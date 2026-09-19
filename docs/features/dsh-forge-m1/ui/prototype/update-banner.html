@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UF3 更新提示 — dsh-forge M1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="index.html" class="nav-brand">dsh-forge <span class="nav-tag">M1 原型</span></a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换亮暗主题">◐</button>
+    <button class="nav-burger" type="button" aria-label="菜单">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="tray.html">托盘菜单 UF1</a>
+      <a href="notifications.html">系统通知 UF2</a>
+      <a href="update-banner.html">更新提示 UF3</a>
+      <a href="crash-recovery.html">崩溃恢复 UF4</a>
+    </div>
+  </nav>
+  <main>
+    <div class="page-head">
+      <h1>UF3 更新提示横幅</h1>
+      <p>顶部居中悬浮(top 40px,toast 同位、可交互、不自动消失);有更新 / 无更新 / 检测失败 / 已关闭四态;关闭与跳转后本次运行不再出现;焦点在横幅内时 Esc 可关。</p>
+    </div>
+
+    <div class="state-row">
+      <button class="btn sm ghost" id="setStateUpdate">有更新</button>
+      <button class="btn sm ghost" id="setStateNone">无更新</button>
+      <button class="btn sm ghost" id="setStateFail">检测失败/离线</button>
+      <button class="btn sm ghost" id="setStateReset">重置(回到有更新)</button>
+      <span class="readout" id="updReadout">状态:有更新</span>
+    </div>
+
+    <div class="desktop">
+      <div class="window-standin">
+        <div class="win-titlebar">
+          <span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span>
+          <span class="win-title">dsh-forge — 主窗口(继承上游 GUI,占位)</span>
+        </div>
+        <div class="win-body">
+          <div>会话:重构登录模块</div>
+          <div class="skeleton mt8" style="width:70%"></div>
+          <div class="skeleton mt8" style="width:45%"></div>
+          <div class="note">横幅悬浮于主窗口内容之上,不遮关键交互、不随滚动。</div>
+        </div>
+      </div>
+
+      <!-- 更新横幅(top 40px 居中,z1100,role=status) -->
+      <div id="updateBanner" role="status" aria-live="polite" tabindex="0"
+           style="position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:1100;
+                  display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:14px;
+                  background:var(--dsw-alias-bg-layer-2);box-shadow:var(--shadow-card);
+                  max-width:min(640px, calc(100% - 48px));font-size:14px;line-height:22px;
+                  animation:notif-in 160ms cubic-bezier(0.4,0,0.2,1)">
+        <span style="color:var(--dsw-alias-link);font-size:16px" aria-hidden="true">↑</span>
+        <span>新版本 <strong id="updVersion">v0.2.0</strong> 可用</span>
+        <button class="btn sm ghost" id="btnViewRelease" style="border:1px solid var(--dsw-alias-border-l3)">查看发布页</button>
+        <button id="btnCloseBanner" aria-label="关闭更新提示"
+                style="margin-left:4px;width:28px;height:28px;border:none;border-radius:8px;background:transparent;
+                       color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px">✕</button>
+      </div>
+
+      <!-- 模拟系统浏览器(跳转发布页) -->
+      <div id="browserMock" style="position:absolute;left:50%;top:120px;transform:translateX(-50%);z-index:1200;
+                  width:min(560px, calc(100% - 48px));padding:16px;border-radius:14px;
+                  background:var(--dsw-alias-bg-layer-2);box-shadow:var(--shadow-card);display:none">
+        <div style="font-size:12px;color:var(--dsw-alias-label-tertiary)" class="mono">系统浏览器(模拟)— github.com/dsh-forge/dsh-forge/releases/tag/v0.2.0</div>
+        <h2 class="mt8">dsh-forge v0.2.0</h2>
+        <p style="color:var(--dsw-alias-label-secondary);font-size:13px">发布页内容占位。v1 档位:用户手动下载安装,应用内不做后台自动更新。</p>
+        <button class="btn sm ghost mt8" id="btnCloseBrowser">关闭浏览器(模拟)</button>
+      </div>
+
+      <div class="taskbar">
+        <span style="font-size:12px;color:var(--dsw-alias-label-secondary)">模拟任务栏</span>
+        <span style="margin-left:auto" class="tray-icon">df</span>
+        <span class="clock">14:32</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // —— 页面专属逻辑 ——
+    var banner = document.getElementById('updateBanner');
+    var readout = document.getElementById('updReadout');
+    var dismissed = false;
+
+    function setState(s) {
+      if (s === 'update') { dismissed = false; banner.style.display = 'flex'; readout.textContent = '状态:有更新(60 秒内呈现,SC6)'; }
+      if (s === 'none') { banner.style.display = 'none'; readout.textContent = '状态:无更新(静默,无 UI)'; }
+      if (s === 'fail') { banner.style.display = 'none'; readout.textContent = '状态:检测失败/离线(静默降级,不弹错,SC2)'; }
+      if (s === 'reset') { dismissed = false; banner.style.display = 'flex'; readout.textContent = '状态:有更新(已重置)'; }
+    }
+
+    function dismiss() {
+      dismissed = true;
+      banner.style.display = 'none';
+      readout.textContent = '状态:已关闭(本次运行不再出现)';
+    }
+
+    document.getElementById('setStateUpdate').addEventListener('click', function () { setState('update'); });
+    document.getElementById('setStateNone').addEventListener('click', function () { setState('none'); });
+    document.getElementById('setStateFail').addEventListener('click', function () { setState('fail'); });
+    document.getElementById('setStateReset').addEventListener('click', function () { setState('reset'); });
+
+    document.getElementById('btnViewRelease').addEventListener('click', function () {
+      document.getElementById('browserMock').style.display = 'block';
+      dismiss();
+    });
+    document.getElementById('btnCloseBrowser').addEventListener('click', function () {
+      document.getElementById('browserMock').style.display = 'none';
+    });
+    document.getElementById('btnCloseBanner').addEventListener('click', dismiss);
+
+    // 焦点在横幅内时 Esc 关闭(设计:键盘可达)
+    banner.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !dismissed) dismiss();
+    });
+  </script>
+</body>
+</html>

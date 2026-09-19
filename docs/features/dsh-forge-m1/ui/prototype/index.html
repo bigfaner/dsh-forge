@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原型导航 — dsh-forge M1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="index.html" class="nav-brand">dsh-forge <span class="nav-tag">M1 原型</span></a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换亮暗主题">◐</button>
+    <button class="nav-burger" type="button" aria-label="菜单">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="tray.html">托盘菜单 UF1</a>
+      <a href="notifications.html">系统通知 UF2</a>
+      <a href="update-banner.html">更新提示 UF3</a>
+      <a href="crash-recovery.html">崩溃恢复 UF4</a>
+    </div>
+  </nav>
+  <main>
+    <div class="page-head">
+      <h1>dsh-forge M1 桌面纯壳 — UI 原型</h1>
+      <p>M1 仅设计 4 个壳级最小面;主窗口功能面 100% 继承上游 dsh GUI(本原型中以灰底占位窗口示意,不代表真实 GUI)。设计体系 = 上游 dsh tokens,右上角 ◐ 可切换亮暗主题。</p>
+    </div>
+    <a href="tray.html" class="page-link" style="text-decoration:none;color:inherit">
+      <div class="panel mt16" style="cursor:pointer">
+        <h2>UF1 系统托盘</h2>
+        <p style="color:var(--dsw-alias-label-secondary)">关窗驻留、托盘菜单恢复/退出;左键聚焦与恢复行为;Linux 托盘创建失败静默降级。</p>
+      </div>
+    </a>
+    <a href="notifications.html" class="page-link" style="text-decoration:none;color:inherit">
+      <div class="panel mt16" style="cursor:pointer">
+        <h2>UF2 系统通知</h2>
+        <p style="color:var(--dsw-alias-label-secondary)">等待输入 / 回合完成两类通知;10 秒窗口按会话去重合并;权限被拒/DND 静默降级与托盘计数兜底;点击定位会话。</p>
+      </div>
+    </a>
+    <a href="update-banner.html" class="page-link" style="text-decoration:none;color:inherit">
+      <div class="panel mt16" style="cursor:pointer">
+        <h2>UF3 更新提示横幅</h2>
+        <p style="color:var(--dsw-alias-label-secondary)">有更新 / 无更新 / 检测失败 / 已关闭四态;不自动消失、可关闭、Esc 可关(焦点在横幅内);跳转发布页。</p>
+      </div>
+    </a>
+    <a href="crash-recovery.html" class="page-link" style="text-decoration:none;color:inherit">
+      <div class="panel mt16" style="cursor:pointer">
+        <h2>UF4 宿主崩溃恢复覆盖层</h2>
+        <p style="color:var(--dsw-alias-label-secondary)">显式状态机:崩溃提示 → 恢复中 → 完成 / 失败;mask + 对话框、focus trap、读屏播报;恢复完成后 toast 告知。</p>
+      </div>
+    </a>
+    <p class="mt16" style="font-size:12px;color:var(--dsw-alias-label-tertiary)">
+      规范来源:ui/ui-design.md(评分 952/1000)|设计体系:DESIGN.md(上游 ui-theme 提取)|评估报告:ui/eval/report.md
+    </p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UF4 宿主崩溃恢复 — dsh-forge M1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="index.html" class="nav-brand">dsh-forge <span class="nav-tag">M1 原型</span></a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换亮暗主题">◐</button>
+    <button class="nav-burger" type="button" aria-label="菜单">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="tray.html">托盘菜单 UF1</a>
+      <a href="notifications.html">系统通知 UF2</a>
+      <a href="update-banner.html">更新提示 UF3</a>
+      <a href="crash-recovery.html">崩溃恢复 UF4</a>
+    </div>
+  </nav>
+  <main>
+    <div class="page-head">
+      <h1>UF4 宿主崩溃恢复覆盖层</h1>
+      <p>显式状态机:崩溃提示 → 恢复中 → 完成(overlay 消失 + toast)/ 失败(原因 + 重启按钮)。mask 阻断交互,Esc/点击 mask 不关闭;focus trap + 读屏播报。</p>
+    </div>
+
+    <div class="state-row">
+      <button class="btn sm primary" id="btnCrash">模拟宿主子进程崩溃(走完整恢复)</button>
+      <button class="btn sm ghost" id="btnFail">模拟恢复失败</button>
+      <button class="btn sm ghost" id="btnReset">重置</button>
+      <span class="readout" id="crReadout">状态:正常运行</span>
+    </div>
+
+    <div class="desktop" id="crDesktop">
+      <div class="window-standin">
+        <div class="win-titlebar">
+          <span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span>
+          <span class="win-title">dsh-forge — 主窗口(继承上游 GUI,占位)</span>
+        </div>
+        <div class="win-body">
+          <div>会话:重构登录模块</div>
+          <div class="skeleton mt8" style="width:65%"></div>
+          <div class="skeleton mt8" style="width:40%"></div>
+          <div class="note">宿主崩溃时,主窗口内容冻结于 mask 之后(不可交互)。</div>
+        </div>
+      </div>
+
+      <!-- 崩溃恢复覆盖层(mask z1200 + 对话框,alertdialog) -->
+      <div id="crOverlay" style="position:absolute;inset:0;z-index:1200;display:none;
+                  background:var(--dsw-alias-bg-mask-1);backdrop-filter:blur(2px);
+                  align-items:center;justify-content:center">
+        <div id="crDialog" role="alertdialog" aria-modal="true" aria-live="assertive" aria-labelledby="crTitle"
+             style="width:min(380px, calc(100% - 48px));border-radius:24px;
+                    background:var(--dsw-alias-bg-layer-2);box-shadow:var(--shadow-card);
+                    padding:22px 24px 24px;display:flex;flex-direction:column;gap:12px">
+          <h2 id="crTitle" style="padding:0 0 0 0">连接已中断</h2>
+          <div id="crStatus" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;line-height:22px">
+            <span id="crDot" style="width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-error-primary);flex:none"></span>
+            <span id="crStatusText">正在重启运行时…</span>
+          </div>
+          <div id="crFailBlock" style="display:none">
+            <div id="crReason" style="margin-top:8px;max-height:96px;overflow:auto;font-size:14px;line-height:22px;
+                 color:var(--dsw-alias-label-secondary)">宿主子进程重启重试耗尽(exit code 137,3 次尝试);完整堆栈见日志。</div>
+            <button class="btn primary" id="btnRestartApp" style="margin-top:16px;align-self:flex-end">重启应用</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="taskbar">
+        <span style="font-size:12px;color:var(--dsw-alias-label-secondary)">模拟任务栏</span>
+        <span style="margin-left:auto" class="tray-icon">df</span>
+        <span class="clock">14:32</span>
+      </div>
+    </div>
+
+    <div class="panel mt16">
+      <span class="chip">读屏/键盘</span>
+      <span style="color:var(--dsw-alias-label-secondary)">对话框 <code>role="alertdialog"</code> + <code>aria-live="assertive"</code>;Tab/Shift+Tab 锁定于对话框内;失败态自动聚焦「重启应用」。</span>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // —— 页面专属逻辑:显式状态机 ——
+    var overlay = document.getElementById('crOverlay');
+    var dialog = document.getElementById('crDialog');
+    var dot = document.getElementById('crDot');
+    var statusText = document.getElementById('crStatusText');
+    var failBlock = document.getElementById('crFailBlock');
+    var readout = document.getElementById('crReadout');
+    var timers = [];
+    var lastFocus = null;
+
+    function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+    function show(state) {
+      overlay.style.display = 'flex';
+      if (state === 'crash') {
+        dialog.querySelector('h2').textContent = '连接已中断';
+        dot.style.background = 'var(--dsw-alias-state-error-primary)';
+        dot.style.width = dot.style.height = '8px';
+        statusText.textContent = '正在重启运行时…';
+        failBlock.style.display = 'none';
+        readout.textContent = '状态:崩溃提示(拉起子进程)';
+        lastFocus = document.activeElement;
+        dialog.focus();
+        // 自动迁移:崩溃提示 → 恢复中(子进程可响应)→ 完成(回放完成)
+        timers.push(setTimeout(function () {
+          dot.style.background = 'var(--dsw-alias-link)';
+          dot.style.width = dot.style.height = '16px';
+          dot.style.borderRadius = '50%';
+          dot.animate ? dot.animate(
+            [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+            { duration: 1000, iterations: Infinity }) : null;
+          statusText.textContent = '正在恢复会话…';
+          readout.textContent = '状态:恢复中(session 持久化回放)';
+        }, 1600));
+        timers.push(setTimeout(function () {
+          overlay.style.display = 'none';
+          dot.getAnimations ? dot.getAnimations().forEach(function (a) { a.cancel(); }) : null;
+          readout.textContent = '状态:恢复完成';
+          dsToast('已恢复最近会话');
+          if (lastFocus && lastFocus.focus) lastFocus.focus();
+        }, 3400));
+      }
+      if (state === 'fail') {
+        clearTimers();
+        overlay.style.display = 'flex';
+        dialog.querySelector('h2').textContent = '连接已中断';
+        dot.style.background = 'var(--dsw-alias-state-error-primary)';
+        dot.style.width = dot.style.height = '8px';
+        statusText.textContent = '恢复失败';
+        failBlock.style.display = 'block';
+        readout.textContent = '状态:恢复失败(不回退到其他态)';
+        document.getElementById('btnRestartApp').focus();
+      }
+    }
+
+    document.getElementById('btnCrash').addEventListener('click', function () { clearTimers(); show('crash'); });
+    document.getElementById('btnFail').addEventListener('click', function () { show('fail'); });
+    document.getElementById('btnReset').addEventListener('click', function () {
+      clearTimers(); overlay.style.display = 'none';
+      if (dot.getAnimations) dot.getAnimations().forEach(function (a) { a.cancel(); });
+      readout.textContent = '状态:正常运行';
+    });
+    document.getElementById('btnRestartApp').addEventListener('click', function () {
+      overlay.style.display = 'none';
+      readout.textContent = '状态:已重启(全新启动路径走 session 恢复)';
+      dsToast('应用已重启,正在恢复会话…');
+    });
+
+    // Esc / 点击 mask:不关闭(设计规定:恢复流程不可跳过)
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) readout.textContent = '状态:点击 mask 无效(恢复不可跳过)';
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.style.display === 'flex') {
+        readout.textContent = '状态:Esc 无效(恢复不可跳过)';
+      }
+      // Focus trap:Tab / Shift+Tab 锁定于对话框
+      if (e.key === 'Tab' && overlay.style.display === 'flex') {
+        var focusables = dialog.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');
+        if (!focusables.length) { e.preventDefault(); dialog.focus(); return; }
+        var first = focusables[0], last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!dialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+    });
+    dialog.setAttribute('tabindex', '-1');
+  </script>
+</body>
+</html>
