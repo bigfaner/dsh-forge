@@ -1,0 +1,721 @@
+{
+  "feature": "dsh-forge-m1",
+  "prd": "prd/prd-spec.md",
+  "design": "design/tech-design.md",
+  "created": "2026-09-20",
+  "tasks": {
+    "1.1-spike-linux-native-modules": {
+      "id": "1.1",
+      "title": "Spike: Linux 原生模块可行性",
+      "priority": "P0",
+      "estimatedTime": "1-4h",
+      "status": "pending",
+      "file": "1.1-spike-linux-native-modules.md",
+      "record": "records/1.1-spike-linux-native-modules.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.2-spike-vendor-closure": {
+      "id": "1.2",
+      "title": "Spike: 依赖闭包解析规则",
+      "priority": "P0",
+      "estimatedTime": "2-4h",
+      "status": "pending",
+      "file": "1.2-spike-vendor-closure.md",
+      "record": "records/1.2-spike-vendor-closure.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.3-spike-session-focus": {
+      "id": "1.3",
+      "title": "Spike: 会话聚焦通道与 locale 读取侦察",
+      "priority": "P0",
+      "estimatedTime": "2-4h",
+      "status": "pending",
+      "file": "1.3-spike-session-focus.md",
+      "record": "records/1.3-spike-session-focus.md",
+      "type": "doc"
+    },
+    "1.4-workspace-scaffold": {
+      "id": "1.4",
+      "title": "pnpm workspace 工程骨架",
+      "priority": "P0",
+      "estimatedTime": "1-3h",
+      "status": "pending",
+      "file": "1.4-workspace-scaffold.md",
+      "record": "records/1.4-workspace-scaffold.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "1.gate": {
+      "id": "1.gate",
+      "title": "Phase 1 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "1.summary"
+      ],
+      "status": "pending",
+      "file": "1.gate.md",
+      "record": "records/1.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "1.summary": {
+      "id": "1.summary",
+      "title": "Phase 1 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4"
+      ],
+      "status": "pending",
+      "file": "1.summary.md",
+      "record": "records/1.summary.md",
+      "type": "doc.summary"
+    },
+    "2.1-sync-upstream": {
+      "id": "2.1",
+      "title": "上游同步与源码投影脚本",
+      "priority": "P0",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "1.2",
+        "1.4",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.1-sync-upstream.md",
+      "record": "records/2.1-sync-upstream.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.2-desktop-host-vendor": {
+      "id": "2.2",
+      "title": "desktop-host-vendor 包落地",
+      "priority": "P0",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "2.1",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.2-desktop-host-vendor.md",
+      "record": "records/2.2-desktop-host-vendor.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.gate": {
+      "id": "2.gate",
+      "title": "Phase 2 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "2.summary"
+      ],
+      "status": "pending",
+      "file": "2.gate.md",
+      "record": "records/2.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "2.summary": {
+      "id": "2.summary",
+      "title": "Phase 2 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "2.1",
+        "2.2"
+      ],
+      "status": "pending",
+      "file": "2.summary.md",
+      "record": "records/2.summary.md",
+      "type": "doc.summary"
+    },
+    "3.1-electron-app-skeleton": {
+      "id": "3.1",
+      "title": "Electron 主进程/preload 工程骨架",
+      "priority": "P0",
+      "estimatedTime": "2-4h",
+      "dependencies": [
+        "1.4",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.1-electron-app-skeleton.md",
+      "record": "records/3.1-electron-app-skeleton.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.2-host-supervisor": {
+      "id": "3.2",
+      "title": "host-supervisor(Interface 1)",
+      "priority": "P0",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "2.2",
+        "3.1",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.2-host-supervisor.md",
+      "record": "records/3.2-host-supervisor.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.3-dsh-app-protocol-carrier": {
+      "id": "3.3",
+      "title": "dsh-app:// 协议载体与注入管道",
+      "priority": "P0",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "3.1",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.3-dsh-app-protocol-carrier.md",
+      "record": "records/3.3-dsh-app-protocol-carrier.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.4-single-instance-lock": {
+      "id": "3.4",
+      "title": "单实例锁与二实例语义(F1)",
+      "priority": "P0",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "3.1",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.4-single-instance-lock.md",
+      "record": "records/3.4-single-instance-lock.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "low"
+    },
+    "3.gate": {
+      "id": "3.gate",
+      "title": "Phase 3 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "3.summary"
+      ],
+      "status": "pending",
+      "file": "3.gate.md",
+      "record": "records/3.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "3.summary": {
+      "id": "3.summary",
+      "title": "Phase 3 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4"
+      ],
+      "status": "pending",
+      "file": "3.summary.md",
+      "record": "records/3.summary.md",
+      "type": "doc.summary"
+    },
+    "4.1-i18n": {
+      "id": "4.1",
+      "title": "壳层 i18n(Interface 7)",
+      "priority": "P1",
+      "estimatedTime": "2-3h",
+      "dependencies": [
+        "1.3",
+        "3.1",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.1-i18n.md",
+      "record": "records/4.1-i18n.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.2-tray-uf1": {
+      "id": "4.2",
+      "title": "系统托盘 UF1",
+      "priority": "P1",
+      "estimatedTime": "2-4h",
+      "dependencies": [
+        "3.4",
+        "4.1",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.2-tray-uf1.md",
+      "record": "records/4.2-tray-uf1.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.3-update-checker": {
+      "id": "4.3",
+      "title": "更新检测(Interface 3)",
+      "priority": "P1",
+      "estimatedTime": "2-3h",
+      "dependencies": [
+        "3.1",
+        "4.1",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.3-update-checker.md",
+      "record": "records/4.3-update-checker.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.4-crash-recovery": {
+      "id": "4.4",
+      "title": "崩溃恢复状态机(Interface 2)",
+      "priority": "P1",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "3.2",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.4-crash-recovery.md",
+      "record": "records/4.4-crash-recovery.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.5-session-focus": {
+      "id": "4.5",
+      "title": "会话聚焦(Interface 5)",
+      "priority": "P1",
+      "estimatedTime": "2-3h",
+      "dependencies": [
+        "1.3",
+        "3.3",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.5-session-focus.md",
+      "record": "records/4.5-session-focus.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.6-notifier-uf2": {
+      "id": "4.6",
+      "title": "系统通知 UF2(Interface 4)",
+      "priority": "P1",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "3.2",
+        "4.1",
+        "4.5",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.6-notifier-uf2.md",
+      "record": "records/4.6-notifier-uf2.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.7-preload-verbs": {
+      "id": "4.7",
+      "title": "preload 语义动词(Interface 6)",
+      "priority": "P1",
+      "estimatedTime": "2-3h",
+      "dependencies": [
+        "3.3",
+        "4.3",
+        "4.4",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.7-preload-verbs.md",
+      "record": "records/4.7-preload-verbs.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.gate": {
+      "id": "4.gate",
+      "title": "Phase 4 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "4.summary"
+      ],
+      "status": "pending",
+      "file": "4.gate.md",
+      "record": "records/4.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "4.summary": {
+      "id": "4.summary",
+      "title": "Phase 4 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "4.6",
+        "4.7"
+      ],
+      "status": "pending",
+      "file": "4.summary.md",
+      "record": "records/4.summary.md",
+      "type": "doc.summary"
+    },
+    "5.1-build-shell-banner-uf3": {
+      "id": "5.1",
+      "title": "UF3 更新横幅组件",
+      "priority": "P1",
+      "estimatedTime": "2-4h",
+      "dependencies": [
+        "4.3",
+        "4.7",
+        "4.1",
+        "4.gate"
+      ],
+      "status": "pending",
+      "file": "5.1-build-shell-banner-uf3.md",
+      "record": "records/5.1-build-shell-banner-uf3.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.2-build-shell-recovery-uf4": {
+      "id": "5.2",
+      "title": "UF4 崩溃恢复覆盖层组件",
+      "priority": "P1",
+      "estimatedTime": "2-4h",
+      "dependencies": [
+        "4.4",
+        "4.7",
+        "4.1",
+        "4.gate"
+      ],
+      "status": "pending",
+      "file": "5.2-build-shell-recovery-uf4.md",
+      "record": "records/5.2-build-shell-recovery-uf4.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.3-integrate-shell-ui": {
+      "id": "5.3",
+      "title": "shell-ui 集成接入主窗口",
+      "priority": "P1",
+      "estimatedTime": "2-3h",
+      "dependencies": [
+        "5.1",
+        "5.2",
+        "3.3",
+        "4.gate"
+      ],
+      "status": "pending",
+      "file": "5.3-integrate-shell-ui.md",
+      "record": "records/5.3-integrate-shell-ui.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.gate": {
+      "id": "5.gate",
+      "title": "Phase 5 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "5.summary"
+      ],
+      "status": "pending",
+      "file": "5.gate.md",
+      "record": "records/5.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "5.summary": {
+      "id": "5.summary",
+      "title": "Phase 5 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "status": "pending",
+      "file": "5.summary.md",
+      "record": "records/5.summary.md",
+      "type": "doc.summary"
+    },
+    "6.1-e2e-suite": {
+      "id": "6.1",
+      "title": "Playwright e2e 套件与 SC7 冒烟",
+      "priority": "P1",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "4.2",
+        "4.6",
+        "4.7",
+        "5.3",
+        "5.gate"
+      ],
+      "status": "pending",
+      "file": "6.1-e2e-suite.md",
+      "record": "records/6.1-e2e-suite.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "6.2-packaging": {
+      "id": "6.2",
+      "title": "三平台打包与体积/离线验证",
+      "priority": "P1",
+      "estimatedTime": "3-4h",
+      "dependencies": [
+        "5.3",
+        "1.1",
+        "5.gate"
+      ],
+      "status": "pending",
+      "file": "6.2-packaging.md",
+      "record": "records/6.2-packaging.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "6.3-ci-release": {
+      "id": "6.3",
+      "title": "CI 三平台矩阵与 Releases 发布",
+      "priority": "P1",
+      "estimatedTime": "2-4h",
+      "dependencies": [
+        "6.2",
+        "5.gate"
+      ],
+      "status": "pending",
+      "file": "6.3-ci-release.md",
+      "record": "records/6.3-ci-release.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.4-manual-checklist": {
+      "id": "6.4",
+      "title": "三平台手检清单与录屏归档流程",
+      "priority": "P1",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "6.3",
+        "5.gate"
+      ],
+      "status": "pending",
+      "file": "6.4-manual-checklist.md",
+      "record": "records/6.4-manual-checklist.md",
+      "type": "doc"
+    },
+    "6.gate": {
+      "id": "6.gate",
+      "title": "Phase 6 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "6.summary"
+      ],
+      "status": "pending",
+      "file": "6.gate.md",
+      "record": "records/6.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "6.summary": {
+      "id": "6.summary",
+      "title": "Phase 6 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4"
+      ],
+      "status": "pending",
+      "file": "6.summary.md",
+      "record": "records/6.summary.md",
+      "type": "doc.summary"
+    },
+    "consolidate-specs": {
+      "id": "T-specs-consolidate",
+      "title": "Consolidate Specs",
+      "priority": "P2",
+      "estimatedTime": "20min",
+      "dependencies": [
+        "T-test-run"
+      ],
+      "status": "pending",
+      "file": "consolidate-specs.md",
+      "record": "records/consolidate-specs.md",
+      "type": "doc.consolidate"
+    },
+    "eval-contract": {
+      "id": "T-eval-contract",
+      "title": "Evaluate Contract Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-contracts"
+      ],
+      "status": "pending",
+      "file": "eval-contract.md",
+      "record": "records/eval-contract.md",
+      "mainSession": true,
+      "type": "eval.contract"
+    },
+    "eval-journey": {
+      "id": "T-eval-journey",
+      "title": "Evaluate Journey Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-journeys"
+      ],
+      "status": "pending",
+      "file": "eval-journey.md",
+      "record": "records/eval-journey.md",
+      "mainSession": true,
+      "type": "eval.journey"
+    },
+    "gen-contracts": {
+      "id": "T-test-gen-contracts",
+      "title": "Generate Test Contracts",
+      "priority": "P1",
+      "estimatedTime": "30-45min",
+      "dependencies": [
+        "T-eval-journey"
+      ],
+      "status": "pending",
+      "file": "gen-contracts.md",
+      "record": "records/gen-contracts.md",
+      "type": "test.gen-contracts"
+    },
+    "gen-journeys": {
+      "id": "T-test-gen-journeys",
+      "title": "Generate Test Journeys",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-review-doc",
+        "1.3",
+        "4.2",
+        "4.7",
+        "3.2",
+        "4.4",
+        "4.5",
+        "6.3",
+        "2.2",
+        "1.2",
+        "3.4",
+        "4.6",
+        "6.1",
+        "6.2",
+        "3.1",
+        "4.1",
+        "5.1",
+        "1.1",
+        "1.4",
+        "2.1",
+        "3.3",
+        "4.3",
+        "5.2",
+        "6.4",
+        "5.3"
+      ],
+      "status": "pending",
+      "file": "gen-journeys.md",
+      "record": "records/gen-journeys.md",
+      "type": "test.gen-journeys"
+    },
+    "gen-test-scripts": {
+      "id": "T-test-gen-scripts",
+      "title": "Generate Web E2E Test Scripts",
+      "priority": "P1",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "T-eval-contract"
+      ],
+      "status": "pending",
+      "file": "gen-test-scripts.md",
+      "record": "records/gen-test-scripts.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.gen-scripts"
+    },
+    "review-doc": {
+      "id": "T-review-doc",
+      "title": "Review Documentation Quality",
+      "priority": "P1",
+      "estimatedTime": "30min",
+      "dependencies": [
+        "1.3",
+        "6.4"
+      ],
+      "status": "pending",
+      "file": "review-doc.md",
+      "record": "records/review-doc.md",
+      "type": "doc.review"
+    },
+    "run-test": {
+      "id": "T-test-run",
+      "title": "Run Web E2E Test",
+      "priority": "P1",
+      "estimatedTime": "30min-1h",
+      "dependencies": [
+        "T-test-gen-scripts"
+      ],
+      "status": "pending",
+      "file": "run-test.md",
+      "record": "records/run-test.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.run"
+    }
+  },
+  "statusEnum": [
+    "pending",
+    "in_progress",
+    "completed",
+    "blocked",
+    "suspended",
+    "skipped",
+    "rejected"
+  ],
+  "priorityEnum": [
+    "P0",
+    "P1",
+    "P2"
+  ]
+}
