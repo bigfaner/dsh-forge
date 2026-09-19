@@ -1,0 +1,12 @@
+# Forge
+.forge/state.json
+.forge/test-state.json
+.forge/worktrees/
+.forge/logs/
+docs/proposals/*/eval/
+docs/features/*/*/eval/
+docs/features/*/tasks/process/
+docs/features/*/tasks/index.json.lock
+docs/features/*/testing/results/
+tests/results/
+docs/proposals/dsh-desktop/proposal.md
