@@ -360,7 +360,7 @@ UF1(托盘)/ UF2(通知)为 OS 原生面,无页面集成 —— 不适用。
 
 ## Open Questions
 
-- [ ] **Spike 1(Linux)**:node-pty 等原生模块 Linux prebuild/构建可用性;desktop-host Linux 启动冒烟
+- [x] **Spike 1(Linux)**:node-pty 等原生模块 Linux prebuild/构建可用性;desktop-host Linux 启动冒烟 → **已验证可行(2026-09-20,任务 1.1)**:ubuntu-24.04(Actions)上 node-pty@1.2.0-beta.15 linux-x64/arm64 prebuild(`pty.node`)开箱可用——`pty.spawn()` 无需 spawn-helper(darwin 才需要;上游 patch 的 `DSH_NODE_PTY_SPAWN_HELPER`/executableSibling 回退在 Linux 不触发);koffi@3.1.1 经 optional dep `@koromix/koffi-linux-x64`(npm 预编译)加载 libc 成功;desktop-host 无头启动冒烟通过(IPC `ready` + 认证 URL + 干净退出,profile=bundles[base, web-app],node 24/ubuntu)。体积初步数据:node-pty 全量 26.9MB → linux 裁剪后 2.65MB(policy:去异平台 prebuilds+pdb);整仓 node_modules 4.58GB → policy 裁剪后 3.68GB(粗上界,含 dev 依赖;真实 runtime 闭包远小于此,待 Spike 2 闭包定稿后精测)。tech-design 宿主子进程假设无需调整;Linux 需自建 runtime 组装脚本(上游 `prepare-dsh` 仅 mac/win 目标)。证据:fork 分支 `bigfaner/deepseek-harness@spike/1.1-linux` workflow run 35474409537 + `scripts/spike-1-linux/`。
 - [ ] **Spike 2(vendor 闭包)** ~~:路径二选一~~ → **已定:源码投影 + 闭包解析**(与「vendor 源码投影」决策同构,升级 = 显式 diff 对照可读;弃整树产物拷贝 —— 产物不可 diff、体积不可裁剪)。Spike 2 剩余范围收窄为:验证 10 个 workspace 依赖闭包解析的完整性规则(manifest 递归 vs 静态 import 扫描),产出 vendored 文件清单草稿。
 - [ ] **Spike 3(session-focus)**:上游可复用的会话聚焦通道侦察(URL hash / postMessage / deep-link);不可用则固化 fallback
 - [ ] 安装包体积预算:**临时上限 ≤500MB/平台**(Electron + 内置 Node + 依赖闭包的经验量级;Spike 1/2 后按上游 runtime-file-policy 思路裁剪实测定稿并修订本值)
