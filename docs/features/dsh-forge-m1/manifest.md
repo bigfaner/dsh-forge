@@ -14,9 +14,11 @@ status: design
 |----------|------|---------|
 | PRD Spec | prd/prd-spec.md | M1 桌面纯壳需求:三平台离线安装包、宿主子进程承载上游 UI(零重写、无端口)、托盘/通知、更新检测、GH Releases 免签名分发、多装共存(profile `dsh-forge`)、宿主崩溃恢复;SC1-9 验收锚点,零 forge 依赖 |
 | User Stories | prd/prd-user-stories.md | 5 条故事:新用户零终端首用、web 用户功能对等、挂机驻留召回、多装共存、更新与崩溃韧性(覆盖 SC1-9 用户可感知项;SC3 归 NFR) |
-| UI Functions | prd/prd-ui-functions.md | 4 个壳级最小面:系统托盘、系统通知、更新提示、崩溃恢复提示;主窗口 100% 继承上游 GUI,零新增应用内页面;文案中英双语 |
+| UI Functions | prd/prd-ui-functions.md | 4 个壳级最小面:系统托盘、系统通知、更新提示、崩溃恢复提示;主窗口 100% 继承上游 GUI,零新增应用内页面;文案中英双语;含评估回写细化(去重/DND 降级/Esc/状态机/session-focus 契约) |
 | UI Design | ui/ui-design.md | 4 壳级面设计:托盘/通知走 OS 原生(菜单结构+文案模板);更新提示 = 顶部居中持久横幅(toast 几何);崩溃恢复 = mask+对话框(上游 Modal 几何);设计体系 = 上游 dsh tokens(项目根 DESIGN.md);eval-ui 952/1000 |
 | Prototype | ui/prototype/ | HTML 原型(index + UF1 托盘/UF2 通知/UF3 更新横幅/UF4 崩溃恢复),上游 --dsw-* tokens 亮暗双主题,状态全覆盖与可交互(含 10s 去重、状态机演示、focus trap) |
+| Tech Design | design/tech-design.md | Electron 壳 + vendored desktop-host(pinned SHA)+ pnpm workspace;host-supervisor/crash-recovery 状态机/update-checker/notifier/session-focus(spike)六接口;vitest+Playwright+三平台 CI;PRD Coverage Map SC1-9 全映射;3 个 spike 待办 |
+| Page Map | design/page-map.md | M1 面清单:主窗口 100% 继承(非本工程路由)+ 2 注入式覆盖层 + 2 OS 原生面;零新增路由页面;载体级测试入口索引 |
 
 ## Traceability
 
@@ -27,3 +29,8 @@ status: design
 | UI Functions > UF2 系统通知 | UI Design > Component: 系统通知 | 系统通知(ui-design §Component 2) | <!-- /breakdown-tasks --> |
 | UI Functions > UF3 更新提示 | UI Design > Component: 更新提示横幅 | 更新提示横幅(ui-design §Component 3) | <!-- /breakdown-tasks --> |
 | UI Functions > UF4 宿主崩溃恢复提示 | UI Design > Component: 宿主崩溃恢复覆盖层 | 宿主崩溃恢复覆盖层(ui-design §Component 4) | <!-- /breakdown-tasks --> |
+| "Scope > In Scope(8 项)"(prd-spec §Scope) | "Architecture / Interfaces"(tech-design §Architecture/§Interfaces) | — | <!-- /breakdown-tasks --> |
+| "Other Notes > Performance/Data/Monitoring"(prd-spec §Other Notes) | "Testing Strategy / Error Handling"(tech-design §Testing/§Error Handling) | — | <!-- /breakdown-tasks --> |
+| "Other Notes > Security"(prd-spec §Other Notes) | "Security Considerations"(tech-design §Security) | — | <!-- /breakdown-tasks --> |
+| "Success Criteria SC1-9"(prd-spec §Success Criteria) | "PRD Coverage Map"(tech-design §PRD Coverage Map) | — | <!-- /breakdown-tasks --> |
+| "UI Functions > UF3/UF4 Placement(existing-page)"(prd-ui-functions) | "Integration Specs"(tech-design §Integration Specs) | shell-ui 覆盖层 | <!-- /breakdown-tasks --> |
