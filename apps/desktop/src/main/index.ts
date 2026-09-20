@@ -141,11 +141,19 @@ export const updateBannerState = createUpdateBannerState({
   onState: (state) => { pushToRenderer(SHELL_PUSH_CHANNELS.updateState, state) },
 })
 
-// Recovery-state side-effect fan-out (task 5.3): every machine transition is
-// mirrored to the UF4 overlay (with failure.detail ≤120 chars on failed) and
-// drives the banner queued-while-mask ladder (mask active during
-// restarting/restoring/failed; exited on recovered).
+// Recovery-state side-effect fan-out (task 5.3 + 6.1 host-exit wiring): every
+// machine transition is mirrored to the UF4 overlay (with failure.detail
+// ≤120 chars on failed) and drives the banner queued-while-mask ladder (mask
+// active during restarting/restoring/failed; exited on recovered). The
+// `retry-scheduled` effect (backoff ladder tick) is what actually re-runs
+// bootHost() — `bootAttempt` is (re)bound inside app-ready below, where the
+// supervisor and profile dir exist.
+let bootAttempt: () => void = () => {}
 function onRecoveryEffect(effect: RecoverySideEffect): void {
+  if (effect.type === 'retry-scheduled') {
+    bootAttempt()
+    return
+  }
   if (effect.type !== 'state-changed') return
   pushToRenderer(SHELL_PUSH_CHANNELS.recoveryState, {
     state: effect.to,
@@ -156,9 +164,17 @@ function onRecoveryEffect(effect: RecoverySideEffect): void {
 
 // Interface 2 (crash-recovery) instance for UF4 state; Interface 6 exposes its
 // state to the renderer through the dshForge.recovery.getState verb and the
-// dsh-forge:recovery-state push. Host-exit event wiring lands with the
-// supervisor-integration task.
+// dsh-forge:recovery-state push. Host-exit wiring (task 6.1): an unexpected
+// host-subprocess exit dispatches `host-exit`; the machine's backoff ladder
+// (2s/4s/8s, ≤3 attempts) drives real bootHost() retries through the
+// retry-scheduled effect above, terminating in host-responsive → restoring →
+// replay-complete → recovered, or retry-exhausted → failed (terminal).
 export const crashRecovery = createCrashRecovery({ onEffect: onRecoveryEffect })
+
+// True while the shell itself asked the host to stop (quit / restartApp /
+// before-quit): those exits are NOT crashes and must not arm the recovery
+// ladder (SC3: graceful shutdown never resurrects the host).
+let hostStopIntentional = false
 
 // UF3 run-level UpdateBannerState (in-memory, not persisted): dismiss is a
 // terminal latch for this process; openRelease uses the last check's URL.
@@ -194,7 +210,10 @@ installShellVerbs(
   {
     restartApp: createRestartSequence({
       disposeRecovery: () => crashRecovery.dispose(),
-      shutdownHost: () => (hostHandle === undefined ? Promise.resolve() : hostHandle.shutdown()),
+      shutdownHost: () => {
+        hostStopIntentional = true
+        return hostHandle === undefined ? Promise.resolve() : hostHandle.shutdown()
+      },
       releaseSingleInstanceLock: () => app.releaseSingleInstanceLock(),
       relaunch: () => { app.relaunch() },
       exit: () => { app.exit(0) },
@@ -233,39 +252,77 @@ void app.whenReady().then(async () => {
   const supervisor = createHostSupervisor(
     process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY },
   )
-  void supervisor.startHost(profileDir).then(async (handle) => {
+
+  // One full host boot cycle: start → handshake → authenticate → carriage
+  // bind. Throws on any failure (caller decides first-boot vs retry path).
+  // `onHostReady` fires only on a successful bind (the first boot resolves the
+  // SPA boot gate; recovery boots skip it — the outcome already resolved).
+  async function bootHost(onHostReady?: () => void): Promise<void> {
+    const handle = await supervisor.startHost(profileDir)
     hostHandle = handle
-    handle.onExit(() => {
+    crashRecovery.setAttempts(supervisor.recoveryContext.attempts)
+    handle.onExit((code, signal) => {
       carriage.clearHost()
-      shellLog.warn({ code: 'WARN_HOST_EXIT', message: 'host subprocess exited; dsh-app:// API carriage unbound', data: { pid: handle.pid } })
+      if (hostStopIntentional) return
+      shellLog.warn({ code: 'WARN_HOST_EXIT', message: 'host subprocess exited unexpectedly; arming crash recovery', data: { pid: handle.pid, code, signal } })
+      try {
+        crashRecovery.dispatch('host-exit', `host exited unexpectedly (code=${String(code)}, signal=${String(signal)})`)
+      } catch (error) {
+        // Illegal only if the machine already left idle (double exit while a
+        // ladder is armed) — the running ladder owns that window.
+        shellLog.warn({ code: 'WARN_RECOVERY_DISPATCH_REJECTED', message: 'host-exit dispatch rejected by the recovery machine', data: { detail: error instanceof Error ? error.message : String(error) } })
+      }
     })
     if (handle.boot === undefined) {
       shellLog.warn({ code: 'WARN_HOST_NO_BOOT_URL', message: 'host ready handshake carried no URL; API carriage stays unbound', data: { pid: handle.pid } })
-      notifyHostOutcome()
-      return
+      throw new Error('host ready handshake carried no URL')
     }
-    let cookie: string
-    try {
-      cookie = await authenticateWebHost(handle.boot.url)
-    } catch (error) {
-      shellLog.error({
-        code: 'ERR_HOST_START_FAILED',
-        message: 'host authentication failed',
-        data: { detail: error instanceof Error ? error.message : String(error) },
-      })
-      notifyHostOutcome()
-      return
-    }
+    const cookie = await authenticateWebHost(handle.boot.url)
     carriage.setHost(handle.boot.url, cookie)
     carriage.setInjections(handle.boot.injections ?? [])
     shellLog.info({ code: 'CARRIAGE_READY', message: 'dsh-app:// carriage bound to host', data: { pid: handle.pid } })
-    notifyHostOutcome()
-  }).catch((error: unknown) => {
+    onHostReady?.()
+  }
+
+  // Recovery ladder tick (retry-scheduled effect): one real restart attempt.
+  // Success walks host-responsive → restoring → replay-complete → recovered
+  // (session replay = session-list 对账, carried by the rebooted host's next
+  // session event; the immediate replay-complete marks the carriage rebound).
+  // Failure mirrors the supervisor's incremented attempts counter into the
+  // machine, which arms the next backoff step or abandons (retry-exhausted).
+  let bootInFlight = false
+  bootAttempt = () => {
+    if (bootInFlight) return // a slow handshake still pending — never double-spawn
+    bootInFlight = true
+    void bootHost().then(() => {
+      bootInFlight = false
+      crashRecovery.dispatch('host-responsive')
+      crashRecovery.dispatch('replay-complete')
+    }).catch((error: unknown) => {
+      bootInFlight = false
+      shellLog.error({
+        code: 'ERR_HOST_START_FAILED',
+        message: 'host restart attempt failed (recovery ladder continues or abandons)',
+        data: { detail: error instanceof Error ? error.message : String(error) },
+      })
+      try {
+        crashRecovery.setAttempts(supervisor.recoveryContext.attempts)
+      } catch { /* attempts already terminal — failed state owns the outcome */ }
+    })
+  }
+
+  // First boot: a spawn/handshake/auth failure goes straight to the terminal
+  // failed state (F1 直进失败态, tech-design Interface 2) with the UF4 overlay
+  // presenting the failure detail; it never arms the retry ladder.
+  void bootHost(notifyHostOutcome).catch((error: unknown) => {
     shellLog.error({
       code: 'ERR_HOST_START_FAILED',
       message: 'host start failed; dsh-app:// API carriage unavailable',
       data: { detail: error instanceof Error ? error.message : String(error) },
     })
+    try {
+      crashRecovery.dispatch('start-failed', error instanceof Error ? error.message : String(error))
+    } catch { /* already terminal (e.g. an earlier host-exit ladder owns state) */ }
     notifyHostOutcome()
   })
 
@@ -329,6 +386,7 @@ app.on('before-quit', (event) => {
   if (quitSettled) return
   event.preventDefault()
   quitSettled = true
+  hostStopIntentional = true
   tray?.destroy()
   const settleHost = hostHandle === undefined ? Promise.resolve() : hostHandle.shutdown()
   void settleHost.finally(() => {

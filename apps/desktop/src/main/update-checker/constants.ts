@@ -14,8 +14,15 @@ export const RELEASE_HOST = 'github.com'
  */
 export const RELEASE_PATH_PREFIX = '/bigfaner/dsh-forge/releases'
 
-/** GitHub Releases atom feed URL (HTTPS read-only; the only network call). */
-export const RELEASE_FEED_URL = `https://${RELEASE_HOST}${RELEASE_PATH_PREFIX}.atom`
+/**
+ * GitHub Releases atom feed URL (HTTPS read-only; the only network call).
+ * `DSH_FORGE_RELEASE_FEED_URL` is the SC6 e2e fake-feed seam (task 6.1: 假
+ * feed 60s 提示+跳转): it swaps only the feed source, never the openRelease
+ * allowlist (build-time frozen above — a fake feed still cannot redirect the
+ * release-page jump anywhere but the allowlisted GH release pages).
+ */
+export const RELEASE_FEED_URL = process.env.DSH_FORGE_RELEASE_FEED_URL
+  ?? `https://${RELEASE_HOST}${RELEASE_PATH_PREFIX}.atom`
 
 /**
  * Per-attempt fetch timeout. Kept well under the SC6 startup budget so the
