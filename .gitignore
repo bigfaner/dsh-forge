@@ -38,3 +38,6 @@ packages/desktop-host-vendor/vendored/.closure-supplements/
 packages/desktop-host-vendor/vendored/packages/skill/skill-office/assets/
 # Bundle patch overlays staged by install-host-closure (runtime data, not projection src)
 packages/desktop-host-vendor/vendored/packages/**/cordis.patch.yml
+
+# host runtime residue (dsh profile root marker written when dev host runs from repo cwd)
+cordis.yml
