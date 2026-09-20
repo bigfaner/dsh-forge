@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m1"
 created: "2026-09-19"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-m1
