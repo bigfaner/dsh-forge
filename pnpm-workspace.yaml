@@ -3,3 +3,10 @@ packages:
   - apps/*
   # Vendored upstream projections and future plugin packages ("everything is a plugin").
   - packages/*
+allowBuilds:
+  electron-winstaller: false
+
+# electron-builder 26.15.x resolves @electron/get 3.x which lacks the cache-mode
+# enum its downloader expects; pin it to 5.x (build-time tooling only).
+overrides:
+  app-builder-lib>@electron/get: ^5.1.0

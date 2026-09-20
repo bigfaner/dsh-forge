@@ -18,7 +18,9 @@
     "sync:upstream": "node scripts/sync-upstream.mjs",
     "project:upstream": "node scripts/vendor-project.mjs",
     "prepare:host-runtime": "node scripts/prepare-host-runtime.mjs",
-    "smoke:host-entry": "node scripts/smoke-host-entry.mjs"
+    "smoke:host-entry": "node scripts/smoke-host-entry.mjs",
+    "assemble:app-resources": "node scripts/assemble-app-resources.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

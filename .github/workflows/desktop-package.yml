@@ -1,0 +1,86 @@
+# Task 6.2: three-platform installer packaging (nsis / dmg / AppImage).
+# Workflow is wired here; scheduling/trigger policy and release publishing are
+# owned by task 6.3 (ci-release) — manual dispatch until then.
+name: desktop-package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  package:
+    name: package (${{ matrix.target }}-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: win32
+            arch: x64
+            runs-on: windows-latest
+            builder-target: nsis
+          - target: darwin
+            arch: x64
+            runs-on: macos-latest
+            builder-target: dmg
+          - target: linux
+            arch: x64
+            runs-on: ubuntu-latest
+            builder-target: AppImage
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout dsh-forge
+        uses: actions/checkout@v4
+
+      - name: Resolve vendored pinned SHA
+        id: sha
+        run: echo "sha=$(node -p "require('./vendor/upstream.lock.json').pinnedSha")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout upstream deepseek-harness at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.sha.outputs.sha }}
+          path: upstream
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Materialize vendored projection
+        run: node scripts/vendor-project.mjs --upstream "$GITHUB_WORKSPACE/upstream"
+
+      - name: Acquire builtin host runtime (Node 22.20.0)
+        run: node scripts/prepare-host-runtime.mjs --node-version 22.20.0
+
+      - name: Build desktop bundle
+        run: pnpm build:desktop
+
+      - name: Stage installer resources (runtime-file-policy trim)
+        run: node scripts/assemble-app-resources.mjs --target ${{ matrix.target }} --arch ${{ matrix.arch }}
+
+      - name: Build installer (electron-builder ${{ matrix.builder-target }})
+        run: pnpm --filter @dsh-forge/desktop exec electron-builder --config build/electron-builder.config.mjs -- ${{ matrix.builder-target }}
+        env:
+          DSH_FORGE_TARGET_PLATFORM: ${{ matrix.target }}
+          DSH_FORGE_TARGET_ARCH: ${{ matrix.arch }}
+
+      - name: Verify size budget + offline self-containment
+        run: node scripts/verify-package.mjs --platform ${{ matrix.target }}
+
+      - name: Upload installer artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-forge-${{ matrix.target }}-${{ matrix.arch }}-installer
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.AppImage
+          if-no-files-found: warn

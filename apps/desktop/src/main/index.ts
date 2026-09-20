@@ -249,8 +249,23 @@ void app.whenReady().then(async () => {
   const hostOutcome = new Promise<void>((resolve) => { notifyHostOutcome = resolve })
   installProtocolCarriage(carriage, { waitForHost: () => hostOutcome })
 
+  // Packaged wiring (task 6.2): in an installed app the vendored upstream
+  // tree and the builtin Node runtime live under process.resourcesPath
+  // (staged by scripts/assemble-app-resources.mjs, embedded as extraResources).
+  // The workspace-relative vendor-seam defaults only resolve in dev/e2e.
+  if (app.isPackaged) {
+    const resourcesPath = process.resourcesPath
+    process.env.DSH_FORGE_HOST_ENTRY ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'desktop-host', 'src', 'index.ts')
+    process.env.DSH_FORGE_WEB_ROOT ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'web', 'dist')
+    process.env.DSH_FORGE_NODE_EXE ??= join(resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'bin/node')
+    shellLog.info({ code: 'PACKAGED_RESOURCES', message: 'packaged app resolving embedded resources', data: { resourcesPath } })
+  }
+
   const supervisor = createHostSupervisor(
-    process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY },
+    {
+      ...(process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY }),
+      ...(process.env.DSH_FORGE_NODE_EXE === undefined ? {} : { nodeExecutable: process.env.DSH_FORGE_NODE_EXE }),
+    },
   )
 
   // One full host boot cycle: start → handshake → authenticate → carriage
