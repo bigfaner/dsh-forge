@@ -64,7 +64,7 @@ describe('tray creation', () => {
     expect(shellTray.state).toEqual({ present: true, missedCount: 0 })
     expect(tray.instance.setToolTip).toHaveBeenCalledWith(TRAY_NAME)
     expect(menus).toHaveLength(1)
-    expect(menus[0]!.map((item) => item.label)).toEqual(['显示主窗口', '退出 dsh-forge'])
+    expect(menus[0]!.map(item => item.label)).toEqual(['显示主窗口', '退出 dsh-forge'])
     expect(tray.instance.setContextMenu).toHaveBeenCalledWith({ menu: true })
   })
 
@@ -78,7 +78,7 @@ describe('tray creation', () => {
     const shellTray = createShellTray(deps)
     expect(shellTray.state).toEqual({ present: false, missedCount: 0 })
     // SC2: no thrown error, no dialog — log only, with the structured code.
-    expect(lines.some((line) => line.includes('ERR_TRAY_UNAVAILABLE'))).toBe(true)
+    expect(lines.some(line => line.includes('ERR_TRAY_UNAVAILABLE'))).toBe(true)
     // No-ops on the degraded handle must be safe.
     expect(() => {
       shellTray.incrementMissed()

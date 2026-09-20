@@ -56,13 +56,13 @@ describe('sender frame validation', () => {
   it('rejects and logs verbs from a foreign frame', () => {
     const lines = errorSink()
     expect(() => assertVerbSender(SHELL_VERB_CHANNELS.recoveryGetState, FOREIGN_EVENT)).toThrow(/unowned frame/)
-    expect(lines.some((line) => line.includes('ERR_IPC_SENDER_REJECTED') && line.includes('https://evil.example/'))).toBe(true)
+    expect(lines.some(line => line.includes('ERR_IPC_SENDER_REJECTED') && line.includes('https://evil.example/'))).toBe(true)
   })
 
   it('rejects and logs verbs when the frame is missing', () => {
     const lines = errorSink()
     expect(() => assertVerbSender(SHELL_VERB_CHANNELS.updateOpenRelease, NO_FRAME_EVENT)).toThrow(/unowned frame/)
-    expect(lines.some((line) => line.includes('ERR_IPC_SENDER_REJECTED'))).toBe(true)
+    expect(lines.some(line => line.includes('ERR_IPC_SENDER_REJECTED'))).toBe(true)
   })
 
   it('accepts the dsh-app://app/ main document frame without logging', () => {
@@ -92,10 +92,10 @@ describe('installShellVerbs', () => {
       expect(() => handler(FOREIGN_EVENT)).toThrow(/unowned frame/)
       expect(() => handler(OWNED_EVENT)).not.toThrow()
     }
-    expect(calls.filter((c) => c === 'dismiss')).toHaveLength(1)
-    expect(calls.filter((c) => c === 'openRelease')).toHaveLength(1)
-    expect(calls.filter((c) => c === 'restartApp')).toHaveLength(1)
-    expect(calls.filter((c) => c === 'getState')).toHaveLength(1)
+    expect(calls.filter(c => c === 'dismiss')).toHaveLength(1)
+    expect(calls.filter(c => c === 'openRelease')).toHaveLength(1)
+    expect(calls.filter(c => c === 'restartApp')).toHaveLength(1)
+    expect(calls.filter(c => c === 'getState')).toHaveLength(1)
   })
 })
 

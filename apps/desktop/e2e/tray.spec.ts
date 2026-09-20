@@ -14,7 +14,7 @@ async function launchShell(): Promise<ElectronApplication> {
 test('closing the main window hides it (tray residency), not quit', async ({ }, testInfo) => {
   testInfo.setTimeout(60_000)
   const electronApp = await launchShell()
-  const window = await electronApp.firstWindow()
+  await electronApp.firstWindow()
 
   // firstWindow resolves before ready-to-show; wait for the visible state
   // the residency assertion depends on.

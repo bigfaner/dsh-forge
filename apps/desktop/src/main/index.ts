@@ -121,7 +121,7 @@ export const sessionFocus = createSessionFocus({
 // build-time RELEASE_HOST/RELEASE_PATH_PREFIX allowlist before it runs.
 export const updateChecker = createUpdateChecker({
   fetchText: fetchReleaseFeed,
-  openExternal: (url) => shell.openExternal(url),
+  openExternal: url => shell.openExternal(url),
 })
 
 // Interface 2 (crash-recovery) instance for UF4 state; Interface 6 exposes its
@@ -241,9 +241,9 @@ void app.whenReady().then(async () => {
   // log only) and residency stays off — close then quits as before.
   tray = createShellTray({
     icon: loadTrayIcon(),
-    createTray: (icon) => new Tray(icon as Electron.NativeImage),
-    buildMenu: (template) => Menu.buildFromTemplate(template),
-    copy: (key) => t(key),
+    createTray: icon => new Tray(icon as Electron.NativeImage),
+    buildMenu: template => Menu.buildFromTemplate(template),
+    copy: key => t(key),
     focusMainWindow: focusPrimaryWindow,
     quitApp: () => {
       void app.quit()

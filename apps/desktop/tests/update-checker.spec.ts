@@ -93,7 +93,7 @@ describe('GitHub Releases atom feed parsing', () => {
     const result = parseReleaseFeed(atomFeed([{ title: 'v0.2.0-rc.1' }, { title: 'weird-title' }]))
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.entries.map((e) => e.version)).toEqual(['0.2.0-rc.1'])
+      expect(result.entries.map(e => e.version)).toEqual(['0.2.0-rc.1'])
     }
   })
 
