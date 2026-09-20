@@ -603,7 +603,7 @@
       "dependencies": [
         "T-test-gen-journeys"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "eval-journey.md",
       "record": "records/eval-journey.md",
       "mainSession": true,
@@ -654,7 +654,7 @@
         "4.1",
         "4.5"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "gen-journeys.md",
       "record": "records/gen-journeys.md",
       "type": "test.gen-journeys"
