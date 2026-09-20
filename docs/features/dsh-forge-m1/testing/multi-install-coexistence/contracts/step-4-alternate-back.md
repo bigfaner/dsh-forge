@@ -23,12 +23,19 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
   fixture_spec:
     entities:
       - entity_type: "Session"
-        min_count: 1
+        min_count: 3
         field_constraints:
           - field: "created_by"
             value: "at least one of each: CLI, official desktop, dsh-forge"
       - entity_type: "Credential"
         min_count: 1
+    relationships:
+      - parent_entity: "SharedHomeData"
+        child_entity: "Session"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Credential"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
 - Input: "User exits dsh-forge, then uses the CLI and the official desktop app against the same $DSH_HOME"
 - Output: "All three forms read the sessions and credentials — including those created by dsh-forge — normally, with zero data corruption"
 - State: "Shared data unchanged in format and content apart from each form's own legitimate writes"

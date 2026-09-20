@@ -29,6 +29,13 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
             value: "currently selected workspace"
       - entity_type: "Credential"
         min_count: 1
+    relationships:
+      - parent_entity: "Workspace"
+        child_entity: "Session"
+        relationship_type: "contains (session belongs to the currently selected workspace)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Credential"
+        relationship_type: "stored_in (credential persisted in shared $DSH_HOME)"
 - Input: "User opens an existing session from the sessions list and exchanges chat messages with the assistant"
 - Output: "Sessions list, session history, and chat interaction behave identically to the existing web GUI; message flow renders correctly in the desktop carrier"
 - State: "New chat messages are appended to the session history in the upstream existing format"

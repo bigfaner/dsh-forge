@@ -23,10 +23,10 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
   fixture_spec:
     entities:
       - entity_type: "Workspace"
-        min_count: 1
+        min_count: 2
         field_constraints:
-          - field: "count"
-            value: "at least 2"
+          - field: "file_tree"
+            value: "browsable"
 - Input: "User browses the workspace file tree and switches to another workspace"
 - Output: "File tree navigation and workspace switching work identically to the web GUI with no state loss"
 - State: "Current workspace selection changes; session and UI state of both workspaces preserved"

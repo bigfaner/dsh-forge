@@ -33,6 +33,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
           - field: "state"
             value: "active"
 - Input: "User launches the app with the fake Releases feed configured"
+<!-- source: inferred — the 60-second upper bound is a test-observation window for the asynchronous update check, not a value from the fact table or tech-design -->
 - Output: "An in-app update hint appears within 60 seconds of startup"
 - State: "Update banner state shown; app otherwise in normal running state"
 - Side-effect: "none"

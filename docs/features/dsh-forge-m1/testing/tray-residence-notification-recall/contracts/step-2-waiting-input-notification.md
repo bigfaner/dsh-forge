@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A — no form submission; session-expired covered at Step 4d. -->
+<!-- fixture entity mapping: OSPermission is OS-level state (notification permission) with no tech-design §Data Models counterpart; fixture generation sets it via the OS notification settings of the test environment -->
 
 ## Outcome "success"
 <!-- residual eval attack point (locale observation) folded into success Output: notification text must follow the active upstream locale, observed in both zh and en -->

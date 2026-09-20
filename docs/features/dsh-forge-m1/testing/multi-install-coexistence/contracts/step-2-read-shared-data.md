@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A — read-only step; session-expired covered at Step 4d. -->
+<!-- fixture entity mapping: RunningInstance ≙ UpstreamLock (tech-design §Data Models) observed at the OS-process level (one per app) -->
 
 ## Outcome "success"
 - Preconditions: "dsh-forge is launched; $DSH_HOME contains sessions and credentials created earlier by CLI and/or the official desktop"
@@ -32,6 +33,13 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         field_constraints:
           - field: "created_by"
             value: "CLI or official desktop"
+    relationships:
+      - parent_entity: "SharedHomeData"
+        child_entity: "Session"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Credential"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
 - Input: "User opens dsh-forge and browses sessions and credentials created earlier by CLI/official desktop"
 - Output: "Shared $DSH_HOME sessions and credentials are read correctly in the upstream existing format"
 - State: "No write occurs to the browsed data; format unchanged"

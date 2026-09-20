@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A — workspace creation has no validation-bearing form in this journey; session-expired N/A — no active session yet. -->
+<!-- fixture entity mapping: SharedHomeData is an aggregate view over the shared $DSH_HOME contents (sessions/settings/credentials in the upstream existing format); tech-design §Data Models defines no single struct for it — fixture generation materializes it as upstream-format files under $DSH_HOME -->
 
 ## Outcome "success"
 - Preconditions: "API key configured and at least one existing workspace available in the picker"

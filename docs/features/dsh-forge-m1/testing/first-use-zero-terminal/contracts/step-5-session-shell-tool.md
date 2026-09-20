@@ -34,6 +34,13 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         field_constraints:
           - field: "state"
             value: "running"
+    relationships:
+      - parent_entity: "Workspace"
+        child_entity: "Session"
+        relationship_type: "contains (session runs inside the selected workspace)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Credential"
+        relationship_type: "stored_in (credential persisted in shared $DSH_HOME)"
 - Input: "User sends a message that triggers a shell tool call in the running session"
 - Output: "At least one shell tool call executes successfully and its result is visible in the session UI"
 - State: "Shell tool call and result recorded in the session history in the upstream existing format"

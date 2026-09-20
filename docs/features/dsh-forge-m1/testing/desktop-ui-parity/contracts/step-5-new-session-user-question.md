@@ -32,6 +32,38 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - State: "New session persisted to shared $DSH_HOME in the upstream existing format; workflow resumed after the answer"
 - Side-effect: "none"
 
+## Outcome "user-question-dismissed-without-answer"
+<!-- source: inferred -->
+<!-- reasoning: parity risk framing requires the boundary where the user abandons the question; the web GUI keeps the session usable after dismissal and the desktop carrier must match -->
+- Preconditions: "A turn has raised a user-question that is rendered and awaiting an answer"
+  fixture_spec:
+    entities:
+      - entity_type: "Session"
+        min_count: 1
+        field_constraints:
+          - field: "state"
+            value: "user-question pending, unanswered"
+- Input: "User dismisses the user-question without answering it"
+- Output: "The question closes without an answer; the session remains open and usable (no hang, no forced answer, no lost session) — identical to web GUI behavior"
+- State: "Session intact and interactable; unanswered question recorded in session state; workflow paused but resumable"
+- Side-effect: "none"
+
+## Outcome "new-session-creation-failure"
+<!-- source: inferred -->
+<!-- reasoning: new-session creation depends on writes to shared $DSH_HOME; a failed write (e.g., disk/permission fault) is the creation-side boundary of this step -->
+- Preconditions: "A workspace is selected; a write to shared $DSH_HOME for the new session fails (e.g., no space or permission denied at the OS level)"
+  fixture_spec:
+    entities:
+      - entity_type: "Workspace"
+        min_count: 1
+        field_constraints:
+          - field: "state"
+            value: "session UI ready, storage write failing"
+- Input: "User attempts to create a new session"
+- Output: "Creation fails with visible in-app error feedback (no silent failure, no hang); existing sessions and shared data are not corrupted"
+- State: "No partial new-session entry persisted; pre-existing sessions and settings unchanged"
+- Side-effect: "none"
+
 ## Journey Invariants
 
 - Every web GUI functional surface exercised in this journey remains 100% usable in the desktop carrier — the user observes identical behavior, rendering, and outcomes on every surface, with no capability loss or carrier-specific failure

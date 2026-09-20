@@ -17,9 +17,11 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A and session-expired N/A — installer-level step with no form submission and no session dependency. -->
+<!-- fixture entity mapping: RunningInstance ≙ UpstreamLock (tech-design §Data Models) observed at the OS-process level; for the official desktop app the lock is the upstream app's own single-instance mechanism, mirrored here as an observable process -->
 
 ## Outcome "success"
-- Preconditions: "Machine already runs dsh CLI and the official upstream desktop app with pre-existing sessions and credentials in $DSH_HOME"
+<!-- coexistence verified at app level: pre-existing upstream state present, and the dsh-forge profile path is uninitialized (first install on this machine) -->
+- Preconditions: "Machine already runs dsh CLI and the official upstream desktop app with pre-existing sessions and credentials in $DSH_HOME; dsh-forge has never been installed, so its profile path is uninitialized; verification focus is app-level coexistence"
   fixture_spec:
     entities:
       - entity_type: "Installation"
@@ -43,7 +45,8 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - Side-effect: "none"
 
 ## Outcome "profile-directory-collision"
-- Preconditions: "Upstream desktop profile directory already exists on the machine before dsh-forge is installed"
+<!-- distinguishing system state vs success: collision-watch mode engaged at the profile-root level (filesystem verification focus), not app-level coexistence -->
+- Preconditions: "Upstream desktop profile directory already exists and is populated on the machine before dsh-forge is installed; the harness is in collision-watch mode with verification focus on the profile-root directory level rather than app coexistence"
   fixture_spec:
     entities:
       - entity_type: "ProfileDirectory"
@@ -54,6 +57,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - Input: "User installs and launches dsh-forge, then inspects the profile directories"
 - Output: "dsh-forge profile is an independent directory (not equal to upstream desktop); the official desktop profile is not modified or overwritten"
 - State: "Two distinct profile directories coexist; upstream profile content byte-identical to before install"
+  <!-- OS-surface qualifier: the byte-identical check is a filesystem-level assertion owned by the journey-level OS/desktop smoke, not the web surface; declared here for traceability -->
 - Side-effect: "none"
 
 ## Outcome "install-while-official-desktop-running"

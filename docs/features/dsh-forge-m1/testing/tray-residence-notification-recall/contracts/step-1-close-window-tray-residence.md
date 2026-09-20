@@ -35,10 +35,12 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - Input: "User closes the main window while a session is running"
 - Output: "The app stays resident in the system tray (does not exit); both the shell process and host subprocess remain alive"
 - State: "App tray-resident; own process count remains 2 (shell + host)"
+  <!-- source: inferred — the steady-state process-count bound (shell main + host subprocess = 2) comes from this journey's invariant, not from a fact-table entry; verified by the journey-level OS/desktop smoke -->
 - Side-effect: "none"
 
 ## Outcome "full-exit-via-tray"
-- Preconditions: "App is running with a session; the user chooses fully exit from the tray menu"
+<!-- distinguishing system state vs success: the user's session is finalized for termination (exit intent already registered), not merely window-close residency -->
+- Preconditions: "App is running with a session whose work the user has concluded; the app is in a terminable state (exit intent registered — distinct from the close-window-to-residency state of the success outcome)"
   fixture_spec:
     entities:
       - entity_type: "Session"

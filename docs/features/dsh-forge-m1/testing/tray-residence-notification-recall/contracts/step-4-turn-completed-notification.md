@@ -42,12 +42,10 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
   fixture_spec:
     entities:
       - entity_type: "Session"
-        min_count: 1
+        min_count: 2
         field_constraints:
           - field: "state"
-            value: "waiting"
-          - field: "count"
-            value: "2 distinct sessions waiting"
+            value: "waiting (2 distinct sessions)"
 - Input: "User receives notifications and clicks the one for the second session"
 - Output: "Each notification focuses its own corresponding session, with no cross-session misdirection"
 - State: "Focus lands on the second session only; first session still waiting"
@@ -67,8 +65,13 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         field_constraints:
           - field: "window"
             value: "10s per session per event type"
+    relationships:
+      - parent_entity: "Session"
+        child_entity: "NotificationDedup"
+        relationship_type: "scoped_to (dedup window is per session per event type)"
 - Input: "User lets both events fire, observes the notification area, then clicks the merged notification"
-- Output: "The events are merged into a single notification whose content reflects the latest event (no duplicate notification stack); clicking it still focuses the corresponding session — Fact FT-007 DEDUP_WINDOW_MS = 10000"
+<!-- Fact FT-007 DEDUP_WINDOW_MS = 10000 — the behavioral 10-second window below is the fact's user-visible form -->
+- Output: "The events are merged into a single notification whose content reflects the latest event (no duplicate notification stack) within a 10-second deduplication window; clicking it still focuses the corresponding session"
 - State: "Exactly one notification for the session/event-type pair; click focuses the correct session"
 - Side-effect: "none"
 

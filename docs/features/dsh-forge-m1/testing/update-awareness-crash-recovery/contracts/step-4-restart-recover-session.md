@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: session-expired applies to this step (Outcome session-expired-during-recovery); validation-error N/A — no form submission. -->
+<!-- fixture entity mapping: HostSubprocess ≙ HostHandle (tech-design §Data Models) observed as an OS process; RecoveryState ≙ RecoveryContext -->
 
 ## Outcome "success"
 - Preconditions: "The host subprocess was killed mid-session; a crash-recovery notice is displayed"

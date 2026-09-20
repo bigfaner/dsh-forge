@@ -32,7 +32,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - Input: "User clicks the update hint"
 - Output: "The user is guided to the release page for manual download (external browser open permitted only for URLs matching the RELEASE_HOST whitelist — Fact FT-009 github.com + /bigfaner/dsh-forge/releases); the app continues running normally afterward"
 - State: "External browser opened to the whitelisted release page; app state unchanged and running"
-- Side-effect: "External browser open via openExternal (allowlist-gated)"
+- Side-effect: "The user's default external browser opens to the allowlisted release page; no page other than an allowlisted release URL may be opened externally"
 
 ## Outcome "feed-same-version"
 - Preconditions: "The fake feed reports the currently installed version (no update)"
@@ -74,7 +74,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 - Input: "User clicks the update hint"
 - Output: "The external open is rejected — no browser/page opens for the non-whitelisted URL; the rejection is logged; the app continues running normally without crash — Fact FT-005 ERR_UPDATE_URL_REJECTED"
 - State: "No external navigation occurred; app in normal running state; rejection entry present in diagnostics"
-- Side-effect: "openExternal attempted and rejected by allowlist; rejection logged"
+- Side-effect: "External browser open attempted and blocked by the release-URL allowlist; no browser/page opens; the rejection is logged"
 
 ## Journey Invariants
 

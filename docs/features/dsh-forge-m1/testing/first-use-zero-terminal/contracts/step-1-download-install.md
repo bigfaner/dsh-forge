@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A and session-expired N/A — installer-level step with no form submission and no session dependency. Per-step Outcome count is 2 (below High target of 3): the installer surface exposes no further fact-backed boundary; density is met at journey level (17 total). -->
+<!-- fixture entity mapping: InstallerPackage is a test-harness artifact entity with no tech-design §Data Models counterpart (the installer download predates any app state); fixture generation materializes it as a downloaded installer file -->
 
 ## Outcome "success"
 - Preconditions: "Clean machine with no Node/git/pnpm preinstalled; installer package already downloaded from GitHub Releases"

@@ -28,6 +28,16 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         min_count: 1
       - entity_type: "Settings"
         min_count: 1
+    relationships:
+      - parent_entity: "SharedHomeData"
+        child_entity: "Session"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Credential"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
+      - parent_entity: "SharedHomeData"
+        child_entity: "Settings"
+        relationship_type: "stored_in (shared $DSH_HOME, upstream existing format)"
 - Input: "User creates a new session and updates settings/credentials inside dsh-forge"
 - Output: "Writes persist to $DSH_HOME in the upstream existing format with no schema change or migration"
 - State: "New session and updated settings/credentials persisted in upstream format"

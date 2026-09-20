@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A — no form submission; session-expired N/A — no session dependency yet. -->
+<!-- fixture entity mapping: RunningInstance ≙ UpstreamLock (tech-design §Data Models) observed at the OS-process level — the design struct is the single-instance lock; the fixture declares the observable running process it gates -->
 
 ## Outcome "success"
 - Preconditions: "App is installed and no prior dsh-forge instance is running; shared $DSH_HOME may contain upstream product data"

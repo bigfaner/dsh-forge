@@ -19,30 +19,30 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 <!-- surface-required note: validation-error N/A — approval response is not a validation-bearing form; session-expired covered at Step 5c. -->
 
 ## Outcome "success"
-- Preconditions: "A session has a pending approval prompt raised by the session"
+- Preconditions: "A session has a pending approval prompt raised by the session; the user's decision state is to approve the prompt"
   fixture_spec:
     entities:
       - entity_type: "Session"
         min_count: 1
         field_constraints:
           - field: "state"
-            value: "pending approval prompt"
-- Input: "User responds to the pending approval prompt"
-- Output: "At least one approval interaction completes; the session proceeds according to the approval decision"
+            value: "pending approval prompt, decision = approve"
+- Input: "User approves the pending approval prompt"
+- Output: "At least one approval interaction completes; the session proceeds with the approved tool execution"
 - State: "Approval decision recorded in session history; session continues"
 - Side-effect: "none"
 
 ## Outcome "approval-rejected-path"
 <!-- source: inferred -->
 <!-- reasoning: journey expected result says the session proceeds according to the approval decision — the reject branch is the boundary the happy-path wording leaves implicit -->
-- Preconditions: "A session has a pending approval prompt and the user chooses to reject/deny it"
+- Preconditions: "A session has a pending approval prompt raised by the session; the user's decision state is to reject/deny the prompt"
   fixture_spec:
     entities:
       - entity_type: "Session"
         min_count: 1
         field_constraints:
           - field: "state"
-            value: "pending approval prompt"
+            value: "pending approval prompt, decision = reject"
 - Input: "User rejects the approval"
 - Output: "The session proceeds according to the rejected decision (tool not executed, session continues or terminates per upstream semantics) — identical to web GUI behavior"
 - State: "Rejected decision recorded; no tool side-effect executed for the rejected call"

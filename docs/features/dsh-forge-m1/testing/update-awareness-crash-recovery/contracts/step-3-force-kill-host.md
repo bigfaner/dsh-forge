@@ -17,6 +17,7 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- surface-required note: validation-error N/A and session-expired N/A — no form; expiry covered at Step 5a. Per-step Outcome count is 2 (below High target of 3): the fact-backed crash boundaries are exhausted at this step — shell-main-crash here and the recovery-path variants at Step 4; journey total (14) meets the 13-20 target. -->
+<!-- fixture entity mapping: HostSubprocess ≙ HostHandle (tech-design §Data Models) observed as an OS process; ShellProcess is the Electron shell main process — no persisted design struct exists for it; both are materialized as observable OS processes by fixture generation -->
 
 ## Outcome "success"
 - Preconditions: "A session is in progress with the host subprocess running"

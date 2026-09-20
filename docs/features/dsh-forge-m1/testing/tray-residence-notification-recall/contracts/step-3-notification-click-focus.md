@@ -32,9 +32,14 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         field_constraints:
           - field: "state"
             value: "waiting"
+    relationships:
+      - parent_entity: "Session"
+        child_entity: "Notification"
+        relationship_type: "refers_to (each notification targets exactly one session)"
 - Input: "User clicks the waiting-for-user-input notification"
 - Output: "The main window reopens/restores and focuses the corresponding session"
 - State: "Window restored and focused on the target session; app process count still 2"
+  <!-- OS-surface qualifier: the process-count assertion is owned by the journey-level OS/desktop smoke, not the web surface; declared here for traceability -->
 - Side-effect: "none"
 
 ## Outcome "session-already-focused"
@@ -51,6 +56,10 @@ last_anchor_sync: "2026-09-20T12:00:00Z"
         field_constraints:
           - field: "state"
             value: "already focused in restored window"
+    relationships:
+      - parent_entity: "Session"
+        child_entity: "Notification"
+        relationship_type: "refers_to (stale notification still targets its session)"
 - Input: "User clicks the notification anyway"
 - Output: "No duplicate window or broken focus; the existing window/session is simply brought to front"
 - State: "Still exactly one window and one focused session"
