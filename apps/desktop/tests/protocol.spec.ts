@@ -166,6 +166,15 @@ describe('createProtocolCarriage (routing)', () => {
     expect(carriage.bootPayload()).toBeUndefined()
   })
 
+  it('hostBinding mirrors the mutable setHost/clearHost state for the WS rewrite layer', () => {
+    const carriage = createProtocolCarriage(deps)
+    expect(carriage.hostBinding()).toBeUndefined()
+    carriage.setHost('http://127.0.0.1:19387/', 'dsh-auth=t')
+    expect(carriage.hostBinding()).toEqual({ url: 'http://127.0.0.1:19387/', cookie: 'dsh-auth=t' })
+    carriage.clearHost()
+    expect(carriage.hostBinding()).toBeUndefined()
+  })
+
   it('forwards API routes to the bound host', async () => {
     const carriage = createProtocolCarriage(deps)
     carriage.setHost('http://127.0.0.1:19387/', 'dsh-auth=t')

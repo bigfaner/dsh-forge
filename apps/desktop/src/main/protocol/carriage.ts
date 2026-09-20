@@ -45,6 +45,11 @@ export interface ProtocolCarriage {
   setHost(url: string, cookie: string): void
   /** Drop the Host binding (host exit / restart); API routes answer 503 again. */
   clearHost(): void
+  /**
+   * Current Host binding ({ url, cookie }) for the WS header-rewrite layer;
+   * undefined while no host is bound (mirrors upstream mutable hostUrl/hostCookie).
+   */
+  hostBinding(): { url: string; cookie: string } | undefined
   /** Replace the Host-provided boot injections. */
   setInjections(injections: readonly unknown[]): void
   /** Boot IPC payload; undefined until a Host URL is bound. */
@@ -98,6 +103,10 @@ export function createProtocolCarriage(deps: ProtocolCarriageDeps): ProtocolCarr
     clearHost(): void {
       hostUrl = undefined
       hostCookie = undefined
+    },
+    hostBinding(): { url: string; cookie: string } | undefined {
+      if (hostUrl === undefined || hostCookie === undefined) return undefined
+      return { url: hostUrl, cookie: hostCookie }
     },
     setInjections(next: readonly unknown[]): void {
       injections = next

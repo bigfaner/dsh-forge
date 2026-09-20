@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell, Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, session, shell, Tray } from 'electron'
 import { join } from 'node:path'
 import { OFFICE_SKILLS_ASSETS_DIR, WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
 import { shellLog } from './log.ts'
@@ -21,6 +21,7 @@ import { createUpdateBannerState } from './update-banner-state/index.ts'
 import { projectHostProfile } from './host-profile/index.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
+import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -279,6 +280,32 @@ void app.whenReady().then(async () => {
   const hostOutcome = new Promise<void>((resolve) => { notifyHostOutcome = resolve })
   installProtocolCarriage(carriage, { waitForHost: () => hostOutcome })
   shellCarriage = carriage
+
+  // WS header-rewrite layer (ported from upstream main.ts): the renderer's
+  // stream client opens a DIRECT WebSocket to the Host origin, which the
+  // Host's Origin fence would 403/401 — rewrite origin/cookie/sec-fetch-site
+  // for main-window WS traffic toward the bound host authority. Registered
+  // once; reads the carriage's mutable host binding on every request, and
+  // passes anything else (including a foreign origin claiming our scheme —
+  // cancelled) through the pure decision in ws-header-rewrite.ts.
+  session.defaultSession.webRequest.onBeforeSendHeaders(WS_REWRITE_URL_FILTER, (details, callback) => {
+    const binding = carriage.hostBinding()
+    const result = resolveWsHeaderRewrite({
+      hostUrl: binding?.url,
+      hostCookie: binding?.cookie,
+      mainWebContentsId: mainWindow === undefined || mainWindow.isDestroyed() ? undefined : mainWindow.webContents.id,
+      details: { url: details.url, webContentsId: details.webContentsId, requestHeaders: details.requestHeaders },
+    })
+    if (result.passthrough) {
+      callback({})
+      return
+    }
+    if (result.cancel) {
+      callback({ cancel: true })
+      return
+    }
+    callback({ requestHeaders: result.requestHeaders })
+  })
 
   const supervisor = createHostSupervisor(
     {
