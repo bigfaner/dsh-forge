@@ -19,6 +19,14 @@ contextBridge.exposeInMainWorld('dshDesktopBoot', {
 contextBridge.exposeInMainWorld('__DSH_FORGE_SHELL__', {
   // Skeleton verb: shell version probe. Real verbs land with their features.
   ping: (): string => 'dsh-forge-shell',
+  // Interface 5 fallback toast: the main process pushes an already-localized
+  // manual-switch message; the shell-ui overlay renders it. Returns an
+  // unsubscriber (single-listener semantic verb, sender = shell main only).
+  onToast: (callback: (message: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string): void => callback(message)
+    ipcRenderer.on('dsh-forge:toast', listener)
+    return () => ipcRenderer.removeListener('dsh-forge:toast', listener)
+  },
 })
 
 // Keep the ipcRenderer import exercised for the whitelist pattern above; the

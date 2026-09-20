@@ -19,11 +19,37 @@
   var gate = globalThis.__DSH_BOOT_READY__
   if (gate !== undefined && gate.promise !== undefined && typeof gate.promise.then === 'function') {
     gate.promise.then(mount, mount)
-    return
-  }
-  if (document.readyState === 'loading') {
+  } else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mount)
-    return
+  } else {
+    mount()
   }
-  mount()
+
+  // Interface 5 fallback toast (task 4.5): the main process has no
+  // session-focus channel into the upstream SPA (spike-3), so a focus
+  // request degrades to "front window + manual-switch toast". This renders
+  // that toast inside the shell overlay root.
+  var TOAST_DURATION_MS = 6000
+  var toastTimer = null
+  function showToast(message) {
+    var root = document.getElementById(ROOT_ID)
+    if (root === null) return
+    var el = document.getElementById('dsh-forge-toast')
+    if (el === null) {
+      el = document.createElement('div')
+      el.id = 'dsh-forge-toast'
+      el.setAttribute('role', 'status')
+      root.append(el)
+    }
+    el.textContent = message
+    if (toastTimer !== null) clearTimeout(toastTimer)
+    toastTimer = setTimeout(function () {
+      el.remove()
+      toastTimer = null
+    }, TOAST_DURATION_MS)
+  }
+  var bridge = globalThis.__DSH_FORGE_SHELL__
+  if (bridge !== undefined && typeof bridge.onToast === 'function') {
+    bridge.onToast(showToast)
+  }
 })()

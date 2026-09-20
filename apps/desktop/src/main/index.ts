@@ -11,6 +11,7 @@ import { installProtocolCarriage } from './protocol/bootstrap.ts'
 import { registerShellScheme } from './protocol/scheme.ts'
 import { SHELL_APP_URL } from './protocol/constants.ts'
 import { claimShellSingleInstance, focusShellWindow } from './single-instance.ts'
+import { createSessionFocus } from './session-focus/index.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -79,6 +80,17 @@ let mainWindow: BrowserWindow | undefined
 function focusPrimaryWindow(): void {
   mainWindow = focusShellWindow(mainWindow, createWindow) as BrowserWindow
 }
+
+// Interface 5 (session focus), frozen fallback per spike-3: no runtime
+// channel into the upstream SPA exists, so focusSession always fronts the
+// main window, toasts `toast.manualSwitch`, and returns false.
+export const sessionFocus = createSessionFocus({
+  focusMainWindow: focusPrimaryWindow,
+  showToast: (message) => {
+    if (mainWindow === undefined || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('dsh-forge:toast', message)
+  },
+})
 
 // F1: claim single-instance ownership before any profile lifecycle. The
 // losing instance logs ERR_SINGLE_INSTANCE and exits inside the claim.
