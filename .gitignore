@@ -30,14 +30,12 @@ packages/desktop-host-vendor/vendored/pnpm-lock.yaml
 packages/desktop-host-vendor/vendored/patches/
 
 packages/desktop-host-vendor/vendored/.closure-install-backup/
-packages/desktop-host-vendor/vendored/packages/subprocess/subprocess-local/scripts/
 packages/desktop-host-vendor/vendored/apps/web/dist/
 packages/desktop-host-vendor/vendored/**/lib/
 packages/desktop-host-vendor/vendored/.closure-supplements/
-# Office-skills assets projected from the upstream checkout (install-host-closure)
-packages/desktop-host-vendor/vendored/packages/skill/skill-office/assets/
-# Bundle patch overlays staged by install-host-closure (runtime data, not projection src)
-packages/desktop-host-vendor/vendored/packages/**/cordis.patch.yml
+# (disc-3) presets/, assets/, scripts/, *.patch.yml are lock-tracked projection
+# content now — vendor/upstream.lock.json carries their sha256 — so they are
+# committed like src/; install-host-closure still re-copies them harmlessly.
 
 # host runtime residue (dsh profile root marker written when dev host runs from repo cwd)
 cordis.yml

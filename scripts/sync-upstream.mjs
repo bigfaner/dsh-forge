@@ -21,9 +21,15 @@
  *     (`--verify-imports`): it must report a subset of the manifest closure.
  *
  * File projection (source projection, same shape as the vendor decision):
- *   per package: package.json, tsconfig.json, tsdown.config.ts, src/**
- *   (tests / node_modules / build output excluded — not part of the closure
- *   payload).
+ *   per package: package.json, tsconfig.json, tsdown.config.ts, src/**, plus
+ *   the package's RUNTIME DATA: presets/ (agent-presets' shipped compositions
+ *   — session create resolves them through SHIPPED_PRESET_ROOT = <pkg>/presets),
+ *   assets/ (skill-office/skill-badge payloads), scripts/ (subprocess-local's
+ *   ensure-spawn-helper), and root-level *.patch.yml (bundle cordis.patch.yml
+ *   overlays read by profile loading). Excluded: tests, node_modules, build
+ *   output, README*, tsconfig.*.json variants — not closure payload.
+ *   (disc-3: the src-only rule shipped a host whose agent-preset registry was
+ *   empty — `startSession` failed silently with agent-preset/not-found.)
  *
  * Integrity: every vendored file records a sha256 digest; the lock also pins
  * the upstream commit SHA so drift is detectable. `--mode verify` recomputes
@@ -169,8 +175,10 @@ export function resolveClosure(index, rootName) {
 
 // --- File projection ------------------------------------------------------
 
-const PROJECTED_ROOT_FILES = ['package.json', 'tsconfig.json', 'tsdown.config.ts']
-const PROJECTED_DIRS = ['src']
+const PROJECTED_ROOT_FILES = ['package.json', 'tsconfig.json', 'tsdown.config.ts', 'LICENSE']
+// Runtime data dirs a package may carry alongside src/ (see header note):
+// shipped agent presets, skill/tool payload assets, per-package runtime scripts.
+const PROJECTED_DIRS = ['src', 'presets', 'assets', 'scripts']
 const SKIP_DIRS = new Set(['node_modules', '.git'])
 
 export function* walk(dir) {
@@ -189,6 +197,11 @@ export function projectPackageFiles(pkgDir) {
   for (const name of PROJECTED_ROOT_FILES) {
     const p = join(pkgDir, name)
     if (existsSync(p)) files.push(p)
+  }
+  // Root-level bundle patch overlays (cordis.patch.yml): runtime data read by
+  // profile loading (dsh.bundle.patch manifest entries).
+  for (const entry of readdirSync(pkgDir)) {
+    if (entry.endsWith('.patch.yml')) files.push(join(pkgDir, entry))
   }
   for (const dir of PROJECTED_DIRS) {
     const p = join(pkgDir, dir)

@@ -15,7 +15,7 @@
       "name": "@deepseek-ai/cordis",
       "version": "4.0.2",
       "dir": "vendor/cordis",
-      "fileCount": 11
+      "fileCount": 12
     },
     {
       "name": "@deepseek-ai/dsh",
@@ -69,43 +69,43 @@
       "name": "@deepseek-ai/dsh-skill-office",
       "version": "0.1.6-alpha.2",
       "dir": "packages/skill/skill-office",
-      "fileCount": 3
+      "fileCount": 7
     },
     {
       "name": "@deepseek-ai/cosmokit",
       "version": "1.8.3",
       "dir": "vendor/cosmokit",
-      "fileCount": 8
+      "fileCount": 9
     },
     {
       "name": "@deepseek-ai/dsh-hmr",
       "version": "0.1.6-alpha.2",
       "dir": "packages/boot/hmr",
-      "fileCount": 5
+      "fileCount": 6
     },
     {
       "name": "@deepseek-ai/cordis-plugin-include",
       "version": "1.0.7",
       "dir": "vendor/include",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/cordis-plugin-loader",
       "version": "1.0.3",
       "dir": "vendor/loader",
-      "fileCount": 10
+      "fileCount": 11
     },
     {
       "name": "@deepseek-ai/cordis-plugin-timer",
       "version": "1.1.4",
       "dir": "vendor/timer",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-acp-app",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/acp-app",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-agent-instructions",
@@ -123,7 +123,7 @@
       "name": "@deepseek-ai/dsh-base",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/base",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-client-ui-agent-preset",
@@ -177,13 +177,13 @@
       "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
       "version": "0.1.6-alpha.2",
       "dir": "packages/experimental/agent-team-profile",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-experimental-agent-team-web-profile",
       "version": "0.1.6-alpha.2",
       "dir": "packages/experimental/agent-team-web-profile",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-fs-local",
@@ -207,7 +207,7 @@
       "name": "@deepseek-ai/dsh-headless",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/headless",
-      "fileCount": 7
+      "fileCount": 8
     },
     {
       "name": "@deepseek-ai/dsh-hooks-claude-code",
@@ -273,13 +273,13 @@
       "name": "@deepseek-ai/dsh-sdk-app",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/sdk-app",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-sdk-minimal",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/sdk-minimal",
-      "fileCount": 3
+      "fileCount": 4
     },
     {
       "name": "@deepseek-ai/dsh-session-projection",
@@ -453,7 +453,7 @@
       "name": "@deepseek-ai/dsh-web-app",
       "version": "0.1.6-alpha.2",
       "dir": "packages/bundle/web-app",
-      "fileCount": 4
+      "fileCount": 5
     },
     {
       "name": "@deepseek-ai/dsh-webhook",
@@ -477,7 +477,7 @@
       "name": "@deepseek-ai/schemastery",
       "version": "3.18.2",
       "dir": "vendor/schemastery",
-      "fileCount": 4
+      "fileCount": 5
     },
     {
       "name": "@deepseek-ai/dsh-http-proxy",
@@ -729,7 +729,7 @@
       "name": "@deepseek-ai/dsh-skill-badge",
       "version": "0.1.6-alpha.2",
       "dir": "packages/skill/skill-badge",
-      "fileCount": 3
+      "fileCount": 5
     },
     {
       "name": "@deepseek-ai/dsh-spill-local",
@@ -783,7 +783,7 @@
       "name": "@deepseek-ai/dsh-subprocess-local",
       "version": "0.1.6-alpha.2",
       "dir": "packages/subprocess/subprocess-local",
-      "fileCount": 19
+      "fileCount": 20
     },
     {
       "name": "@deepseek-ai/dsh-system-prompt",
@@ -891,7 +891,7 @@
       "name": "@deepseek-ai/dsh-agent-presets",
       "version": "0.1.6-alpha.2",
       "dir": "packages/preset/agent-presets",
-      "fileCount": 14
+      "fileCount": 24
     },
     {
       "name": "@deepseek-ai/dsh-api-remotes",
@@ -1495,6 +1495,10 @@
       "sha256": "b4f1307af10f4e9c6da83f84bef23fda9ea63c1847b906a472db20ae66f3d42d"
     },
     {
+      "path": "vendor/cordis/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
+    },
+    {
       "path": "vendor/cordis/package.json",
       "sha256": "8b38780c3a8e5de57f9ad98219bfd6b8fb7877829a1b84e1e987926f32f2dae9"
     },
@@ -1847,6 +1851,22 @@
       "sha256": "8d8b9eda0ef6cff70b36589d5692767fee68141752cd73b19272379c8b699433"
     },
     {
+      "path": "packages/skill/skill-office/assets/office-docx/SKILL.md",
+      "sha256": "6ffd5866a8b025dbb02638be193ac5fe9908148f6c2a557dea74347aad5e0dc2"
+    },
+    {
+      "path": "packages/skill/skill-office/assets/office-pptx/SKILL.md",
+      "sha256": "56c3eb3a6e1a8d9abebd245f6d117c2c7614b9cb87fb73d22939116d8288ceb3"
+    },
+    {
+      "path": "packages/skill/skill-office/assets/office-xlsx/SKILL.md",
+      "sha256": "b8394b54de0d14c90e6377351c7cf871753cede404528c031abf8b056f96880a"
+    },
+    {
+      "path": "packages/skill/skill-office/assets/scripts/check_office.py",
+      "sha256": "d94afa67593a284751e0f2dc000877e836f885d39954a882033cf22a13278f66"
+    },
+    {
       "path": "packages/skill/skill-office/package.json",
       "sha256": "5a54004de48212554323cb1d52f48980e97b359eba460b3f53b84c5a3d4dfcc0"
     },
@@ -1857,6 +1877,10 @@
     {
       "path": "packages/skill/skill-office/tsconfig.json",
       "sha256": "61a546bc2dfc93bdb825b0899498d90e147616875c204db2e9752078d7ae77b6"
+    },
+    {
+      "path": "vendor/cosmokit/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
     },
     {
       "path": "vendor/cosmokit/package.json",
@@ -1891,6 +1915,10 @@
       "sha256": "a747d0d38c24a5efc4d4db7750e62c0d10f62ee951b5b8cde156ca50cdbbc402"
     },
     {
+      "path": "packages/boot/hmr/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
+    },
+    {
       "path": "packages/boot/hmr/package.json",
       "sha256": "d887c4a518da3a5baf20d67f09e8ca05daf4e16693c0577154f03602abbd6086"
     },
@@ -1911,6 +1939,10 @@
       "sha256": "ac94bb9613b0c02b094445d430bfb0bbf1771b19214f17910f57c746981ffb12"
     },
     {
+      "path": "vendor/include/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
+    },
+    {
       "path": "vendor/include/package.json",
       "sha256": "71b49b0ad53ac5a9a5e94b593c389a9249be5da952ea5cd211d5c8ecc5965864"
     },
@@ -1921,6 +1953,10 @@
     {
       "path": "vendor/include/tsconfig.json",
       "sha256": "e389562c9879bc4db6fdfe7fd8c2189c7fb62cb36cec4bf8621ed3cca138bddb"
+    },
+    {
+      "path": "vendor/loader/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
     },
     {
       "path": "vendor/loader/package.json",
@@ -1963,6 +1999,10 @@
       "sha256": "30e7b11e99a28f715da365d3f3ebc48bd75f62953d663ccf6ff7eaf54eacdee1"
     },
     {
+      "path": "vendor/timer/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
+    },
+    {
       "path": "vendor/timer/package.json",
       "sha256": "1270a6e1195a7b45bb401c8955e65a5ce1969f331373ad0282d95e1f7eec44f6"
     },
@@ -1973,6 +2013,10 @@
     {
       "path": "vendor/timer/tsconfig.json",
       "sha256": "36c0a6aa2cbb0c19886002c3a1f65baa874f7ac33518872558301e2980900d7d"
+    },
+    {
+      "path": "packages/bundle/acp-app/cordis.patch.yml",
+      "sha256": "3c559e8860348f1a878637a740bb11f80863f8e97b895060badda962a8a127fd"
     },
     {
       "path": "packages/bundle/acp-app/package.json",
@@ -2029,6 +2073,10 @@
     {
       "path": "packages/core/agent-tool-presentation/tsconfig.json",
       "sha256": "25f63281c8f5a33e861ea095de749472a70a32ba3b4ba7275cc00f0a3c04b122"
+    },
+    {
+      "path": "packages/bundle/base/cordis.patch.yml",
+      "sha256": "a395d4e6b1b4de3694d354ab21901c174f59a30557d906f6324a474f486b2cc8"
     },
     {
       "path": "packages/bundle/base/package.json",
@@ -2331,6 +2379,10 @@
       "sha256": "dcaa27274b285212d67fa914d6717ed8a9bf332dbfe39122b8c2cda3e861cb0a"
     },
     {
+      "path": "packages/experimental/agent-team-profile/cordis.patch.yml",
+      "sha256": "c19d2a7fea6d7bf3db3dbbbb61205f43cf6575ef56dfe67e64f29b78b8fda9d5"
+    },
+    {
       "path": "packages/experimental/agent-team-profile/package.json",
       "sha256": "629320479404dd4d0bad1bdb2b2bc87080a85cd748deaaa333ed39451d4aca95"
     },
@@ -2341,6 +2393,10 @@
     {
       "path": "packages/experimental/agent-team-profile/tsconfig.json",
       "sha256": "280079d7deac963659d8a65f295c060873629ac9d431ffa3286883a6583f608f"
+    },
+    {
+      "path": "packages/experimental/agent-team-web-profile/cordis.patch.yml",
+      "sha256": "66c60557b90756c86ff96671ca553e590d7e72754bf6dc337a396c5c254a7145"
     },
     {
       "path": "packages/experimental/agent-team-web-profile/package.json",
@@ -2437,6 +2493,10 @@
     {
       "path": "packages/goal/goal-round-driver/tsdown.config.ts",
       "sha256": "465e5bfd8f8b99a2ba2c028c470c601e04a114bb4ef412ba004729e4b8c20cf2"
+    },
+    {
+      "path": "packages/bundle/headless/cordis.patch.yml",
+      "sha256": "d0c99638f497c315e248ab63564fa27b4792c60506d6ab8f22c87018b64ab95d"
     },
     {
       "path": "packages/bundle/headless/package.json",
@@ -2671,6 +2731,10 @@
       "sha256": "465e5bfd8f8b99a2ba2c028c470c601e04a114bb4ef412ba004729e4b8c20cf2"
     },
     {
+      "path": "packages/bundle/sdk-app/cordis.patch.yml",
+      "sha256": "4738833ed23734bc971a52fbb35e0344f4100c054037759476bc2685167d8dbd"
+    },
+    {
       "path": "packages/bundle/sdk-app/package.json",
       "sha256": "ea87adcc7a1222cea14bc46a3238ff8046005bc39a06744b5b5c6eedf531c10d"
     },
@@ -2681,6 +2745,10 @@
     {
       "path": "packages/bundle/sdk-app/tsconfig.json",
       "sha256": "b96b6720ee159487c7895a04bbbc31abe35ef54570b8f766e65fbb0759744d5d"
+    },
+    {
+      "path": "packages/bundle/sdk-minimal/cordis.patch.yml",
+      "sha256": "9aa8c1783865a1ef6d073e084ee0cb18316aedf8d6457f51e0cc3f4da85b6979"
     },
     {
       "path": "packages/bundle/sdk-minimal/package.json",
@@ -3303,6 +3371,10 @@
       "sha256": "94e7e87b718ed912abcb4ecb0e41570c03b0f82c11af36ae3771133d0cf77804"
     },
     {
+      "path": "packages/bundle/web-app/cordis.patch.yml",
+      "sha256": "a2fa88bf259e59ee0c010fa2ed0470feaf576296cfe532aabcaa0fd6c8bd1bfa"
+    },
+    {
       "path": "packages/bundle/web-app/package.json",
       "sha256": "5c4f8345e998aaafe0dda03552266ec3d7f1ac0b2e800bf3fcbace0569fcdc86"
     },
@@ -3417,6 +3489,10 @@
     {
       "path": "packages/workflow/workflow-ptc/tsdown.config.ts",
       "sha256": "b4f1307af10f4e9c6da83f84bef23fda9ea63c1847b906a472db20ae66f3d42d"
+    },
+    {
+      "path": "vendor/schemastery/LICENSE",
+      "sha256": "034fb52b1d57360ecbae6cb1632a88f86fd7c3d3f5631a5f082710203dda0be7"
     },
     {
       "path": "vendor/schemastery/package.json",
@@ -4547,6 +4623,14 @@
       "sha256": "340a4d75329cca22958a530f03b0e946d165ea4741cc1deab838347c6488f8ad"
     },
     {
+      "path": "packages/skill/skill-badge/assets/dsh-badge.md",
+      "sha256": "d5eea609823a8d7265c39fd6af98d974132df9aa15fafc5020d3c60853db445e"
+    },
+    {
+      "path": "packages/skill/skill-badge/assets/dsh-badge.png",
+      "sha256": "f2c4f5ec9cbe847c0c763545c4d839efa8485bc74203733d0a0e8259f233c653"
+    },
+    {
       "path": "packages/skill/skill-badge/package.json",
       "sha256": "49df3c30e29c8e59a8c5f1f58c377cdcb5a8e95d1bf2901861a02dc6c8be3def"
     },
@@ -4809,6 +4893,10 @@
     {
       "path": "packages/subprocess/subprocess-local/package.json",
       "sha256": "96f43517e7ea2ba3097251ac5e06862e9c62bbb0aec16943d3a8c8811a7898c0"
+    },
+    {
+      "path": "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs",
+      "sha256": "ca5509febf1e6ec1356df121835ebe5ed2f9cace4bdc2ba6d83d41c7e45e0f1b"
     },
     {
       "path": "packages/subprocess/subprocess-local/src/bin.ts",
@@ -5313,6 +5401,46 @@
     {
       "path": "packages/preset/agent-presets/package.json",
       "sha256": "8c4273c291a36b6cdfc2b1483694caa5c17c3de2a087e756985cc5305abb702c"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/cordis/agent.cordis.yml",
+      "sha256": "d4882736a02aad417d8e93b73ea3b6b48eb39b5280c1a77e224ce73d38512984"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/cordis/preset.yml",
+      "sha256": "c8199388e494731f8d08c738a4220c059a089677d1bbb42d36f760ce9d882b02"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/cordis/skills/cordis-plugin-development/SKILL.md",
+      "sha256": "84daca3e10f6e557e9b8462da035b8b7e5af8ca0b057427fc9a802d4a99c967e"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/cordis/skills/editing-cordis-compositions/SKILL.md",
+      "sha256": "dbf68650fc61260b423844b4f96a35943bb8b6bafcc6ba90324abbbb4b8c46c9"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/minimal/agent.cordis.yml",
+      "sha256": "e75af996ab8c4cc966f8c5b54cd8dc354d7ac71bfcedbe07c8896f63bb7f073b"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/minimal/preset.yml",
+      "sha256": "9369a101ebdae504c109d48dbccffeed236966e9cb818ae82277dd4347ad8eb8"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/ptc/agent.cordis.yml",
+      "sha256": "830928ce6e1281bc000afbfc937664d1acf79811d870099fcf0d0951a8203680"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/ptc/preset.yml",
+      "sha256": "1bfc9606aa8537b34bec80d9f54392f159c0ffc045c9b1bb620f076038d5e5de"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/standard/agent.cordis.yml",
+      "sha256": "0934f22b2fdbc158fd2edad33ec5dd2671b5b1f727800dcaab74cee3bd7294af"
+    },
+    {
+      "path": "packages/preset/agent-presets/presets/standard/preset.yml",
+      "sha256": "3c61b4ce68e5dd5cb2c099693fdcb30b91d5f22bbbef546e233321b0fa68f0e4"
     },
     {
       "path": "packages/preset/agent-presets/src/authoring.ts",
