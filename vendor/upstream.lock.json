@@ -1,10 +1,9 @@
 {
-  "$schema": "spike-2-draft",
+  "$schema": "https://dsh-forge/schemas/upstream-lock.json",
   "pinnedSha": "c36ba648dc106d21fb32562793b3e3b9c8922bc4",
   "desktopHostVersion": "0.1.6-alpha.2",
   "resolutionRule": "pnpm-manifest-recursion",
   "resolutionRationale": "Manifest recursion over `dependencies` (workspace:/link:/file: specs) is authoritative: it is deterministic and matches what pnpm actually links at install time. Static import scanning is incomplete for this upstream because dsh discovers and loads plugins at runtime (plugin-manager, dsh.configTrees mounts), so import graphs silently omit runtime-reached packages; import scanning is retained only as a subset-verification pass (--verify-imports). devDependencies are excluded (build-only, never shipped).",
-  "generatedAt": "2026-09-20T00:11:41.660Z",
   "packages": [
     {
       "name": "@deepseek-ai/dsh-desktop-host",
