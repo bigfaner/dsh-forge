@@ -484,7 +484,7 @@
         "5.3",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.1-e2e-suite.md",
       "record": "records/6.1-e2e-suite.md",
       "surface-type": "web",
