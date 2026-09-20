@@ -10,6 +10,9 @@ test('step-4/success: turn completes while window closed; restore shows the comp
   try {
     const { electronApp, page } = up.fixture
     await page.locator('#session-list .session-item').first().click()
+    // Session history renders asynchronously after the click — wait for the
+    // pre-existing entries before capturing the baseline count.
+    await expect(page.locator('#session-history .entry').first()).toBeVisible()
     const historyCount = await page.locator('#session-history .entry').count()
     // Trigger another turn, close the window, wait for completion (turn resolves
     // synchronously in the fixture host), then return via the notification path.
