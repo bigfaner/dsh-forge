@@ -7,7 +7,8 @@ import { defineConfig, type Plugin } from 'vite'
 // document.body end) next to the main/preload outputs so the main process can
 // serve the concatenation inside the dsh-app:// origin from `dist/shell-ui.js`.
 // Order matters: bootstrap (root mount + onMount registry) first, then the
-// UF3 update banner which registers via __DSH_FORGE_SHELL_UI__.onMount.
+// UF3 update banner and UF4 crash-recovery overlay which register via
+// __DSH_FORGE_SHELL_UI__.onMount.
 function copyShellUi(): Plugin {
   return {
     name: 'copy-shell-ui',
@@ -15,6 +16,7 @@ function copyShellUi(): Plugin {
       const sources = [
         'src/shell-ui/shell-ui.js',
         'src/shell-ui/update-banner.js',
+        'src/shell-ui/crash-recovery.js',
       ].map((rel) => readFileSync(join(__dirname, rel), 'utf8'))
       writeFileSync(join(__dirname, 'dist/shell-ui.js'), sources.join('\n'))
     },
