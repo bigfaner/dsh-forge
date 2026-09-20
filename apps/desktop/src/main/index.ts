@@ -15,6 +15,8 @@ import { createSessionFocus } from './session-focus/index.ts'
 import { createShellTray, type ShellTray } from './tray/index.ts'
 import { loadTrayIcon } from './tray/icon.ts'
 import { init as initI18n, t } from './i18n/index.ts'
+import { createUpdateChecker, fetchReleaseFeed } from './update-checker/index.ts'
+import { UPDATE_CHECK_STARTUP_BUDGET_MS } from './update-checker/constants.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -111,6 +113,14 @@ export const sessionFocus = createSessionFocus({
   },
 })
 
+// Interface 3 (update-checker): GH Releases atom feed over HTTPS read-only.
+// openExternal goes through Electron's shell; openRelease enforces the
+// build-time RELEASE_HOST/RELEASE_PATH_PREFIX allowlist before it runs.
+export const updateChecker = createUpdateChecker({
+  fetchText: fetchReleaseFeed,
+  openExternal: (url) => shell.openExternal(url),
+})
+
 // F1: claim single-instance ownership before any profile lifecycle. The
 // losing instance logs ERR_SINGLE_INSTANCE and exits inside the claim.
 const ownsShellInstance = claimShellSingleInstance(app, focusPrimaryWindow)
@@ -192,6 +202,31 @@ void app.whenReady().then(async () => {
   })
 
   mainWindow = createWindow()
+
+  // Interface 3 (UF3 / F4 / SC6): the update check starts at app-ready and
+  // must resolve within 60s of startup. It never blocks startup and never
+  // surfaces a dialog on failure — offline/unreachable degrades silently to
+  // `unavailable` with an ERR_UPDATE_FEED_UNREACHABLE log (SC2). The UF3
+  // banner presentation (update-available → shell-ui overlay) lands with the
+  // notifier/banner task; here we only record the outcome.
+  const updateCheckStartedAt = Date.now()
+  void updateChecker.check(app.getVersion()).then((result) => {
+    const elapsedMs = Date.now() - updateCheckStartedAt
+    if (elapsedMs > UPDATE_CHECK_STARTUP_BUDGET_MS) {
+      shellLog.warn({
+        code: 'ERR_UPDATE_FEED_UNREACHABLE',
+        message: 'update check exceeded the SC6 60s startup budget',
+        data: { elapsedMs },
+      })
+    } else {
+      shellLog.info({
+        code: 'UPDATE_CHECK_DONE',
+        message: 'startup update check resolved',
+        data: { status: result.status, latestVersion: result.latestVersion, elapsedMs },
+      })
+    }
+  })
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
   })
