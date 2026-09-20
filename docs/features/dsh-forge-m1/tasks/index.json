@@ -501,7 +501,7 @@
         "1.1",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.2-packaging.md",
       "record": "records/6.2-packaging.md",
       "surface-type": "web",
