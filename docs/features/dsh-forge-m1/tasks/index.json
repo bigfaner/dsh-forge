@@ -21,7 +21,7 @@
       "title": "Spike: 依赖闭包解析规则",
       "priority": "P0",
       "estimatedTime": "2-4h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.2-spike-vendor-closure.md",
       "record": "records/1.2-spike-vendor-closure.md",
       "surface-type": "web",
