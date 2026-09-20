@@ -37,10 +37,27 @@ contextBridge.exposeInMainWorld('dshForge', {
   update: {
     dismiss: (): Promise<void> => ipcRenderer.invoke('dsh-forge:update-dismiss') as Promise<void>,
     openRelease: (): Promise<void> => ipcRenderer.invoke('dsh-forge:update-open-release') as Promise<void>,
+    // UF3 banner state pull (late-mount catch-up) + push subscription.
+    // Payload: UpdateBannerState = { phase: 'hidden'|'queued'|'shown'|'dismissed'; version? }.
+    getState: (): Promise<{ phase: string; version?: string }> =>
+      ipcRenderer.invoke('dsh-forge:update-get-state') as Promise<{ phase: string; version?: string }>,
+    onState: (callback: (state: { phase: string; version?: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: { phase: string; version?: string }): void => callback(state)
+      ipcRenderer.on('dsh-forge:update-state', listener)
+      return () => ipcRenderer.removeListener('dsh-forge:update-state', listener)
+    },
   },
   recovery: {
     restartApp: (): Promise<void> => ipcRenderer.invoke('dsh-forge:recovery-restart-app') as Promise<void>,
     getState: (): Promise<RecoveryState> => ipcRenderer.invoke('dsh-forge:recovery-get-state') as Promise<RecoveryState>,
+    // UF4 state push subscription (the renderer mirrors the main-side machine).
+    // Payload: { state: RecoveryState; reason?: string } — reason present only
+    // on 'failed' (failure.detail, ≤120 chars, tech-design Data Models).
+    onState: (callback: (state: { state: RecoveryState; reason?: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { state: RecoveryState; reason?: string }): void => callback(payload)
+      ipcRenderer.on('dsh-forge:recovery-state', listener)
+      return () => ipcRenderer.removeListener('dsh-forge:recovery-state', listener)
+    },
   },
 })
 

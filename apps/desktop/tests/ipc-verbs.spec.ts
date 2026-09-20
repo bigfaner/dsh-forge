@@ -28,11 +28,12 @@ afterEach(() => {
 })
 
 describe('Interface 6 IPC whitelist', () => {
-  it('contains exactly the four dshForge verb channels', () => {
+  it('contains exactly the five dshForge verb channels', () => {
     expect(Object.values(SHELL_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:recovery-get-state',
       'dsh-forge:recovery-restart-app',
       'dsh-forge:update-dismiss',
+      'dsh-forge:update-get-state',
       'dsh-forge:update-open-release',
     ])
   })
@@ -81,13 +82,14 @@ describe('installShellVerbs', () => {
       {
         dismiss: () => { calls.push('dismiss') },
         openRelease: () => { calls.push('openRelease') },
+        getState: () => { calls.push('update-get-state') },
       },
       {
         restartApp: () => { calls.push('restartApp') },
         getState: () => { calls.push('getState') },
       },
     )
-    expect(handlers.size).toBe(4)
+    expect(handlers.size).toBe(5)
     for (const [, handler] of handlers) {
       expect(() => handler(FOREIGN_EVENT)).toThrow(/unowned frame/)
       expect(() => handler(OWNED_EVENT)).not.toThrow()
@@ -144,7 +146,7 @@ describe('getState return type', () => {
     let current: RecoveryState = 'idle'
     installShellVerbs(
       (channel, listener) => { handlers.set(channel, listener) },
-      { dismiss: () => {}, openRelease: () => {} },
+      { dismiss: () => {}, openRelease: () => {}, getState: () => undefined },
       { restartApp: () => {}, getState: () => current },
     )
     const handler = handlers.get(SHELL_VERB_CHANNELS.recoveryGetState)

@@ -136,7 +136,7 @@ describe('t() interpolation', () => {
 
   it('interpolates numeric params and leaves unknown placeholders verbatim', async () => {
     await init({ settingsFile: settingsPath('en.yaml') })
-    expect(t('crash.restarting')).toBe('Restarting the app…')
+    expect(t('crash.restarting')).toBe('Restarting the runtime…')
     expect(t('notify.waitInput.body', { title: 3 })).toContain('3')
     expect(t('toast.manualSwitch', { other: 'x' })).toBe('Please switch to session {title} manually')
   })

@@ -297,8 +297,9 @@
 
   // Auto-wire inside the shell overlay root once it mounts (task 3.3 gate)
   // against the real preload bridge. The main process owns the recovery
-  // state machine; the renderer mirrors it through getState (Interface 6)
-  // whenever the host grants it — the probe is defensive and cheap.
+  // state machine; the renderer mirrors it through the dsh-forge:recovery-state
+  // push (task 5.3 — every transition, with failure.detail on 'failed') plus
+  // a getState pull for late-mount catch-up. Both paths are defensive.
   var shell = globalThis.__DSH_FORGE_SHELL_UI__
   if (shell !== undefined && typeof shell.onMount === 'function') {
     shell.onMount(function () {
@@ -307,6 +308,9 @@
       var root = document.getElementById('dsh-forge-shell-root')
       if (root === null) return
       var overlay = createCrashRecoveryOverlay({ document: document, root: root, dshForge: forge })
+      if (typeof forge.recovery.onState === 'function') {
+        try { forge.recovery.onState(function (payload) { overlay.applyState(payload) }) } catch { /* SC2 */ }
+      }
       if (typeof forge.recovery.getState === 'function') {
         try {
           forge.recovery.getState().then(function (s) { overlay.applyState({ state: s }) }, function () { /* SC2 */ })

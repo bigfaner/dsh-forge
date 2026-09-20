@@ -4,7 +4,7 @@ exports[`CopyKey union coverage > en snapshot 1`] = `
 {
   "crash.failed": "Recovery failed — please restart the app",
   "crash.recovered": "Recovered",
-  "crash.restarting": "Restarting the app…",
+  "crash.restarting": "Restarting the runtime…",
   "crash.restoring": "Restoring your session…",
   "crash.title": "Application crashed",
   "notify.turnEnd.body": "Session "{title}" has finished its turn",
@@ -24,7 +24,7 @@ exports[`CopyKey union coverage > zh snapshot 1`] = `
 {
   "crash.failed": "恢复失败,请重启应用",
   "crash.recovered": "已恢复",
-  "crash.restarting": "正在重启应用…",
+  "crash.restarting": "正在重启运行时…",
   "crash.restoring": "正在恢复会话…",
   "crash.title": "应用崩溃",
   "notify.turnEnd.body": "会话「{title}」已完成本轮回复",

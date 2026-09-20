@@ -213,6 +213,13 @@
       if (typeof forge.update.onState === 'function') {
         try { forge.update.onState(function (s) { banner.applyState(s) }) } catch { /* SC2 */ }
       }
+      // Late-mount catch-up: pull the current phase once (main owns the
+      // hidden/queued/shown/dismissed machine since task 5.3).
+      if (typeof forge.update.getState === 'function') {
+        try {
+          forge.update.getState().then(function (s) { if (s) banner.applyState(s) }, function () { /* SC2 */ })
+        } catch { /* SC2 silent degrade */ }
+      }
     })
   }
 })()

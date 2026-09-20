@@ -17,9 +17,10 @@ import { loadTrayIcon } from './tray/icon.ts'
 import { init as initI18n, t } from './i18n/index.ts'
 import { createUpdateChecker, fetchReleaseFeed } from './update-checker/index.ts'
 import { UPDATE_CHECK_STARTUP_BUDGET_MS } from './update-checker/constants.ts'
-import { createCrashRecovery } from './crash-recovery/index.ts'
+import { createCrashRecovery, type RecoverySideEffect } from './crash-recovery/index.ts'
+import { createUpdateBannerState } from './update-banner-state/index.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
-import { installShellVerbs, createRestartSequence } from './ipc/index.ts'
+import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -124,10 +125,40 @@ export const updateChecker = createUpdateChecker({
   openExternal: url => shell.openExternal(url),
 })
 
+// Main → renderer push seam (task 5.3 integration): state pushes go only to
+// the live primary window's webContents (the dsh-app:// main document). A
+// missing/destroyed window drops the push silently — the renderer catches up
+// through the getState pull verbs after (re)mount.
+function pushToRenderer(channel: string, payload: unknown): void {
+  if (mainWindow === undefined || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send(channel, payload)
+}
+
+// UF3 banner state machine (task 5.3): main owns the phase (hidden / queued /
+// shown / dismissed); the renderer banner mirrors it over
+// dsh-forge:update-state pushes + the update-get-state pull verb.
+export const updateBannerState = createUpdateBannerState({
+  onState: (state) => { pushToRenderer(SHELL_PUSH_CHANNELS.updateState, state) },
+})
+
+// Recovery-state side-effect fan-out (task 5.3): every machine transition is
+// mirrored to the UF4 overlay (with failure.detail ≤120 chars on failed) and
+// drives the banner queued-while-mask ladder (mask active during
+// restarting/restoring/failed; exited on recovered).
+function onRecoveryEffect(effect: RecoverySideEffect): void {
+  if (effect.type !== 'state-changed') return
+  pushToRenderer(SHELL_PUSH_CHANNELS.recoveryState, {
+    state: effect.to,
+    ...(effect.context.failure === undefined ? {} : { reason: effect.context.failure.detail }),
+  })
+  updateBannerState.setMaskActive(effect.to === 'restarting' || effect.to === 'restoring' || effect.to === 'failed')
+}
+
 // Interface 2 (crash-recovery) instance for UF4 state; Interface 6 exposes its
-// state to the renderer through the dshForge.recovery.getState verb. Host-exit
-// event wiring lands with the supervisor-integration task.
-export const crashRecovery = createCrashRecovery()
+// state to the renderer through the dshForge.recovery.getState verb and the
+// dsh-forge:recovery-state push. Host-exit event wiring lands with the
+// supervisor-integration task.
+export const crashRecovery = createCrashRecovery({ onEffect: onRecoveryEffect })
 
 // UF3 run-level UpdateBannerState (in-memory, not persisted): dismiss is a
 // terminal latch for this process; openRelease uses the last check's URL.
@@ -142,6 +173,7 @@ installShellVerbs(
   {
     dismiss: () => {
       updateBannerDismissed = true
+      updateBannerState.dismiss()
       shellLog.info({ code: 'UPDATE_BANNER_DISMISSED', message: 'UF3 update banner dismissed for this run' })
     },
     openRelease: async () => {
@@ -157,6 +189,7 @@ installShellVerbs(
       }
       await updateChecker.openRelease(lastUpdateCheck.releaseUrl)
     },
+    getState: () => updateBannerState.getState(),
   },
   {
     restartApp: createRestartSequence({
@@ -261,6 +294,11 @@ void app.whenReady().then(async () => {
   const updateCheckStartedAt = Date.now()
   void updateChecker.check(app.getVersion()).then((result) => {
     lastUpdateCheck = result
+    // UF3: update-available feeds the banner state machine (queued while the
+    // UF4 mask is up, shown otherwise); up-to-date/unavailable stay hidden.
+    if (result.status === 'update-available' && result.latestVersion !== undefined) {
+      updateBannerState.reportAvailable(result.latestVersion)
+    }
     const elapsedMs = Date.now() - updateCheckStartedAt
     if (elapsedMs > UPDATE_CHECK_STARTUP_BUDGET_MS) {
       shellLog.warn({

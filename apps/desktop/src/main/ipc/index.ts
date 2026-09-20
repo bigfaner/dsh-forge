@@ -18,8 +18,19 @@ import type { RecoveryState } from '../crash-recovery/index.ts'
 export const SHELL_VERB_CHANNELS = {
   updateDismiss: 'dsh-forge:update-dismiss',
   updateOpenRelease: 'dsh-forge:update-open-release',
+  updateGetState: 'dsh-forge:update-get-state',
   recoveryRestartApp: 'dsh-forge:recovery-restart-app',
   recoveryGetState: 'dsh-forge:recovery-get-state',
+} as const
+
+/**
+ * Main → renderer push channels (task 5.3 integration). Not invokable verbs:
+ * the renderer only subscribes (preload onState); the main process is the sole
+ * sender and pushes only to the dsh-app:// main document's webContents.
+ */
+export const SHELL_PUSH_CHANNELS = {
+  updateState: 'dsh-forge:update-state',
+  recoveryState: 'dsh-forge:recovery-state',
 } as const
 
 export type ShellVerbChannel = (typeof SHELL_VERB_CHANNELS)[keyof typeof SHELL_VERB_CHANNELS]
@@ -50,12 +61,14 @@ export function assertVerbSender(channel: ShellVerbChannel, event: VerbSenderEve
   }
 }
 
-/** Deps for the update verbs (banner task 4.x supplies real banner state). */
+/** Deps for the update verbs (banner-state machine task 5.3 supplies state). */
 export interface ShellUpdateVerbs {
   /** UF3 banner dismissed (UpdateBannerState → 'dismissed', run-level latch). */
   readonly dismiss: () => void
   /** Open the release page via the allowlisted openExternal path. */
   readonly openRelease: () => Promise<void> | void
+  /** Current UpdateBannerState pull (renderer late-mount catch-up). */
+  readonly getState: () => unknown
 }
 
 export interface ShellRecoveryVerbs {
@@ -82,6 +95,10 @@ export function installShellVerbs(
   handle(SHELL_VERB_CHANNELS.updateOpenRelease, (event) => {
     assertVerbSender(SHELL_VERB_CHANNELS.updateOpenRelease, event)
     return update.openRelease()
+  })
+  handle(SHELL_VERB_CHANNELS.updateGetState, (event) => {
+    assertVerbSender(SHELL_VERB_CHANNELS.updateGetState, event)
+    return update.getState()
   })
   handle(SHELL_VERB_CHANNELS.recoveryRestartApp, (event) => {
     assertVerbSender(SHELL_VERB_CHANNELS.recoveryRestartApp, event)
