@@ -9,18 +9,49 @@
 // layout can evolve without touching the shell.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const VENDORED_UPSTREAM_SHA = 'c36ba648dc106d21fb32562793b3e3b9c8922bc4'
 
-const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+/**
+ * Locate this package's src directory.
+ *
+ * Two contexts: (a) ESM workspace source (tests, direct imports) where
+ * `import.meta.url` is the module URL; (b) bundled into the Electron main CJS
+ * artifact, where the bundler replaces `import.meta` with an empty object —
+ * there the workspace root is discovered by walking up from the bundle
+ * (process.argv[1], i.e. apps/desktop/dist/main.cjs) to the directory that
+ * contains this package.
+ */
+function resolvePackageRoot(): string {
+  const selfUrl: string | undefined = import.meta.url
+  if (selfUrl !== undefined) return dirname(dirname(fileURLToPath(selfUrl)))
+  let dir = resolve(process.argv[1] ?? process.cwd())
+  for (let i = 0; i < 10; i++) {
+    const candidate = join(dir, 'packages', 'desktop-host-vendor')
+    if (existsSync(join(candidate, 'src', 'index.ts'))) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return join(process.cwd(), 'src')
+}
+
+const PACKAGE_ROOT = resolvePackageRoot()
 
 /** Root of the materialized vendored projection (upstream-relative paths live under it). */
 export const VENDORED_ROOT = join(PACKAGE_ROOT, 'vendored')
 
 /** Upstream desktop-host child-process entry (spawned under the builtin Node runtime). */
 export const HOST_ENTRY_PATH = join(VENDORED_ROOT, 'apps/desktop-host/src/index.ts')
+
+/**
+ * Vendored web frontend dist directory (upstream SPA static root served over
+ * dsh-app://). Projected as a build artifact; tests and dev wiring override
+ * through DSH_FORGE_WEB_ROOT until the closure install step produces it.
+ */
+export const WEB_APP_DIST_DIR = join(VENDORED_ROOT, 'apps/web/dist')
 
 export interface DesktopHostVendorInfo {
   readonly pinnedSha: string

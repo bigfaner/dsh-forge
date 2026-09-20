@@ -26,8 +26,21 @@ export type HostSessionEvent =
   | { type: 'turn-end'; sessionId: string; title: string }
   | { type: 'session-list'; sessions: Array<{ id: string; title: string }> }
 
+/**
+ * Host boot facts carried by the ready handshake (vendored entry:
+ * `process.send?.({ type: 'ready', url, injections })`). Consumed by the
+ * dsh-app:// protocol carriage (web-asset & API traffic over the upstream
+ * host-protocol/wire seam).
+ */
+export interface HostBootInfo {
+  readonly url: string
+  readonly injections?: readonly unknown[]
+}
+
 export interface HostHandle {
   readonly pid: number
+  /** ready-payload boot facts; undefined when the handshake carried no URL. */
+  readonly boot?: HostBootInfo
   onExit(cb: (code: number | null, signal: string | null) => void): void
   onSessionEvent(cb: (ev: HostSessionEvent) => void): void
   shutdown(): Promise<void>
@@ -181,8 +194,11 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
           clearTimeout(readyTimer)
           if (settled) return
           settled = true
+          const boot: HostBootInfo | undefined = typeof message.url === 'string' && message.url !== ''
+            ? { url: message.url, injections: Array.isArray(message.injections) ? message.injections : [] }
+            : undefined
           shellLog.info({ code: 'HOST_STARTED', message: 'host subprocess ready', data: { pid: child.pid } })
-          resolve(makeHandle(child, () => exitCallbacks, () => eventCallbacks, () => ({ exited, exitCode, exitSignal })))
+          resolve(makeHandle(child, () => exitCallbacks, () => eventCallbacks, () => ({ exited, exitCode, exitSignal }), boot))
           return
         }
         if (!ready && message.type === 'fatal') {
@@ -215,9 +231,11 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
     getExitCallbacks: () => Array<(code: number | null, signal: string | null) => void>,
     getEventCallbacks: () => Array<(ev: HostSessionEvent) => void>,
     getExitState: () => { exited: boolean; exitCode: number | null; exitSignal: string | null },
+    boot: HostBootInfo | undefined,
   ): HostHandle {
     return {
       pid: child.pid as number,
+      boot,
       onExit(cb) { getExitCallbacks().push(cb) },
       onSessionEvent(cb) { getEventCallbacks().push(cb) },
       shutdown() {

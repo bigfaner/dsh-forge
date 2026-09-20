@@ -167,6 +167,24 @@ describe('host-supervisor (Interface 1)', () => {
     await expect(supervisor.startHost('/profile')).rejects.toThrow('prepare-host-runtime')
     expect(spawnChild).not.toHaveBeenCalled()
   })
+
+  it('captures the ready handshake boot payload (url + injections) on HostHandle.boot', async () => {
+    const child = new MockHostChild()
+    const supervisor = createHostSupervisor(makeDeps(child))
+    const pending = supervisor.startHost('/profile')
+    child.hostMessage({ type: 'ready', url: 'http://127.0.0.1:19387/auth', injections: [{ kind: 'script', line: 'x' }] })
+    const handle = await pending
+    expect(handle.boot).toEqual({ url: 'http://127.0.0.1:19387/auth', injections: [{ kind: 'script', line: 'x' }] })
+  })
+
+  it('leaves boot undefined when the ready handshake carries no URL', async () => {
+    const child = new MockHostChild()
+    const supervisor = createHostSupervisor(makeDeps(child))
+    const pending = supervisor.startHost('/profile')
+    child.hostMessage({ type: 'smoke-ready' })
+    const handle = await pending
+    expect(handle.boot).toBeUndefined()
+  })
 })
 
 describe('parseSessionEvent', () => {
