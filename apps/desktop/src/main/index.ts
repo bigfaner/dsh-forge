@@ -10,6 +10,7 @@ import { createProtocolCarriage } from './protocol/carriage.ts'
 import { installProtocolCarriage } from './protocol/bootstrap.ts'
 import { registerShellScheme } from './protocol/scheme.ts'
 import { SHELL_APP_URL } from './protocol/constants.ts'
+import { claimShellSingleInstance, focusShellWindow } from './single-instance.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -70,7 +71,22 @@ function resolveProfileDir(): string {
   return process.env.DSH_FORGE_PROFILE_DIR ?? join(app.getPath('userData'), 'host-profile')
 }
 
+// Primary window registry for the second-instance focus path (F1). A closed
+// window that left the shell resident in the tray is covered by the
+// `undefined` branch of focusShellWindow (fresh primary window).
+let mainWindow: BrowserWindow | undefined
+
+function focusPrimaryWindow(): void {
+  mainWindow = focusShellWindow(mainWindow, createWindow) as BrowserWindow
+}
+
+// F1: claim single-instance ownership before any profile lifecycle. The
+// losing instance logs ERR_SINGLE_INSTANCE and exits inside the claim.
+const ownsShellInstance = claimShellSingleInstance(app, focusPrimaryWindow)
+
 void app.whenReady().then(() => {
+  if (!ownsShellInstance) return
+
   shellLog.info({ code: 'SHELL_READY', message: 'electron shell started', data: { version: app.getVersion() } })
 
   const profileDir = resolveProfileDir()
@@ -126,7 +142,7 @@ void app.whenReady().then(() => {
     notifyHostOutcome()
   })
 
-  createWindow()
+  mainWindow = createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
