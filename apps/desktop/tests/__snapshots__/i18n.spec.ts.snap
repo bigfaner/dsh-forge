@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CopyKey union coverage > en snapshot 1`] = `
+{
+  "crash.failed": "Recovery failed — please restart the app",
+  "crash.recovered": "Recovered",
+  "crash.restarting": "Restarting the app…",
+  "crash.restoring": "Restoring your session…",
+  "crash.title": "Application crashed",
+  "notify.turnEnd.body": "Session "{title}" has finished its turn",
+  "notify.turnEnd.title": "Turn completed",
+  "notify.waitInput.body": "Session "{title}" is awaiting your input",
+  "notify.waitInput.title": "Awaiting input",
+  "toast.manualSwitch": "Please switch to session {title} manually",
+  "toast.notifyDisabled": "System notifications are disabled; you can enable them in system settings",
+  "tray.quit": "Quit dsh-forge",
+  "tray.show": "Show main window",
+  "update.aria.close": "Close",
+  "update.viewRelease": "View release notes",
+}
+`;
+
+exports[`CopyKey union coverage > zh snapshot 1`] = `
+{
+  "crash.failed": "恢复失败,请重启应用",
+  "crash.recovered": "已恢复",
+  "crash.restarting": "正在重启应用…",
+  "crash.restoring": "正在恢复会话…",
+  "crash.title": "应用崩溃",
+  "notify.turnEnd.body": "会话「{title}」已完成本轮回复",
+  "notify.turnEnd.title": "回合完成",
+  "notify.waitInput.body": "会话「{title}」等待你的输入",
+  "notify.waitInput.title": "等待输入",
+  "toast.manualSwitch": "请手动切换到会话 {title}",
+  "toast.notifyDisabled": "系统通知已禁用,可在系统设置中开启",
+  "tray.quit": "退出 dsh-forge",
+  "tray.show": "显示主窗口",
+  "update.aria.close": "关闭",
+  "update.viewRelease": "查看更新",
+}
+`;

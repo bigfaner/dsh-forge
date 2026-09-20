@@ -12,7 +12,8 @@
     "dev": "vite build && electron ."
   },
   "dependencies": {
-    "@dsh-forge/desktop-host-vendor": "workspace:*"
+    "@dsh-forge/desktop-host-vendor": "workspace:*",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
