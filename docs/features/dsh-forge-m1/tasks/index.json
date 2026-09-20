@@ -246,7 +246,7 @@
         "3.1",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.1-i18n.md",
       "record": "records/4.1-i18n.md",
       "surface-type": "web",
@@ -263,7 +263,7 @@
         "4.1",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.2-tray-uf1.md",
       "record": "records/4.2-tray-uf1.md",
       "surface-type": "web",
@@ -280,7 +280,7 @@
         "4.1",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.3-update-checker.md",
       "record": "records/4.3-update-checker.md",
       "surface-type": "web",
@@ -296,7 +296,7 @@
         "3.2",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.4-crash-recovery.md",
       "record": "records/4.4-crash-recovery.md",
       "surface-type": "web",
@@ -313,7 +313,7 @@
         "3.3",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.5-session-focus.md",
       "record": "records/4.5-session-focus.md",
       "surface-type": "web",
@@ -331,7 +331,7 @@
         "4.5",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.6-notifier-uf2.md",
       "record": "records/4.6-notifier-uf2.md",
       "surface-type": "web",
