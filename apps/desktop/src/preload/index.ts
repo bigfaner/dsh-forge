@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { RecoveryState } from '../main/crash-recovery/index.ts'
 
 // contextBridge semantic verbs (whitelist). The renderer (upstream client UI
 // plugin family) talks to the shell exclusively through these verbs; raw
@@ -29,6 +30,17 @@ contextBridge.exposeInMainWorld('__DSH_FORGE_SHELL__', {
   },
 })
 
-// Keep the ipcRenderer import exercised for the whitelist pattern above; the
-// sender-validated verb surface grows in later tasks.
-void ipcRenderer
+// Interface 6: dshForge semantic verbs (IPC whitelist + main-side sender frame
+// validation). Each verb maps to exactly one whitelisted channel; the main
+// process rejects and logs any invoke from an unowned frame.
+contextBridge.exposeInMainWorld('dshForge', {
+  update: {
+    dismiss: (): Promise<void> => ipcRenderer.invoke('dsh-forge:update-dismiss') as Promise<void>,
+    openRelease: (): Promise<void> => ipcRenderer.invoke('dsh-forge:update-open-release') as Promise<void>,
+  },
+  recovery: {
+    restartApp: (): Promise<void> => ipcRenderer.invoke('dsh-forge:recovery-restart-app') as Promise<void>,
+    getState: (): Promise<RecoveryState> => ipcRenderer.invoke('dsh-forge:recovery-get-state') as Promise<RecoveryState>,
+  },
+})
+

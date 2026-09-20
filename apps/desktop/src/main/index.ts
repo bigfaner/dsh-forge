@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, shell, Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell, Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
@@ -17,6 +17,9 @@ import { loadTrayIcon } from './tray/icon.ts'
 import { init as initI18n, t } from './i18n/index.ts'
 import { createUpdateChecker, fetchReleaseFeed } from './update-checker/index.ts'
 import { UPDATE_CHECK_STARTUP_BUDGET_MS } from './update-checker/constants.ts'
+import { createCrashRecovery } from './crash-recovery/index.ts'
+import type { UpdateCheck } from './update-checker/index.ts'
+import { installShellVerbs, createRestartSequence } from './ipc/index.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -121,6 +124,52 @@ export const updateChecker = createUpdateChecker({
   openExternal: (url) => shell.openExternal(url),
 })
 
+// Interface 2 (crash-recovery) instance for UF4 state; Interface 6 exposes its
+// state to the renderer through the dshForge.recovery.getState verb. Host-exit
+// event wiring lands with the supervisor-integration task.
+export const crashRecovery = createCrashRecovery()
+
+// UF3 run-level UpdateBannerState (in-memory, not persisted): dismiss is a
+// terminal latch for this process; openRelease uses the last check's URL.
+let updateBannerDismissed = false
+let lastUpdateCheck: UpdateCheck | undefined
+
+// Interface 6 (preload 语义动词): IPC whitelist + sender frame validation.
+// restartApp ordering: shutdown host → release single-instance lock →
+// relaunch → old process exits (no orphan host, SC3-preserving).
+installShellVerbs(
+  (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
+  {
+    dismiss: () => {
+      updateBannerDismissed = true
+      shellLog.info({ code: 'UPDATE_BANNER_DISMISSED', message: 'UF3 update banner dismissed for this run' })
+    },
+    openRelease: async () => {
+      if (updateBannerDismissed) {
+        // UpdateBannerState: dismissed is terminal for this run — the verb
+        // stays a no-op afterwards (F4-D2 latch, reset only by relaunch).
+        shellLog.warn({ code: 'ERR_UPDATE_URL_REJECTED', message: 'openRelease requested after the banner was dismissed for this run' })
+        return
+      }
+      if (lastUpdateCheck?.releaseUrl === undefined) {
+        shellLog.warn({ code: 'ERR_UPDATE_URL_REJECTED', message: 'openRelease requested with no known release URL (no successful update check yet)' })
+        return
+      }
+      await updateChecker.openRelease(lastUpdateCheck.releaseUrl)
+    },
+  },
+  {
+    restartApp: createRestartSequence({
+      disposeRecovery: () => crashRecovery.dispose(),
+      shutdownHost: () => (hostHandle === undefined ? Promise.resolve() : hostHandle.shutdown()),
+      releaseSingleInstanceLock: () => app.releaseSingleInstanceLock(),
+      relaunch: () => { app.relaunch() },
+      exit: () => { app.exit(0) },
+    }),
+    getState: () => crashRecovery.context.state,
+  },
+)
+
 // F1: claim single-instance ownership before any profile lifecycle. The
 // losing instance logs ERR_SINGLE_INSTANCE and exits inside the claim.
 const ownsShellInstance = claimShellSingleInstance(app, focusPrimaryWindow)
@@ -211,6 +260,7 @@ void app.whenReady().then(async () => {
   // notifier/banner task; here we only record the outcome.
   const updateCheckStartedAt = Date.now()
   void updateChecker.check(app.getVersion()).then((result) => {
+    lastUpdateCheck = result
     const elapsedMs = Date.now() - updateCheckStartedAt
     if (elapsedMs > UPDATE_CHECK_STARTUP_BUDGET_MS) {
       shellLog.warn({
