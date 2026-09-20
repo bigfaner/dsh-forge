@@ -1,16 +1,22 @@
-import { copyFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 
-// Copy the shell-ui overlay bootstrap (renderer-side plain script, no bundle
-// processing — it must stay a classic <script> injectable at document.body end)
-// next to the main/preload outputs so the main process can serve it inside
-// the dsh-app:// origin from `dist/shell-ui.js`.
+// Assemble the shell-ui overlay payload (renderer-side plain scripts, no
+// bundle processing — they must stay classic <script> injectable at
+// document.body end) next to the main/preload outputs so the main process can
+// serve the concatenation inside the dsh-app:// origin from `dist/shell-ui.js`.
+// Order matters: bootstrap (root mount + onMount registry) first, then the
+// UF3 update banner which registers via __DSH_FORGE_SHELL_UI__.onMount.
 function copyShellUi(): Plugin {
   return {
     name: 'copy-shell-ui',
     closeBundle() {
-      copyFileSync(join(__dirname, 'src/shell-ui/shell-ui.js'), join(__dirname, 'dist/shell-ui.js'))
+      const sources = [
+        'src/shell-ui/shell-ui.js',
+        'src/shell-ui/update-banner.js',
+      ].map((rel) => readFileSync(join(__dirname, rel), 'utf8'))
+      writeFileSync(join(__dirname, 'dist/shell-ui.js'), sources.join('\n'))
     },
   }
 }

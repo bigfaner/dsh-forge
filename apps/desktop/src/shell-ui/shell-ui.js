@@ -10,11 +10,24 @@
 ;(function () {
   'use strict'
   var ROOT_ID = 'dsh-forge-shell-root'
+  var mounted = false
+  var mountCallbacks = []
+  // Overlay-component registry (task 5.1 UF3 banner): later concatenated
+  // scripts register a callback that runs once the root exists.
+  globalThis.__DSH_FORGE_SHELL_UI__ = {
+    onMount: function (callback) {
+      if (mounted) callback()
+      else mountCallbacks.push(callback)
+    },
+  }
   function mount() {
     if (document.getElementById(ROOT_ID) !== null) return
     var el = document.createElement('div')
     el.id = ROOT_ID
     document.body.append(el)
+    mounted = true
+    var pending = mountCallbacks.splice(0)
+    for (var i = 0; i < pending.length; i++) pending[i]()
   }
   var gate = globalThis.__DSH_BOOT_READY__
   if (gate !== undefined && gate.promise !== undefined && typeof gate.promise.then === 'function') {
