@@ -517,7 +517,7 @@
         "6.2",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.3-ci-release.md",
       "record": "records/6.3-ci-release.md",
       "surface-type": "web",
@@ -533,7 +533,7 @@
         "6.3",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.4-manual-checklist.md",
       "record": "records/6.4-manual-checklist.md",
       "type": "doc"
