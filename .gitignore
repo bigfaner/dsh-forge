@@ -10,3 +10,11 @@ docs/features/*/tasks/index.json.lock
 docs/features/*/testing/results/
 tests/results/
 docs/proposals/dsh-desktop/proposal.md
+
+# Node / pnpm
+node_modules/
+dist/
+release/
+playwright-report/
+test-results/
+*.tsbuildinfo

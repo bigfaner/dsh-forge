@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "app.dshforge.desktop",
+  "productName": "dsh-forge",
+  "directories": {
+    "output": "release"
+  },
+  "files": ["dist/**", "src/shell-ui/**"],
+  "win": {
+    "target": ["nsis"]
+  },
+  "mac": {
+    "target": ["dmg"]
+  },
+  "linux": {
+    "target": ["AppImage"]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-forge/root",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build:desktop": "pnpm --filter @dsh-forge/desktop run build",
+    "dev:desktop": "pnpm --filter @dsh-forge/desktop run dev",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "oxlint .",
+    "sync:upstream": "node scripts/sync-upstream.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "oxlint": "1.76.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

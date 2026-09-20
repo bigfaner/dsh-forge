@@ -1,0 +1,5 @@
+packages:
+  # Product assemblies over the package tier; apps/desktop owns the Electron shell.
+  - apps/*
+  # Vendored upstream projections and future plugin packages ("everything is a plugin").
+  - packages/*
