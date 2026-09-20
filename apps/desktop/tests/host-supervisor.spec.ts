@@ -27,7 +27,7 @@ class MockHostChild extends EventEmitter {
 
 function makeDeps(child: MockHostChild): HostSupervisorDeps {
   return {
-    spawnChild: () => child as unknown as HostChildProcess,
+    spawnChild: (_node, _args, _options) => child as unknown as HostChildProcess,
     nodeExecutable: 'node-mock',
     hostEntryPath: 'host-entry-mock.ts',
     readyTimeoutMs: 500,
@@ -50,6 +50,41 @@ afterEach(() => {
 })
 
 describe('host-supervisor (Interface 1)', () => {
+  it('spawns the vendored entry with the argv contract: [--experimental-strip-types, entry, runtimeDir, projectDir, payload?]', async () => {
+    const child = new MockHostChild()
+    const spawnChild = vi.fn(() => child as unknown as HostChildProcess)
+    const supervisor = createHostSupervisor({
+      spawnChild: spawnChild as never,
+      nodeExecutable: 'node-mock',
+      hostEntryPath: 'host-entry-mock.ts',
+      runtimeDir: 'runtime-dir-mock',
+      primaryRuntimeSource: 'payload-mock/primary-runtime',
+      readyTimeoutMs: 500,
+    })
+    const pending = supervisor.startHost('project-dir-mock')
+    ready(child)
+    await pending
+    expect(spawnChild).toHaveBeenCalledWith('node-mock',
+      ['--experimental-strip-types', 'host-entry-mock.ts', 'runtime-dir-mock', 'project-dir-mock', 'payload-mock/primary-runtime'],
+      { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+  })
+
+  it('omits the payload argv slot when no primary-runtime source is configured', async () => {
+    const child = new MockHostChild()
+    const spawnChild = vi.fn(() => child as unknown as HostChildProcess)
+    const supervisor = createHostSupervisor({
+      spawnChild: spawnChild as never,
+      nodeExecutable: 'node-mock',
+      hostEntryPath: 'host-entry-mock.ts',
+      runtimeDir: 'runtime-dir-mock',
+      readyTimeoutMs: 500,
+    })
+    const pending = supervisor.startHost('project-dir-mock')
+    ready(child)
+    await pending
+    expect(spawnChild.mock.calls[0][1]).toEqual(['--experimental-strip-types', 'host-entry-mock.ts', 'runtime-dir-mock', 'project-dir-mock'])
+  })
+
   it('startHost resolves after ready handshake with the child pid', async () => {
     const child = new MockHostChild()
     const supervisor = createHostSupervisor(makeDeps(child))

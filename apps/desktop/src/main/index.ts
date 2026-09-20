@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, shell, Tray } from 'electron'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
+import { OFFICE_SKILLS_ASSETS_DIR, WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
 import { shellLog } from './log.ts'
 import { SHELL_WEB_PREFERENCES } from './web-preferences.ts'
 import { createHostSupervisor, type HostHandle } from './host-supervisor/index.ts'
@@ -19,6 +18,7 @@ import { createUpdateChecker, fetchReleaseFeed } from './update-checker/index.ts
 import { UPDATE_CHECK_STARTUP_BUDGET_MS } from './update-checker/constants.ts'
 import { createCrashRecovery, type RecoverySideEffect } from './crash-recovery/index.ts'
 import { createUpdateBannerState } from './update-banner-state/index.ts'
+import { projectHostProfile } from './host-profile/index.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 
@@ -240,7 +240,32 @@ void app.whenReady().then(async () => {
   shellLog.info({ code: 'SHELL_READY', message: 'electron shell started', data: { version: app.getVersion() } })
 
   const profileDir = resolveProfileDir()
-  mkdirSync(profileDir, { recursive: true })
+
+  // Packaged wiring (task 6.2): in an installed app the vendored upstream
+  // tree and the builtin Node runtime live under process.resourcesPath
+  // (staged by scripts/assemble-app-resources.mjs, embedded as extraResources).
+  // The workspace-relative vendor-seam defaults only resolve in dev/e2e —
+  // resolve the packaged overrides before any consumer below.
+  if (app.isPackaged) {
+    const resourcesPath = process.resourcesPath
+    process.env.DSH_FORGE_HOST_ENTRY ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'desktop-host', 'src', 'index.ts')
+    process.env.DSH_FORGE_HOST_RUNTIME_DIR ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'desktop-host')
+    process.env.DSH_FORGE_OFFICE_SKILLS ??= join(resourcesPath, 'vendor', 'vendored', 'packages', 'skill', 'skill-office', 'assets')
+    process.env.DSH_FORGE_WEB_ROOT ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'web', 'dist')
+    process.env.DSH_FORGE_NODE_EXE ??= join(resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'bin/node')
+    shellLog.info({ code: 'PACKAGED_RESOURCES', message: 'packaged app resolving embedded resources', data: { resourcesPath } })
+  }
+
+  // Host profile + payload projection (disc-2): the vendored host entry boots
+  // from (a) an application-owned profile project (package.json
+  // `dsh.profile.bundles`; the host materializes its own node_modules there in
+  // link mode) and (b) an office payload source whose sibling office-skills/
+  // asset tree is a hard boot requirement. Both live app-owned under userData
+  // — never inside the upstream $DSH_HOME (SC8 coexistence).
+  const hostProfile = projectHostProfile({
+    profileDir,
+    officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
+  })
 
   // dsh-app:// carriage: web assets from the vendored web frontend dist,
   // API traffic forwarded to the authenticated upstream Host.
@@ -255,20 +280,14 @@ void app.whenReady().then(async () => {
   installProtocolCarriage(carriage, { waitForHost: () => hostOutcome })
   shellCarriage = carriage
 
-  // Packaged wiring (task 6.2): in an installed app the vendored upstream
-  // tree and the builtin Node runtime live under process.resourcesPath
-  // (staged by scripts/assemble-app-resources.mjs, embedded as extraResources).
-  // The workspace-relative vendor-seam defaults only resolve in dev/e2e.
-  if (app.isPackaged) {
-    const resourcesPath = process.resourcesPath
-    process.env.DSH_FORGE_HOST_ENTRY ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'desktop-host', 'src', 'index.ts')
-    process.env.DSH_FORGE_WEB_ROOT ??= join(resourcesPath, 'vendor', 'vendored', 'apps', 'web', 'dist')
-    process.env.DSH_FORGE_NODE_EXE ??= join(resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'bin/node')
-    shellLog.info({ code: 'PACKAGED_RESOURCES', message: 'packaged app resolving embedded resources', data: { resourcesPath } })
-  }
-
   const supervisor = createHostSupervisor(
     {
+      // The host loads its plugin profile from the project dir's package.json
+      // (HOST_PROFILE_INITIALIZED in the projector) — dev/packaged both use
+      // the profile dir; argv[2] runtimeDir defaults to the vendored
+      // desktop-host dir (packaged: DSH_FORGE_HOST_RUNTIME_DIR below).
+      ...(process.env.DSH_FORGE_HOST_RUNTIME_DIR === undefined ? {} : { runtimeDir: process.env.DSH_FORGE_HOST_RUNTIME_DIR }),
+      ...(hostProfile.primaryRuntimeSource === undefined ? {} : { primaryRuntimeSource: hostProfile.primaryRuntimeSource }),
       ...(process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY }),
       ...(process.env.DSH_FORGE_NODE_EXE === undefined ? {} : { nodeExecutable: process.env.DSH_FORGE_NODE_EXE }),
     },

@@ -7,9 +7,18 @@
 // recovery `attempts` counter on every startHost() call (written into
 // RecoveryContext, consumed by crash-recovery / Interface 2).
 //
-// Child-process IPC contract (verified against the vendored entry and the
-// smoke fixture):
-//   argv:    [hostEntry, runtimeDir(profileDir), projectDir]
+// Child-process IPC contract (verified against the vendored entry — see
+// vendored/apps/desktop-host/src/index.ts — and the smoke fixture):
+//   argv:    [hostEntry, runtimeDir, projectDir, primaryRuntimeSource?]
+//     argv[2] runtimeDir  — dsh installation dir: the vendored desktop-host
+//                           package whose node_modules carries the install
+//                           anchor (node_modules/@deepseek-ai/dsh/package.json).
+//     argv[3] projectDir  — application-owned profile project: package.json
+//                           `dsh.profile.bundles` manifest; the host
+//                           materializes its own node_modules there (link mode).
+//     argv[4] source      — primary-runtime payload dir (sibling
+//                           office-skills/ is a hard boot requirement).
+//     argv[5]             — resolution mode: 'runtime' | (undefined → 'link').
 //   child -> parent : { type: 'ready', ... } handshake success
 //                     { type: 'fatal', message } startup failure
 //                     { type: 'wait-input' | 'turn-end' | 'session-list', ... }
@@ -18,7 +27,7 @@
 
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { HOST_ENTRY_PATH, resolveBuiltinNode } from '@dsh-forge/desktop-host-vendor'
+import { HOST_ENTRY_PATH, HOST_RUNTIME_DIR, resolveBuiltinNode } from '@dsh-forge/desktop-host-vendor'
 import { shellLog } from '../log.ts'
 
 export type HostSessionEvent =
@@ -61,6 +70,8 @@ export interface HostChildProcess {
   once(event: string, listener: (...args: unknown[]) => void): unknown
   send(message: unknown): boolean
   kill(signal?: string): boolean
+  /** Piped stderr (stdio[2] = 'pipe'); mock children omit it. */
+  readonly stderr?: { on(event: 'data', listener: (chunk: Buffer) => void): unknown }
 }
 
 export interface HostSupervisorDeps {
@@ -70,13 +81,17 @@ export interface HostSupervisorDeps {
   resolveNode?: () => string
   nodeExecutable?: string
   hostEntryPath?: string
-  projectDir?: string
+  /** dsh installation dir passed as entry argv[2] (install anchor root). */
+  runtimeDir?: string
+  /** Primary-runtime payload source (entry argv[4]); defaults to $DSH_FORGE_PRIMARY_RUNTIME. */
+  primaryRuntimeSource?: string
   readyTimeoutMs?: number
   shutdownTimeoutMs?: number
 }
 
 export interface HostSupervisor {
-  startHost(profileDir: string): Promise<HostHandle>
+  /** @param projectDir - application-owned profile project (entry argv[3]). */
+  startHost(projectDir: string): Promise<HostHandle>
   /** Snapshot of the recovery context written by this supervisor (attempts counter). */
   readonly recoveryContext: Readonly<RecoveryContext>
 }
@@ -120,7 +135,12 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
   const {
     spawnChild = (nodeExecutable, args, options) => spawn(nodeExecutable, args, options) as unknown as HostChildProcess,
     hostEntryPath = HOST_ENTRY_PATH,
-    projectDir = process.cwd(),
+    // argv[2] for the vendored entry: the closure-installed desktop-host dir
+    // (its node_modules carries the dsh install anchor).
+    runtimeDir = HOST_RUNTIME_DIR,
+    // argv[4] for the vendored entry: the primary-runtime payload source dir
+    // (its sibling office-skills/ is a hard host-boot requirement).
+    primaryRuntimeSource = process.env.DSH_FORGE_PRIMARY_RUNTIME,
     readyTimeoutMs = DEFAULT_READY_TIMEOUT_MS,
     shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   } = deps
@@ -129,7 +149,7 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
   let nodeExecutable = deps.nodeExecutable
   let recoveryContext: RecoveryContext = { state: 'idle', attempts: 0 }
 
-  function startHost(profileDir: string): Promise<HostHandle> {
+  function startHost(projectDir: string): Promise<HostHandle> {
     // attempts: +1 on every startHost() call, written into RecoveryContext (tech-design Interface 2 note).
     recoveryContext = { ...recoveryContext, attempts: recoveryContext.attempts + 1 }
 
@@ -146,7 +166,12 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
     return new Promise<HostHandle>((resolve, reject) => {
       let child: HostChildProcess
       try {
-        child = spawnChild(nodeExecutable as string, [hostEntryPath, profileDir, projectDir], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+        child = spawnChild(nodeExecutable as string,
+          // --experimental-strip-types: the vendored entry is TypeScript run
+          // under the builtin standalone Node (22.20 ships stripping; the
+          // explicit flag keeps older acquired runtimes working).
+          ['--experimental-strip-types', hostEntryPath, runtimeDir, projectDir, ...(primaryRuntimeSource === undefined ? [] : [primaryRuntimeSource])],
+          { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error)
         shellLog.error({ code: 'ERR_HOST_START_FAILED', message: 'host spawn threw', data: { detail } })
@@ -215,12 +240,19 @@ export function createHostSupervisor(deps: HostSupervisorDeps = {}): HostSupervi
       })
 
       // Exit before the handshake completes is a startup failure (SC: spawn/握手失败).
+      // Keep the child's stderr tail so the failure log names the real cause.
+      const stderrTail: string[] = []
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderrTail.push(chunk.toString())
+        while (stderrTail.length > 0 && stderrTail.join('').length > 8192) stderrTail.shift()
+      })
       const guard = (): void => {
         if (ready || settled) return
         settled = true
         clearTimeout(readyTimer)
-        shellLog.error({ code: 'ERR_HOST_START_FAILED', message: 'host exited before handshake', data: { pid: child.pid } })
-        reject(new HostStartError('host exited before ready handshake'))
+        const detail = stderrTail.join('').trim()
+        shellLog.error({ code: 'ERR_HOST_START_FAILED', message: 'host exited before handshake', data: { pid: child.pid, ...(detail === '' ? {} : { stderr: detail }) } })
+        reject(new HostStartError(`host exited before ready handshake${detail === '' ? '' : `: ${detail}`}`))
       }
       child.once('exit', guard)
     })

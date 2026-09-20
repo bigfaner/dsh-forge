@@ -130,11 +130,30 @@ function main() {
   report.vendorTree = copyTree(join(VENDOR_PACKAGE, 'vendored'), join(STAGING_ROOT, 'vendor', 'vendored'),
     (path, _isDir) => desktopRuntimeFileExclusion(path, { platform: args.target, arch: args.arch }))
 
-  // Closure markers (Spike 2 pending): the host dependency closure and the
-  // upstream web dist are installed into the vendored tree by build-time steps
-  // that do not exist yet; record their absence so the size report is honest.
-  for (const [label, marker] of [['host dependency closure (node_modules)', join(VENDOR_PACKAGE, 'vendored', 'apps', 'desktop-host', 'node_modules')], ['upstream web dist', join(VENDOR_PACKAGE, 'vendored', 'apps', 'web', 'dist')]]) {
-    if (!existsSync(marker)) report.closureNotes.push(`${label} not installed yet (Spike 2 / closure install step pending) — staged without it`)
+  // Closure state (disc-2): the host dependency closure (node_modules) and
+  // the upstream web dist are build-time steps over the vendored tree
+  // (scripts/install-host-closure.mjs, scripts/build-upstream-web.mjs).
+  // Record presence or — with the remediation command — absence, so the size
+  // report stays honest either way.
+  for (const [label, marker, remediation] of [
+    ['host dependency closure (node_modules)', join(VENDOR_PACKAGE, 'vendored', 'node_modules'), 'node scripts/install-host-closure.mjs'],
+    ['upstream web dist', join(VENDOR_PACKAGE, 'vendored', 'apps', 'web', 'dist'), 'node scripts/build-upstream-web.mjs'],
+    ['office-skills assets', join(VENDOR_PACKAGE, 'vendored', 'packages', 'skill', 'skill-office', 'assets'), 'node scripts/install-host-closure.mjs'],
+  ]) {
+    if (existsSync(marker)) report.closureNotes.push(`${label} present — staged`)
+    else report.closureNotes.push(`${label} missing — run: ${remediation}`)
+  }
+  // Honest size caveat: pnpm's closure layout (the .pnpm virtual store plus
+  // the junction/symlink links per package) is NOT carried by the plain copy
+  // above — .pnpm/.bin are policy-dropped and link entries fall through the
+  // directory/file copy. The staged byte count therefore reflects the
+  // trimmed real-file subset, not the full closure footprint (disc-2 closure
+  // install reports CLOSURE_INSTALLED ≈ 512MB on disk). Re-staging the
+  // dereferenced closure (with dedup) is the SC1/SC9 packaging
+  // re-verification follow-up.
+  if (existsSync(join(VENDOR_PACKAGE, 'vendored', 'node_modules'))) {
+    report.closureNotes.push('closure staging caveat: pnpm virtual store (.pnpm) and junction/symlink links are excluded by the current copy step — staged bytes under-count the runtime closure; dereference strategy lands with SC1/SC9 packaging re-verification')
+    report.closureNotes.push('disc-2: closure is real — host boots in dev through the vendored node_modules install anchor (HOST_STARTED + CARRIAGE_READY verified); packaged boot additionally needs the dereferenced closure from the SC1/SC9 follow-up')
   }
 
   report.stagedBytes = report.runtimeTree.keptBytes + report.vendorTree.keptBytes

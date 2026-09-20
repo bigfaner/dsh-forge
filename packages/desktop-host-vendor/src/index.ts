@@ -53,6 +53,31 @@ export const HOST_ENTRY_PATH = join(VENDORED_ROOT, 'apps/desktop-host/src/index.
  */
 export const WEB_APP_DIST_DIR = join(VENDORED_ROOT, 'apps/web/dist')
 
+/**
+ * Vendored desktop-host node_modules (pnpm closure installed by
+ * scripts/install-host-closure.mjs). The upstream host entry resolves its
+ * profile module-fallback graph from a `node_modules/@deepseek-ai/dsh`
+ * install anchor inside the runtime dir the shell passes as argv[1]; the
+ * shell links the profile dir's node_modules here (disc-2 dev wiring).
+ */
+export const HOST_MODULE_LINK_DIR = join(VENDORED_ROOT, 'apps/desktop-host/node_modules')
+
+/**
+ * Vendored desktop-host runtime dir (disc-2): the host entry's argv[2]. The
+ * entry resolves its install anchor as `<runtimeDir>/node_modules/@deepseek-
+ * ai/dsh/package.json` from here, so this must be the closure-installed
+ * desktop-host package dir itself — never a bare profile dir.
+ */
+export const HOST_RUNTIME_DIR = join(VENDORED_ROOT, 'apps/desktop-host')
+
+/**
+ * Vendored office-skills asset tree (disc-2): the hard host-boot requirement
+ * of the upstream office plugin (assetRoot = dirname(argv[4])/office-skills).
+ * Projected from the upstream checkout by scripts/install-host-closure.mjs
+ * (build artifact — gitignored, like the workspace lib/ projections).
+ */
+export const OFFICE_SKILLS_ASSETS_DIR = join(VENDORED_ROOT, 'packages/skill/skill-office/assets')
+
 export interface DesktopHostVendorInfo {
   readonly pinnedSha: string
   readonly projected: boolean

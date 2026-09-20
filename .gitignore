@@ -22,3 +22,19 @@ test-results/
 # Build-time builtin Node runtime (acquired by scripts/prepare-host-runtime.mjs, never committed)
 packages/desktop-host-vendor/runtime/
 .cache/
+
+# Generated closure-install artifacts inside the vendored tree (scripts/install-host-closure.mjs)
+packages/desktop-host-vendor/vendored/pnpm-workspace.yaml
+packages/desktop-host-vendor/vendored/package.json
+packages/desktop-host-vendor/vendored/pnpm-lock.yaml
+packages/desktop-host-vendor/vendored/patches/
+
+packages/desktop-host-vendor/vendored/.closure-install-backup/
+packages/desktop-host-vendor/vendored/packages/subprocess/subprocess-local/scripts/
+packages/desktop-host-vendor/vendored/apps/web/dist/
+packages/desktop-host-vendor/vendored/**/lib/
+packages/desktop-host-vendor/vendored/.closure-supplements/
+# Office-skills assets projected from the upstream checkout (install-host-closure)
+packages/desktop-host-vendor/vendored/packages/skill/skill-office/assets/
+# Bundle patch overlays staged by install-host-closure (runtime data, not projection src)
+packages/desktop-host-vendor/vendored/packages/**/cordis.patch.yml
