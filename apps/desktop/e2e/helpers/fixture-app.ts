@@ -33,6 +33,10 @@ export interface FixtureAppOptions {
   env?: Record<string, string>
   /** Extra <script> content appended after the boot-gate bootstrap script. */
   spaScript?: string
+  /** Omit the fixture index.html (upstream web dist missing, disc-1 path). */
+  webIndexMissing?: boolean
+  /** Host child that exits before the ready handshake (first-boot failure). */
+  failingHost?: boolean
 }
 
 /**
@@ -83,21 +87,28 @@ export async function launchFixtureApp(options: FixtureAppOptions = {}): Promise
 
   const hostEntry = join(dir, 'host-entry.mjs')
   const pidFile = join(dir, 'host.pid')
-  await writeFile(hostEntry, [
-    `const url = ${JSON.stringify(hostUrl)}`,
-    `const pidFile = ${JSON.stringify(pidFile)}`,
-    "import { appendFileSync } from 'node:fs'",
-    'const send = (message) => { if (process.send) process.send(message) }',
-    'appendFileSync(pidFile, String(process.pid) + \'\\n\')',
-    `send({ type: 'ready', url, injections: ${JSON.stringify([])} })`,
-    'process.on(\'message\', (m) => { if (m && m.type === \'shutdown\') { send({ type: \'shutdown-complete\' }); if (process.connected) process.disconnect(); process.exit(0) } })',
-    'process.once(\'disconnect\', () => process.exit(0))',
-    'setInterval(() => {}, 60_000)',
-  ].join('\n'))
+  await writeFile(hostEntry, options.failingHost === true
+    ? [
+        "import { appendFileSync } from 'node:fs'",
+        `const pidFile = ${JSON.stringify(pidFile)}`,
+        'appendFileSync(pidFile, String(process.pid) + \'\\n\')',
+        'process.exit(1)',
+      ].join('\n')
+    : [
+        `const url = ${JSON.stringify(hostUrl)}`,
+        `const pidFile = ${JSON.stringify(pidFile)}`,
+        "import { appendFileSync } from 'node:fs'",
+        'const send = (message) => { if (process.send) process.send(message) }',
+        'appendFileSync(pidFile, String(process.pid) + \'\\n\')',
+        `send({ type: 'ready', url, injections: ${JSON.stringify([])} })`,
+        'process.on(\'message\', (m) => { if (m && m.type === \'shutdown\') { send({ type: \'shutdown-complete\' }); if (process.connected) process.disconnect(); process.exit(0) } })',
+        'process.once(\'disconnect\', () => process.exit(0))',
+        'setInterval(() => {}, 60_000)',
+      ].join('\n'))
 
   const webRoot = join(dir, 'web')
   await mkdir(webRoot, { recursive: true })
-  await writeFile(join(webRoot, 'index.html'), bootGatePage(options))
+  if (options.webIndexMissing !== true) await writeFile(join(webRoot, 'index.html'), bootGatePage(options))
 
   const appDir = join(fileURLToPath(new URL('..', import.meta.url)), '..')
   const electronApp = await _electron.launch({
@@ -112,10 +123,7 @@ export async function launchFixtureApp(options: FixtureAppOptions = {}): Promise
   })
   const page = await electronApp.firstWindow()
   await page.waitForURL(url => url.href.startsWith('dsh-app://app/'), { timeout: 15_000 })
-  await page.waitForFunction(() => {
-    const last = document.body.lastElementChild
-    return last !== null && last.id === 'dsh-forge-shell-root'
-  })
+  await page.waitForFunction(() => document.getElementById('dsh-forge-shell-root') !== null)
   return {
     electronApp,
     page,

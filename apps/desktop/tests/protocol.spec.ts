@@ -176,3 +176,41 @@ describe('createProtocolCarriage (routing)', () => {
     expect(String(fetchMock.mock.calls[0]?.[0] as unknown)).toBe('http://127.0.0.1:19387/api/sessions')
   })
 })
+
+describe('shell fallback document (disc-1 blank-boot fix)', () => {
+  it('serves the built-in fallback when the upstream web dist index is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-forge-fallback-')) // no index.html
+    const carriage = createProtocolCarriage({ webRoot: root, shellUiAssetPath: 'C:/nowhere/shell-ui.js' })
+    const response = await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/`))
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    const html = await response.text()
+    // Shell-owned contract: mount point + same shell-ui bundle + resolved gate.
+    expect(html).toContain('<div id="dsh-forge-shell-root"></div>')
+    expect(html).toContain(`<script src="${SHELL_UI_SCRIPT_URL}"></script>`)
+    expect(html).toContain('__DSH_BOOT_READY__.resolve()')
+    // No upstream assets referenced (fallback must stand alone).
+    expect(html).not.toContain('/assets/')
+    // Non-index web assets still 404 (only the document falls back).
+    expect((await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/assets/app.js`))).status).toBe(404)
+  })
+
+  it('forceShellFallback latches the fallback for index pathnames even with a live dist', async () => {
+    const root = await makeWebRoot()
+    const carriage = createProtocolCarriage({ webRoot: root, shellUiAssetPath: 'C:/nowhere/shell-ui.js' })
+    const before = await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/`))
+    expect(await before.text()).toBe(await serveWebDocument(new Request(`${SHELL_APP_ORIGIN}/`), root, { shellUiScriptUrl: SHELL_UI_SCRIPT_URL }).then(r => r.text()))
+    carriage.forceShellFallback()
+    const after = await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/index.html`))
+    expect(await after.text()).toContain('dsh-forge-shell-root')
+    expect((await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/`, { method: 'POST' }))).status).toBe(405)
+  })
+
+  it('normal path stays untouched: live dist serves the upstream index (not the fallback)', async () => {
+    const root = await makeWebRoot()
+    const carriage = createProtocolCarriage({ webRoot: root, shellUiAssetPath: 'C:/nowhere/shell-ui.js' })
+    const html = await (await carriage.handle(new Request(`${SHELL_APP_ORIGIN}/`))).text()
+    expect(html).toContain('<div id="root"></div>')
+    expect(html).not.toContain('dsh-forge-shell-root')
+  })
+})

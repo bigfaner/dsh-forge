@@ -21,10 +21,14 @@
     },
   }
   function mount() {
-    if (document.getElementById(ROOT_ID) !== null) return
-    var el = document.createElement('div')
-    el.id = ROOT_ID
-    document.body.append(el)
+    if (mounted) return
+    // The root may pre-exist (disc-1 shell fallback document ships its own
+    // #dsh-forge-shell-root mount point) — adopt it instead of bailing.
+    if (document.getElementById(ROOT_ID) === null) {
+      var el = document.createElement('div')
+      el.id = ROOT_ID
+      document.body.append(el)
+    }
     mounted = true
     var pending = mountCallbacks.splice(0)
     for (var i = 0; i < pending.length; i++) pending[i]()

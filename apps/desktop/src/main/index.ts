@@ -6,7 +6,7 @@ import { shellLog } from './log.ts'
 import { SHELL_WEB_PREFERENCES } from './web-preferences.ts'
 import { createHostSupervisor, type HostHandle } from './host-supervisor/index.ts'
 import { authenticateWebHost } from './protocol/web-document.ts'
-import { createProtocolCarriage } from './protocol/carriage.ts'
+import { createProtocolCarriage, type ProtocolCarriage } from './protocol/carriage.ts'
 import { installProtocolCarriage } from './protocol/bootstrap.ts'
 import { registerShellScheme } from './protocol/scheme.ts'
 import { SHELL_APP_URL } from './protocol/constants.ts'
@@ -149,12 +149,17 @@ export const updateBannerState = createUpdateBannerState({
 // bootHost() — `bootAttempt` is (re)bound inside app-ready below, where the
 // supervisor and profile dir exist.
 let bootAttempt: () => void = () => {}
+// disc-1: the protocol carriage lives inside app-ready, but recovery effects
+// (first-boot start-failed) can only fire after app-ready ran — safe to bind
+// through this late-bound reference.
+let shellCarriage: ProtocolCarriage | undefined
 function onRecoveryEffect(effect: RecoverySideEffect): void {
   if (effect.type === 'retry-scheduled') {
     bootAttempt()
     return
   }
   if (effect.type !== 'state-changed') return
+  if (effect.to === 'failed') shellCarriage?.forceShellFallback()
   pushToRenderer(SHELL_PUSH_CHANNELS.recoveryState, {
     state: effect.to,
     ...(effect.context.failure === undefined ? {} : { reason: effect.context.failure.detail }),
@@ -248,6 +253,7 @@ void app.whenReady().then(async () => {
   let notifyHostOutcome: () => void = () => {}
   const hostOutcome = new Promise<void>((resolve) => { notifyHostOutcome = resolve })
   installProtocolCarriage(carriage, { waitForHost: () => hostOutcome })
+  shellCarriage = carriage
 
   // Packaged wiring (task 6.2): in an installed app the vendored upstream
   // tree and the builtin Node runtime live under process.resourcesPath

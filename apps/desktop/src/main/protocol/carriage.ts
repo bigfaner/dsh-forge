@@ -11,6 +11,7 @@
 // The shell itself opens no listening port; the Host is reached as a client.
 
 import { forwardWebRequest, serveStaticFile, serveWebDocument } from './web-document.ts'
+import { serveShellFallback } from './shell-fallback.ts'
 import { SHELL_UI_SCRIPT_PATH, SHELL_UI_SCRIPT_URL } from './constants.ts'
 
 /** Pathnames served from the web frontend dist (upstream routing table). */
@@ -48,12 +49,29 @@ export interface ProtocolCarriage {
   setInjections(injections: readonly unknown[]): void
   /** Boot IPC payload; undefined until a Host URL is bound. */
   bootPayload(): ShellBootPayload | undefined
+  /**
+   * Latch the built-in shell fallback document for index pathnames (terminal
+   * host-failure state): the upstream SPA can no longer boot, so dsh-app://
+   * serves the shell-owned document with the shell-ui mount point instead.
+   */
+  forceShellFallback(): void
 }
 
 export function createProtocolCarriage(deps: ProtocolCarriageDeps): ProtocolCarriage {
   let hostUrl: string | undefined
   let hostCookie: string | undefined
   let injections: readonly unknown[] = []
+  let fallbackForced = false
+
+  const serveIndex = async (request: Request): Promise<Response> => {
+    if (fallbackForced) return serveShellFallback(request, SHELL_UI_SCRIPT_URL)
+    const response = await serveWebDocument(request, deps.webRoot, { shellUiScriptUrl: SHELL_UI_SCRIPT_URL })
+    // disc-1: a missing upstream web dist (index 404) must never leave the
+    // window on an empty document — serve the built-in shell fallback so the
+    // shell-ui overlay and UF4 recovery dialog can mount.
+    if (response.status === 404) return serveShellFallback(request, SHELL_UI_SCRIPT_URL)
+    return response
+  }
 
   return {
     async handle(request: Request): Promise<Response> {
@@ -61,6 +79,9 @@ export function createProtocolCarriage(deps: ProtocolCarriageDeps): ProtocolCarr
       if (url.hostname !== 'app') return new Response(null, { status: 404 })
       if (url.pathname === SHELL_UI_SCRIPT_PATH) {
         return serveStaticFile(request, deps.shellUiAssetPath)
+      }
+      if (WEB_ASSET_INDEX_PATHNAMES.includes(url.pathname)) {
+        return serveIndex(request)
       }
       if (isWebAssetPathname(url.pathname)) {
         return serveWebDocument(request, deps.webRoot, { shellUiScriptUrl: SHELL_UI_SCRIPT_URL })
@@ -84,6 +105,9 @@ export function createProtocolCarriage(deps: ProtocolCarriageDeps): ProtocolCarr
     bootPayload(): ShellBootPayload | undefined {
       if (hostUrl === undefined) return undefined
       return { injections, streamBaseUrl: new URL(hostUrl).origin }
+    },
+    forceShellFallback(): void {
+      fallbackForced = true
     },
   }
 }
