@@ -5,10 +5,11 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "main": "dist/main/index.js",
+  "main": "dist/main.cjs",
   "scripts": {
     "build": "vite build",
-    "dev": "vite build --watch"
+    "dev:watch": "vite build --watch",
+    "dev": "vite build && electron ."
   },
   "dependencies": {
     "@dsh-forge/desktop-host-vendor": "workspace:*"
