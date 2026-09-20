@@ -7,6 +7,7 @@ name: upstream-web-e2e
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [main]
 
@@ -20,6 +21,7 @@ jobs:
 
       - name: Resolve vendored pinned SHA
         id: sha
+        shell: bash
         run: echo "sha=$(node -p "require('./vendor/upstream.lock.json').pinnedSha")" >> "$GITHUB_OUTPUT"
 
       - name: Checkout upstream deepseek-harness at pinned SHA
