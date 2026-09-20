@@ -59,3 +59,8 @@ After fixing, verify the fix works:
 Full regression is verified by the dispatcher, not by this fix task.
 
 When this task is recorded as completed via `task record`, the source task  is automatically restored to pending if all its dependencies are completed.
+
+## Acceptance Criteria
+
+- [ ] WS 头重写为纯函数并有单测(非主窗口/无宿主/异源取消/完整重写)
+- [ ] dev 运行后远程流 WS 连接建立(左下角指示器非「重新连接中」)
