@@ -43,7 +43,7 @@
       "title": "pnpm workspace 工程骨架",
       "priority": "P0",
       "estimatedTime": "1-3h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.4-workspace-scaffold.md",
       "record": "records/1.4-workspace-scaffold.md",
       "surface-type": "web",
@@ -75,7 +75,7 @@
         "1.3",
         "1.4"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "1.summary.md",
       "record": "records/1.summary.md",
       "type": "doc.summary"
