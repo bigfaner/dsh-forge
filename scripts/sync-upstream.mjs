@@ -38,6 +38,8 @@
  *   node scripts/sync-upstream.mjs --upstream <path-to-deepseek-harness> \
  *     [--sha c36ba648dc106d21fb32562793b3e3b9c8922bc4] [--out vendor/upstream.lock.json] \
  *     [--mode sync|verify] [--verify-imports]
+ *   node scripts/sync-upstream.mjs --mode diff --out <current-lock> --new-lock <candidate-lock>
+ *     (upgrade drill: readable report of what a pinned-SHA bump changes)
  */
 
 import { createHash } from 'node:crypto'
@@ -50,17 +52,22 @@ export const DESKTOP_HOST_PACKAGE = '@deepseek-ai/dsh-desktop-host'
 // --- CLI args -----------------------------------------------------------
 
 export function parseArgs(argv) {
-  const args = { upstream: null, sha: PINNED_SHA_DEFAULT, out: 'vendor/upstream.lock.json', mode: 'sync', verifyImports: false }
+  const args = { upstream: null, sha: PINNED_SHA_DEFAULT, out: 'vendor/upstream.lock.json', mode: 'sync', verifyImports: false, newLock: null }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--upstream') args.upstream = argv[++i]
     else if (argv[i] === '--sha') args.sha = argv[++i]
     else if (argv[i] === '--out') args.out = argv[++i]
     else if (argv[i] === '--mode') args.mode = argv[++i]
     else if (argv[i] === '--verify-imports') args.verifyImports = true
+    else if (argv[i] === '--new-lock') args.newLock = argv[++i]
     else { console.error(`Unknown argument: ${argv[i]}`); process.exit(2) }
   }
-  if (!args.upstream) { console.error('Usage: sync-upstream.mjs --upstream <repo-path> [--sha <sha>] [--out <file>] [--mode sync|verify] [--verify-imports]'); process.exit(2) }
-  if (args.mode !== 'sync' && args.mode !== 'verify') { console.error(`--mode must be sync or verify, got: ${args.mode}`); process.exit(2) }
+  const modes = ['sync', 'verify', 'diff']
+  if (args.mode === 'diff') {
+    // diff compares two lock files; --new-lock is the freshly synced candidate.
+    if (!args.newLock) { console.error('Usage: sync-upstream.mjs --mode diff --out <current-lock> --new-lock <candidate-lock> [--upstream <repo-path>]'); process.exit(2) }
+  } else if (!args.upstream) { console.error('Usage: sync-upstream.mjs --upstream <repo-path> [--sha <sha>] [--out <file>] [--mode sync|verify|diff] [--verify-imports]'); process.exit(2) }
+  if (!modes.includes(args.mode)) { console.error(`--mode must be one of ${modes.join('|')}, got: ${args.mode}`); process.exit(2) }
   return args
 }
 
@@ -261,6 +268,77 @@ export function verifyLock(lock, root, rootName = DESKTOP_HOST_PACKAGE) {
   return { ok: problems.length === 0, problems, checked: lock.vendoredFiles.length }
 }
 
+// --- Upgrade diff (readable report between two locks) ---------------------
+
+/**
+ * Compare two locks (current vs candidate produced by a sync at a new pinned
+ * SHA) and produce a structured, reviewable upgrade report. Pure function.
+ */
+export function diffLocks(oldLock, newLock) {
+  const oldFiles = new Map(oldLock.vendoredFiles.map((f) => [f.path, f.sha256]))
+  const newFiles = new Map(newLock.vendoredFiles.map((f) => [f.path, f.sha256]))
+  const addedFiles = []
+  const removedFiles = []
+  const changedFiles = []
+  for (const [path, digest] of newFiles) {
+    if (!oldFiles.has(path)) addedFiles.push(path)
+    else if (oldFiles.get(path) !== digest) changedFiles.push(path)
+  }
+  for (const path of oldFiles.keys()) {
+    if (!newFiles.has(path)) removedFiles.push(path)
+  }
+  const oldPkgs = new Map((oldLock.packages ?? []).map((p) => [p.name, p]))
+  const newPkgs = new Map(newLock.packages.map((p) => [p.name, p]))
+  const packageChanges = []
+  for (const [name, pkg] of newPkgs) {
+    if (!oldPkgs.has(name)) packageChanges.push({ name, change: 'added', from: undefined, to: pkg.version })
+    else if (oldPkgs.get(name).version !== pkg.version) packageChanges.push({ name, change: 'version', from: oldPkgs.get(name).version, to: pkg.version })
+  }
+  for (const [name, pkg] of oldPkgs) {
+    if (!newPkgs.has(name)) packageChanges.push({ name, change: 'removed', from: pkg.version, to: undefined })
+  }
+  const oldRegistry = new Set(oldLock.registryDependencies ?? [])
+  const newRegistry = new Set(newLock.registryDependencies ?? [])
+  return {
+    from: { pinnedSha: oldLock.pinnedSha, desktopHostVersion: oldLock.desktopHostVersion },
+    to: { pinnedSha: newLock.pinnedSha, desktopHostVersion: newLock.desktopHostVersion },
+    desktopHostVersionChanged: oldLock.desktopHostVersion !== newLock.desktopHostVersion,
+    packageChanges: packageChanges.sort((a, b) => a.name.localeCompare(b.name)),
+    registryDependencyChanges: {
+      added: [...newRegistry].filter((d) => !oldRegistry.has(d)).sort(),
+      removed: [...oldRegistry].filter((d) => !newRegistry.has(d)).sort(),
+    },
+    addedFiles: addedFiles.sort(),
+    removedFiles: removedFiles.sort(),
+    changedFiles: changedFiles.sort(),
+  }
+}
+
+/** Render a diffLocks report as a human-readable upgrade review document. */
+export function formatDiffReport(report) {
+  const lines = []
+  const bump = (sha) => sha.slice(0, 8)
+  lines.push(`upgrade diff: ${bump(report.from.pinnedSha)} -> ${bump(report.to.pinnedSha)}`)
+  lines.push(`desktop-host version: ${report.from.desktopHostVersion} -> ${report.to.desktopHostVersion}${report.desktopHostVersionChanged ? '  (CHANGED)' : ''}`)
+  lines.push('')
+  lines.push(`workspace packages changed: ${report.packageChanges.length}`)
+  for (const c of report.packageChanges) {
+    lines.push(`  - ${c.name}: ${c.change === 'version' ? `${c.from} -> ${c.to}` : c.change}`)
+  }
+  const rc = report.registryDependencyChanges
+  lines.push(`registry dependencies: +${rc.added.length} / -${rc.removed.length}`)
+  for (const d of rc.added) lines.push(`  + ${d}`)
+  for (const d of rc.removed) lines.push(`  - ${d}`)
+  lines.push('')
+  lines.push(`vendored files: +${report.addedFiles.length} added / ~${report.changedFiles.length} changed / -${report.removedFiles.length} removed`)
+  for (const f of report.addedFiles) lines.push(`  + ${f}`)
+  for (const f of report.changedFiles) lines.push(`  ~ ${f}`)
+  for (const f of report.removedFiles) lines.push(`  - ${f}`)
+  lines.push('')
+  lines.push('next: re-run scripts/vendor-project.mjs --upstream <repo> to materialize, then review the git diff of packages/desktop-host-vendor/vendored')
+  return lines.join('\n')
+}
+
 // --- Optional import-scan verification ------------------------------------
 
 /** Collect package names referenced by relative imports inside `src`. */
@@ -299,7 +377,17 @@ export function scanImports(index, closureSet, rootName) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2))
-  const root = args.upstream.replace(/\\/g, '/')
+  const root = (args.upstream ?? '').replace(/\\/g, '/')
+
+  if (args.mode === 'diff') {
+    for (const file of [args.out, args.newLock]) {
+      if (!existsSync(file)) { console.error(`lock file not found: ${file}`); process.exit(1) }
+    }
+    const oldLock = JSON.parse(readFileSync(args.out, 'utf8'))
+    const newLock = JSON.parse(readFileSync(args.newLock, 'utf8'))
+    console.log(formatDiffReport(diffLocks(oldLock, newLock)))
+    return
+  }
 
   if (args.mode === 'verify') {
     if (!existsSync(args.out)) { console.error(`lock file not found: ${args.out}`); process.exit(1) }

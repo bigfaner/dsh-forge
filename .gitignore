@@ -18,3 +18,7 @@ release/
 playwright-report/
 test-results/
 *.tsbuildinfo
+
+# Build-time builtin Node runtime (acquired by scripts/prepare-host-runtime.mjs, never committed)
+packages/desktop-host-vendor/runtime/
+.cache/

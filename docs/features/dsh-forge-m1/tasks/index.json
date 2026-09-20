@@ -90,7 +90,7 @@
         "1.4",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.1-sync-upstream.md",
       "record": "records/2.1-sync-upstream.md",
       "surface-type": "web",
@@ -106,7 +106,7 @@
         "2.1",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "file": "2.2-desktop-host-vendor.md",
       "record": "records/2.2-desktop-host-vendor.md",
       "surface-type": "web",
