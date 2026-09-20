@@ -19,6 +19,7 @@ status: tasks
 | Prototype | ui/prototype/ | HTML 原型(index + UF1 托盘/UF2 通知/UF3 更新横幅/UF4 崩溃恢复),上游 --dsw-* tokens 亮暗双主题,状态全覆盖与可交互(含 10s 去重、状态机演示、focus trap) |
 | Tech Design | design/tech-design.md | Electron 壳 + vendored desktop-host(pinned SHA)+ pnpm workspace;7 类型化接口(host-supervisor/crash-recovery/update-checker/notifier/session-focus/preload/i18n);4 张关键流程 Mermaid;vitest+Playwright+三平台 CI;eval-design 957/1000,Breakdown 门 173/180 |
 | Page Map | design/page-map.md | M1 面清单:主窗口 100% 继承(非本工程路由)+ 2 注入式覆盖层 + 2 OS 原生面;零新增路由页面;载体级测试入口索引 |
+| Consolidated Specs | specs/biz-specs.md, specs/tech-specs.md | 规格沉淀:2 条 CROSS 业务规则(多装共存数据所有权→business-rules/coexistence.md、静默降级→business-rules/resilience.md)+ 2 条 CROSS 技术约定(pinned SHA vendor→conventions/upstream-vendor.md、Electron IPC 安全模式→conventions/electron-ipc-security.md);已集成(specs/.integrated,2026-09-20) |
 | Tasks | tasks/index.json | 21 业务任务(6 阶段:3 spike 前置 → 上游接入 → 壳骨架 → 壳级功能 → 壳层 UI → 分发验收)+ 自动阶段门;SC1-9 全覆盖;validate PASS |
 
 ## Traceability
