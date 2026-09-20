@@ -1,10 +1,10 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, Menu, shell, Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
 import { shellLog } from './log.ts'
 import { SHELL_WEB_PREFERENCES } from './web-preferences.ts'
-import { createHostSupervisor } from './host-supervisor/index.ts'
+import { createHostSupervisor, type HostHandle } from './host-supervisor/index.ts'
 import { authenticateWebHost } from './protocol/web-document.ts'
 import { createProtocolCarriage } from './protocol/carriage.ts'
 import { installProtocolCarriage } from './protocol/bootstrap.ts'
@@ -12,6 +12,9 @@ import { registerShellScheme } from './protocol/scheme.ts'
 import { SHELL_APP_URL } from './protocol/constants.ts'
 import { claimShellSingleInstance, focusShellWindow } from './single-instance.ts'
 import { createSessionFocus } from './session-focus/index.ts'
+import { createShellTray, type ShellTray } from './tray/index.ts'
+import { loadTrayIcon } from './tray/icon.ts'
+import { init as initI18n, t } from './i18n/index.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -36,6 +39,11 @@ function createWindow(): BrowserWindow {
     webPreferences: SHELL_WEB_PREFERENCES,
   })
   win.once('ready-to-show', () => win.show())
+  // First-show latch: the load-failure fallback below must never re-show a
+  // window the user sent to the tray (UF1 residency hide) after it had been
+  // visible once — only a document that never became visible is rescued.
+  let shownOnce = false
+  win.once('show', () => { shownOnce = true })
   const loaded = DEV_SERVER_URL ? win.loadURL(DEV_SERVER_URL) : win.loadURL(SHELL_APP_URL)
   void loaded.catch((error: unknown) => {
     shellLog.error({
@@ -46,7 +54,7 @@ function createWindow(): BrowserWindow {
   }).finally(() => {
     // Fallback show: a failed/empty document load must never leave the
     // window hidden (ready-to-show may not fire for error documents).
-    if (!win.isDestroyed() && !win.isVisible()) win.show()
+    if (!win.isDestroyed() && !shownOnce && !win.isVisible()) win.show()
   })
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (['http:', 'https:'].includes(new URL(url).protocol)) void shell.openExternal(url)
@@ -65,6 +73,9 @@ function createWindow(): BrowserWindow {
       data: { reason: details.reason, exitCode: details.exitCode },
     })
   })
+  // UF1: every primary window (initial, activate, tray restore) carries the
+  // close-to-tray residency hook when the tray is present.
+  tray?.attachCloseToResidency(win)
   return win
 }
 
@@ -76,6 +87,14 @@ function resolveProfileDir(): string {
 // window that left the shell resident in the tray is covered by the
 // `undefined` branch of focusShellWindow (fresh primary window).
 let mainWindow: BrowserWindow | undefined
+
+// UF1 tray (SC5): created after app-ready; undefined until then and on the
+// Linux ERR_TRAY_UNAVAILABLE silent-degradation path (no residency there —
+// closing the last window quits).
+let tray: ShellTray | undefined
+
+// Current host handle for the quit path (UF1 AC: 退出无孤儿进程).
+let hostHandle: HostHandle | undefined
 
 function focusPrimaryWindow(): void {
   mainWindow = focusShellWindow(mainWindow, createWindow) as BrowserWindow
@@ -96,8 +115,11 @@ export const sessionFocus = createSessionFocus({
 // losing instance logs ERR_SINGLE_INSTANCE and exits inside the claim.
 const ownsShellInstance = claimShellSingleInstance(app, focusPrimaryWindow)
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   if (!ownsShellInstance) return
+
+  // Interface 7: read-only locale resolution before any shell copy is used.
+  await initI18n()
 
   shellLog.info({ code: 'SHELL_READY', message: 'electron shell started', data: { version: app.getVersion() } })
 
@@ -120,6 +142,7 @@ void app.whenReady().then(() => {
     process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY },
   )
   void supervisor.startHost(profileDir).then(async (handle) => {
+    hostHandle = handle
     handle.onExit(() => {
       carriage.clearHost()
       shellLog.warn({ code: 'WARN_HOST_EXIT', message: 'host subprocess exited; dsh-app:// API carriage unbound', data: { pid: handle.pid } })
@@ -154,9 +177,39 @@ void app.whenReady().then(() => {
     notifyHostOutcome()
   })
 
+  // UF1 tray (SC5): native menu + close-to-tray residency. On Linux without
+  // a system tray the creation failure degrades silently (ERR_TRAY_UNAVAILABLE,
+  // log only) and residency stays off — close then quits as before.
+  tray = createShellTray({
+    icon: loadTrayIcon(),
+    createTray: (icon) => new Tray(icon as Electron.NativeImage),
+    buildMenu: (template) => Menu.buildFromTemplate(template),
+    copy: (key) => t(key),
+    focusMainWindow: focusPrimaryWindow,
+    quitApp: () => {
+      void app.quit()
+    },
+  })
+
   mainWindow = createWindow()
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
+  })
+})
+
+// UF1 AC (退出无孤儿进程): every quit path (tray menu, window-all-closed,
+// OS signal) funnels through before-quit, which first tears the tray down
+// (icon removed + residency latch released so the window close is not
+// intercepted) and only lets the app exit after the host subprocess settled.
+let quitSettled = false
+app.on('before-quit', (event) => {
+  if (quitSettled) return
+  event.preventDefault()
+  quitSettled = true
+  tray?.destroy()
+  const settleHost = hostHandle === undefined ? Promise.resolve() : hostHandle.shutdown()
+  void settleHost.finally(() => {
+    app.quit()
   })
 })
 
