@@ -8,6 +8,7 @@ surface_keys: ["web"]
 sources:
   - docs/features/dsh-forge-m1/prd/prd-user-stories.md
   - docs/features/dsh-forge-m1/prd/prd-spec.md
+  - docs/features/dsh-forge-m1/design/tech-design.md
 generated: "2026-09-20"
 ---
 
@@ -75,21 +76,29 @@ A community developer on a clean machine (no Node/git/pnpm) downloads the instal
 
 **Expected Result**: Installation and first launch succeed; the update check fails silently — no error dialog, no blocking of startup.
 
-### Step 2b: App already running (single-instance lock)
+### Step 2b: App already running with window open (single-instance lock)
 
-**Precondition**: Another instance of the app is already running on the machine.
+**Precondition**: Another instance of dsh-forge is already running with its main window open.
 
 **User Action**: Launch the app a second time.
 
-**Expected Result**: The existing window is focused instead of spawning a new instance; no second host subprocess or profile contention occurs.
+**Expected Result**: The existing window is focused instead of spawning a new instance; no second host subprocess or profile contention occurs. (source: tech-design F1 single-instance flow — "已运行 → 恢复既有窗口")
+
+### Step 2b′: App already running tray-resident (second launch restores from tray)
+
+**Precondition**: dsh-forge is already running but its main window is closed (tray-resident).
+
+**User Action**: Launch the app a second time.
+
+**Expected Result**: The single-instance lock routes the launch to the running instance and the main window is restored from the tray (focused on the last-active session); no second instance or host subprocess is spawned. (source: tech-design F1 — "已关窗驻留则从托盘还原")
 
 ### Step 2c: Host subprocess fails to start
 
-**Precondition**: The host subprocess cannot start (e.g., corrupted runtime or environmental interference).
+**Precondition**: The bundled runtime binary is corrupted or missing (e.g., the installed runtime file was deleted or truncated), so the host subprocess spawn/handshake deterministically fails on launch.
 
 **User Action**: Launch the app.
 
-**Expected Result**: The shell stays alive and shows an error message with troubleshooting guidance; the app does not crash or hang silently.
+**Expected Result**: The shell stays alive and enters the failed state with an `ERR_HOST_START_FAILED`-shaped error message (troubleshooting guidance visible in-app); the app does not crash or hang silently. (source: tech-design F1 / error-code table — `ERR_HOST_START_FAILED`, UF4 failed state)
 
 ### Step 3b: Invalid API key
 
@@ -97,7 +106,7 @@ A community developer on a clean machine (no Node/git/pnpm) downloads the instal
 
 **User Action**: Submit the credential configuration.
 
-**Expected Result**: Upstream validation feedback is shown in-app; the user can correct the key without restarting; no partial/corrupt credential state is persisted.
+**Expected Result**: Upstream validation feedback is shown in-app; the user can correct the key without restarting; no partial/corrupt credential state is persisted. (required_outcomes: `validation-error` per surface-web rule)
 
 ### Step 4b: No workspace exists yet
 
@@ -114,6 +123,14 @@ A community developer on a clean machine (no Node/git/pnpm) downloads the instal
 **User Action**: Continue interacting with the session.
 
 **Expected Result**: The session state is presented in the GUI and the user can respond in-app to resume the workflow.
+
+### Step 5c: Session expires during first session (surface rule coverage)
+
+**Precondition**: The upstream session/auth token lapses while the user is mid-workflow in the first session (e.g., extended idle after the shell tool call in Step 5).
+
+**User Action**: Send the next message / trigger the next approval.
+
+**Expected Result**: The user is shown session-expired feedback in-app and can re-establish the session (re-authenticate/restart the session) without restarting the app; no silent data loss. (required_outcomes: `session-expired` per surface-web rule; source: inferred)
 
 ## Journey Invariants
 

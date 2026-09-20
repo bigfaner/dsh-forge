@@ -8,6 +8,7 @@ surface_keys: ["web"]
 sources:
   - docs/features/dsh-forge-m1/prd/prd-user-stories.md
   - docs/features/dsh-forge-m1/prd/prd-spec.md
+  - docs/features/dsh-forge-m1/design/tech-design.md
 generated: "2026-09-20"
 ---
 
@@ -53,6 +54,12 @@ An existing dsh web GUI user verifies that the desktop carrier provides 100% of 
 
 **Expected Result**: File tree navigation and workspace switching work identically to the web GUI with no state loss.
 
+### Step 5: Create a new session and answer a user-question
+
+**User Action**: Create a new session in the current workspace, then trigger and answer a user-question raised by the assistant.
+
+**Expected Result**: New-session creation works as in the web GUI; the user-question renders in-app and the submitted answer is accepted and resumes the workflow — identical to web GUI behavior. (source: PRD SC7 smoke list — "新建会话", "user-questions 呈现与作答")
+
 ## Edge Cases
 
 ### Step 1b: Prior web GUI session opened in desktop
@@ -79,6 +86,14 @@ An existing dsh web GUI user verifies that the desktop carrier provides 100% of 
 
 **Expected Result**: The dialog renders and behaves the same as in the web GUI.
 
+### Step 3c: Invalid settings input rejected in-app
+
+**Precondition**: A settings field accepts an invalid value (e.g., malformed value rejected by upstream validation).
+
+**User Action**: Submit the invalid settings value.
+
+**Expected Result**: In-app validation feedback is shown (same message/behavior as the web GUI); the previous valid settings are preserved; no partial settings write. (required_outcomes: `validation-error` per surface-web rule; source: inferred)
+
 ### Step 4b: Workspace with no sessions yet
 
 **Precondition**: The selected workspace contains no sessions.
@@ -87,8 +102,16 @@ An existing dsh web GUI user verifies that the desktop carrier provides 100% of 
 
 **Expected Result**: An appropriate empty state is shown, matching web GUI behavior.
 
+### Step 4c: Session expires mid-parity walkthrough (surface rule coverage)
+
+**Precondition**: The upstream session/auth token lapses during the parity walkthrough (e.g., after an extended pause on the settings surface).
+
+**User Action**: Return to the chat surface and send a message.
+
+**Expected Result**: The user is shown session-expired feedback in-app and can re-establish the session without app restart; previously completed parity checks remain valid. (required_outcomes: `session-expired` per surface-web rule; source: inferred)
+
 ## Journey Invariants
 
-- Every web GUI functional surface exercised in this journey remains 100% usable in the desktop carrier (equivalent carrier-level tests pass)
+- Every web GUI functional surface exercised in this journey remains 100% usable in the desktop carrier — the user observes identical behavior, rendering, and outcomes on every surface, with no capability loss or carrier-specific failure
 - The desktop carrier introduces no UI rewrite artifacts — behavior matches upstream web GUI semantics
 - No listening port is opened while using any surface

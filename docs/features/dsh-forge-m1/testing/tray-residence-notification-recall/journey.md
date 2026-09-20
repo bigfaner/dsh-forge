@@ -8,6 +8,7 @@ surface_keys: ["web"]
 sources:
   - docs/features/dsh-forge-m1/prd/prd-user-stories.md
   - docs/features/dsh-forge-m1/prd/prd-spec.md
+  - docs/features/dsh-forge-m1/design/tech-design.md
 generated: "2026-09-20"
 ---
 
@@ -51,7 +52,7 @@ A long-session user closes the main window to work on other things; the app stay
 
 **User Action**: Trigger another turn, close the window again, wait for turn completion, then click that notification.
 
-**Expected Result**: The "turn completed" notification fires (each platform at least once) and clicking it focuses the corresponding session window.
+**Expected Result**: The "turn completed" notification fires (each platform at least once) and clicking it focuses the corresponding session window. (source: tech-design F3 notification flow)
 
 ### Step 5: Restore or exit from the tray menu
 
@@ -92,6 +93,22 @@ A long-session user closes the main window to work on other things; the app stay
 **User Action**: Receive notifications and click the one for the second session.
 
 **Expected Result**: Each notification focuses its own corresponding session, with no cross-session misdirection.
+
+### Step 4c: Repeated same-session notifications within the 10s dedup window
+
+**Precondition**: The same session emits the same event type repeatedly within 10 seconds (e.g., two "waiting for user input" events for one session in quick succession) while the window is closed.
+
+**User Action**: Let both events fire; observe the system notification area; then click the merged notification.
+
+**Expected Result**: The events are merged into a single notification whose content reflects the latest event (no duplicate notification stack); clicking it still focuses the corresponding session. (source: tech-design F3 / Interface 4 notifier — "10s 窗口内同会话同事件 → 合并·更新既有通知内容")
+
+### Step 4d: Session expires while window closed and tray-resident (surface rule coverage)
+
+**Precondition**: The app has been tray-resident with a waiting session long enough that the upstream session/auth token lapses.
+
+**User Action**: Click the recall notification (or restore the window from the tray) and attempt to resume the session.
+
+**Expected Result**: The user is shown session-expired feedback in-app and can re-establish the session without app restart; the tray/notification system does not enter an error loop. (required_outcomes: `session-expired` per surface-web rule; source: inferred)
 
 ### Step 5b: Tray unavailable in the desktop environment (Linux)
 

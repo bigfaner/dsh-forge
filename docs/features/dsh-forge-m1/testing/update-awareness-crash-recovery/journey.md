@@ -8,6 +8,7 @@ surface_keys: ["web"]
 sources:
   - docs/features/dsh-forge-m1/prd/prd-user-stories.md
   - docs/features/dsh-forge-m1/prd/prd-spec.md
+  - docs/features/dsh-forge-m1/design/tech-design.md
 generated: "2026-09-20"
 ---
 
@@ -39,7 +40,7 @@ A continuous user gets an in-app update hint when a new version exists (and can 
 
 **User Action**: Click the update hint.
 
-**Expected Result**: The user is guided to the release page for manual download; the app continues running normally afterward.
+**Expected Result**: The user is guided to the release page for manual download (external browser open permitted only for URLs matching the `RELEASE_HOST` whitelist — source: tech-design security table "openExternal 仅放行 RELEASE_HOST 白名单"); the app continues running normally afterward.
 
 ### Step 3: Force-kill the host subprocess mid-session
 
@@ -77,7 +78,15 @@ A continuous user gets an in-app update hint when a new version exists (and can 
 
 **User Action**: Dismiss the hint without jumping to the release page.
 
-**Expected Result**: The hint closes cleanly and does not re-appear repeatedly within the same session.
+**Expected Result**: The hint closes cleanly and does not re-appear repeatedly within the same session. (source: tech-design F4 — "横幅 dismissed·本次运行不再出现", dismissed 为终态仅重启复位)
+
+### Step 2d: Feed supplies a non-whitelisted release URL
+
+**Precondition**: The fake feed contains a newer version whose `releaseUrl` points to a host/path outside the `RELEASE_HOST = 'github.com'` + `RELEASE_PATH_PREFIX` whitelist (e.g., an attacker-controlled domain).
+
+**User Action**: Click the update hint.
+
+**Expected Result**: The external open is rejected — no browser/page opens for the non-whitelisted URL; the rejection is logged; the app continues running normally without crash. (source: tech-design security table — "不匹配即拒绝 openExternal 并 log")
 
 ### Step 3b: Shell main process itself crashes
 
@@ -102,6 +111,22 @@ A continuous user gets an in-app update hint when a new version exists (and can 
 **User Action**: Restore the window after the crash.
 
 **Expected Result**: The crash-recovery notice is visible after restore and the recovery flow works identically.
+
+### Step 4d: Recovery retries exhausted (terminal failed state)
+
+**Precondition**: The host subprocess is killed and the recovery restart fails to reach a responsive state on every attempt (e.g., the runtime is broken so each restart attempt fails after the 2s/4s/8s backoff sequence).
+
+**User Action**: Wait through the automatic retry sequence (3 attempts).
+
+**Expected Result**: Recovery enters the terminal failed state with an `ERR_RECOVERY_RETRY_EXHAUSTED`-shaped message (≤120-char failure detail shown); no infinite retry loop, no further restart attempts, no silent exit — the shell stays alive showing the failed state. (source: tech-design F2 — "restarting --> failed: retry-exhausted(重试 3 次耗尽)", error-code `ERR_RECOVERY_RETRY_EXHAUSTED`)
+
+### Step 5a: Session expires while awaiting recovery (surface rule coverage)
+
+**Precondition**: The upstream session/auth token lapses during the crash/recovery window before the user returns to the window.
+
+**User Action**: Complete recovery and attempt to continue the restored session.
+
+**Expected Result**: The user is shown session-expired feedback in-app and can re-establish the session without app restart; the recovered persisted session state is not destroyed. (required_outcomes: `session-expired` per surface-web rule; source: inferred)
 
 ## Journey Invariants
 

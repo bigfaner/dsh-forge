@@ -8,6 +8,7 @@ surface_keys: ["web"]
 sources:
   - docs/features/dsh-forge-m1/prd/prd-user-stories.md
   - docs/features/dsh-forge-m1/prd/prd-spec.md
+  - docs/features/dsh-forge-m1/design/tech-design.md
 generated: "2026-09-20"
 ---
 
@@ -64,13 +65,15 @@ A user who already has the dsh CLI and the official desktop app installed also i
 
 **Expected Result**: `dsh-forge` profile is an independent directory (≠ upstream `desktop`); the official desktop profile is not modified or overwritten.
 
-### Step 2b: Simultaneous run of two desktop forms
+### Step 2b: Second dsh-forge launch while dsh-forge and official desktop both run
 
-**Precondition**: The official upstream desktop app is running at the same time as dsh-forge.
+**Precondition**: dsh-forge is running and the official upstream desktop app is also running (two different apps, one instance each).
 
-**User Action**: Use both apps against the shared `$DSH_HOME` concurrently.
+**User Action**: Launch a second dsh-forge instance while both apps are running.
 
-**Expected Result**: The single-instance lock prevents two dsh-forge instances; cross-form concurrent access does not corrupt shared data (each profile's writes respect upstream format rules).
+**Expected Result**: The dsh-forge single-instance lock prevents the second dsh-forge instance (existing window focused or restored from tray); the official desktop app is unaffected; no second dsh-forge host subprocess or profile contention occurs. (source: tech-design F1 single-instance flow)
+
+**Note**: Simultaneous *cross-form concurrent writes* (dsh-forge writing to `$DSH_HOME` at the exact moment the official desktop writes) is not specified by PRD or tech-design — concurrent-access safety is UNKNOWN; this journey only asserts alternating access (see Step 4c).
 
 ### Step 3b: Credential updated by CLI between dsh-forge sessions
 
@@ -86,15 +89,23 @@ A user who already has the dsh CLI and the official desktop app installed also i
 
 **User Action**: Uninstall dsh-forge, then use CLI again.
 
-**Expected Result**: Shared `$DSH_HOME` data remains intact and usable by CLI; only the `dsh-forge` profile directory is removed.
+**Expected Result**: Shared `$DSH_HOME` data remains intact and usable by CLI. Whether the uninstaller removes only the `dsh-forge` profile directory (and never touches upstream `desktop` profile or shared `$DSH_HOME` data) is UNKNOWN — uninstall semantics are not specified by PRD or tech-design; observed uninstaller behavior must be recorded and any destructive effect on shared data is a defect.
 
 ### Step 4c: Alternating rapidly across forms
 
-**Precondition**: Sessions exist from all three forms.
+**Precondition**: Sessions exist from all three forms; each form is used one at a time (no simultaneous writes).
 
 **User Action**: Rapidly alternate CLI → dsh-forge → official desktop → CLI, each reading the shared data.
 
-**Expected Result**: All reads succeed each time; no torn writes or lock residue from rapid alternation.
+**Expected Result**: All reads succeed each time; no data corruption from rapid *alternating* access (source: PRD/tech-design DF003/SC8 — "交替读写互不损坏"). Absence of torn writes or lock residue under *simultaneous* access is not asserted — that is UNKNOWN (see Step 2b note).
+
+### Step 4d: Session expires between form switches (surface rule coverage)
+
+**Precondition**: While working in CLI, the upstream session/auth token created in the dsh-forge session lapses.
+
+**User Action**: Switch back to dsh-forge and attempt to continue the session.
+
+**Expected Result**: The user is shown session-expired feedback in-app and can re-establish the session; shared `$DSH_HOME` data is not corrupted by the expiry. (required_outcomes: `session-expired` per surface-web rule; source: inferred)
 
 ## Journey Invariants
 
