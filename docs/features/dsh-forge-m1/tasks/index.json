@@ -400,7 +400,7 @@
         "4.1",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.1-build-shell-banner-uf3.md",
       "record": "records/5.1-build-shell-banner-uf3.md",
       "surface-type": "web",
