@@ -436,7 +436,7 @@
         "3.3",
         "4.gate"
       ],
-      "status": "in_progress",
+      "status": "completed",
       "file": "5.3-integrate-shell-ui.md",
       "record": "records/5.3-integrate-shell-ui.md",
       "surface-type": "web",
