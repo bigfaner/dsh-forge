@@ -546,7 +546,7 @@
       "dependencies": [
         "6.summary"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.gate.md",
       "record": "records/6.gate.md",
       "breaking": true,
