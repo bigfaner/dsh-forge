@@ -144,6 +144,34 @@ try {
     await page.waitForFunction(() => document.querySelector('[contenteditable="true"]')?.textContent?.includes('验收测试输入') === true, undefined, T)
   })
 
+  // 重命名走 persistence resume 路径(曾因上游构建产物 lib/worker.cjs 缺失
+  // 而 resume failed — fix-3 回归守卫)。只动本 sweep 自己的验收会话。
+  await step('会话: 重命名(persistence resume 回归)', async () => {
+    const row = page.getByText('验收测试', { exact: false }).first()
+    if (!(await row.isVisible().catch(() => false))) {
+      console.log('  (SKIP: 无验收会话, 需 --send 先创建)')
+      return
+    }
+    await row.hover() // 操作按钮 hover 才显现
+    await page.waitForTimeout(300)
+    await page.getByRole('button', { name: /会话“验收测试[^”]*”的操作/ }).first().click()
+    await page.getByText('重命名', { exact: false }).first().waitFor({ ...T })
+    await page.getByText('重命名', { exact: false }).first().click()
+    const input = page.locator('input').last()
+    await input.waitFor({ ...T })
+    await input.fill('验收测试-已重命名')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(3_000)
+    if (!(await page.getByText('验收测试-已重命名', { exact: false }).first().isVisible().catch(() => false))) {
+      for (const label of ['保存', '确定', '确认']) {
+        const b = page.getByRole('button', { name: label }).first()
+        if (await b.isVisible().catch(() => false)) { await b.click(); break }
+      }
+      await page.waitForTimeout(3_000)
+      await page.getByText('验收测试-已重命名', { exact: false }).first().waitFor({ ...T })
+    }
+  })
+
   if (SEND) {
     await step('发送: 真实回合(已配置模型)', async () => {
       // 在全新会话中发送, 且发送前断言回合统计不存在 — 防止匹配到

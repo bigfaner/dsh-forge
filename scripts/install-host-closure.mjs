@@ -26,6 +26,12 @@
  *   node scripts/install-host-closure.mjs            (install; idempotent)
  *   node scripts/install-host-closure.mjs --check    (verify markers only)
  *
+ * Prerequisite: the upstream checkout must carry a FRESH host-face build of
+ * the pinned SHA (`pnpm run build:lib:host`) — step 5 projects its lib/
+ * output verbatim, and canaries fail the install when known runtime-required
+ * built artifacts are absent (stale/partial upstream builds break at first
+ * use, not at install).
+ *
  * Exit 0 on success; 1 on failure.
  */
 
@@ -56,8 +62,23 @@ const markerPaths = () => [
   join(VENDORED_ROOT, 'packages', 'skill', 'skill-office', 'assets'),
 ]
 
+// Built-artifact canaries (fix-3): lib/ projection copies upstream build
+// output wholesale; a stale or partial upstream build breaks runtime paths
+// SILENTLY (missing session-persistence-jsonl/lib/worker.cjs surfaced as
+// "rename failed: resume failed" only at first use). These must exist after
+// the lib projection — a missing canary means the upstream checkout needs
+// `pnpm run build:lib:host` before this installer can produce a working tree.
+const canaryPaths = () => [
+  join(VENDORED_ROOT, 'packages', 'session', 'session-persistence-jsonl', 'lib', 'worker.cjs'),
+]
+
 export function checkClosure() {
   const problems = []
+  for (const canary of canaryPaths()) {
+    if (!existsSync(canary)) {
+      problems.push(`missing built-artifact canary (upstream not built?): ${canary} — run 'pnpm run build:lib:host' in the upstream checkout first`)
+    }
+  }
   for (const marker of markerPaths()) {
     if (!existsSync(marker)) problems.push(`missing: ${marker}`)
   }
