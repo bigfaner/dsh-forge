@@ -1,0 +1,8 @@
+# hello-world demo plugin, profile-layer patch (task 2 bundle form): one
+# root-level insert row mounting the package into the web tree (same form as
+# the upstream web-app browser plugin roster). The node half (lib/index.js)
+# is the intentionally empty apply; the browser half ships via
+# exports['./client'] and is picked up by the client-modules roster scan.
+- insert:
+    - id: hello-world
+      name: '@dsh-forge/plugin-hello-world'

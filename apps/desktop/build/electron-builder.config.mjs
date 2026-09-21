@@ -45,6 +45,10 @@ export function createElectronBuilderConfig(env = process.env, hostPlatform = pr
     files: ['dist/**', '!node_modules/@dsh-forge/desktop-host-vendor/**'],
     extraResources: [
       { from: staging, to: '.', filter: ['runtime/**', 'vendor/**', 'staging-manifest.json'] },
+      // Product-level plugin-bundles config (ui-plugin-foundation task 2): the
+      // plugin tree's single source of truth, read once at shell startup from
+      // process.resourcesPath — never written by the running app.
+      { from: 'resources', to: '.', filter: ['plugin-bundles.json'] },
     ],
     win: {
       target: ['nsis'],

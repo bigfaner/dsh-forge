@@ -11,6 +11,7 @@
 //   node ../../scripts/acceptance/live-ui-sweep.mjs [--send]
 //     --send  额外执行「发送消息」真实回合(消耗已配置模型的少量 token)
 // 退出码: 0 = 全部 PASS; 1 = 有 FAIL 或启动失败。
+import { readFileSync } from 'node:fs'
 import { _electron } from '@playwright/test'
 
 const SEND = process.argv.includes('--send')
@@ -101,6 +102,23 @@ try {
   await step('boot: UI 挂载', async () => {
     await btn('新建会话').waitFor({ state: 'visible', timeout: 60_000 })
     await page.waitForTimeout(1_500) // 会话列表水合
+  })
+
+  // 配置化路径覆盖(ui-plugin-foundation 任务 2): 产品级 plugin-bundles 配置
+  // 是插件树唯一事实源 — 壳侧启动期差集调和应使 userData 投影 manifest 的
+  // bundle 清单与配置逐项(含顺序)一致。
+  await step('插件树对账: profile manifest ≡ 产品配置', async () => {
+    const configPath = process.env.DSH_FORGE_PLUGIN_BUNDLES
+      ?? `${repoRoot}/apps/desktop/resources/plugin-bundles.json`
+    const config = JSON.parse(readFileSync(configPath, 'utf8'))
+    const desired = config.bundles.map(entry => entry.name)
+    const userData = await app.evaluate(({ app }) => app.getPath('userData'))
+    const profileDir = process.env.DSH_FORGE_PROFILE_DIR ?? `${userData}/host-profile`
+    const manifest = JSON.parse(readFileSync(`${profileDir}/package.json`, 'utf8'))
+    const actual = manifest.dsh?.profile?.bundles ?? []
+    if (JSON.stringify(actual) !== JSON.stringify(desired)) {
+      throw new Error(`profile bundles ${JSON.stringify(actual)} != config ${JSON.stringify(desired)}`)
+    }
   })
 
   await step('清理: 归档旧验收会话', async () => {

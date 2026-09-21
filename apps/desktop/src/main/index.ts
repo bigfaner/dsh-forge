@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, session, shell, Tray } from 'electron'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { OFFICE_SKILLS_ASSETS_DIR, WEB_APP_DIST_DIR } from '@dsh-forge/desktop-host-vendor'
 import { shellLog } from './log.ts'
 import { SHELL_WEB_PREFERENCES } from './web-preferences.ts'
@@ -18,7 +19,13 @@ import { createUpdateChecker, fetchReleaseFeed } from './update-checker/index.ts
 import { UPDATE_CHECK_STARTUP_BUDGET_MS } from './update-checker/constants.ts'
 import { createCrashRecovery, type RecoverySideEffect } from './crash-recovery/index.ts'
 import { createUpdateBannerState } from './update-banner-state/index.ts'
-import { projectHostProfile } from './host-profile/index.ts'
+import {
+  HostProfileError,
+  loadPluginBundlesConfig,
+  PluginBundlesConfigError,
+  projectHostProfile,
+  type HostProfileProjection,
+} from './host-profile/index.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
@@ -88,6 +95,30 @@ function createWindow(): BrowserWindow {
 
 function resolveProfileDir(): string {
   return process.env.DSH_FORGE_PROFILE_DIR ?? join(app.getPath('userData'), 'host-profile')
+}
+
+// Task 2 (ui-plugin-foundation): the product-level plugin-bundles config is
+// the plugin tree's single source of truth. Resolved like the other resource
+// seams (env override > packaged resources dir > workspace resources/); read
+// once at startup and never written — product manifest entries are read-only
+// to runtime start/stop writers (AC5).
+function resolvePluginBundlesConfigPath(): string {
+  return process.env.DSH_FORGE_PLUGIN_BUNDLES
+    ?? (app.isPackaged ? join(process.resourcesPath, 'plugin-bundles.json') : join(__dirname, '..', 'resources', 'plugin-bundles.json'))
+}
+
+// Dev anchor for `workspace:` materialization sources: walk up from the main
+// bundle (apps/desktop/dist) to the workspace root (pnpm-workspace.yaml
+// marker), so the depth change between src/ and dist/ cannot skew the anchor.
+function resolveWorkspaceRoot(): string {
+  let dir = __dirname
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return resolve(__dirname, '..', '..', '..')
 }
 
 // Primary window registry for the second-instance focus path (F1). A closed
@@ -257,16 +288,34 @@ void app.whenReady().then(async () => {
     shellLog.info({ code: 'PACKAGED_RESOURCES', message: 'packaged app resolving embedded resources', data: { resourcesPath } })
   }
 
-  // Host profile + payload projection (disc-2): the vendored host entry boots
-  // from (a) an application-owned profile project (package.json
-  // `dsh.profile.bundles`; the host materializes its own node_modules there in
-  // link mode) and (b) an office payload source whose sibling office-skills/
-  // asset tree is a hard boot requirement. Both live app-owned under userData
-  // — never inside the upstream $DSH_HOME (SC8 coexistence).
-  const hostProfile = projectHostProfile({
-    profileDir,
-    officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
-  })
+  // Host profile + payload projection (disc-2 + task 2 config-ization): the
+  // vendored host entry boots from (a) an application-owned profile project
+  // (package.json `dsh.profile.bundles`, converged to the product config by
+  // the projector's startup reconciliation; the host materializes its own
+  // node_modules there in link mode) and (b) an office payload source whose
+  // sibling office-skills/ asset tree is a hard boot requirement. Both live
+  // app-owned under userData — never inside the upstream $DSH_HOME (SC8).
+  // A missing/corrupt/invalid config or an unreconcilable projection fails
+  // loud below (explicit start-failed path); the bundle list cannot be derived
+  // from anywhere but the product config.
+  let hostProfile: HostProfileProjection | undefined
+  let profileFailure: string | undefined
+  try {
+    const pluginBundles = loadPluginBundlesConfig(resolvePluginBundlesConfigPath())
+    hostProfile = projectHostProfile({
+      profileDir,
+      officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
+      bundles: pluginBundles.bundles,
+      workspaceRoot: resolveWorkspaceRoot(),
+    })
+  } catch (error) {
+    profileFailure = error instanceof Error ? error.message : String(error)
+    shellLog.error({
+      code: error instanceof PluginBundlesConfigError || error instanceof HostProfileError ? error.code : 'ERR_HOST_PROFILE',
+      message: 'host profile projection from the product plugin-bundles config failed; host start aborted',
+      data: { detail: profileFailure },
+    })
+  }
 
   // dsh-app:// carriage: web assets from the vendored web frontend dist,
   // API traffic forwarded to the authenticated upstream Host.
@@ -314,7 +363,7 @@ void app.whenReady().then(async () => {
       // the profile dir; argv[2] runtimeDir defaults to the vendored
       // desktop-host dir (packaged: DSH_FORGE_HOST_RUNTIME_DIR below).
       ...(process.env.DSH_FORGE_HOST_RUNTIME_DIR === undefined ? {} : { runtimeDir: process.env.DSH_FORGE_HOST_RUNTIME_DIR }),
-      ...(hostProfile.primaryRuntimeSource === undefined ? {} : { primaryRuntimeSource: hostProfile.primaryRuntimeSource }),
+      ...(hostProfile?.primaryRuntimeSource === undefined ? {} : { primaryRuntimeSource: hostProfile.primaryRuntimeSource }),
       ...(process.env.DSH_FORGE_HOST_ENTRY === undefined ? {} : { hostEntryPath: process.env.DSH_FORGE_HOST_ENTRY }),
       ...(process.env.DSH_FORGE_NODE_EXE === undefined ? {} : { nodeExecutable: process.env.DSH_FORGE_NODE_EXE }),
     },
@@ -380,18 +429,27 @@ void app.whenReady().then(async () => {
 
   // First boot: a spawn/handshake/auth failure goes straight to the terminal
   // failed state (F1 直进失败态, tech-design Interface 2) with the UF4 overlay
-  // presenting the failure detail; it never arms the retry ladder.
-  void bootHost(notifyHostOutcome).catch((error: unknown) => {
-    shellLog.error({
-      code: 'ERR_HOST_START_FAILED',
-      message: 'host start failed; dsh-app:// API carriage unavailable',
-      data: { detail: error instanceof Error ? error.message : String(error) },
-    })
+  // presenting the failure detail; it never arms the retry ladder. A config or
+  // profile-projection failure short-circuits the spawn through the same
+  // explicit path (task 2 error contract: never a silent startup crash).
+  if (profileFailure !== undefined) {
     try {
-      crashRecovery.dispatch('start-failed', error instanceof Error ? error.message : String(error))
-    } catch { /* already terminal (e.g. an earlier host-exit ladder owns state) */ }
+      crashRecovery.dispatch('start-failed', profileFailure)
+    } catch { /* already terminal (an earlier host-exit ladder owns state) */ }
     notifyHostOutcome()
-  })
+  } else {
+    void bootHost(notifyHostOutcome).catch((error: unknown) => {
+      shellLog.error({
+        code: 'ERR_HOST_START_FAILED',
+        message: 'host start failed; dsh-app:// API carriage unavailable',
+        data: { detail: error instanceof Error ? error.message : String(error) },
+      })
+      try {
+        crashRecovery.dispatch('start-failed', error instanceof Error ? error.message : String(error))
+      } catch { /* already terminal (e.g. an earlier host-exit ladder owns state) */ }
+      notifyHostOutcome()
+    })
+  }
 
   // UF1 tray (SC5): native menu + close-to-tray residency. On Linux without
   // a system tray the creation failure degrades silently (ERR_TRAY_UNAVAILABLE,

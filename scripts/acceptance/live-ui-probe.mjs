@@ -22,6 +22,12 @@ let t0 = Date.now()
 const stamp = () => ((Date.now() - t0) / 1000).toFixed(1)
 const log = (kind, detail) => { events.push({ t: stamp(), kind, ...detail }); console.log(`[${stamp()}s] ${kind} ${JSON.stringify(detail)}`) }
 
+// 冷启动计时口径(ui-plugin-foundation 任务 2): 主进程拉起(_electron.launch
+// 调用点)→ firstWindow / dsh-app 文档就绪 / UI ready 三个锚点, 归档用
+// launch→ui-ready(与探针既有的 UI 挂载门槛同口径)。
+const launchStart = Date.now()
+const coldStart = { firstWindowMs: undefined, urlMs: undefined, uiReadyMs: undefined }
+
 const app = await _electron.launch({ args: [mainPath] })
 try {
   await runProbe(app)
@@ -31,6 +37,8 @@ try {
 
 async function runProbe(app) {
 const page = await app.firstWindow()
+coldStart.firstWindowMs = Date.now() - launchStart
+log('cold-start', { anchor: 'firstWindow', ms: coldStart.firstWindowMs })
 
 page.on('console', msg => {
   const text = msg.text()
@@ -54,11 +62,13 @@ page.on('websocket', ws => {
 
 // --- 等待真实 UI 挂载(宿主启动 ~4-8s + 水合) --------------------------------
 await page.waitForURL(url => url.href.startsWith('dsh-app://app/'), { timeout: 30_000 })
+coldStart.urlMs = Date.now() - launchStart
 log('url', { href: page.url() })
 const newSessionButton = page.getByRole('button', { name: '新建会话' })
   .or(page.getByRole('button', { name: 'New Session' }))
 await newSessionButton.first().waitFor({ state: 'visible', timeout: 60_000 })
-log('ui-ready', { button: '新会话 visible' })
+coldStart.uiReadyMs = Date.now() - launchStart
+log('ui-ready', { button: '新会话 visible', coldStartMs: coldStart.uiReadyMs })
 
 /** DOM + 传输层快照: 全部按钮的可访问名 + 内省 __DSH_TRANSPORT__。 */
 async function snapshot(label) {
@@ -69,10 +79,14 @@ async function snapshot(label) {
     return t === undefined ? undefined : { ownsHost: t.ownsHost, streamBaseUrl: t.streamBaseUrl }
   })
   const bodyText = await page.evaluate(() => document.body.innerText)
+  // 产品配置驱动装配的插件面板标记(任务 2 增删腿的行为证据)。
+  const pluginPanels = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-dsh-forge-plugin]')].map(el => el.getAttribute('data-dsh-forge-plugin')))
   log('snapshot', {
     label,
     transport,
     buttons,
+    pluginPanels,
     bodyExcerpt: bodyText.replaceAll('\n', ' | ').slice(0, 600),
   })
 }
@@ -88,5 +102,6 @@ if (clickNewSession) {
   await snapshot('after-new-session-click')
 }
 
+console.log(`\n=== cold-start: launch→firstWindow=${String(coldStart.firstWindowMs)}ms launch→url=${String(coldStart.urlMs)}ms launch→ui-ready=${String(coldStart.uiReadyMs)}ms ===`)
 console.log('\n=== probe complete ===')
 }

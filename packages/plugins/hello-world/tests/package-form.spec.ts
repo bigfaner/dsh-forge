@@ -20,7 +20,10 @@ const manifest = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
   type: string
   main: string
   exports: Record<string, { types?: string; default?: string }>
-  dsh?: { client?: { inject?: string[]; platform?: string } }
+  dsh?: {
+    bundle?: { patch?: string }
+    client?: { inject?: string[]; platform?: string }
+  }
   files?: string[]
   peerDependencies?: Record<string, string>
   devDependencies?: Record<string, string>
@@ -114,8 +117,17 @@ describe('hello-world package: ui-goal plugin form (AC3)', () => {
     expect(client?.inject).toContain('@deepseek-ai/dsh-client-ui-chat')
   })
 
-  it('ships a small ui-goal-shaped artifact list', () => {
-    expect(manifest.files).toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts'])
+  it('ships a small ui-goal-shaped artifact list plus the profile-layer patch', () => {
+    // Task 2: the package is now a valid profile bundle — dsh.bundle.patch +
+    // the shipped cordis.patch.yml (one loader row) join the artifact list.
+    expect(manifest.files).toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts', 'cordis.patch.yml'])
+  })
+
+  it('declares the dsh.bundle patch required for a profile layer (task 2)', () => {
+    expect(manifest.dsh?.bundle).toEqual({ patch: './cordis.patch.yml' })
+    const patch = readFileSync(join(pkgRoot, 'cordis.patch.yml'), 'utf8')
+    // One loader row mounting the package (web-app browser-roster row form).
+    expect(patch).toContain("name: '@dsh-forge/plugin-hello-world'")
   })
 
   it('provides an empty host-half apply so the host Loader sees the plugin', async () => {
