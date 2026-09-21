@@ -39,3 +39,4 @@ packages/desktop-host-vendor/vendored/.closure-supplements/
 
 # host runtime residue (dsh profile root marker written when dev host runs from repo cwd)
 cordis.yml
+.claude/agent-memory/
