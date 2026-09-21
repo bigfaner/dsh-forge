@@ -41,6 +41,15 @@ jobs:
         shell: bash
         run: pnpm lint
 
+      # ui-plugin-foundation task 4: plugin foundation gate — version
+      # consistency assertion (alignment line exact == UpstreamLock
+      # .desktopHostVersion; cordis independent line exact-only) + artifact-level
+      # vendored scan over the built plugin bundles. Runs before vitest so the
+      # gate spec in tests/verify-plugins.spec.ts finds the built artifacts.
+      - name: Plugin foundation gate (version alignment + vendored scan)
+        shell: bash
+        run: pnpm verify:plugins
+
       - name: Unit tests (vitest)
         shell: bash
         run: pnpm test
