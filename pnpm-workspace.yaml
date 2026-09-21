@@ -1,8 +1,11 @@
 packages:
   # Product assemblies over the package tier; apps/desktop owns the Electron shell.
   - apps/*
-  # Vendored upstream projections and future plugin packages ("everything is a plugin").
+  # Vendored upstream projections ("everything is a plugin").
   - packages/*
+  # First-party plugin packages: pure npm-dependency trees, physically isolated
+  # from the vendored projection (task 1: hello-world, ui-plugin-foundation).
+  - packages/plugins/*
 allowBuilds:
   electron-winstaller: false
 

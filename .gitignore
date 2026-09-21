@@ -19,6 +19,9 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 
+# Plugin package build artifacts (pnpm build:plugins)
+packages/plugins/*/lib/
+
 # Build-time builtin Node runtime (acquired by scripts/prepare-host-runtime.mjs, never committed)
 packages/desktop-host-vendor/runtime/
 .cache/
