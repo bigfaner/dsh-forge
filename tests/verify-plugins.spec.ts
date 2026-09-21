@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -8,7 +8,9 @@ import { spawnSync } from 'node:child_process'
 import {
   ALIGNMENT_FAMILY_PREFIX,
   INDEPENDENT_LINE_PACKAGES,
+  TEMPLATE_ENGINES_KEY,
   checkPluginVersionAlignment,
+  checkTemplateEngines,
   checkVersionStamps,
   extractModuleSpecifiers,
   isExactVersion,
@@ -75,7 +77,10 @@ const CLEAN_CLIENT_BUNDLE = `window.__ModuleLoader__.load({
 \t}
 });`
 
-function makeTmpWorkspace(plugins: Array<{ name: string, manifest: any, artifacts?: Record<string, string>, stamp?: any }>) {
+function makeTmpWorkspace(
+  plugins: Array<{ name: string, manifest: any, artifacts?: Record<string, string>, stamp?: any }>,
+  templates: Array<{ name: string, manifest: any, stamp?: any }> = [],
+) {
   const root = mkdtempSync(join(tmpdir(), 'verify-plugins-test-'))
   mkdirSync(join(root, 'vendor'), { recursive: true })
   writeFileSync(join(root, 'vendor', 'upstream.lock.json'), JSON.stringify(FIXTURE_LOCK, null, 2))
@@ -92,7 +97,34 @@ function makeTmpWorkspace(plugins: Array<{ name: string, manifest: any, artifact
       writeFileSync(join(dir, 'version-stamp.json'), JSON.stringify(p.stamp, null, 2))
     }
   }
+  for (const t of templates) {
+    const dir = join(root, 'packages', 'templates', t.name)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(t.manifest, null, 2))
+    if (t.stamp !== undefined) {
+      writeFileSync(join(dir, 'version-stamp.json'), JSON.stringify(t.stamp, null, 2))
+    }
+  }
   return root
+}
+
+// Template fixture: same alignment discipline as a plugin, plus the
+// engines-style host declaration every template must carry (task 7).
+function templateFixture(overrides: Record<string, any> = {}) {
+  return {
+    name: '@dsh-forge/template-fixture',
+    dir: 'packages/templates/fixture',
+    manifest: {
+      name: '@dsh-forge/template-fixture',
+      peerDependencies: {
+        '@deepseek-ai/cordis': '4.0.2',
+        '@deepseek-ai/dsh-client-store': '0.1.6-alpha.2',
+        '@deepseek-ai/dsh-client-ui-chat': '0.1.6-alpha.2',
+      },
+      engines: { '@deepseek-ai/dsh': '0.1.6-alpha.2' },
+    },
+    ...overrides,
+  }
 }
 
 // --- AC-1: explicit comparison set, exact + aligned --------------------------
@@ -509,5 +541,256 @@ describe('fixture workspace layout', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+// --- task 7: template leg (outflow-side version sync) ------------------------
+
+describe('template discovery + required stamp (task 7 AC-3)', () => {
+  it('discovers templates under packages/templates and reports them separately from plugins', () => {
+    const root = makeTmpWorkspace([], [{ name: 'fixture', manifest: templateFixture().manifest, stamp: makeVersionStamp(FIXTURE_BASELINE) }])
+    try {
+      const report = runGate(root)
+      expect(report.templates).toEqual([{ name: '@dsh-forge/template-fixture', dir: 'packages/templates/fixture' }])
+      expect(report.plugins).toEqual([])
+      expect(report.ok).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reds when a template carries no version stamp (outflow sync must be assertable, not optional)', () => {
+    const root = makeTmpWorkspace([], [{ name: 'fixture', manifest: templateFixture().manifest }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      const violation = report.violations.find((v) => v.check === 'version-stamp')
+      expect(violation?.detail).toContain('packages/templates/fixture/version-stamp.json')
+      expect(violation?.detail).toContain('--stamp packages/templates/fixture')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reds on a stale template stamp (upstream bumped, template not re-stamped)', () => {
+    const stale = { ...makeVersionStamp(FIXTURE_BASELINE), desktopHostVersion: '0.1.5-rc.2' }
+    const root = makeTmpWorkspace([], [{ name: 'fixture', manifest: templateFixture().manifest, stamp: stale }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      expect(report.violations.some((v) => v.check === 'version-stamp' && v.detail.includes('0.1.5-rc.2'))).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('does not demand build artifacts from a source-scaffold template (no lib/ by design)', () => {
+    const root = makeTmpWorkspace([], [{ name: 'fixture', manifest: templateFixture().manifest, stamp: makeVersionStamp(FIXTURE_BASELINE) }])
+    try {
+      const report = runGate(root)
+      expect(report.violations).toEqual([])
+      expect(report.violations.some((v) => v.check === 'artifacts-missing')).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('template engines declaration (task 7 AC-3, VS Code engines.vscode analog)', () => {
+  it('greens on an exact engines version equal to desktopHostVersion', () => {
+    const report = checkTemplateEngines([templateFixture()], FIXTURE_BASELINE)
+    expect(report.ok).toBe(true)
+    expect(report.violations).toEqual([])
+  })
+
+  it('reds when engines["@deepseek-ai/dsh"] is missing', () => {
+    const missing = templateFixture({ manifest: { peerDependencies: templateFixture().manifest.peerDependencies } })
+    const report = checkTemplateEngines([missing], FIXTURE_BASELINE)
+    expect(report.ok).toBe(false)
+    expect(report.violations[0].check).toBe('template-engines')
+    expect(report.violations[0].detail).toContain('engines["@deepseek-ai/dsh"]')
+    expect(report.violations[0].detail).toContain('missing')
+  })
+
+  it('reds on a non-exact engines spec (range, dist-tag)', () => {
+    for (const bad of ['^0.1.6-alpha.2', 'alpha', '>=0.1.0']) {
+      const plugin = templateFixture({ manifest: { ...templateFixture().manifest, engines: { '@deepseek-ai/dsh': bad } } })
+      const report = checkTemplateEngines([plugin], FIXTURE_BASELINE)
+      expect(report.ok, `spec "${bad}"`).toBe(false)
+      expect(report.violations[0].detail).toContain(bad)
+      expect(report.violations[0].detail).toContain('exact')
+    }
+  })
+
+  it('reds on an exact engines version that differs from desktopHostVersion', () => {
+    const mismatched = templateFixture({ manifest: { ...templateFixture().manifest, engines: { '@deepseek-ai/dsh': '0.1.5-rc.2' } } })
+    const report = checkTemplateEngines([mismatched], FIXTURE_BASELINE)
+    expect(report.ok).toBe(false)
+    expect(report.violations[0].detail).toContain('0.1.5-rc.2')
+    expect(report.violations[0].detail).toContain('0.1.6-alpha.2')
+  })
+
+  it('names the engines key as a constant (upstream bump = same-diff discipline)', () => {
+    expect(TEMPLATE_ENGINES_KEY).toBe('@deepseek-ai/dsh')
+  })
+})
+
+describe('template manifest gate (task 7 AC-2 + Hard Rule: no workspace:/file: outflow)', () => {
+  it('reds on a workspace:^ spec copied into template peers', () => {
+    const root = makeTmpWorkspace([], [{
+      name: 'fixture',
+      manifest: { ...templateFixture().manifest, peerDependencies: { ...templateFixture().manifest.peerDependencies, '@deepseek-ai/dsh-client-ui-slots': 'workspace:^' } },
+      stamp: makeVersionStamp(FIXTURE_BASELINE),
+    }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      expect(report.violations.some((v) => v.check === 'manifest-sources' && v.detail.includes('workspace:'))).toBe(true)
+      // the alignment leg fires too: workspace:^ is not an exact version
+      expect(report.violations.some((v) => v.check === 'version-alignment' && v.detail.includes('workspace:^'))).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reds on an in-repo file: dependency spec in the template manifest', () => {
+    const root = makeTmpWorkspace([], [{
+      name: 'fixture',
+      manifest: { ...templateFixture().manifest, devDependencies: { '@deepseek-ai/dsh-client-locale': 'file:../../vendor/thing' } },
+      stamp: makeVersionStamp(FIXTURE_BASELINE),
+    }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      expect(report.violations.some((v) => v.check === 'manifest-sources' && v.detail.includes('file:'))).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reds on a misaligned dsh-client-* version in the template', () => {
+    const root = makeTmpWorkspace([], [{
+      name: 'fixture',
+      manifest: { ...templateFixture().manifest, peerDependencies: { ...templateFixture().manifest.peerDependencies, '@deepseek-ai/dsh-client-store': '0.1.5-rc.2' } },
+      stamp: makeVersionStamp(FIXTURE_BASELINE),
+    }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      expect(report.violations.some((v) => v.check === 'version-alignment' && v.detail.includes('0.1.5-rc.2'))).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('engines violations join the full gate report', () => {
+    const root = makeTmpWorkspace([], [{
+      name: 'fixture',
+      manifest: { ...templateFixture().manifest, engines: {} },
+      stamp: makeVersionStamp(FIXTURE_BASELINE),
+    }])
+    try {
+      const report = runGate(root)
+      expect(report.ok).toBe(false)
+      expect(report.violations.some((v) => v.check === 'template-engines')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('--stamp on a template dir (task 7 AC-3 same-source mechanism)', () => {
+  const cli = join(testsDir, '..', 'scripts', 'verify-plugins.mjs')
+
+  it('stamps packages/templates/<name> from the lock and the gate goes green', () => {
+    const root = makeTmpWorkspace([], [{ name: 'fixture', manifest: templateFixture().manifest }])
+    try {
+      const result = spawnSync(process.execPath, [cli, '--root', root, '--stamp', 'packages/templates/fixture'], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      const stamp = JSON.parse(readFileSync(join(root, 'packages', 'templates', 'fixture', 'version-stamp.json'), 'utf8'))
+      expect(stamp).toEqual(makeVersionStamp(FIXTURE_BASELINE))
+      expect(spawnSync(process.execPath, [cli, '--root', root], { encoding: 'utf8' }).status).toBe(0)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+// --- task 7: the shipped template itself (AC-1/AC-2/AC-3/AC-4 over the real tree)
+
+const TEMPLATE_DIR = join(repoRoot, 'packages', 'templates', 'plugin')
+const HELLO_WORLD_DIR = join(repoRoot, 'packages', 'plugins', 'hello-world')
+
+function listFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name)
+    return entry.isDirectory() ? listFiles(full) : [entry.name]
+  }).sort()
+}
+
+describe('the shipped template (task 7 real workspace)', () => {
+  it('is discovered by the gate, stamped, engines-declared, and the full real gate stays green', () => {
+    const report = runGate(repoRoot)
+    expect(report.templates.map((t) => t.name)).toEqual(['@dsh-forge/template-plugin'])
+    expect(report.templates.map((t) => t.dir)).toEqual(['packages/templates/plugin'])
+    expect(report.violations).toEqual([])
+    expect(report.ok).toBe(true)
+  })
+
+  it('carries a version stamp identical to the lock baseline (outflow-side sync)', () => {
+    const baseline = loadBaseline(repoRoot)
+    const stamp = JSON.parse(readFileSync(join(TEMPLATE_DIR, 'version-stamp.json'), 'utf8'))
+    expect(stamp).toEqual(makeVersionStamp(baseline))
+  })
+
+  it('mirrors the hello-world plugin contract surface (manifest-level distillation)', () => {
+    const baseline = loadBaseline(repoRoot)
+    const hello = JSON.parse(readFileSync(join(HELLO_WORLD_DIR, 'package.json'), 'utf8'))
+    const template = JSON.parse(readFileSync(join(TEMPLATE_DIR, 'package.json'), 'utf8'))
+    // the dsh client-plugin contract: inject set, platform, bundle patch, exports face
+    expect(template.dsh).toEqual(hello.dsh)
+    expect(Object.keys(template.exports)).toEqual(Object.keys(hello.exports))
+    expect(template.files).toEqual(hello.files)
+    expect(template.scripts.build).toBe(hello.scripts.build)
+    // peer line: npm-form registry specs only, family exact == desktopHostVersion, cordis exact
+    expect(Object.keys(template.peerDependencies).sort()).toEqual(Object.keys(hello.peerDependencies).sort())
+    for (const [name, spec] of Object.entries<string>(template.peerDependencies)) {
+      expect(isExactVersion(spec), `${name}: "${spec}"`).toBe(true)
+      if (name.startsWith(ALIGNMENT_FAMILY_PREFIX)) expect(spec).toBe(baseline.desktopHostVersion)
+      if (INDEPENDENT_LINE_PACKAGES.includes(name)) expect(spec).toBe(baseline.cordisVersion)
+    }
+    // the engines-style host declaration is in lockstep with the peer line
+    expect(template.engines[TEMPLATE_ENGINES_KEY]).toBe(baseline.desktopHostVersion)
+  })
+
+  it('mirrors the hello-world source tree (postures preserved, panel renamed)', () => {
+    const helloFiles = listFiles(join(HELLO_WORLD_DIR, 'src')).map((f) => f.replace('HelloWorldPanel', 'TemplatePanel'))
+    expect(listFiles(join(TEMPLATE_DIR, 'src'))).toEqual(helloFiles)
+    // build/pack scaffolding travels with the template
+    for (const file of ['tsconfig.json', 'tsdown.config.ts', 'cordis.patch.yml', 'version-stamp.json', 'README.md']) {
+      expect(readFileSync(join(TEMPLATE_DIR, file), 'utf8').length, file).toBeGreaterThan(0)
+    }
+  })
+
+  it('links the client bundle id to the manifest name (loader contract)', () => {
+    const template = JSON.parse(readFileSync(join(TEMPLATE_DIR, 'package.json'), 'utf8'))
+    const config = readFileSync(join(TEMPLATE_DIR, 'tsdown.config.ts'), 'utf8')
+    expect(config).toContain(`const id = '${template.name}'`)
+  })
+
+  it('ships a third-party-facing README: first steps documented, no vendored-tree paths', () => {
+    const baseline = loadBaseline(repoRoot)
+    const readme = readFileSync(join(TEMPLATE_DIR, 'README.md'), 'utf8')
+    // both "first steps" are documented: dependency install + host install
+    expect(readme).toContain('plugin --profile')
+    // the engines-style declaration is explained
+    expect(readme).toContain('engines')
+    // examples carry the current exact baseline (same-diff bump discipline)
+    expect(readme).toContain(baseline.desktopHostVersion)
+    // the dist-tag trap is named explicitly (no bare names, no ^)
+    expect(readme).toContain('workspace:^')
+    // readers never need this repo's vendored trees
+    expect(readme).not.toContain('packages/desktop-host-vendor')
+    expect(readme).not.toContain('vendor/upstream.lock')
   })
 })

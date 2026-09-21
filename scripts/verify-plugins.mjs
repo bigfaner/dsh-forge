@@ -1,12 +1,15 @@
 // Plugin foundation gate (ui-plugin-foundation task 4): version-consistency
 // assertion + artifact-level vendored scan, joined into one quality gate.
+// Task 7 extends the same mechanism to the plugin engineering template(s)
+// under packages/templates/* (outflow side): same manifest rules, plus a
+// REQUIRED version stamp and the engines-style host declaration check.
 //
 // Two entry forms share this module (single source of truth):
 //   - vitest: tests/verify-plugins.spec.ts imports the functions below, so the
 //     gate runs inside `pnpm test` (the CI lint-unit leg already runs it).
 //   - CLI: `node scripts/verify-plugins.mjs` (wired as `pnpm verify:plugins`,
 //     which builds the plugins first), for standalone red-light reproduction
-//     and for stamping template version stamps (`--stamp <pluginDir>`).
+//     and for stamping version stamps (`--stamp <pluginOrTemplateDir>`).
 //
 // Comparison set is EXPLICIT and must not be widened to make the gate pass
 // (task Hard Rule):
@@ -24,7 +27,18 @@
 // vendor trees (vendor/ or packages/desktop-host-vendor/), carrying a
 // vendor path segment, or using the file: protocol to point into the repo is
 // a red light. Manifest dependency specs declaring file:/link:/workspace: or
-// bare paths into the repo are red for the same reason.
+// bare paths into the repo are red for the same reason (this is also the
+// machine face of the template Hard Rule: template manifests must never
+// carry workspace: or in-repo file: specs — they break the moment they
+// leave this repo).
+//
+// Template leg (task 7): templates are source scaffolds — no built lib/ is
+// expected or demanded — but their manifests face the same version and
+// source rules as plugin manifests, they MUST carry a version-stamp.json
+// (outflow-side sync proof; plugins may omit stamps, templates may not),
+// and they must declare the host they target via engines["@deepseek-ai/dsh"]
+// (the VS Code engines.vscode analog), exact and equal to
+// desktopHostVersion.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -37,6 +51,8 @@ export const LOCK_RELATIVE_PATH = 'vendor/upstream.lock.json'
 export const STAMP_FILE_NAME = 'version-stamp.json'
 export const ARTIFACT_DIR_NAME = 'lib'
 export const ARTIFACT_EXTENSIONS = ['.js', '.mjs', '.cjs']
+export const TEMPLATE_ROOT_DIR = 'packages/templates'
+export const TEMPLATE_ENGINES_KEY = '@deepseek-ai/dsh'
 
 // --- baseline ---------------------------------------------------------------
 
@@ -340,6 +356,48 @@ export function checkVersionStamps(stamps, baseline) {
   return { ok: violations.length === 0, violations }
 }
 
+// --- template leg (task 7: outflow-side version sync) --------------------------
+
+/**
+ * Templates declare the host they target via engines[TEMPLATE_ENGINES_KEY] —
+ * the VS Code engines.vscode analog. The declaration must be an exact pinned
+ * version equal to desktopHostVersion (kept in lockstep with the peer line
+ * and the stamp: all three bump in the same diff).
+ * @param {Array<{name: string, dir: string, manifest: object}>} templates
+ * @param {{desktopHostVersion: string}} baseline
+ */
+export function checkTemplateEngines(templates, baseline) {
+  const violations = []
+  for (const template of templates) {
+    const where = `${template.dir}/package.json > engines["${TEMPLATE_ENGINES_KEY}"]`
+    const spec = template.manifest?.engines?.[TEMPLATE_ENGINES_KEY]
+    if (spec === undefined) {
+      violations.push({
+        plugin: template.name,
+        check: 'template-engines',
+        detail: `[template-engines] ${where}: missing — a template must declare which dsh host version it targets (the engines.vscode analog); set it to the exact desktopHostVersion in lockstep with the peer line`,
+      })
+      continue
+    }
+    if (!isExactVersion(spec)) {
+      violations.push({
+        plugin: template.name,
+        check: 'template-engines',
+        detail: `[template-engines] ${where}: "${spec}" — must be an exact pinned version; ranges and dist-tags are forbidden for the same reason as on the dependency line`,
+      })
+      continue
+    }
+    if (String(spec) !== baseline.desktopHostVersion) {
+      violations.push({
+        plugin: template.name,
+        check: 'template-engines',
+        detail: `[template-engines] ${where}: "${spec}" != desktopHostVersion "${baseline.desktopHostVersion}" (${LOCK_RELATIVE_PATH}) — keep the engines declaration, the peer line, and the stamp in the same diff`,
+      })
+    }
+  }
+  return { ok: violations.length === 0, violations }
+}
+
 // --- gate orchestration ------------------------------------------------------------
 
 function collectArtifactFiles(libDir) {
@@ -374,10 +432,30 @@ function discoverPlugins(rootDir) {
   return plugins
 }
 
+/** Discover engineering templates under packages/templates/* (source scaffolds). */
+export function discoverTemplates(rootDir) {
+  const templatesRoot = join(rootDir, TEMPLATE_ROOT_DIR)
+  if (!existsSync(templatesRoot)) return []
+  const templates = []
+  for (const entry of readdirSync(templatesRoot, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory()) continue
+    const manifestPath = join(templatesRoot, entry.name, 'package.json')
+    if (!existsSync(manifestPath)) continue
+    templates.push({
+      name: JSON.parse(readFileSync(manifestPath, 'utf8')).name ?? entry.name,
+      dir: toPosix(relative(rootDir, join(templatesRoot, entry.name))),
+      dirAbs: join(templatesRoot, entry.name),
+      manifest: JSON.parse(readFileSync(manifestPath, 'utf8')),
+    })
+  }
+  return templates
+}
+
 /** Run the full gate over a workspace root. */
 export function runGate(rootDir) {
   const baseline = loadBaseline(rootDir)
   const plugins = discoverPlugins(rootDir)
+  const templates = discoverTemplates(rootDir)
 
   const versionAlignment = checkPluginVersionAlignment(plugins, baseline)
   const manifestSources = scanManifestModuleSources(plugins, rootDir)
@@ -420,12 +498,45 @@ export function runGate(rootDir) {
       })
     }
   }
-  const stampCheck = checkVersionStamps(stamps, baseline)
+
+  // Template leg (task 7): same manifest rules as plugins, a REQUIRED stamp
+  // (outflow-side sync must be assertable), the engines host declaration —
+  // and deliberately NO artifact demand (a template is a source scaffold; the
+  // maintained build reference is packages/plugins/hello-world).
+  const templateAlignment = checkPluginVersionAlignment(templates, baseline)
+  const templateManifestSources = scanManifestModuleSources(templates, rootDir)
+  const templateEngines = checkTemplateEngines(templates, baseline)
+  const templateStamps = []
+  for (const template of templates) {
+    const stampPath = join(template.dirAbs, STAMP_FILE_NAME)
+    if (!existsSync(stampPath)) {
+      stampViolations.push({
+        plugin: template.name,
+        check: 'version-stamp',
+        detail: `[version-stamp] ${template.dir}/${STAMP_FILE_NAME}: missing — templates MUST carry a version stamp (the outflow-side sync proof; plugins may omit stamps, templates may not); run "node scripts/verify-plugins.mjs --stamp ${template.dir}"`,
+      })
+      continue
+    }
+    try {
+      templateStamps.push({ name: template.name, dir: template.dir, stamp: JSON.parse(readFileSync(stampPath, 'utf8')) })
+    } catch (error) {
+      stampViolations.push({
+        plugin: template.name,
+        check: 'version-stamp',
+        detail: `[version-stamp] ${template.dir}/${STAMP_FILE_NAME}: unparsable (${error.message}) — regenerate with --stamp`,
+      })
+    }
+  }
+
+  const stampCheck = checkVersionStamps([...stamps, ...templateStamps], baseline)
 
   const violations = [
     ...versionAlignment.violations,
     ...manifestSources.violations,
     ...artifactViolations,
+    ...templateAlignment.violations,
+    ...templateManifestSources.violations,
+    ...templateEngines.violations,
     ...stampViolations,
     ...stampCheck.violations,
   ]
@@ -434,7 +545,13 @@ export function runGate(rootDir) {
     ok: violations.length === 0,
     baseline,
     plugins: plugins.map((p) => ({ name: p.name, dir: p.dir })),
-    scanned: { manifests: plugins.length, artifacts: artifactCount, specifiers: specifierCount },
+    templates: templates.map((t) => ({ name: t.name, dir: t.dir })),
+    scanned: {
+      manifests: plugins.length,
+      artifacts: artifactCount,
+      specifiers: specifierCount,
+      templates: templates.length,
+    },
     violations,
   }
 }
@@ -447,6 +564,9 @@ export function printHumanReport(report) {
   lines.push(`  root: ${report.baseline.root ?? ''}`.trimEnd())
   lines.push(`  baseline: desktopHostVersion ${report.baseline.desktopHostVersion} / cordis ${report.baseline.cordisVersion ?? '(absent from lock)'} / pinnedSha ${report.baseline.pinnedSha ?? '(absent)'}`)
   lines.push(`  plugins: ${report.plugins.length}${report.plugins.length ? ` (${report.plugins.map((p) => p.name).join(', ')})` : ''}`)
+  if ((report.templates ?? []).length > 0) {
+    lines.push(`  templates: ${report.templates.length} (${report.templates.map((t) => t.name).join(', ')})`)
+  }
   lines.push(`  scanned: ${report.scanned.manifests} manifests, ${report.scanned.artifacts} artifacts, ${report.scanned.specifiers} module specifiers`)
   const failedChecks = new Set(report.violations.map((v) => v.check))
   const checks = [
@@ -454,7 +574,8 @@ export function printHumanReport(report) {
     ['manifest-sources', 'manifest module sources (no file:/link:/workspace:/path specs into the repo)'],
     ['artifact-sources', 'artifact module sources (no vendor/ resolutions, no file: into the repo)'],
     ['artifacts-missing', 'plugin build artifacts present'],
-    ['version-stamp', 'version stamps in sync with vendor/upstream.lock.json'],
+    ['template-engines', 'template host declaration (engines["@deepseek-ai/dsh"] exact == desktopHostVersion)'],
+    ['version-stamp', 'version stamps in sync with vendor/upstream.lock.json (required for templates)'],
   ]
   for (const [check, label] of checks) {
     lines.push(`  ${failedChecks.has(check) ? 'FAIL' : '[PASS]'} ${label}`)
@@ -480,7 +601,7 @@ export function runCli(argv) {
   if (args.includes('--stamp')) {
     const pluginDirArg = flag('--stamp')
     if (!pluginDirArg) {
-      console.error('usage: node scripts/verify-plugins.mjs [--root DIR] [--json] [--stamp <pluginDir>]')
+      console.error('usage: node scripts/verify-plugins.mjs [--root DIR] [--json] [--stamp <pluginOrTemplateDir>]')
       return 2
     }
     const pluginDirAbs = resolve(rootDir, pluginDirArg)

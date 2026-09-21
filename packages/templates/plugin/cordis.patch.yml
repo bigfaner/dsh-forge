@@ -1,0 +1,10 @@
+# dsh client plugin template, profile-layer patch: one root-level insert row
+# mounting the package into the web tree (same form as the upstream web-app
+# browser plugin roster). Bare {id, name} rows are OVERRIDES, not inserts —
+# a client plugin's loader row must ride a root-level `- insert:` list. The
+# node half (lib/index.js) is the intentionally empty apply; the browser half
+# ships via exports['./client'] and is picked up by the client-modules roster
+# scan.
+- insert:
+    - id: template-demo
+      name: '@dsh-forge/template-plugin'

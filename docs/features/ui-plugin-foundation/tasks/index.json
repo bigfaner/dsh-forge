@@ -97,7 +97,7 @@
       "dependencies": [
         "4"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "7-plugin-template-walkthrough.md",
       "record": "records/7-plugin-template-walkthrough.md",
       "surface-type": "web",
