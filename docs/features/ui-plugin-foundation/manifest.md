@@ -1,7 +1,7 @@
 ---
 feature: "ui-plugin-foundation"
 created: "2026-09-22"
-status: tasks
+status: completed
 mode: quick
 ---
 
