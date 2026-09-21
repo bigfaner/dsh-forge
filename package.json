@@ -22,7 +22,8 @@
     "smoke:host-entry": "node scripts/smoke-host-entry.mjs",
     "assemble:app-resources": "node scripts/assemble-app-resources.mjs",
     "verify:package": "node scripts/verify-package.mjs",
-    "verify:plugins": "pnpm build:plugins && node scripts/verify-plugins.mjs"
+    "verify:plugins": "pnpm build:plugins && node scripts/verify-plugins.mjs",
+    "stage:plugin-tarballs": "node scripts/stage-plugin-tarballs.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

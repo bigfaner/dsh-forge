@@ -101,10 +101,34 @@ describe('loadPluginBundlesConfig (task 2 AC1)', () => {
   })
 
   it('fails loud on invalid source specs', () => {
-    const badSources = ['', 'workspace:', 'workspace:/abs/path', 'workspace:\\abs', 'npm:foo', 'file:../x', 'xworkspace:a', 7]
+    const badSources = [
+      '', 'workspace:', 'workspace:/abs/path', 'workspace:\\abs', 'workspace:../escape', 'workspace:a/../b',
+      'npm:foo', 'file:../x', 'xworkspace:a', 'tarball:foo.tar', 'tarball:/abs/x.tgz', 'tarball:../up.tgz',
+      'tarball:sub/dir/../evil.tgz', 'tarball:has<chars>.tgz', 'xtarball:a.tgz', 7,
+    ]
     for (const source of badSources) {
       const path = writeConfig({ bundles: [{ name: '@dsh-forge/plugin-x', source }] })
       expect(() => loadPluginBundlesConfig(path), `source=${JSON.stringify(source)}`).toThrow(/invalid source/u)
     }
+  })
+
+  // Task 6: the packaged distribution form (spike-report §4.1) grows the
+  // source vocabulary with `tarball:<resources-relative .tgz>` — the artifact
+  // staged next to the config in app resources, unpacked by the shell at
+  // reconciliation. Validation stays strict: relative, .tgz, no traversal.
+  it('accepts tarball sources alongside workspace sources', () => {
+    const path = writeConfig({
+      bundles: [
+        { name: '@deepseek-ai/dsh-base' },
+        { name: '@dsh-forge/plugin-hello-world', source: 'tarball:plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz' },
+        { name: '@dsh-forge/plugin-dev', source: 'workspace:packages/plugins/dev' },
+      ],
+    })
+    const config = loadPluginBundlesConfig(path)
+    expect(config.bundles).toEqual([
+      { name: '@deepseek-ai/dsh-base' },
+      { name: '@dsh-forge/plugin-hello-world', source: 'tarball:plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz' },
+      { name: '@dsh-forge/plugin-dev', source: 'workspace:packages/plugins/dev' },
+    ])
   })
 })

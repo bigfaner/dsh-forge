@@ -7,7 +7,9 @@
 // `dsh web`(npm launcher), 不经本仓任何壳代码 —— 可移植性证据的官方侧。
 //
 // 用法:
-//   node scripts/acceptance/dsh-web-probe.mjs --url "http://127.0.0.1:PORT/?token=..." [--label S0] [--open-session]
+//   node scripts/acceptance/dsh-web-probe.mjs --url "http://127.0.0.1:PORT/?token=..." [--label S0] [--open-session] [--click-panel]
+//   --click-panel  面板渲染后点击其按钮, 验证 点击 → store 更新 → 重渲染 活链路
+//                  (任务 6: 两侧环境交互一致性证据的官方 web 侧)。
 // 退出码: 0 = 探针完成(无论发现什么); 1 = 启动/等待 UI 失败。
 import { chromium } from '@playwright/test'
 
@@ -19,6 +21,7 @@ const argOf = (name) => {
 const url = argOf('url')
 const label = argOf('label') ?? 'probe'
 const openSession = args.includes('--open-session')
+const clickPanel = args.includes('--click-panel')
 if (!url) {
   console.error('usage: dsh-web-probe.mjs --url <url> [--label S] [--open-session]')
   process.exit(1)
@@ -95,6 +98,24 @@ async function runProbe() {
         text: (el.textContent ?? '').slice(0, 300),
       })))
     log('panel-texts', { panels: panelTexts })
+
+    if (clickPanel) {
+      // 任务 6 交互腿: 点击面板按钮 → store 席位更新 → 绑定选择器重渲染。
+      const panel = page.locator('[data-dsh-forge-plugin]').first()
+      if (await panel.count() === 0) {
+        log('panel-click', { label, status: 'FAIL', reason: 'no panel to click' })
+      } else {
+        const textBefore = ((await panel.textContent()) ?? '').trim()
+        await panel.locator('button').first().click()
+        await page.waitForTimeout(800)
+        const textAfter = ((await panel.textContent()) ?? '').trim()
+        log('panel-click', {
+          label,
+          status: textAfter !== textBefore ? 'interaction-PASS' : 'interaction-FAIL',
+          textBefore, textAfter,
+        })
+      }
+    }
   }
 
   console.log(`\n=== dsh-web probe [${label}] complete: ${events.filter((e) => e.kind === 'pageerror').length} pageerrors, ${events.filter((e) => e.kind === 'console' && e.level === 'error').length} console-errors ===`)

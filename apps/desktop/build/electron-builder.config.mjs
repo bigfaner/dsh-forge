@@ -48,7 +48,10 @@ export function createElectronBuilderConfig(env = process.env, hostPlatform = pr
       // Product-level plugin-bundles config (ui-plugin-foundation task 2): the
       // plugin tree's single source of truth, read once at shell startup from
       // process.resourcesPath — never written by the running app.
-      { from: 'resources', to: '.', filter: ['plugin-bundles.json'] },
+      // Task 6 (spike §4.1): the staged plugin pack tarballs it references —
+      // the packaged distribution carrier, pre-seeded into the userData host
+      // profile at startup (no pnpm, no network).
+      { from: 'resources', to: '.', filter: ['plugin-bundles.json', 'plugin-tarballs/**'] },
     ],
     win: {
       target: ['nsis'],

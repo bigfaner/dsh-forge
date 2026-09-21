@@ -301,12 +301,16 @@ void app.whenReady().then(async () => {
   let hostProfile: HostProfileProjection | undefined
   let profileFailure: string | undefined
   try {
-    const pluginBundles = loadPluginBundlesConfig(resolvePluginBundlesConfigPath())
+    const pluginBundlesConfigPath = resolvePluginBundlesConfigPath()
+    const pluginBundles = loadPluginBundlesConfig(pluginBundlesConfigPath)
     hostProfile = projectHostProfile({
       profileDir,
       officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
       bundles: pluginBundles.bundles,
       workspaceRoot: resolveWorkspaceRoot(),
+      // Task 6: `tarball:` sources are staged next to the config in app
+      // resources (dev: resources/, packaged: process.resourcesPath).
+      resourcesRoot: dirname(pluginBundlesConfigPath),
     })
   } catch (error) {
     profileFailure = error instanceof Error ? error.message : String(error)

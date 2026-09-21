@@ -14,7 +14,7 @@
  * Exit 0 within budget and self-contained; 1 otherwise.
  */
 
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const RELEASE = join('apps', 'desktop', 'release')
@@ -71,6 +71,24 @@ function main() {
     const nodeExe = join(resources, 'runtime', args.platform === 'win32' ? 'node.exe' : 'bin/node')
     for (const required of [nodeExe, join(resources, 'vendor', 'vendored', 'apps', 'desktop-host', 'src', 'index.ts'), join(resources, 'staging-manifest.json')]) {
       if (!existsSync(required)) problems.push(`unpacked app missing embedded resource: ${required}`)
+    }
+    // ui-plugin-foundation task 6: the plugin tree's config and every tarball
+    // it references must be embedded — the packaged pre-seeding leg must be
+    // self-contained (offline NFR).
+    const bundlesConfigPath = join(resources, 'plugin-bundles.json')
+    if (!existsSync(bundlesConfigPath)) {
+      problems.push(`unpacked app missing embedded resource: ${bundlesConfigPath}`)
+    } else {
+      try {
+        const bundles = JSON.parse(readFileSync(bundlesConfigPath, 'utf8')).bundles ?? []
+        for (const entry of bundles) {
+          if (typeof entry?.source !== 'string' || !entry.source.startsWith('tarball:')) continue
+          const tarball = join(resources, entry.source.slice('tarball:'.length))
+          if (!existsSync(tarball)) problems.push(`unpacked app missing staged plugin tarball for ${String(entry.name)}: ${tarball}`)
+        }
+      } catch (error) {
+        problems.push(`embedded plugin-bundles.json is not readable: ${String(error)}`)
+      }
     }
   }
 

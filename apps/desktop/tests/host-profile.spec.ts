@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { projectHostProfile, type PluginBundleEntry } from '../src/main/host-profile/index.ts'
+import { pluginPackBlocks, writeTarball } from './helpers/tarball-fixture.ts'
 
 // Task 2: the projector reconciles the app-owned userData profile against the
 // product-level plugin-bundles config (single source of truth). Write-once
@@ -230,5 +231,152 @@ describe('projectHostProfile (disc-2 + task 2 config-ization)', () => {
     projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: withHelloWorld, workspaceRoot })
     projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: OFFICIAL })
     expect(readFileSync(configPath, 'utf8')).toBe(configBytes)
+  })
+})
+
+// Task 6 (spike-report §4.1): packaged distribution form = tarball built-in +
+// shell-side pre-seeding. The config's `source` vocabulary grows a
+// `tarball:<resources-relative .tgz>` form; the projector unpacks the artifact
+// into the profile's node_modules as a REAL directory (resolveBundleDir's
+// second anchor accepts either), write-once with a shell-owned seed marker —
+// no pnpm, no network, zero plugin identity in shell code (the name and the
+// artifact path come from the config alone).
+describe('projectHostProfile (task 6 tarball pre-seeding leg)', () => {
+  const PLUGIN = '@dsh-forge/plugin-hello-world'
+
+  /** A scratch resources root holding a packed plugin tarball; returns config-ready entries. */
+  function makeResources(scratch: string, version = '0.1.0', marker = 'v1'): { resourcesRoot: string; bundles: readonly PluginBundleEntry[]; tarballPath: string } {
+    const resourcesRoot = join(scratch, 'resources')
+    mkdirSync(resourcesRoot, { recursive: true })
+    const tarballPath = writeTarball(pluginPackBlocks(PLUGIN, version, marker), join(resourcesRoot, 'plugin-tarballs'), `dsh-forge-plugin-hello-world-${version}.tgz`)
+    return {
+      resourcesRoot,
+      bundles: [...OFFICIAL, { name: PLUGIN, source: `tarball:plugin-tarballs/dsh-forge-plugin-hello-world-${version}.tgz` }],
+      tarballPath,
+    }
+  }
+
+  const seededDir = (profileDir: string) => join(profileDir, 'node_modules', '@dsh-forge', 'plugin-hello-world')
+  const MARKER = '.dsh-forge-seed.json'
+
+  it('pre-seeds the tarball entry as a real unpacked directory with a seed marker', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    const seeded = seededDir(profileDir)
+    expect(lstatSync(seeded).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(seeded, 'package.json'), 'utf8')).toContain(PLUGIN)
+    expect(readFileSync(join(seeded, 'lib', 'client.js'), 'utf8')).toContain('client half v1')
+    const marker = JSON.parse(readFileSync(join(seeded, MARKER), 'utf8'))
+    expect(marker.bundle).toBe(PLUGIN)
+    expect(marker.source).toBe(bundles[2]?.source)
+    expect(marker.sha256).toMatch(/^[0-9a-f]{64}$/u)
+    expect(typeof marker.seededAt).toBe('string')
+  })
+
+  it('is write-once: an identical re-run leaves the materialization untouched', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    const markerPath = join(seededDir(profileDir), MARKER)
+    const before = readFileSync(markerPath, 'utf8')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    expect(readFileSync(markerPath, 'utf8')).toBe(before)
+    // No staging residue is left behind either.
+    expect(readdirSync(profileDir).filter(name => name.startsWith('.dsh-forge-seed-'))).toEqual([])
+  })
+
+  it('re-materializes when the artifact changes (sha drift converges)', () => {
+    const scratch = makeScratch()
+    const first = makeResources(scratch, '0.1.0', 'v1')
+    const profileDir = join(scratch, 'host-profile')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: first.bundles, resourcesRoot: first.resourcesRoot })
+    expect(readFileSync(join(seededDir(profileDir), 'lib', 'client.js'), 'utf8')).toContain('v1')
+    // Same name, rebuilt artifact (different bytes/version).
+    const second = makeResources(scratch, '0.1.1', 'v2')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: second.bundles, resourcesRoot: second.resourcesRoot })
+    expect(readFileSync(join(seededDir(profileDir), 'lib', 'client.js'), 'utf8')).toContain('v2')
+    expect(JSON.parse(readFileSync(join(seededDir(profileDir), 'package.json'), 'utf8')).version).toBe('0.1.1')
+  })
+
+  it('replaces a stale shell-seeded workspace junction with the unpacked directory', () => {
+    const scratch = makeScratch()
+    const { workspaceRoot, withHelloWorld } = makePluginWorkspace(scratch)
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: withHelloWorld, workspaceRoot })
+    expect(lstatSync(seededDir(profileDir)).isSymbolicLink()).toBe(true)
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    expect(lstatSync(seededDir(profileDir)).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(seededDir(profileDir), 'lib', 'index.js'), 'utf8')).toContain('host half')
+  })
+
+  it('leaves a foreign (marker-less) real directory alone', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    const seeded = seededDir(profileDir)
+    mkdirSync(seeded, { recursive: true })
+    writeFileSync(join(seeded, 'package.json'), '{"name":"pnpm-managed"}\n')
+    expect(() => projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })).not.toThrow()
+    expect(readFileSync(join(seeded, 'package.json'), 'utf8')).toContain('pnpm-managed')
+  })
+
+  it('skips upstream-owned module-fallback links (the host heals those)', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    const ownedDir = join(profileDir, '.dsh-module-fallback', 'node_modules', '@dsh-forge', 'plugin-hello-world')
+    const modulesDir = join(profileDir, 'node_modules', '@dsh-forge')
+    mkdirSync(ownedDir, { recursive: true })
+    writeFileSync(join(ownedDir, 'package.json'), '{"name":"upstream-healed"}\n')
+    mkdirSync(modulesDir, { recursive: true })
+    symlinkSync(ownedDir, join(modulesDir, 'plugin-hello-world'), 'junction')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    expect(lstatSync(join(modulesDir, 'plugin-hello-world')).isSymbolicLink()).toBe(true)
+  })
+
+  it('fails loud with remediation when the tarball is missing or the anchor is absent', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    rmSync(join(resourcesRoot, 'plugin-tarballs'), { recursive: true, force: true })
+    expect(() => projectHostProfile({ profileDir: join(scratch, 'host-profile'), officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot }))
+      .toThrow(/tarball/u)
+    expect(() => projectHostProfile({ profileDir: join(scratch, 'host-profile-2'), officeSkillsSource: OFFICE(scratch), bundles }))
+      .toThrow(/resourcesRoot/u)
+  })
+
+  it('fails loud on a corrupt tarball, leaving no materialization or residue behind', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    writeFileSync(join(resourcesRoot, 'plugin-tarballs', 'dsh-forge-plugin-hello-world-0.1.0.tgz'), Buffer.from('not a tarball'))
+    const profileDir = join(scratch, 'host-profile')
+    expect(() => projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })).toThrow()
+    expect(existsSync(seededDir(profileDir))).toBe(false)
+    expect(readdirSync(profileDir).filter(name => name.startsWith('.dsh-forge-seed-'))).toEqual([])
+  })
+
+  it('fails loud when the packed package identity does not match the config entry', () => {
+    const scratch = makeScratch()
+    const resourcesRoot = join(scratch, 'resources')
+    mkdirSync(join(resourcesRoot, 'plugin-tarballs'), { recursive: true })
+    writeTarball(pluginPackBlocks('@dsh-forge/plugin-impostor', '0.1.0'), join(resourcesRoot, 'plugin-tarballs'), 'dsh-forge-plugin-hello-world-0.1.0.tgz')
+    const bundles: readonly PluginBundleEntry[] = [...OFFICIAL, { name: PLUGIN, source: 'tarball:plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz' }]
+    expect(() => projectHostProfile({ profileDir: join(scratch, 'host-profile'), officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot }))
+      .toThrow(/impostor|identity|name/u)
+  })
+
+  it('delete leg prunes a tarball-seeded directory and the empty scope parent', () => {
+    const scratch = makeScratch()
+    const { resourcesRoot, bundles } = makeResources(scratch)
+    const profileDir = join(scratch, 'host-profile')
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles, resourcesRoot })
+    expect(existsSync(seededDir(profileDir))).toBe(true)
+    projectHostProfile({ profileDir, officeSkillsSource: OFFICE(scratch), bundles: OFFICIAL, resourcesRoot })
+    expect(readManifest(profileDir).dsh?.profile?.bundles).toEqual(OFFICIAL.map(e => e.name))
+    expect(existsSync(seededDir(profileDir))).toBe(false)
+    expect(existsSync(join(profileDir, 'node_modules', '@dsh-forge'))).toBe(false)
   })
 })
