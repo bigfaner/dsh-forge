@@ -1,0 +1,8 @@
+# Collision-replica fixture, profile-layer patch: one root-level insert row
+# mounting the package into the web tree (same form as the upstream web-app
+# browser plugin roster and hello-world's row). The node half (lib/index.js)
+# is the intentionally empty apply; the browser half ships via
+# exports['./client'] and is picked up by the client-modules roster scan.
+- insert:
+    - id: hello-world-collision
+      name: '@dsh-forge/plugin-hello-world-collision'
