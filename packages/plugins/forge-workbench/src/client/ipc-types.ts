@@ -131,8 +131,9 @@ export interface RecordSessionLinkInput {
  * Interface 1 TaskStatus — the forge task-state vocabulary, 7 态 (tech-design
  * §Interface 1 / Cross-Layer Data Map: "enum(同词表,StateDot)"). The runtime
  * vocabulary constant and the display maps live in i18n/task-status.ts (task
- * 5.5, the shared status-rendering layer 5.7/5.9 consume); this file stays
- * pure types.
+ * 5.5, the shared status-rendering layer 5.7 consumes); the FEATURE-status
+ * vocabulary below is a DIFFERENT forge vocabulary with its own sibling
+ * module (i18n/feature-status.ts, task 5.9). This file stays pure types.
  */
 export type TaskStatus =
   | 'pending'
@@ -254,3 +255,57 @@ export type WorkbenchEvent =
   }
   | { readonly type: 'feature_updated'; readonly projectId: string; readonly featureSlug: string }
   | { readonly type: 'sync'; readonly projectId: string; readonly sync: SyncStatus }
+
+// ---------------------------------------------------------------------------
+// Feature family, UF4 (task 5.9's consumption)
+// ---------------------------------------------------------------------------
+
+/**
+ * Interface 1 DocKind — the five feature-document kinds. The canonical tab
+ * order (manifest/prd/design/ui/tasks, ui-design UF4 文档 tab) and the label
+ * routing live in i18n/feature-status.ts; this file stays pure types.
+ */
+export type DocKind = 'manifest' | 'prd' | 'design' | 'ui' | 'tasks'
+
+/**
+ * Interface 1 FeatureStatus — the forge MANIFEST vocabulary passed through
+ * VERBATIM (tech-design Cross-Layer Data Map: "manifest 词表(连字符
+ * 'in-progress')"). Deliberately NOT the 7-态 TaskStatus: 'in-progress' keeps
+ * its hyphen, and the set is the feature lifecycle's own five phases. The
+ * runtime vocabulary + stepper-phase mapping live in i18n/feature-status.ts.
+ */
+export type FeatureStatus = 'prd' | 'design' | 'tasks' | 'in-progress' | 'completed'
+
+/**
+ * Interface 1 FeatureSummary — one row of workbench.getFeatureBoard(projectId)
+ * (task 5.9's consumption; the main-side peer is
+ * apps/desktop/src/main/workbench/ipc/types.ts from 2.7). `docKinds` lists the
+ * kinds that ACTUALLY exist and drives the docs-tab disabled matrix (a missing
+ * kind disables its tab, never hides it — spec Interface 1 note).
+ */
+export interface FeatureSummary {
+  readonly slug: string
+  readonly status: FeatureStatus
+  /** Document kinds that exist for this feature (⊆ the five canonical kinds). */
+  readonly docKinds: DocKind[]
+  readonly taskTotal: number
+  readonly taskCompleted: number
+  /** ISO 8601 UTC. */
+  readonly updatedAt: string
+}
+
+/** Interface 1 FeatureBoardData — workbench.getFeatureBoard(projectId)'s payload. */
+export interface FeatureBoardData {
+  readonly features: readonly FeatureSummary[]
+  readonly generatedAt: string
+}
+
+/**
+ * Interface 1 FeatureDoc — workbench.readFeatureDoc(projectId, featureSlug,
+ * kind)'s payload. `markdown` is the document's original text; the read-only
+ * rendering (防注入) is MarkdownView's job (task 5.2), never a raw injection.
+ */
+export interface FeatureDoc {
+  readonly kind: DocKind
+  readonly markdown: string
+}

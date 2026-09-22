@@ -24,8 +24,9 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type {
-  Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
-  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
+  DocKind, FeatureBoardData, FeatureDoc, Project, ProjectPatch, RecordSessionLinkInput,
+  RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
+  WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -68,6 +69,13 @@ export interface WorkbenchViewFace {
   useViewKey: SnapshotSelectorHook<ViewKeySnapshot>
   /** Switch the workbench interior tab (the shell's tab-strip action). */
   selectWorkbenchTab: (tab: WorkbenchTabKey) => void
+  /**
+   * Open the feature-detail subview (task 5.9): the machine's own
+   * `openFeatureDetail(slug)` — the features tab carrying a slug, the single
+   * subview-addressing path (no second router). The return trip rides
+   * `selectWorkbenchTab('workbench/features')`, which clears the slug.
+   */
+  openFeatureDetail: (slug: string) => void
 }
 
 /**
@@ -235,6 +243,45 @@ export interface TaskDetailFace {
 }
 
 /**
+ * The UF4 feature board's data face (task 5.9, UI dependency layering — the
+ * same seam shape as TaskBoardFace): the BUILD stage renders against the
+ * shared mock twin (mocks/workbench.createMockFeatureBoardFace), the 5.16
+ * assembly injects the Interface 1 verb. The member mirrors
+ * workbench.getFeatureBoard(projectId) one-to-one; rejections carry the
+ * serialized {@link WorkbenchVerbError} shape so the board's error state runs
+ * against the real form from day one.
+ */
+export interface FeatureBoardFace {
+  /** Interface 1 workbench.getFeatureBoard(projectId) — the board's data load. */
+  loadFeatureBoard(projectId: string): Promise<FeatureBoardData>
+}
+
+/**
+ * The UF4 doc tabs' data face (task 5.9, UI dependency layering — the same
+ * seam shape as TaskDetailFace): the BUILD stage renders against the shared
+ * mock twin (mocks/workbench.createMockFeatureDocFace), the 5.16 assembly
+ * injects the Interface 1 verb. The member mirrors
+ * workbench.readFeatureDoc(projectId, featureSlug, kind) one-to-one — the
+ * per-tab one-shot read behind the loading/error/ERR_SNAPSHOT_STALE branches.
+ */
+export interface FeatureDocFace {
+  /** Interface 1 workbench.readFeatureDoc(projectId, featureSlug, kind) — one doc tab's read. */
+  readFeatureDoc(projectId: string, featureSlug: string, kind: DocKind): Promise<FeatureDoc>
+}
+
+/**
+ * The shell's passthrough seat for the feature board (task 5.9): absent
+ * entirely in the build stage (the page runs on its mock twins); the 5.16
+ * assembly injects the IPC-backed faces (the board verb + the doc verb).
+ */
+export interface WorkbenchFeaturesSeat {
+  /** The board face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
+  readonly face?: Partial<FeatureBoardFace>
+  /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
+  readonly docFace?: Partial<FeatureDocFace>
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -255,6 +302,8 @@ export type WorkbenchShellProps =
   & { wizard?: RegisterWizardSeat }
   /** The task board's assembly seat (task 5.5): absent = the board-local mock twin. */
   & { taskBoard?: TaskBoardSeat }
+  /** The feature board's assembly seat (task 5.9): absent = the page-local mock twins. */
+  & { features?: WorkbenchFeaturesSeat }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

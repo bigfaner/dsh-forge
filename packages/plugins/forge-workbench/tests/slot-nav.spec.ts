@@ -139,6 +139,7 @@ describe('slot nav: registration and the injected view face (AC1)', () => {
     expect(source.getSnapshot()).toEqual(nav.store.getSnapshot())
     expect(typeof source.subscribe).toBe('function')
     expect(typeof face.selectWorkbenchTab).toBe('function')
+    expect(typeof face.openFeatureDetail).toBe('function')
     expect(typeof face.notifyPresented).toBe('function')
     expect(typeof face.notifyDismissed).toBe('function')
     // The sidebar row keeps the 3.2 contract.
@@ -184,6 +185,25 @@ describe('slot nav: the carrier projects through ctx.layout.selectPanel (AC1/AC4
     expect(nav.store.getSnapshot()).toEqual({
       view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined,
     })
+    expect(nav.persistenceWrites.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
+    expect(layout.calls.at(-1)).toBe('workbench')
+    disposeParent()
+  })
+
+  it('the feature-detail action drives the shared controller: subview slug lands, projection follows (5.9)', () => {
+    const nav = makeNav()
+    const layout = makeLayout()
+    installSlotNav(makeFakeCtx(nav.core, layout), {
+      controller: nav.controller, store: nav.store, label: () => 'Workbench',
+    })
+    const disposeParent = declareNavigationSlots(nav.core)
+    const face = faceOf(mainEntry(nav.core) as StoredEntry)
+    ;(face.openFeatureDetail as (slug: string) => void)('dsh-forge-m1')
+    expect(nav.store.getSnapshot()).toEqual({
+      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m1',
+    })
+    // The slug stays session-scoped: the persisted projection carries only
+    // the tab dimension (3.3 AC4).
     expect(nav.persistenceWrites.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
     expect(layout.calls.at(-1)).toBe('workbench')
     disposeParent()

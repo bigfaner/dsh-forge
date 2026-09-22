@@ -36,6 +36,14 @@
  * placeholder). The optional `taskBoard` prop is its assembly seat — the
  * IPC face arrives with 5.15, the row-selection seam is 5.7's detail dock.
  *
+ * Task 5.9 fills the LAST reserved seat: the UF4 feature board page mounts
+ * into `workbench/features`, routing list↔detail on the view-key machine's
+ * featureSlug dimension (enter = the view face's openFeatureDetail, return =
+ * the tab action clearing the slug — the machine stays the single addressing
+ * authority). The optional `features` prop is its assembly seat (IPC faces
+ * + doc verbs; 5.16), and with it the 3.2 placeholder retires — every tab
+ * of the strip now carries its page.
+ *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
  * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
@@ -59,6 +67,7 @@ import { TopBar } from './components/chrome/TopBar'
 import { OverviewPage } from './views/overview/OverviewPage'
 import { RegisterWizard } from './views/overview/RegisterWizard'
 import { TaskBoardPage } from './views/TaskBoardPage'
+import { FeaturesPage } from './views/FeaturesPage'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -108,7 +117,8 @@ const contentStyle = {
   padding: '16px',
 } as const
 
-const placeholderStyle = {
+/** The gate card's base: dashed placeholder geometry (only the state gate uses it since 5.9). */
+const gateBaseStyle = {
   alignItems: 'center',
   border: '1px dashed var(--dsh-border-color, currentColor)',
   borderRadius: 8,
@@ -117,9 +127,9 @@ const placeholderStyle = {
   justifyContent: 'center',
 } as const
 
-/** The gate card: ui-design 空态卡 geometry, dashed like the placeholder, with the register CTA. */
+/** The gate card: ui-design 空态卡 geometry, dashed, with the register CTA. */
 const gateStyle = {
-  ...placeholderStyle,
+  ...gateBaseStyle,
   flexDirection: 'column',
   gap: '8px',
   textAlign: 'center',
@@ -180,7 +190,7 @@ function StateGate(props: { t: (key: WorkbenchKey) => string; onRegister: () => 
  * The registered main-panel component: top bar (identity + project switcher +
  * add action), the three-tab strip (the view-key machine's tab dimension),
  * and the gated/ungated mount container the active view key addresses (the
- * 3.2 placeholder until the remaining 5.x).
+ * 3.2 placeholder retired: since 5.9 every tab of the strip carries its page).
  * @param props - composed props: the main slot's runtime share, the `t` seat,
  *   the view face (selector + tab action + panel lifecycle), and (optionally,
  *   assembly-time) the chrome data face — absent members use the build-stage
@@ -241,6 +251,12 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const gated = workbenchState.activeProjectId === null
     && view.workbenchTab !== 'workbench/overview'
 
+  // 仓外角标 premise (ui-design UF4 / DF005): the feature detail badges the
+  // active project's external doc location.
+  const activeProject = workbenchState.projects.find(
+    project => project.id === workbenchState.activeProjectId,
+  )
+
   return (
     <div data-dsh-forge-plugin="forge-workbench" data-dsh-forge-shell="" style={shellStyle}>
       <TopBar
@@ -291,8 +307,23 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   </div>
                 )
                 : (
-                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
-                    <em>{props.t('shell.placeholder')}</em>
+                  // UF4 (task 5.9): the feature board page takes the LAST
+                  // reserved seat — list↔detail routed on the view-key
+                  // machine's featureSlug dimension (enter = the view face's
+                  // openFeatureDetail, return = the tab action clearing the
+                  // slug); the optional features seat hands the page its
+                  // IPC-backed faces (5.16).
+                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
+                    <FeaturesPage
+                      t={props.t}
+                      projectId={workbenchState.activeProjectId ?? undefined}
+                      featureSlug={view.featureSlug}
+                      onOpenFeature={props.openFeatureDetail}
+                      onBack={() => { props.selectWorkbenchTab('workbench/features') }}
+                      externalDocs={activeProject?.docLocationType === 'external'}
+                      face={props.features?.face}
+                      docFace={props.features?.docFace}
+                    />
                   </div>
                 )}
         </div>

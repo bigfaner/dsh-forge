@@ -652,7 +652,10 @@ describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)',
       props: {
         useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
         selectWorkbenchTab,
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab'>,
+        openFeatureDetail: (slug: string) => {
+          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+        },
+      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
     }
   }
 

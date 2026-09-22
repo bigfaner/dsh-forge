@@ -233,7 +233,7 @@ describe('TopBar: identity + switcher + persistent add action (AC2)', () => {
 describe('WorkbenchShell: the state gate + chrome integration (AC3/AC5)', () => {
   /** A controllable view face (the shell.spec pattern). */
   function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
-    props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab'>
+    props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>
     selectWorkbenchTab: ReturnType<typeof vi.fn>
   } {
     let snapshot: ViewKeySnapshot = {
@@ -249,6 +249,9 @@ describe('WorkbenchShell: the state gate + chrome integration (AC3/AC5)', () => 
       props: {
         useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
         selectWorkbenchTab,
+        openFeatureDetail: (slug: string) => {
+          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+        },
       },
       selectWorkbenchTab,
     }

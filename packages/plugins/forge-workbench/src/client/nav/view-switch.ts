@@ -83,6 +83,17 @@ export class ViewSwitchController {
   }
 
   /**
+   * Open the feature-detail subview (task 5.9): the features tab carrying a
+   * slug — the machine's own subview-addressing transition, driven through
+   * the same one write path both navigation forms share. The return trip is
+   * `switchWorkbenchTab('workbench/features')` (the machine clears the slug).
+   */
+  openFeatureDetail(slug: string): void {
+    this.store.openFeatureDetail(slug)
+    this.project()
+  }
+
+  /**
    * Arm the one-shot boot-restore hold. The upstream boot sequence re-opens
    * the last session AFTER the plugin loads (home-scoped session list
    * hydrating seconds after ui-ready; ui-workspace's replaceMain/clearMain

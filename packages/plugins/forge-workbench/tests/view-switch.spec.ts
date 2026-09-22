@@ -55,6 +55,23 @@ describe('ViewSwitchController: the one write path (AC1/AC2)', () => {
     expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
   })
 
+  it('openFeatureDetail (5.9) transitions the subview slug and projects it; the slug never persists', () => {
+    const { controller, persist } = makeController()
+    const carrier = recordingCarrier('slot')
+    controller.attach(carrier)
+    controller.openFeatureDetail('dsh-forge-m2')
+    expect(carrier.presented.at(-1)).toEqual({
+      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m2',
+    })
+    // Session-scoped slug: the persisted projection keeps only the tab.
+    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
+    // The return trip: the tab action clears the slug (the return stack).
+    controller.switchWorkbenchTab('workbench/features')
+    expect(carrier.presented.at(-1)).toEqual({
+      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined,
+    })
+  })
+
   it('presents WITHOUT a live carrier (grace window) — the transition and persist still land', () => {
     const { controller, persist } = makeController()
     controller.switchWorkbench('workbench/tasks')

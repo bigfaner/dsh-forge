@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchPanelIcon } from '../src/client/WorkbenchPanelIcon.tsx'
 import { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from '../src/client/WorkbenchShell.tsx'
@@ -36,11 +36,11 @@ const t = { en: bind(en), zh: bind(zh) }
 
 /**
  * A controllable view face: `set` mutates the snapshot the selector reads,
- * `selectWorkbenchTab` records the shell's action (the store side of the
- * transition lives in the controller specs).
+ * `selectWorkbenchTab` / `openFeatureDetail` record the shell's actions (the
+ * store side of the transitions lives in the controller specs).
  */
 function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
-  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab'>
+  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>
 } {
   let snapshot: ViewKeySnapshot = {
     view: 'workbench',
@@ -54,6 +54,9 @@ function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
       selectWorkbenchTab: (tab: WorkbenchTabKey) => {
         snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
       },
+      openFeatureDetail: (slug: string) => {
+        snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+      },
     },
   }
 }
@@ -61,15 +64,17 @@ function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
 afterEach(() => cleanup())
 
 describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
-  it('renders the shell title, the tab strip, and the remaining 5.x placeholder inside the flow provider', () => {
-    // Task 5.3 filled the overview seat with the UF1 page and task 5.5 the
-    // tasks seat with the UF2 board (their own suites cover those mounts);
-    // the placeholder contract lives on the still-open seats — features
-    // until the UF4 build.
+  it('renders the shell title, the tab strip, and the UF4 feature board on the features seat', async () => {
+    // Tasks 5.3/5.5/5.9 filled all three seats (their own suites cover the
+    // overview/tasks mounts) — the features tab now carries the UF4 page
+    // (the 3.2 placeholder retired with it), over the shared mock registry's
+    // ACTIVE project (no state gate).
     const face = makeFace({ workbenchTab: 'workbench/features' })
     render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     expect(screen.getByText(en['shell.title'])).toBeDefined()
-    expect(screen.getByText(en['shell.placeholder'])).toBeDefined()
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-feature-card="dsh-forge-m2"]')).not.toBeNull()
+    })
     expect(document.querySelector('[data-dsh-forge-plugin="forge-workbench"]')).not.toBeNull()
     expect(document.querySelector('[data-dsh-forge-shell]')).not.toBeNull()
     expect(document.querySelector('[data-dsh-forge-tabs]')).not.toBeNull()

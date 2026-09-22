@@ -167,6 +167,7 @@ function RailOverlay(props: RailNavOptions): ReactNode {
     t: props.t,
     useViewKey: bindViewKeyHook(props.store),
     selectWorkbenchTab: (tab: WorkbenchTabKey) => { props.controller.switchWorkbenchTab(tab) },
+    openFeatureDetail: (slug: string) => { props.controller.openFeatureDetail(slug) },
   }))
 }
 

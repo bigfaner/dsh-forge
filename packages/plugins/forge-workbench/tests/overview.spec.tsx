@@ -479,11 +479,14 @@ describe('WorkbenchShell: the overview mount + assembly seat (5.1 → 5.3)', () 
       props: {
         useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
         selectWorkbenchTab,
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab'>,
+        openFeatureDetail: (slug: string) => {
+          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+        },
+      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
     }
   }
 
-  it('mounts the page inside the reserved overview container; other tabs keep their placeholders', async () => {
+  it('mounts the page inside the reserved overview container (each tab owns its page since 5.9)', async () => {
     const face = makeViewFace()
     render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     const seat = document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]') as HTMLElement

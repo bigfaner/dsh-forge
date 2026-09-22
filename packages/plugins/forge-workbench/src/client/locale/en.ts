@@ -8,7 +8,6 @@
 export type WorkbenchKey =
   | 'panel'
   | 'shell.title'
-  | 'shell.placeholder'
   | 'view.session'
   | 'rail.label'
   | 'tabs.label'
@@ -201,12 +200,46 @@ export type WorkbenchKey =
   | 'detail.links.ended'
   | 'detail.links.enter'
   | 'detail.launch.reserved'
+  | 'features.loading'
+  | 'features.loadError.title'
+  | 'features.loadError.retry'
+  | 'features.empty.title'
+  | 'features.empty.body'
+  | 'features.breadcrumb'
+  | 'features.breadcrumb.root'
+  | 'features.openDetail'
+  | 'features.progress'
+  | 'features.progressAria'
+  | 'features.completedBadge'
+  | 'features.externalDocs'
+  | 'features.stepper.label'
+  | 'features.notFound.title'
+  | 'features.notFound.body'
+  | 'features.notFound.back'
+  | 'features.docs.tabsLabel'
+  | 'features.docs.disabledHint'
+  | 'features.docs.loading'
+  | 'features.docs.error.title'
+  | 'features.docs.error.retry'
+  | 'features.docs.stale.title'
+  | 'features.docs.stale.body'
+  | 'features.docs.stale.retry'
+  | 'features.docs.empty'
+  | 'features.status.prd'
+  | 'features.status.design'
+  | 'features.status.tasks'
+  | 'features.status.in-progress'
+  | 'features.status.completed'
+  | 'features.doc.manifest'
+  | 'features.doc.prd'
+  | 'features.doc.design'
+  | 'features.doc.ui'
+  | 'features.doc.tasks'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
   'panel': 'Workbench',
   'shell.title': 'forge workbench',
-  'shell.placeholder': 'Workbench shell — task board, details, and feature views arrive in M2 5.x',
   'view.session': 'Sessions',
   'rail.label': 'Primary view switch',
   'tabs.label': 'Workbench views',
@@ -399,4 +432,39 @@ export const en: Record<WorkbenchKey, string> = {
   'detail.links.ended': 'Ended',
   'detail.links.enter': 'Enter session',
   'detail.launch.reserved': 'The session launch entry arrives with task 5.11.',
+  'features.loading': 'Loading features…',
+  'features.loadError.title': 'Failed to load the feature board',
+  'features.loadError.retry': 'Retry',
+  'features.empty.title': 'No features',
+  'features.empty.body': 'No forge feature data exists under this project yet. Initialize the project with forge and its features appear here.',
+  'features.breadcrumb': 'Feature board breadcrumb',
+  'features.breadcrumb.root': 'Feature board',
+  'features.openDetail': 'Open feature {slug}',
+  'features.progress': '{completed}/{total} tasks',
+  'features.progressAria': 'Task progress: {completed} of {total} tasks completed',
+  'features.completedBadge': 'All tasks completed',
+  'features.externalDocs': 'External docs',
+  'features.stepper.label': 'Feature status phases',
+  'features.notFound.title': 'Feature not found',
+  'features.notFound.body': 'This feature is not in the current board data — it may have been removed.',
+  'features.notFound.back': 'Back to the feature board',
+  'features.docs.tabsLabel': 'Feature documents',
+  'features.docs.disabledHint': 'No document of this kind',
+  'features.docs.loading': 'Loading document…',
+  'features.docs.error.title': 'Failed to read the document',
+  'features.docs.error.retry': 'Retry',
+  'features.docs.stale.title': 'Snapshot is stale',
+  'features.docs.stale.body': 'The snapshot no longer matches the forge files. A rescan is being triggered; retry in a moment.',
+  'features.docs.stale.retry': 'Retry',
+  'features.docs.empty': 'This document is empty.',
+  'features.status.prd': 'prd',
+  'features.status.design': 'design',
+  'features.status.tasks': 'tasks',
+  'features.status.in-progress': 'in-progress',
+  'features.status.completed': 'completed',
+  'features.doc.manifest': 'manifest',
+  'features.doc.prd': 'prd',
+  'features.doc.design': 'design',
+  'features.doc.ui': 'ui',
+  'features.doc.tasks': 'tasks',
 }

@@ -1,8 +1,10 @@
 /**
  * The shared task-status vocabulary (task 5.5 — the FIRST status-rendering
  * task of the 5.x build): the ONE mapping layer every task-status surface
- * goes through. Task 5.7 (UF3 detail dock) and 5.9 (UF4 feature board)
- * consume it as-is — the exported API below is contract-stable for them.
+ * goes through. Task 5.7 (UF3 detail dock) consumes it as-is; task 5.9 (UF4
+ * feature board) follows the same API shape for its own FEATURE vocabulary
+ * in the sibling i18n/feature-status.ts (the manifest 词表, NOT the 7-态) —
+ * the exported API below is contract-stable for both.
  *
  * Split of concerns (the i18n/errors.ts precedent, ui-design 全局规则: 文案
  * 一律经上游 locale 机制 zh/en,不自建文案通道):

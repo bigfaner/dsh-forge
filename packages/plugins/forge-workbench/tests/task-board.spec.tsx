@@ -832,7 +832,10 @@ describe('shell integration: the tasks seat mounts the board', () => {
         selectWorkbenchTab: (tab: WorkbenchTabKey) => {
           snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
         },
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab'>,
+        openFeatureDetail: (slug: string) => {
+          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+        },
+      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
     }
   }
 

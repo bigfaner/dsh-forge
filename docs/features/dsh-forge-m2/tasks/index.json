@@ -551,7 +551,7 @@
         "5.2",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.9-feature-board-build.md",
       "record": "records/5.9-feature-board-build.md",
       "surface-type": "web",

@@ -17,14 +17,21 @@
  * twin (createMockTaskBoardFace: loadBoard + the onEvents channel with a
  * test-facing emit poke). Task 5.7 adds the UF3 detail fixtures
  * (MOCK_TASK_DETAILS — rich multi-hop chain / header matrix / sparse) and
- * the dock's verb twin (createMockTaskDetailFace).
+ * the dock's verb twin (createMockTaskDetailFace). Task 5.9 adds the UF4
+ * feature-family fixtures (MOCK_FEATURE_BOARD — the SAME feature slugs the
+ * board fixture's tasks reference: dsh-forge-m2 in-progress with a missing
+ * ui doc kind + dsh-forge-m1 completed 48/48 with all five kinds; the empty
+ * variant; MOCK_FEATURE_DOCS keyed `<slug>/<kind>`) and the verb twins
+ * (createMockFeatureBoardFace / createMockFeatureDocFace, the latter with a
+ * test-facing failWith poke for the doc error/stale branches).
  */
 import type {
-  Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
-  WorkbenchState,
+  DocKind, FeatureBoardData, FeatureDoc, Project, ProjectPatch, RegisterProjectInput, TaskBoardData,
+  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
-  OverviewFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace, TaskDetailFace,
+  FeatureBoardFace, FeatureDocFace, OverviewFace, RegisterWizardFace, SessionLaunchServices,
+  TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -622,5 +629,134 @@ export function createMockTaskDetailFace(
       }
       return detail
     },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feature board + doc tabs, UF4 (task 5.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * The populated UF4 fixture (task 5.9): two features over the SAME slugs the
+ * UF2 board fixture's tasks reference (dsh-forge-m2 / dsh-forge-m1), covering
+ * every dimension the list/detail views render —
+ *   status    manifest 词表透传 VERBATIM: 'in-progress' keeps its hyphen;
+ *   docKinds  dsh-forge-m2 lacks 'ui' (the disabled-tab case: missing kinds
+ *             disable, never hide), dsh-forge-m1 carries all five;
+ *   progress  m2 partial (4/15), m1 fully complete (48/48 — the 完成徽标 case,
+ *             judged on taskCompleted=taskTotal exactly like the view does).
+ */
+export const MOCK_FEATURE_BOARD: FeatureBoardData = Object.freeze({
+  features: Object.freeze([
+    Object.freeze({
+      slug: 'dsh-forge-m2', status: 'in-progress',
+      docKinds: ['manifest', 'prd', 'design', 'tasks'] as DocKind[],
+      taskTotal: 15, taskCompleted: 4, updatedAt: '2026-09-22T09:12:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'dsh-forge-m1', status: 'completed',
+      docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'] as DocKind[],
+      taskTotal: 48, taskCompleted: 48, updatedAt: '2026-09-20T14:00:00.000Z',
+    }),
+  ]),
+  generatedAt: MOCK_NOW,
+})
+
+/** The empty board (ui-design UF4 empty 态: 空态 + forge 初始化引导). */
+export const MOCK_FEATURE_BOARD_EMPTY: FeatureBoardData = Object.freeze({
+  features: Object.freeze([]),
+  generatedAt: MOCK_NOW,
+})
+
+/**
+ * The doc-tab fixtures, keyed `<featureSlug>/<kind>` — every kind the board
+ * rows declare (and nothing else, so unknown-kind reads reject). The markdown
+ * exercises the MarkdownView subset (heading/list/code) and names its feature
+ * so tab-content assertions can tell docs apart.
+ */
+export const MOCK_FEATURE_DOCS: ReadonlyMap<string, FeatureDoc> = new Map<string, FeatureDoc>([
+  ['dsh-forge-m2/manifest', {
+    kind: 'manifest',
+    markdown: '# dsh-forge-m2 manifest\n\n- status: in-progress\n- tasks: 15\n',
+  }],
+  ['dsh-forge-m2/prd', {
+    kind: 'prd',
+    markdown: '# dsh-forge-m2 PRD\n\nThe M2 requirements and session workbench.\n',
+  }],
+  ['dsh-forge-m2/design', {
+    kind: 'design',
+    markdown: '# dsh-forge-m2 tech design\n\n```ts\ninterface FeatureSummary { slug: string }\n```\n',
+  }],
+  ['dsh-forge-m2/tasks', {
+    kind: 'tasks',
+    markdown: '# dsh-forge-m2 tasks\n\n- 5.5 UF2 board\n- 5.9 UF4 feature board\n',
+  }],
+  ['dsh-forge-m1/manifest', {
+    kind: 'manifest',
+    markdown: '# dsh-forge-m1 manifest\n\n- status: completed\n- tasks: 48\n',
+  }],
+  ['dsh-forge-m1/prd', {
+    kind: 'prd',
+    markdown: '# dsh-forge-m1 PRD\n\nThe M1 shell requirements.\n',
+  }],
+  ['dsh-forge-m1/design', {
+    kind: 'design',
+    markdown: '# dsh-forge-m1 tech design\n\nThe shell, tray, and update channel.\n',
+  }],
+  ['dsh-forge-m1/ui', {
+    kind: 'ui',
+    markdown: '# dsh-forge-m1 UI design\n\nThe M1 visual language.\n',
+  }],
+  ['dsh-forge-m1/tasks', {
+    kind: 'tasks',
+    markdown: '# dsh-forge-m1 tasks\n\n- 4.3 update channel\n- 4.4 installer signing\n',
+  }],
+])
+
+/**
+ * The UF4 board's build-stage face, task 5.9 (UI dependency layering): the
+ * Interface 1 getFeatureBoard verb as a closure-held twin over the fixture —
+ * a stateless read, like the dock's twin. The 5.16 assembly replaces the
+ * whole face with the IPC verb.
+ */
+export function createMockFeatureBoardFace(
+  initial: FeatureBoardData = MOCK_FEATURE_BOARD,
+): FeatureBoardFace {
+  return {
+    loadFeatureBoard: async () => initial,
+  }
+}
+
+/**
+ * The UF4 doc tabs' build-stage face, task 5.9 (UI dependency layering): the
+ * Interface 1 readFeatureDoc verb as a closure-held twin over the fixture
+ * map. Known `<slug>/<kind>` entries resolve; unknown entries reject with the
+ * serialized WorkbenchVerbError shape under the spec's 兜底 code
+ * (ERR_WORKBENCH_DB — an unknown read is a generic failure, exactly the
+ * runtime's unknown-exception mapping). The returned `failWith` is MOCK-ONLY
+ * (the test driver that arms a rejection — e.g. ERR_SNAPSHOT_STALE — for the
+ * doc branches' error/stale states).
+ */
+export function createMockFeatureDocFace(
+  initial: ReadonlyMap<string, FeatureDoc> = MOCK_FEATURE_DOCS,
+): FeatureDocFace & {
+  /** Arm a rejection for the next read(s) of one doc (the test driver). */
+  failWith(slug: string, kind: DocKind, error: { code: string; message: string }): void
+} {
+  const armed = new Map<string, { code: string; message: string }>()
+  return {
+    readFeatureDoc: async (_projectId, featureSlug, kind) => {
+      const failure = armed.get(`${featureSlug}/${kind}`)
+      if (failure !== undefined) throw failure
+      const doc = initial.get(`${featureSlug}/${kind}`)
+      if (doc === undefined) {
+        throw {
+          code: 'ERR_WORKBENCH_DB',
+          message: `build-stage mock: no ${kind} doc for ${featureSlug}`,
+        }
+      }
+      return doc
+    },
+    failWith: (slug, kind, error) => { armed.set(`${slug}/${kind}`, error) },
   }
 }
