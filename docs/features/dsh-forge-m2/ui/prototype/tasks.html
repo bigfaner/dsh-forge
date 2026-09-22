@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 · 任务看板 — dsh-forge M2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail(工作台 = 当前视图) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn" type="button" aria-label="会话" title="会话" onclick="location.href='session.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn is-active" type="button" aria-label="工作台" title="工作台" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <!-- 顶栏 h48 sticky:项目切换器(Menu 卡)+ 添加项目 -->
+      <header class="topbar">
+        <div class="menu-wrap">
+          <button class="btn sm ghost" type="button" data-menu-trigger aria-haspopup="menu">dsh-forge ▾</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" type="button">dsh-forge <span style="margin-left:auto;">✓</span></button>
+            <button class="menu-item" type="button">electron-course</button>
+            <div class="menu-sep"></div>
+            <button class="menu-item" type="button">＋ 添加项目</button>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="btn sm ghost" type="button" onclick="location.href='overview.html'">＋ 添加项目</button>
+      </header>
+
+      <!-- tab 条:概览 / 任务(当前)/ feature -->
+      <nav class="tabstrip" aria-label="工作台页面">
+        <a class="tab" href="overview.html">概览</a>
+        <a class="tab is-active" href="tasks.html" aria-current="page">任务</a>
+        <a class="tab" href="features.html">feature</a>
+      </nav>
+
+      <main class="content" data-state-root data-state="populated">
+        <!-- 工具栏(三视图 segmented + 筛选 + 排序 + 计数) -->
+        <div class="toolbar" data-when="populated">
+          <div class="segmented" role="tablist" aria-label="看板视图" data-tabs="taskview">
+            <button type="button" role="tab" data-tab="tree" class="is-active" aria-selected="true">依赖树</button>
+            <button type="button" role="tab" data-tab="group" aria-selected="false">状态分组</button>
+            <button type="button" role="tab" data-tab="list" aria-selected="false">列表</button>
+          </div>
+          <span class="filter-label">筛选</span>
+          <div class="menu-wrap">
+            <button class="btn sm ghost" type="button" data-menu-trigger>feature ▾</button>
+            <div class="menu" role="menu">
+              <button class="menu-item" type="button">全部 feature</button>
+              <button class="menu-item" type="button">dsh-forge-m1</button>
+              <button class="menu-item" type="button">ui-plugin-foundation</button>
+            </div>
+          </div>
+          <div class="menu-wrap">
+            <button class="btn sm ghost" type="button" data-menu-trigger>状态 ▾</button>
+            <div class="menu" role="menu">
+              <button class="menu-item" type="button">全部状态</button>
+              <button class="menu-item" type="button">pending</button>
+              <button class="menu-item" type="button">in_progress</button>
+              <button class="menu-item" type="button">completed</button>
+            </div>
+          </div>
+          <label class="toggle t-12"><input type="checkbox"> worktree</label>
+          <div class="menu-wrap">
+            <button class="btn sm ghost" type="button" data-menu-trigger>排序 ▾</button>
+            <div class="menu" role="menu">
+              <button class="menu-item" type="button">更新时间(新→旧)</button>
+              <button class="menu-item" type="button">任务 ID</button>
+            </div>
+          </div>
+          <span class="toolbar-count" id="task-count">任务计数 6(当前筛选)/ 共 6</span>
+        </div>
+
+        <!-- 三视图容器:状态可见性归 state 切换器,视图互斥归 segmented -->
+        <div data-when="populated">
+        <!-- ===== 视图 A · 依赖树(默认;blocker 在上,被阻塞在下;键盘 Tab/方向键遍历) ===== -->
+        <div data-tab-panel="tree" data-tab-group="taskview">
+          <div class="dag-wrap">
+            <div class="dag" id="dag">
+              <svg class="edges" aria-hidden="true">
+                <defs>
+                  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                    <path d="M0,0 L8,4 L0,8 z" fill="var(--dsw-alias-border-l3)"></path>
+                  </marker>
+                </defs>
+                <line x1="160" y1="96" x2="300" y2="168" marker-end="url(#arrow)"></line><!-- T1.1 → T1.2 -->
+                <line x1="420" y1="236" x2="530" y2="318" marker-end="url(#arrow)"></line><!-- T1.2 → T2.1 -->
+                <line x1="820" y1="96" x2="660" y2="318" marker-end="url(#arrow)"></line><!-- T1.3 → T2.1 -->
+                <line x1="590" y1="386" x2="590" y2="462" marker-end="url(#arrow)"></line><!-- T2.1 → T2.2 -->
+              </svg>
+
+              <!-- 节点卡:w240 · r14 · StateDot(aria)+ 标题 + ID/状态短名/角标 -->
+              <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.1 壳工程搭建,状态 completed,feature dsh-forge-m1" style="left: 40px; top: 30px;" data-task="t11">
+                <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">壳工程搭建</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">1.1</span><span class="t-secondary">已完成</span></div>
+              </div>
+
+              <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.2 宿主子进程接入,状态 completed,worktree,来源 终端" style="left: 180px; top: 170px;" data-task="t12">
+                <button class="node-action" type="button" aria-label="发起会话" title="发起会话" data-uf5>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+                </button>
+                <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">宿主子进程接入</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">1.2</span><span class="t-secondary">已完成</span><span class="pill">⌥w</span><span class="pill">终端</span></div>
+              </div>
+
+              <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.3 dsh-app 协议缝,状态 completed,来源 会话" style="left: 700px; top: 30px;" data-task="t13">
+                <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">dsh-app:// 协议缝</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">1.3</span><span class="t-secondary">已完成</span><span class="pill">会话</span></div>
+              </div>
+
+              <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.4 更新检测,状态 completed" style="left: 40px; top: 320px;" data-task="t14">
+                <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">更新检测</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">1.4</span><span class="t-secondary">已完成</span></div>
+              </div>
+
+              <div class="node-card focused" tabindex="0" role="button" aria-label="任务 T2.1 托盘与通知,状态 in_progress,来源 会话,会话挂接进行中,依赖 T1.2 与 T1.3" style="left: 470px; top: 320px;" data-task="t21">
+                <button class="node-action" type="button" aria-label="发起会话" title="发起会话" data-uf5>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+                </button>
+                <div class="node-title-row"><span class="dot st-in_progress" role="img" aria-label="状态:in_progress"></span><span class="node-title t-14">托盘与通知</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">2.1</span><span class="t-secondary">进行中</span><span class="pill">会话</span><span class="pill blue"><span class="dot st-in_progress breath" aria-hidden="true"></span>会话中</span></div>
+              </div>
+
+              <div class="node-card" tabindex="0" role="button" aria-label="任务 T2.2 单实例与多装共存,状态 pending,被 T2.1 阻塞,无执行 prompt" style="left: 470px; top: 466px;" data-task="t22" data-no-prompt>
+                <button class="node-action" type="button" aria-label="发起会话" title="该任务暂无执行 prompt(处于 pending 且被阻塞)" data-uf5 disabled>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+                </button>
+                <div class="node-title-row"><span class="dot st-pending" role="img" aria-label="状态:pending"></span><span class="node-title t-14">单实例与多装共存</span></div>
+                <div class="node-meta t-12"><span class="t-mono t-secondary">2.2</span><span class="t-secondary">待处理</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="t-12 t-secondary">只读看板:视图内不提供任何任务状态变更入口;键盘 = Tab / 方向键按布局序遍历,Enter / Space 打开详情侧板。</p>
+        </div>
+
+        <!-- ===== 视图 B · 状态分组(7 态横向看板列) ===== -->
+        <div data-tab-panel="group" data-tab-group="taskview" hidden>
+          <div class="board-cols">
+            <div class="board-col">
+              <div class="board-col-head"><span class="dot st-pending" aria-hidden="true"></span><span class="t-14">pending</span><span class="pill t-12">1</span></div>
+              <div class="board-col-body">
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T2.2 单实例与多装共存,状态 pending" data-task="t22" data-no-prompt>
+                  <div class="node-title-row"><span class="dot st-pending" role="img" aria-label="状态:pending"></span><span class="node-title t-14">单实例与多装共存</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">2.2</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-head"><span class="dot st-in_progress" aria-hidden="true"></span><span class="t-14">in_progress</span><span class="pill t-12">1</span></div>
+              <div class="board-col-body">
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T2.1 托盘与通知,状态 in_progress,会话挂接进行中" data-task="t21">
+                  <div class="node-title-row"><span class="dot st-in_progress" role="img" aria-label="状态:in_progress"></span><span class="node-title t-14">托盘与通知</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">2.1</span><span class="pill blue"><span class="dot st-in_progress breath" aria-hidden="true"></span>会话中</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-head"><span class="dot st-completed" aria-hidden="true"></span><span class="t-14">completed</span><span class="pill t-12">4</span></div>
+              <div class="board-col-body">
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.1 壳工程搭建,状态 completed" data-task="t11">
+                  <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">壳工程搭建</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">1.1</span></div>
+                </div>
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.2 宿主子进程接入,状态 completed" data-task="t12">
+                  <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">宿主子进程接入</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">1.2</span><span class="pill">⌥w</span></div>
+                </div>
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.3 dsh-app 协议缝,状态 completed" data-task="t13">
+                  <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">dsh-app:// 协议缝</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">1.3</span></div>
+                </div>
+                <div class="node-card" tabindex="0" role="button" aria-label="任务 T1.4 更新检测,状态 completed" data-task="t14">
+                  <div class="node-title-row"><span class="dot st-completed" role="img" aria-label="状态:completed"></span><span class="node-title t-14">更新检测</span></div>
+                  <div class="node-meta t-12"><span class="t-mono t-secondary">1.4</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="board-col"><div class="board-col-head"><span class="dot st-blocked" aria-hidden="true"></span><span class="t-14">blocked</span><span class="pill t-12">0</span></div><div class="board-col card"><p class="board-col-empty">无此状态任务</p></div></div>
+            <div class="board-col"><div class="board-col-head"><span class="dot st-suspended" aria-hidden="true"></span><span class="t-14">suspended</span><span class="pill t-12">0</span></div><div class="board-col card"><p class="board-col-empty">无此状态任务</p></div></div>
+            <div class="board-col"><div class="board-col-head"><span class="dot st-skipped" aria-hidden="true"></span><span class="t-14">skipped</span><span class="pill t-12">0</span></div><div class="board-col card"><p class="board-col-empty">无此状态任务</p></div></div>
+            <div class="board-col"><div class="board-col-head"><span class="dot st-rejected" aria-hidden="true"></span><span class="t-14">rejected</span><span class="pill t-12">0</span></div><div class="board-col card"><p class="board-col-empty">无此状态任务</p></div></div>
+          </div>
+        </div>
+
+        <!-- ===== 视图 C · 列表 ===== -->
+        <div data-tab-panel="list" data-tab-group="taskview" hidden>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>ID</th><th>标题</th><th>状态</th><th>feature</th><th>分支</th><th>worktree</th><th>来源</th><th>更新时间</th></tr></thead>
+              <tbody id="task-rows">
+                <tr tabindex="0" data-task="t21"><td class="t-mono t-12">2.1</td><td>托盘与通知</td><td><span class="pill blue">进行中</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">m1/2.1-tray</td><td class="t-12 t-secondary">—</td><td><span class="pill">会话</span></td><td class="t-12 t-secondary">09-21 14:02</td></tr>
+                <tr tabindex="0" data-task="t22"><td class="t-mono t-12">2.2</td><td>单实例与多装共存</td><td><span class="pill">待处理</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">09-21 14:02</td></tr>
+                <tr tabindex="0" data-task="t12"><td class="t-mono t-12">1.2</td><td>宿主子进程接入</td><td><span class="pill">已完成</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">m1/1.2-host(已合并)</td><td class="t-12 t-secondary">⌥w</td><td><span class="pill">终端</span></td><td class="t-12 t-secondary">09-15 18:40</td></tr>
+                <tr tabindex="0" data-task="t13"><td class="t-mono t-12">1.3</td><td>dsh-app:// 协议缝</td><td><span class="pill">已完成</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">main</td><td class="t-12 t-secondary">—</td><td><span class="pill">会话</span></td><td class="t-12 t-secondary">09-16 11:20</td></tr>
+                <tr tabindex="0" data-task="t11"><td class="t-mono t-12">1.1</td><td>壳工程搭建</td><td><span class="pill">已完成</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">main</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">09-12 09:05</td></tr>
+                <tr tabindex="0" data-task="t14"><td class="t-mono t-12">1.4</td><td>更新检测</td><td><span class="pill">已完成</span></td><td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">main</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">—</td><td class="t-12 t-secondary">09-18 16:31</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </div><!-- /三视图容器 -->
+
+        <!-- ===== state: loading ===== -->
+        <div data-when="loading" aria-hidden="true">
+          <div class="skeleton" style="height: 48px; margin-bottom: 14px;"></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 240px); gap: 24px; justify-content: center; margin-top: 24px;">
+            <div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div>
+            <div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div>
+          </div>
+        </div>
+
+        <!-- ===== state: empty ===== -->
+        <div data-when="empty">
+          <div class="card state-card">
+            <div class="t-16" style="margin-bottom: 4px;">无任务</div>
+            <p class="t-14 t-secondary hint">当前项目尚未建立任务数据。参考 forge 初始化文档(<span class="t-mono t-12">forge proposal → /write-prd → /breakdown-tasks</span>)生成首个任务分解。</p>
+          </div>
+        </div>
+
+        <!-- ===== state: error ===== -->
+        <div data-when="error">
+          <div class="card state-card">
+            <div class="t-16 error-text" style="margin-bottom: 4px;">forge 数据读取异常</div>
+            <p class="t-14 t-secondary hint">任务索引读取失败(文件缺失 / 格式不符 / 磁盘错误)。</p>
+            <button class="btn primary" type="button" onclick="location.reload()">重试</button>
+          </div>
+        </div>
+
+        <!-- 回流提示区(aria-live) -->
+        <span class="visually-hidden" id="flow-live" aria-live="polite"></span>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 任务详情侧板(UF3;z100 · 不 mask 主区 · 焦点锁定) ===== -->
+  <aside class="side-panel" id="detail-panel" hidden aria-label="任务详情">
+    <div class="side-head">
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <div style="flex: 1;">
+          <div class="t-12 t-secondary t-mono" id="dp-id">2.1</div>
+          <div class="t-16" id="dp-title">托盘与通知</div>
+        </div>
+        <button class="dialog-close" type="button" id="dp-close" aria-label="关闭侧板">✕</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+        <span class="pill blue"><span class="dot st-in_progress" aria-hidden="true"></span>进行中</span>
+        <span class="pill">会话</span>
+        <span class="pill">⌥worktree</span>
+      </div>
+      <button class="btn primary" type="button" id="dp-launch" style="width: 100%; margin-top: 14px;">▶ 发起会话</button>
+    </div>
+    <div class="side-body">
+      <!-- 描述 -->
+      <section class="accordion">
+        <button class="accordion-head" type="button"><span class="caret">▾</span>描述</button>
+        <div class="accordion-body">
+          <p style="color: var(--dsw-alias-label-primary);">实现系统托盘驻留与系统通知:</p>
+          <ul style="list-style: disc; padding-left: 18px; margin-top: 4px;">
+            <li>关窗驻留托盘,菜单可恢复窗口与完全退出(SC5)</li>
+            <li>「等待用户输入」「回合完成」两态通知,点击聚焦对应会话(SC4)</li>
+            <li>通知权限被拒 → 静默降级 + log(BIZ-resilience-001)</li>
+          </ul>
+        </div>
+      </section>
+      <!-- 依赖链 -->
+      <section class="accordion">
+        <button class="accordion-head" type="button"><span class="caret">▾</span>依赖链</button>
+        <div class="accordion-body dep-chain">
+          <div class="dep-line">├ 1.2 宿主子进程接入(已完成)</div>
+          <div class="dep-line">└ 1.3 dsh-app:// 协议缝(已完成)→ 本任务</div>
+        </div>
+      </section>
+      <!-- 执行记录 -->
+      <section class="accordion">
+        <button class="accordion-head" type="button"><span class="caret">▾</span>执行记录</button>
+        <div class="accordion-body">
+          <div style="padding: 2px 0;">· 09-21 14:02 <span class="t-mono">claim</span> <span class="pill t-12">会话</span></div>
+          <div style="padding: 2px 0;">· 09-20 10:12 <span class="t-mono">reopen</span> <span class="pill t-12">终端</span></div>
+          <div style="padding: 2px 0;">· 09-18 16:31 <span class="t-mono">submit</span> <span class="pill t-12">终端</span></div>
+        </div>
+      </section>
+      <!-- 挂接历史 -->
+      <section class="accordion">
+        <button class="accordion-head" type="button"><span class="caret">▾</span>挂接历史</button>
+        <div class="accordion-body">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 2px 0;">
+            <span>· 09-21 14:05 会话 <span class="t-mono">#a3f2</span></span>
+            <button class="btn sm ghost" type="button" onclick="location.href='session.html'">进入会话</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 2px 0;">
+            <span>· 09-19 09:44 会话 <span class="t-mono">#77b1</span></span>
+            <button class="btn sm ghost" type="button" onclick="location.href='session.html'">进入会话</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ===== 发起失败对话框(UF5 error 态;沿用 M1 恢复引导模式) ===== -->
+  <div class="dialog-mask" id="launch-error" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="le-title">
+      <div class="dialog-head">
+        <div class="t-16" id="le-title" style="flex: 1;">发起会话失败</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">宿主子进程未就绪(ERR_HOST_NOT_READY):请检查凭据配置后重试。</p>
+        <p class="t-12 t-secondary" style="margin-top: 8px;">恢复引导:打开「会话视图 → 设置 → 凭据」完成 API key 配置;或参考 M1 错误路径文档。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>留在工作台</button>
+        <button class="btn primary" type="button" data-dialog-close>重试</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 原型辅助(非产品 UI) -->
+  <div class="proto-bar">
+    <span class="grp t-secondary">原型状态</span>
+    <span class="grp">
+      <label><input type="radio" name="proto-state" value="populated" checked> 数据</label>
+      <label><input type="radio" name="proto-state" value="loading"> 加载</label>
+      <label><input type="radio" name="proto-state" value="empty"> 空态</label>
+      <label><input type="radio" name="proto-state" value="error"> 错误</label>
+    </span>
+    <span class="grp"><button class="btn sm ghost" type="button" id="sim-flow">模拟回流</button></span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    /* ===== 页面专属:任务看板(UF2 + UF3 + UF5)===== */
+    (function () {
+      var panel = document.getElementById('detail-panel');
+      var live = document.getElementById('flow-live');
+      var NO_PROMPT = { t22: '该任务暂无执行 prompt:处于 pending 且被依赖阻塞,待前置完成后生成。' };
+
+      /* ---- 打开/关闭 UF3 侧板 ---- */
+      function openPanel(id, title) {
+        document.getElementById('dp-id').textContent = id;
+        document.getElementById('dp-title').textContent = title;
+        var launch = document.getElementById('dp-launch');
+        /* 简化:仅 2.2 无 prompt */
+        var noPrompt = id === '2.2';
+        launch.disabled = noPrompt;
+        launch.title = noPrompt ? NO_PROMPT.t22 : '';
+        panel.hidden = false;
+        document.getElementById('dp-close').focus();
+      }
+      function closePanel() { panel.hidden = true; }
+      document.getElementById('dp-close').addEventListener('click', closePanel);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) closePanel(); });
+
+      var TASKS = {
+        t11: ['1.1', '壳工程搭建'], t12: ['1.2', '宿主子进程接入'], t13: ['1.3', 'dsh-app:// 协议缝'],
+        t14: ['1.4', '更新检测'], t21: ['2.1', '托盘与通知'], t22: ['2.2', '单实例与多装共存']
+      };
+      document.querySelectorAll('[data-task]').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          if (e.target.closest('[data-uf5]')) return;
+          var t = TASKS[el.getAttribute('data-task')];
+          openPanel(t[0], t[1]);
+        });
+        el.addEventListener('keydown', function (e) {
+          if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('[data-uf5]')) {
+            e.preventDefault();
+            var t = TASKS[el.getAttribute('data-task')];
+            openPanel(t[0], t[1]);
+          }
+        });
+      });
+
+      /* ---- UF5:发起会话(节点 hover 按钮 / 侧板主按钮) ---- */
+      function launch(btn) {
+        if (btn.disabled) return;
+        var original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> 正在发起会话…';
+        live.textContent = '正在发起会话';
+        setTimeout(function () {
+          btn.innerHTML = original; btn.disabled = false;
+          if (window.__simulateLaunchFail) { openDialog('launch-error'); return; }
+          toast('会话已发起:任务 prompt 已注入,跳转会话视图');
+          setTimeout(function () { location.href = 'session.html'; }, 600);
+        }, 900);
+      }
+      document.querySelectorAll('[data-uf5]').forEach(function (b) {
+        b.addEventListener('click', function (e) { e.stopPropagation(); launch(b); });
+      });
+      document.getElementById('dp-launch').addEventListener('click', function () {
+        if (this.disabled) { toast(this.title || '该任务暂无执行 prompt'); return; }
+        launch(this);
+      });
+
+      /* ---- 模拟回流:第 1 次 = 属性级(T2.1 高亮 + 角标),第 2 次 = 结构性(新增 T2.3) ---- */
+      var flowCount = 0;
+      document.getElementById('sim-flow').addEventListener('click', function () {
+        flowCount++;
+        if (flowCount === 1) {
+          document.querySelectorAll('[data-task="t21"]').forEach(function (el) {
+            el.classList.remove('flow-highlight'); void el.offsetWidth; el.classList.add('flow-highlight');
+          });
+          live.textContent = '任务 2.1 状态由外部更新(来源:终端)';
+          toast('外部变更已回流 · 来源 [终端] · ≤5s 时效');
+          return;
+        }
+        /* 结构性:节点淡入 + 列表行插入(增量,不重置滚动) */
+        var dag = document.getElementById('dag');
+        if (dag && !dag.querySelector('[data-task="t23"]')) {
+          var node = document.createElement('div');
+          node.className = 'node-card'; node.tabIndex = 0; node.setAttribute('data-task', 't23');
+          node.setAttribute('role', 'button');
+          node.setAttribute('aria-label', '任务 T2.3 发布流水线,状态 pending,新增');
+          node.style.cssText = 'left:700px;top:466px;animation:fade-in .2s var(--ease)';
+          node.innerHTML = '<div class="node-title-row"><span class="dot st-pending" role="img" aria-label="状态:pending"></span><span class="node-title t-14">发布流水线</span></div>'
+            + '<div class="node-meta t-12"><span class="t-mono t-secondary">2.3</span><span class="t-secondary">待处理</span><span class="pill">终端</span></div>';
+          dag.appendChild(node);
+          node.addEventListener('click', function () { openPanel('2.3', '发布流水线'); });
+        }
+        var rows = document.getElementById('task-rows');
+        if (rows && !rows.querySelector('[data-task="t23"]')) {
+          var tr = document.createElement('tr');
+          tr.tabIndex = 0; tr.setAttribute('data-task', 't23');
+          tr.innerHTML = '<td class="t-mono t-12">2.3</td><td>发布流水线</td><td><span class="pill">待处理</span></td>'
+            + '<td class="t-12 t-secondary">dsh-forge-m1</td><td class="t-mono t-12 t-secondary">m1/2.3-release</td><td class="t-12 t-secondary">—</td><td><span class="pill">终端</span></td><td class="t-12 t-secondary">刚刚</td>';
+          rows.insertBefore(tr, rows.firstChild);
+          tr.addEventListener('click', function () { openPanel('2.3', '发布流水线'); });
+        }
+        var count = document.getElementById('task-count');
+        if (count) count.textContent = '任务计数 7(当前筛选)/ 共 7';
+        live.textContent = '新增任务 2.3 发布流水线(结构性回流)';
+        toast('结构性回流:任务 2.3 已增量插入(保留滚动/视图状态)');
+        flowCount = 0;
+      });
+
+      /* 原型彩蛋:按住 Shift 点「模拟回流」两次之一后启用失败演示 —— 简化为双击 = 发起失败演示 */
+      document.getElementById('sim-flow').addEventListener('dblclick', function () {
+        window.__simulateLaunchFail = true;
+        toast('已切换为「发起失败」演示:点击任一发起会话按钮');
+      });
+    })();
+  </script>
+</body>
+</html>

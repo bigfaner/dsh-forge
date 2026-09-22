@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 · 项目概览 — dsh-forge M2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail(工作台 = 当前视图) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn" type="button" aria-label="会话" title="会话" onclick="location.href='session.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn is-active" type="button" aria-label="工作台" title="工作台" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <!-- 顶栏 h48 sticky:项目切换器(Menu 卡)+ 添加项目 -->
+      <header class="topbar">
+        <div class="menu-wrap">
+          <button class="btn sm ghost" type="button" data-menu-trigger aria-haspopup="menu" id="switcher-label">dsh-forge ▾</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" type="button" data-project="dsh-forge">dsh-forge <span style="margin-left:auto;">✓</span></button>
+            <button class="menu-item" type="button" data-project="electron-course">electron-course</button>
+            <div class="menu-sep"></div>
+            <button class="menu-item" type="button" data-open-wizard>＋ 添加项目</button>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="btn sm ghost" type="button" data-open-wizard>＋ 添加项目</button>
+      </header>
+
+      <!-- tab 条:概览(当前)/ 任务 / feature -->
+      <nav class="tabstrip" aria-label="工作台页面">
+        <a class="tab is-active" href="overview.html" aria-current="page">概览</a>
+        <a class="tab" href="tasks.html">任务</a>
+        <a class="tab" href="features.html">feature</a>
+      </nav>
+
+      <main class="content" data-state-root data-state="populated" aria-live="polite">
+
+        <!-- ===== state: populated ===== -->
+        <div data-when="populated">
+          <!-- 项目元信息行(当前激活项目) -->
+          <div style="margin-bottom: 14px;">
+            <div class="t-16" id="meta-name">dsh-forge</div>
+            <div class="t-12 t-secondary t-mono" id="meta-path" style="margin-top: 2px; word-break: break-all;">
+              Z:\project\dsh\dsh-forge · 文档位置:仓内 docs/
+            </div>
+          </div>
+
+          <!-- 项目卡片 grid -->
+          <div class="grid-cards" id="project-grid" style="margin-bottom: 20px;">
+            <div class="card pad" data-project-card="dsh-forge" style="border-color: var(--dsw-alias-link); border-width: 1.5px; position: relative;">
+              <span class="pill pill blue" style="position: absolute; top: -11px; left: 12px; background: var(--dsw-alias-link); color: #fff;">当前</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="dot st-completed" role="img" aria-label="状态:可用"></span>
+                <span class="t-14 proj-name" data-name> dsh-forge</span>
+              </div>
+              <div class="t-12 t-secondary t-mono" style="margin: 6px 0 12px;">Z:\project\dsh\dsh-forge<br>文档位置:仓内 docs/</div>
+              <div style="display: flex; gap: 6px;">
+                <button class="btn sm ghost" type="button" data-rename>重命名</button>
+                <button class="btn sm ghost" type="button" disabled>切换</button>
+                <button class="btn sm ghost" type="button" data-remove>移除</button>
+              </div>
+            </div>
+
+            <div class="card pad" data-project-card="electron-course">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="dot st-completed" role="img" aria-label="状态:可用"></span>
+                <span class="t-14 proj-name" data-name> electron-course</span>
+              </div>
+              <div class="t-12 t-secondary t-mono" style="margin: 6px 0 12px;">Z:\project\github\electron-course<br>文档位置:仓内 docs/</div>
+              <div style="display: flex; gap: 6px;">
+                <button class="btn sm ghost" type="button" data-rename>重命名</button>
+                <button class="btn sm ghost" type="button" data-switch>切换</button>
+                <button class="btn sm ghost" type="button" data-remove>移除</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 插件管理区(UF6,两级模型)===== -->
+          <section class="card pad" aria-labelledby="plugin-title">
+            <h2 class="t-16" id="plugin-title" style="margin-bottom: 4px;">插件</h2>
+            <ul>
+              <!-- 必备行:无禁用入口(不渲染动作按钮,而非渲染后 disabled —— SC6 行为口径) -->
+              <li style="display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-bottom: 1px solid var(--dsw-alias-border-l1);">
+                <span class="dot st-completed" role="img" aria-label="状态:已启用"></span>
+                <span class="t-14">forge 工作台核心</span>
+                <span class="pill neutral-fill">必备</span>
+                <span class="t-12 t-secondary" style="margin-left: auto;">已启用</span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-bottom: 1px solid var(--dsw-alias-border-l1);" data-plugin="hello-world">
+                <span class="dot st-completed" role="img" aria-label="状态:已启用"></span>
+                <span class="t-14">hello-world(示例)</span>
+                <span class="t-12 t-secondary" style="margin-left: auto;">已启用</span>
+                <button class="btn sm ghost" type="button" data-disable-plugin>禁用</button>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 4px 2px 0 24px;">
+                <span class="t-12 t-secondary">第三方插件 · 禁用仅退出其注入内容</span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 12px 2px;" data-plugin="journey-metrics">
+                <span class="dot st-pending" role="img" aria-label="状态:已禁用"></span>
+                <span class="t-14" style="color: var(--dsw-alias-label-secondary);">journey-metrics(第三方)</span>
+                <span class="t-12 t-secondary" style="margin-left: auto;">已禁用</span>
+                <button class="btn sm ghost" type="button" data-enable-plugin>启用</button>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <!-- ===== state: loading(扫描骨架) ===== -->
+        <div data-when="loading" aria-hidden="true">
+          <div class="skeleton" style="width: 180px; height: 24px; margin-bottom: 16px;"></div>
+          <div class="grid-cards" style="margin-bottom: 20px;">
+            <div class="skeleton" style="height: 140px;"></div>
+            <div class="skeleton" style="height: 140px;"></div>
+          </div>
+          <div class="skeleton" style="height: 180px;"></div>
+        </div>
+
+        <!-- ===== state: empty ===== -->
+        <div data-when="empty">
+          <div class="card state-card">
+            <div class="t-16" style="margin-bottom: 4px;">还没有注册项目</div>
+            <p class="t-14 t-secondary hint">注册一个 forge 项目后,任务看板、feature 看板与文档浏览将在此工作台内可用。</p>
+            <button class="btn primary" type="button" data-open-wizard>注册项目</button>
+          </div>
+        </div>
+
+        <!-- ===== state: error(激活项目路径失效) ===== -->
+        <div data-when="error">
+          <div class="card state-card">
+            <div class="t-16 error-text" style="margin-bottom: 4px;">项目路径不可访问</div>
+            <p class="t-14 t-secondary hint">
+              当前激活项目 <span class="t-mono t-12">dsh-forge</span> 的代码根目录或文档位置已失效(移动 / 重命名 / 权限变更)。<br>
+              重新指向将复用注册向导 · 编辑模式,保留显示名与挂接索引。
+            </p>
+            <div style="display: flex; gap: 8px; justify-content: center;">
+              <button class="btn primary" type="button" data-repoint>重新指向</button>
+              <button class="btn ghost" type="button" data-remove>移除</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 项目注册向导(UF1)· 3 步 + 编辑模式 ===== -->
+  <div class="dialog-mask" id="wizard" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+      <div class="dialog-head">
+        <div style="flex: 1;">
+          <div class="t-16" id="wizard-title">注册项目</div>
+          <div class="step-dots" aria-hidden="true">
+            <span class="step-dot current" data-step-dot="1"></span><span class="step-line" data-step-line="1"></span>
+            <span class="step-dot" data-step-dot="2"></span><span class="step-line" data-step-line="2"></span>
+            <span class="step-dot" data-step-dot="3"></span>
+          </div>
+          <div class="t-12 t-secondary" id="wizard-step-label">步骤 1/3</div>
+        </div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <!-- 步骤① -->
+        <div data-wizard-step="1">
+          <label class="field">
+            <span class="label t-14">① 选择代码根目录</span>
+            <div style="display: flex; gap: 8px;">
+              <input class="input mono" id="wiz-root" placeholder="例如 Z:\project\ai\forge" aria-label="代码根目录路径" style="flex: 1;">
+              <button class="btn ghost" type="button" id="wiz-root-browse">浏览…</button>
+            </div>
+          </label>
+          <div class="field-error" id="wiz-root-error" hidden>未检出 forge 数据(.forge / docs/features):请修正路径,或先在终端初始化项目。</div>
+          <div class="t-12 t-secondary">将扫描 <span class="t-mono">.forge/config.yaml</span> 与 <span class="t-mono">docs/features/</span> 以确认这是 forge 项目。</div>
+        </div>
+        <!-- 步骤② -->
+        <div data-wizard-step="2" hidden>
+          <fieldset style="border: none;">
+            <legend class="t-14" style="padding: 0 0 4px;">② 文档位置</legend>
+            <label class="radio-row t-14"><input type="radio" name="wiz-docloc" value="in" checked> 仓内(默认)<span class="t-12 t-secondary">&lt;代码根目录&gt;/docs/</span></label>
+            <label class="radio-row t-14"><input type="radio" name="wiz-docloc" value="out"> 仓外本地路径</label>
+            <div style="display: flex; gap: 8px; padding: 2px 0 0 24px;" id="wiz-out-row" hidden>
+              <input class="input mono" id="wiz-out-path" placeholder="D:\forge-docs\myproj" aria-label="仓外文档路径" style="flex: 1;">
+              <button class="btn ghost" type="button" id="wiz-out-browse">浏览…</button>
+            </div>
+            <div class="field-error" id="wiz-out-error" hidden>文档路径须与代码根目录不同。</div>
+            <div class="warn-block" id="wiz-warn" hidden>
+              ⚠ 仓外路径需授权:工作台将仅读取该路径下的 forge 过程文档;须 ≠ 代码根目录。
+            </div>
+            <label class="check-row t-12" id="wiz-auth-row" hidden>
+              <input type="checkbox" id="wiz-auth">
+              <span>我确认授权工作台访问上述仓外文档路径。</span>
+            </label>
+          </fieldset>
+        </div>
+        <!-- 步骤③ -->
+        <div data-wizard-step="3" hidden>
+          <div class="t-14" style="margin-bottom: 10px;">③ 确认:三分信息摘要(只读)</div>
+          <dl style="display: grid; grid-template-columns: 96px 1fr; row-gap: 10px; column-gap: 12px;">
+            <dt class="t-12 t-secondary">代码根目录</dt><dd class="t-12 t-mono" id="wiz-sum-root">—</dd>
+            <dt class="t-12 t-secondary">文档位置</dt><dd class="t-12 t-mono" id="wiz-sum-doc">—</dd>
+            <dt class="t-12 t-secondary">项目显示名</dt>
+            <dd><input class="input" id="wiz-name" style="height: 28px; font-size: 12px;" aria-label="项目显示名(默认取目录名)"></dd>
+          </dl>
+          <p class="t-12 t-secondary" style="margin-top: 12px;">显示名默认取目录名,可修改;仅存于工作台注册表,不影响磁盘目录名。</p>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" id="wiz-prev" hidden>← 上一步</button>
+        <button class="btn primary" type="button" id="wiz-next" disabled title="请先填写代码根目录">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 移除确认(UF1) ===== -->
+  <div class="dialog-mask" id="remove-confirm" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="remove-title">
+      <div class="dialog-head">
+        <div class="t-16" id="remove-title" style="flex: 1;">移除项目</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14" id="remove-text">仅删除工作台注册信息,不动项目文件。</p>
+        <p class="t-12 t-secondary" style="margin-top: 8px;" id="remove-sub" hidden>移除的是当前激活项目:确认后将按注册顺序自动激活剩余首个项目。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="remove-ok">移除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 禁用插件确认(UF6) ===== -->
+  <div class="dialog-mask" id="disable-confirm" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="disable-title">
+      <div class="dialog-head">
+        <div class="t-16" id="disable-title" style="flex: 1;">禁用插件</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">仅该插件的注入内容退出;forge 数据与任务看板、会话挂接等工作台核心能力不受影响。</p>
+        <p class="t-12 t-secondary" style="margin-top: 8px;">检测到活动挂接会话正在使用其扩展:会话本体不受影响,仅工作台内注入内容退出。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="disable-ok">确认禁用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 原型辅助(非产品 UI) -->
+  <div class="proto-bar">
+    <span class="grp t-secondary">原型状态</span>
+    <span class="grp">
+      <label><input type="radio" name="proto-state" value="populated" checked> 数据</label>
+      <label><input type="radio" name="proto-state" value="loading"> 加载</label>
+      <label><input type="radio" name="proto-state" value="empty"> 空态</label>
+      <label><input type="radio" name="proto-state" value="error"> 错误</label>
+    </span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    /* ===== 页面专属:概览(UF1 + UF6)===== */
+    (function () {
+      var editMode = false;
+
+      /* ---- 状态切换辅助 ---- */
+      function setState(state) {
+        var root = document.querySelector('[data-state-root]');
+        root.setAttribute('data-state', state);
+        root.querySelectorAll('[data-when]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-when').split(' ').indexOf(state) === -1;
+        });
+        document.querySelectorAll('input[name="proto-state"]').forEach(function (r) { r.checked = r.value === state; });
+      }
+
+      /* ---- 注册向导 ---- */
+      var wiz = document.getElementById('wizard');
+      var step = 1;
+      var rootInput = document.getElementById('wiz-root');
+      var rootError = document.getElementById('wiz-root-error');
+      var nextBtn = document.getElementById('wiz-next');
+      var prevBtn = document.getElementById('wiz-prev');
+      var outRow = document.getElementById('wiz-out-row');
+      var outPath = document.getElementById('wiz-out-path');
+      var outError = document.getElementById('wiz-out-error');
+      var warn = document.getElementById('wiz-warn');
+      var authRow = document.getElementById('wiz-auth-row');
+      var auth = document.getElementById('wiz-auth');
+
+      function openWizard(mode) {
+        editMode = mode === 'edit';
+        document.getElementById('wizard-title').textContent = editMode ? '重新指向项目' : '注册项目';
+        if (editMode) {
+          rootInput.value = 'Z:\\project\\dsh\\dsh-forge';
+          document.querySelector('input[name="wiz-docloc"][value="in"]').checked = true;
+        }
+        gotoStep(1);
+        openDialog('wizard');
+      }
+      function gotoStep(n) {
+        step = n;
+        wiz.querySelectorAll('[data-wizard-step]').forEach(function (s) { s.hidden = s.getAttribute('data-wizard-step') !== String(n); });
+        wiz.querySelectorAll('[data-step-dot]').forEach(function (d) {
+          var i = +d.getAttribute('data-step-dot');
+          d.classList.toggle('current', i === n);
+          d.classList.toggle('done', i < n);
+        });
+        wiz.querySelectorAll('[data-step-line]').forEach(function (l) {
+          l.classList.toggle('done', +l.getAttribute('data-step-line') < n);
+          l.style.background = +l.getAttribute('data-step-line') < n ? 'var(--dsw-alias-state-success-primary)' : '';
+        });
+        document.getElementById('wizard-step-label').textContent = '步骤 ' + n + '/3';
+        prevBtn.hidden = n === 1;
+        nextBtn.textContent = n === 3 ? (editMode ? '完成(重扫)' : '完成') : '下一步';
+        validate();
+      }
+      function validate() {
+        if (step === 1) {
+          /* 模拟:非空路径即视为检出(空 → 未检出错误) */
+          var detected = rootInput.value.trim().length > 0;
+          rootError.hidden = detected;
+          nextBtn.disabled = !detected;
+          nextBtn.title = detected ? '' : '请先填写有效的代码根目录';
+        } else if (step === 2) {
+          var isOut = document.querySelector('input[name="wiz-docloc"]:checked').value === 'out';
+          outRow.hidden = !isOut; warn.hidden = !isOut; authRow.hidden = !isOut;
+          if (!isOut) { outError.hidden = true; nextBtn.disabled = false; nextBtn.title = ''; return; }
+          var same = outPath.value.trim() && outPath.value.trim() === rootInput.value.trim();
+          outError.hidden = !same;
+          nextBtn.disabled = same || !auth.checked || !outPath.value.trim();
+          nextBtn.title = same ? '文档路径须与代码根目录不同' : (!outPath.value.trim() ? '请填写仓外路径' : (!auth.checked ? '需确认授权' : ''));
+        } else {
+          nextBtn.disabled = false;
+          document.getElementById('wiz-sum-root').textContent = rootInput.value || '—';
+          var loc = document.querySelector('input[name="wiz-docloc"]:checked').value === 'out'
+            ? outPath.value : (rootInput.value + '\\docs');
+          document.getElementById('wiz-sum-doc').textContent = loc || '—';
+          if (!document.getElementById('wiz-name').value) {
+            document.getElementById('wiz-name').value = (rootInput.value.split('\\').pop() || '').trim();
+          }
+        }
+      }
+      rootInput.addEventListener('input', validate);
+      outPath.addEventListener('input', validate);
+      auth.addEventListener('change', validate);
+      document.getElementById('wiz-root-browse').addEventListener('click', function () {
+        rootInput.value = 'Z:\\project\\ai\\forge'; validate();
+      });
+      document.getElementById('wiz-out-browse').addEventListener('click', function () {
+        outPath.value = 'D:\\forge-docs\\demo'; validate();
+      });
+      document.querySelectorAll('input[name="wiz-docloc"]').forEach(function (r) { r.addEventListener('change', validate); });
+      prevBtn.addEventListener('click', function () { gotoStep(step - 1); });
+      nextBtn.addEventListener('click', function () {
+        if (step < 3) { gotoStep(step + 1); return; }
+        /* 完成:注册中 spinner → 关闭 + 激活 */
+        nextBtn.disabled = true;
+        nextBtn.innerHTML = '<span class="spinner"></span>' + (editMode ? '重新指向中…' : '注册中…');
+        setTimeout(function () {
+          nextBtn.textContent = '完成'; nextBtn.disabled = false;
+          closeDialog(wiz);
+          setState('populated');
+          toast(editMode ? '已重新指向并重扫 forge 数据' : '已注册并激活 ' + (document.getElementById('wiz-name').value || '新项目'));
+          /* 重置向导 */
+          editMode = false; rootInput.value = ''; outPath.value = ''; auth.checked = false;
+          document.getElementById('wiz-name').value = '';
+          document.querySelector('input[name="wiz-docloc"][value="in"]').checked = true;
+        }, 900);
+      });
+      /* 关闭守卫:已有输入 / 已过步骤① → 先确认「放弃注册?」 */
+      window.wizardCloseGuard = function () {
+        var dirty = step > 1 || rootInput.value.trim() || outPath.value.trim();
+        if (dirty && !confirm('放弃注册?已填写的信息将丢失。')) return false;
+        return true;
+      };
+      wiz.setAttribute('data-close-guard', 'wizardCloseGuard');
+      document.querySelectorAll('[data-open-wizard]').forEach(function (b) {
+        b.addEventListener('click', function () { openWizard('new'); });
+      });
+      document.querySelectorAll('[data-repoint]').forEach(function (b) {
+        b.addEventListener('click', function () { openWizard('edit'); });
+      });
+
+      /* ---- 项目切换 ---- */
+      var metaName = document.getElementById('meta-name');
+      var metaPath = document.getElementById('meta-path');
+      var switcherLabel = document.getElementById('switcher-label');
+      document.querySelectorAll('[data-switch], .menu-item[data-project]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var name = b.getAttribute('data-project') || b.closest('[data-project-card]').getAttribute('data-project-card');
+          switcherLabel.textContent = name + ' ▾';
+          metaName.textContent = name;
+          metaPath.textContent = name === 'dsh-forge'
+            ? 'Z:\\project\\dsh\\dsh-forge · 文档位置:仓内 docs/'
+            : 'Z:\\project\\github\\electron-course · 文档位置:仓内 docs/';
+          document.querySelectorAll('[data-project-card]').forEach(function (c) {
+            var active = c.getAttribute('data-project-card') === name;
+            c.style.borderColor = active ? 'var(--dsw-alias-link)' : '';
+            c.style.borderWidth = active ? '1.5px' : '';
+            var pill = c.querySelector('.pill');
+            if (pill) pill.remove();
+            if (active) {
+              var p = document.createElement('span');
+              p.className = 'pill'; p.style.cssText = 'position:absolute;top:-11px;left:12px;background:var(--dsw-alias-link);color:#fff;';
+              p.textContent = '当前'; c.prepend(p);
+            }
+            var sw = c.querySelector('[data-switch]');
+            if (sw) sw.disabled = active;
+          });
+          toast('已切换到 ' + name + '(任务 / feature 数据切换中)');
+        });
+      });
+
+      /* ---- 重命名(inline) ---- */
+      document.querySelectorAll('[data-rename]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var card = b.closest('[data-project-card]');
+          var nameEl = card.querySelector('[data-name]');
+          if (card.querySelector('input[data-rename-input]')) return;
+          var input = document.createElement('input');
+          input.setAttribute('data-rename-input', '');
+          input.className = 'input'; input.style.cssText = 'height:28px;font-size:14px;';
+          input.value = nameEl.textContent.trim();
+          nameEl.replaceWith(input); input.focus(); input.select();
+          function commit() { nameEl.textContent = ' ' + (input.value.trim() || input.defaultValue.trim()); input.replaceWith(nameEl); }
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { input.value = input.defaultValue; commit(); }
+          });
+          input.addEventListener('blur', commit);
+        });
+      });
+
+      /* ---- 移除(确认 + 激活移交) ---- */
+      var pendingRemove = null;
+      document.querySelectorAll('[data-remove]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          pendingRemove = b.closest('[data-project-card]') || document.querySelector('[data-state-root]');
+          var isActive = pendingRemove.getAttribute && pendingRemove.getAttribute('data-project-card') === metaName.textContent;
+          var remaining = document.querySelectorAll('[data-project-card]').length - 1;
+          document.getElementById('remove-sub').hidden = !(isActive && remaining > 0);
+          openDialog('remove-confirm');
+        });
+      });
+      document.getElementById('remove-ok').addEventListener('click', function () {
+        closeDialog(document.getElementById('remove-confirm'));
+        if (pendingRemove && pendingRemove.remove) pendingRemove.remove();
+        var rest = document.querySelectorAll('[data-project-card]');
+        if (!rest.length) { setState('empty'); toast('已移除;暂无注册项目'); return; }
+        var first = rest[0];
+        var name = first.getAttribute('data-project-card');
+        /* 按注册顺序自动激活剩余首项(单激活恒有明确归属) */
+        switcherLabel.textContent = name + ' ▾'; metaName.textContent = name;
+        metaPath.textContent = 'Z:\\project\\github\\electron-course · 文档位置:仓内 docs/';
+        first.style.borderColor = 'var(--dsw-alias-link)'; first.style.borderWidth = '1.5px';
+        toast('已移除;已激活 ' + name);
+      });
+
+      /* ---- 插件启停(UF6) ---- */
+      document.querySelectorAll('[data-disable-plugin]').forEach(function (b) {
+        b.addEventListener('click', function () { openDialog('disable-confirm'); });
+      });
+      document.getElementById('disable-ok').addEventListener('click', function () {
+        closeDialog(document.getElementById('disable-confirm'));
+        var li = document.querySelector('[data-plugin="hello-world"]');
+        li.querySelector('.t-14').style.color = 'var(--dsw-alias-label-secondary)';
+        li.querySelector('.dot').className = 'dot st-pending';
+        li.querySelector('.t-12.t-secondary').textContent = '已禁用';
+        var b2 = li.querySelector('[data-disable-plugin]');
+        var en = document.createElement('button');
+        en.className = 'btn sm ghost'; en.type = 'button'; en.setAttribute('data-enable-plugin', '');
+        en.textContent = '启用';
+        b2.replaceWith(en); bindEnable(en);
+        toast('hello-world 已禁用:其注入内容已退出,数据零损坏');
+      });
+      function bindEnable(btn) {
+        btn.addEventListener('click', function () {
+          var li = btn.closest('[data-plugin]');
+          li.querySelector('.t-14').style.color = '';
+          li.querySelector('.dot').className = 'dot st-completed';
+          li.querySelector('.t-12.t-secondary').textContent = '已启用';
+          var dis = document.createElement('button');
+          dis.className = 'btn sm ghost'; dis.type = 'button'; dis.setAttribute('data-disable-plugin', '');
+          dis.textContent = '禁用';
+          btn.replaceWith(dis);
+          dis.addEventListener('click', function () { openDialog('disable-confirm'); });
+          toast('已启用:注入内容恢复,数据完整');
+        });
+      }
+      document.querySelectorAll('[data-enable-plugin]').forEach(bindEnable);
+    })();
+  </script>
+</body>
+</html>

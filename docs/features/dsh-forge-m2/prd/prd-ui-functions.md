@@ -1,5 +1,6 @@
 ---
 feature: "dsh-forge-m2"
+updated: "2026-09-22"
 ---
 
 # dsh-forge M2 — UI Functions
@@ -95,7 +96,7 @@ feature: "dsh-forge-m2"
 
 ### Description
 
-以图形化依赖树 + 状态分组/列表两种视图只读展示激活项目的任务全集:状态(7 态)、依赖(blocker 关系)、所属 feature、worktree 标识、变更来源标识[会话/终端]。支持按 feature/状态/worktree 筛选与排序。**不提供任何写操作入口**(人侧只读,主体模型见 prd-spec)。
+以图形化依赖树 + 状态分组/列表两种视图只读展示激活项目的任务全集:状态(7 态)、依赖(blocker 关系)、所属 feature、worktree 标识、执行分支、变更来源标识[会话/终端]。支持按 feature/状态/worktree 筛选与排序。**不提供任何写操作入口**(人侧只读,主体模型见 prd-spec)。
 
 ### User Interaction Flow
 
@@ -110,7 +111,7 @@ feature: "dsh-forge-m2"
 |-------|------|--------|-------|
 | 任务 ID/标题/状态 | id/string/enum | forge 任务数据 | 状态与 forge 一致(7 态) |
 | 依赖关系 | graph | forge 任务数据 | blocker 边 |
-| 所属 feature / worktree | ref/string | forge 任务数据/执行痕迹 | 卡片角标 |
+| 所属 feature / worktree / 分支 | ref/string | forge 任务数据/执行痕迹 | 卡片角标;分支名(任务执行 git 分支)在列表视图列展示 |
 | 变更来源标识 | enum[会话/终端] | 变更事件(DF003) | 最近变更可见 |
 | 任务规模 | count | — | ≤500 任务,首屏 ≤2s |
 
