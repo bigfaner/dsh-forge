@@ -29,6 +29,9 @@ import {
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
+import { openDatabase } from './workbench/store/db.ts'
+import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
+import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -319,6 +322,47 @@ void app.whenReady().then(async () => {
       message: 'host profile projection from the product plugin-bundles config failed; host start aborted',
       data: { detail: profileFailure },
     })
+  }
+
+  // M2 task 2.7: workbench data kernel + the dshForge.workbench.* verb face.
+  // The SQLite kernel boots before the window loads (every verb must already
+  // be registered on ipcMain by then). A boot failure is an explicit startup
+  // error carried by the M1 crash-recovery path — there is no silent
+  // no-database degradation, and the verb face simply stays uninstalled.
+  try {
+    const userDataPath = app.getPath('userData')
+    const workbenchDb = await openDatabase(userDataPath)
+    const workbenchEvents = createWorkbenchEventSubscriptions()
+    const workbenchIpc = createWorkbenchIpcServices({
+      db: workbenchDb.db,
+      pluginBundlesPath: resolvePluginBundlesConfigPath(),
+      userDataPath,
+      // 3.1 seam: the stub guard (mandatory → ERR_PLUGIN_MANDATORY) stays in
+      // place until the host-profile guard lands — swap the implementation at
+      // this assembly point only (PluginEnableGuard contract in ipc/plugins.ts).
+      onEvents: workbenchEvents.sink,
+    })
+    installWorkbenchVerbs(
+      (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
+      workbenchIpc.verbs,
+      workbenchEvents,
+    )
+    workbenchIpc.start()
+    shellLog.info({
+      code: 'WORKBENCH_READY',
+      message: 'workbench data kernel booted; dshForge.workbench verb face installed',
+      data: { dbPath: workbenchDb.path },
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    shellLog.error({
+      code: 'ERR_WORKBENCH_DB',
+      message: 'workbench database boot failed; the workbench verb face is not installed',
+      data: { detail },
+    })
+    try {
+      crashRecovery.dispatch('start-failed', detail)
+    } catch { /* already terminal (an earlier failure owns the state) */ }
   }
 
   // dsh-app:// carriage: web assets from the vendored web frontend dist,

@@ -28,8 +28,11 @@ import {
 /** manifest status 词表(feature_snapshot 透传词表)。 */
 const FEATURE_STATUS_VOCAB: ReadonlySet<string> = new Set(['prd', 'design', 'tasks', 'in-progress', 'completed'])
 
-/** 五类文档的方言锚点(相对 feature 目录)。 */
-const DOC_KIND_ANCHORS: ReadonlyArray<readonly [DocKind, string]> = [
+/**
+ * 五类文档的方言锚点(相对 feature 目录)。任务 2.7 起导出:readFeatureDoc
+ * 动词的文件定位与 docKinds 探测共用同一锚点表(单一事实源)。
+ */
+export const DOC_KIND_ANCHORS: ReadonlyArray<readonly [DocKind, string]> = [
   ['manifest', join('manifest.md')],
   ['prd', join('prd', 'prd-spec.md')],
   ['design', join('design', 'tech-design.md')],
