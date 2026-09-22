@@ -24,6 +24,17 @@
  * chrome; the optional `overview` prop is the 5.14 assembly seat (IPC face +
  * sync signals), absent in the build stage where the page runs its mock twin.
  *
+ * Task 5.14 completes the overview family's ASSEMBLY: with the preload
+ * bridge live and no explicit chrome state member, the shell runs its whole
+ * chrome (switcher + gate), the overview tab, and the register wizard on ONE
+ * store-backed real chain (store/workbench-state.ts — a single getState per
+ * first paint, onEvents-derived 失联 signals, mutation refreshes through the
+ * same store) and mounts the ASSEMBLED view (views/overview/OverviewView)
+ * on the overview seat; the wizard's WRITE pair goes over the bridge while
+ * its probes keep the build-stage twin (no Interface 1 probe verb). The
+ * explicit seats / hostless mounts reproduce the build-stage forms — the
+ * DI switch discipline every assembly keeps.
+ *
  * Task 5.4 owns the register entry: the addProject seam (chrome 「添加项目」/
  * overview empty card / state-gate card) and the overview lost-card repoint
  * seam open the UF1 register wizard overlay (`workbench/dialog/register`) —
@@ -61,14 +72,21 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { WorkbenchShellProps } from './contract'
-import type { Project } from './ipc-types'
+import type { Project, WorkbenchState } from './ipc-types'
 import type { WorkbenchKey } from './locale/en'
 import { WORKBENCH_DIALOG_PREFIX, type WorkbenchTabKey } from './store/view-key'
 import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
+import { createIpcRegisterWizardVerbs, getWorkbenchIpcBridge, normalizeWorkbenchVerbError } from './ipc/workbench'
+import {
+  createWorkbenchStateStore, INITIAL_WORKBENCH_STATE_SNAPSHOT, type WorkbenchStateStore,
+} from './store/workbench-state'
+import { fillTemplate } from './views/overview/format'
+import { TOAST_Z } from './views/tasks/launch/LaunchStates'
 import { ChromeButton } from './components/chrome/ChromeButton'
 import { TabBar } from './components/chrome/TabBar'
 import { TopBar } from './components/chrome/TopBar'
-import { OverviewPage } from './views/overview/OverviewPage'
+import { OverviewView } from './views/overview/OverviewView'
+import type { RegisterWizardResult } from './views/overview/RegisterWizard'
 import { RegisterWizard } from './views/overview/RegisterWizard'
 import { TaskBoardPage } from './views/TaskBoardPage'
 import { FeaturesView } from './views/features/FeaturesView'
@@ -165,6 +183,53 @@ const gateButtonStyle = {
   padding: '0 12px',
 } as const
 
+/**
+ * The real-path chrome's pre-read placeholder (task 5.14): while the first
+ * getState is in flight (or failed with no last-good state) the chrome holds
+ * NO registry — never the build-stage mock fixtures (mock 全撤 covers the
+ * chrome too). The tab pages own their loading branches in that window.
+ */
+const UNRESOLVED_CHROME_STATE: WorkbenchState = Object.freeze({
+  projects: Object.freeze([]),
+  activeProjectId: null,
+  plugins: Object.freeze([]),
+})
+
+/** The shell-level toast card (z1100, role=status — the OverviewPage twin). */
+const shellToastStyle = {
+  background: 'var(--dsh-bg, Canvas)',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '14px',
+  bottom: '16px',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+  display: 'flex',
+  gap: '10px',
+  maxWidth: '360px',
+  padding: '12px 14px',
+  position: 'fixed',
+  right: '16px',
+  zIndex: TOAST_Z,
+} as const
+
+const shellToastBodyStyle = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontSize: '14px',
+  lineHeight: '22px',
+  margin: '0',
+  maxWidth: 'none',
+} as const
+
+const shellToastDismissStyle = {
+  background: 'transparent',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '14px',
+  color: 'inherit',
+  cursor: 'pointer',
+  font: 'inherit',
+  height: '24px',
+  padding: '0 8px',
+} as const
+
 /** The wizard's open target: fresh register, or the prefilled edit (repoint/rename) row. */
 type WizardTarget = { mode: 'register' } | { mode: 'edit'; project: Project }
 
@@ -209,13 +274,71 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     props.launch?.subscribe ?? (() => () => {}),
     props.launch?.getSnapshot ?? (() => undefined),
   )
+  // Task 5.14 — the real chrome data path: with the preload bridge live and
+  // no explicit chrome state member, the chrome (switcher + gate), the UF1
+  // page, and the register wizard run on ONE store-backed getState chain
+  // (store/workbench-state.ts; mock 全撤); the bridge absent (hostless jsdom
+  // / build stage) or the explicit member present keeps the 5.1 mock + local
+  // stubs — the DI switch. Bridge presence is fixed for the shell's life.
+  const [bridge] = useState(() => getWorkbenchIpcBridge())
+  const [stateStore] = useState<WorkbenchStateStore | undefined>(() =>
+    props.workbenchState === undefined && bridge !== undefined
+      ? createWorkbenchStateStore(bridge)
+      : undefined)
+  const chromeSnapshot = useSyncExternalStore(
+    stateStore?.subscribe ?? (() => () => {}),
+    stateStore?.getSnapshot ?? (() => INITIAL_WORKBENCH_STATE_SNAPSHOT),
+  )
+  useEffect(() => {
+    if (stateStore === undefined) return
+    // The store lives and dies with the shell's mount (the keyed main slot /
+    // the rail overlay both remount the whole shell on view switches).
+    return () => { stateStore.dispose() }
+  }, [stateStore])
+  useEffect(() => {
+    if (stateStore === undefined) return
+    // The first paint's read — the page's own loadState shares it through
+    // the store's in-flight coalescing (ONE round trip). A rejection's
+    // observable lives in the snapshot phase; nothing to rethrow here.
+    // The same effect re-arms on every TAB switch: a context switch is the
+    // natural re-sync point for registry drift written behind the shell
+    // (devtools/bridge-side writes) — the shell-owned mutations refresh on
+    // their own, the boot-mounted shell otherwise wouldn't.
+    void stateStore.refresh().catch(() => {})
+  }, [stateStore, view.workbenchTab])
+  // The wizard's real WRITE pair (5.14): registerProject / updateProject
+  // over the bridge, rejections normalized. The step-①/② probes keep the
+  // wizard's build-stage twin (no Interface 1 probe verb — the real
+  // validation is the submit-time main-side chain; ipc/workbench.ts notes).
+  const [wizardVerbs] = useState(() => (bridge === undefined ? undefined : createIpcRegisterWizardVerbs(bridge)))
   // Build-stage defaults (UI dependency layering): the shared mock + a local
   // single-activation stub. Assembly (5.14-5.16) overrides the whole face
   // with the IPC-backed implementation.
   const [mockState, setMockState] = useState(() => MOCK_WORKBENCH_STATE)
-  const workbenchState = props.workbenchState ?? mockState
+  const workbenchState = props.workbenchState
+    ?? (stateStore !== undefined ? (chromeSnapshot.state ?? UNRESOLVED_CHROME_STATE) : mockState)
+  // The shell-level toast (the register-success 提示可切换 notice + the
+  // chrome verb failure copy — the wizard is shell-owned, so its success
+  // toast is too; the page keeps its own verb toasts).
+  const [shellToast, setShellToast] = useState<string | undefined>(undefined)
+  // The external-mutation epoch (5.14): bumped when a mutation the overview
+  // PAGE didn't fire (the wizard's register/repoint, the chrome switcher's
+  // activation) refreshed the registry — OverviewView rides it through as
+  // the page's reloadToken (re-read without a remount).
+  const [externalReloadNonce, setExternalReloadNonce] = useState(0)
   const activateProject = props.activateProject
-    ?? ((id: string) => { setMockState(state => ({ ...state, activeProjectId: id })) })
+    ?? (stateStore !== undefined
+      ? (id: string) => {
+        void stateStore.bridge.activateProject(id)
+          .then(() => stateStore.refresh())
+          .then(() => { setExternalReloadNonce(nonce => nonce + 1) })
+          .catch((error: unknown) => {
+            setShellToast(fillTemplate(props.t('overview.toast.failed'), {
+              message: normalizeWorkbenchVerbError(error).message,
+            }))
+          })
+      }
+      : (id: string) => { setMockState(state => ({ ...state, activeProjectId: id })) })
 
   // The register wizard (task 5.4): the addProject / repoint seams open the
   // `workbench/dialog/register` overlay — register mode, or the prefilled edit
@@ -238,10 +361,42 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   }, [])
 
   /** Close the wizard and return focus to the opener (the dialog contract). */
-  const closeWizard = (): void => {
+  const closeWizard = (result?: RegisterWizardResult): void => {
     setWizardTarget(undefined)
     const trigger = wizardTriggerRef.current
     if (trigger !== null && document.contains(trigger)) trigger.focus()
+    if (result === undefined) return
+    // A completed submit (5.14): refresh the registry the whole family reads
+    // (single-source consistency) and surface the register-success 提示可切换
+    // notice (AC4 — the new project is immediately visible in the grid; the
+    // register verb itself never activates, activateProject is the
+    // single-active transaction).
+    if (stateStore !== undefined) {
+      void stateStore.refresh()
+        .then(() => {
+          setExternalReloadNonce(nonce => nonce + 1)
+          if (result.action === 'register') {
+            setShellToast(fillTemplate(props.t('overview.toast.registered'), {
+              name: result.project.displayName,
+            }))
+          }
+        })
+        .catch(() => {})
+      return
+    }
+    // The build-stage twin: mirror the completion into the local mock state
+    // so the chrome's registry stays coherent with the wizard's outcome.
+    if (result.action === 'register') {
+      setMockState(state => ({ ...state, projects: [...state.projects, result.project] }))
+      setShellToast(fillTemplate(props.t('overview.toast.registered'), {
+        name: result.project.displayName,
+      }))
+    } else {
+      setMockState(state => ({
+        ...state,
+        projects: state.projects.map(row => (row.id === result.project.id ? result.project : row)),
+      }))
+    }
   }
 
   /**
@@ -258,9 +413,20 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
 
   // The page-map state gate: project-scoped tabs (tasks/features, the
   // feature-detail subview included) need an active project; the overview tab
-  // owns its own empty state (UF1/5.3) and keeps its mount container.
-  const gated = workbenchState.activeProjectId === null
+  // owns its own empty state (UF1/5.3) and keeps its mount container. The
+  // real path gates only on a RESOLVED registry — while the first getState is
+  // pending (or failed with no last-good state) the tab pages own their own
+  // loading branches, so no gate flash precedes them.
+  const chromeUnresolved = stateStore !== undefined && chromeSnapshot.state === undefined
+  const gated = !chromeUnresolved
+    && workbenchState.activeProjectId === null
     && view.workbenchTab !== 'workbench/overview'
+  // The real path's switch contract (ui-design UF1 切换 interaction): a chrome
+  // activation re-keys the project-scoped tab mounts so their data rebuilds
+  // for the new active project (loading skeleton first — never stale rows).
+  const activeProjectKey = stateStore !== undefined && workbenchState.activeProjectId !== null
+    ? workbenchState.activeProjectId
+    : undefined
 
   // 仓外角标 premise (ui-design UF4 / DF005): the feature detail badges the
   // active project's external doc location.
@@ -300,22 +466,24 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
             ? <StateGate t={props.t} onRegister={addProject} />
             : view.workbenchTab === 'workbench/overview'
               ? (
-                // UF1 (task 5.3): the overview page owns its own empty state,
-                // so it takes the reserved seat WITHOUT the state gate. Its
-                // register CTA fires the same addProject seam as the chrome;
-                // the lost-card repoint defaults to the 5.4 wizard's EDIT
-                // mode (5.14's overview seat can override either); the
-                // optional overview seat hands the page its IPC-backed face +
-                // sync signals — absent, the page runs on its mock twin (the
-                // same for the UF6 plugin section's pluginFace, 5.13/5.14).
+                // UF1 (task 5.3 build · 5.14 assembly): the overview tab owns
+                // its own empty state, so it takes the reserved seat WITHOUT
+                // the state gate. The ASSEMBLED view swaps the page's mock
+                // data plane for the real chain when the shell's store is
+                // live (IPC faces + store-routed getState + sync-derived 失联
+                // signals); the explicit overview seat / a hostless mount
+                // reproduces the 5.3 build-stage page. The register CTA fires
+                // the same addProject seam as the chrome; the lost-card
+                // repoint defaults to the 5.4 wizard's EDIT mode (the seat
+                // can override either).
                 <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
-                  <OverviewPage
+                  <OverviewView
                     t={props.t}
                     onRegister={addProject}
                     onRepoint={props.overview?.onRepoint ?? ((project) => { openWizard({ mode: 'edit', project }) })}
-                    lostProjectIds={props.overview?.lostProjectIds}
-                    face={props.overview?.face}
-                    pluginFace={props.overview?.pluginFace}
+                    reloadToken={externalReloadNonce}
+                    seat={props.overview}
+                    store={stateStore}
                   />
                 </div>
               )
@@ -331,6 +499,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   // panel-primary, real services via the launch seat).
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                     <TaskBoardPage
+                      key={activeProjectKey}
                       t={props.t}
                       projectId={workbenchState.activeProjectId ?? undefined}
                       codeRoot={activeProject?.codeRoot}
@@ -355,6 +524,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   // the tab action clearing the slug).
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                     <FeaturesView
+                      key={activeProjectKey}
                       t={props.t}
                       featureSlug={view.featureSlug}
                       onOpenFeature={props.openFeatureDetail}
@@ -371,17 +541,37 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
 
       {/* UF1 (task 5.4): the register wizard overlay — `workbench/dialog/
           register` in the page-map's dialog family. The 5.14 `wizard` seat
-          injects the IPC face + locate treatment over the mock twin. */}
+          injects the IPC face + locate treatment over the mock twin; on the
+          real path the shell itself hands the wizard's WRITE pair (the
+          bridge's registerProject/updateProject over the build-stage twin's
+          probes) and the store-backed registry. */}
       {wizardTarget !== undefined && (
         <RegisterWizard
           t={props.t}
           mode={wizardTarget.mode}
           project={wizardTarget.mode === 'edit' ? wizardTarget.project : undefined}
           projects={workbenchState.projects}
-          face={props.wizard?.face}
+          face={props.wizard?.face ?? (stateStore !== undefined ? wizardVerbs : undefined)}
           onLocate={props.wizard?.onLocate ?? locateProject}
           onClose={closeWizard}
         />
+      )}
+
+      {/* The shell-level toast (5.14): the register-success 提示可切换 notice
+          and the chrome verb-failure copy (the OverviewPage toast twin). */}
+      {shellToast !== undefined && (
+        <div role="status" aria-live="polite" data-dsh-forge-shell-toast="" style={shellToastStyle}>
+          <p style={shellToastBodyStyle}>{shellToast}</p>
+          <ChromeButton
+            type="button"
+            aria-label={props.t('overview.toast.dismiss')}
+            data-dsh-forge-shell-toast-dismiss=""
+            style={shellToastDismissStyle}
+            onClick={() => { setShellToast(undefined) }}
+          >
+            <span aria-hidden="true">✕</span>
+          </ChromeButton>
+        </div>
       )}
     </div>
   )

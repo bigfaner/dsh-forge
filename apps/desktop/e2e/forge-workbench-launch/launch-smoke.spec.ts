@@ -1,5 +1,8 @@
 // @feature dsh-forge-m2 | @web-e2e | @journey forge-workbench-launch
 // Traceability: docs/features/dsh-forge-m2/tasks/5.11-session-launch-entry-integrate.md
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES, FORGE_WORKBENCH, FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball, launchPluginShell,
@@ -28,6 +31,14 @@ import {
 // root — a fixture the mock-chrome board fixes to the real repo path, so the
 // full stub leg belongs to 6.1's fixture 工程 + 6.3 (detailed legs), after the
 // 5.14/5.15 assemblies feed the board its real project context.
+//
+// 5.14 amendment: the board's project context (projectId/codeRoot the launch
+// entries mount with) now comes from the REAL chrome registry — the mock
+// chrome's fixed repo-path codeRoot retired with the overview assembly. Each
+// leg therefore registers + activates a FIXTURE forge project over the real
+// bridge before opening the board; leg B's env allowlist carries the fixture
+// root (created pre-launch under a deterministic temp root, so the env string
+// is knowable before the shell starts).
 
 /** The minimal product config: base bundles + the mandatory forge core. */
 function launchBundles() {
@@ -39,6 +50,47 @@ function launchBundles() {
 
 function launchTarballs() {
   return [{ at: FORGE_WORKBENCH_STAGED_AT, from: forgeWorkbenchTarball() }]
+}
+
+/**
+ * The pre-launch temp root + a registrable fixture forge project (docs/
+ * features with one feature — the main-side detection the REAL register
+ * validation chain runs). Created BEFORE launch so the fixture path can ride
+ * the env (leg B's allowlist) and the bridge registration alike.
+ */
+function launchFixtureRoot(): { root: string; fixtureRoot: string } {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-forge-launch-e2e-'))
+  const fixtureRoot = join(root, 'fixture-project')
+  const docs = join(fixtureRoot, 'docs', 'features')
+  const featureDir = join(docs, 'launch-demo')
+  mkdirSync(join(featureDir, 'tasks'), { recursive: true })
+  writeFileSync(join(featureDir, 'manifest.md'), '---\nstatus: in-progress\n---\n# launch-demo\n\nLaunch fixture feature.\n')
+  writeFileSync(join(featureDir, 'tasks', 'index.json'), `${JSON.stringify({
+    tasks: {
+      '1.1': { id: '1.1', title: 'first', status: 'completed', dependencies: [] },
+    },
+  }, undefined, 2)}\n`)
+  return { root, fixtureRoot }
+}
+
+/** The register/activate subset the prelude drives over the real bridge. */
+interface RegisterBridge {
+  registerProject(input: { codeRoot: string; docLocationType: 'in_repo' }): Promise<{ id: string }>
+  activateProject(id: string): Promise<void>
+}
+
+/** Register + activate the fixture over the real bridge (5.14 amendment). */
+async function registerFixtureProject(
+  page: import('@playwright/test').Page, fixtureRoot: string,
+): Promise<void> {
+  await page.evaluate(async (codeRoot: string) => {
+    const bridge = (globalThis as { dshForge?: { workbench?: RegisterBridge } }).dshForge?.workbench
+    if (bridge?.registerProject === undefined || bridge.activateProject === undefined) {
+      throw new Error('dshForge.workbench bridge is unavailable in the e2e renderer')
+    }
+    const project = await bridge.registerProject({ codeRoot, docLocationType: 'in_repo' })
+    await bridge.activateProject(project.id)
+  }, fixtureRoot)
 }
 
 /**
@@ -80,15 +132,20 @@ const nodeHoverTriggers = (page: import('@playwright/test').Page) =>
 
 test('5.11/launch-smoke leg A: real probe round-trip, fail-closed (no env seam) disables both mounts', async ({ }, testInfo) => {
   testInfo.setTimeout(240_000)
-  // PATH pinned to an empty temp dir: no forge candidate can resolve on ANY
-  // machine (hermetic — the host child inherits this env).
+  // PATH pinned to System32: no forge candidate can resolve on ANY machine
+  // (hermetic — the host child inherits this env). The fixture project is
+  // registered over the real bridge (5.14: the board's project context is
+  // the real chrome registry), but NOT allowlisted — the fail-closed leg.
+  const { root, fixtureRoot } = launchFixtureRoot()
   const shell = await launchPluginShell({
     bundles: launchBundles(),
     stageTarballs: launchTarballs(),
+    rootDir: root,
     env: { PATH: FORGE_FREE_PATH },
   })
   try {
     await shell.uiReady()
+    await registerFixtureProject(shell.page, fixtureRoot)
     await switchToWorkbench(shell.page)
     await openTasksBoard(shell.page)
 
@@ -125,20 +182,24 @@ test('5.11/launch-smoke leg A: real probe round-trip, fail-closed (no env seam) 
 
 test('5.11/launch-smoke leg B: DSH_FORGE_PROJECT_ROOTS consumed by the host (cli-unavailable reason)', async ({ }, testInfo) => {
   testInfo.setTimeout(240_000)
-  // The seam half-fed: the BOARD's project root allowlisted (the mock chrome's
-  // fixed codeRoot — the real repo path, as a STRING only), PATH still
-  // forge-free → the allowlist gate passes, resolution fails → the OTHER
-  // disabled reason. This is the env feed's contract, exercised end-to-end.
+  // The seam half-fed: the FIXTURE project's root allowlisted (registered
+  // over the real bridge — 5.14 replaced the retired mock-chrome fixed
+  // codeRoot), PATH still forge-free → the allowlist gate passes, resolution
+  // fails → the OTHER disabled reason. This is the env feed's contract,
+  // exercised end-to-end.
+  const { root, fixtureRoot } = launchFixtureRoot()
   const shell = await launchPluginShell({
     bundles: launchBundles(),
     stageTarballs: launchTarballs(),
+    rootDir: root,
     env: {
       PATH: FORGE_FREE_PATH,
-      DSH_FORGE_PROJECT_ROOTS: JSON.stringify(['Z:/project/dsh/dsh-forge']),
+      DSH_FORGE_PROJECT_ROOTS: JSON.stringify([fixtureRoot.split('\\').join('/')]),
     },
   })
   try {
     await shell.uiReady()
+    await registerFixtureProject(shell.page, fixtureRoot)
     await switchToWorkbench(shell.page)
     await openTasksBoard(shell.page)
 

@@ -75,6 +75,7 @@ export const zh: Record<WorkbenchKey, string> = {
   'overview.lost.repoint': '重新指向',
   'overview.lost.remove': '移除项目',
   'overview.toast.activated': '已激活 {name}',
+  'overview.toast.registered': '已注册 {name},可在顶部项目切换器中切换至该项目',
   'overview.toast.refreshed': '项目列表已刷新',
   'overview.toast.failed': '操作失败:{message}',
   'overview.toast.dismiss': '知道了',

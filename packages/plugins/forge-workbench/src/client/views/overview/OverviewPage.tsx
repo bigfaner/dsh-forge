@@ -74,6 +74,13 @@ export interface OverviewPageProps {
   onRepoint?: ((project: Project) => void) | undefined
   /** Path re-validation failures: per-card 失联徽标 + the active-project error card. */
   lostProjectIds?: readonly string[] | undefined
+  /**
+   * External-mutation reload signal (5.14): the assembly bumps this when a
+   * mutation OUTSIDE this page (the wizard's register/repoint, the chrome
+   * switcher's activation) refreshed the registry — the page re-reads its
+   * face. Absent/constant = the mount-once + own-verb load discipline.
+   */
+  reloadToken?: number | undefined
   /** The page face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
   face?: Partial<OverviewFace> | undefined
   /** The UF6 section face — absent members fall back to the section-local mock twin (5.14 injects the IPC face). */
@@ -279,11 +286,12 @@ export function OverviewPage(props: OverviewPageProps) {
     }
   }
 
-  // Mount-once initial load (the face identity is fixed for the page's life,
-  // like the 5.10 probe effect).
+  // Mount-once initial load, re-fired on the assembly's external-mutation
+  // token (5.14: the wizard/chrome refreshed the registry behind the page).
+  // The token identity is fixed for the page's life, like the 5.10 probe effect.
   useEffect(() => {
     void load()
-  }, [])
+  }, [props.reloadToken])
 
   /**
    * Run one Interface 1 verb with the page's error mapping:

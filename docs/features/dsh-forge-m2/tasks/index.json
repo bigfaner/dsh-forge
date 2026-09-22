@@ -384,7 +384,7 @@
         "5.13",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.14-overview-page-assembly.md",
       "record": "records/5.14-overview-page-assembly.md",
       "surface-type": "web",

@@ -74,6 +74,7 @@ export type WorkbenchKey =
   | 'overview.lost.repoint'
   | 'overview.lost.remove'
   | 'overview.toast.activated'
+  | 'overview.toast.registered'
   | 'overview.toast.refreshed'
   | 'overview.toast.failed'
   | 'overview.toast.dismiss'
@@ -325,6 +326,7 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.lost.repoint': 'Repoint',
   'overview.lost.remove': 'Remove project',
   'overview.toast.activated': 'Activated {name}',
+  'overview.toast.registered': 'Registered {name} — switch to it from the project switcher',
   'overview.toast.refreshed': 'Project list refreshed',
   'overview.toast.failed': 'Action failed: {message}',
   'overview.toast.dismiss': 'Dismiss',

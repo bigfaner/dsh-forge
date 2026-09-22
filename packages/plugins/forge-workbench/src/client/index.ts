@@ -85,9 +85,11 @@ export {
 // The Interface 1 IPC adapter (task 5.16 — the pattern the 5.14 overview and
 // 5.15 task-board assemblies reuse): the guarded preload-bridge read, the
 // 1:1 face→verb factories, and the rejection-envelope normalization that
-// keeps every view's error mapping form-agnostic.
+// keeps every view's error mapping form-agnostic. Task 5.14 added the
+// overview family's faces (overview/plugin + the wizard's WRITE pair).
 export {
-  createIpcFeatureBoardFace, createIpcFeatureDocFace, getWorkbenchIpcBridge,
+  createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcOverviewFace, createIpcPluginFace,
+  createIpcRegisterWizardVerbs, getWorkbenchIpcBridge,
   normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,
 } from './ipc/workbench'
 export type { WorkbenchIpcBridge } from './ipc/workbench'
@@ -95,6 +97,15 @@ export type { WorkbenchIpcBridge } from './ipc/workbench'
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
 export type { FeatureDocsCache } from './store/feature-board'
+// The overview family's single-source read model (task 5.14): one store per
+// shell mount over the live bridge — getState coalescing, mutation refreshes,
+// and the onEvents-derived 失联 signals (sync-state errors).
+export {
+  createWorkbenchStateStore, INITIAL_WORKBENCH_STATE_SNAPSHOT,
+} from './store/workbench-state'
+export type {
+  WorkbenchStatePhase, WorkbenchStateSnapshot, WorkbenchStateStore,
+} from './store/workbench-state'
 // The shared task-status vocabulary (task 5.5 — the first status-rendering
 // task): the 7-态 runtime order + the label/short-label/StateDot routing.
 // Tasks 5.7 (detail dock) and 5.9 (feature board) consume it as-is — the
@@ -108,6 +119,12 @@ export type { TaskStatusTranslate } from './i18n/task-status'
 // overview seat; exported for the 5.14 assembly + its tests.
 export { OverviewPage } from './views/overview/OverviewPage'
 export type { OverviewPageProps } from './views/overview/OverviewPage'
+// The UF1 overview tab, assembled (task 5.14): the completion view the shell
+// mounts — the store form renders the real IPC chain (faces + store-routed
+// getState + sync-derived 失联 signals); the seat / store-absent forms
+// reproduce the 5.3 build-stage page.
+export { OverviewView } from './views/overview/OverviewView'
+export type { OverviewViewProps } from './views/overview/OverviewView'
 export { formatTimestamp, middleEllipsis } from './views/overview/format'
 export { fillTemplate } from './views/overview/format'
 // The UF2 task board page (task 5.5): mounted by the shell into the reserved

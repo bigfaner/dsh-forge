@@ -16,7 +16,8 @@
  *      mirroring its §Interface 1 verb one-to-one with the QUALIFIED argument
  *      order verbatim (getFeatureBoard(projectId), readFeatureDoc(projectId,
  *      featureSlug, kind)). No batching, no caching here — page-session
- *      caches belong to the views' stores (store/feature-board.ts).
+ *      caches belong to the views' stores (store/feature-board.ts,
+ *      store/workbench-state.ts).
  *
  *   3. ERROR NORMALIZATION — main-side verb rejections arrive as an Error
  *      whose `.message` is the serialized `{ code, message, detail? }`
@@ -33,7 +34,9 @@ import type {
   RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, WorkbenchEvent, WorkbenchState,
   WorkbenchVerbError,
 } from '../ipc-types'
-import type { FeatureBoardFace, FeatureDocFace } from '../contract'
+import type {
+  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace,
+} from '../contract'
 
 /**
  * The preload namespace surface (task 2.7): the 13 data verbs + the
@@ -158,6 +161,93 @@ export function createIpcFeatureDocFace(bridge: WorkbenchIpcBridge): FeatureDocF
     ): Promise<FeatureDoc> => {
       try {
         return await bridge.readFeatureDoc(projectId, featureSlug, kind)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/** The UF1 overview face over the verbs (task 5.14's consumption; 1:1 mapping). */
+export function createIpcOverviewFace(bridge: WorkbenchIpcBridge): OverviewFace {
+  return {
+    loadState: async (): Promise<WorkbenchState> => {
+      try {
+        return await bridge.getState()
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    activateProject: async (id: string): Promise<void> => {
+      try {
+        await bridge.activateProject(id)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
+      try {
+        return await bridge.updateProject(id, patch)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    removeProject: async (id: string): Promise<void> => {
+      try {
+        await bridge.removeProject(id)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/** The UF6 plugin-section face over the verbs (task 5.14's consumption; 1:1 mapping). */
+export function createIpcPluginFace(bridge: WorkbenchIpcBridge): PluginFace {
+  return {
+    listPlugins: async (): Promise<PluginRow[]> => {
+      try {
+        return await bridge.listPlugins()
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    setPluginEnabled: async (name: string, enabled: boolean): Promise<PluginRow[]> => {
+      try {
+        return await bridge.setPluginEnabled(name, enabled)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/**
+ * The register wizard's IPC WRITE pair (task 5.14) — registerProject /
+ * updateProject, the verbs Interface 1 actually declares for the wizard's
+ * submit. The step-①/② PROBE members have no Interface 1 verb (the 5.14
+ * task's verb list carries none): the wizard's build-stage twin keeps
+ * serving them (permissive for unknown paths — the instant feedback UX),
+ * and the REAL validation is the submit-time main-side chain whose ERR_*
+ * rejections land in the wizard's centralized i18n/errors.ts mapping — the
+ * inline correction copy the spec's Error Handling table assigns those
+ * codes. Returned as a Partial-compatible slice: the shell hands it to the
+ * wizard's face seam, which spreads it over the mock twin.
+ */
+export function createIpcRegisterWizardVerbs(
+  bridge: WorkbenchIpcBridge,
+): Pick<RegisterWizardFace, 'registerProject' | 'updateProject'> {
+  return {
+    registerProject: async (input: RegisterProjectInput): Promise<Project> => {
+      try {
+        return await bridge.registerProject(input)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
+      try {
+        return await bridge.updateProject(id, patch)
       } catch (error) {
         renormalize(error)
       }
