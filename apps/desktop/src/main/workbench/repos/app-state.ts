@@ -18,22 +18,34 @@ interface AppStateRow {
   readonly value: string
 }
 
-/** 解码 app_state.value(防御读:损坏 JSON 不炸读取路径,回退 null)。 */
-function decodeActiveProjectId(value: string): string | null {
+/**
+ * 读 app_state 任意键的 JSON 值(防御读:无行/损坏 JSON → null)。任务 2.4
+ * 起除单激活指针外还有 registry 层的仓外授权登记键 —— kv 读写统一走本
+ * repos 模块,调用方不手写 SQL(Hard Rule 2.2 的 app_state 写路径纪律)。
+ */
+export function readAppStateJson(db: RepoDb, key: string): unknown {
+  const row = db.prepare('SELECT value FROM app_state WHERE key = ?').get(key) as
+    | Pick<AppStateRow, 'value'>
+    | undefined
+  if (row === undefined) return null
   try {
-    const parsed: unknown = JSON.parse(value)
-    return typeof parsed === 'string' ? parsed : null
+    return JSON.parse(row.value)
   } catch {
     return null
   }
 }
 
+/** 写 app_state 任意键的 JSON 值(key 主键 upsert;语义由调用方负责)。 */
+export function writeAppStateJson(db: RepoDb, key: string, value: unknown): void {
+  db.prepare(
+    'INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+  ).run(key, JSON.stringify(value))
+}
+
 /** 当前激活项目 id;未激活(无行/空值/损坏值)→ null。 */
 export function getActiveProjectId(db: RepoDb): string | null {
-  const row = db.prepare('SELECT value FROM app_state WHERE key = ?').get(ACTIVE_PROJECT_KEY) as
-    | Pick<AppStateRow, 'value'>
-    | undefined
-  return row === undefined ? null : decodeActiveProjectId(row.value)
+  const parsed: unknown = readAppStateJson(db, ACTIVE_PROJECT_KEY)
+  return typeof parsed === 'string' ? parsed : null
 }
 
 /**

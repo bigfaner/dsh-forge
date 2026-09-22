@@ -23,11 +23,12 @@ import {
 } from './types.ts'
 
 /**
- * code_root 规范化:resolve 后统一为正斜杠、去尾斜杠(盘符根/POSIX 根保留
- * 原形)。UNIQUE(code_root) 的可比性依赖这一步——同一目录的不同分隔符/
- * 尾斜杠写法必须折叠为同一存储值。
+ * 注册路径规范化(code_root 与仓外文档路径共用):resolve 后统一为正斜杠、
+ * 去尾斜杠(盘符根/POSIX 根保留原形)。UNIQUE(code_root) 的可比性依赖这
+ * 一步——同一目录的不同分隔符/尾斜杠写法必须折叠为同一存储值;registry
+ * 层(任务 2.4)的授权登记与冲突比对沿用同一函数,保证两处口径不漂移。
  */
-function normalizeCodeRoot(codeRoot: string): string {
+export function normalizeRegisteredPath(codeRoot: string): string {
   const resolved = resolve(codeRoot).replaceAll('\\', '/')
   if (resolved === '/' || /^[A-Za-z]:\/$/.test(resolved)) return resolved
   return resolved.replace(/\/+$/, '')
@@ -51,7 +52,7 @@ function selectProjectRow(db: RepoDb, id: string): ProjectRow | undefined {
  */
 export function registerProject(db: RepoDb, input: RegisterProjectInput): Project {
   const id = crypto.randomUUID()
-  const codeRoot = normalizeCodeRoot(input.codeRoot)
+  const codeRoot = normalizeRegisteredPath(input.codeRoot)
   const displayName = input.displayName?.trim() || defaultDisplayName(codeRoot)
   try {
     db.prepare(

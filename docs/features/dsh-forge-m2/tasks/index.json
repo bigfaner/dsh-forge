@@ -64,7 +64,7 @@
       "dependencies": [
         "2.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.4-project-registry.md",
       "record": "records/2.4-project-registry.md",
       "surface-type": "web",
