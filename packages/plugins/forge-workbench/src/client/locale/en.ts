@@ -127,7 +127,7 @@ export type WorkbenchKey =
   | 'tasks.view.tree'
   | 'tasks.view.grouped'
   | 'tasks.view.list'
-  | 'tasks.view.treeHint'
+  | 'tasks.tree.canvasLabel'
   | 'tasks.search.label'
   | 'tasks.search.placeholder'
   | 'tasks.filter.status'
@@ -308,7 +308,7 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.view.tree': 'Dependency tree',
   'tasks.view.grouped': 'By status',
   'tasks.view.list': 'List',
-  'tasks.view.treeHint': 'The dependency-tree view arrives with task 5.6.',
+  'tasks.tree.canvasLabel': 'Task dependency graph',
   'tasks.search.label': 'Search tasks',
   'tasks.search.placeholder': 'Search title or task number',
   'tasks.filter.status': 'Status',

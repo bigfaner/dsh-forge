@@ -22,6 +22,11 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
 }))
 
+// Since 5.6 the tasks tab's DEFAULT view is the DAG — the real ReactFlow
+// needs d3-zoom + ResizeObserver (absent in jsdom), so the board mount in
+// these shell renders goes through the lib-boundary standin (e2e rides real).
+vi.mock('@xyflow/react', async () => await import('./helpers/xyflow-standin'))
+
 // Task 5.1 AC6 — the page chrome units: tab strip (the view-key machine's tab
 // dimension, keyboard activation), project switcher (Menu card, empty-state
 // guidance, keyboard), top bar, and the shell-level state gate (page-map:

@@ -1,9 +1,9 @@
 /**
  * The UF2 task-board toolbar (task 5.5, ui-design UF2 工具栏 h48 sticky): the
- * three-view segmented switcher (视图 A 依赖树 rendered as a DISABLED
- * placeholder tab until 5.6 builds the DAG), the filter family (feature ▾ /
- * 状态 ▾ multi-select / worktree toggle / search over 标题+任务号), the sort
- * control (状态 / 更新时间), the 任务计数, and the sync 状态指示
+ * three-view segmented switcher (视图 A 依赖树 — live since task 5.6 — /
+ * 视图 B 状态分组 / 视图 C 列表), the filter family (feature ▾ / 状态 ▾
+ * multi-select / worktree toggle / search over 标题+任务号), the sort control
+ * (状态 / 更新时间), the 任务计数, and the sync 状态指示
  * (idle/scanning/error + lastScanAt; error carries the 重试 CTA — a sync
  * error is a TOOLBAR light, never a view error: the board keeps its data).
  *
@@ -26,7 +26,7 @@ import { fillTemplate, formatTimestamp } from '../overview/format'
 /** The three board views: A 依赖树 (5.6) / B 状态分组 / C 列表. */
 export type BoardViewKey = 'tree' | 'grouped' | 'list'
 
-/** The view tuple in switcher order. */
+/** The view tuple in switcher order (A 依赖树 first — the board default since 5.6). */
 export const BOARD_VIEWS = ['tree', 'grouped', 'list'] as const
 
 /** The C list's sort keys (ui-design UF2 排序 ▾: 状态 / 更新时间). */
@@ -119,13 +119,6 @@ const viewTabActiveStyle = {
   background: 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))',
   color: 'var(--dsw-alias-label-primary, inherit)',
   fontWeight: 500,
-} as const
-
-const viewTabDisabledStyle = {
-  ...viewTabStyle,
-  color: 'var(--dsw-alias-label-secondary, inherit)',
-  cursor: 'default',
-  opacity: 0.5,
 } as const
 
 /** sm ghost trigger (h28 r14) — the dropdown/toggle family's shared face. */
@@ -335,20 +328,19 @@ function MenuRow(props: {
 // The toolbar
 // ---------------------------------------------------------------------------
 
-/** The selectable-view tuple (the 5.6 placeholder tree tab is NOT in rotation). */
-const SELECTABLE_VIEWS = ['grouped', 'list'] as const
+/** The selectable-view tuple — all three views are live since 5.6 built the DAG. */
+const SELECTABLE_VIEWS = BOARD_VIEWS
 
 /**
  * The h48 sticky toolbar. The view switcher is a role=tablist whose tabs
  * address the page's view panels (id scheme `dsh-forge-board-view-tab-<view>`
- * — the panels label themselves back); the tree tab renders disabled with
- * its 5.6 hint until that task lands.
+ * — the panels label themselves back).
  */
 export function TaskToolbar(props: TaskToolbarProps) {
   const { t, filter, onFilterChange } = props
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
-  /** Rotate focus/selection among the ENABLED views (WAI-ARIA tabs, 5.1 TabBar parity). */
+  /** Rotate focus/selection among the views (WAI-ARIA tabs, 5.1 TabBar parity). */
   const onViewKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const current = SELECTABLE_VIEWS.indexOf(props.view as (typeof SELECTABLE_VIEWS)[number])
     let next: number | undefined
@@ -397,28 +389,22 @@ export function TaskToolbar(props: TaskToolbarProps) {
         style={{ display: 'flex', gap: '2px' }}
         onKeyDown={onViewKeyDown}
       >
-        {BOARD_VIEWS.map((view, index) => {
-          const disabled = view === 'tree'
-          return (
-            <ChromeButton
-              key={view}
-              ref={(element) => { tabRefs.current[index] = element }}
-              type="button"
-              role="tab"
-              id={`dsh-forge-board-view-tab-${view}`}
-              aria-selected={props.view === view ? 'true' : 'false'}
-              // The A tab is the 5.6 placeholder: rendered, named, out of rotation.
-              aria-disabled={disabled ? 'true' : 'false'}
-              tabIndex={!disabled && props.view === view ? 0 : -1}
-              title={disabled ? t('tasks.view.treeHint') : undefined}
-              data-dsh-forge-board-view={view}
-              style={disabled ? viewTabDisabledStyle : props.view === view ? viewTabActiveStyle : viewTabStyle}
-              onClick={() => { if (!disabled) props.onViewChange(view) }}
-            >
-              {t(view === 'tree' ? 'tasks.view.tree' : view === 'grouped' ? 'tasks.view.grouped' : 'tasks.view.list')}
-            </ChromeButton>
-          )
-        })}
+        {BOARD_VIEWS.map((view, index) => (
+          <ChromeButton
+            key={view}
+            ref={(element) => { tabRefs.current[index] = element }}
+            type="button"
+            role="tab"
+            id={`dsh-forge-board-view-tab-${view}`}
+            aria-selected={props.view === view ? 'true' : 'false'}
+            tabIndex={props.view === view ? 0 : -1}
+            data-dsh-forge-board-view={view}
+            style={props.view === view ? viewTabActiveStyle : viewTabStyle}
+            onClick={() => { props.onViewChange(view) }}
+          >
+            {t(view === 'tree' ? 'tasks.view.tree' : view === 'grouped' ? 'tasks.view.grouped' : 'tasks.view.list')}
+          </ChromeButton>
+        ))}
       </div>
 
       <div role="group" aria-label={t('tasks.filters.label')} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>

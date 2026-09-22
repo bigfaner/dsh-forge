@@ -6,7 +6,7 @@ import {
 } from '../src/client/views/TaskBoardPage.tsx'
 import { TaskBoardPage } from '../src/client/views/TaskBoardPage.tsx'
 import type { TaskBoardPageProps } from '../src/client/views/TaskBoardPage.tsx'
-import { DEFAULT_BOARD_FILTER } from '../src/client/views/tasks/TaskToolbar.tsx'
+import { DEFAULT_BOARD_FILTER, type BoardViewKey } from '../src/client/views/tasks/TaskToolbar.tsx'
 import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
@@ -35,6 +35,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
 }))
 
+// Since 5.6 the board's DEFAULT view is 视图 A (the DAG) — the real ReactFlow
+// needs d3-zoom + ResizeObserver (absent in jsdom), so every board render in
+// this file goes through the lib-boundary standin (tests/task-dag.spec.tsx
+// owns the view-A units; the real engine rides the e2e lane).
+vi.mock('@xyflow/react', async () => await import('./helpers/xyflow-standin'))
+
 type Dict = Record<WorkbenchKey, string>
 const bind = (dict: Dict) => (key: WorkbenchKey): string => dict[key]
 const t = { en: bind(en), zh: bind(zh) }
@@ -62,13 +68,23 @@ function makeFace(initial: TaskBoardData = MOCK_TASK_BOARD) {
 
 type Face = ReturnType<typeof makeFace>
 
-/** Render the page and settle the initial load into the populated state. */
-async function renderBoard(props: Partial<TaskBoardPageProps> = {}, face?: Face) {
+/**
+ * Render the page and settle the initial load into the populated state.
+ * The board's default view is 视图 A (tree, since 5.6); `initial` switches to
+ * another view after the load settles (the bulk of the 5.5 B/C assertions
+ * address their own panels — 'raw' keeps the default for switcher tests).
+ */
+async function renderBoard(
+  props: Partial<TaskBoardPageProps> = {},
+  face?: Face,
+  initial: 'raw' | BoardViewKey = 'grouped',
+) {
   const f = face ?? makeFace()
   render(<TaskBoardPage t={t.en} face={f} {...props} />)
   await waitFor(() => {
     expect(document.querySelector('[data-dsh-forge-task-toolbar]')).not.toBeNull()
   })
+  if (initial !== 'raw') switchView(initial)
   return { face: f }
 }
 
@@ -347,38 +363,48 @@ describe('view C: the 列表 view', () => {
 // ---------------------------------------------------------------------------
 
 describe('toolbar: the view switcher', () => {
-  it('renders A/B/C tabs; the tree tab is the disabled 5.6 placeholder; B is the default', async () => {
-    await renderBoard()
+  it('renders A/B/C tabs, all enabled; the tree (视图 A) is the default since 5.6', async () => {
+    await renderBoard({}, undefined, 'raw')
     const list = document.querySelector('[data-dsh-forge-board-views]') as HTMLElement
     expect(list.getAttribute('role')).toBe('tablist')
     expect(list.getAttribute('aria-label')).toBe(en['tasks.views.label'])
     const tabs = Array.from(list.querySelectorAll('[role="tab"]'))
     expect(tabs.map(tab => tab.getAttribute('data-dsh-forge-board-view'))).toEqual(['tree', 'grouped', 'list'])
-    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false'])
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false'])
+    // No placeholder anymore: the tree tab carries no disabled state or hint.
     const tree = tabs[0] as HTMLElement
-    expect(tree.getAttribute('aria-disabled')).toBe('true')
-    expect(tree.getAttribute('title')).toBe(en['tasks.view.treeHint'])
-    // Activating the placeholder switches nothing.
-    fireEvent.click(tree)
-    expect(document.querySelector('[data-dsh-forge-status-board]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-forge-task-list]')).toBeNull()
+    expect(tree.getAttribute('aria-disabled')).toBeNull()
+    expect(tree.getAttribute('title')).toBeNull()
+    expect(tree.getAttribute('tabIndex')).toBe('0')
+    // Its panel (the DAG view) is mounted and labelled back by the tab.
+    expect(document.querySelector('[data-dsh-forge-board-panel="tree"]')?.getAttribute('aria-labelledby'))
+      .toBe('dsh-forge-board-view-tab-tree')
+    expect(document.querySelector('[data-dsh-forge-dep-tree]')).not.toBeNull()
   })
 
-  it('switches B↔C with panels labelled by their tabs; keyboard arrows rotate', async () => {
-    await renderBoard()
+  it('switches A/B/C with panels labelled by their tabs; keyboard arrows rotate', async () => {
+    await renderBoard({}, undefined, 'raw')
+    const treeTab = document.querySelector('[data-dsh-forge-board-view="tree"]') as HTMLElement
     const groupedTab = document.querySelector('[data-dsh-forge-board-view="grouped"]') as HTMLElement
     const listTab = document.querySelector('[data-dsh-forge-board-view="list"]') as HTMLElement
-    expect(groupedTab.getAttribute('tabIndex')).toBe('0')
+    expect(groupedTab.getAttribute('tabIndex')).toBe('-1')
     expect(listTab.getAttribute('tabIndex')).toBe('-1')
     fireEvent.click(listTab)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-board-panel="list"]')?.getAttribute('aria-labelledby'))
         .toBe('dsh-forge-board-view-tab-list')
     })
+    // ArrowLeft over list → grouped; another ArrowLeft → tree (index wraps
+    // over the three ENABLED views — A joined the rotation with 5.6).
     fireEvent.keyDown(document.querySelector('[data-dsh-forge-board-views]') as HTMLElement, { key: 'ArrowLeft' })
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-board-panel="grouped"]')).not.toBeNull()
     })
+    fireEvent.keyDown(document.querySelector('[data-dsh-forge-board-views]') as HTMLElement, { key: 'ArrowLeft' })
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-board-panel="tree"]')).not.toBeNull()
+    })
+    expect(treeTab.getAttribute('aria-selected')).toBe('true')
   })
 
   it('switching views preserves the filters (Hard Rule: 切换不重置筛选)', async () => {
@@ -529,6 +555,10 @@ describe('updating 态: task_updated events light rows, announce politely', () =
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-task-toolbar]')).not.toBeNull()
     })
+    switchView('grouped')
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-status-board]')).not.toBeNull()
+    })
     vi.useFakeTimers()
     act(() => {
       face.emit([
@@ -553,6 +583,10 @@ describe('updating 态: task_updated events light rows, announce politely', () =
     const view = render(<TaskBoardPage t={t.en} face={face} projectId="p1" />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-task-toolbar]')).not.toBeNull()
+    })
+    switchView('grouped')
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-status-board]')).not.toBeNull()
     })
     expect(face.subscribeEvents).toHaveBeenCalledTimes(1)
     act(() => {
@@ -754,7 +788,7 @@ describe('toolbar controls: the dropdown keyboard contract (WAI-ARIA menu, Proje
     expect(document.querySelector('[role="menu"]')).toBeNull()
   })
 
-  it('the switcher keyboard covers Home/End over the enabled views', async () => {
+  it('the switcher keyboard covers Home/End over the three views (Home = tree since 5.6)', async () => {
     await renderBoard()
     switchView('list')
     await waitFor(() => {
@@ -763,7 +797,7 @@ describe('toolbar controls: the dropdown keyboard contract (WAI-ARIA menu, Proje
     const views = document.querySelector('[data-dsh-forge-board-views]') as HTMLElement
     fireEvent.keyDown(views, { key: 'Home' })
     await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-board-panel="grouped"]')).not.toBeNull()
+      expect(document.querySelector('[data-dsh-forge-board-panel="tree"]')).not.toBeNull()
     })
     fireEvent.keyDown(views, { key: 'End' })
     await waitFor(() => {
@@ -815,6 +849,12 @@ describe('shell integration: the tasks seat mounts the board', () => {
     )
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-toolbar]')).not.toBeNull()
+    })
+    // The board's default view is the DAG (5.6); switch to view B for the
+    // card-click leg of the seat wiring.
+    fireEvent.click(document.querySelector('[data-dsh-forge-board-view="grouped"]') as HTMLElement)
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-card="dsh-forge-m2/5.5"]')).not.toBeNull()
     })
     fireEvent.click(document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.5"]') as HTMLElement)
     expect(onSelect).toHaveBeenCalledTimes(1)

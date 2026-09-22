@@ -128,7 +128,7 @@ export const zh: Record<WorkbenchKey, string> = {
   'tasks.view.tree': '依赖树',
   'tasks.view.grouped': '状态分组',
   'tasks.view.list': '列表',
-  'tasks.view.treeHint': '依赖树视图将在任务 5.6 提供。',
+  'tasks.tree.canvasLabel': '任务依赖图',
   'tasks.search.label': '搜索任务',
   'tasks.search.placeholder': '搜索标题或任务号',
   'tasks.filter.status': '状态',

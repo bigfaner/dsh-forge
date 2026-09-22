@@ -8,10 +8,9 @@
  * the IPC verbs + the real event push. No IPC runtime is touched here (the
  * 5.x BUILD layering rule).
  *
- * Scope of this half (the task split): the toolbar + 视图 B(状态分组) +
- * 视图 C(列表). 视图 A 依赖树 is 5.6's — the switcher renders its tab as a
- * disabled 5.6 placeholder, so the switcher contract (A/B/C) is already the
- * final one.
+ * Scope of this half (the task split): the toolbar + the three views —
+ * 视图 A 依赖树 (5.6, the DEFAULT per ui-design) / 视图 B 状态分组 / 视图 C
+ * 列表. All three share the filter/sort state owned here.
  *
  * State ownership (Hard Rule: 视图 A/B/C 切换不重置筛选与滚动位置): the
  * filter/sort/collapse state lives HERE, above the views — a view switch
@@ -31,6 +30,7 @@
  * data beside it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Viewport } from '@xyflow/react'
 import type { TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
 import type { TaskBoardFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
@@ -41,6 +41,7 @@ import { fillTemplate } from './overview/format'
 import {
   DEFAULT_BOARD_FILTER, TaskToolbar, type BoardFilterState, type BoardSortKey, type BoardViewKey,
 } from './tasks/TaskToolbar'
+import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
 
@@ -228,7 +229,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
 
   const [phase, setPhase] = useState<'loading' | 'ready' | 'load-error'>('loading')
   const [board, setBoard] = useState<TaskBoardData | undefined>(undefined)
-  const [view, setView] = useState<BoardViewKey>('grouped')
+  // ui-design UF2: 视图 A 依赖树 is the board's default view (since 5.6).
+  const [view, setView] = useState<BoardViewKey>('tree')
   const [filter, setFilter] = useState<BoardFilterState>(DEFAULT_BOARD_FILTER)
   const [sort, setSort] = useState<BoardSortKey>('status')
   const [collapsedStatuses, setCollapsedStatuses] = useState<ReadonlySet<TaskStatus>>(new Set())
@@ -305,7 +307,11 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   // offset at SWITCH TIME (while the grouped DOM is still mounted — an effect
   // cleanup would already see the next view's DOM), restore on re-entry. The
   // vertical scroller is the shell's content area — never remounted, never
-  // reset by a switch.
+  // reset by a switch. The tree's pan/zoom rides the same rule through the
+  // settled-viewport stash (updated on every move end while view A is open,
+  // re-applied as its defaultViewport on re-entry — fit-view stays first-load
+  // only).
+  const treeViewport = useRef<Viewport | undefined>(undefined)
   const handleViewChange = (next: BoardViewKey): void => {
     if (view === 'grouped' && next !== 'grouped') {
       const container = pageRef.current?.querySelector<HTMLElement>('[data-dsh-forge-status-board]')
@@ -331,6 +337,48 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
 
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
+
+  // The active view panel (A/B/C — one tabpanel at a time, each labelled back
+  // by its toolbar tab; view A is the DAG, default since 5.6).
+  const viewPanel = view === 'tree'
+    ? (
+      <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-tree" data-dsh-forge-board-panel="tree">
+        <DepTreeView
+          t={props.t}
+          tasks={visibleTasks}
+          danglingByTask={danglingByTask}
+          updatingKeys={updatingKeys}
+          onSelect={props.onSelect}
+          initialViewport={treeViewport.current}
+          onViewportSettled={(viewport) => { treeViewport.current = viewport }}
+        />
+      </div>
+    )
+    : view === 'grouped'
+      ? (
+        <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-grouped" data-dsh-forge-board-panel="grouped">
+          <StatusBoard
+            t={props.t}
+            tasks={visibleTasks}
+            collapsedStatuses={collapsedStatuses}
+            onCollapsedStatusesChange={setCollapsedStatuses}
+            danglingByTask={danglingByTask}
+            updatingKeys={updatingKeys}
+            onSelect={props.onSelect}
+          />
+        </div>
+      )
+      : (
+        <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-list" data-dsh-forge-board-panel="list">
+          <TaskList
+            t={props.t}
+            tasks={visibleTasks}
+            danglingByTask={danglingByTask}
+            updatingKeys={updatingKeys}
+            onSelect={props.onSelect}
+          />
+        </div>
+      )
 
   return (
     <div ref={pageRef} data-dsh-forge-task-board="" aria-busy={phase === 'loading' ? 'true' : 'false'} style={pageStyle}>
@@ -403,39 +451,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
                 </ChromeButton>
               </div>
             )
-            : view === 'grouped'
-              ? (
-                <div
-                  role="tabpanel"
-                  aria-labelledby="dsh-forge-board-view-tab-grouped"
-                  data-dsh-forge-board-panel="grouped"
-                >
-                  <StatusBoard
-                    t={props.t}
-                    tasks={visibleTasks}
-                    collapsedStatuses={collapsedStatuses}
-                    onCollapsedStatusesChange={setCollapsedStatuses}
-                    danglingByTask={danglingByTask}
-                    updatingKeys={updatingKeys}
-                    onSelect={props.onSelect}
-                  />
-                </div>
-              )
-              : (
-                <div
-                  role="tabpanel"
-                  aria-labelledby="dsh-forge-board-view-tab-list"
-                  data-dsh-forge-board-panel="list"
-                >
-                  <TaskList
-                    t={props.t}
-                    tasks={visibleTasks}
-                    danglingByTask={danglingByTask}
-                    updatingKeys={updatingKeys}
-                    onSelect={props.onSelect}
-                  />
-                </div>
-              )}
+            : viewPanel}
 
           {/* The 回流 announcement (aria-live polite, visually hidden). */}
           <p role="status" aria-live="polite" data-dsh-forge-board-announce="" style={srOnlyStyle}>

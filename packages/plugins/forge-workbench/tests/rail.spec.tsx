@@ -26,6 +26,11 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
 }))
 
+// Since 5.6 the tasks tab's DEFAULT view is the DAG — the real ReactFlow
+// needs d3-zoom + ResizeObserver (absent in jsdom), so the overlay's shell
+// renders that mount through the lib-boundary standin (e2e rides real).
+vi.mock('@xyflow/react', async () => await import('./helpers/xyflow-standin'))
+
 ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
 /** Bind the en dictionary as the rail's translate. */
