@@ -61,6 +61,23 @@ export function endSessionLink(db: RepoDb, linkId: string): void {
   // changes = 0 且行存在 → 已是 ended:幂等 no-op。
 }
 
+/**
+ * 发起侧收敛(4.2):同任务换会话再发起时,结束该任务其余 active 挂接行
+ * (keepSessionId 行除外),历史行保留。ended 迁移的两个触发都来自发起侧
+ * ——显式 endSessionLink 与本收敛;spike-1 §5 证明无会话终态信号
+ * (AgentStatus 二态、dispose=宿主卸载非完成),故不做 agent-status 启发,
+ * 也不在应用退出时收敛(Story2 AC3:重启后挂接关系仍在)。返回收敛行数。
+ */
+export function supersedeActiveSessionLinks(db: RepoDb, projectId: string, taskKey: string, keepSessionId: string): number {
+  const changes = db
+    .prepare(
+      `UPDATE session_links SET status = 'ended', ended_at = ?
+       WHERE project_id = ? AND task_key = ? AND status = 'active' AND session_id <> ?`,
+    )
+    .run(new Date().toISOString(), projectId, taskKey, keepSessionId)
+  return Number(changes.changes)
+}
+
 /** 按项目查询挂接历史(含 ended,新→旧:started_at 倒序,rowid 兜底同刻)。 */
 export function listSessionLinks(db: RepoDb, projectId: string): SessionLink[] {
   const rows = db

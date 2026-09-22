@@ -22,6 +22,7 @@ import {
 } from '../src/main/workbench/ipc/handlers.ts'
 import type { WorkbenchEventSender, WorkbenchVerbEvent } from '../src/main/workbench/ipc/sender-validate.ts'
 import { WorkbenchRepoError } from '../src/main/workbench/repos/types.ts'
+import { listSessionLinksByTask } from '../src/main/workbench/repos/session-links.ts'
 import { WorkbenchRegistryError } from '../src/main/workbench/registry/validate.ts'
 import { authorizeExternalDocPath } from '../src/main/workbench/registry/authorize.ts'
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
@@ -781,6 +782,26 @@ describe('workbench services: board / detail / doc reads', () => {
       const ended = verbs.recordSessionLink({ projectId: project.id, taskKey: 'alpha/1.1', sessionId: 's-1' })
       expect(ended.status).toBe('active') // 复挂恢复 active(刷新语义)
       expect(toCapture(() => verbs.endSessionLink('missing'))).toMatchObject({ code: 'ERR_SESSION_LINK_NOT_FOUND' })
+    })
+  })
+
+  it('recordSessionLink converges prior active links of the task (4.2 发起侧收敛: ended 回流 + 历史保留)', async () => {
+    await withHarness(({ verbs, seedProject, db }) => {
+      const project = seedProject(makeForgeRoot('converge'))
+      verbs.recordSessionLink({ projectId: project.id, taskKey: 'alpha/1.1', sessionId: 's-1' })
+      verbs.recordSessionLink({ projectId: project.id, taskKey: 'alpha/1.1', sessionId: 's-2' })
+
+      // 换会话再发起:旧挂接置 ended(ended_at 落定),新挂接 active,历史行保留。
+      const links = listSessionLinksByTask(db, project.id, 'alpha/1.1')
+      expect(links.map(row => [row.sessionId, row.status])).toEqual([['s-2', 'active'], ['s-1', 'ended']])
+      expect(links.find(row => row.sessionId === 's-1')?.endedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+
+      // 同 session 重复登记:不收敛自身(keepSessionId 排除),幂等复挂。
+      const again = verbs.recordSessionLink({ projectId: project.id, taskKey: 'alpha/1.1', sessionId: 's-2' })
+      const linksAfter = listSessionLinksByTask(db, project.id, 'alpha/1.1')
+      expect(linksAfter).toHaveLength(2)
+      expect(linksAfter.find(row => row.id === again.id)?.status).toBe('active')
+      expect(linksAfter.find(row => row.sessionId === 's-1')?.status).toBe('ended')
     })
   })
 })

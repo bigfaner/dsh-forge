@@ -23,6 +23,9 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // this program's Typert view — `ctx.remote.forgeBridge` after the 5.10/5.11
 // namespace mount. Zero runtime face: the service lives in the host half.
 import type {} from './services'
+// Type-only: the SessionLaunch remote-face declaration (task 4.2), same
+// discipline — `ctx.remote.sessionLaunch` after the entry-task mount.
+import type {} from './session-launch'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
@@ -59,6 +62,10 @@ export type {
   GetTaskPromptInput, GetTaskPromptResult, ResolveCliResult,
   TaskPromptAvailable, TaskPromptUnavailable,
 } from './services'
+export type {
+  SessionLaunchFailed, SessionLaunchInput, SessionLaunchOk,
+  SessionLaunchRemoteFace, SessionLaunchResult,
+} from './session-launch'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {

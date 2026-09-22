@@ -1,8 +1,9 @@
 /**
  * forge-workbench plugin, host half (dsh host process). Task 3.2 shipped this
- * scaffold deliberately EMPTY; task 4.1 fills the first face — the ForgeBridge
- * cordis service (forge CLI resolution + task-prompt retrieval, Interface 2).
- * Session launch (DF004) and FORGE_ACTOR passthrough remain 4.2 work. The
+ * scaffold deliberately EMPTY; task 4.1 filled the first face — the
+ * ForgeBridge cordis service (forge CLI resolution + task-prompt retrieval,
+ * Interface 2). Task 4.2 fills the second face — the SessionLaunch cordis
+ * service (DF004 channel + FORGE_ACTOR passthrough, Interface 2/5/6). The
  * browser half ships via exports['./client'] and is discovered through the
  * package.json dsh.client declaration.
  *
@@ -19,10 +20,20 @@
  *   binary. Absent → the PATH chain applies.
  *
  * Both names follow the host-spawn env precedent (DSH_FORGE_PRIMARY_RUNTIME).
+ *
+ * SessionLaunch needs NO shell-side env feed: its channel (the upstream
+ * `sessionController`) lives in the SAME cordis app as this plugin (spike-1
+ * §0: 插件 host 半身与宿主服务同进程同一 cordis 应用), resolved per call
+ * (session-launch-rpc.sessionChannelOf) so the web-app bundle row may
+ * register before or after this plugin. Absence is not an error — the
+ * service answers ERR_HOST_NOT_READY and the client entry walks the
+ * Interface 5 degradation chain (tier 2 ctx.remote.session → tier 3 frozen
+ * fallback; those legs are 5.10/5.11 work).
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { ForgeBridgeService } from './forge-bridge-rpc'
+import { SessionLaunchService } from './session-launch-rpc'
 
 const PROJECT_ROOTS_ENV = 'DSH_FORGE_PROJECT_ROOTS'
 const CLI_PATH_ENV = 'DSH_FORGE_CLI_PATH'
@@ -49,9 +60,10 @@ function registeredProjectRootsFromEnv(): readonly string[] {
 }
 
 /**
- * Host plugin body: register the ForgeBridge remote service (service key and
- * wire namespace `forgeBridge`; the Gateway discovers the binding and routes
- * `ctx.remote.forgeBridge.*` from the browser half).
+ * Host plugin body: register the two remote services (service keys and wire
+ * namespaces `forgeBridge` and `sessionLaunch`; the Gateway discovers the
+ * bindings and routes `ctx.remote.forgeBridge.*` / `ctx.remote.sessionLaunch.*`
+ * from the browser half).
  * @param ctx - host cordis context.
  */
 export function apply(ctx: Context): void {
@@ -62,4 +74,5 @@ export function apply(ctx: Context): void {
       return value === undefined || value === '' ? undefined : value
     },
   })
+  new SessionLaunchService(ctx)
 }

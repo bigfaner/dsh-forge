@@ -41,7 +41,7 @@ import {
   type RepoDb,
   type TaskSnapshot,
 } from '../repos/types.ts'
-import { listSessionLinksByTask, recordSessionLink as recordSessionLinkRow, endSessionLink as endSessionLinkRow } from '../repos/session-links.ts'
+import { listSessionLinksByTask, recordSessionLink as recordSessionLinkRow, endSessionLink as endSessionLinkRow, supersedeActiveSessionLinks } from '../repos/session-links.ts'
 import { getSyncState } from '../repos/sync-state.ts'
 import { getTaskSnapshot, listTaskSnapshots } from '../repos/task-snapshots.ts'
 import { createWorkbenchWatcher } from '../watcher/watch.ts'
@@ -310,6 +310,11 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       },
 
       recordSessionLink(input: RecordSessionLinkInput): SessionLink {
+        // 4.2 发起侧收敛:同任务换会话再发起 = 旧 active 挂接置 ended
+        // (历史保留;同 session 重复登记不受影响 —— keepSessionId 排除)。
+        // ended 迁移只发生在发起侧(本收敛 + 显式 endSessionLink),不做
+        // agent-status 启发,也不在应用退出时收敛(Story2 AC3)。
+        supersedeActiveSessionLinks(db, input.projectId, input.taskKey, input.sessionId)
         return recordSessionLinkRow(db, input)
       },
 

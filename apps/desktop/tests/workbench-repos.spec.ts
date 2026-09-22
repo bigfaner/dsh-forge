@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { openDatabase, type DatabaseSyncLike } from '../src/main/workbench/store/db.ts'
 import { activateProject, getActiveProject, getActiveProjectId } from '../src/main/workbench/repos/app-state.ts'
 import { listProjects, registerProject, removeProject, updateProject } from '../src/main/workbench/repos/projects.ts'
-import { endSessionLink, listSessionLinks, listSessionLinksByTask, recordSessionLink } from '../src/main/workbench/repos/session-links.ts'
+import { endSessionLink, listSessionLinks, listSessionLinksByTask, recordSessionLink, supersedeActiveSessionLinks } from '../src/main/workbench/repos/session-links.ts'
 import { WorkbenchRepoError, type Project } from '../src/main/workbench/repos/types.ts'
 
 // Task 2.2 — owned-SoT repos (projects / app_state / session_links) over the
@@ -396,5 +396,69 @@ describe('session_links — 幂等登记 / 结束 / 历史 (AC4/AC5-UNIQUE 幂�
       expect(new Date(revived.startedAt).getTime()).toBeGreaterThan(new Date(link.startedAt).getTime())
       expect(sessionLinkRows(db, project.id)).toBe(1)
     })
+  })
+})
+
+describe('session_links — 发起侧收敛 supersede + 重启持久化 (4.2 AC5/AC3)', () => {
+  it('supersede ends the task\'s OTHER active links, keeps the keep-id and other tasks alone', async () => {
+    await withDb(async (db) => {
+      const project = registerInRepo(db, 'C:\\repos\\alpha')
+      const keep = recordSessionLink(db, { projectId: project.id, taskKey: 'alpha/2.1', sessionId: 'session-new' })
+      await tick()
+      recordSessionLink(db, { projectId: project.id, taskKey: 'alpha/2.1', sessionId: 'session-old-a' })
+      await tick()
+      const endedAlready = recordSessionLink(db, { projectId: project.id, taskKey: 'alpha/2.1', sessionId: 'session-old-b' })
+      endSessionLink(db, endedAlready.id)
+      const endedAtBefore = listSessionLinksByTask(db, project.id, 'alpha/2.1')
+        .find(row => row.sessionId === 'session-old-b')?.endedAt
+      await tick()
+      const otherTask = recordSessionLink(db, { projectId: project.id, taskKey: 'alpha/3.1', sessionId: 'session-old-a' })
+
+      const converged = supersedeActiveSessionLinks(db, project.id, 'alpha/2.1', 'session-new')
+
+      expect(converged).toBe(1) // 仅同任务其余 active 行(oldA);ended/异任务行不动
+      const rows = listSessionLinksByTask(db, project.id, 'alpha/2.1')
+      const byId = new Map(rows.map(row => [row.sessionId, row]))
+      expect(byId.get('session-new')?.status).toBe('active')
+      expect(byId.get('session-new')?.endedAt).toBeNull()
+      expect(byId.get('session-old-a')?.status).toBe('ended')
+      expect(byId.get('session-old-a')?.endedAt).toMatch(ISO_PATTERN)
+      expect(byId.get('session-old-b')?.endedAt).toBe(endedAtBefore) // 已 ended 行不被刷新
+      expect(listSessionLinksByTask(db, project.id, 'alpha/3.1')[0]?.id).toBe(otherTask.id)
+      expect(listSessionLinksByTask(db, project.id, 'alpha/3.1')[0]?.status).toBe('active')
+      expect(keep.id).toBeDefined()
+    })
+  })
+
+  it('supersede re-run is idempotent (0 rows) and an unknown task converges nothing', async () => {
+    await withDb(async (db) => {
+      const project = registerInRepo(db, 'C:\\repos\\alpha')
+      recordSessionLink(db, { projectId: project.id, taskKey: 'alpha/2.1', sessionId: 'session-keep' })
+      expect(supersedeActiveSessionLinks(db, project.id, 'alpha/2.1', 'session-keep')).toBe(0)
+      expect(supersedeActiveSessionLinks(db, project.id, 'alpha/9.9', 'session-keep')).toBe(0)
+      expect(supersedeActiveSessionLinks(db, 'no-such-project', 'alpha/2.1', 'session-keep')).toBe(0)
+    })
+  })
+
+  it('挂接关系经 store 关闭重开仍在(Story2 AC3 重启持久化)', async () => {
+    const dir = makeScratch()
+    let linkId: string
+    const first = await openDatabase(dir)
+    try {
+      const project = registerInRepo(first.db, 'C:\\repos\\restart')
+      const link = recordSessionLink(first.db, { projectId: project.id, taskKey: 'alpha/2.1', sessionId: 'session-keep' })
+      linkId = link.id
+    } finally {
+      first.db.close()
+    }
+    const second = await openDatabase(dir)
+    try {
+      const project = second.db.prepare('SELECT id FROM projects').get() as { id: string }
+      const rows = listSessionLinksByTask(second.db, project.id, 'alpha/2.1')
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ id: linkId, sessionId: 'session-keep', status: 'active', endedAt: null })
+    } finally {
+      second.db.close()
+    }
   })
 })
