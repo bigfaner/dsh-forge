@@ -294,17 +294,22 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
               )
               : view.workbenchTab === 'workbench/tasks'
                 ? (
-                  // UF2 (task 5.5): the task board page takes the reserved
-                  // tasks seat — toolbar + views B/C over the mock twin; the
-                  // optional taskBoard seat hands the page its IPC-backed
-                  // face (5.15) and claims the row-selection seam (5.7's
-                  // detail dock).
+                  // UF2 (task 5.5) + UF3 integration (task 5.8): the task
+                  // board page takes the reserved tasks seat — toolbar + the
+                  // three views + the 5.7 detail dock over the selection
+                  // store (the page owns the linkage). The optional taskBoard
+                  // seat hands the page its IPC-backed faces (5.15) and
+                  // observes activations; the active project's codeRoot
+                  // mounts the dock's UF5 panel-primary entry (5.11 wires
+                  // the real services behind it).
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                     <TaskBoardPage
                       t={props.t}
                       projectId={workbenchState.activeProjectId ?? undefined}
+                      codeRoot={activeProject?.codeRoot}
                       onSelect={props.taskBoard?.onSelect}
                       face={props.taskBoard?.face}
+                      detailFace={props.taskBoard?.detailFace}
                     />
                   </div>
                 )

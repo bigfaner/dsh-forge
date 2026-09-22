@@ -47,6 +47,13 @@ import { RecordsTimeline } from './detail/RecordsTimeline'
 /** ui-design 层叠: the detail dock rides z100 (dialogs z1200, toasts z1100). */
 export const DETAIL_DOCK_Z = 100
 
+/**
+ * The dock's width (ui-design UF3 Placement: min(440px, 45vw)). Exported so
+ * the 5.8 integration insets the board's flow layout by EXACTLY this strip
+ * (dock open ⇒ the views yield, close ⇒ bounce back — one constant, no drift).
+ */
+export const DETAIL_DOCK_WIDTH = 'min(440px, 45vw)'
+
 /** Inputs of {@link TaskDetailPanel}. */
 export interface TaskDetailPanelProps {
   /** The locale seat (the shell's `t`). */
@@ -92,7 +99,7 @@ const dockStyle = {
   position: 'absolute',
   right: '0',
   top: '0',
-  width: 'min(440px, 45vw)',
+  width: DETAIL_DOCK_WIDTH,
   zIndex: DETAIL_DOCK_Z,
 } as const
 

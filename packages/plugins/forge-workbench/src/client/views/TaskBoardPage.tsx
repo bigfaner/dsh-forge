@@ -23,20 +23,35 @@
  * a full-page reset. The data merge behind events is the 5.15 assembly's
  * (the mock channel only proves the presentation).
  *
+ * Task 5.8 mounts the UF3 detail dock (tech-design §Integration UF3): the
+ * SELECTION STORE below is the linkage's single source (Hard Rule: one
+ * store, the three views never keep copies) — 视图 B 行 / 视图 C 行 / 视图 A
+ * 节点 activations all write it, the dock + every view's selected highlight
+ * read it. The dock overlays the page root's right edge (z100, no mask) and
+ * the root insets its flow layout by the dock's exact width while open, so
+ * the views shrink and bounce back instead of sliding under the overlay.
+ * Selection survives close (页内会话期: reopening restores the last task) and
+ * is KEYED, not visibility-coupled: a filter hiding the selected task keeps
+ * the dock open (the task exists; the 回流 structural deletion → dock error
+ * path is 5.15's event merge). An outside press on a board SELECTABLE is
+ * mid-selection, not an outside click — its activation switches the dock in
+ * place (the aria-busy repaint, 无闪烁) instead of close-then-reopen.
+ *
  * Read-only discipline (BIZ-task-ops-001 Hard Rule): the page renders no
  * write affordance of any kind — interactions are navigation (the onSelect
- * seam 5.7's dock claims) and view control (toolbar) only. A sync error is
+ * seam the dock claims) and view control (toolbar) only. A sync error is
  * a TOOLBAR light with a retry, never a view error: the board keeps its
  * data beside it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Viewport } from '@xyflow/react'
 import type { TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
-import type { TaskBoardFace } from '../contract'
+import type { TaskBoardFace, TaskDetailFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { TASK_STATUSES } from '../i18n/task-status'
 import { ChromeButton } from '../components/chrome/ChromeButton'
 import { createMockTaskBoardFace } from '../mocks/workbench'
+import { createSelectedTaskStore } from '../store/selected-task'
 import { fillTemplate } from './overview/format'
 import {
   DEFAULT_BOARD_FILTER, TaskToolbar, type BoardFilterState, type BoardSortKey, type BoardViewKey,
@@ -44,6 +59,7 @@ import {
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
+import { TaskDetailPanel, DETAIL_DOCK_WIDTH } from './tasks/TaskDetailPanel'
 
 /** The local id of a qualified board key: `feature/5.5` → `5.5`. */
 export function localIdOf(key: string): string {
@@ -131,17 +147,35 @@ export interface TaskBoardPageProps {
   t: (key: WorkbenchKey) => string
   /** The active project the board reads (the Interface 1 verb argument). */
   projectId?: string | undefined
+  /**
+   * The active project's codeRoot — present mounts the dock's UF5
+   * panel-primary launch entry (absent keeps the reserved placeholder; 5.11
+   * wires the real services behind it).
+   */
+  codeRoot?: string | undefined
   /** The 5.7 detail-dock selection seam — a row/card activation hands the task over. */
   onSelect?: ((task: TaskSummary) => void) | undefined
   /** The page face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   face?: Partial<TaskBoardFace> | undefined
+  /** The detail dock's face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
+  detailFace?: Partial<TaskDetailFace> | undefined
 }
+
+/**
+ * The board selectable family — the elements whose activation SELECTS (and
+ * so must not count as the dock's 点击侧板外 close trigger): a view B card, a
+ * view C row, a view A DAG node wrapper (the lib keys them `data-id`).
+ */
+const SELECTABLE_SELECTOR = '[data-dsh-forge-task-card], [data-dsh-forge-task-row], [data-dsh-forge-dep-tree] [data-id]'
 
 const pageStyle = {
   display: 'flex',
   flexDirection: 'column',
   gap: '12px',
   minWidth: '0',
+  // The dock anchors here (absolute, right edge) while the flow layout
+  // yields to it through the open-state right inset — 见 the 5.8 wiring.
+  position: 'relative',
 } as const
 
 /** Shared card face for the non-data states (empty / no-match / error). */
@@ -241,6 +275,61 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   const statusBoardScrollLeft = useRef(0)
   const pageRef = useRef<HTMLDivElement>(null)
   const updatingKeysRef = useRef<ReadonlySet<string>>(new Set())
+
+  // The UF3 selection store (task 5.8, Hard Rule: the linkage's ONE source).
+  // One instance per page mount = the AC's 页内会话期 scope; every activation
+  // writes here, the dock and the views' selected marks read from here.
+  const [selection] = useState(() => createSelectedTaskStore())
+  const selected = useSyncExternalStore(selection.subscribe, selection.getSnapshot)
+
+  // Outside-close arbitration (5.8): the dock closes on outside pointerdowns
+  // EXCEPT presses on a board SELECTABLE — ui-design UF2 makes 点击节点/行 the
+  // dock's OPEN/switch trigger, so such a press is mid-selection, not an
+  // outside click; its activation then switches the dock in place (无闪烁).
+  // This capture listener registers at PAGE mount — before the dock's own
+  // listener can exist (the dock only mounts on a later commit) — so the
+  // sentinel is set before the dock's handler asks. It lives exactly the
+  // press: pointerup/pointercancel (and the completing click) clear it, so an
+  // Esc / ✕ close never consults a stale press.
+  const selectablePressRef = useRef(false)
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      selectablePressRef.current = target instanceof Element
+        && target.closest(SELECTABLE_SELECTOR) !== null
+    }
+    const release = (): void => { selectablePressRef.current = false }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('pointerup', release, true)
+    document.addEventListener('pointercancel', release, true)
+    document.addEventListener('click', release, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointerup', release, true)
+      document.removeEventListener('pointercancel', release, true)
+      document.removeEventListener('click', release, true)
+    }
+  }, [])
+
+  /** Every source's one write path: select + open, then the shell seat observes. */
+  const handleSelect = useCallback((task: TaskSummary): void => {
+    selection.select(task.key)
+    props.onSelect?.(task)
+  }, [selection, props.onSelect])
+
+  /**
+   * The dock's close (Esc / ✕ / true outside click): drop only the open arm —
+   * the key stays as the reopen-restore memory (页内会话期).
+   */
+  const handleCloseDock = useCallback((): void => {
+    if (selectablePressRef.current) return
+    selection.close()
+  }, [selection])
+
+  /** The dep-chain jump: retarget the SAME selection (dock repaints in place). */
+  const handleNavigate = useCallback((taskKey: string): void => {
+    selection.select(taskKey)
+  }, [selection])
 
   // Latest-value refs for the mount-once effects (load / event subscription).
   const tRef = useRef(props.t)
@@ -348,7 +437,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
           tasks={visibleTasks}
           danglingByTask={danglingByTask}
           updatingKeys={updatingKeys}
-          onSelect={props.onSelect}
+          selectedKey={selected.taskKey}
+          onSelect={handleSelect}
           initialViewport={treeViewport.current}
           onViewportSettled={(viewport) => { treeViewport.current = viewport }}
         />
@@ -364,7 +454,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             onCollapsedStatusesChange={setCollapsedStatuses}
             danglingByTask={danglingByTask}
             updatingKeys={updatingKeys}
-            onSelect={props.onSelect}
+            selectedKey={selected.taskKey}
+            onSelect={handleSelect}
           />
         </div>
       )
@@ -375,13 +466,26 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             tasks={visibleTasks}
             danglingByTask={danglingByTask}
             updatingKeys={updatingKeys}
-            onSelect={props.onSelect}
+            selectedKey={selected.taskKey}
+            onSelect={handleSelect}
           />
         </div>
       )
 
   return (
-    <div ref={pageRef} data-dsh-forge-task-board="" aria-busy={phase === 'loading' ? 'true' : 'false'} style={pageStyle}>
+    <div
+      ref={pageRef}
+      data-dsh-forge-task-board=""
+      aria-busy={phase === 'loading' ? 'true' : 'false'}
+      style={{
+        ...pageStyle,
+        // The dock-open right inset (AC3): exactly the dock's width, so the
+        // flow layout (toolbar + views) yields the strip and bounces back on
+        // close — the views shrink, they never slide under the overlay (the
+        // minWidth 0 chain + B's own overflowX keep horizontal scrolling sane).
+        ...(selected.open ? { paddingRight: DETAIL_DOCK_WIDTH } : {}),
+      }}
+    >
       {phase === 'loading' && (
         <div
           role="status"
@@ -457,6 +561,21 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
           <p role="status" aria-live="polite" data-dsh-forge-board-announce="" style={srOnlyStyle}>
             {announcement ?? ''}
           </p>
+
+          {/* UF3 (task 5.8): the detail dock — the selection store's open arm
+              drives it (closed ⇒ null ⇒ not rendered; a key switch swaps the
+              detail in place through the panel's aria-busy repaint). The dock
+              anchors to this root's right edge; the root's open-state inset
+              above made room for it. */}
+          <TaskDetailPanel
+            t={props.t}
+            taskKey={selected.open ? (selected.taskKey ?? null) : null}
+            projectId={props.projectId}
+            codeRoot={props.codeRoot}
+            face={props.detailFace}
+            onClose={handleCloseDock}
+            onNavigate={handleNavigate}
+          />
         </>
       )}
     </div>

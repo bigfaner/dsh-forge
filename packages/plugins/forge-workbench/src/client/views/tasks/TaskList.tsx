@@ -23,6 +23,11 @@ export interface TaskListProps {
   danglingByTask: ReadonlyMap<string, readonly string[]>
   /** The task keys currently carrying the 回流 updating highlight. */
   updatingKeys: ReadonlySet<string>
+  /**
+   * The single-source selection key (5.8): the row whose key matches carries
+   * the selected mark — controlled from the selection store, never row-local.
+   */
+  selectedKey?: string | undefined
   /** The 5.7 selection seam — a row activation hands the task over (navigation only). */
   onSelect?: ((task: TaskSummary) => void) | undefined
 }
@@ -110,6 +115,7 @@ export function TaskList(props: TaskListProps) {
               task={task}
               danglingBlockers={props.danglingByTask.get(task.key) ?? []}
               updating={props.updatingKeys.has(task.key)}
+              selected={props.selectedKey === task.key}
               onSelect={props.onSelect}
             />
           ))}

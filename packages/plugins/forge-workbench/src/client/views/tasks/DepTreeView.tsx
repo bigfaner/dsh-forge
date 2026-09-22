@@ -54,6 +54,12 @@ export interface DepTreeViewProps {
   danglingByTask: ReadonlyMap<string, readonly string[]>
   /** The task keys currently carrying the 回流 updating highlight. */
   updatingKeys: ReadonlySet<string>
+  /**
+   * The single-source selection key (5.8): the matching node carries the
+   * ui-design 焦点任务 border — controlled from the selection store, never
+   * node-local state.
+   */
+  selectedKey?: string | undefined
   /** The 5.7 selection seam — a node activation (click / Enter / Space) hands the task over. */
   onSelect?: ((task: TaskSummary) => void) | undefined
   /**
@@ -126,12 +132,14 @@ export function DepTreeView(props: DepTreeViewProps) {
   const onViewportSettled = props.onViewportSettled
 
   const graph = useMemo(() => {
-    const built = buildTaskGraph(props.tasks, props.danglingByTask, props.updatingKeys, props.t)
+    const built = buildTaskGraph(
+      props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey,
+    )
     const positions = new Map<string, DagPosition>(built.nodes.map(node => [node.id, node.position]))
     const traversal: TraversalIndex = buildTraversalIndex(positions, built.edges)
     const taskByKey = new Map(props.tasks.map(task => [task.key, task] as const))
     return { built, positions, traversal, taskByKey }
-  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t])
+  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey])
 
   /** Move DOM focus onto a node wrapper (the lib keys wrappers by `data-id`). */
   const focusNode = (key: string): void => {

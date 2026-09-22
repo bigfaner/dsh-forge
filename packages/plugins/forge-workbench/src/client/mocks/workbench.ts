@@ -17,7 +17,9 @@
  * twin (createMockTaskBoardFace: loadBoard + the onEvents channel with a
  * test-facing emit poke). Task 5.7 adds the UF3 detail fixtures
  * (MOCK_TASK_DETAILS — rich multi-hop chain / header matrix / sparse) and
- * the dock's verb twin (createMockTaskDetailFace). Task 5.9 adds the UF4
+ * the dock's verb twin (createMockTaskDetailFace). Task 5.8 adds the dep-chain
+ * JUMP target (MOCK_TASK_DETAIL_MID — dsh-forge-m2/5.6, a hop on the RICH
+ * chain the selection tests retarget onto). Task 5.9 adds the UF4
  * feature-family fixtures (MOCK_FEATURE_BOARD — the SAME feature slugs the
  * board fixture's tasks reference: dsh-forge-m2 in-progress with a missing
  * ui doc kind + dsh-forge-m1 completed 48/48 with all five kinds; the empty
@@ -613,11 +615,36 @@ export const MOCK_TASK_DETAIL_SPARSE: TaskDetail = Object.freeze({
   links: Object.freeze([]),
 })
 
+/**
+ * The dep-chain JUMP target (task 5.8): dsh-forge-m2/5.6 — a hop on the
+ * RICH detail's chain AND a board row, so the dock's 依赖链 onNavigate can
+ * retarget onto a task the selection tests can also reach from every view
+ * (the board twin of this summary is the fixture row above).
+ */
+export const MOCK_TASK_DETAIL_MID: TaskDetail = Object.freeze({
+  summary: Object.freeze({
+    key: 'dsh-forge-m2/5.6', title: 'UF2 dependency-tree view (DAG)',
+    status: 'pending', featureSlug: 'dsh-forge-m2', blockers: ['5.5'],
+    branch: null, worktree: false, source: null,
+    updatedAt: '2026-09-22T07:30:00.000Z',
+  }),
+  descriptionMarkdown: 'The layered DAG canvas with keyboard traversal over the task_snapshot graph.',
+  depChain: Object.freeze([
+    Object.freeze({
+      key: 'dsh-forge-m2/5.5', title: 'UF2 task board build: toolbar + status-grouped and list views',
+      status: 'in_progress',
+    }),
+  ]),
+  records: Object.freeze([]),
+  links: Object.freeze([]),
+})
+
 /** The dock's fixture map (keyed by the qualified task address). */
 export const MOCK_TASK_DETAILS: ReadonlyMap<string, TaskDetail> = new Map([
   [MOCK_TASK_DETAIL_RICH.summary.key, MOCK_TASK_DETAIL_RICH],
   [MOCK_TASK_DETAIL_HEADER.summary.key, MOCK_TASK_DETAIL_HEADER],
   [MOCK_TASK_DETAIL_SPARSE.summary.key, MOCK_TASK_DETAIL_SPARSE],
+  [MOCK_TASK_DETAIL_MID.summary.key, MOCK_TASK_DETAIL_MID],
 ])
 
 /**

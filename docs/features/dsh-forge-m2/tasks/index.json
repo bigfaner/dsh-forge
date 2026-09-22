@@ -534,7 +534,7 @@
         "5.6",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.8-task-detail-integrate.md",
       "record": "records/5.8-task-detail-integrate.md",
       "surface-type": "web",

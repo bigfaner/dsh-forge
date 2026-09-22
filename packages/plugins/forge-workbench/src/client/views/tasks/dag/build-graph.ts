@@ -38,6 +38,11 @@ export interface TaskCardNodeData extends Record<string, unknown> {
   readonly danglingBlockers: readonly string[]
   /** The 回流 highlight flag (attribute-level changes light the card). */
   readonly updating: boolean
+  /**
+   * The single-source selection mark (5.8): TRUE on the selected-store key —
+   * the ui-design 焦点任务 border (`--dsw-alias-link` 1.5px) renders from it.
+   */
+  readonly selected: boolean
   /** The locale seat (the shell's `t`). */
   readonly t: DagTranslate
 }
@@ -60,6 +65,8 @@ export interface TaskDagGraph {
  * @param danglingByTask - key → dangling LOCAL blockers, computed against the FULL set.
  * @param updatingKeys - task keys currently carrying the 回流 highlight.
  * @param t - the locale seat.
+ * @param selectedKey - the single-source selection key (5.8), or undefined
+ *   with no selection — the matching node carries the 焦点任务 mark.
  * @returns nodes in layout reading order (layer top-down, then left→right —
  *   the Tab order ui-design specifies) with positions from the layered layout.
  */
@@ -68,6 +75,7 @@ export function buildTaskGraph(
   danglingByTask: ReadonlyMap<string, readonly string[]>,
   updatingKeys: ReadonlySet<string>,
   t: DagTranslate,
+  selectedKey?: string | undefined,
 ): TaskDagGraph {
   const visibleKeys = new Set(tasks.map(task => task.key))
   const edges: TaskDagEdge[] = []
@@ -103,6 +111,7 @@ export function buildTaskGraph(
       task,
       danglingBlockers: danglingByTask.get(task.key) ?? [],
       updating: updatingKeys.has(task.key),
+      selected: selectedKey === task.key,
       t,
     },
     width: NODE_CARD_WIDTH,

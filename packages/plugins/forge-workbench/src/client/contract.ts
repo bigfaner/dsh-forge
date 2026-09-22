@@ -215,17 +215,21 @@ export interface TaskBoardFace {
 
 /**
  * The shell's passthrough seat for the task board (task 5.5): absent
- * entirely in the build stage (the page runs on its mock twin); the 5.15
- * assembly injects the IPC-backed face, and 5.7's detail dock claims the
- * selection seam.
+ * entirely in the build stage (the page runs on its mock twins); the 5.15
+ * assembly injects the IPC-backed faces. Since 5.8 the page owns the
+ * selection linkage (the single-source store + the mounted detail dock);
+ * this seat remains the assembly's observation/injection surface.
  */
 export interface TaskBoardSeat {
   /** The board face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   readonly face?: Partial<TaskBoardFace>
+  /** The detail-dock face — absent members fall back to the build-stage mock (5.15 injects the IPC verb). */
+  readonly detailFace?: Partial<TaskDetailFace>
   /**
-   * The UF3 selection seam: a row/card activation (click / Enter / Space —
-   * navigation, the ONLY interaction rows carry) hands the task over; 5.7's
-   * detail dock owns the panel this opens.
+   * The UF3 selection seam OBSERVATION: a row/card activation (click /
+   * Enter / Space — navigation, the ONLY interaction rows carry) hands the
+   * task over. Since 5.8 the page's selection store opens the dock itself;
+   * this callback observes every activation for the assembly (5.15).
    */
   readonly onSelect?: ((task: TaskSummary) => void) | undefined
 }

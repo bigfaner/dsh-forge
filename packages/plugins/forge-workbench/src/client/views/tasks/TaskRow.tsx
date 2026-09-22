@@ -34,6 +34,12 @@ export interface TaskRowBaseProps {
   danglingBlockers: readonly string[]
   /** The 回流 updating highlight (a task_updated event landed on this row). */
   updating?: boolean
+  /**
+   * The single-source selection mark (5.8): TRUE on the task the selection
+   * store holds — a controlled prop, never row-local state (Hard Rule). The
+   * transient updating fill wins over it when both land.
+   */
+  selected?: boolean
   /** The 5.7 selection seam — the ONLY interaction a row carries (navigation). */
   onSelect?: ((task: TaskSummary) => void) | undefined
 }
@@ -44,6 +50,13 @@ const NONE_CELL = '—'
 /** The updating highlight: interactive-bg-hover fill fading out over 0.3s (ui-design 回流·属性级). */
 const updatingBackground = 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))'
 const updatingTransition = 'background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+
+/**
+ * The selected fill: the SAME interactive-bg-hover token the tab strip's
+ * 选中态 uses (ui-design) — the persistent selection mark for the B card and
+ * the C row. `data-dsh-forge-selected` is its observation hook.
+ */
+const selectedBackground = 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))'
 
 /** Pill-adjacent badge (ui-design: 徽标用 Pill): 12/18 capsule, nowrap. */
 export const badgeStyle = {
@@ -172,16 +185,19 @@ const cardBadgesRowStyle = {
  * nothing inside edits anything.
  */
 export function TaskCard(props: TaskRowBaseProps) {
-  const { task, t, updating = false, onSelect } = props
+  const { task, t, updating = false, selected = false, onSelect } = props
   return (
     <button
       type="button"
       data-dsh-forge-task-card={task.key}
       data-dsh-forge-updating={updating ? '' : undefined}
+      data-dsh-forge-selected={selected ? '' : undefined}
       aria-label={`${task.key} · ${task.title}`}
       style={{
         ...cardStyle,
         transition: updatingTransition,
+        ...(selected ? { backgroundColor: selectedBackground } : {}),
+        // The transient 回流 fill wins over the persistent selection mark.
         ...(updating ? { backgroundColor: updatingBackground } : {}),
       }}
       onClick={() => { onSelect?.(task) }}
@@ -236,7 +252,7 @@ const statusCellStyle = {
  * entire interaction surface.
  */
 export function TaskListRow(props: TaskRowBaseProps) {
-  const { task, t, updating = false, onSelect } = props
+  const { task, t, updating = false, selected = false, onSelect } = props
   const activate = (): void => { onSelect?.(task) }
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -248,11 +264,14 @@ export function TaskListRow(props: TaskRowBaseProps) {
     <tr
       data-dsh-forge-task-row={task.key}
       data-dsh-forge-updating={updating ? '' : undefined}
+      data-dsh-forge-selected={selected ? '' : undefined}
       tabIndex={0}
       aria-label={`${task.key} · ${task.title}`}
       style={{
         ...rowStyle,
         transition: updatingTransition,
+        ...(selected ? { backgroundColor: selectedBackground } : {}),
+        // The transient 回流 fill wins over the persistent selection mark.
         ...(updating ? { backgroundColor: updatingBackground } : {}),
       }}
       onClick={activate}

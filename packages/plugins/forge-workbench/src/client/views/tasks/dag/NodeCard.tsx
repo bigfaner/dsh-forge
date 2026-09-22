@@ -59,6 +59,14 @@ const launchSlotStyle = {
 /** The updating highlight fill (回流·属性级 — same tokens as the B card). */
 const updatingBackground = 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))'
 
+/**
+ * The 焦点任务 selection mark (5.8): the selected node's border — the SAME
+ * `--dsw-alias-link` 1.5px ui-design specifies for the focused task (从 UF3
+ * 返回/挂接回流定位), so the DAG's selected node and keyboard-focused node
+ * read as one visual family. `data-dsh-forge-selected` is its observation hook.
+ */
+const selectedBorderStyle = '1.5px solid var(--dsw-alias-link, rgb(65, 118, 230))'
+
 const titleRowStyle = {
   alignItems: 'center',
   display: 'flex',
@@ -112,12 +120,17 @@ const handleStyle = { opacity: 0 } as const
  * NODE_CARD_HEIGHT) keeps the layered layout exact; fields mirror the B card.
  */
 export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
-  const { task, t, updating } = data
+  const { task, t, updating, selected } = data
   return (
     <div
       data-dsh-forge-node-card={task.key}
       data-dsh-forge-updating={updating ? '' : undefined}
-      style={{ ...cardStyle, ...(updating ? { backgroundColor: updatingBackground } : {}) }}
+      data-dsh-forge-selected={selected ? '' : undefined}
+      style={{
+        ...cardStyle,
+        ...(selected ? { border: selectedBorderStyle } : {}),
+        ...(updating ? { backgroundColor: updatingBackground } : {}),
+      }}
     >
       <Handle type="target" position={Position.Top} isConnectable={false} style={handleStyle} />
       {/* The reserved UF5 hover-trigger mount (5.11 fills this box). */}
