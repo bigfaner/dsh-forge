@@ -34,7 +34,7 @@
       "dependencies": [
         "2.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.2-owned-state-repos.md",
       "record": "records/2.2-owned-state-repos.md",
       "surface-type": "web",
