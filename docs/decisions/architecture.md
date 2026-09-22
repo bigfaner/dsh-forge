@@ -13,3 +13,4 @@
 | 2026-09-22 | dsh-forge-m2 | 工作台渲染载体 = forge 核心插件注入上游 GUI,导航槽位优先,插件内 rail 降级 | 与上游 UI 融合且保 G6 零壳代码改动;两形态行为契约一致 | dsh-forge-m2/design/tech-design.md §Overview D3 |
 | 2026-09-22 | dsh-forge-m2 | 数据面分工:主数据走 Electron 内核 IPC,forge CLI 执行面走插件 host 半身 | 对齐「过渡 = 插件宿主半身 spawn CLI」与数据内核入壳两既定方向 | dsh-forge-m2/design/tech-design.md §Architecture |
 | 2026-09-22 | dsh-forge-m2 | DF003 感知 = fs.watch 递归 + 400ms debounce + 2s 轮询兜底;来源序 actor→挂接推断 | ≤5s 时效内零新增依赖;forge 不改时推断兜底不阻塞 | dsh-forge-m2/design/tech-design.md §Interface 3 |
+| 2026-09-23 | dsh-forge-m3 | SoT 分治:任务结构化状态以 SQLite 为权威(单写者 = 内核),`tasks/index.json` 一次性显式迁移后终态淘汰;任务/记录 md 与阶段资产留文件不入库,随文档根(默认仓外,仓内兼容) | 根除 index.json 多写者风险(SC8 spike §4 旧写者静默丢未知字段);文档 git 评审面保底;拒绝「全量入库」(评审断裂/迁移面翻倍)与「全量留文件」(多写者永续)两端 | proposals/dsh-forge-m3/proposal.md §Proposed Solution 架构约束、§Assumptions Challenged;features/dsh-forge-m3 prd/prd-spec.md §阶段资产与文档根数据模型 |
