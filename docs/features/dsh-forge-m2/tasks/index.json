@@ -435,7 +435,7 @@
         "3.2",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.2-markdown-readonly-renderer.md",
       "record": "records/5.2-markdown-readonly-renderer.md",
       "surface-type": "web",

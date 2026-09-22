@@ -55,6 +55,11 @@ export type {
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 export type { DocLocationType, PluginRow, Project, WorkbenchState } from './ipc-types'
 export { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE } from './mocks/workbench'
+// The shared read-only markdown renderer (task 5.2, T3 mitigation): every
+// prose surface of the 5.x views (task descriptions, execution records, the
+// five feature doc kinds) renders through this one sanitized component.
+export { MarkdownView } from './components/common/MarkdownView'
+export type { MarkdownViewProps } from './components/common/MarkdownView'
 export { ViewSwitchController } from './nav/view-switch'
 export type { NavForm, ViewCarrier } from './nav/view-switch'
 export { installRailNav } from './nav/rail'

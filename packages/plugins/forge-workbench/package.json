@@ -49,7 +49,8 @@
     "cordis.patch.yml"
   ],
   "dependencies": {
-    "@xyflow/react": "12.11.6"
+    "@xyflow/react": "12.11.6",
+    "marked": "18.0.13"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
