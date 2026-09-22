@@ -145,3 +145,25 @@ export function listTaskSnapshotsByStatus(db: RepoDb, projectId: string, status:
     .all(projectId, status) as TaskSnapshotRow[]
   return rows.map(toTaskSnapshot)
 }
+
+/**
+ * 结构性删除(任务 2.5 indexer):任务在 forge 文件侧消失(文件删除/移
+ * 相位)→ 快照行删除,不留孤儿行。不存在即 no-op;返回是否实际删除。
+ * 派生缓存语义:删除不级联任何自有表(session_links.task_key 为自由 TEXT,
+ * 挂接历史与任务实体解耦)。
+ */
+export function deleteTaskSnapshot(db: RepoDb, projectId: string, taskKey: string): boolean {
+  const result = db.prepare('DELETE FROM task_snapshot WHERE project_id = ? AND task_key = ?').run(projectId, taskKey)
+  return result.changes > 0
+}
+
+/** 批量结构性删除(单事务语义由调用方承载——indexer 写事务内逐行执行)。 */
+export function deleteTaskSnapshots(db: RepoDb, projectId: string, taskKeys: readonly string[]): number {
+  let deleted = 0
+  const statement = db.prepare('DELETE FROM task_snapshot WHERE project_id = ? AND task_key = ?')
+  for (const taskKey of taskKeys) {
+    const result = statement.run(projectId, taskKey)
+    if (result.changes > 0) deleted += 1
+  }
+  return deleted
+}

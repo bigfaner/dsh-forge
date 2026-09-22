@@ -83,3 +83,13 @@ export function listFeatureSnapshots(db: RepoDb, projectId: string): FeatureSnap
     .all(projectId) as FeatureSnapshotRow[]
   return rows.map(toFeatureSnapshot)
 }
+
+/**
+ * 结构性删除(任务 2.5 indexer):feature 目录消失 → 快照行删除。不存在
+ * 即 no-op;返回是否实际删除。任务行的级联清理由 indexer 写事务显式执行
+ * (先删任务行再删 feature 行,计数一致性由重放 upsert 维护)。
+ */
+export function deleteFeatureSnapshot(db: RepoDb, projectId: string, featureSlug: string): boolean {
+  const result = db.prepare('DELETE FROM feature_snapshot WHERE project_id = ? AND feature_slug = ?').run(projectId, featureSlug)
+  return result.changes > 0
+}

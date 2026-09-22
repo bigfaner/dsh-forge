@@ -79,7 +79,7 @@
       "dependencies": [
         "2.3"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.5-forge-indexer.md",
       "record": "records/2.5-forge-indexer.md",
       "surface-type": "web",
