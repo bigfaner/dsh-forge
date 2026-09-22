@@ -16,6 +16,7 @@
  */
 import type { DocKind, FeatureSummary } from '../../ipc-types'
 import type { FeatureDocFace } from '../../contract'
+import type { FeatureDocsCache } from '../../store/feature-board'
 import { featureStatusLabel } from '../../i18n/feature-status'
 import type { FeatureStatusTranslate } from '../../i18n/feature-status'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
@@ -35,6 +36,12 @@ export interface FeatureDetailProps {
   externalDocs?: boolean | undefined
   /** The doc face passthrough (5.16 injects the IPC face). */
   docFace?: Partial<FeatureDocFace> | undefined
+  /**
+   * The page-session doc cache passthrough (task 5.16): the page owns it; a
+   * detail remount re-reads through it (already-read docs render without
+   * re-firing the verb).
+   */
+  docsCache?: FeatureDocsCache | undefined
   /** The return seam — the shell routes it to the machine's tab action (slug cleared). */
   onBack: () => void
 }
@@ -226,6 +233,7 @@ export function FeatureDetail(props: FeatureDetailProps) {
         featureSlug={feature.slug}
         docKinds={feature.docKinds as readonly DocKind[]}
         face={props.docFace}
+        docsCache={props.docsCache}
       />
     </div>
   )

@@ -11,7 +11,10 @@
  * Body states (task AC 三分支齐备): loading 骨架 / read failure (error card +
  * retry) / ERR_SNAPSHOT_STALE (快照过期 — the spec's distinct presentation:
  * rescan guidance + retry; §Error Handling) plus the populated MarkdownView
- * and the empty-document hint.
+ * and the empty-document hint. Task 5.16: the stale branch first AUTO-refetches
+ * once silently (§Error Handling 静默触发重取; only a repeat failure shows the
+ * dedicated card), and every read goes through the page-session doc cache
+ * (docsCache prop — a hit renders without firing the verb; 重复打开不重拉).
  *
  * Keyboard (WAI-ARIA tabs, the 5.1 TabBar precedent): roving tabindex over
  * the ENABLED tabs, ArrowLeft/Right/Home/End move focus AND select
@@ -19,13 +22,15 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import type { DocKind, FeatureDoc, WorkbenchVerbError } from '../../ipc-types'
+import type { DocKind, FeatureDoc } from '../../ipc-types'
 import type { FeatureDocFace } from '../../contract'
+import type { FeatureDocsCache } from '../../store/feature-board'
 import { FEATURE_DOC_KINDS, docKindLabel } from '../../i18n/feature-status'
 import type { FeatureStatusTranslate } from '../../i18n/feature-status'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockFeatureDocFace } from '../../mocks/workbench'
+import { normalizeWorkbenchVerbError } from '../../ipc/workbench'
 
 /** Inputs of {@link FeatureDocs}. */
 export interface FeatureDocsProps {
@@ -39,6 +44,13 @@ export interface FeatureDocsProps {
   docKinds: readonly DocKind[]
   /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   face?: Partial<FeatureDocFace> | undefined
+  /**
+   * The page-session doc cache (task 5.16): a hit renders WITHOUT firing the
+   * verb (重复打开不重拉); a successful read writes back. The page owns the
+   * cache and clears it on a project switch — this component only reads and
+   * writes entries.
+   */
+  docsCache?: FeatureDocsCache | undefined
 }
 
 const tabsStyle = {
@@ -132,10 +144,14 @@ const emptyHintStyle = {
   margin: '0',
 } as const
 
-/** Is the thrown value an ERR_SNAPSHOT_STALE rejection (the serialized verb shape)? */
+/**
+ * Is the thrown value an ERR_SNAPSHOT_STALE rejection? Normalized through the
+ * ONE envelope authority (ipc/workbench.ts), so both rejection forms count —
+ * the plain shape the build-stage mocks throw AND the real IPC form (an Error
+ * whose message is the serialized envelope).
+ */
 function isSnapshotStale(error: unknown): boolean {
-  return typeof error === 'object' && error !== null
-    && (error as WorkbenchVerbError).code === 'ERR_SNAPSHOT_STALE'
+  return normalizeWorkbenchVerbError(error).code === 'ERR_SNAPSHOT_STALE'
 }
 
 /**
@@ -159,6 +175,14 @@ export function FeatureDocs(props: FeatureDocsProps) {
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'stale'>('loading')
   const [doc, setDoc] = useState<FeatureDoc | undefined>(undefined)
   const [retryNonce, setRetryNonce] = useState(0)
+  // ERR_SNAPSHOT_STALE's silent auto-refetch driver (task 5.16): the first
+  // stale rejection re-fires the read ONCE without leaving the loading phase;
+  // only a repeat failure surfaces the dedicated 快照过期 presentation (AC3:
+  // 自动重取一次,仍失败才显错). The manual retry (retryNonce) re-arms the
+  // allowance for the next chain.
+  const [autoRefetchNonce, setAutoRefetchNonce] = useState(0)
+  const staleRetriedRef = useRef(false)
+  const attemptKeyRef = useRef('')
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   // Latest-value ref for the load effect (the t seat never changes identity
@@ -166,12 +190,24 @@ export function FeatureDocs(props: FeatureDocsProps) {
   const projectIdRef = useRef(props.projectId)
   projectIdRef.current = props.projectId
 
-  // The per-tab read: one effect run per (slug, kind, retry) — the alive flag
-  // drops stale resolutions when the tab switches mid-flight.
+  // The per-tab read: one effect run per (slug, kind, retry, auto-refetch) —
+  // the alive flag drops stale resolutions when the tab switches mid-flight.
+  // A cache hit short-circuits the verb entirely (页内缓存: 重复打开不重拉).
   useEffect(() => {
     if (activeKind === undefined) {
       setDoc(undefined)
       setPhase('loading')
+      return
+    }
+    const attemptKey = `${props.featureSlug}/${String(activeKind)}/${String(retryNonce)}`
+    if (attemptKeyRef.current !== attemptKey) {
+      attemptKeyRef.current = attemptKey
+      staleRetriedRef.current = false
+    }
+    const cached = props.docsCache?.get(props.featureSlug, activeKind)
+    if (cached !== undefined) {
+      setDoc(cached)
+      setPhase('ready')
       return
     }
     let alive = true
@@ -179,16 +215,25 @@ export function FeatureDocs(props: FeatureDocsProps) {
     void face.readFeatureDoc(projectIdRef.current ?? '', props.featureSlug, activeKind)
       .then((next) => {
         if (!alive) return
+        props.docsCache?.put(props.featureSlug, activeKind, next)
         setDoc(next)
         setPhase('ready')
       })
       .catch((error: unknown) => {
         if (!alive) return
+        if (isSnapshotStale(error) && !staleRetriedRef.current) {
+          // Spec §Error Handling: 静默触发重取 — one silent refetch, still
+          // loading; a repeat failure falls through to the presentation.
+          staleRetriedRef.current = true
+          setAutoRefetchNonce(nonce => nonce + 1)
+          return
+        }
         setPhase(isSnapshotStale(error) ? 'stale' : 'error')
       })
     return () => { alive = false }
-    // The face identity is fixed for the component's life (the page precedents).
-  }, [props.featureSlug, activeKind, retryNonce])
+    // The face + cache identities are fixed for the component's life (the
+    // page precedents); the cache is consulted, never subscribed to.
+  }, [props.featureSlug, activeKind, retryNonce, autoRefetchNonce])
 
   // Keyboard (the TabBar precedent): arrows/Home/End move focus AND select
   // among the ENABLED tabs only — a disabled tab is unreachable.

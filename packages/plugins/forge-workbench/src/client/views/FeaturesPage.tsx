@@ -17,6 +17,14 @@
  * construction. A slug missing from the loaded board renders the not-found
  * card + back (a defensive state the assembly's live refresh can produce).
  *
+ * Completion state (task 5.16): the board load is KEYED on projectId (a
+ * project switch is a fresh page session — reload + doc-cache clear, the
+ * Hard Rule) and the page owns the page-session doc cache
+ * (store/feature-board.ts) the doc tabs read through — repeated opens of a
+ * read doc never re-fire readFeatureDoc. The IPC faces themselves arrive via
+ * the features seat (views/features/FeaturesView.tsx assembles them from the
+ * ipc/workbench.ts adapter).
+ *
  * Read-only discipline: the page's every interaction is navigation (card →
  * detail, breadcrumb → list, doc tabs) — no write affordance exists.
  */
@@ -26,6 +34,7 @@ import type { FeatureBoardFace, FeatureDocFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { ChromeButton } from '../components/chrome/ChromeButton'
 import { createMockFeatureBoardFace, createMockFeatureDocFace } from '../mocks/workbench'
+import { createFeatureDocsCache } from '../store/feature-board'
 import { FeatureList } from './features/FeatureList'
 import { FeatureDetail } from './features/FeatureDetail'
 
@@ -139,12 +148,14 @@ export function FeaturesPage(props: FeaturesPageProps) {
   const [board, setBoard] = useState<FeatureBoardData | undefined>(undefined)
   const hasLoaded = useRef(false)
 
-  const projectIdRef = useRef(props.projectId)
-  projectIdRef.current = props.projectId
+  // The page-session doc cache (task 5.16): one per page mount — it survives
+  // the list↔detail round trips (the page stays mounted) and is CLEARED on a
+  // project switch below (Hard Rule: 文档缓存仅在页内会话期,不得跨项目残留).
+  const [docsCache] = useState(() => createFeatureDocsCache())
 
-  const load = async (): Promise<void> => {
+  const load = async (projectId: string): Promise<void> => {
     try {
-      const next = await boardFace.loadFeatureBoard(projectIdRef.current ?? '')
+      const next = await boardFace.loadFeatureBoard(projectId)
       hasLoaded.current = true
       setBoard(next)
       setPhase('ready')
@@ -155,11 +166,17 @@ export function FeaturesPage(props: FeaturesPageProps) {
     }
   }
 
-  // Mount-once initial load (the face identity is fixed for the page's life,
-  // like the board page's).
+  // Initial load + the project-switch reload (task 5.16): a projectId change
+  // is a FRESH page session — the old project's board never stays visible and
+  // the doc cache drops with it. The face identity is fixed for the page's
+  // life (like the board page's).
   useEffect(() => {
-    void load()
-  }, [])
+    hasLoaded.current = false
+    docsCache.clear()
+    setBoard(undefined)
+    setPhase('loading')
+    void load(props.projectId ?? '')
+  }, [props.projectId])
 
   const inDetail = props.featureSlug !== undefined
   const summary = inDetail && board !== undefined
@@ -189,7 +206,7 @@ export function FeaturesPage(props: FeaturesPageProps) {
               style={primaryButtonStyle}
               onClick={() => {
                 setPhase('loading')
-                void load()
+                void load(props.projectId ?? '')
               }}
             >
               {props.t('features.loadError.retry')}
@@ -218,6 +235,7 @@ export function FeaturesPage(props: FeaturesPageProps) {
               feature={summary}
               externalDocs={props.externalDocs}
               docFace={docFace}
+              docsCache={docsCache}
               onBack={props.onBack ?? (() => {})}
             />
           )

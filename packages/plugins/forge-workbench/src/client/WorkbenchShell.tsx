@@ -36,13 +36,17 @@
  * placeholder). The optional `taskBoard` prop is its assembly seat — the
  * IPC face arrives with 5.15, the row-selection seam is 5.7's detail dock.
  *
- * Task 5.9 fills the LAST reserved seat: the UF4 feature board page mounts
+ * Task 5.9 filled the LAST reserved seat: the UF4 feature board page mounts
  * into `workbench/features`, routing list↔detail on the view-key machine's
  * featureSlug dimension (enter = the view face's openFeatureDetail, return =
  * the tab action clearing the slug — the machine stays the single addressing
- * authority). The optional `features` prop is its assembly seat (IPC faces
- * + doc verbs; 5.16), and with it the 3.2 placeholder retires — every tab
- * of the strip now carries its page.
+ * authority). Task 5.16 completes the seat: the shell now mounts the
+ * ASSEMBLED view (views/features/FeaturesView) — the real dshForge bridge
+ * drives it (getState-sourced active project + the getFeatureBoard /
+ * readFeatureDoc IPC faces, mock 全撤), while the optional `features` prop
+ * (the explicit seat) and hostless mounts reproduce the 5.9 build-stage
+ * page. With 5.9 the 3.2 placeholder retired — every tab of the strip
+ * carries its page.
  *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
@@ -67,7 +71,7 @@ import { TopBar } from './components/chrome/TopBar'
 import { OverviewPage } from './views/overview/OverviewPage'
 import { RegisterWizard } from './views/overview/RegisterWizard'
 import { TaskBoardPage } from './views/TaskBoardPage'
-import { FeaturesPage } from './views/FeaturesPage'
+import { FeaturesView } from './views/features/FeaturesView'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -314,22 +318,25 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   </div>
                 )
                 : (
-                  // UF4 (task 5.9): the feature board page takes the LAST
-                  // reserved seat — list↔detail routed on the view-key
-                  // machine's featureSlug dimension (enter = the view face's
-                  // openFeatureDetail, return = the tab action clearing the
-                  // slug); the optional features seat hands the page its
-                  // IPC-backed faces (5.16).
+                  // UF4 (task 5.16 assembly): the features seat now mounts the
+                  // COMPLETION view — with the real dshForge bridge live it
+                  // resolves the active project over getState and hands
+                  // FeaturesPage the IPC faces (getFeatureBoard /
+                  // readFeatureDoc, mock 全撤); the explicit seat / a hostless
+                  // mount reproduces the 5.9 build-stage page exactly. The
+                  // list↔detail routing stays on the view-key machine's
+                  // featureSlug dimension (enter = openFeatureDetail, return =
+                  // the tab action clearing the slug).
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
-                    <FeaturesPage
+                    <FeaturesView
                       t={props.t}
-                      projectId={workbenchState.activeProjectId ?? undefined}
                       featureSlug={view.featureSlug}
                       onOpenFeature={props.openFeatureDetail}
                       onBack={() => { props.selectWorkbenchTab('workbench/features') }}
-                      externalDocs={activeProject?.docLocationType === 'external'}
-                      face={props.features?.face}
-                      docFace={props.features?.docFace}
+                      onRegister={addProject}
+                      seat={props.features}
+                      chromeProjectId={workbenchState.activeProjectId ?? undefined}
+                      chromeExternalDocs={activeProject?.docLocationType === 'external'}
                     />
                   </div>
                 )}

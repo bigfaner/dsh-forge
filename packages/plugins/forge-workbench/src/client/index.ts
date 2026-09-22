@@ -44,6 +44,7 @@ export type {
   WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
   TaskBoardFace, TaskBoardSeat,
+  FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -65,6 +66,19 @@ export {
   MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockOverviewFace,
   createMockTaskBoardFace,
 } from './mocks/workbench'
+// The Interface 1 IPC adapter (task 5.16 — the pattern the 5.14 overview and
+// 5.15 task-board assemblies reuse): the guarded preload-bridge read, the
+// 1:1 face→verb factories, and the rejection-envelope normalization that
+// keeps every view's error mapping form-agnostic.
+export {
+  createIpcFeatureBoardFace, createIpcFeatureDocFace, getWorkbenchIpcBridge,
+  normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,
+} from './ipc/workbench'
+export type { WorkbenchIpcBridge } from './ipc/workbench'
+// The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
+// cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
+export { createFeatureDocsCache } from './store/feature-board'
+export type { FeatureDocsCache } from './store/feature-board'
 // The shared task-status vocabulary (task 5.5 — the first status-rendering
 // task): the 7-态 runtime order + the label/short-label/StateDot routing.
 // Tasks 5.7 (detail dock) and 5.9 (feature board) consume it as-is — the
@@ -86,6 +100,13 @@ export { fillTemplate } from './views/overview/format'
 // switcher's tree tab is its placeholder.
 export { TaskBoardPage } from './views/TaskBoardPage'
 export type { TaskBoardPageProps } from './views/TaskBoardPage'
+// The UF4 features tab, assembled (task 5.16): the completion view the shell
+// mounts — real bridge → getState-sourced project + IPC faces; the seat /
+// hostless forms reproduce the 5.9 build-stage page (exported with it).
+export { FeaturesView } from './views/features/FeaturesView'
+export type { FeaturesViewProps } from './views/features/FeaturesView'
+export { FeaturesPage } from './views/FeaturesPage'
+export type { FeaturesPageProps } from './views/FeaturesPage'
 export {
   computeDanglingByTask, featureSlugsOf, filterTasks, localIdOf, resolveBlockerKey, sortTasks,
 } from './views/TaskBoardPage'
