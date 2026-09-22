@@ -120,8 +120,13 @@ function focusablesOf(root: HTMLElement): HTMLElement[] {
   ))
 }
 
-/** Ref the DialogFrame focuses on open — attach it to the dialog's primary button. */
-export type DialogInitialFocus = React.RefObject<HTMLButtonElement | null>
+/**
+ * Ref the DialogFrame focuses on open — attach it to the dialog's default
+ * control (a button for the launch family, the first INPUT for the 5.4
+ * wizard: `RefObject<HTMLButtonElement>` stays assignable under the widened
+ * element type).
+ */
+export type DialogInitialFocus = React.RefObject<HTMLElement | null>
 
 /**
  * The shared dialog frame: mask + card, focus-in on mount (the primary

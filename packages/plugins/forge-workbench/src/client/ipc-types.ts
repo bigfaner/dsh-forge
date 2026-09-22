@@ -41,6 +41,19 @@ export interface Project {
 }
 
 /**
+ * Interface 1 registerProject input: the three-step wizard's submit payload
+ * (task 5.4). `displayName` omitted / empty means 缺省 = the codeRoot
+ * directory name; `docLocationPath` is required (and ≠ codeRoot) when
+ * external, always null when in_repo.
+ */
+export interface RegisterProjectInput {
+  readonly codeRoot: string
+  readonly docLocationType: DocLocationType
+  readonly docLocationPath?: string | null
+  readonly displayName?: string
+}
+
+/**
  * Interface 1 updateProject patch: rename = `displayName`; repoint = the doc
  * location fields (repoint completes with a rescan — the registry verb's own
  * semantics; the patch itself only carries the fields).

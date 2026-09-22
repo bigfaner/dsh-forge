@@ -24,6 +24,13 @@
  * chrome; the optional `overview` prop is the 5.14 assembly seat (IPC face +
  * sync signals), absent in the build stage where the page runs its mock twin.
  *
+ * Task 5.4 owns the register entry: the addProject seam (chrome 「添加项目」/
+ * overview empty card / state-gate card) and the overview lost-card repoint
+ * seam open the UF1 register wizard overlay (`workbench/dialog/register`) —
+ * register mode and the prefilled edit mode (repoint/rename) respectively.
+ * The optional `wizard` prop is its assembly seat (IPC face + locate
+ * treatment); absent, the dialog runs on its build-stage mock twin.
+ *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
  * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
@@ -34,9 +41,10 @@
  * useReactFlow without mounting their own provider — and the dependency-tree
  * engine (D4) enters through this plugin's bundle, never the shell's.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { WorkbenchShellProps } from './contract'
+import type { Project } from './ipc-types'
 import type { WorkbenchKey } from './locale/en'
 import { WORKBENCH_DIALOG_PREFIX, type WorkbenchTabKey } from './store/view-key'
 import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
@@ -44,6 +52,7 @@ import { ChromeButton } from './components/chrome/ChromeButton'
 import { TabBar } from './components/chrome/TabBar'
 import { TopBar } from './components/chrome/TopBar'
 import { OverviewPage } from './views/overview/OverviewPage'
+import { RegisterWizard } from './views/overview/RegisterWizard'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -136,6 +145,9 @@ const gateButtonStyle = {
   padding: '0 12px',
 } as const
 
+/** The wizard's open target: fresh register, or the prefilled edit (repoint/rename) row. */
+type WizardTarget = { mode: 'register' } | { mode: 'edit'; project: Project }
+
 /**
  * The state gate (page-map Route Guard equivalence): without an active
  * project the project-scoped tabs guide to registration — a guidance card,
@@ -177,10 +189,19 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const workbenchState = props.workbenchState ?? mockState
   const activateProject = props.activateProject
     ?? ((id: string) => { setMockState(state => ({ ...state, activeProjectId: id })) })
-  const addProject = props.addProject ?? (() => {
-    // The register wizard (task 5.4) owns the dialog overlay; until it lands
-    // the entry point exists and fires — the wizard presentation is its seam.
-  })
+
+  // The register wizard (task 5.4): the addProject / repoint seams open the
+  // `workbench/dialog/register` overlay — register mode, or the prefilled edit
+  // mode. The dialog runs its own per-mount mock twin (the OverviewPage
+  // precedent); the 5.14 seat injects the IPC face over it. The opener
+  // snapshots focus so close returns there.
+  const [wizardTarget, setWizardTarget] = useState<WizardTarget | undefined>(undefined)
+  const wizardTriggerRef = useRef<HTMLElement | null>(null)
+  const openWizard = (target: WizardTarget): void => {
+    wizardTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setWizardTarget(target)
+  }
+  const addProject = props.addProject ?? (() => { openWizard({ mode: 'register' }) })
 
   // External-selection sync (slot path): mounting means an actor selected the
   // workbench panel, unmounting means it left. Stable callbacks — run once.
@@ -188,6 +209,25 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     props.notifyPresented?.()
     return () => { props.notifyDismissed?.() }
   }, [])
+
+  /** Close the wizard and return focus to the opener (the dialog contract). */
+  const closeWizard = (): void => {
+    setWizardTarget(undefined)
+    const trigger = wizardTriggerRef.current
+    if (trigger !== null && document.contains(trigger)) trigger.focus()
+  }
+
+  /**
+   * The build-stage locate (ERR_PROJECT_EXISTS terminal): scroll the existing
+   * card into view — the 5.14 seat's onLocate replaces the treatment
+   * (scroll + highlight + toast).
+   */
+  const locateProject = (project: Project): void => {
+    const card = document.querySelector(`[data-dsh-forge-project-card="${project.id}"]`)
+    if (card !== null && typeof (card as HTMLElement).scrollIntoView === 'function') {
+      ;(card as HTMLElement).scrollIntoView({ block: 'center' })
+    }
+  }
 
   // The page-map state gate: project-scoped tabs (tasks/features, the
   // feature-detail subview included) need an active project; the overview tab
@@ -214,14 +254,15 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                 // UF1 (task 5.3): the overview page owns its own empty state,
                 // so it takes the reserved seat WITHOUT the state gate. Its
                 // register CTA fires the same addProject seam as the chrome;
-                // the optional overview seat (5.14) hands the page its
-                // IPC-backed face + sync signals — absent, the page runs on
-                // its build-stage mock twin.
+                // the lost-card repoint defaults to the 5.4 wizard's EDIT
+                // mode (5.14's overview seat can override either); the
+                // optional overview seat hands the page its IPC-backed face +
+                // sync signals — absent, the page runs on its mock twin.
                 <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                   <OverviewPage
                     t={props.t}
                     onRegister={addProject}
-                    onRepoint={props.overview?.onRepoint}
+                    onRepoint={props.overview?.onRepoint ?? ((project) => { openWizard({ mode: 'edit', project }) })}
                     lostProjectIds={props.overview?.lostProjectIds}
                     face={props.overview?.face}
                   />
@@ -234,6 +275,21 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
               )}
         </div>
       </ReactFlowProvider>
+
+      {/* UF1 (task 5.4): the register wizard overlay — `workbench/dialog/
+          register` in the page-map's dialog family. The 5.14 `wizard` seat
+          injects the IPC face + locate treatment over the mock twin. */}
+      {wizardTarget !== undefined && (
+        <RegisterWizard
+          t={props.t}
+          mode={wizardTarget.mode}
+          project={wizardTarget.mode === 'edit' ? wizardTarget.project : undefined}
+          projects={workbenchState.projects}
+          face={props.wizard?.face}
+          onLocate={props.wizard?.onLocate ?? locateProject}
+          onClose={closeWizard}
+        />
+      )}
     </div>
   )
 }

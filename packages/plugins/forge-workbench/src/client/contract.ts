@@ -23,7 +23,9 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 // into this program's SlotMap view (declared by ui-sidebar).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
-import type { Project, ProjectPatch, RecordSessionLinkInput, SessionLink, WorkbenchState } from './ipc-types'
+import type {
+  Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, WorkbenchState,
+} from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
 
@@ -135,6 +137,56 @@ export interface WorkbenchOverviewSeat {
 }
 
 /**
+ * The register wizard's probe results (task 5.4). The step-① read is the
+ * DF003-前置 detection the wizard shows as instant feedback (ui-design UF1
+ * States: 检出成功显示任务/feature 概览); failures carry the §Error Handling
+ * `ERR_*` codes verbatim so the inline mapping is the real one.
+ */
+export type CodeRootProbeResult =
+  | { available: true; taskTotal: number; featureTotal: number }
+  | { available: false; reasonCode: 'ERR_CODE_ROOT_UNREADABLE' | 'ERR_FORGE_NOT_DETECTED'; detail?: string }
+
+/** The step-② external doc-path probe: conflict guard + readability (授权前提). */
+export type ExternalPathProbeResult =
+  | { ok: true }
+  | { ok: false; reasonCode: 'ERR_DOC_PATH_CONFLICT' | 'ERR_EXTERNAL_PATH_UNREADABLE'; detail?: string }
+
+/**
+ * The register wizard's data + action face (task 5.4, UI dependency layering —
+ * the same seam shape as OverviewFace / SessionLaunchServices): the BUILD
+ * stage renders against mocks/workbench.createMockRegisterWizardFace, the
+ * 5.14 assembly task injects the Interface 1 verbs (registerProject /
+ * updateProject reject with the serialized {@link WorkbenchVerbError} shape)
+ * plus the real detection read behind the probe members.
+ */
+export interface RegisterWizardFace {
+  /** Step ①: does this codeRoot carry forge data (`.forge/` or a docs location)? */
+  probeCodeRoot(input: { codeRoot: string }): Promise<CodeRootProbeResult>
+  /** Step ②: external doc-path validation (≠ codeRoot, readable — the authorization's premise). */
+  probeExternalPath(input: { codeRoot: string; docLocationPath: string }): Promise<ExternalPathProbeResult>
+  /** Interface 1 registerProject — the ONLY write, fired solely from the summary-confirm step (Hard Rule). */
+  registerProject(input: RegisterProjectInput): Promise<Project>
+  /** Interface 1 updateProject — the edit mode's repoint/rename verb (repoint completes with a rescan). */
+  updateProject(id: string, patch: ProjectPatch): Promise<Project>
+}
+
+/**
+ * The shell's passthrough seat for the register wizard (task 5.4): absent
+ * entirely in the build stage (the dialog runs on its mock twin); 5.14
+ * injects the IPC-backed face and the locate treatment.
+ */
+export interface RegisterWizardSeat {
+  /** The wizard face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
+  readonly face?: Partial<RegisterWizardFace>
+  /**
+   * ERR_PROJECT_EXISTS terminal (spec Error Handling: 提示已注册并定位既有
+   * 项目卡片): the wizard closes itself and hands over the registered row;
+   * the assembly scrolls/highlights the overview card.
+   */
+  readonly onLocate?: ((project: Project) => void) | undefined
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -151,6 +203,8 @@ export type WorkbenchShellProps =
   & Partial<WorkbenchChromeFace>
   /** The overview page's assembly seat (task 5.3): absent = the page-local mock twin. */
   & { overview?: WorkbenchOverviewSeat }
+  /** The register wizard's assembly seat (task 5.4): absent = the wizard-local mock twin. */
+  & { wizard?: RegisterWizardSeat }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

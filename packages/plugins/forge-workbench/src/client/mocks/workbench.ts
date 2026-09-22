@@ -9,10 +9,12 @@
  * projects, first active); the empty variant exercises the chrome's state
  * gate (page-map: 无激活项目 → tasks/features guide to registration). Task
  * 5.3 adds the card-data variety (external docs / never-activated) and the
- * overview page's mock verb twin (createMockOverviewFace).
+ * overview page's mock verb twin (createMockOverviewFace). Task 5.4 adds the
+ * register wizard's fixtures + verb twin (createMockRegisterWizardFace).
  */
-import type { Project, ProjectPatch, WorkbenchState } from '../ipc-types'
-import type { OverviewFace, SessionLaunchServices } from '../contract'
+import type { Project, ProjectPatch, RegisterProjectInput, WorkbenchState } from '../ipc-types'
+import type { OverviewFace, RegisterWizardFace, SessionLaunchServices } from '../contract'
+import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
 /** The demo mandatory core row (UF6 consumes the same rows in 5.12). */
 const MOCK_PLUGINS = Object.freeze([
@@ -169,6 +171,130 @@ export function createMockOverviewFace(initial: WorkbenchState = MOCK_WORKBENCH_
         ? (projects[0]?.id ?? null)
         : state.activeProjectId
       state = { ...state, projects, activeProjectId }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Register wizard (task 5.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Step-① probe fixtures: deterministic paths the mock twin answers without
+ * touching the filesystem (BUILD layering — the real detection read arrives
+ * with the 5.14 assembly). Any path outside these fixtures probes as
+ * detected with the counts below, so happy-path flows stay writable.
+ */
+export const MOCK_WIZARD_OK_ROOT = 'Z:\\project\\demo'
+export const MOCK_WIZARD_UNREADABLE_ROOT = 'Z:\\project\\gone'
+export const MOCK_WIZARD_NO_FORGE_ROOT = 'Z:\\project\\plain'
+
+/** The detected overview counts (ui-design: 检出成功显示任务/feature 概览). */
+export const MOCK_WIZARD_TASK_TOTAL = 12
+export const MOCK_WIZARD_FEATURE_TOTAL = 3
+
+/** Step-② probe fixtures: one readable external docs path, one unreachable. */
+export const MOCK_WIZARD_EXTERNAL_OK = 'Z:\\docs\\demo'
+export const MOCK_WIZARD_EXTERNAL_UNREADABLE = 'Z:\\docs\\gone'
+
+/**
+ * The register wizard's build-stage face, task 5.4 (UI dependency layering):
+ * a STATEFUL local twin over a closure-held registry — a factory, not a
+ * singleton, so every mount/test gets isolated state (the createMockOverview
+ * Face precedent). Verb semantics mirror the main-process chain
+ * (tech-design §Interface 1 / §Error Handling):
+ *
+ *   probeCodeRoot      — fixture-keyed; unknown non-empty paths detect fine;
+ *   probeExternalPath  — samePath(codeRoot) → ERR_DOC_PATH_CONFLICT, the
+ *                        unreadable fixture → ERR_EXTERNAL_PATH_UNREADABLE;
+ *   registerProject    — UNIQUE(code_root) → ERR_PROJECT_EXISTS; external
+ *                        path = codeRoot → ERR_DOC_PATH_CONFLICT; displayName
+ *                        缺省 = the codeRoot directory name; deterministic
+ *                        mock ids + frozen MOCK_NOW stamps;
+ *   updateProject      — patches the row (explicit field merge: an undefined
+ *                        patch member never nulls a stored field), unknown id
+ *                        → ERR_PROJECT_NOT_FOUND.
+ *
+ * The 5.14 assembly task replaces the whole face with the IPC verbs + the
+ * real detection read.
+ */
+export function createMockRegisterWizardFace(
+  initial: WorkbenchState = MOCK_WORKBENCH_STATE,
+): RegisterWizardFace {
+  let projects: readonly Project[] = initial.projects
+  let seq = 0
+  const verbError = (code: string, message: string): never => {
+    throw { code, message }
+  }
+  const findByRoot = (codeRoot: string): Project | undefined =>
+    projects.find(project => samePath(project.codeRoot, codeRoot))
+  return {
+    probeCodeRoot: async ({ codeRoot }) => {
+      const root = codeRoot.trim()
+      if (samePath(root, MOCK_WIZARD_UNREADABLE_ROOT)) {
+        return { available: false, reasonCode: 'ERR_CODE_ROOT_UNREADABLE', detail: `mock fixture: ${MOCK_WIZARD_UNREADABLE_ROOT}` }
+      }
+      if (samePath(root, MOCK_WIZARD_NO_FORGE_ROOT)) {
+        return { available: false, reasonCode: 'ERR_FORGE_NOT_DETECTED', detail: `mock fixture: ${MOCK_WIZARD_NO_FORGE_ROOT}` }
+      }
+      return { available: true, taskTotal: MOCK_WIZARD_TASK_TOTAL, featureTotal: MOCK_WIZARD_FEATURE_TOTAL }
+    },
+    probeExternalPath: async ({ codeRoot, docLocationPath }) => {
+      const path = docLocationPath.trim()
+      if (samePath(path, codeRoot)) {
+        return { ok: false, reasonCode: 'ERR_DOC_PATH_CONFLICT', detail: 'external docs path equals the code root' }
+      }
+      if (samePath(path, MOCK_WIZARD_EXTERNAL_UNREADABLE)) {
+        return { ok: false, reasonCode: 'ERR_EXTERNAL_PATH_UNREADABLE', detail: `mock fixture: ${MOCK_WIZARD_EXTERNAL_UNREADABLE}` }
+      }
+      return { ok: true }
+    },
+    registerProject: async (input: RegisterProjectInput) => {
+      // Interface 1: codeRoot is normalized at registration (绝对路径规范化).
+      const codeRoot = normalizePathForCompare(input.codeRoot)
+      if (findByRoot(codeRoot) !== undefined) {
+        return verbError('ERR_PROJECT_EXISTS', `build-stage mock: ${codeRoot} is already registered`)
+      }
+      if (input.docLocationType === 'external' && samePath(input.docLocationPath ?? '', codeRoot)) {
+        return verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
+      }
+      seq += 1
+      const project: Project = {
+        id: `mock-wizard-project-${String(seq).padStart(4, '0')}`,
+        displayName: input.displayName !== undefined && input.displayName.trim() !== ''
+          ? input.displayName.trim()
+          : directoryNameOf(codeRoot),
+        codeRoot,
+        docLocationType: input.docLocationType,
+        docLocationPath: input.docLocationType === 'external' ? (input.docLocationPath ?? null) : null,
+        createdAt: MOCK_NOW,
+        lastActivatedAt: null,
+      }
+      projects = [...projects, project]
+      return project
+    },
+    updateProject: async (id: string, patch: ProjectPatch) => {
+      const current = projects.find(project => project.id === id)
+      if (current === undefined) {
+        return verbError('ERR_PROJECT_NOT_FOUND', `build-stage mock: no registered project ${id}`)
+      }
+      const docLocationType = patch.docLocationType ?? current.docLocationType
+      const docLocationPath = docLocationType === 'external'
+        ? (patch.docLocationPath ?? current.docLocationPath)
+        : null
+      if (docLocationType === 'external' && docLocationPath !== null && samePath(docLocationPath, current.codeRoot)) {
+        return verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
+      }
+      const updated: Project = {
+        ...current,
+        displayName: patch.displayName !== undefined && patch.displayName.trim() !== ''
+          ? patch.displayName.trim()
+          : current.displayName,
+        docLocationType,
+        docLocationPath,
+      }
+      projects = projects.map(project => (project.id === id ? updated : project))
+      return updated
     },
   }
 }
