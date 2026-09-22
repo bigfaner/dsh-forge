@@ -1,26 +1,42 @@
 /**
  * The workbench main-panel shell (task 3.2 scaffold, view-key driven since
- * task 3.3). It mounts as the `main` slot's `workbench` key — in the slot
- * path chosen by the upstream sidebar, in the fallback rail rendered inside
- * the plugin-owned overlay container — the SAME component either way, so the
- * two forms cannot diverge (Hard Rule).
+ * task 3.3, chrome since task 5.1). It mounts as the `main` slot's
+ * `workbench` key — in the slot path chosen by the upstream sidebar, in the
+ * fallback rail rendered inside the plugin-owned overlay container — the SAME
+ * component either way, so the two forms cannot diverge (Hard Rule).
  *
- * Task 3.3 adds the dual-view face: the view-key selector drives the tab
+ * Task 3.3 added the dual-view face: the view-key selector drives the tab
  * strip (概览/任务/feature, role=tab + aria-selected per ui-design) and the
  * view-key → container mapping table below; the mount/lifecycle notifications
- * report external panel selection back to the shared controller. The UF1–UF6
- * views land inside the reserved mount containers in M2 5.x.
+ * report external panel selection back to the shared controller.
+ *
+ * Task 5.1 lands the page chrome inside that shell: the top bar (app
+ * identity + project switcher + 「添加项目」, ui-design 顶栏), the three-tab
+ * strip as the TabBar component (the view-key machine's tab dimension — the
+ * only tab state, persisted by 3.3), and the page-map STATE GATE: with no
+ * active project the tasks/features tabs present a registration guide
+ * (引导态, never an error), while the UF1-UF6 views land inside the reserved
+ * mount containers in the remaining 5.x tasks.
+ *
+ * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
+ * types + the shared mock (mocks/workbench.ts) through the optional
+ * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
+ * face; absent members keep the build-stage stubs.
  *
  * The board area stays wrapped in @xyflow/react's ReactFlowProvider: the
  * shell establishes the flow context once, so 5.x task-board views consume
  * useReactFlow without mounting their own provider — and the dependency-tree
  * engine (D4) enters through this plugin's bundle, never the shell's.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { WorkbenchShellProps } from './contract'
 import type { WorkbenchKey } from './locale/en'
-import { WORKBENCH_DIALOG_PREFIX, WORKBENCH_TABS, type WorkbenchTabKey } from './store/view-key'
+import { WORKBENCH_DIALOG_PREFIX, type WorkbenchTabKey } from './store/view-key'
+import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
+import { ChromeButton } from './components/chrome/ChromeButton'
+import { TabBar } from './components/chrome/TabBar'
+import { TopBar } from './components/chrome/TopBar'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -58,28 +74,7 @@ const shellStyle = {
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
-  padding: '16px',
-  gap: '12px',
-} as const
-
-const tabsStyle = {
-  display: 'flex',
-  gap: '4px',
-} as const
-
-const tabStyle = {
-  background: 'transparent',
-  border: 'none',
-  borderRadius: '14px',
-  color: 'inherit',
-  cursor: 'pointer',
-  font: 'inherit',
-  padding: '8px 14px',
-} as const
-
-const activeTabStyle = {
-  ...tabStyle,
-  background: 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))',
+  minWidth: '0',
 } as const
 
 const contentStyle = {
@@ -87,6 +82,8 @@ const contentStyle = {
   flex: 1,
   flexDirection: 'column',
   minHeight: 0,
+  overflowY: 'auto',
+  padding: '16px',
 } as const
 
 const placeholderStyle = {
@@ -98,50 +95,118 @@ const placeholderStyle = {
   justifyContent: 'center',
 } as const
 
-/** The tab-strip rows: locale key + view key, in WORKBENCH_TABS order. */
-const TAB_LOCALE_KEYS: Record<WorkbenchTabKey, WorkbenchKey> = {
-  'workbench/overview': 'tab.overview',
-  'workbench/tasks': 'tab.tasks',
-  'workbench/features': 'tab.features',
+/** The gate card: ui-design 空态卡 geometry, dashed like the placeholder, with the register CTA. */
+const gateStyle = {
+  ...placeholderStyle,
+  flexDirection: 'column',
+  gap: '8px',
+  textAlign: 'center',
+} as const
+
+const gateTitleStyle = {
+  fontSize: '16px',
+  fontWeight: 500,
+  lineHeight: '24px',
+} as const
+
+const gateBodyStyle = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontSize: '14px',
+  lineHeight: '22px',
+  margin: '0',
+  maxWidth: '420px',
+} as const
+
+/** The register CTA: md primary pill (brand action color). */
+const gateButtonStyle = {
+  background: 'var(--dsw-alias-link, rgb(65, 118, 230))',
+  border: 'none',
+  borderRadius: '14px',
+  color: '#fff',
+  cursor: 'pointer',
+  font: 'inherit',
+  height: '28px',
+  padding: '0 12px',
+} as const
+
+/**
+ * The state gate (page-map Route Guard equivalence): without an active
+ * project the project-scoped tabs guide to registration — a guidance card,
+ * deliberately NOT an error surface.
+ */
+function StateGate(props: { t: (key: WorkbenchKey) => string; onRegister: () => void }) {
+  return (
+    <div data-dsh-forge-gate="" style={gateStyle}>
+      <strong style={gateTitleStyle}>{props.t('gate.title')}</strong>
+      <p style={gateBodyStyle}>{props.t('gate.body')}</p>
+      <ChromeButton
+        type="button"
+        data-dsh-forge-gate-register=""
+        style={gateButtonStyle}
+        onClick={() => { props.onRegister() }}
+      >
+        {props.t('gate.register')}
+      </ChromeButton>
+    </div>
+  )
 }
 
 /**
- * The registered main-panel component: tab strip + the active view's reserved
- * mount container (the 3.2 placeholder until 5.x).
+ * The registered main-panel component: top bar (identity + project switcher +
+ * add action), the three-tab strip (the view-key machine's tab dimension),
+ * and the gated/ungated mount container the active view key addresses (the
+ * 3.2 placeholder until the remaining 5.x).
  * @param props - composed props: the main slot's runtime share, the `t` seat,
- *   and the view face (selector + tab action + panel lifecycle).
+ *   the view face (selector + tab action + panel lifecycle), and (optionally,
+ *   assembly-time) the chrome data face — absent members use the build-stage
+ *   mock + local stubs.
  */
 export function WorkbenchShell(props: WorkbenchShellProps) {
   const view = props.useViewKey(snapshot => snapshot)
+  // Build-stage defaults (UI dependency layering): the shared mock + a local
+  // single-activation stub. Assembly (5.14-5.16) overrides the whole face
+  // with the IPC-backed implementation.
+  const [mockState, setMockState] = useState(() => MOCK_WORKBENCH_STATE)
+  const workbenchState = props.workbenchState ?? mockState
+  const activateProject = props.activateProject
+    ?? ((id: string) => { setMockState(state => ({ ...state, activeProjectId: id })) })
+  const addProject = props.addProject ?? (() => {
+    // The register wizard (task 5.4) owns the dialog overlay; until it lands
+    // the entry point exists and fires — the wizard presentation is its seam.
+  })
+
   // External-selection sync (slot path): mounting means an actor selected the
   // workbench panel, unmounting means it left. Stable callbacks — run once.
   useEffect(() => {
     props.notifyPresented?.()
     return () => { props.notifyDismissed?.() }
   }, [])
+
+  // The page-map state gate: project-scoped tabs (tasks/features, the
+  // feature-detail subview included) need an active project; the overview tab
+  // owns its own empty state (UF1/5.3) and keeps its mount container.
+  const gated = workbenchState.activeProjectId === null
+    && view.workbenchTab !== 'workbench/overview'
+
   return (
     <div data-dsh-forge-plugin="forge-workbench" data-dsh-forge-shell="" style={shellStyle}>
-      <h2>{props.t('shell.title')}</h2>
-      <div role="tablist" aria-label={props.t('tabs.label')} data-dsh-forge-tabs="" style={tabsStyle}>
-        {WORKBENCH_TABS.map(tab => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={view.workbenchTab === tab ? 'true' : 'false'}
-            data-dsh-forge-tab={tab}
-            style={view.workbenchTab === tab ? activeTabStyle : tabStyle}
-            onClick={() => { props.selectWorkbenchTab(tab) }}
-          >
-            {props.t(TAB_LOCALE_KEYS[tab])}
-          </button>
-        ))}
-      </div>
+      <TopBar
+        t={props.t}
+        projects={workbenchState.projects}
+        activeProjectId={workbenchState.activeProjectId}
+        onActivate={activateProject}
+        onAddProject={addProject}
+      />
+      <TabBar t={props.t} activeTab={view.workbenchTab} onSelect={props.selectWorkbenchTab} />
       <ReactFlowProvider>
         <div data-dsh-forge-content="" style={contentStyle}>
-          <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
-            <em>{props.t('shell.placeholder')}</em>
-          </div>
+          {gated
+            ? <StateGate t={props.t} onRegister={addProject} />
+            : (
+              <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
+                <em>{props.t('shell.placeholder')}</em>
+              </div>
+            )}
         </div>
       </ReactFlowProvider>
     </div>

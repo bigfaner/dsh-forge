@@ -15,6 +15,13 @@ export type WorkbenchKey =
   | 'tab.overview'
   | 'tab.tasks'
   | 'tab.features'
+  | 'chrome.addProject'
+  | 'switcher.label'
+  | 'switcher.empty'
+  | 'switcher.emptyHint'
+  | 'gate.title'
+  | 'gate.body'
+  | 'gate.register'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -27,4 +34,11 @@ export const en: Record<WorkbenchKey, string> = {
   'tab.overview': 'Overview',
   'tab.tasks': 'Tasks',
   'tab.features': 'Features',
+  'chrome.addProject': 'Add project',
+  'switcher.label': 'Active project',
+  'switcher.empty': 'No projects yet',
+  'switcher.emptyHint': 'Register a forge project to activate the workbench.',
+  'gate.title': 'No active project',
+  'gate.body': 'Tasks and features are organized per project. Register a project to unlock these views.',
+  'gate.register': 'Register a project',
 }

@@ -16,4 +16,11 @@ export const zh: Record<WorkbenchKey, string> = {
   'tab.overview': '概览',
   'tab.tasks': '任务',
   'tab.features': 'feature',
+  'chrome.addProject': '添加项目',
+  'switcher.label': '当前项目',
+  'switcher.empty': '还没有项目',
+  'switcher.emptyHint': '注册一个 forge 项目即可启用工作台。',
+  'gate.title': '未激活项目',
+  'gate.body': '任务与 feature 按项目组织,注册项目后即可查看。',
+  'gate.register': '注册项目',
 }

@@ -40,7 +40,10 @@ import type { WorkbenchKey } from './locale/en'
 export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT } from './contract'
 export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
-export type { WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle } from './contract'
+export type {
+  WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
+  WorkbenchChromeFace,
+} from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
   INITIAL_VIEW_KEY, VIEW_KEY_STORAGE_KEY, WORKBENCH_DIALOG_PREFIX, WORKBENCH_TABS,
@@ -48,6 +51,10 @@ export {
 export type {
   PersistedViewKey, TopLevelView, ViewKeyPersistence, ViewKeySnapshot, ViewKeyStore, WorkbenchTabKey,
 } from './store/view-key'
+// Interface 1 DTO types, client half (task 5.1): the structural source the
+// 5.x build tasks render against (assembly swaps the mocks for IPC reads).
+export type { DocLocationType, PluginRow, Project, WorkbenchState } from './ipc-types'
+export { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE } from './mocks/workbench'
 export { ViewSwitchController } from './nav/view-switch'
 export type { NavForm, ViewCarrier } from './nav/view-switch'
 export { installRailNav } from './nav/rail'

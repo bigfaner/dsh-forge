@@ -23,6 +23,7 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 // into this program's SlotMap view (declared by ui-sidebar).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
+import type { WorkbenchState } from './ipc-types'
 
 /** Dictionary namespace owned by this plugin (LocaleNamespaceMap merge target). */
 export const NS = 'workbench'
@@ -77,6 +78,22 @@ export interface WorkbenchPanelLifecycle {
 }
 
 /**
+ * The chrome's data + action face (task 5.1, UI dependency layering): the
+ * 5.x BUILD stage renders against DTO types + the shared mock (the shell
+ * defaults to mocks/workbench.ts when the face is absent), and the 5.14-5.16
+ * ASSEMBLY tasks inject the IPC-backed implementation — the seam is these
+ * three members, no shell rewrite.
+ */
+export interface WorkbenchChromeFace {
+  /** Interface 1 workbench.getState()'s assembly (projects + single activation + plugin rows). */
+  readonly workbenchState: WorkbenchState
+  /** Interface 1 activateProject(id) — single activation; build stage = local stub. */
+  readonly activateProject: (id: string) => void
+  /** The register entry — the 5.4 wizard owns the dialog; stubbed until it lands. */
+  readonly addProject: () => void
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -89,6 +106,8 @@ export type WorkbenchShellProps =
   & PropsLocale<typeof NS>
   & WorkbenchViewFace
   & Partial<WorkbenchPanelLifecycle>
+  /** The chrome face is partial: absent members fall back to the build-stage mock (task 5.1). */
+  & Partial<WorkbenchChromeFace>
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

@@ -299,7 +299,7 @@
         "3.3",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.1-workbench-shell-chrome.md",
       "record": "records/5.1-workbench-shell-chrome.md",
       "surface-type": "web",
