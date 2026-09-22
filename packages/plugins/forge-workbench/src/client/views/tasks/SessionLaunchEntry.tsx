@@ -171,8 +171,12 @@ export interface SessionLaunchEntryProps {
   t: (key: WorkbenchKey) => string
   /** The task being launched (identity + cwd + title). */
   task: SessionLaunchTaskRef
-  /** Success leg — 5.11 wires 切会话视图 + ctx.uiWorkspace.openSession(sessionId). */
-  onLaunched?: (sessionId: string) => void
+  /**
+   * Success leg (5.11): 切会话视图 + ctx.uiWorkspace.openSession(sessionId).
+   * The task ref rides along so the caller can write the 运行中徽标 for the
+   * launched task's qualified key without re-deriving it.
+   */
+  onLaunched?: (sessionId: string, task: SessionLaunchTaskRef) => void
   /** Service seam: absent members keep the build-stage mock (5.11 injects the real face). */
   services?: Partial<SessionLaunchServices>
 }
@@ -246,7 +250,7 @@ export function SessionLaunchEntry(props: SessionLaunchEntryProps) {
         sessionId: outcome.sessionId,
       }).catch(() => undefined)
       setStage('done')
-      props.onLaunched?.(outcome.sessionId)
+      props.onLaunched?.(outcome.sessionId, props.task)
       return
     }
     if (outcome.kind === 'degraded') {

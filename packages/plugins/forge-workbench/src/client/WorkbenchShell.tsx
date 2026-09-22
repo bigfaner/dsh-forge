@@ -58,7 +58,7 @@
  * useReactFlow without mounting their own provider — and the dependency-tree
  * engine (D4) enters through this plugin's bundle, never the shell's.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { WorkbenchShellProps } from './contract'
 import type { Project } from './ipc-types'
@@ -202,6 +202,13 @@ function StateGate(props: { t: (key: WorkbenchKey) => string; onRegister: () => 
  */
 export function WorkbenchShell(props: WorkbenchShellProps) {
   const view = props.useViewKey(snapshot => snapshot)
+  // The UF5 launch seat (5.11): an observable — the rpc members land when the
+  // remote namespaces mount; absent seat = the entries keep the build-stage
+  // mocks (hostless mounts, unit tests).
+  const launch = useSyncExternalStore(
+    props.launch?.subscribe ?? (() => () => {}),
+    props.launch?.getSnapshot ?? (() => undefined),
+  )
   // Build-stage defaults (UI dependency layering): the shared mock + a local
   // single-activation stub. Assembly (5.14-5.16) overrides the whole face
   // with the IPC-backed implementation.
@@ -261,6 +268,22 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     project => project.id === workbenchState.activeProjectId,
   )
 
+  // The board's vertical scroll memory (5.11 AC4): this div is the vertical
+  // scroller; with a board session store it restores on entering the tasks
+  // tab and saves on leaving (a UF5 round-trip unmounts the whole shell in
+  // the slot path — the store is the memory that survives it).
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (view.workbenchTab !== 'workbench/tasks') return
+    const element = contentRef.current
+    const session = props.boardSession
+    if (element === null || session === undefined) return
+    element.scrollTop = session.getScroll().contentScrollTop
+    return () => { session.saveScroll({ contentScrollTop: element.scrollTop }) }
+    // The store identity is fixed for the app's life (created in the client
+    // apply); re-arming per tasks-tab entry is the restore contract.
+  }, [view.workbenchTab, props.boardSession])
+
   return (
     <div data-dsh-forge-plugin="forge-workbench" data-dsh-forge-shell="" style={shellStyle}>
       <TopBar
@@ -272,7 +295,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
       />
       <TabBar t={props.t} activeTab={view.workbenchTab} onSelect={props.selectWorkbenchTab} />
       <ReactFlowProvider>
-        <div data-dsh-forge-content="" style={contentStyle}>
+        <div ref={contentRef} data-dsh-forge-content="" style={contentStyle}>
           {gated
             ? <StateGate t={props.t} onRegister={addProject} />
             : view.workbenchTab === 'workbench/overview'
@@ -304,8 +327,8 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   // store (the page owns the linkage). The optional taskBoard
                   // seat hands the page its IPC-backed faces (5.15) and
                   // observes activations; the active project's codeRoot
-                  // mounts the dock's UF5 panel-primary entry (5.11 wires
-                  // the real services behind it).
+                  // mounts the UF5 entries (5.11: node-card hover + the
+                  // panel-primary, real services via the launch seat).
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                     <TaskBoardPage
                       t={props.t}
@@ -314,6 +337,9 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                       onSelect={props.taskBoard?.onSelect}
                       face={props.taskBoard?.face}
                       detailFace={props.taskBoard?.detailFace}
+                      {...(launch === undefined ? {} : { launchServices: launch.services })}
+                      {...(launch === undefined || launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
+                      {...(props.boardSession === undefined ? {} : { session: props.boardSession })}
                     />
                   </div>
                 )

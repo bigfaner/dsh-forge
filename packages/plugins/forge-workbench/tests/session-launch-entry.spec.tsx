@@ -374,7 +374,8 @@ describe('SessionLaunchEntry: launch chain terminals (AC3/AC4)', () => {
     const onLaunched = vi.fn()
     const { services } = await openConfirm({ onLaunched })
     fireEvent.click(document.querySelector('[data-dsh-forge-launch-confirm-ok]') as HTMLButtonElement)
-    await waitFor(() => { expect(onLaunched).toHaveBeenCalledWith('session-tier1') })
+    // 5.11: the hand-over carries the task ref (the board's badge write key).
+    await waitFor(() => { expect(onLaunched).toHaveBeenCalledWith('session-tier1', TASK) })
     expect(services.launch).toHaveBeenCalledTimes(1)
     expect(services.launch).toHaveBeenCalledWith({
       promptText: VERBATIM_PROMPT,

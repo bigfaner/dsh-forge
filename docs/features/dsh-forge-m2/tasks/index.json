@@ -333,7 +333,7 @@
         "4.2",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.11-session-launch-entry-integrate.md",
       "record": "records/5.11-session-launch-entry-integrate.md",
       "surface-type": "web",

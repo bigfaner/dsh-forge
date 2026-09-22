@@ -29,6 +29,8 @@ import type {} from './session-launch'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
+import { createBoardSessionStore } from './store/board-session'
+import { createLaunchSeat } from './launch-rpc'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
 import { installSlotNav } from './nav/slot-inject'
@@ -45,6 +47,7 @@ export type {
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
   TaskBoardFace, TaskBoardSeat,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
+  SessionLaunchHandover, TaskBoardLaunchSeat,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -53,6 +56,19 @@ export {
 export type {
   PersistedViewKey, TopLevelView, ViewKeyPersistence, ViewKeySnapshot, ViewKeyStore, WorkbenchTabKey,
 } from './store/view-key'
+// The board session store (task 5.11, AC3/AC4): the plugin-lifetime selection/
+// scroll/badge memory that survives the UF5 round-trip's shell unmount.
+export { createBoardSessionStore, INITIAL_BOARD_SCROLL } from './store/board-session'
+export type { BoardScrollMemory, BoardSessionStore } from './store/board-session'
+// The UF5 launch rpc assembly (task 5.11): the namespace contribution, the
+// tier-2 client channel, the renderer tier-3 legs, and the observable seat
+// both navigation forms thread into the shell.
+export {
+  bringMainWindowToFront, copyPromptToClipboard, createLaunchSeat,
+  deriveLaunchRequestIdClient, FORGE_WORKBENCH_REMOTE_CONTRIBUTION, launchViaClientChannel,
+  sessionChannelOf,
+} from './launch-rpc'
+export type { LaunchSeatSnapshot, LaunchSeatStore } from './launch-rpc'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
@@ -181,6 +197,13 @@ export function apply(ctx: ClientContext): void {
 
   const store = createViewKeyStore(createLocalStoragePersistence())
   const controller = new ViewSwitchController(store)
+  // The UF5 launch seat + the board session store (task 5.11): both live at
+  // plugin lifetime — ABOVE the shell — because a UF5 round-trip unmounts the
+  // shell in the slot path (the keyed main slot) and the success hand-over +
+  // the selection/scroll/badge memory must survive it. The seat's rpc members
+  // land when the `remote` service + the namespace contribution mount.
+  const launchSeat = createLaunchSeat(ctx, controller)
+  const boardSession = createBoardSessionStore()
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -200,6 +223,8 @@ export function apply(ctx: ClientContext): void {
       // the rail is only the visible toggle. Otherwise the rail owns the
       // workbench surface itself.
       content: mainCommitted ? 'chrome' : 'overlay',
+      launch: launchSeat,
+      boardSession,
     })
   }
 
@@ -216,6 +241,8 @@ export function apply(ctx: ClientContext): void {
   const disposeSlotNav = installSlotNav(ctx, {
     controller,
     store,
+    launch: launchSeat,
+    boardSession,
     label: () => t('panel'),
     onMainCommitted: () => {
       mainCommitted = true

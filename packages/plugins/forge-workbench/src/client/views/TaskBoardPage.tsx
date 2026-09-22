@@ -45,13 +45,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Viewport } from '@xyflow/react'
-import type { TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
+import type { SessionLink, TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
 import type { TaskBoardFace, TaskDetailFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { TASK_STATUSES } from '../i18n/task-status'
 import { ChromeButton } from '../components/chrome/ChromeButton'
 import { createMockTaskBoardFace } from '../mocks/workbench'
 import { createSelectedTaskStore } from '../store/selected-task'
+import type { BoardSessionStore } from '../store/board-session'
 import { fillTemplate } from './overview/format'
 import {
   DEFAULT_BOARD_FILTER, TaskToolbar, type BoardFilterState, type BoardSortKey, type BoardViewKey,
@@ -59,7 +60,10 @@ import {
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
+import { qualifyTaskKey } from './tasks/SessionLaunchEntry'
+import type { SessionLaunchTaskRef } from '../contract'
 import { TaskDetailPanel, DETAIL_DOCK_WIDTH } from './tasks/TaskDetailPanel'
+import type { DagLaunchMount } from './tasks/dag/build-graph'
 
 /** The local id of a qualified board key: `feature/5.5` → `5.5`. */
 export function localIdOf(key: string): string {
@@ -149,8 +153,7 @@ export interface TaskBoardPageProps {
   projectId?: string | undefined
   /**
    * The active project's codeRoot — present mounts the dock's UF5
-   * panel-primary launch entry (absent keeps the reserved placeholder; 5.11
-   * wires the real services behind it).
+   * panel-primary launch entry AND the DAG node cards' hover triggers (5.11).
    */
   codeRoot?: string | undefined
   /** The 5.7 detail-dock selection seam — a row/card activation hands the task over. */
@@ -159,6 +162,16 @@ export interface TaskBoardPageProps {
   face?: Partial<TaskBoardFace> | undefined
   /** The detail dock's face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   detailFace?: Partial<TaskDetailFace> | undefined
+  /** The UF5 launch services (5.11): absent members keep the build-stage mocks (the DI switch). */
+  launchServices?: Partial<import('../contract').SessionLaunchServices> | undefined
+  /** The UF5 success hand-over (5.11): 切会话视图 + session locating fires through both mounts. */
+  onLaunched?: import('../contract').SessionLaunchHandover | undefined
+  /**
+   * The board session store (5.11 AC3/AC4): present = the plugin-lifetime
+   * selection/scroll/badge memory (survives the launch round-trip's shell
+   * unmount); absent = per-mount stores (the 5.8 behavior, unit tests).
+   */
+  session?: BoardSessionStore | undefined
 }
 
 /**
@@ -272,15 +285,27 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   const [announcement, setAnnouncement] = useState<string | undefined>(undefined)
   const hasLoaded = useRef(false)
   const clearTimers = useRef<Array<ReturnType<typeof setTimeout>>>([])
-  const statusBoardScrollLeft = useRef(0)
   const pageRef = useRef<HTMLDivElement>(null)
   const updatingKeysRef = useRef<ReadonlySet<string>>(new Set())
 
   // The UF3 selection store (task 5.8, Hard Rule: the linkage's ONE source).
-  // One instance per page mount = the AC's 页内会话期 scope; every activation
-  // writes here, the dock and the views' selected marks read from here.
-  const [selection] = useState(() => createSelectedTaskStore())
+  // One instance per page mount = the AC's 页内会话期 scope — UNLESS the
+  // assembly handed the plugin-lifetime board session store (5.11 AC4: the
+  // launch round-trip unmounts the shell in the slot path; the injected
+  // selection survives it); every activation writes here, the dock and the
+  // views' selected marks read from here.
+  const [localSelection] = useState(() => createSelectedTaskStore())
+  const selection = props.session?.selection ?? localSelection
   const selected = useSyncExternalStore(selection.subscribe, selection.getSnapshot)
+
+  // The 运行中徽标 data (5.11 AC3): the board session store's active-link map
+  // (launch success writes it; the dock's authoritative link reads reconcile
+  // it). Without a session store the board keeps no badge (per-mount scope).
+  const NO_ACTIVE_LINKS = useMemo(() => new Map<string, string>(), [])
+  const activeLinks = useSyncExternalStore(
+    props.session?.subscribeLinks ?? (() => () => {}),
+    props.session?.getActiveLinks ?? (() => NO_ACTIVE_LINKS),
+  )
 
   // Outside-close arbitration (5.8): the dock closes on outside pointerdowns
   // EXCEPT presses on a board SELECTABLE — ui-design UF2 makes 点击节点/行 the
@@ -399,8 +424,19 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   // reset by a switch. The tree's pan/zoom rides the same rule through the
   // settled-viewport stash (updated on every move end while view A is open,
   // re-applied as its defaultViewport on re-entry — fit-view stays first-load
-  // only).
-  const treeViewport = useRef<Viewport | undefined>(undefined)
+  // only). With a session store (5.11 AC4) the same memory ALSO survives a
+  // page unmount (the launch round-trip): hydrate at mount, save on unmount.
+  const [sessionScroll] = useState(() => props.session?.getScroll())
+  const treeViewport = useRef<Viewport | undefined>(sessionScroll?.treeViewport)
+  const statusBoardScrollLeft = useRef(sessionScroll?.statusBoardScrollLeft ?? 0)
+  useEffect(() => () => {
+    props.session?.saveScroll({
+      treeViewport: treeViewport.current,
+      statusBoardScrollLeft: statusBoardScrollLeft.current,
+    })
+    // The session store identity is fixed for the app's life; the save reads
+    // the refs at unmount time (the 5.11 AC4 memory's write leg).
+  }, [])
   const handleViewChange = (next: BoardViewKey): void => {
     if (view === 'grouped' && next !== 'grouped') {
       const container = pageRef.current?.querySelector<HTMLElement>('[data-dsh-forge-status-board]')
@@ -424,6 +460,38 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     [allTasks, filter, sort],
   )
 
+  // The UF5 success leg (5.11): delegate the hand-over (切会话视图 + session
+  // locating — the shell's seat), then write the 运行中徽标 into the board
+  // session store for the launched task's qualified key (AC3/AC2: back on the
+  // board, the badge reads correctly off the store, unmount-surviving).
+  const handleLaunched = useCallback((sessionId: string, task: SessionLaunchTaskRef): void => {
+    props.onLaunched?.(sessionId, task)
+    if (props.session !== undefined && props.projectId !== undefined) {
+      props.session.markLinkActive(props.projectId, qualifyTaskKey(task.featureSlug, task.localId), sessionId)
+    }
+  }, [props.onLaunched, props.session, props.projectId])
+
+  // The dock's authoritative link read (5.11): getTaskDetail.links reconciles
+  // the badge map (an ended/absent active link drops it — the end path).
+  const handleLinksLoaded = useCallback((taskKey: string, links: readonly SessionLink[]): void => {
+    if (props.session !== undefined && props.projectId !== undefined) {
+      props.session.reconcileLinks(props.projectId, taskKey, links)
+    }
+  }, [props.session, props.projectId])
+
+  // The DAG's launch mount (5.11): one memoized object — the graph rebuild
+  // keys on its identity, so the entries' props stay referentially stable
+  // between renders (a services/onLaunched change is a REAL change).
+  const dagLaunchMount = useMemo<DagLaunchMount | undefined>(() => {
+    if (props.projectId === undefined || props.codeRoot === undefined) return undefined
+    return {
+      projectId: props.projectId,
+      codeRoot: props.codeRoot,
+      ...(props.launchServices === undefined ? {} : { services: props.launchServices }),
+      onLaunched: handleLaunched,
+    }
+  }, [props.projectId, props.codeRoot, props.launchServices, handleLaunched])
+
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
 
@@ -441,6 +509,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
           onSelect={handleSelect}
           initialViewport={treeViewport.current}
           onViewportSettled={(viewport) => { treeViewport.current = viewport }}
+          {...(dagLaunchMount === undefined ? {} : { launch: dagLaunchMount })}
+          activeLinks={activeLinks}
         />
       </div>
     )
@@ -456,6 +526,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             updatingKeys={updatingKeys}
             selectedKey={selected.taskKey}
             onSelect={handleSelect}
+            activeLinks={activeLinks}
           />
         </div>
       )
@@ -468,6 +539,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             updatingKeys={updatingKeys}
             selectedKey={selected.taskKey}
             onSelect={handleSelect}
+            activeLinks={activeLinks}
           />
         </div>
       )
@@ -573,6 +645,12 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             projectId={props.projectId}
             codeRoot={props.codeRoot}
             face={props.detailFace}
+            {...(props.launchServices === undefined ? {} : { services: props.launchServices })}
+            onLaunched={handleLaunched}
+            {...(selected.taskKey === undefined
+              ? {}
+              : { activeSessionId: activeLinks.get(selected.taskKey) })}
+            {...(props.session === undefined ? {} : { onLinksLoaded: handleLinksLoaded })}
             onClose={handleCloseDock}
             onNavigate={handleNavigate}
           />

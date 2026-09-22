@@ -25,6 +25,8 @@ import {
   MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT,
 } from '../contract'
 import type { ViewKeyStore, WorkbenchTabKey } from '../store/view-key'
+import type { BoardSessionStore } from '../store/board-session'
+import type { LaunchSeatStore } from '../launch-rpc'
 import { WorkbenchPanelIcon } from '../WorkbenchPanelIcon'
 import { WorkbenchShell } from '../WorkbenchShell'
 import type { ViewCarrier, ViewSwitchController } from './view-switch'
@@ -44,6 +46,16 @@ export interface SlotNavOptions {
    * preferred form is fully live and the fallback rail stands down.
    */
   readonly onPathLive?: () => void
+  /**
+   * The UF5 launch seat (5.11): the shell subscribes and hands the board page
+   * the real launch services + the success hand-over.
+   */
+  readonly launch?: LaunchSeatStore | undefined
+  /**
+   * The board session store (5.11 AC3/AC4): the selection/scroll/badge memory
+   * that survives the launch round-trip's shell unmount.
+   */
+  readonly boardSession?: BoardSessionStore | undefined
 }
 
 /**
@@ -90,6 +102,8 @@ export function installSlotNav(ctx: ClientContext, options: SlotNavOptions): () 
         openFeatureDetail: (slug: string) => { controller.openFeatureDetail(slug) },
         notifyPresented: () => { controller.adoptExternalView('workbench') },
         notifyDismissed: () => { controller.adoptExternalView('session') },
+        ...(options.launch === undefined ? {} : { launch: options.launch }),
+        ...(options.boardSession === undefined ? {} : { boardSession: options.boardSession }),
       }),
     }, WorkbenchShell)
     mainCommitted = true

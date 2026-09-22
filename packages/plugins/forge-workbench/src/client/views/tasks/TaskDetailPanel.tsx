@@ -29,13 +29,14 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
-import type { TaskDetail } from '../../ipc-types'
-import type { SessionLaunchServices, TaskDetailFace } from '../../contract'
+import type { SessionLink, TaskDetail } from '../../ipc-types'
+import type { SessionLaunchServices, SessionLaunchTaskRef, TaskDetailFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockTaskDetailFace } from '../../mocks/workbench'
 import { localIdOf } from '../TaskBoardPage'
+import { SessionBadge } from './SessionBadge'
 import { SessionLaunchEntry } from './SessionLaunchEntry'
 import { focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
 import { badgeStyle, sourceBadgeStyle } from './TaskRow'
@@ -75,6 +76,20 @@ export interface TaskDetailPanelProps {
   face?: Partial<TaskDetailFace> | undefined
   /** Service seam passed through to the UF5 entry (5.11 injects the real remotes). */
   services?: Partial<SessionLaunchServices> | undefined
+  /**
+   * The UF5 success hand-over, passed through to the entry (5.11): 切会话视图 +
+   * session locating. The task ref rides along for the caller's badge write.
+   */
+  onLaunched?: ((sessionId: string, task: SessionLaunchTaskRef) => void) | undefined
+  /** The task's ACTIVE session link id (5.11 AC3 — the 会话运行中 badge in the header). */
+  activeSessionId?: string | undefined
+  /**
+   * The dock's authoritative link read (5.11): fires after every successful
+   * loadDetail with the task's links — the caller reconciles the 运行中徽标
+   * (an ended/absent link drops it, the ≤5s end path until a link event kind
+   * exists in the WorkbenchEvent vocabulary).
+   */
+  onLinksLoaded?: ((taskKey: string, links: readonly SessionLink[]) => void) | undefined
   /** Close (Esc / ✕ / outer pointerdown); the parent clears the selection. */
   onClose: () => void
   /** Dep-chain item activation — re-target the selection to that task (AC: 可点击跳转选中). */
@@ -229,6 +244,10 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
   // The load: one effect run per (taskKey, retry) — the alive flag drops
   // stale resolutions when the key switches mid-flight. A close resets the
   // cached detail so the next open starts from the skeleton.
+  // The links-read notification rides a ref (the callback identity follows
+  // the page's callbacks; the load effect's identity discipline stays).
+  const onLinksLoadedRef = useRef(props.onLinksLoaded)
+  onLinksLoadedRef.current = props.onLinksLoaded
   useEffect(() => {
     if (!open || props.taskKey === undefined || props.taskKey === null) {
       setDetail(undefined)
@@ -242,6 +261,7 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
         if (!alive) return
         setDetail(next)
         setPhase('ready')
+        onLinksLoadedRef.current?.(props.taskKey as string, next.links)
       })
       .catch(() => {
         if (alive) setPhase('error')
@@ -386,6 +406,7 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
             </div>
             <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: '4px', minWidth: 0 }}>
               <DetailStatusPill t={props.t} status={detail.summary.status} />
+              <SessionBadge t={props.t} sessionId={props.activeSessionId} />
               {detail.summary.branch !== null && (
                 <span title={detail.summary.branch} style={monoSecondaryStyle}>{detail.summary.branch}</span>
               )}
@@ -406,6 +427,7 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
                 variant="panel-primary"
                 t={props.t}
                 {...(props.services !== undefined ? { services: props.services } : {})}
+                {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
                 task={{
                   projectId: props.projectId,
                   codeRoot: props.codeRoot,

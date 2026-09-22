@@ -38,6 +38,8 @@ export interface StatusBoardProps {
   selectedKey?: string | undefined
   /** The 5.7 selection seam — a card activation hands the task over (navigation only). */
   onSelect?: ((task: TaskSummary) => void) | undefined
+  /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
+  activeLinks?: ReadonlyMap<string, string> | undefined
 }
 
 /** The horizontal kanban scroller (列宽 min 280, 横向滚动). */
@@ -159,6 +161,7 @@ export function StatusBoard(props: StatusBoardProps) {
                       danglingBlockers={props.danglingByTask.get(task.key) ?? []}
                       updating={props.updatingKeys.has(task.key)}
                       selected={props.selectedKey === task.key}
+                      {...(props.activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: props.activeLinks.get(task.key) })}
                       onSelect={props.onSelect}
                     />
                   ))}

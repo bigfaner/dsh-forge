@@ -23,6 +23,8 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 // into this program's SlotMap view (declared by ui-sidebar).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
+import type { BoardSessionStore } from './store/board-session'
+import type { LaunchSeatStore } from './launch-rpc'
 import type {
   DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
   RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
@@ -306,6 +308,27 @@ export interface WorkbenchFeaturesSeat {
 }
 
 /**
+ * The UF5 launch success hand-over (task 5.11): the entry fires it with the
+ * launched session (and the task ref it launched from — the board's badge
+ * write needs the qualified key). The real assembly's implementation lives in
+ * launch-rpc.ts's seat: 切会话视图 through the view-switch controller + the
+ * `ctx.uiWorkspace.openSession(sessionId)` locator (spike-1 §2.2).
+ */
+export type SessionLaunchHandover = (sessionId: string, task: SessionLaunchTaskRef) => void
+
+/**
+ * The board page's assembly seat for the UF5 integration (task 5.11): the
+ * real launch services (absent members keep the build-stage mock — the DI
+ * switch) plus the success hand-over callback.
+ */
+export interface TaskBoardLaunchSeat {
+  /** The real service members — absent members fall back to mocks/workbench defaults (launch-rpc seat). */
+  readonly services?: Partial<SessionLaunchServices>
+  /** Launch success: 切会话视图 + session locating (5.11 wires the real hand-over). */
+  readonly onLaunched?: SessionLaunchHandover
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -328,6 +351,19 @@ export type WorkbenchShellProps =
   & { taskBoard?: TaskBoardSeat }
   /** The feature board's assembly seat (task 5.9): absent = the page-local mock twins. */
   & { features?: WorkbenchFeaturesSeat }
+  /**
+   * The UF5 launch seat STORE (task 5.11, launch-rpc.createLaunchSeat): an
+   * observable — the rpc members land when the remote namespaces mount. The
+   * shell subscribes (uSES); absent = the entries keep the build-stage mocks
+   * (hostless mounts, 5.x unit tests).
+   */
+  & { launch?: LaunchSeatStore }
+  /**
+   * The board session store (task 5.11, AC3/AC4): the plugin-lifetime memory
+   * (selection + scroll + active-link badges) that survives the launch
+   * round-trip's shell unmount. Absent = per-mount stores (5.8 behavior).
+   */
+  & { boardSession?: BoardSessionStore }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

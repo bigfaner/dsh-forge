@@ -30,6 +30,8 @@ export interface TaskListProps {
   selectedKey?: string | undefined
   /** The 5.7 selection seam — a row activation hands the task over (navigation only). */
   onSelect?: ((task: TaskSummary) => void) | undefined
+  /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
+  activeLinks?: ReadonlyMap<string, string> | undefined
 }
 
 const wrapStyle = {
@@ -116,6 +118,7 @@ export function TaskList(props: TaskListProps) {
               danglingBlockers={props.danglingByTask.get(task.key) ?? []}
               updating={props.updatingKeys.has(task.key)}
               selected={props.selectedKey === task.key}
+              {...(props.activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: props.activeLinks.get(task.key) })}
               onSelect={props.onSelect}
             />
           ))}

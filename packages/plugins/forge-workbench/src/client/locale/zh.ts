@@ -181,6 +181,7 @@ export const zh: Record<WorkbenchKey, string> = {
   'tasks.column.source': '来源',
   'tasks.column.updatedAt': '更新时间',
   'tasks.badge.worktree': 'worktree',
+  'tasks.badge.sessionLive': '会话运行中',
   'tasks.source.session': '会话',
   'tasks.source.terminal': '终端',
   'tasks.dangling': '悬空依赖',

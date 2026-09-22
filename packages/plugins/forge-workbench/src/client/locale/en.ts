@@ -180,6 +180,7 @@ export type WorkbenchKey =
   | 'tasks.column.source'
   | 'tasks.column.updatedAt'
   | 'tasks.badge.worktree'
+  | 'tasks.badge.sessionLive'
   | 'tasks.source.session'
   | 'tasks.source.terminal'
   | 'tasks.dangling'
@@ -430,6 +431,7 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.column.source': 'Source',
   'tasks.column.updatedAt': 'Updated',
   'tasks.badge.worktree': 'worktree',
+  'tasks.badge.sessionLive': 'Session live',
   'tasks.source.session': 'Session',
   'tasks.source.terminal': 'Terminal',
   'tasks.dangling': 'Dangling blocker',

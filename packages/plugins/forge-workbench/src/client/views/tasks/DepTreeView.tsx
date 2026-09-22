@@ -39,7 +39,8 @@ import { ReactFlow, type FitViewOptions, type KeyCode, type Viewport } from '@xy
 import type { TaskSummary } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
 import {
-  buildTaskGraph, buildTraversalIndex, nextFocusKey, type FocusDirection, type TaskDagNode, type TraversalIndex,
+  buildTaskGraph, buildTraversalIndex, nextFocusKey,
+  type DagLaunchMount, type FocusDirection, type TaskDagNode, type TraversalIndex,
 } from './dag/build-graph'
 import type { DagPosition } from './dag/layout'
 import { TaskCardNode } from './dag/NodeCard'
@@ -70,6 +71,13 @@ export interface DepTreeViewProps {
   initialViewport?: Viewport | undefined
   /** The settled-viewport stash hook (fires when a pan/zoom gesture ends). */
   onViewportSettled?: ((viewport: Viewport) => void) | undefined
+  /**
+   * The UF5 hover-trigger mount (5.11): present mounts the node-hover entry in
+   * every node card's reserved 28×28 slot; absent keeps the slots empty.
+   */
+  launch?: DagLaunchMount | undefined
+  /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
+  activeLinks?: ReadonlyMap<string, string> | undefined
 }
 
 /**
@@ -78,6 +86,10 @@ export interface DepTreeViewProps {
  * absolute placement) — each rule scoped under `.dsh-forge-dag` (the
  * ReactFlow root's className, below), so the sheet is inert outside this
  * view's own subtree. Mount-scoped: it leaves the document with the view.
+ * The node rule re-enables `pointer-events` (the viewport layer disables
+ * them for the pan surface; the lib's own sheet does the same for nodes) —
+ * without it the card's selection click AND the UF5 hover trigger are dead
+ * in the real browser (events never reach the wrapper).
  */
 const DAG_CANVAS_CSS = `
 .dsh-forge-dag .react-flow__viewport { pointer-events: none; transform-origin: 0 0; }
@@ -85,7 +97,7 @@ const DAG_CANVAS_CSS = `
 .dsh-forge-dag .react-flow__edges svg { left: 0; overflow: visible; position: absolute; pointer-events: none; top: 0; }
 .dsh-forge-dag .react-flow__edge { pointer-events: none; }
 .dsh-forge-dag .react-flow__edge-path { fill: none; }
-.dsh-forge-dag .react-flow__node { cursor: pointer; position: absolute; user-select: none; }
+.dsh-forge-dag .react-flow__node { cursor: pointer; pointer-events: all; position: absolute; user-select: none; }
 .dsh-forge-dag .react-flow__node:focus, .dsh-forge-dag .react-flow__node:focus-visible { outline: none; }
 .dsh-forge-dag .react-flow__node:focus-visible .dsh-forge-node-card { border: 1.5px solid var(--dsw-alias-link, rgb(65, 118, 230)); }
 .dsh-forge-dag .react-flow__handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; opacity: 0; width: 1px; }
@@ -134,12 +146,13 @@ export function DepTreeView(props: DepTreeViewProps) {
   const graph = useMemo(() => {
     const built = buildTaskGraph(
       props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey,
+      props.launch, props.activeLinks,
     )
     const positions = new Map<string, DagPosition>(built.nodes.map(node => [node.id, node.position]))
     const traversal: TraversalIndex = buildTraversalIndex(positions, built.edges)
     const taskByKey = new Map(props.tasks.map(task => [task.key, task] as const))
     return { built, positions, traversal, taskByKey }
-  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey])
+  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey, props.launch, props.activeLinks])
 
   /** Move DOM focus onto a node wrapper (the lib keys wrappers by `data-id`). */
   const focusNode = (key: string): void => {

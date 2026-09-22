@@ -7,11 +7,12 @@
  *
  * The wrapper div (the lib's `.react-flow__node`) carries the interaction —
  * click / Enter / Space navigate to the selection seam; the card itself is
- * pure presentation plus the RESERVED mount point for the UF5 hover trigger
- * (tech-design Integration: 节点卡右上角 hover/:focus-within 显现按钮 28×28 —
- * 5.10's SessionLaunchEntry node-hover variant mounts here with 5.11; the
- * slot is an empty positioned container until then, revealed by the scoped
- * `.dsh-forge-dag` stylesheet on wrapper hover/:focus-within).
+ * pure presentation plus the UF5 hover trigger's mount point (tech-design
+ * Integration: 节点卡右上角 hover/:focus-within 显现按钮 28×28 — since 5.11 the
+ * reserved box hosts 5.10's SessionLaunchEntry node-hover variant whenever the
+ * page hands a launch mount down; without one it stays an empty positioned
+ * container, revealed by the scoped `.dsh-forge-dag` stylesheet on wrapper
+ * hover/:focus-within).
  *
  * The 28×28 budget is the slot's reserved box; the focus ring rides the
  * scoped stylesheet (`.react-flow__node:focus-within .dsh-forge-node-card`,
@@ -21,6 +22,8 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_STATUS_DOT_STATE, taskStatusShortLabel } from '../../../i18n/task-status'
+import { localIdOf } from '../../TaskBoardPage'
+import { SessionLaunchEntry } from '../SessionLaunchEntry'
 import { TaskBadges } from '../TaskRow'
 import type { TaskDagNode } from './build-graph'
 
@@ -120,7 +123,7 @@ const handleStyle = { opacity: 0 } as const
  * NODE_CARD_HEIGHT) keeps the layered layout exact; fields mirror the B card.
  */
 export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
-  const { task, t, updating, selected } = data
+  const { task, t, updating, selected, launch, activeSessionId } = data
   return (
     <div
       data-dsh-forge-node-card={task.key}
@@ -133,8 +136,27 @@ export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
       }}
     >
       <Handle type="target" position={Position.Top} isConnectable={false} style={handleStyle} />
-      {/* The reserved UF5 hover-trigger mount (5.11 fills this box). */}
-      <span data-dsh-forge-node-launch="" style={launchSlotStyle} />
+      {/* The reserved UF5 hover-trigger mount — 5.11 fills the box with the
+          node-hover entry variant whenever the page handed a launch mount
+          (project context + services) down; the scoped sheet reveals it on
+          wrapper hover/:focus-within. */}
+      <span data-dsh-forge-node-launch="" style={launchSlotStyle}>
+        {launch !== undefined && (
+          <SessionLaunchEntry
+            variant="node-hover"
+            t={t}
+            {...(launch.services === undefined ? {} : { services: launch.services })}
+            {...(launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
+            task={{
+              projectId: launch.projectId,
+              codeRoot: launch.codeRoot,
+              featureSlug: task.featureSlug,
+              localId: localIdOf(task.key),
+              title: task.title,
+            }}
+          />
+        )}
+      </span>
       <span style={titleRowStyle}>
         <StateDot state={TASK_STATUS_DOT_STATE[task.status]} />
         <span title={task.title} style={titleStyle}>{task.title}</span>
@@ -151,7 +173,12 @@ export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
             {task.branch}
           </span>
         )}
-        <TaskBadges t={t} task={task} danglingBlockers={data.danglingBlockers} />
+        <TaskBadges
+          t={t}
+          task={task}
+          danglingBlockers={data.danglingBlockers}
+          {...(activeSessionId === undefined ? {} : { activeSessionId })}
+        />
       </span>
       <Handle type="source" position={Position.Bottom} isConnectable={false} style={handleStyle} />
     </div>

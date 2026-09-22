@@ -20,6 +20,7 @@ import type { TaskSummary } from '../../ipc-types'
 import { TASK_STATUS_DOT_STATE, taskStatusLabel, taskStatusShortLabel } from '../../i18n/task-status'
 import type { WorkbenchKey } from '../../locale/en'
 import { fillTemplate, formatTimestamp } from '../overview/format'
+import { SessionBadge } from './SessionBadge'
 
 /** Inputs shared by every row/card variant. */
 export interface TaskRowBaseProps {
@@ -40,6 +41,12 @@ export interface TaskRowBaseProps {
    * transient updating fill wins over it when both land.
    */
   selected?: boolean
+  /**
+   * The task's ACTIVE session link id (5.11 AC3): present renders the 会话运行中
+   * badge inside the shared cluster — a controlled prop off the board session
+   * store, never row-local state.
+   */
+  activeSessionId?: string | undefined
   /** The 5.7 selection seam — the ONLY interaction a row carries (navigation). */
   onSelect?: ((task: TaskSummary) => void) | undefined
 }
@@ -98,9 +105,10 @@ const monoSecondaryStyle = {
  * placeholders instead.
  */
 export function TaskBadges(props: TaskRowBaseProps) {
-  const { task, t, danglingBlockers } = props
+  const { task, t, danglingBlockers, activeSessionId } = props
   return (
     <>
+      <SessionBadge t={t} sessionId={activeSessionId} />
       {task.worktree && <span data-dsh-forge-badge="worktree" style={badgeStyle}>{t('tasks.badge.worktree')}</span>}
       {task.source !== null && (
         <span data-dsh-forge-badge={`source:${task.source}`} style={sourceBadgeStyle}>
@@ -252,7 +260,7 @@ const statusCellStyle = {
  * entire interaction surface.
  */
 export function TaskListRow(props: TaskRowBaseProps) {
-  const { task, t, updating = false, selected = false, onSelect } = props
+  const { task, t, updating = false, selected = false, onSelect, activeSessionId } = props
   const activate = (): void => { onSelect?.(task) }
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -282,6 +290,9 @@ export function TaskListRow(props: TaskRowBaseProps) {
       <td style={statusCellStyle}>
         <StateDot state={TASK_STATUS_DOT_STATE[task.status]} />
         {taskStatusLabel(task.status, t)}
+        {/* 5.11 AC3: the 会话运行中 badge rides the status cell (the C-row
+            cells carry their own dimensions — the shared cluster is B/A only). */}
+        <SessionBadge t={t} sessionId={activeSessionId} />
       </td>
       <td style={rowCellStyle}>{task.featureSlug}</td>
       <td title={task.branch ?? undefined} style={rowMonoCellStyle}>{task.branch ?? NONE_CELL}</td>
