@@ -1,0 +1,60 @@
+# SC7 ① leg (task 6.1): run the upstream client web e2e suite AS-IS on the
+# upstream workspace at the vendored pinned SHA (Playwright browser mode), with
+# the exemption-list mechanism enforced by scripts/run-upstream-web-e2e.mjs —
+# no silent skips. The shell-side ② leg (fixture SPA smoke checklist) runs in
+# the desktop e2e job (pnpm test:e2e).
+name: upstream-web-e2e
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+
+jobs:
+  upstream-web-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout dsh-forge (runner + exemptions + lock)
+        uses: actions/checkout@v4
+
+      - name: Resolve vendored pinned SHA
+        id: sha
+        shell: bash
+        run: echo "sha=$(node -p "require('./vendor/upstream.lock.json').pinnedSha")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout upstream deepseek-harness at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.sha.outputs.sha }}
+          path: upstream
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: upstream/pnpm-lock.yaml
+
+      - name: Install upstream workspace
+        run: pnpm install --frozen-lockfile
+        working-directory: upstream
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: upstream
+
+      - name: Run upstream web e2e (exemption-audited)
+        run: node scripts/run-upstream-web-e2e.mjs
+        env:
+          DSH_UPSTREAM_ROOT: ${{ github.workspace }}/upstream
+
+      - name: Upload e2e exemption audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-web-e2e-report
+          path: test-results/upstream-web-e2e/

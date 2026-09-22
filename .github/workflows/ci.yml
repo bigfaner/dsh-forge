@@ -1,0 +1,185 @@
+# Task 6.3: continuous integration — three-platform matrix (tech-design
+# Testing Strategy: windows-latest × macos-latest(arm64) × ubuntu-latest,
+# with the packaging matrix additionally covering darwin-x64).
+#
+# Legs:
+#   lint-unit          — oxlint + vitest (incl. release-constants consistency
+#                        vs git remote origin) on ubuntu.
+#   desktop-e2e        — Playwright _electron shell e2e (pnpm test:e2e) per
+#                        OS; SC7 ② leg fixture SPA smoke checklist.
+#   upstream-web-e2e  — SC7 ① leg reused from 6.1 via workflow_call.
+#   desktop-package    — 6.2 packaging matrix reused via workflow_call.
+#   ci-summary         — aggregate failure report (always runs, turns the
+#                        workflow red on any leg failure).
+name: ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dsh-forge-m1]
+  pull_request:
+
+jobs:
+  lint-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        shell: bash
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Lint (oxlint)
+        shell: bash
+        run: pnpm lint
+
+      # ui-plugin-foundation task 4: plugin foundation gate — version
+      # consistency assertion (alignment line exact == UpstreamLock
+      # .desktopHostVersion; cordis independent line exact-only) + artifact-level
+      # vendored scan over the built plugin bundles. Runs before vitest so the
+      # gate spec in tests/verify-plugins.spec.ts finds the built artifacts.
+      - name: Plugin foundation gate (version alignment + vendored scan)
+        shell: bash
+        run: pnpm verify:plugins
+
+      - name: Unit tests (vitest)
+        shell: bash
+        run: pnpm test
+
+  desktop-e2e:
+    name: desktop-e2e (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    continue-on-error: true # report leg aggregates failures below
+    steps:
+      - name: Checkout dsh-forge
+        uses: actions/checkout@v4
+
+      - name: Resolve vendored pinned SHA
+        id: sha
+        shell: bash
+        run: echo "sha=$(node -p "require('./vendor/upstream.lock.json').pinnedSha")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout upstream deepseek-harness at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.sha.outputs.sha }}
+          path: upstream
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        shell: bash
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Materialize vendored projection
+        shell: bash
+        run: node scripts/vendor-project.mjs --upstream "$GITHUB_WORKSPACE/upstream"
+
+      - name: Acquire builtin host runtime (Node 22.20.0)
+        shell: bash
+        run: node scripts/prepare-host-runtime.mjs --node-version 22.20.0
+
+      - name: Build desktop bundle
+        shell: bash
+        run: pnpm build:desktop
+
+      # ui-plugin-foundation: the demo plugin is not a default product bundle,
+      # so plugin journeys pack their own tarball on demand (packPlugin) — the
+      # workspace plugin packages must be built for that channel to exist.
+      - name: Build workspace plugins
+        shell: bash
+        run: pnpm build:plugins
+
+      - name: Install Electron runtime deps (linux only)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libasound2t64 libgbm1
+
+      - name: Run desktop e2e (Playwright _electron)
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' pnpm test:e2e
+          else
+            pnpm test:e2e
+          fi
+
+      - name: Report failed e2e leg
+        if: failure()
+        shell: bash
+        run: |
+          echo "::error title=desktop-e2e(${{ matrix.os }}) failed::Shell e2e failed on ${{ matrix.os }}. Trace: apps/desktop/test-results/ (artifact below)."
+          exit 1
+
+      - name: Upload e2e traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-${{ matrix.os }}-traces
+          path: |
+            apps/desktop/test-results/
+            test-results/
+          if-no-files-found: ignore
+
+  upstream-web-e2e:
+    continue-on-error: true # report leg aggregates failures below
+    uses: ./.github/workflows/upstream-web-e2e.yml
+
+  desktop-package:
+    continue-on-error: true # report leg aggregates failures below
+    uses: ./.github/workflows/desktop-package.yml
+
+  # Aggregate failure report (task 6.3): always runs, prints every leg's
+  # outcome, and turns the workflow red if any leg failed — so a leg failure
+  # is never silently absorbed by continue-on-error above.
+  ci-summary:
+    needs: [lint-unit, desktop-e2e, upstream-web-e2e, desktop-package]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Print CI matrix report and gate
+        shell: bash
+        run: |
+          fail=0
+          report() {
+            local leg="$1" result="$2"
+            echo "| ${leg} | ${result} |" >> table.md
+            [ "$result" = "success" ] || fail=1
+          }
+          {
+            echo "## CI matrix report"
+            echo "| Leg | Result |"
+            echo "|-----|--------|"
+          } | tee "$GITHUB_STEP_SUMMARY"
+          report "lint-unit" "${{ needs.lint-unit.result }}"
+          report "desktop-e2e (windows / macos / ubuntu; per-OS jobs)" "${{ needs.desktop-e2e.result }}"
+          report "upstream-web-e2e (SC7 ①)" "${{ needs.upstream-web-e2e.result }}"
+          report "desktop-package (SC packaging matrix)" "${{ needs.desktop-package.result }}"
+          cat table.md | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$fail" -ne 0 ]; then
+            echo "::error title=CI matrix failed::One or more CI legs failed. See the summary table; failed legs keep per-platform jobs + artifacts (installer / e2e traces / exemption audit) for diagnosis."
+            exit 1
+          fi
+          echo "All CI legs green." | tee -a "$GITHUB_STEP_SUMMARY"

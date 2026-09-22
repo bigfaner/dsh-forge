@@ -1,0 +1,78 @@
+# Task 6.3: tag-triggered GitHub Releases publishing (unsigned installers).
+#
+# On push of a `v*` tag: run the 6.2 packaging matrix (nsis / dmg x2 /
+# AppImage — no signing, M1 scope), then download all per-platform installer
+# artifacts and attach them to a GitHub Release on this repo via `gh release
+# create`. Publishing target is implicitly this repository (bigfaner/dsh-forge),
+# which the unit-tested build-time allowlist
+# (apps/desktop/src/main/update-checker/constants.ts: RELEASE_HOST /
+# RELEASE_PATH_PREFIX) pins for the update-checker jump — the release channel
+# and the allowlist can therefore not drift apart.
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # required to create the GitHub Release
+
+jobs:
+  package:
+    uses: ./.github/workflows/desktop-package.yml
+
+  publish:
+    needs: package # includes the desktop-package aggregate report gate
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dsh-forge-*-installer
+          merge-multiple: true
+          path: release-assets
+
+      - name: Verify expected installer set (three-platform matrix)
+        shell: bash
+        run: |
+          ls -lh release-assets/
+          set -e
+          found=0
+          for pattern in 'dsh-forge-*-win32-x64.exe' 'dsh-forge-*-darwin-x64.dmg' 'dsh-forge-*-darwin-arm64.dmg' 'dsh-forge-*-linux-x64.AppImage'; do
+            if compgen -G "release-assets/$pattern" > /dev/null; then
+              found=$((found+1))
+            else
+              echo "::error title=Missing release asset::Expected installer matching '$pattern' was not found among the downloaded artifacts."
+            fi
+          done
+          if [ "$found" -ne 4 ]; then
+            echo "::error title=Incomplete release asset set::Only $found/4 expected installers present; refusing to publish an incomplete release."
+            exit 1
+          fi
+
+      - name: Create GitHub Release with installers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          echo "Publishing release ${tag} to ${GITHUB_REPOSITORY} (update-checker allowlist: github.com/${GITHUB_REPOSITORY}/releases)"
+          gh release view "$tag" >/dev/null 2>&1 && existing=yes || existing=no
+          args=(--title "dsh-forge ${tag}" --generate-notes)
+          if [ "$existing" = "yes" ]; then
+            echo "Release ${tag} already exists — uploading missing assets."
+            gh release upload "$tag" release-assets/* --clobber
+          else
+            gh release create "$tag" "${args[@]}" release-assets/*
+          fi
+
+      - name: Verify release is visible on the allowlisted channel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --json assets,url

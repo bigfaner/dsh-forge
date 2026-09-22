@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UF2 系统通知 — dsh-forge M1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="index.html" class="nav-brand">dsh-forge <span class="nav-tag">M1 原型</span></a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换亮暗主题">◐</button>
+    <button class="nav-burger" type="button" aria-label="菜单">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="tray.html">托盘菜单 UF1</a>
+      <a href="notifications.html">系统通知 UF2</a>
+      <a href="update-banner.html">更新提示 UF3</a>
+      <a href="crash-recovery.html">崩溃恢复 UF4</a>
+    </div>
+  </nav>
+  <main>
+    <div class="page-head">
+      <h1>UF2 系统通知</h1>
+      <p>两类触发(等待输入 / 回合完成);同一会话同一事件 10 秒窗口内合并更新;点击 → 前置主窗口并定位会话;权限被拒/DND 静默降级 + 托盘计数兜底。</p>
+    </div>
+
+    <div class="state-row">
+      <button class="btn sm ghost" data-emit="wait" data-session="重构登录模块">触发「等待输入」</button>
+      <button class="btn sm ghost" data-emit="wait" data-session="编写单元测试">触发「等待输入」(另一会话)</button>
+      <button class="btn sm ghost" data-emit="turn" data-session="重构登录模块">触发「回合完成」</button>
+      <button class="btn sm ghost" data-emit="turn" data-session="超长会话名称用来验证通知正文单行截断行为是否正确执行省略号收尾">超长会话名(截断)</button>
+      <button class="btn sm ghost" id="btnDnd">权限被拒 / DND 模式</button>
+      <span class="readout" id="notifReadout">通知权限:已授予</span>
+    </div>
+
+    <div class="desktop">
+      <div class="window-standin" id="mainWindow">
+        <div class="win-titlebar">
+          <span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span>
+          <span class="win-title">dsh-forge — 主窗口(继承上游 GUI,占位)</span>
+        </div>
+        <div class="win-body">
+          <div>会话列表:</div>
+          <div class="session" data-session="重构登录模块">重构登录模块</div>
+          <div class="session" data-session="编写单元测试">编写单元测试</div>
+          <div class="session" data-session="超长会话名称用来验证通知正文单行截断行为是否正确执行省略号收尾">超长会话名称…</div>
+          <div class="note">点击通知后:前置窗口 + 派发 session-focus 事件聚焦对应会话(通道为 tech-design 依赖;降级 = 前置 + toast 手动切换提示)。</div>
+          <div class="note mono" id="focusLog" style="margin-top:12px">event log: —</div>
+        </div>
+      </div>
+
+      <div id="notifStack" style="position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:10px;z-index:150"></div>
+
+      <div class="taskbar">
+        <span style="font-size:12px;color:var(--dsw-alias-label-secondary)">模拟任务栏</span>
+        <span id="traySlot" style="margin-left:auto">
+          <span class="tray-icon" id="trayIcon2" title="dsh-forge">df</span>
+        </span>
+        <span class="clock">14:32</span>
+      </div>
+    </div>
+
+    <div class="panel mt16">
+      <span class="chip">验证要点</span>
+      <span style="color:var(--dsw-alias-label-secondary)">10s 内连点同一会话同一事件 → 通知内容原地更新不重复弹;「等待输入」与「回合完成」不去重;不同会话独立计数。</span>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // —— 页面专属逻辑 ——
+    var stack = document.getElementById('notifStack');
+    var readout = document.getElementById('notifReadout');
+    var dnd = false, dndToastShown = false, missCount = 0;
+    var recent = {}; // key: session|event -> {el, timer}
+
+    var COPY = {
+      wait: { title: '会话等待你的输入', en: 'Session needs your input' },
+      turn: { title: '回合已完成', en: 'Turn completed' }
+    };
+
+    function emitNotification(event, session) {
+      if (dnd) {
+        missCount++;
+        document.getElementById('trayIcon2').title = 'dsh-forge(' + missCount + ')';
+        if (!dndToastShown) {
+          dndToastShown = true;
+          dsToast('系统通知已禁用,可在系统设置中开启');
+        }
+        readout.textContent = '通知权限:被拒/DND(托盘计数 ' + missCount + ')';
+        return;
+      }
+      var key = session + '|' + event;
+      var hit = recent[key];
+      if (hit && Date.now() - hit.at < 10000) {
+        hit.count++;
+        hit.el.querySelector('.n-body').textContent = session + '(合并 ' + hit.count + ' 次)';
+        clearTimeout(hit.timer);
+        hit.timer = setTimeout(function () { delete recent[key]; }, 10000);
+        readout.textContent = '10s 窗口内合并:' + session.slice(0, 12) + ' / ' + event;
+        return;
+      }
+      var n = document.createElement('div');
+      n.className = 'os-notification';
+      n.setAttribute('role', 'button');
+      n.innerHTML = '<span class="app-icon">df</span><span><span class="n-title"></span><br><span class="n-body"></span></span>';
+      n.querySelector('.n-title').textContent = COPY[event].title;
+      n.querySelector('.n-body').textContent = session;
+      n.addEventListener('click', function () { focusSession(session); n.remove(); });
+      stack.appendChild(n);
+      recent[key] = { el: n, at: Date.now(), count: 1, timer: setTimeout(function () { delete recent[key]; }, 10000) };
+      readout.textContent = '已弹出:' + COPY[event].title + ' → ' + session.slice(0, 16);
+    }
+
+    function focusSession(session) {
+      document.querySelectorAll('.win-body .session').forEach(function (s) {
+        s.classList.toggle('focused', s.getAttribute('data-session') === session);
+      });
+      document.getElementById('focusLog').textContent =
+        'event log: session-focus → "' + (session.length > 24 ? session.slice(0, 24) + '…' : session) + '" (前置窗口 + 聚焦)';
+    }
+
+    document.querySelectorAll('[data-emit]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        emitNotification(b.getAttribute('data-emit'), b.getAttribute('data-session'));
+      });
+    });
+
+    document.getElementById('btnDnd').addEventListener('click', function () {
+      dnd = !dnd;
+      if (!dnd) { missCount = 0; dndToastShown = false; document.getElementById('trayIcon2').title = 'dsh-forge'; }
+      readout.textContent = dnd ? '通知权限:被拒/DND(静默降级)' : '通知权限:已授予';
+      this.textContent = dnd ? '恢复通知权限' : '权限被拒 / DND 模式';
+    });
+
+    document.getElementById('trayIcon2').addEventListener('click', function () {
+      if (missCount > 0) dsToast('错过的通知:' + missCount + ' 条(点击托盘查看)');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UF1 系统托盘 — dsh-forge M1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="index.html" class="nav-brand">dsh-forge <span class="nav-tag">M1 原型</span></a>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换亮暗主题">◐</button>
+    <button class="nav-burger" type="button" aria-label="菜单">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="tray.html">托盘菜单 UF1</a>
+      <a href="notifications.html">系统通知 UF2</a>
+      <a href="update-banner.html">更新提示 UF3</a>
+      <a href="crash-recovery.html">崩溃恢复 UF4</a>
+    </div>
+  </nav>
+  <main>
+    <div class="page-head">
+      <h1>UF1 系统托盘</h1>
+      <p>OS 原生菜单,不使用自绘 UI。左键单击:窗口可见 → 仅聚焦;窗口已关 → 恢复。菜单:显示主窗口 / 退出。</p>
+    </div>
+
+    <div class="state-row">
+      <button class="btn sm ghost" id="btnShowState">常驻(窗口可见)</button>
+      <button class="btn sm ghost" id="btnHideState">常驻(窗口已关/驻留)</button>
+      <button class="btn sm ghost" id="btnLinuxFail">Linux 托盘创建失败(静默降级)</button>
+      <span class="readout" id="trayReadout">状态:窗口可见</span>
+    </div>
+
+    <div class="desktop" id="desktop">
+      <div class="window-standin" id="mainWindow">
+        <div class="win-titlebar">
+          <span class="win-dot"></span><span class="win-dot"></span>
+          <span class="win-dot close" id="btnCloseWin" title="关闭主窗口(驻留,不退出)"></span>
+          <span class="win-title">dsh-forge — 主窗口(继承上游 GUI,占位)</span>
+        </div>
+        <div class="win-body">
+          <div>会话:重构登录模块</div>
+          <div class="note">窗口关闭按钮 = 驻留托盘(不退出);仅托盘菜单「退出」终结应用。</div>
+        </div>
+      </div>
+
+      <div class="native-menu" id="trayMenu" role="menu" aria-label="dsh-forge 托盘菜单">
+        <div class="menu-item" id="menuShow" role="menuitem">显示主窗口 / Show Main Window</div>
+        <div class="menu-item danger" id="menuQuit" role="menuitem">退出 / Quit</div>
+      </div>
+
+      <div class="taskbar">
+        <span style="font-size:12px;color:var(--dsw-alias-label-secondary)">模拟任务栏</span>
+        <span id="traySlot" style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span class="tray-icon" id="trayIcon" title="dsh-forge" tabindex="0">df</span>
+        </span>
+        <span class="clock">14:32</span>
+      </div>
+    </div>
+
+    <div class="panel mt16" id="exitPanel" style="display:none">
+      <span class="chip err">已退出</span>
+      <span style="color:var(--dsw-alias-label-secondary)">壳与宿主子进程已终结,不留孤儿进程。</span>
+      <button class="btn sm primary" id="btnRelaunch" style="margin-left:12px">重新启动(模拟)</button>
+    </div>
+
+    <div class="panel mt16" id="linuxFailPanel" style="display:none">
+      <span class="chip warn">Linux 托盘创建失败</span>
+      <span style="color:var(--dsw-alias-label-secondary)">静默降级:主窗口不受影响,日志记录,不弹错(SC2)。「驻留」不可用,关窗即退出。</span>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // —— 页面专属逻辑 ——
+    var win = document.getElementById('mainWindow');
+    var menu = document.getElementById('trayMenu');
+    var icon = document.getElementById('trayIcon');
+    var readout = document.getElementById('trayReadout');
+    var exited = false;
+
+    function say(s) { readout.textContent = '状态:' + s; }
+
+    // 左键单击托盘图标:窗口可见 → 仅聚焦;已关 → 恢复(设计规定)
+    icon.addEventListener('click', function () {
+      if (exited) return;
+      if (win.classList.contains('hidden')) {
+        win.classList.remove('hidden');
+        say('窗口已关 → 左键恢复并聚焦');
+      } else {
+        say('窗口可见 → 左键仅聚焦(不最小化、不还原)');
+        win.style.outline = '2px solid var(--dsw-alias-link)';
+        setTimeout(function () { win.style.outline = 'none'; }, 600);
+      }
+      menu.classList.remove('open');
+    });
+
+    // 右键 → 原生菜单
+    icon.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      if (exited) return;
+      var bar = icon.getBoundingClientRect();
+      var desk = document.getElementById('desktop').getBoundingClientRect();
+      menu.style.right = (desk.right - bar.right) + 'px';
+      menu.style.bottom = (desk.bottom - bar.top + 6) + 'px';
+      menu.classList.add('open');
+    });
+
+    document.getElementById('menuShow').addEventListener('click', function () {
+      menu.classList.remove('open');
+      win.classList.remove('hidden');
+      say('菜单「显示主窗口」→ 恢复/聚焦');
+    });
+    document.getElementById('menuQuit').addEventListener('click', function () {
+      menu.classList.remove('open');
+      exited = true;
+      win.classList.add('hidden');
+      document.getElementById('traySlot').style.display = 'none';
+      document.getElementById('exitPanel').style.display = 'block';
+      say('已完全退出(壳 + 宿主子进程)');
+    });
+
+    // 关闭主窗口 → 驻留
+    document.getElementById('btnCloseWin').addEventListener('click', function () {
+      win.classList.add('hidden');
+      say('关窗 → 驻留托盘(图标保持)');
+    });
+
+    // 状态切换按钮
+    document.getElementById('btnShowState').addEventListener('click', function () {
+      exited = false; win.classList.remove('hidden');
+      document.getElementById('traySlot').style.display = 'flex';
+      document.getElementById('exitPanel').style.display = 'none';
+      say('窗口可见');
+    });
+    document.getElementById('btnHideState').addEventListener('click', function () {
+      win.classList.add('hidden'); say('窗口已关(驻留)');
+    });
+    document.getElementById('btnLinuxFail').addEventListener('click', function () {
+      var p = document.getElementById('linuxFailPanel');
+      var on = p.style.display === 'none';
+      p.style.display = on ? 'block' : 'none';
+      document.getElementById('traySlot').style.display = on ? 'none' : 'flex';
+      document.getElementById('btnHideState').disabled = on;
+      say(on ? 'Linux 托盘创建失败(静默降级)' : '恢复正常');
+    });
+    document.getElementById('btnRelaunch').addEventListener('click', function () {
+      exited = false;
+      document.getElementById('traySlot').style.display = 'flex';
+      document.getElementById('exitPanel').style.display = 'none';
+      win.classList.remove('hidden');
+      say('重新启动');
+    });
+
+    // 点击桌面空白处收起菜单
+    document.getElementById('desktop').addEventListener('click', function (e) {
+      if (!menu.contains(e.target) && e.target !== icon) menu.classList.remove('open');
+    });
+  </script>
+</body>
+</html>

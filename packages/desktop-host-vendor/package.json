@@ -1,0 +1,15 @@
+{
+  "name": "@dsh-forge/desktop-host-vendor",
+  "description": "Vendored upstream dsh desktop-host projection (pinned SHA c36ba648) plus adapter seams",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "sync": "node ../../scripts/sync-upstream.mjs",
+    "project": "node ../../scripts/vendor-project.mjs",
+    "prepare-runtime": "node ../../scripts/prepare-host-runtime.mjs",
+    "smoke": "node ../../scripts/smoke-host-entry.mjs"
+  }
+}

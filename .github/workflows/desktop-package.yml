@@ -1,0 +1,133 @@
+# Task 6.2: three-platform installer packaging (nsis / dmg / AppImage).
+# Task 6.3: matrix completed with darwin/arm64 (tech-design Testing Strategy:
+# windows × macos(arm64+x64) × ubuntu), `shell: bash` pinned on run steps
+# (windows runners default to pwsh, which would misexpand "$GITHUB_OUTPUT"),
+# and an aggregate report job for clear failure-matrix reporting
+# (fail-fast:false + continue-on-error so every platform runs and reports).
+# Release publishing (tag-triggered) is owned by release.yml (task 6.3).
+name: desktop-package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  package:
+    name: package (${{ matrix.target }}-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: win32
+            arch: x64
+            runs-on: windows-latest
+            builder-target: nsis
+          - target: darwin
+            arch: x64
+            runs-on: macos-latest
+            builder-target: dmg
+          - target: darwin
+            arch: arm64
+            runs-on: macos-latest
+            builder-target: dmg
+          - target: linux
+            arch: x64
+            runs-on: ubuntu-latest
+            builder-target: AppImage
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 60
+    # Keep the whole matrix running (fail-fast:false above) AND let the
+    # report job below always execute; the report job converts an aggregate
+    # failure into a red workflow so callers (ci.yml / release.yml) gate on it.
+    continue-on-error: true
+    steps:
+      - name: Checkout dsh-forge
+        uses: actions/checkout@v4
+
+      - name: Resolve vendored pinned SHA
+        id: sha
+        shell: bash
+        run: echo "sha=$(node -p "require('./vendor/upstream.lock.json').pinnedSha")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout upstream deepseek-harness at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.sha.outputs.sha }}
+          path: upstream
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace
+        shell: bash
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Materialize vendored projection
+        shell: bash
+        run: node scripts/vendor-project.mjs --upstream "$GITHUB_WORKSPACE/upstream"
+
+      - name: Acquire builtin host runtime (Node 22.20.0)
+        shell: bash
+        run: node scripts/prepare-host-runtime.mjs --node-version 22.20.0
+
+      - name: Build desktop bundle
+        shell: bash
+        run: pnpm build:desktop
+
+      - name: Stage installer resources (runtime-file-policy trim)
+        shell: bash
+        run: node scripts/assemble-app-resources.mjs --target ${{ matrix.target }} --arch ${{ matrix.arch }}
+
+      - name: Build installer (electron-builder ${{ matrix.builder-target }})
+        shell: bash
+        run: pnpm --filter @dsh-forge/desktop exec electron-builder --config build/electron-builder.config.mjs -- ${{ matrix.builder-target }}
+        env:
+          DSH_FORGE_TARGET_PLATFORM: ${{ matrix.target }}
+          DSH_FORGE_TARGET_ARCH: ${{ matrix.arch }}
+
+      - name: Verify size budget + offline self-containment
+        shell: bash
+        run: node scripts/verify-package.mjs --platform ${{ matrix.target }}
+
+      - name: Report failed platform leg
+        if: failure()
+        shell: bash
+        run: |
+          echo "::error title=package(${{ matrix.target }}-${{ matrix.arch }}) failed::Installer packaging failed for ${{ matrix.runs-on }} / ${{ matrix.target }}-${{ matrix.arch }} (${{ matrix.builder-target }}). Inspect this job's steps; the per-platform artifact upload below records whatever was produced."
+          exit 1
+
+      - name: Upload installer artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-forge-${{ matrix.target }}-${{ matrix.arch }}-installer
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.AppImage
+          if-no-files-found: warn
+
+  # Aggregate failure-matrix report (task 6.3): always runs, prints the
+  # package matrix verdict, and turns the workflow red on any platform
+  # failure so callers can gate on this workflow's conclusion.
+  report:
+    needs: package
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Print matrix result and gate
+        shell: bash
+        run: |
+          result="${{ needs.package.result }}"
+          echo "## desktop-package matrix result: ${result}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$result" != "success" ]; then
+            echo "::error title=desktop-package matrix ${result}::At least one packaging leg failed (win32-x64 / darwin-x64 / darwin-arm64 / linux-x64). See the 'package (...)' jobs and the dsh-forge-<target>-<arch>-installer artifacts (uploaded with if:always) for what each platform produced."
+            exit 1
+          fi
+          echo "All packaging legs green: win32-x64 (nsis), darwin-x64 (dmg), darwin-arm64 (dmg), linux-x64 (AppImage)." | tee -a "$GITHUB_STEP_SUM"

@@ -1,0 +1,10 @@
+{
+  "bundles": [
+    {
+      "name": "@deepseek-ai/dsh-base"
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-app"
+    }
+  ]
+}

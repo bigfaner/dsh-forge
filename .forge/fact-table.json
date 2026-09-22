@@ -1,0 +1,294 @@
+{
+  "facts": [
+    {
+      "fact_id": "FT-001",
+      "source": "static",
+      "subject": "Tray unavailable error code",
+      "kind": "error_code",
+      "value": "ERR_TRAY_UNAVAILABLE — emitted when no system tray is present; app must degrade gracefully without orphaning a resident process",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/tray/index.ts"
+    },
+    {
+      "fact_id": "FT-002",
+      "source": "static",
+      "subject": "Notification permission denied error code",
+      "kind": "error_code",
+      "value": "ERR_NOTIFICATION_DENIED — OS notification permission denied; no error loop, session state remains visible on manual restore",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/notifier/index.ts"
+    },
+    {
+      "fact_id": "FT-003",
+      "source": "static",
+      "subject": "Host subprocess start failure error code",
+      "kind": "error_code",
+      "value": "ERR_HOST_START_FAILED — shell stays alive, enters failed state, troubleshooting guidance shown in-app (UF4)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/index.ts; apps/desktop/src/main/crash-recovery/"
+    },
+    {
+      "fact_id": "FT-004",
+      "source": "static",
+      "subject": "Update feed unreachable error code",
+      "kind": "error_code",
+      "value": "ERR_UPDATE_FEED_UNREACHABLE — update check fails silently; no error dialog, no retry storm, startup not blocked",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/update-checker/"
+    },
+    {
+      "fact_id": "FT-005",
+      "source": "static",
+      "subject": "Non-whitelisted release URL rejection",
+      "kind": "error_code",
+      "value": "ERR_UPDATE_URL_REJECTED — openExternal rejected for URLs outside RELEASE_HOST allowlist; rejection logged; app continues normally",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/update-checker/constants.ts; apps/desktop/src/main/index.ts"
+    },
+    {
+      "fact_id": "FT-006",
+      "source": "static",
+      "subject": "Single instance lock error code",
+      "kind": "error_code",
+      "value": "ERR_SINGLE_INSTANCE — second launch routed to running instance: window open → focus existing; tray-resident → restore from tray; no second host subprocess",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/single-instance.ts"
+    },
+    {
+      "fact_id": "FT-007",
+      "source": "static",
+      "subject": "Notification dedup window",
+      "kind": "signature",
+      "value": "DEDUP_WINDOW_MS = 10000 — same session + same event type within 10s merges into one notification updated with latest content; click still focuses that session",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/notifier/index.ts:102,214"
+    },
+    {
+      "fact_id": "FT-008",
+      "source": "static",
+      "subject": "Crash recovery backoff and terminal state",
+      "kind": "signature",
+      "value": "BACKOFF_SCHEDULE_MS = [2000, 4000, 8000]; 3 attempts; exhaustion → failed state with failure code retry-exhausted (ERR_RECOVERY_RETRY_EXHAUSTED-shaped message, ≤120-char failure detail); no infinite retry, shell stays alive",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/crash-recovery/"
+    },
+    {
+      "fact_id": "FT-009",
+      "source": "static",
+      "subject": "Release URL allowlist",
+      "kind": "precondition",
+      "value": "RELEASE_HOST = 'github.com', RELEASE_PATH_PREFIX = '/bigfaner/dsh-forge/releases'; only matching URLs may open externally",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/update-checker/constants.ts:9,15"
+    },
+    {
+      "fact_id": "FT-010",
+      "source": "static",
+      "subject": "Update banner state machine",
+      "kind": "side_effect",
+      "value": "UpdateBannerPhase = hidden | queued | shown | dismissed; while UF4 recovery mask active a new banner transitions to queued and is shown when mask exits; already-shown banner stays shown under mask; dismissed is terminal until restart",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/update-banner-state/index.ts"
+    },
+    {
+      "fact_id": "FT-011",
+      "source": "static",
+      "subject": "Carrier protocol",
+      "kind": "output_format",
+      "value": "dsh-app:// custom protocol carries the upstream SPA; no listening port is opened",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/protocol/; docs/features/dsh-forge-m1/design/page-map.md"
+    },
+    {
+      "fact_id": "FT-012",
+      "source": "static",
+      "subject": "Shell IPC channel namespaces",
+      "kind": "signature",
+      "value": "dshForge.update.* and dshForge.recovery.* IPC channels with sender validation (ERR_IPC_SENDER_REJECTED on invalid sender)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/ipc/index.ts; apps/desktop/src/preload/index.ts"
+    },
+    {
+      "fact_id": "FT-013",
+      "source": "static",
+      "subject": "Profile directory isolation",
+      "kind": "precondition",
+      "value": "dsh-forge profile directory is independent of upstream desktop profile; shared $DSH_HOME product data read/written only in upstream existing format",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "docs/features/dsh-forge-m1/design/tech-design.md"
+    },
+    {
+      "fact_id": "FT-014",
+      "source": "static",
+      "subject": "i18n locale mechanism",
+      "kind": "output_format",
+      "value": "Shell-layer tray/notification/banner texts resolved via upstream locale mechanism (zh/en) through t() CopyKeys; zero hardcoded strings; switching upstream locale changes tray and notification texts",
+      "confidence": "inferred",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "citation": "apps/desktop/src/main/i18n/copy.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-015",
+      "subject": "Vendored upstream lock baseline",
+      "kind": "signature",
+      "value": "vendor/upstream.lock.json: pinnedSha c36ba648dc106d21fb32562793b3e3b9c8922bc4, desktopHostVersion 0.1.6-alpha.2, @deepseek-ai/cordis 4.0.2 — the alignment baseline every plugin version assertion reads",
+      "citation": "vendor/upstream.lock.json"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-016",
+      "subject": "Product-level plugin bundle config (plugin tree single source of truth)",
+      "kind": "signature",
+      "value": "apps/desktop/resources/plugin-bundles.json lists bundles: @deepseek-ai/dsh-base, @deepseek-ai/dsh-web-app, @dsh-forge/plugin-hello-world with source \"tarball:plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz\"; loaded once at startup, read-only to the shell module (runtime enable/disable writers must not mutate product-owned entries)",
+      "citation": "apps/desktop/resources/plugin-bundles.json; apps/desktop/src/main/host-profile/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-017",
+      "subject": "Startup reconciliation of userData profile to product config",
+      "kind": "side_effect",
+      "value": "add leg: profile bundle manifest rewritten to config order, entries carrying a source get profile-local materialization seeded; delete leg: entries the config dropped are pruned from the manifest and their profile-local materialization removed; upstream-owned .dsh-module-fallback/ links never touched; cleanup only invalidates — never adds an assembly channel",
+      "citation": "apps/desktop/src/main/host-profile/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-018",
+      "subject": "Bundle materialization source vocabulary and write-once pre-seed marker",
+      "kind": "signature",
+      "value": "source forms: workspace:<repo-relative dir> (dev junction, source dir must exist) and tarball:<resources-relative .tgz> (packaged: shell unpacks pnpm-pack artifact into profile node_modules as a real directory — no pnpm, no network; seed marker .dsh-forge-seed.json carries artifact sha256, re-runs idempotent, sha drift converges)",
+      "citation": "apps/desktop/src/main/host-profile/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-019",
+      "subject": "Vendored host boot argv contract",
+      "kind": "precondition",
+      "value": "argv[2] runtimeDir = dsh installation dir whose node_modules carries the install anchor; argv[3] projectDir = profile project with package.json dsh.profile.bundles manifest (host materializes own node_modules link-mode fallback junctions on first boot); argv[4] source = primary-runtime payload dir whose sibling office-skills/ is a hard boot requirement",
+      "citation": "apps/desktop/src/main/host-profile/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-020",
+      "subject": "userData projection paths (SC8 coexistence)",
+      "kind": "output_format",
+      "value": "shell projects app-owned inputs under <userData>/host-profile and <userData>/host-payload — never inside the upstream $DSH_HOME; runProfile with resolvedProfile writes only into the handed profile dir",
+      "citation": "apps/desktop/src/main/host-profile/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-021",
+      "subject": "hello-world plugin manifest",
+      "kind": "signature",
+      "value": "@dsh-forge/plugin-hello-world: exports[\"./client\"] exposed; dsh.client.inject = @deepseek-ai/dsh-client-locale, ui-chat, ui-renderer (minimal stable subset); every @deepseek-ai/dsh-client-* peer+dev dep exact 0.1.6-alpha.2; cordis peer 4.0.2 exact; platform web",
+      "citation": "packages/plugins/hello-world/package.json"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-022",
+      "subject": "hello-world slot contract (two-way extension)",
+      "kind": "signature",
+      "value": "injects into conversation.chat.assistant-actions (ui-chat core strip); registers hello-world.panel sub-slot {kind single, scope session} plus a store seat (createHelloWorldStore) through the same ctx.slots.register call; panel click updates the store seat and re-renders — the run-link evidence that distinguishes live link from static injection",
+      "citation": "packages/plugins/hello-world/src/client/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-023",
+      "subject": "Collision fixture build-time modes (ui-slots collision mechanics)",
+      "kind": "signature",
+      "value": "hello-world-collision MODE: replica = same child key hello-world.panel distinct id, first declarer wins and second register call throws; coexist = own key collision-replica.panel, both panels merge into the list slot (control); shadow = same cell id at lower priority -1, layered takeover with previous occupant staying on the ledger; tie = same cell id at same priority 0, registry rejects with an explicit throw",
+      "citation": "packages/plugins/hello-world-collision/src/client/index.ts"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-024",
+      "subject": "Version-consistency gate comparison set",
+      "kind": "signature",
+      "value": "scripts/verify-plugins.mjs: alignment line = every @deepseek-ai/dsh-client-* dependency in dependencies/devDependencies/peerDependencies/optionalDependencies must be an exact pinned version identical to UpstreamLock.desktopHostVersion (dist-tags must be resolved and committed as exact first); independent line = @deepseek-ai/cordis exact but deliberately NOT compared with desktopHostVersion; everything else out of the set; entry forms: vitest tests/verify-plugins.spec.ts (runs inside pnpm test) and CLI pnpm verify:plugins; --stamp stamps template version stamps",
+      "citation": "scripts/verify-plugins.mjs"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-025",
+      "subject": "Artifact-level vendored scan and template manifest rules",
+      "kind": "precondition",
+      "value": "plugin build artifacts under lib/ (.js/.mjs/.cjs) must be vendor-free: any module specifier resolving into vendor trees (vendor/ or packages/desktop-host-vendor/), carrying a vendor path segment, or using file: protocol into the repo is red; manifest dependency specs declaring file:/link:/workspace: or bare in-repo paths are red for the same reason; templates expect no built lib/ but face the same manifest rules, MUST carry version-stamp.json, and MUST declare engines[\"@deepseek-ai/dsh\"] exact == desktopHostVersion",
+      "citation": "scripts/verify-plugins.mjs"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-026",
+      "subject": "Plugin engineering template manifest",
+      "kind": "signature",
+      "value": "@dsh-forge/template-plugin (packages/templates/plugin): engines {\"@deepseek-ai/dsh\": \"0.1.6-alpha.2\"} (VS Code engines.vscode analog), exports[\"./client\"], npm-form exact dependencies (no workspace:/link:/file: specs), dsh.client.inject = minimal stable subset (locale, ui-chat, ui-renderer)",
+      "citation": "packages/templates/plugin/package.json"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-027",
+      "subject": "Plugin tarball staging (packaging leg, config-driven)",
+      "kind": "side_effect",
+      "value": "scripts/stage-plugin-tarballs.mjs: pnpm-pack the workspace plugins the product config references via tarball: sources and stage artifacts next to plugin-bundles.json in app resources (dev: apps/desktop/resources; packaged: electron-builder extraResources filter plugin-tarballs/**); staged filename must equal the config-declared basename — plugin version bump without config edit fails loud; --check verifies staged files exist; exit 0 success / 1 failure",
+      "citation": "scripts/stage-plugin-tarballs.mjs"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-028",
+      "subject": "live-ui-probe real-chain evidence collection flags",
+      "kind": "signature",
+      "value": "scripts/acceptance/live-ui-probe.mjs runs the real vendored host subprocess + real web dist; --plugin-leg collects boot roster product plugin entries, [data-dsh-forge-plugin] panel DOM text, panel-only screenshots, and click -> store update -> re-render live check; --executable probes the packaged exe (win-unpacked); --offline-proxy attaches dead proxy 127.0.0.1:9 (all external HTTP fails = offline simulation; dsh-app:// custom protocol bypasses proxy); --artifacts-dir defaults to docs/features/ui-plugin-foundation/artifacts; exit 0 = probe completed, 1 = boot/UI wait failure",
+      "citation": "scripts/acceptance/live-ui-probe.mjs"
+    },
+    {
+      "source": "static",
+      "confidence": "inferred",
+      "updated_at": "2026-09-22T00:00:00Z",
+      "fact_id": "FT-029",
+      "subject": "Spike report gate for M2 design",
+      "kind": "precondition",
+      "value": "docs/features/ui-plugin-foundation/spike-report.md: each of the three unverified items archived as conclusion + independent fallback two-column; distribution-form conclusion (spike-report §4.1) = tarball built-in + shell-side pre-seeding; source-level facts anchored to checkout SHA c36ba648 (0.1.6-alpha.2); journey pins the doc reference baseline at tech-direction commit 6f5b109 (2026-09-21)",
+      "citation": "scripts/stage-plugin-tarballs.mjs; docs/features/ui-plugin-foundation/testing/spike-conclusion-fallback/journey.md"
+    }
+  ]
+}

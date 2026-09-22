@@ -1,0 +1,15 @@
+packages:
+  # Product assemblies over the package tier; apps/desktop owns the Electron shell.
+  - apps/*
+  # Vendored upstream projections ("everything is a plugin").
+  - packages/*
+  # First-party plugin packages: pure npm-dependency trees, physically isolated
+  # from the vendored projection (task 1: hello-world, ui-plugin-foundation).
+  - packages/plugins/*
+allowBuilds:
+  electron-winstaller: false
+
+# electron-builder 26.15.x resolves @electron/get 3.x which lacks the cache-mode
+# enum its downloader expects; pin it to 5.x (build-time tooling only).
+overrides:
+  app-builder-lib>@electron/get: ^5.1.0

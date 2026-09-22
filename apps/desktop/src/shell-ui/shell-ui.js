@@ -1,0 +1,72 @@
+/* dsh-forge shell-ui overlay bootstrap (task 3.3 injection pipeline).
+ *
+ * Appended at the end of <body> by the dsh-app:// web-document transform —
+ * strictly after the upstream injection sequence in document order. It waits
+ * for the upstream boot gate (__DSH_BOOT_READY__, resolved by the upstream web
+ * entry after Host boot injections are applied) and then mounts the shell-ui
+ * overlay root at document.body end (tech-design Integration Specs insertion
+ * point; UF3 banner / UF4 mask attach inside this root in later tasks).
+ */
+;(function () {
+  'use strict'
+  var ROOT_ID = 'dsh-forge-shell-root'
+  var mounted = false
+  var mountCallbacks = []
+  // Overlay-component registry (task 5.1 UF3 banner): later concatenated
+  // scripts register a callback that runs once the root exists.
+  globalThis.__DSH_FORGE_SHELL_UI__ = {
+    onMount: function (callback) {
+      if (mounted) callback()
+      else mountCallbacks.push(callback)
+    },
+  }
+  function mount() {
+    if (mounted) return
+    // The root may pre-exist (disc-1 shell fallback document ships its own
+    // #dsh-forge-shell-root mount point) — adopt it instead of bailing.
+    if (document.getElementById(ROOT_ID) === null) {
+      var el = document.createElement('div')
+      el.id = ROOT_ID
+      document.body.append(el)
+    }
+    mounted = true
+    var pending = mountCallbacks.splice(0)
+    for (var i = 0; i < pending.length; i++) pending[i]()
+  }
+  var gate = globalThis.__DSH_BOOT_READY__
+  if (gate !== undefined && gate.promise !== undefined && typeof gate.promise.then === 'function') {
+    gate.promise.then(mount, mount)
+  } else if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount)
+  } else {
+    mount()
+  }
+
+  // Interface 5 fallback toast (task 4.5): the main process has no
+  // session-focus channel into the upstream SPA (spike-3), so a focus
+  // request degrades to "front window + manual-switch toast". This renders
+  // that toast inside the shell overlay root.
+  var TOAST_DURATION_MS = 6000
+  var toastTimer = null
+  function showToast(message) {
+    var root = document.getElementById(ROOT_ID)
+    if (root === null) return
+    var el = document.getElementById('dsh-forge-toast')
+    if (el === null) {
+      el = document.createElement('div')
+      el.id = 'dsh-forge-toast'
+      el.setAttribute('role', 'status')
+      root.append(el)
+    }
+    el.textContent = message
+    if (toastTimer !== null) clearTimeout(toastTimer)
+    toastTimer = setTimeout(function () {
+      el.remove()
+      toastTimer = null
+    }, TOAST_DURATION_MS)
+  }
+  var bridge = globalThis.__DSH_FORGE_SHELL__
+  if (bridge !== undefined && typeof bridge.onToast === 'function') {
+    bridge.onToast(showToast)
+  }
+})()

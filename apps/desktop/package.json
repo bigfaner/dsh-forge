@@ -1,0 +1,28 @@
+{
+  "name": "@dsh-forge/desktop",
+  "description": "Electron shell for the dsh-forge workbench (vendored upstream desktop-host subprocess)",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "vite build",
+    "dev:watch": "vite build --watch",
+    "dev": "vite build && electron .",
+    "dist": "electron-builder --config build/electron-builder.config.mjs",
+    "dist:dir": "electron-builder --config build/electron-builder.config.mjs --dir"
+  },
+  "dependencies": {
+    "@dsh-forge/desktop-host-vendor": "workspace:*",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  },
+  "author": "dsh-forge"
+}

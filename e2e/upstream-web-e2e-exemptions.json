@@ -1,0 +1,5 @@
+{
+  "$schema": "https://dsh-forge/schemas/upstream-web-e2e-exemptions.json",
+  "description": "SC7 ①腿豁免清单 (tech-design §Testing Strategy): upstream web e2e cases that do NOT run must be declared here with a reason; the runner (scripts/run-upstream-web-e2e.mjs) fails on any undeclared skip and flags stale entries. 不允许静默跳过. Entry shape: { \"test\": \"<file> > <suite> > <case>\", \"reason\": \"...\" } — e.g. real-API cases that self-skip without provider credentials in keyless CI get declared here on the first CI run (task 6.3 tunes the credential preflight).",
+  "exemptions": []
+}
