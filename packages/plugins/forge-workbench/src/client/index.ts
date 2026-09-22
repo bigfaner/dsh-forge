@@ -86,13 +86,21 @@ export {
 // 5.15 task-board assemblies reuse): the guarded preload-bridge read, the
 // 1:1 face→verb factories, and the rejection-envelope normalization that
 // keeps every view's error mapping form-agnostic. Task 5.14 added the
-// overview family's faces (overview/plugin + the wizard's WRITE pair).
+// overview family's faces (overview/plugin + the wizard's WRITE pair);
+// task 5.15 added the tasks family's (board + detail).
 export {
   createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcOverviewFace, createIpcPluginFace,
-  createIpcRegisterWizardVerbs, getWorkbenchIpcBridge,
+  createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
+  getWorkbenchIpcBridge,
   normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,
 } from './ipc/workbench'
 export type { WorkbenchIpcBridge } from './ipc/workbench'
+// The renderer's SINGLE-SUBSCRIBER event channel (task 5.15): the one
+// multiplexed onEvents subscription every workbench family's event leg
+// rides (the verb deregisters the whole webContents on any unsubscribe, so
+// independent subscriptions cannot coexist).
+export { getWorkbenchEventSource } from './ipc/workbench-events'
+export type { WorkbenchEventSource, WorkbenchEventListener } from './ipc/workbench-events'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -133,6 +141,21 @@ export { fillTemplate } from './views/overview/format'
 // switcher's tree tab is its placeholder.
 export { TaskBoardPage } from './views/TaskBoardPage'
 export type { TaskBoardPageProps } from './views/TaskBoardPage'
+// The UF2 tasks tab, assembled (task 5.15): the completion view the shell
+// mounts — real bridge → the store-backed board chain (ONE getTaskBoard
+// first paint + the 回流 coalesce-then-fetch event loop) + the IPC detail
+// face; the seat / hostless forms reproduce the 5.5/5.8 build-stage page.
+export { TasksView } from './views/tasks/TasksView'
+export type { TasksViewProps } from './views/tasks/TasksView'
+// The tasks tab's page store (task 5.15): the 快照缓存 + 事件合并 read
+// model — read-through loadBoard, the debounced event refresh, and the
+// event-merged sync projection the view feeds the page through.
+export {
+  createTaskBoardStore, INITIAL_TASK_BOARD_SNAPSHOT, TASK_BOARD_REFRESH_DEBOUNCE_MS,
+} from './store/task-board'
+export type {
+  TaskBoardPhase, TaskBoardSnapshot, TaskBoardStore,
+} from './store/task-board'
 // The UF4 features tab, assembled (task 5.16): the completion view the shell
 // mounts — real bridge → getState-sourced project + IPC faces; the seat /
 // hostless forms reproduce the 5.9 build-stage page (exported with it).

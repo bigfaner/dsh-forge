@@ -172,6 +172,15 @@ export interface TaskBoardPageProps {
    * unmount); absent = per-mount stores (the 5.8 behavior, unit tests).
    */
   session?: BoardSessionStore | undefined
+  /**
+   * The assembly's re-feed token (5.15, the OverviewPage reloadToken
+   * precedent): a change re-fires load() WITHOUT a remount — the
+   * event-driven refresh path (store publish → view token) feeds the new
+   * snapshot through the same face, so rows update in place (the Hard Rule:
+   * 回流 never rebuilds the page). Absent/stable = the build-stage
+   * mount-once behavior.
+   */
+  reloadToken?: number | undefined
 }
 
 /**
@@ -287,6 +296,16 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   const clearTimers = useRef<Array<ReturnType<typeof setTimeout>>>([])
   const pageRef = useRef<HTMLDivElement>(null)
   const updatingKeysRef = useRef<ReadonlySet<string>>(new Set())
+  // The 5.15 event-merge coupling (ui-design UF2 回流·结构性): task_updated
+  // events with changeKind 'structural' land their keys here; a load that
+  // settles WITHOUT one of those keys in the board means the task was
+  // DELETED — if the dock is open on it, the dock must flip to its error
+  // state (焦点任务被删且侧板开启 → 侧板转错误态). Keys proven alive by a
+  // settled board retire their marker (structural ≠ deleted); markers for
+  // absent keys persist so a mid-flight event can't be lost to a settle
+  // that raced the snapshot upsert.
+  const structuralKeysRef = useRef<Set<string>>(new Set())
+  const [detailReload, setDetailReload] = useState(0)
 
   // The UF3 selection store (task 5.8, Hard Rule: the linkage's ONE source).
   // One instance per page mount = the AC's 页内会话期 scope — UNLESS the
@@ -297,6 +316,10 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   const [localSelection] = useState(() => createSelectedTaskStore())
   const selection = props.session?.selection ?? localSelection
   const selected = useSyncExternalStore(selection.subscribe, selection.getSnapshot)
+  // Latest-value mirror for the load path (the structural-deletion check
+  // reads the selection at SETTLE time, not at effect-arming time).
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
 
   // The 运行中徽标 data (5.11 AC3): the board session store's active-link map
   // (launch success writes it; the dock's authoritative link reads reconcile
@@ -368,6 +391,22 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
       hasLoaded.current = true
       setBoard(next)
       setPhase('ready')
+      // The structural-deletion coupling (5.15, see structuralKeysRef): a
+      // structurally-flagged key absent from the settled board while the
+      // dock is open on it → force the dock to re-read (the verb rejects on
+      // a deleted task → the dock's error card — the spec's 侧板转错误态).
+      const selectionNow = selectedRef.current
+      const openKey = selectionNow.open ? selectionNow.taskKey : undefined
+      if (openKey !== undefined && structuralKeysRef.current.has(openKey)
+        && !next.tasks.some(task => task.key === openKey)) {
+        setDetailReload(nonce => nonce + 1)
+      }
+      // Markers proven alive by this snapshot retire (structural ≠ deleted);
+      // markers of absent keys persist for the next settle (the race note
+      // on structuralKeysRef).
+      for (const key of structuralKeysRef.current) {
+        if (next.tasks.some(task => task.key === key)) structuralKeysRef.current.delete(key)
+      }
       return next
     } catch {
       // A failed FIRST load has nothing to render — the retry card. A failed
@@ -377,11 +416,14 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     }
   }
 
-  // Mount-once initial load (the face identity is fixed for the page's life,
-  // like the overview page's).
+  // Mount-time initial load + the assembly's re-feed leg (5.15): the effect
+  // re-arms on reloadToken changes — the view bumps the token when the
+  // store published data the page didn't fetch itself (the OverviewPage
+  // reloadToken precedent). The face identity stays fixed for the page's
+  // life, like the overview page's.
   useEffect(() => {
     void load()
-  }, [])
+  }, [props.reloadToken])
 
   const handleEvents = useCallback((events: readonly WorkbenchEvent[]): void => {
     // Foreign projects' events are not this board's concern (the assembly
@@ -391,6 +433,11 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
       event.type === 'task_updated'
       && (projectIdRef.current === undefined || event.projectId === projectIdRef.current))
     if (updates.length === 0) return
+    // The structural markers ride the same filtered stream (5.15's
+    // event-merge coupling — see structuralKeysRef).
+    for (const event of updates) {
+      if (event.changeKind === 'structural') structuralKeysRef.current.add(event.taskKey)
+    }
     const keys = new Set([...updatingKeysRef.current, ...updates.map(event => event.taskKey)])
     updatingKeysRef.current = keys
     setUpdatingKeys(keys)
@@ -644,6 +691,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             taskKey={selected.open ? (selected.taskKey ?? null) : null}
             projectId={props.projectId}
             codeRoot={props.codeRoot}
+            reloadToken={detailReload}
             face={props.detailFace}
             {...(props.launchServices === undefined ? {} : { services: props.launchServices })}
             onLaunched={handleLaunched}

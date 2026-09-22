@@ -72,6 +72,14 @@ export interface TaskDetailPanelProps {
    * absent renders the reserved disabled placeholder (AC: 按钮位预留).
    */
   codeRoot?: string | undefined
+  /**
+   * The external re-read token (5.15): a change re-fires the load for the
+   * CURRENT key — the 回流 structural-deletion path (the board's event
+   * merge detected the open key was deleted; the re-read rejects and this
+   * dock's error card shows — ui-design 侧板转错误态). Unset/stable in the
+   * build stage (no real deletions there).
+   */
+  reloadToken?: number | undefined
   /** The detail face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   face?: Partial<TaskDetailFace> | undefined
   /** Service seam passed through to the UF5 entry (5.11 injects the real remotes). */
@@ -268,8 +276,9 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
       })
     return () => { alive = false }
     // The face identity is fixed for the dock's life (the page precedents'
-    // load-effect discipline).
-  }, [open, props.taskKey, retryNonce])
+    // load-effect discipline); reloadToken re-fires the read for the SAME
+    // key (the 5.15 structural-deletion path).
+  }, [open, props.taskKey, retryNonce, props.reloadToken])
 
   // Focus-in on open (capturing the trigger for the return trip) + the
   // slide-in flip; the cleanup returns focus to the trigger on close or

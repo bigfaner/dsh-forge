@@ -16,15 +16,17 @@
  * page-level "never an error wall on refresh" contract).
  *
  * The onEvents subscription (订阅 onEvents 增量): Interface 1 is a
- * single-subscriber verb, so the store holds THE renderer's one
- * subscription for the overview family — sync events are the 失联 signal
- * source (sync_state error → the per-card 失联徽标 + the active-project
- * error card via `lostProjectIds`; idle/scanning recovers the row).
- * task_updated / feature_updated events are NOT this store's concern (the
- * board pages own those legs — 5.15) and are ignored here by design.
+ * single-subscriber verb, so the store's leg rides the renderer's ONE
+ * shared channel (ipc/workbench-events.ts, since 5.15) — sync events are
+ * the 失联 signal source (sync_state error → the per-card 失联徽标 + the
+ * active-project error card via `lostProjectIds`; idle/scanning recovers
+ * the row). task_updated / feature_updated events are NOT this store's
+ * concern (the board pages own those legs — 5.15) and are ignored here by
+ * design.
  */
 import type { WorkbenchState } from '../ipc-types'
 import { normalizeWorkbenchVerbError, type WorkbenchIpcBridge } from '../ipc/workbench'
+import { getWorkbenchEventSource } from '../ipc/workbench-events'
 
 /** The load lifecycle of the store's read model (the chrome's gate input). */
 export type WorkbenchStatePhase = 'loading' | 'error' | 'ready'
@@ -81,7 +83,12 @@ export function createWorkbenchStateStore(bridge: WorkbenchIpcBridge): Workbench
   }
 
   // The single-subscriber event leg: sync events drive the 失联 signals.
-  const unsubscribeEvents = bridge.onEvents((events) => {
+  // Since 5.15 the leg rides the SHARED channel (ipc/workbench-events.ts):
+  // the verb is single-subscriber at the webContents level, and the main-side
+  // registry deregisters the whole renderer on ANY unsubscribe — so the
+  // overview family and the task-board family multiplex over one preload
+  // subscription (either one's teardown can never strand the other's push).
+  const unsubscribeEvents = getWorkbenchEventSource(bridge).subscribe((events) => {
     let changed = false
     for (const event of events) {
       if (event.type !== 'sync') continue

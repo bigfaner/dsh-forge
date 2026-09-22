@@ -35,8 +35,10 @@ import type {
   WorkbenchVerbError,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace,
+  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace, TaskBoardFace,
+  TaskDetailFace,
 } from '../contract'
+import { getWorkbenchEventSource } from './workbench-events'
 
 /**
  * The preload namespace surface (task 2.7): the 13 data verbs + the
@@ -215,6 +217,42 @@ export function createIpcPluginFace(bridge: WorkbenchIpcBridge): PluginFace {
     setPluginEnabled: async (name: string, enabled: boolean): Promise<PluginRow[]> => {
       try {
         return await bridge.setPluginEnabled(name, enabled)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/**
+ * The UF2 board face over the verbs (task 5.15's consumption): loadBoard is
+ * the raw 1:1 verb mapping (the task-board STORE wraps it with the
+ * read-through/serve semantics the page consumes — store/task-board.ts),
+ * while subscribeEvents routes through the SINGLE-SUBSCRIBER shared channel
+ * (workbench-events.ts) so the page's presentation leg (row highlights +
+ * aria-live) and the store's data-merge leg multiplex over ONE preload
+ * subscription instead of competing for the verb.
+ */
+export function createIpcTaskBoardFace(bridge: WorkbenchIpcBridge): TaskBoardFace {
+  return {
+    loadBoard: async (projectId: string): Promise<TaskBoardData> => {
+      try {
+        return await bridge.getTaskBoard(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    subscribeEvents: (callback: (events: readonly WorkbenchEvent[]) => void): (() => void) =>
+      getWorkbenchEventSource(bridge).subscribe(callback),
+  }
+}
+
+/** The UF3 detail-dock face over the verb (task 5.15's consumption; 1:1 mapping). */
+export function createIpcTaskDetailFace(bridge: WorkbenchIpcBridge): TaskDetailFace {
+  return {
+    loadDetail: async (projectId: string, taskKey: string): Promise<TaskDetail> => {
+      try {
+        return await bridge.getTaskDetail(projectId, taskKey)
       } catch (error) {
         renormalize(error)
       }

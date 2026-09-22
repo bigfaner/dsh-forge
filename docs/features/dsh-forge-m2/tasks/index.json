@@ -403,7 +403,7 @@
         "5.11",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.15-tasks-page-assembly.md",
       "record": "records/5.15-tasks-page-assembly.md",
       "surface-type": "web",

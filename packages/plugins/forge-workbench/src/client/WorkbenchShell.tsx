@@ -47,6 +47,12 @@
  * placeholder). The optional `taskBoard` prop is its assembly seat — the
  * IPC face arrives with 5.15, the row-selection seam is 5.7's detail dock.
  *
+ * Task 5.15 completes the tasks seat's ASSEMBLY: the shell mounts the
+ * assembled view (views/tasks/TasksView) — the real dshForge bridge drives
+ * the store-backed board chain (ONE getTaskBoard first paint, the 回流
+ * event loop, the IPC detail face; mock 全撤), while the explicit seat /
+ * hostless mounts reproduce the 5.5/5.8 build-stage page.
+ *
  * Task 5.9 filled the LAST reserved seat: the UF4 feature board page mounts
  * into `workbench/features`, routing list↔detail on the view-key machine's
  * featureSlug dimension (enter = the view face's openFeatureDetail, return =
@@ -88,7 +94,7 @@ import { TopBar } from './components/chrome/TopBar'
 import { OverviewView } from './views/overview/OverviewView'
 import type { RegisterWizardResult } from './views/overview/RegisterWizard'
 import { RegisterWizard } from './views/overview/RegisterWizard'
-import { TaskBoardPage } from './views/TaskBoardPage'
+import { TasksView } from './views/tasks/TasksView'
 import { FeaturesView } from './views/features/FeaturesView'
 
 /**
@@ -489,23 +495,25 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
               )
               : view.workbenchTab === 'workbench/tasks'
                 ? (
-                  // UF2 (task 5.5) + UF3 integration (task 5.8): the task
-                  // board page takes the reserved tasks seat — toolbar + the
-                  // three views + the 5.7 detail dock over the selection
-                  // store (the page owns the linkage). The optional taskBoard
-                  // seat hands the page its IPC-backed faces (5.15) and
-                  // observes activations; the active project's codeRoot
-                  // mounts the UF5 entries (5.11: node-card hover + the
-                  // panel-primary, real services via the launch seat).
+                  // UF2 (task 5.5 build · 5.15 assembly) + UF3 integration
+                  // (task 5.8): the tasks seat now mounts the ASSEMBLED view
+                  // — with the real dshForge bridge live it runs the
+                  // store-backed chain (ONE getTaskBoard per first paint +
+                  // the 回流 coalesce-then-fetch event loop over the shared
+                  // single-subscriber channel + the IPC detail face, mock
+                  // 全撤); the explicit taskBoard seat / a hostless mount
+                  // reproduces the 5.5/5.8 build-stage page. The active
+                  // project's codeRoot mounts the UF5 entries (5.11:
+                  // node-card hover + the panel-primary, real services via
+                  // the launch seat); the key re-mounts per project switch.
                   <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
-                    <TaskBoardPage
+                    <TasksView
                       key={activeProjectKey}
                       t={props.t}
                       projectId={workbenchState.activeProjectId ?? undefined}
                       codeRoot={activeProject?.codeRoot}
                       onSelect={props.taskBoard?.onSelect}
-                      face={props.taskBoard?.face}
-                      detailFace={props.taskBoard?.detailFace}
+                      seat={props.taskBoard}
                       {...(launch === undefined ? {} : { launchServices: launch.services })}
                       {...(launch === undefined || launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
                       {...(props.boardSession === undefined ? {} : { session: props.boardSession })}
