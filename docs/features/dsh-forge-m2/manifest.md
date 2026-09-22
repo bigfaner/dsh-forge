@@ -1,6 +1,7 @@
 ---
 feature: "dsh-forge-m2"
 created: "2026-09-21"
+updated: "2026-09-22"
 status: prd
 ---
 
@@ -12,9 +13,17 @@ status: prd
 
 | Document | Path | Summary |
 |----------|------|---------|
-| PRD Spec | prd/prd-spec.md | M2 需求与会话工作台:项目三分模型注册(仓内默认/仓外路径可选)、任务/依赖树只读看板(worktree/来源标识,人只读、变更归 agent 会话与终端)、feature 看板与五类文档浏览、会话挂接(1 击发起+prompt 注入+挂接持久化+≤5s 状态回流+回溯)、能力插件化(禁用回归纯壳);前置插件机制等价性 spike;SC1-8 验收 |
-| User Stories | prd/prd-user-stories.md | 6 条故事:任务可视化浏览、一键发起带上下文会话、状态回流与来源标识、双形态一致、多项目管理、feature 文档浏览与仓外注册(覆盖 SDD 开发者/双形态使用者/多项目拥有者三角色) |
-| UI Functions | prd/prd-ui-functions.md | 6 个 UI 功能面:项目注册与管理、任务看板(只读)、任务详情面板、feature 看板与文档浏览、会话挂接、能力插件启停;新增工作台页面族(new-page×3)+ 复用上游会话界面;中英双语;含导航架构与页面组合 |
+| PRD Spec | prd/prd-spec.md | M2 需求与会话工作台:项目三分模型注册(仓内默认/仓外路径可选)、任务/依赖树只读看板(worktree/来源标识,人只读、变更归 agent 会话与终端)、feature 看板与五类文档浏览、会话挂接(1 击发起+prompt 注入+挂接持久化+≤5s 状态回流+回溯)、两级插件模型(2026-09-22 修订:forge 核心=必备插件不可禁用、第三方可启停,经基座产品级配置装配;SQLite 数据内核方向入 DF001/DF005 记账);硬前置 ui-plugin-foundation 基座 + 前置语义等价性 spike(SC8);SC1-8 验收 |
+| User Stories | prd/prd-user-stories.md | 7 条故事:任务可视化浏览、一键发起带上下文会话、状态回流与来源标识、双形态一致、多项目管理、feature 文档浏览与仓外注册、插件管理两级模型(必备不可禁用+第三方启停,2026-09-22 新增)(覆盖 SDD 开发者/双形态使用者/多项目拥有者三角色) |
+| UI Functions | prd/prd-ui-functions.md | 6 个 UI 功能面:项目注册与管理、任务看板(只读)、任务详情面板、feature 看板与文档浏览、会话挂接、插件管理(两级模型:必备标识+第三方启停,2026-09-22 修订);新增工作台页面族(new-page×3)+ 复用上游会话界面;中英双语;含导航架构与页面组合 |
+
+## Dependencies
+
+| Dependency | Type | Status | Gate |
+|-----------|------|--------|------|
+| [ui-plugin-foundation](../ui-plugin-foundation/manifest.md)(插件工程基座) | 硬前置(feature 级) | tasks(2026-09-22,任务全部 pending) | 至少其 bundle 配置化 + 装配 spike(基座任务 2/5)完成后,M2 的 UI 插件任务方可开工;M2 消费其交付(产品级配置装配/版本断言/工程模板),不重复实现 |
+
+> 记账来源:[ui-plugin-foundation 提案](../../proposals/ui-plugin-foundation/proposal.md) Next Steps(2026-09-21);硬时序门槛 = 本 PRD 修订(2026-09-22 完成)+ 基座就绪,二者任一悬空则 M2 任务分解不开工。
 
 ## Traceability
 

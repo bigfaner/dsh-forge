@@ -1,11 +1,13 @@
 ---
 feature: "dsh-forge-m2"
+updated: "2026-09-22"
 ---
 
 # User Stories: dsh-forge M2 — 需求与会话工作台
 
 > 角色来源(prd-spec Background):SDD 开发者(作者本人/社区实践者)、双形态使用者(终端插件与应用交替)、多项目拥有者(社区实践者)。
 > 主体模型约束:看板对人只读;任务状态变更由 agent 会话或终端执行。
+> 插件模型约束(2026-09-22 修订,两级插件模型):forge 核心 = 必备插件(内置分发、不可禁用、仅作者维护);启停语义仅第三方插件(UF6)。
 
 ## Story 1: 任务可视化浏览
 
@@ -82,3 +84,17 @@ feature: "dsh-forge-m2"
 - Given 本仓含 dsh-forge-m1(completed),When 打开 feature 看板,Then 状态机显示正确,manifest/prd/design/ui/tasks 五类文档可读渲染
 - Given forge 项目的过程文档位于仓外本地路径,When 以该路径注册,Then 看板/feature/文档功能完整,文档格式与仓内一致
 - Given 注册向导中未显式选择仓外路径,Then 默认文档位置为仓内(外置默认关闭)
+
+---
+
+## Story 7: 插件管理(两级模型)
+
+**As a** SDD 开发者(已安装第三方扩展插件的社区实践者)
+**I want to** 在工作台内查看插件清单与层级(必备/第三方),并按需启停第三方插件
+**So that** 界面能力可自主收敛,且确信 forge 核心能力始终在位、启停不损伤任何数据
+
+**Acceptance Criteria:**
+- Given 工作台已装配 forge 核心插件与 ≥1 个第三方插件(测试 fixture),When 打开插件管理区,Then 核心插件标记"必备"且无禁用入口,第三方插件显示启用状态
+- Given 第三方插件处于启用状态,When 禁用并二次确认,Then 仅该插件注入内容退出,任务看板/会话挂接等核心能力不受影响,forge 数据零损坏
+- Given 第三方插件处于禁用状态,When 重新启用,Then 该插件注入内容恢复且数据完整
+- Given 执行过启停操作,When 检查产品级配置,Then 产品清单条目未被改写(必备清单对运行时启停只读,升级/重装不冲突)

@@ -1,6 +1,6 @@
 ---
 created: "2026-09-19"
-updated: "2026-09-19"
+updated: "2026-09-22"
 author: "faner"
 status: Draft
 intent: "new-feature"
@@ -9,6 +9,8 @@ intent: "new-feature"
 # Proposal: dsh-forge —— 以项目为中心的 SDD 桌面工作台(M1 = 独立桌面壳)
 
 > **接管说明(2026-09-19)**:本提案接管 `proposals/dsh-desktop/proposal.md`(2026-09-16 修订版)的方向定义权,该提案已标记 Superseded;其 M1 范围、SC1-8、Source Code References A-H 节**整体继承且继续有效**,本文不再重复论证。**纪律约束:dsh 是 2026-09 新出现的项目,公开资料稀缺,一切以其本地源码为唯一权威参考,禁止凭记忆或公开资料猜测其 API;forge 官方文档为 2026-06 快照,以仓库实际代码与模板为准。**
+
+> **方向同步(2026-09-22)**:本文已按 `docs/proposals/ui-plugin-foundation/proposal.md`(2026-09-21,下称"基座提案")的用户定向决策同步修订四处——①"一切皆插件"细化为**两级插件模型**;②新增**产品数据内核(SQLite 入壳)**方向声明;③新增 **forge CLI 退役演进**(终点 = 应用 API + dsh tool);④ui-plugin-foundation 基座**硬前置 M2**。范围、验收与技术论证以基座提案为准(其源码级证据继承同目录 `ui-plugin-vendor-free.md`),本文只锚定方向。
 
 ## Problem
 
@@ -22,6 +24,7 @@ intent: "new-feature"
 - **forge 侧(2026-09-19 本地核查 `Z:\project\ai\forge`)**:v3.0.0,Go CLI(19 命令)+ Claude Code Plugin(21 Skill / 16 Command / 1 Subagent / Hooks);全部状态为本地文件——`.forge/config.yaml`、`docs/features/<slug>/{manifest.md, prd/, design/, tasks/index.json, tasks/*.md, tasks/records/}`、`docs/{business-rules,conventions,decisions,lessons}/`(带 `domains` frontmatter 按需加载)、`tests/<surfaceKey>/`;feature 状态机与任务状态机(7 态)由 CLI 维护保证一致性;知识全部存在各项目仓内,**无跨项目知识层**;`forge prompt get-by-task-id` 已提供任务→执行 prompt 的现成映射(会话挂接的天然入口)。
 - **dsh 侧(2026-09-16 核查,详见 Superseded 提案)**:上游 apps/desktop 为生产级同构实现(子进程宿主 + 分帧管道 + `dsh-app://` + `__DSH_TRANSPORT__` carrier),验证了壳层技术路线;everything-is-a-plugin 架构提供了能力插件化的原生机制。
 - **决策日志(2026-09-19 brainstorm,全部为用户显式选择)**:①终态定位 = forge 工作台(以项目为中心),dsh 为内嵌引擎;②引擎战略 = dsh 唯一,Claude Code 插件退役(冻结过渡);③M1 冻结为纯壳,forge 从 M2 起每里程碑独立提案;④受众 = 社区公开 + 自用旗舰,三平台 + GH Releases 维持 M1 must;⑤项目三分模型(见 Proposed Solution);⑥一切皆插件(遵循 dsh 理念);⑦新增 SC9 补宿主崩溃恢复验收缺口。
+- **决策日志(2026-09-21 定向,用户显式选择,经基座提案)**:⑧两级插件模型(forge 核心 = 必备插件:内置 bundle 分发、不可禁用、仅作者维护;启停语义仅第三方插件);⑨产品数据内核(SQLite 任务索引 / 项目↔会话挂接 + 任务 CRUD 数据 API)进 Electron 壳,M2/M3 落地;⑩forge CLI 退役(过渡 = 插件宿主半身 spawn CLI;终点 = 应用 API + dsh tool,CLI 不保留);⑪ui-plugin-foundation 工程基座独立立项并硬前置 M2 UI 插件任务。
 
 ### Urgency
 
@@ -44,17 +47,19 @@ intent: "new-feature"
 **路线图(方向锚点;仅 M1 进入本 feature 的 v1)**:
 
 - **M1 纯壳(= v1,范围冻结,继承 Superseded 提案)**:三平台安装包 + 宿主子进程 + 托盘/通知 + 免签名 GitHub Releases + 更新检测。不含任何 forge 能力。
-- **M2 需求与会话**:**任务列表可视化**(第一功能面:forge 任务/依赖树从终端表格变成图形看板)、feature 看板(状态机/文档浏览)、**会话挂接**(从任务一键发起 dsh 会话 + 任务上下文注入)。首个任务为 spike:dsh 插件机制 vs forge skill/hook/subagent 语义等价性。
+- **M2 需求与会话**:**任务列表可视化**(第一功能面:forge 任务/依赖树从终端表格变成图形看板)、feature 看板(状态机/文档浏览)、**会话挂接**(从任务一键发起 dsh 会话 + 任务上下文注入)。**硬前置(2026-09-21)**:ui-plugin-foundation 工程基座(至少 spike + bundle 配置化)完成后,UI 插件任务方可开工,且 M2 PRD 须先按两级插件模型修订 G6/SC6、按 SQLite 方向记账 DF001/DF005(修订完成前不得进入任务分解);首个任务为 spike:dsh 插件机制 vs forge skill/hook/subagent 语义等价性(= M2 SC8,与基座提案的装配路线 spike 验证面不同,互不替代)。
 - **M3 知识与测试用例**:知识库(项目级 + 跨项目全局层)的浏览、检索与会话按需注入;测试用例管理(journey/contract 与测试脚本的关联视图、执行结果)。
-- **M4 管线原生化(应用化完成态)**:brainstorm→PRD→设计→任务→执行 的管线、对抗式评估器、Quality Gate、任务编排从"Claude Code skill 指令流"迁移为**应用原生工作流**;插件退役完成。
+- **M4 管线原生化(应用化完成态)**:brainstorm→PRD→设计→任务→执行 的管线、对抗式评估器、Quality Gate、任务编排从"Claude Code skill 指令流"迁移为**应用原生工作流**;插件退役完成;forge CLI 同步退役——能力形态终点 = **应用 API(Electron 数据内核)+ dsh tool,CLI 不保留**(过渡形态 = 插件宿主半身 spawn CLI;具体形态由 M2 SC8 spike 与 M4 设计定,禁止预判)。
 
 **架构约束**:
 
-- **一切皆插件**:遵循 dsh 的 everything-is-a-plugin 理念,forge 的各项能力(任务看板、知识库、管线、文档存储适配器……)尽量以 dsh 插件形式提供,壳不焊死功能——能力可独立演进、可启停、未来可回馈上游。
+- **一切皆插件 → 两级插件模型(2026-09-21 修订)**:遵循 dsh 的 everything-is-a-plugin 理念,forge 的各项能力(任务看板、知识库、管线、文档存储适配器……)以 dsh 插件形式提供,壳不焊死功能,保留回馈上游与独立分发的自由;但插件分两级——**forge 核心 = 必备插件**:内置 bundle 分发、不可禁用、不可被第三方修改、仅作者维护升级,消费基座槽位 + 复用 dsh 组件体系 + 贡献自有槽位供第三方扩展工作台;**第三方 = 扩展插件**:用户经 `dsh plugin add` 自装,注入基座槽位或工作台槽位,与必备插件同机制共存、互不垄断。原"能力可独立启停、禁用回归纯壳"语义收缩至第三方插件(M2 G6/SC6 记账修订);插件清单 = 产品级配置(插件树唯一事实源),不得焊死壳代码(ui-plugin-foundation 交付件)。
 - **宿主与协议缝复用**:M1 技术架构(宿主子进程 + `dsh-app://` + carrier)整体继承,是 M2+ 一切能力的底座(细节见 Superseded 提案)。
-- **数据格式为唯一事实源**:应用与(过渡期内的)插件读写同一套 forge 文件格式,双形态不产生第二事实源。
+- **产品数据内核(SQLite 入壳,方向声明 2026-09-21)**:Electron 壳 = 运行宿主 + 产品数据内核——任务索引、项目↔会话挂接、工作台自有状态以 SQLite 置于 Electron 侧存储,并提供数据 API(特别是任务 CRUD);M2/M3 落地,项目三分模型的"工作台自有项目文件"即落于此。诚实声明:数据内核进壳偏离官方壳极小产品 API 面模式,是 dsh-forge 作为产品壳(非兼容壳)的自主选择;纪律 = preload IPC 面沿用 M1 electron-ipc-security 约束(origin-lock、typed、版本化、最小必要面);事实源关系(forge 文件 vs SQLite)与 API 形态 M2/M3 设计时定。
+- **forge 能力形态演进(CLI 退役,2026-09-21 定向)**:forge 特色能力是本应用的差异化价值核心,以必备能力随产品交付;CLI 为过渡形态(插件宿主半身 spawn Go CLI,经标准 rpc 暴露,二进制随包分发)→ 演进终点 = **应用 API(Electron 数据内核)+ dsh tool,CLI 不保留**;任务调度机制(领取分配、依赖解析、状态机编排)插件化——可随产品演进替换,不动数据内核。
+- **数据格式为唯一事实源**:应用与(过渡期内的)插件读写同一套 forge 文件格式,双形态不产生第二事实源;SQLite 数据内核落地后的事实源关系为 M2/M3 设计命题,落地前 forge 文件仍为唯一事实源,禁止预支结论。
 
-**过渡管理**:Claude Code 插件**冻结在 3.x**(bug-fix only,停止演进);日常管线随应用能力覆盖迁移(约 M2 会话挂接落地后开始),M4 完成;forge 公开仓库的演进载体角色由本应用继承。
+**过渡管理**:Claude Code 插件**冻结在 3.x**(bug-fix only,停止演进);日常管线随应用能力覆盖迁移(约 M2 会话挂接落地后开始),M4 完成;forge 公开仓库的演进载体角色由本应用继承。forge 引擎(Go CLI)同为过渡形态——过渡期经插件宿主半身 spawn 使用,退役终点见架构约束。
 
 ### Innovation Highlights
 
@@ -78,16 +83,17 @@ intent: "new-feature"
 ### Non-Functional Requirements
 
 - 继承 M1 全部 NFR(离线自足、进程足迹 = 2、可恢复性、无监听端口安全模型、零侵入上游)——见 Superseded 提案。
-- **插件化**:forge 能力以插件组装,可独立启停;壳内核不因能力增减而改动。
+- **插件化**:forge 能力以插件组装;启停语义仅第三方插件(forge 核心 = 必备插件,不可禁用,2026-09-21 修订);壳内核不因能力增减而改动。
 - **存储解耦**:工作台不要求过程文档位于代码仓内;外置为可选能力,默认关闭。
 - **双形态一致性**:过渡期内应用与冻结插件共享 forge 数据格式,互不破坏。
 
 ### Constraints & Dependencies
 
 - **继承 M1 全部技术约束**:宿主子进程复用上游 desktop-host(private 包获取方式待 tech-design)、版本精确锁定、内置上游 Node 运行时、独立 profile 目录名、三平台 CI 为 must(详见 Superseded 提案)。
-- **forge 依赖**:`Z:\project\ai\forge`,用户自研可控(v3.0.0,Go 单二进制 CLI 可随包分发);插件冻结在 3.x 过渡。
+- **forge 依赖**:`Z:\project\ai\forge`,用户自研可控(v3.0.0,Go 单二进制 CLI 可随包分发,过渡形态——退役演进见架构约束);插件冻结在 3.x 过渡。
 - **dsh 插件机制为一等依赖**:"一切皆插件"要求 forge 能力跑在 dsh 插件机制上,其与 forge skill/hook/subagent 语义的等价性**未知**,M2 首个 spike 前禁止假设结论。
 - **forge 侧新能力依赖**:跨项目全局知识层、过程文档外置、wiki 对接,均超出 forge 当前数据模型,需 forge 核心配合演进(用户可控,无第三方协调成本)。
+- **M2 前置依赖(2026-09-21)**:ui-plugin-foundation 工程基座(至少 spike + bundle 配置化)硬前置 M2 UI 插件任务;M2 PRD 修订(G6/SC6 两级插件模型、DF001/DF005 SQLite 记账)完成前不得进入 M2 任务分解(基座提案 Next Steps 已记账)。
 
 ## Alternatives & Industry Benchmarking
 
@@ -116,7 +122,7 @@ intent: "new-feature"
 ### Technical Feasibility
 
 - **M1:高**(生产背书,继承 Superseded 提案论证;剩余三点未知归 `/tech-design`)。
-- **M2+:中高(方向性判断)**——forge 核心状态宿主无关(文件 + Go CLI),sidecar/随包分发/直接读写均可行;数据格式 3.x 已稳定。剩余未知:①dsh 插件机制能否等价承载 forge 语义(M2 首个 spike,兜底 = 管线原生化前置);②跨项目知识层、文档外置、wiki 对接的 forge 侧演进量(M3 设计时评估)。
+- **M2+:中高(方向性判断)**——forge 核心状态宿主无关(文件 + Go CLI),sidecar/随包分发/直接读写均可行;数据格式 3.x 已稳定。剩余未知:①dsh 插件机制能否等价承载 forge 语义(M2 首个 spike,兜底 = 管线原生化前置);②UI 插件装配路线三项未验证项(→ ui-plugin-foundation spike,2026-09-21 已立项收敛);③跨项目知识层、文档外置、wiki 对接的 forge 侧演进量(M3 设计时评估)。
 
 ### Resource & Timeline
 
@@ -137,6 +143,9 @@ intent: "new-feature"
 | 三平台分发对自用工具是过重负担 | Need Gate(更简替代/为何是现在) | Rejected 挑战:社区公开 + 自用旗舰,维持 M1 must(用户定向) |
 | 过程文档必须存放在代码仓内(forge 现状) | 用户输入 + 简单替代检查 | Refined:项目三分模型,文档可外置 + 可对接 wiki,默认仓内 |
 | forge 能力作为应用的内置功能开发 | 用户定向(一切皆插件) | Refined:能力以 dsh 插件形式提供,壳不焊死功能 |
+| "一切皆插件"意味着全部能力可启停、可禁用 | 用户定向(必备能力,2026-09-21,经基座提案) | Refined:两级插件模型——forge 核心 = 必备插件(内置分发、不可禁用、仅作者维护);启停语义收缩至第三方插件(M2 G6/SC6 记账修订) |
+| 工作台数据(任务索引/挂接)读写经 forge 文件与 CLI 即可,无需应用侧存储 | Stress Test(M2 G1 首屏 ≤2s @500 任务的文件扫描成本;挂接关系无结构化存储) | Refined:SQLite 数据内核入壳方向声明(Electron 侧 + 数据 API,任务 CRUD),M2/M3 落地,事实源关系届时设计 |
+| forge CLI 作为长期能力形态保留 | 用户定向(2026-09-21,经基座提案) | Refined:CLI 为过渡形态;演进终点 = 应用 API(Electron 数据内核)+ dsh tool,CLI 不保留(形态由 M2 SC8 spike 与 M4 设计定) |
 | (继承)主进程即宿主 / 无桌面形态 / Python 依赖 / v1 必须签名与自动更新 | 源码核查 + Stress Test | 见 Superseded 提案 Assumptions Challenged(结论继续有效) |
 
 ## Scope
@@ -174,6 +183,8 @@ intent: "new-feature"
 | 安装包体积三份运行时(继承) | H | M | 上游 runtime-file-policy 裁剪思路 + 体积预算(继承) |
 | Linux 原生模块 prebuild 未知(继承) | M | M | tech-design 首项 spike + CI Linux 矩阵先行 |
 | 未签名首启摩擦 / 三平台行为差异 / 多装共存冲突 / 子进程崩溃(继承) | H-M | M-L | 见 Superseded 提案 Key Risks(SC9 新增崩溃恢复验收) |
+| SQLite 数据内核入壳扩大 preload IPC 安全面(偏离官方极小产品 API 面模式) | M | M | 沿用 M1 electron-ipc-security 约束(origin-lock、typed、版本化、最小必要面);API 面随 M2/M3 设计逐项评审 |
+| 两级插件模型与 M2 PRD 口径不同步(G6/SC6/DF001/DF005) | M | M | 硬时序门槛:M2 PRD 修订完成前不得进入 M2 任务分解(基座提案 Next Steps 已记账) |
 
 ## Success Criteria
 
@@ -192,13 +203,14 @@ intent: "new-feature"
 ## Next Steps
 
 - Proceed to `/write-prd` to formalize requirements(PRD 覆盖 M1;以本文与 Superseded 提案的 Source Code References 为源码导航)
-- M2(需求与会话,含任务可视化)启动时另行提案;其首个任务为 dsh 插件机制等价性 spike
+- M2(需求与会话,含任务可视化)PRD 已立项(`docs/features/dsh-forge-m2/`,status = prd);开工线为双门槛(2026-09-21)——ui-plugin-foundation 基座(至少 spike + bundle 配置化)完成 + M2 PRD 修订完成(G6/SC6 两级插件模型、DF001/DF005 SQLite 记账),二者并行推进,任一悬空则 UI 插件任务阻塞;M2 首个任务仍为语义等价性 spike(SC8)
 
 ## Source Code References(源码参考,供后续执行 agent 使用)
 
 > **使用规则**:dsh 本地源码为唯一权威(禁止凭公开资料猜测);forge 文档为 2026-06 快照,以仓库代码与模板为准;行号会漂移,优先按符号名检索。
 
 - **dsh 仓库**:`Z:\project\github\deepseek-harness` —— 完整导航见 Superseded 提案 Source Code References A-H 节(宿主组装/carrier/RPC/事件/持久化/上游桌面实现/UI 组装/Electron 工程模式,2026-09-16 核查,继续有效)。
+- **插件路线源码导航(M2+,2026-09-21)**:`docs/proposals/dsh-forge/ui-plugin-vendor-free.md`(技术方向文档)——npm 发布面、ui-slots 契约、装配机制、dist-tag 陷阱的源码级证据;上游对齐基准 = vendored SHA `c36ba648` / `0.1.6-alpha.2`;引用其结论须钉在 git 提交版 `6f5b109`。
 - **course 仓库**:`Z:\project\github\electron-course`(Electron 工程教学参考,同上 H 节)。
 - **forge 仓库**:`Z:\project\ai\forge`(用户自研;Go CLI + Claude Code Plugin;v3.0.0;MIT):
   - `README.md` — 能力面、竞品对比、两种工作模式、工程规模。
