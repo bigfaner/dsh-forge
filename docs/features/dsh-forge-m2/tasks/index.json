@@ -625,7 +625,7 @@
         "6.1",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.2-sc1-board-consistency.md",
       "record": "records/6.2-sc1-board-consistency.md",
       "surface-type": "web",
