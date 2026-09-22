@@ -32,3 +32,5 @@
 13. 参考dsh官方的不同模式，内置full、quick模式。
    - brainstorm独立于任何一个模式
    - 小修小改，不走任何一个模式，但是检查文档是否偏移了代码
+
+14. 补充proposal看板，dsh-forge-m2 feature没有包含
