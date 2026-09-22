@@ -425,6 +425,15 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     void load()
   }, [props.reloadToken])
 
+  // 6.4 (SC5-2 无跨项目残留): bind the plugin-lifetime session to THIS page's
+  // project on mount — a project switch re-keys the shell's TasksView, and the
+  // rebind closes a selection the previous project opened (same-project
+  // remounts — the 5.11 UF5 round trip — keep it, store/ board-session.ts).
+  useEffect(() => {
+    if (props.session === undefined || props.projectId === undefined) return
+    props.session.bindProject(props.projectId)
+  }, [props.session, props.projectId])
+
   const handleEvents = useCallback((events: readonly WorkbenchEvent[]): void => {
     // Foreign projects' events are not this board's concern (the assembly
     // subscribes per active project; undefined projectId accepts all — the

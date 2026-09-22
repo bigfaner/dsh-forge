@@ -87,7 +87,7 @@ interface FakeHandle {
   readonly recursive: boolean
   closed: boolean
   /** Fire a filesystem event on this handle. */
-  fire(eventType?: string): void
+  fire(eventType?: string, filename?: string | null): void
   /** Fire a runtime watch error on this handle (dir deleted / permission). */
   fail(message?: string): void
 }
@@ -101,7 +101,7 @@ function makeFakeWatch(mode: WatchMode): { handles: FakeHandle[]; opener: WatchO
       dir,
       recursive: options.recursive,
       closed: false,
-      fire: (eventType = 'change') => listener(eventType, 'file'),
+      fire: (eventType = 'change', filename: string | null = 'file') => listener(eventType, filename),
       fail: (message = 'EPERM: operation not permitted') => onError(new Error(message)),
     }
     handles.push(handle)
@@ -435,6 +435,26 @@ describe('workbench watcher: degrade', () => {
     liveHandles(harness)[0]!.fire() // upper flow still works on the degraded tier
     await advanceAndSlice(harness, 400)
     expect(harness.scanSpy).toHaveBeenCalledTimes(1)
+    expect(harness.log.warn.mock.calls.length).toBe(0) // degradation is a strategy log, not an error crash
+  })
+
+  it('6.4 root-self removal (the win32 rename-storm form): ONE change signal then degrade — the storm cannot starve the debounce', async () => {
+    const harness = await makeHarness()
+    harness.watcher.rebuild(harness.target)
+    expect(harness.watcher.strategy).toBe('recursive')
+
+    // win32 reports a watched root's own deletion as an endless rename tail
+    // carrying the root's `\\?\` absolute path. The tier must emit the change
+    // ONCE, retire the handle (generation bump), and ignore the tail.
+    const stormed = liveHandles(harness)[0]!
+    stormed.fire('rename', `\\\\?\\${stormed.dir}`)
+    stormed.fire('rename', `\\\\?\\${stormed.dir}`)
+    stormed.fire('rename', `\\\\?\\${stormed.dir}`)
+    expect(stormed.closed).toBe(true)
+    expect(harness.watcher.strategy).not.toBe('recursive') // degraded (tree when roots exist; polling when gone)
+
+    await advanceAndSlice(harness, 400)
+    expect(harness.scanSpy).toHaveBeenCalledTimes(1) // exactly the one signal's scan
     expect(harness.log.warn.mock.calls.length).toBe(0) // degradation is a strategy log, not an error crash
   })
 

@@ -132,7 +132,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 }
 
 // ---------------------------------------------------------------------------
-// 动词注册(15 条白名单通道)
+// 动词注册(16 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -217,6 +217,9 @@ export function installWorkbenchVerbs(
   })
 
   register(C.endSessionLink, args => services.endSessionLink(requireString('endSessionLink', 'linkId', args[0])))
+
+  register(C.authorizeExternalDocPath, args =>
+    services.authorizeExternalDocPath(requireString('authorizeExternalDocPath', 'path', args[0])))
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

@@ -334,6 +334,14 @@ export function RegisterWizard(props: RegisterWizardProps) {
     setSubmitting(true)
     setSubmitError(undefined)
     try {
+      // 6.4: an external draft's step-② explicit authorization lands FIRST —
+      // the registry validation chain reads the persisted record (2.4's single
+      // write path; the register/repoint input itself carries no bypass flag).
+      // The SAME path normalization the verb payload uses keeps the record and
+      // the registered docLocationPath comparable.
+      if (draft.docLocationType === 'external' && draft.externalAuthorized) {
+        await face.authorizeExternalDocPath(normalizePathForCompare(draft.docLocationPath))
+      }
       if (props.mode === 'register') {
         const project = await face.registerProject(buildRegisterInput(draft))
         props.onClose?.({ project, action: 'register' })

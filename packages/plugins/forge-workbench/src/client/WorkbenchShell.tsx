@@ -440,6 +440,20 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     project => project.id === workbenchState.activeProjectId,
   )
 
+  // 6.4 (SC5-2 无跨项目残留): a project switch retires the feature-detail
+  // selection — the machine's featureSlug addressed the PREVIOUS project's
+  // board, and the features page's keyed remount would otherwise land on the
+  // not-found card (a stale selection, never the new project's data). The
+  // tab-selection action is the machine's own slug-clearing transition.
+  const lastActiveProjectIdRef = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    const id = workbenchState.activeProjectId
+    const last = lastActiveProjectIdRef.current
+    lastActiveProjectIdRef.current = id
+    if (last === undefined || id === last || view.featureSlug === undefined) return
+    props.selectWorkbenchTab(view.workbenchTab)
+  }, [workbenchState.activeProjectId, view.featureSlug, view.workbenchTab, props.selectWorkbenchTab])
+
   // The board's vertical scroll memory (5.11 AC4): this div is the vertical
   // scroller; with a board session store it restores on entering the tasks
   // tab and saves on leaving (a UF5 round-trip unmounts the whole shell in

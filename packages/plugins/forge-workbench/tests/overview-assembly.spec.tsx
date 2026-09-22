@@ -180,6 +180,7 @@ function installBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIp
     setPluginEnabled: async () => [],
     recordSessionLink: async () => ({}),
     endSessionLink: async () => undefined,
+    authorizeExternalDocPath: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

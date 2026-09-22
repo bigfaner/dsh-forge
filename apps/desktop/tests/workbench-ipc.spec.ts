@@ -24,7 +24,8 @@ import type { WorkbenchEventSender, WorkbenchVerbEvent } from '../src/main/workb
 import { WorkbenchRepoError } from '../src/main/workbench/repos/types.ts'
 import { listSessionLinksByTask } from '../src/main/workbench/repos/session-links.ts'
 import { WorkbenchRegistryError } from '../src/main/workbench/registry/validate.ts'
-import { authorizeExternalDocPath } from '../src/main/workbench/registry/authorize.ts'
+import { authorizeExternalDocPath, listExternalDocAuthorizations } from '../src/main/workbench/registry/authorize.ts'
+import { normalizeRegisteredPath } from '../src/main/workbench/repos/projects.ts'
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
 import {
   createPluginFace,
@@ -111,6 +112,7 @@ function fakeServices(): WorkbenchVerbServices {
       endedAt: null,
     })),
     endSessionLink: vi.fn(() => undefined),
+    authorizeExternalDocPath: vi.fn(() => undefined),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -157,9 +159,10 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the fifteen whitelisted verb channels, one per verb', () => {
+  it('contains exactly the sixteen whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
+      'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-end-session-link',
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-state',
@@ -175,7 +178,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(15)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(16)
   })
 
   it('keeps the event push channel off the invokable verb whitelist', () => {
@@ -217,10 +220,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 15 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 16 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(15)
+    expect(handlers.size).toBe(16)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -261,6 +264,9 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.endSessionLink)?.(OWNED, 'l-1')
     expect(services.endSessionLink).toHaveBeenCalledWith('l-1')
+
+    handlers.get(C.authorizeExternalDocPath)?.(OWNED, 'Z:/external-docs')
+    expect(services.authorizeExternalDocPath).toHaveBeenCalledWith('Z:/external-docs')
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {
@@ -633,6 +639,30 @@ describe('workbench services: project lifecycle + perception orchestration', () 
       expect(repointed.docLocationType).toBe('external')
       expect(perception.retargets).toEqual([project.id])
       expect(perception.rescans).toEqual([project.id])
+    })
+  })
+
+  it('authorizeExternalDocPath records the persisted consent the external register chain reads (6.4 SC5-1 seam)', async () => {
+    await withHarness(({ verbs, db }) => {
+      const externalRoot = makeForgeRoot('authorized-external')
+      const codeRoot = makeForgeRoot('external-reg')
+
+      // Without consent on record the chain rejects — the 2.4 gate the wizard
+      // step-② checkbox exists to satisfy (nothing in the INPUT can bypass).
+      const rejected = toCapture(() =>
+        verbs.registerProject({ codeRoot, docLocationType: 'external', docLocationPath: externalRoot }))
+      expect(rejected).toBeInstanceOf(WorkbenchRegistryError)
+      expect((rejected as WorkbenchRegistryError).code).toBe('ERR_EXTERNAL_PATH_UNREADABLE')
+
+      // The verb = the wizard's explicit-confirm write path (single writer,
+      // app_state record, normalized path). The same register input passes.
+      verbs.authorizeExternalDocPath(externalRoot)
+      expect(listExternalDocAuthorizations(db)).toEqual([
+        expect.objectContaining({ path: normalizeRegisteredPath(externalRoot) }),
+      ])
+      const project = verbs.registerProject({ codeRoot, docLocationType: 'external', docLocationPath: externalRoot })
+      expect(project.docLocationType).toBe('external')
+      expect(project.docLocationPath).toBe(normalizeRegisteredPath(externalRoot))
     })
   })
 

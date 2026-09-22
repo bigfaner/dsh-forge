@@ -115,3 +115,44 @@ describe('board session store: active links (AC3)', () => {
     expect(store.getActiveLinks().get('other/1.1')).toBe('session-x')
   })
 })
+
+describe('board session store: bindProject (6.4 SC5-2 无跨项目残留)', () => {
+  it('a DIFFERENT project rebind closes the open selection and drops the link map', () => {
+    const store = createBoardSessionStore()
+    store.selection.select('demo/2.1')
+    store.markLinkActive('p1', 'demo/2.1', 'session-a')
+    expect(store.selection.getSnapshot().open).toBe(true)
+
+    store.bindProject('p2')
+    // The stale cross-project taskKey retires with the badges — the dock the
+    // re-mounted board would render must NOT re-aim at the new project's
+    // detail verb with the old key.
+    expect(store.selection.getSnapshot()).toEqual({ taskKey: 'demo/2.1', open: false })
+    expect(store.getActiveLinks().size).toBe(0)
+
+    // After the rebind the store serves p2: a fresh select opens normally.
+    store.bindProject('p2')
+    store.selection.select('other/1.1')
+    expect(store.selection.getSnapshot()).toEqual({ taskKey: 'other/1.1', open: true })
+  })
+
+  it('a SAME project rebind keeps selection and badges (the 5.11 UF5 round trip on one project)', () => {
+    const store = createBoardSessionStore()
+    store.bindProject('p1')
+    store.selection.select('demo/2.1')
+    store.markLinkActive('p1', 'demo/2.1', 'session-a')
+
+    store.bindProject('p1')
+    store.bindProject('p1')
+    expect(store.selection.getSnapshot()).toEqual({ taskKey: 'demo/2.1', open: true })
+    expect(store.getActiveLinks().get('demo/2.1')).toBe('session-a')
+  })
+
+  it('an undefined rebind is a no-op (unresolved gate/skeleton mounts never scope the store)', () => {
+    const store = createBoardSessionStore()
+    store.bindProject('p1')
+    store.selection.select('demo/2.1')
+    store.bindProject(undefined)
+    expect(store.selection.getSnapshot()).toEqual({ taskKey: 'demo/2.1', open: true })
+  })
+})

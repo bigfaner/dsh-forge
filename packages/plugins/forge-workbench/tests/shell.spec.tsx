@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchPanelIcon } from '../src/client/WorkbenchPanelIcon.tsx'
 import { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from '../src/client/WorkbenchShell.tsx'
+import { MOCK_WORKBENCH_STATE } from '../src/client/mocks/workbench.ts'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
@@ -153,6 +154,41 @@ describe('WorkbenchShell: aria and lifecycle (AC6)', () => {
     expect(notifyDismissed).not.toHaveBeenCalled()
     view.unmount()
     expect(notifyDismissed).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('WorkbenchShell: project switch retires the feature-detail selection (6.4 SC5-2)', () => {
+  it('an active-project change fires the tab action that clears the slug; same-project rerenders and slug-less switches never do', () => {
+    const projects = MOCK_WORKBENCH_STATE.projects
+    let snapshot: ViewKeySnapshot = { view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'demo-slug' }
+    const selectWorkbenchTab = vi.fn()
+    const props = {
+      useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
+      selectWorkbenchTab,
+      openFeatureDetail: (slug: string) => { snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug } },
+      workbenchState: { ...MOCK_WORKBENCH_STATE, activeProjectId: projects[0].id },
+      activateProject: vi.fn(),
+      addProject: vi.fn(),
+    }
+    const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...props} />)
+    // First resolution (undefined → id) arms the tracker; nothing to clear yet.
+    expect(selectWorkbenchTab).not.toHaveBeenCalled()
+
+    // Same project, different slug (a fresh detail open): NOT a switch.
+    snapshot = { ...snapshot, featureSlug: 'another-slug' }
+    view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...props} />)
+    expect(selectWorkbenchTab).not.toHaveBeenCalled()
+
+    // The switch: the machine's own slug-clearing transition (tab action)
+    // fires with the CURRENT tab retained.
+    view.rerender(
+      <WorkbenchShell
+        t={t.en as WorkbenchShellProps['t']} {...props}
+        workbenchState={{ ...MOCK_WORKBENCH_STATE, activeProjectId: projects[1].id }}
+      />,
+    )
+    expect(selectWorkbenchTab).toHaveBeenCalledTimes(1)
+    expect(selectWorkbenchTab).toHaveBeenCalledWith('workbench/features')
   })
 })
 

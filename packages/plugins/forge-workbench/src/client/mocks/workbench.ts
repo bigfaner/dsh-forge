@@ -256,12 +256,18 @@ export function createMockRegisterWizardFace(
 ): RegisterWizardFace {
   let projects: readonly Project[] = initial.projects
   let seq = 0
+  /** 6.4: the authorization records the mock twin keeps (test-observable). */
+  const authorizedExternalPaths = new Set<string>()
   const verbError = (code: string, message: string): never => {
     throw { code, message }
   }
   const findByRoot = (codeRoot: string): Project | undefined =>
     projects.find(project => samePath(project.codeRoot, codeRoot))
   return {
+    authorizeExternalDocPath: async (path: string) => {
+      // 6.4: mirror the registry's persisted record (idempotent upsert, no fs).
+      authorizedExternalPaths.add(normalizePathForCompare(path))
+    },
     probeCodeRoot: async ({ codeRoot }) => {
       const root = codeRoot.trim()
       if (samePath(root, MOCK_WIZARD_UNREADABLE_ROOT)) {

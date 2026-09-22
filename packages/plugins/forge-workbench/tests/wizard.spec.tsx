@@ -51,6 +51,7 @@ function makeFace(initial: WorkbenchState = MOCK_WORKBENCH_STATE) {
     probeExternalPath: vi.fn(base.probeExternalPath),
     registerProject: vi.fn(base.registerProject),
     updateProject: vi.fn(base.updateProject),
+    authorizeExternalDocPath: vi.fn(base.authorizeExternalDocPath),
   }, { base })
 }
 type WizardFaceSpy = ReturnType<typeof makeFace>
@@ -416,7 +417,7 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     await fillStep1(overrides.path ?? MOCK_WIZARD_OK_ROOT)
     fireEvent.click(next())
     if (overrides.external !== undefined) {
-      fireEvent.click($('[data-dsh-forge-wizard-doc-external"]'))
+      fireEvent.click($('[data-dsh-forge-wizard-doc-external]'))
       fireEvent.change(externalInput(), { target: { value: overrides.external } })
       fireEvent.click(authorize())
     }
@@ -439,6 +440,29 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     fireEvent.click(finish())
     await waitFor(() => { expect(face.registerProject).toHaveBeenCalledTimes(1) })
     expect(face.registerProject.mock.calls[0][0].displayName).toBe('My Demo')
+  })
+
+  it('6.4: an external submit records the step-② authorization BEFORE registerProject (the persisted consent the registry chain reads); in_repo never fires it', async () => {
+    // in_repo: no authorization member call at all.
+    const inRepo = await toStep3()
+    fireEvent.click(finish())
+    await waitFor(() => { expect(inRepo.face.registerProject).toHaveBeenCalledTimes(1) })
+    expect(inRepo.face.authorizeExternalDocPath).not.toHaveBeenCalled()
+    cleanup() // one dialog in the document at a time — $() targets the first
+
+    // external + authorized: the record lands first, with the SAME path
+    // normalization the register payload carries (comparable against the
+    // registered docLocationPath).
+    const external = await toStep3({ external: `${MOCK_WIZARD_EXTERNAL_OK}\\` })
+    fireEvent.click(finish())
+    await waitFor(() => { expect(external.face.registerProject).toHaveBeenCalledTimes(1) })
+    expect(external.face.authorizeExternalDocPath).toHaveBeenCalledTimes(1)
+    expect(external.face.authorizeExternalDocPath).toHaveBeenCalledWith(MOCK_WIZARD_EXTERNAL_OK)
+    expect(external.face.registerProject.mock.calls[0][0].docLocationPath).toBe(MOCK_WIZARD_EXTERNAL_OK)
+    expect(
+      external.face.authorizeExternalDocPath.mock.invocationCallOrder[0],
+      'the authorization record precedes the register verb (the validation chain reads it)',
+    ).toBeLessThan(external.face.registerProject.mock.invocationCallOrder[0])
   })
 
   it('submitting: finish disabled + spinner label, Esc/✕ disarmed until settle', async () => {
@@ -537,6 +561,24 @@ describe('RegisterWizard: edit mode (重新指向)', () => {
     const result = (onClose.mock.calls[0] as [{ project: Project; action: 'register' | 'update' }])[0]
     expect(result.action).toBe('update')
     expect(result.project.docLocationType).toBe('in_repo')
+  })
+
+  it('6.4: repointing to a NEW external path re-authorizes it before updateProject (编辑模式无豁免 — the chain needs the record for the new path)', async () => {
+    const { face } = renderEdit()
+    await waitFor(() => { expect(next().disabled).toBe(false) })
+    fireEvent.click(next())
+    // A path edit resets the confirm; the new path needs its own consent.
+    fireEvent.change(externalInput(), { target: { value: 'Z:\\docs\\relocated  ' } })
+    fireEvent.click(authorize())
+    await waitFor(() => { expect(next().disabled).toBe(false) })
+    fireEvent.click(next())
+    fireEvent.click(finish())
+    await waitFor(() => { expect(face.updateProject).toHaveBeenCalledTimes(1) })
+    expect(face.authorizeExternalDocPath).toHaveBeenCalledTimes(1)
+    expect(face.authorizeExternalDocPath).toHaveBeenCalledWith('Z:\\docs\\relocated')
+    expect(face.updateProject.mock.calls[0][1].docLocationPath).toBe('Z:\\docs\\relocated')
+    expect(face.authorizeExternalDocPath.mock.invocationCallOrder[0])
+      .toBeLessThan(face.updateProject.mock.invocationCallOrder[0])
   })
 
   it('rename rides the same patch (ProjectPatch displayName)', async () => {

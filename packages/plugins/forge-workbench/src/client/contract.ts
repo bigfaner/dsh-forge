@@ -181,6 +181,13 @@ export interface RegisterWizardFace {
   registerProject(input: RegisterProjectInput): Promise<Project>
   /** Interface 1 updateProject — the edit mode's repoint/rename verb (repoint completes with a rescan). */
   updateProject(id: string, patch: ProjectPatch): Promise<Project>
+  /**
+   * 6.4: the step-② explicit authorization's persisted record — fired from the
+   * SAME summary-confirm submit, BEFORE register/update, whenever the draft is
+   * external + authorized (the 2.4 registry gate reads the record; without it
+   * the real chain rejects external with ERR_EXTERNAL_PATH_UNREADABLE).
+   */
+  authorizeExternalDocPath(path: string): Promise<void>
 }
 
 /**

@@ -60,6 +60,12 @@ export interface WorkbenchIpcBridge {
   setPluginEnabled(name: string, enabled: boolean): Promise<PluginRow[]>
   recordSessionLink(input: RecordSessionLinkInput): Promise<SessionLink>
   endSessionLink(linkId: string): Promise<void>
+  /**
+   * 6.4: the wizard step-② explicit authorization record — the persisted
+   * external-doc-path consent the register/repoint validation chain reads
+   * (registry/authorize.ts's single write path over IPC; zero fs probing).
+   */
+  authorizeExternalDocPath(path: string): Promise<void>
   /** Batched push (≤500ms main-side); returns the unsubscribe. */
   onEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
 }
@@ -68,7 +74,8 @@ export interface WorkbenchIpcBridge {
 const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'getState', 'registerProject', 'updateProject', 'removeProject', 'activateProject',
   'getTaskBoard', 'getTaskDetail', 'getFeatureBoard', 'readFeatureDoc',
-  'listPlugins', 'setPluginEnabled', 'recordSessionLink', 'endSessionLink', 'onEvents',
+  'listPlugins', 'setPluginEnabled', 'recordSessionLink', 'endSessionLink',
+  'authorizeExternalDocPath', 'onEvents',
 ]
 
 /**
@@ -261,20 +268,21 @@ export function createIpcTaskDetailFace(bridge: WorkbenchIpcBridge): TaskDetailF
 }
 
 /**
- * The register wizard's IPC WRITE pair (task 5.14) — registerProject /
- * updateProject, the verbs Interface 1 actually declares for the wizard's
- * submit. The step-①/② PROBE members have no Interface 1 verb (the 5.14
- * task's verb list carries none): the wizard's build-stage twin keeps
- * serving them (permissive for unknown paths — the instant feedback UX),
- * and the REAL validation is the submit-time main-side chain whose ERR_*
- * rejections land in the wizard's centralized i18n/errors.ts mapping — the
- * inline correction copy the spec's Error Handling table assigns those
- * codes. Returned as a Partial-compatible slice: the shell hands it to the
- * wizard's face seam, which spreads it over the mock twin.
+ * The register wizard's IPC WRITE face (task 5.14; 6.4 adds the authorization
+ * member) — registerProject / updateProject / authorizeExternalDocPath, the
+ * verbs the wizard's submit fires. The step-①/② PROBE members have no
+ * Interface 1 verb (the 5.14 task's verb list carries none): the wizard's
+ * build-stage twin keeps serving them (permissive for unknown paths — the
+ * instant feedback UX), and the REAL validation is the submit-time main-side
+ * chain whose ERR_* rejections land in the wizard's centralized
+ * i18n/errors.ts mapping — the inline correction copy the spec's Error
+ * Handling table assigns those codes. Returned as a Partial-compatible
+ * slice: the shell hands it to the wizard's face seam, which spreads it over
+ * the mock twin.
  */
 export function createIpcRegisterWizardVerbs(
   bridge: WorkbenchIpcBridge,
-): Pick<RegisterWizardFace, 'registerProject' | 'updateProject'> {
+): Pick<RegisterWizardFace, 'registerProject' | 'updateProject' | 'authorizeExternalDocPath'> {
   return {
     registerProject: async (input: RegisterProjectInput): Promise<Project> => {
       try {
@@ -286,6 +294,13 @@ export function createIpcRegisterWizardVerbs(
     updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
       try {
         return await bridge.updateProject(id, patch)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    authorizeExternalDocPath: async (path: string): Promise<void> => {
+      try {
+        await bridge.authorizeExternalDocPath(path)
       } catch (error) {
         renormalize(error)
       }

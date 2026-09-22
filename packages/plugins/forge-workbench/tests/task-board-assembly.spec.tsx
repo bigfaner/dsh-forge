@@ -56,6 +56,7 @@ function baseBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIpcBr
     setPluginEnabled: async () => [],
     recordSessionLink: async () => ({}) as never,
     endSessionLink: async () => undefined,
+    authorizeExternalDocPath: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as WorkbenchIpcBridge

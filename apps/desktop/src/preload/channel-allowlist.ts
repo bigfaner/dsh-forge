@@ -29,6 +29,7 @@ export const WORKBENCH_VERB_CHANNELS = {
   setPluginEnabled: 'dsh-forge:workbench-set-plugin-enabled',
   recordSessionLink: 'dsh-forge:workbench-record-session-link',
   endSessionLink: 'dsh-forge:workbench-end-session-link',
+  authorizeExternalDocPath: 'dsh-forge:workbench-authorize-external-doc-path',
   subscribeEvents: 'dsh-forge:workbench-subscribe-events',
   unsubscribeEvents: 'dsh-forge:workbench-unsubscribe-events',
 } as const

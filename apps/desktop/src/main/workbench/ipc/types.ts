@@ -152,6 +152,11 @@ export interface WorkbenchVerbServices {
   setPluginEnabled(name: string, enabled: boolean): PluginRow[]
   recordSessionLink(input: RecordSessionLinkInput): SessionLink
   endSessionLink(linkId: string): void
+  /**
+   * 仓外路径显式授权登记(6.4):向导步骤②确认的唯一落库通道 ——
+   * registry/authorize.ts 的持久化记录(校验链只读;零 fs 探测)。
+   */
+  authorizeExternalDocPath(path: string): void
 }
 
 // ---------------------------------------------------------------------------

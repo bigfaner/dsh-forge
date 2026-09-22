@@ -109,6 +109,10 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.recordSessionLink, input) as Promise<SessionLink>,
     endSessionLink: (linkId: string): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.endSessionLink, linkId) as Promise<void>,
+    // 6.4: the wizard step-② explicit authorization record (registry/authorize
+    // single write path; validation chains read it, nothing here touches fs).
+    authorizeExternalDocPath: (path: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.authorizeExternalDocPath, path) as Promise<void>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

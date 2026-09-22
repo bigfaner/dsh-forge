@@ -26,6 +26,7 @@ import {
   registerProject as registerProjectValidated,
   updateProject as updateProjectValidated,
 } from '../registry/validate.ts'
+import { authorizeExternalDocPath as authorizeExternalDocPathRecord } from '../registry/authorize.ts'
 import { getActiveProjectId, activateProject as activateProjectRow } from '../repos/app-state.ts'
 import { listFeatureSnapshots } from '../repos/feature-snapshots.ts'
 import {
@@ -320,6 +321,13 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
       endSessionLink(linkId: string): void {
         endSessionLinkRow(db, linkId)
+      },
+
+      authorizeExternalDocPath(path: string): void {
+        // 6.4:向导步骤②授权确认的落库通道(2.4 单写路径)。纯登记,零 fs
+        // 探测 —— 可读性/forge 检出探测由注册/重指向校验链在读取该记录
+        // 之后执行(Hard Rule:未授权路径连探测都不做)。
+        authorizeExternalDocPathRecord(db, path)
       },
     },
 

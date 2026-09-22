@@ -80,6 +80,12 @@ export interface StubPromptControl {
 export interface StubCliControl {
   readonly version?: StubVersionControl
   readonly prompt?: StubPromptControl
+  /**
+   * Extra absolute docs/features roots to scan (6.4's SC5 shape): an
+   * externally-registered project spawns with cwd = codeRoot, where no
+   * docs/features exists — these roots carry its task index instead.
+   */
+  readonly docsRoots?: readonly string[]
 }
 
 /** One recorded stub invocation. */
@@ -155,20 +161,25 @@ if (sub === 'version') {
   return
 }
 
-// Find one task entry by local id across the cwd's features (index.json is
-// the authority — the 2.5 dialect).
+// Find one task entry by local id across the features roots (index.json is
+// the authority — the 2.5 dialect). Roots = cwd's docs/features plus any
+// control.docsRoots (the SC5 仓外 shape: the spawned cwd is the codeRoot,
+// the docs live at the registered external path).
 function findEntry(localId) {
-  const featuresDir = path.resolve(process.cwd(), 'docs', 'features')
-  let featureDirs = []
-  try { featureDirs = fs.readdirSync(featuresDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() } catch { return undefined }
-  for (const slug of featureDirs) {
-    const indexPath = path.join(featuresDir, slug, 'tasks', 'index.json')
-    let entries
-    try { entries = JSON.parse(fs.readFileSync(indexPath, 'utf8')).tasks } catch { continue }
-    if (!entries || typeof entries !== 'object') continue
-    for (const [stem, entry] of Object.entries(entries)) {
-      if (entry && typeof entry === 'object' && entry.id === localId) {
-        return { slug, stem, entry, tasksDir: path.join(featuresDir, slug, 'tasks') }
+  const roots = [path.resolve(process.cwd(), 'docs', 'features')]
+  if (Array.isArray(control.docsRoots)) roots.push.apply(roots, control.docsRoots)
+  for (const featuresDir of roots) {
+    let featureDirs = []
+    try { featureDirs = fs.readdirSync(featuresDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() } catch { continue }
+    for (const slug of featureDirs) {
+      const indexPath = path.join(featuresDir, slug, 'tasks', 'index.json')
+      let entries
+      try { entries = JSON.parse(fs.readFileSync(indexPath, 'utf8')).tasks } catch { continue }
+      if (!entries || typeof entries !== 'object') continue
+      for (const [stem, entry] of Object.entries(entries)) {
+        if (entry && typeof entry === 'object' && entry.id === localId) {
+          return { slug, stem, entry, tasksDir: path.join(featuresDir, slug, 'tasks') }
+        }
       }
     }
   }

@@ -661,7 +661,7 @@
         "6.1",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.4-sc45-features-external-docs.md",
       "record": "records/6.4-sc45-features-external-docs.md",
       "surface-type": "web",

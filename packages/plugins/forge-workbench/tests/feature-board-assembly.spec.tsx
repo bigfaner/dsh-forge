@@ -68,6 +68,7 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     setPluginEnabled: async () => [],
     recordSessionLink: async () => ({}),
     endSessionLink: async () => undefined,
+    authorizeExternalDocPath: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

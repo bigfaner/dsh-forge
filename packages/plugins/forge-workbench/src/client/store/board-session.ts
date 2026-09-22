@@ -13,6 +13,10 @@
  *               opens + retargets, close keeps the key). The page uses the
  *               injected one when present and falls back to a per-mount
  *               instance otherwise (tests / seat mounts keep 5.8 behavior).
+ *               Since 6.4 the plugin-lifetime selection is PROJECT-SCOPED:
+ *               the page's mount-time bindProject closes it when the board
+ *               re-mounts for a DIFFERENT active project (SC5-2 无跨项目残留);
+ *               same-project remounts (the UF5 round trip) keep it.
  *   scroll    — the board's scroll memory (the tree viewport stash, view B's
  *               horizontal offset, the shell content's vertical scrollTop).
  *               Save-on-leave / restore-on-enter, exact-value, never clamped
@@ -73,6 +77,15 @@ export interface BoardSessionStore {
    * ended/absent drops it.
    */
   reconcileLinks(projectId: string, taskKey: string, links: readonly SessionLink[]): void
+  /**
+   * Project rebind (6.4, SC5-2): the board page calls this on mount — a bind
+   * to a DIFFERENT project closes the selection (a stale cross-project taskKey
+   * re-aimed at the new project's detail verb is residue, not state) and the
+   * link map follows the existing project scoping. The SAME project rebinds
+   * untouched (the 5.11 UF5 round-trip — launch → 切会话视图 → back on one
+   * project — keeps selection and badges).
+   */
+  bindProject(projectId: string | undefined): void
 }
 
 /**
@@ -91,7 +104,13 @@ export function createBoardSessionStore(selection?: SelectedTaskStore): BoardSes
   /** Project scoping: a different project's board starts from a clean map. */
   const ensureProject = (next: string): void => {
     if (projectId === next) return
+    const previous = projectId
     projectId = next
+    // 6.4 (SC5-2 无跨项目残留): a genuine CROSS-PROJECT transition retires the
+    // selection with the link map — the open taskKey addressed the previous
+    // project's board. The initial bind (undefined → first project) closes
+    // nothing: no cross-project key can predate it.
+    if (previous !== undefined) selectionStore.close()
     if (activeLinks.size === 0) return
     activeLinks = new Map()
     for (const listener of [...linkListeners]) listener()
@@ -148,6 +167,10 @@ export function createBoardSessionStore(selection?: SelectedTaskStore): BoardSes
       }
       if (current === active.sessionId) return
       commitLinks(new Map(activeLinks).set(taskKey, active.sessionId))
+    },
+    bindProject(project: string | undefined): void {
+      if (project === undefined) return // unresolved gate/skeleton — nothing to bind
+      ensureProject(project)
     },
   }
 }

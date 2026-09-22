@@ -16,7 +16,7 @@
 // 触发降级或扫描。
 
 import { readdirSync, statSync, watch as fsWatch, type Dirent } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 export type WatchStrategy = 'recursive' | 'tree' | 'polling'
 
@@ -150,6 +150,22 @@ function defaultTreeSignature(roots: readonly string[]): string {
   return parts.join(';')
 }
 
+/**
+ * Is this event's filename the watched directory ITSELF (6.4, SC5
+ * path-invalidation)? win32 reports a watched root's own removal as an
+ * unbounded rename storm on the surviving handle — the filename arrives in
+ * the `\\?\`-prefixed absolute form (relative names are always children).
+ * @param dir - the watched directory this handle belongs to.
+ * @param filename - the event filename (null = unusable).
+ */
+function isWatchedRootSelf(dir: string, filename: string | null): boolean {
+  if (filename === null || filename === '') return false
+  const raw = filename.startsWith('\\\\?\\') ? filename.slice(4) : filename
+  const absolute = isAbsolute(raw) ? raw : resolve(dir, raw)
+  if (process.platform === 'win32') return absolute.toLowerCase() === dir.toLowerCase()
+  return absolute === dir
+}
+
 export function createTierController(roots: readonly string[], hooks: TierHooks, deps: TierDeps = {}): TierController {
   const openWatch = deps.openWatch ?? defaultOpenWatch
   const treeSignature = deps.treeSignature ?? defaultTreeSignature
@@ -186,8 +202,17 @@ export function createTierController(roots: readonly string[], hooks: TierHooks,
 
   function openOne(dir: string, recursive: boolean): OpenedWatch | null {
     const gen = generation
-    const listener: WatchListener = (eventType, _filename) => {
+    const listener: WatchListener = (eventType, filename) => {
       if (gen !== generation || stopped) return
+      if (eventType === 'rename' && isWatchedRootSelf(dir, filename)) {
+        // The watched ROOT itself was renamed/removed: ONE change signal (the
+        // scan reads the missing dir → sync error — the SC5 路径失效 error
+        // state), then degrade — the storming handle must not spin the loop
+        // or starve the debounce with an endless event tail.
+        hooks.onChange()
+        degradeFromWatchError(new Error(`watched root removed: ${dir}`))
+        return
+      }
       if (!recursive && eventType === 'rename') refreshTreeWatches() // 新建目录需补挂非递归 watch
       hooks.onChange()
     }

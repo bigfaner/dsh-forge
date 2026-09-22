@@ -7,11 +7,19 @@
 //
 // 通道清单(tech-design §Interface 1 动词表):
 //   13 个数据动词 + onEvents 的订阅/退订动词对(subscribe-events /
-//   unsubscribe-events)= 15 条白名单通道;事件推送走独立的
+//   unsubscribe-events)+ 仓外授权确认动词(authorize-external-doc-path,
+//   6.4 补齐)= 16 条白名单通道;事件推送走独立的
 //   `dsh-forge:workbench-events`(主→渲染,不可 invoke,不在动词白名单内)。
 //   onEvents 在 preload 侧呈现为单订阅者语义动词:订阅即 invoke
 //   subscribe-events,返回的退订函数移除监听并 invoke unsubscribe-events
 //   —— 渲染层销毁时主进程经 webContents destroyed 钩子自动退订。
+//
+// authorize-external-doc-path(6.4,SC5-1 缺口补齐):2.4 的仓外授权登记
+// (registry/authorize.ts —— 持久化 app_state 记录,校验链只读它,入参无
+// 旗标可绕过)此前没有任何 IPC 写入面,真实链上仓外注册恒被
+// ERR_EXTERNAL_PATH_UNREADABLE 拒绝。本动词 = 向导步骤②显式授权确认的唯一
+// 落库通道(经 RegisterWizard 的 step-③ submit 触发):只登记授权,零 fs
+// 探测(可读性/检出探测仍在注册校验链内、授权确认之后)。
 
 /** The complete workbench verb whitelist. Nothing else may be invoked from the renderer. */
 export const WORKBENCH_VERB_CHANNELS = {
@@ -28,6 +36,7 @@ export const WORKBENCH_VERB_CHANNELS = {
   setPluginEnabled: 'dsh-forge:workbench-set-plugin-enabled',
   recordSessionLink: 'dsh-forge:workbench-record-session-link',
   endSessionLink: 'dsh-forge:workbench-end-session-link',
+  authorizeExternalDocPath: 'dsh-forge:workbench-authorize-external-doc-path',
   subscribeEvents: 'dsh-forge:workbench-subscribe-events',
   unsubscribeEvents: 'dsh-forge:workbench-unsubscribe-events',
 } as const
