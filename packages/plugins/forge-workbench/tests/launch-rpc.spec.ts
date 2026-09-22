@@ -312,6 +312,19 @@ describe('createLaunchSeat', () => {
     expect(openSession).toHaveBeenCalledWith('session-target')
   })
 
+  it('onLaunched survives a locate failure (unknown session id) — the view switch stands, no throw', () => {
+    // The stub-channel / store-sync shape: uiWorkspace.retain rejects the id
+    // SYNCHRONOUSLY; onLaunched's locate leg is best-effort (the 切会话视图
+    // already landed) and must not surface as an unhandled rejection.
+    const openSession = vi.fn(() => { throw new Error('sessions.retain: unknown session session-x') })
+    const { ctx } = fakeCtx({ uiWorkspace: { openSession } })
+    const controller = fakeController()
+    const seat = createLaunchSeat(ctx as never, controller)
+    expect(() => seat.getSnapshot().onLaunched('session-x')).not.toThrow()
+    expect(controller.switched).toEqual(['session'])
+    expect(openSession).toHaveBeenCalledWith('session-x')
+  })
+
   it('mounts the contribution when remote arrives and commits the rpc members (probe unwraps the envelope)', async () => {
     const { remote, mountedContribution } = fakeRemote()
     const getTaskPrompt = vi.fn(async () => ({

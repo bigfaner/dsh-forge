@@ -287,7 +287,15 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
     if (!open) return
     const active = document.activeElement
     returnFocusRef.current = active instanceof HTMLElement ? active : null
-    rootRef.current?.focus()
+    // Focus arbitration (SC2-1 确认默认焦点): a MODAL dialog frame mounted in
+    // the same commit — the UF5 launch confirm opening off a node-card click
+    // that ALSO selected the task into this dock — owns the focus; the dock's
+    // non-modal focus-in runs later in the commit and must not steal it
+    // (Enter alone has to confirm the launch). The return-trip capture above
+    // still records the pre-dock trigger either way.
+    if (document.querySelector('[data-dsh-forge-dialog]') === null) {
+      rootRef.current?.focus()
+    }
     const frame = typeof requestAnimationFrame === 'function'
       ? requestAnimationFrame(() => { setEntered(true) })
       : undefined

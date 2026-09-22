@@ -179,6 +179,12 @@ export function DepTreeView(props: DepTreeViewProps) {
   /** The delegated canvas keydown: resolve the focused node wrapper, run its contract. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const target = event.target as HTMLElement | null
+    // Interactive descendants own their keys: the UF5 launch trigger and the
+    // confirm dialog's controls mount INSIDE the node card (DOM-descendants
+    // of the wrapper), and the node contract must not swallow their Enter /
+    // Space activation with preventDefault (SC2-1 确认默认焦点 — Enter alone
+    // confirms the launch). Same for arrows over a text control.
+    if (target?.closest('button, input, textarea, select, a[href], [contenteditable], [data-dsh-forge-dialog]') != null) return
     const wrapper = target?.closest<HTMLElement>('[data-id]') ?? null
     // Keys outside a node wrapper (the pane itself) are not this view's.
     if (wrapper === null) return

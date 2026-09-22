@@ -392,7 +392,18 @@ export function createLaunchSeat(ctx: ClientContext, controller: ViewSwitchContr
     // session inside the conversation — openSession's replaceMain is itself
     // a navigation, so the machine must already say `session`.
     controller.switchSession()
-    uiWorkspaceOf(ctx)?.openSession(sessionId)
+    // The locate leg is best-effort BY DESIGN (the guarded-read discipline
+    // this module follows throughout): a session the workspace store does
+    // not know — the e2e stub channel's id, or a store-sync race in the real
+    // app — makes retain throw; the view switch already landed, so the
+    // failure degrades to "located when the store catches up" and must never
+    // surface as a renderer pageerror (an unhandled rejection off the launch
+    // chain's success path).
+    try {
+      uiWorkspaceOf(ctx)?.openSession(sessionId)
+    } catch {
+      // The session view is up; locating is an enhancement, not a guarantee.
+    }
   }
 
   let snapshot: LaunchSeatSnapshot = Object.freeze({

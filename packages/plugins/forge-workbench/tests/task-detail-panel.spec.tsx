@@ -155,6 +155,27 @@ describe('dock: focus management', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
+  it('focus arbitration: a modal dialog mounted in the same commit keeps the focus (SC2-1 确认默认焦点)', async () => {
+    // The SC2-1 shape: a node-card click both opens the dock AND the launch
+    // confirm dialog — the dialog's initial focus must survive the dock's
+    // later-in-commit focus-in (Enter alone confirms the launch).
+    render(<Harness initialKey={null} openKey={RICH_KEY} />)
+    const trigger = q('[data-testid="trigger"]')
+    trigger.focus()
+    const dialogButton = document.createElement('button')
+    dialogButton.type = 'button'
+    dialogButton.setAttribute('data-dsh-forge-launch-confirm-ok', '')
+    const dialogCard = document.createElement('div')
+    dialogCard.setAttribute('data-dsh-forge-dialog', 'launch-confirm')
+    dialogCard.appendChild(dialogButton)
+    document.body.appendChild(dialogCard)
+    dialogButton.focus()
+    fireEvent.click(trigger)
+    await waitFor(() => { expect(root()).not.toBeNull() })
+    expect(document.activeElement).toBe(dialogButton)
+    dialogCard.remove()
+  })
+
   it('Tab/Shift+Tab cycle inside the dock (focus trap)', async () => {
     await renderPanel({
       initialKey: RICH_KEY,

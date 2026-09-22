@@ -514,6 +514,25 @@ describe('DepTreeView: keyboard + selection seam (AC3)', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('interactive descendants own their keys — Enter inside a button is never swallowed (SC2-1 确认默认焦点)', async () => {
+    // The UF5 confirm dialog mounts INSIDE the node card (a DOM-descendant of
+    // the wrapper): its confirm button's native Enter activation must survive
+    // the canvas's delegated node contract (no preventDefault, no re-select).
+    const onSelect = vi.fn()
+    await renderBoard({ onSelect })
+    const node = document.querySelector('[data-id="dsh-forge-m2/5.5"]') as HTMLElement
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.setAttribute('data-dsh-forge-launch-confirm-ok', '')
+    node.appendChild(button)
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    button.dispatchEvent(event)
+    expect(event.defaultPrevented, 'the delegated handler must not preventDefault').toBe(false)
+    expect(onSelect, 'the node contract must not treat the dialog key as node navigation').not.toHaveBeenCalled()
+  })
+
   it('keeps focus put at a traversal boundary (no scroll-away, no crash)', async () => {
     await renderBoard()
     const root = document.querySelector('[data-id="dsh-forge-m2/3.9"]') as HTMLElement // no blockers
