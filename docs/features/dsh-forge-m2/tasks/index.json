@@ -315,7 +315,7 @@
         "4.1",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.10-session-launch-entry-build.md",
       "record": "records/5.10-session-launch-entry-build.md",
       "surface-type": "web",

@@ -58,3 +58,34 @@ export interface WorkbenchState {
   readonly activeProjectId: string | null
   readonly plugins: readonly PluginRow[]
 }
+
+/**
+ * Session-link status (session_links.status, er-diagram): event-driven
+ * transition, `ended` rows are kept for the history list.
+ */
+export type SessionLinkStatus = 'active' | 'ended'
+
+/**
+ * One session_links row (Interface 1): the task↔session 挂接 index — the
+ * workbench-owned source of truth behind the UF2/UF3 挂接徽标 and the UF3
+ * 挂接历史.
+ */
+export interface SessionLink {
+  readonly id: string
+  readonly projectId: string
+  /** Workbench dialect: qualified `<featureSlug>/<localId>` (task 2.5). */
+  readonly taskKey: string
+  readonly sessionId: string
+  readonly status: SessionLinkStatus
+  /** ISO 8601 UTC (发起时间; repeat registration refreshes it). */
+  readonly startedAt: string
+  /** Non-null when status='ended'. */
+  readonly endedAt: string | null
+}
+
+/** Interface 1 recordSessionLink input (the launch success chain's persist leg). */
+export interface RecordSessionLinkInput {
+  readonly projectId: string
+  readonly taskKey: string
+  readonly sessionId: string
+}

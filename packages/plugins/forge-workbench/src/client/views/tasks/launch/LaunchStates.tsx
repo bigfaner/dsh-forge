@@ -1,0 +1,376 @@
+/**
+ * The UF5 launch-state presentation family (task 5.10, ui-design 会话挂接节
+ * States 行): the shared dialog frame (ui-dialog geometry — r24 card over a
+ * mask-1 + blur overlay, z1200 per the M2 层序), the initiating spinner, the
+ * degradation toast (剪贴板已复制 + 手动指引, z1100, aria-live polite), and
+ * the 发起失败 error dialog (标题 + 原因 + 恢复引导, M1 recovery-guidance
+ * form). The ConfirmPanel composes the same DialogFrame, so every launch
+ * overlay shares one focus contract: focus lands on the dialog's primary
+ * button on open (Story2 — the confirm button is the default focus, so Enter
+ * alone launches), Tab/Shift+Tab cycle inside (focus trap), Esc / mask / ✕
+ * dismiss (armed only while nothing is in flight), and the caller returns
+ * focus to the entry trigger on close.
+ *
+ * Styles stay inline (no stylesheet pipeline — Hard Rule): the theme rides
+ * the host `--dsw-*` / `--dsh-*` vars exactly like the 5.1 chrome.
+ */
+import { useEffect, useRef, type ReactNode } from 'react'
+import { ChromeButton } from '../../../components/chrome/ChromeButton'
+
+/** ui-design 层叠: dialog overlays z1200 (mask + blur), toasts z1100. */
+export const DIALOG_Z = 1200
+export const TOAST_Z = 1100
+
+/** ui-dialog geometry: full-screen mask (mask-1 + 2px blur) with a centered r24 card. */
+const maskStyle = {
+  alignItems: 'center',
+  background: 'var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.4))',
+  backdropFilter: 'blur(2px)',
+  display: 'flex',
+  inset: '0',
+  justifyContent: 'center',
+  position: 'fixed',
+  zIndex: DIALOG_Z,
+} as const
+
+const cardStyle = {
+  background: 'var(--dsh-bg, Canvas)',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '24px',
+  boxShadow: '0 16px 48px rgba(0, 0, 0, 0.24)',
+  display: 'flex',
+  flexDirection: 'column',
+  maxHeight: '70vh',
+  maxWidth: 'min(520px, calc(100vw - 48px))',
+  padding: '22px 24px 24px',
+  width: 'min(520px, calc(100vw - 48px))',
+} as const
+
+const titleStyle = {
+  fontSize: '16px',
+  fontWeight: 600,
+  lineHeight: '24px',
+  margin: '0',
+} as const
+
+const bodyStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+  minHeight: '0',
+  overflowY: 'auto',
+  paddingTop: '10px',
+} as const
+
+const footerStyle = {
+  alignItems: 'center',
+  display: 'flex',
+  gap: '8px',
+  justifyContent: 'flex-end',
+  paddingTop: '16px',
+} as const
+
+/** ui-design md primary pill (h36 r18, brand action color). */
+export const primaryButtonStyle = {
+  background: 'var(--dsw-alias-link, rgb(65, 118, 230))',
+  border: 'none',
+  borderRadius: '18px',
+  color: '#fff',
+  cursor: 'pointer',
+  font: 'inherit',
+  height: '36px',
+  padding: '0 16px',
+} as const
+
+/** ui-design sm ghost pill (h28 r14). */
+export const ghostButtonStyle = {
+  background: 'transparent',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '14px',
+  color: 'inherit',
+  cursor: 'pointer',
+  font: 'inherit',
+  height: '28px',
+  padding: '0 12px',
+} as const
+
+const closeButtonStyle = {
+  alignItems: 'center',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '8px',
+  color: 'inherit',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  flex: '0 0 auto',
+  font: 'inherit',
+  height: '28px',
+  justifyContent: 'center',
+  marginLeft: 'auto',
+  width: '28px',
+} as const
+
+/**
+ * Focusables of a dialog card in DOM order (the trap's cycle set). Disabled
+ * buttons are skipped — the browser's own Tab semantics agree.
+ */
+function focusablesOf(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+  ))
+}
+
+/** Ref the DialogFrame focuses on open — attach it to the dialog's primary button. */
+export type DialogInitialFocus = React.RefObject<HTMLButtonElement | null>
+
+/**
+ * The shared dialog frame: mask + card, focus-in on mount (the primary
+ * button the `initialFocus` ref addresses), Tab/Shift+Tab trap, Esc/mask
+ * dismiss. `onDismiss === undefined` disarms dismissal (the initiating
+ * phase — a launch that cannot be cancelled must not look cancellable).
+ */
+export function DialogFrame(props: {
+  role: 'dialog' | 'alertdialog'
+  ariaLabelledBy: string
+  initialFocus?: DialogInitialFocus
+  onDismiss?: (() => void) | undefined
+  dialogDataKey?: string | undefined
+  children: ReactNode
+}) {
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    props.initialFocus?.current?.focus()
+  }, [])
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Escape' && props.onDismiss !== undefined) {
+      event.preventDefault()
+      props.onDismiss()
+      return
+    }
+    if (event.key !== 'Tab' || cardRef.current === null) return
+    const focusables = focusablesOf(cardRef.current)
+    if (focusables.length === 0) return
+    const first = focusables[0] as HTMLElement
+    const last = focusables[focusables.length - 1] as HTMLElement
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  return (
+    <div
+      data-dsh-forge-dialog-mask=""
+      style={maskStyle}
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget && props.onDismiss !== undefined) props.onDismiss()
+      }}
+    >
+      <div
+        ref={cardRef}
+        role={props.role}
+        aria-modal="true"
+        aria-labelledby={props.ariaLabelledBy}
+        data-dsh-forge-dialog={props.dialogDataKey}
+        style={cardStyle}
+        onKeyDown={onKeyDown}
+      >
+        {props.children}
+      </div>
+    </div>
+  )
+}
+
+/** The dialog header row: title + (optional) ✕ close (28×28 r8, ui-dialog geometry). */
+export function DialogHeader(props: {
+  id: string
+  title: string
+  closeLabel?: string | undefined
+  onClose?: (() => void) | undefined
+}) {
+  return (
+    <div style={{ alignItems: 'center', display: 'flex', gap: '8px' }}>
+      <h2 id={props.id} style={titleStyle}>{props.title}</h2>
+      {props.onClose !== undefined && props.closeLabel !== undefined && (
+        <ChromeButton
+          type="button"
+          aria-label={props.closeLabel}
+          data-dsh-forge-dialog-close=""
+          style={closeButtonStyle}
+          onClick={props.onClose}
+        >
+          <span aria-hidden="true">✕</span>
+        </ChromeButton>
+      )}
+    </div>
+  )
+}
+
+/** The dialog body slot (scrollable interior, max 70vh per ui-dialog). */
+export function DialogBody(props: { children: ReactNode }) {
+  return <div style={bodyStyle}>{props.children}</div>
+}
+
+/** The dialog footer slot (right-aligned button row). */
+export function DialogFooter(props: { children: ReactNode }) {
+  return <div style={footerStyle}>{props.children}</div>
+}
+
+/**
+ * The initiating indicator (ui-design initiating 态): spinner + 「正在发起会话…」.
+ * The rotation is SMIL inside the plugin's own inline SVG — self-contained,
+ * no stylesheet pipeline, and inert in reduced-motion user agents that
+ * disable SMIL animations.
+ */
+export function LaunchSpinner(props: { label: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={props.label}
+      data-dsh-forge-launch-spinner=""
+      style={{ display: 'inline-flex', height: '14px', width: '14px' }}
+    >
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+        <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite" />
+        </path>
+      </svg>
+    </span>
+  )
+}
+
+const toastCardStyle = {
+  alignItems: 'flex-start',
+  background: 'var(--dsh-bg, Canvas)',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '14px',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  maxWidth: '360px',
+  padding: '12px 14px',
+  position: 'fixed',
+  right: '16px',
+  bottom: '16px',
+  zIndex: TOAST_Z,
+} as const
+
+const toastTitleStyle = {
+  fontSize: '14px',
+  fontWeight: 600,
+  lineHeight: '22px',
+} as const
+
+const toastBodyStyle = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontSize: '12px',
+  lineHeight: '18px',
+  margin: '0',
+} as const
+
+/**
+ * The degradation toast (Interface 5 tier 3): 剪贴板已复制说明 + 手动指引,
+ * presented as guidance — never as an error (`ERR_SESSION_CHANNEL_UNAVAILABLE`
+ * is routing, not error display). role=status / aria-live=polite per the
+ * ui-design a11y rules; dismissed explicitly (no auto-timer to race the user).
+ */
+export function DegradedToast(props: {
+  title: string
+  copied: string
+  guide: string
+  dismissLabel: string
+  onDismiss: () => void
+}) {
+  return (
+    <div role="status" aria-live="polite" data-dsh-forge-launch-toast="" style={toastCardStyle}>
+      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', width: '100%' }}>
+        <strong style={toastTitleStyle}>{props.title}</strong>
+        <ChromeButton
+          type="button"
+          aria-label={props.dismissLabel}
+          data-dsh-forge-launch-toast-dismiss=""
+          style={{ ...ghostButtonStyle, height: '24px', marginLeft: 'auto', padding: '0 8px' }}
+          onClick={props.onDismiss}
+        >
+          <span aria-hidden="true">✕</span>
+        </ChromeButton>
+      </div>
+      <p style={toastBodyStyle}>{props.copied}</p>
+      <p style={toastBodyStyle}>{props.guide}</p>
+    </div>
+  )
+}
+
+const reasonStyle = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontSize: '14px',
+  lineHeight: '22px',
+  margin: '0',
+} as const
+
+const detailStyle = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontSize: '12px',
+  lineHeight: '18px',
+  margin: '0',
+  overflowWrap: 'anywhere',
+} as const
+
+/**
+ * The 发起失败 dialog (ui-design error 态): 标题 + 原因 + 恢复引导, Retry
+ * primary (default focus — 关闭后可重试), Close ghost. Reached only for
+ * chain exceptions and a denied clipboard (both channel tiers already
+ * routed before this can show — a bare channel failure degrades instead,
+ * never errors).
+ */
+export function LaunchErrorDialog(props: {
+  titleId: string
+  title: string
+  reason: string
+  detail?: string | undefined
+  retryLabel: string
+  closeLabel: string
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const retryRef = useRef<HTMLButtonElement | null>(null)
+  return (
+    <DialogFrame
+      role="alertdialog"
+      ariaLabelledBy={props.titleId}
+      initialFocus={retryRef}
+      onDismiss={props.onClose}
+      dialogDataKey="launch-error"
+    >
+      <DialogHeader id={props.titleId} title={props.title} closeLabel={props.closeLabel} onClose={props.onClose} />
+      <DialogBody>
+        <p style={reasonStyle}>{props.reason}</p>
+        {props.detail !== undefined && props.detail !== '' && (
+          <p data-dsh-forge-launch-error-detail="" style={detailStyle}>{props.detail}</p>
+        )}
+      </DialogBody>
+      <DialogFooter>
+        <ChromeButton type="button" data-dsh-forge-launch-error-close="" style={ghostButtonStyle} onClick={props.onClose}>
+          {props.closeLabel}
+        </ChromeButton>
+        <ChromeButton
+          ref={(element: HTMLButtonElement | null): void => { retryRef.current = element }}
+          type="button"
+          data-dsh-forge-launch-error-retry=""
+          style={primaryButtonStyle}
+          onClick={props.onRetry}
+        >
+          {props.retryLabel}
+        </ChromeButton>
+      </DialogFooter>
+    </DialogFrame>
+  )
+}
