@@ -451,7 +451,7 @@
         "5.1",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.3-overview-page-build.md",
       "record": "records/5.3-overview-page-build.md",
       "surface-type": "web",

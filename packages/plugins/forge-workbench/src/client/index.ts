@@ -42,7 +42,7 @@ export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
 export type {
   WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
-  WorkbenchChromeFace,
+  WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -53,8 +53,15 @@ export type {
 } from './store/view-key'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
-export type { DocLocationType, PluginRow, Project, WorkbenchState } from './ipc-types'
-export { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE } from './mocks/workbench'
+export type {
+  DocLocationType, PluginRow, Project, ProjectPatch, WorkbenchState, WorkbenchVerbError,
+} from './ipc-types'
+export { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE, createMockOverviewFace } from './mocks/workbench'
+// The UF1 overview page (task 5.3): mounted by the shell into the reserved
+// overview seat; exported for the 5.14 assembly + its tests.
+export { OverviewPage } from './views/overview/OverviewPage'
+export type { OverviewPageProps } from './views/overview/OverviewPage'
+export { formatTimestamp, middleEllipsis } from './views/overview/format'
 // The shared read-only markdown renderer (task 5.2, T3 mitigation): every
 // prose surface of the 5.x views (task descriptions, execution records, the
 // five feature doc kinds) renders through this one sanitized component.

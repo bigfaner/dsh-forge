@@ -46,6 +46,40 @@ export type WorkbenchKey =
   | 'launch.error.unexpected'
   | 'launch.error.retry'
   | 'launch.error.close'
+  | 'overview.meta.codeRoot'
+  | 'overview.meta.docLocation'
+  | 'overview.doc.inRepo'
+  | 'overview.doc.external'
+  | 'overview.card.activate'
+  | 'overview.card.rename'
+  | 'overview.card.remove'
+  | 'overview.card.activeBadge'
+  | 'overview.card.lostBadge'
+  | 'overview.card.lastActivated'
+  | 'overview.card.neverActivated'
+  | 'overview.rename.label'
+  | 'overview.rename.hint'
+  | 'overview.remove.title'
+  | 'overview.remove.promise'
+  | 'overview.remove.hint'
+  | 'overview.remove.confirm'
+  | 'overview.remove.cancel'
+  | 'overview.empty.title'
+  | 'overview.empty.body'
+  | 'overview.empty.register'
+  | 'overview.loading'
+  | 'overview.loadError.title'
+  | 'overview.loadError.retry'
+  | 'overview.lost.title'
+  | 'overview.lost.body'
+  | 'overview.lost.repoint'
+  | 'overview.lost.remove'
+  | 'overview.toast.activated'
+  | 'overview.toast.refreshed'
+  | 'overview.toast.failed'
+  | 'overview.toast.dismiss'
+  | 'overview.plugins.title'
+  | 'overview.plugins.reserved'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -89,4 +123,38 @@ export const en: Record<WorkbenchKey, string> = {
   'launch.error.unexpected': 'The launch chain failed unexpectedly.',
   'launch.error.retry': 'Retry',
   'launch.error.close': 'Close',
+  'overview.meta.codeRoot': 'Code root',
+  'overview.meta.docLocation': 'Docs location',
+  'overview.doc.inRepo': 'In repo',
+  'overview.doc.external': 'External',
+  'overview.card.activate': 'Activate',
+  'overview.card.rename': 'Rename',
+  'overview.card.remove': 'Remove',
+  'overview.card.activeBadge': 'Current',
+  'overview.card.lostBadge': 'Directory unreachable',
+  'overview.card.lastActivated': 'Last activated',
+  'overview.card.neverActivated': 'Never activated',
+  'overview.rename.label': 'Project display name',
+  'overview.rename.hint': 'Enter to save · Esc to cancel',
+  'overview.remove.title': 'Remove project',
+  'overview.remove.promise': 'Only the workbench registration is removed — no files inside the repository are deleted.',
+  'overview.remove.hint': 'You can register the project again at any time.',
+  'overview.remove.confirm': 'Remove',
+  'overview.remove.cancel': 'Cancel',
+  'overview.empty.title': 'No projects yet',
+  'overview.empty.body': 'Register a forge project to switch the workbench between your projects.',
+  'overview.empty.register': 'Register a project',
+  'overview.loading': 'Loading projects…',
+  'overview.loadError.title': 'Failed to load projects',
+  'overview.loadError.retry': 'Retry',
+  'overview.lost.title': 'Active project directory unreachable',
+  'overview.lost.body': 'The registered path can no longer be reached. Repoint the project to a valid location, or remove its registration (project files are never touched).',
+  'overview.lost.repoint': 'Repoint',
+  'overview.lost.remove': 'Remove project',
+  'overview.toast.activated': 'Activated {name}',
+  'overview.toast.refreshed': 'Project list refreshed',
+  'overview.toast.failed': 'Action failed: {message}',
+  'overview.toast.dismiss': 'Dismiss',
+  'overview.plugins.title': 'Plugins',
+  'overview.plugins.reserved': 'The plugin management section arrives with M2 5.12.',
 }

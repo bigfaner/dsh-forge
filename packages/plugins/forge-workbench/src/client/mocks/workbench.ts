@@ -7,16 +7,25 @@
  *
  * The populated variant mirrors the approved prototype's demo registry (two
  * projects, first active); the empty variant exercises the chrome's state
- * gate (page-map: 无激活项目 → tasks/features guide to registration).
+ * gate (page-map: 无激活项目 → tasks/features guide to registration). Task
+ * 5.3 adds the card-data variety (external docs / never-activated) and the
+ * overview page's mock verb twin (createMockOverviewFace).
  */
-import type { WorkbenchState } from '../ipc-types'
-import type { SessionLaunchServices } from '../contract'
+import type { Project, ProjectPatch, WorkbenchState } from '../ipc-types'
+import type { OverviewFace, SessionLaunchServices } from '../contract'
 
 /** The demo mandatory core row (UF6 consumes the same rows in 5.12). */
 const MOCK_PLUGINS = Object.freeze([
   Object.freeze({ name: '@dsh-forge/plugin-forge-workbench', mandatory: true, enabled: true }),
   Object.freeze({ name: '@dsh-forge/plugin-hello-world', mandatory: false, enabled: true }),
 ])
+
+/**
+ * The fixed "now" the overview mock stamps (task 5.3): a frozen ISO so
+ * activation side effects (`lastActivatedAt`) stay deterministic in tests —
+ * the page's date rendering is injected/pure for the same reason.
+ */
+export const MOCK_NOW = '2026-09-22T09:00:00.000Z'
 
 /** Populated registry: two projects, the first active (prototype fidelity). */
 export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
@@ -30,14 +39,16 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
       createdAt: '2026-09-20T08:12:00.000Z',
       lastActivatedAt: '2026-09-22T06:40:00.000Z',
     }),
+    // Task 5.3 widens the fixture for the project-card field matrix: an
+    // external doc location (the 仓外 badge) and a never-activated project.
     Object.freeze({
       id: 'b2c93f57-1e6a-4d88-8f0c-2a9d4e7b1c53',
       displayName: 'electron-course',
       codeRoot: 'Z:\\project\\github\\electron-course',
-      docLocationType: 'in_repo',
-      docLocationPath: null,
+      docLocationType: 'external',
+      docLocationPath: 'Z:\\docs\\electron-course',
       createdAt: '2026-09-21T10:02:00.000Z',
-      lastActivatedAt: '2026-09-21T18:22:00.000Z',
+      lastActivatedAt: null,
     }),
   ]),
   activeProjectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
@@ -98,4 +109,66 @@ export const MOCK_SESSION_LAUNCH_SERVICES: SessionLaunchServices = {
     startedAt: '2026-09-22T08:00:00.000Z',
     endedAt: null,
   }),
+}
+
+/**
+ * The overview page's build-stage face, task 5.3 (UI dependency layering): a
+ * STATEFUL local twin of the Interface 1 verbs over a closure-held registry —
+ * a factory, not a singleton, so every mount/test gets isolated state. The
+ * verb semantics mirror the main-process transactions (tech-design §Interface
+ * 1 / Data Models):
+ *
+ *   activateProject — single activation, stamps `lastActivatedAt` (MOCK_NOW);
+ *   updateProject   — patches the row, returns the updated Project;
+ *   removeProject   — drops the row; when the ACTIVE project is removed the
+ *                    first remaining row (registration order) is auto-activated,
+ *                    the last removal clears the pointer (single-activation
+ *                    invariant: null ⟺ empty registry) — exactly what the
+ *                    main-side transaction does, so the page's toast logic
+ *                    runs against the real semantics;
+ *   unknown id      — rejects the serialized WorkbenchVerbError shape
+ *                    (ERR_PROJECT_NOT_FOUND), the form the IPC runtime sends.
+ *
+ * The 5.14 assembly task replaces the whole face with the IPC verbs.
+ */
+export function createMockOverviewFace(initial: WorkbenchState = MOCK_WORKBENCH_STATE): OverviewFace {
+  let state: WorkbenchState = initial
+  const notFound = (id: string): { code: string; message: string } => ({
+    code: 'ERR_PROJECT_NOT_FOUND',
+    message: `build-stage mock: no registered project ${id}`,
+  })
+  return {
+    loadState: async () => state,
+    activateProject: async (id: string) => {
+      if (!state.projects.some(project => project.id === id)) throw notFound(id)
+      state = {
+        ...state,
+        activeProjectId: id,
+        projects: state.projects.map(project =>
+          project.id === id ? { ...project, lastActivatedAt: MOCK_NOW } : project,
+        ),
+      }
+    },
+    updateProject: async (id: string, patch: ProjectPatch) => {
+      const project = state.projects.find(row => row.id === id)
+      if (project === undefined) throw notFound(id)
+      const updated: Project = { ...project, ...patch }
+      state = {
+        ...state,
+        projects: state.projects.map(row => (row.id === id ? updated : row)),
+      }
+      return updated
+    },
+    removeProject: async (id: string) => {
+      const projects = state.projects.filter(project => project.id !== id)
+      if (projects.length === state.projects.length) throw notFound(id)
+      // Removed the active project → the transaction migrates the pointer to
+      // the first remaining row (registration order), or clears it when the
+      // registry became empty.
+      const activeProjectId = state.activeProjectId === id
+        ? (projects[0]?.id ?? null)
+        : state.activeProjectId
+      state = { ...state, projects, activeProjectId }
+    },
+  }
 }

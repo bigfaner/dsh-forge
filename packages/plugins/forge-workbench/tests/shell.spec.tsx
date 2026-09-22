@@ -53,8 +53,11 @@ function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
 afterEach(() => cleanup())
 
 describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
-  it('renders the shell title, the tab strip, and the 5.x placeholder inside the flow provider', () => {
-    const face = makeFace()
+  it('renders the shell title, the tab strip, and the remaining 5.x placeholder inside the flow provider', () => {
+    // Task 5.3 filled the overview seat with the UF1 page (its own suite
+    // covers that mount); the placeholder contract lives on the still-open
+    // seats — tasks until 5.6, features until 5.8.
+    const face = makeFace({ workbenchTab: 'workbench/tasks' })
     render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     expect(screen.getByText(en['shell.title'])).toBeDefined()
     expect(screen.getByText(en['shell.placeholder'])).toBeDefined()

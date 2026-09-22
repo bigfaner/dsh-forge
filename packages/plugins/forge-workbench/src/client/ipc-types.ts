@@ -40,6 +40,30 @@ export interface Project {
   readonly lastActivatedAt: string | null
 }
 
+/**
+ * Interface 1 updateProject patch: rename = `displayName`; repoint = the doc
+ * location fields (repoint completes with a rescan — the registry verb's own
+ * semantics; the patch itself only carries the fields).
+ */
+export interface ProjectPatch {
+  readonly displayName?: string
+  readonly docLocationType?: DocLocationType
+  readonly docLocationPath?: string | null
+}
+
+/**
+ * The Interface 1 verb rejection shape (tech-design Error Handling: every IPC
+ * verb rejects with the serialized `{ code, message, detail? }` form — the
+ * `ERR_*` code vocabulary is the client's error-mapping key). The build-stage
+ * mocks throw this same shape, so the view's code mapping is exercised before
+ * the runtime exists.
+ */
+export interface WorkbenchVerbError {
+  readonly code: string
+  readonly message: string
+  readonly detail?: string
+}
+
 /** One plugin row in the two-level model (mandatory derived from the product manifest). */
 export interface PluginRow {
   readonly name: string

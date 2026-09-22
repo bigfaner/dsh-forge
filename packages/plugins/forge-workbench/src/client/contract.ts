@@ -23,7 +23,7 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 // into this program's SlotMap view (declared by ui-sidebar).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
-import type { RecordSessionLinkInput, SessionLink, WorkbenchState } from './ipc-types'
+import type { Project, ProjectPatch, RecordSessionLinkInput, SessionLink, WorkbenchState } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
 
@@ -96,6 +96,45 @@ export interface WorkbenchChromeFace {
 }
 
 /**
+ * The overview page's data + action face (task 5.3, UI dependency layering —
+ * the same seam shape as WorkbenchChromeFace / SessionLaunchServices): the
+ * BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockOverviewFace), the 5.14 assembly task injects
+ * the Interface 1 IPC verbs. Every member mirrors its §Interface 1 verb
+ * one-to-one — rejections surface the serialized {@link WorkbenchVerbError}
+ * shape so the page's code mapping is the real one from day one.
+ */
+export interface OverviewFace {
+  /** Interface 1 workbench.getState() — the page's data load (loading/ready phases). */
+  loadState(): Promise<WorkbenchState>
+  /** Interface 1 activateProject(id) — single activation (the transaction lives main-side). */
+  activateProject(id: string): Promise<void>
+  /** Interface 1 updateProject(id, patch) — the rename action's verb (displayName patch). */
+  updateProject(id: string, patch: ProjectPatch): Promise<Project>
+  /** Interface 1 removeProject(id) — registration-only; project files are never touched. */
+  removeProject(id: string): Promise<void>
+}
+
+/**
+ * The shell's passthrough seat for the overview page (task 5.3): one optional
+ * prop object the 5.14 assembly uses to hand the page its IPC-backed face and
+ * the sync-derived signals — absent entirely in the build stage (the page
+ * then runs on its own mock twin).
+ */
+export interface WorkbenchOverviewSeat {
+  /** The page face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
+  readonly face?: Partial<OverviewFace>
+  /**
+   * Project ids whose codeRoot/docLocation re-validation failed (5.14 derives
+   * from sync_state): drives the per-card 失联徽标 and, for the active
+   * project, the error card with 重新指向/移除 (ui-design UF1 error 态).
+   */
+  readonly lostProjectIds?: readonly string[]
+  /** The repoint seam — the 5.4 wizard edit mode owns the dialog this fires. */
+  readonly onRepoint?: (project: Project) => void
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -110,6 +149,8 @@ export type WorkbenchShellProps =
   & Partial<WorkbenchPanelLifecycle>
   /** The chrome face is partial: absent members fall back to the build-stage mock (task 5.1). */
   & Partial<WorkbenchChromeFace>
+  /** The overview page's assembly seat (task 5.3): absent = the page-local mock twin. */
+  & { overview?: WorkbenchOverviewSeat }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

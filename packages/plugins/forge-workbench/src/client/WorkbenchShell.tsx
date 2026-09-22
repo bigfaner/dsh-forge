@@ -18,6 +18,12 @@
  * (引导态, never an error), while the UF1-UF6 views land inside the reserved
  * mount containers in the remaining 5.x tasks.
  *
+ * Task 5.3 fills the first seat: the UF1 overview page mounts into the
+ * reserved `workbench/overview` container (ungated — the page owns its own
+ * empty state), its register CTA firing the same addProject seam as the
+ * chrome; the optional `overview` prop is the 5.14 assembly seat (IPC face +
+ * sync signals), absent in the build stage where the page runs its mock twin.
+ *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
  * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
@@ -37,6 +43,7 @@ import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
 import { ChromeButton } from './components/chrome/ChromeButton'
 import { TabBar } from './components/chrome/TabBar'
 import { TopBar } from './components/chrome/TopBar'
+import { OverviewPage } from './views/overview/OverviewPage'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -202,11 +209,29 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         <div data-dsh-forge-content="" style={contentStyle}>
           {gated
             ? <StateGate t={props.t} onRegister={addProject} />
-            : (
-              <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
-                <em>{props.t('shell.placeholder')}</em>
-              </div>
-            )}
+            : view.workbenchTab === 'workbench/overview'
+              ? (
+                // UF1 (task 5.3): the overview page owns its own empty state,
+                // so it takes the reserved seat WITHOUT the state gate. Its
+                // register CTA fires the same addProject seam as the chrome;
+                // the optional overview seat (5.14) hands the page its
+                // IPC-backed face + sync signals — absent, the page runs on
+                // its build-stage mock twin.
+                <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
+                  <OverviewPage
+                    t={props.t}
+                    onRegister={addProject}
+                    onRepoint={props.overview?.onRepoint}
+                    lostProjectIds={props.overview?.lostProjectIds}
+                    face={props.overview?.face}
+                  />
+                </div>
+              )
+              : (
+                <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
+                  <em>{props.t('shell.placeholder')}</em>
+                </div>
+              )}
         </div>
       </ReactFlowProvider>
     </div>
