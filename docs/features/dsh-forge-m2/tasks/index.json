@@ -19,7 +19,7 @@
       "title": "SQLite store 基座：node:sqlite 打开/初始化/schema v1 迁移器 + boot 探针",
       "priority": "P0",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "completed",
       "file": "2.1-store-foundation.md",
       "record": "records/2.1-store-foundation.md",
       "surface-type": "web",
