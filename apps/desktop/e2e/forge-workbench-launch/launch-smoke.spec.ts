@@ -141,6 +141,12 @@ test('5.11/launch-smoke leg A: real probe round-trip, fail-closed (no env seam) 
     bundles: launchBundles(),
     stageTarballs: launchTarballs(),
     rootDir: root,
+    // 6.1 isolation seam: a per-journey userData (fresh registry — the shared
+    // real one accumulated 40+ stale fixture rows run over run, widening the
+    // boot-restore bounce until switchToWorkbench flaked). The fail-closed
+    // contract is unchanged: boot feeds an empty allowlist, runtime
+    // registration cannot reach the spawned host's env.
+    userDataDir: join(root, 'user-data'),
     env: { PATH: FORGE_FREE_PATH },
   })
   try {
@@ -162,9 +168,11 @@ test('5.11/launch-smoke leg A: real probe round-trip, fail-closed (no env seam) 
     await expect(first).toHaveAttribute('title', /prompt|执行|发起/i)
 
     // The dock's panel-primary entry carries the same state after a selection
-    // (the NODE wrapper — real ReactFlow keys edges by data-id too; 5.6 is a
-    // task the build-stage detail mock covers, so the dock opens with content).
-    await shell.page.locator('.dsh-forge-dag .react-flow__node[data-id="dsh-forge-m2/5.6"]').click()
+    // (the NODE wrapper — real ReactFlow keys nodes by data-id; 6.1 repaired
+    // the stale mock-era key: the board now renders the FIXTURE project's own
+    // tasks, so the click targets the fixture's single task node — the fixed
+    // launch-demo slug carries no stamp).
+    await shell.page.locator('.dsh-forge-dag .react-flow__node[data-id="launch-demo/1.1"]').click()
     const dockEntry = shell.page.locator('[data-dsh-forge-task-detail] [data-dsh-forge-launch-trigger][data-mount="panel-primary"]')
     await expect(dockEntry).toBeVisible({ timeout: 10_000 })
     await expect(dockEntry).toHaveAttribute('data-probe', 'unavailable')
@@ -192,6 +200,7 @@ test('5.11/launch-smoke leg B: DSH_FORGE_PROJECT_ROOTS consumed by the host (cli
     bundles: launchBundles(),
     stageTarballs: launchTarballs(),
     rootDir: root,
+    userDataDir: join(root, 'user-data'),
     env: {
       PATH: FORGE_FREE_PATH,
       DSH_FORGE_PROJECT_ROOTS: JSON.stringify([fixtureRoot.split('\\').join('/')]),

@@ -34,6 +34,8 @@ import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
 import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
+import { listProjects } from './workbench/repos/projects.ts'
+import { createHostSpawnEnvFeeder } from './workbench/host-env-feed.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -45,6 +47,17 @@ import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
 // `__DSH_TRANSPORT__` carrier boot IPC, and the shell-ui injection pipeline.
 
 const DEV_SERVER_URL = process.env.DSH_FORGE_DEV_SERVER_URL
+
+// Task 6.1 (e2e userData isolation seam): an explicit override pins the whole
+// app-owned state face (workbench DB <userData>/workbench, the
+// plugin-runtime.json overlay, the single-instance lock) to a test-owned temp
+// dir — journeys stop sharing the dev machine's real %APPDATA%/Electron and
+// stop contending its single-instance lock. Same env-seam family as
+// DSH_FORGE_PROFILE_DIR / DSH_FORGE_PLUGIN_BUNDLES; must run before app ready.
+const isolatedUserData = process.env.DSH_FORGE_USER_DATA?.trim()
+if (isolatedUserData !== undefined && isolatedUserData !== '') {
+  app.setPath('userData', isolatedUserData)
+}
 
 // Must run before app ready (upstream precedent: module-scope registration).
 registerShellScheme()
@@ -335,9 +348,14 @@ void app.whenReady().then(async () => {
   // be registered on ipcMain by then). A boot failure is an explicit startup
   // error carried by the M1 crash-recovery path — there is no silent
   // no-database degradation, and the verb face simply stays uninstalled.
+  // Task 6.1: on success this also binds the projects-table provider the host
+  // env feed below consumes (empty until the kernel is up — fail-closed).
+  let listWorkbenchProjectRoots: () => readonly string[] = () => []
+  const feedHostSpawnEnv = createHostSpawnEnvFeeder()
   try {
     const userDataPath = app.getPath('userData')
     const workbenchDb = await openDatabase(userDataPath)
+    listWorkbenchProjectRoots = () => listProjects(workbenchDb.db).map(project => project.codeRoot)
     const workbenchEvents = createWorkbenchEventSubscriptions()
     const pluginBundlesPath = resolvePluginBundlesConfigPath()
     const workbenchIpc = createWorkbenchIpcServices({
@@ -431,6 +449,12 @@ void app.whenReady().then(async () => {
   // `onHostReady` fires only on a successful bind (the first boot resolves the
   // SPA boot gate; recovery boots skip it — the outcome already resolved).
   async function bootHost(onHostReady?: () => void): Promise<void> {
+    // Task 6.1 (4.1's shell-side feed): refresh the ForgeBridge allowlist env
+    // from the workbench projects table right before every host spawn (first
+    // boot + recovery restarts). An explicitly-set non-empty value wins — the
+    // test-profile override channel (5.11 leg B precedent). The host child
+    // inherits this env; its plugin host half reads it per call.
+    feedHostSpawnEnv(listWorkbenchProjectRoots())
     const handle = await supervisor.startHost(profileDir)
     hostHandle = handle
     crashRecovery.setAttempts(supervisor.recoveryContext.attempts)

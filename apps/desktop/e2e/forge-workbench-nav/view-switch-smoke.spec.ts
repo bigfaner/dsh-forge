@@ -98,7 +98,7 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
 test('3.3/slot-path: 会话⇄工作台 switch by click and keyboard, aria, session-view first boot', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
   const { root, fixtureRoot } = navFixtureRoot()
-  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs(), rootDir: root })
+  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs(), rootDir: root, userDataDir: join(root, 'user-data') })
   try {
     const { page } = shell
     await shell.uiReady()
@@ -160,7 +160,8 @@ test('3.3/slot-path: 会话⇄工作台 switch by click and keyboard, aria, sess
 
 test('3.3/restart: the last view survives an application restart (two boots, one profile)', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
-  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs() })
+  const root = mkdtempSync(join(tmpdir(), 'dsh-forge-nav-e2e-'))
+  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs(), rootDir: root, userDataDir: join(root, 'user-data') })
   const rootDir = shell.dir
   try {
     const { page } = shell
@@ -179,7 +180,7 @@ test('3.3/restart: the last view survives an application restart (two boots, one
   // Boot 2 (same root dir → same config/profile/userData): the persisted
   // workbench view restores WITHOUT any interaction — the slot carrier's
   // attach-time projection re-selects the panel at boot.
-  const reborn = await launchPluginShell({ bundles: navBundles(), stageTarballs: [], rootDir })
+  const reborn = await launchPluginShell({ bundles: navBundles(), stageTarballs: [], rootDir, userDataDir: shell.userDataDir })
   try {
     await reborn.uiReady()
     await expect(reborn.page.locator('[data-dsh-forge-shell]')).toBeVisible()

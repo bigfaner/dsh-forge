@@ -608,7 +608,7 @@
       "dependencies": [
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.1-e2e-forge-fixture.md",
       "record": "records/6.1-e2e-forge-fixture.md",
       "surface-type": "web",

@@ -18,6 +18,10 @@
  *   spawn).
  * - `DSH_FORGE_CLI_PATH` — the workbench 设置显式路径 override for the forge
  *   binary. Absent → the PATH chain applies.
+ * - `DSH_FORGE_SESSION_STUB_DIR` — TEST-ONLY (task 6.1): when set, the
+ *   session-launch channel is the file-backed e2e stub instead of the real
+ *   upstream sessionController (control.json orchestration + journal.jsonl
+ *   observation; see session-channel-stub.ts).
  *
  * Both names follow the host-spawn env precedent (DSH_FORGE_PRIMARY_RUNTIME).
  *
@@ -34,6 +38,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { ForgeBridgeService } from './forge-bridge-rpc'
 import { SessionLaunchService } from './session-launch-rpc'
+import { createStubSessionChannel, resolveSessionStubDir } from './session-channel-stub'
 
 const PROJECT_ROOTS_ENV = 'DSH_FORGE_PROJECT_ROOTS'
 const CLI_PATH_ENV = 'DSH_FORGE_CLI_PATH'
@@ -74,5 +79,13 @@ export function apply(ctx: Context): void {
       return value === undefined || value === '' ? undefined : value
     },
   })
-  new SessionLaunchService(ctx)
+  // Task 6.1: the e2e session-channel stub seam. Unset (every production
+  // boot) resolves the REAL upstream sessionController per call; a stub dir
+  // swaps in the file-backed orchestration channel (see
+  // session-channel-stub.ts for why an env seam is the only in-host
+  // injection point — cordis provide() refuses duplicate service names).
+  const sessionStubDir = resolveSessionStubDir()
+  new SessionLaunchService(ctx, sessionStubDir === undefined
+    ? undefined
+    : { getSessionChannel: () => createStubSessionChannel(sessionStubDir) })
 }

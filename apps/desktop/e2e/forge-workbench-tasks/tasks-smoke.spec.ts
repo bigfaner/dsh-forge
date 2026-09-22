@@ -1,6 +1,7 @@
 // @feature dsh-forge-m2 | @web-e2e | @journey forge-workbench-tasks
 // Traceability: docs/features/dsh-forge-m2/tasks/5.15-tasks-page-assembly.md
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
@@ -85,7 +86,7 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
 
 test('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation refresh over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
-  const shell = await launchPluginShell({ bundles: tasksBundles(), stageTarballs: tasksTarballs() })
+  const shell = await launchPluginShell({ bundles: tasksBundles(), stageTarballs: tasksTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-tasks-smoke-')), 'user-data') })
   try {
     await shell.uiReady()
     const { page } = shell

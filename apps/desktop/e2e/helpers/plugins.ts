@@ -187,6 +187,19 @@ export interface PluginShellOptions {
   readonly expectFailure?: boolean
   /** Persistent root for multi-boot tests (default: a fresh temp dir per launch). */
   readonly rootDir?: string
+  /**
+   * Working directory for the Electron main process (6.1: the stub-CLI
+   * version probe resolves node's main entry against the host child's cwd,
+   * which inherits this). Default: Playwright's own cwd.
+   */
+  readonly cwd?: string
+  /**
+   * Isolated userData (6.1 Hard Rule): pins the workbench DB, the
+   * plugin-runtime overlay, AND the single-instance lock to a per-journey
+   * temp dir via the DSH_FORGE_USER_DATA seam — the registry stops sharing
+   * the dev machine's real %APPDATA%/Electron across journeys.
+   */
+  readonly userDataDir?: string
 }
 
 export interface PluginShell {
@@ -196,6 +209,8 @@ export interface PluginShell {
   readonly dir: string
   readonly configPath: string
   readonly profileDir: string
+  /** The isolated userData dir, when `userDataDir` was passed (6.1 seam). */
+  readonly userDataDir: string | undefined
   /** Every renderer pageerror since launch (the collision/observability channel). */
   readonly pageErrors: string[]
   writeConfig(entries: readonly BundleEntry[]): void
@@ -228,12 +243,16 @@ export async function launchPluginShell(options: PluginShellOptions = {}): Promi
   }
   const args = [MAIN_PATH]
   if (options.offlineProxy === true) args.push('--proxy-server=http://127.0.0.1:9')
+  const userDataDir = options.userDataDir === undefined ? undefined : resolve(options.userDataDir)
+  if (userDataDir !== undefined) mkdirSync(userDataDir, { recursive: true })
   const electronApp = await _electron.launch({
     args,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     env: {
       ...process.env,
       DSH_FORGE_PLUGIN_BUNDLES: configPath,
       DSH_FORGE_PROFILE_DIR: profileDir,
+      ...(userDataDir === undefined ? {} : { DSH_FORGE_USER_DATA: userDataDir }),
       ...options.env,
     },
   })
@@ -246,6 +265,7 @@ export async function launchPluginShell(options: PluginShellOptions = {}): Promi
     dir,
     configPath,
     profileDir,
+    userDataDir,
     pageErrors,
     writeConfig: (entries) => { writeFileSync(configPath, bundlesConfigJson(entries)) },
     stageTarball: (at, from) => {

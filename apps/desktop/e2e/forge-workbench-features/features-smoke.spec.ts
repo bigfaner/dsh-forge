@@ -1,6 +1,7 @@
 // @feature dsh-forge-m2 | @web-e2e | @journey forge-workbench-features
 // Traceability: docs/features/dsh-forge-m2/tasks/5.16-features-page-assembly.md
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
@@ -88,7 +89,7 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
 
 test('5.16/features-smoke: list → detail → doc browsing over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
-  const shell = await launchPluginShell({ bundles: featuresBundles(), stageTarballs: featuresTarballs() })
+  const shell = await launchPluginShell({ bundles: featuresBundles(), stageTarballs: featuresTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-features-smoke-')), 'user-data') })
   try {
     await shell.uiReady()
     const { page } = shell
