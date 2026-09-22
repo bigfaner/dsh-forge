@@ -34,3 +34,17 @@ export function middleEllipsis(path: string, maxLength = 48): string {
   const budget = Math.max(8, Math.floor((maxLength - 1) / 2))
   return `${path.slice(0, budget)}…${path.slice(path.length - budget)}`
 }
+
+/**
+ * Fill a locale template's `{slot}` placeholders (shared since task 5.5 —
+ * the board's count/sync/announce copies parametrize the same way the
+ * overview's toasts do). Unknown slots stay verbatim (a missing value is a
+ * visible `{slot}`, never a silently dropped token).
+ * @param template - the locale string, e.g. `'{visible} of {total} tasks'`.
+ * @param values - the slot values.
+ * @returns the template with every known slot substituted.
+ */
+export function fillTemplate(template: string, values: Readonly<Record<string, string>>): string {
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    Object.hasOwn(values, name) ? values[name]! : match)
+}

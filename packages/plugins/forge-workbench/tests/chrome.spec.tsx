@@ -13,6 +13,15 @@ import { WORKBENCH_TABS } from '../src/client/store/view-key.ts'
 import { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE } from '../src/client/mocks/workbench.ts'
 import type { Project } from '../src/client/ipc-types.ts'
 
+// The upstream StateDot (consumed by the tasks-seat board since task 5.5)
+// resolves through the module table at runtime; the npm node entry carries
+// undeclared transitive deps (clsx/shiki/...) that only the upstream
+// monorepo supplies, so the jsdom unit render stubs it (the shell.spec
+// precedent — the real dot path rides the e2e boot).
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
+}))
+
 // Task 5.1 AC6 — the page chrome units: tab strip (the view-key machine's tab
 // dimension, keyboard activation), project switcher (Menu card, empty-state
 // guidance, keyboard), top bar, and the shell-level state gate (page-map:

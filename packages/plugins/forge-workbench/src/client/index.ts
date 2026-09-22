@@ -43,6 +43,7 @@ export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchS
 export type {
   WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
+  TaskBoardFace, TaskBoardSeat,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -53,15 +54,51 @@ export type {
 } from './store/view-key'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
+// Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
+// SyncStatus/TaskBoardData/WorkbenchEvent).
 export type {
-  DocLocationType, PluginRow, Project, ProjectPatch, WorkbenchState, WorkbenchVerbError,
+  ChangeSource, DocLocationType, PluginRow, Project, ProjectPatch, SyncStatus, TaskBoardData,
+  TaskSummary, TaskStatus, WorkbenchEvent, WorkbenchState, WorkbenchVerbError,
 } from './ipc-types'
-export { MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE, createMockOverviewFace } from './mocks/workbench'
+export {
+  MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE,
+  MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockOverviewFace,
+  createMockTaskBoardFace,
+} from './mocks/workbench'
+// The shared task-status vocabulary (task 5.5 — the first status-rendering
+// task): the 7-态 runtime order + the label/short-label/StateDot routing.
+// Tasks 5.7 (detail dock) and 5.9 (feature board) consume it as-is — the
+// API is contract-stable for them.
+export {
+  TASK_STATUSES, TASK_STATUS_DOT_STATE, TASK_STATUS_LABEL_KEYS, TASK_STATUS_SHORT_LABEL_KEYS,
+  isTaskStatus, taskStatusLabel, taskStatusShortLabel,
+} from './i18n/task-status'
+export type { TaskStatusTranslate } from './i18n/task-status'
 // The UF1 overview page (task 5.3): mounted by the shell into the reserved
 // overview seat; exported for the 5.14 assembly + its tests.
 export { OverviewPage } from './views/overview/OverviewPage'
 export type { OverviewPageProps } from './views/overview/OverviewPage'
 export { formatTimestamp, middleEllipsis } from './views/overview/format'
+export { fillTemplate } from './views/overview/format'
+// The UF2 task board page (task 5.5): mounted by the shell into the reserved
+// tasks seat; exported with its pure board model (filter/sort/dangling) for
+// the 5.15 assembly + its tests. View A (依赖树 DAG) is 5.6's — the
+// switcher's tree tab is its placeholder.
+export { TaskBoardPage } from './views/TaskBoardPage'
+export type { TaskBoardPageProps } from './views/TaskBoardPage'
+export {
+  computeDanglingByTask, featureSlugsOf, filterTasks, localIdOf, resolveBlockerKey, sortTasks,
+} from './views/TaskBoardPage'
+export { DEFAULT_BOARD_FILTER, TaskToolbar } from './views/tasks/TaskToolbar'
+export type {
+  BoardFilterState, BoardSortKey, BoardTranslate, BoardViewKey,
+} from './views/tasks/TaskToolbar'
+export { StatusBoard } from './views/tasks/StatusBoard'
+export type { StatusBoardProps } from './views/tasks/StatusBoard'
+export { TaskList } from './views/tasks/TaskList'
+export type { TaskListProps } from './views/tasks/TaskList'
+export { TaskBadges, TaskCard, TaskListRow } from './views/tasks/TaskRow'
+export type { TaskRowBaseProps } from './views/tasks/TaskRow'
 // The shared read-only markdown renderer (task 5.2, T3 mitigation): every
 // prose surface of the 5.x views (task descriptions, execution records, the
 // five feature doc kinds) renders through this one sanitized component.

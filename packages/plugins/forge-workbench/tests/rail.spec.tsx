@@ -22,6 +22,8 @@ import {
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconBranchOutline16: () => null,
   IconNewChatOutline16: () => null,
+  // Consumed by the tasks-seat board since task 5.5 (shell mount chain).
+  StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
 }))
 
 ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true

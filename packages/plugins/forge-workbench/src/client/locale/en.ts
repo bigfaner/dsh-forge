@@ -123,6 +123,67 @@ export type WorkbenchKey =
   | 'wizard.discard.body'
   | 'wizard.discard.confirm'
   | 'wizard.discard.cancel'
+  | 'tasks.views.label'
+  | 'tasks.view.tree'
+  | 'tasks.view.grouped'
+  | 'tasks.view.list'
+  | 'tasks.view.treeHint'
+  | 'tasks.search.label'
+  | 'tasks.search.placeholder'
+  | 'tasks.filter.status'
+  | 'tasks.filter.statusAll'
+  | 'tasks.filter.feature'
+  | 'tasks.filter.featureAll'
+  | 'tasks.filter.worktree'
+  | 'tasks.filters.label'
+  | 'tasks.sort.label'
+  | 'tasks.sort.status'
+  | 'tasks.sort.updatedAt'
+  | 'tasks.count'
+  | 'tasks.sync.idle'
+  | 'tasks.sync.scanning'
+  | 'tasks.sync.error'
+  | 'tasks.sync.retry'
+  | 'tasks.sync.lastScan'
+  | 'tasks.sync.neverScanned'
+  | 'tasks.loading'
+  | 'tasks.empty.title'
+  | 'tasks.empty.body'
+  | 'tasks.noMatch.title'
+  | 'tasks.noMatch.body'
+  | 'tasks.noMatch.clear'
+  | 'tasks.loadError.title'
+  | 'tasks.loadError.retry'
+  | 'tasks.column.key'
+  | 'tasks.column.title'
+  | 'tasks.column.status'
+  | 'tasks.column.feature'
+  | 'tasks.column.branch'
+  | 'tasks.column.worktree'
+  | 'tasks.column.source'
+  | 'tasks.column.updatedAt'
+  | 'tasks.badge.worktree'
+  | 'tasks.source.session'
+  | 'tasks.source.terminal'
+  | 'tasks.dangling'
+  | 'tasks.dangling.title'
+  | 'tasks.select'
+  | 'tasks.group.ariaLabel'
+  | 'tasks.updated.announce'
+  | 'tasks.status.pending'
+  | 'tasks.status.in_progress'
+  | 'tasks.status.completed'
+  | 'tasks.status.blocked'
+  | 'tasks.status.suspended'
+  | 'tasks.status.skipped'
+  | 'tasks.status.rejected'
+  | 'tasks.status.short.pending'
+  | 'tasks.status.short.in_progress'
+  | 'tasks.status.short.completed'
+  | 'tasks.status.short.blocked'
+  | 'tasks.status.short.suspended'
+  | 'tasks.status.short.skipped'
+  | 'tasks.status.short.rejected'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -243,4 +304,65 @@ export const en: Record<WorkbenchKey, string> = {
   'wizard.discard.body': 'The values entered so far will be lost.',
   'wizard.discard.confirm': 'Discard',
   'wizard.discard.cancel': 'Keep editing',
+  'tasks.views.label': 'Task board views',
+  'tasks.view.tree': 'Dependency tree',
+  'tasks.view.grouped': 'By status',
+  'tasks.view.list': 'List',
+  'tasks.view.treeHint': 'The dependency-tree view arrives with task 5.6.',
+  'tasks.search.label': 'Search tasks',
+  'tasks.search.placeholder': 'Search title or task number',
+  'tasks.filter.status': 'Status',
+  'tasks.filter.statusAll': 'All statuses',
+  'tasks.filter.feature': 'Feature',
+  'tasks.filter.featureAll': 'All features',
+  'tasks.filter.worktree': 'Worktree only',
+  'tasks.filters.label': 'Filters',
+  'tasks.sort.label': 'Sort',
+  'tasks.sort.status': 'By status',
+  'tasks.sort.updatedAt': 'By updated time',
+  'tasks.count': '{visible} of {total} tasks',
+  'tasks.sync.idle': 'Synced',
+  'tasks.sync.scanning': 'Scanning…',
+  'tasks.sync.error': 'Sync failed',
+  'tasks.sync.retry': 'Retry',
+  'tasks.sync.lastScan': 'Last scan {time}',
+  'tasks.sync.neverScanned': 'Never scanned',
+  'tasks.loading': 'Loading tasks…',
+  'tasks.empty.title': 'No tasks',
+  'tasks.empty.body': 'No forge task data exists under this project yet. Initialize the project with forge and its tasks appear here.',
+  'tasks.noMatch.title': 'No matching tasks',
+  'tasks.noMatch.body': 'No task matches the current search and filters.',
+  'tasks.noMatch.clear': 'Clear filters',
+  'tasks.loadError.title': 'Failed to load the task board',
+  'tasks.loadError.retry': 'Retry',
+  'tasks.column.key': 'Task',
+  'tasks.column.title': 'Title',
+  'tasks.column.status': 'Status',
+  'tasks.column.feature': 'Feature',
+  'tasks.column.branch': 'Branch',
+  'tasks.column.worktree': 'Worktree',
+  'tasks.column.source': 'Source',
+  'tasks.column.updatedAt': 'Updated',
+  'tasks.badge.worktree': 'worktree',
+  'tasks.source.session': 'Session',
+  'tasks.source.terminal': 'Terminal',
+  'tasks.dangling': 'Dangling blocker',
+  'tasks.dangling.title': 'Blocked by {keys}, which are not in the current task set',
+  'tasks.select': 'Open task details',
+  'tasks.group.ariaLabel': '{status} ({count} tasks)',
+  'tasks.updated.announce': 'Task {key} updated',
+  'tasks.status.pending': 'Pending',
+  'tasks.status.in_progress': 'In progress',
+  'tasks.status.completed': 'Completed',
+  'tasks.status.blocked': 'Blocked',
+  'tasks.status.suspended': 'Suspended',
+  'tasks.status.skipped': 'Skipped',
+  'tasks.status.rejected': 'Rejected',
+  'tasks.status.short.pending': 'Pending',
+  'tasks.status.short.in_progress': 'Active',
+  'tasks.status.short.completed': 'Done',
+  'tasks.status.short.blocked': 'Blocked',
+  'tasks.status.short.suspended': 'Held',
+  'tasks.status.short.skipped': 'Skipped',
+  'tasks.status.short.rejected': 'Rejected',
 }

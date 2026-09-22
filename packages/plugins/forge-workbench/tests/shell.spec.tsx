@@ -8,11 +8,14 @@ import { zh } from '../src/client/locale/zh.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
 import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
-// The upstream icon resolves through the module table at runtime (browser
-// bundle); the npm node entry carries undeclared transitive deps
+// The upstream icons/dots resolve through the module table at runtime
+// (browser bundle); the npm node entry carries undeclared transitive deps
 // (clsx/shiki/katex/...) that only the upstream monorepo supplies, so the
-// jsdom unit render stubs the glyph. The real icon path rides the e2e boot.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ IconBranchOutline16: () => null }))
+// jsdom unit render stubs them. The real paths ride the e2e boot.
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  IconBranchOutline16: () => null,
+  StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
+}))
 
 // Task 3.2 AC2 (the slot shell renders — placeholder + flow provider + `t`
 // seat) extended by task 3.3: the view face drives the tab strip
@@ -54,10 +57,11 @@ afterEach(() => cleanup())
 
 describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
   it('renders the shell title, the tab strip, and the remaining 5.x placeholder inside the flow provider', () => {
-    // Task 5.3 filled the overview seat with the UF1 page (its own suite
-    // covers that mount); the placeholder contract lives on the still-open
-    // seats — tasks until 5.6, features until 5.8.
-    const face = makeFace({ workbenchTab: 'workbench/tasks' })
+    // Task 5.3 filled the overview seat with the UF1 page and task 5.5 the
+    // tasks seat with the UF2 board (their own suites cover those mounts);
+    // the placeholder contract lives on the still-open seats — features
+    // until the UF4 build.
+    const face = makeFace({ workbenchTab: 'workbench/features' })
     render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     expect(screen.getByText(en['shell.title'])).toBeDefined()
     expect(screen.getByText(en['shell.placeholder'])).toBeDefined()

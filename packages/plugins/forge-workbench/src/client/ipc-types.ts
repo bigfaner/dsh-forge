@@ -126,3 +126,88 @@ export interface RecordSessionLinkInput {
   readonly taskKey: string
   readonly sessionId: string
 }
+
+/**
+ * Interface 1 TaskStatus — the forge task-state vocabulary, 7 态 (tech-design
+ * §Interface 1 / Cross-Layer Data Map: "enum(同词表,StateDot)"). The runtime
+ * vocabulary constant and the display maps live in i18n/task-status.ts (task
+ * 5.5, the shared status-rendering layer 5.7/5.9 consume); this file stays
+ * pure types.
+ */
+export type TaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'blocked'
+  | 'suspended'
+  | 'skipped'
+  | 'rejected'
+
+/**
+ * Interface 1 ChangeSource — the per-change marker ([会话]/[终端]), the
+ * Interface 3 判定序 product (actor 标记 → 挂接推断); null = no recorded
+ * change source yet.
+ */
+export type ChangeSource = 'session' | 'terminal'
+
+/**
+ * Interface 1 TaskSummary (task 5.5's consumption; the main-side peer is
+ * apps/desktop/src/main/workbench/ipc/types.ts from 2.7 — both halves derive
+ * from the same spec section). Dialect notes (task 2.5): `key` is the 看板
+ * 限定地址 `<featureSlug>/<localId>`; `blockers` carry the same-feature
+ * LOCAL upstream keys verbatim.
+ */
+export interface TaskSummary {
+  /** 看板限定地址 `<featureSlug>/<localId>` (task 2.5 dialect). */
+  readonly key: string
+  readonly title: string
+  readonly status: TaskStatus
+  readonly featureSlug: string
+  /**
+   * Direct upstream blockers — same-feature LOCAL upstream keys (task 2.5
+   * dialect; the transitive chain is getTaskDetail's, not the board's).
+   */
+  readonly blockers: string[]
+  /** The task's execution git branch (执行痕迹); null when the dialect has none. */
+  readonly branch: string | null
+  readonly worktree: boolean
+  /** The most recent change's source; null when none is recorded. */
+  readonly source: ChangeSource | null
+  readonly updatedAt: string
+}
+
+/**
+ * Interface 1 SyncStatus — the perception layer's health projection (the
+ * indexer's SyncStatusPayload shape). `state === 'error'` is a TOOLBAR
+ * indicator, never a view error: the board keeps rendering its data beside
+ * the sync light (tech-design §Error Handling: 看板顶栏轻量态 + 重试).
+ */
+export interface SyncStatus {
+  readonly state: 'idle' | 'scanning' | 'error'
+  readonly lastScanAt: string | null
+  readonly error?: string
+}
+
+/** Interface 1 TaskBoardData — workbench.getTaskBoard(projectId)'s payload. */
+export interface TaskBoardData {
+  readonly tasks: readonly TaskSummary[]
+  readonly generatedAt: string
+  readonly sync: SyncStatus
+}
+
+/**
+ * Interface 1 WorkbenchEvent — the push channel's payload (batched ≤500ms
+ * main-side; single-subscriber semantics). The 5.5 board consumes
+ * `task_updated` for the 回流 updating 态; `sync` / `feature_updated` become
+ * live with the 5.15 assembly.
+ */
+export type WorkbenchEvent =
+  | {
+    readonly type: 'task_updated'
+    readonly projectId: string
+    readonly taskKey: string
+    readonly source: ChangeSource | null
+    readonly changeKind: 'attribute' | 'structural'
+  }
+  | { readonly type: 'feature_updated'; readonly projectId: string; readonly featureSlug: string }
+  | { readonly type: 'sync'; readonly projectId: string; readonly sync: SyncStatus }

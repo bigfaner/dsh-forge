@@ -24,7 +24,8 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type {
-  Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, WorkbenchState,
+  Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
+  TaskSummary, WorkbenchEvent, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -187,6 +188,39 @@ export interface RegisterWizardSeat {
 }
 
 /**
+ * The UF2 task board's data + action face (task 5.5, UI dependency layering —
+ * the same seam shape as OverviewFace / RegisterWizardFace): the BUILD stage
+ * renders against the shared mock twin
+ * (mocks/workbench.createMockTaskBoardFace), the 5.15 assembly task injects
+ * the Interface 1 verbs — getTaskBoard for the load, the onEvents push
+ * channel (single-subscriber, batched ≤500ms main-side) for the 回流
+ * updating 态.
+ */
+export interface TaskBoardFace {
+  /** Interface 1 workbench.getTaskBoard(projectId) — the board's data load. */
+  loadBoard(projectId: string): Promise<TaskBoardData>
+  /** Interface 1 workbench.onEvents(callback) — the 回流 event channel; returns the unsubscribe. */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+}
+
+/**
+ * The shell's passthrough seat for the task board (task 5.5): absent
+ * entirely in the build stage (the page runs on its mock twin); the 5.15
+ * assembly injects the IPC-backed face, and 5.7's detail dock claims the
+ * selection seam.
+ */
+export interface TaskBoardSeat {
+  /** The board face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
+  readonly face?: Partial<TaskBoardFace>
+  /**
+   * The UF3 selection seam: a row/card activation (click / Enter / Space —
+   * navigation, the ONLY interaction rows carry) hands the task over; 5.7's
+   * detail dock owns the panel this opens.
+   */
+  readonly onSelect?: ((task: TaskSummary) => void) | undefined
+}
+
+/**
  * Composed props of the main-panel shell component. The framework standard
  * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
  * from the requirement: the fallback rail mounts the SAME component outside
@@ -205,6 +239,8 @@ export type WorkbenchShellProps =
   & { overview?: WorkbenchOverviewSeat }
   /** The register wizard's assembly seat (task 5.4): absent = the wizard-local mock twin. */
   & { wizard?: RegisterWizardSeat }
+  /** The task board's assembly seat (task 5.5): absent = the board-local mock twin. */
+  & { taskBoard?: TaskBoardSeat }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

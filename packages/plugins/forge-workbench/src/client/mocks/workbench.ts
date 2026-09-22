@@ -11,9 +11,16 @@
  * 5.3 adds the card-data variety (external docs / never-activated) and the
  * overview page's mock verb twin (createMockOverviewFace). Task 5.4 adds the
  * register wizard's fixtures + verb twin (createMockRegisterWizardFace).
+ * Task 5.5 adds the UF2 task-board fixtures (MOCK_TASK_BOARD — multi-status,
+ * qualified keys, one deliberately dangling blocker, branch/worktree/source
+ * variety — plus the sync-error and empty variants) and the board's verb
+ * twin (createMockTaskBoardFace: loadBoard + the onEvents channel with a
+ * test-facing emit poke).
  */
-import type { Project, ProjectPatch, RegisterProjectInput, WorkbenchState } from '../ipc-types'
-import type { OverviewFace, RegisterWizardFace, SessionLaunchServices } from '../contract'
+import type {
+  Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskSummary, WorkbenchEvent, WorkbenchState,
+} from '../ipc-types'
+import type { OverviewFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
 /** The demo mandatory core row (UF6 consumes the same rows in 5.12). */
@@ -295,6 +302,170 @@ export function createMockRegisterWizardFace(
       }
       projects = projects.map(project => (project.id === id ? updated : project))
       return updated
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Task board, UF2 (task 5.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The populated UF2 fixture (task 5.5): 15 tasks across BOTH mock features,
+ * covering every dimension the B/C views render —
+ *   status    all 7 态 present (4 pending / 1 in_progress / 5 completed /
+ *             2 blocked / 1 suspended / 1 skipped / 1 rejected);
+ *   key       QUALIFIED `<featureSlug>/<localId>` addresses (task 2.5
+ *             dialect) over two features (dsh-forge-m2, dsh-forge-m1);
+ *   blockers  same-feature LOCAL keys — 5.9 blocks on a '5.8' that is
+ *             DELIBERATELY absent (the dangling-blocker case 6.2's
+ *             consistency expectations mark), 6.1 and 5.15 resolve;
+ *   branch    null + named branches; worktree true/false; source
+ *             session/terminal/null.
+ */
+const MOCK_BOARD_TASKS: readonly TaskSummary[] = Object.freeze([
+  Object.freeze({
+    key: 'dsh-forge-m2/5.5', title: 'UF2 task board build: toolbar + status-grouped and list views',
+    status: 'in_progress', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: 'dsh-forge-m2', worktree: true, source: 'session',
+    updatedAt: '2026-09-22T09:12:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.6', title: 'UF2 dependency-tree view (DAG)',
+    status: 'pending', featureSlug: 'dsh-forge-m2', blockers: ['5.5'],
+    branch: null, worktree: false, source: null,
+    updatedAt: '2026-09-22T07:30:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.7', title: 'UF3 task detail dock',
+    status: 'pending', featureSlug: 'dsh-forge-m2', blockers: ['5.5'],
+    branch: null, worktree: false, source: 'terminal',
+    updatedAt: '2026-09-22T08:05:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.15', title: 'Task board IPC assembly',
+    status: 'pending', featureSlug: 'dsh-forge-m2', blockers: ['5.5', '5.6'],
+    branch: null, worktree: false, source: null,
+    updatedAt: '2026-09-21T16:00:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.2', title: 'MarkdownView read-only renderer',
+    status: 'completed', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: 'feat/5.2-markdown', worktree: false, source: 'session',
+    updatedAt: '2026-09-21T10:20:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.3', title: 'UF1 overview page build',
+    status: 'completed', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: 'feat/5.3-overview', worktree: false, source: 'terminal',
+    updatedAt: '2026-09-21T08:40:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/5.4', title: 'UF1 register wizard build',
+    status: 'completed', featureSlug: 'dsh-forge-m2', blockers: ['5.3'],
+    branch: 'feat/5.4-wizard', worktree: false, source: 'session',
+    updatedAt: '2026-09-21T09:00:00.000Z',
+  }),
+  Object.freeze({
+    // The dangling case: '5.8' resolves to dsh-forge-m2/5.8, absent on purpose.
+    key: 'dsh-forge-m2/5.9', title: 'UF4 feature board',
+    status: 'blocked', featureSlug: 'dsh-forge-m2', blockers: ['5.8'],
+    branch: null, worktree: false, source: null,
+    updatedAt: '2026-09-20T15:45:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/6.1', title: 'Indexer dialect guard',
+    status: 'blocked', featureSlug: 'dsh-forge-m2', blockers: ['5.15'],
+    branch: null, worktree: false, source: 'terminal',
+    updatedAt: '2026-09-20T17:10:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/3.9', title: 'Fallback rail polish',
+    status: 'suspended', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: 'spike/3.9-rail', worktree: false, source: 'terminal',
+    updatedAt: '2026-09-20T12:00:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/3.11', title: 'Alternate rail experiment',
+    status: 'skipped', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: null, worktree: false, source: null,
+    updatedAt: '2026-09-19T18:30:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m2/3.12', title: 'Deep-link channel probe',
+    status: 'rejected', featureSlug: 'dsh-forge-m2', blockers: [],
+    branch: 'rejected/3.12-deeplink', worktree: false, source: 'terminal',
+    updatedAt: '2026-09-19T11:00:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m1/4.3', title: 'Update channel',
+    status: 'completed', featureSlug: 'dsh-forge-m1', blockers: [],
+    branch: 'release/v1', worktree: false, source: 'session',
+    updatedAt: '2026-09-17T10:00:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m1/4.4', title: 'Installer signing matrix',
+    status: 'completed', featureSlug: 'dsh-forge-m1', blockers: ['4.3'],
+    branch: 'release/v1', worktree: true, source: 'terminal',
+    updatedAt: '2026-09-18T14:00:00.000Z',
+  }),
+  Object.freeze({
+    key: 'dsh-forge-m1/7.2', title: 'Crash recovery e2e leg',
+    status: 'pending', featureSlug: 'dsh-forge-m1', blockers: [],
+    branch: null, worktree: true, source: null,
+    updatedAt: '2026-09-16T09:30:00.000Z',
+  }),
+])
+
+/** The idle-sync populated board (the build-stage default the page loads). */
+export const MOCK_TASK_BOARD: TaskBoardData = Object.freeze({
+  tasks: MOCK_BOARD_TASKS,
+  generatedAt: MOCK_NOW,
+  sync: Object.freeze({ state: 'idle', lastScanAt: MOCK_NOW }),
+})
+
+/**
+ * The sync-error variant (tech-design §Error Handling: watcher/indexer 感知
+ * 失败不弹 UI — 看板顶栏轻量态 + 重试). Same tasks: a sync error NEVER
+ * blanks the board (sync error ≠ view error).
+ */
+export const MOCK_TASK_BOARD_SYNC_ERROR: TaskBoardData = Object.freeze({
+  tasks: MOCK_BOARD_TASKS,
+  generatedAt: MOCK_NOW,
+  sync: Object.freeze({
+    state: 'error',
+    lastScanAt: '2026-09-22T08:55:00.000Z',
+    error: 'build-stage mock: watcher degraded to polling',
+  }),
+})
+
+/** The empty board (ui-design UF2 empty 态: 空态卡 + forge 初始化引导). */
+export const MOCK_TASK_BOARD_EMPTY: TaskBoardData = Object.freeze({
+  tasks: [],
+  generatedAt: MOCK_NOW,
+  sync: Object.freeze({ state: 'idle', lastScanAt: null }),
+})
+
+/**
+ * The UF2 board's build-stage face, task 5.5 (UI dependency layering): the
+ * Interface 1 verb pair as a closure-held twin — `loadBoard` answers the
+ * fixture, `subscribeEvents` registers into a listener set with the verb's
+ * unsubscribe semantics. The returned `emit` is MOCK-ONLY (the test driver
+ * that pushes WorkbenchEvent batches through the channel the 5.15 assembly
+ * replaces with the real dsh-forge:workbench-events push).
+ */
+export function createMockTaskBoardFace(
+  initial: TaskBoardData = MOCK_TASK_BOARD,
+): TaskBoardFace & { emit(events: readonly WorkbenchEvent[]): void } {
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  return {
+    loadBoard: async () => initial,
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    emit: (events) => {
+      for (const listener of listeners) listener(events)
     },
   }
 }

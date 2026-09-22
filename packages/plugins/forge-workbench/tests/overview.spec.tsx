@@ -63,6 +63,15 @@ async function renderOverview(props: Partial<OverviewPageProps> = {}, face?: Ret
   return { face: f }
 }
 
+// The upstream StateDot (consumed by the tasks-seat board since task 5.5,
+// via the WorkbenchShell mount chain) resolves through the module table at
+// runtime; the npm node entry carries undeclared transitive deps
+// (clsx/shiki/...) that only the upstream monorepo supplies, so the jsdom
+// unit render stubs it (the shell.spec precedent).
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
+}))
+
 afterEach(() => cleanup())
 
 // ---------------------------------------------------------------------------

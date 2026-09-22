@@ -31,6 +31,11 @@
  * The optional `wizard` prop is its assembly seat (IPC face + locate
  * treatment); absent, the dialog runs on its build-stage mock twin.
  *
+ * Task 5.5 fills the tasks seat: the UF2 board page (toolbar + 视图 B 状态
+ * 分组 + 视图 C 列表 over the mock twin; 视图 A remains the switcher's 5.6
+ * placeholder). The optional `taskBoard` prop is its assembly seat — the
+ * IPC face arrives with 5.15, the row-selection seam is 5.7's detail dock.
+ *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
  * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
@@ -53,6 +58,7 @@ import { TabBar } from './components/chrome/TabBar'
 import { TopBar } from './components/chrome/TopBar'
 import { OverviewPage } from './views/overview/OverviewPage'
 import { RegisterWizard } from './views/overview/RegisterWizard'
+import { TaskBoardPage } from './views/TaskBoardPage'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
@@ -268,11 +274,27 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   />
                 </div>
               )
-              : (
-                <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
-                  <em>{props.t('shell.placeholder')}</em>
-                </div>
-              )}
+              : view.workbenchTab === 'workbench/tasks'
+                ? (
+                  // UF2 (task 5.5): the task board page takes the reserved
+                  // tasks seat — toolbar + views B/C over the mock twin; the
+                  // optional taskBoard seat hands the page its IPC-backed
+                  // face (5.15) and claims the row-selection seam (5.7's
+                  // detail dock).
+                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
+                    <TaskBoardPage
+                      t={props.t}
+                      projectId={workbenchState.activeProjectId ?? undefined}
+                      onSelect={props.taskBoard?.onSelect}
+                      face={props.taskBoard?.face}
+                    />
+                  </div>
+                )
+                : (
+                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)} style={placeholderStyle}>
+                    <em>{props.t('shell.placeholder')}</em>
+                  </div>
+                )}
         </div>
       </ReactFlowProvider>
 
