@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectNotMaterialized,
   expectRecoveryFailed,
   launchStateShell,
@@ -22,7 +22,7 @@ test('step-1/success: config edit adds the hello-world entry, projection untouch
   const stagedAt = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
   const state = await launchStateShell({
     bundles: BASE_BUNDLES,
-    stageTarballs: [{ at: stagedAt, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: stagedAt, from: helloWorldTarball() }],
   })
   try {
     // Existing projection baseline (write-once leg fixture: one prior profile).

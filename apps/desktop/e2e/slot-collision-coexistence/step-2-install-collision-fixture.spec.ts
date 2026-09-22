@@ -7,7 +7,7 @@ import {
   COLLISION_DIR,
   COLLISION_FIXTURE,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectRosterContains,
   launchPluginShell,
   packPlugin,
@@ -30,7 +30,7 @@ test('step-2/success: the collision fixture installs beside hello-world through 
       { name: COLLISION_FIXTURE, source: `tarball:${COLLISION_AT}` },
     ],
     stageTarballs: [
-      { at: HW_AT, from: PRODUCT_STAGED_TARBALL },
+      { at: HW_AT, from: helloWorldTarball() },
       { at: COLLISION_AT, from: fixture.tarball },
     ],
   })

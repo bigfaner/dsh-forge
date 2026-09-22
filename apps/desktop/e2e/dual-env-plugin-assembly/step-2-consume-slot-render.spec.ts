@@ -8,7 +8,7 @@ import {
   BASE_BUNDLES,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectRosterContains,
   launchPluginShell,
@@ -25,7 +25,7 @@ test('step-2/success: the panel consumes the stable core slot in the served envi
   })
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)
@@ -75,7 +75,7 @@ test('step-2/loading-state: the assembly lands with the first frame — no manua
   })
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await shell.uiReady()

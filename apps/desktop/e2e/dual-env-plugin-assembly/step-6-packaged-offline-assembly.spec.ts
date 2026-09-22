@@ -9,7 +9,7 @@ import {
   BASE_BUNDLES,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectMaterialized,
   expectRecoveryFailed,
@@ -30,13 +30,13 @@ test('step-6/success: the adopted distribution form assembles and boots fully of
   })
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
     offlineProxy: true,
   })
   try {
     await shell.uiReady()
     await expectRosterContains(shell, HELLO_WORLD)
-    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
   } finally { await shell.close() }
 
   // Artifact-level module-source scan over the real delivered file set: any
@@ -62,10 +62,12 @@ test('step-6/staged-artifact-name-mismatch: --check is green on the real tree; a
   testInfo.annotations.push({
     type: 'note', description: 'stage-plugin-tarballs.mjs executes main() at import (module side effect), so the planner is driven via its CLI + shipped source: (a) the real tree passes --check; (b) the build channel\'s basename guard is present in the shipped script; (c) the runtime gate (startup reconciliation) fails loud for a config entry whose artifact basename is absent — the version-bump-not-synced boundary.',
   })
-  // (a) Real tree: the CLI check is green (staged tarball present).
+  // (a) Real tree: the CLI check is green — with the default config carrying
+  // no tarball-sourced entries (the demo plugin is not a default product
+  // bundle), green is the explicit empty-plan no-op, not artifact presence.
   const green = spawnSync('node', ['scripts/stage-plugin-tarballs.mjs', '--check'], { cwd: REPO_ROOT, encoding: 'utf8' })
   expect(green.status, green.stderr ?? green.stdout).toBe(0)
-  expect(green.stdout).toContain('STAGE_CHECK OK')
+  expect(green.stdout).toContain('no tarball-sourced entries in the product config')
 
   // (b) The build channel carries the basename-equality guard verbatim.
   const stageSource = readFileSync(join(REPO_ROOT, 'scripts', 'stage-plugin-tarballs.mjs'), 'utf8')

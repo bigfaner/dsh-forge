@@ -173,3 +173,18 @@ cd apps/desktop && node ../../scripts/acceptance/live-ui-probe.mjs --offline-pro
 配置校验扩展 2 + 硬编码扫描 1 + staging 计划 3,及既有回归);本次改动模块
 行覆盖 host-profile/index.ts 97.4% / tarball.ts 96.6%(仓库全量 87.5% 行);
 lint 除既有 `apps/desktop/e2e` 基线外零错。
+
+## 7. 追记(2026-09-22):默认配置不再随包内置 hello-world
+
+产品决定:hello-world 是演示插件,不应成为默认产品装配。上文 3-bundle
+提交态与测量数字均为任务 6 当时状态,保留作历史证据。现行状态:
+
+- `plugin-bundles.json` 默认 = 2-bundle 基线(`dsh-base` + `dsh-web-app`,
+  无 `source`,走 vendored 闭包两锚解析);`resources/plugin-tarballs/`
+  不再默认产出,electron-builder `plugin-tarballs/**` 滤子空匹配。
+- 存量 userData profile 由启动期差集调和自动清剪(任务 2 删腿语义,
+  config-driven-plugin-lifecycle step-4 实证)。
+- 测试侧改按需 `pnpm pack`(与 staging 通道同字节);回归守卫 =
+  dual-env step-5 断言默认配置恰好两条基线、零 `@dsh-forge/` 身份。
+- 复现第 6 节官方 web 腿的 `TGZ` 来源相应改为自行 `pnpm pack`
+  `packages/plugins/hello-world` 的产物。

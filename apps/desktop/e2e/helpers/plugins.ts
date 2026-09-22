@@ -29,9 +29,15 @@ export const HELLO_WORLD_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-wor
 export const COLLISION_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-world-collision')
 export const TEMPLATE_DIR = join(REPO_ROOT, 'packages', 'templates', 'plugin')
 export const PRODUCT_CONFIG = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json')
-export const PRODUCT_STAGED_TARBALL = join(
-  REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-tarballs', 'dsh-forge-plugin-hello-world-0.1.0.tgz',
-)
+/**
+ * The hello-world tarball for journeys: packed on demand via pnpm pack. The
+ * demo plugin is not a default product bundle (default config = the two
+ * vendored-closure base entries), so journeys produce their own artifact —
+ * the exact bytes the stage channel would stage for a tarball-sourced entry.
+ */
+export function helloWorldTarball(): string {
+  return packPlugin(HELLO_WORLD_DIR).tarball
+}
 export const HELLO_WORLD = '@dsh-forge/plugin-hello-world'
 export const COLLISION_FIXTURE = '@dsh-forge/plugin-hello-world-collision'
 /** The vendored lock baseline (FT-015) — the alignment line every gate reads. */

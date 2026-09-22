@@ -9,7 +9,7 @@ import {
   HELLO_WORLD,
   HELLO_WORLD_DIR,
   LOCK_BASELINE,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectMaterialized,
   expectRosterContains,
@@ -54,11 +54,11 @@ test('step-1/success: the self-install artifact satisfies the alignment contract
   const stagedAt = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
   const state = await launchStateShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${stagedAt}` }],
-    stageTarballs: [{ at: stagedAt, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: stagedAt, from: helloWorldTarball() }],
   })
   try {
     expect(readProfileBundles(state.profileDir)).toContain(HELLO_WORLD)
-    await expectMaterialized(state.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(state.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(helloWorldTarball()))
     // Zero vendored references in the delivered file set (files[] contract).
     const materialized = join(state.profileDir, 'node_modules', ...HELLO_WORLD.split('/'))
     expect(existsSync(join(materialized, 'lib', 'client.js'))).toBe(true)
@@ -107,7 +107,7 @@ test('step-1/network-error: shell-side assembly + boot complete with all externa
   const stagedAt = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${stagedAt}` }],
-    stageTarballs: [{ at: stagedAt, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: stagedAt, from: helloWorldTarball() }],
     offlineProxy: true,
   })
   try {

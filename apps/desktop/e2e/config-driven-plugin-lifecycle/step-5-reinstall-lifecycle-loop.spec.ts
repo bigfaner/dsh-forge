@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectMaterialized,
   launchStateShell,
   readProfileBundles,
@@ -30,10 +30,10 @@ test('step-5/success: re-adding the entry rebuilds the materialization — the l
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
-    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
   } finally { await boot1.close() }
 
   const boot2 = await launchStateShell({ rootDir: root, bundles: BASE_BUNDLES })
@@ -45,14 +45,14 @@ test('step-5/success: re-adding the entry rebuilds the materialization — the l
   const boot3 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     // Output: re-assembly reproduces the first-boot state exactly.
-    await expectMaterialized(boot3.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot3.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
     expect(readProfileBundles(boot3.profileDir)).toEqual([...BASE_BUNDLES.map(b => b.name), HELLO_WORLD])
     const firstMarker = readSeedMarker(boot3.profileDir, HELLO_WORLD)
-    expect(firstMarker?.sha256).toBe(sha256File(PRODUCT_STAGED_TARBALL))
+    expect(firstMarker?.sha256).toBe(sha256File(helloWorldTarball()))
   } finally { await boot3.close() }
 })
 
@@ -67,10 +67,10 @@ test('step-5/repeated-cycle-idempotent: two add/remove cycles converge with zero
     const add = await launchStateShell({
       rootDir: root,
       bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-      stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+      stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
     })
     try {
-      await expectMaterialized(add.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+      await expectMaterialized(add.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
       expect(readProfileBundles(add.profileDir).filter(name => name === HELLO_WORLD)).toHaveLength(1)
     } finally { await add.close() }
     const remove = await launchStateShell({ rootDir: root, bundles: BASE_BUNDLES })
@@ -83,7 +83,7 @@ test('step-5/repeated-cycle-idempotent: two add/remove cycles converge with zero
   const finalBoot = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     const markers = collectFiles(finalBoot.profileDir, '.dsh-forge-seed.json')
@@ -104,10 +104,10 @@ test('step-5/marker-orphan-converge: a stale marker that no longer matches the c
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
-    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
   } finally { await boot1.close() }
 
   // Simulate the partial-cleanup residue: the tree is gutted but a stale
@@ -128,12 +128,12 @@ test('step-5/marker-orphan-converge: a stale marker that no longer matches the c
   const boot2 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     // Output: the orphan is recognized and converges — materialization fully
     // rebuilt from the current artifact, marker rewritten with the true sha.
-    await expectMaterialized(boot2.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot2.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
     expect(existsSync(join(materialized, 'lib', 'index.js')), 'rebuilt artifact tree').toBe(true)
     const marker = readSeedMarker(boot2.profileDir, HELLO_WORLD)
     expect(marker?.source).toBe(SOURCE)

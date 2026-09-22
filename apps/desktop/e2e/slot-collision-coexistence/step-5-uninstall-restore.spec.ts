@@ -10,7 +10,7 @@ import {
   COLLISION_DIR,
   COLLISION_FIXTURE,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectRosterContains,
   expectRosterLacks,
   launchPluginShell,
@@ -34,7 +34,7 @@ test('step-5/remove-collision-only: removing the fixture restores the single-dec
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY, COLLISION_ENTRY],
     stageTarballs: [
-      { at: HW_AT, from: PRODUCT_STAGED_TARBALL },
+      { at: HW_AT, from: helloWorldTarball() },
       { at: COLLISION_AT, from: fixture.tarball },
     ],
   })
@@ -67,7 +67,7 @@ test('step-5/remove-all-pristine: removing both plugins returns the UI to the pl
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY, COLLISION_ENTRY],
     stageTarballs: [
-      { at: HW_AT, from: PRODUCT_STAGED_TARBALL },
+      { at: HW_AT, from: helloWorldTarball() },
       { at: COLLISION_AT, from: fixture.tarball },
     ],
   })

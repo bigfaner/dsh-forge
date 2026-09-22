@@ -10,7 +10,7 @@ import {
   COLLISION_FIXTURE,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectRosterContains,
   launchPluginShell,
@@ -69,7 +69,7 @@ test('step-4/interaction-error-visible: a plugin runtime throw is captured by th
       { name: COLLISION_FIXTURE, source: `tarball:${fixtureAt}` },
     ],
     stageTarballs: [
-      { at: STAGED_AT, from: PRODUCT_STAGED_TARBALL },
+      { at: STAGED_AT, from: helloWorldTarball() },
       { at: fixtureAt, from: fixture.tarball },
     ],
   })

@@ -10,7 +10,7 @@ import {
   HELLO_WORLD,
   HELLO_WORLD_DIR,
   MAIN_PATH,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectMaterialized,
   expectRosterContains,
   hashTree,
@@ -35,7 +35,7 @@ test('step-2/success: boot materializes + assembles the added entry, roster carr
   const shellCodeBefore = hashTree(shellSrcDir)
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     // Output: the entry took effect — assembled into the host boot roster.
@@ -44,7 +44,7 @@ test('step-2/success: boot materializes + assembles the added entry, roster carr
     // State: manifest converged to config order; node_modules materialized
     // with the .dsh-forge-seed.json marker carrying the artifact sha256.
     expect(readProfileBundles(shell.profileDir)).toEqual([...BASE_BUNDLES.map(b => b.name), HELLO_WORLD])
-    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
 
     // Invariant: shell code diff = 0 across the config-driven add.
     expect(hashTree(shellSrcDir)).toBe(shellCodeBefore)
@@ -60,7 +60,7 @@ test('step-2/cold-start-regression: the timing channel records the probe anchors
   const launchStart = Date.now()
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     const firstWindowMs = Date.now() - launchStart // firstWindow resolved inside the launcher
@@ -80,17 +80,17 @@ test('step-2/seed-sha-drift-converge: staged artifact sha drift re-materializes 
     description: 'Drift fixture = same package identity packed at version 0.2.0 (FT-018: the marker carries the artifact sha256; drift converges by rebuild — write-once allows exactly this convergence, other entries untouched).',
   })
   const drifted = packPlugin(HELLO_WORLD_DIR, '0.2.0')
-  expect(drifted.sha256).not.toBe(sha256File(PRODUCT_STAGED_TARBALL))
+  expect(drifted.sha256).not.toBe(sha256File(helloWorldTarball()))
 
   // One persistent root; two boots against it.
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-drift-e2e-'))
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
-    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot1.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
   } finally { await boot1.close() }
 
   // Artifact drift: the staged bytes change under the SAME config source.

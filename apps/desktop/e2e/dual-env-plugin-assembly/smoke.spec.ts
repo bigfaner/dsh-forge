@@ -11,7 +11,7 @@ import {
   BASE_BUNDLES,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectMaterialized,
   expectRosterContains,
@@ -41,18 +41,18 @@ test('dual-env-plugin-assembly journey smoke: install contract -> slots -> wirin
   // Step 5 — the same plugin assembles in the shell through the config path.
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)
-    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
     await expect(shell.page.getByRole('button', { name: /新建会话|New Session/ }).first()).toBeVisible()
   } finally { await shell.close() }
 
   // Step 6 — the adopted distribution form boots fully offline.
   const offline = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
     offlineProxy: true,
   })
   try {

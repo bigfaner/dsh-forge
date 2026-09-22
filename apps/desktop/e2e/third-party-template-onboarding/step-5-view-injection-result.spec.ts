@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { BASE_BUNDLES, HELLO_WORLD, PRODUCT_STAGED_TARBALL, REPO_ROOT, expectRosterContains, launchPluginShell } from '../helpers/plugins.ts'
+import { BASE_BUNDLES, HELLO_WORLD, helloWorldTarball, REPO_ROOT, expectRosterContains, launchPluginShell } from '../helpers/plugins.ts'
 import { checkVersionStamps, loadBaseline, makeVersionStamp } from '../../../../scripts/verify-plugins.mjs'
 
 const STAGED_AT = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
@@ -19,7 +19,7 @@ test('step-5/success: the injection result is observable — shell side live, of
 
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)

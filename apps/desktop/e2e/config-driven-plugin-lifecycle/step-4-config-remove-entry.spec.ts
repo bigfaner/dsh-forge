@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   bundlesConfigJson,
   expectNotMaterialized,
@@ -33,7 +33,7 @@ test('step-4/success: config removal prunes the materialization and disassembles
   const withHw = await launchPluginShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(withHw, HELLO_WORLD)
@@ -74,7 +74,7 @@ test('step-4/no-legal-cleanup-channel: the archived shell-side reconciliation cl
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try { expect(readProfileBundles(boot1.profileDir)).toContain(HELLO_WORLD) } finally { await boot1.close() }
   const boot2 = await launchStateShell({ rootDir: root, bundles: BASE_BUNDLES })
@@ -94,7 +94,7 @@ test('step-4/runtime-writer-rejected: the product config stays byte-identical ac
   const withHw = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     const added = readFileSync(withHw.configPath, 'utf8')
@@ -114,7 +114,7 @@ test('step-4/runtime-writer-rejected: the product config stays byte-identical ac
   const readded = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     expect(readFileSync(readded.configPath, 'utf8')).toContain(HELLO_WORLD)
@@ -131,7 +131,7 @@ test('step-4/reconciliation-overreach: node_modules only ever holds config-deriv
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, HW_ENTRY],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     const scope = join(boot1.profileDir, 'node_modules', '@dsh-forge')

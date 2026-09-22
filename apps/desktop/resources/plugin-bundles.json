@@ -5,10 +5,6 @@
     },
     {
       "name": "@deepseek-ai/dsh-web-app"
-    },
-    {
-      "name": "@dsh-forge/plugin-hello-world",
-      "source": "tarball:plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz"
     }
   ]
 }

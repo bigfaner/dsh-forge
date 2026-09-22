@@ -13,7 +13,7 @@ import {
   COLLISION_DIR,
   COLLISION_FIXTURE,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectRosterContains,
   expectRosterLacks,
@@ -32,7 +32,7 @@ test('slot-collision-coexistence journey smoke: baseline -> collide -> observe -
   const fixture = packPlugin(COLLISION_DIR)
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-collision-smoke-'))
   const staging = [
-    { at: HW_AT, from: PRODUCT_STAGED_TARBALL },
+    { at: HW_AT, from: helloWorldTarball() },
     { at: COLLISION_AT, from: fixture.tarball },
   ]
 

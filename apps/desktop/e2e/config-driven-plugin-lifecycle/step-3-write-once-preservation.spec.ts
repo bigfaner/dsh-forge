@@ -12,7 +12,7 @@ import {
   COLLISION_FIXTURE,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   expectMaterialized,
   launchStateShell,
   packPlugin,
@@ -46,7 +46,7 @@ test('step-3/success: entries untouched by the config change keep their write-on
   const boot2 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: COLLISION_FIXTURE, source: otherSource }, { name: HELLO_WORLD, source: `tarball:${stagedAt}` }],
-    stageTarballs: [{ at: stagedAt, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: stagedAt, from: helloWorldTarball() }],
   })
   try {
     // Output: the untouched entry was NOT rebuilt — its seed marker still
@@ -55,7 +55,7 @@ test('step-3/success: entries untouched by the config change keep their write-on
     const markerAfter = readSeedMarker(boot2.profileDir, COLLISION_FIXTURE)
     expect(markerAfter).toMatchObject({ bundle: COLLISION_FIXTURE, source: otherSource, sha256: other.sha256 })
     await expectMaterialized(boot2.profileDir, COLLISION_FIXTURE, otherSource, other.sha256)
-    await expectMaterialized(boot2.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot2.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(helloWorldTarball()))
 
     // State: manifest keeps config order; no corruption of the old entry.
     expect(readProfileBundles(boot2.profileDir)).toEqual([
@@ -78,10 +78,10 @@ test('step-3/stale-version-materialization: config pointing at a newer version c
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${v1At}` }],
-    stageTarballs: [{ at: v1At, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: v1At, from: helloWorldTarball() }],
   })
   try {
-    await expectMaterialized(boot1.profileDir, HELLO_WORLD, `tarball:${v1At}`, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot1.profileDir, HELLO_WORLD, `tarball:${v1At}`, sha256File(helloWorldTarball()))
   } finally { await boot1.close() }
 
   // Config entry now references the NEWER artifact (different basename).
@@ -111,10 +111,10 @@ test('step-3/fallback-links-preserved: upstream-owned .dsh-module-fallback links
   const boot1 = await launchStateShell({
     rootDir: root,
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${stagedAt}` }],
-    stageTarballs: [{ at: stagedAt, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: stagedAt, from: helloWorldTarball() }],
   })
   try {
-    await expectMaterialized(boot1.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot1.profileDir, HELLO_WORLD, `tarball:${stagedAt}`, sha256File(helloWorldTarball()))
   } finally { await boot1.close() }
 
   // Plant the upstream-owned fallback fixture (the shape the host heals).

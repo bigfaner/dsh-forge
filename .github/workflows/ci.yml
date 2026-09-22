@@ -102,6 +102,13 @@ jobs:
         shell: bash
         run: pnpm build:desktop
 
+      # ui-plugin-foundation: the demo plugin is not a default product bundle,
+      # so plugin journeys pack their own tarball on demand (packPlugin) — the
+      # workspace plugin packages must be built for that channel to exist.
+      - name: Build workspace plugins
+        shell: bash
+        run: pnpm build:plugins
+
       - name: Install Electron runtime deps (linux only)
         if: matrix.os == 'ubuntu-latest'
         shell: bash

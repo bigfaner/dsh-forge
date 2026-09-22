@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { BASE_BUNDLES, HELLO_WORLD, HELLO_WORLD_DIR, PRODUCT_STAGED_TARBALL, REPO_ROOT, TEMPLATE_DIR, expectRosterContains, launchPluginShell } from '../helpers/plugins.ts'
+import { BASE_BUNDLES, HELLO_WORLD, HELLO_WORLD_DIR, helloWorldTarball, REPO_ROOT, TEMPLATE_DIR, expectRosterContains, launchPluginShell } from '../helpers/plugins.ts'
 import { checkPluginVersionAlignment, checkTemplateEngines, checkVersionStamps, loadBaseline, makeVersionStamp } from '../../../../scripts/verify-plugins.mjs'
 
 const STAGED_AT = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
@@ -41,7 +41,7 @@ test('third-party-template-onboarding journey smoke: scaffold -> declare -> buil
   // and the injection is observable on the boot roster.
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)

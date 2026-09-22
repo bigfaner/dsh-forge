@@ -10,7 +10,7 @@ import {
   COLLISION_FIXTURE,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectRosterContains,
   launchPluginShell,
@@ -49,7 +49,7 @@ test('step-3/third-party-registration-renders: a second plugin declaring the pan
       { name: COLLISION_FIXTURE, source: `tarball:${fixtureAt}` },
     ],
     stageTarballs: [
-      { at: STAGED_AT, from: PRODUCT_STAGED_TARBALL },
+      { at: STAGED_AT, from: helloWorldTarball() },
       { at: fixtureAt, from: fixture.tarball },
     ],
   })

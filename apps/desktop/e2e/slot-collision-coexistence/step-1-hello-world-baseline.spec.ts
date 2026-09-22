@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectRosterContains,
   launchPluginShell,
@@ -25,7 +25,7 @@ test('step-1/success: hello-world baseline renders its slots without disturbing 
   })
   const shell = await launchPluginShell({
     bundles: basePlus([{ name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }]),
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)
@@ -43,7 +43,7 @@ test('step-1/core-slot-collision-splash: the host core surface survives third-pa
   })
   const shell = await launchPluginShell({
     bundles: basePlus([{ name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }]),
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await shell.uiReady()

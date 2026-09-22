@@ -9,7 +9,7 @@ import {
   HELLO_WORLD,
   HELLO_WORLD_DIR,
   MAIN_PATH,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectMaterialized,
   expectRosterContains,
@@ -28,12 +28,12 @@ test('step-5/success: the same plugin assembles in the shell via the product con
   })
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)
     expect(readProfileBundles(shell.profileDir)).toEqual([...BASE_BUNDLES.map(b => b.name), HELLO_WORLD])
-    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(shell.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
   } finally { await shell.close() }
 })
 
@@ -44,9 +44,13 @@ test('step-5/config-bypass-hardcode: zero plugin identity lives in the built she
   const mainBundle = readFileSync(MAIN_PATH, 'utf8')
   expect(mainBundle).not.toContain(HELLO_WORLD)
   expect(mainBundle).not.toContain('@dsh-forge/plugin-')
-  // And the committed product config really drives the default assembly.
-  const productConfig = readFileSync(join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json'), 'utf8')
-  expect(productConfig).toContain(HELLO_WORLD)
+  // And the committed product config really drives the default assembly:
+  // exactly the vendored-closure base entries — the demo plugin is a
+  // journey/test-only fixture, never a default product bundle.
+  const productConfigPath = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json')
+  const productBundles = (JSON.parse(readFileSync(productConfigPath, 'utf8')) as { bundles: Array<{ name: string }> }).bundles
+  expect(productBundles.map(entry => entry.name)).toEqual([...BASE_BUNDLES.map(entry => entry.name)])
+  expect(readFileSync(productConfigPath, 'utf8')).not.toContain('@dsh-forge/')
 })
 
 test('step-5/dual-env-divergence: shell-side and official-web-side evidence agree on the same plugin contract', async ({ }, testInfo) => {
@@ -76,7 +80,7 @@ test('step-5/dual-env-divergence: shell-side and official-web-side evidence agre
   // Shell side: the same identity assembles through the config channel.
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: SOURCE }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)

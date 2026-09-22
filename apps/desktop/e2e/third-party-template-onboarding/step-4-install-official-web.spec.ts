@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   TEMPLATE_DIR,
   expectRosterContains,
@@ -30,7 +30,7 @@ test('step-4/success: the derived form installs — gates green and the artifact
   // The artifact-side install: the real staged tarball reaches a running host.
   const shell = await launchPluginShell({
     bundles: [...BASE_BUNDLES, { name: HELLO_WORLD, source: `tarball:${STAGED_AT}` }],
-    stageTarballs: [{ at: STAGED_AT, from: PRODUCT_STAGED_TARBALL }],
+    stageTarballs: [{ at: STAGED_AT, from: helloWorldTarball() }],
   })
   try {
     await expectRosterContains(shell, HELLO_WORLD)

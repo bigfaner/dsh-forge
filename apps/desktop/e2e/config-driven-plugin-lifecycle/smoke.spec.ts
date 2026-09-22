@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
   HELLO_WORLD,
-  PRODUCT_STAGED_TARBALL,
+  helloWorldTarball,
   REPO_ROOT,
   expectMaterialized,
   expectRosterContains,
@@ -37,7 +37,7 @@ test('config-driven-plugin-lifecycle journey smoke: add -> apply -> write-once -
   try {
     expect(readProfileBundles(boot1.profileDir)).toEqual(BASE_BUNDLES.map(b => b.name))
     boot1.writeConfig([...BASE_BUNDLES, HW_ENTRY])
-    boot1.stageTarball(STAGED_AT, PRODUCT_STAGED_TARBALL)
+    boot1.stageTarball(STAGED_AT, helloWorldTarball())
     expect(readProfileBundles(boot1.profileDir)).toEqual(BASE_BUNDLES.map(b => b.name))
   } finally { await boot1.close() }
 
@@ -45,7 +45,7 @@ test('config-driven-plugin-lifecycle journey smoke: add -> apply -> write-once -
   const boot2 = await launchPluginShell({ rootDir: root, bundles: [...BASE_BUNDLES, HW_ENTRY] })
   try {
     await expectRosterContains(boot2, HELLO_WORLD)
-    await expectMaterialized(boot2.profileDir, HELLO_WORLD, SOURCE, sha256File(PRODUCT_STAGED_TARBALL))
+    await expectMaterialized(boot2.profileDir, HELLO_WORLD, SOURCE, sha256File(helloWorldTarball()))
     // Step 3 — write-once: the base entries' manifest face is untouched.
     expect(readProfileBundles(boot2.profileDir)).toEqual([...BASE_BUNDLES.map(b => b.name), HELLO_WORLD])
   } finally { await boot2.close() }
@@ -63,7 +63,7 @@ test('config-driven-plugin-lifecycle journey smoke: add -> apply -> write-once -
   try {
     await expectRosterContains(boot4, HELLO_WORLD)
     const marker = readSeedMarker(boot4.profileDir, HELLO_WORLD)
-    expect(marker).toMatchObject({ bundle: HELLO_WORLD, source: SOURCE, sha256: sha256File(PRODUCT_STAGED_TARBALL) })
+    expect(marker).toMatchObject({ bundle: HELLO_WORLD, source: SOURCE, sha256: sha256File(helloWorldTarball()) })
   } finally { await boot4.close() }
 
   // Journey invariant: shell code identity across the whole add/remove cycle.
