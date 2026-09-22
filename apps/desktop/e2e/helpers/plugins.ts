@@ -26,6 +26,7 @@ import { launchFixtureApp, type FixtureApp } from './fixture-app.ts'
 export const REPO_ROOT = resolve(fileURLToPath(new URL('../../../../', import.meta.url)))
 export const MAIN_PATH = join(REPO_ROOT, 'apps', 'desktop', 'dist', 'main.cjs')
 export const HELLO_WORLD_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-world')
+export const FORGE_WORKBENCH_DIR = join(REPO_ROOT, 'packages', 'plugins', 'forge-workbench')
 export const COLLISION_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-world-collision')
 export const TEMPLATE_DIR = join(REPO_ROOT, 'packages', 'templates', 'plugin')
 export const PRODUCT_CONFIG = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json')
@@ -38,7 +39,18 @@ export const PRODUCT_CONFIG = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'p
 export function helloWorldTarball(): string {
   return packPlugin(HELLO_WORLD_DIR).tarball
 }
+/**
+ * The forge-workbench tarball for journeys: same on-demand channel. Unlike
+ * the demo plugin, forge-workbench IS a default product bundle (mandatory,
+ * tarball-sourced in the committed product config), so this is a test-local
+ * repack of the exact bytes the stage channel ships.
+ */
+export function forgeWorkbenchTarball(): string {
+  return packPlugin(FORGE_WORKBENCH_DIR).tarball
+}
 export const HELLO_WORLD = '@dsh-forge/plugin-hello-world'
+export const FORGE_WORKBENCH = '@dsh-forge/plugin-forge-workbench'
+export const FORGE_WORKBENCH_STAGED_AT = 'plugin-tarballs/dsh-forge-plugin-forge-workbench-0.1.0.tgz'
 export const COLLISION_FIXTURE = '@dsh-forge/plugin-hello-world-collision'
 /** The vendored lock baseline (FT-015) — the alignment line every gate reads. */
 export const LOCK_BASELINE = {
@@ -57,12 +69,18 @@ export const BASE_BUNDLES = [
 export interface BundleEntry {
   readonly name: string
   readonly source?: string
+  /** `true` = mandatory partition (task 3.1): immune to the runtime overlay. */
+  readonly mandatory?: true
 }
 
 /** Serialize a plugin-bundles config exactly like the product resource. */
 export function bundlesConfigJson(entries: readonly BundleEntry[]): string {
   return `${JSON.stringify({
-    bundles: entries.map(entry => ({ name: entry.name, ...(entry.source === undefined ? {} : { source: entry.source }) })),
+    bundles: entries.map(entry => ({
+      name: entry.name,
+      ...(entry.source === undefined ? {} : { source: entry.source }),
+      ...(entry.mandatory === undefined ? {} : { mandatory: entry.mandatory }),
+    })),
   }, undefined, 2)}\n`
 }
 

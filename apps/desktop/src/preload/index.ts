@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { RecoveryState } from '../main/crash-recovery/index.ts'
-import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from '../main/workbench/ipc/channel-allowlist.ts'
+// Preload-local copy of the workbench channel table — the sandboxed preload
+// cannot require relative bundle chunks, so it must not share modules with the
+// main bundle (see ./channel-allowlist.ts header; sync locked by tests).
+import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,

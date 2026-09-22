@@ -360,6 +360,9 @@ describe('runGate on the real workspace', () => {
     expect(report.scanned.artifacts).toBeGreaterThan(0)
     expect(report.scanned.specifiers).toBeGreaterThan(0)
     expect(report.plugins.map((p) => p.name).sort()).toEqual([
+      // M2 3.2: forge-workbench joined the workspace plugin set (the
+      // mandatory forge core bundle).
+      '@dsh-forge/plugin-forge-workbench',
       '@dsh-forge/plugin-hello-world',
       '@dsh-forge/plugin-hello-world-collision',
     ])

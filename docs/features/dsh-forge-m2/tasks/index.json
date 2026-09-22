@@ -175,7 +175,7 @@
         "3.1",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.2-forge-workbench-plugin-scaffold.md",
       "record": "records/3.2-forge-workbench-plugin-scaffold.md",
       "surface-type": "web",

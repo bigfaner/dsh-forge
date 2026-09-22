@@ -1,0 +1,9 @@
+# forge-workbench plugin (M2 task 3.2), profile-layer patch: one root-level
+# insert row mounting the package into the web tree (same form as the upstream
+# web-app browser plugin roster). The node half (lib/index.js) is the
+# intentionally empty host apply (4.x fills ForgeBridge/SessionLaunch); the
+# browser half ships via exports['./client'] and is picked up by the
+# client-modules roster scan.
+- insert:
+    - id: forge-workbench
+      name: '@dsh-forge/plugin-forge-workbench'

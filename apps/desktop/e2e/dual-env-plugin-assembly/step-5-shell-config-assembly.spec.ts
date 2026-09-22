@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES,
+  FORGE_WORKBENCH,
+  FORGE_WORKBENCH_STAGED_AT,
   HELLO_WORLD,
   HELLO_WORLD_DIR,
   MAIN_PATH,
@@ -45,12 +47,20 @@ test('step-5/config-bypass-hardcode: zero plugin identity lives in the built she
   expect(mainBundle).not.toContain(HELLO_WORLD)
   expect(mainBundle).not.toContain('@dsh-forge/plugin-')
   // And the committed product config really drives the default assembly:
-  // exactly the vendored-closure base entries — the demo plugin is a
-  // journey/test-only fixture, never a default product bundle.
+  // the vendored-closure base entries plus the mandatory forge core plugin
+  // (M2 3.2 — the first forge-core bundle ships in the product manifest).
+  // The demo plugin stays a journey/test-only fixture, never a default.
   const productConfigPath = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json')
-  const productBundles = (JSON.parse(readFileSync(productConfigPath, 'utf8')) as { bundles: Array<{ name: string }> }).bundles
-  expect(productBundles.map(entry => entry.name)).toEqual([...BASE_BUNDLES.map(entry => entry.name)])
-  expect(readFileSync(productConfigPath, 'utf8')).not.toContain('@dsh-forge/')
+  const productBundles = (JSON.parse(readFileSync(productConfigPath, 'utf8')) as {
+    bundles: Array<{ name: string; source?: string; mandatory?: boolean }>
+  }).bundles
+  expect(productBundles.map(entry => entry.name)).toEqual([...BASE_BUNDLES.map(entry => entry.name), FORGE_WORKBENCH])
+  expect(productBundles[2]).toMatchObject({
+    name: FORGE_WORKBENCH,
+    source: `tarball:${FORGE_WORKBENCH_STAGED_AT}`,
+    mandatory: true,
+  })
+  expect(readFileSync(productConfigPath, 'utf8')).not.toContain(HELLO_WORLD)
 })
 
 test('step-5/dual-env-divergence: shell-side and official-web-side evidence agree on the same plugin contract', async ({ }, testInfo) => {

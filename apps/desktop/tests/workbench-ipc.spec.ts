@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,10 @@ import {
   WORKBENCH_VERB_CHANNELS,
   isWhitelistedWorkbenchVerbChannel,
 } from '../src/main/workbench/ipc/channel-allowlist.ts'
+import {
+  WORKBENCH_EVENT_CHANNEL as PRELOAD_WORKBENCH_EVENT_CHANNEL,
+  WORKBENCH_VERB_CHANNELS as PRELOAD_WORKBENCH_VERB_CHANNELS,
+} from '../src/preload/channel-allowlist.ts'
 import {
   createWorkbenchEventSubscriptions,
   installWorkbenchVerbs,
@@ -176,6 +180,26 @@ describe('workbench verb routing table', () => {
   it('keeps the event push channel off the invokable verb whitelist', () => {
     expect(WORKBENCH_EVENT_CHANNEL).toBe('dsh-forge:workbench-events')
     expect(isWhitelistedWorkbenchVerbChannel(WORKBENCH_EVENT_CHANNEL)).toBe(false)
+  })
+
+  it('preload-side channel table copy stays deep-equal with the main-side source of truth', () => {
+    // The sandboxed preload cannot require relative bundle chunks, so
+    // src/preload/channel-allowlist.ts duplicates the table instead of
+    // importing it (see that file's header). This is the drift lock: both
+    // copies must carry identical keys and channel strings.
+    expect(PRELOAD_WORKBENCH_VERB_CHANNELS).toEqual(WORKBENCH_VERB_CHANNELS)
+    expect(PRELOAD_WORKBENCH_EVENT_CHANNEL).toBe(WORKBENCH_EVENT_CHANNEL)
+  })
+
+  it('built preload stays self-contained — no relative chunk requires (sandbox constraint)', () => {
+    // Regression lock for the 1ff9cdd breakage class: a module shared between
+    // the main and preload entries splits into a sibling chunk the sandboxed
+    // preload cannot load ("module not found: ./channel-allowlist-*.cjs").
+    // Only assertable when a built dist exists (the e2e legs always have one).
+    const preloadPath = join(import.meta.dirname, '..', 'dist', 'preload.cjs')
+    if (!existsSync(preloadPath)) return
+    const built = readFileSync(preloadPath, 'utf8')
+    expect(built).not.toMatch(/require\(\s*['"]\.\//u)
   })
 
   it('rejects off-whitelist channels (never registered)', () => {
