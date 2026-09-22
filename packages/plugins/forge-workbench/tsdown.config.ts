@@ -14,6 +14,7 @@
  *    react stays a module-table external — single React instance by
  *    host-profile unified module resolution).
  */
+import { isAbsolute } from 'node:path'
 import { defineConfig } from 'tsdown'
 
 const id = '@dsh-forge/plugin-forge-workbench'
@@ -49,7 +50,20 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { neverBundle: () => true, alwaysBundle: () => false },
+    // The node half is self-contained ESM: the plugin's OWN files inline;
+    // bare specifiers — node builtins (node:child_process, node:path) and
+    // packages (@deepseek-ai/dsh-typert-protocol) — stay external, resolved
+    // by the host process (peers resolve from the install anchor boot graph).
+    // Until 4.1 the host half imported nothing, so a blanket neverBundle was
+    // inert; with the ForgeBridge files the predicate must be absolute-path
+    // PROOF: rolldown hands the external callback RESOLVED absolute ids for
+    // relative imports, so a startsWith('.') test silently externalizes the
+    // plugin's own files.
+    deps: {
+      neverBundle: (specifier: string) =>
+        specifier.startsWith('node:')
+        || (!specifier.startsWith('.') && !specifier.startsWith('/') && !isAbsolute(specifier)),
+    },
   },
   {
     name: `${id}/client`,

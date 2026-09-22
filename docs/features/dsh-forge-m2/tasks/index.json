@@ -238,7 +238,7 @@
         "3.2",
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.1-forge-cli-bridge.md",
       "record": "records/4.1-forge-cli-bridge.md",
       "surface-type": "web",

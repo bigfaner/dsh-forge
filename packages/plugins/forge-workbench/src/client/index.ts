@@ -19,6 +19,10 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the ForgeBridge remote-face declaration (task 4.1) into
+// this program's Typert view — `ctx.remote.forgeBridge` after the 5.10/5.11
+// namespace mount. Zero runtime face: the service lives in the host half.
+import type {} from './services'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
@@ -50,6 +54,11 @@ export type { SlotNavOptions } from './nav/slot-inject'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
 export type { WorkbenchKey } from './locale/en'
+export type {
+  ForgeCliResolved, ForgeCliUnavailable, ForgeBridgeRemoteFace,
+  GetTaskPromptInput, GetTaskPromptResult, ResolveCliResult,
+  TaskPromptAvailable, TaskPromptUnavailable,
+} from './services'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
