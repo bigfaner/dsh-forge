@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { openDatabase, WorkbenchDbError, type DatabaseSyncLike } from '../src/main/workbench/store/db.ts'
+import { openDatabase, WorkbenchDbError, type DatabaseSyncLike, type SqliteModuleLike } from '../src/main/workbench/store/db.ts'
 import { readSchemaVersion } from '../src/main/workbench/store/migrate.ts'
 import { SCHEMA_V1_SQL } from '../src/main/workbench/store/schema-v1.ts'
 
@@ -231,13 +231,16 @@ describe('boot probe failure — structured ERR_WORKBENCH_DB (AC4)', () => {
     let caught: unknown
     try {
       await openDatabase(makeScratch(), {
-        loadSqliteModule: async () => ({
-          DatabaseSync: class {
-            constructor(_location: string) {
-              throw new Error('simulated: opening the database failed')
-            }
-          },
-        }),
+        // The mock only implements the constructor — the trial open throws
+        // before any connection member is used, hence the double cast.
+        loadSqliteModule: async () =>
+          ({
+            DatabaseSync: class {
+              constructor(_location: string) {
+                throw new Error('simulated: opening the database failed')
+              }
+            },
+          }) as unknown as SqliteModuleLike,
       })
     } catch (error) {
       caught = error
