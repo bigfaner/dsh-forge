@@ -13,10 +13,14 @@
  *     same surface the chrome's addProject fires.
  *   onRepoint  — the active-project-lost error card's 重新指向 → the 5.4
  *     wizard in EDIT mode.
- *   the plugin-section seat — FILLED by 5.12: the PluginSection 区块卡 below
- *     the grid (two-tier rows over its own PluginFace seam; the empty state
- *     stays card-only per ui-design, so the section rides the populated
- *     branch).
+ *   the plugin-section seat — FILLED by 5.12, integrated by 5.13: the
+ *     PluginSection 区块卡 below the project content (two-tier rows over its
+ *     own PluginFace seam). Its visibility never depends on the project
+ *     registration state (task 5.13: 无项目时仍可见 — 插件管理与项目无关),
+ *     so it rides BOTH ready branches — below the grid when populated, below
+ *     the empty 空态卡 when not — at a stable child slot, keeping its state
+ *     across empty ⇄ populated transitions. The page's own loading/load-error
+ *     branches stay page-level (5.14 owns the unified branch orchestration).
  *
  * Error mapping (tech-design Error Handling): a verb rejecting
  * ERR_PROJECT_NOT_FOUND (concurrent removal left a stale id behind) refreshes
@@ -72,7 +76,7 @@ export interface OverviewPageProps {
   lostProjectIds?: readonly string[] | undefined
   /** The page face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
   face?: Partial<OverviewFace> | undefined
-  /** The UF6 section face — absent members fall back to the section-local mock twin (5.13/5.14 inject). */
+  /** The UF6 section face — absent members fall back to the section-local mock twin (5.14 injects the IPC face). */
   pluginFace?: Partial<PluginFace> | undefined
 }
 
@@ -447,12 +451,19 @@ export function OverviewPage(props: OverviewPageProps) {
             onRename={rename}
             onRemove={(project) => { setRemoving(project) }}
           />
-
-          {/* The UF6 seat (5.12 fills it): the two-tier 插件区块卡 below the
-              grid — its own PluginFace seam (mock twin by default, 5.13/5.14
-              inject the IPC verbs). */}
-          <PluginSection t={props.t} face={props.pluginFace} />
         </>
+      )}
+
+      {/* The UF6 seat (5.12 fills it · 5.13 integrates it): the two-tier
+          插件区块卡 below the project content — its own PluginFace seam (mock
+          twin by default, 5.14 injects the IPC verbs). Rendered in EVERY ready
+          branch (populated grid AND empty 空态卡 alike): plugin management is
+          unrelated to project registration, so the section never hides with
+          the empty state; the stable child slot keeps its state across the
+          empty ⇄ populated transitions (no re-list when the project roster
+          changes). */}
+      {phase === 'ready' && state !== undefined && (
+        <PluginSection t={props.t} face={props.pluginFace} />
       )}
 
       {removing !== undefined && (

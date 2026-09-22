@@ -366,7 +366,7 @@
         "5.3",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.13-plugin-section-integrate.md",
       "record": "records/5.13-plugin-section-integrate.md",
       "surface-type": "web",

@@ -459,9 +459,10 @@ describe('OverviewPage: the UF6 plugin-section seat (5.12 fills it)', () => {
     expect(order.indexOf(section)).toBeGreaterThan(order.indexOf(grid))
   })
 
-  it('the empty state renders no plugin section (ui-design States: 空态卡 only)', async () => {
+  it('the empty state keeps the plugin section mounted (5.13: 不随空态隐藏)', async () => {
     await renderOverview({}, makeFace(MOCK_EMPTY_WORKBENCH_STATE))
-    expect(document.querySelector('[data-dsh-forge-plugins-section]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-overview-empty]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-plugins-section]')).not.toBeNull()
   })
 })
 
