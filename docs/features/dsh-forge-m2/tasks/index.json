@@ -712,7 +712,7 @@
         "6.4",
         "6.5"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.summary.md",
       "record": "records/6.summary.md",
       "type": "doc.summary"
