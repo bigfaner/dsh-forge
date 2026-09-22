@@ -192,7 +192,7 @@
         "3.2",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.3-nav-injection-view-switch.md",
       "record": "records/3.3-nav-injection-view-switch.md",
       "surface-type": "web",

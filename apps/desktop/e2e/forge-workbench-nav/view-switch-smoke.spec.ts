@@ -1,0 +1,142 @@
+// @feature dsh-forge-m2 | @web-e2e | @journey forge-workbench-nav
+// Traceability: docs/features/dsh-forge-m2/tasks/3.3-nav-injection-view-switch.md
+import { expect, test } from '@playwright/test'
+import {
+  BASE_BUNDLES, FORGE_WORKBENCH, FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball, launchPluginShell,
+} from '../helpers/plugins.ts'
+
+// Task 3.3 view-switch smoke (slot path — the preferred form, live): the
+// workbench entry appears in the upstream sidebar navigation (AC1), clicking
+// and keyboard activation switch 会话⇄工作台 with zero shell code, the shell's
+// tab strip carries role=tab/aria-selected (AC6), the first boot defaults to
+// the session view and the last view survives a restart (AC4). The fallback
+// rail cannot be forced in a live boot without removing the upstream bundles
+// (which kills the SPA the rail switches back into), so its automated leg is
+// the jsdom mount in packages/plugins/forge-workbench/tests/rail.spec.tsx
+// against the SAME machine, controller, and shell component.
+
+/** The minimal product config: base bundles + the mandatory forge core. */
+function navBundles() {
+  return [
+    ...BASE_BUNDLES,
+    { name: FORGE_WORKBENCH, source: `tarball:${FORGE_WORKBENCH_STAGED_AT}`, mandatory: true } as const,
+  ]
+}
+
+function navTarballs() {
+  return [{ at: FORGE_WORKBENCH_STAGED_AT, from: forgeWorkbenchTarball() }]
+}
+
+/** The upstream sidebar's workbench row (ui-sidebar PanelRow: native button + aria-label from our locale). */
+const workbenchRow = (page: import('@playwright/test').Page) =>
+  page.getByRole('button', { name: /^工作台$|^Workbench$/ }).first()
+
+/**
+ * Switch into the workbench tolerating the upstream boot-time session
+ * auto-restore: the home-scoped session list hydrates seconds after ui-ready
+ * and its navigation ends in selectPanel(null) (ui-workspace replaceMain),
+ * which deselects a panel chosen too early. The machine correctly follows
+ * that bounce; the test simply retries until the selection sticks.
+ */
+async function switchToWorkbench(page: import('@playwright/test').Page): Promise<void> {
+  const shellPanel = page.locator('[data-dsh-forge-shell]')
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await workbenchRow(page).click()
+    await expect(shellPanel).toBeVisible({ timeout: 10_000 })
+    // Settle window: longer than the observed hydration bounce.
+    await page.waitForTimeout(2_500)
+    if (await shellPanel.count() > 0) return
+  }
+  throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
+}
+
+test('3.3/slot-path: 会话⇄工作台 switch by click and keyboard, aria, session-view first boot', async ({ }, testInfo) => {
+  testInfo.setTimeout(300_000)
+  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs() })
+  try {
+    const { page } = shell
+    await shell.uiReady()
+    // AC4 first boot: nothing persisted for our view key → the session view.
+    // The probe userData (dsh-app:// origin storage) is shared across journey
+    // boots, so a prior run may have restored a stale workbench view —
+    // normalize it away before asserting the first-boot default.
+    await page.evaluate(() => { localStorage.removeItem('dsh.forge.workbench.view') })
+    const shellPanel = page.locator('[data-dsh-forge-shell]')
+    if (await shellPanel.count() > 0) {
+      await page.getByRole('button', { name: /新建会话|New Session/ }).first().click()
+      await expect(shellPanel).toHaveCount(0)
+      await page.evaluate(() => { localStorage.removeItem('dsh.forge.workbench.view') })
+    }
+    await expect(shellPanel).toHaveCount(0)
+
+    // AC1: the entry sits in the upstream navigation area, not selected.
+    const row = workbenchRow(page)
+    await expect(row).toBeVisible()
+    await expect(row).not.toHaveAttribute('aria-current', 'page')
+
+    // AC1 click switch (settled past the boot session-restore bounce).
+    await switchToWorkbench(page)
+    await expect(row).toHaveAttribute('aria-current', 'page')
+
+    // AC1/AC6 back to 会话, then keyboard activation (native button: Enter)
+    // switches to 工作台 again.
+    await page.getByRole('button', { name: /新建会话|New Session/ }).first().click()
+    await expect(page.locator('[data-dsh-forge-shell]')).toHaveCount(0)
+    await row.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('[data-dsh-forge-shell]')).toBeVisible({ timeout: 10_000 })
+
+    // AC5/AC6: the shell's tab strip — role=tab + aria-selected per tab; the
+    // active view key addresses its reserved mount container.
+    const overviewTab = page.getByRole('tab', { name: /^概览$|^Overview$/ })
+    const tasksTab = page.getByRole('tab', { name: /^任务$|^Tasks$/ })
+    await expect(overviewTab).toHaveAttribute('aria-selected', 'true')
+    await expect(tasksTab).toHaveAttribute('aria-selected', 'false')
+    await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeVisible()
+    await tasksTab.click()
+    await expect(tasksTab).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+
+    // AC1 back: New Session navigates the conversation (selectPanel(null)) —
+    // the upstream flow, no reload.
+    await page.getByRole('button', { name: /新建会话|New Session/ }).first().click()
+    await expect(page.locator('[data-dsh-forge-shell]')).toHaveCount(0)
+    await expect(row).not.toHaveAttribute('aria-current', 'page')
+
+    // AC4: the last view persisted through the machine's own write path.
+    const persisted = await page.evaluate(() => localStorage.getItem('dsh.forge.workbench.view'))
+    expect(JSON.parse(persisted ?? 'null')).toEqual({ view: 'session', workbenchTab: 'workbench/tasks' })
+    expect(shell.pageErrors, `renderer pageerrors: ${shell.pageErrors.join(' | ')}`).toEqual([])
+  } finally { await shell.close() }
+})
+
+test('3.3/restart: the last view survives an application restart (two boots, one profile)', async ({ }, testInfo) => {
+  testInfo.setTimeout(300_000)
+  const shell = await launchPluginShell({ bundles: navBundles(), stageTarballs: navTarballs() })
+  const rootDir = shell.dir
+  try {
+    const { page } = shell
+    await shell.uiReady()
+    await page.evaluate(() => { localStorage.removeItem('dsh.forge.workbench.view') })
+    // Boot 1: switch into the workbench on the overview tab (deterministic —
+    // a prior journey may have retained another tab in the shared storage)
+    // and leave the workbench the active view.
+    await switchToWorkbench(page)
+    await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+    expect(
+      JSON.parse(await page.evaluate(() => localStorage.getItem('dsh.forge.workbench.view')) ?? 'null'),
+    ).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
+  } finally { await shell.close() }
+
+  // Boot 2 (same root dir → same config/profile/userData): the persisted
+  // workbench view restores WITHOUT any interaction — the slot carrier's
+  // attach-time projection re-selects the panel at boot.
+  const reborn = await launchPluginShell({ bundles: navBundles(), stageTarballs: [], rootDir })
+  try {
+    await reborn.uiReady()
+    await expect(reborn.page.locator('[data-dsh-forge-shell]')).toBeVisible()
+    await expect(workbenchRow(reborn.page)).toHaveAttribute('aria-current', 'page')
+    await expect(reborn.page.getByRole('tab', { name: /^概览$|^Overview$/ })).toHaveAttribute('aria-selected', 'true')
+    expect(reborn.pageErrors, `renderer pageerrors: ${reborn.pageErrors.join(' | ')}`).toEqual([])
+  } finally { await reborn.close() }
+})

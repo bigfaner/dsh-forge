@@ -27,6 +27,7 @@ function makeFakeCtx(core: SlotCore): Context {
       const dispose = fn()
       return () => dispose?.()
     },
+    get: (): undefined => undefined,
     locale: {
       register(ns: string, dicts: Record<string, Record<string, string>>): () => void {
         localeRegistry.set(ns, dicts)
@@ -53,6 +54,7 @@ function makeFakeCtx(core: SlotCore): Context {
           disposeActive?.()
         }
       },
+      spec: (key: string) => core.specDynamic(key),
     },
   }
   return ctx as unknown as Context
