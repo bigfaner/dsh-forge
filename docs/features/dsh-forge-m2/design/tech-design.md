@@ -404,10 +404,16 @@ interface SessionLaunchService {
 
 ## Open Questions
 
-- [ ] 上游顶级导航槽位确切名称与可用性(首个 UI 任务源码侦察前置;结论与降级裁决落 design/spike 档;两形态行为契约已冻结于 ui-design)
-- [ ] DF004 会话创建通道形态(Interface 5 候选序;fallback 已冻结可用,不阻塞)
-- [ ] `FORGE_ACTOR` 透传的 forge 仓最小改造面(SC8 spike 结论;不改则退化 Interface 3 推断兜底)
-- [ ] 会话结束事件可得性(session_links status→ended 迁移;不可得时由发起侧收敛,已列兜底口径)
+> 四项均已由 SC8 spike(任务 1.1,2026-09-22)回填结论,报告:[design/spike-1-findings.md](./spike-1-findings.md)。原问题文本保留,结论附后。
+
+- [x] 上游顶级导航槽位确切名称与可用性(首个 UI 任务源码侦察前置;结论与降级裁决落 design/spike 档;两形态行为契约已冻结于 ui-design)
+  - **结论:存在。** 槽位对 = `main`(keyed,root scope,`ui-layout` 声明)+ `sidebar.panellist`(list,root scope,`ui-sidebar` 声明);注册契约 `key/id/order/label(+children 子槽)`,逐字先例 = 上游 ui-plugin-manager(`PANEL_ID='plugins'`,order 0);`ctx.layout.selectPanel` 切换。生成式编译期契约背书(cordis-client-runner slot-catalog,freshness-gated)。**D3 首选路径(上游导航槽位优先)成立**,自绘 rail 保留为兜底。
+- [x] DF004 会话创建通道形态(Interface 5 候选序;fallback 已冻结可用,不阻塞)
+  - **结论:采用候选 1。** host 半身直注 `sessionController`(双半身先例 ui-deliverables)`create({cwd})` + `prompt(mode:'queue')`——进程内零外部通道,prompt 即持久化用户消息(SC3 语义);降级链 1→2(client 半身 `ctx.remote.session`,同语义备选)→3(剪贴板+toast 兜底)。会话定位升级:client 半身 `ctx.uiWorkspace.openSession(sessionId)`(运行期服务通道);M1 localStorage poke 关闭(该键仅 boot 期读取)。cwd-only 会话的侧栏归组细节留 4.x 实测。
+- [x] `FORGE_ACTOR` 透传的 forge 仓最小改造面(SC8 spike 结论;不改则退化 Interface 3 推断兜底)
+  - **结论:可行,覆盖面 = submit 记录。** 最小改造 = `pkg/task/record.go`(`NewRecordTemplateData` 读 env)+ 6 类记录模板条件行(空 env 字节不变,记录文件 write-once 无回读,格式不变原则满足);claim/transition 无记录产物,加 index.json 字段会被旧写者丢弃(双形态共写),不做。传输链 = 注入 prompt 附加 `FORGE_ACTOR=session:<linkId>` 前缀指令行,零 dsh 上游配合。Interface 3 判定序保持「actor(可为空)→ 挂接推断」,推断兜底为主路径,不阻塞 M2;forge 仓改造列为可选增强。
+- [x] 会话结束事件可得性(session_links status→ended 迁移;不可得时由发起侧收敛,已列兜底口径)
+  - **结论:不可得终态信号。** dsh session 为持久会话(`AgentStatus = 'idle'|'running'` 二态;`api-session/status` 仅运行态翻转;`session/disposed` 为宿主卸载、archive 为 UI 操作,均非会话完成)。`session_links.status→ended` 迁移**维持发起侧收敛**;可选增强 = host 半身订阅 `agent/status` 做 idle 启发,不作 ended 判据。
 
 ## Appendix
 

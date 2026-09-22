@@ -9,7 +9,7 @@
       "title": "SC8 spike：dsh 插件机制承载 forge 管线语义等价性 + DF004/导航槽位/FORGE_ACTOR 侦察",
       "priority": "P0",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.1-spike-semantic-equivalence.md",
       "record": "records/1.1-spike-semantic-equivalence.md",
       "type": "doc"
