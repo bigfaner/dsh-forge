@@ -279,7 +279,8 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                 // the lost-card repoint defaults to the 5.4 wizard's EDIT
                 // mode (5.14's overview seat can override either); the
                 // optional overview seat hands the page its IPC-backed face +
-                // sync signals — absent, the page runs on its mock twin.
+                // sync signals — absent, the page runs on its mock twin (the
+                // same for the UF6 plugin section's pluginFace, 5.13/5.14).
                 <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                   <OverviewPage
                     t={props.t}
@@ -287,6 +288,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                     onRepoint={props.overview?.onRepoint ?? ((project) => { openWizard({ mode: 'edit', project }) })}
                     lostProjectIds={props.overview?.lostProjectIds}
                     face={props.overview?.face}
+                    pluginFace={props.overview?.pluginFace}
                   />
                 </div>
               )

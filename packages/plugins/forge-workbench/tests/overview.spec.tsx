@@ -440,15 +440,17 @@ describe('OverviewPage: themes, keyboard reachability, responsive grid (AC5)', (
 })
 
 // ---------------------------------------------------------------------------
-// Reserved seats: UF6 (5.12) + the shell mount + the 5.14 assembly seat
+// Filled seats: UF6 (5.12) + the shell mount + the 5.14 assembly seat
 // ---------------------------------------------------------------------------
 
-describe('OverviewPage: reserved seats', () => {
-  it('the UF6 plugin-section 区块卡 sits below the grid, reserved for 5.12', async () => {
+describe('OverviewPage: the UF6 plugin-section seat (5.12 fills it)', () => {
+  it('the UF6 plugin-section 区块卡 sits below the grid and renders its two-tier rows', async () => {
     await renderOverview()
     const section = document.querySelector('[data-dsh-forge-plugins-section]') as HTMLElement
-    expect(section.getAttribute('data-reserved')).toBe('5.12')
+    expect(section.hasAttribute('data-reserved')).toBe(false)
     expect(section.textContent).toContain(en['overview.plugins.title'])
+    // The section rides the page's own mock twin default (build stage).
+    expect(section.querySelectorAll('[data-dsh-forge-plugin-row]').length).toBeGreaterThanOrEqual(4)
     // Below the grid in page child order (the page-map section order).
     const page = document.querySelector('[data-dsh-forge-overview]') as HTMLElement
     const grid = document.querySelector('[data-dsh-forge-project-grid]') as HTMLElement
@@ -457,7 +459,7 @@ describe('OverviewPage: reserved seats', () => {
     expect(order.indexOf(section)).toBeGreaterThan(order.indexOf(grid))
   })
 
-  it('the empty state reserves no plugin seat (ui-design States: 空态卡 only)', async () => {
+  it('the empty state renders no plugin section (ui-design States: 空态卡 only)', async () => {
     await renderOverview({}, makeFace(MOCK_EMPTY_WORKBENCH_STATE))
     expect(document.querySelector('[data-dsh-forge-plugins-section]')).toBeNull()
   })

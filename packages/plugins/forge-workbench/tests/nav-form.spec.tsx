@@ -13,6 +13,8 @@ import {
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconBranchOutline16: () => null,
   IconNewChatOutline16: () => null,
+  // Task 5.12: the overview page's UF6 plugin section renders StateDot rows.
+  StateDot: () => null,
 }))
 
 // Task 3.3 AC2 fallback trigger (槽位不可用时自动启用) at the coordinator

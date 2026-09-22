@@ -24,7 +24,7 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, Project, ProjectPatch, RecordSessionLinkInput,
+  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
   RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
   WorkbenchState,
 } from './ipc-types'
@@ -135,6 +135,8 @@ export interface OverviewFace {
 export interface WorkbenchOverviewSeat {
   /** The page face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
   readonly face?: Partial<OverviewFace>
+  /** The UF6 section face — absent members fall back to the build-stage mock (5.13/5.14 inject the IPC verbs). */
+  readonly pluginFace?: Partial<PluginFace>
   /**
    * Project ids whose codeRoot/docLocation re-validation failed (5.14 derives
    * from sync_state): drives the per-card 失联徽标 and, for the active
@@ -267,6 +269,24 @@ export interface FeatureBoardFace {
 export interface FeatureDocFace {
   /** Interface 1 workbench.readFeatureDoc(projectId, featureSlug, kind) — one doc tab's read. */
   readFeatureDoc(projectId: string, featureSlug: string, kind: DocKind): Promise<FeatureDoc>
+}
+
+/**
+ * The UF6 plugin section's data + action face (task 5.12, UI dependency
+ * layering — the same seam shape as OverviewFace, 5.7's 1:1 verb discipline):
+ * the BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockPluginFace), the 5.13/5.14 assembly tasks inject
+ * the Interface 1 verbs. Every member mirrors its §Interface 1 verb
+ * one-to-one; rejections carry the serialized {@link WorkbenchVerbError}
+ * shape. ERR_PLUGIN_MANDATORY is UNREACHABLE from the UI by construction (a
+ * mandatory row renders no write control — Hard Rule), so the section's
+ * mapping for it is defense-in-depth's visible layer, not a UI-walkable path.
+ */
+export interface PluginFace {
+  /** Interface 1 workbench.listPlugins() — the section's data load. */
+  listPlugins(): Promise<PluginRow[]>
+  /** Interface 1 workbench.setPluginEnabled(name, enabled) — resolves the current rows. */
+  setPluginEnabled(name: string, enabled: boolean): Promise<PluginRow[]>
 }
 
 /**

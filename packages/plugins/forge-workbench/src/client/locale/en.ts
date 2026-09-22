@@ -78,7 +78,25 @@ export type WorkbenchKey =
   | 'overview.toast.failed'
   | 'overview.toast.dismiss'
   | 'overview.plugins.title'
-  | 'overview.plugins.reserved'
+  | 'overview.plugins.loading'
+  | 'overview.plugins.loadError.title'
+  | 'overview.plugins.loadError.retry'
+  | 'overview.plugins.emptyThirdParty'
+  | 'overview.plugins.mandatoryBadge'
+  | 'overview.plugins.status.enabled'
+  | 'overview.plugins.status.disabled'
+  | 'overview.plugins.thirdPartyHint'
+  | 'overview.plugins.action.disable'
+  | 'overview.plugins.action.enable'
+  | 'overview.plugins.transitioning'
+  | 'overview.plugins.confirm.title'
+  | 'overview.plugins.confirm.impact'
+  | 'overview.plugins.confirm.confirm'
+  | 'overview.plugins.confirm.cancel'
+  | 'overview.plugins.err.mandatory'
+  | 'overview.plugins.err.runtimeState'
+  | 'overview.plugins.err.generic'
+  | 'overview.plugins.toast.dismiss'
   | 'wizard.title'
   | 'wizard.editTitle'
   | 'wizard.stepLabel'
@@ -310,7 +328,25 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.toast.failed': 'Action failed: {message}',
   'overview.toast.dismiss': 'Dismiss',
   'overview.plugins.title': 'Plugins',
-  'overview.plugins.reserved': 'The plugin management section arrives with M2 5.12.',
+  'overview.plugins.loading': 'Loading plugins…',
+  'overview.plugins.loadError.title': 'Failed to load plugins',
+  'overview.plugins.loadError.retry': 'Retry',
+  'overview.plugins.emptyThirdParty': 'No third-party plugins installed — only the required set is present.',
+  'overview.plugins.mandatoryBadge': 'Required',
+  'overview.plugins.status.enabled': 'Enabled',
+  'overview.plugins.status.disabled': 'Disabled',
+  'overview.plugins.thirdPartyHint': 'Third-party plugin · disabling only withdraws its injected content',
+  'overview.plugins.action.disable': 'Disable',
+  'overview.plugins.action.enable': 'Enable',
+  'overview.plugins.transitioning': 'Updating plugin state…',
+  'overview.plugins.confirm.title': 'Disable plugin',
+  'overview.plugins.confirm.impact': "Only this plugin's injected content is withdrawn — forge data and the workbench's core capabilities are unaffected.",
+  'overview.plugins.confirm.confirm': 'Disable',
+  'overview.plugins.confirm.cancel': 'Cancel',
+  'overview.plugins.err.mandatory': 'A required plugin cannot be disabled — it is part of the workbench core.',
+  'overview.plugins.err.runtimeState': 'The plugin runtime state was invalid and has been rebuilt automatically.',
+  'overview.plugins.err.generic': 'Action failed: {message}',
+  'overview.plugins.toast.dismiss': 'Dismiss',
   'wizard.title': 'Register project',
   'wizard.editTitle': 'Repoint project',
   'wizard.stepLabel': 'Step {current}/{total}',

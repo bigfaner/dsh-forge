@@ -13,8 +13,10 @@
  *     same surface the chrome's addProject fires.
  *   onRepoint  — the active-project-lost error card's 重新指向 → the 5.4
  *     wizard in EDIT mode.
- *   the plugin-section seat — the 区块卡 below the grid where 5.12's
- *     PluginSection mounts.
+ *   the plugin-section seat — FILLED by 5.12: the PluginSection 区块卡 below
+ *     the grid (two-tier rows over its own PluginFace seam; the empty state
+ *     stays card-only per ui-design, so the section rides the populated
+ *     branch).
  *
  * Error mapping (tech-design Error Handling): a verb rejecting
  * ERR_PROJECT_NOT_FOUND (concurrent removal left a stale id behind) refreshes
@@ -25,12 +27,13 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { Project, WorkbenchState, WorkbenchVerbError } from '../../ipc-types'
-import type { OverviewFace } from '../../contract'
+import type { OverviewFace, PluginFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { TOAST_Z } from '../tasks/launch/LaunchStates'
 import { createMockOverviewFace } from '../../mocks/workbench'
 import { ProjectGrid } from './ProjectGrid'
+import { PluginSection } from './PluginSection'
 import { RemoveConfirm } from './RemoveConfirm'
 import { middleEllipsis } from './format'
 
@@ -69,6 +72,8 @@ export interface OverviewPageProps {
   lostProjectIds?: readonly string[] | undefined
   /** The page face — absent members fall back to the build-stage mock (5.14 injects the IPC face). */
   face?: Partial<OverviewFace> | undefined
+  /** The UF6 section face — absent members fall back to the section-local mock twin (5.13/5.14 inject). */
+  pluginFace?: Partial<PluginFace> | undefined
 }
 
 const pageStyle = {
@@ -443,11 +448,10 @@ export function OverviewPage(props: OverviewPageProps) {
             onRemove={(project) => { setRemoving(project) }}
           />
 
-          {/* The UF6 seat (5.12): the 区块卡 below the grid — reserved mount. */}
-          <section data-dsh-forge-plugins-section="" data-reserved="5.12" style={cardStyle}>
-            <h3 style={cardTitleStyle}>{props.t('overview.plugins.title')}</h3>
-            <p style={cardBodyStyle}>{props.t('overview.plugins.reserved')}</p>
-          </section>
+          {/* The UF6 seat (5.12 fills it): the two-tier 插件区块卡 below the
+              grid — its own PluginFace seam (mock twin by default, 5.13/5.14
+              inject the IPC verbs). */}
+          <PluginSection t={props.t} face={props.pluginFace} />
         </>
       )}
 

@@ -23,20 +23,32 @@
  * ui doc kind + dsh-forge-m1 completed 48/48 with all five kinds; the empty
  * variant; MOCK_FEATURE_DOCS keyed `<slug>/<kind>`) and the verb twins
  * (createMockFeatureBoardFace / createMockFeatureDocFace, the latter with a
- * test-facing failWith poke for the doc error/stale branches).
+ * test-facing failWith poke for the doc error/stale branches). Task 5.12
+ * widens the plugin fixture to the real product-manifest shape (MOCK_PLUGIN_
+ * ROWS) and adds the UF6 section's verb twin (createMockPluginFace: the
+ * mandatory guard rejects ERR_PLUGIN_MANDATORY for real; failWith /
+ * failListWith arm the failure branches).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, Project, ProjectPatch, RegisterProjectInput, TaskBoardData,
-  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
+  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RegisterProjectInput,
+  TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, OverviewFace, RegisterWizardFace, SessionLaunchServices,
-  TaskBoardFace, TaskDetailFace,
+  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace,
+  SessionLaunchServices, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
-/** The demo mandatory core row (UF6 consumes the same rows in 5.12). */
-const MOCK_PLUGINS = Object.freeze([
+/**
+ * The two-tier plugin fixture (task 5.12 widens it to the REAL product-
+ * manifest shape — apps/desktop/resources/plugin-bundles.json landed by 3.1/
+ * 3.2): three mandatory rows (the two upstream platform bundles + this
+ * workbench plugin) and the togglable third-party fixture (hello-world).
+ * The same rows serve both the getState assembly and the UF6 mock twin.
+ */
+export const MOCK_PLUGIN_ROWS: readonly PluginRow[] = Object.freeze([
+  Object.freeze({ name: '@deepseek-ai/dsh-base', mandatory: true, enabled: true }),
+  Object.freeze({ name: '@deepseek-ai/dsh-web-app', mandatory: true, enabled: true }),
   Object.freeze({ name: '@dsh-forge/plugin-forge-workbench', mandatory: true, enabled: true }),
   Object.freeze({ name: '@dsh-forge/plugin-hello-world', mandatory: false, enabled: true }),
 ])
@@ -73,14 +85,14 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
     }),
   ]),
   activeProjectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
-  plugins: MOCK_PLUGINS,
+  plugins: MOCK_PLUGIN_ROWS,
 })
 
 /** The state-gate fixture: no projects, no active pointer (single-activation invariant: null ⟺ empty registry). */
 export const MOCK_EMPTY_WORKBENCH_STATE: WorkbenchState = Object.freeze({
   projects: Object.freeze([]),
   activeProjectId: null,
-  plugins: MOCK_PLUGINS,
+  plugins: MOCK_PLUGIN_ROWS,
 })
 
 /**
@@ -758,5 +770,72 @@ export function createMockFeatureDocFace(
       return doc
     },
     failWith: (slug, kind, error) => { armed.set(`${slug}/${kind}`, error) },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plugin section, UF6 (task 5.12)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF6 section's build-stage face, task 5.12 (UI dependency layering): the
+ * Interface 1 verb pair as a STATEFUL closure twin — a factory, not a
+ * singleton, so every mount/test gets isolated state (the createMockOverview
+ * Face precedent). Verb semantics mirror the main-process pair (tech-design
+ * §Interface 1 / §Interface 4):
+ *
+ *   listPlugins        — the current rows (a one-shot list failure can be
+ *                        armed for the load-error branch via failListWith);
+ *   setPluginEnabled   — patches the row and resolves the FULL current
+ *                        PluginRow[] (the verb's contract); a mandatory name
+ *                        targeted for disable rejects the serialized
+ *                        WorkbenchVerbError shape ERR_PLUGIN_MANDATORY — the
+ *                        REAL guard semantics, so the section's
+ *                        defense-in-depth mapping runs against the genuine
+ *                        rejection; an unknown name falls to the generic
+ *                        ERR_WORKBENCH_DB 兜底 (Propagation Strategy).
+ *
+ * The returned `failWith` / `failListWith` are MOCK-ONLY (the test drivers
+ * that arm rejections — failListWith arms exactly the NEXT load — for the
+ * section's error/failure branches).
+ */
+export function createMockPluginFace(
+  initial: readonly PluginRow[] = MOCK_PLUGIN_ROWS,
+): PluginFace & {
+  /** Arm a rejection for the next setPluginEnabled of one plugin (the test driver). */
+  failWith(name: string, error: { code: string; message: string }): void
+  /** Arm a rejection for exactly the NEXT listPlugins (the test driver). */
+  failListWith(error: { code: string; message: string }): void
+} {
+  let rows: PluginRow[] = [...initial]
+  let armedList: { code: string; message: string } | undefined
+  const armed = new Map<string, { code: string; message: string }>()
+  return {
+    listPlugins: async () => {
+      if (armedList !== undefined) {
+        const failure = armedList
+        armedList = undefined
+        throw failure
+      }
+      return rows
+    },
+    setPluginEnabled: async (name, enabled) => {
+      const failure = armed.get(name)
+      if (failure !== undefined) throw failure
+      const row = rows.find(candidate => candidate.name === name)
+      if (row === undefined) {
+        throw { code: 'ERR_WORKBENCH_DB', message: `build-stage mock: no plugin row ${name}` }
+      }
+      if (row.mandatory && !enabled) {
+        throw {
+          code: 'ERR_PLUGIN_MANDATORY',
+          message: `build-stage mock: ${name} is mandatory and cannot be disabled`,
+        }
+      }
+      rows = rows.map(candidate => candidate.name === name ? { ...candidate, enabled } : candidate)
+      return rows
+    },
+    failWith: (name, error) => { armed.set(name, error) },
+    failListWith: (error) => { armedList = error },
   }
 }
