@@ -46,7 +46,8 @@ import { getSyncState } from '../repos/sync-state.ts'
 import { getTaskSnapshot, listTaskSnapshots } from '../repos/task-snapshots.ts'
 import { createWorkbenchWatcher } from '../watcher/watch.ts'
 import type { WorkbenchEventSink } from '../watcher/events.ts'
-import { createPluginFace, createStubPluginEnableGuard, readPluginManifestBundles, type PluginEnableGuard } from './plugins.ts'
+import { createPluginEnableGuard } from '../../plugin-runtime/guard.ts'
+import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } from './plugins.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -77,7 +78,7 @@ export interface WorkbenchIpcServiceDeps {
   readonly pluginBundlesPath: string
   /** userData 根(覆盖文件 plugin-runtime.json 落于此)。 */
   readonly userDataPath: string
-  /** 3.1 接线缝:setPluginEnabled 守卫(2.7 桩)。 */
+  /** setPluginEnabled 守卫(缺省 = 3.1 真守卫,mandatory 派生自同一产品清单)。 */
   readonly pluginGuard?: PluginEnableGuard
   /** 事件批推送端(2.7 接 IPC 订阅广播;缺省丢弃)。 */
   readonly onEvents?: WorkbenchEventSink
@@ -164,11 +165,9 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   const pluginFace = createPluginFace({
     manifestPath: deps.pluginBundlesPath,
     overlayPath: join(deps.userDataPath, 'plugin-runtime.json'),
-    guard: deps.pluginGuard ?? createStubPluginEnableGuard(() => {
-      // 桩守卫的名单来源 = 同一产品清单(mandatory 派生);3.1 在装配处
-      // 替换为 host-profile 真守卫时,本缺省分支整体退役。
-      return readPluginManifestBundles(deps.pluginBundlesPath)
-    }),
+    // 3.1:真守卫(mandatory → ERR_PLUGIN_MANDATORY);名单来源 = 同一
+    // 产品清单,不另立名单(G6)。2.7 桩守卫已退役。
+    guard: deps.pluginGuard ?? createPluginEnableGuard(() => readPluginManifestBundles(deps.pluginBundlesPath)),
   })
   const defaultPerception = (): WorkbenchPerceptionSeam => {
     const watcher = createWorkbenchWatcher(db, { onEvents: sink })

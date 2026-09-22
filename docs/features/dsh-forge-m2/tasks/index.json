@@ -159,7 +159,7 @@
       "dependencies": [
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.1-mandatory-plugin-guard.md",
       "record": "records/3.1-mandatory-plugin-guard.md",
       "surface-type": "web",

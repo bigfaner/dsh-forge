@@ -23,10 +23,10 @@ import { authorizeExternalDocPath } from '../src/main/workbench/registry/authori
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
 import {
   createPluginFace,
-  createStubPluginEnableGuard,
   PluginMandatoryError,
   readPluginManifestBundles,
 } from '../src/main/workbench/ipc/plugins.ts'
+import { createPluginEnableGuard } from '../src/main/plugin-runtime/guard.ts'
 import { createWorkbenchIpcServices, type WorkbenchPerceptionSeam } from '../src/main/workbench/ipc/services.ts'
 import type { Project, WorkbenchState, WorkbenchVerbServices } from '../src/main/workbench/ipc/types.ts'
 
@@ -39,7 +39,7 @@ import type { Project, WorkbenchState, WorkbenchVerbServices } from '../src/main
 // Four AC groups under test: routing table, sender rejection, event
 // subscription lifecycle, error envelope — plus the service assembly over the
 // 2.2-2.6 kernel (repos / registry / scan / perception seam) and the plugin
-// face with the 3.1 guard seam (stub: mandatory → ERR_PLUGIN_MANDATORY).
+// face with the 3.1 real guard (mandatory → ERR_PLUGIN_MANDATORY).
 
 const OWNED: WorkbenchVerbEvent = { senderFrame: { url: 'dsh-app://app/' } }
 const FOREIGN: WorkbenchVerbEvent = { senderFrame: { url: 'https://evil.example/' } }
@@ -761,7 +761,7 @@ describe('workbench services: board / detail / doc reads', () => {
   })
 })
 
-describe('plugin face: two-tier model + 3.1 guard seam', () => {
+describe('plugin face: two-tier model + 3.1 real guard', () => {
   function makeFace(root: string, manifestBundles: unknown) {
     const manifest = join(root, 'resources', 'plugin-bundles.json')
     mkdirSync(join(root, 'resources'), { recursive: true })
@@ -769,7 +769,7 @@ describe('plugin face: two-tier model + 3.1 guard seam', () => {
     const pluginFace = createPluginFace({
       manifestPath: manifest,
       overlayPath: join(root, 'user', 'plugin-runtime.json'),
-      guard: createStubPluginEnableGuard(() => readPluginManifestBundles(manifest)),
+      guard: createPluginEnableGuard(() => readPluginManifestBundles(manifest)),
     })
     return { pluginFace, manifest }
   }

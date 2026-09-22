@@ -1,10 +1,12 @@
 {
   "bundles": [
     {
-      "name": "@deepseek-ai/dsh-base"
+      "name": "@deepseek-ai/dsh-base",
+      "mandatory": true
     },
     {
-      "name": "@deepseek-ai/dsh-web-app"
+      "name": "@deepseek-ai/dsh-web-app",
+      "mandatory": true
     }
   ]
 }

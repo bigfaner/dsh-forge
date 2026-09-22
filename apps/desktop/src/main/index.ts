@@ -29,9 +29,11 @@ import {
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
+import { createPluginEnableGuard } from './plugin-runtime/guard.ts'
 import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
+import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -314,6 +316,10 @@ void app.whenReady().then(async () => {
       // Task 6: `tarball:` sources are staged next to the config in app
       // resources (dev: resources/, packaged: process.resourcesPath).
       resourcesRoot: dirname(pluginBundlesConfigPath),
+      // Task 3.1: fold the runtime enable/disable overlay into the projection —
+      // mandatory bundles assemble unconditionally, disabled third-party ones
+      // are held out. Same file the setPluginEnabled verb writes (single state).
+      overlayPath: join(app.getPath('userData'), 'plugin-runtime.json'),
     })
   } catch (error) {
     profileFailure = error instanceof Error ? error.message : String(error)
@@ -333,13 +339,16 @@ void app.whenReady().then(async () => {
     const userDataPath = app.getPath('userData')
     const workbenchDb = await openDatabase(userDataPath)
     const workbenchEvents = createWorkbenchEventSubscriptions()
+    const pluginBundlesPath = resolvePluginBundlesConfigPath()
     const workbenchIpc = createWorkbenchIpcServices({
       db: workbenchDb.db,
-      pluginBundlesPath: resolvePluginBundlesConfigPath(),
+      pluginBundlesPath,
       userDataPath,
-      // 3.1 seam: the stub guard (mandatory → ERR_PLUGIN_MANDATORY) stays in
-      // place until the host-profile guard lands — swap the implementation at
-      // this assembly point only (PluginEnableGuard contract in ipc/plugins.ts).
+      // 3.1 seam: the real guard (mandatory → ERR_PLUGIN_MANDATORY) replaces
+      // the 2.7 stub at this assembly point — mandatory identity derives from
+      // the same product manifest (G6, no second list); setPluginEnabled
+      // stays the single write path into plugin-runtime.json.
+      pluginGuard: createPluginEnableGuard(() => readPluginManifestBundles(pluginBundlesPath)),
       onEvents: workbenchEvents.sink,
     })
     installWorkbenchVerbs(
