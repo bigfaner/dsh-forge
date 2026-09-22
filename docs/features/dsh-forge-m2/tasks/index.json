@@ -516,7 +516,7 @@
         "5.1",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.7-task-detail-panel-build.md",
       "record": "records/5.7-task-detail-panel-build.md",
       "surface-type": "web",

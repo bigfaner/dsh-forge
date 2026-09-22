@@ -46,7 +46,7 @@ const updatingBackground = 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 
 const updatingTransition = 'background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
 
 /** Pill-adjacent badge (ui-design: 徽标用 Pill): 12/18 capsule, nowrap. */
-const badgeStyle = {
+export const badgeStyle = {
   borderRadius: '8px',
   border: '1px solid var(--dsh-border-color, CanvasText)',
   color: 'var(--dsw-alias-label-secondary, inherit)',
@@ -58,7 +58,7 @@ const badgeStyle = {
 } as const
 
 /** The source badge variant: the per-change 来源 marker ([会话]/[终端]). */
-const sourceBadgeStyle = {
+export const sourceBadgeStyle = {
   ...badgeStyle,
   color: 'var(--dsw-alias-label-primary, inherit)',
 } as const

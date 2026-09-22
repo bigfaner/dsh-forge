@@ -25,7 +25,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type {
   Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
-  TaskSummary, WorkbenchEvent, WorkbenchState,
+  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -218,6 +218,20 @@ export interface TaskBoardSeat {
    * detail dock owns the panel this opens.
    */
   readonly onSelect?: ((task: TaskSummary) => void) | undefined
+}
+
+/**
+ * The UF3 detail dock's data face (task 5.7, UI dependency layering — the
+ * same seam shape as TaskBoardFace): the BUILD stage renders against the
+ * shared mock twin (mocks/workbench.createMockTaskDetailFace), the 5.15
+ * assembly injects the Interface 1 verb. The member mirrors
+ * workbench.getTaskDetail(projectId, taskKey) one-to-one; rejections carry
+ * the serialized {@link WorkbenchVerbError} shape so the dock's error state
+ * runs against the real form from day one.
+ */
+export interface TaskDetailFace {
+  /** Interface 1 workbench.getTaskDetail(projectId, taskKey) — the dock's one-shot load. */
+  loadDetail(projectId: string, taskKey: string): Promise<TaskDetail>
 }
 
 /**

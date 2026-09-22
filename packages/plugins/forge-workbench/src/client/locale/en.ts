@@ -184,6 +184,23 @@ export type WorkbenchKey =
   | 'tasks.status.short.suspended'
   | 'tasks.status.short.skipped'
   | 'tasks.status.short.rejected'
+  | 'detail.close'
+  | 'detail.loading'
+  | 'detail.error.title'
+  | 'detail.error.retry'
+  | 'detail.section.description'
+  | 'detail.section.depChain'
+  | 'detail.section.records'
+  | 'detail.section.links'
+  | 'detail.description.empty'
+  | 'detail.depChain.empty'
+  | 'detail.depChain.self'
+  | 'detail.records.empty'
+  | 'detail.links.empty'
+  | 'detail.links.active'
+  | 'detail.links.ended'
+  | 'detail.links.enter'
+  | 'detail.launch.reserved'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -365,4 +382,21 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.status.short.suspended': 'Held',
   'tasks.status.short.skipped': 'Skipped',
   'tasks.status.short.rejected': 'Rejected',
+  'detail.close': 'Close',
+  'detail.loading': 'Loading task details…',
+  'detail.error.title': 'Failed to load task details',
+  'detail.error.retry': 'Retry',
+  'detail.section.description': 'Description',
+  'detail.section.depChain': 'Dependency chain',
+  'detail.section.records': 'Execution records',
+  'detail.section.links': 'Session history',
+  'detail.description.empty': 'This task has no written description yet.',
+  'detail.depChain.empty': 'No upstream blockers — this task is a root.',
+  'detail.depChain.self': 'this task',
+  'detail.records.empty': 'No execution records yet.',
+  'detail.links.empty': 'No session has been attached to this task yet.',
+  'detail.links.active': 'Active',
+  'detail.links.ended': 'Ended',
+  'detail.links.enter': 'Enter session',
+  'detail.launch.reserved': 'The session launch entry arrives with task 5.11.',
 }

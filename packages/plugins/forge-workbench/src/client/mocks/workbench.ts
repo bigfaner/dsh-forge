@@ -15,12 +15,17 @@
  * qualified keys, one deliberately dangling blocker, branch/worktree/source
  * variety — plus the sync-error and empty variants) and the board's verb
  * twin (createMockTaskBoardFace: loadBoard + the onEvents channel with a
- * test-facing emit poke).
+ * test-facing emit poke). Task 5.7 adds the UF3 detail fixtures
+ * (MOCK_TASK_DETAILS — rich multi-hop chain / header matrix / sparse) and
+ * the dock's verb twin (createMockTaskDetailFace).
  */
 import type {
-  Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskSummary, WorkbenchEvent, WorkbenchState,
+  Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
+  WorkbenchState,
 } from '../ipc-types'
-import type { OverviewFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace } from '../contract'
+import type {
+  OverviewFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace, TaskDetailFace,
+} from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
 /** The demo mandatory core row (UF6 consumes the same rows in 5.12). */
@@ -466,6 +471,156 @@ export function createMockTaskBoardFace(
     },
     emit: (events) => {
       for (const listener of listeners) listener(events)
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Task detail dock, UF3 (task 5.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF3 detail fixtures (task 5.7): three details keyed by the SAME
+ * qualified addresses the board fixture uses (the detail summary is the
+ * board row's twin — SC1's 板/详情一致性 from day one):
+ *
+ *   dsh-forge-m2/6.1  RICH — the multi-hop depChain (5.5 → 5.6 → 5.15, the
+ *                     same blocker path the DAG fixture draws), multi-record
+ *                     history (session/terminal/null 来源), an active + an
+ *                     ended link (新→旧), and a description that exercises
+ *                     the MarkdownView subset (headings/list/code/link);
+ *   dsh-forge-m1/4.4  header matrix — branch(mono)/worktree/source all set,
+ *                     single-hop completed chain, one ended link;
+ *   dsh-forge-m1/7.2  SPARSE — every section empty (the 空态 fixture).
+ */
+export const MOCK_TASK_DETAIL_RICH: TaskDetail = Object.freeze({
+  summary: Object.freeze({
+    key: 'dsh-forge-m2/6.1', title: 'Indexer dialect guard',
+    status: 'blocked', featureSlug: 'dsh-forge-m2', blockers: ['5.15'],
+    branch: null, worktree: false, source: 'terminal',
+    updatedAt: '2026-09-20T17:10:00.000Z',
+  }),
+  descriptionMarkdown: [
+    '# 6.1 — Indexer dialect guard',
+    '',
+    'Locks the task 2.5 dialect (`task_key` = qualified `<featureSlug>/<localId>`)',
+    'behind fixture-driven assertions so the indexer and the board cannot drift.',
+    '',
+    '- qualified-address mapping for every snapshot row',
+    '- blocker resolution stays inside the feature namespace',
+    '- records keep their frontmatter timestamps verbatim',
+    '',
+    '```ts',
+    "expect(localIdOf('dsh-forge-m2/5.5')).toBe('5.5')",
+    '```',
+    '',
+    'See the [dialect notes](https://example.com/dialect) for the full table.',
+    '',
+  ].join('\n'),
+  depChain: Object.freeze([
+    Object.freeze({
+      key: 'dsh-forge-m2/5.5', title: 'UF2 task board build: toolbar + status-grouped and list views',
+      status: 'in_progress',
+    }),
+    Object.freeze({ key: 'dsh-forge-m2/5.6', title: 'UF2 dependency-tree view (DAG)', status: 'pending' }),
+    Object.freeze({ key: 'dsh-forge-m2/5.15', title: 'Task board IPC assembly', status: 'pending' }),
+  ]),
+  records: Object.freeze([
+    Object.freeze({
+      at: '2026-09-22T09:05:00.000Z', kind: 'coding.feature', source: 'session',
+      summary: '## Summary\n\nRe-ran the dialect suite after the 2.5 amendment — **all green**.',
+    }),
+    Object.freeze({
+      at: '2026-09-21T18:40:00.000Z', kind: 'coding.feature', source: 'terminal',
+      summary: '## Summary\n\nAdded the qualified-address fixtures and locked `task_key` mapping.',
+    }),
+    Object.freeze({
+      at: '2026-09-20T17:10:00.000Z', kind: 'coding.feature', source: null,
+      summary: '## Summary\n\nTask opened with the guard skeleton.',
+    }),
+  ]),
+  links: Object.freeze([
+    Object.freeze({
+      id: 'link-mock-0107', projectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
+      taskKey: 'dsh-forge-m2/6.1', sessionId: 'session-a3f2c9d1', status: 'active',
+      startedAt: '2026-09-22T08:05:00.000Z', endedAt: null,
+    }),
+    Object.freeze({
+      id: 'link-mock-0102', projectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
+      taskKey: 'dsh-forge-m2/6.1', sessionId: 'session-7b2e4f60', status: 'ended',
+      startedAt: '2026-09-21T14:02:00.000Z', endedAt: '2026-09-21T16:40:00.000Z',
+    }),
+  ]),
+})
+
+/** The header-matrix twin: every summary dimension present (branch/worktree/source). */
+export const MOCK_TASK_DETAIL_HEADER: TaskDetail = Object.freeze({
+  summary: Object.freeze({
+    key: 'dsh-forge-m1/4.4', title: 'Installer signing matrix',
+    status: 'completed', featureSlug: 'dsh-forge-m1', blockers: ['4.3'],
+    branch: 'release/v1', worktree: true, source: 'terminal',
+    updatedAt: '2026-09-18T14:00:00.000Z',
+  }),
+  descriptionMarkdown: 'Sign the installer across the release matrix and verify each channel.',
+  depChain: Object.freeze([
+    Object.freeze({ key: 'dsh-forge-m1/4.3', title: 'Update channel', status: 'completed' }),
+  ]),
+  records: Object.freeze([
+    Object.freeze({
+      at: '2026-09-18T14:00:00.000Z', kind: 'coding.feature', source: 'terminal',
+      summary: '## Summary\n\nAll channels signed and verified.',
+    }),
+  ]),
+  links: Object.freeze([
+    Object.freeze({
+      id: 'link-mock-0144', projectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
+      taskKey: 'dsh-forge-m1/4.4', sessionId: 'session-0c55e2a8', status: 'ended',
+      startedAt: '2026-09-17T09:00:00.000Z', endedAt: '2026-09-17T13:20:00.000Z',
+    }),
+  ]),
+})
+
+/** The empty-state twin: no description, no chain, no records, no links. */
+export const MOCK_TASK_DETAIL_SPARSE: TaskDetail = Object.freeze({
+  summary: Object.freeze({
+    key: 'dsh-forge-m1/7.2', title: 'Crash recovery e2e leg',
+    status: 'pending', featureSlug: 'dsh-forge-m1', blockers: [],
+    branch: null, worktree: true, source: null,
+    updatedAt: '2026-09-16T09:30:00.000Z',
+  }),
+  descriptionMarkdown: '',
+  depChain: Object.freeze([]),
+  records: Object.freeze([]),
+  links: Object.freeze([]),
+})
+
+/** The dock's fixture map (keyed by the qualified task address). */
+export const MOCK_TASK_DETAILS: ReadonlyMap<string, TaskDetail> = new Map([
+  [MOCK_TASK_DETAIL_RICH.summary.key, MOCK_TASK_DETAIL_RICH],
+  [MOCK_TASK_DETAIL_HEADER.summary.key, MOCK_TASK_DETAIL_HEADER],
+  [MOCK_TASK_DETAIL_SPARSE.summary.key, MOCK_TASK_DETAIL_SPARSE],
+])
+
+/**
+ * The UF3 dock's build-stage face, task 5.7 (UI dependency layering): the
+ * Interface 1 getTaskDetail verb as a closure-held twin over the fixture
+ * map — known keys resolve their detail, unknown keys reject with the
+ * serialized WorkbenchVerbError shape (ERR_TASK_NOT_FOUND), the form the
+ * IPC runtime sends. The 5.15 assembly replaces the whole face.
+ */
+export function createMockTaskDetailFace(
+  initial: ReadonlyMap<string, TaskDetail> = MOCK_TASK_DETAILS,
+): TaskDetailFace {
+  return {
+    loadDetail: async (_projectId, taskKey) => {
+      const detail = initial.get(taskKey)
+      if (detail === undefined) {
+        throw {
+          code: 'ERR_TASK_NOT_FOUND',
+          message: `build-stage mock: no task detail for ${taskKey}`,
+        }
+      }
+      return detail
     },
   }
 }

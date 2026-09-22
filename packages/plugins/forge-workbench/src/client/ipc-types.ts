@@ -196,6 +196,49 @@ export interface TaskBoardData {
 }
 
 /**
+ * Interface 1 TaskRecord (task 5.7's consumption; the main-side peer is
+ * apps/desktop/src/main/workbench/ipc/types.ts from 2.7). Dialect notes
+ * (task 2.5): the forge write-once record .md adaptation — `at` is the
+ * record's timestamp string VERBATIM (frontmatter, no re-normalization),
+ * `kind` the task's type, `source` the actor slot when forge recorded one
+ * (mostly null in practice — the 挂接推断 fallback is main-side), `summary`
+ * the record's summary section verbatim.
+ */
+export interface TaskRecord {
+  readonly at: string
+  readonly kind: string
+  readonly source: ChangeSource | null
+  readonly summary: string
+}
+
+/**
+ * Interface 1 depChain entry — the upstream TRANSITIVE chain in topological
+ * order (blockers first); `key` is the qualified `<featureSlug>/<localId>`
+ * address (task 2.5 dialect — the same address the board's edges resolve
+ * to, which is what 依赖链呈现与视图 A 图同源同序 rests on).
+ */
+export interface TaskDepChainEntry {
+  readonly key: string
+  readonly title: string
+  readonly status: TaskStatus
+}
+
+/**
+ * Interface 1 TaskDetail — workbench.getTaskDetail(projectId, taskKey)'s
+ * one-shot assembly: summary + 描述原文 + 依赖链 + 执行记录 + 挂接历史.
+ * `descriptionMarkdown` is the task file's original text; the read-only
+ * rendering (防注入) is MarkdownView's job, never a raw injection face.
+ */
+export interface TaskDetail {
+  readonly summary: TaskSummary
+  readonly descriptionMarkdown: string
+  readonly depChain: readonly TaskDepChainEntry[]
+  readonly records: readonly TaskRecord[]
+  /** 挂接历史 (新→旧). */
+  readonly links: readonly SessionLink[]
+}
+
+/**
  * Interface 1 WorkbenchEvent — the push channel's payload (batched ≤500ms
  * main-side; single-subscriber semantics). The 5.5 board consumes
  * `task_updated` for the 回流 updating 态; `sync` / `feature_updated` become

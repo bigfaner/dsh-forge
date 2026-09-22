@@ -112,9 +112,10 @@ const closeButtonStyle = {
 
 /**
  * Focusables of a dialog card in DOM order (the trap's cycle set). Disabled
- * buttons are skipped — the browser's own Tab semantics agree.
+ * buttons are skipped — the browser's own Tab semantics agree. Shared since
+ * task 5.7: the UF3 detail dock's non-modal trap cycles the same set.
  */
-function focusablesOf(root: HTMLElement): HTMLElement[] {
+export function focusablesOf(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(
     'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
   ))
