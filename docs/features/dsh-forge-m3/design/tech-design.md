@@ -148,8 +148,8 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 ### Interface 3: 派发与审批通道(spike ② ③ 定形)
 
-- **预合成(内核,确定性)**:`dispatch` 服务组装三要素——任务类型协议(spike ④ 移植面清单)+ feature 目标/摘要(`stage_asset` 最近资产)+ 生效偏好(`prefs` 解析)→ 完整注入内容字符串;`prompt_hash` 落库(SC3 断言锚点,**口径随 spike ③ 裁决:systemPrompt 或组合首条消息,hash oracle 复用 M2 e2e channel stub journal 的逐字符比对形态**)。
-- **subagent 创建(host)**:`sessionController` 通道(M2 先例:`create({cwd})` + `prompt(mode:'queue')`);注入契约候选——①create 选项字段 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地并 e2e 验证的基线:原文不改写、仅追加 FORGE_ACTOR 指令行;实测 dsh 无 per-session env 注入面)**——**spike ③ 裁决**(先证伪/证实 dsh 存在 systemPrompt 面,无则 ④ 为默认),内核视为不透明传输(仅保证字符串完整交付);并行 = N 次独立 create,互不共享上下文(G3)。
+- **预合成(内核,确定性)**:`dispatch` 服务组装三要素——任务类型协议(spike ④ 移植面清单)+ feature 目标/摘要(`stage_asset` 最近资产)+ 生效偏好(`prefs` 解析)→ 完整注入内容字符串;`prompt_hash` 落库(SC3 断言锚点,**口径 spike ③ 已定形:sha256(组合首条消息 = 预合成内容 + 追加行);dispatch 预铸 sessionId(caller-minted 幂等 adopt)使 hash 随行落库、重派发不漂移;hash oracle 复用 M2 e2e channel stub journal 的逐字符比对形态**)。
+- **subagent 创建(host)**:`sessionController` 通道(M2 先例:`create({cwd})` + `prompt(mode:'queue')`);注入契约 **spike ③ 已裁决:④ 首条 user 消息追加**(原文不改写、仅追加一行归因指令——FORGE_ACTOR 语义收窄为 bash 归因 + 外部 CLI 过渡期,主通道 actor 结构化经 dsh tool,spike ②;文案字节归 3.4);候选 ①create 选项字段/②会话模板 preset/③首条 system 消息均证伪或不采(dsh systemPrompt 面存在但无按次注入契约,详见 spike-3 报告);内核视为不透明传输(仅保证字符串完整交付,spike ③ §5 确认无泄漏假设);并行 = N 次独立 create,互不共享上下文(G3)。
 - **审批路由(approval-bridge)**:宿主 subagent 审批事件 → tool 桥 → 内核 `approval_request`(pending)→ 事件推送 UI(UF1 审批 dock);`decideApproval` 反向经桥回 subagent 审批通道;FORGE_ACTOR 语义延续(dispatch 行 + task 变更记 actor)。
 - **降级链**:桥不可用 → 会话内提示;launch 失败 → 派发 failed 态 + 重派发;契约不满足 → 派发前检查拒绝(`ERR_SYSTEM_PROMPT_CONTRACT`)。
 
@@ -218,7 +218,7 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 | ERR_TOOL_BRIDGE_UNAVAILABLE | renderer 桥不可用 | 会话内降级提示 + 一次重试(Story 9) |
 | ERR_APPROVAL_NOT_FOUND / ERR_APPROVAL_DECIDED | 审批条目失效/已决 | 看板刷新 + toast |
 | ERR_DISPATCH_LAUNCH_FAILED | subagent 创建失败 | 派发 failed 态 + 原因 + 重派发 |
-| ERR_SYSTEM_PROMPT_CONTRACT | spike ③ 契约不满足 | 派发前检查拒绝 + 提示 |
+| ERR_SYSTEM_PROMPT_CONTRACT | spike ③ 契约三查不满足(通道可解析/预合成内容非空/prompt_hash 已定型) | 派发前检查拒绝 + 提示 |
 | ERR_SKILL_DIR_SYNC | customSkillDirs 漂移修复失败 | boot 日志 + 设置面告警 |
 
 ### Propagation Strategy
@@ -236,7 +236,7 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 | task.status | CHECK 7 态 | TaskStatus | enum | StateDot 词表 | 状态机合法边(内核) |
 | task.task_type | TEXT | string? | string? | 协议选择键 | 预合成注册表内 |
 | dispatch.state | CHECK 5 态 | DispatchState | enum | 编排角标谱(待启动/执行中/待审批/失败/已提交) | `awaiting ⇔ pending 审批` |
-| prompt_hash | TEXT | string | string | —(断言锚点) | sha256(注入内容;口径随 spike ③:systemPrompt 或组合首条消息) |
+| prompt_hash | TEXT | string | string | —(断言锚点) | sha256(组合首条消息 = 预合成内容 + 追加行;spike ③ 定形,e2e 逐字符 oracle 复用 M2 channel stub journal 形态) |
 | prefs.value_json | JSON | typed | typed 控件 | bool/number/enum/string | 键注册表(范围/枚举) |
 | prefs 来源 | 行级 scope | — | PrefRow.source | 继承/覆盖徽标 | feature>project>global 解析 |
 | stage_asset.path | TEXT | string | string | 资产卡只读 | 存在性 + frontmatter |
@@ -344,7 +344,7 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 - [x] spike ① dsh tool 注册契约:vendored `plugin-manager/tools.ts` 先例;renderer 桥时延与启动竞态实测(T2 可用性确认)。**结论(2026-09-23,详见 [spike-1-tool-registration.md](spike-1-tool-registration.md)):T2 可用。①注册契约定形——`defineTool` + `ctx.tools.register`(host 半身 root context = 全局工具,base `tools` 行装配,`run_code` 保留名/同 scope 重名拒绝;先例逐项成立);②桥机制修正——字面「host 发起 rpc」在上游开放面不存在(转发事件白名单 const 闭合,`api/remotes/src/remote-events.ts`),可行形态 = **client 订问 stream Remote(`@Remote({mode:'stream'})`,sessionController.follow/control 先例)+ 单向 answer**,经自有 `TypertRemoteService`(SRC 发现,M2 ForgeBridge 同型),零新端口/零新依赖/动词封闭保持,已以最小实测工程全链打通;③实测时延——桥全往返 med ~1.3ms、含 dsh 工具管线 ~16ms,boot 竞态由 backlog 重放吸收(无丢失),无人应答走预算超时——「重试一次 + ERR_TOOL_BRIDGE_UNAVAILABLE」降级链充分(附 activeStreams 快速失败优化建议);④**偏差回填——`forge.task.add` 点号名会被 provider 字符集拒绝(名原样上 wire,上游全 snake_case),2.1 须改下划线扁平名(`forge_task_add`)或单工具+action 枚举**。**
 
 - [x] spike ② subagent 审批面:审批事件订阅/应答通道 + FORGE_ACTOR 在 subagent 上下文的透传形式。**结论(2026-09-23,详见 [spike-2-subagent-approval.md](spike-2-subagent-approval.md)):审批面可用且无需伪造通道——①订阅/应答定形:审批 = 单一全局 agent-scoped `approval/request` waterfall(`user-approval` ApprovalService,fail-closed 四态);approval-bridge 订阅面 = host 半身 `ctx.on('approval/request', …, { prepend: true })`(root 上下文对 scoped 派发全局准入;ACP 桥 host 侧应答者先例),**必须 prepend 抢占**在 api-remotes 转发器之前,否则上游 `ui-approval` 话者对任意会话 id 无条件 materialize scope 并认领,工作台审批 dock 被饿死;应答面 = listener 返回 `ApprovalOutcome` 原生回注 pending 工具调用,decideApproval(内核先落库)→ 事件 → client → host 桥单向 answer(spike 1 实测形态)→ resolve;非 dispatch 会话 `next()` 委派,上游会话内面板行为零改动;client 侧 `ctx.remote.$on` 面被上游认领饿死,弃用;②FORGE_ACTOR 透传:M3 主通道结构化——dsh tool 写集 actor = `exec.agent.session.id`(`session:<id>`,与 `dispatch.session_id` 同键直 join,零 env 载体);M2「首条 user 消息追加指令行」基线保留但收窄为 bash 内 shell 归因 + 外部 CLI 过渡期;外部写 `external` 推断兜底,判定序延续 M2 spike-1 §4.4;③payload 可观察性:事件本体不携带操作正文(callId 链接去重设计),类别(toolName+reason)直存、正文(arguments)经 host 侧 `tools/pre-execute` 观察者按 callId join(workspace-changes 先例)→ `approval_request.payload_json` 结构化送达可行;④附带发现:gateway 对转发 waterfall 无原生超时(无 client 即悬挂至 signal abort)——prepend 认领恰好消除该面;人类决策等待不限短预算(桥传输腿才用 spike 1 预算);上游四态 vs 内核三态 CHECK 的 `cancelled`/`unavailable` 落位方案(倾向 rejected+明细,不改 schema)移交 3.5。**
-- [ ] spike ③ systemPrompt 注入契约:四候选裁决——①create 选项 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地 e2e 验证基线:`prompt(mode:'queue')` + FORGE_ACTOR 追加行 + 逐字符 hash oracle;实测 dsh 无 per-session env 注入面)**;先证伪/证实 systemPrompt 面存在性,无则 ④ 默认;`prompt_hash` 口径随裁决。
+- [x] spike ③ systemPrompt 注入契约:四候选裁决——①create 选项 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地 e2e 验证基线:`prompt(mode:'queue')` + FORGE_ACTOR 追加行 + 逐字符 hash oracle;实测 dsh 无 per-session env 注入面)**;先证伪/证实 systemPrompt 面存在性,无则 ④ 默认;`prompt_hash` 口径随裁决。**结论(2026-09-23,详见 [spike-3-systemprompt-contract.md](spike-3-systemprompt-contract.md)):采用 ④。dsh 存在 systemPrompt 面(`ctx.systemPrompt` 服务,scoped 分层段注册,`core/system-prompt`),但**不提供按次注入契约**——①证伪:`SessionCreateRequest = {workspaceId?,cwd?,sessionId?,agentPreset?}` 无提示词字段(同进程 `agent.ctx.systemPrompt.section` reach-around 机制可达但非持久/无契约/弱审计,不采);②面存在不采:agent preset = standing 共享组合,开放面无按文本造 preset 入口(authoring 仅整目录 copy),用户 roster 污染 + web bundle 工具住在 preset 后(自定义 preset 需复制 standard 全量行)+ persona 槽位语义错位;③证伪:消息通道只产 user 消息(`PromptContentPart` 无 role,source 强制 `kind:'user'`),system 消息是装配派生物(source 必须 plugin);④证实:零上游配合、持久可重放、逐字符可断言。`prompt_hash` 口径定形 = **sha256(组合首条消息全文 = 预合成内容 + 追加行)**,dispatch 预铸 sessionId(caller-minted 幂等 adopt)使 hash 随行落库、重派发不漂移;e2e 断言四件套(全文 hash 全等/前缀逐字节/恰好一行追加/requestId 确定性)直接复用 M2 channel stub journal;`ERR_SYSTEM_PROMPT_CONTRACT` 收窄为通道可解析 + 内容非空 + hash 已定型三查;内核不透明传输边界确认无泄漏假设(无 env/system 槽位/宿主解释假设)。追加行文案收窄为 bash 归因 + 过渡期 CLI(spike ② §2),字节定稿归 3.4。**
 - [ ] spike ④ `forge prompt` 模板移植面:任务类型协议文本清单 + 预合成模板映射(含暂缓技能的协议依赖);**模板权威源 = forge-cli `pkg/prompt/templates` + `pkg/task/templates`**(Go 源码逐文件核对,不凭文档记忆)。
 
 ## Appendix

@@ -31,7 +31,7 @@
       "title": "spike③ systemPrompt 注入契约:四候选裁决(④ 首条 user 消息追加为已验证基线)",
       "priority": "P0",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "0.3-spike-systemprompt-contract.md",
       "record": "records/0.3-spike-systemprompt-contract.md",
       "type": "doc"
