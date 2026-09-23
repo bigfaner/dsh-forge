@@ -21,6 +21,7 @@ status: tasks
 | ER Diagram | design/er-diagram.md | 6 实体:projects/app_state/session_links(自有 SoT)+ task_snapshot/feature_snapshot/sync_state(派生缓存,可重建);5 索引;规模 ≤10⁴ 行;2026-09-22 批准 |
 | SQL Schema | design/schema.sql | SQLite(node:sqlite/WAL)CREATE TABLE ×6 + 索引 ×5 + 行级 CHECK;schema_version 应用层迁移器;SoT 与派生缓存分区注释;2026-09-22 批准 |
 | Page Map | design/page-map.md | 视图键寻址(上游 SPA 无路由,M1 spike-3);workbench/overview|tasks|features + 浮层 + 上游会话视图跳转目标;共享组件与状态门(无路由守卫) |
+| Integrated Specs | specs/biz-specs.md, specs/tech-specs.md | 规格整合预览(2026-09-23,[auto-specs] 非交互整合):8 条业务规则 + 9 条技术规格提取;CROSS 项已并入 docs/business-rules/(workbench.md 新建 + coexistence/task-operations 追加)与 docs/conventions/(host-integration.md、markdown-rendering.md 新建 + electron-ipc-security/data-kernel/product-architecture/ui-reuse 追加);详见 specs/review-choices.md 与 specs/.integrated |
 
 ## Dependencies
 

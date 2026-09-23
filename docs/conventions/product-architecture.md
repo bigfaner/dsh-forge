@@ -15,12 +15,12 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 **Source**: proposals/dsh-forge/proposal.md 架构约束 1(2026-09-22 修订);proposals/ui-plugin-foundation/proposal.md §Proposed Solution
 
 - 必备插件消费基座槽位(ui-slots)+ 复用 dsh 客户端组件体系(不自建第二套,见 ui-reuse.md),并贡献自有槽位供第三方扩展工作台。
-- 「不可禁用」执行点(配置保护分区 vs 壳侧守卫)为 tech-design 待决项;决策约束 = 执行点输入必须为产品配置派生数据,否则即重新引入「清单焊死壳代码」缺陷。
+- 「不可禁用」执行点已裁决(2026-09-22 M2 D2)= 双层防护:产品清单 mandatory 只读分区 + 运行时启停覆盖文件(`<userData>/plugin-runtime.json`,schema `{disabled: []}` 仅纳第三方,违规条目剔除 + log)+ host-profile 单一写路径守卫(对 mandatory 禁用请求拒绝 + log);裁决约束 = 执行点输入必须为产品配置派生数据,否则即重新引入「清单焊死壳代码」缺陷。
 - 验收口径:M2 SC6(必备插件无可用禁用通道;第三方 fixture 禁用仅退出其注入内容,数据零损坏);M2 G6/UF6/Story7 已按两级模型记账(2026-09-22 修订)。
 
 ### TECH-product-arch-002: 插件装配 = ui-plugin-foundation 基座,产品级配置为唯一事实源
 
-**Requirement**: 插件清单(bundle 清单)为产品级配置,是插件树唯一事实源,不得焊死壳代码(`HOST_PROFILE_BUNDLES` 配置化);dsh 插件机制为唯一装配机制,内置(profile bundle 清单)与运行时(`dsh plugin add`)双形态同机制,不发明旁路;运行时启停读写同一配置,但产品清单条目对运行时启停只读;ui-plugin-foundation 基座(至少 spike + bundle 配置化)硬前置 M2 UI 插件任务。
+**Requirement**: 插件清单(bundle 清单)为产品级配置,是插件树唯一事实源,不得焊死壳代码(产品级配置文件 `apps/desktop/resources/plugin-bundles.json`,随包分发、构建期产物、运行时零写入);dsh 插件机制为唯一装配机制,内置(profile bundle 清单)与运行时(`dsh plugin add`)双形态同机制,不发明旁路;运行时启停读写同一配置,但产品清单条目对运行时启停只读;ui-plugin-foundation 基座(至少 spike + bundle 配置化)硬前置 M2 UI 插件任务。
 **Context**: M2 全部 forge 能力 UI 以插件形态交付的工程前置;版本对齐纪律必须在第一个自有插件诞生前建立(dist-tag `latest` 停旧版的实测陷阱)。
 **Scope**: [CROSS]
 **Source**: proposals/ui-plugin-foundation/proposal.md(In Scope/交付件 ③);features/dsh-forge-m2 manifest Dependencies
@@ -31,7 +31,7 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 
 ### TECH-product-arch-003: 产品数据内核(SQLite 入 Electron 壳)——方向声明
 
-**Requirement**: 任务索引、项目↔会话挂接、工作台自有状态(项目注册表/视图状态)以 SQLite 置于 Electron 侧存储,提供数据 API(特别是任务 CRUD);M2/M3 落地;落地前 forge 文件仍为唯一事实源(应用只读消费),SQLite 不产生第二事实源——事实源关系(forge 文件 vs SQLite)与 API 形态为 M2/M3 设计命题,禁止预支结论。
+**Requirement**: 任务索引、项目↔会话挂接、工作台自有状态(项目注册表/视图状态)以 SQLite 置于 Electron 侧存储,提供数据 API(特别是任务 CRUD);M2 已落地(D1 裁决:自有状态 + 派生快照均入 SQLite,v1,`<userData>/workbench/workbench.db`);落地后 forge 文件仍为唯一事实源(应用只读消费),SQLite 不产生第二事实源——权威切面(结构化任务状态以 SQLite 为权威)为 M3 设计域(2026-09-23 T1 SoT 分治裁决,读路由按列开关渐进切换,见 TECH-data-kernel-001)。
 **Context**: 2026-09-21 用户定向——M2 看板首屏/状态回流的文件扫描成本与挂接关系结构化存储所迫;诚实声明:数据内核进壳偏离官方壳极小产品 API 面模式,是产品壳(非兼容壳)的自主选择。
 **Scope**: [CROSS]
 **Source**: proposals/dsh-forge/proposal.md 架构约束 3;features/dsh-forge-m2 prd DF005/DF001(2026-09-22 记账)
@@ -59,3 +59,17 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 
 - 插件(packages/plugins/*)可有 lib/ 产物但可省 version stamp;模板是源码脚手架,无 lib/ 要求,但 stamp 必备。
 - 对齐线族(@deepseek-ai/dsh-client-*)exact ≡ desktopHostVersion 已由 TECH-product-arch-002 记账;本条覆盖其产物级/vendor-free 半面。
+
+### TECH-product-arch-006: 常驻进程足迹 = 2
+
+**Requirement**: 常驻进程足迹 = 2(Electron 壳 + dsh 宿主)不变;forge CLI 按需 spawn、执行完退出;不新增常驻进程/常驻监听依赖(文件感知用内建 fs.watch 递归 + 降级链,不引 chokidar);新增常驻进程须显式提案。
+**Context**: M1 继承约束,M2 延续;与零网络监听、离线自足共同构成足迹纪律。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m2 TECH-009(prd/prd-spec.md §继承约束;design/tech-design.md §Overview/§Appendix Alternatives)
+
+### TECH-product-arch-007: 渲染进程新增依赖只进插件 bundle(React 单实例)
+
+**Requirement**: 渲染进程新增第三方 UI 依赖只进插件 bundle(不进壳、不进 preload);React 保持单一实例、版本对齐宿主模块表(经 host-profile 模块解析外置),插件不得引入第二 React 实例。
+**Context**: 壳内核不因能力增减改动(G6);M2 实证 = @xyflow/react 仅入 packages/plugins/forge-workbench 依赖,apps/desktop 零新增。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m2 TECH-008(design/tech-design.md §Dependencies;D4 裁决)

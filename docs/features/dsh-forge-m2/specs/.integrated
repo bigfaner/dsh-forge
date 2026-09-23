@@ -1,0 +1,17 @@
+feature: "dsh-forge-m2"
+integrated: "2026-09-23"
+biz_count: 8
+tech_count: 9
+replaced: []
+notes: >
+  Non-interactive auto-integration ([auto-specs]).
+  Integrated: BIZ-workbench-001..005 (new docs/business-rules/workbench.md),
+  BIZ-coexistence-002, BIZ-task-ops-002, TECH-electron-ipc-002,
+  TECH-data-kernel-002/003, TECH-host-001/002 (new docs/conventions/host-integration.md),
+  TECH-markdown-001 (new docs/conventions/markdown-rendering.md),
+  TECH-product-arch-006/007, TECH-ui-reuse-002.
+  Skipped as already covered: BIZ-007 (BIZ-task-ops-001), BIZ-009 (TECH-product-arch-001),
+  BIZ-010 (TECH-ui-reuse-001); TECH-010 [LOCAL] stays in feature.
+  Drift auto-fix in same run: TECH-product-arch-001 (open-question bullet resolved by D2),
+  TECH-product-arch-002 (HOST_PROFILE_BUNDLES mechanism reference updated to
+  resources/plugin-bundles.json), TECH-product-arch-003 (M2 landing recorded).

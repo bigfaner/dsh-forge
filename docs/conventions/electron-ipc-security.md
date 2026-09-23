@@ -16,3 +16,10 @@ domains: [electron, ipc, preload, sender-validation, open-external, allowlist]
 
 - contextIsolation: true,sandbox 对齐上游 desktop 配置。
 - 注入内容(shell-ui bundle)不内联任何 feed/会话动态数据(防 DOM 注入)。
+
+### TECH-electron-ipc-002: workbench 动词面模式(单命名空间 · 一动词一通道 · 错误信封)
+
+**Requirement**: 数据内核/工作台能力经 preload 单一命名空间(`dshForge.workbench`)暴露;每个语义动词映射唯一白名单通道 `dsh-forge:workbench-<name>`(禁止复用、禁止通配透传动词;通道表 = main 与 preload 共用的同一常量模块,禁止两侧手写漂移);每 handler 校验 sender frame;动词 reject 信封 = JSON 序列化 `{code, message, detail?}`,携带合法 `ERR_*` code 的域错误原码透传,未知异常 → 兜底码 + log;主→渲染事件推送走独立非 invoke 通道,事件批量合并 ≤500ms,渲染层销毁自动退订;onEvents 呈现为单订阅者语义动词(订阅/退订动词对)。
+**Context**: TECH-electron-ipc-001 的数据内核扩展面;M2 落地 16 白名单通道(13 数据动词 + subscribe/unsubscribe 对 + 仓外授权动词),后续数据内核扩面(M3+)沿用本模式。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m2 TECH-001(design/tech-design.md §Interface 1;apps/desktop/src/main/workbench/ipc/channel-allowlist.ts)
