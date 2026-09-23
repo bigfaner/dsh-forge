@@ -152,6 +152,23 @@ export type TaskStatus =
 export type ChangeSource = 'session' | 'terminal'
 
 /**
+ * M3 v2 dispatch.state — the orchestration 5 态 (tech-design §Data Models
+ * dispatch 行; kernel twin = repos/types.ts DispatchState). The badge
+ * spectrum's vocabulary (task 3.7): starting/running/awaiting/failed/done,
+ * done/failed terminal. Declared HERE (not selection-mode.ts) so the event
+ * union below and every orchestration consumer share one canonical client
+ * twin; selection-mode.ts re-exports it.
+ */
+export type DispatchState = 'starting' | 'running' | 'awaiting' | 'failed' | 'done'
+
+/**
+ * M3 v2 approval_request.state — the 3 态 (tech-design §Data Models; kernel
+ * twin = repos/types.ts ApprovalState). `awaiting ⇔ pending 审批` 不变式;
+ * the dock presents pending only, decided rows ride the audit trail.
+ */
+export type ApprovalState = 'pending' | 'approved' | 'rejected'
+
+/**
  * Interface 1 TaskSummary (task 5.5's consumption; the main-side peer is
  * apps/desktop/src/main/workbench/ipc/types.ts from 2.7 — both halves derive
  * from the same spec section). Dialect notes (task 2.5): `key` is the 看板
@@ -270,6 +287,24 @@ export type WorkbenchEvent =
   // (PRD G8/Story 8). Consumed by the UF2 badge (4.2), declared here so the
   // client union stays the structural twin of the main-side vocabulary.
   | { readonly type: 'deviation_detected'; readonly projectId: string }
+  // M3 v2 (task 3.7, tech-design §Interface 1 事件扩展): the orchestration
+  // reflux pair — dispatch_updated drives the 编排角标谱 migration (≤5s,
+  // subscription-driven), approval_received drives the approval dock's
+  // refresh + the toolbar/tab counts (tech-design §Interface 3 审批路由).
+  // Payload twins of the kernel dispatch-service.ts event builders verbatim.
+  | {
+    readonly type: 'dispatch_updated'
+    readonly projectId: string
+    readonly dispatchId: string
+    readonly taskKey: string
+    readonly state: DispatchState
+  }
+  | {
+    readonly type: 'approval_received'
+    readonly projectId: string
+    readonly approvalId: string
+    readonly taskKey: string
+  }
 
 // ---------------------------------------------------------------------------
 // Migration family, UF3 (task 1.6's consumption; the main-side peer is

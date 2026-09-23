@@ -245,6 +245,40 @@ export type WorkbenchKey =
   | 'tasks.dispatch.announce.entered'
   | 'tasks.dispatch.announce.exited'
   | 'tasks.dispatch.announce.dispatched'
+  | 'tasks.orch.starting'
+  | 'tasks.orch.running'
+  | 'tasks.orch.awaiting'
+  | 'tasks.orch.failed'
+  | 'tasks.orch.done'
+  | 'tasks.orch.awaiting.aria'
+  | 'tasks.orch.awaiting.tooltip'
+  | 'tasks.orch.announce.task'
+  | 'tasks.orch.announce.batch'
+  | 'tasks.orch.announce.batchMixed'
+  | 'tasks.approval.toolbar'
+  | 'tasks.approval.toolbar.aria'
+  | 'tasks.approval.tabBadge.aria'
+  | 'tasks.approval.title'
+  | 'tasks.approval.note'
+  | 'tasks.approval.close'
+  | 'tasks.approval.loading'
+  | 'tasks.approval.loadError.title'
+  | 'tasks.approval.loadError.retry'
+  | 'tasks.approval.empty'
+  | 'tasks.approval.empty.hint'
+  | 'tasks.approval.detail'
+  | 'tasks.approval.expand'
+  | 'tasks.approval.collapse'
+  | 'tasks.approval.approve'
+  | 'tasks.approval.reject'
+  | 'tasks.approval.deciding'
+  | 'tasks.approval.payload.unavailable'
+  | 'tasks.approval.back'
+  | 'tasks.approval.error.title'
+  | 'tasks.approval.error.refreshed'
+  | 'tasks.approval.announce.arrived'
+  | 'tasks.approval.announce.approved'
+  | 'tasks.approval.announce.rejected'
   | 'detail.close'
   | 'detail.loading'
   | 'detail.error.title'
@@ -568,6 +602,40 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.dispatch.announce.entered': 'Entered dispatch selection mode',
   'tasks.dispatch.announce.exited': 'Exited selection mode (selection cleared)',
   'tasks.dispatch.announce.dispatched': 'Dispatched {count} task(s)',
+  'tasks.orch.starting': 'Pending',
+  'tasks.orch.running': 'Running',
+  'tasks.orch.awaiting': 'Awaiting approval',
+  'tasks.orch.failed': 'Failed',
+  'tasks.orch.done': 'Submitted',
+  'tasks.orch.awaiting.aria': 'Task {key} awaiting approval — click to open approvals',
+  'tasks.orch.awaiting.tooltip': 'Click to open approvals',
+  'tasks.orch.announce.task': 'Task {key} entered {state}',
+  'tasks.orch.announce.batch': '{count} tasks entered {state}',
+  'tasks.orch.announce.batchMixed': '{count} task orchestration states updated',
+  'tasks.approval.toolbar': 'Approvals {count}',
+  'tasks.approval.toolbar.aria': 'Approvals: {count} awaiting',
+  'tasks.approval.tabBadge.aria': '{count} awaiting approval',
+  'tasks.approval.title': 'Awaiting approval ({count})',
+  'tasks.approval.note': 'Approve / reject only via explicit click — no default auto-approval.',
+  'tasks.approval.close': 'Close the approval panel',
+  'tasks.approval.loading': 'Loading approvals…',
+  'tasks.approval.loadError.title': 'Failed to load approvals',
+  'tasks.approval.loadError.retry': 'Retry',
+  'tasks.approval.empty': 'No approvals awaiting',
+  'tasks.approval.empty.hint': 'New approval requests surface as badges and counts — never a modal.',
+  'tasks.approval.detail': 'Details ↗',
+  'tasks.approval.expand': 'Expand',
+  'tasks.approval.collapse': 'Collapse',
+  'tasks.approval.approve': 'Approve',
+  'tasks.approval.reject': 'Reject',
+  'tasks.approval.deciding': 'Submitting decision…',
+  'tasks.approval.payload.unavailable': 'Request body unavailable',
+  'tasks.approval.back': '◂ Back to approvals ({count})',
+  'tasks.approval.error.title': 'Approval action failed',
+  'tasks.approval.error.refreshed': 'The list has been refreshed.',
+  'tasks.approval.announce.arrived': '{count} approval(s) awaiting',
+  'tasks.approval.announce.approved': 'Task {key} approved — back to running',
+  'tasks.approval.announce.rejected': 'Task {key} rejected — moved to failed',
   'detail.close': 'Close',
   'detail.loading': 'Loading task details…',
   'detail.error.title': 'Failed to load task details',

@@ -23,15 +23,19 @@
  * Notes). The DTO twins below stay structural twins of the kernel halves
  * (apps/desktop ipc/types.ts 3.2/3.3): the plugin cannot import the app.
  */
-import type { FeatureStatus, TaskStatus } from '../../../ipc-types'
+import type { DispatchState, FeatureStatus, TaskStatus } from '../../../ipc-types'
 import type { WorkbenchKey } from '../../../locale/en'
 
 // ---------------------------------------------------------------------------
 // Interface 1 verb DTO twins (kernel 3.2/3.3; camelCase projections)
 // ---------------------------------------------------------------------------
 
-/** dispatch 行 5 态(kernel DispatchState;badge rendering lands 3.7). */
-export type DispatchState = 'starting' | 'running' | 'awaiting' | 'failed' | 'done'
+/**
+ * dispatch 行 5 态 — the CANONICAL client twin lives in ipc-types.ts since
+ * task 3.7 (the WorkbenchEvent union's dispatch_updated member needs it);
+ * re-exported here so the 3.6 chain's imports stay stable.
+ */
+export type { DispatchState }
 
 /** 单条缺失项(kernel MissingItem — 结构化警告清单元素). */
 export interface MissingItem {
