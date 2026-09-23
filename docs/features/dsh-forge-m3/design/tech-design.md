@@ -25,7 +25,7 @@ M3 在 M2 的**双载体**(Electron 数据内核 + forge-workbench 插件双半�
 
 | # | 裁决 | 结论 | 主要理由 |
 |---|------|------|---------|
-| T1 | 状态机载体(PRD 预支禁令项) | TS 原生移植入内核 | 与 node:sqlite/零原生重编译/三平台纪律一致;对拍器保证与 Go 行为等价 |
+| T1 | 状态机载体(PRD 预支禁令项) | TS 原生移植入内核 | 与 node:sqlite/零原生重编译/三平台纪律一致;对拍器保证与 Go 行为等价;**移植基准 = forge-cli Go 源** `Z:\project\ai\forge\forge-cli`(`pkg/task/statemachine.go` 状态机 / `deps.go`+`toposort.go` 依赖解析 / `stage_gates.go` 门 / `pkg/prompt/templates` 提示词模板) |
 | T2 | dsh tool → 内核通道 | renderer 桥接(host rpc → client 半身 → IPC 白名单) | 零新增监听面;动词面封闭;spike ① 验证时延与可用性 |
 | T3 | 已迁移项目外部写回收 | 自动重摄入 + 偏离标记 | 不阻断外部会话;SQLite 保持权威一致;偏离可观察 |
 | T4 | 阶段资产文件规范 | `stages/<stage>.md` 单一规范文件 | 门校验幂等;「最新一份」语义清晰;元数据入 SQLite |
@@ -85,7 +85,7 @@ M3 在 M2 的**双载体**(Electron 数据内核 + forge-workbench 插件双半�
 
 ### Interface 1: 内核 IPC 动词面 v2(`dshForge.workbench.*` 白名单扩展)
 
-每动词唯一白名单通道 + sender frame 校验(TECH-electron-ipc-001 延续)。核心类型与动词(完整类型随任务分解细化,`/* */` 为约束注记):
+每动词唯一白名单通道 + sender frame 校验(TECH-electron-ipc-001 延续)。**通道命名沿用 v1 惯例**:`dsh-forge:workbench-<kebab-verb>`,preload 与 main 共享同一份常量表(`channel-allowlist.ts` 模式,禁两侧手写漂移);事件推送复用既有 `dsh-forge:workbench-events` 批量通道(≤500ms,主→渲染唯一 sender),订阅/退订 = `subscribe-events`/`unsubscribe-events` 动词对。核心类型与动词(完整类型随任务分解细化,`/* */` 为约束注记):
 
 ```ts
 type Actor = string                                  // 'session:<id>' | 'external' | 'kernel' | 派发者
@@ -143,13 +143,13 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 ```
 
 - **renderer 桥接(T2)**:tool handler(host)→ cordis rpc → client 半身 tool 桥 → I1 白名单动词。桥不可用(UI 未装载/启动竞态)→ 重试一次后返回 `ERR_TOOL_BRIDGE_UNAVAILABLE` 明确提示(Story 9,禁静默)。
-- **权限界**:写集仅 `data_authority='sqlite'` 项目;`files` 项目 → 明确提示走 CLI(双形态纪律);输入 schema 严格类型,`taskKey` 白名单正则 `^\d+(\.\d+)*$`(M2 T2 缓解延续)。
+- **权限界**:写集仅 `data_authority='sqlite'` 项目;`files` 项目 → 明确提示走 CLI(双形态纪律);输入 schema 严格类型,`taskKey` 校验 = **看板限定地址形态** `<featureSlug>/<localId>`(TECH-data-kernel-003;localId 含 `5.gate` 等非数字相位键——看板全量投影不排除;校验 = 单 `/` 分隔 + 两段非空 + 禁路径分隔/控制字符,**弃裸 ID 数字正则**,M2 已证裸 ID 假设不成立)。
 - **actor**:tool 调用自动携带所属会话标识(`session:<id>`),内核强制记 `updated_by`(审计)。
 
 ### Interface 3: 派发与审批通道(spike ② ③ 定形)
 
-- **预合成(内核,确定性)**:`dispatch` 服务组装三要素——任务类型协议(spike ④ 移植面清单)+ feature 目标/摘要(`stage_asset` 最近资产)+ 生效偏好(`prefs` 解析)→ 完整 systemPrompt 字符串;`prompt_hash` 落库(SC3 断言锚点)。
-- **subagent 创建(host)**:`sessionController` 通道(M2 先例);systemPrompt 注入契约三候选——①create 选项字段 ②会话模板/preset ③首条 system 消息——**spike ③ 裁决,内核视为不透明传输**(仅保证字符串完整交付);并行 = N 次独立 create,互不共享上下文(G3)。
+- **预合成(内核,确定性)**:`dispatch` 服务组装三要素——任务类型协议(spike ④ 移植面清单)+ feature 目标/摘要(`stage_asset` 最近资产)+ 生效偏好(`prefs` 解析)→ 完整注入内容字符串;`prompt_hash` 落库(SC3 断言锚点,**口径随 spike ③ 裁决:systemPrompt 或组合首条消息,hash oracle 复用 M2 e2e channel stub journal 的逐字符比对形态**)。
+- **subagent 创建(host)**:`sessionController` 通道(M2 先例:`create({cwd})` + `prompt(mode:'queue')`);注入契约候选——①create 选项字段 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地并 e2e 验证的基线:原文不改写、仅追加 FORGE_ACTOR 指令行;实测 dsh 无 per-session env 注入面)**——**spike ③ 裁决**(先证伪/证实 dsh 存在 systemPrompt 面,无则 ④ 为默认),内核视为不透明传输(仅保证字符串完整交付);并行 = N 次独立 create,互不共享上下文(G3)。
 - **审批路由(approval-bridge)**:宿主 subagent 审批事件 → tool 桥 → 内核 `approval_request`(pending)→ 事件推送 UI(UF1 审批 dock);`decideApproval` 反向经桥回 subagent 审批通道;FORGE_ACTOR 语义延续(dispatch 行 + task 变更记 actor)。
 - **降级链**:桥不可用 → 会话内提示;launch 失败 → 派发 failed 态 + 重派发;契约不满足 → 派发前检查拒绝(`ERR_SYSTEM_PROMPT_CONTRACT`)。
 
@@ -157,8 +157,8 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 1. **守卫**:`dispatch.ended_at IS NULL` 计数 >0 → `ERR_MIGRATION_GUARD`(UI 列在跑清单);
 2. **备份**:`<userData>/workbench/backups/<projectId>-<ts>/`(库文件 + 文档树 `tasks/` 拷贝);
-3. **摄入**:单事务全量 `index.json` → `task` 行(字段映射 + `task_type`/`desc_path` 推断);
-4. **对拍**:任务全集(ID/状态/依赖/标题)源 vs 目标零差异;差异 → 回滚 + `ERR_MIGRATION_VERIFY`;
+3. **摄入**:单事务全量 `index.json` → `task` 行(字段映射 + **限定地址合成** `<featureSlug>/<localId>`(TECH-data-kernel-003 方言,与 task_snapshot 一致)+ `task_type`/`desc_path` 推断);
+4. **对拍**:任务全集(限定地址/状态/依赖/标题)`task` 表 vs `task_snapshot` 派生投影零差异;差异 → 回滚 + `ERR_MIGRATION_VERIFY`;
 5. **切读**:`projects.data_authority='sqlite'` 同事务置位;
 6. **归档**:`index.json` → `index.json.migrated-<ts>`(失败 → 整体回滚备份,零半迁移);
 7. **外部写回收(T3)**:watcher 检出已迁移项目 `index.json` 复现/变更 → 幂等重摄入(同 3-4)→ `projects.deviated=1` + `deviation_detected` 事件 + `migration_event(reingest)` 留档;不阻断外部会话。
@@ -167,7 +167,7 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 ### Interface 5: 阶段门与阶段资产(T4)
 
 - 资产文件:文档根 `features/<slug>/stages/<stage>.md`,frontmatter `{ stage, generated, goal }` + 正文摘要;由 agent 会话经 `forge.stage.summarize` 写入;`stage_asset` 索引随感知更新(派生可重建)。
-- 门校验(`checkStageArtifacts`,确定性代码,断言无模型调用):PRD 各阶段期望产物清单(存在性 + frontmatter/结构解析 + SQLite 状态查询);缺失 = 警告 + 清单,`acknowledgeMissing` 后可派发(warn 不阻断)。
+- 门校验(`checkStageArtifacts`,确定性代码,断言无模型调用):PRD 各阶段期望产物清单(存在性 + frontmatter/结构解析 + SQLite 状态查询),机械判定先例 = forge-cli `pkg/task/stage_gates.go`;缺失 = 警告 + 清单,`acknowledgeMissing` 后可派发(warn 不阻断)。
 - 推进(`advanceStage`):门(阶段总结已生成)不满足 → 拒绝 + 引导;满足 → 内核写 manifest status(阶段推进内化,归宿表 `feature set/complete`)→ `stage_advanced` 事件 → 新阶段会话系统提示词强制注入目标 + 摘要(预合成链消费 `stage_asset`)。
 - 偏离:watcher 检出非内核发起的 manifest status 变更(外部跨阶段)→ `feature_snapshot.deviated=1` + 事件(仅呈现,不阻断)。
 
@@ -186,17 +186,17 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 | Model | Key Fields | Notes |
 |-------|------------|-------|
-| task | (project_id, task_key)(PK), feature_slug, status(7 态 CHECK), blockers_json, task_type, desc_path, updated_by | **权威 SoT(迁移后)**;状态机唯一写入口 |
-| dispatch | id(PK), batch_id, state(5 态), session_id, prompt_hash, ended_at | 编排域;`ended_at IS NULL` = 在跑(迁移守卫判据) |
+| task | (project_id, task_key)(PK), feature_slug(冗余列承 v1 方言), status(7 态 CHECK), blockers(JSON,本地上游 key 原词), task_type, desc_path, updated_by | **权威 SoT(迁移后)**;task_key = 看板限定地址 `<featureSlug>/<localId>`;状态机唯一写入口(移植基准 forge-cli `pkg/task/`) |
+| dispatch | id(PK), batch_id, state(5 态), session_id, prompt_hash, ended_at | 编排域;`ended_at IS NULL` = 在跑(迁移守卫判据);task_key 限定地址 |
 | approval_request | id(PK), dispatch_id(FK), payload_json, state(3 态), decided_by | 审批审计;`awaiting ⇔ pending` 不变式 |
-| prefs | (scope, scope_id, key)(PK), value_json | 单表 scope 化;键集封闭(应用层注册表);`scope_id=''` 约定 |
+| prefs | (scope, scope_id, key)(PK), value_json | 单表 scope 化;键集封闭(应用层注册表);`scope_id`:global=`''`/project=项目id/**feature=`<projectId>/<featureSlug>`**(防跨项目同 slug 碰撞) |
 | stage_asset | (project_id, feature_slug, stage)(PK), path, generated_at | 派生索引;内容留 `stages/<stage>.md` |
 | proposal_snapshot | (project_id, slug)(PK), status(4 态), feature_slug? | 派生;frontmatter 解析 |
 | migration_event | id(PK), phase(7 相), result, detail_json | 迁移/回收审计(可回查) |
 | projects 增列 | data_authority, deviated, migrated_at, backup_path | 读路由 + 迁移/偏离状态 |
 | feature_snapshot 增列 | deviated, last_external_at | feature 级偏离 |
 
-存储:沿用 `<userData>/workbench/workbench.db`(v2 增量迁移,启动时按 schema_version 事务执行);备份目录 `<userData>/workbench/backups/`。
+存储:沿用 `<userData>/workbench/workbench.db`;v2 载体纪律(v1 先例,TECH-data-kernel-001):`design/schema.sql` = 设计投影,运行时 = `migrate.ts` MIGRATIONS 追加 `{version:2}` 段 + 内联 TS 常量,**两者由漂移对账测试强制同步**;每版本段各自事务顺序执行,schema_version 单行只进不退,库版本>已知即拒开(`ERR_WORKBENCH_DB`);PRAGMA(WAL/foreign_keys)为连接级设置由 `db.ts` 每次开库应用,不入 DDL;备份目录 `<userData>/workbench/backups/`。
 
 ## Error Handling
 
@@ -232,10 +232,11 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 | Field Name | Storage Layer | Backend Model | API/DTO | Frontend Type | Validation Rule |
 |------------|---------------|---------------|---------|---------------|-----------------|
+| task.task_key | TEXT | string | string | 看板地址(mono) | 限定地址 `<featureSlug>/<localId>`(含相位键;悬空 blocker 显式标记) |
 | task.status | CHECK 7 态 | TaskStatus | enum | StateDot 词表 | 状态机合法边(内核) |
 | task.task_type | TEXT | string? | string? | 协议选择键 | 预合成注册表内 |
 | dispatch.state | CHECK 5 态 | DispatchState | enum | 编排角标谱(待启动/执行中/待审批/失败/已提交) | `awaiting ⇔ pending 审批` |
-| prompt_hash | TEXT | string | string | —(断言锚点) | sha256(systemPrompt) |
+| prompt_hash | TEXT | string | string | —(断言锚点) | sha256(注入内容;口径随 spike ③:systemPrompt 或组合首条消息) |
 | prefs.value_json | JSON | typed | typed 控件 | bool/number/enum/string | 键注册表(范围/枚举) |
 | prefs 来源 | 行级 scope | — | PrefRow.source | 继承/覆盖徽标 | feature>project>global 解析 |
 | stage_asset.path | TEXT | string | string | 资产卡只读 | 存在性 + frontmatter |
@@ -252,11 +253,11 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 |---|------|--------------------|-----------------|-------------|
 | 1 | UF1 编排扩展 | `views/TaskBoardPage.tsx` + `tasks/detail/TaskDetailPanel.tsx` | 工具栏派发/审批按钮、选择模式、浮动条、审批 dock、侧板编排分区 | dispatch/approvals 动词 + 事件 |
 | 2 | UF2 阶段化 | `views/features/*`(FeatureStepper/FeatureDetail) | stepper gate 态 + 第六「阶段资产」tab + 偏离徽标 | getStageGate/listStageAssets + feature_snapshot 增列 |
-| 3 | UF3 迁移 | `views/overview/ProjectCard.tsx` + `RegisterWizard.tsx` | 项目卡可迁移 Pill/入口 + 向导条件步骤(检出 index.json 时) | migration 动词 + 事件 |
+| 3 | UF3 迁移 | `views/overview/ProjectCard.tsx` + `RegisterWizard.tsx`(步骤件 `wizard/StepPath|StepExternal|StepSummary`) | 项目卡可迁移 Pill/入口 + 向导条件步骤(检出 index.json 时插入 StepExternal 与 StepSummary 之间) | migration 动词 + 事件 |
 | 4 | UF4 偏好 | `views/overview/`(新增 PreferenceSection) | 项目卡区块下偏好面(层级 segmented + 键分组) | prefs 动词 |
-| 5 | UF5 提案 | `views/`(新增 ProposalsPage)+ `WorkbenchShell.tsx` tab 序修订 | 第二 tab(概览/提案/Feature/任务)+ 审批徽标 | proposal 动词 |
+| 5 | UF5 提案 | `views/`(新增 ProposalsPage)+ tab 序修订(真落点 = `client/store/view-key.ts` WORKBENCH_TABS 状态机 + localStorage 持久化与 `isWorkbenchTabKey` 守卫 + `components/chrome/TabBar.tsx` roving tabindex + locale `tab.*` 键) | 第二 tab(概览/提案/Feature/任务)+ 审批徽标 | proposal 动词 |
 | 6 | tool 桥 | `client/ipc/workbench.ts`(既有通道复用)+ host rpc server | host 半身 tool handler → client 桥函数 → IPC 动词 | I1 写集/读 |
-| 7 | ForgeBridge 退役 | `host/forge-bridge*.ts` 删除;`session-launch` → `dispatch-launch` | 预合成取代 `forge prompt`;M2 UF5 入口语义演进为「派发执行」 | dispatch 链 |
+| 7 | ForgeBridge 退役 | `host/forge-bridge.ts` + `forge-bridge-rpc.ts` + `cli-resolve.ts` 删除;`session-launch` → `dispatch-launch`(host `session-launch.ts`/`session-launch-rpc.ts` + client `session-launch.ts`/`launch-rpc.ts` + `views/tasks/launch/*`/`SessionLaunchEntry.tsx` 演进) | 预合成取代 `forge prompt`;M2 UF5 入口语义演进为「派发执行」 | dispatch 链 |
 
 ## Testing Strategy
 
@@ -264,7 +265,8 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 | Layer | Test Type | Tool | What to Test | Coverage Target |
 |-------|-----------|------|--------------|-----------------|
-| tasks/(状态机) | Unit | vitest | 7 态全合法边 + 全拒绝边矩阵;依赖解析(传递链/终态前置);对拍器(fixture:Go CLI 输出 vs TS 内核零差异) | ≥80% 行 |
+| tasks/(状态机) | Unit | vitest | 7 态全合法边 + 全拒绝边矩阵;依赖解析(传递链/终态前置);对拍器(fixture:**forge-cli Go 源仓 `pkg/task` 行为基准 + 真实 index.json 语料**(含相位键/悬空 blocker)vs TS 内核零差异) | ≥80% 行 |
+| store/(v2 迁移) | Unit | vitest | schema-v2.sql ↔ 内联常量漂移对账(v1 workbench-store.spec 先例);版本单调/拒新库 | 对账全绿 |
 | migration/ | Unit | vitest + tmp 树 | 备份→摄入→对拍→切读→归档全链;失败注错回滚(零半迁移);重试幂等;外部写重摄入 + 偏离置位 | ≥80% |
 | dispatch/ | Unit | vitest | 产物检查确定性(**断言无模型调用**);预合成三要素(协议/摘要/偏好注入内容断言);并行互不串扰;守卫计数 | ≥80% |
 | prefs/ | Unit | vitest | 三级覆盖序全用例;键集/类型校验;事务原子(失败回滚) | ≥80% |
@@ -277,7 +279,7 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 - **SC1**:干净环境(无 forge CLI)安装 → 注册迁移 → 派发 → dsh tool 提交 → 回流;进程/日志级断言 CLI 调用数 = 0;15 技能扁平名解析全成功。
 - **SC2**:迁移前后任务全集对拍零差异;完成后 `index.json` 不存在(`.migrated-*` 在);md 原样;中断重试零半迁移。
-- **SC3**:3 无依赖任务并行派发;subagent systemPrompt 含三要素(注入内容断言);审批可见可操作。
+- **SC3**:3 无依赖任务并行派发;subagent 注入内容含三要素(逐字符断言,hash oracle 复用 M2 channel stub journal 形态);审批可见可操作。
 - **SC4**:产物缺失 → 警告清单不阻断(确认后派发);门拒绝/放行;资产文件存在 + 只读渲染;新阶段会话注入断言;外部跨阶段 → 偏离徽标。
 - **SC5**:三级覆盖用例;预合成反映生效值。
 - **SC6**:提案列表/详情/eval 一致性;外部变更 ≤5s;互跳;零写入口。
@@ -341,8 +343,8 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 - [ ] spike ① dsh tool 注册契约:vendored `plugin-manager/tools.ts` 先例;renderer 桥时延与启动竞态实测(T2 可用性确认)。
 - [ ] spike ② subagent 审批面:审批事件订阅/应答通道 + FORGE_ACTOR 在 subagent 上下文的透传形态。
-- [ ] spike ③ systemPrompt 注入契约:三候选(create 选项 / 会话模板 / 首 system 消息)裁决;不满足时的退化边界。
-- [ ] spike ④ `forge prompt` 模板移植面:任务类型协议文本清单 + 预合成模板映射(含暂缓技能的协议依赖)。
+- [ ] spike ③ systemPrompt 注入契约:四候选裁决——①create 选项 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地 e2e 验证基线:`prompt(mode:'queue')` + FORGE_ACTOR 追加行 + 逐字符 hash oracle;实测 dsh 无 per-session env 注入面)**;先证伪/证实 systemPrompt 面存在性,无则 ④ 默认;`prompt_hash` 口径随裁决。
+- [ ] spike ④ `forge prompt` 模板移植面:任务类型协议文本清单 + 预合成模板映射(含暂缓技能的协议依赖);**模板权威源 = forge-cli `pkg/prompt/templates` + `pkg/task/templates`**(Go 源码逐文件核对,不凭文档记忆)。
 
 ## Appendix
 
@@ -367,3 +369,5 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 - M2 设计:[dsh-forge-m2 tech-design](../../dsh-forge-m2/design/tech-design.md)(内核/IPC/发起链/spike-1 结论)
 - 约定:product-architecture.md(TECH-product-arch-003/004)、electron-ipc-security.md、ui-reuse.md、upstream-vendor.md
 - vendored 侦察:skill-filesystem(customSkillDirs)、plugin-manager/tools.ts(tool 注册)、session-controller(subagent)存在性已证(2026-09-23)
+- **forge-cli Go 源码(移植唯一权威)**:`Z:\project\ai\forge\forge-cli` —— `pkg/task/statemachine.go`(7 态)/ `deps.go`+`toposort.go`(依赖)/ `stage_gates.go`(门)/ `pkg/prompt/templates`+`pkg/task/templates`(提示词);对拍器与 spike ④ 直接以此为准
+- M2 实码偏差核对(2026-09-23,M2 PR #2 合入后):task_key 限定地址方言(TECH-data-kernel-003)、prefs feature scope 限定地址、schema 载体四件套(migrate.ts 段 + 内联常量 + 漂移对账 + PRAGMA 不入 DDL)、注入候选 ④(user 消息基线)——均已修入本设计

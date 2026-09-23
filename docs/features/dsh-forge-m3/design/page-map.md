@@ -5,7 +5,7 @@ related: design/tech-design.md
 
 # Page Map: dsh-forge M3 流程即产品
 
-> **路由现实**(M2 page-map 延续):上游 SPA 无 URL 路由,页面寻址 = **视图键(会话期内存切换)**。M3 修订 workbench 内 tab 序为 **概览 / 提案 / Feature / 任务**(PRD Navigation Architecture),新增 `workbench/proposals` tab 页;其余为既有视图的功能扩展。本图供 gen-contracts/gen-test-scripts 以**元素与状态**(非 URL)定位页面。
+> **路由现实**(M2 page-map 延续):上游 SPA 无 URL 路由,页面寻址 = **视图键(会话期内存切换)**。M3 修订 workbench 内 tab 序为 **概览 / 提案 / Feature / 任务**(PRD Navigation Architecture),新增 `workbench/proposals` tab 页;其余为既有视图的功能扩展。tab 序修订落点 = `client/store/view-key.ts` 状态机(WORKBENCH_TABS + localStorage 持久化)+ `components/chrome/TabBar.tsx` + locale `tab.*`(M2 实码核对,2026-09-23)。本图供 gen-contracts/gen-test-scripts 以**元素与状态**(非 URL)定位页面。
 
 ## Page Overview
 
