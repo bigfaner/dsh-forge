@@ -41,7 +41,7 @@
       "title": "spike④ forge prompt 模板移植面盘点:任务类型协议清单 + 预合成模板映射",
       "priority": "P0",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "0.4-spike-prompt-templates-port.md",
       "record": "records/0.4-spike-prompt-templates-port.md",
       "type": "doc"
