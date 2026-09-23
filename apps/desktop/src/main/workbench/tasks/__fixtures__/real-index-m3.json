@@ -1,9 +1,5 @@
 {
   "feature": "dsh-forge-m3",
-  "prd": "prd/prd-spec.md",
-  "design": "design/tech-design.md",
-  "proposal": "docs/proposals/dsh-forge-m3/proposal.md",
-  "created": "2026-09-23",
   "tasks": {
     "0.1-spike-tool-registration": {
       "id": "0.1",
@@ -64,7 +60,7 @@
       "title": "任务状态机与依赖解析 TS 移植:statemachine/deps/toposort + Go 对拍器",
       "priority": "P0",
       "estimatedTime": "4h",
-      "status": "completed",
+      "status": "in_progress",
       "file": "1.2-statemachine-deps-port.md",
       "record": "records/1.2-statemachine-deps-port.md",
       "surface-type": "web",
@@ -1005,10 +1001,5 @@
     "suspended",
     "skipped",
     "rejected"
-  ],
-  "priorityEnum": [
-    "P0",
-    "P1",
-    "P2"
   ]
 }

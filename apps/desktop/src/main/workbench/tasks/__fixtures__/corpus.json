@@ -1,0 +1,325 @@
+{
+  "depCases": [
+    {
+      "name": "all-completed",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "1.2-b", "id": "1.2", "status": "completed" },
+        { "key": "2.1-c", "id": "2.1", "status": "blocked", "dependencies": ["1.1", "1.2"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "each-status-precondition",
+      "tasks": [
+        { "key": "7.1-pending", "id": "7.1", "status": "pending" },
+        { "key": "7.2-inprogress", "id": "7.2", "status": "in_progress" },
+        { "key": "7.3-completed", "id": "7.3", "status": "completed" },
+        { "key": "7.4-blocked", "id": "7.4", "status": "blocked" },
+        { "key": "7.5-suspended", "id": "7.5", "status": "suspended" },
+        { "key": "7.6-skipped", "id": "7.6", "status": "skipped" },
+        { "key": "7.7-rejected", "id": "7.7", "status": "rejected" },
+        {
+          "key": "8.1-consumer",
+          "id": "8.1",
+          "status": "blocked",
+          "dependencies": ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7"]
+        }
+      ],
+      "target": "8.1"
+    },
+    {
+      "name": "rejected-does-not-satisfy",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "rejected" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "missing-exact-dangling",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1", "9.9"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "wildcard-expands-business-only",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "pending" },
+        { "key": "1.2-b", "id": "1.2", "status": "pending" },
+        { "key": "1.gate", "id": "1.gate", "status": "completed" },
+        { "key": "1.summary", "id": "1.summary", "status": "completed" },
+        { "key": "T-run", "id": "T-run", "status": "completed" },
+        { "key": "2.1-c", "id": "2.1", "status": "blocked", "dependencies": ["1.x"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "wildcard-self-excluded",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "pending" },
+        { "key": "1.2-b", "id": "1.2", "status": "pending" }
+      ],
+      "target": "1.1",
+      "rawDeps": ["1.x"]
+    },
+    {
+      "name": "wildcard-no-match",
+      "tasks": [
+        { "key": "2.1-c", "id": "2.1", "status": "blocked", "dependencies": ["5.x"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "wildcard-satisfied",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "1.2-b", "id": "1.2", "status": "skipped" },
+        { "key": "2.1-c", "id": "2.1", "status": "blocked", "dependencies": ["1.x"] }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "transitive-chain",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "pending", "dependencies": ["1.1"] },
+        { "key": "3.1-c", "id": "3.1", "status": "blocked", "dependencies": ["2.1"] }
+      ],
+      "target": "3.1"
+    },
+    {
+      "name": "fix-task-active-blocks-unblock",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"], "sourceTaskID": "1.1" },
+        {
+          "key": "T-fix-1",
+          "id": "T-fix-1",
+          "status": "in_progress",
+          "sourceTaskID": "2.1",
+          "type": "coding.fix"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "fix-task-completed-no-block",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"], "sourceTaskID": "1.1" },
+        {
+          "key": "T-fix-1",
+          "id": "T-fix-1",
+          "status": "completed",
+          "sourceTaskID": "2.1",
+          "type": "coding.fix"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "fix-task-rejected-no-block",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"], "sourceTaskID": "1.1" },
+        {
+          "key": "T-fix-1",
+          "id": "T-fix-1",
+          "status": "rejected",
+          "sourceTaskID": "2.1",
+          "type": "coding.fix"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "fix-type-docfix-active",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"] },
+        {
+          "key": "T-docfix",
+          "id": "T-docfix",
+          "status": "pending",
+          "sourceTaskID": "2.1",
+          "type": "doc.fix"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "fix-type-prefix-variant-active",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"] },
+        {
+          "key": "T-fixweb",
+          "id": "T-fixweb",
+          "status": "pending",
+          "sourceTaskID": "2.1",
+          "type": "coding.fix.web"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "fix-task-targeting-other-task",
+      "tasks": [
+        { "key": "1.1-a", "id": "1.1", "status": "completed" },
+        { "key": "2.1-b", "id": "2.1", "status": "blocked", "dependencies": ["1.1"] },
+        { "key": "3.1-c", "id": "3.1", "status": "pending" },
+        {
+          "key": "T-fix-2",
+          "id": "T-fix-2",
+          "status": "in_progress",
+          "sourceTaskID": "3.1",
+          "type": "coding.fix"
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "task-not-found",
+      "tasks": [],
+      "target": "zzz"
+    },
+    {
+      "name": "m2-dialect-slug-keys",
+      "tasks": [
+        { "key": "1.1-spike-a", "id": "1.1", "status": "completed" },
+        { "key": "1.2-port-b", "id": "1.2", "status": "pending" },
+        {
+          "key": "2.1-consumer",
+          "id": "2.1",
+          "status": "blocked",
+          "dependencies": ["1.1", "1.2"]
+        }
+      ],
+      "target": "2.1"
+    },
+    {
+      "name": "byid-key-precedence",
+      "tasks": [
+        { "key": "2.1", "id": "9.9", "status": "pending" },
+        { "key": "b", "id": "2.1", "status": "completed" },
+        { "key": "c", "id": "3.1", "status": "blocked", "dependencies": ["2.1"] }
+      ],
+      "target": "3.1"
+    }
+  ],
+  "toposortCases": [
+    { "name": "empty", "tasks": [] },
+    { "name": "single", "tasks": [{ "key": "1", "id": "1" }] },
+    {
+      "name": "linear-chain",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2", "dependencies": ["1"] },
+        { "key": "3", "id": "3", "dependencies": ["2"] }
+      ]
+    },
+    {
+      "name": "diamond",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2", "dependencies": ["1"] },
+        { "key": "3", "id": "3", "dependencies": ["1"] },
+        { "key": "4", "id": "4", "dependencies": ["2", "3"] }
+      ]
+    },
+    {
+      "name": "same-level-natural-order",
+      "tasks": [
+        { "key": "3", "id": "3" },
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2" },
+        { "key": "10", "id": "10" },
+        { "key": "1.1", "id": "1.1" }
+      ]
+    },
+    {
+      "name": "cycle",
+      "tasks": [
+        { "key": "1", "id": "1", "dependencies": ["3"] },
+        { "key": "2", "id": "2", "dependencies": ["1"] },
+        { "key": "3", "id": "3", "dependencies": ["2"] }
+      ]
+    },
+    {
+      "name": "self-reference",
+      "tasks": [{ "key": "1", "id": "1", "dependencies": ["1"] }]
+    },
+    {
+      "name": "missing-dep",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2", "dependencies": ["1", "999"] }
+      ]
+    },
+    {
+      "name": "disconnected",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2", "dependencies": ["1"] },
+        { "key": "3", "id": "3" },
+        { "key": "4", "id": "4", "dependencies": ["3"] }
+      ]
+    },
+    {
+      "name": "wildcard-deps",
+      "tasks": [
+        { "key": "1.1", "id": "1.1" },
+        { "key": "1.2", "id": "1.2" },
+        { "key": "2", "id": "2", "dependencies": ["1.x"] }
+      ]
+    },
+    {
+      "name": "mixed-exact-wildcard-dedup",
+      "tasks": [
+        { "key": "1.1", "id": "1.1" },
+        { "key": "1.2", "id": "1.2" },
+        { "key": "2", "id": "2" },
+        { "key": "3", "id": "3", "dependencies": ["1.1", "1.x"] }
+      ]
+    },
+    {
+      "name": "wildcard-no-match",
+      "tasks": [{ "key": "2", "id": "2", "dependencies": ["5.x"] }]
+    },
+    {
+      "name": "cycle-plus-happy",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "2", "id": "2", "dependencies": ["1"] },
+        { "key": "3", "id": "3", "dependencies": ["4"] },
+        { "key": "4", "id": "4", "dependencies": ["3"] }
+      ]
+    },
+    {
+      "name": "multiple-missing",
+      "tasks": [{ "key": "1", "id": "1", "dependencies": ["99", "100"] }]
+    },
+    {
+      "name": "phase-key-natural-order",
+      "tasks": [
+        { "key": "1", "id": "1" },
+        { "key": "1.1", "id": "1.1" },
+        { "key": "1.2", "id": "1.2" },
+        { "key": "1.gate", "id": "1.gate" },
+        { "key": "1.summary", "id": "1.summary" },
+        { "key": "2", "id": "2", "dependencies": ["1.x"] }
+      ]
+    },
+    {
+      "name": "wildcard-self-edge-cycle",
+      "tasks": [
+        { "key": "1.1", "id": "1.1", "dependencies": ["1.x"] },
+        { "key": "1.2", "id": "1.2" },
+        { "key": "2", "id": "2" }
+      ]
+    }
+  ]
+}
