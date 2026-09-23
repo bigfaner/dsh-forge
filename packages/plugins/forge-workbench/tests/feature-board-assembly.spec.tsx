@@ -75,6 +75,14 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     startMigration: async () => ({ started: true }),
     probeCodeRoot: async () => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false }),
     getWorkbenchPaths: async () => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' }),
+    // M3 task verbs (task 2.1): the presence check walks every declared member.
+    taskAdd: async () => ({}) as never,
+    taskClaim: async () => ({}) as never,
+    taskTransition: async () => ({}) as never,
+    taskSubmit: async () => ({}) as never,
+    taskReopen: async () => ({}) as never,
+    taskGet: async () => ({}) as never,
+    taskQuery: async () => [],
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

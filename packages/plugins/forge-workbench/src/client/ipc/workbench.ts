@@ -34,8 +34,10 @@
  */
 import type {
   DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
-  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
-  TaskDetail, WorkbenchEvent, WorkbenchPaths, WorkbenchState, WorkbenchVerbError,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
+  TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
+  TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
+  WorkbenchState, WorkbenchVerbError,
 } from '../ipc-types'
 import type {
   CodeRootProbeResult, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace, PluginFace,
@@ -77,6 +79,20 @@ export interface WorkbenchIpcBridge {
   /** M3 UF3 integration reads (task 1.7): the wizard's real probe + kernel paths. */
   probeCodeRoot(input: { codeRoot: string; docLocationPath?: string | null }): Promise<CodeRootProbeResult>
   getWorkbenchPaths(): Promise<WorkbenchPaths>
+  /**
+   * M3 task verbs (task 2.1 appending; preload/main sides landed with 1.3):
+   * the write-set five carry the actor string (`session:<id>` — kernel
+   * records it as updated_by on every write) and the read two route by the
+   * project's data_authority. Rejections arrive as the same
+   * `{ code, message, detail? }` envelope (ERR_TASK_*).
+   */
+  taskAdd(input: TaskAddInput, actor: TaskActor): Promise<TaskSummary>
+  taskClaim(input: TaskClaimInput, actor: TaskActor): Promise<TaskSummary>
+  taskTransition(input: TaskTransitionInput, actor: TaskActor): Promise<TaskSummary>
+  taskSubmit(input: TaskSubmitInput, actor: TaskActor): Promise<TaskSummary>
+  taskReopen(input: TaskReopenInput, actor: TaskActor): Promise<TaskSummary>
+  taskGet(input: TaskGetInput): Promise<TaskDetail>
+  taskQuery(input: TaskQueryInput): Promise<TaskSummary[]>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -86,6 +102,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'listPlugins', 'setPluginEnabled', 'recordSessionLink', 'endSessionLink',
   'authorizeExternalDocPath', 'onEvents',
   'getMigrationStatus', 'startMigration', 'probeCodeRoot', 'getWorkbenchPaths',
+  // M3 task verbs (task 2.1): the preload surface carries them since 1.3.
+  'taskAdd', 'taskClaim', 'taskTransition', 'taskSubmit', 'taskReopen', 'taskGet', 'taskQuery',
 ]
 
 /**

@@ -30,6 +30,7 @@ import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
 import { createBoardSessionStore } from './store/board-session'
+import { installToolBridgeClient } from './ipc/tool-bridge'
 import { createLaunchSeat } from './launch-rpc'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
@@ -105,6 +106,15 @@ export type { WorkbenchIpcBridge } from './ipc/workbench'
 // independent subscriptions cannot coexist).
 export { getWorkbenchEventSource } from './ipc/workbench-events'
 export type { WorkbenchEventSource, WorkbenchEventListener } from './ipc/workbench-events'
+// The renderer tool bridge (M3 task 2.1, T2): mounts the forgeToolBridge
+// remote namespace (calls stream + answer) and pumps host tool calls onto the
+// whitelisted workbench IPC verbs (closed verb map). Later tool families ride
+// the same bridge — no new channel.
+export {
+  dispatchToolBridgeCall, FORGE_TOOL_BRIDGE_REMOTE_CONTRIBUTION, installToolBridgeClient,
+  runToolBridgePump,
+} from './ipc/tool-bridge'
+export type { ToolBridgePumpDeps } from './ipc/tool-bridge'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -271,6 +281,11 @@ export function apply(ctx: ClientContext): void {
   // land when the `remote` service + the namespace contribution mount.
   const launchSeat = createLaunchSeat(ctx, controller)
   const boardSession = createBoardSessionStore()
+  // M3 task 2.1 (T2): the renderer tool bridge — plugin-lifetime pump that
+  // answers the host's forge_task_* tool calls over the whitelisted IPC verbs.
+  // Guarded throughout (hostless worlds stay silent; the host degrades via its
+  // grace/budget chain).
+  const disposeToolBridge = installToolBridgeClient(ctx)
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -336,6 +351,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => {
     clearTimeout(graceTimer)
     disableRail()
+    disposeToolBridge()
     disposeSlotNav()
   }, 'forge-workbench: navigation forms')
 }

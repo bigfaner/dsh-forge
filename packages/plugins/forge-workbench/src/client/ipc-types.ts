@@ -392,3 +392,68 @@ export interface FeatureDoc {
   readonly kind: DocKind
   readonly markdown: string
 }
+
+// ---------------------------------------------------------------------------
+// M3 task verb DTOs (task 2.1) — the write-set/read family the tool bridge
+// forwards to (tech-design §Interface 1 任务权威写集; the main-side peers are
+// apps/desktop/src/main/workbench/ipc/types.ts from 1.3, both halves deriving
+// from the same spec section).
+// ---------------------------------------------------------------------------
+
+/** 操作主体(tech-design Actor):`session:<id>` | `external` | `kernel` | 派发者。 */
+export type TaskActor = string
+
+/** taskAdd 入参(taskKey 缺省 = 内核自动 ID,Go disc-N 惯例)。 */
+export interface TaskAddInput {
+  readonly projectId: string
+  readonly featureSlug: string
+  readonly title: string
+  /** 看板限定地址;缺省自动合成;显式给定时前缀必须 = featureSlug。 */
+  readonly taskKey?: string
+  /** 直接上游 blocker 的本地 key 原词(同 feature 命名空间)。 */
+  readonly blockers?: readonly string[]
+  /** 任务类型(预合成协议选择键);缺省 null。 */
+  readonly taskType?: string
+  /** 描述 md 相对文档根(features/)路径;缺省 null。 */
+  readonly descPath?: string
+}
+
+/** taskClaim 入参。 */
+export interface TaskClaimInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskTransition 入参(reason 语境串;v2 schema 无列,接受不落库)。 */
+export interface TaskTransitionInput {
+  readonly projectId: string
+  readonly taskKey: string
+  readonly to: TaskStatus
+  readonly reason?: string
+}
+
+/** taskSubmit 入参(recordPath 语境路径;记录 md 留文档树不入库)。 */
+export interface TaskSubmitInput {
+  readonly projectId: string
+  readonly taskKey: string
+  readonly recordPath?: string
+}
+
+/** taskReopen 入参。 */
+export interface TaskReopenInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskGet 入参(读路由按 projects.data_authority)。 */
+export interface TaskGetInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskQuery 入参(读路由列表;过滤器均可缺省)。 */
+export interface TaskQueryInput {
+  readonly projectId: string
+  readonly featureSlug?: string
+  readonly status?: TaskStatus
+}

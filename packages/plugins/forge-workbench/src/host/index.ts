@@ -2,9 +2,11 @@
  * forge-workbench plugin, host half (dsh host process). Task 3.2 shipped this
  * scaffold deliberately EMPTY; task 4.1 filled the first face — the
  * ForgeBridge cordis service (forge CLI resolution + task-prompt retrieval,
- * Interface 2). Task 4.2 fills the second face — the SessionLaunch cordis
- * service (DF004 channel + FORGE_ACTOR passthrough, Interface 2/5/6). The
- * browser half ships via exports['./client'] and is discovered through the
+ * Interface 2). Task 4.2 filled the second face — the SessionLaunch cordis
+ * service (DF004 channel + FORGE_ACTOR passthrough, Interface 2/5/6). M3 task
+ * 2.1 added the third face — the agent-native dsh tool base (ForgeToolBridge
+ * reverse-stream service + the forge_task_* family on the base ToolRuntime).
+ * The browser half ships via exports['./client'] and is discovered through the
  * package.json dsh.client declaration.
  *
  * Cross-process dependency seams (fail closed; the workbench data kernel is
@@ -39,6 +41,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ForgeBridgeService } from './forge-bridge-rpc'
 import { SessionLaunchService } from './session-launch-rpc'
 import { createStubSessionChannel, resolveSessionStubDir } from './session-channel-stub'
+import { registerForgeTools } from './forge-tools/index'
 
 const PROJECT_ROOTS_ENV = 'DSH_FORGE_PROJECT_ROOTS'
 const CLI_PATH_ENV = 'DSH_FORGE_CLI_PATH'
@@ -88,4 +91,9 @@ export function apply(ctx: Context): void {
   new SessionLaunchService(ctx, sessionStubDir === undefined
     ? undefined
     : { getSessionChannel: () => createStubSessionChannel(sessionStubDir) })
+  // M3 task 2.1: the dsh tool face base — the ForgeToolBridge remote service
+  // (calls stream + answer, T2) and the forge_task_* tool family on the base
+  // ToolRuntime (global tools, spike-1 §1.1). Later tool families (knowledge /
+  // feature / proposal / pref / stage) append onto this base, no new channel.
+  registerForgeTools(ctx)
 }

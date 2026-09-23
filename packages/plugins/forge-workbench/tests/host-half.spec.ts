@@ -72,22 +72,27 @@ function baselineShims(): Record<string, unknown> {
   }
 }
 
-describe('forge-workbench host half: apply registers the ForgeBridge + SessionLaunch services (4.1/4.2)', () => {
-  it('exports apply as the sole host export and registering it provides both remote services', async () => {
+describe('forge-workbench host half: apply registers the ForgeBridge + SessionLaunch + ForgeToolBridge services (4.1/4.2/2.1)', () => {
+  it('exports apply as the sole host export and registering it provides all three remote services', async () => {
     const module = await import('../lib/index.js')
     expect(Object.keys(module)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect(hostApply(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(2)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch'])
+    expect(provide).toHaveBeenCalledTimes(3)
+    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch', 'forgeToolBridge'])
     // The Gateway's source-mode discovery face: @Remote-marked methods become
-    // the wire endpoints forgeBridge/{resolveCli,getTaskPrompt} (4.1) and
-    // sessionLaunch/launch (4.2).
+    // the wire endpoints forgeBridge/{resolveCli,getTaskPrompt} (4.1),
+    // sessionLaunch/launch (4.2), and forgeToolBridge/{calls,answer} (2.1 —
+    // calls is the stream-mode subscription face, spike-1 §2').
     const bridge = provide.mock.calls[0][1] as object
     expect(remoteMethods(bridge).map(marker => marker.exportName ?? marker.method).sort())
       .toEqual(['getTaskPrompt', 'resolveCli'])
     const launcher = provide.mock.calls[1][1] as object
     expect(remoteMethods(launcher).map(marker => marker.exportName ?? marker.method)).toEqual(['launch'])
+    const toolBridge = provide.mock.calls[2][1] as object
+    const toolMarkers = remoteMethods(toolBridge)
+    expect(toolMarkers.map(marker => marker.exportName ?? marker.method).sort()).toEqual(['answer', 'calls'])
+    expect(toolMarkers.find(marker => (marker.exportName ?? marker.method) === 'calls')?.mode).toBe('stream')
   })
 
   it('ships no stub/not-implemented markers in the host half source', () => {
@@ -174,13 +179,13 @@ describe('forge-workbench host half: project-roots env transport (fail closed)',
 })
 
 describe('forge-workbench dual-half artifacts: both load through their channels (AC3)', () => {
-  it('the node-half artifact (lib/index.js) registers both host services when applied', async () => {
+  it('the node-half artifact (lib/index.js) registers all three host services when applied', async () => {
     const nodeHalf = await import(join(pkgRoot, 'lib', 'index.js'))
     expect(Object.keys(nodeHalf)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect((nodeHalf.apply as (ctx: Context) => void)(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(2)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch'])
+    expect(provide).toHaveBeenCalledTimes(3)
+    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch', 'forgeToolBridge'])
   })
 
   it('the browser-half artifact (lib/client.js) executes through the module-table loader channel', () => {
