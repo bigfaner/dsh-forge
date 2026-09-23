@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 · Feature 看板 — dsh-forge M3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail(工作台 = 当前视图) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn" type="button" aria-label="会话" title="会话" onclick="location.href='session.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn is-active" type="button" aria-label="工作台" title="工作台" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <!-- 顶栏 h48 sticky:项目切换器(Menu 卡)+ 添加项目 -->
+      <header class="topbar">
+        <div class="menu-wrap">
+          <button class="btn sm ghost" type="button" data-menu-trigger aria-haspopup="menu">dsh-forge ▾</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" type="button">dsh-forge <span style="margin-left:auto;">✓</span></button>
+            <button class="menu-item" type="button">electron-course</button>
+            <div class="menu-sep"></div>
+            <button class="menu-item" type="button">＋ 添加项目</button>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="btn sm ghost" type="button" onclick="location.href='overview.html'">＋ 添加项目</button>
+      </header>
+
+      <!-- tab 条(M3 修订):概览 / 提案 / Feature(当前)/ 任务(带审批计数徽标) -->
+      <nav class="tabstrip" aria-label="工作台页面">
+        <a class="tab" href="overview.html">概览</a>
+        <a class="tab" href="proposals.html">提案</a>
+        <a class="tab is-active" href="features.html" aria-current="page">Feature</a>
+        <a class="tab" href="tasks.html">任务<span class="tab-badge" data-approval-badge aria-label="2 项待审批">2</span></a>
+      </nav>
+
+      <main class="content" data-state-root data-state="populated">
+        <div data-when="populated">
+          <!-- ===== 列表视图 ===== -->
+          <div id="f-list">
+            <nav class="t-12 t-secondary" style="padding: 4px 0 12px;" aria-label="面包屑">feature 看板</nav>
+            <div class="grid-features" id="feature-grid">
+              <!-- 卡由页面脚本渲染 -->
+            </div>
+          </div>
+
+          <!-- ===== 详情子视图 ===== -->
+          <div id="f-detail" hidden>
+            <nav class="t-12 t-secondary" style="padding: 4px 0 12px; display: flex; gap: 6px;" aria-label="面包屑">
+              <a href="#" id="f-back" style="color: var(--dsw-alias-link);">feature 看板</a><span>/</span><span class="t-mono" id="fd-crumb">dsh-forge-m3</span>
+            </nav>
+
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;" id="fd-title-row">
+              <h2 class="t-16 t-mono" id="fd-slug">dsh-forge-m3</h2>
+              <span class="pill" id="fd-status">in-progress</span>
+              <span class="pill warn" id="fd-deviate" title="外部会话存在跨阶段操作" aria-label="偏离:外部会话存在跨阶段操作">⚠ 偏离</span>
+              <span class="pill neutral-fill" id="fd-outside" aria-label="文档位置:仓外本地路径">⌂ 仓外</span>
+            </div>
+
+            <!-- stepper(M3:当前阶段门未满足 = warn 描边 + 提示行) -->
+            <div class="stepper" id="fd-stepper" role="img" aria-label="状态机">
+              <div class="stepper-step" data-step="0"><span class="stepper-node" aria-hidden="true"></span><span class="stepper-label">prd</span></div>
+              <div class="stepper-bar" data-bar="0" aria-hidden="true"></div>
+              <div class="stepper-step" data-step="1"><span class="stepper-node" aria-hidden="true"></span><span class="stepper-label">design</span></div>
+              <div class="stepper-bar" data-bar="1" aria-hidden="true"></div>
+              <div class="stepper-step" data-step="2"><span class="stepper-node" aria-hidden="true"></span><span class="stepper-label">tasks</span></div>
+              <div class="stepper-bar" data-bar="2" aria-hidden="true"></div>
+              <div class="stepper-step" data-step="3"><span class="stepper-node" aria-hidden="true"></span><span class="stepper-label">in-progress</span></div>
+              <div class="stepper-bar" data-bar="3" aria-hidden="true"></div>
+              <div class="stepper-step" data-step="4"><span class="stepper-node" aria-hidden="true"></span><span class="stepper-label">completed</span></div>
+            </div>
+            <p class="gate-hint" id="fd-gate-hint" hidden style="margin-bottom: 8px;" title="生成路径:任务详情 → 生成阶段总结(subagent 派发)">▲ 总结未生成——推进需先生成阶段总结</p>
+
+            <!-- 六 tab(M3 追加「阶段资产」末位) -->
+            <div class="tabstrip" style="padding-left: 0; margin-bottom: 12px;" data-tabs="docs" role="tablist" aria-label="feature 文档">
+              <button class="tab is-active" type="button" role="tab" data-tab="manifest" aria-selected="true">manifest</button>
+              <button class="tab" type="button" role="tab" data-tab="prd" aria-selected="false">prd</button>
+              <button class="tab" type="button" role="tab" data-tab="design" aria-selected="false">design</button>
+              <button class="tab" type="button" role="tab" data-tab="ui" aria-selected="false" id="fd-ui-tab">ui</button>
+              <button class="tab" type="button" role="tab" data-tab="tasks" aria-selected="false">tasks</button>
+              <button class="tab" type="button" role="tab" data-tab="assets" aria-selected="false">阶段资产</button>
+            </div>
+
+            <div class="card" style="padding: 18px 20px; min-height: 280px;">
+              <div data-tab-panel="manifest" data-tab-group="docs"><div class="md-readonly" id="fd-manifest"></div></div>
+              <div data-tab-panel="prd" data-tab-group="docs" hidden><div class="md-readonly" id="fd-prd"></div></div>
+              <div data-tab-panel="design" data-tab-group="docs" hidden><div class="md-readonly" id="fd-design"></div></div>
+              <div data-tab-panel="ui" data-tab-group="docs" hidden><div class="md-readonly" id="fd-ui"></div></div>
+              <div data-tab-panel="tasks" data-tab-group="docs" hidden><div class="md-readonly" id="fd-tasks-md"></div></div>
+              <div data-tab-panel="assets" data-tab-group="docs" hidden>
+                <div id="fd-assets"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== state: loading ===== -->
+        <div data-when="loading" aria-hidden="true">
+          <div class="skeleton" style="width: 140px; height: 18px; margin-bottom: 14px;"></div>
+          <div class="grid-features">
+            <div class="skeleton" style="height: 110px;"></div>
+            <div class="skeleton" style="height: 110px;"></div>
+            <div class="skeleton" style="height: 110px;"></div>
+          </div>
+        </div>
+
+        <!-- ===== state: empty ===== -->
+        <div data-when="empty">
+          <div class="card state-card">
+            <div class="t-16" style="margin-bottom: 4px;">无 feature</div>
+            <p class="t-14 t-secondary hint">当前项目 <span class="t-mono t-12">docs/features/</span> 下没有 feature 目录。从提案看板开始管线(<span class="t-mono t-12">/write-prd</span>)。</p>
+          </div>
+        </div>
+
+        <!-- ===== state: error ===== -->
+        <div data-when="error">
+          <div class="card state-card">
+            <div class="t-16 error-text" style="margin-bottom: 4px;">文档位置不可访问</div>
+            <p class="t-14 t-secondary hint">
+              仓外文档路径已失效,feature 数据无法读取。<br>
+              重新指向 = 注册向导 · 编辑模式;或移除项目后重新注册(同 M2 UF4 口径)。
+            </p>
+            <div style="display: flex; gap: 8px; justify-content: center;">
+              <button class="btn primary" type="button" onclick="location.href='overview.html'">重新指向</button>
+              <button class="btn ghost" type="button" onclick="location.href='overview.html'">移除项目</button>
+            </div>
+          </div>
+        </div>
+
+        <span class="visually-hidden" id="flow-live" aria-live="polite"></span>
+      </main>
+    </div>
+  </div>
+
+  <!-- 原型辅助(非产品 UI) -->
+  <div class="proto-bar">
+    <span class="grp t-secondary">原型状态</span>
+    <span class="grp">
+      <label><input type="radio" name="proto-state" value="populated" checked> 数据</label>
+      <label><input type="radio" name="proto-state" value="loading"> 加载</label>
+      <label><input type="radio" name="proto-state" value="empty"> 空态</label>
+      <label><input type="radio" name="proto-state" value="error"> 错误</label>
+    </span>
+    <span class="grp"><button class="btn sm ghost" type="button" id="sim-flow">模拟回流</button></span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    /* ===== 页面专属:feature 看板(UF2 阶段化)===== */
+    (function () {
+      var FEATURES = {
+        'dsh-forge-m1': {
+          status: ['completed', 'st-completed', 'pill'], outside: false, deviated: false, gatePending: false,
+          reached: [true, true, true, true, true], progress: '48 / 48', bar: '100%', date: '09-20',
+          manifest: '<h3 class="t-14">Feature: dsh-forge-m1</h3><p class="t-12 t-secondary" style="margin-top:8px;">纯壳里程碑:三平台安装包、宿主子进程、托盘/通知。SC1-9 全部验收通过。</p>',
+          prd: '<p class="t-12 t-secondary">目标:干净机器零终端配置可用;进程足迹 = 2;离线自足;多装共存共享 $DSH_HOME 不损坏。</p>',
+          design: '<p class="t-12 t-secondary">继承上游 apps/desktop 架构;宿主子进程 + dsh-app:// 协议缝。</p>',
+          ui: '<p class="t-12 t-secondary">M1 仅壳级 UI:设置面板、更新提示、恢复引导(上游设计语言)。</p>',
+          tasksMd: '<p class="t-12 t-secondary">48 / 48 completed。</p>',
+          assets: [
+            { stage: 'prd', date: '2026-09-19', goal: '干净机器零终端配置可用的桌面壳。', summary: 'SC1-9 定形:安装即用、双进程、离线、共存。' },
+            { stage: 'completed', date: '2026-09-20', goal: '三平台发布就绪。', summary: 'GH Releases 免签名发布;e2e 归档完成。' }
+          ]
+        },
+        'dsh-forge-m2': {
+          status: ['in-progress', 'st-in_progress', 'pill blue'], outside: false, deviated: false, gatePending: false,
+          reached: [true, true, true, true, false], progress: '38 / 52', bar: '73%', date: '09-23',
+          manifest: '<h3 class="t-14">Feature: dsh-forge-m2</h3><p class="t-12 t-secondary" style="margin-top:8px;">需求与会话工作台:项目注册、任务/feature/文档看板、会话挂接。硬前置 ui-plugin-foundation。</p>',
+          prd: '<p class="t-12 t-secondary">G1-G8:注册向导、只读看板、发起会话链、回流 ≤5s、SQLite 快照、必备插件不可禁用。</p>',
+          design: '<p class="t-12 t-secondary">数据面分工:主数据走内核 IPC;DF003 感知 = fs.watch + debounce + 轮询兜底。</p>',
+          ui: '<p class="t-12 t-secondary">M2 工作台设计(eval 961/1000):概览/任务/feature 三 tab + 详情侧板。</p>',
+          tasksMd: '<p class="t-12 t-secondary">52 任务:Phase1-6;38 completed。</p>',
+          assets: [
+            { stage: 'prd', date: '2026-09-22', goal: '把 forge 项目装进工作台。', summary: '三看板 + 会话挂接定形;偏好与编排留 M3。' },
+            { stage: 'design', date: '2026-09-22', goal: 'SQLite 快照与感知链路。', summary: '快照可重建;回流 ≤5s;actor 来源序。' }
+          ]
+        },
+        'dsh-forge-m3': {
+          status: ['in-progress', 'st-in_progress', 'pill blue'], outside: false, deviated: true, gatePending: true,
+          reached: [true, true, true, true, false], progress: '12 / 52', bar: '23%', date: '09-23',
+          manifest: '<h3 class="t-14">Feature: dsh-forge-m3</h3><p class="t-12 t-secondary" style="margin-top:8px;">流程即产品:subagent 派发编排、SoT 分治迁移、CLI 退役收口、强制阶段化、偏好三级、提案看板。</p>',
+          prd: '<p class="t-12 t-secondary">D1-D5 裁决 + SC1-9;人 = 观察与编排发起,无任务写 UI。</p>',
+          design: '<p class="t-12 t-secondary">预合成三要素 systemPrompt;dsh tool 写通道;阶段门与资产文件。</p>',
+          ui: '<p class="t-12 t-secondary">M3 工作台扩展(eval 954/1000):tab 序修订 + UF1-UF5。</p>',
+          tasksMd: '<p class="t-12 t-secondary">52 任务:迁移内核 / 派发编排 / 退役收口 / 阶段化 / 偏好 / 提案看板。</p>',
+          assets: [
+            { stage: 'prd', date: '2026-09-23', goal: '让 forge 管线本身成为产品能力。', summary: '五项裁决(D1-D5)定形;SoT 分治与 CLI 归宿表成文。' },
+            { stage: 'design', date: '2026-09-23', goal: '在 M2 工作台上叠加编排面。', summary: '选择模式 + 审批 dock + 迁移对话框 + 偏好三级 + 提案看板。' }
+          ]
+        },
+        'ui-plugin-foundation': {
+          status: ['in-progress', 'st-in_progress', 'pill blue'], outside: true, deviated: false, gatePending: false,
+          reached: [true, true, true, true, false], progress: '9 / 12', bar: '75%', date: '09-22',
+          manifest: '<h3 class="t-14">Feature: ui-plugin-foundation</h3><p class="t-12 t-secondary" style="margin-top:8px;">两级插件模型工程基座;插件清单迁出壳代码。</p>',
+          prd: '<p class="t-12 t-secondary">必备 = 内置 bundle 不可禁用;第三方经自有槽位扩展。</p>',
+          design: '<p class="t-12 t-secondary">配置化 + spike + 模板 + 断言。</p>',
+          ui: null,
+          tasksMd: '<p class="t-12 t-secondary">12 任务:9 completed。</p>',
+          assets: [
+            { stage: 'prd', date: '2026-09-21', goal: '为 M2 UI 插件收敛工程前置。', summary: '清单即配置;版本对齐纪律先于第一个插件。' }
+          ]
+        }
+      };
+
+      var list = document.getElementById('f-list');
+      var detail = document.getElementById('f-detail');
+      var grid = document.getElementById('feature-grid');
+      var live = document.getElementById('flow-live');
+      var currentSlug = null;
+
+      function cardHtml(slug, d) {
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+          + '<span class="t-14 t-mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + slug + '</span>'
+          + '<span class="' + d.status[2] + '"><span class="dot ' + d.status[1] + '" aria-hidden="true"></span>' + d.status[0] + '</span>'
+          + (d.deviated ? '<span class="pill warn" title="外部会话存在跨阶段操作" aria-label="偏离:外部会话存在跨阶段操作">⚠ 偏离</span>' : '')
+          + '</div>'
+          + '<div class="progress" style="margin-bottom:6px;"><i style="width:' + d.bar + ';"></i></div>'
+          + '<div style="display:flex;justify-content:space-between;" class="t-12 t-secondary"><span>' + d.progress + '</span><span>' + d.date + '</span></div>';
+      }
+      function renderGrid() {
+        grid.innerHTML = '';
+        Object.keys(FEATURES).forEach(function (slug) {
+          var d = FEATURES[slug];
+          var card = document.createElement('div');
+          card.className = 'card pad';
+          card.setAttribute('role', 'button'); card.tabIndex = 0;
+          card.setAttribute('aria-label', 'feature ' + slug + ',状态 ' + d.status[0] + ',' + d.progress + (d.deviated ? ',存在偏离' : '') + (d.outside ? ',文档位置仓外' : ''));
+          card.innerHTML = cardHtml(slug, d);
+          card.addEventListener('click', function () { openDetail(slug); });
+          card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(slug); } });
+          grid.appendChild(card);
+        });
+      }
+
+      function assetCardHtml(a) {
+        return '<div class="card pad asset-card">'
+          + '<div class="asset-head"><span class="pill neutral-fill">' + a.stage + '</span><span class="t-12 t-secondary t-mono">' + a.date + '</span></div>'
+          + '<div class="md-readonly t-12"><p><span class="t-secondary">目标:</span>' + a.goal + '</p><p><span class="t-secondary">摘要:</span>' + a.summary + '</p></div>'
+          + '</div>';
+      }
+      function renderAssets(slug) {
+        var box = document.getElementById('fd-assets');
+        var d = FEATURES[slug];
+        if (!d.assets.length) {
+          box.innerHTML = '<div class="state-card card" style="border:none;"><div class="t-14">尚无阶段资产</div><p class="t-12 t-secondary hint">首次阶段推进后,各阶段的目标与总结将生成于此(文档根阶段资产文件)。</p></div>';
+          return;
+        }
+        box.innerHTML = d.assets.map(assetCardHtml).join('');
+      }
+
+      function openDetail(slug) {
+        currentSlug = slug;
+        var d = FEATURES[slug]; if (!d) return;
+        document.getElementById('fd-crumb').textContent = slug;
+        document.getElementById('fd-slug').textContent = slug;
+        var st = document.getElementById('fd-status');
+        st.textContent = d.status[0];
+        st.className = d.status[2].indexOf('blue') > -1 ? 'pill blue' : 'pill';
+        st.innerHTML = '<span class="dot ' + d.status[1] + '" aria-hidden="true"></span>' + d.status[0];
+        document.getElementById('fd-deviate').hidden = !d.deviated;
+        document.getElementById('fd-outside').hidden = !d.outside;
+        /* stepper:已达 = 品牌蓝;当前阶段门未满足 = warn 描边(不标 reached) */
+        detail.querySelectorAll('.stepper-step').forEach(function (s) {
+          var i = +s.getAttribute('data-step');
+          var gateHere = d.gatePending && i === 3 && d.reached[i];
+          s.classList.toggle('reached', d.reached[i] && !gateHere);
+          s.classList.toggle('gate-pending', gateHere);
+        });
+        detail.querySelectorAll('.stepper-bar').forEach(function (b) {
+          b.classList.toggle('reached', d.reached[+b.getAttribute('data-bar') + 1]);
+        });
+        document.getElementById('fd-gate-hint').hidden = !d.gatePending;
+        document.getElementById('fd-stepper').setAttribute('aria-label',
+          '状态机:prd、design、tasks 已达;当前阶段 in-progress' + (d.gatePending ? ',阶段总结未生成(门未满足)' : '') + ';completed 未达');
+        /* 文档内容 */
+        document.getElementById('fd-manifest').innerHTML = d.manifest;
+        document.getElementById('fd-prd').innerHTML = d.prd;
+        document.getElementById('fd-design').innerHTML = d.design;
+        var uiTab = document.getElementById('fd-ui-tab');
+        uiTab.disabled = !d.ui;
+        uiTab.title = d.ui ? '' : '无此类文档';
+        document.getElementById('fd-ui').innerHTML = d.ui || '';
+        document.getElementById('fd-tasks-md').innerHTML = d.tasksMd;
+        renderAssets(slug);
+        /* 回落 manifest tab */
+        var mt = detail.querySelector('[data-tab="manifest"]');
+        detail.querySelectorAll('[data-tab]').forEach(function (b) {
+          var active = b === mt;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        detail.querySelectorAll('[data-tab-panel]').forEach(function (p) { p.hidden = p.getAttribute('data-tab-panel') !== 'manifest'; });
+        list.hidden = true; detail.hidden = false;
+      }
+
+      document.getElementById('f-back').addEventListener('click', function (e) {
+        e.preventDefault();
+        detail.hidden = true; list.hidden = false;
+      });
+
+      renderGrid();
+
+      /* 提案徽标跳转:?feature=<slug> 直开详情 */
+      var qs = new URLSearchParams(location.search);
+      var jump = qs.get('feature');
+      if (jump && FEATURES[jump]) openDetail(jump);
+
+      /* ---- 模拟回流:① m2 阶段推进(新资产卡 0.2s 淡入)② m2 偏离徽标即时出现 ---- */
+      var flowCount = 0;
+      document.getElementById('sim-flow').addEventListener('click', function () {
+        flowCount++;
+        var m2 = FEATURES['dsh-forge-m2'];
+        if (flowCount === 1) {
+          /* 阶段资产新增(tasks 阶段总结生成) */
+          m2.assets.push({ stage: 'tasks', date: '刚刚', goal: '52 项任务分解定形。', summary: '六 Phase 划分;迁移/编排/退役三线并行。' });
+          if (currentSlug === 'dsh-forge-m2') renderAssets('dsh-forge-m2');
+          var cards = document.getElementById('fd-assets').querySelectorAll('.asset-card');
+          var last = cards[cards.length - 1];
+          if (last) last.classList.add('flow-highlight');
+          live.textContent = 'feature dsh-forge-m2 新增阶段资产(tasks)';
+          toast('阶段推进回流:新资产卡已淡入 · ≤5s 时效(保滚动位置)');
+          return;
+        }
+        /* 偏离:外部会话跨阶段操作被感知 → 卡 + 详情徽标即时出现 */
+        m2.deviated = true;
+        renderGrid();
+        document.getElementById('fd-deviate').hidden = !(currentSlug === 'dsh-forge-m2');
+        live.textContent = '检测到外部会话跨阶段操作:feature dsh-forge-m2 标记偏离';
+        toast('偏离徽标已即时出现(仅呈现,不阻断)');
+        flowCount = 0;
+      });
+    })();
+  </script>
+</body>
+</html>

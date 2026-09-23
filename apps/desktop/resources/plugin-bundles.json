@@ -1,10 +1,17 @@
 {
   "bundles": [
     {
-      "name": "@deepseek-ai/dsh-base"
+      "name": "@deepseek-ai/dsh-base",
+      "mandatory": true
     },
     {
-      "name": "@deepseek-ai/dsh-web-app"
+      "name": "@deepseek-ai/dsh-web-app",
+      "mandatory": true
+    },
+    {
+      "name": "@dsh-forge/plugin-forge-workbench",
+      "source": "tarball:plugin-tarballs/dsh-forge-plugin-forge-workbench-0.1.0.tgz",
+      "mandatory": true
     }
   ]
 }

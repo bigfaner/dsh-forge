@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 · 项目概览 — dsh-forge M3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail(工作台 = 当前视图) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn" type="button" aria-label="会话" title="会话" onclick="location.href='session.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn is-active" type="button" aria-label="工作台" title="工作台" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <!-- 顶栏 h48 sticky:项目切换器 + 添加项目(注册向导) -->
+      <header class="topbar">
+        <div class="menu-wrap">
+          <button class="btn sm ghost" type="button" data-menu-trigger aria-haspopup="menu">dsh-forge ▾</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" type="button">dsh-forge <span style="margin-left:auto;">✓</span></button>
+            <button class="menu-item" type="button">electron-course</button>
+            <div class="menu-sep"></div>
+            <button class="menu-item" type="button" data-wizard-open>＋ 添加项目</button>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="btn sm ghost" type="button" data-wizard-open>＋ 添加项目</button>
+      </header>
+
+      <!-- tab 条(M3 修订):概览(当前)/ 提案 / Feature / 任务(带审批计数徽标) -->
+      <nav class="tabstrip" aria-label="工作台页面">
+        <a class="tab is-active" href="overview.html" aria-current="page">概览</a>
+        <a class="tab" href="proposals.html">提案</a>
+        <a class="tab" href="features.html">Feature</a>
+        <a class="tab" href="tasks.html">任务<span class="tab-badge" data-approval-badge aria-label="2 项待审批">2</span></a>
+      </nav>
+
+      <main class="content" data-state-root data-state="populated">
+        <div data-when="populated">
+          <!-- ===== UF3 · 项目卡(可迁移 Pill + 迁移入口,在跑编排守卫) ===== -->
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <h2 class="t-16">项目</h2>
+            <button class="btn sm ghost" type="button" data-wizard-open>＋ 添加项目(注册向导 · 条件四步)</button>
+          </div>
+          <div class="grid-features">
+            <div class="card pad" data-project-card="dsh-forge">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <span class="t-14 t-mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">dsh-forge</span>
+                <span class="pill warn" data-mig-pill title="docs/features/*/tasks/index.json 检出待迁移" aria-label="可迁移:index.json 待迁移">可迁移</span>
+                <span class="pill success" data-mig-done-pill hidden><span class="dot st-completed" aria-hidden="true"></span>已迁移 · SQLite</span>
+              </div>
+              <p class="t-12 t-secondary" style="margin-bottom:10px;">4 features · 152 任务 · 文档位置:仓内<br>内核数据:任务态 index.json(旧基座,待迁移)</p>
+              <div style="display:flex;gap:8px;">
+                <button class="btn sm ghost" type="button" onclick="document.getElementById('pref-section').scrollIntoView({behavior:'smooth'})">⚙ 运行偏好</button>
+                <button class="btn sm primary" type="button" data-mig-open>迁移</button>
+              </div>
+            </div>
+            <div class="card pad">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <span class="t-14 t-mono" style="flex:1;">electron-course</span>
+                <span class="pill success"><span class="dot st-completed" aria-hidden="true"></span>已迁移 · SQLite</span>
+              </div>
+              <p class="t-12 t-secondary" style="margin-bottom:10px;">1 feature · 12 任务 · 文档位置:仓外本地路径<br>内核数据:SQLite 权威(迁移于 09-20)</p>
+              <div style="display:flex;gap:8px;">
+                <button class="btn sm ghost" type="button" onclick="toast('多项目偏好面:项目切换后同构呈现')">⚙ 运行偏好</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== UF4 · 运行偏好三级面 ===== -->
+          <div id="pref-section" style="margin-top: 22px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+              <h2 class="t-16">运行偏好</h2>
+              <span class="t-12 t-secondary">生效解析:Feature &gt; 项目 &gt; 全局;未覆盖键逐级回退</span>
+              <div class="segmented" role="tablist" aria-label="偏好层级" id="pref-levels" style="margin-left:auto;">
+                <button type="button" data-level="global">全局</button>
+                <button type="button" data-level="project" class="is-active">项目 · dsh-forge</button>
+                <button type="button" data-level="feature">Feature · dsh-forge-m3</button>
+              </div>
+            </div>
+            <div class="card" style="padding: 6px 16px 14px;" id="pref-groups"><!-- 键分组行由脚本渲染 --></div>
+            <!-- 保存条(dirty 时出现) -->
+            <div class="float-bar" id="pref-savebar" hidden role="toolbar" aria-label="偏好保存">
+              <span class="t-14" id="pref-dirty-n">有 0 处未保存修改</span>
+              <button class="btn sm ghost" type="button" id="pref-discard">放弃修改</button>
+              <button class="btn primary" type="button" id="pref-save">保存</button>
+            </div>
+            <p class="t-12 t-secondary" style="margin-top: 10px;">键集 = auto.* / worktree.* / eval.*;改写仅经保存落盘(单写者 = 内核);保存失败整体回滚至保存前状态(原子性)。</p>
+          </div>
+        </div>
+
+        <!-- ===== state: loading ===== -->
+        <div data-when="loading" aria-hidden="true">
+          <div class="skeleton" style="width: 120px; height: 20px; margin-bottom: 12px;"></div>
+          <div class="grid-features">
+            <div class="skeleton" style="height: 130px;"></div>
+            <div class="skeleton" style="height: 130px;"></div>
+          </div>
+        </div>
+
+        <!-- ===== state: empty ===== -->
+        <div data-when="empty">
+          <div class="card state-card">
+            <div class="t-16" style="margin-bottom: 4px;">尚无项目</div>
+            <p class="t-14 t-secondary hint">注册首个项目后,概览呈现项目卡与偏好面。</p>
+            <button class="btn primary" type="button" data-wizard-open>＋ 添加项目</button>
+          </div>
+        </div>
+
+        <!-- ===== state: error ===== -->
+        <div data-when="error">
+          <div class="card state-card">
+            <div class="t-16 error-text" style="margin-bottom: 4px;">文档位置不可访问</div>
+            <p class="t-14 t-secondary hint">仓外文档路径已失效,项目数据无法读取。重新指向 = 注册向导 · 编辑模式;或移除项目后重新注册(同 M2 UF4 口径)。</p>
+            <button class="btn primary" type="button" data-wizard-open>重新指向</button>
+          </div>
+        </div>
+
+        <span class="visually-hidden" id="flow-live" aria-live="polite"></span>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 迁移确认(一次性显式;清单 + 备份说明) ===== -->
+  <div class="dialog-mask" id="migrate-confirm" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mc-title">
+      <div class="dialog-head">
+        <div class="t-16" id="mc-title" style="flex: 1;">迁移任务数据到 SQLite</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">检出 <strong>3</strong> 个 feature 仍以 index.json 承载任务态,共 <strong>152</strong> 项任务:</p>
+        <ul class="t-12 t-mono" style="margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: var(--dsw-alias-interactive-bg-hover);">
+          <li style="padding: 2px 0;">dsh-forge-m1 · 48 任务</li>
+          <li style="padding: 2px 0;">dsh-forge-m2 · 52 任务</li>
+          <li style="padding: 2px 0;">dsh-forge-m3 · 52 任务</li>
+        </ul>
+        <p class="t-12 t-secondary">迁移为<strong>一次性显式操作</strong>:旧文件仅归档不删除;过程中自动备份,任一步失败整体回滚至迁移前状态(零半迁移)。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="mc-go">开始迁移</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 迁移原子进度(进行中不可关闭;步骤 ✓/◐/○) ===== -->
+  <div class="dialog-mask" id="migrate-progress" hidden data-close-guard="migrateRunningGuard">
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="mp-title" aria-describedby="mp-live">
+      <div class="dialog-head">
+        <div class="t-16" id="mp-title" style="flex: 1;">迁移中…</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body" style="padding-top: 4px;">
+        <div class="mig-step"><span class="mig-ico done" data-mig-ico="0">✓</span><span class="mig-label t-12 t-secondary">备份</span><span class="mig-sub t-12 t-secondary" data-mig-sub="0">~/.dsh/backup/m3-migration.tar</span></div>
+        <div class="mig-step"><span class="mig-ico todo" data-mig-ico="1">○</span><span class="mig-label t-12 t-secondary">迁移数据</span><span class="mig-sub t-12 t-secondary" data-mig-sub="1">152 任务 → SQLite 内核</span></div>
+        <div class="mig-step"><span class="mig-ico todo" data-mig-ico="2">○</span><span class="mig-label t-12 t-secondary">校验对拍</span><span class="mig-sub t-12 t-secondary" data-mig-sub="2">任务全集 ID/状态/依赖</span></div>
+        <div class="mig-step"><span class="mig-ico todo" data-mig-ico="3">○</span><span class="mig-label t-12 t-secondary">切换读通道</span><span class="mig-sub t-12 t-secondary" data-mig-sub="3">工作台读改走内核 IPC</span></div>
+        <div class="mig-step"><span class="mig-ico todo" data-mig-ico="4">○</span><span class="mig-label t-12 t-secondary">归档</span><span class="mig-sub t-12 t-secondary" data-mig-sub="4">index.json → *.migrated</span></div>
+        <span class="visually-hidden" aria-live="polite" id="mp-live"></span>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close hidden data-mig-done-close>关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 迁移失败回滚 ===== -->
+  <div class="dialog-mask" id="migrate-error" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="me-title">
+      <div class="dialog-head">
+        <div class="t-16 error-text" id="me-title" style="flex: 1;">迁移失败 · 已回滚</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">失败于步骤 3(校验对拍):2 项差异。</p>
+        <p class="t-12 t-secondary" style="margin-top: 6px;">已自动回滚至迁移前状态(零半迁移):index.json 保持权威,读通道未切换,备份保留于 ~/.dsh/backup/。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>关闭</button>
+        <button class="btn primary" type="button" id="me-retry">重试迁移</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 在跑编排守卫(迁移互斥,硬阻断) ===== -->
+  <div class="dialog-mask" id="migrate-guard" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="mg-title">
+      <div class="dialog-head">
+        <div class="t-16" id="mg-title" style="flex: 1;">⚠ 暂不可迁移</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">存在 <strong>2</strong> 项在跑编排:</p>
+        <ul class="t-12 t-mono" style="margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: var(--dsw-alias-interactive-bg-hover);">
+          <li style="padding: 2px 0;">T2.2 · 执行中</li>
+          <li style="padding: 2px 0;">T2.3 · 待审批</li>
+        </ul>
+        <p class="t-12 t-secondary">迁移与在跑编排互斥(PRD 硬约束)。编排结束(终态/审批完结)后可再发起。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn primary" type="button" data-dialog-close>知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 保存失败回滚(UF4 原子性) ===== -->
+  <div class="dialog-mask" id="pref-save-error" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="pe-title">
+      <div class="dialog-head">
+        <div class="t-16 error-text" id="pe-title" style="flex: 1;">偏好保存失败</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">内核写通道返回异常(单写者忙碌)。</p>
+        <p class="t-12 t-secondary" style="margin-top: 6px;">已整体回滚至保存前状态——界面呈现值与落盘值一致,无半保存态。可稍后重试。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>关闭</button>
+        <button class="btn primary" type="button" id="pe-retry">重试保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 注册向导(M3 条件四步:检测到 index.json 时插入「迁移预检」) ===== -->
+  <div class="dialog-mask" id="wizard" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="wz-title">
+      <div class="dialog-head">
+        <div class="t-16" id="wz-title" style="flex: 1;">添加项目</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <div class="step-dots" aria-hidden="true">
+          <span class="step-dot" data-dot="0"></span><span class="step-line" data-line="0"></span>
+          <span class="step-dot" data-dot="1"></span><span class="step-line" data-line="1"></span>
+          <span class="step-dot" data-dot="2"></span><span class="step-line" data-line="2"></span>
+          <span class="step-dot" data-dot="3"></span>
+        </div>
+        <div id="wz-body"></div>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" id="wz-prev">上一步</button>
+        <button class="btn primary" type="button" id="wz-next">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 原型辅助(非产品 UI) -->
+  <div class="proto-bar">
+    <span class="grp t-secondary">原型状态</span>
+    <span class="grp">
+      <label><input type="radio" name="proto-state" value="populated" checked> 数据</label>
+      <label><input type="radio" name="proto-state" value="loading"> 加载</label>
+      <label><input type="radio" name="proto-state" value="empty"> 空态</label>
+      <label><input type="radio" name="proto-state" value="error"> 错误</label>
+    </span>
+    <span class="grp"><label><input type="checkbox" id="sim-guard"> 在跑编排守卫</label></span>
+    <span class="grp"><label><input type="checkbox" id="sim-migfail"> 模拟迁移失败</label></span>
+    <span class="grp"><label><input type="checkbox" id="sim-savefail"> 模拟保存失败</label></span>
+    <span class="grp"><button class="btn sm ghost" type="button" id="sim-flow">模拟回流</button></span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    /* ===== 页面专属:概览(UF3 迁移 + UF4 偏好三级)===== */
+    (function () {
+      var live = document.getElementById('flow-live');
+
+      /* ================================================================
+         UF4 · 偏好三级
+         ================================================================ */
+      var LEVEL_ZH = { global: '全局', project: '项目', feature: 'Feature' };
+      var PREF_KEYS = [
+        { group: '派发编排 · auto.*', keys: [
+          { name: 'auto.dispatch.approval', type: 'select', options: ['always', 'write-only', 'never'] },
+          { name: 'auto.dispatch.parallel', type: 'number', min: 1, max: 8 },
+          { name: 'auto.eval.gate', type: 'number', min: 0, max: 1000 }
+        ] },
+        { group: '工作树 · worktree.*', keys: [
+          { name: 'worktree.enabled', type: 'bool' },
+          { name: 'worktree.branchPrefix', type: 'text' }
+        ] },
+        { group: '评估 · eval.*', keys: [
+          { name: 'eval.ui.target', type: 'number', min: 0, max: 1000 },
+          { name: 'eval.ui.iterations', type: 'number', min: 1, max: 5 }
+        ] }
+      ];
+      var VALUES = {
+        global: { 'auto.dispatch.approval': 'write-only', 'auto.dispatch.parallel': 4, 'auto.eval.gate': 900,
+          'worktree.enabled': true, 'worktree.branchPrefix': 'forge/', 'eval.ui.target': 950, 'eval.ui.iterations': 3 },
+        project: { 'auto.dispatch.approval': 'always', 'worktree.enabled': false },
+        feature: { 'eval.ui.target': 960 }
+      };
+      var level = 'project';
+      var edits = {};   /* key → {value} | {delete:true}(本级编辑) */
+
+      function resolve(key) {
+        if (VALUES.feature[key] !== undefined) return { v: VALUES.feature[key], from: 'feature' };
+        if (VALUES.project[key] !== undefined) return { v: VALUES.project[key], from: 'project' };
+        return { v: VALUES.global[key], from: 'global' };
+      }
+      function ctlHtml(key, def, value, disabled) {
+        var d = disabled ? ' disabled' : '';
+        if (def.type === 'select') {
+          var opts = def.options.map(function (o) { return '<option value="' + o + '"' + (o === value ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+          return '<select class="input" style="height:28px;width:150px;border-radius:14px;" data-pref-ctl="' + key + '"' + d + '>' + opts + '</select>';
+        }
+        if (def.type === 'bool') {
+          return '<label class="toggle t-12"><input type="checkbox" data-pref-ctl="' + key + '"' + (value ? ' checked' : '') + d + '> 启用</label>';
+        }
+        if (def.type === 'number') {
+          return '<input class="num-input" type="number" inputmode="numeric" min="' + def.min + '" max="' + def.max + '" value="' + value + '" data-pref-ctl="' + key + '" data-min="' + def.min + '" data-max="' + def.max + '"' + d + '>';
+        }
+        return '<input class="txt-input" type="text" value="' + value + '" data-pref-ctl="' + key + '"' + d + '>';
+      }
+      function rowHtml(key, def) {
+        var isRoot = level === 'global';
+        var hasLocal = VALUES[level][key] !== undefined;
+        var eff = resolve(key);
+        var local = isRoot || hasLocal;
+        var disabled = !local;
+        var ctl = ctlHtml(key, def, local ? VALUES[level][key] : eff.v, disabled);
+        var srcHtml;
+        if (isRoot) {
+          srcHtml = '<span class="pill neutral-fill">根设置</span>';
+        } else if (hasLocal) {
+          srcHtml = '<span class="pill blue">覆盖 · 本级</span><button class="link-btn" type="button" data-pref-revert="' + key + '">恢复继承</button>';
+        } else {
+          srcHtml = '<span class="pill">继承 · ' + LEVEL_ZH[eff.from] + '</span><button class="link-btn" type="button" data-pref-override="' + key + '">覆盖</button>';
+        }
+        return '<span class="key-name">' + key + '</span><span class="key-ctl">' + ctl + '</span><span class="key-source">' + srcHtml + '</span>';
+      }
+      function renderPrefs() {
+        var box = document.getElementById('pref-groups');
+        var html = '';
+        PREF_KEYS.forEach(function (g) {
+          html += '<div class="t-12 t-secondary" style="padding: 12px 2px 4px; font-weight: 500;">' + g.group + '</div>';
+          g.keys.forEach(function (def) {
+            html += '<div class="key-row" data-key-row="' + def.name + '">' + rowHtml(def.name, def) + '</div>';
+          });
+        });
+        box.innerHTML = html;
+        bindPrefs();
+        syncSavebar();
+      }
+      function dirtyCount() { return Object.keys(edits).length; }
+      function syncSavebar() {
+        var n = dirtyCount();
+        var bar = document.getElementById('pref-savebar');
+        bar.hidden = n === 0;
+        document.getElementById('pref-dirty-n').textContent = '有 ' + n + ' 处未保存修改';
+        document.getElementById('pref-save').disabled = !!boxHasInvalid();
+      }
+      function boxHasInvalid() {
+        return !!document.querySelector('[data-pref-ctl].ctl-error');
+      }
+      function markEdit(key, edit) {
+        edits[key] = edit;
+        var row = document.querySelector('[data-key-row="' + key + '"]');
+        if (row) row.classList.add('flow-highlight');
+        syncSavebar();
+      }
+      function bindPrefs() {
+        document.querySelectorAll('[data-pref-override]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var key = b.getAttribute('data-pref-override');
+            var def = findDef(key);
+            VALUES[level][key] = resolve(key).v; /* 以当前生效值起改 */
+            markEdit(key, { value: VALUES[level][key] });
+            renderPrefs();
+            toast('已在本级覆盖:' + key + '(未保存)');
+          });
+        });
+        document.querySelectorAll('[data-pref-revert]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var key = b.getAttribute('data-pref-revert');
+            delete VALUES[level][key];
+            markEdit(key, { delete: true });
+            renderPrefs();
+            toast('已恢复继承:' + key + '(未保存)');
+          });
+        });
+        document.querySelectorAll('[data-pref-ctl]').forEach(function (c) {
+          if (c.disabled) return;
+          var key = c.getAttribute('data-pref-ctl');
+          var def = findDef(key);
+          c.addEventListener('input', function () {
+            if (def.type === 'number') {
+              var v = c.value === '' ? NaN : +c.value;
+              var ok = !isNaN(v) && v >= def.min && v <= def.max;
+              c.classList.toggle('ctl-error', !ok);
+              var row = c.closest('.key-row');
+              var err = row.querySelector('.field-error');
+              if (!ok && !err) {
+                var e = document.createElement('span');
+                e.className = 'field-error'; e.setAttribute('data-range-err', '');
+                e.textContent = '范围 ' + def.min + '–' + def.max;
+                row.querySelector('.key-ctl').appendChild(e);
+              } else if (ok && err) err.remove();
+              if (!ok) { syncSavebar(); return; }
+              VALUES[level][key] = v;
+            } else if (def.type === 'bool') {
+              VALUES[level][key] = c.checked;
+            } else {
+              VALUES[level][key] = c.value;
+            }
+            markEdit(key, { value: VALUES[level][key] });
+            syncSavebar();
+          });
+        });
+      }
+      function findDef(key) {
+        for (var i = 0; i < PREF_KEYS.length; i++) {
+          for (var j = 0; j < PREF_KEYS[i].keys.length; j++) {
+            if (PREF_KEYS[i].keys[j].name === key) return PREF_KEYS[i].keys[j];
+          }
+        }
+        return null;
+      }
+      /* 层级切换 */
+      document.querySelectorAll('#pref-levels [data-level]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('#pref-levels [data-level]').forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+          if (dirtyCount()) { edits = {}; toast('切换层级:未保存修改已丢弃(演示简化)'); }
+          level = btn.getAttribute('data-level');
+          renderPrefs();
+          document.getElementById('pref-groups').classList.add('flow-highlight');
+          setTimeout(function () { document.getElementById('pref-groups').classList.remove('flow-highlight'); }, 350);
+        });
+      });
+      document.getElementById('pref-discard').addEventListener('click', function () {
+        edits = {};
+        /* 回滚到保存前:重置本级编辑(简化 = 重新载入当前层级基线) */
+        renderPrefs();
+        toast('已放弃:界面回滚至保存前状态');
+      });
+      document.getElementById('pref-save').addEventListener('click', function () {
+        if (boxHasInvalid()) { toast('存在越界值,修正后才能保存'); return; }
+        if (document.getElementById('sim-savefail').checked) {
+          edits = {};
+          renderPrefs();
+          live.textContent = '偏好保存失败,已回滚至保存前状态';
+          openDialog('pref-save-error');
+          return;
+        }
+        var n = dirtyCount();
+        edits = {};
+        renderPrefs();
+        live.textContent = '偏好已保存(' + n + ' 处修改,单写者落盘)';
+        toast('已保存 ' + n + ' 处修改 · 偏好面(经 dsh tool 可被 agent 读取)');
+      });
+      document.getElementById('pe-retry').addEventListener('click', function () {
+        closeDialog(document.getElementById('pref-save-error'));
+        toast('重试成功(演示):修改需重新编辑');
+      });
+      renderPrefs();
+
+      /* ================================================================
+         UF3 · index.json → SQLite 迁移
+         ================================================================ */
+      var MIGRATED = false;
+      var migRunning = false;
+      window.migrateRunningGuard = function () {
+        if (migRunning) { toast('迁移进行中,不可关闭(原子性)'); return false; }
+        return true;
+      };
+      document.querySelectorAll('[data-mig-open]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (MIGRATED) { toast('本项目已迁移(SQLite 权威)'); return; }
+          if (document.getElementById('sim-guard').checked) { openDialog('migrate-guard'); return; }
+          openDialog('migrate-confirm');
+        });
+      });
+      document.getElementById('mc-go').addEventListener('click', function () {
+        closeDialog(document.getElementById('migrate-confirm'));
+        runMigration();
+      });
+      document.getElementById('me-retry').addEventListener('click', function () {
+        closeDialog(document.getElementById('migrate-error'));
+        runMigration();
+      });
+      function setStep(i, state) {
+        var ico = document.querySelector('[data-mig-ico="' + i + '"]');
+        ico.className = 'mig-ico ' + state;
+        ico.textContent = state === 'done' ? '✓' : state === 'doing' ? '◐' : '○';
+        if (state === 'doing') document.getElementById('mp-live').textContent = '迁移步骤进行中:' + document.querySelector('[data-mig-sub="' + i + '"]').textContent;
+      }
+      function runMigration() {
+        migRunning = true;
+        for (var i = 0; i < 5; i++) setStep(i, 'todo');
+        document.querySelector('[data-mig-done-close]').hidden = true;
+        document.getElementById('mp-title').textContent = '迁移中…';
+        openDialog('migrate-progress');
+        var failAt = document.getElementById('sim-migfail').checked ? 2 : -1;
+        var step = 0;
+        (function advance() {
+          if (step > 0) setStep(step - 1, 'done');
+          if (step === 5) { finishMigration(true); return; }
+          if (step === failAt) { /* 在该步报失败(先置 doing 再失败) */
+            setStep(step, 'doing');
+            setTimeout(function () { finishMigration(false); }, 600);
+            return;
+          }
+          setStep(step, 'doing');
+          step++;
+          setTimeout(advance, 650);
+        })();
+      }
+      function finishMigration(ok) {
+        migRunning = false;
+        closeDialog(document.getElementById('migrate-progress'));
+        if (ok) {
+          MIGRATED = true;
+          document.querySelector('[data-mig-pill]').hidden = true;
+          document.querySelector('[data-mig-done-pill]').hidden = false;
+          var card = document.querySelector('[data-project-card="dsh-forge"]');
+          if (card) {
+            card.querySelector('.t-12.t-secondary').innerHTML = '4 features · 152 任务 · 文档位置:仓内<br>内核数据:SQLite 权威(index.json 已归档)';
+            var mb = card.querySelector('[data-mig-open]');
+            if (mb) mb.remove();
+            card.classList.add('flow-highlight');
+          }
+          live.textContent = '任务数据迁移完成:SQLite 权威,对拍一致 152/152';
+          toast('迁移完成 · 对拍一致(152/152);index.json 已归档为 *.migrated');
+        } else {
+          live.textContent = '迁移失败于校验对拍,已回滚至迁移前状态';
+          openDialog('migrate-error');
+        }
+      }
+
+      /* ================================================================
+         注册向导(条件四步:第 3 步 = 迁移预检,仅检出 index.json 时)
+         ================================================================ */
+      var WZ_STEPS = [
+        function () {
+          return '<div class="t-14" style="margin-bottom:8px;">文档位置</div>'
+            + '<label class="field"><span class="label t-12 t-secondary">本地路径</span><input class="input mono" value="D:\\forge-docs\\demo" data-wz-path></label>'
+            + '<div class="radio-row"><input type="radio" name="wz-loc" checked><span class="t-14">仓内(docs/features/ 相对仓库)</span></div>'
+            + '<div class="radio-row"><input type="radio" name="wz-loc"><span class="t-14">仓外(独立本地目录,可移动)</span></div>';
+        },
+        function () {
+          return '<div class="t-14" style="margin-bottom:8px;">验证</div>'
+            + '<p class="t-12 t-secondary" style="line-height:20px;">✓ 目录可读 · manifest × 4 · proposals × 6<br>✓ 无另一工作台实例持有该位置锁</p>';
+        },
+        function () {
+          return '<div class="t-14" style="margin-bottom:8px;">迁移预检 <span class="pill warn">条件步骤</span></div>'
+            + '<p class="t-12 t-secondary" style="margin-bottom:8px;">检出 <span class="t-mono">docs/features/*/tasks/index.json</span>(旧基座任务态)。注册后如何处理?</p>'
+            + '<div class="radio-row"><input type="radio" name="wz-mig" id="wz-mig-now" checked><span class="t-14">立即迁移(推荐 · 注册完成即转 SQLite 权威)</span></div>'
+            + '<div class="radio-row"><input type="radio" name="wz-mig"><span class="t-14">稍后迁移(项目卡将显示「可迁移」入口)</span></div>';
+        },
+        function () {
+          return '<div class="t-14" style="margin-bottom:8px;">完成</div>'
+            + '<p class="t-12 t-secondary" style="line-height:20px;">项目 demo 已注册。<br>'
+            + (wzMigNow
+              ? '迁移将在后台启动:备份 → 迁移 → 对拍 → 切读通道(原子,失败回滚)。'
+              : '可迁移状态已标记:概览 · 项目卡提供「迁移」入口。')
+            + '</p>';
+        }
+      ];
+      var wzStep = 0;
+      var wzMigNow = true;  /* 第 3 步离开时捕获(步骤 DOM 已销毁) */
+      function wzRender() {
+        document.getElementById('wz-body').innerHTML = WZ_STEPS[wzStep]();
+        document.querySelectorAll('[data-dot]').forEach(function (d) {
+          var i = +d.getAttribute('data-dot');
+          d.className = 'step-dot' + (i < wzStep ? ' done' : i === wzStep ? ' current' : '');
+        });
+        document.querySelectorAll('[data-line]').forEach(function (l) {
+          l.style.background = +l.getAttribute('data-line') < wzStep ? 'var(--dsw-alias-link)' : '';
+        });
+        document.getElementById('wz-prev').disabled = wzStep === 0;
+        document.getElementById('wz-next').textContent = wzStep === WZ_STEPS.length - 1 ? '完成' : '下一步';
+      }
+      document.getElementById('wz-prev').addEventListener('click', function () { if (wzStep > 0) { wzStep--; wzRender(); } });
+      document.getElementById('wz-next').addEventListener('click', function () {
+        if (wzStep === WZ_STEPS.length - 1) {
+          closeDialog(document.getElementById('wizard'));
+          toast('项目已注册(演示)' + (wzMigNow ? ' · 后台迁移已启动' : ' · 项目卡已标记可迁移'));
+          return;
+        }
+        if (wzStep === 2) {
+          var now = document.getElementById('wz-mig-now');
+          if (now) wzMigNow = now.checked;
+        }
+        wzStep++; wzRender();
+      });
+      document.querySelectorAll('[data-wizard-open]').forEach(function (b) {
+        b.addEventListener('click', function () { wzStep = 0; wzRender(); openDialog('wizard'); });
+      });
+
+      /* ---- 模拟回流:外部会话经 dsh tool 改 Feature 覆盖键 ---- */
+      document.getElementById('sim-flow').addEventListener('click', function () {
+        VALUES.feature['eval.ui.target'] = VALUES.feature['eval.ui.target'] === 960 ? 955 : 960;
+        renderPrefs();
+        if (level === 'feature') {
+          var row = document.querySelector('[data-key-row="eval.ui.target"]');
+          if (row) row.classList.add('flow-highlight');
+        }
+        live.textContent = '外部会话经 dsh tool 修改 Feature 偏好:eval.ui.target → ' + VALUES.feature['eval.ui.target'];
+        toast('偏好外部变更已回流(≤5s):eval.ui.target = ' + VALUES.feature['eval.ui.target']);
+      });
+    })();
+  </script>
+</body>
+</html>

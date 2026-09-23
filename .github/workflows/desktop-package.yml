@@ -79,6 +79,18 @@ jobs:
         shell: bash
         run: pnpm build:desktop
 
+      # M2 3.2: the product config's mandatory forge-workbench entry is
+      # tarball-sourced; electron-builder embeds resources/plugin-tarballs/**
+      # and verify-package asserts every config-declared tarball is present in
+      # the unpacked app — build + stage before packaging.
+      - name: Build workspace plugins
+        shell: bash
+        run: pnpm build:plugins
+
+      - name: Stage product plugin tarballs
+        shell: bash
+        run: pnpm stage:plugin-tarballs
+
       - name: Stage installer resources (runtime-file-policy trim)
         shell: bash
         run: node scripts/assemble-app-resources.mjs --target ${{ matrix.target }} --arch ${{ matrix.arch }}

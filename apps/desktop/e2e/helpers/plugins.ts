@@ -26,6 +26,7 @@ import { launchFixtureApp, type FixtureApp } from './fixture-app.ts'
 export const REPO_ROOT = resolve(fileURLToPath(new URL('../../../../', import.meta.url)))
 export const MAIN_PATH = join(REPO_ROOT, 'apps', 'desktop', 'dist', 'main.cjs')
 export const HELLO_WORLD_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-world')
+export const FORGE_WORKBENCH_DIR = join(REPO_ROOT, 'packages', 'plugins', 'forge-workbench')
 export const COLLISION_DIR = join(REPO_ROOT, 'packages', 'plugins', 'hello-world-collision')
 export const TEMPLATE_DIR = join(REPO_ROOT, 'packages', 'templates', 'plugin')
 export const PRODUCT_CONFIG = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'plugin-bundles.json')
@@ -38,7 +39,18 @@ export const PRODUCT_CONFIG = join(REPO_ROOT, 'apps', 'desktop', 'resources', 'p
 export function helloWorldTarball(): string {
   return packPlugin(HELLO_WORLD_DIR).tarball
 }
+/**
+ * The forge-workbench tarball for journeys: same on-demand channel. Unlike
+ * the demo plugin, forge-workbench IS a default product bundle (mandatory,
+ * tarball-sourced in the committed product config), so this is a test-local
+ * repack of the exact bytes the stage channel ships.
+ */
+export function forgeWorkbenchTarball(): string {
+  return packPlugin(FORGE_WORKBENCH_DIR).tarball
+}
 export const HELLO_WORLD = '@dsh-forge/plugin-hello-world'
+export const FORGE_WORKBENCH = '@dsh-forge/plugin-forge-workbench'
+export const FORGE_WORKBENCH_STAGED_AT = 'plugin-tarballs/dsh-forge-plugin-forge-workbench-0.1.0.tgz'
 export const COLLISION_FIXTURE = '@dsh-forge/plugin-hello-world-collision'
 /** The vendored lock baseline (FT-015) — the alignment line every gate reads. */
 export const LOCK_BASELINE = {
@@ -57,12 +69,18 @@ export const BASE_BUNDLES = [
 export interface BundleEntry {
   readonly name: string
   readonly source?: string
+  /** `true` = mandatory partition (task 3.1): immune to the runtime overlay. */
+  readonly mandatory?: true
 }
 
 /** Serialize a plugin-bundles config exactly like the product resource. */
 export function bundlesConfigJson(entries: readonly BundleEntry[]): string {
   return `${JSON.stringify({
-    bundles: entries.map(entry => ({ name: entry.name, ...(entry.source === undefined ? {} : { source: entry.source }) })),
+    bundles: entries.map(entry => ({
+      name: entry.name,
+      ...(entry.source === undefined ? {} : { source: entry.source }),
+      ...(entry.mandatory === undefined ? {} : { mandatory: entry.mandatory }),
+    })),
   }, undefined, 2)}\n`
 }
 
@@ -169,6 +187,19 @@ export interface PluginShellOptions {
   readonly expectFailure?: boolean
   /** Persistent root for multi-boot tests (default: a fresh temp dir per launch). */
   readonly rootDir?: string
+  /**
+   * Working directory for the Electron main process (6.1: the stub-CLI
+   * version probe resolves node's main entry against the host child's cwd,
+   * which inherits this). Default: Playwright's own cwd.
+   */
+  readonly cwd?: string
+  /**
+   * Isolated userData (6.1 Hard Rule): pins the workbench DB, the
+   * plugin-runtime overlay, AND the single-instance lock to a per-journey
+   * temp dir via the DSH_FORGE_USER_DATA seam — the registry stops sharing
+   * the dev machine's real %APPDATA%/Electron across journeys.
+   */
+  readonly userDataDir?: string
 }
 
 export interface PluginShell {
@@ -178,6 +209,8 @@ export interface PluginShell {
   readonly dir: string
   readonly configPath: string
   readonly profileDir: string
+  /** The isolated userData dir, when `userDataDir` was passed (6.1 seam). */
+  readonly userDataDir: string | undefined
   /** Every renderer pageerror since launch (the collision/observability channel). */
   readonly pageErrors: string[]
   writeConfig(entries: readonly BundleEntry[]): void
@@ -210,12 +243,16 @@ export async function launchPluginShell(options: PluginShellOptions = {}): Promi
   }
   const args = [MAIN_PATH]
   if (options.offlineProxy === true) args.push('--proxy-server=http://127.0.0.1:9')
+  const userDataDir = options.userDataDir === undefined ? undefined : resolve(options.userDataDir)
+  if (userDataDir !== undefined) mkdirSync(userDataDir, { recursive: true })
   const electronApp = await _electron.launch({
     args,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     env: {
       ...process.env,
       DSH_FORGE_PLUGIN_BUNDLES: configPath,
       DSH_FORGE_PROFILE_DIR: profileDir,
+      ...(userDataDir === undefined ? {} : { DSH_FORGE_USER_DATA: userDataDir }),
       ...options.env,
     },
   })
@@ -228,6 +265,7 @@ export async function launchPluginShell(options: PluginShellOptions = {}): Promi
     dir,
     configPath,
     profileDir,
+    userDataDir,
     pageErrors,
     writeConfig: (entries) => { writeFileSync(configPath, bundlesConfigJson(entries)) },
     stageTarball: (at, from) => {

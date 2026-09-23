@@ -289,6 +289,276 @@
       "kind": "precondition",
       "value": "docs/features/ui-plugin-foundation/spike-report.md: each of the three unverified items archived as conclusion + independent fallback two-column; distribution-form conclusion (spike-report §4.1) = tarball built-in + shell-side pre-seeding; source-level facts anchored to checkout SHA c36ba648 (0.1.6-alpha.2); journey pins the doc reference baseline at tech-direction commit 6f5b109 (2026-09-21)",
       "citation": "scripts/stage-plugin-tarballs.mjs; docs/features/ui-plugin-foundation/testing/spike-conclusion-fallback/journey.md"
+    },
+    {
+      "fact_id": "FT-030",
+      "source": "static",
+      "subject": "Workbench IPC verb face channel inventory",
+      "kind": "signature",
+      "value": "16 whitelisted channels under dshForge.workbench.*: getState, registerProject, updateProject, removeProject, activateProject, getTaskBoard, getTaskDetail, getFeatureBoard, readFeatureDoc, listPlugins, setPluginEnabled, recordSessionLink, endSessionLink, authorizeExternalDocPath, plus subscribeEvents/unsubscribeEvents; one channel per verb, sender validation before service call",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/handlers.ts:159-245"
+    },
+    {
+      "fact_id": "FT-031",
+      "source": "static",
+      "subject": "Workbench IPC error envelope",
+      "kind": "error_code",
+      "value": "WorkbenchErrorEnvelope {code, message, detail?}; reject serializes the envelope as the Error message (renderer parses back to object); errors carrying a domain ERR_* code pass through unchanged; unclassified exceptions fall back to ERR_WORKBENCH_DB with log",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/handlers.ts:29-64"
+    },
+    {
+      "fact_id": "FT-032",
+      "source": "static",
+      "subject": "TaskSummary DTO dialect",
+      "kind": "signature",
+      "value": "TaskSummary.key = qualified board address <featureSlug>/<localId>; blockers = same-feature local upstream keys (transitive chain expanded by getTaskDetail); branch nullable execution trace; worktree boolean; source = session|terminal|null; updatedAt timestamp",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/types.ts:39-53"
+    },
+    {
+      "fact_id": "FT-033",
+      "source": "static",
+      "subject": "Task status vocabulary (7 states)",
+      "kind": "output_format",
+      "value": "task_snapshot.status constrained to pending, in_progress, completed, blocked, suspended, skipped, rejected; source column constrained to session or terminal; blockers stored as JSON array of direct upstream keys",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v1.sql:65-78"
+    },
+    {
+      "fact_id": "FT-034",
+      "source": "static",
+      "subject": "Feature snapshot projection",
+      "kind": "output_format",
+      "value": "feature_snapshot.status is a manifest-vocabulary passthrough (prd/design/tasks/in-progress/completed); doc_kinds = JSON array subset of manifest/prd/design/ui/tasks; task_total and task_completed counts maintained per feature",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v1.sql:83-92"
+    },
+    {
+      "fact_id": "FT-035",
+      "source": "static",
+      "subject": "Session link lifecycle semantics",
+      "kind": "side_effect",
+      "value": "session_links UNIQUE(project_id, task_key, session_id); status active|ended; recordSessionLink = idempotent upsert (re-record refreshes started_at, resets to active, row id stable); endSessionLink sets ended without deleting rows (idempotent no-op when already ended); supersedeActiveSessionLinks ends other active rows of the same task keeping the keepSessionId row (launch-side convergence; no convergence at app exit); history listed newest-first by started_at including ended rows",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/repos/session-links.ts:28-95"
+    },
+    {
+      "fact_id": "FT-036",
+      "source": "static",
+      "subject": "Project registration repo semantics",
+      "kind": "side_effect",
+      "value": "projects.code_root UNIQUE -> ERR_PROJECT_EXISTS on duplicate; display_name defaults to the code_root directory name when not provided; doc_location_type in_repo (path NULL) | external (path required); removeProject runs in an immediate transaction that clears the active_project_id pointer when it targets the removed project, with CASCADE deleting snapshots and session links; unknown id -> ERR_PROJECT_NOT_FOUND",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/repos/projects.ts:53-121; apps/desktop/src/main/workbench/store/schema-v1.sql:27-39"
+    },
+    {
+      "fact_id": "FT-037",
+      "source": "static",
+      "subject": "Registration/repoint validation chain order and codes",
+      "kind": "error_code",
+      "value": "Chain order (rejection precedence): (1) input coherence shape errors -> plain Error; (2) code_root not a readable directory -> ERR_CODE_ROOT_UNREADABLE (message carries path and reason: does not exist / permission denied / not a directory); (3) external path equals own code_root, an existing project code_root, or an existing external doc path -> ERR_DOC_PATH_CONFLICT (pure db comparison, zero fs); (4) external path without recorded authorization -> ERR_EXTERNAL_PATH_UNREADABLE (checked before any fs probe of that path); (5) external path not readable -> ERR_EXTERNAL_PATH_UNREADABLE; (6) forge data not detected -> ERR_FORGE_NOT_DETECTED; (7) repos UNIQUE(code_root) -> ERR_PROJECT_EXISTS. updateProject repoint walks the same chain (edit mode has no authorization exemption); pure rename does no fs probing",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/registry/validate.ts:46-52,144-219"
+    },
+    {
+      "fact_id": "FT-038",
+      "source": "static",
+      "subject": "Forge checkout detection rule",
+      "kind": "precondition",
+      "value": "forge data detected when a .forge directory or a docs/features directory exists under the effective doc location (in_repo -> codeRoot; external -> docLocationPath); the ERR_FORGE_NOT_DETECTED message names which probe is missing",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/registry/validate.ts:169-178"
+    },
+    {
+      "fact_id": "FT-039",
+      "source": "static",
+      "subject": "getTaskPrompt probe gates and spawn shape",
+      "kind": "signature",
+      "value": "Gate order: illegal task-key dialect -> ERR_NO_PROMPT with no spawn; projectRoot not in the registered-project allowlist -> ERR_NO_PROMPT; CLI resolution failure or spawn error -> ERR_FORGE_CLI_UNAVAILABLE; otherwise spawns 'forge prompt get-by-task-id <localId>' with cwd pinned to the registered root, 15s budget, 2MiB stdout cap, 256KiB stderr cap; nonzero exit (structured stderr), timeout, output overflow, or empty stdout -> ERR_NO_PROMPT; success returns the COMPLETE stdout untrimmed (promptText is byte-faithful)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/host/forge-bridge.ts:125-215"
+    },
+    {
+      "fact_id": "FT-040",
+      "source": "static",
+      "subject": "Task key dialects",
+      "kind": "precondition",
+      "value": "local forge task id = digits separated by dots (source whitelist FORGE_TASK_KEY_PATTERN); board-qualified address = <featureSlug>/<localId> (used in IPC and session_links); spawn argv carries only the local id",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/host/forge-bridge.ts:29; packages/plugins/forge-workbench/src/client/views/tasks/SessionLaunchEntry.tsx:40-43"
+    },
+    {
+      "fact_id": "FT-041",
+      "source": "static",
+      "subject": "SessionLaunch host chain contract",
+      "kind": "signature",
+      "value": "launch input {promptText (complete getTaskPrompt stdout), title, cwd = registered codeRoot, sessionId?}; channel = in-process sessionController: create({sessionId, cwd}) idempotent-adopts a caller-minted session-<uuid> id, then prompt({requestId, sessionId, mode: 'queue', content}) persists the first user message; requestId deterministically derived by sha256 over sessionId + message (replays never double-post); failure reasonCodes: ERR_HOST_NOT_READY (channel absent; client tries tier 2) and ERR_SESSION_CHANNEL_UNAVAILABLE (create/prompt leg failed or exceeded the 10s per-leg hang guard; routes into the tier-3 fallback, never an error presentation); empty promptText or cwd is a caller contract rejection",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/host/session-launch.ts:38-176"
+    },
+    {
+      "fact_id": "FT-042",
+      "source": "static",
+      "subject": "UF5 launch degradation chain tiers",
+      "kind": "output_format",
+      "value": "tier 1 host channel -> tier 2 renderer ctx.remote.session retry (carries the tier-1 recovery sessionId for adopt + re-prompt) -> tier 3 frozen fallback (verbatim prompt to clipboard + main window fronted + manual-guidance toast); channel failures ROUTE down the chain and are never displayed as errors; only a denied clipboard or a thrown rejection resolves 'failed' (LaunchErrorDialog with clipboard-denied/unexpected copy and a retry entry)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/tasks/SessionLaunchEntry.tsx:60-116"
+    },
+    {
+      "fact_id": "FT-043",
+      "source": "static",
+      "subject": "UF5 entry probe and stage states",
+      "kind": "output_format",
+      "value": "mount-once getTaskPrompt probe: available -> trigger enabled with the byte-faithful cached promptText; ERR_NO_PROMPT or ERR_FORGE_CLI_UNAVAILABLE -> trigger disabled with a reason tooltip (launch.reason.noPrompt = 该任务没有执行 prompt,无法从它发起会话 / launch.reason.cliUnavailable), never an error surface; confirm panel shows the prompt preview default-collapsed with confirm as default focus (one click, 3s budget); trigger element carries data-probe and data-stage attributes; stages idle/confirm/degraded/failed/done; initiating indicator while the chain runs",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/tasks/SessionLaunchEntry.tsx:118-314"
+    },
+    {
+      "fact_id": "FT-044",
+      "source": "static",
+      "subject": "Launch success-leg persistence order",
+      "kind": "side_effect",
+      "value": "after a launched outcome: recordSessionLink({projectId, taskKey = qualified address, sessionId}) — a persistence hiccup is swallowed (the session is not un-launched); then onLaunched switches to the session view (uiWorkspace.openSession) and the task card shows the 会话运行中 badge; the launch-side supersede converges prior active links of the task",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/tasks/SessionLaunchEntry.tsx:243-254"
+    },
+    {
+      "fact_id": "FT-045",
+      "source": "static",
+      "subject": "FORGE_ACTOR attribution and change-source determination",
+      "kind": "side_effect",
+      "value": "first user message = verbatim prompt + ONE appended attribution instruction line (body never rewritten), actor value 'session:<sessionId>'; change-source order: path 1 record actor frontmatter 'session:' prefix -> session / literal 'terminal' -> terminal; path 2 fallback: task has an active session link -> session, otherwise terminal; judged only for changed rows (unchanged rows keep historical source)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/host/actor-env.ts:32-50; apps/desktop/src/main/workbench/indexer/source.ts:22-45"
+    },
+    {
+      "fact_id": "FT-046",
+      "source": "static",
+      "subject": "WorkbenchEvent push shapes",
+      "kind": "output_format",
+      "value": "WorkbenchEvent = task_updated {projectId, taskKey, source, changeKind attribute|structural} | feature_updated {projectId, featureSlug} | sync {projectId, sync}; SyncStatusPayload = {state idle|scanning|error, lastScanAt, error?}; batched push on channel dsh-forge:workbench-events to subscribed live senders only; single-subscriber semantics per webContents (re-subscribe idempotent, destroy auto-unsubscribes)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/indexer/diff.ts:21-43; apps/desktop/src/main/workbench/ipc/handlers.ts:96-132"
+    },
+    {
+      "fact_id": "FT-047",
+      "source": "static",
+      "subject": "File watcher orchestration budgets",
+      "kind": "precondition",
+      "value": "watch targets = codeRoot/.forge plus the effective docs/features (external doc location -> docLocationPath/docs/features); change batches debounced 400ms trailing; rescans scheduled via setTimeout(0) macro-task slicing (never on the fs callback stack); event batcher merges pushes within 500ms; only registered and authorized roots are watched (unauthorized external root excluded with a warn, other roots unaffected); activate switch = full watch rebuild (handles released); removeProject stops the chain with null",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/watcher/watch.ts:3-53,99-105"
+    },
+    {
+      "fact_id": "FT-048",
+      "source": "static",
+      "subject": "Plugin two-tier runtime projection",
+      "kind": "signature",
+      "value": "PluginRow {name, mandatory, enabled}; mandatory derives from the build-time product manifest plugin-bundles.json (runtime read-only); enabled derives from <userData>/plugin-runtime.json whose schema is exactly {disabled: string[]} — a missing file is an empty overlay meaning all enabled; the overlay structurally excludes mandatory names (third-party only)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/plugins.ts:4-17,100-116; apps/desktop/src/main/plugin-runtime/overlay.ts:4-22"
+    },
+    {
+      "fact_id": "FT-049",
+      "source": "static",
+      "subject": "setPluginEnabled guard behavior",
+      "kind": "error_code",
+      "value": "guard runs before any overlay write: disable request for a mandatory bundle -> PluginMandatoryError with code ERR_PLUGIN_MANDATORY plus a structured log (UI renders no disable affordance = defense layer 1; the guard is layer 2); unknown plugin name -> plain contract error from the verb face; a successful write touches ONLY the overlay file (manifest bytes unchanged) and returns the refreshed PluginRow list",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/plugin-runtime/guard.ts:46-63; apps/desktop/src/main/workbench/ipc/plugins.ts:105-117"
+    },
+    {
+      "fact_id": "FT-050",
+      "source": "static",
+      "subject": "Plugin runtime overlay parse-time validation",
+      "kind": "error_code",
+      "value": "structurally malformed overlay (bad JSON, non-object root, unknown keys, missing/non-array disabled) -> original isolated as <name>.corrupt-<timestamp> and an empty overlay rebuilt, startup never blocked, ERR_PLUGIN_RUNTIME_STATE logged; schema-valid but violating entries (mandatory names, unknown names, non-strings) stripped in memory with an ERR_PLUGIN_RUNTIME_STATE log — the manifest state wins for those rows",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/plugin-runtime/overlay.ts:10-53"
+    },
+    {
+      "fact_id": "FT-051",
+      "source": "static",
+      "subject": "External doc path authorization gate",
+      "kind": "precondition",
+      "value": "the authorizeExternalDocPath verb is the sole persistence channel for wizard step-2 explicit authorization; the validation chain checks the authorization record BEFORE any fs probe of the path (unauthorized external path -> ERR_EXTERNAL_PATH_UNREADABLE without probing); repoint/edit mode walks the same chain with no exemption",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/types.ts:154-159; apps/desktop/src/main/workbench/registry/validate.ts:153-167"
+    },
+    {
+      "fact_id": "FT-052",
+      "source": "static",
+      "subject": "Source marking and link UI labels (zh locale)",
+      "kind": "output_format",
+      "value": "tasks.source.session = 会话; tasks.source.terminal = 终端; tasks.badge.sessionLive = 会话运行中; detail.links.active = 会话中; detail.links.enter = 进入会话; detail.links.empty = 该任务尚未挂接会话; launch.reason.noPrompt tooltip = 该任务没有执行 prompt,无法从它发起会话",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "packages/plugins/forge-workbench/src/client/locale/zh.ts:185-223"
+    },
+    {
+      "fact_id": "FT-053",
+      "source": "static",
+      "subject": "View-key page addressing (no URL routes)",
+      "kind": "signature",
+      "value": "no URL routing; pages addressed by session-memory view keys: workbench/overview (default tab), workbench/tasks, workbench/features (+ :slug detail subview), workbench/dialog/* overlays (wizard, remove confirm, plugin disable confirm, launch error), session (upstream view, UF5 jump target); equivalent gating = state gates (no active project -> overview empty state auto-enters wizard; invalid external doc -> error card + repoint guidance)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "docs/features/dsh-forge-m2/design/page-map.md:8-18,115-131,143-145"
+    },
+    {
+      "fact_id": "FT-054",
+      "source": "static",
+      "subject": "readFeatureDoc kind whitelist and tab gating",
+      "kind": "signature",
+      "value": "readFeatureDoc kind must be one of manifest/prd/design/ui/tasks (shape error otherwise); FeatureSummary.docKinds lists only the kinds actually present and drives the UF4 doc-tab enabled/disabled state — missing kinds render disabled, never hidden; the five tab headers are always present",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/handlers.ts:90,190-200; apps/desktop/src/main/workbench/ipc/types.ts:88-97"
+    },
+    {
+      "fact_id": "FT-055",
+      "source": "static",
+      "subject": "TaskDetail composition",
+      "kind": "signature",
+      "value": "getTaskDetail returns summary + descriptionMarkdown (task file raw markdown for injection-safe read-only rendering) + depChain (transitive upstream blocker chain, topological order, qualified keys) + records (at/kind/source/summary adapted from the forge write-once record markdown, no fabricated fields) + links (session link history newest-first, ended rows included); per-task link history is the same lookup the source-inference fallback consumes",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/types.ts:62-86; apps/desktop/src/main/workbench/repos/session-links.ts:89-95"
+    },
+    {
+      "fact_id": "FT-056",
+      "source": "static",
+      "subject": "Sync status surface on the board",
+      "kind": "output_format",
+      "value": "TaskBoardData carries sync SyncStatusPayload {state idle|scanning|error, lastScanAt, error?}; sync_state.error caps the reason at 120 characters; on perception-chain failure the board presents the sync-error toolbar indication with silent retry and retains the last-good board; snapshots are rebuildable derived caches (forge files remain the sole source of truth)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-23T01:18:11Z",
+      "citation": "apps/desktop/src/main/workbench/indexer/diff.ts:32-43; apps/desktop/src/main/workbench/store/schema-v1.sql:96-101"
     }
   ]
 }

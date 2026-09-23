@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原型导航 — dsh-forge M2 需求与会话工作台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="content" style="max-width: 1080px; margin: 0 auto; padding-top: 40px;">
+    <h1 class="t-16">dsh-forge M2 — UI 原型导航</h1>
+    <p class="t-secondary" style="margin: 8px 0 6px;">
+      依据 <span class="t-mono t-12">ui/ui-design.md</span>(eval 961/1000 修订版)生成。纯 vanilla HTML/CSS/JS,无框架、无构建,直接浏览器打开。
+    </p>
+    <ul class="t-12 t-secondary" style="margin-bottom: 24px; list-style: disc; padding-left: 20px; line-height: 22px;">
+      <li>壳级双视图切换以「降级形态 slim rail(48px)」呈现(首选形态 = 上游侧边栏导航扩展,复用上游组件,原型不可再现;两形态交互契约等价,见设计文档 Navigation 节)。</li>
+      <li>右下角「原型状态」切换器可在 数据 / 加载 / 空态 / 错误 之间切换(原型辅助 UI,非产品界面);主题按钮切换亮暗双主题。</li>
+      <li>令牌与几何均取自 DESIGN.md(--dsw-alias-* 语义别名、r14/r20/r24、12/18 · 14/22 · 16/24)。</li>
+    </ul>
+
+    <div class="grid-features">
+      <a href="overview.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · 项目概览(UF1 + UF6)</h3>
+        <p class="t-12 t-secondary">项目卡片 grid、inline 重命名、注册向导(3 步 + 编辑模式/重新指向)、移除确认与激活移交、插件管理区(必备行无禁用入口)。</p>
+      </div></a>
+      <a href="tasks.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · 任务看板(UF2 + UF3 + UF5)</h3>
+        <p class="t-12 t-secondary">依赖树 DAG / 状态分组 7 列 / 列表三视图、任务详情侧板、发起会话与挂接徽标、回流演示(属性级 + 结构性)。</p>
+      </div></a>
+      <a href="features.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · feature 看板(UF4)</h3>
+        <p class="t-12 t-secondary">feature 卡 grid、状态机 stepper(5 态)、五类文档只读浏览、空缺文档 tab 禁用、仓外路径失效错误引导。</p>
+      </div></a>
+      <a href="session.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">会话视图(上游继承,占位)</h3>
+        <p class="t-12 t-secondary">上游 GUI 100% 继承,不在 M2 设计范围;原型呈现 UF5「发起会话 / 进入会话」的切换落点与首条消息注入示意。</p>
+      </div></a>
+    </div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

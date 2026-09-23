@@ -47,11 +47,22 @@
 // The config itself is read-only to this module (AC5): it is loaded once at
 // startup and never written — runtime enable/disable writers (M2 UF6) may read
 // the same file but must not mutate product-owned entries through it.
+//
+// Task 3.1 — entries may carry `mandatory: true` (forge core / platform
+// required bundles; the plugin tree's mandatory identity derives from this
+// manifest alone, G6). The projector folds the userData runtime overlay
+// (`plugin-runtime.json`, `{ disabled: [...] }` — third-party names only)
+// into the same reconciliation flow: mandatory bundles are immune to the
+// overlay (always assembled, even if a hand-edited file names them) and a
+// disabled third-party bundle is held out of the profile manifest — its
+// injected content exits; re-enabling restores it through the add leg. The
+// overlay is read defensively: a malformed file never blocks startup.
 
 import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { shellLog } from '../log.ts'
+import { readPluginRuntimeOverlay } from '../plugin-runtime/overlay.ts'
 import { extractTarball, TarballError } from './tarball.ts'
 
 /** Upstream's profile-owned module-fallback directory (never touched here). */
@@ -79,6 +90,13 @@ export interface PluginBundleEntry {
    * the vendored installation closure.
    */
   readonly source?: string
+  /**
+   * `true` marks a mandatory bundle (forge core / platform required, task
+   * 3.1): always assembled regardless of the runtime overlay; disable
+   * requests for it are rejected upstream (ERR_PLUGIN_MANDATORY). Absent =
+   * third-party (the only overlay-writable tier).
+   */
+  readonly mandatory?: true
 }
 
 /** Parsed product-level plugin-bundles config (single source of truth, task 2). */
@@ -147,9 +165,9 @@ export function loadPluginBundlesConfig(configPath: string): PluginBundlesConfig
       throw new PluginBundlesConfigError(`every bundle entry in ${configPath} must hold a JSON object`)
     }
     for (const key of Object.keys(candidate)) {
-      if (key !== 'name' && key !== 'source') throw new PluginBundlesConfigError(`unknown key ${JSON.stringify(key)} on a bundle entry in ${configPath} (expected "name", "source")`)
+      if (key !== 'name' && key !== 'source' && key !== 'mandatory') throw new PluginBundlesConfigError(`unknown key ${JSON.stringify(key)} on a bundle entry in ${configPath} (expected "name", "source", "mandatory")`)
     }
-    const { name, source } = candidate
+    const { name, source, mandatory } = candidate
     if (typeof name !== 'string' || !BUNDLE_NAME_PATTERN.test(name)) {
       throw new PluginBundlesConfigError(`invalid bundle name ${JSON.stringify(name)} in ${configPath} (expected a plain or scoped npm package name)`)
     }
@@ -158,7 +176,12 @@ export function loadPluginBundlesConfig(configPath: string): PluginBundlesConfig
     if (source !== undefined && !isValidSource(source)) {
       throw new PluginBundlesConfigError(`invalid source ${JSON.stringify(source)} for bundle ${JSON.stringify(name)} in ${configPath} (expected "workspace:<repo-relative dir>")`)
     }
-    entries.push(source === undefined ? { name } : { name, source })
+    // Task 3.1: the mandatory convention is `mandatory: true` (absent = third-party);
+    // any other value fails loud rather than half-marking the protected partition.
+    if (mandatory !== undefined && mandatory !== true) {
+      throw new PluginBundlesConfigError(`invalid mandatory ${JSON.stringify(mandatory)} for bundle ${JSON.stringify(name)} in ${configPath} (only literal true marks a mandatory bundle; omit the key otherwise)`)
+    }
+    entries.push({ name, ...(source === undefined ? {} : { source }), ...(mandatory === undefined ? {} : { mandatory }) })
   }
   return Object.freeze({ bundles: Object.freeze(entries) })
 }
@@ -226,6 +249,14 @@ export interface HostProfileDeps {
   readonly workspaceRoot?: string
   /** App-resources root anchoring `tarball:` source specs (dev: apps/desktop/resources; packaged: process.resourcesPath). */
   readonly resourcesRoot?: string
+  /**
+   * Runtime enable/disable overlay (`<userData>/plugin-runtime.json`, task
+   * 3.1). When provided, disabled third-party bundles are held out of the
+   * profile manifest; mandatory bundles are immune. Absent/missing file =
+   * empty overlay = every config bundle assembled. Read defensively — a
+   * malformed overlay never fails the projection.
+   */
+  readonly overlayPath?: string
 }
 
 export interface HostProfileProjection {
@@ -457,13 +488,33 @@ function sameBundles(left: readonly string[], right: readonly string[]): boolean
 /**
  * Project the host profile project and the office payload source, reconciling
  * the manifest bundle list and profile-local materializations against the
- * product config (single source of truth). Existing host-managed materialization
- * is never reset: only the shell-owned manifest list and the shell-seeded links
- * converge to the config; upstream-owned fallback links are left to the host.
+ * product config (single source of truth), folded with the runtime overlay
+ * (task 3.1): mandatory bundles assemble unconditionally (a hand-edited
+ * overlay naming them is stripped by the overlay reader — load-side guard,
+ * T5), disabled third-party bundles are held out (their injected content
+ * exits; re-enabling converges back through the add leg). Existing
+ * host-managed materialization is never reset: only the shell-owned manifest
+ * list and the shell-seeded links converge to the config; upstream-owned
+ * fallback links are left to the host.
  */
 export function projectHostProfile(deps: HostProfileDeps): HostProfileProjection {
   const { profileDir, officeSkillsSource, bundles } = deps
-  const desired = bundles.map(entry => entry.name)
+  // Task 3.1: the overlay read is defensive (missing = empty; malformed =
+  // isolated + rebuilt by the overlay module) — it can never fail the boot.
+  const overlay = deps.overlayPath === undefined
+    ? { disabled: new Set<string>() }
+    : readPluginRuntimeOverlay(deps.overlayPath, bundles.map(entry => ({ name: entry.name, mandatory: entry.mandatory === true })))
+  const desired = bundles
+    .filter((entry) => {
+      if (entry.mandatory === true) return true // protected partition: disabled never applies
+      return !overlay.disabled.has(entry.name)
+    })
+    .map(entry => entry.name)
+  for (const entry of bundles) {
+    if (entry.mandatory !== true && overlay.disabled.has(entry.name)) {
+      shellLog.info({ code: 'HOST_PROFILE_PLUGIN_DISABLED', message: 'third-party bundle held out of the host profile (runtime overlay)', data: { bundle: entry.name } })
+    }
+  }
 
   mkdirSync(profileDir, { recursive: true })
   const manifestPath = join(profileDir, 'package.json')

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>会话视图 — dsh-forge M2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail:会话 = 当前视图(激活态:interactive-bg-hover 填充 + 左缘 2px 品牌蓝指示条) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn is-active" type="button" aria-label="会话" title="会话" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn" type="button" aria-label="工作台" title="工作台" onclick="location.href='overview.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <main class="content" style="display: grid; place-items: center;">
+        <!-- 上游 GUI 100% 继承 —— 占位框架,非设计对象 -->
+        <div class="card" style="max-width: 640px; width: 100%; padding: 40px 32px; text-align: center; border-style: dashed;">
+          <div class="t-16" style="margin-bottom: 8px;">会话视图 = 上游 GUI(100% 继承)</div>
+          <p class="t-14 t-secondary" style="margin-bottom: 20px;">
+            主窗口会话界面整体继承上游 dsh 客户端,不在 M2 UI 设计范围(TECH-ui-reuse-001)。<br>
+            UF5「发起会话 / 进入会话」经壳级视图切换落到本视图,并以 session-focus 定位目标会话;<br>
+            切换不重载、不重排、不丢会话状态(0.2s fade)。
+          </p>
+          <div class="card pad" style="text-align: left; margin-bottom: 20px;">
+            <div class="t-12 t-secondary" style="margin-bottom: 6px;">UF5 注入效果示意 — 会话首条用户消息</div>
+            <pre class="t-mono t-12" style="white-space: pre-wrap; color: var(--dsw-alias-label-primary);">$ forge prompt get-by-task-id 2.1
+
+任务 2.1 托盘与通知(当前状态: in_progress)
+执行上下文:
+- 目标: 实现系统托盘驻留与两种系统通知……
+- 依赖: T1.2 宿主子进程接入(已完成)
+- 验收: SC4 通知点击聚焦 / SC5 托盘恢复与退出
+按任务执行 prompt 开工,无需手工粘贴上下文。</pre>
+          </div>
+          <button class="btn primary" type="button" onclick="location.href='tasks.html'">返回工作台</button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="proto-bar">
+    <span class="grp t-secondary">会话视图为上游继承占位页</span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

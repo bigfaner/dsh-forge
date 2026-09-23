@@ -6,9 +6,10 @@
 
 | Category | Type File | Decisions | Last Updated |
 |----------|-----------|-----------|--------------|
-| Architecture | architecture.md | 2 | 2026-09-20 |
-| Interface | interface.md | 1 | 2026-09-20 |
-| Dependencies | dependencies.md | 2 | 2026-09-20 |
+| Architecture | architecture.md | 16 | 2026-09-23 |
+| Interface | interface.md | 2 | 2026-09-23 |
+| Data Model | data-model.md | 2 | 2026-09-23 |
+| Dependencies | dependencies.md | 3 | 2026-09-22 |
 | Testing | testing.md | 1 | 2026-09-20 |
 | Local Dev & Deployment | local-dev-deployment.md | 1 | 2026-09-19 |
 | Product | product.md | 1 | 2026-09-19 |
@@ -17,11 +18,13 @@
 
 | Date | Feature | Type | Decision | Source |
 |------|---------|------|----------|--------|
-| 2026-09-20 | dsh-forge-m1 | dependencies | vendor 闭包获取定稿:源码投影+闭包解析,弃整树产物拷贝 | dsh-forge-m1/design/tech-design.md §Open Questions |
-| 2026-09-20 | dsh-forge-m1 | architecture | 本仓采用 pnpm workspace(apps/ + packages/)布局 | dsh-forge-m1/design/tech-design.md §Overview |
-| 2026-09-20 | dsh-forge-m1 | architecture | Electron 壳路线整体继承上游 apps/desktop,不自选替代框架 | dsh-forge-m1/design/tech-design.md §Overview |
-| 2026-09-20 | dsh-forge-m1 | interface | session-focus 经 carrier 注入通道实现,spike 验证,fallback=前置+toast | dsh-forge-m1/design/tech-design.md §Interfaces |
-| 2026-09-20 | dsh-forge-m1 | dependencies | desktop-host 以 vendor 源码投影获取,按上游 commit SHA 精确锁定 | dsh-forge-m1/design/tech-design.md §Overview |
-| 2026-09-20 | dsh-forge-m1 | testing | 测试栈定为 vitest 单测 + Playwright _electron e2e + 三平台 CI 矩阵 | dsh-forge-m1/design/tech-design.md §Testing |
-| 2026-09-19 | dsh-forge-m1 | product | 应用显示名与 profile 目录名定为 dsh-forge,弃用 desktop-ce 旧建议 | dsh-forge-m1/prd/prd-spec.md §Scope |
-| 2026-09-19 | dsh-forge-m1 | local-dev-deployment | forge surface 类型无 desktop,项目 surface 配置按 web 近似 | dsh-forge-m1/prd/prd-ui-functions.md §Navigation |
+| 2026-09-23 | dsh-forge-m3 | architecture | systemPrompt 预合成归内核(三要素确定性组装 + prompt_hash),host 仅持 subagent 创建 | dsh-forge-m3/design/tech-design.md §Interface 3 |
+| 2026-09-23 | dsh-forge-m3 | architecture | 任务状态机载体 = TS 原生移植入内核(7 态 + 依赖解析),Go 对拍器保证行为等价 | dsh-forge-m3/design/tech-design.md §Overview 裁决 T1 |
+| 2026-09-23 | dsh-forge-m3 | architecture | dsh tool→内核通道 = renderer 桥接(host rpc→client 半身→IPC 白名单),零新增监听面 | dsh-forge-m3/design/tech-design.md §Interface 2 裁决 T2 |
+| 2026-09-23 | dsh-forge-m3 | architecture | 已迁移项目外部写 = 幂等自动重摄入 + 偏离标记,不阻断外部会话 | dsh-forge-m3/design/tech-design.md §Interface 4 裁决 T3 |
+| 2026-09-23 | dsh-forge-m3 | data-model | 阶段资产 = stages/<stage>.md 单一规范文件,元数据入 stage_asset 索引 | dsh-forge-m3/design/tech-design.md §Interface 5 裁决 T4 |
+| 2026-09-23 | dsh-forge-m3 | data-model | 偏好存储 = 单表 prefs(scope, scope_id, key)三级 scope 化,键集封闭 | dsh-forge-m3/design/tech-design.md §Data Models |
+| 2026-09-23 | dsh-forge-m3 | interface | 工具写集仅对 data_authority='sqlite' 项目开放,files 项目提示走 CLI | dsh-forge-m3/design/tech-design.md §Interface 2 权限界 |
+| 2026-09-22 | dsh-forge-m2 | architecture | SQLite 内核 M2 全落:node:sqlite 内建,自有 SoT 与派生快照分区,快照可重建 | dsh-forge-m2/design/tech-design.md §Overview/§Data Models |
+| 2026-09-22 | dsh-forge-m2 | architecture | 必备插件不可禁用 = 双层防护:清单 mandatory 只读分区 + 覆盖文件仅纳第三方 + 守卫 | dsh-forge-m2/design/tech-design.md §Interface 4 |
+| 2026-09-22 | dsh-forge-m2 | architecture | 工作台渲染载体 = forge 核心插件注入上游 GUI,导航槽位优先,插件内 rail 降级 | dsh-forge-m2/design/tech-design.md §Overview D3 |

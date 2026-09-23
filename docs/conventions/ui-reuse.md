@@ -16,3 +16,10 @@ domains: [ui, reuse, dsh-upstream, desktop-shell, locale]
 - 自研 UI 前必须先核对上游无对应物,并在任务执行记录中说明核对结论。
 - 壳层自有文案中英双语,经上游 locale 机制提供,不自建文案通道。
 - 背景:用户 2026-09-19 PRD 阶段定向;源 dsh-forge-m1 PRD Functional Specs「UI 沿用最大化原则」。
+
+### TECH-ui-reuse-002: 上游导航槽位注入与视图键寻址(无路由 SPA)
+
+**Requirement**: 上游 SPA 无路由——新增顶级视图经上游导航槽位注入:`main`(keyed 槽,root scope,ui-layout 声明)+ `sidebar.panellist`(list 槽,ui-sidebar 声明),注册契约 `key/id/order/label`;视图切换经 `ctx.layout.selectPanel` 回写共享控制器;页面族用视图键寻址(page-map 惯例,如 `workbench/overview|tasks|features`),视图切换状态会话期内存、不持久化进路由系统;禁自建导航旁路(插件内自绘 rail 仅最后兜底)。
+**Context**: M1 spike-3 证外部通道不可用;M2 spike-1 定形槽位对;新增页面族(M3+)沿用。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m2 TECH-006(design/tech-design.md §Overview D3/§Integration Specs;design/spike-1-findings.md §1;design/page-map.md;packages/plugins/forge-workbench/src/client/contract.ts)

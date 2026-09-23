@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原型导航 — dsh-forge M3 流程即产品</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="content" style="max-width: 1080px; margin: 0 auto; padding-top: 40px;">
+    <h1 class="t-16">dsh-forge M3 — UI 原型导航</h1>
+    <p class="t-secondary" style="margin: 8px 0 6px;">
+      依据 <span class="t-mono t-12">ui/ui-design.md</span>(eval 954/1000 修订版)生成。纯 vanilla HTML/CSS/JS,无框架、无构建,直接浏览器打开。
+    </p>
+    <ul class="t-12 t-secondary" style="margin-bottom: 24px; list-style: disc; padding-left: 20px; line-height: 22px;">
+      <li>工作台 tab 序修订(M3):<strong>概览 / 提案 / Feature / 任务</strong>——提案看板为第二 tab,Feature 第三、任务沉底;「任务」tab 标签右上 warn 计数徽标 = 工作台级待审批指示。</li>
+      <li>右下角「原型状态」切换器可在 数据 / 加载 / 空态 / 错误 之间切换(原型辅助 UI,非产品界面);主题按钮切换亮暗双主题。</li>
+      <li>令牌与几何均取自 DESIGN.md(--dsw-alias-* 语义别名、r14/r20/r24、12/18 · 14/22 · 16/24);M2 既有面(注册向导/插件管理/任务三视图)按 M3 语义演进呈现。</li>
+      <li>人 = 观察与编排发起(派发/审批/迁移/偏好),无任务写 UI(BIZ-task-ops-001 M3 修订)。</li>
+    </ul>
+
+    <div class="grid-features">
+      <a href="overview.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · 项目概览(UF3 迁移 + UF4 偏好)</h3>
+        <p class="t-12 t-secondary">项目卡「可迁移」Pill 与「迁移」入口(在跑编排守卫)、迁移确认/原子进度/失败回滚对话框、注册向导条件四步(内嵌迁移);运行偏好三级面(全局/项目/Feature segmented + 键分组 + 继承/覆盖徽标 + 保存失败回滚)。</p>
+      </div></a>
+      <a href="proposals.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · 提案看板(UF5,第二 tab·新页)</h3>
+        <p class="t-12 t-secondary">提案行列表(状态 Pill 色谱 / slug / 作者 / feature 徽标互跳)、详情双子 tab(proposal/eval,eval 缺失禁用)、只读硬约束(零写入口)、外部回流演示。</p>
+      </div></a>
+      <a href="features.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · Feature 看板(UF2 阶段化)</h3>
+        <p class="t-12 t-secondary">feature 卡偏离徽标、stepper 门未满足态(warn 描边 + 总结未生成引导)、第六「阶段资产」tab(按阶段分组卡,目标+摘要只读)、阶段资产空态、偏离回流演示。</p>
+      </div></a>
+      <a href="tasks.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">工作台 · 任务看板(UF1 派发与编排)</h3>
+        <p class="t-12 t-secondary">工具栏「派发」+「审批 N」warn Pill 按钮、选择模式(checkbox 原语 + ⤢ 详情入口 + 浮动操作条 + 键盘契约)、产物缺失警告(warn 不阻断)、编排态角标谱(待启动/执行中/待审批/失败/已提交)、审批 dock 面板(批准/拒绝 + 详情往返)、详情侧板「派发执行」与编排分区。</p>
+      </div></a>
+      <a href="session.html" class="page-link"><div class="card pad">
+        <h3 class="t-14" style="margin-bottom: 6px;">会话视图(上游继承,占位)</h3>
+        <p class="t-12 t-secondary">上游 GUI 100% 继承(TECH-ui-reuse-001),不在 M3 设计范围;原型呈现 UF1「进入会话」的切换落点与 subagent 执行会话定位示意。</p>
+      </div></a>
+    </div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

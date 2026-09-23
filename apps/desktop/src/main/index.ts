@@ -29,6 +29,13 @@ import {
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
+import { createPluginEnableGuard } from './plugin-runtime/guard.ts'
+import { openDatabase } from './workbench/store/db.ts'
+import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
+import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
+import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
+import { listProjects } from './workbench/repos/projects.ts'
+import { createHostSpawnEnvFeeder } from './workbench/host-env-feed.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -40,6 +47,17 @@ import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-hea
 // `__DSH_TRANSPORT__` carrier boot IPC, and the shell-ui injection pipeline.
 
 const DEV_SERVER_URL = process.env.DSH_FORGE_DEV_SERVER_URL
+
+// Task 6.1 (e2e userData isolation seam): an explicit override pins the whole
+// app-owned state face (workbench DB <userData>/workbench, the
+// plugin-runtime.json overlay, the single-instance lock) to a test-owned temp
+// dir — journeys stop sharing the dev machine's real %APPDATA%/Electron and
+// stop contending its single-instance lock. Same env-seam family as
+// DSH_FORGE_PROFILE_DIR / DSH_FORGE_PLUGIN_BUNDLES; must run before app ready.
+const isolatedUserData = process.env.DSH_FORGE_USER_DATA?.trim()
+if (isolatedUserData !== undefined && isolatedUserData !== '') {
+  app.setPath('userData', isolatedUserData)
+}
 
 // Must run before app ready (upstream precedent: module-scope registration).
 registerShellScheme()
@@ -311,6 +329,10 @@ void app.whenReady().then(async () => {
       // Task 6: `tarball:` sources are staged next to the config in app
       // resources (dev: resources/, packaged: process.resourcesPath).
       resourcesRoot: dirname(pluginBundlesConfigPath),
+      // Task 3.1: fold the runtime enable/disable overlay into the projection —
+      // mandatory bundles assemble unconditionally, disabled third-party ones
+      // are held out. Same file the setPluginEnabled verb writes (single state).
+      overlayPath: join(app.getPath('userData'), 'plugin-runtime.json'),
     })
   } catch (error) {
     profileFailure = error instanceof Error ? error.message : String(error)
@@ -319,6 +341,55 @@ void app.whenReady().then(async () => {
       message: 'host profile projection from the product plugin-bundles config failed; host start aborted',
       data: { detail: profileFailure },
     })
+  }
+
+  // M2 task 2.7: workbench data kernel + the dshForge.workbench.* verb face.
+  // The SQLite kernel boots before the window loads (every verb must already
+  // be registered on ipcMain by then). A boot failure is an explicit startup
+  // error carried by the M1 crash-recovery path — there is no silent
+  // no-database degradation, and the verb face simply stays uninstalled.
+  // Task 6.1: on success this also binds the projects-table provider the host
+  // env feed below consumes (empty until the kernel is up — fail-closed).
+  let listWorkbenchProjectRoots: () => readonly string[] = () => []
+  const feedHostSpawnEnv = createHostSpawnEnvFeeder()
+  try {
+    const userDataPath = app.getPath('userData')
+    const workbenchDb = await openDatabase(userDataPath)
+    listWorkbenchProjectRoots = () => listProjects(workbenchDb.db).map(project => project.codeRoot)
+    const workbenchEvents = createWorkbenchEventSubscriptions()
+    const pluginBundlesPath = resolvePluginBundlesConfigPath()
+    const workbenchIpc = createWorkbenchIpcServices({
+      db: workbenchDb.db,
+      pluginBundlesPath,
+      userDataPath,
+      // 3.1 seam: the real guard (mandatory → ERR_PLUGIN_MANDATORY) replaces
+      // the 2.7 stub at this assembly point — mandatory identity derives from
+      // the same product manifest (G6, no second list); setPluginEnabled
+      // stays the single write path into plugin-runtime.json.
+      pluginGuard: createPluginEnableGuard(() => readPluginManifestBundles(pluginBundlesPath)),
+      onEvents: workbenchEvents.sink,
+    })
+    installWorkbenchVerbs(
+      (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
+      workbenchIpc.verbs,
+      workbenchEvents,
+    )
+    workbenchIpc.start()
+    shellLog.info({
+      code: 'WORKBENCH_READY',
+      message: 'workbench data kernel booted; dshForge.workbench verb face installed',
+      data: { dbPath: workbenchDb.path },
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    shellLog.error({
+      code: 'ERR_WORKBENCH_DB',
+      message: 'workbench database boot failed; the workbench verb face is not installed',
+      data: { detail },
+    })
+    try {
+      crashRecovery.dispatch('start-failed', detail)
+    } catch { /* already terminal (an earlier failure owns the state) */ }
   }
 
   // dsh-app:// carriage: web assets from the vendored web frontend dist,
@@ -378,6 +449,12 @@ void app.whenReady().then(async () => {
   // `onHostReady` fires only on a successful bind (the first boot resolves the
   // SPA boot gate; recovery boots skip it — the outcome already resolved).
   async function bootHost(onHostReady?: () => void): Promise<void> {
+    // Task 6.1 (4.1's shell-side feed): refresh the ForgeBridge allowlist env
+    // from the workbench projects table right before every host spawn (first
+    // boot + recovery restarts). An explicitly-set non-empty value wins — the
+    // test-profile override channel (5.11 leg B precedent). The host child
+    // inherits this env; its plugin host half reads it per call.
+    feedHostSpawnEnv(listWorkbenchProjectRoots())
     const handle = await supervisor.startHost(profileDir)
     hostHandle = handle
     crashRecovery.setAttempts(supervisor.recoveryContext.attempts)

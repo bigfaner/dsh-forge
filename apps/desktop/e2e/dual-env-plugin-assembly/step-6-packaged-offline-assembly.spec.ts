@@ -62,12 +62,13 @@ test('step-6/staged-artifact-name-mismatch: --check is green on the real tree; a
   testInfo.annotations.push({
     type: 'note', description: 'stage-plugin-tarballs.mjs executes main() at import (module side effect), so the planner is driven via its CLI + shipped source: (a) the real tree passes --check; (b) the build channel\'s basename guard is present in the shipped script; (c) the runtime gate (startup reconciliation) fails loud for a config entry whose artifact basename is absent — the version-bump-not-synced boundary.',
   })
-  // (a) Real tree: the CLI check is green — with the default config carrying
-  // no tarball-sourced entries (the demo plugin is not a default product
-  // bundle), green is the explicit empty-plan no-op, not artifact presence.
+  // (a) Real tree: the CLI check is green — since M2 3.2 the default config
+  // carries one tarball-sourced entry (the mandatory forge-workbench bundle),
+  // so green means the staged artifact really is present at the config-declared
+  // path (stage it with: pnpm build:plugins && pnpm stage:plugin-tarballs).
   const green = spawnSync('node', ['scripts/stage-plugin-tarballs.mjs', '--check'], { cwd: REPO_ROOT, encoding: 'utf8' })
   expect(green.status, green.stderr ?? green.stdout).toBe(0)
-  expect(green.stdout).toContain('no tarball-sourced entries in the product config')
+  expect(green.stdout).toContain('staged tarball(s) present')
 
   // (b) The build channel carries the basename-equality guard verbatim.
   const stageSource = readFileSync(join(REPO_ROOT, 'scripts', 'stage-plugin-tarballs.mjs'), 'utf8')

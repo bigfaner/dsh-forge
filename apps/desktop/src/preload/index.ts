@@ -1,5 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { RecoveryState } from '../main/crash-recovery/index.ts'
+// Preload-local copy of the workbench channel table — the sandboxed preload
+// cannot require relative bundle chunks, so it must not share modules with the
+// main bundle (see ./channel-allowlist.ts header; sync locked by tests).
+import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
+import type {
+  FeatureBoardData,
+  FeatureDoc,
+  PluginRow,
+  Project,
+  RecordSessionLinkInput,
+  RegisterProjectInput,
+  SessionLink,
+  TaskBoardData,
+  TaskDetail,
+  WorkbenchEvent,
+  WorkbenchState,
+} from '../main/workbench/ipc/types.ts'
+import type { DocKind, ProjectPatch } from '../main/workbench/ipc/types.ts'
 
 // contextBridge semantic verbs (whitelist). The renderer (upstream client UI
 // plugin family) talks to the shell exclusively through these verbs; raw
@@ -57,6 +75,59 @@ contextBridge.exposeInMainWorld('dshForge', {
       const listener = (_event: Electron.IpcRendererEvent, payload: { state: RecoveryState; reason?: string }): void => callback(payload)
       ipcRenderer.on('dsh-forge:recovery-state', listener)
       return () => ipcRenderer.removeListener('dsh-forge:recovery-state', listener)
+    },
+  },
+  // M2 Interface 1: workbench data-plane semantic verbs (task 2.7). Each verb
+  // maps to exactly one whitelisted channel (channel-allowlist.ts is the shared
+  // source — no hand-written channel strings, no generic invoke passthrough).
+  // Rejections arrive as WorkbenchIpcError whose message is the serialized
+  // `{ code, message, detail? }` envelope (tech-design §Error Handling).
+  workbench: {
+    getState: (): Promise<WorkbenchState> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getState) as Promise<WorkbenchState>,
+    registerProject: (input: RegisterProjectInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.registerProject, input) as Promise<Project>,
+    updateProject: (id: string, patch: ProjectPatch): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.updateProject, id, patch) as Promise<Project>,
+    removeProject: (id: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.removeProject, id) as Promise<void>,
+    activateProject: (id: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.activateProject, id) as Promise<void>,
+    getTaskBoard: (projectId: string): Promise<TaskBoardData> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getTaskBoard, projectId) as Promise<TaskBoardData>,
+    getTaskDetail: (projectId: string, taskKey: string): Promise<TaskDetail> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getTaskDetail, projectId, taskKey) as Promise<TaskDetail>,
+    getFeatureBoard: (projectId: string): Promise<FeatureBoardData> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getFeatureBoard, projectId) as Promise<FeatureBoardData>,
+    readFeatureDoc: (projectId: string, featureSlug: string, kind: DocKind): Promise<FeatureDoc> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.readFeatureDoc, projectId, featureSlug, kind) as Promise<FeatureDoc>,
+    listPlugins: (): Promise<PluginRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listPlugins) as Promise<PluginRow[]>,
+    setPluginEnabled: (name: string, enabled: boolean): Promise<PluginRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setPluginEnabled, name, enabled) as Promise<PluginRow[]>,
+    recordSessionLink: (input: RecordSessionLinkInput): Promise<SessionLink> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.recordSessionLink, input) as Promise<SessionLink>,
+    endSessionLink: (linkId: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.endSessionLink, linkId) as Promise<void>,
+    // 6.4: the wizard step-② explicit authorization record (registry/authorize
+    // single write path; validation chains read it, nothing here touches fs).
+    authorizeExternalDocPath: (path: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.authorizeExternalDocPath, path) as Promise<void>,
+    // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
+    // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
+    // registers the renderer with the main-side subscription registry; the
+    // returned unsubscriber removes the listener AND deregisters — a destroyed
+    // renderer is deregistered main-side via the webContents destroyed hook.
+    onEvents: (callback: (events: readonly WorkbenchEvent[]) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, events: readonly WorkbenchEvent[]): void => {
+        callback(events)
+      }
+      ipcRenderer.on(WORKBENCH_EVENT_CHANNEL, listener)
+      void ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.subscribeEvents)
+      return () => {
+        ipcRenderer.removeListener(WORKBENCH_EVENT_CHANNEL, listener)
+        void ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.unsubscribeEvents)
+      }
     },
   },
 })

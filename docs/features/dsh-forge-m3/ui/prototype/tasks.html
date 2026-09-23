@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 · 任务看板 — dsh-forge M3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 壳级 slim rail(工作台 = 当前视图) -->
+    <aside class="rail" aria-label="主视图切换">
+      <button class="rail-btn" type="button" aria-label="会话" title="会话" onclick="location.href='session.html'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg>
+      </button>
+      <button class="rail-btn is-active" type="button" aria-label="工作台" title="工作台" aria-current="location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </button>
+    </aside>
+
+    <div class="main">
+      <!-- 顶栏 h48 sticky:项目切换器(Menu 卡)+ 添加项目 -->
+      <header class="topbar">
+        <div class="menu-wrap">
+          <button class="btn sm ghost" type="button" data-menu-trigger aria-haspopup="menu">dsh-forge ▾</button>
+          <div class="menu" role="menu">
+            <button class="menu-item" type="button">dsh-forge <span style="margin-left:auto;">✓</span></button>
+            <button class="menu-item" type="button">electron-course</button>
+            <div class="menu-sep"></div>
+            <button class="menu-item" type="button">＋ 添加项目</button>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="btn sm ghost" type="button" onclick="location.href='overview.html'">＋ 添加项目</button>
+      </header>
+
+      <!-- tab 条(M3 修订):概览 / 提案 / Feature / 任务(当前,带审批计数徽标) -->
+      <nav class="tabstrip" aria-label="工作台页面">
+        <a class="tab" href="overview.html">概览</a>
+        <a class="tab" href="proposals.html">提案</a>
+        <a class="tab" href="features.html">Feature</a>
+        <a class="tab is-active" href="tasks.html" aria-current="page">任务<span class="tab-badge" data-approval-badge aria-label="2 项待审批">2</span></a>
+      </nav>
+
+      <main class="content" data-state-root data-state="populated">
+        <!-- 工具栏:M2 三视图/筛选/排序(继承)+ 派发 + 审批(M3 追加右侧) -->
+        <div class="toolbar" data-when="populated">
+          <div class="segmented" role="tablist" aria-label="看板视图" data-tabs="taskview">
+            <button type="button" role="tab" data-tab="tree" class="is-active" aria-selected="true">依赖树</button>
+            <button type="button" role="tab" data-tab="group" aria-selected="false">状态分组</button>
+            <button type="button" role="tab" data-tab="list" aria-selected="false">列表</button>
+          </div>
+          <div class="menu-wrap">
+            <button class="btn sm ghost" type="button" data-menu-trigger>feature ▾</button>
+            <div class="menu" role="menu">
+              <button class="menu-item" type="button">全部 feature</button>
+              <button class="menu-item" type="button">dsh-forge-m3</button>
+              <button class="menu-item" type="button">dsh-forge-m2</button>
+            </div>
+          </div>
+          <div class="menu-wrap">
+            <button class="btn sm ghost" type="button" data-menu-trigger>状态 ▾</button>
+            <div class="menu" role="menu">
+              <button class="menu-item" type="button">全部状态</button>
+              <button class="menu-item" type="button">pending</button>
+              <button class="menu-item" type="button">in_progress</button>
+              <button class="menu-item" type="button">completed</button>
+            </div>
+          </div>
+          <label class="toggle t-12"><input type="checkbox"> worktree</label>
+          <span class="toolbar-count" id="task-count">任务计数 9(当前筛选)/ 共 9</span>
+          <button class="btn primary" type="button" id="dispatch-btn" title="">派发</button>
+          <button class="btn sm warn-pill" type="button" id="appr-btn" aria-label="审批:2 项待审批" hidden><span class="dot breath" aria-hidden="true"></span>审批 <span id="appr-count">2</span></button>
+        </div>
+
+        <div data-when="populated">
+          <!-- ===== 视图 A · 依赖树(blocker 在上;键盘 Tab/方向键遍历;选择模式整面 = 勾选) ===== -->
+          <div data-tab-panel="tree" data-tab-group="taskview">
+            <div class="dag-wrap">
+              <div class="dag" id="dag">
+                <svg class="edges" aria-hidden="true">
+                  <defs>
+                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L8,4 L0,8 z" fill="var(--dsw-alias-border-l3)"></path>
+                    </marker>
+                  </defs>
+                  <line x1="160" y1="96" x2="300" y2="168" marker-end="url(#arrow)"></line><!-- 1.1 → 1.2 -->
+                  <line x1="420" y1="236" x2="530" y2="318" marker-end="url(#arrow)"></line><!-- 1.2 → 2.1 -->
+                  <line x1="730" y1="96" x2="560" y2="318" marker-end="url(#arrow)"></line><!-- 1.3 → 2.1 -->
+                  <line x1="240" y1="236" x2="165" y2="318" marker-end="url(#arrow)"></line><!-- 1.2 → 1.4 -->
+                  <line x1="860" y1="96" x2="850" y2="168" marker-end="url(#arrow)"></line><!-- 1.3 → 2.5 -->
+                  <line x1="590" y1="386" x2="590" y2="462" marker-end="url(#arrow)"></line><!-- 2.1 → 2.2 -->
+                  <line x1="690" y1="386" x2="840" y2="462" marker-end="url(#arrow)"></line><!-- 2.1 → 2.3 -->
+                  <line x1="500" y1="386" x2="310" y2="462" marker-end="url(#arrow)"></line><!-- 2.1 → 2.4 -->
+                </svg>
+                <!-- 节点卡由页面脚本渲染(TASKS 数据驱动) -->
+              </div>
+            </div>
+            <p class="t-12 t-secondary">看板只读:任务状态变更归 agent(经 dsh tool);人 = 编排发起(派发/审批)。选择模式:整面点击 = 勾选 · Space = 勾选 · Enter = 详情 · Esc = 退出。</p>
+          </div>
+
+          <!-- ===== 视图 B · 状态分组 ===== -->
+          <div data-tab-panel="group" data-tab-group="taskview" hidden>
+            <div class="board-cols" id="board"></div>
+          </div>
+
+          <!-- ===== 视图 C · 列表(勾选 = checkbox 内嵌行首) ===== -->
+          <div data-tab-panel="list" data-tab-group="taskview" hidden>
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th style="width: 44px;" data-select-only hidden>选</th><th>ID</th><th>标题</th><th>编排</th><th>状态</th><th>feature</th><th>来源</th><th>更新时间</th></tr></thead>
+                <tbody id="task-rows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== state: loading ===== -->
+        <div data-when="loading" aria-hidden="true">
+          <div class="skeleton" style="height: 48px; margin-bottom: 14px;"></div>
+          <div style="display: grid; grid-template-columns: repeat(3, 240px); gap: 24px; justify-content: center; margin-top: 24px;">
+            <div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div>
+            <div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div><div class="skeleton" style="height: 66px;"></div>
+          </div>
+        </div>
+
+        <!-- ===== state: empty ===== -->
+        <div data-when="empty">
+          <div class="card state-card">
+            <div class="t-16" style="margin-bottom: 4px;">无任务</div>
+            <p class="t-14 t-secondary hint">当前 feature 尚未分解任务。经 <span class="t-mono t-12">/breakdown-tasks</span> 生成任务分解后,派发与编排在此可用。</p>
+          </div>
+        </div>
+
+        <!-- ===== state: error ===== -->
+        <div data-when="error">
+          <div class="card state-card">
+            <div class="t-16 error-text" style="margin-bottom: 4px;">任务数据读取异常</div>
+            <p class="t-14 t-secondary hint">内核任务数据(SQLite 权威)读取失败。</p>
+            <button class="btn primary" type="button" onclick="location.reload()">重试</button>
+          </div>
+        </div>
+
+        <!-- 回流提示区(aria-live;同任务 2s 窗口仅播终态,批量聚合一条) -->
+        <span class="visually-hidden" id="flow-live" aria-live="polite"></span>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 任务详情侧板(M2 UF3 演进:派发执行 + 编排分区;z100;与审批面板同层互斥) ===== -->
+  <aside class="side-panel" id="detail-panel" hidden aria-label="任务详情">
+    <div class="side-head">
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <div style="flex: 1;">
+          <button class="btn sm ghost back-link" type="button" id="dp-back-appr" hidden style="margin-bottom: 6px;">◂ 返回审批(<span id="dp-back-appr-n">2</span>)</button>
+          <div class="t-12 t-secondary t-mono" id="dp-id">2.2</div>
+          <div class="t-16" id="dp-title">systemPrompt 预合成</div>
+        </div>
+        <button class="dialog-close" type="button" id="dp-close" aria-label="关闭侧板">✕</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap;" id="dp-pills"></div>
+      <button class="btn primary" type="button" id="dp-dispatch" style="width: 100%; margin-top: 14px;">▶ 派发执行</button>
+      <p class="t-12 t-secondary" id="dp-dispatch-note" style="margin-top: 6px;">M2「发起会话」的 M3 演进:预合成 systemPrompt + subagent 派发。</p>
+    </div>
+    <div class="side-body" id="dp-body"></div>
+  </aside>
+
+  <!-- ===== 审批面板(右侧 dock;z100;与详情侧板同构互斥) ===== -->
+  <aside class="side-panel" id="appr-panel" hidden aria-label="待审批">
+    <div class="side-head">
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <div class="t-16" style="flex: 1;">待审批(<span id="ap-count">2</span>)</div>
+        <button class="dialog-close" type="button" id="ap-close" aria-label="关闭审批面板">✕</button>
+      </div>
+      <p class="t-12 t-secondary" style="margin-top: 4px;">批准 / 拒绝仅经显式点击,无默认自动批准(PRD 硬约束)。</p>
+    </div>
+    <div class="side-body" id="ap-body"></div>
+  </aside>
+
+  <!-- ===== 浮动操作条(选择模式;底缘居中 · z200) ===== -->
+  <div class="float-bar" id="float-bar" hidden role="toolbar" aria-label="选择操作">
+    <span class="t-14" id="fb-count">已选 0 项</span>
+    <button class="btn sm ghost" type="button" id="fb-cancel">取消</button>
+    <button class="btn primary" type="button" id="fb-dispatch">派发所选 0 →</button>
+  </div>
+
+  <!-- ===== warning:产物缺失(warn 不阻断) ===== -->
+  <div class="dialog-mask" id="dispatch-warning" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dw-title">
+      <div class="dialog-head">
+        <div class="t-16" id="dw-title" style="flex: 1;">⚠ 当前阶段产物不齐全</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">派发前确定性检查(代码判定)发现当前阶段产物缺失:</p>
+        <ul class="t-12 t-mono" style="margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: var(--dsw-alias-interactive-bg-hover);">
+          <li style="padding: 2px 0;">docs/features/dsh-forge-m3/design/tech-design.md</li>
+          <li style="padding: 2px 0;">docs/features/dsh-forge-m3/tasks/records/阶段总结.md</li>
+        </ul>
+        <p class="t-12 t-secondary">缺失清单将留档日志。警告不阻断派发——确认后可继续(PRD 硬约束:强制阶段化 = warn,非 block)。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="dw-continue">继续派发</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== confirming:派发确认 ===== -->
+  <div class="dialog-mask" id="dispatch-confirm" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dc-title">
+      <div class="dialog-head">
+        <div class="t-16" id="dc-title" style="flex: 1;">确认派发</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">将派发以下 <span id="dc-n">2</span> 项任务(无依赖冲突,可并行):</p>
+        <ul class="t-12" id="dc-list" style="margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: var(--dsw-alias-interactive-bg-hover);"></ul>
+        <p class="t-12 t-secondary">派发时内核将预合成 systemPrompt 三要素:<strong>任务类型协议 + feature 目标/摘要 + 生效偏好</strong>;subagent 启动预算 ≤3s。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="dc-go">派发</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== dispatching 超时错误 ===== -->
+  <div class="dialog-mask" id="dispatch-error" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="de-title">
+      <div class="dialog-head">
+        <div class="t-16 error-text" id="de-title" style="flex: 1;">派发超时</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14">派发预算超时(>3s):subagent 未在预算内可交互。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>关闭</button>
+        <button class="btn primary" type="button" data-dialog-close>重试</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 重派发二次确认 ===== -->
+  <div class="dialog-mask" id="redispatch-confirm" hidden>
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="rd-title">
+      <div class="dialog-head">
+        <div class="t-16" id="rd-title" style="flex: 1;">重派发确认</div>
+        <button class="dialog-close" type="button" data-dialog-close aria-label="关闭">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-14" id="rd-task">T2.4 审批面板组件</p>
+        <p class="t-12 t-secondary" id="rd-reason" style="margin-top: 6px;">上次失败原因:subagent 退出码 1(宿主会话通道未就绪)</p>
+        <p class="t-12 t-secondary" style="margin-top: 8px;">重派发将重走产物齐全性检查与预合成。</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn sm ghost" type="button" data-dialog-close>取消</button>
+        <button class="btn primary" type="button" id="rd-go">重派发</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 原型辅助(非产品 UI) -->
+  <div class="proto-bar">
+    <span class="grp t-secondary">原型状态</span>
+    <span class="grp">
+      <label><input type="radio" name="proto-state" value="populated" checked> 数据</label>
+      <label><input type="radio" name="proto-state" value="loading"> 加载</label>
+      <label><input type="radio" name="proto-state" value="empty"> 空态</label>
+      <label><input type="radio" name="proto-state" value="error"> 错误</label>
+    </span>
+    <span class="grp"><button class="btn sm ghost" type="button" id="sim-flow">模拟回流</button></span>
+    <span class="grp"><button class="btn sm ghost" type="button" data-theme-toggle>主题</button></span>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    /* ===== 页面专属:任务派发与编排(UF1)===== */
+    (function () {
+      /* ---------- 数据 ---------- */
+      var TASKS = {
+        t11: { id: '1.1', title: '迁移数据模型与 SQLite 内核', status: 'completed', deps: [], pos: [40, 30], orch: null,
+          desc: '任务结构化状态以 SQLite 为权威(单写者 = 内核);自有 SoT 与派生快照分区。' },
+        t12: { id: '1.2', title: '备份与原子回滚', status: 'completed', deps: ['t11'], pos: [180, 170], orch: null,
+          desc: '迁移前自动备份;失败回滚至迁移前状态(零半迁移态)。' },
+        t13: { id: '1.3', title: '对拍器与差异报告', status: 'completed', deps: [], pos: [700, 30], orch: null,
+          desc: '任务全集(ID/状态/依赖/标题)对拍;结论可回查。' },
+        t14: { id: '1.4', title: '偏好三级 API', status: 'pending', deps: ['t12'], pos: [40, 320], orch: null,
+          desc: '偏好存储(全局/项目/feature)与解析(feature > 项目 > 全局);键集 = auto.*/worktree.*/eval.*。' },
+        t21: { id: '2.1', title: 'dsh tool 写通道', status: 'completed', deps: ['t12', 't13'], pos: [470, 320], orch: null,
+          desc: 'agent 域任务写操作经 dsh tool;actor 标识审计;零 forge CLI。' },
+        t22: { id: '2.2', title: 'systemPrompt 预合成', status: 'in_progress', deps: ['t21'], pos: [470, 466], orch: 'running',
+          dispatched: '09-23 10:12', session: '#c41e', presyn: true,
+          desc: '派发时合成三要素:任务类型协议 + feature 目标/摘要 + 生效偏好。' },
+        t23: { id: '2.3', title: 'subagent 并行派发', status: 'in_progress', deps: ['t21'], pos: [730, 466], orch: 'awaiting',
+          dispatched: '09-23 09:58', session: '#b90d', presyn: true,
+          request: '执行 git commit -m "feat(dispatch): parallel subagent dispatch" —— 需写入工作区并创建提交(工作区写入);提交范围 = packages/plugins/forge-workbench/src/server/dispatch.ts(新增)。此操作将修改 git 状态,请审批。',
+          desc: '多任务无依赖并行派发;新旧派发角标独立呈现、互不串扰。' },
+        t24: { id: '2.4', title: '审批面板组件', status: 'pending', deps: ['t21'], pos: [180, 466], orch: 'failed',
+          dispatched: '09-23 09:40', presyn: true,
+          reason: 'subagent 退出码 1:宿主会话通道未就绪(spike ② 依赖)',
+          desc: '审批 dock 面板:条目 = 任务 + 请求正文;批准/拒绝显式点击。' },
+        t25: { id: '2.5', title: '提案看板数据链', status: 'in_progress', deps: ['t13'], pos: [730, 170], orch: 'awaiting',
+          dispatched: '09-23 10:31', session: '#c52f', presyn: true,
+          request: '执行 pnpm --filter forge-workbench typecheck —— 需写入派生类型产物(node_modules/.cache,工作区写入);缓存目录不在 .gitignore 白名单内,请审批。',
+          desc: 'proposals/ frontmatter 解析 + 关联关系 + ≤5s 回流。' }
+      };
+      var STATUS_ZH = { completed: '已完成', in_progress: '进行中', pending: '待处理' };
+      var ST_CLS = { completed: 'st-completed', in_progress: 'st-in_progress', pending: 'st-pending' };
+      var ORCH_ZH = { starting: '待启动', running: '执行中', awaiting: '待审批', failed: '失败', submitted: '已提交' };
+
+      var live = document.getElementById('flow-live');
+      var floatBar = document.getElementById('float-bar');
+      var detailPanel = document.getElementById('detail-panel');
+      var apprPanel = document.getElementById('appr-panel');
+      var selecting = false;
+      var checked = {};      /* key → true */
+      var pendingDispatch = [];  /* 确认对话框中的目标 */
+      var apprReturn = false;    /* 详情经「详情 ↗」进入 → 显示返回审批 */
+
+      /* ---------- 渲染辅助 ---------- */
+      function orchPillHtml(t) {
+        if (!t.orch) return '';
+        if (t.orch === 'starting') return '<span class="pill outline">待启动</span>';
+        if (t.orch === 'running') return '<span class="pill blue"><span class="dot st-in_progress breath" aria-hidden="true"></span>执行中</span>';
+        if (t.orch === 'awaiting') return '<span class="pill warn clickable" data-approve-jump="' + t.id + '" role="button" tabindex="0" title="点击进入审批" aria-label="任务 ' + t.id + ' 待审批,点击进入审批">待审批</span>';
+        if (t.orch === 'failed') return '<span class="pill error">失败</span>';
+        return '<span class="pill success">已提交</span>';
+      }
+      function dispatchable(t) {
+        return t.status === 'pending' && t.deps.every(function (d) { return TASKS[d].status === 'completed'; });
+      }
+      function chkDisabledReason(t) {
+        if (t.status === 'completed') return '终态任务不可派发';
+        if (t.status === 'in_progress') return '任务执行中(或存在在跑编排)';
+        if (!dispatchable(t)) return '存在未完成依赖';
+        return '';
+      }
+      function nodeCardHtml(key) {
+        var t = TASKS[key];
+        return '<input class="chk chk-overlay" type="checkbox" data-chk="' + key + '" aria-label="勾选任务 ' + t.id + ' ' + t.title + '"' + (chkDisabledReason(t) ? ' disabled title="' + chkDisabledReason(t) + '"' : '') + '>'
+          + '<button class="detail-jump" type="button" data-detail-jump="' + key + '" aria-label="打开任务详情" title="打开任务详情">⤢</button>'
+          + '<button class="node-action" type="button" data-node-dispatch="' + key + '" aria-label="派发执行" title="派发执行">'
+          + '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>'
+          + '<div class="node-title-row"><span class="dot ' + ST_CLS[t.status] + '" role="img" aria-label="状态:' + t.status + '"></span><span class="node-title t-14">' + t.title + '</span></div>'
+          + '<div class="node-meta t-12"><span class="t-mono t-secondary">' + t.id + '</span><span class="t-secondary">' + STATUS_ZH[t.status] + '</span>' + orchPillHtml(t) + '</div>';
+      }
+      function renderTree() {
+        var dag = document.getElementById('dag');
+        dag.querySelectorAll('.node-card').forEach(function (n) { n.remove(); });
+        Object.keys(TASKS).forEach(function (key) {
+          var t = TASKS[key];
+          var node = document.createElement('div');
+          node.className = 'node-card';
+          node.style.left = t.pos[0] + 'px'; node.style.top = t.pos[1] + 'px';
+          node.tabIndex = 0; node.setAttribute('role', 'button'); node.setAttribute('data-task', key);
+          node.setAttribute('aria-label', '任务 T' + t.id + ' ' + t.title + ',状态 ' + t.status + (t.orch ? ',编排态 ' + ORCH_ZH[t.orch] : ''));
+          node.innerHTML = nodeCardHtml(key);
+          dag.appendChild(node);
+        });
+        bindCards();
+      }
+      function renderBoard() {
+        var board = document.getElementById('board');
+        var order = ['pending', 'in_progress', 'completed', 'blocked', 'suspended', 'skipped', 'rejected'];
+        board.innerHTML = '';
+        order.forEach(function (st) {
+          var items = Object.keys(TASKS).filter(function (k) { return TASKS[k].status === st; });
+          var col = document.createElement('div');
+          col.className = 'board-col';
+          var head = '<div class="board-col-head"><span class="dot ' + ST_CLS[st] + '" aria-hidden="true"></span><span class="t-14">' + st + '</span><span class="pill t-12">' + items.length + '</span></div>';
+          col.innerHTML = head;
+          var body = document.createElement('div');
+          body.className = 'board-col-body';
+          if (!items.length) {
+            body.innerHTML = '<div class="card"><p class="board-col-empty">无此状态任务</p></div>';
+          } else {
+            items.forEach(function (key) {
+              var card = document.createElement('div');
+              card.className = 'node-card';
+              card.style.width = 'auto';
+              card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('data-task', key);
+              card.setAttribute('aria-label', '任务 T' + TASKS[key].id + ' ' + TASKS[key].title + ',状态 ' + st);
+              card.innerHTML = nodeCardHtml(key);
+              body.appendChild(card);
+            });
+          }
+          col.appendChild(body);
+          board.appendChild(col);
+        });
+        bindCards();
+      }
+      function renderList() {
+        var tbody = document.getElementById('task-rows');
+        tbody.innerHTML = '';
+        Object.keys(TASKS).forEach(function (key) {
+          var t = TASKS[key];
+          var tr = document.createElement('tr');
+          tr.tabIndex = 0; tr.setAttribute('data-task', key);
+          var disabled = chkDisabledReason(t);
+          tr.innerHTML = '<td data-select-only' + (selecting ? '' : ' hidden') + '><input class="chk" style="width:20px;height:20px;border-radius:10px;" type="checkbox" data-chk="' + key + '" aria-label="勾选任务 ' + t.id + '"' + (disabled ? ' disabled title="' + disabled + '"' : '') + '></td>'
+            + '<td class="t-mono t-12">' + t.id + '</td>'
+            + '<td style="white-space:normal;min-width:180px;">' + t.title + '</td>'
+            + '<td>' + orchPillHtml(t) + '</td>'
+            + '<td><span class="pill">' + STATUS_ZH[t.status] + '</span></td>'
+            + '<td class="t-12 t-secondary">dsh-forge-m3</td>'
+            + '<td><span class="pill">会话</span></td>'
+            + '<td class="t-12 t-secondary">' + (t.dispatched || '09-21 14:02') + '</td>';
+          tbody.appendChild(tr);
+        });
+        bindCards();
+      }
+      function renderAll() { renderTree(); renderBoard(); renderList(); syncCheckedUI(); }
+
+      /* ---------- 绑定卡片/行交互 ---------- */
+      function bindCards() {
+        document.querySelectorAll('[data-task]').forEach(function (el) {
+          var key = el.getAttribute('data-task');
+          el.addEventListener('click', function (e) {
+            if (e.target.closest('[data-chk],[data-detail-jump],[data-node-dispatch],[data-approve-jump]')) return;
+            if (selecting) { toggleChk(key); return; }
+            openDetail(key, false);
+          });
+          el.addEventListener('keydown', function (e) {
+            if (e.target.closest('[data-chk],[data-detail-jump],[data-node-dispatch],[data-approve-jump]')) return;
+            if (selecting && e.key === ' ') { e.preventDefault(); toggleChk(key); return; }
+            if (e.key === 'Enter' || (!selecting && e.key === ' ')) { e.preventDefault(); openDetail(key, false); }
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              var cards = Array.prototype.filter.call(document.querySelectorAll('[data-task]:not([hidden])'), function (c) { return c.offsetParent !== null; });
+              var i = cards.indexOf(el);
+              var next = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? cards[i - 1] : cards[i + 1];
+              if (next) { e.preventDefault(); next.focus(); }
+            }
+          });
+        });
+        document.querySelectorAll('[data-detail-jump]').forEach(function (b) {
+          b.addEventListener('click', function (e) { e.stopPropagation(); openDetail(b.getAttribute('data-detail-jump'), false); });
+        });
+        document.querySelectorAll('[data-node-dispatch]').forEach(function (b) {
+          b.addEventListener('click', function (e) { e.stopPropagation(); runDispatch([b.getAttribute('data-node-dispatch')]); });
+        });
+        document.querySelectorAll('[data-approve-jump]').forEach(function (p) {
+          p.addEventListener('click', function (e) { e.stopPropagation(); openApproval(p.getAttribute('data-approve-jump')); });
+          p.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openApproval(p.getAttribute('data-approve-jump')); } });
+        });
+      }
+
+      /* ---------- 选择模式 ---------- */
+      function enterSelection() {
+        selecting = true;
+        document.body.classList.add('selecting');
+        floatBar.hidden = false;
+        document.querySelectorAll('[data-select-only]').forEach(function (td) { td.hidden = false; });
+        syncCheckedUI();
+        live.textContent = '已进入派发选择模式';
+      }
+      function exitSelection(clear) {
+        selecting = false;
+        document.body.classList.remove('selecting');
+        floatBar.hidden = true;
+        if (clear) { checked = {}; }
+        document.querySelectorAll('[data-select-only]').forEach(function (td) { td.hidden = true; });
+        syncCheckedUI();
+      }
+      function toggleChk(key) {
+        var reason = chkDisabledReason(TASKS[key]);
+        if (reason) { toast(reason); return; }
+        checked[key] = !checked[key];
+        if (!checked[key]) delete checked[key];
+        syncCheckedUI();
+      }
+      function syncCheckedUI() {
+        var n = Object.keys(checked).length;
+        document.querySelectorAll('[data-chk]').forEach(function (c) {
+          var key = c.getAttribute('data-chk');
+          c.checked = !!checked[key];
+          var card = c.closest('[data-task]');
+          if (card) card.classList.toggle('checked', !!checked[key]);
+        });
+        document.getElementById('fb-count').textContent = '已选 ' + n + ' 项';
+        var go = document.getElementById('fb-dispatch');
+        go.textContent = '派发所选 ' + n + ' →';
+        go.disabled = n === 0;
+      }
+      document.getElementById('dispatch-btn').addEventListener('click', function () {
+        if (selecting) return;
+        enterSelection();
+        toast('选择模式:点击卡片勾选,Esc 退出');
+      });
+      document.getElementById('fb-cancel').addEventListener('click', function () { exitSelection(true); });
+
+      /* ---------- 派发流程 ---------- */
+      function runDispatch(keys) {
+        pendingDispatch = keys;
+        /* 产物齐全性检查 → 演示固定走 warning(缺失清单)→ confirming */
+        document.getElementById('dw-continue').setAttribute('data-next', '1');
+        openDialog('dispatch-warning');
+      }
+      document.getElementById('dw-continue').addEventListener('click', function () {
+        closeDialog(document.getElementById('dispatch-warning'));
+        showConfirming();
+      });
+      function showConfirming() {
+        var ul = document.getElementById('dc-list');
+        ul.innerHTML = '';
+        pendingDispatch.forEach(function (k) {
+          var t = TASKS[k];
+          var li = document.createElement('li');
+          li.style.padding = '2px 0';
+          li.innerHTML = '<span class="t-mono">T' + t.id + '</span> ' + t.title;
+          ul.appendChild(li);
+        });
+        document.getElementById('dc-n').textContent = pendingDispatch.length;
+        openDialog('dispatch-confirm');
+      }
+      document.getElementById('fb-dispatch').addEventListener('click', function () { runDispatch(Object.keys(checked)); });
+      document.getElementById('dc-go').addEventListener('click', function () {
+        closeDialog(document.getElementById('dispatch-confirm'));
+        /* dispatching:按钮 spinner + 目标卡片「待启动」 */
+        var btn = selecting ? document.getElementById('fb-dispatch') : null;
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>正在派发…'; }
+        pendingDispatch.forEach(function (k) { setOrch(k, 'starting'); });
+        live.textContent = '正在派发 ' + pendingDispatch.length + ' 项任务';
+        setTimeout(function () {
+          if (btn) { btn.disabled = false; btn.innerHTML = '派发所选 ' + pendingDispatch.length + ' →'; }
+          pendingDispatch.forEach(function (k) {
+            setOrch(k, 'running');
+            TASKS[k].dispatched = '刚刚';
+            TASKS[k].session = '#' + Math.random().toString(16).slice(2, 6);
+          });
+          /* 聚合播报(同批一条计数) */
+          live.textContent = pendingDispatch.length + ' 个任务进入执行中';
+          toast('已派发 ' + pendingDispatch.length + ' 项:预合成完成,subagent 已启动(≤3s)');
+          if (selecting) exitSelection(true);
+        }, 1200);
+      });
+      function setOrch(key, state) {
+        TASKS[key].orch = state;
+        renderAll();
+      }
+
+      /* ---------- 任务详情侧板 ---------- */
+      function openDetail(key, fromApproval) {
+        var t = TASKS[key];
+        apprPanel.hidden = true;
+        apprReturn = !!fromApproval;
+        document.getElementById('dp-back-appr').hidden = !fromApproval;
+        document.getElementById('dp-back-appr-n').textContent = awaitingCount();
+        document.getElementById('dp-id').textContent = t.id;
+        document.getElementById('dp-title').textContent = t.title;
+        var pills = '<span class="pill"><span class="dot ' + ST_CLS[t.status] + '" aria-hidden="true"></span>' + STATUS_ZH[t.status] + '</span><span class="pill">dsh-forge-m3</span>';
+        if (t.orch) pills += orchPillHtml(t);
+        document.getElementById('dp-pills').innerHTML = pills;
+        /* 派发按钮可用性 */
+        var dBtn = document.getElementById('dp-dispatch');
+        var reason = chkDisabledReason(t);
+        if (t.orch === 'failed') { dBtn.disabled = false; dBtn.textContent = '▶ 派发执行'; dBtn.title = ''; }
+        else if (reason) { dBtn.disabled = true; dBtn.title = reason; }
+        else { dBtn.disabled = false; dBtn.title = ''; }
+        /* 编排分区(置于执行记录之上) */
+        var orchHtml = '';
+        if (t.orch) {
+          orchHtml = '<div class="orch-line"><span class="t-secondary t-12">当前编排态</span>' + orchPillHtml(t)
+            + '<span class="t-12 t-secondary t-mono">派发于 ' + (t.dispatched || '—') + '</span></div>';
+          if (t.session) orchHtml += '<div class="orch-line"><span class="t-12 t-secondary">subagent 会话 ' + t.session + '</span><button class="btn sm ghost" type="button" onclick="location.href=\'session.html\'">进入会话</button></div>';
+          if (t.orch === 'awaiting') orchHtml += '<div class="orch-line"><button class="btn sm primary" type="button" data-go-appr="' + t.id + '">去审批</button></div>';
+          if (t.orch === 'failed' && t.reason) {
+            orchHtml += '<div class="orch-line"><span class="t-12 error-text">失败原因:' + t.reason + '</span></div>'
+              + '<div class="orch-line"><button class="btn sm ghost" type="button" data-redispatch="' + t.id + '">重派发</button></div>';
+          }
+          orchHtml += '<div class="orch-line"><span class="t-12 t-secondary">预合成要素:协议 ✓ · 目标摘要 ✓ · 偏好 ✓</span></div>';
+        } else {
+          orchHtml = '<p class="t-12 t-secondary">尚未派发(无编排记录)。</p>';
+        }
+        var deps = t.deps.map(function (d) {
+          var dt = TASKS[d];
+          return '<div class="dep-line">└ ' + dt.id + ' ' + dt.title + '(' + STATUS_ZH[dt.status] + ')→ 本任务</div>';
+        }).join('') || '<div class="dep-line">无依赖</div>';
+        var records = '';
+        if (t.orch === 'failed') records = '<div style="padding:2px 0;">· 09-23 09:40 <span class="t-mono">dispatch</span> <span class="pill t-12">工作台</span></div><div style="padding:2px 0;">· 09-23 09:41 <span class="t-mono">fail</span> <span class="pill t-12">subagent</span></div>';
+        else if (t.orch) records = '<div style="padding:2px 0;">· ' + (t.dispatched || '刚刚') + ' <span class="t-mono">dispatch</span> <span class="pill t-12">工作台</span></div>';
+        else records = '<div style="padding:2px 0;">· 09-20 10:00 <span class="t-mono">submit</span> <span class="pill t-12">dsh tool</span></div>';
+        var hooks = '';
+        if (t.session) hooks = '<div style="display:flex;align-items:center;gap:8px;padding:2px 0;"><span>· ' + (t.dispatched || '刚刚') + ' 会话 <span class="t-mono">' + t.session + '</span></span><button class="btn sm ghost" type="button" onclick="location.href=\'session.html\'">进入会话</button></div>';
+        document.getElementById('dp-body').innerHTML =
+          '<section class="accordion"><button class="accordion-head" type="button"><span class="caret">▾</span>编排</button><div class="accordion-body">' + orchHtml + '</div></section>'
+          + '<section class="accordion"><button class="accordion-head" type="button"><span class="caret">▾</span>描述</button><div class="accordion-body"><p style="color:var(--dsw-alias-label-primary);">' + t.desc + '</p></div></section>'
+          + '<section class="accordion"><button class="accordion-head" type="button"><span class="caret">▾</span>依赖链</button><div class="accordion-body dep-chain">' + deps + '</div></section>'
+          + '<section class="accordion"><button class="accordion-head" type="button"><span class="caret">▾</span>执行记录</button><div class="accordion-body">' + records + '</div></section>'
+          + '<section class="accordion"><button class="accordion-head" type="button"><span class="caret">▾</span>挂接历史</button><div class="accordion-body">' + (hooks || '<div class="dep-line">无挂接会话</div>') + '</div></section>';
+        /* 面板内动态按钮绑定 */
+        var goAppr = document.getElementById('dp-body').querySelector('[data-go-appr]');
+        if (goAppr) goAppr.addEventListener('click', function () { openApproval(goAppr.getAttribute('data-go-appr')); });
+        var rd = document.getElementById('dp-body').querySelector('[data-redispatch]');
+        if (rd) rd.addEventListener('click', function () { openRedispatch(rd.getAttribute('data-redispatch')); });
+        detailPanel.hidden = false;
+        document.getElementById('dp-close').focus();
+      }
+      document.getElementById('dp-close').addEventListener('click', function () { detailPanel.hidden = true; });
+      document.getElementById('dp-dispatch').addEventListener('click', function () {
+        var key = document.getElementById('dp-id').textContent;
+        var k = Object.keys(TASKS).filter(function (x) { return TASKS[x].id === key; })[0];
+        if (!k) return;
+        if (TASKS[k].orch === 'failed') { openRedispatch(TASKS[k].id); return; }
+        if (this.disabled) { toast(this.title || '当前不可派发'); return; }
+        detailPanel.hidden = true;
+        runDispatch([k]);
+      });
+      document.getElementById('dp-back-appr').addEventListener('click', function () {
+        detailPanel.hidden = true;
+        openApproval(null); /* 恢复剩余条目与滚动位置 */
+      });
+
+      /* ---------- 重派发 ---------- */
+      function openRedispatch(id) {
+        var k = Object.keys(TASKS).filter(function (x) { return TASKS[x].id === id; })[0];
+        if (!k) return;
+        document.getElementById('rd-task').textContent = 'T' + TASKS[k].id + ' ' + TASKS[k].title;
+        document.getElementById('rd-reason').textContent = '上次失败原因:' + (TASKS[k].reason || '—');
+        document.getElementById('rd-go').setAttribute('data-key', k);
+        openDialog('redispatch-confirm');
+      }
+      document.getElementById('rd-go').addEventListener('click', function () {
+        var k = this.getAttribute('data-key');
+        closeDialog(document.getElementById('redispatch-confirm'));
+        detailPanel.hidden = true;
+        runDispatch([k]);
+      });
+
+      /* ---------- 审批面板 ---------- */
+      function awaitingKeys() {
+        return Object.keys(TASKS).filter(function (k) { return TASKS[k].orch === 'awaiting'; });
+      }
+      function awaitingCount() { return awaitingKeys().length; }
+      function syncApprovalChrome() {
+        var n = awaitingCount();
+        document.getElementById('ap-count').textContent = n;
+        document.getElementById('appr-count').textContent = n;
+        var btn = document.getElementById('appr-btn');
+        btn.hidden = n === 0;
+        btn.setAttribute('aria-label', '审批:' + n + ' 项待审批');
+        var badge = document.querySelector('[data-approval-badge]');
+        if (n === 0) { badge.hidden = true; badge.removeAttribute('aria-label'); }
+        else { badge.hidden = false; badge.textContent = n; badge.setAttribute('aria-label', n + ' 项待审批'); }
+      }
+      function apprEntryHtml(key) {
+        var t = TASKS[key];
+        return '<div class="appr-item" data-appr-item="' + key + '">'
+          + '<div class="appr-task-row"><span class="t-12 t-secondary"><span class="t-mono">T' + t.id + '</span> ' + t.title + '</span>'
+          + '<button class="link-btn" type="button" data-appr-detail="' + key + '" style="margin-left:auto;">详情 ↗</button></div>'
+          + '<div class="appr-body clamp-3" data-appr-text>' + t.request + '</div>'
+          + '<button class="link-btn" type="button" data-appr-expand>展开</button>'
+          + '<div class="appr-actions"><button class="btn sm ghost" type="button" data-appr-reject="' + key + '">拒绝</button>'
+          + '<button class="btn sm primary" type="button" data-appr-approve="' + key + '">批准</button></div></div>';
+      }
+      function renderApproval() {
+        var body = document.getElementById('ap-body');
+        var keys = awaitingKeys();
+        if (!keys.length) {
+          body.innerHTML = '<div class="state-card" style="padding: 40px 16px;"><div class="t-14">已无待审批请求</div><p class="t-12 t-secondary hint">新的审批请求到达时将以角标与计数提示,不弹模态。</p></div>';
+        } else {
+          body.innerHTML = keys.map(apprEntryHtml).join('');
+          body.querySelectorAll('[data-appr-detail]').forEach(function (b) {
+            b.addEventListener('click', function () { openDetail(b.getAttribute('data-appr-detail'), true); });
+          });
+          body.querySelectorAll('[data-appr-expand]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var text = b.parentElement.querySelector('[data-appr-text]');
+              text.classList.toggle('clamp-3');
+              b.textContent = text.classList.contains('clamp-3') ? '展开' : '收起';
+            });
+          });
+          body.querySelectorAll('[data-appr-approve]').forEach(function (b) {
+            b.addEventListener('click', function () { decide(b.getAttribute('data-appr-approve'), true); });
+          });
+          body.querySelectorAll('[data-appr-reject]').forEach(function (b) {
+            b.addEventListener('click', function () { decide(b.getAttribute('data-appr-reject'), false); });
+          });
+        }
+        syncApprovalChrome();
+      }
+      function decide(key, approve) {
+        var item = document.querySelector('[data-appr-item="' + key + '"]');
+        var t = TASKS[key];
+        function apply() {
+          if (approve) {
+            t.orch = 'running';
+            live.textContent = '任务 ' + t.id + ' 审批已批准,回到执行中';
+            toast('已批准:T' + t.id + ' 回到「执行中」');
+          } else {
+            t.orch = 'failed';
+            t.reason = '审批请求被拒绝';
+            live.textContent = '任务 ' + t.id + ' 审批被拒绝,转入失败';
+            toast('已拒绝:T' + t.id + ' 转「失败」(侧板可重派发)');
+          }
+          renderAll();
+          renderApproval();
+          if (!detailPanel.hidden) openDetail(Object.keys(TASKS).filter(function (x) { return TASKS[x].id === document.getElementById('dp-id').textContent; })[0], apprReturn);
+        }
+        if (item) { item.classList.add('is-leaving'); setTimeout(apply, 200); }
+        else apply();
+      }
+      function openApproval(focusId) {
+        detailPanel.hidden = true;
+        renderApproval();
+        apprPanel.hidden = false;
+        document.getElementById('ap-close').focus();
+        if (focusId) {
+          var item = document.querySelector('[data-appr-item="' + Object.keys(TASKS).filter(function (x) { return TASKS[x].id === focusId; })[0] + '"]');
+          if (item) item.scrollIntoView({ block: 'center' });
+        }
+      }
+      document.getElementById('ap-close').addEventListener('click', function () { apprPanel.hidden = true; });
+      document.getElementById('appr-btn').addEventListener('click', function () { openApproval(null); });
+
+      /* ---------- Esc 分层:对话框(app.js 消费)> 选择模式 > 侧板 ---------- */
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (document.querySelector('.dialog-mask:not([hidden])')) return; /* 对话框先消费,不透传 */
+        if (selecting) { exitSelection(true); toast('已退出选择模式(已选清空)'); return; }
+        if (!detailPanel.hidden) { detailPanel.hidden = true; return; }
+        if (!apprPanel.hidden) { apprPanel.hidden = true; }
+      });
+
+      /* ---------- 模拟回流:T2.2 执行中 → 已提交(0.3s 一闪)→ 完成 ---------- */
+      document.getElementById('sim-flow').addEventListener('click', function () {
+        var t = TASKS.t22;
+        if (t.orch !== 'running') { toast('T2.2 已回流过(刷新页面重置演示)'); return; }
+        t.orch = 'submitted';
+        renderAll();
+        live.textContent = '任务 2.2 已提交(subagent 经 dsh tool 提交,≤5s 回流)';
+        setTimeout(function () {
+          t.orch = null;
+          t.status = 'completed';
+          renderAll();
+          toast('已提交回流:T2.2 完成(success 一闪后回落状态角标)');
+        }, 300);
+      });
+
+      /* ---------- 启动 ---------- */
+      renderAll();
+      syncApprovalChrome();
+    })();
+  </script>
+</body>
+</html>
