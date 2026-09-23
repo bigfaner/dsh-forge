@@ -31,7 +31,7 @@ import type {
 } from '../../host/forge-tools/bridge-core'
 import type {
   KnowledgeFactInput, KnowledgeForensicInput, KnowledgeLessonInput, KnowledgeResearchInput,
-  TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput, TaskReopenInput,
+  PrefScope, TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskStatus, TaskSubmitInput, TaskTransitionInput,
 } from '../ipc-types'
 import { getWorkbenchIpcBridge, normalizeWorkbenchVerbError, type WorkbenchIpcBridge } from './workbench'
@@ -198,11 +198,31 @@ function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Prom
         projectId: args.projectId as string,
         featureSlug: args.featureSlug as string,
       })
+    case 'pref_get':
+      return bridge.getPrefs(prefScopeOf(args))
     default: {
       const unreachable: never = call.verb
       return Promise.reject(new Error(`forge tool bridge: unknown verb ${String(unreachable)}`))
     }
   }
+}
+
+/**
+ * pref_get 帧的 tier 组合(任务 3.1):两参缺省 = 全局;仅 projectId =
+ * 项目级;projectId + featureSlug = feature 级(限定地址
+ * `<projectId>/<featureSlug>` 在本面组合 —— host 工具面已做白名单断言,
+ * 此处只承映射)。featureSlug 无 projectId = 不可达组合,防御拒绝。
+ */
+function prefScopeOf(args: BridgeCallArgs): PrefScope {
+  if (args.featureSlug !== undefined) {
+    if (typeof args.projectId !== 'string' || args.projectId === '') {
+      // host 工具面已挡的不可达组合:防御拒绝(dispatch 的 catch 折成封装应答)。
+      throw new Error('forge tool bridge: pref_get featureSlug requires projectId')
+    }
+    return { feature: `${args.projectId}/${args.featureSlug}` }
+  }
+  if (args.projectId !== undefined) return { project: args.projectId }
+  return 'global'
 }
 
 /**

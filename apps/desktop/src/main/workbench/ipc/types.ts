@@ -493,6 +493,48 @@ export interface FeatureStatusReport {
 }
 
 // ---------------------------------------------------------------------------
+// M3 偏好动词 DTO(任务 3.1;tech-design §Interface 1 偏好段 + §Data Models
+// prefs 行:单表 scope 化;键集 = 应用层注册表,forge config 键定义权威)
+// ---------------------------------------------------------------------------
+
+/**
+ * 偏好 scope 入参(Interface 1:global | { project } | { feature });
+ * feature 字段 = 限定地址 `<projectId>/<featureSlug>`(scope_id 约定,
+ * 防跨项目同 slug 键碰撞)。
+ */
+export type PrefScope = 'global' | { readonly project: string } | { readonly feature: string }
+
+/** setPrefs 条目(键 + 任意 JSON 值;键集/类型校验在内核服务面)。 */
+export interface PrefEntry {
+  readonly key: string
+  readonly value: unknown
+}
+
+/** 生效值来源层级(三级解析产物;'default' = 注册表权威默认;null = 无值)。 */
+export type PrefSource = 'feature' | 'project' | 'global' | 'default' | null
+
+/** getPrefs 行(Interface 1 PrefRow:生效值 + 来源 + 类型元数据 + 覆盖位)。 */
+export interface PrefRow {
+  readonly key: string
+  /** 键分组(auto/worktree/coverage/eval;UI 折叠区,不硬编码键清单)。 */
+  readonly group: 'auto' | 'worktree' | 'coverage' | 'eval'
+  /** 值类型元数据(布尔/数值/文本/列表/覆盖策略)。 */
+  readonly type: 'boolean' | 'number' | 'text' | 'list' | 'coverage'
+  /** 控件提示(forge config 键定义的消费面)。 */
+  readonly control: 'toggle' | 'number-input' | 'text-input' | 'coverage-input'
+  /** 最终生效值(feature > project > global > 注册表默认;无值键 = null)。 */
+  readonly value: unknown
+  /** 生效值来源层级;无值 = null。 */
+  readonly source: PrefSource
+  /** 查询 scope 本级是否有显式覆盖行。 */
+  readonly override: boolean
+  /** 本级覆盖值(override=false → null)。 */
+  readonly localValue: unknown
+  /** 注册表权威默认值(三级皆未设置时的生效候选;无默认 → null)。 */
+  readonly defaultValue: unknown
+}
+
+// ---------------------------------------------------------------------------
 // 动词服务契约(handler 只做 参数校验 + 服务调用 + 错误映射,Hard Rule)
 // ---------------------------------------------------------------------------
 
@@ -564,6 +606,15 @@ export interface WorkbenchVerbServices {
   featureList(projectId: string): FeatureListEntry[]
   /** forge feature status <slug> 同口径读(manifest + 任务聚合 + 评分)。 */
   featureStatus(input: { projectId: string; featureSlug: string }): FeatureStatusReport
+  // —— M3 偏好动词(任务 3.1;实现 = prefs/prefs-service.ts 经 services.ts
+  // 装配;键集封闭 + 三级解析 + 事务原子写)——
+  /** 注册表全键投影:生效值 + 来源层级 + 类型元数据 + 本级覆盖位。 */
+  getPrefs(scope: PrefScope): PrefRow[]
+  /** 事务原子批量写(键集/类型校验前置;键集外 → ERR_PREF_KEY_UNKNOWN,
+   * 类型越界 → ERR_PREF_VALUE_INVALID);完成 → prefs_updated 事件。 */
+  setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): void
+  /** 删本级覆盖行(幂等);生效值回落下一级;实际删除 → prefs_updated。 */
+  clearPrefOverride(scope: PrefScope, key: string): void
 }
 
 // ---------------------------------------------------------------------------

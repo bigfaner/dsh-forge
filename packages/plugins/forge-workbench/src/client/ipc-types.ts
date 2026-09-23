@@ -668,3 +668,34 @@ export interface FeatureStatusReport {
   }
   readonly scores: { readonly prd: string; readonly design: string; readonly ui: string }
 }
+
+// M3 偏好动词 DTO(任务 3.1;结构孪生 = main 侧 ipc/types.ts —— 双半身
+// 各自声明,插件不依赖应用,4.1 先例)
+
+/**
+ * 偏好 scope 入参:global | { project } | { feature };feature 字段 =
+ * 限定地址 `<projectId>/<featureSlug>`(scope_id 约定,防跨项目同 slug 碰撞)。
+ */
+export type PrefScope = 'global' | { readonly project: string } | { readonly feature: string }
+
+/** setPrefs 条目(键集/类型校验在内核)。 */
+export interface PrefEntry {
+  readonly key: string
+  readonly value: unknown
+}
+
+/** 生效值来源层级(三级解析 + 注册表默认;null = 无值)。 */
+export type PrefSource = 'feature' | 'project' | 'global' | 'default' | null
+
+/** getPrefs 行(生效值 + 来源 + 类型元数据 + 本级覆盖位)。 */
+export interface PrefRow {
+  readonly key: string
+  readonly group: 'auto' | 'worktree' | 'coverage' | 'eval'
+  readonly type: 'boolean' | 'number' | 'text' | 'list' | 'coverage'
+  readonly control: 'toggle' | 'number-input' | 'text-input' | 'coverage-input'
+  readonly value: unknown
+  readonly source: PrefSource
+  readonly override: boolean
+  readonly localValue: unknown
+  readonly defaultValue: unknown
+}

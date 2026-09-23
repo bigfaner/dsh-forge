@@ -46,6 +46,14 @@ export type WorkbenchEvent =
     readonly type: 'deviation_detected'
     readonly projectId: string
   }
+  // M3 v2(任务 3.1;tech-design §Interface 1 事件扩展):偏好写完成信号
+  // prefs_updated { scope }(载荷扩为 scope + scopeId —— 消费面按地址过滤
+  // 刷新,编辑面归 5.x)。仅实际变更发(setPrefs 空批/幂等清除 no-op 不发)。
+  | {
+    readonly type: 'prefs_updated'
+    readonly scope: 'global' | 'project' | 'feature'
+    readonly scopeId: string
+  }
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 

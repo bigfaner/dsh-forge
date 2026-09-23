@@ -37,7 +37,8 @@ import type {
   KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
-  KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, Project,
+  KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
+  PrefScope, Project,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
@@ -111,6 +112,18 @@ export interface WorkbenchIpcBridge {
   knowledgeForensic(input: KnowledgeForensicInput): Promise<KnowledgeForensicResult>
   featureList(projectId: string): Promise<FeatureListEntry[]>
   featureStatus(input: { projectId: string; featureSlug: string }): Promise<FeatureStatusReport>
+  /**
+   * M3 prefs verbs (task 3.1): the three-tier preference family over the
+   * closed forge pref registry (auto / worktree / coverage / eval groups,
+   * surfaces excluded). getPrefs answers every registered key with its
+   * effective value + source tier + type metadata; setPrefs is atomic
+   * (ERR_PREF_KEY_UNKNOWN / ERR_PREF_VALUE_INVALID rejections ride the same
+   * `{ code, message, detail? }` envelope); clearPrefOverride falls the
+   * effective value back to the next tier.
+   */
+  getPrefs(scope: PrefScope): Promise<PrefRow[]>
+  setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): Promise<void>
+  clearPrefOverride(scope: PrefScope, key: string): Promise<void>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -124,6 +137,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'taskAdd', 'taskClaim', 'taskTransition', 'taskSubmit', 'taskReopen', 'taskGet', 'taskQuery',
   // M3 knowledge + feature-read verbs (task 2.2, D4).
   'knowledgeFact', 'knowledgeLesson', 'knowledgeResearch', 'knowledgeForensic', 'featureList', 'featureStatus',
+  // M3 prefs verbs (task 3.1).
+  'getPrefs', 'setPrefs', 'clearPrefOverride',
 ]
 
 /**

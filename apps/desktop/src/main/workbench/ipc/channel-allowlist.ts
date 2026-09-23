@@ -69,6 +69,13 @@ export const WORKBENCH_VERB_CHANNELS = {
   knowledgeForensic: 'dsh-forge:workbench-knowledge-forensic',
   featureList: 'dsh-forge:workbench-feature-list',
   featureStatus: 'dsh-forge:workbench-feature-status',
+  // —— M3 prefs 段(任务 3.1 追加;Hard Rule 延续:追加式修改,既有动词
+  //    定义不改写)。偏好面 = tech-design §Interface 1 偏好段三动词
+  //    (getPrefs/setPrefs/clearPrefOverride);键集/类型/事务在内核
+  //    (prefs-service),通道面零特权。 ——
+  getPrefs: 'dsh-forge:workbench-get-prefs',
+  setPrefs: 'dsh-forge:workbench-set-prefs',
+  clearPrefOverride: 'dsh-forge:workbench-clear-pref-override',
 } as const
 
 /**

@@ -24,6 +24,9 @@ import type {
   MigrationStarted,
   MigrationStatus,
   PluginRow,
+  PrefEntry,
+  PrefRow,
+  PrefScope,
   ProbeCodeRootInput,
   ProbeCodeRootResult,
   Project,
@@ -202,6 +205,18 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureList, projectId) as Promise<FeatureListEntry[]>,
     featureStatus: (input: { projectId: string; featureSlug: string }): Promise<FeatureStatusReport> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureStatus, input) as Promise<FeatureStatusReport>,
+    // M3 prefs verbs (task 3.1): the three-tier preference family
+    // (feature > project > global > registry default). setPrefs is atomic
+    // (validate-all-then-write inside one transaction); rejections arrive as
+    // the same { code, message, detail? } envelope (ERR_PREF_KEY_UNKNOWN /
+    // ERR_PREF_VALUE_INVALID / ERR_PREF_SCOPE_INVALID / ERR_PROJECT_NOT_FOUND).
+    // Writes that change anything push prefs_updated through onEvents.
+    getPrefs: (scope: PrefScope): Promise<PrefRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getPrefs, scope) as Promise<PrefRow[]>,
+    setPrefs: (scope: PrefScope, entries: readonly PrefEntry[]): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setPrefs, scope, entries) as Promise<void>,
+    clearPrefOverride: (scope: PrefScope, key: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.clearPrefOverride, scope, key) as Promise<void>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

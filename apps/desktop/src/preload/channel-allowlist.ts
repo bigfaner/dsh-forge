@@ -57,6 +57,11 @@ export const WORKBENCH_VERB_CHANNELS = {
   knowledgeForensic: 'dsh-forge:workbench-knowledge-forensic',
   featureList: 'dsh-forge:workbench-feature-list',
   featureStatus: 'dsh-forge:workbench-feature-status',
+  // M3 prefs 段(任务 3.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getPrefs: 'dsh-forge:workbench-get-prefs',
+  setPrefs: 'dsh-forge:workbench-set-prefs',
+  clearPrefOverride: 'dsh-forge:workbench-clear-pref-override',
 } as const
 
 /**

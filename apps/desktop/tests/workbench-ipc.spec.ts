@@ -136,6 +136,9 @@ function fakeServices(): WorkbenchVerbServices {
     knowledgeForensic: vi.fn(() => ({ action: 'search', sessions: [] })),
     featureList: vi.fn(() => []),
     featureStatus: vi.fn(() => ({ slug: 'alpha', status: 'tasks', tasks: { byStatus: {}, total: 0, indexPresent: false }, scores: { prd: '', design: '', ui: '' } })),
+    getPrefs: vi.fn(() => []),
+    setPrefs: vi.fn(() => undefined),
+    clearPrefOverride: vi.fn(() => undefined),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -182,15 +185,17 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the thirty-three whitelisted verb channels, one per verb', () => {
+  it('contains exactly the thirty-six whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
+      'dsh-forge:workbench-clear-pref-override',
       'dsh-forge:workbench-end-session-link',
       'dsh-forge:workbench-feature-list',
       'dsh-forge:workbench-feature-status',
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-migration-status',
+      'dsh-forge:workbench-get-prefs',
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
       'dsh-forge:workbench-get-task-detail',
@@ -206,6 +211,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
+      'dsh-forge:workbench-set-prefs',
       'dsh-forge:workbench-start-migration',
       'dsh-forge:workbench-subscribe-events',
       'dsh-forge:workbench-task-add',
@@ -218,7 +224,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(33)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(36)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -261,6 +267,9 @@ describe('workbench verb routing table', () => {
       'knowledgeForensic',
       'featureList',
       'featureStatus',
+      'getPrefs',
+      'setPrefs',
+      'clearPrefOverride',
     ])
   })
 
@@ -303,10 +312,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 33 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 36 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(33)
+    expect(handlers.size).toBe(36)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -410,6 +419,17 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' })
     expect(services.featureStatus).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha' })
+
+    // M3 prefs 段(任务 3.1):scope 形状校验(三级单选)+ 服务转发;键集/
+    // 类型/限定地址/事务在内核(prefs-service),本层零内联业务。
+    handlers.get(C.getPrefs)?.(OWNED, { feature: 'p-1/alpha' })
+    expect(services.getPrefs).toHaveBeenCalledWith({ feature: 'p-1/alpha' })
+
+    handlers.get(C.setPrefs)?.(OWNED, 'global', [{ key: 'auto.gitPush', value: true }])
+    expect(services.setPrefs).toHaveBeenCalledWith('global', [{ key: 'auto.gitPush', value: true }])
+
+    handlers.get(C.clearPrefOverride)?.(OWNED, { project: 'p-1' }, 'auto.gitPush')
+    expect(services.clearPrefOverride).toHaveBeenCalledWith({ project: 'p-1' }, 'auto.gitPush')
   })
 
   it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {

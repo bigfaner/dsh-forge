@@ -22,6 +22,8 @@ import type {
   KnowledgeForensicInput,
   KnowledgeLessonInput,
   KnowledgeResearchInput,
+  PrefEntry,
+  PrefScope,
   ProjectPatch,
   RecordSessionLinkInput,
   RegisterProjectInput,
@@ -164,7 +166,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 
 // ---------------------------------------------------------------------------
 // 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
-// + 知识系/feature 读段 6 条(任务 2.2)= 33 条白名单通道)
+// + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
+// = 36 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -489,6 +492,49 @@ export function installWorkbenchVerbs(
     requireString('featureStatus', 'input.featureSlug', input.featureSlug)
     return services.featureStatus(input as unknown as { projectId: string; featureSlug: string })
   })
+
+  // —— M3 prefs 段(任务 3.1):三条偏好动词。Hard Rule 延续 —— 本层只做
+  // sender 校验 + 参数形状校验 + 服务调用 + 错误映射;scope 限定地址拆解、
+  // 项目存在性、键集/类型校验与事务原子全部在内核服务面(prefs-service),
+  // 不信任 renderer 语义。 ——
+
+  /** scope 形状校验:'global' | { project } | { feature }(限定地址语义归内核)。 */
+  const requirePrefScope = (verb: string, value: unknown): PrefScope => {
+    if (value === 'global') return value
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const scope = value as { project?: unknown; feature?: unknown }
+      const hasProject = scope.project !== undefined
+      const hasFeature = scope.feature !== undefined
+      if (hasProject === hasFeature) {
+        throw new Error(`workbench.${verb}: scope must be 'global', { project }, or { feature } (exactly one tier field)`)
+      }
+      if (hasProject) {
+        return { project: requireString(verb, 'scope.project', scope.project) }
+      }
+      return { feature: requireString(verb, 'scope.feature', scope.feature) }
+    }
+    throw new Error(`workbench.${verb}: scope must be 'global', { project }, or { feature } (got ${typeof value})`)
+  }
+
+  register(C.getPrefs, args => services.getPrefs(requirePrefScope('getPrefs', args[0])))
+
+  register(C.setPrefs, (args) => {
+    const scope = requirePrefScope('setPrefs', args[0])
+    if (!Array.isArray(args[1])) {
+      throw new Error(`workbench.setPrefs: entries must be an array (got ${typeof args[1]})`)
+    }
+    const entries: PrefEntry[] = args[1].map((entry, index) => {
+      const record = requireObject('setPrefs', `entries[${String(index)}]`, entry)
+      return {
+        key: requireString('setPrefs', `entries[${String(index)}].key`, record.key),
+        value: record.value,
+      }
+    })
+    return services.setPrefs(scope, entries)
+  })
+
+  register(C.clearPrefOverride, args =>
+    services.clearPrefOverride(requirePrefScope('clearPrefOverride', args[0]), requireString('clearPrefOverride', 'key', args[1])))
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

@@ -18,6 +18,7 @@ import { createToolBridgeCore, type ToolBridgeCore } from './bridge-core'
 import { createForgeTaskTools } from './task-tools'
 import { createForgeKnowledgeTools } from './knowledge'
 import { createForgeFeatureReadTools } from './feature-read'
+import { createForgePrefTools } from './pref'
 import { ForgeToolBridgeService } from './rpc'
 
 /** tools 服务的最小注册面(duck-typing;类型见 @deepseek-ai/dsh-tools)。 */
@@ -75,6 +76,8 @@ export function registerForgeTools(ctx: Context): ForgeToolsAssembly {
         // 任务 2.2(D4):知识系 + feature 读族 —— 同一基座追加注册,不另设通道。
         ...createForgeKnowledgeTools({ call }),
         ...createForgeFeatureReadTools({ call }),
+        // 任务 3.1:pref 读族(forge_pref_get,读生效值)—— 同一基座追加注册。
+        ...createForgePrefTools({ call }),
       ]
       for (const tool of families) {
         toolDisposers.push(registry.register(tool))
