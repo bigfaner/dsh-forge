@@ -60,6 +60,7 @@ import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
 import { createStagesVerbService } from '../stages/stages-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
+import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -275,19 +276,25 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   // M3 任务 3.2:stages 读动词服务(确定性清单 + 门态 + 资产索引读)。零写
   // 面、零事件(advanceStage/summarize 写侧归 4.1);features 根解析与
   // taskVerbs 同源注入(文档根三分模型单一解析)。
+  const resolveFeaturesRoot = (projectId: string): string | null => {
+    const project = findProjectRow(db, projectId)
+    return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
+  }
   const stagesVerbs = createStagesVerbService({
     db,
-    resolveFeaturesRoot: (projectId: string): string | null => {
-      const project = findProjectRow(db, projectId)
-      return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
-    },
+    resolveFeaturesRoot,
   })
+
+  // M3 任务 3.4:预合成引擎(三要素组装 + prompt_hash 口径物)。取 代
+  // forge prompt —— 派发链的注入内容自此由内核确定性合成,零 CLI 自跑
+  // 路径;每派发现读 stage_asset/偏好/任务 frontmatter(动态性,零缓存)。
+  const presynthEngine = createPresynthEngine({ db, resolveFeaturesRoot })
 
   // M3 任务 3.3:编排动词服务(dispatch/approval 域)。装配缝:
   //   - checkArtifacts = stagesVerbs.checkStageArtifacts(3.2 确定性清单的
   //     dispatch 消费面,缺失 = blocked 联合返回);
-  //   - composePrompt 缺省(3.4 预合成引擎接线前 = 契约拒绝
-  //     ERR_SYSTEM_PROMPT_CONTRACT,dispatch 无自跑合成路径);
+  //   - composePrompt = presynthEngine(3.4 接线:组合首条消息 + 预铸
+  //     sessionId;hash = sha256(消息)随行落库);
   //   - launchPort 缺省(3.5 host dispatch-launch 接线前行留 starting;
   //     Hard Rule:内核不持会话创建权);
   //   - 事件经同一 sink 批推(dispatch_updated/approval_received;迁移/
@@ -297,6 +304,7 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   const dispatchVerbs = createDispatchVerbService({
     db,
     checkArtifacts: (projectId, featureSlug) => stagesVerbs.checkStageArtifacts({ projectId, featureSlug }),
+    composePrompt: task => presynthEngine.compose(task),
     onEvents: events => sink(events),
   })
 

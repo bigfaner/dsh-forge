@@ -65,6 +65,7 @@ import {
   type ApprovalRecord,
 } from './approval-repo.ts'
 import type { DispatchLaunchInput, DispatchLaunchPort } from './launch-port.ts'
+import type { PresynthInjection } from './presynth/assemble.ts'
 
 /** 审批入列入参(host approval-bridge(3.5)→ 内核;非 IPC 动词面)。 */
 export interface ReceiveApprovalInput {
@@ -82,10 +83,13 @@ export interface DispatchVerbDeps {
   readonly checkArtifacts: (projectId: string, featureSlug: string) => StageArtifactsReport
   /**
    * 预合成 seam(3.4 引擎接线):入参 = 权威任务行,返回 = 完整注入内容串
-   * (内核不解释);hash = sha256(该串)随行落库。缺省 = 无预合成 →
-   * 派发前契约拒绝(ERR_SYSTEM_PROMPT_CONTRACT:预合成内容非空)。
+   * (组合首条消息,spike③ 口径;内核不解释);hash = sha256(该串)随行
+   * 落库。PresynthInjection 形态(3.4 引擎)额外携带预铸 sessionId —— 随
+   * dispatch 行落库(spike③ §4:hash 与 launch 解耦)+ 透传 launch-port
+   * (3.5 create({sessionId}) 幂等 adopt)。缺省 = 无预合成 → 派发前契约
+   * 拒绝(ERR_SYSTEM_PROMPT_CONTRACT:预合成内容非空)。
    */
-  readonly composePrompt?: (task: AuthoritativeTask) => string
+  readonly composePrompt?: (task: AuthoritativeTask) => string | PresynthInjection
   /** host 启动回调(3.5 dispatch-launch 接线);缺省 = 行留 starting。 */
   readonly launchPort?: DispatchLaunchPort
   /** 事件批直发端(动词完成批;迁移/偏好面 onEvent 同款形态)。 */
@@ -274,18 +278,30 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
     }
 
     // —— 预合成契约查(内容非空 + hash 定型;seam 缺省 = 契约拒绝)——
+    // PresynthInjection 形态(3.4 引擎)携带预铸 sessionId:随行落库 + 透传
+    // launch-port(spike③ §4 落库时机);string 形态(测试缝/旧装配)保持
+    // sessionId 空值语义(launch 回填路径不变)。
     const prompts = tasks.map((task) => {
-      const prompt = deps.composePrompt?.(task)
-      if (typeof prompt !== 'string' || prompt === '') {
+      const product = deps.composePrompt?.(task)
+      const message = typeof product === 'string' ? product : product?.message
+      if (typeof message !== 'string' || message === '') {
         throw new DispatchDomainError(
           'ERR_SYSTEM_PROMPT_CONTRACT',
           `dispatch for task ${task.taskKey} has no presynthesized injection content (pre-synthesis engine not wired or produced empty output) — refusing to dispatch`,
         )
       }
-      return prompt
+      const sessionId = typeof product === 'object' && product !== null ? product.sessionId : null
+      if (sessionId === '') {
+        throw new DispatchDomainError(
+          'ERR_SYSTEM_PROMPT_CONTRACT',
+          `dispatch for task ${task.taskKey} carries an empty pre-minted session id — the injection hash would not be auditable against the session`,
+        )
+      }
+      return { message, sessionId }
     })
 
-    // —— 同批落行(单事务;每任务独立行,batch_id 聚合)——
+    // —— 同批落行(单事务;每任务独立行,batch_id 聚合;prompt_hash =
+    // sha256(组合首条消息),预铸 sessionId 随行落库)——
     const batchId = randomUUID()
     const dispatchedAt = new Date().toISOString()
     let rows: DispatchRecord[] = withDispatchTx(db, () =>
@@ -295,7 +311,8 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
           featureSlug: task.featureSlug,
           taskKey: task.taskKey,
           batchId,
-          promptHash: sha256Hex(prompts[i] as string),
+          promptHash: sha256Hex(prompts[i]?.message ?? ''),
+          sessionId: prompts[i]?.sessionId ?? null,
           actor,
           dispatchedAt,
         }),
@@ -315,8 +332,9 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
             featureSlug: row.featureSlug,
             taskKey: row.taskKey,
             taskType: tasks[i]?.taskType ?? null,
-            prompt: prompts[i] as string,
+            prompt: prompts[i]?.message ?? '',
             promptHash: row.promptHash,
+            sessionId: prompts[i]?.sessionId ?? null,
           }
           try {
             return { row, outcome: await port.launch(input) }

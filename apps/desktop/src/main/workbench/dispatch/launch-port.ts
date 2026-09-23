@@ -26,10 +26,17 @@ export interface DispatchLaunchInput {
   readonly taskKey: string
   /** 任务类型(预合成协议选择键);未落 = null。 */
   readonly taskType: string | null
-  /** 预合成注入内容(3.4 引擎产物;内核不解释,只透传)。 */
+  /** 预合成注入内容(3.4 引擎产物 = 组合首条消息;内核不解释,只透传)。 */
   readonly prompt: string
   /** 注入内容 sha256(与 dispatch 行 prompt_hash 同值,SC3 断言锚点)。 */
   readonly promptHash: string
+  /**
+   * 预铸 sessionId(spike③ §4:3.4 引擎 compose 时铸造并随 dispatch 行
+   * 落库 —— prompt_hash 是其函数)。3.5 dispatch-launch 以同 id 走
+   * create({sessionId}) 幂等 adopt,再 prompt 投递注入内容。null = 无预
+   * 铸形态(3.3 语义,host 自铸)。
+   */
+  readonly sessionId: string | null
 }
 
 /** 单次启动结果:成功回传 sessionId;失败携带原因(failed 态落库面)。 */

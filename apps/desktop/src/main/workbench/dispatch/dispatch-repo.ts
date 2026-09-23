@@ -169,7 +169,7 @@ export function withDispatchTx<T>(db: RepoDb, run: () => T): T {
 // 行级 CRUD(唯一写入口)
 // ---------------------------------------------------------------------------
 
-/** 插入入参(新派发行恒 starting;session/ended/error 由后续迁移落)。 */
+/** 插入入参(新派发行恒 starting;ended/error 由后续迁移落)。 */
 export interface InsertDispatchInput {
   readonly projectId: string
   readonly featureSlug: string
@@ -177,22 +177,28 @@ export interface InsertDispatchInput {
   /** 同批多任务聚合 id(动词层铸造,单次 dispatchTasks 一个)。 */
   readonly batchId: string
   readonly promptHash: string
+  /**
+   * 预铸 sessionId(spike③ §4:3.4 引擎 compose 时 caller-minted,hash 与
+   * launch 解耦);null = 无预铸形态(3.3 语义,launch 成功后回填)。
+   */
+  readonly sessionId: string | null
   readonly actor: string
   readonly dispatchedAt: string
 }
 
-/** 新派发行(id 内铸 uuid;state='starting',session/ended/error 空)。 */
+/** 新派发行(id 内铸 uuid;state='starting',ended/error 空)。 */
 export function insertDispatch(db: RepoDb, input: InsertDispatchInput): DispatchRecord {
   const id = randomUUID()
   db.prepare(
     `INSERT INTO dispatch (id, batch_id, project_id, feature_slug, task_key, state, session_id, prompt_hash, actor, dispatched_at, ended_at, error)
-     VALUES (?, ?, ?, ?, ?, 'starting', NULL, ?, ?, ?, NULL, NULL)`,
+     VALUES (?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?, NULL, NULL)`,
   ).run(
     id,
     input.batchId,
     input.projectId,
     input.featureSlug,
     input.taskKey,
+    input.sessionId,
     input.promptHash,
     input.actor,
     input.dispatchedAt,
