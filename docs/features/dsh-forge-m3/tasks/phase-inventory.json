@@ -1,0 +1,79 @@
+[
+  {
+    "phase": 0,
+    "name": "spike×4(零产品代码)",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 0,
+        "description": "SC8:四项 spike(tool 注册 / subagent 审批与 ACTOR / systemPrompt 契约 / prompt 移植面)结论与兜底建议归档 design/,回填 tech-design Open Questions;spike 间零依赖可并行,可与 M2 收尾并行"
+      }
+    ]
+  },
+  {
+    "phase": 1,
+    "name": "内核 SoT 迁移 + 显式迁移面(UF3)",
+    "source": "PRD-explicit(细化:UF3 迁移操作面并入本相位——迁移为显式人工触发,无 UI 则迁移不可达,P2 起的 tool 写集依赖 data_authority='sqlite' 项目)",
+    "gates": [
+      {
+        "afterPhase": 1,
+        "description": "SC2 单测级闭环:迁移对拍零差异 / 零半迁移 / index.json 淘汰 / md 原样;UF3 面可用(概览入口 + 向导条件步骤);外部写回收 + 偏离标记生效"
+      }
+    ]
+  },
+  {
+    "phase": 2,
+    "name": "dsh tool 面",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 2,
+        "description": "agent 写/读/知识系 tool 经 renderer 桥(T2)可达内核;files 项目写集明确拒绝(双形态纪律);桥降级重试→明确提示"
+      }
+    ]
+  },
+  {
+    "phase": 3,
+    "name": "subagent 执行(编排面)",
+    "source": "PRD-explicit(细化:prefs 内核域与 stages 读侧内核前置入本相位——预合成三要素与派发前检查依赖二者;UF4 编辑面仍留 P5)",
+    "gates": [
+      {
+        "afterPhase": 3,
+        "description": "SC3 单测级:并行派发互不串扰 / 预合成三要素注入断言 / 审批往返 / ≤3s 启动预算;UF1 面可用(选择模式/审批 dock/侧板编排分区)"
+      }
+    ]
+  },
+  {
+    "phase": 4,
+    "name": "阶段化",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 4,
+        "description": "SC4 单测级:门拒绝/放行 / 阶段资产文件落文档根 / 新阶段会话注入 / 偏离标识;UF2 面可用(stepper 门态 + 第六「阶段资产」tab)"
+      }
+    ]
+  },
+  {
+    "phase": 5,
+    "name": "偏好编辑面 / 提案看板 / 技能迁移",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 5,
+        "description": "UF4 偏好编辑面可用(三级查看修改);UF5 提案看板新页 + tab 序修订(概览/提案/Feature/任务);15 项技能扁平名 bundle + customSkillDirs 同步(D2/D5)"
+      }
+    ]
+  },
+  {
+    "phase": 6,
+    "name": "零 CLI 收口 + SC e2e 腿",
+    "source": "PRD-explicit(「M3 末零 CLI 依赖收口 gate(横切)」落为末相位执行)",
+    "gates": [
+      {
+        "afterPhase": 6,
+        "description": "G1/G8:ForgeBridge 退役后应用出包与执行链零 forge CLI 依赖;SC1-SC9 全绿;M1/M2 既有 e2e 回归腿不回归(单实例锁纪律)"
+      }
+    ]
+  }
+]
