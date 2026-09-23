@@ -224,6 +224,49 @@ export interface MigrationStatus {
   readonly migratedAt: string | null
   /** 最近一笔迁移审计事件;从未发起 → null。 */
   readonly lastEvent: MigrationEvent | null
+  /**
+   * 文档树是否仍检出 tasks/index.json(任务 1.7):migratable 判定的
+   * 文档侧半边 —— authority 'files' + 本位 true = 卡片「可迁移」;迁移
+   * 归档后(或从未有任务态)为 false。
+   */
+  readonly indexJsonDetected: boolean
+}
+
+/**
+ * probeCodeRoot 入参(任务 1.7):向导步骤①的 codeRoot + 步骤②定型后的
+ * 文档位置(docLocationPath 缺省/null = 仓内,探测点落 codeRoot 自身)。
+ * 检出语义对齐注册校验链的 detectForgeCheckout —— 同一 fs 只读判定。
+ */
+export interface ProbeCodeRootInput {
+  readonly codeRoot: string
+  readonly docLocationPath?: string | null
+}
+
+/**
+ * probeCodeRoot 返回形态(任务 1.7):可用性(forge 检出)+ 概览计数 +
+ * indexJsonDetected(条件迁移步骤的前提,Interface 4 §8)。
+ */
+export type ProbeCodeRootResult =
+  | {
+    readonly available: true
+    readonly taskTotal: number
+    readonly featureTotal: number
+    readonly indexJsonDetected: boolean
+  }
+  | {
+    readonly available: false
+    readonly reasonCode: 'ERR_CODE_ROOT_UNREADABLE' | 'ERR_FORGE_NOT_DETECTED'
+    readonly detail?: string
+  }
+
+/**
+ * getWorkbenchPaths 返回形态(任务 1.7):内核管理位置 —— docsRoot = 仓外
+ * 文档根默认(应用管理路径,G7/SC9 注册向导默认值翻转的落点),backupsRoot
+ * = 迁移备份根(确认对话框的 mono 备份位置)。
+ */
+export interface WorkbenchPaths {
+  readonly docsRoot: string
+  readonly backupsRoot: string
 }
 
 /** startMigration 返回形态(进度经 migration_progress 事件,Interface 1)。 */
@@ -275,7 +318,7 @@ export interface WorkbenchVerbServices {
   /** 读路由列表(过滤 featureSlug/status,双分支同口径)。 */
   taskQuery(input: TaskQueryInput): TaskSummary[]
   // —— M3 迁移动词(任务 1.4;实现 = migration/pipeline.ts,经 services.ts 装配)——
-  /** 迁移状态读取(authority/deviated/migratedAt/lastEvent)。 */
+  /** 迁移状态读取(authority/deviated/migratedAt/lastEvent/indexJsonDetected)。 */
   getMigrationStatus(projectId: string): MigrationStatus
   /**
    * 一次性显式迁移(Interface 4 第 1-6 步):在跑编排 → ERR_MIGRATION_GUARD;
@@ -283,6 +326,11 @@ export interface WorkbenchVerbServices {
    * (整体回滚后可重试)。相位进度经 migration_progress 事件推送。
    */
   startMigration(projectId: string): Promise<MigrationStarted>
+  // —— M3 UF3 集成读(任务 1.7;向导真实探测 + 默认值翻转的内核位置)——
+  /** 注册向导 step-①/② 探测(forge 检出 + 计数 + index.json 检出;只读)。 */
+  probeCodeRoot(input: ProbeCodeRootInput): ProbeCodeRootResult
+  /** 内核管理位置(docsRoot = 仓外文档根默认;backupsRoot = 迁移备份根)。 */
+  getWorkbenchPaths(): WorkbenchPaths
 }
 
 // ---------------------------------------------------------------------------

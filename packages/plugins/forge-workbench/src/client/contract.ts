@@ -28,7 +28,7 @@ import type { LaunchSeatStore } from './launch-rpc'
 import type {
   DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
-  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
+  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -140,6 +140,13 @@ export interface WorkbenchOverviewSeat {
   /** The UF6 section face — absent members fall back to the build-stage mock (5.13/5.14 inject the IPC verbs). */
   readonly pluginFace?: Partial<PluginFace>
   /**
+   * The UF3 migration family's face (task 1.7): PRESENT activates the card
+   * migration surface (可迁移 Pill/入口 + MigrationDialogs); absent keeps the
+   * M2 page. The real-path view derives it from the store's bridge; tests
+   * inject the 1.6 mock twin here.
+   */
+  readonly migrationFace?: Partial<MigrationFace>
+  /**
    * Project ids whose codeRoot/docLocation re-validation failed (5.14 derives
    * from sync_state): drives the per-card 失联徽标 and, for the active
    * project, the error card with 重新指向/移除 (ui-design UF1 error 态).
@@ -156,7 +163,18 @@ export interface WorkbenchOverviewSeat {
  * `ERR_*` codes verbatim so the inline mapping is the real one.
  */
 export type CodeRootProbeResult =
-  | { available: true; taskTotal: number; featureTotal: number }
+  | {
+    available: true
+    taskTotal: number
+    featureTotal: number
+    /**
+     * Task 1.7: does the probed doc tree carry tasks/index.json? The
+     * conditional migration step's premise (Interface 4 §8) — the wizard
+     * re-probes with the SETTLED step-② doc location before inserting the
+     * step between ② and ③.
+     */
+    indexJsonDetected: boolean
+  }
   | { available: false; reasonCode: 'ERR_CODE_ROOT_UNREADABLE' | 'ERR_FORGE_NOT_DETECTED'; detail?: string }
 
 /** The step-② external doc-path probe: conflict guard + readability (授权前提). */
@@ -173,8 +191,13 @@ export type ExternalPathProbeResult =
  * plus the real detection read behind the probe members.
  */
 export interface RegisterWizardFace {
-  /** Step ①: does this codeRoot carry forge data (`.forge/` or a docs location)? */
-  probeCodeRoot(input: { codeRoot: string }): Promise<CodeRootProbeResult>
+  /**
+   * Step ① (and the 1.7 step-②-advance re-probe): does this codeRoot carry
+   * forge data (`.forge/` or the chosen docs location)? The 1.7 real chain
+   * wires the Interface 1 probe verb over the mock twin (docLocationPath
+   * absent/null = 仓内, the probe lands on the codeRoot's own tree).
+   */
+  probeCodeRoot(input: { codeRoot: string; docLocationPath?: string | null }): Promise<CodeRootProbeResult>
   /** Step ②: external doc-path validation (≠ codeRoot, readable — the authorization's premise). */
   probeExternalPath(input: { codeRoot: string; docLocationPath: string }): Promise<ExternalPathProbeResult>
   /** Interface 1 registerProject — the ONLY write, fired solely from the summary-confirm step (Hard Rule). */
@@ -242,6 +265,13 @@ export interface MigrationFace {
    * mock twin serves the build stage.
    */
   loadGuard(projectId: string): Promise<MigrationGuardSnapshot>
+  /**
+   * Interface 1 getWorkbenchPaths() (task 1.7): the kernel-managed locations
+   * this integration's two consumers read — the flipped wizard default
+   * (docsRoot + the project's directory name = the 仓外应用管理路径 prefill)
+   * and the migration confirm's 备份位置 copy (backupsRoot).
+   */
+  getWorkbenchPaths(): Promise<WorkbenchPaths>
 }
 
 /** The entry-guard snapshot: blocked ⟺ running orchestrations exist. */

@@ -75,6 +75,7 @@ async function wizardRegisterInRepo(page: Page, codeRoot: string, name: string):
   await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
   await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-dsh-forge-wizard-next]').click()
+  await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // M3 翻转(1.7):仓外为默认,本腿选回仓内注册
   await page.locator('[data-dsh-forge-wizard-next]').click()
   await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
   await page.locator('[data-dsh-forge-wizard-finish]').click()

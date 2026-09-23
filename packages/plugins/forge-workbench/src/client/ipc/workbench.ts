@@ -33,13 +33,13 @@
  *      error card).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
-  RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, WorkbenchEvent, WorkbenchState,
-  WorkbenchVerbError,
+  DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
+  TaskDetail, WorkbenchEvent, WorkbenchPaths, WorkbenchState, WorkbenchVerbError,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace, TaskBoardFace,
-  TaskDetailFace,
+  CodeRootProbeResult, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace, PluginFace,
+  RegisterWizardFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
 
@@ -71,6 +71,12 @@ export interface WorkbenchIpcBridge {
   authorizeExternalDocPath(path: string): Promise<void>
   /** Batched push (≤500ms main-side); returns the unsubscribe. */
   onEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+  /** M3 migration pair (task 1.4 main-side; the 1.7 client wiring). */
+  getMigrationStatus(projectId: string): Promise<MigrationStatus>
+  startMigration(projectId: string): Promise<MigrationStarted>
+  /** M3 UF3 integration reads (task 1.7): the wizard's real probe + kernel paths. */
+  probeCodeRoot(input: { codeRoot: string; docLocationPath?: string | null }): Promise<CodeRootProbeResult>
+  getWorkbenchPaths(): Promise<WorkbenchPaths>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -79,6 +85,7 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'getTaskBoard', 'getTaskDetail', 'getFeatureBoard', 'readFeatureDoc',
   'listPlugins', 'setPluginEnabled', 'recordSessionLink', 'endSessionLink',
   'authorizeExternalDocPath', 'onEvents',
+  'getMigrationStatus', 'startMigration', 'probeCodeRoot', 'getWorkbenchPaths',
 ]
 
 /**
@@ -170,6 +177,45 @@ export function normalizeWorkbenchVerbError(error: unknown): WorkbenchVerbError 
 /** Normalize a rejection by re-throwing it (the face wrappers' catch leg). */
 function renormalize(error: unknown): never {
   throw normalizeWorkbenchVerbError(error)
+}
+
+/**
+ * The UF3 migration family's face over the verbs (task 1.7's assembly): the
+ * Interface 1 migration pair 1:1 (rejections normalized), the event channel
+ * through the SAME shared single-subscriber source every listening family
+ * multiplexes over, and the kernel-paths read. `loadGuard` is the
+ * never-blocked stub the 1.6 build stage ran — the real dispatch-domain read
+ * (dispatch.ended_at IS NULL) lands with the 3.x verbs; until then the
+ * kernel's own ERR_MIGRATION_GUARD rejection remains the hard gate and the
+ * entry-guard hook merely renders an always-eligible entry.
+ */
+export function createIpcMigrationFace(bridge: WorkbenchIpcBridge): MigrationFace {
+  return {
+    getMigrationStatus: async (projectId: string): Promise<MigrationStatus> => {
+      try {
+        return await bridge.getMigrationStatus(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    startMigration: async (projectId: string): Promise<MigrationStarted> => {
+      try {
+        return await bridge.startMigration(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    subscribeEvents: (callback: (events: readonly WorkbenchEvent[]) => void): (() => void) =>
+      getWorkbenchEventSource(bridge).subscribe(callback),
+    loadGuard: async () => ({ blocked: false, runningCount: 0 }),
+    getWorkbenchPaths: async (): Promise<WorkbenchPaths> => {
+      try {
+        return await bridge.getWorkbenchPaths()
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
 }
 
 /** The UF4 board face over the verb (task 5.16's consumption; 1:1 mapping). */
@@ -293,22 +339,28 @@ export function createIpcTaskDetailFace(bridge: WorkbenchIpcBridge): TaskDetailF
 }
 
 /**
- * The register wizard's IPC WRITE face (task 5.14; 6.4 adds the authorization
- * member) — registerProject / updateProject / authorizeExternalDocPath, the
- * verbs the wizard's submit fires. The step-①/② PROBE members have no
- * Interface 1 verb (the 5.14 task's verb list carries none): the wizard's
- * build-stage twin keeps serving them (permissive for unknown paths — the
- * instant feedback UX), and the REAL validation is the submit-time main-side
- * chain whose ERR_* rejections land in the wizard's centralized
- * i18n/errors.ts mapping — the inline correction copy the spec's Error
- * Handling table assigns those codes. Returned as a Partial-compatible
- * slice: the shell hands it to the wizard's face seam, which spreads it over
- * the mock twin.
+ * The register wizard's IPC face slice (task 5.14; 6.4 adds the authorization
+ * member; 1.7 adds the REAL probe) — registerProject / updateProject /
+ * authorizeExternalDocPath / probeCodeRoot. The probe gained a verb in 1.7
+ * because the CONDITIONAL migration step's premise must be real on the real
+ * chain (a permissive mock would offer the step for every registration);
+ * probeExternalPath keeps the build-stage twin (permissive — the real
+ * validation is the submit-time main-side chain whose ERR_* rejections land
+ * in the wizard's centralized i18n/errors.ts mapping). Returned as a
+ * Partial-compatible slice: the shell hands it to the wizard's face seam,
+ * which spreads it over the mock twin.
  */
 export function createIpcRegisterWizardVerbs(
   bridge: WorkbenchIpcBridge,
-): Pick<RegisterWizardFace, 'registerProject' | 'updateProject' | 'authorizeExternalDocPath'> {
+): Pick<RegisterWizardFace, 'registerProject' | 'updateProject' | 'authorizeExternalDocPath' | 'probeCodeRoot'> {
   return {
+    probeCodeRoot: async (input: { codeRoot: string; docLocationPath?: string | null }): Promise<CodeRootProbeResult> => {
+      try {
+        return await bridge.probeCodeRoot(input)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
     registerProject: async (input: RegisterProjectInput): Promise<Project> => {
       try {
         return await bridge.registerProject(input)

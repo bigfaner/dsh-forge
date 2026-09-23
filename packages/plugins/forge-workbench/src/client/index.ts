@@ -93,8 +93,8 @@ export {
 // overview family's faces (overview/plugin + the wizard's WRITE pair);
 // task 5.15 added the tasks family's (board + detail).
 export {
-  createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcOverviewFace, createIpcPluginFace,
-  createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
+  createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcMigrationFace, createIpcOverviewFace,
+  createIpcPluginFace, createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
   getWorkbenchIpcBridge,
   normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,
 } from './ipc/workbench'
@@ -159,6 +159,9 @@ export type {
 } from './views/overview/migration/MigrateProgressDialog'
 export { useMigrationGuard } from './views/overview/migration/MigrateGuard'
 export type { MigrationGuardView, UseMigrationGuardInput } from './views/overview/migration/MigrateGuard'
+// 1.7: the per-card guarded entry mount (ProjectCard's action-row host).
+export { MigrationCardEntry } from './views/overview/migration/MigrationCardEntry'
+export type { MigrationCardEntryProps } from './views/overview/migration/MigrationCardEntry'
 // The UF2 task board page (task 5.5): mounted by the shell into the reserved
 // tasks seat; exported with its pure board model (filter/sort/dangling) for
 // the 5.15 assembly + its tests. View A (依赖树 DAG) is 5.6's — the

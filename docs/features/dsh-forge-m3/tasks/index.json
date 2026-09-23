@@ -140,7 +140,7 @@
       "dependencies": [
         "1.6"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "1.7-migration-ui-integrate.md",
       "record": "records/1.7-migration-ui-integrate.md",
       "breaking": true,

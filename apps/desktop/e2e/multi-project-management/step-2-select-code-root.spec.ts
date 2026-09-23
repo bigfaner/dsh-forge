@@ -149,6 +149,7 @@ test('step-2/no-forge-data [@web-e2e @journey multi-project-management]: forge-l
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-next]').click()
+      await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // M3 翻转(1.7):仓外为默认,本腿选回仓内注册
       await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-finish]').click()
       const submitError = page.locator('[data-dsh-forge-wizard-submit-error]')
@@ -206,6 +207,7 @@ test('step-2/duplicate-registration [@web-e2e @journey multi-project-management]
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-next]').click()
+      await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // M3 翻转(1.7):仓外为默认,本腿选回仓内注册
       await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-finish]').click()
       await expect(page.locator('[data-dsh-forge-wizard-exists]'), 'ERR_PROJECT_EXISTS 已注册提示').toBeVisible({ timeout: 15_000 })
@@ -272,6 +274,7 @@ test('step-2/code-root-unreadable [@web-e2e @journey multi-project-management]: 
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-next]').click()
+      await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // M3 翻转(1.7):仓外为默认,本腿选回仓内注册
       await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
       await page.locator('[data-dsh-forge-wizard-finish]').click()
       const submitError = page.locator('[data-dsh-forge-wizard-submit-error]')

@@ -125,8 +125,11 @@ function fakeServices(): WorkbenchVerbServices {
       deviated: false,
       migratedAt: null,
       lastEvent: null,
+      indexJsonDetected: false,
     })),
     startMigration: vi.fn(() => Promise.resolve({ started: true })),
+    probeCodeRoot: vi.fn(() => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false })),
+    getWorkbenchPaths: vi.fn(() => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -173,7 +176,7 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the twenty-five whitelisted verb channels, one per verb', () => {
+  it('contains exactly the twenty-seven whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
@@ -183,7 +186,9 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
       'dsh-forge:workbench-get-task-detail',
+      'dsh-forge:workbench-get-workbench-paths',
       'dsh-forge:workbench-list-plugins',
+      'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
       'dsh-forge:workbench-record-session-link',
       'dsh-forge:workbench-register-project',
@@ -201,7 +206,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(25)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(27)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -236,6 +241,8 @@ describe('workbench verb routing table', () => {
       'taskQuery',
       'getMigrationStatus',
       'startMigration',
+      'probeCodeRoot',
+      'getWorkbenchPaths',
     ])
   })
 
@@ -278,10 +285,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 25 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 27 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(25)
+    expect(handlers.size).toBe(27)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })

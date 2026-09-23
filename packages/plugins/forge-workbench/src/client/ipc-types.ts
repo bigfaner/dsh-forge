@@ -315,11 +315,28 @@ export interface MigrationStatus {
   readonly deviated: boolean
   readonly migratedAt: string | null
   readonly lastEvent: MigrationEvent | null
+  /**
+   * Does the doc tree still carry tasks/index.json (task 1.7)? The migratable
+   * judgment's doc-side half — authority 'files' + true = the card's 可迁移;
+   * false after the archive (or when no task corpus ever existed).
+   */
+  readonly indexJsonDetected: boolean
 }
 
 /** Interface 1 startMigration(projectId) payload — progress rides the events. */
 export interface MigrationStarted {
   readonly started: true
+}
+
+/**
+ * Interface 1 getWorkbenchPaths() payload (task 1.7, structural twin of the
+ * main-side type): the kernel-managed locations — docsRoot backs the flipped
+ * 仓外 registration default (G7/SC9 应用管理路径), backupsRoot the migration
+ * confirm dialog's mono 备份位置 copy.
+ */
+export interface WorkbenchPaths {
+  readonly docsRoot: string
+  readonly backupsRoot: string
 }
 
 // ---------------------------------------------------------------------------

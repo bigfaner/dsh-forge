@@ -33,6 +33,7 @@
  */
 import type {
   DocKind, FeatureBoardData, FeatureDoc, MigrationPhase, MigrationPhaseResult, MigrationStatus,
+  WorkbenchPaths,
   PluginRow, Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail, TaskSummary,
   WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
@@ -258,6 +259,7 @@ export const MOCK_WIZARD_EXTERNAL_UNREADABLE = 'Z:\\docs\\gone'
  */
 export function createMockRegisterWizardFace(
   initial: WorkbenchState = MOCK_WORKBENCH_STATE,
+  options: { indexJsonDetected?: boolean } = {},
 ): RegisterWizardFace {
   let projects: readonly Project[] = initial.projects
   let seq = 0
@@ -281,7 +283,12 @@ export function createMockRegisterWizardFace(
       if (samePath(root, MOCK_WIZARD_NO_FORGE_ROOT)) {
         return { available: false, reasonCode: 'ERR_FORGE_NOT_DETECTED', detail: `mock fixture: ${MOCK_WIZARD_NO_FORGE_ROOT}` }
       }
-      return { available: true, taskTotal: MOCK_WIZARD_TASK_TOTAL, featureTotal: MOCK_WIZARD_FEATURE_TOTAL }
+      return {
+        available: true,
+        taskTotal: MOCK_WIZARD_TASK_TOTAL,
+        featureTotal: MOCK_WIZARD_FEATURE_TOTAL,
+        indexJsonDetected: options.indexJsonDetected === true,
+      }
     },
     probeExternalPath: async ({ codeRoot, docLocationPath }) => {
       const path = docLocationPath.trim()
@@ -886,12 +893,13 @@ export function createMockPluginFace(
 /** The mock backup directory (the confirm copy's mono 备份位置). */
 export const MOCK_MIGRATION_BACKUP_PATH = 'Z:/userData/workbench/backups/demo-20260924T080000Z'
 
-/** The migratable status fixture (authority 'files', never migrated). */
+/** The migratable status fixture (authority 'files' + index.json detected — the card's 可迁移 premise). */
 export const MOCK_MIGRATION_STATUS_FILES: MigrationStatus = Object.freeze({
   authority: 'files',
   deviated: false,
   migratedAt: null,
   lastEvent: null,
+  indexJsonDetected: true,
 })
 
 /** The migrated status fixture (authority 'sqlite', audit trail behind it). */
@@ -899,6 +907,7 @@ export const MOCK_MIGRATION_STATUS_SQLITE: MigrationStatus = Object.freeze({
   authority: 'sqlite',
   deviated: false,
   migratedAt: '2026-09-24T08:00:05.000Z',
+  indexJsonDetected: false,
   lastEvent: {
     id: 'ev-archive-ok',
     projectId: 'demo',
@@ -907,6 +916,15 @@ export const MOCK_MIGRATION_STATUS_SQLITE: MigrationStatus = Object.freeze({
     detailJson: null,
     at: '2026-09-24T08:00:05.000Z',
   } as const,
+})
+
+/**
+ * The kernel-managed locations fixture (task 1.7): the flipped wizard default's
+ * 应用管理路径 root + the migration confirm's 备份位置 root (mock userData).
+ */
+export const MOCK_WORKBENCH_PATHS: WorkbenchPaths = Object.freeze({
+  docsRoot: 'Z:/userData/workbench/docs',
+  backupsRoot: 'Z:/userData/workbench/backups',
 })
 
 /** The mock twin's knobs (the spec's scenario matrix: 成功 / 相位注错 / 守卫). */
@@ -1009,6 +1027,7 @@ export function createMockMigrationFace(
       guardReads += 1
       return guard
     },
+    getWorkbenchPaths: async () => MOCK_WORKBENCH_PATHS,
   }
   return {
     face,

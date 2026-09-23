@@ -82,7 +82,14 @@ test('step-3/success [@web-e2e @journey multi-project-management]: in_repo defau
       await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 10_000 })
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
-      await expect(page.locator('[data-dsh-forge-wizard-doc-in-repo]'), '默认仓内文档位置(外置默认关闭)').toBeChecked()
+      // M3 翻转(1.7/G7/SC9):仓外应用管理路径为默认 —— 预填内核 docsRoot 路径
+      // +「已预填,可修改」提示 + 未显式授权则「下一步」禁用(BIZ 授权纪律延续)。
+      await expect(page.locator('[data-dsh-forge-wizard-doc-external]'), '默认仓外文档位置(应用管理路径)').toBeChecked()
+      await expect(page.locator('[data-dsh-forge-wizard-external-input]')).not.toHaveValue('')
+      await expect(page.locator('[data-dsh-forge-wizard-external-default]')).toBeVisible()
+      await expect(page.locator('[data-dsh-forge-wizard-authorize]')).not.toBeChecked()
+      await expect(page.locator('[data-dsh-forge-wizard-next]')).toBeDisabled()
+      await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // 本腿选回仓内注册
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
       // UF1 数据要求:显示名缺省 = 代码根目录名(placeholder 承载缺省)。

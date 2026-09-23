@@ -69,6 +69,12 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     recordSessionLink: async () => ({}),
     endSessionLink: async () => undefined,
     authorizeExternalDocPath: async () => undefined,
+    // M3 migration pair + UF3 integration reads (task 1.7): the presence
+    // check walks every declared bridge member.
+    getMigrationStatus: async () => ({ authority: 'files', deviated: false, migratedAt: null, lastEvent: null, indexJsonDetected: false }),
+    startMigration: async () => ({ started: true }),
+    probeCodeRoot: async () => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false }),
+    getWorkbenchPaths: async () => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' }),
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

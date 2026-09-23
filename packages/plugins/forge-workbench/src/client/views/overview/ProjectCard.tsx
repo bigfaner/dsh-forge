@@ -23,9 +23,27 @@
  */
 import { useState } from 'react'
 import type { Project } from '../../ipc-types'
+import type { MigrationFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { formatTimestamp } from './format'
+import { MigrationPill } from './migration/MigrationPill'
+import { MigrationCardEntry } from './migration/MigrationCardEntry'
+
+/**
+ * The card's migration surface (task 1.7, ui-design 项目卡追加): present ONLY
+ * on the assembled path (the page derives it from getMigrationStatus —
+ * authority 'files' + indexJsonDetected = 'migratable', 'sqlite' =
+ * 'migrated'); absent = the M2 card verbatim (the build-stage default).
+ */
+export interface ProjectCardMigration {
+  /** 'migratable' = 可迁移 Pill + 「迁移」 entry; 'migrated' = the 已迁移 Pill (entry retired). */
+  readonly status: 'migratable' | 'migrated'
+  /** The migration family's face (the entry-guard hook's reads). */
+  readonly face: MigrationFace
+  /** Open the migration dialog family (the page owns MigrationDialogs). */
+  readonly onMigrate: (project: Project) => void
+}
 
 /** Inputs of {@link ProjectCard}. */
 export interface ProjectCardProps {
@@ -46,6 +64,8 @@ export interface ProjectCardProps {
   onRename: (id: string, displayName: string) => Promise<boolean>
   /** Opens the double-step RemoveConfirm (task Hard Rule: never one-click). */
   onRemove: (project: Project) => void
+  /** The migration surface (task 1.7) — absent renders the M2 card verbatim. */
+  migration?: ProjectCardMigration | undefined
 }
 
 /** ui-design 项目卡: r14 · bg-layer-2 · pad 14; active = brand border 1.5px. */
@@ -227,6 +247,9 @@ export function ProjectCard(props: ProjectCardProps) {
         >
           {props.t(props.project.docLocationType === 'in_repo' ? 'overview.doc.inRepo' : 'overview.doc.external')}
         </span>
+        {props.migration !== undefined && (
+          <MigrationPill t={props.t} status={props.migration.status} />
+        )}
       </div>
 
       {editing
@@ -299,6 +322,15 @@ export function ProjectCard(props: ProjectCardProps) {
         >
           {props.t('overview.card.remove')}
         </ChromeButton>
+        {props.migration !== undefined && props.migration.status === 'migratable' && (
+          <MigrationCardEntry
+            t={props.t}
+            projectId={props.project.id}
+            face={props.migration.face}
+            migratable={true}
+            onOpen={() => { props.migration?.onMigrate(props.project) }}
+          />
+        )}
       </div>
     </article>
   )

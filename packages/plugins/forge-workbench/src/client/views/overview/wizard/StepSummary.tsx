@@ -92,6 +92,11 @@ export interface StepSummaryProps {
   readonly submitError: { readonly code: string; readonly message: string } | undefined
   /** The already-registered row for ERR_PROJECT_EXISTS (locate target). */
   readonly existingProject: Project | undefined
+  /**
+   * Task 1.7: the conditional ③'s collected choice, shown as a read-only row
+   * (undefined = the step never offered — no row, the classic three-step form).
+   */
+  readonly migrationChoice: 'now' | 'defer' | undefined
   /** Draft update. */
   readonly onNameChange: (value: string) => void
   /** The locate CTA — the wizard closes itself right after firing it. */
@@ -128,6 +133,14 @@ export function StepSummary(props: StepSummaryProps) {
           )}
         </p>
       </div>
+      {props.migrationChoice !== undefined && (
+        <div>
+          <div style={rowLabelStyle}>{props.t('wizard.stepMigrate.title')}</div>
+          <p data-dsh-forge-wizard-summary-migrate="" style={plainStyle}>
+            {props.t(props.migrationChoice === 'now' ? 'wizard.summary.migrateNow' : 'wizard.summary.migrateDefer')}
+          </p>
+        </div>
+      )}
       <div>
         <label style={rowLabelStyle} htmlFor={nameInputId}>{props.t('overview.rename.label')}</label>
         <input

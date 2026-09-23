@@ -181,6 +181,12 @@ function installBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIp
     recordSessionLink: async () => ({}),
     endSessionLink: async () => undefined,
     authorizeExternalDocPath: async () => undefined,
+    // M3 migration pair + UF3 integration reads (task 1.7): the presence
+    // check walks every declared bridge member.
+    getMigrationStatus: async () => ({ authority: 'files', deviated: false, migratedAt: null, lastEvent: null, indexJsonDetected: false }),
+    startMigration: async () => ({ started: true }),
+    probeCodeRoot: async () => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false }),
+    getWorkbenchPaths: async () => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' }),
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge
@@ -464,7 +470,11 @@ describe('shell integration: the overview family over the real bridge', () => {
     await waitFor(() => { expect($('[data-dsh-forge-wizard-probe="detected"]')).not.toBeNull() })
     fireEvent.click($('[data-dsh-forge-wizard-next]'))
     await waitFor(() => { expect($('[data-dsh-forge-wizard-doc-external]')).not.toBeNull() })
-    fireEvent.click($('[data-dsh-forge-wizard-next]')) // in_repo default — step ② skippable
+    // M3 flip (task 1.7): 仓外应用管理路径 is now the DEFAULT — this
+    // registration opts back IN-REPO explicitly (the bridge probe reports no
+    // index.json, so the form stays three-step).
+    fireEvent.click($('[data-dsh-forge-wizard-doc-in-repo]'))
+    fireEvent.click($('[data-dsh-forge-wizard-next]'))
     await waitFor(() => { expect($('[data-dsh-forge-wizard-finish]')).not.toBeNull() })
     fireEvent.click($('[data-dsh-forge-wizard-finish]'))
     // The REAL verb fired with the built RegisterProjectInput…

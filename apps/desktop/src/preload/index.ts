@@ -10,6 +10,8 @@ import type {
   MigrationStarted,
   MigrationStatus,
   PluginRow,
+  ProbeCodeRootInput,
+  ProbeCodeRootResult,
   Project,
   RecordSessionLinkInput,
   RegisterProjectInput,
@@ -25,6 +27,7 @@ import type {
   TaskSummary,
   TaskTransitionInput,
   WorkbenchEvent,
+  WorkbenchPaths,
   WorkbenchState,
 } from '../main/workbench/ipc/types.ts'
 import type { DocKind, ProjectPatch } from '../main/workbench/ipc/types.ts'
@@ -153,6 +156,15 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getMigrationStatus, projectId) as Promise<MigrationStatus>,
     startMigration: (projectId: string): Promise<MigrationStarted> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.startMigration, projectId) as Promise<MigrationStarted>,
+    // M3 UF3 integration reads (task 1.7): the register wizard's real step-①
+    // probe (forge availability + totals + indexJsonDetected — the conditional
+    // migration step's premise) and the kernel-managed locations behind the
+    // flipped 仓外 default (docsRoot) and the migration confirm copy
+    // (backupsRoot). Both read-only.
+    probeCodeRoot: (input: ProbeCodeRootInput): Promise<ProbeCodeRootResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeCodeRoot, input) as Promise<ProbeCodeRootResult>,
+    getWorkbenchPaths: (): Promise<WorkbenchPaths> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getWorkbenchPaths) as Promise<WorkbenchPaths>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

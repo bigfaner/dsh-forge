@@ -1,34 +1,47 @@
 /**
- * The UF1 项目注册向导, BUILD half (task 5.4): the `workbench/dialog/register`
- * overlay (page-map view-key family, mounted by the workbench shell from the
- * addProject / repoint seams). Three steps — ① codeRoot + forge-detection
- * instant feedback, ② docs location (仓内默认 / 仓外 + 显式授权), ③ summary
- * confirm + displayName (缺省 = codeRoot 目录名) — with back-navigation that
- * never drops state. Edit mode reuses the SAME dialog (标题「重新指向项目」,
- * prefilled from the registered row): the submit walks updateProject's
- * ProjectPatch semantics (rename + repoint; 重指向校验同链 — the same probe
- * and conflict guards run over the prefilled root).
+ * The UF1 项目注册向导, BUILD half (tasks 5.4 + 1.7): the `workbench/dialog/
+ * register` overlay (page-map view-key family, mounted by the workbench shell
+ * from the addProject / repoint seams). Steps — ① codeRoot + forge-detection
+ * instant feedback, ② docs location (M3 flip, task 1.7: 仓外应用管理路径
+ * DEFAULT + prefilled, 仓内 selectable — G7/SC9), the CONDITIONAL ③ 迁移确认
+ * (register mode + the settled doc tree probed `tasks/index.json` — Interface
+ * 4 §8; three dots become four), and the summary confirm + displayName
+ * (缺省 = codeRoot 目录名) — with back-navigation that never drops state.
+ * Edit mode reuses the SAME dialog (标题「重新指向项目」, prefilled from the
+ * registered row; the conditional migration step NEVER appears there — the
+ * card entry owns a registered project's migration): the submit walks
+ * updateProject's ProjectPatch semantics (rename + repoint; 重指向校验同链).
+ *
+ * 1.7 in-place migration phase (ui-design 向导内迁移): with the toggle ON and
+ * registration confirmed, the step content area EVOLVES IN PLACE into the
+ * 1.6 progress presentation (MigrationProgressBody — 校验/迁移/对拍 rows +
+ * 对拍结论 / 回滚说明; NO nested dialog, the 唯一模态 ruling) and the wizard
+ * LOCKS WHOLE (Esc/✕/mask inert for the phase's whole lifetime — closing
+ * happens ONLY through the explicit terminals: 完成 = [进入工作台], 失败 =
+ * [重试] + [以未迁移态完成注册], pre-flight guard rejection = the inline note
+ * + the same pair).
  *
  * Dialog discipline (ui-design 全局规则 + page-map): the shared DialogFrame —
  * focus lands on the first field, Tab/Shift+Tab trap, Esc / mask / ✕ dismiss
  * with a DIRTY guard (any input → the 放弃确认 sub-dialog first; clean closes
- * immediately), dismissal disarmed while the submit is in flight. Enter
- * advances: each step is one form whose submit IS the forward action.
+ * immediately), dismissal disarmed while the submit is in flight or the
+ * migration phase is live. Enter advances: each step is one form whose submit
+ * IS the forward action.
  *
- * Hard Rule: 向导提交前不得写入任何持久状态 — steps ①/② read probes only;
- * the registerProject / updateProject verb fires solely from the step-③
- * confirm.
+ * Hard Rule: 向导提交前不得写入任何持久状态 — steps ①/② (and the conditional
+ * ③) read probes and collect choices only; the registerProject / updateProject
+ * verb fires solely from the summary confirm, startMigration only AFTER it.
  *
- * Data layering (the OverviewFace precedent): the face defaults to the
- * build-stage mock twin (mocks/workbench.createMockRegisterWizardFace); the
- * 5.14 assembly spreads the IPC-backed members over it. Error copy routes
- * through the centralized i18n/errors.ts table.
+ * Data layering (the OverviewFace precedent): the faces default to the
+ * build-stage mock twins (mocks/workbench.createMockRegisterWizardFace /
+ * createMockMigrationFace); the assemblies spread the IPC-backed members over
+ * them. Error copy routes through the centralized i18n/errors.ts table.
  */
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import type {
   DocLocationType, Project, ProjectPatch, RegisterProjectInput,
 } from '../../ipc-types'
-import type { RegisterWizardFace } from '../../contract'
+import type { MigrationFace, RegisterWizardFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import {
@@ -36,11 +49,14 @@ import {
   ghostButtonStyle, primaryButtonStyle,
 } from '../tasks/launch/LaunchStates'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../../paths'
-import { createMockRegisterWizardFace } from '../../mocks/workbench'
+import { createMockMigrationFace, createMockRegisterWizardFace } from '../../mocks/workbench'
 import { StepPath } from './wizard/StepPath'
 import { StepExternal } from './wizard/StepExternal'
 import { StepSummary } from './wizard/StepSummary'
+import { StepMigrate } from './wizard/StepMigrate'
 import { verbErrorCode } from './OverviewPage'
+import { MigrationProgressBody, useMigrationRun } from './migration/MigrateProgressDialog'
+import { migrationStartErrorText } from './migration/MigrateConfirmDialog'
 
 // ---------------------------------------------------------------------------
 // Draft model (pure — exported for direct unit tests)
@@ -53,15 +69,27 @@ export interface WizardDraft {
   readonly docLocationPath: string
   readonly externalAuthorized: boolean
   readonly displayName: string
+  /**
+   * The conditional ③'s toggle (task 1.7): migrate right after registering.
+   * Default TRUE (ui-design 开关默认开); FALSE = the read-only compatibility
+   * registration (the card keeps 可迁移). Edit mode carries TRUE as a neutral
+   * baseline (the step never renders there, so the value never goes dirty).
+   */
+  readonly migrateNow: boolean
 }
 
-/** The register mode's pristine draft (step ① empty, 仓内 default — AC1 可跳过). */
+/**
+ * The register mode's pristine draft (step ① empty; M3 flip, task 1.7: 仓外
+ * DEFAULT — the app-managed path prefills once the codeRoot is known and the
+ * kernel paths read lands; 仓内 remains a radio away).
+ */
 export const EMPTY_WIZARD_DRAFT: WizardDraft = Object.freeze({
   codeRoot: '',
-  docLocationType: 'in_repo',
+  docLocationType: 'external',
   docLocationPath: '',
   externalAuthorized: false,
   displayName: '',
+  migrateNow: true,
 })
 
 /**
@@ -77,6 +105,7 @@ export function draftOfProject(project: Project): WizardDraft {
     docLocationPath: project.docLocationPath ?? '',
     externalAuthorized: project.docLocationType === 'external',
     displayName: project.displayName,
+    migrateNow: true,
   }
 }
 
@@ -87,6 +116,7 @@ export function isWizardDraftDirty(draft: WizardDraft, baseline: WizardDraft): b
     || draft.docLocationPath !== baseline.docLocationPath
     || draft.externalAuthorized !== baseline.externalAuthorized
     || draft.displayName !== baseline.displayName
+    || draft.migrateNow !== baseline.migrateNow
 }
 
 /** Step ③'s registerProject payload (Interface 1 RegisterProjectInput). */
@@ -147,14 +177,21 @@ export interface RegisterWizardResult {
 export interface RegisterWizardProps {
   /** The locale seat (the shell's `t`). */
   readonly t: (key: WorkbenchKey) => string
-  /** register = fresh 3-step flow; edit = the repoint/rename reuse (prefilled). */
+  /** register = fresh flow (conditionally four steps); edit = the repoint/rename reuse (prefilled, three steps). */
   readonly mode: 'register' | 'edit'
   /** The registered row being repointed — required when mode='edit'. */
   readonly project: Project | undefined
   /** The current registry (the ERR_PROJECT_EXISTS locate lookup). */
   readonly projects: readonly Project[]
-  /** Face members override the build-stage mock twin (5.14 injects the IPC verbs). */
+  /** Face members override the build-stage mock twin (5.14 injects the IPC verbs; 1.7 adds the real probe). */
   readonly face?: Partial<RegisterWizardFace> | undefined
+  /**
+   * The migration family's face (task 1.7): getWorkbenchPaths backs the
+   * flipped default's app-managed prefill; startMigration/events run the
+   * in-place phase after registration. Absent members fall back to the
+   * build-stage mock twin (1.7's assembly injects the IPC face).
+   */
+  readonly migrationFace?: Partial<MigrationFace> | undefined
   /** ERR_PROJECT_EXISTS locate notification — the wizard closes itself after firing. */
   readonly onLocate?: ((project: Project) => void) | undefined
   /** Every close path funnels here (success carries the result; cancel/discard carries none). */
@@ -204,6 +241,16 @@ const stepTextStyle = {
   margin: '0',
 } as const
 
+/** 1.7: the in-place phase's pre-flight guard note (the confirm door's twin). */
+const preflightNoteStyle = {
+  border: '1px solid var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
+  borderRadius: '14px',
+  color: 'var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
+  fontSize: '12px',
+  lineHeight: '18px',
+  padding: '8px 12px',
+} as const
+
 /**
  * The register wizard overlay (`data-dsh-forge-dialog="register-wizard"`).
  * Mount = open (the shell owns the open/close decision); unmount = closed.
@@ -213,17 +260,33 @@ export function RegisterWizard(props: RegisterWizardProps) {
   const generatedId = useId().replace(/[^a-zA-Z0-9-]/g, '')
   const titleId = `dsh-forge-wizard-title-${generatedId}`
 
-  // Build-stage default face: one isolated mock twin per mount (5.14 spreads
-  // the IPC-backed members over it — the OverviewPage precedent).
+  // Build-stage default faces: one isolated mock twin per mount (5.14 spreads
+  // the IPC-backed members over it — the OverviewPage precedent; 1.7 adds the
+  // migration family's twin for the paths read + the in-place run).
   const [defaultFace] = useState(() => createMockRegisterWizardFace())
   const face: RegisterWizardFace = { ...defaultFace, ...props.face }
-
-  const baseline = useMemo(
-    () => (props.mode === 'edit' && props.project !== undefined ? draftOfProject(props.project) : EMPTY_WIZARD_DRAFT),
-    [props.mode, props.project],
+  const [defaultMigrationFace] = useState(() => createMockMigrationFace().face)
+  // Identity-stable for given props (the run hook's event subscription and
+  // the paths-read effect key on the face object itself).
+  const migrationFace: MigrationFace = useMemo(
+    () => ({ ...defaultMigrationFace, ...props.migrationFace }),
+    [defaultMigrationFace, props.migrationFace],
   )
-  const [draft, setDraft] = useState<WizardDraft>(baseline)
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+
+  const initialBaseline = props.mode === 'edit' && props.project !== undefined
+    ? draftOfProject(props.project)
+    : EMPTY_WIZARD_DRAFT
+  // The baseline is STATE (not a memo): the 1.7 default-path prefill patches
+  // draft AND baseline together, so a pristine wizard stays clean (Esc = the
+  // immediate close) even though the app-managed path landed in the draft.
+  const [baseline, setBaseline] = useState<WizardDraft>(initialBaseline)
+  const [draft, setDraft] = useState<WizardDraft>(initialBaseline)
+  /** 1.7: the CONDITIONAL ③ exists only when the settled doc tree probed index.json. */
+  const [migrationOffered, setMigrationOffered] = useState(false)
+  /** 1.7: set once registration resolved and the in-place migration run began. */
+  const [migrationPhase, setMigrationPhase] = useState<{ readonly project: Project } | undefined>(undefined)
+  const [docsRoot, setDocsRoot] = useState<string | null>(null)
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [codeRootProbe, setCodeRootProbe] = useState<CodeRootProbe>({ status: 'empty' })
   const [externalProbe, setExternalProbe] = useState<ExternalProbe>({ status: 'idle' })
   const [submitting, setSubmitting] = useState(false)
@@ -242,6 +305,52 @@ export function RegisterWizard(props: RegisterWizardProps) {
   const discardReturnRef = useRef<HTMLElement | null>(null)
   const probeSeq = useRef(0)
   const externalSeq = useRef(0)
+  const offerSeq = useRef(0)
+  const defaultPathApplied = useRef(false)
+
+  // 1.7: the kernel-managed docs root (the flipped default's 应用管理路径 base).
+  // A failed read keeps docsRoot null — the prefill stays absent and the
+  // external branch demands a hand-typed path (the chain still works).
+  useEffect(() => {
+    let alive = true
+    migrationFace.getWorkbenchPaths().then((paths) => {
+      if (alive) setDocsRoot(paths.docsRoot)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [migrationFace])
+
+  // 1.7 prefill: 仓外 default + the app-managed path `<docsRoot>/<dirname>`
+  // lands ONCE (register mode, pristine external draft, codeRoot known) — and
+  // patches the BASELINE with it, so the untouched wizard is NOT dirty (Esc
+  // still closes immediately; the discard guard never fires on the default).
+  useEffect(() => {
+    if (defaultPathApplied.current) return
+    if (props.mode !== 'register') {
+      defaultPathApplied.current = true
+      return
+    }
+    const name = directoryNameOf(draft.codeRoot.trim())
+    if (name === '' || docsRoot === null) return
+    if (draft.docLocationType !== 'external' || draft.docLocationPath !== '') {
+      defaultPathApplied.current = true
+      return
+    }
+    const prefilled = docsRoot.endsWith('/') ? `${docsRoot}${name}` : `${docsRoot}/${name}`
+    defaultPathApplied.current = true
+    setDraft(current => (current.docLocationType === 'external' && current.docLocationPath === ''
+      ? { ...current, docLocationPath: prefilled }
+      : current))
+    setBaseline(current => (current.docLocationType === 'external' && current.docLocationPath === ''
+      ? { ...current, docLocationPath: prefilled }
+      : current))
+  }, [docsRoot, draft.codeRoot, draft.docLocationType, draft.docLocationPath, props.mode])
+
+  // The in-place migration run (1.7): the hook lives for the wizard's whole
+  // lifetime; the placeholder id matches no project until the phase begins.
+  const migrationRun = useMigrationRun({
+    projectId: migrationPhase?.project.id ?? 'dsh-forge-wizard-unregistered',
+    face: migrationFace,
+  })
 
   // Step ① probe: fires on every codeRoot change (mount included — the edit
   // prefill probes the registered root through the same chain).
@@ -326,17 +435,49 @@ export function RegisterWizard(props: RegisterWizardProps) {
   const dirty = isWizardDraftDirty(draft, baseline)
   const defaultName = directoryNameOf(draft.codeRoot.trim())
   const existingProject = props.projects.find(project => samePath(project.codeRoot, draft.codeRoot.trim()))
+  /** 1.7: the summary's step number rides the conditional ③ (offered → 4). */
+  const summaryStep = migrationOffered ? 4 : 3
+  const stepCount = migrationOffered ? 4 : 3
+  const inMigrationPhase = migrationPhase !== undefined
 
   // ---- actions ---------------------------------------------------------------
 
-  const advance = (): void => {
-    if (step === 3) return
-    if (step === 1 && !canAdvanceStep1) return
-    if (step === 2 && !canAdvanceStep2) return
-    setStep(current => (current === 3 ? current : (current + 1) as 2 | 3))
+  /**
+   * 1.7: leaving ② re-probes with the SETTLED doc location — the conditional
+   * ③'s premise is the CHOSEN tree's index.json (the step-① probe scanned the
+   * repo side only). Register mode only; a probe failure offers nothing.
+   */
+  const advanceFromStep2 = (): void => {
+    if (!canAdvanceStep2) return
+    if (props.mode !== 'register') {
+      setStep(3)
+      return
+    }
+    const seq = (offerSeq.current += 1)
+    const settledPath = draft.docLocationType === 'external' ? draft.docLocationPath.trim() : null
+    void face.probeCodeRoot({ codeRoot: draft.codeRoot.trim(), docLocationPath: settledPath }).then((result) => {
+      if (seq !== offerSeq.current) return
+      setMigrationOffered(result.available && result.indexJsonDetected)
+      setStep(3)
+    }, () => {
+      if (seq !== offerSeq.current) return
+      setMigrationOffered(false)
+      setStep(3)
+    })
   }
 
-  /** The only persistent-write call site (task Hard Rule): step ③ confirm. */
+  const advance = (): void => {
+    if (inMigrationPhase) return
+    if (step === summaryStep) return
+    if (step === 1 && !canAdvanceStep1) return
+    if (step === 2) {
+      advanceFromStep2()
+      return
+    }
+    setStep(current => (current >= summaryStep ? current : (current + 1) as 2 | 3 | 4))
+  }
+
+  /** The only persistent-write call site (task Hard Rule): the summary confirm. */
   const submit = async (): Promise<void> => {
     if (submitting) return
     setSubmitting(true)
@@ -352,6 +493,15 @@ export function RegisterWizard(props: RegisterWizardProps) {
       }
       if (props.mode === 'register') {
         const project = await face.registerProject(buildRegisterInput(draft))
+        // 1.7: the toggle ON + the conditional step offered → the step content
+        // area evolves IN PLACE into the migration run; the wizard closes only
+        // through the phase's explicit terminals. Everything else closes now.
+        if (migrationOffered && draft.migrateNow) {
+          setMigrationPhase({ project })
+          setSubmitting(false)
+          migrationRun.start()
+          return
+        }
         props.onClose?.({ project, action: 'register' })
       } else if (props.project !== undefined) {
         const updated = await face.updateProject(props.project.id, buildProjectPatch(draft))
@@ -370,13 +520,18 @@ export function RegisterWizard(props: RegisterWizardProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
-    if (step < 3) advance()
+    if (inMigrationPhase) return
+    if (step < summaryStep) advance()
     else void submit()
   }
 
-  /** Esc / mask / ✕: dirty → the discard confirm; clean → immediate close; in-flight → disarmed. */
+  /**
+   * Esc / mask / ✕: dirty → the discard confirm; clean → immediate close;
+   * in-flight → disarmed; migration phase → disarmed for its WHOLE lifetime
+   * (ui-design: 执行中向导整体锁定,关闭仅经显式终端按钮 — 完成/失败/未迁移态)。
+   */
   const requestClose = (): void => {
-    if (submitting || discardOpen) return
+    if (submitting || inMigrationPhase || discardOpen) return
     if (dirty) {
       discardReturnRef.current = document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -385,6 +540,14 @@ export function RegisterWizard(props: RegisterWizardProps) {
       return
     }
     props.onClose?.()
+  }
+
+  /** 1.7: close from a migration-phase terminal (carries the registration result). */
+  const closeAfterMigration = (): void => {
+    const phase = migrationPhase
+    if (phase === undefined) return
+    setMigrationPhase(undefined)
+    props.onClose?.({ project: phase.project, action: 'register' })
   }
 
   /**
@@ -421,7 +584,12 @@ export function RegisterWizard(props: RegisterWizardProps) {
 
   const stepLabel = t('wizard.stepLabel')
     .replace('{current}', String(step))
-    .replace('{total}', '3')
+    .replace('{total}', String(stepCount))
+  /** The migration run's current projection (the in-place phase's body source). */
+  const run = migrationRun.run
+  const runPreflightNote = run.status === 'idle' && run.startRejection !== null
+    ? migrationStartErrorText(run.startRejection, t)
+    : ''
 
   return (
     <>
@@ -429,124 +597,196 @@ export function RegisterWizard(props: RegisterWizardProps) {
         role="dialog"
         ariaLabelledBy={titleId}
         initialFocus={pathInputRef}
-        onDismiss={submitting ? undefined : requestClose}
+        onDismiss={submitting || inMigrationPhase ? undefined : requestClose}
         dialogDataKey="register-wizard"
         cardRef={wizardCardRef}
       >
         <DialogHeader
           id={titleId}
-          title={t(props.mode === 'edit' ? 'wizard.editTitle' : 'wizard.title')}
-          closeLabel={submitting ? undefined : t('wizard.close')}
-          onClose={submitting ? undefined : requestClose}
+          title={inMigrationPhase
+            ? t('migration.progress.title')
+            : t(props.mode === 'edit' ? 'wizard.editTitle' : 'wizard.title')}
+          closeLabel={submitting || inMigrationPhase ? undefined : t('wizard.close')}
+          onClose={submitting || inMigrationPhase ? undefined : requestClose}
         />
-        <form style={formStyle} noValidate data-dsh-forge-wizard-step={step} onSubmit={handleSubmit}>
+        <form style={formStyle} noValidate data-dsh-forge-wizard-step={inMigrationPhase ? 'migration' : step} onSubmit={handleSubmit}>
           <DialogBody>
-            {/* 步骤点 + 步骤 N/3 (ui-design Layout; the stepper carries the label). */}
-            <div role="group" aria-label={stepLabel} data-dsh-forge-wizard-stepper="" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {[1, 2, 3].map((index) => {
-                const state = index < step ? 'past' : index === step ? 'current' : 'future'
-                return (
-                  <span key={index} style={{ display: 'contents' }}>
-                    {index > 1 && <span aria-hidden="true" style={connectorStyle} />}
-                    <span
-                      aria-hidden="true"
-                      data-dsh-forge-wizard-dot={state}
-                      style={{
-                        ...dotBaseStyle,
-                        ...(state === 'current'
-                          ? { background: 'var(--dsw-alias-link, rgb(65, 118, 230))' }
-                          : state === 'past'
-                            ? { background: 'var(--dsw-alias-state-success-primary, rgb(34, 197, 94))' }
-                            : { border: '1.5px solid var(--dsh-border-color, CanvasText)' }),
-                      }}
-                    />
-                  </span>
-                )
-              })}
-              <span aria-hidden="true" style={stepTextStyle}>{stepLabel}</span>
-            </div>
+            {/* 1.7 向导内迁移: the step content area evolves IN PLACE into the
+                1.6 progress presentation — no nested dialog (唯一一模态), the
+                stepper retires for the phase, and the terminals own every
+                close (the frame's dismissal is disarmed above). */}
+            {inMigrationPhase ? (
+              <div data-dsh-forge-wizard-migration-run="">
+                <MigrationProgressBody t={t} run={run} />
+                {runPreflightNote !== '' && (
+                  <p role="status" data-dsh-forge-wizard-migration-preflight="" style={{ margin: '10px 0 0 0', ...preflightNoteStyle }}>
+                    {runPreflightNote}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* 步骤点 + 步骤 N/总 (ui-design Layout; the stepper carries the
+                    label; the count rides the conditional ③ — 三圆 ⇄ 四圆). */}
+                <div role="group" aria-label={stepLabel} data-dsh-forge-wizard-stepper="" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {Array.from({ length: stepCount }, (_, index) => index + 1).map((index) => {
+                    const state = index < step ? 'past' : index === step ? 'current' : 'future'
+                    return (
+                      <span key={index} style={{ display: 'contents' }}>
+                        {index > 1 && <span aria-hidden="true" style={connectorStyle} />}
+                        <span
+                          aria-hidden="true"
+                          data-dsh-forge-wizard-dot={state}
+                          style={{
+                            ...dotBaseStyle,
+                            ...(state === 'current'
+                              ? { background: 'var(--dsw-alias-link, rgb(65, 118, 230))' }
+                              : state === 'past'
+                                ? { background: 'var(--dsw-alias-state-success-primary, rgb(34, 197, 94))' }
+                                : { border: '1.5px solid var(--dsh-border-color, CanvasText)' }),
+                          }}
+                        />
+                      </span>
+                    )
+                  })}
+                  <span aria-hidden="true" style={stepTextStyle}>{stepLabel}</span>
+                </div>
 
-            {step === 1 && (
-              <StepPath
-                t={t}
-                value={draft.codeRoot}
-                editable={props.mode === 'register'}
-                probe={codeRootProbe}
-                inputRef={pathInputRef}
-                onChange={(value) => { setDraft(current => ({ ...current, codeRoot: value })) }}
-              />
-            )}
-            {step === 2 && (
-              <StepExternal
-                t={t}
-                codeRoot={draft.codeRoot.trim()}
-                docLocationType={draft.docLocationType}
-                docLocationPath={draft.docLocationPath}
-                externalAuthorized={draft.externalAuthorized}
-                externalProbe={externalProbe}
-                issue={step2Issue}
-                onTypeChange={(type) => { setDraft(current => ({ ...current, docLocationType: type })) }}
-                onPathChange={(path) => {
-                  // Any real path edit re-authorizes nothing: the explicit
-                  // confirm targets THIS path (the 2.4 persisted authorization
-                  // covered the previous one only). A no-op change (same text)
-                  // keeps the state as-is.
-                  setDraft(current => (path === current.docLocationPath
-                    ? current
-                    : { ...current, docLocationPath: path, externalAuthorized: false }))
-                }}
-                onAuthorizeChange={(authorized) => { setDraft(current => ({ ...current, externalAuthorized: authorized })) }}
-              />
-            )}
-            {step === 3 && (
-              <StepSummary
-                t={t}
-                codeRoot={draft.codeRoot.trim()}
-                docLocationType={draft.docLocationType}
-                docLocationPath={draft.docLocationPath}
-                displayName={draft.displayName}
-                defaultName={defaultName}
-                submitError={submitError}
-                existingProject={existingProject}
-                onNameChange={(value) => { setDraft(current => ({ ...current, displayName: value })) }}
-                onLocate={closeAfterLocate}
-              />
+                {step === 1 && (
+                  <StepPath
+                    t={t}
+                    value={draft.codeRoot}
+                    editable={props.mode === 'register'}
+                    probe={codeRootProbe}
+                    inputRef={pathInputRef}
+                    onChange={(value) => { setDraft(current => ({ ...current, codeRoot: value })) }}
+                  />
+                )}
+                {step === 2 && (
+                  <StepExternal
+                    t={t}
+                    codeRoot={draft.codeRoot.trim()}
+                    docLocationType={draft.docLocationType}
+                    docLocationPath={draft.docLocationPath}
+                    externalAuthorized={draft.externalAuthorized}
+                    externalProbe={externalProbe}
+                    issue={step2Issue}
+                    defaultPath={docsRoot === null || directoryNameOf(draft.codeRoot.trim()) === ''
+                      ? null
+                      : `${docsRoot.endsWith('/') ? docsRoot.slice(0, -1) : docsRoot}/${directoryNameOf(draft.codeRoot.trim())}`}
+                    onTypeChange={(type) => { setDraft(current => ({ ...current, docLocationType: type })) }}
+                    onPathChange={(path) => {
+                      // Any real path edit re-authorizes nothing: the explicit
+                      // confirm targets THIS path (the 2.4 persisted authorization
+                      // covered the previous one only). A no-op change (same text)
+                      // keeps the state as-is.
+                      setDraft(current => (path === current.docLocationPath
+                        ? current
+                        : { ...current, docLocationPath: path, externalAuthorized: false }))
+                    }}
+                    onAuthorizeChange={(authorized) => { setDraft(current => ({ ...current, externalAuthorized: authorized })) }}
+                  />
+                )}
+                {/* 1.7 条件③: migration confirm — ONLY when offered (the settled
+                    doc tree probed index.json); the summary shifts to ④. */}
+                {step === 3 && migrationOffered && (
+                  <StepMigrate
+                    t={t}
+                    migrateNow={draft.migrateNow}
+                    onMigrateNowChange={(migrateNow) => { setDraft(current => ({ ...current, migrateNow })) }}
+                  />
+                )}
+                {step === summaryStep && (
+                  <StepSummary
+                    t={t}
+                    codeRoot={draft.codeRoot.trim()}
+                    docLocationType={draft.docLocationType}
+                    docLocationPath={draft.docLocationPath}
+                    displayName={draft.displayName}
+                    defaultName={defaultName}
+                    submitError={submitError}
+                    existingProject={existingProject}
+                    migrationChoice={!migrationOffered ? undefined : draft.migrateNow ? 'now' : 'defer'}
+                    onNameChange={(value) => { setDraft(current => ({ ...current, displayName: value })) }}
+                    onLocate={closeAfterLocate}
+                  />
+                )}
+              </>
             )}
           </DialogBody>
           <DialogFooter>
-            {step > 1 && (
-              <ChromeButton
-                type="button"
-                data-dsh-forge-wizard-back=""
-                style={ghostButtonStyle}
-                onClick={() => { setStep(current => (current === 1 ? current : (current - 1) as 1 | 2)) }}
-              >
-                {t('wizard.back')}
-              </ChromeButton>
-            )}
-            {step < 3 && (
-              <ChromeButton
-                type="submit"
-                disabled={!canAdvanceStep1 && step === 1 || !canAdvanceStep2 && step === 2}
-                title={step === 1 ? step1BlockedReason : step2BlockedReason}
-                data-dsh-forge-wizard-next=""
-                style={primaryButtonStyle}
-              >
-                {t('wizard.next')}
-              </ChromeButton>
-            )}
-            {step === 3 && (
-              <ChromeButton
-                type="submit"
-                disabled={submitting}
-                data-dsh-forge-wizard-finish=""
-                style={primaryButtonStyle}
-              >
-                {submitting && <LaunchSpinner label={t(props.mode === 'edit' ? 'wizard.submittingEdit' : 'wizard.submitting')} />}
-                <span style={{ marginLeft: submitting ? '6px' : undefined }}>
-                  {t(props.mode === 'edit' ? 'wizard.finishEdit' : 'wizard.finish')}
-                </span>
-              </ChromeButton>
+            {inMigrationPhase ? (
+              <>
+                {/* 失败/前置拒绝: [以未迁移态完成注册] (ghost) + [重试] (md 主);
+                    完成: [进入工作台] (md 主)。执行中: no controls at all. */}
+                {(run.status === 'failed' || runPreflightNote !== '') && (
+                  <ChromeButton
+                    type="button"
+                    data-dsh-forge-wizard-migration-finish-unmigrated=""
+                    style={ghostButtonStyle}
+                    onClick={closeAfterMigration}
+                  >
+                    {t('wizard.migration.finishUnmigrated')}
+                  </ChromeButton>
+                )}
+                {(run.status === 'failed' || runPreflightNote !== '') && (
+                  <ChromeButton
+                    type="button"
+                    data-dsh-forge-wizard-migration-retry=""
+                    style={primaryButtonStyle}
+                    onClick={migrationRun.start}
+                  >
+                    {t('migration.failed.retry')}
+                  </ChromeButton>
+                )}
+                {run.status === 'done' && (
+                  <ChromeButton
+                    type="button"
+                    data-dsh-forge-wizard-migration-enter=""
+                    style={primaryButtonStyle}
+                    onClick={closeAfterMigration}
+                  >
+                    {t('wizard.migration.enterWorkbench')}
+                  </ChromeButton>
+                )}
+              </>
+            ) : (
+              <>
+                {step > 1 && (
+                  <ChromeButton
+                    type="button"
+                    data-dsh-forge-wizard-back=""
+                    style={ghostButtonStyle}
+                    onClick={() => { setStep(current => (current === 1 ? current : (current - 1) as 1 | 2 | 3)) }}
+                  >
+                    {t('wizard.back')}
+                  </ChromeButton>
+                )}
+                {step < summaryStep && (
+                  <ChromeButton
+                    type="submit"
+                    disabled={!canAdvanceStep1 && step === 1 || !canAdvanceStep2 && step === 2}
+                    title={step === 1 ? step1BlockedReason : step2BlockedReason}
+                    data-dsh-forge-wizard-next=""
+                    style={primaryButtonStyle}
+                  >
+                    {t('wizard.next')}
+                  </ChromeButton>
+                )}
+                {step === summaryStep && (
+                  <ChromeButton
+                    type="submit"
+                    disabled={submitting}
+                    data-dsh-forge-wizard-finish=""
+                    style={primaryButtonStyle}
+                  >
+                    {submitting && <LaunchSpinner label={t(props.mode === 'edit' ? 'wizard.submittingEdit' : 'wizard.submitting')} />}
+                    <span style={{ marginLeft: submitting ? '6px' : undefined }}>
+                      {t(props.mode === 'edit' ? 'wizard.finishEdit' : 'wizard.finish')}
+                    </span>
+                  </ChromeButton>
+                )}
+              </>
             )}
           </DialogFooter>
         </form>

@@ -55,6 +55,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   //    相位进度走事件通道(migration_progress),非动词。 ——
   getMigrationStatus: 'dsh-forge:workbench-get-migration-status',
   startMigration: 'dsh-forge:workbench-start-migration',
+  // M3 UF3 集成段(任务 1.7 追加;与 preload 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言):向导真实探测 + 内核位置读。
+  probeCodeRoot: 'dsh-forge:workbench-probe-code-root',
+  getWorkbenchPaths: 'dsh-forge:workbench-get-workbench-paths',
 } as const
 
 /**

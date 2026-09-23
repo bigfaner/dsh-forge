@@ -82,7 +82,9 @@ import type { Project, WorkbenchState } from './ipc-types'
 import type { WorkbenchKey } from './locale/en'
 import { WORKBENCH_DIALOG_PREFIX, type WorkbenchTabKey } from './store/view-key'
 import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
-import { createIpcRegisterWizardVerbs, getWorkbenchIpcBridge, normalizeWorkbenchVerbError } from './ipc/workbench'
+import {
+  createIpcMigrationFace, createIpcRegisterWizardVerbs, getWorkbenchIpcBridge, normalizeWorkbenchVerbError,
+} from './ipc/workbench'
 import {
   createWorkbenchStateStore, INITIAL_WORKBENCH_STATE_SNAPSHOT, type WorkbenchStateStore,
 } from './store/workbench-state'
@@ -313,10 +315,14 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     void stateStore.refresh().catch(() => {})
   }, [stateStore, view.workbenchTab])
   // The wizard's real WRITE pair (5.14): registerProject / updateProject
-  // over the bridge, rejections normalized. The step-①/② probes keep the
-  // wizard's build-stage twin (no Interface 1 probe verb — the real
-  // validation is the submit-time main-side chain; ipc/workbench.ts notes).
+  // over the bridge, rejections normalized. 1.7 adds the REAL probeCodeRoot
+  // (the conditional migration step's premise must be real on the real chain)
+  // and the migration family's face (the flipped default's paths read + the
+  // in-place run after registration). probeExternalPath keeps the build-stage
+  // twin (no Interface 1 verb — the real validation is the submit-time
+  // main-side chain; ipc/workbench.ts notes).
   const [wizardVerbs] = useState(() => (bridge === undefined ? undefined : createIpcRegisterWizardVerbs(bridge)))
+  const [wizardMigrationFace] = useState(() => (bridge === undefined ? undefined : createIpcMigrationFace(bridge)))
   // Build-stage defaults (UI dependency layering): the shared mock + a local
   // single-activation stub. Assembly (5.14-5.16) overrides the whole face
   // with the IPC-backed implementation.
@@ -574,6 +580,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           project={wizardTarget.mode === 'edit' ? wizardTarget.project : undefined}
           projects={workbenchState.projects}
           face={props.wizard?.face ?? (stateStore !== undefined ? wizardVerbs : undefined)}
+          migrationFace={stateStore !== undefined ? wizardMigrationFace : undefined}
           onLocate={props.wizard?.onLocate ?? locateProject}
           onClose={closeWizard}
         />

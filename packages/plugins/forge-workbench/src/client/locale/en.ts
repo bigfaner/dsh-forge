@@ -124,7 +124,18 @@ export type WorkbenchKey =
   | 'wizard.step2.needAuthorize'
   | 'wizard.step2.authorize'
   | 'wizard.step2.warn'
+  | 'wizard.step2.externalDefaultHint'
+  | 'wizard.step2.defaultPathHint'
   | 'wizard.step3.title'
+  | 'wizard.stepMigrate.title'
+  | 'wizard.stepMigrate.intro'
+  | 'wizard.stepMigrate.toggle'
+  | 'wizard.stepMigrate.onHint'
+  | 'wizard.stepMigrate.offHint'
+  | 'wizard.summary.migrateNow'
+  | 'wizard.summary.migrateDefer'
+  | 'wizard.migration.enterWorkbench'
+  | 'wizard.migration.finishUnmigrated'
   | 'wizard.step3.nameHint'
   | 'wizard.err.codeRootUnreadable'
   | 'wizard.err.codeRootUnreadable.guide'
@@ -396,15 +407,26 @@ export const en: Record<WorkbenchKey, string> = {
   'wizard.step1.checking': 'Checking for forge data…',
   'wizard.step1.detected': 'Forge data detected: {tasks} tasks · {features} features',
   'wizard.step1.readonlyHint': 'The code root is fixed at registration and cannot change; repointing covers the docs location.',
-  'wizard.step2.inRepo': 'In repo (default)',
+  'wizard.step2.inRepo': 'In repo',
   'wizard.step2.inRepoHint': 'Feature documents live inside the repository (docs/features).',
-  'wizard.step2.external': 'External local path',
+  'wizard.step2.external': 'Out of repo — app-managed (default)',
+  'wizard.step2.externalDefaultHint': 'Feature documents stay outside the code repository, under the app-managed docs root.',
+  'wizard.step2.defaultPathHint': 'App-managed location (prefilled; editable)',
   'wizard.step2.externalPlaceholder': 'Absolute path outside the code root',
   'wizard.step2.required': 'The external path is required.',
   'wizard.step2.checking': 'Checking the external path…',
   'wizard.step2.needAuthorize': 'Confirm the authorization to continue.',
   'wizard.step2.authorize': 'I authorize the workbench to read feature documents at this external path.',
   'wizard.step2.warn': 'External path: must differ from the code root, and requires explicit authorization.',
+  'wizard.stepMigrate.title': 'Migration confirm',
+  'wizard.stepMigrate.intro': 'tasks/index.json was detected in the project doc tree (the legacy task-state base). Migrate it to the app data kernel now?',
+  'wizard.stepMigrate.toggle': 'Migrate to the M3 kernel after registering',
+  'wizard.stepMigrate.onHint': 'Runs the one-time migration right after registration completes (recommended).',
+  'wizard.stepMigrate.offHint': 'Off registers the project in the read-only compatibility state: the project card keeps its Migratable entry and migration can start later from the overview.',
+  'wizard.summary.migrateNow': 'Migrate to the M3 kernel right after registering',
+  'wizard.summary.migrateDefer': 'Defer migration (read-only compatibility; the card stays migratable)',
+  'wizard.migration.enterWorkbench': 'Enter the workbench',
+  'wizard.migration.finishUnmigrated': 'Finish registration unmigrated',
   'wizard.step3.title': 'Confirm registration',
   'wizard.step3.nameHint': 'Defaults to the code root directory name.',
   'wizard.err.codeRootUnreadable': 'This path does not exist or cannot be read.',

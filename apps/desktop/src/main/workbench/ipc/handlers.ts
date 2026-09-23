@@ -159,7 +159,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 }
 
 // ---------------------------------------------------------------------------
-// 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 = 25 条白名单通道)
+// 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条 = 27 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -344,6 +344,23 @@ export function installWorkbenchVerbs(
 
   register(C.startMigration, args =>
     services.startMigration(requireString('startMigration', 'projectId', args[0])))
+
+  // —— M3 UF3 集成段(任务 1.7):两条只读探测/位置读。同一 Hard Rule ——
+  //    本层零内联业务;probeCodeRoot 的 fs 只读探测与 getWorkbenchPaths 的
+  //    userData 路径解析全部在 services 装配层。——
+  register(C.probeCodeRoot, (args) => {
+    const input = args[0]
+    if (input === null || typeof input !== 'object' || typeof (input as { codeRoot?: unknown }).codeRoot !== 'string') {
+      throw new Error('probeCodeRoot expects { codeRoot: string }')
+    }
+    const { codeRoot, docLocationPath } = input as { codeRoot: string; docLocationPath?: unknown }
+    return services.probeCodeRoot({
+      codeRoot,
+      ...(typeof docLocationPath === 'string' ? { docLocationPath } : { docLocationPath: null }),
+    })
+  })
+
+  register(C.getWorkbenchPaths, () => services.getWorkbenchPaths())
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

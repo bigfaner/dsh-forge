@@ -29,16 +29,17 @@
  * the card's 移除 only OPENS the double-step confirm; the verb fires solely
  * from the dialog's confirm.
  */
-import { useEffect, useRef, useState } from 'react'
-import type { Project, WorkbenchState, WorkbenchVerbError } from '../../ipc-types'
-import type { OverviewFace, PluginFace } from '../../contract'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { MigrationStatus, Project, WorkbenchState, WorkbenchVerbError } from '../../ipc-types'
+import type { MigrationFace, OverviewFace, PluginFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { TOAST_Z } from '../tasks/launch/LaunchStates'
-import { createMockOverviewFace } from '../../mocks/workbench'
+import { createMockMigrationFace, createMockOverviewFace } from '../../mocks/workbench'
 import { ProjectGrid } from './ProjectGrid'
 import { PluginSection } from './PluginSection'
 import { RemoveConfirm } from './RemoveConfirm'
+import { MigrationDialogs } from './migration/MigrateProgressDialog'
 import { middleEllipsis } from './format'
 
 /** Narrow an unknown verb rejection to the serialized Interface 1 error code. */
@@ -85,6 +86,13 @@ export interface OverviewPageProps {
   face?: Partial<OverviewFace> | undefined
   /** The UF6 section face — absent members fall back to the section-local mock twin (5.14 injects the IPC face). */
   pluginFace?: Partial<PluginFace> | undefined
+  /**
+   * The UF3 migration family's face (task 1.7): PRESENT selects the card
+   * migration surface (statuses → 可迁移 Pill/入口, MigrationDialogs mount);
+   * absent keeps the M2 page verbatim (the build-stage default). The 1.7
+   * assembly injects the IPC face; tests the 1.6 mock twin.
+   */
+  migrationFace?: Partial<MigrationFace> | undefined
 }
 
 const pageStyle = {
@@ -263,12 +271,32 @@ export function OverviewPage(props: OverviewPageProps) {
   // assembly spreads the IPC-backed members over it).
   const [defaultFace] = useState(() => createMockOverviewFace())
   const face: OverviewFace = { ...defaultFace, ...props.face }
+  // UF3 (task 1.7): the migration face spreads the same way, but the card
+  // surface ACTIVATES only when the seat provided one (absent = the M2 page
+  // verbatim — the pill/entry/dialog never appear in the build stage).
+  const [defaultMigrationFace] = useState(() => createMockMigrationFace().face)
+  // Identity-stable for given props (the statuses effect keys its loads on
+  // the face — a fresh spread per render would loop the effect forever).
+  const migrationFace: MigrationFace = useMemo(
+    () => ({ ...defaultMigrationFace, ...props.migrationFace }),
+    [defaultMigrationFace, props.migrationFace],
+  )
+  const migrationEnabled = props.migrationFace !== undefined
   const lostProjectIds = props.lostProjectIds ?? []
 
   const [phase, setPhase] = useState<'loading' | 'ready' | 'load-error'>('loading')
   const [state, setState] = useState<WorkbenchState | undefined>(undefined)
   const [toastText, setToastText] = useState<string | undefined>(undefined)
   const [removing, setRemoving] = useState<Project | undefined>(undefined)
+  // UF3 (task 1.7): the card-surface state — per-project migration statuses,
+  // the migrating row (MigrationDialogs' open), the confirm copy's backup
+  // root, and a settle nonce (a finished run re-reads the statuses so the
+  // Pill/entry retire without a remount). All inert while migrationFace is
+  // absent (the M2 build-stage page).
+  const [migrationStatuses, setMigrationStatuses] = useState<ReadonlyMap<string, MigrationStatus>>(new Map())
+  const [migrating, setMigrating] = useState<Project | undefined>(undefined)
+  const [backupsRoot, setBackupsRoot] = useState<string>('')
+  const [migrationNonce, setMigrationNonce] = useState(0)
   const hasLoaded = useRef(false)
 
   const load = async (): Promise<WorkbenchState | undefined> => {
@@ -292,6 +320,36 @@ export function OverviewPage(props: OverviewPageProps) {
   useEffect(() => {
     void load()
   }, [props.reloadToken])
+
+  // UF3 (task 1.7): the per-project migration statuses — read on every
+  // registry refresh AND every settle nonce bump (a finished run flips
+  // authority → the Pill/entry retire). A failed per-project read leaves
+  // that card without the surface (never an error wall); the whole pass is
+  // skipped while migrationFace is absent (the M2 page).
+  useEffect(() => {
+    if (!migrationEnabled || state === undefined) return
+    let alive = true
+    void Promise.all(state.projects.map(project =>
+      migrationFace.getMigrationStatus(project.id)
+        .then(status => [project.id, status] as const)
+        .catch(() => undefined),
+    )).then((rows) => {
+      if (!alive) return
+      setMigrationStatuses(new Map(rows.filter((row): row is readonly [string, MigrationStatus] => row !== undefined)))
+    })
+    return () => { alive = false }
+  }, [state, migrationNonce, migrationFace])
+
+  // UF3 (task 1.7): the confirm copy's 备份位置 root (one read; the run's own
+  // backup path lands inline in the verify row once the run starts).
+  useEffect(() => {
+    if (!migrationEnabled) return
+    let alive = true
+    migrationFace.getWorkbenchPaths().then((paths) => {
+      if (alive) setBackupsRoot(paths.backupsRoot)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [migrationFace])
 
   /**
    * Run one Interface 1 verb with the page's error mapping:
@@ -324,6 +382,11 @@ export function OverviewPage(props: OverviewPageProps) {
     const ok = await runVerb(() => face.updateProject(id, { displayName }))
     if (ok) await load()
     return ok
+  }
+
+  /** UF3 (task 1.7): the card 「迁移」 entry's click — opens the dialog family (the single door). */
+  const openMigration = (project: Project): void => {
+    setMigrating(project)
   }
 
   const cancelRemove = (): void => {
@@ -458,6 +521,24 @@ export function OverviewPage(props: OverviewPageProps) {
             onActivate={activate}
             onRename={rename}
             onRemove={(project) => { setRemoving(project) }}
+            {...(migrationEnabled
+              ? {
+                migrationOf: (project: Project) => {
+                  const status = migrationStatuses.get(project.id)
+                  if (status === undefined) return undefined
+                  if (status.authority === 'sqlite') {
+                    return { status: 'migrated' as const, face: migrationFace, onMigrate: openMigration }
+                  }
+                  // 可迁移 = files authority + the doc tree still carries index.json
+                  // (ui-design migratable 判定; a bare-files project without a task
+                  // corpus never shows the entry).
+                  if (status.indexJsonDetected) {
+                    return { status: 'migratable' as const, face: migrationFace, onMigrate: openMigration }
+                  }
+                  return undefined
+                },
+              }
+              : {})}
           />
         </>
       )}
@@ -480,6 +561,29 @@ export function OverviewPage(props: OverviewPageProps) {
           project={removing}
           onConfirm={confirmRemove}
           onCancel={cancelRemove}
+        />
+      )}
+
+      {/* UF3 (task 1.7): the explicit-migration dialog family — the card
+          entry's ONLY door (confirm → progress/results, the 1.6 state
+          machine). A settled run re-reads the registry AND the statuses, so
+          the 可迁移 Pill + entry retire the moment the run completes. */}
+      {migrationEnabled && migrating !== undefined && (
+        <MigrationDialogs
+          t={props.t}
+          projectId={migrating.id}
+          face={migrationFace}
+          backupPath={backupsRoot}
+          open={true}
+          onSettled={() => {
+            setMigrationNonce(nonce => nonce + 1)
+            void load()
+          }}
+          onClose={() => {
+            setMigrating(undefined)
+            setMigrationNonce(nonce => nonce + 1)
+            void load()
+          }}
         />
       )}
 

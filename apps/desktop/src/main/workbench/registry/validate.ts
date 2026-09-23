@@ -82,7 +82,8 @@ function describeFsFailure(error: unknown): string {
 type DirectoryProbe = { ok: true } | { ok: false; reason: string }
 
 /** 只读探测:路径存在、为目录、可读(stat + access R_OK,零写入)。 */
-function probeReadableDirectory(path: string): DirectoryProbe {
+/** 只读目录探测(导出于任务 1.7:services 的 probeCodeRoot 复用同一判定)。 */
+export function probeReadableDirectory(path: string): DirectoryProbe {
   try {
     if (!statSync(path).isDirectory()) return { ok: false, reason: 'not a directory' }
     accessSync(path, constants.R_OK)

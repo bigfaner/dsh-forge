@@ -25,9 +25,9 @@
  */
 import { useState, useSyncExternalStore } from 'react'
 import type { Project } from '../../ipc-types'
-import type { OverviewFace, PluginFace, WorkbenchOverviewSeat } from '../../contract'
+import type { MigrationFace, OverviewFace, PluginFace, WorkbenchOverviewSeat } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
-import { createIpcOverviewFace, createIpcPluginFace } from '../../ipc/workbench'
+import { createIpcMigrationFace, createIpcOverviewFace, createIpcPluginFace } from '../../ipc/workbench'
 import { INITIAL_WORKBENCH_STATE_SNAPSHOT, type WorkbenchStateStore } from '../../store/workbench-state'
 import { OverviewPage } from './OverviewPage'
 
@@ -53,10 +53,11 @@ export interface OverviewViewProps {
   store?: WorkbenchStateStore | undefined
 }
 
-/** The real chain's fixed face pair (identities fixed for the view's life). */
+/** The real chain's fixed face set (identities fixed for the view's life). */
 interface RealFaces {
   overview: OverviewFace
   plugin: PluginFace
+  migration: MigrationFace
 }
 
 /**
@@ -77,6 +78,7 @@ export function OverviewView(props: OverviewViewProps) {
     return {
       overview: { ...createIpcOverviewFace(store.bridge), loadState: () => store.refresh() },
       plugin: createIpcPluginFace(store.bridge),
+      migration: createIpcMigrationFace(store.bridge),
     }
   })
 
@@ -91,6 +93,7 @@ export function OverviewView(props: OverviewViewProps) {
         lostProjectIds={props.seat?.lostProjectIds}
         face={props.seat?.face}
         pluginFace={props.seat?.pluginFace}
+        migrationFace={props.seat?.migrationFace}
       />
     )
   }
@@ -98,6 +101,8 @@ export function OverviewView(props: OverviewViewProps) {
   // The real chain: the IPC faces over the store-backed read model; the
   // shell's external-mutation token re-reads the page behind wizard/chrome
   // mutations (no remount — the plugin section keeps its 5.13 stability).
+  // 1.7: the migration face joins the set — the real host gets the card
+  // migration surface (mock 全撤 for it too).
   return (
     <OverviewPage
       t={props.t}
@@ -107,6 +112,7 @@ export function OverviewView(props: OverviewViewProps) {
       reloadToken={props.reloadToken}
       face={realFaces.overview}
       pluginFace={realFaces.plugin}
+      migrationFace={realFaces.migration}
     />
   )
 }

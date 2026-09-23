@@ -16,21 +16,24 @@
 // boot 恢复:start() 对已持久化的激活项目恢复感知(retarget + 重扫,不动
 // last_activated_at —— 快照对账即重建,er-diagram 派生缓存语义)。
 
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
 import { resolveFeaturesDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
 import { toSyncStatusPayload } from '../indexer/diff.ts'
 import {
+  probeReadableDirectory,
   registerProject as registerProjectValidated,
   updateProject as updateProjectValidated,
 } from '../registry/validate.ts'
+import { detectForgeCheckout } from '../registry/forge-detect.ts'
 import { authorizeExternalDocPath as authorizeExternalDocPathRecord } from '../registry/authorize.ts'
 import { getActiveProjectId, activateProject as activateProjectRow } from '../repos/app-state.ts'
 import { listFeatureSnapshots } from '../repos/feature-snapshots.ts'
 import {
   listProjects,
+  normalizeRegisteredPath,
   removeProject as removeProjectRow,
 } from '../repos/projects.ts'
 import {
@@ -57,6 +60,8 @@ import type {
   FeatureBoardData,
   FeatureDoc,
   PluginRow,
+  ProbeCodeRootInput,
+  ProbeCodeRootResult,
   RecordSessionLinkInput,
   RegisterProjectInput,
   SessionLink,
@@ -64,6 +69,7 @@ import type {
   TaskDepChainEntry,
   TaskDetail,
   TaskRecord,
+  WorkbenchPaths,
   WorkbenchState,
   WorkbenchVerbServices,
 } from './types.ts'
@@ -248,6 +254,96 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     onEvent: event => sink([event]),
   })
 
+  // M3 任务 1.7(UF3 集成读):内核管理位置 + 向导真实探测 + 可迁移判定
+  // 的文档侧半边。全部只读 fs(探测/扫描);唯一写面 = 仓外默认路径的
+  // 应用管理目录置备(下方 provision —— userData 空间,非项目目录)。
+  const workbenchPaths: WorkbenchPaths = {
+    docsRoot: join(deps.userDataPath, 'workbench', 'docs'),
+    backupsRoot: join(deps.userDataPath, 'workbench', 'backups'),
+  }
+
+  /** 目录直下列表(缺失/不可读 → 空数组;探测语境不放大 fs 噪声)。 */
+  const listSubdirs = (dir: string): readonly string[] => {
+    try {
+      return readdirSync(dir, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * 任务态语料扫描(只读):含可解析 tasks/index.json 的 feature 计数 +
+   * 任务合计 + 任一检出位。probeCodeRoot(向导)与 getMigrationStatus 的
+   * indexJsonDetected(卡片)共用 —— 单实现,零两边漂移。
+   */
+  const scanTaskCorpus = (featuresDir: string): { featureTotal: number; taskTotal: number; indexJsonDetected: boolean } => {
+    let featureTotal = 0
+    let taskTotal = 0
+    let indexJsonDetected = false
+    for (const slug of listSubdirs(featuresDir)) {
+      const entries = readTaskIndex(join(featuresDir, slug, 'tasks', 'index.json'))
+      if (entries === null) continue // 无 index.json / 不可解析 —— 摄入会拒,检出位不亮
+      featureTotal += 1
+      taskTotal += Object.keys(entries).length
+      indexJsonDetected = true
+    }
+    return { featureTotal, taskTotal, indexJsonDetected }
+  }
+
+  /** probeCodeRoot(向导 step-①/② 定型后探测;detectForgeCheckout 同语义)。 */
+  const probeCodeRootImpl = (input: ProbeCodeRootInput): ProbeCodeRootResult => {
+    const codeRoot = input.codeRoot.trim()
+    const rootProbe = probeReadableDirectory(codeRoot)
+    if (!rootProbe.ok) {
+      return { available: false, reasonCode: 'ERR_CODE_ROOT_UNREADABLE', detail: rootProbe.reason }
+    }
+    const docLocationPath = typeof input.docLocationPath === 'string' && input.docLocationPath.trim() !== ''
+      ? input.docLocationPath.trim()
+      : null
+    const detection = detectForgeCheckout({ codeRoot, docLocationPath })
+    if (!detection.detected) {
+      return {
+        available: false,
+        reasonCode: 'ERR_FORGE_NOT_DETECTED',
+        detail: `neither ${detection.probes.forgeDir} nor ${detection.probes.docsFeatures} exists`,
+      }
+    }
+    const corpus = scanTaskCorpus(resolveFeaturesDir({ id: 'probe', codeRoot, docLocationPath }))
+    return {
+      available: true,
+      taskTotal: corpus.taskTotal,
+      featureTotal: corpus.featureTotal,
+      indexJsonDetected: corpus.indexJsonDetected,
+    }
+  }
+
+  /**
+   * 仓外默认路径置备(G7/SC9 默认值翻转的落地面):external 路径位于内核
+   * docsRoot 之下 → 注册/重指向动词先建目录(应用管理空间,幂等),校验链
+   * 的只读纪律不变(用户自供路径永不建、永不变更)。授权记录仍为前置
+   * (BIZ-workbench-001 延续:仓外须显式授权 —— 置备不等于授权)。
+   */
+  const provisionAppManagedDocRoot = (docLocationType: unknown, docLocationPath: unknown): void => {
+    if (docLocationType !== 'external' || typeof docLocationPath !== 'string' || docLocationPath.trim() === '') return
+    const target = normalizeRegisteredPath(docLocationPath)
+    const root = normalizeRegisteredPath(workbenchPaths.docsRoot)
+    // normalizeRegisteredPath 双侧折叠为 `/` 方言 —— 前缀比对同方言。
+    if (target !== root && !target.startsWith(`${root}/`)) return
+    try {
+      statSync(target)
+    } catch {
+      // 缺失(ENOENT 等)→ 置备;置备失败不拦截:校验链的可读性探测
+      // 随后给出明确拒绝(ERR_EXTERNAL_PATH_UNREADABLE,消息含路径与原因)。
+      try {
+        mkdirSync(target, { recursive: true })
+      } catch {
+        // 已存在(并发注册同一路径)或不可创建 —— 校验链兜底。
+      }
+      return
+    }
+    // stat 成功但非目录 → 不动(校验链会以 not a directory 拒绝)。
+  }
+
   return {
     verbs: {
       getState(): WorkbenchState {
@@ -259,10 +355,14 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       },
 
       registerProject(input: RegisterProjectInput): Project {
+        provisionAppManagedDocRoot(input.docLocationType, input.docLocationPath)
         return registerProjectValidated(db, input)
       },
 
       updateProject(id: string, patch: ProjectPatch): Project {
+        // 1.7:重指向到内核管理路径同样先置备(repoint 与注册同一外部语义;
+        // type 未变且 path 缺省 = 纯改名,guard 直接短路)。
+        provisionAppManagedDocRoot(patch.docLocationType, patch.docLocationPath)
         const updated = updateProjectValidated(db, id, patch)
         const touchesDocLocation = patch.docLocationType !== undefined || patch.docLocationPath !== undefined
         if (touchesDocLocation) {
@@ -375,8 +475,21 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
       // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
       //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——
-      getMigrationStatus: projectId => migrationService.getMigrationStatus(projectId),
+      getMigrationStatus: (projectId) => {
+        const status = migrationService.getMigrationStatus(projectId)
+        if (status.authority !== 'files') return { ...status, indexJsonDetected: false }
+        const project = findProjectRow(db, projectId)
+        return {
+          ...status,
+          indexJsonDetected: project === undefined
+            ? false
+            : scanTaskCorpus(resolveFeaturesDir(scanTargetOf(project))).indexJsonDetected,
+        }
+      },
       startMigration: projectId => migrationService.startMigration(projectId),
+      // —— M3 UF3 集成读(任务 1.7)——
+      probeCodeRoot: input => probeCodeRootImpl(input),
+      getWorkbenchPaths: () => workbenchPaths,
     },
 
     start(): void {

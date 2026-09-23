@@ -45,6 +45,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   // tests/workbench-ipc.spec.ts deep-equal 断言)。
   getMigrationStatus: 'dsh-forge:workbench-get-migration-status',
   startMigration: 'dsh-forge:workbench-start-migration',
+  // M3 UF3 集成段(任务 1.7 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  probeCodeRoot: 'dsh-forge:workbench-probe-code-root',
+  getWorkbenchPaths: 'dsh-forge:workbench-get-workbench-paths',
 } as const
 
 /**
