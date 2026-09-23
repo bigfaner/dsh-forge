@@ -26,9 +26,9 @@ import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type { BoardSessionStore } from './store/board-session'
 import type { LaunchSeatStore } from './launch-rpc'
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
-  RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
-  WorkbenchState,
+  DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
+  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -204,6 +204,51 @@ export interface RegisterWizardSeat {
    * the assembly scrolls/highlights the overview card.
    */
   readonly onLocate?: ((project: Project) => void) | undefined
+}
+
+/**
+ * The UF3 migration family's data + action face (task 1.6, UI dependency
+ * layering — the same seam shape as OverviewFace / RegisterWizardFace): the
+ * BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockMigrationFace), the 1.7 assembly injects the
+ * Interface 1 IPC verbs. Rejections surface the serialized
+ * {@link WorkbenchVerbError} shape (ERR_MIGRATION_GUARD / IN_PROGRESS /
+ * VERIFY) so the dialog family's code mapping is the real one from day one.
+ */
+export interface MigrationFace {
+  /**
+   * Interface 1 getMigrationStatus(projectId) — the Pill 判定 (authority)
+   * and the post-backup backup-path read-back (lastEvent.detailJson).
+   */
+  getMigrationStatus(projectId: string): Promise<MigrationStatus>
+  /**
+   * Interface 1 startMigration(projectId) — the ONE-SHOT explicit migration
+   * (Hard Rule: explicit confirmation only; progress rides migration_progress
+   * events over subscribeEvents). Pre-flight guard rejections
+   * (ERR_MIGRATION_GUARD / ERR_MIGRATION_IN_PROGRESS) carry no events.
+   */
+  startMigration(projectId: string): Promise<MigrationStarted>
+  /**
+   * Interface 1 onEvents — the single-subscriber batched channel (≤500ms
+   * main-side): migration_progress drives the step rows; any project-scoped
+   * batch re-reads the guard (守卫解除 ≤5s 自动恢复).
+   */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+  /**
+   * The entry-guard read: does a RUNNING ORCHESTRATION block migration
+   * (dispatch.ended_at IS NULL — Interface 4 ①)? The overview-card path
+   * consumes it; the wizard path never does (未迁移项目无编排面 — ui-design
+   * 裁决). The real verb face lands with the dispatch domain (3.x); the
+   * mock twin serves the build stage.
+   */
+  loadGuard(projectId: string): Promise<MigrationGuardSnapshot>
+}
+
+/** The entry-guard snapshot: blocked ⟺ running orchestrations exist. */
+export interface MigrationGuardSnapshot {
+  readonly blocked: boolean
+  /** Running-orchestration count (tooltip context; 0 when not blocked). */
+  readonly runningCount: number
 }
 
 /**

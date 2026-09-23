@@ -255,6 +255,35 @@ export type WorkbenchKey =
   | 'features.doc.design'
   | 'features.doc.ui'
   | 'features.doc.tasks'
+  | 'migration.pill.migratable'
+  | 'migration.pill.migrated'
+  | 'migration.entry.migrate'
+  | 'migration.entry.guardTooltip'
+  | 'migration.confirm.title'
+  | 'migration.confirm.intro'
+  | 'migration.confirm.bullet.tasks'
+  | 'migration.confirm.bullet.backup'
+  | 'migration.confirm.bullet.archive'
+  | 'migration.confirm.bullet.md'
+  | 'migration.confirm.backupLabel'
+  | 'migration.confirm.migrate'
+  | 'migration.confirm.cancel'
+  | 'migration.step.verify'
+  | 'migration.step.migrate'
+  | 'migration.step.parity'
+  | 'migration.step.backupDone'
+  | 'migration.progress.title'
+  | 'migration.result.parityOk'
+  | 'migration.result.done'
+  | 'migration.failed.title'
+  | 'migration.failed.atStep'
+  | 'migration.failed.rollbackNote'
+  | 'migration.failed.retry'
+  | 'migration.failed.close'
+  | 'migration.live.running'
+  | 'migration.err.guard'
+  | 'migration.err.inProgress'
+  | 'migration.err.generic'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -507,4 +536,35 @@ export const en: Record<WorkbenchKey, string> = {
   'features.doc.design': 'design',
   'features.doc.ui': 'ui',
   'features.doc.tasks': 'tasks',
+  // The UF3 migration family (task 1.6): Pill/entry, confirm copy, step
+  // rows, terminal results, guard notes — zh/en parity enforced by typing.
+  'migration.pill.migratable': 'Migratable',
+  'migration.pill.migrated': 'Migrated · SQLite',
+  'migration.entry.migrate': 'Migrate',
+  'migration.entry.guardTooltip': 'Task orchestration in progress — migration unlocks after it settles',
+  'migration.confirm.title': 'Migrate to the M3 kernel',
+  'migration.confirm.intro': 'A one-time migration is about to run:',
+  'migration.confirm.bullet.tasks': 'Task structured state → the app data kernel (SQLite)',
+  'migration.confirm.bullet.backup': 'Automatic backup before migrating; any failed phase rolls the whole run back (no half-migrated state)',
+  'migration.confirm.bullet.archive': 'tasks/index.json retires after completion (kept on disk as a *.migrated archive)',
+  'migration.confirm.bullet.md': 'Task and record .md files are untouched',
+  'migration.confirm.backupLabel': 'Backup location',
+  'migration.confirm.migrate': 'Migrate',
+  'migration.confirm.cancel': 'Cancel',
+  'migration.step.verify': 'Verify',
+  'migration.step.migrate': 'Migrate',
+  'migration.step.parity': 'Parity check',
+  'migration.step.backupDone': 'Backup complete →',
+  'migration.progress.title': 'Migrate to the M3 kernel',
+  'migration.result.parityOk': 'Parity result: zero diff across the full task set',
+  'migration.result.done': 'Done',
+  'migration.failed.title': 'Migration failed · rolled back',
+  'migration.failed.atStep': 'Failed at step "{step}"',
+  'migration.failed.rollbackNote': 'Rolled back to the pre-migration state (backup kept; no half-migrated state).',
+  'migration.failed.retry': 'Retry',
+  'migration.failed.close': 'Close',
+  'migration.live.running': 'Migration step in progress: {step}',
+  'migration.err.guard': 'Task orchestration is in progress — migration and running orchestrations are mutually exclusive; start again after they settle.',
+  'migration.err.inProgress': 'A migration is already running for this project; wait for it to settle and try again.',
+  'migration.err.generic': 'The migration could not start ({code}); nothing has changed — try again.',
 }

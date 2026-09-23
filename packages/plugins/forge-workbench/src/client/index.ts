@@ -48,6 +48,7 @@ export type {
   TaskBoardFace, TaskBoardSeat,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
   SessionLaunchHandover, TaskBoardLaunchSeat,
+  MigrationFace, MigrationGuardSnapshot,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -74,13 +75,16 @@ export type { LaunchSeatSnapshot, LaunchSeatStore } from './launch-rpc'
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
 // SyncStatus/TaskBoardData/WorkbenchEvent).
 export type {
-  ChangeSource, DocLocationType, PluginRow, Project, ProjectPatch, SyncStatus, TaskBoardData,
+  ChangeSource, DocLocationType, MigrationEvent, MigrationPhase, MigrationPhaseResult,
+  MigrationStarted, MigrationStatus, PluginRow, Project, ProjectPatch, SyncStatus, TaskBoardData,
   TaskSummary, TaskStatus, WorkbenchEvent, WorkbenchState, WorkbenchVerbError,
 } from './ipc-types'
 export {
   MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE,
   MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockOverviewFace,
   createMockTaskBoardFace,
+  MOCK_MIGRATION_BACKUP_PATH, MOCK_MIGRATION_STATUS_FILES, MOCK_MIGRATION_STATUS_SQLITE,
+  createMockMigrationFace,
 } from './mocks/workbench'
 // The Interface 1 IPC adapter (task 5.16 — the pattern the 5.14 overview and
 // 5.15 task-board assemblies reuse): the guarded preload-bridge read, the
@@ -135,6 +139,26 @@ export { OverviewView } from './views/overview/OverviewView'
 export type { OverviewViewProps } from './views/overview/OverviewView'
 export { formatTimestamp, middleEllipsis } from './views/overview/format'
 export { fillTemplate } from './views/overview/format'
+// The UF3 migration component family (M3 task 1.6, build stage): the card
+// surface (pill + guarded entry), the confirm door, and the progress/result
+// family (pure run view-model + hook + wizard-reusable body + dialog + the
+// dialog-family flow). The 1.7 assembly wires them into ProjectCard and the
+// register wizard's in-place step.
+export { MigrationPill, MigrationEntryButton } from './views/overview/migration/MigrationPill'
+export type { MigrationPillStatus, MigrationPillProps, MigrationEntryButtonProps } from './views/overview/migration/MigrationPill'
+export { MigrateConfirmDialog, migrationStartErrorText } from './views/overview/migration/MigrateConfirmDialog'
+export type { MigrateConfirmDialogProps, MigrationTranslate } from './views/overview/migration/MigrateConfirmDialog'
+export {
+  MIGRATION_STEPS, MigrationDialogs, MigrationProgressBody, MigrateProgressDialog,
+  applyMigrationProgressEvent, initialMigrationRunState, stepOfPhase, useMigrationRun,
+} from './views/overview/migration/MigrateProgressDialog'
+export type {
+  MigrationRun, MigrationRunState, MigrationRunStatus, MigrationStepKey, MigrationStepState,
+  MigrationDialogsProps, MigrationProgressBodyProps, MigrateProgressDialogProps,
+  UseMigrationRunInput,
+} from './views/overview/migration/MigrateProgressDialog'
+export { useMigrationGuard } from './views/overview/migration/MigrateGuard'
+export type { MigrationGuardView, UseMigrationGuardInput } from './views/overview/migration/MigrateGuard'
 // The UF2 task board page (task 5.5): mounted by the shell into the reserved
 // tasks seat; exported with its pure board model (filter/sort/dangling) for
 // the 5.15 assembly + its tests. View A (依赖树 DAG) is 5.6's — the

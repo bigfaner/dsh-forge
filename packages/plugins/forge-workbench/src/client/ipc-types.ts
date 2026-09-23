@@ -255,6 +255,72 @@ export type WorkbenchEvent =
   }
   | { readonly type: 'feature_updated'; readonly projectId: string; readonly featureSlug: string }
   | { readonly type: 'sync'; readonly projectId: string; readonly sync: SyncStatus }
+  // M3 v2 (task 1.4, tech-design §Interface 1 事件扩展): one migration_phase
+  // completion signal per phase — the migration dialogs' step driver. The
+  // payload carries phase + result only (audit detail stays main-side in
+  // migration_event.detail_json; the UI reads it back through
+  // getMigrationStatus().lastEvent).
+  | {
+    readonly type: 'migration_progress'
+    readonly projectId: string
+    readonly phase: MigrationPhase
+    readonly result: MigrationPhaseResult
+  }
+  // M3 v2 (task 1.5): deviation signal — presentation only, never a block
+  // (PRD G8/Story 8). Consumed by the UF2 badge (4.2), declared here so the
+  // client union stays the structural twin of the main-side vocabulary.
+  | { readonly type: 'deviation_detected'; readonly projectId: string }
+
+// ---------------------------------------------------------------------------
+// Migration family, UF3 (task 1.6's consumption; the main-side peer is
+// apps/desktop/src/main/workbench/ipc/types.ts from 1.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The migration phase vocabulary (schema-v2.sql §9 CHECK twin; seven phases):
+ * backup → ingest → verify → switch → archive is the one-shot pipeline's
+ * linear order (Interface 4), rollback tags the wholesale-rollback completion
+ * on failure, reingest is the external-write recovery phase (1.5) — never
+ * part of the one-shot run presentation.
+ */
+export type MigrationPhase =
+  | 'backup' | 'ingest' | 'verify' | 'switch' | 'archive' | 'rollback' | 'reingest'
+
+/** A phase's outcome (migration_event.result CHECK twin). */
+export type MigrationPhaseResult = 'ok' | 'fail'
+
+/**
+ * One migration_event audit row (Interface 1 MigrationEvent): the reviewable
+ * record behind `getMigrationStatus().lastEvent` — `detailJson` carries the
+ * phase's detail verbatim (the backup phase: `{ backupPath, … }`; verify: the
+ * parity report; rollback: the restore outcome).
+ */
+export interface MigrationEvent {
+  readonly id: string
+  readonly projectId: string
+  readonly phase: MigrationPhase
+  readonly result: MigrationPhaseResult
+  readonly detailJson: string | null
+  readonly at: string
+}
+
+/**
+ * Interface 1 getMigrationStatus(projectId) payload: the read-routing switch
+ * plus the migration/deviation markers. `authority: 'files'` is the
+ * migratable premise (the card-level detection of `tasks/index.json` joins
+ * it in 1.7); `'sqlite'` = migrated.
+ */
+export interface MigrationStatus {
+  readonly authority: 'files' | 'sqlite'
+  readonly deviated: boolean
+  readonly migratedAt: string | null
+  readonly lastEvent: MigrationEvent | null
+}
+
+/** Interface 1 startMigration(projectId) payload — progress rides the events. */
+export interface MigrationStarted {
+  readonly started: true
+}
 
 // ---------------------------------------------------------------------------
 // Feature family, UF4 (task 5.9's consumption)

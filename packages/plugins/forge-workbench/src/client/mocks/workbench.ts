@@ -32,12 +32,13 @@
  * failListWith arm the failure branches).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RegisterProjectInput,
-  TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
+  DocKind, FeatureBoardData, FeatureDoc, MigrationPhase, MigrationPhaseResult, MigrationStatus,
+  PluginRow, Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail, TaskSummary,
+  WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace,
-  SessionLaunchServices, TaskBoardFace, TaskDetailFace,
+  FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot, OverviewFace,
+  PluginFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -47,6 +48,10 @@ import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
  * 3.2): three mandatory rows (the two upstream platform bundles + this
  * workbench plugin) and the togglable third-party fixture (hello-world).
  * The same rows serve both the getState assembly and the UF6 mock twin.
+ * M3 task 1.6 adds the UF3 migration family's fixtures + verb twin
+ * (MOCK_MIGRATION_* / createMockMigrationFace: phase-disciplined event
+ * pushes mirroring migration/pipeline.ts, with failAtPhase / rejectGuard /
+ * guard knobs for the dialog family's scenario matrix).
  */
 export const MOCK_PLUGIN_ROWS: readonly PluginRow[] = Object.freeze([
   Object.freeze({ name: '@deepseek-ai/dsh-base', mandatory: true, enabled: true }),
@@ -870,5 +875,150 @@ export function createMockPluginFace(
     },
     failWith: (name, error) => { armed.set(name, error) },
     failListWith: (error) => { armedList = error },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Migration family, UF3 (task 1.6)
+// ---------------------------------------------------------------------------
+
+/** The mock backup directory (the confirm copy's mono 备份位置). */
+export const MOCK_MIGRATION_BACKUP_PATH = 'Z:/userData/workbench/backups/demo-20260924T080000Z'
+
+/** The migratable status fixture (authority 'files', never migrated). */
+export const MOCK_MIGRATION_STATUS_FILES: MigrationStatus = Object.freeze({
+  authority: 'files',
+  deviated: false,
+  migratedAt: null,
+  lastEvent: null,
+})
+
+/** The migrated status fixture (authority 'sqlite', audit trail behind it). */
+export const MOCK_MIGRATION_STATUS_SQLITE: MigrationStatus = Object.freeze({
+  authority: 'sqlite',
+  deviated: false,
+  migratedAt: '2026-09-24T08:00:05.000Z',
+  lastEvent: {
+    id: 'ev-archive-ok',
+    projectId: 'demo',
+    phase: 'archive',
+    result: 'ok',
+    detailJson: null,
+    at: '2026-09-24T08:00:05.000Z',
+  } as const,
+})
+
+/** The mock twin's knobs (the spec's scenario matrix: 成功 / 相位注错 / 守卫). */
+export interface MockMigrationFaceOptions {
+  /** Success (default): backup→ingest→verify→switch→archive ok, verb resolves. */
+  readonly failAtPhase?: MigrationPhase | undefined
+  /** startMigration rejects ERR_MIGRATION_GUARD pre-flight (zero events). */
+  readonly rejectGuard?: boolean
+  /** The initial entry-guard snapshot (在跑编排守卫态). */
+  readonly guard?: MigrationGuardSnapshot | undefined
+  /** The initial migration status (Pill 判定面). */
+  readonly status?: MigrationStatus | undefined
+  /** The project the twin serves (event projectId); default 'demo'. */
+  readonly projectId?: string | undefined
+}
+
+/**
+ * The UF3 migration family's build-stage verb twin (task 1.6): the Interface 1
+ * migration verbs + the guard read as closure-held mocks whose event pushes
+ * mirror the kernel pipeline's discipline (migration/pipeline.ts): backup ok
+ * BEFORE the transaction opens; ingest/verify/switch/archive ok together
+ * after COMMIT; a failure pushes the failed phase + rollback ok and THEN the
+ * verb rejects; a pre-flight guard rejection pushes nothing. The returned
+ * pokes are MOCK-ONLY (the createMockTaskBoardFace emit precedent):
+ * `emit`/`setGuard`/`settleNextAsSuccess` retune the twin mid-test, and
+ * `startCalls`/`guardReads` count the verb legs for the zero-verb assertions.
+ */
+export function createMockMigrationFace(
+  options: MockMigrationFaceOptions = {},
+): {
+  readonly face: MigrationFace
+  emit(events: readonly WorkbenchEvent[]): void
+  setGuard(snapshot: MigrationGuardSnapshot): void
+  settleNextAsSuccess(): void
+  readonly startCalls: number
+  readonly guardReads: number
+} {
+  const projectId = options.projectId ?? 'demo'
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  let guard = options.guard ?? { blocked: false, runningCount: 0 }
+  let status = options.status ?? MOCK_MIGRATION_STATUS_FILES
+  let failAtPhase: MigrationPhase | undefined = options.failAtPhase
+  let nextRejectsGuard = options.rejectGuard === true
+  let startCalls = 0
+  let guardReads = 0
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of [...listeners]) listener(events)
+  }
+  const push = (phase: MigrationPhase, result: MigrationPhaseResult): void => {
+    emit([{ type: 'migration_progress', projectId, phase, result }])
+  }
+  const face: MigrationFace = {
+    getMigrationStatus: async () => status,
+    startMigration: async () => {
+      startCalls += 1
+      if (nextRejectsGuard) {
+        nextRejectsGuard = false
+        throw {
+          code: 'ERR_MIGRATION_GUARD',
+          message: 'build-stage mock: running dispatch(es) block migration',
+        }
+      }
+      const failAt = failAtPhase
+      push('backup', 'ok')
+      // backup ok 落 lastEvent(进度行「备份完成 → 路径」的回读面)。
+      status = {
+        ...status,
+        lastEvent: {
+          id: `ev-backup-${String(startCalls)}`,
+          projectId,
+          phase: 'backup',
+          result: 'ok',
+          detailJson: JSON.stringify({ backupPath: MOCK_MIGRATION_BACKUP_PATH }),
+          at: '2026-09-24T08:00:01.000Z',
+        },
+      }
+      if (failAt === 'backup') {
+        push('backup', 'fail')
+        throw { code: 'ERR_WORKBENCH_DB', message: 'build-stage mock: injected backup failure' }
+      }
+      for (const phase of ['ingest', 'verify', 'switch', 'archive'] as const) {
+        if (failAt === phase) {
+          push(phase, 'fail')
+          push('rollback', 'ok')
+          throw {
+            code: phase === 'verify' ? 'ERR_MIGRATION_VERIFY' : 'ERR_WORKBENCH_DB',
+            message: `build-stage mock: injected ${phase} failure`,
+          }
+        }
+        push(phase, 'ok')
+      }
+      status = { ...MOCK_MIGRATION_STATUS_SQLITE, lastEvent: status.lastEvent }
+      return { started: true }
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    loadGuard: async () => {
+      guardReads += 1
+      return guard
+    },
+  }
+  return {
+    face,
+    emit,
+    setGuard: (snapshot: MigrationGuardSnapshot) => { guard = snapshot },
+    settleNextAsSuccess: () => {
+      failAtPhase = undefined
+      nextRejectsGuard = false
+    },
+    get startCalls(): number { return startCalls },
+    get guardReads(): number { return guardReads },
   }
 }
