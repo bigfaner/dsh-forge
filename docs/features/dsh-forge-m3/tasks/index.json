@@ -21,7 +21,7 @@
       "title": "spike② subagent 审批面:审批事件订阅/应答通道 + FORGE_ACTOR 透传形态",
       "priority": "P0",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "0.2-spike-subagent-approval.md",
       "record": "records/0.2-spike-subagent-approval.md",
       "type": "doc"
