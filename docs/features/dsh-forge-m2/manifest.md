@@ -2,7 +2,7 @@
 feature: "dsh-forge-m2"
 created: "2026-09-21"
 updated: "2026-09-22"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-m2
