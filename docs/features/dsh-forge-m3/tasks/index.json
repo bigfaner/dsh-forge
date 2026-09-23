@@ -322,7 +322,7 @@
         "3.4",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.5-dispatch-launch-approval-bridge.md",
       "record": "records/3.5-dispatch-launch-approval-bridge.md",
       "surface-type": "web",

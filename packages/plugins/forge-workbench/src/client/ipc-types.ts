@@ -169,6 +169,54 @@ export type DispatchState = 'starting' | 'running' | 'awaiting' | 'failed' | 'do
 export type ApprovalState = 'pending' | 'approved' | 'rejected'
 
 /**
+ * M3 dispatch 行 / approval_request 行的 client 孪生(任务 3.5;kernel twin =
+ * ipc/types.ts DispatchRow/ApprovalRow,camelCase 投影同形)。服务于 host
+ * 回调 relay 面(tool-bridge approval_* 帧 + launch 回填动词):3.5 的桥接线
+ * 与 3.9 的编排 wiring 共用;selection-mode.ts 的 DispatchRow 为 UI 视图孪生,
+ * 与本行结构兼容。
+ */
+export interface DispatchRow {
+  readonly id: string
+  readonly batchId: string
+  readonly projectId: string
+  readonly featureSlug: string
+  readonly taskKey: string
+  readonly state: DispatchState
+  readonly sessionId: string | null
+  readonly promptHash: string
+  readonly actor: string
+  readonly dispatchedAt: string
+  readonly endedAt: string | null
+  readonly error: string | null
+}
+
+export interface ApprovalRow {
+  readonly id: string
+  readonly dispatchId: string
+  readonly projectId: string
+  readonly taskKey: string
+  readonly sessionId: string
+  readonly payload: unknown
+  readonly state: ApprovalState
+  readonly createdAt: string
+  readonly decidedAt: string | null
+  readonly decidedBy: string | null
+}
+
+/** decideApproval 入参(显式点击,无自动批准;kernel twin 同名)。 */
+export interface DecideApprovalInput {
+  readonly approvalId: string
+  readonly approve: boolean
+}
+
+/** receiveApproval 入参(host approval-bridge → T2 桥 → 内核;relay 形态)。 */
+export interface ReceiveApprovalInput {
+  readonly dispatchId: string
+  readonly sessionId?: string
+  readonly payload: unknown
+}
+
+/**
  * Interface 1 TaskSummary (task 5.5's consumption; the main-side peer is
  * apps/desktop/src/main/workbench/ipc/types.ts from 2.7 — both halves derive
  * from the same spec section). Dialect notes (task 2.5): `key` is the 看板

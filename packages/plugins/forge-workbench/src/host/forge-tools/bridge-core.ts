@@ -31,7 +31,12 @@
  *
  * 任务 3.1 追加:pref 读族(forge.pref.get → pref_get;读生效值,三级
  * 解析)。tier 组合(projectId/featureSlug → PrefScope)在 client dispatch
- * 面;host 工具面只承白名单断言。 */
+ * 面;host 工具面只承白名单断言。
+ *
+ * 任务 3.5 追加:审批桥上行族(approval-bridge 内核端口;非模型工具 ——
+ * 不注册为 dsh tool,仅作 host→内核的桥动词):approval_receive(审批事件
+ * 入列)+ approval_decide(cancelled 核销腿,decideApproval(approve=false)
+ * 形态)。client 泵映射见 tool-bridge.ts 的封闭 switch。 */
 export type ForgeToolBridgeVerb =
   | 'task_add'
   | 'task_claim'
@@ -48,6 +53,8 @@ export type ForgeToolBridgeVerb =
   | 'feature_list'
   | 'feature_status'
   | 'pref_get'
+  | 'approval_receive'
+  | 'approval_decide'
 
 /** 桥 transport 级失败码(spike-1 §3.3;区别于内核业务 ERR_* 码)。 */
 export const BRIDGE_TRANSPORT_CODE = 'ERR_TOOL_BRIDGE_UNAVAILABLE' as const

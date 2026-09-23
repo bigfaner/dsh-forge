@@ -662,10 +662,43 @@ export interface DispatchTasksInput {
  * 集,≤3s 启动预算内;blocked = 产物缺失未确认,missing = 结构化清单)。
  * redispatch 的 Interface 1 草图为 DispatchRow[],因「重走检查」可 blocked,
  * 统一为本联合(类型随任务分解细化的既定惯例)。
+ *
+ * 任务 3.5:dispatched 行 = DispatchedRow(行 + launch payload)—— 预合成
+ * 组合首条消息内核不落库(仅 prompt_hash),经派发应答交 renderer relay 转
+ * host dispatch-launch(M2 promptText 过 renderer 先例);getDispatches 仍回
+ * 素 DispatchRow(prompt 不随看板刷新回流)。
  */
 export type DispatchTasksResult =
-  | { readonly dispatched: readonly DispatchRow[] }
+  | { readonly dispatched: readonly DispatchedRow[] }
   | { readonly blocked: 'artifacts-missing'; readonly missing: readonly MissingItem[] }
+
+/**
+ * 派发应答行的启动载荷(host dispatch-launch 的输入面;tech-design §I3
+ * subagent 创建)。prompt = 组合首条消息原文(含追加行;host 零改写交付)。
+ */
+export interface DispatchLaunchPayload {
+  /** 预合成组合首条消息(sha256(prompt) = 行 prompt_hash;SC3 断言锚点)。 */
+  readonly prompt: string
+  readonly promptHash: string
+  /** 预铸 sessionId(spike-3 §4;create({sessionId}) 幂等 adopt)。 */
+  readonly sessionId: string | null
+  /** subagent cwd(项目 codeRoot,内核解析)。 */
+  readonly cwd: string
+  /** 任务类型(协议选择键);未落 = null。 */
+  readonly taskType: string | null
+}
+
+/** 派发应答行(dispatch 行 + 启动载荷)。 */
+export type DispatchedRow = DispatchRow & { readonly launch: DispatchLaunchPayload }
+
+/** receiveApproval 动词入参(任务 3.5:host approval-bridge → 内核的 relay 形态)。 */
+export interface ReceiveApprovalVerbInput {
+  readonly dispatchId: string
+  /** 来源 subagent 会话(与 dispatch.session_id 同键;缺省用行回填值)。 */
+  readonly sessionId?: string
+  /** 请求正文 + 类别(任意 JSON 值,原样落 payload_json)。 */
+  readonly payload: unknown
+}
 
 /** decideApproval 入参(Interface 1:显式点击,无自动批准)。 */
 export interface DecideApprovalInput {
@@ -794,6 +827,18 @@ export interface WorkbenchVerbServices {
    * pending 决策后 dispatch awaiting → running(dispatch_updated 回流)。
    */
   decideApproval(input: DecideApprovalInput, actor: TaskActor): ApprovalRow
+
+  // —— M3 host 回调段(任务 3.5):renderer relay 替 host 半身转发的回调面
+  //    (dispatch-launch 启动回填 + approval-bridge 审批入列)。语义/事务在
+  //    dispatch-service 域面,非 UI 直呼语义;通道面零特权(渲染进程被攻破
+  //    面的最大能力 = 既定动词集,与 UI 同权)。 ——
+
+  /** 审批事件入列(host approval-bridge → T2 桥 → 本动词):pending + awaiting 联动。 */
+  receiveApproval(input: ReceiveApprovalVerbInput): ApprovalRow
+  /** launch 成功回填:starting → running + session_id(幂等:同 session 重复 no-op)。 */
+  notifySessionStarted(dispatchId: string, sessionId: string): DispatchRow
+  /** launch 失败:starting → failed + 原因(ERR_DISPATCH_LAUNCH_FAILED 呈现口径)。 */
+  notifyLaunchFailed(dispatchId: string, error: string): DispatchRow
 }
 
 // ---------------------------------------------------------------------------

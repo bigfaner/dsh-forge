@@ -20,6 +20,7 @@ import type {
   DecideApprovalInput,
   DispatchTasksInput,
   DocKind,
+  ReceiveApprovalVerbInput,
   KnowledgeFactInput,
   KnowledgeForensicInput,
   KnowledgeLessonInput,
@@ -170,7 +171,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
-// = 44 条白名单通道)
+// + dispatch host 回调段 3 条(任务 3.5)= 47 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -598,6 +599,34 @@ export function installWorkbenchVerbs(
     }
     return services.decideApproval(input as unknown as DecideApprovalInput, requireString('decideApproval', 'actor', args[1]))
   })
+
+  // —— M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身
+  // (dispatch-launch/approval-bridge)转发的回调面;语义/事务在内核
+  // dispatch-service,通道面零特权(T1 延续:不信任 renderer 语义)。 ——
+
+  register(C.receiveApproval, (args) => {
+    const input = requireObject('receiveApproval', 'input', args[0])
+    requireString('receiveApproval', 'input.dispatchId', input.dispatchId)
+    if (input.sessionId !== undefined && typeof input.sessionId !== 'string') {
+      throw new Error(`workbench.receiveApproval: input.sessionId must be a string when present (got ${typeof input.sessionId})`)
+    }
+    if (input.payload === undefined) {
+      throw new Error('workbench.receiveApproval: input.payload is required (the approval request body)')
+    }
+    return services.receiveApproval(input as unknown as ReceiveApprovalVerbInput)
+  })
+
+  register(C.notifySessionStarted, args =>
+    services.notifySessionStarted(
+      requireString('notifySessionStarted', 'dispatchId', args[0]),
+      requireString('notifySessionStarted', 'sessionId', args[1]),
+    ))
+
+  register(C.notifyLaunchFailed, args =>
+    services.notifyLaunchFailed(
+      requireString('notifyLaunchFailed', 'dispatchId', args[0]),
+      requireString('notifyLaunchFailed', 'error', args[1]),
+    ))
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

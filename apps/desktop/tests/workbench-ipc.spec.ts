@@ -147,6 +147,9 @@ function fakeServices(): WorkbenchVerbServices {
     getDispatches: vi.fn(() => []),
     listApprovals: vi.fn(() => []),
     decideApproval: vi.fn(() => ({ id: 'a-1', state: 'approved' })),
+    receiveApproval: vi.fn(() => ({ id: 'a-1', state: 'pending' })),
+    notifySessionStarted: vi.fn(() => ({ id: 'd-1', state: 'running' })),
+    notifyLaunchFailed: vi.fn(() => ({ id: 'd-1', state: 'failed' })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -193,7 +196,7 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the forty-four whitelisted verb channels, one per verb', () => {
+  it('contains exactly the forty-seven whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
@@ -220,8 +223,11 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-list-approvals',
       'dsh-forge:workbench-list-plugins',
       'dsh-forge:workbench-list-stage-assets',
+      'dsh-forge:workbench-notify-launch-failed',
+      'dsh-forge:workbench-notify-session-started',
       'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
+      'dsh-forge:workbench-receive-approval',
       'dsh-forge:workbench-record-session-link',
       'dsh-forge:workbench-redispatch',
       'dsh-forge:workbench-register-project',
@@ -240,7 +246,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(44)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(47)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -294,6 +300,9 @@ describe('workbench verb routing table', () => {
       'getDispatches',
       'listApprovals',
       'decideApproval',
+      'receiveApproval',
+      'notifySessionStarted',
+      'notifyLaunchFailed',
     ])
   })
 
@@ -339,7 +348,7 @@ describe('workbench verb routing table', () => {
   it('registers exactly the 39 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(44)
+    expect(handlers.size).toBe(47)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -454,6 +463,17 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.clearPrefOverride)?.(OWNED, { project: 'p-1' }, 'auto.gitPush')
     expect(services.clearPrefOverride).toHaveBeenCalledWith({ project: 'p-1' }, 'auto.gitPush')
+
+    // M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身转发的
+    // 回调面 —— 形状校验 + 服务转发;语义/事务在 dispatch-service 域面。
+    handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 'session-launch-1', payload: { toolName: 'bash', reason: 'escalation' } })
+    expect(services.receiveApproval).toHaveBeenCalledWith({ dispatchId: 'd-1', sessionId: 'session-launch-1', payload: { toolName: 'bash', reason: 'escalation' } })
+
+    handlers.get(C.notifySessionStarted)?.(OWNED, 'd-1', 'session-launch-1')
+    expect(services.notifySessionStarted).toHaveBeenCalledWith('d-1', 'session-launch-1')
+
+    handlers.get(C.notifyLaunchFailed)?.(OWNED, 'd-1', 'create failed: boom')
+    expect(services.notifyLaunchFailed).toHaveBeenCalledWith('d-1', 'create failed: boom')
   })
 
   it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {
@@ -491,6 +511,8 @@ describe('workbench verb routing table', () => {
       ['forensic action outside vocab', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'wipe' })],
       ['forensic last not positive integer', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'search', last: 0 })],
       ['featureStatus missing slug', () => handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1' })],
+      ['receiveApproval missing payload (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1' })],
+      ['receiveApproval non-string sessionId (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 42, payload: {} })],
     ]
     for (const [label, run] of cases) {
       const error = toCapture(run) as WorkbenchIpcError
@@ -505,6 +527,7 @@ describe('workbench verb routing table', () => {
     expect(services.knowledgeLesson).not.toHaveBeenCalled()
     expect(services.knowledgeForensic).not.toHaveBeenCalled()
     expect(services.featureStatus).not.toHaveBeenCalled()
+    expect(services.receiveApproval).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {

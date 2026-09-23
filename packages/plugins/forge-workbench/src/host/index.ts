@@ -6,6 +6,12 @@
  * service (DF004 channel + FORGE_ACTOR passthrough, Interface 2/5/6). M3 task
  * 2.1 added the third face — the agent-native dsh tool base (ForgeToolBridge
  * reverse-stream service + the forge_task_* family on the base ToolRuntime).
+ * M3 task 3.5 added the orchestration channel pair — dispatch-launch (the
+ * subagent-creation face over sessionController; the plugin's ONLY M3 session
+ * creator — kernel dispatch orchestrates, host launches) + approval-bridge
+ * (the prepend `approval/request` waterfall listener routing dispatch-session
+ * approvals into the kernel via the T2 bridge; decideApproval answers ride the
+ * approvalBridge/answer rpc).
  * The browser half ships via exports['./client'] and is discovered through the
  * package.json dsh.client declaration.
  *
@@ -39,9 +45,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { ForgeBridgeService } from './forge-bridge-rpc'
-import { SessionLaunchService } from './session-launch-rpc'
+import { SessionLaunchService, sessionChannelOf } from './session-launch-rpc'
 import { createStubSessionChannel, resolveSessionStubDir } from './session-channel-stub'
 import { registerForgeTools } from './forge-tools/index'
+import { DispatchLaunchService } from './dispatch-launch/rpc'
+import { createDispatchSessionRegistry } from './dispatch-launch/registry'
+import { ApprovalBridgeService, attachApprovalBridge } from './approval-bridge/rpc'
+import { createApprovalBridgeCore, createPreExecuteCapture, type ApprovalKernelPort } from './approval-bridge/bridge'
 
 const PROJECT_ROOTS_ENV = 'DSH_FORGE_PROJECT_ROOTS'
 const CLI_PATH_ENV = 'DSH_FORGE_CLI_PATH'
@@ -87,7 +97,12 @@ export function apply(ctx: Context): void {
   // swaps in the file-backed orchestration channel (see
   // session-channel-stub.ts for why an env seam is the only in-host
   // injection point — cordis provide() refuses duplicate service names).
+  // M3 task 3.5: dispatch-launch rides the SAME seam (SC3's hash-oracle e2e
+  // legs drive the subagent creates through the stub journal).
   const sessionStubDir = resolveSessionStubDir()
+  const launchChannel = sessionStubDir === undefined
+    ? () => sessionChannelOf(ctx)
+    : () => createStubSessionChannel(sessionStubDir)
   new SessionLaunchService(ctx, sessionStubDir === undefined
     ? undefined
     : { getSessionChannel: () => createStubSessionChannel(sessionStubDir) })
@@ -95,5 +110,48 @@ export function apply(ctx: Context): void {
   // (calls stream + answer, T2) and the forge_task_* tool family on the base
   // ToolRuntime (global tools, spike-1 §1.1). Later tool families (knowledge /
   // feature / proposal / pref / stage) append onto this base, no new channel.
-  registerForgeTools(ctx)
+  // 3.5 consumes its bridge core as the approval-bridge's kernel port below.
+  const forgeTools = registerForgeTools(ctx)
+
+  // M3 task 3.5: the orchestration channel pair —
+  //   dispatch-launch (subagent creation; the ONLY session-creation holder in
+  //   this plugin's M3 face) + approval-bridge (the `approval/request`
+  //   waterfall listener routing dispatch-session approvals to the kernel).
+  // The session registry is the shared claim filter: launch registers the
+  // pre-minted session ids, the approval bridge claims only those.
+  const dispatchSessions = createDispatchSessionRegistry()
+  new DispatchLaunchService(ctx, dispatchSessions, { getSessionChannel: launchChannel })
+
+  const kernelPort: ApprovalKernelPort = {
+    receiveApproval(input) {
+      // T2 桥上行:approval_receive 帧 → client 泵 → I1 receiveApproval 动词 →
+      // 内核插 pending + awaiting 联动(transport 级失败由桥的重试一次承载)。
+      return forgeTools.core.callWithRetry('approval_receive', { ...input }, `session:${input.sessionId}`)
+        .then((outcome) => {
+          if (outcome.ok) {
+            const id = (outcome.value as { readonly id?: unknown } | null)?.id
+            if (typeof id === 'string' && id !== '') return { approvalId: id }
+            throw Object.assign(new Error('approval_receive: kernel answer carried no approval id'), { code: 'ERR_WORKBENCH_DB' })
+          }
+          throw Object.assign(new Error(outcome.message), { code: outcome.code })
+        })
+    },
+    rejectApproval(input, actor) {
+      // cancelled 核销腿:decideApproval(approve=false) 形态,actor='kernel'。
+      return forgeTools.core.callWithRetry('approval_decide', { ...input, approve: false }, actor)
+        .then((outcome) => {
+          if (outcome.ok) return outcome.value
+          throw Object.assign(new Error(outcome.message), { code: outcome.code })
+        })
+    },
+  }
+  const capture = createPreExecuteCapture()
+  const approvalCore = createApprovalBridgeCore({
+    resolveDispatch: dispatchSessions.lookup,
+    kernel: kernelPort,
+    argumentsOf: callId => capture.argumentsOf(callId),
+    dropCapture: callId => capture.drop(callId),
+  })
+  new ApprovalBridgeService(ctx, approvalCore)
+  attachApprovalBridge(ctx, approvalCore, capture)
 }

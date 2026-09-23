@@ -10,6 +10,7 @@ import type {
   DispatchRow,
   DispatchTasksInput,
   DispatchTasksResult,
+  ReceiveApprovalVerbInput,
   FeatureBoardData,
   FeatureDoc,
   FeatureListEntry,
@@ -258,6 +259,20 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listApprovals, projectId) as Promise<ApprovalRow[]>,
     decideApproval: (input: DecideApprovalInput, actor: string): Promise<ApprovalRow> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.decideApproval, input, actor) as Promise<ApprovalRow>,
+    // M3 dispatch host-callback verbs (task 3.5): the renderer RELAYS these on
+    // behalf of the plugin host half — dispatch-launch launch outcomes
+    // (notifySessionStarted/notifyLaunchFailed move starting rows to running/
+    // failed with the session backfill) and approval-bridge request arrivals
+    // (receiveApproval inserts the pending row + flips the dispatch awaiting;
+    // the T2 tool-bridge pump in the client half maps approval_receive frames
+    // here). Same { code, message, detail? } rejection envelope (ERR_DISPATCH_*
+    // / ERR_APPROVAL_*).
+    receiveApproval: (input: ReceiveApprovalVerbInput): Promise<ApprovalRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.receiveApproval, input) as Promise<ApprovalRow>,
+    notifySessionStarted: (dispatchId: string, sessionId: string): Promise<DispatchRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.notifySessionStarted, dispatchId, sessionId) as Promise<DispatchRow>,
+    notifyLaunchFailed: (dispatchId: string, error: string): Promise<DispatchRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.notifyLaunchFailed, dispatchId, error) as Promise<DispatchRow>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

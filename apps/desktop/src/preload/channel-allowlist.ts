@@ -74,6 +74,11 @@ export const WORKBENCH_VERB_CHANNELS = {
   getDispatches: 'dsh-forge:workbench-get-dispatches',
   listApprovals: 'dsh-forge:workbench-list-approvals',
   decideApproval: 'dsh-forge:workbench-decide-approval',
+  // M3 dispatch host 回调段(任务 3.5 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  receiveApproval: 'dsh-forge:workbench-receive-approval',
+  notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
+  notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
 } as const
 
 /**

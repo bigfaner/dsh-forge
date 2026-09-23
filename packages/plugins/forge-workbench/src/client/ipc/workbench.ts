@@ -33,12 +33,13 @@
  *      error card).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, FeatureListEntry, FeatureStatusReport,
+  ApprovalRow, DecideApprovalInput, DispatchRow, DocKind, FeatureBoardData, FeatureDoc,
+  FeatureListEntry, FeatureStatusReport,
   KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project,
+  PrefScope, Project, ReceiveApprovalInput,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
@@ -124,6 +125,20 @@ export interface WorkbenchIpcBridge {
   getPrefs(scope: PrefScope): Promise<PrefRow[]>
   setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): Promise<void>
   clearPrefOverride(scope: PrefScope, key: string): Promise<void>
+  /**
+   * M3 dispatch host-callback relay verbs (task 3.5): the renderer forwards
+   * these ON BEHALF of the plugin host half — the approval-bridge's request
+   * arrivals (receiveApproval: pending insert + awaiting flip; the tool-bridge
+   * pump maps approval_receive frames here and approval_decide to
+   * decideApproval for the cancelled核销 leg) and dispatch-launch's outcome
+   * backfill (notifySessionStarted/notifyLaunchFailed move starting rows to
+   * running/failed). Rejections ride the same `{ code, message, detail? }`
+   * envelope (ERR_DISPATCH_* / ERR_APPROVAL_*).
+   */
+  receiveApproval(input: ReceiveApprovalInput): Promise<ApprovalRow>
+  decideApproval(input: DecideApprovalInput, actor: string): Promise<ApprovalRow>
+  notifySessionStarted(dispatchId: string, sessionId: string): Promise<DispatchRow>
+  notifyLaunchFailed(dispatchId: string, error: string): Promise<DispatchRow>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -139,6 +154,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'knowledgeFact', 'knowledgeLesson', 'knowledgeResearch', 'knowledgeForensic', 'featureList', 'featureStatus',
   // M3 prefs verbs (task 3.1).
   'getPrefs', 'setPrefs', 'clearPrefOverride',
+  // M3 dispatch host-callback relay verbs (task 3.5).
+  'receiveApproval', 'decideApproval', 'notifySessionStarted', 'notifyLaunchFailed',
 ]
 
 /**

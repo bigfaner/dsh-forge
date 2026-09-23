@@ -31,8 +31,8 @@ import type {
 } from '../../host/forge-tools/bridge-core'
 import type {
   KnowledgeFactInput, KnowledgeForensicInput, KnowledgeLessonInput, KnowledgeResearchInput,
-  PrefScope, TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput, TaskReopenInput,
-  TaskStatus, TaskSubmitInput, TaskTransitionInput,
+  PrefScope, ReceiveApprovalInput, TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput,
+  TaskReopenInput, TaskStatus, TaskSubmitInput, TaskTransitionInput,
 } from '../ipc-types'
 import { getWorkbenchIpcBridge, normalizeWorkbenchVerbError, type WorkbenchIpcBridge } from './workbench'
 
@@ -151,6 +151,12 @@ interface BridgeCallArgs {
   last?: number
   transcriptPath?: string
   sessionDir?: string
+  // —— 审批桥上行族(任务 3.5;approval_receive/approval_decide 帧字段)——
+  dispatchId?: string
+  sessionId?: string
+  payload?: unknown
+  approvalId?: string
+  approve?: boolean
 }
 
 /**
@@ -200,6 +206,18 @@ function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Prom
       })
     case 'pref_get':
       return bridge.getPrefs(prefScopeOf(args))
+    // —— 审批桥上行族(任务 3.5):host approval-bridge 的内核端口腿。
+    //    approval_receive = 审批事件入列(插 pending + awaiting 联动);
+    //    approval_decide = cancelled 核销腿(actor='kernel',decideApproval
+    //    (approve=false) 形态 —— spike-2 §4-5 方案 (a))。两者皆非模型
+    //    工具帧(host 内部端口),actor 语义 = 帧自带审计主体。 ——
+    case 'approval_receive':
+      return bridge.receiveApproval(args as unknown as ReceiveApprovalInput)
+    case 'approval_decide':
+      return bridge.decideApproval(
+        { approvalId: args.approvalId as string, approve: args.approve === true },
+        call.actor,
+      )
     default: {
       const unreachable: never = call.verb
       return Promise.reject(new Error(`forge tool bridge: unknown verb ${String(unreachable)}`))

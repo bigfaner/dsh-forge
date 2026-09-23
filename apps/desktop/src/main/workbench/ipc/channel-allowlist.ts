@@ -94,6 +94,13 @@ export const WORKBENCH_VERB_CHANNELS = {
   getDispatches: 'dsh-forge:workbench-get-dispatches',
   listApprovals: 'dsh-forge:workbench-list-approvals',
   decideApproval: 'dsh-forge:workbench-decide-approval',
+  // —— M3 dispatch host 回调段(任务 3.5 追加;Hard Rule 延续:追加式修改)。
+  //    renderer relay 替 host 半身转发的回调面(dispatch-launch 启动回填 +
+  //    approval-bridge 审批入列,tech-design §Interface 3);语义/事务在
+  //    dispatch-service 域面,通道面零特权。 ——
+  receiveApproval: 'dsh-forge:workbench-receive-approval',
+  notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
+  notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
 } as const
 
 /**

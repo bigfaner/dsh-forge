@@ -149,6 +149,20 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
     }
   }
 
+  /**
+   * 项目 codeRoot(dispatch-launch 的 create cwd;任务 3.5)。权威断言已证
+   * 行存在,缺失 = 存储损伤 → 显式错误(不静默空 cwd)。
+   */
+  const requireProjectCodeRoot = (projectId: string): string => {
+    const row = db
+      .prepare('SELECT code_root FROM projects WHERE id = ?')
+      .get(projectId) as { readonly code_root?: unknown } | undefined
+    if (row === undefined || typeof row.code_root !== 'string' || row.code_root === '') {
+      throw new WorkbenchRepoError('ERR_PROJECT_NOT_FOUND', `project ${projectId} carries no readable code_root (storage damage) — cannot mint a launch payload`)
+    }
+    return row.code_root
+  }
+
   /** 同 feature 命名空间依赖索引(task-service buildFeatureIndex 同型)。 */
   const buildFeatureIndex = (projectId: string, featureSlug: string): TaskIndex =>
     new TaskIndex(
@@ -254,6 +268,7 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
   ): Promise<DispatchTasksResult> => {
     // —— 前置校验(全批原子:任一拒绝零写入)——
     requireSqliteAuthority(projectId)
+    const projectCodeRoot = requireProjectCodeRoot(projectId)
     const tasks: AuthoritativeTask[] = []
     for (const taskKey of taskKeys) {
       assertBoardTaskKey(taskKey)
@@ -357,7 +372,21 @@ export function createDispatchVerbService(deps: DispatchVerbDeps): DispatchVerbS
     }
 
     emit(events)
-    return { dispatched: rows }
+    // —— launch payload 随行(任务 3.5):预合成组合首条消息不落库(仅
+    // prompt_hash),经派发应答交 renderer relay → host dispatch-launch
+    // (M2 promptText 过 renderer 先例;getDispatches 不回流 prompt)。——
+    return {
+      dispatched: rows.map((row, i) => ({
+        ...row,
+        launch: {
+          prompt: prompts[i]?.message ?? '',
+          promptHash: row.promptHash,
+          sessionId: row.sessionId,
+          cwd: projectCodeRoot,
+          taskType: tasks[i]?.taskType ?? null,
+        },
+      })),
+    }
   }
 
   return {

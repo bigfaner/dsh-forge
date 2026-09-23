@@ -557,6 +557,13 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       listApprovals: projectId => dispatchVerbs.listApprovals(projectId),
       decideApproval: (input, actor) => dispatchVerbs.decideApproval(input, actor),
 
+      // —— M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身
+      //    (dispatch-launch/approval-bridge)转发的回调面 —— 域面方法直通
+      //    (receiveApproval 入列/notify* 回填;事务与 ⇔ 不变式在域内)。 ——
+      receiveApproval: input => dispatchVerbs.receiveApproval(input),
+      notifySessionStarted: (dispatchId, sessionId) => dispatchVerbs.notifySessionStarted(dispatchId, sessionId),
+      notifyLaunchFailed: (dispatchId, error) => dispatchVerbs.notifyLaunchFailed(dispatchId, error),
+
       // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
       //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——
       getMigrationStatus: (projectId) => {

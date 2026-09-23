@@ -35,6 +35,7 @@ import type { MissingItem, StageArtifactsReport, WorkbenchVerbServices } from '.
 import type { WorkbenchEvent } from '../src/main/workbench/indexer/diff.ts'
 import { createDispatchVerbService, type DispatchVerbService } from '../src/main/workbench/dispatch/dispatch-service.ts'
 import type { DispatchLaunchInput, DispatchLaunchOutcome, DispatchLaunchPort } from '../src/main/workbench/dispatch/launch-port.ts'
+import type { PresynthInjection } from '../src/main/workbench/dispatch/presynth/assemble.ts'
 import { countPendingApprovals } from '../src/main/workbench/dispatch/approval-repo.ts'
 import { listDispatches } from '../src/main/workbench/dispatch/dispatch-repo.ts'
 import {
@@ -129,7 +130,7 @@ interface Harness {
   /** 事件批收集端(每动词调用一批)。 */
   readonly batches: WorkbenchEvent[][]
   readonly checkArtifacts: { mockReturnValue(report: StageArtifactsReport): void }
-  readonly composePrompt: { mockReturnValueOnce(value: string): void }
+  readonly composePrompt: { mockReturnValueOnce(value: string | PresynthInjection): void }
   readonly launchInputs: DispatchLaunchInput[]
   service(overrides?: { launchPort?: DispatchLaunchPort }): DispatchVerbService
 }
@@ -845,6 +846,67 @@ describe('IPC face — routing, shape validation, envelope passthrough, assembly
       code: 'ERR_FEATURE_NOT_FOUND',
     })
     assembly.dispose()
+    h.db.close()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 任务 3.5:dispatched 行的 launch payload(renderer relay → host dispatch-launch
+// 的传输面;预合成组合首条消息不落库,经派发应答交付 —— M2 promptText 先例)
+// ---------------------------------------------------------------------------
+
+describe('task 3.5: dispatch rows carry the launch payload for the renderer relay', () => {
+  it('attaches prompt/promptHash/pre-minted sessionId/cwd/taskType per dispatched row (hash oracle)', async () => {
+    const h = await seedHarness()
+    const message = 'EXECUTOR PREAMBLE…\nprotocol body\n\n[dsh-forge workbench] Attribution: session:session-pre-1'
+    h.composePrompt.mockReturnValueOnce({ sessionId: 'session-pre-1', message })
+    const service = h.service()
+    const rows = dispatchedOf(await service.dispatchTasks({ projectId: h.projectId, taskKeys: ['alpha/1.1'] }, 'kernel')) as Array<{
+      id: string
+      promptHash: string
+      sessionId: string | null
+      launch: { prompt: string; promptHash: string; sessionId: string | null; cwd: string; taskType: string | null }
+    }>
+    const codeRoot = (h.db.prepare('SELECT code_root FROM projects WHERE id = ?').get(h.projectId) as { code_root: string }).code_root
+    expect(rows).toHaveLength(1)
+    const row = rows[0] as (typeof rows)[number] & { launch: { prompt: string } }
+    expect(row.launch.prompt).toBe(message) // 原文逐字符(host 零改写交付面)
+    expect(row.launch.promptHash).toBe(createHash('sha256').update(message, 'utf8').digest('hex'))
+    expect(row.promptHash).toBe(row.launch.promptHash) // 与行 prompt_hash 同值(SC3 锚点)
+    expect(row.launch.sessionId).toBe('session-pre-1') // 预铸 id 随行(spike-3 §4)
+    expect(row.sessionId).toBe('session-pre-1')
+    expect(row.launch.cwd).toBe(codeRoot) // create cwd = 项目 codeRoot
+    expect(row.launch.taskType).toBe(null) // 种子任务未落类型
+    h.db.close()
+  })
+
+  it('keeps the payload aligned on the port-wired path too (final rows, post-transition)', async () => {
+    const h = await seedHarness()
+    h.composePrompt.mockReturnValueOnce({ sessionId: 'session-pre-2', message: 'MSG[alpha/2.1]' })
+    const service = h.service({ launchPort: stubPort(h.launchInputs) })
+    const rows = dispatchedOf(await service.dispatchTasks({ projectId: h.projectId, taskKeys: ['alpha/2.1'] }, 'kernel')) as Array<{
+      state: string
+      launch: { prompt: string }
+    }>
+    expect(rows[0]?.state).toBe('running')
+    expect(rows[0]?.launch.prompt).toBe('MSG[alpha/2.1]')
+    h.db.close()
+  })
+
+  it('redispatch rows carry the payload as well (fresh row, fresh audit trail)', async () => {
+    const h = await seedHarness()
+    h.composePrompt.mockReturnValueOnce({ sessionId: 'session-pre-3', message: 'FIRST' })
+    const service = h.service()
+    const first = dispatchedOf(await service.dispatchTasks({ projectId: h.projectId, taskKeys: ['alpha/1.1'] }, 'kernel')) as Array<{ id: string }>
+    service.notifyLaunchFailed(first[0]?.id as string, 'ERR_DISPATCH_LAUNCH_FAILED: create failed')
+    h.composePrompt.mockReturnValueOnce({ sessionId: 'session-pre-4', message: 'SECOND' })
+    const second = dispatchedOf(await service.redispatch(first[0]?.id as string, 'kernel')) as Array<{
+      id: string
+      launch: { prompt: string; sessionId: string | null }
+    }>
+    expect(second[0]?.id).not.toBe(first[0]?.id)
+    expect(second[0]?.launch.prompt).toBe('SECOND')
+    expect(second[0]?.launch.sessionId).toBe('session-pre-4')
     h.db.close()
   })
 })
