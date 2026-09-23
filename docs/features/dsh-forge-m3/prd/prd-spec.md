@@ -194,6 +194,8 @@ flowchart TD
 
 > 过渡纪律:未注册项目全程 CLI 照旧;已注册项目切换应用通道后不再依赖 CC 插件日常管线(SC7 断言无 spawn)。
 
+> **归宿分解决议(2026-09-23,breakdown-tasks 期用户裁决)**:quality-gate / cleanup / worktree / verify-task-done 四行按 tech-design Interface 2 封闭动词集收窄——四动词 M3 不落「内核 API + dsh tool」,延至 M4。依据:M2 运行时零依赖(全仓无 spawn 点,退役不断链);不在 SC1-9/G1-G8 验收路径(零 spawn 断言的「日常管线」= 派发→执行→提交);过渡期由双形态承载(CLI 留机器,既有 git hook 不破坏,verify-task-done 行内「hook 安装面 M4 收口」语义不变)。表内行文保留为 PRD 期原始裁决记录;M3 执行权威 = tech-design Interface 2;延后记账 = 任务 6.1 AC4(gate 记录)+ 主提案路线图 M4 段 + todo.md。
+
 ### 各阶段期望产物清单(PRD 必答②:机器可校验)
 
 检查时机 = 新会话/任务派发前;检查对象 = feature 当前阶段;执行者 = **确定性代码**(文件存在 + frontmatter/结构解析 + SQLite 状态查询),断言无模型调用;缺失 = 警告 + 缺失清单 + 用户确认后可继续(不阻断)。

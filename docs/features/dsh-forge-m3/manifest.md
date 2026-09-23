@@ -28,7 +28,7 @@ status: tasks
 | [dsh-forge-m2](../dsh-forge-m2/manifest.md)(需求与会话工作台) | 硬前置(feature 级) | tasks(2026-09-23,在建) | 至少 UF2 看板 / UF5 发起链 / 数据内核 / e2e 腿完成后,M3 产品代码任务方可开工;前置 spike×4(零产品代码)可与 M2 Phase 5/6 收尾并行 |
 | forge 仓数据模型演进(偏好三级/阶段资产/文档根/阶段产物清单定义/技能根) | 配合项(用户可控) | 未开工 | 对应 M3 任务开工前就绪;仓侧自研可控 |
 
-> 记账来源:[dsh-forge-m3 提案](../../proposals/dsh-forge-m3/proposal.md) Next Steps(2026-09-22);提案待办记账动作:主提案路线图 M3/M4 定义修订 + todo.md 条目 2/3/5/14 状态标记(独立于本 PRD,另行执行)。
+> 记账来源:[dsh-forge-m3 提案](../../proposals/dsh-forge-m3/proposal.md) Next Steps(2026-09-22);记账动作已执行(2026-09-23,breakdown-tasks 收尾):主提案路线图 M3/M4 段修订、todo.md 条目 2/3/5/14 转 M3 在建、归宿表四动词(quality-gate/cleanup/worktree/verify-task-done)M4 延后决议(PRD 归宿表注记 + 任务 6.1 AC4 gate 记录)。
 
 ## Traceability
 
