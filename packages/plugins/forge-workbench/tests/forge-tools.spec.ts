@@ -26,10 +26,20 @@ import {
 } from '../src/host/forge-tools/task-tools.ts'
 import { isBoardTaskKeyAddress, type BridgeOutcome, type ForgeToolBridgeVerb } from '../src/host/forge-tools/bridge-core.ts'
 
-/** The eight registered tool names, spike-1 flat form. */
+/** The eight registered task-tool names, spike-1 flat form. */
 const EXPECTED_TOOL_NAMES = [
   'forge_task_add', 'forge_task_claim', 'forge_task_transition', 'forge_task_submit',
   'forge_task_reopen', 'forge_task_get', 'forge_task_query', 'forge_task_list',
+] as const
+
+/**
+ * The full registerForgeTools assembly: the 2.1 task family plus the 2.2
+ * knowledge (D4) and feature-read families appended on the same base.
+ */
+const ASSEMBLY_TOOL_NAMES = [
+  ...EXPECTED_TOOL_NAMES,
+  'forge_fact', 'forge_lesson', 'forge_research', 'forge_forensic',
+  'forge_feature_list', 'forge_feature_status',
 ] as const
 
 /** Minimal exec-context face the tool bodies read (spike-1 §1.1 exec 契约). */
@@ -271,7 +281,7 @@ describe('registerForgeTools assembly (host half)', () => {
       },
     }
     const assembly = registerForgeTools(ctx as never)
-    expect(registered.sort()).toEqual([...EXPECTED_TOOL_NAMES].sort())
+    expect(registered.sort()).toEqual([...ASSEMBLY_TOOL_NAMES].sort())
     // The bridge rpc service self-registers under the forgeToolBridge key.
     expect(provide).toHaveBeenCalledTimes(1)
     expect(provide.mock.calls[0]?.[0]).toBe('forgeToolBridge')
