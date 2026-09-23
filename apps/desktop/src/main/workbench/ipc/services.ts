@@ -49,6 +49,8 @@ import { createWorkbenchWatcher } from '../watcher/watch.ts'
 import type { WorkbenchEventSink } from '../watcher/events.ts'
 import { createPluginEnableGuard } from '../../plugin-runtime/guard.ts'
 import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } from './plugins.ts'
+import { toTaskSummary } from './task-summary.ts'
+import { createTaskVerbService } from '../tasks/task-service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -60,7 +62,6 @@ import type {
   TaskDepChainEntry,
   TaskDetail,
   TaskRecord,
-  TaskSummary,
   WorkbenchState,
   WorkbenchVerbServices,
 } from './types.ts'
@@ -97,19 +98,8 @@ export interface WorkbenchIpcServiceAssembly {
 }
 
 /** task_snapshot 行 → TaskSummary DTO(剥离仓储侧 projectId;key = 限定地址)。 */
-function toTaskSummary(snapshot: TaskSnapshot): TaskSummary {
-  return {
-    key: snapshot.taskKey,
-    title: snapshot.title,
-    status: snapshot.status,
-    featureSlug: snapshot.featureSlug,
-    blockers: [...snapshot.blockers],
-    branch: snapshot.branch,
-    worktree: snapshot.worktree,
-    source: snapshot.source,
-    updatedAt: snapshot.updatedAt,
-  }
-}
+// M3(任务 1.3):映射器抽驻 ./task-summary.ts(读路由双分支共用);本模块
+// import 复用,行为不变。
 
 function findProjectRow(db: RepoDb, id: string): Project | undefined {
   return listProjects(db).find(project => project.id === id)
@@ -190,6 +180,51 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     return project
   }
 
+  // M2 详情装配(getTaskDetail 既有实现,行为钉定)。M3 任务 1.3 起同时
+  // 作为 taskGet 读路由 files 分支的注入实现 —— files 项目走 task_snapshot
+  // 派生投影(M2 行为不变,tech-design §Interface 1 读路由)。
+  const readFilesTaskDetail = (projectId: string, taskKey: string): TaskDetail => {
+    const project = requireProject(projectId)
+    const snapshot = getTaskSnapshot(db, projectId, taskKey)
+    if (snapshot === null) {
+      // 快照无行 = 任务不存在(或尚未扫入);按未知异常口径回通用错误。
+      throw new Error(`task ${taskKey} not found in project ${projectId} snapshots`)
+    }
+    const featuresDir = resolveFeaturesDir(scanTargetOf(project))
+    const tasksDir = join(featuresDir, snapshot.featureSlug, 'tasks')
+    const entries = readTaskIndex(join(tasksDir, 'index.json')) ?? {}
+    const localId = taskKey.includes('/') ? taskKey.slice(taskKey.indexOf('/') + 1) : taskKey
+    // 执行记录:复用 2.5 解析方言(write-once 记录 .md;TaskRecord 适配
+    // 形态无虚构字段);index.json 不可读时记录区为空,不放大损伤。
+    const parsed = parseFeatureTasks(tasksDir, snapshot.featureSlug, entries, '')
+    const parsedTask = parsed.tasks?.find(task => task.taskKey === taskKey)
+    const records: TaskRecord[] = (parsedTask?.records ?? []).map(record => ({
+      at: record.at,
+      kind: record.kind,
+      source: record.source,
+      summary: record.summary,
+    }))
+    return {
+      summary: toTaskSummary(snapshot),
+      descriptionMarkdown: readTaskDescription(entries, tasksDir, localId),
+      depChain: buildDepChain(listTaskSnapshots(db, projectId), taskKey),
+      records,
+      links: listSessionLinksByTask(db, projectId, taskKey),
+    }
+  }
+
+  // M3 任务 1.3:任务动词服务(五写集 + taskGet/taskQuery 读路由)。
+  // files 详情装配注入(行为不变);文档根解析注入(sqlite 分支的
+  // desc_path/记录 .md 寻址,SoT 分治:md 留文档树)。
+  const taskVerbs = createTaskVerbService({
+    db,
+    readFilesTaskDetail,
+    resolveFeaturesRoot: (projectId: string): string | null => {
+      const project = findProjectRow(db, projectId)
+      return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
+    },
+  })
+
   return {
     verbs: {
       getState(): WorkbenchState {
@@ -243,33 +278,7 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       },
 
       getTaskDetail(projectId: string, taskKey: string): TaskDetail {
-        const project = requireProject(projectId)
-        const snapshot = getTaskSnapshot(db, projectId, taskKey)
-        if (snapshot === null) {
-          // 快照无行 = 任务不存在(或尚未扫入);按未知异常口径回通用错误。
-          throw new Error(`task ${taskKey} not found in project ${projectId} snapshots`)
-        }
-        const featuresDir = resolveFeaturesDir(scanTargetOf(project))
-        const tasksDir = join(featuresDir, snapshot.featureSlug, 'tasks')
-        const entries = readTaskIndex(join(tasksDir, 'index.json')) ?? {}
-        const localId = taskKey.includes('/') ? taskKey.slice(taskKey.indexOf('/') + 1) : taskKey
-        // 执行记录:复用 2.5 解析方言(write-once 记录 .md;TaskRecord 适配
-        // 形态无虚构字段);index.json 不可读时记录区为空,不放大损伤。
-        const parsed = parseFeatureTasks(tasksDir, snapshot.featureSlug, entries, '')
-        const parsedTask = parsed.tasks?.find(task => task.taskKey === taskKey)
-        const records: TaskRecord[] = (parsedTask?.records ?? []).map(record => ({
-          at: record.at,
-          kind: record.kind,
-          source: record.source,
-          summary: record.summary,
-        }))
-        return {
-          summary: toTaskSummary(snapshot),
-          descriptionMarkdown: readTaskDescription(entries, tasksDir, localId),
-          depChain: buildDepChain(listTaskSnapshots(db, projectId), taskKey),
-          records,
-          links: listSessionLinksByTask(db, projectId, taskKey),
-        }
+        return readFilesTaskDetail(projectId, taskKey)
       },
 
       getFeatureBoard(projectId: string): FeatureBoardData {
@@ -329,6 +338,17 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
         // 之后执行(Hard Rule:未授权路径连探测都不做)。
         authorizeExternalDocPathRecord(db, path)
       },
+
+      // —— M3 任务动词(任务 1.3):委托 tasks/task-service(唯一写入口 =
+      // task-repo 内核事务路径;读路由按 projects.data_authority)。 ——
+
+      taskAdd: (input, actor) => taskVerbs.taskAdd(input, actor),
+      taskClaim: (input, actor) => taskVerbs.taskClaim(input, actor),
+      taskTransition: (input, actor) => taskVerbs.taskTransition(input, actor),
+      taskSubmit: (input, actor) => taskVerbs.taskSubmit(input, actor),
+      taskReopen: (input, actor) => taskVerbs.taskReopen(input, actor),
+      taskGet: input => taskVerbs.taskGet(input),
+      taskQuery: input => taskVerbs.taskQuery(input),
     },
 
     start(): void {

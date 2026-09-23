@@ -32,6 +32,15 @@ export const WORKBENCH_VERB_CHANNELS = {
   authorizeExternalDocPath: 'dsh-forge:workbench-authorize-external-doc-path',
   subscribeEvents: 'dsh-forge:workbench-subscribe-events',
   unsubscribeEvents: 'dsh-forge:workbench-unsubscribe-events',
+  // M3 tasks 段(任务 1.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  taskAdd: 'dsh-forge:workbench-task-add',
+  taskClaim: 'dsh-forge:workbench-task-claim',
+  taskTransition: 'dsh-forge:workbench-task-transition',
+  taskSubmit: 'dsh-forge:workbench-task-submit',
+  taskReopen: 'dsh-forge:workbench-task-reopen',
+  taskGet: 'dsh-forge:workbench-task-get',
+  taskQuery: 'dsh-forge:workbench-task-query',
 } as const
 
 /**

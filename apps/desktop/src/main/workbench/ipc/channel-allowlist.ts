@@ -39,6 +39,17 @@ export const WORKBENCH_VERB_CHANNELS = {
   authorizeExternalDocPath: 'dsh-forge:workbench-authorize-external-doc-path',
   subscribeEvents: 'dsh-forge:workbench-subscribe-events',
   unsubscribeEvents: 'dsh-forge:workbench-unsubscribe-events',
+  // —— M3 tasks 段(任务 1.3 追加;Hard Rule:追加式修改,M2 既有动词
+  //    定义不改写)。命名沿用 v1 惯例 `dsh-forge:workbench-<kebab-verb>`;
+  //    通道清单 = tech-design §Interface 1 任务权威写集(5)+ 读路由(2)。
+  //    写集动词的 actor 审计与权限界在内核(task-service),通道面零特权。 ——
+  taskAdd: 'dsh-forge:workbench-task-add',
+  taskClaim: 'dsh-forge:workbench-task-claim',
+  taskTransition: 'dsh-forge:workbench-task-transition',
+  taskSubmit: 'dsh-forge:workbench-task-submit',
+  taskReopen: 'dsh-forge:workbench-task-reopen',
+  taskGet: 'dsh-forge:workbench-task-get',
+  taskQuery: 'dsh-forge:workbench-task-query',
 } as const
 
 /**

@@ -50,6 +50,13 @@ export interface TaskSummary {
   /** 最近一笔变更来源;无则 null。 */
   readonly source: ChangeSource | null
   readonly updatedAt: string
+  /**
+   * M3(任务 1.3):权威通道(sqlite)的 actor 审计列投影
+   * (`session:<id>`|`external`|`kernel`|派发者);files 分支(task_snapshot
+   * 派生投影)不携带 —— `source` 为其 v1 判定序来源。读路由双分支的统一
+   * DTO 出口(tech-design §Interface 1 TaskSummary;完整类型随任务分解细化)。
+   */
+  readonly updatedBy?: string
 }
 
 /** Interface 1 TaskBoardData。 */
@@ -130,6 +137,68 @@ export interface RecordSessionLinkInput {
 }
 
 // ---------------------------------------------------------------------------
+// M3 任务动词 DTO(任务 1.3;tech-design §Interface 1 任务权威写集 + 读路由)
+// ---------------------------------------------------------------------------
+
+/** 操作主体:session 会话标识 / 外部通道 / 内核 / 派发者(tech-design Actor)。 */
+export type TaskActor = string
+
+/** taskAdd 入参(Interface 1;taskKey 缺省 = 内核自动 ID,Go disc-N 惯例)。 */
+export interface TaskAddInput {
+  readonly projectId: string
+  readonly featureSlug: string
+  readonly title: string
+  /** 看板限定地址;缺省自动合成;显式给定时前缀必须 = featureSlug。 */
+  readonly taskKey?: string
+  /** 直接上游 blocker 的本地 key 原词(同 feature 命名空间)。 */
+  readonly blockers?: readonly string[]
+  /** 任务类型(预合成协议选择键);缺省 null。 */
+  readonly taskType?: string
+  /** 描述 md 相对文档根(features/)路径;缺省 null。 */
+  readonly descPath?: string
+}
+
+/** taskClaim 入参。 */
+export interface TaskClaimInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskTransition 入参(reason 为语境串;v2 schema 无列,接受不落库)。 */
+export interface TaskTransitionInput {
+  readonly projectId: string
+  readonly taskKey: string
+  readonly to: TaskStatus
+  readonly reason?: string
+}
+
+/** taskSubmit 入参(recordPath 为记录 .md 语境路径;md 留文档树不入库)。 */
+export interface TaskSubmitInput {
+  readonly projectId: string
+  readonly taskKey: string
+  readonly recordPath?: string
+}
+
+/** taskReopen 入参。 */
+export interface TaskReopenInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskGet 入参(读路由按 projects.data_authority)。 */
+export interface TaskGetInput {
+  readonly projectId: string
+  readonly taskKey: string
+}
+
+/** taskQuery 入参(读路由列表;过滤器均可缺省)。 */
+export interface TaskQueryInput {
+  readonly projectId: string
+  readonly featureSlug?: string
+  readonly status?: TaskStatus
+}
+
+// ---------------------------------------------------------------------------
 // 动词服务契约(handler 只做 参数校验 + 服务调用 + 错误映射,Hard Rule)
 // ---------------------------------------------------------------------------
 
@@ -157,6 +226,21 @@ export interface WorkbenchVerbServices {
    * registry/authorize.ts 的持久化记录(校验链只读;零 fs 探测)。
    */
   authorizeExternalDocPath(path: string): void
+  // —— M3 任务动词(任务 1.3;实现 = tasks/task-service.ts,经 services.ts 装配)——
+  /** 插入权威行(默认 pending;唯一写入口 = task-repo 内核事务)。 */
+  taskAdd(input: TaskAddInput, actor: TaskActor): TaskSummary
+  /** → in_progress;依赖终态前置 → ERR_TASK_DEPS_UNSATISFIED。 */
+  taskClaim(input: TaskClaimInput, actor: TaskActor): TaskSummary
+  /** 显式迁移(role=manual);非法边 → ERR_TASK_STATE_INVALID。 */
+  taskTransition(input: TaskTransitionInput, actor: TaskActor): TaskSummary
+  /** → completed(role=submit)。 */
+  taskSubmit(input: TaskSubmitInput, actor: TaskActor): TaskSummary
+  /** rejected/skipped → pending(role=reopen)。 */
+  taskReopen(input: TaskReopenInput, actor: TaskActor): TaskSummary
+  /** 读路由:files → task_snapshot 派生投影(M2 行为不变);sqlite → task 权威表。 */
+  taskGet(input: TaskGetInput): TaskDetail
+  /** 读路由列表(过滤 featureSlug/status,双分支同口径)。 */
+  taskQuery(input: TaskQueryInput): TaskSummary[]
 }
 
 // ---------------------------------------------------------------------------

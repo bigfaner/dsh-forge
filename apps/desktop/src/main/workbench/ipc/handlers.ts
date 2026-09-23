@@ -21,6 +21,13 @@ import type {
   ProjectPatch,
   RecordSessionLinkInput,
   RegisterProjectInput,
+  TaskAddInput,
+  TaskClaimInput,
+  TaskGetInput,
+  TaskQueryInput,
+  TaskReopenInput,
+  TaskSubmitInput,
+  TaskTransitionInput,
   WorkbenchErrorEnvelope,
   WorkbenchVerbServices,
 } from './types.ts'
@@ -89,6 +96,26 @@ function requireObject(verb: string, arg: string, value: unknown): Record<string
 
 const DOC_KINDS: ReadonlySet<string> = new Set(['manifest', 'prd', 'design', 'ui', 'tasks'])
 
+/** 任务 7 态词表(schema-v2 task.status CHECK 同源;浅校验用)。 */
+const TASK_STATUSES: ReadonlySet<string> = new Set([
+  'pending',
+  'in_progress',
+  'completed',
+  'blocked',
+  'suspended',
+  'skipped',
+  'rejected',
+])
+
+/** 可选字符串字段:缺省/字符串放行,其余(含空串)拒绝为形状错。 */
+function optionalString(verb: string, arg: string, value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`workbench.${verb}: ${arg} must be a non-empty string when present (got ${typeof value})`)
+  }
+  return value
+}
+
 // ---------------------------------------------------------------------------
 // 事件订阅登记(onEvents 主进程侧半身)
 // ---------------------------------------------------------------------------
@@ -132,7 +159,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 }
 
 // ---------------------------------------------------------------------------
-// 动词注册(16 条白名单通道)
+// 动词注册(M2 16 条 + M3 tasks 段 7 条 = 23 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -220,6 +247,79 @@ export function installWorkbenchVerbs(
 
   register(C.authorizeExternalDocPath, args =>
     services.authorizeExternalDocPath(requireString('authorizeExternalDocPath', 'path', args[0])))
+
+  // —— M3 tasks 段(任务 1.3):七个任务动词。Hard Rule 延续 —— 本层只做
+  // sender 校验 + 参数形状校验 + 服务调用 + 错误映射;taskKey 限定地址
+  // 形态、actor 审计、状态机/依赖校验全部在内核服务面(task-service),
+  // 不信任 renderer 语义(T1 缓解)。 ——
+
+  const requireTaskRef = (verb: string, value: unknown): { projectId: string; taskKey: string } => {
+    const input = requireObject(verb, 'input', value)
+    requireString(verb, 'input.projectId', input.projectId)
+    requireString(verb, 'input.taskKey', input.taskKey)
+    return input as unknown as { projectId: string; taskKey: string }
+  }
+
+  register(C.taskAdd, (args) => {
+    const input = requireObject('taskAdd', 'input', args[0])
+    requireString('taskAdd', 'input.projectId', input.projectId)
+    requireString('taskAdd', 'input.featureSlug', input.featureSlug)
+    requireString('taskAdd', 'input.title', input.title)
+    optionalString('taskAdd', 'input.taskKey', input.taskKey)
+    optionalString('taskAdd', 'input.taskType', input.taskType)
+    optionalString('taskAdd', 'input.descPath', input.descPath)
+    if (input.blockers !== undefined && input.blockers !== null) {
+      if (!Array.isArray(input.blockers) || input.blockers.some(dep => typeof dep !== 'string' || dep === '')) {
+        throw new Error('workbench.taskAdd: input.blockers must be an array of non-empty strings when present')
+      }
+    }
+    return services.taskAdd(input as unknown as TaskAddInput, requireString('taskAdd', 'actor', args[1]))
+  })
+
+  register(C.taskClaim, args =>
+    services.taskClaim(
+      requireTaskRef('taskClaim', args[0]) as TaskClaimInput,
+      requireString('taskClaim', 'actor', args[1]),
+    ))
+
+  register(C.taskTransition, (args) => {
+    const input = requireObject('taskTransition', 'input', args[0])
+    requireString('taskTransition', 'input.projectId', input.projectId)
+    requireString('taskTransition', 'input.taskKey', input.taskKey)
+    const to = requireString('taskTransition', 'input.to', input.to)
+    if (!TASK_STATUSES.has(to)) {
+      throw new Error(`workbench.taskTransition: input.to must be one of the 7 task statuses (got ${to})`)
+    }
+    optionalString('taskTransition', 'input.reason', input.reason)
+    return services.taskTransition(input as unknown as TaskTransitionInput, requireString('taskTransition', 'actor', args[1]))
+  })
+
+  register(C.taskSubmit, (args) => {
+    const input = requireObject('taskSubmit', 'input', args[0])
+    requireString('taskSubmit', 'input.projectId', input.projectId)
+    requireString('taskSubmit', 'input.taskKey', input.taskKey)
+    optionalString('taskSubmit', 'input.recordPath', input.recordPath)
+    return services.taskSubmit(input as unknown as TaskSubmitInput, requireString('taskSubmit', 'actor', args[1]))
+  })
+
+  register(C.taskReopen, args =>
+    services.taskReopen(
+      requireTaskRef('taskReopen', args[0]) as TaskReopenInput,
+      requireString('taskReopen', 'actor', args[1]),
+    ))
+
+  register(C.taskGet, args => services.taskGet(requireTaskRef('taskGet', args[0]) as TaskGetInput))
+
+  register(C.taskQuery, (args) => {
+    const input = requireObject('taskQuery', 'input', args[0])
+    requireString('taskQuery', 'input.projectId', input.projectId)
+    optionalString('taskQuery', 'input.featureSlug', input.featureSlug)
+    const status = optionalString('taskQuery', 'input.status', input.status)
+    if (status !== undefined && !TASK_STATUSES.has(status)) {
+      throw new Error(`workbench.taskQuery: input.status must be one of the 7 task statuses when present (got ${status})`)
+    }
+    return services.taskQuery(input as unknown as TaskQueryInput)
+  })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

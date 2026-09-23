@@ -12,8 +12,16 @@ import type {
   RecordSessionLinkInput,
   RegisterProjectInput,
   SessionLink,
+  TaskAddInput,
   TaskBoardData,
+  TaskClaimInput,
   TaskDetail,
+  TaskGetInput,
+  TaskQueryInput,
+  TaskReopenInput,
+  TaskSubmitInput,
+  TaskSummary,
+  TaskTransitionInput,
   WorkbenchEvent,
   WorkbenchState,
 } from '../main/workbench/ipc/types.ts'
@@ -113,6 +121,25 @@ contextBridge.exposeInMainWorld('dshForge', {
     // single write path; validation chains read it, nothing here touches fs).
     authorizeExternalDocPath: (path: string): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.authorizeExternalDocPath, path) as Promise<void>,
+    // M3 task verbs (task 1.3): the five write-set verbs carry an explicit
+    // actor string (session:<id> | external | kernel | dispatcher) — the
+    // kernel records it as updated_by on every write (audit discipline);
+    // taskGet/taskQuery route by the project's data_authority. Rejections
+    // arrive as the same { code, message, detail? } envelope (ERR_TASK_*).
+    taskAdd: (input: TaskAddInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskAdd, input, actor) as Promise<TaskSummary>,
+    taskClaim: (input: TaskClaimInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskClaim, input, actor) as Promise<TaskSummary>,
+    taskTransition: (input: TaskTransitionInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskTransition, input, actor) as Promise<TaskSummary>,
+    taskSubmit: (input: TaskSubmitInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskSubmit, input, actor) as Promise<TaskSummary>,
+    taskReopen: (input: TaskReopenInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskReopen, input, actor) as Promise<TaskSummary>,
+    taskGet: (input: TaskGetInput): Promise<TaskDetail> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskGet, input) as Promise<TaskDetail>,
+    taskQuery: (input: TaskQueryInput): Promise<TaskSummary[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskQuery, input) as Promise<TaskSummary[]>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

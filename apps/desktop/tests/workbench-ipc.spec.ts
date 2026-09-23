@@ -113,6 +113,13 @@ function fakeServices(): WorkbenchVerbServices {
     })),
     endSessionLink: vi.fn(() => undefined),
     authorizeExternalDocPath: vi.fn(() => undefined),
+    taskAdd: vi.fn(() => ({ key: 'alpha/disc-1', status: 'pending' })),
+    taskClaim: vi.fn(() => ({ key: 'alpha/1.1', status: 'in_progress' })),
+    taskTransition: vi.fn(() => ({ key: 'alpha/1.1', status: 'blocked' })),
+    taskSubmit: vi.fn(() => ({ key: 'alpha/1.1', status: 'completed' })),
+    taskReopen: vi.fn(() => ({ key: 'alpha/1.1', status: 'pending' })),
+    taskGet: vi.fn(() => ({ summary: { key: 'alpha/1.1' } })),
+    taskQuery: vi.fn(() => []),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -159,7 +166,7 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the sixteen whitelisted verb channels, one per verb', () => {
+  it('contains exactly the twenty-three whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
@@ -175,10 +182,50 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
       'dsh-forge:workbench-subscribe-events',
+      'dsh-forge:workbench-task-add',
+      'dsh-forge:workbench-task-claim',
+      'dsh-forge:workbench-task-get',
+      'dsh-forge:workbench-task-query',
+      'dsh-forge:workbench-task-reopen',
+      'dsh-forge:workbench-task-submit',
+      'dsh-forge:workbench-task-transition',
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(16)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(23)
+  })
+
+  it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
+    // Hard Rule(任务 1.3):通道常量表追加式修改,禁改写 M2 既有动词定义。
+    // 钉定 M2 段原样(键序 = 定义序);M3 段只许出现在其后。
+    const keys = Object.keys(WORKBENCH_VERB_CHANNELS)
+    expect(keys.slice(0, 16)).toEqual([
+      'getState',
+      'registerProject',
+      'updateProject',
+      'removeProject',
+      'activateProject',
+      'getTaskBoard',
+      'getTaskDetail',
+      'getFeatureBoard',
+      'readFeatureDoc',
+      'listPlugins',
+      'setPluginEnabled',
+      'recordSessionLink',
+      'endSessionLink',
+      'authorizeExternalDocPath',
+      'subscribeEvents',
+      'unsubscribeEvents',
+    ])
+    expect(keys.slice(16)).toEqual([
+      'taskAdd',
+      'taskClaim',
+      'taskTransition',
+      'taskSubmit',
+      'taskReopen',
+      'taskGet',
+      'taskQuery',
+    ])
   })
 
   it('keeps the event push channel off the invokable verb whitelist', () => {
@@ -220,10 +267,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 16 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 23 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(16)
+    expect(handlers.size).toBe(23)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -267,6 +314,62 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.authorizeExternalDocPath)?.(OWNED, 'Z:/external-docs')
     expect(services.authorizeExternalDocPath).toHaveBeenCalledWith('Z:/external-docs')
+
+    // M3 tasks 段(任务 1.3):写集动词携带 actor 审计位;读动词按
+    // data_authority 路由 —— 本层只做形状校验与转发(零内联业务)。
+    handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', title: 'new task' }, 'session:s-1')
+    expect(services.taskAdd).toHaveBeenCalledWith(
+      { projectId: 'p-1', featureSlug: 'alpha', title: 'new task' },
+      'session:s-1',
+    )
+
+    handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, 'session:s-1')
+    expect(services.taskClaim).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' }, 'session:s-1')
+
+    handlers.get(C.taskTransition)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'blocked', reason: 'waiting' }, 'external')
+    expect(services.taskTransition).toHaveBeenCalledWith(
+      { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'blocked', reason: 'waiting' },
+      'external',
+    )
+
+    handlers.get(C.taskSubmit)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', recordPath: 'records/alpha-1.1.md' }, 'session:s-1')
+    expect(services.taskSubmit).toHaveBeenCalledWith(
+      { projectId: 'p-1', taskKey: 'alpha/1.1', recordPath: 'records/alpha-1.1.md' },
+      'session:s-1',
+    )
+
+    handlers.get(C.taskReopen)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, 'kernel')
+    expect(services.taskReopen).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' }, 'kernel')
+
+    handlers.get(C.taskGet)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' })
+    expect(services.taskGet).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' })
+
+    handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
+    expect(services.taskQuery).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
+  })
+
+  it('rejects M3 task verb shape violations before the service (vocab + actor + blockers array)', () => {
+    stderrSink()
+    const services = fakeServices()
+    const { handlers } = installed(services)
+    const C = WORKBENCH_VERB_CHANNELS
+    const cases: Array<[string, () => unknown]> = [
+      ['missing actor', () => handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' })],
+      ['empty actor', () => handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, '')],
+      ['to outside 7-state vocab', () => handlers.get(C.taskTransition)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'done' }, 'kernel')],
+      ['blockers not string array', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', title: 't', blockers: [42] }, 'kernel')],
+      ['status outside vocab', () => handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', status: 'done' })],
+      ['taskAdd missing title', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' }, 'kernel')],
+    ]
+    for (const [label, run] of cases) {
+      const error = toCapture(run) as WorkbenchIpcError
+      expect(error, label).toBeInstanceOf(WorkbenchIpcError)
+      expect(JSON.parse(error.message), label).toMatchObject({ code: 'ERR_WORKBENCH_DB' })
+    }
+    expect(services.taskAdd).not.toHaveBeenCalled()
+    expect(services.taskClaim).not.toHaveBeenCalled()
+    expect(services.taskTransition).not.toHaveBeenCalled()
+    expect(services.taskQuery).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {
