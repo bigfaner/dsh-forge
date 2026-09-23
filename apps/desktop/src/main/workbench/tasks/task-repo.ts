@@ -300,6 +300,17 @@ export function insertTask(db: RepoDb, input: InsertTaskInput): AuthoritativeTas
 }
 
 /**
+ * 按 feature 整组删除权威行(重摄入(1.5)的整 feature 替换面:先删后插,
+ * 同一外部写重复回收零重复行/零残留)。返回删除行数(诊断/审计用)。
+ */
+export function deleteTasksByFeature(db: RepoDb, projectId: string, featureSlug: string): number {
+  const changes = db
+    .prepare('DELETE FROM task WHERE project_id = ? AND feature_slug = ?')
+    .run(projectId, featureSlug)
+  return Number(changes.changes)
+}
+
+/**
  * 状态迁移写(动词经状态机校验后的唯一落库语句):更新 status +
  * updated_by(actor 审计)+ updated_at。行不存在 → ERR_TASK_NOT_FOUND
  * (changes=0 判定,不静默)。其余字段不动(blockers/title 等非迁移面)。

@@ -38,13 +38,21 @@ export type WorkbenchEvent =
     readonly phase: MigrationPhase
     readonly result: MigrationPhaseResult
   }
+  // M3 v2(任务 1.5;tech-design §Interface 1 事件扩展):偏离检出信号,
+  // 仅呈现不阻断(PRD G8/Story 8)。项目级形态 = 已迁移项目 index.json
+  // 外部复现/变更被重摄入 watcher 检出(Interface 4 第 7 步);feature 级
+  // 形态(featureSlug 载荷,manifest 外部跨阶段)归 4.2 扩展本联合。
+  | {
+    readonly type: 'deviation_detected'
+    readonly projectId: string
+  }
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 
 /**
  * migration_event 相位词表(schema-v2.sql §9 CHECK 同源;迁移/回收审计)。
- * reingest 相 = 外部写回收(Interface 4 第 7 步,任务 1.5),本任务只落
- * 词表与审计面,不实现回收逻辑。
+ * reingest 相 = 外部写回收(Interface 4 第 7 步,任务 1.5:migration/
+ * reingest-watcher 每次实际回收 ok/fail 各留一行)。
  */
 export type MigrationPhase = 'backup' | 'ingest' | 'verify' | 'switch' | 'archive' | 'rollback' | 'reingest'
 

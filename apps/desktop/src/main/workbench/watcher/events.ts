@@ -9,8 +9,9 @@
 //
 // 合并键:task_updated → (type, projectId, taskKey);feature_updated →
 // (type, projectId, featureSlug);sync → (type, projectId);migration_progress
-// → (type, projectId, phase, result)(M3 v2 事件,任务 1.4)。批内顺序 =
-// 首现位次(新键插到批尾),载荷 = 最后形态。
+// → (type, projectId, phase, result)(M3 v2 事件,任务 1.4);deviation_detected
+// → (type, projectId)(M3 v2 事件,任务 1.5)。批内顺序 = 首现位次(新键插到
+// 批尾),载荷 = 最后形态。
 
 import type { WorkbenchEvent } from '../indexer/diff.ts'
 
@@ -45,6 +46,8 @@ function coalesceKey(event: WorkbenchEvent): string {
       return `sync|${event.projectId}`
     case 'migration_progress':
       return `migration_progress|${event.projectId}|${event.phase}|${event.result}`
+    case 'deviation_detected':
+      return `deviation_detected|${event.projectId}`
   }
 }
 

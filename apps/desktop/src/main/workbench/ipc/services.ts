@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
-import { resolveFeaturesDir, scanForgeFiles, type ScanTarget } from '../indexer/scan.ts'
+import { resolveFeaturesDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
 import { toSyncStatusPayload } from '../indexer/diff.ts'
 import {
   registerProject as registerProjectValidated,
@@ -52,6 +52,7 @@ import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } f
 import { toTaskSummary } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
 import { createMigrationService } from '../migration/pipeline.ts'
+import { createReingestHook } from '../migration/reingest-watcher.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -162,11 +163,21 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     guard: deps.pluginGuard ?? createPluginEnableGuard(() => readPluginManifestBundles(deps.pluginBundlesPath)),
   })
   const defaultPerception = (): WorkbenchPerceptionSeam => {
-    const watcher = createWorkbenchWatcher(db, { onEvents: sink })
+    // M3 任务 1.5:外部写回收钩子挂接感知基座 —— 每轮感知扫描(M2 watcher
+    // 触发或动词同步重扫)后同步检查已迁移项目的 index.json 复现/变更;
+    // 回收产出的事件(deviation_detected / migration_progress reingest)并入
+    // 同一扫描事件批,走同一 sink/批推通道;钩子永不抛错、files 项目短路。
+    const reingest = createReingestHook({ db })
+    const scanWithReingest = (target: ScanTarget): ScanOutcome => {
+      const outcome = scanForgeFiles(db, target)
+      const events = reingest.afterScan(target)
+      return events.length > 0 ? { ...outcome, events: [...outcome.events, ...events] } : outcome
+    }
+    const watcher = createWorkbenchWatcher(db, { scan: (_db, target) => scanWithReingest(target), onEvents: sink })
     return {
       retarget: target => watcher.rebuild(target),
       rescan: (target) => {
-        const outcome = scanForgeFiles(db, target)
+        const outcome = scanWithReingest(target)
         if (outcome.events.length > 0) sink(outcome.events)
       },
     }

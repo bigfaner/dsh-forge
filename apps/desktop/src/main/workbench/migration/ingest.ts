@@ -18,12 +18,14 @@
 // 写入口纪律(1.3 Hard Rule):行写入只经 task-repo insertTask —— 本模块
 // 在迁移大事务内逐行调用,不留任何旁路写。事务归属:本模块不自持事务
 // (SAVEPOINT/BEGIN 均由 pipeline 承载);摄入失败 = 抛错上交 → 整体回滚。
+// 单 feature 行集采集(collectFeatureIngestRows)同时供外部写重摄入
+// (1.5 reingest-watcher)复用 —— 两路摄入同一映射,零分立实现。
 
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
 import type { RepoDb } from '../repos/types.ts'
-import { insertTask } from '../tasks/task-repo.ts'
+import { insertTask, type InsertTaskInput } from '../tasks/task-repo.ts'
 import { listFeatureSlugsWithTasks } from './backup.ts'
 
 /** 单 feature 摄入记账。 */
@@ -58,6 +60,51 @@ function extrasByLocalId(slug: string, entries: TaskIndexEntries): Map<string, E
 }
 
 /**
+ * 单 feature 摄入行集(纯读 + 映射,零写):迁移摄入(1.4)与外部写重摄入
+ * (1.5)共用同一映射 —— 任何分立实现都会自造两边漂移。index.json 不可读/
+ * 不可解析 → 抛错(任务集不可知即拒绝,不静默部分摄入)。
+ */
+export function collectFeatureIngestRows(input: {
+  readonly projectId: string
+  readonly featuresRoot: string
+  readonly slug: string
+}): readonly InsertTaskInput[] {
+  const tasksDir = join(input.featuresRoot, input.slug, 'tasks')
+  const indexPath = join(tasksDir, 'index.json')
+  const entries = readTaskIndex(indexPath)
+  if (entries === null) {
+    throw new Error(
+      `migration ingest: ${input.slug}/tasks/index.json is missing or unreadable — the full task set is unknowable, refusing to migrate a partial corpus`,
+    )
+  }
+  const indexMtime = statSync(indexPath).mtime.toISOString()
+  const parsed = parseFeatureTasks(tasksDir, input.slug, entries, indexMtime)
+  // entries ≠ null 时解析器恒返回数组;null 分支属其「index 不可读」降级
+  // 契约(本调用面已在 readTaskIndex 前置排除),防御性显式拒绝。
+  if (parsed.tasks === null) {
+    throw new Error(
+      `migration ingest: ${input.slug}/tasks/index.json could not be parsed — refusing to migrate a partial corpus`,
+    )
+  }
+  const extras = extrasByLocalId(input.slug, entries)
+  return parsed.tasks.map((task) => {
+    const extra = extras.get(task.localId)
+    return {
+      projectId: input.projectId,
+      taskKey: task.taskKey,
+      featureSlug: input.slug,
+      title: task.title,
+      status: task.status,
+      blockers: task.blockers,
+      taskType: extra?.taskType ?? null,
+      descPath: extra?.descPath ?? `${input.slug}/tasks/${task.localId}.md`,
+      updatedBy: 'kernel',
+      updatedAt: task.updatedAt,
+    }
+  })
+}
+
+/**
  * 全量摄入(必须在调用方事务内执行):任一 feature 的 index.json 不可读
  * → 抛错(全量不可知即迁移不可行,不静默跳过 —— 静默跳过会把「缺一个
  * feature」留给对拍兜底,错误面反而模糊)。`afterRow` = 测试注错缝
@@ -72,42 +119,17 @@ export function ingestTaskIndexes(input: {
   const features: IngestFeatureOutcome[] = []
   let rows = 0
   for (const slug of listFeatureSlugsWithTasks(input.featuresRoot)) {
-    const tasksDir = join(input.featuresRoot, slug, 'tasks')
-    const indexPath = join(tasksDir, 'index.json')
-    const entries = readTaskIndex(indexPath)
-    if (entries === null) {
-      throw new Error(
-        `migration ingest: ${slug}/tasks/index.json is missing or unreadable — the full task set is unknowable, refusing to migrate a partial corpus`,
-      )
-    }
-    const indexMtime = statSync(indexPath).mtime.toISOString()
-    const parsed = parseFeatureTasks(tasksDir, slug, entries, indexMtime)
-    // entries ≠ null 时解析器恒返回数组;null 分支属其「index 不可读」降级
-    // 契约(本调用面已在 readTaskIndex 前置排除),防御性显式拒绝。
-    if (parsed.tasks === null) {
-      throw new Error(
-        `migration ingest: ${slug}/tasks/index.json could not be parsed — refusing to migrate a partial corpus`,
-      )
-    }
-    const extras = extrasByLocalId(slug, entries)
-    for (const task of parsed.tasks) {
-      const extra = extras.get(task.localId)
-      insertTask(input.db, {
-        projectId: input.projectId,
-        taskKey: task.taskKey,
-        featureSlug: slug,
-        title: task.title,
-        status: task.status,
-        blockers: task.blockers,
-        taskType: extra?.taskType ?? null,
-        descPath: extra?.descPath ?? `${slug}/tasks/${task.localId}.md`,
-        updatedBy: 'kernel',
-        updatedAt: task.updatedAt,
-      })
+    const featureRows = collectFeatureIngestRows({
+      projectId: input.projectId,
+      featuresRoot: input.featuresRoot,
+      slug,
+    })
+    for (const row of featureRows) {
+      insertTask(input.db, row)
       rows += 1
-      input.afterRow?.(rows, task.taskKey)
+      input.afterRow?.(rows, row.taskKey)
     }
-    features.push({ slug, taskCount: parsed.tasks.length })
+    features.push({ slug, taskCount: featureRows.length })
   }
   return { rows, features }
 }
