@@ -370,7 +370,7 @@
         "3.3",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.8-task-detail-orchestration-build.md",
       "record": "records/3.8-task-detail-orchestration-build.md",
       "surface-type": "web",

@@ -255,6 +255,28 @@ export type WorkbenchKey =
   | 'tasks.orch.announce.task'
   | 'tasks.orch.announce.batch'
   | 'tasks.orch.announce.batchMixed'
+  | 'tasks.orch.section'
+  | 'tasks.orch.execute'
+  | 'tasks.orch.execute.busy'
+  | 'tasks.orch.execute.note'
+  | 'tasks.orch.empty'
+  | 'tasks.orch.currentState'
+  | 'tasks.orch.dispatchedAt'
+  | 'tasks.orch.session'
+  | 'tasks.orch.failedReason'
+  | 'tasks.orch.failedReason.none'
+  | 'tasks.orch.redispatch'
+  | 'tasks.orch.presynth'
+  | 'tasks.orch.presynth.tooltip'
+  | 'tasks.orch.presynth.hash'
+  | 'tasks.orch.goApproval'
+  | 'tasks.orch.announce.dispatched'
+  | 'tasks.redispatch.title'
+  | 'tasks.redispatch.reason'
+  | 'tasks.redispatch.reason.none'
+  | 'tasks.redispatch.note'
+  | 'tasks.redispatch.go'
+  | 'tasks.redispatch.cancel'
   | 'tasks.approval.toolbar'
   | 'tasks.approval.toolbar.aria'
   | 'tasks.approval.tabBadge.aria'
@@ -612,6 +634,28 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.orch.announce.task': 'Task {key} entered {state}',
   'tasks.orch.announce.batch': '{count} tasks entered {state}',
   'tasks.orch.announce.batchMixed': '{count} task orchestration states updated',
+  'tasks.orch.section': 'Orchestration',
+  'tasks.orch.execute': 'Dispatch now',
+  'tasks.orch.execute.busy': 'Dispatching…',
+  'tasks.orch.execute.note': 'The M2 "Launch session" entry, evolved: presynthesized systemPrompt + subagent dispatch.',
+  'tasks.orch.empty': 'Not dispatched yet (no orchestration record).',
+  'tasks.orch.currentState': 'Current orchestration state',
+  'tasks.orch.dispatchedAt': 'Dispatched {time}',
+  'tasks.orch.session': 'subagent session {id}',
+  'tasks.orch.failedReason': 'Failure reason: {reason}',
+  'tasks.orch.failedReason.none': 'Failure reason: — (none recorded)',
+  'tasks.orch.redispatch': 'Redispatch',
+  'tasks.orch.presynth': 'Presynth: protocol ✓ · goal summary ✓ · preferences ✓',
+  'tasks.orch.presynth.tooltip': 'Three elements: task-type protocol (template library) · feature goal/summary (latest stage asset) · effective preferences (three-tier resolution)',
+  'tasks.orch.presynth.hash': 'prompt_hash {hash}',
+  'tasks.orch.goApproval': 'Go to approvals',
+  'tasks.orch.announce.dispatched': 'Task {key} dispatched',
+  'tasks.redispatch.title': 'Redispatch confirmation',
+  'tasks.redispatch.reason': 'Previous failure: {reason}',
+  'tasks.redispatch.reason.none': 'Previous failure: — (none recorded)',
+  'tasks.redispatch.note': 'Redispatch re-runs the artifact completeness check and the presynthesis.',
+  'tasks.redispatch.go': 'Redispatch',
+  'tasks.redispatch.cancel': 'Cancel',
   'tasks.approval.toolbar': 'Approvals {count}',
   'tasks.approval.toolbar.aria': 'Approvals: {count} awaiting',
   'tasks.approval.tabBadge.aria': '{count} awaiting approval',
