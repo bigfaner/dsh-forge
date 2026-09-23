@@ -58,6 +58,7 @@ import { createMigrationService } from '../migration/pipeline.ts'
 import { createReingestHook } from '../migration/reingest-watcher.ts'
 import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
+import { createStagesVerbService } from '../stages/stages-service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -269,6 +270,17 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   // M3 任务 3.1:偏好动词服务(三级解析 + 键集封闭 + 事务原子写)。写完成
   // 事件(prefs_updated)经同一 sink 批推(迁移面 onEvent 同款直发形态)。
   const prefsVerbs = createPrefsVerbService({ db, onEvent: event => sink([event]) })
+
+  // M3 任务 3.2:stages 读动词服务(确定性清单 + 门态 + 资产索引读)。零写
+  // 面、零事件(advanceStage/summarize 写侧归 4.1);features 根解析与
+  // taskVerbs 同源注入(文档根三分模型单一解析)。
+  const stagesVerbs = createStagesVerbService({
+    db,
+    resolveFeaturesRoot: (projectId: string): string | null => {
+      const project = findProjectRow(db, projectId)
+      return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
+    },
+  })
 
   // M3 任务 1.7(UF3 集成读):内核管理位置 + 向导真实探测 + 可迁移判定
   // 的文档侧半边。全部只读 fs(探测/扫描);唯一写面 = 仓外默认路径的
@@ -503,6 +515,12 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       getPrefs: scope => prefsVerbs.getPrefs(scope),
       setPrefs: (scope, entries) => prefsVerbs.setPrefs(scope, entries),
       clearPrefOverride: (scope, key) => prefsVerbs.clearPrefOverride(scope, key),
+
+      // —— M3 stages 读动词(任务 3.2):委托 stages/stages-service
+      //    (checkStageArtifacts 确定性清单 + getStageGate/listStageAssets)。 ——
+      checkStageArtifacts: input => stagesVerbs.checkStageArtifacts(input),
+      getStageGate: (projectId, featureSlug) => stagesVerbs.getStageGate(projectId, featureSlug),
+      listStageAssets: (projectId, featureSlug) => stagesVerbs.listStageAssets(projectId, featureSlug),
 
       // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
       //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——

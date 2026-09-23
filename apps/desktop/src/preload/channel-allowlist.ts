@@ -62,6 +62,11 @@ export const WORKBENCH_VERB_CHANNELS = {
   getPrefs: 'dsh-forge:workbench-get-prefs',
   setPrefs: 'dsh-forge:workbench-set-prefs',
   clearPrefOverride: 'dsh-forge:workbench-clear-pref-override',
+  // M3 stages 读段(任务 3.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
+  getStageGate: 'dsh-forge:workbench-get-stage-gate',
+  listStageAssets: 'dsh-forge:workbench-list-stage-assets',
 } as const
 
 /**

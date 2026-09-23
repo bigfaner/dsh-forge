@@ -167,7 +167,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // ---------------------------------------------------------------------------
 // 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
-// = 36 条白名单通道)
+// + stages 读段 3 条(任务 3.2)= 39 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -535,6 +535,30 @@ export function installWorkbenchVerbs(
 
   register(C.clearPrefOverride, args =>
     services.clearPrefOverride(requirePrefScope('clearPrefOverride', args[0]), requireString('clearPrefOverride', 'key', args[1])))
+
+  // —— M3 stages 读段(任务 3.2):三条阶段动词。Hard Rule 延续 —— 本层
+  // 只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;期望清单判定、
+  // 门态与资产索引读取全部在内核服务面(stages-service,确定性代码),
+  // 不信任 renderer 语义。 ——
+
+  register(C.checkStageArtifacts, (args) => {
+    const input = requireObject('checkStageArtifacts', 'input', args[0])
+    requireString('checkStageArtifacts', 'input.projectId', input.projectId)
+    requireString('checkStageArtifacts', 'input.featureSlug', input.featureSlug)
+    return services.checkStageArtifacts(input as unknown as { projectId: string; featureSlug: string })
+  })
+
+  register(C.getStageGate, args =>
+    services.getStageGate(
+      requireString('getStageGate', 'projectId', args[0]),
+      requireString('getStageGate', 'featureSlug', args[1]),
+    ))
+
+  register(C.listStageAssets, args =>
+    services.listStageAssets(
+      requireString('listStageAssets', 'projectId', args[0]),
+      requireString('listStageAssets', 'featureSlug', args[1]),
+    ))
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

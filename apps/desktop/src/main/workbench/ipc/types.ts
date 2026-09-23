@@ -535,6 +535,68 @@ export interface PrefRow {
 }
 
 // ---------------------------------------------------------------------------
+// M3 stages 读侧 DTO(任务 3.2;tech-design §Interface 1 编排段
+// checkStageArtifacts + 阶段段 getStageGate/listStageAssets;期望清单权威 =
+// PRD §各阶段期望产物清单 —— 应用仅消费机器可校验定义,不新增语义)
+// ---------------------------------------------------------------------------
+
+/**
+ * 机器可校验规则词表(PRD 各阶段期望产物清单右列的规则面投影;
+ * dispatch 层据 MissingItem 呈现警告,acknowledgeMissing 后可派发)。
+ */
+export type StageCheckRule =
+  | 'file-missing'             // 期望文件/目录不存在(存在性)
+  | 'manifest-status-mismatch' // manifest frontmatter status 缺失/越界(status 一致)
+  | 'task-set-empty'           // SQLite 任务集为空(任务集非空)
+  | 'dep-dangling'             // 依赖引用悬空(依赖引用可解析且无悬空)
+  | 'no-dispatched-task'       // 无 in_progress/completed 任务(状态查询)
+  | 'task-md-empty'            // 被派发任务 md 描述为空/缺失(任务 md 内容解析)
+  | 'task-not-terminal'        // completed 聚合:任务未终态(聚合查询)
+  | 'stage-asset-missing'      // 阶段资产文件缺失(资产齐全)
+
+/** 单条缺失项(结构化警告清单元素;缺失 = 警告不阻断,G4)。 */
+export interface MissingItem {
+  /** 产生该期望的阶段行(PRD 清单行)。 */
+  readonly stage: FeatureStatus
+  /** 命中的机器规则。 */
+  readonly rule: StageCheckRule
+  /** 缺失对象:相对路径(tasks/ 方言)/ 任务看板地址 / 聚合面名。 */
+  readonly artifact: string
+  /** 机器可读解释(稳定文案,UI/会话直接呈现)。 */
+  readonly detail: string
+}
+
+/** checkStageArtifacts 产物(Interface 1 UF1 编排段)。 */
+export interface StageArtifactsReport {
+  /** feature 当前阶段(manifest 权威;损坏时快照/管线头降级,见实现注记)。 */
+  readonly stage: FeatureStatus
+  /** 期望清单全过(= missing 为空);false 仍可派发(acknowledgeMissing)。 */
+  readonly satisfied: boolean
+  readonly missing: readonly MissingItem[]
+}
+
+/** stage_asset 行的 IPC 投影(派生索引;内容留文档根 stages/<stage>.md)。 */
+export interface StageAssetRow {
+  readonly stage: FeatureStatus
+  /** features 根相对路径(`<slug>/stages/<stage>.md`;与 task.desc_path 同方言)。 */
+  readonly path: string
+  /** frontmatter generated 原词;缺失 → null。 */
+  readonly generatedAt: string | null
+}
+
+/** getStageGate 产物(Interface 1 UF2 阶段段:门态 + 资产列表)。 */
+export interface StageGateInfo {
+  readonly featureSlug: string
+  readonly stage: FeatureStatus
+  /** 门态:当前阶段总结资产(stages/<stage>.md)已生成(存在性,活性 fs 判定)。 */
+  readonly summaryGenerated: boolean
+  /** 门资产路径(features 根相对);未生成 → null。 */
+  readonly gateAssetPath: string | null
+  /** 阶段资产列表(stage_asset 索引,管线序)。 */
+  readonly assets: readonly StageAssetRow[]
+}
+
+// ---------------------------------------------------------------------------
 // 动词服务契约(handler 只做 参数校验 + 服务调用 + 错误映射,Hard Rule)
 // ---------------------------------------------------------------------------
 
@@ -615,6 +677,19 @@ export interface WorkbenchVerbServices {
   setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): void
   /** 删本级覆盖行(幂等);生效值回落下一级;实际删除 → prefs_updated。 */
   clearPrefOverride(scope: PrefScope, key: string): void
+  // —— M3 stages 读动词(任务 3.2;实现 = stages/stages-service.ts 经
+  // services.ts 装配;检查为确定性代码 —— 文件 + SQLite 查询,零模型调用)——
+  /**
+   * 派发前产物齐全性检查(PRD 各阶段期望产物清单逐规则判定;缺失 =
+   * 警告 + MissingItem 清单,warn 不阻断 —— 阻断逻辑在 dispatch 层以
+   * acknowledgeMissing 表达)。项目不存在 → ERR_PROJECT_NOT_FOUND;
+   * feature 目录缺失 → ERR_FEATURE_NOT_FOUND。
+   */
+  checkStageArtifacts(input: { readonly projectId: string; readonly featureSlug: string }): StageArtifactsReport
+  /** 门态(当前阶段总结已/未生成)+ 资产列表(stage_asset 索引,管线序)。 */
+  getStageGate(projectId: string, featureSlug: string): StageGateInfo
+  /** 按阶段(管线序)返回 stage_asset 行;空集 = 无资产(合法状态)。 */
+  listStageAssets(projectId: string, featureSlug: string): StageAssetRow[]
 }
 
 // ---------------------------------------------------------------------------

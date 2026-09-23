@@ -56,6 +56,7 @@ import {
   type DanglingBlocker,
 } from './diff.ts'
 import { determineSource } from './source.ts'
+import { collectStageAssets, deleteStageAssets, replaceStageAssets } from '../stages/stage-asset-index.ts'
 
 /** 扫描目标(projects 行的最小投影;docBase 口径同 registry/forge-detect)。 */
 export interface ScanTarget {
@@ -161,6 +162,13 @@ function applyScanResult(
   const featureDiff = diffFeatures(options.previousFeatures, incomingFeatures, presentSlugs)
   const featureBySlug = new Map(result.features.map(feature => [feature.slug, feature]))
 
+  // M3 任务 3.2:stage_asset 感知索引 —— 每轮扫描对全部在场 feature 全量同步
+  // (stages/*.md 变更不改变 feature_snapshot.updatedAt,按 changed-slug 门控
+  // 会漏感知;行集替换 = 派生纯函数,与 rebuildStageAssetIndex 共用实现)。
+  // fs 读取置于写事务外(事务内只承写)。
+  const featuresDir = resolveFeaturesDir(target)
+  const stageAssetsBySlug = new Map(result.features.map(feature => [feature.slug, collectStageAssets(featuresDir, feature.slug)]))
+
   const runWrites = (): void => {
     deleteTaskSnapshots(db, target.id, taskDiff.deletedKeys)
     const batchRows = taskDiff.upserts.flatMap((row) => {
@@ -183,6 +191,7 @@ function applyScanResult(
     upsertTaskSnapshots(db, target.id, batchRows)
     for (const slug of featureDiff.deletedSlugs) {
       deleteFeatureSnapshot(db, target.id, slug)
+      deleteStageAssets(db, target.id, slug) // M3 3.2:feature 结构性删除 → 派生索引行清理
     }
     for (const row of incomingFeatures) {
       if (!featureDiff.changedSlugs.includes(row.featureSlug)) continue // 未变化不重写:updated_at 不漂移
@@ -195,6 +204,9 @@ function applyScanResult(
         docKinds: row.docKinds,
         updatedAt: parsedFeature.updatedAt,
       })
+    }
+    for (const feature of result.features) {
+      replaceStageAssets(db, target.id, feature.slug, stageAssetsBySlug.get(feature.slug) ?? [])
     }
   }
 

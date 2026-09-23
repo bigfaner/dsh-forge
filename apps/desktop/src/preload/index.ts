@@ -33,6 +33,9 @@ import type {
   RecordSessionLinkInput,
   RegisterProjectInput,
   SessionLink,
+  StageArtifactsReport,
+  StageAssetRow,
+  StageGateInfo,
   TaskAddInput,
   TaskBoardData,
   TaskClaimInput,
@@ -217,6 +220,19 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setPrefs, scope, entries) as Promise<void>,
     clearPrefOverride: (scope: PrefScope, key: string): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.clearPrefOverride, scope, key) as Promise<void>,
+    // M3 stages read verbs (task 3.2): deterministic pre-dispatch artifact
+    // checklist (missing = warn list, never blocks here — the dispatch layer
+    // expresses acknowledgement via acknowledgeMissing) plus the stage gate
+    // (current-stage summary generated?) and the derived stage-asset index
+    // (pipeline-ordered). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_FEATURE_NOT_FOUND).
+    checkStageArtifacts: (input: { projectId: string; featureSlug: string }): Promise<StageArtifactsReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.checkStageArtifacts, input) as Promise<StageArtifactsReport>,
+    getStageGate: (projectId: string, featureSlug: string): Promise<StageGateInfo> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getStageGate, projectId, featureSlug) as Promise<StageGateInfo>,
+    listStageAssets: (projectId: string, featureSlug: string): Promise<StageAssetRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listStageAssets, projectId, featureSlug) as Promise<StageAssetRow[]>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

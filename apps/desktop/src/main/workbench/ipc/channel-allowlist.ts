@@ -76,6 +76,14 @@ export const WORKBENCH_VERB_CHANNELS = {
   getPrefs: 'dsh-forge:workbench-get-prefs',
   setPrefs: 'dsh-forge:workbench-set-prefs',
   clearPrefOverride: 'dsh-forge:workbench-clear-pref-override',
+  // —— M3 stages 读段(任务 3.2 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 编排段
+  //    checkStageArtifacts(派发前产物齐全性检查,确定性代码)+ 阶段段
+  //    getStageGate/listStageAssets(门态 + 资产索引读);检查语义与
+  //    MissingItem 清单在内核(stages-service),通道面零特权。 ——
+  checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
+  getStageGate: 'dsh-forge:workbench-get-stage-gate',
+  listStageAssets: 'dsh-forge:workbench-list-stage-assets',
 } as const
 
 /**

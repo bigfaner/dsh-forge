@@ -1,0 +1,362 @@
+{
+  "$comment": "任务 3.2 阶段门读侧语料:五阶段清单矩阵(齐全/缺失)。materialize(spec) 落 tmp 文档树 + 真 db(node:sqlite);期望值 = PRD §各阶段期望产物清单(机器可校验)的逐规则投影。模板占位符 {slug}/{status}/{stage}/{generated}/{goal}/{localId}/{title}/{deps}/{body}。",
+  "slug": "alpha",
+  "templates": {
+    "manifest": "---\nstatus: {status}\ncreated: \"2026-09-18\"\n---\n\n# {slug}\n",
+    "stageAsset": "---\nstage: {stage}\ngenerated: \"{generated}\"\ngoal: \"{goal}\"\n---\n\n# {stage} 阶段总结\n\n摘要正文。\n",
+    "taskMd": "---\nid: \"{localId}\"\ntitle: \"{title}\"\nstatus: \"{status}\"\ndependencies: {deps}\n---\n\n## Description\n\n{body}\n",
+    "designDoc": "# tech design\n\n接口与数据模型……\n",
+    "prdSpec": "# prd\n\n范围与验收……\n"
+  },
+  "scenarios": [
+    {
+      "name": "prd-complete",
+      "manifestStatus": "prd",
+      "prdSpec": true,
+      "designDocs": [],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "prd", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "prd-missing-prd-spec",
+      "manifestStatus": "prd",
+      "prdSpec": false,
+      "designDocs": [],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "prd",
+        "satisfied": false,
+        "missing": [{ "stage": "prd", "rule": "file-missing", "artifact": "prd/prd-spec.md" }]
+      }
+    },
+    {
+      "name": "prd-manifest-status-invalid",
+      "manifestStatus": "shipped",
+      "prdSpec": true,
+      "designDocs": [],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "prd",
+        "satisfied": false,
+        "missing": [{ "stage": "prd", "rule": "manifest-status-mismatch", "artifact": "manifest.md" }]
+      }
+    },
+    {
+      "name": "prd-manifest-missing",
+      "manifestStatus": null,
+      "prdSpec": true,
+      "designDocs": [],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "prd",
+        "satisfied": false,
+        "missing": [{ "stage": "prd", "rule": "file-missing", "artifact": "manifest.md" }]
+      }
+    },
+    {
+      "name": "prd-manifest-missing-snapshot-fallback",
+      "manifestStatus": null,
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": [], "mdBody": "Do the thing." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": "tasks",
+      "expect": {
+        "stage": "tasks",
+        "satisfied": false,
+        "missing": [{ "stage": "prd", "rule": "file-missing", "artifact": "manifest.md" }]
+      }
+    },
+    {
+      "name": "design-complete",
+      "manifestStatus": "design",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "design", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "design-dir-empty",
+      "manifestStatus": "design",
+      "prdSpec": true,
+      "designDocs": [],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "design",
+        "satisfied": false,
+        "missing": [{ "stage": "design", "rule": "file-missing", "artifact": "design/" }]
+      }
+    },
+    {
+      "name": "tasks-complete",
+      "manifestStatus": "tasks",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": [], "mdBody": "Do the thing." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "tasks", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "tasks-no-md",
+      "manifestStatus": "tasks",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": false,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": [], "mdBody": "Do the thing." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "tasks",
+        "satisfied": false,
+        "missing": [{ "stage": "tasks", "rule": "file-missing", "artifact": "tasks/" }]
+      }
+    },
+    {
+      "name": "tasks-empty-set",
+      "manifestStatus": "tasks",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "tasks",
+        "satisfied": false,
+        "missing": [
+          { "stage": "tasks", "rule": "file-missing", "artifact": "tasks/" },
+          { "stage": "tasks", "rule": "task-set-empty", "artifact": "tasks" }
+        ]
+      }
+    },
+    {
+      "name": "tasks-dep-dangling",
+      "manifestStatus": "tasks",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": [], "mdBody": "Do the thing." },
+        { "localId": "1.2", "title": "Task two", "status": "pending", "blockers": ["1.9"], "mdBody": "Depends on nothing real." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "tasks",
+        "satisfied": false,
+        "missing": [{ "stage": "tasks", "rule": "dep-dangling", "artifact": "alpha/1.2" }]
+      }
+    },
+    {
+      "name": "tasks-dep-wildcard-empty",
+      "manifestStatus": "tasks",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": ["2.x"], "mdBody": "Wildcard matches nothing." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "tasks",
+        "satisfied": false,
+        "missing": [{ "stage": "tasks", "rule": "dep-dangling", "artifact": "alpha/1.1" }]
+      }
+    },
+    {
+      "name": "in-progress-complete",
+      "manifestStatus": "in-progress",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "in_progress", "blockers": [], "mdBody": "Doing the thing." },
+        { "localId": "1.2", "title": "Task two", "status": "completed", "blockers": ["1.1"], "mdBody": "Did the other thing." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "in-progress", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "in-progress-none-dispatched",
+      "manifestStatus": "in-progress",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "pending", "blockers": [], "mdBody": "Not started." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "in-progress",
+        "satisfied": false,
+        "missing": [{ "stage": "in-progress", "rule": "no-dispatched-task", "artifact": "in-progress" }]
+      }
+    },
+    {
+      "name": "in-progress-md-empty",
+      "manifestStatus": "in-progress",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "in_progress", "blockers": [], "mdBody": "" }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "in-progress",
+        "satisfied": false,
+        "missing": [{ "stage": "in-progress", "rule": "task-md-empty", "artifact": "alpha/1.1" }]
+      }
+    },
+    {
+      "name": "in-progress-sqlite-route",
+      "manifestStatus": "in-progress",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": false,
+      "stageAssets": [],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "in_progress", "blockers": [], "mdBody": "Doing the thing on the authoritative table." }
+      ],
+      "authority": "sqlite",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "in-progress", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "completed-complete",
+      "manifestStatus": "completed",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": ["prd", "design", "tasks", "in-progress"],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "completed", "blockers": [], "mdBody": "Done." },
+        { "localId": "1.2", "title": "Task two", "status": "skipped", "blockers": [], "mdBody": "Skipped deliberately." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": { "stage": "completed", "satisfied": true, "missing": [] }
+    },
+    {
+      "name": "completed-not-terminal",
+      "manifestStatus": "completed",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": ["prd", "design", "tasks", "in-progress"],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "completed", "blockers": [], "mdBody": "Done." },
+        { "localId": "1.2", "title": "Task two", "status": "pending", "blockers": [], "mdBody": "Never ran." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "completed",
+        "satisfied": false,
+        "missing": [{ "stage": "completed", "rule": "task-not-terminal", "artifact": "alpha/1.2" }]
+      }
+    },
+    {
+      "name": "completed-asset-missing",
+      "manifestStatus": "completed",
+      "prdSpec": true,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": ["prd", "design", "tasks"],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "completed", "blockers": [], "mdBody": "Done." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "completed",
+        "satisfied": false,
+        "missing": [{ "stage": "completed", "rule": "stage-asset-missing", "artifact": "stages/in-progress.md" }]
+      }
+    },
+    {
+      "name": "completed-cumulative",
+      "manifestStatus": "completed",
+      "prdSpec": false,
+      "designDocs": ["tech-design.md"],
+      "writeTaskMds": true,
+      "indexJson": true,
+      "stageAssets": ["prd", "design", "tasks", "in-progress"],
+      "tasks": [
+        { "localId": "1.1", "title": "Task one", "status": "completed", "blockers": [], "mdBody": "Done." }
+      ],
+      "authority": "files",
+      "featureSnapshotStatus": null,
+      "expect": {
+        "stage": "completed",
+        "satisfied": false,
+        "missing": [{ "stage": "prd", "rule": "file-missing", "artifact": "prd/prd-spec.md" }]
+      }
+    }
+  ]
+}
