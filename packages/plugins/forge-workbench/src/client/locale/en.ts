@@ -214,6 +214,37 @@ export type WorkbenchKey =
   | 'tasks.status.short.suspended'
   | 'tasks.status.short.skipped'
   | 'tasks.status.short.rejected'
+  | 'tasks.dispatch.entry'
+  | 'tasks.dispatch.entry.disabledTooltip'
+  | 'tasks.dispatch.detail'
+  | 'tasks.dispatch.disabled.terminal'
+  | 'tasks.dispatch.disabled.inProgress'
+  | 'tasks.dispatch.disabled.suspended'
+  | 'tasks.dispatch.disabled.deps'
+  | 'tasks.dispatch.float.label'
+  | 'tasks.dispatch.float.count'
+  | 'tasks.dispatch.float.cancel'
+  | 'tasks.dispatch.float.go'
+  | 'tasks.dispatch.float.busy'
+  | 'tasks.dispatch.warning.title'
+  | 'tasks.dispatch.warning.listLabel'
+  | 'tasks.dispatch.warning.intro'
+  | 'tasks.dispatch.warning.note'
+  | 'tasks.dispatch.warning.continue'
+  | 'tasks.dispatch.warning.cancel'
+  | 'tasks.dispatch.confirm.title'
+  | 'tasks.dispatch.confirm.intro'
+  | 'tasks.dispatch.confirm.presynth'
+  | 'tasks.dispatch.confirm.go'
+  | 'tasks.dispatch.confirm.cancel'
+  | 'tasks.dispatch.error.timeoutTitle'
+  | 'tasks.dispatch.error.failedTitle'
+  | 'tasks.dispatch.error.timeoutBody'
+  | 'tasks.dispatch.error.retry'
+  | 'tasks.dispatch.error.close'
+  | 'tasks.dispatch.announce.entered'
+  | 'tasks.dispatch.announce.exited'
+  | 'tasks.dispatch.announce.dispatched'
   | 'detail.close'
   | 'detail.loading'
   | 'detail.error.title'
@@ -506,6 +537,37 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.status.short.suspended': 'Held',
   'tasks.status.short.skipped': 'Skipped',
   'tasks.status.short.rejected': 'Rejected',
+  'tasks.dispatch.entry': 'Dispatch',
+  'tasks.dispatch.entry.disabledTooltip': 'No dispatchable tasks (unmet dependencies or terminal)',
+  'tasks.dispatch.detail': 'Open task details',
+  'tasks.dispatch.disabled.terminal': 'Terminal task — reopen it before dispatching',
+  'tasks.dispatch.disabled.inProgress': 'Task in progress (one executor per task)',
+  'tasks.dispatch.disabled.suspended': 'Task suspended — resume it before dispatching',
+  'tasks.dispatch.disabled.deps': 'Has unmet dependencies',
+  'tasks.dispatch.float.label': 'Selection actions',
+  'tasks.dispatch.float.count': '{count} selected',
+  'tasks.dispatch.float.cancel': 'Cancel',
+  'tasks.dispatch.float.go': 'Dispatch {count} →',
+  'tasks.dispatch.float.busy': 'Dispatching…',
+  'tasks.dispatch.warning.title': 'Stage artifacts incomplete',
+  'tasks.dispatch.warning.listLabel': 'Missing artifacts',
+  'tasks.dispatch.warning.intro': 'The deterministic pre-dispatch check (code-checked) found missing stage artifacts:',
+  'tasks.dispatch.warning.note': 'The missing list is logged. This warning does not block dispatch — continue after confirming.',
+  'tasks.dispatch.warning.continue': 'Continue dispatch',
+  'tasks.dispatch.warning.cancel': 'Cancel',
+  'tasks.dispatch.confirm.title': 'Confirm dispatch',
+  'tasks.dispatch.confirm.intro': 'About to dispatch the following {count} task(s) (no dependency conflicts; parallel):',
+  'tasks.dispatch.confirm.presynth': 'On dispatch the kernel pre-synthesizes the systemPrompt from three elements: task-type protocol + feature goal/summary + effective preferences; subagent start budget ≤3s.',
+  'tasks.dispatch.confirm.go': 'Dispatch',
+  'tasks.dispatch.confirm.cancel': 'Cancel',
+  'tasks.dispatch.error.timeoutTitle': 'Dispatch timed out',
+  'tasks.dispatch.error.failedTitle': 'Dispatch failed',
+  'tasks.dispatch.error.timeoutBody': 'The dispatch budget expired (>3s): the subagent did not become interactive within budget.',
+  'tasks.dispatch.error.retry': 'Retry',
+  'tasks.dispatch.error.close': 'Close',
+  'tasks.dispatch.announce.entered': 'Entered dispatch selection mode',
+  'tasks.dispatch.announce.exited': 'Exited selection mode (selection cleared)',
+  'tasks.dispatch.announce.dispatched': 'Dispatched {count} task(s)',
   'detail.close': 'Close',
   'detail.loading': 'Loading task details…',
   'detail.error.title': 'Failed to load task details',
