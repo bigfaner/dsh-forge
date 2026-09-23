@@ -232,6 +232,14 @@ export function RegisterWizard(props: RegisterWizardProps) {
 
   const pathInputRef = useRef<HTMLInputElement>(null)
   const discardCancelRef = useRef<HTMLButtonElement | null>(null)
+  // fix-1 defect B (dialog focus contract): where focus returns when the
+  // discard sub-dialog closes WITHOUT discarding — the element the guard
+  // interrupted, else the step-① input, else the card's -1 anchor. Without
+  // a restore the unmounting overlay drops focus to <body>, outside the
+  // card-scoped keydown handler, and the wizard's Esc/mask/✕ go dead for
+  // keyboard users (the second Esc could never re-raise the guard).
+  const wizardCardRef = useRef<HTMLDivElement | null>(null)
+  const discardReturnRef = useRef<HTMLElement | null>(null)
   const probeSeq = useRef(0)
   const externalSeq = useRef(0)
 
@@ -370,10 +378,40 @@ export function RegisterWizard(props: RegisterWizardProps) {
   const requestClose = (): void => {
     if (submitting || discardOpen) return
     if (dirty) {
+      discardReturnRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
       setDiscardOpen(true)
       return
     }
     props.onClose?.()
+  }
+
+  /**
+   * The discard sub-dialog's cancel/dismiss close (fix-1 defect B): close
+   * the overlay AND restore focus INTO the wizard (the interrupted element
+   * when it survived inside the card, else the step-① input, else the
+   * card's -1 anchor) so the card's keydown scope owns the keyboard again —
+   * Esc re-raises the guard, Tab cycles the card, exactly as before the
+   * sub-dialog existed.
+   */
+  const cancelDiscard = (): void => {
+    setDiscardOpen(false)
+    const interrupted = discardReturnRef.current
+    discardReturnRef.current = null
+    if (
+      interrupted !== null
+      && interrupted.isConnected
+      && wizardCardRef.current?.contains(interrupted) === true
+    ) {
+      interrupted.focus()
+      return
+    }
+    if (pathInputRef.current !== null) {
+      pathInputRef.current.focus()
+      return
+    }
+    wizardCardRef.current?.focus()
   }
 
   const closeAfterLocate = (): void => {
@@ -393,6 +431,7 @@ export function RegisterWizard(props: RegisterWizardProps) {
         initialFocus={pathInputRef}
         onDismiss={submitting ? undefined : requestClose}
         dialogDataKey="register-wizard"
+        cardRef={wizardCardRef}
       >
         <DialogHeader
           id={titleId}
@@ -520,14 +559,14 @@ export function RegisterWizard(props: RegisterWizardProps) {
           role="alertdialog"
           ariaLabelledBy={`dsh-forge-wizard-discard-title-${generatedId}`}
           initialFocus={discardCancelRef}
-          onDismiss={() => { setDiscardOpen(false) }}
+          onDismiss={cancelDiscard}
           dialogDataKey="register-wizard-discard"
         >
           <DialogHeader
             id={`dsh-forge-wizard-discard-title-${generatedId}`}
             title={t(props.mode === 'edit' ? 'wizard.discard.editTitle' : 'wizard.discard.title')}
             closeLabel={t('wizard.discard.cancel')}
-            onClose={() => { setDiscardOpen(false) }}
+            onClose={cancelDiscard}
           />
           <DialogBody>
             <p style={{ fontSize: '14px', lineHeight: '22px', margin: '0' }}>{t('wizard.discard.body')}</p>
@@ -538,7 +577,7 @@ export function RegisterWizard(props: RegisterWizardProps) {
               type="button"
               data-dsh-forge-wizard-discard-cancel=""
               style={ghostButtonStyle}
-              onClick={() => { setDiscardOpen(false) }}
+              onClick={cancelDiscard}
             >
               {t('wizard.discard.cancel')}
             </ChromeButton>

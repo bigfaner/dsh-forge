@@ -295,6 +295,55 @@ describe('createTaskBoardStore: read-through + coalesce-then-fetch', () => {
     store.dispose()
   })
 
+  it('fix-1 defect A: a sync landing BESIDE task_updated rides the pending refresh — no pre-refresh re-feed', async () => {
+    vi.useFakeTimers()
+    // The REAL scan batch shape (scanForgeFiles appends a trailing sync to
+    // every outcome): [task_updated(structural), sync]. An immediate
+    // sync-merge publish would re-feed the page off the PRE-refresh board,
+    // whose stale rows "prove alive" the deleted key and consume the page's
+    // structural marker — the dock's error-card leg then never fires.
+    const h = boardBridge([BOARD_V1, BOARD_V1_DELETED])
+    const store = createTaskBoardStore(h.fake, 'p1')
+    await store.loadBoard('p1')
+    store.handleEvents([
+      taskUpdated('demo/1.1', 'structural'),
+      { type: 'sync', projectId: 'p1', sync: { state: 'error', lastScanAt: null, error: 'skipped 1 file' } },
+    ])
+    await vi.advanceTimersByTimeAsync(TASK_BOARD_REFRESH_DEBOUNCE_MS - 1)
+    expect(store.getSnapshot().feed).toBe(0) // no intermediate publish
+    expect(h.calls.getTaskBoard).toBe(1)
+    await vi.advanceTimersByTimeAsync(1)
+    // ONE refresh; its settle carries BOTH the deletion and the merged sync.
+    expect(h.calls.getTaskBoard).toBe(2)
+    const snapshot = store.getSnapshot()
+    expect(snapshot.feed).toBe(1)
+    expect(snapshot.board?.tasks.map(row => row.key)).toEqual(['demo/1.2'])
+    expect(snapshot.board?.sync.state).toBe('error')
+    store.dispose()
+  })
+
+  it('fix-1 defect A: a sync stashed for a read that FAILS still lands (kept board) and never survives to a later read', async () => {
+    vi.useFakeTimers()
+    const h = boardBridge([BOARD_V1])
+    const store = createTaskBoardStore(h.fake, 'p1')
+    await store.loadBoard('p1')
+    h.fake.getTaskBoard = async (): Promise<TaskBoardData> => {
+      throw new Error(JSON.stringify({ code: 'ERR_WORKBENCH_DB', message: 'down' }))
+    }
+    store.handleEvents([
+      taskUpdated('demo/1.1', 'structural'),
+      { type: 'sync', projectId: 'p1', sync: { state: 'error', lastScanAt: null, error: 'watch degraded' } },
+    ])
+    await vi.advanceTimersByTimeAsync(TASK_BOARD_REFRESH_DEBOUNCE_MS)
+    // The failed refresh keeps the last good board + counters, but the
+    // stashed sync is NOT lost (toolbar light moves) nor carried into a
+    // later, fresher read.
+    expect(store.getSnapshot()).toMatchObject({ phase: 'error', revision: 1, feed: 0 })
+    expect(store.getSnapshot().board?.sync.state).toBe('error')
+    expect(store.getSnapshot().board?.tasks).toHaveLength(2)
+    store.dispose()
+  })
+
   it('a failed refresh keeps the last good board and both counters', async () => {
     vi.useFakeTimers()
     const h = boardBridge([BOARD_V1])
@@ -429,6 +478,36 @@ describe('TasksView: the assembled tasks tab', () => {
     vi.useRealTimers()
     // The row is gone, and the open dock turned to its error card (the
     // re-read rejects on the deleted key).
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-task-row="demo/1.1"], [data-dsh-forge-task-card="demo/1.1"]')).toBeNull()
+    })
+    await waitFor(() => { expect($('[data-dsh-forge-detail-error]')).not.toBeNull() })
+  })
+
+  it('回流·结构性 (real scan batch shape, fix-1 defect A): structural + trailing sync still flips the dock to its error card', async () => {
+    const h = boardBridge([BOARD_V1, BOARD_V1_DELETED])
+    installBridge(h.fake)
+    render(<TasksView t={t} projectId="p1" />)
+    await toGrouped()
+    fireEvent.click($('[data-dsh-forge-task-card="demo/1.1"]'))
+    await waitFor(() => {
+      expect($('[data-dsh-forge-task-detail="demo/1.1"]')).not.toBeNull()
+      expect($('[data-dsh-forge-detail-header]').textContent).toContain('first task')
+    })
+    vi.useFakeTimers()
+    // scanForgeFiles appends a trailing sync to EVERY outcome (scan.ts), so
+    // the structural deletion event always arrives beside one. The sync
+    // merge must ride the debounced refresh — an immediate merge re-feeds
+    // the page off the pre-refresh board, the retire loop consumes the
+    // marker on the still-present stale row, and the dock never re-reads.
+    act(() => {
+      h.emit([
+        taskUpdated('demo/1.1', 'structural'),
+        { type: 'sync', projectId: 'p1', sync: { state: 'idle', lastScanAt: '2026-09-23T09:00:00.000Z' } },
+      ])
+    })
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_BOARD_REFRESH_DEBOUNCE_MS) })
+    vi.useRealTimers()
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-task-row="demo/1.1"], [data-dsh-forge-task-card="demo/1.1"]')).toBeNull()
     })

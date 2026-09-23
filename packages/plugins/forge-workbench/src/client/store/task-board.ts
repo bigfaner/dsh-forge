@@ -170,8 +170,15 @@ export function createTaskBoardStore(bridge: WorkbenchIpcBridge, projectId: stri
         // A failed refresh keeps the last good board and both counters (an
         // error is a no-op for consumers — the page's error surface is its
         // own first-load/retry machinery; the store stays subscribed, the
-        // next batch re-arms the retry naturally).
-        publish({ ...snapshot, phase: 'error' })
+        // next batch re-arms the retry naturally). A sync stashed for THIS
+        // read (the fix-1 defect-A deferral / the mid-flight stash) is
+        // merged onto the kept board here and CLEARED — never carried over a
+        // failed read to overwrite a later, fresher DTO.
+        const keptBoard = flightSync === undefined || snapshot.board === undefined
+          ? snapshot.board
+          : { ...snapshot.board, sync: flightSync }
+        flightSync = undefined
+        publish({ ...snapshot, ...(keptBoard === undefined ? {} : { board: keptBoard }), phase: 'error' })
         throw normalizeWorkbenchVerbError(error)
       },
     )
@@ -202,19 +209,35 @@ export function createTaskBoardStore(bridge: WorkbenchIpcBridge, projectId: stri
       // feature_updated: the UF4 page's leg (5.16's note) — not consumed here.
     }
     if (latestSync !== undefined) {
-      // A read in flight would settle this event "backwards" at its DTO —
-      // remember it for the re-apply over the settle.
-      if (inFlight !== undefined) flightSync = latestSync
-      // Merge onto the last good board (a sync event never fetches); before
-      // the first read there is nothing to merge onto — the next read's DTO
-      // carries the state anyway.
-      if (snapshot.board !== undefined) {
-        publish({
-          ...snapshot,
-          board: { ...snapshot.board, sync: latestSync },
-          revision: snapshot.revision + 1,
-          feed: snapshot.feed + 1,
-        })
+      // fix-1 defect A: a sync landing BESIDE task_updated (the real scan
+      // batch shape — every scanForgeFiles outcome appends a trailing sync)
+      // must NOT re-feed the page off the PRE-refresh board while the task
+      // refresh is still debounced. The view answers a feed advance by
+      // re-feeding the page, the page SERVES this (pre-refresh) snapshot,
+      // and the page's structural-marker retire loop then consumes the
+      // deletion marker on a board that still carries the deleted key —
+      // the marker leg that flips the dock to its error card dies. Stash
+      // the sync onto the pending read instead (its settle re-applies it;
+      // newest wins across coalesced batches).
+      if (wantsRefresh || refreshTimer !== undefined) {
+        flightSync = latestSync
+      } else {
+        // A read in flight would settle this event "backwards" at its DTO —
+        // remember it for the re-apply over the settle. (The in-flight join
+        // serves the read's FRESH result, so the immediate merge here cannot
+        // feed the page a pre-refresh board.)
+        if (inFlight !== undefined) flightSync = latestSync
+        // Merge onto the last good board (a sync event never fetches); before
+        // the first read there is nothing to merge onto — the next read's DTO
+        // carries the state anyway.
+        if (snapshot.board !== undefined) {
+          publish({
+            ...snapshot,
+            board: { ...snapshot.board, sync: latestSync },
+            revision: snapshot.revision + 1,
+            feed: snapshot.feed + 1,
+          })
+        }
       }
     }
     if (wantsRefresh) scheduleRefresh()

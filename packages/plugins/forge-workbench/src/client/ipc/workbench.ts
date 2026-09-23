@@ -21,13 +21,16 @@
  *
  *   3. ERROR NORMALIZATION — main-side verb rejections arrive as an Error
  *      whose `.message` is the serialized `{ code, message, detail? }`
- *      envelope (handlers.ts WorkbenchIpcError; tech-design §Error Handling).
- *      `normalizeWorkbenchVerbError` folds every rejection into the plain
- *      {@link WorkbenchVerbError} shape the build-stage mocks already throw,
- *      so a view's code mapping (i18n/errors.ts routing, the
- *      ERR_SNAPSHOT_STALE branch) is form-agnostic from day one. Unknown
- *      shapes fall to the spec's ERR_WORKBENCH_DB 兜底 (Propagation
- *      Strategy: unclassified → generic error card).
+ *      envelope (handlers.ts WorkbenchIpcError; tech-design §Error Handling)
+ *      — over REAL ipcMain.handle, Electron prefixes that message
+ *      (`Error invoking remote method '<channel>': …`), leaving the envelope
+ *      as a trailing substring. `normalizeWorkbenchVerbError` folds every
+ *      rejection (either form) into the plain {@link WorkbenchVerbError}
+ *      shape the build-stage mocks already throw, so a view's code mapping
+ *      (i18n/errors.ts routing, the ERR_SNAPSHOT_STALE branch) is
+ *      form-agnostic from day one. Unknown shapes fall to the spec's
+ *      ERR_WORKBENCH_DB 兜底 (Propagation Strategy: unclassified → generic
+ *      error card).
  */
 import type {
   DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
@@ -123,7 +126,17 @@ function asEnvelope(value: unknown): WorkbenchVerbError | undefined {
  *   ① the plain-object form the build-stage mocks throw (passthrough);
  *   ② the IPC form — an Error whose `.message` is the envelope JSON
  *      (handlers.ts serializes on purpose so the renderer can parse back);
- *   ③ anything else → the spec's ERR_WORKBENCH_DB 兜底.
+ *   ③ the REAL-ipcMain.handle form (fix-1 defect C): Electron re-wraps every
+ *      `ipcMain.handle` rejection renderer-side as
+ *      `Error invoking remote method '<channel>': WorkbenchIpcError: {json}`
+ *      — the envelope survives only as a TRAILING substring of the message,
+ *      so the strict ② parse always throws and every code-keyed renderer
+ *      branch (ERR_PROJECT_EXISTS / ERR_SNAPSHOT_STALE / …) degraded to the
+ *      ERR_WORKBENCH_DB 兜底 over the real chain. Scan each `{` for a
+ *      message SUFFIX that parses into an envelope: the envelope is the
+ *      message's last JSON value, so only its own opening brace can
+ *      whole-parse — earlier braces run into the trailing text and fail.
+ *   ④ anything else → the spec's ERR_WORKBENCH_DB 兜底.
  */
 export function normalizeWorkbenchVerbError(error: unknown): WorkbenchVerbError {
   const plain = asEnvelope(error)
@@ -133,7 +146,19 @@ export function normalizeWorkbenchVerbError(error: unknown): WorkbenchVerbError 
       const parsed = asEnvelope(JSON.parse(error.message))
       if (parsed !== undefined) return parsed
     } catch {
-      // Not an envelope message — the 兜底 below.
+      // Not a whole-message envelope — the trailing-substring leg below.
+    }
+    for (
+      let at = error.message.indexOf('{')
+      ; at !== -1
+      ; at = error.message.indexOf('{', at + 1)
+    ) {
+      try {
+        const parsed = asEnvelope(JSON.parse(error.message.slice(at)))
+        if (parsed !== undefined) return parsed
+      } catch {
+        // Not this candidate `{` — keep scanning toward the envelope.
+      }
     }
   }
   return {

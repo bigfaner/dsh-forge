@@ -14,7 +14,7 @@
  * Styles stay inline (no stylesheet pipeline — Hard Rule): the theme rides
  * the host `--dsw-*` / `--dsh-*` vars exactly like the 5.1 chrome.
  */
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { ChromeButton } from '../../../components/chrome/ChromeButton'
 
 /** ui-design 层叠: dialog overlays z1200 (mask + blur), toasts z1100. */
@@ -134,6 +134,14 @@ export type DialogInitialFocus = React.RefObject<HTMLElement | null>
  * button the `initialFocus` ref addresses), Tab/Shift+Tab trap, Esc/mask
  * dismiss. `onDismiss === undefined` disarms dismissal (the initiating
  * phase — a launch that cannot be cancelled must not look cancellable).
+ *
+ * The card itself is a `tabIndex={-1}` focus anchor and an optional
+ * `cardRef` hands the caller the card element — both exist for the dialog
+ * focus contract's restore leg (fix-1 defect B): a sub-dialog that unmounts
+ * WITHOUT restoring focus strands `document.activeElement` on `<body>`,
+ * outside this card's keydown scope, so the parent dialog's Esc/mask/✕
+ * handlers go keyboard-dead. (-1 keeps the anchor OUT of the trap's cycle
+ * set — focusablesOf excludes it.)
  */
 export function DialogFrame(props: {
   role: 'dialog' | 'alertdialog'
@@ -141,9 +149,19 @@ export function DialogFrame(props: {
   initialFocus?: DialogInitialFocus
   onDismiss?: (() => void) | undefined
   dialogDataKey?: string | undefined
+  /** The caller's mutable card ref (the focus-restore anchor above). */
+  cardRef?: RefObject<HTMLDivElement | null> | ((element: HTMLDivElement | null) => void) | undefined
   children: ReactNode
 }) {
-  const cardRef = useRef<HTMLDivElement>(null)
+  const localCardRef = useRef<HTMLDivElement | null>(null)
+  const setCardRef = (element: HTMLDivElement | null): void => {
+    localCardRef.current = element
+    if (typeof props.cardRef === 'function') {
+      props.cardRef(element)
+    } else if (props.cardRef !== undefined && props.cardRef !== null) {
+      ;(props.cardRef as { current: HTMLDivElement | null }).current = element
+    }
+  }
 
   useEffect(() => {
     props.initialFocus?.current?.focus()
@@ -155,8 +173,8 @@ export function DialogFrame(props: {
       props.onDismiss()
       return
     }
-    if (event.key !== 'Tab' || cardRef.current === null) return
-    const focusables = focusablesOf(cardRef.current)
+    if (event.key !== 'Tab' || localCardRef.current === null) return
+    const focusables = focusablesOf(localCardRef.current)
     if (focusables.length === 0) return
     const first = focusables[0] as HTMLElement
     const last = focusables[focusables.length - 1] as HTMLElement
@@ -178,11 +196,12 @@ export function DialogFrame(props: {
       }}
     >
       <div
-        ref={cardRef}
+        ref={setCardRef}
         role={props.role}
         aria-modal="true"
         aria-labelledby={props.ariaLabelledBy}
         data-dsh-forge-dialog={props.dialogDataKey}
+        tabIndex={-1}
         style={cardStyle}
         onKeyDown={onKeyDown}
       >

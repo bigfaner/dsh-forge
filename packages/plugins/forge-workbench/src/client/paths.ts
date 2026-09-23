@@ -7,12 +7,16 @@
  */
 
 /**
- * Normalize a path for equality checks: trim whitespace and strip trailing
- * `/` or `\` separators (a lone root separator survives).
+ * Normalize a path for equality checks: trim whitespace, fold `\` to `/`
+ * (both separator spellings denote the same directory — the registry stores
+ * the main-side `normalizeRegisteredPath` form, forward slashes, while a
+ * Windows user types backslashes; without folding the wizard's
+ * existingProject lookup never finds the stored row), and strip trailing
+ * separators (a lone root separator survives).
  */
 export function normalizePathForCompare(path: string): string {
-  let value = path.trim()
-  while (value.length > 1 && (value.endsWith('/') || value.endsWith('\\'))) {
+  let value = path.trim().replaceAll('\\', '/')
+  while (value.length > 1 && value.endsWith('/')) {
     value = value.slice(0, -1)
   }
   return value

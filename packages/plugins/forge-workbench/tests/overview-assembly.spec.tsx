@@ -255,6 +255,24 @@ describe('the IPC faces: 1:1 verb mapping with QUALIFIED args + normalized rejec
         return verbs.registerProject({ codeRoot: 'Z:\\dup', docLocationType: 'in_repo' })
       })).rejects.toMatchObject({ code: 'ERR_PROJECT_EXISTS' })
   })
+
+  it('fix-1 defect C: the wizard\'s ERR_PROJECT_EXISTS branch stays reachable over the real-IPC wire form', async () => {
+    // Over a real ipcMain.handle, Electron 44 re-wraps the rejection as
+    // `Error invoking remote method '<channel>': WorkbenchIpcError: {json}` —
+    // the envelope only survives as a trailing substring of the message
+    // (experimentally verified on this repo's chain, T-test-run). The
+    // code-keyed [data-dsh-forge-wizard-exists] submit face rides exactly
+    // this leg; with the strict whole-message parse it degraded to
+    // ERR_WORKBENCH_DB and the face was unreachable over real IPC.
+    const mainSide = new Error(JSON.stringify({ code: 'ERR_PROJECT_EXISTS', message: 'code root already registered' }))
+    mainSide.name = 'WorkbenchIpcError'
+    const registerProject = vi.fn(async (): Promise<Project> => {
+      throw new Error(`Error invoking remote method 'dsh-forge:workbench-register-project': ${String(mainSide)}`)
+    })
+    const verbs = createIpcRegisterWizardVerbs(installBridge({ registerProject }))
+    await expect(verbs.registerProject({ codeRoot: 'Z:\\dup', docLocationType: 'in_repo' }))
+      .rejects.toMatchObject({ code: 'ERR_PROJECT_EXISTS' })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -452,7 +470,7 @@ describe('shell integration: the overview family over the real bridge', () => {
     // The REAL verb fired with the built RegisterProjectInput…
     await waitFor(() => { expect(registry.calls.registerProject.length).toBe(1) })
     expect(registry.calls.registerProject).toEqual([
-      { codeRoot: 'Z:\\brand\\new', docLocationType: 'in_repo', docLocationPath: null },
+      { codeRoot: 'Z:/brand/new', docLocationType: 'in_repo', docLocationPath: null },
     ])
     // …the registry refreshed (the new card is immediately visible) and the
     // toast names the project + carries the 提示可切换 guidance (AC4).

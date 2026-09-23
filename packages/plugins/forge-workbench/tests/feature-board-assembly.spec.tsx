@@ -112,6 +112,55 @@ describe('normalizeWorkbenchVerbError: every rejection folds to the plain envelo
       .toEqual({ code: 'ERR_PROJECT_NOT_FOUND', message: 'gone', detail: 'x' })
   })
 
+  it('fix-1 defect C: the REAL ipcMain.handle form — Electron prefixes the message, the envelope survives as a trailing substring', () => {
+    // Over a real ipcMain.handle Electron 44 re-wraps the rejection
+    // renderer-side as `Error invoking remote method '<channel>': <name>:
+    // <message>` (experimentally verified on this repo's chain, T-test-run).
+    // handlers.ts rejects WorkbenchIpcError (name='WorkbenchIpcError',
+    // message = the envelope JSON), so the strict whole-message parse can
+    // never succeed over the real hop — the trailing-substring scan below
+    // is what keeps every code-keyed renderer branch reachable.
+    const wire = (channel: string, envelope: { code: string; message: string; detail?: string }): Error => {
+      const mainSide = new Error(JSON.stringify(envelope))
+      mainSide.name = 'WorkbenchIpcError'
+      return new Error(`Error invoking remote method '${channel}': ${String(mainSide)}`)
+    }
+    const wrapped = wire('dsh-forge:workbench-register-project', {
+      code: 'ERR_PROJECT_EXISTS',
+      message: 'code root already registered',
+    })
+    // The observed wire shape, not the idealized one:
+    expect(wrapped.message).toBe(
+      'Error invoking remote method \'dsh-forge:workbench-register-project\': '
+      + 'WorkbenchIpcError: {"code":"ERR_PROJECT_EXISTS","message":"code root already registered"}',
+    )
+    expect(normalizeWorkbenchVerbError(wrapped))
+      .toEqual({ code: 'ERR_PROJECT_EXISTS', message: 'code root already registered' })
+    // The systemic siblings (each had a dead renderer branch over real IPC):
+    expect(normalizeWorkbenchVerbError(wire('dsh-forge:workbench-read-feature-doc', {
+      code: 'ERR_SNAPSHOT_STALE', message: 'stale',
+    }))).toEqual({ code: 'ERR_SNAPSHOT_STALE', message: 'stale' })
+    expect(normalizeWorkbenchVerbError(wire('dsh-forge:workbench-update-project', {
+      code: 'ERR_PROJECT_NOT_FOUND', message: 'gone', detail: 'x',
+    }))).toEqual({ code: 'ERR_PROJECT_NOT_FOUND', message: 'gone', detail: 'x' })
+  })
+
+  it('fix-1 defect C: the scan ignores non-envelope JSON earlier in the message', () => {
+    const rejection = new Error(
+      'Error invoking remote method \'dsh-forge:workbench-register-project\': '
+      + 'WorkbenchIpcError: {"code":"ERR_PROJECT_EXISTS","message":"root {dup} taken"}',
+    )
+    // The {dup} brace inside the envelope\'s message string is not a
+    // candidate start; only the envelope\'s own opening brace whole-parses.
+    expect(normalizeWorkbenchVerbError(rejection))
+      .toEqual({ code: 'ERR_PROJECT_EXISTS', message: 'root {dup} taken' })
+    // A non-envelope JSON object earlier in the text never parses (trailing
+    // text after it) and never masks the real envelope:
+    expect(normalizeWorkbenchVerbError(new Error(
+      'junk {"not":"an envelope"} then WorkbenchIpcError: {"code":"ERR_PLUGIN_MANDATORY","message":"no"}',
+    ))).toEqual({ code: 'ERR_PLUGIN_MANDATORY', message: 'no' })
+  })
+
   it('unknown shapes fall to the spec ERR_WORKBENCH_DB 兜底', () => {
     expect(normalizeWorkbenchVerbError(new Error('plain boom')))
       .toEqual({ code: 'ERR_WORKBENCH_DB', message: 'plain boom' })

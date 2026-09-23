@@ -127,9 +127,10 @@ afterEach(() => cleanup())
 // ---------------------------------------------------------------------------
 
 describe('paths primitives', () => {
-  it('normalizePathForCompare trims and strips trailing separators (root survives)', () => {
-    expect(normalizePathForCompare('  Z:\\a\\b\\ ')).toBe('Z:\\a\\b')
-    expect(normalizePathForCompare('Z:\\a\\b//')).toBe('Z:\\a\\b')
+  it('normalizePathForCompare trims, folds separators, and strips trailing separators (root survives)', () => {
+    expect(normalizePathForCompare('  Z:\\a\\b\\ ')).toBe('Z:/a/b')
+    expect(normalizePathForCompare('Z:\\a\\b//')).toBe('Z:/a/b')
+    expect(normalizePathForCompare('Z:/a/b/')).toBe('Z:/a/b')
     expect(normalizePathForCompare('/')).toBe('/')
     expect(normalizePathForCompare('')).toBe('')
   })
@@ -137,6 +138,10 @@ describe('paths primitives', () => {
   it('samePath: separator-spelling variants equal, different tails differ', () => {
     expect(samePath('Z:\\a\\b', 'Z:\\a\\b\\')).toBe(true)
     expect(samePath('Z:\\a\\b', ' Z:\\a\\b ')).toBe(true)
+    // fix-1 defect C (locate leg): the registry stores the main-side
+    // normalized form (forward slashes); a typed backslash path must still
+    // find the row or the ERR_PROJECT_EXISTS 定位 CTA never renders.
+    expect(samePath('Z:/a/b', 'Z:\\a\\b')).toBe(true)
     expect(samePath('Z:\\a\\b', 'Z:\\a\\c')).toBe(false)
     expect(samePath('', '  ')).toBe(true)
   })
@@ -151,8 +156,10 @@ describe('paths primitives', () => {
 
 describe('draft model: buildRegisterInput / buildProjectPatch / dirtiness', () => {
   it('buildRegisterInput: in_repo nulls the path; external trims it; empty name = absent key (缺省 dirname)', () => {
+    // paths.ts folds separators on the way out (the registry's stored
+    // dialect); the main-side chain re-normalizes regardless.
     const input = buildRegisterInput({ ...EMPTY_WIZARD_DRAFT, codeRoot: ' Z:\\project\\demo ' })
-    expect(input).toEqual({ codeRoot: 'Z:\\project\\demo', docLocationType: 'in_repo', docLocationPath: null })
+    expect(input).toEqual({ codeRoot: 'Z:/project/demo', docLocationType: 'in_repo', docLocationPath: null })
     expect('displayName' in input).toBe(false)
 
     const external = buildRegisterInput({
@@ -163,9 +170,9 @@ describe('draft model: buildRegisterInput / buildProjectPatch / dirtiness', () =
       displayName: '  Demo  ',
     })
     expect(external).toEqual({
-      codeRoot: 'Z:\\project\\demo',
+      codeRoot: 'Z:/project/demo',
       docLocationType: 'external',
-      docLocationPath: 'Z:\\docs\\demo',
+      docLocationPath: 'Z:/docs/demo',
       displayName: 'Demo',
     })
   })
@@ -179,7 +186,7 @@ describe('draft model: buildRegisterInput / buildProjectPatch / dirtiness', () =
       docLocationType: 'external',
       docLocationPath: ' Z:\\docs\\demo\\ ',
     })
-    expect(repoint).toEqual({ docLocationType: 'external', docLocationPath: 'Z:\\docs\\demo' })
+    expect(repoint).toEqual({ docLocationType: 'external', docLocationPath: 'Z:/docs/demo' })
     expect('displayName' in repoint).toBe(false)
   })
 
@@ -236,12 +243,12 @@ describe('RegisterWizard: the three-step machine', () => {
 
     const result = (onClose.mock.calls[0] as [{ project: Project; action: 'register' | 'update' }])[0]
     expect(result.action).toBe('register')
-    expect(result.project.codeRoot).toBe(MOCK_WIZARD_OK_ROOT)
+    expect(result.project.codeRoot).toBe('Z:/project/demo') // the registry dialect (paths.ts fold)
     expect(result.project.displayName).toBe('demo') // 缺省 = codeRoot 目录名
     expect(result.project.docLocationPath).toBeNull()
     expect(face.registerProject).toHaveBeenCalledTimes(1)
     expect(face.registerProject).toHaveBeenCalledWith({
-      codeRoot: MOCK_WIZARD_OK_ROOT,
+      codeRoot: 'Z:/project/demo',
       docLocationType: 'in_repo',
       docLocationPath: null,
     })
@@ -457,8 +464,8 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     fireEvent.click(finish())
     await waitFor(() => { expect(external.face.registerProject).toHaveBeenCalledTimes(1) })
     expect(external.face.authorizeExternalDocPath).toHaveBeenCalledTimes(1)
-    expect(external.face.authorizeExternalDocPath).toHaveBeenCalledWith(MOCK_WIZARD_EXTERNAL_OK)
-    expect(external.face.registerProject.mock.calls[0][0].docLocationPath).toBe(MOCK_WIZARD_EXTERNAL_OK)
+    expect(external.face.authorizeExternalDocPath).toHaveBeenCalledWith('Z:/docs/demo')
+    expect(external.face.registerProject.mock.calls[0][0].docLocationPath).toBe('Z:/docs/demo')
     expect(
       external.face.authorizeExternalDocPath.mock.invocationCallOrder[0],
       'the authorization record precedes the register verb (the validation chain reads it)',
@@ -508,6 +515,26 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     expect(onLocate).toHaveBeenCalledWith(ACTIVE_PROJECT)
     expect(onClose).toHaveBeenCalledTimes(1) // no result — a cancel-shaped close
     expect((onClose.mock.calls[0] as [unknown])[0]).toBeUndefined()
+  })
+
+  it('fix-1 defect C (locate leg): a FORWARD-slash registry row is found when the user types BACKSLASHES — the 定位 CTA renders', async () => {
+    // The real registry stores the main-side normalizeRegisteredPath form
+    // (resolve + forward slashes); a Windows user types backslashes. Before
+    // the separator fold the existingProject lookup missed the stored row
+    // and the ERR_PROJECT_EXISTS 定位 CTA never rendered (the e2e step-2 leg).
+    const registered: Project = { ...ACTIVE_PROJECT, codeRoot: 'Z:/reg/already' }
+    const onLocate = vi.fn()
+    const face = makeFace({ ...MOCK_WORKBENCH_STATE, projects: [registered] })
+    renderWizard({ projects: [registered], onLocate }, face)
+    await fillStep1('Z:\\reg\\already')
+    fireEvent.click(next())
+    fireEvent.click(next())
+    // The face's mock registry holds the SAME forward-slash row, so the
+    // rejection is the UNIQUE(code_root) semantics, not a stub.
+    fireEvent.click(finish())
+    await waitFor(() => { expect($('[data-dsh-forge-wizard-exists]')).not.toBeNull() })
+    fireEvent.click($('[data-dsh-forge-wizard-locate]'))
+    expect(onLocate).toHaveBeenCalledWith(registered)
   })
 
   it('generic verb failure: the failed line carries the serialized message', async () => {
@@ -575,8 +602,10 @@ describe('RegisterWizard: edit mode (重新指向)', () => {
     fireEvent.click(finish())
     await waitFor(() => { expect(face.updateProject).toHaveBeenCalledTimes(1) })
     expect(face.authorizeExternalDocPath).toHaveBeenCalledTimes(1)
-    expect(face.authorizeExternalDocPath).toHaveBeenCalledWith('Z:\\docs\\relocated')
-    expect(face.updateProject.mock.calls[0][1].docLocationPath).toBe('Z:\\docs\\relocated')
+    // The client folds separators before sending (paths.ts — the registry's
+    // stored dialect); the main-side chain re-normalizes regardless.
+    expect(face.authorizeExternalDocPath).toHaveBeenCalledWith('Z:/docs/relocated')
+    expect(face.updateProject.mock.calls[0][1].docLocationPath).toBe('Z:/docs/relocated')
     expect(face.authorizeExternalDocPath.mock.invocationCallOrder[0])
       .toBeLessThan(face.updateProject.mock.invocationCallOrder[0])
   })
@@ -657,6 +686,43 @@ describe('RegisterWizard: dialog discipline', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(pathInput().value).toBe(MOCK_WIZARD_OK_ROOT) // state intact
     fireEvent.keyDown(card(), { key: 'Escape' })
+    fireEvent.click($('[data-dsh-forge-wizard-discard-confirm]'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('fix-1 defect B: discard-cancel restores focus INTO the wizard — a real focused-element second Esc re-raises the guard', () => {
+    // Keyboard-real discipline: every keyDown is dispatched on the element a
+    // REAL keyboard press would target (document.activeElement), never on the
+    // card itself — the sibling tests' card-targeted keyDown masked the focus
+    // contract this regression pins.
+    const { onClose } = renderWizard()
+    fireEvent.change(pathInput(), { target: { value: MOCK_WIZARD_OK_ROOT } })
+    // Focus sits in the card (mount focused the step-① input); the raise.
+    expect(card().contains(document.activeElement)).toBe(true)
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(document.querySelector('[data-dsh-forge-dialog="register-wizard-discard"]')).not.toBeNull()
+
+    // Cancel leg ①: the cancel BUTTON. Focus must return INTO the wizard
+    // card (pre-fix it fell to <body> and the card's keydown scope died).
+    fireEvent.click($('[data-dsh-forge-wizard-discard-cancel]'))
+    expect(document.querySelector('[data-dsh-forge-dialog="register-wizard-discard"]')).toBeNull()
+    expect(card().contains(document.activeElement), 'cancel returns focus into the wizard card')
+      .toBe(true)
+    expect(document.activeElement).toBe(pathInput())
+
+    // The second Esc — dispatched on the FOCUSED element, exactly as a real
+    // keyboard / Playwright press does — re-raises the guard (确认放弃 leg
+    // stays reachable).
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(document.querySelector('[data-dsh-forge-dialog="register-wizard-discard"]')).not.toBeNull()
+
+    // Cancel leg ②: the sub-dialog's OWN Esc/onDismiss path restores too.
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(document.querySelector('[data-dsh-forge-dialog="register-wizard-discard"]')).toBeNull()
+    expect(card().contains(document.activeElement)).toBe(true)
+
+    // And the re-raised + confirm leg closes the wizard exactly once.
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
     fireEvent.click($('[data-dsh-forge-wizard-discard-confirm]'))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -768,7 +834,7 @@ describe('createMockRegisterWizardFace: the verb twin', () => {
       docLocationType: 'in_repo',
     })
     expect(created.displayName).toBe('demo')
-    expect(created.codeRoot).toBe(MOCK_WIZARD_OK_ROOT)
+    expect(created.codeRoot).toBe('Z:/project/demo') // stored in the registry dialect (paths.ts fold)
     expect(created.createdAt).toBe(MOCK_NOW)
     const second = await face.registerProject({ codeRoot: 'Z:\\other', docLocationType: 'in_repo', displayName: 'Other' })
     expect(second.id).not.toBe(created.id)
