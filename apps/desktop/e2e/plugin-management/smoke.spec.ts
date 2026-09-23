@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, expectRosterLacks, sha256File } from '../helpers/plugins.ts'
+import { HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, sha256File } from '../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
 import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from '../tests/m2/helpers/restart-app.ts'
@@ -53,7 +53,8 @@ test('plugin-management journey smoke: two-tier census → disable (confirm, ove
       await page.locator('[data-dsh-forge-plugin-confirm]').click()
       await expect(helloRow).toHaveAttribute('data-enabled', 'false', { timeout: 15_000 })
       expect(readOverlay(overlayPath), '覆盖文件恰含目标第三方名').toEqual({ disabled: [HELLO_WORLD] })
-      await expectRosterLacks(shell, HELLO_WORLD)
+      // 注:禁用只写 overlay,boot roster(靴期装配图,会话内静态)的折除
+      // 收口在重启 — 会话内 roster 面不可变(产品规则);停用态由上行持有。
       await expectRosterContains(shell, SAMPLE_B)
       await expect(page.locator(`[data-dsh-forge-plugin-row="${SAMPLE_B}"]`), '对照第三方不受影响').toHaveAttribute('data-enabled', 'true')
 
@@ -80,7 +81,7 @@ test('plugin-management journey smoke: two-tier census → disable (confirm, ove
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

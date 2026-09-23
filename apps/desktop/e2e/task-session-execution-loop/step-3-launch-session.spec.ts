@@ -154,7 +154,7 @@ test('step-3/no-prompt-disabled [@web-e2e @journey task-session-execution-loop]:
       const trigger = page.locator(`[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
       await expect(trigger, 'probe must reach unavailable (stub CLI failed)').toHaveAttribute('data-probe', 'unavailable', { timeout: 20_000 })
       await expect(trigger, '入口禁用(前置不满足,UF5 校验映射)').toBeDisabled()
-      await expect(trigger, '原因说明 tooltip = launch.reason.noPrompt(双语任一)').toHaveTitle(new RegExp(`${zh['launch.reason.noPrompt'].replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${en['launch.reason.noPrompt'].replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+      await expect(trigger, '原因说明 tooltip = launch.reason.noPrompt(双语任一)').toHaveAttribute('title', new RegExp(`${zh['launch.reason.noPrompt'].replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${en['launch.reason.noPrompt'].replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
 
       // 尝试点击(force,禁用态)不得弹任何错误/确认面。
       await trigger.click({ force: true }).catch(() => {})

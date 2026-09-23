@@ -107,7 +107,7 @@ test('step-1/success [@web-e2e @journey dual-form-consistency]: terminal change 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -155,7 +155,7 @@ test('step-1/board-open-change [@web-e2e @journey dual-form-consistency]: arriva
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -230,7 +230,7 @@ test('step-1/perception-chain-error [@web-e2e @journey dual-form-consistency]: s
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

@@ -65,14 +65,17 @@ export const normalizeDoc = (text: string): string => text.replaceAll(/\s+/g, ''
 /**
  * The fixture file's TEXT projection for the comparison(SC4 同款):markdown
  * SYNTAX tokens that render as structure with no text content — thematic
- * breaks (`---`, the manifest frontmatter fences) and heading `#` markers —
- * drop out of the source side exactly as the renderer drops them.
+ * breaks (`---`, the manifest frontmatter fences), heading `#` markers, and
+ * link `[label](url)` hrefs (the guarded renderer keeps the label text and
+ * carries the URL on the span title — MarkdownView 安全规则 4) — drop out of
+ * the source side exactly as the renderer drops them.
  */
 export function fixtureTextProjection(markdown: string): string {
   return normalizeDoc(markdown
     .split('\n')
     .filter(line => line.trim() !== '---')
     .map(line => line.replace(/^\s{0,3}#{1,6}\s+/, ''))
+    .map(line => line.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'))
     .join('\n'))
 }
 

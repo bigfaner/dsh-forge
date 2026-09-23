@@ -11,7 +11,7 @@ import { FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball } from '../helpers/plu
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import type { WrittenForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
-import type { GeneratedTask, GeneratedTaskSet } from '../fixtures/task-generator.ts'
+import type { GeneratedTaskSet } from '../fixtures/task-generator.ts'
 import { materializeStubCli } from '../fixtures/stubs/cli.ts'
 import type { StubCli } from '../fixtures/stubs/cli.ts'
 import { createFixtureMutator } from '../tests/m2/helpers/file-mutate.ts'
@@ -22,11 +22,6 @@ import {
   boardStatusEntries, boardSourceOf, bridgeRecordSessionLink, detailLinksOf, expectIndexSerializerRoundTrip,
   expectStatusMapsEqual, fileStatusMap, measureReflow, pickTaskKey, readTerminalStatuses, workbenchBundles,
 } from './helpers.ts'
-
-/** file-mutate writeRecord 默认记录常量镜像(终态模型渲染需逐字一致)。 */
-const RECORD_STAMP_MIRROR = '2026-09-23 12:00'
-const RECORD_SUMMARY_MIRROR = 'stub 会话侧变更:claim + 状态推进(fixture 记录)'
-type MutableTask = { -readonly [K in keyof GeneratedTask]: GeneratedTask[K] }
 
 test('smoke/happy-path [@web-e2e @journey dual-form-consistency]: terminal change → session change → terminal agreement → SC7 integrity → link history', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
@@ -84,19 +79,14 @@ test('smoke/happy-path [@web-e2e @journey dual-form-consistency]: terminal chang
         expectIndexSerializerRoundTrip(slug, path)
       }
       expectStatusMapsEqual('smoke·step4 文件直读 vs 数据面', fileStatusMap(project), new Map(await boardStatusEntries(page, projectId)))
-      const finalModel: GeneratedTaskSet = structuredClone(set)
-      const twinOf = (key: string): MutableTask => {
-        const slug = key.split('/')[0] ?? ''
-        const localId = key.split('/')[1] ?? ''
-        const task = finalModel.features.find(row => row.slug === slug)?.tasks.find(row => row.localId === localId)
-        if (task === undefined) throw new Error(`smoke: twin task missing for ${key}`)
-        return task as MutableTask
-      }
-      twinOf(terminalSide.key).status = t1
-      const sessionTwin = twinOf(sessionSide.key)
-      sessionTwin.record = { actor: `session:${sessionId}`, summary: RECORD_SUMMARY_MIRROR, completed: RECORD_STAMP_MIRROR }
-      sessionTwin.status = s1
-      const scratchRender = writeForgeProject(finalModel, { codeRoot: join(root, 'scratch-final-render') })
+      // 终态模型渲染 = 全新渲染 + 以同一变更器重放本腿的全部 sanctioned 写
+      // (mutateStatus 只重写 index.json;任务 .md 描述体不随状态翻写 —— 6.1
+      // writer 语义,镜像模型重渲染会漂移)。
+      const scratchRender = writeForgeProject(set, { codeRoot: join(root, 'scratch-final-render') })
+      const oracleMutator = createFixtureMutator(set, scratchRender)
+      oracleMutator.mutateStatus(terminalSide.key, t1)
+      oracleMutator.writeRecord(sessionSide.key, `session:${sessionId}`)
+      oracleMutator.mutateStatus(sessionSide.key, s1)
       assertTreesIdentical('smoke·step4 docs 树 vs 终态模型渲染', hashTree(join(scratchRender.codeRoot, 'docs')), hashTree(join(project.codeRoot, 'docs')))
       const stubArtifacts = process.platform === 'win32' ? ['prompt.js', 'task.js'] : []
       expect(readdirSync(project.codeRoot).sort(), 'smoke·step4 项目根零工作台自有产物').toEqual(['.forge', 'docs', ...stubArtifacts].sort())
@@ -118,7 +108,7 @@ test('smoke/happy-path [@web-e2e @journey dual-form-consistency]: terminal chang
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

@@ -117,9 +117,14 @@ export async function switchToWorkbench(page: Page): Promise<void> {
   const shellPanel = page.locator('[data-dsh-forge-shell]')
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await workbenchRow(page).click()
-    await expect(shellPanel).toBeVisible({ timeout: 10_000 })
-    await page.waitForTimeout(2_500)
-    if (await shellPanel.count() > 0) return
+    // The boot bounce can also land BETWEEN the click and the mount (the panel
+    // never appears — selectPanel(null) wipes the click's selection); that
+    // variant retries like the mounted-then-vanished one instead of failing.
+    const mounted = await shellPanel.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false)
+    if (mounted) {
+      await page.waitForTimeout(2_500)
+      if (await shellPanel.count() > 0) return
+    }
   }
   throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
 }

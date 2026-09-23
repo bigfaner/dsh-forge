@@ -99,7 +99,7 @@ test('step-2/success [@web-e2e @journey multi-project-management]: readable forg
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -168,7 +168,7 @@ test('step-2/no-forge-data [@web-e2e @journey multi-project-management]: forge-l
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -226,7 +226,7 @@ test('step-2/duplicate-registration [@web-e2e @journey multi-project-management]
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -290,7 +290,7 @@ test('step-2/code-root-unreadable [@web-e2e @journey multi-project-management]: 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

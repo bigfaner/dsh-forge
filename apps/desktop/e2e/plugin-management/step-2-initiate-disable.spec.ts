@@ -88,7 +88,7 @@ test('step-2/success [@web-e2e @journey plugin-management]: disable click opens 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -150,19 +150,22 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
       // Output/State:仅该插件名入 disabled 集;会话本体与挂接关系保持。
       await expect(helloRow).toHaveAttribute('data-enabled', 'false', { timeout: 15_000 })
       expect(readOverlay(overlayPath), '覆盖文件恰含目标第三方名').toEqual({ disabled: [HELLO_WORLD] })
-      // 看板仍渲染(dock 开着回任务页即证)+ 挂接行仍 active(存续面;退出
-      // 说明面未落地 —— 见头注 divergence note)。
+      // 看板仍渲染 + 挂接关系保持(存续面;退出说明面未落地 —— 见头注
+      // divergence note)。工作台 tab 往返会重挂视图、dock 选择不复原 ——
+      // 契约面是「会话本体与挂接关系保持」:重开 dock 断言挂接行仍 active。
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
-      await expect(dock, '任务 dock 存续').toBeVisible()
-      await expect(linkRow.locator('[data-dsh-forge-badge="link:active"]'), '挂接行仍 active(会话本体不中断代理)').toBeVisible()
+      await page.locator(`[data-dsh-forge-node-card="${taskKey1}"]`).click()
+      await expect(dock, '任务 dock 可再开(会话使用面存续)').toBeVisible({ timeout: 15_000 })
+      await expect(linkRow.locator('[data-dsh-forge-badge="link:active"]'), '挂接行仍 active(会话本体不中断代理)').toBeVisible({ timeout: 15_000 })
       // 换任务再切回 → 全新 getTaskDetail 读数同样保留挂接行。
       await page.locator(`[data-dsh-forge-node-card="${feature1.slug}/${task2.localId}"]`).click()
       await expect(page.locator(`[data-dsh-forge-task-detail="${feature1.slug}/${task2.localId}"]`)).toBeVisible({ timeout: 15_000 })
       await page.locator(`[data-dsh-forge-node-card="${taskKey1}"]`).click()
       await expect(page.locator('[data-dsh-forge-detail-link="session-pm2-in-0001"] [data-dsh-forge-badge="link:active"]'))
         .toBeVisible({ timeout: 15_000 })
-      // 对照:另一第三方不受影响(「仅该插件」收敛)。
+      // 对照:另一第三方不受影响(「仅该插件」收敛)— 插件行在概览页。
+      await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
       await expect(page.locator(`[data-dsh-forge-plugin-row="${SAMPLE_B}"]`)).toHaveAttribute('data-enabled', 'true')
 
       expect(shell.pageErrors, `renderer pageerrors: ${shell.pageErrors.join(' | ')}`).toEqual([])
@@ -171,7 +174,7 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

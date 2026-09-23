@@ -110,7 +110,7 @@ test('step-3/success [@web-e2e @journey dual-form-consistency]: alternating term
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -160,7 +160,7 @@ test('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consiste
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -208,7 +208,7 @@ test('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consiste
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -286,7 +286,7 @@ test('step-3/structural-change-flowback [@web-e2e @journey dual-form-consistency
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

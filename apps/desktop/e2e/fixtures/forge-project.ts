@@ -154,7 +154,7 @@ export function writeForgeProject(set: GeneratedTaskSet, location: ForgeProjectL
 
 /** Remove a written project tree (Hard Rule: 测试后清理). */
 export function removeForgeProject(root: string): void {
-  rmSync(root, { recursive: true, force: true })
+  rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
 }
 
 /**

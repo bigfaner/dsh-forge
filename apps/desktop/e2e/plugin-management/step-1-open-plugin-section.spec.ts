@@ -24,7 +24,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
-  HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, expectRosterLacks, readProfileBundles, sha256File,
+  FORGE_WORKBENCH, HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, expectRosterLacks, readProfileBundles,
+  sha256File,
 } from '../helpers/plugins.ts'
 import {
   MANDATORY_NAMES, PROFILE_ALL, expectTwoTierSectionCensus, journeyBundles, journeyStageTarballs,
@@ -57,7 +58,9 @@ test('step-1/success [@web-e2e @journey plugin-management]: the section renders 
       await expectTwoTierSectionCensus(page, [HELLO_WORLD, '@dsh-forge/plugin-hello-world-sample-b'])
 
       // 装置面自证(也验证 sample-b 克隆配方):两第三方注入共存,零 pageerror。
-      for (const name of MANDATORY_NAMES) await expectRosterContains(shell, name)
+      // @deepseek-ai/* 必备不经 boot roster 面(读取面只含 @dsh-forge/*)—
+      // 以 profile 清单证全量;forge-workbench 双面在场。
+      await expectRosterContains(shell, FORGE_WORKBENCH)
       await expectRosterContains(shell, HELLO_WORLD)
       await expectRosterContains(shell, '@dsh-forge/plugin-hello-world-sample-b')
       expect(readProfileBundles(shell.profileDir), 'profile 清单 = 测试 profile 全量(5 项)').toEqual([...PROFILE_ALL])
@@ -68,7 +71,7 @@ test('step-1/success [@web-e2e @journey plugin-management]: the section renders 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -115,7 +118,7 @@ test('step-1/mandatory-no-disable [@web-e2e @journey plugin-management]: mandato
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -144,7 +147,10 @@ test('step-1/overlay-invalid [@web-e2e @journey plugin-management]: preset manda
         const { page } = shell
         // 启动不阻断;清单态赢:必备全载,hello-world 被-held-out,违规条目
         // 仅内存剔除 → 同文件里的第三方名仍生效(sample-b 仍装配 —— 精确清洗)。
-        for (const name of MANDATORY_NAMES) await expectRosterContains(shell, name)
+        // @deepseek-ai/* 必备以 profile 清单证全量(roster 面只含 @dsh-forge/*)。
+        await expectRosterContains(shell, FORGE_WORKBENCH)
+        expect(readProfileBundles(shell.profileDir), '违规条目仅内存剔除:必备全量,hello-world 折除,仅剩对照')
+          .toEqual([...MANDATORY_NAMES, '@dsh-forge/plugin-hello-world-sample-b'])
         await expectRosterLacks(shell, HELLO_WORLD)
         await expectRosterContains(shell, '@dsh-forge/plugin-hello-world-sample-b')
 
@@ -174,7 +180,9 @@ test('step-1/overlay-invalid [@web-e2e @journey plugin-management]: preset manda
       try {
         const { page } = shell
         // 启动不阻断;空 overlay 重建 → 全量 5 包装配。
-        for (const name of MANDATORY_NAMES) await expectRosterContains(shell, name)
+        // @deepseek-ai/* 必备以 profile 清单证全量(roster 面只含 @dsh-forge/*)。
+        await expectRosterContains(shell, FORGE_WORKBENCH)
+        expect(readProfileBundles(shell.profileDir), '空 overlay 重建:全量 5 包装配').toEqual([...PROFILE_ALL])
         await expectRosterContains(shell, HELLO_WORLD)
         await expectRosterContains(shell, '@dsh-forge/plugin-hello-world-sample-b')
 
@@ -196,7 +204,7 @@ test('step-1/overlay-invalid [@web-e2e @journey plugin-management]: preset manda
       }
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -240,7 +248,7 @@ test('step-1/load-error-retry [@web-e2e @journey plugin-management]: [SKIPPED-in
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

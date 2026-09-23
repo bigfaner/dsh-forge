@@ -33,7 +33,7 @@ import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, openTasksBo
 import {
   boardBlockersOf, boardSourceOf, boardStatusEntries, boardStatusOf, bridgeRecordSessionLink,
   expectFourWayAgreement, expectStatusMapsEqual, fileStatusMap, measureReflow, pickTaskKey,
-  readIndexEntries, readTerminalStatuses, workbenchBundles,
+  readIndexEntries, readTerminalStatuses, shortLabelsOf, workbenchBundles,
 } from './helpers.ts'
 
 /** Step-2 fixture:12 任务双 feature、零记录(挂接/actor 全由腿内显式建立)。 */
@@ -105,7 +105,7 @@ test('step-2/success [@web-e2e @journey dual-form-consistency]: after a session-
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -153,6 +153,13 @@ test('step-2/high-frequency-terminal-changes [@web-e2e @journey dual-form-consis
 
       // 最终状态与 forge 数据一致:文件直读 + 终端 TSV + 四路对拍。
       const finalStatus = walk[walk.length - 1] as GeneratedTaskStatus
+      // 渲染面收敛(数据面已见终态;视图经 FT-047 事件链跟上 — SC7 的 view
+      // 收敛等待同款:数据面轮询之外先等 DOM 卡片呈终态)。
+      await page.waitForFunction((input: { key: string; labels: string[] }) => {
+        const card = document.querySelector(`[data-dsh-forge-node-card="${input.key}"]`)
+        const text = card?.textContent ?? ''
+        return input.labels.some(label => text.includes(label))
+      }, { key: target.key, labels: shortLabelsOf(finalStatus) }, { timeout: 15_000, polling: 50 })
       expect(fileStatusMap(project).get(target.key), '终态 = 最后一笔(文件直读)').toBe(finalStatus)
       expect(readTerminalStatuses(stub, project.codeRoot).get(target.key), '终态 = 最后一笔(终端读)').toBe(finalStatus)
       await expectFourWayAgreement(page, projectId, stub, project.codeRoot, '高频后终态')
@@ -163,7 +170,7 @@ test('step-2/high-frequency-terminal-changes [@web-e2e @journey dual-form-consis
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

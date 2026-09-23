@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
-  HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, expectRosterLacks, sha256File,
+  FORGE_WORKBENCH, HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, expectRosterLacks, readProfileBundles,
+  sha256File,
 } from '../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
@@ -57,7 +58,9 @@ test('step-4/success [@web-e2e @journey plugin-management]: enable restores the 
       await page.locator('[data-dsh-forge-plugin-confirm]').click()
       await expect(helloRow).toHaveAttribute('data-enabled', 'false', { timeout: 15_000 })
       expect(readOverlay(overlayPath)).toEqual({ disabled: [HELLO_WORLD] })
-      await expectRosterLacks(shell, HELLO_WORLD)
+      // 注:boot roster 是靴期装配图(会话内静态);禁用只写 overlay,折除
+      // 收口在重启(产品规则)— 会话内 roster 面不可变,停用态由上行(行属
+      // 性 + overlay 字节)持有,重启腿(restart-persistence)持跨靴 roster 面。
 
       // Input:对已停用行点「启用」(直接动词,无确认)。
       await helloRow.locator('[data-dsh-forge-plugin-action="enable"]').click()
@@ -79,7 +82,7 @@ test('step-4/success [@web-e2e @journey plugin-management]: enable restores the 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -131,7 +134,11 @@ test('step-4/restart-persistence [@web-e2e @journey plugin-management]: the disa
         await expectRosterLacks(shell, HELLO_WORLD)
         await expectRosterContains(shell, SAMPLE_B)
         // 对照第三方不受牵连 + forge 核心必备仍以必备身份在位。
-        for (const name of MANDATORY_NAMES) await expectRosterContains(shell, name)
+        // @deepseek-ai/* 必备不经 boot roster 面(其读取面只含 @dsh-forge/*)—
+        // 以 profile 清单(装配通道)证全量;forge-workbench 双面在场。
+        await expectRosterContains(shell, FORGE_WORKBENCH)
+        expect(readProfileBundles(shell.profileDir), '重启后 profile:必备全量,禁用折除目标,仅剩对照')
+          .toEqual([...MANDATORY_NAMES, SAMPLE_B])
 
         // 核心能力:已注册项目看板照常(注册随 userData 跨靴持久)。
         await openTasksBoard(page, set.facts.taskCount)
@@ -155,7 +162,7 @@ test('step-4/restart-persistence [@web-e2e @journey plugin-management]: the disa
       }
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

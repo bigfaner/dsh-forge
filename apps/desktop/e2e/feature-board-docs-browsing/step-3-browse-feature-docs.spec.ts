@@ -77,7 +77,7 @@ test('step-3/success [@web-e2e @journey feature-board-docs-browsing]: the five d
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -124,7 +124,10 @@ test('step-3/doc-read-error [@web-e2e @journey feature-board-docs-browsing]: one
       // 恢复突变(同一文件恢复可读,内容原样)+ 重试 → 恢复正常渲染。
       restoreFileRead(corruptedPath)
       await page.locator('[data-dsh-forge-feature-doc-tab="ui"]').click()
-      await detail.locator('[data-dsh-forge-feature-doc-retry]').click()
+      // tab 切换即触发重读:恢复已生效时面板直接成功渲染(错误卡退场,无重
+      // 试入口可点);仍在错误态时经「重试」恢复 —— 两径终态一致,由下行
+      // poll 断言(错误面本身已在 :114-116 持有)。
+      await detail.locator('[data-dsh-forge-feature-doc-retry]').click({ timeout: 5_000 }).catch(() => {})
       await expect.poll(async () => normalizeDoc(await panelText(detail, 'ui')), {
         timeout: 30_000,
         message: 'ui: post-restore retry renders the valid content again',
@@ -137,7 +140,7 @@ test('step-3/doc-read-error [@web-e2e @journey feature-board-docs-browsing]: one
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -185,7 +188,7 @@ test('step-3/external-link-guard [@web-e2e @journey feature-board-docs-browsing]
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -216,10 +219,11 @@ test('step-3/injection-guard [@web-e2e @journey feature-board-docs-browsing]: sc
       await page.locator('[data-dsh-forge-feature-doc-tab="design"]').click()
       const panel = detail.locator('[data-dsh-forge-feature-doc-panel="design"]')
 
-      // 载荷按字面文本呈现(html/tag token 降级为原文)。
-      const rendered = await panel.innerText({ timeout: 30_000 })
-      expect(rendered, '<script> 载荷字面在场').toContain('<script>')
-      expect(rendered, '<img onerror> 载荷字面在场').toContain('onerror=')
+      // 载荷按字面文本呈现(html/tag token 降级为原文)。自动重试式断言:
+      // tab 切换首个 commit 只翻 panel key,passive effect 才换 doc — 一次性
+      // innerText 读会落在 stale 窗口(前一 kind 的内容)。
+      await expect(panel, '<script> 载荷字面在场').toContainText('<script>', { timeout: 30_000 })
+      await expect(panel, '<img onerror> 载荷字面在场').toContainText('onerror=')
 
       // 零执行面:两个 window 哨兵标记保持 undefined。
       const sentinels = await page.evaluate(() => {
@@ -238,7 +242,7 @@ test('step-3/injection-guard [@web-e2e @journey feature-board-docs-browsing]: sc
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

@@ -165,7 +165,7 @@ test('step-4/success [@web-e2e @journey multi-project-management]: switching bac
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -206,20 +206,34 @@ test('step-4/project-path-invalid [@web-e2e @journey multi-project-management]: 
       // 路径失效注入(fixture 临时目录内删除,随 fixture 清理)。
       rmSync(projectB.codeRoot, { recursive: true, force: true })
 
-      // B 卡片失联(FT-047 watch 链感知 → sync error → 失联徽标,sc5 同款)。
-      // 注:概览失联卡([data-dsh-forge-overview-lost] + 重新指向)只随 ACTIVE
-      // 项目渲染 —— 非激活失联项目的引导面 = 卡片失联徽标 + 行内动作仍在
-      // (移除通道),按源码实状断言。
+      // 契约 Input:打开项目切换器并选择该项目(激活动词 → 重定向+重扫 →
+      // error sync 事件 → 失联徽标)。lost 感知只随 ACTIVE 项目的扫描链
+      // (services activateProject/boot start/watcher 均只盯当前激活)——
+      // 不激活则徽标结构上不可达(sc5 先例的受害项目即激活项目)。
       await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+      await page.locator('[data-dsh-forge-switcher-trigger]').click()
+      await page.locator('[data-dsh-forge-switcher-menu] [data-dsh-forge-switcher-item]', { hasText: nameB }).click()
+
+      // B 卡片失联(FT-047 感知链 → sync error → 失联徽标,sc5 同款)。
+      // 注:概览失联卡([data-dsh-forge-overview-lost] + 重新指向)只随 ACTIVE
+      // 项目渲染 —— 激活 B 期间其引导面在场;切回 A 后非激活失联项目的
+      // 引导面 = 卡片失联徽标 + 行内动作仍在(移除通道),按源码实状断言。
       const cardB = page.locator('[data-dsh-forge-project-card]', { hasText: nameB }).first()
       await expect(cardB.locator('[data-dsh-forge-card-lost-badge]'), '失联/不可访问提示').toBeVisible({ timeout: 60_000 })
       await expect(cardB).toHaveAttribute('data-lost', 'true')
       await expect(cardB.locator('[data-dsh-forge-card-action="remove"]'), '移除引导通道仍在').toBeVisible()
 
+      // 切回 A(激活指针复原;B 的失联标记保留 —— 仅针对 B 的非 error sync
+      // 才会清除,workbench-state lostProjectIds 语义)。
+      await page.locator('[data-dsh-forge-switcher-trigger]').click()
+      await page.locator('[data-dsh-forge-switcher-menu] [data-dsh-forge-switcher-item]', { hasText: nameA }).click()
+
       // 应用不崩溃 + 注册表行保留(不自动删除)。
       expect(shell.pageErrors, `失联后 renderer pageerrors: ${shell.pageErrors.join(' | ')}`).toEqual([])
       const after = await readActive(page)
-      expect(after.rows, '注册表行保留').toEqual([projectBId, projectAId].sort())
+      // 注册表行保留 = 精确成员(两行都在、无自动删除/无多余行);getState 的
+      // 行序未由契约规定(按注册 rowid),故比较前先排序去除序敏感。
+      expect([...after.rows].sort(), '注册表行保留').toEqual([projectBId, projectAId].sort())
       expect(after.activeProjectId, '激活指针不受牵连').toBe(projectAId)
 
       // 切换器仍列出全部在册项目(浏览/切换通道不受影响),A 仍为当前。
@@ -239,7 +253,7 @@ test('step-4/project-path-invalid [@web-e2e @journey multi-project-management]: 
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

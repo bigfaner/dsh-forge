@@ -75,8 +75,13 @@ function buildHelloWorldSampleB(): { tarball: string; stagedAt: string } {
     .replaceAll('hello-world', 'hello-world-sample-b')
     .replaceAll('helloworld', 'helloworld-sample-b')
   writeFileSync(clientPath, client)
+  // The profile-layer patch manifest rides along verbatim otherwise: its
+  // insert row would remount the ORIGINAL hello-world under the clone's
+  // layer (patch rows compose verbatim) — re-id it the same way.
+  const patchPath = join(scratch, 'cordis.patch.yml')
+  writeFileSync(patchPath, readFileSync(patchPath, 'utf8').replaceAll('hello-world', 'hello-world-sample-b'))
   const { tarball } = packPlugin(scratch)
-  rmSync(scratch, { recursive: true, force: true })
+  rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
   return { tarball, stagedAt: HELLO_WORLD_SAMPLE_B_STAGED_AT }
 }
 

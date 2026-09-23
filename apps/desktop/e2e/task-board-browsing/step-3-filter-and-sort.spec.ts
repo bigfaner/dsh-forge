@@ -133,6 +133,11 @@ test('step-3/success [@web-e2e @journey task-board-browsing]: feature/status/wor
       await expectVisibleSet(page, ground, {
         statuses: new Set(TASK_STATUSES.filter(status => status !== 'pending')),
       }, '状态筛选:取消 pending(其余六态)')
+      // 重置为全选 — selectOnlyStatus 的「全选态起」前置(补集步已取消
+      // pending,盲 toggle 会把 pending 重新勾上)。
+      await page.locator('[data-dsh-forge-menu-trigger="status"]').click()
+      await page.getByRole('menuitem', { name: eitherLocale(zh['tasks.filter.statusAll'], en['tasks.filter.statusAll']) }).click()
+      await page.keyboard.press('Escape')
       await selectOnlyStatus(page, 'completed')
       await expectVisibleSet(page, ground, { statuses: new Set<GeneratedTaskStatus>(['completed']) }, '状态精选 = {completed}')
       // 重置状态(全部状态项)。
@@ -196,7 +201,7 @@ test('step-3/no-match-empty [@web-e2e @journey task-board-browsing]: all-pending
       await selectOnlyStatus(page, 'completed')
 
       // 明确空态,非错误。
-      const noMatch = page.locator('[data-dsh-forge-task-board-nomatch"]')
+      const noMatch = page.locator('[data-dsh-forge-task-board-nomatch]')
       await expect(noMatch, '筛选组合无匹配 → 明确空态').toBeVisible({ timeout: 10_000 })
       await expect(
         noMatch,
@@ -206,7 +211,7 @@ test('step-3/no-match-empty [@web-e2e @journey task-board-browsing]: all-pending
       expect(await visibleRowKeys(page), '零可见行').toEqual([])
 
       // 清除筛选 → 视图恢复(全量任务重现)。
-      await page.locator('[data-dsh-forge-task-board-clear-filters"]').click()
+      await page.locator('[data-dsh-forge-task-board-clear-filters]').click()
       await expect(noMatch).toHaveCount(0)
       await expectVisibleSet(page, ground, {}, '清除筛选后全量恢复')
 

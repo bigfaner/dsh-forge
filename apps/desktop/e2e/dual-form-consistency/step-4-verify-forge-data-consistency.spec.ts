@@ -21,7 +21,7 @@ import { FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball } from '../helpers/plu
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import type { WrittenForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
-import type { GeneratedTask, GeneratedTaskSet } from '../fixtures/task-generator.ts'
+import type { GeneratedTaskSet } from '../fixtures/task-generator.ts'
 import { materializeStubCli } from '../fixtures/stubs/cli.ts'
 import type { StubCli } from '../fixtures/stubs/cli.ts'
 import { createFixtureMutator } from '../tests/m2/helpers/file-mutate.ts'
@@ -33,13 +33,6 @@ import {
   expectStatusMapsEqual, fileStatusMap, measureReflow, pickTaskKey, readTerminalStatuses,
   workbenchBundles,
 } from './helpers.ts'
-
-/** file-mutate writeRecord 的默认记录常量镜像(渲染字节需与变更器逐字一致)。 */
-const RECORD_STAMP_MIRROR = '2026-09-23 12:00'
-const RECORD_SUMMARY_MIRROR = 'stub 会话侧变更:claim + 状态推进(fixture 记录)'
-
-/** 运行时可变任务形态(structuredClone 产物上的镜像变更用)。 */
-type MutableTask = { -readonly [K in keyof GeneratedTask]: GeneratedTask[K] }
 
 /** Step-4 fixture:12 任务双 feature、零记录(交替腿的会话侧记录由腿内建立)。 */
 function stepFourFixture(): { set: GeneratedTaskSet; root: string; project: WrittenForgeProject; stub: StubCli; mutator: FixtureMutator } {
@@ -95,22 +88,14 @@ test('step-4/success [@web-e2e @journey dual-form-consistency]: SC7 round-trip i
       expectStatusMapsEqual('校验面 文件直读 vs 数据面', fileStatusMap(project), board)
       expectStatusMapsEqual('校验面 终端 TSV vs 数据面', readTerminalStatuses(stub, project.codeRoot), board)
 
-      // ---- ③ 混写检测:终态模型镜像 → 全新渲染 → 树哈希对拍。----------------
-      const finalModel: GeneratedTaskSet = structuredClone(set)
-      const twinOf = (key: string): MutableTask => {
-        const slug = key.split('/')[0] ?? ''
-        const localId = key.split('/')[1] ?? ''
-        const feature = finalModel.features.find(row => row.slug === slug)
-        const task = feature?.tasks.find(row => row.localId === localId)
-        if (task === undefined) throw new Error(`step-4: twin task missing for ${key}`)
-        return task as MutableTask
-      }
-      twinOf(terminalSide.key).status = t1
-      const sessionTwin = twinOf(sessionSide.key)
-      sessionTwin.record = { actor: `session:${sessionId}`, summary: RECORD_SUMMARY_MIRROR, completed: RECORD_STAMP_MIRROR }
-      sessionTwin.status = s1
-
-      const scratchRender = writeForgeProject(finalModel, { codeRoot: join(root, 'scratch-final-render') })
+      // ---- ③ 混写检测:全新渲染 + 变更器重放 sanctioned 写 → 树哈希对拍。------
+      // (mutateStatus 只重写 index.json;任务 .md 描述体不随状态翻写 —— 6.1
+      // writer 语义,镜像模型重渲染会漂移。)
+      const scratchRender = writeForgeProject(set, { codeRoot: join(root, 'scratch-final-render') })
+      const oracleMutator = createFixtureMutator(set, scratchRender)
+      oracleMutator.mutateStatus(terminalSide.key, t1)
+      oracleMutator.writeRecord(sessionSide.key, `session:${sessionId}`)
+      oracleMutator.mutateStatus(sessionSide.key, s1)
       assertTreesIdentical('docs 树 vs 终态模型全新渲染(零意外文件)',
         hashTree(join(scratchRender.codeRoot, 'docs')), hashTree(join(project.codeRoot, 'docs')))
 
@@ -126,7 +111,7 @@ test('step-4/success [@web-e2e @journey dual-form-consistency]: SC7 round-trip i
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -180,7 +165,7 @@ test('step-4/offline-terminal-changes [@web-e2e @journey dual-form-consistency]:
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

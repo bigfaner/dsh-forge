@@ -541,6 +541,6 @@ export function disposeJourney(setup: JourneySetup): void {
     console.log(`[session-loop] journey root kept for diagnostics: ${setup.root}`)
     return
   }
-  rmSync(setup.root, { recursive: true, force: true })
+  rmSync(setup.root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
   expect(existsSync(setup.root)).toBe(false)
 }

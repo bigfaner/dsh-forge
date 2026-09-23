@@ -232,7 +232,7 @@ const SHORT_LABEL_KEYS: Readonly<Record<GeneratedTaskStatus, keyof typeof zh>> =
 }
 
 /** Both locales' short labels for a status (the shell's `t` seat is either). */
-function shortLabelsOf(status: GeneratedTaskStatus): string[] {
+export function shortLabelsOf(status: GeneratedTaskStatus): string[] {
   return [zh[SHORT_LABEL_KEYS[status]], en[SHORT_LABEL_KEYS[status]]]
 }
 

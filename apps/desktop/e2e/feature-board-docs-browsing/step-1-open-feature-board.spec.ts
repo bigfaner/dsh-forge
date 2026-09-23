@@ -91,7 +91,7 @@ test('step-1/success [@web-e2e @journey feature-board-docs-browsing]: dual-sampl
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -128,7 +128,7 @@ test('step-1/empty-state [@web-e2e @journey feature-board-docs-browsing]: zero-f
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -169,7 +169,7 @@ test('step-1/loading-state [@web-e2e @journey feature-board-docs-browsing]: skel
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

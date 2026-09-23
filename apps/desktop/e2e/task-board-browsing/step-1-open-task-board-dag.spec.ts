@@ -250,7 +250,7 @@ test('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-task proj
       await switchToWorkbench(page)
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
-      const emptyCard = page.locator('[data-dsh-forge-task-board-empty"]')
+      const emptyCard = page.locator('[data-dsh-forge-task-board-empty]')
       await expect(emptyCard, '空(empty)态卡可见').toBeVisible({ timeout: 15_000 })
       await expect(
         emptyCard,

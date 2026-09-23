@@ -38,7 +38,8 @@ import { assertTreesIdentical, hashTree } from '../tests/m2/helpers/tree-hash.ts
 import {
   boardSourceOf, boardStatusEntries, boardStatusOf, bridgeEndSessionLink, bridgeRecordSessionLink,
   detailLinksOf, detailRecordsOf, expectIndexSerializerRoundTrip, expectStatusMapsEqual,
-  fileStatusMap, measureReflow, pickTaskKey, readIndexEntries, workbenchBundles, writeIndexEntries,
+  fileStatusMap, measureReflow, pickTaskKey, readIndexEntries, readTerminalStatuses, workbenchBundles,
+  writeIndexEntries,
 } from './helpers.ts'
 
 /** Step-5 fixture:12 任务双 feature、recordRate 0(record 指针由腿内显式建立)。 */
@@ -85,16 +86,17 @@ test('step-5/success [@web-e2e @journey dual-form-consistency]: after alternatio
       await measureReflow(page, terminalSide.key, 'terminal', t1,
         () => { mutator.mutateStatus(terminalSide.key, t1) })
 
-      // 交替后、挂接登记前:forge 树哈希锚点。
-      const forgeTreeBeforeLink = hashTree(join(project.codeRoot, 'docs'))
-
-      // 挂接登记(Interface 1 动词直达;发起链路非本旅程被测面)。
+      // 挂接登记(Interface 1 动词直达;发起链路非本旅程被测面)— 先于会话
+      // 侧写:actor 记录本身即驱动 [会话] 徽标(frozen 腿 :152-155 先例)。
       await bridgeRecordSessionLink(page, { projectId, taskKey: sessionSide.key, sessionId })
       const s1 = mutator.nextStatusOf(sessionSide.key)
       await measureReflow(page, sessionSide.key, 'session', s1, () => {
         mutator.writeRecord(sessionSide.key, `session:${sessionId}`)
         mutator.mutateStatus(sessionSide.key, s1)
       })
+
+      // 交替后、挂接已登记:forge 树哈希锚点(其后仅剩查看类操作,零 sanctioned 写)。
+      const forgeTreeBeforeLink = hashTree(join(project.codeRoot, 'docs'))
 
       // ---- 用户查看参与交替任务的详情与挂接状态。----------------------------
       await openDetailDock(page, sessionSide.key)
@@ -120,7 +122,7 @@ test('step-5/success [@web-e2e @journey dual-form-consistency]: after alternatio
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -188,7 +190,7 @@ test('step-5/frozen-plugin-compat [@web-e2e @journey dual-form-consistency]: a 3
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
@@ -254,7 +256,7 @@ test('step-5/ended-link-history-retained [@web-e2e @journey dual-form-consistenc
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })

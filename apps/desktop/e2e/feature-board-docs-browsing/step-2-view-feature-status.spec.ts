@@ -91,7 +91,7 @@ test('step-2/success [@web-e2e @journey feature-board-docs-browsing]: stepper sh
       await closeAndAwaitExit(shell)
     }
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     expect(existsSync(root)).toBe(false)
   }
 })
