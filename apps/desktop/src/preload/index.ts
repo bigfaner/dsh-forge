@@ -7,6 +7,20 @@ import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allo
 import type {
   FeatureBoardData,
   FeatureDoc,
+  FeatureListEntry,
+  FeatureStatusReport,
+  KnowledgeFactEntry,
+  KnowledgeFactInput,
+  KnowledgeFactListResult,
+  KnowledgeFactSummaryResult,
+  KnowledgeForensicInput,
+  KnowledgeForensicResult,
+  KnowledgeLesson,
+  KnowledgeLessonInput,
+  KnowledgeLessonListResult,
+  KnowledgeResearchInput,
+  KnowledgeResearchListResult,
+  KnowledgeResearchReport,
   MigrationStarted,
   MigrationStatus,
   PluginRow,
@@ -30,6 +44,9 @@ import type {
   WorkbenchPaths,
   WorkbenchState,
 } from '../main/workbench/ipc/types.ts'
+
+/** The knowledgeFact verb result union (line-length relief; same members as the interface). */
+type KnowledgeFactVerbResult = KnowledgeFactListResult | KnowledgeFactEntry | KnowledgeFactSummaryResult
 import type { DocKind, ProjectPatch } from '../main/workbench/ipc/types.ts'
 
 // contextBridge semantic verbs (whitelist). The renderer (upstream client UI
@@ -165,6 +182,26 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeCodeRoot, input) as Promise<ProbeCodeRootResult>,
     getWorkbenchPaths: (): Promise<WorkbenchPaths> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getWorkbenchPaths) as Promise<WorkbenchPaths>,
+    // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
+    // planes over the registered project's doc root (fact/lesson/research
+    // read + append-only write; forensic machine-global read-only — no
+    // projectId; feature list/status read). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_KNOWLEDGE_* / ERR_FORENSIC_SOURCE_UNREADABLE / ERR_FEATURE_NOT_FOUND).
+    knowledgeFact: (input: KnowledgeFactInput): Promise<KnowledgeFactVerbResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeFact, input) as Promise<KnowledgeFactVerbResult>,
+    knowledgeLesson: (input: KnowledgeLessonInput): Promise<KnowledgeLessonListResult | KnowledgeLesson> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeLesson, input) as Promise<KnowledgeLessonListResult | KnowledgeLesson>,
+    knowledgeResearch: (input: KnowledgeResearchInput): Promise<KnowledgeResearchListResult | KnowledgeResearchReport> =>
+      ipcRenderer.invoke(
+        WORKBENCH_VERB_CHANNELS.knowledgeResearch, input,
+      ) as Promise<KnowledgeResearchListResult | KnowledgeResearchReport>,
+    knowledgeForensic: (input: KnowledgeForensicInput): Promise<KnowledgeForensicResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeForensic, input) as Promise<KnowledgeForensicResult>,
+    featureList: (projectId: string): Promise<FeatureListEntry[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureList, projectId) as Promise<FeatureListEntry[]>,
+    featureStatus: (input: { projectId: string; featureSlug: string }): Promise<FeatureStatusReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureStatus, input) as Promise<FeatureStatusReport>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

@@ -130,6 +130,12 @@ function fakeServices(): WorkbenchVerbServices {
     startMigration: vi.fn(() => Promise.resolve({ started: true })),
     probeCodeRoot: vi.fn(() => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false })),
     getWorkbenchPaths: vi.fn(() => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' })),
+    knowledgeFact: vi.fn(() => ({ total: 0, facts: [] })),
+    knowledgeLesson: vi.fn(() => ({ total: 0, lessons: [] })),
+    knowledgeResearch: vi.fn(() => ({ total: 0, reports: [] })),
+    knowledgeForensic: vi.fn(() => ({ action: 'search', sessions: [] })),
+    featureList: vi.fn(() => []),
+    featureStatus: vi.fn(() => ({ slug: 'alpha', status: 'tasks', tasks: { byStatus: {}, total: 0, indexPresent: false }, scores: { prd: '', design: '', ui: '' } })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -176,17 +182,23 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the twenty-seven whitelisted verb channels, one per verb', () => {
+  it('contains exactly the thirty-three whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-end-session-link',
+      'dsh-forge:workbench-feature-list',
+      'dsh-forge:workbench-feature-status',
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-migration-status',
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
       'dsh-forge:workbench-get-task-detail',
       'dsh-forge:workbench-get-workbench-paths',
+      'dsh-forge:workbench-knowledge-fact',
+      'dsh-forge:workbench-knowledge-forensic',
+      'dsh-forge:workbench-knowledge-lesson',
+      'dsh-forge:workbench-knowledge-research',
       'dsh-forge:workbench-list-plugins',
       'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
@@ -206,7 +218,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(27)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(33)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -243,6 +255,12 @@ describe('workbench verb routing table', () => {
       'startMigration',
       'probeCodeRoot',
       'getWorkbenchPaths',
+      'knowledgeFact',
+      'knowledgeLesson',
+      'knowledgeResearch',
+      'knowledgeForensic',
+      'featureList',
+      'featureStatus',
     ])
   })
 
@@ -285,10 +303,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 27 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 33 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(27)
+    expect(handlers.size).toBe(33)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -372,6 +390,26 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.startMigration)?.(OWNED, 'p-1')
     expect(services.startMigration).toHaveBeenCalledWith('p-1')
+
+    // M3 知识系 + feature 读段(任务 2.2,D4):input 形状校验 + 服务转发;
+    // 路径授权/数据面语义在内核(knowledge-service),本层零内联业务。
+    handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'list', source: 'runtime' })
+    expect(services.knowledgeFact).toHaveBeenCalledWith({ projectId: 'p-1', action: 'list', source: 'runtime' })
+
+    handlers.get(C.knowledgeLesson)?.(OWNED, { projectId: 'p-1', action: 'add', name: 'gotcha-x', body: 'b', tags: ['testing'] })
+    expect(services.knowledgeLesson).toHaveBeenCalledWith({ projectId: 'p-1', action: 'add', name: 'gotcha-x', body: 'b', tags: ['testing'] })
+
+    handlers.get(C.knowledgeResearch)?.(OWNED, { projectId: 'p-1', action: 'get', slug: 'codegraph' })
+    expect(services.knowledgeResearch).toHaveBeenCalledWith({ projectId: 'p-1', action: 'get', slug: 'codegraph' })
+
+    handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'search', keyword: 'bridge', last: 5 })
+    expect(services.knowledgeForensic).toHaveBeenCalledWith({ action: 'search', keyword: 'bridge', last: 5 })
+
+    handlers.get(C.featureList)?.(OWNED, 'p-1')
+    expect(services.featureList).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' })
+    expect(services.featureStatus).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha' })
   })
 
   it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {
@@ -401,6 +439,14 @@ describe('workbench verb routing table', () => {
       ['blockers not string array', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', title: 't', blockers: [42] }, 'kernel')],
       ['status outside vocab', () => handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', status: 'done' })],
       ['taskAdd missing title', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' }, 'kernel')],
+      ['fact action outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'purge' })],
+      ['fact source outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'list', source: 'divine' })],
+      ['fact entry kind outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'add', entry: { subject: 's', kind: 'nonsense', value: 1 } })],
+      ['fact entry missing value', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'add', entry: { subject: 's', kind: 'signature' } })],
+      ['lesson tags not string array', () => handlers.get(C.knowledgeLesson)?.(OWNED, { projectId: 'p-1', action: 'add', name: 'x', body: 'b', tags: [7] })],
+      ['forensic action outside vocab', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'wipe' })],
+      ['forensic last not positive integer', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'search', last: 0 })],
+      ['featureStatus missing slug', () => handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1' })],
     ]
     for (const [label, run] of cases) {
       const error = toCapture(run) as WorkbenchIpcError
@@ -411,6 +457,10 @@ describe('workbench verb routing table', () => {
     expect(services.taskClaim).not.toHaveBeenCalled()
     expect(services.taskTransition).not.toHaveBeenCalled()
     expect(services.taskQuery).not.toHaveBeenCalled()
+    expect(services.knowledgeFact).not.toHaveBeenCalled()
+    expect(services.knowledgeLesson).not.toHaveBeenCalled()
+    expect(services.knowledgeForensic).not.toHaveBeenCalled()
+    expect(services.featureStatus).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {

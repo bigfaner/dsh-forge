@@ -23,7 +23,11 @@
 // client 泵拿到返回值即刻迭代,与「接入即注册」等价;入队先于迭代的调用走
 // backlog 重放(测试同形态)。
 
-/** 桥动词集(封闭;tech-design §Interface 2 任务族 —— 工具名后缀 = 桥动词)。 */
+/** 桥动词集(封闭;tech-design §Interface 2 任务族 —— 工具名后缀 = 桥动词)。
+ *
+ * 任务 2.2 追加(D4):知识系族(fact/lesson/research = 动作分派 verb;
+ * forensic 只读)与 feature 读族(list/status)。动作枚举在 args.action,
+ * 桥动词与工具族一一对应;client 侧 dispatch 仍是封闭 switch(T4)。 */
 export type ForgeToolBridgeVerb =
   | 'task_add'
   | 'task_claim'
@@ -33,6 +37,12 @@ export type ForgeToolBridgeVerb =
   | 'task_get'
   | 'task_query'
   | 'task_list'
+  | 'knowledge_fact'
+  | 'knowledge_lesson'
+  | 'knowledge_research'
+  | 'knowledge_forensic'
+  | 'feature_list'
+  | 'feature_status'
 
 /** 桥 transport 级失败码(spike-1 §3.3;区别于内核业务 ERR_* 码)。 */
 export const BRIDGE_TRANSPORT_CODE = 'ERR_TOOL_BRIDGE_UNAVAILABLE' as const

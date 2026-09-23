@@ -90,8 +90,12 @@ function isSegment(segment: string): boolean {
   return true
 }
 
-/** 通用执行核:actor 导出 → 桥调用 → 值化(transport 失败 throw 上抛)。 */
-async function executeVia(
+/** 通用执行核:actor 导出 → 桥调用 → 值化(transport 失败 throw 上抛)。
+ *
+ * 任务 2.2 起导出:knowledge/feature 工具族共用同一执行核与结果语义
+ * (内核值/业务拒绝 = canonical JSON 值;transport 失败 = throw 上抛,
+ * Story 9 降级链禁静默)。 */
+export async function executeVia(
   call: ForgeTaskToolCallFn,
   verb: ForgeToolBridgeVerb,
   args: Record<string, unknown>,

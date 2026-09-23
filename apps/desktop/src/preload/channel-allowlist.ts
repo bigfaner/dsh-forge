@@ -49,6 +49,14 @@ export const WORKBENCH_VERB_CHANNELS = {
   // tests/workbench-ipc.spec.ts deep-equal 断言)。
   probeCodeRoot: 'dsh-forge:workbench-probe-code-root',
   getWorkbenchPaths: 'dsh-forge:workbench-get-workbench-paths',
+  // M3 知识系 + feature 读段(任务 2.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  knowledgeFact: 'dsh-forge:workbench-knowledge-fact',
+  knowledgeLesson: 'dsh-forge:workbench-knowledge-lesson',
+  knowledgeResearch: 'dsh-forge:workbench-knowledge-research',
+  knowledgeForensic: 'dsh-forge:workbench-knowledge-forensic',
+  featureList: 'dsh-forge:workbench-feature-list',
+  featureStatus: 'dsh-forge:workbench-feature-status',
 } as const
 
 /**

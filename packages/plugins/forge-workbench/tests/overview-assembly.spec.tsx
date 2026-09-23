@@ -195,6 +195,13 @@ function installBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIp
     taskReopen: async () => ({}) as never,
     taskGet: async () => ({}) as never,
     taskQuery: async () => [],
+    // M3 knowledge + feature-read verbs (task 2.2): same presence walk.
+    knowledgeFact: async () => ({}) as never,
+    knowledgeLesson: async () => ({}) as never,
+    knowledgeResearch: async () => ({}) as never,
+    knowledgeForensic: async () => ({}) as never,
+    featureList: async () => [],
+    featureStatus: async () => ({}) as never,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

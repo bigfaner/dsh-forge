@@ -71,6 +71,13 @@ function baseBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIpcBr
     taskReopen: async () => ({}) as never,
     taskGet: async () => ({}) as TaskDetail,
     taskQuery: async () => [],
+    // M3 knowledge + feature-read verbs (task 2.2): same presence walk.
+    knowledgeFact: async () => ({}) as never,
+    knowledgeLesson: async () => ({}) as never,
+    knowledgeResearch: async () => ({}) as never,
+    knowledgeForensic: async () => ({}) as never,
+    featureList: async () => [],
+    featureStatus: async () => ({}) as never,
     onEvents: () => () => {},
     ...overrides,
   } as WorkbenchIpcBridge

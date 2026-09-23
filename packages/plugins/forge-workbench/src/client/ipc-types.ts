@@ -457,3 +457,214 @@ export interface TaskQueryInput {
   readonly featureSlug?: string
   readonly status?: TaskStatus
 }
+
+// ---------------------------------------------------------------------------
+// M3 知识系 + feature 读动词 DTO(任务 2.2;tech-design §Interface 2 D4 段;
+// 主侧 peer = apps/desktop/src/main/workbench/ipc/types.ts —— 同一 spec 段
+// 的结构孪生,插件不得依赖应用(4.1 先例)。数据面移植基准 = forge-cli
+// pkg/facttable · pkg/infocmd · internal/cmd/{forensic,feature}。
+// ---------------------------------------------------------------------------
+
+/** fact 条目(Go FactEntry 同形;value = 任意 JSON 值)。 */
+export interface KnowledgeFactEntry {
+  readonly factId: string
+  readonly source: 'static' | 'runtime' | 'manual'
+  readonly subject: string
+  readonly kind: 'signature' | 'output_format' | 'error_code' | 'side_effect' | 'precondition' | 'compilation_error' | 'runtime_crash'
+  readonly value: unknown
+  readonly confidence: 'confirmed' | 'inferred' | 'assumed'
+  readonly updatedAt: string
+}
+
+/** fact add 草稿(factId 缺省自动铸;source 缺省 manual;confidence 缺省 inferred)。 */
+export interface KnowledgeFactDraft {
+  readonly factId?: string
+  readonly source?: 'static' | 'runtime' | 'manual'
+  readonly subject: string
+  readonly kind: 'signature' | 'output_format' | 'error_code' | 'side_effect' | 'precondition' | 'compilation_error' | 'runtime_crash'
+  readonly value: unknown
+  readonly confidence?: 'confirmed' | 'inferred' | 'assumed'
+}
+
+/** knowledgeFact 入参(动作分派:list/get/summary 读 + add 写)。 */
+export interface KnowledgeFactInput {
+  readonly projectId: string
+  readonly action: 'list' | 'get' | 'summary' | 'add'
+  readonly source?: 'static' | 'runtime' | 'manual'
+  readonly confidence?: 'confirmed' | 'inferred' | 'assumed'
+  readonly factId?: string
+  readonly entry?: KnowledgeFactDraft
+}
+
+/** fact list 产物(fact_id 升序)。 */
+export interface KnowledgeFactListResult {
+  readonly total: number
+  readonly facts: readonly KnowledgeFactEntry[]
+}
+
+/** fact summary 产物(分组计数 + runtime-confirmed 覆盖率)。 */
+export interface KnowledgeFactSummaryResult {
+  readonly total: number
+  readonly bySource: Readonly<Record<string, number>>
+  readonly byConfidence: Readonly<Record<string, number>>
+  readonly byKind: Readonly<Record<string, number>>
+  readonly runtimeConfirmed: number
+  readonly coveragePercent: number
+}
+
+/** lesson 条目(Go Lesson 同形;filePath = docBase 相对路径)。 */
+export interface KnowledgeLesson {
+  readonly name: string
+  readonly title: string
+  readonly created: string
+  readonly tags: readonly string[]
+  readonly severity: string
+  readonly category: string
+  readonly filePath: string
+}
+
+/** knowledgeLesson 入参(list/get 读 + add 写;created 缺省当日)。 */
+export interface KnowledgeLessonInput {
+  readonly projectId: string
+  readonly action: 'list' | 'get' | 'add'
+  readonly name?: string
+  readonly title?: string
+  readonly tags?: readonly string[]
+  readonly severity?: string
+  readonly created?: string
+  readonly body?: string
+}
+
+/** lesson list 产物(created 降序,mtime 降级)。 */
+export interface KnowledgeLessonListResult {
+  readonly total: number
+  readonly lessons: readonly KnowledgeLesson[]
+}
+
+/** research 条目(Go Report 同形)。 */
+export interface KnowledgeResearchReport {
+  readonly slug: string
+  readonly created: string
+  readonly topic: string
+  readonly mode: string
+  readonly dimensions: readonly string[]
+  readonly candidates: readonly string[]
+  readonly filePath: string
+}
+
+/** knowledgeResearch 入参(list/get 读 + add 写)。 */
+export interface KnowledgeResearchInput {
+  readonly projectId: string
+  readonly action: 'list' | 'get' | 'add'
+  readonly slug?: string
+  readonly topic?: string
+  readonly mode?: string
+  readonly dimensions?: readonly string[]
+  readonly candidates?: readonly string[]
+  readonly created?: string
+  readonly body?: string
+}
+
+/** research list 产物。 */
+export interface KnowledgeResearchListResult {
+  readonly total: number
+  readonly reports: readonly KnowledgeResearchReport[]
+}
+
+/** forensic search 条目(Go sessionSummary 同形)。 */
+export interface ForensicSessionSummary {
+  readonly sessionId: string
+  readonly project: string
+  readonly dateTime: string
+  readonly msgCount: number
+  readonly firstMsg: string
+}
+
+/** forensic extract 产物(Go extractResult 同形;证据以值返回,不落盘)。 */
+export interface ForensicEvidence {
+  readonly file: string
+  readonly lines: number
+  readonly model?: string
+  readonly gitBranch?: string
+  readonly thinking: readonly { line: number; thinking: string; stopReason?: string; model?: string; msgId?: string }[]
+  readonly toolCalls: readonly { line: number; tool: string; input: string; stopReason?: string; msgId?: string }[]
+  readonly toolResults: readonly { line: number; toolUseId: string; resultType?: string; filePath?: string }[]
+  readonly userMsgs: readonly { line: number; content: string; isMeta: boolean }[]
+  readonly skillsUsed: readonly string[]
+  readonly hooks: readonly { line: number; hookName: string; hookEvent: string; durationMs: number; exitCode: number; command: string }[]
+  readonly filesEdited: readonly string[]
+  readonly summary: {
+    readonly totalThinking: number
+    readonly totalToolCalls: number
+    readonly totalToolResults: number
+    readonly totalUserMsgs: number
+    readonly toolBreakdown: Readonly<Record<string, number>>
+    readonly filesRead: readonly string[]
+    readonly filesWritten: readonly string[]
+    readonly grepPatterns: readonly string[]
+    readonly agentsSpawned: readonly { name: string; count: number }[]
+    readonly commands: readonly string[]
+    readonly hookBreakdown: readonly { name: string; count: number }[]
+    readonly hookFailures: number
+    readonly compactCount: number
+    readonly planModeCount: number
+    readonly stopReasons: Readonly<Record<string, number>>
+    readonly skillInvocations: readonly { name: string; count: number }[]
+    readonly subagentCount: number
+    readonly startTime: string
+    readonly endTime: string
+    readonly duration: string
+    readonly topSlowest: readonly { tool: string; line: number; seconds: number; detail?: string }[]
+    readonly timingByTool: readonly { tool: string; count: number; total: number; average: number; max: number }[]
+    readonly totalToolMs: number
+    readonly thinkingTurns: readonly { line: number; seconds: number; stopReason?: string; detail?: string }[]
+    readonly totalThinkingMs: number
+  }
+}
+
+/** forensic subagents 条目(Go subagentInfo 同形)。 */
+export interface ForensicSubagent {
+  readonly agentId: string
+  readonly agentType: string
+  readonly transcript: string
+}
+
+/** knowledgeForensic 入参(三只读动作;无 projectId —— 机器全局只读源)。 */
+export interface KnowledgeForensicInput {
+  readonly action: 'search' | 'extract' | 'subagents'
+  readonly projectPath?: string
+  readonly keyword?: string
+  readonly session?: string
+  readonly skill?: string
+  readonly last?: number
+  readonly transcriptPath?: string
+  readonly sessionDir?: string
+}
+
+/** forensic 动作判别产物。 */
+export type KnowledgeForensicResult =
+  | { readonly action: 'search'; readonly sessions: readonly ForensicSessionSummary[] }
+  | { readonly action: 'extract'; readonly evidence: ForensicEvidence }
+  | { readonly action: 'subagents'; readonly subagents: readonly ForensicSubagent[] }
+
+/** feature list 条目(Go featureInfo 同形投影)。 */
+export interface FeatureListEntry {
+  readonly slug: string
+  readonly status: string
+  readonly created: string
+  readonly completed: number
+  readonly total: number
+  readonly scores: { readonly prd: string; readonly design: string; readonly ui: string; readonly tests: string }
+}
+
+/** feature status 产物(manifest + 任务聚合 + 评分)。 */
+export interface FeatureStatusReport {
+  readonly slug: string
+  readonly status: string
+  readonly tasks: {
+    readonly byStatus: Readonly<Record<string, number>>
+    readonly total: number
+    readonly indexPresent: boolean
+  }
+  readonly scores: { readonly prd: string; readonly design: string; readonly ui: string }
+}

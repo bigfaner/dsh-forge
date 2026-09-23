@@ -33,7 +33,11 @@
  *      error card).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
+  DocKind, FeatureBoardData, FeatureDoc, FeatureListEntry, FeatureStatusReport,
+  KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
+  KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
+  KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
+  KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, Project,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
@@ -93,6 +97,20 @@ export interface WorkbenchIpcBridge {
   taskReopen(input: TaskReopenInput, actor: TaskActor): Promise<TaskSummary>
   taskGet(input: TaskGetInput): Promise<TaskDetail>
   taskQuery(input: TaskQueryInput): Promise<TaskSummary[]>
+  /**
+   * M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
+   * planes over the registered project's doc root (fact/lesson/research read +
+   * append-only write; forensic machine-global read-only — no projectId;
+   * feature list/status read). Business rejections arrive as the same
+   * `{ code, message, detail? }` envelope (ERR_PROJECT_NOT_FOUND /
+   * ERR_KNOWLEDGE_* / ERR_FORENSIC_SOURCE_UNREADABLE / ERR_FEATURE_NOT_FOUND).
+   */
+  knowledgeFact(input: KnowledgeFactInput): Promise<KnowledgeFactListResult | KnowledgeFactEntry | KnowledgeFactSummaryResult>
+  knowledgeLesson(input: KnowledgeLessonInput): Promise<KnowledgeLessonListResult | KnowledgeLesson>
+  knowledgeResearch(input: KnowledgeResearchInput): Promise<KnowledgeResearchListResult | KnowledgeResearchReport>
+  knowledgeForensic(input: KnowledgeForensicInput): Promise<KnowledgeForensicResult>
+  featureList(projectId: string): Promise<FeatureListEntry[]>
+  featureStatus(input: { projectId: string; featureSlug: string }): Promise<FeatureStatusReport>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -104,6 +122,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'getMigrationStatus', 'startMigration', 'probeCodeRoot', 'getWorkbenchPaths',
   // M3 task verbs (task 2.1): the preload surface carries them since 1.3.
   'taskAdd', 'taskClaim', 'taskTransition', 'taskSubmit', 'taskReopen', 'taskGet', 'taskQuery',
+  // M3 knowledge + feature-read verbs (task 2.2, D4).
+  'knowledgeFact', 'knowledgeLesson', 'knowledgeResearch', 'knowledgeForensic', 'featureList', 'featureStatus',
 ]
 
 /**

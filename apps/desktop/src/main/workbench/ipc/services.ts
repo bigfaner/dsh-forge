@@ -56,6 +56,7 @@ import { toTaskSummary } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
 import { createMigrationService } from '../migration/pipeline.ts'
 import { createReingestHook } from '../migration/reingest-watcher.ts'
+import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -94,6 +95,8 @@ export interface WorkbenchIpcServiceDeps {
   readonly onEvents?: WorkbenchEventSink
   /** 感知编排 seam(缺省 = createWorkbenchWatcher + scanForgeFiles)。 */
   readonly perception?: WorkbenchPerceptionSeam
+  /** forensic search 的 home 基目录(缺省 os.homedir;e2e/测试确定性注入面,任务 2.2)。 */
+  readonly forensicHomeDir?: string
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -252,6 +255,14 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     userDataPath: deps.userDataPath,
     loadProject: projectId => findProjectRow(db, projectId) ?? null,
     onEvent: event => sink([event]),
+  })
+
+  // M3 任务 2.2(D4):知识系 + feature 读动词服务。文件数据面直读写
+  // (fact = codeRoot/.forge;lesson/research/feature = 文档根;forensic =
+  // 机器全局只读源),路径授权与动作分派在 knowledge-service。
+  const knowledgeVerbs = createKnowledgeVerbService({
+    db,
+    ...(deps.forensicHomeDir === undefined ? {} : { homeDir: deps.forensicHomeDir }),
   })
 
   // M3 任务 1.7(UF3 集成读):内核管理位置 + 向导真实探测 + 可迁移判定
@@ -472,6 +483,15 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       taskReopen: (input, actor) => taskVerbs.taskReopen(input, actor),
       taskGet: input => taskVerbs.taskGet(input),
       taskQuery: input => taskVerbs.taskQuery(input),
+
+      // —— M3 知识系 + feature 读动词(任务 2.2,D4):委托 knowledge/
+      //    knowledge-service(文件数据面;读写语义 = forge CLI 对应命令)。 ——
+      knowledgeFact: input => knowledgeVerbs.knowledgeFact(input),
+      knowledgeLesson: input => knowledgeVerbs.knowledgeLesson(input),
+      knowledgeResearch: input => knowledgeVerbs.knowledgeResearch(input),
+      knowledgeForensic: input => knowledgeVerbs.knowledgeForensic(input),
+      featureList: projectId => knowledgeVerbs.featureList(projectId),
+      featureStatus: input => knowledgeVerbs.featureStatus(input),
 
       // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
       //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——

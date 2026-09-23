@@ -18,6 +18,10 @@ import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS, type WorkbenchVerbCha
 import { assertWorkbenchSender, type WorkbenchEventSender, type WorkbenchVerbEvent } from './sender-validate.ts'
 import type {
   DocKind,
+  KnowledgeFactInput,
+  KnowledgeForensicInput,
+  KnowledgeLessonInput,
+  KnowledgeResearchInput,
   ProjectPatch,
   RecordSessionLinkInput,
   RegisterProjectInput,
@@ -159,7 +163,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 }
 
 // ---------------------------------------------------------------------------
-// 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条 = 27 条白名单通道)
+// 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
+// + 知识系/feature 读段 6 条(任务 2.2)= 33 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -361,6 +366,129 @@ export function installWorkbenchVerbs(
   })
 
   register(C.getWorkbenchPaths, () => services.getWorkbenchPaths())
+
+  // —— M3 知识系 + feature 读段(任务 2.2,D4):六条动词。Hard Rule 延续 ——
+  //    本层只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;动作分派、
+  //    路径授权(文档根/forge 根 + 越界拒绝)与 forge 数据面语义全部在内核
+  //    (knowledge/knowledge-service.ts),不信任 renderer 语义(T1)。 ——
+
+  const FACT_SOURCES = new Set(['static', 'runtime', 'manual'])
+  const FACT_CONFIDENCES = new Set(['confirmed', 'inferred', 'assumed'])
+  const FACT_KINDS = new Set([
+    'signature', 'output_format', 'error_code', 'side_effect',
+    'precondition', 'compilation_error', 'runtime_crash',
+  ])
+
+  /** 可选字符串数组成员校验(tags/dimensions/candidates 共用)。 */
+  const optionalStringArray = (verb: string, arg: string, value: unknown): void => {
+    if (value === undefined || value === null) return
+    if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string' || entry === '')) {
+      throw new Error(`workbench.${verb}: ${arg} must be an array of non-empty strings when present`)
+    }
+  }
+
+  const requireKnowledgeProject = (verb: string, value: unknown): string =>
+    requireString(verb, 'input.projectId', value)
+
+  register(C.knowledgeFact, (args) => {
+    const input = requireObject('knowledgeFact', 'input', args[0])
+    requireKnowledgeProject('knowledgeFact', input.projectId)
+    const action = requireString('knowledgeFact', 'input.action', input.action)
+    if (!['list', 'get', 'summary', 'add'].includes(action)) {
+      throw new Error(`workbench.knowledgeFact: input.action must be one of list/get/summary/add (got ${action})`)
+    }
+    const source = optionalString('knowledgeFact', 'input.source', input.source)
+    if (source !== undefined && !FACT_SOURCES.has(source)) {
+      throw new Error(`workbench.knowledgeFact: input.source must be one of static/runtime/manual when present (got ${source})`)
+    }
+    const confidence = optionalString('knowledgeFact', 'input.confidence', input.confidence)
+    if (confidence !== undefined && !FACT_CONFIDENCES.has(confidence)) {
+      throw new Error(`workbench.knowledgeFact: input.confidence must be one of confirmed/inferred/assumed when present (got ${confidence})`)
+    }
+    optionalString('knowledgeFact', 'input.factId', input.factId)
+    if (input.entry !== undefined && input.entry !== null) {
+      const entry = requireObject('knowledgeFact', 'input.entry', input.entry)
+      requireString('knowledgeFact', 'input.entry.subject', entry.subject)
+      const kind = requireString('knowledgeFact', 'input.entry.kind', entry.kind)
+      if (!FACT_KINDS.has(kind)) {
+        throw new Error(`workbench.knowledgeFact: input.entry.kind must be one of the 7 fact kinds (got ${kind})`)
+      }
+      if (entry.value === undefined || entry.value === null) {
+        throw new Error('workbench.knowledgeFact: input.entry.value is required (any JSON value)')
+      }
+      optionalString('knowledgeFact', 'input.entry.factId', entry.factId)
+      const entrySource = optionalString('knowledgeFact', 'input.entry.source', entry.source)
+      if (entrySource !== undefined && !FACT_SOURCES.has(entrySource)) {
+        throw new Error(`workbench.knowledgeFact: input.entry.source must be one of static/runtime/manual when present (got ${entrySource})`)
+      }
+      const entryConfidence = optionalString('knowledgeFact', 'input.entry.confidence', entry.confidence)
+      if (entryConfidence !== undefined && !FACT_CONFIDENCES.has(entryConfidence)) {
+        throw new Error(`workbench.knowledgeFact: input.entry.confidence must be one of confirmed/inferred/assumed when present (got ${entryConfidence})`)
+      }
+    }
+    return services.knowledgeFact(input as unknown as KnowledgeFactInput)
+  })
+
+  register(C.knowledgeLesson, (args) => {
+    const input = requireObject('knowledgeLesson', 'input', args[0])
+    requireKnowledgeProject('knowledgeLesson', input.projectId)
+    const action = requireString('knowledgeLesson', 'input.action', input.action)
+    if (!['list', 'get', 'add'].includes(action)) {
+      throw new Error(`workbench.knowledgeLesson: input.action must be one of list/get/add (got ${action})`)
+    }
+    optionalString('knowledgeLesson', 'input.name', input.name)
+    optionalString('knowledgeLesson', 'input.title', input.title)
+    optionalString('knowledgeLesson', 'input.severity', input.severity)
+    optionalString('knowledgeLesson', 'input.created', input.created)
+    optionalString('knowledgeLesson', 'input.body', input.body)
+    optionalStringArray('knowledgeLesson', 'input.tags', input.tags)
+    return services.knowledgeLesson(input as unknown as KnowledgeLessonInput)
+  })
+
+  register(C.knowledgeResearch, (args) => {
+    const input = requireObject('knowledgeResearch', 'input', args[0])
+    requireKnowledgeProject('knowledgeResearch', input.projectId)
+    const action = requireString('knowledgeResearch', 'input.action', input.action)
+    if (!['list', 'get', 'add'].includes(action)) {
+      throw new Error(`workbench.knowledgeResearch: input.action must be one of list/get/add (got ${action})`)
+    }
+    optionalString('knowledgeResearch', 'input.slug', input.slug)
+    optionalString('knowledgeResearch', 'input.topic', input.topic)
+    optionalString('knowledgeResearch', 'input.mode', input.mode)
+    optionalString('knowledgeResearch', 'input.created', input.created)
+    optionalString('knowledgeResearch', 'input.body', input.body)
+    optionalStringArray('knowledgeResearch', 'input.dimensions', input.dimensions)
+    optionalStringArray('knowledgeResearch', 'input.candidates', input.candidates)
+    return services.knowledgeResearch(input as unknown as KnowledgeResearchInput)
+  })
+
+  register(C.knowledgeForensic, (args) => {
+    const input = requireObject('knowledgeForensic', 'input', args[0])
+    const action = requireString('knowledgeForensic', 'input.action', input.action)
+    if (!['search', 'extract', 'subagents'].includes(action)) {
+      throw new Error(`workbench.knowledgeForensic: input.action must be one of search/extract/subagents (got ${action})`)
+    }
+    optionalString('knowledgeForensic', 'input.projectPath', input.projectPath)
+    optionalString('knowledgeForensic', 'input.keyword', input.keyword)
+    optionalString('knowledgeForensic', 'input.session', input.session)
+    optionalString('knowledgeForensic', 'input.skill', input.skill)
+    if (input.last !== undefined && input.last !== null && (typeof input.last !== 'number' || !Number.isInteger(input.last) || input.last <= 0)) {
+      throw new Error('workbench.knowledgeForensic: input.last must be a positive integer when present')
+    }
+    optionalString('knowledgeForensic', 'input.transcriptPath', input.transcriptPath)
+    optionalString('knowledgeForensic', 'input.sessionDir', input.sessionDir)
+    return services.knowledgeForensic(input as unknown as KnowledgeForensicInput)
+  })
+
+  register(C.featureList, args =>
+    services.featureList(requireString('featureList', 'projectId', args[0])))
+
+  register(C.featureStatus, (args) => {
+    const input = requireObject('featureStatus', 'input', args[0])
+    requireString('featureStatus', 'input.projectId', input.projectId)
+    requireString('featureStatus', 'input.featureSlug', input.featureSlug)
+    return services.featureStatus(input as unknown as { projectId: string; featureSlug: string })
+  })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

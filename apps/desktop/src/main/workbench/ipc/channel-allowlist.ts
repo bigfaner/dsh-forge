@@ -59,6 +59,16 @@ export const WORKBENCH_VERB_CHANNELS = {
   // tests/workbench-ipc.spec.ts deep-equal 断言):向导真实探测 + 内核位置读。
   probeCodeRoot: 'dsh-forge:workbench-probe-code-root',
   getWorkbenchPaths: 'dsh-forge:workbench-get-workbench-paths',
+  // —— M3 知识系 + feature 读段(任务 2.2 追加;Hard Rule 延续:追加式修改,
+  //    既有动词定义不改写)。动词面 = tech-design §Interface 2 D4 段
+  //    (fact/lesson/research 读+必要写、forensic 只读、feature list/status
+  //    只读);通道面零特权,动作分派与路径授权在内核(knowledge-service)。 ——
+  knowledgeFact: 'dsh-forge:workbench-knowledge-fact',
+  knowledgeLesson: 'dsh-forge:workbench-knowledge-lesson',
+  knowledgeResearch: 'dsh-forge:workbench-knowledge-research',
+  knowledgeForensic: 'dsh-forge:workbench-knowledge-forensic',
+  featureList: 'dsh-forge:workbench-feature-list',
+  featureStatus: 'dsh-forge:workbench-feature-status',
 } as const
 
 /**

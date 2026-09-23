@@ -30,6 +30,7 @@ import type {
   ForgeToolBridgeAnswer, ForgeToolBridgeCall,
 } from '../../host/forge-tools/bridge-core'
 import type {
+  KnowledgeFactInput, KnowledgeForensicInput, KnowledgeLessonInput, KnowledgeResearchInput,
   TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskStatus, TaskSubmitInput, TaskTransitionInput,
 } from '../ipc-types'
@@ -127,12 +128,39 @@ interface BridgeCallArgs {
   reason?: string
   recordPath?: string
   status?: TaskStatus
+  // —— 知识系 + feature 读族(任务 2.2;形态 = knowledge/feature-read 工具)——
+  action?: string
+  source?: string
+  confidence?: string
+  factId?: string
+  entry?: Record<string, unknown>
+  name?: string
+  tags?: string[]
+  severity?: string
+  created?: string
+  body?: string
+  slug?: string
+  topic?: string
+  mode?: string
+  dimensions?: string[]
+  candidates?: string[]
+  projectPath?: string
+  keyword?: string
+  session?: string
+  skill?: string
+  last?: number
+  transcriptPath?: string
+  sessionDir?: string
 }
 
 /**
  * 一帧 → I1 白名单动词的封闭映射(写动词透传 actor 审计;读动词不携带;
  * task_list = 无过滤 task_query,forge CLI task list 同义)。封闭集外的
  * 动词 = 类型面不可达,防御分支显式拒绝(T4 —— 桥不是透传面)。
+ *
+ * 知识系族(任务 2.2)按 action 判写:fact/lesson/research 的 add = 写
+ * 动作(actor 透传桥面;内核按 forge 数据面消费 —— 文件形态无作者槽,
+ * 不落盘),list/get/summary = 读动作不携带;forensic/feature 全只读。
  */
 function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Promise<unknown> {
   const args = call.args as unknown as BridgeCallArgs
@@ -153,6 +181,23 @@ function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Prom
       return bridge.taskQuery(args as unknown as TaskQueryInput)
     case 'task_list':
       return bridge.taskQuery({ projectId: args.projectId })
+    case 'knowledge_fact':
+      // add 的 actor 审计位随帧走(ForgeToolBridgeCall.actor),不进 IPC 面
+      // —— forge 文件数据面无作者槽(Hard Rule 不新增语义),内核不落盘。
+      return bridge.knowledgeFact(args as unknown as KnowledgeFactInput)
+    case 'knowledge_lesson':
+      return bridge.knowledgeLesson(args as unknown as KnowledgeLessonInput)
+    case 'knowledge_research':
+      return bridge.knowledgeResearch(args as unknown as KnowledgeResearchInput)
+    case 'knowledge_forensic':
+      return bridge.knowledgeForensic(args as unknown as KnowledgeForensicInput)
+    case 'feature_list':
+      return bridge.featureList(args.projectId as string)
+    case 'feature_status':
+      return bridge.featureStatus({
+        projectId: args.projectId as string,
+        featureSlug: args.featureSlug as string,
+      })
     default: {
       const unreachable: never = call.verb
       return Promise.reject(new Error(`forge tool bridge: unknown verb ${String(unreachable)}`))
