@@ -17,6 +17,8 @@ import { shellLog } from '../../log.ts'
 import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS, type WorkbenchVerbChannel } from './channel-allowlist.ts'
 import { assertWorkbenchSender, type WorkbenchEventSender, type WorkbenchVerbEvent } from './sender-validate.ts'
 import type {
+  DecideApprovalInput,
+  DispatchTasksInput,
   DocKind,
   KnowledgeFactInput,
   KnowledgeForensicInput,
@@ -167,7 +169,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // ---------------------------------------------------------------------------
 // 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
-// + stages 读段 3 条(任务 3.2)= 39 条白名单通道)
+// + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
+// = 44 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -559,6 +562,42 @@ export function installWorkbenchVerbs(
       requireString('listStageAssets', 'projectId', args[0]),
       requireString('listStageAssets', 'featureSlug', args[1]),
     ))
+
+  // —— M3 dispatch 段(任务 3.3):五条编排动词。Hard Rule 延续 —— 本层
+  // 只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;可派发集校验
+  // (状态/依赖)、产物检查消费、预合成契约查、审批审计与 ⇔ 不变式全部
+  // 在内核服务面(dispatch-service),不信任 renderer 语义(T1);
+  // dispatchTasks/redispatch 的 Promise 拒绝经 register 的 then 链同码封装。 ——
+
+  register(C.dispatchTasks, (args) => {
+    const input = requireObject('dispatchTasks', 'input', args[0])
+    requireString('dispatchTasks', 'input.projectId', input.projectId)
+    if (!Array.isArray(input.taskKeys) || input.taskKeys.some(key => typeof key !== 'string' || key === '')) {
+      throw new Error('workbench.dispatchTasks: input.taskKeys must be a non-empty array of non-empty board addresses')
+    }
+    if (input.acknowledgeMissing !== undefined && typeof input.acknowledgeMissing !== 'boolean') {
+      throw new Error(`workbench.dispatchTasks: input.acknowledgeMissing must be a boolean when present (got ${typeof input.acknowledgeMissing})`)
+    }
+    return services.dispatchTasks(input as unknown as DispatchTasksInput, requireString('dispatchTasks', 'actor', args[1]))
+  })
+
+  register(C.redispatch, args =>
+    services.redispatch(requireString('redispatch', 'dispatchId', args[0]), requireString('redispatch', 'actor', args[1])))
+
+  register(C.getDispatches, args =>
+    services.getDispatches(requireString('getDispatches', 'projectId', args[0])))
+
+  register(C.listApprovals, args =>
+    services.listApprovals(requireString('listApprovals', 'projectId', args[0])))
+
+  register(C.decideApproval, (args) => {
+    const input = requireObject('decideApproval', 'input', args[0])
+    requireString('decideApproval', 'input.approvalId', input.approvalId)
+    if (typeof input.approve !== 'boolean') {
+      throw new Error(`workbench.decideApproval: input.approve must be a boolean (got ${typeof input.approve})`)
+    }
+    return services.decideApproval(input as unknown as DecideApprovalInput, requireString('decideApproval', 'actor', args[1]))
+  })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

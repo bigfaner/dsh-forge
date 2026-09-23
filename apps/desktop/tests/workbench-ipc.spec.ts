@@ -142,6 +142,11 @@ function fakeServices(): WorkbenchVerbServices {
     checkStageArtifacts: vi.fn(() => ({ stage: 'prd', satisfied: true, missing: [] })),
     getStageGate: vi.fn(() => ({ featureSlug: 'alpha', stage: 'prd', summaryGenerated: false, gateAssetPath: null, assets: [] })),
     listStageAssets: vi.fn(() => []),
+    dispatchTasks: vi.fn(() => Promise.resolve({ dispatched: [] })),
+    redispatch: vi.fn(() => Promise.resolve({ dispatched: [] })),
+    getDispatches: vi.fn(() => []),
+    listApprovals: vi.fn(() => []),
+    decideApproval: vi.fn(() => ({ id: 'a-1', state: 'approved' })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -188,15 +193,18 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the thirty-nine whitelisted verb channels, one per verb', () => {
+  it('contains exactly the forty-four whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-check-stage-artifacts',
       'dsh-forge:workbench-clear-pref-override',
+      'dsh-forge:workbench-decide-approval',
+      'dsh-forge:workbench-dispatch-tasks',
       'dsh-forge:workbench-end-session-link',
       'dsh-forge:workbench-feature-list',
       'dsh-forge:workbench-feature-status',
+      'dsh-forge:workbench-get-dispatches',
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-migration-status',
       'dsh-forge:workbench-get-prefs',
@@ -209,11 +217,13 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-knowledge-forensic',
       'dsh-forge:workbench-knowledge-lesson',
       'dsh-forge:workbench-knowledge-research',
+      'dsh-forge:workbench-list-approvals',
       'dsh-forge:workbench-list-plugins',
       'dsh-forge:workbench-list-stage-assets',
       'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
       'dsh-forge:workbench-record-session-link',
+      'dsh-forge:workbench-redispatch',
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
@@ -230,7 +240,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(39)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(44)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -279,6 +289,11 @@ describe('workbench verb routing table', () => {
       'checkStageArtifacts',
       'getStageGate',
       'listStageAssets',
+      'dispatchTasks',
+      'redispatch',
+      'getDispatches',
+      'listApprovals',
+      'decideApproval',
     ])
   })
 
@@ -324,7 +339,7 @@ describe('workbench verb routing table', () => {
   it('registers exactly the 39 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(39)
+    expect(handlers.size).toBe(44)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })

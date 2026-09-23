@@ -283,7 +283,7 @@
         "3.2",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.3-dispatch-approval-domain.md",
       "record": "records/3.3-dispatch-approval-domain.md",
       "surface-type": "web",

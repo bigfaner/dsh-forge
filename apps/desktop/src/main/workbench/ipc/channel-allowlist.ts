@@ -84,6 +84,16 @@ export const WORKBENCH_VERB_CHANNELS = {
   checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
   getStageGate: 'dsh-forge:workbench-get-stage-gate',
   listStageAssets: 'dsh-forge:workbench-list-stage-assets',
+  // —— M3 dispatch 段(任务 3.3 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 编排段五动词
+  //    (dispatchTasks/redispatch/getDispatches/listApprovals/decideApproval);
+  //    可派发集校验/审批审计/⇔ 不变式在内核(dispatch-service),通道面
+  //    零特权;subagent 启动位点 = host 回调接口(launch-port),不经动词面。 ——
+  dispatchTasks: 'dsh-forge:workbench-dispatch-tasks',
+  redispatch: 'dsh-forge:workbench-redispatch',
+  getDispatches: 'dsh-forge:workbench-get-dispatches',
+  listApprovals: 'dsh-forge:workbench-list-approvals',
+  decideApproval: 'dsh-forge:workbench-decide-approval',
 } as const
 
 /**

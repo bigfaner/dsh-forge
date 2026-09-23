@@ -28,6 +28,16 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | '
 /** 最近一笔变更来源(Interface 3 判定序产物;task_snapshot.source CHECK)。 */
 export type ChangeSource = 'session' | 'terminal'
 
+/**
+ * dispatch 5 态词表(schema-v2.sql §4 dispatch.state CHECK 同源;任务 3.3):
+ * starting(subagent 启动中,session 未回填)→ running(session 已建)→
+ * awaiting(存在 pending 审批,⇔ 不变式)→ done/failed(终态,ended_at 置位)。
+ */
+export type DispatchState = 'starting' | 'running' | 'awaiting' | 'failed' | 'done'
+
+/** approval_request 3 态词表(schema-v2.sql §5 state CHECK 同源;任务 3.3)。 */
+export type ApprovalState = 'pending' | 'approved' | 'rejected'
+
 /** forge manifest 词表(feature_snapshot.status 透传;'in-progress' 连字符原词)。 */
 export type FeatureStatus = 'prd' | 'design' | 'tasks' | 'in-progress' | 'completed'
 

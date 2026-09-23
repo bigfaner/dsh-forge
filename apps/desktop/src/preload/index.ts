@@ -5,6 +5,11 @@ import type { RecoveryState } from '../main/crash-recovery/index.ts'
 // main bundle (see ./channel-allowlist.ts header; sync locked by tests).
 import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
 import type {
+  ApprovalRow,
+  DecideApprovalInput,
+  DispatchRow,
+  DispatchTasksInput,
+  DispatchTasksResult,
   FeatureBoardData,
   FeatureDoc,
   FeatureListEntry,
@@ -233,6 +238,26 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getStageGate, projectId, featureSlug) as Promise<StageGateInfo>,
     listStageAssets: (projectId: string, featureSlug: string): Promise<StageAssetRow[]> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listStageAssets, projectId, featureSlug) as Promise<StageAssetRow[]>,
+    // M3 dispatch verbs (task 3.3): the orchestration family. dispatchTasks
+    // validates the dispatchable set (status allowed + terminal deps — rejections
+    // arrive as the same { code, message, detail? } envelope, ERR_TASK_*),
+    // consumes checkStageArtifacts (missing & unacknowledged → the blocked
+    // union with the missing list) and creates one dispatch row per task
+    // sharing a batchId; the actor string is the dispatching human (audit).
+    // decideApproval is the only decision path (no auto-approval; decided_by
+    // audit); duplicate decisions → ERR_APPROVAL_DECIDED, stale entries →
+    // ERR_APPROVAL_NOT_FOUND. State reflux arrives through dispatch_updated /
+    // approval_received events (onEvents).
+    dispatchTasks: (input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.dispatchTasks, input, actor) as Promise<DispatchTasksResult>,
+    redispatch: (dispatchId: string, actor: string): Promise<DispatchTasksResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.redispatch, dispatchId, actor) as Promise<DispatchTasksResult>,
+    getDispatches: (projectId: string): Promise<DispatchRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getDispatches, projectId) as Promise<DispatchRow[]>,
+    listApprovals: (projectId: string): Promise<ApprovalRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listApprovals, projectId) as Promise<ApprovalRow[]>,
+    decideApproval: (input: DecideApprovalInput, actor: string): Promise<ApprovalRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.decideApproval, input, actor) as Promise<ApprovalRow>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the

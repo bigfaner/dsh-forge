@@ -12,7 +12,7 @@
 // 纯函数层:不触 db、不触 fs —— 分类单测无需库与 fixture(库级端到端在
 // scan 集成用例覆盖)。
 
-import type { ChangeSource, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
+import type { ChangeSource, DispatchState, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
 
 /**
  * Interface 1 WorkbenchEvent(indexer 产出的变更事件;2.6 watcher 经
@@ -53,6 +53,25 @@ export type WorkbenchEvent =
     readonly type: 'prefs_updated'
     readonly scope: 'global' | 'project' | 'feature'
     readonly scopeId: string
+  }
+  // M3 v2(任务 3.3;tech-design §Interface 1 事件扩展):编排域信号。
+  // dispatch_updated = dispatch 行状态迁移的回流通知(载荷在设计的
+  // { dispatchId, taskKey, state } 基础上扩 projectId —— 消费面(3.6-3.9
+  // 看板/详情)按激活项目过滤,prefs_updated 扩载荷同款细化);
+  // approval_received = approval_request(pending)入列通知(审批 dock 数据
+  // 到达信号;决策后的状态回流走 dispatch_updated)。
+  | {
+    readonly type: 'dispatch_updated'
+    readonly projectId: string
+    readonly dispatchId: string
+    readonly taskKey: string
+    readonly state: DispatchState
+  }
+  | {
+    readonly type: 'approval_received'
+    readonly projectId: string
+    readonly approvalId: string
+    readonly taskKey: string
   }
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——

@@ -59,6 +59,7 @@ import { createReingestHook } from '../migration/reingest-watcher.ts'
 import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
 import { createStagesVerbService } from '../stages/stages-service.ts'
+import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -280,6 +281,23 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       const project = findProjectRow(db, projectId)
       return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
     },
+  })
+
+  // M3 任务 3.3:编排动词服务(dispatch/approval 域)。装配缝:
+  //   - checkArtifacts = stagesVerbs.checkStageArtifacts(3.2 确定性清单的
+  //     dispatch 消费面,缺失 = blocked 联合返回);
+  //   - composePrompt 缺省(3.4 预合成引擎接线前 = 契约拒绝
+  //     ERR_SYSTEM_PROMPT_CONTRACT,dispatch 无自跑合成路径);
+  //   - launchPort 缺省(3.5 host dispatch-launch 接线前行留 starting;
+  //     Hard Rule:内核不持会话创建权);
+  //   - 事件经同一 sink 批推(dispatch_updated/approval_received;迁移/
+  //     偏好面 onEvent 同款单批直发形态)。
+  // host 回调面(receiveApproval/notify*——3.5 approval-bridge 与
+  // dispatch-launch 接线)保留在 dispatchVerbs 域面对象上,不入 IPC 动词面。
+  const dispatchVerbs = createDispatchVerbService({
+    db,
+    checkArtifacts: (projectId, featureSlug) => stagesVerbs.checkStageArtifacts({ projectId, featureSlug }),
+    onEvents: events => sink(events),
   })
 
   // M3 任务 1.7(UF3 集成读):内核管理位置 + 向导真实探测 + 可迁移判定
@@ -521,6 +539,15 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       checkStageArtifacts: input => stagesVerbs.checkStageArtifacts(input),
       getStageGate: (projectId, featureSlug) => stagesVerbs.getStageGate(projectId, featureSlug),
       listStageAssets: (projectId, featureSlug) => stagesVerbs.listStageAssets(projectId, featureSlug),
+
+      // —— M3 编排动词(任务 3.3):委托 dispatch/dispatch-service
+      //    (可派发集校验 + 产物检查消费 + 审批决策 + ⇔ 不变式;
+      //    subagent 启动位点 = host 回调接口,不经动词面)。 ——
+      dispatchTasks: (input, actor) => dispatchVerbs.dispatchTasks(input, actor),
+      redispatch: (dispatchId, actor) => dispatchVerbs.redispatch(dispatchId, actor),
+      getDispatches: projectId => dispatchVerbs.getDispatches(projectId),
+      listApprovals: projectId => dispatchVerbs.listApprovals(projectId),
+      decideApproval: (input, actor) => dispatchVerbs.decideApproval(input, actor),
 
       // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
       //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——

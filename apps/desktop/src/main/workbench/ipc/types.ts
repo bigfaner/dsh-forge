@@ -13,7 +13,9 @@
 //     否则 null / summary = `## Summary` 节原文),不虚构 forge 未写字段。
 
 import type {
+  ApprovalState,
   ChangeSource,
+  DispatchState,
   DocKind,
   FeatureStatus,
   Project,
@@ -28,6 +30,7 @@ import type { MigrationPhase, SyncStatusPayload as SyncStatus, WorkbenchEvent } 
 // 直接依赖 main 内部模块路径)。SyncStatus = 感知层的 SyncStatusPayload
 // (Interface 1 事件载荷形态)。
 export type { ChangeSource, DocKind, Project, ProjectPatch, RegisterProjectInput, SessionLink, TaskStatus }
+export type { ApprovalState, DispatchState }
 export type { SyncStatus, WorkbenchEvent, MigrationPhase }
 export type { FeatureStatus }
 
@@ -597,6 +600,80 @@ export interface StageGateInfo {
 }
 
 // ---------------------------------------------------------------------------
+// M3 编排域 DTO(任务 3.3;tech-design §Interface 1 编排段 dispatchTasks/
+// redispatch/getDispatches/listApprovals/decideApproval + §Data Models
+// dispatch/approval_request 行;schema-v2.sql §4/§5)
+// ---------------------------------------------------------------------------
+
+/** dispatch 行的 IPC 投影(Interface 1 DispatchRow;camelCase)。 */
+export interface DispatchRow {
+  readonly id: string
+  /** 同批多任务聚合 id(单次 dispatchTasks 一个)。 */
+  readonly batchId: string
+  readonly projectId: string
+  readonly featureSlug: string
+  /** 看板限定地址 `<featureSlug>/<localId>`。 */
+  readonly taskKey: string
+  /** 5 态(starting/running/awaiting/failed/done;done/failed 为终态)。 */
+  readonly state: DispatchState
+  /** subagent 会话 id;NULL = 尚未启动(host 回填)。 */
+  readonly sessionId: string | null
+  /** 注入内容 sha256(SC3 断言锚点;口径 = sha256(注入串))。 */
+  readonly promptHash: string
+  /** 派发发起者(人;actor 审计)。 */
+  readonly actor: string
+  readonly dispatchedAt: string
+  /** 终态时刻;在跑(starting/running/awaiting)恒 null。 */
+  readonly endedAt: string | null
+  /** 失败原因(failed 态);无 → null。 */
+  readonly error: string | null
+}
+
+/** approval_request 行的 IPC 投影(Interface 1 ApprovalRow;camelCase)。 */
+export interface ApprovalRow {
+  readonly id: string
+  readonly dispatchId: string
+  readonly projectId: string
+  readonly taskKey: string
+  /** 来源 subagent 会话。 */
+  readonly sessionId: string
+  /** 请求正文 + 类别(payload_json 防御解码值;损坏行 = null)。 */
+  readonly payload: unknown
+  /** 3 态(pending/approved/rejected)。 */
+  readonly state: ApprovalState
+  readonly createdAt: string
+  /** 决策时刻;pending → null。 */
+  readonly decidedAt: string | null
+  /** 审批审计(人;Hard Rule T5:仅显式动词决策)。 */
+  readonly decidedBy: string | null
+}
+
+/** dispatchTasks 入参(Interface 1 编排段;acknowledgeMissing = 缺失确认面)。 */
+export interface DispatchTasksInput {
+  readonly projectId: string
+  /** 看板限定地址集(单/多选;去重校验在内核)。 */
+  readonly taskKeys: readonly string[]
+  /** 产物缺失确认(确认后可派发,warn 不阻断;G4/SC4)。 */
+  readonly acknowledgeMissing?: boolean
+}
+
+/**
+ * dispatchTasks / redispatch 联合返回(Interface 1:dispatched = 已落库行
+ * 集,≤3s 启动预算内;blocked = 产物缺失未确认,missing = 结构化清单)。
+ * redispatch 的 Interface 1 草图为 DispatchRow[],因「重走检查」可 blocked,
+ * 统一为本联合(类型随任务分解细化的既定惯例)。
+ */
+export type DispatchTasksResult =
+  | { readonly dispatched: readonly DispatchRow[] }
+  | { readonly blocked: 'artifacts-missing'; readonly missing: readonly MissingItem[] }
+
+/** decideApproval 入参(Interface 1:显式点击,无自动批准)。 */
+export interface DecideApprovalInput {
+  readonly approvalId: string
+  readonly approve: boolean
+}
+
+// ---------------------------------------------------------------------------
 // 动词服务契约(handler 只做 参数校验 + 服务调用 + 错误映射,Hard Rule)
 // ---------------------------------------------------------------------------
 
@@ -690,6 +767,33 @@ export interface WorkbenchVerbServices {
   getStageGate(projectId: string, featureSlug: string): StageGateInfo
   /** 按阶段(管线序)返回 stage_asset 行;空集 = 无资产(合法状态)。 */
   listStageAssets(projectId: string, featureSlug: string): StageAssetRow[]
+  // —— M3 编排动词(任务 3.3;实现 = dispatch/dispatch-service.ts 经
+  // services.ts 装配;内核不持会话创建权 —— subagent 启动仅经 host 回调
+  // 接口 launch-port,3.5 接线)——
+  /**
+   * 派发(可派发集校验:状态允许 + 依赖终态 → 阻止并返回依赖提示;
+   * checkStageArtifacts 消费:缺失且未 acknowledgeMissing → blocked 联合
+   * 返回缺失清单;同批多任务单 batch_id、每任务独立行)。files 项目 →
+   * ERR_TASK_NOT_AUTHORITATIVE;预合成缺失 → ERR_SYSTEM_PROMPT_CONTRACT。
+   * 完成事件 dispatch_updated 经批量通道推送。
+   */
+  dispatchTasks(input: DispatchTasksInput, actor: TaskActor): Promise<DispatchTasksResult>
+  /**
+   * 重派发(failed 行的恢复路径):重走检查 + 预合成 + 新行落库(原行留
+   * 审计轨迹);二次确认在 UI。非 failed 行 → ERR_DISPATCH_STATE_INVALID;
+   * 行缺失 → ERR_DISPATCH_NOT_FOUND。
+   */
+  redispatch(dispatchId: string, actor: TaskActor): Promise<DispatchTasksResult>
+  /** 项目派发全量(dispatched_at 倒序;看板编排面板数据源)。 */
+  getDispatches(projectId: string): DispatchRow[]
+  /** 项目审批全量(pending 前 created_at 倒序;审批 dock 数据源)。 */
+  listApprovals(projectId: string): ApprovalRow[]
+  /**
+   * 审批显式决策(批准/拒绝):decided_by/decided_at 审计;重复决策 →
+   * ERR_APPROVAL_DECIDED;失效条目 → ERR_APPROVAL_NOT_FOUND。最后一条
+   * pending 决策后 dispatch awaiting → running(dispatch_updated 回流)。
+   */
+  decideApproval(input: DecideApprovalInput, actor: TaskActor): ApprovalRow
 }
 
 // ---------------------------------------------------------------------------
