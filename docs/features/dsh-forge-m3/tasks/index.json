@@ -10,10 +10,11 @@
       "title": "spike① dsh tool 注册契约:renderer 桥时延与启动竞态实测(T2 可用性确认)",
       "priority": "P0",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "0.1-spike-tool-registration.md",
       "record": "records/0.1-spike-tool-registration.md",
-      "type": "doc"
+      "type": "doc",
+      "blockedReason": "no implementation found"
     },
     "0.2-spike-subagent-approval": {
       "id": "0.2",

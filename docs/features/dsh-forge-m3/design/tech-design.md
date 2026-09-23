@@ -341,7 +341,8 @@ forge.fact / lesson / research / forensic                // D4 知识系(读+必
 
 > Phase 0 spike×4(零产品代码)回填;结论归档 design/,作为后续任务开工依据(SC8)。
 
-- [ ] spike ① dsh tool 注册契约:vendored `plugin-manager/tools.ts` 先例;renderer 桥时延与启动竞态实测(T2 可用性确认)。
+- [x] spike ① dsh tool 注册契约:vendored `plugin-manager/tools.ts` 先例;renderer 桥时延与启动竞态实测(T2 可用性确认)。**结论(2026-09-23,详见 [spike-1-tool-registration.md](spike-1-tool-registration.md)):T2 可用。①注册契约定形——`defineTool` + `ctx.tools.register`(host 半身 root context = 全局工具,base `tools` 行装配,`run_code` 保留名/同 scope 重名拒绝;先例逐项成立);②桥机制修正——字面「host 发起 rpc」在上游开放面不存在(转发事件白名单 const 闭合,`api/remotes/src/remote-events.ts`),可行形态 = **client 订问 stream Remote(`@Remote({mode:'stream'})`,sessionController.follow/control 先例)+ 单向 answer**,经自有 `TypertRemoteService`(SRC 发现,M2 ForgeBridge 同型),零新端口/零新依赖/动词封闭保持,已以最小实测工程全链打通;③实测时延——桥全往返 med ~1.3ms、含 dsh 工具管线 ~16ms,boot 竞态由 backlog 重放吸收(无丢失),无人应答走预算超时——「重试一次 + ERR_TOOL_BRIDGE_UNAVAILABLE」降级链充分(附 activeStreams 快速失败优化建议);④**偏差回填——`forge.task.add` 点号名会被 provider 字符集拒绝(名原样上 wire,上游全 snake_case),2.1 须改下划线扁平名(`forge_task_add`)或单工具+action 枚举**。**
+
 - [ ] spike ② subagent 审批面:审批事件订阅/应答通道 + FORGE_ACTOR 在 subagent 上下文的透传形态。
 - [ ] spike ③ systemPrompt 注入契约:四候选裁决——①create 选项 ②会话模板/preset ③首条 system 消息 ④**首条 user 消息追加(M2 已落地 e2e 验证基线:`prompt(mode:'queue')` + FORGE_ACTOR 追加行 + 逐字符 hash oracle;实测 dsh 无 per-session env 注入面)**;先证伪/证实 systemPrompt 面存在性,无则 ④ 默认;`prompt_hash` 口径随裁决。
 - [ ] spike ④ `forge prompt` 模板移植面:任务类型协议文本清单 + 预合成模板映射(含暂缓技能的协议依赖);**模板权威源 = forge-cli `pkg/prompt/templates` + `pkg/task/templates`**(Go 源码逐文件核对,不凭文档记忆)。
