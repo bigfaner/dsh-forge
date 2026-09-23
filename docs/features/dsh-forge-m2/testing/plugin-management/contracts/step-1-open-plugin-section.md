@@ -21,18 +21,20 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
-- Preconditions: "应用已启动并进入工作台;插件装置就绪——forge 核心插件以必备身份装配(必备标识派生自产品级配置清单 mandatory 标注),第三方 fixture 插件至少 2 个且均启用(基座 hello-world + fixture 内动态注册第二实例,「仅该插件」收敛需第二实例对照方可证伪);plugin-runtime.json 为合法状态(缺失或无违规条目;失效形态腿见 overlay-invalid)"
+- Preconditions: "应用已启动并进入工作台;插件装置就绪——forge 核心插件以必备身份装配(必备标识派生自产品级配置清单 mandatory 标注,FT-048),第三方 fixture 插件至少 2 个且均启用(「仅该插件」收敛需第二实例对照方可证伪;第三方样例物化机制 = 测试 profile 清单变体,见 state_requirements);plugin-runtime.json 为合法状态(缺失或无违规条目,FT-048;失效形态腿见 overlay-invalid)"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
-            value: "forge 核心插件恰一个 = true"
+            value: "产品清单条目全部 mandatory = true(当前 3 条:@deepseek-ai/dsh-base、@deepseek-ai/dsh-web-app、@dsh-forge/plugin-forge-workbench;hello-world 已移出产品清单)"
           - field: "enabled"
-            value: "全部启用(覆盖文件缺失或为空 = 全启用)"
+            value: "全部启用(覆盖文件缺失或为空 = 全启用,FT-048)"
     state_requirements:
       - description: "一次性 fixture 装置:临时目录 + 隔离 userData(启停覆盖文件 plugin-runtime.json 归旅程控制)、测试后清理"
+        prerequisite_entity: "Plugin"
+      - description: "测试 profile 清单变体(任务 6.5 注记口径):产品 3 必备之外,hello-world 以非必备条目入清单变体、第二第三方样例亦在清单变体内落名——插件行集唯一来源是清单文件(listPlugins 行集 = manifest.map,FT-048),第三方样例不经清单变体无法出现在插件区(宿主槽位「动态注册」不入插件行集);变体仅存在于测试 profile,不动生产清单语义"
         prerequisite_entity: "Plugin"
       - description: "跨面断言口径:文件面断言由测试进程直读 fixture 文件(产品清单 sha256 前后对拍、覆盖文件写入、forge 数据 hash 对拍),不以「没报错」为据"
         prerequisite_entity: "Plugin"
@@ -54,27 +56,45 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
             value: true
 - Input: "用户在必备插件行寻找禁用入口并尝试发起禁用"
 - Output: "必备插件行无禁用入口(不渲染,而非渲染后禁用);渲染面不存在禁用 forge 核心插件的通道"
-- State: "无启停写请求可从浏览器面发出;纵深第二层(对必备名启停写请求的守卫拒绝,ERR_PLUGIN_MANDATORY)由 SC6 验收,不在浏览器面断言"
+- State: "无启停写请求可从浏览器面发出;纵深第二层(对必备名启停写请求的守卫拒绝,ERR_PLUGIN_MANDATORY,FT-049)由 SC6 验收,不在浏览器面断言"
 - Side-effect: "none"
 
 ## Outcome "overlay-invalid"
 <!-- surface-web required_outcomes 映射:session-expired → 本旅程为离线桌面应用(继承 M1 无端口/无服务端会话模型),无字面会话过期面;通道失效类比 = 运行时启停状态通道失效(plugin-runtime.json 被篡改塞必备名/坏 JSON 解析失败),按 ERR_PLUGIN_RUNTIME_STATE 处置 = 本边 -->
 <!-- source: inferred:处置口径(启动不阻断、违规条目剔除回退清单态)无 PRD 明文;依据 = tech-design Interface 4 双层防护(解析即校验)+ 已落地 sc6 e2e 两型篡改腿 -->
-- Preconditions: "隔离 userData 内的 plugin-runtime.json 失效(①被篡改塞入必备名;②坏 JSON 解析失败;fixture 预置后启动)"
+- Preconditions: "隔离 userData 内的 plugin-runtime.json 失效(①被篡改塞入必备名;②坏 JSON 解析失败)"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
-            value: "forge 核心插件恰一个 = true"
+            value: "产品清单条目全部 mandatory = true(当前 3 条,口径同 success 腿)"
     state_requirements:
       - description: "plugin-runtime.json 预置失效形态(塞必备名 / 坏 JSON)"
         prerequisite_entity: "Plugin"
 - Input: "用户启动应用并打开插件管理区"
 - Output: "启动不阻断;插件区按清单态呈现——必备插件全数在位且必备徽标在,两级行态不受违规内容影响;应用不崩溃、不展示残缺列表"
-- State: "坏 JSON:原文件隔离为带时间戳的损坏备份 + 空覆盖重建;塞必备名:违规条目内存剔除 + 结构化日志(ERR_PLUGIN_RUNTIME_STATE),清单态获胜"
+- State: "坏 JSON:原文件隔离为带时间戳的损坏备份 + 空覆盖重建;塞必备名:违规条目内存剔除 + 结构化日志(ERR_PLUGIN_RUNTIME_STATE),清单态获胜(FT-050)"
 - Side-effect: "损坏文件隔离重建仅发生在隔离 userData 内(旅程控制);产品清单字节不变"
+
+## Outcome "load-error-retry"
+<!-- source: inferred:插件区首载失败错误卡 + 重试 + 失败重列保底无 PRD 明文;依据 = PluginSection 实装行为(packages/plugins/forge-workbench/src/client/views/overview/PluginSection.tsx:首载失败无行可渲染 → load-error 重试错误卡;已就绪后的重列失败保持末次良好行,不乐观清空) -->
+- Preconditions: "插件区首载失败(listPlugins 首载拒绝;发生于首载成功前,与 success 的就绪态及 overlay-invalid 的清单态回退均互斥——后两者 listPlugins 调用成功)"
+  fixture_spec:
+    entities:
+      - entity_type: "Plugin"
+        min_count: 5
+        field_constraints:
+          - field: "mandatory"
+            value: "产品清单条目全部 mandatory = true(当前 3 条,口径同 success 腿)"
+    state_requirements:
+      - description: "listPlugins 首载拒绝注入(装置态;重试后恢复为正常清单装置)"
+        prerequisite_entity: "Plugin"
+- Input: "用户查看插件管理区,并在错误卡上点击「重试」"
+- Output: "首载失败时插件区呈现加载失败错误卡(含重试入口),不呈现空白或残缺列表;重试成功后恢复两级呈现(清单态完整)"
+- State: "首载失败无行可渲染 → 错误卡;失败重列保底——已就绪后的重列失败保持末次良好行,不乐观清空既有行态"
+- Side-effect: "none(加载路径只读)"
 
 ## Journey Invariants
 
@@ -91,5 +111,5 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 fixture_spec:
   entities:
     - entity_type: "Plugin"
-      min_count: 3
+      min_count: 5
 ```

@@ -25,14 +25,29 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
           - field: "enabled"
             value: "目标插件启用中"
+      - entity_type: "Project"
+        min_count: 1
+        field_constraints:
+          - field: "active"
+            value: true
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "SessionLink"
+        min_count: 0
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
     state_requirements:
-      - description: "目标插件注入内容未在线使用于活跃会话/挂接视图"
+      - description: "常规场景装置:session_links 无承载目标插件注入内容的活跃挂接(目标内容未在线使用)——挂接索引为工作台自有 SoT、不可从 forge 文件推导(FT-035),fixture 显式钉缺席"
+        prerequisite_entity: "SessionLink"
+      - description: "第三方 fixture 插件经测试 profile 清单变体物化(口径见 step-1 Setup:产品 3 必备 + 2 第三方样例,行集唯一来源 = 清单文件)"
         prerequisite_entity: "Plugin"
 - Input: "对第三方插件点击「禁用」"
 - Output: "出现二次确认,说明影响(仅该插件注入内容退出;forge 数据与工作台核心能力不受影响)"
@@ -44,14 +59,34 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
           - field: "enabled"
             value: "目标插件启用中"
+      - entity_type: "Project"
+        min_count: 1
+        field_constraints:
+          - field: "active"
+            value: true
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "active"
     state_requirements:
-      - description: "目标插件注入内容在活跃挂接会话内在线使用"
+      - description: "目标插件注入内容在活跃挂接会话内在线使用(挂接会话经 UF5 发起链铺出或 fixture 直排 session_links;挂接索引为工作台自有 SoT、不可从 forge 文件推导,FT-035)"
+        prerequisite_entity: "SessionLink"
+      - description: "挂接会话本体存活装置:该 active 挂接承载的会话进程在线(禁用断言「会话本体不中断」以此为前提)"
+        prerequisite_entity: "SessionLink"
+      - description: "第三方 fixture 插件经测试 profile 清单变体物化(口径见 step-1 Setup:产品 3 必备 + 2 第三方样例,行集唯一来源 = 清单文件)"
         prerequisite_entity: "Plugin"
 - Input: "在此在线使用状态下对该插件发起禁用并确认"
 - Output: "二次确认明确提示影响(会话本体与核心挂接能力不受影响);确认后仅该插件注入内容退出,会话本体不中断,挂接区显示第三方扩展内容退出说明(third-party-disabled 态)"
@@ -73,5 +108,15 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 fixture_spec:
   entities:
     - entity_type: "Plugin"
-      min_count: 3
+      min_count: 5
+    - entity_type: "Project"
+      min_count: 1
+    - entity_type: "Task"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Project"
+    - entity_type: "SessionLink"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Task"
 ```

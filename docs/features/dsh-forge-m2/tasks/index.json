@@ -738,7 +738,7 @@
       "dependencies": [
         "T-test-gen-contracts"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "eval-contract.md",
       "record": "records/eval-contract.md",
       "mainSession": true,

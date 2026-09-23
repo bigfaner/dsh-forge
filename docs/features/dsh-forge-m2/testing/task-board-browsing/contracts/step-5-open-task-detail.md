@@ -21,7 +21,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
-- Preconditions: "所选任务已有执行记录(Setup 预置:来源 = 会话/终端各至少 1);看板正常加载"
+- Preconditions: "所选任务已有执行记录(Setup 预置:来源 = 会话/终端各至少 1)且该任务无挂接历史;看板正常加载"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -31,15 +31,22 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         relationship_type: "belongs_to"
         parent_entity: "Project"
       - entity_type: "TaskRecord"
-        min_count: 1
+        min_count: 2
         relationship_type: "belongs_to"
         parent_entity: "Task"
         field_constraints:
           - field: "source"
             value: "会话与终端来源各至少一笔(fixture 内)"
+      - entity_type: "SessionLink"
+        min_count: 0
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+    state_requirements:
+      - description: "所选任务挂接历史为空:session_links 无该任务的行——挂接索引为工作台自有 SoT、不可从 forge 文件推导,fixture 须显式钉零(隔离 userData、零挂接写入足迹),挂接历史区因此确定为空态"
+        prerequisite_entity: "Task"
 - Input: "用户点击一个已有执行记录的任务卡片/节点"
-- Output: "详情面板展示描述(任务文件原文只读渲染)、依赖链(上游 blocker 传递链)、执行记录(时间/类型/来源/摘要),均可只读浏览;无挂接历史时该区显示空态说明(该任务尚未挂接会话)"
-- State: "选中任务态建立;TaskDetail 载入(summary + 描述原文 + 依赖链 + 执行记录 + 挂接历史);执行记录如实呈现 forge 写入的记录(不虚构字段)"
+- Output: "详情面板展示描述(任务文件原文只读渲染)、依赖链(上游 blocker 传递链,FT-055)、执行记录(时间/类型/来源/摘要),均可只读浏览;挂接历史区显示空态说明「该任务尚未挂接会话」(FT-052 detail.links.empty)"
+- State: "选中任务态建立;任务详情载入(摘要 + 描述原文 + 依赖链 + 执行记录 + 挂接历史,组成见 FT-055;本 Outcome 挂接历史为空、呈现空态);执行记录如实呈现 forge 写入的记录(不虚构字段)"
 - Side-effect: "none(只读)"
 - Invariants: "详情无写操作入口;记录来源呈现与 forge 数据一致"
 
@@ -83,7 +90,11 @@ fixture_spec:
       relationship_type: "belongs_to"
       parent_entity: "Project"
     - entity_type: "TaskRecord"
-      min_count: 1
+      min_count: 2
+      relationship_type: "belongs_to"
+      parent_entity: "Task"
+    - entity_type: "SessionLink"
+      min_count: 0
       relationship_type: "belongs_to"
       parent_entity: "Task"
 ```

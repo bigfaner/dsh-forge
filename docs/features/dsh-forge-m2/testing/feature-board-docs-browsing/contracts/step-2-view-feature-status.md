@@ -21,7 +21,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
-- Preconditions: "feature 看板已加载双 feature 样板(completed 五类齐备 / in-progress 缺可选文档类)"
+- Preconditions: "feature 看板已加载双 feature 样板(completed 五类齐备 / in-progress 缺 ui 类可选文档)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -34,10 +34,10 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
           - field: "status"
             value: "completed 与 in-progress 各一个"
           - field: "docKinds"
-            value: "completed 五类齐备;in-progress 缺可选文档类"
+            value: "completed 五类齐备;in-progress 缺 ui 类(单类缺席实例,可确定实例化)"
 - Input: "依次点击 completed 样板与 in-progress 样板 feature"
-- Output: "completed 样板状态机显示 completed,in-progress 样板显示 in-progress(forge manifest 词表透传,五态全称标签);进入 feature 详情/文档目录:五类 tab 恒在,按该 feature 实际文档类启用、缺类禁用不隐藏"
-- State: "feature 详情子视图打开(视图键 = feature slug 段);docKinds 投影驱动 tab 启停;状态 stepper 呈现对应态"
+- Output: "completed 样板状态机显示 completed,in-progress 样板显示 in-progress(forge manifest 词表透传,五态全称标签,FT-034);进入 feature 详情/文档目录:五类 tab 恒在,按该 feature 实际文档类启用、缺类禁用不隐藏(FT-054)"
+- State: "feature 详情子视图打开(视图键 = feature slug 段,FT-053 子视图寻址);docKinds 投影驱动 tab 启停(FT-054);状态 stepper 呈现对应态"
 - Side-effect: "none(只读)"
 - Invariants: "缺类文档 tab = 禁用而非隐藏;状态词表与 forge manifest 一致"
 

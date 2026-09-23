@@ -33,8 +33,11 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         field_constraints:
           - field: "branch"
             value: "至少一个任务带非空执行分支名,至少一个任务为空(无执行痕迹)"
+    state_requirements:
+      - description: "跨面断言通道:任务集合一致性校验 = 测试进程直读 fixture forge 文件(浏览器侧不自行观测 CLI 输出)"
+        prerequisite_entity: "Task"
 - Input: "用户切换「状态分组」视图,再切换「列表」视图(segmented 三视图控件)"
-- Output: "状态分组视图按 forge 任务状态(7 态)分组展示;列表视图含执行分支名列——带执行分支的任务显示分支名、无执行痕迹的任务显示空占位(不虚构 forge 未写的字段);任务集合与 forge 数据一致(校验通道 = 测试进程直读 fixture forge 文件)"
+- Output: "状态分组视图按 forge 任务状态(7 态,FT-033)分组展示;列表视图含执行分支名列——带执行分支的任务显示分支名、无执行痕迹的任务显示空占位(branch 可空、不虚构 forge 未写的字段,FT-032);任务集合与 forge 数据一致"
 - State: "视图切换为会话期内存态(不持久化);任务数据不变(同一快照的不同投影)"
 - Side-effect: "none(视图态本地记忆属 DF005 视图状态,不写事实数据)"
 - Invariants: "7 态分组词表与 forge 状态一致;空占位不虚构字段"

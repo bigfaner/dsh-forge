@@ -25,36 +25,38 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
           - field: "enabled"
             value: "目标插件已停用"
     state_requirements:
+      - description: "第三方 fixture 插件经测试 profile 清单变体物化(口径见 step-1 Setup:产品 3 必备 + 2 第三方样例,行集唯一来源 = 清单文件)"
+        prerequisite_entity: "Plugin"
       - description: "跨面断言口径:数据完整 = 测试进程直读 fixture 文件 hash 对拍"
         prerequisite_entity: "Plugin"
 - Input: "对该第三方插件点击「启用」"
-- Output: "该插件注入内容恢复、行回到启用态;数据完整(hash 对拍)"
+- Output: "该插件注入内容恢复、行回到启用态;数据完整"
 - State: "覆盖文件写入(目标插件名移出 disabled 集);清单态不变"
 - Side-effect: "启停仅写覆盖文件(清单字节不变)"
 
 ## Outcome "restart-persistence"
 <!-- source: inferred:「重启后禁用状态保持」无 PRD 明文;依据 = UF6 Data Requirements「第三方插件状态 | 运行时启停状态(同一配置)」——启停状态持久于配置的运行时部分,跨启动并入装配对账 -->
-- Preconditions: "第三方插件已被禁用且不执行启用操作,直接重启应用(与 success 的启用腿互斥);重启腿执行假设成立(等待进程退出 + 单实例锁释放后再启动,每次启动前单实例探测)"
+- Preconditions: "第三方插件已被禁用且不执行启用操作,直接重启应用(与 success 的启用腿互斥)"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标与对照第三方插件 = false"
           - field: "enabled"
             value: "目标插件已停用,对照启用中"
     state_requirements:
-      - description: "重启前无活跃 dsh-forge 实例(单实例锁释放;否则 ERR_SINGLE_INSTANCE 环境性失败)"
+      - description: "重启执行口径:测试进程等待进程退出 + 单实例锁释放后再启动,每次启动前单实例探测——重启前无活跃 dsh-forge 实例(单实例锁未释放 = ERR_SINGLE_INSTANCE 环境性失败,FT-006)"
         prerequisite_entity: "Plugin"
-- Input: "重启应用并打开插件管理区与工作台(e2e 驱动面:测试进程等待进程退出与单实例锁释放后重新启动)"
+- Input: "重启应用并打开插件管理区与工作台"
 - Output: "该插件禁用状态保持(行仍呈现已停用、注入内容仍退出);另一第三方插件启停状态不受牵连;数据完整;forge 核心插件仍以必备身份在位"
 - State: "覆盖文件跨启动持久(userData 内);启动装配按清单 × 覆盖对账"
 - Side-effect: "none(重启只读对账)"
@@ -74,5 +76,5 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 fixture_spec:
   entities:
     - entity_type: "Plugin"
-      min_count: 3
+      min_count: 5
 ```

@@ -40,7 +40,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         prerequisite_entity: "Task"
 - Input: "用户点击该任务卡片/节点,查看卡片角标与详情内标识"
 - Output: "worktree 标识可见(卡片角标);任务详情内标识可见"
-- State: "选中任务态建立;worktree/branch 字段如实投影自快照"
+- State: "选中任务态建立;worktree/branch 字段如实投影自快照(FT-032:worktree 布尔、branch 可空执行分支)"
 - Side-effect: "none(只读)"
 
 ## Journey Invariants

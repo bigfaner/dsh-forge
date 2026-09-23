@@ -45,11 +45,12 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         prerequisite_entity: "Task"
 - Input: "双形态交替各执行至少 1 次读写向变更操作(终端与挂接会话轮流对任务执行操作)"
 - Output: "每笔变更在看板与终端双侧均正确反映,变更来源逐笔标记正确([会话]/[终端])"
-- State: "每笔变更一次 task_updated 事件 + 快照 upsert;来源槽逐笔更新(会话侧 = actor 标记或 active 挂接推断;终端侧 = 无 active 挂接的终端变更)"
+- State: "每笔变更一次 task_updated 事件与看板快照更新(FT-046);来源逐笔更新(判定序:actor 标记 → active 挂接推断 → 否则终端,FT-045;仅变更行判定,未变更行保留历史来源)"
 - Side-effect: "forge 文件被双侧操作变更(工作台零写回)"
 - Invariants: "来源标记逐笔正确;不产生第二事实源"
 
 ## Outcome "simultaneous-late-op-rejected"
+<!-- surface-web required_outcomes 映射:validation-error → 本旅程看板人侧只读、无表单输入面;非法输入类比 = 双形态并发下不满足 forge 状态机前置的操作输入,由 forge CLI 拒绝并反馈发起侧 = 本边 -->
 - Preconditions: "终端与挂接会话几乎同时对同一任务发起操作,且后到操作不满足 forge 状态机前置(如对已完成转移的任务再次 claim)"
   fixture_spec:
     entities:
@@ -77,7 +78,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 
 ## Outcome "simultaneous-late-op-accepted"
 <!-- source: inferred:后到操作合法分支与被拒分支同源——journey Step 3b「后到操作按 forge 状态语义处理(如未满足前置则被 CLI 拒绝)」隐含合法分支顺序生效;forge 状态机为唯一裁决者,顺序语义由写入时序决定 -->
-- Preconditions: "终端与挂接会话几乎同时对同一任务发起操作,且后到操作按 forge 状态语义仍合法(状态机允许顺序执行)"
+- Preconditions: "终端与挂接会话几乎同时对同一任务发起操作,且后到操作按 forge 状态语义仍合法(状态机允许顺序执行;操作对配方:任务起始 status = pending——先到操作 = claim(pending 可认领),后到操作 = transition(claim 后状态满足转移前置),两笔按到达序均满足 forge 状态机前置,对照 rejected 腿「后到前置不满足」配方)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -86,6 +87,9 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+        field_constraints:
+          - field: "status"
+            value: "pending(确定性起始态:先到 claim → 后到 transition,按到达序均合法)"
       - entity_type: "SessionLink"
         min_count: 1
         relationship_type: "belongs_to"
@@ -110,9 +114,12 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+    state_requirements:
+      - description: "跨面断言口径:任务集一致性 = 测试进程直读 fixture forge 文件对拍(浏览器侧不自行观测文件系统)"
+        prerequisite_entity: "Project"
 - Input: "终端新增(或移除)任务文件,保持看板打开观察"
-- Output: "结构性变更 5 秒内回流呈现(结构性增量/移除;新任务出现或消失任务移出,删除不留孤儿);任务集与 forge 数据一致(测试进程直读对拍)"
-- State: "task_snapshot 集合与 forge 文件任务集一致(新增行 upsert / 消失行删除);事件 changeKind = structural"
+- Output: "结构性变更 5 秒内回流呈现(结构性增量/移除;新任务出现、消失任务移出);删除不留孤儿——孤儿 = 看板侧已消失任务的残留呈现(挂接记录不做级联清除,其处置按 Step 5 挂接保留语义);看板任务集与 forge 数据一致"
+- State: "看板任务集与 forge 文件任务集一致(新增任务入集、消失任务出集,无残留呈现);变更事件 changeKind = structural(FT-046)"
 - Side-effect: "none(工作台只读感知)"
 - Invariants: "看板任务集与事实源一致"
 

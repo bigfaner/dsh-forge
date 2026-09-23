@@ -40,9 +40,11 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
     state_requirements:
       - description: "对比口径:渲染文本空白剥离规范化后与仓外 fixture 文件投影全等(仓内/仓外同口径,测试进程直读)"
         prerequisite_entity: "ExternalDocTree"
+      - description: "读取/渲染实现口径:readFeatureDoc 按项目文档位置解析(FT-030;external 位置语义 = FT-036);仓内/仓外由同一渲染组件承载(「同一渲染面」实现口径)"
+        prerequisite_entity: "ExternalDocTree"
 - Input: "打开该仓外项目的 feature 过程文档浏览"
-- Output: "feature 详情带仓外文档角标;文档与仓内同一渲染面只读展示,按同一规范化口径与仓外 fixture 文件全等(「格式与仓内一致」的可观测口径)"
-- State: "文档读取自仓外路径(readFeatureDoc 按项目文档位置解析);呈现层零分叉(同一渲染组件)"
+- Output: "feature 详情带仓外文档角标(设计源 = ui-design UF4 Data Mapping:仓外角标 = 文档位置来源,工作台自有状态 DF005);文档与仓内同一渲染面只读展示,渲染内容与仓外 fixture 文件投影一致(对拍口径见 state_requirements)"
+- State: "文档读取自项目登记的仓外文档位置(FT-036);呈现与仓内同一渲染面、零分叉"
 - Side-effect: "none(只读)"
 
 ## Outcome "external-path-invalid-repoint"
@@ -62,9 +64,12 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         field_constraints:
           - field: "state"
             value: "第一棵树已失效(移动/删除);第二棵树为恢复目标"
+    state_requirements:
+      - description: "重指向落库口径(仅供对拍,不入行为断言):doc_location_path 更新为第二仓外树(FT-036);路径失效注入 = fixture 临时目录内移动/删除第一棵树(随 fixture 清理)"
+        prerequisite_entity: "ExternalDocTree"
 - Input: "打开该项目的 feature 详情并点击文档;随后经重新指向入口走向导编辑模式,指向第二仓外树并重确认授权"
-- Output: "明确提示路径不可访问(error 态)并提供重新指向/移除项目引导;已扫快照数据不被静默清空(feature 列表仍在);重指向并重确认授权后,错误态消退、feature 列表与文档按新树重建"
-- State: "失效期:读取失败仅作用于文档读取面,既有 feature 快照保留(不静默清空);恢复:doc_location_path 更新为第二仓外树(编辑模式走同一注册校验链,仓外同样需授权——无豁免),快照按新树重建"
+- Output: "明确提示路径不可访问(error 态)并提供重新指向/移除项目引导(FT-053:外部文档失效 → 错误卡 + 重新指向引导);已扫快照数据不被静默清空(feature 列表仍在);重指向并重确认授权后,错误态消退、feature 列表与文档按新树重建"
+- State: "失效期:读取失败仅作用于文档读取面,既有 feature 快照保留(不静默清空);恢复:仓外文档位置更新为第二仓外树(编辑模式走同一注册校验链,仓外同样需授权——无豁免,FT-051),快照按新树重建"
 - Side-effect: "重指向只写工作台自有库;零项目目录写入"
 
 ## Journey Invariants

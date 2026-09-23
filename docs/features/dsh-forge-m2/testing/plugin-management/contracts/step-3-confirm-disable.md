@@ -21,22 +21,26 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
-- Preconditions: "禁用二次确认对话框已确认;目标第三方插件启用中且注入内容未在线使用(常规场景);另一第三方插件启用中(对照);启停覆盖文件已存在(常规装置;覆盖文件尚不存在时的首次写文件腿见 first-write-creates-overlay)"
+- Preconditions: "禁用二次确认对话框已确认;目标第三方插件启用中且注入内容未在线使用(常规场景);另一第三方插件启用中(对照);启停覆盖文件已存在(常规装置,预置内容见 state_requirements;覆盖文件尚不存在时的首次写文件腿见 first-write-creates-overlay)"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标与对照第三方插件 = false"
           - field: "enabled"
             value: "确认前目标与对照均启用"
     state_requirements:
+      - description: "常规装置:plugin-runtime.json 预置存在,disabled 集不含目标与对照第三方名(对照插件「不受影响」断言的装置基线)"
+        prerequisite_entity: "Plugin"
+      - description: "第三方 fixture 插件经测试 profile 清单变体物化(口径见 step-1 Setup:产品 3 必备 + 2 第三方样例,行集唯一来源 = 清单文件)"
+        prerequisite_entity: "Plugin"
       - description: "跨面断言口径:forge 数据零损坏 = hash 前后对拍(测试进程直读 fixture 文件)"
         prerequisite_entity: "Plugin"
 - Input: "确认禁用"
-- Output: "仅该插件注入内容退出,该插件行转为已停用态(状态 + 「启用」动作);另一第三方插件注入内容不受影响;任务看板/会话挂接等核心能力不受影响;forge 数据零损坏(hash 对拍)"
-- State: "覆盖文件写入(目标插件名入 disabled 集,结构上仅容第三方名);清单态与行态刷新"
+- Output: "仅该插件注入内容退出,该插件行转为已停用态(状态 + 「启用」动作);另一第三方插件注入内容不受影响;任务看板/会话挂接等核心能力不受影响;forge 数据零损坏"
+- State: "覆盖文件写入(目标插件名入 disabled 集,结构上仅容第三方名,FT-048);清单态与行态刷新"
 - Side-effect: "启停仅写 userData 覆盖文件(产品清单字节不变)"
 
 ## Outcome "double-click-guard"
@@ -45,7 +49,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
@@ -53,24 +57,27 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
       - description: "启停操作执行窗口期(transitioning)"
         prerequisite_entity: "Plugin"
 - Input: "在操作完成前快速重复点击「禁用/启用」"
-- Output: "行保持操作中指示直至本次操作完成,重复点击不触发第二次启停执行;不产生中间损坏状态(零损坏不变量,hash 对拍)"
+- Output: "行保持操作中指示直至本次操作完成,重复点击不触发第二次启停执行;不产生中间损坏状态(零损坏不变量)"
 - State: "仅一次启停执行落覆盖文件;最终行态 = 单次操作结果"
 - Side-effect: "同单次启停(无重复写)"
 
 ## Outcome "cancel-no-op"
-- Preconditions: "禁用二次确认对话框已打开(Step 2 发起后)"
+- Preconditions: "禁用二次确认对话框已打开(Step 2 发起后);启停覆盖文件已存在且 disabled 集不含目标与对照第三方名(装置钉死存在性,见 state_requirements——覆盖文件缺席装置由 first-write-creates-overlay 腿持有,本腿「写入未发生」断言需既有字节为基线)"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
           - field: "enabled"
             value: "目标插件启用中"
+    state_requirements:
+      - description: "取消腿装置:plugin-runtime.json 预置存在,disabled 集不含目标与对照第三方名(「覆盖文件未被写入」断言的对拍基线;若无文件装置,断言改为「文件仍不存在」)"
+        prerequisite_entity: "Plugin"
 - Input: "在确认对话框选择「取消」"
 - Output: "对话框关闭且无任何状态变化:该插件仍启用、注入内容保持在线"
-- State: "启停覆盖文件未被写入(文件面对拍:内容不变)"
+- State: "启停覆盖文件未被写入(内容与预置一致)"
 - Side-effect: "none(取消路径零写入)"
 
 ## Outcome "first-write-creates-overlay"
@@ -79,7 +86,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
   fixture_spec:
     entities:
       - entity_type: "Plugin"
-        min_count: 3
+        min_count: 5
         field_constraints:
           - field: "mandatory"
             value: "目标第三方插件 = false"
@@ -87,7 +94,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
       - description: "plugin-runtime.json 缺失(首次启停前的初始态)"
         prerequisite_entity: "Plugin"
 - Input: "对目标第三方插件执行禁用并确认"
-- Output: "禁用生效(行转已停用);覆盖文件被创建,内容恰为只含该插件名的 disabled 集(文件面直读断言);产品清单字节不变(sha256 对拍)"
+- Output: "禁用生效(行转已停用);覆盖文件被创建,内容恰为只含该插件名的 disabled 集;产品清单字节不变"
 - State: "覆盖文件由无到有;disabled 集恰含目标插件名"
 - Side-effect: "仅写覆盖文件(单一写路径)"
 
@@ -106,5 +113,5 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 fixture_spec:
   entities:
     - entity_type: "Plugin"
-      min_count: 3
+      min_count: 5
 ```

@@ -21,6 +21,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
+<!-- source: inferred:零 forge CLI 调用推自 FT-038(forge 检出 = 目录存在性探测,无 CLI 通道)+ FT-039(forge CLI spawn 仅在任务 prompt 腿) -->
 - Preconditions: "向导处于步骤 ①;第二个项目路径为含 forge 数据的可读目录(.forge 或 docs/features 存在)且未被注册"
   fixture_spec:
     entities:
@@ -34,7 +35,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         prerequisite_entity: "Project"
 - Input: "用户选择第二个项目的代码根目录并确认"
 - Output: "系统扫描并检出 forge 数据(显示扫描中 loading 指示);检出通过后进入步骤 ②(选文档位置)"
-- State: "向导前进至步骤 ②;零注册写入(检出为只读探测,零 forge CLI 调用、零项目目录写入)"
+- State: "向导前进至步骤 ②;零注册写入(检出为只读探测,零项目目录写入;FT-038:forge 检出 = .forge/docs/features 目录存在性探测)"
 - Side-effect: "none(全程只读探测)"
 
 ## Outcome "no-forge-data"
@@ -52,11 +53,11 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         prerequisite_entity: "Project"
 - Input: "用户在步骤 ① 选择该路径并确认"
 - Output: "显示错误引导(修正路径或提示先初始化项目);停留在步骤 ①,不得进入步骤 ②"
-- State: "零注册写入(校验链在 forge 检出关卡拒绝,错误码语义 ERR_FORGE_NOT_DETECTED,消息指明缺失探测项)"
+- State: "零注册写入(注册校验在 forge 检出关卡拒绝——FT-037(6)+FT-038,错误码语义 ERR_FORGE_NOT_DETECTED,消息指明缺失探测项)"
 - Side-effect: "none"
 
 ## Outcome "duplicate-registration"
-<!-- source: inferred:拒绝注册并提示已注册、定位既有项目卡片 —— 推自 tech-design 错误码表 ERR_PROJECT_EXISTS(code_root UNIQUE 冲突);不重复落库由 UNIQUE 约束保证 -->
+<!-- 事实锚:FT-036(projects.code_root 唯一 → 重复注册拒绝、不重复落库)+ FT-037(7)(注册库唯一性关卡拒绝,错误码 ERR_PROJECT_EXISTS);source: inferred:「定位既有项目卡片」的用户面呈现推自 tech-design 错误码表文案设计 -->
 - Preconditions: "向导步骤 ① 选定的代码根目录已被注册为项目(与现有项目 code_root 相同)"
   fixture_spec:
     entities:
@@ -67,11 +68,11 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
             value: "与向导将选路径相同(已注册)"
 - Input: "用户在步骤 ① 选择该目录并确认"
 - Output: "提示该代码根目录已注册并定位既有项目卡片;注册不重复落库(工作台状态读数不变)"
-- State: "注册表不变(UNIQUE(code_root) 拒绝,错误码语义 ERR_PROJECT_EXISTS)"
+- State: "注册表不变(重复注册被拒——同一 code_root 不得重复注册,FT-036/FT-037(7),错误码语义 ERR_PROJECT_EXISTS)"
 - Side-effect: "none"
 
 ## Outcome "code-root-unreadable"
-<!-- source: inferred:路径不可读腿推自注册校验链序 2(code_root 可读性探测,ERR_CODE_ROOT_UNREADABLE,消息含路径与原因:不存在/权限/非目录;见 apps/desktop/src/main/workbench/registry/validate.ts:144-152) -->
+<!-- 事实锚:FT-037(2)(code_root 可读性探测:非可读目录 → ERR_CODE_ROOT_UNREADABLE,消息含路径与原因——不存在/权限被拒/非目录;可读性关卡先于检出与唯一性关卡) -->
 - Preconditions: "向导步骤 ① 选定的路径不可读——不存在、权限被拒或非目录(与未检出 forge 数据、已注册两情形互斥)"
   fixture_spec:
     entities:
@@ -85,7 +86,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         prerequisite_entity: "Project"
 - Input: "用户在步骤 ① 选择该路径并确认"
 - Output: "错误提示含路径与原因(不存在/权限被拒/非目录);停留在步骤 ①,不进入步骤 ②"
-- State: "零注册写入(校验链序 2 拒绝,错误码语义 ERR_CODE_ROOT_UNREADABLE)"
+- State: "零注册写入(路径可读性校验拒绝——FT-037(2),错误码语义 ERR_CODE_ROOT_UNREADABLE)"
 - Side-effect: "none"
 
 ## Journey Invariants

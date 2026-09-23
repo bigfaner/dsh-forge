@@ -34,12 +34,23 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
             value: "与代码根目录分离的仓外本地路径"
           - field: "docKinds"
             value: "同构五类文档"
+      - entity_type: "Feature"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "slug"
+            value: "与仓外 docs 树内 feature 目录名一致(注册后列表对拍锚点)"
+          - field: "docKinds"
+            value: "manifest/prd/design/ui/tasks 五类齐备(实体宿主 = 仓外树)"
     state_requirements:
       - description: "跨面断言口径:注册落库形态 = 工作台状态读数对拍(浏览器侧不自行观测文件系统/注册库)"
         prerequisite_entity: "Project"
+      - description: "落库/感知实现口径(仅供对拍,不入行为断言):projects 行 doc_location_type = external、doc_location_path = 仓外路径(FT-036);感知链 watch 目标含仓外 docs 路径、仅授权根纳入(FT-047)"
+        prerequisite_entity: "ExternalDocTree"
 - Input: "以仓外本地路径为文档位置注册该 forge 项目(向导步骤②显式选择仓外路径并勾选授权确认)"
-- Output: "不超过 3 步注册完成并激活;注册信息落库为仓外文档位置(不等于代码根目录,状态读数对拍);feature 列表与文档均读仓外树(slug 与仓外 fixture 一致)"
-- State: "projects 行 doc_location_type = external、doc_location_path = 仓外路径;激活指针指向新项目;感知链 watch 目标含仓外 docs 路径(授权已登记)"
+- Output: "不超过 3 步注册完成并激活;注册信息落库为仓外文档位置(不等于代码根目录,FT-036);feature 列表与文档均读仓外树(slug 与仓外 fixture 一致)"
+- State: "项目登记的文档位置 = 仓外路径(FT-036:external 位置必带路径);新项目成为激活项目;文档感知范围覆盖仓外 docs 路径且仅授权根纳入(FT-047;授权已登记)"
 - Side-effect: "注册/授权只写工作台自有库;零项目目录与仓外树写入"
 - Invariants: "仓外注册与仓内同一向导面(非法输入腿家族持有)"
 
@@ -60,4 +71,8 @@ fixture_spec:
       min_count: 1
     - entity_type: "ExternalDocTree"
       min_count: 1
+    - entity_type: "Feature"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Project"
 ```

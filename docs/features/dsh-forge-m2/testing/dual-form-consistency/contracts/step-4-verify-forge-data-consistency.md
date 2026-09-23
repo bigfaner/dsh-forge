@@ -21,7 +21,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 
 ## Outcome "success"
-- Preconditions: "Step 3 交替操作已完成(双侧多笔读写向变更已发生);SC7 验收脚本可运行(测试进程执行往返断言)"
+- Preconditions: "Step 3 交替操作已完成(双侧多笔读写向变更已发生)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -32,7 +32,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         parent_entity: "Project"
         field_constraints:
           - field: "status"
-            value: "已经历双形态交替变更"
+            value: "pending(交替起始态,seed 可构造;「已经历双形态交替变更」由 Preconditions 引 Step 3 表达,不由 fixture 字段值承载)"
     state_requirements:
       - description: "跨面断言口径:一致性校验 = 测试进程对 fixture forge 数据运行 SC7 验收脚本往返断言(浏览器侧不自行观测文件系统)"
         prerequisite_entity: "Project"

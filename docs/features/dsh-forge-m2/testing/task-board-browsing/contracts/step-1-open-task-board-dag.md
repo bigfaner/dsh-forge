@@ -36,6 +36,8 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         field_constraints:
           - field: "blockers"
             value: "依赖关系覆盖链/菱形/悬空依赖各至少一处"
+          - field: "source"
+            value: "null 与非 null 并存(无记录任务与带记录任务;source 可空 = 无执行来源)"
       - entity_type: "TaskRecord"
         min_count: 2
         relationship_type: "belongs_to"
@@ -49,8 +51,8 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
       - description: "跨面断言通道:与 forge task list 输出一致的校验 = 测试进程直读 fixture forge 文件或 stub CLI stdout(浏览器侧不自行观测 CLI 输出)"
         prerequisite_entity: "Task"
 - Input: "用户进入工作台·任务看板"
-- Output: "默认展示图形化依赖树,blocker 关系可视化;任务数/状态/依赖与 forge task list 输出一致(含已完成历史任务;校验通道见 Preconditions);首屏 2 秒内可交互(计时口径 = 500 任务 fixture 腿:进入任务页到依赖树 500 节点首屏可交互)"
-- State: "任务看板快照(TaskBoardData)载入;sync 状态 idle;默认视图 = 依赖树"
+- Output: "默认展示图形化依赖树,blocker 关系可视化;任务数/状态/依赖与 forge task list 输出一致(含已完成历史任务);首屏 2 秒内可交互(计时口径 = 500 任务 fixture 腿:进入任务页到依赖树 500 节点首屏可交互)"
+- State: "任务看板快照载入;sync 状态 idle(FT-056);默认视图 = 依赖树"
 - Side-effect: "none(只读浏览)"
 
 ## Outcome "read-error"
@@ -69,7 +71,7 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
       - description: "fixture 副本注入文件损坏/权限异常(读取失败注入)"
         prerequisite_entity: "Project"
 - Input: "用户进入任务看板"
-- Output: "显示错误(error)态与重试入口;应用不崩溃、不展示残缺或错误的数据;排除读取障碍后点击重试,看板恢复渲染且与 forge 数据一致(校验通道见 Preconditions)"
+- Output: "显示错误(error)态与重试入口;应用不崩溃、不展示残缺或错误的数据;排除读取障碍后点击重试,看板恢复渲染且与 forge 数据一致"
 - State: "读取失败不落残缺快照(整体失败语义);重试成功后快照重建"
 - Side-effect: "none(重试为只读重扫)"
 
@@ -79,9 +81,13 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
     entities:
       - entity_type: "Project"
         min_count: 1
-        field_constraints:
-          - field: "taskCount"
-            value: 0
+      - entity_type: "Task"
+        min_count: 0
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+    state_requirements:
+      - description: "零任务以 Task 实体缺席表达(min_count 0):projects 表无任务计数字段,不虚构字段;该 fixture 项目的 forge 数据无任何任务条目"
+        prerequisite_entity: "Project"
 - Input: "用户进入任务看板"
 - Output: "显示空(empty)态「无任务」引导(指向 forge 初始化),不显示错误"
 - State: "看板无任务快照数据;视图停留空态呈现"

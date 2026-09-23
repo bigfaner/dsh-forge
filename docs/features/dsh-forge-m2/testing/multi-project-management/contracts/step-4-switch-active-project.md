@@ -28,17 +28,41 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         min_count: 2
         field_constraints:
           - field: "active"
-            value: "恰有一个(待切换离开的目标)"
+            value: "恰有一个(当前激活 = 第二个项目,待切换离开)"
+      - entity_type: "Task"
+        min_count: 2
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "project"
+            value: "两项目各至少 1 个任务(「完整切换」断言非空洞)"
+      - entity_type: "Feature"
+        min_count: 2
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "project"
+            value: "两项目各至少 1 个 feature(feature 面切换可判)"
+      - entity_type: "SessionLink"
+        min_count: 2
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "task"
+            value: "两项目任务各至少 1 条挂接(挂接历史按项目呈现可判;挂接索引为工作台自有 SoT、不可从 forge 文件推导)"
+    state_requirements:
+      - description: "激活态断言口径 = 工作台状态读数对拍(浏览器侧不自行观测文件系统)"
+        prerequisite_entity: "Project"
 - Input: "从项目切换器切换回第一个项目"
 - Output: "看板/feature/挂接数据完整切换到目标项目(任务/feature 列表、详情、挂接历史均按目标项目呈现)"
-- State: "active_project_id 更新为目标项目(单激活,状态读数对拍);感知链按激活切换全量重建(旧 watch 全释放,新项目根建立);派生快照按目标项目读出"
+- State: "active_project_id 更新为目标项目(单激活;读数口径见 state_requirements);感知链按激活切换全量重建(FT-047:旧 watch 全释放、新项目根建立);派生快照按目标项目读出"
 - Side-effect: "none(切换只写激活指针,不写 forge 数据)"
 - Invariants: "任意时刻至多一个激活项目"
 
 ## Outcome "project-path-invalid"
 <!-- surface-web required_outcomes 映射:session-expired → 本旅程为离线桌面应用(继承 M1 无端口模型),无字面会话过期面;通道失效类比 = 已注册项目数据通道(路径)失效 = 本边 -->
 <!-- source: inferred:失联提示 + 重新指向/移除引导 —— 推自 UF4 校验规则「路径失效时明确提示不可访问,并提供重新指向/移除项目引导」(仓外路径既定口径推广至代码根目录,已落地 e2e sc5 失联卡同口径);「不误改」推自移除只删注册信息约束 -->
-- Preconditions: "已注册项目的代码根目录已不可访问(被移动/删除;fixture 临时目录内操作)"
+- Preconditions: "已注册项目的代码根目录已不可访问(被移动/删除)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -46,6 +70,16 @@ last_anchor_sync: "2026-09-23T01:18:11Z"
         field_constraints:
           - field: "codeRoot"
             value: "至少一个项目的根目录已不可访问"
+      - entity_type: "Task"
+        min_count: 2
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "project"
+            value: "两项目各至少 1 个任务(「其余项目浏览不受影响」断言非空洞)"
+    state_requirements:
+      - description: "路径失效注入:fixture 临时目录内移动/删除该根目录,随 fixture 清理"
+        prerequisite_entity: "Project"
 - Input: "打开项目切换器并选择该项目"
 - Output: "该项目卡片呈现明确的失联/不可访问提示与重新指向/移除引导;应用不崩溃,项目数据不被误改"
 - State: "注册表行保留(不自动删除);其余项目浏览与切换不受影响"
@@ -66,4 +100,16 @@ fixture_spec:
   entities:
     - entity_type: "Project"
       min_count: 2
+    - entity_type: "Task"
+      min_count: 2
+      relationship_type: "belongs_to"
+      parent_entity: "Project"
+    - entity_type: "Feature"
+      min_count: 2
+      relationship_type: "belongs_to"
+      parent_entity: "Project"
+    - entity_type: "SessionLink"
+      min_count: 2
+      relationship_type: "belongs_to"
+      parent_entity: "Task"
 ```
