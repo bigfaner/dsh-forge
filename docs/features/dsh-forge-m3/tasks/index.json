@@ -51,7 +51,7 @@
       "title": "schema v2 迁移段:store MIGRATIONS {version:2}(2 组 ALTER + 7 表 + 5 索引)+ 漂移对账",
       "priority": "P0",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.1-schema-v2-migration.md",
       "record": "records/1.1-schema-v2-migration.md",
       "breaking": true,
