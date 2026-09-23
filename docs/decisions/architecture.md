@@ -14,3 +14,7 @@
 | 2026-09-22 | dsh-forge-m2 | 数据面分工:主数据走 Electron 内核 IPC,forge CLI 执行面走插件 host 半身 | 对齐「过渡 = 插件宿主半身 spawn CLI」与数据内核入壳两既定方向 | dsh-forge-m2/design/tech-design.md §Architecture |
 | 2026-09-22 | dsh-forge-m2 | DF003 感知 = fs.watch 递归 + 400ms debounce + 2s 轮询兜底;来源序 actor→挂接推断 | ≤5s 时效内零新增依赖;forge 不改时推断兜底不阻塞 | dsh-forge-m2/design/tech-design.md §Interface 3 |
 | 2026-09-23 | dsh-forge-m3 | SoT 分治:任务结构化状态以 SQLite 为权威(单写者 = 内核),`tasks/index.json` 一次性显式迁移后终态淘汰;任务/记录 md 与阶段资产留文件不入库,随文档根(默认仓外,仓内兼容) | 根除 index.json 多写者风险(SC8 spike §4 旧写者静默丢未知字段);文档 git 评审面保底;拒绝「全量入库」(评审断裂/迁移面翻倍)与「全量留文件」(多写者永续)两端 | proposals/dsh-forge-m3/proposal.md §Proposed Solution 架构约束、§Assumptions Challenged;features/dsh-forge-m3 prd/prd-spec.md §阶段资产与文档根数据模型 |
+| 2026-09-23 | dsh-forge-m3 | 任务状态机载体 = TS 原生移植入内核(7 态状态机 + 依赖解析),配 Go 对拍器保证行为等价 | 零原生重编译、三平台与零 npm 依赖纪律;弃 Go 嵌入库与 CLI 包裹(SC1) | dsh-forge-m3/design/tech-design.md §Overview 裁决 T1 |
+| 2026-09-23 | dsh-forge-m3 | dsh tool→内核通道 = renderer 桥接:host cordis rpc → client 半身 tool 桥 → 既有 IPC 白名单 | 零新增监听面;动词面封闭;桥不可用重试一次后明确提示(禁静默) | 同上 §Interface 2 裁决 T2 |
+| 2026-09-23 | dsh-forge-m3 | 已迁移项目外部写 = watcher 检出后幂等自动重摄入 + 项目/feature 偏离标记,不阻断外部会话 | SQLite 保持权威一致、偏离可观察;弃「仅告警不摄入」(持续分叉) | 同上 §Interface 4 裁决 T3 |
+| 2026-09-23 | dsh-forge-m3 | systemPrompt 预合成归内核(三要素确定性组装 + prompt_hash 落库),host 半身仅持 subagent 创建 | 三要素数据(偏好/阶段资产)在内核,单查询可断言;host 合成则双查询且断言弱 | 同上 §Interface 3/§Appendix |
