@@ -33,21 +33,22 @@
  *      error card).
  */
 import type {
-  ApprovalRow, DecideApprovalInput, DispatchRow, DocKind, FeatureBoardData, FeatureDoc,
+  ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
+  DocKind, FeatureBoardData, FeatureDoc,
   FeatureListEntry, FeatureStatusReport,
   KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project, ReceiveApprovalInput,
+  PrefScope, Project, ReceiveApprovalInput, StageArtifactsReport,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
   WorkbenchState, WorkbenchVerbError,
 } from '../ipc-types'
 import type {
-  CodeRootProbeResult, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace, PluginFace,
-  RegisterWizardFace, TaskBoardFace, TaskDetailFace,
+  CodeRootProbeResult, DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace,
+  PluginFace, RegisterWizardFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
 
@@ -139,6 +140,20 @@ export interface WorkbenchIpcBridge {
   decideApproval(input: DecideApprovalInput, actor: string): Promise<ApprovalRow>
   notifySessionStarted(dispatchId: string, sessionId: string): Promise<DispatchRow>
   notifyLaunchFailed(dispatchId: string, error: string): Promise<DispatchRow>
+  /**
+   * M3 UF1 human-side orchestration verbs (task 3.9 wiring; the preload
+   * surface carries them since 3.3): the dispatch chain (checkStageArtifacts
+   * / dispatchTasks / redispatch — actor = the dispatching human's audit
+   * string) and the board/dock reads (getDispatches / listApprovals).
+   * decideApproval above is the family's sixth member (shared with the 3.5
+   * relay face). Rejections ride the same `{ code, message, detail? }`
+   * envelope (ERR_TASK_* / ERR_STAGE_* / ERR_DISPATCH_* / ERR_APPROVAL_*).
+   */
+  checkStageArtifacts(input: { projectId: string; featureSlug: string }): Promise<StageArtifactsReport>
+  dispatchTasks(input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult>
+  redispatch(dispatchId: string, actor: string): Promise<DispatchTasksResult>
+  getDispatches(projectId: string): Promise<DispatchRow[]>
+  listApprovals(projectId: string): Promise<ApprovalRow[]>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -156,6 +171,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'getPrefs', 'setPrefs', 'clearPrefOverride',
   // M3 dispatch host-callback relay verbs (task 3.5).
   'receiveApproval', 'decideApproval', 'notifySessionStarted', 'notifyLaunchFailed',
+  // M3 UF1 human-side orchestration verbs (task 3.9; preload surface since 3.3).
+  'checkStageArtifacts', 'dispatchTasks', 'redispatch', 'getDispatches', 'listApprovals',
 ]
 
 /**
@@ -401,6 +418,60 @@ export function createIpcTaskDetailFace(bridge: WorkbenchIpcBridge): TaskDetailF
     loadDetail: async (projectId: string, taskKey: string): Promise<TaskDetail> => {
       try {
         return await bridge.getTaskDetail(projectId, taskKey)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/**
+ * The UF1 orchestration face over the verbs (task 3.9's assembly leg; 1:1
+ * mapping with error renormalization). The dispatch/approval chains consume
+ * the rejections through their own normalizeWorkbenchVerbError folds, so the
+ * envelope is re-serialized here into the plain shape every face member
+ * answers (the ERROR NORMALIZATION contract above).
+ */
+export function createIpcDispatchFace(bridge: WorkbenchIpcBridge): DispatchFace {
+  return {
+    checkStageArtifacts: async (input: { projectId: string; featureSlug: string }): Promise<StageArtifactsReport> => {
+      try {
+        return await bridge.checkStageArtifacts(input)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    dispatchTasks: async (input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult> => {
+      try {
+        return await bridge.dispatchTasks(input, actor)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    redispatch: async (dispatchId: string, actor: string): Promise<DispatchTasksResult> => {
+      try {
+        return await bridge.redispatch(dispatchId, actor)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    getDispatches: async (projectId: string): Promise<DispatchRow[]> => {
+      try {
+        return await bridge.getDispatches(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    listApprovals: async (projectId: string): Promise<ApprovalRow[]> => {
+      try {
+        return await bridge.listApprovals(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    decideApproval: async (input: DecideApprovalInput, actor: string): Promise<ApprovalRow> => {
+      try {
+        return await bridge.decideApproval(input, actor)
       } catch (error) {
         renormalize(error)
       }

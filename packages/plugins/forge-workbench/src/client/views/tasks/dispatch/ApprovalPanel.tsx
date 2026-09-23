@@ -40,8 +40,7 @@ import type { ApprovalState, WorkbenchEvent } from '../../../ipc-types'
 import { normalizeWorkbenchVerbError } from '../../../ipc/workbench'
 import { fillTemplate } from '../../overview/format'
 import { ChromeButton } from '../../../components/chrome/ChromeButton'
-import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z } from '../TaskDetailPanel'
-import { focusablesOf, ghostButtonStyle, LaunchSpinner, primaryButtonStyle } from '../launch/LaunchStates'
+import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, ghostButtonStyle, LaunchSpinner, primaryButtonStyle } from '../launch/LaunchStates'
 import type { DispatchTranslate } from './DispatchBadge'
 
 // ---------------------------------------------------------------------------

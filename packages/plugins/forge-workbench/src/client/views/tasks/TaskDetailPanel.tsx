@@ -23,13 +23,15 @@
  * a rejection shows the error card + retry (rejections carry the serialized
  * WorkbenchVerbError shape — the IPC runtime's real form).
  *
- * Read-only discipline (BIZ-task-ops-001): every interaction here is
- * navigation (dep-chain jump, 进入会话 seam) or panel control — no task
- * write affordance exists in this file by construction.
+ * Read-only discipline (BIZ-task-ops-001, M3 修订): every interaction here is
+ * navigation (dep-chain jump, 进入会话 seam), panel control, or ORCHESTRATION
+ * INITIATION (task 3.9's dispatch mount — 派发执行 / 重派发 / 去审批: the
+ * human's 编排发起 face, never a task-status write) — no task write
+ * affordance exists in this file by construction.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
-import type { SessionLink, TaskDetail } from '../../ipc-types'
+import type { DispatchRow, SessionLink, TaskDetail } from '../../ipc-types'
 import type { SessionLaunchServices, SessionLaunchTaskRef, TaskDetailFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
@@ -38,22 +40,25 @@ import { createMockTaskDetailFace } from '../../mocks/workbench'
 import { localIdOf } from '../TaskBoardPage'
 import { SessionBadge } from './SessionBadge'
 import { SessionLaunchEntry } from './SessionLaunchEntry'
-import { focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
+import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
 import { badgeStyle, sourceBadgeStyle } from './TaskRow'
 import { DepChain } from './detail/DepChain'
 import { DetailStatusPill } from './detail/ProgressDots'
 import { LinkHistory } from './detail/LinkHistory'
 import { RecordsTimeline } from './detail/RecordsTimeline'
+import { ApprovalReturnButton } from './dispatch/ApprovalPanel'
+import {
+  currentDispatchRow, DispatchExecuteButton, OrchestrationSection, useDetailDispatchChain,
+  type DetailDispatchVerbs,
+} from './dispatch/OrchestrationSection'
+import type { SelectionTaskEntry } from './dispatch/selection-mode'
 
 /** ui-design 层叠: the detail dock rides z100 (dialogs z1200, toasts z1100). */
-export const DETAIL_DOCK_Z = 100
-
-/**
- * The dock's width (ui-design UF3 Placement: min(440px, 45vw)). Exported so
- * the 5.8 integration insets the board's flow layout by EXACTLY this strip
- * (dock open ⇒ the views yield, close ⇒ bounce back — one constant, no drift).
- */
-export const DETAIL_DOCK_WIDTH = 'min(440px, 45vw)'
+// Since 3.9 the constants live in launch/LaunchStates.tsx (the dock family's
+// acyclic shared home — the approval panel imports this module's components,
+// so a same-module declaration would cycle); re-exported for the 5.8-era
+// consumers that address them here (TaskBoardPage's inset, the specs).
+export { DETAIL_DOCK_Z, DETAIL_DOCK_WIDTH }
 
 /** Inputs of {@link TaskDetailPanel}. */
 export interface TaskDetailPanelProps {
@@ -104,6 +109,12 @@ export interface TaskDetailPanelProps {
   onNavigate?: ((taskKey: string) => void) | undefined
   /** 「进入会话」 seam — absent link rows stay informational (SC3-3/6.3 wire the jump). */
   onEnterSession?: ((sessionId: string) => void) | undefined
+  /**
+   * The UF1 orchestration mount (task 3.9): present = the M3 dispatch form
+   * (派发执行 primary + 编排 partition + the approval round-trip head);
+   * absent = the M2 form verbatim.
+   */
+  dispatch?: TaskDetailDispatchMount | undefined
 }
 
 /** The dock geometry (ui-design UF3 Placement): right edge, min(440px, 45vw), bg-layer-2, left border. */
@@ -195,7 +206,43 @@ const emptyHintStyle = {
 } as const
 
 /** The accordion section ids (also the data-dsh-forge-detail-section values). */
-type DetailSectionId = 'description' | 'depChain' | 'records' | 'links'
+type DetailSectionId = 'orchestration' | 'description' | 'depChain' | 'records' | 'links'
+
+/**
+ * The UF1 orchestration mount (task 3.9, ui-design 任务详情侧板 M2 UF3 演进):
+ * everything the dock's dispatch form needs — the 3.8 chain verbs, the
+ * project's dispatch rows (unfiltered — the section picks this task's), the
+ * board entries (the dispatchability mirror's lookup set), and the approval
+ * round-trip seams. PRESENT = the M3 form: the 「▶ 派发执行」 primary button
+ * (the M2 「发起会话」 slot's same-position semantic evolution — Hard Rule:
+ * ONE button, one door) + the 编排 partition (置于执行记录之上). ABSENT =
+ * the M2 form verbatim (the build-stage/tests keep their launch entry).
+ */
+export interface TaskDetailDispatchMount {
+  /** The 3.8 chain verbs (check / dispatch / redispatch; preload twins). */
+  readonly verbs: DetailDispatchVerbs
+  /** The project's dispatch rows (unfiltered — currentDispatchRow picks this task's). */
+  readonly rows: readonly DispatchRow[]
+  /** The board tasks (the 3.6 kernel-semantics mirror's lookup set). */
+  readonly entries: readonly SelectionTaskEntry[]
+  /** Fired once on a successful dispatch/redispatch (the page refreshes its rows). */
+  readonly onDispatched?: ((rows: readonly DispatchRow[]) => void) | undefined
+  /** [去审批] / the awaiting badge — switch to the approval dock (the 3.9 mutex). */
+  readonly onOpenApproval: (taskKey: string) => void
+  /** 「进入会话」 — 切会话视图 + session-focus (the M1 view-switch contract). */
+  readonly onEnterSession?: ((sessionId: string) => void) | undefined
+  /** Present = the detail was entered FROM the approval dock (详情 ↗) → the 「◂ 返回审批(N)」 head button. */
+  readonly approvalReturn?: { readonly count: number } | undefined
+  /** The return button's action — reopen the approval dock (entries + scroll restored). */
+  readonly onReturnToApproval?: (() => void) | undefined
+}
+
+/** The no-op verb twin the chain hook runs against while no mount is present (never invoked). */
+const IDLE_DETAIL_VERBS: DetailDispatchVerbs = {
+  checkStageArtifacts: async () => { throw new Error('no dispatch mount') },
+  dispatchTasks: async () => { throw new Error('no dispatch mount') },
+  redispatch: async () => { throw new Error('no dispatch mount') },
+}
 
 /**
  * One accordion section: a heading toggle (aria-expanded + aria-controls)
@@ -279,6 +326,19 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
     // load-effect discipline); reloadToken re-fires the read for the SAME
     // key (the 5.15 structural-deletion path).
   }, [open, props.taskKey, retryNonce, props.reloadToken])
+
+  // The UF1 single-task chain (task 3.9): the 3.8 controller runs on EVERY
+  // mount (unconditional hook); without a dispatch mount it sits idle at
+  // phase 'idle' — nothing renders its trigger, no leg ever fires.
+  const dispatchMount = props.dispatch
+  const detailController = useDetailDispatchChain({
+    projectId: props.projectId ?? '',
+    taskKey: open && props.taskKey !== null && props.taskKey !== undefined ? props.taskKey : '',
+    title: detail?.summary.title ?? '',
+    featureSlug: detail?.summary.featureSlug ?? '',
+    verbs: dispatchMount?.verbs ?? IDLE_DETAIL_VERBS,
+    ...(dispatchMount?.onDispatched === undefined ? {} : { onDispatched: dispatchMount.onDispatched }),
+  })
 
   // Focus-in on open (capturing the trigger for the return trip) + the
   // slide-in flip; the cleanup returns focus to the trigger on close or
@@ -404,6 +464,16 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
       {showContent && detail !== undefined && (
         <>
           <header data-dsh-forge-detail-header="" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {dispatchMount?.approvalReturn !== undefined && (
+              // The 审批 round-trip's return leg (task 3.9): the detail was
+              // entered from the approval dock (详情 ↗) — 「◂ 返回审批(N)」
+              // reopens it (entries + scroll restored by the dock's machine).
+              <ApprovalReturnButton
+                t={props.t}
+                count={dispatchMount.approvalReturn.count}
+                onReturn={() => { dispatchMount.onReturnToApproval?.() }}
+              />
+            )}
             <div style={{ alignItems: 'center', display: 'flex', gap: '8px', minWidth: 0 }}>
               <h2 id="dsh-forge-detail-title" title={detail.summary.title} style={titleStyle}>
                 {detail.summary.title}
@@ -438,45 +508,82 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
             </div>
           </header>
 
-          {props.projectId !== undefined && props.codeRoot !== undefined
+          {dispatchMount !== undefined
             ? (
-              <SessionLaunchEntry
-                variant="panel-primary"
+              // The M3 form (task 3.9): the「▶ 派发执行」primary — the M2
+              // 「发起会话」slot's SAME-POSITION semantic evolution (Hard Rule:
+              // ONE button, one door); the dispatch chain's dialogs render in
+              // the orchestration section below (one controller, one place).
+              <DispatchExecuteButton
                 t={props.t}
-                {...(props.services !== undefined ? { services: props.services } : {})}
-                {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
-                task={{
-                  projectId: props.projectId,
-                  codeRoot: props.codeRoot,
-                  featureSlug: detail.summary.featureSlug,
-                  localId: localIdOf(detail.summary.key),
+                controller={detailController}
+                entry={{
+                  key: detail.summary.key,
                   title: detail.summary.title,
+                  status: detail.summary.status,
+                  featureSlug: detail.summary.featureSlug,
+                  blockers: detail.summary.blockers,
                 }}
+                entries={dispatchMount.entries}
+                currentRow={currentDispatchRow(dispatchMount.rows, detail.summary.key)}
               />
             )
-            : (
-              // AC 按钮位预留: the reserved disabled placeholder — the same
-              // md-primary geometry the UF5 entry uses, inert until the
-              // mounting context can hand over the project ref (5.8/5.11).
-              <ChromeButton
-                type="button"
-                disabled
-                data-dsh-forge-detail-launch-reserved=""
-                title={props.t('detail.launch.reserved')}
-                style={{
-                  ...primaryButtonStyle,
-                  alignItems: 'center',
-                  cursor: 'default',
-                  display: 'inline-flex',
-                  gap: '6px',
-                  justifyContent: 'center',
-                  width: '100%',
-                }}
-              >
-                <span aria-hidden="true">▶</span>
-                <span>{props.t('launch.primary')}</span>
-              </ChromeButton>
-            )}
+            : props.projectId !== undefined && props.codeRoot !== undefined
+              ? (
+                <SessionLaunchEntry
+                  variant="panel-primary"
+                  t={props.t}
+                  {...(props.services !== undefined ? { services: props.services } : {})}
+                  {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
+                  task={{
+                    projectId: props.projectId,
+                    codeRoot: props.codeRoot,
+                    featureSlug: detail.summary.featureSlug,
+                    localId: localIdOf(detail.summary.key),
+                    title: detail.summary.title,
+                  }}
+                />
+              )
+              : (
+                // AC 按钮位预留: the reserved disabled placeholder — the same
+                // md-primary geometry the UF5 entry uses, inert until the
+                // mounting context can hand over the project ref (5.8/5.11).
+                <ChromeButton
+                  type="button"
+                  disabled
+                  data-dsh-forge-detail-launch-reserved=""
+                  title={props.t('detail.launch.reserved')}
+                  style={{
+                    ...primaryButtonStyle,
+                    alignItems: 'center',
+                    cursor: 'default',
+                    display: 'inline-flex',
+                    gap: '6px',
+                    justifyContent: 'center',
+                    width: '100%',
+                  }}
+                >
+                  <span aria-hidden="true">▶</span>
+                  <span>{props.t('launch.primary')}</span>
+                </ChromeButton>
+              )}
+
+          {dispatchMount !== undefined && (
+            // The 编排 partition (task 3.9, ui-design: 置于执行记录之上) — the
+            // FIRST body section (prototype dp-body order: 编排 → 描述 → 依赖链
+            // → 执行记录 → 挂接历史), sharing the execute button's ONE controller.
+            <DetailSection t={props.t} id="orchestration" titleKey="tasks.orch.section">
+              <OrchestrationSection
+                t={props.t}
+                taskKey={detail.summary.key}
+                taskTitle={detail.summary.title}
+                rows={dispatchMount.rows}
+                controller={detailController}
+                {...(dispatchMount.onEnterSession === undefined ? {} : { onEnterSession: dispatchMount.onEnterSession })}
+                onOpenApproval={dispatchMount.onOpenApproval}
+              />
+            </DetailSection>
+          )}
 
           <DetailSection t={props.t} id="description" titleKey="detail.section.description">
             {detail.descriptionMarkdown.trim() !== ''

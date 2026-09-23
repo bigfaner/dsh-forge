@@ -136,6 +136,8 @@ export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
       }}
     >
       <Handle type="target" position={Position.Top} isConnectable={false} style={handleStyle} />
+      {/* The UF1 selection-mode overlay cluster (task 3.9) — self-hiding. */}
+      {data.selectionDecor}
       {/* The reserved UF5 hover-trigger mount — 5.11 fills the box with the
           node-hover entry variant whenever the page handed a launch mount
           (project context + services) down; the scoped sheet reveals it on
@@ -179,6 +181,7 @@ export function TaskCardNode({ data }: NodeProps<TaskDagNode>) {
           danglingBlockers={data.danglingBlockers}
           {...(activeSessionId === undefined ? {} : { activeSessionId })}
         />
+        {data.orchBadge}
       </span>
       <Handle type="source" position={Position.Bottom} isConnectable={false} style={handleStyle} />
     </div>

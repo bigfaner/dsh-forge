@@ -99,6 +99,12 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     decideApproval: async () => ({ id: 'a-1', dispatchId: 'd-1', projectId: 'p1', taskKey: 'demo/1.1', sessionId: 'session-x', payload: {}, state: 'approved', createdAt: '', decidedAt: null, decidedBy: null }),
     notifySessionStarted: async () => ({ id: 'd-1', batchId: 'b-1', projectId: 'p1', featureSlug: 'demo', taskKey: 'demo/1.1', state: 'running', sessionId: 'session-x', promptHash: 'h', actor: 'workbench', dispatchedAt: '', endedAt: null, error: null }),
     notifyLaunchFailed: async () => ({ id: 'd-1', batchId: 'b-1', projectId: 'p1', featureSlug: 'demo', taskKey: 'demo/1.1', state: 'failed', sessionId: null, promptHash: 'h', actor: 'workbench', dispatchedAt: '', endedAt: null, error: 'boom' }),
+    // 任务 3.9 UF1 人侧编排段(BRIDGE_MEMBERS presence check 全员可调)。
+    checkStageArtifacts: async () => ({ stage: 'tasks', satisfied: true, missing: [] }),
+    dispatchTasks: async () => ({ dispatched: [] }),
+    redispatch: async () => ({ dispatched: [] }),
+    getDispatches: async () => [],
+    listApprovals: async () => [],
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

@@ -46,7 +46,7 @@ export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchS
 export type {
   WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
-  TaskBoardFace, TaskBoardSeat,
+  TaskBoardFace, TaskBoardSeat, DispatchFace,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
   SessionLaunchHandover, TaskBoardLaunchSeat,
   MigrationFace, MigrationGuardSnapshot,
@@ -76,14 +76,17 @@ export type { LaunchSeatSnapshot, LaunchSeatStore } from './launch-rpc'
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
 // SyncStatus/TaskBoardData/WorkbenchEvent).
 export type {
-  ChangeSource, DocLocationType, MigrationEvent, MigrationPhase, MigrationPhaseResult,
-  MigrationStarted, MigrationStatus, PluginRow, Project, ProjectPatch, SyncStatus, TaskBoardData,
+  ApprovalRow, ApprovalState, ChangeSource, DispatchRow, DispatchState, DispatchTasksInput,
+  DispatchTasksResult, DecideApprovalInput, DocLocationType, MigrationEvent, MigrationPhase,
+  MigrationPhaseResult,
+  MigrationStarted, MigrationStatus, MissingItem, PluginRow, Project, ProjectPatch,
+  StageArtifactsReport, SyncStatus, TaskBoardData,
   TaskSummary, TaskStatus, WorkbenchEvent, WorkbenchState, WorkbenchVerbError,
 } from './ipc-types'
 export {
   MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE,
   MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockOverviewFace,
-  createMockTaskBoardFace,
+  createMockTaskBoardFace, createMockDispatchFace,
   MOCK_MIGRATION_BACKUP_PATH, MOCK_MIGRATION_STATUS_FILES, MOCK_MIGRATION_STATUS_SQLITE,
   createMockMigrationFace,
 } from './mocks/workbench'
@@ -94,7 +97,8 @@ export {
 // overview family's faces (overview/plugin + the wizard's WRITE pair);
 // task 5.15 added the tasks family's (board + detail).
 export {
-  createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcMigrationFace, createIpcOverviewFace,
+  createIpcDispatchFace, createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcMigrationFace,
+  createIpcOverviewFace,
   createIpcPluginFace, createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
   getWorkbenchIpcBridge,
   normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,

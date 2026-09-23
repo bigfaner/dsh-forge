@@ -26,9 +26,10 @@ import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type { BoardSessionStore } from './store/board-session'
 import type { LaunchSeatStore } from './launch-rpc'
 import type {
+  ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
   DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
-  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskBoardData,
-  TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, StageArtifactsReport,
+  TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
 import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
@@ -298,6 +299,35 @@ export interface TaskBoardFace {
 }
 
 /**
+ * The UF1 orchestration verb face (task 3.9, tech-design §Integration #1 /
+ * §Interface 1 编排段): the six human-side dispatch/approval verbs the board
+ * page's UF1 wiring consumes — checkStageArtifacts / dispatchTasks /
+ * redispatch (the 3.6/3.8 chains) + getDispatches / listApprovals /
+ * decideApproval (the badge spectrum, the approval dock). Signatures mirror
+ * the preload bridge of task 3.3 one-to-one; the DTO twins are the
+ * ipc-types.ts canonical client twins (structural twins of the 3.6-3.8 UI
+ * view twins, so the face satisfies DispatchVerbs / DetailDispatchVerbs /
+ * ApprovalVerbs structurally). The page runs on its mock twin in tests;
+ * the assembly (TasksView) injects the IPC-backed face when the bridge is
+ * live — absent members keep the UF1 toolbar entries inert (never a silent
+ * mock in the real host).
+ */
+export interface DispatchFace {
+  /** workbench.checkStageArtifacts(input) — the deterministic pre-dispatch check. */
+  checkStageArtifacts(input: { readonly projectId: string; readonly featureSlug: string }): Promise<StageArtifactsReport>
+  /** workbench.dispatchTasks(input, actor) — mint dispatch rows (blocked = missing & unacknowledged). */
+  dispatchTasks(input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult>
+  /** workbench.redispatch(dispatchId, actor) — re-run the whole pre-check for a failed row. */
+  redispatch(dispatchId: string, actor: string): Promise<DispatchTasksResult>
+  /** workbench.getDispatches(projectId) — the board's orchestration rows (the badge spectrum's data). */
+  getDispatches(projectId: string): Promise<DispatchRow[]>
+  /** workbench.listApprovals(projectId) — the approval dock's rows (pending first, created_at 倒序). */
+  listApprovals(projectId: string): Promise<ApprovalRow[]>
+  /** workbench.decideApproval(input, actor) — the ONLY decision path (explicit click, decided_by audit). */
+  decideApproval(input: DecideApprovalInput, actor: string): Promise<ApprovalRow>
+}
+
+/**
  * The shell's passthrough seat for the task board (task 5.5): absent
  * entirely in the build stage (the page runs on its mock twins); the 5.15
  * assembly injects the IPC-backed faces. Since 5.8 the page owns the
@@ -309,6 +339,12 @@ export interface TaskBoardSeat {
   readonly face?: Partial<TaskBoardFace>
   /** The detail-dock face — absent members fall back to the build-stage mock (5.15 injects the IPC verb). */
   readonly detailFace?: Partial<TaskDetailFace>
+  /**
+   * The UF1 orchestration face (task 3.9): absent members keep the UF1
+   * toolbar entries inert (no silent mock twin); tests inject the mock twin
+   * through here, the assembly injects the IPC-backed face.
+   */
+  readonly dispatchFace?: Partial<DispatchFace> | undefined
   /**
    * The UF3 selection seam OBSERVATION: a row/card activation (click /
    * Enter / Space — navigation, the ONLY interaction rows carry) hands the

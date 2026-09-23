@@ -11,7 +11,9 @@
  *       budget timer, and stale-leg tokens so a late verb settle after a
  *       timeout/close never lands.
  *   <SelectionLayer controller t onOpenDetail> — wraps the board views
- *       (cards carry `data-dsh-forge-select-card="<taskKey>"`), owns the
+ *       (cards address themselves by `data-dsh-forge-select-card` OR the M2
+ *       board's own hooks — view B card / view C row / view A `data-id`
+ *       wrapper, the CARD_SELECTOR union since 3.9), owns the
  *       keyboard contract in the CAPTURE phase (Space = 勾选 / Enter = 详情 /
  *       方向键遍历 — the M2 Enter/Space semantics are overridden exactly and
  *       only while the selecting phase is live, so nothing inside the cards
@@ -389,6 +391,30 @@ export interface SelectionLayerProps {
 /** The card-addressing attribute the keyboard/click contract keys off. */
 export const SELECT_CARD_ATTR = 'data-dsh-forge-select-card'
 
+/**
+ * The card-addressing selector UNION (task 3.9's board integration): the
+ * 3.6 build attribute plus the M2 board's OWN card hooks — the view B card,
+ * the view C row, and the view A DAG node wrapper (the lib keys them
+ * `data-id`) — so the whole-surface toggle / keyboard contract addresses
+ * every real board card with ZERO M2 view changes (the 3.6 hard rule: the
+ * interaction rides this layer's capture/bubble handlers, never the cards).
+ */
+const CARD_SELECTOR = [
+  `[${SELECT_CARD_ATTR}]`,
+  '[data-dsh-forge-task-card]',
+  '[data-dsh-forge-task-row]',
+  '[data-dsh-forge-dep-tree] [data-id]',
+].join(',')
+
+/** A resolved card element's task key (whichever hook addressed it). */
+function taskKeyOfCard(card: Element): string | null {
+  if (card.hasAttribute(SELECT_CARD_ATTR)) return card.getAttribute(SELECT_CARD_ATTR)
+  if (card.hasAttribute('data-dsh-forge-task-card')) return card.getAttribute('data-dsh-forge-task-card')
+  if (card.hasAttribute('data-dsh-forge-task-row')) return card.getAttribute('data-dsh-forge-task-row')
+  if (card.hasAttribute('data-id')) return card.getAttribute('data-id')
+  return null
+}
+
 /** Click targets that keep their own meaning inside a card (checkbox, ⤢, caller-marked). */
 const SELECT_INTERACTIVE_SELECTOR = [
   '[data-dsh-forge-select-chk]',
@@ -415,7 +441,7 @@ function isDomVisible(element: HTMLElement): boolean {
 /** The nearest card element addressing `target`, if any. */
 function cardOf(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof HTMLElement)) return null
-  return target.closest(`[${SELECT_CARD_ATTR}]`)
+  return target.closest(CARD_SELECTOR)
 }
 
 /** The structured outcome → locale copy (the aria-live leg). */
@@ -461,7 +487,7 @@ export function SelectionLayer(props: SelectionLayerProps) {
     if (snapshot.phase !== 'selecting') return
     const card = cardOf(event.target)
     if (card === null) return
-    const taskKey = card.getAttribute(SELECT_CARD_ATTR)
+    const taskKey = taskKeyOfCard(card)
     if (taskKey === null || taskKey === '') return
     if (event.key === ' ') {
       event.preventDefault()
@@ -477,7 +503,7 @@ export function SelectionLayer(props: SelectionLayerProps) {
     ) {
       event.preventDefault()
       event.stopPropagation()
-      const cards = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(`[${SELECT_CARD_ATTR}]`))
+      const cards = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(CARD_SELECTOR))
         .filter(isDomVisible)
       const index = cards.indexOf(card)
       if (index === -1) return
@@ -497,7 +523,7 @@ export function SelectionLayer(props: SelectionLayerProps) {
     if (snapshot.phase !== 'selecting') return
     if (event.target instanceof HTMLElement && event.target.closest(SELECT_INTERACTIVE_SELECTOR) !== null) return
     const card = cardOf(event.target)
-    const taskKey = card?.getAttribute(SELECT_CARD_ATTR)
+    const taskKey = card === null ? null : taskKeyOfCard(card)
     if (taskKey !== null && taskKey !== undefined && taskKey !== '') controller.toggle(taskKey)
   }
 

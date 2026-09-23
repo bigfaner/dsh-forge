@@ -21,6 +21,18 @@ import { ChromeButton } from '../../../components/chrome/ChromeButton'
 export const DIALOG_Z = 1200
 export const TOAST_Z = 1100
 
+/**
+ * ui-design 层叠 + UF3 Placement: the side DOCK family's shared geometry —
+ * z100 below the float bar (z200, 选择模式) and every dialog/toast, width
+ * min(440px, 45vw) (the board insets its flow layout by exactly this strip
+ * while EITHER dock — detail or approval, 同层互斥 since 3.9 — is open).
+ * Declared HERE (the tasks family's shared chrome module) since 3.9: the
+ * detail panel and the approval panel import each other's components, so
+ * the constants need an acyclic home every dock consumer shares.
+ */
+export const DETAIL_DOCK_Z = 100
+export const DETAIL_DOCK_WIDTH = 'min(440px, 45vw)'
+
 /** ui-dialog geometry: full-screen mask (mask-1 + 2px blur) with a centered r24 card. */
 const maskStyle = {
   alignItems: 'center',

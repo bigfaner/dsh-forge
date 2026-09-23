@@ -217,6 +217,46 @@ export interface ReceiveApprovalInput {
 }
 
 /**
+ * 单条缺失项(任务 3.9 canonical client twin;main-side peer = ipc/types.ts
+ * MissingItem, verbatim)—— dispatch/selection-mode.ts 的同名 UI 视图孪生与本行
+ * 结构兼容,双生并存由 3.5 的 DispatchRow 注记先例覆盖。`rule` 在客户端保持
+ * string(kernel StageCheckRule 词表原词透传,呈现层不枚举)。
+ */
+export interface MissingItem {
+  /** 产生该期望的阶段行(PRD 清单行). */
+  readonly stage: FeatureStatus
+  /** 命中的机器规则(kernel StageCheckRule 词表原词). */
+  readonly rule: string
+  /** 缺失对象:相对路径(tasks/ 方言)/ 任务看板地址 / 聚合面名. */
+  readonly artifact: string
+  /** 机器可读解释(稳定文案,UI 直接呈现). */
+  readonly detail: string
+}
+
+/** checkStageArtifacts 产物(任务 3.9 canonical client twin;kernel StageArtifactsReport). */
+export interface StageArtifactsReport {
+  readonly stage: FeatureStatus
+  /** 期望清单全过(= missing 为空);false 仍可派发(acknowledgeMissing). */
+  readonly satisfied: boolean
+  readonly missing: readonly MissingItem[]
+}
+
+/** dispatchTasks 入参(任务 3.9 canonical client twin;acknowledgeMissing = 缺失确认面). */
+export interface DispatchTasksInput {
+  readonly projectId: string
+  readonly taskKeys: readonly string[]
+  readonly acknowledgeMissing?: boolean
+}
+
+/**
+ * dispatchTasks 联合返回(任务 3.9 canonical client twin;blocked = 产物缺失未
+ * 确认 —— 零落行,警告门重开)。
+ */
+export type DispatchTasksResult =
+  | { readonly dispatched: readonly DispatchRow[] }
+  | { readonly blocked: 'artifacts-missing'; readonly missing: readonly MissingItem[] }
+
+/**
  * Interface 1 TaskSummary (task 5.5's consumption; the main-side peer is
  * apps/desktop/src/main/workbench/ipc/types.ts from 2.7 — both halves derive
  * from the same spec section). Dialect notes (task 2.5): `key` is the 看板

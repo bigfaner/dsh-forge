@@ -40,7 +40,7 @@ import type { TaskSummary } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
 import {
   buildTaskGraph, buildTraversalIndex, nextFocusKey,
-  type DagLaunchMount, type FocusDirection, type TaskDagNode, type TraversalIndex,
+  type DagDecorMount, type DagLaunchMount, type FocusDirection, type TaskDagNode, type TraversalIndex,
 } from './dag/build-graph'
 import type { DagPosition } from './dag/layout'
 import { TaskCardNode } from './dag/NodeCard'
@@ -78,6 +78,12 @@ export interface DepTreeViewProps {
   launch?: DagLaunchMount | undefined
   /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   activeLinks?: ReadonlyMap<string, string> | undefined
+  /**
+   * The UF1 decoration composers (task 3.9, 角标以 props 传入): the 编排态
+   * 角标 + the selection-mode cluster, composed per node by the page and
+   * carried through the node data. Absent renders the pure M2 card.
+   */
+  decor?: DagDecorMount | undefined
 }
 
 /**
@@ -146,13 +152,13 @@ export function DepTreeView(props: DepTreeViewProps) {
   const graph = useMemo(() => {
     const built = buildTaskGraph(
       props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey,
-      props.launch, props.activeLinks,
+      props.launch, props.activeLinks, props.decor,
     )
     const positions = new Map<string, DagPosition>(built.nodes.map(node => [node.id, node.position]))
     const traversal: TraversalIndex = buildTraversalIndex(positions, built.edges)
     const taskByKey = new Map(props.tasks.map(task => [task.key, task] as const))
     return { built, positions, traversal, taskByKey }
-  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey, props.launch, props.activeLinks])
+  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey, props.launch, props.activeLinks, props.decor])
 
   /** Move DOM focus onto a node wrapper (the lib keys wrappers by `data-id`). */
   const focusNode = (key: string): void => {

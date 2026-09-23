@@ -9,6 +9,7 @@
  * Read-only discipline: rows carry navigation only (the selection seam);
  * there is no per-row control of any other kind (BIZ-task-ops-001).
  */
+import type { ReactNode } from 'react'
 import type { TaskSummary } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
 import { TaskListRow } from './TaskRow'
@@ -32,6 +33,16 @@ export interface TaskListProps {
   onSelect?: ((task: TaskSummary) => void) | undefined
   /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   activeLinks?: ReadonlyMap<string, string> | undefined
+  /**
+   * The UF1 编排态角标 composer (task 3.9, 角标以 props 传入): called per
+   * row; the returned node rides the row's status cell verbatim.
+   */
+  orchBadgeOf?: ((taskKey: string) => ReactNode | undefined) | undefined
+  /**
+   * The UF1 selection-mode cell composer (task 3.9, checkbox 内嵌行首):
+   * called per row; the returned cell self-hides outside selection mode.
+   */
+  selectionCellOf?: ((taskKey: string) => ReactNode | undefined) | undefined
 }
 
 const wrapStyle = {
@@ -120,6 +131,8 @@ export function TaskList(props: TaskListProps) {
               selected={props.selectedKey === task.key}
               {...(props.activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: props.activeLinks.get(task.key) })}
               onSelect={props.onSelect}
+              {...(props.orchBadgeOf === undefined ? {} : { orchBadge: props.orchBadgeOf(task.key) })}
+              {...(props.selectionCellOf === undefined ? {} : { selectionCell: props.selectionCellOf(task.key) })}
             />
           ))}
         </tbody>

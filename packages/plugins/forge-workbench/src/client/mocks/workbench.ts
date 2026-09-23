@@ -32,13 +32,16 @@
  * failListWith arm the failure branches).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, MigrationPhase, MigrationPhaseResult, MigrationStatus,
+  ApprovalRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
+  MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
-  PluginRow, Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail, TaskSummary,
+  MissingItem, PluginRow, Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail,
+  TaskSummary,
   WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot, OverviewFace,
+  DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot,
+  OverviewFace,
   PluginFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
@@ -1039,5 +1042,165 @@ export function createMockMigrationFace(
     },
     get startCalls(): number { return startCalls },
     get guardReads(): number { return guardReads },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UF1 dispatch face, M3 (task 3.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF1 orchestration family's build-stage twin (task 3.9): the six verbs
+ * of contract.ts's DispatchFace as a closure-held state machine over
+ * in-memory rows — the page's UF1 wiring and the 3.9 integration suite drive
+ * the whole chain (selection → check → confirm → dispatch → reflux badges /
+ * approval decide / redispatch) against it, mirroring the kernel's own edge
+ * semantics small:
+ *
+ *   - dispatchTasks mints one `starting` row per key (a fresh batchId per
+ *     call, promptHash deterministic per mint) — `blocked` when the armed
+ *     missing list is non-empty and acknowledgeMissing is absent (零落行);
+ *   - redispatch re-runs the armed check against a FAILED row and mints its
+ *     successor (the original row stays as the audit trail);
+ *   - decideApproval is the only decision path (pending rows only — an
+ *     already-decided row rejects ERR_APPROVAL_DECIDED, the stale-entry face)
+ *     and flips the row's dispatch to running/failed with the reflux event;
+ *   - the test-facing pokes (failNextDispatch / setMissing / emit) arm the
+ *     error/blocked/reflux branches.
+ *
+ * The twin is TEST/BUILD-ONLY: the page never defaults to it (the real host
+ * gets the IPC face; absent verbs keep the UF1 entries inert — mock 全撤).
+ */
+export interface MockDispatchFaceOptions {
+  /** The project the rows/approvals address (defaults to the mock project id). */
+  readonly projectId?: string
+  /** Pre-seeded dispatch rows (the badge spectrum's initial data). */
+  readonly rows?: readonly DispatchRow[]
+  /** Pre-seeded approval rows (pending entries the dock lists). */
+  readonly approvals?: readonly ApprovalRow[]
+  /** The armed missing list checkStageArtifacts answers (the warning door). */
+  readonly missing?: readonly MissingItem[]
+}
+
+/** Everything the dispatch mock twin exposes beyond the face (the pokes). */
+export interface MockDispatchFace extends DispatchFace {
+  /** Arm the missing list (checkStageArtifacts + the blocked dispatch leg). */
+  setMissing(missing: readonly MissingItem[]): void
+  /** Arm the NEXT dispatchTasks/redispatch call to reject (the error dialog leg). */
+  failNextDispatch(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the board's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+  /** Wire the twin's internal reflux emits into the BOARD face's emit poke. */
+  pipe(sink: (events: readonly WorkbenchEvent[]) => void): void
+  /** The live rows (post-mutation reads). */
+  readonly rows: readonly DispatchRow[]
+  /** The live approvals (post-mutation reads). */
+  readonly approvals: readonly ApprovalRow[]
+}
+
+/** One seeded row's counter (ids stay stable + unique per mint). */
+let mockDispatchSeq = 0
+
+/** The UF1 dispatch/approval verb twin (see {@link MockDispatchFaceOptions}). */
+export function createMockDispatchFace(options: MockDispatchFaceOptions = {}): MockDispatchFace {
+  const projectId = options.projectId ?? 'mock-project'
+  let rows: DispatchRow[] = (options.rows ?? []).map(row => ({ ...row }))
+  let approvals: ApprovalRow[] = (options.approvals ?? []).map(row => ({ ...row }))
+  let missing: readonly MissingItem[] = options.missing ?? []
+  let failNext: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const mint = (taskKey: string, batchId: string, state: DispatchState, sessionId: string | null, actor: string): DispatchRow => {
+    mockDispatchSeq += 1
+    return {
+      id: `dsp-${mockDispatchSeq}`,
+      batchId,
+      projectId,
+      featureSlug: taskKey.slice(0, taskKey.lastIndexOf('/')) || taskKey,
+      taskKey,
+      state,
+      sessionId,
+      promptHash: `hash-${taskKey.replaceAll('/', '-')}-${mockDispatchSeq}`,
+      actor,
+      dispatchedAt: new Date().toISOString(),
+      endedAt: null,
+      error: null,
+    }
+  }
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of listeners) listener(events)
+  }
+  return {
+    checkStageArtifacts: async () => ({ stage: 'tasks', satisfied: missing.length === 0, missing }),
+    dispatchTasks: async (input, actor) => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      if (missing.length > 0 && input.acknowledgeMissing !== true) {
+        return { blocked: 'artifacts-missing', missing }
+      }
+      const batchId = `batch-${mockDispatchSeq + 1}`
+      const minted = input.taskKeys.map(taskKey => mint(taskKey, batchId, 'starting', null, actor))
+      rows = [...rows, ...minted]
+      emit(minted.map(row => ({
+        type: 'dispatch_updated' as const, projectId, dispatchId: row.id, taskKey: row.taskKey, state: row.state,
+      })))
+      return { dispatched: minted }
+    },
+    redispatch: async (dispatchId, actor) => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      const target = rows.find(row => row.id === dispatchId)
+      if (target === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_DISPATCH_NOT_FOUND', message: 'mock: unknown dispatch' }))
+      }
+      if (target.state !== 'failed') {
+        throw new Error(JSON.stringify({ code: 'ERR_DISPATCH_STATE_INVALID', message: 'mock: only failed rows redispatch' }))
+      }
+      if (missing.length > 0) return { blocked: 'artifacts-missing', missing }
+      const successor = mint(target.taskKey, `batch-${mockDispatchSeq + 1}`, 'starting', null, actor)
+      rows = [...rows, successor]
+      emit([{ type: 'dispatch_updated', projectId, dispatchId: successor.id, taskKey: successor.taskKey, state: successor.state }])
+      return { dispatched: [successor] }
+    },
+    getDispatches: async () => rows,
+    listApprovals: async () => [...approvals].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    decideApproval: async (input) => {
+      const target = approvals.find(row => row.id === input.approvalId)
+      if (target === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_APPROVAL_NOT_FOUND', message: 'mock: unknown approval' }))
+      }
+      if (target.state !== 'pending') {
+        throw new Error(JSON.stringify({ code: 'ERR_APPROVAL_DECIDED', message: 'mock: approval already decided' }))
+      }
+      const decided: ApprovalRow = {
+        ...target,
+        state: input.approve ? 'approved' : 'rejected',
+        decidedAt: new Date().toISOString(),
+        decidedBy: 'workbench',
+      }
+      approvals = approvals.map(row => (row.id === decided.id ? decided : row))
+      const dispatch = rows.find(row => row.id === decided.dispatchId && row.state === 'awaiting')
+      if (dispatch !== undefined) {
+        const next: DispatchState = input.approve ? 'running' : 'failed'
+        rows = rows.map(row => (row.id === dispatch.id
+          ? { ...row, state: next, endedAt: new Date().toISOString(), error: input.approve ? null : '审批请求被拒绝' }
+          : row))
+        emit([{ type: 'dispatch_updated', projectId, dispatchId: dispatch.id, taskKey: dispatch.taskKey, state: next }])
+      }
+      return decided
+    },
+    setMissing: (next) => { missing = next },
+    failNextDispatch: (code = 'ERR_DISPATCH_LAUNCH_FAILED', message = 'mock: dispatch rejected') => {
+      failNext = { code, message }
+    },
+    emit,
+    pipe: (sink: (events: readonly WorkbenchEvent[]) => void) => { listeners.add(sink) },
+    get rows(): readonly DispatchRow[] { return rows },
+    get approvals(): readonly ApprovalRow[] { return approvals },
   }
 }

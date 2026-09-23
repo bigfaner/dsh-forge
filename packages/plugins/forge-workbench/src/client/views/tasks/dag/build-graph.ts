@@ -20,6 +20,7 @@
  *              `<key> · <title>` (view B card parity).
  */
 import type { Edge, Node } from '@xyflow/react'
+import type { ReactNode } from 'react'
 import type { TaskSummary } from '../../../ipc-types'
 import type { SessionLaunchServices, SessionLaunchTaskRef } from '../../../contract'
 import type { WorkbenchKey } from '../../../locale/en'
@@ -49,6 +50,21 @@ export interface DagLaunchMount {
   readonly onLaunched?: ((sessionId: string, task: SessionLaunchTaskRef) => void) | undefined
 }
 
+/**
+ * The UF1 decoration composer mount (task 3.9, 角标以包装/props 传入): the
+ * page composes per-node UF1 decorations — the 编排态角标 (DispatchBadge)
+ * and the selection-mode cluster (checkbox overlay + ⤢) — carried per GRAPH
+ * (one object, the page memoizes it) exactly like {@link DagLaunchMount}.
+ * Both composers' nodes self-hide outside a live orchestration/selection
+ * mode, so an absent mount renders the pure M2 card.
+ */
+export interface DagDecorMount {
+  /** Per-task 编排态角标 node (rides the card's badge row). */
+  readonly orchBadgeOf?: ((taskKey: string) => ReactNode | undefined) | undefined
+  /** Per-task selection-mode decoration cluster (rides the card's overlay). */
+  readonly selectionDecorOf?: ((taskKey: string) => ReactNode | undefined) | undefined
+}
+
 /** The custom-node data payload: everything the card renders, nothing else. */
 export interface TaskCardNodeData extends Record<string, unknown> {
   readonly task: TaskSummary
@@ -70,6 +86,10 @@ export interface TaskCardNodeData extends Record<string, unknown> {
   readonly launch?: DagLaunchMount | undefined
   /** The task's ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   readonly activeSessionId?: string | undefined
+  /** The UF1 编排态角标 node (task 3.9; undefined renders the pure M2 card). */
+  readonly orchBadge?: ReactNode | undefined
+  /** The UF1 selection-mode cluster (task 3.9; self-hiding outside the mode). */
+  readonly selectionDecor?: ReactNode | undefined
 }
 
 /** The view-A node: a task card (`nodeTypes.taskCard`). */
@@ -96,6 +116,8 @@ export interface TaskDagGraph {
  *   the reserved 28×28 slot empty.
  * @param activeLinks - taskKey → ACTIVE session link id (5.11 AC3), or
  *   undefined for no badges.
+ * @param decor - the UF1 decoration composers (task 3.9), or undefined for
+ *   the pure M2 card.
  * @returns nodes in layout reading order (layer top-down, then left→right —
  *   the Tab order ui-design specifies) with positions from the layered layout.
  */
@@ -107,6 +129,7 @@ export function buildTaskGraph(
   selectedKey?: string | undefined,
   launch?: DagLaunchMount | undefined,
   activeLinks?: ReadonlyMap<string, string> | undefined,
+  decor?: DagDecorMount | undefined,
 ): TaskDagGraph {
   const visibleKeys = new Set(tasks.map(task => task.key))
   const edges: TaskDagEdge[] = []
@@ -146,6 +169,8 @@ export function buildTaskGraph(
       t,
       ...(launch === undefined ? {} : { launch }),
       ...(activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: activeLinks.get(task.key) }),
+      ...(decor?.orchBadgeOf === undefined ? {} : { orchBadge: decor.orchBadgeOf(task.key) }),
+      ...(decor?.selectionDecorOf === undefined ? {} : { selectionDecor: decor.selectionDecorOf(task.key) }),
     },
     width: NODE_CARD_WIDTH,
     height: NODE_CARD_HEIGHT,

@@ -43,7 +43,7 @@ import type {
 } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import {
-  createIpcTaskDetailFace, getWorkbenchIpcBridge,
+  createIpcDispatchFace, createIpcTaskDetailFace, getWorkbenchIpcBridge,
 } from '../../ipc/workbench'
 import type { WorkbenchIpcBridge } from '../../ipc/workbench'
 import {
@@ -106,6 +106,10 @@ export function TasksView(props: TasksViewProps) {
     seatForm || props.projectId === undefined ? undefined : createTaskBoardStore(bridge, props.projectId))
   const [boardFace] = useState(() => (store === undefined ? undefined : store.asFace()))
   const [detailFace] = useState(() => (bridge === undefined ? undefined : createIpcTaskDetailFace(bridge)))
+  // The UF1 dispatch face (task 3.9): the six orchestration verbs over the
+  // same bridge — the real host's UF1 surface (派发/审批/编排回流) goes live
+  // through it; mock 全撤 (no mock twin ever answers when the bridge lives).
+  const [dispatchFace] = useState(() => (bridge === undefined ? undefined : createIpcDispatchFace(bridge)))
   useEffect(() => {
     if (store === undefined) return
     return () => { store.dispose() }
@@ -139,6 +143,7 @@ export function TasksView(props: TasksViewProps) {
         onSelect={props.onSelect}
         face={props.seat?.face}
         detailFace={props.seat?.detailFace}
+        dispatchFace={props.seat?.dispatchFace}
         {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
         {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
         {...(props.session === undefined ? {} : { session: props.session })}
@@ -167,7 +172,8 @@ export function TasksView(props: TasksViewProps) {
 
   // The real chain: the store-backed board face + the IPC detail face over
   // the resolved active project; the store's publishes re-feed the page
-  // through reloadToken (rows update in place — never a remount).
+  // through reloadToken (rows update in place — never a remount). Since 3.9
+  // the dispatch face rides along (the UF1 orchestration surface).
   return (
     <TaskBoardPage
       t={props.t}
@@ -176,6 +182,7 @@ export function TasksView(props: TasksViewProps) {
       onSelect={props.onSelect}
       face={boardFace}
       detailFace={detailFace}
+      dispatchFace={dispatchFace}
       reloadToken={reloadToken}
       {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}

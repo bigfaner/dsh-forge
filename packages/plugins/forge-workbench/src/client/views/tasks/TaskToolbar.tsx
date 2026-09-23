@@ -80,6 +80,13 @@ export interface TaskToolbarProps {
   sync: SyncStatus
   /** The sync-error 重试 CTA's action (the page reloads the board). */
   onRetrySync: () => void
+  /**
+   * The toolbar's right-edge action slot (task 3.9, ui-design UF1 工具栏追加):
+   * the UF1 「派发」/「审批 N」 entries render AFTER the M2 controls (M2
+   * 既有控件不动). Additive presentation slot only — the toolbar's own
+   * controls and their state stay exactly as they were.
+   */
+  actions?: ReactNode | undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +526,9 @@ export function TaskToolbar(props: TaskToolbarProps) {
           </ChromeButton>
         )}
       </span>
+
+      {/* The UF1 action slot (task 3.9): 派发 / 审批 N, right of the M2 controls. */}
+      {props.actions}
     </div>
   )
 }

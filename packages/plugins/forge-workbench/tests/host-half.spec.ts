@@ -25,7 +25,18 @@ const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** Minimal Context face the cordis Service base needs at registration time. */
 function fakeHostContext(): { ctx: Context; provide: ReturnType<typeof vi.fn> } {
   const provide = vi.fn()
-  return { ctx: { reflect: { provide } } as unknown as Context, provide }
+  return {
+    ctx: {
+      reflect: { provide },
+      // M3 task 3.5: apply() also attaches the approval-bridge's waterfall
+      // listeners (approval/request + tools/pre-execute) — the minimal event
+      // surface a host context carries for the attach (each on() returns its
+      // detach; the rebuilt bundle exercises the real attach since 3.9's
+      // lib refresh unmasked the stale-artifact gap).
+      on: vi.fn(() => () => {}),
+    } as unknown as Context,
+    provide,
+  }
 }
 
 /** The module-table baseline the host SPA answers (hello-world / template contract). */
@@ -78,8 +89,12 @@ describe('forge-workbench host half: apply registers the ForgeBridge + SessionLa
     expect(Object.keys(module)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect(hostApply(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(3)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch', 'forgeToolBridge'])
+    // Since 3.5 apply registers FIVE remote services: the M2 trio plus the
+    // orchestration pair (dispatchLaunch + approvalBridge).
+    expect(provide).toHaveBeenCalledTimes(5)
+    expect(provide.mock.calls.map(call => call[0])).toEqual([
+      'forgeBridge', 'sessionLaunch', 'forgeToolBridge', 'dispatchLaunch', 'approvalBridge',
+    ])
     // The Gateway's source-mode discovery face: @Remote-marked methods become
     // the wire endpoints forgeBridge/{resolveCli,getTaskPrompt} (4.1),
     // sessionLaunch/launch (4.2), and forgeToolBridge/{calls,answer} (2.1 —
@@ -184,8 +199,12 @@ describe('forge-workbench dual-half artifacts: both load through their channels 
     expect(Object.keys(nodeHalf)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect((nodeHalf.apply as (ctx: Context) => void)(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(3)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch', 'forgeToolBridge'])
+    // Since 3.5 the artifact registers the orchestration pair too (the stale
+    // pre-3.5 bundle masked this — 3.9's lib refresh unmasked it).
+    expect(provide).toHaveBeenCalledTimes(5)
+    expect(provide.mock.calls.map(call => call[0])).toEqual([
+      'forgeBridge', 'sessionLaunch', 'forgeToolBridge', 'dispatchLaunch', 'approvalBridge',
+    ])
   })
 
   it('the browser-half artifact (lib/client.js) executes through the module-table loader channel', () => {

@@ -388,7 +388,7 @@
         "3.8",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.9-uf1-integrate.md",
       "record": "records/3.9-uf1-integrate.md",
       "surface-type": "web",
