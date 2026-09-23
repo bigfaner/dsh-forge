@@ -28,6 +28,28 @@ export type WorkbenchEvent =
   }
   | { readonly type: 'feature_updated'; readonly projectId: string; readonly featureSlug: string }
   | { readonly type: 'sync'; readonly projectId: string; readonly sync: SyncStatusPayload }
+  // M3 v2(任务 1.4;tech-design §Interface 1 事件扩展):迁移相位完成信号。
+  // 每相位(backup/ingest/verify/switch/archive,失败另加 rollback)完成即
+  // 推送一条;终态对话框与进度呈现由消费面(1.7)组装,本事件只承载相位
+  // 与结果,不承载对拍报告全文(可回查面 = migration_event.detail_json)。
+  | {
+    readonly type: 'migration_progress'
+    readonly projectId: string
+    readonly phase: MigrationPhase
+    readonly result: MigrationPhaseResult
+  }
+
+// —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
+
+/**
+ * migration_event 相位词表(schema-v2.sql §9 CHECK 同源;迁移/回收审计)。
+ * reingest 相 = 外部写回收(Interface 4 第 7 步,任务 1.5),本任务只落
+ * 词表与审计面,不实现回收逻辑。
+ */
+export type MigrationPhase = 'backup' | 'ingest' | 'verify' | 'switch' | 'archive' | 'rollback' | 'reingest'
+
+/** 相位结果词表(migration_event.result CHECK 同源)。 */
+export type MigrationPhaseResult = 'ok' | 'fail'
 
 /** Interface 1 SyncStatus(事件载荷形态;repos SyncState 的 DTO 投影)。 */
 export interface SyncStatusPayload {

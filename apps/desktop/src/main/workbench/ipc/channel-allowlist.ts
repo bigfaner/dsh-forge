@@ -50,6 +50,11 @@ export const WORKBENCH_VERB_CHANNELS = {
   taskReopen: 'dsh-forge:workbench-task-reopen',
   taskGet: 'dsh-forge:workbench-task-get',
   taskQuery: 'dsh-forge:workbench-task-query',
+  // —— M3 migration 段(任务 1.4 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。迁移面 = 一对动词:状态读取 + 一次性显式发起;
+  //    相位进度走事件通道(migration_progress),非动词。 ——
+  getMigrationStatus: 'dsh-forge:workbench-get-migration-status',
+  startMigration: 'dsh-forge:workbench-start-migration',
 } as const
 
 /**

@@ -51,6 +51,7 @@ import { createPluginEnableGuard } from '../../plugin-runtime/guard.ts'
 import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } from './plugins.ts'
 import { toTaskSummary } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
+import { createMigrationService } from '../migration/pipeline.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -225,6 +226,17 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     },
   })
 
+  // M3 任务 1.4:迁移动词服务(Interface 4 第 1-6 步内核管线)。相位事件
+  // 经同一 sink 批推(单事件批;2.6 节流语义面向 watcher 扫描批,迁移面
+  // 直发不损语义 —— 批内合并键已含 migration_progress)。库文件路径由
+  // pipeline 缺省解析(boot 落位同源 resolveWorkbenchDbPath)。
+  const migrationService = createMigrationService({
+    db,
+    userDataPath: deps.userDataPath,
+    loadProject: projectId => findProjectRow(db, projectId) ?? null,
+    onEvent: event => sink([event]),
+  })
+
   return {
     verbs: {
       getState(): WorkbenchState {
@@ -349,6 +361,11 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       taskReopen: (input, actor) => taskVerbs.taskReopen(input, actor),
       taskGet: input => taskVerbs.taskGet(input),
       taskQuery: input => taskVerbs.taskQuery(input),
+
+      // —— M3 迁移动词(任务 1.4):委托 migration/pipeline(守卫/备份/
+      //    摄入/对拍/切读/归档 + migration_event 审计 + migration_progress)。 ——
+      getMigrationStatus: projectId => migrationService.getMigrationStatus(projectId),
+      startMigration: projectId => migrationService.startMigration(projectId),
     },
 
     start(): void {

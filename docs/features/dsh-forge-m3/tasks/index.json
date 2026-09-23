@@ -95,7 +95,7 @@
       "dependencies": [
         "1.3"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "1.4-migration-pipeline.md",
       "record": "records/1.4-migration-pipeline.md",
       "surface-type": "web",

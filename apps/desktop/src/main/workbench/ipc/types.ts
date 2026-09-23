@@ -22,13 +22,13 @@ import type {
   SessionLink,
   TaskStatus,
 } from '../repos/types.ts'
-import type { SyncStatusPayload as SyncStatus, WorkbenchEvent } from '../indexer/diff.ts'
+import type { MigrationPhase, SyncStatusPayload as SyncStatus, WorkbenchEvent } from '../indexer/diff.ts'
 
 // Interface 1 中已由仓储/感知层定义的 DTO,以本模块为共享出口(避免渲染层
 // 直接依赖 main 内部模块路径)。SyncStatus = 感知层的 SyncStatusPayload
 // (Interface 1 事件载荷形态)。
 export type { ChangeSource, DocKind, Project, ProjectPatch, RegisterProjectInput, SessionLink, TaskStatus }
-export type { SyncStatus, WorkbenchEvent }
+export type { SyncStatus, WorkbenchEvent, MigrationPhase }
 export type { FeatureStatus }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +199,39 @@ export interface TaskQueryInput {
 }
 
 // ---------------------------------------------------------------------------
+// M3 迁移动词 DTO(任务 1.4;tech-design §Interface 1 迁移段 + §Interface 4)
+// ---------------------------------------------------------------------------
+
+/** migration_event 行的 IPC 投影(迁移/回收审计,结果可回查;PRD G2)。 */
+export interface MigrationEvent {
+  readonly id: string
+  readonly projectId: string
+  /** 7 相词表(schema-v2.sql §9 CHECK 同源;reingest 相 = 外部写回收,1.5)。 */
+  readonly phase: MigrationPhase
+  readonly result: 'ok' | 'fail'
+  /** 相位详情 JSON 原文(对拍报告/备份清单/回滚明细);无 → null。 */
+  readonly detailJson: string | null
+  readonly at: string
+}
+
+/** getMigrationStatus 返回形态(Interface 1:读路由 + 迁移/偏离状态)。 */
+export interface MigrationStatus {
+  /** 项目任务权威通道(projects.data_authority)。 */
+  readonly authority: 'files' | 'sqlite'
+  /** 外部写回收偏离标记(projects.deviated;置位归 1.5 重摄入路径)。 */
+  readonly deviated: boolean
+  /** 迁移完成时间;未迁移 → null。 */
+  readonly migratedAt: string | null
+  /** 最近一笔迁移审计事件;从未发起 → null。 */
+  readonly lastEvent: MigrationEvent | null
+}
+
+/** startMigration 返回形态(进度经 migration_progress 事件,Interface 1)。 */
+export interface MigrationStarted {
+  readonly started: true
+}
+
+// ---------------------------------------------------------------------------
 // 动词服务契约(handler 只做 参数校验 + 服务调用 + 错误映射,Hard Rule)
 // ---------------------------------------------------------------------------
 
@@ -241,6 +274,15 @@ export interface WorkbenchVerbServices {
   taskGet(input: TaskGetInput): TaskDetail
   /** 读路由列表(过滤 featureSlug/status,双分支同口径)。 */
   taskQuery(input: TaskQueryInput): TaskSummary[]
+  // —— M3 迁移动词(任务 1.4;实现 = migration/pipeline.ts,经 services.ts 装配)——
+  /** 迁移状态读取(authority/deviated/migratedAt/lastEvent)。 */
+  getMigrationStatus(projectId: string): MigrationStatus
+  /**
+   * 一次性显式迁移(Interface 4 第 1-6 步):在跑编排 → ERR_MIGRATION_GUARD;
+   * 迁移中重复发起 → ERR_MIGRATION_IN_PROGRESS;对拍差异 → ERR_MIGRATION_VERIFY
+   * (整体回滚后可重试)。相位进度经 migration_progress 事件推送。
+   */
+  startMigration(projectId: string): Promise<MigrationStarted>
 }
 
 // ---------------------------------------------------------------------------

@@ -41,6 +41,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   taskReopen: 'dsh-forge:workbench-task-reopen',
   taskGet: 'dsh-forge:workbench-task-get',
   taskQuery: 'dsh-forge:workbench-task-query',
+  // M3 migration 段(任务 1.4 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getMigrationStatus: 'dsh-forge:workbench-get-migration-status',
+  startMigration: 'dsh-forge:workbench-start-migration',
 } as const
 
 /**

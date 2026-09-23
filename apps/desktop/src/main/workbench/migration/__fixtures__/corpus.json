@@ -1,0 +1,92 @@
+{
+  "comment": [
+    "Migration-pipeline tmp-tree corpus (task 1.4). Dialect = this repo's live",
+    "forge shape (spike-1-findings §4.1): per-feature docs/features/<slug>/tasks/",
+    "with index.json (structured state authority), task .md bodies and write-once",
+    "records/<stem>.md files. Coverage demanded by the task notes: 相位键 (1.gate /",
+    "5.gate local ids), 悬空 blocker (2.1 → 9.9, matches no task), 通配依赖",
+    "(2.2 → 2.x), 多 feature (two features with colliding phase-key namespaces),",
+    "one submitted task carrying a record .md. The spec builder materializes this",
+    "corpus into a tmp code root with deterministic mtimes, scans it once (so",
+    "task_snapshot carries the derived projection), then drives the pipeline."
+  ],
+  "features": [
+    {
+      "slug": "checkout-flow",
+      "manifestStatus": "in-progress",
+      "tasks": [
+        {
+          "id": "1.1",
+          "stem": "1.1-spike",
+          "title": "Spike: parity baseline",
+          "status": "completed",
+          "type": "spike",
+          "dependencies": [],
+          "record": true
+        },
+        {
+          "id": "1.gate",
+          "stem": "1-gate",
+          "title": "Phase 1 gate",
+          "status": "completed",
+          "type": "gate",
+          "dependencies": ["1.1"]
+        },
+        {
+          "id": "1.2",
+          "stem": "1.2-task",
+          "title": "Implement kernel ingest",
+          "status": "in_progress",
+          "type": "coding",
+          "dependencies": ["1.gate"]
+        },
+        {
+          "id": "2.1",
+          "stem": "2.1-task",
+          "title": "Verify board parity",
+          "status": "blocked",
+          "type": "coding",
+          "dependencies": ["1.2", "9.9"]
+        },
+        {
+          "id": "2.2",
+          "stem": "2.2-task",
+          "title": "Wildcard dependency consumer",
+          "status": "pending",
+          "type": "coding",
+          "dependencies": ["2.x"]
+        },
+        {
+          "id": "T-review-doc",
+          "stem": "T-review-doc",
+          "title": "Review migration docs",
+          "status": "pending",
+          "type": "doc",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "slug": "settings-panel",
+      "manifestStatus": "tasks",
+      "tasks": [
+        {
+          "id": "5.1",
+          "stem": "5.1-task",
+          "title": "Settings panel scaffold",
+          "status": "pending",
+          "type": "coding",
+          "dependencies": []
+        },
+        {
+          "id": "5.gate",
+          "stem": "5-gate",
+          "title": "Phase 5 gate",
+          "status": "pending",
+          "type": "gate",
+          "dependencies": ["5.1"]
+        }
+      ]
+    }
+  ]
+}

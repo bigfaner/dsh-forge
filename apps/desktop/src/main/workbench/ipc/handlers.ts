@@ -159,13 +159,15 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 }
 
 // ---------------------------------------------------------------------------
-// 动词注册(M2 16 条 + M3 tasks 段 7 条 = 23 条白名单通道)
+// 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 = 25 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
  * Register every workbench verb on exactly one whitelisted channel. Sender
  * validation runs before the try/catch (M1-style plain rejection, never
  * remapped); everything else is mapped through {@link toWorkbenchIpcError}.
+ * Async verbs (任务 1.4 起,如 startMigration 的 fs IO 面)经同一映射:同步
+ * 抛错即时封装,Promise 拒绝在 then 链上同码封装 —— 两条路径共享一张表。
  */
 export function installWorkbenchVerbs(
   handle: WorkbenchHandleRegistrar,
@@ -175,11 +177,22 @@ export function installWorkbenchVerbs(
   const register = (channel: WorkbenchVerbChannel, run: (args: readonly unknown[]) => unknown): void => {
     handle(channel, (event, ...args) => {
       assertWorkbenchSender(channel, event)
+      let result: unknown
       try {
-        return run(args)
+        result = run(args)
       } catch (error) {
         throw toWorkbenchIpcError(error, channel)
       }
+      if (
+        result !== null &&
+        typeof result === 'object' &&
+        typeof (result as PromiseLike<unknown>).then === 'function'
+      ) {
+        return (result as PromiseLike<unknown>).then(undefined, (error: unknown) => {
+          throw toWorkbenchIpcError(error, channel)
+        })
+      }
+      return result
     })
   }
 
@@ -320,6 +333,17 @@ export function installWorkbenchVerbs(
     }
     return services.taskQuery(input as unknown as TaskQueryInput)
   })
+
+  // —— M3 migration 段(任务 1.4):一对迁移动词。Hard Rule 延续 —— 本层
+  //    只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;守卫/备份/
+  //    摄入/对拍/切读/归档与回滚全部在内核管线(migration/pipeline.ts),
+  //    startMigration 的异步拒绝经 register 的 then 链同码封装。 ——
+
+  register(C.getMigrationStatus, args =>
+    services.getMigrationStatus(requireString('getMigrationStatus', 'projectId', args[0])))
+
+  register(C.startMigration, args =>
+    services.startMigration(requireString('startMigration', 'projectId', args[0])))
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

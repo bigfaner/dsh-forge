@@ -120,6 +120,13 @@ function fakeServices(): WorkbenchVerbServices {
     taskReopen: vi.fn(() => ({ key: 'alpha/1.1', status: 'pending' })),
     taskGet: vi.fn(() => ({ summary: { key: 'alpha/1.1' } })),
     taskQuery: vi.fn(() => []),
+    getMigrationStatus: vi.fn(() => ({
+      authority: 'files',
+      deviated: false,
+      migratedAt: null,
+      lastEvent: null,
+    })),
+    startMigration: vi.fn(() => Promise.resolve({ started: true })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -166,12 +173,13 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the twenty-three whitelisted verb channels, one per verb', () => {
+  it('contains exactly the twenty-five whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-end-session-link',
       'dsh-forge:workbench-get-feature-board',
+      'dsh-forge:workbench-get-migration-status',
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
       'dsh-forge:workbench-get-task-detail',
@@ -181,6 +189,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
+      'dsh-forge:workbench-start-migration',
       'dsh-forge:workbench-subscribe-events',
       'dsh-forge:workbench-task-add',
       'dsh-forge:workbench-task-claim',
@@ -192,12 +201,12 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(23)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(25)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
-    // Hard Rule(任务 1.3):通道常量表追加式修改,禁改写 M2 既有动词定义。
-    // 钉定 M2 段原样(键序 = 定义序);M3 段只许出现在其后。
+    // Hard Rule(任务 1.3/1.4):通道常量表追加式修改,禁改写 M2 既有动词
+    // 定义。钉定 M2 段原样(键序 = 定义序);M3 段只许出现在其后。
     const keys = Object.keys(WORKBENCH_VERB_CHANNELS)
     expect(keys.slice(0, 16)).toEqual([
       'getState',
@@ -225,6 +234,8 @@ describe('workbench verb routing table', () => {
       'taskReopen',
       'taskGet',
       'taskQuery',
+      'getMigrationStatus',
+      'startMigration',
     ])
   })
 
@@ -267,10 +278,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 23 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 25 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(23)
+    expect(handlers.size).toBe(25)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -346,6 +357,29 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
     expect(services.taskQuery).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
+
+    // M3 migration 段(任务 1.4):projectId 形状校验 + 服务转发;异步面
+    // 的错误映射见下一条用例。
+    handlers.get(C.getMigrationStatus)?.(OWNED, 'p-1')
+    expect(services.getMigrationStatus).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.startMigration)?.(OWNED, 'p-1')
+    expect(services.startMigration).toHaveBeenCalledWith('p-1')
+  })
+
+  it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {
+    stderrSink()
+    const services = fakeServices()
+    const guardError = Object.assign(new Error('project p-1 has 1 running dispatch(es)'), { code: 'ERR_MIGRATION_GUARD' })
+    services.startMigration = vi.fn(() => Promise.reject(guardError))
+    const { handlers } = installed(services)
+    const result = handlers.get(WORKBENCH_VERB_CHANNELS.startMigration)?.(OWNED, 'p-1') as Promise<unknown>
+    await expect(result).rejects.toBeInstanceOf(WorkbenchIpcError)
+    const error = (await result.then(
+      () => undefined,
+      (rejection: unknown) => rejection,
+    )) as WorkbenchIpcError
+    expect(JSON.parse(error.message)).toMatchObject({ code: 'ERR_MIGRATION_GUARD' })
   })
 
   it('rejects M3 task verb shape violations before the service (vocab + actor + blockers array)', () => {

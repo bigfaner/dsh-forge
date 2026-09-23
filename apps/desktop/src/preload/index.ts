@@ -7,6 +7,8 @@ import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allo
 import type {
   FeatureBoardData,
   FeatureDoc,
+  MigrationStarted,
+  MigrationStatus,
   PluginRow,
   Project,
   RecordSessionLinkInput,
@@ -140,6 +142,17 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskGet, input) as Promise<TaskDetail>,
     taskQuery: (input: TaskQueryInput): Promise<TaskSummary[]> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskQuery, input) as Promise<TaskSummary[]>,
+    // M3 migration verbs (task 1.4): status read is synchronous-shaped; the
+    // one-shot startMigration runs the guard→backup→ingest→verify→switch→
+    // archive pipeline in the kernel and reports phase progress through
+    // migration_progress events (onEvents). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_MIGRATION_GUARD /
+    // ERR_MIGRATION_IN_PROGRESS / ERR_MIGRATION_VERIFY — verify failures are
+    // rolled back wholesale and retryable).
+    getMigrationStatus: (projectId: string): Promise<MigrationStatus> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getMigrationStatus, projectId) as Promise<MigrationStatus>,
+    startMigration: (projectId: string): Promise<MigrationStarted> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.startMigration, projectId) as Promise<MigrationStarted>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the
