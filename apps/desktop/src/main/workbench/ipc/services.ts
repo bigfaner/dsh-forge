@@ -55,7 +55,7 @@ import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } f
 import { toTaskSummary, toTaskSummaryFromAuthoritative } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
 import { getProjectTaskAuthority, listTasks } from '../tasks/task-repo.ts'
-import { createMigrationService } from '../migration/pipeline.ts'
+import { createMigrationService, type MigrationFaults } from '../migration/pipeline.ts'
 import { createReingestHook } from '../migration/reingest-watcher.ts'
 import { createDeviationHook } from '../stages/deviation-watcher.ts'
 import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
@@ -111,6 +111,13 @@ export interface WorkbenchIpcServiceDeps {
    * 侧(host-profile/skill-dirs.ts 的聚合结局)注入;getState 只读呈现。
    */
   readonly skillDirSyncAlerts?: readonly SkillDirSyncAlert[] | undefined
+  /**
+   * 迁移注错缝(任务 6.4,SC2 e2e「失败重试」腿;TEST-ONLY)。缺省
+   * undefined → 无注错(生产面恒缺省);注入 = 逐次 startMigration 重新
+   * 求值的解析器(env 缝族 DSH_FORGE_MIGRATION_FAULTS,见
+   * migration/faults-stub.ts)。boot 接线(main/index.ts)传入。
+   */
+  readonly migrationFaults?: () => MigrationFaults | undefined
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -281,6 +288,7 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     userDataPath: deps.userDataPath,
     loadProject: projectId => findProjectRow(db, projectId) ?? null,
     onEvent: event => sink([event]),
+    ...(deps.migrationFaults === undefined ? {} : { faults: deps.migrationFaults }),
   })
 
   // M3 任务 2.2(D4):知识系 + feature 读动词服务。文件数据面直读写

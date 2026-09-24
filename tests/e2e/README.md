@@ -10,6 +10,7 @@
 | `fixtures/corpus.ts` | 两类项目语料:①未迁移(index.json + 任务 md,M2 writer 复用);②已迁移(真内核链 register→scan→migrate 产出的 `<userData>/workbench/workbench.db` + `.migrated` 归档,md 原样) | SC1/SC2(6.3/6.4)、SC9(6.8) |
 | `stubs/dispatch.ts` | 派发通道统一 stub(test 半身):一个目录同时驱动两个 env 缝(`DSH_FORGE_SESSION_STUB_DIR` + `DSH_FORGE_APPROVAL_STUB_DIR`),一份 journal(create/prompt/session-ended/approval 四类) | SC3(6.5)及全部派发腿 |
 | `stubs/oracle.ts` | prompt_hash 四件套 oracle(内核三查 + requestId 确定性;spike-3 §4 口径)+ 逐字符语料(CRLF/unicode/行尾空格/收尾换行) | SC3 注入内容断言 |
+| `stubs/migration-faults.ts` | 迁移注错缝 stub(test 半身):控制文件写入 `migration-fault-control.json`,host 半身(`apps/desktop/.../migration/faults-stub.ts`)经 env 缝 `DSH_FORGE_MIGRATION_FAULTS` 逐次 startMigration 重读 —— 注错 → 回滚 → 清错 → 重试,全程文件驱动 | SC2(6.4)失败重试腿 |
 | `helpers/instance-lock.ts` | 单实例锁纪律:进程表枚举 + dsh-forge 实例识别(repo main.cjs 形 + 打包 exe 形)+ fail-fast 断言 | 全部腿(Hard Rule:跑前必查) |
 | `helpers/app.ts` | M3 腿启动器:`launchPluginShell` 预设(强制隔离 userData + 默认干净 PATH + stub env 随行) | 全部腿 |
 | `specs/*.spec.ts` | Playwright 腿(project `forge-m3-e2e`;`just web-test-m3 <name>`) | 6.3-6.8 |

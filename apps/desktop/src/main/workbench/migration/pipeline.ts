@@ -185,8 +185,12 @@ export interface MigrationPipelineDeps {
   readonly onEvent: (event: WorkbenchEvent) => void
   /** 时钟缝(缺省真实时钟;测试注入定值)。 */
   readonly now?: () => Date
-  /** 注错缝(测试)。 */
-  readonly faults?: MigrationFaults
+  /**
+   * 注错缝(测试)。静态对象或逐次解析器:解析器在每次 startMigration
+   * 入口重新求值(单次运行内恒定;重试 = 新调用 = 新求值 —— 6.4 SC2 的
+   * 「注错 → 回滚 → 清错 → 重试成功」旅程契约,env 缝族见 faults-stub.ts)。
+   */
+  readonly faults?: MigrationFaults | (() => MigrationFaults | undefined)
 }
 
 /** 本模块装配产物(Interface 1 迁移动词对)。 */
@@ -278,6 +282,9 @@ export function createMigrationService(deps: MigrationPipelineDeps): MigrationSe
       }
 
       migrationsInFlight.add(projectId)
+      // 注错缝求值(入口一次,单次运行内恒定):静态对象原样;解析器逐次
+      // startMigration 重新求值 —— 重试腿清错后同服务可成功(6.4 SC2)。
+      const faults = typeof deps.faults === 'function' ? deps.faults() : deps.faults
       // 文档根解析口径同 indexer/scan.resolveFeaturesDir(docBase = 仓外文档
       // 路径 ?? codeRoot;三分模型,BIZ-workbench-001)。
       const featuresRoot = join(project.docLocationPath ?? project.codeRoot, 'docs', 'features')
@@ -326,7 +333,7 @@ export function createMigrationService(deps: MigrationPipelineDeps): MigrationSe
             projectId,
             featuresRoot,
             afterRow: (rowsSoFar) => {
-              if (deps.faults?.failIngestAfterRows === rowsSoFar) {
+              if (faults?.failIngestAfterRows === rowsSoFar) {
                 throw new Error(`injected ingest failure after ${String(rowsSoFar)} row(s) (test fault)`)
               }
             },
@@ -370,7 +377,7 @@ export function createMigrationService(deps: MigrationPipelineDeps): MigrationSe
           })
 
           failedPhase = 'archive'
-          const renamed = await archiveIndexes(featuresRoot, stamp, deps.faults?.failArchiveForSlug)
+          const renamed = await archiveIndexes(featuresRoot, stamp, faults?.failArchiveForSlug)
           recordMigrationEvent(db, {
             projectId,
             phase: 'archive',

@@ -35,6 +35,7 @@ import { createPluginEnableGuard } from './plugin-runtime/guard.ts'
 import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
+import { createMigrationFaultsResolver } from './workbench/migration/faults-stub.ts'
 import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
 
 // Electron shell main entry.
@@ -375,6 +376,9 @@ void app.whenReady().then(async () => {
       pluginGuard: createPluginEnableGuard(() => readPluginManifestBundles(pluginBundlesPath)),
       // 5.7:customSkillDirs boot 同步告警(getState 设置面呈现;空 = 健康)。
       skillDirSyncAlerts,
+      // 6.4(SC2 e2e):迁移注错缝 —— env 缝族成员(DSH_FORGE_MIGRATION_
+      // FAULTS);未设置 → 解析器恒 undefined,生产行为不变。
+      migrationFaults: createMigrationFaultsResolver(),
       onEvents: workbenchEvents.sink,
     })
     installWorkbenchVerbs(

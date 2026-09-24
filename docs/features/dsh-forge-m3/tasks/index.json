@@ -731,7 +731,7 @@
         "6.2",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.4-sc2-migration.md",
       "record": "records/6.4-sc2-migration.md",
       "surface-type": "web",
