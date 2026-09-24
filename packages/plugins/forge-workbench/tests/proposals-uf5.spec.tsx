@@ -431,6 +431,30 @@ describe('回流 — sync 事件驱动列表/详情更新 (AC4)', () => {
     expect(panel.scrollTop).toBe(80)
     expect(view.container.querySelector('[data-dsh-forge-proposal-doc-skeleton]')).toBeNull()
   })
+
+  // The SC6 e2e leg's real-browser anchor (task 6.7): a same-key re-read never
+  // collapses the panel content — the skeleton flash would clamp scrollTop in
+  // a real layout engine (jsdom cannot see it), so the last-good discipline
+  // is what makes 保滚动 true beyond jsdom.
+  it('detail reflux: a same-key re-read keeps the last good doc — no skeleton flash, a failed re-read never blanks the open document', async () => {
+    const face = createMockProposalsFace()
+    const proposal = seeded.get('dsh-forge-m3')!
+    const view = render(
+      <ProposalDetail t={t.zh} projectId={PROJECT_ID} proposal={proposal} face={face} onBack={() => {}} />,
+    )
+    await waitFor(() => {
+      expect(view.container.querySelector('[data-dsh-forge-proposal-doc-panel]')?.textContent).toContain('M3 流程即产品')
+    })
+    // A FAILED same-key re-read (a transient read failure behind a sync
+    // push): the open document stays rendered — never an error wall, never
+    // a blank panel.
+    face.failNextDoc('ERR_PROPOSAL_NOT_FOUND', 'mock: transient read failure')
+    face.emit([{ type: 'sync', projectId: PROJECT_ID, sync: { state: 'idle', lastScanAt: '2026-09-24T08:00:03.000Z' } }])
+    await new Promise((resolve) => { setTimeout(resolve, 30) })
+    expect(view.container.querySelector('[data-dsh-forge-proposal-doc-panel]')?.textContent).toContain('M3 流程即产品')
+    expect(view.container.querySelector('[data-dsh-forge-proposal-doc-error]')).toBeNull()
+    expect(view.container.querySelector('[data-dsh-forge-proposal-doc-skeleton]')).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------

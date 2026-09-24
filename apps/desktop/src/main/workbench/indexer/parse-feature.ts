@@ -109,7 +109,13 @@ function parseFeatureDir(featureDir: string, slug: string): FeatureDirParse {
   let tasks: ParsedTask[] | null = null
   const entries = readTaskIndex(indexPath)
   if (entries === null) {
-    failures.push({ file: `${slug}/tasks/index.json`, reason: 'tasks index unreadable or malformed' })
+    // M3 任务 6.7:缺失与损坏分型 —— 缺失(文件不在)是已迁移项目的
+    // 稳态(index.json 已淘汰,.migrated-* 归档;权威在 SQLite),扫描层
+    // 按 data_authority 过滤该形态;在场而不可解析仍为失败(外部异常)。
+    failures.push({
+      file: `${slug}/tasks/index.json`,
+      reason: exists(indexPath) ? 'tasks index unreadable or malformed' : 'tasks index missing',
+    })
   } else {
     const taskResult = parseFeatureTasks(tasksDir, slug, entries, mtimeIsoOrNull(indexPath) ?? '')
     tasks = taskResult.tasks

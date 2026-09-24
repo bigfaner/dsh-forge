@@ -245,10 +245,23 @@ export function ProposalDetail(props: ProposalDetailProps) {
 
   // The per-tab read: one effect run per (slug, tab, retry, reflux) — the
   // alive flag drops stale resolutions when the tab switches mid-flight.
+  // A FRESH (slug, tab) opens the loading skeleton; a same-key re-read
+  // (reflux / retry) KEEPS the last good doc rendered until the fresh read
+  // settles — the panel's content never collapses mid-read, so its
+  // scrollTop survives the reflux re-render in a real layout engine
+  // (保滚动 by construction — jsdom cannot assert the clamp, the SC6 e2e
+  // leg does), and a transient re-read failure never blanks the open
+  // document (the list's last-good discipline).
+  const docKey = `${proposal.slug}::${activeTab}`
+  const docKeyRef = useRef('')
   useEffect(() => {
     let alive = true
-    setPhase('loading')
-    setDoc(undefined)
+    const fresh = docKeyRef.current !== docKey
+    docKeyRef.current = docKey
+    if (fresh) {
+      setPhase('loading')
+      setDoc(undefined)
+    }
     void faceRef.current.readProposalDoc({ projectId: projectIdRef.current ?? '', slug: proposal.slug, kind: activeTab })
       .then((next) => {
         if (!alive) return
@@ -256,10 +269,12 @@ export function ProposalDetail(props: ProposalDetailProps) {
         setPhase('ready')
       })
       .catch(() => {
-        if (alive) setPhase('error')
+        // Only a FRESH key's failure surfaces the error card; a same-key
+        // re-read failure keeps the last good doc rendered.
+        if (alive && fresh) setPhase('error')
       })
     return () => { alive = false }
-  }, [proposal.slug, activeTab, retryNonce, refluxNonce])
+  }, [proposal.slug, activeTab, retryNonce, refluxNonce, docKey])
 
   // The 回流 leg (AC4): project-scoped `sync` pushes bump the read nonce —
   // the OPEN document re-renders with fresh content while the PANEL element

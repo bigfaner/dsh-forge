@@ -43,6 +43,7 @@ import {
   upsertTaskSnapshots,
 } from '../repos/task-snapshots.ts'
 import { markScanFailed, markScanStarted, markScanSucceeded } from '../repos/sync-state.ts'
+import { getProjectTaskAuthority } from '../tasks/task-repo.ts'
 import type { ForgeParseFailure, ParsedTask } from './parse-task.ts'
 import { scanFeatures, type FeatureScanResult } from './parse-feature.ts'
 import {
@@ -336,8 +337,19 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     wrapTransaction: true,
   })
 
+  // M3 任务 6.7:已迁移(data_authority='sqlite')项目的稳态 = index.json
+  // 已淘汰(.migrated-* 归档在;任务权威在 SQLite)—— 基线扫描的「index
+  // 缺失」不是失败,否则每次激活/感知重扫都置 sync error 态,渲染侧
+  // lostProjectIds 把健康已迁移项目误判「仓外路径失效」(概览引导卡 +
+  // 提案板阻断,SC6 腿暴露)。文件复现/变更的外部写回收仍归 reingest
+  // 钩子(1.5,扫描后);在场而不可解析(unreadable or malformed)依旧
+  // 计入失败(外部异常透出)。files 权威项目两形态均为失败(M2 语义不变)。
+  const failures = getProjectTaskAuthority(db, target.id) === 'sqlite'
+    ? result.failures.filter(failure => failure.reason !== 'tasks index missing')
+    : result.failures
+
   const sync =
-    result.failures.length > 0 ? markScanFailed(db, target.id, formatSkipReason(result.failures)) : markScanSucceeded(db, target.id)
+    failures.length > 0 ? markScanFailed(db, target.id, formatSkipReason(failures)) : markScanSucceeded(db, target.id)
 
   const stats: ScanStats = {
     featuresScanned: result.features.length,
@@ -345,7 +357,7 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     taskUpserts: applied.stats.taskUpserts,
     taskDeletes: applied.stats.taskDeletes,
     recordsParsed: applied.stats.recordsParsed,
-    skippedFiles: result.failures,
+    skippedFiles: failures,
     danglingBlockers: applied.stats.danglingBlockers,
   }
   const events: WorkbenchEvent[] = [
