@@ -54,6 +54,7 @@ import type {
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
 import { dispatchLaunchRelayOf } from './dispatch-relay'
+import { approvalAnswerRelayOf } from './approval-answer'
 
 /**
  * The preload namespace surface (task 2.7): the 13 data verbs + the
@@ -534,7 +535,13 @@ export function createIpcDispatchFace(bridge: WorkbenchIpcBridge): DispatchFace 
     },
     decideApproval: async (input: DecideApprovalInput, actor: string): Promise<ApprovalRow> => {
       try {
-        return await bridge.decideApproval(input, actor)
+        const row = await bridge.decideApproval(input, actor)
+        // 任务 6.5(SC3):决策送达腿 —— 内核行已决(权威事实)后,把
+        // (approvalId, approve) 对经 host 桥 settle 回注 subagent 的 pending
+        // 工具调用(spike-2 §1.3 ③)。fire-and-forget:送达失败不改写已决
+        // 事实,不上抛(桥核晚到/重复 settle 幂等)。
+        approvalAnswerRelayOf()?.answerDecision(input.approvalId, input.approve)
+        return row
       } catch (error) {
         renormalize(error)
       }

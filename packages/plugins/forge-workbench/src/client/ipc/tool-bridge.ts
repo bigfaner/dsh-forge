@@ -127,10 +127,41 @@ const DISPATCH_LAUNCH_LAUNCH: InvocationDescriptor = {
   result: { mode: 'src-json' },
 }
 
-/** 桥命名空间贡献(挂载后 `ctx.remote.forgeToolBridge.*` / `ctx.remote.dispatchLaunch.launch` 可调)。 */
+/**
+ * 任务 6.5(SC3):approvalBridge/answer 面(host approval-bridge rpc 单方法;
+ * wire 字段 = host 参数名 `input` 原词,strict 手写 codec,src-json 结果)。
+ * 同一贡献的第三个描述符 —— 审批决策送达腿(approval-answer.ts)的载体。
+ */
+const APPROVAL_ANSWER_SCHEMA: TypertSchema<{ approvalId: string; approve: boolean }> = {
+  parse(value: unknown): { approvalId: string; approve: boolean } {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError('expected the ApprovalAnswerInput object')
+    }
+    const approvalId = (value as { approvalId?: unknown }).approvalId
+    if (typeof approvalId !== 'string' || approvalId === '') {
+      throw new TypeError('field approvalId must be a non-empty string')
+    }
+    if (typeof (value as { approve?: unknown }).approve !== 'boolean') {
+      throw new TypeError('field approve must be a boolean')
+    }
+    return value as { approvalId: string; approve: boolean }
+  },
+}
+
+const APPROVAL_BRIDGE_ANSWER: InvocationDescriptor = {
+  id: `${PACKAGE}#approvalBridge/answer`,
+  service: 'approvalBridge',
+  namespace: 'approvalBridge',
+  method: 'answer',
+  invocation: { kind: 'direct' },
+  parameters: [jsonParameter('input', `${PACKAGE}#ApprovalAnswerInput`, APPROVAL_ANSWER_SCHEMA)],
+  result: { mode: 'src-json' },
+}
+
+/** 桥命名空间贡献(挂载后 `ctx.remote.forgeToolBridge.*` / `ctx.remote.dispatchLaunch.launch` / `ctx.remote.approvalBridge.answer` 可调)。 */
 export const FORGE_TOOL_BRIDGE_REMOTE_CONTRIBUTION: TypertRemoteContribution = {
   package: PACKAGE,
-  descriptors: [FORGE_TOOL_BRIDGE_CALLS, FORGE_TOOL_BRIDGE_ANSWER, DISPATCH_LAUNCH_LAUNCH],
+  descriptors: [FORGE_TOOL_BRIDGE_CALLS, FORGE_TOOL_BRIDGE_ANSWER, DISPATCH_LAUNCH_LAUNCH, APPROVAL_BRIDGE_ANSWER],
 }
 
 // ---------------------------------------------------------------------------

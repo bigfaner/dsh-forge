@@ -748,7 +748,7 @@
         "3.5",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.5-sc3-parallel-dispatch.md",
       "record": "records/6.5-sc3-parallel-dispatch.md",
       "surface-type": "web",

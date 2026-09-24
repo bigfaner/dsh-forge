@@ -26,6 +26,7 @@ import {
 import { createBoardSessionStore } from './store/board-session'
 import { installToolBridgeClient } from './ipc/tool-bridge'
 import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
+import { installApprovalAnswerRelay } from './ipc/approval-answer'
 import { getWorkbenchIpcBridge } from './ipc/workbench'
 import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
@@ -120,6 +121,13 @@ export {
   launchRequestOf, relayDispatchedRows, setDispatchLaunchRelay,
 } from './ipc/dispatch-relay'
 export type { DispatchLaunchRelay } from './ipc/dispatch-relay'
+// The renderer approval-answer leg (M3 task 6.5, SC3): decided approvals ride
+// the host approval-bridge settle face so the subagent's pending ask resolves
+// with the human verdict (spike-2 §1.3 ③ 决策送达链).
+export {
+  approvalAnswerRelayOf, deliverApprovalAnswer, installApprovalAnswerRelay, setApprovalAnswerRelay,
+} from './ipc/approval-answer'
+export type { ApprovalAnswerRelay } from './ipc/approval-answer'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -290,6 +298,11 @@ export function apply(ctx: ClientContext): void {
   const disposeLaunchRelay = workbenchBridge === undefined
     ? () => {}
     : installDispatchLaunchRelay(ctx, workbenchBridge)
+  // M3 task 6.5 (SC3): the renderer approval-answer leg — decided approvals
+  // ride the host approval-bridge settle face (the subagent's pending ask
+  // resolves with the human verdict). No bridge/remote = no-op (kernel-only
+  // semantics: the row is decided, delivery waits).
+  const disposeAnswerRelay = installApprovalAnswerRelay(ctx)
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -357,6 +370,7 @@ export function apply(ctx: ClientContext): void {
     disableRail()
     disposeToolBridge()
     disposeLaunchRelay()
+    disposeAnswerRelay()
     disposeSlotNav()
   }, 'forge-workbench: navigation forms')
 }
