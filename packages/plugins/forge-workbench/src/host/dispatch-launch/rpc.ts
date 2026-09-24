@@ -8,7 +8,7 @@
 //     请求序对齐返回(内核 failed/running 态的回填面 = relay 侧 notify 动词,
 //     不在本面)。
 // 装饰器语法封闭在此(工作区测试 transform 不降级标准装饰器;单测经 tsc 产物
-// 加载 —— session-launch-rpc / forge-tools rpc 先例);逻辑在 launch.ts。
+// 加载 —— forge-tools rpc 先例);逻辑在 launch.ts。
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'

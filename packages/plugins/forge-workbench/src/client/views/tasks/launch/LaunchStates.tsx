@@ -1,15 +1,16 @@
 /**
- * The UF5 launch-state presentation family (task 5.10, ui-design 会话挂接节
- * States 行): the shared dialog frame (ui-dialog geometry — r24 card over a
- * mask-1 + blur overlay, z1200 per the M2 层序), the initiating spinner, the
- * degradation toast (剪贴板已复制 + 手动指引, z1100, aria-live polite), and
- * the 发起失败 error dialog (标题 + 原因 + 恢复引导, M1 recovery-guidance
- * form). The ConfirmPanel composes the same DialogFrame, so every launch
- * overlay shares one focus contract: focus lands on the dialog's primary
- * button on open (Story2 — the confirm button is the default focus, so Enter
- * alone launches), Tab/Shift+Tab cycle inside (focus trap), Esc / mask / ✕
- * dismiss (armed only while nothing is in flight), and the caller returns
- * focus to the entry trigger on close.
+ * The tasks family's shared presentation chrome (task 5.10 起;M3 6.1 起为
+ * 全工作台共享件): the shared dialog frame (ui-dialog geometry — r24 card
+ * over a mask-1 + blur overlay, z1200 per the M2 层序), the initiating
+ * spinner, and the button/geometry constants the dispatch dialogs, the
+ * migration dialogs, the wizard steps, and the prefs rows all compose. The
+ * M2 launch-specific members (ConfirmPanel 的 degradation toast + 发起失败
+ * error dialog) were deleted with the ForgeBridge retirement (task 6.1).
+ *
+ * Every dialog overlay built on DialogFrame shares one focus contract:
+ * focus lands on the dialog's primary control on open, Tab/Shift+Tab cycle
+ * inside (focus trap), Esc / mask / ✕ dismiss, and the caller returns focus
+ * to the trigger on close.
  *
  * Styles stay inline (no stylesheet pipeline — Hard Rule): the theme rides
  * the host `--dsw-*` / `--dsh-*` vars exactly like the 5.1 chrome.
@@ -259,7 +260,7 @@ export function DialogFooter(props: { children: ReactNode }) {
 }
 
 /**
- * The initiating indicator (ui-design initiating 态): spinner + 「正在发起会话…」.
+ * The initiating indicator (ui-design initiating 态): spinner + label.
  * The rotation is SMIL inside the plugin's own inline SVG — self-contained,
  * no stylesheet pipeline, and inert in reduced-motion user agents that
  * disable SMIL animations.
@@ -279,135 +280,5 @@ export function LaunchSpinner(props: { label: string }) {
         </path>
       </svg>
     </span>
-  )
-}
-
-const toastCardStyle = {
-  alignItems: 'flex-start',
-  background: 'var(--dsh-bg, Canvas)',
-  border: '1px solid var(--dsh-border-color, CanvasText)',
-  borderRadius: '14px',
-  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  maxWidth: '360px',
-  padding: '12px 14px',
-  position: 'fixed',
-  right: '16px',
-  bottom: '16px',
-  zIndex: TOAST_Z,
-} as const
-
-const toastTitleStyle = {
-  fontSize: '14px',
-  fontWeight: 600,
-  lineHeight: '22px',
-} as const
-
-const toastBodyStyle = {
-  color: 'var(--dsw-alias-label-secondary, inherit)',
-  fontSize: '12px',
-  lineHeight: '18px',
-  margin: '0',
-} as const
-
-/**
- * The degradation toast (Interface 5 tier 3): 剪贴板已复制说明 + 手动指引,
- * presented as guidance — never as an error (`ERR_SESSION_CHANNEL_UNAVAILABLE`
- * is routing, not error display). role=status / aria-live=polite per the
- * ui-design a11y rules; dismissed explicitly (no auto-timer to race the user).
- */
-export function DegradedToast(props: {
-  title: string
-  copied: string
-  guide: string
-  dismissLabel: string
-  onDismiss: () => void
-}) {
-  return (
-    <div role="status" aria-live="polite" data-dsh-forge-launch-toast="" style={toastCardStyle}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', width: '100%' }}>
-        <strong style={toastTitleStyle}>{props.title}</strong>
-        <ChromeButton
-          type="button"
-          aria-label={props.dismissLabel}
-          data-dsh-forge-launch-toast-dismiss=""
-          style={{ ...ghostButtonStyle, height: '24px', marginLeft: 'auto', padding: '0 8px' }}
-          onClick={props.onDismiss}
-        >
-          <span aria-hidden="true">✕</span>
-        </ChromeButton>
-      </div>
-      <p style={toastBodyStyle}>{props.copied}</p>
-      <p style={toastBodyStyle}>{props.guide}</p>
-    </div>
-  )
-}
-
-const reasonStyle = {
-  color: 'var(--dsw-alias-label-secondary, inherit)',
-  fontSize: '14px',
-  lineHeight: '22px',
-  margin: '0',
-} as const
-
-const detailStyle = {
-  color: 'var(--dsw-alias-label-secondary, inherit)',
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-  fontSize: '12px',
-  lineHeight: '18px',
-  margin: '0',
-  overflowWrap: 'anywhere',
-} as const
-
-/**
- * The 发起失败 dialog (ui-design error 态): 标题 + 原因 + 恢复引导, Retry
- * primary (default focus — 关闭后可重试), Close ghost. Reached only for
- * chain exceptions and a denied clipboard (both channel tiers already
- * routed before this can show — a bare channel failure degrades instead,
- * never errors).
- */
-export function LaunchErrorDialog(props: {
-  titleId: string
-  title: string
-  reason: string
-  detail?: string | undefined
-  retryLabel: string
-  closeLabel: string
-  onRetry: () => void
-  onClose: () => void
-}) {
-  const retryRef = useRef<HTMLButtonElement | null>(null)
-  return (
-    <DialogFrame
-      role="alertdialog"
-      ariaLabelledBy={props.titleId}
-      initialFocus={retryRef}
-      onDismiss={props.onClose}
-      dialogDataKey="launch-error"
-    >
-      <DialogHeader id={props.titleId} title={props.title} closeLabel={props.closeLabel} onClose={props.onClose} />
-      <DialogBody>
-        <p style={reasonStyle}>{props.reason}</p>
-        {props.detail !== undefined && props.detail !== '' && (
-          <p data-dsh-forge-launch-error-detail="" style={detailStyle}>{props.detail}</p>
-        )}
-      </DialogBody>
-      <DialogFooter>
-        <ChromeButton type="button" data-dsh-forge-launch-error-close="" style={ghostButtonStyle} onClick={props.onClose}>
-          {props.closeLabel}
-        </ChromeButton>
-        <ChromeButton
-          ref={(element: HTMLButtonElement | null): void => { retryRef.current = element }}
-          type="button"
-          data-dsh-forge-launch-error-retry=""
-          style={primaryButtonStyle}
-          onClick={props.onRetry}
-        >
-          {props.retryLabel}
-        </ChromeButton>
-      </DialogFooter>
-    </DialogFrame>
   )
 }

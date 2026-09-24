@@ -26,7 +26,7 @@ import {
 } from '../contract'
 import type { ViewKeyStore, WorkbenchTabKey } from '../store/view-key'
 import type { BoardSessionStore } from '../store/board-session'
-import type { LaunchSeatStore } from '../launch-rpc'
+import type { SessionHandover } from '../session-handover'
 import { WorkbenchPanelIcon } from '../WorkbenchPanelIcon'
 import { WorkbenchShell } from '../WorkbenchShell'
 import type { ViewCarrier, ViewSwitchController } from './view-switch'
@@ -47,10 +47,10 @@ export interface SlotNavOptions {
    */
   readonly onPathLive?: () => void
   /**
-   * The UF5 launch seat (5.11): the shell subscribes and hands the board page
-   * the real launch services + the success hand-over.
+   * The session hand-over seat (5.11; M3 6.1 slimmed): the shell hands the
+   * board page the 「进入会话」 jump seam.
    */
-  readonly launch?: LaunchSeatStore | undefined
+  readonly launch?: SessionHandover | undefined
   /**
    * The board session store (5.11 AC3/AC4): the selection/scroll/badge memory
    * that survives the launch round-trip's shell unmount.

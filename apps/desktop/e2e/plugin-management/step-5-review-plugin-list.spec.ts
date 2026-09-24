@@ -133,17 +133,14 @@ test('step-5/core-capability-unaffected [@web-e2e @journey plugin-management]: w
       await page.locator('[data-dsh-forge-board-view="tree"]').click()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
 
-      // 核心能力 2 + 3:任务详情可读 + 一键发起会话入口可用(stub CLI 探测链)。
+      // 核心能力 2:任务详情可读(6.1:M2 发起会话入口随 ForgeBridge 退役;
+      // 派发执行面归 UF1/SC3 腿)。
       const feature1 = set.features[0]
       const task1 = feature1?.tasks[0]
       if (feature1 === undefined || task1 === undefined) throw new Error('fixture set missing tasks')
       const taskKey = `${feature1.slug}/${task1.localId}`
       await page.locator(`[data-dsh-forge-node-card="${taskKey}"]`).click()
       await expect(page.locator(`[data-dsh-forge-task-detail="${taskKey}"]`), '任务详情可读').toBeVisible({ timeout: 15_000 })
-      await expect(
-        page.locator(`[data-dsh-forge-node-card="${taskKey}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`),
-        '发起会话入口可用(probe = available;FT-043)',
-      ).toHaveAttribute('data-probe', 'available', { timeout: 30_000 })
 
       // 插件面:已停用目标行的退出说明 hint(最近 landed 面,见头注)非空;
       // 对照第三方行启用不受影响。

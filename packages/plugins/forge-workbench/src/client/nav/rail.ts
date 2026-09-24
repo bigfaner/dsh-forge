@@ -26,7 +26,7 @@ import { IconBranchOutline16, IconNewChatOutline16 } from '@deepseek-ai/dsh-clie
 import type { SnapshotSelectorHook, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ViewKeySnapshot, ViewKeyStore, WorkbenchTabKey } from '../store/view-key'
 import type { BoardSessionStore } from '../store/board-session'
-import type { LaunchSeatStore } from '../launch-rpc'
+import type { SessionHandover } from '../session-handover'
 import { WorkbenchShell } from '../WorkbenchShell'
 import type { ViewCarrier, ViewSwitchController } from './view-switch'
 
@@ -47,8 +47,8 @@ export interface RailNavOptions {
   readonly t: TranslateNS<'workbench'>
   /** Whether the rail also owns the workbench surface (see {@link RailContentMode}). */
   readonly content: RailContentMode
-  /** The UF5 launch seat (5.11) — threaded into the overlay's shell (form parity with the slot path). */
-  readonly launch?: LaunchSeatStore | undefined
+  /** The session hand-over seat (5.11; M3 6.1 slimmed) — threaded into the overlay's shell (form parity with the slot path). */
+  readonly launch?: SessionHandover | undefined
   /** The board session store (5.11 AC3/AC4) — threaded into the overlay's shell. */
   readonly boardSession?: BoardSessionStore | undefined
 }

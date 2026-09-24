@@ -9,25 +9,26 @@
 // 断言:
 //   - 挂接条目可见且 active(携带会话标识/时间),「进入会话」控件不渲染
 //     (count 0 —— 与 seam 未接线的代码事实一致,记为任务注记);
-//   - 壳级视图切换的原样可观测面 = 发起成功的跳转(UF5 onLaunched →
-//     uiWorkspace.openSession,keyed main slot 卸载工作台 shell);从会话
-//     视图经上游侧栏「工作台」行返回(switchToWorkbench)= 契约的「从会话
-//     界面返回」输入,断言视图键回到 workbench/tasks 且看板/选中任务态
-//     (侧板停留在原任务)恢复;
+//   - 壳级视图切换的原样可观测面 = 离开工作台主面板(6.1 口径:上游
+//     「新建会话」按钮 selectPanel(null),keyed main slot 卸载工作台
+//     shell —— 与 M2 发起跳转同一观测面;发起链本身随 ForgeBridge 退役);
+//     从会话视图经上游侧栏「工作台」行返回(switchToWorkbench)= 契约的
+//     「从会话界面返回」输入,断言视图键回到 workbench/tasks 且看板/选中
+//     任务态(侧板停留在原任务)恢复;
 //   - 重入/往返不产生新的挂接行(既有 active 挂接原样使用;links 恒 1 行,
 //     会话标识不变,徽标不变)。
 import { expect, test } from '@playwright/test'
 import { registerFixtureProject } from '../fixtures/forge-project.ts'
 import { cleanupViewKey, closeAndAwaitExit, openTasksBoard, switchToWorkbench } from '../tests/m2/helpers/restart-app.ts'
 import {
-  disposeJourney, launchOneClick, pickTaskKey, pollChannelJournal, readTaskDetail, setUpJourney,
+  disposeJourney, linkSessionViaBridge, pickTaskKey, readTaskDetail, setUpJourney,
 } from './helpers.ts'
 
 test('step-7/success [@web-e2e @journey task-session-execution-loop]: session-view round trip restores workbench/tasks + dock selection; the active link is reused, no new row', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
-  const { set, channel, project, session } = setup
+  const { set, project, session } = setup
   const KEY = pickTaskKey(set, task => task.status === 'pending' && task.record === null && task.dependencies.length === 0, '重入对象')
 
   try {
@@ -42,12 +43,12 @@ test('step-7/success [@web-e2e @journey task-session-execution-loop]: session-vi
       await page.locator(`[data-dsh-forge-node-card="${KEY}"]`).click()
       await expect(page.locator(`[data-dsh-forge-task-detail="${KEY}"]`)).toBeVisible({ timeout: 15_000 })
 
-      // 建立进行中(active)挂接并发起跳转(UF5 成功链,侧板主入口)。
-      await launchOneClick(page, `[data-dsh-forge-task-detail="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="panel-primary"]`)
-      const created = await pollChannelJournal(channel, entry => entry.kind === 'create', 'the session create')
-      sessionId = created.sessionId ?? ''
-      expect(sessionId).not.toBe('')
-      expect(await page.locator('[data-dsh-forge-shell]').count(), '发起成功 = 壳级切换至会话视图(view key → session)').toBe(0)
+      // 建立进行中(active)挂接(6.1:内核动词直调)。
+      sessionId = await linkSessionViaBridge(page, projectId, KEY, 'session-step7-reenter')
+      // 壳级切换至会话视图:上游「新建会话」按钮(selectPanel(null)卸载
+      // 工作台 shell —— 与 M2 发起跳转同一观测面)。
+      await page.getByRole('button', { name: /新建会话|New Session/ }).first().click()
+      await expect(page.locator('[data-dsh-forge-shell]'), '壳级切换至会话视图(工作台 shell 卸载)').toHaveCount(0, { timeout: 15_000 })
 
       // ---- 从会话界面返回(上游侧栏「工作台」行)----------------------------
       await switchToWorkbench(page)

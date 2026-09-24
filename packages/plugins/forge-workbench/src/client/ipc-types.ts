@@ -4,8 +4,8 @@
  * TYPES + mock data only; the IPC runtime is wired by the 5.14-5.16 assembly
  * tasks). PURE TYPES, zero runtime code.
  *
- * The plugin package cannot depend on the app (the 4.1 precedent — see
- * host/forge-bridge.ts), so this file is the client-side declaration of the
+ * The plugin package cannot depend on the app (the M2 4.1 precedent — the
+ * retired host/forge-bridge.ts), so this file is the client-side declaration of the
  * SAME shapes the main process serves: field definitions follow tech-design
  * §Interface 1 as the single authority, the main-side peer being
  * apps/desktop/src/main/workbench/ipc/types.ts (task 2.7). Both halves derive

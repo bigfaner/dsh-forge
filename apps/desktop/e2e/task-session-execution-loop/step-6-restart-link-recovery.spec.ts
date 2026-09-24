@@ -20,7 +20,7 @@ import type { Page } from '@playwright/test'
 import { registerFixtureProject } from '../fixtures/forge-project.ts'
 import { cleanupViewKey, closeAndAwaitExit, openTasksBoard } from '../tests/m2/helpers/restart-app.ts'
 import {
-  disposeJourney, launchOneClick, pickTaskKey, pollChannelJournal,
+  disposeJourney, linkSessionViaBridge, pickTaskKey,
   readActiveProjectId, readTaskDetail, setUpJourney,
 } from './helpers.ts'
 
@@ -34,21 +34,18 @@ test('step-6/success [@web-e2e @journey task-session-execution-loop]: restart ke
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
-  const { set, channel, project, session } = setup
+  const { set, project, session } = setup
   const KEY = pickTaskKey(set, task => task.status === 'pending' && task.record === null && task.dependencies.length === 0, '重启挂接对象')
 
   try {
-    // ---- Boot 1:发起,写入唯一 active 挂接 --------------------------------
+    // ---- Boot 1:写入唯一 active 挂接(6.1:内核动词直调)-----------------
     let shell = await session.boot()
     let sessionId = ''
     try {
       const { page } = shell
-      await registerFixtureProject(page, project)
+      const projectId = await registerFixtureProject(page, project)
       await openTasksBoard(page, set.facts.taskCount)
-      await launchOneClick(page, `[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
-      const created = await pollChannelJournal(channel, entry => entry.kind === 'create', 'the session create')
-      sessionId = created.sessionId ?? ''
-      expect(sessionId).not.toBe('')
+      sessionId = await linkSessionViaBridge(page, projectId, KEY, 'session-step6-success')
     } finally {
       await cleanupViewKey(shell.page)
       await closeAndAwaitExit(shell)
@@ -87,25 +84,21 @@ test('step-6/multi-history-recovery [@web-e2e @journey task-session-execution-lo
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
-  const { set, channel, project, session } = setup
+  const { set, project, session } = setup
   const KEY = pickTaskKey(set, task => task.status === 'pending' && task.record === null && task.dependencies.length === 0, '多历史挂接对象')
 
   try {
-    // ---- Boot 1:两次发起(supersede → 1 active + 1 ended 并存)----------
+    // ---- Boot 1:两次挂接(6.1:内核动词直调;supersede → 1 active + 1
+    // ended 并存 —— recordSessionLink 的同任务第二行置 ended 第一行)------
     let shell = await session.boot()
     let sessionIdOne = ''
     let sessionIdTwo = ''
     try {
       const { page } = shell
-      await registerFixtureProject(page, project)
+      const projectId = await registerFixtureProject(page, project)
       await openTasksBoard(page, set.facts.taskCount)
-      await launchOneClick(page, `[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
-      sessionIdOne = (await pollChannelJournal(channel, entry => entry.kind === 'create', 'the first create')).sessionId ?? ''
-      expect(sessionIdOne).not.toBe('')
-      await openTasksBoard(page, set.facts.taskCount)
-      await openDock(page, KEY)
-      await launchOneClick(page, `[data-dsh-forge-task-detail="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="panel-primary"]`)
-      sessionIdTwo = (await pollChannelJournal(channel, entry => entry.kind === 'create' && entry.sessionId !== sessionIdOne, 'the second create')).sessionId ?? ''
+      sessionIdOne = await linkSessionViaBridge(page, projectId, KEY, 'session-step6-hist-1')
+      sessionIdTwo = await linkSessionViaBridge(page, projectId, KEY, 'session-step6-hist-2')
       expect(sessionIdTwo).not.toBe(sessionIdOne)
     } finally {
       await cleanupViewKey(shell.page)

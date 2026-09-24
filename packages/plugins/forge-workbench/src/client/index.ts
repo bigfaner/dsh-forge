@@ -9,29 +9,23 @@
  * view-key machine through the one controller (nav/view-switch), so their
  * behavior contracts are identical by construction; view state persists
  * across restarts (store/view-key), first boot defaulting to the session
- * view. The host half (ForgeBridge / session launch / FORGE_ACTOR passthrough)
- * arrives in 4.x, the UF views in 5.x. Cross-boundary traffic happens
- * exclusively through cordis services (slots, locale) — no shell internals
- * are imported, in either direction.
+ * view. The host half's M2 ForgeBridge / session-launch faces were retired by
+ * M3 task 6.1 (CLI 退役); the dispatch chain (2.1 tools + 3.5 orchestration
+ * pair) is the host face now. Cross-boundary traffic happens exclusively
+ * through cordis services (slots, locale) — no shell internals are imported,
+ * in either direction.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the renderer-owned slots service (ctx.slots) Context merge.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the ForgeBridge remote-face declaration (task 4.1) into
-// this program's Typert view — `ctx.remote.forgeBridge` after the 5.10/5.11
-// namespace mount. Zero runtime face: the service lives in the host half.
-import type {} from './services'
-// Type-only: the SessionLaunch remote-face declaration (task 4.2), same
-// discipline — `ctx.remote.sessionLaunch` after the entry-task mount.
-import type {} from './session-launch'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
 import { createBoardSessionStore } from './store/board-session'
 import { installToolBridgeClient } from './ipc/tool-bridge'
-import { createLaunchSeat } from './launch-rpc'
+import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
 import { installSlotNav } from './nav/slot-inject'
@@ -48,7 +42,7 @@ export type {
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
   TaskBoardFace, TaskBoardSeat, DispatchFace,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
-  SessionLaunchHandover, TaskBoardLaunchSeat,
+  SessionLaunchHandover,
   MigrationFace, MigrationGuardSnapshot,
 } from './contract'
 export {
@@ -62,15 +56,11 @@ export type {
 // scroll/badge memory that survives the UF5 round-trip's shell unmount.
 export { createBoardSessionStore, INITIAL_BOARD_SCROLL } from './store/board-session'
 export type { BoardScrollMemory, BoardSessionStore } from './store/board-session'
-// The UF5 launch rpc assembly (task 5.11): the namespace contribution, the
-// tier-2 client channel, the renderer tier-3 legs, and the observable seat
-// both navigation forms thread into the shell.
-export {
-  bringMainWindowToFront, copyPromptToClipboard, createLaunchSeat,
-  deriveLaunchRequestIdClient, FORGE_WORKBENCH_REMOTE_CONTRIBUTION, launchViaClientChannel,
-  sessionChannelOf,
-} from './launch-rpc'
-export type { LaunchSeatSnapshot, LaunchSeatStore } from './launch-rpc'
+// The session hand-over (M3 task 6.1 — the retired launch seat's surviving
+// slice): 切会话视图 + session locating, threaded into the shell by both
+// navigation forms.
+export { createSessionHandover } from './session-handover'
+export type { SessionHandover } from './session-handover'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
@@ -231,15 +221,6 @@ export type { SlotNavOptions } from './nav/slot-inject'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
 export type { WorkbenchKey } from './locale/en'
-export type {
-  ForgeCliResolved, ForgeCliUnavailable, ForgeBridgeRemoteFace,
-  GetTaskPromptInput, GetTaskPromptResult, ResolveCliResult,
-  TaskPromptAvailable, TaskPromptUnavailable,
-} from './services'
-export type {
-  SessionLaunchFailed, SessionLaunchInput, SessionLaunchOk,
-  SessionLaunchRemoteFace, SessionLaunchResult,
-} from './session-launch'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -278,12 +259,12 @@ export function apply(ctx: ClientContext): void {
 
   const store = createViewKeyStore(createLocalStoragePersistence())
   const controller = new ViewSwitchController(store)
-  // The UF5 launch seat + the board session store (task 5.11): both live at
-  // plugin lifetime — ABOVE the shell — because a UF5 round-trip unmounts the
-  // shell in the slot path (the keyed main slot) and the success hand-over +
-  // the selection/scroll/badge memory must survive it. The seat's rpc members
-  // land when the `remote` service + the namespace contribution mount.
-  const launchSeat = createLaunchSeat(ctx, controller)
+  // The session hand-over + the board session store (task 5.11; M3 6.1
+  // slimmed the seat to the hand-over): both live at plugin lifetime — ABOVE
+  // the shell — because a board round-trip unmounts the shell in the slot
+  // path (the keyed main slot) and the hand-over + the selection/scroll/badge
+  // memory must survive it.
+  const launchSeat = createSessionHandover(ctx, controller)
   const boardSession = createBoardSessionStore()
   // M3 task 2.1 (T2): the renderer tool bridge — plugin-lifetime pump that
   // answers the host's forge_task_* tool calls over the whitelisted IPC verbs.

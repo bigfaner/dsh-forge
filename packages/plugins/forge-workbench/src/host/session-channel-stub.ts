@@ -2,13 +2,14 @@
  * The e2e stub session channel, host half (task 6.1 fixture 工程 — the seam
  * 6.3's SC2/SC3 legs drive; AC「stub 会话通道可编排三态」).
  *
- * Why an env seam instead of a second cordis service: the DF004 main channel
- * is resolved per call from `ctx.sessionController` (session-launch-rpc), and
+ * Why an env seam instead of a second cordis service: the session channel
+ * is resolved per call from `ctx.sessionController`
+ * (dispatch-launch/channel.sessionChannelOf), and
  * cordis `provide()` THROWS on a duplicate service name — an in-process
  * stand-in cannot register beside the web-app bundle's real controller. The
  * only injection point inside the host child is therefore this module, wired
- * in host/index.ts behind `DSH_FORGE_SESSION_STUB_DIR` (same env-seam family
- * as DSH_FORGE_PROJECT_ROOTS; unset → the real channel, production bytes
+ * in host/index.ts behind `DSH_FORGE_SESSION_STUB_DIR` (env-seam family;
+ * unset → the real channel, production bytes
  * untouched).
  *
  * Protocol (file-backed; the test process is the other end):
@@ -19,24 +20,25 @@
  *   <stubDir>/journal.jsonl — one JSON line per observed channel call:
  *     { "kind": "create", "at": ISO, "sessionId": string, "cwd": string }
  *     { "kind": "prompt", "at": ISO, "sessionId": string, "requestId": string,
- *       "mode": "queue", "text": string }   // the COMPOSED first user message
- *                                            (prompt + FORGE_ACTOR line) —
- *                                            6.3's 逐字符 hash oracle.
+ *       "mode": "queue", "text": string }   // the presynthesized first user
+ *                                            message (kernel 预合成组合串,
+ *                                            host 零改写) — SC3's 逐字符
+ *                                            hash oracle.
  * The third orchestration state (「结束事件」) is launcher-side convergence by
  * design (spike-1 §5: sessions carry no terminal signal); the TEST-side
  * helper appends a `{ "kind": "session-ended", "sessionId" }` journal line
  * (apps/desktop/e2e/fixtures/stubs/channel.ts) so 6.3 can drive the
  * endSessionLink verb off the same journal stream.
  *
- * Failure semantics mirror the real channel: 'fail' legs throw (the launch
- * core maps them to ERR_SESSION_CHANNEL_UNAVAILABLE); 'hang' legs never
+ * Failure semantics mirror the real channel: 'fail' legs throw (the dispatch
+ * launch core maps them to ERR_DISPATCH_LAUNCH_FAILED); 'hang' legs never
  * settle (the per-leg ceiling classifies them as timeouts).
  */
 
 import { appendFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { SessionChannel } from './session-launch'
+import type { SessionChannel } from './dispatch-launch/channel'
 
 /** Env name carrying the stub home dir (unset/empty → real channel). */
 export const SESSION_STUB_DIR_ENV = 'DSH_FORGE_SESSION_STUB_DIR'

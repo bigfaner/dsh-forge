@@ -162,12 +162,16 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
       await waitForTreeNodes(page, setB1.facts.taskCount, 60_000)
-      // 发起可用(launch probe;SC2/3 own the chain itself)。
+      // 仓外树的任务详情可读(6.1:M2 发起入口随 ForgeBridge 退役;读面即
+      // 仓外数据链的证词)。
       const taskBKey = `${featureB1.slug}/${taskB1.localId}`
+      await page.locator(`[data-dsh-forge-node-card="${taskBKey}"]`).click()
       await expect(
-        page.locator(`[data-dsh-forge-node-card="${taskBKey}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`),
-        'the launch entry probes available on the external project',
-      ).toHaveAttribute('data-probe', 'available', { timeout: 20_000 })
+        page.locator(`[data-dsh-forge-task-detail="${taskBKey}"]`),
+        'the external project task detail reads over the out-of-repo tree',
+      ).toBeVisible({ timeout: 15_000 })
+      await page.locator('[data-dsh-forge-detail-close]').click()
+      await expect(page.locator('[data-dsh-forge-task-detail]')).toHaveCount(0)
 
       await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       const featureB1Card = page.locator(`[data-dsh-forge-feature-card="${featureB1.slug}"]`)

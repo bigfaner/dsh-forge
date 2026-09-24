@@ -27,7 +27,7 @@
 // 本文件是纯逻辑核(单测直载);cordis rpc 壳(装饰器封闭)在 ./rpc.ts。
 
 import { randomUUID } from 'node:crypto'
-import { deriveLaunchRequestId, SESSION_CHANNEL_TIMEOUT_MS, type SessionChannel } from '../session-launch'
+import { deriveLaunchRequestId, SESSION_CHANNEL_TIMEOUT_MS, type SessionChannel } from './channel'
 
 /**
  * 一次派发启动请求(内核 launch-port DispatchLaunchInput 的 host 侧结构孪生

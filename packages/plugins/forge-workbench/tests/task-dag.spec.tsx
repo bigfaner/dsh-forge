@@ -445,13 +445,6 @@ describe('DepTreeView: node cards (AC5 — 字段与视图 C 行一致)', () => 
     ).toBeNull()
   })
 
-  it('reserves the 28×28 hover launch slot per card — empty until 5.11 mounts the trigger', async () => {
-    await renderBoard()
-    const slots = document.querySelectorAll('[data-dsh-forge-node-launch]')
-    expect(slots.length).toBe(TOTAL)
-    for (const slot of Array.from(slots)) expect(slot.textContent).toBe('')
-  })
-
   it('lights the 回流 updating highlight on the addressed card only', async () => {
     const face = createMockTaskBoardFace()
     render(<TaskBoardPage t={t.en} face={face} />)

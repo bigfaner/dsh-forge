@@ -15,8 +15,8 @@
 ## 一、执行引擎与 agent 能力
 
 ### 1. SDD 流程提效,随 LLM 增强而越轻量(原 #1)
-- forge skill 适配 dsh,通过插件引入【M2 在建:以 forge 核心插件形态落地(双半身:UI + CLI 桥)】
-- forge CLI 转换为 dsh tool 或应用 API,以插件形式【方向已定:CLI 退役演进;M2 先桥接,退役是终点】
+- forge skill 适配 dsh,通过插件引入【M2 已覆盖:M2 以双半身插件形态落地(UI + CLI 桥);M3 6.1 起 CLI 桥退役删除,技能面 = customSkillDirs 15 项 dsh 形态(D2)】
+- forge CLI 转换为 dsh tool 或应用 API,以插件形式【M3 已落地(6.1 收口):查询/变更面 = dsh tool + 内核动词,预合成取代 forge prompt;quality-gate/cleanup/worktree/verify-task-done 四动词 M4 随 GUI 逐项归宿(PRD 归宿分解决议)】
 - skill逐步迁移，分组。一组一个插件。
 
 ### 2. subagent 必须具备(原 #6)【M3 在建:预合成引擎 + 派发审批链(dsh-forge-m3 3.4/3.5)】

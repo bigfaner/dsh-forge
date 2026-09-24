@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import { deriveLaunchRequestId, type SessionChannel } from '../src/host/session-launch.ts'
+import { deriveLaunchRequestId, type SessionChannel } from '../src/host/dispatch-launch/channel.ts'
 import {
   createDispatchLaunchCore,
   type DispatchLaunchOutcome,

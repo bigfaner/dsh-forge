@@ -24,17 +24,15 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type { BoardSessionStore } from './store/board-session'
-import type { LaunchSeatStore } from './launch-rpc'
+import type { SessionHandover } from './session-handover'
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
   DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
   PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch, ProposalBoardData,
-  ProposalDoc, RecordSessionLinkInput, RegisterProjectInput, SessionLink,
+  ProposalDoc, RegisterProjectInput,
   StageArtifactsReport, StageAssetRow, StageGateInfo,
   TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
-import type { GetTaskPromptResult } from './services'
-import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
 
 /** Dictionary namespace owned by this plugin (LocaleNamespaceMap merge target). */
 export const NS = 'workbench'
@@ -123,7 +121,7 @@ export interface WorkbenchChromeFace {
 
 /**
  * The overview page's data + action face (task 5.3, UI dependency layering —
- * the same seam shape as WorkbenchChromeFace / SessionLaunchServices): the
+ * the same seam shape as WorkbenchChromeFace): the
  * BUILD stage renders against the shared mock twin
  * (mocks/workbench.createMockOverviewFace), the 5.14 assembly task injects
  * the Interface 1 IPC verbs. Every member mirrors its §Interface 1 verb
@@ -197,7 +195,7 @@ export type ExternalPathProbeResult =
 
 /**
  * The register wizard's data + action face (task 5.4, UI dependency layering —
- * the same seam shape as OverviewFace / SessionLaunchServices): the BUILD
+ * the same seam shape as OverviewFace): the BUILD
  * stage renders against mocks/workbench.createMockRegisterWizardFace, the
  * 5.14 assembly task injects the Interface 1 verbs (registerProject /
  * updateProject reject with the serialized {@link WorkbenchVerbError} shape)
@@ -556,25 +554,14 @@ export interface WorkbenchProposalsSeat {
 }
 
 /**
- * The UF5 launch success hand-over (task 5.11): the entry fires it with the
- * launched session (and the task ref it launched from — the board's badge
- * write needs the qualified key). The real assembly's implementation lives in
- * launch-rpc.ts's seat: 切会话视图 through the view-switch controller + the
- * `ctx.uiWorkspace.openSession(sessionId)` locator (spike-1 §2.2).
+ * The session success hand-over (task 5.11; M3 6.1 起为 dispatch 链「进入会
+ * 话」所消费): the caller fires it with the session (and the task ref it
+ * belongs to — the board's badge write needs the qualified key). The real
+ * assembly's implementation lives in session-handover.ts: 切会话视图 through
+ * the view-switch controller + the `ctx.uiWorkspace.openSession(sessionId)`
+ * locator (spike-1 §2.2).
  */
 export type SessionLaunchHandover = (sessionId: string, task: SessionLaunchTaskRef) => void
-
-/**
- * The board page's assembly seat for the UF5 integration (task 5.11): the
- * real launch services (absent members keep the build-stage mock — the DI
- * switch) plus the success hand-over callback.
- */
-export interface TaskBoardLaunchSeat {
-  /** The real service members — absent members fall back to mocks/workbench defaults (launch-rpc seat). */
-  readonly services?: Partial<SessionLaunchServices>
-  /** Launch success: 切会话视图 + session locating (5.11 wires the real hand-over). */
-  readonly onLaunched?: SessionLaunchHandover
-}
 
 /**
  * Composed props of the main-panel shell component. The framework standard
@@ -602,12 +589,12 @@ export type WorkbenchShellProps =
   /** The proposals board's assembly seat (task 5.5, UF5): absent = the page-local mock twin (real chain = the shell's IPC face). */
   & { proposals?: WorkbenchProposalsSeat }
   /**
-   * The UF5 launch seat STORE (task 5.11, launch-rpc.createLaunchSeat): an
-   * observable — the rpc members land when the remote namespaces mount. The
-   * shell subscribes (uSES); absent = the entries keep the build-stage mocks
-   * (hostless mounts, 5.x unit tests).
+   * The session hand-over seat (task 5.11; M3 6.1 slimmed to the hand-over
+   * alone — session-handover.ts): 切会话视图 + session locating for the
+   * dispatch chain's 「进入会话」 jump. Absent = the board's jump seam stays
+   * unwired (hostless mounts, 5.x unit tests).
    */
-  & { launch?: LaunchSeatStore }
+  & { launch?: SessionHandover }
   /**
    * The board session store (task 5.11, AC3/AC4): the plugin-lifetime memory
    * (selection + scroll + active-link badges) that survives the launch
@@ -619,44 +606,18 @@ export type WorkbenchShellProps =
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>
 
 /**
- * The task identity the UF5 launch entry needs (task 5.10): the project the
- * task belongs to (link persistence + launch cwd), and the workbench dialect
- * address — the entry derives the QUALIFIED key `<featureSlug>/<localId>`
- * (task 2.5) for both the prompt probe and recordSessionLink.
+ * The task identity the session jump needs (task 5.10): the project the
+ * task belongs to (badge persistence context), and the workbench dialect
+ * address — the caller derives the QUALIFIED key `<featureSlug>/<localId>`
+ * (task 2.5).
  */
 export interface SessionLaunchTaskRef {
   readonly projectId: string
-  /** Registered project codeRoot — the DF004 create-cwd (Interface 2 / spike-1 §2.1). */
+  /** Registered project codeRoot (project context of the jump). */
   readonly codeRoot: string
   readonly featureSlug: string
   readonly localId: string
-  /** Display title (the launch input's `title`). */
+  /** Display title. */
   readonly title: string
 }
 
-/**
- * The UF5 launch entry's service face (task 5.10, UI dependency layering —
- * same seam shape as WorkbenchChromeFace): the BUILD stage renders against
- * mocks/workbench.ts defaults, the 5.11 integrate task swaps the members for
- * the real `ctx.remote.forgeBridge` / `ctx.remote.sessionLaunch` /
- * `ctx.remote.session` / M1 session-focus form calls. Every remote-shaped
- * member returns the host-half result types verbatim (reasonCode convention).
- */
-export interface SessionLaunchServices {
-  /** Availability probe: `ctx.remote.forgeBridge.getTaskPrompt` (Interface 2). */
-  probe(input: { projectRoot: string; taskKey: string }): Promise<GetTaskPromptResult>
-  /** Tier 1 (DF004 main channel): `ctx.remote.sessionLaunch.launch`. */
-  launch(input: SessionLaunchInput): Promise<SessionLaunchResult>
-  /**
-   * Tier 2 (Interface 5 candidate 2): `ctx.remote.session` create+prompt with
-   * the SAME semantics — a renderer-side retry carrying the tier-1 recovery
-   * sessionId when the failed result provided one.
-   */
-  launchViaClientChannel(input: SessionLaunchInput): Promise<SessionLaunchResult>
-  /** Tier 3 leg 1: copy the verbatim prompt to the clipboard. Resolves false when denied/failed. */
-  copyPromptToClipboard(text: string): Promise<boolean>
-  /** Tier 3 leg 2: bring the main window to front (M1 session-focus fallback form). */
-  bringMainWindowToFront(): void
-  /** Success-chain persist leg: `workbench.recordSessionLink` (qualified taskKey). */
-  recordSessionLink(input: RecordSessionLinkInput): Promise<SessionLink>
-}

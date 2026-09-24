@@ -342,13 +342,10 @@ function StateGate(props: { t: (key: WorkbenchKey) => string; onRegister: () => 
  */
 export function WorkbenchShell(props: WorkbenchShellProps) {
   const view = props.useViewKey(snapshot => snapshot)
-  // The UF5 launch seat (5.11): an observable — the rpc members land when the
-  // remote namespaces mount; absent seat = the entries keep the build-stage
-  // mocks (hostless mounts, unit tests).
-  const launch = useSyncExternalStore(
-    props.launch?.subscribe ?? (() => () => {}),
-    props.launch?.getSnapshot ?? (() => undefined),
-  )
+  // The session hand-over seat (5.11; M3 6.1 slimmed): the dispatch chain's
+  // 「进入会话」 jump seam. Absent seat = the board's jump seam stays
+  // unwired (hostless mounts, unit tests).
+  const launch = props.launch
   // Task 5.14 — the real chrome data path: with the preload bridge live and
   // no explicit chrome state member, the chrome (switcher + gate), the UF1
   // page, and the register wizard run on ONE store-backed getState chain
@@ -665,10 +662,10 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                     // the 回流 coalesce-then-fetch event loop over the shared
                     // single-subscriber channel + the IPC detail face, mock
                     // 全撤); the explicit taskBoard seat / a hostless mount
-                    // reproduces the 5.5/5.8 build-stage page. The active
-                    // project's codeRoot mounts the UF5 entries (5.11:
-                    // node-card hover + the panel-primary, real services via
-                    // the launch seat); the key re-mounts per project switch.
+                    // reproduces the 5.5/5.8 build-stage page. The hand-over
+                    // seat carries the dispatch chain's 「进入会话」 jump
+                    // (5.11 seat, M3 6.1 slimmed); the key re-mounts per
+                    // project switch.
                     <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
                       <TasksView
                         key={activeProjectKey}
@@ -677,7 +674,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                         codeRoot={activeProject?.codeRoot}
                         onSelect={props.taskBoard?.onSelect}
                         seat={props.taskBoard}
-                        {...(launch === undefined ? {} : { launchServices: launch.services })}
                         {...(launch === undefined || launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
                         {...(props.boardSession === undefined ? {} : { session: props.boardSession })}
                       />

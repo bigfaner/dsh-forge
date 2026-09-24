@@ -46,7 +46,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { Viewport } from '@xyflow/react'
 import type { DispatchRow, DispatchState, SessionLink, TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
-import type { DispatchFace, SessionLaunchTaskRef, TaskBoardFace, TaskDetailFace } from '../contract'
+import type { DispatchFace, TaskBoardFace, TaskDetailFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { TASK_STATUSES } from '../i18n/task-status'
 import { ChromeButton } from '../components/chrome/ChromeButton'
@@ -60,9 +60,8 @@ import {
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
-import { qualifyTaskKey } from './tasks/SessionLaunchEntry'
 import { TaskDetailPanel, DETAIL_DOCK_WIDTH, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
-import type { DagDecorMount, DagLaunchMount } from './tasks/dag/build-graph'
+import type { DagDecorMount } from './tasks/dag/build-graph'
 import { hasDispatchableEntry, type DispatchVerbs } from './tasks/dispatch/selection-mode'
 import { DetailJumpButton, SelectionCheckbox, SelectionLayer, useDispatchSelection } from './tasks/dispatch/SelectionLayer'
 import { DispatchToolbarButton } from './tasks/dispatch/DispatchToolbarButton'
@@ -76,6 +75,11 @@ import {
 export function localIdOf(key: string): string {
   const slash = key.lastIndexOf('/')
   return slash === -1 ? key : key.slice(slash + 1)
+}
+
+/** The workbench dialect task address (task 2.5): `<featureSlug>/<localId>`. */
+export function qualifyTaskKey(featureSlug: string, localId: string): string {
+  return `${featureSlug}/${localId}`
 }
 
 /**
@@ -169,9 +173,7 @@ export interface TaskBoardPageProps {
   face?: Partial<TaskBoardFace> | undefined
   /** The detail dock's face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   detailFace?: Partial<TaskDetailFace> | undefined
-  /** The UF5 launch services (5.11): absent members keep the build-stage mocks (the DI switch). */
-  launchServices?: Partial<import('../contract').SessionLaunchServices> | undefined
-  /** The UF5 success hand-over (5.11): 切会话视图 + session locating fires through both mounts. */
+  /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: import('../contract').SessionLaunchHandover | undefined
   /**
    * The board session store (5.11 AC3/AC4): present = the plugin-lifetime
@@ -713,8 +715,9 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   }, [selection])
 
   // 「进入会话」(the orchestration section's subagent jump): the M1 view-switch
-  // contract rides the launch seat's hand-over (切会话视图 + session locating)
-  // — no new return face.
+  // contract rides the hand-over seat (切会话视图 + session locating), and the
+  // 运行中徽标 write rides along (AC3/AC2: back on the board, the badge reads
+  // correctly off the store, unmount-surviving).
   const handleEnterSession = useCallback((sessionId: string): void => {
     if (props.projectId === undefined || props.codeRoot === undefined) return
     const taskKey = selectedRef.current.taskKey
@@ -728,7 +731,10 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
       localId: localIdOf(task.key),
       title: task.title,
     })
-  }, [props.projectId, props.codeRoot, props.onLaunched, allTasks])
+    if (props.session !== undefined) {
+      props.session.markLinkActive(props.projectId, taskKey, sessionId)
+    }
+  }, [props.projectId, props.codeRoot, props.onLaunched, props.session, allTasks])
 
   // The 编排角标谱's per-task state: the LATEST row per task (redispatch
   // mints a new row — latest-by-dispatchedAt is the live orchestration).
@@ -795,17 +801,6 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     onReturnToApproval: returnToApproval,
   }
 
-  // The UF5 success leg (5.11): delegate the hand-over (切会话视图 + session
-  // locating — the shell's seat), then write the 运行中徽标 into the board
-  // session store for the launched task's qualified key (AC3/AC2: back on the
-  // board, the badge reads correctly off the store, unmount-surviving).
-  const handleLaunched = useCallback((sessionId: string, task: SessionLaunchTaskRef): void => {
-    props.onLaunched?.(sessionId, task)
-    if (props.session !== undefined && props.projectId !== undefined) {
-      props.session.markLinkActive(props.projectId, qualifyTaskKey(task.featureSlug, task.localId), sessionId)
-    }
-  }, [props.onLaunched, props.session, props.projectId])
-
   // The dock's authoritative link read (5.11): getTaskDetail.links reconciles
   // the badge map (an ended/absent active link drops it — the end path).
   const handleLinksLoaded = useCallback((taskKey: string, links: readonly SessionLink[]): void => {
@@ -813,19 +808,6 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
       props.session.reconcileLinks(props.projectId, taskKey, links)
     }
   }, [props.session, props.projectId])
-
-  // The DAG's launch mount (5.11): one memoized object — the graph rebuild
-  // keys on its identity, so the entries' props stay referentially stable
-  // between renders (a services/onLaunched change is a REAL change).
-  const dagLaunchMount = useMemo<DagLaunchMount | undefined>(() => {
-    if (props.projectId === undefined || props.codeRoot === undefined) return undefined
-    return {
-      projectId: props.projectId,
-      codeRoot: props.codeRoot,
-      ...(props.launchServices === undefined ? {} : { services: props.launchServices }),
-      onLaunched: handleLaunched,
-    }
-  }, [props.projectId, props.codeRoot, props.launchServices, handleLaunched])
 
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
@@ -854,7 +836,6 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
               onSelect={handleSelect}
               initialViewport={treeViewport.current}
               onViewportSettled={(viewport) => { treeViewport.current = viewport }}
-              {...(dagLaunchMount === undefined ? {} : { launch: dagLaunchMount })}
               activeLinks={activeLinks}
               decor={dagDecor}
             />
@@ -1027,8 +1008,6 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             codeRoot={props.codeRoot}
             reloadToken={detailReload}
             face={props.detailFace}
-            {...(props.launchServices === undefined ? {} : { services: props.launchServices })}
-            onLaunched={handleLaunched}
             {...(selected.taskKey === undefined
               ? {}
               : { activeSessionId: activeLinks.get(selected.taskKey) })}

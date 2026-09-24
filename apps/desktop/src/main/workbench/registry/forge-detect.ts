@@ -4,9 +4,9 @@
 // 文档位置(docs/features,仓外时位于 docLocationPath 之下)存在 forge
 // 过程文档目录(tech-design §Error Types & Codes ERR_FORGE_NOT_DETECTED:
 // 「.forge/ 与文档位置均无」)。纯 fs 只读探测,刻意不解析 forge CLI 可用
-// 性 —— 那是发起链(Interface 2 resolveCli,任务 4.1)的职责;本判定在
-// forge CLI 不在 PATH 时照常工作(AC1),且 Hard Rule:注册校验零 forge
-// CLI 调用(无 spawn、无写操作)。
+// 性 —— M3 起 CLI 退役(任务 6.1),应用执行链零 forge CLI 依赖;本判定
+// 在 forge CLI 不在机器上时照常工作(AC1),且 Hard Rule:注册校验零
+// forge CLI 调用(无 spawn、无写操作)。
 
 import { statSync } from 'node:fs'
 import { join } from 'node:path'

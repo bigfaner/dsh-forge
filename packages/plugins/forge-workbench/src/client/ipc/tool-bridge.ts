@@ -4,7 +4,7 @@
  * 桥形态(spike-1 §2 跳 2',倒向桥):host 半身 ForgeToolBridgeService 暴露
  * `calls` stream + `answer` 单向面;本模块在 renderer 侧 ——
  *   1. NAMESPACE MOUNT — 经 `ctx.remote.$mount` 挂 `forgeToolBridge` 命名空间
- *      (launch-rpc.ts 5.11 同款手写 TypertRemoteContribution:直接描述符,
+ *      (5.11 先例的手写 TypertRemoteContribution 形态:直接描述符,
  *      wire 字段 = host 方法参数名原词,strict 手写 codec 入参校验,src-json
  *      结果;`calls` = mode:'stream' + cancellation signal 尾参)。
  *   2. CALL PUMP — 打开 calls 流,逐帧 dispatch 到 I1 白名单动词
@@ -36,7 +36,7 @@ import type {
 } from '../ipc-types'
 import { getWorkbenchIpcBridge, normalizeWorkbenchVerbError, type WorkbenchIpcBridge } from './workbench'
 
-/** The plugin's npm identity (contribution bookkeeping; launch-rpc 同源). */
+/** The plugin's npm identity (contribution bookkeeping; 5.11 seat 同源). */
 const PACKAGE = '@dsh-forge/plugin-forge-workbench'
 
 /** 流断开后的重开延时(连接丢失自愈;短于 host 侧宽限+重试预算的组合)。 */
@@ -65,7 +65,7 @@ const ANSWER_SCHEMA: TypertSchema<ForgeToolBridgeAnswer> = {
   },
 }
 
-/** One strict-parameter descriptor (launch-rpc jsonParameter 同款)。 */
+/** One strict-parameter descriptor (5.11 先例的 jsonParameter 同款)。 */
 function jsonParameter(name: string, typeSymbol: string, schema: TypertSchema<unknown>): InvocationParameterDescriptor {
   return {
     name,

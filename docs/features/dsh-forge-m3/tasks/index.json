@@ -678,7 +678,7 @@
         "5.5",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.1-forge-bridge-retirement.md",
       "record": "records/6.1-forge-bridge-retirement.md",
       "breaking": true,

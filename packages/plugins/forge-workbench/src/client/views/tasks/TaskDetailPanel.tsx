@@ -1,9 +1,10 @@
 /**
  * The UF3 任务详情侧板, BUILD half (task 5.7): the right-edge dock the task
  * board's selection seam opens — summary header (status pill via the ONE
- * shared vocabulary, key/branch mono, worktree/来源 徽标), the UF5
- * panel-primary launch entry (or its reserved disabled placeholder until
- * 5.11 wires the real channel), and the four accordion sections: 描述
+ * shared vocabulary, key/branch mono, worktree/来源 徽标), the UF1
+ * dispatch primary (3.9's 派发执行; the M2 发起会话 entry retired with
+ * the ForgeBridge chain, task 6.1 — absent dispatch mount keeps the
+ * reserved disabled placeholder), and the four accordion sections: 描述
  * (MarkdownView read-only) / 依赖链 (topological, same blocker path as the
  * DAG) / 执行记录 (timeline with per-entry 来源 badges) / 挂接历史 (active/
  * ended links, 新→旧). The 5.8 integrate task mounts this dock into the
@@ -32,14 +33,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import type { DispatchRow, SessionLink, TaskDetail } from '../../ipc-types'
-import type { SessionLaunchServices, SessionLaunchTaskRef, TaskDetailFace } from '../../contract'
+import type { TaskDetailFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockTaskDetailFace } from '../../mocks/workbench'
-import { localIdOf } from '../TaskBoardPage'
 import { SessionBadge } from './SessionBadge'
-import { SessionLaunchEntry } from './SessionLaunchEntry'
 import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
 import { badgeStyle, sourceBadgeStyle } from './TaskRow'
 import { DepChain } from './detail/DepChain'
@@ -73,8 +72,8 @@ export interface TaskDetailPanelProps {
   /** The active project — the loadDetail verb argument + the launch ref. */
   projectId?: string | undefined
   /**
-   * The project codeRoot — present mounts the UF5 panel-primary entry;
-   * absent renders the reserved disabled placeholder (AC: 按钮位预留).
+   * The project codeRoot (project context; the M2 launch entry that consumed
+   * it retired with the ForgeBridge chain — task 6.1).
    */
   codeRoot?: string | undefined
   /**
@@ -87,13 +86,6 @@ export interface TaskDetailPanelProps {
   reloadToken?: number | undefined
   /** The detail face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   face?: Partial<TaskDetailFace> | undefined
-  /** Service seam passed through to the UF5 entry (5.11 injects the real remotes). */
-  services?: Partial<SessionLaunchServices> | undefined
-  /**
-   * The UF5 success hand-over, passed through to the entry (5.11): 切会话视图 +
-   * session locating. The task ref rides along for the caller's badge write.
-   */
-  onLaunched?: ((sessionId: string, task: SessionLaunchTaskRef) => void) | undefined
   /** The task's ACTIVE session link id (5.11 AC3 — the 会话运行中 badge in the header). */
   activeSessionId?: string | undefined
   /**
@@ -528,45 +520,31 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
                 currentRow={currentDispatchRow(dispatchMount.rows, detail.summary.key)}
               />
             )
-            : props.projectId !== undefined && props.codeRoot !== undefined
-              ? (
-                <SessionLaunchEntry
-                  variant="panel-primary"
-                  t={props.t}
-                  {...(props.services !== undefined ? { services: props.services } : {})}
-                  {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
-                  task={{
-                    projectId: props.projectId,
-                    codeRoot: props.codeRoot,
-                    featureSlug: detail.summary.featureSlug,
-                    localId: localIdOf(detail.summary.key),
-                    title: detail.summary.title,
-                  }}
-                />
-              )
-              : (
-                // AC 按钮位预留: the reserved disabled placeholder — the same
-                // md-primary geometry the UF5 entry uses, inert until the
-                // mounting context can hand over the project ref (5.8/5.11).
-                <ChromeButton
-                  type="button"
-                  disabled
-                  data-dsh-forge-detail-launch-reserved=""
-                  title={props.t('detail.launch.reserved')}
-                  style={{
-                    ...primaryButtonStyle,
-                    alignItems: 'center',
-                    cursor: 'default',
-                    display: 'inline-flex',
-                    gap: '6px',
-                    justifyContent: 'center',
-                    width: '100%',
-                  }}
-                >
-                  <span aria-hidden="true">▶</span>
-                  <span>{props.t('launch.primary')}</span>
-                </ChromeButton>
-              )}
+            : (
+              // AC 按钮位预留 (6.1 口径): the reserved disabled placeholder —
+              // the same md-primary geometry the dispatch primary uses; the
+              // M2 发起会话 entry retired with the ForgeBridge chain, so a
+              // dock without the dispatch mount (seat/build-stage forms)
+              // reserves the button slot instead.
+              <ChromeButton
+                type="button"
+                disabled
+                data-dsh-forge-detail-launch-reserved=""
+                title={props.t('detail.launch.reserved')}
+                style={{
+                  ...primaryButtonStyle,
+                  alignItems: 'center',
+                  cursor: 'default',
+                  display: 'inline-flex',
+                  gap: '6px',
+                  justifyContent: 'center',
+                  width: '100%',
+                }}
+              >
+                <span aria-hidden="true">▶</span>
+                <span>{props.t('launch.primary')}</span>
+              </ChromeButton>
+            )}
 
           {dispatchMount !== undefined && (
             // The 编排 partition (task 3.9, ui-design: 置于执行记录之上) — the

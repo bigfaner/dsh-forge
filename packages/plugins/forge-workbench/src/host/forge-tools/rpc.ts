@@ -9,7 +9,7 @@
 // 尾参 = transport cancellation,gateway SRC 解析自动识别)。零新端口/零新
 // 依赖/动词封闭保持。本文件是薄壳 —— 逻辑在 bridge-core.ts(decorator-free);
 // decorator 语法封闭在此(工作区测试 transform 不降级标准装饰器,单测经
-// tsc 产物加载,forge-bridge-rpc 先例)。
+// tsc 产物加载,4.1 先例)。
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'

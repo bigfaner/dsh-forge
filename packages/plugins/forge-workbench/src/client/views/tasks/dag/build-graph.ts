@@ -22,7 +22,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { ReactNode } from 'react'
 import type { TaskSummary } from '../../../ipc-types'
-import type { SessionLaunchServices, SessionLaunchTaskRef } from '../../../contract'
 import type { WorkbenchKey } from '../../../locale/en'
 import { resolveBlockerKey } from '../../TaskBoardPage'
 import { NODE_CARD_HEIGHT, NODE_CARD_WIDTH, layoutGraph, type DagEdgeRef, type DagPosition } from './layout'
@@ -34,27 +33,10 @@ const EDGE_COLOR = 'var(--dsh-border-color, rgba(128, 128, 128, 0.55))'
 export type DagTranslate = (key: WorkbenchKey) => string
 
 /**
- * The UF5 hover-trigger mount info (task 5.11): everything every node card's
- * launch entry needs — the task ref's project context (id + codeRoot), the
- * service seam, and the success hand-over. Carried per GRAPH (one object, the
- * page memoizes it), not per node — the entry derives its own task ref.
- */
-export interface DagLaunchMount {
-  /** The active project id (the recordSessionLink verb argument). */
-  readonly projectId: string
-  /** The active project's registered codeRoot (the launch cwd). */
-  readonly codeRoot: string
-  /** The launch services seam — absent members keep the build-stage mocks. */
-  readonly services?: Partial<SessionLaunchServices> | undefined
-  /** The launch success hand-over (切会话视图 + session locating + the badge write). */
-  readonly onLaunched?: ((sessionId: string, task: SessionLaunchTaskRef) => void) | undefined
-}
-
-/**
  * The UF1 decoration composer mount (task 3.9, 角标以包装/props 传入): the
  * page composes per-node UF1 decorations — the 编排态角标 (DispatchBadge)
  * and the selection-mode cluster (checkbox overlay + ⤢) — carried per GRAPH
- * (one object, the page memoizes it) exactly like {@link DagLaunchMount}.
+ * (one object, the page memoizes it).
  * Both composers' nodes self-hide outside a live orchestration/selection
  * mode, so an absent mount renders the pure M2 card.
  */
@@ -79,11 +61,6 @@ export interface TaskCardNodeData extends Record<string, unknown> {
   readonly selected: boolean
   /** The locale seat (the shell's `t`). */
   readonly t: DagTranslate
-  /**
-   * The UF5 mount (5.11): present mounts the hover launch entry in the
-   * reserved 28×28 slot; absent keeps the slot empty (no project context).
-   */
-  readonly launch?: DagLaunchMount | undefined
   /** The task's ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   readonly activeSessionId?: string | undefined
   /** The UF1 编排态角标 node (task 3.9; undefined renders the pure M2 card). */
@@ -112,8 +89,6 @@ export interface TaskDagGraph {
  * @param t - the locale seat.
  * @param selectedKey - the single-source selection key (5.8), or undefined
  *   with no selection — the matching node carries the 焦点任务 mark.
- * @param launch - the UF5 hover-trigger mount (5.11), or undefined to keep
- *   the reserved 28×28 slot empty.
  * @param activeLinks - taskKey → ACTIVE session link id (5.11 AC3), or
  *   undefined for no badges.
  * @param decor - the UF1 decoration composers (task 3.9), or undefined for
@@ -127,7 +102,6 @@ export function buildTaskGraph(
   updatingKeys: ReadonlySet<string>,
   t: DagTranslate,
   selectedKey?: string | undefined,
-  launch?: DagLaunchMount | undefined,
   activeLinks?: ReadonlyMap<string, string> | undefined,
   decor?: DagDecorMount | undefined,
 ): TaskDagGraph {
@@ -167,7 +141,6 @@ export function buildTaskGraph(
       updating: updatingKeys.has(task.key),
       selected: selectedKey === task.key,
       t,
-      ...(launch === undefined ? {} : { launch }),
       ...(activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: activeLinks.get(task.key) }),
       ...(decor?.orchBadgeOf === undefined ? {} : { orchBadge: decor.orchBadgeOf(task.key) }),
       ...(decor?.selectionDecorOf === undefined ? {} : { selectionDecor: decor.selectionDecorOf(task.key) }),

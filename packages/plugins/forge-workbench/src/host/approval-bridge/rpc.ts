@@ -12,7 +12,7 @@
 //      spike-2 §1.3 ②)+ `tools/pre-execute` 观察者(callId→arguments 捕获,
 //      workspace-changes 先例;观察不认领,恒 next())。
 //
-// 装饰器语法封闭在此(session-launch-rpc / forge-tools rpc 先例);逻辑在
+// 装饰器语法封闭在此(forge-tools rpc 先例);逻辑在
 // bridge.ts(纯核,单测直载)。
 
 import type { Context } from '@deepseek-ai/cordis'

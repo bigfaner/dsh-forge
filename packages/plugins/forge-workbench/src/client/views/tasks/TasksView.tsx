@@ -31,7 +31,7 @@
  *   2. The dock's face is the ipc adapter's getTaskDetail (1:1, rejections
  *      normalized); the page's structural-deletion coupling flips the dock
  *      to its error card (the 板↔侧板 contract 5.8 reserved for this task).
- *   3. The UF5 launch seats pass through untouched (5.11's assembly).
+ *   3. The session jump hand-over passes through untouched (5.11 seat, M3 slim).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskSummary } from '../../ipc-types'
@@ -39,7 +39,7 @@ import type {
   BoardSessionStore,
 } from '../../store/board-session'
 import type {
-  SessionLaunchHandover, SessionLaunchServices, TaskBoardSeat,
+  SessionLaunchHandover, TaskBoardSeat,
 } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import {
@@ -63,9 +63,7 @@ export interface TasksViewProps {
   onSelect?: ((task: TaskSummary) => void) | undefined
   /** The explicit assembly seat (tests / build stage) — present wins over the bridge. */
   seat?: TaskBoardSeat | undefined
-  /** The UF5 launch services (5.11): passed through to the page's entries. */
-  launchServices?: Partial<SessionLaunchServices> | undefined
-  /** The UF5 success hand-over (5.11): passed through to the page's entries. */
+  /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: SessionLaunchHandover | undefined
   /** The board session store (5.11 AC3/AC4): the plugin-lifetime memory. */
   session?: BoardSessionStore | undefined
@@ -144,7 +142,6 @@ export function TasksView(props: TasksViewProps) {
         face={props.seat?.face}
         detailFace={props.seat?.detailFace}
         dispatchFace={props.seat?.dispatchFace}
-        {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
         {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
         {...(props.session === undefined ? {} : { session: props.session })}
       />
@@ -184,7 +181,6 @@ export function TasksView(props: TasksViewProps) {
       detailFace={detailFace}
       dispatchFace={dispatchFace}
       reloadToken={reloadToken}
-      {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
       {...(props.session === undefined ? {} : { session: props.session })}
     />

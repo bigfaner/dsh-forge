@@ -418,12 +418,12 @@ describe('coexistence: the board stays interactive beside the open dock', () => 
     expect(dock()!.getAttribute('data-dsh-forge-task-detail')).toBe(RICH_KEY)
   })
 
-  it('the launch entry mounts panel-primary once projectId + codeRoot are present', async () => {
+  it('without a dispatch mount the reserved placeholder keeps the button slot even with the project ref (6.1: the M2 entry retired)', async () => {
     await renderBoard({ projectId: 'p-1', codeRoot: 'Z:\\project\\dsh\\dsh-forge' }, 'list')
     activateFrom('c', RICH_KEY)
     await waitFor(() => { expect(dock()).not.toBeNull() })
-    expect(document.querySelector('[data-dsh-forge-detail-launch-reserved]')).toBeNull()
-    expect(document.querySelector('[data-dsh-forge-launch-trigger]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-detail-launch-reserved]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-launch-trigger]')).toBeNull()
   })
 
   it('without a codeRoot the reserved placeholder keeps the button slot', async () => {
