@@ -67,7 +67,9 @@ test('smoke/happy-path [@web-e2e @journey feature-board-docs-browsing]: board(Pi
       await liveCard.click()
       const liveDetail = page.locator(`[data-dsh-forge-feature-detail="${LIVE_SAMPLE_SLUG}"]`)
       await expect(liveDetail).toBeVisible({ timeout: 15_000 })
-      await expect(liveDetail.locator('[data-dsh-forge-feature-stepper] [data-dsh-forge-stepper-state="current"]'))
+      // M3 UF2(任务 4.4):样板无阶段资产 → 当前节点呈现 gate-pending 态
+      // (warn 描边;总结未生成),非 current。
+      await expect(liveDetail.locator('[data-dsh-forge-feature-stepper] [data-dsh-forge-stepper-state="gate-pending"]'))
         .toHaveAttribute('data-dsh-forge-stepper-phase', 'in-progress')
 
       // ---- Step 3:五类 tab 启用矩阵 + 规范化对比 + 返回导航。----------------

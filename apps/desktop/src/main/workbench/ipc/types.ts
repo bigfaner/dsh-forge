@@ -104,6 +104,12 @@ export interface FeatureSummary {
   readonly taskTotal: number
   readonly taskCompleted: number
   readonly updatedAt: string
+  /**
+   * feature 级偏离标记(任务 4.4,Integration #2 数据源 = feature_snapshot.
+   * deviated;4.2 watcher 置位 / 内核合法推进清除)。板动词与 advanceStage
+   * 返回恒投影;呈现层(偏离徽标)判定 === true。
+   */
+  readonly deviated: boolean
 }
 
 /** Interface 1 FeatureBoardData。 */

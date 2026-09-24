@@ -443,12 +443,24 @@ export interface PluginFace {
  * The shell's passthrough seat for the feature board (task 5.9): absent
  * entirely in the build stage (the page runs on its mock twins); the 5.16
  * assembly injects the IPC-backed faces (the board verb + the doc verb).
+ * Task 4.4 adds the UF2 stage face (Integration Spec #2): absent members
+ * keep the M2 form (no sixth tab, no gate verdict, no advance entry — the
+ * dispatch-face inert discipline: the advance leg is a WRITE surface, so
+ * no silent mock twin ever runs); tests inject the mock twin, the assembly
+ * injects the IPC-backed face.
  */
 export interface WorkbenchFeaturesSeat {
   /** The board face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   readonly face?: Partial<FeatureBoardFace>
   /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   readonly docFace?: Partial<FeatureDocFace>
+  /**
+   * The UF2 stage face (task 4.4): getStageGate drives the stepper gate
+   * verdict, listStageAssets the sixth 「阶段资产」 tab, advanceStage the
+   * header's advance entry, subscribeEvents the stage_advanced /
+   * deviation_detected board reflux (≤5s).
+   */
+  readonly stageFace?: Partial<StageFace> | undefined
 }
 
 /**

@@ -33,7 +33,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openDatabase, type DatabaseSyncLike } from '../src/main/workbench/store/db.ts'
 import type { RepoDb } from '../src/main/workbench/repos/types.ts'
-import { upsertFeatureSnapshot } from '../src/main/workbench/repos/feature-snapshots.ts'
+import { upsertFeatureSnapshot, markFeatureDeviation } from '../src/main/workbench/repos/feature-snapshots.ts'
 import { insertTask } from '../src/main/workbench/tasks/task-repo.ts'
 import type { AuthoritativeTask } from '../src/main/workbench/tasks/task-repo.ts'
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
@@ -527,6 +527,8 @@ describe('stages write verbs on the IPC/service face', () => {
     verbs: WorkbenchVerbServices
     events: WorkbenchEvent[]
     featureDir: string
+    /** The raw db handle (the 4.4 board-projection leg marks deviation directly). */
+    db: DatabaseSyncLike
     dispose: () => void
   }> {
     const root = makeScratch()
@@ -554,6 +556,7 @@ describe('stages write verbs on the IPC/service face', () => {
       verbs: assembly.verbs,
       events,
       featureDir,
+      db,
       dispose: () => {
         assembly.dispose()
         db.close()
@@ -620,6 +623,36 @@ describe('stages write verbs on the IPC/service face', () => {
         'advanceStage',
       )
       expect(JSON.parse(envelope.message)).toMatchObject({ code: 'ERR_STAGE_GATE_UNSATISFIED', message: 'gate unsatisfied' })
+    } finally {
+      ctx.dispose()
+    }
+  })
+
+  // 任务 4.4(Integration #2 数据源):偏离徽标的板 DTO 投影 —— getFeatureBoard
+  // 恒携带 feature_snapshot.deviated;advanceStage 返回面同样投影(合法推进
+  // = 偏离清除点 → false)。
+  it('getFeatureBoard projects feature_snapshot.deviated; the advance return carries the post-clear verdict', async () => {
+    const ctx = await withServicesTree()
+    try {
+      const verbs = ctx.verbs
+      // 造行:当前阶段(design)总结生成后推进 → 快照行落库(manifest design→tasks)。
+      verbs.stageSummarize({ projectId: 'p-1', featureSlug: SLUG, stage: 'design', goal: 'g', summary: 's' })
+      const advanced = verbs.advanceStage('p-1', SLUG)
+      expect(advanced.deviated).toBe(false)
+
+      const boardRowOf = () =>
+        verbs.getFeatureBoard('p-1').features.find(feature => feature.slug === SLUG)
+      expect(boardRowOf()?.status).toBe('tasks')
+      expect(boardRowOf()?.deviated).toBe(false)
+
+      // 外部跨阶段操作被感知(4.2 watcher 置位面)→ 板 DTO 即刻可读。
+      markFeatureDeviation(ctx.db as RepoDb, 'p-1', SLUG, FIXED_AT)
+      expect(boardRowOf()?.deviated).toBe(true)
+
+      // 合法推进 = 清除点:下一阶段(tasks)总结生成后推进 → 板 DTO 回落 false。
+      verbs.stageSummarize({ projectId: 'p-1', featureSlug: SLUG, stage: 'tasks', goal: 'g2', summary: 's2' })
+      expect(verbs.advanceStage('p-1', SLUG).deviated).toBe(false)
+      expect(boardRowOf()?.deviated).toBe(false)
     } finally {
       ctx.dispose()
     }

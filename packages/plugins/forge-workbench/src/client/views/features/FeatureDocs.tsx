@@ -19,11 +19,17 @@
  * Keyboard (WAI-ARIA tabs, the 5.1 TabBar precedent): roving tabindex over
  * the ENABLED tabs, ArrowLeft/Right/Home/End move focus AND select
  * (automatic activation), disabled tabs are focusable by neither path.
+ *
+ * Task 4.4 (UF2/Integration #2): a present stageFace.listStageAssets
+ * appends the sixth 「阶段资产」 tab at the strip's END — a DIFFERENT data
+ * plane (StageAssetsTab reads listStageAssets + the stage_advanced reflux
+ * itself), so the M2 doc-tab mechanism above is untouched by construction;
+ * an absent stage face renders the five-tab M2 strip verbatim.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { DocKind, FeatureDoc } from '../../ipc-types'
-import type { FeatureDocFace } from '../../contract'
+import type { FeatureDocFace, StageFace } from '../../contract'
 import type { FeatureDocsCache } from '../../store/feature-board'
 import { FEATURE_DOC_KINDS, docKindLabel } from '../../i18n/feature-status'
 import type { FeatureStatusTranslate } from '../../i18n/feature-status'
@@ -31,6 +37,14 @@ import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockFeatureDocFace } from '../../mocks/workbench'
 import { normalizeWorkbenchVerbError } from '../../ipc/workbench'
+import { StageAssetsTab } from './stages/StageAssetsTab'
+
+/**
+ * The strip's selection space (task 4.4): the five canonical DocKinds plus
+ * the sixth 「阶段资产」 pseudo-kind — `assets` addresses the stage-assets
+ * panel (a DIFFERENT data plane: listStageAssets, never readFeatureDoc).
+ */
+type TabSelection = DocKind | 'assets'
 
 /** Inputs of {@link FeatureDocs}. */
 export interface FeatureDocsProps {
@@ -44,6 +58,14 @@ export interface FeatureDocsProps {
   docKinds: readonly DocKind[]
   /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   face?: Partial<FeatureDocFace> | undefined
+  /**
+   * The UF2 stage face (task 4.4, Integration #2): a PRESENT listStageAssets
+   * member appends the sixth 「阶段资产」 tab at the strip's END (M2 文档 tab
+   * 机制不动 — the five-kind strip, its disabled matrix, the doc cache and
+   * the stale-refetch legs all stay untouched); an absent member keeps the
+   * M2 five-tab form exactly.
+   */
+  stageFace?: Partial<StageFace> | undefined
   /**
    * The page-session doc cache (task 5.16): a hit renders WITHOUT firing the
    * verb (重复打开不重拉); a successful read writes back. The page owns the
@@ -167,10 +189,19 @@ export function FeatureDocs(props: FeatureDocsProps) {
   const face: FeatureDocFace = { ...defaultFace, ...props.face }
 
   const available = FEATURE_DOC_KINDS.filter(kind => props.docKinds.includes(kind))
-  const [requested, setRequested] = useState<DocKind | undefined>(undefined)
-  const activeKind = requested !== undefined && props.docKinds.includes(requested)
+  // The sixth tab's premise (task 4.4): the stage read leg exists. Absent =
+  // the M2 five-tab strip verbatim (no assets pseudo-kind anywhere).
+  const hasAssetsTab = props.stageFace?.listStageAssets !== undefined
+  const focusable: readonly TabSelection[] = hasAssetsTab ? [...available, 'assets'] : [...available]
+  const [requested, setRequested] = useState<TabSelection | undefined>(undefined)
+  const requestedValid = requested !== undefined
+    && (requested === 'assets' ? hasAssetsTab : props.docKinds.includes(requested))
+  const activeTab: TabSelection | undefined = requestedValid
     ? requested
-    : available[0]
+    : available[0] ?? (hasAssetsTab ? 'assets' : undefined)
+  const activeKind: DocKind | undefined = activeTab === undefined || activeTab === 'assets'
+    ? undefined
+    : activeTab
 
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'stale'>('loading')
   const [doc, setDoc] = useState<FeatureDoc | undefined>(undefined)
@@ -193,7 +224,11 @@ export function FeatureDocs(props: FeatureDocsProps) {
   // The per-tab read: one effect run per (slug, kind, retry, auto-refetch) —
   // the alive flag drops stale resolutions when the tab switches mid-flight.
   // A cache hit short-circuits the verb entirely (页内缓存: 重复打开不重拉).
+  // The sixth assets tab owns a DIFFERENT data plane (StageAssetsTab reads
+  // listStageAssets itself): while it is active the doc leg is skipped
+  // entirely — no verb fires, no doc state churns.
   useEffect(() => {
+    if (activeTab === 'assets') return
     if (activeKind === undefined) {
       setDoc(undefined)
       setPhase('loading')
@@ -236,21 +271,24 @@ export function FeatureDocs(props: FeatureDocsProps) {
   }, [props.featureSlug, activeKind, retryNonce, autoRefetchNonce])
 
   // Keyboard (the TabBar precedent): arrows/Home/End move focus AND select
-  // among the ENABLED tabs only — a disabled tab is unreachable.
+  // among the ENABLED tabs only — a disabled tab is unreachable. The sixth
+  // assets tab is always enabled, so it joins the roving set at the END
+  // (task 4.4: End lands on it when the stage face is present).
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const current = activeKind === undefined ? -1 : available.indexOf(activeKind)
+    const current = activeTab === undefined ? -1 : focusable.indexOf(activeTab)
     let next: number | undefined
-    if (event.key === 'ArrowRight') next = available.length === 0 ? undefined : (current + 1) % available.length
-    else if (event.key === 'ArrowLeft') next = available.length === 0 ? undefined : (current - 1 + available.length) % available.length
-    else if (event.key === 'Home') next = available.length === 0 ? undefined : 0
-    else if (event.key === 'End') next = available.length === 0 ? undefined : available.length - 1
+    if (event.key === 'ArrowRight') next = focusable.length === 0 ? undefined : (current + 1) % focusable.length
+    else if (event.key === 'ArrowLeft') next = focusable.length === 0 ? undefined : (current - 1 + focusable.length) % focusable.length
+    else if (event.key === 'Home') next = focusable.length === 0 ? undefined : 0
+    else if (event.key === 'End') next = focusable.length === 0 ? undefined : focusable.length - 1
     if (next === undefined) return
     event.preventDefault()
-    setRequested(available[next]!)
-    tabRefs.current[FEATURE_DOC_KINDS.indexOf(available[next]!)]?.focus()
+    const selection = focusable[next]!
+    setRequested(selection)
+    tabRefs.current[selection === 'assets' ? FEATURE_DOC_KINDS.length : FEATURE_DOC_KINDS.indexOf(selection)]?.focus()
   }
 
-  const tabId = (kind: DocKind): string => `dsh-forge-feature-doc-tab-${kind}`
+  const tabId = (kind: TabSelection): string => `dsh-forge-feature-doc-tab-${kind}`
 
   return (
     <div data-dsh-forge-feature-docs="">
@@ -263,7 +301,7 @@ export function FeatureDocs(props: FeatureDocsProps) {
       >
         {FEATURE_DOC_KINDS.map((kind) => {
           const enabled = props.docKinds.includes(kind)
-          const active = kind === activeKind
+          const active = kind === activeTab
           return (
             <ChromeButton
               key={kind}
@@ -284,16 +322,40 @@ export function FeatureDocs(props: FeatureDocsProps) {
             </ChromeButton>
           )
         })}
+        {hasAssetsTab && (
+          <ChromeButton
+            ref={(element) => { tabRefs.current[FEATURE_DOC_KINDS.length] = element }}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'assets' ? 'true' : 'false'}
+            tabIndex={activeTab === 'assets' ? 0 : -1}
+            id={tabId('assets')}
+            data-dsh-forge-feature-doc-tab="assets"
+            style={activeTab === 'assets' ? activeTabStyle : tabStyle}
+            onClick={() => { setRequested('assets') }}
+          >
+            {props.t('features.stages.assets.tab')}
+          </ChromeButton>
+        )}
       </div>
 
-      {activeKind !== undefined && (
+      {activeTab !== undefined && (
         <div
           role="tabpanel"
-          aria-labelledby={tabId(activeKind)}
-          data-dsh-forge-feature-doc-panel={activeKind}
+          aria-labelledby={tabId(activeTab)}
+          data-dsh-forge-feature-doc-panel={activeTab}
           style={panelStyle}
         >
-          {phase === 'loading' && (
+          {activeTab === 'assets' && (
+            <StageAssetsTab
+              t={props.t}
+              projectId={props.projectId}
+              featureSlug={props.featureSlug}
+              face={props.stageFace}
+            />
+          )}
+
+          {activeTab !== 'assets' && phase === 'loading' && (
             <div
               role="status"
               aria-label={props.t('features.docs.loading')}
@@ -310,7 +372,7 @@ export function FeatureDocs(props: FeatureDocsProps) {
             </div>
           )}
 
-          {phase === 'error' && (
+          {activeTab !== 'assets' && phase === 'error' && (
             <div data-dsh-forge-feature-doc-error="" role="alert" style={stateCardStyle}>
               <h3 style={cardTitleStyle}>{props.t('features.docs.error.title')}</h3>
               <div>
@@ -326,7 +388,7 @@ export function FeatureDocs(props: FeatureDocsProps) {
             </div>
           )}
 
-          {phase === 'stale' && (
+          {activeTab !== 'assets' && phase === 'stale' && (
             <div data-dsh-forge-feature-doc-stale="" role="status" style={stateCardStyle}>
               <h3 style={cardTitleStyle}>{props.t('features.docs.stale.title')}</h3>
               <p style={cardBodyStyle}>{props.t('features.docs.stale.body')}</p>
@@ -343,7 +405,7 @@ export function FeatureDocs(props: FeatureDocsProps) {
             </div>
           )}
 
-          {phase === 'ready' && doc !== undefined
+          {activeTab !== 'assets' && phase === 'ready' && doc !== undefined
             && (doc.markdown.trim() !== ''
               ? <MarkdownView markdown={doc.markdown} />
               : <p data-dsh-forge-feature-doc-empty="" style={emptyHintStyle}>{props.t('features.docs.empty')}</p>)}

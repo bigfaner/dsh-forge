@@ -1062,6 +1062,8 @@ describe('workbench services: board / detail / doc reads', () => {
           taskTotal: 2,
           taskCompleted: 0,
           updatedAt: expect.any(String),
+          // 任务 4.4(Integration #2):偏离徽标数据源恒投影(4.2 watcher 置位)。
+          deviated: false,
         },
       ])
     })

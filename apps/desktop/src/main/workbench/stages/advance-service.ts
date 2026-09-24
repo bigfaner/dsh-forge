@@ -180,10 +180,14 @@ export function createStageWriteService(deps: StageWriteDeps): StageWriteService
         taskTotal: snapshot.taskTotal,
         taskCompleted: snapshot.taskCompleted,
         updatedAt: snapshot.updatedAt,
+        deviated: snapshot.deviated,
       }
     }
     // 无快照行(从未扫描):返回零计数投影,不落行(no-op = 零写入)。
-    return { slug: featureSlug, status: fallbackStatus, docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: new Date().toISOString() }
+    return {
+      slug: featureSlug, status: fallbackStatus, docKinds: [], taskTotal: 0, taskCompleted: 0,
+      updatedAt: new Date().toISOString(), deviated: false,
+    }
   }
 
   return {
@@ -283,6 +287,9 @@ export function createStageWriteService(deps: StageWriteDeps): StageWriteService
         taskTotal: snapshot.taskTotal,
         taskCompleted: snapshot.taskCompleted,
         updatedAt: snapshot.updatedAt,
+        // 4.2 口径:合法推进 = 偏离清除点 —— 上方 clearFeatureDeviation 刚翻
+        // 位,返回面按构造即推进后状态(snapshot 捕获于清除前,不回读)。
+        deviated: false,
       }
     },
   }

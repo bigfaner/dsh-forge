@@ -365,6 +365,8 @@ export const zh: Record<WorkbenchKey, string> = {
   'features.stages.advance.unavailable': '阶段数据面未接入(无推进动词)',
   'features.stages.advance.rejected.title': '阶段门未满足',
   'features.stages.assets.label': '阶段资产(按阶段分组,自旧到新)',
+  // 第六详情 tab 的条带标签(任务 4.4,ui-design:末位追加)。
+  'features.stages.assets.tab': '阶段资产',
   'features.stages.assets.goal': '目标',
   'features.stages.assets.summary': '摘要',
   'features.stages.assets.loading': '正在加载阶段资产…',

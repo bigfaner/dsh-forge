@@ -13,9 +13,17 @@
  * The 完成徽标 reuses the list's exact judgment (taskCompleted === taskTotal,
  * never recomputed); the 仓外角标 derives from the project registration
  * (docLocationType='external', DF005 — the shell passes the boolean in).
+ *
+ * UF2 强化 (task 4.4, Integration #2 — additive, absent stage face = the M2
+ * detail form verbatim): the deviation badge (the SAME component the card
+ * renders) beside the status Pill; the advance entry pinned to the header
+ * row's right edge; the stepper's gate verdict (getStageGate, re-read on
+ * stage_advanced reflux) + the GateHint line under the stepper; the sixth
+ * 「阶段资产」 tab through FeatureDocs.
  */
+import { useEffect, useState } from 'react'
 import type { DocKind, FeatureSummary } from '../../ipc-types'
-import type { FeatureDocFace } from '../../contract'
+import type { FeatureDocFace, StageFace } from '../../contract'
 import type { FeatureDocsCache } from '../../store/feature-board'
 import { featureStatusLabel } from '../../i18n/feature-status'
 import type { FeatureStatusTranslate } from '../../i18n/feature-status'
@@ -23,6 +31,9 @@ import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { fillTemplate, formatTimestamp } from '../overview/format'
 import { FeatureStepper } from './FeatureStepper'
 import { FeatureDocs } from './FeatureDocs'
+import { DeviationBadge } from './stages/DeviationBadge'
+import { GateHint } from './stages/GateHint'
+import { AdvanceStageButton } from './stages/AdvanceStageButton'
 
 /** Inputs of {@link FeatureDetail}. */
 export interface FeatureDetailProps {
@@ -36,6 +47,21 @@ export interface FeatureDetailProps {
   externalDocs?: boolean | undefined
   /** The doc face passthrough (5.16 injects the IPC face). */
   docFace?: Partial<FeatureDocFace> | undefined
+  /**
+   * The UF2 stage face passthrough (task 4.4, Integration #2): getStageGate
+   * drives the stepper's gate verdict + the hint line, advanceStage the
+   * header's advance entry, listStageAssets the sixth 「阶段资产」 tab (via
+   * FeatureDocs), subscribeEvents the stage_advanced gate re-read. Absent =
+   * the M2 detail form (no gate state, no entry, five tabs — the inert
+   * discipline: the advance leg is a WRITE surface).
+   */
+  stageFace?: Partial<StageFace> | undefined
+  /**
+   * The page's advance-success seam (task 4.4): the assembly refreshes the
+   * board from the post-advance summary (the ≤5s reflux rides the event
+   * channel separately — this is the immediate leg).
+   */
+  onStageAdvanced?: (() => void) | undefined
   /**
    * The page-session doc cache passthrough (task 5.16): the page owns it; a
    * detail remount re-reads through it (already-read docs render without
@@ -128,6 +154,11 @@ const completedBadgeStyle = {
   color: 'var(--dsw-alias-state-success-primary, rgb(34, 197, 94))',
 } as const
 
+/** The UF2 advance entry's slot: pinned to the header row's right edge. */
+const advanceSlotStyle = {
+  marginLeft: 'auto',
+} as const
+
 /** 12/18 secondary meta (the task-progress summary line). */
 const metaStyle = {
   color: 'var(--dsw-alias-label-secondary, inherit)',
@@ -172,6 +203,45 @@ export function FeatureDetail(props: FeatureDetailProps) {
     completed: String(feature.taskCompleted),
     total: String(feature.taskTotal),
   })
+
+  // —— UF2 门态读(task 4.4):getStageGate 的活性判定驱动 stepper 门态 +
+  // 提示行;读失败/缺席 = M2 呈现降级(无门态、无提示行——感知面纪律,
+  // 不弹错误卡)。终态 completed 不呈现门态(无可推进,completed 徽标即
+  // 终态呈现)。 ——
+  const gateVerb = props.stageFace?.getStageGate
+  const [gatePending, setGatePending] = useState<boolean | undefined>(undefined)
+  const [gateNonce, setGateNonce] = useState(0)
+  useEffect(() => {
+    if (gateVerb === undefined) return
+    let alive = true
+    gateVerb(props.projectId ?? '', feature.slug)
+      .then((info) => {
+        if (!alive) return
+        setGatePending(
+          info.stage === 'completed' ? false : !info.summaryGenerated,
+        )
+      })
+      .catch(() => {
+        if (alive) setGatePending(undefined)
+      })
+    return () => { alive = false }
+  }, [gateVerb, props.projectId, feature.slug, gateNonce])
+
+  // —— UF2 回流(task 4.4):stage_advanced 命中本 feature → 门态重读(外
+  // 部推进,如经 dsh tool 的会话;本详情头部按钮的推进同样经此通道)。
+  // The board leg (deviation_detected) rides the PAGE's own subscription. ——
+  const subscribe = props.stageFace?.subscribeEvents
+  useEffect(() => {
+    if (subscribe === undefined) return
+    return subscribe((events) => {
+      for (const event of events) {
+        if (event.type === 'stage_advanced' && event.featureSlug === feature.slug) {
+          setGateNonce(nonce => nonce + 1)
+        }
+      }
+    })
+  }, [subscribe, feature.slug])
+
   return (
     <div data-dsh-forge-feature-detail={feature.slug} style={rootStyle}>
       <nav aria-label={t('features.breadcrumb')} data-dsh-forge-feature-breadcrumb="" style={breadcrumbStyle}>
@@ -192,6 +262,7 @@ export function FeatureDetail(props: FeatureDetailProps) {
         <span data-dsh-forge-feature-status={feature.status} style={statusPillStyle}>
           {featureStatusLabel(feature.status, t)}
         </span>
+        <DeviationBadge t={t} deviated={feature.deviated} />
         {props.externalDocs === true && (
           <span data-dsh-forge-badge="external-docs" style={externalBadgeStyle}>
             ⌂ {t('features.externalDocs')}
@@ -201,6 +272,22 @@ export function FeatureDetail(props: FeatureDetailProps) {
           <span data-dsh-forge-feature-completed="" style={completedBadgeStyle}>
             {t('features.completedBadge')}
           </span>
+        )}
+        {/* UF2 推进入口(任务 4.4):头部行末位(右缘)——仅在阶段数据面接线
+            时挂载(无 stage face = M2 详情形逐字节不变);终态 completed 组件
+            自身不渲染;face 缺 advanceStage 成员 = 惰性 disabled + tooltip
+            (4.3 惰性纪律)。 */}
+        {props.stageFace !== undefined && (
+          <div style={advanceSlotStyle}>
+            <AdvanceStageButton
+              t={t}
+              projectId={props.projectId}
+              featureSlug={feature.slug}
+              status={feature.status}
+              face={props.stageFace}
+              onAdvanced={() => { props.onStageAdvanced?.() }}
+            />
+          </div>
         )}
       </header>
 
@@ -225,7 +312,9 @@ export function FeatureDetail(props: FeatureDetailProps) {
         </span>
       </div>
 
-      <FeatureStepper t={props.t} status={feature.status} />
+      <FeatureStepper t={props.t} status={feature.status} gatePending={gatePending} />
+
+      <GateHint t={props.t} gatePending={gatePending} />
 
       <FeatureDocs
         t={props.t}
@@ -233,6 +322,7 @@ export function FeatureDetail(props: FeatureDetailProps) {
         featureSlug={feature.slug}
         docKinds={feature.docKinds as readonly DocKind[]}
         face={props.docFace}
+        stageFace={props.stageFace}
         docsCache={props.docsCache}
       />
     </div>

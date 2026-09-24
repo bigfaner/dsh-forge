@@ -714,11 +714,13 @@ export const MOCK_FEATURE_BOARD: FeatureBoardData = Object.freeze({
       slug: 'dsh-forge-m2', status: 'in-progress',
       docKinds: ['manifest', 'prd', 'design', 'tasks'] as DocKind[],
       taskTotal: 15, taskCompleted: 4, updatedAt: '2026-09-22T09:12:00.000Z',
+      deviated: false,
     }),
     Object.freeze({
       slug: 'dsh-forge-m1', status: 'completed',
       docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'] as DocKind[],
       taskTotal: 48, taskCompleted: 48, updatedAt: '2026-09-20T14:00:00.000Z',
+      deviated: false,
     }),
   ]),
   generatedAt: MOCK_NOW,
@@ -1323,6 +1325,7 @@ export function createMockStageFace(options: MockStageFaceOptions = {}): MockSta
         return {
           slug, status: 'completed', docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
           taskTotal: 52, taskCompleted: 52, updatedAt: '2026-09-24T08:00:00.000Z',
+          deviated: false,
         }
       }
       if (!gate.summaryGenerated) {
@@ -1343,6 +1346,8 @@ export function createMockStageFace(options: MockStageFaceOptions = {}): MockSta
       return {
         slug, status: next, docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
         taskTotal: 38, taskCompleted: 12, updatedAt: '2026-09-24T08:00:00.000Z',
+        // 4.2 口径:内核合法推进 = 偏离标记清除点 → 推进后恒 false。
+        deviated: false,
       }
     },
     subscribeEvents: (listener) => {

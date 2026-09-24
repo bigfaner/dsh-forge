@@ -9,6 +9,10 @@
  *     hyphen intact); no second copy exists in this file by construction;
  *   - 完成徽标判定: taskCompleted === taskTotal (taskTotal > 0), the DTO's own
  *     counters — NEVER recomputed from task data (m1 completed 样板语义).
+ *   - 偏离徽标 (task 4.4, UF2/Integration #2): the SAME DeviationBadge the
+ *     detail header renders, placed BESIDE the status Pill (the board DTO's
+ *     feature_snapshot.deviated projection) — presentation only, the M2 card
+ *     structure otherwise untouched.
  *
  * The whole card is ONE navigation trigger (click / Enter / Space → the
  * onOpenFeature seam, which the shell routes into the view-key machine's
@@ -18,6 +22,7 @@ import type { FeatureSummary } from '../../ipc-types'
 import { featureStatusLabel } from '../../i18n/feature-status'
 import type { FeatureStatusTranslate } from '../../i18n/feature-status'
 import { fillTemplate, formatTimestamp } from '../overview/format'
+import { DeviationBadge } from './stages/DeviationBadge'
 
 /** Inputs of {@link FeatureList}. */
 export interface FeatureListProps {
@@ -154,6 +159,7 @@ export function FeatureCard(props: {
         <span data-dsh-forge-feature-status={feature.status} style={statusPillStyle}>
           {featureStatusLabel(feature.status, t)}
         </span>
+        <DeviationBadge t={t} deviated={feature.deviated} />
         {complete && (
           <span data-dsh-forge-feature-completed="" style={completedBadgeStyle}>
             {t('features.completedBadge')}

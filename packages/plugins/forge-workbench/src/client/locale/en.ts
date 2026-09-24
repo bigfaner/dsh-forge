@@ -362,6 +362,7 @@ export type WorkbenchKey =
   | 'features.stages.advance.unavailable'
   | 'features.stages.advance.rejected.title'
   | 'features.stages.assets.label'
+  | 'features.stages.assets.tab'
   | 'features.stages.assets.goal'
   | 'features.stages.assets.summary'
   | 'features.stages.assets.loading'
@@ -761,6 +762,8 @@ export const en: Record<WorkbenchKey, string> = {
   'features.stages.advance.unavailable': 'Stage data plane not wired (no advance verb)',
   'features.stages.advance.rejected.title': 'Stage gate unsatisfied',
   'features.stages.assets.label': 'Stage assets (grouped by stage, oldest first)',
+  // The sixth detail tab's strip label (task 4.4, ui-design: 末位追加).
+  'features.stages.assets.tab': 'Stage assets',
   'features.stages.assets.goal': 'Goal',
   'features.stages.assets.summary': 'Summary',
   'features.stages.assets.loading': 'Loading stage assets…',

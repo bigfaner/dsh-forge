@@ -570,6 +570,15 @@ export interface FeatureSummary {
   readonly taskCompleted: number
   /** ISO 8601 UTC. */
   readonly updatedAt: string
+  /**
+   * Feature-level deviation flag (task 4.4, tech-design §Integration #2 data
+   * source = feature_snapshot.deviated; the watcher of 4.2 sets it, a kernel-
+   * legal advance clears it). OPTIONAL on the client twin only: the kernel
+   * verb always projects it, the presentation judges `=== true` (the badge
+   * renders for a flagged feature and NOTHING otherwise — legacy build-stage
+   * fixtures stay valid).
+   */
+  readonly deviated?: boolean
 }
 
 /** Interface 1 FeatureBoardData — workbench.getFeatureBoard(projectId)'s payload. */

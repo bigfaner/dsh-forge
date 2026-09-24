@@ -487,6 +487,9 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
           taskTotal: snapshot.taskTotal,
           taskCompleted: snapshot.taskCompleted,
           updatedAt: snapshot.updatedAt,
+          // 任务 4.4(Integration #2):偏离徽标数据源 —— feature_snapshot.
+          // deviated 投影(4.2 watcher 置位 / 内核合法推进清除)。
+          deviated: snapshot.deviated,
         }))
         return { features, generatedAt: new Date().toISOString() }
       },
