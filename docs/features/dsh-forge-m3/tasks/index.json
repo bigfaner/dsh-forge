@@ -697,7 +697,7 @@
         "5.5",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.2-e2e-fixture-base.md",
       "record": "records/6.2-e2e-fixture-base.md",
       "surface-type": "web",

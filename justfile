@@ -26,6 +26,12 @@ web-probe:
 web-test journey:
     pnpm exec playwright test apps/desktop/e2e/{{journey}}
 
+# Run one M3 SC leg spec (task 6.2 base), e.g. `just web-test-m3 base-smoke`.
+# Spec names map to tests/e2e/specs/<name>.spec.ts (playwright project
+# forge-m3-e2e; same serialized-worker/single-instance discipline).
+web-test-m3 spec:
+    pnpm exec playwright test --project=forge-m3-e2e tests/e2e/specs/{{spec}}
+
 # No shared state to clean: each fixture owns its temp userData / project
 # dirs and removes them post-run (apps/desktop/e2e/helpers/fixture-app.ts).
 web-teardown:

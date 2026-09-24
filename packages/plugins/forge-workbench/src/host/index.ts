@@ -28,6 +28,11 @@
  *   sessionController (control.json orchestration + journal.jsonl
  *   observation; see session-channel-stub.ts). Both dispatch-launch and the
  *   approval-bridge ride the same per-call resolution.
+ * - `DSH_FORGE_APPROVAL_STUB_DIR` — TEST-ONLY (6.2 base): when set, a polled
+ *   injector mints `approval/request` twins into the REAL approval-bridge
+ *   core (inject.jsonl → handle → journal outcome; see
+ *   approval-event-stub.ts) — the e2e stand-in for a live subagent asking,
+ *   since the stubbed session channel runs no real agent to ask.
  *
  * The session channel needs NO shell-side env feed: it (the upstream
  * `sessionController`) lives in the SAME cordis app as this plugin (spike-1
@@ -40,6 +45,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { createStubSessionChannel, resolveSessionStubDir } from './session-channel-stub'
+import { attachApprovalEventStub, resolveApprovalStubDir } from './approval-event-stub'
 import { registerForgeTools } from './forge-tools/index'
 import { DispatchLaunchService } from './dispatch-launch/rpc'
 import { sessionChannelOf } from './dispatch-launch/channel'
@@ -113,4 +119,16 @@ export function apply(ctx: Context): void {
   })
   new ApprovalBridgeService(ctx, approvalCore)
   attachApprovalBridge(ctx, approvalCore, capture)
+
+  // The e2e approval-event stub seam (6.2 base). Unset (every production
+  // boot) attaches nothing; a stub dir polls inject.jsonl and drives the REAL
+  // bridge core + pre-execute capture (approval-event-stub.ts). The interval
+  // is unref'd and lives with the host child — no dispose ceremony needed.
+  const approvalStubDir = resolveApprovalStubDir()
+  if (approvalStubDir !== undefined) {
+    attachApprovalEventStub(approvalStubDir, {
+      handle: request => approvalCore.handle(request),
+      observeToolExec: exec => capture.observe(exec),
+    })
+  }
 }
