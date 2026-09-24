@@ -53,6 +53,7 @@ import type {
   PluginFace, ProposalFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
+import { dispatchLaunchRelayOf } from './dispatch-relay'
 
 /**
  * The preload namespace surface (task 2.7): the 13 data verbs + the
@@ -471,11 +472,24 @@ export function createIpcTaskDetailFace(bridge: WorkbenchIpcBridge): TaskDetailF
 }
 
 /**
+ * 任务 6.3(SC1):dispatched 应答的 relay 过腿 —— installed launch relay
+ * 在场即转交(relay 缺席 = 行留 starting,内核既定语义,不抛错)。
+ */
+function relayDispatchResult(result: DispatchTasksResult): void {
+  if (!('dispatched' in result)) return // blocked:零落行,无 relay 面
+  dispatchLaunchRelayOf()?.relayDispatched(result.dispatched)
+}
+
+/**
  * The UF1 orchestration face over the verbs (task 3.9's assembly leg; 1:1
  * mapping with error renormalization). The dispatch/approval chains consume
  * the rejections through their own normalizeWorkbenchVerbError folds, so the
  * envelope is re-serialized here into the plain shape every face member
  * answers (the ERROR NORMALIZATION contract above).
+ *
+ * 任务 6.3(SC1):dispatched 应答经 renderer launch relay 转交 host
+ * dispatch-launch(两段式派发链的第二段;relay 缺席 = 行留 starting,内核
+ * 既定语义)。本面是看板全部派发链(工具栏多选 + 详情单任务)的单一过点。
  */
 export function createIpcDispatchFace(bridge: WorkbenchIpcBridge): DispatchFace {
   return {
@@ -488,14 +502,18 @@ export function createIpcDispatchFace(bridge: WorkbenchIpcBridge): DispatchFace 
     },
     dispatchTasks: async (input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult> => {
       try {
-        return await bridge.dispatchTasks(input, actor)
+        const result = await bridge.dispatchTasks(input, actor)
+        relayDispatchResult(result)
+        return result
       } catch (error) {
         renormalize(error)
       }
     },
     redispatch: async (dispatchId: string, actor: string): Promise<DispatchTasksResult> => {
       try {
-        return await bridge.redispatch(dispatchId, actor)
+        const result = await bridge.redispatch(dispatchId, actor)
+        relayDispatchResult(result)
+        return result
       } catch (error) {
         renormalize(error)
       }

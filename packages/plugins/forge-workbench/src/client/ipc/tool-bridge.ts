@@ -99,10 +99,38 @@ const FORGE_TOOL_BRIDGE_ANSWER: InvocationDescriptor = {
   result: { mode: 'src-json' },
 }
 
-/** 桥命名空间贡献(挂载后 `ctx.remote.forgeToolBridge.calls/answer` 可调)。 */
+/**
+ * 任务 6.3(SC1):dispatchLaunch/launch 面(host dispatch-launch rpc 单方法;
+ * wire 字段 = host 参数名 `input` 原词,strict 手写 codec,src-json 结果)。
+ * 与工具桥两描述符**同一贡献**:typert 的远端贡献按 package 键登记,同一
+ * 包二次 $mount 即「already registered」拒绝 —— 插件对 Gateway 只挂一次
+ * (M2 launch-rpc 先例:forgeBridge/sessionLaunch 同贡献多描述符)。
+ */
+const LAUNCH_INPUT_SCHEMA: TypertSchema<{ launches: readonly unknown[] }> = {
+  parse(value: unknown): { launches: readonly unknown[] } {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError('expected the DispatchLaunchRpcInput object')
+    }
+    const launches = (value as { launches?: unknown }).launches
+    if (!Array.isArray(launches)) throw new TypeError('field launches must be an array')
+    return value as { launches: readonly unknown[] }
+  },
+}
+
+const DISPATCH_LAUNCH_LAUNCH: InvocationDescriptor = {
+  id: `${PACKAGE}#dispatchLaunch/launch`,
+  service: 'dispatchLaunch',
+  namespace: 'dispatchLaunch',
+  method: 'launch',
+  invocation: { kind: 'direct' },
+  parameters: [jsonParameter('input', `${PACKAGE}#DispatchLaunchRpcInput`, LAUNCH_INPUT_SCHEMA)],
+  result: { mode: 'src-json' },
+}
+
+/** 桥命名空间贡献(挂载后 `ctx.remote.forgeToolBridge.*` / `ctx.remote.dispatchLaunch.launch` 可调)。 */
 export const FORGE_TOOL_BRIDGE_REMOTE_CONTRIBUTION: TypertRemoteContribution = {
   package: PACKAGE,
-  descriptors: [FORGE_TOOL_BRIDGE_CALLS, FORGE_TOOL_BRIDGE_ANSWER],
+  descriptors: [FORGE_TOOL_BRIDGE_CALLS, FORGE_TOOL_BRIDGE_ANSWER, DISPATCH_LAUNCH_LAUNCH],
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +394,9 @@ export function installToolBridgeClient(ctx: ClientContext): () => void {
     }).inject(['remote'], (remoteCtx: ClientContext) => {
       const remote = remoteCtx.get('remote', false) as TypertClientRemote | undefined
       if (remote === undefined || typeof remote.$mount !== 'function') return
+      // 6.3:the ONE plugin-wide mount — both namespaces (forgeToolBridge +
+      // dispatchLaunch) ride this single contribution; the dispatch-launch
+      // relay polls for its namespace instead of mounting again.
       void remote.$mount(FORGE_TOOL_BRIDGE_REMOTE_CONTRIBUTION)
         .then((disposeMount) => {
           const namespace = namespaceOf(remoteCtx)

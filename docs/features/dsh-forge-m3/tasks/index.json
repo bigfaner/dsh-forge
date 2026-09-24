@@ -715,7 +715,7 @@
         "5.7",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.3-sc1-zero-cli.md",
       "record": "records/6.3-sc1-zero-cli.md",
       "surface-type": "web",

@@ -52,8 +52,9 @@ import { createWorkbenchWatcher } from '../watcher/watch.ts'
 import type { WorkbenchEventSink } from '../watcher/events.ts'
 import { createPluginEnableGuard } from '../../plugin-runtime/guard.ts'
 import { createPluginFace, readPluginManifestBundles, type PluginEnableGuard } from './plugins.ts'
-import { toTaskSummary } from './task-summary.ts'
+import { toTaskSummary, toTaskSummaryFromAuthoritative } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
+import { getProjectTaskAuthority, listTasks } from '../tasks/task-repo.ts'
 import { createMigrationService } from '../migration/pipeline.ts'
 import { createReingestHook } from '../migration/reingest-watcher.ts'
 import { createDeviationHook } from '../stages/deviation-watcher.ts'
@@ -265,6 +266,10 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       const project = findProjectRow(db, projectId)
       return project === undefined ? null : resolveFeaturesDir(scanTargetOf(project))
     },
+    // 任务 6.3(SC1):权威任务写随写直发 task_updated(单批直发,迁移/偏好/
+    // 编排面 onEvent 同款形态)—— 否则 sqlite 项目的看板回流无推送面(感知
+    // 扫描只覆盖 files 项目),SC1 的 ≤5s 回流链断。
+    onEvent: event => sink([event]),
   })
 
   // M3 任务 1.4:迁移动词服务(Interface 4 第 1-6 步内核管线)。相位事件
@@ -489,8 +494,16 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       getTaskBoard(projectId: string): TaskBoardData {
         assertProjectExists(db, projectId)
         const sync = getSyncState(db, projectId)
+        // 任务 6.3(SC1):读路由按 data_authority 分流(tech-design §Interface 1
+        // 读动词口径 —— 1.3 落了 taskGet/taskQuery,本动词此前漏分流,已迁移项
+        // 目的看板会读 files 侧快照缓存:迁移归档 index.json 后扫描将清空
+        // task_snapshot,看板随之失真)。sqlite → task 权威表(files 快照缓存
+        // 仅是 files 项目的派生投影)。
+        const tasks = getProjectTaskAuthority(db, projectId) === 'sqlite'
+          ? listTasks(db, projectId).map(toTaskSummaryFromAuthoritative)
+          : listTaskSnapshots(db, projectId).map(toTaskSummary)
         return {
-          tasks: listTaskSnapshots(db, projectId).map(toTaskSummary),
+          tasks,
           generatedAt: new Date().toISOString(),
           // 从未扫描(行不存在)→ idle + 空游标:看板空态(状态门),非错误。
           sync: sync === null ? { state: 'idle', lastScanAt: null } : toSyncStatusPayload(sync),
@@ -635,7 +648,16 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
             : scanTaskCorpus(resolveFeaturesDir(scanTargetOf(project))).indexJsonDetected,
         }
       },
-      startMigration: projectId => migrationService.startMigration(projectId),
+      startMigration: (projectId) => {
+        // 任务 6.3(SC1):向导路径 register→migrate 之间无激活/扫描位 ——
+        // verify 对拍的 task_snapshot 派生投影可能从未建立(0 行 →
+        // ERR_MIGRATION_VERIFY 误拒)。从未扫描的项目先行一次同步重扫
+        // (感知基座既有面,派生缓存重建幂等;已扫描项目路径不变)。
+        if (getSyncState(db, projectId) === null) {
+          perception.rescan(scanTargetOf(requireProject(projectId)))
+        }
+        return migrationService.startMigration(projectId)
+      },
       // —— M3 UF3 集成读(任务 1.7)——
       probeCodeRoot: input => probeCodeRootImpl(input),
       getWorkbenchPaths: () => workbenchPaths,

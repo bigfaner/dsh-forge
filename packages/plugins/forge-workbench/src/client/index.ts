@@ -25,6 +25,8 @@ import {
 } from './store/view-key'
 import { createBoardSessionStore } from './store/board-session'
 import { installToolBridgeClient } from './ipc/tool-bridge'
+import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
+import { getWorkbenchIpcBridge } from './ipc/workbench'
 import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
@@ -66,7 +68,8 @@ export type { SessionHandover } from './session-handover'
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
 // SyncStatus/TaskBoardData/WorkbenchEvent).
 export type {
-  ApprovalRow, ApprovalState, ChangeSource, DispatchRow, DispatchState, DispatchTasksInput,
+  ApprovalRow, ApprovalState, ChangeSource, DispatchedRow, DispatchLaunchPayload, DispatchRow,
+  DispatchState, DispatchTasksInput,
   DispatchTasksResult, DecideApprovalInput, DocLocationType, MigrationEvent, MigrationPhase,
   MigrationPhaseResult,
   MigrationStarted, MigrationStatus, MissingItem, PluginRow, Project, ProjectPatch,
@@ -109,6 +112,14 @@ export {
   runToolBridgePump,
 } from './ipc/tool-bridge'
 export type { ToolBridgePumpDeps } from './ipc/tool-bridge'
+// The renderer launch relay (M3 task 6.3, SC1): the two-stage dispatch chain's
+// second stage — dispatched rows' launch payloads ride the host dispatch-launch
+// rpc, outcomes backfill through the notify verbs.
+export {
+  dispatchLaunchRelayOf, installDispatchLaunchRelay,
+  launchRequestOf, relayDispatchedRows, setDispatchLaunchRelay,
+} from './ipc/dispatch-relay'
+export type { DispatchLaunchRelay } from './ipc/dispatch-relay'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -271,6 +282,14 @@ export function apply(ctx: ClientContext): void {
   // Guarded throughout (hostless worlds stay silent; the host degrades via its
   // grace/budget chain).
   const disposeToolBridge = installToolBridgeClient(ctx)
+  // M3 task 6.3 (SC1): the renderer launch relay — the two-stage dispatch
+  // chain's driver leg. The IPC dispatch face hands dispatched rows' launch
+  // payloads here; absent remote/bridge worlds keep the kernel's
+  // rows-stay-starting semantics.
+  const workbenchBridge = getWorkbenchIpcBridge()
+  const disposeLaunchRelay = workbenchBridge === undefined
+    ? () => {}
+    : installDispatchLaunchRelay(ctx, workbenchBridge)
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -337,6 +356,7 @@ export function apply(ctx: ClientContext): void {
     clearTimeout(graceTimer)
     disableRail()
     disposeToolBridge()
+    disposeLaunchRelay()
     disposeSlotNav()
   }, 'forge-workbench: navigation forms')
 }

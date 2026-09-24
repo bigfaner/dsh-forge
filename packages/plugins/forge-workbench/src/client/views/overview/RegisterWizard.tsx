@@ -351,6 +351,14 @@ export function RegisterWizard(props: RegisterWizardProps) {
     projectId: migrationPhase?.project.id ?? 'dsh-forge-wizard-unregistered',
     face: migrationFace,
   })
+  // 任务 6.3(SC1):相位开始后的首次启动必须走渲染后 effect —— submit() 内
+  // 同步调用 migrationRun.start() 时,闭包里的 hook 输入仍是占位 id
+  // (setMigrationPhase 尚未重渲染),动词以 ERR_PROJECT_NOT_FOUND 拒绝,迁移
+  // 相位永远失败。effect 在相位落地(真 id 就位)后恰好启动一次。
+  useEffect(() => {
+    if (migrationPhase === undefined) return
+    migrationRun.start()
+  }, [migrationPhase])
 
   // Step ① probe: fires on every codeRoot change (mount included — the edit
   // prefill probes the registered root through the same chain).
@@ -497,9 +505,10 @@ export function RegisterWizard(props: RegisterWizardProps) {
         // area evolves IN PLACE into the migration run; the wizard closes only
         // through the phase's explicit terminals. Everything else closes now.
         if (migrationOffered && draft.migrateNow) {
+          // 任务 6.3(SC1):start 归相位落地后的 effect(见上)— 同步调用会
+          // 以占位 id 拒绝(占位 id ≠ 本渲染闭包的真 id)。
           setMigrationPhase({ project })
           setSubmitting(false)
-          migrationRun.start()
           return
         }
         props.onClose?.({ project, action: 'register' })

@@ -32,7 +32,7 @@
  * failListWith arm the failure branches).
  */
 import type {
-  ApprovalRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
+  ApprovalRow, DispatchedRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
   FeatureStatus, FeatureSummary,
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
@@ -1066,7 +1066,7 @@ export function createMockDispatchFace(options: MockDispatchFaceOptions = {}): M
   let missing: readonly MissingItem[] = options.missing ?? []
   let failNext: { code: string; message: string } | undefined
   const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
-  const mint = (taskKey: string, batchId: string, state: DispatchState, sessionId: string | null, actor: string): DispatchRow => {
+  const mint = (taskKey: string, batchId: string, state: DispatchState, sessionId: string | null, actor: string): DispatchedRow => {
     mockDispatchSeq += 1
     return {
       id: `dsp-${mockDispatchSeq}`,
@@ -1081,6 +1081,15 @@ export function createMockDispatchFace(options: MockDispatchFaceOptions = {}): M
       dispatchedAt: new Date().toISOString(),
       endedAt: null,
       error: null,
+      // 任务 6.3:dispatched 行携带 launch 载荷(两段式链的 mock 面 —— relay
+      // 缺席的 jsdom 世界不消费,真实面由内核应答供给)。
+      launch: {
+        prompt: `mock presynthesized first message for ${taskKey}`,
+        promptHash: `hash-${taskKey.replaceAll('/', '-')}-${mockDispatchSeq}`,
+        sessionId,
+        cwd: `Z:/mock/${projectId}`,
+        taskType: null,
+      },
     }
   }
   const emit = (events: readonly WorkbenchEvent[]): void => {

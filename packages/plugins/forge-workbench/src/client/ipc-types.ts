@@ -225,6 +225,27 @@ export interface DecideApprovalInput {
   readonly approve: boolean
 }
 
+/**
+ * 派发应答行的启动载荷(任务 6.3 client 孪生;kernel twin = ipc/types.ts
+ * DispatchLaunchPayload)—— dispatchTasks/redispatch 应答的 dispatched 行
+ * 携带,renderer launch relay 的输入面(prompt 不落库、不随 getDispatches
+ * 回流;tech-design §Interface 3 两段式派发链)。
+ */
+export interface DispatchLaunchPayload {
+  /** 预合成组合首条消息(sha256(prompt) = 行 prompt_hash;SC3 断言锚点)。 */
+  readonly prompt: string
+  readonly promptHash: string
+  /** 预铸 sessionId(spike-3 §4;create({sessionId}) 幂等 adopt)。 */
+  readonly sessionId: string | null
+  /** subagent cwd(项目 codeRoot,内核解析)。 */
+  readonly cwd: string
+  /** 任务类型(协议选择键);未落 = null。 */
+  readonly taskType: string | null
+}
+
+/** 派发应答行(dispatch 行 + 启动载荷;kernel twin = ipc/types.ts DispatchedRow)。 */
+export type DispatchedRow = DispatchRow & { readonly launch: DispatchLaunchPayload }
+
 /** receiveApproval 入参(host approval-bridge → T2 桥 → 内核;relay 形态)。 */
 export interface ReceiveApprovalInput {
   readonly dispatchId: string
@@ -366,10 +387,12 @@ export interface DispatchTasksInput {
 
 /**
  * dispatchTasks 联合返回(任务 3.9 canonical client twin;blocked = 产物缺失未
- * 确认 —— 零落行,警告门重开)。
+ * 确认 —— 零落行,警告门重开)。任务 6.3:dispatched 行携带 launch payload
+ * (kernel twin = ipc/types.ts DispatchedRow —— 两段式派发链的 renderer
+ * relay 输入面)。
  */
 export type DispatchTasksResult =
-  | { readonly dispatched: readonly DispatchRow[] }
+  | { readonly dispatched: readonly DispatchedRow[] }
   | { readonly blocked: 'artifacts-missing'; readonly missing: readonly MissingItem[] }
 
 /**

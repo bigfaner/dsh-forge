@@ -49,11 +49,11 @@ import type {
   TaskTransitionInput,
   TaskDepChainEntry,
 } from '../ipc/types.ts'
-import type { RepoDb, TaskStatus } from '../repos/types.ts'
+import type { ChangeSource, RepoDb, TaskStatus } from '../repos/types.ts'
 import { WorkbenchRepoError } from '../repos/types.ts'
 import { listSessionLinksByTask } from '../repos/session-links.ts'
 import { listTaskSnapshots } from '../repos/task-snapshots.ts'
-import { toTaskSummary, toTaskSummaryFromAuthoritative } from '../ipc/task-summary.ts'
+import { actorSourceOf, toTaskSummary, toTaskSummaryFromAuthoritative } from '../ipc/task-summary.ts'
 import { parseRecordMarkdown } from '../indexer/parse-task.ts'
 import { getUnmetDeps, resolveWildcardDep } from './deps.ts'
 import { TaskIndex } from './model.ts'
@@ -91,6 +91,21 @@ export interface TaskVerbDeps {
   readonly readFilesTaskDetail: (projectId: string, taskKey: string) => TaskDetail
   /** 文档根(features/)绝对路径解析;项目不存在 → null。desc_path 相对此根。 */
   readonly resolveFeaturesRoot: (projectId: string) => string | null
+  /**
+   * 任务 6.3(SC1):权威写随写直发 task_updated(单批;迁移/偏好/编排面
+   * onEvent 同款形态)。缺省 = 无推送(1.3 期行为;看板对 sqlite 项目的
+   * 回流依赖此事件 —— 感知扫描只覆盖 files 项目)。
+   */
+  readonly onEvent?: (event: TaskWriteEvent) => void
+}
+
+/** 任务 6.3:task_updated 事件形态(indexer/diff.ts WorkbenchEvent 的成员)。 */
+export interface TaskWriteEvent {
+  readonly type: 'task_updated'
+  readonly projectId: string
+  readonly taskKey: string
+  readonly source: ChangeSource | null
+  readonly changeKind: 'attribute' | 'structural'
 }
 
 /** 本模块装配产物:七个 task 动词(并入 WorkbenchVerbServices 面)。 */
@@ -189,6 +204,20 @@ function assembleAuthoritativeDetail(
 export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
   const { db } = deps
 
+  /**
+   * 任务 6.3(SC1):权威写成功后的 task_updated 直发(事务提交后发,失败
+   * 零事件)。source = actor 逆向投影(session:<id> → session,external →
+   * terminal,内核/派发者 → null;task-summary.ts actorSourceOf 同源)。
+   */
+  const emitTaskUpdated = (
+    projectId: string,
+    taskKey: string,
+    actor: string,
+    changeKind: 'attribute' | 'structural',
+  ): void => {
+    deps.onEvent?.({ type: 'task_updated', projectId, taskKey, source: actorSourceOf(actor), changeKind })
+  }
+
   /** 项目存在 + 权威通道断言(写集权限界;files → 走 CLI 提示,业务提示非错误噪音)。 */
   const requireSqliteAuthority = (projectId: string): void => {
     const authority = getProjectTaskAuthority(db, projectId)
@@ -238,15 +267,16 @@ export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
 
   /**
    * 迁移执行核(transition/submit/reopen 共用):状态机校验 →(phase-2
-   * 边)依赖检查 → 单语句落库,全程 withTaskTx(零部分写入)。
+   * 边)依赖检查 → 单语句落库,全程 withTaskTx(零部分写入)。成功后直发
+   * task_updated(任务 6.3:sqlite 项目看板回流推送面)。
    */
   const applyTransition = (
     input: { readonly projectId: string; readonly taskKey: string },
     to: TaskStatus,
     role: TransitionRole,
     actor: string,
-  ): TaskSummary =>
-    withTaskTx(db, () => {
+  ): TaskSummary => {
+    const summary = withTaskTx(db, () => {
       const task = requireTask(input.projectId, input.taskKey)
       const rejection = validateTransition(task.status, to, role)
       if (rejection !== null) {
@@ -271,6 +301,9 @@ export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
       const updated = updateTaskStatus(db, input.projectId, task.taskKey, to, actor, new Date().toISOString())
       return toTaskSummaryFromAuthoritative(updated)
     })
+    emitTaskUpdated(input.projectId, input.taskKey, actor, 'attribute')
+    return summary
+  }
 
   return {
     // —— taskAdd:插入权威行(默认 pending;缺省 taskKey → Go 自动 ID)——
@@ -278,7 +311,7 @@ export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
       if (actor === '') {
         throw new Error('taskAdd: actor must be a non-empty string (audit discipline)')
       }
-      return withTaskTx(db, () => {
+      const summary = withTaskTx(db, () => {
         requireSqliteAuthority(input.projectId)
         assertFeatureSlugSegment(input.featureSlug)
         if (input.title === '') {
@@ -337,12 +370,14 @@ export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
         })
         return toTaskSummaryFromAuthoritative(inserted)
       })
+      emitTaskUpdated(input.projectId, summary.key, actor, 'structural')
+      return summary
     },
 
     // —— taskClaim:→ in_progress(role=claim;依赖终态前置,claim 语境)——
     taskClaim(input: TaskClaimInput, actor: string): TaskSummary {
       requireSqliteAuthority(input.projectId)
-      return withTaskTx(db, () => {
+      const summary = withTaskTx(db, () => {
         const task = requireTask(input.projectId, input.taskKey)
         const rejection = validateTransition(task.status, 'in_progress', 'claim')
         if (rejection !== null && rejection.guardMsg !== DEPS_CHECK_GUARD_MSG) {
@@ -361,6 +396,8 @@ export function createTaskVerbService(deps: TaskVerbDeps): TaskVerbService {
         const updated = updateTaskStatus(db, input.projectId, task.taskKey, 'in_progress', actor, new Date().toISOString())
         return toTaskSummaryFromAuthoritative(updated)
       })
+      emitTaskUpdated(input.projectId, input.taskKey, actor, 'attribute')
+      return summary
     },
 
     // —— taskTransition:显式迁移(role=manual;reason 为调用方语境串,
