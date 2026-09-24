@@ -30,14 +30,15 @@
  * from the dialog's confirm.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { MigrationStatus, Project, WorkbenchState, WorkbenchVerbError } from '../../ipc-types'
-import type { MigrationFace, OverviewFace, PluginFace } from '../../contract'
+import type { MigrationStatus, Project, WorkbenchState, WorkbenchVerbError, WorkbenchEvent } from '../../ipc-types'
+import type { MigrationFace, OverviewFace, PluginFace, PrefsFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { TOAST_Z } from '../tasks/launch/LaunchStates'
-import { createMockMigrationFace, createMockOverviewFace } from '../../mocks/workbench'
+import { createMockFeatureBoardFace, createMockMigrationFace, createMockOverviewFace } from '../../mocks/workbench'
 import { ProjectGrid } from './ProjectGrid'
 import { PluginSection } from './PluginSection'
+import { PreferenceSection, type PrefFeatureRef } from './prefs/PreferenceSection'
 import { RemoveConfirm } from './RemoveConfirm'
 import { MigrationDialogs } from './migration/MigrateProgressDialog'
 import { middleEllipsis } from './format'
@@ -93,6 +94,28 @@ export interface OverviewPageProps {
    * assembly injects the IPC face; tests the 1.6 mock twin.
    */
   migrationFace?: Partial<MigrationFace> | undefined
+  /**
+   * The UF4 prefs family's face (task 5.2, Integration Spec #4): threads
+   * into the in-page PreferenceSection (插件管理区之下). Absent members fall
+   * back to the section-local mock twin — the build-stage default; the
+   * OverviewView assembly injects the bridge-backed verbs.
+   */
+  prefsFace?: Partial<PrefsFace> | undefined
+  /**
+   * UF4 (task 5.2): the Feature tier's roster source — the ACTIVE project's
+   * kernel feature list (featureList verb on the real chain; the mock board
+   * twin in the build stage). Keyed on the active project id: a switch
+   * rebinds the section's feature Menu, and the section re-reads its tier
+   * scope through its own loading skeleton.
+   */
+  loadFeatures?: ((projectId: string) => Promise<readonly PrefFeatureRef[]>) | undefined
+  /**
+   * UF4 (task 5.2): the prefs_updated reflux channel (the shared
+   * single-subscriber event source). Threads into the section, which filters
+   * the pushed events against the current scope's resolution chain and
+   * silently re-reads (生效值即时刷新, 免手动刷新).
+   */
+  subscribePrefsEvents?: ((listener: (events: readonly WorkbenchEvent[]) => void) => (() => void)) | undefined
 }
 
 const pageStyle = {
@@ -429,6 +452,35 @@ export function OverviewPage(props: OverviewPageProps) {
   }
 
   const activeProject = state?.projects.find(project => project.id === state.activeProjectId)
+
+  // UF4 (task 5.2): the section's feature roster — loaded per ACTIVE project
+  // (feature 选择器数据源 = feature 列表,内核). The stale roster never leaks
+  // into the next project's Feature Menu (cleared synchronously on the id
+  // change); a failed read degrades to a disabled Feature tier — never an
+  // error wall. The section's own scope loads handle the loading 骨架.
+  const [features, setFeatures] = useState<readonly PrefFeatureRef[]>([])
+  const [buildStageFeatureSource] = useState(() => createMockFeatureBoardFace())
+  const loadFeatures = useMemo(
+    () => props.loadFeatures ?? (async (projectId: string): Promise<readonly PrefFeatureRef[]> => {
+      const board = await buildStageFeatureSource.loadFeatureBoard(projectId)
+      return board.features.map(feature => ({ slug: feature.slug }))
+    }),
+    [props.loadFeatures, buildStageFeatureSource],
+  )
+  const activeProjectId = activeProject?.id ?? null
+  useEffect(() => {
+    if (activeProjectId === null) {
+      setFeatures(prev => (prev.length === 0 ? prev : []))
+      return
+    }
+    let alive = true
+    setFeatures([])
+    void loadFeatures(activeProjectId)
+      .then((next) => { if (alive) setFeatures(next) })
+      .catch(() => { if (alive) setFeatures([]) })
+    return () => { alive = false }
+  }, [activeProjectId, loadFeatures])
+
   const populated = phase === 'ready' && state !== undefined && state.projects.length > 0
   const skillDirAlerts = state?.skillDirSyncAlerts
 
@@ -583,6 +635,27 @@ export function OverviewPage(props: OverviewPageProps) {
           changes). */}
       {phase === 'ready' && state !== undefined && (
         <PluginSection t={props.t} face={props.pluginFace} />
+      )}
+
+      {/* The UF4 seat (task 5.2, Integration Spec #4): the 偏好区块卡 BELOW
+          the plugin section (插件管理区之下) at its own stable child slot —
+          same ready-branch discipline as the plugin section, so the section's
+          tier/accordion state survives the empty ⇄ populated transitions.
+          The global tier is project-independent, so the section renders in
+          EVERY ready branch (无激活项目 = 仅「全局」可用, the section's own
+          disabled-tier contract); the active-project binding drives the
+          项目/Feature tiers, the roster effect above feeds the Menu, and the
+          reflux seam re-reads on prefs_updated. */}
+      {phase === 'ready' && state !== undefined && (
+        <PreferenceSection
+          t={props.t}
+          activeProject={activeProject === undefined
+            ? undefined
+            : { id: activeProject.id, displayName: activeProject.displayName }}
+          features={features}
+          face={props.prefsFace}
+          subscribeEvents={props.subscribePrefsEvents}
+        />
       )}
 
       {removing !== undefined && (

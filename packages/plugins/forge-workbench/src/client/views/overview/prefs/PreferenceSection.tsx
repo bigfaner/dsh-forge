@@ -2,8 +2,9 @@
  * The UF4 偏好编辑面 section card, BUILD half (task 5.1, ui-design 偏好
  * 编辑面·三级): r14 · bg-layer-2 · pad 14, 标题「运行偏好」(16/24) —
  * 层级 segmented (全局/项目/Feature) + Feature 级的 feature 选择 Menu 卡 +
- * 键分组折叠区 + 键行 (PrefKeyRow). NOT mounted on the overview page here —
- * the 5.2 integration task owns the Placement (插件管理区之下).
+ * 键分组折叠区 + 键行 (PrefKeyRow). Mounted by the 5.2 integration on the
+ * overview page (插件管理区之下 — OverviewPage owns the Placement); this
+ * file's 5.2 additions are the reflux seam below.
  *
  * Data plane (ui-design Data Binding + Hard Rules): everything flows through
  * the PrefsFace seam — getPrefs answers EVERY registry key with type/control/
@@ -27,7 +28,7 @@
  * open); `resetPrefGroupSessionMemory` is the spec-isolation seam.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PrefRow, PrefScope } from '../../../ipc-types'
+import type { PrefRow, PrefScope, WorkbenchEvent } from '../../../ipc-types'
 import type { PrefsFace } from '../../../contract'
 import type { WorkbenchKey } from '../../../locale/en'
 import { ChromeButton } from '../../../components/chrome/ChromeButton'
@@ -69,6 +70,17 @@ export interface PreferenceSectionProps {
   readonly features?: readonly PrefFeatureRef[] | undefined
   /** The section face — absent members fall back to the build-stage mock (5.2 injects the IPC face). */
   readonly face?: Partial<PrefsFace> | undefined
+  /**
+   * UF4 reflux seam (task 5.2, tech-design §Interface 1 事件扩展): the
+   * shared single-subscriber event channel (the 5.2 assembly hands
+   * getWorkbenchEventSource(bridge).subscribe). The section filters pushed
+   * `prefs_updated { scope, scopeId }` events against the CURRENT scope's
+   * resolution-chain addresses (global ⊂ project ⊂ feature — a global write
+   * moves a project-tier row's effective value too) and silently re-reads:
+   * rows stay mounted, no skeleton, no manual refresh. Absent = the
+   * build-stage form (no push channel).
+   */
+  readonly subscribeEvents?: ((listener: (events: readonly WorkbenchEvent[]) => void) => (() => void)) | undefined
 }
 
 /** ui-design 区块卡: r14 · bg-layer-2 · pad 14. */
@@ -245,6 +257,41 @@ function scopeKeyOf(scope: PrefScope | undefined): string | undefined {
 }
 
 /**
+ * The kernel's prefs_updated push (the main-side WorkbenchEvent twin,
+ * prefs-service.ts prefsUpdatedEvent: global → scopeId '' / project → the
+ * project id / feature → `<projectId>/<featureSlug>`). Declared locally —
+ * the client union lands the variant with the e2e lane; the narrowing below
+ * is structural, never a shape assumption beyond the payload contract.
+ */
+interface PrefsUpdatedEvent {
+  readonly type: 'prefs_updated'
+  readonly scope: 'global' | 'project' | 'feature'
+  readonly scopeId: string
+}
+
+/** Narrow a pushed event to the prefs_updated form (anything else → undefined). */
+function asPrefsUpdated(event: WorkbenchEvent): PrefsUpdatedEvent | undefined {
+  const candidate = event as WorkbenchEvent | PrefsUpdatedEvent
+  return candidate.type === 'prefs_updated' ? candidate : undefined
+}
+
+/**
+ * One scope's resolution-chain addresses (the prefs-repo prefScopeChain
+ * twin): global → [global]; project → [project, global]; feature →
+ * [feature, its project, global]. A prefs_updated at any of these addresses
+ * can move THIS scope's effective values, so the reflux listens to exactly
+ * this set — never more (a foreign project/slug never re-reads), never less
+ * (a global write moves an inherited project-tier row).
+ */
+function scopeChainAddresses(scope: PrefScope): ReadonlyArray<readonly [PrefsUpdatedEvent['scope'], string]> {
+  if (scope === 'global') return [['global', '']]
+  if ('project' in scope) return [['project', scope.project], ['global', '']]
+  const slash = scope.feature.indexOf('/')
+  const projectId = slash === -1 ? '' : scope.feature.slice(0, slash)
+  return [['feature', scope.feature], ['project', projectId], ['global', '']]
+}
+
+/**
  * The UF4 section. The load state machine (loading 骨架 / load-error 重试 /
  * ready rows) keys on the current scope; per-row save state (saving spinners,
  * inline errors) rides Maps keyed by key and CLEARS on every tier change
@@ -279,6 +326,8 @@ export function PreferenceSection(props: PreferenceSectionProps) {
 
   const rowsRef = useRef<readonly PrefRow[] | undefined>(undefined)
   rowsRef.current = rows
+  const savingKeysRef = useRef<ReadonlySet<string>>(new Set())
+  savingKeysRef.current = savingKeys
   const toastTimer = useRef<number | undefined>(undefined)
   const menuWrapRef = useRef<HTMLDivElement>(null)
 
@@ -340,6 +389,36 @@ export function PreferenceSection(props: PreferenceSectionProps) {
     document.addEventListener('mousedown', onDocumentMouseDown)
     return () => { document.removeEventListener('mousedown', onDocumentMouseDown) }
   }, [menuOpen])
+
+  // The prefs_updated reflux (task 5.2, AC3): a pushed write at any of the
+  // current scope's chain addresses silently re-reads the rows. Skipped
+  // while a save is in flight — the write's own authoritative refetch lands
+  // the same rows, and a mid-save re-read must not stomp the optimistic
+  // display value back to the pre-write state.
+  useEffect(() => {
+    const subscribe = props.subscribeEvents
+    if (subscribe === undefined) return
+    return subscribe((events) => {
+      if (rowsRef.current === undefined || savingKeysRef.current.size > 0) return
+      const scope = scopeRef.current
+      if (scope === undefined) return
+      const chain = scopeChainAddresses(scope)
+      const hit = events.some((event) => {
+        const pushed = asPrefsUpdated(event)
+        return pushed !== undefined
+          && chain.some(([kind, id]) => pushed.scope === kind && pushed.scopeId === id)
+      })
+      if (!hit) return
+      void face.getPrefs(scope).then((next) => {
+        if (scopeKeyOf(scopeRef.current) !== scopeKeyOf(scope)) return
+        if (rowsRef.current === undefined || savingKeysRef.current.size > 0) return
+        setRows(next)
+      }).catch(() => {
+        // A failed reflux read keeps the current rows (the next explicit
+        // read retries; never an error wall behind a push).
+      })
+    })
+  }, [props.subscribeEvents, face])
 
   // Toast timer lifecycle (连改合并: every success REFRESHES the one timer).
   useEffect(() => () => {

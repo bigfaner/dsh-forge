@@ -24,12 +24,16 @@
  * tab content); this view carries only the page's faces.
  */
 import { useState, useSyncExternalStore } from 'react'
-import type { Project } from '../../ipc-types'
-import type { MigrationFace, OverviewFace, PluginFace, WorkbenchOverviewSeat } from '../../contract'
+import type { Project, WorkbenchEvent } from '../../ipc-types'
+import type { MigrationFace, OverviewFace, PluginFace, PrefsFace, WorkbenchOverviewSeat } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
-import { createIpcMigrationFace, createIpcOverviewFace, createIpcPluginFace } from '../../ipc/workbench'
+import {
+  createIpcMigrationFace, createIpcOverviewFace, createIpcPluginFace, normalizeWorkbenchVerbError,
+} from '../../ipc/workbench'
+import { getWorkbenchEventSource } from '../../ipc/workbench-events'
 import { INITIAL_WORKBENCH_STATE_SNAPSHOT, type WorkbenchStateStore } from '../../store/workbench-state'
 import { OverviewPage } from './OverviewPage'
+import type { PrefFeatureRef } from './prefs/PreferenceSection'
 
 /** Inputs of {@link OverviewView}. */
 export interface OverviewViewProps {
@@ -58,6 +62,10 @@ interface RealFaces {
   overview: OverviewFace
   plugin: PluginFace
   migration: MigrationFace
+  /** UF4 (task 5.2): the prefs verbs + the feature-roster source + the reflux channel. */
+  prefs: PrefsFace
+  loadFeatures: (projectId: string) => Promise<readonly PrefFeatureRef[]>
+  subscribePrefsEvents: (listener: (events: readonly WorkbenchEvent[]) => void) => () => void
 }
 
 /**
@@ -73,12 +81,44 @@ export function OverviewView(props: OverviewViewProps) {
   )
   // Face identities fixed for the view's life (the page keys its loads on
   // them; the store routes loadState so chrome + page + wizard share reads).
+  // UF4 (task 5.2): the prefs family derives from the SAME bridge — the
+  // three verbs with the shared error normalization (the Hard Rule keeps the
+  // factory local to the overview wiring; ipc/workbench.ts discipline
+  // verbatim), featureList as the Feature tier's roster source (a failed
+  // read degrades to a disabled tier, never an error wall), and the ONE
+  // shared single-subscriber event source the workbench families multiplex
+  // over (workbench-events.ts) as the prefs_updated reflux channel.
   const [realFaces] = useState<RealFaces | undefined>(() => {
     if (store === undefined) return undefined
+    const bridge = store.bridge
+    const renormalize = async <T,>(verb: () => Promise<T>): Promise<T> => {
+      try {
+        return await verb()
+      } catch (error) {
+        throw normalizeWorkbenchVerbError(error)
+      }
+    }
     return {
-      overview: { ...createIpcOverviewFace(store.bridge), loadState: () => store.refresh() },
-      plugin: createIpcPluginFace(store.bridge),
-      migration: createIpcMigrationFace(store.bridge),
+      overview: { ...createIpcOverviewFace(bridge), loadState: () => store.refresh() },
+      plugin: createIpcPluginFace(bridge),
+      migration: createIpcMigrationFace(bridge),
+      prefs: {
+        getPrefs: (scope) => renormalize(() => bridge.getPrefs(scope)),
+        setPrefs: (scope, entries) => renormalize(async () => {
+          await bridge.setPrefs(scope, entries)
+        }),
+        clearPrefOverride: (scope, key) => renormalize(async () => {
+          await bridge.clearPrefOverride(scope, key)
+        }),
+      },
+      loadFeatures: async (projectId: string): Promise<readonly PrefFeatureRef[]> => {
+        try {
+          return (await bridge.featureList(projectId)).map(entry => ({ slug: entry.slug }))
+        } catch {
+          return [] // degraded: the Feature tier disables — never an error wall
+        }
+      },
+      subscribePrefsEvents: (listener) => getWorkbenchEventSource(bridge).subscribe(listener),
     }
   })
 
@@ -102,7 +142,8 @@ export function OverviewView(props: OverviewViewProps) {
   // shell's external-mutation token re-reads the page behind wizard/chrome
   // mutations (no remount — the plugin section keeps its 5.13 stability).
   // 1.7: the migration face joins the set — the real host gets the card
-  // migration surface (mock 全撤 for it too).
+  // migration surface (mock 全撤 for it too). 5.2: the UF4 family rides
+  // along (prefs verbs + featureList + the reflux channel over the bridge).
   return (
     <OverviewPage
       t={props.t}
@@ -113,6 +154,9 @@ export function OverviewView(props: OverviewViewProps) {
       face={realFaces.overview}
       pluginFace={realFaces.plugin}
       migrationFace={realFaces.migration}
+      prefsFace={realFaces.prefs}
+      loadFeatures={realFaces.loadFeatures}
+      subscribePrefsEvents={realFaces.subscribePrefsEvents}
     />
   )
 }
