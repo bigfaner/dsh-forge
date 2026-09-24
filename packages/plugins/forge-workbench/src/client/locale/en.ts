@@ -98,6 +98,42 @@ export type WorkbenchKey =
   | 'overview.plugins.err.runtimeState'
   | 'overview.plugins.err.generic'
   | 'overview.plugins.toast.dismiss'
+  | 'overview.prefs.title'
+  | 'overview.prefs.resolveHint'
+  | 'overview.prefs.tier.global'
+  | 'overview.prefs.tier.project'
+  | 'overview.prefs.tier.projectNamed'
+  | 'overview.prefs.tier.feature'
+  | 'overview.prefs.tier.projectDisabled'
+  | 'overview.prefs.tier.featureDisabled'
+  | 'overview.prefs.feature.select'
+  | 'overview.prefs.feature.menuLabel'
+  | 'overview.prefs.feature.hint'
+  | 'overview.prefs.group.auto'
+  | 'overview.prefs.group.worktree'
+  | 'overview.prefs.group.coverage'
+  | 'overview.prefs.group.eval'
+  | 'overview.prefs.loading'
+  | 'overview.prefs.loadError.title'
+  | 'overview.prefs.loadError.retry'
+  | 'overview.prefs.row.inherited'
+  | 'overview.prefs.row.overridden'
+  | 'overview.prefs.row.unset'
+  | 'overview.prefs.row.clear'
+  | 'overview.prefs.row.saving'
+  | 'overview.prefs.row.saveError'
+  | 'overview.prefs.row.retry'
+  | 'overview.prefs.row.invalidNumber'
+  | 'overview.prefs.row.invalidPercent'
+  | 'overview.prefs.row.invalidText'
+  | 'overview.prefs.row.invalidList'
+  | 'overview.prefs.coverage.maintain'
+  | 'overview.prefs.source.global'
+  | 'overview.prefs.source.project'
+  | 'overview.prefs.source.feature'
+  | 'overview.prefs.source.default'
+  | 'overview.prefs.toast.saved'
+  | 'overview.prefs.toast.dismiss'
   | 'wizard.title'
   | 'wizard.editTitle'
   | 'wizard.stepLabel'
@@ -495,6 +531,42 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.plugins.err.runtimeState': 'The plugin runtime state was invalid and has been rebuilt automatically.',
   'overview.plugins.err.generic': 'Action failed: {message}',
   'overview.plugins.toast.dismiss': 'Dismiss',
+  'overview.prefs.title': 'Run preferences',
+  'overview.prefs.resolveHint': 'Effective resolution: Feature > Project > Global; keys without an override fall back tier by tier.',
+  'overview.prefs.tier.global': 'Global',
+  'overview.prefs.tier.project': 'Project',
+  'overview.prefs.tier.projectNamed': 'Project · {name}',
+  'overview.prefs.tier.feature': 'Feature',
+  'overview.prefs.tier.projectDisabled': 'No active project — register and activate a project to edit project-tier preferences.',
+  'overview.prefs.tier.featureDisabled': 'No feature in the active project yet — the feature tier unlocks once one exists.',
+  'overview.prefs.feature.select': 'Select a feature',
+  'overview.prefs.feature.menuLabel': 'Feature picker',
+  'overview.prefs.feature.hint': 'Select a feature to view and edit its overrides.',
+  'overview.prefs.group.auto': 'auto',
+  'overview.prefs.group.worktree': 'worktree',
+  'overview.prefs.group.coverage': 'coverage',
+  'overview.prefs.group.eval': 'eval',
+  'overview.prefs.loading': 'Loading preferences…',
+  'overview.prefs.loadError.title': 'Failed to load preferences',
+  'overview.prefs.loadError.retry': 'Retry',
+  'overview.prefs.row.inherited': 'Inherited · {source}: {value}',
+  'overview.prefs.row.overridden': 'Overridden here',
+  'overview.prefs.row.unset': 'Not set',
+  'overview.prefs.row.clear': 'Clear',
+  'overview.prefs.row.saving': 'Saving…',
+  'overview.prefs.row.saveError': 'Save failed: {message}',
+  'overview.prefs.row.retry': 'Retry',
+  'overview.prefs.row.invalidNumber': 'Enter a whole number.',
+  'overview.prefs.row.invalidPercent': 'Enter a whole number between 0 and 100.',
+  'overview.prefs.row.invalidText': 'Must not be empty.',
+  'overview.prefs.row.invalidList': 'Enter at least one non-empty entry.',
+  'overview.prefs.coverage.maintain': 'maintain',
+  'overview.prefs.source.global': 'Global',
+  'overview.prefs.source.project': 'Project',
+  'overview.prefs.source.feature': 'Feature',
+  'overview.prefs.source.default': 'Default',
+  'overview.prefs.toast.saved': 'Saved',
+  'overview.prefs.toast.dismiss': 'Dismiss',
   'wizard.title': 'Register project',
   'wizard.editTitle': 'Repoint project',
   'wizard.stepLabel': 'Step {current}/{total}',

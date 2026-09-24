@@ -533,7 +533,7 @@
         "3.1",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.1-prefs-ui-build.md",
       "record": "records/5.1-prefs-ui-build.md",
       "surface-type": "web",

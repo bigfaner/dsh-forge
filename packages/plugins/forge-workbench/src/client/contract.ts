@@ -28,7 +28,8 @@ import type { LaunchSeatStore } from './launch-rpc'
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
   DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
-  PluginRow, Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink,
+  PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch, RecordSessionLinkInput,
+  RegisterProjectInput, SessionLink,
   StageArtifactsReport, StageAssetRow, StageGateInfo,
   TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
@@ -437,6 +438,29 @@ export interface PluginFace {
   listPlugins(): Promise<PluginRow[]>
   /** Interface 1 workbench.setPluginEnabled(name, enabled) — resolves the current rows. */
   setPluginEnabled(name: string, enabled: boolean): Promise<PluginRow[]>
+}
+
+/**
+ * The UF4 prefs section's data + action face (task 5.1, UI dependency
+ * layering — the same seam shape as PluginFace, the 3.1 verb discipline):
+ * the BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockPrefsFace), the 5.2 assembly task injects the
+ * Interface 1 IPC verbs. Every member mirrors its §Interface 1 偏好段 verb
+ * one-to-one — getPrefs answers EVERY registered key (closed forge registry,
+ * surfaces excluded) with effective value + source tier + type/control/group
+ * metadata (the 键→控件映射 authority; the UI never hardcodes the key list);
+ * setPrefs is atomic with rejections carrying the serialized
+ * {@link WorkbenchVerbError} shape (ERR_PREF_KEY_UNKNOWN /
+ * ERR_PREF_VALUE_INVALID); clearPrefOverride deletes this tier's row so the
+ * effective value falls back to the next tier.
+ */
+export interface PrefsFace {
+  /** Interface 1 workbench.getPrefs(scope) — every registry key, resolved for the scope. */
+  getPrefs(scope: PrefScope): Promise<PrefRow[]>
+  /** Interface 1 workbench.setPrefs(scope, entries) — transactional write; type-checked in the kernel. */
+  setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): Promise<void>
+  /** Interface 1 workbench.clearPrefOverride(scope, key) — idempotent; the value falls back a tier. */
+  clearPrefOverride(scope: PrefScope, key: string): Promise<void>
 }
 
 /**

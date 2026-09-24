@@ -36,7 +36,8 @@ import type {
   FeatureStatus, FeatureSummary,
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
-  MissingItem, PluginRow, Project, ProjectPatch, RegisterProjectInput, StageAssetRow,
+  MissingItem, PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch,
+  RegisterProjectInput, StageAssetRow,
   StageGateInfo, TaskBoardData, TaskDetail,
   TaskSummary,
   WorkbenchEvent, WorkbenchState,
@@ -44,7 +45,8 @@ import type {
 import type {
   DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot,
   OverviewFace,
-  PluginFace, RegisterWizardFace, SessionLaunchServices, StageFace, TaskBoardFace, TaskDetailFace,
+  PluginFace, PrefsFace, RegisterWizardFace, SessionLaunchServices, StageFace, TaskBoardFace,
+  TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -1361,5 +1363,234 @@ export function createMockStageFace(options: MockStageFaceOptions = {}): MockSta
     },
     emit,
     get gate(): StageGateInfo { return gate },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Prefs family, UF4 (task 5.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The mock forge pref registry — a REPRESENTATIVE projection of the real
+ * kernel registry (task 3.1 workbench/prefs/registry.ts), not a parity twin:
+ * every group (auto/worktree/coverage/eval) and every type/control pair the
+ * UI must render (toggle / number-input / text-input / list-as-text /
+ * coverage-input) appears exactly so the component layer is exercised across
+ * the whole metadata surface. surfaces.* stays absent BY CONSTRUCTION (PRD
+ * D3: structural facts never enter the inheritance chain).
+ */
+export interface MockPrefKeyDef {
+  readonly key: string
+  readonly group: PrefRow['group']
+  readonly type: PrefRow['type']
+  readonly control: PrefRow['control']
+  readonly defaultValue?: unknown
+}
+
+export const MOCK_PREF_REGISTRY: readonly MockPrefKeyDef[] = Object.freeze([
+  Object.freeze({ key: 'auto.test.quick', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'auto.test.full', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: true }),
+  Object.freeze({ key: 'auto.gitPush', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'auto.eval.prd', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'worktree.source-branch', group: 'worktree', type: 'text', control: 'text-input' }),
+  Object.freeze({ key: 'worktree.includes', group: 'worktree', type: 'list', control: 'text-input' }),
+  Object.freeze({
+    key: 'coverage.coding.feature', group: 'coverage', type: 'coverage', control: 'coverage-input',
+    defaultValue: Object.freeze({ type: 'percentage', percentage: 80 }),
+  }),
+  Object.freeze({
+    key: 'coverage.coding.refactor', group: 'coverage', type: 'coverage', control: 'coverage-input',
+    defaultValue: Object.freeze({ type: 'maintain' }),
+  }),
+  Object.freeze({ key: 'eval.proposal.target', group: 'eval', type: 'number', control: 'number-input', defaultValue: 900 }),
+  Object.freeze({ key: 'eval.proposal.iterations', group: 'eval', type: 'number', control: 'number-input', defaultValue: 3 }),
+])
+
+/** The build-stage seed: a global + a project override the section inherits from. */
+const MOCK_PREF_SEED: Readonly<Record<string, unknown>> = Object.freeze({
+  'global:auto.test.full': false,
+  'global:worktree.source-branch': 'main',
+  'project:mock-project:auto.test.quick': true,
+})
+
+/** Classify a PrefScope the way the mock's override store keys it. */
+function mockPrefScopeKey(scope: PrefScope): { kind: 'global' | 'project' | 'feature'; id: string } {
+  if (scope === 'global') return { kind: 'global', id: '' }
+  if ('project' in scope) return { kind: 'project', id: scope.project }
+  return { kind: 'feature', id: scope.feature }
+}
+
+/** The tier chain a scope resolves through (feature > project > global > default). */
+function mockPrefTierKeys(scope: PrefScope): readonly { tier: PrefRow['source']; storeKey: string }[] {
+  const { kind, id } = mockPrefScopeKey(scope)
+  if (kind === 'global') return [{ tier: 'global', storeKey: 'global:' }]
+  if (kind === 'project') {
+    return [
+      { tier: 'project', storeKey: 'project:' + id + ':' },
+      { tier: 'global', storeKey: 'global:' },
+    ]
+  }
+  // feature scopeId = '<projectId>/<featureSlug>' (tech-design Data Models).
+  const projectId = id.slice(0, Math.max(0, id.indexOf('/')))
+  return [
+    { tier: 'feature', storeKey: 'feature:' + id + ':' },
+    { tier: 'project', storeKey: 'project:' + projectId + ':' },
+    { tier: 'global', storeKey: 'global:' },
+  ]
+}
+
+/** The serialized rejection the kernel prefs verbs send (plain envelope form). */
+const prefEnvelope = (code: string, message: string): { code: string; message: string } => ({ code, message })
+
+/**
+ * The UF4 prefs section's verb twin (task 5.1): in-memory per-tier override
+ * store + three-tier resolution mirroring workbench/prefs/resolve.ts's shape
+ * (feature > project > global > registry default; source null ⟺ no value).
+ *
+ *   getPrefs          — every MOCK_PREF_REGISTRY key resolved for the scope
+ *                      (effective value + source + override/localValue), the
+ *                      real verb's every-key contract;
+ *   setPrefs          — per-entry key-known + type-shape validation
+ *                      (ERR_PREF_KEY_UNKNOWN / ERR_PREF_VALUE_INVALID
+ *                      envelopes); entries apply atomically (a rejected
+ *                      entry leaves the store untouched);
+ *   clearPrefOverride — idempotent own-tier delete (a missing row is a no-op).
+ *
+ * The returned failGetWith / failSetWith / failClearWith are MOCK-ONLY test
+ * drivers arming the NEXT call of that verb with a rejection.
+ */
+export function createMockPrefsFace(): PrefsFace & {
+  /** Arm a rejection for exactly the NEXT getPrefs (the load-error driver). */
+  failGetWith(error: { code: string; message: string }): void
+  /** Arm a rejection for the next setPrefs of one key (the save-error driver). */
+  failSetWith(key: string, error: { code: string; message: string }): void
+  /** Arm a rejection for the next clearPrefOverride of one key. */
+  failClearWith(key: string, error: { code: string; message: string }): void
+} {
+  const overrides = new Map<string, unknown>()
+  for (const [seedKey, value] of Object.entries(MOCK_PREF_SEED)) overrides.set(seedKey, value)
+  let armedGet: { code: string; message: string } | undefined
+  const armedSet = new Map<string, { code: string; message: string }>()
+  const armedClear = new Map<string, { code: string; message: string }>()
+
+  const ownStoreKey = (scope: PrefScope): string => {
+    const { kind, id } = mockPrefScopeKey(scope)
+    return kind === 'global' ? 'global:' : kind + ':' + id + ':'
+  }
+
+  const validate = (key: string, value: unknown): void => {
+    const def = MOCK_PREF_REGISTRY.find(candidate => candidate.key === key)
+    if (def === undefined) {
+      throw prefEnvelope(
+        'ERR_PREF_KEY_UNKNOWN',
+        'build-stage mock: preference key ' + JSON.stringify(key) + ' is not in the mock registry',
+      )
+    }
+    const bad = (reason: string): never => {
+      throw prefEnvelope(
+        'ERR_PREF_VALUE_INVALID',
+        'build-stage mock: preference value for ' + JSON.stringify(key) + ' is invalid: ' + reason,
+      )
+    }
+    switch (def.type) {
+      case 'boolean':
+        if (typeof value !== 'boolean') bad('expected a boolean, got ' + typeof value)
+        return
+      case 'number':
+        if (typeof value !== 'number' || !Number.isInteger(value)) {
+          bad('expected an integer, got ' + JSON.stringify(value))
+        }
+        return
+      case 'text':
+        if (typeof value !== 'string' || value.trim() === '') {
+          bad('expected a non-empty string, got ' + JSON.stringify(value))
+        }
+        return
+      case 'list': {
+        const items = typeof value === 'string'
+          ? value.split(',')
+          : Array.isArray(value) ? value : undefined
+        if (items === undefined || items.some(item => typeof item !== 'string')) {
+          bad('expected a comma-separated string or a string array, got ' + JSON.stringify(value))
+        }
+        return
+      }
+      case 'coverage': {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const strategy = value as { type?: unknown; percentage?: unknown }
+          if (strategy.type === 'maintain') return
+          if (
+            strategy.type === 'percentage' && typeof strategy.percentage === 'number'
+            && Number.isInteger(strategy.percentage) && strategy.percentage >= 0 && strategy.percentage <= 100
+          ) return
+        }
+        bad('expected a CoverageStrategy, got ' + JSON.stringify(value))
+      }
+    }
+  }
+
+  return {
+    getPrefs: async (scope: PrefScope): Promise<PrefRow[]> => {
+      if (armedGet !== undefined) {
+        const failure = armedGet
+        armedGet = undefined
+        throw failure
+      }
+      const own = ownStoreKey(scope)
+      const chain = mockPrefTierKeys(scope)
+      return MOCK_PREF_REGISTRY.map((def): PrefRow => {
+        let value: unknown = undefined
+        let source: PrefRow['source'] = null
+        for (const link of chain) {
+          const hit = overrides.get(link.storeKey + def.key)
+          if (hit !== undefined) {
+            value = hit
+            source = link.tier
+            break
+          }
+        }
+        if (value === undefined && def.defaultValue !== undefined) {
+          value = def.defaultValue
+          source = 'default'
+        }
+        const localRaw = overrides.get(own + def.key)
+        return {
+          key: def.key,
+          group: def.group,
+          type: def.type,
+          control: def.control,
+          value: value ?? null,
+          source,
+          override: localRaw !== undefined,
+          localValue: localRaw ?? null,
+          defaultValue: def.defaultValue ?? null,
+        }
+      })
+    },
+    setPrefs: async (scope: PrefScope, entries: readonly PrefEntry[]): Promise<void> => {
+      const pending = entries.map((entry) => {
+        const failure = armedSet.get(entry.key)
+        if (failure !== undefined) {
+          armedSet.delete(entry.key) // one-shot (the documented NEXT-call arm)
+          throw failure
+        }
+        validate(entry.key, entry.value)
+        return entry
+      })
+      // Atomic: validation of the whole batch precedes any write (no half-batch).
+      for (const entry of pending) overrides.set(ownStoreKey(scope) + entry.key, entry.value)
+    },
+    clearPrefOverride: async (scope: PrefScope, key: string): Promise<void> => {
+      const failure = armedClear.get(key)
+      if (failure !== undefined) {
+        armedClear.delete(key) // one-shot
+        throw failure
+      }
+      overrides.delete(ownStoreKey(scope) + key)
+    },
+    failGetWith: (error) => { armedGet = error },
+    failSetWith: (key, error) => { armedSet.set(key, error) },
+    failClearWith: (key, error) => { armedClear.set(key, error) },
   }
 }
