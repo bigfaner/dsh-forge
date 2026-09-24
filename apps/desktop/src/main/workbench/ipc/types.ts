@@ -131,11 +131,25 @@ export interface PluginRow {
   readonly enabled: boolean
 }
 
+/**
+ * customSkillDirs boot 同步失败告警条目(任务 5.7;tech-design §Error Types
+ * & Codes 的 ERR_SKILL_DIR_SYNC 行)。形态与 host-profile/skill-dirs.ts 的
+ * 同名结构一致(boot 接线侧注入,经 getState 供设置面呈现;空/缺省 = 健康)。
+ */
+export interface SkillDirSyncAlert {
+  readonly code: 'ERR_SKILL_DIR_SYNC'
+  readonly plugin: string
+  readonly message: string
+  readonly detail?: string | undefined
+}
+
 /** Interface 1 WorkbenchState(getState 装配产物)。 */
 export interface WorkbenchState {
   readonly projects: Project[]
   readonly activeProjectId: string | null
   readonly plugins: PluginRow[]
+  /** boot 同步告警(5.7;缺省 = 无告警 —— 既有消费方零影响)。 */
+  readonly skillDirSyncAlerts?: readonly SkillDirSyncAlert[] | undefined
 }
 
 /** Interface 1 recordSessionLink 入参形态。 */

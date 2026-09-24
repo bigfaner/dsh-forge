@@ -148,6 +148,12 @@ const lostCardStyle = {
   border: '1.5px solid var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
 } as const
 
+/** 5.7 skill-dir sync alert card — error-tinted (the load-error precedent). */
+const skillDirAlertCardStyle = {
+  ...cardStyle,
+  border: '1.5px solid var(--dsw-alias-state-error-primary, rgb(236, 19, 19))',
+} as const
+
 const errorCardStyle = {
   ...cardStyle,
   border: '1.5px solid var(--dsw-alias-state-error-primary, rgb(236, 19, 19))',
@@ -424,10 +430,34 @@ export function OverviewPage(props: OverviewPageProps) {
 
   const activeProject = state?.projects.find(project => project.id === state.activeProjectId)
   const populated = phase === 'ready' && state !== undefined && state.projects.length > 0
+  const skillDirAlerts = state?.skillDirSyncAlerts
 
   return (
     <div data-dsh-forge-overview="" aria-busy={phase === 'loading' ? 'true' : 'false'} style={pageStyle}>
       {phase === 'loading' && <OverviewSkeleton label={props.t('overview.loading')} />}
+
+      {/* 5.7:customSkillDirs boot 同步失败告警(ERR_SKILL_DIR_SYNC;设置面
+          呈现面 = 概览页置顶告警卡 —— Hard Rule「失败显式告警不静默」的
+          renderer 半面;载荷随 getState 走,零新增动词/通道)。 */}
+      {phase === 'ready' && skillDirAlerts !== undefined && skillDirAlerts.length > 0 && (
+        <section
+          data-dsh-forge-skill-dir-alerts=""
+          role="alert"
+          aria-label={props.t('overview.skillDirs.alertTitle')}
+          style={skillDirAlertCardStyle}
+        >
+          <h3 style={cardTitleStyle}>{props.t('overview.skillDirs.alertTitle')}</h3>
+          {skillDirAlerts.map(alert => (
+            <p
+              key={`${alert.plugin}:${alert.message}`}
+              data-dsh-forge-skill-dir-alert={alert.plugin}
+              style={cardBodyStyle}
+            >
+              {fillTemplate(props.t('overview.skillDirs.alertEntry'), { name: alert.plugin, message: alert.message })}
+            </p>
+          ))}
+        </section>
+      )}
 
       {phase === 'load-error' && (
         <div data-dsh-forge-overview-load-error="" role="alert" style={errorCardStyle}>

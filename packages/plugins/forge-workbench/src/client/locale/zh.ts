@@ -79,6 +79,8 @@ export const zh: Record<WorkbenchKey, string> = {
   'overview.toast.refreshed': '项目列表已刷新',
   'overview.toast.failed': '操作失败:{message}',
   'overview.toast.dismiss': '知道了',
+  'overview.skillDirs.alertTitle': '技能目录同步失败',
+  'overview.skillDirs.alertEntry': '{name}:{message} —— 会话内 forge 技能可能无法寻址;请查看应用日志(ERR_SKILL_DIR_SYNC)。',
   'overview.plugins.title': '插件',
   'overview.plugins.loading': '正在加载插件…',
   'overview.plugins.loadError.title': '插件加载失败',

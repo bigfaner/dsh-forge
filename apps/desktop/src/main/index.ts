@@ -25,7 +25,9 @@ import {
   PluginBundlesConfigError,
   projectHostProfile,
   type HostProfileProjection,
+  type PluginBundlesConfig,
 } from './host-profile/index.ts'
+import { syncProfileSkillDirs, type SkillDirSyncAlert } from './host-profile/skill-dirs.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
@@ -318,9 +320,10 @@ void app.whenReady().then(async () => {
   // from anywhere but the product config.
   let hostProfile: HostProfileProjection | undefined
   let profileFailure: string | undefined
+  let pluginBundles: PluginBundlesConfig | undefined
   try {
     const pluginBundlesConfigPath = resolvePluginBundlesConfigPath()
-    const pluginBundles = loadPluginBundlesConfig(pluginBundlesConfigPath)
+    pluginBundles = loadPluginBundlesConfig(pluginBundlesConfigPath)
     hostProfile = projectHostProfile({
       profileDir,
       officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
@@ -341,6 +344,16 @@ void app.whenReady().then(async () => {
       message: 'host profile projection from the product plugin-bundles config failed; host start aborted',
       data: { detail: profileFailure },
     })
+  }
+
+  // Task 5.7 (Interface 6, D2): customSkillDirs boot 同步 —— profile 物化之后、
+  // host spawn 之前(宿主 composeProfile 一次性读入 user layer,spawn 后再写
+  // 对当次 boot 不生效)。机制随插件交付(lib/skill-dirs.js,零 peers 依赖),
+  // 壳侧经产品配置遍历触发;失败 = ERR_SKILL_DIR_SYNC 日志 + 设置面告警条目
+  // (经下方 workbench 服务装配进 getState),不阻断 boot(技能面降级非致命)。
+  let skillDirSyncAlerts: readonly SkillDirSyncAlert[] = []
+  if (hostProfile !== undefined && pluginBundles !== undefined) {
+    skillDirSyncAlerts = (await syncProfileSkillDirs({ profileDir, bundles: pluginBundles.bundles })).alerts
   }
 
   // M2 task 2.7: workbench data kernel + the dshForge.workbench.* verb face.
@@ -367,6 +380,8 @@ void app.whenReady().then(async () => {
       // the same product manifest (G6, no second list); setPluginEnabled
       // stays the single write path into plugin-runtime.json.
       pluginGuard: createPluginEnableGuard(() => readPluginManifestBundles(pluginBundlesPath)),
+      // 5.7:customSkillDirs boot 同步告警(getState 设置面呈现;空 = 健康)。
+      skillDirSyncAlerts,
       onEvents: workbenchEvents.sink,
     })
     installWorkbenchVerbs(

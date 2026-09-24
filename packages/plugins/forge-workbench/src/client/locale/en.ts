@@ -78,6 +78,8 @@ export type WorkbenchKey =
   | 'overview.toast.refreshed'
   | 'overview.toast.failed'
   | 'overview.toast.dismiss'
+  | 'overview.skillDirs.alertTitle'
+  | 'overview.skillDirs.alertEntry'
   | 'overview.plugins.title'
   | 'overview.plugins.loading'
   | 'overview.plugins.loadError.title'
@@ -511,6 +513,8 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.toast.refreshed': 'Project list refreshed',
   'overview.toast.failed': 'Action failed: {message}',
   'overview.toast.dismiss': 'Dismiss',
+  'overview.skillDirs.alertTitle': 'Skill directory sync failed',
+  'overview.skillDirs.alertEntry': '{name}: {message} — forge skills may not resolve in sessions; check the app log (ERR_SKILL_DIR_SYNC).',
   'overview.plugins.title': 'Plugins',
   'overview.plugins.loading': 'Loading plugins…',
   'overview.plugins.loadError.title': 'Failed to load plugins',

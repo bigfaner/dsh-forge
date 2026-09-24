@@ -73,6 +73,7 @@ import type {
   RecordSessionLinkInput,
   RegisterProjectInput,
   SessionLink,
+  SkillDirSyncAlert,
   TaskBoardData,
   TaskDepChainEntry,
   TaskDetail,
@@ -104,6 +105,11 @@ export interface WorkbenchIpcServiceDeps {
   readonly perception?: WorkbenchPerceptionSeam
   /** forensic search 的 home 基目录(缺省 os.homedir;e2e/测试确定性注入面,任务 2.2)。 */
   readonly forensicHomeDir?: string
+  /**
+   * customSkillDirs boot 同步告警(任务 5.7;缺省/空 = 无告警)。boot 接线
+   * 侧(host-profile/skill-dirs.ts 的聚合结局)注入;getState 只读呈现。
+   */
+  readonly skillDirSyncAlerts?: readonly SkillDirSyncAlert[] | undefined
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -439,6 +445,9 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
           projects: listProjects(db),
           activeProjectId: getActiveProjectId(db),
           plugins: pluginFace.listRows(),
+          ...(deps.skillDirSyncAlerts === undefined || deps.skillDirSyncAlerts.length === 0
+            ? {}
+            : { skillDirSyncAlerts: [...deps.skillDirSyncAlerts] }),
         }
       },
 

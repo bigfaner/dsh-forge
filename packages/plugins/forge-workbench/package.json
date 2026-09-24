@@ -19,6 +19,9 @@
       "types": "./lib/types/host/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./skill-dirs": {
+      "default": "./lib/skill-dirs.js"
+    },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
@@ -44,9 +47,11 @@
   },
   "files": [
     "lib/index.js",
+    "lib/skill-dirs.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "resources/skills"
   ],
   "dependencies": {
     "@xyflow/react": "12.11.6",

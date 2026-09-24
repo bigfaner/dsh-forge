@@ -41,7 +41,7 @@ const MODULE_TABLE_BASELINE = new Set([
 export default defineConfig([
   {
     name: id,
-    entry: { index: 'lib/types/host/index.js' },
+    entry: { index: 'lib/types/host/index.js', 'skill-dirs': 'lib/types/host/skill-dirs/sync.js' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
@@ -59,6 +59,11 @@ export default defineConfig([
     // PROOF: rolldown hands the external callback RESOLVED absolute ids for
     // relative imports, so a startsWith('.') test silently externalizes the
     // plugin's own files.
+    // M3 task 5.7 adds the skill-dirs entry: lib/skill-dirs.js (the
+    // customSkillDirs boot-sync mechanism) imports ONLY node builtins — the
+    // Electron shell main dynamically imports it from the materialized plugin
+    // directory at boot, so it must resolve with zero peers installed (the
+    // packaged materialization carries no node_modules of its own).
     deps: {
       neverBundle: (specifier: string) =>
         specifier.startsWith('node:')

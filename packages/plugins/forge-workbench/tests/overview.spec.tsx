@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OverviewPage, verbErrorCode } from '../src/client/views/overview/OverviewPage.tsx'
 import type { OverviewPageProps } from '../src/client/views/overview/OverviewPage.tsx'
@@ -587,5 +587,50 @@ describe('verbErrorCode: the serialized rejection guard', () => {
     expect(verbErrorCode('string')).toBeUndefined()
     expect(verbErrorCode(null)).toBeUndefined()
     expect(verbErrorCode({ code: 42 })).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 5.7 — 设置面告警条目:概览页对 WorkbenchState.skillDirSyncAlerts 的
+// 置顶告警卡(Hard Rule「customSkillDirs 同步失败显式告警不静默」的 renderer
+// 半面)。载荷随既有 getState 动词行走,零新增动词/通道。
+// ---------------------------------------------------------------------------
+
+describe('task 5.7 — overview skill-dir sync alert card', () => {
+  const ALERT_STATE: WorkbenchState = {
+    ...MOCK_WORKBENCH_STATE,
+    skillDirSyncAlerts: [
+      {
+        code: 'ERR_SKILL_DIR_SYNC',
+        plugin: '@dsh-forge/plugin-forge-workbench',
+        message: 'skill root missing — materialization incomplete',
+      },
+    ],
+  }
+
+  it('renders the ERR_SKILL_DIR_SYNC entries when the boot sync failed', async () => {
+    render(<OverviewPage t={t.en} face={createMockOverviewFace(ALERT_STATE)} />)
+    const card = await screen.findByRole('alert')
+    expect(card.getAttribute('data-dsh-forge-skill-dir-alerts')).toBe('')
+    expect(card.getAttribute('aria-label')).toBe(en['overview.skillDirs.alertTitle'])
+    const entry = screen.getByText((_content, element) =>
+      element?.getAttribute('data-dsh-forge-skill-dir-alert') === '@dsh-forge/plugin-forge-workbench')
+    expect(entry.textContent).toContain('skill root missing')
+    expect(entry.textContent).toContain('ERR_SKILL_DIR_SYNC')
+  })
+
+  it('stays absent on a healthy boot (no regressions for existing consumers)', async () => {
+    render(<OverviewPage t={t.en} face={createMockOverviewFace()} />)
+    // 页面就绪的判据 = 激活项目元信息区(aria-label 唯一);健康 boot 无告警卡。
+    await waitFor(() => {
+      expect(screen.getByLabelText(ACTIVE_PROJECT.displayName)).toBeTruthy()
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('carries bilingual copy (zh locale parity)', () => {
+    expect(zh['overview.skillDirs.alertTitle']).toContain('技能目录')
+    expect(en['overview.skillDirs.alertEntry']).toContain('{name}')
+    expect(zh['overview.skillDirs.alertEntry']).toContain('{name}')
   })
 })

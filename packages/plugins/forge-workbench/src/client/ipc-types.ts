@@ -94,6 +94,22 @@ export interface WorkbenchState {
   readonly projects: readonly Project[]
   readonly activeProjectId: string | null
   readonly plugins: readonly PluginRow[]
+  /**
+   * customSkillDirs boot 同步失败告警(任务 5.7;main 侧 getState 装配,
+   * 缺省 = 无告警)。设置面(概览页)呈现 ERR_SKILL_DIR_SYNC 条目。
+   */
+  readonly skillDirSyncAlerts?: readonly SkillDirSyncAlert[] | undefined
+}
+
+/**
+ * 一条技能目录同步告警(tech-design §Error Types & Codes 的 ERR_SKILL_DIR_SYNC
+ * 行;plugin = 携带技能面的 bundle 名,message = 失败原因)。
+ */
+export interface SkillDirSyncAlert {
+  readonly code: 'ERR_SKILL_DIR_SYNC'
+  readonly plugin: string
+  readonly message: string
+  readonly detail?: string | undefined
 }
 
 /**
