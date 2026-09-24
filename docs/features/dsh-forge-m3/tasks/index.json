@@ -581,7 +581,7 @@
         "5.3",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.4-proposals-ui-build.md",
       "record": "records/5.4-proposals-ui-build.md",
       "surface-type": "web",

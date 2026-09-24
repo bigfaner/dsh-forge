@@ -50,7 +50,7 @@ import type {
 } from '../ipc-types'
 import type {
   CodeRootProbeResult, DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace,
-  PluginFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
+  PluginFace, ProposalFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
 
@@ -552,6 +552,36 @@ export function createIpcStageFace(bridge: WorkbenchIpcBridge): StageFace {
     advanceStage: async (projectId: string, featureSlug: string): Promise<FeatureSummary> => {
       try {
         return await bridge.advanceStage(projectId, featureSlug)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    subscribeEvents: (callback: (events: readonly WorkbenchEvent[]) => void): (() => void) =>
+      getWorkbenchEventSource(bridge).subscribe(callback),
+  }
+}
+
+/**
+ * The UF5 proposals face over the verbs (task 5.4's assembly leg, the
+ * stage-face discipline): the Interface 1 read pair 1:1 with error
+ * renormalization, and the reflux through the SINGLE-SUBSCRIBER shared
+ * channel — the proposals board rides the project-scoped `sync` pushes
+ * (every scan completion; proposals/ joined the watched roots with 5.3), so
+ * the ≤5s reflux multiplexes over ONE preload subscription like every other
+ * listening family. The 5.3 verb comment marks this face as 5.4's landing.
+ */
+export function createIpcProposalFace(bridge: WorkbenchIpcBridge): ProposalFace {
+  return {
+    loadBoard: async (projectId: string): Promise<ProposalBoardData> => {
+      try {
+        return await bridge.getProposalBoard(projectId)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    readProposalDoc: async (input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc> => {
+      try {
+        return await bridge.readProposalDoc(input)
       } catch (error) {
         renormalize(error)
       }

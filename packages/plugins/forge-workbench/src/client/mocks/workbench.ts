@@ -37,7 +37,7 @@ import type {
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
   MissingItem, PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch,
-  RegisterProjectInput, StageAssetRow,
+  ProposalBoardData, ProposalDoc, RegisterProjectInput, StageAssetRow,
   StageGateInfo, TaskBoardData, TaskDetail,
   TaskSummary,
   WorkbenchEvent, WorkbenchState,
@@ -45,8 +45,8 @@ import type {
 import type {
   DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot,
   OverviewFace,
-  PluginFace, PrefsFace, RegisterWizardFace, SessionLaunchServices, StageFace, TaskBoardFace,
-  TaskDetailFace,
+  PluginFace, PrefsFace, ProposalFace, RegisterWizardFace, SessionLaunchServices, StageFace,
+  TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -1592,5 +1592,164 @@ export function createMockPrefsFace(): PrefsFace & {
     failGetWith: (error) => { armedGet = error },
     failSetWith: (key, error) => { armedSet.set(key, error) },
     failClearWith: (key, error) => { armedClear.set(key, error) },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Proposals family, UF5 (task 5.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The seeded proposal board (task 5.4 — the approved prototype's registry in
+ * the KERNEL's own baseline order): created desc with slug-asc ties, the full
+ * four-status spectrum, one feature-less early-pipeline pair (徽标不渲染),
+ * and hasEval true exactly where the eval fixture map carries a report.
+ */
+export const MOCK_PROPOSAL_BOARD: ProposalBoardData = Object.freeze({
+  proposals: Object.freeze([
+    Object.freeze({
+      slug: 'dsh-forge-m2', status: 'accepted', author: 'faner', created: '2026-09-22',
+      featureSlug: 'dsh-forge-m2', hasEval: true, updatedAt: '2026-09-22T10:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'dsh-forge-m3', status: 'draft', author: 'faner', created: '2026-09-22',
+      featureSlug: 'dsh-forge-m3', hasEval: true, updatedAt: '2026-09-22T11:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'ui-plugin-foundation', status: 'accepted', author: 'faner', created: '2026-09-21',
+      featureSlug: 'ui-plugin-foundation', hasEval: true, updatedAt: '2026-09-21T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'skill-marketplace', status: 'draft', author: 'faner', created: '2026-09-20',
+      featureSlug: null, hasEval: false, updatedAt: '2026-09-20T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'forge-tui', status: 'rejected', author: 'faner', created: '2026-09-18',
+      featureSlug: null, hasEval: true, updatedAt: '2026-09-18T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'gen-and-run', status: 'superseded', author: 'faner', created: '2026-09-15',
+      featureSlug: null, hasEval: false, updatedAt: '2026-09-15T09:00:00.000Z',
+    }),
+  ]),
+  generatedAt: '2026-09-24T08:00:00.000Z',
+  proposalsRoot: 'Z:/docs/demo/docs/proposals',
+})
+
+/** The seeded proposal documents, keyed `<slug>/<kind>` (readProposalDoc's twin). */
+export const MOCK_PROPOSAL_DOCS: ReadonlyMap<string, ProposalDoc> = new Map<string, ProposalDoc>([
+  ['dsh-forge-m3/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# M3 流程即产品\n\n任务执行 subagent 化(派发时预合成三要素 systemPrompt + 并行 + 看板编排审批);任务 CRUD 应用 API + SoT 分治(SQLite 权威);CLI 退役收口;强制阶段化;偏好三级;提案看板。\n\n- 决策日志:显式迁移 / customSkillDirs / 偏好三级化\n',
+  })],
+  ['dsh-forge-m3/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 902/1000(达标);基线 848 → 终值 902。\n',
+  })],
+  ['dsh-forge-m2/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# M2 需求与会话工作台\n\n项目注册(仓内/仓外文档位置)、任务/feature/文档三看板、会话挂接与发起链、插件基座落地。\n',
+  })],
+  ['dsh-forge-m2/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 886/1000(达标)。\n',
+  })],
+  ['ui-plugin-foundation/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# UI 插件工程基座\n\n两级插件模型(forge 核心 = 必备不可禁用);SQLite 数据内核入壳方向声明;插件清单迁出壳代码为产品级配置。\n',
+  })],
+  ['ui-plugin-foundation/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 871/1000(达标)。\n',
+  })],
+  ['skill-marketplace/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# Skill 市场(草案)\n\n第三方技能发现与安装;依赖 customSkillDirs 承载。管线早期形态:尚无关联 feature(正常态,徽标不渲染)。\n',
+  })],
+  ['forge-tui/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# forge CLI TUI 化\n\n以终端 UI 承载看板。评审结论:与「应用化 + CLI 退役」路线冲突,拒绝。\n',
+  })],
+  ['forge-tui/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 620/1000(未达标,路线冲突)。\n',
+  })],
+  ['gen-and-run/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# gen-and-run 一体化命令\n\n已被 dsh-forge-m3「流程即产品」方案取代(subagent 派发取代命令直跑)。\n',
+  })],
+])
+
+/** Everything the proposals mock twin exposes beyond the face (the pokes). */
+export interface MockProposalsFace extends ProposalFace {
+  /** Re-arm the board (the reflux legs feed this; the next loadBoard serves it). */
+  setBoard(board: ProposalBoardData): void
+  /** Overwrite one document's markdown (the detail reflux legs). */
+  setDoc(slug: string, kind: 'proposal' | 'eval', markdown: string): void
+  /** Arm the NEXT loadBoard call to reject (the error/retry branch). */
+  failNextBoard(code?: string, message?: string): void
+  /** Arm the NEXT readProposalDoc call to reject (the doc error/retry branch). */
+  failNextDoc(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the twin's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+}
+
+/** The UF5 proposals verb twin (see {@link MockProposalsFace}). */
+export function createMockProposalsFace(options: { projectId?: string; board?: ProposalBoardData } = {}): MockProposalsFace {
+  const projectId = options.projectId ?? 'mock-project'
+  let board = options.board ?? MOCK_PROPOSAL_BOARD
+  const docs = new Map<string, ProposalDoc>(MOCK_PROPOSAL_DOCS)
+  let failNextBoard: { code: string; message: string } | undefined
+  let failNextDoc: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const envelopeError = (failure: { code: string; message: string }): never => {
+    throw new Error(JSON.stringify(failure))
+  }
+  return {
+    loadBoard: async (requestProjectId: string): Promise<ProposalBoardData> => {
+      if (requestProjectId !== projectId) {
+        throw new Error(JSON.stringify({
+          code: 'ERR_PROJECT_NOT_FOUND',
+          message: `mock: unknown project '${requestProjectId}'`,
+        }))
+      }
+      if (failNextBoard !== undefined) {
+        const failure = failNextBoard
+        failNextBoard = undefined
+        envelopeError(failure)
+      }
+      return board
+    },
+    readProposalDoc: async (input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc> => {
+      if (failNextDoc !== undefined) {
+        const failure = failNextDoc
+        failNextDoc = undefined
+        envelopeError(failure)
+      }
+      const doc = docs.get(`${input.slug}/${input.kind}`)
+      if (doc === undefined) {
+        throw new Error(JSON.stringify({
+          code: 'ERR_PROPOSAL_NOT_FOUND',
+          message: `mock: no ${input.kind} document for proposal '${input.slug}'`,
+        }))
+      }
+      return doc
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    setBoard: (next) => { board = next },
+    setDoc: (slug, kind, markdown) => { docs.set(`${slug}/${kind}`, { kind, markdown }) },
+    failNextBoard: (code = 'ERR_WORKBENCH_DB', message = 'mock: board read rejected') => {
+      failNextBoard = { code, message }
+    },
+    failNextDoc: (code = 'ERR_PROPOSAL_NOT_FOUND', message = 'mock: doc read rejected') => {
+      failNextDoc = { code, message }
+    },
+    emit: (events) => {
+      for (const listener of listeners) listener(events)
+    },
   }
 }

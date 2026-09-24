@@ -28,8 +28,8 @@ import type { LaunchSeatStore } from './launch-rpc'
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
   DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
-  PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch, RecordSessionLinkInput,
-  RegisterProjectInput, SessionLink,
+  PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch, ProposalBoardData,
+  ProposalDoc, RecordSessionLinkInput, RegisterProjectInput, SessionLink,
   StageArtifactsReport, StageAssetRow, StageGateInfo,
   TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
@@ -485,6 +485,33 @@ export interface WorkbenchFeaturesSeat {
    * deviation_detected board reflux (≤5s).
    */
   readonly stageFace?: Partial<StageFace> | undefined
+}
+
+/**
+ * The UF5 提案看板's data face (task 5.4, tech-design §Interface 1 提案段 +
+ * §Integration #5): the READ-ONLY proposal pair the component layer consumes —
+ * loadBoard answers the board rows (proposal_snapshot projection, created-desc
+ * baseline) + the proposals root for the empty-state path hint; readProposalDoc
+ * answers the raw markdown of one document (kind 'proposal' = proposal.md,
+ * 'eval' = the deterministic eval-report pick). subscribeEvents routes through
+ * the SAME shared single-subscriber channel every family multiplexes over —
+ * the proposals reflux rides the project-scoped `sync` pushes (every scan
+ * completion, watcher-driven ≤5s on the real chain; proposals/ is inside the
+ * watched roots since 5.3). Signatures mirror the preload bridge one-to-one
+ * (the 5.3 verbs); rejections carry the serialized {@link WorkbenchVerbError}
+ * shape (ERR_PROJECT_NOT_FOUND / ERR_PROPOSAL_PATH_INVALID /
+ * ERR_PROPOSAL_NOT_FOUND). The components build against the mock twin
+ * (mocks/workbench.createMockProposalsFace — a pure READ face, so the
+ * build-stage default mock is legitimate, the feature-board-face discipline);
+ * 5.5's assembly injects the IPC-backed face.
+ */
+export interface ProposalFace {
+  /** Interface 1 workbench.getProposalBoard(projectId) — the board's data load. */
+  loadBoard(projectId: string): Promise<ProposalBoardData>
+  /** Interface 1 workbench.readProposalDoc(input) — one document's raw markdown. */
+  readProposalDoc(input: { readonly projectId: string; readonly slug: string; readonly kind: 'proposal' | 'eval' }): Promise<ProposalDoc>
+  /** The shared single-subscriber event channel (sync pushes → reflux ≤5s). */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
 }
 
 /**

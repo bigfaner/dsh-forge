@@ -438,6 +438,38 @@ export type WorkbenchKey =
   | 'migration.err.guard'
   | 'migration.err.inProgress'
   | 'migration.err.generic'
+  | 'proposals.title'
+  | 'proposals.readonly'
+  | 'proposals.loading'
+  | 'proposals.loadError.title'
+  | 'proposals.loadError.retry'
+  | 'proposals.lost.title'
+  | 'proposals.lost.body'
+  | 'proposals.lost.repoint'
+  | 'proposals.lost.remove'
+  | 'proposals.empty.title'
+  | 'proposals.empty.body'
+  | 'proposals.sort.label'
+  | 'proposals.sort.created'
+  | 'proposals.sort.slug'
+  | 'proposals.sort.status'
+  | 'proposals.row.openDetail'
+  | 'proposals.row.featureJump'
+  | 'proposals.updated.announce'
+  | 'proposals.detail.breadcrumb'
+  | 'proposals.detail.breadcrumb.root'
+  | 'proposals.detail.docs.tabsLabel'
+  | 'proposals.detail.tab.proposal'
+  | 'proposals.detail.tab.eval'
+  | 'proposals.detail.evalMissing'
+  | 'proposals.detail.docs.loading'
+  | 'proposals.detail.docs.error.title'
+  | 'proposals.detail.docs.error.retry'
+  | 'proposals.detail.docs.empty'
+  | 'proposals.status.draft'
+  | 'proposals.status.accepted'
+  | 'proposals.status.rejected'
+  | 'proposals.status.superseded'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -879,4 +911,36 @@ export const en: Record<WorkbenchKey, string> = {
   'migration.err.guard': 'Task orchestration is in progress — migration and running orchestrations are mutually exclusive; start again after they settle.',
   'migration.err.inProgress': 'A migration is already running for this project; wait for it to settle and try again.',
   'migration.err.generic': 'The migration could not start ({code}); nothing has changed — try again.',
+  'proposals.title': 'Proposals',
+  'proposals.readonly': 'proposals/ · read-only',
+  'proposals.loading': 'Loading proposals…',
+  'proposals.loadError.title': 'Failed to load proposals',
+  'proposals.loadError.retry': 'Retry',
+  'proposals.lost.title': 'Document location inaccessible',
+  'proposals.lost.body': 'The external document path is no longer accessible, so proposals/ cannot be read. Repoint the project to a valid location, or remove the registration and register again.',
+  'proposals.lost.repoint': 'Repoint',
+  'proposals.lost.remove': 'Remove project',
+  'proposals.empty.title': 'No proposals yet',
+  'proposals.empty.body': 'The document root proposals/ is empty or does not exist yet.',
+  'proposals.sort.label': 'Sort',
+  'proposals.sort.created': 'created (new→old)',
+  'proposals.sort.slug': 'slug',
+  'proposals.sort.status': 'status',
+  'proposals.row.openDetail': 'Open proposal {slug} (status {status}, author {author}, {created})',
+  'proposals.row.featureJump': 'Jump to feature {slug}',
+  'proposals.updated.announce': 'Proposal board updated: {count} change(s)',
+  'proposals.detail.breadcrumb': 'Breadcrumb',
+  'proposals.detail.breadcrumb.root': 'Proposal board',
+  'proposals.detail.docs.tabsLabel': 'Proposal documents',
+  'proposals.detail.tab.proposal': 'proposal',
+  'proposals.detail.tab.eval': 'eval',
+  'proposals.detail.evalMissing': 'No evaluation report',
+  'proposals.detail.docs.loading': 'Loading document…',
+  'proposals.detail.docs.error.title': 'Failed to load document',
+  'proposals.detail.docs.error.retry': 'Retry',
+  'proposals.detail.docs.empty': 'The document is empty.',
+  'proposals.status.draft': 'Draft',
+  'proposals.status.accepted': 'Accepted',
+  'proposals.status.rejected': 'Rejected',
+  'proposals.status.superseded': 'Superseded',
 }
