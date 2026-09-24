@@ -976,7 +976,7 @@
         "0.4",
         "0.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "review-doc.md",
       "record": "records/review-doc.md",
       "type": "doc.review"
