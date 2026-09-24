@@ -406,7 +406,7 @@ describe('回流 — sync 事件驱动列表/详情更新 (AC4)', () => {
     loadSpy.mockClear()
     face.emit([{ type: 'sync', projectId: 'other-project', sync: { state: 'idle', lastScanAt: null } }])
     face.emit([{ type: 'feature_updated', projectId: PROJECT_ID, featureSlug: 'dsh-forge-m3' }])
-    await new Promise(resolve => { setTimeout(resolve, 30) })
+    await new Promise((resolve) => { setTimeout(resolve, 30) })
     expect(loadSpy).not.toHaveBeenCalled()
     expect(view.container.querySelector('[data-dsh-forge-proposal-live]')?.textContent).toBe('')
   })

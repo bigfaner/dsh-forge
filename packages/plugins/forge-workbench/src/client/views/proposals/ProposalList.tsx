@@ -489,7 +489,7 @@ export function ProposalList(props: ProposalListProps) {
           if (previous !== undefined) {
             const prevBySlug = new Map(previous.proposals.map(row => [row.slug, row]))
             const changed = next.proposals
-              .filter(row => {
+              .filter((row) => {
                 const prev = prevBySlug.get(row.slug)
                 return prev === undefined || prev.status !== row.status || prev.updatedAt !== row.updatedAt
               })
@@ -606,7 +606,7 @@ export function ProposalList(props: ProposalListProps) {
             <SortMenu t={t} sort={sort} onSortChange={setSort} />
           </div>
           <div data-dsh-forge-proposal-rows="" role="list" aria-label={t('proposals.title')} style={listCardStyle}>
-            {rows.map(row => {
+            {rows.map((row) => {
               const flowing = flowSlugs.has(row.slug)
               return (
                 <div
@@ -627,7 +627,7 @@ export function ProposalList(props: ProposalListProps) {
                     ...(flowing ? { backgroundColor: FLOW_BACKGROUND } : {}),
                   }}
                   onClick={() => { openProposal(row.slug) }}
-                  onKeyDown={event => { onRowKeyDown(event, row.slug) }}
+                  onKeyDown={(event) => { onRowKeyDown(event, row.slug) }}
                 >
                   <ProposalStatusPill status={row.status} t={t} />
                   <span title={row.slug} style={slugStyle}>{row.slug}</span>
@@ -638,11 +638,11 @@ export function ProposalList(props: ProposalListProps) {
                       aria-label={fillTemplate(t('proposals.row.featureJump'), { slug: row.featureSlug })}
                       title={row.featureSlug}
                       style={featureBadgeStyle}
-                      onClick={event => {
+                      onClick={(event) => {
                         event.stopPropagation()
                         props.onOpenFeature?.(row.featureSlug ?? '')
                       }}
-                      onKeyDown={event => {
+                      onKeyDown={(event) => {
                         // The badge owns Enter/Space itself (jsdom fires no
                         // synthetic click) and never leaks them to the row.
                         if (event.key === 'Enter' || event.key === ' ') {

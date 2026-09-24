@@ -103,7 +103,7 @@ export function OverviewView(props: OverviewViewProps) {
       plugin: createIpcPluginFace(bridge),
       migration: createIpcMigrationFace(bridge),
       prefs: {
-        getPrefs: (scope) => renormalize(() => bridge.getPrefs(scope)),
+        getPrefs: scope => renormalize(() => bridge.getPrefs(scope)),
         setPrefs: (scope, entries) => renormalize(async () => {
           await bridge.setPrefs(scope, entries)
         }),
@@ -118,7 +118,7 @@ export function OverviewView(props: OverviewViewProps) {
           return [] // degraded: the Feature tier disables — never an error wall
         }
       },
-      subscribePrefsEvents: (listener) => getWorkbenchEventSource(bridge).subscribe(listener),
+      subscribePrefsEvents: listener => getWorkbenchEventSource(bridge).subscribe(listener),
     }
   })
 

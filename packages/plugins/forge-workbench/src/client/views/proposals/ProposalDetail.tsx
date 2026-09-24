@@ -324,13 +324,13 @@ export function ProposalDetail(props: ProposalDetailProps) {
         style={tabsStyle}
         onKeyDown={onKeyDown}
       >
-        {DOC_TABS.map(tab => {
+        {DOC_TABS.map((tab) => {
           const enabled = tab === 'proposal' || evalAvailable
           const active = tab === activeTab
           return (
             <ChromeButton
               key={tab}
-              ref={element => { tabRefs.current[DOC_TABS.indexOf(tab)] = element }}
+              ref={(element) => { tabRefs.current[DOC_TABS.indexOf(tab)] = element }}
               type="button"
               role="tab"
               disabled={!enabled}
