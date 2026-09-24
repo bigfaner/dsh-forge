@@ -59,6 +59,7 @@ import { createReingestHook } from '../migration/reingest-watcher.ts'
 import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
 import { createStagesVerbService } from '../stages/stages-service.ts'
+import { createStageWriteService } from '../stages/advance-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import type {
@@ -283,6 +284,16 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   const stagesVerbs = createStagesVerbService({
     db,
     resolveFeaturesRoot,
+  })
+
+  // M3 任务 4.1:stages 写动词服务(forge.stage.summarize 内核写面 +
+  // advanceStage 推进门内化)。features 根解析与读动词同源;stage_advanced
+  // 事件经同一 sink 直发单批(迁移/偏好面 onEvent 同款形态);manifest 写入
+  // 仅经本服务内核路径(外部直改由 4.2 watcher 判偏离)。
+  const stageWriteVerbs = createStageWriteService({
+    db,
+    resolveFeaturesRoot,
+    onEvent: event => sink([event]),
   })
 
   // M3 任务 3.4:预合成引擎(三要素组装 + prompt_hash 口径物)。取 代
@@ -547,6 +558,12 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       checkStageArtifacts: input => stagesVerbs.checkStageArtifacts(input),
       getStageGate: (projectId, featureSlug) => stagesVerbs.getStageGate(projectId, featureSlug),
       listStageAssets: (projectId, featureSlug) => stagesVerbs.listStageAssets(projectId, featureSlug),
+
+      // —— M3 stages 写动词(任务 4.1):委托 stages/advance-service
+      //    (forge.stage.summarize 写面 + advanceStage 推进门;stage_advanced
+      //    事件随写直发)。 ——
+      advanceStage: (projectId, featureSlug) => stageWriteVerbs.advanceStage(projectId, featureSlug),
+      stageSummarize: input => stageWriteVerbs.stageSummarize(input),
 
       // —— M3 编排动词(任务 3.3):委托 dispatch/dispatch-service
       //    (可派发集校验 + 产物检查消费 + 审批决策 + ⇔ 不变式;

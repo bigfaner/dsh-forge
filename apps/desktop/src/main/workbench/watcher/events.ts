@@ -12,8 +12,9 @@
 // → (type, projectId, phase, result)(M3 v2 事件,任务 1.4);deviation_detected
 // → (type, projectId)(M3 v2 事件,任务 1.5);prefs_updated → (type, scope,
 // scopeId)(M3 v2 事件,任务 3.1);dispatch_updated → (type, dispatchId)、
-// approval_received → (type, approvalId)(M3 v2 事件,任务 3.3)。批内顺序 =
-// 首现位次(新键插到批尾),载荷 = 最后形态。
+// approval_received → (type, approvalId)(M3 v2 事件,任务 3.3);
+// stage_advanced → (type, projectId, featureSlug)(M3 v2 事件,任务 4.1)。
+// 批内顺序 = 首现位次(新键插到批尾),载荷 = 最后形态。
 
 import type { WorkbenchEvent } from '../indexer/diff.ts'
 
@@ -56,6 +57,8 @@ function coalesceKey(event: WorkbenchEvent): string {
       return `dispatch_updated|${event.dispatchId}`
     case 'approval_received':
       return `approval_received|${event.approvalId}`
+    case 'stage_advanced':
+      return `stage_advanced|${event.projectId}|${event.featureSlug}`
   }
 }
 

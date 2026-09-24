@@ -84,6 +84,13 @@ export const WORKBENCH_VERB_CHANNELS = {
   checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
   getStageGate: 'dsh-forge:workbench-get-stage-gate',
   listStageAssets: 'dsh-forge:workbench-list-stage-assets',
+  // —— M3 stages 写段(任务 4.1 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。advanceStage = 推进门(manifest 内核写面,归宿表
+  //    feature set/complete 的 complete 腿);stageSummarize = forge.stage
+  //    .summarize 的内核写面(Interface 2「文档根直写」的动词承载)。门
+  //    校验/资产写入/幂等口径在内核(advance-service),通道面零特权。 ——
+  advanceStage: 'dsh-forge:workbench-advance-stage',
+  stageSummarize: 'dsh-forge:workbench-stage-summarize',
   // —— M3 dispatch 段(任务 3.3 追加;Hard Rule 延续:追加式修改,既有
   //    动词定义不改写)。动词面 = tech-design §Interface 1 编排段五动词
   //    (dispatchTasks/redispatch/getDispatches/listApprovals/decideApproval);

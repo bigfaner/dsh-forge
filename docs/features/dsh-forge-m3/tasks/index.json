@@ -438,7 +438,7 @@
       "dependencies": [
         "3.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.1-stage-advance-summarize.md",
       "record": "records/4.1-stage-advance-summarize.md",
       "surface-type": "web",

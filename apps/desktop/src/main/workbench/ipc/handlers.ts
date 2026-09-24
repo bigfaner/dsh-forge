@@ -30,6 +30,7 @@ import type {
   ProjectPatch,
   RecordSessionLinkInput,
   RegisterProjectInput,
+  StageSummarizeInput,
   TaskAddInput,
   TaskClaimInput,
   TaskGetInput,
@@ -116,6 +117,9 @@ const TASK_STATUSES: ReadonlySet<string> = new Set([
   'rejected',
 ])
 
+/** forge 阶段管线词表(schema-v2 stage CHECK / manifest status 同源;浅校验用)。 */
+const STAGE_VOCAB: ReadonlySet<string> = new Set(['prd', 'design', 'tasks', 'in-progress', 'completed'])
+
 /** 可选字符串字段:缺省/字符串放行,其余(含空串)拒绝为形状错。 */
 function optionalString(verb: string, arg: string, value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined
@@ -171,7 +175,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // 动词注册(M2 16 条 + M3 tasks 段 7 条 + migration 段 2 条 + UF3 集成段 2 条
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
-// + dispatch host 回调段 3 条(任务 3.5)= 47 条白名单通道)
+// + dispatch host 回调段 3 条(任务 3.5)+ stages 写段 2 条(任务 4.1)
+// = 49 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -563,6 +568,29 @@ export function installWorkbenchVerbs(
       requireString('listStageAssets', 'projectId', args[0]),
       requireString('listStageAssets', 'featureSlug', args[1]),
     ))
+
+  // —— M3 stages 写段(任务 4.1):推进门 + 阶段资产写动词。Hard Rule 延续
+  //    —— 本层只做 sender 校验 + 参数形状/词表浅校验 + 服务调用 + 错误
+  //    映射;门判定、manifest 内核写、幂等口径与索引同步全部在内核服务面
+  //    (advance-service),不信任 renderer 语义。 ——
+
+  register(C.advanceStage, args =>
+    services.advanceStage(
+      requireString('advanceStage', 'projectId', args[0]),
+      requireString('advanceStage', 'featureSlug', args[1]),
+    ))
+
+  register(C.stageSummarize, (args) => {
+    const input = requireObject('stageSummarize', 'input', args[0])
+    requireString('stageSummarize', 'input.projectId', input.projectId)
+    requireString('stageSummarize', 'input.featureSlug', input.featureSlug)
+    if (!STAGE_VOCAB.has(requireString('stageSummarize', 'input.stage', input.stage))) {
+      throw new Error('workbench.stageSummarize: input.stage must be one of prd/design/tasks/in-progress/completed')
+    }
+    requireString('stageSummarize', 'input.goal', input.goal)
+    requireString('stageSummarize', 'input.summary', input.summary)
+    return services.stageSummarize(input as unknown as StageSummarizeInput)
+  })
 
   // —— M3 dispatch 段(任务 3.3):五条编排动词。Hard Rule 延续 —— 本层
   // 只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;可派发集校验

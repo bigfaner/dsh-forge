@@ -67,6 +67,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
   getStageGate: 'dsh-forge:workbench-get-stage-gate',
   listStageAssets: 'dsh-forge:workbench-list-stage-assets',
+  // M3 stages 写段(任务 4.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  advanceStage: 'dsh-forge:workbench-advance-stage',
+  stageSummarize: 'dsh-forge:workbench-stage-summarize',
   // M3 dispatch 段(任务 3.3 追加;与 main 侧同键同值,drift 锁 =
   // tests/workbench-ipc.spec.ts deep-equal 断言)。
   dispatchTasks: 'dsh-forge:workbench-dispatch-tasks',

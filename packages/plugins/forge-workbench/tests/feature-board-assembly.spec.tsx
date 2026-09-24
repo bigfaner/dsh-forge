@@ -105,6 +105,9 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     redispatch: async () => ({ dispatched: [] }),
     getDispatches: async () => [],
     listApprovals: async () => [],
+    // M3 stages 写段(任务 4.1;BRIDGE_MEMBERS presence check 全员可调)。
+    advanceStage: async () => ({ slug: 'demo', status: 'tasks', docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: '' }),
+    stageSummarize: async () => ({ stage: 'tasks', path: 'demo/stages/tasks.md', generatedAt: '', featureStage: 'tasks', gateOpen: true }),
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

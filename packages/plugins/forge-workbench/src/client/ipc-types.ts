@@ -241,6 +241,35 @@ export interface StageArtifactsReport {
   readonly missing: readonly MissingItem[]
 }
 
+/**
+ * stageSummarize 入参(任务 4.1 canonical client twin;kernel
+ * StageSummarizeInput verbatim)—— the forge.stage.summarize tool's kernel
+ * write face (Interface 2「文档根直写」over the bridge).
+ */
+export interface StageSummarizeInput {
+  readonly projectId: string
+  readonly featureSlug: string
+  /** 资产阶段(词表 = forge 管线;决定文件名 stages/<stage>.md). */
+  readonly stage: FeatureStatus
+  /** 阶段目标(frontmatter goal;非空). */
+  readonly goal: string
+  /** 摘要正文(frontmatter 之后;非空). */
+  readonly summary: string
+}
+
+/** stageSummarize 产物(任务 4.1 canonical client twin;kernel StageSummarizeResult). */
+export interface StageSummarizeResult {
+  readonly stage: FeatureStatus
+  /** features 根相对路径(`<slug>/stages/<stage>.md`). */
+  readonly path: string
+  /** 内核铸造的生成时戳(frontmatter generated). */
+  readonly generatedAt: string
+  /** feature 当前阶段(活性解析,manifest SoT). */
+  readonly featureStage: FeatureStatus
+  /** 写后门态:当前阶段总结已生成(推进门开). */
+  readonly gateOpen: boolean
+}
+
 /** dispatchTasks 入参(任务 3.9 canonical client twin;acknowledgeMissing = 缺失确认面). */
 export interface DispatchTasksInput {
   readonly projectId: string

@@ -142,6 +142,8 @@ function fakeServices(): WorkbenchVerbServices {
     checkStageArtifacts: vi.fn(() => ({ stage: 'prd', satisfied: true, missing: [] })),
     getStageGate: vi.fn(() => ({ featureSlug: 'alpha', stage: 'prd', summaryGenerated: false, gateAssetPath: null, assets: [] })),
     listStageAssets: vi.fn(() => []),
+    advanceStage: vi.fn(() => ({ slug: 'alpha', status: 'design', docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: '2026-09-20T10:00:00.000Z' })),
+    stageSummarize: vi.fn(() => ({ stage: 'prd', path: 'alpha/stages/prd.md', generatedAt: '2026-09-20T10:00:00.000Z', featureStage: 'prd', gateOpen: true })),
     dispatchTasks: vi.fn(() => Promise.resolve({ dispatched: [] })),
     redispatch: vi.fn(() => Promise.resolve({ dispatched: [] })),
     getDispatches: vi.fn(() => []),
@@ -196,9 +198,10 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the forty-seven whitelisted verb channels, one per verb', () => {
+  it('contains exactly the forty-nine whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
+      'dsh-forge:workbench-advance-stage',
       'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-check-stage-artifacts',
       'dsh-forge:workbench-clear-pref-override',
@@ -234,6 +237,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
       'dsh-forge:workbench-set-prefs',
+      'dsh-forge:workbench-stage-summarize',
       'dsh-forge:workbench-start-migration',
       'dsh-forge:workbench-subscribe-events',
       'dsh-forge:workbench-task-add',
@@ -246,7 +250,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(47)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(49)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -295,6 +299,8 @@ describe('workbench verb routing table', () => {
       'checkStageArtifacts',
       'getStageGate',
       'listStageAssets',
+      'advanceStage',
+      'stageSummarize',
       'dispatchTasks',
       'redispatch',
       'getDispatches',
@@ -345,10 +351,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 39 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 49 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(47)
+    expect(handlers.size).toBe(49)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -464,6 +470,14 @@ describe('workbench verb routing table', () => {
     handlers.get(C.clearPrefOverride)?.(OWNED, { project: 'p-1' }, 'auto.gitPush')
     expect(services.clearPrefOverride).toHaveBeenCalledWith({ project: 'p-1' }, 'auto.gitPush')
 
+    // M3 stages 写段(任务 4.1):推进门 + 阶段资产写 —— 位置/形状/词表
+    // 浅校验 + 服务转发;门判定与 manifest 内核写在 advance-service。
+    handlers.get(C.advanceStage)?.(OWNED, 'p-1', 'alpha')
+    expect(services.advanceStage).toHaveBeenCalledWith('p-1', 'alpha')
+
+    handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
+    expect(services.stageSummarize).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
+
     // M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身转发的
     // 回调面 —— 形状校验 + 服务转发;语义/事务在 dispatch-service 域面。
     handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 'session-launch-1', payload: { toolName: 'bash', reason: 'escalation' } })
@@ -513,6 +527,8 @@ describe('workbench verb routing table', () => {
       ['featureStatus missing slug', () => handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1' })],
       ['receiveApproval missing payload (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1' })],
       ['receiveApproval non-string sessionId (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 42, payload: {} })],
+      ['stageSummarize stage outside vocab (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'shipped', goal: 'g', summary: 's' })],
+      ['stageSummarize empty goal (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: '', summary: 's' })],
     ]
     for (const [label, run] of cases) {
       const error = toCapture(run) as WorkbenchIpcError
@@ -528,6 +544,7 @@ describe('workbench verb routing table', () => {
     expect(services.knowledgeForensic).not.toHaveBeenCalled()
     expect(services.featureStatus).not.toHaveBeenCalled()
     expect(services.receiveApproval).not.toHaveBeenCalled()
+    expect(services.stageSummarize).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {

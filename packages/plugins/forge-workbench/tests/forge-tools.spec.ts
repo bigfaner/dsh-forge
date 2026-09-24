@@ -42,6 +42,7 @@ const ASSEMBLY_TOOL_NAMES = [
   'forge_fact', 'forge_lesson', 'forge_research', 'forge_forensic',
   'forge_feature_list', 'forge_feature_status',
   'forge_pref_get',
+  'forge_stage_summarize',
 ] as const
 
 /** Minimal exec-context face the tool bodies read (spike-1 §1.1 exec 契约). */

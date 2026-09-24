@@ -599,6 +599,34 @@ export interface StageGateInfo {
   readonly assets: readonly StageAssetRow[]
 }
 
+// ———— M3 stages 写侧 DTO(任务 4.1;tech-design §Interface 5 推进/资产写腿)————
+
+/** stageSummarize 入参(Interface 2 forge.stage.summarize 的内核写面)。 */
+export interface StageSummarizeInput {
+  readonly projectId: string
+  readonly featureSlug: string
+  /** 资产阶段(词表 = forge 管线;决定文件名 stages/<stage>.md)。 */
+  readonly stage: FeatureStatus
+  /** 阶段目标(frontmatter goal;非空)。 */
+  readonly goal: string
+  /** 摘要正文(frontmatter 之后;非空)。 */
+  readonly summary: string
+}
+
+/** stageSummarize 产物(写/覆盖结果 + 写后门态)。 */
+export interface StageSummarizeResult {
+  /** 资产阶段(= 入参 stage)。 */
+  readonly stage: FeatureStatus
+  /** features 根相对路径(`<slug>/stages/<stage>.md`)。 */
+  readonly path: string
+  /** 内核铸造的生成时戳(frontmatter generated)。 */
+  readonly generatedAt: string
+  /** feature 当前阶段(活性解析,manifest SoT)。 */
+  readonly featureStage: FeatureStatus
+  /** 写后门态:当前阶段总结已生成(= 本次写入即开门的直接判定)。 */
+  readonly gateOpen: boolean
+}
+
 // ---------------------------------------------------------------------------
 // M3 编排域 DTO(任务 3.3;tech-design §Interface 1 编排段 dispatchTasks/
 // redispatch/getDispatches/listApprovals/decideApproval + §Data Models
@@ -800,6 +828,22 @@ export interface WorkbenchVerbServices {
   getStageGate(projectId: string, featureSlug: string): StageGateInfo
   /** 按阶段(管线序)返回 stage_asset 行;空集 = 无资产(合法状态)。 */
   listStageAssets(projectId: string, featureSlug: string): StageAssetRow[]
+  // —— M3 stages 写动词(任务 4.1;实现 = stages/advance-service.ts 经
+  // services.ts 装配;manifest 写入仅经 advanceStage 内核路径)——
+  /**
+   * 推进门:当前阶段总结未生成 → ERR_STAGE_GATE_UNSATISFIED(缺失引导);
+   * 已生成 → 内核写 manifest status(阶段推进内化)→ feature_snapshot 同步
+   * → stage_advanced 事件,返回推进后 FeatureSummary。终态 'completed' 的
+   * 重复推进 = 幂等 no-op(零写入、零事件)。manifest frontmatter 损坏 →
+   * ERR_STAGE_MANIFEST_UNREADABLE。
+   */
+  advanceStage(projectId: string, featureSlug: string): FeatureSummary
+  /**
+   * 写/覆盖阶段资产 stages/<stage>.md(frontmatter { stage, generated, goal }
+   * + 摘要正文;同阶段重写 = 覆盖更新,T4)+ stage_asset 索引同步(感知
+   * 同款实现)。词表外阶段 / 空 goal / 空摘要 → ERR_STAGE_ASSET_INVALID。
+   */
+  stageSummarize(input: StageSummarizeInput): StageSummarizeResult
   // —— M3 编排动词(任务 3.3;实现 = dispatch/dispatch-service.ts 经
   // services.ts 装配;内核不持会话创建权 —— subagent 启动仅经 host 回调
   // 接口 launch-port,3.5 接线)——

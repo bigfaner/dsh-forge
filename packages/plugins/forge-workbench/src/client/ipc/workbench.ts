@@ -40,7 +40,8 @@ import type {
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project, ReceiveApprovalInput, StageArtifactsReport,
+  PrefScope, Project, ReceiveApprovalInput, StageArtifactsReport, FeatureSummary,
+  StageSummarizeInput, StageSummarizeResult,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
@@ -154,6 +155,19 @@ export interface WorkbenchIpcBridge {
   redispatch(dispatchId: string, actor: string): Promise<DispatchTasksResult>
   getDispatches(projectId: string): Promise<DispatchRow[]>
   listApprovals(projectId: string): Promise<ApprovalRow[]>
+  /**
+   * M3 stages write verbs (task 4.1, tech-design §Interface 5): advanceStage
+   * is the advance gate — unsatisfied (current stage summary missing) →
+   * ERR_STAGE_GATE_UNSATISFIED with guidance; satisfied → the kernel writes
+   * the manifest status (stage advance internalized), syncs the feature
+   * snapshot and pushes stage_advanced. stageSummarize is the
+   * forge.stage.summarize kernel write face ((over)writes
+   * stages/<stage>.md + syncs the stage_asset index). Rejections ride the
+   * same `{ code, message, detail? }` envelope (ERR_STAGE_* /
+   * ERR_FEATURE_NOT_FOUND / ERR_PROJECT_NOT_FOUND).
+   */
+  advanceStage(projectId: string, featureSlug: string): Promise<FeatureSummary>
+  stageSummarize(input: StageSummarizeInput): Promise<StageSummarizeResult>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -173,6 +187,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'receiveApproval', 'decideApproval', 'notifySessionStarted', 'notifyLaunchFailed',
   // M3 UF1 human-side orchestration verbs (task 3.9; preload surface since 3.3).
   'checkStageArtifacts', 'dispatchTasks', 'redispatch', 'getDispatches', 'listApprovals',
+  // M3 stages write verbs (task 4.1).
+  'advanceStage', 'stageSummarize',
 ]
 
 /**

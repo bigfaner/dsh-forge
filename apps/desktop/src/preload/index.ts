@@ -42,6 +42,9 @@ import type {
   StageArtifactsReport,
   StageAssetRow,
   StageGateInfo,
+  StageSummarizeInput,
+  StageSummarizeResult,
+  FeatureSummary,
   TaskAddInput,
   TaskBoardData,
   TaskClaimInput,
@@ -239,6 +242,22 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getStageGate, projectId, featureSlug) as Promise<StageGateInfo>,
     listStageAssets: (projectId: string, featureSlug: string): Promise<StageAssetRow[]> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listStageAssets, projectId, featureSlug) as Promise<StageAssetRow[]>,
+    // M3 stages write verbs (task 4.1): advanceStage is the advance gate —
+    // the current stage's summary asset must exist (live fs verdict) or the
+    // call rejects ERR_STAGE_GATE_UNSATISFIED with the missing-asset guidance;
+    // a satisfied gate flips the manifest status kernel-side (stage advance
+    // internalized, feature set/complete's "complete" leg), syncs the feature
+    // snapshot and pushes stage_advanced through onEvents. A repeated advance
+    // at 'completed' is an idempotent no-op (no write, no event). stageSummarize
+    // is the forge.stage.summarize kernel write face: (over)writes
+    // stages/<stage>.md (frontmatter { stage, generated, goal } + summary body)
+    // and syncs the stage_asset index. Rejections ride the same
+    // { code, message, detail? } envelope (ERR_STAGE_* / ERR_FEATURE_NOT_FOUND
+    // / ERR_PROJECT_NOT_FOUND).
+    advanceStage: (projectId: string, featureSlug: string): Promise<FeatureSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.advanceStage, projectId, featureSlug) as Promise<FeatureSummary>,
+    stageSummarize: (input: StageSummarizeInput): Promise<StageSummarizeResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.stageSummarize, input) as Promise<StageSummarizeResult>,
     // M3 dispatch verbs (task 3.3): the orchestration family. dispatchTasks
     // validates the dispatchable set (status allowed + terminal deps — rejections
     // arrive as the same { code, message, detail? } envelope, ERR_TASK_*),

@@ -31,8 +31,8 @@ import type {
 } from '../../host/forge-tools/bridge-core'
 import type {
   KnowledgeFactInput, KnowledgeForensicInput, KnowledgeLessonInput, KnowledgeResearchInput,
-  PrefScope, ReceiveApprovalInput, TaskAddInput, TaskClaimInput, TaskGetInput, TaskQueryInput,
-  TaskReopenInput, TaskStatus, TaskSubmitInput, TaskTransitionInput,
+  PrefScope, ReceiveApprovalInput, StageSummarizeInput, TaskAddInput, TaskClaimInput, TaskGetInput,
+  TaskQueryInput, TaskReopenInput, TaskStatus, TaskSubmitInput, TaskTransitionInput,
 } from '../ipc-types'
 import { getWorkbenchIpcBridge, normalizeWorkbenchVerbError, type WorkbenchIpcBridge } from './workbench'
 
@@ -157,6 +157,10 @@ interface BridgeCallArgs {
   payload?: unknown
   approvalId?: string
   approve?: boolean
+  // —— stage 写族(任务 4.1;stage_summarize 帧字段)——
+  stage?: string
+  goal?: string
+  summary?: string
 }
 
 /**
@@ -206,6 +210,16 @@ function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Prom
       })
     case 'pref_get':
       return bridge.getPrefs(prefScopeOf(args))
+    // —— stage 写族(任务 4.1):forge_stage_summarize 的内核写腿(资产
+    //    文件无作者槽,actor 不进 IPC 面 —— 知识系 add 同口径)。 ——
+    case 'stage_summarize':
+      return bridge.stageSummarize({
+        projectId: args.projectId as string,
+        featureSlug: args.featureSlug as string,
+        stage: args.stage as StageSummarizeInput['stage'],
+        goal: args.goal as string,
+        summary: args.summary as string,
+      })
     // —— 审批桥上行族(任务 3.5):host approval-bridge 的内核端口腿。
     //    approval_receive = 审批事件入列(插 pending + awaiting 联动);
     //    approval_decide = cancelled 核销腿(actor='kernel',decideApproval

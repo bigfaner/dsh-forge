@@ -36,7 +36,11 @@
  * 任务 3.5 追加:审批桥上行族(approval-bridge 内核端口;非模型工具 ——
  * 不注册为 dsh tool,仅作 host→内核的桥动词):approval_receive(审批事件
  * 入列)+ approval_decide(cancelled 核销腿,decideApproval(approve=false)
- * 形态)。client 泵映射见 tool-bridge.ts 的封闭 switch。 */
+ * 形态)。client 泵映射见 tool-bridge.ts 的封闭 switch。
+ *
+ * 任务 4.1 追加:stage 写族(forge.stage.summarize → stage_summarize;
+ * 阶段资产写/覆盖 + 索引同步。推进门 advanceStage = 人侧 UF2 动词,不经
+ * tool 面 —— Interface 2 stage 族仅 summarize)。 */
 export type ForgeToolBridgeVerb =
   | 'task_add'
   | 'task_claim'
@@ -55,6 +59,7 @@ export type ForgeToolBridgeVerb =
   | 'pref_get'
   | 'approval_receive'
   | 'approval_decide'
+  | 'stage_summarize'
 
 /** 桥 transport 级失败码(spike-1 §3.3;区别于内核业务 ERR_* 码)。 */
 export const BRIDGE_TRANSPORT_CODE = 'ERR_TOOL_BRIDGE_UNAVAILABLE' as const

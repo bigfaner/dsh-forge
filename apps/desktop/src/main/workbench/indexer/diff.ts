@@ -73,6 +73,15 @@ export type WorkbenchEvent =
     readonly approvalId: string
     readonly taskKey: string
   }
+  // M3 v2(任务 4.1;tech-design §Interface 1 事件扩展):阶段推进完成信号
+  // stage_advanced { featureSlug }(载荷扩 projectId —— dispatch_updated 扩
+  // 载荷同款,消费面按激活项目过滤)。仅实际推进发(advanceStage 内核写
+  // manifest 后;终态幂等 no-op 不产事件)。UF2 stepper 消费面归 5.x。
+  | {
+    readonly type: 'stage_advanced'
+    readonly projectId: string
+    readonly featureSlug: string
+  }
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 
