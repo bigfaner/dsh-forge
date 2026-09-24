@@ -26,6 +26,7 @@ import { listSessionLinksByTask } from '../src/main/workbench/repos/session-link
 import { WorkbenchRegistryError } from '../src/main/workbench/registry/validate.ts'
 import { authorizeExternalDocPath, listExternalDocAuthorizations } from '../src/main/workbench/registry/authorize.ts'
 import { normalizeRegisteredPath } from '../src/main/workbench/repos/projects.ts'
+import { StageWriteError } from '../src/main/workbench/stages/advance-service.ts'
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
 import {
   createPluginFace,
@@ -726,6 +727,28 @@ describe('error envelope', () => {
     expect(registry.envelope.code).toBe('ERR_CODE_ROOT_UNREADABLE')
     const guard = toWorkbenchIpcError(new PluginMandatoryError('plugin forge-workbench is mandatory'), 'verb')
     expect(guard.envelope).toEqual({ code: 'ERR_PLUGIN_MANDATORY', message: 'plugin forge-workbench is mandatory' })
+  })
+
+  // SC4(任务 6.6)补件:域错误自带的字符串 detail(StageWriteError 的门
+  // 缺失引导 / KnowledgeError 的知识面引导)随封装透传 —— GateHint 等
+  // 渲染层引导面按原文呈现缺失清单,不再被映射面截断。
+  it('forwards a domain error string detail through the envelope (gate-guidance legibility)', () => {
+    const error = toWorkbenchIpcError(
+      new StageWriteError(
+        'ERR_STAGE_GATE_UNSATISFIED',
+        'stage gate unsatisfied: the summary asset of the current stage \'design\' has not been generated yet',
+        'missing: features/alpha/stages/design.md — generate it first with the forge_stage_summarize tool',
+      ),
+      'dsh-forge:workbench-advance-stage',
+    )
+    expect(error.envelope).toEqual({
+      code: 'ERR_STAGE_GATE_UNSATISFIED',
+      message: 'stage gate unsatisfied: the summary asset of the current stage \'design\' has not been generated yet',
+      detail: 'missing: features/alpha/stages/design.md — generate it first with the forge_stage_summarize tool',
+    })
+    // 非 string / 空 detail 不入封装(无引导面的域错误形态不变)。
+    const bare = toWorkbenchIpcError(new WorkbenchRepoError('ERR_PROJECT_NOT_FOUND', 'project gone'), 'verb')
+    expect(bare.envelope).toEqual({ code: 'ERR_PROJECT_NOT_FOUND', message: 'project gone' })
   })
 
   it('falls back to ERR_WORKBENCH_DB + log for unclassified errors', () => {

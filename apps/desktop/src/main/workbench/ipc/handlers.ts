@@ -59,14 +59,22 @@ function errorMessage(error: unknown): string {
 /**
  * 错误映射:①已是封装形态原样;②携带合法 `ERR_*` code 的域错误
  * (WorkbenchRepoError / WorkbenchRegistryError / WorkbenchDbError / 守卫
- * PluginMandatoryError 及 3.1 真守卫的等价形态)→ 同码封装;③未知异常 →
+ * PluginMandatoryError 及 3.1 真守卫的等价形态)→ 同码封装(域错误自带
+ * 字符串 detail —— StageWriteError 的门缺失引导 / KnowledgeError 的
+ * 知识面引导 —— 随封装透传,渲染层 GateHint 等引导面按原文呈现;SC4
+ * e2e 暴露的接线缺口,缺失清单引导原样可达);③未知异常 →
  * ERR_WORKBENCH_DB 兜底封装 + log(Propagation Strategy 口径)。
  */
 export function toWorkbenchIpcError(error: unknown, verb: string): WorkbenchIpcError {
   if (error instanceof WorkbenchIpcError) return error
   const code = (error as { code?: unknown } | null | undefined)?.code
   if (error instanceof Error && typeof code === 'string' && DOMAIN_CODE_PATTERN.test(code)) {
-    return new WorkbenchIpcError({ code, message: error.message })
+    const detail = (error as { detail?: unknown } | null | undefined)?.detail
+    return new WorkbenchIpcError(
+      typeof detail === 'string' && detail !== ''
+        ? { code, message: error.message, detail }
+        : { code, message: error.message },
+    )
   }
   shellLog.error({
     code: 'ERR_WORKBENCH_DB',

@@ -765,7 +765,7 @@
         "4.4",
         "5.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "6.6-sc4-stage-gates.md",
       "record": "records/6.6-sc4-stage-gates.md",
       "surface-type": "web",
