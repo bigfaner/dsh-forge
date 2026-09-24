@@ -111,7 +111,7 @@ test('5.16/features-smoke: list → detail → doc browsing over the real IPC ch
 
     // The features tab over the assembled view.
     await switchToWorkbench(page)
-    await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+    await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
     await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-features"]')).toBeVisible()
 
     // List: REAL board data (the fixture slugs — the mock twins' dsh-forge-m1/m2

@@ -96,7 +96,7 @@ test('smoke/happy-path [@web-e2e @journey feature-board-docs-browsing]: board(Pi
       await cardOf(page, 'proj-fb-smoke-ext').locator('[data-dsh-forge-card-action="activate"]').click()
       await expect(cardOf(page, 'proj-fb-smoke-ext')).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
 
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       const extCard = page.locator(`[data-dsh-forge-feature-card="${EXT_SMOKE_SLUG}"]`)
       await expect(extCard).toBeVisible({ timeout: 30_000 })
       await extCard.click()

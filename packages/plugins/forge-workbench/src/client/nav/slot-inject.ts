@@ -100,6 +100,7 @@ export function installSlotNav(ctx: ClientContext, options: SlotNavOptions): () 
         hooks: { viewKey: store },
         selectWorkbenchTab: (tab: WorkbenchTabKey) => { controller.switchWorkbenchTab(tab) },
         openFeatureDetail: (slug: string) => { controller.openFeatureDetail(slug) },
+        openProposalDetail: (slug: string) => { controller.openProposalDetail(slug) },
         notifyPresented: () => { controller.adoptExternalView('workbench') },
         notifyDismissed: () => { controller.adoptExternalView('session') },
         ...(options.launch === undefined ? {} : { launch: options.launch }),

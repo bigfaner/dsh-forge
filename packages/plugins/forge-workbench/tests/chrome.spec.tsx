@@ -43,31 +43,40 @@ const MOCK_PROJECTS = MOCK_WORKBENCH_STATE.projects as readonly Project[]
 
 afterEach(() => cleanup())
 
-describe('TabBar: the three-tab strip drives the view-key machine (AC1/AC4)', () => {
-  it('renders the three page-map tabs in store order with locale labels and aria state', () => {
+describe('TabBar: the four-tab strip drives the view-key machine (AC1/AC4)', () => {
+  it('renders the four page-map tabs in M3 order with locale labels and aria state', () => {
     const onSelect = vi.fn()
-    render(<TabBar t={t.en} activeTab="workbench/tasks" onSelect={onSelect} />)
+    render(<TabBar t={t.en} activeTab="workbench/proposals" onSelect={onSelect} />)
     const tabs = screen.getAllByRole('tab')
+    // M3 revision (5.5, PRD Navigation Architecture): 概览/提案/Feature/任务 —
+    // the proposals board second, Feature third, tasks last.
     expect(tabs.map(tab => tab.textContent)).toEqual([
-      en['tab.overview'], en['tab.tasks'], en['tab.features'],
+      en['tab.overview'], en['tab.proposals'], en['tab.features'], en['tab.tasks'],
     ])
-    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false'])
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false', 'false'])
     expect(tabs.map(tab => tab.getAttribute('data-dsh-forge-tab'))).toEqual([...WORKBENCH_TABS])
-    expect(tabs.map(tab => tab.tabIndex)).toEqual([-1, 0, -1])
+    expect(tabs.map(tab => tab.tabIndex)).toEqual([-1, 0, -1, -1])
   })
 
-  it('routes every click through the machine action — including re-selecting the features tab (the :slug subview return)', () => {
+  it('normalizes the Feature label bilingually (zh「Feature」/en Features, 5.5 AC2)', () => {
+    render(<TabBar t={t.zh} activeTab="workbench/overview" onSelect={() => {}} />)
+    expect(document.querySelector('[data-dsh-forge-tab="workbench/features"]')?.textContent).toBe('Feature')
+    expect(document.querySelector('[data-dsh-forge-tab="workbench/proposals"]')?.textContent).toBe('提案')
+  })
+
+  it('routes every click through the machine action — including re-selecting a tab from its own :slug subview (the return)', () => {
     const onSelect = vi.fn()
     render(<TabBar t={t.en} activeTab="workbench/features" onSelect={onSelect} />)
     for (const tab of WORKBENCH_TABS) {
       fireEvent.click(document.querySelector(`[data-dsh-forge-tab="${tab}"]`) as HTMLButtonElement)
     }
-    expect(onSelect).toHaveBeenCalledTimes(3)
+    expect(onSelect).toHaveBeenCalledTimes(4)
     expect(onSelect).toHaveBeenNthCalledWith(1, 'workbench/overview')
-    expect(onSelect).toHaveBeenNthCalledWith(2, 'workbench/tasks')
-    // Re-selecting the features tab while the subview is open = the machine's
-    // selectWorkbenchTab('workbench/features') → slug cleared → back to list.
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'workbench/proposals')
     expect(onSelect).toHaveBeenNthCalledWith(3, 'workbench/features')
+    // Re-selecting a tab while its subview is open = the machine's own
+    // selectWorkbenchTab → slug cleared → back to the board/list.
+    expect(onSelect).toHaveBeenNthCalledWith(4, 'workbench/tasks')
   })
 
   it('arrow keys select and focus with wrap-around; Home/End jump (WAI-ARIA tabs)', () => {
@@ -76,12 +85,12 @@ describe('TabBar: the three-tab strip drives the view-key machine (AC1/AC4)', ()
     const list = document.querySelector('[data-dsh-forge-tabs]') as HTMLElement
     const tabs = screen.getAllByRole('tab')
     fireEvent.keyDown(list, { key: 'ArrowRight' })
-    expect(onSelect).toHaveBeenCalledWith('workbench/tasks')
+    expect(onSelect).toHaveBeenCalledWith('workbench/proposals')
     expect(document.activeElement).toBe(tabs[1])
     fireEvent.keyDown(list, { key: 'ArrowLeft' })
-    expect(onSelect).toHaveBeenCalledWith('workbench/features') // wrap: overview ← features
+    expect(onSelect).toHaveBeenCalledWith('workbench/tasks') // wrap: overview ← tasks (沉底)
     fireEvent.keyDown(list, { key: 'End' })
-    expect(onSelect).toHaveBeenLastCalledWith('workbench/features')
+    expect(onSelect).toHaveBeenLastCalledWith('workbench/tasks')
     fireEvent.keyDown(list, { key: 'Home' })
     expect(onSelect).toHaveBeenLastCalledWith('workbench/overview')
     // Non-navigation keys are inert.
@@ -101,6 +110,30 @@ describe('TabBar: the three-tab strip drives the view-key machine (AC1/AC4)', ()
   it('renders the zh dictionary through the same component (bilingual balance)', () => {
     render(<TabBar t={t.zh} activeTab="workbench/overview" onSelect={() => {}} />)
     expect(screen.getByText(zh['tab.features'])).toBeDefined()
+    expect(screen.getByText(zh['tab.proposals'])).toBeDefined()
+  })
+})
+
+describe('TabBar: the 任务 tab 审批计数徽标 (5.5 wiring of the 3.7 component, AC4)', () => {
+  it('renders the warn count badge inside the TASKS tab label only, with the aria 全称', () => {
+    render(<TabBar t={t.en} activeTab="workbench/overview" onSelect={() => {}} approvalCount={3} />)
+    const badge = document.querySelector('[data-dsh-forge-approval-tab-badge]')
+    expect(badge?.textContent).toBe('3')
+    expect(badge?.getAttribute('aria-label')).toBe('3 awaiting approval')
+    // The badge lives inside the tasks tab's label box (its positioning
+    // context), never on another tab.
+    const host = badge?.closest('[data-dsh-forge-tab]')
+    expect(host?.getAttribute('data-dsh-forge-tab')).toBe('workbench/tasks')
+  })
+
+  it('N = 0 (or absent) renders NO badge — hidden, not disabled (AC4)', () => {
+    const { unmount } = render(<TabBar t={t.en} activeTab="workbench/tasks" onSelect={() => {}} approvalCount={0} />)
+    expect(document.querySelector('[data-dsh-forge-approval-tab-badge]')).toBeNull()
+    // The tasks tab label stays the bare locale string (no count bleed).
+    expect(document.querySelector('[data-dsh-forge-tab="workbench/tasks"]')?.textContent).toBe(en['tab.tasks'])
+    unmount()
+    render(<TabBar t={t.en} activeTab="workbench/tasks" onSelect={() => {}} />)
+    expect(document.querySelector('[data-dsh-forge-approval-tab-badge]')).toBeNull()
   })
 })
 

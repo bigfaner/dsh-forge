@@ -597,7 +597,7 @@
         "5.4",
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.5-proposals-page-assembly.md",
       "record": "records/5.5-proposals-page-assembly.md",
       "breaking": true,

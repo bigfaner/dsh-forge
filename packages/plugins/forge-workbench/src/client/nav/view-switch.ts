@@ -94,6 +94,18 @@ export class ViewSwitchController {
   }
 
   /**
+   * Open the proposal-detail subview (task 5.5, UF5): the proposals tab
+   * carrying a slug — the machine's own subview-addressing transition, the
+   * same one write path both navigation forms share. The return trip is
+   * `switchWorkbenchTab('workbench/proposals')` (the machine clears the slug
+   * — the breadcrumb-return contract).
+   */
+  openProposalDetail(slug: string): void {
+    this.store.openProposalDetail(slug)
+    this.project()
+  }
+
+  /**
    * Arm the one-shot boot-restore hold. The upstream boot sequence re-opens
    * the last session AFTER the plugin loads (home-scoped session list
    * hydrating seconds after ui-ready; ui-workspace's replaceMain/clearMain

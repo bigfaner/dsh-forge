@@ -212,7 +212,7 @@ test('step-5/remove-active-with-remaining [@web-e2e @journey multi-project-manag
       // 项目域页呈现引导卡(选择/注册引导):任务与 feature 两 tab 同 gate。
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await expect(page.locator('[data-dsh-forge-gate]'), '任务页引导卡(激活指针置空)').toBeVisible({ timeout: 15_000 })
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator('[data-dsh-forge-gate]'), 'feature 页同 gate').toBeVisible({ timeout: 15_000 })
 
       // 剩余项目仍可浏览(概览卡片在);文件零改动。

@@ -63,7 +63,7 @@ test('step-5/success [@web-e2e @journey feature-board-docs-browsing]: external f
       await registerExternalProject(page, project.codeRoot, externalDocs, projectName)
 
       // feature 详情:仓外角标(DF005)+ 五类文档同口径对比。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-features"]')).toBeVisible()
       const extCard = page.locator(`[data-dsh-forge-feature-card="${EXT_ONE_SLUG}"]`)
       await expect(extCard).toBeVisible({ timeout: 30_000 })
@@ -131,7 +131,7 @@ test('step-5/external-path-invalid-repoint [@web-e2e @journey feature-board-docs
       await expect(cardOf(page, projectName).locator('[data-dsh-forge-card-lost-badge]'), '卡失联徽标').toBeVisible()
 
       // 已扫快照不被静默清空:feature 列表仍在;文档读取逐次复验 → 错误卡。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${EXT_ONE_SLUG}"]`),
         '既有 feature 快照保留(错误态不清数据)').toBeVisible({ timeout: 30_000 })
       await page.locator(`[data-dsh-forge-feature-card="${EXT_ONE_SLUG}"]`).click()
@@ -158,7 +158,7 @@ test('step-5/external-path-invalid-repoint [@web-e2e @journey feature-board-docs
       expect(repointed?.docLocationPath).toBe(externalDocsTwo.replaceAll('\\', '/'))
 
       // 快照按新树重建:旧 slug 出集、新 slug 入集;文档内容随新树。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${EXT_TWO_SLUG}"]`),
         '新树 slug 入列(重建)').toBeVisible({ timeout: 30_000 })
       await expect(page.locator(`[data-dsh-forge-feature-card="${EXT_ONE_SLUG}"]`),

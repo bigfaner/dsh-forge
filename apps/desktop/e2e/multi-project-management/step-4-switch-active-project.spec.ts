@@ -139,7 +139,7 @@ test('step-4/success [@web-e2e @journey multi-project-management]: switching bac
       await expect(page.locator(`[data-dsh-forge-detail-link="${sessionB}"]`), '跨项目挂接行不呈现').toHaveCount(0)
 
       // feature 页切换可判:A 的卡片在、B 的卡片不在、无 stale 残留。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureA1.slug}"]`)).toBeVisible({ timeout: 30_000 })
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureB1.slug}"]`)).toHaveCount(0)
       await expect(page.locator('[data-dsh-forge-feature-notfound]'), '无 stale feature-detail 残留').toHaveCount(0)

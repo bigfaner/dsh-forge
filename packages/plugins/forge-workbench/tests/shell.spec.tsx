@@ -41,22 +41,26 @@ const t = { en: bind(en), zh: bind(zh) }
  * store side of the transitions lives in the controller specs).
  */
 function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
-  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>
+  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail' | 'openProposalDetail'>
 } {
   let snapshot: ViewKeySnapshot = {
     view: 'workbench',
     workbenchTab: 'workbench/overview',
     featureSlug: undefined,
+    proposalSlug: undefined,
     ...initial,
   }
   return {
     props: {
       useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
       selectWorkbenchTab: (tab: WorkbenchTabKey) => {
-        snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
+        snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined, proposalSlug: undefined }
       },
       openFeatureDetail: (slug: string) => {
-        snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
+        snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug, proposalSlug: undefined }
+      },
+      openProposalDetail: (slug: string) => {
+        snapshot = { ...snapshot, workbenchTab: 'workbench/proposals', proposalSlug: slug, featureSlug: undefined }
       },
     },
   }
@@ -89,18 +93,22 @@ describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
     expect(screen.getByText(zh['tab.features'])).toBeDefined()
   })
 
-  it('reserves every page-map view key in the mapping table (5.x mount points)', () => {
+  it('reserves every page-map view key in the mapping table (5.x mount points + 5.5 proposals family)', () => {
     expect(Object.keys(VIEW_MOUNT_TABLE)).toEqual([
       'workbench/overview',
+      'workbench/proposals',
       'workbench/tasks',
       'workbench/features',
       'workbench/features/:slug',
+      'workbench/proposals/:slug',
       'workbench/dialog/*',
     ])
     expect(resolveViewMount('workbench/overview', undefined)).toBe('dsh-forge-view-overview')
+    expect(resolveViewMount('workbench/proposals', undefined)).toBe('dsh-forge-view-proposals')
     expect(resolveViewMount('workbench/tasks', undefined)).toBe('dsh-forge-view-tasks')
     expect(resolveViewMount('workbench/features', undefined)).toBe('dsh-forge-view-features')
     expect(resolveViewMount('workbench/features', 'dsh-forge-m2')).toBe('dsh-forge-view-feature-detail')
+    expect(resolveViewMount('workbench/proposals', undefined, 'dsh-forge-m2')).toBe('dsh-forge-view-proposal-detail')
   })
 
   it('mounts the container the active view key addresses — a tab switch swaps it', () => {
@@ -108,15 +116,16 @@ describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
     const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).not.toBeNull()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false'])
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false'])
     // The tab action performs the machine transition (mutation here mirrors
-    // the controller's), then the selector re-reads on rerender.
+    // the controller's), then the selector re-reads on rerender. tabs[1] is
+    // now the SECOND tab — the proposals board (M3 order).
     ;(tabs[1] as HTMLButtonElement).click()
     view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposals"]')).not.toBeNull()
     expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeNull()
     expect(
-      (document.querySelector('[data-dsh-forge-tab="workbench/tasks"]') as HTMLElement).getAttribute('aria-selected'),
+      (document.querySelector('[data-dsh-forge-tab="workbench/proposals"]') as HTMLElement).getAttribute('aria-selected'),
     ).toBe('true')
   })
 
@@ -124,6 +133,12 @@ describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
     const face = makeFace({ workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m2' })
     render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-feature-detail"]')).not.toBeNull()
+  })
+
+  it('the proposal-detail subview addresses its own reserved container (5.5)', () => {
+    const face = makeFace({ workbenchTab: 'workbench/proposals', proposalSlug: 'dsh-forge-m2' })
+    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
+    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposal-detail"]')).not.toBeNull()
   })
 })
 

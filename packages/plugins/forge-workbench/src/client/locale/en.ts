@@ -12,6 +12,7 @@ export type WorkbenchKey =
   | 'rail.label'
   | 'tabs.label'
   | 'tab.overview'
+  | 'tab.proposals'
   | 'tab.tasks'
   | 'tab.features'
   | 'chrome.addProject'
@@ -443,6 +444,9 @@ export type WorkbenchKey =
   | 'proposals.loading'
   | 'proposals.loadError.title'
   | 'proposals.loadError.retry'
+  | 'proposals.notFound.title'
+  | 'proposals.notFound.body'
+  | 'proposals.notFound.back'
   | 'proposals.lost.title'
   | 'proposals.lost.body'
   | 'proposals.lost.repoint'
@@ -479,6 +483,7 @@ export const en: Record<WorkbenchKey, string> = {
   'rail.label': 'Primary view switch',
   'tabs.label': 'Workbench views',
   'tab.overview': 'Overview',
+  'tab.proposals': 'Proposals',
   'tab.tasks': 'Tasks',
   'tab.features': 'Features',
   'chrome.addProject': 'Add project',
@@ -916,6 +921,9 @@ export const en: Record<WorkbenchKey, string> = {
   'proposals.loading': 'Loading proposals…',
   'proposals.loadError.title': 'Failed to load proposals',
   'proposals.loadError.retry': 'Retry',
+  'proposals.notFound.title': 'Proposal not found',
+  'proposals.notFound.body': 'This proposal is no longer on the board — it may have been renamed or removed outside the workbench.',
+  'proposals.notFound.back': 'Back to the board',
   'proposals.lost.title': 'Document location inaccessible',
   'proposals.lost.body': 'The external document path is no longer accessible, so proposals/ cannot be read. Repoint the project to a valid location, or remove the registration and register again.',
   'proposals.lost.repoint': 'Repoint',

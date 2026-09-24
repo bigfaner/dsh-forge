@@ -65,7 +65,7 @@ test('step-4/success [@web-e2e @journey feature-board-docs-browsing]: wizard ext
       await expect(cardOf(page, projectName)).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
 
       // feature 列表读仓外树:slug 与仓外 fixture 一致;文档内容与仓外树文件全等。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-features"]')).toBeVisible()
       const extCard = page.locator(`[data-dsh-forge-feature-card="${EXT_SLUG}"]`)
       await expect(extCard, '仓外树的 feature slug 入列').toBeVisible({ timeout: 30_000 })

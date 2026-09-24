@@ -81,6 +81,16 @@ export interface WorkbenchViewFace {
    * `selectWorkbenchTab('workbench/features')`, which clears the slug.
    */
   openFeatureDetail: (slug: string) => void
+  /**
+   * Open the proposal-detail subview (task 5.5, UF5): the machine's own
+   * `openProposalDetail(slug)` — the proposals tab carrying a slug, the same
+   * subview-addressing discipline as {@link openFeatureDetail}. The return
+   * trip rides `selectWorkbenchTab('workbench/proposals')`, which clears the
+   * slug (the breadcrumb-return contract). Optional member: the machine
+   * action is REQUIRED on the store (the authority); the face may omit it
+   * only in stale build-stage doubles, where the page's open seam no-ops.
+   */
+  openProposalDetail?: ((slug: string) => void) | undefined
 }
 
 /**
@@ -515,6 +525,37 @@ export interface ProposalFace {
 }
 
 /**
+ * The shell's passthrough seat for the proposals board (task 5.5, UF5
+ * assembly): absent entirely on the real path (the shell derives the page's
+ * inputs from its store-backed chrome chain and injects the IPC-backed
+ * proposal face); tests / the build stage inject the mock twin + seam
+ * overrides through here.
+ */
+export interface WorkbenchProposalsSeat {
+  /** The proposals face — absent members fall back to the build-stage mock (5.5 injects the IPC face on the real chain). */
+  readonly face?: Partial<ProposalFace> | undefined
+  /**
+   * 仓外路径失效 override (seat form only): true renders the list's lost
+   * guidance card. The real path derives the flag from the store's
+   * sync-derived lostProjectIds (the OverviewView 口径).
+   */
+  readonly docsLost?: boolean | undefined
+  /**
+   * The lost card's 重新指向 seam override — the shell's default routes it to
+   * the register wizard's EDIT mode for the ACTIVE project (the 5.4 repoint
+   * treatment); the seam is parameterless (the lost card is the active
+   * project's by construction).
+   */
+  readonly onRepoint?: (() => void) | undefined
+  /**
+   * The lost card's 移除项目 seam override — the shell's default opens the
+   * RemoveConfirm double-confirm over the tab content (the overview remove
+   * flow's discipline; 移除 MUST pass the two-step confirmation).
+   */
+  readonly onRemove?: (() => void) | undefined
+}
+
+/**
  * The UF5 launch success hand-over (task 5.11): the entry fires it with the
  * launched session (and the task ref it launched from — the board's badge
  * write needs the qualified key). The real assembly's implementation lives in
@@ -558,6 +599,8 @@ export type WorkbenchShellProps =
   & { taskBoard?: TaskBoardSeat }
   /** The feature board's assembly seat (task 5.9): absent = the page-local mock twins. */
   & { features?: WorkbenchFeaturesSeat }
+  /** The proposals board's assembly seat (task 5.5, UF5): absent = the page-local mock twin (real chain = the shell's IPC face). */
+  & { proposals?: WorkbenchProposalsSeat }
   /**
    * The UF5 launch seat STORE (task 5.11, launch-rpc.createLaunchSeat): an
    * observable — the rpc members land when the remote namespaces mount. The
