@@ -10,7 +10,8 @@
 // 合并键:task_updated → (type, projectId, taskKey);feature_updated →
 // (type, projectId, featureSlug);sync → (type, projectId);migration_progress
 // → (type, projectId, phase, result)(M3 v2 事件,任务 1.4);deviation_detected
-// → (type, projectId)(M3 v2 事件,任务 1.5);prefs_updated → (type, scope,
+// → (type, projectId, featureSlug — feature 级含 slug、项目级(1.5)空尾,
+// 同窗两形态互不吞并)(M3 v2 事件,任务 1.5/4.2);prefs_updated → (type, scope,
 // scopeId)(M3 v2 事件,任务 3.1);dispatch_updated → (type, dispatchId)、
 // approval_received → (type, approvalId)(M3 v2 事件,任务 3.3);
 // stage_advanced → (type, projectId, featureSlug)(M3 v2 事件,任务 4.1)。
@@ -50,7 +51,7 @@ function coalesceKey(event: WorkbenchEvent): string {
     case 'migration_progress':
       return `migration_progress|${event.projectId}|${event.phase}|${event.result}`
     case 'deviation_detected':
-      return `deviation_detected|${event.projectId}`
+      return `deviation_detected|${event.projectId}|${event.featureSlug ?? ''}`
     case 'prefs_updated':
       return `prefs_updated|${event.scope}|${event.scopeId}`
     case 'dispatch_updated':

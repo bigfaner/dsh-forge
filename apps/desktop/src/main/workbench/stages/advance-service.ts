@@ -23,7 +23,9 @@
 //     ERR_STAGE_GATE_UNSATISFIED + 引导(拒绝可观察,非静默)。
 //
 // manifest 写入纪律(Hard Rule:manifest 写入仅经 advanceStage 内核路径 ——
-// 本模块是内核唯一的 manifest status 写面;外部直改由 4.2 watcher 判偏离):
+// 本模块是内核唯一的 manifest status 写面;外部直改由 4.2 watcher 判偏离,
+// 推进成功 = feature_snapshot.deviated 的定义清除点,仅翻 deviated、
+// last_external_at 留审计):
 //   - 在场 + frontmatter 可解析 → 仅替换 status 字段(其余字段与正文原文
 //     保留;status 键存在则原位替换,缺席则追加);
 //   - 在场 + 无 frontmatter 块 → 原文整体保留为正文,前插 status frontmatter;
@@ -43,7 +45,7 @@ import { join } from 'node:path'
 import { stringify as stringifyYaml } from 'yaml'
 import type { DocKind, FeatureStatus, RepoDb } from '../repos/types.ts'
 import { WorkbenchRepoError } from '../repos/types.ts'
-import { upsertFeatureSnapshot, getFeatureSnapshot } from '../repos/feature-snapshots.ts'
+import { upsertFeatureSnapshot, getFeatureSnapshot, clearFeatureDeviation } from '../repos/feature-snapshots.ts'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import type { WorkbenchEvent } from '../indexer/diff.ts'
 import { parseFrontmatterObject, splitFrontmatter, stringifyFrontmatter } from '../knowledge/frontmatter.ts'
@@ -264,6 +266,12 @@ export function createStageWriteService(deps: StageWriteDeps): StageWriteService
         docKinds,
         updatedAt: new Date().toISOString(),
       })
+
+      // 4.2 偏离清除:内核合法推进 = 偏离标记的定义清除点(upsert 不触碰
+      // deviated/last_external_at,须显式翻位;last_external_at 保留为审计
+      // 痕迹)。manifest 与快照成对写 → 后续感知轮恒无「manifest ≠ 快照」,
+      // 推进自身不触发偏离。门拒绝/终态 no-op 提前返回,不清除。
+      clearFeatureDeviation(db, projectId, featureSlug)
 
       // stage_advanced 事件(仅实际推进发;载荷 = projectId + featureSlug)。
       deps.onEvent?.(stageAdvancedEvent(projectId, featureSlug))

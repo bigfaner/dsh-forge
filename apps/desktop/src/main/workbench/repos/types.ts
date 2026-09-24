@@ -132,6 +132,10 @@ export interface FeatureSnapshot {
   readonly taskTotal: number
   readonly taskCompleted: number
   readonly updatedAt: string
+  /** feature 级偏离标记(v2 增列;4.2 watcher 置位,内核合法推进清除,仅呈现)。 */
+  readonly deviated: boolean
+  /** 最近一次外部变更检出时戳(4.2;清除偏离时不抹 —— 审计痕迹)。 */
+  readonly lastExternalAt: string | null
 }
 
 export interface SyncState {
@@ -183,7 +187,7 @@ export interface TaskSnapshotRow {
   readonly updated_at: string
 }
 
-/** feature_snapshot 表行(schema-v1.sql;派生缓存)。 */
+/** feature_snapshot 表行(schema-v1.sql 基底 + v2 增列 deviated/last_external_at)。 */
 export interface FeatureSnapshotRow {
   readonly project_id: string
   readonly feature_slug: string
@@ -192,6 +196,8 @@ export interface FeatureSnapshotRow {
   readonly task_total: number
   readonly task_completed: number
   readonly updated_at: string
+  readonly deviated: number
+  readonly last_external_at: string | null
 }
 
 /** sync_state 表行(schema-v1.sql;派生运行簿记)。 */
@@ -268,6 +274,8 @@ export function toFeatureSnapshot(row: FeatureSnapshotRow): FeatureSnapshot {
     taskTotal: row.task_total,
     taskCompleted: row.task_completed,
     updatedAt: row.updated_at,
+    deviated: row.deviated === 1,
+    lastExternalAt: row.last_external_at,
   }
 }
 

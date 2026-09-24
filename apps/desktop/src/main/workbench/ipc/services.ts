@@ -56,6 +56,7 @@ import { toTaskSummary } from './task-summary.ts'
 import { createTaskVerbService } from '../tasks/task-service.ts'
 import { createMigrationService } from '../migration/pipeline.ts'
 import { createReingestHook } from '../migration/reingest-watcher.ts'
+import { createDeviationHook } from '../stages/deviation-watcher.ts'
 import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
 import { createStagesVerbService } from '../stages/stages-service.ts'
@@ -177,21 +178,29 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     guard: deps.pluginGuard ?? createPluginEnableGuard(() => readPluginManifestBundles(deps.pluginBundlesPath)),
   })
   const defaultPerception = (): WorkbenchPerceptionSeam => {
-    // M3 任务 1.5:外部写回收钩子挂接感知基座 —— 每轮感知扫描(M2 watcher
-    // 触发或动词同步重扫)后同步检查已迁移项目的 index.json 复现/变更;
-    // 回收产出的事件(deviation_detected / migration_progress reingest)并入
-    // 同一扫描事件批,走同一 sink/批推通道;钩子永不抛错、files 项目短路。
+    // M3 任务 1.5/4.2:外部写回收 + feature 级偏离检测钩子挂接感知基座 ——
+    // 每轮感知扫描(M2 watcher 触发或动词同步重扫)同一包装内执行:
+    //   - 偏离检测在扫描【前】(判据 = pre-scan 快照 vs 活性 manifest;内核
+    //     advanceStage 对两者成对同步写,恒不触发)→ deviation_detected
+    //     (featureSlug 载荷)+ feature_snapshot.deviated 置位;
+    //   - 重摄入在扫描【后】(1.5:已迁移项目 index.json 复现/变更回收)。
+    // 两路事件(deviation_detected 项目/feature 级 + migration_progress
+    // reingest)并入同一扫描事件批,走同一 sink/批推通道(同通道不同载荷);
+    // 钩子均永不抛错、检测/回收失败仅日志(感知面纪律,不弹 UI)。
     const reingest = createReingestHook({ db })
-    const scanWithReingest = (target: ScanTarget): ScanOutcome => {
+    const deviation = createDeviationHook({ db })
+    const scanWithHooks = (target: ScanTarget): ScanOutcome => {
+      const deviationEvents = deviation.beforeScan(target)
       const outcome = scanForgeFiles(db, target)
-      const events = reingest.afterScan(target)
-      return events.length > 0 ? { ...outcome, events: [...outcome.events, ...events] } : outcome
+      const reingestEvents = reingest.afterScan(target)
+      const extra = [...deviationEvents, ...reingestEvents]
+      return extra.length > 0 ? { ...outcome, events: [...outcome.events, ...extra] } : outcome
     }
-    const watcher = createWorkbenchWatcher(db, { scan: (_db, target) => scanWithReingest(target), onEvents: sink })
+    const watcher = createWorkbenchWatcher(db, { scan: (_db, target) => scanWithHooks(target), onEvents: sink })
     return {
       retarget: target => watcher.rebuild(target),
       rescan: (target) => {
-        const outcome = scanWithReingest(target)
+        const outcome = scanWithHooks(target)
         if (outcome.events.length > 0) sink(outcome.events)
       },
     }

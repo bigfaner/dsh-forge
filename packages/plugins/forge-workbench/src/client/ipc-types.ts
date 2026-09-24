@@ -400,10 +400,12 @@ export type WorkbenchEvent =
     readonly phase: MigrationPhase
     readonly result: MigrationPhaseResult
   }
-  // M3 v2 (task 1.5): deviation signal — presentation only, never a block
-  // (PRD G8/Story 8). Consumed by the UF2 badge (4.2), declared here so the
-  // client union stays the structural twin of the main-side vocabulary.
-  | { readonly type: 'deviation_detected'; readonly projectId: string }
+  // M3 v2 (task 1.5/4.2): deviation signal — presentation only, never a block
+  // (PRD G8/Story 8). Same channel, two payloads: project level (1.5 reingest
+  // watcher — projectId only) and feature level (4.2 deviation watcher —
+  // featureSlug rides along for the UF2 badge). Declared here so the client
+  // union stays the structural twin of the main-side vocabulary.
+  | { readonly type: 'deviation_detected'; readonly projectId: string; readonly featureSlug?: string }
   // M3 v2 (task 3.7, tech-design §Interface 1 事件扩展): the orchestration
   // reflux pair — dispatch_updated drives the 编排角标谱 migration (≤5s,
   // subscription-driven), approval_received drives the approval dock's

@@ -38,13 +38,17 @@ export type WorkbenchEvent =
     readonly phase: MigrationPhase
     readonly result: MigrationPhaseResult
   }
-  // M3 v2(任务 1.5;tech-design §Interface 1 事件扩展):偏离检出信号,
-  // 仅呈现不阻断(PRD G8/Story 8)。项目级形态 = 已迁移项目 index.json
-  // 外部复现/变更被重摄入 watcher 检出(Interface 4 第 7 步);feature 级
-  // 形态(featureSlug 载荷,manifest 外部跨阶段)归 4.2 扩展本联合。
+  // M3 v2(任务 1.5/4.2;tech-design §Interface 1 事件扩展):偏离检出信号,
+  // 仅呈现不阻断(PRD G8/Story 8)。同通道不同载荷 —— 项目级(1.5)= 已迁移
+  // 项目 index.json 外部复现/变更被重摄入 watcher 检出(Interface 4 第 7
+  // 步,载荷仅 projectId);feature 级(4.2)= 非内核 manifest status 变更
+  // 被 stages/deviation-watcher 检出(载荷增 featureSlug;projectId 恒在,
+  // dispatch_updated 扩载荷同款,消费面按激活项目过滤)。
   | {
     readonly type: 'deviation_detected'
     readonly projectId: string
+    /** feature 级形态在场;项目级(1.5)缺席本键。 */
+    readonly featureSlug?: string
   }
   // M3 v2(任务 3.1;tech-design §Interface 1 事件扩展):偏好写完成信号
   // prefs_updated { scope }(载荷扩为 scope + scopeId —— 消费面按地址过滤
