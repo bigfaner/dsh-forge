@@ -353,6 +353,23 @@ export type WorkbenchKey =
   | 'features.doc.design'
   | 'features.doc.ui'
   | 'features.doc.tasks'
+  | 'features.stages.deviation'
+  | 'features.stages.deviation.tooltip'
+  | 'features.stages.gateHint'
+  | 'features.stages.gateHint.tooltip'
+  | 'features.stages.advance'
+  | 'features.stages.advance.busy'
+  | 'features.stages.advance.unavailable'
+  | 'features.stages.advance.rejected.title'
+  | 'features.stages.assets.label'
+  | 'features.stages.assets.goal'
+  | 'features.stages.assets.summary'
+  | 'features.stages.assets.loading'
+  | 'features.stages.assets.error.title'
+  | 'features.stages.assets.error.retry'
+  | 'features.stages.assets.empty.title'
+  | 'features.stages.assets.empty.body'
+  | 'features.stages.stepper.gateAria'
   | 'migration.pill.migratable'
   | 'migration.pill.migrated'
   | 'migration.entry.migrate'
@@ -732,6 +749,26 @@ export const en: Record<WorkbenchKey, string> = {
   'features.doc.design': 'design',
   'features.doc.ui': 'ui',
   'features.doc.tasks': 'tasks',
+  // The UF2 stage family (task 4.3, ui-design UF2): deviation badge, gate
+  // hint line, advance action, stage-assets tab — zh/en parity enforced by
+  // typing. The gate-hint line copy mirrors the ui-design 提示行 verbatim.
+  'features.stages.deviation': '⚠ Deviated',
+  'features.stages.deviation.tooltip': 'An external session has performed a cross-stage operation',
+  'features.stages.gateHint': '▲ Summary not generated — advancing requires the stage summary first',
+  'features.stages.gateHint.tooltip': 'Generation path: task detail → generate stage summary (subagent dispatch)',
+  'features.stages.advance': 'Advance stage',
+  'features.stages.advance.busy': 'Advancing…',
+  'features.stages.advance.unavailable': 'Stage data plane not wired (no advance verb)',
+  'features.stages.advance.rejected.title': 'Stage gate unsatisfied',
+  'features.stages.assets.label': 'Stage assets (grouped by stage, oldest first)',
+  'features.stages.assets.goal': 'Goal',
+  'features.stages.assets.summary': 'Summary',
+  'features.stages.assets.loading': 'Loading stage assets…',
+  'features.stages.assets.error.title': 'Failed to load stage assets',
+  'features.stages.assets.error.retry': 'Retry',
+  'features.stages.assets.empty.title': 'No stage assets yet',
+  'features.stages.assets.empty.body': 'After the first stage advance, each stage\'s goal and summary are generated here (doc-root stage asset files).',
+  'features.stages.stepper.gateAria': ', stage summary not generated (gate pending)',
   // The UF3 migration family (task 1.6): Pill/entry, confirm copy, step
   // rows, terminal results, guard notes — zh/en parity enforced by typing.
   'migration.pill.migratable': 'Migratable',

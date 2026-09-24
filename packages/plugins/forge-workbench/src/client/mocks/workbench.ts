@@ -33,16 +33,18 @@
  */
 import type {
   ApprovalRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
+  FeatureStatus, FeatureSummary,
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
-  MissingItem, PluginRow, Project, ProjectPatch, RegisterProjectInput, TaskBoardData, TaskDetail,
+  MissingItem, PluginRow, Project, ProjectPatch, RegisterProjectInput, StageAssetRow,
+  StageGateInfo, TaskBoardData, TaskDetail,
   TaskSummary,
   WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
   DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot,
   OverviewFace,
-  PluginFace, RegisterWizardFace, SessionLaunchServices, TaskBoardFace, TaskDetailFace,
+  PluginFace, RegisterWizardFace, SessionLaunchServices, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -1202,5 +1204,157 @@ export function createMockDispatchFace(options: MockDispatchFaceOptions = {}): M
     pipe: (sink: (events: readonly WorkbenchEvent[]) => void) => { listeners.add(sink) },
     get rows(): readonly DispatchRow[] { return rows },
     get approvals(): readonly ApprovalRow[] { return approvals },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UF2 stage face, M3 (task 4.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF2 stage family's seeded assets (task 4.3): the dsh-forge-m2 fixture
+ * carries two content-joined rows (the SAME stage vocabulary/order the real
+ * verb answers — pipeline order, goal + summary from the doc-root asset
+ * files' frontmatter/body). Content-joined = the 4.3 verb-row shape
+ * (goal/summary optional on the DTO; the tab degrades missing legs to '').
+ */
+export const MOCK_STAGE_ASSETS: readonly StageAssetRow[] = Object.freeze([
+  Object.freeze({
+    stage: 'prd',
+    path: 'dsh-forge-m2/stages/prd.md',
+    generatedAt: '2026-09-22T10:00:00.000Z',
+    goal: '把 forge 项目装进工作台。',
+    summary: '三看板 + 会话挂接定形;偏好与编排留 M3。',
+  }),
+  Object.freeze({
+    stage: 'design',
+    path: 'dsh-forge-m2/stages/design.md',
+    generatedAt: '2026-09-22T11:00:00.000Z',
+    goal: 'SQLite 快照与感知链路。',
+    summary: '快照可重建;回流 ≤5s;actor 来源序。',
+  }),
+])
+
+/** The seeded gate (the mock feature sits in the tasks stage, gate open). */
+export const MOCK_STAGE_GATE: StageGateInfo = Object.freeze({
+  featureSlug: 'dsh-forge-m2',
+  stage: 'tasks',
+  summaryGenerated: true,
+  gateAssetPath: 'dsh-forge-m2/stages/tasks.md',
+  assets: MOCK_STAGE_ASSETS,
+})
+
+/**
+ * The UF2 stage family's build-stage twin (task 4.3): the four members of
+ * contract.ts's StageFace as a closure-held state machine mirroring the
+ * kernel's own edge semantics small (advance-service.ts 4.1):
+ *
+ *   - getStageGate answers the seeded gate (setGate re-arms it — the
+ *     gate-pending leg seeds summaryGenerated=false + gateAssetPath=null);
+ *   - listStageAssets answers the seeded rows (setAssets re-arms);
+ *   - advanceStage: gate unsatisfied → the serialized ERR_STAGE_GATE_
+ *     UNSATISFIED envelope with the SAME guidance detail string shape the
+ *     kernel throws (引导文案 + 缺失清单 leg); satisfied → the stage moves
+ *     one pipeline step, the gate re-arms against the NEW stage (fresh
+ *     stage's summary not generated — 推进成功后的重复请求 = 新门未满足),
+ *     stage_advanced rides the twin's own channel, and the post-advance
+ *     FeatureSummary resolves; terminal 'completed' = idempotent no-op
+ *     (zero writes, zero events);
+ *   - subscribeEvents is the twin's own listener set (emit pokes +
+ *     advance reflux).
+ *
+ * The twin is TEST/BUILD-ONLY (the dispatch-face discipline: advanceStage is
+ * a WRITE surface, so the components never default to this twin — absent
+ * face members stay inert; tests inject it, 4.4's assembly injects the
+ * IPC-backed face).
+ */
+export interface MockStageFaceOptions {
+  /** The project the rows address (defaults to the mock project id). */
+  readonly projectId?: string
+  /** The feature the gate/rows address (defaults to the mock feature slug). */
+  readonly featureSlug?: string
+  /** The seeded gate (defaults to MOCK_STAGE_GATE, gate open). */
+  readonly gate?: StageGateInfo
+  /** The seeded asset rows (defaults to MOCK_STAGE_ASSETS; pipeline-sorted on read). */
+  readonly assets?: readonly StageAssetRow[]
+}
+
+/** Everything the stage mock twin exposes beyond the face (the pokes). */
+export interface MockStageFace extends StageFace {
+  /** Re-arm the gate verdict (the gate-pending / re-open legs). */
+  setGate(gate: StageGateInfo): void
+  /** Re-arm the asset row set (the new-card fade-in leg feeds this). */
+  setAssets(assets: readonly StageAssetRow[]): void
+  /** Arm the NEXT advanceStage call to reject with an arbitrary envelope (the error leg). */
+  failNextAdvance(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the twin's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+  /** The live gate (post-advance reads). */
+  readonly gate: StageGateInfo
+}
+
+const MOCK_STAGE_PIPELINE: readonly FeatureStatus[] = ['prd', 'design', 'tasks', 'in-progress', 'completed']
+
+/** The UF2 stage verb twin (see {@link MockStageFaceOptions}). */
+export function createMockStageFace(options: MockStageFaceOptions = {}): MockStageFace {
+  const projectId = options.projectId ?? 'mock-project'
+  const featureSlug = options.featureSlug ?? 'dsh-forge-m2'
+  let gate: StageGateInfo = { ...(options.gate ?? MOCK_STAGE_GATE), featureSlug }
+  let assets: readonly StageAssetRow[] = options.assets ?? MOCK_STAGE_ASSETS
+  let failNext: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of listeners) listener(events)
+  }
+  const pipelineIndex = (stage: FeatureStatus): number => MOCK_STAGE_PIPELINE.indexOf(stage)
+  return {
+    getStageGate: async () => ({ ...gate, assets: [...assets] }),
+    listStageAssets: async () =>
+      [...assets].sort((a, b) => pipelineIndex(a.stage) - pipelineIndex(b.stage)),
+    advanceStage: async (_projectId: string, slug: string): Promise<FeatureSummary> => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      const stage = gate.stage
+      // 终态幂等 no-op(零写入、零事件)—— 4.1 kernel 口径。
+      if (stage === 'completed') {
+        return {
+          slug, status: 'completed', docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
+          taskTotal: 52, taskCompleted: 52, updatedAt: '2026-09-24T08:00:00.000Z',
+        }
+      }
+      if (!gate.summaryGenerated) {
+        // 与内核同形:code + 引导文案,detail = 缺失清单引导(缺失路径 + 生成路径)。
+        throw new Error(JSON.stringify({
+          code: 'ERR_STAGE_GATE_UNSATISFIED',
+          message: `stage gate unsatisfied: the summary asset of the current stage '${stage}' has not been generated yet`,
+          detail: `missing: features/${slug}/stages/${stage}.md — generate it first with the forge_stage_summarize tool (frontmatter { stage: "${stage}", goal } + summary body), then advance again`,
+        }))
+      }
+      const next = MOCK_STAGE_PIPELINE[pipelineIndex(stage) + 1]
+      if (next === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_STAGE_GATE_UNSATISFIED', message: `mock: stage '${stage}' has no successor` }))
+      }
+      // 推进:门态换新阶段(新阶段总结未生成),资产集不变,事件回流。
+      gate = { ...gate, stage: next, summaryGenerated: false, gateAssetPath: null }
+      emit([{ type: 'stage_advanced', projectId, featureSlug: slug }])
+      return {
+        slug, status: next, docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
+        taskTotal: 38, taskCompleted: 12, updatedAt: '2026-09-24T08:00:00.000Z',
+      }
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    setGate: (next) => { gate = { ...next, featureSlug } },
+    setAssets: (next) => { assets = next },
+    failNextAdvance: (code = 'ERR_WORKBENCH_DB', message = 'mock: advance rejected') => {
+      failNext = { code, message }
+    },
+    emit,
+    get gate(): StageGateInfo { return gate },
   }
 }

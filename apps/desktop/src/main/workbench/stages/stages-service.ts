@@ -9,6 +9,10 @@
 //     索引,管线序;UF2 第六「阶段资产」tab 数据源);
 //   - listStageAssets → stage_asset 行集(管线序)。
 //
+// 任务 4.3 UF2 裁决:两读动词的行集在索引行上活性拼接资产内容
+// (joinStageAssetContent:frontmatter goal + 正文摘要)—— 第六 tab 的
+// 目标/摘要只读渲染数据源(page-map);索引/表仍元数据-only(schema 不动)。
+//
 // 写侧(forge.stage.summarize / advanceStage 门内化 / stage_advanced 事件)
 // 归任务 4.1;本模块零写面(读动词)。
 //
@@ -16,12 +20,13 @@
 // 解析);feature 目录缺失 → ERR_FEATURE_NOT_FOUND(knowledge feature 面
 // 同码口径),项目缺失 → ERR_PROJECT_NOT_FOUND。
 
-import { statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RepoDb } from '../repos/types.ts'
 import { WorkbenchRepoError } from '../repos/types.ts'
 import { checkStageArtifacts, resolveFeatureStage } from './artifacts-check.ts'
 import { listStageAssetRows, stageAssetPathOf } from './stage-asset-index.ts'
+import { parseFrontmatterObject, readStringField, splitFrontmatter } from '../knowledge/frontmatter.ts'
 import type { StageArtifactsReport, StageAssetRow, StageGateInfo } from '../ipc/types.ts'
 
 /** stages 域错误码(feature 缺失;与 knowledge feature 面同码)。 */
@@ -60,6 +65,30 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/**
+ * 资产内容活性读(任务 4.3 UF2 裁决):在索引行上拼接文档根
+ * `stages/<stage>.md` 的 frontmatter goal + 正文摘要 —— 第六「阶段资产」
+ * tab 的目标/摘要只读渲染数据源。解析方言 = stage-asset-index 同款
+ * (knowledge/frontmatter);文件缺席/不可读/损坏 → 内容字段省略
+ * (感知时滞窗口的诚实降级,呈现层按空串呈现;索引行仍为行集权威)。
+ */
+function joinStageAssetContent(featuresRoot: string, rows: readonly StageAssetRow[]): StageAssetRow[] {
+  return rows.map((row) => {
+    let markdown: string
+    try {
+      markdown = readFileSync(join(featuresRoot, row.path), 'utf8')
+    } catch {
+      return row
+    }
+    const { raw, body } = splitFrontmatter(markdown)
+    if (raw === null) return { ...row, summary: body.trim() }
+    const fields = parseFrontmatterObject(markdown)
+    if (fields === null) return { ...row, summary: body.trim() }
+    const goal = readStringField(fields, 'goal')
+    return goal === '' ? { ...row, summary: body.trim() } : { ...row, goal, summary: body.trim() }
+  })
+}
+
 export function createStagesVerbService(deps: StagesVerbDeps): StagesVerbService {
   const { db } = deps
 
@@ -83,7 +112,7 @@ export function createStagesVerbService(deps: StagesVerbDeps): StagesVerbService
     },
 
     getStageGate(projectId: string, featureSlug: string): StageGateInfo {
-      const { featureDir } = requireFeature(projectId, featureSlug)
+      const { featuresRoot, featureDir } = requireFeature(projectId, featureSlug)
       const { stage } = resolveFeatureStage(db, projectId, featureSlug, featureDir)
       // 门态 = 活性 fs 存在性判定(推进门语义 = 阶段总结已生成;索引行仅作
       // 资产列表呈现,不承担门裁决 —— agent 刚写完资产即可过门,不吃感知时滞)。
@@ -98,13 +127,13 @@ export function createStagesVerbService(deps: StagesVerbDeps): StagesVerbService
         stage,
         summaryGenerated,
         gateAssetPath: summaryGenerated ? stageAssetPathOf(featureSlug, stage) : null,
-        assets: listStageAssetRows(db, projectId, featureSlug),
+        assets: joinStageAssetContent(featuresRoot, listStageAssetRows(db, projectId, featureSlug)),
       }
     },
 
     listStageAssets(projectId: string, featureSlug: string): StageAssetRow[] {
-      requireFeature(projectId, featureSlug)
-      return listStageAssetRows(db, projectId, featureSlug)
+      const { featuresRoot } = requireFeature(projectId, featureSlug)
+      return joinStageAssetContent(featuresRoot, listStageAssetRows(db, projectId, featureSlug))
     },
   }
 }

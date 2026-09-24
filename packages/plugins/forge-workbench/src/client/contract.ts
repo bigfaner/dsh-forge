@@ -27,8 +27,9 @@ import type { BoardSessionStore } from './store/board-session'
 import type { LaunchSeatStore } from './launch-rpc'
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
-  DocKind, FeatureBoardData, FeatureDoc, MigrationStarted, MigrationStatus, PluginRow, Project,
-  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, StageArtifactsReport,
+  DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
+  PluginRow, Project, ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink,
+  StageArtifactsReport, StageAssetRow, StageGateInfo,
   TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
 import type { GetTaskPromptResult } from './services'
@@ -325,6 +326,31 @@ export interface DispatchFace {
   listApprovals(projectId: string): Promise<ApprovalRow[]>
   /** workbench.decideApproval(input, actor) — the ONLY decision path (explicit click, decided_by audit). */
   decideApproval(input: DecideApprovalInput, actor: string): Promise<ApprovalRow>
+}
+
+/**
+ * The UF2 stage family's data face (task 4.3, tech-design §Interface 1 阶段段
+ * + §Interface 5): the three stage verbs the UF2 component layer consumes —
+ * getStageGate (the stepper's gate verdict + the assets list), listStageAssets
+ * (the sixth 「阶段资产」 tab's rows, content-joined), advanceStage (the advance
+ * action; unsatisfied gate → ERR_STAGE_GATE_UNSATISFIED riding the serialized
+ * WorkbenchVerbError shape, satisfied → the post-advance FeatureSummary +
+ * stage_advanced reflux through the SAME shared event source every family
+ * multiplexes over). Signatures mirror the preload bridge one-to-one; the
+ * component layer builds against the mock twin (mocks/workbench.
+ * createMockStageFace — TEST/BUILD-ONLY, the advance leg is a WRITE surface so
+ * absent members stay inert, the dispatch-face discipline), 4.4's assembly
+ * injects the IPC-backed face.
+ */
+export interface StageFace {
+  /** workbench.getStageGate(projectId, featureSlug) — gate verdict + assets list. */
+  getStageGate(projectId: string, featureSlug: string): Promise<StageGateInfo>
+  /** workbench.listStageAssets(projectId, featureSlug) — the tab's content-joined rows (pipeline order). */
+  listStageAssets(projectId: string, featureSlug: string): Promise<StageAssetRow[]>
+  /** workbench.advanceStage(projectId, featureSlug) — the gate-gated advance (terminal stage = idempotent no-op). */
+  advanceStage(projectId: string, featureSlug: string): Promise<FeatureSummary>
+  /** The shared single-subscriber event channel (stage_advanced / deviation_detected reflux ≤5s). */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
 }
 
 /**

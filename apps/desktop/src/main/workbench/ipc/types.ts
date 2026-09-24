@@ -578,13 +578,24 @@ export interface StageArtifactsReport {
   readonly missing: readonly MissingItem[]
 }
 
-/** stage_asset 行的 IPC 投影(派生索引;内容留文档根 stages/<stage>.md)。 */
+/**
+ * stage_asset 行的 IPC 投影(派生索引;内容留文档根 stages/<stage>.md)。
+ * 任务 4.3 UF2 裁决:动词行(getStageGate/listStageAssets)在索引行上活性
+ * 拼接资产内容(`goal` = frontmatter goal,`summary` = 正文摘要)—— 第六
+ * 「阶段资产」tab 的目标/摘要只读渲染数据源(page-map「listStageAssets 只读
+ * 渲染」);可选性 = 内核内部索引读(预合成 stageAssets 腿、行集同步)仍为
+ * 纯元数据三字段,呈现层缺省内容按空串降级。
+ */
 export interface StageAssetRow {
   readonly stage: FeatureStatus
   /** features 根相对路径(`<slug>/stages/<stage>.md`;与 task.desc_path 同方言)。 */
   readonly path: string
   /** frontmatter generated 原词;缺失 → null。 */
   readonly generatedAt: string | null
+  /** 资产内容(动词行活性拼接;索引内部读不携带):frontmatter goal。 */
+  readonly goal?: string
+  /** 资产内容(动词行活性拼接;索引内部读不携带):正文摘要。 */
+  readonly summary?: string
 }
 
 /** getStageGate 产物(Interface 1 UF2 阶段段:门态 + 资产列表)。 */

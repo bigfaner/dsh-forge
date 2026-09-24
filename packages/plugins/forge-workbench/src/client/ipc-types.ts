@@ -270,6 +270,41 @@ export interface StageSummarizeResult {
   readonly gateOpen: boolean
 }
 
+/**
+ * stage_asset 行(任务 4.3 canonical client twin;kernel StageAssetRow)。
+ * 元数据三字段 = stage_asset 派生索引列;`goal`/`summary` = UF2 第六
+ * 「阶段资产」tab 的内容腿(4.3 裁决:动词行在索引行上活性拼接文档根
+ * `stages/<stage>.md` 的 frontmatter goal + 正文摘要 —— page-map 的
+ * 「listStageAssets 只读渲染」数据源;DB 索引仍元数据-only,schema 不动)。
+ * 可选性 = 内核内部索引读(assemble 预合成腿)不携带内容;呈现层缺省 ''。
+ */
+export interface StageAssetRow {
+  readonly stage: FeatureStatus
+  /** features 根相对路径(`<slug>/stages/<stage>.md`;与 task.desc_path 同方言). */
+  readonly path: string
+  /** frontmatter generated 原词;缺失 → null. */
+  readonly generatedAt: string | null
+  /** 资产内容:frontmatter goal(动词行就位;索引内部读缺省). */
+  readonly goal?: string
+  /** 资产内容:frontmatter 之后正文摘要(动词行就位;索引内部读缺省). */
+  readonly summary?: string
+}
+
+/**
+ * getStageGate 产物(任务 4.3 canonical client twin;kernel StageGateInfo):
+ * 门态(当前阶段总结已生成,活性 fs 判定)+ 资产列表(管线序,含内容)。
+ */
+export interface StageGateInfo {
+  readonly featureSlug: string
+  readonly stage: FeatureStatus
+  /** 门态:当前阶段总结资产(stages/<stage>.md)已生成. */
+  readonly summaryGenerated: boolean
+  /** 门资产路径(features 根相对);未生成 → null. */
+  readonly gateAssetPath: string | null
+  /** 阶段资产列表(stage_asset 索引,管线序). */
+  readonly assets: readonly StageAssetRow[]
+}
+
 /** dispatchTasks 入参(任务 3.9 canonical client twin;acknowledgeMissing = 缺失确认面). */
 export interface DispatchTasksInput {
   readonly projectId: string
@@ -406,6 +441,12 @@ export type WorkbenchEvent =
   // featureSlug rides along for the UF2 badge). Declared here so the client
   // union stays the structural twin of the main-side vocabulary.
   | { readonly type: 'deviation_detected'; readonly projectId: string; readonly featureSlug?: string }
+  // M3 v2 (task 4.1 kernel push; client twin lands with 4.3's UF2 components):
+  // the stage-advance reflux — the kernel fires it on every actual advance
+  // (terminal 'completed' idempotent no-ops emit nothing). The UF2 surfaces
+  // (stepper gate refresh + the stage-assets tab's new-card fade-in) ride it
+  // ≤5s through the same batched channel.
+  | { readonly type: 'stage_advanced'; readonly projectId: string; readonly featureSlug: string }
   // M3 v2 (task 3.7, tech-design §Interface 1 事件扩展): the orchestration
   // reflux pair — dispatch_updated drives the 编排角标谱 migration (≤5s,
   // subscription-driven), approval_received drives the approval dock's

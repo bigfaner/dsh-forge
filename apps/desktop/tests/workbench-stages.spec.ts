@@ -531,6 +531,36 @@ describe('getStageGate / listStageAssets', () => {
     }
   })
 
+  // —— 任务 4.3 UF2 裁决:动词行内容拼接(goal + summary 活性读)——
+
+  it('getStageGate/listStageAssets rows carry the doc-root content (frontmatter goal + body summary, live join)', async () => {
+    const m = await withGateTree(['prd', 'design'])
+    try {
+      m.scan()
+      const rows = m.service.listStageAssets(m.projectId, corpus.slug)
+      expect(rows.map(row => row.goal)).toEqual(['Goal of prd', 'Goal of design'])
+      expect(rows.map(row => row.summary)).toEqual(['# prd 阶段总结\n\n摘要正文。', '# design 阶段总结\n\n摘要正文。'])
+      const gate = m.service.getStageGate(m.projectId, corpus.slug)
+      expect(gate.assets.map(row => row.goal)).toEqual(['Goal of prd', 'Goal of design'])
+    } finally {
+      m.db.close()
+    }
+  })
+
+  it('content join degrades honestly when the asset file vanishes after the scan (row kept, content absent)', async () => {
+    const m = await withGateTree(['prd'])
+    try {
+      m.scan()
+      rmSync(join(m.featureDir, 'stages', 'prd.md'))
+      const rows = m.service.listStageAssets(m.projectId, corpus.slug)
+      expect(rows.map(row => row.stage)).toEqual(['prd']) // 索引行集权威仍在
+      expect(rows[0]!.goal).toBeUndefined()
+      expect(rows[0]!.summary).toBeUndefined()
+    } finally {
+      m.db.close()
+    }
+  })
+
   it('STAGE_PIPELINE pins the forge stage vocabulary and order', () => {
     expect(STAGE_PIPELINE).toEqual(['prd', 'design', 'tasks', 'in-progress', 'completed'])
   })

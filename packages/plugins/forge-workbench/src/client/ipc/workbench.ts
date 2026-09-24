@@ -41,7 +41,7 @@ import type {
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
   PrefScope, Project, ReceiveApprovalInput, StageArtifactsReport, FeatureSummary,
-  StageSummarizeInput, StageSummarizeResult,
+  StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
@@ -49,7 +49,7 @@ import type {
 } from '../ipc-types'
 import type {
   CodeRootProbeResult, DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace,
-  PluginFace, RegisterWizardFace, TaskBoardFace, TaskDetailFace,
+  PluginFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { getWorkbenchEventSource } from './workbench-events'
 
@@ -168,6 +168,16 @@ export interface WorkbenchIpcBridge {
    */
   advanceStage(projectId: string, featureSlug: string): Promise<FeatureSummary>
   stageSummarize(input: StageSummarizeInput): Promise<StageSummarizeResult>
+  /**
+   * M3 stages read verbs (task 4.3's client wiring; the preload surface has
+   * carried them since 3.2/4.1): getStageGate answers the UF2 stepper's gate
+   * verdict + the content-joined assets list; listStageAssets answers the
+   * sixth 「阶段资产」 tab's rows (pipeline order). Rejections ride the same
+   * `{ code, message, detail? }` envelope (ERR_PROJECT_NOT_FOUND /
+   * ERR_FEATURE_NOT_FOUND).
+   */
+  getStageGate(projectId: string, featureSlug: string): Promise<StageGateInfo>
+  listStageAssets(projectId: string, featureSlug: string): Promise<StageAssetRow[]>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -189,6 +199,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'checkStageArtifacts', 'dispatchTasks', 'redispatch', 'getDispatches', 'listApprovals',
   // M3 stages write verbs (task 4.1).
   'advanceStage', 'stageSummarize',
+  // M3 stages read verbs (task 4.3; preload surface since 3.2/4.1).
+  'getStageGate', 'listStageAssets',
 ]
 
 /**
@@ -492,6 +504,43 @@ export function createIpcDispatchFace(bridge: WorkbenchIpcBridge): DispatchFace 
         renormalize(error)
       }
     },
+  }
+}
+
+/**
+ * The UF2 stage face over the verbs (task 4.3's assembly leg; 1:1 mapping
+ * with error renormalization, the dispatch-face discipline). advanceStage
+ * rejections reach the components through their own normalizeWorkbenchVerbError
+ * folds, so the ERR_STAGE_GATE_UNSATISFIED guidance leg runs against the same
+ * envelope shape the build-stage mock twin throws; subscribeEvents routes
+ * through the SINGLE-SUBSCRIBER shared channel (workbench-events.ts) so the
+ * stage_advanced reflux multiplexes over ONE preload subscription.
+ */
+export function createIpcStageFace(bridge: WorkbenchIpcBridge): StageFace {
+  return {
+    getStageGate: async (projectId: string, featureSlug: string): Promise<StageGateInfo> => {
+      try {
+        return await bridge.getStageGate(projectId, featureSlug)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    listStageAssets: async (projectId: string, featureSlug: string): Promise<StageAssetRow[]> => {
+      try {
+        return await bridge.listStageAssets(projectId, featureSlug)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    advanceStage: async (projectId: string, featureSlug: string): Promise<FeatureSummary> => {
+      try {
+        return await bridge.advanceStage(projectId, featureSlug)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    subscribeEvents: (callback: (events: readonly WorkbenchEvent[]) => void): (() => void) =>
+      getWorkbenchEventSource(bridge).subscribe(callback),
   }
 }
 
