@@ -91,6 +91,12 @@ export const WORKBENCH_VERB_CHANNELS = {
   //    校验/资产写入/幂等口径在内核(advance-service),通道面零特权。 ——
   advanceStage: 'dsh-forge:workbench-advance-stage',
   stageSummarize: 'dsh-forge:workbench-stage-summarize',
+  // —— M3 proposals 段(任务 5.3 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。提案面 = tech-design §Interface 1 提案段两读动词
+  //    (getProposalBoard/readProposalDoc,UF5 数据面);只读硬约束 —— 本域
+  //    零写动词(状态流转归终端/agent 会话),通道面零特权。 ——
+  getProposalBoard: 'dsh-forge:workbench-get-proposal-board',
+  readProposalDoc: 'dsh-forge:workbench-read-proposal-doc',
   // —— M3 dispatch 段(任务 3.3 追加;Hard Rule 延续:追加式修改,既有
   //    动词定义不改写)。动词面 = tech-design §Interface 1 编排段五动词
   //    (dispatchTasks/redispatch/getDispatches/listApprovals/decideApproval);

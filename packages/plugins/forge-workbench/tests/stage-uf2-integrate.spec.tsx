@@ -404,6 +404,9 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     stageSummarize: async () => ({}) as never,
     getStageGate: async () => ({}) as never,
     listStageAssets: async () => [],
+    // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
+    getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
+    readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

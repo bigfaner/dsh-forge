@@ -40,7 +40,8 @@ import type {
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project, ReceiveApprovalInput, StageArtifactsReport, FeatureSummary,
+  PrefScope, Project, ProposalBoardData, ProposalDoc, ReceiveApprovalInput,
+  StageArtifactsReport, FeatureSummary,
   StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
@@ -178,6 +179,19 @@ export interface WorkbenchIpcBridge {
    */
   getStageGate(projectId: string, featureSlug: string): Promise<StageGateInfo>
   listStageAssets(projectId: string, featureSlug: string): Promise<StageAssetRow[]>
+  /**
+   * M3 proposals read verbs (task 5.3, UF5 data plane): getProposalBoard
+   * answers the read-only proposal board (derived proposal_snapshot rows in
+   * the created-descending baseline order with the live-joined hasEval flag
+   * and the proposals root for the empty-state path hint); readProposalDoc
+   * answers the raw markdown of proposals/<slug>/proposal.md (kind
+   * 'proposal') or the deterministic eval-report pick (kind 'eval' —
+   * final-report.md preferred, lexicographic fallback). Rejections ride the
+   * same `{ code, message, detail? }` envelope (ERR_PROJECT_NOT_FOUND /
+   * ERR_PROPOSAL_PATH_INVALID / ERR_PROPOSAL_NOT_FOUND).
+   */
+  getProposalBoard(projectId: string): Promise<ProposalBoardData>
+  readProposalDoc(input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -201,6 +215,9 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'advanceStage', 'stageSummarize',
   // M3 stages read verbs (task 4.3; preload surface since 3.2/4.1).
   'getStageGate', 'listStageAssets',
+  // M3 proposals read verbs (task 5.3; the tool-bridge pump's proposal legs
+  // dispatch here; the UF5 client face lands with 5.4).
+  'getProposalBoard', 'readProposalDoc',
 ]
 
 /**

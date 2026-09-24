@@ -144,6 +144,8 @@ function fakeServices(): WorkbenchVerbServices {
     listStageAssets: vi.fn(() => []),
     advanceStage: vi.fn(() => ({ slug: 'alpha', status: 'design', docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: '2026-09-20T10:00:00.000Z' })),
     stageSummarize: vi.fn(() => ({ stage: 'prd', path: 'alpha/stages/prd.md', generatedAt: '2026-09-20T10:00:00.000Z', featureStage: 'prd', gateOpen: true })),
+    getProposalBoard: vi.fn(() => ({ proposals: [], generatedAt: '2026-09-20T10:00:00.000Z', proposalsRoot: 'Z:/root/docs/proposals' })),
+    readProposalDoc: vi.fn(() => ({ kind: 'proposal', markdown: '# p\n' })),
     dispatchTasks: vi.fn(() => Promise.resolve({ dispatched: [] })),
     redispatch: vi.fn(() => Promise.resolve({ dispatched: [] })),
     getDispatches: vi.fn(() => []),
@@ -198,7 +200,7 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the forty-nine whitelisted verb channels, one per verb', () => {
+  it('contains exactly the fifty-one whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-advance-stage',
@@ -214,6 +216,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-migration-status',
       'dsh-forge:workbench-get-prefs',
+      'dsh-forge:workbench-get-proposal-board',
       'dsh-forge:workbench-get-stage-gate',
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
@@ -230,6 +233,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-notify-session-started',
       'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
+      'dsh-forge:workbench-read-proposal-doc',
       'dsh-forge:workbench-receive-approval',
       'dsh-forge:workbench-record-session-link',
       'dsh-forge:workbench-redispatch',
@@ -250,7 +254,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(49)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(51)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -301,6 +305,8 @@ describe('workbench verb routing table', () => {
       'listStageAssets',
       'advanceStage',
       'stageSummarize',
+      'getProposalBoard',
+      'readProposalDoc',
       'dispatchTasks',
       'redispatch',
       'getDispatches',
@@ -351,10 +357,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 49 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 51 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(49)
+    expect(handlers.size).toBe(51)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -477,6 +483,14 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
     expect(services.stageSummarize).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
+
+    // M3 proposals 段(任务 5.3):只读两动词 —— projectId/slug/kind 形状
+    // 校验 + 服务转发;只读硬约束在域面(零写动词)。
+    handlers.get(C.getProposalBoard)?.(OWNED, 'p-1')
+    expect(services.getProposalBoard).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.readProposalDoc)?.(OWNED, { projectId: 'p-1', slug: 'dsh-forge-m3', kind: 'eval' })
+    expect(services.readProposalDoc).toHaveBeenCalledWith({ projectId: 'p-1', slug: 'dsh-forge-m3', kind: 'eval' })
 
     // M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身转发的
     // 回调面 —— 形状校验 + 服务转发;语义/事务在 dispatch-service 域面。

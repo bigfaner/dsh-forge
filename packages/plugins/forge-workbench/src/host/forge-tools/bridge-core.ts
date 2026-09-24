@@ -40,7 +40,11 @@
  *
  * 任务 4.1 追加:stage 写族(forge.stage.summarize → stage_summarize;
  * 阶段资产写/覆盖 + 索引同步。推进门 advanceStage = 人侧 UF2 动词,不经
- * tool 面 —— Interface 2 stage 族仅 summarize)。 */
+ * tool 面 —— Interface 2 stage 族仅 summarize)。
+ *
+ * 任务 5.3 追加:proposal 读族(forge.proposal.list/show → proposal_list/
+ * proposal_show;只读硬约束 —— 本域零写动词,归宿表「提案看板 GUI +
+ * dsh tool 只读」行)。 */
 export type ForgeToolBridgeVerb =
   | 'task_add'
   | 'task_claim'
@@ -60,6 +64,8 @@ export type ForgeToolBridgeVerb =
   | 'approval_receive'
   | 'approval_decide'
   | 'stage_summarize'
+  | 'proposal_list'
+  | 'proposal_show'
 
 /** 桥 transport 级失败码(spike-1 §3.3;区别于内核业务 ERR_* 码)。 */
 export const BRIDGE_TRANSPORT_CODE = 'ERR_TOOL_BRIDGE_UNAVAILABLE' as const

@@ -20,7 +20,7 @@ import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
-import { resolveFeaturesDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
+import { resolveFeaturesDir, resolveProposalsDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
 import { toSyncStatusPayload } from '../indexer/diff.ts'
 import {
   probeReadableDirectory,
@@ -61,6 +61,7 @@ import { createKnowledgeVerbService } from '../knowledge/knowledge-service.ts'
 import { createPrefsVerbService } from '../prefs/prefs-service.ts'
 import { createStagesVerbService } from '../stages/stages-service.ts'
 import { createStageWriteService } from '../stages/advance-service.ts'
+import { createProposalsVerbService } from '../proposals/proposals-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import type {
@@ -303,6 +304,19 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     db,
     resolveFeaturesRoot,
     onEvent: event => sink([event]),
+  })
+
+  // M3 任务 5.3:proposals 读动词服务(proposal_snapshot 派生索引读 +
+  // hasEval 活性拼接 + markdown 原文只读)。只读硬约束 —— 本域零写动词、
+  // 零事件;proposals 根解析与 features 根同源(scan.resolveProposalsDir,
+  // 文档根三分模型单一解析),感知回流由 proposals/ 感知根 + 每轮扫描同步
+  // 承载(DF007 ≤5s)。
+  const proposalsVerbs = createProposalsVerbService({
+    db,
+    resolveProposalsRoot: (projectId: string): string | null => {
+      const project = findProjectRow(db, projectId)
+      return project === undefined ? null : resolveProposalsDir(scanTargetOf(project))
+    },
   })
 
   // M3 任务 3.4:预合成引擎(三要素组装 + prompt_hash 口径物)。取 代
@@ -576,6 +590,12 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       //    事件随写直发)。 ——
       advanceStage: (projectId, featureSlug) => stageWriteVerbs.advanceStage(projectId, featureSlug),
       stageSummarize: input => stageWriteVerbs.stageSummarize(input),
+
+      // —— M3 proposals 读动词(任务 5.3):委托 proposals/proposals-service
+      //    (proposal_snapshot 索引读 + 排序基线 + hasEval 活性拼接 + markdown
+      //    原文只读;只读硬约束 —— 零写动词)。 ——
+      getProposalBoard: projectId => proposalsVerbs.getProposalBoard(projectId),
+      readProposalDoc: input => proposalsVerbs.readProposalDoc(input),
 
       // —— M3 编排动词(任务 3.3):委托 dispatch/dispatch-service
       //    (可派发集校验 + 产物检查消费 + 审批决策 + ⇔ 不变式;

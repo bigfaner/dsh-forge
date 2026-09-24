@@ -57,6 +57,7 @@ import {
 } from './diff.ts'
 import { determineSource } from './source.ts'
 import { collectStageAssets, deleteStageAssets, replaceStageAssets } from '../stages/stage-asset-index.ts'
+import { collectProposalIndex, replaceProposalSnapshots } from '../proposals/proposal-indexer.ts'
 
 /** 扫描目标(projects 行的最小投影;docBase 口径同 registry/forge-detect)。 */
 export interface ScanTarget {
@@ -88,6 +89,15 @@ export interface ScanOutcome {
 /** features 目录解析(docBase = docLocationPath ?? codeRoot,仓外文档三分模型)。 */
 export function resolveFeaturesDir(target: ScanTarget): string {
   return join(target.docLocationPath ?? target.codeRoot, 'docs', 'features')
+}
+
+/**
+ * proposals 目录解析(任务 5.3;docBase 口径同 resolveFeaturesDir)。
+ * forge-cli `feature.ProposalBaseDir` = docs/proposals(文档根布局三分:
+ * features/<slug>/ + proposals/<slug>/ + 阶段资产)。
+ */
+export function resolveProposalsDir(target: ScanTarget): string {
+  return join(target.docLocationPath ?? target.codeRoot, 'docs', 'proposals')
 }
 
 /** 解析失败 → sync_state 错误项文案(≤120 截断由 repos 层执行)。 */
@@ -169,6 +179,11 @@ function applyScanResult(
   const featuresDir = resolveFeaturesDir(target)
   const stageAssetsBySlug = new Map(result.features.map(feature => [feature.slug, collectStageAssets(featuresDir, feature.slug)]))
 
+  // M3 任务 5.3:proposal_snapshot 感知索引 —— 项目级行集替换(派生纯函数,
+  // 与 rebuildProposalIndex 共用 collect/replace 实现;proposals/ 变更不触
+  // task/feature 行,全量同步零漂移)。fs 读取置于写事务外(同上)。
+  const proposalRows = collectProposalIndex(resolveProposalsDir(target), featuresDir)
+
   const runWrites = (): void => {
     deleteTaskSnapshots(db, target.id, taskDiff.deletedKeys)
     const batchRows = taskDiff.upserts.flatMap((row) => {
@@ -208,6 +223,8 @@ function applyScanResult(
     for (const feature of result.features) {
       replaceStageAssets(db, target.id, feature.slug, stageAssetsBySlug.get(feature.slug) ?? [])
     }
+    // M3 5.3:提案行集替换(结构性删除经整组替换清行;无 proposals/ 目录 → 空集)。
+    replaceProposalSnapshots(db, target.id, proposalRows)
   }
 
   if (options.wrapTransaction) {
@@ -283,6 +300,22 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     dirOk = false
   }
   if (!dirOk) {
+    // M3 5.3:features/ 缺失(管线早期:仅 proposals/ 在场)不阻断提案索引 ——
+    // proposal_snapshot 自持事务独立行集替换(任务/feature 快照零变更,M2
+    // error 态语义保持);失败上抛由 watcher 感知面降级(Hard Rule 不弹 UI)。
+    const proposalRows = collectProposalIndex(resolveProposalsDir(target), featuresDir)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      replaceProposalSnapshots(db, target.id, proposalRows)
+      db.exec('COMMIT')
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK')
+      } catch {
+        // The connection may already be unusable; prefer rethrowing the original error.
+      }
+      throw error
+    }
     const sync = markScanFailed(db, target.id, `features directory not found: ${featuresDir}`)
     const stats: ScanStats = {
       featuresScanned: 0,

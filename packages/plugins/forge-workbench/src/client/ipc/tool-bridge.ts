@@ -161,6 +161,8 @@ interface BridgeCallArgs {
   stage?: string
   goal?: string
   summary?: string
+  // —— proposal 读族(任务 5.3;proposal_list/proposal_show 帧字段)——
+  kind?: string
 }
 
 /**
@@ -219,6 +221,17 @@ function invokeVerb(bridge: WorkbenchIpcBridge, call: ForgeToolBridgeCall): Prom
         stage: args.stage as StageSummarizeInput['stage'],
         goal: args.goal as string,
         summary: args.summary as string,
+      })
+    // —— proposal 读族(任务 5.3):forge_proposal_list/show 的内核读腿
+    //    (只读 —— 不携带 actor 写审计,feature 读族同口径;kind 缺省
+    //    proposal,host 工具面已做白名单断言)。 ——
+    case 'proposal_list':
+      return bridge.getProposalBoard(args.projectId as string)
+    case 'proposal_show':
+      return bridge.readProposalDoc({
+        projectId: args.projectId as string,
+        slug: args.slug as string,
+        kind: (args.kind ?? 'proposal') as 'proposal' | 'eval',
       })
     // —— 审批桥上行族(任务 3.5):host approval-bridge 的内核端口腿。
     //    approval_receive = 审批事件入列(插 pending + awaiting 联动);

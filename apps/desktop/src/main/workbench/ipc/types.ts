@@ -645,6 +645,44 @@ export interface StageSummarizeResult {
 }
 
 // ---------------------------------------------------------------------------
+// M3 提案域 DTO(任务 5.3;tech-design §Interface 1 提案段 getProposalBoard/
+// readProposalDoc + schema-v2.sql §8 proposal_snapshot;只读数据面,DF007)
+// ---------------------------------------------------------------------------
+
+/** 提案状态词表(proposal_snapshot.status CHECK 同源;4 态小写规范形)。 */
+export type ProposalStatus = 'draft' | 'accepted' | 'rejected' | 'superseded'
+
+/** proposal_snapshot 行的板投影(UF5 列表行;hasEval = 活性 fs 拼接腿)。 */
+export interface ProposalSummary {
+  readonly slug: string
+  readonly status: ProposalStatus
+  /** frontmatter author 原词;缺失 → null。 */
+  readonly author: string | null
+  /** frontmatter created 原词;缺失 → mtime 本地日期(forge 数据面回退)。 */
+  readonly created: string | null
+  /** 关联 feature(slug 同一性 + manifest 在场);NULL = 无关联(不渲染徽标)。 */
+  readonly featureSlug: string | null
+  /** eval 报告存在性(活性 fs:eval/ 下 ≥1 .md;schema 无列)。 */
+  readonly hasEval: boolean
+  /** proposal.md mtime(ISO)。 */
+  readonly updatedAt: string
+}
+
+/** getProposalBoard 产物(全量列表 + 排序基线 = created 降序,平局 slug 升序)。 */
+export interface ProposalBoardData {
+  readonly proposals: readonly ProposalSummary[]
+  readonly generatedAt: string
+  /** proposals 根绝对路径(UF5 空态卡的文档根路径说明数据源)。 */
+  readonly proposalsRoot: string
+}
+
+/** readProposalDoc 产物(markdown 原文只读;渲染层白名单归 UI 任务)。 */
+export interface ProposalDoc {
+  readonly kind: 'proposal' | 'eval'
+  readonly markdown: string
+}
+
+// ---------------------------------------------------------------------------
 // M3 编排域 DTO(任务 3.3;tech-design §Interface 1 编排段 dispatchTasks/
 // redispatch/getDispatches/listApprovals/decideApproval + §Data Models
 // dispatch/approval_request 行;schema-v2.sql §4/§5)
@@ -861,6 +899,22 @@ export interface WorkbenchVerbServices {
    * 同款实现)。词表外阶段 / 空 goal / 空摘要 → ERR_STAGE_ASSET_INVALID。
    */
   stageSummarize(input: StageSummarizeInput): StageSummarizeResult
+  // —— M3 提案读动词(任务 5.3;实现 = proposals/proposals-service.ts 经
+  // services.ts 装配;只读硬约束 —— 本域零写动词,状态流转归终端/agent
+  // 会话)——
+  /**
+   * 提案板(UF5 列表数据):proposal_snapshot 派生索引全量行 + 排序基线
+   * (created 降序,平局 slug 升序)+ hasEval 活性拼接 + proposalsRoot
+   * (空态卡路径说明)。快照随感知回流(DF007 ≤5s,proposals/ 感知根)。
+   */
+  getProposalBoard(projectId: string): ProposalBoardData
+  /**
+   * 提案文档 markdown 原文只读读(proposal | eval 两 kind;eval 确定性
+   * 选锚 = eval/final-report.md 优先,否则字典序首位 .md)。项目缺失 →
+   * ERR_PROJECT_NOT_FOUND;slug 段形态 → ERR_PROPOSAL_PATH_INVALID;
+   * 文件缺失/eval 无报告 → ERR_PROPOSAL_NOT_FOUND。
+   */
+  readProposalDoc(input: { readonly projectId: string; readonly slug: string; readonly kind: 'proposal' | 'eval' }): ProposalDoc
   // —— M3 编排动词(任务 3.3;实现 = dispatch/dispatch-service.ts 经
   // services.ts 装配;内核不持会话创建权 —— subagent 启动仅经 host 回调
   // 接口 launch-port,3.5 接线)——

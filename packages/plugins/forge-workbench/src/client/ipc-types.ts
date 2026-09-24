@@ -305,6 +305,42 @@ export interface StageGateInfo {
   readonly assets: readonly StageAssetRow[]
 }
 
+// ———— M3 提案域 DTO(任务 5.3 canonical client twin;kernel ipc/types.ts
+// ———— ProposalStatus/ProposalSummary/ProposalBoardData/ProposalDoc,只读数据面)
+
+/** 提案状态词表(proposal_snapshot.status CHECK 同源;4 态小写规范形)。 */
+export type ProposalStatus = 'draft' | 'accepted' | 'rejected' | 'superseded'
+
+/** proposal_snapshot 行的板投影(UF5 列表行;hasEval = 活性 fs 拼接腿)。 */
+export interface ProposalSummary {
+  readonly slug: string
+  readonly status: ProposalStatus
+  /** frontmatter author 原词;缺失 → null。 */
+  readonly author: string | null
+  /** frontmatter created 原词;缺失 → mtime 本地日期(forge 数据面回退)。 */
+  readonly created: string | null
+  /** 关联 feature(slug 同一性 + manifest 在场);NULL = 无关联(不渲染徽标)。 */
+  readonly featureSlug: string | null
+  /** eval 报告存在性(活性 fs:eval/ 下 ≥1 .md;schema 无列)。 */
+  readonly hasEval: boolean
+  /** proposal.md mtime(ISO)。 */
+  readonly updatedAt: string
+}
+
+/** getProposalBoard 产物(全量列表 + 排序基线 = created 降序,平局 slug 升序)。 */
+export interface ProposalBoardData {
+  readonly proposals: readonly ProposalSummary[]
+  readonly generatedAt: string
+  /** proposals 根绝对路径(UF5 空态卡的文档根路径说明数据源)。 */
+  readonly proposalsRoot: string
+}
+
+/** readProposalDoc 产物(markdown 原文只读;渲染层白名单归 UI 任务)。 */
+export interface ProposalDoc {
+  readonly kind: 'proposal' | 'eval'
+  readonly markdown: string
+}
+
 /** dispatchTasks 入参(任务 3.9 canonical client twin;acknowledgeMissing = 缺失确认面). */
 export interface DispatchTasksInput {
   readonly projectId: string

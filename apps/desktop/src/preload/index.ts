@@ -31,6 +31,8 @@ import type {
   MigrationStatus,
   PluginRow,
   PrefEntry,
+  ProposalBoardData,
+  ProposalDoc,
   PrefRow,
   PrefScope,
   ProbeCodeRootInput,
@@ -258,6 +260,19 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.advanceStage, projectId, featureSlug) as Promise<FeatureSummary>,
     stageSummarize: (input: StageSummarizeInput): Promise<StageSummarizeResult> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.stageSummarize, input) as Promise<StageSummarizeResult>,
+    // M3 proposals read verbs (task 5.3, UF5 data plane): getProposalBoard
+    // answers the read-only proposal board (derived proposal_snapshot rows in
+    // the created-descending baseline order, live-joined hasEval, plus the
+    // proposals root for the empty-state path hint); readProposalDoc answers
+    // the raw markdown of proposals/<slug>/proposal.md (kind 'proposal') or
+    // the deterministic eval-report pick (kind 'eval' — final-report.md
+    // preferred, lexicographic fallback). Rejections ride the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_PROPOSAL_PATH_INVALID / ERR_PROPOSAL_NOT_FOUND).
+    getProposalBoard: (projectId: string): Promise<ProposalBoardData> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProposalBoard, projectId) as Promise<ProposalBoardData>,
+    readProposalDoc: (input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.readProposalDoc, input) as Promise<ProposalDoc>,
     // M3 dispatch verbs (task 3.3): the orchestration family. dispatchTasks
     // validates the dispatchable set (status allowed + terminal deps — rejections
     // arrive as the same { code, message, detail? } envelope, ERR_TASK_*),

@@ -35,7 +35,8 @@ const EXPECTED_TOOL_NAMES = [
 /**
  * The full registerForgeTools assembly: the 2.1 task family plus the 2.2
  * knowledge (D4) and feature-read families and the 3.1 pref family appended
- * on the same base.
+ * on the same base, plus the 4.1 stage family and the 5.3 proposal read
+ * family.
  */
 const ASSEMBLY_TOOL_NAMES = [
   ...EXPECTED_TOOL_NAMES,
@@ -43,6 +44,7 @@ const ASSEMBLY_TOOL_NAMES = [
   'forge_feature_list', 'forge_feature_status',
   'forge_pref_get',
   'forge_stage_summarize',
+  'forge_proposal_list', 'forge_proposal_show',
 ] as const
 
 /** Minimal exec-context face the tool bodies read (spike-1 §1.1 exec 契约). */

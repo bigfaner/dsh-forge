@@ -592,6 +592,24 @@ export function installWorkbenchVerbs(
     return services.stageSummarize(input as unknown as StageSummarizeInput)
   })
 
+  // —— M3 proposals 段(任务 5.3):两条提案读动词。Hard Rule 延续 —— 本层
+  // 只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;只读硬约束
+  // (零写动词)在域面(proposals-service),不信任 renderer 语义。 ——
+
+  register(C.getProposalBoard, args =>
+    services.getProposalBoard(requireString('getProposalBoard', 'projectId', args[0])))
+
+  register(C.readProposalDoc, (args) => {
+    const input = requireObject('readProposalDoc', 'input', args[0])
+    requireString('readProposalDoc', 'input.projectId', input.projectId)
+    requireString('readProposalDoc', 'input.slug', input.slug)
+    const kind = requireString('readProposalDoc', 'input.kind', input.kind)
+    if (kind !== 'proposal' && kind !== 'eval') {
+      throw new Error(`workbench.readProposalDoc: input.kind must be one of proposal/eval (got ${kind})`)
+    }
+    return services.readProposalDoc(input as unknown as { projectId: string; slug: string; kind: 'proposal' | 'eval' })
+  })
+
   // —— M3 dispatch 段(任务 3.3):五条编排动词。Hard Rule 延续 —— 本层
   // 只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;可派发集校验
   // (状态/依赖)、产物检查消费、预合成契约查、审批审计与 ⇔ 不变式全部

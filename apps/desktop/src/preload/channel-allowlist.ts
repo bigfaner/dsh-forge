@@ -71,6 +71,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   // tests/workbench-ipc.spec.ts deep-equal 断言)。
   advanceStage: 'dsh-forge:workbench-advance-stage',
   stageSummarize: 'dsh-forge:workbench-stage-summarize',
+  // M3 proposals 段(任务 5.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getProposalBoard: 'dsh-forge:workbench-get-proposal-board',
+  readProposalDoc: 'dsh-forge:workbench-read-proposal-doc',
   // M3 dispatch 段(任务 3.3 追加;与 main 侧同键同值,drift 锁 =
   // tests/workbench-ipc.spec.ts deep-equal 断言)。
   dispatchTasks: 'dsh-forge:workbench-dispatch-tasks',

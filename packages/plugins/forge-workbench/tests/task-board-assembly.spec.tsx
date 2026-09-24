@@ -99,6 +99,9 @@ function baseBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIpcBr
     // M3 stages 读段(任务 4.3;preload 面自 3.2/4.1 已携带)。
     getStageGate: async () => ({ featureSlug: 'demo', stage: 'tasks', summaryGenerated: false, gateAssetPath: null, assets: [] }),
     listStageAssets: async () => [],
+    // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
+    getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
+    readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
     onEvents: () => () => {},
     ...overrides,
   } as WorkbenchIpcBridge
