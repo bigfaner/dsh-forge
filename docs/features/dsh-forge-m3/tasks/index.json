@@ -613,7 +613,7 @@
       "dependencies": [
         "4.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.6-skills-bundle.md",
       "record": "records/5.6-skills-bundle.md",
       "type": "doc"
