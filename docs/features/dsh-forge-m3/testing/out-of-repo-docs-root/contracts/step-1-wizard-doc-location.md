@@ -7,10 +7,10 @@ sources:
   - docs/features/dsh-forge-m3/testing/out-of-repo-docs-root/journey.md
 anchors:
   web:
-    page: "注册向导(文档位置步骤)"
+    page: "工作台 · 项目概览(UF3 迁移 + UF4 偏好扩展)"
     route: "workbench/dialog/register-wizard"
     requires_auth: false
-    layout: "WorkbenchShell → WizardDialog → StepExternal(文档位置)"
+    layout: "WorkbenchShell(工作台 · 项目概览)→ WizardDialog 注册向导浮层(「注册向导(条件步骤)」区)→ StepExternal(文档位置)"
 last_anchor_sync: "2026-09-25T00:59:32Z"
 ---
 
@@ -20,6 +20,7 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 <!-- state-verification: full -->
 
 ## Outcome "success"
+<!-- source: FT-095(向导文档位置步骤默认仓外,in_repo 为显式选项;仓外默认 = 应用管理的文档根) -->
 - Preconditions: "新 forge 项目代码仓(fixture:含 .git、代码文件与 .forge/,无过程文档);应用已启动;起始环境授权登记为空,应用管理路径可写"
   fixture_spec:
     entities:
@@ -32,11 +33,13 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
             value: false
 - Input: "用户经项目切换器「添加项目」发起注册新项目,走到文档位置步骤"
 - Output: "默认值 = 仓外文档根(应用管理路径);仓内存放为可选项(非默认)"
-- State: "纯呈现;默认值翻转落点 = 内核管理位置(docsRoot);零注册写入"
+- State: "纯呈现;默认值翻转仅改变向导的默认选项(新注册文档根默认 = 应用管理的仓外文档根);零注册写入"
+<!-- impl: 仓外默认文档根 = 应用路径约定的管理位置(FT-095);翻转不回写既有项目行 -->
 - Side-effect: "none"
 - Invariants: "新注册项目的文档根默认恒为仓外(应用管理路径);仓内仅为显式选项"
 
 ## Outcome "explicit-in-repo"
+<!-- source: FT-036(doc_location_type in_repo → 路径为空;external → 路径必填);FT-095(in_repo 为向导显式选项,非淘汰) -->
 - Preconditions: "文档位置步骤呈现中;用户主动选择仓内选项"
   fixture_spec:
     entities:
@@ -53,10 +56,11 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 
 ## Outcome "forge-not-detected"
 <!-- source: BIZ-workbench-003(注册校验链:`.forge/` 与文档位置均无 → ERR_FORGE_NOT_DETECTED,错误引导修正路径或先初始化项目) -->
+<!-- source: FT-038(forge 检出规则:有效文档位置下 .forge/ 或 docs/features 均无 → ERR_FORGE_NOT_DETECTED,错误信息指明缺失项) -->
 - Preconditions: "注册所选代码根目录不含 .forge/ 且文档位置无 forge 数据"
   fixture_spec:
     entities:
-      - entity_type: "CodeRootDirectory"
+      - entity_type: "ForgeProjectCodeRoot"
         min_count: 1
         field_constraints:
           - field: "hasDotForge"
@@ -65,7 +69,7 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
             value: false
 - Input: "用户选择该目录作为代码根继续注册"
 - Output: "注册被阻止,呈现 forge 数据未检出的错误引导(修正路径或先初始化项目);不进入文档位置步骤"
-- State: "零注册写入;校验链在文档位置步骤之前拦截"
+- State: "零注册写入;注册流程停在 forge 检出失败处,未进入文档位置步骤(向导步骤序的拦截时点无事实表来源:UNKNOWN)"
 - Side-effect: "none"
 - Invariants: "注册期校验链沿用 M2:forge 数据未检出即阻止"
 

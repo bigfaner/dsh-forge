@@ -7,7 +7,7 @@ sources:
   - docs/features/dsh-forge-m3/testing/stage-gates-cross-phase-context/journey.md
 anchors:
   web:
-    page: "工作台 · Feature 看板(偏离徽标)"
+    page: "工作台 · Feature 看板(UF2 阶段化扩展)"
     route: "workbench/features"
     requires_auth: false
     layout: "WorkbenchShell → FeaturesPage(偏离徽标 + 详情区偏离标识)"
@@ -20,11 +20,15 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 <!-- state-verification: full -->
 
 ## Outcome "success"
+<!-- facts: FT-085(感知扫描前比对活性 manifest 与既有快照:不一致 → 偏离置位 + 外部变更时间 + deviation_detected 事件;扫描随后收敛快照,同一外部变更只报一次;呈现不阻断) -->
 - Preconditions: "feature 处于已扫描快照在场的阶段;外部会话(终端/冻结 CC 插件)将 manifest status 改写为不同阶段(跨阶段操作)"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "data_authority"
+            value: "sqlite"
       - entity_type: "Feature"
         min_count: 1
         relationship_type: "belongs_to"
@@ -41,16 +45,20 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
             value: "被外部改写为与快照不同的词表内阶段"
 - Input: "用户以外部会话对该 feature 做跨阶段操作,回看 feature 看板"
 - Output: "偏离标识可见;外部会话不被硬阻断;标识仅为呈现"
-- State: "感知扫描前比对:manifest status ≠ 快照 status → feature_snapshot.deviated 置位 + last_external_at 记录;deviation_detected 事件推送;本轮扫描随后将快照收敛到 manifest(同一外部变更只报一次)"
+- State: "感知扫描前比对文档根 manifest 阶段与既有快照:不一致 → 偏离标记置位并记录外部变更时间;偏离事件(deviation_detected)推送;本轮扫描随后将快照收敛到文档根现状(同一外部变更只报一次)"
 - Side-effect: "deviation_detected 事件;manifest 字节与 mtime 原样(零宿主侵入)"
 - Invariants: "外部会话永不硬阻断(零宿主侵入);偏离仅呈现"
 
 ## Outcome "no-blocking-interaction"
+<!-- facts: FT-085(偏离仅呈现、零阻断交互;标记持续至下次内核合法 advanceStage 清除) -->
 - Preconditions: "偏离标识呈现中"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "data_authority"
+            value: "sqlite"
       - entity_type: "Feature"
         min_count: 1
         relationship_type: "belongs_to"

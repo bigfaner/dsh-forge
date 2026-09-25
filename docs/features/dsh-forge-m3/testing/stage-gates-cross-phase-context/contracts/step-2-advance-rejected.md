@@ -7,8 +7,8 @@ sources:
   - docs/features/dsh-forge-m3/testing/stage-gates-cross-phase-context/journey.md
 anchors:
   web:
-    page: "工作台 · Feature 详情(推进动作 + GateHint)"
-    route: "workbench/features/<slug>"
+    page: "工作台 · Feature 看板(UF2 阶段化扩展)"
+    route: "workbench/features/:slug"
     requires_auth: false
     layout: "WorkbenchShell → FeatureDetail(AdvanceStageButton + GateHint 缺失清单引导)"
 last_anchor_sync: "2026-09-25T00:59:32Z"
@@ -20,11 +20,15 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 <!-- state-verification: full -->
 
 ## Outcome "gate-rejected"
+<!-- facts: FT-080(门不满足 → ERR_STAGE_GATE_UNSATISFIED + 缺失产物引导文案,点名期望路径与产出工具;活性 fs 判定);FT-081(拒绝路径不产生任何推进写入) -->
 - Preconditions: "feature 处于中间阶段且当前阶段的总结资产未生成(文档根不存在 stages/<当前阶段>.md)"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "data_authority"
+            value: "sqlite"
       - entity_type: "Feature"
         min_count: 1
         relationship_type: "belongs_to"
@@ -32,12 +36,19 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
         field_constraints:
           - field: "status"
             value: "tasks(中间阶段)"
+      - entity_type: "ManifestFile"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Feature"
+        field_constraints:
+          - field: "frontmatter.status"
+            value: "tasks(与 feature 当前阶段一致;零写入断言的观察基线)"
     state_requirements:
       - description: "features/<slug>/stages/<当前阶段>.md 不存在(总结未生成)"
         prerequisite_entity: "Feature"
 - Input: "用户请求将该 feature 推进到下一阶段"
 - Output: "请求被门拒绝;拒绝文案可观察并引导缺失动作(生成阶段总结,提示期望资产路径与产出工具);feature 阶段不变"
-- State: "推进被 ERR_STAGE_GATE_UNSATISFIED 拒绝;manifest 与 feature_snapshot 零写入;门校验为活性 fs 判定(确定性代码)"
+- State: "推进零生效(feature 阶段与详情呈现零变更,零写入);门校验为活性文件判定(确定性代码,不吃索引时滞)"
 - Side-effect: "none"
 - Invariants: "阶段推进门为编排层硬门:总结未生成必拒绝推进"
 

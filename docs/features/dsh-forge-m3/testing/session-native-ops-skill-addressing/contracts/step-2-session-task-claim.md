@@ -18,9 +18,12 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
 <!-- state-verification: full -->
+<!-- 测试通道定义(本 journey 全部 Input 共用):web harness 不直接驱动 agent 会话;agent 动作经测试通道注入 —— ①驱动面:harness 在 exec 上下文中直接调用 dsh model-facing tool 调用集(与 agent 会话调用同面),不经浏览器表单;②身份供给:exec 上下文携带会话标识 session:<id>(actor 由此派生),可按 outcome 构造身份缺失;③调用记录:通道逐次记录 tool 调用入参、canonical JSON 返回与上抛错误,供断言;④边界注入:宿主/插件面缺席、配置漂移、非法 taskKey 等边界状态经通道构造。回流/审计/寻址断言不受模拟方式影响(journey e2e 驱动面注记)。 -->
 
 ## Outcome "success"
-- Preconditions: "备一个可执行任务(带执行 prompt,状态 pending,依赖满足);审计日志通道可查"
+<!-- source: fact FT-093(task-service.ts:95-109):权威写事务提交后 task_updated 事件直发(看板 ≤5s 免手动刷新回流依赖此直发) -->
+<!-- source: fact FT-060(schema-v2.ts:48;task-service.ts:34-36):每笔内核写记 updated_by(session:<id>)与 updated_at -->
+- Preconditions: "目标任务存在且可执行:状态 pending、依赖全部终态、附执行 prompt"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -45,7 +48,8 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 
 ## Outcome "illegal-transition-rejected"
 <!-- source: inferred:状态机(7 态)入数据内核,非法转换必拒(如对 completed 任务 claim) -->
-- Preconditions: "目标任务当前状态不允许该操作(状态机 7 态约束外,如 completed 任务)"
+<!-- 错误码溯源:ERR_TASK_STATE_INVALID 及其消息 = 代码实勘(task-service.ts:122-124),准确但未入 Fact Table(FT-057 为状态表事实,不含该错误码) -->
+- Preconditions: "项目为 sqlite 权威(data_authority='sqlite';files 权威项目在状态判定前即被权威闸以 ERR_TASK_NOT_AUTHORITATIVE 拒绝,见 not-authoritative-rejected);目标任务当前状态不允许该操作(状态机 7 态约束外,如 completed 任务)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -61,13 +65,14 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
           - field: "status"
             value: "completed(终态,claim 非法)"
 - Input: "指示 agent 执行该变更(claim 终态任务)"
-- Output: "状态机拒绝并返回明确错误(ERR_TASK_STATE_INVALID,Go 原码消息透传,如 completed 不可逆提示);任务状态不变;审计不留成功记录"
+- Output: "状态机拒绝并返回明确错误(ERR_TASK_STATE_INVALID,消息为具体业务说明,如 completed 为终态不可逆);任务状态不变;审计不留成功记录"
 - State: "任务行零变更;拒绝以业务值(ok 为假 + code)返回,非错误噪音"
 - Side-effect: "none"
 - Invariants: "非法变更恒被状态机拒绝,不产生部分写"
 
 ## Outcome "deps-unsatisfied-rejected"
 <!-- source: inferred:依赖解析入数据内核,依赖不满足的任务变更被拒 -->
+<!-- 错误码溯源:ERR_TASK_DEPS_UNSATISFIED 与 unmet 原词清单 = 代码实勘(task-service.ts:127-133),准确但未入 Fact Table -->
 - Preconditions: "任务依赖未满足(已解析 blocker 未终态)"
   fixture_spec:
     entities:
@@ -121,7 +126,7 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 
 ## Journey Invariants
 
-- 已注册项目会话内任务操作唯一通道 = dsh tool(零 CLI 依赖、零 bash spawn、零 forge: 前缀)
+- 已注册且已迁移(sqlite 权威)的项目,会话内任务操作唯一通道 = dsh tool(零 CLI 依赖、零 bash spawn、零 forge: 前缀);未迁移(files 权威)项目写被拒并引导走 forge CLI(双形态过渡)
 - 每笔变更留 actor 标识(FORGE_ACTOR 语义延续),审计、记录与看板来源一致
 - 技能承载 = customSkillDirs 配置路径(应用写入与升级同步维护);项目仓零新增文件
 - tool 不可用永不静默失败;非法变更恒被状态机/依赖解析拒绝,不产生部分写

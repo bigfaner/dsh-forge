@@ -7,8 +7,8 @@ sources:
   - docs/features/dsh-forge-m3/testing/stage-gates-cross-phase-context/journey.md
 anchors:
   web:
-    page: "工作台 · Feature 详情(阶段资产 tab)"
-    route: "workbench/features/<slug>"
+    page: "工作台 · Feature 看板(UF2 阶段化扩展)"
+    route: "workbench/features/:slug"
     requires_auth: false
     layout: "WorkbenchShell → FeatureDetail → StageAssetsTab(第六 tab)"
 last_anchor_sync: "2026-09-25T00:59:32Z"
@@ -20,11 +20,15 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
 <!-- state-verification: full -->
 
 ## Outcome "success"
-- Preconditions: "feature 存在至少一份阶段资产(先行阶段已产出)"
+<!-- facts: FT-084(资产登记为元数据索引,内容留文档根文件;面板按登记寻址文档根) -->
+- Preconditions: "feature 存在至少一份良性内容的阶段资产(先行阶段已产出,内容不含恶意 markdown 结构)"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "data_authority"
+            value: "sqlite"
       - entity_type: "Feature"
         min_count: 1
         relationship_type: "belongs_to"
@@ -33,9 +37,12 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Feature"
+        field_constraints:
+          - field: "content"
+            value: "良性内容(无脚本注入/危险链接)"
 - Input: "用户打开详情区「阶段资产」面板浏览"
 - Output: "按阶段浏览目标 + 摘要只读渲染(经 MarkdownView 白名单,frontmatter + 摘要);无任何编辑入口"
-- State: "纯读零写;面板内容 = stage_asset 索引寻址的文档根文件内容"
+- State: "纯读零写;面板内容 = 按资产登记寻址的文档根文件内容(与文档根一致)"
 - Side-effect: "none"
 - Invariants: "工作台呈现恒只读(白名单渲染)"
 
@@ -46,6 +53,9 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "data_authority"
+            value: "sqlite"
       - entity_type: "Feature"
         min_count: 1
         relationship_type: "belongs_to"
@@ -57,7 +67,7 @@ last_anchor_sync: "2026-09-25T00:59:32Z"
         field_constraints:
           - field: "content"
             value: "含恶意 markdown 结构(脚本注入/危险链接)"
-- Input: "用户浏览「阶段资产」面板"
+- Input: "用户浏览「阶段资产」面板中的恶意内容条目"
 - Output: "渲染经 MarkdownView 白名单,注入内容不生效;面板严格只读(无编辑/写入口)"
 - State: "文件内容零改动;面板呈现安全渲染结果"
 - Side-effect: "none"
