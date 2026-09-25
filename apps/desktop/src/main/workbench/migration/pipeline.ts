@@ -134,6 +134,13 @@ export interface MigrationStatus {
   readonly deviated: boolean
   readonly migratedAt: string | null
   readonly lastEvent: MigrationEventRecord | null
+  /**
+   * 最近一次成功备份的目录(migration_event 的 backup-ok 行 detailJson.
+   * backupPath;从未成功备份 → null)。稳定读取面:不受 lastEvent 随管线
+   * 前移影响 —— 快速迁移(读回时 lastEvent 已非 backup)下完成态仍能
+   * 呈现备份位置(不可逆归档的唯一恢复锚点,契约不变量)。
+   */
+  readonly backupPath: string | null
 }
 
 interface ProjectMigrationRow {
@@ -159,6 +166,21 @@ export function getMigrationStatus(db: RepoDb, projectId: string): MigrationStat
     deviated: row.deviated !== 0,
     migratedAt: row.migrated_at,
     lastEvent: getLatestMigrationEvent(db, projectId),
+    backupPath: getLatestBackupPath(db, projectId),
+  }
+}
+
+/** 最近一次成功备份的目录(backup-ok 行 detailJson.backupPath;无/损坏 → null)。 */
+function getLatestBackupPath(db: RepoDb, projectId: string): string | null {
+  const row = db
+    .prepare("SELECT detail_json FROM migration_event WHERE project_id = ? AND phase = 'backup' AND result = 'ok' ORDER BY at DESC, rowid DESC LIMIT 1")
+    .get(projectId) as { readonly detail_json: string | null } | undefined
+  if (row === undefined || row.detail_json === null) return null
+  try {
+    const detail = JSON.parse(row.detail_json) as { backupPath?: unknown }
+    return typeof detail.backupPath === 'string' && detail.backupPath !== '' ? detail.backupPath : null
+  } catch {
+    return null
   }
 }
 

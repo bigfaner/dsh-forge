@@ -185,6 +185,9 @@ test.describe.serial('explicit-sot-migration / step 3: 原子迁移执行与对�
     // 注入:源文件损坏(JSON 解析必败)。
     const corruptBytes = '{ this is not json ]]'
     writeFileSync(indexPath, corruptBytes, 'utf8')
+    // 回滚断言的基线 = 注入后的稳定态(本腿要求损坏文件原样在位;treeBefore
+    // 保留原始语料,供修复重试腿的终态对拍引用)。
+    const corruptBaseline = snapshotDocTree(kernel.docsRoot)
 
     await startOverviewMigration(world)
     const progress = world.page.locator('[data-dsh-forge-dialog="migrate-progress"]')
@@ -201,7 +204,7 @@ test.describe.serial('explicit-sot-migration / step 3: 原子迁移执行与对�
     } finally {
       ;(db as unknown as { close(): void }).close()
     }
-    assertDocTreeRolledBack('s3/corrupt', treeBefore, kernel.docsRoot)
+    assertDocTreeRolledBack('s3/corrupt', corruptBaseline, kernel.docsRoot)
     expect(existsSync(indexPath), 'index.json 在位').toBe(true)
 
     // 修复源文件 → 重试成功(对拍零差异)。

@@ -91,7 +91,8 @@ test('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成
 
     // ---- Step 5:审批可见 + 显式批准 → 回执行中 -----------------------------
     stub.injectToolExec('disp-loop-smoke-call', { command: 'pnpm exec vitest run tests/disp-loop-smoke' })
-    stub.injectApproval({ agentId: rows[0]?.sessionId as string, toolName: 'Bash', callId: 'disp-loop-smoke-call', reason: 'smoke approval leg' })
+    const approvalRow = rows.find(row => row.taskKey === TASK_1)
+    stub.injectApproval({ agentId: approvalRow?.sessionId as string, toolName: 'Bash', callId: 'disp-loop-smoke-call', reason: 'smoke approval leg' })
     await waitForOrchBadge(page, TASK_1, 'awaiting', 20_000)
     const entry = page.locator('[data-dsh-forge-approval-entry]')
     await entry.click()

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { freshRoot, normPath, resolveForgeCli, runForgeCli, snapshotTree, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
-import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks } from './harness.ts'
+import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks, writeCliRecordData } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
 test.describe.serial('dual-form-transition / step 1: 未注册项目全程 CLI 照旧', () => {
@@ -50,13 +50,14 @@ test.describe.serial('dual-form-transition / step 1: 未注册项目全程 CLI �
     expect(addOut.status, 'task add 退出码 0').toBe(0)
     expect(addOut.stdout, 'add 行为正常(ACTION: ADDED 标记)').toContain('ACTION: ADDED')
 
-    // claim(领取)。
-    const claimOut = runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cliRoot)
+    // claim(领取)— 真 CLI 口径:无位置参数,领取下一个可领任务(此处
+    // 任务 1/9 同深度同优先级,ID 语义序 1 < 9,确定性命中基础任务)。
+    const claimOut = runForgeCli(forgeExe, ['task', 'claim'], cliRoot)
     expect(claimOut.status, 'task claim 退出码 0').toBe(0)
     expect(cliIndexTasks(cli.indexPath).get(CLI_BASE_ID)?.status, 'CLI 权威文件:基础任务 → in_progress').toBe('in_progress')
 
-    // submit(完成后提交)。
-    const submitOut = runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], cliRoot)
+    // submit(完成后提交;--data 记录文件为真 CLI 硬必填面)。
+    const submitOut = runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData(cliRoot, CLI_BASE_ID)], cliRoot)
     expect(submitOut.status, 'task submit 退出码 0').toBe(0)
     expect(cliIndexTasks(cli.indexPath).get(CLI_BASE_ID)?.status, 'CLI 权威文件:基础任务 → completed').toBe('completed')
 
@@ -73,12 +74,12 @@ test.describe.serial('dual-form-transition / step 1: 未注册项目全程 CLI �
     const cli = buildUnregisteredCliCorpus(cliRoot)
 
     // 先走合法管线至 completed。
-    runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cliRoot)
-    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], cliRoot)
+    runForgeCli(forgeExe, ['task', 'claim'], cliRoot)
+    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData(cliRoot, CLI_BASE_ID)], cliRoot)
     const baseline = snapshotTree(cliRoot)
 
-    // 非法领取(completed 终态)→ CLI 呈现拒绝与原因(非零退出)。
-    const refused = runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cliRoot, { allowFailure: true })
+    // 非法领取(completed 终态后无可领任务)→ CLI 呈现拒绝与原因(非零退出)。
+    const refused = runForgeCli(forgeExe, ['task', 'claim'], cliRoot, { allowFailure: true })
     expect(refused.status, '对终态任务 claim → 非零退出(状态机拒绝)').not.toBe(0)
     expect(cliIndexTasks(cli.indexPath).get(CLI_BASE_ID)?.status, '任务状态不被破坏(无半状态)').toBe('completed')
     expect(snapshotTree(cliRoot).get('docs/features/dual-cli-unregistered/tasks/index.json'),

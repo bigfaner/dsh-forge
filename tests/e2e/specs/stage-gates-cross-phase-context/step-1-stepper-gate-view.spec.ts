@@ -71,7 +71,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 1: 查看阶段 ste
     await detail.locator('[data-dsh-forge-feature-doc-tab="assets"]').click()
     const assetsPanel = detail.locator('[data-dsh-forge-feature-doc-panel="assets"]')
     await expect(assetsPanel, '资产面板在场').toBeVisible({ timeout: 10_000 })
-    await expect(assetsPanel.locator('[data-dsh-forge-feature-doc-empty], [data-dsh-forge-stage-asset-empty]').first(),
+    await expect(assetsPanel.locator('[data-dsh-forge-stage-assets-empty]').first(),
       '空态占位说明在场(asset-empty 正常态)').toBeVisible({ timeout: 15_000 })
   })
 })

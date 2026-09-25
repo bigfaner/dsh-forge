@@ -128,7 +128,7 @@ test.describe.serial('preferences-tiered-override / step 3: 修改 feature 级�
     const db = await openKernelDb(world.kernel.userDataDir)
     try {
       const sqlite = db as unknown as { prepare: (sql: string) => { all: (...args: string[]) => Array<{ key: string }> } }
-      const rows = sqlite.prepare('SELECT key FROM prefs WHERE scope_kind = ?').all('global')
+      const rows = sqlite.prepare('SELECT key FROM prefs WHERE scope = ?').all('global')
       expect(rows.filter(row => row.key === BOOL_KEY), 'prefs 表零残留行').toHaveLength(0)
     } finally {
       ;(db as unknown as { close(): void }).close()

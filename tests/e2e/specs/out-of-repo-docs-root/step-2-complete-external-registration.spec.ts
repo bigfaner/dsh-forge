@@ -106,14 +106,32 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
     await page.locator('[data-dsh-forge-wizard-external-input]').fill(freshKernel.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-external-error="conflict"]'), '路径冲突错误(role=alert,成因可辨)').toBeVisible({ timeout: 10_000 })
 
-    // 成因二:不存在的路径 → ERR_EXTERNAL_PATH_UNREADABLE。
+    // 成因二:不存在的路径 → 注册被拒并按成因呈现。真链路的路径探针为宽容
+    // 孪生(设计:真校验在提交时主侧链,经向导集中错误映射呈现)—— 契约
+    // 口径 = 「注册被阻止 + 成因可辨(ERR_EXTERNAL_PATH_UNREADABLE)+ 修正
+    // 后可继续」,呈现面为提交错误(role=alert)。
     await page.locator('[data-dsh-forge-wizard-external-input]').fill(join(freshKernel.root, 'no-such-dir'))
-    await expect(page.locator('[data-dsh-forge-wizard-external-error="unreadable"]'), '路径不可读错误(成因可辨)').toBeVisible({ timeout: 10_000 })
+    await page.locator('[data-dsh-forge-wizard-authorize]').check()
+    await expect(page.locator('[data-dsh-forge-wizard-next]'), '宽容探针:可前进至提交面').toBeEnabled({ timeout: 10_000 })
+    await page.locator('[data-dsh-forge-wizard-next]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible({ timeout: 10_000 })
+    await page.locator('[data-dsh-forge-wizard-finish]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-submit-error]'), '不可读路径 → 注册被拒(role=alert)').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-dsh-forge-wizard-submit-error]'), '成因可辨(不可读目录 + 路径在场)').toContainText('is not a readable directory')
+    expect((await bridgeInvoke<{ projects: Array<{ codeRoot: string }> }>(page, 'getState', [])).projects.some(
+      row => normPath(row.codeRoot) === normPath(freshKernel.codeRoot)), '被拒路径 → 零注册写入').toBe(false)
 
-    // 修正:回退默认应用管理路径 → 授权后可继续。
+    // 修正:回退默认应用管理路径 → 授权后可继续完成注册(携默认迁移)。
+    await page.locator('[data-dsh-forge-wizard-back]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
     await page.locator('[data-dsh-forge-wizard-external-input]').fill(managedDocRoot(freshKernel.root, 'repo'))
     await page.locator('[data-dsh-forge-wizard-authorize]').check()
-    await expect(page.locator('[data-dsh-forge-wizard-next]'), '修正后可继续完成注册').toBeEnabled({ timeout: 10_000 })
+    await page.locator('[data-dsh-forge-wizard-next]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-step-migrate]'), '修正后可继续(迁移步骤在场)').toBeVisible({ timeout: 15_000 })
+    await page.locator('[data-dsh-forge-wizard-next]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
+    await page.locator('[data-dsh-forge-wizard-finish]').click()
+    await expect(page.locator('[data-dsh-forge-wizard-step="migration"]'), '完成注册(进入原位迁移相)').toBeVisible({ timeout: 15_000 })
   })
 
   // Outcome "duplicate-registration" — 重复注册被阻止(零新增)。

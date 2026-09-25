@@ -54,8 +54,11 @@ test.describe.serial('stage-gates-cross-phase-context / step 3: 生成阶段总�
     expect(markdown, 'frontmatter goal 逐字').toContain(TASKS_GOAL)
     expect(markdown, '正文摘要逐字').toContain(TASKS_SUMMARY_MARK)
 
-    // 门态翻转(重开详情 —— SC4 先例:stepper 门态经重开呈现)。
+    // 门态翻转(重开详情 —— SC4 先例:stepper 门态经重开呈现)。生成稿假设
+    // 详情已开;实际到达态是列表 —— 先开详情再走重开链。
+    await page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`).click()
     const detail = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
+    await expect(detail).toBeVisible({ timeout: 10_000 })
     await detail.locator('[data-dsh-forge-feature-back]').click()
     await page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`).click()
     await expect(page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)).toBeVisible({ timeout: 10_000 })

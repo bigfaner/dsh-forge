@@ -135,8 +135,10 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
     await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
-    await expect(page.locator('[data-dsh-forge-proposal-row], [data-dsh-forge-node-card]').first(),
-      '任务/提案视图可寻址(空态或仓外语料)').toBeVisible({ timeout: 20_000 })
+    // 任务视图可寻址:空语料 = 看板空态卡呈现(任务卡/提案行仅在语料非空
+    // 时存在,生成稿曾误以为空态也有行元素)。
+    await expect(page.locator('[data-dsh-forge-task-board-empty]'),
+      '任务视图可寻址(空态 = 无任务空态卡呈现)').toBeVisible({ timeout: 20_000 })
     const state = await bridgeInvoke<{ projects: Array<{ codeRoot: string; docLocationType: string }> }>(page, 'getState', [])
     expect(state.projects.find(row => normPath(row.codeRoot) === normPath((legacy as KernelWorld).codeRoot))?.docLocationType,
       '注册行 external(按仓外寻址)').toBe('external')

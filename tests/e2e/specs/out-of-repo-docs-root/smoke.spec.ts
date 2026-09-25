@@ -36,8 +36,14 @@ test('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(external 
     await page.locator('[data-dsh-forge-wizard-next]').click()
     await expect(page.locator('[data-dsh-forge-wizard-doc-external]'), 'Step 1:默认仓外').toBeChecked()
     await expect(page.locator('[data-dsh-forge-wizard-external-default]'), 'Step 1:已预填提示行').toBeVisible({ timeout: 10_000 })
-    await page.keyboard.press('Escape')
-    await page.locator('[data-dsh-forge-dialog="register-wizard"]').waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => {})
+    // 关闭向导(✕ 走 requestClose,与 Esc 同路):干净草稿立即关闭;脏草稿
+    // 先弹放弃确认 —— 两者择一收敛后向导必关。
+    await page.locator('[data-dsh-forge-dialog="register-wizard"] [data-dsh-forge-dialog-close]').click()
+    const discard = page.locator('[data-dsh-forge-dialog="register-wizard-discard"]')
+    if (await discard.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true, () => false)) {
+      await discard.locator('[data-dsh-forge-wizard-discard-confirm]').click()
+    }
+    await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]'), '步骤①探查后关闭向导').toBeHidden({ timeout: 10_000 })
 
     // ---- Step 2:默认仓外完成注册(授权 → 迁移 → 注册行)-------------
     await registerExternalViaWizard(page, kernel.codeRoot)

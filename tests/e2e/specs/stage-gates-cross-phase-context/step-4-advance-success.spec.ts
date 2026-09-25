@@ -49,6 +49,8 @@ test.describe.serial('stage-gates-cross-phase-context / step 4: 推进成功', (
     await summarizeTasks(world)
     expect(readFileSync(manifestPath, 'utf8'), '前置:manifest 在 tasks').toContain('status: tasks')
 
+    // 到达态是列表;详情经卡片点击打开(生成稿假设详情已开)。
+    await page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`).click()
     const detail = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
     await expect(detail).toBeVisible({ timeout: 10_000 })
     const advanceEntry = detail.locator('[data-dsh-forge-advance-entry]')
@@ -105,6 +107,8 @@ test.describe.serial('stage-gates-cross-phase-context / step 4: 推进成功', (
     const corrupted = '---\nstatus: [broken yaml {{{\n---\n# broken\n'
     writeFileSync(manifestPath, corrupted, 'utf8')
 
+    // 到达态是列表;详情经卡片点击打开(与同文件 success 腿同口径)。
+    await page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`).click()
     const detail = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
     await expect(detail).toBeVisible({ timeout: 10_000 })
     await detail.locator('[data-dsh-forge-advance-entry]').click()

@@ -49,7 +49,10 @@ test.describe.serial('explicit-sot-migration / step 2: 确认迁移(含备份说
     const backupPathEl = confirm.locator('[data-dsh-forge-migrate-backup-path]')
     await expect(backupPathEl, '备份位置说明在场').toBeVisible()
     expect((await backupPathEl.textContent()) ?? '', '备份位置 = userData 下 backups 根').toContain('backups')
-    await expect(confirm.locator('[data-dsh-forge-migrate-guard-note]'), '迁移内容/守卫说明在场').toBeVisible()
+    // 三要素正文承载(guard-note 元素 = 启动侧拒绝内联注记,仅错误路由在场,生成稿误用作常驻锚点)。
+    await expect(confirm, '迁移内容说明在场').toContainText('任务结构化状态')
+    await expect(confirm, '自动备份说明在场').toContainText('迁移前自动备份')
+    await expect(confirm, 'index.json 淘汰说明在场').toContainText('index.json 退役归档')
     await expect(confirm.locator('[data-dsh-forge-migrate-confirm]'), '显式确认动作在场').toBeVisible()
 
     // 未显式确认 → 不进入执行(进度浮层缺席,权威仍 files)。

@@ -10,6 +10,8 @@
 //   bare — 同型项目但 proposals/ 为空(empty 态腿)。
 // 前置 anchors:page "工作台 · 提案看板(第二 tab)" / route workbench/proposals。
 
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { buildKernelWorld, type KernelWorld, type TaskSpec } from '../_lib/journey-world.ts'
 
 export const PROP_FEATURE = 'prop-board'
@@ -54,7 +56,7 @@ function hostileBody(): string {
 
 /** The main world (associated + orphan + hostile proposals corpus). */
 export async function buildMainWorld(root: string): Promise<KernelWorld> {
-  return await buildKernelWorld(root, {
+  const world = await buildKernelWorld(root, {
     feature: { slug: PROP_FEATURE, status: 'tasks', docKinds: ['prd', 'design'] },
     tasks: TASKS,
     proposals: [
@@ -64,9 +66,24 @@ export async function buildMainWorld(root: string): Promise<KernelWorld> {
         evalReport: `# ${EVAL_H1}\n\n${EVAL_MARK}\n`,
       },
       { slug: ORPHAN, status: 'draft', author: ORPHAN_AUTHOR, created: ORPHAN_CREATED, title: ORPHAN_H1, mark: '管线早期提案 — 无关联 feature、无 eval。' },
-      { slug: HOSTILE, status: 'review', author: 'hostile-author', created: HOSTILE_CREATED, title: '恶意 markdown 提案', mark: 'body-ignored', evalReport: hostileBody() },
+      // 词表内状态(PROPOSAL_STATUS_VOCAB;生成稿的 'review' 越界会被索引器静默跳过)。
+      { slug: HOSTILE, status: 'accepted', author: 'hostile-author', created: HOSTILE_CREATED, title: '恶意 markdown 提案', mark: 'body-ignored', evalReport: hostileBody() },
     ],
   })
+  // 防注入腿的恶意语料落【提案正文】(生成稿误置于 eval 报告位):详情白名
+  // 单渲染验收的对象是 proposal.md 本体 —— 以同型 frontmatter 重写正文。
+  writeFileSync(join(world.docsRoot, 'docs', 'proposals', HOSTILE, 'proposal.md'), [
+    '---',
+    'status: accepted',
+    'author: hostile-author',
+    `created: "${HOSTILE_CREATED}"`,
+    'intent: new-feature',
+    '---',
+    '',
+    hostileBody(),
+    '',
+  ].join('\n'), 'utf8')
+  return world
 }
 
 /** The bare world (proposals/ empty — the empty-state leg). */

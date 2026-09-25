@@ -20,6 +20,7 @@ import {
   dispatchFromBoard,
   freshRoot,
   getDispatchRows,
+  normPath,
   openKernelDb,
   resolveForgeCli,
   runForgeCli,
@@ -28,7 +29,7 @@ import {
   WorldManager,
   bridgeInvoke,
 } from '../_lib/journey-world.ts'
-import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks } from './harness.ts'
+import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks, writeCliRecordData } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
 test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏', () => {
@@ -55,9 +56,11 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
 
     // ---- 第 1 轮:先终端(未注册任务 1 推进至提交)--------------------
     runForgeCli(forgeExe, ['task', 'add', '--title', '交替第 1 轮 CLI 任务', '--type', 'doc', '--id', '7', '--description', 'round 1 cli'], (cli as { codeRoot: string }).codeRoot)
-    runForgeCli(forgeExe, ['task', 'claim', '7'], (cli as { codeRoot: string }).codeRoot)
-    runForgeCli(forgeExe, ['task', 'submit', '7'], (cli as { codeRoot: string }).codeRoot)
-    expect(cliIndexTasks((cli as { indexPath: string }).indexPath).get('7')?.status, '第 1 轮 CLI:任务 7 → completed').toBe('completed')
+    // 真 CLI 口径:claim 无位置参数,领取下一个可领任务(任务 1/7 同深度
+    // 同优先级,ID 语义序 1 < 7 → 第 1 轮确定性命中基础任务,与步注释一致)。
+    runForgeCli(forgeExe, ['task', 'claim'], (cli as { codeRoot: string }).codeRoot)
+    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData((cli as { codeRoot: string }).codeRoot, CLI_BASE_ID)], (cli as { codeRoot: string }).codeRoot)
+    expect(cliIndexTasks((cli as { indexPath: string }).indexPath).get(CLI_BASE_ID)?.status, '第 1 轮 CLI:任务 1 → completed').toBe('completed')
 
     // ---- 第 1 轮:后应用(任务 1 推进至提交)--------------------------
     await dispatchFromBoard(page, ['dual-form/1'])
@@ -72,8 +75,9 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     const row2 = (await getDispatchRows(page, world.projectId)).find(candidate => candidate.taskKey === 'dual-form/2')
     await bridgeInvoke(page, 'taskClaim', [{ projectId: world.projectId, taskKey: 'dual-form/2' }, `session:${row2?.sessionId as string}`])
     await bridgeInvoke(page, 'taskSubmit', [{ projectId: world.projectId, taskKey: 'dual-form/2' }, `session:${row2?.sessionId as string}`])
-    runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], (cli as { codeRoot: string }).codeRoot)
-    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], (cli as { codeRoot: string }).codeRoot)
+    // 第 2 轮终端腿:领取下一个可领任务 = 第 1 轮新增的任务 7(1 已完成)。
+    runForgeCli(forgeExe, ['task', 'claim'], (cli as { codeRoot: string }).codeRoot)
+    runForgeCli(forgeExe, ['task', 'submit', '7', '--data', writeCliRecordData((cli as { codeRoot: string }).codeRoot, '7')], (cli as { codeRoot: string }).codeRoot)
 
     // ---- 两轮交替后的双方一致面 --------------------------------------
     // 已注册侧:看板呈现 = 内核权威表(状态对拍)。
@@ -83,7 +87,9 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     // 未注册侧:CLI 任务视图 = 仓内 forge 文件。
     const listOut = runForgeCli(forgeExe, ['task', 'list', '--local'], (cli as { codeRoot: string }).codeRoot)
     expect(listOut.stdout, '未注册:基础任务在场(CLI 权威文件)').toContain(CLI_BASE_TITLE)
-    expect(cliIndexTasks((cli as { indexPath: string }).indexPath).get(CLI_BASE_ID)?.status, '未注册:基础任务 completed').toBe('completed')
+    const cliRows = cliIndexTasks((cli as { indexPath: string }).indexPath)
+    expect(cliRows.get(CLI_BASE_ID)?.status, '未注册:基础任务(第 1 轮)completed').toBe('completed')
+    expect(cliRows.get('7')?.status, '未注册:第 1 轮新增任务(第 2 轮)completed').toBe('completed')
   })
 
   // Outcome "cross-project-isolation" — 终局核查(数据域归属)。
@@ -107,7 +113,9 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     const cliTasks = cliIndexTasks((cli as { indexPath: string }).indexPath)
     expect(cliTasks.size, '未注册域文件集非空').toBeGreaterThan(0)
     const state = await bridgeInvoke<{ projects: Array<{ codeRoot: string }> }>(page, 'getState', [])
-    expect(state.projects.some(row => (cli as { codeRoot: string }).codeRoot.includes('cli-repo')), '未注册仓不经注册(零内核渗入)').toBe(false)
+    // 注册表行集里不存在未注册仓的代码根(smoke/step1 同口径的路径比对;
+    // 生成稿曾误写为对语料路径自身做子串检查 —— 恒真断言,不是注册面)。
+    expect(state.projects.some(row => normPath(row.codeRoot) === normPath((cli as { codeRoot: string }).codeRoot)), '未注册仓不经注册(零内核渗入)').toBe(false)
     // 已注册任务的 md 文件不出现在未注册仓(零文件渗入)。
     const cliTree = snapshotTree((cli as { codeRoot: string }).codeRoot)
     expect([...cliTree.keys()].every(rel => !rel.startsWith('docs/features/dual-form/')), '已注册 feature 文档不出现在未注册仓').toBe(true)
@@ -122,8 +130,8 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     const world = await manager.acquire(kernelB, 'inflight')
     const { page } = world
 
-    // 在途:CLI 领取(未提交)+ 应用派发并领取(未提交)。
-    runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cliB.codeRoot)
+    // 在途:CLI 领取(未提交;真 CLI 无位置参数,语料仅任务 1 可领)+ 应用派发并领取(未提交)。
+    runForgeCli(forgeExe, ['task', 'claim'], cliB.codeRoot)
     expect(cliIndexTasks(cliB.indexPath).get(CLI_BASE_ID)?.status, 'CLI 在途(in_progress)').toBe('in_progress')
     await dispatchFromBoard(page, ['dual-form/1'])
     await waitForOrchBadge(page, 'dual-form/1', 'running', 20_000)
@@ -131,7 +139,7 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     await bridgeInvoke(page, 'taskClaim', [{ projectId: world.projectId, taskKey: 'dual-form/1' }, `session:${row?.sessionId as string}`])
 
     // 交替提交:先终端,再应用。
-    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], cliB.codeRoot)
+    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData(cliB.codeRoot, CLI_BASE_ID)], cliB.codeRoot)
     await bridgeInvoke(page, 'taskSubmit', [{ projectId: world.projectId, taskKey: 'dual-form/1' }, `session:${row?.sessionId as string}`])
 
     // 各自任务全集一致、无交叉污染(单写者纪律)。
@@ -160,8 +168,8 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
     // 未注册侧:CLI 形态完全不受影响(同刻照常)。
     const listOut = runForgeCli(forgeExe, ['task', 'list', '--local'], cliC.codeRoot)
     expect(listOut.status, '通道异常期间 CLI 照常(与宿主无耦合)').toBe(0)
-    runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cliC.codeRoot)
-    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], cliC.codeRoot)
+    runForgeCli(forgeExe, ['task', 'claim'], cliC.codeRoot)
+    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData(cliC.codeRoot, CLI_BASE_ID)], cliC.codeRoot)
     expect(cliIndexTasks(cliC.indexPath).get(CLI_BASE_ID)?.status, 'CLI 推进不受影响').toBe('completed')
 
     // 通道恢复:重派发继续;无残留半状态。

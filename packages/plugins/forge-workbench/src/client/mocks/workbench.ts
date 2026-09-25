@@ -859,6 +859,7 @@ export const MOCK_MIGRATION_STATUS_FILES: MigrationStatus = Object.freeze({
   deviated: false,
   migratedAt: null,
   lastEvent: null,
+  backupPath: null,
   indexJsonDetected: true,
 })
 
@@ -868,6 +869,7 @@ export const MOCK_MIGRATION_STATUS_SQLITE: MigrationStatus = Object.freeze({
   deviated: false,
   migratedAt: '2026-09-24T08:00:05.000Z',
   indexJsonDetected: false,
+  backupPath: null,
   lastEvent: {
     id: 'ev-archive-ok',
     projectId: 'demo',
@@ -949,9 +951,11 @@ export function createMockMigrationFace(
       }
       const failAt = failAtPhase
       push('backup', 'ok')
-      // backup ok 落 lastEvent(进度行「备份完成 → 路径」的回读面)。
+      // backup ok 落 lastEvent + 稳定面 backupPath(进度行「备份完成 → 路径」
+      // 的回读面;backupPath 不随 lastEvent 前移丢失 —— 快速迁移语义)。
       status = {
         ...status,
+        backupPath: MOCK_MIGRATION_BACKUP_PATH,
         lastEvent: {
           id: `ev-backup-${String(startCalls)}`,
           projectId,
@@ -976,7 +980,7 @@ export function createMockMigrationFace(
         }
         push(phase, 'ok')
       }
-      status = { ...MOCK_MIGRATION_STATUS_SQLITE, lastEvent: status.lastEvent }
+      status = { ...MOCK_MIGRATION_STATUS_SQLITE, lastEvent: status.lastEvent, backupPath: status.backupPath }
       return { started: true }
     },
     subscribeEvents: (listener) => {

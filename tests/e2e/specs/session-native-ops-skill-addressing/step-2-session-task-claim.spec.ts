@@ -82,7 +82,8 @@ test.describe.serial('session-native-ops-skill-addressing / step 2: 会话内任
       const sqlite = db as unknown as { prepare: (sql: string) => { get: (...args: string[]) => { status: string; updated_by: string | null } } }
       const row = sqlite.prepare('SELECT status, updated_by FROM task WHERE project_id = ? AND task_key = ?').get(world.projectId, TASK_2)
       expect(row.status, '任务状态不变(completed 终态不可逆)').toBe('completed')
-      expect(row.updated_by, '审计不留成功记录').toBeNull()
+      // 拒绝的 claim 不落审计:非法 actor 不出现在 updated_by(摄入基线 'kernel',非 null)。
+      expect(row.updated_by, '审计不留成功记录(拒绝的 actor 不落审计)').not.toBe('session:sess-ops-illegal')
     } finally {
       ;(db as unknown as { close(): void }).close()
     }

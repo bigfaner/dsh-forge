@@ -15,7 +15,6 @@ import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
   REFLOW_BUDGET_MS,
-  captureMainStdout,
   dispatchFromBoard,
   freshRoot,
   getDispatchRows,
@@ -31,7 +30,7 @@ import {
   WorldManager,
   bridgeInvoke,
 } from '../_lib/journey-world.ts'
-import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks } from './harness.ts'
+import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks, writeCliRecordData } from './harness.ts'
 
 test('smoke/dual-form-transition: 应用通道日常管线(零 spawn 双面 + 审计 + ≤5s 回流)与未注册 CLI 世界并存互不破坏', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
@@ -44,7 +43,8 @@ test('smoke/dual-form-transition: 应用通道日常管线(零 spawn 双面 + �
   try {
     const world = await manager.acquire(kernel, 'main')
     const { page } = world
-    const mainLog = captureMainStdout(world.shell)
+    // boot 期挂接的捕获(活性窗口完整;晚期挂接 = 死流,零标记断言空转)。
+    const mainLog = world.mainLog
     const appPid = world.shell.electronApp.process().pid ?? -1
 
     // ---- 应用通道日常管线(Step 2 face)-------------------------------
@@ -80,8 +80,10 @@ test('smoke/dual-form-transition: 应用通道日常管线(零 spawn 双面 + �
     const listOut = runForgeCli(forgeExe, ['task', 'list', '--local'], cli.codeRoot)
     expect(listOut.status, 'CLI 照常(并存互不破坏)').toBe(0)
     expect(listOut.stdout, 'CLI 任务视图 = 仓内 forge 文件').toContain(CLI_BASE_TITLE)
-    runForgeCli(forgeExe, ['task', 'claim', CLI_BASE_ID], cli.codeRoot)
-    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID], cli.codeRoot)
+    // 真 CLI 口径:claim = 领取下一个可领任务(无位置参数;语料仅任务 1 可领,
+    // 确定性命中);submit = <id> + --data 记录文件(summary 硬必填)。
+    runForgeCli(forgeExe, ['task', 'claim'], cli.codeRoot)
+    runForgeCli(forgeExe, ['task', 'submit', CLI_BASE_ID, '--data', writeCliRecordData(cli.codeRoot, CLI_BASE_ID)], cli.codeRoot)
     expect(cliIndexTasks(cli.indexPath).get(CLI_BASE_ID)?.status, 'CLI 推进至终态').toBe('completed')
     expect(snapshotTree(cli.codeRoot).get('docs/features/dual-cli-unregistered/tasks/index.json'),
       'CLI 权威文件按其自身语义演进(add/claim/submit 写入)').not.toBe(cliTreeBefore.get('docs/features/dual-cli-unregistered/tasks/index.json'))

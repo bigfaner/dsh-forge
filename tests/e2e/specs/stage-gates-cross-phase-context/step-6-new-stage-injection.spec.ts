@@ -66,9 +66,13 @@ test.describe.serial('stage-gates-cross-phase-context / step 6: 新阶段会话�
     await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toBeVisible({ timeout: 10_000 })
     const contrastWrap = page.locator(`[data-dsh-forge-select-chk="${IN_PROGRESS_TASK}"]`)
     await expect(contrastWrap.locator('[data-dsh-forge-select-chk-input]'), 'in_progress 对照:勾选禁用(单执行者)').toBeDisabled()
-    const contrastTitle = await contrastWrap.getAttribute('title')
+    // 禁用缘由 tooltip 落在 input 上(aria-label=任务标题在 wrap 无 title)。
+    const contrastTitle = await contrastWrap.locator('[data-dsh-forge-select-chk-input]').getAttribute('title')
     expect(contrastTitle ?? '', '拒绝原因 = 单执行者').toContain('执行')
-    await page.keyboard.press('Escape')
+    // 空选择态无浮条(浮条 = 已选 ≥1)、Esc 需层内焦点 —— 先勾选一条可派
+    // 发任务唤出浮条再取消,即确定态退出(同一 exit 语义;后续派发重新勾选)。
+    await page.locator(`[data-dsh-forge-select-chk="${TASK_2}"] [data-dsh-forge-select-chk-input]`).check()
+    await page.locator('[data-dsh-forge-dispatch-cancel]').click()
     await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toHaveCount(0, { timeout: 10_000 })
 
     // 新阶段派发:产物齐(对照任务满足 in-progress 行)→ 无警告直达确认。

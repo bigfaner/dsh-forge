@@ -25,7 +25,6 @@ import { tmpdir } from 'node:os'
 import { expect, test } from '@playwright/test'
 import {
   REFLOW_BUDGET_MS,
-  captureMainStdout,
   dispatchFromBoard,
   freshRoot,
   getDispatchRows,
@@ -59,7 +58,9 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
-    const mainLog = captureMainStdout(world.shell)
+    // 日志级断言用 boot 期即挂接的捕获(SC1 口径:WORKBENCH_WATCH 等 boot 期
+    // shellLog 行必须落在窗口内,晚期挂接会得到死流 —— 活性断言恒假)。
+    const mainLog = world.mainLog
     const appPid = world.shell.electronApp.process().pid ?? -1
 
     // 派发(产物齐 → 直达确认)→ stub 执行 → dsh tool 提交。
@@ -150,6 +151,9 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     })
     const hookPath = join(hookKernel.codeRoot, '.git', 'hooks', 'pre-commit')
     const hookBody = '#!/bin/sh\necho verify-task-done: OK\nexit 0\n'
+    // 语料须是真实 git 仓(hook 的宿主):buildKernelWorld 的文件面不建仓,
+    // 缺 git init 时 `.git/hooks` 只是普通目录,git add/commit 无从触发。
+    execSync('git init -q .', { cwd: hookKernel.codeRoot, timeout: 30_000 })
     mkdirSync(join(hookKernel.codeRoot, '.git', 'hooks'), { recursive: true })
     writeFileSync(hookPath, hookBody, 'utf8')
 

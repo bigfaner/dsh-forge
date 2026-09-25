@@ -77,17 +77,26 @@ test.describe.serial('session-native-ops-skill-addressing / step 4: 技能集扁
     const patchPath = join(first.shell.profileDir, 'cordis.patch.yml')
     const original = readFileSync(patchPath, 'utf8')
     const skillRoot = /customSkillDirs:[\s\S]*?-\s*'([^']+)'/.exec(original)?.[1] as string
-    const userEntry = "  - 'C:/user-own-skill-dir'"
+    const userEntry = "- 'C:/user-own-skill-dir'"
 
-    // 注入漂移:受管条目删除(缺失)+ 用户自有条目追加(字节保留锚)。
-    const drifted = [...original.split('\n')
-      .filter(line => !(line.trim().startsWith('-') && (line.includes(skillRoot) || line.includes(skillRoot.replaceAll('\\', '/'))))),
-      userEntry].join('\n')
+    // 注入漂移:patch 是【顶层 YAML 数组】(provider 行 + 行内 config.
+    // customSkillDirs 嵌套条目),非平铺映射 —— 用户自有条目须与受管条目
+    // 同缩进成同级列表项。此处以用户行原位替换受管行(缺失漂移 + 用户条
+    // 目一次注入;缩进取自受管行自身。生成稿曾用平铺键锚 + 固定缩进,结构
+    // 损毁致 host「failed to parse overlay」→ 重启腿坠「连接已中断」)。
+    const lines = original.split('\n')
+    const entryIdx = lines.findIndex(line => line.trim().startsWith('-')
+      && (line.includes(skillRoot) || line.includes(skillRoot.replaceAll('\\', '/'))))
+    const entryIndent = lines[entryIdx]?.match(/^\s*/)?.[0] ?? ''
+    const drifted = [...lines.slice(0, entryIdx), `${entryIndent}${userEntry}`, ...lines.slice(entryIdx + 1)].join('\n')
+    // 杀前停在概览(session-restore 复现该视图;重启腿的激活块在概览找项
+    // 目卡 —— 留在任务页则复现为任务页,卡片不可寻)。
+    await first.page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
     await manager.killLive()
     writeFileSync(patchPath, drifted, 'utf8')
 
     // 重启(同 rootDir/profile):boot 同步重写受管条目(可管理漂移恢复)。
-    const second = await manager.acquire(kernel as KernelWorld, 'reboot')
+    const second = await manager.acquire(kernel as KernelWorld, 'reboot', { tab: 'workbench/overview' })
     const repaired = readFileSync(patchPath, 'utf8')
     expect(repaired.includes(userEntry.trim()), '用户自有目录条目字节级保留').toBe(true)
     assertSkillsResolve(second.shell.profileDir)

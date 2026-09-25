@@ -60,7 +60,11 @@ test.describe.serial('task-dispatch-execution-loop / step 2: 发起派发并过�
 
     // State:检查纯读零写 —— 派发行仍零。
     expect(await getDispatchRows(page, world.projectId), '未确认 → 零派发行').toHaveLength(0)
-    await page.keyboard.press('Escape')
+    // 退出链:先取消确认对话框(其 Esc 只消费对话框层),再点浮条取消退出
+    // 选择(已勾 TASK_1 → 浮条在场;零派发)。
+    await page.locator('[data-dsh-forge-dispatch-confirm-cancel]').click()
+    await expect(page.locator('[data-dsh-forge-dialog="dispatch-confirm"]')).toHaveCount(0, { timeout: 10_000 })
+    await page.locator('[data-dsh-forge-dispatch-cancel]').click()
     await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toHaveCount(0, { timeout: 10_000 })
   })
 

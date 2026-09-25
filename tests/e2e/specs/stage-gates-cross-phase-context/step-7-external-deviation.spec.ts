@@ -67,6 +67,13 @@ test.describe.serial('stage-gates-cross-phase-context / step 7: 外部会话跨�
     const { page } = world
 
     // 前置:偏离徽标呈现中(承接 success 的外部改写;若未回流则再触发)。
+    // 复用世界可能停在上一测试的详情态 —— 先归位 features 列表。
+    await page.locator('[data-dsh-forge-tab="workbench/features"]').click()
+    const carriedDetail = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
+    if (await carriedDetail.isVisible().catch(() => false)) {
+      await carriedDetail.locator('[data-dsh-forge-feature-back]').click()
+      await expect(carriedDetail).toHaveCount(0, { timeout: 10_000 })
+    }
     const featureCard = page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`)
     await expect(featureCard.locator('[data-dsh-forge-badge="deviation"]'), '偏离徽标在场(前置)').toBeVisible({ timeout: 20_000 })
 
@@ -75,9 +82,13 @@ test.describe.serial('stage-gates-cross-phase-context / step 7: 外部会话跨�
     await page.waitForTimeout(800)
     await expect(page.locator('[data-dsh-forge-dialog]'), '点击徽标:零阻断弹窗').toHaveCount(0)
 
-    // 正常编排操作照旧:详情可开、任务看板可浏览(标识仅呈现)。
-    await featureCard.click()
-    await expect(page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`), '正常浏览照旧可用').toBeVisible({ timeout: 10_000 })
+    // 正常编排操作照旧:详情可开、任务看板可浏览(标识仅呈现)。徽标点击
+    // 会冒泡至卡片(徽标非交互元素)而开详情 —— 已开即导航已证,未开再点卡。
+    const detailAfterBadge = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
+    if (!(await detailAfterBadge.isVisible().catch(() => false))) {
+      await featureCard.click()
+    }
+    await expect(detailAfterBadge, '正常浏览照旧可用').toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
     await expect(page.locator('[data-dsh-forge-node-card]').first(), '任务看板照旧可浏览').toBeVisible({ timeout: 20_000 })
     await expect(page.locator('[data-dsh-forge-dialog]'), '全程零阻断弹窗').toHaveCount(0)

@@ -586,6 +586,13 @@ export interface MigrationStatus {
   readonly migratedAt: string | null
   readonly lastEvent: MigrationEvent | null
   /**
+   * 最近一次成功备份的目录(migration_event backup-ok 行的稳定回读面;
+   * 从未成功备份 → null)。进度对话框完成后呈现备份位置优先取本字段 —
+   * lastEvent 会随管线前移,快速迁移下 backup 相位读回(lastEvent 语义)
+   * 会错过,而备份位置是完成态必呈的恢复锚点。
+   */
+  readonly backupPath: string | null
+  /**
    * Does the doc tree still carry tasks/index.json (task 1.7)? The migratable
    * judgment's doc-side half — authority 'files' + true = the card's 可迁移;
    * false after the archive (or when no task corpus ever existed).

@@ -213,13 +213,19 @@ export function StageAssetsTab(props: StageAssetsTabProps) {
 
   // The reflux subscription: stage_advanced matching this feature (≤5s on the
   // real chain — the batched channel) re-fires the read; the new-card enter
-  // fade arms in the entries effect below.
+  // fade arms in the entries effect below. External-write reflux (提案列表同
+  // 纪律):感知扫描的项目域 sync 事件同样重读 —— 外部会话新增的阶段资产
+  // 须 ≤5s 呈现,无需重开面板。
   useEffect(() => {
     const subscribe = props.face?.subscribeEvents
     if (subscribe === undefined) return
     return subscribe((events) => {
       for (const event of events) {
         if (event.type === 'stage_advanced' && event.featureSlug === props.featureSlug) {
+          setRefluxNonce(nonce => nonce + 1)
+          continue
+        }
+        if (event.type === 'sync' && event.projectId === projectIdRef.current) {
           setRefluxNonce(nonce => nonce + 1)
         }
       }

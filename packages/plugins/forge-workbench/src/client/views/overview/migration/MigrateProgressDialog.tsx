@@ -220,10 +220,16 @@ export function useMigrationRun(input: UseMigrationRunInput): MigrationRun {
           if (event.type !== 'migration_progress') continue
           if (event.projectId !== input.projectId) continue
           next = applyMigrationProgressEvent(next, event)
-          // 备份完成后一次性回读实际备份目录(lastEvent.detailJson.backupPath)。
+          // 备份完成后一次性回读实际备份目录(优先 status.backupPath 的
+          // 稳定面 —— lastEvent 随管线前移,快速迁移下 backup 相位读回会
+          // 错过,完成态仍须呈现备份位置;lastEvent 解析保留为兼容回退)。
           if (event.phase === 'backup' && event.result === 'ok' && !backupRead.current) {
             backupRead.current = true
             void input.face.getMigrationStatus(input.projectId).then((status) => {
+              if (typeof status.backupPath === 'string' && status.backupPath !== '') {
+                setRun(state => state.backupPath === null ? { ...state, backupPath: status.backupPath as string } : state)
+                return
+              }
               if (status.lastEvent?.phase === 'backup' && status.lastEvent.detailJson !== null) {
                 try {
                   const detail = JSON.parse(status.lastEvent.detailJson) as { backupPath?: unknown }

@@ -29,7 +29,7 @@ test.describe.serial('proposal-board-browsing / step 3: 经徽标互跳 feature 
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world
 
-    const boardBefore = await bridgeInvoke<Array<{ slug: string }>>(page, 'getProposalBoard', [world.projectId])
+    const boardBefore = await bridgeInvoke<{ proposals: Array<{ slug: string }> }>(page, 'getProposalBoard', [world.projectId])
 
     // 互跳入口 = 关联行的 feature 徽标。
     const jumpBadge = page.locator(`[data-dsh-forge-proposal-row="${ASSOCIATED}"] [data-dsh-forge-proposal-feature-jump="${PROP_FEATURE}"]`)
@@ -47,7 +47,7 @@ test.describe.serial('proposal-board-browsing / step 3: 经徽标互跳 feature 
     await expect(page.locator('[data-dsh-forge-proposal-rows], [data-dsh-forge-proposal-list-seat]').first(), '提案 tab → 板(往返闭合)').toBeVisible({ timeout: 15_000 })
 
     // State:视图切换零数据变更(派生快照不因导航漂移)。
-    const boardAfter = await bridgeInvoke<Array<{ slug: string }>>(page, 'getProposalBoard', [world.projectId])
-    expect(boardAfter.map(row => row.slug).sort(), '互跳往返零数据变更').toEqual(boardBefore.map(row => row.slug).sort())
+    const boardAfter = await bridgeInvoke<{ proposals: Array<{ slug: string }> }>(page, 'getProposalBoard', [world.projectId])
+    expect(boardAfter.proposals.map(row => row.slug).sort(), '互跳往返零数据变更').toEqual(boardBefore.proposals.map(row => row.slug).sort())
   })
 })

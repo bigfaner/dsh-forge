@@ -34,7 +34,12 @@ test('smoke/explicit-sot-migration: 发现入口 → 显式确认(备份说明)�
     await expect(confirm).toBeVisible({ timeout: 10_000 })
     const backupText = (await confirm.locator('[data-dsh-forge-migrate-backup-path]').textContent()) ?? ''
     expect(backupText, 'Step 2:备份位置说明(userData 下 backups 根)').toContain('backups')
-    await expect(confirm.locator('[data-dsh-forge-migrate-guard-note]'), 'Step 2:迁移内容说明').toBeVisible()
+    // Step 2:三要素说明(迁移内容/自动备份/index.json 淘汰)—— 以对话框
+    // 正文承载(guard-note 元素是启动侧拒绝的内联注记,仅错误路由时在场,
+    // 生成稿曾误用作常驻说明锚点)。
+    await expect(confirm, 'Step 2:迁移内容说明').toContainText('任务结构化状态')
+    await expect(confirm, 'Step 2:自动备份说明').toContainText('迁移前自动备份')
+    await expect(confirm, 'Step 2:index.json 淘汰说明').toContainText('index.json 退役归档')
     await confirm.locator('[data-dsh-forge-migrate-confirm]').click()
 
     // ---- Step 3:原子迁移执行与对拍结果 ----------------------------------

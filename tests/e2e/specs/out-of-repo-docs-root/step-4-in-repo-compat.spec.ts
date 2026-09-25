@@ -98,7 +98,9 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
     mkdirSync(proposalDir, { recursive: true })
     const tProposal = Date.now()
     writeFileSync(join(proposalDir, 'proposal.md'), proposalMarkdown({
-      status: 'review', author: 'external-writer', created: '2026-09-25', title: 'oor 回流提案', mark: 'oor 外部回流锚点。',
+      // 词表内状态(PROPOSAL_STATUS_VOCAB:draft/accepted/rejected/superseded
+      // —— 越界词表状态被索引器静默跳过,生成稿曾用 'review')。
+      status: 'accepted', author: 'external-writer', created: '2026-09-25', title: 'oor 回流提案', mark: 'oor 外部回流锚点。',
     }), 'utf8')
     await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
     await page.locator('[data-dsh-forge-proposal-row="oor-backflow-proposal"]').waitFor({ state: 'visible', timeout: 20_000 })

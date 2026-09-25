@@ -248,6 +248,12 @@ export interface MigrationStatus {
   /** 最近一笔迁移审计事件;从未发起 → null。 */
   readonly lastEvent: MigrationEvent | null
   /**
+   * 最近一次成功备份的目录(migration_event backup-ok 行;从未 → null)。
+   * 稳定面:完成态呈现备份位置不依赖 lastEvent 恰好停在 backup 相位
+   * (快速迁移下读回时 lastEvent 已前移 —— 备份锚点仍须在场)。
+   */
+  readonly backupPath: string | null
+  /**
    * 文档树是否仍检出 tasks/index.json(任务 1.7):migratable 判定的
    * 文档侧半边 —— authority 'files' + 本位 true = 卡片「可迁移」;迁移
    * 归档后(或从未有任务态)为 false。

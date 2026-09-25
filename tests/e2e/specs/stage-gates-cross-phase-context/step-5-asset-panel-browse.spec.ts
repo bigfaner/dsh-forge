@@ -29,6 +29,14 @@ test.describe.serial('stage-gates-cross-phase-context / step 5: 阶段资产面�
   /** Open the feature detail's assets panel (assumes summary written first). */
   async function openAssetsPanel(world: Awaited<ReturnType<WorldManager['acquire']>>) {
     const { page } = world
+    // 复用世界可能停在任意视图/详情态 —— 先归位 features 列表(标签点击
+    // 归位;若停在详情内则再退一层),卡片才可寻。
+    await page.locator('[data-dsh-forge-tab="workbench/features"]').click()
+    const openDetail = page.locator(`[data-dsh-forge-feature-detail="${GATE_FEATURE}"]`)
+    if (await openDetail.isVisible().catch(() => false)) {
+      await openDetail.locator('[data-dsh-forge-feature-back]').click()
+      await expect(openDetail).toHaveCount(0, { timeout: 10_000 })
+    }
     const card = page.locator(`[data-dsh-forge-feature-card="${GATE_FEATURE}"]`)
     await expect(card).toBeVisible({ timeout: 30_000 })
     await card.click()

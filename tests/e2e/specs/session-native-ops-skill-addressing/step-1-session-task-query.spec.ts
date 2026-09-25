@@ -58,7 +58,8 @@ test.describe.serial('session-native-ops-skill-addressing / step 1: 会话内任
       const sqlite = db as unknown as { prepare: (sql: string) => { all: (...args: string[]) => Array<{ task_key: string; updated_by: string | null }> } }
       const rows = sqlite.prepare('SELECT task_key, updated_by FROM task WHERE project_id = ?').all(world.projectId)
       expect(rows.length, '内核行集与查询同基数').toBe(4)
-      expect(rows.every(row => row.updated_by === null), '只读操作零审计写入(updated_by 基线)').toBe(true)
+      // 零审计写入 = 零会话 actor(摄入基线行为 'kernel',非 null —— 生成稿误设 null 基线)。
+      expect(rows.every(row => !(row.updated_by ?? '').startsWith('session:')), '只读操作零审计写入(零会话 actor)').toBe(true)
     } finally {
       ;(db as unknown as { close(): void }).close()
     }
@@ -85,7 +86,7 @@ test.describe.serial('session-native-ops-skill-addressing / step 1: 会话内任
       const sqlite = db as unknown as { prepare: (sql: string) => { get: (...args: string[]) => { status: string; updated_by: string | null } } }
       const row = sqlite.prepare('SELECT status, updated_by FROM task WHERE project_id = ? AND task_key = ?').get(world.projectId, 'sess-ops/1')
       expect(row.status, '任务状态不变(pending)').toBe('pending')
-      expect(row.updated_by, '审计不留任何记录').toBeNull()
+      expect(row.updated_by ?? '', '审计不留任何记录(拒绝的面不落会话 actor;摄入基线为 kernel 非 null)').not.toContain('session:')
     } finally {
       ;(db as unknown as { close(): void }).close()
     }

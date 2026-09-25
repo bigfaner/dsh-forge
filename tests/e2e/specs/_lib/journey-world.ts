@@ -341,6 +341,12 @@ export interface AppWorld {
   readonly kernel: KernelWorld
   readonly root: string
   readonly projectId: string
+  /**
+   * Main-process stdout captured from launch (attached BEFORE uiReady /
+   * workbench switch, SC1 口径: boot 期 shellLog 行 —— SHELL_READY /
+   * WORKBENCH_WATCH 等 —— 必须落在捕获窗口内,日志级断言才有活性锚点).
+   */
+  readonly mainLog: readonly string[]
 }
 
 export interface BootOptions {
@@ -370,14 +376,26 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
     ...(options.cleanPath === undefined ? {} : { cleanPath: options.cleanPath }),
   })
   const page = shell.page
+  // 日志级断言的活性锚点:自 launch 起捕获主进程 stdout(切换工作台/激活
+  // 项目发生在捕获挂接之后,boot 期 shellLog 行才不会丢)。
+  const mainLog = captureMainStdout(shell)
   await shell.uiReady()
   await switchToWorkbench(page)
   let projectId = kernel.projectId
   if ((options.activate ?? true) === true) {
+    // 激活块在概览找项目卡;同 UserData 重启(会话恢复)可能落在其它视图
+    // —— 先归位概览(已选中即零操作)。
+    const overviewTab = page.locator('[data-dsh-forge-tab="workbench/overview"]')
+    if (await overviewTab.getAttribute('aria-selected').catch(() => null) !== 'true') {
+      await overviewTab.click()
+    }
     const displayName = kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await expect(card).toBeVisible({ timeout: 30_000 })
-    await card.locator('[data-dsh-forge-card-action="activate"]').click()
+    // 重启腿(session-restore)项目已激活:activate 按钮呈 disabled(「当前」),
+    // 无条件点击会超时 —— 已激活即跳过,终态断言仍钉 data-active=true。
+    const activateBtn = card.locator('[data-dsh-forge-card-action="activate"]')
+    if (await activateBtn.isEnabled()) await activateBtn.click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
     const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])
     projectId = state.activeProjectId as string
@@ -387,7 +405,7 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
   if (tab !== 'workbench/overview') {
     await page.locator(`[data-dsh-forge-tab="${tab}"]`).click()
   }
-  return { tag, shell, page, stub, stubDir, kernel, root: kernel.root, projectId }
+  return { tag, shell, page, stub, stubDir, kernel, root: kernel.root, projectId, mainLog }
 }
 
 /** Close one app world (graceful shell close + stub dir removal; root stays for relaunch legs). */
@@ -432,8 +450,24 @@ export class WorldManager {
   async killLive(): Promise<void> {
     const world = this.live
     if (world === null) return
-    world.shell.electronApp.process().kill()
-    await new Promise(resolve => { setTimeout(resolve, 1_500) })
+    const proc = world.shell.electronApp.process()
+    const pid = proc.pid
+    proc.kill()
+    // Windows:整树击杀(渲染器/网络服务/【vendored host 子进程】—— host 持
+    // 19387,单独杀主进程会留下孤 host,重启腿的 host 绑定即 EADDRINUSE,
+    // [data-dsh-forge-shell] 永不挂载)。
+    if (process.platform === 'win32' && pid !== undefined) {
+      try {
+        execSync(`taskkill /PID ${String(pid)} /T /F`, { timeout: 15_000, stdio: 'ignore' })
+      } catch {
+        // 已退出即忽略(竞态无害)。
+      }
+    }
+    // 等进程真正退出再放行重启:单实例锁随进程句柄释放,固定等待与重启
+    // 竞态(ERR_SINGLE_INSTANCE → 页面即关)。
+    for (let i = 0; i < 20 && proc.exitCode === null; i += 1) {
+      await new Promise(resolve => { setTimeout(resolve, 500) })
+    }
     await world.shell.close().catch(() => {})
     this.live = null
   }
@@ -516,7 +550,18 @@ export async function getDispatchRows(page: Page, projectId: string): Promise<Di
 
 /** The full board dispatch chain (enter → check N → go → [warning] → confirm). */
 export async function dispatchFromBoard(page: Page, taskKeys: readonly string[]): Promise<number> {
-  await page.locator('[data-dsh-forge-dispatch-entry]').click()
+  // 散置模态面(上一测试遗留的任务详情等)拦截工具栏指针 —— 经其显式关闭
+  // 钮收起(Esc 对该面板不生效)再进入。
+  const strayDetail = page.locator('[data-dsh-forge-task-detail]')
+  if (await strayDetail.isVisible().catch(() => false)) {
+    await strayDetail.locator('[data-dsh-forge-detail-close]').click().catch(() => {})
+    await expect(strayDetail).toHaveCount(0, { timeout: 5_000 }).catch(() => {})
+  }
+  // 派发链位:上一链 busy 相位期间 entry 为 no-op(idle→selecting 才有效)
+  // —— 等链位归 idle(entry-active=false)再进入。
+  const entry = page.locator('[data-dsh-forge-dispatch-entry]')
+  await expect(entry).toHaveAttribute('data-dsh-forge-dispatch-entry-active', 'false', { timeout: 30_000 })
+  await entry.click()
   await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toBeVisible({ timeout: 10_000 })
   for (const taskKey of taskKeys) {
     await page.locator(`[data-dsh-forge-select-chk="${taskKey}"] [data-dsh-forge-select-chk-input]`).check()
@@ -728,7 +773,11 @@ export function assertSkillsResolve(profileDir: string): void {
   expect(existsSync(patchPath), 'boot 同步落笔用户层 dsh 配置(customSkillDirs 承载面)').toBe(true)
   const patch = readFileSync(patchPath, 'utf8')
   expect(/id:\s*skill-filesystem/.test(patch), 'patch 用户层持有 skill-filesystem 受管行').toBe(true)
-  const skillRoot = /customSkillDirs:[\s\S]*?-\s*'([^']+)'/.exec(patch)?.[1]
+  // 受管根 = 条目中位于 profile node_modules 之内者(漂移腿在场用户自有
+  // 条目时,首条目未必是受管根 —— 生成稿曾锚定首条目)。
+  const listBlock = /customSkillDirs:([\s\S]*?)(?=\n\S|$)/.exec(patch)?.[1] ?? ''
+  const entries = [...listBlock.matchAll(/-\s*'([^']+)'/g)].map(match => match[1] as string)
+  const skillRoot = entries.find(entry => entry.includes('node_modules')) ?? entries[0]
   expect(typeof skillRoot, 'customSkillDirs 条目指向技能根').toBe('string')
   expect(existsSync(skillRoot as string), `技能根在场: ${String(skillRoot)}`).toBe(true)
   const dirs = readdirSync(skillRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()

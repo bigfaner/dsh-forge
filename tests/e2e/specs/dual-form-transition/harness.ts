@@ -67,8 +67,13 @@ export function buildUnregisteredCliCorpus(codeRoot: string): { codeRoot: string
         dependencies: [],
         type: 'doc',
         file: '1-base.md',
+        record: 'records/1-base.md',
       },
     },
+    // 真 CLI 的 index 方言:submit 会按 statusEnum 校验记录状态
+    // (缺位 → "Invalid status"),priorityEnum 同为枚举面。
+    statusEnum: ['pending', 'in_progress', 'completed', 'blocked', 'suspended', 'skipped', 'rejected'],
+    priorityEnum: ['P0', 'P1', 'P2'],
   }, undefined, 2)}\n`)
   writeFileSync(join(tasksDir, '1-base.md'), [
     '---',
@@ -93,4 +98,15 @@ export function buildUnregisteredCliCorpus(codeRoot: string): { codeRoot: string
 export function cliIndexTasks(indexPath: string): Map<string, { id: string; title: string; status: string }> {
   const parsed = JSON.parse(readFileSync(indexPath, 'utf8')) as { tasks: Record<string, { id: string; title: string; status: string }> }
   return new Map(Object.entries(parsed.tasks).map(([, row]) => [row.id, row]))
+}
+
+/**
+ * Write the CLI submit record JSON into the corpus (the real CLI's `--data`
+ * face: submit REQUIRES record data — summary is hard-required, stdin is
+ * unreliable on Windows). Returns the path to pass as `--data`.
+ */
+export function writeCliRecordData(codeRoot: string, taskId: string, summary = 'dual-form CLI leg record'): string {
+  const dataPath = join(codeRoot, '.forge', `submit-${taskId}.json`)
+  writeFileSync(dataPath, `${JSON.stringify({ taskId, status: 'completed', summary }, undefined, 2)}\n`)
+  return dataPath
 }

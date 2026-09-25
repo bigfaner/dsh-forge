@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { freshRoot, openKernelDb, recordMarkdown, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
-import { buildMainWorld, SESS_FEATURE, TASK_1 } from './harness.ts'
+import { buildMainWorld, SESS_FEATURE, TASK_1, TASK_4 } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
 const RECORD_MARK = 'sess-ops 执行记录锚点 — submit 后经 taskGet 渲染(记录链路)。'
@@ -105,10 +105,9 @@ test.describe.serial('session-native-ops-skill-addressing / step 3: 会话内任
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
 
-    // 重置骑手任务为 in_progress(submit 的前置)。
-    await bridgeInvoke(page, 'taskReopen', [{ projectId: world.projectId, taskKey: TASK_1 }, actor]).catch(() => {})
-    const reclaimed = await bridgeInvoke<{ status: string }>(page, 'taskClaim', [{ projectId: world.projectId, taskKey: TASK_1 }, actor])
-    expect(reclaimed.status).toBe('in_progress')
+    // 骑手 = 语料的 in_progress 任务(4)。reopen 面 = rejected/skipped →
+    // pending(completed 终态不可逆),生成稿「completed 后 reopen 再 claim」
+    // 的前设在域内不成立 —— 顺前置状态直接用既有 in_progress 行。
 
     // 非法形态(缺段)→ 工具面白名单拒绝,零触达内核写面。
     let message: string | undefined
@@ -120,7 +119,7 @@ test.describe.serial('session-native-ops-skill-addressing / step 3: 会话内任
     expect(message ?? '', 'ERR_TASK_KEY_INVALID(形态说明)').toContain('ERR_TASK_KEY_INVALID')
 
     // 更正-重试闭环:合法 <featureSlug>/<localId> 地址成功。
-    const submitted = await bridgeInvoke<{ status: string }>(page, 'taskSubmit', [{ projectId: world.projectId, taskKey: TASK_1 }, actor])
+    const submitted = await bridgeInvoke<{ status: string }>(page, 'taskSubmit', [{ projectId: world.projectId, taskKey: TASK_4 }, actor])
     expect(submitted.status, '更正后重试成功').toBe('completed')
   })
 })

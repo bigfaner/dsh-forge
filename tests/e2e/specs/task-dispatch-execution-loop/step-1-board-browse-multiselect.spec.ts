@@ -82,12 +82,18 @@ test.describe.serial('task-dispatch-execution-loop / step 1: 看板浏览并多�
     // 依赖未满足任务(TASK_4,blocker = TASK_0 未终态):勾选控件禁用 + 依赖提示。
     const disabledWrap = page.locator(`[data-dsh-forge-select-chk="${TASK_4}"]`)
     await expect(disabledWrap.locator('[data-dsh-forge-select-chk-input]'), '依赖未满足 → 勾选禁用(阻止入口)').toBeDisabled()
-    const title = await disabledWrap.getAttribute('title')
+    // 禁用缘由 tooltip 落在 input 上(wrap 无 title;aria-label=任务标题)。
+    const title = await disabledWrap.locator('[data-dsh-forge-select-chk-input]').getAttribute('title')
     expect(title ?? '', '依赖提示原词(存在未完成依赖)').toContain('依赖')
 
     // State:零派发行、零 journal 行(不启动任何 subagent)。
     expect(await getDispatchRows(page, world.projectId), '阻止 = 零派发行').toHaveLength(0)
     expect(world.stub?.readJournal() ?? [], '零 subagent 启动(journal 空)').toHaveLength(0)
+
+    // 退出选择面(勾一条可派发唤出浮条后取消;后续 idle 腿断言选择层缺席)。
+    await page.locator(`[data-dsh-forge-select-chk="${TASK_1}"] [data-dsh-forge-select-chk-input]`).check()
+    await page.locator('[data-dsh-forge-dispatch-cancel]').click()
+    await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toHaveCount(0, { timeout: 10_000 })
     await page.keyboard.press('Escape')
   })
 
