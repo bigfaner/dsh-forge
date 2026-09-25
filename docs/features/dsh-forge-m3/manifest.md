@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m3"
 created: "2026-09-23"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-m3
