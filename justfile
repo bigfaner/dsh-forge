@@ -7,8 +7,11 @@ compile:
 # Unit-test gate (forge quality gate for breaking tasks): the workspace vitest
 # suite (root vitest.config.ts — tests/**, apps/*/tests, packages/*/tests).
 # Playwright e2e stays a separate lane (`pnpm test:e2e`), not part of unit gate.
+# Cap the worker pool: default ~15 forks exhaust OS commit when memory-tight
+# (fix-1/fix-3 evidence — Zone Allocation OOM at ~4GB free masquerading as test
+# failures); capped pool runs the full 1802-test suite green in ~38s.
 unit-test:
-    pnpm exec vitest run
+    VITEST_MAX_WORKERS=4 pnpm exec vitest run
 
 # Web e2e orchestration lane (run-tests skill). The app under test is the
 # Electron desktop shell — Playwright launches it per-test via
