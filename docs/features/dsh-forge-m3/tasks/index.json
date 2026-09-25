@@ -890,7 +890,7 @@
       "dependencies": [
         "T-eval-journey"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "gen-contracts.md",
       "record": "records/gen-contracts.md",
       "type": "test.gen-contracts"
