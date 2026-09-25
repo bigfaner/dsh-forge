@@ -47,3 +47,22 @@ pnpm test:e2e                      # 全量(desktop-e2e + forge-m3-e2e,worker=1 
 ```
 
 前置:`pnpm build:plugins`(桩/插件 host 半身改动后)+ `apps/desktop/dist/main.cjs` 已构建。
+
+## 契约派生腿(T-test-gen-scripts,tests/e2e/specs/&lt;journey&gt;/)
+
+`tests/e2e/specs/<journey>/`(8 旅程,gen-journeys → gen-contracts → **gen-test-scripts**
+产物):每旅程 = `harness.ts`(旅程语料世界)+ `step-*.spec.ts`(每 Contract 步一
+文件,每 Outcome 一测试,`test.describe.serial`)+ `smoke.spec.ts`(全 happy path
+单测试)。公共装置在 `specs/_lib/journey-world.ts`(内核语料链 / app 世界 /
+WorldManager 单实例纪律 / oracle 与零 spawn 面)。与 SC 腿同跑同纪律:
+
+```sh
+just web-test-m3 task-dispatch-execution-loop/step-1-board-browse-multiselect  # 单步文件
+just web-test-m3 dual-form-transition/                                        # 单旅程
+```
+
+注:① 契约指定 7 个 Outcome 的注入缝在 6.2 基座缺席(内核不可用 / watcher 故
+障 / 桥传输故障 / 迁移中外写等),已在各文件头注明 DEFERRED —— 质量门禁止无条
+件 skip 空测试,故不生成占位;② dual-form 腿需本机可解析的真实 forge CLI
+(`where.exe forge`,SC7 同前提);③ 全量契约派生腿运行时长为小时级(每文件独
+立世界,单实例串行),按旅程增量跑。
