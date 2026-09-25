@@ -1,9 +1,9 @@
 ---
-title: "工作台业务规则(项目三分模型 · 单激活 · 会话挂接 · 时效基线)"
-domains: [project-registration, doc-location, session-link, stage-gates, prefs-inheritance, proposal-board, freshness-baseline]
+title: "工作台业务规则(项目三分模型 · 单激活 · 会话挂接 · 时效基线 · 单向投影 · subagent 反查)"
+domains: [project-registration, three-part-model, doc-location, session-link, prompt-injection, freshness-baseline, single-active, workspace-projection, archive-semantics, subagent-lineage, task-session-binding, executing-state]
 ---
 
-# 工作台业务规则(项目三分模型 · 单激活 · 会话挂接 · 时效基线)
+# 工作台业务规则(项目三分模型 · 单激活 · 会话挂接 · 时效基线 · 单向投影 · subagent 反查)
 
 ## Project Registration
 
@@ -85,3 +85,26 @@ domains: [project-registration, doc-location, session-link, stage-gates, prefs-i
 **Context**: 状态时效与首屏的产品级量化口径;CI 计时用宽松阈值防抖动。
 **Scope**: [CROSS]
 **Source**: feature/dsh-forge-m2 BIZ-005(prd/prd-spec.md §Performance Requirements/§Data storage)
+
+## Workspace Projection & Task-Session Binding
+
+### BIZ-workbench-006: workspaceRegistry 单向投影(权威-投影,归档≠删除)
+
+**Rule**: forge 项目注册表为权威,dsh workspaceRegistry 为单向投影——注册(新增,同名同序)、改名(同步)、归档(workspace 保留,会话仍按项目分组;forge 侧移入归档分区,项目会话列表不再展示)、删除(workspace 移除,会话按 dsh 语义退未分组、历史不删除)四操作同步;任何入口禁止反向写——dsh 侧手改仅对账呈现偏差提示;投影写入失败降级为无投影继续运行,不阻断注册/改名/归档,可手动重试。
+**Context**: 双向同步引入双写源与冲突合并;归档≠删除保历史分组可找回(workspaceRegistry 移除语义本身不删会话)。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m4(prd/prd-spec.md §必答④⑤;PRD 期裁决 1)
+
+### BIZ-workbench-007: subagent 归拢与任务反查(血缘推断权威,命名辅助)
+
+**Rule**: subagent 会话(origin=subagent)在项目会话列表归拢于 parent 会话血缘树下——顶层永不平铺、默认收起(计数徽标 = 运行中/总数,超上限尾部「查看全部」);任务↔subagent 绑定 = 运行时血缘推断(任务 → session_links active 顶层会话 → 血缘树内后代),不落库、可随时重算;派发 prompt 约定执行 subagent 以「任务 id + title」命名——命名仅辅助可读,与血缘冲突时以血缘为准;多任务共会话场景降级为会话级标注(「该会话执行中」)。
+**Context**: 零新协议面、数据完备;回写(任务级精度)后置 M5 派发协议重构。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m4(prd/prd-spec.md §必答⑥;PRD 期裁决 2)
+
+### BIZ-workbench-008: 「执行中」判定(状态 × 挂接正交)
+
+**Rule**: 任务「正在执行」的呈现判定 = status=in_progress 且存在 active 会话挂接;status 与会话挂接为正交事实——in_progress 而无 active 挂接的任务常规展示并标注「未挂接会话」,不得计入执行中突出呈现。
+**Context**: 状态生命周期(forge 状态机)与会话挂接(发起侧收敛,见 BIZ-workbench-004)是两个事实源;feature 执行态聚焦与任务反查共用此判定,避免「点执行中任务却无会话可开」的空转。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m4(prd/prd-spec.md §必答⑦;PRD 期裁决 3)
