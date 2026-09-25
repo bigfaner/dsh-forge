@@ -20,6 +20,7 @@ status: tasks
 | ER Diagram | design/er-diagram.md | v2 增量 ER:projects 增 data_authority/deviated/migrated_at/backup_path;task(权威 SoT,7 态 CHECK,PK project_id+task_key)/dispatch(5 态,ended_at IS NULL=在跑=迁移守卫判据)/approval_request(awaiting⇔pending 不变式)/prefs(单表 scope 化,scope_id 空串约定)/stage_asset/proposal_snapshot(派生可重建)/migration_event(7 相审计);性质表 + 4 条不变式(状态机唯一写入口/审批对应/键集封闭/迁移原子性) |
 | Schema | design/schema.sql | v2 迁移脚本(事务内按 schema_version 执行):2 组 ALTER 增列 + 7 张新表(task/dispatch/approval_request/prefs/stage_asset/proposal_snapshot/migration_event)全 CHECK 约束 + 5 索引;M2 v1 表全保留 |
 | Page Map | design/page-map.md | 视图键寻址(无 URL 路由延续):四 tab 页(概览=UF3 迁移+UF4 偏好扩展/提案=UF5 新页第二 tab/Feature=UF2 阶段门+资产 tab/任务=UF1 编排扩展)+ 浮层族(派发链/迁移链/偏好)+ 侧板互斥(详情/审批 dock)+ Esc 分层 + 状态门(迁移 close-guard/在跑守卫/门拒绝/桥降级);共享组件与上游会话跳转 |
+| Specs Consolidated | specs/(biz-specs.md · tech-specs.md · review-choices.md) | 规格沉淀(2026-09-25,非交互自动集成):业务规则 7 条入 docs/business-rules/(workbench 006-009 阶段门/偏好三级/提案只读、coexistence-003 SoT 分治、sot-migration.md 新文件迁移纪律 2 条);技术约定 8 条入 docs/conventions/(host-integration 003-006 tool 注册/renderer 桥/审批路由/预合成契约、data-kernel 004-005 taskKey 校验/Go 对拍、product-arch-008 customSkillDirs、testing.md 新文件 e2e 纪律);漂移修复 7 处(coexistence-002/workbench-001/004/ipc-002/data-kernel-001/host-002/product-arch-003·004);[auto-specs] 提交可追溯 |
 
 ## Dependencies
 
