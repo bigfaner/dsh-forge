@@ -10,7 +10,7 @@ import {
   createStubSessionChannel,
   resolveSessionStubDir,
 } from '../src/host/session-channel-stub.ts'
-import { createSessionLaunchCore } from '../src/host/session-launch.ts'
+import { createDispatchLaunchCore } from '../src/host/dispatch-launch/launch.ts'
 
 const dirs: string[] = []
 function stubDir(): string {
@@ -108,24 +108,46 @@ describe('createStubSessionChannel — the three states (AC4)', () => {
   })
 })
 
-describe('createStubSessionChannel through the launch core (4.2 consumption)', () => {
-  it('the full launch walks the stub channel and lands ok with the caller-minted session id', async () => {
+describe('createStubSessionChannel through the dispatch launch core (3.5/6.1 consumption)', () => {
+  it('a full dispatch launch walks the stub channel and lands ok with the pre-minted session id', async () => {
     const dir = stubDir()
-    const core = createSessionLaunchCore({ getSessionChannel: () => createStubSessionChannel(dir) })
-    const result = await core.launch({ promptText: 'TASK PROMPT', title: 't', cwd: 'Z:/proj', sessionId: 'session-stub-fixed' })
+    const core = createDispatchLaunchCore({ getSessionChannel: () => createStubSessionChannel(dir) })
+    const result = await core.launch({
+      dispatchId: 'd-stub-1',
+      batchId: 'b-stub-1',
+      projectId: 'p1',
+      featureSlug: 'demo',
+      taskKey: 'demo/1.1',
+      taskType: null,
+      prompt: 'PRE-SYNTHESIZED INJECTION CONTENT',
+      promptHash: 'f'.repeat(64),
+      sessionId: 'session-stub-fixed',
+      cwd: 'Z:/proj',
+    })
     expect(result).toEqual({ ok: true, sessionId: 'session-stub-fixed' })
-    // The journaled first message is the prompt + the FORGE_ACTOR attribution line.
+    // The journaled first message is the presynthesized content, delivered
+    // character-for-character (host 零改写).
     const lines = journal(dir).map(line => JSON.parse(line) as { kind: string; text?: string })
     const prompt = lines.find(entry => entry.kind === 'prompt')
-    expect(prompt?.text).toContain('TASK PROMPT')
-    expect(prompt?.text).toContain('FORGE_ACTOR=session:session-stub-fixed')
+    expect(prompt?.text).toBe('PRE-SYNTHESIZED INJECTION CONTENT')
   })
 
-  it('an orchestrated create failure surfaces ERR_SESSION_CHANNEL_UNAVAILABLE', async () => {
+  it('an orchestrated create failure surfaces ERR_DISPATCH_LAUNCH_FAILED', async () => {
     const dir = stubDir()
     writeControl(dir, { create: 'fail' })
-    const core = createSessionLaunchCore({ getSessionChannel: () => createStubSessionChannel(dir) })
-    const result = await core.launch({ promptText: 'P', title: 't', cwd: 'Z:/proj' })
-    expect(result).toMatchObject({ ok: false, reasonCode: 'ERR_SESSION_CHANNEL_UNAVAILABLE' })
+    const core = createDispatchLaunchCore({ getSessionChannel: () => createStubSessionChannel(dir) })
+    const result = await core.launch({
+      dispatchId: 'd-stub-2',
+      batchId: 'b-stub-2',
+      projectId: 'p1',
+      featureSlug: 'demo',
+      taskKey: 'demo/1.2',
+      taskType: null,
+      prompt: 'P',
+      promptHash: 'a'.repeat(64),
+      sessionId: null,
+      cwd: 'Z:/proj',
+    })
+    expect(result).toMatchObject({ ok: false, code: 'ERR_DISPATCH_LAUNCH_FAILED' })
   })
 })

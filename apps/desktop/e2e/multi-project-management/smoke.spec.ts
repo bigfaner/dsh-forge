@@ -88,7 +88,10 @@ test('multi-project-management journey smoke: wizard → register B (in_repo) �
       // ---- Step 2→3:检出通过 → 默认仓内 → 完成注册 B ----------------------
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-doc]')).toBeVisible()
-      await expect(page.locator('[data-dsh-forge-wizard-doc-in-repo]')).toBeChecked()
+      // M3 翻转(1.7/G7):仓外应用管理路径为默认(预填 + 未授权则下一步禁用)。
+      await expect(page.locator('[data-dsh-forge-wizard-doc-external]'), '默认仓外文档位置(应用管理路径)').toBeChecked()
+      await expect(page.locator('[data-dsh-forge-wizard-external-default]')).toBeVisible()
+      await page.locator('[data-dsh-forge-wizard-doc-in-repo]').click() // 本腿选回仓内注册
       await page.locator('[data-dsh-forge-wizard-next]').click()
       await expect(page.locator('[data-dsh-forge-wizard-step-summary]')).toBeVisible()
       await expect(page.locator('[data-dsh-forge-wizard-name-input]')).toHaveAttribute('placeholder', nameB)

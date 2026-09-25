@@ -7,7 +7,8 @@
 // 不受模拟方式影响;审批走主窗口现有会话 UI 一节随 agent 面一并由文件变
 // 更通道承载。
 //
-//   success —— 挂接会话运行中(先经 step-3 链路真实发起),单笔 claim 落
+//   success —— 挂接会话运行中(6.1 演进:经内核 recordSessionLink 动词建立
+//   —— M2 发起链退役,挂接语义不变),单笔 claim 落
 //   文件(挂接推断主路径:path ②,FT-045)→ ≤5s 免手动刷新回流,来源
 //   [会话](source:session 徽标翻转);≤5s 计量 = sc3 口径原样搬入
 //   helpers.ts(t0 = 最后一次 writeFileSync 返回,t1 = 页内首见目标徽标 +
@@ -34,15 +35,15 @@ import { cleanupViewKey, closeAndAwaitExit, openTasksBoard } from '../tests/m2/h
 import { createFixtureMutator } from '../tests/m2/helpers/file-mutate.ts'
 import type { FixtureMutator } from '../tests/m2/helpers/file-mutate.ts'
 import {
-  assertReflowWithinBudget, disposeJourney, launchOneClick, measureReflow,
-  pickTaskKey, pollChannelJournal, readBoard, readForgeIndexTruth, setUpJourney,
+  assertReflowWithinBudget, disposeJourney, linkSessionViaBridge, measureReflow,
+  pickTaskKey, readBoard, readForgeIndexTruth, setUpJourney,
 } from './helpers.ts'
 
 test('step-5/success [@web-e2e @journey task-session-execution-loop]: simulated claim on the linked task reflows ≤5s with the [会话] source flip', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
-  const { set, channel, project, session } = setup
+  const { set, project, session } = setup
   const KEY = pickTaskKey(set, task => task.status === 'pending' && task.record === null && task.dependencies.length === 0, '挂接会话对象(pending + 无记录)')
   const mutator: FixtureMutator = createFixtureMutator(set, project)
 
@@ -50,15 +51,16 @@ test('step-5/success [@web-e2e @journey task-session-execution-loop]: simulated 
     const shell = await session.boot()
     try {
       const { page } = shell
-      await registerFixtureProject(page, project)
+      const projectId = await registerFixtureProject(page, project)
       await openTasksBoard(page, set.facts.taskCount)
 
-      // ---- 建立挂接(挂接会话运行中)--------------------------------------
-      await launchOneClick(page, `[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
-      const created = await pollChannelJournal(channel, entry => entry.kind === 'create', 'the session create')
-      const sessionId = created.sessionId ?? ''
-      expect(sessionId).not.toBe('')
-      await openTasksBoard(page, set.facts.taskCount)
+      // ---- 建立挂接(挂接会话运行中;6.1 = 内核动词直调)------------------
+      const sessionId = await linkSessionViaBridge(page, projectId, KEY, 'session-step5-success')
+      // 权威读点亮徽标:打开侧板(getTaskDetail.links reconcile)再回看板。
+      await page.locator(`[data-dsh-forge-node-card="${KEY}"]`).click()
+      await expect(page.locator(`[data-dsh-forge-task-detail="${KEY}"]`)).toBeVisible({ timeout: 15_000 })
+      await page.locator('[data-dsh-forge-detail-close]').click()
+      await expect(page.locator('[data-dsh-forge-task-detail]')).toHaveCount(0)
       await expect(
         page.locator(`[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-badge="session-live"]`),
       ).toHaveAttribute('data-dsh-forge-session-id', sessionId, { timeout: 10_000 })
@@ -161,7 +163,7 @@ test('step-5/multi-change-flowback [@web-e2e @journey task-session-execution-loo
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
-  const { set, channel, project, session } = setup
+  const { set, project, session } = setup
   const KEY = pickTaskKey(set, task => task.status === 'pending' && task.record === null && task.dependencies.length === 0, '连续变更对象')
   const mutator: FixtureMutator = createFixtureMutator(set, project)
 
@@ -172,12 +174,9 @@ test('step-5/multi-change-flowback [@web-e2e @journey task-session-execution-loo
       const projectId = await registerFixtureProject(page, project)
       await openTasksBoard(page, set.facts.taskCount)
 
-      // 挂接会话运行中 + FORGE_ACTOR 标记(判定序 path ① 的透传槽形态)。
-      await launchOneClick(page, `[data-dsh-forge-node-card="${KEY}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
-      const created = await pollChannelJournal(channel, entry => entry.kind === 'create', 'the session create')
-      const sessionId = created.sessionId ?? ''
-      expect(sessionId).not.toBe('')
-      await openTasksBoard(page, set.facts.taskCount)
+      // 挂接会话运行中 + FORGE_ACTOR 标记(判定序 path ① 的透传槽形态;
+      // 6.1:挂接经内核动词建立)。
+      const sessionId = await linkSessionViaBridge(page, projectId, KEY, 'session-step5-multi')
 
       // 连续三笔:claim → transition → submit 的 e2e 模拟(状态行走
       // pending→in_progress→completed→rejected;首笔前落 actor 记录 —

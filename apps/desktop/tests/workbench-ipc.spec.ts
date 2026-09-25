@@ -26,6 +26,7 @@ import { listSessionLinksByTask } from '../src/main/workbench/repos/session-link
 import { WorkbenchRegistryError } from '../src/main/workbench/registry/validate.ts'
 import { authorizeExternalDocPath, listExternalDocAuthorizations } from '../src/main/workbench/registry/authorize.ts'
 import { normalizeRegisteredPath } from '../src/main/workbench/repos/projects.ts'
+import { StageWriteError } from '../src/main/workbench/stages/advance-service.ts'
 import { scanForgeFiles, type ScanTarget } from '../src/main/workbench/indexer/scan.ts'
 import {
   createPluginFace,
@@ -113,6 +114,47 @@ function fakeServices(): WorkbenchVerbServices {
     })),
     endSessionLink: vi.fn(() => undefined),
     authorizeExternalDocPath: vi.fn(() => undefined),
+    taskAdd: vi.fn(() => ({ key: 'alpha/disc-1', status: 'pending' })),
+    taskClaim: vi.fn(() => ({ key: 'alpha/1.1', status: 'in_progress' })),
+    taskTransition: vi.fn(() => ({ key: 'alpha/1.1', status: 'blocked' })),
+    taskSubmit: vi.fn(() => ({ key: 'alpha/1.1', status: 'completed' })),
+    taskReopen: vi.fn(() => ({ key: 'alpha/1.1', status: 'pending' })),
+    taskGet: vi.fn(() => ({ summary: { key: 'alpha/1.1' } })),
+    taskQuery: vi.fn(() => []),
+    getMigrationStatus: vi.fn(() => ({
+      authority: 'files',
+      deviated: false,
+      migratedAt: null,
+      lastEvent: null,
+      indexJsonDetected: false,
+    })),
+    startMigration: vi.fn(() => Promise.resolve({ started: true })),
+    probeCodeRoot: vi.fn(() => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false })),
+    getWorkbenchPaths: vi.fn(() => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' })),
+    knowledgeFact: vi.fn(() => ({ total: 0, facts: [] })),
+    knowledgeLesson: vi.fn(() => ({ total: 0, lessons: [] })),
+    knowledgeResearch: vi.fn(() => ({ total: 0, reports: [] })),
+    knowledgeForensic: vi.fn(() => ({ action: 'search', sessions: [] })),
+    featureList: vi.fn(() => []),
+    featureStatus: vi.fn(() => ({ slug: 'alpha', status: 'tasks', tasks: { byStatus: {}, total: 0, indexPresent: false }, scores: { prd: '', design: '', ui: '' } })),
+    getPrefs: vi.fn(() => []),
+    setPrefs: vi.fn(() => undefined),
+    clearPrefOverride: vi.fn(() => undefined),
+    checkStageArtifacts: vi.fn(() => ({ stage: 'prd', satisfied: true, missing: [] })),
+    getStageGate: vi.fn(() => ({ featureSlug: 'alpha', stage: 'prd', summaryGenerated: false, gateAssetPath: null, assets: [] })),
+    listStageAssets: vi.fn(() => []),
+    advanceStage: vi.fn(() => ({ slug: 'alpha', status: 'design', docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: '2026-09-20T10:00:00.000Z' })),
+    stageSummarize: vi.fn(() => ({ stage: 'prd', path: 'alpha/stages/prd.md', generatedAt: '2026-09-20T10:00:00.000Z', featureStage: 'prd', gateOpen: true })),
+    getProposalBoard: vi.fn(() => ({ proposals: [], generatedAt: '2026-09-20T10:00:00.000Z', proposalsRoot: 'Z:/root/docs/proposals' })),
+    readProposalDoc: vi.fn(() => ({ kind: 'proposal', markdown: '# p\n' })),
+    dispatchTasks: vi.fn(() => Promise.resolve({ dispatched: [] })),
+    redispatch: vi.fn(() => Promise.resolve({ dispatched: [] })),
+    getDispatches: vi.fn(() => []),
+    listApprovals: vi.fn(() => []),
+    decideApproval: vi.fn(() => ({ id: 'a-1', state: 'approved' })),
+    receiveApproval: vi.fn(() => ({ id: 'a-1', state: 'pending' })),
+    notifySessionStarted: vi.fn(() => ({ id: 'd-1', state: 'running' })),
+    notifyLaunchFailed: vi.fn(() => ({ id: 'd-1', state: 'failed' })),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -159,26 +201,122 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the sixteen whitelisted verb channels, one per verb', () => {
+  it('contains exactly the fifty-one whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
+      'dsh-forge:workbench-advance-stage',
       'dsh-forge:workbench-authorize-external-doc-path',
+      'dsh-forge:workbench-check-stage-artifacts',
+      'dsh-forge:workbench-clear-pref-override',
+      'dsh-forge:workbench-decide-approval',
+      'dsh-forge:workbench-dispatch-tasks',
       'dsh-forge:workbench-end-session-link',
+      'dsh-forge:workbench-feature-list',
+      'dsh-forge:workbench-feature-status',
+      'dsh-forge:workbench-get-dispatches',
       'dsh-forge:workbench-get-feature-board',
+      'dsh-forge:workbench-get-migration-status',
+      'dsh-forge:workbench-get-prefs',
+      'dsh-forge:workbench-get-proposal-board',
+      'dsh-forge:workbench-get-stage-gate',
       'dsh-forge:workbench-get-state',
       'dsh-forge:workbench-get-task-board',
       'dsh-forge:workbench-get-task-detail',
+      'dsh-forge:workbench-get-workbench-paths',
+      'dsh-forge:workbench-knowledge-fact',
+      'dsh-forge:workbench-knowledge-forensic',
+      'dsh-forge:workbench-knowledge-lesson',
+      'dsh-forge:workbench-knowledge-research',
+      'dsh-forge:workbench-list-approvals',
       'dsh-forge:workbench-list-plugins',
+      'dsh-forge:workbench-list-stage-assets',
+      'dsh-forge:workbench-notify-launch-failed',
+      'dsh-forge:workbench-notify-session-started',
+      'dsh-forge:workbench-probe-code-root',
       'dsh-forge:workbench-read-feature-doc',
+      'dsh-forge:workbench-read-proposal-doc',
+      'dsh-forge:workbench-receive-approval',
       'dsh-forge:workbench-record-session-link',
+      'dsh-forge:workbench-redispatch',
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-set-plugin-enabled',
+      'dsh-forge:workbench-set-prefs',
+      'dsh-forge:workbench-stage-summarize',
+      'dsh-forge:workbench-start-migration',
       'dsh-forge:workbench-subscribe-events',
+      'dsh-forge:workbench-task-add',
+      'dsh-forge:workbench-task-claim',
+      'dsh-forge:workbench-task-get',
+      'dsh-forge:workbench-task-query',
+      'dsh-forge:workbench-task-reopen',
+      'dsh-forge:workbench-task-submit',
+      'dsh-forge:workbench-task-transition',
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(16)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(51)
+  })
+
+  it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
+    // Hard Rule(任务 1.3/1.4):通道常量表追加式修改,禁改写 M2 既有动词
+    // 定义。钉定 M2 段原样(键序 = 定义序);M3 段只许出现在其后。
+    const keys = Object.keys(WORKBENCH_VERB_CHANNELS)
+    expect(keys.slice(0, 16)).toEqual([
+      'getState',
+      'registerProject',
+      'updateProject',
+      'removeProject',
+      'activateProject',
+      'getTaskBoard',
+      'getTaskDetail',
+      'getFeatureBoard',
+      'readFeatureDoc',
+      'listPlugins',
+      'setPluginEnabled',
+      'recordSessionLink',
+      'endSessionLink',
+      'authorizeExternalDocPath',
+      'subscribeEvents',
+      'unsubscribeEvents',
+    ])
+    expect(keys.slice(16)).toEqual([
+      'taskAdd',
+      'taskClaim',
+      'taskTransition',
+      'taskSubmit',
+      'taskReopen',
+      'taskGet',
+      'taskQuery',
+      'getMigrationStatus',
+      'startMigration',
+      'probeCodeRoot',
+      'getWorkbenchPaths',
+      'knowledgeFact',
+      'knowledgeLesson',
+      'knowledgeResearch',
+      'knowledgeForensic',
+      'featureList',
+      'featureStatus',
+      'getPrefs',
+      'setPrefs',
+      'clearPrefOverride',
+      'checkStageArtifacts',
+      'getStageGate',
+      'listStageAssets',
+      'advanceStage',
+      'stageSummarize',
+      'getProposalBoard',
+      'readProposalDoc',
+      'dispatchTasks',
+      'redispatch',
+      'getDispatches',
+      'listApprovals',
+      'decideApproval',
+      'receiveApproval',
+      'notifySessionStarted',
+      'notifyLaunchFailed',
+    ])
   })
 
   it('keeps the event push channel off the invokable verb whitelist', () => {
@@ -220,10 +358,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 16 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 51 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(16)
+    expect(handlers.size).toBe(51)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -267,6 +405,161 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.authorizeExternalDocPath)?.(OWNED, 'Z:/external-docs')
     expect(services.authorizeExternalDocPath).toHaveBeenCalledWith('Z:/external-docs')
+
+    // M3 tasks 段(任务 1.3):写集动词携带 actor 审计位;读动词按
+    // data_authority 路由 —— 本层只做形状校验与转发(零内联业务)。
+    handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', title: 'new task' }, 'session:s-1')
+    expect(services.taskAdd).toHaveBeenCalledWith(
+      { projectId: 'p-1', featureSlug: 'alpha', title: 'new task' },
+      'session:s-1',
+    )
+
+    handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, 'session:s-1')
+    expect(services.taskClaim).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' }, 'session:s-1')
+
+    handlers.get(C.taskTransition)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'blocked', reason: 'waiting' }, 'external')
+    expect(services.taskTransition).toHaveBeenCalledWith(
+      { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'blocked', reason: 'waiting' },
+      'external',
+    )
+
+    handlers.get(C.taskSubmit)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', recordPath: 'records/alpha-1.1.md' }, 'session:s-1')
+    expect(services.taskSubmit).toHaveBeenCalledWith(
+      { projectId: 'p-1', taskKey: 'alpha/1.1', recordPath: 'records/alpha-1.1.md' },
+      'session:s-1',
+    )
+
+    handlers.get(C.taskReopen)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, 'kernel')
+    expect(services.taskReopen).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' }, 'kernel')
+
+    handlers.get(C.taskGet)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' })
+    expect(services.taskGet).toHaveBeenCalledWith({ projectId: 'p-1', taskKey: 'alpha/1.1' })
+
+    handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
+    expect(services.taskQuery).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', status: 'pending' })
+
+    // M3 migration 段(任务 1.4):projectId 形状校验 + 服务转发;异步面
+    // 的错误映射见下一条用例。
+    handlers.get(C.getMigrationStatus)?.(OWNED, 'p-1')
+    expect(services.getMigrationStatus).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.startMigration)?.(OWNED, 'p-1')
+    expect(services.startMigration).toHaveBeenCalledWith('p-1')
+
+    // M3 知识系 + feature 读段(任务 2.2,D4):input 形状校验 + 服务转发;
+    // 路径授权/数据面语义在内核(knowledge-service),本层零内联业务。
+    handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'list', source: 'runtime' })
+    expect(services.knowledgeFact).toHaveBeenCalledWith({ projectId: 'p-1', action: 'list', source: 'runtime' })
+
+    handlers.get(C.knowledgeLesson)?.(OWNED, { projectId: 'p-1', action: 'add', name: 'gotcha-x', body: 'b', tags: ['testing'] })
+    expect(services.knowledgeLesson).toHaveBeenCalledWith({ projectId: 'p-1', action: 'add', name: 'gotcha-x', body: 'b', tags: ['testing'] })
+
+    handlers.get(C.knowledgeResearch)?.(OWNED, { projectId: 'p-1', action: 'get', slug: 'codegraph' })
+    expect(services.knowledgeResearch).toHaveBeenCalledWith({ projectId: 'p-1', action: 'get', slug: 'codegraph' })
+
+    handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'search', keyword: 'bridge', last: 5 })
+    expect(services.knowledgeForensic).toHaveBeenCalledWith({ action: 'search', keyword: 'bridge', last: 5 })
+
+    handlers.get(C.featureList)?.(OWNED, 'p-1')
+    expect(services.featureList).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' })
+    expect(services.featureStatus).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha' })
+
+    // M3 prefs 段(任务 3.1):scope 形状校验(三级单选)+ 服务转发;键集/
+    // 类型/限定地址/事务在内核(prefs-service),本层零内联业务。
+    handlers.get(C.getPrefs)?.(OWNED, { feature: 'p-1/alpha' })
+    expect(services.getPrefs).toHaveBeenCalledWith({ feature: 'p-1/alpha' })
+
+    handlers.get(C.setPrefs)?.(OWNED, 'global', [{ key: 'auto.gitPush', value: true }])
+    expect(services.setPrefs).toHaveBeenCalledWith('global', [{ key: 'auto.gitPush', value: true }])
+
+    handlers.get(C.clearPrefOverride)?.(OWNED, { project: 'p-1' }, 'auto.gitPush')
+    expect(services.clearPrefOverride).toHaveBeenCalledWith({ project: 'p-1' }, 'auto.gitPush')
+
+    // M3 stages 写段(任务 4.1):推进门 + 阶段资产写 —— 位置/形状/词表
+    // 浅校验 + 服务转发;门判定与 manifest 内核写在 advance-service。
+    handlers.get(C.advanceStage)?.(OWNED, 'p-1', 'alpha')
+    expect(services.advanceStage).toHaveBeenCalledWith('p-1', 'alpha')
+
+    handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
+    expect(services.stageSummarize).toHaveBeenCalledWith({ projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: 'g', summary: 's' })
+
+    // M3 proposals 段(任务 5.3):只读两动词 —— projectId/slug/kind 形状
+    // 校验 + 服务转发;只读硬约束在域面(零写动词)。
+    handlers.get(C.getProposalBoard)?.(OWNED, 'p-1')
+    expect(services.getProposalBoard).toHaveBeenCalledWith('p-1')
+
+    handlers.get(C.readProposalDoc)?.(OWNED, { projectId: 'p-1', slug: 'dsh-forge-m3', kind: 'eval' })
+    expect(services.readProposalDoc).toHaveBeenCalledWith({ projectId: 'p-1', slug: 'dsh-forge-m3', kind: 'eval' })
+
+    // M3 dispatch host 回调段(任务 3.5):renderer relay 替 host 半身转发的
+    // 回调面 —— 形状校验 + 服务转发;语义/事务在 dispatch-service 域面。
+    handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 'session-launch-1', payload: { toolName: 'bash', reason: 'escalation' } })
+    expect(services.receiveApproval).toHaveBeenCalledWith({ dispatchId: 'd-1', sessionId: 'session-launch-1', payload: { toolName: 'bash', reason: 'escalation' } })
+
+    handlers.get(C.notifySessionStarted)?.(OWNED, 'd-1', 'session-launch-1')
+    expect(services.notifySessionStarted).toHaveBeenCalledWith('d-1', 'session-launch-1')
+
+    handlers.get(C.notifyLaunchFailed)?.(OWNED, 'd-1', 'create failed: boom')
+    expect(services.notifyLaunchFailed).toHaveBeenCalledWith('d-1', 'create failed: boom')
+  })
+
+  it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {
+    stderrSink()
+    const services = fakeServices()
+    const guardError = Object.assign(new Error('project p-1 has 1 running dispatch(es)'), { code: 'ERR_MIGRATION_GUARD' })
+    services.startMigration = vi.fn(() => Promise.reject(guardError))
+    const { handlers } = installed(services)
+    const result = handlers.get(WORKBENCH_VERB_CHANNELS.startMigration)?.(OWNED, 'p-1') as Promise<unknown>
+    await expect(result).rejects.toBeInstanceOf(WorkbenchIpcError)
+    const error = (await result.then(
+      () => undefined,
+      (rejection: unknown) => rejection,
+    )) as WorkbenchIpcError
+    expect(JSON.parse(error.message)).toMatchObject({ code: 'ERR_MIGRATION_GUARD' })
+  })
+
+  it('rejects M3 task verb shape violations before the service (vocab + actor + blockers array)', () => {
+    stderrSink()
+    const services = fakeServices()
+    const { handlers } = installed(services)
+    const C = WORKBENCH_VERB_CHANNELS
+    const cases: Array<[string, () => unknown]> = [
+      ['missing actor', () => handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' })],
+      ['empty actor', () => handlers.get(C.taskClaim)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1' }, '')],
+      ['to outside 7-state vocab', () => handlers.get(C.taskTransition)?.(OWNED, { projectId: 'p-1', taskKey: 'alpha/1.1', to: 'done' }, 'kernel')],
+      ['blockers not string array', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', title: 't', blockers: [42] }, 'kernel')],
+      ['status outside vocab', () => handlers.get(C.taskQuery)?.(OWNED, { projectId: 'p-1', status: 'done' })],
+      ['taskAdd missing title', () => handlers.get(C.taskAdd)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha' }, 'kernel')],
+      ['fact action outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'purge' })],
+      ['fact source outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'list', source: 'divine' })],
+      ['fact entry kind outside vocab', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'add', entry: { subject: 's', kind: 'nonsense', value: 1 } })],
+      ['fact entry missing value', () => handlers.get(C.knowledgeFact)?.(OWNED, { projectId: 'p-1', action: 'add', entry: { subject: 's', kind: 'signature' } })],
+      ['lesson tags not string array', () => handlers.get(C.knowledgeLesson)?.(OWNED, { projectId: 'p-1', action: 'add', name: 'x', body: 'b', tags: [7] })],
+      ['forensic action outside vocab', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'wipe' })],
+      ['forensic last not positive integer', () => handlers.get(C.knowledgeForensic)?.(OWNED, { action: 'search', last: 0 })],
+      ['featureStatus missing slug', () => handlers.get(C.featureStatus)?.(OWNED, { projectId: 'p-1' })],
+      ['receiveApproval missing payload (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1' })],
+      ['receiveApproval non-string sessionId (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 42, payload: {} })],
+      ['stageSummarize stage outside vocab (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'shipped', goal: 'g', summary: 's' })],
+      ['stageSummarize empty goal (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: '', summary: 's' })],
+    ]
+    for (const [label, run] of cases) {
+      const error = toCapture(run) as WorkbenchIpcError
+      expect(error, label).toBeInstanceOf(WorkbenchIpcError)
+      expect(JSON.parse(error.message), label).toMatchObject({ code: 'ERR_WORKBENCH_DB' })
+    }
+    expect(services.taskAdd).not.toHaveBeenCalled()
+    expect(services.taskClaim).not.toHaveBeenCalled()
+    expect(services.taskTransition).not.toHaveBeenCalled()
+    expect(services.taskQuery).not.toHaveBeenCalled()
+    expect(services.knowledgeFact).not.toHaveBeenCalled()
+    expect(services.knowledgeLesson).not.toHaveBeenCalled()
+    expect(services.knowledgeForensic).not.toHaveBeenCalled()
+    expect(services.featureStatus).not.toHaveBeenCalled()
+    expect(services.receiveApproval).not.toHaveBeenCalled()
+    expect(services.stageSummarize).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {
@@ -434,6 +727,28 @@ describe('error envelope', () => {
     expect(registry.envelope.code).toBe('ERR_CODE_ROOT_UNREADABLE')
     const guard = toWorkbenchIpcError(new PluginMandatoryError('plugin forge-workbench is mandatory'), 'verb')
     expect(guard.envelope).toEqual({ code: 'ERR_PLUGIN_MANDATORY', message: 'plugin forge-workbench is mandatory' })
+  })
+
+  // SC4(任务 6.6)补件:域错误自带的字符串 detail(StageWriteError 的门
+  // 缺失引导 / KnowledgeError 的知识面引导)随封装透传 —— GateHint 等
+  // 渲染层引导面按原文呈现缺失清单,不再被映射面截断。
+  it('forwards a domain error string detail through the envelope (gate-guidance legibility)', () => {
+    const error = toWorkbenchIpcError(
+      new StageWriteError(
+        'ERR_STAGE_GATE_UNSATISFIED',
+        'stage gate unsatisfied: the summary asset of the current stage \'design\' has not been generated yet',
+        'missing: features/alpha/stages/design.md — generate it first with the forge_stage_summarize tool',
+      ),
+      'dsh-forge:workbench-advance-stage',
+    )
+    expect(error.envelope).toEqual({
+      code: 'ERR_STAGE_GATE_UNSATISFIED',
+      message: 'stage gate unsatisfied: the summary asset of the current stage \'design\' has not been generated yet',
+      detail: 'missing: features/alpha/stages/design.md — generate it first with the forge_stage_summarize tool',
+    })
+    // 非 string / 空 detail 不入封装(无引导面的域错误形态不变)。
+    const bare = toWorkbenchIpcError(new WorkbenchRepoError('ERR_PROJECT_NOT_FOUND', 'project gone'), 'verb')
+    expect(bare.envelope).toEqual({ code: 'ERR_PROJECT_NOT_FOUND', message: 'project gone' })
   })
 
   it('falls back to ERR_WORKBENCH_DB + log for unclassified errors', () => {
@@ -784,6 +1099,8 @@ describe('workbench services: board / detail / doc reads', () => {
           taskTotal: 2,
           taskCompleted: 0,
           updatedAt: expect.any(String),
+          // 任务 4.4(Integration #2):偏离徽标数据源恒投影(4.2 watcher 置位)。
+          deviated: false,
         },
       ])
     })

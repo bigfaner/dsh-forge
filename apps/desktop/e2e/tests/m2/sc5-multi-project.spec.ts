@@ -162,14 +162,18 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
       await waitForTreeNodes(page, setB1.facts.taskCount, 60_000)
-      // 发起可用(launch probe;SC2/3 own the chain itself)。
+      // 仓外树的任务详情可读(6.1:M2 发起入口随 ForgeBridge 退役;读面即
+      // 仓外数据链的证词)。
       const taskBKey = `${featureB1.slug}/${taskB1.localId}`
+      await page.locator(`[data-dsh-forge-node-card="${taskBKey}"]`).click()
       await expect(
-        page.locator(`[data-dsh-forge-node-card="${taskBKey}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`),
-        'the launch entry probes available on the external project',
-      ).toHaveAttribute('data-probe', 'available', { timeout: 20_000 })
+        page.locator(`[data-dsh-forge-task-detail="${taskBKey}"]`),
+        'the external project task detail reads over the out-of-repo tree',
+      ).toBeVisible({ timeout: 15_000 })
+      await page.locator('[data-dsh-forge-detail-close]').click()
+      await expect(page.locator('[data-dsh-forge-task-detail]')).toHaveCount(0)
 
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       const featureB1Card = page.locator(`[data-dsh-forge-feature-card="${featureB1.slug}"]`)
       await expect(featureB1Card).toBeVisible({ timeout: 30_000 })
       await featureB1Card.click()
@@ -200,7 +204,7 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
 
       // 文档读取逐次复验(T4):fresh 页会话(切页重挂载清 doc 缓存)→
       // 默认 manifest tab 即错误卡;任务页数据仍在(快照不因错误态清空)。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       const detailB1Again = page.locator(`[data-dsh-forge-feature-detail="${featureB1.slug}"]`)
       if (await detailB1Again.count() === 0) {
         await page.locator(`[data-dsh-forge-feature-card="${featureB1.slug}"]`).click()
@@ -238,7 +242,7 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
       // so the rebuilt LIST is the correct landing — B1's slugs gone, B2's in.
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await waitForTreeNodes(page, setB2.facts.taskCount, 60_000)
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureB2.slug}"]`)).toBeVisible({ timeout: 30_000 })
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureB1.slug}"]`)).toHaveCount(0)
       await page.locator(`[data-dsh-forge-feature-card="${featureB2.slug}"]`).click()
@@ -261,7 +265,7 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
       await expect(page.locator('[data-dsh-forge-tasks-count]'))
         .toContainText(new RegExp(`1\\s*(?:of|\\/)\\s*${String(setB2.facts.taskCount)}`), { timeout: 15_000 })
       // feature 选中态:详情子视图开着(上面已开,回列表再开一次以留痕)。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureB2.slug}"]`)).toBeVisible()
       await page.locator(`[data-dsh-forge-feature-card="${featureB2.slug}"]`).click()
       await expect(detailB2).toBeVisible({ timeout: 15_000 })
@@ -280,7 +284,7 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
         .toContainText(new RegExp(`${String(setA.facts.taskCount)}\\s*(?:of|\\/)\\s*${String(setA.facts.taskCount)}`), { timeout: 15_000 })
       await expect(page.locator('[data-dsh-forge-badge="session-live"]'), 'no cross-project live-link badge').toHaveCount(0)
       // feature 页:A 的列表(非 not-found 残留),B 的卡片不在。
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureA1.slug}"]`)).toBeVisible({ timeout: 30_000 })
       await expect(page.locator('[data-dsh-forge-feature-notfound]'), 'the stale feature-detail selection cleared').toHaveCount(0)
       await expect(page.locator(`[data-dsh-forge-feature-card="${featureB2.slug}"]`)).toHaveCount(0)
@@ -308,7 +312,7 @@ test('6.4/sc5-multi-project [@web-e2e @journey sc5-multi-project]: external-auth
       await expect(page.locator('[data-dsh-forge-switcher-trigger]')).not.toContainText(nameA, { timeout: 10_000 })
       await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
       await expect(page.locator('[data-dsh-forge-gate]'), 'pointer cleared → the state-gate guidance card').toBeVisible({ timeout: 15_000 })
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator('[data-dsh-forge-gate]'), 'the features tab gates the same way').toBeVisible({ timeout: 15_000 })
       assertTreesIdentical('A codeRoot across remove', hashA, hashTree(projectA.codeRoot))
 

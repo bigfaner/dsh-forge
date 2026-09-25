@@ -1,0 +1,25 @@
+feature: "dsh-forge-m3"
+integrated: "2026-09-25"
+mode: "non-interactive (auto-integrate all CROSS items, [auto-specs])"
+biz_count: 7
+tech_count: 9
+implicit_rules:
+  - TECH-data-kernel-006: 内核域模块模式(repo 唯一写入口 + service 动词面 + 感知 seam)——漂移扫描期提取自执行记录与代码
+replaced: []
+drift_fixes:
+  - BIZ-coexistence-002: +M3 修订注记(SoT 分治收窄唯一事实源表述)
+  - BIZ-workbench-001: +M3 修订块(文档根默认仓外翻转)
+  - BIZ-workbench-004: +M3 修订块(预合成取代 forge prompt 注入)
+  - TECH-electron-ipc-002: 通道数 16 → 51(v2 扩面)
+  - TECH-data-kernel-001: schema 载体四件套机制精确化
+  - TECH-host-002: +M3 退役注记(forge CLI spawn 链删除,保留通用外部进程纪律)
+  - TECH-product-arch-003/004: +M3 落地/收口状态注记
+new_files:
+  - docs/business-rules/sot-migration.md
+  - docs/conventions/testing.md
+domains_rederived:
+  - docs/business-rules/workbench.md
+  - docs/business-rules/coexistence.md
+  - docs/conventions/host-integration.md
+  - docs/conventions/data-kernel.md
+  - docs/conventions/product-architecture.md

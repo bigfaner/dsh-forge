@@ -271,7 +271,7 @@ function linkTree(target: string, source: string): void {
 }
 
 /** Path of a bundle's profile-local materialization under the profile's node_modules. */
-function materializationPath(profileDir: string, name: string): string {
+export function materializationPath(profileDir: string, name: string): string {
   return join(profileDir, 'node_modules', ...name.split('/'))
 }
 

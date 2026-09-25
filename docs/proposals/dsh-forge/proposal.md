@@ -48,8 +48,8 @@ intent: "new-feature"
 
 - **M1 纯壳(= v1,范围冻结,继承 Superseded 提案)**:三平台安装包 + 宿主子进程 + 托盘/通知 + 免签名 GitHub Releases + 更新检测。不含任何 forge 能力。
 - **M2 需求与会话**:**任务列表可视化**(第一功能面:forge 任务/依赖树从终端表格变成图形看板)、feature 看板(状态机/文档浏览)、**会话挂接**(从任务一键发起 dsh 会话 + 任务上下文注入)。**硬前置(2026-09-21)**:ui-plugin-foundation 工程基座(至少 spike + bundle 配置化)完成后,UI 插件任务方可开工,且 M2 PRD 须先按两级插件模型修订 G6/SC6、按 SQLite 方向记账 DF001/DF005(修订完成前不得进入任务分解);首个任务为 spike:dsh 插件机制 vs forge skill/hook/subagent 语义等价性(= M2 SC8,与基座提案的装配路线 spike 验证面不同,互不替代)。
-- **M3 知识与测试用例**:知识库(项目级 + 跨项目全局层)的浏览、检索与会话按需注入;测试用例管理(journey/contract 与测试脚本的关联视图、执行结果)。
-- **M4 管线原生化(应用化完成态)**:brainstorm→PRD→设计→任务→执行 的管线、对抗式评估器、Quality Gate、任务编排从"Claude Code skill 指令流"迁移为**应用原生工作流**;插件退役完成;forge CLI 同步退役——能力形态终点 = **应用 API(Electron 数据内核)+ dsh tool,CLI 不保留**(过渡形态 = 插件宿主半身 spawn CLI;具体形态由 M2 SC8 spike 与 M4 设计定,禁止预判)。
+- **M3 流程即产品(2026-09-23 修订,原「知识与测试用例」段顺延 M4)**:SDD 流程编排权迁入应用——任务执行 subagent 化(派发时预合成专业化系统提示词 + 并行 + 看板编排审批)、任务 SoT 翻转 SQLite(显式迁移)、dsh model-facing tool 面、forge CLI 应用侧退役一步到位(15 项必迁技能 customSkillDirs 承载)、强制阶段化(阶段门 + 阶段资产 + 强制注入)、偏好三级、提案看板只读、过程文档默认仓外;知识系数据面先行(fact/lesson/research/forensic dsh tool)。
+- **M4 管线原生化(应用化完成态)**:brainstorm→PRD→设计→任务→执行 的管线、对抗式评估器、任务编排从"Claude Code skill 指令流"迁移为**应用原生工作流**;CLI 四动词收口(quality-gate / cleanup / worktree / verify-task-done 落内核 API + dsh tool——2026-09-23 归宿分解决议自 M3 延后,依据见 dsh-forge-m3 PRD 归宿表注记)+ quality-gate/cleanup GUI 面 + git hook 安装面收口;20 项辅助技能逐项归宿;知识库(项目级完善 + 跨项目全局层)与测试用例管理;插件退役完成;forge CLI 同步退役——能力形态终点 = **应用 API(Electron 数据内核)+ dsh tool,CLI 不保留**(过渡形态 = 插件宿主半身 spawn CLI;M3 设计已定形为双载体不引入第三载体)。
 
 **架构约束**:
 

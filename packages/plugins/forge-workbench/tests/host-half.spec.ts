@@ -11,10 +11,11 @@ import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 // lib/) does.
 import { apply as hostApply } from '../lib/index.js'
 
-// Task 3.2 shipped the host half deliberately 空载 (empty-load); task 4.1
-// fills its first face: apply(ctx) now registers the ForgeBridge remote
-// service (service key `forgeBridge`). The dual-half channel availability is
-// still verified by loading BOTH real artifacts through their real channels:
+// M3 task 6.1 (ForgeBridge 退役): the M2 forgeBridge/sessionLaunch services
+// are deleted — apply(ctx) now registers the THREE M3 faces (forgeToolBridge
+// stream + the dispatchLaunch/approvalBridge orchestration pair). The
+// dual-half channel availability is still verified by loading BOTH real
+// artifacts through their real channels:
 // the node half as an ES module (the host Loader's channel) and the browser
 // half through a minimal __ModuleLoader__ whose require table answers exactly
 // the module-table baseline — the resolution surface every later client→host
@@ -25,7 +26,18 @@ const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** Minimal Context face the cordis Service base needs at registration time. */
 function fakeHostContext(): { ctx: Context; provide: ReturnType<typeof vi.fn> } {
   const provide = vi.fn()
-  return { ctx: { reflect: { provide } } as unknown as Context, provide }
+  return {
+    ctx: {
+      reflect: { provide },
+      // M3 task 3.5: apply() also attaches the approval-bridge's waterfall
+      // listeners (approval/request + tools/pre-execute) — the minimal event
+      // surface a host context carries for the attach (each on() returns its
+      // detach; the rebuilt bundle exercises the real attach since 3.9's
+      // lib refresh unmasked the stale-artifact gap).
+      on: vi.fn(() => () => {}),
+    } as unknown as Context,
+    provide,
+  }
 }
 
 /** The module-table baseline the host SPA answers (hello-world / template contract). */
@@ -72,22 +84,29 @@ function baselineShims(): Record<string, unknown> {
   }
 }
 
-describe('forge-workbench host half: apply registers the ForgeBridge + SessionLaunch services (4.1/4.2)', () => {
-  it('exports apply as the sole host export and registering it provides both remote services', async () => {
+describe('forge-workbench host half: apply registers the ForgeToolBridge + dispatchLaunch + approvalBridge services (2.1/3.5)', () => {
+  it('exports apply as the sole host export and registering it provides all three remote services', async () => {
     const module = await import('../lib/index.js')
     expect(Object.keys(module)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect(hostApply(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(2)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch'])
+    // Since 6.1 (ForgeBridge 退役) apply registers THREE remote services: the
+    // tool bridge plus the orchestration pair (dispatchLaunch +
+    // approvalBridge); the M2 forgeBridge/sessionLaunch faces are gone.
+    expect(provide).toHaveBeenCalledTimes(3)
+    expect(provide.mock.calls.map(call => call[0])).toEqual([
+      'forgeToolBridge', 'dispatchLaunch', 'approvalBridge',
+    ])
     // The Gateway's source-mode discovery face: @Remote-marked methods become
-    // the wire endpoints forgeBridge/{resolveCli,getTaskPrompt} (4.1) and
-    // sessionLaunch/launch (4.2).
-    const bridge = provide.mock.calls[0][1] as object
-    expect(remoteMethods(bridge).map(marker => marker.exportName ?? marker.method).sort())
-      .toEqual(['getTaskPrompt', 'resolveCli'])
-    const launcher = provide.mock.calls[1][1] as object
-    expect(remoteMethods(launcher).map(marker => marker.exportName ?? marker.method)).toEqual(['launch'])
+    // the wire endpoints forgeToolBridge/{calls,answer} (2.1 — calls is the
+    // stream-mode subscription face, spike-1 §2'), dispatchLaunch/launch
+    // (3.5), and approvalBridge/answer (3.5, the decideApproval 下行腿).
+    const toolBridge = provide.mock.calls[0][1] as object
+    const toolMarkers = remoteMethods(toolBridge)
+    expect(toolMarkers.map(marker => marker.exportName ?? marker.method).sort()).toEqual(['answer', 'calls'])
+    expect(toolMarkers.find(marker => (marker.exportName ?? marker.method) === 'calls')?.mode).toBe('stream')
+    const dispatchLauncher = provide.mock.calls[1][1] as object
+    expect(remoteMethods(dispatchLauncher).map(marker => marker.exportName ?? marker.method)).toEqual(['launch'])
   })
 
   it('ships no stub/not-implemented markers in the host half source', () => {
@@ -96,91 +115,18 @@ describe('forge-workbench host half: apply registers the ForgeBridge + SessionLa
   })
 })
 
-describe('forge-workbench host half: project-roots env transport (fail closed)', () => {
-  const ENV_KEY = 'DSH_FORGE_PROJECT_ROOTS'
-  const CLI_KEY = 'DSH_FORGE_CLI_PATH'
-  const saved = process.env[ENV_KEY]
-  const savedCli = process.env[CLI_KEY]
-  const savedPath = process.env.PATH
-
-  afterEach(() => {
-    if (saved === undefined) delete process.env[ENV_KEY]
-    else process.env[ENV_KEY] = saved
-    if (savedCli === undefined) delete process.env[CLI_KEY]
-    else process.env[CLI_KEY] = savedCli
-    if (savedPath === undefined) delete process.env.PATH
-    else process.env.PATH = savedPath
-    vi.restoreAllMocks()
-  })
-
-  it('rejects spawn for an unregistered root when the transport carries a valid list (parse ok, no warn)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    process.env[ENV_KEY] = JSON.stringify(['Z:/workbench/registered-a'])
-    const { ctx, provide } = fakeHostContext()
-    hostApply(ctx)
-    const instance = provide.mock.calls[0][1] as {
-      getTaskPrompt(input: { projectRoot: string; taskKey: string }): Promise<{ available: boolean; reasonCode?: string; detail?: string }>
-    }
-    const result = await instance.getTaskPrompt({ projectRoot: 'Z:/workbench/somewhere-else', taskKey: '4.1' })
-    expect(result).toMatchObject({ available: false, reasonCode: 'ERR_NO_PROMPT' })
-    expect((result as { detail?: string }).detail).toContain('not a registered project')
-    expect(warn).not.toHaveBeenCalled()
-  })
-
-  it('closes the allowlist on invalid JSON transport (warn + reject)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    process.env[ENV_KEY] = '{not json'
-    const { ctx, provide } = fakeHostContext()
-    hostApply(ctx)
-    const instance = provide.mock.calls[0][1] as {
-      getTaskPrompt(input: { projectRoot: string; taskKey: string }): Promise<{ available: boolean; reasonCode?: string; detail?: string }>
-    }
-    const result = await instance.getTaskPrompt({ projectRoot: 'Z:/workbench/registered-a', taskKey: '4.1' })
-    expect(result).toMatchObject({ available: false, reasonCode: 'ERR_NO_PROMPT' })
-    expect(warn).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes the allowlist when the transport is absent (secure default)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    delete process.env[ENV_KEY]
-    const { ctx, provide } = fakeHostContext()
-    hostApply(ctx)
-    const instance = provide.mock.calls[0][1] as {
-      getTaskPrompt(input: { projectRoot: string; taskKey: string }): Promise<{ available: boolean; reasonCode?: string }>
-    }
-    expect(await instance.getTaskPrompt({ projectRoot: 'Z:/workbench/anywhere', taskKey: '4.1' }))
-      .toMatchObject({ available: false, reasonCode: 'ERR_NO_PROMPT' })
-  })
-
-  it('feeds DSH_FORGE_CLI_PATH into the resolution chain (explicit stage, both-path diagnostics)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A PATH pinned empty keeps the chain hermetic: the explicit candidate is
-    // a real file that nonetheless cannot execute (a data file), so the probe
-    // fails and the PATH stage finds nothing — ERR_FORGE_CLI_UNAVAILABLE with
-    // BOTH stage diagnostics, and no real forge is ever reached.
-    process.env[CLI_KEY] = join(pkgRoot, 'tsdown.config.ts')
-    process.env.PATH = ''
-    process.env[ENV_KEY] = JSON.stringify(['Z:/workbench/registered-a'])
-    const { ctx, provide } = fakeHostContext()
-    hostApply(ctx)
-    const instance = provide.mock.calls[0][1] as {
-      getTaskPrompt(input: { projectRoot: string; taskKey: string }): Promise<{ available: boolean; reasonCode?: string; detail?: string }>
-    }
-    const result = await instance.getTaskPrompt({ projectRoot: 'Z:/workbench/registered-a', taskKey: '4.1' })
-    expect(result).toMatchObject({ available: false, reasonCode: 'ERR_FORGE_CLI_UNAVAILABLE' })
-    expect((result as { detail?: string }).detail).toContain('explicit path')
-    expect((result as { detail?: string }).detail).toContain('PATH')
-  })
-})
-
 describe('forge-workbench dual-half artifacts: both load through their channels (AC3)', () => {
-  it('the node-half artifact (lib/index.js) registers both host services when applied', async () => {
+  it('the node-half artifact (lib/index.js) registers all three M3 host services when applied', async () => {
     const nodeHalf = await import(join(pkgRoot, 'lib', 'index.js'))
     expect(Object.keys(nodeHalf)).toEqual(['apply'])
     const { ctx, provide } = fakeHostContext()
     expect((nodeHalf.apply as (ctx: Context) => void)(ctx)).toBeUndefined()
-    expect(provide).toHaveBeenCalledTimes(2)
-    expect(provide.mock.calls.map(call => call[0])).toEqual(['forgeBridge', 'sessionLaunch'])
+    // Since 6.1 the artifact registers the M3 faces only (the M2
+    // forgeBridge/sessionLaunch services retired with the spawn chain).
+    expect(provide).toHaveBeenCalledTimes(3)
+    expect(provide.mock.calls.map(call => call[0])).toEqual([
+      'forgeToolBridge', 'dispatchLaunch', 'approvalBridge',
+    ])
   })
 
   it('the browser-half artifact (lib/client.js) executes through the module-table loader channel', () => {

@@ -30,7 +30,7 @@
 import { useEffect, useState } from 'react'
 import type { WorkbenchFeaturesSeat } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
-import { createIpcFeatureBoardFace, createIpcFeatureDocFace, getWorkbenchIpcBridge } from '../../ipc/workbench'
+import { createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcStageFace, getWorkbenchIpcBridge } from '../../ipc/workbench'
 import type { WorkbenchIpcBridge } from '../../ipc/workbench'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { FeaturesPage } from '../FeaturesPage'
@@ -143,6 +143,9 @@ export function FeaturesView(props: FeaturesViewProps) {
   // Face identities fixed with it (FeaturesPage keys its loads on projectId).
   const [boardFace] = useState(() => (bridge === undefined ? undefined : createIpcFeatureBoardFace(bridge)))
   const [docFace] = useState(() => (bridge === undefined ? undefined : createIpcFeatureDocFace(bridge)))
+  // The UF2 stage face (task 4.4, Integration #2): the gate verdict / advance
+  // entry / sixth tab + the stage_advanced & deviation_detected reflux.
+  const [stageFace] = useState(() => (bridge === undefined ? undefined : createIpcStageFace(bridge)))
 
   const [project, setProject] = useState<ProjectResolution>({ phase: 'resolving' })
   const [resolveNonce, setResolveNonce] = useState(0)
@@ -177,7 +180,8 @@ export function FeaturesView(props: FeaturesViewProps) {
 
   if (seatForm) {
     // The 5.9 form, verbatim: the seat's faces (or the build-stage mock twins
-    // when absent) over the chrome's project projection.
+    // when absent) over the chrome's project projection. Task 4.4 threads the
+    // seat's stage face through (absent = the M2 five-tab form).
     return (
       <FeaturesPage
         t={props.t}
@@ -188,6 +192,7 @@ export function FeaturesView(props: FeaturesViewProps) {
         externalDocs={props.chromeExternalDocs}
         face={props.seat?.face}
         docFace={props.seat?.docFace}
+        stageFace={props.seat?.stageFace}
       />
     )
   }
@@ -258,6 +263,7 @@ export function FeaturesView(props: FeaturesViewProps) {
       externalDocs={project.externalDocs}
       face={boardFace}
       docFace={docFace}
+      stageFace={stageFace}
     />
   )
 }

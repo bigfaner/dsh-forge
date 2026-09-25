@@ -28,6 +28,16 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | '
 /** 最近一笔变更来源(Interface 3 判定序产物;task_snapshot.source CHECK)。 */
 export type ChangeSource = 'session' | 'terminal'
 
+/**
+ * dispatch 5 态词表(schema-v2.sql §4 dispatch.state CHECK 同源;任务 3.3):
+ * starting(subagent 启动中,session 未回填)→ running(session 已建)→
+ * awaiting(存在 pending 审批,⇔ 不变式)→ done/failed(终态,ended_at 置位)。
+ */
+export type DispatchState = 'starting' | 'running' | 'awaiting' | 'failed' | 'done'
+
+/** approval_request 3 态词表(schema-v2.sql §5 state CHECK 同源;任务 3.3)。 */
+export type ApprovalState = 'pending' | 'approved' | 'rejected'
+
 /** forge manifest 词表(feature_snapshot.status 透传;'in-progress' 连字符原词)。 */
 export type FeatureStatus = 'prd' | 'design' | 'tasks' | 'in-progress' | 'completed'
 
@@ -122,6 +132,10 @@ export interface FeatureSnapshot {
   readonly taskTotal: number
   readonly taskCompleted: number
   readonly updatedAt: string
+  /** feature 级偏离标记(v2 增列;4.2 watcher 置位,内核合法推进清除,仅呈现)。 */
+  readonly deviated: boolean
+  /** 最近一次外部变更检出时戳(4.2;清除偏离时不抹 —— 审计痕迹)。 */
+  readonly lastExternalAt: string | null
 }
 
 export interface SyncState {
@@ -173,7 +187,7 @@ export interface TaskSnapshotRow {
   readonly updated_at: string
 }
 
-/** feature_snapshot 表行(schema-v1.sql;派生缓存)。 */
+/** feature_snapshot 表行(schema-v1.sql 基底 + v2 增列 deviated/last_external_at)。 */
 export interface FeatureSnapshotRow {
   readonly project_id: string
   readonly feature_slug: string
@@ -182,6 +196,8 @@ export interface FeatureSnapshotRow {
   readonly task_total: number
   readonly task_completed: number
   readonly updated_at: string
+  readonly deviated: number
+  readonly last_external_at: string | null
 }
 
 /** sync_state 表行(schema-v1.sql;派生运行簿记)。 */
@@ -258,6 +274,8 @@ export function toFeatureSnapshot(row: FeatureSnapshotRow): FeatureSnapshot {
     taskTotal: row.task_total,
     taskCompleted: row.task_completed,
     updatedAt: row.updated_at,
+    deviated: row.deviated === 1,
+    lastExternalAt: row.last_external_at,
   }
 }
 

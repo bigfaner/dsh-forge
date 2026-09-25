@@ -43,6 +43,7 @@ import {
   upsertTaskSnapshots,
 } from '../repos/task-snapshots.ts'
 import { markScanFailed, markScanStarted, markScanSucceeded } from '../repos/sync-state.ts'
+import { getProjectTaskAuthority } from '../tasks/task-repo.ts'
 import type { ForgeParseFailure, ParsedTask } from './parse-task.ts'
 import { scanFeatures, type FeatureScanResult } from './parse-feature.ts'
 import {
@@ -56,6 +57,8 @@ import {
   type DanglingBlocker,
 } from './diff.ts'
 import { determineSource } from './source.ts'
+import { collectStageAssets, deleteStageAssets, replaceStageAssets } from '../stages/stage-asset-index.ts'
+import { collectProposalIndex, replaceProposalSnapshots } from '../proposals/proposal-indexer.ts'
 
 /** 扫描目标(projects 行的最小投影;docBase 口径同 registry/forge-detect)。 */
 export interface ScanTarget {
@@ -87,6 +90,15 @@ export interface ScanOutcome {
 /** features 目录解析(docBase = docLocationPath ?? codeRoot,仓外文档三分模型)。 */
 export function resolveFeaturesDir(target: ScanTarget): string {
   return join(target.docLocationPath ?? target.codeRoot, 'docs', 'features')
+}
+
+/**
+ * proposals 目录解析(任务 5.3;docBase 口径同 resolveFeaturesDir)。
+ * forge-cli `feature.ProposalBaseDir` = docs/proposals(文档根布局三分:
+ * features/<slug>/ + proposals/<slug>/ + 阶段资产)。
+ */
+export function resolveProposalsDir(target: ScanTarget): string {
+  return join(target.docLocationPath ?? target.codeRoot, 'docs', 'proposals')
 }
 
 /** 解析失败 → sync_state 错误项文案(≤120 截断由 repos 层执行)。 */
@@ -161,6 +173,18 @@ function applyScanResult(
   const featureDiff = diffFeatures(options.previousFeatures, incomingFeatures, presentSlugs)
   const featureBySlug = new Map(result.features.map(feature => [feature.slug, feature]))
 
+  // M3 任务 3.2:stage_asset 感知索引 —— 每轮扫描对全部在场 feature 全量同步
+  // (stages/*.md 变更不改变 feature_snapshot.updatedAt,按 changed-slug 门控
+  // 会漏感知;行集替换 = 派生纯函数,与 rebuildStageAssetIndex 共用实现)。
+  // fs 读取置于写事务外(事务内只承写)。
+  const featuresDir = resolveFeaturesDir(target)
+  const stageAssetsBySlug = new Map(result.features.map(feature => [feature.slug, collectStageAssets(featuresDir, feature.slug)]))
+
+  // M3 任务 5.3:proposal_snapshot 感知索引 —— 项目级行集替换(派生纯函数,
+  // 与 rebuildProposalIndex 共用 collect/replace 实现;proposals/ 变更不触
+  // task/feature 行,全量同步零漂移)。fs 读取置于写事务外(同上)。
+  const proposalRows = collectProposalIndex(resolveProposalsDir(target), featuresDir)
+
   const runWrites = (): void => {
     deleteTaskSnapshots(db, target.id, taskDiff.deletedKeys)
     const batchRows = taskDiff.upserts.flatMap((row) => {
@@ -183,6 +207,7 @@ function applyScanResult(
     upsertTaskSnapshots(db, target.id, batchRows)
     for (const slug of featureDiff.deletedSlugs) {
       deleteFeatureSnapshot(db, target.id, slug)
+      deleteStageAssets(db, target.id, slug) // M3 3.2:feature 结构性删除 → 派生索引行清理
     }
     for (const row of incomingFeatures) {
       if (!featureDiff.changedSlugs.includes(row.featureSlug)) continue // 未变化不重写:updated_at 不漂移
@@ -196,6 +221,11 @@ function applyScanResult(
         updatedAt: parsedFeature.updatedAt,
       })
     }
+    for (const feature of result.features) {
+      replaceStageAssets(db, target.id, feature.slug, stageAssetsBySlug.get(feature.slug) ?? [])
+    }
+    // M3 5.3:提案行集替换(结构性删除经整组替换清行;无 proposals/ 目录 → 空集)。
+    replaceProposalSnapshots(db, target.id, proposalRows)
   }
 
   if (options.wrapTransaction) {
@@ -271,6 +301,22 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     dirOk = false
   }
   if (!dirOk) {
+    // M3 5.3:features/ 缺失(管线早期:仅 proposals/ 在场)不阻断提案索引 ——
+    // proposal_snapshot 自持事务独立行集替换(任务/feature 快照零变更,M2
+    // error 态语义保持);失败上抛由 watcher 感知面降级(Hard Rule 不弹 UI)。
+    const proposalRows = collectProposalIndex(resolveProposalsDir(target), featuresDir)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      replaceProposalSnapshots(db, target.id, proposalRows)
+      db.exec('COMMIT')
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK')
+      } catch {
+        // The connection may already be unusable; prefer rethrowing the original error.
+      }
+      throw error
+    }
     const sync = markScanFailed(db, target.id, `features directory not found: ${featuresDir}`)
     const stats: ScanStats = {
       featuresScanned: 0,
@@ -291,8 +337,19 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     wrapTransaction: true,
   })
 
+  // M3 任务 6.7:已迁移(data_authority='sqlite')项目的稳态 = index.json
+  // 已淘汰(.migrated-* 归档在;任务权威在 SQLite)—— 基线扫描的「index
+  // 缺失」不是失败,否则每次激活/感知重扫都置 sync error 态,渲染侧
+  // lostProjectIds 把健康已迁移项目误判「仓外路径失效」(概览引导卡 +
+  // 提案板阻断,SC6 腿暴露)。文件复现/变更的外部写回收仍归 reingest
+  // 钩子(1.5,扫描后);在场而不可解析(unreadable or malformed)依旧
+  // 计入失败(外部异常透出)。files 权威项目两形态均为失败(M2 语义不变)。
+  const failures = getProjectTaskAuthority(db, target.id) === 'sqlite'
+    ? result.failures.filter(failure => failure.reason !== 'tasks index missing')
+    : result.failures
+
   const sync =
-    result.failures.length > 0 ? markScanFailed(db, target.id, formatSkipReason(result.failures)) : markScanSucceeded(db, target.id)
+    failures.length > 0 ? markScanFailed(db, target.id, formatSkipReason(failures)) : markScanSucceeded(db, target.id)
 
   const stats: ScanStats = {
     featuresScanned: result.features.length,
@@ -300,7 +357,7 @@ export function scanForgeFiles(db: RepoDb, target: ScanTarget): ScanOutcome {
     taskUpserts: applied.stats.taskUpserts,
     taskDeletes: applied.stats.taskDeletes,
     recordsParsed: applied.stats.recordsParsed,
-    skippedFiles: result.failures,
+    skippedFiles: failures,
     danglingBlockers: applied.stats.danglingBlockers,
   }
   const events: WorkbenchEvent[] = [

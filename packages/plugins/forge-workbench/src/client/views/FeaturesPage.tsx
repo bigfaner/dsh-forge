@@ -30,7 +30,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { FeatureBoardData } from '../ipc-types'
-import type { FeatureBoardFace, FeatureDocFace } from '../contract'
+import type { FeatureBoardFace, FeatureDocFace, StageFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { ChromeButton } from '../components/chrome/ChromeButton'
 import { createMockFeatureBoardFace, createMockFeatureDocFace } from '../mocks/workbench'
@@ -65,6 +65,13 @@ export interface FeaturesPageProps {
   face?: Partial<FeatureBoardFace> | undefined
   /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   docFace?: Partial<FeatureDocFace> | undefined
+  /**
+   * The UF2 stage face (task 4.4, Integration #2): drives the detail's gate
+   * verdict + advance entry + sixth tab, and the page's own board reflux
+   * (stage_advanced / deviation_detected for THIS project → board reload,
+   * ≤5s — the deviation badge's 即时出现 leg). Absent = the M2 page form.
+   */
+  stageFace?: Partial<StageFace> | undefined
 }
 
 const pageStyle = {
@@ -178,6 +185,25 @@ export function FeaturesPage(props: FeaturesPageProps) {
     void load(props.projectId ?? '')
   }, [props.projectId])
 
+  // The UF2 board reflux (task 4.4): stage_advanced / deviation_detected for
+  // THIS project re-fire the board verb over the stage face's shared
+  // single-subscriber channel (≤5s on the real chain — the deviation badge's
+  // 即时出现 leg and the post-advance status refresh; the loaded board stays
+  // rendered while the re-read is in flight, 不打断焦点/滚动). Other
+  // projects' events never reload this board.
+  useEffect(() => {
+    const subscribe = props.stageFace?.subscribeEvents
+    if (subscribe === undefined) return
+    return subscribe((events) => {
+      for (const event of events) {
+        if (event.projectId !== props.projectId) continue
+        if (event.type === 'stage_advanced' || event.type === 'deviation_detected') {
+          void load(props.projectId ?? '')
+        }
+      }
+    })
+  }, [props.stageFace, props.projectId])
+
   const inDetail = props.featureSlug !== undefined
   const summary = inDetail && board !== undefined
     ? board.features.find(feature => feature.slug === props.featureSlug)
@@ -235,6 +261,8 @@ export function FeaturesPage(props: FeaturesPageProps) {
               feature={summary}
               externalDocs={props.externalDocs}
               docFace={docFace}
+              stageFace={props.stageFace}
+              onStageAdvanced={() => { void load(props.projectId ?? '') }}
               docsCache={docsCache}
               onBack={props.onBack ?? (() => {})}
             />

@@ -70,6 +70,16 @@ export interface OpenDatabaseDeps {
 const WORKBENCH_DIR = 'workbench'
 const DB_FILE_NAME = 'workbench.db'
 
+/**
+ * Canonical workbench database file path for a userData root (single source
+ * for the `<userData>/workbench/workbench.db` placement rule). Migration
+ * backup (task 1.4) resolves the live db artifacts through this helper so it
+ * can never drift from the boot-time placement.
+ */
+export function resolveWorkbenchDbPath(userDataPath: string): string {
+  return join(userDataPath, WORKBENCH_DIR, DB_FILE_NAME)
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }

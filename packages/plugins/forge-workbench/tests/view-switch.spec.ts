@@ -72,6 +72,23 @@ describe('ViewSwitchController: the one write path (AC1/AC2)', () => {
     })
   })
 
+  it('openProposalDetail (5.5, UF5) rides the same one write path — transition, projection, no persistence', () => {
+    const { controller, persist } = makeController()
+    const carrier = recordingCarrier('rail')
+    controller.attach(carrier)
+    controller.openProposalDetail('dsh-forge-m2')
+    expect(carrier.presented.at(-1)).toEqual({
+      view: 'workbench', workbenchTab: 'workbench/proposals', featureSlug: undefined, proposalSlug: 'dsh-forge-m2',
+    })
+    // Session-scoped slug: the persisted projection keeps only the tab.
+    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/proposals' })
+    // The breadcrumb return: the tab action clears the slug.
+    controller.switchWorkbenchTab('workbench/proposals')
+    expect(carrier.presented.at(-1)).toEqual({
+      view: 'workbench', workbenchTab: 'workbench/proposals', featureSlug: undefined, proposalSlug: undefined,
+    })
+  })
+
   it('presents WITHOUT a live carrier (grace window) — the transition and persist still land', () => {
     const { controller, persist } = makeController()
     controller.switchWorkbench('workbench/tasks')

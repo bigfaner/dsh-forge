@@ -69,6 +69,51 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     recordSessionLink: async () => ({}),
     endSessionLink: async () => undefined,
     authorizeExternalDocPath: async () => undefined,
+    // M3 migration pair + UF3 integration reads (task 1.7): the presence
+    // check walks every declared bridge member.
+    getMigrationStatus: async () => ({ authority: 'files', deviated: false, migratedAt: null, lastEvent: null, indexJsonDetected: false }),
+    startMigration: async () => ({ started: true }),
+    probeCodeRoot: async () => ({ available: true, taskTotal: 0, featureTotal: 0, indexJsonDetected: false }),
+    getWorkbenchPaths: async () => ({ docsRoot: 'Z:/userData/workbench/docs', backupsRoot: 'Z:/userData/workbench/backups' }),
+    // M3 task verbs (task 2.1): the presence check walks every declared member.
+    taskAdd: async () => ({}) as never,
+    taskClaim: async () => ({}) as never,
+    taskTransition: async () => ({}) as never,
+    taskSubmit: async () => ({}) as never,
+    taskReopen: async () => ({}) as never,
+    taskGet: async () => ({}) as never,
+    taskQuery: async () => [],
+    // M3 knowledge + feature-read verbs (task 2.2): same presence walk.
+    knowledgeFact: async () => ({}) as never,
+    knowledgeLesson: async () => ({}) as never,
+    knowledgeResearch: async () => ({}) as never,
+    knowledgeForensic: async () => ({}) as never,
+    featureList: async () => [],
+    featureStatus: async () => ({}) as never,
+    // M3 prefs verbs (task 3.1): same presence walk.
+    getPrefs: async () => [],
+    setPrefs: async () => undefined,
+    clearPrefOverride: async () => undefined,
+    // 任务 3.5 host 回调 relay 段(BRIDGE_MEMBERS presence check 全员可调)。
+    receiveApproval: async () => ({ id: 'a-1', dispatchId: 'd-1', projectId: 'p1', taskKey: 'demo/1.1', sessionId: 'session-x', payload: {}, state: 'pending', createdAt: '', decidedAt: null, decidedBy: null }),
+    decideApproval: async () => ({ id: 'a-1', dispatchId: 'd-1', projectId: 'p1', taskKey: 'demo/1.1', sessionId: 'session-x', payload: {}, state: 'approved', createdAt: '', decidedAt: null, decidedBy: null }),
+    notifySessionStarted: async () => ({ id: 'd-1', batchId: 'b-1', projectId: 'p1', featureSlug: 'demo', taskKey: 'demo/1.1', state: 'running', sessionId: 'session-x', promptHash: 'h', actor: 'workbench', dispatchedAt: '', endedAt: null, error: null }),
+    notifyLaunchFailed: async () => ({ id: 'd-1', batchId: 'b-1', projectId: 'p1', featureSlug: 'demo', taskKey: 'demo/1.1', state: 'failed', sessionId: null, promptHash: 'h', actor: 'workbench', dispatchedAt: '', endedAt: null, error: 'boom' }),
+    // 任务 3.9 UF1 人侧编排段(BRIDGE_MEMBERS presence check 全员可调)。
+    checkStageArtifacts: async () => ({ stage: 'tasks', satisfied: true, missing: [] }),
+    dispatchTasks: async () => ({ dispatched: [] }),
+    redispatch: async () => ({ dispatched: [] }),
+    getDispatches: async () => [],
+    listApprovals: async () => [],
+    // M3 stages 写段(任务 4.1;BRIDGE_MEMBERS presence check 全员可调)。
+    advanceStage: async () => ({ slug: 'demo', status: 'tasks', docKinds: [], taskTotal: 0, taskCompleted: 0, updatedAt: '' }),
+    stageSummarize: async () => ({ stage: 'tasks', path: 'demo/stages/tasks.md', generatedAt: '', featureStage: 'tasks', gateOpen: true }),
+    // M3 stages 读段(任务 4.3;preload 面自 3.2/4.1 已携带)。
+    getStageGate: async () => ({ featureSlug: 'demo', stage: 'tasks', summaryGenerated: false, gateAssetPath: null, assets: [] }),
+    listStageAssets: async () => [],
+    // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
+    getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
+    readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

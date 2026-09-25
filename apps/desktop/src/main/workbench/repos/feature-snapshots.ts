@@ -93,3 +93,33 @@ export function deleteFeatureSnapshot(db: RepoDb, projectId: string, featureSlug
   const result = db.prepare('DELETE FROM feature_snapshot WHERE project_id = ? AND feature_slug = ?').run(projectId, featureSlug)
   return result.changes > 0
 }
+
+// ---------------------------------------------------------------------------
+// feature 级偏离标记(任务 4.2;v2 增列 deviated/last_external_at 的唯一写面)
+// ---------------------------------------------------------------------------
+
+/**
+ * 偏离置位 + 检出时戳(4.2 deviation-watcher 调用):非内核 manifest
+ * status 变更被检出。独立于扫描写事务(upsert 不触碰两列,标记恒存续 ——
+ * 「偏离标记保持」直到内核合法推进清除)。返回是否命中既有行。
+ */
+export function markFeatureDeviation(db: RepoDb, projectId: string, featureSlug: string, at: string): boolean {
+  return (
+    db
+      .prepare('UPDATE feature_snapshot SET deviated = 1, last_external_at = ? WHERE project_id = ? AND feature_slug = ?')
+      .run(at, projectId, featureSlug).changes > 0
+  )
+}
+
+/**
+ * 偏离清除(advance-service 内核合法推进成功后调用):仅翻 deviated,
+ * last_external_at 保留(审计痕迹 —— 最近一次外部变更时戳可回查)。
+ * 返回是否实际发生 1 → 0 翻转(门拒绝/终态 no-op 不调用 = 不清除)。
+ */
+export function clearFeatureDeviation(db: RepoDb, projectId: string, featureSlug: string): boolean {
+  return (
+    db
+      .prepare('UPDATE feature_snapshot SET deviated = 0 WHERE project_id = ? AND feature_slug = ? AND deviated = 1')
+      .run(projectId, featureSlug).changes > 0
+  )
+}

@@ -19,6 +19,9 @@
       "types": "./lib/types/host/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./skill-dirs": {
+      "default": "./lib/skill-dirs.js"
+    },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
@@ -44,9 +47,11 @@
   },
   "files": [
     "lib/index.js",
+    "lib/skill-dirs.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "resources/skills"
   ],
   "dependencies": {
     "@xyflow/react": "12.11.6",
@@ -60,6 +65,7 @@
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.6-alpha.2"
   },
   "devDependencies": {
@@ -70,6 +76,7 @@
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.6-alpha.2",
     "@testing-library/react": "16.3.2",
     "@types/node": "22.20.4",

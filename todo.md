@@ -2,21 +2,24 @@
 
 > 产品方向:以项目为中心的 SDD 工作台(dsh 引擎 × forge 方法论)。
 > 状态标记:
-> - 【M2 已覆盖】— dsh-forge-m2 已落地(2026-09-23 完成,53/53,PR#2 合并),无需单独立项
-> - 【M3+ 候选】— M3 之后优先考虑
+> - 【M2 已覆盖】— dsh-forge-m2 已吸收,无需单独立项
+> - 【M2 在建】— M2 已含该切片,随 feature 推进
+> - 【M3 在建】— dsh-forge-m3 已吸收,随 feature 推进
+> - 【M3+ 候选】— M2 收尾后优先考虑
 > - 【远期】— 方向性,暂不立题
 > - 【留坑】— 待想清楚再动
 >
-> 梳理日期:2026-09-22(条目重编号,括注原编号);最近更新:2026-09-23(M2 完成,M3 定稿)
+> 梳理日期:2026-09-22(条目重编号,括注原编号;M2 硬前置 ui-plugin-foundation 尚未开工)
+> 更新:2026-09-23(dsh-forge-m3「流程即产品」任务分解完成;条目 2/3/5/14 转 M3 在建;主提案路线图 M3/M4 段修订;CLI 四动词 quality-gate/cleanup/worktree/verify-task-done M4 延后决议)
 
 ## 一、执行引擎与 agent 能力
 
 ### 1. SDD 流程提效,随 LLM 增强而越轻量(原 #1)
-- forge skill 适配 dsh,通过插件引入【M2 已覆盖:forge 核心插件双半身(UI + CLI 桥)已落地】
-- forge CLI 转换为 dsh tool 或应用 API,以插件形式【方向已定:CLI 退役演进;M2 先桥接,退役是终点】
+- forge skill 适配 dsh,通过插件引入【M2 已覆盖:M2 以双半身插件形态落地(UI + CLI 桥);M3 6.1 起 CLI 桥退役删除,技能面 = customSkillDirs 15 项 dsh 形态(D2)】
+- forge CLI 转换为 dsh tool 或应用 API,以插件形式【M3 已落地(6.1 收口):查询/变更面 = dsh tool + 内核动词,预合成取代 forge prompt;quality-gate/cleanup/worktree/verify-task-done 四动词 M4 随 GUI 逐项归宿(PRD 归宿分解决议)】
 - skill逐步迁移，分组。一组一个插件。
 
-### 2. subagent 必须具备(原 #6)【M3+ 候选,优先级高】
+### 2. subagent 必须具备(原 #6)【M3 在建:预合成引擎 + 派发审批链(dsh-forge-m3 3.4/3.5)】
 - 系统提示词专业化:提前合成,而非像 forge task-executor 启动后再合成
 
 ## 二、数据内核(SQLite)
@@ -24,9 +27,9 @@
 ### 3. 任务列表等信息存储 SQLite(原 #4)
 - 运行时展示所属 worktree【M2 已覆盖:UF2 任务看板三视图含 worktree/来源标识】
 - 任务索引、项目与会话关系入 SQLite,放 electron 侧并提供 API
-  - 存储与查询【M2 已覆盖:6 表(projects/app_state/session_links + 3 派生快照)已落地】
-  - 任务 CRUD API【M3+ 候选:M2 看板只读,变更归 agent 会话与终端,人写通道后置】
-- 运行偏好分级:全局/项目/feature(.forge/config.yaml)【M3+ 候选:当前仅项目级】
+  - 存储与查询【M2 在建:6 表(projects/app_state/session_links + 3 派生快照)】
+  - 任务 CRUD API【M3 在建:tasks 域 + dsh tool 写集(dsh-forge-m3 1.3/2.1)】
+- 运行偏好分级:全局/项目/feature(.forge/config.yaml)【M3 在建:prefs 三级(dsh-forge-m3 3.1)】
 
 ## 三、流程阶段化与模式
 
@@ -34,7 +37,7 @@
 - 全链路:proposal → 任务执行 → 测试用例【产品主线;M2 落地「会话挂接」切片,其余 M3+】
 - 集成 opendesign【留坑:暂时不考虑】
 
-### 5. SDD 流程融合 UI,强制阶段化(原 #8)【M3+ 候选(核心)】
+### 5. SDD 流程融合 UI,强制阶段化(原 #8)【M3 在建:阶段门 + 强制注入 + 偏离标识(dsh-forge-m3 3.2/4.1-4.4)】
 - 进入下一个阶段强制开启新会话
 - 新会话要检查当前阶段的产物是否齐全
 - 阶段结束时强制总结 feature 目标与摘要(参考 PI 的会话压缩机制)
@@ -77,7 +80,7 @@
 
 ### 13. 预览原型图(原 #12)【M3+ 候选】
 
-### 14. 补充 proposal 看板(原 #14)【M3+ 候选:已确认 dsh-forge-m2 feature 看板未包含此缺口】
+### 14. 补充 proposal 看板(原 #14)【M3 在建:提案看板只读 + eval 报告 + 互跳(dsh-forge-m3 5.3-5.5)】
 
 ### 15. 增加todo看板，允许用户手动或通过agent9添加待办事项。
 
@@ -93,18 +96,6 @@
 
 ### 21. 多端协同：手机控制dsh-forge，查询状态，下发任务。
 
-### 22. fix-bug,bug（缺陷）看板，自动上报
-
-### 23. 代码注释不添加任务标识
-
-### 24. 任务调度优化：
-   - 使用代码实现任务分派逻辑
-   - subagent结束即任务结束后，程序接收到信号做后处理：读取agent写出的record.json，创建任务记录，更新任务状态
-
-## 推进建议(2026-09-23)
-
-1. M2 已完成(PR#2 合并,53/53):会话挂接、任务看板三视图、SQLite 6 表、forge 核心插件双半身均已落地,原「M2 在建」条目全部转为「M2 已覆盖」。
-2. 近期:M3「流程即产品」执行。设计定稿 + 任务分解已完成(2026-09-23,分支 dsh-forge-m3):T1 内核动词面 v2/schema v2 迁移、T2 dsh tool 桥、T3 派发与审批、T4 阶段门与阶段资产,共 41 业务任务/7 相位。
-3. P0 四个 spike 相互独立,可并行开工:①工具注册契约 ②subagent 审批 ③系统提示词契约 ④prompt 模板移植(对拍源:forge-cli pkg/task + pkg/prompt)。
-4. 原 2026-09-22 优先序(subagent 预合成 → 任务 CRUD API → 强制阶段化)已被 M3 T3/T1/T4 吸收,不再单独立项。
-5. 远期条目(7/10/11)不立题,保持方向;留坑条目(opendesign、阶段知识注入)等想清楚再引入。
+1. 近期:M2 全量执行(待 ui-plugin-foundation 基座就绪后开工 UI 插件任务),本清单无需动作。
+2. M3 主线已定:条目 2 + 3 + 5(+14)合成「流程即产品」,立项 dsh-forge-m3(2026-09-23 任务分解完成,41 任务/7 相位,P0 spike×4 起步);条目 12/13 等其余「M3+ 候选」顺延 M4 评估。
+3. 远期条目(7/10/11)不立题,保持方向;留坑条目(opendesign、阶段知识注入)等想清楚再引入。

@@ -1,6 +1,6 @@
 ---
 title: "多装共存与数据所有权"
-domains: [coexistence, profile, dsh-home, credentials, data-ownership, schema]
+domains: [coexistence, profile, dsh-home, credentials, data-ownership, sot-split]
 ---
 
 # 多装共存与数据所有权
@@ -25,3 +25,12 @@ domains: [coexistence, profile, dsh-home, credentials, data-ownership, schema]
 **Source**: feature/dsh-forge-m2 BIZ-006(prd/prd-spec.md §DF002/DF003/存储约束/SC7;design/tech-design.md §Overview 事实源纪律)
 
 - 双写禁令的直接推演:SQLite 直写 forge 数据(双写)在 M2 tech-design Alternatives 中被明令拒绝(第二事实源)。
+
+**M3 修订(2026-09-25,M3 交付生效)**:「forge 文件为唯一事实源、应用只读消费」的绝对表述被 **SoT 分治**收窄(见 BIZ-coexistence-003):任务结构化状态(index.json 内容)以 SQLite 为权威,双形态不破坏与往返兼容语义延续——外部写经自动重摄入回收(非阻断),`tasks/*.md`/`records/*.md` 与阶段资产仍为文件权威,既有仓内/未注册项目照旧。
+
+### BIZ-coexistence-003: SoT 分治——任务结构化状态以 SQLite 为权威,文档资产留文件
+
+**Rule**: 任务结构化状态(ID/状态/依赖/标题)以 SQLite `task` 表为权威——单写者 = 内核(状态机唯一写入口),读路由按 `projects.data_authority` 渐进切换('files' | 'sqlite');`tasks/index.json` 一次性显式迁移后**终态淘汰**(归档 `.migrated-<ts>`,已迁移项目复现即外部写信号);任务/记录 md 与阶段资产等文档资产留文件不入库(默认仓外文档根,仓内兼容),内容权威在文件、元数据/快照入 SQLite 为派生可重建;「禁双写」纪律收敛为「内核唯一写者 + 外部写自动重摄入」,不再存在第二写者。
+**Context**: 根除 index.json 多写者风险(M2 SC8 spike §4:旧写者重写静默丢未知字段);拒绝「全量入库」(git 评审断裂)与「全量留文件」(多写者永续)两端;决策记账 docs/decisions/architecture.md(2026-09-23)。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m3 BIZ-005(prd/prd-spec.md §What 2/G2/SC2;design/tech-design.md §Overview T1/§Interface 4;tasks/records/1.3-1.5)

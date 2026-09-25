@@ -12,7 +12,7 @@
 // 纯函数层:不触 db、不触 fs —— 分类单测无需库与 fixture(库级端到端在
 // scan 集成用例覆盖)。
 
-import type { ChangeSource, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
+import type { ChangeSource, DispatchState, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
 
 /**
  * Interface 1 WorkbenchEvent(indexer 产出的变更事件;2.6 watcher 经
@@ -28,6 +28,76 @@ export type WorkbenchEvent =
   }
   | { readonly type: 'feature_updated'; readonly projectId: string; readonly featureSlug: string }
   | { readonly type: 'sync'; readonly projectId: string; readonly sync: SyncStatusPayload }
+  // M3 v2(任务 1.4;tech-design §Interface 1 事件扩展):迁移相位完成信号。
+  // 每相位(backup/ingest/verify/switch/archive,失败另加 rollback)完成即
+  // 推送一条;终态对话框与进度呈现由消费面(1.7)组装,本事件只承载相位
+  // 与结果,不承载对拍报告全文(可回查面 = migration_event.detail_json)。
+  | {
+    readonly type: 'migration_progress'
+    readonly projectId: string
+    readonly phase: MigrationPhase
+    readonly result: MigrationPhaseResult
+  }
+  // M3 v2(任务 1.5/4.2;tech-design §Interface 1 事件扩展):偏离检出信号,
+  // 仅呈现不阻断(PRD G8/Story 8)。同通道不同载荷 —— 项目级(1.5)= 已迁移
+  // 项目 index.json 外部复现/变更被重摄入 watcher 检出(Interface 4 第 7
+  // 步,载荷仅 projectId);feature 级(4.2)= 非内核 manifest status 变更
+  // 被 stages/deviation-watcher 检出(载荷增 featureSlug;projectId 恒在,
+  // dispatch_updated 扩载荷同款,消费面按激活项目过滤)。
+  | {
+    readonly type: 'deviation_detected'
+    readonly projectId: string
+    /** feature 级形态在场;项目级(1.5)缺席本键。 */
+    readonly featureSlug?: string
+  }
+  // M3 v2(任务 3.1;tech-design §Interface 1 事件扩展):偏好写完成信号
+  // prefs_updated { scope }(载荷扩为 scope + scopeId —— 消费面按地址过滤
+  // 刷新,编辑面归 5.x)。仅实际变更发(setPrefs 空批/幂等清除 no-op 不发)。
+  | {
+    readonly type: 'prefs_updated'
+    readonly scope: 'global' | 'project' | 'feature'
+    readonly scopeId: string
+  }
+  // M3 v2(任务 3.3;tech-design §Interface 1 事件扩展):编排域信号。
+  // dispatch_updated = dispatch 行状态迁移的回流通知(载荷在设计的
+  // { dispatchId, taskKey, state } 基础上扩 projectId —— 消费面(3.6-3.9
+  // 看板/详情)按激活项目过滤,prefs_updated 扩载荷同款细化);
+  // approval_received = approval_request(pending)入列通知(审批 dock 数据
+  // 到达信号;决策后的状态回流走 dispatch_updated)。
+  | {
+    readonly type: 'dispatch_updated'
+    readonly projectId: string
+    readonly dispatchId: string
+    readonly taskKey: string
+    readonly state: DispatchState
+  }
+  | {
+    readonly type: 'approval_received'
+    readonly projectId: string
+    readonly approvalId: string
+    readonly taskKey: string
+  }
+  // M3 v2(任务 4.1;tech-design §Interface 1 事件扩展):阶段推进完成信号
+  // stage_advanced { featureSlug }(载荷扩 projectId —— dispatch_updated 扩
+  // 载荷同款,消费面按激活项目过滤)。仅实际推进发(advanceStage 内核写
+  // manifest 后;终态幂等 no-op 不产事件)。UF2 stepper 消费面归 5.x。
+  | {
+    readonly type: 'stage_advanced'
+    readonly projectId: string
+    readonly featureSlug: string
+  }
+
+// —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
+
+/**
+ * migration_event 相位词表(schema-v2.sql §9 CHECK 同源;迁移/回收审计)。
+ * reingest 相 = 外部写回收(Interface 4 第 7 步,任务 1.5:migration/
+ * reingest-watcher 每次实际回收 ok/fail 各留一行)。
+ */
+export type MigrationPhase = 'backup' | 'ingest' | 'verify' | 'switch' | 'archive' | 'rollback' | 'reingest'
+
+/** 相位结果词表(migration_event.result CHECK 同源)。 */
+export type MigrationPhaseResult = 'ok' | 'fail'
 
 /** Interface 1 SyncStatus(事件载荷形态;repos SyncState 的 DTO 投影)。 */
 export interface SyncStatusPayload {

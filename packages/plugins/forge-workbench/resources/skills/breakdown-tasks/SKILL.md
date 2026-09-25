@@ -1,0 +1,224 @@
+---
+name: breakdown-tasks
+description: Use when the technical design is finalized to break down into executable tasks. Creates task files based on technical design.
+---
+
+# Breakdown Tasks
+
+Break a technical design into executable tasks (1-4h each, clear dependencies, testable acceptance criteria).
+
+## Prerequisites
+| Artifact                | Missing? Run                    |
+| ----------------------- | ------------------------------- |
+| `prd/prd-spec.md`       | `/write-prd`                    |
+| `design/tech-design.md` | `/tech-design` |
+
+## Condition-Rule Matrix
+
+Evaluate each row independently. Load ONLY if condition is true. Rule files are additive — skeleton is complete without any.
+
+| Rule File | Load Condition | Steps |
+|-----------|---------------|-------|
+| `rules/phase-detection.md` | PRD contains phase/gate structure | 2, 3 |
+| `rules/ui-placement.md` | `ui/ui-design.md` OR `prd/prd-ui-functions.md` exists | 1, 2, 3, 4a |
+| `rules/db-schema.md` | `design/er-diagram.md` exists | 2, 4a |
+| `rules/existing-code-split.md` | Tech-design modifies existing shared code | 4a |
+| *(surface resolution built into Step 4a)* | Always | 4a |
+
+Read applicable files via `rules/<filename>`.
+
+## Docs-Only Fast Path
+
+When all tasks are `type: "doc"` (non-compilable, non-runnable output only), skip Step 0. Step 5 is always mandatory. Detection: Step 1 scans artifacts → every element targets non-compilable files → docs-only.
+
+## Step 0: Resolve Language
+
+Discover via `docs/conventions/testing/index.md` (preferred) or scan existing source/test files. On failure: ask user.
+
+<HARD-RULE>
+Do NOT silently default to any language. Do NOT use `domains` frontmatter filtering — use index.md-based discovery.
+</HARD-RULE>
+
+## Step 1: Read All Documents
+Feature-relative paths below resolve from `docs/features/<slug>/`. Read `manifest.md`, then all available: `prd/prd-spec.md`, `design/tech-design.md`, `design/api-handbook.md` (if exists), `design/er-diagram.md` (if exists), `design/schema.sql` (if exists), `prd/prd-user-stories.md` (if exists), `prd/prd-ui-functions.md` (if exists), `ui/ui-design.md` (if exists).
+
+IF `rules/ui-placement.md` loaded, apply its UI Prototype Reading and Placement Validation. IF `rules/phase-detection.md` loaded, apply its phase detection.
+
+## Step 2: Map → Tasks
+
+### Element Mapping
+| Design Element | Source | Task Type |
+| --- | --- | --- |
+| Interface definition | tech-design.md | Interface task |
+| Data model | tech-design.md | Model task |
+| Backend component | tech-design.md | Implementation (Backend) |
+| Error type | tech-design.md | Error handling task |
+| PRD flow gate (diamond node) | prd-spec.md | Gate verification task |
+
+IF `rules/ui-placement.md` loaded, add its UI mapping rows. IF `rules/db-schema.md` loaded, add: `DB schema (er-diagram + schema.sql) | design/er-diagram.md, design/schema.sql | Schema task`.
+
+### PRD Coverage Verification
+Read **PRD Coverage Map** from `tech-design.md`. Every AC maps to >=1 task. Fallback: `prd/prd-user-stories.md` AC directly.
+
+### Phase & Gate Detection
+IF `rules/phase-detection.md` loaded, apply three-tier detection, write `tasks/phase-inventory.json`. Else source="fallback" → artifact-driven decomposition in Step 3.
+
+## Step 3: Derive Phases & Dependencies
+
+Number phases sequentially (1.x, 2.x, ...).
+**PRD-defined** (preferred): map explicit/heuristic phases to numbered phases. PRD structure takes priority.
+**Artifact-driven** (fallback): list elements → determine edges → group by dependency depth → number in order.
+
+IF `rules/ui-placement.md` loaded, apply its UI Dependency Layer rules.
+
+**Dependencies**: same phase = parallel (unless conflicting). Cross-phase = depend on gate or last task. IF `rules/ui-placement.md` loaded, apply UI dependency principle.
+
+**Split Rules** (priority order): (1) Independently verifiable standard — separate tasks if outcomes require different verification contexts. (2) Multi-verb detection — split by functional boundary when verbs target different concerns. (3) Operational ceiling — split by file group when modifying >8 files with the same pattern; each sub-task targets ≤8 files.
+
+<HARD-GATE>
+Maximum 6 Acceptance Criteria per task. If a task has >6 AC, its scope is too large — split further by functional boundary. No overall task count cap; task volume is bounded by design scope and the AC max rule.
+</HARD-GATE>
+
+**Complexity判定** (at task generation): `low` = AC ≤ 3 AND no Hard Rules AND Reference Files ≤ 1; `high` = AC ≥ 5 OR has Hard Rules; `medium` = everything else. LLM judgment override allowed with reason in Implementation Notes. breakdown-tasks may have finer AC granularity due to tech-design decomposition; LLM override is expected to be more common.
+
+## Step 4: Create Task Files
+
+<HARD-RULE>
+Read template before writing. Naming: business task `<seq>.<sub>-<slug>.md` ID `<seq>.<sub>`; test task `<title-slug>.md` ID `T-test-<N>`. Stage-gates auto-generated by `forge task index` for phases with >=2 business tasks — do NOT create manually. Business tasks MUST use `<phase>.<sub>` ID format. `dependencies` reference task IDs not index keys. Wildcard `"<phase>.x"` = all tasks in phase (resolved by CLI).
+</HARD-RULE>
+
+### 4a. Business Tasks
+One task file per design element. Set `breaking: true` if modifying shared interfaces/models/API contracts. Additive Go interface changes are breaking.
+
+IF `rules/existing-code-split.md` loaded, apply split for shared-code modifications. IF `rules/db-schema.md` loaded, apply schema task rules. IF `rules/ui-placement.md` loaded, apply UI Reference File Requirements.
+
+### File Scope Boundary
+
+For tasks involving multiple files: enumerate exact file names in Implementation Notes (never "all files" or vague terms). When operational ceiling triggers split, add Hard Rule: `仅修改以下文件：<file list>`.
+
+### Breaking Task Test Impact Assessment
+
+When `breaking: true`, add to Implementation Notes:
+```
+### Test Impact
+- Affected test suite(s): <test directory paths>
+- Expected fixture changes: <which test fixtures need updating>
+- Risk level: low/medium/high
+```
+Fix-tasks in the same test directory are merged into one.
+
+Populate **User Stories** from `prd/prd-user-stories.md` or note "No direct user story mapping."
+
+**Hard Rules**: fill `{{HARD_RULES}}` only for critical constraints. Leave empty for normal tasks.
+
+#### Reference Files Generation
+
+<HARD-RULE>
+1. BEFORE writing Reference Files, Grep `^#{1,4} ` on `docs/features/<slug>/design/tech-design.md` to extract all headers. Only use headers that actually exist. If no match found, omit `(ref: ...)` — never fabricate headers.
+2. First entry MUST be the full tech-design path: `- docs/features/<slug>/design/tech-design.md — <relevant sections>`
+</HARD-RULE>
+
+**Inline format**: `- <file-path>: <specific change description> (ref: <actual-design-header>)`. Max 5 inline entries. Each entry 1-2 lines.
+
+**Extraction heuristic**: Extract file paths from `## Affected Files` → search tech-design.md for matching sections → extract specific requirements (not just section titles) → merge, deduplicate, keep 2-5 most relevant. Header in `(ref: ...)` MUST match an extracted header.
+
+UI tasks use `rules/ui-placement.md` requirements instead — no overlap.
+
+### Surface-Key/Type Inference
+
+Run `forge surfaces` once. Single-surface project → set same key/type on all tasks (scalar surfaces: `surface-key` empty). Multi-surface → path-prefix match per task; ambiguous → call per file. On failure: leave empty, continue. Parsing rule: see `rules/surface-output-parsing.md` in this skill directory.
+
+### Priority Assignment
+
+P0 = core mechanism or blocks others; P1 = maps to PRD AC or core user flow; P2 = polish/edge cases.
+
+### Type Assignment
+
+| Type | When to assign |
+|------|----------------|
+| `coding.feature` | New runtime behavior, new user-facing capability, or new files |
+| `coding.enhancement` | Improves existing behavior without new capabilities |
+| `coding.cleanup` | Removes dead code, fixes tech debt, improves hygiene |
+| `coding.refactor` | Restructures code without behavior change |
+| `coding.fix` | Auto-generated for test failures; do not assign manually |
+| `doc` | Non-compilable, non-runnable output only (e.g., `.md`, `.yaml`, `.json`, `.sql`, `.toml`, `.graphql`) |
+| `doc.consolidate` | User-created consolidation task (legacy projects) |
+| `doc.drift` | User-created drift audit task |
+
+Fallback: `coding.feature`. **Classify by output artifact, not intent.** If the task produces no compilable or runnable files, type must be `doc`.
+
+<HARD-RULE>
+Non-compilable files (`.md`, `.sql`, `.yaml`, `.json`, `.toml`, `.graphql`, etc.) are always non-compilable regardless of directory location — even under `pkg/`, `src/`, `internal/`. If output is ONLY non-compilable files, type **must** be `doc`, not `coding.*`. Decision test: "Does the output include any file that needs compilation or runtime testing?" If NO → `doc`.
+</HARD-RULE>
+
+| Category | Quality-gate |
+|----------|-------------|
+| Code (`coding.*`) | Run (compile + fmt + lint + test) |
+| Doc (`doc`, `doc.consolidate`, `doc.drift`) | Skip |
+
+### Intent Propagation
+
+If `docs/proposals/<slug>/proposal.md` has `intent`, use as default type. 1:1 mapping: `new-feature`→`coding.feature`, `enhancement`→`coding.enhancement`, `refactor`→`coding.refactor`, `cleanup`→`coding.cleanup`, `fix`→`coding.fix`, `doc`→`doc`. Individual task `type` overrides. `doc.consolidate` and `doc.drift` are auto-generated, unified under `doc`.
+
+### Template Selection
+
+All Affected Files non-compilable → `templates/task-doc.md`. Any compilable → `templates/task.md`.
+
+### 4b. Test Tasks (auto-generated)
+
+Test tasks (T-test-*) are auto-generated by `forge task index` in Step 5. Do NOT create manually.
+
+Fix-Type Derivation: `doc`/`eval` → `doc.fix`; `coding`/`test`/`validation`/`gate` → `coding.fix`.
+
+Run the dsh tool `forge_task_add` with type `<derived-fix-type>`, title `Fix: <desc>`, `<TASK_ID>`'s local key in `blockers` (block-source: the source task stays blocked until the fix resolves), and a description carrying `SOURCE_FILES="<paths>"`, `TEST_SCRIPT="<test>"`, `TEST_RESULTS="<results>"`, and `<cause>`.
+
+## Step 5: Task Sizing Audit
+
+After all task files are written, self-audit every task: (1) Multi-verb detection — split if title links independent actions; (2) AC cross-domain — split if AC covers unrelated domains; (3) Operational ceiling — split if modifying >8 files with same pattern. Split → re-assign IDs, re-wire dependencies, output audit report.
+
+<HARD-GATE>
+If any task still has >6 AC after splitting, split further. Do not proceed to Step 6 until all tasks pass.
+</HARD-GATE>
+
+## Step 6: Generate index.json
+
+```bash
+forge task index --feature <slug>
+```
+
+Scans `.md`, auto-generates stage-gates + test tasks, produces `index.json`, validates.
+
+## Step 7: Validate
+
+```bash
+forge task validate docs/features/<slug>/tasks/index.json
+```
+
+## Step 8: Update Manifest
+
+Read `templates/manifest-update-tasks.md`. Fill 5-column traceability (PRD Section | Design Section | UI Component | Placement | Tasks; "---" for N/A). Advance status to `tasks`.
+
+## Step 9: Commit Planning Artifacts
+
+Only if Step 7 passed.
+
+<HARD-RULE>
+Stage only planning artifact paths — never `git add -A` or `git add .`.
+</HARD-RULE>
+
+```bash
+git add docs/features/<slug>/tasks/*.md docs/features/<slug>/tasks/index.json docs/features/<slug>/manifest.md docs/features/<slug>/prd/ docs/features/<slug>/design/ docs/features/<slug>/ui/
+git commit -m "docs(<slug>): add breakdown-tasks planning artifacts"
+```
+
+## Output Checklist
+- [ ] `tasks/phase-inventory.json` written (if `rules/phase-detection.md` loaded)
+- [ ] Task files follow naming conventions
+- [ ] `index.json` valid, `forge task validate` passes
+- [ ] Stage-gates auto-generated
+- [ ] Every PRD AC covered by >=1 task
+- [ ] DAG (no cycles)
+- [ ] Every gate has corresponding gate task
+- [ ] `breaking: true` on shared-contract modifications
+- [ ] User Stories populated
+- [ ] `manifest.md` updated with traceability + `status: tasks`

@@ -24,14 +24,15 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
 import type { BoardSessionStore } from './store/board-session'
-import type { LaunchSeatStore } from './launch-rpc'
+import type { SessionHandover } from './session-handover'
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RecordSessionLinkInput,
-  RegisterProjectInput, SessionLink, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent,
-  WorkbenchState,
+  ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
+  DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
+  PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch, ProposalBoardData,
+  ProposalDoc, RegisterProjectInput,
+  StageArtifactsReport, StageAssetRow, StageGateInfo,
+  TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchPaths, WorkbenchState,
 } from './ipc-types'
-import type { GetTaskPromptResult } from './services'
-import type { SessionLaunchInput, SessionLaunchResult } from './session-launch'
 
 /** Dictionary namespace owned by this plugin (LocaleNamespaceMap merge target). */
 export const NS = 'workbench'
@@ -78,6 +79,16 @@ export interface WorkbenchViewFace {
    * `selectWorkbenchTab('workbench/features')`, which clears the slug.
    */
   openFeatureDetail: (slug: string) => void
+  /**
+   * Open the proposal-detail subview (task 5.5, UF5): the machine's own
+   * `openProposalDetail(slug)` — the proposals tab carrying a slug, the same
+   * subview-addressing discipline as {@link openFeatureDetail}. The return
+   * trip rides `selectWorkbenchTab('workbench/proposals')`, which clears the
+   * slug (the breadcrumb-return contract). Optional member: the machine
+   * action is REQUIRED on the store (the authority); the face may omit it
+   * only in stale build-stage doubles, where the page's open seam no-ops.
+   */
+  openProposalDetail?: ((slug: string) => void) | undefined
 }
 
 /**
@@ -110,7 +121,7 @@ export interface WorkbenchChromeFace {
 
 /**
  * The overview page's data + action face (task 5.3, UI dependency layering —
- * the same seam shape as WorkbenchChromeFace / SessionLaunchServices): the
+ * the same seam shape as WorkbenchChromeFace): the
  * BUILD stage renders against the shared mock twin
  * (mocks/workbench.createMockOverviewFace), the 5.14 assembly task injects
  * the Interface 1 IPC verbs. Every member mirrors its §Interface 1 verb
@@ -140,6 +151,13 @@ export interface WorkbenchOverviewSeat {
   /** The UF6 section face — absent members fall back to the build-stage mock (5.13/5.14 inject the IPC verbs). */
   readonly pluginFace?: Partial<PluginFace>
   /**
+   * The UF3 migration family's face (task 1.7): PRESENT activates the card
+   * migration surface (可迁移 Pill/入口 + MigrationDialogs); absent keeps the
+   * M2 page. The real-path view derives it from the store's bridge; tests
+   * inject the 1.6 mock twin here.
+   */
+  readonly migrationFace?: Partial<MigrationFace>
+  /**
    * Project ids whose codeRoot/docLocation re-validation failed (5.14 derives
    * from sync_state): drives the per-card 失联徽标 and, for the active
    * project, the error card with 重新指向/移除 (ui-design UF1 error 态).
@@ -156,7 +174,18 @@ export interface WorkbenchOverviewSeat {
  * `ERR_*` codes verbatim so the inline mapping is the real one.
  */
 export type CodeRootProbeResult =
-  | { available: true; taskTotal: number; featureTotal: number }
+  | {
+    available: true
+    taskTotal: number
+    featureTotal: number
+    /**
+     * Task 1.7: does the probed doc tree carry tasks/index.json? The
+     * conditional migration step's premise (Interface 4 §8) — the wizard
+     * re-probes with the SETTLED step-② doc location before inserting the
+     * step between ② and ③.
+     */
+    indexJsonDetected: boolean
+  }
   | { available: false; reasonCode: 'ERR_CODE_ROOT_UNREADABLE' | 'ERR_FORGE_NOT_DETECTED'; detail?: string }
 
 /** The step-② external doc-path probe: conflict guard + readability (授权前提). */
@@ -166,15 +195,20 @@ export type ExternalPathProbeResult =
 
 /**
  * The register wizard's data + action face (task 5.4, UI dependency layering —
- * the same seam shape as OverviewFace / SessionLaunchServices): the BUILD
+ * the same seam shape as OverviewFace): the BUILD
  * stage renders against mocks/workbench.createMockRegisterWizardFace, the
  * 5.14 assembly task injects the Interface 1 verbs (registerProject /
  * updateProject reject with the serialized {@link WorkbenchVerbError} shape)
  * plus the real detection read behind the probe members.
  */
 export interface RegisterWizardFace {
-  /** Step ①: does this codeRoot carry forge data (`.forge/` or a docs location)? */
-  probeCodeRoot(input: { codeRoot: string }): Promise<CodeRootProbeResult>
+  /**
+   * Step ① (and the 1.7 step-②-advance re-probe): does this codeRoot carry
+   * forge data (`.forge/` or the chosen docs location)? The 1.7 real chain
+   * wires the Interface 1 probe verb over the mock twin (docLocationPath
+   * absent/null = 仓内, the probe lands on the codeRoot's own tree).
+   */
+  probeCodeRoot(input: { codeRoot: string; docLocationPath?: string | null }): Promise<CodeRootProbeResult>
   /** Step ②: external doc-path validation (≠ codeRoot, readable — the authorization's premise). */
   probeExternalPath(input: { codeRoot: string; docLocationPath: string }): Promise<ExternalPathProbeResult>
   /** Interface 1 registerProject — the ONLY write, fired solely from the summary-confirm step (Hard Rule). */
@@ -207,6 +241,58 @@ export interface RegisterWizardSeat {
 }
 
 /**
+ * The UF3 migration family's data + action face (task 1.6, UI dependency
+ * layering — the same seam shape as OverviewFace / RegisterWizardFace): the
+ * BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockMigrationFace), the 1.7 assembly injects the
+ * Interface 1 IPC verbs. Rejections surface the serialized
+ * {@link WorkbenchVerbError} shape (ERR_MIGRATION_GUARD / IN_PROGRESS /
+ * VERIFY) so the dialog family's code mapping is the real one from day one.
+ */
+export interface MigrationFace {
+  /**
+   * Interface 1 getMigrationStatus(projectId) — the Pill 判定 (authority)
+   * and the post-backup backup-path read-back (lastEvent.detailJson).
+   */
+  getMigrationStatus(projectId: string): Promise<MigrationStatus>
+  /**
+   * Interface 1 startMigration(projectId) — the ONE-SHOT explicit migration
+   * (Hard Rule: explicit confirmation only; progress rides migration_progress
+   * events over subscribeEvents). Pre-flight guard rejections
+   * (ERR_MIGRATION_GUARD / ERR_MIGRATION_IN_PROGRESS) carry no events.
+   */
+  startMigration(projectId: string): Promise<MigrationStarted>
+  /**
+   * Interface 1 onEvents — the single-subscriber batched channel (≤500ms
+   * main-side): migration_progress drives the step rows; any project-scoped
+   * batch re-reads the guard (守卫解除 ≤5s 自动恢复).
+   */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+  /**
+   * The entry-guard read: does a RUNNING ORCHESTRATION block migration
+   * (dispatch.ended_at IS NULL — Interface 4 ①)? The overview-card path
+   * consumes it; the wizard path never does (未迁移项目无编排面 — ui-design
+   * 裁决). The real verb face lands with the dispatch domain (3.x); the
+   * mock twin serves the build stage.
+   */
+  loadGuard(projectId: string): Promise<MigrationGuardSnapshot>
+  /**
+   * Interface 1 getWorkbenchPaths() (task 1.7): the kernel-managed locations
+   * this integration's two consumers read — the flipped wizard default
+   * (docsRoot + the project's directory name = the 仓外应用管理路径 prefill)
+   * and the migration confirm's 备份位置 copy (backupsRoot).
+   */
+  getWorkbenchPaths(): Promise<WorkbenchPaths>
+}
+
+/** The entry-guard snapshot: blocked ⟺ running orchestrations exist. */
+export interface MigrationGuardSnapshot {
+  readonly blocked: boolean
+  /** Running-orchestration count (tooltip context; 0 when not blocked). */
+  readonly runningCount: number
+}
+
+/**
  * The UF2 task board's data + action face (task 5.5, UI dependency layering —
  * the same seam shape as OverviewFace / RegisterWizardFace): the BUILD stage
  * renders against the shared mock twin
@@ -223,6 +309,60 @@ export interface TaskBoardFace {
 }
 
 /**
+ * The UF1 orchestration verb face (task 3.9, tech-design §Integration #1 /
+ * §Interface 1 编排段): the six human-side dispatch/approval verbs the board
+ * page's UF1 wiring consumes — checkStageArtifacts / dispatchTasks /
+ * redispatch (the 3.6/3.8 chains) + getDispatches / listApprovals /
+ * decideApproval (the badge spectrum, the approval dock). Signatures mirror
+ * the preload bridge of task 3.3 one-to-one; the DTO twins are the
+ * ipc-types.ts canonical client twins (structural twins of the 3.6-3.8 UI
+ * view twins, so the face satisfies DispatchVerbs / DetailDispatchVerbs /
+ * ApprovalVerbs structurally). The page runs on its mock twin in tests;
+ * the assembly (TasksView) injects the IPC-backed face when the bridge is
+ * live — absent members keep the UF1 toolbar entries inert (never a silent
+ * mock in the real host).
+ */
+export interface DispatchFace {
+  /** workbench.checkStageArtifacts(input) — the deterministic pre-dispatch check. */
+  checkStageArtifacts(input: { readonly projectId: string; readonly featureSlug: string }): Promise<StageArtifactsReport>
+  /** workbench.dispatchTasks(input, actor) — mint dispatch rows (blocked = missing & unacknowledged). */
+  dispatchTasks(input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult>
+  /** workbench.redispatch(dispatchId, actor) — re-run the whole pre-check for a failed row. */
+  redispatch(dispatchId: string, actor: string): Promise<DispatchTasksResult>
+  /** workbench.getDispatches(projectId) — the board's orchestration rows (the badge spectrum's data). */
+  getDispatches(projectId: string): Promise<DispatchRow[]>
+  /** workbench.listApprovals(projectId) — the approval dock's rows (pending first, created_at 倒序). */
+  listApprovals(projectId: string): Promise<ApprovalRow[]>
+  /** workbench.decideApproval(input, actor) — the ONLY decision path (explicit click, decided_by audit). */
+  decideApproval(input: DecideApprovalInput, actor: string): Promise<ApprovalRow>
+}
+
+/**
+ * The UF2 stage family's data face (task 4.3, tech-design §Interface 1 阶段段
+ * + §Interface 5): the three stage verbs the UF2 component layer consumes —
+ * getStageGate (the stepper's gate verdict + the assets list), listStageAssets
+ * (the sixth 「阶段资产」 tab's rows, content-joined), advanceStage (the advance
+ * action; unsatisfied gate → ERR_STAGE_GATE_UNSATISFIED riding the serialized
+ * WorkbenchVerbError shape, satisfied → the post-advance FeatureSummary +
+ * stage_advanced reflux through the SAME shared event source every family
+ * multiplexes over). Signatures mirror the preload bridge one-to-one; the
+ * component layer builds against the mock twin (mocks/workbench.
+ * createMockStageFace — TEST/BUILD-ONLY, the advance leg is a WRITE surface so
+ * absent members stay inert, the dispatch-face discipline), 4.4's assembly
+ * injects the IPC-backed face.
+ */
+export interface StageFace {
+  /** workbench.getStageGate(projectId, featureSlug) — gate verdict + assets list. */
+  getStageGate(projectId: string, featureSlug: string): Promise<StageGateInfo>
+  /** workbench.listStageAssets(projectId, featureSlug) — the tab's content-joined rows (pipeline order). */
+  listStageAssets(projectId: string, featureSlug: string): Promise<StageAssetRow[]>
+  /** workbench.advanceStage(projectId, featureSlug) — the gate-gated advance (terminal stage = idempotent no-op). */
+  advanceStage(projectId: string, featureSlug: string): Promise<FeatureSummary>
+  /** The shared single-subscriber event channel (stage_advanced / deviation_detected reflux ≤5s). */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+}
+
+/**
  * The shell's passthrough seat for the task board (task 5.5): absent
  * entirely in the build stage (the page runs on its mock twins); the 5.15
  * assembly injects the IPC-backed faces. Since 5.8 the page owns the
@@ -234,6 +374,12 @@ export interface TaskBoardSeat {
   readonly face?: Partial<TaskBoardFace>
   /** The detail-dock face — absent members fall back to the build-stage mock (5.15 injects the IPC verb). */
   readonly detailFace?: Partial<TaskDetailFace>
+  /**
+   * The UF1 orchestration face (task 3.9): absent members keep the UF1
+   * toolbar entries inert (no silent mock twin); tests inject the mock twin
+   * through here, the assembly injects the IPC-backed face.
+   */
+  readonly dispatchFace?: Partial<DispatchFace> | undefined
   /**
    * The UF3 selection seam OBSERVATION: a row/card activation (click /
    * Enter / Space — navigation, the ONLY interaction rows carry) hands the
@@ -303,37 +449,119 @@ export interface PluginFace {
 }
 
 /**
+ * The UF4 prefs section's data + action face (task 5.1, UI dependency
+ * layering — the same seam shape as PluginFace, the 3.1 verb discipline):
+ * the BUILD stage renders against the shared mock twin
+ * (mocks/workbench.createMockPrefsFace), the 5.2 assembly task injects the
+ * Interface 1 IPC verbs. Every member mirrors its §Interface 1 偏好段 verb
+ * one-to-one — getPrefs answers EVERY registered key (closed forge registry,
+ * surfaces excluded) with effective value + source tier + type/control/group
+ * metadata (the 键→控件映射 authority; the UI never hardcodes the key list);
+ * setPrefs is atomic with rejections carrying the serialized
+ * {@link WorkbenchVerbError} shape (ERR_PREF_KEY_UNKNOWN /
+ * ERR_PREF_VALUE_INVALID); clearPrefOverride deletes this tier's row so the
+ * effective value falls back to the next tier.
+ */
+export interface PrefsFace {
+  /** Interface 1 workbench.getPrefs(scope) — every registry key, resolved for the scope. */
+  getPrefs(scope: PrefScope): Promise<PrefRow[]>
+  /** Interface 1 workbench.setPrefs(scope, entries) — transactional write; type-checked in the kernel. */
+  setPrefs(scope: PrefScope, entries: readonly PrefEntry[]): Promise<void>
+  /** Interface 1 workbench.clearPrefOverride(scope, key) — idempotent; the value falls back a tier. */
+  clearPrefOverride(scope: PrefScope, key: string): Promise<void>
+}
+
+/**
  * The shell's passthrough seat for the feature board (task 5.9): absent
  * entirely in the build stage (the page runs on its mock twins); the 5.16
  * assembly injects the IPC-backed faces (the board verb + the doc verb).
+ * Task 4.4 adds the UF2 stage face (Integration Spec #2): absent members
+ * keep the M2 form (no sixth tab, no gate verdict, no advance entry — the
+ * dispatch-face inert discipline: the advance leg is a WRITE surface, so
+ * no silent mock twin ever runs); tests inject the mock twin, the assembly
+ * injects the IPC-backed face.
  */
 export interface WorkbenchFeaturesSeat {
   /** The board face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   readonly face?: Partial<FeatureBoardFace>
   /** The doc face — absent members fall back to the build-stage mock (5.16 injects the IPC face). */
   readonly docFace?: Partial<FeatureDocFace>
+  /**
+   * The UF2 stage face (task 4.4): getStageGate drives the stepper gate
+   * verdict, listStageAssets the sixth 「阶段资产」 tab, advanceStage the
+   * header's advance entry, subscribeEvents the stage_advanced /
+   * deviation_detected board reflux (≤5s).
+   */
+  readonly stageFace?: Partial<StageFace> | undefined
 }
 
 /**
- * The UF5 launch success hand-over (task 5.11): the entry fires it with the
- * launched session (and the task ref it launched from — the board's badge
- * write needs the qualified key). The real assembly's implementation lives in
- * launch-rpc.ts's seat: 切会话视图 through the view-switch controller + the
- * `ctx.uiWorkspace.openSession(sessionId)` locator (spike-1 §2.2).
+ * The UF5 提案看板's data face (task 5.4, tech-design §Interface 1 提案段 +
+ * §Integration #5): the READ-ONLY proposal pair the component layer consumes —
+ * loadBoard answers the board rows (proposal_snapshot projection, created-desc
+ * baseline) + the proposals root for the empty-state path hint; readProposalDoc
+ * answers the raw markdown of one document (kind 'proposal' = proposal.md,
+ * 'eval' = the deterministic eval-report pick). subscribeEvents routes through
+ * the SAME shared single-subscriber channel every family multiplexes over —
+ * the proposals reflux rides the project-scoped `sync` pushes (every scan
+ * completion, watcher-driven ≤5s on the real chain; proposals/ is inside the
+ * watched roots since 5.3). Signatures mirror the preload bridge one-to-one
+ * (the 5.3 verbs); rejections carry the serialized {@link WorkbenchVerbError}
+ * shape (ERR_PROJECT_NOT_FOUND / ERR_PROPOSAL_PATH_INVALID /
+ * ERR_PROPOSAL_NOT_FOUND). The components build against the mock twin
+ * (mocks/workbench.createMockProposalsFace — a pure READ face, so the
+ * build-stage default mock is legitimate, the feature-board-face discipline);
+ * 5.5's assembly injects the IPC-backed face.
+ */
+export interface ProposalFace {
+  /** Interface 1 workbench.getProposalBoard(projectId) — the board's data load. */
+  loadBoard(projectId: string): Promise<ProposalBoardData>
+  /** Interface 1 workbench.readProposalDoc(input) — one document's raw markdown. */
+  readProposalDoc(input: { readonly projectId: string; readonly slug: string; readonly kind: 'proposal' | 'eval' }): Promise<ProposalDoc>
+  /** The shared single-subscriber event channel (sync pushes → reflux ≤5s). */
+  subscribeEvents(callback: (events: readonly WorkbenchEvent[]) => void): () => void
+}
+
+/**
+ * The shell's passthrough seat for the proposals board (task 5.5, UF5
+ * assembly): absent entirely on the real path (the shell derives the page's
+ * inputs from its store-backed chrome chain and injects the IPC-backed
+ * proposal face); tests / the build stage inject the mock twin + seam
+ * overrides through here.
+ */
+export interface WorkbenchProposalsSeat {
+  /** The proposals face — absent members fall back to the build-stage mock (5.5 injects the IPC face on the real chain). */
+  readonly face?: Partial<ProposalFace> | undefined
+  /**
+   * 仓外路径失效 override (seat form only): true renders the list's lost
+   * guidance card. The real path derives the flag from the store's
+   * sync-derived lostProjectIds (the OverviewView 口径).
+   */
+  readonly docsLost?: boolean | undefined
+  /**
+   * The lost card's 重新指向 seam override — the shell's default routes it to
+   * the register wizard's EDIT mode for the ACTIVE project (the 5.4 repoint
+   * treatment); the seam is parameterless (the lost card is the active
+   * project's by construction).
+   */
+  readonly onRepoint?: (() => void) | undefined
+  /**
+   * The lost card's 移除项目 seam override — the shell's default opens the
+   * RemoveConfirm double-confirm over the tab content (the overview remove
+   * flow's discipline; 移除 MUST pass the two-step confirmation).
+   */
+  readonly onRemove?: (() => void) | undefined
+}
+
+/**
+ * The session success hand-over (task 5.11; M3 6.1 起为 dispatch 链「进入会
+ * 话」所消费): the caller fires it with the session (and the task ref it
+ * belongs to — the board's badge write needs the qualified key). The real
+ * assembly's implementation lives in session-handover.ts: 切会话视图 through
+ * the view-switch controller + the `ctx.uiWorkspace.openSession(sessionId)`
+ * locator (spike-1 §2.2).
  */
 export type SessionLaunchHandover = (sessionId: string, task: SessionLaunchTaskRef) => void
-
-/**
- * The board page's assembly seat for the UF5 integration (task 5.11): the
- * real launch services (absent members keep the build-stage mock — the DI
- * switch) plus the success hand-over callback.
- */
-export interface TaskBoardLaunchSeat {
-  /** The real service members — absent members fall back to mocks/workbench defaults (launch-rpc seat). */
-  readonly services?: Partial<SessionLaunchServices>
-  /** Launch success: 切会话视图 + session locating (5.11 wires the real hand-over). */
-  readonly onLaunched?: SessionLaunchHandover
-}
 
 /**
  * Composed props of the main-panel shell component. The framework standard
@@ -358,13 +586,15 @@ export type WorkbenchShellProps =
   & { taskBoard?: TaskBoardSeat }
   /** The feature board's assembly seat (task 5.9): absent = the page-local mock twins. */
   & { features?: WorkbenchFeaturesSeat }
+  /** The proposals board's assembly seat (task 5.5, UF5): absent = the page-local mock twin (real chain = the shell's IPC face). */
+  & { proposals?: WorkbenchProposalsSeat }
   /**
-   * The UF5 launch seat STORE (task 5.11, launch-rpc.createLaunchSeat): an
-   * observable — the rpc members land when the remote namespaces mount. The
-   * shell subscribes (uSES); absent = the entries keep the build-stage mocks
-   * (hostless mounts, 5.x unit tests).
+   * The session hand-over seat (task 5.11; M3 6.1 slimmed to the hand-over
+   * alone — session-handover.ts): 切会话视图 + session locating for the
+   * dispatch chain's 「进入会话」 jump. Absent = the board's jump seam stays
+   * unwired (hostless mounts, 5.x unit tests).
    */
-  & { launch?: LaunchSeatStore }
+  & { launch?: SessionHandover }
   /**
    * The board session store (task 5.11, AC3/AC4): the plugin-lifetime memory
    * (selection + scroll + active-link badges) that survives the launch
@@ -376,44 +606,18 @@ export type WorkbenchShellProps =
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>
 
 /**
- * The task identity the UF5 launch entry needs (task 5.10): the project the
- * task belongs to (link persistence + launch cwd), and the workbench dialect
- * address — the entry derives the QUALIFIED key `<featureSlug>/<localId>`
- * (task 2.5) for both the prompt probe and recordSessionLink.
+ * The task identity the session jump needs (task 5.10): the project the
+ * task belongs to (badge persistence context), and the workbench dialect
+ * address — the caller derives the QUALIFIED key `<featureSlug>/<localId>`
+ * (task 2.5).
  */
 export interface SessionLaunchTaskRef {
   readonly projectId: string
-  /** Registered project codeRoot — the DF004 create-cwd (Interface 2 / spike-1 §2.1). */
+  /** Registered project codeRoot (project context of the jump). */
   readonly codeRoot: string
   readonly featureSlug: string
   readonly localId: string
-  /** Display title (the launch input's `title`). */
+  /** Display title. */
   readonly title: string
 }
 
-/**
- * The UF5 launch entry's service face (task 5.10, UI dependency layering —
- * same seam shape as WorkbenchChromeFace): the BUILD stage renders against
- * mocks/workbench.ts defaults, the 5.11 integrate task swaps the members for
- * the real `ctx.remote.forgeBridge` / `ctx.remote.sessionLaunch` /
- * `ctx.remote.session` / M1 session-focus form calls. Every remote-shaped
- * member returns the host-half result types verbatim (reasonCode convention).
- */
-export interface SessionLaunchServices {
-  /** Availability probe: `ctx.remote.forgeBridge.getTaskPrompt` (Interface 2). */
-  probe(input: { projectRoot: string; taskKey: string }): Promise<GetTaskPromptResult>
-  /** Tier 1 (DF004 main channel): `ctx.remote.sessionLaunch.launch`. */
-  launch(input: SessionLaunchInput): Promise<SessionLaunchResult>
-  /**
-   * Tier 2 (Interface 5 candidate 2): `ctx.remote.session` create+prompt with
-   * the SAME semantics — a renderer-side retry carrying the tier-1 recovery
-   * sessionId when the failed result provided one.
-   */
-  launchViaClientChannel(input: SessionLaunchInput): Promise<SessionLaunchResult>
-  /** Tier 3 leg 1: copy the verbatim prompt to the clipboard. Resolves false when denied/failed. */
-  copyPromptToClipboard(text: string): Promise<boolean>
-  /** Tier 3 leg 2: bring the main window to front (M1 session-focus fallback form). */
-  bringMainWindowToFront(): void
-  /** Success-chain persist leg: `workbench.recordSessionLink` (qualified taskKey). */
-  recordSessionLink(input: RecordSessionLinkInput): Promise<SessionLink>
-}

@@ -1,27 +1,35 @@
 /**
- * The workbench tab strip (task 5.1, ui-design 工作台内部结构): 概览 / 任务 /
- * feature — the three page-map view keys `workbench/overview|tasks|features`.
- * This is the presentation twin of the 3.3 view-key machine's tab dimension:
- * every activation routes through the machine's `selectWorkbenchTab` action
- * (persisted last tab; re-selecting the features tab from the
- * `workbench/features/:slug` subview clears the slug — the subview return
- * stack), so the strip never keeps a second tab state (task Hard Rule via the
- * 3.3 contract).
+ * The workbench tab strip (task 5.1, ui-design 工作台内部结构; M3 revision
+ * task 5.5): 概览 / 提案 / Feature / 任务 — the four page-map view keys
+ * `workbench/overview|proposals|features|tasks` in the PRD's M3 order (提案
+ * second, Feature third, tasks last; the「Feature」label normalized). This is
+ * the presentation twin of the 3.3 view-key machine's tab dimension: every
+ * activation routes through the machine's `selectWorkbenchTab` action
+ * (persisted last tab; re-selecting a tab from its own `:slug` subview clears
+ * the slug — the subview return stack), so the strip never keeps a second
+ * tab state (task Hard Rule via the 3.3 contract).
  *
  * Keyboard (ui-design 全局规则, WAI-ARIA tabs pattern): Tab reaches the strip's
  * active tab only (roving tabindex); ArrowLeft/ArrowRight/Home/End move focus
  * and select — automatic activation, the same transitions a click performs.
+ *
+ * Task 5.5 also mounts the 工作台级审批指示 on the 任务 tab label: the 3.7
+ * ApprovalCountBadge (warn capsule, top-right of the label's relative box,
+ * N = 0 NOT rendered) so the pending signal stays visible from every tab —
+ * the count itself is a CONTROLLED prop the shell feeds (task 3.7's contract).
  */
 import { useRef, type KeyboardEvent } from 'react'
 import { WORKBENCH_TABS, type WorkbenchTabKey } from '../../store/view-key'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from './ChromeButton'
+import { ApprovalCountBadge } from '../../views/tasks/dispatch/ApprovalCountBadge'
 
 /** The tab-strip rows: locale key + view key, in WORKBENCH_TABS order. */
 export const TAB_LOCALE_KEYS: Record<WorkbenchTabKey, WorkbenchKey> = {
   'workbench/overview': 'tab.overview',
-  'workbench/tasks': 'tab.tasks',
+  'workbench/proposals': 'tab.proposals',
   'workbench/features': 'tab.features',
+  'workbench/tasks': 'tab.tasks',
 }
 
 /** Inputs of {@link TabBar}. */
@@ -32,6 +40,12 @@ export interface TabBarProps {
   activeTab: WorkbenchTabKey
   /** The machine's tab action — every activation (click or arrow) goes through here. */
   onSelect: (tab: WorkbenchTabKey) => void
+  /**
+   * The pending-approval count for the 任务 tab's warn badge (task 5.5 wiring
+   * of the 3.7 component; the shell feeds the live workbench-level count).
+   * Absent/0 → the badge renders nothing.
+   */
+  approvalCount?: number | undefined
 }
 
 const tabsStyle = {
@@ -50,6 +64,7 @@ const tabStyle = {
   cursor: 'pointer',
   font: 'inherit',
   padding: '8px 14px',
+  position: 'relative',
 } as const
 
 /** Selected tab: interactive-bg-hover fill + label-primary. */
@@ -61,7 +76,7 @@ const activeTabStyle = {
 } as const
 
 /**
- * The three-tab strip. `data-dsh-forge-tabs` / `data-dsh-forge-tab` are the
+ * The four-tab strip. `data-dsh-forge-tabs` / `data-dsh-forge-tab` are the
  * 3.3 test/e2e observation hooks — the attributes are contract, not deco.
  */
 export function TabBar(props: TabBarProps) {
@@ -103,6 +118,9 @@ export function TabBar(props: TabBarProps) {
           onClick={() => { props.onSelect(tab) }}
         >
           {props.t(TAB_LOCALE_KEYS[tab])}
+          {tab === 'workbench/tasks' && (
+            <ApprovalCountBadge t={props.t} count={props.approvalCount ?? 0} />
+          )}
         </ChromeButton>
       ))}
     </div>

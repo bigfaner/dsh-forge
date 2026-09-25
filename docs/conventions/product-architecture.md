@@ -1,6 +1,6 @@
 ---
 title: "产品架构约束(两级插件 · 数据内核 · CLI 演进)"
-domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-config, data-kernel, sqlite, cli-retirement, workbench, forge]
+domains: [architecture, plugins, two-tier-plugin, product-config, data-kernel, cli-retirement, skill-hosting]
 ---
 
 # 产品架构约束(两级插件 · 数据内核 · CLI 演进)
@@ -39,6 +39,7 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 - 数据内核扩大的 preload IPC 面逐项过 electron-ipc-security.md 约束(origin-lock、typed、版本化、最小必要面),API 面随 M2/M3 设计逐项评审。
 - 项目三分模型的「工作台自有项目文件」即落于此内核,独立存放、不与 forge 数据混放。
 - M2 记账:DF005(工作台自有状态 → 产品数据内核,Format = SQLite 方向声明,任务索引为派生)、DF001(spawn CLI 为过渡,查询面未来可切数据 API)。
+- **M3 落地(2026-09-25 记账)**:权威切面已交付——`task` 表(SQLite 权威,7 态 CHECK)+ `data_authority` 读路由(files | sqlite)落地,见 BIZ-coexistence-003 / docs/business-rules/sot-migration.md。
 
 ### TECH-product-arch-004: forge 能力形态演进——CLI 退役,终点 = 应用 API + dsh tool
 
@@ -49,6 +50,7 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 
 - M2 即过渡形态:应用看板经 spawn CLI 只读查询 + prompt 获取(DF001),写操作仍由 agent 会话/终端执行。
 - 形态细节由 M2 SC8(dsh 插件机制 vs forge skill/hook/subagent 语义等价性 spike)与 M4 设计定;spike 结论未出前禁止假设结论。
+- **M3 收口(2026-09-25 记账)**:终点形态已落地——ForgeBridge/spawn CLI 链退役,应用出包与执行链零 forge CLI 依赖(SC1/G1 断言);任务写集/读集/知识系/偏好/阶段/提案均经 dsh tool + 内核 API;forge 仓 CLI 停止发布与 CC 插件最终收口归 M4。
 
 ### TECH-product-arch-005: 插件工程产物 vendor-free 纪律(机器门禁)
 
@@ -73,3 +75,10 @@ domains: [architecture, plugins, two-tier-plugin, mandatory-plugin, product-conf
 **Context**: 壳内核不因能力增减改动(G6);M2 实证 = @xyflow/react 仅入 packages/plugins/forge-workbench 依赖,apps/desktop 零新增。
 **Scope**: [CROSS]
 **Source**: feature/dsh-forge-m2 TECH-008(design/tech-design.md §Dependencies;D4 裁决)
+
+### TECH-product-arch-008: 技能承载 = customSkillDirs(应用单写 + 前缀校验 + 漂移重写)
+
+**Requirement**: forge 技能以 dsh 原生形态随插件 bundle(`resources/skills/`,扁平名寻址);承载路径 = 用户层 dsh 配置 `customSkillDirs`(skill-filesystem 消费),项目仓零新增文件;配置**仅应用写入**(boot/插件激活时 += 技能根,去重);**漂移校验**(路径存在 + 清单 hash)失败即重写;路径前缀必须 ∈ 插件安装目录(防任意目录注入技能面);修复失败 → `ERR_SKILL_DIR_SYNC` 日志 + 设置面告警(禁静默);应用负责版本升级时的路径同步维护(路径漂移 = 应用责任)。
+**Context**: M3 D2 裁决(弃项目侧播种——零物化、项目仓零新增);威胁 T3 缓解;SC1 断言 15 必迁技能扁平名解析全部成功。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m3 TECH-007(prd/prd-spec.md §技能迁移划分表/DF006;design/tech-design.md §Interface 6;tasks/records/5.6、5.7)

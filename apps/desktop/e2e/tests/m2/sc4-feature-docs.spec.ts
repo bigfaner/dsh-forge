@@ -163,7 +163,7 @@ test('6.4/sc4-feature-docs [@web-e2e @journey sc4-feature-docs]: m1-completed ba
       expect(typeof projectId).toBe('string')
 
       await switchToWorkbench(page)
-      await page.getByRole('tab', { name: /^feature$|^Features$/ }).click()
+      await page.getByRole('tab', { name: /^Feature$|^Features$/ }).click()
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-features"]')).toBeVisible()
 
       // ======================================================================

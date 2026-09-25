@@ -26,6 +26,15 @@ export interface FeatureStepperProps {
   t: FeatureStatusTranslate
   /** The feature's manifest status — the phase cursor. */
   status: FeatureStatus
+  /**
+   * The UF2 gate-pending extension point (task 4.3, ui-design gate-pending 态;
+   * 4.4's detail wiring passes getStageGate's verdict in): true = the CURRENT
+   * stage's summary asset has not been generated — the current node swaps its
+   * 品牌蓝 fill for the WARN 描边 (hollow + warn ring + warn label) and the
+   * list's aria-label appends the gate note. Absent/false keeps the M2
+   * presentation untouched (the normal 态).
+   */
+  gatePending?: boolean | undefined
 }
 
 const stepperStyle = {
@@ -75,6 +84,18 @@ const dotPendingStyle = {
   borderColor: 'var(--dsh-border-color, CanvasText)',
 } as const
 
+/**
+ * The gate-pending node (UF2 task 4.3): warn 描边 — hollow with the warn
+ * border + a warn ring (the current-state ring's warn twin) + the warn label.
+ */
+const dotGatePendingStyle = {
+  ...dotStyle,
+  background: 'transparent',
+  borderColor: 'var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
+} as const
+
+const gatePendingRing = '0 0 0 3px var(--dsh-interactive-bg-hover, rgba(245, 158, 11, 0.3))'
+
 /** The current node's ring — the extra current-state signal beyond the fill. */
 const currentRing = '0 0 0 3px var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.3))'
 
@@ -92,36 +113,61 @@ const labelSecondaryStyle = {
   color: 'var(--dsw-alias-label-secondary, inherit)',
 } as const
 
+/** The gate-pending label: 12/18 全称 in the warn accent (the hint line's twin). */
+const labelGatePendingStyle = {
+  ...labelStyle,
+  color: 'var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
+} as const
+
+/**
+ * One node dot's resolved style: the gate-pending warn 描边 (hollow + warn
+ * ring) when the gate holds at this phase, else the M2 set — brand-blue fill
+ * for reached, hollow border-l3 for pending, the current ring on top.
+ */
+function nodeDotStyle(reached: boolean, current: boolean, gateHere: boolean) {
+  if (gateHere) return { ...dotGatePendingStyle, boxShadow: gatePendingRing }
+  return {
+    ...(reached ? dotReachedStyle : dotPendingStyle),
+    ...(current ? { boxShadow: currentRing } : {}),
+  }
+}
+
 /**
  * The five-phase stepper. Reached phases (≤ the status's phase index) fill
  * brand blue; the current one additionally carries aria-current="step" + the
- * ring; unreached phases stay hollow (border-l3).
+ * ring; unreached phases stay hollow (border-l3). With `gatePending` (UF2
+ * task 4.3) the CURRENT node swaps its fill for the warn 描边 (gate-pending
+ * state) — the reached set before it and the pending set after it unchanged.
  */
 export function FeatureStepper(props: FeatureStepperProps) {
   const currentPhase = FEATURE_STATUS_PHASE[props.status]
   return (
     <div data-dsh-forge-feature-stepper="" style={stepperStyle}>
-      <ol aria-label={props.t('features.stepper.label')} style={trackStyle}>
+      <ol
+        aria-label={props.t('features.stepper.label')
+          + (props.gatePending === true ? props.t('features.stages.stepper.gateAria') : '')}
+        style={trackStyle}
+      >
         {FEATURE_STATUSES.map((phase, index) => {
           const reached = index <= currentPhase
           const current = index === currentPhase
+          const gateHere = current && props.gatePending === true
           const label = featureStatusLabel(phase, props.t)
           return (
             <li
               key={phase}
               aria-current={current ? 'step' : undefined}
               data-dsh-forge-stepper-phase={phase}
-              data-dsh-forge-stepper-state={current ? 'current' : reached ? 'reached' : 'pending'}
+              data-dsh-forge-stepper-state={gateHere ? 'gate-pending' : current ? 'current' : reached ? 'reached' : 'pending'}
               style={phaseStyle}
             >
+              <span aria-hidden="true" style={nodeDotStyle(reached, current, gateHere)} />
               <span
-                aria-hidden="true"
-                style={{
-                  ...(reached ? dotReachedStyle : dotPendingStyle),
-                  ...(current ? { boxShadow: currentRing } : {}),
-                }}
-              />
-              <span title={label} style={reached ? labelStyle : labelSecondaryStyle}>{label}</span>
+                title={label}
+                style={gateHere ? labelGatePendingStyle : reached ? labelStyle : labelSecondaryStyle}
+              >
+                {label}
+              </span>
             </li>
           )
         })}

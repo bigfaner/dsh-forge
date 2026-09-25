@@ -32,6 +32,61 @@ export const WORKBENCH_VERB_CHANNELS = {
   authorizeExternalDocPath: 'dsh-forge:workbench-authorize-external-doc-path',
   subscribeEvents: 'dsh-forge:workbench-subscribe-events',
   unsubscribeEvents: 'dsh-forge:workbench-unsubscribe-events',
+  // M3 tasks 段(任务 1.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  taskAdd: 'dsh-forge:workbench-task-add',
+  taskClaim: 'dsh-forge:workbench-task-claim',
+  taskTransition: 'dsh-forge:workbench-task-transition',
+  taskSubmit: 'dsh-forge:workbench-task-submit',
+  taskReopen: 'dsh-forge:workbench-task-reopen',
+  taskGet: 'dsh-forge:workbench-task-get',
+  taskQuery: 'dsh-forge:workbench-task-query',
+  // M3 migration 段(任务 1.4 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getMigrationStatus: 'dsh-forge:workbench-get-migration-status',
+  startMigration: 'dsh-forge:workbench-start-migration',
+  // M3 UF3 集成段(任务 1.7 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  probeCodeRoot: 'dsh-forge:workbench-probe-code-root',
+  getWorkbenchPaths: 'dsh-forge:workbench-get-workbench-paths',
+  // M3 知识系 + feature 读段(任务 2.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  knowledgeFact: 'dsh-forge:workbench-knowledge-fact',
+  knowledgeLesson: 'dsh-forge:workbench-knowledge-lesson',
+  knowledgeResearch: 'dsh-forge:workbench-knowledge-research',
+  knowledgeForensic: 'dsh-forge:workbench-knowledge-forensic',
+  featureList: 'dsh-forge:workbench-feature-list',
+  featureStatus: 'dsh-forge:workbench-feature-status',
+  // M3 prefs 段(任务 3.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getPrefs: 'dsh-forge:workbench-get-prefs',
+  setPrefs: 'dsh-forge:workbench-set-prefs',
+  clearPrefOverride: 'dsh-forge:workbench-clear-pref-override',
+  // M3 stages 读段(任务 3.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  checkStageArtifacts: 'dsh-forge:workbench-check-stage-artifacts',
+  getStageGate: 'dsh-forge:workbench-get-stage-gate',
+  listStageAssets: 'dsh-forge:workbench-list-stage-assets',
+  // M3 stages 写段(任务 4.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  advanceStage: 'dsh-forge:workbench-advance-stage',
+  stageSummarize: 'dsh-forge:workbench-stage-summarize',
+  // M3 proposals 段(任务 5.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getProposalBoard: 'dsh-forge:workbench-get-proposal-board',
+  readProposalDoc: 'dsh-forge:workbench-read-proposal-doc',
+  // M3 dispatch 段(任务 3.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  dispatchTasks: 'dsh-forge:workbench-dispatch-tasks',
+  redispatch: 'dsh-forge:workbench-redispatch',
+  getDispatches: 'dsh-forge:workbench-get-dispatches',
+  listApprovals: 'dsh-forge:workbench-list-approvals',
+  decideApproval: 'dsh-forge:workbench-decide-approval',
+  // M3 dispatch host 回调段(任务 3.5 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  receiveApproval: 'dsh-forge:workbench-receive-approval',
+  notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
+  notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
 } as const
 
 /**

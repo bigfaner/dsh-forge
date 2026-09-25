@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -737,6 +737,48 @@ describe('indexer/scan — corruption tolerance (AC4)', () => {
       expect(second.sync.status).toBe('error')
       expect(second.stats.tasksIndexed).toBe(0)
       expect(listTaskSnapshots(db, projectId).map(task => task.taskKey)).toEqual(['alpha/1.1']) // preserved
+    })
+  })
+
+  // M3 任务 6.7(SC6 腿暴露的误判回归钉):已迁移项目的稳态 = index.json
+  // 已淘汰(.migrated-* 归档;权威在 SQLite)—— 基线扫描不得把「index
+  // 缺失」记为失败,否则每次激活/感知重扫都置 sync error,渲染侧把健康
+  // 已迁移项目误判「仓外路径失效」(概览引导卡 + 提案板阻断)。
+  it('migrated (sqlite authority) steady state: retired index.json is NOT a scan failure — sync stays clean; files authority keeps failing', async () => {
+    const root = makeScratch()
+    buildForgeProject(root, [{ slug: 'alpha', tasks: [{ id: '1.1', status: 'pending' }] }])
+    await withDb((db) => {
+      const { projectId, outcome: first } = setupScannedProject(db, root)
+      expect(first.sync.status).toBe('idle') // baseline: the files corpus scans clean
+
+      // The post-migration steady state: index retired to the archive name.
+      const indexPath = indexPathFor(root, 'alpha')
+      renameSync(indexPath, `${indexPath}.migrated-20260924T000000Z`)
+
+      // files authority: missing index is still a failure (M2 semantics).
+      const filesRescan = scanForgeFiles(db, { id: projectId, codeRoot: root, docLocationPath: null })
+      expect(filesRescan.sync.status).toBe('error')
+      expect(filesRescan.stats.skippedFiles.some(failure => failure.reason === 'tasks index missing')).toBe(true)
+
+      // sqlite authority (migrated): the retired index is the steady state —
+      // clean sync, no skipped files, no renderer lost signal.
+      db.prepare("UPDATE projects SET data_authority = 'sqlite' WHERE id = ?").run(projectId)
+      const migratedRescan = scanForgeFiles(db, { id: projectId, codeRoot: root, docLocationPath: null })
+      expect(migratedRescan.sync.status).toBe('idle')
+      expect(migratedRescan.sync.error).toBeNull()
+      expect(migratedRescan.stats.skippedFiles).toHaveLength(0)
+      expect(
+        migratedRescan.events.some(event => event.type === 'sync' && event.sync.state === 'idle'),
+        'the pushed sync event carries the idle payload (no error-state event)',
+      ).toBe(true)
+
+      // A REAPPEARED but malformed index on a migrated project is still an
+      // anomaly worth surfacing (unreadable-or-malformed is not the steady
+      // state; the external write's recovery is the reingest hook's).
+      writeFileSync(indexPath, '{ broken external write')
+      const malformedRescan = scanForgeFiles(db, { id: projectId, codeRoot: root, docLocationPath: null })
+      expect(malformedRescan.sync.status).toBe('error')
+      expect(malformedRescan.stats.skippedFiles.some(failure => failure.reason === 'tasks index unreadable or malformed')).toBe(true)
     })
   })
 })

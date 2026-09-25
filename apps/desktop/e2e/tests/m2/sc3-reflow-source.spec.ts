@@ -1,7 +1,10 @@
 // @feature dsh-forge-m2 | @web-e2e | @journey sc3-reflow-source
 // Traceability: docs/features/dsh-forge-m2/tasks/6.3-sc23-session-injection-flow.md
 //
-// SC3 验收腿(stub 会话通道,PRD Story3 状态回流与来源):
+// SC3 验收腿(PRD Story3 状态回流与来源;6.1 演进:M2 发起链随
+// ForgeBridge 退役删除,挂接建立腿改为内核 recordSessionLink 动词直调 ——
+// 正是 M2 发起成功链在成功侧调用的同一持久腿,回流/来源/挂接历史语义
+// 不变;subagent 发起链的 e2e 归 SC3/6.5):
 //
 //   SC3-1 会话侧变更 → ≤5s [会话] —— 2.5 判定序的两条路径都走:
 //     ① actor 标记(记录 frontmatter `actor: session:<id>`,FORGE_ACTOR
@@ -35,9 +38,6 @@ import {
 import { registerFixtureProject, writeForgeProject } from '../../fixtures/forge-project.ts'
 import { generateTaskSet } from '../../fixtures/task-generator.ts'
 import type { GeneratedTaskStatus } from '../../fixtures/task-generator.ts'
-import { materializeStubCli } from '../../fixtures/stubs/cli.ts'
-import { createChannelStub } from '../../fixtures/stubs/channel.ts'
-import type { ChannelStubEntry } from '../../fixtures/stubs/channel.ts'
 import { zh } from '../../../../../packages/plugins/forge-workbench/src/client/locale/zh.ts'
 import { en } from '../../../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
 import {
@@ -113,21 +113,31 @@ async function assertReflowWithinBudget(
   ).toBe(true)
 }
 
-/** Poll the channel journal for an entry (the host process writes it). */
-async function pollJournal(
-  channel: ReturnType<typeof createChannelStub>,
-  predicate: (entry: ChannelStubEntry) => boolean,
-  what: string,
-): Promise<ChannelStubEntry> {
-  const deadline = Date.now() + 15_000
-  for (;;) {
-    const found = channel.readJournal().find(predicate)
-    if (found !== undefined) return found
-    if (Date.now() > deadline) {
-      throw new Error(`channel journal never carried ${what}: ${JSON.stringify(channel.readJournal())}`)
+/** recordSessionLink 的 bridge 面子集。 */
+interface RecordLinkBridge {
+  dshForge?: {
+    workbench?: {
+      recordSessionLink?: (input: {
+        projectId: string
+        taskKey: string
+        sessionId: string
+      }) => Promise<{ sessionId: string; status: string }>
     }
-    await new Promise(resolve => setTimeout(resolve, 200))
   }
+}
+
+/** 建立一条 active 挂接(内核动词直调 —— M2 发起成功链的同一持久腿)。 */
+async function linkSession(page: Page, projectId: string, taskKey: string, sessionId: string): Promise<string> {
+  const link = await page.evaluate(async (input: { projectId: string; taskKey: string; sessionId: string }) => {
+    const bridge = (globalThis as RecordLinkBridge).dshForge?.workbench
+    if (bridge?.recordSessionLink === undefined) {
+      throw new Error('dshForge.workbench.recordSessionLink bridge unavailable in the e2e renderer')
+    }
+    return await bridge.recordSessionLink(input)
+  }, { projectId, taskKey, sessionId })
+  expect(link.sessionId).toBe(sessionId)
+  expect(link.status).toBe('active')
+  return sessionId
 }
 
 function sc3Bundles() {
@@ -156,25 +166,16 @@ test('6.3/sc3-reflow-source [@web-e2e @journey sc3-reflow-source]: ≤5s reflow 
   expect(set.facts.taskCount).toBe(12)
 
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-sc3-'))
-  const stub = materializeStubCli(join(root, 'stub-cli'))
-  const channel = createChannelStub(join(root, 'stub-channel'))
   const project = writeForgeProject(set, { codeRoot: join(root, 'fixture-project') })
-  stub.attachProject(project.codeRoot)
   const mutator = createFixtureMutator(set, project)
   const session = createAppSessionFactory({
     bundles: sc3Bundles(),
     stageTarballs: [{ at: FORGE_WORKBENCH_STAGED_AT, from: forgeWorkbenchTarball() }],
     rootDir: join(root, 'shell'),
     userDataDir: join(root, 'user-data'),
-    cwd: stub.launchCwd,
-    // DSH_FORGE_PROJECT_ROOTS: the ForgeBridge spawn-allowlist is a HOST-SPAWN
-    // env fact — a mid-boot registration never reaches the live host child;
-    // the explicit-env override is the documented test channel (5.11 leg-B).
-    env: {
-      ...stub.env,
-      ...channel.env,
-      DSH_FORGE_PROJECT_ROOTS: JSON.stringify([project.codeRoot]),
-    },
+    cwd: root,
+    // 6.1(ForgeBridge 退役):应用 env 零 CLI 缝 —— 无 stub CLI、无 stub
+    // 通道、无 allowlist;挂接经内核 recordSessionLink 动词建立。
   })
 
   try {
@@ -193,17 +194,13 @@ test('6.3/sc3-reflow-source [@web-e2e @journey sc3-reflow-source]: ≤5s reflow 
         page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"] [data-dsh-forge-badge="source:terminal"]`),
       ).toBeVisible()
 
-      // ---- establish the active link (the launch whose session "acts") -----
-      const trigger = page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"] [data-dsh-forge-launch-trigger][data-mount="node-hover"]`)
-      await expect(trigger).toHaveAttribute('data-probe', 'available', { timeout: 20_000 })
-      await trigger.click()
-      await expect(page.locator('[data-dsh-forge-dialog="launch-confirm"]')).toBeVisible({ timeout: 10_000 })
-      await page.keyboard.press('Enter')
-      await expect(page.locator('[data-dsh-forge-shell]')).toHaveCount(0, { timeout: 15_000 })
-      const created = await pollJournal(channel, entry => entry.kind === 'create', 'the session create')
-      sessionIdOne = created.sessionId ?? ''
-      expect(sessionIdOne).not.toBe('')
-      await openTasksBoard(page, set.facts.taskCount)
+      // ---- establish the active link (6.1: kernel verb; the session "acts") -
+      sessionIdOne = await linkSession(page, projectId, KEY_LINKED, 'session-sc3-one')
+      // 权威读点亮徽标:打开侧板(getTaskDetail.links reconcile)再回看板。
+      await page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"]`).click()
+      await expect(page.locator(`[data-dsh-forge-task-detail="${KEY_LINKED}"]`)).toBeVisible({ timeout: 15_000 })
+      await page.locator('[data-dsh-forge-detail-close]').click()
+      await expect(page.locator('[data-dsh-forge-task-detail]')).toHaveCount(0)
       await expect(
         page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"] [data-dsh-forge-badge="session-live"]`),
       ).toHaveAttribute('data-dsh-forge-session-id', sessionIdOne, { timeout: 10_000 })
@@ -254,26 +251,20 @@ test('6.3/sc3-reflow-source [@web-e2e @journey sc3-reflow-source]: ≤5s reflow 
       ])
 
       // ======================================================================
-      // SC3-3 挂接结束→历史回溯: re-launch the linked task — 4.2 supersede
-      // ends the S1 row; the dock's 挂接历史 walks active→ended in full.
+      // SC3-3 挂接结束→历史回溯: link the task AGAIN (6.1: kernel verb) —
+      // recordSessionLink's supersede ends the S1 row; the dock's 挂接历史
+      // walks active→ended in full.
       // ======================================================================
       await page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"]`).click()
       await expect(page.locator(`[data-dsh-forge-task-detail="${KEY_LINKED}"]`)).toBeVisible({ timeout: 15_000 })
-      const panelTrigger = page.locator(
-        `[data-dsh-forge-task-detail="${KEY_LINKED}"] [data-dsh-forge-launch-trigger][data-mount="panel-primary"]`)
-      await expect(panelTrigger).toHaveAttribute('data-probe', 'available', { timeout: 20_000 })
-      await panelTrigger.click()
-      await expect(page.locator('[data-dsh-forge-dialog="launch-confirm"]')).toBeVisible({ timeout: 10_000 })
-      await page.keyboard.press('Enter')
-      await expect(page.locator('[data-dsh-forge-shell]')).toHaveCount(0, { timeout: 15_000 })
-      const secondCreate = await pollJournal(channel,
-        entry => entry.kind === 'create' && (entry.sessionId ?? '') !== sessionIdOne, 'the second session create')
-      sessionIdTwo = secondCreate.sessionId ?? ''
+      sessionIdTwo = await linkSession(page, projectId, KEY_LINKED, 'session-sc3-two')
       expect(sessionIdTwo).not.toBe(sessionIdOne)
 
       await openTasksBoard(page, set.facts.taskCount)
-      // The badge follows the NEW session (launch success wrote it; the dock's
-      // authoritative read below keeps it honest).
+      // The badge follows the NEW session (the dock's authoritative read below
+      // keeps it honest).
+      await page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"]`).click()
+      await expect(page.locator(`[data-dsh-forge-task-detail="${KEY_LINKED}"]`)).toBeVisible({ timeout: 15_000 })
       await expect(
         page.locator(`[data-dsh-forge-node-card="${KEY_LINKED}"] [data-dsh-forge-badge="session-live"]`),
       ).toHaveAttribute('data-dsh-forge-session-id', sessionIdTwo, { timeout: 10_000 })

@@ -1,0 +1,1062 @@
+{
+  "feature": "dsh-forge-m3",
+  "prd": "prd/prd-spec.md",
+  "design": "design/tech-design.md",
+  "proposal": "docs/proposals/dsh-forge-m3/proposal.md",
+  "created": "2026-09-23",
+  "tasks": {
+    "0.1-spike-tool-registration": {
+      "id": "0.1",
+      "title": "spike① dsh tool 注册契约:renderer 桥时延与启动竞态实测(T2 可用性确认)",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "0.1-spike-tool-registration.md",
+      "record": "records/0.1-spike-tool-registration.md",
+      "type": "doc",
+      "blockedReason": "no implementation found"
+    },
+    "0.2-spike-subagent-approval": {
+      "id": "0.2",
+      "title": "spike② subagent 审批面:审批事件订阅/应答通道 + FORGE_ACTOR 透传形态",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "0.2-spike-subagent-approval.md",
+      "record": "records/0.2-spike-subagent-approval.md",
+      "type": "doc"
+    },
+    "0.3-spike-systemprompt-contract": {
+      "id": "0.3",
+      "title": "spike③ systemPrompt 注入契约:四候选裁决(④ 首条 user 消息追加为已验证基线)",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "0.3-spike-systemprompt-contract.md",
+      "record": "records/0.3-spike-systemprompt-contract.md",
+      "type": "doc"
+    },
+    "0.4-spike-prompt-templates-port": {
+      "id": "0.4",
+      "title": "spike④ forge prompt 模板移植面盘点:任务类型协议清单 + 预合成模板映射",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "0.4-spike-prompt-templates-port.md",
+      "record": "records/0.4-spike-prompt-templates-port.md",
+      "type": "doc"
+    },
+    "1.1-schema-v2-migration": {
+      "id": "1.1",
+      "title": "schema v2 迁移段:store MIGRATIONS {version:2}(2 组 ALTER + 7 表 + 5 索引)+ 漂移对账",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "status": "completed",
+      "file": "1.1-schema-v2-migration.md",
+      "record": "records/1.1-schema-v2-migration.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.2-statemachine-deps-port": {
+      "id": "1.2",
+      "title": "任务状态机与依赖解析 TS 移植:statemachine/deps/toposort + Go 对拍器",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "status": "completed",
+      "file": "1.2-statemachine-deps-port.md",
+      "record": "records/1.2-statemachine-deps-port.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.3-task-repo-verbs": {
+      "id": "1.3",
+      "title": "task 权威仓储与 CRUD 写集动词:7 态唯一写入口 + 读路由 data_authority + actor 审计",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.1",
+        "1.2"
+      ],
+      "status": "completed",
+      "file": "1.3-task-repo-verbs.md",
+      "record": "records/1.3-task-repo-verbs.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.4-migration-pipeline": {
+      "id": "1.4",
+      "title": "一次性显式迁移管线:守卫/备份/摄入/对拍/切读/归档 + migration_event 审计",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.3"
+      ],
+      "status": "completed",
+      "file": "1.4-migration-pipeline.md",
+      "record": "records/1.4-migration-pipeline.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.5-external-write-reingest": {
+      "id": "1.5",
+      "title": "外部写自动重摄入与偏离标记:index.json 复现/变更 watcher + deviated 置位",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.4"
+      ],
+      "status": "completed",
+      "file": "1.5-external-write-reingest.md",
+      "record": "records/1.5-external-write-reingest.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "1.6-migration-ui-build": {
+      "id": "1.6",
+      "title": "UF3 组件:迁移 Pill + 确认/进度(close-guard)/失败回滚对话框族",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.4"
+      ],
+      "status": "completed",
+      "file": "1.6-migration-ui-build.md",
+      "record": "records/1.6-migration-ui-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "1.7-migration-ui-integrate": {
+      "id": "1.7",
+      "title": "UF3 集成:ProjectCard 迁移入口 + 注册向导条件迁移步骤 + 文档根默认仓外翻转",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.6"
+      ],
+      "status": "completed",
+      "file": "1.7-migration-ui-integrate.md",
+      "record": "records/1.7-migration-ui-integrate.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "1.gate": {
+      "id": "1.gate",
+      "title": "Phase 1 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "1.summary"
+      ],
+      "status": "completed",
+      "file": "1.gate.md",
+      "record": "records/1.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "1.summary": {
+      "id": "1.summary",
+      "title": "Phase 1 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7"
+      ],
+      "status": "completed",
+      "file": "1.summary.md",
+      "record": "records/1.summary.md",
+      "type": "doc.summary"
+    },
+    "2.1-tool-bridge-task-tools": {
+      "id": "2.1",
+      "title": "dsh tool 桥与 forge.task 工具面:renderer 桥接(T2)+ 写集/读工具注册",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "0.1",
+        "1.3",
+        "1.gate"
+      ],
+      "status": "completed",
+      "file": "2.1-tool-bridge-task-tools.md",
+      "record": "records/2.1-tool-bridge-task-tools.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.2-knowledge-feature-tools": {
+      "id": "2.2",
+      "title": "知识系与 feature 读工具:forge.fact/lesson/research/forensic + feature.list/status",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.1",
+        "1.gate"
+      ],
+      "status": "completed",
+      "file": "2.2-knowledge-feature-tools.md",
+      "record": "records/2.2-knowledge-feature-tools.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.gate": {
+      "id": "2.gate",
+      "title": "Phase 2 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "2.summary"
+      ],
+      "status": "completed",
+      "file": "2.gate.md",
+      "record": "records/2.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "2.summary": {
+      "id": "2.summary",
+      "title": "Phase 2 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "2.1",
+        "2.2"
+      ],
+      "status": "completed",
+      "file": "2.summary.md",
+      "record": "records/2.summary.md",
+      "type": "doc.summary"
+    },
+    "3.1-prefs-domain": {
+      "id": "3.1",
+      "title": "prefs 内核域:单表 scope 化仓储 + 键注册表 + 三级解析 + 动词/事件 + forge.pref.get",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.1",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.1-prefs-domain.md",
+      "record": "records/3.1-prefs-domain.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.2-stage-check-readside": {
+      "id": "3.2",
+      "title": "stages 内核域·读侧:checkStageArtifacts 确定性清单 + stage_asset 索引 + 门态动词",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.3",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.2-stage-check-readside.md",
+      "record": "records/3.2-stage-check-readside.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.3-dispatch-approval-domain": {
+      "id": "3.3",
+      "title": "dispatch 内核域:dispatch/approval_request 仓储 + 编排动词 + 审批决策 + 事件",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.2",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.3-dispatch-approval-domain.md",
+      "record": "records/3.3-dispatch-approval-domain.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.4-presynth-engine": {
+      "id": "3.4",
+      "title": "预合成引擎:三要素组装(协议/目标摘要/生效偏好)+ prompt_hash + 模板移植",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "0.3",
+        "0.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.4-presynth-engine.md",
+      "record": "records/3.4-presynth-engine.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.5-dispatch-launch-approval-bridge": {
+      "id": "3.5",
+      "title": "dispatch-launch 与 approval-bridge:host subagent 创建 + 审批路由往返 + 降级链",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "0.2",
+        "0.3",
+        "2.1",
+        "3.4",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.5-dispatch-launch-approval-bridge.md",
+      "record": "records/3.5-dispatch-launch-approval-bridge.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.6-dispatch-selection-build": {
+      "id": "3.6",
+      "title": "UF1 组件·选择模式与派发链:工具栏入口 + 多选 + 浮动条 + warning/confirm 对话框",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.3",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.6-dispatch-selection-build.md",
+      "record": "records/3.6-dispatch-selection-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.7-approval-dock-build": {
+      "id": "3.7",
+      "title": "UF1 组件·审批 dock 与编排角标:ApprovalPanel + 角标谱 + tab 计数徽标",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.3",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.7-approval-dock-build.md",
+      "record": "records/3.7-approval-dock-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.8-task-detail-orchestration-build": {
+      "id": "3.8",
+      "title": "UF1 组件·详情侧板编排分区:派发执行主按钮 + 编排态/重派发/预合成要素行",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "3.3",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.8-task-detail-orchestration-build.md",
+      "record": "records/3.8-task-detail-orchestration-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.9-uf1-integrate": {
+      "id": "3.9",
+      "title": "UF1 集成:TaskBoardPage 编排接入(工具栏/三视图/详情侧板)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.6",
+        "3.7",
+        "3.8",
+        "2.gate"
+      ],
+      "status": "completed",
+      "file": "3.9-uf1-integrate.md",
+      "record": "records/3.9-uf1-integrate.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.gate": {
+      "id": "3.gate",
+      "title": "Phase 3 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "3.summary"
+      ],
+      "status": "completed",
+      "file": "3.gate.md",
+      "record": "records/3.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "3.summary": {
+      "id": "3.summary",
+      "title": "Phase 3 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9"
+      ],
+      "status": "completed",
+      "file": "3.summary.md",
+      "record": "records/3.summary.md",
+      "type": "doc.summary"
+    },
+    "4.1-stage-advance-summarize": {
+      "id": "4.1",
+      "title": "stages 写侧与推进门:forge.stage.summarize + advanceStage 门内化 + stage_advanced",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "completed",
+      "file": "4.1-stage-advance-summarize.md",
+      "record": "records/4.1-stage-advance-summarize.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.2-deviation-detection": {
+      "id": "4.2",
+      "title": "偏离检测:外部跨阶段操作 watcher + feature_snapshot.deviated + 事件呈现",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "completed",
+      "file": "4.2-deviation-detection.md",
+      "record": "records/4.2-deviation-detection.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.3-stage-ui-build": {
+      "id": "4.3",
+      "title": "UF2 组件:stepper 门态 + 偏离徽标 + StageAssetsTab 分组卡",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.2",
+        "3.gate"
+      ],
+      "status": "completed",
+      "file": "4.3-stage-ui-build.md",
+      "record": "records/4.3-stage-ui-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.4-uf2-integrate": {
+      "id": "4.4",
+      "title": "UF2 集成:Feature 看板 stepper 强化 + 第六「阶段资产」tab 接入",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "4.3",
+        "3.gate"
+      ],
+      "status": "completed",
+      "file": "4.4-uf2-integrate.md",
+      "record": "records/4.4-uf2-integrate.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.gate": {
+      "id": "4.gate",
+      "title": "Phase 4 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "4.summary"
+      ],
+      "status": "completed",
+      "file": "4.gate.md",
+      "record": "records/4.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "4.summary": {
+      "id": "4.summary",
+      "title": "Phase 4 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4"
+      ],
+      "status": "completed",
+      "file": "4.summary.md",
+      "record": "records/4.summary.md",
+      "type": "doc.summary"
+    },
+    "5.1-prefs-ui-build": {
+      "id": "5.1",
+      "title": "UF4 组件:PreferenceSection(层级 segmented + 键分组 + 继承/覆盖徽标)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.1",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.1-prefs-ui-build.md",
+      "record": "records/5.1-prefs-ui-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.2-uf4-integrate": {
+      "id": "5.2",
+      "title": "UF4 集成:概览页设置区偏好面接入(插件管理区之下)",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "5.1",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.2-uf4-integrate.md",
+      "record": "records/5.2-uf4-integrate.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.3-proposals-domain": {
+      "id": "5.3",
+      "title": "proposals 内核域:proposal_snapshot frontmatter 索引 + 看板动词 + ≤5s 回流",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.1",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.3-proposals-domain.md",
+      "record": "records/5.3-proposals-domain.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.4-proposals-ui-build": {
+      "id": "5.4",
+      "title": "UF5 组件:提案行列表 + 详情双子 tab(proposal/eval 只读)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "5.3",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.4-proposals-ui-build.md",
+      "record": "records/5.4-proposals-ui-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.5-proposals-page-assembly": {
+      "id": "5.5",
+      "title": "UF5 页面装配与 tab 序修订:ProposalsPage 第二 tab + WORKBENCH_TABS/TabBar/locale",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "5.4",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.5-proposals-page-assembly.md",
+      "record": "records/5.5-proposals-page-assembly.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.6-skills-bundle": {
+      "id": "5.6",
+      "title": "15 项必迁技能 dsh 形态 bundle:resources/skills/ 扁平名(D2/D5)",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.6-skills-bundle.md",
+      "record": "records/5.6-skills-bundle.md",
+      "type": "doc"
+    },
+    "5.7-customskilldirs-sync": {
+      "id": "5.7",
+      "title": "customSkillDirs 配置写入与漂移校验:boot 同步 + 路径前缀校验 + 清单 hash",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "5.6",
+        "4.gate"
+      ],
+      "status": "completed",
+      "file": "5.7-customskilldirs-sync.md",
+      "record": "records/5.7-customskilldirs-sync.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "5.gate": {
+      "id": "5.gate",
+      "title": "Phase 5 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "5.summary"
+      ],
+      "status": "completed",
+      "file": "5.gate.md",
+      "record": "records/5.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "5.summary": {
+      "id": "5.summary",
+      "title": "Phase 5 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7"
+      ],
+      "status": "completed",
+      "file": "5.summary.md",
+      "record": "records/5.summary.md",
+      "type": "doc.summary"
+    },
+    "6.1-forge-bridge-retirement": {
+      "id": "6.1",
+      "title": "ForgeBridge 退役:host CLI spawn 链删除 + session-launch→dispatch-launch 收口",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.5",
+        "3.9",
+        "5.5",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.1-forge-bridge-retirement.md",
+      "record": "records/6.1-forge-bridge-retirement.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.cleanup",
+      "complexity": "high"
+    },
+    "6.2-e2e-fixture-base": {
+      "id": "6.2",
+      "title": "SC e2e 基座:干净环境 fixture(无 forge CLI)+ channel stub journal hash oracle",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.9",
+        "4.4",
+        "5.5",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.2-e2e-fixture-base.md",
+      "record": "records/6.2-e2e-fixture-base.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.3-sc1-zero-cli": {
+      "id": "6.3",
+      "title": "SC1 e2e:零 CLI 执行链 + 15 技能扁平名寻址断言",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "6.1",
+        "6.2",
+        "5.7",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.3-sc1-zero-cli.md",
+      "record": "records/6.3-sc1-zero-cli.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.4-sc2-migration": {
+      "id": "6.4",
+      "title": "SC2 e2e:SoT 迁移零丢失(对拍/index.json 淘汰/md 原样/中断重试)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "6.2",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.4-sc2-migration.md",
+      "record": "records/6.4-sc2-migration.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.5-sc3-parallel-dispatch": {
+      "id": "6.5",
+      "title": "SC3 e2e:3 任务并行派发 + 注入三要素断言 + 审批可见可操作",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "6.2",
+        "3.5",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.5-sc3-parallel-dispatch.md",
+      "record": "records/6.5-sc3-parallel-dispatch.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.6-sc4-stage-gates": {
+      "id": "6.6",
+      "title": "SC4 e2e:阶段硬门(警告不阻断/门拒绝/资产渲染/新阶段注入/偏离标识)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "6.2",
+        "4.4",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.6-sc4-stage-gates.md",
+      "record": "records/6.6-sc4-stage-gates.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.7-sc56-prefs-proposals": {
+      "id": "6.7",
+      "title": "SC5+SC6 e2e:偏好三级继承 + 提案看板只读/回流/互跳",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "6.2",
+        "5.2",
+        "5.5",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.7-sc56-prefs-proposals.md",
+      "record": "records/6.7-sc56-prefs-proposals.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.8-sc79-dual-form-outofrepo": {
+      "id": "6.8",
+      "title": "SC7+SC9 e2e:过渡双形态零 spawn + 过程文档默认仓外",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "6.2",
+        "1.7",
+        "5.gate"
+      ],
+      "status": "completed",
+      "file": "6.8-sc79-dual-form-outofrepo.md",
+      "record": "records/6.8-sc79-dual-form-outofrepo.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "6.gate": {
+      "id": "6.gate",
+      "title": "Phase 6 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "6.summary"
+      ],
+      "status": "completed",
+      "file": "6.gate.md",
+      "record": "records/6.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "6.summary": {
+      "id": "6.summary",
+      "title": "Phase 6 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.6",
+        "6.7",
+        "6.8"
+      ],
+      "status": "completed",
+      "file": "6.summary.md",
+      "record": "records/6.summary.md",
+      "type": "doc.summary"
+    },
+    "consolidate-specs": {
+      "id": "T-specs-consolidate",
+      "title": "Consolidate Specs",
+      "priority": "P2",
+      "estimatedTime": "20min",
+      "dependencies": [
+        "T-test-run"
+      ],
+      "status": "completed",
+      "file": "consolidate-specs.md",
+      "record": "records/consolidate-specs.md",
+      "type": "doc.consolidate"
+    },
+    "eval-contract": {
+      "id": "T-eval-contract",
+      "title": "Evaluate Contract Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-contracts"
+      ],
+      "status": "completed",
+      "file": "eval-contract.md",
+      "record": "records/eval-contract.md",
+      "mainSession": true,
+      "type": "eval.contract"
+    },
+    "eval-journey": {
+      "id": "T-eval-journey",
+      "title": "Evaluate Journey Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-journeys"
+      ],
+      "status": "completed",
+      "file": "eval-journey.md",
+      "record": "records/eval-journey.md",
+      "mainSession": true,
+      "type": "eval.journey"
+    },
+    "fix-1": {
+      "id": "fix-1",
+      "title": "fix unit-test: just unit-test failure in quality gate",
+      "priority": "P0",
+      "estimatedTime": "30min",
+      "status": "completed",
+      "file": "fix-1.md",
+      "record": "records/fix-1.md",
+      "breaking": true,
+      "type": "coding.fix"
+    },
+    "fix-2": {
+      "id": "fix-2",
+      "title": "fix unit-test: just unit-test failure in quality gate",
+      "priority": "P0",
+      "estimatedTime": "30min",
+      "status": "skipped",
+      "file": "fix-2.md",
+      "record": "records/fix-2.md",
+      "breaking": true,
+      "type": "coding.fix"
+    },
+    "fix-3": {
+      "id": "fix-3",
+      "title": "fix unit-test: just unit-test failure in quality gate",
+      "priority": "P0",
+      "estimatedTime": "30min",
+      "status": "completed",
+      "file": "fix-3.md",
+      "record": "records/fix-3.md",
+      "breaking": true,
+      "type": "coding.fix"
+    },
+    "fix-4": {
+      "id": "fix-4",
+      "title": "fix unit-test: just unit-test failure in quality gate",
+      "priority": "P0",
+      "estimatedTime": "30min",
+      "status": "skipped",
+      "file": "fix-4.md",
+      "record": "records/fix-4.md",
+      "breaking": true,
+      "type": "coding.fix"
+    },
+    "gen-contracts": {
+      "id": "T-test-gen-contracts",
+      "title": "Generate Test Contracts",
+      "priority": "P1",
+      "estimatedTime": "30-45min",
+      "dependencies": [
+        "T-eval-journey"
+      ],
+      "status": "completed",
+      "file": "gen-contracts.md",
+      "record": "records/gen-contracts.md",
+      "type": "test.gen-contracts"
+    },
+    "gen-journeys": {
+      "id": "T-test-gen-journeys",
+      "title": "Generate Test Journeys",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-review-doc",
+        "1.7",
+        "1.4",
+        "5.7",
+        "3.5",
+        "0.4",
+        "fix-2",
+        "6.6",
+        "0.2",
+        "0.3",
+        "1.5",
+        "3.1",
+        "4.3",
+        "4.4",
+        "3.4",
+        "6.3",
+        "1.6",
+        "1.1",
+        "2.1",
+        "3.7",
+        "6.1",
+        "6.4",
+        "fix-3",
+        "fix-4",
+        "3.6",
+        "6.2",
+        "1.2",
+        "3.8",
+        "5.1",
+        "5.6",
+        "fix-1",
+        "3.9",
+        "4.2",
+        "5.4",
+        "5.2",
+        "5.5",
+        "6.8",
+        "2.2",
+        "4.1",
+        "5.3",
+        "6.5",
+        "0.1",
+        "3.2",
+        "1.3",
+        "3.3",
+        "6.7"
+      ],
+      "status": "completed",
+      "file": "gen-journeys.md",
+      "record": "records/gen-journeys.md",
+      "type": "test.gen-journeys"
+    },
+    "gen-test-scripts": {
+      "id": "T-test-gen-scripts",
+      "title": "Generate Web E2E Test Scripts",
+      "priority": "P1",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "T-eval-contract"
+      ],
+      "status": "completed",
+      "file": "gen-test-scripts.md",
+      "record": "records/gen-test-scripts.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.gen-scripts"
+    },
+    "review-doc": {
+      "id": "T-review-doc",
+      "title": "Review Documentation Quality",
+      "priority": "P1",
+      "estimatedTime": "30min",
+      "dependencies": [
+        "0.4",
+        "0.2",
+        "0.3",
+        "5.6",
+        "0.1"
+      ],
+      "status": "completed",
+      "file": "review-doc.md",
+      "record": "records/review-doc.md",
+      "type": "doc.review"
+    },
+    "run-test": {
+      "id": "T-test-run",
+      "title": "Run Web E2E Test",
+      "priority": "P1",
+      "estimatedTime": "30min-1h",
+      "dependencies": [
+        "T-test-gen-scripts"
+      ],
+      "status": "completed",
+      "file": "run-test.md",
+      "record": "records/run-test.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.run"
+    }
+  },
+  "statusEnum": [
+    "pending",
+    "in_progress",
+    "completed",
+    "blocked",
+    "suspended",
+    "skipped",
+    "rejected"
+  ],
+  "priorityEnum": [
+    "P0",
+    "P1",
+    "P2"
+  ]
+}

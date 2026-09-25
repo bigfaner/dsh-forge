@@ -32,12 +32,21 @@
  * failListWith arm the failure branches).
  */
 import type {
-  DocKind, FeatureBoardData, FeatureDoc, PluginRow, Project, ProjectPatch, RegisterProjectInput,
-  TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
+  ApprovalRow, DispatchedRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
+  FeatureStatus, FeatureSummary,
+  MigrationPhase, MigrationPhaseResult, MigrationStatus,
+  WorkbenchPaths,
+  MissingItem, PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch,
+  ProposalBoardData, ProposalDoc, RegisterProjectInput, StageAssetRow,
+  StageGateInfo, TaskBoardData, TaskDetail,
+  TaskSummary,
+  WorkbenchEvent, WorkbenchState,
 } from '../ipc-types'
 import type {
-  FeatureBoardFace, FeatureDocFace, OverviewFace, PluginFace, RegisterWizardFace,
-  SessionLaunchServices, TaskBoardFace, TaskDetailFace,
+  DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, MigrationGuardSnapshot,
+  OverviewFace,
+  PluginFace, PrefsFace, ProposalFace, RegisterWizardFace, StageFace,
+  TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
 
@@ -47,6 +56,10 @@ import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
  * 3.2): three mandatory rows (the two upstream platform bundles + this
  * workbench plugin) and the togglable third-party fixture (hello-world).
  * The same rows serve both the getState assembly and the UF6 mock twin.
+ * M3 task 1.6 adds the UF3 migration family's fixtures + verb twin
+ * (MOCK_MIGRATION_* / createMockMigrationFace: phase-disciplined event
+ * pushes mirroring migration/pipeline.ts, with failAtPhase / rejectGuard /
+ * guard knobs for the dialog family's scenario matrix).
  */
 export const MOCK_PLUGIN_ROWS: readonly PluginRow[] = Object.freeze([
   Object.freeze({ name: '@deepseek-ai/dsh-base', mandatory: true, enabled: true }),
@@ -96,55 +109,6 @@ export const MOCK_EMPTY_WORKBENCH_STATE: WorkbenchState = Object.freeze({
   activeProjectId: null,
   plugins: MOCK_PLUGIN_ROWS,
 })
-
-/**
- * The demo task prompt (task 5.10): deliberately carries leading blank lines,
- * indentation, a fenced block, and a TRAILING newline — the shapes that prove
- * the preview and the launch call are byte-faithful (SC3: no trimming, no
- * re-wrapping anywhere on the client path).
- */
-export const MOCK_TASK_PROMPT = `# Task 5.10 — UF5 session launch entry
-
-Execute task \`5.10\` from \`docs/features/dsh-forge-m2/tasks/5.10-session-launch-entry-build.md\`.
-
-    indented detail line that must survive verbatim
-
-- bullet one
-- bullet two
-
-End of prompt.` + '\n'
-
-/** The sessionId the mock tier-1 channel "creates" (stable for assertions). */
-export const MOCK_LAUNCHED_SESSION_ID = 'session-mock-5f0c1d2e'
-
-/**
- * The UF5 launch services, build-stage default (task 5.10): the happy probe +
- * a tier-1 that always succeeds. The 5.11 integrate task replaces these
- * members with the real remote calls (`ctx.remote.forgeBridge` /
- * `ctx.remote.sessionLaunch` / `ctx.remote.session` / M1 session-focus form).
- */
-export const MOCK_SESSION_LAUNCH_SERVICES: SessionLaunchServices = {
-  probe: async () => ({ available: true, promptText: MOCK_TASK_PROMPT }),
-  launch: async () => ({ ok: true, sessionId: MOCK_LAUNCHED_SESSION_ID }),
-  launchViaClientChannel: async () => ({
-    ok: false,
-    reasonCode: 'ERR_SESSION_CHANNEL_UNAVAILABLE',
-    detail: 'build-stage mock: the tier-2 client channel is wired by 5.11',
-  }),
-  copyPromptToClipboard: async () => true,
-  bringMainWindowToFront: () => {
-    // Build-stage no-op (the M1 session-focus focusMainWindow form lands with 5.11).
-  },
-  recordSessionLink: async input => ({
-    id: 'link-mock-0001',
-    projectId: input.projectId,
-    taskKey: input.taskKey,
-    sessionId: input.sessionId,
-    status: 'active',
-    startedAt: '2026-09-22T08:00:00.000Z',
-    endedAt: null,
-  }),
-}
 
 /**
  * The overview page's build-stage face, task 5.3 (UI dependency layering): a
@@ -253,6 +217,7 @@ export const MOCK_WIZARD_EXTERNAL_UNREADABLE = 'Z:\\docs\\gone'
  */
 export function createMockRegisterWizardFace(
   initial: WorkbenchState = MOCK_WORKBENCH_STATE,
+  options: { indexJsonDetected?: boolean } = {},
 ): RegisterWizardFace {
   let projects: readonly Project[] = initial.projects
   let seq = 0
@@ -276,7 +241,12 @@ export function createMockRegisterWizardFace(
       if (samePath(root, MOCK_WIZARD_NO_FORGE_ROOT)) {
         return { available: false, reasonCode: 'ERR_FORGE_NOT_DETECTED', detail: `mock fixture: ${MOCK_WIZARD_NO_FORGE_ROOT}` }
       }
-      return { available: true, taskTotal: MOCK_WIZARD_TASK_TOTAL, featureTotal: MOCK_WIZARD_FEATURE_TOTAL }
+      return {
+        available: true,
+        taskTotal: MOCK_WIZARD_TASK_TOTAL,
+        featureTotal: MOCK_WIZARD_FEATURE_TOTAL,
+        indexJsonDetected: options.indexJsonDetected === true,
+      }
     },
     probeExternalPath: async ({ codeRoot, docLocationPath }) => {
       const path = docLocationPath.trim()
@@ -697,11 +667,13 @@ export const MOCK_FEATURE_BOARD: FeatureBoardData = Object.freeze({
       slug: 'dsh-forge-m2', status: 'in-progress',
       docKinds: ['manifest', 'prd', 'design', 'tasks'] as DocKind[],
       taskTotal: 15, taskCompleted: 4, updatedAt: '2026-09-22T09:12:00.000Z',
+      deviated: false,
     }),
     Object.freeze({
       slug: 'dsh-forge-m1', status: 'completed',
       docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'] as DocKind[],
       taskTotal: 48, taskCompleted: 48, updatedAt: '2026-09-20T14:00:00.000Z',
+      deviated: false,
     }),
   ]),
   generatedAt: MOCK_NOW,
@@ -870,5 +842,878 @@ export function createMockPluginFace(
     },
     failWith: (name, error) => { armed.set(name, error) },
     failListWith: (error) => { armedList = error },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Migration family, UF3 (task 1.6)
+// ---------------------------------------------------------------------------
+
+/** The mock backup directory (the confirm copy's mono 备份位置). */
+export const MOCK_MIGRATION_BACKUP_PATH = 'Z:/userData/workbench/backups/demo-20260924T080000Z'
+
+/** The migratable status fixture (authority 'files' + index.json detected — the card's 可迁移 premise). */
+export const MOCK_MIGRATION_STATUS_FILES: MigrationStatus = Object.freeze({
+  authority: 'files',
+  deviated: false,
+  migratedAt: null,
+  lastEvent: null,
+  backupPath: null,
+  indexJsonDetected: true,
+})
+
+/** The migrated status fixture (authority 'sqlite', audit trail behind it). */
+export const MOCK_MIGRATION_STATUS_SQLITE: MigrationStatus = Object.freeze({
+  authority: 'sqlite',
+  deviated: false,
+  migratedAt: '2026-09-24T08:00:05.000Z',
+  indexJsonDetected: false,
+  backupPath: null,
+  lastEvent: {
+    id: 'ev-archive-ok',
+    projectId: 'demo',
+    phase: 'archive',
+    result: 'ok',
+    detailJson: null,
+    at: '2026-09-24T08:00:05.000Z',
+  } as const,
+})
+
+/**
+ * The kernel-managed locations fixture (task 1.7): the flipped wizard default's
+ * 应用管理路径 root + the migration confirm's 备份位置 root (mock userData).
+ */
+export const MOCK_WORKBENCH_PATHS: WorkbenchPaths = Object.freeze({
+  docsRoot: 'Z:/userData/workbench/docs',
+  backupsRoot: 'Z:/userData/workbench/backups',
+})
+
+/** The mock twin's knobs (the spec's scenario matrix: 成功 / 相位注错 / 守卫). */
+export interface MockMigrationFaceOptions {
+  /** Success (default): backup→ingest→verify→switch→archive ok, verb resolves. */
+  readonly failAtPhase?: MigrationPhase | undefined
+  /** startMigration rejects ERR_MIGRATION_GUARD pre-flight (zero events). */
+  readonly rejectGuard?: boolean
+  /** The initial entry-guard snapshot (在跑编排守卫态). */
+  readonly guard?: MigrationGuardSnapshot | undefined
+  /** The initial migration status (Pill 判定面). */
+  readonly status?: MigrationStatus | undefined
+  /** The project the twin serves (event projectId); default 'demo'. */
+  readonly projectId?: string | undefined
+}
+
+/**
+ * The UF3 migration family's build-stage verb twin (task 1.6): the Interface 1
+ * migration verbs + the guard read as closure-held mocks whose event pushes
+ * mirror the kernel pipeline's discipline (migration/pipeline.ts): backup ok
+ * BEFORE the transaction opens; ingest/verify/switch/archive ok together
+ * after COMMIT; a failure pushes the failed phase + rollback ok and THEN the
+ * verb rejects; a pre-flight guard rejection pushes nothing. The returned
+ * pokes are MOCK-ONLY (the createMockTaskBoardFace emit precedent):
+ * `emit`/`setGuard`/`settleNextAsSuccess` retune the twin mid-test, and
+ * `startCalls`/`guardReads` count the verb legs for the zero-verb assertions.
+ */
+export function createMockMigrationFace(
+  options: MockMigrationFaceOptions = {},
+): {
+  readonly face: MigrationFace
+  emit(events: readonly WorkbenchEvent[]): void
+  setGuard(snapshot: MigrationGuardSnapshot): void
+  settleNextAsSuccess(): void
+  readonly startCalls: number
+  readonly guardReads: number
+} {
+  const projectId = options.projectId ?? 'demo'
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  let guard = options.guard ?? { blocked: false, runningCount: 0 }
+  let status = options.status ?? MOCK_MIGRATION_STATUS_FILES
+  let failAtPhase: MigrationPhase | undefined = options.failAtPhase
+  let nextRejectsGuard = options.rejectGuard === true
+  let startCalls = 0
+  let guardReads = 0
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of [...listeners]) listener(events)
+  }
+  const push = (phase: MigrationPhase, result: MigrationPhaseResult): void => {
+    emit([{ type: 'migration_progress', projectId, phase, result }])
+  }
+  const face: MigrationFace = {
+    getMigrationStatus: async () => status,
+    startMigration: async () => {
+      startCalls += 1
+      if (nextRejectsGuard) {
+        nextRejectsGuard = false
+        throw {
+          code: 'ERR_MIGRATION_GUARD',
+          message: 'build-stage mock: running dispatch(es) block migration',
+        }
+      }
+      const failAt = failAtPhase
+      push('backup', 'ok')
+      // backup ok 落 lastEvent + 稳定面 backupPath(进度行「备份完成 → 路径」
+      // 的回读面;backupPath 不随 lastEvent 前移丢失 —— 快速迁移语义)。
+      status = {
+        ...status,
+        backupPath: MOCK_MIGRATION_BACKUP_PATH,
+        lastEvent: {
+          id: `ev-backup-${String(startCalls)}`,
+          projectId,
+          phase: 'backup',
+          result: 'ok',
+          detailJson: JSON.stringify({ backupPath: MOCK_MIGRATION_BACKUP_PATH }),
+          at: '2026-09-24T08:00:01.000Z',
+        },
+      }
+      if (failAt === 'backup') {
+        push('backup', 'fail')
+        throw { code: 'ERR_WORKBENCH_DB', message: 'build-stage mock: injected backup failure' }
+      }
+      for (const phase of ['ingest', 'verify', 'switch', 'archive'] as const) {
+        if (failAt === phase) {
+          push(phase, 'fail')
+          push('rollback', 'ok')
+          throw {
+            code: phase === 'verify' ? 'ERR_MIGRATION_VERIFY' : 'ERR_WORKBENCH_DB',
+            message: `build-stage mock: injected ${phase} failure`,
+          }
+        }
+        push(phase, 'ok')
+      }
+      status = { ...MOCK_MIGRATION_STATUS_SQLITE, lastEvent: status.lastEvent, backupPath: status.backupPath }
+      return { started: true }
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    loadGuard: async () => {
+      guardReads += 1
+      return guard
+    },
+    getWorkbenchPaths: async () => MOCK_WORKBENCH_PATHS,
+  }
+  return {
+    face,
+    emit,
+    setGuard: (snapshot: MigrationGuardSnapshot) => { guard = snapshot },
+    settleNextAsSuccess: () => {
+      failAtPhase = undefined
+      nextRejectsGuard = false
+    },
+    get startCalls(): number { return startCalls },
+    get guardReads(): number { return guardReads },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UF1 dispatch face, M3 (task 3.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF1 orchestration family's build-stage twin (task 3.9): the six verbs
+ * of contract.ts's DispatchFace as a closure-held state machine over
+ * in-memory rows — the page's UF1 wiring and the 3.9 integration suite drive
+ * the whole chain (selection → check → confirm → dispatch → reflux badges /
+ * approval decide / redispatch) against it, mirroring the kernel's own edge
+ * semantics small:
+ *
+ *   - dispatchTasks mints one `starting` row per key (a fresh batchId per
+ *     call, promptHash deterministic per mint) — `blocked` when the armed
+ *     missing list is non-empty and acknowledgeMissing is absent (零落行);
+ *   - redispatch re-runs the armed check against a FAILED row and mints its
+ *     successor (the original row stays as the audit trail);
+ *   - decideApproval is the only decision path (pending rows only — an
+ *     already-decided row rejects ERR_APPROVAL_DECIDED, the stale-entry face)
+ *     and flips the row's dispatch to running/failed with the reflux event;
+ *   - the test-facing pokes (failNextDispatch / setMissing / emit) arm the
+ *     error/blocked/reflux branches.
+ *
+ * The twin is TEST/BUILD-ONLY: the page never defaults to it (the real host
+ * gets the IPC face; absent verbs keep the UF1 entries inert — mock 全撤).
+ */
+export interface MockDispatchFaceOptions {
+  /** The project the rows/approvals address (defaults to the mock project id). */
+  readonly projectId?: string
+  /** Pre-seeded dispatch rows (the badge spectrum's initial data). */
+  readonly rows?: readonly DispatchRow[]
+  /** Pre-seeded approval rows (pending entries the dock lists). */
+  readonly approvals?: readonly ApprovalRow[]
+  /** The armed missing list checkStageArtifacts answers (the warning door). */
+  readonly missing?: readonly MissingItem[]
+}
+
+/** Everything the dispatch mock twin exposes beyond the face (the pokes). */
+export interface MockDispatchFace extends DispatchFace {
+  /** Arm the missing list (checkStageArtifacts + the blocked dispatch leg). */
+  setMissing(missing: readonly MissingItem[]): void
+  /** Arm the NEXT dispatchTasks/redispatch call to reject (the error dialog leg). */
+  failNextDispatch(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the board's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+  /** Wire the twin's internal reflux emits into the BOARD face's emit poke. */
+  pipe(sink: (events: readonly WorkbenchEvent[]) => void): void
+  /** The live rows (post-mutation reads). */
+  readonly rows: readonly DispatchRow[]
+  /** The live approvals (post-mutation reads). */
+  readonly approvals: readonly ApprovalRow[]
+}
+
+/** One seeded row's counter (ids stay stable + unique per mint). */
+let mockDispatchSeq = 0
+
+/** The UF1 dispatch/approval verb twin (see {@link MockDispatchFaceOptions}). */
+export function createMockDispatchFace(options: MockDispatchFaceOptions = {}): MockDispatchFace {
+  const projectId = options.projectId ?? 'mock-project'
+  let rows: DispatchRow[] = (options.rows ?? []).map(row => ({ ...row }))
+  let approvals: ApprovalRow[] = (options.approvals ?? []).map(row => ({ ...row }))
+  let missing: readonly MissingItem[] = options.missing ?? []
+  let failNext: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const mint = (taskKey: string, batchId: string, state: DispatchState, sessionId: string | null, actor: string): DispatchedRow => {
+    mockDispatchSeq += 1
+    return {
+      id: `dsp-${mockDispatchSeq}`,
+      batchId,
+      projectId,
+      featureSlug: taskKey.slice(0, taskKey.lastIndexOf('/')) || taskKey,
+      taskKey,
+      state,
+      sessionId,
+      promptHash: `hash-${taskKey.replaceAll('/', '-')}-${mockDispatchSeq}`,
+      actor,
+      dispatchedAt: new Date().toISOString(),
+      endedAt: null,
+      error: null,
+      // 任务 6.3:dispatched 行携带 launch 载荷(两段式链的 mock 面 —— relay
+      // 缺席的 jsdom 世界不消费,真实面由内核应答供给)。
+      launch: {
+        prompt: `mock presynthesized first message for ${taskKey}`,
+        promptHash: `hash-${taskKey.replaceAll('/', '-')}-${mockDispatchSeq}`,
+        sessionId,
+        cwd: `Z:/mock/${projectId}`,
+        taskType: null,
+      },
+    }
+  }
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of listeners) listener(events)
+  }
+  return {
+    checkStageArtifacts: async () => ({ stage: 'tasks', satisfied: missing.length === 0, missing }),
+    dispatchTasks: async (input, actor) => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      if (missing.length > 0 && input.acknowledgeMissing !== true) {
+        return { blocked: 'artifacts-missing', missing }
+      }
+      const batchId = `batch-${mockDispatchSeq + 1}`
+      const minted = input.taskKeys.map(taskKey => mint(taskKey, batchId, 'starting', null, actor))
+      rows = [...rows, ...minted]
+      emit(minted.map(row => ({
+        type: 'dispatch_updated' as const, projectId, dispatchId: row.id, taskKey: row.taskKey, state: row.state,
+      })))
+      return { dispatched: minted }
+    },
+    redispatch: async (dispatchId, actor) => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      const target = rows.find(row => row.id === dispatchId)
+      if (target === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_DISPATCH_NOT_FOUND', message: 'mock: unknown dispatch' }))
+      }
+      if (target.state !== 'failed') {
+        throw new Error(JSON.stringify({ code: 'ERR_DISPATCH_STATE_INVALID', message: 'mock: only failed rows redispatch' }))
+      }
+      if (missing.length > 0) return { blocked: 'artifacts-missing', missing }
+      const successor = mint(target.taskKey, `batch-${mockDispatchSeq + 1}`, 'starting', null, actor)
+      rows = [...rows, successor]
+      emit([{ type: 'dispatch_updated', projectId, dispatchId: successor.id, taskKey: successor.taskKey, state: successor.state }])
+      return { dispatched: [successor] }
+    },
+    getDispatches: async () => rows,
+    listApprovals: async () => [...approvals].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    decideApproval: async (input) => {
+      const target = approvals.find(row => row.id === input.approvalId)
+      if (target === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_APPROVAL_NOT_FOUND', message: 'mock: unknown approval' }))
+      }
+      if (target.state !== 'pending') {
+        throw new Error(JSON.stringify({ code: 'ERR_APPROVAL_DECIDED', message: 'mock: approval already decided' }))
+      }
+      const decided: ApprovalRow = {
+        ...target,
+        state: input.approve ? 'approved' : 'rejected',
+        decidedAt: new Date().toISOString(),
+        decidedBy: 'workbench',
+      }
+      approvals = approvals.map(row => (row.id === decided.id ? decided : row))
+      const dispatch = rows.find(row => row.id === decided.dispatchId && row.state === 'awaiting')
+      if (dispatch !== undefined) {
+        const next: DispatchState = input.approve ? 'running' : 'failed'
+        rows = rows.map(row => (row.id === dispatch.id
+          ? { ...row, state: next, endedAt: new Date().toISOString(), error: input.approve ? null : '审批请求被拒绝' }
+          : row))
+        emit([{ type: 'dispatch_updated', projectId, dispatchId: dispatch.id, taskKey: dispatch.taskKey, state: next }])
+      }
+      return decided
+    },
+    setMissing: (next) => { missing = next },
+    failNextDispatch: (code = 'ERR_DISPATCH_LAUNCH_FAILED', message = 'mock: dispatch rejected') => {
+      failNext = { code, message }
+    },
+    emit,
+    pipe: (sink: (events: readonly WorkbenchEvent[]) => void) => { listeners.add(sink) },
+    get rows(): readonly DispatchRow[] { return rows },
+    get approvals(): readonly ApprovalRow[] { return approvals },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UF2 stage face, M3 (task 4.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The UF2 stage family's seeded assets (task 4.3): the dsh-forge-m2 fixture
+ * carries two content-joined rows (the SAME stage vocabulary/order the real
+ * verb answers — pipeline order, goal + summary from the doc-root asset
+ * files' frontmatter/body). Content-joined = the 4.3 verb-row shape
+ * (goal/summary optional on the DTO; the tab degrades missing legs to '').
+ */
+export const MOCK_STAGE_ASSETS: readonly StageAssetRow[] = Object.freeze([
+  Object.freeze({
+    stage: 'prd',
+    path: 'dsh-forge-m2/stages/prd.md',
+    generatedAt: '2026-09-22T10:00:00.000Z',
+    goal: '把 forge 项目装进工作台。',
+    summary: '三看板 + 会话挂接定形;偏好与编排留 M3。',
+  }),
+  Object.freeze({
+    stage: 'design',
+    path: 'dsh-forge-m2/stages/design.md',
+    generatedAt: '2026-09-22T11:00:00.000Z',
+    goal: 'SQLite 快照与感知链路。',
+    summary: '快照可重建;回流 ≤5s;actor 来源序。',
+  }),
+])
+
+/** The seeded gate (the mock feature sits in the tasks stage, gate open). */
+export const MOCK_STAGE_GATE: StageGateInfo = Object.freeze({
+  featureSlug: 'dsh-forge-m2',
+  stage: 'tasks',
+  summaryGenerated: true,
+  gateAssetPath: 'dsh-forge-m2/stages/tasks.md',
+  assets: MOCK_STAGE_ASSETS,
+})
+
+/**
+ * The UF2 stage family's build-stage twin (task 4.3): the four members of
+ * contract.ts's StageFace as a closure-held state machine mirroring the
+ * kernel's own edge semantics small (advance-service.ts 4.1):
+ *
+ *   - getStageGate answers the seeded gate (setGate re-arms it — the
+ *     gate-pending leg seeds summaryGenerated=false + gateAssetPath=null);
+ *   - listStageAssets answers the seeded rows (setAssets re-arms);
+ *   - advanceStage: gate unsatisfied → the serialized ERR_STAGE_GATE_
+ *     UNSATISFIED envelope with the SAME guidance detail string shape the
+ *     kernel throws (引导文案 + 缺失清单 leg); satisfied → the stage moves
+ *     one pipeline step, the gate re-arms against the NEW stage (fresh
+ *     stage's summary not generated — 推进成功后的重复请求 = 新门未满足),
+ *     stage_advanced rides the twin's own channel, and the post-advance
+ *     FeatureSummary resolves; terminal 'completed' = idempotent no-op
+ *     (zero writes, zero events);
+ *   - subscribeEvents is the twin's own listener set (emit pokes +
+ *     advance reflux).
+ *
+ * The twin is TEST/BUILD-ONLY (the dispatch-face discipline: advanceStage is
+ * a WRITE surface, so the components never default to this twin — absent
+ * face members stay inert; tests inject it, 4.4's assembly injects the
+ * IPC-backed face).
+ */
+export interface MockStageFaceOptions {
+  /** The project the rows address (defaults to the mock project id). */
+  readonly projectId?: string
+  /** The feature the gate/rows address (defaults to the mock feature slug). */
+  readonly featureSlug?: string
+  /** The seeded gate (defaults to MOCK_STAGE_GATE, gate open). */
+  readonly gate?: StageGateInfo
+  /** The seeded asset rows (defaults to MOCK_STAGE_ASSETS; pipeline-sorted on read). */
+  readonly assets?: readonly StageAssetRow[]
+}
+
+/** Everything the stage mock twin exposes beyond the face (the pokes). */
+export interface MockStageFace extends StageFace {
+  /** Re-arm the gate verdict (the gate-pending / re-open legs). */
+  setGate(gate: StageGateInfo): void
+  /** Re-arm the asset row set (the new-card fade-in leg feeds this). */
+  setAssets(assets: readonly StageAssetRow[]): void
+  /** Arm the NEXT advanceStage call to reject with an arbitrary envelope (the error leg). */
+  failNextAdvance(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the twin's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+  /** The live gate (post-advance reads). */
+  readonly gate: StageGateInfo
+}
+
+const MOCK_STAGE_PIPELINE: readonly FeatureStatus[] = ['prd', 'design', 'tasks', 'in-progress', 'completed']
+
+/** The UF2 stage verb twin (see {@link MockStageFaceOptions}). */
+export function createMockStageFace(options: MockStageFaceOptions = {}): MockStageFace {
+  const projectId = options.projectId ?? 'mock-project'
+  const featureSlug = options.featureSlug ?? 'dsh-forge-m2'
+  let gate: StageGateInfo = { ...(options.gate ?? MOCK_STAGE_GATE), featureSlug }
+  let assets: readonly StageAssetRow[] = options.assets ?? MOCK_STAGE_ASSETS
+  let failNext: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const emit = (events: readonly WorkbenchEvent[]): void => {
+    for (const listener of listeners) listener(events)
+  }
+  const pipelineIndex = (stage: FeatureStatus): number => MOCK_STAGE_PIPELINE.indexOf(stage)
+  return {
+    getStageGate: async () => ({ ...gate, assets: [...assets] }),
+    listStageAssets: async () =>
+      [...assets].sort((a, b) => pipelineIndex(a.stage) - pipelineIndex(b.stage)),
+    advanceStage: async (_projectId: string, slug: string): Promise<FeatureSummary> => {
+      if (failNext !== undefined) {
+        const envelope = failNext
+        failNext = undefined
+        throw new Error(JSON.stringify(envelope))
+      }
+      const stage = gate.stage
+      // 终态幂等 no-op(零写入、零事件)—— 4.1 kernel 口径。
+      if (stage === 'completed') {
+        return {
+          slug, status: 'completed', docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
+          taskTotal: 52, taskCompleted: 52, updatedAt: '2026-09-24T08:00:00.000Z',
+          deviated: false,
+        }
+      }
+      if (!gate.summaryGenerated) {
+        // 与内核同形:code + 引导文案,detail = 缺失清单引导(缺失路径 + 生成路径)。
+        throw new Error(JSON.stringify({
+          code: 'ERR_STAGE_GATE_UNSATISFIED',
+          message: `stage gate unsatisfied: the summary asset of the current stage '${stage}' has not been generated yet`,
+          detail: `missing: features/${slug}/stages/${stage}.md — generate it first with the forge_stage_summarize tool (frontmatter { stage: "${stage}", goal } + summary body), then advance again`,
+        }))
+      }
+      const next = MOCK_STAGE_PIPELINE[pipelineIndex(stage) + 1]
+      if (next === undefined) {
+        throw new Error(JSON.stringify({ code: 'ERR_STAGE_GATE_UNSATISFIED', message: `mock: stage '${stage}' has no successor` }))
+      }
+      // 推进:门态换新阶段(新阶段总结未生成),资产集不变,事件回流。
+      gate = { ...gate, stage: next, summaryGenerated: false, gateAssetPath: null }
+      emit([{ type: 'stage_advanced', projectId, featureSlug: slug }])
+      return {
+        slug, status: next, docKinds: ['manifest', 'prd', 'design', 'ui', 'tasks'],
+        taskTotal: 38, taskCompleted: 12, updatedAt: '2026-09-24T08:00:00.000Z',
+        // 4.2 口径:内核合法推进 = 偏离标记清除点 → 推进后恒 false。
+        deviated: false,
+      }
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    setGate: (next) => { gate = { ...next, featureSlug } },
+    setAssets: (next) => { assets = next },
+    failNextAdvance: (code = 'ERR_WORKBENCH_DB', message = 'mock: advance rejected') => {
+      failNext = { code, message }
+    },
+    emit,
+    get gate(): StageGateInfo { return gate },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Prefs family, UF4 (task 5.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The mock forge pref registry — a REPRESENTATIVE projection of the real
+ * kernel registry (task 3.1 workbench/prefs/registry.ts), not a parity twin:
+ * every group (auto/worktree/coverage/eval) and every type/control pair the
+ * UI must render (toggle / number-input / text-input / list-as-text /
+ * coverage-input) appears exactly so the component layer is exercised across
+ * the whole metadata surface. surfaces.* stays absent BY CONSTRUCTION (PRD
+ * D3: structural facts never enter the inheritance chain).
+ */
+export interface MockPrefKeyDef {
+  readonly key: string
+  readonly group: PrefRow['group']
+  readonly type: PrefRow['type']
+  readonly control: PrefRow['control']
+  readonly defaultValue?: unknown
+}
+
+export const MOCK_PREF_REGISTRY: readonly MockPrefKeyDef[] = Object.freeze([
+  Object.freeze({ key: 'auto.test.quick', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'auto.test.full', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: true }),
+  Object.freeze({ key: 'auto.gitPush', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'auto.eval.prd', group: 'auto', type: 'boolean', control: 'toggle', defaultValue: false }),
+  Object.freeze({ key: 'worktree.source-branch', group: 'worktree', type: 'text', control: 'text-input' }),
+  Object.freeze({ key: 'worktree.includes', group: 'worktree', type: 'list', control: 'text-input' }),
+  Object.freeze({
+    key: 'coverage.coding.feature', group: 'coverage', type: 'coverage', control: 'coverage-input',
+    defaultValue: Object.freeze({ type: 'percentage', percentage: 80 }),
+  }),
+  Object.freeze({
+    key: 'coverage.coding.refactor', group: 'coverage', type: 'coverage', control: 'coverage-input',
+    defaultValue: Object.freeze({ type: 'maintain' }),
+  }),
+  Object.freeze({ key: 'eval.proposal.target', group: 'eval', type: 'number', control: 'number-input', defaultValue: 900 }),
+  Object.freeze({ key: 'eval.proposal.iterations', group: 'eval', type: 'number', control: 'number-input', defaultValue: 3 }),
+])
+
+/** The build-stage seed: a global + a project override the section inherits from. */
+const MOCK_PREF_SEED: Readonly<Record<string, unknown>> = Object.freeze({
+  'global:auto.test.full': false,
+  'global:worktree.source-branch': 'main',
+  'project:mock-project:auto.test.quick': true,
+})
+
+/** Classify a PrefScope the way the mock's override store keys it. */
+function mockPrefScopeKey(scope: PrefScope): { kind: 'global' | 'project' | 'feature'; id: string } {
+  if (scope === 'global') return { kind: 'global', id: '' }
+  if ('project' in scope) return { kind: 'project', id: scope.project }
+  return { kind: 'feature', id: scope.feature }
+}
+
+/** The tier chain a scope resolves through (feature > project > global > default). */
+function mockPrefTierKeys(scope: PrefScope): readonly { tier: PrefRow['source']; storeKey: string }[] {
+  const { kind, id } = mockPrefScopeKey(scope)
+  if (kind === 'global') return [{ tier: 'global', storeKey: 'global:' }]
+  if (kind === 'project') {
+    return [
+      { tier: 'project', storeKey: 'project:' + id + ':' },
+      { tier: 'global', storeKey: 'global:' },
+    ]
+  }
+  // feature scopeId = '<projectId>/<featureSlug>' (tech-design Data Models).
+  const projectId = id.slice(0, Math.max(0, id.indexOf('/')))
+  return [
+    { tier: 'feature', storeKey: 'feature:' + id + ':' },
+    { tier: 'project', storeKey: 'project:' + projectId + ':' },
+    { tier: 'global', storeKey: 'global:' },
+  ]
+}
+
+/** The serialized rejection the kernel prefs verbs send (plain envelope form). */
+const prefEnvelope = (code: string, message: string): { code: string; message: string } => ({ code, message })
+
+/**
+ * The UF4 prefs section's verb twin (task 5.1): in-memory per-tier override
+ * store + three-tier resolution mirroring workbench/prefs/resolve.ts's shape
+ * (feature > project > global > registry default; source null ⟺ no value).
+ *
+ *   getPrefs          — every MOCK_PREF_REGISTRY key resolved for the scope
+ *                      (effective value + source + override/localValue), the
+ *                      real verb's every-key contract;
+ *   setPrefs          — per-entry key-known + type-shape validation
+ *                      (ERR_PREF_KEY_UNKNOWN / ERR_PREF_VALUE_INVALID
+ *                      envelopes); entries apply atomically (a rejected
+ *                      entry leaves the store untouched);
+ *   clearPrefOverride — idempotent own-tier delete (a missing row is a no-op).
+ *
+ * The returned failGetWith / failSetWith / failClearWith are MOCK-ONLY test
+ * drivers arming the NEXT call of that verb with a rejection.
+ */
+export function createMockPrefsFace(): PrefsFace & {
+  /** Arm a rejection for exactly the NEXT getPrefs (the load-error driver). */
+  failGetWith(error: { code: string; message: string }): void
+  /** Arm a rejection for the next setPrefs of one key (the save-error driver). */
+  failSetWith(key: string, error: { code: string; message: string }): void
+  /** Arm a rejection for the next clearPrefOverride of one key. */
+  failClearWith(key: string, error: { code: string; message: string }): void
+} {
+  const overrides = new Map<string, unknown>()
+  for (const [seedKey, value] of Object.entries(MOCK_PREF_SEED)) overrides.set(seedKey, value)
+  let armedGet: { code: string; message: string } | undefined
+  const armedSet = new Map<string, { code: string; message: string }>()
+  const armedClear = new Map<string, { code: string; message: string }>()
+
+  const ownStoreKey = (scope: PrefScope): string => {
+    const { kind, id } = mockPrefScopeKey(scope)
+    return kind === 'global' ? 'global:' : kind + ':' + id + ':'
+  }
+
+  const validate = (key: string, value: unknown): void => {
+    const def = MOCK_PREF_REGISTRY.find(candidate => candidate.key === key)
+    if (def === undefined) {
+      throw prefEnvelope(
+        'ERR_PREF_KEY_UNKNOWN',
+        'build-stage mock: preference key ' + JSON.stringify(key) + ' is not in the mock registry',
+      )
+    }
+    const bad = (reason: string): never => {
+      throw prefEnvelope(
+        'ERR_PREF_VALUE_INVALID',
+        'build-stage mock: preference value for ' + JSON.stringify(key) + ' is invalid: ' + reason,
+      )
+    }
+    switch (def.type) {
+      case 'boolean':
+        if (typeof value !== 'boolean') bad('expected a boolean, got ' + typeof value)
+        return
+      case 'number':
+        if (typeof value !== 'number' || !Number.isInteger(value)) {
+          bad('expected an integer, got ' + JSON.stringify(value))
+        }
+        return
+      case 'text':
+        if (typeof value !== 'string' || value.trim() === '') {
+          bad('expected a non-empty string, got ' + JSON.stringify(value))
+        }
+        return
+      case 'list': {
+        const items = typeof value === 'string'
+          ? value.split(',')
+          : Array.isArray(value) ? value : undefined
+        if (items === undefined || items.some(item => typeof item !== 'string')) {
+          bad('expected a comma-separated string or a string array, got ' + JSON.stringify(value))
+        }
+        return
+      }
+      case 'coverage': {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const strategy = value as { type?: unknown; percentage?: unknown }
+          if (strategy.type === 'maintain') return
+          if (
+            strategy.type === 'percentage' && typeof strategy.percentage === 'number'
+            && Number.isInteger(strategy.percentage) && strategy.percentage >= 0 && strategy.percentage <= 100
+          ) return
+        }
+        bad('expected a CoverageStrategy, got ' + JSON.stringify(value))
+      }
+    }
+  }
+
+  return {
+    getPrefs: async (scope: PrefScope): Promise<PrefRow[]> => {
+      if (armedGet !== undefined) {
+        const failure = armedGet
+        armedGet = undefined
+        throw failure
+      }
+      const own = ownStoreKey(scope)
+      const chain = mockPrefTierKeys(scope)
+      return MOCK_PREF_REGISTRY.map((def): PrefRow => {
+        let value: unknown = undefined
+        let source: PrefRow['source'] = null
+        for (const link of chain) {
+          const hit = overrides.get(link.storeKey + def.key)
+          if (hit !== undefined) {
+            value = hit
+            source = link.tier
+            break
+          }
+        }
+        if (value === undefined && def.defaultValue !== undefined) {
+          value = def.defaultValue
+          source = 'default'
+        }
+        const localRaw = overrides.get(own + def.key)
+        return {
+          key: def.key,
+          group: def.group,
+          type: def.type,
+          control: def.control,
+          value: value ?? null,
+          source,
+          override: localRaw !== undefined,
+          localValue: localRaw ?? null,
+          defaultValue: def.defaultValue ?? null,
+        }
+      })
+    },
+    setPrefs: async (scope: PrefScope, entries: readonly PrefEntry[]): Promise<void> => {
+      const pending = entries.map((entry) => {
+        const failure = armedSet.get(entry.key)
+        if (failure !== undefined) {
+          armedSet.delete(entry.key) // one-shot (the documented NEXT-call arm)
+          throw failure
+        }
+        validate(entry.key, entry.value)
+        return entry
+      })
+      // Atomic: validation of the whole batch precedes any write (no half-batch).
+      for (const entry of pending) overrides.set(ownStoreKey(scope) + entry.key, entry.value)
+    },
+    clearPrefOverride: async (scope: PrefScope, key: string): Promise<void> => {
+      const failure = armedClear.get(key)
+      if (failure !== undefined) {
+        armedClear.delete(key) // one-shot
+        throw failure
+      }
+      overrides.delete(ownStoreKey(scope) + key)
+    },
+    failGetWith: (error) => { armedGet = error },
+    failSetWith: (key, error) => { armedSet.set(key, error) },
+    failClearWith: (key, error) => { armedClear.set(key, error) },
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Proposals family, UF5 (task 5.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The seeded proposal board (task 5.4 — the approved prototype's registry in
+ * the KERNEL's own baseline order): created desc with slug-asc ties, the full
+ * four-status spectrum, one feature-less early-pipeline pair (徽标不渲染),
+ * and hasEval true exactly where the eval fixture map carries a report.
+ */
+export const MOCK_PROPOSAL_BOARD: ProposalBoardData = Object.freeze({
+  proposals: Object.freeze([
+    Object.freeze({
+      slug: 'dsh-forge-m2', status: 'accepted', author: 'faner', created: '2026-09-22',
+      featureSlug: 'dsh-forge-m2', hasEval: true, updatedAt: '2026-09-22T10:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'dsh-forge-m3', status: 'draft', author: 'faner', created: '2026-09-22',
+      featureSlug: 'dsh-forge-m3', hasEval: true, updatedAt: '2026-09-22T11:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'ui-plugin-foundation', status: 'accepted', author: 'faner', created: '2026-09-21',
+      featureSlug: 'ui-plugin-foundation', hasEval: true, updatedAt: '2026-09-21T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'skill-marketplace', status: 'draft', author: 'faner', created: '2026-09-20',
+      featureSlug: null, hasEval: false, updatedAt: '2026-09-20T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'forge-tui', status: 'rejected', author: 'faner', created: '2026-09-18',
+      featureSlug: null, hasEval: true, updatedAt: '2026-09-18T09:00:00.000Z',
+    }),
+    Object.freeze({
+      slug: 'gen-and-run', status: 'superseded', author: 'faner', created: '2026-09-15',
+      featureSlug: null, hasEval: false, updatedAt: '2026-09-15T09:00:00.000Z',
+    }),
+  ]),
+  generatedAt: '2026-09-24T08:00:00.000Z',
+  proposalsRoot: 'Z:/docs/demo/docs/proposals',
+})
+
+/** The seeded proposal documents, keyed `<slug>/<kind>` (readProposalDoc's twin). */
+export const MOCK_PROPOSAL_DOCS: ReadonlyMap<string, ProposalDoc> = new Map<string, ProposalDoc>([
+  ['dsh-forge-m3/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# M3 流程即产品\n\n任务执行 subagent 化(派发时预合成三要素 systemPrompt + 并行 + 看板编排审批);任务 CRUD 应用 API + SoT 分治(SQLite 权威);CLI 退役收口;强制阶段化;偏好三级;提案看板。\n\n- 决策日志:显式迁移 / customSkillDirs / 偏好三级化\n',
+  })],
+  ['dsh-forge-m3/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 902/1000(达标);基线 848 → 终值 902。\n',
+  })],
+  ['dsh-forge-m2/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# M2 需求与会话工作台\n\n项目注册(仓内/仓外文档位置)、任务/feature/文档三看板、会话挂接与发起链、插件基座落地。\n',
+  })],
+  ['dsh-forge-m2/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 886/1000(达标)。\n',
+  })],
+  ['ui-plugin-foundation/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# UI 插件工程基座\n\n两级插件模型(forge 核心 = 必备不可禁用);SQLite 数据内核入壳方向声明;插件清单迁出壳代码为产品级配置。\n',
+  })],
+  ['ui-plugin-foundation/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 871/1000(达标)。\n',
+  })],
+  ['skill-marketplace/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# Skill 市场(草案)\n\n第三方技能发现与安装;依赖 customSkillDirs 承载。管线早期形态:尚无关联 feature(正常态,徽标不渲染)。\n',
+  })],
+  ['forge-tui/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# forge CLI TUI 化\n\n以终端 UI 承载看板。评审结论:与「应用化 + CLI 退役」路线冲突,拒绝。\n',
+  })],
+  ['forge-tui/eval', Object.freeze({
+    kind: 'eval',
+    markdown: '# Eval 报告 — proposal\n\nSCORE: 620/1000(未达标,路线冲突)。\n',
+  })],
+  ['gen-and-run/proposal', Object.freeze({
+    kind: 'proposal',
+    markdown: '# gen-and-run 一体化命令\n\n已被 dsh-forge-m3「流程即产品」方案取代(subagent 派发取代命令直跑)。\n',
+  })],
+])
+
+/** Everything the proposals mock twin exposes beyond the face (the pokes). */
+export interface MockProposalsFace extends ProposalFace {
+  /** Re-arm the board (the reflux legs feed this; the next loadBoard serves it). */
+  setBoard(board: ProposalBoardData): void
+  /** Overwrite one document's markdown (the detail reflux legs). */
+  setDoc(slug: string, kind: 'proposal' | 'eval', markdown: string): void
+  /** Arm the NEXT loadBoard call to reject (the error/retry branch). */
+  failNextBoard(code?: string, message?: string): void
+  /** Arm the NEXT readProposalDoc call to reject (the doc error/retry branch). */
+  failNextDoc(code?: string, message?: string): void
+  /** The test-facing event poke (pushes through the twin's own channel). */
+  emit(events: readonly WorkbenchEvent[]): void
+}
+
+/** The UF5 proposals verb twin (see {@link MockProposalsFace}). */
+export function createMockProposalsFace(options: { projectId?: string; board?: ProposalBoardData } = {}): MockProposalsFace {
+  const projectId = options.projectId ?? 'mock-project'
+  let board = options.board ?? MOCK_PROPOSAL_BOARD
+  const docs = new Map<string, ProposalDoc>(MOCK_PROPOSAL_DOCS)
+  let failNextBoard: { code: string; message: string } | undefined
+  let failNextDoc: { code: string; message: string } | undefined
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
+  const envelopeError = (failure: { code: string; message: string }): never => {
+    throw new Error(JSON.stringify(failure))
+  }
+  return {
+    loadBoard: async (requestProjectId: string): Promise<ProposalBoardData> => {
+      if (requestProjectId !== projectId) {
+        throw new Error(JSON.stringify({
+          code: 'ERR_PROJECT_NOT_FOUND',
+          message: `mock: unknown project '${requestProjectId}'`,
+        }))
+      }
+      if (failNextBoard !== undefined) {
+        const failure = failNextBoard
+        failNextBoard = undefined
+        envelopeError(failure)
+      }
+      return board
+    },
+    readProposalDoc: async (input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc> => {
+      if (failNextDoc !== undefined) {
+        const failure = failNextDoc
+        failNextDoc = undefined
+        envelopeError(failure)
+      }
+      const doc = docs.get(`${input.slug}/${input.kind}`)
+      if (doc === undefined) {
+        throw new Error(JSON.stringify({
+          code: 'ERR_PROPOSAL_NOT_FOUND',
+          message: `mock: no ${input.kind} document for proposal '${input.slug}'`,
+        }))
+      }
+      return doc
+    },
+    subscribeEvents: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    setBoard: (next) => { board = next },
+    setDoc: (slug, kind, markdown) => { docs.set(`${slug}/${kind}`, { kind, markdown }) },
+    failNextBoard: (code = 'ERR_WORKBENCH_DB', message = 'mock: board read rejected') => {
+      failNextBoard = { code, message }
+    },
+    failNextDoc: (code = 'ERR_PROPOSAL_NOT_FOUND', message = 'mock: doc read rejected') => {
+      failNextDoc = { code, message }
+    },
+    emit: (events) => {
+      for (const listener of listeners) listener(events)
+    },
   }
 }

@@ -68,11 +68,20 @@ test('step-2/success [@web-e2e @journey feature-board-docs-browsing]: stepper sh
       await expect(liveDetail).toBeVisible({ timeout: 15_000 })
       const liveStepper = liveDetail.locator('[data-dsh-forge-feature-stepper]')
       await expect(liveStepper.locator('[data-dsh-forge-stepper-state="reached"]')).toHaveCount(3)
-      const liveCurrent = liveStepper.locator('[data-dsh-forge-stepper-state="current"]')
-      await expect(liveCurrent).toHaveCount(1)
-      await expect(liveCurrent).toHaveAttribute('data-dsh-forge-stepper-phase', 'in-progress')
-      await expect(liveCurrent).toContainText('in-progress') // 连字符原词透传
+      // M3 UF2(任务 4.4):样板无阶段资产 → 当前节点 = gate-pending 态
+      // (warn 描边 + 下方「总结未生成」提示行),非 current;completed 未达。
+      const liveGate = liveStepper.locator('[data-dsh-forge-stepper-state="gate-pending"]')
+      await expect(liveGate).toHaveCount(1)
+      await expect(liveGate).toHaveAttribute('data-dsh-forge-stepper-phase', 'in-progress')
+      await expect(liveGate).toContainText('in-progress') // 连字符原词透传
+      await expect(liveStepper.locator('[data-dsh-forge-stepper-state="current"]')).toHaveCount(0)
       await expect(liveStepper.locator('[data-dsh-forge-stepper-state="pending"]')).toHaveCount(1)
+      // 门提示行在位(UF2 gate-pending 呈现面)。
+      await expect(liveDetail.locator('[data-dsh-forge-gate-hint-line]')).toBeVisible()
+      // 第六「阶段资产」tab 末位追加(详情 tab 数 5 → 6)。
+      await expect(liveDetail.locator('[data-dsh-forge-feature-doc-tab="assets"]')).toBeVisible()
+      await expect(liveDetail.locator('[data-dsh-forge-feature-doc-tab="tasks"]~[data-dsh-forge-feature-doc-tab="assets"]'))
+        .toHaveCount(1)
 
       // 缺类(ui)禁用不隐藏;在场类启用。
       const uiTab = page.locator('[data-dsh-forge-feature-doc-tab="ui"]')

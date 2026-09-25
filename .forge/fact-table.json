@@ -559,6 +559,416 @@
       "confidence": "inferred",
       "updated_at": "2026-09-23T01:18:11Z",
       "citation": "apps/desktop/src/main/workbench/indexer/diff.ts:32-43; apps/desktop/src/main/workbench/store/schema-v1.sql:96-101"
+    },
+    {
+      "fact_id": "FT-057",
+      "source": "static",
+      "subject": "M3 kernel 7-state transition table (TS port of Go statemachine)",
+      "kind": "signature",
+      "value": "TRANSITION_TABLE = 23 ordered rules, first match decides; completed irreversible ('task already completed, create a subtask if re-work needed'); rejected/skipped reopen→pending only; only role submit may reach completed; suspended cannot go directly to completed; manual role may enter suspended and adjudicate from it; same-state transition is an allowed no-op; blocked→pending/in_progress for non-manual roles requires dependency check (phase 2)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/tasks/statemachine.ts:46-98,113-122,135-151"
+    },
+    {
+      "fact_id": "FT-058",
+      "source": "static",
+      "subject": "claim vs transition dependency-check dialects",
+      "kind": "precondition",
+      "value": "claim: dangling exact dependencies are vacuously satisfied (filtered, not reported), resolved dependencies must be terminal (completed/skipped; rejected does not satisfy); dangling blocker words are stored verbatim. transition (manual role) blocked→pending/in_progress legs go through checkTransitionDeps where dangling = unmet (a separate Go check, kept separate in the port)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/tasks/task-service.ts:9-25; apps/desktop/src/main/workbench/tasks/deps.ts"
+    },
+    {
+      "fact_id": "FT-059",
+      "source": "static",
+      "subject": "Kernel task write set requires sqlite authority",
+      "kind": "precondition",
+      "value": "all five task write verbs (taskAdd/taskClaim/taskTransition/taskSubmit/taskReopen) only open on projects with data_authority='sqlite'; files-authoritative projects → ERR_TASK_NOT_AUTHORITATIVE with an explicit 'use the forge CLI (dual-form discipline)' hint; decision lives in the kernel, never trusts tool input semantics",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/tasks/task-service.ts:27-32; apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:139-150"
+    },
+    {
+      "fact_id": "FT-060",
+      "source": "static",
+      "subject": "Task actor audit columns",
+      "kind": "side_effect",
+      "value": "every kernel task write records task.updated_by (session:<id> | external | kernel | dispatcher) + updated_at; dsh tool face derives actor automatically from exec.agent session identity as 'session:<id>' and fails closed (throw) when identity is missing — never mis-records audit",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:48; apps/desktop/src/main/workbench/tasks/task-service.ts:34-36; packages/plugins/forge-workbench/src/host/forge-tools/task-tools.ts:55-66"
+    },
+    {
+      "fact_id": "FT-061",
+      "source": "static",
+      "subject": "One-shot migration pipeline phase order and atomicity",
+      "kind": "signature",
+      "value": "phase order pinned: guard → backup → ingest → verify → switch → archive; ingest/verify/switch/archive run inside one transaction whose COMMIT lands after successful archive; any failure → ROLLBACK (db back to pre-migration state) + doc-tree restore (rename rollback, backup as fallback) + post-rollback audit rows written outside the transaction; retry is idempotent-successful (post-failure state ≡ pre-migration state)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/migration/pipeline.ts:1-24,325-434"
+    },
+    {
+      "fact_id": "FT-062",
+      "source": "static",
+      "subject": "Migration domain error codes and guard conditions",
+      "kind": "error_code",
+      "value": "closed set: ERR_MIGRATION_GUARD | ERR_MIGRATION_VERIFY | ERR_MIGRATION_IN_PROGRESS. Guard rejections: project missing; migration already in flight (ERR_MIGRATION_IN_PROGRESS); already migrated (data_authority='sqlite', one-shot, message tells to restore from backups first); running dispatches with ended_at IS NULL > 0 (PRD hard constraint: in-flight orchestration blocks migration). ERR_MIGRATION_VERIFY carries the full parity report",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/migration/pipeline.ts:42,257-283"
+    },
+    {
+      "fact_id": "FT-063",
+      "source": "static",
+      "subject": "Migration backup artifact location and content",
+      "kind": "side_effect",
+      "value": "backup lands at <userData>/workbench/backups/<projectId>-<ts>/ and contains the db file trio plus a copy of the doc tree tasks/ directories; backup phase runs before the transaction opens and leaves an audit row whether it succeeds or fails",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/migration/pipeline.ts:8-9,296-323; apps/desktop/src/main/workbench/migration/backup.ts"
+    },
+    {
+      "fact_id": "FT-064",
+      "source": "static",
+      "subject": "index.json terminal archival",
+      "kind": "side_effect",
+      "value": "archive = rename tasks/index.json → index.json.migrated-<ts> per feature (zero content rewrite, lexicographic order pinned); task and record markdown files (tasks/*.md, tasks/records/*.md) are never migrated or modified — they stay in place",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/migration/pipeline.ts:15,213-241"
+    },
+    {
+      "fact_id": "FT-065",
+      "source": "static",
+      "subject": "migration_event audit table",
+      "kind": "output_format",
+      "value": "migration_event rows: phase ∈ backup|ingest|verify|switch|archive|rollback|reingest, result ∈ ok|fail, detail_json, at; time-ordered listing per project is the reviewable audit face; migration_progress events push each phase completion",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:127-136; apps/desktop/src/main/workbench/migration/pipeline.ts:57-125"
+    },
+    {
+      "fact_id": "FT-066",
+      "source": "static",
+      "subject": "External write reingest and deviation marking (T3)",
+      "kind": "side_effect",
+      "value": "on a migrated project, any reproduced tasks/index.json under the doc tree is by existence an external write; per scan round: fingerprint (sha256 per slug set) dedupe against the last reingest audit; deviation = projects.deviated=1 set before reingest commits (kept on failure) + deviation_detected event; reingest = single transaction delete-then-insert per feature + parity verify, failure → full ROLLBACK + fail audit with reason; the reproduced file stays in place (external session never blocked); un-migrated (files) projects short-circuit with zero behavior change",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/migration/reingest-watcher.ts:1-30,84-96"
+    },
+    {
+      "fact_id": "FT-067",
+      "source": "static",
+      "subject": "dispatch table contract",
+      "kind": "signature",
+      "value": "dispatch row: state ∈ starting|running|awaiting|failed|done (CHECK), session_id NULL until backfilled, prompt_hash = sha256(combined first message) NOT NULL, actor (human dispatcher), batch_id aggregates one dispatch batch, ended_at IS NULL = in-flight (migration guard reads this); one row per task per batch",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:56-73"
+    },
+    {
+      "fact_id": "FT-068",
+      "source": "static",
+      "subject": "Dispatchable task set and per-status hints",
+      "kind": "precondition",
+      "value": "dispatchable statuses = pending | blocked; resolved dependencies must be terminal (claim dialect: dangling vacuously satisfied → filtered from the unmet list); rejections: completed → 'already completed — create a subtask', in_progress → 'one executor per task', suspended → 'resume before dispatching', rejected → 'reopen it before dispatching'; taskKeys must be distinct, non-empty board addresses; whole batch is validated atomically before any row is written",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:117-118,184-213,269-284,393-403"
+    },
+    {
+      "fact_id": "FT-069",
+      "source": "static",
+      "subject": "Stage artifacts missing = warning + acknowledge face, zero rows",
+      "kind": "error_code",
+      "value": "checkStageArtifacts outcome consumed by dispatch: missing items present and acknowledgeMissing not set → return {blocked:'artifacts-missing', missing} with zero dispatch rows (warn does not hard-block — the acknowledge flag expresses informed continuation); acknowledgeMissing=true proceeds to dispatch",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:286-293"
+    },
+    {
+      "fact_id": "FT-070",
+      "source": "static",
+      "subject": "Presynthesis contract check before dispatch",
+      "kind": "precondition",
+      "value": "every dispatched task must carry non-empty presynthesized injection content and a finalized hash; empty/absent presynth (engine not wired or empty output) or empty pre-minted sessionId → ERR_SYSTEM_PROMPT_CONTRACT, refusing to dispatch (zero rows)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:295-316"
+    },
+    {
+      "fact_id": "FT-071",
+      "source": "static",
+      "subject": "Presynthesis three-element composition",
+      "kind": "signature",
+      "value": "three elements assembled deterministically (no eval, no model calls): (1) task-type protocol = PROMPT_TEMPLATES routing over task.task_type with surface-suffix fallback to system base types + EXECUTOR_PREAMBLE wrapper; (2) feature goal/summary = latest stage_asset path (stages/<stage>.md, candidates exclude the feature's current stage, empty set → PhaseSummary block omitted entirely); (3) effective prefs = resolveEffectiveValues (feature>project>global; coverage.<task-type> drives coverage instructions; cleanup/refactor forced to maintain). Product = EXECUTOR_PREAMBLE + rendered protocol; combined first message = content + blank line + attribution line; prompt_hash = sha256(combined message); compose mints a fresh pre-minted session-<uuid> per call so hash is decoupled from launch",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/presynth/assemble.ts:1-56,336-382,399-448"
+    },
+    {
+      "fact_id": "FT-072",
+      "source": "static",
+      "subject": "Presynthesis type routing rejections",
+      "kind": "error_code",
+      "value": "ERR_TASK_TYPE_UNKNOWN: empty task_type or no template match (no exact hit, no strippable surface suffix, or base type not a system type); ERR_TASK_TYPE_NOT_DISPATCHABLE: dispatch-restricted 5 types (skill not carried until M4) and 2 mechanism-replaced types (stage gate / stage summary own the protocol) — template in library but dispatch closed",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/presynth/assemble.ts:62,111-163"
+    },
+    {
+      "fact_id": "FT-073",
+      "source": "static",
+      "subject": "Dispatch host callbacks (state machine edges)",
+      "kind": "side_effect",
+      "value": "notifySessionStarted: starting→running with session_id backfill (idempotent no-op for the same session); notifyLaunchFailed: starting→failed + reason; notifyDispatchEnded: running|awaiting→done|failed with a hard guard — awaiting may not end while pending approvals > 0 (no implicit decisions); all transitions land in kernel transactions, illegal edges rejected with ERR_DISPATCH_STATE_INVALID; events dispatch_updated emitted per change",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:106-114,224-255,498-524"
+    },
+    {
+      "fact_id": "FT-074",
+      "source": "static",
+      "subject": "Approval routing and decision semantics",
+      "kind": "signature",
+      "value": "approval_request rows: state pending|approved|rejected, decided_by/decided_at audit, payload_json carries request body, session_id = source subagent session; receiveApproval accepts only from running/awaiting dispatches (running→awaiting + first pending insert in one transaction; ERR_DISPATCH_STATE_INVALID otherwise — nothing dropped silently); decideApproval is an explicit human decision — repeat decision → ERR_APPROVAL_DECIDED, missing → ERR_APPROVAL_NOT_FOUND; deciding the last pending approval moves awaiting→running in the same transaction; approval_received events emitted on arrival",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:435-496; apps/desktop/src/main/workbench/store/schema-v2.ts:75-89"
+    },
+    {
+      "fact_id": "FT-075",
+      "source": "static",
+      "subject": "Redispatch semantics",
+      "kind": "signature",
+      "value": "redispatch accepts only failed dispatch rows (ERR_DISPATCH_STATE_INVALID otherwise); re-runs the full check chain (artifacts missing → blocked return, no rows); the original failed row stays as the audit trail, the new dispatch gets a new row; UI requires a second confirmation",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/dispatch/dispatch-service.ts:406-419"
+    },
+    {
+      "fact_id": "FT-076",
+      "source": "static",
+      "subject": "Three-tier prefs storage model",
+      "kind": "signature",
+      "value": "single prefs table scoped global|project|feature; feature scope_id = '<projectId>/<featureSlug>' (prevents cross-project slug collisions); closed key registry (auto.* ModeToggles + gitPush + eval booleans, worktree.source-branch text, coverage.<task-type> strategies, eval.* numbers) — surfaces and structural keys excluded; unknown key → ERR_PREF_KEY_UNKNOWN, type violation → ERR_PREF_VALUE_INVALID; type metadata exposed via getPrefs (UI never hardcodes the key list)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:91-101; apps/desktop/src/main/workbench/prefs/registry.ts:26-120"
+    },
+    {
+      "fact_id": "FT-077",
+      "source": "static",
+      "subject": "Prefs effective-value resolution chain",
+      "kind": "output_format",
+      "value": "resolution walks feature > project > global; first explicit row wins; no explicit row anywhere → registry authoritative default (source='default'); worktree.* has no default → value null; getPrefs rows carry value/source/override/localValue so the editor and the dispatch consumer share one source",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/prefs/resolve.ts:1-9,51-108"
+    },
+    {
+      "fact_id": "FT-078",
+      "source": "static",
+      "subject": "setPrefs atomicity",
+      "kind": "side_effect",
+      "value": "setPrefs validates the entire entry list first (key set + type normalization; failure → zero writes) then writes all rows in one transaction — mid-flight failure rolls the whole batch back (no partial persistence); success emits prefs_updated",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/prefs/prefs-service.ts:56-72"
+    },
+    {
+      "fact_id": "FT-079",
+      "source": "static",
+      "subject": "clearPrefOverride idempotence",
+      "kind": "side_effect",
+      "value": "clearPrefOverride deletes the local override row; idempotent no-op when the row is absent and emits no event when nothing changed; effective value falls back to the next tier; key outside the registry → same ERR_PREF_KEY_UNKNOWN as setPrefs",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/prefs/prefs-service.ts:74-82"
+    },
+    {
+      "fact_id": "FT-080",
+      "source": "static",
+      "subject": "Stage gate rule",
+      "kind": "precondition",
+      "value": "gate = stages/<current-stage>.md exists (live fs check identical in getStageGate and advanceStage — never trusts index staleness); unsatisfied advance → ERR_STAGE_GATE_UNSATISFIED with a missing-artifact guidance message naming the expected path and the producing tool; stage pipeline vocabulary = prd → design → tasks → in-progress → completed",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/stages/advance-service.ts:244-251; apps/desktop/src/main/workbench/stages/stages-service.ts:7,114; apps/desktop/src/main/workbench/stages/stage-asset-index.ts (STAGE_PIPELINE)"
+    },
+    {
+      "fact_id": "FT-081",
+      "source": "static",
+      "subject": "advanceStage kernel-write and idempotence semantics",
+      "kind": "side_effect",
+      "value": "advanceStage is the kernel's only manifest status writer (in-place status replace, other fields/body preserved; missing manifest → minimal one created; malformed YAML → ERR_STAGE_MANIFEST_UNREADABLE refusing to merge); already completed → idempotent no-op (zero writes, zero events); successful advance writes manifest + feature_snapshot pair, clears feature deviation (last_external_at kept as audit), emits stage_advanced; a repeat advance after success hits the new stage's unsatisfied gate (observable rejection, not silent)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/stages/advance-service.ts:234-294"
+    },
+    {
+      "fact_id": "FT-082",
+      "source": "static",
+      "subject": "stageSummarize single-canonical-file discipline",
+      "kind": "side_effect",
+      "value": "stageSummarize writes features/<slug>/stages/<stage>.md with frontmatter {stage, generated (kernel-minted ISO), goal} + summary body; same-stage rewrite = overwrite update (T4 single canonical file); stage value outside the vocabulary or empty goal/summary → ERR_STAGE_ASSET_INVALID; after write the stage_asset index is replaced synchronously using the same collector as perception (zero index lag)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/stages/advance-service.ts:194-232"
+    },
+    {
+      "fact_id": "FT-083",
+      "source": "static",
+      "subject": "checkStageArtifacts determinism and cumulative matrix",
+      "kind": "signature",
+      "value": "deterministic code only — file existence + frontmatter/structure parsing + SQLite state queries, zero model calls (import-surface whitelist pinned by tests); expectation matrix is cumulative per stage (design row = prd row + design delta): manifest presence/status, prd/prd-spec.md, design/ ≥1 md, tasks/ ≥1 md + non-empty SQLite task set + dependency references closed, ≥1 dispatched (in_progress|completed) task with non-empty md description, all-terminal tasks + stages/<prd|design|tasks|in-progress>.md assets; missing items = warning list, never an exception",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/stages/artifacts-check.ts:1-22,227-306"
+    },
+    {
+      "fact_id": "FT-084",
+      "source": "static",
+      "subject": "stage_asset index table",
+      "kind": "signature",
+      "value": "stage_asset PK (project_id, feature_slug, stage), stage ∈ prd|design|tasks|in-progress|completed, content stays in doc-root files stages/<stage>.md — the table is a rebuildable derived index (metadata only: path, generated_at)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:103-111"
+    },
+    {
+      "fact_id": "FT-085",
+      "source": "static",
+      "subject": "Feature-level deviation detection",
+      "kind": "side_effect",
+      "value": "before each perception scan: live manifest frontmatter status ≠ pre-scan feature_snapshot.status → external change → feature_snapshot.deviated=1 + last_external_at + deviation_detected event; snapshot-less features / missing or corrupt manifest / out-of-vocabulary status → zero signal, no error; after detection the scan converges the snapshot to the manifest (same external change reported once); marker persists until the next kernel-legal advanceStage (which clears it); presentation only — zero blocking interaction, detection failure only logs ERR_WORKBENCH_DEVIATION",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/stages/deviation-watcher.ts:1-23"
+    },
+    {
+      "fact_id": "FT-086",
+      "source": "static",
+      "subject": "Proposal board read-only contract",
+      "kind": "signature",
+      "value": "exactly two read verbs (getProposalBoard, readProposalDoc), zero write verbs in the domain; proposal_snapshot status ∈ draft|accepted|rejected|superseded, feature_slug NULL = unlinked (no badge rendered); hasEval = live fs check of proposals/<slug>/eval/*.md per read (never trusts index staleness); board sort = created descending, tie → slug ascending (forge-cli Discover baseline); project missing → ERR_PROJECT_NOT_FOUND, bad slug shape → ERR_PROPOSAL_PATH_INVALID, missing file/eval → ERR_PROPOSAL_NOT_FOUND; proposal_snapshot rows sync with each perception scan, reusing the sync event batch",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/proposals/proposals-service.ts:1-21,69-83,96-120; apps/desktop/src/main/workbench/ipc/channel-allowlist.ts:94-99; apps/desktop/src/main/workbench/store/schema-v2.ts:114-125"
+    },
+    {
+      "fact_id": "FT-087",
+      "source": "static",
+      "subject": "Workbench verb channel whitelist (M3 additions)",
+      "kind": "signature",
+      "value": "one channel per verb dsh-forge:workbench-<kebab-verb>, additive-only; M3 adds: 7 task verbs (add/claim/transition/submit/reopen/get/query), 2 migration (getMigrationStatus/startMigration), 2 probes (probeCodeRoot/getWorkbenchPaths), 6 knowledge+feature, 3 prefs, 3 stages read (checkStageArtifacts/getStageGate/listStageAssets), 2 stages write (advanceStage/stageSummarize), 2 proposals, 5 dispatch, 3 host callbacks (receiveApproval/notifySessionStarted/notifyLaunchFailed); event push is a separate main→renderer channel, never invokable",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/channel-allowlist.ts:25-124"
+    },
+    {
+      "fact_id": "FT-088",
+      "source": "static",
+      "subject": "dsh model-facing tool inventory (18 flat snake_case)",
+      "kind": "signature",
+      "value": "forge_task_add / forge_task_claim / forge_task_get / forge_task_list / forge_task_query / forge_task_reopen / forge_task_submit / forge_task_transition / forge_fact / forge_lesson / forge_research / forge_forensic / forge_feature_list / forge_feature_status / forge_pref_get / forge_stage_summarize / forge_proposal_list / forge_proposal_show; flat underscore names (provider charset rejects dots); strict typed schemas + status enums; taskKey whitelist = board address double-gate; actor auto-derived from session identity, missing → fail-closed throw",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/host/forge-tools/index.ts:1-27; packages/plugins/forge-workbench/src/host/forge-tools/task-tools.ts:1-66"
+    },
+    {
+      "fact_id": "FT-089",
+      "source": "static",
+      "subject": "Tool result semantics and degradation",
+      "kind": "error_code",
+      "value": "kernel values and business rejections return as canonical JSON values (ok:false + code + message — a business hint, not error noise); only bridge transport failure after retry = ERR_TOOL_BRIDGE_UNAVAILABLE thrown up into the session as an explicit degradation notice (never silent); actor missing = throw (audit discipline)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/host/forge-tools/task-tools.ts:16-21,98-112"
+    },
+    {
+      "fact_id": "FT-090",
+      "source": "static",
+      "subject": "customSkillDirs skill carriage (15 flat-name skills)",
+      "kind": "signature",
+      "value": "15 skill directories under packages/plugins/forge-workbench/resources/skills: submit-task, git-commit, git-checkout, run-tests, fix-bug, test-guide, brainstorm, write-prd, tech-design, ui-design, breakdown-tasks, quick-tasks, gen-contracts, gen-journeys, gen-test-scripts; app boot writes the skill root into the app-owned host profile user layer (<profileDir>/cordis.patch.yml, id: skill-filesystem row, config.customSkillDirs) before supervisor.startHost; three defenses: install-dir prefix validation, drift repair (missing/duplicate/stale entries + manifest hash marker), explicit non-silent failure ERR_SKILL_DIR_SYNC surfaced as settings alerts; user-owned entries outside the prefix preserved byte-for-byte",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/host/skill-dirs/sync.ts:1-57; packages/plugins/forge-workbench/resources/skills/ (15 dirs)"
+    },
+    {
+      "fact_id": "FT-091",
+      "source": "static",
+      "subject": "Dispatch launch contract (host half)",
+      "kind": "precondition",
+      "value": "launch input requires non-empty prompt + finalized prompt_hash (either missing → refuse start, dispatch row goes failed); create({sessionId, cwd=registered codeRoot}) is caller-minted idempotent adopt; prompt({mode:'queue'}) delivers the combined first message character-for-character (zero rewrite) as a persisted user message; each leg runs under a hang ceiling; failure reasons route to the dispatch failed state, never an unhandled error",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/host/dispatch-launch/launch.ts:5-18,48-52,116-165"
+    },
+    {
+      "fact_id": "FT-092",
+      "source": "static",
+      "subject": "Workbench tab order incl. proposals tab",
+      "kind": "signature",
+      "value": "WORKBENCH_TABS = [workbench/overview, workbench/proposals, workbench/features, workbench/tasks] — proposals tab second (PRD Navigation Architecture); pages addressed by session-memory view keys, no URL routes",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/client/store/view-key.ts:29-42"
+    },
+    {
+      "fact_id": "FT-093",
+      "source": "static",
+      "subject": "Authoritative task write events (sqlite projects)",
+      "kind": "side_effect",
+      "value": "kernel authoritative writes emit task_updated events directly (single batch per verb) — the board's ≤5s no-manual-refresh backflow on migrated projects depends on this direct push because perception scans only cover files projects; presynth consumed at dispatch time (already-launched subagent prompts are never retro-rewritten)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/tasks/task-service.ts:95-109"
+    },
+    {
+      "fact_id": "FT-094",
+      "source": "static",
+      "subject": "M3 event vocabulary and push channel",
+      "kind": "output_format",
+      "value": "v2 event types include task_updated, feature_updated, sync, dispatch_updated, approval_received, deviation_detected, migration_progress, stage_advanced, prefs_updated; batches coalesced ≤500ms on main→renderer channel dsh-forge:workbench-events (main is sole sender; renderer subscribes)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/channel-allowlist.ts:119-124; apps/desktop/src/main/workbench/indexer/diff.ts (v2 event vocabulary)"
+    },
+    {
+      "fact_id": "FT-095",
+      "source": "static",
+      "subject": "Default doc root = app-managed out-of-repo path",
+      "kind": "precondition",
+      "value": "getWorkbenchPaths returns docsRoot = the out-of-repo app-managed default doc root (G7/SC9 wizard default flip) and backupsRoot = migration backup root; wizard doc-location step defaults to external with in-repo as an explicit option; external paths require the persisted authorization record (authorizeExternalDocPath is the sole write channel; validation chain checks the record before any fs probe)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/types.ts:286-297; apps/desktop/src/main/workbench/ipc/handlers.ts:374-388"
+    },
+    {
+      "fact_id": "FT-096",
+      "source": "static",
+      "subject": "ForgeBridge spawn-CLI chain retired",
+      "kind": "side_effect",
+      "value": "the M2 ForgeBridge (spawn forge CLI for prompt synthesis) is deleted; the presynthesized prompt replaces forge prompt; plugin host half contains zero CLI spawn sites; per journey invariants the forge CLI invocation count over an app-channel pipeline is zero (process/log-level assertion)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "packages/plugins/forge-workbench/src/host/index.ts:6 (spawn-CLI chain deleted); packages/plugins/forge-workbench/src/host/forge-bridge.ts (removed)"
+    },
+    {
+      "fact_id": "FT-097",
+      "source": "static",
+      "subject": "v2 schema M3 additions summary",
+      "kind": "signature",
+      "value": "v2 = 2 ALTER groups (projects: data_authority files|sqlite + deviated + migrated_at + backup_path; feature_snapshot: deviated + last_external_at) + 7 new tables (task, dispatch, approval_request, prefs, stage_asset, proposal_snapshot, migration_event) + 6 indexes; only-add carrier discipline (all v1 tables/columns survive); WAL + foreign_keys per connection",
+      "confidence": "inferred",
+      "updated_at": "2026-09-25T00:59:32Z",
+      "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:17-138"
     }
   ]
 }

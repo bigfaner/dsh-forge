@@ -14,7 +14,7 @@
  * ui-primitives consumer); i18n/task-status.ts owns the 7-态 → visual/label
  * routing this file consumes.
  */
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskSummary } from '../../ipc-types'
 import { TASK_STATUS_DOT_STATE, taskStatusLabel, taskStatusShortLabel } from '../../i18n/task-status'
@@ -47,8 +47,37 @@ export interface TaskRowBaseProps {
    * store, never row-local state.
    */
   activeSessionId?: string | undefined
+  /**
+   * The UF1 编排态角标 node (task 3.9, ui-design 角标以 props 传入): the
+   * caller-composed DispatchBadge rides the B card's badge cluster / the C
+   * row's status cell verbatim — this file renders it, it never derives
+   * orchestration semantics (undefined renders nothing; outside a live
+   * orchestration the caller passes nothing).
+   */
+  orchBadge?: ReactNode | undefined
   /** The 5.7 selection seam — the ONLY interaction a row carries (navigation). */
   onSelect?: ((task: TaskSummary) => void) | undefined
+}
+
+/** Inputs of {@link TaskCard} beyond the shared row base (task 3.9 additions). */
+export interface TaskCardProps extends TaskRowBaseProps {
+  /**
+   * The UF1 selection-mode decoration cluster (task 3.9): the caller-composed
+   * SelectionCheckbox overlay + ⤢ DetailJumpButton — self-hiding outside
+   * selection mode (the primitives' own contract), so an undefined/hidden
+   * cluster leaves the card exactly its M2 self.
+   */
+  selectionDecor?: ReactNode | undefined
+}
+
+/** Inputs of {@link TaskListRow} beyond the shared row base (task 3.9 additions). */
+export interface TaskListRowProps extends TaskRowBaseProps {
+  /**
+   * The UF1 selection-mode cell (task 3.9, ui-design 视图 C 勾选内嵌行首): the
+   * caller-composed inline SelectionCheckbox rendered as the row's FIRST cell
+   * — self-hiding outside selection mode (undefined renders no cell).
+   */
+  selectionCell?: ReactNode | undefined
 }
 
 /** The em-dash placeholder for absent optional cells (branch/worktree/source). */
@@ -143,6 +172,7 @@ const cardStyle = {
   font: 'inherit',
   gap: '4px',
   padding: '10px 12px',
+  position: 'relative',
   textAlign: 'left',
   width: '100%',
 } as const
@@ -192,7 +222,7 @@ const cardBadgesRowStyle = {
  * selection trigger — click / Enter / Space navigate to the detail seam;
  * nothing inside edits anything.
  */
-export function TaskCard(props: TaskRowBaseProps) {
+export function TaskCard(props: TaskCardProps) {
   const { task, t, updating = false, selected = false, onSelect } = props
   return (
     <button
@@ -210,6 +240,8 @@ export function TaskCard(props: TaskRowBaseProps) {
       }}
       onClick={() => { onSelect?.(task) }}
     >
+      {/* The UF1 selection-mode overlay cluster (task 3.9) — self-hiding. */}
+      {props.selectionDecor}
       <span style={cardTitleRowStyle}>
         <StateDot state={TASK_STATUS_DOT_STATE[task.status]} />
         <span title={task.title} style={cardTitleStyle}>{task.title}</span>
@@ -227,6 +259,7 @@ export function TaskCard(props: TaskRowBaseProps) {
           </span>
         )}
         <TaskBadges {...props} />
+        {props.orchBadge}
       </span>
     </button>
   )
@@ -259,7 +292,7 @@ const statusCellStyle = {
  * Enter / Space / click navigate to the selection seam; that is the row's
  * entire interaction surface.
  */
-export function TaskListRow(props: TaskRowBaseProps) {
+export function TaskListRow(props: TaskListRowProps) {
   const { task, t, updating = false, selected = false, onSelect, activeSessionId } = props
   const activate = (): void => { onSelect?.(task) }
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>): void => {
@@ -285,6 +318,8 @@ export function TaskListRow(props: TaskRowBaseProps) {
       onClick={activate}
       onKeyDown={onKeyDown}
     >
+      {/* The UF1 selection-mode cell (task 3.9, checkbox 内嵌行首) — self-hiding. */}
+      {props.selectionCell}
       <td style={rowMonoCellStyle}>{task.key}</td>
       <td title={task.title} style={rowCellStyle}>{task.title}</td>
       <td style={statusCellStyle}>
@@ -293,6 +328,7 @@ export function TaskListRow(props: TaskRowBaseProps) {
         {/* 5.11 AC3: the 会话运行中 badge rides the status cell (the C-row
             cells carry their own dimensions — the shared cluster is B/A only). */}
         <SessionBadge t={t} sessionId={activeSessionId} />
+        {props.orchBadge}
       </td>
       <td style={rowCellStyle}>{task.featureSlug}</td>
       <td title={task.branch ?? undefined} style={rowMonoCellStyle}>{task.branch ?? NONE_CELL}</td>

@@ -200,9 +200,10 @@ describe('workbench watcher: trigger', () => {
     const harness = await makeHarness()
     harness.watcher.rebuild(harness.target)
 
-    // Both Interface-3 roots watched recursively in one tier.
+    // Both Interface-3 roots watched recursively in one tier(+ docs 父目录
+    // 兜底:语料无 docs/proposals → 后建根的感知缝由父目录补)。
     expect(harness.watcher.strategy).toBe('recursive')
-    expect(liveHandles(harness).length).toBe(2)
+    expect(liveHandles(harness).length).toBe(3)
     expect(liveHandles(harness).every(handle => handle.recursive)).toBe(true)
 
     liveHandles(harness)[0]!.fire()
@@ -214,6 +215,24 @@ describe('workbench watcher: trigger', () => {
     const rows = listTaskSnapshots(harness.db, harness.target.id)
     expect(rows.length).toBe(1)
     expect(rows[0]).toMatchObject({ taskKey: 'demo/1.1', featureSlug: 'demo', status: 'pending' })
+  })
+
+  it('missing doc root (proposals) falls back to the docs parent — later-created roots stay perceived', async () => {
+    const harness = await makeHarness()
+    harness.watcher.rebuild(harness.target)
+
+    // The corpus has NO docs/proposals → the docs parent rides as the
+    // event-domain fallback (M3 5.3 提案感知根:后建根的首写也须 ≤5s 回流)。
+    expect(harness.watcher.strategy).toBe('recursive')
+    const dirs = liveHandles(harness).map(handle => handle.dir)
+    expect(dirs.some(dir => dir.endsWith('docs')), 'docs 父目录兜底在场').toBe(true)
+    expect(dirs.some(dir => dir.includes('proposals')), '缺失根自身不建立 watch').toBe(false)
+
+    // 父目录事件域内的写入(如首份提案)触发扫描 —— 感知链完整。
+    const parent = liveHandles(harness).find(handle => handle.dir.endsWith('docs'))!
+    parent.fire()
+    await advanceAndSlice(harness, 400)
+    expect(harness.scanSpy).toHaveBeenCalledTimes(1)
   })
 
   it('real fs.watch end to end: file change → incremental scan → snapshot + batched events (perception path)', async () => {
@@ -351,7 +370,7 @@ describe('workbench watcher: degrade', () => {
 
     expect(harness.watcher.strategy).toBe('tree')
     const handles = liveHandles(harness)
-    expect(handles.length).toBe(5) // .forge + docs/features + demo + tasks + records
+    expect(handles.length).toBe(6) // .forge + docs/features + docs 父兜底 + demo + tasks + records
     expect(handles.every(handle => !handle.recursive)).toBe(true)
 
     handles[0]!.fire()
@@ -430,7 +449,7 @@ describe('workbench watcher: degrade', () => {
 
     liveHandles(harness)[0]!.fail('EPERM: watch root vanished')
     expect(harness.watcher.strategy).toBe('tree') // one level down, chain intact
-    expect(liveHandles(harness).length).toBe(5)
+    expect(liveHandles(harness).length).toBe(6)
 
     liveHandles(harness)[0]!.fire() // upper flow still works on the degraded tier
     await advanceAndSlice(harness, 400)
@@ -528,7 +547,7 @@ describe('workbench watcher: recover', () => {
     harness.mode.failTree = false
     await advanceThroughScan(harness, 2000) // next tick probes upgrade first
     expect(harness.watcher.strategy).toBe('recursive')
-    expect(liveHandles(harness).length).toBe(2)
+    expect(liveHandles(harness).length).toBe(3)
     expect(liveHandles(harness).every(handle => handle.recursive)).toBe(true)
 
     const signatureCallsBefore = harness.treeSignature.mock.calls.length
@@ -549,12 +568,12 @@ describe('workbench watcher: recover', () => {
     const other = registerProject(db, { codeRoot: otherRoot, docLocationType: 'in_repo' })
 
     harness.watcher.rebuild(harness.target)
-    expect(liveHandles(harness).length).toBe(2)
+    expect(liveHandles(harness).length).toBe(3)
     const firstBatch = [...harness.handles]
 
     harness.watcher.rebuild({ id: other.id, codeRoot: other.codeRoot, docLocationPath: null })
     expect(firstBatch.every(handle => handle.closed)).toBe(true) // no leaks on switch
-    expect(liveHandles(harness).length).toBe(2)
+    expect(liveHandles(harness).length).toBe(3)
 
     const secondBatch = [...harness.handles]
     harness.watcher.rebuild(null)
@@ -609,7 +628,8 @@ describe('workbench watcher: authorization hard rules', () => {
     authorizeExternalDocPath(db, externalDocs)
     watcher.rebuild(target)
     expect(watcher.strategy).toBe('recursive')
-    expect(handles.filter(handle => !handle.closed).length).toBe(2)
+    // .forge + 外部 docs/features + docs 父兜底(语料无 proposals)。
+    expect(handles.filter(handle => !handle.closed).length).toBe(3)
   })
 
   it('no watchable roots → no watch established, strategy observable as null', async () => {

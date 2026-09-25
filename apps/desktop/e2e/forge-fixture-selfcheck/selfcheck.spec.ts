@@ -39,8 +39,9 @@ import {
 //      journey temp dir (Hard Rule: 绝不复用开发实例 userData) — which also
 //      makes the ERR_SINGLE_INSTANCE cross-run poisoning structurally
 //      impossible (every journey owns its lock);
-//   5. the stub CLI answers through the resolver's own spawn shape
-//      (argument array, shell off — the win32 node.exe-copy trick included);
+//   5. the stub CLI answers argument-array spawns from the TEST process
+//      (shell off — the win32 node.exe-copy trick included; a terminal-side
+//      oracle only since 6.1 — the app chain spawns nothing);
 //   6. cleanup removes every temp root (AC5).
 //
 // Detailed per-surface legs are 6.2-6.5's; this spec stays a smoke.

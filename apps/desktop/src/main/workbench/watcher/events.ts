@@ -8,8 +8,14 @@
 // webContents.send;此处不感知 Electron。
 //
 // 合并键:task_updated → (type, projectId, taskKey);feature_updated →
-// (type, projectId, featureSlug);sync → (type, projectId)。批内顺序 =
-// 首现位次(新键插到批尾),载荷 = 最后形态。
+// (type, projectId, featureSlug);sync → (type, projectId);migration_progress
+// → (type, projectId, phase, result)(M3 v2 事件,任务 1.4);deviation_detected
+// → (type, projectId, featureSlug — feature 级含 slug、项目级(1.5)空尾,
+// 同窗两形态互不吞并)(M3 v2 事件,任务 1.5/4.2);prefs_updated → (type, scope,
+// scopeId)(M3 v2 事件,任务 3.1);dispatch_updated → (type, dispatchId)、
+// approval_received → (type, approvalId)(M3 v2 事件,任务 3.3);
+// stage_advanced → (type, projectId, featureSlug)(M3 v2 事件,任务 4.1)。
+// 批内顺序 = 首现位次(新键插到批尾),载荷 = 最后形态。
 
 import type { WorkbenchEvent } from '../indexer/diff.ts'
 
@@ -42,6 +48,18 @@ function coalesceKey(event: WorkbenchEvent): string {
       return `feature_updated|${event.projectId}|${event.featureSlug}`
     case 'sync':
       return `sync|${event.projectId}`
+    case 'migration_progress':
+      return `migration_progress|${event.projectId}|${event.phase}|${event.result}`
+    case 'deviation_detected':
+      return `deviation_detected|${event.projectId}|${event.featureSlug ?? ''}`
+    case 'prefs_updated':
+      return `prefs_updated|${event.scope}|${event.scopeId}`
+    case 'dispatch_updated':
+      return `dispatch_updated|${event.dispatchId}`
+    case 'approval_received':
+      return `approval_received|${event.approvalId}`
+    case 'stage_advanced':
+      return `stage_advanced|${event.projectId}|${event.featureSlug}`
   }
 }
 

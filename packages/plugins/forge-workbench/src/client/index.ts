@@ -9,28 +9,26 @@
  * view-key machine through the one controller (nav/view-switch), so their
  * behavior contracts are identical by construction; view state persists
  * across restarts (store/view-key), first boot defaulting to the session
- * view. The host half (ForgeBridge / session launch / FORGE_ACTOR passthrough)
- * arrives in 4.x, the UF views in 5.x. Cross-boundary traffic happens
- * exclusively through cordis services (slots, locale) — no shell internals
- * are imported, in either direction.
+ * view. The host half's M2 ForgeBridge / session-launch faces were retired by
+ * M3 task 6.1 (CLI 退役); the dispatch chain (2.1 tools + 3.5 orchestration
+ * pair) is the host face now. Cross-boundary traffic happens exclusively
+ * through cordis services (slots, locale) — no shell internals are imported,
+ * in either direction.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the renderer-owned slots service (ctx.slots) Context merge.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the ForgeBridge remote-face declaration (task 4.1) into
-// this program's Typert view — `ctx.remote.forgeBridge` after the 5.10/5.11
-// namespace mount. Zero runtime face: the service lives in the host half.
-import type {} from './services'
-// Type-only: the SessionLaunch remote-face declaration (task 4.2), same
-// discipline — `ctx.remote.sessionLaunch` after the entry-task mount.
-import type {} from './session-launch'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
 import { createBoardSessionStore } from './store/board-session'
-import { createLaunchSeat } from './launch-rpc'
+import { installToolBridgeClient } from './ipc/tool-bridge'
+import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
+import { installApprovalAnswerRelay } from './ipc/approval-answer'
+import { getWorkbenchIpcBridge } from './ipc/workbench'
+import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
 import { installSlotNav } from './nav/slot-inject'
@@ -45,9 +43,10 @@ export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchS
 export type {
   WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
-  TaskBoardFace, TaskBoardSeat,
+  TaskBoardFace, TaskBoardSeat, DispatchFace,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
-  SessionLaunchHandover, TaskBoardLaunchSeat,
+  SessionLaunchHandover,
+  MigrationFace, MigrationGuardSnapshot,
 } from './contract'
 export {
   createLocalStoragePersistence, createViewKeyStore, hydratePersistedViewKey,
@@ -60,27 +59,30 @@ export type {
 // scroll/badge memory that survives the UF5 round-trip's shell unmount.
 export { createBoardSessionStore, INITIAL_BOARD_SCROLL } from './store/board-session'
 export type { BoardScrollMemory, BoardSessionStore } from './store/board-session'
-// The UF5 launch rpc assembly (task 5.11): the namespace contribution, the
-// tier-2 client channel, the renderer tier-3 legs, and the observable seat
-// both navigation forms thread into the shell.
-export {
-  bringMainWindowToFront, copyPromptToClipboard, createLaunchSeat,
-  deriveLaunchRequestIdClient, FORGE_WORKBENCH_REMOTE_CONTRIBUTION, launchViaClientChannel,
-  sessionChannelOf,
-} from './launch-rpc'
-export type { LaunchSeatSnapshot, LaunchSeatStore } from './launch-rpc'
+// The session hand-over (M3 task 6.1 — the retired launch seat's surviving
+// slice): 切会话视图 + session locating, threaded into the shell by both
+// navigation forms.
+export { createSessionHandover } from './session-handover'
+export type { SessionHandover } from './session-handover'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
 // SyncStatus/TaskBoardData/WorkbenchEvent).
 export type {
-  ChangeSource, DocLocationType, PluginRow, Project, ProjectPatch, SyncStatus, TaskBoardData,
+  ApprovalRow, ApprovalState, ChangeSource, DispatchedRow, DispatchLaunchPayload, DispatchRow,
+  DispatchState, DispatchTasksInput,
+  DispatchTasksResult, DecideApprovalInput, DocLocationType, MigrationEvent, MigrationPhase,
+  MigrationPhaseResult,
+  MigrationStarted, MigrationStatus, MissingItem, PluginRow, Project, ProjectPatch,
+  StageArtifactsReport, SyncStatus, TaskBoardData,
   TaskSummary, TaskStatus, WorkbenchEvent, WorkbenchState, WorkbenchVerbError,
 } from './ipc-types'
 export {
   MOCK_EMPTY_WORKBENCH_STATE, MOCK_WORKBENCH_STATE,
   MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockOverviewFace,
-  createMockTaskBoardFace,
+  createMockTaskBoardFace, createMockDispatchFace,
+  MOCK_MIGRATION_BACKUP_PATH, MOCK_MIGRATION_STATUS_FILES, MOCK_MIGRATION_STATUS_SQLITE,
+  createMockMigrationFace,
 } from './mocks/workbench'
 // The Interface 1 IPC adapter (task 5.16 — the pattern the 5.14 overview and
 // 5.15 task-board assemblies reuse): the guarded preload-bridge read, the
@@ -89,8 +91,9 @@ export {
 // overview family's faces (overview/plugin + the wizard's WRITE pair);
 // task 5.15 added the tasks family's (board + detail).
 export {
-  createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcOverviewFace, createIpcPluginFace,
-  createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
+  createIpcDispatchFace, createIpcFeatureBoardFace, createIpcFeatureDocFace, createIpcMigrationFace,
+  createIpcOverviewFace,
+  createIpcPluginFace, createIpcRegisterWizardVerbs, createIpcTaskBoardFace, createIpcTaskDetailFace,
   getWorkbenchIpcBridge,
   normalizeWorkbenchVerbError, requireWorkbenchIpcBridge,
 } from './ipc/workbench'
@@ -101,6 +104,30 @@ export type { WorkbenchIpcBridge } from './ipc/workbench'
 // independent subscriptions cannot coexist).
 export { getWorkbenchEventSource } from './ipc/workbench-events'
 export type { WorkbenchEventSource, WorkbenchEventListener } from './ipc/workbench-events'
+// The renderer tool bridge (M3 task 2.1, T2): mounts the forgeToolBridge
+// remote namespace (calls stream + answer) and pumps host tool calls onto the
+// whitelisted workbench IPC verbs (closed verb map). Later tool families ride
+// the same bridge — no new channel.
+export {
+  dispatchToolBridgeCall, FORGE_TOOL_BRIDGE_REMOTE_CONTRIBUTION, installToolBridgeClient,
+  runToolBridgePump,
+} from './ipc/tool-bridge'
+export type { ToolBridgePumpDeps } from './ipc/tool-bridge'
+// The renderer launch relay (M3 task 6.3, SC1): the two-stage dispatch chain's
+// second stage — dispatched rows' launch payloads ride the host dispatch-launch
+// rpc, outcomes backfill through the notify verbs.
+export {
+  dispatchLaunchRelayOf, installDispatchLaunchRelay,
+  launchRequestOf, relayDispatchedRows, setDispatchLaunchRelay,
+} from './ipc/dispatch-relay'
+export type { DispatchLaunchRelay } from './ipc/dispatch-relay'
+// The renderer approval-answer leg (M3 task 6.5, SC3): decided approvals ride
+// the host approval-bridge settle face so the subagent's pending ask resolves
+// with the human verdict (spike-2 §1.3 ③ 决策送达链).
+export {
+  approvalAnswerRelayOf, deliverApprovalAnswer, installApprovalAnswerRelay, setApprovalAnswerRelay,
+} from './ipc/approval-answer'
+export type { ApprovalAnswerRelay } from './ipc/approval-answer'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -135,6 +162,29 @@ export { OverviewView } from './views/overview/OverviewView'
 export type { OverviewViewProps } from './views/overview/OverviewView'
 export { formatTimestamp, middleEllipsis } from './views/overview/format'
 export { fillTemplate } from './views/overview/format'
+// The UF3 migration component family (M3 task 1.6, build stage): the card
+// surface (pill + guarded entry), the confirm door, and the progress/result
+// family (pure run view-model + hook + wizard-reusable body + dialog + the
+// dialog-family flow). The 1.7 assembly wires them into ProjectCard and the
+// register wizard's in-place step.
+export { MigrationPill, MigrationEntryButton } from './views/overview/migration/MigrationPill'
+export type { MigrationPillStatus, MigrationPillProps, MigrationEntryButtonProps } from './views/overview/migration/MigrationPill'
+export { MigrateConfirmDialog, migrationStartErrorText } from './views/overview/migration/MigrateConfirmDialog'
+export type { MigrateConfirmDialogProps, MigrationTranslate } from './views/overview/migration/MigrateConfirmDialog'
+export {
+  MIGRATION_STEPS, MigrationDialogs, MigrationProgressBody, MigrateProgressDialog,
+  applyMigrationProgressEvent, initialMigrationRunState, stepOfPhase, useMigrationRun,
+} from './views/overview/migration/MigrateProgressDialog'
+export type {
+  MigrationRun, MigrationRunState, MigrationRunStatus, MigrationStepKey, MigrationStepState,
+  MigrationDialogsProps, MigrationProgressBodyProps, MigrateProgressDialogProps,
+  UseMigrationRunInput,
+} from './views/overview/migration/MigrateProgressDialog'
+export { useMigrationGuard } from './views/overview/migration/MigrateGuard'
+export type { MigrationGuardView, UseMigrationGuardInput } from './views/overview/migration/MigrateGuard'
+// 1.7: the per-card guarded entry mount (ProjectCard's action-row host).
+export { MigrationCardEntry } from './views/overview/migration/MigrationCardEntry'
+export type { MigrationCardEntryProps } from './views/overview/migration/MigrationCardEntry'
 // The UF2 task board page (task 5.5): mounted by the shell into the reserved
 // tasks seat; exported with its pure board model (filter/sort/dangling) for
 // the 5.15 assembly + its tests. View A (依赖树 DAG) is 5.6's — the
@@ -190,15 +240,6 @@ export type { SlotNavOptions } from './nav/slot-inject'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
 export type { WorkbenchKey } from './locale/en'
-export type {
-  ForgeCliResolved, ForgeCliUnavailable, ForgeBridgeRemoteFace,
-  GetTaskPromptInput, GetTaskPromptResult, ResolveCliResult,
-  TaskPromptAvailable, TaskPromptUnavailable,
-} from './services'
-export type {
-  SessionLaunchFailed, SessionLaunchInput, SessionLaunchOk,
-  SessionLaunchRemoteFace, SessionLaunchResult,
-} from './session-launch'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -237,13 +278,31 @@ export function apply(ctx: ClientContext): void {
 
   const store = createViewKeyStore(createLocalStoragePersistence())
   const controller = new ViewSwitchController(store)
-  // The UF5 launch seat + the board session store (task 5.11): both live at
-  // plugin lifetime — ABOVE the shell — because a UF5 round-trip unmounts the
-  // shell in the slot path (the keyed main slot) and the success hand-over +
-  // the selection/scroll/badge memory must survive it. The seat's rpc members
-  // land when the `remote` service + the namespace contribution mount.
-  const launchSeat = createLaunchSeat(ctx, controller)
+  // The session hand-over + the board session store (task 5.11; M3 6.1
+  // slimmed the seat to the hand-over): both live at plugin lifetime — ABOVE
+  // the shell — because a board round-trip unmounts the shell in the slot
+  // path (the keyed main slot) and the hand-over + the selection/scroll/badge
+  // memory must survive it.
+  const launchSeat = createSessionHandover(ctx, controller)
   const boardSession = createBoardSessionStore()
+  // M3 task 2.1 (T2): the renderer tool bridge — plugin-lifetime pump that
+  // answers the host's forge_task_* tool calls over the whitelisted IPC verbs.
+  // Guarded throughout (hostless worlds stay silent; the host degrades via its
+  // grace/budget chain).
+  const disposeToolBridge = installToolBridgeClient(ctx)
+  // M3 task 6.3 (SC1): the renderer launch relay — the two-stage dispatch
+  // chain's driver leg. The IPC dispatch face hands dispatched rows' launch
+  // payloads here; absent remote/bridge worlds keep the kernel's
+  // rows-stay-starting semantics.
+  const workbenchBridge = getWorkbenchIpcBridge()
+  const disposeLaunchRelay = workbenchBridge === undefined
+    ? () => {}
+    : installDispatchLaunchRelay(ctx, workbenchBridge)
+  // M3 task 6.5 (SC3): the renderer approval-answer leg — decided approvals
+  // ride the host approval-bridge settle face (the subagent's pending ask
+  // resolves with the human verdict). No bridge/remote = no-op (kernel-only
+  // semantics: the row is decided, delivery waits).
+  const disposeAnswerRelay = installApprovalAnswerRelay(ctx)
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -309,6 +368,9 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => {
     clearTimeout(graceTimer)
     disableRail()
+    disposeToolBridge()
+    disposeLaunchRelay()
+    disposeAnswerRelay()
     disposeSlotNav()
   }, 'forge-workbench: navigation forms')
 }

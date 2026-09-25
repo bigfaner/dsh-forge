@@ -43,10 +43,10 @@
  * a TOOLBAR light with a retry, never a view error: the board keeps its
  * data beside it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { Viewport } from '@xyflow/react'
-import type { SessionLink, TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
-import type { TaskBoardFace, TaskDetailFace } from '../contract'
+import type { DispatchRow, DispatchState, SessionLink, TaskBoardData, TaskSummary, TaskStatus, WorkbenchEvent } from '../ipc-types'
+import type { DispatchFace, TaskBoardFace, TaskDetailFace } from '../contract'
 import type { WorkbenchKey } from '../locale/en'
 import { TASK_STATUSES } from '../i18n/task-status'
 import { ChromeButton } from '../components/chrome/ChromeButton'
@@ -60,15 +60,26 @@ import {
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
-import { qualifyTaskKey } from './tasks/SessionLaunchEntry'
-import type { SessionLaunchTaskRef } from '../contract'
-import { TaskDetailPanel, DETAIL_DOCK_WIDTH } from './tasks/TaskDetailPanel'
-import type { DagLaunchMount } from './tasks/dag/build-graph'
+import { TaskDetailPanel, DETAIL_DOCK_WIDTH, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import type { DagDecorMount } from './tasks/dag/build-graph'
+import { hasDispatchableEntry, type DispatchVerbs } from './tasks/dispatch/selection-mode'
+import { DetailJumpButton, SelectionCheckbox, SelectionLayer, useDispatchSelection } from './tasks/dispatch/SelectionLayer'
+import { DispatchToolbarButton } from './tasks/dispatch/DispatchToolbarButton'
+import { ApprovalToolbarButton } from './tasks/dispatch/ApprovalCountBadge'
+import { ApprovalPanel, useApprovals, type ApprovalVerbs } from './tasks/dispatch/ApprovalPanel'
+import {
+  createDispatchAnnouncer, DispatchBadge, orchAnnounceText, ORCH_ANNOUNCE_WINDOW_MS,
+} from './tasks/dispatch/DispatchBadge'
 
 /** The local id of a qualified board key: `feature/5.5` → `5.5`. */
 export function localIdOf(key: string): string {
   const slash = key.lastIndexOf('/')
   return slash === -1 ? key : key.slice(slash + 1)
+}
+
+/** The workbench dialect task address (task 2.5): `<featureSlug>/<localId>`. */
+export function qualifyTaskKey(featureSlug: string, localId: string): string {
+  return `${featureSlug}/${localId}`
 }
 
 /**
@@ -162,9 +173,7 @@ export interface TaskBoardPageProps {
   face?: Partial<TaskBoardFace> | undefined
   /** The detail dock's face — absent members fall back to the build-stage mock (5.15 injects the IPC face). */
   detailFace?: Partial<TaskDetailFace> | undefined
-  /** The UF5 launch services (5.11): absent members keep the build-stage mocks (the DI switch). */
-  launchServices?: Partial<import('../contract').SessionLaunchServices> | undefined
-  /** The UF5 success hand-over (5.11): 切会话视图 + session locating fires through both mounts. */
+  /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: import('../contract').SessionLaunchHandover | undefined
   /**
    * The board session store (5.11 AC3/AC4): present = the plugin-lifetime
@@ -181,6 +190,15 @@ export interface TaskBoardPageProps {
    * mount-once behavior.
    */
   reloadToken?: number | undefined
+  /**
+   * The UF1 orchestration face (task 3.9): present + complete = the UF1
+   * wiring goes live (toolbar 派发/审批 N, selection mode over the three
+   * views, the 编排角标谱, the approval dock, the detail-side dispatch form);
+   * absent = the UF1 toolbar entry stays disabled and the M2 board is
+   * EXACTLY its former self (no silent mock — mock 全撤 discipline; tests
+   * inject the mock twin through this prop).
+   */
+  dispatchFace?: Partial<DispatchFace> | undefined
 }
 
 /**
@@ -273,6 +291,23 @@ const srOnlyStyle = {
 const UPDATING_HIGHLIGHT_MS = 1500
 
 /**
+ * The inert verb twins the UF1 controllers idle against while no dispatch
+ * face is wired (task 3.9): every member rejects — and none is ever
+ * INVOKED, because the toolbar's 派发 entry renders disabled without a face
+ * and the approval dock never opens. Presence, not behavior, is the point.
+ */
+const IDLE_CHAIN_VERBS: DispatchVerbs = {
+  checkStageArtifacts: async () => { throw new Error('dispatch verbs unavailable') },
+  dispatchTasks: async () => { throw new Error('dispatch verbs unavailable') },
+}
+
+/** The approval family's idle twin (same discipline as {@link IDLE_CHAIN_VERBS}). */
+const IDLE_APPROVAL_VERBS: ApprovalVerbs = {
+  listApprovals: async () => { throw new Error('dispatch verbs unavailable') },
+  decideApproval: async () => { throw new Error('dispatch verbs unavailable') },
+}
+
+/**
  * The board page. Renders nothing but the skeleton until the first loadBoard
  * settles; a failed REFRESH keeps the last good board (only a failed FIRST
  * load shows the error card), exactly like the overview page's load.
@@ -361,8 +396,18 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
 
   /** Every source's one write path: select + open, then the shell seat observes. */
   const handleSelect = useCallback((task: TaskSummary): void => {
+    // Selection mode's 命中区域划分 (task 3.9): the card's whole surface is
+    // the CHECKBOX toggle (the SelectionLayer already toggled it); the M2
+    // open-detail semantics stay suppressed until the mode exits.
+    if (selectionActiveRef.current) return
+    // The 同层互斥: a detail activation closes the approval dock and drops
+    // the 返回审批 round-trip context (this entry is NOT from the dock).
+    closeApprovalDockRef.current()
+    setDetailFromApproval(false)
     selection.select(task.key)
     props.onSelect?.(task)
+    // The two refs above are the UF1 controllers' late-bound seams (assigned
+    // in the controllers block below, once the machines exist).
   }, [selection, props.onSelect])
 
   /**
@@ -384,6 +429,74 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   tRef.current = props.t
   const projectIdRef = useRef(props.projectId)
   projectIdRef.current = props.projectId
+
+  // -------------------------------------------------------------------------
+  // UF1 wiring, task 3.9 (tech-design §Integration #1). The dispatch face is
+  // the whole UF1 switch: present + complete = the orchestration surface goes
+  // live; absent = the board is EXACTLY its M2 self (the 派发 entry disabled,
+  // no badges, no dock — never a silent mock twin).
+  // -------------------------------------------------------------------------
+  const dispatch: DispatchFace | undefined = useMemo(() => {
+    const face = props.dispatchFace
+    if (face === undefined) return undefined
+    if (face.checkStageArtifacts === undefined || face.dispatchTasks === undefined
+      || face.redispatch === undefined || face.getDispatches === undefined
+      || face.listApprovals === undefined || face.decideApproval === undefined) return undefined
+    return face as DispatchFace
+  }, [props.dispatchFace])
+  const dispatchRef = useRef(dispatch)
+  dispatchRef.current = dispatch
+
+  /** The project's dispatch rows — the 编排角标谱 + the detail section's data. */
+  const [dispatchRows, setDispatchRows] = useState<readonly DispatchRow[]>([])
+  const refreshDispatches = useCallback((): void => {
+    const face = dispatchRef.current
+    if (face === undefined) return
+    void face.getDispatches(projectIdRef.current ?? '')
+      .then((rows) => { setDispatchRows(rows) })
+      .catch(() => {
+        // A failed rows read keeps the last good spectrum (the same
+        // last-good-board discipline as load); the next reflux re-fires it.
+      })
+  }, [])
+  useEffect(() => {
+    if (dispatch === undefined) return
+    refreshDispatches()
+  }, [dispatch, props.projectId, refreshDispatches])
+
+  // The aria-live 播报节流 (ui-design 全局规则): every orchestration reflux
+  // announcement goes through ONE announcer — per-task 2s windows (终态 wins),
+  // ≥2 ready tasks aggregate into one batch line, the approval count rides as
+  // its own single line. The drain timer fires once per quiet window.
+  const announcer = useMemo(() => createDispatchAnnouncer(), [])
+  const [orchAnnounce, setOrchAnnounce] = useState<string | undefined>(undefined)
+  const announceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleAnnounceDrain = useCallback((): void => {
+    announcer.drain(Date.now()) // anchor the pending windows (emits nothing yet)
+    if (announceTimerRef.current !== null) return
+    announceTimerRef.current = setTimeout(() => {
+      announceTimerRef.current = null
+      const lines = announcer.drain(Date.now())
+      if (lines.length === 0) return
+      setOrchAnnounce(lines.map(line => orchAnnounceText(line, tRef.current)).join(' '))
+      setTimeout(() => { setOrchAnnounce(undefined) }, UPDATING_HIGHLIGHT_MS)
+    }, ORCH_ANNOUNCE_WINDOW_MS)
+  }, [announcer])
+  useEffect(() => () => {
+    if (announceTimerRef.current !== null) clearTimeout(announceTimerRef.current)
+  }, [])
+
+  // The pending-approval count (the toolbar 「审批 N」 face; the dock's
+  // controller owns the number, this mirror feeds the button + the announcer).
+  const [approvalCount, setApprovalCount] = useState(0)
+  // The 审批 round-trip flag: the detail dock was entered FROM the approval
+  // dock (详情 ↗) → the detail head carries 「◂ 返回审批(N)」.
+  const [detailFromApproval, setDetailFromApproval] = useState(false)
+  // Late-bound seams the early handlers (handleSelect) close over — assigned
+  // in the UF1 controllers block below (the same render-time mirror style as
+  // selectedRef/projectIdRef above).
+  const selectionActiveRef = useRef(false)
+  const closeApprovalDockRef = useRef<() => void>(() => {})
 
   const load = async (): Promise<TaskBoardData | undefined> => {
     try {
@@ -438,9 +551,22 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     // Foreign projects' events are not this board's concern (the assembly
     // subscribes per active project; undefined projectId accepts all — the
     // build-stage page has no real project binding yet).
+    const mine = (event: WorkbenchEvent): boolean =>
+      projectIdRef.current === undefined || event.projectId === projectIdRef.current
+    // The UF1 orchestration reflux (task 3.9, ≤5s 免手动刷新): dispatch_updated
+    // drives the 编排角标谱 — rows re-read in place (attribute-level: the
+    // views keep their filter/scroll/focus state), the announcement rides
+    // the ONE throttled announcer. approval_received lands the same way
+    // through the approval dock's own subscription (the shared channel).
+    const dispatchUpdates = events.filter((event): event is Extract<typeof event, { type: 'dispatch_updated' }> =>
+      event.type === 'dispatch_updated' && mine(event))
+    if (dispatchUpdates.length > 0) {
+      for (const event of dispatchUpdates) announcer.pushState(event.taskKey, event.state)
+      scheduleAnnounceDrain()
+      refreshDispatches()
+    }
     const updates = events.filter((event): event is Extract<typeof event, { type: 'task_updated' }> =>
-      event.type === 'task_updated'
-      && (projectIdRef.current === undefined || event.projectId === projectIdRef.current))
+      event.type === 'task_updated' && mine(event))
     if (updates.length === 0) return
     // The structural markers ride the same filtered stream (5.15's
     // event-merge coupling — see structuralKeysRef).
@@ -516,16 +642,164 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     [allTasks, filter, sort],
   )
 
-  // The UF5 success leg (5.11): delegate the hand-over (切会话视图 + session
-  // locating — the shell's seat), then write the 运行中徽标 into the board
-  // session store for the launched task's qualified key (AC3/AC2: back on the
-  // board, the badge reads correctly off the store, unmount-surviving).
-  const handleLaunched = useCallback((sessionId: string, task: SessionLaunchTaskRef): void => {
-    props.onLaunched?.(sessionId, task)
-    if (props.session !== undefined && props.projectId !== undefined) {
-      props.session.markLinkActive(props.projectId, qualifyTaskKey(task.featureSlug, task.localId), sessionId)
+  // -------------------------------------------------------------------------
+  // UF1 controllers + the dock mutex (task 3.9). The selection chain and the
+  // approval dock run on EVERY mount (unconditional hooks); without a
+  // dispatch face they idle — nothing reaches a verb.
+  // -------------------------------------------------------------------------
+  const selectionController = useDispatchSelection({
+    entries: allTasks,
+    projectId: props.projectId ?? '',
+    verbs: dispatch ?? IDLE_CHAIN_VERBS,
+    ...(dispatch === undefined ? {} : { onDispatched: () => { refreshDispatches() } }),
+  })
+  const approvals = useApprovals({
+    projectId: props.projectId ?? '',
+    verbs: dispatch ?? IDLE_APPROVAL_VERBS,
+    subscribeEvents: face.subscribeEvents,
+    ...(dispatch === undefined ? {} : { onDecided: () => { refreshDispatches() } }),
+    onCountChange: (count) => {
+      setApprovalCount(count)
+      // The approval-count announcement line rides ONLY on a POSITIVE count
+      // (a count dropping to 0 is the user's own decision — the dock's own
+      // decided announcement covers it; a mount-time 0 never arms the
+      // announcer's drain timer).
+      if (count > 0) {
+        announcer.pushApprovalCount(count)
+        scheduleAnnounceDrain()
+      }
+    },
+  })
+  const selectionActive = selectionController.snapshot.phase !== 'idle'
+  const approvalDockOpen = approvals.snapshot.phase !== 'closed'
+
+  // Latest-value mirrors keep the M2 handlers stable (the DAG launch mount's
+  // memo keys on its handler identities — an approval snapshot change must
+  // not rebuild the graph). The two EARLY refs (selectionActiveRef /
+  // closeApprovalDockRef) are the pre-controller seams handleSelect closes over.
+  selectionActiveRef.current = selectionActive
+  const approvalsRef = useRef(approvals)
+  approvalsRef.current = approvals
+  closeApprovalDockRef.current = () => { approvals.close() }
+
+  /**
+   * The 同层互斥 core (ui-design 层叠与共存): the approval dock and the detail
+   * dock are presentation-exclusive — opening one closes the other; the
+   * 「详情 ↗」/「◂ 返回审批」round-trip keeps each side's state (the approval
+   * machine survives its closed face; the selection store keeps the key).
+   */
+  const openApprovalDock = useCallback((locateTaskKey?: string): void => {
+    if (selectedRef.current.open) selection.close()
+    approvalsRef.current.open(locateTaskKey)
+  }, [selection])
+  const openDetailFromApproval = useCallback((taskKey: string): void => {
+    approvalsRef.current.close()
+    setDetailFromApproval(true)
+    selection.select(taskKey)
+  }, [selection])
+  const returnToApproval = useCallback((): void => {
+    selection.close()
+    setDetailFromApproval(false)
+    approvalsRef.current.open()
+  }, [selection])
+
+  /**
+   * The ⤢ / Enter detail entry INSIDE selection mode (ui-design 命中区域划
+   * 分): opens the dock WITHOUT leaving the mode; the mutex closes the
+   * approval dock (this entry is not from it).
+   */
+  const handleOpenDetailFromSelection = useCallback((taskKey: string): void => {
+    approvalsRef.current.close()
+    setDetailFromApproval(false)
+    selection.select(taskKey)
+  }, [selection])
+
+  // 「进入会话」(the orchestration section's subagent jump): the M1 view-switch
+  // contract rides the hand-over seat (切会话视图 + session locating), and the
+  // 运行中徽标 write rides along (AC3/AC2: back on the board, the badge reads
+  // correctly off the store, unmount-surviving).
+  const handleEnterSession = useCallback((sessionId: string): void => {
+    if (props.projectId === undefined || props.codeRoot === undefined) return
+    const taskKey = selectedRef.current.taskKey
+    if (taskKey === undefined) return
+    const task = allTasks.find(candidate => candidate.key === taskKey)
+    if (task === undefined) return
+    props.onLaunched?.(sessionId, {
+      projectId: props.projectId,
+      codeRoot: props.codeRoot,
+      featureSlug: task.featureSlug,
+      localId: localIdOf(task.key),
+      title: task.title,
+    })
+    if (props.session !== undefined) {
+      props.session.markLinkActive(props.projectId, taskKey, sessionId)
     }
-  }, [props.onLaunched, props.session, props.projectId])
+  }, [props.projectId, props.codeRoot, props.onLaunched, props.session, allTasks])
+
+  // The 编排角标谱's per-task state: the LATEST row per task (redispatch
+  // mints a new row — latest-by-dispatchedAt is the live orchestration).
+  const orchStates = useMemo(() => {
+    const latest = new Map<string, { state: DispatchState; dispatchedAt: string }>()
+    for (const row of dispatchRows) {
+      const prev = latest.get(row.taskKey)
+      if (prev === undefined || row.dispatchedAt >= prev.dispatchedAt) {
+        latest.set(row.taskKey, { state: row.state, dispatchedAt: row.dispatchedAt })
+      }
+    }
+    const states = new Map<string, DispatchState>()
+    for (const [key, entry] of latest) states.set(key, entry.state)
+    return states
+  }, [dispatchRows])
+
+  // The card-level decoration composers (角标以包装/props 传入 — the M2 views
+  // render them verbatim, they never derive orchestration semantics). The
+  // badge wrapper swallows the click: the awaiting pill is the card-side
+  // approval ENTRY (its own action), and the card's own click handler must
+  // not also run (it would close the dock the pill just opened).
+  const orchBadgeOf = useCallback((taskKey: string): ReactNode => {
+    const state = orchStates.get(taskKey)
+    if (state === undefined) return null
+    return (
+      <span
+        key={state}
+        data-dsh-forge-orch-badge-wrap=""
+        onClick={(event) => { event.stopPropagation() }}
+      >
+        <DispatchBadge t={props.t} taskKey={taskKey} state={state} onOpenApproval={openApprovalDock} />
+      </span>
+    )
+  }, [orchStates, props.t, openApprovalDock])
+  const selectionTitleOf = useCallback((taskKey: string): string =>
+    allTasks.find(task => task.key === taskKey)?.title ?? taskKey, [allTasks])
+  const selectionDecorOf = useCallback((taskKey: string): ReactNode => (
+    <>
+      <SelectionCheckbox taskKey={taskKey} title={selectionTitleOf(taskKey)} />
+      <DetailJumpButton taskKey={taskKey} />
+    </>
+  ), [selectionTitleOf])
+  /** The view C 行首内嵌 cell (ui-design: checkbox inline at the row's left edge). */
+  const selectionCellOf = useCallback((taskKey: string): ReactNode => (
+    <td style={{ padding: '6px 10px', width: '44px' }}>
+      <SelectionCheckbox taskKey={taskKey} title={selectionTitleOf(taskKey)} variant="inline" />
+    </td>
+  ), [selectionTitleOf])
+  const dagDecor = useMemo<DagDecorMount>(() => ({
+    orchBadgeOf,
+    selectionDecorOf,
+  }), [orchBadgeOf, selectionDecorOf])
+
+  // The detail dock's UF1 mount (task 3.9): the 3.8 chain + rows + the mutex
+  // seams; present only when the dispatch face is live.
+  const detailDispatchMount: TaskDetailDispatchMount | undefined = dispatch === undefined ? undefined : {
+    verbs: dispatch,
+    rows: dispatchRows,
+    entries: allTasks,
+    onDispatched: () => { refreshDispatches() },
+    onOpenApproval: openApprovalDock,
+    onEnterSession: handleEnterSession,
+    approvalReturn: selected.open && detailFromApproval ? { count: approvalCount } : undefined,
+    onReturnToApproval: returnToApproval,
+  }
 
   // The dock's authoritative link read (5.11): getTaskDetail.links reconciles
   // the badge map (an ended/absent active link drops it — the end path).
@@ -535,70 +809,73 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     }
   }, [props.session, props.projectId])
 
-  // The DAG's launch mount (5.11): one memoized object — the graph rebuild
-  // keys on its identity, so the entries' props stay referentially stable
-  // between renders (a services/onLaunched change is a REAL change).
-  const dagLaunchMount = useMemo<DagLaunchMount | undefined>(() => {
-    if (props.projectId === undefined || props.codeRoot === undefined) return undefined
-    return {
-      projectId: props.projectId,
-      codeRoot: props.codeRoot,
-      ...(props.launchServices === undefined ? {} : { services: props.launchServices }),
-      onLaunched: handleLaunched,
-    }
-  }, [props.projectId, props.codeRoot, props.launchServices, handleLaunched])
-
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
 
   // The active view panel (A/B/C — one tabpanel at a time, each labelled back
-  // by its toolbar tab; view A is the DAG, default since 5.6).
-  const viewPanel = view === 'tree'
-    ? (
-      <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-tree" data-dsh-forge-board-panel="tree">
-        <DepTreeView
-          t={props.t}
-          tasks={visibleTasks}
-          danglingByTask={danglingByTask}
-          updatingKeys={updatingKeys}
-          selectedKey={selected.taskKey}
-          onSelect={handleSelect}
-          initialViewport={treeViewport.current}
-          onViewportSettled={(viewport) => { treeViewport.current = viewport }}
-          {...(dagLaunchMount === undefined ? {} : { launch: dagLaunchMount })}
-          activeLinks={activeLinks}
-        />
-      </div>
-    )
-    : view === 'grouped'
-      ? (
-        <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-grouped" data-dsh-forge-board-panel="grouped">
-          <StatusBoard
-            t={props.t}
-            tasks={visibleTasks}
-            collapsedStatuses={collapsedStatuses}
-            onCollapsedStatusesChange={setCollapsedStatuses}
-            danglingByTask={danglingByTask}
-            updatingKeys={updatingKeys}
-            selectedKey={selected.taskKey}
-            onSelect={handleSelect}
-            activeLinks={activeLinks}
-          />
-        </div>
-      )
-      : (
-        <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-list" data-dsh-forge-board-panel="list">
-          <TaskList
-            t={props.t}
-            tasks={visibleTasks}
-            danglingByTask={danglingByTask}
-            updatingKeys={updatingKeys}
-            selectedKey={selected.taskKey}
-            onSelect={handleSelect}
-            activeLinks={activeLinks}
-          />
-        </div>
-      )
+  // by its toolbar tab; view A is the DAG, default since 5.6). Since 3.9 the
+  // panel rides INSIDE the UF1 SelectionLayer (选择模式整面勾选 + ⤢ 详情 + Esc
+  // 分层 over all three views; the layer mounts nothing while idle) and each
+  // view receives the UF1 decoration composers (角标谱 + selection cluster —
+  // rendered by the M2 components verbatim, never derived inside them).
+  const viewPanel = (
+    <SelectionLayer
+      controller={selectionController}
+      t={props.t}
+      onOpenDetail={handleOpenDetailFromSelection}
+    >
+      {view === 'tree'
+        ? (
+          <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-tree" data-dsh-forge-board-panel="tree">
+            <DepTreeView
+              t={props.t}
+              tasks={visibleTasks}
+              danglingByTask={danglingByTask}
+              updatingKeys={updatingKeys}
+              selectedKey={selected.taskKey}
+              onSelect={handleSelect}
+              initialViewport={treeViewport.current}
+              onViewportSettled={(viewport) => { treeViewport.current = viewport }}
+              activeLinks={activeLinks}
+              decor={dagDecor}
+            />
+          </div>
+        )
+        : view === 'grouped'
+          ? (
+            <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-grouped" data-dsh-forge-board-panel="grouped">
+              <StatusBoard
+                t={props.t}
+                tasks={visibleTasks}
+                collapsedStatuses={collapsedStatuses}
+                onCollapsedStatusesChange={setCollapsedStatuses}
+                danglingByTask={danglingByTask}
+                updatingKeys={updatingKeys}
+                selectedKey={selected.taskKey}
+                onSelect={handleSelect}
+                activeLinks={activeLinks}
+                orchBadgeOf={orchBadgeOf}
+                selectionDecorOf={selectionDecorOf}
+              />
+            </div>
+          )
+          : (
+            <div role="tabpanel" aria-labelledby="dsh-forge-board-view-tab-list" data-dsh-forge-board-panel="list">
+              <TaskList
+                t={props.t}
+                tasks={visibleTasks}
+                danglingByTask={danglingByTask}
+                updatingKeys={updatingKeys}
+                selectedKey={selected.taskKey}
+                onSelect={handleSelect}
+                activeLinks={activeLinks}
+                orchBadgeOf={orchBadgeOf}
+                selectionCellOf={selectionCellOf}
+              />
+            </div>
+          )}
+    </SelectionLayer>
+  )
 
   return (
     <div
@@ -611,7 +888,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
         // flow layout (toolbar + views) yields the strip and bounces back on
         // close — the views shrink, they never slide under the overlay (the
         // minWidth 0 chain + B's own overflowX keep horizontal scrolling sane).
-        ...(selected.open ? { paddingRight: DETAIL_DOCK_WIDTH } : {}),
+        // Since 3.9 EITHER dock (detail OR approval — 同层互斥) claims the strip.
+        ...(selected.open || approvalDockOpen ? { paddingRight: DETAIL_DOCK_WIDTH } : {}),
       }}
     >
       {phase === 'loading' && (
@@ -666,6 +944,25 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             totalCount={allTasks.length}
             sync={board.sync}
             onRetrySync={() => { void load() }}
+            actions={(
+              // UF1 工具栏追加 (task 3.9, ui-design: M2 既有控件不动,右侧追
+              // 加):「派发」md 主 (disabled + tooltip 无可派发/无动词面) and
+              // 「审批 N」warn Pill (N = 0 hidden, never disabled).
+              <>
+                <DispatchToolbarButton
+                  t={props.t}
+                  disabled={dispatch === undefined || !hasDispatchableEntry(allTasks)}
+                  tooltip={props.t('tasks.dispatch.entry.disabledTooltip')}
+                  active={selectionActive}
+                  onEnter={() => { selectionController.enter() }}
+                />
+                <ApprovalToolbarButton
+                  t={props.t}
+                  count={approvalCount}
+                  onOpen={() => { openApprovalDock() }}
+                />
+              </>
+            )}
           />
 
           {noMatch
@@ -690,11 +987,20 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             {announcement ?? ''}
           </p>
 
+          {/* The UF1 orchestration reflux announcements (task 3.9) — the ONE
+              throttled live region every dispatch/approval-state change goes
+              through (2s per-task windows, batch aggregation, approval count
+              as its own line). */}
+          <p role="status" aria-live="polite" data-dsh-forge-board-orch-announce="" style={srOnlyStyle}>
+            {orchAnnounce ?? ''}
+          </p>
+
           {/* UF3 (task 5.8): the detail dock — the selection store's open arm
               drives it (closed ⇒ null ⇒ not rendered; a key switch swaps the
               detail in place through the panel's aria-busy repaint). The dock
               anchors to this root's right edge; the root's open-state inset
-              above made room for it. */}
+              above made room for it. Since 3.9 the dock carries the UF1
+              dispatch mount (派发执行 + 编排分区) whenever the face is live. */}
           <TaskDetailPanel
             t={props.t}
             taskKey={selected.open ? (selected.taskKey ?? null) : null}
@@ -702,14 +1008,25 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             codeRoot={props.codeRoot}
             reloadToken={detailReload}
             face={props.detailFace}
-            {...(props.launchServices === undefined ? {} : { services: props.launchServices })}
-            onLaunched={handleLaunched}
             {...(selected.taskKey === undefined
               ? {}
               : { activeSessionId: activeLinks.get(selected.taskKey) })}
             {...(props.session === undefined ? {} : { onLinksLoaded: handleLinksLoaded })}
             onClose={handleCloseDock}
             onNavigate={handleNavigate}
+            {...(detailDispatchMount === undefined ? {} : { dispatch: detailDispatchMount })}
+          />
+
+          {/* The UF1 审批 dock (task 3.9): the approval panel — 同层互斥 with
+              the detail dock by the handlers above (openApprovalDock closes
+              the detail; the 详情 ↗ detour reopens it with the return
+              context). STAYS MOUNTED while closed (renders nothing) so the
+              返回审批 restore keeps its entries + scroll. */}
+          <ApprovalPanel
+            controller={approvals}
+            t={props.t}
+            titleOf={taskKey => allTasks.find(task => task.key === taskKey)?.title}
+            onOpenDetail={openDetailFromApproval}
           />
         </>
       )}

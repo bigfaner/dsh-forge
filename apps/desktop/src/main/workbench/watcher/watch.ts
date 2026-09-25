@@ -17,9 +17,9 @@
 // removeProject 后由调用方(2.7 IPC 接线)传 null 停链。
 
 import { statSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { shellLog } from '../../log.ts'
-import { resolveFeaturesDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
+import { resolveFeaturesDir, resolveProposalsDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
 import { isExternalDocPathAuthorized } from '../registry/authorize.ts'
 import type { RepoDb } from '../repos/types.ts'
 import { createEventBatcher, type WorkbenchEventSink } from './events.ts'
@@ -70,7 +70,9 @@ function errorMessage(error: unknown): string {
 
 /**
  * watch 目标计算(Hard Rule 执行点):仅已注册项目(调用方已复核)的
- * `.forge/` 与文档位置 `docs/features/`;仓外文档位置未授权即排除该根。
+ * `.forge/` 与文档位置 `docs/features/` + `docs/proposals/`(M3 5.3:提案
+ * 感知根,DF007 ≤5s 回流的 fs 事件源);仓外文档位置未授权即排除文档根
+ * (features 与 proposals 同一授权判定 —— 同属 docLocationPath 之下)。
  * 不存在的根跳过(watch 不得对缺失目录建立,降级链留给存在根)。
  */
 function resolveWatchRoots(db: RepoDb, target: ScanTarget, log: WatchLog): string[] {
@@ -79,10 +81,24 @@ function resolveWatchRoots(db: RepoDb, target: ScanTarget, log: WatchLog): strin
   if (isDirectoryPath(forgeRoot)) roots.push(forgeRoot)
 
   const featuresDir = resolveFeaturesDir(target)
+  const proposalsDir = resolveProposalsDir(target)
+  const pushDocRoots = (): void => {
+    if (isDirectoryPath(featuresDir)) roots.push(featuresDir)
+    if (isDirectoryPath(proposalsDir)) roots.push(proposalsDir)
+    // 后建根感知缝:文档根(features/proposals)在激活重建之后才创建时,
+    // 缺失根没有任何 watch —— 外部首写(如首份提案)永不被感知,≤5s 回流
+    // 断裂(M3 5.3 提案感知根)。以父目录(<docs> 根)兜底:根自身的创建
+    // 与其内部写入都落在父目录的事件域;扫描面不变(scanForgeFiles 自行
+    // 裁决摄入),仅补事件源。
+    if (!isDirectoryPath(featuresDir) || !isDirectoryPath(proposalsDir)) {
+      const docParent = dirname(featuresDir)
+      if (isDirectoryPath(docParent) && !roots.includes(docParent)) roots.push(docParent)
+    }
+  }
   if (target.docLocationPath === null) {
-    if (isDirectoryPath(featuresDir)) roots.push(featuresDir)
+    pushDocRoots()
   } else if (isExternalDocPathAuthorized(db, target.docLocationPath)) {
-    if (isDirectoryPath(featuresDir)) roots.push(featuresDir)
+    pushDocRoots()
   } else {
     log.warn({
       code: LOG_CODE_WATCH_ERROR,

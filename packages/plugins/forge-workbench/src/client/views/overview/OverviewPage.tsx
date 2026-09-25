@@ -29,16 +29,18 @@
  * the card's 移除 only OPENS the double-step confirm; the verb fires solely
  * from the dialog's confirm.
  */
-import { useEffect, useRef, useState } from 'react'
-import type { Project, WorkbenchState, WorkbenchVerbError } from '../../ipc-types'
-import type { OverviewFace, PluginFace } from '../../contract'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { MigrationStatus, Project, WorkbenchState, WorkbenchVerbError, WorkbenchEvent } from '../../ipc-types'
+import type { MigrationFace, OverviewFace, PluginFace, PrefsFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { TOAST_Z } from '../tasks/launch/LaunchStates'
-import { createMockOverviewFace } from '../../mocks/workbench'
+import { createMockFeatureBoardFace, createMockMigrationFace, createMockOverviewFace } from '../../mocks/workbench'
 import { ProjectGrid } from './ProjectGrid'
 import { PluginSection } from './PluginSection'
+import { PreferenceSection, type PrefFeatureRef } from './prefs/PreferenceSection'
 import { RemoveConfirm } from './RemoveConfirm'
+import { MigrationDialogs } from './migration/MigrateProgressDialog'
 import { middleEllipsis } from './format'
 
 /** Narrow an unknown verb rejection to the serialized Interface 1 error code. */
@@ -85,6 +87,35 @@ export interface OverviewPageProps {
   face?: Partial<OverviewFace> | undefined
   /** The UF6 section face — absent members fall back to the section-local mock twin (5.14 injects the IPC face). */
   pluginFace?: Partial<PluginFace> | undefined
+  /**
+   * The UF3 migration family's face (task 1.7): PRESENT selects the card
+   * migration surface (statuses → 可迁移 Pill/入口, MigrationDialogs mount);
+   * absent keeps the M2 page verbatim (the build-stage default). The 1.7
+   * assembly injects the IPC face; tests the 1.6 mock twin.
+   */
+  migrationFace?: Partial<MigrationFace> | undefined
+  /**
+   * The UF4 prefs family's face (task 5.2, Integration Spec #4): threads
+   * into the in-page PreferenceSection (插件管理区之下). Absent members fall
+   * back to the section-local mock twin — the build-stage default; the
+   * OverviewView assembly injects the bridge-backed verbs.
+   */
+  prefsFace?: Partial<PrefsFace> | undefined
+  /**
+   * UF4 (task 5.2): the Feature tier's roster source — the ACTIVE project's
+   * kernel feature list (featureList verb on the real chain; the mock board
+   * twin in the build stage). Keyed on the active project id: a switch
+   * rebinds the section's feature Menu, and the section re-reads its tier
+   * scope through its own loading skeleton.
+   */
+  loadFeatures?: ((projectId: string) => Promise<readonly PrefFeatureRef[]>) | undefined
+  /**
+   * UF4 (task 5.2): the prefs_updated reflux channel (the shared
+   * single-subscriber event source). Threads into the section, which filters
+   * the pushed events against the current scope's resolution chain and
+   * silently re-reads (生效值即时刷新, 免手动刷新).
+   */
+  subscribePrefsEvents?: ((listener: (events: readonly WorkbenchEvent[]) => void) => (() => void)) | undefined
 }
 
 const pageStyle = {
@@ -138,6 +169,12 @@ const cardStyle = {
 const lostCardStyle = {
   ...cardStyle,
   border: '1.5px solid var(--dsw-alias-state-warn-primary, rgb(245, 158, 11))',
+} as const
+
+/** 5.7 skill-dir sync alert card — error-tinted (the load-error precedent). */
+const skillDirAlertCardStyle = {
+  ...cardStyle,
+  border: '1.5px solid var(--dsw-alias-state-error-primary, rgb(236, 19, 19))',
 } as const
 
 const errorCardStyle = {
@@ -263,12 +300,32 @@ export function OverviewPage(props: OverviewPageProps) {
   // assembly spreads the IPC-backed members over it).
   const [defaultFace] = useState(() => createMockOverviewFace())
   const face: OverviewFace = { ...defaultFace, ...props.face }
+  // UF3 (task 1.7): the migration face spreads the same way, but the card
+  // surface ACTIVATES only when the seat provided one (absent = the M2 page
+  // verbatim — the pill/entry/dialog never appear in the build stage).
+  const [defaultMigrationFace] = useState(() => createMockMigrationFace().face)
+  // Identity-stable for given props (the statuses effect keys its loads on
+  // the face — a fresh spread per render would loop the effect forever).
+  const migrationFace: MigrationFace = useMemo(
+    () => ({ ...defaultMigrationFace, ...props.migrationFace }),
+    [defaultMigrationFace, props.migrationFace],
+  )
+  const migrationEnabled = props.migrationFace !== undefined
   const lostProjectIds = props.lostProjectIds ?? []
 
   const [phase, setPhase] = useState<'loading' | 'ready' | 'load-error'>('loading')
   const [state, setState] = useState<WorkbenchState | undefined>(undefined)
   const [toastText, setToastText] = useState<string | undefined>(undefined)
   const [removing, setRemoving] = useState<Project | undefined>(undefined)
+  // UF3 (task 1.7): the card-surface state — per-project migration statuses,
+  // the migrating row (MigrationDialogs' open), the confirm copy's backup
+  // root, and a settle nonce (a finished run re-reads the statuses so the
+  // Pill/entry retire without a remount). All inert while migrationFace is
+  // absent (the M2 build-stage page).
+  const [migrationStatuses, setMigrationStatuses] = useState<ReadonlyMap<string, MigrationStatus>>(new Map())
+  const [migrating, setMigrating] = useState<Project | undefined>(undefined)
+  const [backupsRoot, setBackupsRoot] = useState<string>('')
+  const [migrationNonce, setMigrationNonce] = useState(0)
   const hasLoaded = useRef(false)
 
   const load = async (): Promise<WorkbenchState | undefined> => {
@@ -292,6 +349,36 @@ export function OverviewPage(props: OverviewPageProps) {
   useEffect(() => {
     void load()
   }, [props.reloadToken])
+
+  // UF3 (task 1.7): the per-project migration statuses — read on every
+  // registry refresh AND every settle nonce bump (a finished run flips
+  // authority → the Pill/entry retire). A failed per-project read leaves
+  // that card without the surface (never an error wall); the whole pass is
+  // skipped while migrationFace is absent (the M2 page).
+  useEffect(() => {
+    if (!migrationEnabled || state === undefined) return
+    let alive = true
+    void Promise.all(state.projects.map(project =>
+      migrationFace.getMigrationStatus(project.id)
+        .then(status => [project.id, status] as const)
+        .catch(() => undefined),
+    )).then((rows) => {
+      if (!alive) return
+      setMigrationStatuses(new Map(rows.filter((row): row is readonly [string, MigrationStatus] => row !== undefined)))
+    })
+    return () => { alive = false }
+  }, [state, migrationNonce, migrationFace])
+
+  // UF3 (task 1.7): the confirm copy's 备份位置 root (one read; the run's own
+  // backup path lands inline in the verify row once the run starts).
+  useEffect(() => {
+    if (!migrationEnabled) return
+    let alive = true
+    migrationFace.getWorkbenchPaths().then((paths) => {
+      if (alive) setBackupsRoot(paths.backupsRoot)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [migrationFace])
 
   /**
    * Run one Interface 1 verb with the page's error mapping:
@@ -324,6 +411,11 @@ export function OverviewPage(props: OverviewPageProps) {
     const ok = await runVerb(() => face.updateProject(id, { displayName }))
     if (ok) await load()
     return ok
+  }
+
+  /** UF3 (task 1.7): the card 「迁移」 entry's click — opens the dialog family (the single door). */
+  const openMigration = (project: Project): void => {
+    setMigrating(project)
   }
 
   const cancelRemove = (): void => {
@@ -360,11 +452,64 @@ export function OverviewPage(props: OverviewPageProps) {
   }
 
   const activeProject = state?.projects.find(project => project.id === state.activeProjectId)
+
+  // UF4 (task 5.2): the section's feature roster — loaded per ACTIVE project
+  // (feature 选择器数据源 = feature 列表,内核). The stale roster never leaks
+  // into the next project's Feature Menu (cleared synchronously on the id
+  // change); a failed read degrades to a disabled Feature tier — never an
+  // error wall. The section's own scope loads handle the loading 骨架.
+  const [features, setFeatures] = useState<readonly PrefFeatureRef[]>([])
+  const [buildStageFeatureSource] = useState(() => createMockFeatureBoardFace())
+  const loadFeatures = useMemo(
+    () => props.loadFeatures ?? (async (projectId: string): Promise<readonly PrefFeatureRef[]> => {
+      const board = await buildStageFeatureSource.loadFeatureBoard(projectId)
+      return board.features.map(feature => ({ slug: feature.slug }))
+    }),
+    [props.loadFeatures, buildStageFeatureSource],
+  )
+  const activeProjectId = activeProject?.id ?? null
+  useEffect(() => {
+    if (activeProjectId === null) {
+      setFeatures(prev => (prev.length === 0 ? prev : []))
+      return
+    }
+    let alive = true
+    setFeatures([])
+    void loadFeatures(activeProjectId)
+      .then((next) => { if (alive) setFeatures(next) })
+      .catch(() => { if (alive) setFeatures([]) })
+    return () => { alive = false }
+  }, [activeProjectId, loadFeatures])
+
   const populated = phase === 'ready' && state !== undefined && state.projects.length > 0
+  const skillDirAlerts = state?.skillDirSyncAlerts
 
   return (
     <div data-dsh-forge-overview="" aria-busy={phase === 'loading' ? 'true' : 'false'} style={pageStyle}>
       {phase === 'loading' && <OverviewSkeleton label={props.t('overview.loading')} />}
+
+      {/* 5.7:customSkillDirs boot 同步失败告警(ERR_SKILL_DIR_SYNC;设置面
+          呈现面 = 概览页置顶告警卡 —— Hard Rule「失败显式告警不静默」的
+          renderer 半面;载荷随 getState 走,零新增动词/通道)。 */}
+      {phase === 'ready' && skillDirAlerts !== undefined && skillDirAlerts.length > 0 && (
+        <section
+          data-dsh-forge-skill-dir-alerts=""
+          role="alert"
+          aria-label={props.t('overview.skillDirs.alertTitle')}
+          style={skillDirAlertCardStyle}
+        >
+          <h3 style={cardTitleStyle}>{props.t('overview.skillDirs.alertTitle')}</h3>
+          {skillDirAlerts.map(alert => (
+            <p
+              key={`${alert.plugin}:${alert.message}`}
+              data-dsh-forge-skill-dir-alert={alert.plugin}
+              style={cardBodyStyle}
+            >
+              {fillTemplate(props.t('overview.skillDirs.alertEntry'), { name: alert.plugin, message: alert.message })}
+            </p>
+          ))}
+        </section>
+      )}
 
       {phase === 'load-error' && (
         <div data-dsh-forge-overview-load-error="" role="alert" style={errorCardStyle}>
@@ -458,6 +603,24 @@ export function OverviewPage(props: OverviewPageProps) {
             onActivate={activate}
             onRename={rename}
             onRemove={(project) => { setRemoving(project) }}
+            {...(migrationEnabled
+              ? {
+                migrationOf: (project: Project) => {
+                  const status = migrationStatuses.get(project.id)
+                  if (status === undefined) return undefined
+                  if (status.authority === 'sqlite') {
+                    return { status: 'migrated' as const, face: migrationFace, onMigrate: openMigration }
+                  }
+                  // 可迁移 = files authority + the doc tree still carries index.json
+                  // (ui-design migratable 判定; a bare-files project without a task
+                  // corpus never shows the entry).
+                  if (status.indexJsonDetected) {
+                    return { status: 'migratable' as const, face: migrationFace, onMigrate: openMigration }
+                  }
+                  return undefined
+                },
+              }
+              : {})}
           />
         </>
       )}
@@ -474,12 +637,56 @@ export function OverviewPage(props: OverviewPageProps) {
         <PluginSection t={props.t} face={props.pluginFace} />
       )}
 
+      {/* The UF4 seat (task 5.2, Integration Spec #4): the 偏好区块卡 BELOW
+          the plugin section (插件管理区之下) at its own stable child slot —
+          same ready-branch discipline as the plugin section, so the section's
+          tier/accordion state survives the empty ⇄ populated transitions.
+          The global tier is project-independent, so the section renders in
+          EVERY ready branch (无激活项目 = 仅「全局」可用, the section's own
+          disabled-tier contract); the active-project binding drives the
+          项目/Feature tiers, the roster effect above feeds the Menu, and the
+          reflux seam re-reads on prefs_updated. */}
+      {phase === 'ready' && state !== undefined && (
+        <PreferenceSection
+          t={props.t}
+          activeProject={activeProject === undefined
+            ? undefined
+            : { id: activeProject.id, displayName: activeProject.displayName }}
+          features={features}
+          face={props.prefsFace}
+          subscribeEvents={props.subscribePrefsEvents}
+        />
+      )}
+
       {removing !== undefined && (
         <RemoveConfirm
           t={props.t}
           project={removing}
           onConfirm={confirmRemove}
           onCancel={cancelRemove}
+        />
+      )}
+
+      {/* UF3 (task 1.7): the explicit-migration dialog family — the card
+          entry's ONLY door (confirm → progress/results, the 1.6 state
+          machine). A settled run re-reads the registry AND the statuses, so
+          the 可迁移 Pill + entry retire the moment the run completes. */}
+      {migrationEnabled && migrating !== undefined && (
+        <MigrationDialogs
+          t={props.t}
+          projectId={migrating.id}
+          face={migrationFace}
+          backupPath={backupsRoot}
+          open={true}
+          onSettled={() => {
+            setMigrationNonce(nonce => nonce + 1)
+            void load()
+          }}
+          onClose={() => {
+            setMigrating(undefined)
+            setMigrationNonce(nonce => nonce + 1)
+            void load()
+          }}
         />
       )}
 

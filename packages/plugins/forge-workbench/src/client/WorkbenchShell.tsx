@@ -65,6 +65,17 @@
  * page. With 5.9 the 3.2 placeholder retired — every tab of the strip
  * carries its page.
  *
+ * M3 task 5.5 (UF5 提案看板 + tab 序修订): the strip's order is now the PRD's
+ * M3 revision — 概览 / 提案 / Feature / 任务 (the proposals board SECOND, the
+ * 「Feature」 label normalized) — and the second seat mounts ProposalsPage over
+ * the view-key machine's proposalSlug dimension (list↔detail + the feature
+ * badge's 互跳, all machine transitions). The 任务 tab label carries the 3.7
+ * ApprovalCountBadge (工作台级审批指示): the shell feeds the live pending count
+ * from its own read-side subscription (listApprovals + the shared event
+ * channel), so the signal stays visible from every tab. The proposals
+ * lost-card's 移除项目 seam opens the shell-owned RemoveConfirm (the overview
+ * remove flow's discipline).
+ *
  * Data layering (breakdown rule): the chrome renders against Interface 1 DTO
  * types + the shared mock (mocks/workbench.ts) through the optional
  * WorkbenchChromeFace — the 5.14-5.16 assembly tasks inject the IPC-backed
@@ -82,7 +93,11 @@ import type { Project, WorkbenchState } from './ipc-types'
 import type { WorkbenchKey } from './locale/en'
 import { WORKBENCH_DIALOG_PREFIX, type WorkbenchTabKey } from './store/view-key'
 import { MOCK_WORKBENCH_STATE } from './mocks/workbench'
-import { createIpcRegisterWizardVerbs, getWorkbenchIpcBridge, normalizeWorkbenchVerbError } from './ipc/workbench'
+import {
+  createIpcMigrationFace, createIpcRegisterWizardVerbs, getWorkbenchIpcBridge, normalizeWorkbenchVerbError,
+} from './ipc/workbench'
+import type { WorkbenchIpcBridge } from './ipc/workbench'
+import { getWorkbenchEventSource } from './ipc/workbench-events'
 import {
   createWorkbenchStateStore, INITIAL_WORKBENCH_STATE_SNAPSHOT, type WorkbenchStateStore,
 } from './store/workbench-state'
@@ -94,21 +109,25 @@ import { TopBar } from './components/chrome/TopBar'
 import { OverviewView } from './views/overview/OverviewView'
 import type { RegisterWizardResult } from './views/overview/RegisterWizard'
 import { RegisterWizard } from './views/overview/RegisterWizard'
+import { RemoveConfirm } from './views/overview/RemoveConfirm'
 import { TasksView } from './views/tasks/TasksView'
 import { FeaturesView } from './views/features/FeaturesView'
+import { ProposalsPage } from './views/ProposalsPage'
 
 /**
  * view-key → container mapping table (task 3.3 AC5): every workbench view key
- * the page-map defines reserves its mount container here. M2 5.x lands the UF
- * views INTO these seats — the reservation is the contract, no shell change
- * will be needed then. `:slug` is the feature-detail subview
- * (`workbench/features/<slug>`), `workbench/dialog/*` the 5.x overlay family.
+ * the page-map defines reserves its mount container here. M2 5.x landed the
+ * UF views INTO these seats; task 5.5 (M3) reserves the proposals family —
+ * `workbench/proposals` (the second tab) and its `:slug` detail subview.
+ * `workbench/dialog/*` is the 5.x overlay family.
  */
 export const VIEW_MOUNT_TABLE = {
   'workbench/overview': { container: 'dsh-forge-view-overview' },
+  'workbench/proposals': { container: 'dsh-forge-view-proposals' },
   'workbench/tasks': { container: 'dsh-forge-view-tasks' },
   'workbench/features': { container: 'dsh-forge-view-features' },
   'workbench/features/:slug': { container: 'dsh-forge-view-feature-detail' },
+  'workbench/proposals/:slug': { container: 'dsh-forge-view-proposal-detail' },
   [`${WORKBENCH_DIALOG_PREFIX}*`]: { container: 'dsh-forge-dialog-layer' },
 } as const
 
@@ -116,14 +135,20 @@ export const VIEW_MOUNT_TABLE = {
  * Resolve the active mount container for a snapshot's workbench interior.
  * @param tab - the active workbench tab.
  * @param featureSlug - the feature-detail slug, when the subview is open.
+ * @param proposalSlug - the proposal-detail slug (task 5.5), when that
+ *   subview is open. Optional: the M2 two-argument calls stay valid.
  * @returns the mount container id from {@link VIEW_MOUNT_TABLE}.
  */
 export function resolveViewMount(
   tab: WorkbenchTabKey,
   featureSlug: string | undefined,
+  proposalSlug?: string | undefined,
 ): string {
   if (tab === 'workbench/features' && featureSlug !== undefined) {
     return VIEW_MOUNT_TABLE['workbench/features/:slug'].container
+  }
+  if (tab === 'workbench/proposals' && proposalSlug !== undefined) {
+    return VIEW_MOUNT_TABLE['workbench/proposals/:slug'].container
   }
   return VIEW_MOUNT_TABLE[tab].container
 }
@@ -240,6 +265,50 @@ const shellToastDismissStyle = {
 type WizardTarget = { mode: 'register' } | { mode: 'edit'; project: Project }
 
 /**
+ * The 工作台级审批指示's count source (task 5.5 wiring of the 3.7 badge): a
+ * read-side pending count the TAB STRIP needs on EVERY tab (the dock's own
+ * controller only lives while the tasks tab is mounted). Real chain only —
+ * ONE listApprovals read per active project + re-reads on this project's
+ * orchestration/sync pushes over the shared single-subscriber channel (≤5s,
+ * subscription-driven); the build/hostless forms stay at 0 (N = 0 renders no
+ * badge, so nothing shows). A failed read keeps the last good count.
+ */
+function useApprovalTabCount(
+  bridge: WorkbenchIpcBridge | undefined,
+  activeProjectId: string | null,
+): number {
+  const [count, setCount] = useState(0)
+  const projectRef = useRef(activeProjectId)
+  projectRef.current = activeProjectId
+  useEffect(() => {
+    setCount(0)
+    if (bridge === undefined || activeProjectId === null) return
+    let alive = true
+    const read = (): void => {
+      void bridge.listApprovals(projectRef.current ?? '')
+        .then((rows) => {
+          if (alive) setCount(rows.filter(row => row.state === 'pending').length)
+        })
+        .catch(() => {
+          // The count keeps its last good value; the next reflux re-reads.
+        })
+    }
+    read()
+    const unsubscribe = getWorkbenchEventSource(bridge).subscribe((events) => {
+      const mine = events.some(event =>
+        event.projectId === projectRef.current
+        && (event.type === 'approval_received' || event.type === 'dispatch_updated' || event.type === 'sync'))
+      if (mine) read()
+    })
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [bridge, activeProjectId])
+  return count
+}
+
+/**
  * The state gate (page-map Route Guard equivalence): without an active
  * project the project-scoped tabs guide to registration — a guidance card,
  * deliberately NOT an error surface.
@@ -273,13 +342,10 @@ function StateGate(props: { t: (key: WorkbenchKey) => string; onRegister: () => 
  */
 export function WorkbenchShell(props: WorkbenchShellProps) {
   const view = props.useViewKey(snapshot => snapshot)
-  // The UF5 launch seat (5.11): an observable — the rpc members land when the
-  // remote namespaces mount; absent seat = the entries keep the build-stage
-  // mocks (hostless mounts, unit tests).
-  const launch = useSyncExternalStore(
-    props.launch?.subscribe ?? (() => () => {}),
-    props.launch?.getSnapshot ?? (() => undefined),
-  )
+  // The session hand-over seat (5.11; M3 6.1 slimmed): the dispatch chain's
+  // 「进入会话」 jump seam. Absent seat = the board's jump seam stays
+  // unwired (hostless mounts, unit tests).
+  const launch = props.launch
   // Task 5.14 — the real chrome data path: with the preload bridge live and
   // no explicit chrome state member, the chrome (switcher + gate), the UF1
   // page, and the register wizard run on ONE store-backed getState chain
@@ -313,10 +379,14 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     void stateStore.refresh().catch(() => {})
   }, [stateStore, view.workbenchTab])
   // The wizard's real WRITE pair (5.14): registerProject / updateProject
-  // over the bridge, rejections normalized. The step-①/② probes keep the
-  // wizard's build-stage twin (no Interface 1 probe verb — the real
-  // validation is the submit-time main-side chain; ipc/workbench.ts notes).
+  // over the bridge, rejections normalized. 1.7 adds the REAL probeCodeRoot
+  // (the conditional migration step's premise must be real on the real chain)
+  // and the migration family's face (the flipped default's paths read + the
+  // in-place run after registration). probeExternalPath keeps the build-stage
+  // twin (no Interface 1 verb — the real validation is the submit-time
+  // main-side chain; ipc/workbench.ts notes).
   const [wizardVerbs] = useState(() => (bridge === undefined ? undefined : createIpcRegisterWizardVerbs(bridge)))
+  const [wizardMigrationFace] = useState(() => (bridge === undefined ? undefined : createIpcMigrationFace(bridge)))
   // Build-stage defaults (UI dependency layering): the shared mock + a local
   // single-activation stub. Assembly (5.14-5.16) overrides the whole face
   // with the IPC-backed implementation.
@@ -441,18 +511,54 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   )
 
   // 6.4 (SC5-2 无跨项目残留): a project switch retires the feature-detail
-  // selection — the machine's featureSlug addressed the PREVIOUS project's
-  // board, and the features page's keyed remount would otherwise land on the
-  // not-found card (a stale selection, never the new project's data). The
-  // tab-selection action is the machine's own slug-clearing transition.
+  // AND proposal-detail selections — the machine's slugs addressed the
+  // PREVIOUS project's boards, and the keyed remounts would otherwise land
+  // on the not-found cards (a stale selection, never the new project's
+  // data). The tab-selection action is the machine's own slug-clearing
+  // transition (5.5 extends it to the proposalSlug dimension).
   const lastActiveProjectIdRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
     const id = workbenchState.activeProjectId
     const last = lastActiveProjectIdRef.current
     lastActiveProjectIdRef.current = id
-    if (last === undefined || id === last || view.featureSlug === undefined) return
+    if (last === undefined || id === last) return
+    if (view.featureSlug === undefined && view.proposalSlug === undefined) return
     props.selectWorkbenchTab(view.workbenchTab)
-  }, [workbenchState.activeProjectId, view.featureSlug, view.workbenchTab, props.selectWorkbenchTab])
+  }, [workbenchState.activeProjectId, view.featureSlug, view.proposalSlug, view.workbenchTab, props.selectWorkbenchTab])
+
+  // The UF5 proposals family's shell seams (task 5.5): the 仓外路径失效 flag
+  // (the real path's sync-derived 失联 signals, the OverviewView 口径) and the
+  // lost card's 移除项目 treatment — the shell owns the RemoveConfirm
+  // double-confirm + the remove verb (the overview remove flow's discipline:
+  // 移除 MUST pass the two-step confirmation, repository files untouched).
+  const proposalsDocsLost = stateStore !== undefined && workbenchState.activeProjectId !== null
+    && chromeSnapshot.lostProjectIds.includes(workbenchState.activeProjectId)
+  const [removingProject, setRemovingProject] = useState<Project | undefined>(undefined)
+  const confirmRemoveProject = (): void => {
+    const project = removingProject
+    if (project === undefined) return
+    setRemovingProject(undefined)
+    if (stateStore !== undefined) {
+      void stateStore.bridge.removeProject(project.id)
+        .then(() => stateStore.refresh())
+        .then(() => { setExternalReloadNonce(nonce => nonce + 1) })
+        .catch((error: unknown) => {
+          setShellToast(fillTemplate(props.t('overview.toast.failed'), {
+            message: normalizeWorkbenchVerbError(error).message,
+          }))
+        })
+      return
+    }
+    // The build-stage twin: mirror the removal into the local mock registry.
+    setMockState(state => ({ ...state, projects: state.projects.filter(row => row.id !== project.id) }))
+  }
+
+  // The 工作台级审批指示 (task 5.5 wiring of the 3.7 badge): the tab strip's
+  // count runs on the real chain only (build/hostless stays at 0 — no badge).
+  const approvalTabCount = useApprovalTabCount(
+    stateStore !== undefined ? bridge : undefined,
+    workbenchState.activeProjectId,
+  )
 
   // The board's vertical scroll memory (5.11 AC4): this div is the vertical
   // scroller; with a board session store it restores on entering the tasks
@@ -479,7 +585,12 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onActivate={activateProject}
         onAddProject={addProject}
       />
-      <TabBar t={props.t} activeTab={view.workbenchTab} onSelect={props.selectWorkbenchTab} />
+      <TabBar
+        t={props.t}
+        activeTab={view.workbenchTab}
+        onSelect={props.selectWorkbenchTab}
+        approvalCount={approvalTabCount}
+      />
       <ReactFlowProvider>
         <div ref={contentRef} data-dsh-forge-content="" style={contentStyle}>
           {gated
@@ -507,57 +618,91 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
                   />
                 </div>
               )
-              : view.workbenchTab === 'workbench/tasks'
+              : view.workbenchTab === 'workbench/proposals'
                 ? (
-                  // UF2 (task 5.5 build · 5.15 assembly) + UF3 integration
-                  // (task 5.8): the tasks seat now mounts the ASSEMBLED view
-                  // — with the real dshForge bridge live it runs the
-                  // store-backed chain (ONE getTaskBoard per first paint +
-                  // the 回流 coalesce-then-fetch event loop over the shared
-                  // single-subscriber channel + the IPC detail face, mock
-                  // 全撤); the explicit taskBoard seat / a hostless mount
-                  // reproduces the 5.5/5.8 build-stage page. The active
-                  // project's codeRoot mounts the UF5 entries (5.11:
-                  // node-card hover + the panel-primary, real services via
-                  // the launch seat); the key re-mounts per project switch.
-                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
-                    <TasksView
+                  // UF5 (task 5.5): the proposals tab — the M3 board's SECOND
+                  // seat. The page runs its form selection internally (the
+                  // TasksView/FeaturesView discipline): with the real bridge
+                  // live it reads the IPC proposal face over the resolved
+                  // active project (mock 全撤), while the explicit seat /
+                  // hostless mounts reproduce the build-stage form. The
+                  // list↔detail routing stays on the view-key machine's
+                  // proposalSlug dimension (enter = openProposalDetail,
+                  // return = the tab action clearing the slug); the feature
+                  // badge's 互跳 rides openFeatureDetail (the 提案 tab is the
+                  // return path); the key re-mounts per project switch.
+                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug, view.proposalSlug)}>
+                    <ProposalsPage
                       key={activeProjectKey}
                       t={props.t}
                       projectId={workbenchState.activeProjectId ?? undefined}
-                      codeRoot={activeProject?.codeRoot}
-                      onSelect={props.taskBoard?.onSelect}
-                      seat={props.taskBoard}
-                      {...(launch === undefined ? {} : { launchServices: launch.services })}
-                      {...(launch === undefined || launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
-                      {...(props.boardSession === undefined ? {} : { session: props.boardSession })}
+                      proposalSlug={view.proposalSlug}
+                      onOpenProposal={props.openProposalDetail}
+                      onBack={() => { props.selectWorkbenchTab('workbench/proposals') }}
+                      onOpenFeature={props.openFeatureDetail}
+                      docsLost={proposalsDocsLost}
+                      onRepoint={props.proposals?.onRepoint
+                        ?? (activeProject !== undefined
+                          ? () => { openWizard({ mode: 'edit', project: activeProject }) }
+                          : undefined)}
+                      onRemove={props.proposals?.onRemove
+                        ?? (() => {
+                          if (activeProject !== undefined) setRemovingProject(activeProject)
+                        })}
+                      seat={props.proposals}
                     />
                   </div>
                 )
-                : (
-                  // UF4 (task 5.16 assembly): the features seat now mounts the
-                  // COMPLETION view — with the real dshForge bridge live it
-                  // resolves the active project over getState and hands
-                  // FeaturesPage the IPC faces (getFeatureBoard /
-                  // readFeatureDoc, mock 全撤); the explicit seat / a hostless
-                  // mount reproduces the 5.9 build-stage page exactly. The
-                  // list↔detail routing stays on the view-key machine's
-                  // featureSlug dimension (enter = openFeatureDetail, return =
-                  // the tab action clearing the slug).
-                  <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
-                    <FeaturesView
-                      key={activeProjectKey}
-                      t={props.t}
-                      featureSlug={view.featureSlug}
-                      onOpenFeature={props.openFeatureDetail}
-                      onBack={() => { props.selectWorkbenchTab('workbench/features') }}
-                      onRegister={addProject}
-                      seat={props.features}
-                      chromeProjectId={workbenchState.activeProjectId ?? undefined}
-                      chromeExternalDocs={activeProject?.docLocationType === 'external'}
-                    />
-                  </div>
-                )}
+                : view.workbenchTab === 'workbench/tasks'
+                  ? (
+                    // UF2 (task 5.5 build · 5.15 assembly) + UF3 integration
+                    // (task 5.8): the tasks seat now mounts the ASSEMBLED view
+                    // — with the real dshForge bridge live it runs the
+                    // store-backed chain (ONE getTaskBoard per first paint +
+                    // the 回流 coalesce-then-fetch event loop over the shared
+                    // single-subscriber channel + the IPC detail face, mock
+                    // 全撤); the explicit taskBoard seat / a hostless mount
+                    // reproduces the 5.5/5.8 build-stage page. The hand-over
+                    // seat carries the dispatch chain's 「进入会话」 jump
+                    // (5.11 seat, M3 6.1 slimmed); the key re-mounts per
+                    // project switch.
+                    <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
+                      <TasksView
+                        key={activeProjectKey}
+                        t={props.t}
+                        projectId={workbenchState.activeProjectId ?? undefined}
+                        codeRoot={activeProject?.codeRoot}
+                        onSelect={props.taskBoard?.onSelect}
+                        seat={props.taskBoard}
+                        {...(launch === undefined || launch.onLaunched === undefined ? {} : { onLaunched: launch.onLaunched })}
+                        {...(props.boardSession === undefined ? {} : { session: props.boardSession })}
+                      />
+                    </div>
+                  )
+                  : (
+                    // UF4 (task 5.16 assembly): the features seat now mounts the
+                    // COMPLETION view — with the real dshForge bridge live it
+                    // resolves the active project over getState and hands
+                    // FeaturesPage the IPC faces (getFeatureBoard /
+                    // readFeatureDoc, mock 全撤); the explicit seat / a hostless
+                    // mount reproduces the 5.9 build-stage page exactly. The
+                    // list↔detail routing stays on the view-key machine's
+                    // featureSlug dimension (enter = openFeatureDetail, return =
+                    // the tab action clearing the slug).
+                    <div data-dsh-forge-view={resolveViewMount(view.workbenchTab, view.featureSlug)}>
+                      <FeaturesView
+                        key={activeProjectKey}
+                        t={props.t}
+                        featureSlug={view.featureSlug}
+                        onOpenFeature={props.openFeatureDetail}
+                        onBack={() => { props.selectWorkbenchTab('workbench/features') }}
+                        onRegister={addProject}
+                        seat={props.features}
+                        chromeProjectId={workbenchState.activeProjectId ?? undefined}
+                        chromeExternalDocs={activeProject?.docLocationType === 'external'}
+                      />
+                    </div>
+                  )}
         </div>
       </ReactFlowProvider>
 
@@ -574,8 +719,23 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           project={wizardTarget.mode === 'edit' ? wizardTarget.project : undefined}
           projects={workbenchState.projects}
           face={props.wizard?.face ?? (stateStore !== undefined ? wizardVerbs : undefined)}
+          migrationFace={stateStore !== undefined ? wizardMigrationFace : undefined}
           onLocate={props.wizard?.onLocate ?? locateProject}
           onClose={closeWizard}
+        />
+      )}
+
+      {/* UF5 (task 5.5): the proposals lost-card's 移除项目 double-confirm —
+          the overview remove flow's discipline over the same RemoveConfirm
+          (two-step confirmation, repository files untouched). The confirm
+          verb runs the bridge's removeProject + a registry refresh on the
+          real path, the local mock mirror otherwise. */}
+      {removingProject !== undefined && (
+        <RemoveConfirm
+          t={props.t}
+          project={removingProject}
+          onConfirm={confirmRemoveProject}
+          onCancel={() => { setRemovingProject(undefined) }}
         />
       )}
 

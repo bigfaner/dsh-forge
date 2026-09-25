@@ -1,0 +1,35 @@
+{
+  "proposalDocs": {
+    "p-full": "---\ncreated: \"2026-09-22\"\nauthor: \"faner\"\nstatus: Draft\nintent: \"new-feature\"\n---\n\n# Proposal: full\n\n完整语料:全字段 + Title-case status + eval(final-report 优先锚)。\n",
+    "p-minimal": "---\nstatus: accepted\n---\n\n# Proposal: minimal\n\n缺字段语料:无 author/created(created 回退 mtime 本地日期,author = null);无 eval;无关联 feature。\n",
+    "p-lowercase": "---\ncreated: \"2026-09-20\"\nauthor: \"alice\"\nstatus: superseded\n---\n\n# Proposal: lowercase\n\n小写 status 原词 + 无 eval 目录(仅 proposal.md)。\n",
+    "p-multi-eval": "---\ncreated: \"2026-09-21\"\nauthor: \"bob\"\nstatus: Rejected\n---\n\n# Proposal: multi-eval\n\neval 多文件无 final-report → 字典序首位选锚。\n"
+  },
+  "brokenDocs": {
+    "p-badstatus": "---\ncreated: \"2026-09-19\"\nauthor: \"eve\"\nstatus: on-hold\n---\n\n# Proposal: badstatus\n\n越界词表 → 跳过不索引。\n",
+    "p-nostatus": "---\ncreated: \"2026-09-18\"\nauthor: \"mallory\"\n---\n\n# Proposal: nostatus\n\n无 status → 跳过。\n",
+    "p-broken-yaml": "---\ncreated: \"2026-09-17\"\nstatus: [unclosed\nauthor: \"broken\"\n---\n\n# Proposal: broken yaml\n",
+    "p-empty": "",
+    "p-status-numeric": "---\nstatus: 42\ncreated: \"2026-09-16\"\n---\n\n# Proposal: numeric status\n\nstatus 非字符串 → 跳过。\n"
+  },
+  "evalFiles": {
+    "p-full": ["baseline.md", "final-report.md", "freeform-review.md"],
+    "p-multi-eval": ["baseline-score.md", "freeform-review.md"]
+  },
+  "features": ["p-full", "p-lowercase"],
+  "expect": {
+    "indexed": ["p-full", "p-minimal", "p-lowercase", "p-multi-eval"],
+    "skipped": ["p-badstatus", "p-nostatus", "p-broken-yaml", "p-empty", "p-status-numeric"],
+    "rows": {
+      "p-full": { "status": "draft", "author": "faner", "created": "2026-09-22", "featureSlug": "p-full", "hasEval": true },
+      "p-minimal": { "status": "accepted", "author": null, "created": null, "featureSlug": null, "hasEval": false },
+      "p-lowercase": { "status": "superseded", "author": "alice", "created": "2026-09-20", "featureSlug": "p-lowercase", "hasEval": false },
+      "p-multi-eval": { "status": "rejected", "author": "bob", "created": "2026-09-21", "featureSlug": null, "hasEval": true }
+    },
+    "boardOrder": ["p-full", "p-multi-eval", "p-lowercase", "p-minimal"],
+    "evalPick": {
+      "p-full": "final-report.md",
+      "p-multi-eval": "baseline-score.md"
+    }
+  }
+}

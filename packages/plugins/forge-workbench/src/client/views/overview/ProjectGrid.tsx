@@ -8,7 +8,7 @@
  */
 import type { Project } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
-import { ProjectCard } from './ProjectCard'
+import { ProjectCard, type ProjectCardMigration } from './ProjectCard'
 
 /** Inputs of {@link ProjectGrid}. */
 export interface ProjectGridProps {
@@ -26,6 +26,11 @@ export interface ProjectGridProps {
   onRename: (id: string, displayName: string) => Promise<boolean>
   /** Opens the double-step RemoveConfirm. */
   onRemove: (project: Project) => void
+  /**
+   * The per-card migration surface (task 1.7): the page derives each row's
+   * projection from getMigrationStatus; absent callback = the M2 grid.
+   */
+  migrationOf?: ((project: Project) => ProjectCardMigration | undefined) | undefined
 }
 
 /** ui-design 项目卡片 grid: min 280, auto-fill, gap 12. */
@@ -49,6 +54,7 @@ export function ProjectGrid(props: ProjectGridProps) {
           onActivate={props.onActivate}
           onRename={props.onRename}
           onRemove={props.onRemove}
+          migration={props.migrationOf?.(project)}
         />
       ))}
     </div>

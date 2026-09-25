@@ -1,0 +1,3423 @@
+{
+  "generator": "scripts/tasks-parity-gen (forge-cli pkg/task)",
+  "forgeCliCommit": "644321da",
+  "generatedAt": "2026-09-23T16:25:59Z",
+  "transitions": [
+    {
+      "from": "pending",
+      "to": "pending",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e pending (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "pending",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e in_progress (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "completed",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e completed (role=claim): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e completed (role=reopen): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e completed (role=auto): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e completed (role=manual): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e suspended (role=submit): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e suspended (role=claim): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e suspended (role=reopen): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e suspended (role=auto): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e skipped (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition pending -\u003e rejected (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "pending",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "pending",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e pending (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "pending",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "pending",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e in_progress (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e completed (role=claim): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e completed (role=reopen): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e completed (role=auto): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e completed (role=manual): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e blocked (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e suspended (role=submit): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e suspended (role=claim): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e suspended (role=reopen): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e suspended (role=auto): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e skipped (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition in_progress -\u003e rejected (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "in_progress",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "in_progress",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "completed",
+      "to": "pending",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e pending (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "pending",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e pending (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e pending (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "pending",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e pending (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "pending",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e pending (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e in_progress (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e in_progress (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e in_progress (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e in_progress (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e in_progress (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e completed (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e completed (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e completed (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e completed (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e completed (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e blocked (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e blocked (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e blocked (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e blocked (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e blocked (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e suspended (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e suspended (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e suspended (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e suspended (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e suspended (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e skipped (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e skipped (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e skipped (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e skipped (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e skipped (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e rejected (role=submit): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e rejected (role=claim): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e rejected (role=reopen): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e rejected (role=auto): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "completed",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition completed -\u003e rejected (role=manual): task already completed, create a subtask if re-work needed",
+        "guardMsg": "task already completed, create a subtask if re-work needed"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e pending (role=submit): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e pending (role=claim): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e pending (role=reopen): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e pending (role=auto): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "pending",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e in_progress (role=submit): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e in_progress (role=claim): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e in_progress (role=reopen): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e in_progress (role=auto): dependencies must be checked first",
+        "guardMsg": "dependencies must be checked first"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "completed",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e completed (role=claim): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e completed (role=reopen): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e completed (role=auto): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e completed (role=manual): use forge task submit",
+        "guardMsg": "use forge task submit"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e blocked (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e suspended (role=submit): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e suspended (role=claim): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e suspended (role=reopen): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e suspended (role=auto): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e skipped (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition blocked -\u003e rejected (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "blocked",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "blocked",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "pending",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "pending",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e pending (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "pending",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "pending",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e in_progress (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "completed",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e completed (role=submit): use forge task transition to resume task first",
+        "guardMsg": "use forge task transition to resume task first"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e completed (role=claim): use forge task transition to resume task first",
+        "guardMsg": "use forge task transition to resume task first"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e completed (role=reopen): use forge task transition to resume task first",
+        "guardMsg": "use forge task transition to resume task first"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e completed (role=auto): use forge task transition to resume task first",
+        "guardMsg": "use forge task transition to resume task first"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e completed (role=manual): use forge task transition to resume task first",
+        "guardMsg": "use forge task transition to resume task first"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e blocked (role=submit): use forge task transition to resume suspended task",
+        "guardMsg": "use forge task transition to resume suspended task"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e blocked (role=claim): use forge task transition to resume suspended task",
+        "guardMsg": "use forge task transition to resume suspended task"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e blocked (role=reopen): use forge task transition to resume suspended task",
+        "guardMsg": "use forge task transition to resume suspended task"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e blocked (role=auto): use forge task transition to resume suspended task",
+        "guardMsg": "use forge task transition to resume suspended task"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e blocked (role=manual): use forge task transition to resume suspended task",
+        "guardMsg": "use forge task transition to resume suspended task"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e suspended (role=submit): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e suspended (role=claim): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e suspended (role=reopen): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e suspended (role=auto): use forge task transition to suspend tasks",
+        "guardMsg": "use forge task transition to suspend tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e skipped (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition suspended -\u003e rejected (role=reopen): reopen is only for rejected or skipped tasks",
+        "guardMsg": "reopen is only for rejected or skipped tasks"
+      }
+    },
+    {
+      "from": "suspended",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": true
+    },
+    {
+      "from": "suspended",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": true
+    },
+    {
+      "from": "skipped",
+      "to": "pending",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e pending (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "pending",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e pending (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": true
+    },
+    {
+      "from": "skipped",
+      "to": "pending",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e pending (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "pending",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e pending (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e in_progress (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e in_progress (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e in_progress (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e in_progress (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e in_progress (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "completed",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e completed (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e completed (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e completed (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e completed (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e completed (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e blocked (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e blocked (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e blocked (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e blocked (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e blocked (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e suspended (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e suspended (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e suspended (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e suspended (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e suspended (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e skipped (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e skipped (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e skipped (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e skipped (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e skipped (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e rejected (role=submit): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e rejected (role=claim): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e rejected (role=reopen): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e rejected (role=auto): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "skipped",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition skipped -\u003e rejected (role=manual): task skipped, use forge task reopen",
+        "guardMsg": "task skipped, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e pending (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e pending (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "role": "reopen",
+      "allowed": true
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e pending (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "pending",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e pending (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "in_progress",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e in_progress (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "in_progress",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e in_progress (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "in_progress",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e in_progress (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "in_progress",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e in_progress (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "in_progress",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e in_progress (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "completed",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e completed (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "completed",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e completed (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "completed",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e completed (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "completed",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e completed (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "completed",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e completed (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "blocked",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e blocked (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "blocked",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e blocked (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "blocked",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e blocked (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "blocked",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e blocked (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "blocked",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e blocked (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "suspended",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e suspended (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "suspended",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e suspended (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "suspended",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e suspended (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "suspended",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e suspended (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "suspended",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e suspended (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "skipped",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e skipped (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "skipped",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e skipped (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "skipped",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e skipped (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "skipped",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e skipped (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "skipped",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e skipped (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "rejected",
+      "role": "submit",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e rejected (role=submit): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "rejected",
+      "role": "claim",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e rejected (role=claim): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "rejected",
+      "role": "reopen",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e rejected (role=reopen): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "rejected",
+      "role": "auto",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e rejected (role=auto): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    },
+    {
+      "from": "rejected",
+      "to": "rejected",
+      "role": "manual",
+      "allowed": false,
+      "error": {
+        "message": "invalid transition rejected -\u003e rejected (role=manual): task rejected, use forge task reopen",
+        "guardMsg": "task rejected, use forge task reopen"
+      }
+    }
+  ],
+  "depCases": [
+    {
+      "name": "all-completed",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "each-status-precondition",
+      "checkDeps": {
+        "unmet": [
+          "7.1",
+          "7.2",
+          "7.4",
+          "7.5",
+          "7.7"
+        ]
+      },
+      "unmet": [
+        "7.1",
+        "7.2",
+        "7.4",
+        "7.5",
+        "7.7"
+      ]
+    },
+    {
+      "name": "rejected-does-not-satisfy",
+      "checkDeps": {
+        "unmet": [
+          "1.1"
+        ]
+      },
+      "unmet": [
+        "1.1"
+      ]
+    },
+    {
+      "name": "missing-exact-dangling",
+      "checkDeps": {
+        "unmet": [
+          "9.9"
+        ]
+      },
+      "unmet": [
+        "9.9"
+      ]
+    },
+    {
+      "name": "wildcard-expands-business-only",
+      "checkDeps": {
+        "unmet": [
+          "1.1",
+          "1.2"
+        ]
+      },
+      "unmet": [
+        "1.1",
+        "1.2"
+      ]
+    },
+    {
+      "name": "wildcard-self-excluded",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": [
+        "1.2"
+      ]
+    },
+    {
+      "name": "wildcard-no-match",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "wildcard-satisfied",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "transitive-chain",
+      "checkDeps": {
+        "unmet": [
+          "2.1"
+        ]
+      },
+      "unmet": [
+        "2.1"
+      ]
+    },
+    {
+      "name": "fix-task-active-blocks-unblock",
+      "checkDeps": {
+        "unmet": [
+          "active fix-task exists"
+        ]
+      },
+      "unmet": null
+    },
+    {
+      "name": "fix-task-completed-no-block",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "fix-task-rejected-no-block",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "fix-type-docfix-active",
+      "checkDeps": {
+        "unmet": [
+          "active fix-task exists"
+        ]
+      },
+      "unmet": null
+    },
+    {
+      "name": "fix-type-prefix-variant-active",
+      "checkDeps": {
+        "unmet": [
+          "active fix-task exists"
+        ]
+      },
+      "unmet": null
+    },
+    {
+      "name": "fix-task-targeting-other-task",
+      "checkDeps": {
+        "unmet": null
+      },
+      "unmet": null
+    },
+    {
+      "name": "task-not-found",
+      "checkDeps": {
+        "unmet": null,
+        "error": "task not found: zzz"
+      },
+      "unmet": null
+    },
+    {
+      "name": "m2-dialect-slug-keys",
+      "checkDeps": {
+        "unmet": [
+          "1.2"
+        ]
+      },
+      "unmet": [
+        "1.2"
+      ]
+    },
+    {
+      "name": "byid-key-precedence",
+      "checkDeps": {
+        "unmet": [
+          "2.1"
+        ]
+      },
+      "unmet": [
+        "2.1"
+      ]
+    }
+  ],
+  "toposortCases": [
+    {
+      "name": "empty",
+      "ordered": null,
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "single",
+      "ordered": [
+        "1"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "linear-chain",
+      "ordered": [
+        "1",
+        "2",
+        "3"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "diamond",
+      "ordered": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "same-level-natural-order",
+      "ordered": [
+        "1",
+        "1.1",
+        "2",
+        "3",
+        "10"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "cycle",
+      "ordered": null,
+      "cycles": [
+        "1",
+        "2",
+        "3"
+      ],
+      "missing": null
+    },
+    {
+      "name": "self-reference",
+      "ordered": null,
+      "cycles": [
+        "1"
+      ],
+      "missing": null
+    },
+    {
+      "name": "missing-dep",
+      "ordered": [
+        "1",
+        "2"
+      ],
+      "cycles": null,
+      "missing": [
+        "999"
+      ]
+    },
+    {
+      "name": "disconnected",
+      "ordered": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "wildcard-deps",
+      "ordered": [
+        "1.1",
+        "1.2",
+        "2"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "mixed-exact-wildcard-dedup",
+      "ordered": [
+        "1.1",
+        "1.2",
+        "2",
+        "3"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "wildcard-no-match",
+      "ordered": [
+        "2"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "cycle-plus-happy",
+      "ordered": [
+        "1",
+        "2"
+      ],
+      "cycles": [
+        "3",
+        "4"
+      ],
+      "missing": null
+    },
+    {
+      "name": "multiple-missing",
+      "ordered": [
+        "1"
+      ],
+      "cycles": null,
+      "missing": [
+        "99",
+        "100"
+      ]
+    },
+    {
+      "name": "phase-key-natural-order",
+      "ordered": [
+        "1",
+        "1.1",
+        "1.2",
+        "1.gate",
+        "1.summary",
+        "2"
+      ],
+      "cycles": null,
+      "missing": null
+    },
+    {
+      "name": "wildcard-self-edge-cycle",
+      "ordered": [
+        "1.2",
+        "2"
+      ],
+      "cycles": [
+        "1.1"
+      ],
+      "missing": null
+    }
+  ],
+  "realIndexes": [
+    {
+      "name": "m1",
+      "feature": "dsh-forge-m1",
+      "ordered": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.summary",
+        "1.gate",
+        "2.1",
+        "2.2",
+        "2.summary",
+        "2.gate",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.summary",
+        "3.gate",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "4.6",
+        "4.7",
+        "4.summary",
+        "4.gate",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.summary",
+        "5.gate",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.summary",
+        "6.gate",
+        "disc-1",
+        "disc-2",
+        "fix-2",
+        "fix-1",
+        "T-review-doc",
+        "fix-3",
+        "T-test-gen-journeys",
+        "T-eval-journey",
+        "T-test-gen-contracts",
+        "T-eval-contract",
+        "T-test-gen-scripts",
+        "T-test-run",
+        "T-specs-consolidate"
+      ],
+      "cycles": null,
+      "missing": null,
+      "unmetByTask": {
+        "1.1": null,
+        "1.2": null,
+        "1.3": null,
+        "1.4": null,
+        "1.gate": null,
+        "1.summary": null,
+        "2.1": null,
+        "2.2": null,
+        "2.gate": null,
+        "2.summary": null,
+        "3.1": null,
+        "3.2": null,
+        "3.3": null,
+        "3.4": null,
+        "3.gate": null,
+        "3.summary": null,
+        "4.1": null,
+        "4.2": null,
+        "4.3": null,
+        "4.4": null,
+        "4.5": null,
+        "4.6": null,
+        "4.7": null,
+        "4.gate": null,
+        "4.summary": null,
+        "5.1": null,
+        "5.2": null,
+        "5.3": null,
+        "5.gate": null,
+        "5.summary": null,
+        "6.1": null,
+        "6.2": null,
+        "6.3": null,
+        "6.4": null,
+        "6.gate": null,
+        "6.summary": null,
+        "T-eval-contract": null,
+        "T-eval-journey": null,
+        "T-review-doc": null,
+        "T-specs-consolidate": null,
+        "T-test-gen-contracts": null,
+        "T-test-gen-journeys": null,
+        "T-test-gen-scripts": null,
+        "T-test-run": null,
+        "disc-1": null,
+        "disc-2": null,
+        "fix-1": null,
+        "fix-2": null,
+        "fix-3": null
+      },
+      "checkDepsByTask": {}
+    },
+    {
+      "name": "m2",
+      "feature": "dsh-forge-m2",
+      "ordered": [
+        "1.1",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "2.summary",
+        "2.gate",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.summary",
+        "3.gate",
+        "4.1",
+        "4.2",
+        "4.summary",
+        "4.gate",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7",
+        "5.8",
+        "5.9",
+        "5.10",
+        "5.11",
+        "5.12",
+        "5.13",
+        "5.14",
+        "5.15",
+        "5.16",
+        "5.summary",
+        "5.gate",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.summary",
+        "6.gate",
+        "fix-1",
+        "T-review-doc",
+        "T-test-gen-journeys",
+        "T-eval-journey",
+        "T-test-gen-contracts",
+        "T-eval-contract",
+        "T-test-gen-scripts",
+        "T-test-run",
+        "T-specs-consolidate"
+      ],
+      "cycles": null,
+      "missing": null,
+      "unmetByTask": {
+        "1.1": null,
+        "2.1": null,
+        "2.2": null,
+        "2.3": null,
+        "2.4": null,
+        "2.5": null,
+        "2.6": null,
+        "2.7": null,
+        "2.gate": null,
+        "2.summary": null,
+        "3.1": null,
+        "3.2": null,
+        "3.3": null,
+        "3.gate": null,
+        "3.summary": null,
+        "4.1": null,
+        "4.2": null,
+        "4.gate": null,
+        "4.summary": null,
+        "5.1": null,
+        "5.10": null,
+        "5.11": null,
+        "5.12": null,
+        "5.13": null,
+        "5.14": null,
+        "5.15": null,
+        "5.16": null,
+        "5.2": null,
+        "5.3": null,
+        "5.4": null,
+        "5.5": null,
+        "5.6": null,
+        "5.7": null,
+        "5.8": null,
+        "5.9": null,
+        "5.gate": null,
+        "5.summary": null,
+        "6.1": null,
+        "6.2": null,
+        "6.3": null,
+        "6.4": null,
+        "6.5": null,
+        "6.gate": null,
+        "6.summary": null,
+        "T-eval-contract": null,
+        "T-eval-journey": null,
+        "T-review-doc": null,
+        "T-specs-consolidate": null,
+        "T-test-gen-contracts": null,
+        "T-test-gen-journeys": null,
+        "T-test-gen-scripts": null,
+        "T-test-run": null,
+        "fix-1": null
+      },
+      "checkDepsByTask": {}
+    },
+    {
+      "name": "m3",
+      "feature": "dsh-forge-m3",
+      "ordered": [
+        "0.1",
+        "0.2",
+        "0.3",
+        "0.4",
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.summary",
+        "1.gate",
+        "2.1",
+        "2.2",
+        "2.summary",
+        "2.gate",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9",
+        "3.summary",
+        "3.gate",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.summary",
+        "4.gate",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7",
+        "5.summary",
+        "5.gate",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.6",
+        "6.7",
+        "6.8",
+        "6.summary",
+        "6.gate",
+        "T-review-doc",
+        "T-test-gen-journeys",
+        "T-eval-journey",
+        "T-test-gen-contracts",
+        "T-eval-contract",
+        "T-test-gen-scripts",
+        "T-test-run",
+        "T-specs-consolidate"
+      ],
+      "cycles": null,
+      "missing": null,
+      "unmetByTask": {
+        "0.1": null,
+        "0.2": null,
+        "0.3": null,
+        "0.4": null,
+        "1.1": null,
+        "1.2": null,
+        "1.3": [
+          "1.2"
+        ],
+        "1.4": [
+          "1.3"
+        ],
+        "1.5": [
+          "1.4"
+        ],
+        "1.6": [
+          "1.4"
+        ],
+        "1.7": [
+          "1.6"
+        ],
+        "1.gate": [
+          "1.summary"
+        ],
+        "1.summary": [
+          "1.2",
+          "1.3",
+          "1.4",
+          "1.5",
+          "1.6",
+          "1.7"
+        ],
+        "2.1": [
+          "1.3",
+          "1.gate"
+        ],
+        "2.2": [
+          "2.1",
+          "1.gate"
+        ],
+        "2.gate": [
+          "2.summary"
+        ],
+        "2.summary": [
+          "2.1",
+          "2.2"
+        ],
+        "3.1": [
+          "2.gate"
+        ],
+        "3.2": [
+          "1.3",
+          "2.gate"
+        ],
+        "3.3": [
+          "3.2",
+          "2.gate"
+        ],
+        "3.4": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "2.gate"
+        ],
+        "3.5": [
+          "2.1",
+          "3.4",
+          "2.gate"
+        ],
+        "3.6": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.7": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.8": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.9": [
+          "3.6",
+          "3.7",
+          "3.8",
+          "2.gate"
+        ],
+        "3.gate": [
+          "3.summary"
+        ],
+        "3.summary": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "3.4",
+          "3.5",
+          "3.6",
+          "3.7",
+          "3.8",
+          "3.9"
+        ],
+        "4.1": [
+          "3.gate"
+        ],
+        "4.2": [
+          "3.gate"
+        ],
+        "4.3": [
+          "3.2",
+          "3.gate"
+        ],
+        "4.4": [
+          "4.1",
+          "4.2",
+          "4.3",
+          "3.gate"
+        ],
+        "4.gate": [
+          "4.summary"
+        ],
+        "4.summary": [
+          "4.1",
+          "4.2",
+          "4.3",
+          "4.4"
+        ],
+        "5.1": [
+          "3.1",
+          "4.gate"
+        ],
+        "5.2": [
+          "5.1",
+          "4.gate"
+        ],
+        "5.3": [
+          "4.gate"
+        ],
+        "5.4": [
+          "5.3",
+          "4.gate"
+        ],
+        "5.5": [
+          "5.4",
+          "4.gate"
+        ],
+        "5.6": [
+          "4.gate"
+        ],
+        "5.7": [
+          "5.6",
+          "4.gate"
+        ],
+        "5.gate": [
+          "5.summary"
+        ],
+        "5.summary": [
+          "5.1",
+          "5.2",
+          "5.3",
+          "5.4",
+          "5.5",
+          "5.6",
+          "5.7"
+        ],
+        "6.1": [
+          "3.5",
+          "3.9",
+          "5.5",
+          "5.gate"
+        ],
+        "6.2": [
+          "3.9",
+          "4.4",
+          "5.5",
+          "5.gate"
+        ],
+        "6.3": [
+          "6.1",
+          "6.2",
+          "5.7",
+          "5.gate"
+        ],
+        "6.4": [
+          "6.2",
+          "5.gate"
+        ],
+        "6.5": [
+          "6.2",
+          "3.5",
+          "5.gate"
+        ],
+        "6.6": [
+          "6.2",
+          "4.4",
+          "5.gate"
+        ],
+        "6.7": [
+          "6.2",
+          "5.2",
+          "5.5",
+          "5.gate"
+        ],
+        "6.8": [
+          "6.2",
+          "1.7",
+          "5.gate"
+        ],
+        "6.gate": [
+          "6.summary"
+        ],
+        "6.summary": [
+          "6.1",
+          "6.2",
+          "6.3",
+          "6.4",
+          "6.5",
+          "6.6",
+          "6.7",
+          "6.8"
+        ],
+        "T-eval-contract": [
+          "T-test-gen-contracts"
+        ],
+        "T-eval-journey": [
+          "T-test-gen-journeys"
+        ],
+        "T-review-doc": [
+          "5.6"
+        ],
+        "T-specs-consolidate": [
+          "T-test-run"
+        ],
+        "T-test-gen-contracts": [
+          "T-eval-journey"
+        ],
+        "T-test-gen-journeys": [
+          "T-review-doc",
+          "5.6",
+          "1.5",
+          "2.1",
+          "2.2",
+          "4.1",
+          "1.4",
+          "5.3",
+          "6.1",
+          "6.6",
+          "3.8",
+          "4.2",
+          "4.4",
+          "5.7",
+          "3.9",
+          "3.5",
+          "5.4",
+          "6.4",
+          "3.2",
+          "4.3",
+          "1.7",
+          "3.7",
+          "1.2",
+          "3.4",
+          "3.6",
+          "5.1",
+          "5.5",
+          "6.8",
+          "5.2",
+          "6.5",
+          "6.2",
+          "3.1",
+          "3.3",
+          "6.3",
+          "6.7",
+          "1.3",
+          "1.6"
+        ],
+        "T-test-gen-scripts": [
+          "T-eval-contract"
+        ],
+        "T-test-run": [
+          "T-test-gen-scripts"
+        ]
+      },
+      "checkDepsByTask": {}
+    },
+    {
+      "name": "m3-dangling",
+      "feature": "dsh-forge-m3",
+      "ordered": [
+        "0.1",
+        "0.2",
+        "0.3",
+        "0.4",
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.summary",
+        "1.gate",
+        "2.1",
+        "2.2",
+        "2.summary",
+        "2.gate",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9",
+        "3.summary",
+        "3.gate",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.summary",
+        "4.gate",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7",
+        "5.summary",
+        "5.gate",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.6",
+        "6.7",
+        "6.8",
+        "6.9",
+        "6.summary",
+        "6.gate",
+        "T-review-doc",
+        "T-test-gen-journeys",
+        "T-eval-journey",
+        "T-test-gen-contracts",
+        "T-eval-contract",
+        "T-test-gen-scripts",
+        "T-test-run",
+        "T-specs-consolidate"
+      ],
+      "cycles": null,
+      "missing": [
+        "9.9"
+      ],
+      "unmetByTask": {
+        "0.1": null,
+        "0.2": null,
+        "0.3": null,
+        "0.4": null,
+        "1.1": null,
+        "1.2": null,
+        "1.3": [
+          "1.2"
+        ],
+        "1.4": [
+          "1.3"
+        ],
+        "1.5": [
+          "1.4"
+        ],
+        "1.6": [
+          "1.4"
+        ],
+        "1.7": [
+          "1.6"
+        ],
+        "1.gate": [
+          "1.summary"
+        ],
+        "1.summary": [
+          "1.2",
+          "1.3",
+          "1.4",
+          "1.5",
+          "1.6",
+          "1.7"
+        ],
+        "2.1": [
+          "1.3",
+          "1.gate"
+        ],
+        "2.2": [
+          "2.1",
+          "1.gate"
+        ],
+        "2.gate": [
+          "2.summary"
+        ],
+        "2.summary": [
+          "2.1",
+          "2.2"
+        ],
+        "3.1": [
+          "2.gate"
+        ],
+        "3.2": [
+          "1.3",
+          "2.gate"
+        ],
+        "3.3": [
+          "3.2",
+          "2.gate"
+        ],
+        "3.4": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "2.gate"
+        ],
+        "3.5": [
+          "2.1",
+          "3.4",
+          "2.gate"
+        ],
+        "3.6": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.7": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.8": [
+          "3.3",
+          "2.gate"
+        ],
+        "3.9": [
+          "3.6",
+          "3.7",
+          "3.8",
+          "2.gate"
+        ],
+        "3.gate": [
+          "3.summary"
+        ],
+        "3.summary": [
+          "3.1",
+          "3.2",
+          "3.3",
+          "3.4",
+          "3.5",
+          "3.6",
+          "3.7",
+          "3.8",
+          "3.9"
+        ],
+        "4.1": [
+          "3.gate"
+        ],
+        "4.2": [
+          "3.gate"
+        ],
+        "4.3": [
+          "3.2",
+          "3.gate"
+        ],
+        "4.4": [
+          "4.1",
+          "4.2",
+          "4.3",
+          "3.gate"
+        ],
+        "4.gate": [
+          "4.summary"
+        ],
+        "4.summary": [
+          "4.1",
+          "4.2",
+          "4.3",
+          "4.4"
+        ],
+        "5.1": [
+          "3.1",
+          "4.gate"
+        ],
+        "5.2": [
+          "5.1",
+          "4.gate"
+        ],
+        "5.3": [
+          "4.gate"
+        ],
+        "5.4": [
+          "5.3",
+          "4.gate"
+        ],
+        "5.5": [
+          "5.4",
+          "4.gate"
+        ],
+        "5.6": [
+          "4.gate"
+        ],
+        "5.7": [
+          "5.6",
+          "4.gate"
+        ],
+        "5.gate": [
+          "5.summary"
+        ],
+        "5.summary": [
+          "5.1",
+          "5.2",
+          "5.3",
+          "5.4",
+          "5.5",
+          "5.6",
+          "5.7"
+        ],
+        "6.1": [
+          "3.5",
+          "3.9",
+          "5.5",
+          "5.gate"
+        ],
+        "6.2": [
+          "3.9",
+          "4.4",
+          "5.5",
+          "5.gate"
+        ],
+        "6.3": [
+          "6.1",
+          "6.2",
+          "5.7",
+          "5.gate"
+        ],
+        "6.4": [
+          "6.2",
+          "5.gate"
+        ],
+        "6.5": [
+          "6.2",
+          "3.5",
+          "5.gate"
+        ],
+        "6.6": [
+          "6.2",
+          "4.4",
+          "5.gate"
+        ],
+        "6.7": [
+          "6.2",
+          "5.2",
+          "5.5",
+          "5.gate"
+        ],
+        "6.8": [
+          "6.2",
+          "1.7",
+          "5.gate"
+        ],
+        "6.9": [
+          "9.9",
+          "5.gate"
+        ],
+        "6.gate": [
+          "6.summary"
+        ],
+        "6.summary": [
+          "6.1",
+          "6.2",
+          "6.3",
+          "6.4",
+          "6.5",
+          "6.6",
+          "6.7",
+          "6.8"
+        ],
+        "T-eval-contract": [
+          "T-test-gen-contracts"
+        ],
+        "T-eval-journey": [
+          "T-test-gen-journeys"
+        ],
+        "T-review-doc": [
+          "5.6"
+        ],
+        "T-specs-consolidate": [
+          "T-test-run"
+        ],
+        "T-test-gen-contracts": [
+          "T-eval-journey"
+        ],
+        "T-test-gen-journeys": [
+          "T-review-doc",
+          "5.6",
+          "1.5",
+          "2.1",
+          "2.2",
+          "4.1",
+          "1.4",
+          "5.3",
+          "6.1",
+          "6.6",
+          "3.8",
+          "4.2",
+          "4.4",
+          "5.7",
+          "3.9",
+          "3.5",
+          "5.4",
+          "6.4",
+          "3.2",
+          "4.3",
+          "1.7",
+          "3.7",
+          "1.2",
+          "3.4",
+          "3.6",
+          "5.1",
+          "5.5",
+          "6.8",
+          "5.2",
+          "6.5",
+          "6.2",
+          "3.1",
+          "3.3",
+          "6.3",
+          "6.7",
+          "1.3",
+          "1.6"
+        ],
+        "T-test-gen-scripts": [
+          "T-eval-contract"
+        ],
+        "T-test-run": [
+          "T-test-gen-scripts"
+        ]
+      },
+      "checkDepsByTask": {
+        "6.9": {
+          "unmet": [
+            "9.9",
+            "5.gate"
+          ]
+        }
+      }
+    }
+  ]
+}

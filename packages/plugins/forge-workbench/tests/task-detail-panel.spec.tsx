@@ -319,20 +319,21 @@ describe('sections: header + description + depChain + records + links', () => {
 })
 
 // ---------------------------------------------------------------------------
-// AC5 — the launch entry mount
+// AC5 — the button slot (6.1: the M2 launch entry retired with the chain)
 // ---------------------------------------------------------------------------
 
-describe('launch entry', () => {
-  it('mounts the UF5 panel-primary entry when the project ref is present', async () => {
+describe('button slot', () => {
+  it('renders the reserved disabled placeholder when no dispatch mount is present (project ref irrelevant since 6.1)', async () => {
     await renderPanel({
       initialKey: RICH_KEY,
       projectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
       codeRoot: 'Z:\\project\\dsh\\dsh-forge',
     })
-    const trigger = q('[data-dsh-forge-launch-trigger][data-mount="panel-primary"]')
-    expect(trigger).not.toBeNull()
-    // The build-stage mock probe resolves available → the entry arms enabled.
-    await waitFor(() => { expect(trigger.disabled).toBe(false) })
+    const reserved = q('[data-dsh-forge-detail-launch-reserved]')
+    expect(reserved.disabled).toBe(true)
+    expect(reserved.textContent).toContain(t.en('launch.primary'))
+    expect(reserved.getAttribute('title')).toBe(t.en('detail.launch.reserved'))
+    expect(document.querySelector('[data-dsh-forge-launch-trigger]')).toBeNull()
   })
 
   it('renders the reserved disabled placeholder without the project ref', async () => {

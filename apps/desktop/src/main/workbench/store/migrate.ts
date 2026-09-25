@@ -1,12 +1,13 @@
-// schema_version migrator (task 2.1) — application-layer, sequential
-// migrations. node:sqlite has no built-in migrator; design
-// (docs/features/dsh-forge-m2/design/schema.sql header): schema_version is a
-// single row that only ever moves forward; a migration = executing the not
-// yet applied version segments in order. Applied segments are immutable —
-// evolution appends a new segment, it never edits an old one.
+// schema_version migrator (task 2.1; v2 segment = task 1.1) —
+// application-layer, sequential migrations. node:sqlite has no built-in
+// migrator; design (docs/features/dsh-forge-m2/design/schema.sql header):
+// schema_version is a single row that only ever moves forward; a migration =
+// executing the not yet applied version segments in order. Applied segments
+// are immutable — evolution appends a new segment, it never edits an old one.
 
 import type { DatabaseSyncLike } from './db.ts'
 import { SCHEMA_V1_SQL } from './schema-v1.ts'
+import { SCHEMA_V2_SQL } from './schema-v2.ts'
 
 /** One forward migration step. Steps run inside their own transaction. */
 export interface SchemaMigration {
@@ -14,10 +15,14 @@ export interface SchemaMigration {
   readonly up: (db: DatabaseSyncLike) => void
 }
 
-// v2 挂载点:表结构演进在此追加 { version: 2, up: ... };已发布的版本段不可改写。
+// v3 挂载点:表结构演进在此追加 { version: 3, up: ... };已发布的版本段(v1/v2)不可改写。
 const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, up: applySchemaV1 },
+  { version: 2, up: applySchemaV2 },
 ]
+
+/** The newest known schema version (the MIGRATIONS tail). */
+export const LATEST_SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0
 
 /** v1: full DDL projection (schema-v1.sql) + the schema_version row, atomic. */
 function applySchemaV1(db: DatabaseSyncLike): void {
@@ -27,6 +32,30 @@ function applySchemaV1(db: DatabaseSyncLike): void {
     // 单行纪律:先清后写,重复应用不会堆积行(schema_version 单行递增)。
     db.exec('DELETE FROM schema_version')
     db.exec('INSERT INTO schema_version (version) VALUES (1)')
+    db.exec('COMMIT')
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      // The connection may already be unusable; prefer rethrowing the original error.
+    }
+    throw error
+  }
+}
+
+/**
+ * v2: M3 incremental migration (task 1.1, design/schema.sql v2 projection) —
+ * only-add: 2 ALTER groups (projects / feature_snapshot) + 7 new tables + 6
+ * indexes, atomic with the version bump to 2. The M2 v1 tables and their data
+ * are untouched.
+ */
+function applySchemaV2(db: DatabaseSyncLike): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec(SCHEMA_V2_SQL)
+    // 单行纪律:先清后写,重复应用不会堆积行(schema_version 单行递增)。
+    db.exec('DELETE FROM schema_version')
+    db.exec('INSERT INTO schema_version (version) VALUES (2)')
     db.exec('COMMIT')
   } catch (error) {
     try {
@@ -66,7 +95,7 @@ export interface MigrationOutcome {
  */
 export function migrateDatabase(db: DatabaseSyncLike): MigrationOutcome {
   const from = readSchemaVersion(db)
-  const latest = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0
+  const latest = LATEST_SCHEMA_VERSION
   if (from > latest) {
     throw new Error(
       `workbench database schema version ${String(from)} is newer than the latest known migration ${String(latest)} — refusing to touch it`,

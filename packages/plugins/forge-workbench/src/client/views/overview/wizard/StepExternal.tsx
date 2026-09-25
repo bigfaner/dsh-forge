@@ -96,6 +96,14 @@ const checkingStyle = {
   margin: '0',
 } as const
 
+/** 1.7: the app-managed default path hint (12/18 secondary, no spinner). */
+const checkingStyleLikeHint = {
+  color: 'var(--dsw-alias-label-secondary, inherit)',
+  fontSize: '12px',
+  lineHeight: '18px',
+  margin: '0',
+} as const
+
 /** Inputs of {@link StepExternal}. */
 export interface StepExternalProps {
   /** The locale seat (the shell's `t`). */
@@ -112,6 +120,13 @@ export interface StepExternalProps {
   readonly externalProbe: ExternalProbe
   /** The derived blocking issue of the step (drives the inline copy). */
   readonly issue: Step2Issue
+  /**
+   * Task 1.7 (G7/SC9 flip): the app-managed default `<docsRoot>/<dirname>`
+   * (null until the kernel paths read + codeRoot land). The M3 default is
+   * 仓外 — the hint marks the prefilled 应用管理路径 as editable, and the
+   * external radio's hint states the default.
+   */
+  readonly defaultPath: string | null
   /** Choice update. */
   readonly onTypeChange: (type: DocLocationType) => void
   /** Path update — the owner resets the authorization on every edit. */
@@ -154,7 +169,10 @@ export function StepExternal(props: StepExternalProps) {
             data-dsh-forge-wizard-doc-external=""
             onChange={() => { props.onTypeChange('external') }}
           />
-          <span style={optionTextStyle}>{props.t('wizard.step2.external')}</span>
+          <span style={optionTextStyle}>
+            {props.t('wizard.step2.external')}
+            <span style={optionHintStyle}>{props.t('wizard.step2.externalDefaultHint')}</span>
+          </span>
         </label>
       </div>
 
@@ -166,8 +184,16 @@ export function StepExternal(props: StepExternalProps) {
             placeholder={props.t('wizard.step2.externalPlaceholder')}
             value={props.docLocationPath}
             data-dsh-forge-wizard-external-input=""
+            aria-label={props.t('overview.meta.docLocation')}
             onChange={(event) => { props.onPathChange(event.target.value) }}
           />
+          {/* 1.7: the app-managed default rides visible — 已预填,可修改 (the
+              authorization still targets THIS path explicitly). */}
+          {props.defaultPath !== null && props.docLocationPath.trim() === props.defaultPath && (
+            <p data-dsh-forge-wizard-external-default="" style={checkingStyleLikeHint}>
+              {props.t('wizard.step2.defaultPathHint')}
+            </p>
+          )}
 
           {issue === 'required' && (
             <div role="alert" data-dsh-forge-wizard-external-error="required" style={errorStyle}>

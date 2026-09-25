@@ -14,9 +14,10 @@ import {
 } from '../src/client/i18n/errors.ts'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../src/client/paths.ts'
 import {
-  MOCK_NOW, MOCK_WORKBENCH_STATE, MOCK_WIZARD_EXTERNAL_OK, MOCK_WIZARD_EXTERNAL_UNREADABLE,
-  MOCK_WIZARD_FEATURE_TOTAL, MOCK_WIZARD_NO_FORGE_ROOT, MOCK_WIZARD_OK_ROOT, MOCK_WIZARD_TASK_TOTAL,
-  MOCK_WIZARD_UNREADABLE_ROOT, createMockRegisterWizardFace,
+  MOCK_NOW, MOCK_WORKBENCH_PATHS, MOCK_WORKBENCH_STATE, MOCK_WIZARD_EXTERNAL_OK,
+  MOCK_WIZARD_EXTERNAL_UNREADABLE, MOCK_WIZARD_FEATURE_TOTAL, MOCK_WIZARD_NO_FORGE_ROOT,
+  MOCK_WIZARD_OK_ROOT, MOCK_WIZARD_TASK_TOTAL, MOCK_WIZARD_UNREADABLE_ROOT,
+  createMockRegisterWizardFace,
 } from '../src/client/mocks/workbench.ts'
 import type { CodeRootProbeResult, WorkbenchShellProps } from '../src/client/contract.ts'
 import type { Project, WorkbenchState } from '../src/client/ipc-types.ts'
@@ -111,6 +112,12 @@ async function fillStep1(path: string = MOCK_WIZARD_OK_ROOT) {
   await waitFor(() => { expect(next().disabled).toBe(false) })
 }
 
+/**
+ * M3 flip (task 1.7): 仓外应用管理路径 is the step-② DEFAULT now — the
+ * in-repo registrations (the historical M2 default) opt back explicitly.
+ */
+const chooseInRepo = (): void => { fireEvent.click($('[data-dsh-forge-wizard-doc-in-repo]')) }
+
 // The upstream StateDot (consumed by the tasks-seat board since task 5.5,
 // via the WorkbenchShell mount chain) resolves through the module table at
 // runtime; the npm node entry carries undeclared transitive deps
@@ -158,7 +165,7 @@ describe('draft model: buildRegisterInput / buildProjectPatch / dirtiness', () =
   it('buildRegisterInput: in_repo nulls the path; external trims it; empty name = absent key (缺省 dirname)', () => {
     // paths.ts folds separators on the way out (the registry's stored
     // dialect); the main-side chain re-normalizes regardless.
-    const input = buildRegisterInput({ ...EMPTY_WIZARD_DRAFT, codeRoot: ' Z:\\project\\demo ' })
+    const input = buildRegisterInput({ ...EMPTY_WIZARD_DRAFT, docLocationType: 'in_repo', codeRoot: ' Z:\\project\\demo ' })
     expect(input).toEqual({ codeRoot: 'Z:/project/demo', docLocationType: 'in_repo', docLocationPath: null })
     expect('displayName' in input).toBe(false)
 
@@ -178,7 +185,7 @@ describe('draft model: buildRegisterInput / buildProjectPatch / dirtiness', () =
   })
 
   it('buildProjectPatch: rename + repoint in one patch; empty name = absent key', () => {
-    const rename = buildProjectPatch({ ...EMPTY_WIZARD_DRAFT, displayName: 'renamed' })
+    const rename = buildProjectPatch({ ...EMPTY_WIZARD_DRAFT, docLocationType: 'in_repo', displayName: 'renamed' })
     expect(rename).toEqual({ displayName: 'renamed', docLocationType: 'in_repo', docLocationPath: null })
 
     const repoint = buildProjectPatch({
@@ -236,8 +243,9 @@ describe('RegisterWizard: the three-step machine', () => {
     await fillStep1(MOCK_WIZARD_OK_ROOT)
     fireEvent.click(next()) // 1 → 2
     expect(stepAttr()).toBe('2')
-    fireEvent.click(next()) // 2 → 3 (in_repo default — 仓外可跳过)
-    expect(stepAttr()).toBe('3')
+    chooseInRepo() // M3 flip: the default is 仓外 — this walk registers in-repo
+    fireEvent.click(next()) // 2 → (probe settles) → 3
+    await waitFor(() => { expect(stepAttr()).toBe('3') })
     fireEvent.click(finish()) // 3 → submit
     await waitFor(() => { expect(onClose).toHaveBeenCalledTimes(1) })
 
@@ -315,7 +323,7 @@ describe('RegisterWizard: the three-step machine', () => {
     fireEvent.click(authorize())
     await waitFor(() => { expect(next().disabled).toBe(false) })
     fireEvent.click(next())
-    expect(stepAttr()).toBe('3')
+    await waitFor(() => { expect(stepAttr()).toBe('3') }) // the ②→③ advance rides the probe (1.7)
     fireEvent.change(nameInput(), { target: { value: 'renamed-on-step3' } })
 
     fireEvent.click(back()) // 3 → 2
@@ -325,7 +333,7 @@ describe('RegisterWizard: the three-step machine', () => {
     expect(pathInput().value).toBe(MOCK_WIZARD_OK_ROOT)
     fireEvent.click(next())
     fireEvent.click(next())
-    expect(stepAttr()).toBe('3')
+    await waitFor(() => { expect(stepAttr()).toBe('3') }) // the ②→③ advance rides the probe (1.7)
     expect(nameInput().value).toBe('renamed-on-step3') // survived the round trip
     expect($('[data-dsh-forge-wizard-summary-doc]').textContent).toContain(MOCK_WIZARD_EXTERNAL_OK)
   })
@@ -344,23 +352,33 @@ describe('RegisterWizard: step ② docs-location chain', () => {
     return handles
   }
 
-  it('default in_repo: no external surface at all, 「下一步」 ready immediately (可跳过)', async () => {
+  it('M3 flip (1.7/G7): 仓外应用管理路径 DEFAULT — prefilled path + hint + auth gate; 仓内 one radio away (可跳过)', async () => {
     const { face } = await toStep2()
+    expect(($('[data-dsh-forge-wizard-doc-external]') as HTMLInputElement).checked).toBe(true)
+    // The app-managed prefill <docsRoot>/<dirname> (the mock twin's paths).
+    await waitFor(() => { expect(externalInput().value).toBe(`${MOCK_WORKBENCH_PATHS.docsRoot}/demo`) })
+    expect($('[data-dsh-forge-wizard-external-default]').textContent).toContain(en['wizard.step2.defaultPathHint'])
+    // The explicit authorization still gates the default (BIZ-workbench-001).
+    expect(next().disabled).toBe(true)
+    expect(next().title).toBe(en['wizard.step2.needAuthorize'])
+    expect(face.probeExternalPath).toHaveBeenCalled() // the prefilled path probes like any other
+    // 仓内 remains selectable and instantly advanceable.
+    chooseInRepo()
     expect(document.querySelector('[data-dsh-forge-wizard-external-input]')).toBeNull()
     expect(document.querySelector('[data-dsh-forge-wizard-auth-block]')).toBeNull()
     expect(next().disabled).toBe(false)
-    expect(face.probeExternalPath).not.toHaveBeenCalled()
   })
 
-  it('external 必填: empty path → required error + Next disabled', async () => {
+  it('external 必填: clearing the prefilled path → required error + Next disabled', async () => {
     await toStep2()
-    fireEvent.click($('[data-dsh-forge-wizard-doc-external]'))
+    fireEvent.change(externalInput(), { target: { value: '' } })
     expect($('[data-dsh-forge-wizard-external-error="required"]').textContent).toContain(en['wizard.step2.required'])
     expect(next().disabled).toBe(true)
   })
 
   it('ERR_DOC_PATH_CONFLICT: path = codeRoot → exact ui-design copy, Next disabled, probe NOT consulted', async () => {
     const { face } = await toStep2()
+    face.probeExternalPath.mockClear() // the prefilled default path probed once (1.7)
     fireEvent.click($('[data-dsh-forge-wizard-doc-external]'))
     fireEvent.change(externalInput(), { target: { value: `${MOCK_WIZARD_OK_ROOT}\\` } })
     expect($('[data-dsh-forge-wizard-external-error="conflict"]').textContent)
@@ -427,10 +445,12 @@ describe('RegisterWizard: step ③ summary + submit', () => {
       fireEvent.click($('[data-dsh-forge-wizard-doc-external]'))
       fireEvent.change(externalInput(), { target: { value: overrides.external } })
       fireEvent.click(authorize())
+    } else {
+      chooseInRepo() // M3 flip: the default 仓外 path would gate on authorization
     }
     await waitFor(() => { expect(next().disabled).toBe(false) })
     fireEvent.click(next())
-    expect(stepAttr()).toBe('3')
+    await waitFor(() => { expect(stepAttr()).toBe('3') }) // the ②→③ advance rides the probe (1.7)
     return handles
   }
 
@@ -479,7 +499,9 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     const { onClose } = renderWizard({}, face)
     await fillStep1(MOCK_WIZARD_OK_ROOT)
     fireEvent.click(next())
+    chooseInRepo()
     fireEvent.click(next())
+    await waitFor(() => { expect(finish()).not.toBeNull() })
     fireEvent.click(finish())
     expect(finish().disabled).toBe(true)
     // The spinner rides the button (its label is the accessible copy).
@@ -507,7 +529,9 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     renderWizard({ onLocate, onClose })
     await fillStep1(ACTIVE_PROJECT.codeRoot)
     fireEvent.click(next())
+    chooseInRepo()
     fireEvent.click(next())
+    await waitFor(() => { expect(finish()).not.toBeNull() })
     fireEvent.click(finish())
     await waitFor(() => { expect($('[data-dsh-forge-wizard-exists]')).not.toBeNull() })
     expect($('[data-dsh-forge-wizard-exists]').textContent).toContain(en['wizard.err.projectExists'])
@@ -528,7 +552,9 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     renderWizard({ projects: [registered], onLocate }, face)
     await fillStep1('Z:\\reg\\already')
     fireEvent.click(next())
+    chooseInRepo()
     fireEvent.click(next())
+    await waitFor(() => { expect(finish()).not.toBeNull() })
     // The face's mock registry holds the SAME forward-slash row, so the
     // rejection is the UNIQUE(code_root) semantics, not a stub.
     fireEvent.click(finish())
@@ -545,7 +571,9 @@ describe('RegisterWizard: step ③ summary + submit', () => {
     renderWizard({}, face)
     await fillStep1(MOCK_WIZARD_OK_ROOT)
     fireEvent.click(next())
+    chooseInRepo()
     fireEvent.click(next())
+    await waitFor(() => { expect(finish()).not.toBeNull() })
     fireEvent.click(finish())
     await waitFor(() => { expect($('[data-dsh-forge-wizard-submit-error]')).not.toBeNull() })
     expect($('[data-dsh-forge-wizard-submit-error]').textContent)
@@ -815,7 +843,9 @@ describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)',
     fireEvent.change(pathInput(), { target: { value: MOCK_WIZARD_OK_ROOT } })
     await waitFor(() => { expect(next().disabled).toBe(false) })
     fireEvent.click(next())
+    chooseInRepo()
     fireEvent.click(next())
+    await waitFor(() => { expect(finish()).not.toBeNull() })
     fireEvent.click(finish())
     await waitFor(() => { expect(registerProject).toHaveBeenCalledTimes(1) })
     await waitFor(() => { expect(document.querySelector('[data-dsh-forge-dialog="register-wizard"]')).toBeNull() })

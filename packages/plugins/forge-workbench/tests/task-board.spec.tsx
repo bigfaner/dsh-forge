@@ -51,18 +51,21 @@ const TOTAL = MOCK_TASK_BOARD.tasks.length
 function makeFace(initial: TaskBoardData = MOCK_TASK_BOARD) {
   const base = createMockTaskBoardFace(initial)
   const unsubscribe = vi.fn()
-  let listener: ((events: readonly WorkbenchEvent[]) => void) | undefined
+  // Since 3.9 the page's presentation leg AND the approval dock's
+  // subscription leg both register (the real channel multiplexes over one
+  // preload subscription) — the facade fans emit into EVERY live listener.
+  const listeners = new Set<(events: readonly WorkbenchEvent[]) => void>()
   const face = {
     loadBoard: vi.fn(base.loadBoard),
     subscribeEvents: vi.fn((callback: (events: readonly WorkbenchEvent[]) => void) => {
-      listener = callback
+      listeners.add(callback)
       return unsubscribe
     }),
   }
   return Object.assign(face, {
     base,
     unsubscribe,
-    emit: (events: readonly WorkbenchEvent[]) => { listener?.(events) },
+    emit: (events: readonly WorkbenchEvent[]) => { for (const listener of listeners) listener(events) },
   })
 }
 
@@ -588,7 +591,10 @@ describe('updating 态: task_updated events light rows, announce politely', () =
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-status-board]')).not.toBeNull()
     })
-    expect(face.subscribeEvents).toHaveBeenCalledTimes(1)
+    // Since 3.9 the board's presentation leg AND the approval dock's reflux
+    // leg both subscribe (two listeners, one channel — the multiplexed
+    // real-chain shape); each unsubscribes exactly once on unmount.
+    expect(face.subscribeEvents).toHaveBeenCalledTimes(2)
     act(() => {
       face.emit([
         { type: 'task_updated', projectId: 'OTHER', taskKey: 'dsh-forge-m2/5.6', source: null, changeKind: 'attribute' },
@@ -598,7 +604,7 @@ describe('updating 态: task_updated events light rows, announce politely', () =
     expect((document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.6"]') as HTMLElement)
       .getAttribute('data-dsh-forge-updating')).toBeNull()
     view.unmount()
-    expect(face.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(face.unsubscribe).toHaveBeenCalledTimes(2)
   })
 })
 

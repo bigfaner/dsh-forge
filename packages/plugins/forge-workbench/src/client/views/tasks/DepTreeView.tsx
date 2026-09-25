@@ -40,7 +40,7 @@ import type { TaskSummary } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
 import {
   buildTaskGraph, buildTraversalIndex, nextFocusKey,
-  type DagLaunchMount, type FocusDirection, type TaskDagNode, type TraversalIndex,
+  type DagDecorMount, type FocusDirection, type TaskDagNode, type TraversalIndex,
 } from './dag/build-graph'
 import type { DagPosition } from './dag/layout'
 import { TaskCardNode } from './dag/NodeCard'
@@ -71,13 +71,14 @@ export interface DepTreeViewProps {
   initialViewport?: Viewport | undefined
   /** The settled-viewport stash hook (fires when a pan/zoom gesture ends). */
   onViewportSettled?: ((viewport: Viewport) => void) | undefined
-  /**
-   * The UF5 hover-trigger mount (5.11): present mounts the node-hover entry in
-   * every node card's reserved 28×28 slot; absent keeps the slots empty.
-   */
-  launch?: DagLaunchMount | undefined
   /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   activeLinks?: ReadonlyMap<string, string> | undefined
+  /**
+   * The UF1 decoration composers (task 3.9, 角标以 props 传入): the 编排态
+   * 角标 + the selection-mode cluster, composed per node by the page and
+   * carried through the node data. Absent renders the pure M2 card.
+   */
+  decor?: DagDecorMount | undefined
 }
 
 /**
@@ -102,9 +103,6 @@ const DAG_CANVAS_CSS = `
 .dsh-forge-dag .react-flow__node:focus-visible .dsh-forge-node-card { border: 1.5px solid var(--dsw-alias-link, rgb(65, 118, 230)); }
 .dsh-forge-dag .react-flow__handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; opacity: 0; width: 1px; }
 .dsh-forge-dag .react-flow__pane { touch-action: none; }
-.dsh-forge-dag .dsh-forge-node-launch { opacity: 0; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-.dsh-forge-dag .react-flow__node:hover .dsh-forge-node-launch,
-.dsh-forge-dag .react-flow__node:focus-within .dsh-forge-node-launch { opacity: 1; }
 `
 
 /** The canvas container: fills the tab content area with a viewport-relative height. */
@@ -146,13 +144,13 @@ export function DepTreeView(props: DepTreeViewProps) {
   const graph = useMemo(() => {
     const built = buildTaskGraph(
       props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey,
-      props.launch, props.activeLinks,
+      props.activeLinks, props.decor,
     )
     const positions = new Map<string, DagPosition>(built.nodes.map(node => [node.id, node.position]))
     const traversal: TraversalIndex = buildTraversalIndex(positions, built.edges)
     const taskByKey = new Map(props.tasks.map(task => [task.key, task] as const))
     return { built, positions, traversal, taskByKey }
-  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey, props.launch, props.activeLinks])
+  }, [props.tasks, props.danglingByTask, props.updatingKeys, props.t, props.selectedKey, props.activeLinks, props.decor])
 
   /** Move DOM focus onto a node wrapper (the lib keys wrappers by `data-id`). */
   const focusNode = (key: string): void => {
@@ -179,11 +177,11 @@ export function DepTreeView(props: DepTreeViewProps) {
   /** The delegated canvas keydown: resolve the focused node wrapper, run its contract. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const target = event.target as HTMLElement | null
-    // Interactive descendants own their keys: the UF5 launch trigger and the
-    // confirm dialog's controls mount INSIDE the node card (DOM-descendants
-    // of the wrapper), and the node contract must not swallow their Enter /
-    // Space activation with preventDefault (SC2-1 确认默认焦点 — Enter alone
-    // confirms the launch). Same for arrows over a text control.
+    // Interactive descendants own their keys: interactive controls (the UF1
+    // selection cluster, dialog controls) may mount INSIDE the node card
+    // (DOM-descendants of the wrapper), and the node contract must not
+    // swallow their Enter / Space activation with preventDefault. Same for
+    // arrows over a text control.
     if (target?.closest('button, input, textarea, select, a[href], [contenteditable], [data-dsh-forge-dialog]') != null) return
     const wrapper = target?.closest<HTMLElement>('[data-id]') ?? null
     // Keys outside a node wrapper (the pane itself) are not this view's.

@@ -31,7 +31,7 @@
  *   2. The dock's face is the ipc adapter's getTaskDetail (1:1, rejections
  *      normalized); the page's structural-deletion coupling flips the dock
  *      to its error card (the 板↔侧板 contract 5.8 reserved for this task).
- *   3. The UF5 launch seats pass through untouched (5.11's assembly).
+ *   3. The session jump hand-over passes through untouched (5.11 seat, M3 slim).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskSummary } from '../../ipc-types'
@@ -39,11 +39,11 @@ import type {
   BoardSessionStore,
 } from '../../store/board-session'
 import type {
-  SessionLaunchHandover, SessionLaunchServices, TaskBoardSeat,
+  SessionLaunchHandover, TaskBoardSeat,
 } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import {
-  createIpcTaskDetailFace, getWorkbenchIpcBridge,
+  createIpcDispatchFace, createIpcTaskDetailFace, getWorkbenchIpcBridge,
 } from '../../ipc/workbench'
 import type { WorkbenchIpcBridge } from '../../ipc/workbench'
 import {
@@ -63,9 +63,7 @@ export interface TasksViewProps {
   onSelect?: ((task: TaskSummary) => void) | undefined
   /** The explicit assembly seat (tests / build stage) — present wins over the bridge. */
   seat?: TaskBoardSeat | undefined
-  /** The UF5 launch services (5.11): passed through to the page's entries. */
-  launchServices?: Partial<SessionLaunchServices> | undefined
-  /** The UF5 success hand-over (5.11): passed through to the page's entries. */
+  /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: SessionLaunchHandover | undefined
   /** The board session store (5.11 AC3/AC4): the plugin-lifetime memory. */
   session?: BoardSessionStore | undefined
@@ -106,6 +104,10 @@ export function TasksView(props: TasksViewProps) {
     seatForm || props.projectId === undefined ? undefined : createTaskBoardStore(bridge, props.projectId))
   const [boardFace] = useState(() => (store === undefined ? undefined : store.asFace()))
   const [detailFace] = useState(() => (bridge === undefined ? undefined : createIpcTaskDetailFace(bridge)))
+  // The UF1 dispatch face (task 3.9): the six orchestration verbs over the
+  // same bridge — the real host's UF1 surface (派发/审批/编排回流) goes live
+  // through it; mock 全撤 (no mock twin ever answers when the bridge lives).
+  const [dispatchFace] = useState(() => (bridge === undefined ? undefined : createIpcDispatchFace(bridge)))
   useEffect(() => {
     if (store === undefined) return
     return () => { store.dispose() }
@@ -139,7 +141,7 @@ export function TasksView(props: TasksViewProps) {
         onSelect={props.onSelect}
         face={props.seat?.face}
         detailFace={props.seat?.detailFace}
-        {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
+        dispatchFace={props.seat?.dispatchFace}
         {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
         {...(props.session === undefined ? {} : { session: props.session })}
       />
@@ -167,7 +169,8 @@ export function TasksView(props: TasksViewProps) {
 
   // The real chain: the store-backed board face + the IPC detail face over
   // the resolved active project; the store's publishes re-feed the page
-  // through reloadToken (rows update in place — never a remount).
+  // through reloadToken (rows update in place — never a remount). Since 3.9
+  // the dispatch face rides along (the UF1 orchestration surface).
   return (
     <TaskBoardPage
       t={props.t}
@@ -176,8 +179,8 @@ export function TasksView(props: TasksViewProps) {
       onSelect={props.onSelect}
       face={boardFace}
       detailFace={detailFace}
+      dispatchFace={dispatchFace}
       reloadToken={reloadToken}
-      {...(props.launchServices === undefined ? {} : { launchServices: props.launchServices })}
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
       {...(props.session === undefined ? {} : { session: props.session })}
     />

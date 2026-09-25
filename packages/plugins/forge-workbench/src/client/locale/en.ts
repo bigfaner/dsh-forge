@@ -12,6 +12,7 @@ export type WorkbenchKey =
   | 'rail.label'
   | 'tabs.label'
   | 'tab.overview'
+  | 'tab.proposals'
   | 'tab.tasks'
   | 'tab.features'
   | 'chrome.addProject'
@@ -78,6 +79,8 @@ export type WorkbenchKey =
   | 'overview.toast.refreshed'
   | 'overview.toast.failed'
   | 'overview.toast.dismiss'
+  | 'overview.skillDirs.alertTitle'
+  | 'overview.skillDirs.alertEntry'
   | 'overview.plugins.title'
   | 'overview.plugins.loading'
   | 'overview.plugins.loadError.title'
@@ -98,6 +101,42 @@ export type WorkbenchKey =
   | 'overview.plugins.err.runtimeState'
   | 'overview.plugins.err.generic'
   | 'overview.plugins.toast.dismiss'
+  | 'overview.prefs.title'
+  | 'overview.prefs.resolveHint'
+  | 'overview.prefs.tier.global'
+  | 'overview.prefs.tier.project'
+  | 'overview.prefs.tier.projectNamed'
+  | 'overview.prefs.tier.feature'
+  | 'overview.prefs.tier.projectDisabled'
+  | 'overview.prefs.tier.featureDisabled'
+  | 'overview.prefs.feature.select'
+  | 'overview.prefs.feature.menuLabel'
+  | 'overview.prefs.feature.hint'
+  | 'overview.prefs.group.auto'
+  | 'overview.prefs.group.worktree'
+  | 'overview.prefs.group.coverage'
+  | 'overview.prefs.group.eval'
+  | 'overview.prefs.loading'
+  | 'overview.prefs.loadError.title'
+  | 'overview.prefs.loadError.retry'
+  | 'overview.prefs.row.inherited'
+  | 'overview.prefs.row.overridden'
+  | 'overview.prefs.row.unset'
+  | 'overview.prefs.row.clear'
+  | 'overview.prefs.row.saving'
+  | 'overview.prefs.row.saveError'
+  | 'overview.prefs.row.retry'
+  | 'overview.prefs.row.invalidNumber'
+  | 'overview.prefs.row.invalidPercent'
+  | 'overview.prefs.row.invalidText'
+  | 'overview.prefs.row.invalidList'
+  | 'overview.prefs.coverage.maintain'
+  | 'overview.prefs.source.global'
+  | 'overview.prefs.source.project'
+  | 'overview.prefs.source.feature'
+  | 'overview.prefs.source.default'
+  | 'overview.prefs.toast.saved'
+  | 'overview.prefs.toast.dismiss'
   | 'wizard.title'
   | 'wizard.editTitle'
   | 'wizard.stepLabel'
@@ -124,7 +163,18 @@ export type WorkbenchKey =
   | 'wizard.step2.needAuthorize'
   | 'wizard.step2.authorize'
   | 'wizard.step2.warn'
+  | 'wizard.step2.externalDefaultHint'
+  | 'wizard.step2.defaultPathHint'
   | 'wizard.step3.title'
+  | 'wizard.stepMigrate.title'
+  | 'wizard.stepMigrate.intro'
+  | 'wizard.stepMigrate.toggle'
+  | 'wizard.stepMigrate.onHint'
+  | 'wizard.stepMigrate.offHint'
+  | 'wizard.summary.migrateNow'
+  | 'wizard.summary.migrateDefer'
+  | 'wizard.migration.enterWorkbench'
+  | 'wizard.migration.finishUnmigrated'
   | 'wizard.step3.nameHint'
   | 'wizard.err.codeRootUnreadable'
   | 'wizard.err.codeRootUnreadable.guide'
@@ -203,6 +253,93 @@ export type WorkbenchKey =
   | 'tasks.status.short.suspended'
   | 'tasks.status.short.skipped'
   | 'tasks.status.short.rejected'
+  | 'tasks.dispatch.entry'
+  | 'tasks.dispatch.entry.disabledTooltip'
+  | 'tasks.dispatch.detail'
+  | 'tasks.dispatch.disabled.terminal'
+  | 'tasks.dispatch.disabled.inProgress'
+  | 'tasks.dispatch.disabled.suspended'
+  | 'tasks.dispatch.disabled.deps'
+  | 'tasks.dispatch.float.label'
+  | 'tasks.dispatch.float.count'
+  | 'tasks.dispatch.float.cancel'
+  | 'tasks.dispatch.float.go'
+  | 'tasks.dispatch.float.busy'
+  | 'tasks.dispatch.warning.title'
+  | 'tasks.dispatch.warning.listLabel'
+  | 'tasks.dispatch.warning.intro'
+  | 'tasks.dispatch.warning.note'
+  | 'tasks.dispatch.warning.continue'
+  | 'tasks.dispatch.warning.cancel'
+  | 'tasks.dispatch.confirm.title'
+  | 'tasks.dispatch.confirm.intro'
+  | 'tasks.dispatch.confirm.presynth'
+  | 'tasks.dispatch.confirm.go'
+  | 'tasks.dispatch.confirm.cancel'
+  | 'tasks.dispatch.error.timeoutTitle'
+  | 'tasks.dispatch.error.failedTitle'
+  | 'tasks.dispatch.error.timeoutBody'
+  | 'tasks.dispatch.error.retry'
+  | 'tasks.dispatch.error.close'
+  | 'tasks.dispatch.announce.entered'
+  | 'tasks.dispatch.announce.exited'
+  | 'tasks.dispatch.announce.dispatched'
+  | 'tasks.orch.starting'
+  | 'tasks.orch.running'
+  | 'tasks.orch.awaiting'
+  | 'tasks.orch.failed'
+  | 'tasks.orch.done'
+  | 'tasks.orch.awaiting.aria'
+  | 'tasks.orch.awaiting.tooltip'
+  | 'tasks.orch.announce.task'
+  | 'tasks.orch.announce.batch'
+  | 'tasks.orch.announce.batchMixed'
+  | 'tasks.orch.section'
+  | 'tasks.orch.execute'
+  | 'tasks.orch.execute.busy'
+  | 'tasks.orch.execute.note'
+  | 'tasks.orch.empty'
+  | 'tasks.orch.currentState'
+  | 'tasks.orch.dispatchedAt'
+  | 'tasks.orch.session'
+  | 'tasks.orch.failedReason'
+  | 'tasks.orch.failedReason.none'
+  | 'tasks.orch.redispatch'
+  | 'tasks.orch.presynth'
+  | 'tasks.orch.presynth.tooltip'
+  | 'tasks.orch.presynth.hash'
+  | 'tasks.orch.goApproval'
+  | 'tasks.orch.announce.dispatched'
+  | 'tasks.redispatch.title'
+  | 'tasks.redispatch.reason'
+  | 'tasks.redispatch.reason.none'
+  | 'tasks.redispatch.note'
+  | 'tasks.redispatch.go'
+  | 'tasks.redispatch.cancel'
+  | 'tasks.approval.toolbar'
+  | 'tasks.approval.toolbar.aria'
+  | 'tasks.approval.tabBadge.aria'
+  | 'tasks.approval.title'
+  | 'tasks.approval.note'
+  | 'tasks.approval.close'
+  | 'tasks.approval.loading'
+  | 'tasks.approval.loadError.title'
+  | 'tasks.approval.loadError.retry'
+  | 'tasks.approval.empty'
+  | 'tasks.approval.empty.hint'
+  | 'tasks.approval.detail'
+  | 'tasks.approval.expand'
+  | 'tasks.approval.collapse'
+  | 'tasks.approval.approve'
+  | 'tasks.approval.reject'
+  | 'tasks.approval.deciding'
+  | 'tasks.approval.payload.unavailable'
+  | 'tasks.approval.back'
+  | 'tasks.approval.error.title'
+  | 'tasks.approval.error.refreshed'
+  | 'tasks.approval.announce.arrived'
+  | 'tasks.approval.announce.approved'
+  | 'tasks.approval.announce.rejected'
   | 'detail.close'
   | 'detail.loading'
   | 'detail.error.title'
@@ -255,6 +392,88 @@ export type WorkbenchKey =
   | 'features.doc.design'
   | 'features.doc.ui'
   | 'features.doc.tasks'
+  | 'features.stages.deviation'
+  | 'features.stages.deviation.tooltip'
+  | 'features.stages.gateHint'
+  | 'features.stages.gateHint.tooltip'
+  | 'features.stages.advance'
+  | 'features.stages.advance.busy'
+  | 'features.stages.advance.unavailable'
+  | 'features.stages.advance.rejected.title'
+  | 'features.stages.assets.label'
+  | 'features.stages.assets.tab'
+  | 'features.stages.assets.goal'
+  | 'features.stages.assets.summary'
+  | 'features.stages.assets.loading'
+  | 'features.stages.assets.error.title'
+  | 'features.stages.assets.error.retry'
+  | 'features.stages.assets.empty.title'
+  | 'features.stages.assets.empty.body'
+  | 'features.stages.stepper.gateAria'
+  | 'migration.pill.migratable'
+  | 'migration.pill.migrated'
+  | 'migration.entry.migrate'
+  | 'migration.entry.guardTooltip'
+  | 'migration.confirm.title'
+  | 'migration.confirm.intro'
+  | 'migration.confirm.bullet.tasks'
+  | 'migration.confirm.bullet.backup'
+  | 'migration.confirm.bullet.archive'
+  | 'migration.confirm.bullet.md'
+  | 'migration.confirm.backupLabel'
+  | 'migration.confirm.migrate'
+  | 'migration.confirm.cancel'
+  | 'migration.step.verify'
+  | 'migration.step.migrate'
+  | 'migration.step.parity'
+  | 'migration.step.backupDone'
+  | 'migration.progress.title'
+  | 'migration.result.parityOk'
+  | 'migration.result.done'
+  | 'migration.failed.title'
+  | 'migration.failed.atStep'
+  | 'migration.failed.rollbackNote'
+  | 'migration.failed.retry'
+  | 'migration.failed.close'
+  | 'migration.live.running'
+  | 'migration.err.guard'
+  | 'migration.err.inProgress'
+  | 'migration.err.generic'
+  | 'proposals.title'
+  | 'proposals.readonly'
+  | 'proposals.loading'
+  | 'proposals.loadError.title'
+  | 'proposals.loadError.retry'
+  | 'proposals.notFound.title'
+  | 'proposals.notFound.body'
+  | 'proposals.notFound.back'
+  | 'proposals.lost.title'
+  | 'proposals.lost.body'
+  | 'proposals.lost.repoint'
+  | 'proposals.lost.remove'
+  | 'proposals.empty.title'
+  | 'proposals.empty.body'
+  | 'proposals.sort.label'
+  | 'proposals.sort.created'
+  | 'proposals.sort.slug'
+  | 'proposals.sort.status'
+  | 'proposals.row.openDetail'
+  | 'proposals.row.featureJump'
+  | 'proposals.updated.announce'
+  | 'proposals.detail.breadcrumb'
+  | 'proposals.detail.breadcrumb.root'
+  | 'proposals.detail.docs.tabsLabel'
+  | 'proposals.detail.tab.proposal'
+  | 'proposals.detail.tab.eval'
+  | 'proposals.detail.evalMissing'
+  | 'proposals.detail.docs.loading'
+  | 'proposals.detail.docs.error.title'
+  | 'proposals.detail.docs.error.retry'
+  | 'proposals.detail.docs.empty'
+  | 'proposals.status.draft'
+  | 'proposals.status.accepted'
+  | 'proposals.status.rejected'
+  | 'proposals.status.superseded'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -264,6 +483,7 @@ export const en: Record<WorkbenchKey, string> = {
   'rail.label': 'Primary view switch',
   'tabs.label': 'Workbench views',
   'tab.overview': 'Overview',
+  'tab.proposals': 'Proposals',
   'tab.tasks': 'Tasks',
   'tab.features': 'Features',
   'chrome.addProject': 'Add project',
@@ -330,6 +550,8 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.toast.refreshed': 'Project list refreshed',
   'overview.toast.failed': 'Action failed: {message}',
   'overview.toast.dismiss': 'Dismiss',
+  'overview.skillDirs.alertTitle': 'Skill directory sync failed',
+  'overview.skillDirs.alertEntry': '{name}: {message} — forge skills may not resolve in sessions; check the app log (ERR_SKILL_DIR_SYNC).',
   'overview.plugins.title': 'Plugins',
   'overview.plugins.loading': 'Loading plugins…',
   'overview.plugins.loadError.title': 'Failed to load plugins',
@@ -350,6 +572,42 @@ export const en: Record<WorkbenchKey, string> = {
   'overview.plugins.err.runtimeState': 'The plugin runtime state was invalid and has been rebuilt automatically.',
   'overview.plugins.err.generic': 'Action failed: {message}',
   'overview.plugins.toast.dismiss': 'Dismiss',
+  'overview.prefs.title': 'Run preferences',
+  'overview.prefs.resolveHint': 'Effective resolution: Feature > Project > Global; keys without an override fall back tier by tier.',
+  'overview.prefs.tier.global': 'Global',
+  'overview.prefs.tier.project': 'Project',
+  'overview.prefs.tier.projectNamed': 'Project · {name}',
+  'overview.prefs.tier.feature': 'Feature',
+  'overview.prefs.tier.projectDisabled': 'No active project — register and activate a project to edit project-tier preferences.',
+  'overview.prefs.tier.featureDisabled': 'No feature in the active project yet — the feature tier unlocks once one exists.',
+  'overview.prefs.feature.select': 'Select a feature',
+  'overview.prefs.feature.menuLabel': 'Feature picker',
+  'overview.prefs.feature.hint': 'Select a feature to view and edit its overrides.',
+  'overview.prefs.group.auto': 'auto',
+  'overview.prefs.group.worktree': 'worktree',
+  'overview.prefs.group.coverage': 'coverage',
+  'overview.prefs.group.eval': 'eval',
+  'overview.prefs.loading': 'Loading preferences…',
+  'overview.prefs.loadError.title': 'Failed to load preferences',
+  'overview.prefs.loadError.retry': 'Retry',
+  'overview.prefs.row.inherited': 'Inherited · {source}: {value}',
+  'overview.prefs.row.overridden': 'Overridden here',
+  'overview.prefs.row.unset': 'Not set',
+  'overview.prefs.row.clear': 'Clear',
+  'overview.prefs.row.saving': 'Saving…',
+  'overview.prefs.row.saveError': 'Save failed: {message}',
+  'overview.prefs.row.retry': 'Retry',
+  'overview.prefs.row.invalidNumber': 'Enter a whole number.',
+  'overview.prefs.row.invalidPercent': 'Enter a whole number between 0 and 100.',
+  'overview.prefs.row.invalidText': 'Must not be empty.',
+  'overview.prefs.row.invalidList': 'Enter at least one non-empty entry.',
+  'overview.prefs.coverage.maintain': 'maintain',
+  'overview.prefs.source.global': 'Global',
+  'overview.prefs.source.project': 'Project',
+  'overview.prefs.source.feature': 'Feature',
+  'overview.prefs.source.default': 'Default',
+  'overview.prefs.toast.saved': 'Saved',
+  'overview.prefs.toast.dismiss': 'Dismiss',
   'wizard.title': 'Register project',
   'wizard.editTitle': 'Repoint project',
   'wizard.stepLabel': 'Step {current}/{total}',
@@ -367,15 +625,26 @@ export const en: Record<WorkbenchKey, string> = {
   'wizard.step1.checking': 'Checking for forge data…',
   'wizard.step1.detected': 'Forge data detected: {tasks} tasks · {features} features',
   'wizard.step1.readonlyHint': 'The code root is fixed at registration and cannot change; repointing covers the docs location.',
-  'wizard.step2.inRepo': 'In repo (default)',
+  'wizard.step2.inRepo': 'In repo',
   'wizard.step2.inRepoHint': 'Feature documents live inside the repository (docs/features).',
-  'wizard.step2.external': 'External local path',
+  'wizard.step2.external': 'Out of repo — app-managed (default)',
+  'wizard.step2.externalDefaultHint': 'Feature documents stay outside the code repository, under the app-managed docs root.',
+  'wizard.step2.defaultPathHint': 'App-managed location (prefilled; editable)',
   'wizard.step2.externalPlaceholder': 'Absolute path outside the code root',
   'wizard.step2.required': 'The external path is required.',
   'wizard.step2.checking': 'Checking the external path…',
   'wizard.step2.needAuthorize': 'Confirm the authorization to continue.',
   'wizard.step2.authorize': 'I authorize the workbench to read feature documents at this external path.',
   'wizard.step2.warn': 'External path: must differ from the code root, and requires explicit authorization.',
+  'wizard.stepMigrate.title': 'Migration confirm',
+  'wizard.stepMigrate.intro': 'tasks/index.json was detected in the project doc tree (the legacy task-state base). Migrate it to the app data kernel now?',
+  'wizard.stepMigrate.toggle': 'Migrate to the M3 kernel after registering',
+  'wizard.stepMigrate.onHint': 'Runs the one-time migration right after registration completes (recommended).',
+  'wizard.stepMigrate.offHint': 'Off registers the project in the read-only compatibility state: the project card keeps its Migratable entry and migration can start later from the overview.',
+  'wizard.summary.migrateNow': 'Migrate to the M3 kernel right after registering',
+  'wizard.summary.migrateDefer': 'Defer migration (read-only compatibility; the card stays migratable)',
+  'wizard.migration.enterWorkbench': 'Enter the workbench',
+  'wizard.migration.finishUnmigrated': 'Finish registration unmigrated',
   'wizard.step3.title': 'Confirm registration',
   'wizard.step3.nameHint': 'Defaults to the code root directory name.',
   'wizard.err.codeRootUnreadable': 'This path does not exist or cannot be read.',
@@ -455,6 +724,93 @@ export const en: Record<WorkbenchKey, string> = {
   'tasks.status.short.suspended': 'Held',
   'tasks.status.short.skipped': 'Skipped',
   'tasks.status.short.rejected': 'Rejected',
+  'tasks.dispatch.entry': 'Dispatch',
+  'tasks.dispatch.entry.disabledTooltip': 'No dispatchable tasks (unmet dependencies or terminal)',
+  'tasks.dispatch.detail': 'Open task details',
+  'tasks.dispatch.disabled.terminal': 'Terminal task — reopen it before dispatching',
+  'tasks.dispatch.disabled.inProgress': 'Task in progress (one executor per task)',
+  'tasks.dispatch.disabled.suspended': 'Task suspended — resume it before dispatching',
+  'tasks.dispatch.disabled.deps': 'Has unmet dependencies',
+  'tasks.dispatch.float.label': 'Selection actions',
+  'tasks.dispatch.float.count': '{count} selected',
+  'tasks.dispatch.float.cancel': 'Cancel',
+  'tasks.dispatch.float.go': 'Dispatch {count} →',
+  'tasks.dispatch.float.busy': 'Dispatching…',
+  'tasks.dispatch.warning.title': 'Stage artifacts incomplete',
+  'tasks.dispatch.warning.listLabel': 'Missing artifacts',
+  'tasks.dispatch.warning.intro': 'The deterministic pre-dispatch check (code-checked) found missing stage artifacts:',
+  'tasks.dispatch.warning.note': 'The missing list is logged. This warning does not block dispatch — continue after confirming.',
+  'tasks.dispatch.warning.continue': 'Continue dispatch',
+  'tasks.dispatch.warning.cancel': 'Cancel',
+  'tasks.dispatch.confirm.title': 'Confirm dispatch',
+  'tasks.dispatch.confirm.intro': 'About to dispatch the following {count} task(s) (no dependency conflicts; parallel):',
+  'tasks.dispatch.confirm.presynth': 'On dispatch the kernel pre-synthesizes the systemPrompt from three elements: task-type protocol + feature goal/summary + effective preferences; subagent start budget ≤3s.',
+  'tasks.dispatch.confirm.go': 'Dispatch',
+  'tasks.dispatch.confirm.cancel': 'Cancel',
+  'tasks.dispatch.error.timeoutTitle': 'Dispatch timed out',
+  'tasks.dispatch.error.failedTitle': 'Dispatch failed',
+  'tasks.dispatch.error.timeoutBody': 'The dispatch budget expired (>3s): the subagent did not become interactive within budget.',
+  'tasks.dispatch.error.retry': 'Retry',
+  'tasks.dispatch.error.close': 'Close',
+  'tasks.dispatch.announce.entered': 'Entered dispatch selection mode',
+  'tasks.dispatch.announce.exited': 'Exited selection mode (selection cleared)',
+  'tasks.dispatch.announce.dispatched': 'Dispatched {count} task(s)',
+  'tasks.orch.starting': 'Pending',
+  'tasks.orch.running': 'Running',
+  'tasks.orch.awaiting': 'Awaiting approval',
+  'tasks.orch.failed': 'Failed',
+  'tasks.orch.done': 'Submitted',
+  'tasks.orch.awaiting.aria': 'Task {key} awaiting approval — click to open approvals',
+  'tasks.orch.awaiting.tooltip': 'Click to open approvals',
+  'tasks.orch.announce.task': 'Task {key} entered {state}',
+  'tasks.orch.announce.batch': '{count} tasks entered {state}',
+  'tasks.orch.announce.batchMixed': '{count} task orchestration states updated',
+  'tasks.orch.section': 'Orchestration',
+  'tasks.orch.execute': 'Dispatch now',
+  'tasks.orch.execute.busy': 'Dispatching…',
+  'tasks.orch.execute.note': 'The M2 "Launch session" entry, evolved: presynthesized systemPrompt + subagent dispatch.',
+  'tasks.orch.empty': 'Not dispatched yet (no orchestration record).',
+  'tasks.orch.currentState': 'Current orchestration state',
+  'tasks.orch.dispatchedAt': 'Dispatched {time}',
+  'tasks.orch.session': 'subagent session {id}',
+  'tasks.orch.failedReason': 'Failure reason: {reason}',
+  'tasks.orch.failedReason.none': 'Failure reason: — (none recorded)',
+  'tasks.orch.redispatch': 'Redispatch',
+  'tasks.orch.presynth': 'Presynth: protocol ✓ · goal summary ✓ · preferences ✓',
+  'tasks.orch.presynth.tooltip': 'Three elements: task-type protocol (template library) · feature goal/summary (latest stage asset) · effective preferences (three-tier resolution)',
+  'tasks.orch.presynth.hash': 'prompt_hash {hash}',
+  'tasks.orch.goApproval': 'Go to approvals',
+  'tasks.orch.announce.dispatched': 'Task {key} dispatched',
+  'tasks.redispatch.title': 'Redispatch confirmation',
+  'tasks.redispatch.reason': 'Previous failure: {reason}',
+  'tasks.redispatch.reason.none': 'Previous failure: — (none recorded)',
+  'tasks.redispatch.note': 'Redispatch re-runs the artifact completeness check and the presynthesis.',
+  'tasks.redispatch.go': 'Redispatch',
+  'tasks.redispatch.cancel': 'Cancel',
+  'tasks.approval.toolbar': 'Approvals {count}',
+  'tasks.approval.toolbar.aria': 'Approvals: {count} awaiting',
+  'tasks.approval.tabBadge.aria': '{count} awaiting approval',
+  'tasks.approval.title': 'Awaiting approval ({count})',
+  'tasks.approval.note': 'Approve / reject only via explicit click — no default auto-approval.',
+  'tasks.approval.close': 'Close the approval panel',
+  'tasks.approval.loading': 'Loading approvals…',
+  'tasks.approval.loadError.title': 'Failed to load approvals',
+  'tasks.approval.loadError.retry': 'Retry',
+  'tasks.approval.empty': 'No approvals awaiting',
+  'tasks.approval.empty.hint': 'New approval requests surface as badges and counts — never a modal.',
+  'tasks.approval.detail': 'Details ↗',
+  'tasks.approval.expand': 'Expand',
+  'tasks.approval.collapse': 'Collapse',
+  'tasks.approval.approve': 'Approve',
+  'tasks.approval.reject': 'Reject',
+  'tasks.approval.deciding': 'Submitting decision…',
+  'tasks.approval.payload.unavailable': 'Request body unavailable',
+  'tasks.approval.back': '◂ Back to approvals ({count})',
+  'tasks.approval.error.title': 'Approval action failed',
+  'tasks.approval.error.refreshed': 'The list has been refreshed.',
+  'tasks.approval.announce.arrived': '{count} approval(s) awaiting',
+  'tasks.approval.announce.approved': 'Task {key} approved — back to running',
+  'tasks.approval.announce.rejected': 'Task {key} rejected — moved to failed',
   'detail.close': 'Close',
   'detail.loading': 'Loading task details…',
   'detail.error.title': 'Failed to load task details',
@@ -507,4 +863,92 @@ export const en: Record<WorkbenchKey, string> = {
   'features.doc.design': 'design',
   'features.doc.ui': 'ui',
   'features.doc.tasks': 'tasks',
+  // The UF2 stage family (task 4.3, ui-design UF2): deviation badge, gate
+  // hint line, advance action, stage-assets tab — zh/en parity enforced by
+  // typing. The gate-hint line copy mirrors the ui-design 提示行 verbatim.
+  'features.stages.deviation': '⚠ Deviated',
+  'features.stages.deviation.tooltip': 'An external session has performed a cross-stage operation',
+  'features.stages.gateHint': '▲ Summary not generated — advancing requires the stage summary first',
+  'features.stages.gateHint.tooltip': 'Generation path: task detail → generate stage summary (subagent dispatch)',
+  'features.stages.advance': 'Advance stage',
+  'features.stages.advance.busy': 'Advancing…',
+  'features.stages.advance.unavailable': 'Stage data plane not wired (no advance verb)',
+  'features.stages.advance.rejected.title': 'Stage gate unsatisfied',
+  'features.stages.assets.label': 'Stage assets (grouped by stage, oldest first)',
+  // The sixth detail tab's strip label (task 4.4, ui-design: 末位追加).
+  'features.stages.assets.tab': 'Stage assets',
+  'features.stages.assets.goal': 'Goal',
+  'features.stages.assets.summary': 'Summary',
+  'features.stages.assets.loading': 'Loading stage assets…',
+  'features.stages.assets.error.title': 'Failed to load stage assets',
+  'features.stages.assets.error.retry': 'Retry',
+  'features.stages.assets.empty.title': 'No stage assets yet',
+  'features.stages.assets.empty.body': 'After the first stage advance, each stage\'s goal and summary are generated here (doc-root stage asset files).',
+  'features.stages.stepper.gateAria': ', stage summary not generated (gate pending)',
+  // The UF3 migration family (task 1.6): Pill/entry, confirm copy, step
+  // rows, terminal results, guard notes — zh/en parity enforced by typing.
+  'migration.pill.migratable': 'Migratable',
+  'migration.pill.migrated': 'Migrated · SQLite',
+  'migration.entry.migrate': 'Migrate',
+  'migration.entry.guardTooltip': 'Task orchestration in progress — migration unlocks after it settles',
+  'migration.confirm.title': 'Migrate to the M3 kernel',
+  'migration.confirm.intro': 'A one-time migration is about to run:',
+  'migration.confirm.bullet.tasks': 'Task structured state → the app data kernel (SQLite)',
+  'migration.confirm.bullet.backup': 'Automatic backup before migrating; any failed phase rolls the whole run back (no half-migrated state)',
+  'migration.confirm.bullet.archive': 'tasks/index.json retires after completion (kept on disk as a *.migrated archive)',
+  'migration.confirm.bullet.md': 'Task and record .md files are untouched',
+  'migration.confirm.backupLabel': 'Backup location',
+  'migration.confirm.migrate': 'Migrate',
+  'migration.confirm.cancel': 'Cancel',
+  'migration.step.verify': 'Verify',
+  'migration.step.migrate': 'Migrate',
+  'migration.step.parity': 'Parity check',
+  'migration.step.backupDone': 'Backup complete →',
+  'migration.progress.title': 'Migrate to the M3 kernel',
+  'migration.result.parityOk': 'Parity result: zero diff across the full task set',
+  'migration.result.done': 'Done',
+  'migration.failed.title': 'Migration failed · rolled back',
+  'migration.failed.atStep': 'Failed at step "{step}"',
+  'migration.failed.rollbackNote': 'Rolled back to the pre-migration state (backup kept; no half-migrated state).',
+  'migration.failed.retry': 'Retry',
+  'migration.failed.close': 'Close',
+  'migration.live.running': 'Migration step in progress: {step}',
+  'migration.err.guard': 'Task orchestration is in progress — migration and running orchestrations are mutually exclusive; start again after they settle.',
+  'migration.err.inProgress': 'A migration is already running for this project; wait for it to settle and try again.',
+  'migration.err.generic': 'The migration could not start ({code}); nothing has changed — try again.',
+  'proposals.title': 'Proposals',
+  'proposals.readonly': 'proposals/ · read-only',
+  'proposals.loading': 'Loading proposals…',
+  'proposals.loadError.title': 'Failed to load proposals',
+  'proposals.loadError.retry': 'Retry',
+  'proposals.notFound.title': 'Proposal not found',
+  'proposals.notFound.body': 'This proposal is no longer on the board — it may have been renamed or removed outside the workbench.',
+  'proposals.notFound.back': 'Back to the board',
+  'proposals.lost.title': 'Document location inaccessible',
+  'proposals.lost.body': 'The external document path is no longer accessible, so proposals/ cannot be read. Repoint the project to a valid location, or remove the registration and register again.',
+  'proposals.lost.repoint': 'Repoint',
+  'proposals.lost.remove': 'Remove project',
+  'proposals.empty.title': 'No proposals yet',
+  'proposals.empty.body': 'The document root proposals/ is empty or does not exist yet.',
+  'proposals.sort.label': 'Sort',
+  'proposals.sort.created': 'created (new→old)',
+  'proposals.sort.slug': 'slug',
+  'proposals.sort.status': 'status',
+  'proposals.row.openDetail': 'Open proposal {slug} (status {status}, author {author}, {created})',
+  'proposals.row.featureJump': 'Jump to feature {slug}',
+  'proposals.updated.announce': 'Proposal board updated: {count} change(s)',
+  'proposals.detail.breadcrumb': 'Breadcrumb',
+  'proposals.detail.breadcrumb.root': 'Proposal board',
+  'proposals.detail.docs.tabsLabel': 'Proposal documents',
+  'proposals.detail.tab.proposal': 'proposal',
+  'proposals.detail.tab.eval': 'eval',
+  'proposals.detail.evalMissing': 'No evaluation report',
+  'proposals.detail.docs.loading': 'Loading document…',
+  'proposals.detail.docs.error.title': 'Failed to load document',
+  'proposals.detail.docs.error.retry': 'Retry',
+  'proposals.detail.docs.empty': 'The document is empty.',
+  'proposals.status.draft': 'Draft',
+  'proposals.status.accepted': 'Accepted',
+  'proposals.status.rejected': 'Rejected',
+  'proposals.status.superseded': 'Superseded',
 }

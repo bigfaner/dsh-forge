@@ -25,7 +25,9 @@ import {
   PluginBundlesConfigError,
   projectHostProfile,
   type HostProfileProjection,
+  type PluginBundlesConfig,
 } from './host-profile/index.ts'
+import { syncProfileSkillDirs, type SkillDirSyncAlert } from './host-profile/skill-dirs.ts'
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
@@ -33,9 +35,8 @@ import { createPluginEnableGuard } from './plugin-runtime/guard.ts'
 import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
+import { createMigrationFaultsResolver } from './workbench/migration/faults-stub.ts'
 import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
-import { listProjects } from './workbench/repos/projects.ts'
-import { createHostSpawnEnvFeeder } from './workbench/host-env-feed.ts'
 
 // Electron shell main entry.
 // Responsibilities (see docs/features/dsh-forge-m1/design/tech-design.md):
@@ -318,9 +319,10 @@ void app.whenReady().then(async () => {
   // from anywhere but the product config.
   let hostProfile: HostProfileProjection | undefined
   let profileFailure: string | undefined
+  let pluginBundles: PluginBundlesConfig | undefined
   try {
     const pluginBundlesConfigPath = resolvePluginBundlesConfigPath()
-    const pluginBundles = loadPluginBundlesConfig(pluginBundlesConfigPath)
+    pluginBundles = loadPluginBundlesConfig(pluginBundlesConfigPath)
     hostProfile = projectHostProfile({
       profileDir,
       officeSkillsSource: process.env.DSH_FORGE_OFFICE_SKILLS ?? OFFICE_SKILLS_ASSETS_DIR,
@@ -343,19 +345,24 @@ void app.whenReady().then(async () => {
     })
   }
 
+  // Task 5.7 (Interface 6, D2): customSkillDirs boot 同步 —— profile 物化之后、
+  // host spawn 之前(宿主 composeProfile 一次性读入 user layer,spawn 后再写
+  // 对当次 boot 不生效)。机制随插件交付(lib/skill-dirs.js,零 peers 依赖),
+  // 壳侧经产品配置遍历触发;失败 = ERR_SKILL_DIR_SYNC 日志 + 设置面告警条目
+  // (经下方 workbench 服务装配进 getState),不阻断 boot(技能面降级非致命)。
+  let skillDirSyncAlerts: readonly SkillDirSyncAlert[] = []
+  if (hostProfile !== undefined && pluginBundles !== undefined) {
+    skillDirSyncAlerts = (await syncProfileSkillDirs({ profileDir, bundles: pluginBundles.bundles })).alerts
+  }
+
   // M2 task 2.7: workbench data kernel + the dshForge.workbench.* verb face.
   // The SQLite kernel boots before the window loads (every verb must already
   // be registered on ipcMain by then). A boot failure is an explicit startup
   // error carried by the M1 crash-recovery path — there is no silent
   // no-database degradation, and the verb face simply stays uninstalled.
-  // Task 6.1: on success this also binds the projects-table provider the host
-  // env feed below consumes (empty until the kernel is up — fail-closed).
-  let listWorkbenchProjectRoots: () => readonly string[] = () => []
-  const feedHostSpawnEnv = createHostSpawnEnvFeeder()
   try {
     const userDataPath = app.getPath('userData')
     const workbenchDb = await openDatabase(userDataPath)
-    listWorkbenchProjectRoots = () => listProjects(workbenchDb.db).map(project => project.codeRoot)
     const workbenchEvents = createWorkbenchEventSubscriptions()
     const pluginBundlesPath = resolvePluginBundlesConfigPath()
     const workbenchIpc = createWorkbenchIpcServices({
@@ -367,6 +374,11 @@ void app.whenReady().then(async () => {
       // the same product manifest (G6, no second list); setPluginEnabled
       // stays the single write path into plugin-runtime.json.
       pluginGuard: createPluginEnableGuard(() => readPluginManifestBundles(pluginBundlesPath)),
+      // 5.7:customSkillDirs boot 同步告警(getState 设置面呈现;空 = 健康)。
+      skillDirSyncAlerts,
+      // 6.4(SC2 e2e):迁移注错缝 —— env 缝族成员(DSH_FORGE_MIGRATION_
+      // FAULTS);未设置 → 解析器恒 undefined,生产行为不变。
+      migrationFaults: createMigrationFaultsResolver(),
       onEvents: workbenchEvents.sink,
     })
     installWorkbenchVerbs(
@@ -449,12 +461,6 @@ void app.whenReady().then(async () => {
   // `onHostReady` fires only on a successful bind (the first boot resolves the
   // SPA boot gate; recovery boots skip it — the outcome already resolved).
   async function bootHost(onHostReady?: () => void): Promise<void> {
-    // Task 6.1 (4.1's shell-side feed): refresh the ForgeBridge allowlist env
-    // from the workbench projects table right before every host spawn (first
-    // boot + recovery restarts). An explicitly-set non-empty value wins — the
-    // test-profile override channel (5.11 leg B precedent). The host child
-    // inherits this env; its plugin host half reads it per call.
-    feedHostSpawnEnv(listWorkbenchProjectRoots())
     const handle = await supervisor.startHost(profileDir)
     hostHandle = handle
     crashRecovery.setAttempts(supervisor.recoveryContext.attempts)

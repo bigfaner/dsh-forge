@@ -28,9 +28,14 @@ describe('view-key machine: first boot and defaults (AC4)', () => {
     expect(store.getSnapshot().view).toBe('session')
   })
 
-  it('reserves the key grammar: three tabs in strip order plus the dialog prefix', () => {
-    expect(WORKBENCH_TABS).toEqual(['workbench/overview', 'workbench/tasks', 'workbench/features'])
+  it('reserves the key grammar: the four M3 tabs in strip order plus the dialog prefix', () => {
+    // M3 revision (task 5.5, PRD Navigation Architecture): 概览/提案/Feature/任务
+    // — the proposals board second, Feature third, tasks last.
+    expect(WORKBENCH_TABS).toEqual([
+      'workbench/overview', 'workbench/proposals', 'workbench/features', 'workbench/tasks',
+    ])
     expect(WORKBENCH_DIALOG_PREFIX).toBe('workbench/dialog/')
+    expect(isWorkbenchTabKey('workbench/proposals')).toBe(true)
     expect(isWorkbenchTabKey('workbench/tasks')).toBe(true)
     expect(isWorkbenchTabKey('workbench/dialog/wizard')).toBe(false)
     expect(isWorkbenchTabKey('session')).toBe(false)
@@ -68,6 +73,37 @@ describe('view-key machine: transitions (AC1/AC2 domain)', () => {
     })
     store.selectWorkbenchTab('workbench/overview')
     expect(store.getSnapshot().featureSlug).toBeUndefined()
+  })
+
+  it('proposal detail rides the same subview discipline (5.5): open sets the slug, tab actions clear it', () => {
+    const persistence = memoryPersistence()
+    const store = createViewKeyStore(persistence)
+    store.selectWorkbench('workbench/proposals')
+    store.openProposalDetail('dsh-forge-m2')
+    expect(store.getSnapshot()).toEqual({
+      view: 'workbench',
+      workbenchTab: 'workbench/proposals',
+      featureSlug: undefined,
+      proposalSlug: 'dsh-forge-m2',
+    })
+    // Session-scoped: the persisted projection keeps only the tab (never the slug).
+    expect(persistence.written.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/proposals' })
+    // The breadcrumb return: re-selecting the proposals tab clears the slug.
+    store.selectWorkbenchTab('workbench/proposals')
+    expect(store.getSnapshot().proposalSlug).toBeUndefined()
+    // The 互跳 origin path: a proposal detail survives the session round trip
+    // (selectSession keeps the whole interior), and entering the features
+    // page pops the proposals subview stack (the 提案 tab is the return path).
+    store.openProposalDetail('skill-marketplace')
+    store.selectSession()
+    store.selectWorkbench()
+    expect(store.getSnapshot().proposalSlug).toBe('skill-marketplace')
+    store.openFeatureDetail('dsh-forge-m3')
+    expect(store.getSnapshot()).toMatchObject({ workbenchTab: 'workbench/features', proposalSlug: undefined })
+    // Every tab action clears BOTH subview stacks (the M2 rule, extended).
+    store.openProposalDetail('forge-tui')
+    store.selectWorkbenchTab('workbench/tasks')
+    expect(store.getSnapshot()).toMatchObject({ proposalSlug: undefined, featureSlug: undefined })
   })
 
   it('adopts an external top-level view through the same transition path', () => {
@@ -108,6 +144,12 @@ describe('view-key machine: restart persistence and hostile input (AC4)', () => 
     expect(hydratePersistedViewKey('not-an-object')).toEqual(INITIAL_VIEW_KEY)
     expect(hydratePersistedViewKey(null)).toEqual(INITIAL_VIEW_KEY)
     expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/features' }).view).toBe('workbench')
+    // The M3 key set hydrates like any M2 key (localStorage 兼容: old stored
+    // values stay valid under the new order — no migration needed).
+    expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/proposals' }))
+      .toEqual({ ...INITIAL_VIEW_KEY, view: 'workbench', workbenchTab: 'workbench/proposals' })
+    expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/tasks' }).workbenchTab)
+      .toBe('workbench/tasks')
   })
 
   it('persists through localStorage under the dsh.* key, surviving store recreation', () => {

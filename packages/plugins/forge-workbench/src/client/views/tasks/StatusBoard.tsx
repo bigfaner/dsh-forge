@@ -11,6 +11,7 @@
  * so the visible card population is user-controlled.
  */
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ReactNode } from 'react'
 import type { TaskStatus, TaskSummary } from '../../ipc-types'
 import { TASK_STATUSES, TASK_STATUS_DOT_STATE, taskStatusLabel } from '../../i18n/task-status'
 import type { WorkbenchKey } from '../../locale/en'
@@ -40,6 +41,18 @@ export interface StatusBoardProps {
   onSelect?: ((task: TaskSummary) => void) | undefined
   /** taskKey → ACTIVE session link id (5.11 AC3 — the 会话运行中 badge). */
   activeLinks?: ReadonlyMap<string, string> | undefined
+  /**
+   * The UF1 编排态角标 composer (task 3.9, 角标以 props 传入): called per
+   * card; the returned node rides the card's badge cluster verbatim.
+   * Absent renders no badge (the M2 form exactly).
+   */
+  orchBadgeOf?: ((taskKey: string) => ReactNode | undefined) | undefined
+  /**
+   * The UF1 selection-mode decoration composer (task 3.9): called per card;
+   * the returned cluster (checkbox overlay + ⤢) self-hides outside selection
+   * mode. Absent renders nothing (the M2 form exactly).
+   */
+  selectionDecorOf?: ((taskKey: string) => ReactNode | undefined) | undefined
 }
 
 /** The horizontal kanban scroller (列宽 min 280, 横向滚动). */
@@ -163,6 +176,8 @@ export function StatusBoard(props: StatusBoardProps) {
                       selected={props.selectedKey === task.key}
                       {...(props.activeLinks?.get(task.key) === undefined ? {} : { activeSessionId: props.activeLinks.get(task.key) })}
                       onSelect={props.onSelect}
+                      {...(props.orchBadgeOf === undefined ? {} : { orchBadge: props.orchBadgeOf(task.key) })}
+                      {...(props.selectionDecorOf === undefined ? {} : { selectionDecor: props.selectionDecorOf(task.key) })}
                     />
                   ))}
                 </div>

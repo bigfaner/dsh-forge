@@ -5,18 +5,65 @@ import type { RecoveryState } from '../main/crash-recovery/index.ts'
 // main bundle (see ./channel-allowlist.ts header; sync locked by tests).
 import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
 import type {
+  ApprovalRow,
+  DecideApprovalInput,
+  DispatchRow,
+  DispatchTasksInput,
+  DispatchTasksResult,
+  ReceiveApprovalVerbInput,
   FeatureBoardData,
   FeatureDoc,
+  FeatureListEntry,
+  FeatureStatusReport,
+  KnowledgeFactEntry,
+  KnowledgeFactInput,
+  KnowledgeFactListResult,
+  KnowledgeFactSummaryResult,
+  KnowledgeForensicInput,
+  KnowledgeForensicResult,
+  KnowledgeLesson,
+  KnowledgeLessonInput,
+  KnowledgeLessonListResult,
+  KnowledgeResearchInput,
+  KnowledgeResearchListResult,
+  KnowledgeResearchReport,
+  MigrationStarted,
+  MigrationStatus,
   PluginRow,
+  PrefEntry,
+  ProposalBoardData,
+  ProposalDoc,
+  PrefRow,
+  PrefScope,
+  ProbeCodeRootInput,
+  ProbeCodeRootResult,
   Project,
   RecordSessionLinkInput,
   RegisterProjectInput,
   SessionLink,
+  StageArtifactsReport,
+  StageAssetRow,
+  StageGateInfo,
+  StageSummarizeInput,
+  StageSummarizeResult,
+  FeatureSummary,
+  TaskAddInput,
   TaskBoardData,
+  TaskClaimInput,
   TaskDetail,
+  TaskGetInput,
+  TaskQueryInput,
+  TaskReopenInput,
+  TaskSubmitInput,
+  TaskSummary,
+  TaskTransitionInput,
   WorkbenchEvent,
+  WorkbenchPaths,
   WorkbenchState,
 } from '../main/workbench/ipc/types.ts'
+
+/** The knowledgeFact verb result union (line-length relief; same members as the interface). */
+type KnowledgeFactVerbResult = KnowledgeFactListResult | KnowledgeFactEntry | KnowledgeFactSummaryResult
 import type { DocKind, ProjectPatch } from '../main/workbench/ipc/types.ts'
 
 // contextBridge semantic verbs (whitelist). The renderer (upstream client UI
@@ -113,6 +160,153 @@ contextBridge.exposeInMainWorld('dshForge', {
     // single write path; validation chains read it, nothing here touches fs).
     authorizeExternalDocPath: (path: string): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.authorizeExternalDocPath, path) as Promise<void>,
+    // M3 task verbs (task 1.3): the five write-set verbs carry an explicit
+    // actor string (session:<id> | external | kernel | dispatcher) — the
+    // kernel records it as updated_by on every write (audit discipline);
+    // taskGet/taskQuery route by the project's data_authority. Rejections
+    // arrive as the same { code, message, detail? } envelope (ERR_TASK_*).
+    taskAdd: (input: TaskAddInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskAdd, input, actor) as Promise<TaskSummary>,
+    taskClaim: (input: TaskClaimInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskClaim, input, actor) as Promise<TaskSummary>,
+    taskTransition: (input: TaskTransitionInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskTransition, input, actor) as Promise<TaskSummary>,
+    taskSubmit: (input: TaskSubmitInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskSubmit, input, actor) as Promise<TaskSummary>,
+    taskReopen: (input: TaskReopenInput, actor: string): Promise<TaskSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskReopen, input, actor) as Promise<TaskSummary>,
+    taskGet: (input: TaskGetInput): Promise<TaskDetail> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskGet, input) as Promise<TaskDetail>,
+    taskQuery: (input: TaskQueryInput): Promise<TaskSummary[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.taskQuery, input) as Promise<TaskSummary[]>,
+    // M3 migration verbs (task 1.4): status read is synchronous-shaped; the
+    // one-shot startMigration runs the guard→backup→ingest→verify→switch→
+    // archive pipeline in the kernel and reports phase progress through
+    // migration_progress events (onEvents). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_MIGRATION_GUARD /
+    // ERR_MIGRATION_IN_PROGRESS / ERR_MIGRATION_VERIFY — verify failures are
+    // rolled back wholesale and retryable).
+    getMigrationStatus: (projectId: string): Promise<MigrationStatus> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getMigrationStatus, projectId) as Promise<MigrationStatus>,
+    startMigration: (projectId: string): Promise<MigrationStarted> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.startMigration, projectId) as Promise<MigrationStarted>,
+    // M3 UF3 integration reads (task 1.7): the register wizard's real step-①
+    // probe (forge availability + totals + indexJsonDetected — the conditional
+    // migration step's premise) and the kernel-managed locations behind the
+    // flipped 仓外 default (docsRoot) and the migration confirm copy
+    // (backupsRoot). Both read-only.
+    probeCodeRoot: (input: ProbeCodeRootInput): Promise<ProbeCodeRootResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeCodeRoot, input) as Promise<ProbeCodeRootResult>,
+    getWorkbenchPaths: (): Promise<WorkbenchPaths> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getWorkbenchPaths) as Promise<WorkbenchPaths>,
+    // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
+    // planes over the registered project's doc root (fact/lesson/research
+    // read + append-only write; forensic machine-global read-only — no
+    // projectId; feature list/status read). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_KNOWLEDGE_* / ERR_FORENSIC_SOURCE_UNREADABLE / ERR_FEATURE_NOT_FOUND).
+    knowledgeFact: (input: KnowledgeFactInput): Promise<KnowledgeFactVerbResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeFact, input) as Promise<KnowledgeFactVerbResult>,
+    knowledgeLesson: (input: KnowledgeLessonInput): Promise<KnowledgeLessonListResult | KnowledgeLesson> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeLesson, input) as Promise<KnowledgeLessonListResult | KnowledgeLesson>,
+    knowledgeResearch: (input: KnowledgeResearchInput): Promise<KnowledgeResearchListResult | KnowledgeResearchReport> =>
+      ipcRenderer.invoke(
+        WORKBENCH_VERB_CHANNELS.knowledgeResearch, input,
+      ) as Promise<KnowledgeResearchListResult | KnowledgeResearchReport>,
+    knowledgeForensic: (input: KnowledgeForensicInput): Promise<KnowledgeForensicResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.knowledgeForensic, input) as Promise<KnowledgeForensicResult>,
+    featureList: (projectId: string): Promise<FeatureListEntry[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureList, projectId) as Promise<FeatureListEntry[]>,
+    featureStatus: (input: { projectId: string; featureSlug: string }): Promise<FeatureStatusReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.featureStatus, input) as Promise<FeatureStatusReport>,
+    // M3 prefs verbs (task 3.1): the three-tier preference family
+    // (feature > project > global > registry default). setPrefs is atomic
+    // (validate-all-then-write inside one transaction); rejections arrive as
+    // the same { code, message, detail? } envelope (ERR_PREF_KEY_UNKNOWN /
+    // ERR_PREF_VALUE_INVALID / ERR_PREF_SCOPE_INVALID / ERR_PROJECT_NOT_FOUND).
+    // Writes that change anything push prefs_updated through onEvents.
+    getPrefs: (scope: PrefScope): Promise<PrefRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getPrefs, scope) as Promise<PrefRow[]>,
+    setPrefs: (scope: PrefScope, entries: readonly PrefEntry[]): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setPrefs, scope, entries) as Promise<void>,
+    clearPrefOverride: (scope: PrefScope, key: string): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.clearPrefOverride, scope, key) as Promise<void>,
+    // M3 stages read verbs (task 3.2): deterministic pre-dispatch artifact
+    // checklist (missing = warn list, never blocks here — the dispatch layer
+    // expresses acknowledgement via acknowledgeMissing) plus the stage gate
+    // (current-stage summary generated?) and the derived stage-asset index
+    // (pipeline-ordered). Rejections arrive as the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_FEATURE_NOT_FOUND).
+    checkStageArtifacts: (input: { projectId: string; featureSlug: string }): Promise<StageArtifactsReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.checkStageArtifacts, input) as Promise<StageArtifactsReport>,
+    getStageGate: (projectId: string, featureSlug: string): Promise<StageGateInfo> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getStageGate, projectId, featureSlug) as Promise<StageGateInfo>,
+    listStageAssets: (projectId: string, featureSlug: string): Promise<StageAssetRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listStageAssets, projectId, featureSlug) as Promise<StageAssetRow[]>,
+    // M3 stages write verbs (task 4.1): advanceStage is the advance gate —
+    // the current stage's summary asset must exist (live fs verdict) or the
+    // call rejects ERR_STAGE_GATE_UNSATISFIED with the missing-asset guidance;
+    // a satisfied gate flips the manifest status kernel-side (stage advance
+    // internalized, feature set/complete's "complete" leg), syncs the feature
+    // snapshot and pushes stage_advanced through onEvents. A repeated advance
+    // at 'completed' is an idempotent no-op (no write, no event). stageSummarize
+    // is the forge.stage.summarize kernel write face: (over)writes
+    // stages/<stage>.md (frontmatter { stage, generated, goal } + summary body)
+    // and syncs the stage_asset index. Rejections ride the same
+    // { code, message, detail? } envelope (ERR_STAGE_* / ERR_FEATURE_NOT_FOUND
+    // / ERR_PROJECT_NOT_FOUND).
+    advanceStage: (projectId: string, featureSlug: string): Promise<FeatureSummary> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.advanceStage, projectId, featureSlug) as Promise<FeatureSummary>,
+    stageSummarize: (input: StageSummarizeInput): Promise<StageSummarizeResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.stageSummarize, input) as Promise<StageSummarizeResult>,
+    // M3 proposals read verbs (task 5.3, UF5 data plane): getProposalBoard
+    // answers the read-only proposal board (derived proposal_snapshot rows in
+    // the created-descending baseline order, live-joined hasEval, plus the
+    // proposals root for the empty-state path hint); readProposalDoc answers
+    // the raw markdown of proposals/<slug>/proposal.md (kind 'proposal') or
+    // the deterministic eval-report pick (kind 'eval' — final-report.md
+    // preferred, lexicographic fallback). Rejections ride the same
+    // { code, message, detail? } envelope (ERR_PROJECT_NOT_FOUND /
+    // ERR_PROPOSAL_PATH_INVALID / ERR_PROPOSAL_NOT_FOUND).
+    getProposalBoard: (projectId: string): Promise<ProposalBoardData> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProposalBoard, projectId) as Promise<ProposalBoardData>,
+    readProposalDoc: (input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.readProposalDoc, input) as Promise<ProposalDoc>,
+    // M3 dispatch verbs (task 3.3): the orchestration family. dispatchTasks
+    // validates the dispatchable set (status allowed + terminal deps — rejections
+    // arrive as the same { code, message, detail? } envelope, ERR_TASK_*),
+    // consumes checkStageArtifacts (missing & unacknowledged → the blocked
+    // union with the missing list) and creates one dispatch row per task
+    // sharing a batchId; the actor string is the dispatching human (audit).
+    // decideApproval is the only decision path (no auto-approval; decided_by
+    // audit); duplicate decisions → ERR_APPROVAL_DECIDED, stale entries →
+    // ERR_APPROVAL_NOT_FOUND. State reflux arrives through dispatch_updated /
+    // approval_received events (onEvents).
+    dispatchTasks: (input: DispatchTasksInput, actor: string): Promise<DispatchTasksResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.dispatchTasks, input, actor) as Promise<DispatchTasksResult>,
+    redispatch: (dispatchId: string, actor: string): Promise<DispatchTasksResult> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.redispatch, dispatchId, actor) as Promise<DispatchTasksResult>,
+    getDispatches: (projectId: string): Promise<DispatchRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getDispatches, projectId) as Promise<DispatchRow[]>,
+    listApprovals: (projectId: string): Promise<ApprovalRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listApprovals, projectId) as Promise<ApprovalRow[]>,
+    decideApproval: (input: DecideApprovalInput, actor: string): Promise<ApprovalRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.decideApproval, input, actor) as Promise<ApprovalRow>,
+    // M3 dispatch host-callback verbs (task 3.5): the renderer RELAYS these on
+    // behalf of the plugin host half — dispatch-launch launch outcomes
+    // (notifySessionStarted/notifyLaunchFailed move starting rows to running/
+    // failed with the session backfill) and approval-bridge request arrivals
+    // (receiveApproval inserts the pending row + flips the dispatch awaiting;
+    // the T2 tool-bridge pump in the client half maps approval_receive frames
+    // here). Same { code, message, detail? } rejection envelope (ERR_DISPATCH_*
+    // / ERR_APPROVAL_*).
+    receiveApproval: (input: ReceiveApprovalVerbInput): Promise<ApprovalRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.receiveApproval, input) as Promise<ApprovalRow>,
+    notifySessionStarted: (dispatchId: string, sessionId: string): Promise<DispatchRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.notifySessionStarted, dispatchId, sessionId) as Promise<DispatchRow>,
+    notifyLaunchFailed: (dispatchId: string, error: string): Promise<DispatchRow> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.notifyLaunchFailed, dispatchId, error) as Promise<DispatchRow>,
     // Single-subscriber event verb: batches of WorkbenchEvent pushed by the
     // main process through the 2.6 coalescing batcher (≤500ms). Subscribing
     // registers the renderer with the main-side subscription registry; the
