@@ -601,16 +601,14 @@ forge 文件区
 
 | 视图键/载体 | 组件 | 原型文件 |
 |-------------|------|----------|
-| `projects` | C1 | projects.html |
 | `project` | C2+C3+C9(分屏演示) | project-home.html |
-| `project`(forge 区展开) | C4+C5 | feature-view.html |
-| `project`(forge 区·提案板态) | C4(提案板收纳) | feature-view.html(内嵌区块) |
-| 上游会话视图(subagent) | C6 | session-view.html |
-| 添加项目确认卡 | C7 | projects.html(新建项目)/ project-home.html(左栏 ＋ 原位卡) |
-| `project/settings` | C7+C8 | settings.html |
+| 添加项目确认卡 | C7 | project-home.html(左栏 ＋ 原位卡,唯一入口) |
 | 独立窗口 | C10 | index.html 内说明 + 模拟 |
+| `projects` | C1 | 原型未承载(#25:并入左栏全项目树;独立列表页待 PRD 对账) |
+| `project`(forge 区展开) | C4+C5 | 原型未承载(#25:右栏项目概览子 tab + 文档 tab) |
+| 上游会话视图(subagent) | C6 | 原型未承载(设计保留) |
 
-原型交付说明(管线):「原型文件」列**已交付并通过验收目验(2026-09-25)**——原型位于 `ui/prototype/`(导航页 `index.html`);共享数据层 data.js(sessionStorage 同标签页持久;未发送草稿不持久化)。布局线框权威 = `ui/workbench-layout-v2.md`(v2.9 + 评审裁决 #15–#24);截断省略、focus 可见环、钳制、状态色对比度等视觉断言已在原型上目验;Playwright 冒烟 **106 条全绿**(2026-09-26 添加项目确认卡重构后复跑,证据三档/黏性禁令/已注册/父目录 chips/授权收窄均有断言)。
+原型交付说明(管线):「原型文件」列**已交付并通过验收目验(2026-09-25)**——原型位于 `ui/prototype/`(导航页 `index.html`);共享数据层 data.js(sessionStorage 同标签页持久;未发送草稿不持久化)。**2026-09-27 裁决 #25:原型收敛为单工作台页**(projects / feature-view / settings 三独立页裁撤,保持简洁);布局线框权威 = `ui/workbench-layout-v2.md`(v2.9 + 评审裁决 #15–#25);截断省略、focus 可见环、钳制、状态色对比度等视觉断言已在原型上目验;Playwright 冒烟基线 **106 条全绿**(2026-09-26 五页版,证据三档/黏性禁令/已注册/父目录 chips/授权收窄均有断言;单页收敛后待复跑)。
 
 ## 与 PRD 的对账备忘(Step 10 输入)
 
@@ -619,3 +617,4 @@ forge 文件区
 - C4 阶段矩阵、C5 抽屉形态、C8 确认文案语义均与 PRD 必答⑦/⑤ 一致,无新增交互偏离。
 - **回写记录(2026-09-25,Step 10)**:原型验收(线框 v2.9 + 评审裁决 #15–#23)后,本文件 C2/C3 重写为定形摘要(布局权威指回 `workbench-layout-v2.md`),页面总览更新为已交付;`prd-ui-functions.md` 的 UF2/UF3/UF7/UF8 与 Page Composition 同步回写。分歧记录:头部图标相位规则(新会话零图标)与 dsh 源码 headerCorner 常驻 blank 态为有意分歧(裁决 #17);「开始」tab 可关闭/chipless 底板(裁决 #20/#22/#23)与 dsh 不可关门页语义为有意分歧。
 - **回写记录(2026-09-26)**:注册交互按 `docs/decisions/project-storage-and-knowledge.md` §5 v2 重构 —— C7 重写为「添加项目确认卡」(文档位置预览行 + 证据三档门控 + **零 git 强制**);`ERR_FORGE_NOT_DETECTED` 废止(D1)、仓外授权(BIZ-001/003)收窄至高级自定义、可写性改运行时状态;UF7 同步重写;原型两入口(app.js 原位卡 + projects.html)重构,冒烟 106 全绿。
+- **回写记录(2026-09-27,裁决 #25)**:原型收敛单工作台页 —— projects.html / feature-view.html / settings.html 裁撤(整体 UI 保持简洁)。承载迁移:C1 项目枚举/切换 → 左栏全项目树;C4/C5 feature 浏览 → 右栏项目概览子 tab + 文档 tab;C7 唯一入口 = 左栏 ＋ 原位卡;C8 设置独立页裁撤,左栏 ⚙ 保留入口位(toast 占位),各项随 GUI 逐项归宿;C1 独立列表页与 UF1 的关系待 PRD 对账。

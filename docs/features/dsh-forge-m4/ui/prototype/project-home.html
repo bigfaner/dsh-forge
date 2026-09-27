@@ -1285,8 +1285,8 @@
       document.getElementById('arch-restore').addEventListener('click', doRestore);
       document.getElementById('del-confirm').addEventListener('click', function () {
         FORGE.deleteProject(project.id);
-        protoToast('已删除:主窗口返回项目列表,拆出窗口关闭');
-        setTimeout(function () { location.href = 'projects.html'; }, 400);
+        protoToast('已删除:主窗口返回原型导航,拆出窗口关闭');
+        setTimeout(function () { location.href = 'index.html'; }, 400);
       });
       document.getElementById('c2-retry').addEventListener('click', function () {
         protoSetState('c2', 'default');

@@ -17,27 +17,16 @@
     <div style="padding:20px;display:flex;flex-direction:column;gap:24px">
 
       <section>
-        <h2 class="t-title" style="margin-bottom:4px">页面(对应「页面总览」)</h2>
+        <h2 class="t-title" style="margin-bottom:4px">工作台(单页,对应「页面总览」)</h2>
         <p class="t-aux" style="margin-bottom:12px">
-          完整可交互:共享数据层(data.js)驱动全部页面 —— 发消息有模拟工具调用与回复、会话行 ⋯ 菜单(重命名/分叉/归档)、分组×排序视图选项、新建会话/项目、归档/恢复/删除全链路可走通(状态落 sessionStorage:同标签页跨页/刷新保留,归档会话 → 设置页解除归档可跨页走通;新标签页还原种子数据)。
-          URL 参数:?p=&lt;项目&gt; 定位项目,&amp;s=&lt;会话&gt; 深链,?new=1 新会话;feature-view 支持 #feature-*/#task-*/#board 深链。
+          2026-09-27 裁决 #25:原型收敛为单工作台页 —— projects.html / feature-view.html / settings.html 独立页裁撤,保持简洁;项目枚举/切换 = 左栏全项目树,feature/提案/任务浏览 = 右栏项目概览子 tab,设置 = 左栏底部 ⚙ 占位(各项随 GUI 逐项归宿)。
+          完整可交互:共享数据层(data.js)驱动 —— 发消息有模拟工具调用与回复、会话行 ⋯ 菜单(重命名/分叉/归档)、分组×排序视图选项、新建会话/项目、归档/恢复/删除全链路可走通(状态落 sessionStorage:同标签页刷新保留;新标签页还原种子数据)。
+          URL 参数:?p=&lt;项目&gt; 定位项目,&amp;s=&lt;会话&gt; 深链,?new=1 新会话。
         </p>
         <div class="project-grid" style="padding:0">
-          <a class="card project-card is-clickable" href="projects.html" style="height:auto;min-height:120px">
-            <div class="project-card__top"><span class="t-title">projects.html</span><span class="project-card__arrow">›</span></div>
-            <p class="t-aux">C1 项目列表:数据驱动卡片网格 + 归档分区(可恢复/删除)+ 实时搜索;新建项目 = 添加项目确认卡(代码区唯一必答;文档位置预览行 + 证据三档门控:命中 forge 树沿用仓内 / 有 git 仓内新建 / 无 git 应用管理主路径;已注册/父目录子仓/不存在等边缘态;场景示例在右下原型工具「注册场景」组);状态含 loading/empty/load-error/无匹配。</p>
-          </a>
           <a class="card project-card is-clickable" href="project-home.html" style="height:auto;min-height:120px">
             <div class="project-card__top"><span class="t-title">project-home.html</span><span class="project-card__arrow">›</span></div>
-            <p class="t-aux">C2 项目工作台(v2.9 线框实施):左栏 = 全项目树(280,264–420 可拖,收起 56 rail;品牌行快捷新建 + 新会话独占行 + 区头 🔍/视图选项/📁＋ 添加项目;项目行文件夹图标 hover 换三角 caret 可展开任意项目;会话行状态点+相对时间,hover 时间位变 ⋯;分组 按项目树/按项目/单列表 × 排序 手动/最近更新;每组 5 条+溢出折叠);中间 = dsh 会话面板(76px header 单块:面包屑链 crumb220 右截断 + 动作簇 + utilities 图标(📁▾ 在编辑器中打开 + 面板钮 toggle;新会话不显示,已发送才有)+ 「对话/轨迹」视图 tab;内容列 clamp(680–920) 居中可拖;输入卡 r22 + 状态栏双 pill + 上下文环;运行中主钮 = 停止/排队发送;新会话 hero「探索未至之境」+ 输入卡左上 项目▾/模式▾ 选择器(模式固定四选:标准/PTC/极简/创建);轨迹 tab = 工具栏+时间线+台账+详情面板 320–720 可拖);右栏 = dockkit 页签容器(默认收起轨道归零,收起/展开同一面板图标(仅已发送会话);「开始」页 tab 可关闭,三卡片(标题/说明两行)点击原位替换;全关 = 自动回到开始页内容(无 chip 且隐藏 ＋;开面板走三卡片),有 tab 时 ＋ 紧贴最右 tab、点击直接开「开始」页;项目概览 = 标题栏+概要信息区+提案/feature/任务三子 tab;文档 tab(slug/产物名 · 路径栏+只读正文);依赖图 tab = DAG/泳道双模式(连线画布或状态分组七态泳道;feature 名下拉仅本项目+状态徽标);展开后宽 45% 视口 300–70% 可拖,全屏覆盖会话列;整栏跟随当前项目);C2/C3 状态作用域 + 归档横幅维持。</p>
-          </a>
-          <a class="card project-card is-clickable" href="feature-view.html" style="height:auto;min-height:120px">
-            <div class="project-card__top"><span class="t-title">feature-view.html</span><span class="project-card__arrow">›</span></div>
-            <p class="t-aux">C4 feature 视图(阶段矩阵/执行中卡组,运行态随会话实时变化)+ C5 任务详情抽屉(绑定会话树两区行、未挂接可发起)+ 提案板态;全屏工作场保留,任务抽屉与右栏依赖图共用。</p>
-          </a>
-          <a class="card project-card is-clickable" href="settings.html" style="height:auto;min-height:120px">
-            <div class="project-card__top"><span class="t-title">settings.html</span><span class="project-card__arrow">›</span></div>
-            <p class="t-aux">C7 设置形态([保存更改] + 后果链)+ C8 投影与生命周期(healthy/degraded/deviation/archived;改名/归档/恢复/删除实时生效)+ 已归档会话(搜索 + 解除归档 → 行回左栏)。</p>
+            <p class="t-aux">C2 项目工作台(v2.9 线框实施):左栏 = 全项目树(280,264–420 可拖,收起 56 rail;品牌行快捷新建 + 新会话独占行 + 区头 🔍/视图选项/📁＋ 添加项目;项目行文件夹图标 hover 换三角 caret 可展开任意项目;会话行状态点+相对时间,hover 时间位变 ⋯;分组 按项目树/按项目/单列表 × 排序 手动/最近更新;每组 5 条+溢出折叠);中间 = dsh 会话面板(76px header 单块:面包屑链 crumb220 右截断 + 动作簇 + utilities 图标(📁▾ 在编辑器中打开 + 面板钮 toggle;新会话不显示,已发送才有)+ 「对话/轨迹」视图 tab;内容列 clamp(680–920) 居中可拖;输入卡 r22 + 状态栏双 pill + 上下文环;运行中主钮 = 停止/排队发送;新会话 hero「探索未至之境」+ 输入卡左上 项目▾/模式▾ 选择器(模式固定四选:标准/PTC/极简/创建);轨迹 tab = 工具栏+时间线+台账+详情面板 320–720 可拖);右栏 = dockkit 页签容器(默认收起轨道归零,收起/展开同一面板图标(仅已发送会话);「开始」页 tab 可关闭,三卡片(标题/说明两行)点击原位替换;全关 = 自动回到开始页内容(无 chip 且隐藏 ＋;开面板走三卡片),有 tab 时 ＋ 紧贴最右 tab、点击直接开「开始」页;项目概览 = 标题栏+概要信息区+提案/feature/任务三子 tab;文档 tab(slug/产物名 · 路径栏+只读正文);依赖图 tab = DAG/泳道双模式(连线画布或状态分组七态泳道;feature 名下拉仅本项目+状态徽标);展开后宽 45% 视口 300–70% 可拖,全屏覆盖会话列;整栏跟随当前项目);C2/C3 状态作用域 + 归档横幅维持;C7 添加项目确认卡(左栏 ＋ 原位,唯一入口)。</p>
           </a>
         </div>
       </section>
@@ -84,10 +73,10 @@
       <section>
         <h2 class="t-title" style="margin-bottom:4px">评审说明</h2>
         <ul class="t-aux" style="display:flex;flex-direction:column;gap:4px;padding-left:16px;list-style:disc">
-          <li>数据层:data.js 单一模拟数据源(项目/feature/任务/会话树+消息),变更即广播重渲染并落 sessionStorage(同标签页跨页/刷新保留);新标签页还原种子数据;未发送的新会话不持久化(单例:项目内同时仅一个,已存在时点「新会话」无效,刷新即还原);左栏「＋ 添加项目」= 原位确认卡(文档位置预览行 + 证据门控预选,场景演示在原型工具「注册场景」组,与 projects.html 向导同构共享绑定器)。</li>
+          <li>数据层:data.js 单一模拟数据源(项目/feature/任务/会话树+消息),变更即广播重渲染并落 sessionStorage(同标签页刷新保留);新标签页还原种子数据;未发送的新会话不持久化(单例:项目内同时仅一个,已存在时点「新会话」无效,刷新即还原);左栏「＋ 添加项目」= 原位确认卡(文档位置预览行 + 证据三档门控,裁决 #24),全应用唯一注册入口。</li>
           <li>右下角「原型工具」:切换亮/暗主题与评审专用状态(loading/error/降级/空态按状态作用域标注);核心流程为真实交互,不经工具切换。</li>
           <li>可键盘操作:Tab 遍历,Esc 关浮层/退搜索/回上级;左栏收起(品牌行行尾开关)→ 56px rail(◂/⊕/🔍/＋/⚙);右栏默认收起(轨道归零;strip 尾端 ◂ 收起,会话头右角面板钮 toggle 展开 —— 仅已发送会话可见,新会话右上角无图标,⛶ 全屏覆盖会话列);右栏宽度拖拽 300–70% 视口(中央保底 400,不足自动归零);内容列两侧 10px 拖柄调宽 640–920(持久化)。</li>
-          <li>会话交互:输入卡 Enter 发送(Shift+Enter 换行)→ 500ms 工具行(呼吸点)→ 1.9s 回复落定;运行中主钮变停止、有稿 = 排队发送;工具行「查看」跳轨迹 tab 定位;左栏会话行点击 = 打开,hover ⋯ = 重命名/分叉/归档(归档无确认,行消失,恢复走设置页)。</li>
+          <li>会话交互:输入卡 Enter 发送(Shift+Enter 换行)→ 500ms 工具行(呼吸点)→ 1.9s 回复落定;运行中主钮变停止、有稿 = 排队发送;工具行「查看」跳轨迹 tab 定位;左栏会话行点击 = 打开,hover ⋯ = 重命名/分叉/归档(归档无确认,行消失;恢复入口随独立设置页裁撤暂缺,#25)。</li>
           <li>设计规格权威:视觉断言(截断省略、focus 环、钳制、对比度)以 ../ui-design.md 文字为准,本原型供目验。</li>
         </ul>
       </section>

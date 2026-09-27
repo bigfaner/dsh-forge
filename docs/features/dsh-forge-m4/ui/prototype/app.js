@@ -7,7 +7,6 @@
 (function () {
   'use strict';
 
-  var page = location.pathname.split('/').pop() || 'index.html';
   var HAS_FORGE = !!window.FORGE;
 
   /* ---- 工具 ---- */
@@ -244,7 +243,9 @@
       } else if (confirm('删除项目 ' + p.name + '?投影移除,会话按 dsh 语义退未分组(历史不删除)。')) {
         FORGE.deleteProject(pid);
         protoToast('已删除项目');
-        setTimeout(function () { location.href = 'projects.html'; }, 400);
+        if (pid === FORGE.currentProjectId()) {
+          setTimeout(function () { location.href = 'index.html'; }, 400);
+        }
         return;
       }
       closePopupMenu();
@@ -271,7 +272,7 @@
   }
   window.PROTO_REG = { detect: regDetect };
 
-  /* 共享绑定器:添加项目确认卡(app.js 原位对话框与 projects.html 向导同构)。
+  /* 共享绑定器:添加项目确认卡(工作台左栏 ＋ 原位对话框,全应用唯一注册入口)。
      root 内查询 data-reg-* 元素;onCreate(info) 回调收 {name, path, modeLabel} */
   window.protoBindRegisterCard = function (root, onCreate) {
     var q = function (s) { return root.querySelector(s); };
@@ -641,7 +642,7 @@
       + '</div>'
       + '<div class="sb-searchbox is-hidden"><input type="search" placeholder="搜索项目与会话…" aria-label="搜索项目与会话"></div>'
       + '<div class="sb-list">' + listHtml(cur, prevCur) + '</div>'
-      + '<div class="sb-foot' + (page === 'settings.html' ? ' active' : '') + '" data-sb-settings role="button" tabindex="0">'
+      + '<div class="sb-foot" data-sb-settings role="button" tabindex="0">'
       + ICONS.gear.replace('<svg', '<svg width="15" height="15"') + ' <span>设置</span>'
       + '<span class="sb-conn"><span class="state-dot ok breathing" aria-label="已连接"></span>已连接</span>'
       + '</div>'
@@ -736,9 +737,9 @@
       if (ri) ri.focus();
       return;
     }
-    /* 设置行 */
+    /* 设置行(独立设置页已裁撤 #25:入口位保留,各项随 GUI 逐项归宿) */
     if (e.target.closest('[data-sb-settings], [data-sb-settings-rail]')) {
-      location.href = 'settings.html?p=' + FORGE.currentProjectId();
+      protoToast('设置:原型未含独立页(保持简洁,各项随 GUI 逐项归宿)');
       return;
     }
     /* 收起 / 展开 */
