@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>feature 视图 — dsh-forge M4 原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <div class="app-brand"><span class="app-brand-mark">F</span><span>dsh-forge</span></div>
+      <nav class="panellist" data-sidebar aria-label="主导航"></nav>
+      <div class="sidebar-foot">任务详情 → 绑定会话 → 一键回到工作台会话</div>
+    </aside>
+
+    <main class="app-main workbench">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column"
+           data-state-scope="c4" data-scope-label="C4 forge 文件区形态" data-states="list,expanded,proposal-board,loading,empty" data-current="expanded">
+
+        <!-- 区头(h48):返回 + 面包屑 + 提案板/管线/设置 -->
+        <div class="forge-head">
+          <button class="btn btn-ghost btn-sm" id="back-btn" aria-label="返回项目工作台">←</button>
+          <nav class="breadcrumb" aria-label="forge 文件区导航">
+            <button id="crumb-root">forge 文件区</button>
+            <span aria-hidden="true">/</span>
+            <span class="current" id="crumb-current"></span>
+          </nav>
+          <span style="flex:1"></span>
+          <button class="btn btn-ghost btn-sm" id="board-toggle" aria-pressed="false">提案板</button>
+          <button class="btn btn-ghost btn-sm" disabled title="管线视图 M7 引入">管线</button>
+          <button class="btn btn-ghost btn-sm" id="settings-btn">设置</button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column">
+
+          <!-- list:feature 列表 -->
+          <section data-state="list" id="feature-list"></section>
+
+          <!-- expanded:feature 展开态(数据驱动) -->
+          <section data-state="expanded" class="feature-detail" id="feature-detail"></section>
+
+          <!-- proposal-board:提案板(M3 零缩水收纳) -->
+          <section data-state="proposal-board" class="feature-detail">
+            <div class="t-aux">M3 提案板(功能零缩水收纳:提案列表 / 创建 / 状态流转)</div>
+            <div class="card" style="overflow:hidden">
+              <div class="task-row">
+                <span class="pill">Draft</span>
+                <span class="task-name ellipsis" title="dsh-forge-m5 任务调度补全">dsh-forge-m5 任务调度补全</span>
+                <button class="btn btn-link btn-sm" onclick="protoToast('提案原文:docs/proposals/dsh-forge-m5/proposal.md(原型示意)')">打开</button>
+              </div>
+              <div class="task-row">
+                <span class="pill status-completed">Accepted</span>
+                <span class="task-name ellipsis" title="dsh-forge-m4 项目中心 IA">dsh-forge-m4 项目中心 IA</span>
+                <button class="btn btn-link btn-sm" onclick="protoToast('提案原文:docs/proposals/dsh-forge-m4/proposal.md(原型示意)')">打开</button>
+              </div>
+              <div class="task-row">
+                <span class="pill status-warn">Draft(未提交)</span>
+                <span class="task-name ellipsis" title="dsh-forge-m7 模式化管线">dsh-forge-m7 模式化管线</span>
+                <button class="btn btn-link btn-sm" onclick="protoToast('提案原文:docs/proposals/dsh-forge-m7/proposal.md(原型示意)')">打开</button>
+              </div>
+            </div>
+            <div><button class="btn btn-primary btn-sm" onclick="protoToast('新建提案:进入 /brainstorm 流(原型示意)')">新建提案</button></div>
+          </section>
+
+          <!-- loading -->
+          <section data-state="loading" class="feature-detail" aria-busy="true">
+            <div class="skeleton" style="height:24px;width:220px"></div>
+            <div class="skeleton" style="height:6px"></div>
+            <div class="skeleton" style="height:72px"></div>
+            <div class="skeleton" style="height:240px"></div>
+          </section>
+
+          <!-- empty -->
+          <section data-state="empty">
+            <div class="empty-state">
+              <div class="empty-art" aria-hidden="true">🧩</div>
+              <p>还没有 feature</p>
+              <button class="btn btn-ghost btn-sm" onclick="protoToast('创建 feature 走 /write-prd 流(原型示意)')">创建第一个 feature</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- C5 任务详情抽屉(w400;数据驱动,含绑定会话树) -->
+  <div class="overlay" id="task-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <aside class="drawer">
+      <div id="drawer-content" style="display:flex;flex-direction:column;min-height:0;flex:1"></div>
+    </aside>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* 本页专属:feature 列表/展开(数据驱动)、任务抽屉、深链 #board 与 #task-* 与 #feature-* */
+    (function () {
+      var project = FORGE.project(FORGE.currentProjectId());
+      var currentFeature = null;
+      var crumb = document.getElementById('crumb-current');
+      var boardBtn = document.getElementById('board-toggle');
+
+      function statusPill(f) {
+        return f.status === 'in-progress' ? 'pill status-in-progress'
+          : f.status === 'completed' ? 'pill status-completed' : 'pill';
+      }
+      function runningLinked(tid) {
+        var any = false;
+        FORGE.sessionsOfTask(tid).forEach(function (top) {
+          if (top.status === 'running') any = true;
+          FORGE.descendants(top.id).forEach(function (d) { if (d.status === 'running') any = true; });
+        });
+        return any;
+      }
+
+      /* ---- 列表态 ---- */
+      function renderList() {
+        document.getElementById('feature-list').innerHTML = FORGE.features(project.id).map(function (f) {
+          return '<div class="feature-row" data-feature-select="' + f.slug + '">'
+            + '<span class="slug ellipsis" title="' + escHtml(f.label) + '">' + f.slug + '</span>'
+            + '<span class="' + statusPill(f) + '">' + f.status + '</span>'
+            + '<span class="progress-text">' + f.done + '/' + f.total + '</span></div>';
+        }).join('');
+      }
+
+      /* ---- 展开态:进度 + 阶段重点(按 feature 状态)+ 任务面板 ---- */
+      function stageBlock(f) {
+        var exec = FORGE.runningTasks(project.id).filter(function (t) {
+          var task = FORGE.task(t.id);
+          return task && task.feature === f.slug;
+        });
+        if (f.status === 'design') {
+          return '<div class="stage-row"><span>设计文档:tech-design.md 未定稿</span>'
+            + '<span class="pill status-warn">评审中</span>'
+            + '<button class="btn btn-ghost btn-sm" onclick="protoToast(\'去 /breakdown-tasks(原型示意)\')">去 /breakdown-tasks</button></div>';
+        }
+        if (f.status === 'tasks') {
+          return '<div class="stage-row"><span>' + f.total + ' 任务 / 7 相位</span>'
+            + '<span class="health-item"><span class="state-dot ok" aria-hidden="true"></span>依赖健康</span>'
+            + '<button class="btn btn-primary btn-sm" onclick="protoToast(\'开工:首个任务置 in_progress(原型示意)\')">开工</button></div>';
+        }
+        if (f.status === 'completed') {
+          return '<div class="stage-row"><span>交付:' + escHtml(f.label) + '全部落地</span>'
+            + '<span class="pill status-completed">SC 8/8</span>'
+            + '<span class="health-item"><span class="state-dot ok" aria-hidden="true"></span>质量门通过</span></div>';
+        }
+        /* in-progress(默认) */
+        var cards = exec.length ? exec.map(function (t) {
+          return '<div class="card exec-card" data-task-open="' + t.id + '" data-goto-session="' + t.sessionId
+            + '" title="点击直达会话(血缘推断)">'
+            + '<span class="task-id">' + t.id + '</span>'
+            + '<span class="task-name ellipsis" title="' + escHtml(t.title) + '">' + escHtml(t.title) + '</span>'
+            + '<span class="state-dot ok breathing" aria-label="运行中"></span>'
+            + '<button class="btn btn-link btn-sm">查看会话 ⟂</button></div>';
+        }).join('') : '<p class="t-aux">当前无运行中任务会话。</p>';
+        var done = FORGE.tasksOf(f.slug).filter(function (t) { return t.status === 'completed'; }).length;
+        return '<div class="exec-cards" aria-label="执行中任务(in_progress × active 挂接)">' + cards + '</div>'
+          + '<div class="stage-row" style="margin-top:6px"><span>进度 ' + f.done + '/' + f.total + '</span>'
+          + '<span class="sep">·</span><span>已完成 ' + done + '</span>'
+          + '<span class="pill status-warn">1 blocked</span><span class="pill">1 suspended</span></div>';
+      }
+
+      function taskRow(t) {
+        var run = runningLinked(t.id);
+        var linked = FORGE.sessionsOfTask(t.id);
+        var dotCls = run ? 'state-dot ok breathing'
+          : t.status === 'completed' ? 'state-dot ok'
+          : t.status === 'pending' ? 'state-dot' : 'state-dot warn';
+        var pill = run ? '<span class="pill">⟂ active</span>'
+          : t.status === 'in-progress'
+            ? (linked.length ? '<span class="pill">⟂ ended</span>' : '<span class="pill status-warn">未挂接会话</span>')
+          : t.status === 'completed' ? '<span class="pill status-completed">completed</span>' : '';
+        return '<div class="task-row" data-task-open="' + t.id + '">'
+          + '<span class="' + dotCls + '" aria-label="' + t.status + (run ? ',运行中' : '') + '"></span>'
+          + '<span class="task-id">' + t.id + '</span>'
+          + '<span class="task-name ellipsis" title="' + escHtml(t.title) + '">' + escHtml(t.title) + '</span>'
+          + pill + '</div>';
+      }
+
+      function renderDetail() {
+        var f = FORGE.feature(currentFeature);
+        if (!f) return;
+        var pct = f.total ? Math.round(f.done / f.total * 100) : 0;
+        document.getElementById('feature-detail').innerHTML =
+          '<div class="feature-header"><h2 class="t-title ellipsis" style="flex:1">' + f.slug + '</h2>'
+          + '<span class="' + statusPill(f) + '">' + f.status + '</span>'
+          + '<span class="progress-text">' + f.done + ' / ' + f.total + '</span></div>'
+          + '<div class="progress-track" role="progressbar" aria-label="任务进度 ' + f.done + '/' + f.total
+          + '" aria-valuenow="' + f.done + '" aria-valuemin="0" aria-valuemax="' + f.total + '">'
+          + '<div class="progress-fill" style="width:' + pct + '%"></div></div>'
+          + '<div class="stage-focus">' + stageBlock(f) + '</div>'
+          + '<div><div class="t-aux" style="padding:4px 0 8px">任务面板(从属 ' + f.slug + ')</div>'
+          + '<div class="card" style="overflow:hidden">'
+          + FORGE.tasksOf(f.slug).map(taskRow).join('')
+          + '</div></div>';
+      }
+
+      function toState(name, crumbText) {
+        protoSetState('c4', name);
+        if (crumbText !== undefined) crumb.textContent = crumbText;
+        var isBoard = name === 'proposal-board';
+        boardBtn.setAttribute('aria-pressed', isBoard ? 'true' : 'false');
+      }
+
+      function openFeature(slug) {
+        currentFeature = slug;
+        renderDetail();
+        toState('expanded', slug);
+      }
+
+      /* ---- 任务抽屉(C5) ---- */
+      function sessionTreeRows(top) {
+        var kids = FORGE.childrenOf(top.id);
+        var isOpen = false; /* 抽屉内默认收起,点徽标区展开 */
+        if (!kids.length) {
+          return '<div class="session-item"><div class="session-row">'
+            + '<div class="session-main" data-goto-session="' + top.id + '" role="button" tabindex="0">'
+            + '<span class="session-title ellipsis" title="' + escHtml(top.title) + '">' + escHtml(top.title) + '</span>'
+            + '<span class="session-sub">' + top.updated + (top.status === 'running' ? ' · 运行中' : ' · 已结束') + '</span></div>'
+            + '<span class="pill' + (top.status === 'running' ? ' status-in-progress' : '') + '">'
+            + (top.status === 'running' ? 'active' : 'ended') + '</span>'
+            + '</div></div>';
+        }
+        var c = FORGE.counts(top.id);
+        return '<div class="accordion link-history-row">'
+          + '<div class="session-row">'
+          + '<div class="session-main" data-goto-session="' + top.id + '" role="button" tabindex="0">'
+          + '<span class="session-title ellipsis" title="' + escHtml(top.title) + '">' + escHtml(top.title) + '</span>'
+          + '<span class="session-sub">' + top.updated + '</span></div>'
+          + '<span class="pill' + (top.status === 'running' ? ' status-in-progress' : '') + '">'
+          + (top.status === 'running' ? 'active' : 'ended') + '</span>'
+          + '<div class="session-badges" data-accordion role="button" tabindex="0" aria-expanded="' + isOpen + '" aria-label="展开后代会话">'
+          + '<span class="count-badge">' + c.total + '</span><span class="chevron" aria-hidden="true">›</span></div>'
+          + '</div>'
+          + '<div class="accordion-body"><div class="subagent-list">'
+          + kids.map(function (k) {
+            return '<div class="subagent-row" data-goto-session="' + k.id + '" role="button" tabindex="0">'
+              + '<span class="state-dot' + (k.status === 'running' ? ' ok breathing' : '') + '" aria-hidden="true"></span>'
+              + '<span class="session-title ellipsis" style="flex:1" title="' + escHtml(k.title) + '">' + escHtml(k.title) + '</span></div>';
+          }).join('')
+          + '</div></div></div>';
+      }
+
+      function openTask(tid) {
+        var t = FORGE.task(tid);
+        if (!t) return;
+        var linked = FORGE.sessionsOfTask(tid);
+        var linkedHtml = linked.length
+          ? linked.map(sessionTreeRows).join('')
+            + '<p class="t-aux" style="margin-top:8px">挂接历史新→旧;血缘后代 = 运行时推断,ended 行展开即历史快照查看。</p>'
+          : '<div class="empty-state" style="padding:20px 0"><p>未挂接会话</p>'
+            + '<button class="btn btn-primary btn-sm" data-task-start="' + t.project + '">发起(M3 一键发起链)</button></div>';
+        document.getElementById('drawer-content').innerHTML =
+          '<div class="drawer-header"><div style="flex:1;min-width:0">'
+          + '<h2 class="t-title ellipsis" id="drawer-title" title="' + t.id + ' ' + escHtml(t.title) + '">' + t.id + ' ' + escHtml(t.title) + '</h2>'
+          + '<div style="display:flex;gap:8px;margin-top:4px"><span class="pill status-in-progress">' + t.status + '</span>'
+          + '<span class="t-aux">feature ' + t.feature + '</span></div></div>'
+          + '<button class="icon-btn" data-overlay-close aria-label="关闭">'
+          + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+          + '</button></div>'
+          + '<div class="drawer-body">'
+          + '<div class="drawer-section"><h4>描述(M2/M3 既有区)</h4><p class="t-aux">' + escHtml(t.desc) + '</p></div>'
+          + '<div class="drawer-section"><h4>依赖链</h4><p class="t-aux t-code">' + escHtml(t.deps) + '</p></div>'
+          + '<div class="drawer-section"><h4>执行记录(M2/M3 既有区)</h4><p class="t-aux">' + escHtml(t.record) + '</p></div>'
+          + '<div class="drawer-section"><h4>绑定会话(M4 新增)</h4>' + linkedHtml + '</div>'
+          + '</div>';
+        protoOpenOverlay('#task-drawer');
+      }
+
+      /* ---- 事件代理 ---- */
+      document.addEventListener('click', function (e) {
+        var sel = e.target.closest('[data-feature-select]');
+        if (sel) { openFeature(sel.getAttribute('data-feature-select')); return; }
+        var task = e.target.closest('[data-task-open]');
+        if (task) { e.stopPropagation(); openTask(task.getAttribute('data-task-open')); return; }
+        var gotoS = e.target.closest('[data-goto-session]');
+        if (gotoS) {
+          var s = FORGE.findSession(gotoS.getAttribute('data-goto-session'));
+          location.href = 'project-home.html?p=' + (s ? s.project : project.id) + '&s=' + (s ? s.id : '');
+          return;
+        }
+        var start = e.target.closest('[data-task-start]');
+        if (start) {
+          location.href = 'project-home.html?p=' + start.getAttribute('data-task-start') + '&new=1';
+          return;
+        }
+      });
+
+      document.getElementById('crumb-root').addEventListener('click', function () { toState('list', ''); });
+      boardBtn.addEventListener('click', function () {
+        var st = document.querySelector('[data-state-scope="c4"]').getAttribute('data-current');
+        if (st === 'proposal-board') toState('expanded', currentFeature || '');
+        else toState('proposal-board', '提案板');
+      });
+      document.getElementById('back-btn').addEventListener('click', function () {
+        location.href = 'project-home.html?p=' + project.id;
+      });
+      document.getElementById('settings-btn').addEventListener('click', function () {
+        location.href = 'settings.html?p=' + project.id;
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !document.querySelector('.overlay.is-open')) {
+          var st = document.querySelector('[data-state-scope="c4"]').getAttribute('data-current');
+          if (st === 'expanded' || st === 'proposal-board') toState('list', '');
+        }
+      });
+
+      /* 数据变更(会话运行态)→ 重渲染当前展开 feature */
+      FORGE.on(function () {
+        renderList();
+        if (currentFeature) renderDetail();
+      });
+
+      /* ---- 初始化:默认展开首个 feature;深链 #board / #feature-* / #task-* ---- */
+      renderList();
+      var feats = FORGE.features(project.id);
+      currentFeature = feats.length ? feats[0].slug : null;
+
+      var h = location.hash;
+      if (h === '#board') toState('proposal-board', '提案板');
+      else if (/^#task-/.test(h)) {
+        var t = FORGE.task(h.slice(6));
+        if (t) { currentFeature = t.feature; renderDetail(); toState('expanded', t.feature); openTask(t.id); }
+      } else if (/^#feature-/.test(h)) {
+        openFeature(h.slice(9));
+      } else if (currentFeature) {
+        renderDetail();
+        toState('expanded', currentFeature);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目设置 — dsh-forge M4 原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <div class="app-brand"><span class="app-brand-mark">F</span><span>dsh-forge</span></div>
+      <nav class="panellist" data-sidebar aria-label="主导航"></nav>
+      <div class="sidebar-foot">改名/归档/恢复/删除 = 实时投影变更</div>
+    </aside>
+
+    <main class="app-main">
+      <!-- 设置页头(h56):[←] 返回 + 标题(项目名随数据) -->
+      <header class="settings-header">
+        <button class="btn btn-ghost btn-sm" id="back-btn" aria-label="返回项目工作台(Esc)">←</button>
+        <h1 class="t-title">项目设置 · <span id="s-proj-name">—</span></h1>
+      </header>
+
+      <div class="settings-body" data-state-scope="c8" data-scope-label="C8 投影状态" data-states="healthy,degraded,deviation,archived" data-current="healthy">
+
+        <!-- C7 三区位置(设置页形态:含 [保存更改] 脚) -->
+        <section class="card settings-card" aria-labelledby="loc-title">
+          <h3 id="loc-title">三区位置</h3>
+          <div class="form-row">
+            <label class="form-label" for="s-code-root">代码区 <span class="required" aria-hidden="true">*</span></label>
+            <div class="path-input-line">
+              <input class="path-input" id="s-code-root" aria-describedby="s-code-fb">
+              <button class="btn btn-ghost btn-sm">浏览…</button>
+            </div>
+            <div class="form-feedback ok-text" id="s-code-fb"><span class="state-dot ok" aria-hidden="true"></span>存在 · 可读可写 · forge 数据已检出</div>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="s-doc-root">forge 文件区 <span class="required" aria-hidden="true">*</span></label>
+            <div class="path-input-line">
+              <input class="path-input" id="s-doc-root" aria-describedby="s-doc-fb">
+              <button class="btn btn-ghost btn-sm">浏览…</button>
+            </div>
+            <div class="form-feedback info-text" id="s-doc-fb"><span class="state-dot ok" aria-hidden="true"></span>位于代码区内(仓内形态),合法</div>
+          </div>
+          <p class="t-aux">知识区:不渲染(后续里程碑)。保存后果:路径变更 → 探测缓存失效重探 · 投影按新位置重同步 · feature/task 快照重建(「同步中」标注)。</p>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px">
+            <button class="btn btn-primary btn-md" id="save-loc" disabled>保存更改</button>
+          </div>
+        </section>
+
+        <!-- C8 投影与生命周期 -->
+        <section class="card settings-card" aria-labelledby="proj-title">
+          <h3 id="proj-title">投影与生命周期</h3>
+
+          <!-- healthy -->
+          <div data-state="healthy">
+            <div class="status-line">
+              <span class="state-dot ok" aria-hidden="true"></span>
+              <span>与 dsh 侧一致(workspaceRegistry 投影健康)</span>
+            </div>
+            <div class="lifecycle-row">
+              <button class="btn btn-ghost btn-sm" data-rename>改名</button>
+              <button class="btn btn-ghost btn-sm" data-overlay-open="#archive-dialog">归档</button>
+            </div>
+          </div>
+
+          <!-- degraded -->
+          <div data-state="degraded">
+            <div class="status-line">
+              <span class="state-dot warn" aria-hidden="true"></span>
+              <span style="flex:1">投影写入失败(降级运行,注册/改名/归档不受阻断)</span>
+              <button class="btn btn-primary btn-sm" id="retry-proj">重试投影</button>
+            </div>
+            <p class="advice-line">全设计唯一「投影重试」动作;区内数据装载重试不属投影重试。</p>
+            <div class="lifecycle-row">
+              <button class="btn btn-ghost btn-sm" data-rename>改名</button>
+              <button class="btn btn-ghost btn-sm" data-overlay-open="#archive-dialog">归档</button>
+            </div>
+          </div>
+
+          <!-- deviation:偏差明细折叠(仅提示,无反向写入口) -->
+          <div data-state="deviation">
+            <div class="status-line">
+              <span class="state-dot warn" aria-hidden="true"></span>
+              <span style="flex:1">检出 dsh 侧手改偏差(对账:启动 / 打开页事件)</span>
+            </div>
+            <div class="accordion deviation-fold">
+              <button class="btn btn-ghost btn-sm" data-accordion aria-expanded="false">偏差明细 2 ▾</button>
+              <div class="accordion-body"><div style="padding-top:6px">
+                <div class="deviation-row"><span class="pill status-warn">改名</span><span class="name ellipsis" title="dsh-forge-work">dsh-forge-work</span></div>
+                <div class="deviation-row"><span class="pill status-error">删除</span><span class="name ellipsis" title="dsh-forge-old">dsh-forge-old</span></div>
+                <p class="advice-line">处理建议(只读):改名 → 下次对账按 dsh 侧新名重建索引;删除 → 快照重建后不再呈现该条目;乱序 → 按 dsh 侧实际顺序重排。均不提供反向写回(BIZ-006)。</p>
+              </div></div>
+            </div>
+            <div class="lifecycle-row">
+              <button class="btn btn-ghost btn-sm" data-rename>改名</button>
+              <button class="btn btn-ghost btn-sm" data-overlay-open="#archive-dialog">归档</button>
+            </div>
+          </div>
+
+          <!-- archived -->
+          <div data-state="archived">
+            <div class="archived-banner" style="border:none;padding:6px 12px;margin:0 -12px 8px">
+              <span class="state-dot warn" aria-hidden="true"></span>
+              <span style="flex:1">项目已归档(只读)——workspace 保留,会话仍按项目分组</span>
+            </div>
+            <div class="lifecycle-row">
+              <button class="btn btn-ghost btn-sm" id="restore-btn">恢复</button>
+              <button class="btn btn-ghost btn-sm btn-danger-text" data-overlay-open="#delete-dialog">删除</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 已归档会话(左栏 ⋯ 菜单「归档会话」的恢复入口;搜索 + 行 + 解除归档) -->
+        <section class="card settings-card" aria-labelledby="unarch-title">
+          <h3 id="unarch-title">已归档会话</h3>
+          <input class="search-input" id="unarch-search" type="search"
+                 placeholder="搜索已归档会话…" aria-label="搜索已归档会话" style="width:100%;margin-bottom:6px">
+          <div id="unarch-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- 归档确认 Dialog(BIZ-006 语义文案) -->
+  <div class="overlay" id="archive-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <div class="dialog">
+      <div class="dialog-header">
+        <h2 class="t-title" id="arc-title">归档项目?</h2>
+        <button class="icon-btn" data-overlay-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-aux">workspace 保留,会话仍按项目分组;forge 侧移入归档分区,项目会话列表不再展示。归档 ≠ 删除,可随时恢复。</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-md" data-overlay-close>取消</button>
+        <button class="btn btn-primary btn-md" data-overlay-close id="arc-confirm">确认归档</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认 Dialog -->
+  <div class="overlay" id="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="del-title-2">
+    <div class="overlay__mask" data-overlay-close></div>
+    <div class="dialog">
+      <div class="dialog-header">
+        <h2 class="t-title" id="del-title-2">删除项目?</h2>
+        <button class="icon-btn" data-overlay-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-aux">投影移除,会话按 dsh 语义退未分组(历史不删除);布局记忆随之清除;该项目全部拆出窗口将关闭。</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-md" data-overlay-close>取消</button>
+        <button class="btn btn-primary btn-md" style="background:var(--dsw-alias-state-error-primary);color:#fff" data-overlay-close id="del-confirm-2">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* 本页专属:FORGE 接线(改名/归档/恢复/删除实时生效)、C8 切换、Esc 返回、保存联动 */
+    (function () {
+      var pid = FORGE.currentProjectId();
+      var project = FORGE.project(pid);
+
+      var nameEl = document.getElementById('s-proj-name');
+      var codeEl = document.getElementById('s-code-root');
+      var docEl = document.getElementById('s-doc-root');
+
+      function sync() {
+        project = FORGE.project(pid) || FORGE.project(FORGE.currentProjectId());
+        pid = project.id;
+        nameEl.textContent = project.name;
+        codeEl.value = project.path;
+        docEl.value = project.docPath || (project.path + '\\docs');
+        document.getElementById('arc-title').textContent = '归档项目 ' + project.name + '?';
+        document.getElementById('del-title-2').textContent = '删除项目 ' + project.name + '?';
+        if (project.archived) protoSetState('c8', 'archived');
+      }
+
+      /* 归档 / 恢复 / 删除:FORGE 变更 + 本页状态切换 */
+      document.getElementById('arc-confirm').addEventListener('click', function () {
+        FORGE.archiveProject(pid, true);
+        protoSetState('c8', 'archived');
+        protoToast('已归档:工作台同步进入只读态');
+      });
+      document.getElementById('restore-btn').addEventListener('click', function () {
+        FORGE.archiveProject(pid, false);
+        protoSetState('c8', 'healthy');
+        protoToast('已恢复:移回活跃区(投影不变)');
+      });
+      document.getElementById('del-confirm-2').addEventListener('click', function () {
+        FORGE.deleteProject(pid);
+        protoToast('已删除:主窗口返回项目列表');
+        setTimeout(function () { location.href = 'projects.html'; }, 400);
+      });
+
+      /* 改名:行内输入 + FORGE 生效(投影同步;失败降级不阻断本地生效) */
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('[data-rename]')) return;
+        var name = prompt('新项目名(投影同步;失败降级不阻断本地生效):', project.name);
+        if (!name || name === project.name) return;
+        FORGE.renameProject(pid, name);
+        protoToast('已改名 → ' + name + '(投影同步中)');
+      });
+
+      /* 重试投影:降级恢复 */
+      document.getElementById('retry-proj').addEventListener('click', function () {
+        protoSetState('c8', 'healthy');
+        protoToast('重试投影:同步成功 → healthy');
+      });
+
+      /* Esc:浮层关闭后返回工作台(设计:[←]/Esc 回 project) */
+      document.getElementById('back-btn').addEventListener('click', function () {
+        location.href = 'project-home.html?p=' + pid;
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !document.querySelector('.overlay.is-open') && !document.querySelector('.menu.is-open, .popover.is-open')) {
+          location.href = 'project-home.html?p=' + pid;
+        }
+      });
+
+      /* 保存更改:有变更才可用 */
+      var save = document.getElementById('save-loc');
+      [codeEl, docEl].forEach(function (el) {
+        el.addEventListener('input', function () { save.disabled = false; });
+      });
+      save.addEventListener('click', function () {
+        save.disabled = true;
+        protoToast('三区位置已更新:探测缓存失效 · 投影重同步 · 快照重建(同步中)');
+      });
+
+      /* 数据变更(改名等)→ 标题/对话框文案随动 */
+      FORGE.on(function () {
+        project = FORGE.project(pid);
+        if (project) nameEl.textContent = project.name;
+      });
+
+      /* 已归档会话:列表 + 搜索过滤 + 解除归档(行回到左栏列表) */
+      var unarchList = document.getElementById('unarch-list');
+      var unarchSearch = document.getElementById('unarch-search');
+      function renderUnarch() {
+        var q = (unarchSearch.value || '').trim().toLowerCase();
+        var rows = FORGE.archivedSessions(pid).filter(function (s) {
+          return !q || (s.title || '').toLowerCase().indexOf(q) > -1;
+        });
+        unarchList.innerHTML = rows.length ? rows.map(function (s) {
+          return '<div class="unarch-row">'
+            + '<span class="state-dot warn" aria-hidden="true" title="已归档"></span>'
+            + '<span class="nm ellipsis" title="' + escHtml(s.title) + '">' + escHtml(s.title) + '</span>'
+            + '<span class="t-aux">' + escHtml(s.updated) + '</span>'
+            + '<button class="btn btn-ghost btn-sm" data-unarchive="' + s.id + '">解除归档</button>'
+            + '</div>';
+        }).join('') : '<p class="unarch-empty">' + (q ? '无匹配的已归档会话' : '暂无已归档会话(左栏 ⋯ 菜单「归档会话」后在此恢复)') + '</p>';
+      }
+      unarchSearch.addEventListener('input', renderUnarch);
+      unarchList.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-unarchive]');
+        if (!b) return;
+        FORGE.archiveSession(b.getAttribute('data-unarchive'), false);
+        protoToast('已解除归档:会话回到左栏列表(原分组)');
+      });
+      FORGE.on(renderUnarch);
+      renderUnarch();
+
+      sync();
+    })();
+  </script>
+</body>
+</html>

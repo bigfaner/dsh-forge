@@ -47,3 +47,8 @@ packages/desktop-host-vendor/vendored/.closure-supplements/
 # host runtime residue (dsh profile root marker written when dev host runs from repo cwd)
 cordis.yml
 .claude/agent-memory/
+docs/features/dsh-forge-m4/ui/dsh-初始home.png
+docs/features/dsh-forge-m4/ui/dsh-打开右侧边栏.png
+docs/features/dsh-forge-m4/ui/dsh-两侧边栏收起.png
+docs/features/dsh-forge-m4/ui/dsh-home-layout.md
+docs/features/dsh-forge-m4/ui/image.png

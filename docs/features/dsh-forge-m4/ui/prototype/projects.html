@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目列表 — dsh-forge M4 原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <div class="app-brand"><span class="app-brand-mark">F</span><span>dsh-forge</span></div>
+      <nav class="panellist" data-sidebar aria-label="主导航"></nav>
+      <div class="sidebar-foot">新建项目 = 三区位置注册向导(对话框流)</div>
+    </aside>
+
+    <main class="app-main">
+      <header class="view-header">
+        <h1 class="t-title">项目</h1>
+        <input id="project-search" class="search-input" type="search" placeholder="搜索项目名…" aria-label="搜索项目">
+        <span style="flex:1"></span>
+        <button class="btn btn-primary btn-md" id="new-project-btn">新建项目</button>
+      </header>
+
+      <!-- 状态作用域:C1 页面态(populated / loading / empty / load-error) -->
+      <div data-state-scope="c1" data-scope-label="C1 页面状态" data-states="populated,loading,empty,load-error" data-current="populated">
+
+        <!-- populated -->
+        <section data-state="populated">
+          <div class="project-grid" id="active-grid"></div>
+
+          <div class="archive-section accordion" id="archive-section">
+            <button class="archive-head" data-accordion aria-expanded="false">
+              <span class="chevron" aria-hidden="true">›</span>
+              已归档 <span id="archive-count">0</span>
+            </button>
+            <div class="archive-body"><div>
+              <div class="archive-grid" id="archive-grid"></div>
+            </div></div>
+          </div>
+
+          <div class="empty-state is-hidden" id="no-match">
+            <div class="empty-art" aria-hidden="true">🔍</div>
+            <p>无匹配项目</p>
+            <button class="btn btn-ghost btn-sm" id="clear-search">清除</button>
+          </div>
+        </section>
+
+        <!-- loading:骨架卡 ×6 -->
+        <section data-state="loading" aria-busy="true">
+          <div class="project-grid">
+            <div class="skeleton" style="height:120px"></div>
+            <div class="skeleton" style="height:120px"></div>
+            <div class="skeleton" style="height:120px"></div>
+            <div class="skeleton" style="height:120px"></div>
+            <div class="skeleton" style="height:120px"></div>
+            <div class="skeleton" style="height:120px"></div>
+          </div>
+        </section>
+
+        <!-- empty -->
+        <section data-state="empty">
+          <div class="empty-state">
+            <div class="empty-art" aria-hidden="true">📁</div>
+            <p>还没有注册任何项目</p>
+            <button class="btn btn-primary btn-md" onclick="protoOpenOverlay('#wizard')">注册第一个项目</button>
+          </div>
+        </section>
+
+        <!-- load-error -->
+        <section data-state="load-error">
+          <div class="card error-card">
+            <span class="state-dot error" aria-hidden="true"></span>
+            <strong>项目列表读取失败</strong>
+            <p class="t-aux">项目注册表暂不可用(ERR_DB_UNAVAILABLE),可重试当区数据装载。</p>
+            <button class="btn btn-primary btn-sm" onclick="protoSetState('c1','populated');protoToast('重试成功:注册表恢复')">重试</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- 注册向导(C7;对话框流,非独立路由):三区位置 + 校验场景 -->
+  <div class="overlay" id="wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <div class="dialog">
+      <div class="dialog-header">
+        <div style="flex:1">
+          <h2 class="t-title" id="wizard-title">添加项目</h2>
+          <div class="t-aux">给代码区文件夹即可 — 文档位置由侦测预选,✎ 可改</div>
+        </div>
+        <button class="icon-btn" data-overlay-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-row">
+          <label class="form-label" for="w-code">代码区 <span class="required" aria-hidden="true">*</span></label>
+          <div class="path-input-line">
+            <input class="path-input" id="w-code" data-reg-code value="Z:\project\dsh\demo-app" placeholder="拖拽 / 粘贴 / 浏览代码区文件夹">
+            <button class="btn btn-ghost btn-sm" onclick="protoToast('浏览选择目录(原型示意)')">浏览…</button>
+          </div>
+          <div id="w-detect" data-reg-detect aria-live="polite"></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="w-name">项目名</label>
+          <div class="path-input-line">
+            <input class="path-input" id="w-name" data-reg-name placeholder="自动取文件夹名,可改" style="font-family:var(--font-ui)">
+          </div>
+        </div>
+        <div class="form-row">
+          <span class="form-label">文档位置</span>
+          <div class="ap-preview">
+            <span class="grow" id="w-doc-preview" data-reg-preview></span>
+            <button type="button" class="btn btn-ghost btn-sm" data-reg-edit aria-expanded="false">✎</button>
+          </div>
+          <div class="ap-editpanel" data-reg-panel hidden>
+            <label class="ap-radio"><input type="radio" name="w-mode" value="app" data-reg-mode checked> 应用管理(应用数据目录 + 内部版本历史)</label>
+            <label class="ap-radio"><input type="radio" name="w-mode" value="inrepo" data-reg-mode> 仓内(随 git 提交,可 PR 评审)</label>
+            <div class="path-input-line"><input class="path-input" id="w-doc-path" data-reg-docpath placeholder="<代码区>\docs"></div>
+            <label class="ap-radio" hidden><input type="radio" name="w-mode" value="reuse" data-reg-mode> 沿用仓内已检出的 forge 文档</label>
+          </div>
+        </div>
+        <div class="ap-greyrow">过程留痕 · 应用数据目录(本机,不进 git)</div>
+        <details class="ap-advanced">
+          <summary>高级:自定义文档路径(仓外需授权)</summary>
+          <div class="path-input-line" style="margin-top:8px"><input class="path-input" id="w-custom" data-reg-custom placeholder="自定义文档位置绝对路径"></div>
+          <div id="w-custom-fb" data-reg-customfb></div>
+        </details>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-md" data-overlay-close>取消(Esc)</button>
+        <button class="btn btn-primary btn-md" id="w-create" data-reg-create disabled>添加项目</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认 Dialog -->
+  <div class="overlay" id="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <div class="dialog">
+      <div class="dialog-header">
+        <h2 class="t-title" id="delete-dialog-title">删除项目?</h2>
+        <button class="icon-btn" data-overlay-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-aux" style="margin-bottom:8px">删除将移除 dsh 侧 workspace 投影:</p>
+        <ul class="t-aux" style="display:flex;flex-direction:column;gap:4px;padding-left:16px;list-style:disc">
+          <li>会话按 dsh 语义退未分组(历史不删除)</li>
+          <li>快照/挂接/布局记忆等自有数据级联清除</li>
+          <li>不触碰项目仓内文件与 forge 数据</li>
+        </ul>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-md" data-overlay-close>取消</button>
+        <button class="btn btn-primary btn-md btn-danger-text" style="background:var(--dsw-alias-state-error-primary);color:#fff" data-overlay-close id="del-confirm">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* 本页专属:卡片渲染(数据驱动)、搜索过滤、恢复/删除、注册向导校验机 */
+    (function () {
+      var q = '';
+      var delTarget = null;
+
+      /* ---- 卡片 ---- */
+      function healthHtml(p) {
+        var code = '<span class="health-item"><span class="state-dot ok" aria-hidden="true"></span>代码区 正常</span>';
+        var doc = p.docHealth === 'warn'
+          ? '<span class="health-item" title="' + escHtml(p.docWarn || '') + '"><span class="state-dot warn" aria-hidden="true"></span><span class="warn-text">文件区 异常</span></span>'
+          : '<span class="health-item"><span class="state-dot ok" aria-hidden="true"></span>文件区 正常</span>';
+        return '<div class="project-card__health">' + code + doc + '</div>';
+      }
+      function render() {
+        var active = document.getElementById('active-grid');
+        var archive = document.getElementById('archive-grid');
+        var projects = FORGE.projects();
+        var actives = projects.filter(function (p) { return !p.archived; });
+        var archived = projects.filter(function (p) { return p.archived; });
+
+        active.innerHTML = actives.map(function (p) {
+          return '<a class="card project-card is-clickable" href="project-home.html?p=' + p.id + '" data-project="' + escHtml(p.name) + '"'
+            + ' aria-label="' + escHtml(p.name) + ',点击进入项目工作台">'
+            + '<div class="project-card__top"><span class="t-title ellipsis" title="' + escHtml(p.name) + '">' + escHtml(p.name) + '</span>'
+            + '<span class="project-card__arrow" aria-hidden="true">›</span></div>'
+            + '<div class="t-aux ellipsis">活跃 feature:' + escHtml(p.featureLabel) + '</div>'
+            + healthHtml(p) + '</a>';
+        }).join('');
+
+        archive.innerHTML = archived.map(function (p) {
+          return '<div class="card project-card is-archived" data-project="' + escHtml(p.name) + '" aria-label="' + escHtml(p.name) + ',已归档,只读,可恢复或删除">'
+            + '<div class="project-card__top"><span class="t-title ellipsis" title="' + escHtml(p.name) + '">' + escHtml(p.name) + '</span></div>'
+            + '<div class="t-aux ellipsis">已归档 · ' + escHtml(p.archivedAt || '') + '</div>'
+            + '<div class="project-card__actions">'
+            + '<button class="btn btn-ghost btn-sm" data-restore="' + p.id + '">恢复</button>'
+            + '<button class="btn btn-ghost btn-sm btn-danger-text" data-del-project="' + p.id + '">删除</button>'
+            + '</div></div>';
+        }).join('');
+        document.getElementById('archive-count').textContent = archived.length;
+
+        applyFilter();
+      }
+      function applyFilter() {
+        var query = q.trim().toLowerCase();
+        var visible = 0;
+        var archiveHit = false;
+        ['active-grid', 'archive-grid'].forEach(function (gid) {
+          var grid = document.getElementById(gid);
+          if (!grid) return;
+          Array.prototype.forEach.call(grid.children, function (card) {
+            var name = (card.getAttribute('data-project') || '').toLowerCase();
+            var hit = !query || name.indexOf(query) !== -1;
+            card.classList.toggle('is-hidden', !hit);
+            if (hit) visible++;
+            if (hit && gid === 'archive-grid') archiveHit = true;
+          });
+        });
+        if (query && archiveHit) document.getElementById('archive-section').classList.add('is-expanded');
+        document.getElementById('no-match').classList.toggle('is-hidden', visible !== 0);
+      }
+      FORGE.on(render);
+      render();
+
+      /* ---- 搜索(debounce 300ms) ---- */
+      var input = document.getElementById('project-search');
+      var timer = null;
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { q = input.value; applyFilter(); }, 300);
+      });
+      document.getElementById('clear-search').addEventListener('click', function () {
+        input.value = ''; q = ''; applyFilter(); input.focus();
+      });
+
+      /* ---- 恢复 / 删除 ---- */
+      document.addEventListener('click', function (e) {
+        var restore = e.target.closest('[data-restore]');
+        if (restore) {
+          e.preventDefault(); e.stopPropagation();
+          var p = FORGE.project(restore.getAttribute('data-restore'));
+          FORGE.archiveProject(p.id, false);
+          protoToast('已恢复 ' + p.name + '(Workspace 投影不变)');
+          return;
+        }
+        var del = e.target.closest('[data-del-project]');
+        if (del) {
+          e.preventDefault(); e.stopPropagation();
+          delTarget = del.getAttribute('data-del-project');
+          var name = FORGE.project(delTarget).name;
+          document.getElementById('delete-dialog-title').textContent = '删除项目 ' + name + '?';
+          protoOpenOverlay('#delete-dialog');
+        }
+      });
+      document.getElementById('del-confirm').addEventListener('click', function () {
+        if (!delTarget) return;
+        var name = FORGE.project(delTarget).name;
+        FORGE.deleteProject(delTarget);
+        protoToast('项目 ' + name + ' 已删除');
+        delTarget = null;
+      });
+
+      /* ---- 添加项目确认卡(裁决 #24:预览行 + 证据三档门控;逻辑 = app.js protoBindRegisterCard) ---- */
+      document.getElementById('new-project-btn').addEventListener('click', function () {
+        protoOpenOverlay('#wizard');
+        setTimeout(function () { document.getElementById('w-code').focus(); }, 0);
+      });
+      protoBindRegisterCard(document.getElementById('wizard'), function (info) {
+        var p = FORGE.addProject({ name: info.name, path: info.path });
+        protoCloseOverlay(document.getElementById('wizard'));
+        protoToast('项目 ' + p.name + ' 已添加:探测缓存建立 · 投影同步 · 快照就绪(文档位置:' + info.modeLabel + ')');
+        document.getElementById('w-name').value = '';
+      });
+    })();
+  </script>
+</body>
+</html>

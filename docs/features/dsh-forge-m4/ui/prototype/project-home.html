@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目工作台 — dsh-forge M4 原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <div class="app-brand"><span class="app-brand-mark">F</span><span>dsh-forge</span></div>
+      <nav class="panellist" data-sidebar aria-label="主导航"></nav>
+    </aside>
+
+    <!-- 会话中心工作台(v2.9):中间 = dsh 会话面板(76 header + 对话/轨迹)/ 右栏 = dockkit 页签容器 -->
+    <main class="app-main workbench">
+
+      <!-- 归档横幅(C2 Archived 态;可关闭) -->
+      <div class="archived-banner" id="archived-banner" hidden>
+        <span class="state-dot warn" aria-hidden="true"></span>
+        <span style="flex:1">项目已归档(只读)——左栏树降透明;恢复/删除经右栏概览·设置或下方入口。</span>
+        <button class="btn btn-ghost btn-sm" id="banner-restore">恢复</button>
+        <button class="btn btn-ghost btn-sm btn-danger-text" data-overlay-open="#delete-dialog">删除</button>
+        <button class="icon-btn" id="banner-close" aria-label="关闭横幅" title="关闭横幅">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <!-- 状态作用域:default 会话面板+右侧栏 / loading / error / archived -->
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column"
+           data-state-scope="c2" data-scope-label="C2 工作台状态" data-states="default,loading,error,archived" data-current="default">
+
+        <!-- default:中间 = 76px header(面包屑 + 对话/轨迹);右栏 dockkit -->
+        <div data-state="default" style="flex:1;min-height:0;display:flex;padding:0" class="workbench-body" id="split-root">
+
+          <!-- 会话面板:active = 打开的会话 / hero = 新会话;data-view = conv|traj -->
+          <div class="conv-root" id="conv-root" data-phase="active" data-view="conv">
+            <div class="conv-header">
+              <div class="conv-title-row">
+                <nav class="conv-crumbs" id="conv-crumbs" aria-label="会话位置"></nav>
+                <div class="conv-actions" id="conv-actions"></div>
+                <!-- utilities 图标簇(dsh headerUtilities 同构):📁▾ 在编辑器中打开(评审裁决 2026-09-25 第五批:⋯ 已删) -->
+                <div class="conv-utils">
+                  <button class="icon-btn" id="conv-workspace" aria-label="在编辑器中打开工作区" title="在编辑器中打开工作区">
+                    <span class="conv-util-fold">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                      <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 9l5 5 5-5" transform="translate(-1 -1)"/></svg>
+                    </span>
+                  </button>
+                </div>
+                <!-- 面板钮(常显 toggle:收起 ↔ 展开;dsh headerCorner 同构) -->
+                <button class="icon-btn conv-corner" id="rb-corner-expand" aria-label="展开右侧栏" title="展开右侧栏">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+                </button>
+              </div>
+              <div class="conv-tabs" role="tablist" aria-label="会话视图">
+                <button class="conv-tab active" role="tab" aria-selected="true" data-view-tab="conv">对话</button>
+                <button class="conv-tab" role="tab" aria-selected="false" data-view-tab="traj">轨迹</button>
+              </div>
+            </div>
+
+            <div class="conv-body" id="conv-body">
+              <div class="conv-colhandle l" id="col-l" role="separator" aria-orientation="vertical" aria-label="内容列宽(左拖柄)" tabindex="0"></div>
+              <div class="conv-colhandle r" id="col-r" role="separator" aria-orientation="vertical" aria-label="内容列宽(右拖柄)" tabindex="0"></div>
+
+              <!-- 评审裁决(2026-09-25):hero(新会话/未发送)右上角无任何图标 —— 已发送会话才有
+                   utilities 与面板钮;此处不再放右栏展开浮钮 -->
+
+              <div class="conv-col">
+                <div class="conv-transcript" id="conv-transcript"></div>
+              </div>
+
+              <!-- hero 相位(新会话):logo + 探索未至之境 + 工作区 chip;输入卡随之下移居中 -->
+              <div class="conv-hero" id="conv-hero">
+                <div class="conv-hero-logo" aria-hidden="true">🐋</div>
+                <div class="conv-hero-greet">探索未至之境</div>
+                <div class="conv-hero-workrow" id="hero-work"></div>
+                <span class="pill" style="margin-top:2px">预览版</span>
+              </div>
+
+              <!-- 输入卡(r22):Enter 发送;运行中主钮 = 停止 / 有稿 = 排队发送 -->
+              <div class="composer-seat">
+                <!-- hero 相位选择器(dsh heroWorkspaceRow 同构):输入卡左上方 项目 ▾ / 模式 ▾,仅新会话显示 -->
+                <div class="conv-heropickers" id="hero-pickers">
+                  <button class="pill is-button" id="hp-project" aria-haspopup="menu" title="项目(选择目标项目)">
+                    📁 <span id="hp-proj-name"></span> <span aria-hidden="true">▾</span>
+                  </button>
+                  <button class="pill is-button" id="hp-mode" aria-haspopup="menu" title="模式(标准 / PTC / 极简 / 创建)">
+                    ⚙ <span id="hp-mode-name">标准模式</span> <span aria-hidden="true">▾</span>
+                  </button>
+                </div>
+                <div class="composer-card">
+                  <div class="composer-input" id="composer-input" contenteditable="plaintext-only"
+                       data-placeholder="发消息或创建任务,/ 调用指令,@ 文件或对话" aria-label="会话输入" aria-multiline="true"></div>
+                  <div class="composer-row">
+                    <div class="composer-tools">
+                      <button class="composer-add" aria-label="添加(命令 / 引用)" title="/ 斜杠命令 · @ 文件或对话"
+                              onclick="protoToast('命令菜单(/ 斜杠命令 · @ 引用,原型示意)')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                      </button>
+                      <button class="composer-model" onclick="protoToast('模式:标准 / PTC / 极简 / 创建(原型示意)')">标准模式</button>
+                    </div>
+                    <button class="composer-model" onclick="protoToast('模型选择(上游 ui-model-selection)')">DeepSeek · V3.2</button>
+                    <button class="composer-send" id="composer-send" aria-label="发送" title="发送">
+                      <svg class="i-send" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z" fill="currentColor"/></svg>
+                      <svg class="i-stop" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- 状态栏:统计双 pill + 上下文环 -->
+                <div class="composer-status" id="composer-status"></div>
+                <div class="composer-dock" id="composer-dock"></div>
+              </div>
+
+              <!-- 轨迹 tab:工具栏 + 时间线 + 台账 + 详情面板(M4 罐头) -->
+              <div class="traj-panel" id="traj-panel">
+                <div class="traj-toolbar">
+                  <button class="traj-tb" id="tb-dur">⏱ 时长</button>
+                  <button class="traj-tb" id="tb-rounds" aria-pressed="false">⊞ 轮次收展</button>
+                  <button class="traj-tb" id="tb-calls" aria-pressed="false">⊟ 调用收展</button>
+                  <span style="flex:1"></span>
+                  <button class="traj-tb" onclick="protoToast('轨迹搜索(原型示意)')">🔍 搜索</button>
+                </div>
+                <div class="traj-timeline" id="traj-timeline" aria-hidden="true"></div>
+                <div class="traj-outer">
+                  <div class="traj-ledger" id="traj-ledger" role="list" aria-label="执行台账"></div>
+                  <div class="traj-detail" id="traj-detail">
+                    <div class="traj-detail-resize" id="traj-resize" role="separator" aria-orientation="vertical" aria-label="详情面板宽度(320–720)" tabindex="0"></div>
+                    <div class="traj-detail-tabs" id="traj-detail-tabs"></div>
+                    <div class="traj-detail-body" id="traj-detail-body"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧栏(dockkit):面板无自带头,strip 即上边缘;宽 45%(300–70%);收起轨道归零 -->
+          <div class="rightbar-wrap" id="rb-wrap">
+            <div class="rb-resize" id="rb-resize" role="separator" aria-orientation="vertical"
+                 aria-label="右侧栏宽度(拖拽调整;300–70% 视口)" tabindex="0"></div>
+            <aside class="rightbar" aria-label="右侧栏">
+              <div class="rb-strip" role="tablist" aria-label="右侧栏页签">
+                <div class="rb-chips" id="rb-chips"></div>
+                <div class="rb-tail">
+                  <button class="icon-btn" id="rb-fullscreen" aria-label="全屏(覆盖会话列)" title="全屏(覆盖会话列)">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                  </button>
+                  <button class="icon-btn" id="rb-collapse" aria-label="收起右侧栏" title="收起右侧栏">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 「开始」页(门页):罗盘水印 + 三卡片;卡片点击 = 原位替换开始页签 -->
+              <div class="rb-panel" data-rb-panel="guide">
+                <div class="rb-guide">
+                  <div class="rb-guide-compass" aria-hidden="true">◉</div>
+                  <div class="rb-guide-cards">
+                    <button class="rb-card" data-guide-card="overview">
+                      <span class="ic" aria-hidden="true">📁</span>
+                      <span class="tx"><span class="tt">项目概览</span><span class="sub">提案 · feature · 任务 · 设置</span></span>
+                    </button>
+                    <button class="rb-card" data-guide-card="terminal">
+                      <span class="ic" aria-hidden="true">&gt;_</span>
+                      <span class="tx"><span class="tt">新建终端</span><span class="sub">在会话工作区运行命令</span></span>
+                      <span class="chev" id="shell-chev" role="button" tabindex="0" aria-label="Shell 选择" title="Shell 选择">⌄</span>
+                    </button>
+                    <button class="rb-card" data-guide-card="browser">
+                      <span class="ic" aria-hidden="true">🌐</span>
+                      <span class="tx"><span class="tt">浏览器</span><span class="sub">浏览 HTTP(S) 网页</span></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 「项目概览」tab:标题栏 + 概要信息区 + 四子 tab -->
+              <div class="rb-panel" data-rb-panel="overview">
+                <div class="ov-title" id="ov-title"></div>
+                <div class="ov-meta" id="ov-meta"></div>
+                <div class="ov-tabs" role="tablist" aria-label="项目概览子页签">
+                  <button class="ov-tab" data-ov-tab="proposals">提案</button>
+                  <button class="ov-tab active" data-ov-tab="features">feature</button>
+                  <button class="ov-tab" data-ov-tab="tasks">任务</button>
+                </div>
+                <div class="ov-body" id="ov-body"></div>
+              </div>
+
+              <!-- 「依赖图」tab(feature 名即下拉:仅本项目 feature,带状态徽标;双模式:DAG / 泳道·状态分组) -->
+              <div class="rb-panel" data-rb-panel="dep">
+                <div class="rb-dep">
+                  <div class="rb-dep-head">
+                    <span style="flex:none">依赖图 ·</span>
+                    <button class="btn btn-ghost btn-sm" id="dep-switch" aria-haspopup="menu" title="选择 feature(仅本项目)"></button>
+                    <span style="flex:1"></span>
+                    <div class="dep-seg" role="tablist" aria-label="依赖图视图模式">
+                      <button type="button" data-dep-view="dag" class="on" role="tab" aria-selected="true">DAG</button>
+                      <button type="button" data-dep-view="lane" role="tab" aria-selected="false">泳道图</button>
+                    </div>
+                  </div>
+                  <div id="dep-body"></div>
+                </div>
+              </div>
+
+              <!-- 文档 tab(动态;路径栏 h38 + 只读正文) -->
+              <div id="rb-docs"></div>
+            </aside>
+          </div>
+        </div>
+
+        <!-- loading -->
+        <div data-state="loading" class="workbench-body" aria-busy="true">
+          <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div class="skeleton" style="height:76px"></div><div class="skeleton" style="height:56px"></div><div class="skeleton" style="height:56px"></div>
+          </div>
+        </div>
+
+        <!-- error -->
+        <div data-state="error" class="workbench-body">
+          <div class="card error-card" style="width:100%">
+            <span class="state-dot error" aria-hidden="true"></span>
+            <strong>工作台数据装载失败</strong>
+            <p class="t-aux">feature/task 快照暂不可读(ERR_SNAPSHOT_UNREADABLE)。不白屏——可重试当区数据装载。</p>
+            <button class="btn btn-primary btn-sm" id="c2-retry">重试</button>
+          </div>
+        </div>
+
+        <!-- archived:归档只读(会话列表抑制 + 概览只读) -->
+        <div data-state="archived" class="workbench-body" style="flex-direction:column;gap:12px">
+          <div class="empty-state" style="padding:32px 20px">
+            <div class="empty-art" aria-hidden="true">🗄️</div>
+            <p>已归档项目不再展示会话列表</p>
+            <p class="t-aux">workspace 保留,会话仍按项目分组(dsh 侧可查);恢复后重新展示。</p>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-md" id="arch-restore">恢复项目</button>
+              <button class="btn btn-ghost btn-md btn-danger-text" data-overlay-open="#delete-dialog">删除项目</button>
+            </div>
+          </div>
+          <div style="flex:1;opacity:.75;overflow:auto;padding:0 16px 16px">
+            <p class="rail-label" style="padding:8px 0">forge 文件区(只读)</p>
+            <div id="arch-features" class="card" style="overflow:hidden"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 任务抽屉(概览·任务 / 依赖图节点点击) -->
+  <div class="overlay" id="task-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <aside class="drawer">
+      <div id="drawer-content" style="display:flex;flex-direction:column;min-height:0;flex:1"></div>
+    </aside>
+  </div>
+
+  <!-- 删除确认(横幅/归档态入口) -->
+  <div class="overlay" id="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="del-title">
+    <div class="overlay__mask" data-overlay-close></div>
+    <div class="dialog">
+      <div class="dialog-header">
+        <h2 class="t-title" id="del-title">删除项目?</h2>
+        <button class="icon-btn" data-overlay-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="t-aux">删除将移除 dsh 侧 workspace 投影:会话按 dsh 语义退未分组(历史不删除);该项目全部拆出窗口将关闭。</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-ghost btn-md" data-overlay-close>取消</button>
+        <button class="btn btn-primary btn-md" style="background:var(--dsw-alias-state-error-primary);color:#fff" data-overlay-close
+                id="del-confirm">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* 本页专属:会话面板(视图 tab/面包屑/转录/输入)、轨迹台账、右栏 dockkit 页签模型 */
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var project = FORGE.project(FORGE.currentProjectId());
+      var activeId = null;
+      var timers = {};
+      var bannerDismissed = false;
+      var curView = 'conv';
+      var trajSel = -1;          /* 台账选中行 */
+      var trajCollapseRounds = false, trajCollapseCalls = false;
+
+      var convRoot = document.getElementById('conv-root');
+      var convBody = document.getElementById('conv-body');
+      var transcriptEl = document.getElementById('conv-transcript');
+      var crumbsEl = document.getElementById('conv-crumbs');
+      var actionsEl = document.getElementById('conv-actions');
+      var heroWork = document.getElementById('hero-work');
+      var input = document.getElementById('composer-input');
+      var sendBtn = document.getElementById('composer-send');
+      var statusEl = document.getElementById('composer-status');
+      var dock = document.getElementById('composer-dock');
+      var banner = document.getElementById('archived-banner');
+
+      function find(id) { return FORGE.findSession(id); }
+      function cur() { return activeId ? find(activeId) : null; }
+      function scrollBottom() { convBody.scrollTop = convBody.scrollHeight; }
+      function truncate(t, n) { t = t.replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; }
+
+      /* ---- 视图 tab(对话/轨迹) ---- */
+      function setView(v) {
+        curView = v;
+        convRoot.setAttribute('data-view', v);
+        document.querySelectorAll('[data-view-tab]').forEach(function (b) {
+          var on = b.getAttribute('data-view-tab') === v;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        if (v === 'traj') renderTraj();
+      }
+      document.querySelectorAll('[data-view-tab]').forEach(function (b) {
+        b.addEventListener('click', function () { setView(b.getAttribute('data-view-tab')); });
+      });
+
+      /* ---- 面包屑链(crumb 220;祖先从右侧截断;subagent 祖先 12px) ---- */
+      function renderCrumbs() {
+        var s = cur();
+        var html = '<button class="conv-crumb" data-crumb-root title="项目根">' + escHtml(project.name) + '</button>';
+        if (s) {
+          var chain = FORGE.chainOf(s.id);
+          chain.slice(0, -1).forEach(function (a) {
+            var sub = a.parentId ? ' conv-crumb-subagent' : '';
+            html += '<span class="conv-crumb-sep" aria-hidden="true">/</span>'
+              + '<button class="conv-crumb ellipsis' + sub + '" data-crumb-open="' + a.id + '" title="打开父会话">' + escHtml(a.title) + '</button>';
+          });
+          var isSub = !!s.parentId;
+          html += '<span class="conv-crumb-sep" aria-hidden="true">/</span>'
+            + '<span class="conv-crumb current ellipsis' + (isSub ? ' conv-crumb-subagent' : '') + '" title="' + escHtml(s.title) + '">' + escHtml(s.title) + '</span>';
+        }
+        crumbsEl.innerHTML = html;
+      }
+
+      /* ---- 标题行动作簇:⟞task + 运行态 ---- */
+      function renderActions() {
+        var s = cur();
+        if (!s) { actionsEl.innerHTML = ''; return; }
+        var html = '';
+        if (s.taskId) {
+          html += '<button class="pill is-button" data-task-link="' + s.taskId + '" title="task ' + s.taskId + ',点击打开任务抽屉">⟞ task ' + s.taskId + '</button>';
+        }
+        html += s.status === 'running'
+          ? '<span class="pill status-in-progress">● 运行中</span>'
+          : s.status === 'draft' ? '<span class="pill">待输入</span>' : '<span class="pill">已结束</span>';
+        actionsEl.innerHTML = html;
+      }
+
+      /* ---- 转录(工具行 DisclosureRow + 「查看」跳轨迹) ---- */
+      function renderTranscript() {
+        var s = cur();
+        if (!s || !s.msgs.length) { transcriptEl.innerHTML = ''; return; }
+        transcriptEl.innerHTML = s.msgs.map(function (m, i) {
+          if (m.role === 'user') {
+            return '<div class="conv-user-row"><div class="conv-user-bubble">' + escHtml(m.text) + '</div></div>';
+          }
+          if (m.role === 'tool') {
+            return '<div class="conv-tool"><span class="state-dot ' + (m.running ? 'ok breathing' : 'ok') + '" aria-hidden="true"></span>'
+              + '<span class="ellipsis" style="flex:1">' + escHtml(m.text) + '</span>'
+              + '<button class="btn btn-link btn-sm" data-traj-jump="' + i + '" title="在轨迹中查看">查看</button></div>';
+          }
+          return '<div class="conv-assistant"><span class="role">assistant' + (m.time ? ' · ' + m.time : '') + '</span>'
+            + '<div class="content">' + escHtml(m.text) + '</div></div>';
+        }).join('');
+      }
+
+      /* ---- 状态栏(统计双 pill + 上下文环) ---- */
+      function ringSvg(p) {
+        var C = 37.7, off = (C * (1 - p / 100)).toFixed(1);
+        return '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+          + '<circle cx="8" cy="8" r="6" fill="none" stroke="var(--dsw-alias-interactive-bg-hover)" stroke-width="2.5"/>'
+          + '<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="' + C
+          + '" stroke-dashoffset="' + off + '" transform="rotate(-90 8 8)" stroke-linecap="round"/></svg>';
+      }
+      function renderStatus() {
+        var s = cur();
+        var n = s ? s.msgs.length : 0;
+        var rounds = Math.max(1, Math.ceil(n / 3));
+        var steps = Math.max(1, n);
+        var ctx = Math.min(95, 38 + Math.round(n * 1.5));
+        statusEl.innerHTML =
+          '<span class="pill">◈ ' + rounds + ' 轮 ' + steps + ' 步 · 52 tok/s</span>'
+          + '<span class="pill">◈ 648K tok · 缓存命中 83%</span>'
+          + '<button class="ctx-ring" id="ctx-ring" title="上下文用量(点击看分解)">' + ringSvg(ctx) + ctx + '%</button>';
+        var ring = document.getElementById('ctx-ring');
+        if (ring) ring.addEventListener('click', function () {
+          protoToast('上下文分解:系统 8k · 历史 ' + Math.round(648 * ctx / 100) + 'K · 剩余 ~' + Math.max(4, Math.round(128 * (1 - ctx / 100))) + 'k(原型示意)');
+        });
+        dock.textContent = s && s.status === 'running' ? '运行中——可停止或排队发送' : '';
+      }
+
+      /* ---- 模拟回复(原型 canned) ---- */
+      function pickTool(q) { return /排查|降级|错误|失败/.test(q) ? '读取对账日志(进行中)' : '读取任务上下文(forge prompt get-by-task-id)'; }
+      function pickReply(q) {
+        if (/派发|任务/.test(q)) return '已接收派发。将按任务说明执行:先核对挂载点与上游组件契约,再注入 forge 增强层;关键节点回联任务(⟞)。';
+        if (/排查|降级|错误|失败/.test(q)) return '定位到降级触发路径:对账窗口内投影写入失败即降级,注册/改名/归档不受阻断。建议补偿:下次对账自动重试(设置页「重试投影」同源)。';
+        if (/评审|验收/.test(q)) return '评审结论:实现与 PRD C3 一致;两处建议——状态点优先级覆盖 subagent 运行中、展开态写入布局记忆。已汇总到评审记录。';
+        if (/spike|探索|布局/.test(q)) return 'spike 结论:右栏 dockkit 页签 + 收起归零 + 会话头座位展开钮与上游同构;知识区延后不阻塞 M4。';
+        return '收到。基于当前项目上下文(' + project.name + ' · 快照)继续;需要派发任务时经 forge prompt 全量注入。';
+      }
+
+      function renderArchivedMode() {
+        project = FORGE.project(project.id) || FORGE.project(FORGE.currentProjectId());
+        document.getElementById('del-title').textContent = '删除项目 ' + project.name + '?';
+        if (project.archived) {
+          protoSetState('c2', 'archived');
+          banner.hidden = bannerDismissed;
+        } else {
+          if (document.querySelector('[data-state-scope="c2"]').getAttribute('data-current') === 'archived') {
+            protoSetState('c2', 'default');
+          }
+          banner.hidden = true;
+        }
+        var arch = document.getElementById('arch-features');
+        if (arch) {
+          arch.innerHTML = FORGE.features(project.id).map(function (f) {
+            return '<div class="feature-row" style="cursor:not-allowed" onclick="protoToast(\'已归档:forge 文件区只读,任务详情可看,发起/阶段操作禁用\')">'
+              + '<span class="slug ellipsis">' + f.slug + '</span>'
+              + '<span class="pill">' + f.status + '</span>'
+              + '<span class="progress-text">' + f.done + '/' + f.total + '</span></div>';
+          }).join('');
+        }
+      }
+
+      function syncPhase() {
+        var s = cur();
+        var phase = (!s || s.status === 'draft') ? 'hero' : 'active';
+        convRoot.setAttribute('data-phase', phase);
+        var running = s && s.status === 'running';
+        sendBtn.classList.toggle('is-stop', !!running);
+        var label = running ? '停止(会话运行中;输入区有稿 = 排队发送)' : '发送';
+        sendBtn.setAttribute('aria-label', label);
+        sendBtn.title = label;
+        heroWork.innerHTML = '📁 ' + escHtml(project.workspace || project.path)
+          + ' <span class="pill" style="margin-left:6px" title="' + escHtml(project.path) + '">代码区</span>';
+        document.getElementById('hp-proj-name').textContent = project.name;
+      }
+
+      function refresh() {
+        renderArchivedMode();
+        renderCrumbs(); renderActions(); renderTranscript(); renderStatus();
+        syncPhase();
+        renderOverview();
+        renderDep();
+      }
+      FORGE.on(refresh);
+
+      /* ---- 会话开合(无会话 tab:激活即切换) ---- */
+      function activate(id) {
+        var s = find(id);
+        if (!s) return;
+        activeId = id;
+        window.__activeSessionId = id;
+        setView('conv');
+        refresh();
+        scrollBottom();
+        input.focus();
+      }
+      window.__openSession = function (id) {
+        var s = find(id);
+        if (!s) return;
+        if (s.status === 'draft') {
+          activeId = id;
+          window.__activeSessionId = id;
+          refresh();
+          input.focus();
+          return;
+        }
+        activate(id);
+      };
+      window.__newSession = function () {
+        /* 评审裁决(2026-09-25 第四批):未发送的新会话同时仅一个 —— 已存在时点击无效(no-op);
+           回到草稿走左栏行点击 */
+        if (FORGE.draftSession(project.id)) return;
+        var n = FORGE.newSession(project.id, null, '新会话');
+        activeId = n.id;
+        window.__activeSessionId = n.id;
+        setView('conv');
+        refresh();
+        input.focus();
+        protoToast('已新建会话(右栏收起,零页签;首次展开播种开始页)');
+      };
+
+      /* ---- 发送 / 停止 / 排队 ---- */
+      function send() {
+        var text = input.textContent.trim();
+        if (!text) return;
+        var s = cur();
+        if (!s || s.status === 'ended' || s.status === 'running') {
+          if (!s) { s = FORGE.newSession(project.id, null, '新会话'); activeId = s.id; window.__activeSessionId = s.id; }
+        }
+        var wasDraft = s.status === 'draft';
+        FORGE.appendMsg(s.id, { role: 'user', text: text, time: FORGE.now() });
+        var patch = { status: 'running' };
+        if (wasDraft) patch.title = truncate(text, 14);
+        FORGE.setSession(s.id, patch);
+        input.textContent = '';
+        refresh();
+        scrollBottom();
+        simulateReply(s.id, text);
+      }
+      function simulateReply(id, q) {
+        timers[id] = [
+          setTimeout(function () {
+            FORGE.appendMsg(id, { role: 'tool', text: pickTool(q), running: true, time: FORGE.now() });
+            scrollBottom();
+          }, 500),
+          setTimeout(function () {
+            FORGE.patchLastTool(id, false);
+            FORGE.appendMsg(id, { role: 'assistant', text: pickReply(q), time: FORGE.now() });
+            FORGE.setSession(id, { status: 'ended' });
+            scrollBottom();
+          }, 1900)
+        ];
+      }
+      function stop() {
+        var s = cur();
+        if (!s || s.status !== 'running') return;
+        (timers[s.id] || []).forEach(clearTimeout);
+        timers[s.id] = null;
+        FORGE.patchLastTool(s.id, false);
+        FORGE.setSession(s.id, { status: 'ended' });
+        protoToast('已停止');
+      }
+      sendBtn.addEventListener('click', function () {
+        var s = cur();
+        if (s && s.status === 'running') {
+          if (input.textContent.trim()) protoToast('已排队发送(运行结束后自动发出;原型示意)');
+          else stop();
+          return;
+        }
+        send();
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          var s = cur();
+          if (s && s.status === 'running') {
+            if (input.textContent.trim()) protoToast('已排队发送(运行结束后自动发出;原型示意)');
+            else protoToast('运行中——空稿点击主钮 = 停止');
+            return;
+          }
+          send();
+        }
+      });
+
+      /* ---- hero 相位选择器(dsh heroWorkspaceRow 同构):项目 ▾ / 模式 ▾(第五批:固定四选) ---- */
+      var heroMode = '标准模式';
+      var MODES = ['标准模式', 'PTC模式', '极简模式', '创建模式'];
+      document.getElementById('hp-project').addEventListener('click', function () {
+        protoMenu(this, FORGE.projects().filter(function (p) { return !p.archived; }).map(function (p) {
+          var on = p.id === project.id;
+          return '<button class="menu-item' + (on ? ' is-on' : '') + '" data-hp-proj="' + p.id + '">' + escHtml(p.name)
+            + (on ? '<span class="ck" style="margin-left:auto;color:var(--dsw-alias-link)">✓</span>' : '') + '</button>';
+        }).join(''));
+        document.querySelector('.menu').addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-hp-proj]');
+          if (!b) return;
+          protoMenuClose();
+          var pid = b.getAttribute('data-hp-proj');
+          if (pid !== project.id) location.href = 'project-home.html?p=' + pid + '&new=1';
+        });
+      });
+      document.getElementById('hp-mode').addEventListener('click', function () {
+        protoMenu(this, MODES.map(function (m) {
+          var on = m === heroMode;
+          return '<button class="menu-item' + (on ? ' is-on' : '') + '" data-hp-mode="' + escHtml(m) + '">' + m
+            + (on ? '<span class="ck" style="margin-left:auto;color:var(--dsw-alias-link)">✓</span>' : '') + '</button>';
+        }).join(''));
+        document.querySelector('.menu').addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-hp-mode]');
+          if (!b) return;
+          heroMode = b.getAttribute('data-hp-mode');
+          protoMenuClose();
+          document.getElementById('hp-mode-name').textContent = heroMode;
+          var toolsBtn = document.querySelector('.composer-tools .composer-model');
+          if (toolsBtn) toolsBtn.textContent = heroMode;
+          protoToast('模式:' + heroMode);
+        });
+      });
+
+      /* ---- 中间事件代理 ---- */
+      crumbsEl.addEventListener('click', function (e) {
+        var open = e.target.closest('[data-crumb-open]');
+        if (open) { activate(open.getAttribute('data-crumb-open')); return; }
+        if (e.target.closest('[data-crumb-root]')) protoToast('项目根:左栏切换项目 / 会话');
+      });
+      actionsEl.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-task-link]');
+        if (t) openTask(t.getAttribute('data-task-link'));
+      });
+      transcriptEl.addEventListener('click', function (e) {
+        var j = e.target.closest('[data-traj-jump]');
+        if (j) {
+          trajSel = parseInt(j.getAttribute('data-traj-jump'), 10);
+          setView('traj');
+          var row = document.querySelector('[data-traj-idx="' + trajSel + '"]');
+          if (row) row.scrollIntoView({ block: 'center' });
+        }
+      });
+
+      /* ---- 内容列宽拖拽(clamp 680–920;JS 覆盖下限 640,持久化) ---- */
+      (function () {
+        var saved = null;
+        try { saved = parseInt(localStorage.getItem('proto-conv-w'), 10); } catch (err) { /* 忽略 */ }
+        if (saved >= 640) convRoot.style.setProperty('--conv-col-w', saved + 'px');
+        function apply(px) {
+          var max = Math.min(920, convBody.clientWidth - 32);
+          px = Math.max(640, Math.min(max, px));
+          convRoot.style.setProperty('--conv-col-w', px + 'px');
+          return px;
+        }
+        [document.getElementById('col-l'), document.getElementById('col-r')].forEach(function (h) {
+          var dragging = false, startX = 0, startW = 0;
+          h.addEventListener('pointerdown', function (e) {
+            dragging = true; startX = e.clientX;
+            startW = document.querySelector('.conv-col').getBoundingClientRect().width;
+            h.setPointerCapture(e.pointerId);
+          });
+          h.addEventListener('pointermove', function (e) {
+            if (!dragging) return;
+            apply(startW + (e.clientX - startX) * 2); /* 居中列:双向 ×2 */
+          });
+          h.addEventListener('pointerup', function () {
+            if (!dragging) return;
+            dragging = false;
+            var w = Math.round(document.querySelector('.conv-col').getBoundingClientRect().width);
+            try { localStorage.setItem('proto-conv-w', String(w)); } catch (err) { /* 忽略 */ }
+            protoToast('内容列宽已记忆(' + w + 'px)');
+          });
+        });
+      })();
+
+      /* ---- 轨迹台账 ---- */
+      function trajRows() {
+        var s = cur();
+        var rows = [
+          { kind: '系统', body: 'dsh 引擎 · forge 模板注入' },
+          { kind: '上下文', body: '工作区上下文 · 快照注入(压缩前 68k)' },
+          { kind: '已压缩', body: '轮次 1–2 摘要压缩(-21k)' }
+        ];
+        var round = 0;
+        var msgs = s ? s.msgs : [];
+        msgs.forEach(function (m, i) {
+          if (m.role === 'user') {
+            round++;
+            rows.push({ kind: '● 第 ' + round + ' 轮', body: truncate(m.text, 46), isRound: true, run: s.status === 'running' && i === msgs.length - 1, idx: i });
+            rows.push({ kind: '用户', body: truncate(m.text, 80), idx: i });
+          } else if (m.role === 'assistant') {
+            rows.push({ kind: '助手', body: truncate(m.text, 80), idx: i });
+          } else {
+            rows.push({ kind: '工具', body: m.text + (m.running ? ' · 运行中' : ''), idx: i, isTool: true });
+            rows.push({ kind: '子工具', body: 'Grep pattern "conv-col" · 2 处命中', isTool: true });
+          }
+        });
+        if (!round) rows.push({ kind: '● 第 1 轮', body: '开始分析任务…', isRound: true, run: true });
+        return rows;
+      }
+      function renderTraj() {
+        /* 时间线(静态示意) */
+        document.getElementById('traj-timeline').innerHTML = [3, 6, 4, 9, 5, 3, 7, 4, 2, 8, 5, 3, 6, 4, 2, 5, 7, 3, 4, 6]
+          .map(function (h, i) { return '<i class="' + (i % 7 === 3 ? 'hi' : '') + '" style="height:' + h * 3 + 'px"></i>'; }).join('');
+
+        var rows = trajRows();
+        var html = rows.map(function (r, ri) {
+          var hide = (trajCollapseCalls && r.isTool && !r.isRound) || (trajCollapseRounds && !r.isRound);
+          var sel = r.idx !== undefined && r.idx === trajSel ? ' selected' : '';
+          return '<div class="traj-row' + (r.isRound ? ' is-round' : '') + (r.run ? ' run' : '') + sel + (hide ? ' is-hidden' : '')
+            + '" data-traj-ri="' + ri + '"' + (r.idx !== undefined ? ' data-traj-idx="' + r.idx + '"' : '')
+            + ' role="listitem" tabindex="0">'
+            + (r.isRound ? '<span class="bnd' + (r.run ? '' : '') + '" aria-hidden="true"></span>' : '')
+            + '<span class="kind">' + r.kind + '</span><span class="body ellipsis">' + escHtml(r.body) + '</span></div>';
+        }).join('');
+        document.getElementById('traj-ledger').innerHTML = html;
+        renderTrajDetail(rows[0]);
+      }
+      var detailTab = '概述';
+      function renderTrajDetail(row) {
+        row = row || { kind: '—', body: '—' };
+        var tabs = ['概述', '参数', '结果', '计时', '用量'];
+        document.getElementById('traj-detail-tabs').innerHTML = tabs.map(function (t) {
+          return '<button class="traj-tb' + (t === detailTab ? ' is-on' : '') + '" data-detail-tab="' + t + '">' + t + '</button>';
+        }).join('');
+        var body = '';
+        if (detailTab === '概述') body = '<h4>' + row.kind + '</h4><p>' + escHtml(row.body) + '</p>';
+        else if (detailTab === '参数') body = '<h4>参数</h4><pre>{\n  "path": "docs/features/dsh-forge-m4/ui/prototype/",\n  "encoding": "utf-8"\n}</pre>';
+        else if (detailTab === '结果') body = '<h4>结果</h4><pre>ok · 1.2k 字符 · 截断 0</pre>';
+        else if (detailTab === '计时') body = '<h4>计时</h4><p>排队 12ms · 执行 340ms · 总计 352ms</p>';
+        else body = '<h4>用量</h4><p>输入 2.1K tok(缓存命中 83%)· 输出 0.4K tok</p>';
+        document.getElementById('traj-detail-body').innerHTML = body;
+      }
+      document.getElementById('traj-ledger').addEventListener('click', function (e) {
+        var row = e.target.closest('[data-traj-ri]');
+        if (!row) return;
+        document.querySelectorAll('.traj-row.selected').forEach(function (r) { r.classList.remove('selected'); });
+        row.classList.add('selected');
+        var idxAttr = row.getAttribute('data-traj-idx');
+        trajSel = idxAttr !== null ? parseInt(idxAttr, 10) : -1;
+        renderTrajDetail(trajRows()[parseInt(row.getAttribute('data-traj-ri'), 10)]);
+      });
+      document.getElementById('traj-detail-tabs').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-detail-tab]');
+        if (!b) return;
+        detailTab = b.getAttribute('data-detail-tab');
+        renderTrajDetail(trajRows()[document.querySelector('.traj-row.selected') ? parseInt(document.querySelector('.traj-row.selected').getAttribute('data-traj-ri'), 10) : 0]);
+      });
+      document.getElementById('tb-rounds').addEventListener('click', function () {
+        trajCollapseRounds = !trajCollapseRounds;
+        this.classList.toggle('is-on', trajCollapseRounds);
+        this.setAttribute('aria-pressed', trajCollapseRounds);
+        renderTraj();
+      });
+      document.getElementById('tb-calls').addEventListener('click', function () {
+        trajCollapseCalls = !trajCollapseCalls;
+        this.classList.toggle('is-on', trajCollapseCalls);
+        this.setAttribute('aria-pressed', trajCollapseCalls);
+        renderTraj();
+      });
+      document.getElementById('tb-dur').addEventListener('click', function () {
+        this.classList.toggle('is-on');
+        protoToast('时长标注开关(原型示意)');
+      });
+      /* 详情面板宽拖(320–720) */
+      (function () {
+        var detail = document.getElementById('traj-detail');
+        var h = document.getElementById('traj-resize');
+        var dragging = false, startX = 0, startW = 0;
+        h.addEventListener('pointerdown', function (e) {
+          dragging = true; startX = e.clientX;
+          startW = detail.getBoundingClientRect().width;
+          h.setPointerCapture(e.pointerId);
+        });
+        h.addEventListener('pointermove', function (e) {
+          if (!dragging) return;
+          detail.style.width = Math.max(320, Math.min(720, startW - (e.clientX - startX))) + 'px';
+        });
+        h.addEventListener('pointerup', function () { dragging = false; });
+      })();
+
+      /* ================================================================
+         右侧栏:dockkit 页签模型(开始 = 不可关门页;卡片原位替换)
+         ================================================================ */
+      var rbWrap = document.getElementById('rb-wrap');
+      var chipsEl = document.getElementById('rb-chips');
+      var tabs = [{ id: 'guide', type: 'guide', label: '开始', closable: true }]; /* 第五批+1:初始 tab 可关闭 */
+      var activeTab = 'guide';
+      var ovTab = 'features';
+      var depFeature = null;
+      var depView = 'dag';       /* 依赖图模式:dag | lane(泳道·状态分组) */
+
+      function hasGuide() { return tabs.some(function (t) { return t.type === 'guide'; }); }
+      function activateRb(id) {
+        activeTab = id;
+        renderStrip();
+        renderPanels();
+      }
+      function openTab(tab) { /* 追加(去重:同类型同对象 = 激活既有) */
+        var exist = tabs.filter(function (t) { return t.id === tab.id; })[0];
+        if (exist) { activateRb(exist.id); return; }
+        tabs.push(tab);
+        activateRb(tab.id);
+      }
+      function openFromGuide(tab) { /* 卡片点击 = 原位替换开始页签 */
+        var gi = tabs.findIndex(function (t) { return t.type === 'guide'; });
+        if (gi >= 0) tabs[gi] = tab; else tabs.push(tab);
+        activateRb(tab.id);
+      }
+      function closeRb(id) {
+        var t = tabs.filter(function (x) { return x.id === id; })[0];
+        if (!t || !t.closable) return;
+        var i = tabs.indexOf(t);
+        tabs.splice(i, 1);
+        if (!tabs.length) { activeTab = 'guide'; renderStrip(); renderPanels(); return; } /* 全部关闭 → 自动展示开始页内容,但无 chip(评审裁决 2026-09-25 第七批) */
+        activateRb(tabs[Math.min(i, tabs.length - 1)].id);
+      }
+      function renderStrip() {
+        var html = '';
+        tabs.forEach(function (t, i) {
+          if (i > 0) {
+            var prevActive = tabs[i - 1].id === activeTab;
+            var meActive = t.id === activeTab;
+            html += '<span class="rb-hair' + (prevActive || meActive ? ' hide' : '') + '" aria-hidden="true"></span>';
+          }
+          var quiet = t.type === 'guide' ? ' is-quiet' : '';
+          var closable = t.closable ? ' closable' : '';
+          var act = t.id === activeTab ? ' active' : '';
+          var glyph = t.type === 'guide' ? '<span aria-hidden="true">◉</span>' : '';
+          html += '<button class="rb-chip' + quiet + closable + act + '" role="tab" aria-selected="' + (t.id === activeTab)
+            + '" data-rb-id="' + t.id + '" title="' + escHtml(t.label) + '">'
+            + glyph + '<span class="lb">' + escHtml(t.label) + '</span>'
+            + (t.closable ? '<span class="x" data-rb-close="' + t.id + '" role="button" aria-label="关闭 ' + escHtml(t.label) + '">×</span>' : '')
+            + '</button>';
+        });
+        /* ＋ 紧贴最右侧 tab(点击直接开开始页,无菜单);无任何 tab(chipless 开始页)时隐藏(第八批裁决) */
+        if (tabs.length) {
+          html += '<button class="rb-chip-plus" id="rb-plus" data-rb-plus aria-label="新 tab(开始页)" title="新 tab(开始页)">'
+            + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></button>';
+        }
+        chipsEl.innerHTML = html;
+      }
+      function renderPanels() {
+        document.querySelectorAll('[data-rb-panel]').forEach(function (p) {
+          p.classList.toggle('active', !!activeTab && p.getAttribute('data-rb-panel') === activeTab);
+        });
+        document.querySelectorAll('#rb-docs [data-rb-doc]').forEach(function (p) {
+          p.classList.toggle('active', !!activeTab && p.id === 'doc-' + activeTab);
+        });
+      }
+      chipsEl.addEventListener('click', function (e) {
+        var x = e.target.closest('[data-rb-close]');
+        if (x) { e.stopPropagation(); closeRb(x.getAttribute('data-rb-close')); return; }
+        var plus = e.target.closest('[data-rb-plus]');
+        if (plus) { e.stopPropagation(); openGuideTab(); return; }
+        var chip = e.target.closest('[data-rb-id]');
+        if (chip) activateRb(chip.getAttribute('data-rb-id'));
+      });
+      chipsEl.addEventListener('wheel', function (e) { /* 横滚 */
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { chipsEl.scrollLeft += e.deltaY; e.preventDefault(); }
+      }, { passive: false });
+      /* ＋(紧贴最右 tab):直接开/回「开始」页 tab —— 无下拉(第五批裁决) */
+      function openGuideTab() {
+        var g = tabs.filter(function (t) { return t.type === 'guide'; })[0];
+        if (g) { activateRb(g.id); return; }
+        tabs.push({ id: 'guide', type: 'guide', label: '开始', closable: true });
+        activateRb('guide');
+      }
+
+      /* 开始页卡片 */
+      document.querySelector('[data-rb-panel="guide"]').addEventListener('click', function (e) {
+        var chev = e.target.closest('#shell-chev');
+        if (chev) {
+          e.stopPropagation();
+          protoMenu(chev, FORGE.shells().map(function (s) {
+            return '<button class="menu-item" data-shell="' + escHtml(s) + '">' + escHtml(s) + '</button>';
+          }).join(''));
+          document.querySelector('.menu').addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-shell]');
+            if (!b) return;
+            protoMenuClose();
+            protoToast('新建终端:' + b.getAttribute('data-shell') + '(dsh 引擎能力,原型示意)');
+          });
+          return;
+        }
+        var card = e.target.closest('[data-guide-card]');
+        if (!card) return;
+        var kind = card.getAttribute('data-guide-card');
+        if (kind === 'overview') openFromGuide({ id: 'overview', type: 'overview', label: '项目概览', closable: true });
+        else if (kind === 'terminal') protoToast('新建终端:选择 Shell 后在会话工作区运行(原型示意)');
+        else protoToast('浏览器面板:浏览 HTTP(S) 网页(dsh 引擎能力,原型示意)');
+      });
+
+      /* ---- 概览 tab ---- */
+      function statusPill(f) {
+        return f.status === 'in-progress' ? 'pill status-in-progress'
+          : f.status === 'completed' ? 'pill status-completed' : 'pill';
+      }
+      function activeFeature() {
+        var f = FORGE.features(project.id).filter(function (x) { return x.status === 'in-progress'; })[0];
+        return f || FORGE.features(project.id)[0] || null;
+      }
+      function renderOverview() {
+        var running = FORGE.runningTasks(project.id);
+        var af = activeFeature();
+        document.getElementById('ov-title').textContent = project.name;
+        document.getElementById('ov-meta').innerHTML =
+          '<div class="row"><span class="k">工作区</span><span class="v ellipsis" title="' + escHtml(project.workspace || '') + '">' + escHtml(project.workspace || '—') + '</span></div>'
+          + '<div class="row"><span class="k">代码区</span><span class="v ellipsis" title="' + escHtml(project.path) + '">' + escHtml(project.path) + '</span></div>'
+          + '<div class="row"><span class="k">状态</span><span class="v">'
+          + (project.archived ? '⚠ 已归档'
+             : '活跃 ' + (af ? af.slug : '—') + (af ? ' · 任务 ' + af.done + '/' + af.total : '') + ' · 运行中 ' + running.length)
+          + '</span></div>';
+        var body = '';
+        if (ovTab === 'proposals') {
+          body = FORGE.proposals(project.id).map(function (pr) {
+            var open = !pr.collapsed;
+            var files = open ? pr.files.map(function (f) {
+              return '<div class="tree-row file" data-open-doc="' + f.docId + '" data-open-name="' + escHtml(f.name) + '" data-slug="' + escHtml(pr.slug) + '">'
+                + '<span class="caret"></span><span class="nm">' + escHtml(f.name) + '</span><span class="st">⟶ 开 tab</span></div>';
+            }).join('') : '';
+            return '<div class="tree-row dir' + (open ? ' is-open' : '') + '" data-prop-dir="' + escHtml(pr.slug) + '"><span class="caret">▸</span><span class="nm">' + escHtml(pr.slug) + '/</span>'
+              + '<span class="st">' + escHtml(pr.status) + '</span></div>' + files;
+          }).join('') || '<p class="t-aux" style="padding:8px">暂无提案</p>';
+        } else if (ovTab === 'features') {
+          body = FORGE.docTree(project.id).map(function (d) {
+            var f = FORGE.feature(d.slug);
+            var open = !d.collapsed;
+            var files = open ? d.files.map(function (fi) {
+              return '<div class="tree-row file" data-open-doc="' + fi.docId + '" data-open-name="' + escHtml(fi.name) + '" data-slug="' + escHtml(d.slug) + '">'
+                + '<span class="caret"></span><span class="nm">' + escHtml(fi.name) + '</span><span class="st">⟶ 开 tab</span></div>';
+            }).join('') : '';
+            var st = f ? f.status + ' ' + f.done + '/' + f.total : '';
+            return '<div class="tree-row dir' + (open ? ' is-open' : '') + '" data-tree-dir="' + escHtml(d.slug) + '"><span class="caret">▸</span><span class="nm">' + escHtml(d.slug) + '/</span>'
+              + '<span class="st">' + escHtml(st) + '</span></div>' + files;
+          }).join('') || '<p class="t-aux" style="padding:8px">暂无 feature</p>';
+        } else if (ovTab === 'tasks') {
+          var afSlug = af ? af.slug : '';
+          var execHtml = running.map(function (t) {
+            return '<div class="ov-taskrow" data-task-open="' + t.id + '"><span class="tid">' + t.id + '</span>'
+              + '<span class="nm ellipsis">' + escHtml(t.title) + '</span>'
+              + '<span class="state-dot ok breathing" aria-label="运行中"></span>'
+              + '<button class="btn btn-link btn-sm" data-goto-session="' + t.sessionId + '">⟞ 直达会话</button></div>';
+          }).join('');
+          var listHtml = (af ? FORGE.tasksOf(afSlug) : []).map(function (t) {
+            var run = FORGE.sessionsOfTask(t.id).some(function (s) {
+              return s.status === 'running' || FORGE.descendants(s.id).some(function (d) { return d.status === 'running'; });
+            });
+            return '<div class="ov-taskrow" data-task-open="' + t.id + '"><span class="tid">' + t.id + '</span>'
+              + '<span class="nm ellipsis">' + escHtml(t.title) + '</span>'
+              + (run ? '<span class="pill status-in-progress">● 运行中</span>'
+                 : t.status === 'completed' ? '<span class="pill status-completed">completed</span>'
+                 : '<span class="pill">' + t.status + '</span>') + '</div>';
+          }).join('');
+          body = '<div class="rb-dep-head" style="padding:4px 4px 8px"><span style="flex:1">全部任务 · ' + escHtml(afSlug) + '</span>'
+            + '<button class="btn btn-primary btn-sm" data-open-dep>依赖图</button></div>'
+            + '<p class="t-aux" style="padding:0 4px 4px">执行中(' + running.length + ')</p>' + (execHtml || '<p class="t-aux" style="padding:0 4px 8px">当前无运行中任务会话。</p>')
+            + '<p class="t-aux" style="padding:8px 4px 4px">任务列表</p>' + listHtml;
+        }
+        document.getElementById('ov-body').innerHTML = body;
+      }
+      document.querySelectorAll('[data-ov-tab]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          ovTab = b.getAttribute('data-ov-tab');
+          document.querySelectorAll('[data-ov-tab]').forEach(function (x) { x.classList.toggle('active', x === b); });
+          renderOverview();
+        });
+      });
+      document.getElementById('ov-body').addEventListener('click', function (e) {
+        var doc = e.target.closest('[data-open-doc]');
+        if (doc) { openDoc(doc.getAttribute('data-open-doc'), doc.getAttribute('data-open-name'), doc.getAttribute('data-slug')); return; }
+        var dep = e.target.closest('[data-open-dep]');
+        if (dep) { openTab({ id: 'dep', type: 'dep', label: '依赖图', closable: true }); return; }
+        var task = e.target.closest('[data-task-open]');
+        if (task) { e.stopPropagation(); openTask(task.getAttribute('data-task-open')); return; }
+        var go = e.target.closest('[data-goto-session]');
+        if (go) { activate(go.getAttribute('data-goto-session')); return; }
+      });
+      document.getElementById('ov-body').addEventListener('click', function (e) {
+        var dir = e.target.closest('[data-tree-dir]');
+        if (dir) {
+          var slug = dir.getAttribute('data-tree-dir');
+          FORGE.docTree(project.id).forEach(function (d) {
+            if (d.slug === slug) d.collapsed = !d.collapsed;
+          });
+          renderOverview();
+          return;
+        }
+        var prDir = e.target.closest('[data-prop-dir]');
+        if (prDir) {
+          var pslug = prDir.getAttribute('data-prop-dir');
+          FORGE.proposals(project.id).forEach(function (pr) {
+            if (pr.slug === pslug) pr.collapsed = !pr.collapsed;
+          });
+          renderOverview();
+        }
+      });
+
+      /* ---- 文档 tab(路径栏 h38 + ↻ + 只读正文;tab 名 = slug/产物名) ---- */
+      function openDoc(docId, fileName, slug) {
+        var d = FORGE.doc(docId);
+        if (!d) return;
+        var id = 'doc:' + docId;
+        /* forge 产物 tab 名统一 slug/产物名称(评审裁决 2026-09-25 第七批) */
+        var label = slug + '/' + fileName;
+        openTab({ id: id, type: 'doc', label: label, closable: true, docId: docId });
+        var host = document.getElementById('rb-docs');
+        var panel = document.getElementById('doc-' + CSS.escape(id));
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'rb-panel';
+          panel.id = 'doc-' + id;
+          panel.setAttribute('data-rb-doc', docId);
+          host.appendChild(panel);
+        }
+        var tab = tabs.filter(function (t) { return t.id === id; })[0];
+        if (tab) tab.label = label;
+        panel.innerHTML =
+          '<div class="rb-doc-path"><span aria-hidden="true">📄</span>'
+          + '<span class="p ellipsis" title="' + escHtml(d.path) + '">' + escHtml(d.path) + '</span>'
+          + '<button class="icon-btn" data-doc-reload aria-label="重新读取" title="重新读取">↻</button>'
+          + '<span class="t-aux">只读</span></div>'
+          + '<div class="rb-doc-body">' + escHtml(d.body).replace(/^# (.+)$/m, '<h1>$1</h1>').replace(/^## (.+)$/gm, '<h2>$2</h2>').replace(/\n/g, '<br>') + '</div>';
+        panel.querySelector('[data-doc-reload]').addEventListener('click', function () {
+          protoToast('已重新读取(原型示意)');
+        });
+        renderStrip();
+        renderPanels();
+      }
+
+      /* ---- 依赖图 tab(M2 tasks.html 同构;双模式:DAG 连线画布 / 泳道·状态分组) ---- */
+      function featPillCls(st) {
+        return st === 'in-progress' ? ' status-in-progress' : st === 'completed' ? ' status-completed' : '';
+      }
+      var LANES = [
+        { key: 'pending', label: 'pending' },
+        { key: 'in-progress', label: 'in_progress' },
+        { key: 'completed', label: 'completed' },
+        { key: 'blocked', label: 'blocked' },
+        { key: 'suspended', label: 'suspended' },
+        { key: 'skipped', label: 'skipped' },
+        { key: 'rejected', label: 'rejected' }
+      ];
+      function laneDotCls(st) {
+        if (st === 'in-progress') return 'ok breathing';
+        if (st === 'completed') return 'ok';
+        if (st === 'blocked') return 'error';
+        return '';
+      }
+      function isTaskRun(t) {
+        return FORGE.sessionsOfTask(t.id).some(function (s) {
+          return s.status === 'running' || FORGE.descendants(s.id).some(function (d) { return d.status === 'running'; });
+        });
+      }
+      function taskCardHtml(t, run, styleAttr) {
+        var dot = t.status === 'completed' ? 'ok' : run ? 'ok breathing' : '';
+        return '<div class="node-card"' + styleAttr + ' role="button" tabindex="0"'
+          + ' data-task-open="' + t.id + '"'
+          + ' aria-label="任务 ' + t.id + ' ' + escHtml(t.title) + ',状态 ' + t.status + (run ? ',会话运行中' : '') + '">'
+          + '<div class="node-title-row"><span class="state-dot ' + dot + '" role="img" aria-label="' + t.status + '"></span>'
+          + '<span class="node-title" title="' + escHtml(t.title) + '">' + escHtml(t.title) + '</span></div>'
+          + '<div class="node-meta"><span class="tid">' + t.id + '</span><span>' + t.status + '</span>'
+          + (run ? '<span class="pill status-in-progress">● 会话中</span>' : '') + '</div></div>';
+      }
+      function renderDep() {
+        var af = activeFeature();
+        if (!depFeature) depFeature = af ? af.slug : '';
+        /* 模式开关同步(DAG / 泳道图) */
+        document.querySelectorAll('[data-dep-view]').forEach(function (b) {
+          var on = b.getAttribute('data-dep-view') === depView;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        /* feature 名即下拉:当前 feature + 状态徽标(仅本项目可选项) */
+        var cur = FORGE.feature(depFeature);
+        document.getElementById('dep-switch').innerHTML = escHtml(depFeature)
+          + (cur ? '<span class="pill' + featPillCls(cur.status) + '" style="margin-left:6px">' + cur.status + ' ' + cur.done + '/' + cur.total + '</span>' : '')
+          + ' <span aria-hidden="true">▾</span>';
+        var ts = FORGE.tasksOf(depFeature);
+        if (!ts.length) {
+          document.getElementById('dep-body').innerHTML = '<p class="t-aux" style="padding:8px">该 feature 暂无任务</p>';
+          return;
+        }
+        /* ---- 模式二:泳道图(状态分组;M2 tasks.html board-cols 同构) ---- */
+        if (depView === 'lane') {
+          var laneHtml = LANES.map(function (l) {
+            var items = ts.filter(function (t) { return t.status === l.key; });
+            var cards = items.map(function (t) { return taskCardHtml(t, isTaskRun(t), ''); }).join('');
+            return '<div class="rb-lane"><div class="rb-lane-head">'
+              + '<span class="state-dot ' + laneDotCls(l.key) + '" aria-hidden="true"></span><span>' + l.label + '</span>'
+              + '<span class="pill" style="margin-left:auto">' + items.length + '</span></div>'
+              + '<div class="rb-lane-body">' + (cards || '<p class="rb-lane-empty">无此状态任务</p>') + '</div></div>';
+          }).join('');
+          document.getElementById('dep-body').innerHTML = '<div class="rb-lanes">' + laneHtml + '</div>'
+            + '<p class="t-aux" style="padding:6px 2px 0">泳道图:按任务状态分组(七态);点击节点 = 任务抽屉。</p>';
+          return;
+        }
+        /* ---- 模式一:DAG(SVG 箭头连线 + 绝对定位节点卡;blocker 在左) ---- */
+        var byId = {};
+        ts.forEach(function (t) { byId[t.id] = t; });
+        /* 结构化前置:deps 字符串中、位于本任务 id 首次出现之前的同 feature 任务 id */
+        function prereqs(t) {
+          var raw = String(t.deps || '');
+          var selfAt = raw.indexOf(t.id);
+          var out = [];
+          (raw.match(/\d+\.\d+\.\d+/g) || []).forEach(function (x) {
+            if (x === t.id || !byId[x] || out.indexOf(x) > -1) return;
+            if (selfAt < 0 || raw.indexOf(x) < selfAt) out.push(x);
+          });
+          return out;
+        }
+        var depth = {}, visiting = {};
+        function depthOf(id) {
+          if (depth[id] !== undefined) return depth[id];
+          if (visiting[id]) return 0; /* 环防御 */
+          visiting[id] = true;
+          var ps = prereqs(byId[id]);
+          var d = ps.length ? Math.max.apply(null, ps.map(function (p) { return depthOf(p); })) + 1 : 0;
+          visiting[id] = false;
+          depth[id] = d;
+          return d;
+        }
+        ts.forEach(function (t) { depthOf(t.id); });
+        /* 列内堆叠布局;列宽收窄使三级链在 720px 右栏默认完整可见,更窄走横向滚动 */
+        var cols = {};
+        ts.forEach(function (t) { (cols[depth[t.id]] = cols[depth[t.id]] || []).push(t); });
+        var NW = 200, NH = 58, GAP = 24;
+        var pos = {}, W = 0, H = 0;
+        Object.keys(cols).forEach(function (k) {
+          var c = cols[k];
+          var x = 16 + Number(k) * (NW + GAP);
+          c.forEach(function (t, i) { pos[t.id] = { x: x, y: 16 + i * (NH + 16) }; });
+          W = Math.max(W, x + NW + 16);
+          H = Math.max(H, 16 + c.length * (NH + 16) + 16);
+        });
+        var edges = '';
+        ts.forEach(function (t) {
+          prereqs(t).forEach(function (p) {
+            var a = pos[p], b = pos[t.id];
+            if (!a || !b) return;
+            edges += '<line x1="' + (a.x + NW) + '" y1="' + (a.y + NH / 2) + '" x2="' + b.x + '" y2="' + (b.y + NH / 2) + '" marker-end="url(#deparrow)"></line>';
+          });
+        });
+        var nodes = ts.map(function (t) {
+          var p = pos[t.id];
+          return taskCardHtml(t, isTaskRun(t), ' style="left:' + p.x + 'px;top:' + p.y + 'px"');
+        }).join('');
+        document.getElementById('dep-body').innerHTML = '<div class="dag-wrap"><div class="dag" style="width:' + W + 'px;height:' + H + 'px">'
+          + '<svg class="edges" aria-hidden="true"><defs>'
+          + '<marker id="deparrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">'
+          + '<path d="M0,0 L8,4 L0,8 z" fill="var(--dsw-alias-border-l3)"></path></marker></defs>'
+          + edges + '</svg>' + nodes + '</div></div>'
+          + '<p class="t-aux" style="padding:6px 2px 0">只读依赖图:blocker 在左,箭头指向被阻塞任务;点击节点 = 任务抽屉。</p>';
+      }
+      document.getElementById('dep-body').addEventListener('click', function (e) {
+        var n = e.target.closest('[data-task-open]');
+        if (n) openTask(n.getAttribute('data-task-open'));
+      });
+      document.getElementById('dep-switch').addEventListener('click', function () {
+        var feats = FORGE.features(project.id); /* 仅本项目 feature */
+        protoMenu(this, feats.map(function (f) {
+          return '<button class="menu-item" data-feat="' + escHtml(f.slug) + '">' + escHtml(f.slug)
+            + '<span class="pill' + featPillCls(f.status) + '" style="margin-left:auto">' + f.status + ' ' + f.done + '/' + f.total + '</span></button>';
+        }).join(''));
+        document.querySelector('.menu').addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-feat]');
+          if (!b) return;
+          depFeature = b.getAttribute('data-feat');
+          protoMenuClose();
+          renderDep();
+        });
+      });
+      document.querySelectorAll('[data-dep-view]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          depView = b.getAttribute('data-dep-view');
+          renderDep();
+        });
+      });
+
+      /* ---- 任务抽屉(⟞ pill / 概览·任务 / 依赖图节点) ---- */
+      function openTask(tid) {
+        var t = FORGE.task(tid);
+        if (!t) return;
+        var linked = FORGE.sessionsOfTask(tid);
+        var linkedHtml = linked.length
+          ? linked.map(function (s) {
+            return '<div class="session-item"><div class="session-row">'
+              + '<div class="session-main" data-goto-session="' + s.id + '" role="button" tabindex="0">'
+              + '<span class="session-title ellipsis" title="' + escHtml(s.title) + '">' + escHtml(s.title) + '</span>'
+              + '<span class="session-sub">' + s.updated + (s.status === 'running' ? ' · 运行中' : ' · 已结束') + '</span></div>'
+              + '<span class="pill' + (s.status === 'running' ? ' status-in-progress' : '') + '">' + (s.status === 'running' ? 'active' : 'ended') + '</span>'
+              + '</div></div>';
+          }).join('')
+          : '<div class="empty-state" style="padding:20px 0"><p>未挂接会话</p>'
+            + '<button class="btn btn-primary btn-sm" data-task-start="' + t.project + '">发起(M3 一键发起链)</button></div>';
+        document.getElementById('drawer-content').innerHTML =
+          '<div class="drawer-header"><div style="flex:1;min-width:0">'
+          + '<h2 class="t-title ellipsis" id="drawer-title" title="' + t.id + ' ' + escHtml(t.title) + '">' + t.id + ' ' + escHtml(t.title) + '</h2>'
+          + '<div style="display:flex;gap:8px;margin-top:4px"><span class="pill status-in-progress">' + t.status + '</span>'
+          + '<span class="t-aux">feature ' + t.feature + '</span></div></div>'
+          + '<button class="icon-btn" data-overlay-close aria-label="关闭">'
+          + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+          + '</button></div>'
+          + '<div class="drawer-body">'
+          + '<div class="drawer-section"><h4>描述</h4><p class="t-aux">' + escHtml(t.desc) + '</p></div>'
+          + '<div class="drawer-section"><h4>依赖链</h4><p class="t-aux t-code">' + escHtml(t.deps) + '</p></div>'
+          + '<div class="drawer-section"><h4>执行记录</h4><p class="t-aux">' + escHtml(t.record) + '</p></div>'
+          + '<div class="drawer-section"><h4>绑定会话(M4)</h4>' + linkedHtml + '</div>'
+          + '</div>';
+        protoOpenOverlay('#task-drawer');
+      }
+      document.getElementById('drawer-content').addEventListener('click', function (e) {
+        var go = e.target.closest('[data-goto-session]');
+        if (go) { protoCloseOverlay(document.getElementById('task-drawer')); activate(go.getAttribute('data-goto-session')); return; }
+        var st = e.target.closest('[data-task-start]');
+        if (st) { window.__newSession(); }
+      });
+
+      /* ================================================================
+         右栏:宽度(45% / 300–70%;中央保底 400,不足归零)/ 收起 / 全屏
+         ================================================================ */
+      function sidebarW() {
+        var sb = document.querySelector('.app-sidebar');
+        if (!sb) return 0;
+        return document.querySelector('.app-shell').classList.contains('is-sidebar-collapsed') ? 0 : (sb.getBoundingClientRect().width || 280);
+      }
+      function rbLimits() {
+        var vw = document.documentElement.clientWidth;
+        var maxAllowed = Math.min(vw * 0.7, vw - sidebarW() - 400); /* 中央保底 400 */
+        return { min: 300, max: Math.floor(maxAllowed), def: Math.max(300, Math.round(vw * 0.45)) };
+      }
+      function setRbW(px, silent) {
+        var L = rbLimits();
+        if (L.max < L.min) { setRbCollapsed(true); if (!silent) protoToast('中央区保底 400 不足——右栏轨道归零(源码同构)'); return; }
+        px = Math.max(L.min, Math.min(L.max, px));
+        /* 写自定义属性而非内联 width:内联 width 会压过 .is-collapsed 的 width:0(收起失效教训) */
+        rbWrap.style.setProperty('--rightbar-w', px + 'px');
+        if (!silent) protoToast('右侧栏宽度已记忆(' + px + 'px)');
+      }
+      function setRbCollapsed(c) {
+        rbWrap.classList.toggle('is-collapsed', c);
+        document.body.classList.toggle('rb-collapsed', c);
+        if (c) setRbFullscreen(false);
+        /* 面板钮为常显 toggle:提示语随态切换 */
+        var seat = document.getElementById('rb-corner-expand');
+        seat.setAttribute('aria-label', c ? '展开右侧栏' : '收起右侧栏');
+        seat.title = c ? '展开右侧栏' : '收起右侧栏';
+      }
+      function setRbFullscreen(on) {
+        rbWrap.classList.toggle('is-fullscreen', on);
+        /* 全屏 = 覆盖会话列:conv 轨道让位,右栏走 flex 撑满工作台 */
+        document.getElementById('split-root').classList.toggle('rb-fullscreen', on);
+        if (on) setRbCollapsed(false);
+        document.getElementById('rb-fullscreen').title = on ? '退出全屏' : '全屏(覆盖会话列)';
+      }
+      document.getElementById('rb-fullscreen').addEventListener('click', function () {
+        setRbFullscreen(!rbWrap.classList.contains('is-fullscreen'));
+      });
+      document.getElementById('rb-collapse').addEventListener('click', function () { setRbCollapsed(true); });
+      function expandRb() { /* 会话头面板钮(收起 → 展开) */
+        var L = rbLimits();
+        if (L.max < L.min) { protoToast('视口不足:右栏保持归零(<768 可全屏查看)'); setRbFullscreen(true); return; }
+        setRbCollapsed(false);
+      }
+      /* 面板钮 = 常显 toggle(收起 ↔ 展开;全屏态优先退出全屏) */
+      document.getElementById('rb-corner-expand').addEventListener('click', function () {
+        if (rbWrap.classList.contains('is-fullscreen')) { setRbFullscreen(false); return; }
+        if (rbWrap.classList.contains('is-collapsed')) expandRb();
+        else setRbCollapsed(true);
+      });
+      /* 头部 📁▾:在编辑器中打开工作区(dsh open-in-app 同构:文件资源管理器 / VS Code / IDEA / PyCharm) */
+      document.getElementById('conv-workspace').addEventListener('click', function () {
+        protoMenu(this, ['文件资源管理器', 'VS Code', 'IntelliJ IDEA', 'PyCharm'].map(function (ed) {
+          return '<button class="menu-item" data-editor="' + escHtml(ed) + '">' + escHtml(ed) + '</button>';
+        }).join(''));
+        document.querySelector('.menu').addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-editor]');
+          if (!b) return;
+          protoMenuClose();
+          protoToast('已在 ' + b.getAttribute('data-editor') + ' 中打开工作区(dsh 引擎能力,原型示意)');
+        });
+      });
+      (function () {
+        var h = document.getElementById('rb-resize');
+        var dragging = false, startX = 0, startW = 0;
+        h.addEventListener('pointerdown', function (e) {
+          dragging = true; startX = e.clientX;
+          startW = rbWrap.getBoundingClientRect().width;
+          h.setPointerCapture(e.pointerId);
+        });
+        h.addEventListener('pointermove', function (e) {
+          if (!dragging) return;
+          setRbW(startW - (e.clientX - startX), true);
+        });
+        h.addEventListener('pointerup', function () {
+          if (!dragging) return;
+          dragging = false;
+          if (!rbWrap.classList.contains('is-collapsed')) {
+            protoToast('右侧栏宽度已记忆(' + Math.round(rbWrap.getBoundingClientRect().width) + 'px)');
+          }
+        });
+      })();
+      window.addEventListener('resize', function () {
+        if (rbWrap.classList.contains('is-collapsed') || rbWrap.classList.contains('is-fullscreen')) return;
+        var L = rbLimits();
+        if (L.max < L.min) { setRbCollapsed(true); return; }
+        var w = rbWrap.getBoundingClientRect().width;
+        if (w > L.max || w < L.min) rbWrap.style.setProperty('--rightbar-w', Math.max(L.min, Math.min(L.max, w)) + 'px');
+      });
+
+      /* ---- 归档横幅 / 归档态入口 ---- */
+      document.getElementById('banner-close').addEventListener('click', function () {
+        bannerDismissed = true;
+        banner.hidden = true;
+      });
+      function doRestore() {
+        FORGE.archiveProject(project.id, false);
+        protoToast('已恢复(投影不变,会话仍按项目分组)');
+      }
+      document.getElementById('banner-restore').addEventListener('click', doRestore);
+      document.getElementById('arch-restore').addEventListener('click', doRestore);
+      document.getElementById('del-confirm').addEventListener('click', function () {
+        FORGE.deleteProject(project.id);
+        protoToast('已删除:主窗口返回项目列表,拆出窗口关闭');
+        setTimeout(function () { location.href = 'projects.html'; }, 400);
+      });
+      document.getElementById('c2-retry').addEventListener('click', function () {
+        protoSetState('c2', 'default');
+        protoToast('重试成功:快照恢复');
+      });
+
+      /* ---- 初始化:?p= 项目 / ?s= 深链会话 / ?new=1 新会话草稿;右栏播种「开始」 ---- */
+      /* 评审裁决(2026-09-25):右栏默认收起(轨道归零);展开经会话头座位 / hero 相位顶右浮钮 */
+      setRbCollapsed(true);
+      renderStrip();
+      if (params.get('new') === '1' && !project.archived) {
+        /* ?new=1 同样走单例:已有未发送草稿则复用 */
+        var d = FORGE.draftSession(project.id) || FORGE.newSession(project.id, null, '新会话');
+        activeId = d.id;
+      } else if (!project.archived) {
+        var sParam = params.get('s');
+        var seed = find(sParam);
+        if (!seed) {
+          var tops = FORGE.sessionsOf(project.id);
+          for (var i = 0; i < tops.length && !seed; i++) {
+            var kids = FORGE.childrenOf(tops[i].id);
+            seed = kids.filter(function (k) { return k.status === 'running'; })[0] || null;
+          }
+          if (!seed) seed = tops.filter(function (t) { return t.msgs.length; })[0] || tops[0] || null;
+        }
+        if (seed) activeId = seed.id;
+      }
+      window.__activeSessionId = activeId;
+      FORGE.emit(); /* 侧栏按激活态重渲染高亮 */
+      refresh();
+      renderStrip();
+      renderPanels();
+      scrollBottom();
+    })();
+  </script>
+</body>
+</html>
