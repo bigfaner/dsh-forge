@@ -101,9 +101,11 @@ function packPlugin(pluginDir, scratch) {
     throw new Error(`${pluginDir} has no built lib/index.js — run pnpm build:plugins first`)
   }
   // shell: true — pnpm is a .cmd shim on Windows and Node refuses to spawn
-  // those without a shell; the argument list is fixed constants (no untrusted
-  // input reaches this dev/CI-only build script).
-  const result = spawnSync('pnpm', ['pack', '--pack-destination', scratch], { cwd: pluginDir, shell: true, encoding: 'utf8' })
+  // those without a shell. The command is passed as ONE string (not an args
+  // array): array + shell:true trips DEP0190 (args concatenated unescaped).
+  // scratch is quoted against spaces in the temp path; no untrusted input
+  // reaches this dev/CI-only build script.
+  const result = spawnSync(`pnpm pack --pack-destination "${scratch}"`, { cwd: pluginDir, shell: true, encoding: 'utf8' })
   if (result.status !== 0) throw new Error(`pnpm pack failed in ${pluginDir}: ${(result.stderr ?? result.stdout ?? '').trim().slice(0, 500)}`)
   const produced = readdirSync(scratch).filter(name => name.endsWith('.tgz'))
   if (produced.length !== 1) throw new Error(`pnpm pack in ${pluginDir} produced ${String(produced.length)} tarballs (expected exactly 1)`)

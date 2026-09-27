@@ -44,6 +44,8 @@ packages/desktop-host-vendor/vendored/.closure-supplements/
 # content now — vendor/upstream.lock.json carries their sha256 — so they are
 # committed like src/; install-host-closure still re-copies them harmlessly.
 
+tmp/
+
 # host runtime residue (dsh profile root marker written when dev host runs from repo cwd)
 cordis.yml
 .claude/agent-memory/
