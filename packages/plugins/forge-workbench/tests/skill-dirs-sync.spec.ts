@@ -134,6 +134,7 @@ describe('task 5.7 syncSkillDirs — first write (AC1)', () => {
     const userDir = join(fx.profileDir, 'my-skills')
     const yaml = [
       '- id: skill-filesystem',
+      '  disabled: false',
       '  config:',
       '    customSkillDirs:',
       `      - '${userDir}'`,
@@ -154,6 +155,25 @@ describe('task 5.7 syncSkillDirs — first write (AC1)', () => {
 // ---------------------------------------------------------------------------
 
 describe('task 5.7 syncSkillDirs — drift repair (AC2/AC4)', () => {
+  it('flips a disabled skill-filesystem row back to enabled (web-app layer disable repair)', () => {
+    const fx = fixture()
+    const yaml = [
+      '- id: skill-filesystem',
+      '  disabled: true',
+      '  config:',
+      '    customSkillDirs:',
+      `      - '${fx.skillRoot}'`,
+      '',
+    ].join('\n')
+    writeFileSync(patchPath(fx), yaml)
+    const result = syncSkillDirs({ profileDir: fx.profileDir, pluginDir: fx.pluginDir })
+    expect(result.status).toBe('repaired')
+    expect(result.changes).toContain('managed row enabled (disabled: false ensured)')
+    const text = readPatch(fx)
+    expect(text).toContain('  disabled: false')
+    expect(text).not.toContain('disabled: true')
+  })
+
   it('re-adds the entry after the user removed it (user entries intact)', () => {
     const fx = fixture()
     const userDir = join(fx.profileDir, 'my-skills')

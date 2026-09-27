@@ -315,10 +315,36 @@ function managedRowBlock(skillRoot: string): string[] {
   return [
     MANAGED_ROW_COMMENT,
     `- id: ${SKILL_PROVIDER_ROW_ID}`,
+    `${' '.repeat(ROW_KEY_INDENT)}disabled: false`,
     `${' '.repeat(ROW_KEY_INDENT)}config:`,
     `${' '.repeat(LIST_KEY_INDENT)}customSkillDirs:`,
     `${' '.repeat(ENTRY_INDENT)}- ${quoteYamlString(skillRoot)}`,
   ]
+}
+
+/**
+ * 受管行启用保障(实链路修复,2026-09-27):组合树中 dsh-web-app 层会把
+ * `id: skill-filesystem` 行 patch 为 `disabled: true`(web 面禁本地 FS 扫描),
+ * 而 loader 的 patch 语义只覆盖显式携带的字段 —— 受管行必须自带
+ * `disabled: false` 才能在桌面宿主组合里把 provider 重新挂载起来。既有行
+ * 缺失该键 ⇒ 紧随 id 键行插入;携带非 false 值(含上游层写入的 true)⇒
+ * 原位改写;恒为 false ⇒ 不动。
+ */
+function ensureRowEnabled(row: readonly string[], keyIndent: number): { row: string[]; changed: boolean } {
+  for (const [index, line] of row.entries()) {
+    if (isBlankOrComment(line)) continue
+    if (indentOf(line) !== keyIndent) continue
+    if (keyEntry(line, 'disabled') === undefined) continue
+    if (lineBody(line).trim() === `disabled: ${'false'}`) return { row: [...row], changed: false }
+    const next = [...row]
+    next[index] = `${' '.repeat(keyIndent)}disabled: false`
+    return { row: next, changed: true }
+  }
+  // 插入位点 = 行内首个实体行之后(内联键形态即 id 行后;`-` 独行形态即
+  // 紧随 `-` 行)—— 绝不能落在 `config:` 与其子键之间(会截断嵌套块)。
+  const insertAfter = row.findIndex(line => !isBlankOrComment(line)) + 1
+  const next = [...row.slice(0, insertAfter), `${' '.repeat(keyIndent)}disabled: false`, ...row.slice(insertAfter)]
+  return { row: next, changed: true }
 }
 
 /**
@@ -359,14 +385,20 @@ function editRowEntries(
   installRoot: string,
   eol: string,
 ): PatchTextEdit {
-  const row = bodyLines.slice(rowStart, rowEnd)
+  const originalRow = bodyLines.slice(rowStart, rowEnd)
   // 行键缩进基准:项行内联键(`- id: x` ⇒ dash 段宽)或 `-` 独行后首个键行。
-  const itemLine = lineBody(row[0] ?? '')
+  const itemLine = lineBody(originalRow[0] ?? '')
   const dashMatch = /^- */u.exec(itemLine)
   const inline = dashMatch !== null && dashMatch[0].length < itemLine.trimEnd().length
   const keyIndent = inline
     ? dashMatch![0].length
-    : indentOf(row.slice(1).find(line => !isBlankOrComment(line)) ?? '')
+    : indentOf(originalRow.slice(1).find(line => !isBlankOrComment(line)) ?? '')
+
+  // 受管行启用保障(见 ensureRowEnabled):先行落入,后续区间手术均在
+  // 启用修正后的行上进行;变更说明由 enableChanges 汇入各返回路径。
+  const enabledFix = ensureRowEnabled(originalRow, keyIndent)
+  const row = enabledFix.row
+  const enableChanges = enabledFix.changed ? ['managed row enabled (disabled: false ensured)'] : []
 
   // config: 键行(与 id 键同级)。
   let configIndex = -1
@@ -397,7 +429,7 @@ function editRowEntries(
     ]
     const nextRow = [...row.slice(0, insertAt), ...addition, ...row.slice(insertAt)]
     const next = [...bodyLines.slice(0, rowStart), ...nextRow, ...bodyLines.slice(rowEnd)]
-    return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: ['customSkillDirs config inserted into the managed row'] }
+    return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: [...enableChanges, 'customSkillDirs config inserted into the managed row'] }
   }
 
   // customSkillDirs: 键行(config 子键,缩进 = keyIndent + 2)。
@@ -427,7 +459,7 @@ function editRowEntries(
     const insertAt = configIndex + 1
     const nextRow = [...row.slice(0, insertAt), ...addition, ...row.slice(insertAt)]
     const next = [...bodyLines.slice(0, rowStart), ...nextRow, ...bodyLines.slice(rowEnd)]
-    return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: ['customSkillDirs list created with the skill root entry'] }
+    return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: [...enableChanges, 'customSkillDirs list created with the skill root entry'] }
   }
 
   // 条目区间:listIndex 之后,缩进 > listKeyIndent 的 `- ` 项;区间内注释/
@@ -451,7 +483,11 @@ function editRowEntries(
   const parsedEntries = entryIndexes.map(index => unquoteYamlScalar(lineBody(row[index]!).replace(/^\s*-\s*/u, '')))
   const plan = planCustomSkillDirs(parsedEntries, skillRoot, installRoot)
 
-  if (!plan.changed) return { text: `${[...bodyLines].join(eol)}${eol}`, changed: false, createdRow: false, changes: [] }
+  if (!plan.changed) {
+    if (!enabledFix.changed) return { text: `${[...bodyLines].join(eol)}${eol}`, changed: false, createdRow: false, changes: [] }
+    const enabledOnly = [...bodyLines.slice(0, rowStart), ...row, ...bodyLines.slice(rowEnd)]
+    return { text: `${enabledOnly.join(eol)}${eol}`, changed: true, createdRow: false, changes: enableChanges }
+  }
 
   // 重建条目区间:注释/空行与保留项原行原序回放(用户条目字节保真);删除项
   // (陈旧受管/重复技能根)剔除;技能根缺位时以规范形态追加到区间尾部。
@@ -469,7 +505,7 @@ function editRowEntries(
 
   const nextRow = [...row.slice(0, listIndex + 1), ...rebuilt, ...row.slice(regionEnd)]
   const next = [...bodyLines.slice(0, rowStart), ...nextRow, ...bodyLines.slice(rowEnd)]
-  return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: plan.changes }
+  return { text: `${next.join(eol)}${eol}`, changed: true, createdRow: false, changes: [...enableChanges, ...plan.changes] }
 }
 
 // ---------------------------------------------------------------------------
