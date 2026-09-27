@@ -13,7 +13,7 @@ feature: "dsh-forge-m4"
 
 ## UI Scope
 
-M4 全面 IA 重构的全部 UI 面:项目工作台三区容器页(新,**启动首屏**;项目枚举/切换/归档并入左栏全项目树,独立项目列表页裁撤 —— 2026-09-27 裁决)、代码区会话列表与 subagent 归拢(增强)、feature 阶段感知视图(增强)、任务详情绑定会话反查(增强)、subagent 会话任务元数据(增强)、三区位置选择器(增强)、项目设置投影与归档(增强)、分屏(新)、多窗口(新)。
+M4 全面 IA 重构的全部 UI 面:项目工作台三区容器页(新,**启动首屏**;项目枚举/切换/归档并入左栏全项目树,独立项目列表页裁撤 —— 2026-09-27 裁决)、代码区会话列表与 subagent 归拢(增强)、任务详情绑定会话反查(增强,**对齐现有任务看板 dock 抽屉形态**)、subagent 会话任务元数据(增强)、三区位置选择器(增强)、项目设置投影与归档(增强)、分屏(新)、多窗口(新)。feature 阶段感知视图(增强)已裁撤(2026-09-27 裁决 #27)。
 
 ## Navigation Architecture
 
@@ -30,8 +30,7 @@ M4 全面 IA 重构的全部 UI 面:项目工作台三区容器页(新,**启动�
 
 | Page | Entry Point (UF# or action) | Return Target |
 |------|-----------------------------|---------------|
-| feature 视图 | UF2 forge 文件区 feature 列表项点击 | 项目工作台 |
-| 任务详情 | UF4 任务面板任务点击(面板/抽屉形态,ui-design 定) | feature 视图 |
+| 任务详情 dock | 任务看板任务行点击(现有右缘 dock 抽屉,M2 UF3 同构) | 任务看板 |
 | 项目设置 | UF2 工作台头部入口 | 项目工作台 |
 | 添加项目确认卡 | 工作台左栏 ＋ / 工作台空态(无项目) | 当前页(原位弹卡,不跳页) |
 | 独立窗口(多窗口) | UF9/UF10「拆出为窗口」 | 拆出来源视图 |
@@ -180,72 +179,37 @@ M4 全面 IA 重构的全部 UI 面:项目工作台三区容器页(新,**启动�
 
 ---
 
-## UI Function 4: feature 视图(阶段感知)
+## UI Function 4: feature 视图(阶段感知)【2026-09-27 裁决 #27 裁撤】
 
-### Placement
-
-- **Mode**: existing-page
-- **Target Page**: /p/:projectId(forge 文件区主视图)
-- **Position**: forge 文件区默认视图;feature 列表 → 单 feature 展开
-
-### Description
-
-以 feature 为组织中心:任务面板从属 feature;feature 视图按阶段(prd/design/tasks/in-progress/completed)呈现重点信息矩阵;执行阶段突出正在执行的任务。
-
-### User Interaction Flow
-
-进入 forge 文件区 → feature 列表(名称/阶段/进度)→ 打开 feature → 按当前阶段渲染重点信息(in-progress:执行进度 + 正在执行的任务卡片)→ 点击执行中任务 → 打开其 subagent 会话(UF6;无 subagent 时开顶层会话)→ 任务面板内点击其他任务进入任务详情(UF5)。
-
-### Data Requirements
-
-| Field | Type | Source | Notes |
-|-------|------|--------|-------|
-| feature 列表 | list | feature_snapshot | slug/阶段/进度 |
-| 阶段重点信息 | matrix | PRD 必答⑦矩阵 | 按阶段渲染 |
-| 正在执行的任务 | list | in_progress × active 挂接(判定=PRD 裁决③) | 突出卡片 |
-| 未挂接标注 | flag | in_progress 且无 active 挂接 | 「未挂接会话」 |
-| blocked/suspended 提醒 | badge | task_snapshot | in-progress 阶段 |
-| 阶段资产面板 | panel | M3 阶段资产(收纳) | 功能零缩水 |
-
-### States
-
-| State | Display | Trigger |
-|-------|---------|---------|
-| populated(按阶段) | 阶段矩阵对应内容 | 正常 |
-| executing-focus | 执行进度 + 执行中任务卡片 | in-progress 且有执行中任务 |
-| empty | 「创建第一个 feature」引导 | 无 feature |
-| loading | 骨架屏 | 加载 |
-
-### Validation Rules
-
-- 任务面板必须处于 feature 上下文内(从属断言,SC2)
-- 阶段判定透传 manifest 词表,不引入新状态词
-- 点击执行中任务的打开路径不得多于 1 次点击(SC7/SC8)
+M4 不做 feature 阶段感知增强。处置:①任务面板保持 **M2/M3 任务看板独立视图**(不从属 feature,数据面/组件契约零变更);②feature 浏览 = 工作台右栏「项目概览 → feature 子 tab」(M3 既有面收纳,零缩水);③manifest 阶段词表与 M3 阶段门为既有能力(不动 M3);④原「阶段重点信息矩阵 / 执行态聚焦」设计废止,执行中任务 → subagent 会话通路由 UF5 任务详情 dock 承载(SC7)。原节内容(Placement/Flow/Data/States/Validation)全部废止,编号保留以维持 UF 追溯。
 
 ---
 
-## UI Function 5: 任务详情·绑定会话反查(增强)
+## UI Function 5: 任务详情·绑定会话反查(增强,对齐现有 dock 抽屉)
+
+> 2026-09-27 裁决 #27:**形态对齐现有实现** —— M2/M3 任务看板右缘 dock(`TaskDetailPanel`,M2 UF3)同构:右缘 `min(440px, 45vw)`、bg-layer-2 左边界、滑入 0.2s、z100、**无遮罩**(看板保持可交互)、焦点陷阱(Esc/✕/外点关闭,焦点归还触发元素)。M4 不新建面板/不做全屏工作场,增强全部落在该 dock 既有「挂接历史」节内。
 
 ### Placement
 
-- **Mode**: existing-page
-- **Target Page**: /p/:projectId(forge 文件区,任务面板内面板/抽屉)
-- **Position**: M2/M3 任务详情扩展:新增「绑定会话」区
+- **Mode**: existing(M2/M3 TaskDetailPanel dock 增强,非新视图)
+- **Target Page**: 任务看板(M2/M3 既有独立视图)右缘 dock
+- **Position**: 现有四手风琴节(描述/依赖链/执行记录/挂接历史)的「挂接历史」节扩展
 
 ### Description
 
-任务详情在既有字段(描述/依赖/执行记录)基础上,新增绑定会话区:挂接历史(active/ended)+ 执行 subagent 会话标识 + 一键打开。
+任务详情 dock 在既有内容(状态 pill/key/worktree 徽标/描述/依赖链/执行记录/挂接历史/派发执行主钮)基础上,增强「挂接历史」节:执行 subagent 会话标识(血缘推断)+ 一键打开 + 未挂接发起。
 
 ### User Interaction Flow
 
-打开任务详情 → 绑定会话区呈现挂接历史(新→旧)→ active 行展开其血缘内 subagent 执行会话(任务 id+title 命名)→ 点击会话条目打开(顶层走 session-focus;subagent 走 SubagentAddress)→ ended 行可展开查看历史。
+任务看板点击任务行 → 右缘 dock 滑入(切换任务原地换内容,无闪烁)→ 挂接历史节呈现(active/ended,新→旧)→ active 行展开其血缘内 subagent 执行会话(任务 id+title 命名)→ 点击会话条目打开(顶层走 session-focus;subagent 走 SubagentAddress)→ ended 行可展开查看历史。
 
 ### Data Requirements
 
 | Field | Type | Source | Notes |
 |-------|------|--------|-------|
-| 挂接历史 | list | session_links(含 ended) | 新→旧 |
+| 挂接历史 | list | session_links(含 ended) | 新→旧(M2 既有) |
 | 执行 subagent | list | 血缘推断(active 顶层会话后代) | 运行时计算 |
+| 会话运行中徽标 | flag | active 挂接存在 | dock 头部(M3 既有) |
 | 打开动作 | action | session-focus / SubagentAddress | 通道对账归 tech-design |
 | 任务元数据回显 | object | task_snapshot | 供 UF6 共用 |
 
@@ -256,11 +220,14 @@ M4 全面 IA 重构的全部 UI 面:项目工作台三区容器页(新,**启动�
 | populated | 挂接历史 + 会话条目 | 有挂接 |
 | no-link | 「未挂接会话」+ 发起入口 | 无 active 挂接 |
 | inference-degraded | 仅顶层会话,血缘标注不可用 | 推断超时/失败 |
+| open-failed | 错误提示「会话不存在或已清理」 | 打开目标缺失 |
 
 ### Validation Rules
 
+- 形态与现有 dock 同构断言:右缘滑入、无遮罩、看板保持可操作、Esc/✕/外点关闭(SC7 附带)
 - 挂接历史完整呈现 ended 行(不删行语义,继承 M2)
 - 打开失败(会话已不存在)→ 明确错误提示,不静默
+- 任务→会话打开路径 ≤1 次点击(SC7)
 
 ---
 
@@ -278,7 +245,7 @@ subagent 会话打开时,呈现所执行任务的元数据(任务号/标题/状�
 
 ### User Interaction Flow
 
-从 UF4/UF5/UF3 任一入口打开 subagent 会话 → 视图头部呈现任务元数据条(任务号+标题+状态)→ 点击元数据条跳回任务详情(UF5,双向互通)。
+从 UF5/UF3 任一入口打开 subagent 会话 → 视图头部呈现任务元数据条(任务号+标题+状态)→ 点击元数据条跳回任务详情(UF5,双向互通)。
 
 ### Data Requirements
 
@@ -470,7 +437,7 @@ pane 菜单「拆出为窗口」→ 视图迁入新窗口 → 主窗口与独立
 
 | Page | Type | UI Functions | Position Notes |
 |------|------|-------------|----------------|
-| /p/:projectId(项目工作台) | new | UF1, UF2, UF3, UF4, UF5, UF9, UF10 | **启动首屏**(2026-09-27 裁决;恢复上次活跃项目,无项目 → 空态);三区容器宿主页(左栏项目树 = 项目枚举/切换/归档 UF1 / 中间 dsh 会话面板 / 右栏 dockkit 页签;2026-09-25 定形);独立项目列表页裁撤 |
+| /p/:projectId(项目工作台) | new | UF1, UF2, UF3, UF5, UF9, UF10 | **启动首屏**(2026-09-27 裁决;恢复上次活跃项目,无项目 → 空态);三区容器宿主页(左栏项目树 = 项目枚举/切换/归档 UF1 / 中间 dsh 会话面板 / 右栏 dockkit 页签;2026-09-25 定形);独立项目列表页裁撤;任务看板 = M2/M3 既有独立视图(UF4 裁撤 #27,任务详情 dock 承载 UF5) |
 | /p/:projectId/settings(项目设置) | new | UF7, UF8 | 工作台二级页 |
 | 添加项目确认卡(增强) | existing(M2 UF1 演进) | UF7 | 工作台左栏 ＋ / 工作台空态(原位弹卡,唯一入口) |
 | subagent 会话视图(dsh 原生,注入) | existing | UF6 | 代码区会话视图内 |

@@ -33,7 +33,7 @@ status: Draft
 
 缓动 `cubic-bezier(0.4,0,0.2,1)`,时长 0.1/0.2/0.3s;Button 胶囊(md h36 r18 / sm h28 r14);Dialog r24 + mask + blur(2px);Menu 卡 r20 pad4;`corner-shape: superellipse(1.5)`(@supports 守卫)。
 
-**M4 声明扩展(DESIGN.md 无先例;采纳前以本文为准,后续回写 DESIGN.md)**:内容卡 r12(C4 执行中卡、C6 元数据条——圆角层级介于控件 r14 与浮层容器 r24 之间);进度条端帽 r3(h6 之半,端部全圆观感);focus 可见环 2px(见「可访问性基线」);归档卡降透明 .6(弱化呈现而非禁用,介于 Button 禁用 .4 与全饱和之间);警示色底 6% 透明横幅(C2/C8 归档态,透明度层级对齐 interactive-bg-hover 惯例)。
+**M4 声明扩展(DESIGN.md 无先例;采纳前以本文为准,后续回写 DESIGN.md)**:内容卡 r12(C6 元数据条——圆角层级介于控件 r14 与浮层容器 r24 之间);进度条端帽 r3(h6 之半,端部全圆观感);focus 可见环 2px(见「可访问性基线」);归档卡降透明 .6(弱化呈现而非禁用,介于 Button 禁用 .4 与全饱和之间);警示色底 6% 透明横幅(C2/C8 归档态,透明度层级对齐 interactive-bg-hover 惯例)。
 
 ### 组件复用先例(自研前核对)
 
@@ -44,7 +44,7 @@ status: Draft
 - **键盘模型**:Tab/Shift+Tab 遍历交互件(卡片/列表行/按钮/分隔条);Enter/Space 激活(分隔条除外,见下);树/列表内 ↑/↓ 移动;Esc 关闭当前浮层或返回(见各组件 Interactions)。C9 分隔条 = 连续操作件(slider 语义,`role="separator"` + `aria-valuenow`=当前百分比):聚焦后 ←/→ 调比例 ±2%、Shift+←/→ ±10%、Home/End 复位 50/50,钳制同指针拖拽(30%–70%);Enter/Space 对分隔条无激活语义。
 - **焦点管理**:C5 抽屉、C7 向导、C8 确认 Dialog 打开时焦点移入并圈闭(focus trap),关闭(Esc/关闭钮/完成)后焦点还原到触发元素;浮层语义 `role="dialog"` + `aria-modal`。
 - **focus-visible**:全部交互件显示 2px 可见环(link 色,offset 2px;声明扩展,见「动效与几何」)。
-- **对比度**:12/18 状态色小字(C7 行内错误文案、C8 状态/偏差文字、C4 次文字进度等)在亮暗双主题逐处验证对比度 ≥4.5:1(状态别名随主题切换取值);任一处不达标即改用「状态色 StateDot/图标 + label-primary 文字」组合,不以裸状态色小字交付。
+- **对比度**:12/18 状态色小字(C7 行内错误文案、C8 状态/偏差文字等)在亮暗双主题逐处验证对比度 ≥4.5:1(状态别名随主题切换取值);任一处不达标即改用「状态色 StateDot/图标 + label-primary 文字」组合,不以裸状态色小字交付。
 - **非悬停路径健康**:StateDot 不裸靠颜色,一律伴随 12/18 文字状态词(正常/警示)或 `aria-label`;C1 项目卡聚焦即读出「代码区 正常 / 文件区 异常(<原因>)」,路径详情不依赖 hover。
 - **异步播报**:toast 文案、C3 计数徽标变化、任务状态变更写入全局 `aria-live="polite"` 播报区;骨架容器标 `aria-busy`。
 - **命中区**:交互件可命中区 ≥28×28(对齐 Dialog 关闭钮)。
@@ -52,7 +52,7 @@ status: Draft
 ### 文本溢出与规模基线
 
 - 长字符串(项目名 / feature slug / 任务 title / subagent 名称=任务 id+title)单行省略号截断,不换行、不撑高固定行高(h64/h120/h40);完整内容经 hover/focus tooltip(HoverCard 先例)呈现;任务行内 key(等宽字体)完整保留,仅 title 截断。
-- C4 任务面板 >50 行启用窗口化渲染(仅挂载可视区 ±10 行),≤500 任务规模滚动不卡顿;pane 拖拽边界见 C9。
+- 任务看板(M2/M3 既有独立视图)的列表渲染契约 M4 不变;工作台 pane 拖拽边界见 C9。
 
 ## Navigation & View Keys(设计层定形)
 
@@ -61,14 +61,14 @@ status: Draft
 | 视图键 | 承载 | 槽位 | 迁移来源(M2/M3) |
 |--------|------|------|------------------|
 | ~~`projects`~~ | ~~项目列表(C1)~~ **已裁撤**(2026-09-27 裁决:启动首屏 = `project`;项目枚举/切换/归档 = C3 左栏全项目树) | — | workbench/overview(入口地位由工作台左栏替代) |
-| `project` | 项目工作台三区容器(C2,**启动首屏**;内含 C3/C4) | main(root scope) | workbench/tasks、workbench/features(收纳) |
+| `project` | 项目工作台三区容器(C2,**启动首屏**;内含 C3;任务看板 = M2/M3 既有独立视图) | main(root scope) | workbench/tasks、workbench/features(收纳) |
 | `project/settings` | 项目设置(C7/C8) | main(工作台二级) | M2/M3 设置面演进 |
 | `settings` | 壳级设置(继承 M1,非 M4 新增面;PRD 主导航 #2) | main(root scope) | 既有 M1,键登记对齐 |
 | 上游原生视图(会话等) | 代码区深链 | 上游 sidebar + `selectPanel` | 既有,不变 |
 
 - 页内区切换(代码区 / forge 文件区 / 知识区扩展位)= 工作台页内 tab 状态,**不进全局视图键**;知识区扩展位 M4 仅在页内导航呈现禁用态说明(零空占位)。
-- forge 文件区内部形态(feature 列表态 / feature 展开态 / 提案板态)= 该 pane 内状态,**不进全局视图键**;提案板 = M3 功能零缩水收纳,容器 = forge 文件区 pane(见 C4)。
-- feature 选中态、任务详情开合 = 工作台内共享状态;添加项目确认卡 = 工作台内对话框流(左栏 ＋ / 空态,唯一入口;原 `projects` 视图内对话框流随视图裁撤)。
+- forge 文件区内部形态(feature 列表态 / 提案板态)= 右栏概览子 tab 内状态,**不进全局视图键**;提案板 = M3 功能零缩水收纳,容器 = 右栏项目概览子 tab。
+- 任务详情 dock 开合 = 任务看板内状态;feature 选中态 = 右栏概览子 tab 内状态;添加项目确认卡 = 工作台内对话框流(左栏 ＋ / 空态,唯一入口;原 `projects` 视图内对话框流随视图裁撤)。
 - sidebar 模型全视图统一:`sidebar.panellist` 注册「项目」(首项,M4)与「设置」(`settings`,M1 既有项);`project` 视图承载 panellist,无视图专属注入;项目名与切换入口唯一位于工作台头(C2),sidebar 不注入项目名区。
 - 多窗口(C10)= 壳层窗口能力,不经视图键;拆出视图回主窗口按原键恢复。
 - 孤儿视图清零:原 `workbench/*` 三键由上表替代,`settings`(M1 既有)同步登记,无游离键。
@@ -264,9 +264,11 @@ project 视图
 
 ---
 
-## Component C4: forge 文件区·feature 视图(UF4)
+## Component C4: forge 文件区·feature 视图(UF4)【2026-09-27 裁决 #27 裁撤】
 
-### Placement
+> **本组件设计废止**:M4 不做 feature 阶段感知视图增强。处置:①任务面板保持 M2/M3 任务看板独立视图(不从属 feature);②feature 浏览 = 工作台右栏「项目概览 → feature 子 tab」(M3 既有面,零缩水);③manifest 阶段词表与 M3 阶段门为既有能力(不动 M3);④执行中任务 → subagent 会话通路移交 C5 任务详情 dock。本节余文保留为历史口径参考,不再是实现权威。
+
+### Placement(废止)
 
 - **Mode**: existing-page(M3 feature 视图演进的收纳重组)
 - **Target**: `project` 视图·forge 文件区 pane
@@ -335,19 +337,22 @@ forge 文件区
 
 ## Component C5: 任务详情·绑定会话面板(UF5)
 
+> 2026-09-27 裁决 #27:**形态对齐现有实现** —— 与 M2/M3 任务看板右缘 dock(`TaskDetailPanel`)同构:右缘 `min(440px, 45vw)`、bg-layer-2 左边界、滑入 0.2s、z100、**无遮罩**(看板保持可交互)、焦点陷阱(Esc/✕/外点关闭,焦点归还触发元素);任务切换原地换内容(无闪烁)。M4 增强全部落在该 dock 既有「挂接历史」节内,不新建面板。
+
 ### Placement
 
-- **Mode**: existing-page(M2/M3 任务详情增强)
-- **Target**: `project` 视图·forge 文件区(C4 内抽屉)
-- **Position**: 右侧抽屉(w 400,自右滑入;窄屏(<1024)全宽)
+- **Mode**: existing(M2/M3 TaskDetailPanel dock 增强,非新视图)
+- **Target**: 任务看板(M2/M3 既有独立视图)右缘 dock
+- **Position**: 现有四手风琴节(描述/依赖链/执行记录/挂接历史)的「挂接历史」节扩展
 
 ### Layout Structure
 
 ```
-任务详情抽屉
-├─ 头:任务 key+title(16/24)+ 状态 Pill + 关闭钮 28×28 r8
+任务详情 dock(现有形态)
+├─ 头:任务 key+title(16/24)+ 状态 Pill + 会话运行中徽标 + 关闭钮
+├─ 派发执行主钮(M3 编排面,既有)
 ├─ [既有区,M2/M3 保持]:描述原文 / 依赖链 / 执行记录(功能零缩水)
-└─ [新增] 绑定会话区:
+└─ [增强] 挂接历史节:
     ├─ 挂接历史列表(新→旧):行 = 会话标题 + active/ended Pill + 时间
     │   行展开(active 与 ended 行均可;ended 行展开 = 查看历史,PRD UF5):血缘后代列表(同 C3 展开态样式)→ subagent 条目(名称=任务 id+title;取数同血缘索引,ended 为历史快照)
     └─ 行尾 [打开] ghost(sm):顶层 → session-focus;subagent → SubagentAddress
@@ -357,7 +362,7 @@ forge 文件区
 
 | State | Visual | Behavior |
 |-------|--------|----------|
-| Default | 既有区 + 绑定会话区(有挂接) | — |
+| Default | 既有区 + 挂接历史节增强(有挂接) | — |
 | No-link | 「未挂接会话」+ [发起] 主按钮(sm) | 走 M3 发起链 |
 | Inference-degraded | 仅顶层会话行,血缘位「不可用」次文字 | 可打开顶层 |
 | Open-failed | toast 错误「会话不存在或已清理」 | 不静默 |
@@ -366,7 +371,7 @@ forge 文件区
 
 | Trigger | Action | Feedback |
 |---------|--------|----------|
-| 打开抽屉 | 渲染既有区 + 绑定区 | 滑入 0.3s |
+| 打开 dock | 任务行点击,右缘滑入,渲染既有区 + 增强节 | 滑入 0.2s(现有契约) |
 | 展开 active/ended 行 | 血缘推断后代(active=当前树;ended=历史查看) | 0.2s |
 | [打开] | 打开对应会话视图 | selectPanel/SubagentAddress |
 | [发起] | M3 一键发起链 | 既有链路(prompt 全量注入) |
@@ -538,7 +543,7 @@ forge 文件区
 
 - **Mode**: existing-page(工作台布局层)
 - **Target**: `project` 视图主内容区
-- **Position**: 工作台头 [分屏] 控制;pane 作用于 C3/C4 视图实例
+- **Position**: 工作台头 [分屏] 控制;pane 作用于会话面板 / 任务看板(M2/M3 既有)视图实例
 
 ### Layout Structure
 
@@ -546,7 +551,7 @@ forge 文件区
 主内容区
 ├─ 单 pane(默认):活跃区全幅
 └─ 分屏态:水平双 pane(分隔条 w6 可拖,hover 高亮);pane 头 h32(区名 + [拆出] ghost sm + [关闭] ghost sm)
-    └─ pane 内容 = C3 或 C4 完整组件实例(同一组件,功能面不缩水)
+    └─ pane 内容 = 会话面板或任务看板(M2/M3)完整组件实例(同一组件,功能面不缩水)
 ```
 
 - pane 组合任意(会话+任务面板典型);比例拖拽即存(布局记忆)。
@@ -573,7 +578,7 @@ forge 文件区
 
 ```
 独立窗口:标准壳窗(继承 M1 窗口基座)——标题「<项目名> · <视图名>」
-└─ 内容 = 拆出 pane 的视图实例(C3/C4);无工作台头(窗口标题替代),区导航不可用(单视图)
+└─ 内容 = 拆出 pane 的视图实例(会话面板/任务看板);无工作台头(窗口标题替代),区导航不可用(单视图)
 ```
 
 - 窗口集合(视图类型/尺寸/位置)随项目记忆;关闭主窗口 = 退出应用(单实例,M1 语义)。
@@ -593,7 +598,7 @@ forge 文件区
 
 ## 数据时效与更新传播(BIZ-005)
 
-- 任务/会话派生面(C3 计数徽标、C4 执行中卡组/任务行/进度、C5 绑定会话区)订阅 task_snapshot / session_links / 血缘索引的失效-重建事件,事件到达即重渲染;会话侧与终端侧(外部进程写 forge 文件)变更经文件监听触发快照重建,端到端**免手动刷新可见 ≤5s**。快照 = 派生缓存,可弃重建(BIZ-coexistence-002)。
+- 任务/会话派生面(C3 计数徽标、C5 挂接历史节增强)订阅 task_snapshot / session_links / 血缘索引的失效-重建事件,事件到达即重渲染;会话侧与终端侧(外部进程写 forge 文件)变更经文件监听触发快照重建,端到端**免手动刷新可见 ≤5s**。快照 = 派生缓存,可弃重建(BIZ-coexistence-002)。
 - 重建期间保留上一份快照内容(不回退骨架屏),区域顶部 12/18 次文字「同步中」标注;重建失败按 BIZ-resilience-001 静默降级 + 结构化 log。
 - 全设计不含视图级手动刷新按钮;唯一**投影**重试动作 = C8 [重试投影](重跑投影同步,非刷新视图)。区内错误恢复重试(C1/C2 错误卡 [重试],语义为重试当区数据装载)不属刷新,不受上句限制。
 - 各组件 Loading 终态二选一:数据到位 → Default/Empty;装载失败 → 错误卡(C1/C2)或静默保留上次内容 + 结构化 log(其余派生面,优先 BIZ-resilience-001)。
@@ -607,7 +612,8 @@ forge 文件区
 | 添加项目确认卡 | C7 | project-home.html(左栏 ＋ 原位卡,唯一入口) |
 | 独立窗口 | C10 | index.html 内说明 + 模拟 |
 | `projects` | C1 | 已裁撤(2026-09-27 裁决:启动首屏 = `project` 工作台;C1 并入 C3 左栏全项目树) |
-| `project`(forge 区展开) | C4+C5 | 原型未承载(#25:右栏项目概览子 tab + 文档 tab) |
+| `project`(任务详情 dock) | C5(M2/M3 TaskDetailPanel dock 增强) | 原型未承载(#27:形态对齐现有任务看板右缘 dock) |
+| ~~`project`(forge 区展开)~~ | ~~C4~~ | 已裁撤(#27:feature 阶段感知不做;feature 浏览 = 右栏概览子 tab(M3 面);任务看板独立) |
 | 上游会话视图(subagent) | C6 | 原型未承载(设计保留) |
 
 原型交付说明(管线):「原型文件」列**已交付并通过验收目验(2026-09-25)**——原型位于 `ui/prototype/`(导航页 `index.html`);共享数据层 data.js(sessionStorage 同标签页持久;未发送草稿不持久化)。**2026-09-27 裁决 #25:原型收敛为单工作台页**(projects / feature-view / settings 三独立页裁撤,保持简洁);布局线框权威 = `ui/workbench-layout-v2.md`(v2.9 + 评审裁决 #15–#25);截断省略、focus 可见环、钳制、状态色对比度等视觉断言已在原型上目验;Playwright 冒烟基线 **106 条全绿**(2026-09-26 五页版,证据三档/黏性禁令/已注册/父目录 chips/授权收窄均有断言;单页收敛后待复跑)。
@@ -616,8 +622,9 @@ forge 文件区
 
 - PRD Navigation 的 `/`、`/p/:projectId` 等路由命名 = 逻辑命名;设计层已定形视图键(本文「Navigation & View Keys」),建议回写 PRD 该节加注。
 - C3 明确「复用上游会话列表组件 + forge 增强层」——与 PRD UF3「同一底座」一致,细化了复用边界。
-- C4 阶段矩阵、C5 抽屉形态、C8 确认文案语义均与 PRD 必答⑦/⑤ 一致,无新增交互偏离。
+- C5 dock 形态(对齐现有 `TaskDetailPanel` 契约,#27)、C8 确认文案语义与 PRD 必答⑤ 一致,无新增交互偏离;C4 阶段矩阵与 PRD 必答⑦ 已随裁决 #27 一并裁撤。
 - **回写记录(2026-09-25,Step 10)**:原型验收(线框 v2.9 + 评审裁决 #15–#23)后,本文件 C2/C3 重写为定形摘要(布局权威指回 `workbench-layout-v2.md`),页面总览更新为已交付;`prd-ui-functions.md` 的 UF2/UF3/UF7/UF8 与 Page Composition 同步回写。分歧记录:头部图标相位规则(新会话零图标)与 dsh 源码 headerCorner 常驻 blank 态为有意分歧(裁决 #17);「开始」tab 可关闭/chipless 底板(裁决 #20/#22/#23)与 dsh 不可关门页语义为有意分歧。
 - **回写记录(2026-09-26)**:注册交互按 `docs/decisions/project-storage-and-knowledge.md` §5 v2 重构 —— C7 重写为「添加项目确认卡」(文档位置预览行 + 证据三档门控 + **零 git 强制**);`ERR_FORGE_NOT_DETECTED` 废止(D1)、仓外授权(BIZ-001/003)收窄至高级自定义、可写性改运行时状态;UF7 同步重写;原型两入口(app.js 原位卡 + projects.html)重构,冒烟 106 全绿。
 - **回写记录(2026-09-27,裁决 #25)**:原型收敛单工作台页 —— projects.html / feature-view.html / settings.html 裁撤(整体 UI 保持简洁)。承载迁移:C1 项目枚举/切换 → 左栏全项目树;C4/C5 feature 浏览 → 右栏项目概览子 tab + 文档 tab;C7 唯一入口 = 左栏 ＋ 原位卡;C8 设置独立页裁撤,左栏 ⚙ 保留入口位(toast 占位),各项随 GUI 逐项归宿;C1 独立列表页与 UF1 的关系待 PRD 对账。
 - **回写记录(2026-09-27 续,裁决 #26)**:PRD 落定 **启动首屏 = 项目工作台**(`project`),独立项目列表页裁撤 —— UF1 重定义为「项目枚举与切换(左栏全项目树,embedded)」;PRD 主流程/mermaid/IA 树/主导航表/Page Composition/P1 范围/用户故事 1 已同步回写;视图键表 `projects` 注销;C8 删除当前项目落点 = 返回工作台(其余项目或空态)。
+- **回写记录(2026-09-27 续三,裁决 #27)**:**UF4 feature 阶段感知视图裁撤** —— C4 组件设计废止(任务面板保持 M2/M3 看板独立视图,不从属 feature;feature 浏览 = 右栏概览子 tab(M3 面);阶段词表/阶段门 = M3 既有能力);**UF5/C5 形态对齐现有实现** = 任务看板右缘 dock(`TaskDetailPanel`:min(440px,45vw)/无遮罩/焦点陷阱/滑入 0.2s),增强落在既有「挂接历史」节内,不新建面板;PRD 必答⑦矩阵/SC8/故事 3 废止,迁移清单与 C9 分屏 pane 内容改指 会话面板/任务看板。

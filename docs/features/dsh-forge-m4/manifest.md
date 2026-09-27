@@ -12,11 +12,11 @@ status: design
 
 | Document | Path | Summary |
 |----------|------|---------|
-| PRD Spec | prd/prd-spec.md | 项目中心工作台 IA 重构:五项交付、九项必答定形(三区 IA 稿/迁移清单/文件选择器/投影降级/归档语义/subagent 反查/阶段矩阵/收起交互/分屏多窗口)、四 Phase 规划、SC1-SC8 |
-| User Stories | prd/prd-user-stories.md | 7 个故事:编排者×6(项目一页可见/任务直达会话/执行态聚焦/投影归组/归档不丢历史/分屏记忆)+ 执行 agent×1(任务身份可见) |
-| UI Functions | prd/prd-ui-functions.md | 10 个 UF:项目枚举切换(左栏全项目树)/三区容器工作台(启动首屏)/会话列表 subagent 归拢/feature 阶段感知/任务详情反查/会话任务元数据/三区选择器/投影与归档设置/分屏/多窗口 |
-| UI Design | ui/ui-design.md | 视图键导航定形(projects/project,槽位注入无路由)+ C1-C10 组件设计(布局/状态/交互/数据绑定),DESIGN.md 令牌体系,上游复用边界(会话列表增强层);2026-09-25 C2/C3 按验收原型回写定形 |
-| UI Wireframe(布局权威) | ui/workbench-layout-v2.md | 工作台布局线框 v2.12 + 评审裁决 #1–#26(八批原型修正 + 2026-09-26 添加项目确认卡重构 + 2026-09-27 原型收敛单页 + 启动首屏 = 工作台) |
+| PRD Spec | prd/prd-spec.md | 项目中心工作台 IA 重构:五项交付、八项必答定形(三区 IA 稿/迁移清单/文件选择器/投影降级/归档语义/subagent 反查/收起交互/分屏多窗口;必答⑦阶段矩阵 #27 裁撤)、四 Phase 规划、SC1-SC7(SC8 废止 #27) |
+| User Stories | prd/prd-user-stories.md | 6 个故事(故事 3 执行态聚焦 #27 裁撤):编排者×5(项目一页可见/任务直达会话/投影归组/归档不丢历史/分屏记忆)+ 执行 agent×1(任务身份可见) |
+| UI Functions | prd/prd-ui-functions.md | 10 个 UF(UF4 #27 裁撤,编号保留):项目枚举切换(左栏全项目树)/三区容器工作台(启动首屏)/会话列表 subagent 归拢/任务详情反查(现有 dock 形态)/会话任务元数据/三区选择器/投影与归档设置/分屏/多窗口 |
+| UI Design | ui/ui-design.md | 视图键导航定形(projects/project,槽位注入无路由)+ C1-C10 组件设计(C1/C4 裁撤注记、C5 对齐现有 dock,#25-#27),DESIGN.md 令牌体系,上游复用边界(会话列表增强层);2026-09-25 C2/C3 按验收原型回写定形 |
+| UI Wireframe(布局权威) | ui/workbench-layout-v2.md | 工作台布局线框 v2.12 + 评审裁决 #1–#27(八批原型修正 + 2026-09-26 添加项目确认卡重构 + 2026-09-27 原型收敛单页/启动首屏=工作台/UF4 裁撤+UF5 对齐现有 dock) |
 | UI Prototype(已验收) | ui/prototype/ | 可交互 HTML 原型(单工作台页,#25 收敛):index.html 导航 + project-home.html 三区工作台;Playwright 冒烟基线 106 断言(2026-09-26 五页版),收敛后待复跑 |
 | Decision(上游裁决) | ../../decisions/project-storage-and-knowledge.md | 项目存储与知识库架构 D1–D12:三区存储/知识库两级插件挂载/项目创建证据门控(§5 v2);UF7/C7 上游权威 |
 | Reference | ui/dsh-home-layout.md | dsh 现有 home(会话视图)三态布局基线:左栏/主区/右栏(文件面板)分区线框、浅色主题样式令牌、M4 布局规律 |
@@ -29,8 +29,8 @@ status: design
 | UF1 项目枚举与切换 | C1(并入 C3 左栏全项目树) | project-home.html 左栏(启动首屏 = 工作台,#26;独立列表页裁撤) | |
 | UF2 三区容器 | C2 项目工作台·三区容器(左树/中会话/右 dockkit) | project-home.html | |
 | UF3 会话列表 | C3 左栏项目树·会话列表增强 | project-home.html | |
-| UF4 feature 视图 | C4 forge 文件区·feature 视图 | 原型未承载:右栏项目概览·feature 子 tab + 文档 tab(#25) | |
-| UF5 任务详情 | C5 绑定会话面板 | 原型未承载(设计保留 C5 抽屉形态,#25) | |
+| UF4 feature 视图 | C4(已裁撤 #27) | —(任务面板保持 M2/M3 看板独立;feature 浏览 = 右栏概览子 tab) | |
+| UF5 任务详情 | C5 绑定会话面板(对齐现有 dock #27) | 原型未承载(形态 = 任务看板右缘 TaskDetailPanel 同构) | |
 | UF6 会话元数据 | C6 任务元数据条 | 原型未承载(设计保留 C6) | |
 | UF7 项目创建·文档位置 | C7 添加项目确认卡(预览行/证据门控) | project-home.html(左栏 ＋ 原位卡,唯一入口,#25) | |
 | UF8 投影与归档 | C8 项目设置·投影与生命周期 | 原型未承载(左栏 ⚙ toast 占位,各项随 GUI 逐项归宿,#25) | |

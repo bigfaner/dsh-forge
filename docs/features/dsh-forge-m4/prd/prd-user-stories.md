@@ -33,17 +33,9 @@ feature: "dsh-forge-m4"
 
 ---
 
-## Story 3: feature 执行态聚焦
+## Story 3: feature 执行态聚焦【2026-09-27 裁决 #27 裁撤】
 
-**As a** 编排者(人)
-**I want to** 打开处于执行阶段的 feature 时,第一眼看到正在执行的任务及其会话状态,点击即可进入对应 subagent 会话
-**So that** 不用翻任务面板找哪个任务在跑,编排观察零摩擦
-
-**Acceptance Criteria:**
-- Given feature 处于 in-progress 阶段且存在任务满足「in_progress 且有 active 挂接」,When 打开 feature 视图,Then 突出呈现该任务为重点信息
-- Given 点击正在执行的任务,When 系统解析绑定,Then 打开其对应 subagent 会话(无 subagent 时打开顶层派发会话)(e2e 断言)
-- Given 任务 in_progress 但无 active 挂接,When 查看任务面板,Then 该任务常规展示且标注「未挂接会话」(断言)
-- Given feature 处于 prd/design/tasks/completed 阶段,When 打开 feature 视图,Then 按阶段重点信息矩阵呈现对应内容
+UF4 feature 阶段感知视图裁撤:阶段重点信息矩阵与执行态聚焦不再交付。其可保留价值已由其他故事承载——「点击执行中任务打开 subagent 会话」= Story 2(任务详情 dock 绑定会话);「未挂接会话」标注 = Story 2/UF5 dock 状态。编号保留以维持故事追溯。
 
 ---
 
