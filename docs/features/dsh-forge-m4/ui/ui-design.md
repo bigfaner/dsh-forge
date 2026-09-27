@@ -60,22 +60,24 @@ status: Draft
 
 | 视图键 | 承载 | 槽位 | 迁移来源(M2/M3) |
 |--------|------|------|------------------|
-| `projects` | 项目列表(C1) | main(root scope) | workbench/overview(入口地位替代) |
-| `project` | 项目工作台三区容器(C2,内含 C3/C4) | main(root scope) | workbench/tasks、workbench/features(收纳) |
+| ~~`projects`~~ | ~~项目列表(C1)~~ **已裁撤**(2026-09-27 裁决:启动首屏 = `project`;项目枚举/切换/归档 = C3 左栏全项目树) | — | workbench/overview(入口地位由工作台左栏替代) |
+| `project` | 项目工作台三区容器(C2,**启动首屏**;内含 C3/C4) | main(root scope) | workbench/tasks、workbench/features(收纳) |
 | `project/settings` | 项目设置(C7/C8) | main(工作台二级) | M2/M3 设置面演进 |
-| `settings` | 壳级设置(继承 M1,非 M4 新增面;PRD 主导航 #3) | main(root scope) | 既有 M1,键登记对齐 |
+| `settings` | 壳级设置(继承 M1,非 M4 新增面;PRD 主导航 #2) | main(root scope) | 既有 M1,键登记对齐 |
 | 上游原生视图(会话等) | 代码区深链 | 上游 sidebar + `selectPanel` | 既有,不变 |
 
 - 页内区切换(代码区 / forge 文件区 / 知识区扩展位)= 工作台页内 tab 状态,**不进全局视图键**;知识区扩展位 M4 仅在页内导航呈现禁用态说明(零空占位)。
 - forge 文件区内部形态(feature 列表态 / feature 展开态 / 提案板态)= 该 pane 内状态,**不进全局视图键**;提案板 = M3 功能零缩水收纳,容器 = forge 文件区 pane(见 C4)。
-- feature 选中态、任务详情开合 = 工作台内共享状态;注册向导 = `projects` 视图内对话框流(M2 向导演进)。
-- sidebar 模型全视图统一:`sidebar.panellist` 注册「项目」(首项,M4)与「设置」(`settings`,M1 既有项);`projects` / `project` 两视图共享同一 panellist,无视图专属注入;项目名与切换入口唯一位于工作台头(C2),sidebar 不注入项目名区。
+- feature 选中态、任务详情开合 = 工作台内共享状态;添加项目确认卡 = 工作台内对话框流(左栏 ＋ / 空态,唯一入口;原 `projects` 视图内对话框流随视图裁撤)。
+- sidebar 模型全视图统一:`sidebar.panellist` 注册「项目」(首项,M4)与「设置」(`settings`,M1 既有项);`project` 视图承载 panellist,无视图专属注入;项目名与切换入口唯一位于工作台头(C2),sidebar 不注入项目名区。
 - 多窗口(C10)= 壳层窗口能力,不经视图键;拆出视图回主窗口按原键恢复。
 - 孤儿视图清零:原 `workbench/*` 三键由上表替代,`settings`(M1 既有)同步登记,无游离键。
 
 ---
 
 ## Component C1: 项目列表视图(UF1)
+
+> **2026-09-27 裁决:本组件独立视图裁撤** —— 启动首屏 = 项目工作台(`project`);项目枚举/切换/归档分区/路径健康语义并入 **C3 左栏全项目树**(UF1 重定义为 embedded)。本节数据/校验/状态语义保留为实现参考,宿主 = C3 左栏。
 
 ### Placement
 
@@ -518,7 +520,7 @@ forge 文件区
 | [重试投影] | 重跑同步 | 成功 toast / 保留降级态 |
 | [偏差明细 N] | 展开/收起偏差列表 | 0.2s 高度动画;展开态 Esc/再点收起 |
 | [改名] | 行内编辑 + 确认 | 投影同步;失败降级不阻断本地生效 |
-| [归档]/[删除] | 确认 Dialog(BIZ-006 语义文案) | 归档:留在设置页进入 Archived 态(工作台同步归 C2 Archived 只读);删除:主窗口返回 `projects` + toast,该项目全部拆出窗口关闭(C10) |
+| [归档]/[删除] | 确认 Dialog(BIZ-006 语义文案) | 归档:留在设置页进入 Archived 态(工作台同步归 C2 Archived 只读);删除:主窗口返回工作台(其余项目或空态)+ toast,该项目全部拆出窗口关闭(C10) |
 
 ### Data Binding
 
@@ -604,7 +606,7 @@ forge 文件区
 | `project` | C2+C3+C9(分屏演示) | project-home.html |
 | 添加项目确认卡 | C7 | project-home.html(左栏 ＋ 原位卡,唯一入口) |
 | 独立窗口 | C10 | index.html 内说明 + 模拟 |
-| `projects` | C1 | 原型未承载(#25:并入左栏全项目树;独立列表页待 PRD 对账) |
+| `projects` | C1 | 已裁撤(2026-09-27 裁决:启动首屏 = `project` 工作台;C1 并入 C3 左栏全项目树) |
 | `project`(forge 区展开) | C4+C5 | 原型未承载(#25:右栏项目概览子 tab + 文档 tab) |
 | 上游会话视图(subagent) | C6 | 原型未承载(设计保留) |
 
@@ -618,3 +620,4 @@ forge 文件区
 - **回写记录(2026-09-25,Step 10)**:原型验收(线框 v2.9 + 评审裁决 #15–#23)后,本文件 C2/C3 重写为定形摘要(布局权威指回 `workbench-layout-v2.md`),页面总览更新为已交付;`prd-ui-functions.md` 的 UF2/UF3/UF7/UF8 与 Page Composition 同步回写。分歧记录:头部图标相位规则(新会话零图标)与 dsh 源码 headerCorner 常驻 blank 态为有意分歧(裁决 #17);「开始」tab 可关闭/chipless 底板(裁决 #20/#22/#23)与 dsh 不可关门页语义为有意分歧。
 - **回写记录(2026-09-26)**:注册交互按 `docs/decisions/project-storage-and-knowledge.md` §5 v2 重构 —— C7 重写为「添加项目确认卡」(文档位置预览行 + 证据三档门控 + **零 git 强制**);`ERR_FORGE_NOT_DETECTED` 废止(D1)、仓外授权(BIZ-001/003)收窄至高级自定义、可写性改运行时状态;UF7 同步重写;原型两入口(app.js 原位卡 + projects.html)重构,冒烟 106 全绿。
 - **回写记录(2026-09-27,裁决 #25)**:原型收敛单工作台页 —— projects.html / feature-view.html / settings.html 裁撤(整体 UI 保持简洁)。承载迁移:C1 项目枚举/切换 → 左栏全项目树;C4/C5 feature 浏览 → 右栏项目概览子 tab + 文档 tab;C7 唯一入口 = 左栏 ＋ 原位卡;C8 设置独立页裁撤,左栏 ⚙ 保留入口位(toast 占位),各项随 GUI 逐项归宿;C1 独立列表页与 UF1 的关系待 PRD 对账。
+- **回写记录(2026-09-27 续,裁决 #26)**:PRD 落定 **启动首屏 = 项目工作台**(`project`),独立项目列表页裁撤 —— UF1 重定义为「项目枚举与切换(左栏全项目树,embedded)」;PRD 主流程/mermaid/IA 树/主导航表/Page Composition/P1 范围/用户故事 1 已同步回写;视图键表 `projects` 注销;C8 删除当前项目落点 = 返回工作台(其余项目或空态)。
