@@ -465,6 +465,7 @@
       window.__openSession = function (id) {
         var s = find(id);
         if (!s) return;
+        if (s.project !== project.id) switchProjectInPlace(s.project); /* 跨项目会话:先原位换台 */
         if (s.status === 'draft') {
           activeId = id;
           window.__activeSessionId = id;
@@ -474,6 +475,34 @@
         }
         activate(id);
       };
+      /* 左栏项目切换(2026-09-28 修正):原位换台,不整页跳转(无骨架闪屏)——
+         同项目反复点击 = 零动作零动画;异项目 = 换台 + 仅此一次 0.22s 过渡;
+         wantNew = hero 相位选择器的「新会话」语义(等价原 ?new=1) */
+      function switchProjectInPlace(pid, wantNew) {
+        var p = FORGE.project(pid);
+        if (!p || pid === project.id) return;
+        history.replaceState(null, '', 'project-home.html?p=' + pid); /* 当前项目 = ?p= 驱动 */
+        project = p;
+        activeId = null; window.__activeSessionId = null;
+        bannerDismissed = false;
+        curView = 'conv'; trajSel = -1;
+        input.value = '';
+        tabs.length = 0; tabs.push({ id: 'guide', type: 'guide', label: '开始', closable: true });
+        activeTab = 'guide';
+        setRbCollapsed(true);                    /* 右栏跟随项目:回默认收起 + 开始页 */
+        setView('conv');
+        refresh(); renderStrip(); renderPanels();
+        if (wantNew && !p.archived) {
+          var d = FORGE.draftSession(pid) || FORGE.newSession(pid, null, '新会话');
+          activate(d.id);
+        }
+        var body = document.getElementById('split-root');
+        if (body) {
+          body.classList.remove('proj-switch'); void body.offsetWidth; /* 重触发 */
+          body.classList.add('proj-switch');
+        }
+      }
+      window.__switchProject = switchProjectInPlace;
       window.__newSession = function () {
         /* 评审裁决(2026-09-25 第四批):未发送的新会话同时仅一个 —— 已存在时点击无效(no-op);
            回到草稿走左栏行点击 */
@@ -564,7 +593,7 @@
           if (!b) return;
           protoMenuClose();
           var pid = b.getAttribute('data-hp-proj');
-          if (pid !== project.id) location.href = 'project-home.html?p=' + pid + '&new=1';
+          if (pid !== project.id) switchProjectInPlace(pid, true);
         });
       });
       document.getElementById('hp-mode').addEventListener('click', function () {

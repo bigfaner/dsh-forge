@@ -1218,6 +1218,14 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .rightbar-wrap, .app-sidebar, .workbench-body { transition: none; }
+  .workbench-body.proj-switch { animation: none; }
+}
+
+/* ---- 项目切换过渡(2026-09-28 修正):仅异项目切换播一次;同项目点击零动作 ---- */
+.workbench-body.proj-switch { animation: proj-switch-in 0.22s ease-out; }
+@keyframes proj-switch-in {
+  from { opacity: 0.3; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ---- 添加项目确认卡(文档位置预览行,裁决 #24) ---- */

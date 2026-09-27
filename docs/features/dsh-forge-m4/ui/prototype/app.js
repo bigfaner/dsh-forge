@@ -707,8 +707,16 @@
     if (projNew) { e.stopPropagation(); location.href = 'project-home.html?p=' + projNew.getAttribute('data-proj-new') + '&new=1'; return; }
     var projMore = e.target.closest('[data-proj-more]');
     if (projMore) { e.stopPropagation(); projectMoreMenu(projMore, projMore.getAttribute('data-proj-more')); return; }
+    /* 项目行(2026-09-28 修正):工作台内原位换台(同项目零动作;异项目一次性过渡动画);
+       非工作台页兜底 = 同项目无操作、异项目跳转 */
     var proj = e.target.closest('[data-sb-proj]');
-    if (proj) { location.href = 'project-home.html?p=' + proj.getAttribute('data-sb-proj'); return; }
+    if (proj) {
+      var pjid = proj.getAttribute('data-sb-proj');
+      if (window.__switchProject) { window.__switchProject(pjid); return; }
+      if (pjid === FORGE.currentProjectId()) return;
+      location.href = 'project-home.html?p=' + pjid;
+      return;
+    }
     /* 溢出折叠 */
     var ov = e.target.closest('[data-sb-overflow]');
     if (ov) {
