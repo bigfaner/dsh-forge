@@ -39,7 +39,7 @@ import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockTaskDetailFace } from '../../mocks/workbench'
 import { SessionBadge } from './SessionBadge'
-import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
+import { detailDockWidthOf, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle, type BoardHostForm } from './launch/LaunchStates'
 import { badgeStyle, sourceBadgeStyle } from './TaskRow'
 import { DepChain } from './detail/DepChain'
 import { DetailStatusPill } from './detail/ProgressDots'
@@ -56,8 +56,9 @@ import type { SelectionTaskEntry } from './dispatch/selection-mode'
 // Since 3.9 the constants live in launch/LaunchStates.tsx (the dock family's
 // acyclic shared home — the approval panel imports this module's components,
 // so a same-module declaration would cycle); re-exported for the 5.8-era
-// consumers that address them here (TaskBoardPage's inset, the specs).
-export { DETAIL_DOCK_Z, DETAIL_DOCK_WIDTH }
+// consumers that address them here (the specs — since M4 2.1 the page's inset
+// goes through detailDockWidthOf's host mapping instead).
+export { DETAIL_DOCK_Z, DETAIL_DOCK_WIDTH } from './launch/LaunchStates'
 
 /** Inputs of {@link TaskDetailPanel}. */
 export interface TaskDetailPanelProps {
@@ -71,6 +72,12 @@ export interface TaskDetailPanelProps {
   taskKey?: string | null | undefined
   /** The active project — the loadDetail verb argument + the launch ref. */
   projectId?: string | undefined
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主, threaded by TaskBoardPage):
+   * 'window' (default) = the UF3 dock geometry `min(440px, 45vw)` verbatim;
+   * 'pane' = the dock caps at the board's own box. See {@link detailDockWidthOf}.
+   */
+  host?: BoardHostForm | undefined
   /**
    * The project codeRoot (project context; the M2 launch entry that consumed
    * it retired with the ForgeBridge chain — task 6.1).
@@ -109,7 +116,12 @@ export interface TaskDetailPanelProps {
   dispatch?: TaskDetailDispatchMount | undefined
 }
 
-/** The dock geometry (ui-design UF3 Placement): right edge, min(440px, 45vw), bg-layer-2, left border. */
+/**
+ * The dock geometry (ui-design UF3 Placement): right edge, bg-layer-2, left
+ * border. The WIDTH is host-form-dependent (M4 2.1) and applied at the render
+ * site through {@link detailDockWidthOf} — the window form's ui-design value
+ * `min(440px, 45vw)` verbatim, the pane form capped at the board's own box.
+ */
 const dockStyle = {
   background: 'var(--dsw-alias-bg-layer-2, var(--dsh-bg, Canvas))',
   borderLeft: '1px solid var(--dsh-border-color, CanvasText)',
@@ -125,7 +137,6 @@ const dockStyle = {
   position: 'absolute',
   right: '0',
   top: '0',
-  width: DETAIL_DOCK_WIDTH,
   zIndex: DETAIL_DOCK_Z,
 } as const
 
@@ -419,6 +430,7 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
       tabIndex={-1}
       style={{
         ...dockStyle,
+        width: detailDockWidthOf(props.host ?? 'window'),
         transform: entered ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       }}

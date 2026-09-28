@@ -203,18 +203,23 @@ export type { MigrationGuardView, UseMigrationGuardInput } from './views/overvie
 // 1.7: the per-card guarded entry mount (ProjectCard's action-row host).
 export { MigrationCardEntry } from './views/overview/migration/MigrationCardEntry'
 export type { MigrationCardEntryProps } from './views/overview/migration/MigrationCardEntry'
-// The UF2 task board page (task 5.5): mounted by the shell into the reserved
-// tasks seat; exported with its pure board model (filter/sort/dangling) for
-// the 5.15 assembly + its tests. View A (依赖树 DAG) is 5.6's — the
-// switcher's tree tab is its placeholder.
+// The UF2 task board page (task 5.5; M4 2.1 re-homed): the board's interior
+// page TasksView mounts in either host; exported with its pure board model
+// (filter/sort/dangling) for the assembly + its tests. View A (依赖树 DAG) is
+// 5.6's — the switcher's tree tab is its placeholder.
 export { TaskBoardPage } from './views/TaskBoardPage'
 export type { TaskBoardPageProps } from './views/TaskBoardPage'
-// The UF2 tasks tab, assembled (task 5.15): the completion view the shell
-// mounts — real bridge → the store-backed board chain (ONE getTaskBoard
-// first paint + the 回流 coalesce-then-fetch event loop) + the IPC detail
-// face; the seat / hostless forms reproduce the 5.5/5.8 build-stage page.
+// The 任务看板 assembled view (task 5.15; M4 2.1 dual-host): the HOST-AGNOSTIC
+// component the rightbar pane (2.2's TabKind='board', host='pane') and the
+// detached window (4.3's view='board', host='window' + a pinned source
+// project) both mount — real bridge → the store-backed board chain (ONE
+// getTaskBoard first paint + the 回流 coalesce-then-fetch event loop) + the
+// IPC detail face; the seat / hostless forms reproduce the 5.5/5.8
+// build-stage page. The width breakpoint is INJECTED (零宿主探测).
 export { TasksView } from './views/tasks/TasksView'
 export type { TasksViewProps } from './views/tasks/TasksView'
+export { detailDockWidthOf } from './views/tasks/launch/LaunchStates'
+export type { BoardHostForm } from './views/tasks/launch/LaunchStates'
 // The tasks tab's page store (task 5.15): the 快照缓存 + 事件合并 read
 // model — read-through loadBoard, the debounced event refresh, and the
 // event-merged sync projection the view feeds the page through.

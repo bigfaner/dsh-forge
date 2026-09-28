@@ -49,6 +49,7 @@ import { SelectionFloatBar } from './SelectionFloatBar'
 import { DispatchWarningDialog } from './DispatchWarningDialog'
 import { DispatchConfirmDialog } from './DispatchConfirmDialog'
 import { DispatchErrorDialog } from './DispatchErrorDialog'
+import type { BoardHostForm } from '../launch/LaunchStates'
 
 /** The locale seat shape this module's consumers pass through. */
 export type DispatchTranslate = (key: WorkbenchKey) => string
@@ -380,8 +381,15 @@ export function DetailJumpButton(props: { readonly taskKey: string }) {
 export interface SelectionLayerProps {
   /** The controller (the page's `useDispatchSelection` machine). */
   readonly controller: DispatchSelectionController
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   readonly t: DispatchTranslate
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主, threaded by TaskBoardPage):
+   * rides through to the float bar's anchoring — 'window' (default) keeps the
+   * M2/M3 window-fixed geometry; 'pane' anchors the bar inside the board's
+   * own box.
+   */
+  readonly host?: BoardHostForm | undefined
   /** Open a task's detail (UF3 side panel) — selection mode STAYS active. */
   readonly onOpenDetail: (taskKey: string) => void
   /** The board views; cards carry `data-dsh-forge-select-card="<taskKey>"`. */
@@ -562,6 +570,7 @@ export function SelectionLayer(props: SelectionLayerProps) {
         {active && (
           <SelectionFloatBar
             t={t}
+            host={props.host}
             count={snapshot.selectedKeys.length}
             busy={busy}
             onGoButtonElement={(element) => { floatGoRef.current = element }}

@@ -1,12 +1,13 @@
 /**
- * The UF2 任务看板 page, BUILD half (task 5.5): the page the shell mounts
- * into its reserved `workbench/tasks` seat — the four-state machine the
- * tech-design test plan demands (loading 骨架 / empty 空态卡 / error 重试卡 /
- * populated) over the Interface 1 DTOs through the TaskBoardFace seam. The
- * build stage defaults to the shared mock twin
- * (mocks/workbench.createMockTaskBoardFace); the 5.15 assembly task injects
- * the IPC verbs + the real event push. No IPC runtime is touched here (the
- * 5.x BUILD layering rule).
+ * The UF2 任务看板 page, BUILD half (task 5.5): the board's interior page —
+ * since M4 2.1 mounted by {@link TasksView} in either host (the rightbar
+ * pane / the detached window; the retired `workbench/tasks` main-panel seat
+ * is gone since 1.7) — the four-state machine the tech-design test plan
+ * demands (loading 骨架 / empty 空态卡 / error 重试卡 / populated) over the
+ * Interface 1 DTOs through the TaskBoardFace seam. The build stage defaults
+ * to the shared mock twin (mocks/workbench.createMockTaskBoardFace); the
+ * 5.15 assembly task injects the IPC verbs + the real event push. No IPC
+ * runtime is touched here (the 5.x BUILD layering rule).
  *
  * Scope of this half (the task split): the toolbar + the three views —
  * 视图 A 依赖树 (5.6, the DEFAULT per ui-design) / 视图 B 状态分组 / 视图 C
@@ -60,7 +61,8 @@ import {
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
-import { TaskDetailPanel, DETAIL_DOCK_WIDTH, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import { TaskDetailPanel, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import { detailDockWidthOf, type BoardHostForm } from './tasks/launch/LaunchStates'
 import type { DagDecorMount } from './tasks/dag/build-graph'
 import { hasDispatchableEntry, type DispatchVerbs } from './tasks/dispatch/selection-mode'
 import { DetailJumpButton, SelectionCheckbox, SelectionLayer, useDispatchSelection } from './tasks/dispatch/SelectionLayer'
@@ -158,10 +160,18 @@ export function featureSlugsOf(tasks: readonly TaskSummary[]): string[] {
 
 /** Inputs of {@link TaskBoardPage}. */
 export interface TaskBoardPageProps {
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   t: (key: WorkbenchKey) => string
   /** The active project the board reads (the Interface 1 verb argument). */
   projectId?: string | undefined
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主 — injected, never probed;
+   * TasksView threads it through both assembly forms): 'window' (default) =
+   * the M2/M3 geometry verbatim; 'pane' = the side docks, the float bar, and
+   * this page's dock-open flow inset contract to the board's own box. See
+   * {@link BoardHostForm} / {@link detailDockWidthOf}.
+   */
+  host?: BoardHostForm | undefined
   /**
    * The active project's codeRoot — present mounts the dock's UF5
    * panel-primary launch entry AND the DAG node cards' hover triggers (5.11).
@@ -812,6 +822,11 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
 
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
+  // The host-form dock width (M4 2.1): the window form keeps the UF3 geometry
+  // verbatim; the pane form caps the strip at the board's own box — the inset
+  // below and BOTH docks (TaskDetailPanel + ApprovalPanel) share this one
+  // mapping so the strip and the overlay can never disagree.
+  const dockWidth = detailDockWidthOf(props.host ?? 'window')
 
   // The active view panel (A/B/C — one tabpanel at a time, each labelled back
   // by its toolbar tab; view A is the DAG, default since 5.6). Since 3.9 the
@@ -823,6 +838,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     <SelectionLayer
       controller={selectionController}
       t={props.t}
+      host={props.host}
       onOpenDetail={handleOpenDetailFromSelection}
     >
       {view === 'tree'
@@ -890,7 +906,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
         // close — the views shrink, they never slide under the overlay (the
         // minWidth 0 chain + B's own overflowX keep horizontal scrolling sane).
         // Since 3.9 EITHER dock (detail OR approval — 同层互斥) claims the strip.
-        ...(selected.open || approvalDockOpen ? { paddingRight: DETAIL_DOCK_WIDTH } : {}),
+        ...(selected.open || approvalDockOpen ? { paddingRight: dockWidth } : {}),
       }}
     >
       {phase === 'loading' && (
@@ -1006,6 +1022,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             t={props.t}
             taskKey={selected.open ? (selected.taskKey ?? null) : null}
             projectId={props.projectId}
+            host={props.host}
             codeRoot={props.codeRoot}
             reloadToken={detailReload}
             face={props.detailFace}
@@ -1026,6 +1043,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
           <ApprovalPanel
             controller={approvals}
             t={props.t}
+            host={props.host}
             titleOf={taskKey => allTasks.find(task => task.key === taskKey)?.title}
             onOpenDetail={openDetailFromApproval}
           />

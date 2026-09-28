@@ -8,6 +8,8 @@ import {
 } from '../src/client/store/task-board.ts'
 import { TasksView } from '../src/client/views/tasks/TasksView.tsx'
 import { TaskBoardPage } from '../src/client/views/TaskBoardPage.tsx'
+import { SelectionFloatBar } from '../src/client/views/tasks/dispatch/SelectionFloatBar.tsx'
+import type { BoardHostForm } from '../src/client/index.ts'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import type {
   SyncStatus, TaskBoardData, TaskDetail, TaskSummary, WorkbenchEvent, WorkbenchState,
@@ -646,5 +648,99 @@ describe('TaskBoardPage: the reloadToken + structural-deletion coupling', () => 
     view.rerender(<TaskBoardPage t={t} projectId="p1" face={face} detailFace={detailFace} reloadToken={1} />)
     await waitFor(() => { expect(detailLoads).toBe(2) })
     await waitFor(() => { expect($('[data-dsh-forge-detail-error]')).not.toBeNull() })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// TasksView dual-host props (M4 2.1: 宿主上下文 props 化 — the width
+// breakpoint is INJECTED by the host, the component never probes; the
+// detached window's project binding is the PROP, never an active pointer)
+// ---------------------------------------------------------------------------
+
+describe('TasksView: dual-host props (M4 2.1)', () => {
+  /** Open the detail dock on demo/1.1 through a view B card activation. */
+  async function openDockOnFirstCard(): Promise<void> {
+    await toGrouped()
+    fireEvent.click($('[data-dsh-forge-task-card="demo/1.1"]'))
+    await waitFor(() => { expect($('[data-dsh-forge-task-detail="demo/1.1"]')).not.toBeNull() })
+  }
+
+  it('default host = the window form: the dock geometry stays M2/M3 verbatim (零缩水)', async () => {
+    const h = boardBridge([BOARD_V1])
+    installBridge(h.fake)
+    render(<TasksView t={t} projectId="p1" />)
+    await openDockOnFirstCard()
+    expect($('[data-dsh-forge-task-detail="demo/1.1"]').style.width).toBe('min(440px, 45vw)')
+    // The flow inset mirrors the dock's exact width (the views yield the strip).
+    expect($('[data-dsh-forge-task-board]').style.paddingRight).toBe('min(440px, 45vw)')
+  })
+
+  it("host='pane' (the rightbar pane form): the docks + the flow inset contract to the board's own box", async () => {
+    const h = boardBridge([BOARD_V1])
+    installBridge(h.fake)
+    render(<TasksView t={t} projectId="p1" host="pane" />)
+    await openDockOnFirstCard()
+    expect($('[data-dsh-forge-task-detail="demo/1.1"]').style.width).toBe('min(440px, 100%)')
+    expect($('[data-dsh-forge-task-board]').style.paddingRight).toBe('min(440px, 100%)')
+  })
+
+  it("host='pane' threads the SEAT form too (the build-stage/test seam 2.2's pane host seats)", async () => {
+    const loadBoard = vi.fn(async () => BOARD_V1)
+    render(<TasksView t={t} projectId="p1" host="pane" seat={{ face: { loadBoard } }} />)
+    await openDockOnFirstCard()
+    expect($('[data-dsh-forge-task-detail="demo/1.1"]').style.width).toBe('min(440px, 100%)')
+    expect($('[data-dsh-forge-task-board]').style.paddingRight).toBe('min(440px, 100%)')
+  })
+
+  it("host='pane': the selection float bar anchors INSIDE the board box (never the window)", async () => {
+    const h = boardBridge([BOARD_V1])
+    installBridge(h.fake)
+    render(<TasksView t={t} projectId="p1" host="pane" />)
+    await waitFor(() => { expect($('[data-dsh-forge-task-toolbar]')).not.toBeNull() })
+    // The UF1 verbs are complete on the fake bridge → the 派发 entry goes live
+    // (demo/1.1 pending = dispatchable); entering selection mounts the bar.
+    fireEvent.click($('[data-dsh-forge-dispatch-entry]'))
+    await waitFor(() => { expect($('[data-dsh-forge-dispatch-float-bar]')).not.toBeNull() })
+    const bar = $('[data-dsh-forge-dispatch-float-bar]')
+    expect(bar.style.position).toBe('absolute')
+    expect(bar.style.maxWidth).toBe('calc(100% - 32px)')
+  })
+
+  it('the float bar window form (default): window-fixed, viewport-capped — the M2/M3 twin', () => {
+    render(
+      <SelectionFloatBar
+        t={t}
+        count={2}
+        busy={false}
+        onCancel={() => {}}
+        onDispatch={() => {}}
+      />,
+    )
+    const bar = $('[data-dsh-forge-dispatch-float-bar]')
+    expect(bar.style.position).toBe('fixed')
+    expect(bar.style.maxWidth).toBe('calc(100vw - 32px)')
+  })
+
+  it('the detached-window binding (4.3): the board reads the PROP-SUPPLIED project — pinned, never an active pointer', async () => {
+    const seen: string[] = []
+    const fake = baseBridge({
+      getTaskBoard: async (projectId: string): Promise<TaskBoardData> => {
+        seen.push(projectId)
+        return BOARD_V1
+      },
+    })
+    installBridge(fake)
+    // The view has NO other project source (no active-project store import in
+    // its module graph) — the host pins the SOURCE project and a main-window
+    // activation change can never re-point this board.
+    render(<TasksView t={t} projectId="pinned-source" />)
+    await waitFor(() => { expect($('[data-dsh-forge-task-toolbar]')).not.toBeNull() })
+    expect(seen).toEqual(['pinned-source'])
+  })
+
+  it('the consumption face for 2.2/4.3: BoardHostForm is the exported width-breakpoint vocabulary', () => {
+    const pane: BoardHostForm = 'pane'
+    const window_: BoardHostForm = 'window'
+    expect([pane, window_]).toEqual(['pane', 'window'])
   })
 })
