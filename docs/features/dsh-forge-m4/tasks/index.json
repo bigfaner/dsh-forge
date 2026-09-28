@@ -10,7 +10,7 @@
       "title": "schema v3 迁移段:store MIGRATIONS {version:3}(projects ALTER ×10 + 2 新表 + 2 索引 + TS 回填)+ 漂移对账",
       "priority": "P0",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "blocked",
       "file": "1.1-schema-v3-migration.md",
       "record": "records/1.1-schema-v3-migration.md",
       "breaking": true,
