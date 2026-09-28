@@ -14,6 +14,12 @@
  * pair) is the host face now. Cross-boundary traffic happens exclusively
  * through cordis services (slots, locale) — no shell internals are imported,
  * in either direction.
+ *
+ * M4 task 1.6 added the P1 project-center seats on the same carrier: the boot
+ * default lands on the conversation (the `project` workbench, 裁决 #26), the
+ * panellist「项目」row registers first, and — bridge-gated — the
+ * `sidebar.workspaces` shadowing seat swaps the native browser for the forge
+ * project tree over the active-project pointer store + the C7 confirm card.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the renderer-owned slots service (ctx.slots) Context merge.
@@ -28,16 +34,23 @@ import { installToolBridgeClient } from './ipc/tool-bridge'
 import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
 import { installApprovalAnswerRelay } from './ipc/approval-answer'
 import { getWorkbenchIpcBridge } from './ipc/workbench'
+import { createIpcConfirmCardFace } from './ipc/workbench'
 import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
-import { installSlotNav } from './nav/slot-inject'
+import {
+  installProjectPanelRow, installSlotNav, installWorkspacesSeat, normalizeBootDefaultView,
+} from './nav/slot-inject'
+import {
+  toSessionsFace, toSidebarRightFace, toUiWorkspaceFace, toWorkspacesSource,
+} from './nav/project-seat'
+import { createActiveProjectStore } from './store/active-project'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
 import { en } from './locale/en'
 import { zh } from './locale/zh'
 import type { WorkbenchKey } from './locale/en'
 
-export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT } from './contract'
+export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, PROJECT_SEAT_PRIORITY } from './contract'
 export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
 export type {
@@ -237,6 +250,31 @@ export { installRailNav } from './nav/rail'
 export type { RailContentMode, RailNavOptions } from './nav/rail'
 export { installSlotNav } from './nav/slot-inject'
 export type { SlotNavOptions } from './nav/slot-inject'
+// M4 task 1.6 — the P1 integration seats: the boot default normalization, the
+// panellist「项目」row (address model + installer), and the sidebar.workspaces
+// shadowing seat (component + face + guarded service adapters).
+export {
+  normalizeBootDefaultView, installProjectPanelRow, installWorkspacesSeat,
+} from './nav/slot-inject'
+export type { ProjectPanelRowOptions } from './nav/slot-inject'
+export {
+  PROJECT_PANEL_ID, PROJECT_PANEL_ORDER, isProjectPanelActive,
+} from './nav/panel-info'
+export {
+  ProjectPanelGlyph, ProjectSidebarSeat,
+  toSessionsFace, toSidebarRightFace, toUiWorkspaceFace, toWorkspacesSource,
+} from './nav/project-seat'
+export type {
+  ProjectSeatFace, ProjectSidebarSeatProps, RetainInfoSource, SessionSummaryLike,
+  SessionsFace, SessionsListSource, SidebarRightFace, UiWorkspaceFace, WorkspacesListSource,
+} from './nav/project-seat'
+export { PROJECT_SWITCH_CLASS, PROJECT_SWITCH_TRANSITION_MS } from './nav/project-seat'
+// The active-project pointer store (app_state active_project_id, client half).
+export {
+  createActiveProjectStore, INITIAL_ACTIVE_PROJECT_SNAPSHOT,
+} from './store/active-project'
+export type { ActiveProjectSnapshot, ActiveProjectStore } from './store/active-project'
+export { createIpcConfirmCardFace } from './ipc/workbench'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
 export type { WorkbenchKey } from './locale/en'
@@ -278,6 +316,11 @@ export function apply(ctx: ClientContext): void {
 
   const store = createViewKeyStore(createLocalStoragePersistence())
   const controller = new ViewSwitchController(store)
+  // M4 task 1.6 (裁决 #26 / page-map 启动默认落点): the boot lands on the
+  // CONVERSATION panel — the `project` workbench — so a machine persisted on
+  // the old `workbench` escape-hatch panel is normalized BEFORE the slot
+  // carrier's attach-time projection could re-select it.
+  normalizeBootDefaultView(store, controller)
   // The session hand-over + the board session store (task 5.11; M3 6.1
   // slimmed the seat to the hand-over): both live at plugin lifetime — ABOVE
   // the shell — because a board round-trip unmounts the shell in the slot
@@ -303,6 +346,42 @@ export function apply(ctx: ClientContext): void {
   // resolves with the human verdict). No bridge/remote = no-op (kernel-only
   // semantics: the row is decided, delivery waits).
   const disposeAnswerRelay = installApprovalAnswerRelay(ctx)
+
+  // M4 task 1.6 — the P1 integration seats. The active-project pointer store
+  // (app_state active_project_id, client half) exists only on the real chain
+  // (a hostless world keeps the native sidebar browser: the shadowing seat is
+  // bridge-gated so a degraded boot never swaps in an empty tree); its boot
+  // read is kicked here so the pointer restores before the first seat render.
+  // The upstream data/action services are guarded reads (base-tier plugins
+  // precede app-tier apply in a healthy boot; an absent service leaves that
+  // leg degraded — never a throw, never a load gate).
+  const optionalService = (name: string): unknown => {
+    try {
+      return ctx.get(name, false)
+    } catch {
+      return undefined
+    }
+  }
+  const activeProjectStore = workbenchBridge === undefined
+    ? undefined
+    : createActiveProjectStore(workbenchBridge)
+  activeProjectStore?.refresh().catch(() => {
+    // The boot restore keeps the loading snapshot; the seat's first action
+    // or push-driven refresh retries.
+  })
+  // The panellist「项目」row — order 首项, null-addressed (nav/panel-info).
+  const disposeProjectPanelRow = installProjectPanelRow(ctx, { label: () => t('panel.project') })
+  const disposeWorkspacesSeat = activeProjectStore === undefined || workbenchBridge === undefined
+    ? () => {}
+    : installWorkspacesSeat(ctx, {
+      t,
+      store: activeProjectStore,
+      cardFace: createIpcConfirmCardFace(workbenchBridge),
+      workspaces: toWorkspacesSource(optionalService('workspaces')),
+      sessions: toSessionsFace(optionalService('sessions')),
+      uiWorkspace: toUiWorkspaceFace(optionalService('uiWorkspace')),
+      sidebarRight: toSidebarRightFace(optionalService('sidebarRight')),
+    })
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -371,6 +450,9 @@ export function apply(ctx: ClientContext): void {
     disposeToolBridge()
     disposeLaunchRelay()
     disposeAnswerRelay()
+    disposeWorkspacesSeat()
+    disposeProjectPanelRow()
+    activeProjectStore?.dispose()
     disposeSlotNav()
   }, 'forge-workbench: navigation forms')
 }

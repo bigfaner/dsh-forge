@@ -51,6 +51,25 @@ export const MAIN_SLOT = 'main'
 export const SIDEBAR_SLOT = 'sidebar.panellist'
 
 /**
+ * The sidebar's workspace/session browsing region (declared by ui-sidebar;
+ * single, root scope — ui-workspace registers the native browser at the
+ * default priority 0). M4 task 1.6: the forge project tree SHADOWS that
+ * occupant (替换渲染) by registering at {@link PROJECT_SEAT_PRIORITY} —
+ * SlotCore's single-slot rule: entries sharing the cell coexist at distinct
+ * priorities and the LOWEST renders, an entry crash abdicates down to the
+ * next (the native browser stays the degradation fallback). 声明合并纯增量,
+ * 上游槽位机制零修改 (tech-design §Integration #1; Hard Rule T1/vendored).
+ */
+export const WORKSPACES_SLOT = 'sidebar.workspaces'
+
+/**
+ * The forge project-tree seat's shadowing rank — below ui-workspace's default
+ * 0, so the forge browser wins the cell (lowest renders) while the shadowed
+ * native entry stays registered (crash/teardown fallback).
+ */
+export const PROJECT_SEAT_PRIORITY = -100
+
+/**
  * Sidebar row position: ascending, default 0. `plugins` occupies 0, so the
  * workbench takes 10 — beside, not colliding with, the shipped entries
  * (spike §3.3 recommendation).

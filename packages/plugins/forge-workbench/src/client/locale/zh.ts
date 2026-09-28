@@ -8,6 +8,11 @@ import type { WorkbenchKey } from './en'
 /** Chinese copy. */
 export const zh: Record<WorkbenchKey, string> = {
   'panel': '工作台',
+  'panel.project': '项目',
+  'project.empty.title': '还没有项目',
+  'project.empty.body': '添加一个代码区文件夹,开始使用项目工作台。',
+  'project.toast.registered': '已添加 {name},已切换为活跃项目',
+  'project.toast.located': '「{name}」已注册 · 已打开',
   'shell.title': 'forge 工作台',
   'view.session': '会话',
   'rail.label': '主视图切换',

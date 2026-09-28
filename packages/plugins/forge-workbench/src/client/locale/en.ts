@@ -7,6 +7,11 @@
 /** Dictionary key union of the workbench namespace (LocaleNamespaceMap merge target). */
 export type WorkbenchKey =
   | 'panel'
+  | 'panel.project'
+  | 'project.empty.title'
+  | 'project.empty.body'
+  | 'project.toast.registered'
+  | 'project.toast.located'
   | 'shell.title'
   | 'view.session'
   | 'rail.label'
@@ -568,6 +573,11 @@ export type WorkbenchKey =
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
   'panel': 'Workbench',
+  'panel.project': 'Project',
+  'project.empty.title': 'No projects yet',
+  'project.empty.body': 'Add a code root folder to start the project workbench.',
+  'project.toast.registered': 'Added {name} — switched to it as the active project',
+  'project.toast.located': '{name} is already registered — opened',
   'shell.title': 'forge workbench',
   'view.session': 'Sessions',
   'rail.label': 'Primary view switch',

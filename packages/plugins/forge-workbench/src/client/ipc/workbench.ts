@@ -44,7 +44,8 @@ import type {
   ReceiveApprovalInput, RenameProjectInput,
   StageArtifactsReport, FeatureSummary,
   StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
-  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, RegisterProjectInputV2, SessionLink,
+  TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
   WorkbenchState, WorkbenchVerbError,
@@ -53,6 +54,7 @@ import type {
   CodeRootProbeResult, DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace,
   PluginFace, ProposalFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
+import type { ConfirmCardFace } from '../components/confirm-card/card-state'
 import { getWorkbenchEventSource } from './workbench-events'
 import { dispatchLaunchRelayOf } from './dispatch-relay'
 import { approvalAnswerRelayOf } from './approval-answer'
@@ -669,6 +671,45 @@ export function createIpcRegisterWizardVerbs(
     updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
       try {
         return await bridge.updateProject(id, patch)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    authorizeExternalDocPath: async (path: string): Promise<void> => {
+      try {
+        await bridge.authorizeExternalDocPath(path)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/**
+ * The C7 confirm card's IPC face (M4 task 1.6 — the 1.5 build stage's real
+ * chain): probeProjectPath (the D11 detection report) + registerProject (the
+ * v2 face — the card's single write) + authorizeExternalDocPath (the 仓外自
+ * 定义 explicit-authorization record, BIZ-001/003 收窄). Every member mirrors
+ * its §Interface 1 v3 verb one-to-one with rejections renormalized to the
+ * serialized {@link WorkbenchVerbError} shape (ERR_PROJECT_EXISTS with the
+ * registered fast-lane payload / ERR_CODE_ROOT_UNREADABLE /
+ * ERR_EXTERNAL_PATH_UNREADABLE), so the card's state machine runs against the
+ * real codes from day one.
+ */
+export function createIpcConfirmCardFace(bridge: WorkbenchIpcBridge): ConfirmCardFace {
+  return {
+    probeProjectPath: async (input: ProbeProjectPathInput): Promise<DetectReport> => {
+      try {
+        return await bridge.probeProjectPath(input)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    registerProject: async (input: RegisterProjectInputV2): Promise<Project> => {
+      try {
+        // The v2 face rides the same dual-shaped verb channel main-side
+        // ('anchor' in input routes to the D11 lifecycle chain).
+        return await bridge.registerProject(input)
       } catch (error) {
         renormalize(error)
       }
