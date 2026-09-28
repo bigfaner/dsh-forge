@@ -520,6 +520,50 @@ export type WorkbenchKey =
   | 'tree.rail.newSession'
   | 'tree.rail.search'
   | 'tree.rail.settings'
+  | 'confirmCard.title'
+  | 'confirmCard.subtitle'
+  | 'confirmCard.close'
+  | 'confirmCard.code.label'
+  | 'confirmCard.code.placeholder'
+  | 'confirmCard.code.browse'
+  | 'confirmCard.name.label'
+  | 'confirmCard.name.placeholder'
+  | 'confirmCard.docs.label'
+  | 'confirmCard.docs.edit'
+  | 'confirmCard.trace'
+  | 'confirmCard.advanced.summary'
+  | 'confirmCard.advanced.placeholder'
+  | 'confirmCard.custom.note'
+  | 'confirmCard.custom.pendingAuth'
+  | 'confirmCard.auth.outside'
+  | 'confirmCard.auth.grant'
+  | 'confirmCard.auth.granted'
+  | 'confirmCard.auth.failed'
+  | 'confirmCard.mode.app'
+  | 'confirmCard.mode.appOption'
+  | 'confirmCard.mode.repo-new'
+  | 'confirmCard.mode.repo-newOption'
+  | 'confirmCard.mode.repo-existing'
+  | 'confirmCard.mode.repo-existingOption'
+  | 'confirmCard.mode.custom'
+  | 'confirmCard.docsPath.placeholder'
+  | 'confirmCard.cancel'
+  | 'confirmCard.submit'
+  | 'confirmCard.submit.busy'
+  | 'confirmCard.submit.failed'
+  | 'confirmCard.detect.probing'
+  | 'confirmCard.detect.invalid'
+  | 'confirmCard.detect.registered'
+  | 'confirmCard.detect.missing'
+  | 'confirmCard.detect.notDir'
+  | 'confirmCard.detect.unreadable'
+  | 'confirmCard.detect.parent'
+  | 'confirmCard.detect.git'
+  | 'confirmCard.detect.gitForge'
+  | 'confirmCard.detect.nogit'
+  | 'confirmCard.note.repo-existing'
+  | 'confirmCard.note.repo-new'
+  | 'confirmCard.note.app'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1045,4 +1089,49 @@ export const en: Record<WorkbenchKey, string> = {
   'tree.rail.newSession': 'New session',
   'tree.rail.search': 'Search',
   'tree.rail.settings': 'Settings',
+  // C7 添加项目确认卡 (task 1.5; vocabulary: Add project / Docs location)
+  'confirmCard.title': 'Add project',
+  'confirmCard.subtitle': 'Just point at the code folder — the docs location is pre-picked by detection, ✎ to change',
+  'confirmCard.close': 'Close',
+  'confirmCard.code.label': 'Code area',
+  'confirmCard.code.placeholder': 'Drag / paste / browse the code folder',
+  'confirmCard.code.browse': 'Browse…',
+  'confirmCard.name.label': 'Project name',
+  'confirmCard.name.placeholder': 'Folder name, editable',
+  'confirmCard.docs.label': 'Docs location',
+  'confirmCard.docs.edit': 'Change docs location',
+  'confirmCard.trace': 'Process trace · app data directory (this machine, not in git)',
+  'confirmCard.advanced.summary': 'Advanced: custom docs path (outside the code area requires authorization)',
+  'confirmCard.advanced.placeholder': 'Absolute path of a custom docs location',
+  'confirmCard.custom.note': 'Custom docs location',
+  'confirmCard.custom.pendingAuth': ' · authorization pending',
+  'confirmCard.auth.outside': 'Outside the code area — explicit authorization is required before use (advanced custom only)',
+  'confirmCard.auth.grant': 'Authorize this location',
+  'confirmCard.auth.granted': 'Authorized · recheck passed',
+  'confirmCard.auth.failed': 'Authorization recheck failed — the location is unreadable; fix the path and retry',
+  'confirmCard.mode.app': 'App-managed',
+  'confirmCard.mode.appOption': 'App-managed (app data directory, not in git)',
+  'confirmCard.mode.repo-new': 'In repo',
+  'confirmCard.mode.repo-newOption': 'In repo (committed with git, PR-reviewable)',
+  'confirmCard.mode.repo-existing': 'Reuse in-repo',
+  'confirmCard.mode.repo-existingOption': 'Reuse the detected in-repo forge docs',
+  'confirmCard.mode.custom': 'Custom',
+  'confirmCard.docsPath.placeholder': '<code-area>/docs',
+  'confirmCard.cancel': 'Cancel (Esc)',
+  'confirmCard.submit': 'Add project',
+  'confirmCard.submit.busy': 'Adding…',
+  'confirmCard.submit.failed': 'Add failed — kept open in the card to fix (never silent)',
+  'confirmCard.detect.probing': 'Detecting…',
+  'confirmCard.detect.invalid': 'Invalid path — an absolute path is required; bare drives and relative paths are rejected',
+  'confirmCard.detect.registered': 'Already registered — one project per code root',
+  'confirmCard.detect.missing': 'Path does not exist — the code area must be an existing directory (exists · readable are the registration checks; writability is re-checked at runtime, never a gate)',
+  'confirmCard.detect.notDir': 'Path is not a directory — the code area must be an existing directory',
+  'confirmCard.detect.unreadable': 'Directory unreadable — the hard checks are exists + directory + readable',
+  'confirmCard.detect.parent': 'Multiple git repositories under this directory — did you mean one of these:',
+  'confirmCard.detect.git': '✓ git repository',
+  'confirmCard.detect.gitForge': '✓ git repository · forge docs tree detected',
+  'confirmCard.detect.nogit': 'No git detected — git is not required; docs will be app-managed (nothing is written into this directory)',
+  'confirmCard.note.repo-existing': 'Forge docs detected — reusing in-repo (follows git)',
+  'confirmCard.note.repo-new': 'Committed with git · PR-reviewable',
+  'confirmCard.note.app': 'App data directory (this machine) · app-managed, not in git',
 }

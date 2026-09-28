@@ -34,6 +34,7 @@
 import type {
   ApprovalRow, DispatchedRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
   FeatureStatus, FeatureSummary,
+  DetectReport,
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
   MissingItem, PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch,
@@ -49,6 +50,7 @@ import type {
   TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
+import { checkEntry, type ConfirmCardFace } from '../components/confirm-card/card-state'
 
 /**
  * The two-tier plugin fixture (task 5.12 widens it to the REAL product-
@@ -350,6 +352,130 @@ export function createMockRegisterWizardFace(
       }
       projects = projects.map(project => (project.id === id ? updated : project))
       return updated
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// C7 添加项目确认卡, task 1.5 (mock 侦测动词独立构建; 1.6 wires the real
+// probeProjectPath / registerProject verbs)
+// ---------------------------------------------------------------------------
+
+/** Parent-dir fixture (§5.4 父目录误选): three direct child repos → chips. */
+export const MOCK_CARD_PARENT_ROOT = 'Z:/project/dsh'
+/** Missing-path fixture (硬校验 ①: 存在). */
+export const MOCK_CARD_MISSING_ROOT = 'Z:/project/ghost-repo'
+/** No-git fixture (信息态主路径: 零 git 强制,一等公民). */
+export const MOCK_CARD_NOGIT_ROOT = 'Z:/project/plain-demo'
+/** Git + forge-tree fixture (最强证据: 沿用仓内). */
+export const MOCK_CARD_FORGE_ROOT = 'Z:/work/legacy-repo'
+/** Unreadable-dir fixture (硬校验 ①: 可读). */
+export const MOCK_CARD_UNREADABLE_ROOT = 'Z:/work/locked-repo'
+
+/** The parent fixture's child repos (chip rows; name + path pairs). */
+export const MOCK_CARD_PARENT_CHILDREN: ReadonlyArray<{ name: string; path: string }> = Object.freeze(
+  ['demo-app', 'legacy-repo', 'plain-demo'].map(name => Object.freeze({ name, path: `${MOCK_CARD_PARENT_ROOT}/${name}` })),
+)
+
+/**
+ * The C7 confirm card's build-stage face (task 1.5): a STATEFUL local twin of
+ * the Interface 1 v3 verb pair over a closure-held registry — the detection
+ * verb mirrors workbench/projects-identity/detect.ts's report semantics
+ * (rejected entries → the pathKey=null report; the registered fast lane keys
+ * off the state's code roots via the D11 folded compare), and registerProject
+ * accepts ONLY the v2 face ({anchor, docsPlacement, …} — the card's single
+ * write): UNIQUE root → ERR_PROJECT_EXISTS; app/custom fold to the storage
+ * external form with the kernel-derived docs root for app. An unknown
+ * absolute path detects as a plain git repo (the wizard twin's permissive
+ * default). authorizeExternalDocPath reuses the unreadable external fixture
+ * (ERR_EXTERNAL_PATH_UNREADABLE → the card's 授权行错误态).
+ */
+export function createMockConfirmCardFace(
+  initial: WorkbenchState = MOCK_WORKBENCH_STATE,
+): ConfirmCardFace {
+  let projects: readonly Project[] = initial.projects
+  let seq = 0
+  const findByRoot = (anchor: string): Project | undefined =>
+    projects.find(project => samePath(project.codeRoot, anchor))
+  const rejected = (input: string): DetectReport => ({
+    input,
+    canonicalPath: null,
+    pathKey: null,
+    identity: null,
+    exists: false,
+    isDir: false,
+    readable: false,
+    registered: null,
+    gitRoot: null,
+    forgeTreeHit: false,
+    childRepos: [],
+  })
+  return {
+    probeProjectPath: async (input) => {
+      const entry = checkEntry(input.path)
+      if (!entry.ok) return rejected(input.path)
+      const base = normalizePathForCompare(entry.path)
+      const registeredRow = findByRoot(base)
+      const common = {
+        input: input.path,
+        canonicalPath: base,
+        pathKey: base.toUpperCase(),
+        identity: { dev: '1', ino: '2' },
+        registered: registeredRow === undefined
+          ? null
+          : { projectId: registeredRow.id, displayName: registeredRow.displayName },
+      }
+      if (samePath(base, MOCK_CARD_MISSING_ROOT)) {
+        return { ...common, exists: false, isDir: false, readable: false, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      const dir = { exists: true, isDir: true }
+      if (samePath(base, MOCK_CARD_UNREADABLE_ROOT)) {
+        return { ...common, ...dir, readable: false, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      if (samePath(base, MOCK_CARD_PARENT_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: null, forgeTreeHit: false, childRepos: MOCK_CARD_PARENT_CHILDREN }
+      }
+      if (samePath(base, MOCK_CARD_NOGIT_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      if (samePath(base, MOCK_CARD_FORGE_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: base, forgeTreeHit: true, childRepos: [] }
+      }
+      // Permissive default: a plain git repo without a forge tree (the
+      // prototype's default tier — 仓内新建).
+      return { ...common, ...dir, readable: true, gitRoot: base, forgeTreeHit: false, childRepos: [] }
+    },
+    registerProject: async (input) => {
+      const root = normalizePathForCompare(input.anchor)
+      if (findByRoot(root) !== undefined) {
+        throw { code: 'ERR_PROJECT_EXISTS', message: `build-stage mock: ${input.anchor} is already registered` }
+      }
+      seq += 1
+      const external = input.docsPlacement === 'app' || input.docsPlacement === 'custom'
+      const project: Project = {
+        id: `mock-confirm-project-${String(seq).padStart(4, '0')}`,
+        displayName: input.displayName !== undefined && input.displayName.trim() !== ''
+          ? input.displayName.trim()
+          : directoryNameOf(root),
+        codeRoot: root,
+        docLocationType: external ? 'external' : 'in_repo',
+        docLocationPath: external
+          ? (input.docsPlacement === 'custom' ? (input.docsPath ?? '') : `${MOCK_WORKBENCH_PATHS.docsRoot}/${directoryNameOf(root)}`)
+          : null,
+        createdAt: MOCK_NOW,
+        lastActivatedAt: null,
+        archived: false,
+        sortOrder: seq,
+        projectionState: 'pending',
+        docsPlacement: input.docsPlacement,
+      }
+      projects = [...projects, project]
+      return project
+    },
+    authorizeExternalDocPath: async (path) => {
+      if (samePath(path, MOCK_WIZARD_EXTERNAL_UNREADABLE)) {
+        throw { code: 'ERR_EXTERNAL_PATH_UNREADABLE', message: `build-stage mock: ${path} is unreadable` }
+      }
     },
   }
 }
