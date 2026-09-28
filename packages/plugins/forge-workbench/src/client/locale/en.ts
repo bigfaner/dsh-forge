@@ -12,18 +12,9 @@ export type WorkbenchKey =
   | 'project.empty.body'
   | 'project.toast.registered'
   | 'project.toast.located'
-  | 'shell.title'
   | 'view.session'
   | 'rail.label'
-  | 'tabs.label'
-  | 'tab.overview'
-  | 'tab.proposals'
-  | 'tab.tasks'
-  | 'tab.features'
   | 'chrome.addProject'
-  | 'switcher.label'
-  | 'switcher.empty'
-  | 'switcher.emptyHint'
   | 'gate.title'
   | 'gate.body'
   | 'gate.register'
@@ -578,18 +569,9 @@ export const en: Record<WorkbenchKey, string> = {
   'project.empty.body': 'Add a code root folder to start the project workbench.',
   'project.toast.registered': 'Added {name} — switched to it as the active project',
   'project.toast.located': '{name} is already registered — opened',
-  'shell.title': 'forge workbench',
   'view.session': 'Sessions',
   'rail.label': 'Primary view switch',
-  'tabs.label': 'Workbench views',
-  'tab.overview': 'Overview',
-  'tab.proposals': 'Proposals',
-  'tab.tasks': 'Tasks',
-  'tab.features': 'Features',
   'chrome.addProject': 'Add project',
-  'switcher.label': 'Active project',
-  'switcher.empty': 'No projects yet',
-  'switcher.emptyHint': 'Register a forge project to activate the workbench.',
   'gate.title': 'No active project',
   'gate.body': 'Tasks and features are organized per project. Register a project to unlock these views.',
   'gate.register': 'Register a project',

@@ -11,7 +11,6 @@ import {
 } from '../src/client/mocks/workbench.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
 import type { PluginRow, Project, WorkbenchState } from '../src/client/ipc-types.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.13 — the UF6 integration units: the 5.12 plugin section wired into
 // the real overview page composition (existing-page 挂载, composition layer
@@ -212,21 +211,11 @@ describe('integration: list + toggle round trip in-page (AC3)', () => {
   })
 
   it('the shell overview seat threads its pluginFace into the in-page section (real data source, not the default twin)', async () => {
-    let snapshot: ViewKeySnapshot = { view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined }
-    const viewProps = {
-      useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-      selectWorkbenchTab: vi.fn((tab: WorkbenchTabKey) => {
-        snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-      }),
-      openFeatureDetail: (slug: string) => {
-        snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
-      },
-    } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>
     // A mandatory-only roster — the default twin would render 4 rows.
     const seatFace = makePluginFace(MOCK_PLUGIN_ROWS.filter(row => row.mandatory))
     render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...viewProps}
+        t={t.en as WorkbenchShellProps['t']}
         overview={{ pluginFace: seatFace }}
       />,
     )

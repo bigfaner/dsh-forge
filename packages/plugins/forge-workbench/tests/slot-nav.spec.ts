@@ -6,7 +6,7 @@ import { ViewSwitchController } from '../src/client/nav/view-switch.ts'
 import { installSlotNav } from '../src/client/nav/slot-inject.ts'
 import { createViewKeyStore } from '../src/client/store/view-key.ts'
 import { MAIN_SLOT, PANEL_ID, SIDEBAR_SLOT } from '../src/client/contract.ts'
-import type { PersistedViewKey, WorkbenchTabKey } from '../src/client/store/view-key.ts'
+import type { PersistedViewKey } from '../src/client/store/view-key.ts'
 
 // The shell registration (and through it the upstream icon) resolves through
 // the module table at runtime (browser bundle); the npm node entry carries
@@ -18,11 +18,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 }))
 
 // Task 3.3 AC1 (上游槽位路径) against the real upstream SlotCore (npm
-// 0.1.6-alpha.2): the 3.2 registration pair now carries the view-key machine —
-// the main registration's inject face (the store as a hooks source + the tab
-// action + panel-lifecycle notifications), the carrier attach on commit (whose
-// projection IS the restart restore through ctx.layout.selectPanel), and the
-// commit notifications the form coordinator listens to.
+// 0.1.6-alpha.2), M4 1.7 收口后: the 3.2 registration pair — the main
+// registration's inject face is now the panel-lifecycle pair ALONE (the
+// retired view-key face died with the escape door's interior), the carrier
+// attach on commit (whose projection IS the restart restore through
+// ctx.layout.selectPanel), and the commit notifications the form coordinator
+// listens to.
 
 /** A minimal layout service double recording selectPanel calls. */
 function makeLayout() {
@@ -133,13 +134,10 @@ describe('slot nav: registration and the injected view face (AC1)', () => {
     const entry = mainEntry(nav.core)
     expect(entry).toBeDefined()
     const face = faceOf(entry as StoredEntry)
-    // The store rides the hooks compartment: the framework synthesizes the
-    // `useViewKey` selector from it (getSnapshot/subscribe observable).
-    const source = (face.hooks as Record<string, { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }>).viewKey
-    expect(source.getSnapshot()).toEqual(nav.store.getSnapshot())
-    expect(typeof source.subscribe).toBe('function')
-    expect(typeof face.selectWorkbenchTab).toBe('function')
-    expect(typeof face.openFeatureDetail).toBe('function')
+    // M4 1.7: the panel-lifecycle pair is the whole inject face — the retired
+    // view face (the machine as a hooks source + the tab/subview actions)
+    // died with the escape door's interior.
+    expect(Object.keys(face).sort()).toEqual(['notifyDismissed', 'notifyPresented'])
     expect(typeof face.notifyPresented).toBe('function')
     expect(typeof face.notifyDismissed).toBe('function')
     // The sidebar row keeps the 3.2 contract.
@@ -152,7 +150,7 @@ describe('slot nav: registration and the injected view face (AC1)', () => {
 
 describe('slot nav: the carrier projects through ctx.layout.selectPanel (AC1/AC4)', () => {
   it('attach-on-commit projects the persisted view — 重启回到上次视图 (workbench case)', () => {
-    const nav = makeNav({ view: 'workbench', workbenchTab: 'workbench/tasks' })
+    const nav = makeNav({ view: 'workbench', workbenchTab: 'workbench/overview' })
     const layout = makeLayout()
     installSlotNav(makeFakeCtx(nav.core, layout), {
       controller: nav.controller, store: nav.store, label: () => 'Workbench',
@@ -170,42 +168,6 @@ describe('slot nav: the carrier projects through ctx.layout.selectPanel (AC1/AC4
     })
     const disposeParent = declareNavigationSlots(nav.core)
     expect(layout.calls).toEqual([null])
-    disposeParent()
-  })
-
-  it('the tab action drives the shared controller: machine transition + persist + projection', () => {
-    const nav = makeNav()
-    const layout = makeLayout()
-    installSlotNav(makeFakeCtx(nav.core, layout), {
-      controller: nav.controller, store: nav.store, label: () => 'Workbench',
-    })
-    const disposeParent = declareNavigationSlots(nav.core)
-    const face = faceOf(mainEntry(nav.core) as StoredEntry)
-    ;(face.selectWorkbenchTab as (tab: WorkbenchTabKey) => void)('workbench/features')
-    expect(nav.store.getSnapshot()).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined,
-    })
-    expect(nav.persistenceWrites.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
-    expect(layout.calls.at(-1)).toBe('workbench')
-    disposeParent()
-  })
-
-  it('the feature-detail action drives the shared controller: subview slug lands, projection follows (5.9)', () => {
-    const nav = makeNav()
-    const layout = makeLayout()
-    installSlotNav(makeFakeCtx(nav.core, layout), {
-      controller: nav.controller, store: nav.store, label: () => 'Workbench',
-    })
-    const disposeParent = declareNavigationSlots(nav.core)
-    const face = faceOf(mainEntry(nav.core) as StoredEntry)
-    ;(face.openFeatureDetail as (slug: string) => void)('dsh-forge-m1')
-    expect(nav.store.getSnapshot()).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m1',
-    })
-    // The slug stays session-scoped: the persisted projection carries only
-    // the tab dimension (3.3 AC4).
-    expect(nav.persistenceWrites.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
-    expect(layout.calls.at(-1)).toBe('workbench')
     disposeParent()
   })
 

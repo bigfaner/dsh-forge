@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DOC_KIND_LABEL_KEYS, FEATURE_DOC_KINDS, FEATURE_STATUSES, FEATURE_STATUS_LABEL_KEYS,
@@ -9,15 +10,14 @@ import { FeatureDocs } from '../src/client/views/features/FeatureDocs.tsx'
 import type { FeatureDocsProps } from '../src/client/views/features/FeatureDocs.tsx'
 import { FeaturesPage } from '../src/client/views/FeaturesPage.tsx'
 import type { FeaturesPageProps } from '../src/client/views/FeaturesPage.tsx'
-import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
+import { FeaturesView } from '../src/client/views/features/FeaturesView.tsx'
+import type { FeaturesViewProps } from '../src/client/views/features/FeaturesView.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
 import {
   MOCK_FEATURE_BOARD, MOCK_FEATURE_BOARD_EMPTY, createMockFeatureBoardFace, createMockFeatureDocFace,
 } from '../src/client/mocks/workbench.ts'
 import type { DocKind, FeatureDoc } from '../src/client/ipc-types.ts'
-import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.9 — the UF4 feature board BUILD units (mocked faces; 5.16 wires the
 // IPC verbs). AC map:
@@ -443,71 +443,39 @@ describe('FeatureStepper: phases from the ONE vocabulary', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Shell integration: the seat mount + the view-key subview semantics (AC5)
+// AC5: the subview round trip — re-hosted by M4 1.7 (the page's own routing
+// props carry what the retired shell machine drove; the P2 rightbar pane
+// becomes the host that owns this state)
 // ---------------------------------------------------------------------------
 
-describe('shell integration: the features seat + the subview round trip', () => {
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined, ...initial,
-    }
-    const openFeatureDetail = vi.fn((slug: string) => {
-      snapshot = { view: 'workbench', workbenchTab: 'workbench/features', featureSlug: slug }
-    })
-    const selectWorkbenchTab = vi.fn((tab: WorkbenchTabKey) => {
-      snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-    })
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab,
-        openFeatureDetail,
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-      selectWorkbenchTab,
-      openFeatureDetail,
-    }
+describe('feature board: the subview round trip (AC5, re-hosted)', () => {
+  /** Local-slug routing over the page's own seams (the retired machine's transitions). */
+  function FeaturesRoutingHarness(props: { initialSlug?: string; seat?: FeaturesViewProps['seat'] }) {
+    const [slug, setSlug] = useState<string | undefined>(props.initialSlug)
+    return (
+      <FeaturesView
+        t={t.en as (key: WorkbenchKey) => string}
+        featureSlug={slug}
+        onOpenFeature={setSlug}
+        onBack={() => { setSlug(undefined) }}
+        seat={props.seat}
+        chromeProjectId="p-shell"
+      />
+    )
   }
 
-  it('mounts the UF4 page in the reserved features container; a card enters the subview through the machine', async () => {
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/features' })
+  it('a card enters the subview through the open seam; the breadcrumb back returns to the list (返回保留列表态)', async () => {
     const loadFeatureBoard = vi.fn(async () => MOCK_FEATURE_BOARD)
-    const shell = render(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']}
-        features={{ face: { loadFeatureBoard } }}
-        {...viewFace.props}
-      />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-view="dsh-forge-view-features"]')).not.toBeNull() })
+    render(<FeaturesRoutingHarness seat={{ face: { loadFeatureBoard } }} />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-feature-card="dsh-forge-m2"]')).not.toBeNull()
     })
     fireEvent.click(document.querySelector('[data-dsh-forge-feature-card="dsh-forge-m2"]') as HTMLElement)
-    expect(viewFace.openFeatureDetail).toHaveBeenCalledWith('dsh-forge-m2')
-
-    // The machine transition (mutating here mirrors the controller's) swaps
-    // the mount container and renders the detail subview.
-    shell.rerender(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']}
-        features={{ face: { loadFeatureBoard } }}
-        {...viewFace.props}
-      />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-view="dsh-forge-view-feature-detail"]')).not.toBeNull() })
-    expect(document.querySelector('[data-dsh-forge-feature-detail="dsh-forge-m2"]')).not.toBeNull()
-
-    // The breadcrumb return fires the tab action — the machine clears the slug.
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-feature-detail="dsh-forge-m2"]')).not.toBeNull()
+    })
+    // The breadcrumb return clears the slug through the page's back seam.
     fireEvent.click($('[data-dsh-forge-feature-back]'))
-    expect(viewFace.selectWorkbenchTab).toHaveBeenCalledWith('workbench/features')
-    shell.rerender(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']}
-        features={{ face: { loadFeatureBoard } }}
-        {...viewFace.props}
-      />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-view="dsh-forge-view-features"]')).not.toBeNull() })
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-feature-card="dsh-forge-m2"]')).not.toBeNull()
     })
@@ -515,14 +483,8 @@ describe('shell integration: the features seat + the subview round trip', () => 
     expect(loadFeatureBoard).toHaveBeenCalledTimes(1)
   })
 
-  it('re-selecting the features tab while the subview is open returns to the list (the return stack)', async () => {
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m1' })
-    render(
-      <WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...viewFace.props} />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-view="dsh-forge-view-feature-detail"]')).not.toBeNull() })
-    // The TabBar re-select routes through the same machine tab action.
-    fireEvent.click(document.querySelector('[data-dsh-forge-tab="workbench/features"]') as HTMLElement)
-    expect(viewFace.selectWorkbenchTab).toHaveBeenCalledWith('workbench/features')
+  it('the :slug initial mount addresses the detail subview directly', async () => {
+    render(<FeaturesRoutingHarness initialSlug="dsh-forge-m1" />)
+    await waitFor(() => { expect($('[data-dsh-forge-feature-stepper]')).not.toBeNull() })
   })
 })

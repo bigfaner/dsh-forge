@@ -103,7 +103,7 @@
       "dependencies": [
         "1.6"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "1.7-legacy-view-retirement.md",
       "record": "records/1.7-legacy-view-retirement.md",
       "breaking": true,

@@ -20,6 +20,13 @@
  * panellist「项目」row registers first, and — bridge-gated — the
  * `sidebar.workspaces` shadowing seat swaps the native browser for the forge
  * project tree over the active-project pointer store + the C7 confirm card.
+ *
+ * M4 task 1.7 retired the old view family (Integration 6): the `workbench`
+ * main panel is now the OVERVIEW ESCAPE DOOR single page, the M2/M3 chrome
+ * (TopBar/TabBar/ProjectSwitcher) is deleted, and the view-key machine's
+ * interior collapsed to `workbench/overview` — the boards re-home into the
+ * rightbar pane family in P2 (their components survive, unmounted from this
+ * shell).
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the renderer-owned slots service (ctx.slots) Context merge.
@@ -29,13 +36,11 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import {
   createLocalStoragePersistence, createViewKeyStore,
 } from './store/view-key'
-import { createBoardSessionStore } from './store/board-session'
 import { installToolBridgeClient } from './ipc/tool-bridge'
 import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
 import { installApprovalAnswerRelay } from './ipc/approval-answer'
 import { getWorkbenchIpcBridge } from './ipc/workbench'
 import { createIpcConfirmCardFace } from './ipc/workbench'
-import { createSessionHandover } from './session-handover'
 import { ViewSwitchController } from './nav/view-switch'
 import { installRailNav } from './nav/rail'
 import {
@@ -54,7 +59,7 @@ export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, 
 export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
 export type {
-  WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchViewFace, WorkbenchPanelLifecycle,
+  WorkbenchPanelIconProps, WorkbenchShellProps, WorkbenchPanelLifecycle,
   WorkbenchChromeFace, OverviewFace, WorkbenchOverviewSeat,
   TaskBoardFace, TaskBoardSeat, DispatchFace,
   FeatureBoardFace, FeatureDocFace, WorkbenchFeaturesSeat,
@@ -321,13 +326,6 @@ export function apply(ctx: ClientContext): void {
   // the old `workbench` escape-hatch panel is normalized BEFORE the slot
   // carrier's attach-time projection could re-select it.
   normalizeBootDefaultView(store, controller)
-  // The session hand-over + the board session store (task 5.11; M3 6.1
-  // slimmed the seat to the hand-over): both live at plugin lifetime — ABOVE
-  // the shell — because a board round-trip unmounts the shell in the slot
-  // path (the keyed main slot) and the hand-over + the selection/scroll/badge
-  // memory must survive it.
-  const launchSeat = createSessionHandover(ctx, controller)
-  const boardSession = createBoardSessionStore()
   // M3 task 2.1 (T2): the renderer tool bridge — plugin-lifetime pump that
   // answers the host's forge_task_* tool calls over the whitelisted IPC verbs.
   // Guarded throughout (hostless worlds stay silent; the host degrades via its
@@ -401,8 +399,6 @@ export function apply(ctx: ClientContext): void {
       // the rail is only the visible toggle. Otherwise the rail owns the
       // workbench surface itself.
       content: mainCommitted ? 'chrome' : 'overlay',
-      launch: launchSeat,
-      boardSession,
     })
   }
 
@@ -419,8 +415,6 @@ export function apply(ctx: ClientContext): void {
   const disposeSlotNav = installSlotNav(ctx, {
     controller,
     store,
-    launch: launchSeat,
-    boardSession,
     label: () => t('panel'),
     onMainCommitted: () => {
       mainCommitted = true

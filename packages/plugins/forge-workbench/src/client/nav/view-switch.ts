@@ -1,12 +1,19 @@
 /**
- * The dual-view switching controller (task 3.3): the ONE write path both
- * navigation forms share. Behavior-contract identity between the forms (task
- * Hard Rules: any interaction difference is a defect) is structural here —
- * both forms call the same switch* methods, which transition the same
+ * The dual-view switching controller (task 3.3; M4 task 1.7 collapsed the
+ * interior transitions with the tab family's retirement): the ONE write path
+ * both navigation forms share. Behavior-contract identity between the forms
+ * (task Hard Rules: any interaction difference is a defect) is structural
+ * here — both forms call the same switch* methods, which transition the same
  * view-key machine, persist the same projection, and project onto the single
  * live carrier. Keyboard parity comes from the same activation surface: every
  * switch control in either form is a native button (click / Enter / Space),
  * wired to these methods.
+ *
+ * The addressable interior is the escape door alone (`workbench/overview`),
+ * so the controller's face is the binary top-level switch plus the external
+ * adoption seam — the retired tab/subview transitions
+ * (switchWorkbenchTab / openFeatureDetail / openProposalDetail) died with
+ * their keys (Integration 6); the boards' new hosts arrive with P2.
  *
  * Carriers are exclusive: attaching one detaches the previous (the slot path
  * and the rail never both own presentation). External selection changes — the
@@ -15,9 +22,7 @@
  * which persists the adopted view but never re-projects (the carrier already
  * reflects it; re-presenting would loop).
  */
-import type {
-  TopLevelView, ViewKeySnapshot, ViewKeyStore, WorkbenchTabKey,
-} from '../store/view-key'
+import type { TopLevelView, ViewKeySnapshot, ViewKeyStore } from '../store/view-key'
 
 /** Which navigation form is presenting (decision D3: slot path preferred, rail fallback). */
 export type NavForm = 'slot' | 'rail'
@@ -70,38 +75,9 @@ export class ViewSwitchController {
     this.project()
   }
 
-  /** Switch to the workbench view, optionally targeting a tab. */
-  switchWorkbench(tab?: WorkbenchTabKey): void {
-    this.store.selectWorkbench(tab)
-    this.project()
-  }
-
-  /** Switch the workbench interior tab (stays in the workbench view). */
-  switchWorkbenchTab(tab: WorkbenchTabKey): void {
-    this.store.selectWorkbenchTab(tab)
-    this.project()
-  }
-
-  /**
-   * Open the feature-detail subview (task 5.9): the features tab carrying a
-   * slug — the machine's own subview-addressing transition, driven through
-   * the same one write path both navigation forms share. The return trip is
-   * `switchWorkbenchTab('workbench/features')` (the machine clears the slug).
-   */
-  openFeatureDetail(slug: string): void {
-    this.store.openFeatureDetail(slug)
-    this.project()
-  }
-
-  /**
-   * Open the proposal-detail subview (task 5.5, UF5): the proposals tab
-   * carrying a slug — the machine's own subview-addressing transition, the
-   * same one write path both navigation forms share. The return trip is
-   * `switchWorkbenchTab('workbench/proposals')` (the machine clears the slug
-   * — the breadcrumb-return contract).
-   */
-  openProposalDetail(slug: string): void {
-    this.store.openProposalDetail(slug)
+  /** Switch to the workbench escape door (the overview single page). */
+  switchWorkbench(): void {
+    this.store.selectWorkbench()
     this.project()
   }
 

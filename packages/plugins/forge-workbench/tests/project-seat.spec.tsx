@@ -263,7 +263,7 @@ describe('AC1: boot default + active-project pointer', () => {
   it('normalizeBootDefaultView: a persisted workbench view lands on the conversation (启动首屏)', () => {
     const writes: Array<{ view: string }> = []
     const store = createViewKeyStore({
-      read: () => ({ view: 'workbench', workbenchTab: 'workbench/tasks' }),
+      read: () => ({ view: 'workbench', workbenchTab: 'workbench/overview' }),
       write: (value) => { writes.push(value) },
     })
     const controller = new ViewSwitchController(store)

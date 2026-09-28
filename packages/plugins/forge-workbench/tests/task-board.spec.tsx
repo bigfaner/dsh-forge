@@ -6,8 +6,8 @@ import {
 } from '../src/client/views/TaskBoardPage.tsx'
 import { TaskBoardPage } from '../src/client/views/TaskBoardPage.tsx'
 import type { TaskBoardPageProps } from '../src/client/views/TaskBoardPage.tsx'
+import { TasksView } from '../src/client/views/tasks/TasksView.tsx'
 import { DEFAULT_BOARD_FILTER, type BoardViewKey } from '../src/client/views/tasks/TaskToolbar.tsx'
-import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
 import {
@@ -15,8 +15,6 @@ import {
 } from '../src/client/mocks/workbench.ts'
 import type { TaskBoardData, TaskSummary, WorkbenchEvent } from '../src/client/ipc-types.ts'
 import type { TaskBoardFace } from '../src/client/contract.ts'
-import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.5 — the UF2 board BUILD units (mocked face; 5.15 wires the IPC
 // verbs). AC map:
@@ -827,43 +825,26 @@ describe('toolbar controls: the dropdown keyboard contract (WAI-ARIA menu, Proje
   })
 })
 
-describe('shell integration: the tasks seat mounts the board', () => {
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined, ...initial,
-    }
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab: (tab: WorkbenchTabKey) => {
-          snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-        },
-        openFeatureDetail: (slug: string) => {
-          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
-        },
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-    }
-  }
-
-  it('renders the board inside the reserved workbench/tasks container, seat-wired', async () => {
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/tasks' })
+describe('the tasks seat wires the board (re-hosted M4 1.7: the view mounts directly)', () => {
+  it('renders the seat-wired board; a card activation hands the task to onSelect', async () => {
     const onSelect = vi.fn()
     const face = makeFace()
     render(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']}
-        {...viewFace.props}
-        taskBoard={{ face: { loadBoard: face.loadBoard as TaskBoardFace['loadBoard'] }, onSelect }}
+      <TasksView
+        t={t.en as (key: WorkbenchKey) => string}
+        projectId="p-shell"
+        onSelect={onSelect}
+        seat={{ face: { loadBoard: face.loadBoard as TaskBoardFace['loadBoard'] } }}
       />,
     )
     await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-toolbar]')).not.toBeNull()
+      expect(document.querySelector('[data-dsh-forge-task-toolbar]')).not.toBeNull()
     })
     // The board's default view is the DAG (5.6); switch to view B for the
     // card-click leg of the seat wiring.
     fireEvent.click(document.querySelector('[data-dsh-forge-board-view="grouped"]') as HTMLElement)
     await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-card="dsh-forge-m2/5.5"]')).not.toBeNull()
+      expect(document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.5"]')).not.toBeNull()
     })
     fireEvent.click(document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.5"]') as HTMLElement)
     expect(onSelect).toHaveBeenCalledTimes(1)

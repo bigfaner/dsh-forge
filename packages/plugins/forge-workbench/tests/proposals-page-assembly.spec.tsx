@@ -1,30 +1,27 @@
 // @vitest-environment jsdom
-// Task 5.5 — the UF5 proposals PAGE ASSEMBLY + tab-order revision units. AC map:
-//   AC1 装配/互跳 — ProposalsPage composes the 5.4 list/detail on the SECOND
-//      tab; detail open/back ride the view-key seams; the feature badge's
-//      互跳 fires onOpenFeature (the 提案 tab being the return path); the list
-//      seat STAYS MOUNTED while the detail is open (返回不重拉)
-//   AC2 tab 序/持久化 — the machine/controller/guard units live in
-//      view-key.spec / view-switch.spec; here the SHELL-level strip renders
-//      概览/提案/Feature/任务 and the proposals seat reserves its container
-//   AC3 项目上下文 — a tab round trip never touches the chrome's project
-//      context; the board data follows the project (loading skeleton on a
-//      keyed project switch)
-//   AC4 审批徽标 — the TabBar badge units live in chrome.spec; the shell
-//      feeds the count member (build form: 0 → no badge)
+// Task 5.5 — the UF5 proposals PAGE units; M4 task 1.7 re-hosted (the shell
+// no longer mounts the board — its main-panel key retired with Integration 6;
+// the P2 rightbar pane becomes the host). AC map:
+//   AC1 装配/互跳 — ProposalsPage composes the 5.4 list/detail; detail
+//      open/back ride the page's own routing props (proposalSlug +
+//      onOpenProposal/onBack — the contract the retired view-key machine
+//      drove from the shell, now pinned at the page boundary); the feature
+//      badge's 互跳 fires onOpenFeature; the list seat STAYS MOUNTED while
+//      the detail is open (返回不重拉)
+//   AC3 项目上下文 — the board data follows the project (loading skeleton on
+//      a keyed project switch)
 //   AC6 主路径 — not-found card, docsLost lost-card seams, skeleton
 //
 // Discipline note: render() ONCE per view, then waitFor(assertion) — never
 // render() inside waitFor's polling callback.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
 import { ProposalsPage } from '../src/client/views/ProposalsPage.tsx'
+import type { ProposalsPageProps } from '../src/client/views/ProposalsPage.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
-import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 import {
-  MOCK_EMPTY_WORKBENCH_STATE, MOCK_PROPOSAL_BOARD, MOCK_WORKBENCH_STATE, createMockProposalsFace,
+  MOCK_PROPOSAL_BOARD, MOCK_WORKBENCH_STATE, createMockProposalsFace,
 } from '../src/client/mocks/workbench.ts'
 
 // The upstream icons/dots resolve through the module table at runtime; the
@@ -50,34 +47,28 @@ afterEach(() => {
 })
 
 /**
- * A controllable view face (the shell.spec pattern, extended with the 5.5
- * proposal members): `set` mutates the snapshot the selector reads; the
- * action members record the shell's machine transitions.
+ * A page-level routing harness (the 1.7 re-host): local slug state drives
+ * list⇄detail through the page's own routing props — the contract the
+ * retired view-key machine drove from the shell, now pinned at the page
+ * boundary (the P2 rightbar pane becomes the host that owns this state).
  */
-function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
-  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail' | 'openProposalDetail'>
-  snapshot: () => ViewKeySnapshot
-} {
-  let snapshot: ViewKeySnapshot = {
-    view: 'workbench',
-    workbenchTab: 'workbench/overview',
-    featureSlug: undefined,
-    proposalSlug: undefined,
-    ...initial,
-  }
-  const props = {
-    useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-    selectWorkbenchTab: (tab: WorkbenchTabKey) => {
-      snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined, proposalSlug: undefined }
-    },
-    openFeatureDetail: (slug: string) => {
-      snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug, proposalSlug: undefined }
-    },
-    openProposalDetail: (slug: string) => {
-      snapshot = { ...snapshot, workbenchTab: 'workbench/proposals', proposalSlug: slug, featureSlug: undefined }
-    },
-  }
-  return { props, snapshot: () => snapshot }
+function ProposalsRoutingHarness(props: {
+  initialSlug?: string
+  onOpenFeature?: (featureSlug: string) => void
+  seat?: ProposalsPageProps['seat']
+}) {
+  const [slug, setSlug] = useState<string | undefined>(props.initialSlug)
+  return (
+    <ProposalsPage
+      t={t.en as (key: WorkbenchKey) => string}
+      projectId={PROJECT_ID}
+      proposalSlug={slug}
+      onOpenProposal={setSlug}
+      onBack={() => { setSlug(undefined) }}
+      onOpenFeature={props.onOpenFeature}
+      seat={props.seat}
+    />
+  )
 }
 
 /** A manually-gated board read (deterministic skeleton windows). */
@@ -90,62 +81,19 @@ function gatedBoard() {
 }
 
 // ---------------------------------------------------------------------------
-// AC1/AC2: the shell-level assembly — second tab, reserved containers, gate
+// AC1: the round trips — detail enter/return, feature 互跳 (page-level, the
+// 1.7 re-host: the page's own routing props carry what the retired shell
+// machine drove)
 // ---------------------------------------------------------------------------
 
-describe('WorkbenchShell × proposals tab (AC1/AC2)', () => {
-  it('mounts the ProposalsPage on the SECOND tab over the mock registry (build form)', async () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    // The strip order is the M3 revision: 概览/提案/Feature/任务 — 提案 second.
-    const tabs = Array.from(document.querySelectorAll('[data-dsh-forge-tab]'))
-    expect(tabs.map(tab => tab.getAttribute('data-dsh-forge-tab'))).toEqual([
-      'workbench/overview', 'workbench/proposals', 'workbench/features', 'workbench/tasks',
-    ])
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposals"]')).not.toBeNull()
-    await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-proposal-row="dsh-forge-m2"]')).not.toBeNull()
-    })
-  })
-
-  it('no active project: the proposals tab presents the guidance card, not an error', () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals' })
-    render(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props}
-        workbenchState={MOCK_EMPTY_WORKBENCH_STATE}
-      />,
-    )
-    expect(document.querySelector('[data-dsh-forge-gate]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposals"]')).toBeNull()
-  })
-
-  it('the proposal-detail subview addresses its own reserved container (:slug)', async () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals', proposalSlug: 'dsh-forge-m2' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposal-detail"]')).not.toBeNull()
-    await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-proposal-detail="dsh-forge-m2"]')).not.toBeNull()
-    })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// AC1/AC3: the round trips — detail enter/return, feature 互跳, project context
-// ---------------------------------------------------------------------------
-
-describe('WorkbenchShell × proposals navigation round trips (AC1/AC3)', () => {
+describe('ProposalsPage navigation round trips (AC1/AC3, re-hosted)', () => {
   it('detail enter → breadcrumb back returns to the board; the list seat stayed mounted (返回不重拉)', async () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals' })
-    const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
+    render(<ProposalsRoutingHarness />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-proposal-row="dsh-forge-m2"]')).not.toBeNull()
     })
-    // Enter the detail through the row (the page's open seam → the machine).
+    // Enter the detail through the row (the page's open seam).
     fireEvent.click(document.querySelector('[data-dsh-forge-proposal-row="dsh-forge-m2"]') as HTMLElement)
-    expect(face.snapshot().proposalSlug).toBe('dsh-forge-m2')
-    expect(face.snapshot().workbenchTab).toBe('workbench/proposals')
-    view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-proposal-detail="dsh-forge-m2"]')).not.toBeNull()
     })
@@ -155,46 +103,33 @@ describe('WorkbenchShell × proposals navigation round trips (AC1/AC3)', () => {
     expect(seat).not.toBeNull()
     expect(seat?.hasAttribute('hidden')).toBe(true)
     expect(seat?.querySelector('[data-dsh-forge-proposal-row="dsh-forge-m2"]')).not.toBeNull()
-    // The breadcrumb return fires the machine's tab action (slug cleared).
+    // The breadcrumb return clears the slug through the page's back seam.
     fireEvent.click(document.querySelector('[data-dsh-forge-proposal-back]') as HTMLButtonElement)
-    expect(face.snapshot().proposalSlug).toBeUndefined()
-    view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-proposal-detail="dsh-forge-m2"]')).toBeNull()
     })
     expect(document.querySelector('[data-dsh-forge-proposal-list-seat]')?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('feature 徽标 互跳: the badge routes through openFeatureDetail; the 提案 tab is the return path', async () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
+  it('the :slug initial mount addresses the detail subview directly', async () => {
+    render(<ProposalsRoutingHarness initialSlug="dsh-forge-m2" />)
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-proposal-detail="dsh-forge-m2"]')).not.toBeNull()
+    })
+  })
+
+  it('feature 徽标 互跳: the badge routes through the onOpenFeature seam without opening the row detail', async () => {
+    const onOpenFeature = vi.fn()
+    render(<ProposalsRoutingHarness onOpenFeature={onOpenFeature} />)
     await waitFor(() => {
       expect(document.querySelector('[data-dsh-forge-proposal-row="dsh-forge-m3"]')).not.toBeNull()
     })
     // The row's feature badge (dsh-forge-m3's association) jumps WITHOUT
     // opening the row's own detail (stopPropagation, the 5.4 contract).
     fireEvent.click(document.querySelector('[data-dsh-forge-proposal-feature-jump="dsh-forge-m3"]') as HTMLButtonElement)
-    expect(face.snapshot()).toMatchObject({
-      workbenchTab: 'workbench/features',
-      featureSlug: 'dsh-forge-m3',
-      proposalSlug: undefined,
-    })
-  })
-
-  it('a tab round trip never touches the chrome project context (AC3)', async () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals' })
-    const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    const before = (document.querySelector('[data-dsh-forge-switcher-trigger]') as HTMLElement).textContent
-    for (const tab of ['workbench/overview', 'workbench/tasks', 'workbench/proposals'] as const) {
-      fireEvent.click(document.querySelector(`[data-dsh-forge-tab="${tab}"]`) as HTMLButtonElement)
-      view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    }
-    // Same active project after the round trip (tab switching is view-only).
-    expect((document.querySelector('[data-dsh-forge-switcher-trigger]') as HTMLElement).textContent).toBe(before)
-    expect(before).toContain('dsh-forge')
-    await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-proposal-row]')).not.toBeNull()
-    })
+    expect(onOpenFeature).toHaveBeenCalledWith('dsh-forge-m3')
+    // The jump never opened the row's own detail subview.
+    expect(document.querySelector('[data-dsh-forge-proposal-detail="dsh-forge-m3"]')).toBeNull()
   })
 
   it('a project switch re-keys the board (loading skeleton first, then the new board)', async () => {
