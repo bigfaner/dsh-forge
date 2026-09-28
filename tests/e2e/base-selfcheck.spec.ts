@@ -210,14 +210,25 @@ describe('dispatch stub journal (AC-2)', () => {
       requestId: deriveLaunchRequestId(sessionId, message),
     })
     expect(tamperedResult).toEqual({ ok: false, failures: ['hash-mismatch', 'request-id-mismatch'] })
-    // A second attribution marker breaks check ③ alone.
+    // A second attribution marker breaks check ③ alone (two-line shape: the
+    // third line no longer carries the naming prefix).
     const doubled = `${message}\n${ATTRIBUTION_MARKER} session:other\n`
     expect(verifyPromptInjection({
       journalText: doubled,
       presynthContent: presynth,
       promptHash: promptHashOf(doubled),
       sessionId,
-    })).toEqual({ ok: false, failures: ['attribution-not-single-line'] })
+    })).toEqual({ ok: false, failures: ['appendix-not-two-lines'] })
+    // Dropping the naming line (attribution only) breaks check ③ alone too
+    // (exactly one line is no longer the appendix contract — 恰好两行).
+    const naming = message.slice(message.lastIndexOf('\n') + 1)
+    const noNaming = message.slice(0, message.length - naming.length - 1)
+    expect(verifyPromptInjection({
+      journalText: noNaming,
+      presynthContent: presynth,
+      promptHash: promptHashOf(noNaming),
+      sessionId,
+    })).toEqual({ ok: false, failures: ['appendix-not-two-lines'] })
   })
 
   it('inject lines parse back through the unified reader (approval kind filter)', () => {

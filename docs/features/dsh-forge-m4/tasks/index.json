@@ -298,7 +298,7 @@
       "dependencies": [
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.8-dispatch-appendix-two-lines.md",
       "record": "records/2.8-dispatch-appendix-two-lines.md",
       "breaking": true,

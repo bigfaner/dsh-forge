@@ -85,6 +85,7 @@ function makeChannel(
 
 /** The kernel presynth product as a launch request (pre-minted session id + composed first user message). */
 function requestOf(overrides: Partial<DispatchLaunchRequest> = {}): DispatchLaunchRequest {
+  const prompt = 'EXECUTOR PREAMBLE…\nprotocol body\n\n[dsh-forge workbench] Attribution: session:session-pre-1\n执行本任务时,你 spawn 的 subagent 会话须以『alpha/1.1 demo task』命名'
   return {
     dispatchId: 'd-1',
     batchId: 'b-1',
@@ -92,8 +93,8 @@ function requestOf(overrides: Partial<DispatchLaunchRequest> = {}): DispatchLaun
     featureSlug: 'alpha',
     taskKey: 'alpha/1.1',
     taskType: 'coding.feature',
-    prompt: 'EXECUTOR PREAMBLE…\nprotocol body\n\n[dsh-forge workbench] Attribution: session:session-pre-1',
-    promptHash: createHash('sha256').update('EXECUTOR PREAMBLE…\nprotocol body\n\n[dsh-forge workbench] Attribution: session:session-pre-1', 'utf8').digest('hex'),
+    prompt,
+    promptHash: createHash('sha256').update(prompt, 'utf8').digest('hex'),
     sessionId: 'session-pre-1',
     cwd: 'Z:/workbench/registered-a',
     ...overrides,
@@ -136,11 +137,13 @@ describe('dispatch-launch: the dispatch chain over the stub channel (AC-1)', () 
 
     // The hash oracle (spike-3 §4 four-piece): full-equality on the delivered
     // string — the host neither appends, trims, nor reflows the kernel product
-    // (the attribution line is already part of the composed message).
+    // (the two-line appendix is already part of the composed message).
     expect(delivered).toBe(request.prompt)
     expect(createHash('sha256').update(delivered, 'utf8').digest('hex')).toBe(request.promptHash)
-    // 恰好一行追加行(kernel-composed;host 侧零增补 —— 计数锚点 [dsh-forge workbench])
+    // 两行追加行(kernel-composed;host 侧零增补 —— 归因锚点 [dsh-forge workbench]
+    // 计数 = 1;命名行以 Interface 7 前缀在场,含 taskKey + title)
     expect(delivered.split('[dsh-forge workbench]').length - 1).toBe(1)
+    expect(delivered).toContain('执行本任务时,你 spawn 的 subagent 会话须以『alpha/1.1 demo task』命名')
   })
 
   it('mints a fresh session id only for the non-preminted shape (null sessionId)', async () => {
