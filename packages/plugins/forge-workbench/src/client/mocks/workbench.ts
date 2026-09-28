@@ -86,6 +86,11 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
       docLocationPath: null,
       createdAt: '2026-09-20T08:12:00.000Z',
       lastActivatedAt: '2026-09-22T06:40:00.000Z',
+      // M4 v3 columns (task 1.3): healthy in-repo registrant.
+      archived: false,
+      sortOrder: 0,
+      projectionState: 'pending',
+      docsPlacement: 'repo-existing',
     }),
     // Task 5.3 widens the fixture for the project-card field matrix: an
     // external doc location (the 仓外 badge) and a never-activated project.
@@ -97,6 +102,12 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
       docLocationPath: 'Z:\\docs\\electron-course',
       createdAt: '2026-09-21T10:02:00.000Z',
       lastActivatedAt: null,
+      // M4 v3 columns (task 1.3): the custom-placement corner (columns inert
+      // in the M3 views — no archived-partition UI until the M4 tree lands).
+      archived: false,
+      sortOrder: 1,
+      projectionState: 'degraded',
+      docsPlacement: 'custom',
     }),
   ]),
   activeProjectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
@@ -228,6 +239,38 @@ export function createMockRegisterWizardFace(
   }
   const findByRoot = (codeRoot: string): Project | undefined =>
     projects.find(project => samePath(project.codeRoot, codeRoot))
+  /** Shared insert tail (both input faces): UNIQUE root + conflict → error rows. */
+  const insertRegistered = (
+    codeRoot: string,
+    docLocationType: 'in_repo' | 'external',
+    rawDocPath: string | null | undefined,
+    explicitName: string | undefined,
+    docsPlacement: Project['docsPlacement'],
+  ): Project => {
+    if (findByRoot(codeRoot) !== undefined) {
+      verbError('ERR_PROJECT_EXISTS', `build-stage mock: ${codeRoot} is already registered`)
+    }
+    if (docLocationType === 'external' && samePath(rawDocPath ?? '', codeRoot)) {
+      verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
+    }
+    seq += 1
+    const project: Project = {
+      id: `mock-wizard-project-${String(seq).padStart(4, '0')}`,
+      displayName: explicitName !== undefined && explicitName.trim() !== '' ? explicitName.trim() : directoryNameOf(codeRoot),
+      codeRoot,
+      docLocationType,
+      docLocationPath: docLocationType === 'external' ? (rawDocPath ?? null) : null,
+      createdAt: MOCK_NOW,
+      lastActivatedAt: null,
+      // v3 列:注册序递增;新注册恒未归档/pending。
+      archived: false,
+      sortOrder: seq,
+      projectionState: 'pending',
+      docsPlacement,
+    }
+    projects = [...projects, project]
+    return project
+  }
   return {
     authorizeExternalDocPath: async (path: string) => {
       // 6.4: mirror the registry's persisted record (idempotent upsert, no fs).
@@ -259,28 +302,31 @@ export function createMockRegisterWizardFace(
       return { ok: true }
     },
     registerProject: async (input: RegisterProjectInput) => {
-      // Interface 1: codeRoot is normalized at registration (绝对路径规范化).
-      const codeRoot = normalizePathForCompare(input.codeRoot)
-      if (findByRoot(codeRoot) !== undefined) {
-        return verbError('ERR_PROJECT_EXISTS', `build-stage mock: ${codeRoot} is already registered`)
+      // Interface 1 (M4 任务 1.3 双形态):v2(anchor/docsPlacement)按落位映射
+      // 折成存储形态(app/custom → external,app 派生 <docsRoot>/<文件夹名>);
+      // v1 原样(in_repo→repo-existing / external→custom)。
+      if ('anchor' in input) {
+        const codeRoot = normalizePathForCompare(input.anchor)
+        const external = input.docsPlacement === 'app' || input.docsPlacement === 'custom'
+        return insertRegistered(
+          codeRoot,
+          external ? 'external' : 'in_repo',
+          input.docsPlacement === 'custom'
+            ? (input.docsPath ?? '')
+            : (input.docsPlacement === 'app'
+              ? `${MOCK_WORKBENCH_PATHS.docsRoot}/${directoryNameOf(codeRoot)}`
+              : null),
+          input.displayName,
+          input.docsPlacement,
+        )
       }
-      if (input.docLocationType === 'external' && samePath(input.docLocationPath ?? '', codeRoot)) {
-        return verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
-      }
-      seq += 1
-      const project: Project = {
-        id: `mock-wizard-project-${String(seq).padStart(4, '0')}`,
-        displayName: input.displayName !== undefined && input.displayName.trim() !== ''
-          ? input.displayName.trim()
-          : directoryNameOf(codeRoot),
-        codeRoot,
-        docLocationType: input.docLocationType,
-        docLocationPath: input.docLocationType === 'external' ? (input.docLocationPath ?? null) : null,
-        createdAt: MOCK_NOW,
-        lastActivatedAt: null,
-      }
-      projects = [...projects, project]
-      return project
+      return insertRegistered(
+        normalizePathForCompare(input.codeRoot),
+        input.docLocationType,
+        input.docLocationPath ?? null,
+        input.displayName,
+        input.docLocationType === 'external' ? 'custom' : 'repo-existing',
+      )
     },
     updateProject: async (id: string, patch: ProjectPatch) => {
       const current = projects.find(project => project.id === id)

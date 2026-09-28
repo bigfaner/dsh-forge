@@ -92,7 +92,7 @@ export function useMigrationGuard(input: UseMigrationGuardInput): MigrationGuard
   }
 }
 
-/** Does the event belong to the project? (Every WorkbenchEvent member is project-scoped.) */
+/** Does the event belong to the project? (project_list_changed is registry-scoped — no projectId.) */
 function isProjectScoped(event: WorkbenchEvent, projectId: string): boolean {
-  return event.projectId === projectId
+  return 'projectId' in event && event.projectId === projectId
 }

@@ -114,6 +114,16 @@ export const WORKBENCH_VERB_CHANNELS = {
   receiveApproval: 'dsh-forge:workbench-receive-approval',
   notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
   notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
+  // —— M4 v3 项目中心段(任务 1.3 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P1 批:侦测
+  //    (probeProjectPath)+ 生命周期四新动词(rename/archive/restore/list);
+  //    registerProject/removeProject 复用既有通道(v2 入参/语义扩展,通道
+  //    面零特权,校验语义在内核 projects/lifecycle-service)。 ——
+  probeProjectPath: 'dsh-forge:workbench-probe-project-path',
+  renameProject: 'dsh-forge:workbench-rename-project',
+  archiveProject: 'dsh-forge:workbench-archive-project',
+  restoreProject: 'dsh-forge:workbench-restore-project',
+  listProjects: 'dsh-forge:workbench-list-projects',
 } as const
 
 /**

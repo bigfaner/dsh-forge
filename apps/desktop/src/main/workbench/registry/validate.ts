@@ -117,8 +117,10 @@ function coerceDocLocation(type: unknown, path: unknown): EffectiveDocLocation {
 /**
  * 仓外路径冲突(链序 3,纯 db 比对):path 不得等于本项目 code_root,也不
  * 得命中任何既有项目(重指向时排除自身)的 code_root 或仓外 doc 路径。
+ * 任务 1.3 起导出:registerProject v2 面(app/custom 落点)复用同一比对,
+ * 两处口径不漂移。
  */
-function assertNoDocPathConflict(db: RepoDb, codeRoot: string, externalPath: string, selfId: string | null): void {
+export function assertNoDocPathConflict(db: RepoDb, codeRoot: string, externalPath: string, selfId: string | null): void {
   if (externalPath === codeRoot) {
     throw new WorkbenchRegistryError(
       'ERR_DOC_PATH_CONFLICT',

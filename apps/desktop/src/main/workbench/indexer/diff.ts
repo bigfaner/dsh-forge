@@ -86,6 +86,34 @@ export type WorkbenchEvent =
     readonly projectId: string
     readonly featureSlug: string
   }
+  // M4 v3(任务 1.3;tech-design §Interface 1 事件 v3 扩展):项目中心域信号。
+  // project_list_changed = 注册/改名/归档/恢复/移除任何改变项目列表(或其
+  // 行内容)的动词完成通知(载荷 {},消费面重拉 listProjects/getState);
+  // projection_push_required = 投影期望 push 请求(relay 消费,Interface 2)。
+  // 1.3 的 registerProject 成功即发 projection_push_required 占位 plan
+  // (单 ensure op;3.x 投影全链接管 plan 组装与 reorder/delete 扩展)。
+  | { readonly type: 'project_list_changed' }
+  | {
+    readonly type: 'projection_push_required'
+    readonly projectId: string
+    readonly plan: ProjectionPlan
+  }
+
+// —— M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序
+//    = ensure → rename → reorder → delete,幂等全量重推)——
+
+/** 投影四操作(Interface 1 ProjectionOp;仅 forge 所属子集相对序)。 */
+export type ProjectionOp =
+  | { readonly kind: 'ensure'; readonly canonicalPath: string; readonly title: string }
+  | { readonly kind: 'rename'; readonly workspaceId: string; readonly title: string }
+  | { readonly kind: 'delete'; readonly workspaceId: string }
+  | { readonly kind: 'reorder'; readonly orderedIds: readonly string[] }
+
+/** 一个项目的投影期望 plan(幂等全量重推;偏差 = diff 实况,明细不落表)。 */
+export interface ProjectionPlan {
+  readonly projectId: string
+  readonly ops: readonly ProjectionOp[]
+}
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 

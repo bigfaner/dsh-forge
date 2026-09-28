@@ -65,6 +65,7 @@ import { createStageWriteService } from '../stages/advance-service.ts'
 import { createProposalsVerbService } from '../proposals/proposals-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
+import { createProjectLifecycleService, type RegisterProjectV2Input } from '../projects/lifecycle-service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -369,6 +370,15 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     backupsRoot: join(deps.userDataPath, 'workbench', 'backups'),
   }
 
+  // M4 任务 1.3:项目生命周期域服务(v3·P1 批 —— 侦测/注册 v2/rename/
+  // archive/restore/list;D11 三层比对 + 投影占位事件 + project_list_changed
+  // 经同一 sink 批推,迁移/偏好/编排面 onEvent 同款直发形态)。
+  const lifecycle = createProjectLifecycleService({
+    db,
+    docsRoot: workbenchPaths.docsRoot,
+    onEvents: events => sink(events),
+  })
+
   /** 目录直下列表(缺失/不可读 → 空数组;探测语境不放大 fs 噪声)。 */
   const listSubdirs = (dir: string): readonly string[] => {
     try {
@@ -465,6 +475,11 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       },
 
       registerProject(input: RegisterProjectInput): Project {
+        // M4 任务 1.3:v2 入参(anchor/docsPlacement)走 D11 生命周期链;
+        // v1 入参(M2/M3 向导冻结面)走 registry 链,行为不变。
+        if ('anchor' in input) {
+          return lifecycle.registerProject(input as RegisterProjectV2Input)
+        }
         provisionAppManagedDocRoot(input.docLocationType, input.docLocationPath)
         return registerProjectValidated(db, input)
       },
@@ -488,7 +503,16 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       removeProject(id: string): void {
         const wasActive = getActiveProjectId(db) === id
         removeProjectRow(db, id)
+        // TODO-hook(任务 3.4 投影接线):removeProject 的语义扩展 —— 投影
+        // delete op(dsh workspace 移除,plan 组装经 projection 域)+ 对账
+        // 期望清除(workspace_projection 行随 FK CASCADE 已随行删除,delete
+        // push 事件在此接线时补发)。
+        // TODO-hook(任务 4.2 拆出窗口):该项目的 detached 窗口关闭钩子
+        // (壳层窗口注册表按 projectId 收回;不得提前引入跨相位实现)。
         if (wasActive) perception.retarget(null)
+        // M4 任务 1.3:移除即列表变更(project_list_changed;DB 删除 + FK
+        // cascade 已由 repos 事务承载)。
+        sink([{ type: 'project_list_changed' }])
       },
 
       activateProject(id: string): void {
@@ -669,6 +693,15 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       // —— M3 UF3 集成读(任务 1.7)——
       probeCodeRoot: input => probeCodeRootImpl(input),
       getWorkbenchPaths: () => workbenchPaths,
+
+      // —— M4 v3 项目中心动词(任务 1.3):委托 projects/lifecycle-service
+      //    (D11 侦测/注册 v2/生命周期;事件经同一 sink 批推)。 ——
+
+      probeProjectPath: input => lifecycle.probeProjectPath(input),
+      renameProject: input => lifecycle.renameProject(input),
+      archiveProject: input => lifecycle.archiveProject(input),
+      restoreProject: input => lifecycle.restoreProject(input),
+      listProjects: () => lifecycle.listProjects(),
     },
 
     start(): void {

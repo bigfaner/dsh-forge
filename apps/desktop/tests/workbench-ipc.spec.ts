@@ -86,6 +86,11 @@ const PROJECT: Project = {
   docLocationPath: null,
   createdAt: '2026-09-22T00:00:00.000Z',
   lastActivatedAt: null,
+  // M4 v3 columns (task 1.3).
+  archived: false,
+  sortOrder: 0,
+  projectionState: 'pending',
+  docsPlacement: 'repo-existing',
 }
 
 /** vi.fn-backed service double: every verb records its call and returns a marker. */
@@ -155,6 +160,16 @@ function fakeServices(): WorkbenchVerbServices {
     receiveApproval: vi.fn(() => ({ id: 'a-1', state: 'pending' })),
     notifySessionStarted: vi.fn(() => ({ id: 'd-1', state: 'running' })),
     notifyLaunchFailed: vi.fn(() => ({ id: 'd-1', state: 'failed' })),
+    // M4 v3 项目中心段(任务 1.3)。
+    probeProjectPath: vi.fn(() => ({
+      input: 'Z:/demo', canonicalPath: 'Z:/demo', pathKey: 'Z:/DEMO',
+      identity: { dev: '1', ino: '2' }, exists: true, isDir: true, readable: true,
+      registered: null, gitRoot: null, forgeTreeHit: false, childRepos: [],
+    })),
+    renameProject: vi.fn(() => PROJECT),
+    archiveProject: vi.fn(() => PROJECT),
+    restoreProject: vi.fn(() => PROJECT),
+    listProjects: vi.fn(() => [PROJECT]),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -201,10 +216,11 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the fifty-one whitelisted verb channels, one per verb', () => {
+  it('contains exactly the fifty-six whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-advance-stage',
+      'dsh-forge:workbench-archive-project',
       'dsh-forge:workbench-authorize-external-doc-path',
       'dsh-forge:workbench-check-stage-artifacts',
       'dsh-forge:workbench-clear-pref-override',
@@ -229,10 +245,12 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-knowledge-research',
       'dsh-forge:workbench-list-approvals',
       'dsh-forge:workbench-list-plugins',
+      'dsh-forge:workbench-list-projects',
       'dsh-forge:workbench-list-stage-assets',
       'dsh-forge:workbench-notify-launch-failed',
       'dsh-forge:workbench-notify-session-started',
       'dsh-forge:workbench-probe-code-root',
+      'dsh-forge:workbench-probe-project-path',
       'dsh-forge:workbench-read-feature-doc',
       'dsh-forge:workbench-read-proposal-doc',
       'dsh-forge:workbench-receive-approval',
@@ -240,6 +258,8 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-redispatch',
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
+      'dsh-forge:workbench-rename-project',
+      'dsh-forge:workbench-restore-project',
       'dsh-forge:workbench-set-plugin-enabled',
       'dsh-forge:workbench-set-prefs',
       'dsh-forge:workbench-stage-summarize',
@@ -255,7 +275,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(51)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(56)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -316,6 +336,12 @@ describe('workbench verb routing table', () => {
       'receiveApproval',
       'notifySessionStarted',
       'notifyLaunchFailed',
+      // M4 v3 项目中心段(任务 1.3 追加;Hard Rule 延续:追加式修改)。
+      'probeProjectPath',
+      'renameProject',
+      'archiveProject',
+      'restoreProject',
+      'listProjects',
     ])
   })
 
@@ -358,10 +384,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 51 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 56 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(51)
+    expect(handlers.size).toBe(56)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -503,6 +529,28 @@ describe('workbench verb routing table', () => {
 
     handlers.get(C.notifyLaunchFailed)?.(OWNED, 'd-1', 'create failed: boom')
     expect(services.notifyLaunchFailed).toHaveBeenCalledWith('d-1', 'create failed: boom')
+
+    // M4 v3 项目中心段(任务 1.3):input 形状校验 + 服务转发;D11 校验/
+    // 事件在内核 lifecycle-service,本层零内联业务。
+    handlers.get(C.probeProjectPath)?.(OWNED, { path: 'Z:/demo' })
+    expect(services.probeProjectPath).toHaveBeenCalledWith({ path: 'Z:/demo' })
+
+    handlers.get(C.renameProject)?.(OWNED, { projectId: 'p-1', displayName: 'renamed' })
+    expect(services.renameProject).toHaveBeenCalledWith({ projectId: 'p-1', displayName: 'renamed' })
+
+    handlers.get(C.archiveProject)?.(OWNED, { projectId: 'p-1' })
+    expect(services.archiveProject).toHaveBeenCalledWith({ projectId: 'p-1' })
+
+    handlers.get(C.restoreProject)?.(OWNED, { projectId: 'p-1' })
+    expect(services.restoreProject).toHaveBeenCalledWith({ projectId: 'p-1' })
+
+    handlers.get(C.listProjects)?.(OWNED)
+    expect(services.listProjects).toHaveBeenCalledTimes(1)
+
+    // registerProject v2 face (任务 1.3):anchor/docsPlacement 形状放行后
+    // 原样转发(v1 断言见上,双形态同一动词通道)。
+    handlers.get(C.registerProject)?.(OWNED, { anchor: 'Z:/demo', docsPlacement: 'app' })
+    expect(services.registerProject).toHaveBeenCalledWith({ anchor: 'Z:/demo', docsPlacement: 'app' })
   })
 
   it('maps async verb rejections through the same error envelope (startMigration, 任务 1.4)', async () => {

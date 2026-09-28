@@ -199,8 +199,9 @@ export function createTaskBoardStore(bridge: WorkbenchIpcBridge, projectId: stri
     let latestSync: SyncStatus | undefined
     for (const event of events) {
       // Foreign projects' events are not this board's concern (the active
-      // project's tab is the only audience here).
-      if (event.projectId !== projectId) continue
+      // project's tab is the only audience here). project_list_changed (M4)
+      // carries no projectId — it is a whole-registry signal, not board-reflux.
+      if (!('projectId' in event) || event.projectId !== projectId) continue
       if (event.type === 'task_updated') {
         wantsRefresh = true
       } else if (event.type === 'sync') {

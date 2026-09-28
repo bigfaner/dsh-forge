@@ -7,10 +7,14 @@ import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allo
 import type {
   ApprovalRow,
   DecideApprovalInput,
+  DetectReport,
   DispatchRow,
   DispatchTasksInput,
   DispatchTasksResult,
+  ProbeProjectPathInput,
+  ProjectRefInput,
   ReceiveApprovalVerbInput,
+  RenameProjectInput,
   FeatureBoardData,
   FeatureDoc,
   FeatureListEntry,
@@ -199,6 +203,29 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeCodeRoot, input) as Promise<ProbeCodeRootResult>,
     getWorkbenchPaths: (): Promise<WorkbenchPaths> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getWorkbenchPaths) as Promise<WorkbenchPaths>,
+    // M4 v3 project-center verbs (task 1.3): probeProjectPath answers the C7
+    // detection report (D11 identity + registered fast lane + evidence probes —
+    // read-only, path-level failures degrade into the report shape); the
+    // lifecycle four (rename / archive / restore / listProjects) carry the v3
+    // columns (archived / sortOrder / projectionState / docsPlacement). The
+    // registerProject verb above now ALSO accepts the v2 input shape
+    // ({ anchor, docsPlacement, … }) alongside the M2/M3 v1 shape. Rejections
+    // arrive as the same { code, message, detail? } envelope
+    // (ERR_PROJECT_EXISTS with the registered fast-lane payload in detail /
+    // ERR_CODE_ROOT_UNREADABLE / ERR_EXTERNAL_PATH_UNREADABLE /
+    // ERR_PROJECT_NOT_FOUND); successful mutations push
+    // project_list_changed (and projection_push_required placeholders) through
+    // onEvents.
+    probeProjectPath: (input: ProbeProjectPathInput): Promise<DetectReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeProjectPath, input) as Promise<DetectReport>,
+    renameProject: (input: RenameProjectInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.renameProject, input) as Promise<Project>,
+    archiveProject: (input: ProjectRefInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.archiveProject, input) as Promise<Project>,
+    restoreProject: (input: ProjectRefInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.restoreProject, input) as Promise<Project>,
+    listProjects: (): Promise<Project[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listProjects) as Promise<Project[]>,
     // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
     // planes over the registered project's doc root (fact/lesson/research
     // read + append-only write; forensic machine-global read-only — no

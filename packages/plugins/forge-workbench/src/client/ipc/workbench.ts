@@ -34,13 +34,14 @@
  */
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
-  DocKind, FeatureBoardData, FeatureDoc,
+  DetectReport, DocKind, FeatureBoardData, FeatureDoc,
   FeatureListEntry, FeatureStatusReport,
   KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project, ProposalBoardData, ProposalDoc, ReceiveApprovalInput,
+  PrefScope, ProbeProjectPathInput, Project, ProjectRefInput, ProposalBoardData, ProposalDoc,
+  ReceiveApprovalInput, RenameProjectInput,
   StageArtifactsReport, FeatureSummary,
   StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
@@ -194,6 +195,23 @@ export interface WorkbenchIpcBridge {
    */
   getProposalBoard(projectId: string): Promise<ProposalBoardData>
   readProposalDoc(input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc>
+  /**
+   * M4 v3 project-center verbs (task 1.3): probeProjectPath answers the C7
+   * detection report (D11 identity + registered fast lane + bounded evidence
+   * probes — read-only); the lifecycle four carry the v3 columns
+   * (archived / sortOrder / projectionState / docsPlacement). registerProject
+   * above additionally accepts the v2 input ({ anchor, docsPlacement, … }).
+   * Rejections ride the same `{ code, message, detail? }` envelope
+   * (ERR_PROJECT_EXISTS with the registered fast-lane payload in detail /
+   * ERR_CODE_ROOT_UNREADABLE / ERR_EXTERNAL_PATH_UNREADABLE /
+   * ERR_PROJECT_NOT_FOUND); mutations push project_list_changed (and the
+   * projection_push_required placeholder) through onEvents.
+   */
+  probeProjectPath(input: ProbeProjectPathInput): Promise<DetectReport>
+  renameProject(input: RenameProjectInput): Promise<Project>
+  archiveProject(input: ProjectRefInput): Promise<Project>
+  restoreProject(input: ProjectRefInput): Promise<Project>
+  listProjects(): Promise<Project[]>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -220,6 +238,8 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   // M3 proposals read verbs (task 5.3; the tool-bridge pump's proposal legs
   // dispatch here; the UF5 client face lands with 5.4).
   'getProposalBoard', 'readProposalDoc',
+  // M4 v3 project-center verbs (task 1.3; C7 card / project tree consume in 2.x).
+  'probeProjectPath', 'renameProject', 'archiveProject', 'restoreProject', 'listProjects',
 ]
 
 /**

@@ -515,6 +515,7 @@ describe('RegisterWizard: step ③ summary + submit', () => {
         id: 'p1', displayName: 'demo', codeRoot: MOCK_WIZARD_OK_ROOT,
         docLocationType: 'in_repo', docLocationPath: null,
         createdAt: MOCK_NOW, lastActivatedAt: null,
+        archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
       })
     })
     await waitFor(() => { expect(onClose).toHaveBeenCalledTimes(1) })
@@ -830,6 +831,7 @@ describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)',
       id: 'assembled-1', displayName: 'demo', codeRoot: MOCK_WIZARD_OK_ROOT,
       docLocationType: 'in_repo' as const, docLocationPath: null,
       createdAt: MOCK_NOW, lastActivatedAt: null,
+      archived: false, sortOrder: 0, projectionState: 'pending' as const, docsPlacement: 'repo-existing' as const,
     }))
     const face = makeViewFace()
     render(

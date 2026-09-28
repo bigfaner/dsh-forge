@@ -87,6 +87,13 @@ export const WORKBENCH_VERB_CHANNELS = {
   receiveApproval: 'dsh-forge:workbench-receive-approval',
   notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
   notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
+  // M4 v3 项目中心段(任务 1.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  probeProjectPath: 'dsh-forge:workbench-probe-project-path',
+  renameProject: 'dsh-forge:workbench-rename-project',
+  archiveProject: 'dsh-forge:workbench-archive-project',
+  restoreProject: 'dsh-forge:workbench-restore-project',
+  listProjects: 'dsh-forge:workbench-list-projects',
 } as const
 
 /**

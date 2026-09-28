@@ -196,7 +196,8 @@ export function FeaturesPage(props: FeaturesPageProps) {
     if (subscribe === undefined) return
     return subscribe((events) => {
       for (const event of events) {
-        if (event.projectId !== props.projectId) continue
+        // M4: project_list_changed carries no projectId — not feature-reflux.
+        if (!('projectId' in event) || event.projectId !== props.projectId) continue
         if (event.type === 'stage_advanced' || event.type === 'deviation_detected') {
           void load(props.projectId ?? '')
         }

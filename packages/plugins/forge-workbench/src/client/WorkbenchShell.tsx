@@ -296,7 +296,8 @@ function useApprovalTabCount(
     read()
     const unsubscribe = getWorkbenchEventSource(bridge).subscribe((events) => {
       const mine = events.some(event =>
-        event.projectId === projectRef.current
+        'projectId' in event
+        && event.projectId === projectRef.current
         && (event.type === 'approval_received' || event.type === 'dispatch_updated' || event.type === 'sync'))
       if (mine) read()
     })

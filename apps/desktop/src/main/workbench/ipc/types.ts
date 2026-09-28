@@ -17,22 +17,41 @@ import type {
   ChangeSource,
   DispatchState,
   DocKind,
+  DocsPlacement,
   FeatureStatus,
   Project,
   ProjectPatch,
-  RegisterProjectInput,
+  ProjectionState,
+  RegisterProjectInput as RegisterProjectV1Input,
   SessionLink,
   TaskStatus,
 } from '../repos/types.ts'
-import type { MigrationPhase, SyncStatusPayload as SyncStatus, WorkbenchEvent } from '../indexer/diff.ts'
+import type {
+  ProjectionOp,
+  ProjectionPlan,
+  MigrationPhase,
+  SyncStatusPayload as SyncStatus,
+  WorkbenchEvent,
+} from '../indexer/diff.ts'
+import type { DetectReport } from '../projects-identity/detect.ts'
+import type {
+  ProjectRefInput,
+  RegisterProjectV2Input,
+  RenameProjectInput,
+} from '../projects/lifecycle-service.ts'
 
 // Interface 1 中已由仓储/感知层定义的 DTO,以本模块为共享出口(避免渲染层
 // 直接依赖 main 内部模块路径)。SyncStatus = 感知层的 SyncStatusPayload
 // (Interface 1 事件载荷形态)。
-export type { ChangeSource, DocKind, Project, ProjectPatch, RegisterProjectInput, SessionLink, TaskStatus }
+export type { ChangeSource, DocKind, Project, ProjectPatch, SessionLink, TaskStatus, DocsPlacement, ProjectionState }
 export type { ApprovalState, DispatchState }
-export type { SyncStatus, WorkbenchEvent, MigrationPhase }
+export type { SyncStatus, WorkbenchEvent, MigrationPhase, ProjectionOp, ProjectionPlan, DetectReport }
 export type { FeatureStatus }
+export type { RegisterProjectV2Input, RenameProjectInput, ProjectRefInput }
+// M4 v3(任务 1.3):registerProject 入参 = v1(M2/M3 向导,冻结面)| v2
+// (P1 批新面,anchor / docsPlacement 四值 / customAuthorized)。同一动词
+// 通道收双形态 —— 既有 v1 调用方零改动,v2 由 C7 卡接线(2.x)。
+export type RegisterProjectInput = RegisterProjectV1Input | RegisterProjectV2Input
 
 // ---------------------------------------------------------------------------
 // Interface 1 只在动词面出现的 DTO(仓储层无对应行形态)
@@ -157,6 +176,15 @@ export interface RecordSessionLinkInput {
   readonly projectId: string
   readonly taskKey: string
   readonly sessionId: string
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 项目中心动词 DTO(任务 1.3;tech-design §Interface 1 v3·P1 批)
+// ---------------------------------------------------------------------------
+
+/** probeProjectPath 入参(C7 侦测;裸盘符/相对路径在归一化入口即拒)。 */
+export interface ProbeProjectPathInput {
+  readonly path: string
 }
 
 // ---------------------------------------------------------------------------
@@ -819,6 +847,7 @@ export interface DecideApprovalInput {
  */
 export interface WorkbenchVerbServices {
   getState(): WorkbenchState
+  /** v1 入参走 M2 registry 链(冻结面);v2 入参(anchor/docsPlacement)走 D11 生命周期链。 */
   registerProject(input: RegisterProjectInput): Project
   updateProject(id: string, patch: ProjectPatch): Project
   removeProject(id: string): void
@@ -974,6 +1003,24 @@ export interface WorkbenchVerbServices {
   notifySessionStarted(dispatchId: string, sessionId: string): DispatchRow
   /** launch 失败:starting → failed + 原因(ERR_DISPATCH_LAUNCH_FAILED 呈现口径)。 */
   notifyLaunchFailed(dispatchId: string, error: string): DispatchRow
+
+  // —— M4 v3 项目中心动词(任务 1.3;实现 = projects/lifecycle-service
+  //    经 services.ts 装配;硬校验语义/事件见该模块头)——
+
+  /**
+   * C7 侦测动词(只读;消费 1.2 DetectReport):归一化 + 存在性/可读性
+   * 事实 + 三层比对已注册快车道 + 证据侦测(gitRoot/forgeTreeHit/
+   * childRepos,固定前缀有界探测)。路径级失败降级进报告形态,不抛错。
+   */
+  probeProjectPath(input: ProbeProjectPathInput): DetectReport
+  /** 纯 DB 改名,零 fs;完成 → project_list_changed。 */
+  renameProject(input: RenameProjectInput): Project
+  /** archived=1(dsh 侧 workspace 保留);完成 → project_list_changed。 */
+  archiveProject(input: ProjectRefInput): Project
+  /** archived=0;完成 → project_list_changed。 */
+  restoreProject(input: ProjectRefInput): Project
+  /** v3 扩展列全量(sort_order 注册序输出)。 */
+  listProjects(): Project[]
 }
 
 // ---------------------------------------------------------------------------

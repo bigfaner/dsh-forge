@@ -65,6 +65,8 @@ afterEach(() => {
 const project = (id: string, displayName: string, codeRoot: string): Project => ({
   id, displayName, codeRoot, docLocationType: 'in_repo', docLocationPath: null,
   createdAt: '2026-09-22T08:00:00.000Z', lastActivatedAt: null,
+  // M4 v3 columns (task 1.3).
+  archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
 })
 
 const REAL_PROJECTS: Project[] = [
@@ -226,6 +228,12 @@ function installBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIp
     // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
     getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
     readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
+    // M4 v3 项目中心段(任务 1.3;presence check 全员可调)。
+    probeProjectPath: async () => ({}) as never,
+    renameProject: async () => ({}) as never,
+    archiveProject: async () => ({}) as never,
+    restoreProject: async () => ({}) as never,
+    listProjects: async () => [],
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge

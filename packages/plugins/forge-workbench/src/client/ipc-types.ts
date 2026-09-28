@@ -23,6 +23,23 @@
 export type DocLocationType = 'in_repo' | 'external'
 
 /**
+ * M4 v3 证据三档落位(tech-design §Interface 1;main-side peer =
+ * repos/types.ts DocsPlacement,schema-v3 projects.docs_placement CHECK 同源):
+ * repo-existing(仓内已有树)/ repo-new(仓内新建,懒物化)/ app(内核
+ * docsRoot 派生)/ custom(仓外自定义,须显式授权);legacy = v3 迁移前值
+ * 冻结(仅迁移回填不可归类行)。
+ */
+export type DocsPlacement = 'repo-existing' | 'repo-new' | 'app' | 'custom' | 'legacy'
+
+/**
+ * M4 v3 投影状态机(tech-design §Interface 1;schema-v3
+ * projects.projection_state CHECK 同源):pending → healthy;上游操作失败
+ * / relay 不在场 → degraded(可重试);对账 diff 检出 dsh 侧手改 →
+ * deviation(仅呈现,无反向写)。
+ */
+export type ProjectionState = 'pending' | 'healthy' | 'degraded' | 'deviation'
+
+/**
  * A registered project (workbench-owned state, single source of truth in the
  * main-process store; the renderer only ever sees this DTO).
  */
@@ -38,20 +55,54 @@ export interface Project {
   /** ISO 8601 UTC. */
   readonly createdAt: string
   readonly lastActivatedAt: string | null
+  // —— M4 v3 增列(任务 1.3;main-side peer = repos/types.ts Project)——
+  /** 归档位(归档 ≠ 删除:dsh 侧 workspace 保留,forge 侧归档分区)。 */
+  readonly archived: boolean
+  /** 注册序(= 投影「同名同序」的 forge 侧权威)。 */
+  readonly sortOrder: number
+  /** 投影状态机单值(3.x 对账接线前恒 'pending')。 */
+  readonly projectionState: ProjectionState
+  /** 证据三档落位 + custom(仓内落点永不继承)。 */
+  readonly docsPlacement: DocsPlacement
 }
 
 /**
- * Interface 1 registerProject input: the three-step wizard's submit payload
- * (task 5.4). `displayName` omitted / empty means 缺省 = the codeRoot
- * directory name; `docLocationPath` is required (and ≠ codeRoot) when
- * external, always null when in_repo.
+ * Interface 1 registerProject input, v1 face (the three-step wizard's submit
+ * payload, task 5.4 — the M2/M3 frozen shape). `displayName` omitted / empty
+ * means 缺省 = the codeRoot directory name; `docLocationPath` is required
+ * (and ≠ codeRoot) when external, always null when in_repo.
  */
-export interface RegisterProjectInput {
+export interface RegisterProjectInputV1 {
   readonly codeRoot: string
   readonly docLocationType: DocLocationType
   readonly docLocationPath?: string | null
   readonly displayName?: string
 }
+
+/**
+ * Interface 1 registerProject input, v2 face (M4 task 1.3;the C7 确认卡's
+ * submit payload). Hard checks are exactly two kernel-side (anchor exists +
+ * dir + readable; cross-project uniqueness via the D11 three-tier identity);
+ * `docsPath` is required for repo-new / custom; `customAuthorized: true` is
+ * required for custom (BIZ-001/003 收窄).
+ */
+export interface RegisterProjectInputV2 {
+  /** 代码根目录(D11 anchor;bare drives / relative paths rejected at entry). */
+  readonly anchor: string
+  /** 缺省 = 文件夹名。 */
+  readonly displayName?: string
+  readonly docsPlacement: 'repo-existing' | 'repo-new' | 'app' | 'custom'
+  /** repo-new / custom 必填;app = kernel-derived. */
+  readonly docsPath?: string
+  /** custom 必填 true. */
+  readonly customAuthorized?: boolean
+}
+
+/**
+ * Interface 1 registerProject input(M4 任务 1.3 起的双形态联合:同一动词
+ * 通道收 v1 | v2 —— v1 = M2/M3 向导冻结面,v2 = P1 批新面,2.x C7 卡接线)。
+ */
+export type RegisterProjectInput = RegisterProjectInputV1 | RegisterProjectInputV2
 
 /**
  * Interface 1 updateProject patch: rename = `displayName`; repoint = the doc
@@ -540,6 +591,83 @@ export type WorkbenchEvent =
     readonly approvalId: string
     readonly taskKey: string
   }
+  // M4 v3 (task 1.3, tech-design §Interface 1 事件 v3 扩展): project-center
+  // signals. project_list_changed = any register/rename/archive/restore/remove
+  // completion (empty payload — consumers re-pull listProjects/getState);
+  // projection_push_required = the projection relay's work item (Interface 2;
+  // task 1.3's registerProject emits the placeholder plan — a single ensure
+  // op; 3.x generalizes the plan assembly).
+  | { readonly type: 'project_list_changed' }
+  | {
+    readonly type: 'projection_push_required'
+    readonly projectId: string
+    readonly plan: ProjectionPlan
+  }
+
+// ---------------------------------------------------------------------------
+// M4 v3 project-center verb DTOs (task 1.3;main-side peers =
+// apps/desktop/src/main/workbench/projects-identity/detect.ts and
+// projects/lifecycle-service.ts — both halves derive from tech-design
+// §Interface 1 v3)
+// ---------------------------------------------------------------------------
+
+/**
+ * M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序 =
+ * ensure → rename → reorder → delete,幂等全量重推;仅 forge 所属子集相对序)。
+ */
+export type ProjectionOp =
+  | { readonly kind: 'ensure'; readonly canonicalPath: string; readonly title: string }
+  | { readonly kind: 'rename'; readonly workspaceId: string; readonly title: string }
+  | { readonly kind: 'delete'; readonly workspaceId: string }
+  | { readonly kind: 'reorder'; readonly orderedIds: readonly string[] }
+
+/** 一个项目的投影期望 plan(幂等全量重推;偏差 = diff 实况,明细不落表)。 */
+export interface ProjectionPlan {
+  readonly projectId: string
+  readonly ops: readonly ProjectionOp[]
+}
+
+/** probeProjectPath 入参(C7 侦测;裸盘符/相对路径在归一化入口即拒)。 */
+export interface ProbeProjectPathInput {
+  readonly path: string
+}
+
+/**
+ * Interface 1 DetectReport(M4 任务 1.3;main-side peer =
+ * projects-identity/detect.ts verbatim)— the C7 确认卡's detection data:
+ * normalization facts + three-tier registered fast lane + bounded evidence
+ * probes (gitRoot / forgeTreeHit / childRepos chips).
+ */
+export interface DetectReport {
+  readonly input: string
+  /** realpath.native canonical; null when realpath failed (string fallback). */
+  readonly canonicalPath: string | null
+  /** win32-folded comparison key; null only when the entry itself was rejected. */
+  readonly pathKey: string | null
+  readonly identity: { readonly dev: string; readonly ino: string } | null
+  readonly exists: boolean
+  readonly isDir: boolean
+  readonly readable: boolean
+  /** pathKey or (dev,ino) hit → fast lane { projectId, displayName }. */
+  readonly registered: { readonly projectId: string; readonly displayName: string } | null
+  /** Set when the probed root itself carries a top-level `.git`. */
+  readonly gitRoot: string | null
+  /** `<root>/docs/features` + direct manifest.md existence (D1 tree signal). */
+  readonly forgeTreeHit: boolean
+  /** Direct child repos; chips only when ≥2 (parent-dir mis-pick signal). */
+  readonly childRepos: ReadonlyArray<{ readonly name: string; readonly path: string }>
+}
+
+/** renameProject 入参(纯 DB 改名,零 fs)。 */
+export interface RenameProjectInput {
+  readonly projectId: string
+  readonly displayName: string
+}
+
+/** archiveProject / restoreProject 入参。 */
+export interface ProjectRefInput {
+  readonly projectId: string
+}
 
 // ---------------------------------------------------------------------------
 // Migration family, UF3 (task 1.6's consumption; the main-side peer is

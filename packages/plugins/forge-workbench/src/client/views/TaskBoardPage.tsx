@@ -552,7 +552,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     // subscribes per active project; undefined projectId accepts all — the
     // build-stage page has no real project binding yet).
     const mine = (event: WorkbenchEvent): boolean =>
-      projectIdRef.current === undefined || event.projectId === projectIdRef.current
+      projectIdRef.current === undefined
+      || ('projectId' in event && event.projectId === projectIdRef.current)
     // The UF1 orchestration reflux (task 3.9, ≤5s 免手动刷新): dispatch_updated
     // drives the 编排角标谱 — rows re-read in place (attribute-level: the
     // views keep their filter/scroll/focus state), the announcement rides

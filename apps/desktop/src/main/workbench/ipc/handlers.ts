@@ -27,9 +27,12 @@ import type {
   KnowledgeResearchInput,
   PrefEntry,
   PrefScope,
+  ProbeProjectPathInput,
   ProjectPatch,
+  ProjectRefInput,
   RecordSessionLinkInput,
   RegisterProjectInput,
+  RenameProjectInput,
   StageSummarizeInput,
   TaskAddInput,
   TaskClaimInput,
@@ -184,7 +187,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
 // + dispatch host 回调段 3 条(任务 3.5)+ stages 写段 2 条(任务 4.1)
-// = 49 条白名单通道)
+// + M4 v3 项目中心段 5 条(任务 1.3)= 56 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -225,10 +228,36 @@ export function installWorkbenchVerbs(
 
   register(C.getState, () => services.getState())
 
+  // M4 v3(任务 1.3):registerProject 收 v1 | v2 双形态 —— anchor/docsPlacement
+  // 在场即 v2(P1 批新面,docsPlacement 词表 + repo-new/custom 必填 docsPath +
+  // custom 必填 customAuthorized=true 的形状契约在此;D11 硬校验在内核
+  // lifecycle-service),否则 v1(M2/M3 向导冻结面,校验不变)。
+  const DOC_PLACEMENTS: ReadonlySet<string> = new Set(['repo-existing', 'repo-new', 'app', 'custom'])
+
   register(C.registerProject, (args) => {
     const input = requireObject('registerProject', 'input', args[0])
-    requireString('registerProject', 'input.codeRoot', input.codeRoot)
-    requireString('registerProject', 'input.docLocationType', input.docLocationType)
+    const isV2 = input.anchor !== undefined || input.docsPlacement !== undefined
+    if (isV2) {
+      requireString('registerProject', 'input.anchor', input.anchor)
+      optionalString('registerProject', 'input.displayName', input.displayName)
+      const docsPlacement = requireString('registerProject', 'input.docsPlacement', input.docsPlacement)
+      if (!DOC_PLACEMENTS.has(docsPlacement)) {
+        throw new Error(`workbench.registerProject: input.docsPlacement must be one of repo-existing/repo-new/app/custom (got ${docsPlacement})`)
+      }
+      optionalString('registerProject', 'input.docsPath', input.docsPath)
+      if ((docsPlacement === 'repo-new' || docsPlacement === 'custom') && (typeof input.docsPath !== 'string' || input.docsPath === '')) {
+        throw new Error(`workbench.registerProject: input.docsPath is required when docsPlacement is ${docsPlacement}`)
+      }
+      if (input.customAuthorized !== undefined && typeof input.customAuthorized !== 'boolean') {
+        throw new Error(`workbench.registerProject: input.customAuthorized must be a boolean when present (got ${typeof input.customAuthorized})`)
+      }
+      if (docsPlacement === 'custom' && input.customAuthorized !== true) {
+        throw new Error('workbench.registerProject: input.customAuthorized must be true when docsPlacement is custom (explicit consent, BIZ-workbench-001/003)')
+      }
+    } else {
+      requireString('registerProject', 'input.codeRoot', input.codeRoot)
+      requireString('registerProject', 'input.docLocationType', input.docLocationType)
+    }
     return services.registerProject(input as unknown as RegisterProjectInput)
   })
 
@@ -681,6 +710,38 @@ export function installWorkbenchVerbs(
       requireString('notifyLaunchFailed', 'dispatchId', args[0]),
       requireString('notifyLaunchFailed', 'error', args[1]),
     ))
+
+  // —— M4 v3 项目中心段(任务 1.3):侦测 + 生命周期四新动词。Hard Rule
+  //    延续 —— 本层只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;
+  //    D11 三层比对/硬校验、事件推送与投影占位全部在内核服务面
+  //    (projects/lifecycle-service),不信任 renderer 语义(T4)。 ——
+
+  register(C.probeProjectPath, (args) => {
+    const input = requireObject('probeProjectPath', 'input', args[0])
+    requireString('probeProjectPath', 'input.path', input.path)
+    return services.probeProjectPath(input as unknown as ProbeProjectPathInput)
+  })
+
+  register(C.renameProject, (args) => {
+    const input = requireObject('renameProject', 'input', args[0])
+    requireString('renameProject', 'input.projectId', input.projectId)
+    requireString('renameProject', 'input.displayName', input.displayName)
+    return services.renameProject(input as unknown as RenameProjectInput)
+  })
+
+  register(C.archiveProject, (args) => {
+    const input = requireObject('archiveProject', 'input', args[0])
+    requireString('archiveProject', 'input.projectId', input.projectId)
+    return services.archiveProject(input as unknown as ProjectRefInput)
+  })
+
+  register(C.restoreProject, (args) => {
+    const input = requireObject('restoreProject', 'input', args[0])
+    requireString('restoreProject', 'input.projectId', input.projectId)
+    return services.restoreProject(input as unknown as ProjectRefInput)
+  })
+
+  register(C.listProjects, () => services.listProjects())
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (
