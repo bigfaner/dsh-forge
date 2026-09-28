@@ -250,7 +250,7 @@
       "dependencies": [
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.5-lineage-service.md",
       "record": "records/2.5-lineage-service.md",
       "surface-type": "web",

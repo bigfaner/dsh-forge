@@ -279,6 +279,24 @@ export type {
   SessionsFace, SessionsListSource, SidebarRightFace, UiWorkspaceFace, WorkspacesListSource,
 } from './nav/project-seat'
 export { PROJECT_SWITCH_CLASS, PROJECT_SWITCH_TRANSITION_MS } from './nav/project-seat'
+// M4 task 2.5 — the lineage derivation service (tech-design §Interface 3,
+// client half, pure read-only): the upstream sessions snapshot (guarded
+// duck-typed adapters, no api-* imports) ⊕ the M3 get-task-detail
+// session_links joined into TaskBinding — 执行中判定 (BIZ-workbench-008),
+// ≤100ms cooperative budget with silent 仅顶层 degrade (BIZ-resilience-001),
+// 不落库 (recompute anytime). C5 (2.6) / C6 (2.7) consume; C3's copy seat
+// stays 1.4's.
+export {
+  createLineageDeadline, defaultLineageLog, deriveSessionLineage, deriveTaskBinding,
+  judgeExecuting, lineageSnapshotOf, LINEAGE_BUDGET_MS, LINEAGE_CHECK_INTERVAL,
+  LINEAGE_DESCENDANT_LIMIT, LINEAGE_LOG_PREFIX, logLineageDegraded, toLineageSessionsSource,
+} from './lineage'
+export type {
+  DeriveTaskBindingInput, ExecutionJudgment, LineageCatalog, LineageCatalogChild,
+  LineageCatalogEntry, LineageDeadline, LineageDegradedReason, LineageLog, LineageSessionRow,
+  LineageSessionsSnapshot, LineageSessionsSource, LineageSubagentAddress, LineageTaskRef,
+  SessionLink, SessionLineageResult, SessionTaskBadge, SubagentHit, TaskBinding, TaskLinkRow,
+} from './lineage'
 // The active-project pointer store (app_state active_project_id, client half).
 export {
   createActiveProjectStore, INITIAL_ACTIVE_PROJECT_SNAPSHOT,
