@@ -474,6 +474,52 @@ export type WorkbenchKey =
   | 'proposals.status.accepted'
   | 'proposals.status.rejected'
   | 'proposals.status.superseded'
+  | 'tree.label'
+  | 'tree.search.placeholder'
+  | 'tree.search.open'
+  | 'tree.search.exit'
+  | 'tree.viewOptions'
+  | 'tree.viewOptions.group'
+  | 'tree.viewOptions.group.tree'
+  | 'tree.viewOptions.group.byProject'
+  | 'tree.viewOptions.group.flat'
+  | 'tree.viewOptions.sort'
+  | 'tree.viewOptions.sort.manual'
+  | 'tree.viewOptions.sort.recent'
+  | 'tree.session.menu'
+  | 'tree.session.rename'
+  | 'tree.session.fork'
+  | 'tree.session.archive'
+  | 'tree.project.menu'
+  | 'tree.project.rename'
+  | 'tree.project.remove'
+  | 'tree.project.restore'
+  | 'tree.project.newSession'
+  | 'tree.project.expand'
+  | 'tree.project.collapse'
+  | 'tree.archivedSection'
+  | 'tree.archivedBadge'
+  | 'tree.overflow.expand'
+  | 'tree.overflow.collapse'
+  | 'tree.ungrouped'
+  | 'tree.ungrouped.adopt'
+  | 'tree.empty.title'
+  | 'tree.empty.newSession'
+  | 'tree.degraded'
+  | 'tree.dot.awaitingInput'
+  | 'tree.dot.running'
+  | 'tree.dot.subagentRunning'
+  | 'tree.dot.subagentRunningCount'
+  | 'tree.caret.expand'
+  | 'tree.caret.collapse'
+  | 'tree.time.justNow'
+  | 'tree.time.minutes'
+  | 'tree.time.hours'
+  | 'tree.time.days'
+  | 'tree.rail.collapse'
+  | 'tree.rail.newSession'
+  | 'tree.rail.search'
+  | 'tree.rail.settings'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -951,4 +997,52 @@ export const en: Record<WorkbenchKey, string> = {
   'proposals.status.accepted': 'Accepted',
   'proposals.status.rejected': 'Rejected',
   'proposals.status.superseded': 'Superseded',
+  // C3 left-rail project tree (task 1.4; ui-design §Component C3 +
+  // workbench-layout-v2 §2 — the ⋯ menu items are the dsh Rows.tsx trio).
+  'tree.label': 'Projects',
+  'tree.search.placeholder': 'Search projects & sessions…',
+  'tree.search.open': 'Search',
+  'tree.search.exit': 'Exit search',
+  'tree.viewOptions': 'View options',
+  'tree.viewOptions.group': 'Grouping',
+  'tree.viewOptions.group.tree': 'By project tree',
+  'tree.viewOptions.group.byProject': 'By project',
+  'tree.viewOptions.group.flat': 'Single list',
+  'tree.viewOptions.sort': 'Sorting',
+  'tree.viewOptions.sort.manual': 'Manual',
+  'tree.viewOptions.sort.recent': 'Recently updated',
+  'tree.session.menu': 'Session menu',
+  'tree.session.rename': 'Rename',
+  'tree.session.fork': 'Fork session',
+  'tree.session.archive': 'Archive session',
+  'tree.project.menu': 'Project menu',
+  'tree.project.rename': 'Rename',
+  'tree.project.remove': 'Delete project',
+  'tree.project.restore': 'Restore project',
+  'tree.project.newSession': 'New session here',
+  'tree.project.expand': 'Expand sessions',
+  'tree.project.collapse': 'Collapse sessions',
+  'tree.archivedSection': 'Archived ({n})',
+  'tree.archivedBadge': 'Archived (read-only)',
+  'tree.overflow.expand': 'Show {n} more sessions',
+  'tree.overflow.collapse': 'Collapse',
+  'tree.ungrouped': 'Ungrouped',
+  'tree.ungrouped.adopt': 'Adopt',
+  'tree.empty.title': 'No sessions yet',
+  'tree.empty.newSession': '+ New session',
+  'tree.degraded': 'Lineage unavailable — top-level sessions only; it restores automatically.',
+  'tree.dot.awaitingInput': 'Awaiting input',
+  'tree.dot.running': 'Running',
+  'tree.dot.subagentRunning': 'Subagent running',
+  'tree.dot.subagentRunningCount': '{n} subagents running',
+  'tree.caret.expand': 'Expand descendants',
+  'tree.caret.collapse': 'Collapse descendants',
+  'tree.time.justNow': 'now',
+  'tree.time.minutes': '{n} min',
+  'tree.time.hours': '{n} h',
+  'tree.time.days': '{n} d',
+  'tree.rail.collapse': 'Expand sidebar',
+  'tree.rail.newSession': 'New session',
+  'tree.rail.search': 'Search',
+  'tree.rail.settings': 'Settings',
 }
