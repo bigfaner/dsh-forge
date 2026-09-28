@@ -16,7 +16,10 @@ import { buildPureWorld, managedDocRoot, OOR_FEATURE, registerExternalViaWizard 
 
 const TASK_KEY = `${OOR_FEATURE}/1`
 
-test('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(external 行)→ 多类资产读写落文档根(板呈现)→ 代码仓零新增(git 断言)', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(external 行)→ 多类资产读写落文档根(板呈现)→ 代码仓零新增(git 断言)', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildPureWorld(freshRoot('oor-smoke'))

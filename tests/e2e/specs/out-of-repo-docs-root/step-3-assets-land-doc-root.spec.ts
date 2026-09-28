@@ -38,8 +38,12 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 四类资产同源仓外 + 代码仓零新增。
-  test('step3/success: tasks/records/stage-assets/proposals all read+write at the doc root; boards render them; the code repo workspace stays clean (git face)', async ({ }, testInfo) => {
+  test.fixme('step3/success: tasks/records/stage-assets/proposals all read+write at the doc root; boards render them; the code repo workspace stays clean (git face)', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page, stub } = world
@@ -108,7 +112,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
   })
 
   // Outcome "legacy-in-repo-docs-invisible" — 仓内既有文档不被呈现、零搬迁。
-  test('step3/legacy-in-repo-docs-invisible: the legacy tree (in-repo docs, NO index.json) registers default-external: no migration step, views address the external root, in-repo files untouched', async ({ }, testInfo) => {
+  test.fixme('step3/legacy-in-repo-docs-invisible: the legacy tree (in-repo docs, NO index.json) registers default-external: no migration step, views address the external root, in-repo files untouched', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(legacy as KernelWorld, 'legacy', { activate: false, tab: 'workbench/overview' })
     const { page } = world
@@ -146,7 +150,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
   })
 
   // Outcome "remove-registration" — 移除 = 仅自有数据级联;仓内零触碰。
-  test('step3/remove-registration: removing the registration cascades ONLY app-owned data; repo files + forge data untouched; re-registering the same root works', async ({ }, testInfo) => {
+  test.fixme('step3/remove-registration: removing the registration cascades ONLY app-owned data; repo files + forge data untouched; re-registering the same root works', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page } = world

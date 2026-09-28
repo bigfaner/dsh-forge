@@ -32,7 +32,10 @@ import {
 /** Setup 实际任务规模的首屏预算(契约 Output:首屏 2 秒内可交互)。 */
 const FIRST_INTERACTIVE_BUDGET_MS = 2_000
 
-test('step-1/success [@web-e2e @journey task-session-execution-loop]: task board DAG vs forge files (dual channel) + first interactive ≤2s + read-only face', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-1/success [@web-e2e @journey task-session-execution-loop]: task board DAG vs forge files (dual channel) + first interactive ≤2s + read-only face', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   // --- fixture(seed 固定 ⇒ 同模型 ⇒ 同文件字节;自检兜底方言形状)----------

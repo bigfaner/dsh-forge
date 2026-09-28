@@ -47,8 +47,11 @@ function stepOneFixture(): { set: GeneratedTaskSet; root: string; project: Writt
   const mutator = createFixtureMutator(set, project)
   return { set, root, project, stub, mutator }
 }
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('step-1/success [@web-e2e @journey dual-form-consistency]: terminal change flowbacks ≤5s with [终端] source (board entered after the change)', async ({ }, testInfo) => {
+test.fixme('step-1/success [@web-e2e @journey dual-form-consistency]: terminal change flowbacks ≤5s with [终端] source (board entered after the change)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepOneFixture()
   const session = createAppSessionFactory({
@@ -112,7 +115,7 @@ test('step-1/success [@web-e2e @journey dual-form-consistency]: terminal change 
   }
 })
 
-test('step-1/board-open-change [@web-e2e @journey dual-form-consistency]: arrival change on the OPEN board ≤5s, existing content retained (no full-board reload)', async ({ }, testInfo) => {
+test.fixme('step-1/board-open-change [@web-e2e @journey dual-form-consistency]: arrival change on the OPEN board ≤5s, existing content retained (no full-board reload)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepOneFixture()
   const session = createAppSessionFactory({
@@ -160,7 +163,7 @@ test('step-1/board-open-change [@web-e2e @journey dual-form-consistency]: arriva
   }
 })
 
-test('step-1/perception-chain-error [@web-e2e @journey dual-form-consistency]: sync-error toolbar + last-good board retained, retry after restore converges (FT-056)', async ({ }, testInfo) => {
+test.fixme('step-1/perception-chain-error [@web-e2e @journey dual-form-consistency]: sync-error toolbar + last-good board retained, retry after restore converges (FT-056)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepOneFixture()
   const session = createAppSessionFactory({

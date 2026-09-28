@@ -46,8 +46,11 @@ function stepTwoFixture(): { set: GeneratedTaskSet; root: string; project: Writt
   const mutator = createFixtureMutator(set, project)
   return { set, root, project, stub, mutator }
 }
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('step-2/success [@web-e2e @journey dual-form-consistency]: after a session-attributed change the terminal forge task status agrees with the board ([会话] mark)', async ({ }, testInfo) => {
+test.fixme('step-2/success [@web-e2e @journey dual-form-consistency]: after a session-attributed change the terminal forge task status agrees with the board ([会话] mark)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepTwoFixture()
   const session = createAppSessionFactory({
@@ -110,7 +113,7 @@ test('step-2/success [@web-e2e @journey dual-form-consistency]: after a session-
   }
 })
 
-test('step-2/high-frequency-terminal-changes [@web-e2e @journey dual-form-consistency]: pinned spacing (>FT-047 merge window) keeps every terminal change individually visible; final four-way agreement', async ({ }, testInfo) => {
+test.fixme('step-2/high-frequency-terminal-changes [@web-e2e @journey dual-form-consistency]: pinned spacing (>FT-047 merge window) keeps every terminal change individually visible; final four-way agreement', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepTwoFixture()
   const session = createAppSessionFactory({

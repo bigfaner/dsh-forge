@@ -27,8 +27,12 @@ test.describe.serial('proposal-board-browsing / step 1: 打开提案列表', () 
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第③行 · M3 提案板(workbench/proposals)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 列表与文档根一致 + 零写入口(控件清单级)。
-  test('step1/success: the board lists every proposal with metadata + badges (orphan badge-less), tab order 概览/提案/Feature/任务, created-desc order, zero write affordances', async ({ }, testInfo) => {
+  test.fixme('step1/success: the board lists every proposal with metadata + badges (orphan badge-less), tab order 概览/提案/Feature/任务, created-desc order, zero write affordances', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(main as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world
@@ -69,7 +73,7 @@ test.describe.serial('proposal-board-browsing / step 1: 打开提案列表', () 
   })
 
   // Outcome "empty-state" — 空态为正常呈现。
-  test('step1/empty-state: empty proposals/ renders the 暂无提案 placeholder + path note (normal state, no error)', async ({ }, testInfo) => {
+  test.fixme('step1/empty-state: empty proposals/ renders the 暂无提案 placeholder + path note (normal state, no error)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(bare as KernelWorld, 'bare', { tab: 'workbench/proposals' })
     const { page } = world

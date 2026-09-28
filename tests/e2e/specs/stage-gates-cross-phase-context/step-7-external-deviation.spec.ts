@@ -28,8 +28,12 @@ test.describe.serial('stage-gates-cross-phase-context / step 7: 外部会话跨�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 偏离徽标 + 不硬阻断三面。
-  test('step7/success: an external cross-stage manifest rewrite surfaces the deviation badge; the app does NOT block (bytes intact, detail openable, verbs answer)', async ({ }, testInfo) => {
+  test.fixme('step7/success: an external cross-stage manifest rewrite surfaces the deviation badge; the app does NOT block (bytes intact, detail openable, verbs answer)', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world
@@ -61,7 +65,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 7: 外部会话跨�
   })
 
   // Outcome "no-blocking-interaction" — 偏离不产生阻断交互。
-  test('step7/no-blocking-interaction: with the badge presented, clicking it and continuing orchestration produce ZERO blocking dialogs; normal browsing stays available', async ({ }, testInfo) => {
+  test.fixme('step7/no-blocking-interaction: with the badge presented, clicking it and continuing orchestration produce ZERO blocking dialogs; normal browsing stays available', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world

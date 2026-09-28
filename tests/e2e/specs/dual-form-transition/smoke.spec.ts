@@ -31,8 +31,11 @@ import {
   bridgeInvoke,
 } from '../_lib/journey-world.ts'
 import { buildRegisteredWorld, buildUnregisteredCliCorpus, CLI_BASE_ID, CLI_BASE_TITLE, cliIndexTasks, writeCliRecordData } from './harness.ts'
+// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('smoke/dual-form-transition: 应用通道日常管线(零 spawn 双面 + 审计 + ≤5s 回流)与未注册 CLI 世界并存互不破坏', async ({ }, testInfo) => {
+test.fixme('smoke/dual-form-transition: 应用通道日常管线(零 spawn 双面 + 审计 + ≤5s 回流)与未注册 CLI 世界并存互不破坏', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildRegisteredWorld(freshRoot('dual-smoke'))

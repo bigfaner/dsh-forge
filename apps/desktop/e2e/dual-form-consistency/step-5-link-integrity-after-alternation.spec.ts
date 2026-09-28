@@ -59,7 +59,10 @@ async function openDetailDock(page: Page, taskKey: string): Promise<void> {
   await expect(page.locator(`[data-dsh-forge-task-detail="${taskKey}"]`)).toBeVisible({ timeout: 15_000 })
 }
 
-test('step-5/success [@web-e2e @journey dual-form-consistency]: after alternation the task detail shows the intact active link; recording/viewing links writes zero bytes into the forge tree', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-5/success [@web-e2e @journey dual-form-consistency]: after alternation the task detail shows the intact active link; recording/viewing links writes zero bytes into the forge tree', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepFiveFixture()
   const session = createAppSessionFactory({
@@ -127,7 +130,10 @@ test('step-5/success [@web-e2e @journey dual-form-consistency]: after alternatio
   }
 })
 
-test('step-5/frozen-plugin-compat [@web-e2e @journey dual-form-consistency]: a 3.x-shaped dialect copy-write (index.json round-trip, record: pointer dropped) renders fine, format intact, board≡files', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-5/frozen-plugin-compat [@web-e2e @journey dual-form-consistency]: a 3.x-shaped dialect copy-write (index.json round-trip, record: pointer dropped) renders fine, format intact, board≡files', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepFiveFixture()
   const session = createAppSessionFactory({
@@ -195,7 +201,10 @@ test('step-5/frozen-plugin-compat [@web-e2e @journey dual-form-consistency]: a 3
   }
 })
 
-test('step-5/ended-link-history-retained [@web-e2e @journey dual-form-consistency]: ended link stays in the newest-first history [S2 active, S1 ended] with endedAt; forge tree untouched across the leg', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-5/ended-link-history-retained [@web-e2e @journey dual-form-consistency]: ended link stays in the newest-first history [S2 active, S1 ended] with endedAt; forge tree untouched across the leg', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project } = stepFiveFixture()
   const session = createAppSessionFactory({

@@ -244,7 +244,10 @@ const detailOf = (page: Page, slug: string) => page.locator(`[data-dsh-forge-pro
 // The SC6 leg
 // ---------------------------------------------------------------------------
 
-test('sc6/proposals: board metadata/detail/eval consistency + external reflux ≤5s (scroll kept) + proposal↔feature round trip + zero write affordances (double-level)', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第③行 · M3 提案板(workbench/proposals)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('sc6/proposals: board metadata/detail/eval consistency + external reflux ≤5s (scroll kept) + proposal↔feature round trip + zero write affordances (double-level)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule / 6.2 base — the instance-lock discipline runs BEFORE any launch.

@@ -206,7 +206,8 @@ async function switchToWorkbench(page: Page): Promise<void> {
 
 /** Register through the wizard WITHOUT migrating (the 稍后 leg → overview entry). */
 async function registerWithoutMigration(page: Page, codeRoot: string): Promise<void> {
-  await page.locator('[data-dsh-forge-add-project]').click()
+  // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+  await page.locator('[data-dsh-forge-overview-register]').click()
   await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
   await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -448,7 +449,8 @@ test('sc2/wizard-external: fresh registration (external docs root + explicit aut
     await switchToWorkbench(page)
 
     // Wizard: path → 仓外 step (fill + explicit authorization) → migrate ON.
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(corpus.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })

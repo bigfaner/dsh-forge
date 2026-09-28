@@ -54,7 +54,10 @@ function journeyBundles(): ReadonlyArray<{ name: string; source?: string; mandat
   ]
 }
 
-test('step-2/success [@web-e2e @journey multi-project-management]: readable forge code root probes detected and advances to step ② with zero writes', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-2/success [@web-e2e @journey multi-project-management]: readable forge code root probes detected and advances to step ② with zero writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm2ok', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -104,7 +107,7 @@ test('step-2/success [@web-e2e @journey multi-project-management]: readable forg
   }
 })
 
-test('step-2/no-forge-data [@web-e2e @journey multi-project-management]: forge-less path is refused — stays on ① (probe leg) and rejected at submit (real chain leg), zero writes on both', async ({ }, testInfo) => {
+test.fixme('step-2/no-forge-data [@web-e2e @journey multi-project-management]: forge-less path is refused — stays on ① (probe leg) and rejected at submit (real chain leg), zero writes on both', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm2nf', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -174,7 +177,7 @@ test('step-2/no-forge-data [@web-e2e @journey multi-project-management]: forge-l
   }
 })
 
-test('step-2/duplicate-registration [@web-e2e @journey multi-project-management]: re-registering a registered code root is refused at submit with locate-to-existing-card, registry unchanged', async ({ }, testInfo) => {
+test.fixme('step-2/duplicate-registration [@web-e2e @journey multi-project-management]: re-registering a registered code root is refused at submit with locate-to-existing-card, registry unchanged', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm2dup', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -233,7 +236,7 @@ test('step-2/duplicate-registration [@web-e2e @journey multi-project-management]
   }
 })
 
-test('step-2/code-root-unreadable [@web-e2e @journey multi-project-management]: unreadable code root is refused — stays on ① (probe leg) and rejected at submit (real chain leg), zero writes on both', async ({ }, testInfo) => {
+test.fixme('step-2/code-root-unreadable [@web-e2e @journey multi-project-management]: unreadable code root is refused — stays on ① (probe leg) and rejected at submit (real chain leg), zero writes on both', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm2ur', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })

@@ -25,8 +25,12 @@ test.describe.serial('proposal-board-browsing / step 2: 查看提案详情与 ev
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第③行 · M3 提案板(workbench/proposals)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 详情双 tab 渲染一致 + 返回。
-  test('step2/success: detail renders the proposal body AND the eval report verbatim (MarkdownView whitelist); the breadcrumb returns to the board', async ({ }, testInfo) => {
+  test.fixme('step2/success: detail renders the proposal body AND the eval report verbatim (MarkdownView whitelist); the breadcrumb returns to the board', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world
@@ -59,7 +63,7 @@ test.describe.serial('proposal-board-browsing / step 2: 查看提案详情与 ev
   })
 
   // Outcome "no-feature-badge" — 孤儿详情照常(正常态,非错误)。
-  test('step2/no-feature-badge: the unassociated proposal browses normally (detail + proposal body); NULL feature is a legal early-pipeline shape', async ({ }, testInfo) => {
+  test.fixme('step2/no-feature-badge: the unassociated proposal browses normally (detail + proposal body); NULL feature is a legal early-pipeline shape', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world
@@ -73,7 +77,7 @@ test.describe.serial('proposal-board-browsing / step 2: 查看提案详情与 ev
   })
 
   // Outcome "markdown-injection-guard" — 白名单渲染,注入不生效。
-  test('step2/markdown-injection-guard: the hostile proposal renders through the whitelist — zero script execution, zero handler attributes, zero javascript: links', async ({ }, testInfo) => {
+  test.fixme('step2/markdown-injection-guard: the hostile proposal renders through the whitelist — zero script execution, zero handler attributes, zero javascript: links', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world

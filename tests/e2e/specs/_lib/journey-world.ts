@@ -356,14 +356,20 @@ export interface BootOptions {
   readonly env?: Record<string, string>
   /** Keep the ambient PATH (default false = the clean-PATH preset). */
   readonly cleanPath?: boolean
-  /** Activate the kernel's project and settle on a tab (default 'workbench/tasks'). */
+  /** Activate the kernel's project (default true — the project-card settle). */
   readonly activate?: boolean
+  /**
+   * @deprecated M4 task 1.8 (迁移清单 #9): the workbench interior collapsed to
+   * the overview escape door (1.7) — the boot lands on it directly, so there
+   * is no tab to click. The option stays (union unchanged) so specs parked as
+   * test.fixme until the P2 rightbar re-homing (2.1–2.4/2.10) still collect.
+   */
   readonly tab?: 'workbench/overview' | 'workbench/proposals' | 'workbench/features' | 'workbench/tasks'
   /** Skip the instance-lock probe (default false — the Hard Rule runs it). */
   readonly skipLockProbe?: boolean
 }
 
-/** Boot the app world over one kernel world (launch → uiReady → workbench → activate → tab). */
+/** Boot the app world over one kernel world (launch → uiReady → workbench(escape door) → activate). */
 export async function bootAppWorld(kernel: KernelWorld, tag: string, options: BootOptions = {}): Promise<AppWorld> {
   if ((options.skipLockProbe ?? false) === false) assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
   const stubDir = mkdtempSync(join(tmpdir(), `dsh-forge-m3-${tag}-stub-`))
@@ -383,12 +389,8 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
   await switchToWorkbench(page)
   let projectId = kernel.projectId
   if ((options.activate ?? true) === true) {
-    // 激活块在概览找项目卡;同 UserData 重启(会话恢复)可能落在其它视图
-    // —— 先归位概览(已选中即零操作)。
-    const overviewTab = page.locator('[data-dsh-forge-tab="workbench/overview"]')
-    if (await overviewTab.getAttribute('aria-selected').catch(() => null) !== 'true') {
-      await overviewTab.click()
-    }
+    // 激活块在逃生门(overview 单页)找项目卡;1.7 后 workbench 内景即概览,
+    // 无 tab 可归位 —— shell 挂载即达(迁移清单 #9/1.8)。
     const displayName = kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await expect(card).toBeVisible({ timeout: 30_000 })
@@ -400,10 +402,6 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
     const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])
     projectId = state.activeProjectId as string
     await expect(projectId, '激活项目在座(= 语料注册行)').toBe(kernel.projectId)
-  }
-  const tab = options.tab ?? 'workbench/tasks'
-  if (tab !== 'workbench/overview') {
-    await page.locator(`[data-dsh-forge-tab="${tab}"]`).click()
   }
   return { tag, shell, page, stub, stubDir, kernel, root: kernel.root, projectId, mainLog }
 }

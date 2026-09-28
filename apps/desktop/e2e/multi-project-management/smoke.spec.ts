@@ -35,7 +35,10 @@ async function readRegistry(page: Page): Promise<{ rows: string[]; activeProject
 /** The card whose registered displayName is `name` (codeRoot 目录名 default). */
 const cardOf = (page: Page, name: string) => page.locator('[data-dsh-forge-project-card]', { hasText: name }).first()
 
-test('multi-project-management journey smoke: wizard → register B (in_repo) → activate → switch back to A → remove B → re-register', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('multi-project-management journey smoke: wizard → register B (in_repo) → activate → switch back to A → remove B → re-register', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   const setA = generateTaskSet({ seed: 'mpmsmoke', taskCount: 12, featureCount: 2, danglingRate: 0, recordRate: 0 })

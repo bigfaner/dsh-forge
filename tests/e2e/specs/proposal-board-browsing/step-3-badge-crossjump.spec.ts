@@ -23,8 +23,12 @@ test.describe.serial('proposal-board-browsing / step 3: 经徽标互跳 feature 
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第③行 · M3 提案板(workbench/proposals)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — proposal → feature → 返回链往返闭合。
-  test('step3/success: the feature badge jumps to the Feature board entry and the return chain closes back on the proposal board (zero data change)', async ({ }, testInfo) => {
+  test.fixme('step3/success: the feature badge jumps to the Feature board entry and the return chain closes back on the proposal board (zero data change)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/proposals' })
     const { page } = world

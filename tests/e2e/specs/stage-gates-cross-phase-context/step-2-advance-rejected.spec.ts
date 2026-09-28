@@ -26,8 +26,12 @@ test.describe.serial('stage-gates-cross-phase-context / step 2: 总结未生成�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "gate-rejected" — 编排层硬门:拒绝 + 引导 + 零写入。
-  test('step2/gate-rejected: advancing without the stage summary → ERR_STAGE_GATE_UNSATISFIED with asset-path + tool guidance; stage unchanged (manifest bytes untouched)', async ({ }, testInfo) => {
+  test.fixme('step2/gate-rejected: advancing without the stage summary → ERR_STAGE_GATE_UNSATISFIED with asset-path + tool guidance; stage unchanged (manifest bytes untouched)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world

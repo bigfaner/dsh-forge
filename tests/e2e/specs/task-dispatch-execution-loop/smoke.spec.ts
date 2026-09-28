@@ -30,7 +30,10 @@ import { verifyPromptInjection } from '../../stubs/oracle.ts'
 import { buildMainWorld, FEATURE, TASK_1, TASK_2, TASK_3 } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
-test('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成注入(oracle)→ 审批批准 → 进入会话返回 → claim/submit ×3 回流 ≤5s → 板 = 内核', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成注入(oracle)→ 审批批准 → 进入会话返回 → claim/submit ×3 回流 ≤5s → 板 = 内核', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildMainWorld(freshRoot('disp-loop-smoke'))

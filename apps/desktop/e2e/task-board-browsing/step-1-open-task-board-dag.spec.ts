@@ -41,7 +41,10 @@ import {
 import { zh } from '../../../../packages/plugins/forge-workbench/src/client/locale/zh.ts'
 import { en } from '../../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
 
-test('step-1/success [@web-e2e @journey task-board-browsing]: default DAG + three-view/model consistency (12 tasks, dual oracle channel) + sync idle', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-1/success [@web-e2e @journey task-board-browsing]: default DAG + three-view/model consistency (12 tasks, dual oracle channel) + sync idle', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -179,7 +182,7 @@ test('step-1/success [@web-e2e @journey task-board-browsing]: default DAG + thre
   }
 })
 
-test('step-1/read-error [@web-e2e @journey task-board-browsing]: corrupt index.json → FT-056 sync-error toolbar + last-good board, retry after restore converges to the files', async ({ }, testInfo) => {
+test.fixme('step-1/read-error [@web-e2e @journey task-board-browsing]: corrupt index.json → FT-056 sync-error toolbar + last-good board, retry after restore converges to the files', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -233,7 +236,7 @@ test('step-1/read-error [@web-e2e @journey task-board-browsing]: corrupt index.j
   }
 })
 
-test('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-task project renders the 无任务 empty card, never an error', async ({ }, testInfo) => {
+test.fixme('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-task project renders the 无任务 empty card, never an error', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   // 零任务以 Task 实体缺席表达(手建 typed 模型 —— 生成器不接受 0;sc4 先例)。
@@ -269,7 +272,7 @@ test('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-task proj
   }
 })
 
-test('step-1/loading-state [@web-e2e @journey task-board-browsing]: skeleton shows before ready and error/empty never appear during loading (armed observer, 96 tasks)', async ({ }, testInfo) => {
+test.fixme('step-1/loading-state [@web-e2e @journey task-board-browsing]: skeleton shows before ready and error/empty never appear during loading (armed observer, 96 tasks)', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const set = generateTaskSet({ seed: BOARD_LOADING_SEED, taskCount: 96, featureCount: 8, danglingRate: 0.1, recordRate: 0.4 })

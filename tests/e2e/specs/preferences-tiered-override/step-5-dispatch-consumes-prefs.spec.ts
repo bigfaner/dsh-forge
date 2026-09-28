@@ -60,8 +60,12 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
     if (await dismiss.isVisible().catch(() => false)) await dismiss.click()
   }
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 修改后派发消费新生效值(55%)。
-  test('step5/success: post-change dispatch injects the NEW effective value (55%); the registry default 80 retreats; editing surface and dispatch consume the same resolution', async ({ }, testInfo) => {
+  test.fixme('step5/success: post-change dispatch injects the NEW effective value (55%); the registry default 80 retreats; editing surface and dispatch consume the same resolution', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page, stub } = world
@@ -101,7 +105,7 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
   })
 
   // Outcome "no-retroactive-rewrite" — 已派发不追溯;仅新派发消费新值。
-  test('step5/no-retroactive-rewrite: after a further change (55 → 66) the pre-change row keeps its prompt_hash; only the NEW dispatch consumes 66%', async ({ }, testInfo) => {
+  test.fixme('step5/no-retroactive-rewrite: after a further change (55 → 66) the pre-change row keeps its prompt_hash; only the NEW dispatch consumes 66%', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page, stub } = world

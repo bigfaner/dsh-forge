@@ -49,7 +49,10 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
   })
 
   // Outcome "success" — 两轮交替(终端→应用,应用→终端)。
-  test('step3/success: two alternating rounds (terminal→app, then app→terminal) leave both worlds intact — board = kernel rows on the registered side, CLI files on the unregistered side', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+  test.fixme('step3/success: two alternating rounds (terminal→app, then app→terminal) leave both worlds intact — board = kernel rows on the registered side, CLI files on the unregistered side', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
@@ -122,7 +125,10 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
   })
 
   // Outcome "in-flight-coexistence" — 在途变更共存下的交替提交。
-  test('step3/in-flight-coexistence: in-flight changes on BOTH sides commit alternately (CLI first, then app) with zero cross-pollution', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+  test.fixme('step3/in-flight-coexistence: in-flight changes on BOTH sides commit alternately (CLI first, then app) with zero cross-pollution', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     // 独立世界(在途态干净):CLI 侧新任务在途 + 应用侧任务在途。
     const kernelB = await buildRegisteredWorld(freshRoot('dual-s3b'))
@@ -150,7 +156,11 @@ test.describe.serial('dual-form-transition / step 3: 双形态交替互不破坏
   })
 
   // Outcome "channel-unavailable-asymmetric" — 已注册侧失败 + 未注册侧不受影响。
-  test('step3/channel-unavailable-asymmetric: the registered side shows failed + recovery while the unregistered CLI keeps working throughout', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
+  test.fixme('step3/channel-unavailable-asymmetric: the registered side shows failed + recovery while the unregistered CLI keeps working throughout', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     const kernelC = await buildRegisteredWorld(freshRoot('dual-s3c'))
     const cliC = buildUnregisteredCliCorpus(join(mkdtempSync(join(tmpdir(), 'dual-cli-s3c-')), 'cli-repo'))

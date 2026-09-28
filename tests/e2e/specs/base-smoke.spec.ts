@@ -3,7 +3,8 @@
 //
 // Task 6.2 base smoke — the ONE leg proving the base is usable (基座可用):
 // real shell boot under the base's three disciplines, then the workbench
-// tab-order assertion (概览/提案/Feature/任务 — the 5.5 revision):
+// view-key face (M4 task 1.8 迁移改写:1.7 退役 TabBar/内景收缩后,原 TabBar
+// 顺序断言迁移为「逃生门单页 + retired 面零残留」口径 —— 迁移清单 #9):
 //
 //   1. Hard Rule first: no active dsh-forge instance may hold the machine
 //      (M1 lesson — external lock holders poison runs into
@@ -12,9 +13,9 @@
 //      (process probe, all faces) and rides into the Electron launch env;
 //   3. the dispatch-stub env pair is set at boot (both host seams wired —
 //      the stubs must not disturb a production-shaped boot);
-//   4. boot → 工作台 → the TabBar order === WORKBENCH_TABS
-//      (['workbench/overview','workbench/proposals','workbench/features',
-//      'workbench/tasks']) with overview selected by default.
+//   4. boot → 工作台(逃生门)= overview 单页:唯一内景容器
+//      dsh-forge-view-overview 在场、[data-dsh-forge-tab] 面零残留
+//      (retired TabBar 孤儿清零)、无 retired 三视图容器挂载。
 //
 // Detailed SC legs are 6.3-6.8; this spec stays a smoke.
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -42,7 +43,7 @@ async function switchToWorkbench(page: Page): Promise<void> {
   throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
 }
 
-test('6.2/base-smoke: clean-env boot → 工作台 → tab order 概览/提案/Feature/任务', async ({ }, testInfo) => {
+test('6.2/base-smoke: clean-env boot → 工作台(逃生门)= overview 单页 + retired 视图面零残留', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   // Hard Rule / AC-4 — the instance-lock discipline runs BEFORE any launch.
@@ -65,14 +66,20 @@ test('6.2/base-smoke: clean-env boot → 工作台 → tab order 概览/提案/F
     await shell.uiReady()
     await switchToWorkbench(shell.page)
 
-    // AC-3 — the tab strip renders in WORKBENCH_TABS order (the 5.5 revision:
-    // 提案 second), and overview is the default selection.
-    const tabs = shell.page.locator('[data-dsh-forge-tabs] [data-dsh-forge-tab]')
-    await expect(tabs).toHaveCount(4)
-    const keys = await tabs.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).getAttribute('data-dsh-forge-tab')))
-    expect(keys).toEqual(['workbench/overview', 'workbench/proposals', 'workbench/features', 'workbench/tasks'])
-    await expect(shell.page.locator('[data-dsh-forge-tab="workbench/overview"]')).toHaveAttribute('aria-selected', 'true')
-    await expect(shell.page.locator('[data-dsh-forge-tab="workbench/proposals"]')).toHaveAttribute('aria-selected', 'false')
+    // AC-3 (M4 1.8 迁移改写)— the escape door IS the overview single page:
+    // the retired TabBar strip is gone entirely (zero [data-dsh-forge-tab]),
+    // the overview container is the ONLY interior mount, and no retired view
+    // container (tasks/features/proposals) leaks anywhere in the document.
+    await expect(shell.page.locator('[data-dsh-forge-tab]'),
+      'retired TabBar 面零残留(孤儿视图清零)').toHaveCount(0)
+    await expect(shell.page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]'),
+      '逃生门唯一内景 = overview 单页容器').toBeVisible({ timeout: 15_000 })
+    await expect(shell.page.locator('[data-dsh-forge-shell] [data-dsh-forge-view]'),
+      '内景恰一个挂载容器(单页收缩)').toHaveCount(1)
+    for (const retired of ['tasks', 'features', 'proposals'] as const) {
+      await expect(shell.page.locator(`[data-dsh-forge-view="dsh-forge-view-${retired}"]`),
+        `retired 容器 dsh-forge-view-${retired} 全页零挂载`).toHaveCount(0)
+    }
   } finally {
     await shell.close()
     rmSync(stubDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })

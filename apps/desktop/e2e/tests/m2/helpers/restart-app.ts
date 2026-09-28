@@ -142,6 +142,11 @@ export async function waitForTreeNodes(page: Page, expectedNodes: number, timeou
  * Navigate to the populated task board: workbench row → 任务 tab → view-A
  * panel with the full node population. Safe to re-run after a launch's
  * 切会话视图 (the keyed main slot re-mounts the whole shell).
+ *
+ * @deprecated M4 task 1.8 (迁移清单 #9 / 必答② 第②行): the 任务 tab and the
+ * tasks main view retired with 1.7 — the board re-homes into the rightbar
+ * pane family (P2 2.1/2.2). Kept for the test.fixme'd board specs' compile
+ * face; restored to a live path with the P2 hosts.
  */
 export async function openTasksBoard(page: Page, expectedNodes: number): Promise<void> {
   await switchToWorkbench(page)

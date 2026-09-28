@@ -49,7 +49,10 @@ function journeyBundles(): ReadonlyArray<{ name: string; source?: string; mandat
 /** The card whose registered displayName is `name` (codeRoot 目录名 default). */
 const cardOf = (page: Page, name: string) => page.locator('[data-dsh-forge-project-card]', { hasText: name }).first()
 
-test('step-3/success [@web-e2e @journey multi-project-management]: in_repo default completes registration in 3 steps, explicit activate keeps single activation, zero project-dir writes', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-3/success [@web-e2e @journey multi-project-management]: in_repo default completes registration in 3 steps, explicit activate keeps single activation, zero project-dir writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm3ok', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -130,7 +133,7 @@ test('step-3/success [@web-e2e @journey multi-project-management]: in_repo defau
   }
 })
 
-test('step-3/same-path-conflict [@web-e2e @journey multi-project-management]: external doc path equal to the code root is refused inline on step ② with zero writes', async ({ }, testInfo) => {
+test.fixme('step-3/same-path-conflict [@web-e2e @journey multi-project-management]: external doc path equal to the code root is refused inline on step ② with zero writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm3cfl', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -184,7 +187,7 @@ test('step-3/same-path-conflict [@web-e2e @journey multi-project-management]: ex
   }
 })
 
-test('step-3/external-auth-required [@web-e2e @journey multi-project-management]: explicit authorization unlocks the external doc location and registers it external, zero project-dir writes', async ({ }, testInfo) => {
+test.fixme('step-3/external-auth-required [@web-e2e @journey multi-project-management]: explicit authorization unlocks the external doc location and registers it external, zero project-dir writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm3ext', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -256,7 +259,7 @@ test('step-3/external-auth-required [@web-e2e @journey multi-project-management]
   }
 })
 
-test('step-3/external-auth-declined [@web-e2e @journey multi-project-management]: without the explicit authorization checkbox the wizard cannot advance past step ②, zero writes', async ({ }, testInfo) => {
+test.fixme('step-3/external-auth-declined [@web-e2e @journey multi-project-management]: without the explicit authorization checkbox the wizard cannot advance past step ②, zero writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm3dec', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })
@@ -312,7 +315,7 @@ test('step-3/external-auth-declined [@web-e2e @journey multi-project-management]
   }
 })
 
-test('step-3/external-authorized-unreadable [@web-e2e @journey multi-project-management]: authorized external path removed before finish is refused at submit, registration refused', async ({ }, testInfo) => {
+test.fixme('step-3/external-authorized-unreadable [@web-e2e @journey multi-project-management]: authorized external path removed before finish is refused at submit, registration refused', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setA = generateTaskSet({ seed: 'mpm3unr', taskCount: 6, featureCount: 1, danglingRate: 0, recordRate: 0 })

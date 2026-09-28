@@ -84,7 +84,10 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
   throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
 }
 
-test('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation refresh over the real IPC chain', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation refresh over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
   const shell = await launchPluginShell({ bundles: tasksBundles(), stageTarballs: tasksTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-tasks-smoke-')), 'user-data') })
   try {

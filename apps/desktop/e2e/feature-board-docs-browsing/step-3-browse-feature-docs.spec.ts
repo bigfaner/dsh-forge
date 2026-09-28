@@ -33,7 +33,10 @@ function writeGuardDocs(project: WrittenForgeProject): void {
   writeFileSync(join(project.featuresDir, GUARDS_SLUG, 'design', 'tech-design.md'), INJECTION_DOC)
 }
 
-test('step-3/success [@web-e2e @journey feature-board-docs-browsing]: the five docs render read-only with normalized-equal text vs fixture files; back navigation works', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-3/success [@web-e2e @journey feature-board-docs-browsing]: the five docs render read-only with normalized-equal text vs fixture files; back navigation works', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = guardsTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb3-'))
@@ -82,7 +85,7 @@ test('step-3/success [@web-e2e @journey feature-board-docs-browsing]: the five d
   }
 })
 
-test('step-3/doc-read-error [@web-e2e @journey feature-board-docs-browsing]: one unreadable doc shows error+retry without affecting siblings; restore+retry renders normally again', async ({ }, testInfo) => {
+test.fixme('step-3/doc-read-error [@web-e2e @journey feature-board-docs-browsing]: one unreadable doc shows error+retry without affecting siblings; restore+retry renders normally again', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = guardsTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb3e-'))
@@ -145,7 +148,7 @@ test('step-3/doc-read-error [@web-e2e @journey feature-board-docs-browsing]: one
   }
 })
 
-test('step-3/external-link-guard [@web-e2e @journey feature-board-docs-browsing]: external link renders as inert text, zero anchors, clicking never leaves dsh-app://', async ({ }, testInfo) => {
+test.fixme('step-3/external-link-guard [@web-e2e @journey feature-board-docs-browsing]: external link renders as inert text, zero anchors, clicking never leaves dsh-app://', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = guardsTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb3l-'))
@@ -193,7 +196,7 @@ test('step-3/external-link-guard [@web-e2e @journey feature-board-docs-browsing]
   }
 })
 
-test('step-3/injection-guard [@web-e2e @journey feature-board-docs-browsing]: script/HTML payloads render as literal text and never execute', async ({ }, testInfo) => {
+test.fixme('step-3/injection-guard [@web-e2e @journey feature-board-docs-browsing]: script/HTML payloads render as literal text and never execute', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = guardsTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb3i-'))

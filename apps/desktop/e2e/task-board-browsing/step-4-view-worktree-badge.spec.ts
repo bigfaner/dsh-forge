@@ -23,7 +23,10 @@ import {
   BOARD_SEED, disposeBoardJourney, groundOf, readBoard, setUpBoardJourney,
 } from './helpers.ts'
 
-test('step-4/success [@web-e2e @journey task-board-browsing]: code-faithful form — zero worktree badge in all three views, bridge projects the dialect (branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-4/success [@web-e2e @journey task-board-browsing]: code-faithful form — zero worktree badge in all three views, bridge projects the dialect (branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })

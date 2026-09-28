@@ -50,8 +50,11 @@ function stepThreeFixture(): { set: GeneratedTaskSet; root: string; project: Wri
   const mutator = createFixtureMutator(set, project)
   return { set, root, project, stub, mutator }
 }
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('step-3/success [@web-e2e @journey dual-form-consistency]: alternating terminal/session writes both reflow ≤5s with per-change correct source marks; final four-way agreement', async ({ }, testInfo) => {
+test.fixme('step-3/success [@web-e2e @journey dual-form-consistency]: alternating terminal/session writes both reflow ≤5s with per-change correct source marks; final four-way agreement', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepThreeFixture()
   const session = createAppSessionFactory({
@@ -114,8 +117,11 @@ test('step-3/success [@web-e2e @journey dual-form-consistency]: alternating term
     expect(existsSync(root)).toBe(false)
   }
 })
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consistency]: late claim on a completed task is not applied — board/terminal/file agree, no half-write (CLI-side rejection not observable from the workbench surface)', async ({ }, testInfo) => {
+test.fixme('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consistency]: late claim on a completed task is not applied — board/terminal/file agree, no half-write (CLI-side rejection not observable from the workbench surface)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepThreeFixture()
   const session = createAppSessionFactory({
@@ -165,7 +171,10 @@ test('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consiste
   }
 })
 
-test('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consistency]: pending→claim→transition sequential composition lands on both sides; final four-way agreement, no half-write', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consistency]: pending→claim→transition sequential composition lands on both sides; final four-way agreement, no half-write', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepThreeFixture()
   const session = createAppSessionFactory({
@@ -213,7 +222,10 @@ test('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consiste
   }
 })
 
-test('step-3/structural-change-flowback [@web-e2e @journey dual-form-consistency]: terminal task ADD/REMOVE reflows ≤5s; board task set equals the file set both ways, no orphan after removal', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-3/structural-change-flowback [@web-e2e @journey dual-form-consistency]: terminal task ADD/REMOVE reflows ≤5s; board task set equals the file set both ways, no orphan after removal', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub } = stepThreeFixture()
   const session = createAppSessionFactory({

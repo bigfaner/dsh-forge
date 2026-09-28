@@ -39,7 +39,10 @@ import {
   pickTaskKey, readBoard, readForgeIndexTruth, setUpJourney,
 } from './helpers.ts'
 
-test('step-5/success [@web-e2e @journey task-session-execution-loop]: simulated claim on the linked task reflows ≤5s with the [会话] source flip', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-5/success [@web-e2e @journey task-session-execution-loop]: simulated claim on the linked task reflows ≤5s with the [会话] source flip', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
@@ -96,7 +99,7 @@ test('step-5/success [@web-e2e @journey task-session-execution-loop]: simulated 
   }
 })
 
-test('step-5/sync-degraded [@web-e2e @journey task-session-execution-loop]: corrupt index.json after a healthy load → FT-056 sync-error toolbar + last-good board retained → retry converges', async ({ }, testInfo) => {
+test.fixme('step-5/sync-degraded [@web-e2e @journey task-session-execution-loop]: corrupt index.json after a healthy load → FT-056 sync-error toolbar + last-good board retained → retry converges', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
@@ -159,7 +162,7 @@ test('step-5/sync-degraded [@web-e2e @journey task-session-execution-loop]: corr
   }
 })
 
-test('step-5/multi-change-flowback [@web-e2e @journey task-session-execution-loop]: three consecutive changes each reflow ≤5s as [会话], final state equals the forge files', async ({ }, testInfo) => {
+test.fixme('step-5/multi-change-flowback [@web-e2e @journey task-session-execution-loop]: three consecutive changes each reflow ≤5s as [会话], final state equals the forge files', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()

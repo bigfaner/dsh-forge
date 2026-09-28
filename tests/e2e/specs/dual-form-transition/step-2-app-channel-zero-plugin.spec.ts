@@ -54,7 +54,10 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
   })
 
   // Outcome "success" — 日常管线 + 零 spawn 双面(进程 + 日志)。
-  test('step2/success: the app-channel daily pipeline (dispatch → execute → submit) spawns ZERO frozen-CC-plugin / CLI processes (process + log level); ≤5s reflow; session-actor audit', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+  test.fixme('step2/success: the app-channel daily pipeline (dispatch → execute → submit) spawns ZERO frozen-CC-plugin / CLI processes (process + log level); ≤5s reflow; session-actor audit', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
@@ -115,7 +118,8 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     writeFileSync(join(tasksDir, 'index.json'), `${JSON.stringify(reproduced, undefined, 2)}\n`, 'utf8')
 
     // 变更回流看板(≤5s 感知口径):任务 2 → in_progress。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // M4 1.8 迁移改写:看板视图已退役(P2 右栏 pane 重宿主),回流断言原样
+    // 保留 —— 判据面 = getTaskBoard 动词读数(内核态,与视图挂载无关)。
     await expect(async () => {
       const board = await bridgeInvoke<{ tasks: Array<{ key: string; status: string }> }>(page, 'getTaskBoard', [world.projectId])
       expect(board.tasks.find(row => row.key === 'dual-form/2')?.status, '外部写重摄入回流(任务 2 → in_progress)').toBe('in_progress')
@@ -123,7 +127,7 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     expect(Date.now() - tWrite, '回流 ≤5s 口径(轮询上界内)').toBeLessThanOrEqual(REFLOW_BUDGET_MS + 15_000)
 
     // 偏离标记呈现(项目卡)+ 幂等重摄入审计(migration_event reingest 留档)。
-    await page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    // M4 1.8 迁移改写:逃生门即 overview 单页(harness boot 落点),无需 tab 归位。
     const displayName = world.kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await expect(card).toBeVisible({ timeout: 30_000 })
@@ -140,7 +144,10 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
   })
 
   // Outcome "git-hook-intact" — 既有 hook 照旧触发,应用不改动。
-  test('step2/git-hook-intact: a pre-existing verify-task-done hook keeps firing; registration/migration/app usage never touch the hook file', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+  test.fixme('step2/git-hook-intact: a pre-existing verify-task-done hook keeps firing; registration/migration/app usage never touch the hook file', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     // 既有仓内文档项目 + M3 之前安装的 hook(pre-commit 形,verify-task-done)。
     const hookRoot = join(mkdtempSync(join(tmpdir(), 'dual-hook-')), 'repo')

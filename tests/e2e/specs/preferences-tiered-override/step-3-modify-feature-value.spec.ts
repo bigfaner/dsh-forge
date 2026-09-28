@@ -71,7 +71,7 @@ test.describe.serial('preferences-tiered-override / step 3: 修改 feature 级�
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
 
-    await page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    // M4 1.8 迁移改写:逃生门即 overview 单页(harness boot 落点),无需 tab 归位。
     await waitPrefsReady(page)
     await switchPrefTier(page, 'global')
     await waitGroupRows(page, 'eval')

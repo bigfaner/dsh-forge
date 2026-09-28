@@ -30,7 +30,8 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
   /** Walk the wizard to the doc-location step (paused for in-dialog assertions). */
   async function walkToDocStep(world: Awaited<ReturnType<WorldManager['acquire']>>): Promise<void> {
     const { page } = world
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill((pure as KernelWorld).codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -70,7 +71,8 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
     const world = await manager.acquire(freshKernel, 'auth', { activate: false, tab: 'workbench/overview' })
     const { page } = world
 
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(freshKernel.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -94,7 +96,8 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
     const { page } = world
 
     await (async () => {
-      await page.locator('[data-dsh-forge-add-project]').click()
+      // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+      await page.locator('[data-dsh-forge-overview-register]').click()
       await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
       await page.locator('[data-dsh-forge-wizard-path-input]').fill(freshKernel.codeRoot)
       await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -134,8 +137,12 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
     await expect(page.locator('[data-dsh-forge-wizard-step="migration"]'), '完成注册(进入原位迁移相)').toBeVisible({ timeout: 15_000 })
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第①⑤行 · 概览空态 CTA 之外的注册入口(多项目注册向导门)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "duplicate-registration" — 重复注册被阻止(零新增)。
-  test('step2/duplicate-registration: re-registering the same normalized code root is blocked; the existing registration is untouched', async ({ }, testInfo) => {
+  test.fixme('step2/duplicate-registration: re-registering the same normalized code root is blocked; the existing registration is untouched', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page } = world
@@ -145,7 +152,8 @@ test.describe.serial('out-of-repo-docs-root / step 2: 以默认仓外完成注�
     expect(before.projects.some(row => normPath(row.codeRoot) === normPath((pure as KernelWorld).codeRoot)), '前置:已注册').toBe(true)
 
     // 再次发起注册向导(同一代码根)。
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill((pure as KernelWorld).codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })

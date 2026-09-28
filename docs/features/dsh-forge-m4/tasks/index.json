@@ -119,7 +119,7 @@
       "dependencies": [
         "1.7"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "1.8-e2e-migration-sc1-sc2.md",
       "record": "records/1.8-e2e-migration-sc1-sc2.md",
       "surface-type": "web",

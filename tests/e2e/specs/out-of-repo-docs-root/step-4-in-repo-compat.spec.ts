@@ -31,8 +31,12 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 仓内兼容读写 + 管理空间零创建。
-  test('step4/success: the in-repo project registers (explicit in_repo) + migrates in place; M3 read/writes land at the original in-repo seats; the app-managed docs root is NEVER created', async ({ }, testInfo) => {
+  test.fixme('step4/success: the in-repo project registers (explicit in_repo) + migrates in place; M3 read/writes land at the original in-repo seats; the app-managed docs root is NEVER created', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     const world = await manager.acquire(inrepo as KernelWorld, 'inrepo', { activate: false, tab: 'workbench/overview' })
     const { page } = world
@@ -87,7 +91,7 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
   })
 
   // Outcome "external-change-backflow" — 仓内项目的外部变更回流。
-  test('step4/external-change-backflow: external edits to the in-repo docs reflux — task + proposal ≤5s; stage-asset/doc views show the latest content', async ({ }, testInfo) => {
+  test.fixme('step4/external-change-backflow: external edits to the in-repo docs reflux — task + proposal ≤5s; stage-asset/doc views show the latest content', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(inrepo as KernelWorld, 'inrepo')
     const { page } = world

@@ -30,7 +30,10 @@ import {
   disposeJourney, expectedDepChain, groundOf, pickTaskKey, readBoard, readTaskDetail, setUpJourney,
 } from './helpers.ts'
 
-test('step-2/success [@web-e2e @journey task-session-execution-loop]: detail dock renders forge verbatim description, topological dep chain, records + no write affordance', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-2/success [@web-e2e @journey task-session-execution-loop]: detail dock renders forge verbatim description, topological dep chain, records + no write affordance', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setup = setUpJourney()
@@ -124,7 +127,7 @@ test('step-2/success [@web-e2e @journey task-session-execution-loop]: detail doc
   }
 })
 
-test('step-2/worktree-trace-visible [@web-e2e @journey task-session-execution-loop]: code-faithful form — no worktree badge fabricated, branch column renders the empty placeholder (dialect: branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
+test.fixme('step-2/worktree-trace-visible [@web-e2e @journey task-session-execution-loop]: code-faithful form — no worktree badge fabricated, branch column renders the empty placeholder (dialect: branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const setup = setUpJourney()

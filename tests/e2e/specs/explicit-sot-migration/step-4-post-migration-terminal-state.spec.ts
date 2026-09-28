@@ -27,7 +27,8 @@ import type { KernelWorld } from '../_lib/journey-world.ts'
 
 /** The wizard registration WITH one-shot migration (SC1/SC2-leg3 selector chain). */
 export async function registerWithMigration(page: Page, codeRoot: string): Promise<void> {
-  await page.locator('[data-dsh-forge-add-project]').click()
+  // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+  await page.locator('[data-dsh-forge-overview-register]').click()
   await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
   await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -77,7 +78,11 @@ test.describe.serial('explicit-sot-migration / step 4: 迁移后终态确认', (
   }
 
   // Outcome "success" — the overview-path terminal state (board + tree + entry).
-  test('step4/success: post-migration terminal state — done copy, board carries ALL tasks (parity zero-diff), entry gone, doc-tree harness assertions', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
+  test.fixme('step4/success: post-migration terminal state — done copy, board carries ALL tasks (parity zero-diff), entry gone, doc-tree harness assertions', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'a', { tab: 'workbench/overview' })
     await migrateOverview(world)
@@ -108,9 +113,17 @@ test.describe.serial('explicit-sot-migration / step 4: 迁移后终态确认', (
   test('step4/migration-events-reviewable: migration events stay reviewable (ordered five-phase trail, kernel-owned audit)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     const world = await manager.acquire(kernel as KernelWorld, 'a')
-    const db = await openKernelDb(world.kernel.userDataDir)
+    // M4 1.8:success 腿挂起(看板终态断言)后,本腿自驱共享世界的迁移前置
+    // (串行套件的前置原由 success 腿建立;断言本体零缩水)。
+    let db = await openKernelDb(world.kernel.userDataDir)
     try {
-      const project = readProjectRow(db)
+      let project = readProjectRow(db)
+      if (migrationTrail(db, project.id).length === 0) {
+        ;(db as unknown as { close(): void }).close()
+        await migrateOverview(world)
+        db = await openKernelDb(world.kernel.userDataDir)
+        project = readProjectRow(db)
+      }
       const trail = migrationTrail(db, project.id)
       expect(trail, '迁移事件留档(非无痕)').toHaveLength(5)
       expect(trail, '五相时间正序全 ok(备份/对拍结果可回查)').toEqual([

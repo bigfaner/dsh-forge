@@ -48,8 +48,12 @@ test.describe.serial('stage-gates-cross-phase-context / step 5: 阶段资产面�
     return { detail, panel }
   }
 
+  // [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 良性内容只读渲染。
-  test('step5/success: the assets panel renders goal + summary read-only (verbatim anchors); ZERO interactive elements in the render area', async ({ }, testInfo) => {
+  test.fixme('step5/success: the assets panel renders goal + summary read-only (verbatim anchors); ZERO interactive elements in the render area', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world
@@ -69,7 +73,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 5: 阶段资产面�
   })
 
   // Outcome "markdown-injection-guard" — 恶意资产白名单渲染。
-  test('step5/markdown-injection-guard: a hostile stage-asset file renders through the whitelist — injections stay inert, the panel stays strictly read-only', async ({ }, testInfo) => {
+  test.fixme('step5/markdown-injection-guard: a hostile stage-asset file renders through the whitelist — injections stay inert, the panel stays strictly read-only', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world

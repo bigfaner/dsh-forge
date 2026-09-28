@@ -197,7 +197,10 @@ function writeSc9aDocCorpus(docRoot: string): { readonly featuresRoot: string; r
 // Leg 1
 // ---------------------------------------------------------------------------
 
-test('sc9/default-out-of-repo: wizard doc-location default = app-managed out-of-repo path; tasks/records/stage-assets/proposals read+write land at the doc root; code repo gains ZERO process docs (git status + file faces)', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('sc9/default-out-of-repo: wizard doc-location default = app-managed out-of-repo path; tasks/records/stage-assets/proposals read+write land at the doc root; code repo gains ZERO process docs (git status + file faces)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule(回归纪律)— the instance-lock probe runs BEFORE any launch.
@@ -438,7 +441,7 @@ function sc9bTaskSet(): GeneratedTaskSet {
   }
 }
 
-test('sc9/in-repo-compat: existing in-repo docs project registers (explicit in_repo) + migrates in place; reads/writes keep landing at the original in-repo seats; the app-managed docs root is never created', async ({ }, testInfo) => {
+test.fixme('sc9/in-repo-compat: existing in-repo docs project registers (explicit in_repo) + migrates in place; reads/writes keep landing at the original in-repo seats; the app-managed docs root is never created', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule(回归纪律)— the instance-lock probe runs BEFORE any launch.

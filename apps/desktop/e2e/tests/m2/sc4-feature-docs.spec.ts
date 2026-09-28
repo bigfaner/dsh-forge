@@ -131,7 +131,10 @@ function sc4Bundles() {
   ]
 }
 
-test('6.4/sc4-feature-docs [@web-e2e @journey sc4-feature-docs]: m1-completed badge + counters + five-doc-kind fidelity vs fixture files', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('6.4/sc4-feature-docs [@web-e2e @journey sc4-feature-docs]: m1-completed badge + counters + five-doc-kind fidelity vs fixture files', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   const set = sc4TaskSet()

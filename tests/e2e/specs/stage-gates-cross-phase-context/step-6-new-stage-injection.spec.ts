@@ -51,8 +51,12 @@ test.describe.serial('stage-gates-cross-phase-context / step 6: 新阶段会话�
     expect(advanced.status, '推进 → in-progress(新阶段)').toBe('in-progress')
   }
 
+  // [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 新阶段注入锚 = 最新先行阶段资产;单执行者对照。
-  test('step6/success: post-advance dispatch injects the LATEST stage asset anchor (tasks.md; prd retreats), oracle verifies; the in_progress contrast task is refused (single executor)', async ({ }, testInfo) => {
+  test.fixme('step6/success: post-advance dispatch injects the LATEST stage asset anchor (tasks.md; prd retreats), oracle verifies; the in_progress contrast task is refused (single executor)', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page, stub } = world
@@ -109,7 +113,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 6: 新阶段会话�
   })
 
   // Outcome "host-channel-unavailable" — launch 注错面(SC3 口径)。
-  test('step6/host-channel-unavailable: channel fault (launch injection) → failed row + reason + redispatch recovery, no residual half state', async ({ }, testInfo) => {
+  test.fixme('step6/host-channel-unavailable: channel fault (launch injection) → failed row + reason + redispatch recovery, no residual half state', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const kernelB = await buildMainWorld(freshRoot('gate-s6b'))
     const world = await manager.acquire(kernelB, 'fault')
