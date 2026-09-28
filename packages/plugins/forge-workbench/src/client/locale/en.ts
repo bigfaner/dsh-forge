@@ -560,6 +560,17 @@ export type WorkbenchKey =
   | 'confirmCard.note.repo-existing'
   | 'confirmCard.note.repo-new'
   | 'confirmCard.note.app'
+  | 'rightbar.tab.guide'
+  | 'rightbar.tab.overview'
+  | 'rightbar.tab.board'
+  | 'rightbar.tab.doc'
+  | 'rightbar.tab.depgraph'
+  | 'rightbar.guide.overview.title'
+  | 'rightbar.guide.overview.description'
+  | 'rightbar.guide.terminal.title'
+  | 'rightbar.guide.terminal.description'
+  | 'rightbar.guide.browser.title'
+  | 'rightbar.guide.browser.description'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1126,4 +1137,16 @@ export const en: Record<WorkbenchKey, string> = {
   'confirmCard.note.repo-existing': 'Forge docs detected — reusing in-repo (follows git)',
   'confirmCard.note.repo-new': 'Committed with git · PR-reviewable',
   'confirmCard.note.app': 'App data directory (this machine) · app-managed, not in git',
+  // M4 task 2.2 — the rightbar forge tabs (kinds + 开始页 cards).
+  'rightbar.tab.guide': 'Start',
+  'rightbar.tab.overview': 'Project overview',
+  'rightbar.tab.board': 'Task board',
+  'rightbar.tab.doc': 'Document',
+  'rightbar.tab.depgraph': 'Dependency graph',
+  'rightbar.guide.overview.title': 'Project overview',
+  'rightbar.guide.overview.description': 'Proposals · features · tasks at a glance',
+  'rightbar.guide.terminal.title': 'New terminal',
+  'rightbar.guide.terminal.description': 'Run commands in the session workspace',
+  'rightbar.guide.browser.title': 'Browser',
+  'rightbar.guide.browser.description': 'Browse HTTP(S) pages',
 }

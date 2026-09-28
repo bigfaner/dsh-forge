@@ -568,4 +568,16 @@ export const zh: Record<WorkbenchKey, string> = {
   'confirmCard.note.repo-existing': '已检出 forge 文档,沿用(随 git)',
   'confirmCard.note.repo-new': '随 git 提交、可 PR 评审',
   'confirmCard.note.app': '应用数据目录(本机)· 应用管理,不进 git',
+  // M4 task 2.2 —— 右栏 forge tabs(kind 名 + 开始页三卡片)。
+  'rightbar.tab.guide': '开始',
+  'rightbar.tab.overview': '项目概览',
+  'rightbar.tab.board': '任务看板',
+  'rightbar.tab.doc': '文档',
+  'rightbar.tab.depgraph': '依赖图',
+  'rightbar.guide.overview.title': '项目概览',
+  'rightbar.guide.overview.description': '提案 · feature · 任务 · 一页可见',
+  'rightbar.guide.terminal.title': '新建终端',
+  'rightbar.guide.terminal.description': '在会话工作区运行命令',
+  'rightbar.guide.browser.title': '浏览器',
+  'rightbar.guide.browser.description': '浏览 HTTP(S) 网页',
 }

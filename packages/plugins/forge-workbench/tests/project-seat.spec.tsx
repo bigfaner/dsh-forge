@@ -208,7 +208,14 @@ interface SeatWorld {
     forkSession: MockFn
     archiveSession: MockFn
   }
-  sidebarRight: { isExpanded: MockFn; toggleExpanded: MockFn }
+  sidebarRight: {
+    isExpanded: MockFn
+    toggleExpanded: MockFn
+    openTab: MockFn
+    close: MockFn
+    focus: MockFn
+    openTabs: { getSnapshot: MockFn }
+  }
 }
 
 async function makeSeatWorld(initial: { projects: Project[]; activeProjectId: string | null }): Promise<SeatWorld> {
@@ -230,7 +237,16 @@ async function makeSeatWorld(initial: { projects: Project[]; activeProjectId: st
     forkSession: vi.fn(),
     archiveSession: vi.fn(),
   }
-  const sidebarRight = { isExpanded: vi.fn(() => false), toggleExpanded: vi.fn() }
+  // M4 2.2: the 换台重置 seam consumes the tabs-model face (close/focus/
+  // openTab + the open-tab inventory beside the 1.6 collapse pair).
+  const sidebarRight = {
+    isExpanded: vi.fn(() => false),
+    toggleExpanded: vi.fn(),
+    openTab: vi.fn(),
+    close: vi.fn(),
+    focus: vi.fn(),
+    openTabs: { getSnapshot: vi.fn(() => [] as Array<{ tabId: string; kind: string }>) },
+  }
   return { bridgeFake, store, workspaces, sessions, uiWorkspace, sidebarRight }
 }
 
@@ -660,8 +676,12 @@ describe('seat behavior seams', () => {
     }
     expect(toUiWorkspaceFace(uiWorkspace)).toBe(uiWorkspace)
     expect(toUiWorkspaceFace({ startSession: () => {} })).toBeUndefined()
-    const sidebarRight = { isExpanded: () => false, toggleExpanded: () => {} }
+    const sidebarRight = {
+      isExpanded: () => false, toggleExpanded: () => {}, openTab: () => {}, close: () => {},
+      focus: () => {}, openTabs: { getSnapshot: () => [] },
+    }
     expect(toSidebarRightFace(sidebarRight)).toBe(sidebarRight)
     expect(toSidebarRightFace({ isExpanded: () => false })).toBeUndefined()
+    expect(toSidebarRightFace({ ...sidebarRight, openTabs: {} })).toBeUndefined()
   })
 })

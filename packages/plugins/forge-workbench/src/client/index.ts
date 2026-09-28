@@ -50,12 +50,13 @@ import {
   toSessionsFace, toSidebarRightFace, toUiWorkspaceFace, toWorkspacesSource,
 } from './nav/project-seat'
 import { createActiveProjectStore } from './store/active-project'
+import { installRightbarTabs } from './views/rightbar/RightbarTabs'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
 import { en } from './locale/en'
 import { zh } from './locale/zh'
 import type { WorkbenchKey } from './locale/en'
 
-export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, PROJECT_SEAT_PRIORITY } from './contract'
+export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, PROJECT_SEAT_PRIORITY, RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from './contract'
 export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
 export type {
@@ -302,6 +303,27 @@ export {
   createActiveProjectStore, INITIAL_ACTIVE_PROJECT_SNAPSHOT,
 } from './store/active-project'
 export type { ActiveProjectSnapshot, ActiveProjectStore } from './store/active-project'
+// M4 task 2.2 — the rightbar forge tabs (tech-design §Integration #5): the
+// five-kind table (Interface 4's TabKind whitelist; guide = the extension
+// take-over of the native door page), the 开始页 body + chip title, the
+// container installer (definitions + keyed bodies + the §4.7 linkage
+// watcher), and the lifecycle/linkage model (§4.7/§4.8 + 裁决 #28-④'s
+// 右栏回默认 — the pure functions project-seat's 换台重置 seam consumes).
+export {
+  forgeTabDefinitions, forgeTabId, FORGE_TAB_ID_PREFIX, isTabKind,
+  PROJECT_SCOPED_TAB_KINDS, RIGHTBAR_TAB_KINDS,
+} from './views/rightbar/tab-kinds'
+export type { TabKind, TabKindTranslate } from './views/rightbar/tab-kinds'
+export { CompassGlyph, GuideTab, GuideTabTitle } from './views/rightbar/GuideTab'
+export type { ForgeTabFace, GuideTabProps, GuideTabTitleProps } from './views/rightbar/GuideTab'
+export {
+  BoardTabBody, DepgraphTabBody, DocTabBody, installRightbarTabs, OverviewTabBody, toTabRegistryFace,
+} from './views/rightbar/RightbarTabs'
+export type { BoardTabFace, RightbarTabsOptions, TabRegistryFace } from './views/rightbar/RightbarTabs'
+export {
+  ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
+} from './views/rightbar/tabs-model'
+export type { OpenTabRow, ProjectSwitchOutcome, RightbarTabsFace } from './views/rightbar/tabs-model'
 export { createIpcConfirmCardFace } from './ipc/workbench'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
@@ -403,6 +425,14 @@ export function apply(ctx: ClientContext): void {
       uiWorkspace: toUiWorkspaceFace(optionalService('uiWorkspace')),
       sidebarRight: toSidebarRightFace(optionalService('sidebarRight')),
     })
+  // M4 task 2.2 — the rightbar forge tabs (tech-design §Integration #5): the
+  // five kinds mount into the native right column through the upstream public
+  // seams (guarded throughout: an absent sidebarRightTabs keeps the family
+  // unregistered; the linkage/board legs ride the active-project store).
+  const disposeRightbarTabs = installRightbarTabs(ctx, {
+    t,
+    ...activeProjectStore === undefined ? {} : { activeProjectStore },
+  })
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false
@@ -468,6 +498,7 @@ export function apply(ctx: ClientContext): void {
     disposeLaunchRelay()
     disposeAnswerRelay()
     disposeWorkspacesSeat()
+    disposeRightbarTabs()
     disposeProjectPanelRow()
     activeProjectStore?.dispose()
     disposeSlotNav()

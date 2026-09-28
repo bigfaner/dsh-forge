@@ -67,6 +67,24 @@ export const WORKSPACES_SLOT = 'sidebar.workspaces'
 export const PROJECT_SEAT_PRIORITY = -100
 
 /**
+ * The right Sidebar's tab-BODY seat (declared by ui-sidebar-right as a child
+ * of `rightbar.session`; keyed, session scope). M4 task 2.2 (tech-design
+ * §Integration #5): the forge tab kinds — guide/overview/board/doc/depgraph —
+ * register their bodies here, each under its own definition id, exactly as an
+ * upstream type shipped from another package does (`ui-sidebar-terminal` is
+ * the live precedent). 声明合并纯增量, 上游槽位机制零修改 (Hard Rule).
+ */
+export const RIGHTBAR_TAB_SLOT = 'sidebar.right.pane.tab'
+
+/**
+ * The right Sidebar's tab-chip TITLE seat (the same dispatch for what the
+ * chip shows; keyed, session scope). Registering is optional — without an
+ * entry the chip shows the registry title captured at open time; the forge
+ * guide registers one so its chip keeps the compass glyph.
+ */
+export const RIGHTBAR_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'
+
+/**
  * Sidebar row position: ascending, default 0. `plugins` occupies 0, so the
  * workbench takes 10 — beside, not colliding with, the shipped entries
  * (spike §3.3 recommendation).

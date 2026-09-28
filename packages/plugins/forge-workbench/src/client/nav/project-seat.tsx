@@ -40,6 +40,8 @@ import type { TreeSession, TreeWorkspace } from '../components/project-tree/tree
 import { ConfirmCard } from '../components/confirm-card/ConfirmCard'
 import type { Project } from '../ipc-types'
 import { fillTemplate } from '../views/overview/format'
+import type { RightbarTabsFace } from '../views/rightbar/tabs-model'
+import { resetRightbarToDefault, toRightbarTabsFace } from '../views/rightbar/tabs-model'
 
 // ---------------------------------------------------------------------------
 // Duck-typed upstream faces (guarded reads; no api-* package imports)
@@ -100,11 +102,13 @@ export interface UiWorkspaceFace {
   archiveSession(sessionId: string): void | Promise<void>
 }
 
-/** The rightbar collapse face (the 换台重置's 右栏回默认 leg). */
-export interface SidebarRightFace {
-  isExpanded(): boolean
-  toggleExpanded(): void
-}
+/**
+ * The rightbar controller face (the 换台重置's 右栏回默认 leg, M4 2.2): the
+ * tabs-model subset — `resetRightbarToDefault` closes every closable tab and
+ * collapses the column (收起 + 开始页: the next expansion seeds the door page
+ * natively), superseding 1.6's bare collapse-if-expanded toggle.
+ */
+export type SidebarRightFace = RightbarTabsFace
 
 // ---------------------------------------------------------------------------
 // Guarded service adapters (the session-handover discipline: narrow the
@@ -144,12 +148,12 @@ export function toUiWorkspaceFace(candidate: unknown): UiWorkspaceFace | undefin
   return candidate as unknown as UiWorkspaceFace
 }
 
-/** Narrow the `ctx.sidebarRight` service onto the collapse subset. */
-export function toSidebarRightFace(candidate: unknown): SidebarRightFace | undefined {
-  if (!isObject(candidate)) return undefined
-  if (!isFunction(candidate.isExpanded) || !isFunction(candidate.toggleExpanded)) return undefined
-  return candidate as unknown as SidebarRightFace
-}
+/**
+ * Narrow the `ctx.sidebarRight` service onto the tabs-model face (M4 2.2:
+ * the 换台重置 close/collapse subset + the inventory reads — the same guard
+ * `toRightbarTabsFace` applies; aliased for the seat's historical name).
+ */
+export const toSidebarRightFace = toRightbarTabsFace
 
 /** The seat's injected face (the registration's inject factory product). */
 export interface ProjectSeatFace {
@@ -421,15 +425,15 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
   /**
    * 换台重置 (裁决 #28 ④): the native New-Session flow over the new project's
    * workspace clears the active session to hero + the input draft (blank
-   * draft 单例, native semantics); the rightbar collapses back to default.
-   * The 开始页/归档横幅 legs mount with the P2 rightbar-tabs + C2 banner —
-   * this seam is their single wiring point.
+   * draft 单例, native semantics); the rightbar returns to its DEFAULT —
+   * 收起 + 开始页 — through the 2.2 tabs model (`resetRightbarToDefault`:
+   * close every closable tab, collapse what stays expanded; the next
+   * expansion seeds the 开始页 natively). The 归档横幅 leg mounts with the
+   * C2 banner.
    */
   const resetWorkbenchContext = (projectId: string): void => {
     props.uiWorkspace?.startSession(workspaceIdOfProject(projectId))
-    if (props.sidebarRight !== undefined && props.sidebarRight.isExpanded()) {
-      props.sidebarRight.toggleExpanded()
-    }
+    resetRightbarToDefault(props.sidebarRight)
   }
   const switchProjectInPlace = (projectId: string): void => {
     if (store === undefined) return
