@@ -1,0 +1,778 @@
+{
+  "feature": "dsh-forge-m4",
+  "prd": "prd/prd-spec.md",
+  "design": "design/tech-design.md",
+  "proposal": "docs/proposals/dsh-forge-m4/proposal.md",
+  "created": "2026-09-28",
+  "tasks": {
+    "1.1-schema-v3-migration": {
+      "id": "1.1",
+      "title": "schema v3 迁移段:store MIGRATIONS {version:3}(projects ALTER ×10 + 2 新表 + 2 索引 + TS 回填)+ 漂移对账",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "1.1-schema-v3-migration.md",
+      "record": "records/1.1-schema-v3-migration.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.2-projects-identity-domain": {
+      "id": "1.2",
+      "title": "内核 projects-identity 域:D11 归一化管线 + 三层比对自愈 + 证据侦测(固定前缀有界探测)",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.1"
+      ],
+      "status": "pending",
+      "file": "1.2-projects-identity-domain.md",
+      "record": "records/1.2-projects-identity-domain.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.3-ipc-verbs-v3-identity-lifecycle": {
+      "id": "1.3",
+      "title": "IPC 动词面 v3·P1 批:probeProjectPath/registerProject + 生命周期五动词 + project_list_changed 事件 + allowlist 漂移",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.2"
+      ],
+      "status": "pending",
+      "file": "1.3-ipc-verbs-v3-identity-lifecycle.md",
+      "record": "records/1.3-ipc-verbs-v3-identity-lifecycle.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.4-project-tree-browser-build": {
+      "id": "1.4",
+      "title": "C3 组件:左栏全项目树浏览器(项目/会话/subagent 三级 + 分组×排序 + 溢出 + 搜索 + 视图选项 + 归档分区)",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.3"
+      ],
+      "status": "pending",
+      "file": "1.4-project-tree-browser-build.md",
+      "record": "records/1.4-project-tree-browser-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.5-confirm-card-build": {
+      "id": "1.5",
+      "title": "C7 组件:添加项目确认卡(证据三档文档位置预览行 + 黏性禁令 + 授权收窄 + 子仓 chips + 已注册快车道)",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.3"
+      ],
+      "status": "pending",
+      "file": "1.5-confirm-card-build.md",
+      "record": "records/1.5-confirm-card-build.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.6-uf1-uf2-uf7-integrate": {
+      "id": "1.6",
+      "title": "P1 集成:启动首屏(conversation 默认)+ sidebar.workspaces 座位注入 + panellist「项目」行 + C7 唯一入口 + 原位换台 #28",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.4",
+        "1.5"
+      ],
+      "status": "pending",
+      "file": "1.6-uf1-uf2-uf7-integrate.md",
+      "record": "records/1.6-uf1-uf2-uf7-integrate.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.7-legacy-view-retirement": {
+      "id": "1.7",
+      "title": "旧视图退役:workbench/* 视图键注销 + TabBar/TopBar/ProjectSwitcher 退役 + main 面板收缩 overview 逃生门",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.6"
+      ],
+      "status": "pending",
+      "file": "1.7-legacy-view-retirement.md",
+      "record": "records/1.7-legacy-view-retirement.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.refactor",
+      "complexity": "high"
+    },
+    "1.8-e2e-migration-sc1-sc2": {
+      "id": "1.8",
+      "title": "e2e 迁移:按迁移清单改写 M2/M3 既有规格视图键/入口断言(M1 原样)+ SC1 腿 + SC2 布局腿",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.7"
+      ],
+      "status": "pending",
+      "file": "1.8-e2e-migration-sc1-sc2.md",
+      "record": "records/1.8-e2e-migration-sc1-sc2.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.gate": {
+      "id": "1.gate",
+      "title": "Phase 1 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "1.summary"
+      ],
+      "status": "pending",
+      "file": "1.gate.md",
+      "record": "records/1.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "1.summary": {
+      "id": "1.summary",
+      "title": "Phase 1 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.8"
+      ],
+      "status": "pending",
+      "file": "1.summary.md",
+      "record": "records/1.summary.md",
+      "type": "doc.summary"
+    },
+    "2.1-tasksview-dual-host": {
+      "id": "2.1",
+      "title": "TasksView 组件化:去 TabBar/视图键耦合(右栏 pane + 拆出窗口双宿主),看板功能面零缩水",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.1-tasksview-dual-host.md",
+      "record": "records/2.1-tasksview-dual-host.md",
+      "surface-type": "web",
+      "type": "coding.enhancement",
+      "complexity": "medium"
+    },
+    "2.10-sc2-full-regression-inventory": {
+      "id": "2.10",
+      "title": "SC2 全量 e2e 腿 + 回归盘点定稿(迁移清单零缩水全绿基线记录)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate",
+        "1.8",
+        "2.3",
+        "2.4",
+        "2.9"
+      ],
+      "status": "pending",
+      "file": "2.10-sc2-full-regression-inventory.md",
+      "record": "records/2.10-sc2-full-regression-inventory.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.2-rightbar-tab-container": {
+      "id": "2.2",
+      "title": "右栏 forge tabs 容器:tab kinds 注册(guide/overview/board/doc/depgraph)+ 开始页 + strip 机制 + 联动与宽度",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.gate",
+        "2.1"
+      ],
+      "status": "pending",
+      "file": "2.2-rightbar-tab-container.md",
+      "record": "records/2.2-rightbar-tab-container.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.3-overview-tab-m3-faces": {
+      "id": "2.3",
+      "title": "「项目概览」tab:标题栏 + 概要信息区 + 提案/feature/任务三子 tab(M3 面零缩水收纳)+ board 入口",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate",
+        "2.2"
+      ],
+      "status": "pending",
+      "file": "2.3-overview-tab-m3-faces.md",
+      "record": "records/2.3-overview-tab-m3-faces.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.4-doc-depgraph-tabs": {
+      "id": "2.4",
+      "title": "文档 tab + 依赖图 tab(slug/产物名 · 只读正文;DAG/泳道双模式,feature 下拉仅本项目)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate",
+        "2.2"
+      ],
+      "status": "pending",
+      "file": "2.4-doc-depgraph-tabs.md",
+      "record": "records/2.4-doc-depgraph-tabs.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.5-lineage-service": {
+      "id": "2.5",
+      "title": "lineage 推导服务(client):上游快照 ⊕ session_links 只读 join + 执行中判定 + ≤100ms 超时降级(不落库)",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.5-lineage-service.md",
+      "record": "records/2.5-lineage-service.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.6-task-detail-link-history": {
+      "id": "2.6",
+      "title": "C5 挂接历史增强:行展开血缘后代 + [打开] 双通道 + No-link 态 [发起] 终态禁用(todo#30)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate",
+        "2.1",
+        "2.5"
+      ],
+      "status": "pending",
+      "file": "2.6-task-detail-link-history.md",
+      "record": "records/2.6-task-detail-link-history.md",
+      "surface-type": "web",
+      "type": "coding.enhancement",
+      "complexity": "high"
+    },
+    "2.7-session-open-channel-c6-metadata": {
+      "id": "2.7",
+      "title": "会话打开通道 openSessionTarget(顶层/SubagentAddress/旁置)+ C6 元数据条(会话域槽注入,bound/ambiguous/unbound)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate",
+        "2.5"
+      ],
+      "status": "pending",
+      "file": "2.7-session-open-channel-c6-metadata.md",
+      "record": "records/2.7-session-open-channel-c6-metadata.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.8-dispatch-appendix-two-lines": {
+      "id": "2.8",
+      "title": "派发追加行两行化(内核 presynth:归因行 + 命名行;prompt_hash 口径不变;e2e 断言口径两行化)",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.8-dispatch-appendix-two-lines.md",
+      "record": "records/2.8-dispatch-appendix-two-lines.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.enhancement",
+      "complexity": "high"
+    },
+    "2.9-sc7-e2e-subagent-stub": {
+      "id": "2.9",
+      "title": "SC7 e2e 腿 + subagent 血缘语料 stub 扩展(parentSession/origin 头注入)+ 命名遵循率固定桩",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.gate",
+        "2.6",
+        "2.7",
+        "2.8"
+      ],
+      "status": "pending",
+      "file": "2.9-sc7-e2e-subagent-stub.md",
+      "record": "records/2.9-sc7-e2e-subagent-stub.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.gate": {
+      "id": "2.gate",
+      "title": "Phase 2 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "2.summary"
+      ],
+      "status": "pending",
+      "file": "2.gate.md",
+      "record": "records/2.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "2.summary": {
+      "id": "2.summary",
+      "title": "Phase 2 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "2.1",
+        "2.10",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "2.8",
+        "2.9"
+      ],
+      "status": "pending",
+      "file": "2.summary.md",
+      "record": "records/2.summary.md",
+      "type": "doc.summary"
+    },
+    "3.1-projection-domain-diff": {
+      "id": "3.1",
+      "title": "内核 projection 域:workspace_projection 期望状态 repo + diff 纯函数(四操作 + 三类偏差)+ 幂等全量重推",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.1-projection-domain-diff.md",
+      "record": "records/3.1-projection-domain-diff.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.2-projection-verbs-reconcile": {
+      "id": "3.2",
+      "title": "投影 IPC 动词 + 对账 service:retry/getStatus/submitSnapshot/reportOutcome + projection_push_required/updated 事件",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate",
+        "3.1"
+      ],
+      "status": "pending",
+      "file": "3.2-projection-verbs-reconcile.md",
+      "record": "records/3.2-projection-verbs-reconcile.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.3-projection-client-relay": {
+      "id": "3.3",
+      "title": "client projection relay:WorkspaceChannel duck-typed 声明 + plan 执行序 + 错误映射 + outcome 回填 + follow 快照上报",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate",
+        "3.2"
+      ],
+      "status": "pending",
+      "file": "3.3-projection-client-relay.md",
+      "record": "records/3.3-projection-client-relay.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.4-lifecycle-projection-integration": {
+      "id": "3.4",
+      "title": "生命周期×投影集成:注册 push/改名 rename/删除 delete+FK/归档不动 + 偏差对账链路 + 派发会话归组验证",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate",
+        "3.3"
+      ],
+      "status": "pending",
+      "file": "3.4-lifecycle-projection-integration.md",
+      "record": "records/3.4-lifecycle-projection-integration.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.5-c8-projection-lifecycle-gui": {
+      "id": "3.5",
+      "title": "C8 投影与生命周期 GUI:概览投影状态行 + [重试投影]/偏差明细折叠 + 左栏生命周期菜单 + 归档横幅只读态",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate",
+        "3.4"
+      ],
+      "status": "pending",
+      "file": "3.5-c8-projection-lifecycle-gui.md",
+      "record": "records/3.5-c8-projection-lifecycle-gui.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.6-sc3-sync-e2e": {
+      "id": "3.6",
+      "title": "SC3 e2e·同步语义腿:注册同名同序 / 改名同步 / 归档保留 + forge 归档分区 / 删除移除 + 会话退未分组 / 派发归组",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.gate",
+        "3.4",
+        "3.5"
+      ],
+      "status": "pending",
+      "file": "3.6-sc3-sync-e2e.md",
+      "record": "records/3.6-sc3-sync-e2e.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.7-sc3-deviation-degrade-e2e": {
+      "id": "3.7",
+      "title": "SC3 e2e·偏差与降级腿:手改不回流 + 偏差提示 / 投影故障注入降级不阻断注册 / 重试恢复两侧一致",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "2.gate",
+        "3.4",
+        "3.5"
+      ],
+      "status": "pending",
+      "file": "3.7-sc3-deviation-degrade-e2e.md",
+      "record": "records/3.7-sc3-deviation-degrade-e2e.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.gate": {
+      "id": "3.gate",
+      "title": "Phase 3 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "3.summary"
+      ],
+      "status": "pending",
+      "file": "3.gate.md",
+      "record": "records/3.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "3.summary": {
+      "id": "3.summary",
+      "title": "Phase 3 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7"
+      ],
+      "status": "pending",
+      "file": "3.summary.md",
+      "record": "records/3.summary.md",
+      "type": "doc.summary"
+    },
+    "4.1-ui-state-domain-verbs": {
+      "id": "4.1",
+      "title": "内核 ui-state 域:project_ui_state repo + ProjectLayout v1 schema 白名单校验 + get/setProjectUiState 动词",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.1-ui-state-domain-verbs.md",
+      "record": "records/4.1-ui-state-domain-verbs.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.2-shell-windows-registry": {
+      "id": "4.2",
+      "title": "壳层 windows/:窗口注册表 + windowOpenDetached/GetRole/Recall 动词组 + 每窗事件 fan-out/carriage 泛化",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.2-shell-windows-registry.md",
+      "record": "records/4.2-shell-windows-registry.md",
+      "breaking": true,
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.3-window-role-boot-detached-gui": {
+      "id": "4.3",
+      "title": "client window-role boot + 拆出/收回 GUI:pane 头 [拆出为窗口] · boot role 分发 · OS 关闭 ≡ 收回 · 窗口语义(归档/项目绑定)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.gate",
+        "2.2",
+        "4.2"
+      ],
+      "status": "pending",
+      "file": "4.3-window-role-boot-detached-gui.md",
+      "record": "records/4.3-window-role-boot-detached-gui.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.4-c9-split-panes": {
+      "id": "4.4",
+      "title": "C9 分屏:右栏多 pane(board tab + 会话旁置 aside)+ pane 增删/比例钳制 30–70 + 分隔条键盘模型",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.gate",
+        "2.2"
+      ],
+      "status": "pending",
+      "file": "4.4-c9-split-panes.md",
+      "record": "records/4.4-c9-split-panes.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.5-layout-memory-engine": {
+      "id": "4.5",
+      "title": "布局记忆引擎:ProjectLayout 采集(sidebar/tree/rightbar panes/detached)+ 恢复重放 + debounce 写入 + 删除清除",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.gate",
+        "4.1",
+        "4.3",
+        "4.4"
+      ],
+      "status": "pending",
+      "file": "4.5-layout-memory-engine.md",
+      "record": "records/4.5-layout-memory-engine.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.6-sc4-e2e": {
+      "id": "4.6",
+      "title": "SC4 e2e 腿:分屏同屏可操作 / 布局重进恢复 / 拆出窗口并行 + 单实例(主窗关闭 = 退出)",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.gate",
+        "4.3",
+        "4.5"
+      ],
+      "status": "pending",
+      "file": "4.6-sc4-e2e.md",
+      "record": "records/4.6-sc4-e2e.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.7-sc5-sc6-final-acceptance": {
+      "id": "4.7",
+      "title": "SC5/SC6 全量验收收口:零缩水终验(对照盘点基线)+ 性能断言(首屏 ≤2s@500 任务/切换不劣化/投影 ≤2s)+ quality-gate",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.gate",
+        "2.10",
+        "3.6",
+        "3.7",
+        "4.6"
+      ],
+      "status": "pending",
+      "file": "4.7-sc5-sc6-final-acceptance.md",
+      "record": "records/4.7-sc5-sc6-final-acceptance.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.gate": {
+      "id": "4.gate",
+      "title": "Phase 4 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "4.summary"
+      ],
+      "status": "pending",
+      "file": "4.gate.md",
+      "record": "records/4.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "4.summary": {
+      "id": "4.summary",
+      "title": "Phase 4 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "4.6",
+        "4.7"
+      ],
+      "status": "pending",
+      "file": "4.summary.md",
+      "record": "records/4.summary.md",
+      "type": "doc.summary"
+    },
+    "consolidate-specs": {
+      "id": "T-specs-consolidate",
+      "title": "Consolidate Specs",
+      "priority": "P2",
+      "estimatedTime": "20min",
+      "dependencies": [
+        "T-test-run"
+      ],
+      "status": "pending",
+      "file": "consolidate-specs.md",
+      "record": "records/consolidate-specs.md",
+      "type": "doc.consolidate"
+    },
+    "eval-journey": {
+      "id": "T-eval-journey",
+      "title": "Evaluate Journey Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-journeys"
+      ],
+      "status": "pending",
+      "file": "eval-journey.md",
+      "record": "records/eval-journey.md",
+      "mainSession": true,
+      "type": "eval.journey"
+    },
+    "gen-journeys": {
+      "id": "T-test-gen-journeys",
+      "title": "Generate Test Journeys",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "2.5",
+        "4.2",
+        "4.4",
+        "1.1",
+        "1.6",
+        "2.6",
+        "2.10",
+        "2.4",
+        "2.8",
+        "3.6",
+        "3.4",
+        "4.3",
+        "1.3",
+        "2.9",
+        "3.5",
+        "4.7",
+        "2.3",
+        "1.4",
+        "1.5",
+        "2.7",
+        "1.8",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.7",
+        "4.5",
+        "4.6",
+        "1.2",
+        "1.7",
+        "3.2",
+        "3.3",
+        "4.1"
+      ],
+      "status": "pending",
+      "file": "gen-journeys.md",
+      "record": "records/gen-journeys.md",
+      "type": "test.gen-journeys"
+    },
+    "gen-test-scripts": {
+      "id": "T-test-gen-scripts",
+      "title": "Generate Web E2E Test Scripts",
+      "priority": "P1",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "T-eval-journey"
+      ],
+      "status": "pending",
+      "file": "gen-test-scripts.md",
+      "record": "records/gen-test-scripts.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.gen-scripts"
+    },
+    "run-test": {
+      "id": "T-test-run",
+      "title": "Run Web E2E Test",
+      "priority": "P1",
+      "estimatedTime": "30min-1h",
+      "dependencies": [
+        "T-test-gen-scripts"
+      ],
+      "status": "pending",
+      "file": "run-test.md",
+      "record": "records/run-test.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.run"
+    }
+  },
+  "statusEnum": [
+    "pending",
+    "in_progress",
+    "completed",
+    "blocked",
+    "suspended",
+    "skipped",
+    "rejected"
+  ],
+  "priorityEnum": [
+    "P0",
+    "P1",
+    "P2"
+  ]
+}
