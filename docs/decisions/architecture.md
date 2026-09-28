@@ -18,3 +18,4 @@
 | 2026-09-23 | dsh-forge-m3 | dsh tool→内核通道 = renderer 桥接:host cordis rpc → client 半身 tool 桥 → 既有 IPC 白名单 | 零新增监听面;动词面封闭;桥不可用重试一次后明确提示(禁静默) | 同上 §Interface 2 裁决 T2 |
 | 2026-09-23 | dsh-forge-m3 | 已迁移项目外部写 = watcher 检出后幂等自动重摄入 + 项目/feature 偏离标记,不阻断外部会话 | SQLite 保持权威一致、偏离可观察;弃「仅告警不摄入」(持续分叉) | 同上 §Interface 4 裁决 T3 |
 | 2026-09-23 | dsh-forge-m3 | systemPrompt 预合成归内核(三要素确定性组装 + prompt_hash 落库),host 半身仅持 subagent 创建 | 三要素数据(偏好/阶段资产)在内核,单查询可断言;host 合成则双查询且断言弱 | 同上 §Interface 3/§Appendix |
+| 2026-09-28 | dsh-forge-m4 | 工作台承载 = 原生 home 增强层:conversation 面板 + 左栏 sidebar.workspaces 座位注入 + 原生 rightbar 挂 forge tabs | 会话视图零重挂载、启动首屏天然成立(默认面板)、分屏用原生 pane;弃 forge 主面板自建容器 | dsh-forge-m4/design/tech-design.md §Overview 裁决 T1 |

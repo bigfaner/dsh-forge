@@ -6,18 +6,21 @@
 
 | Category | Type File | Decisions | Last Updated |
 |----------|-----------|-----------|--------------|
-| Architecture | architecture.md | 16 | 2026-09-23 |
-| Interface | interface.md | 2 | 2026-09-23 |
+| Architecture | architecture.md | 17 | 2026-09-28 |
+| Interface | interface.md | 3 | 2026-09-28 |
 | Data Model | data-model.md | 4 | 2026-09-24 |
 | Dependencies | dependencies.md | 3 | 2026-09-22 |
 | Testing | testing.md | 1 | 2026-09-20 |
 | Local Dev & Deployment | local-dev-deployment.md | 1 | 2026-09-19 |
-| Product | product.md | 1 | 2026-09-19 |
+| Product | product.md | 2 | 2026-09-28 |
 
 ## Recent Decisions
 
 | Date | Feature | Type | Decision | Source |
 |------|---------|------|----------|--------|
+| 2026-09-28 | dsh-forge-m4 | architecture | 工作台承载 = 原生 home 增强层(conversation + 左栏座位注入 + rightbar forge tabs) | dsh-forge-m4/design/tech-design.md §Overview 裁决 T1 |
+| 2026-09-28 | dsh-forge-m4 | interface | 投影写通道 = client relay 直调上游 workspaceController remote,内核期望状态幂等全量重推 | dsh-forge-m4/design/tech-design.md §Interface 2 裁决 T3 |
+| 2026-09-28 | dsh-forge-m4 | product | M4 存储边界 = 仅身份+三档+确认卡;影子 git/runtime_root 顺延存储里程碑 | dsh-forge-m4/design/tech-design.md §Overview 裁决 T6 |
 | 2026-09-24 | dsh-forge-m4 | data-model | subagent 挂接 = 血缘推断 + 任务 id+title 命名辅助,session_links 不扩列;回写后置 M5 | dsh-forge-m4/prd/prd-spec.md §必答⑥ |
 | 2026-09-24 | dsh-forge-m4 | data-model | workspaceRegistry 单向投影(归档保留/删除移除;禁反向写;降级不阻断) | dsh-forge-m4/prd/prd-spec.md §必答④⑤ |
 | 2026-09-23 | dsh-forge-m3 | architecture | systemPrompt 预合成归内核(三要素确定性组装 + prompt_hash),host 仅持 subagent 创建 | dsh-forge-m3/design/tech-design.md §Interface 3 |

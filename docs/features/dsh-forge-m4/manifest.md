@@ -18,6 +18,10 @@ status: design
 | UI Design | ui/ui-design.md | 视图键导航定形(projects/project,槽位注入无路由)+ C1-C10 组件设计(C1/C4 裁撤注记、C5 对齐现有 dock,#25-#27),DESIGN.md 令牌体系,上游复用边界(会话列表增强层);2026-09-25 C2/C3 按验收原型回写定形 |
 | UI Wireframe(布局权威) | ui/workbench-layout-v2.md | 工作台布局线框 v2.12 + 评审裁决 #1–#27(八批原型修正 + 2026-09-26 添加项目确认卡重构 + 2026-09-27 原型收敛单页/启动首屏=工作台/UF4 裁撤+UF5 对齐现有 dock) |
 | UI Prototype(已验收) | ui/prototype/ | 可交互 HTML 原型(单工作台页,#25 收敛):index.html 导航 + project-home.html 三区工作台;Playwright 冒烟基线 106 断言(2026-09-26 五页版),收敛后待复跑 |
+| Tech Design | design/tech-design.md | 四条交付线(原生 home 增强层 IA / 任务↔会话反查 / workspaceRegistry 单向投影 / 分屏多窗口)+ 裁决 T1-T7(2026-09-28)+ IPC v3 动词面 + 集成/测试/安全;遗留(20 技能/四动词/影子 git/runtime_root)顺延记账 |
+| ER Diagram | design/er-diagram.md | v3 增量:projects 身份/生命周期/投影 10 列 + project_ui_state(布局记忆)+ workspace_projection(投影期望快照);血缘推断不落库 |
+| SQL Schema | design/schema.sql | v3 段:ALTER ×10(UNIQUE 折叠键索引)+ 两新表(FK cascade = 项目删除清除);事务内 TS 回填策略 |
+| Page Map | design/page-map.md | 视图键/布局态寻址(无路由):project 工作台 = conversation+注入层、任务看板双宿主 pane、概览逃生门、拆出窗口 WindowRole;旧 workbench/* 四 tab 键退役 |
 | Decision(上游裁决) | ../../decisions/project-storage-and-knowledge.md | 项目存储与知识库架构 D1–D12:三区存储/知识库两级插件挂载/项目创建证据门控(§5 v2);UF7/C7 上游权威 |
 | Reference | ui/dsh-home-layout.md | dsh 现有 home(会话视图)三态布局基线:左栏/主区/右栏(文件面板)分区线框、浅色主题样式令牌、M4 布局规律 |
 
@@ -36,3 +40,8 @@ status: design
 | UF8 投影与归档 | C8 项目设置·投影与生命周期 | 原型未承载(左栏 ⚙ toast 占位,各项随 GUI 逐项归宿,#25) | |
 | UF9 分屏 | C9 分屏布局 | project-home.html | |
 | UF10 多窗口 | C10 多窗口 | index.html | |
+| 必答③/UF7 注册与三区位置(prd §必答③) | tech-design §Interface 1(侦测/注册)+ §Integration 7 | C7 | |
+| 必答④⑤/UF8 投影与生命周期(prd §必答④⑤) | tech-design §Interface 1/2(投影通道)+ §Data Models | C8 | |
+| 必答⑥⑧/UF3/UF5/UF6 反查与归拢(prd §必答⑥⑧) | tech-design §Interface 3/6/7(lineage/打开/追加行) | C3/C5/C6 | |
+| 必答⑨/UF9/UF10 分屏多窗口(prd §必答⑨) | tech-design §Interface 4/5(布局记忆/窗口) | C9/C10 | |
+| SC1-SC7 验收(prd §Success Criteria) | tech-design §Testing Strategy(Key Scenarios) | — | |
