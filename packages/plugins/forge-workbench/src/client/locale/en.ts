@@ -352,6 +352,16 @@ export type WorkbenchKey =
   | 'detail.links.active'
   | 'detail.links.ended'
   | 'detail.links.enter'
+  | 'detail.links.open'
+  | 'detail.links.launch'
+  | 'detail.links.launch.terminal'
+  | 'detail.links.lineage.unavailable'
+  | 'detail.links.lineage.expand'
+  | 'detail.links.lineage.collapse'
+  | 'detail.links.descendants.empty'
+  | 'detail.links.descendants.more'
+  | 'detail.links.openFailed'
+  | 'detail.links.openFailed.dismiss'
   | 'detail.launch.reserved'
   | 'features.loading'
   | 'features.loadError.title'
@@ -920,6 +930,16 @@ export const en: Record<WorkbenchKey, string> = {
   'detail.links.active': 'Active',
   'detail.links.ended': 'Ended',
   'detail.links.enter': 'Enter session',
+  'detail.links.open': 'Open',
+  'detail.links.launch': 'Launch',
+  'detail.links.launch.terminal': 'The task is in a terminal state — launching a new session is disabled.',
+  'detail.links.lineage.unavailable': 'Unavailable',
+  'detail.links.lineage.expand': 'Expand subagent lineage',
+  'detail.links.lineage.collapse': 'Collapse subagent lineage',
+  'detail.links.descendants.empty': 'No subagent sessions under this link.',
+  'detail.links.descendants.more': 'Show all {n}',
+  'detail.links.openFailed': 'Session not found or already cleaned up.',
+  'detail.links.openFailed.dismiss': 'Dismiss',
   'detail.launch.reserved': 'The session launch entry arrives with task 5.11.',
   'features.loading': 'Loading features…',
   'features.loadError.title': 'Failed to load the feature board',

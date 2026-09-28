@@ -7,7 +7,9 @@
  * reserved disabled placeholder), and the four accordion sections: 描述
  * (MarkdownView read-only) / 依赖链 (topological, same blocker path as the
  * DAG) / 执行记录 (timeline with per-entry 来源 badges) / 挂接历史 (active/
- * ended links, 新→旧). The 5.8 integrate task mounts this dock into the
+ * ended links, 新→旧; since M4 2.6 the C5 enhancement rides INSIDE that
+ * section — 行展开血缘后代 + [打开] 双通道 + No-link [发起], seam-gated).
+ * The 5.8 integrate task mounts this dock into the
  * board page (TasksView + the selection store); the 5.15 assembly swaps
  * the mock face for the Interface 1 getTaskDetail verb.
  *
@@ -44,12 +46,14 @@ import { badgeStyle, sourceBadgeStyle } from './TaskRow'
 import { DepChain } from './detail/DepChain'
 import { DetailStatusPill } from './detail/ProgressDots'
 import { LinkHistory } from './detail/LinkHistory'
+import type { LinkHistoryLineageSeat, SessionOpenTarget } from './detail/LinkHistory'
 import { RecordsTimeline } from './detail/RecordsTimeline'
 import { ApprovalReturnButton } from './dispatch/ApprovalPanel'
 import {
   currentDispatchRow, DispatchExecuteButton, OrchestrationSection, useDetailDispatchChain,
   type DetailDispatchVerbs,
 } from './dispatch/OrchestrationSection'
+import { isTerminalTaskStatus } from './dispatch/selection-mode'
 import type { SelectionTaskEntry } from './dispatch/selection-mode'
 
 /** ui-design 层叠: the detail dock rides z100 (dialogs z1200, toasts z1100). */
@@ -106,8 +110,20 @@ export interface TaskDetailPanelProps {
   onClose: () => void
   /** Dep-chain item activation — re-target the selection to that task (AC: 可点击跳转选中). */
   onNavigate?: ((taskKey: string) => void) | undefined
-  /** 「进入会话」 seam — absent link rows stay informational (SC3-3/6.3 wire the jump). */
-  onEnterSession?: ((sessionId: string) => void) | undefined
+  /**
+   * 「打开」 dual-channel seam (M4 2.6, tech-design §Integration #2 — M3's
+   * 进入会话 seam EXTENDED over Interface 6's both target shapes): a TOP
+   * link row passes its sessionId string; a lineage descendant entry passes
+   * the hit's SubagentAddress triple. Absent link rows stay informational;
+   * the channel implementation is 2.7's session-open.ts.
+   */
+  onEnterSession?: ((target: SessionOpenTarget) => void | Promise<unknown>) | undefined
+  /**
+   * The C5 挂接历史 lineage seat (M4 2.6): PRESENT = the lineage capability
+   * is wired behind the board — the links section's 行展开 + degraded
+   * presentation ride it; `snapshot` absent within = inference-degraded.
+   */
+  linkLineage?: LinkHistoryLineageSeat | undefined
   /**
    * The UF1 orchestration mount (task 3.9): present = the M3 dispatch form
    * (派发执行 primary + 编排 partition + the approval round-trip head);
@@ -587,7 +603,20 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
             <RecordsTimeline t={props.t} records={detail.records} />
           </DetailSection>
           <DetailSection t={props.t} id="links" titleKey="detail.section.links">
-            <LinkHistory t={props.t} links={detail.links} onEnterSession={props.onEnterSession} />
+            {/* C5 挂接历史 增强 (M4 2.6): the lineage seat + the No-link [发起]
+                seam — the [发起] rides the SAME dispatch controller as the head
+                primary (ONE chain, the M3 发起链) and todo#30 disables it on
+                terminal task states. Absent seams keep the M2/M3 form. */}
+            <LinkHistory
+              t={props.t}
+              links={detail.links}
+              {...(props.linkLineage === undefined ? {} : { lineage: props.linkLineage })}
+              onEnterSession={props.onEnterSession}
+              {...(dispatchMount === undefined ? {} : {
+                onLaunch: () => { detailController.startDispatch() },
+                launchDisabled: isTerminalTaskStatus(detail.summary.status),
+              })}
+            />
           </DetailSection>
         </>
       )}
