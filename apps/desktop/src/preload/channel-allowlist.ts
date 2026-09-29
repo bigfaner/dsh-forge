@@ -100,6 +100,10 @@ export const WORKBENCH_VERB_CHANNELS = {
   getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
   submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
   reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
+  // M4 v3 ui-state 段(任务 4.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getProjectUiState: 'dsh-forge:workbench-get-project-ui-state',
+  setProjectUiState: 'dsh-forge:workbench-set-project-ui-state',
 } as const
 
 /**

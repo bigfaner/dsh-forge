@@ -135,6 +135,14 @@ export const WORKBENCH_VERB_CHANNELS = {
   getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
   submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
   reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
+  // —— M4 v3 ui-state 段(任务 4.1 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P4 批两动词
+  //    (getProjectUiState/setProjectUiState 布局记忆读写,project_ui_state
+  //    承载);ProjectLayout v1 白名单校验在内核域面(ui-state/
+  //    layout-schema.ts —— 违规重置默认 + ERR_LAYOUT_INVALID log,不拒写
+  //    面),通道面零特权。 ——
+  getProjectUiState: 'dsh-forge:workbench-get-project-ui-state',
+  setProjectUiState: 'dsh-forge:workbench-set-project-ui-state',
 } as const
 
 /**

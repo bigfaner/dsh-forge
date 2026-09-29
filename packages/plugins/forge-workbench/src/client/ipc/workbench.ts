@@ -41,7 +41,8 @@ import type {
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
   PrefScope, ProbeProjectPathInput, Project, ProjectionState, ProjectionStatusRow,
-  ProjectRefInput, ProposalBoardData, ProposalDoc,
+  ProjectLayout, ProjectRefInput, ProposalBoardData, ProposalDoc,
+  GetProjectUiStateInput, SetProjectUiStateInput,
   ReceiveApprovalInput, RenameProjectInput, ReportProjectionOutcomeInput,
   RetryProjectionInput, SubmitWorkspaceSnapshotInput, GetProjectionStatusInput,
   StageArtifactsReport, FeatureSummary,
@@ -230,6 +231,16 @@ export interface WorkbenchIpcBridge {
   getProjectionStatus(input?: GetProjectionStatusInput): Promise<ProjectionStatusRow[]>
   submitWorkspaceSnapshot(input: SubmitWorkspaceSnapshotInput): Promise<void>
   reportProjectionOutcome(input: ReportProjectionOutcomeInput): Promise<void>
+  /**
+   * M4 v3 ui-state verbs (task 4.1): the layout-memory pair over
+   * project_ui_state — the 4.5 layout engine consumes them (collect →
+   * debounce → setProjectUiState; re-enter → getProjectUiState → replay).
+   * Neither verb rejects on an invalid layout blob (whitelist failure →
+   * default layout + ERR_LAYOUT_INVALID log main-side); only
+   * ERR_PROJECT_NOT_FOUND rejections ride the envelope.
+   */
+  getProjectUiState(input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout }>
+  setProjectUiState(input: SetProjectUiStateInput): Promise<void>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -261,6 +272,9 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   // M4 v3 projection verbs (task 3.2; the 3.3 relay + 3.5 status surface
   // consume them — the presence check stays whole-surface per the one rule).
   'retryProjection', 'getProjectionStatus', 'submitWorkspaceSnapshot', 'reportProjectionOutcome',
+  // M4 v3 ui-state verbs (task 4.1; the 4.5 layout engine consumes them —
+  // the presence check stays whole-surface per the one rule).
+  'getProjectUiState', 'setProjectUiState',
 ]
 
 /**

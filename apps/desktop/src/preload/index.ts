@@ -12,14 +12,17 @@ import type {
   DispatchTasksInput,
   DispatchTasksResult,
   GetProjectionStatusInput,
+  GetProjectUiStateInput,
   ProbeProjectPathInput,
   ProjectionState,
   ProjectionStatusRow,
+  ProjectLayout,
   ProjectRefInput,
   ReceiveApprovalVerbInput,
   RenameProjectInput,
   ReportProjectionOutcomeInput,
   RetryProjectionInput,
+  SetProjectUiStateInput,
   SubmitWorkspaceSnapshotInput,
   FeatureBoardData,
   FeatureDoc,
@@ -252,6 +255,18 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.submitWorkspaceSnapshot, input) as Promise<void>,
     reportProjectionOutcome: (input: ReportProjectionOutcomeInput): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.reportProjectionOutcome, input) as Promise<void>,
+    // M4 v3 ui-state verbs (task 4.1): the layout-memory pair over
+    // project_ui_state — the 4.5 layout engine consumes them (collect →
+    // debounce → setProjectUiState; re-enter → getProjectUiState → replay the
+    // open sequence). Neither verb rejects on an invalid layout blob: the v1
+    // whitelist failure lands as the default layout with an ERR_LAYOUT_INVALID
+    // log main-side (read = corrupt stored blob, write = the server-side
+    // re-validation above the client debounce). Only ERR_PROJECT_NOT_FOUND
+    // rejections ride the { code, message, detail? } envelope.
+    getProjectUiState: (input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout }> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectUiState, input) as Promise<{ layout: ProjectLayout }>,
+    setProjectUiState: (input: SetProjectUiStateInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setProjectUiState, input) as Promise<void>,
     // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
     // planes over the registered project's doc root (fact/lesson/research
     // read + append-only write; forensic machine-global read-only — no

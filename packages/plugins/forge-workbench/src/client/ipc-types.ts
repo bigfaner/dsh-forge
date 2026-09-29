@@ -16,6 +16,8 @@
  * they consume — the same incremental growth the main-side module followed.
  */
 
+import type { TabKind } from './views/rightbar/tab-kinds'
+
 /**
  * Where a project's feature documents live (Interface 1): inside the repo, or
  * an explicitly authorized external path.
@@ -751,6 +753,72 @@ export interface RenameProjectInput {
 /** archiveProject / restoreProject 入参。 */
 export interface ProjectRefInput {
   readonly projectId: string
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 ui-state verb DTOs (task 4.1;main-side peer =
+// apps/desktop/src/main/workbench/ui-state/layout-schema.ts — the CANONICAL
+// ProjectLayout v1 declaration). This twin is local per the plugin-cannot-
+// -import-app precedent; TabKind reuses 2.2's table (views/rightbar/
+// tab-kinds.ts) so the plugin keeps a single declaration, and the kernel ↔
+// client lockstep is locked by the drift assertion in apps/desktop/tests/
+// workbench-ui-state.spec.ts.
+// ---------------------------------------------------------------------------
+
+/**
+ * detached 窗口的会话定位(§Data Models:SessionId | SubagentAddress)——
+ * 顶层会话 = sessionId;subagent = (parent, child, mode) 三元组(恰一形态)。
+ */
+export type SessionTarget =
+  | { readonly sessionId: string }
+  | { readonly parentSessionId: string; readonly childSessionId: string; readonly mode: 'one-shot' | 'continuable' }
+
+/** detached 窗口矩形(Interface 4 detached[].rect;4.2 windowOpenDetached 同参)。 */
+export interface Rect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Interface 4 ProjectLayout v1(布局记忆 blob,项目域):sidebar 宽/收起、
+ * tree 三集、rightbar 比例/panes·tabs、detached 窗口集。恢复 = 4.5 重放
+ * open 操作序列;分组×排序视图选项 = localStorage 用户级(C3 口径),
+ * 不入本形态(Hard Rule 双轨边界)。
+ */
+export interface ProjectLayout {
+  readonly version: 1
+  readonly sidebar: { readonly collapsed: boolean; readonly width?: number }
+  readonly tree: {
+    readonly expandedProjects: readonly string[]
+    readonly expandedSessions: readonly string[]
+    readonly overflowOpen: readonly string[]
+  }
+  readonly rightbar: {
+    readonly widthPct?: number
+    readonly panes: ReadonlyArray<{ readonly tabs: ReadonlyArray<{ readonly kind: TabKind; readonly topic?: string }> }>
+  }
+  readonly detached: ReadonlyArray<{
+    readonly view: 'board' | 'conversation'
+    readonly target?: SessionTarget
+    readonly rect?: Rect
+  }>
+}
+
+/** getProjectUiState 入参(无行 = 默认布局)。 */
+export interface GetProjectUiStateInput {
+  readonly projectId: string
+}
+
+/**
+ * setProjectUiState 入参(client debounce(4.5)之上的服务端第二道校验:
+ * 非法 blob 落库为默认布局 + ERR_LAYOUT_INVALID log,动词不拒 —— 唯一
+ * reject 面 = ERR_PROJECT_NOT_FOUND)。
+ */
+export interface SetProjectUiStateInput {
+  readonly projectId: string
+  readonly layout: ProjectLayout
 }
 
 // ---------------------------------------------------------------------------

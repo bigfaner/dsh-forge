@@ -41,6 +41,7 @@ import type {
 } from '../projects/lifecycle-service.ts'
 import type { DeviationRow, WorkspaceSnapshotEntry } from '../projection/index.ts'
 import type { ProjectionStatusRow, ReportProjectionOutcomeInput } from '../projection/service.ts'
+import type { ProjectLayout, Rect, SessionTarget, TabKind } from '../ui-state/layout-schema.ts'
 
 // Interface 1 中已由仓储/感知层定义的 DTO,以本模块为共享出口(避免渲染层
 // 直接依赖 main 内部模块路径)。SyncStatus = 感知层的 SyncStatusPayload
@@ -53,6 +54,9 @@ export type { FeatureStatus }
 // 「单源无漂移」约定:渲染面经本模块转出口,不另立双份声明)。
 export type { DeviationRow, WorkspaceSnapshotEntry, ProjectionStatusRow, ReportProjectionOutcomeInput }
 export type { RegisterProjectV2Input, RenameProjectInput, ProjectRefInput }
+// M4 v3(任务 4.1;布局记忆 DTO 单源 = ui-state 域 layout-schema —— Interface 4
+// 的内核 canonical 声明,渲染面经本模块转出口,不另立双份声明)。
+export type { ProjectLayout, TabKind, SessionTarget, Rect }
 // M4 v3(任务 1.3):registerProject 入参 = v1(M2/M3 向导,冻结面)| v2
 // (P1 批新面,anchor / docsPlacement 四值 / customAuthorized)。同一动词
 // 通道收双形态 —— 既有 v1 调用方零改动,v2 由 C7 卡接线(2.x)。
@@ -213,6 +217,26 @@ export interface GetProjectionStatusInput {
  */
 export interface SubmitWorkspaceSnapshotInput {
   readonly workspaces: readonly WorkspaceSnapshotEntry[]
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 ui-state 动词 DTO(任务 4.1;tech-design §Interface 1 v3·P4 批两
+// 动词;ProjectLayout/TabKind 单源 = ui-state/layout-schema.ts 经本模块转出口)
+// ---------------------------------------------------------------------------
+
+/** getProjectUiState 入参(无行 = 默认布局)。 */
+export interface GetProjectUiStateInput {
+  readonly projectId: string
+}
+
+/**
+ * setProjectUiState 入参(client debounce(4.5)之上的服务端第二道校验:
+ * layout 经 v1 白名单复验,非法 blob 落库为默认布局 + ERR_LAYOUT_INVALID
+ * log,动词不拒 —— 唯一 reject 面 = ERR_PROJECT_NOT_FOUND)。
+ */
+export interface SetProjectUiStateInput {
+  readonly projectId: string
+  readonly layout: ProjectLayout
 }
 
 // ---------------------------------------------------------------------------
@@ -1079,6 +1103,22 @@ export interface WorkbenchVerbServices {
    * ERR_PROJECTION_OP_FAILED detail 携原码)→ push_failed → degraded。
    */
   reportProjectionOutcome(input: ReportProjectionOutcomeInput): void
+
+  // —— M4 v3 ui-state 动词(任务 4.1;实现 = ui-state 域 schema 校验 +
+  //    repo 经 services.ts 装配;Hard Rule:违规 blob 不拒动词面 —— 重置
+  //    默认 + ERR_LAYOUT_INVALID log;唯一 reject 面 = ERR_PROJECT_NOT_FOUND
+  //    与 handler 形状契约错)——
+
+  /**
+   * 布局记忆读:无行 = 默认布局;行内 blob 违规 = 默认布局 + log(不抛错,
+   * 读取面不放大存储损伤)。
+   */
+  getProjectUiState(input: GetProjectUiStateInput): { readonly layout: ProjectLayout }
+  /**
+   * 布局记忆写(UPSERT + updated_at 刷新):layout 经 v1 白名单二次校验
+   * (T5;客户端 debounce 之上的防线),非法 → 落库默认布局 + log,不拒。
+   */
+  setProjectUiState(input: SetProjectUiStateInput): void
 }
 
 // ---------------------------------------------------------------------------

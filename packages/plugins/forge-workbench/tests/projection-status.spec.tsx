@@ -136,6 +136,15 @@ function baseBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIpcBr
     getProjectionStatus: async () => [],
     submitWorkspaceSnapshot: async () => undefined,
     reportProjectionOutcome: async () => undefined,
+    // M4 v3 ui-state 段(任务 4.1;presence check 全员可调;值面 4.5 前无消费)。
+    getProjectUiState: async () => ({
+      layout: {
+        version: 1, sidebar: { collapsed: false },
+        tree: { expandedProjects: [], expandedSessions: [], overflowOpen: [] },
+        rightbar: { panes: [] }, detached: [],
+      },
+    }),
+    setProjectUiState: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as WorkbenchIpcBridge

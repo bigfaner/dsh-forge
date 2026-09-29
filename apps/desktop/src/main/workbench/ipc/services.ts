@@ -18,6 +18,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { shellLog } from '../../log.ts'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
 import { resolveFeaturesDir, resolveProposalsDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
@@ -68,6 +69,8 @@ import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import { createProjectLifecycleService, type RegisterProjectV2Input } from '../projects/lifecycle-service.ts'
 import { createProjectionReconcileService } from '../projection/service.ts'
 import { createLifecycleProjectionHooks } from '../projection/lifecycle-hooks.ts'
+import { DEFAULT_PROJECT_LAYOUT, sanitizeProjectLayout } from '../ui-state/layout-schema.ts'
+import { getProjectUiStateRow, saveProjectLayout } from '../ui-state/ui-state-repo.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -189,6 +192,19 @@ function readTaskDescription(entries: TaskIndexEntries, tasksDir: string, localI
     }
   }
   return ''
+}
+
+/**
+ * ERR_LAYOUT_INVALID 落 log(任务 4.1;tech-design §Error Types & Codes 该行
+ * 口径:重置默认布局 + log,不弹错、不拒动词面)。读/写两相位共用 —— 读侧
+ * = 行内 blob 违规;写侧 = 服务端二次校验拦下的非法入参(落库为默认布局)。
+ */
+function logLayoutInvalid(phase: 'read' | 'write', projectId: string, reason: string | null): void {
+  shellLog.warn({
+    code: 'ERR_LAYOUT_INVALID',
+    message: `project ${projectId} layout blob failed the v1 whitelist schema and was reset to the default layout (${phase})`,
+    ...(reason === null ? {} : { data: { projectId, phase, reason } }),
+  })
 }
 
 export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): WorkbenchIpcServiceAssembly {
@@ -749,6 +765,24 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       getProjectionStatus: input => projection.getProjectionStatus(input),
       submitWorkspaceSnapshot: input => projection.submitSnapshot(input.workspaces),
       reportProjectionOutcome: input => projection.reportOutcome(input),
+
+      // —— M4 v3 ui-state 动词(任务 4.1):布局记忆读写(Interface 1 v3·P4
+      //    批两动词)。schema 白名单校验 = 服务端第二道防线(客户端 debounce
+      //    之上;T5):非法 blob 落库为默认布局 + ERR_LAYOUT_INVALID log,
+      //    不拒动词面;唯一 reject 面 = ERR_PROJECT_NOT_FOUND。 ——
+      getProjectUiState: (input) => {
+        assertProjectExists(db, input.projectId)
+        const row = getProjectUiStateRow(db, input.projectId)
+        if (row === null) return { layout: DEFAULT_PROJECT_LAYOUT }
+        if (row.reset) logLayoutInvalid('read', input.projectId, row.reason)
+        return { layout: row.layout }
+      },
+      setProjectUiState: (input) => {
+        assertProjectExists(db, input.projectId)
+        const sanitized = sanitizeProjectLayout(input.layout)
+        if (sanitized.reset) logLayoutInvalid('write', input.projectId, sanitized.reason)
+        saveProjectLayout(db, input.projectId, sanitized.layout, new Date().toISOString())
+      },
     },
 
     start(): void {

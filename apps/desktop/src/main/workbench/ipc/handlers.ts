@@ -21,6 +21,7 @@ import type {
   DispatchTasksInput,
   DocKind,
   GetProjectionStatusInput,
+  GetProjectUiStateInput,
   ReceiveApprovalVerbInput,
   KnowledgeFactInput,
   KnowledgeForensicInput,
@@ -35,6 +36,7 @@ import type {
   RegisterProjectInput,
   RenameProjectInput,
   RetryProjectionInput,
+  SetProjectUiStateInput,
   StageSummarizeInput,
   TaskAddInput,
   TaskClaimInput,
@@ -190,7 +192,7 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
 // + dispatch host 回调段 3 条(任务 3.5)+ stages 写段 2 条(任务 4.1)
 // + M4 v3 项目中心段 5 条(任务 1.3)+ 投影段 4 条(任务 3.2)
-// = 60 条白名单通道)
+// + ui-state 段 2 条(任务 4.1)= 62 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -809,6 +811,26 @@ export function installWorkbenchVerbs(
         message: requireString('reportProjectionOutcome', 'input.error.message', error.message),
       },
     })
+  })
+
+  // —— M4 v3 ui-state 段(任务 4.1):布局记忆两动词。Hard Rule 延续 ——
+  //    本层只做 sender 校验 + 参数形状校验(调用方契约错在此拒绝;layout
+  //    仅须为对象)+ 服务调用 + 错误映射;ProjectLayout v1 白名单校验
+  //    (违规 → 默认布局 + ERR_LAYOUT_INVALID log,不拒写面)在内核域面
+  //    (ui-state/layout-schema.ts 经 services.ts 装配),不信任 renderer
+  //    语义(T5 服务端第二道防线;客户端 debounce 属 4.5)。 ——
+
+  register(C.getProjectUiState, (args) => {
+    const input = requireObject('getProjectUiState', 'input', args[0])
+    requireString('getProjectUiState', 'input.projectId', input.projectId)
+    return services.getProjectUiState(input as unknown as GetProjectUiStateInput)
+  })
+
+  register(C.setProjectUiState, (args) => {
+    const input = requireObject('setProjectUiState', 'input', args[0])
+    requireString('setProjectUiState', 'input.projectId', input.projectId)
+    requireObject('setProjectUiState', 'input.layout', input.layout)
+    return services.setProjectUiState(input as unknown as SetProjectUiStateInput)
   })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
