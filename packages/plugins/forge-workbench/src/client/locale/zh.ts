@@ -659,6 +659,17 @@ export const zh: Record<WorkbenchKey, string> = {
   'rightbar.depgraph.mode.label': '依赖图视图模式',
   'rightbar.depgraph.mode.dag': 'DAG',
   'rightbar.depgraph.mode.lane': '泳道图',
+  // M4 task 4.4 —— C9 分屏控制(工作台头 [分屏] 菜单 / pane 头 / 分隔条)。
+  'rightbar.split.menu': '分屏',
+  'rightbar.split.menu.board': '看板',
+  'rightbar.split.menu.aside': '会话旁置',
+  'rightbar.split.menu.asideUnavailable': '暂无可旁置的 subagent 会话 —— 先从任务挂接历史打开',
+  'rightbar.split.separator': '分屏比例',
+  'rightbar.split.pane.board': '看板',
+  'rightbar.split.pane.sessionAside': '会话旁置',
+  'rightbar.split.pane.detach': '拆出为窗口',
+  'rightbar.split.pane.detachReserved': '多窗口 · M4 4.3 接入',
+  'rightbar.split.pane.close': '关闭',
   // M4 task 2.7 —— C6 subagent 会话·任务元数据条(bound/ambiguous 双态;任务号方言为拉丁 mono,前缀随设计稿保留 task)。
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': '查看任务',

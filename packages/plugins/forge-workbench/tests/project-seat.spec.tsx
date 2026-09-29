@@ -212,6 +212,7 @@ interface SeatWorld {
     isExpanded: MockFn
     toggleExpanded: MockFn
     openTab: MockFn
+    openResource: MockFn
     close: MockFn
     focus: MockFn
     openTabs: { getSnapshot: MockFn }
@@ -243,6 +244,7 @@ async function makeSeatWorld(initial: { projects: Project[]; activeProjectId: st
     isExpanded: vi.fn(() => false),
     toggleExpanded: vi.fn(),
     openTab: vi.fn(),
+    openResource: vi.fn(),
     close: vi.fn(),
     focus: vi.fn(),
     openTabs: { getSnapshot: vi.fn(() => [] as Array<{ tabId: string; kind: string }>) },
@@ -692,7 +694,8 @@ describe('seat behavior seams', () => {
     expect(toUiWorkspaceFace(uiWorkspace)).toBe(uiWorkspace)
     expect(toUiWorkspaceFace({ startSession: () => {} })).toBeUndefined()
     const sidebarRight = {
-      isExpanded: () => false, toggleExpanded: () => {}, openTab: () => {}, close: () => {},
+      isExpanded: () => false, toggleExpanded: () => {}, openTab: () => {}, openResource: () => {},
+      close: () => {},
       focus: () => {}, openTabs: { getSnapshot: () => [] },
     }
     expect(toSidebarRightFace(sidebarRight)).toBe(sidebarRight)

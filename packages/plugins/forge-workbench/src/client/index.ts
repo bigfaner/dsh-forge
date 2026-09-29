@@ -58,8 +58,9 @@ import { toLineageSessionsSource } from './lineage'
 import { installMetadataBar } from './components/task-metadata/MetadataBar'
 import type { MetadataTaskSource } from './components/task-metadata/MetadataBar'
 import { installArchiveBanner } from './components/archive-banner/ArchiveBanner'
-import { ensureBoardActive, toRightbarTabsFace } from './views/rightbar/tabs-model'
+import { ensureBoardActive, createSplitPaneStore, toRightbarTabsFace } from './views/rightbar/tabs-model'
 import { installRightbarTabs } from './views/rightbar/RightbarTabs'
+import { installSplitControls } from './views/rightbar/SplitControls'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
 import { en } from './locale/en'
 import { zh } from './locale/zh'
@@ -438,6 +439,30 @@ export {
   ensureBoardActive, ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
 } from './views/rightbar/tabs-model'
 export type { OpenTabRow, ProjectSwitchOutcome, RightbarTabsFace } from './views/rightbar/tabs-model'
+// M4 task 4.4 — Component C9, the 分屏: the multi-pane split model (pane-set
+// + clamped ratio + keyboard stepping + the onLayoutChange report seam over
+// the public controller face), the pane 头 (区名 + [拆出为窗口] 动作位 +
+// [关闭]), and the 工作台头 [分屏] menu + the a11y 分隔条 (the conversation
+// header utilities seat host + installer).
+export {
+  clampSplitRatio, createSplitPaneStore, deriveSplitPanes, INITIAL_SPLIT_LAYOUT, isSplitActive,
+  openSplitPane, ratioFromDrag, stepSplitRatio,
+  SPLIT_RATIO_MAX, SPLIT_RATIO_MIN, SPLIT_RATIO_RESET, SPLIT_RATIO_STEP, SPLIT_RATIO_STEP_LARGE,
+} from './views/rightbar/tabs-model'
+export type {
+  RightbarCloseFace, RightbarSplitFace, SplitLayoutState, SplitPaneRow, SplitPaneSelection,
+  SplitPaneStore, SplitPaneStoreOptions, SplitPaneView, SplitStepKey,
+} from './views/rightbar/tabs-model'
+export { PaneHeader } from './views/rightbar/PaneControls'
+export type { PaneControlsTranslate, PaneHeaderProps } from './views/rightbar/PaneControls'
+export {
+  CONVERSATION_HEADER_UTILITIES_SLOT, installSplitControls, SplitControlSeat, SPLIT_CONTROL_ID,
+  SPLIT_CONTROL_ORDER, SplitMenuControl, SplitSeparator,
+} from './views/rightbar/SplitControls'
+export type {
+  ConversationHeaderUtilitiesZone, SplitControlSeatProps, SplitControlsFace, SplitControlsTranslate,
+  SplitMenuControlProps, SplitSeparatorProps,
+} from './views/rightbar/SplitControls'
 export { createIpcConfirmCardFace } from './ipc/workbench'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
@@ -642,6 +667,25 @@ export function apply(ctx: ClientContext): void {
   const liveUiWorkspace = lazyUpstreamFace('uiWorkspace', 'openSession', toUiWorkspaceFace)
   const liveSidebarRight = lazyUpstreamFace('sidebarRight', 'openTab', toSidebarRightFace)
 
+  // M4 task 4.4 — the C9 分屏 state home: ONE plugin-lifetime split store
+  // shared by the 工作台头 [分屏] control (the conversation header utilities
+  // seat) and the board pane body's chrome (pane 头 + 分隔条). The
+  // onLayoutChange seam stays UNWIRED here (比例态经接口暴露 — the store's
+  // option surface IS the interface; 4.5's layout-memory collection is its
+  // consumer; nothing persists in this task).
+  const splitStore = createSplitPaneStore()
+  // The 工作台头 [分屏] control: the [分屏] menu's picks resolve the controller
+  // face LAZILY (the late-boot lesson — an apply-time read freezes an absent
+  // service for the plugin's lifetime). The aside target resolver is ABSENT
+  // on this wiring: the 会话旁置 row renders disabled until the subagent
+  // context (the C5/C6 jump seams) supplies a live target — never a dead
+  // click; the model + control carry the full flow (specs assert it).
+  const disposeSplitControls = installSplitControls(ctx, {
+    t,
+    store: splitStore,
+    getSplitFace: () => toRightbarTabsFace(optionalService('sidebarRight')),
+  })
+
   // The registrations themselves stay AT APPLY (the slot/seat lifecycles are
   // service-independent — deferring them behind ctx.inject tied the seat to
   // cordis fiber re-evaluation, which unregisters/re-registers on every
@@ -705,6 +749,9 @@ export function apply(ctx: ClientContext): void {
         // `ctx.sessions` read the metadata bar rides, threaded into the board
         // pane so the detail dock's 挂接历史 rows gain the 行展开 face.
         get sessions() { return liveSessionsFace() },
+        // M4 4.4: the C9 split store (the pane 头 + 分隔条 chrome + the
+        // pane-set watcher over the open-tab inventory).
+        splitStore,
       })
       return true
     }
@@ -790,6 +837,7 @@ export function apply(ctx: ClientContext): void {
     disposeWorkspacesSeat()
     disposeMetadataBar()
     disposeArchiveBanner()
+    disposeSplitControls()
     disposeRightbarTabs()
     disposeProjectPanelRow()
     activeProjectStore?.dispose()

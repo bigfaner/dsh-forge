@@ -654,6 +654,18 @@ export type WorkbenchKey =
   | 'rightbar.depgraph.mode.label'
   | 'rightbar.depgraph.mode.dag'
   | 'rightbar.depgraph.mode.lane'
+  // M4 task 4.4 — Component C9, the 分屏 controls (the [分屏] menu, the pane
+  // 头, and the 分隔条's a11y labels).
+  | 'rightbar.split.menu'
+  | 'rightbar.split.menu.board'
+  | 'rightbar.split.menu.aside'
+  | 'rightbar.split.menu.asideUnavailable'
+  | 'rightbar.split.separator'
+  | 'rightbar.split.pane.board'
+  | 'rightbar.split.pane.sessionAside'
+  | 'rightbar.split.pane.detach'
+  | 'rightbar.split.pane.detachReserved'
+  | 'rightbar.split.pane.close'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1310,6 +1322,17 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.depgraph.mode.label': 'Dependency graph view mode',
   'rightbar.depgraph.mode.dag': 'DAG',
   'rightbar.depgraph.mode.lane': 'Swimlane',
+  // M4 task 4.4 — Component C9, the 分屏 controls.
+  'rightbar.split.menu': 'Split view',
+  'rightbar.split.menu.board': 'Task board',
+  'rightbar.split.menu.aside': 'Session aside',
+  'rightbar.split.menu.asideUnavailable': 'No subagent session to aside yet — open one from a task\'s linked sessions first',
+  'rightbar.split.separator': 'Split ratio',
+  'rightbar.split.pane.board': 'Task board',
+  'rightbar.split.pane.sessionAside': 'Session aside',
+  'rightbar.split.pane.detach': 'Detach to window',
+  'rightbar.split.pane.detachReserved': 'Multi-window arrives with M4 4.3',
+  'rightbar.split.pane.close': 'Close pane',
   // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': 'View task',

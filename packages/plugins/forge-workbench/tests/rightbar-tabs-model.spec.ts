@@ -135,7 +135,7 @@ describe('AC4 换台重置: resetRightbarToDefault (裁决 #28-④ 收起 + 开�
 
 describe('AC1 guard: toRightbarTabsFace (the project-seat adapter discipline)', () => {
   const full = {
-    openTab: () => {}, close: () => {}, focus: () => {},
+    openTab: () => {}, openResource: () => {}, close: () => {}, focus: () => {},
     isExpanded: () => false, toggleExpanded: () => {},
     openTabs: { getSnapshot: () => [] as readonly OpenTabRow[] },
   }

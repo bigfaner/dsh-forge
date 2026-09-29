@@ -40,7 +40,7 @@
  * track and does not conflict: different granularity). 分栏钮/拖拽排序/
  * 跨栏/拖出浮动 are dsh dockkit capabilities M4 does not build (注记).
  */
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -58,10 +58,15 @@ import type { OverviewTaskSource } from './overview-model'
 import { DocTab } from './DocTab'
 import { DocTabTitle, createDocTabsRegistry, focusOrOpenDoc, type DocTabsRegistry } from './DocTree'
 import { DepGraphTab } from './DepGraphTab'
+import { PaneHeader } from './PaneControls'
+import { SplitSeparator } from './SplitControls'
 import {
   forgeTabDefinitions, forgeTabId, RIGHTBAR_TAB_KINDS, type TabKind,
 } from './tab-kinds'
-import { followProjectSwitch, toRightbarTabsFace } from './tabs-model'
+import {
+  followProjectSwitch, INITIAL_SPLIT_LAYOUT, isSplitActive, toRightbarTabsFace,
+  type SplitPaneStore,
+} from './tabs-model'
 
 // ---------------------------------------------------------------------------
 // Tab bodies
@@ -94,6 +99,13 @@ export interface BoardTabFace extends ForgeTabFace {
    * M2/M3 informational form.
    */
   readonly sessions?: import('../../nav/project-seat').SessionsFace | undefined
+  /**
+   * The plugin-lifetime C9 split store (M4 4.4): present + an ACTIVE split
+   * (≥ 2 C9 panes) mounts the pane 头 + 分隔条 chrome AROUND the TasksView
+   * (AC5: the chrome wraps, never into — the view below is the SAME
+   * instance); absent = the plain 2.1 pane body.
+   */
+  readonly split?: SplitPaneStore | undefined
 }
 
 /**
@@ -102,19 +114,61 @@ export interface BoardTabFace extends ForgeTabFace {
  * per-project by contract), and `host='pane'` contracts the docks/float bar
  * to the board's own box (零宿主探测: the breakpoint is injected, never
  * probed).
+ *
+ * M4 4.4 (C9): while the split is ACTIVE the body gains the pane 头 (区名 +
+ * the reserved [拆出为窗口] 动作位 + [关闭] — the close rides the tab's OWN
+ * actions, the native seat contract) and the 分隔条 at the left edge (the
+ * a11y keyboard separator + the clamped drag, tabs-model/SplitControls).
  */
-export function BoardTabBody({ t, activeProject, session, onEnterSession, sessions }: BoardTabFace): ReactNode {
+export function BoardTabBody(
+  { useTabInfo, t, activeProject, session, onEnterSession, sessions, split }: BoardTabFace & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>,
+): ReactNode {
   const snapshot = useSyncExternalStore(
     activeProject?.subscribe ?? (() => () => {}),
     activeProject?.getSnapshot ?? (() => INITIAL_ACTIVE_PROJECT_SNAPSHOT),
   )
+  const splitSnapshot = useSyncExternalStore(
+    split?.subscribe ?? (() => () => {}),
+    split?.getSnapshot ?? (() => INITIAL_SPLIT_LAYOUT),
+  )
+  const paneRef = useRef<HTMLDivElement | null>(null)
   const projectId = snapshot.activeProjectId ?? undefined
   const project = projectId === undefined ? undefined : snapshot.projects.find(row => row.id === projectId)
+  const splitActive = split !== undefined && isSplitActive(splitSnapshot)
+  // The pane 头 [关闭] rides the tab's OWN seat contract (the DocTab
+  // `props.useTabInfo?.()` discipline — the actions read at render, the
+  // callback only fires them).
+  const closeTab = useTabInfo?.().tab.actions.close
+  const closePane = (): void => { closeTab?.() }
+  // The drag math's denominator: the pane's measured width lifted to the WHOLE
+  // split's width through the pane's share (first pane = ratio, else 1-ratio;
+  // the open order tracks the pane order in the common flow). Zero-measured
+  // (a jsdom mount) = the drag degrades, the keyboard path still works.
+  const measureSplitContainer = (): number => {
+    const panePx = paneRef.current?.offsetWidth ?? 0
+    if (!(panePx > 0) || split === undefined) return 0
+    const boardIndex = splitSnapshot.panes.findIndex(pane => pane.view === 'board')
+    const share = boardIndex === 0 ? splitSnapshot.ratio : 1 - splitSnapshot.ratio
+    if (!(share > 0) || !(share < 1)) return 0
+    return panePx / share
+  }
   return (
     <div
+      ref={paneRef}
       data-dsh-forge-board-pane=""
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0, position: 'relative' }}
     >
+      {splitActive && (
+        <SplitSeparator
+          t={t}
+          ratio={splitSnapshot.ratio}
+          onRatioChange={(ratio) => { split?.setRatio(ratio) }}
+          measureContainer={measureSplitContainer}
+        />
+      )}
+      {splitActive && (
+        <PaneHeader t={t} view="board" onClose={closePane} />
+      )}
       <TasksView
         key={projectId ?? 'unresolved'}
         t={t}
@@ -312,6 +366,13 @@ export interface RightbarTabsOptions extends ForgeTabFace {
    * detail dock's 挂接历史 rows gain the 行展开 face (SC7 消费点 wiring).
    */
   readonly sessions?: import('../../nav/project-seat').SessionsFace | undefined
+  /**
+   * The plugin-lifetime C9 split store (M4 4.4): threaded into the board pane
+   * body (the pane 头 + 分隔条 chrome) AND fed the open-tab inventory (the
+   * watcher below — native closes / project-switch closes reconcile the pane
+   * set; reaching the empty set IS the 全部 pane 关闭 → 回活跃区 transition).
+   */
+  readonly splitStore?: SplitPaneStore | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -347,7 +408,7 @@ function optionalService(ctx: ClientContext, name: string): unknown {
  * @returns disposer removing the definitions, the bodies, and the watcher.
  */
 export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOptions): () => void {
-  const { t, activeProjectStore, boardSession, onEnterSession, onOpenTask, readTaskSources } = options
+  const { t, activeProjectStore, boardSession, onEnterSession, onOpenTask, readTaskSources, splitStore } = options
   const tabs = toTabRegistryFace(optionalService(ctx, 'sidebarRightTabs'))
   if (tabs === undefined) return () => {}
   const face: ForgeTabFace = { t }
@@ -393,6 +454,8 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     // resolve the upstream service lazily — an eager destructure would freeze
     // an absent service into the face for the plugin's lifetime).
     get sessions() { return options.sessions },
+    // M4 4.4: the C9 split store (the pane 头 + 分隔条 chrome's state home).
+    ...splitStore === undefined ? {} : { split: splitStore },
   }
   const overviewFace: OverviewTabFace = {
     t,
@@ -466,7 +529,21 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     })
   }
 
+  // The C9 pane-set watcher (M4 4.4): the split store reconciles with the
+  // open-tab inventory — native chip × closes, the §4.7 project-switch closes
+  // and any C5-opened aside all land in the pane set through ONE source. The
+  // boot reconcile seeds the set from whatever is already open (e.g. a board
+  // the guide door seated before the split began).
+  let disposeSplitWatch: (() => void) | undefined
+  if (splitStore !== undefined && sidebarRight !== undefined) {
+    splitStore.reconcile(sidebarRight.openTabs.getSnapshot())
+    disposeSplitWatch = sidebarRight.openTabs.subscribe?.(() => {
+      splitStore.reconcile(sidebarRight.openTabs.getSnapshot())
+    })
+  }
+
   return () => {
+    disposeSplitWatch?.()
     disposeWatch?.()
     disposeDocTitle()
     disposeGuideTitle()

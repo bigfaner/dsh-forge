@@ -148,6 +148,7 @@ function makeFace(rows: readonly OpenTabRow[], expanded: boolean) {
   const calls = { closed: [] as string[], opened: [] as string[], focused: [] as string[], toggles: 0 }
   const face = {
     openTab: (kind: string) => { calls.opened.push(kind) },
+    openResource: () => {},
     close: (tabId: string) => { calls.closed.push(tabId) },
     focus: (tabId: string) => { calls.focused.push(tabId) },
     isExpanded: () => expanded,
