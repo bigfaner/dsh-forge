@@ -401,7 +401,7 @@
         "2.gate",
         "3.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.3-projection-client-relay.md",
       "record": "records/3.3-projection-client-relay.md",
       "surface-type": "web",

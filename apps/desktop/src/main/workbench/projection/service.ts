@@ -54,8 +54,16 @@ import {
 import { buildProjectionPlan, matchByPath, type WorkspaceSnapshotEntry, type WorkspaceSnapshotInput } from './plan.ts'
 import { nextProjectionState, reconcileVerdictEvent, type ProjectionEvent } from './state-machine.ts'
 
-/** Interface 2 的上游错误码映射词表(→ ERR_PROJECTION_OP_FAILED detail 携原码)。 */
-const UPSTREAM_OP_ERROR_CODES: ReadonlySet<string> = new Set(['workspace/invalid-path', 'name-conflict', 'move-invalid'])
+/**
+ * Interface 2 的上游错误码映射词表(→ ERR_PROJECTION_OP_FAILED detail 携原码)。
+ * 3.3 对齐 vendored(c36ba648 workspace-controller types.ts):实况码全带
+ * `workspace/` 前缀('workspace/name-conflict' / 'workspace/move-invalid'),
+ * 词表同时收录设计字面短形与 vendored 前缀形(relay 原码透传,不裁剪)。
+ */
+const UPSTREAM_OP_ERROR_CODES: ReadonlySet<string> = new Set([
+  'workspace/invalid-path', 'name-conflict', 'move-invalid',
+  'workspace/name-conflict', 'workspace/move-invalid',
+])
 
 /** 上游错误码映射:三码 → ERR_PROJECTION_OP_FAILED(原码入 detail);未列举码原样透传。 */
 export function mapUpstreamProjectionError(code: string, message: string): string {

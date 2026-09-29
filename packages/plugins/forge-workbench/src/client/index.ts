@@ -39,6 +39,7 @@ import {
 import { installToolBridgeClient } from './ipc/tool-bridge'
 import { installDispatchLaunchRelay } from './ipc/dispatch-relay'
 import { installApprovalAnswerRelay } from './ipc/approval-answer'
+import { installProjectionRelay } from './projection'
 import { getWorkbenchIpcBridge } from './ipc/workbench'
 import { createIpcConfirmCardFace } from './ipc/workbench'
 import { ViewSwitchController } from './nav/view-switch'
@@ -178,6 +179,23 @@ export {
   approvalAnswerRelayOf, deliverApprovalAnswer, installApprovalAnswerRelay, setApprovalAnswerRelay,
 } from './ipc/approval-answer'
 export type { ApprovalAnswerRelay } from './ipc/approval-answer'
+// M4 task 3.3 — the client projection relay (tech-design §Interface 2): the
+// duck-typed upstream workspace channel declaration (vendored types.ts is the
+// compile-time authority), the snapshot follow-flow reporter (submitWorkspaceSnapshot
+// boot + debounced), and the plan-execution/outcome-backfill/boot-replay relay
+// over the 3.2 verb face.
+export {
+  applyRegistryOrder, applyWorkspaceRow, canonicalOpsOf, createProjectionRelay,
+  createSnapshotReporter, defaultProjectionRelayLog, dropWorkspaceId, executeProjectionPlan,
+  insertBeforeLinksOf, installProjectionRelay, PROJECTION_CHANNEL_UNAVAILABLE, PROJECTION_LOG_PREFIX,
+  snapshotEntriesOf, WORKSPACES_SERVICE_KEY, workspacesSourceOf, WORKSPACE_NOT_FOUND,
+  WORKSPACE_REMOTE_KEY, workspaceChannelOf,
+} from './projection'
+export type {
+  PlanExecutionResult, ProjectionRelayDeps, ProjectionRelayLog, SnapshotReporter,
+  SnapshotReporterDeps, WorkspaceChannel, WorkspaceOpFailure, WorkspaceOpResult,
+  WorkspaceRow, WorkspaceSnapshotSource,
+} from './projection'
 // The UF4 page-session doc cache (task 5.16): one per FeaturesPage mount,
 // cleared on a project switch (Hard Rule: 文档缓存仅在页内会话期).
 export { createFeatureDocsCache } from './store/feature-board'
@@ -458,6 +476,16 @@ export function apply(ctx: ClientContext): void {
   // resolves with the human verdict). No bridge/remote = no-op (kernel-only
   // semantics: the row is decided, delivery waits).
   const disposeAnswerRelay = installApprovalAnswerRelay(ctx)
+  // M4 task 3.3 — the projection relay (tech-design §Interface 2): subscribes
+  // projection_push_required (the subscription IS the kernel's relay-presence
+  // marker), executes plans over the duck-typed upstream workspace remote face,
+  // backfills per-project outcomes, reports the native workspace snapshot
+  // follow-flow (boot + debounced), and replays channel-absent plans once the
+  // remote namespace lands. Bridge-gated like the launch relay; degraded
+  // upstream services never gate the plugin load.
+  const disposeProjectionRelay = workbenchBridge === undefined
+    ? () => {}
+    : installProjectionRelay(ctx, workbenchBridge)
 
   // M4 task 1.6 — the P1 integration seats. The active-project pointer store
   // (app_state active_project_id, client half) exists only on the real chain
@@ -723,6 +751,7 @@ export function apply(ctx: ClientContext): void {
     disposeToolBridge()
     disposeLaunchRelay()
     disposeAnswerRelay()
+    disposeProjectionRelay()
     disposeWorkspacesSeat()
     disposeMetadataBar()
     disposeRightbarTabs()

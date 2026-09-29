@@ -355,6 +355,12 @@ describe('reportProjectionOutcome — 回填矩阵 (AC-3)', () => {
     expect(mapUpstreamProjectionError('upstream/unknown-code', 'm')).toBe('upstream/unknown-code: m')
   })
 
+  it('vendored 前缀形(workspace/name-conflict|move-invalid,3.3 relay 原码透传)同样映射', () => {
+    expect(mapUpstreamProjectionError('workspace/name-conflict', 'taken')).toBe('ERR_PROJECTION_OP_FAILED (upstream workspace/name-conflict): taken')
+    expect(mapUpstreamProjectionError('workspace/move-invalid', 'bad anchor')).toBe('ERR_PROJECTION_OP_FAILED (upstream workspace/move-invalid): bad anchor')
+    expect(mapUpstreamProjectionError('workspace/not-found', 'gone')).toBe('workspace/not-found: gone')
+  })
+
   it('error 后重试成功 → degraded 恢复 healthy(push_succeeded 恢复路径)', async () => {
     await withDb((db) => {
       const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
