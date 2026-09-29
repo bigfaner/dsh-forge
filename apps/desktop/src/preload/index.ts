@@ -293,8 +293,10 @@ contextBridge.exposeInMainWorld('dshForge', {
     // log main-side (read = corrupt stored blob, write = the server-side
     // re-validation above the client debounce). Only ERR_PROJECT_NOT_FOUND
     // rejections ride the { code, message, detail? } envelope.
-    getProjectUiState: (input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout }> =>
-      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectUiState, input) as Promise<{ layout: ProjectLayout }>,
+    // fix-2:stored(行存在信号)随 layout 一并回传 —— 4.5 布局引擎以它
+    // 区分「从未记过」(默认 blob,不重放 tree)与「记过」。
+    getProjectUiState: (input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout; stored: boolean }> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectUiState, input) as Promise<{ layout: ProjectLayout; stored: boolean }>,
     setProjectUiState: (input: SetProjectUiStateInput): Promise<void> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setProjectUiState, input) as Promise<void>,
     // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data

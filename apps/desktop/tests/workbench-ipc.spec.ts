@@ -175,8 +175,9 @@ function fakeServices(): WorkbenchVerbServices {
     getProjectionStatus: vi.fn(() => []),
     submitWorkspaceSnapshot: vi.fn(() => undefined),
     reportProjectionOutcome: vi.fn(() => undefined),
-    // M4 v3 ui-state 段(任务 4.1)。
+    // M4 v3 ui-state 段(任务 4.1;fix-2:stored 行存在信号随读回传)。
     getProjectUiState: vi.fn(() => ({
+      stored: true,
       layout: {
         version: 1,
         sidebar: { collapsed: false },

@@ -19,6 +19,12 @@
  *     RESURRECT a project_ui_state row for a gone project (upsert + no FK
  *     guard on the write path). The kernel's cascade + the 4.2/4.3 window
  *     closes are the landed halves; this is the client's no-resurrect half;
+ *   - 无行 = 默认布局 (fix-2): a project with NO project_ui_state row
+ *     answers the default blob + stored:false — NOTHING replays and the
+ *     tree feed stays silent, so the §2.3 activation auto-expand survives
+ *     the first entry (the SC7 regression 4.6 diagnosed: the default blob's
+ *     EMPTY tree branch used to publish over the activation expansion);
+ *     collection still runs — the first seam report writes the first row;
  *   - 写入失败: a rejected setProjectUiState (ERR_PROJECT_NOT_FOUND after a
  *     removal, storage faults) logs and drops — never a throw, never a
  *     retry storm. The kernel re-validates every write anyway (4.1's
@@ -40,9 +46,13 @@ import {
 } from './collect'
 import { replayProjectLayout, type LayoutReplayFaces } from './replay'
 
-/** The 4.1 verb subset the engine rides (the bridge's ui-state pair). */
+/**
+ * The 4.1 verb subset the engine rides (the bridge's ui-state pair).
+ * fix-2 additive:`stored` = 行存在信号(kernel 回传;false/缺席 = 该项目从未
+ * 写过布局,layout 即默认 blob)—— 引擎据此跳过默认 blob 的恢复重放。
+ */
 export interface LayoutMemoryVerbs {
-  getProjectUiState(input: { readonly projectId: string }): Promise<{ readonly layout: ProjectLayout }>
+  getProjectUiState(input: { readonly projectId: string }): Promise<{ readonly layout: ProjectLayout; readonly stored?: boolean }>
   setProjectUiState(input: { readonly projectId: string; readonly layout: ProjectLayout }): Promise<void>
 }
 
@@ -178,10 +188,20 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
   const loadAndReplay = (target: string): void => {
     verbs.getProjectUiState({ projectId: target })
       .then(
-        ({ layout }) => {
+        ({ layout, stored }) => {
           // The pointer may have moved again while the read was in flight —
           // a stale restore must not replay onto the wrong project.
           if (projectId() !== target) return
+          // fix-2:无行 = 默认布局 —— the project never persisted a layout,
+          // so the fresh native posture IS the default layout and NOTHING
+          // replays. The default blob's replay plan is empty anyway; the
+          // hazard was the tree feed: publishing the EMPTY default block
+          // hands the browser a parent-fed layout whose sync CLOBBERS the
+          // §2.3 activation auto-expand of the just-entered project's group
+          // (the SC7 regression 4.6 diagnosed). Only a stored row (stored
+          // === true; anything else = an older/absent signal) carries a
+          // memory worth replaying.
+          if (stored !== true) return
           // Notify ONLY on a real tree-content change (the 4.6 SC4 e2e
           // finding): the boot service-race retry re-reads an IDENTICAL
           // layout, and an unconditional re-notify hands the browser a fresh

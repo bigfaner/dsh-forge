@@ -800,9 +800,12 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       getProjectUiState: (input) => {
         assertProjectExists(db, input.projectId)
         const row = getProjectUiStateRow(db, input.projectId)
-        if (row === null) return { layout: DEFAULT_PROJECT_LAYOUT }
+        // fix-2:stored = 行存在信号 —— 无行 = 默认布局 + stored:false(4.5
+        // 引擎以该信号区分「从未记过」与「记过」:默认 blob 不重放 tree,
+        // §2.3 激活自动展开得以在首启存活)。
+        if (row === null) return { layout: DEFAULT_PROJECT_LAYOUT, stored: false }
         if (row.reset) logLayoutInvalid('read', input.projectId, row.reason)
-        return { layout: row.layout }
+        return { layout: row.layout, stored: true }
       },
       setProjectUiState: (input) => {
         assertProjectExists(db, input.projectId)

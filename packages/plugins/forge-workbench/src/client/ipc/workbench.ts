@@ -238,8 +238,13 @@ export interface WorkbenchIpcBridge {
    * Neither verb rejects on an invalid layout blob (whitelist failure →
    * default layout + ERR_LAYOUT_INVALID log main-side); only
    * ERR_PROJECT_NOT_FOUND rejections ride the envelope.
+   *
+   * fix-2 additive: `stored` = the row-exists signal (false = the project
+   * never persisted a layout — the returned layout IS the default blob);
+   * optional so an older host surface stays shape-compatible, and the
+   * engine treats anything but `true` as the default-blob path.
    */
-  getProjectUiState(input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout }>
+  getProjectUiState(input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout; stored?: boolean }>
   setProjectUiState(input: SetProjectUiStateInput): Promise<void>
 }
 

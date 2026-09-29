@@ -322,32 +322,32 @@ async function withVerbHarness(run: (harness: VerbHarness) => void | Promise<voi
 }
 
 describe('ui-state verbs — get/setProjectUiState (AC-3/AC-4)', () => {
-  it('无行 = 默认布局;合法写 → 读往返保真', async () => {
+  it('无行 = 默认布局 + stored:false;合法写 → 读往返保真 + stored:true(fix-2 行存在信号)', async () => {
     await withVerbHarness(({ db, verbs }) => {
       const project = registerProject(db as RepoDb, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
-      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT })
+      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT, stored: false })
       verbs.setProjectUiState({ projectId: project.id, layout: LEGAL })
-      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: LEGAL })
+      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: LEGAL, stored: true })
     })
   })
 
-  it('服务端二次校验:非法 layout 落库为默认布局 + ERR_LAYOUT_INVALID log,动词不拒', async () => {
+  it('服务端二次校验:非法 layout 落库为默认布局 + ERR_LAYOUT_INVALID log,动词不拒(行在 → stored:true)', async () => {
     await withVerbHarness(({ db, verbs, stdout }) => {
       const project = registerProject(db as RepoDb, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
       // handler 面已保形状为对象;未知 kind = schema 违规 → 写面不拒、落库默认。
       const invalid = { ...LEGAL, rightbar: { panes: [{ tabs: [{ kind: 'chat' }] }] } } as unknown as ProjectLayout
       expect(() => verbs.setProjectUiState({ projectId: project.id, layout: invalid })).not.toThrow()
-      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT })
+      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT, stored: true })
       expect(stdout.some(line => line.includes('ERR_LAYOUT_INVALID'))).toBe(true)
     })
   })
 
-  it('读侧违规 blob → 默认布局 + ERR_LAYOUT_INVALID log(不放大存储损伤)', async () => {
+  it('读侧违规 blob → 默认布局 + ERR_LAYOUT_INVALID log(不放大存储损伤;行在 → stored:true)', async () => {
     await withVerbHarness(({ db, verbs, stdout }) => {
       const project = registerProject(db as RepoDb, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
       db.prepare('INSERT INTO project_ui_state (project_id, layout_json, updated_at) VALUES (?, ?, ?)')
         .run(project.id, JSON.stringify({ ...LEGAL, sidebar: { collapsed: false, width: 9999 } }), '2026-09-30T08:00:00.000Z')
-      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT })
+      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: DEFAULT_PROJECT_LAYOUT, stored: true })
       expect(stdout.some(line => line.includes('ERR_LAYOUT_INVALID'))).toBe(true)
     })
   })
@@ -358,7 +358,7 @@ describe('ui-state verbs — get/setProjectUiState (AC-3/AC-4)', () => {
       const clamped = { ...LEGAL, rightbar: { ...LEGAL.rightbar, widthPct: 95 } }
       verbs.setProjectUiState({ projectId: project.id, layout: clamped })
       const expected: ProjectLayout = { ...LEGAL, rightbar: { ...LEGAL.rightbar, widthPct: 70 } }
-      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: expected })
+      expect(verbs.getProjectUiState({ projectId: project.id })).toEqual({ layout: expected, stored: true })
       expect(stdout.some(line => line.includes('ERR_LAYOUT_INVALID'))).toBe(false)
     })
   })

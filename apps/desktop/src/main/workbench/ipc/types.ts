@@ -1111,9 +1111,11 @@ export interface WorkbenchVerbServices {
 
   /**
    * 布局记忆读:无行 = 默认布局;行内 blob 违规 = 默认布局 + log(不抛错,
-   * 读取面不放大存储损伤)。
+   * 读取面不放大存储损伤)。fix-2:stored = 行存在信号(false = 该项目从未
+   * 写过布局 —— 4.5 引擎据此跳过默认 blob 的 tree 重放,§2.3 激活自动展开
+   * 在首启存活;违规重置默认的行仍为 true:行在,记忆语义在)。
    */
-  getProjectUiState(input: GetProjectUiStateInput): { readonly layout: ProjectLayout }
+  getProjectUiState(input: GetProjectUiStateInput): { readonly layout: ProjectLayout; readonly stored: boolean }
   /**
    * 布局记忆写(UPSERT + updated_at 刷新):layout 经 v1 白名单二次校验
    * (T5;客户端 debounce 之上的防线),非法 → 落库默认布局 + log,不拒。

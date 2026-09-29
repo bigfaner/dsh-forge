@@ -457,7 +457,10 @@ interface VerbsHarness {
   failWrites: boolean
 }
 
-/** The ui-state verb pair fake (kernel-shaped: missing row → default layout). */
+/**
+ * The ui-state verb pair fake (kernel-shaped: missing row → default layout +
+ * stored:false; fix-2's row-exists signal rides every read).
+ */
 function makeVerbs(): VerbsHarness {
   const harness: VerbsHarness = {
     writes: [],
@@ -469,7 +472,10 @@ function makeVerbs(): VerbsHarness {
       getProjectUiState: async ({ projectId }) => {
         harness.reads.push(projectId)
         if (harness.failReads) throw new Error('ERR_WORKBENCH_DB')
-        return { layout: harness.stored.get(projectId) ?? collectProjectLayout({}) }
+        return {
+          layout: harness.stored.get(projectId) ?? collectProjectLayout({}),
+          stored: harness.stored.has(projectId),
+        }
       },
       setProjectUiState: async (input) => {
         if (harness.failWrites) throw new Error('ERR_PROJECT_NOT_FOUND')
@@ -623,6 +629,50 @@ describe('AC2: 换台 — write-on-leave + load-and-replay', () => {
     await flushMicrotasks()
     expect(log).toHaveBeenCalledTimes(1)
     expect(log.mock.calls[0]?.[0]).toContain('getProjectUiState rejected')
+    engine.dispose()
+  })
+
+  it('无行 = 默认布局 (fix-2): the default-blob restore replays NOTHING and the tree feed stays silent (the §2.3 activation auto-expand survives the first entry)', async () => {
+    const { clock, advance } = makeClock()
+    const { verbs, writes, reads } = makeVerbs()
+    const openedTabs: string[] = []
+    // Every replay leg is a TRIPWIRE: the default blob must issue no op.
+    const faces: LayoutReplayFaces = {
+      sidebar: {
+        setWidth: () => { throw new Error('unexpected:sidebar-width') },
+        setCollapsed: () => { throw new Error('unexpected:sidebar-collapse') },
+      },
+      rightbar: { openTab: (kind) => { openedTabs.push(kind) } },
+      split: { setRatio: () => { throw new Error('unexpected:split-ratio') } },
+      detached: { openDetached: async () => { throw new Error('unexpected:open-detached') } },
+    }
+    let pointer: string | null = 'p-1'
+    const engine = createLayoutMemoryEngine({ verbs, projectId: () => pointer, clock, getReplayFaces: () => faces })
+    const restored: Array<TreeLayoutState | undefined> = []
+    const unsubscribe = engine.subscribeRestoredTree(() => { restored.push(engine.getRestoredTree()) })
+    expect(engine.getRestoredTree()).toBeUndefined()
+    // p-2 has NO project_ui_state row — the kernel answers the default
+    // blob + stored:false (the fix-2 row-exists signal).
+    pointer = 'p-2'
+    engine.handleProjectChange()
+    await flushMicrotasks()
+    expect(reads).toEqual(['p-2'])
+    // The tree feed NEVER publishes the empty default block: only the
+    // resetFragments notification (undefined) fired. A published empty
+    // block hands the browser a parent-fed layout whose sync clobbers the
+    // §2.3 activation auto-expand of the just-entered project's group
+    // (the SC7-family regression 4.6 diagnosed).
+    expect(restored).toEqual([undefined])
+    expect(engine.getRestoredTree()).toBeUndefined()
+    expect(openedTabs).toEqual([])
+    // Collection still runs on a row-less project: the first seam report
+    // writes the FIRST row (the next entry then carries a real memory).
+    engine.setTree(TREE)
+    advance(LAYOUT_WRITE_DEBOUNCE_MS)
+    expect(writes.length).toBe(1)
+    expect(writes[0]?.projectId).toBe('p-2')
+    expect(writes[0]?.layout.tree).toEqual(TREE)
+    unsubscribe()
     engine.dispose()
   })
 })
