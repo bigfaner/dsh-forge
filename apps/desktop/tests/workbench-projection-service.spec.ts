@@ -519,6 +519,163 @@ describe('relay absent semantics — plan preserved + degraded (AC-4)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// 任务 3.7 — 实况未知期间的 plan = 延迟收敛补推(snapshot 竞态语义)
+//
+// 竞态面(3.6 移交):注册类动词早于 follow 流首报时,plan 在 snapshot=null
+// 下组装 —— ensure/条件 rename 可达而 buildReorderOp 恒 null(实况序未知
+// 不可派生)→ 单 plan 执行不满足「幂等全量重推 = 收敛全部期望状态」的自
+// 包含性,且无任何自动补推:实况序漂移(boot 期既有 workspace)滞留 boot
+// 序,首报对账还会把该漂移呈现为伪 deviation(用户未手改)。
+//
+// 裁决(tech-design §Interface 1 plan 自包含 + §Interface 2「幂等全量重推」):
+// 未知实况按「待收敛」处理 —— 实况未知期间【实际发出】的 plan 登记项目集,
+// 首报到达(null → 已知)即逐项目补推(此刻 reorder op 可派生);补推不
+// bypass 通道缺席语义(缺席 → 重试一次 → degraded,plan 保留)。
+// ---------------------------------------------------------------------------
+
+describe('unknown-snapshot push — deferred convergence re-push on first snapshot (task 3.7)', () => {
+  it('plan 发出时实况未知(无 reorder op)→ 首报到达即补推,新 plan 携 reorder op', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      const b = registerProject(db, { codeRoot: projPath('b'), docLocationType: 'in_repo', displayName: 'B' })
+      const h = makeHarness(db)
+      // 注册竞态:实况未知下两个 plan 各自发出 —— 自包含但 reorder 不可派生。
+      h.service.pushForRegistration(a.id)
+      h.service.pushForRegistration(b.id)
+      const raced = pushRequired(h.events)
+      expect(raced).toHaveLength(2)
+      for (const event of raced) {
+        expect((event as { plan: { ops: unknown[] } }).plan.ops)
+          .toEqual([expect.objectContaining({ kind: 'ensure' })])
+      }
+      // relay 执行后回填 ok(实况仍未知 = 占位哨兵路径)→ healthy,期望在库。
+      h.service.reportOutcome({ projectId: a.id, ok: true })
+      h.service.reportOutcome({ projectId: b.id, ok: true })
+      // 首报到达:实况序与期望序相逆([B, A] vs sort_order [A, B])→ 补推
+      // 两个项目,新 plan 的 ops 只剩 reorder(title 已收敛,ensure 免)。
+      h.service.submitSnapshot([ws('ws-b', projPath('b'), 'B', 0), ws('ws-a', projPath('a'), 'A', 1)])
+      const drained = pushRequired(h.events).slice(2)
+      expect(drained).toHaveLength(2)
+      expect(new Set(drained.map(event => (event as { projectId: string }).projectId)))
+        .toEqual(new Set([a.id, b.id]))
+      for (const event of drained) {
+        expect((event as { plan: { ops: unknown[] } }).plan.ops)
+          .toEqual([{ kind: 'reorder', orderedIds: ['ws-a', 'ws-b'] }])
+      }
+    })
+  })
+
+  it('实况已知期间发出的 push 不登记补推:后续上报零新 push(既有行为不变)', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      const h = makeHarness(db)
+      h.service.submitSnapshot([ws('ws-1', projPath('a'), 'A', 0)]) // 首报(无待收敛集)
+      h.service.retryProjection({ projectId: a.id }) // 实况已知下发出
+      expect(pushRequired(h.events)).toHaveLength(1)
+      h.service.submitSnapshot([ws('ws-1', projPath('a'), 'A', 0)]) // 后续上报 = 补推 no-op
+      expect(pushRequired(h.events)).toHaveLength(1)
+    })
+  })
+
+  it('补推集只触发一次(清位);归档项目与已消失行跳过,活跃项目恰一补推', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      const b = registerProject(db, { codeRoot: projPath('b'), docLocationType: 'in_repo', displayName: 'B' })
+      const c = registerProject(db, { codeRoot: projPath('c'), docLocationType: 'in_repo', displayName: 'C' })
+      const h = makeHarness(db)
+      h.service.pushForRegistration(a.id)
+      h.service.pushForRegistration(b.id)
+      h.service.pushForRegistration(c.id)
+      expect(pushRequired(h.events)).toHaveLength(3)
+      setProjectArchived(db, b.id, true) // 归档:零 op 不推送(必答⑤)
+      db.prepare('DELETE FROM workspace_projection WHERE project_id = ?').run(c.id)
+      db.prepare('DELETE FROM projects WHERE id = ?').run(c.id) // 移除竞态:行已消失
+      // 首报 → 补推:仅 a(归档/消失行跳过);再报 → 已清位,零新 push。
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0)])
+      expect(pushRequired(h.events).slice(3))
+        .toEqual([{ type: 'projection_push_required', projectId: a.id, plan: { projectId: a.id, ops: [] } }])
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0)])
+      expect(pushRequired(h.events)).toHaveLength(4)
+    })
+  })
+
+  it('补推不 bypass 通道缺席语义:relay 缺席 → 重试一次 → degraded(禁静默丢弃)', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      const h = makeHarness(db)
+      h.service.pushForRegistration(a.id) // 实况未知期间发出 → 登记补推
+      expect(pushRequired(h.events)).toHaveLength(1)
+      h.setRelay(false)
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0)]) // 首报 → 补推遭缺席
+      expect(pushRequired(h.events)).toHaveLength(1) // 无静默丢弃到无人监听通道
+      settleChannelRetry()
+      expect(listProjects(db).find(p => p.id === a.id)?.projectionState).toBe('degraded')
+      expect(getWorkspaceProjectionRow(db, a.id)?.lastError).toContain('ERR_PROJECTION_CHANNEL_UNAVAILABLE')
+    })
+  })
+
+  it('ensure 物化落位补推(②类):自家 create 前插经 order 帧晚到 → 静置后按最新实况补推 reorder,且终止', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      const d = registerProject(db, { codeRoot: projPath('d'), docLocationType: 'in_repo', displayName: 'D' })
+      recordSuccessfulPush(db, { projectId: a.id, workspaceId: 'ws-a', path: projPath('a'), title: 'A', orderIdx: 0, pushedAt: '2026-09-28T00:00:00.000Z' })
+      const h = makeHarness(db)
+      // δ 未在实况 → retry plan = [ensure](reorder 无从派生:δ 无落位)。
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0)])
+      h.service.retryProjection({ projectId: d.id })
+      expect((pushRequired(h.events)[0] as { plan: { ops: unknown[] } }).plan.ops)
+        .toEqual([{ kind: 'ensure', canonicalPath: projPath('d'), title: 'D' }])
+      // relay 执行:执行后快照先行上报 —— relay 本地视图仍是【追加】序
+      // (宿主 create 的最终落位 = 前插,经 order 帧晚到,此视图未反映)。
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0), ws('ws-d', projPath('d'), 'D', 1)])
+      h.service.reportOutcome({ projectId: d.id, ok: true }) // match=ws-d ≠ 库内(null)→ 静置定时登记
+      expect(pushRequired(h.events), '登记不立即推(执行后快照是滞后视图,即补即消费即空转)').toHaveLength(1)
+      expect(listProjects(db).find(p => p.id === d.id)?.projectionState).toBe('healthy') // 回填正常
+      // order 帧到达:实况序真相 = δ 前插;静置窗内不推,窗口到按最新实况补推。
+      h.service.submitSnapshot([ws('ws-d', projPath('d'), 'D', 0), ws('ws-a', projPath('a'), 'A', 1)])
+      expect(pushRequired(h.events), '静置窗口内零新 push').toHaveLength(1)
+      vi.advanceTimersByTime(600)
+      const drained = pushRequired(h.events).slice(1)
+      expect(drained).toHaveLength(1)
+      expect((drained[0] as { plan: { ops: unknown[] } }).plan.ops)
+        .toEqual([{ kind: 'reorder', orderedIds: ['ws-a', 'ws-d'] }])
+      // 终止性:补推 outcome(id 已在库,②判据即否)→ 窗口再到零新 push。
+      h.service.reportOutcome({ projectId: d.id, ok: true })
+      vi.advanceTimersByTime(600)
+      expect(pushRequired(h.events)).toHaveLength(2)
+      // 已收敛世界的物化 outcome(ops 空)→ 静置后零事件零噪音。
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0), ws('ws-d', projPath('d'), 'D', 1)])
+      h.service.reportOutcome({ projectId: d.id, ok: true })
+      vi.advanceTimersByTime(600)
+      expect(pushRequired(h.events), '已收敛:ops 空不补推').toHaveLength(2)
+    })
+  })
+
+  it('id 未变(纯 rename/reorder push 的 outcome)不登记补推 —— 手改偏差世界零自动重推', async () => {
+    vi.useFakeTimers()
+    await withDb((db) => {
+      const a = registerProject(db, { codeRoot: projPath('a'), docLocationType: 'in_repo', displayName: 'A' })
+      recordSuccessfulPush(db, { projectId: a.id, workspaceId: 'ws-a', path: projPath('a'), title: 'A', orderIdx: 0, pushedAt: '2026-09-28T00:00:00.000Z' })
+      const h = makeHarness(db)
+      // 已物化项目的重推 outcome(id 相同)→ 不登记 → 后续上报零新 push:
+      // 手改偏差(BIZ-006 仅呈现)不会被补推自动「纠正」。
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A', 0)])
+      h.service.retryProjection({ projectId: a.id })
+      h.service.reportOutcome({ projectId: a.id, ok: true })
+      h.service.submitSnapshot([ws('ws-a', projPath('a'), 'A-hacked', 0)])
+      settleReconcile()
+      expect(pushRequired(h.events)).toHaveLength(1) // 仅最初那次,补推缺席
+      expect(listProjects(db).find(p => p.id === a.id)?.projectionState).toBe('deviation')
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // AC-5:注册 hook(期望占位 + 真实 plan;动词不因投影失败 reject)
 // ---------------------------------------------------------------------------
 

@@ -27,7 +27,19 @@
 //   - buildRemovalPlan:3.4 removeProject 接线 —— delete plan 组装,必须在
 //     项目行删除【之前】调用(期望并集随后 FK cascade 消失;行删除后由
 //     lifecycle-hooks 发 projection_push_required,relay 执行后回填走终态
-//     no-op)。
+//     no-op);
+//   - 延迟收敛补推(任务 3.7,收敛前提竞态裁决):两类「plan 组装时收敛前提
+//     尚未成事实」的世界,单 plan 不满足「幂等全量重推收敛全部期望状态」的
+//     自包含性 —— ① 注册类动词早于 follow 流首报:plan 在实况未知(snapshot
+//     =null)下组装,reorder op 恒不可派生 → 首报到达即补推;② 本轮 push
+//     自身的 ensure 物化:宿主 create 的最终落位(注册表前插,经 order 帧
+//     晚 ~200-300ms 到达)在 plan 组装之后才成事实,plan 的 reorder 腿无从
+//     覆盖自家 create 的位置 → 物化 outcome 后静置窗口(materialization
+//     SettleMs > 帧滞后 + 上报 debounce)按最新实况幂等补推一次。补推不
+//     bypass 通道缺席语义(缺席 → 重试一次 → degraded,plan 保留);归档
+//     项目与已消失行跳过(必答⑤/移除竞态);终止性 = ②一次性定时器 + 补推
+//     outcome 时 id 已在库(②判据即否);残差呈现为诚实 deviation + 用户
+//     重试(BIZ-005/006 兜底)。
 //
 // relay 不在场语义(Interface 2;禁静默丢弃):push 时 relayPresence 探测
 // 为假(渲染未装载/启动竞态)→ 重试一次(竞态窗口:订阅登记可能稍后到位)
@@ -128,6 +140,11 @@ export interface ProjectionReconcileDeps {
   readonly debounceMs?: number
   /** 通道缺席重试延迟 ms(默认 500;「重试一次后」的竞态窗口)。 */
   readonly channelRetryMs?: number
+  /**
+   * ②类物化静置窗口 ms(默认 600;> follow 流 order 帧滞后 + 上报 debounce
+   * ~300ms):自家 ensure 物化后等实况序落定再补推。
+   */
+  readonly materializationSettleMs?: number
   /** 时钟(默认 real;测试注入确定性)。 */
   readonly now?: () => string
 }
@@ -157,10 +174,30 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
   const relayPresent = deps.relayPresence ?? (() => true)
   const debounceMs = deps.debounceMs ?? 250
   const channelRetryMs = deps.channelRetryMs ?? 500
+  const materializationSettleMs = deps.materializationSettleMs ?? 600
   const now = deps.now ?? (() => new Date().toISOString())
 
   /** 最近上报实况(null = 收数前;follow 流只读输入,永不落库)。 */
   let snapshot: WorkspaceSnapshotInput = null
+  /**
+   * 延迟收敛登记集(任务 3.7)——「plan 组装时收敛前提尚未成事实」的两类
+   * 世界,补推后 plan 才恢复「单 plan 收敛全部期望状态」的自包含性
+   * (tech-design §Interface 1/2):
+   *   ① 实况未知(snapshot=null)期间实际发出过 plan(reorder 无从派生)
+   *      → 首报到达即补推(此刻实况序已知);
+   *   ② 本轮 push 自身的 ensure 刚物化(outcome-ok 时 match 的 workspaceId
+   *      ≠ 库内 pushed id):宿主 create 的最终落位(实测 = 注册表前插,经
+   *      follow 流 order 帧晚 ~200-300ms 到达)在 plan 组装之后才成事实,
+   *      该 plan 的 reorder 腿不可能覆盖自家 create 的位置 → 静置窗口后按
+   *      最新实况补推(首份执行后快照是 relay 本地视图,落位未反映 ——
+   *      即补即消费会被滞后视图空转一次)。
+   * 补推走 pushPlan 全语义(通道缺席 → 重试一次 → degraded,禁静默丢弃);
+   * 终止性 = ②一次性定时器 + 补推 outcome 时 id 已在库(②判据即否)。
+   * 不补推的残差呈现为诚实的 deviation + 用户重试(BIZ-005/006 兜底)。
+   */
+  const pendingConvergencePushes = new Set<string>()
+  /** ②类静置定时器(projectId → timer;dispose 冲刷清理)。 */
+  const materializationTimers = new Map<string, ReturnType<typeof setTimeout>>()
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null
 
   const emitUpdated = (projectId: string, state: ProjectionState, deviations?: readonly DeviationRow[]): void => {
@@ -228,7 +265,22 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
     const attempt = (retried: boolean): void => {
       if (relayPresent()) {
         const plan = buildProjectionPlan(listProjectionExpectations(db), snapshot, projectId)
+        // 审计面(3.7 诊断纪律,快照 log 同款):plan 发出即结构化 log ——
+        // push 事件不落 stdout,排障(谁在何时推了什么)唯一可观测面。
+        shellLog.info({
+          code: 'WORKBENCH_PROJECTION_PUSH',
+          message: `projection plan pushed for ${projectId} (${String(plan.ops.length)} ops)`,
+          data: {
+            projectId,
+            ops: plan.ops.map(op => op.kind),
+            snapshotKnown: snapshot !== null,
+            retried,
+          },
+        })
         deps.onEvents([{ type: 'projection_push_required', projectId, plan }])
+        // 延迟收敛登记(任务 3.7):实况未知下发出的 plan 缺 reorder 腿,
+        // 首报到达时补推才恢复自包含性。
+        if (snapshot === null) pendingConvergencePushes.add(projectId)
         return
       }
       if (!retried) {
@@ -278,6 +330,20 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
         message: `native workspace snapshot reported (${String(workspaces.length)} workspaces)`,
         data: { count: workspaces.length, workspaceIds: workspaces.map(entry => entry.workspaceId) },
       })
+      // 延迟收敛补推①(任务 3.7):上报到达即冲刷登记集 —— 此刻实况序已知,
+      // 补推 plan 携 reorder op,单 plan 即收敛全部期望状态。归档项目(必答⑤
+      // 零 op)与已消失行(移除竞态)跳过;补推走 pushPlan 全语义(通道缺席
+      // → 重试一次 → degraded,禁静默丢弃)。②类(自家 create 落位)走
+      // materializationTimers 的静置定时腿,不入本集。
+      if (pendingConvergencePushes.size > 0) {
+        const projectIds = [...pendingConvergencePushes]
+        pendingConvergencePushes.clear()
+        for (const projectId of projectIds) {
+          const exp = findExpectation(projectId)
+          if (exp === null || exp.archived) continue
+          pushPlan(projectId)
+        }
+      }
       scheduleReconcile()
     },
 
@@ -332,6 +398,27 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
         // 期望 repo 回写:workspaceId 解析 = 实况 path 命中 → 既有 pushed id →
         // 占位哨兵(3.3 relay 随行快照使命中恒有真值;哨兵仅启动竞态窗口)。
         const match = matchByPath(exp, snapshot)
+        // 延迟收敛②(任务 3.7):本轮 push 的 ensure 刚物化(或复连换 id)
+        // = match 真值 ≠ 库内 pushed id —— 宿主 create 的最终落位(前插,经
+        // order 帧晚到)在 plan 组装之后才成事实,plan 的 reorder 腿无从覆盖
+        // 自家 create 的位置。静置窗口(> order 帧滞后 + 上报 debounce)后按
+        // 最新实况补推一次;首份执行后快照是 relay 本地视图(落位未反映),
+        // 即报即补会被它空转消费 —— 故走定时腿而非上报冲刷。
+        if (match !== null && match.workspaceId !== (exp.pushedWorkspaceId ?? '')) {
+          const existing = materializationTimers.get(input.projectId)
+          if (existing !== undefined) clearTimeout(existing)
+          materializationTimers.set(input.projectId, setTimeout(() => {
+            materializationTimers.delete(input.projectId)
+            safe(() => {
+              const current = findExpectation(input.projectId)
+              if (current === null || current.archived) return
+              const plan = buildProjectionPlan(listProjectionExpectations(db), snapshot, input.projectId)
+              // 仍有收敛 op(此刻含真落位的 reorder)→ 幂等补推;ops 空 =
+              // 已收敛,零事件零噪音。
+              if (plan.ops.length > 0) pushPlan(input.projectId)
+            })
+          }, materializationSettleMs))
+        }
         recordSuccessfulPush(db, {
           projectId: input.projectId,
           workspaceId: match?.workspaceId ?? exp.pushedWorkspaceId ?? '',
@@ -370,6 +457,8 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
     },
 
     dispose(): void {
+      for (const timer of materializationTimers.values()) clearTimeout(timer)
+      materializationTimers.clear()
       if (reconcileTimer === null) return
       clearTimeout(reconcileTimer)
       reconcileTimer = null

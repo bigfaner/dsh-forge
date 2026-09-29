@@ -467,7 +467,7 @@
         "3.4",
         "3.5"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.7-sc3-deviation-degrade-e2e.md",
       "record": "records/3.7-sc3-deviation-degrade-e2e.md",
       "surface-type": "web",

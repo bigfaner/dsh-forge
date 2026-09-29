@@ -36,6 +36,7 @@ import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
 import { createMigrationFaultsResolver } from './workbench/migration/faults-stub.ts'
+import { createProjectionFaultsResolver } from './workbench/projection/faults-stub.ts'
 import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
 
 // Electron shell main entry.
@@ -364,6 +365,7 @@ void app.whenReady().then(async () => {
     const userDataPath = app.getPath('userData')
     const workbenchDb = await openDatabase(userDataPath)
     const workbenchEvents = createWorkbenchEventSubscriptions()
+    const projectionFaults = createProjectionFaultsResolver()
     const pluginBundlesPath = resolvePluginBundlesConfigPath()
     const workbenchIpc = createWorkbenchIpcServices({
       db: workbenchDb.db,
@@ -383,7 +385,10 @@ void app.whenReady().then(async () => {
       // 3.2:投影 relay 在场探测 —— 事件订阅登记非空 = 渲染已装载(relay
       // 可达);注册/重推在缺席时重试一次后 degraded
       // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留禁静默丢弃)。
-      relayPresence: () => workbenchEvents.size > 0,
+      // 3.7(SC3 e2e):投影通道注错缝(env 缝族,DSH_FORGE_PROJECTION_
+      // FAULTS 控制文件随探测重读)—— channel:'unavailable' 使探测恒假;
+      // 未设置 → 解析器恒 undefined,生产行为不变。
+      relayPresence: () => projectionFaults()?.channel !== 'unavailable' && workbenchEvents.size > 0,
     })
     installWorkbenchVerbs(
       (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
