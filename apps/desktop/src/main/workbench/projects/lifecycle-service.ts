@@ -6,7 +6,8 @@
 //   registerProject   v2 注册面(anchor / displayName / docsPlacement 四值 /
 //                     customAuthorized;BEGIN IMMEDIATE;成功 → 投影期望
 //                     push 事件占位 + project_list_changed)
-//   renameProject     纯 DB 改名,零 fs
+//   renameProject     纯 DB 改名,零 fs(投影 rename 同步经 onProjectionRenamed
+//                     hook —— 任务 3.4 接线,plan 组装归 projection 域)
 //   archiveProject    archived=1(dsh 侧 workspace 保留 —— 归档 ≠ 删除)
 //   restoreProject    archived=0
 //   listProjects      v3 扩展列(archived / sortOrder / projectionState /
@@ -33,11 +34,17 @@
 // registerProject 成功发 projection_push_required(任务 3.2 起:
 // onProjectionExpectation hook 在场 = projection 域真实载荷 —— 期望占位 +
 // 自包含 plan 组装/relay 缺席降级归 projection/service;缺省兜底 = 1.3 占位
-// 单 ensure plan)+ project_list_changed;rename/archive/restore 发
-// project_list_changed;动词不因投影失败 reject(hook 异常仅 log)。
+// 单 ensure plan)+ project_list_changed;renameProject(任务 3.4 起:
+// onProjectionRenamed hook 在场 = projection 域自包含 plan push 含 rename
+// op;归档项目零 op 不推送)先 projection_push_required 后
+// project_list_changed;archive/restore = 零投影 op(必答⑤:workspace
+// 保留,dsh 侧不动)仅发 project_list_changed;动词不因投影失败 reject
+// (hook 异常仅 log)。
 //
-// removeProject 的语义扩展(投影 delete + 拆出窗关闭)在 ipc/services.ts 的
-// 既有动词装配处留 TODO-hook(依赖 3.4/4.2),本域不提前引入跨相位实现。
+// removeProject 的语义扩展(投影 delete + FK cascade + 拆出窗关闭)在
+// ipc/services.ts 的既有动词装配处承载:投影 delete plan 组装/推送 = 任务
+// 3.4 接线(projection/lifecycle-hooks.ts);「拆出窗关闭」hook 留 TODO
+// 注记(任务 4.2 窗口注册表落地后接线)。本域不引入跨相位实现。
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -118,6 +125,13 @@ export interface ProjectLifecycleDeps {
    * Hard Rule:hook 异常仅 log —— 注册语义永不因投影失败 reject。
    */
   readonly onProjectionExpectation?: (projectId: string) => void
+  /**
+   * 改名成功 → 自包含 plan push 含 rename op(任务 3.4 接线:ipc/services
+   * 注入 projection 域 pushForRename;归档项目零 op 不推送给该域承载)。
+   * 缺省 = 纯 DB 改名零投影事件(isolated 装配)。Hard Rule 同上:hook 异常
+   * 仅 log —— 改名语义永不因投影失败 reject。
+   */
+  readonly onProjectionRenamed?: (projectId: string) => void
 }
 
 /** 缺省显示名 = canonical 展示路径的最后一段目录名(与 repos 缺省同口径)。 */
@@ -315,13 +329,27 @@ export function createProjectLifecycleService(deps: ProjectLifecycleDeps): {
     },
 
     renameProject(input: RenameProjectInput): Project {
-      // 纯 DB 更新,零 fs(感知/投影均不随改名触发 —— 投影 rename 同步经
-      // 3.x projection 域接替)。
+      // 纯 DB 更新,零 fs;感知不随改名触发。投影 rename 同步(任务 3.4):
+      // onProjectionRenamed hook 在场(ipc/services 真实装配)= projection
+      // 域自包含 plan push(rename op 依实况派生);缺省(isolated 装配)=
+      // 零投影事件。Hard Rule(Propagation Strategy):hook 异常仅结构化
+      // log —— 改名语义永不因投影失败 reject。
       const displayName = input.displayName.trim()
       if (displayName === '') {
         throw new Error('workbench.renameProject: displayName must be a non-empty string')
       }
       const updated = updateProjectRow(db, input.projectId, { displayName })
+      if (deps.onProjectionRenamed !== undefined) {
+        try {
+          deps.onProjectionRenamed(input.projectId)
+        } catch (error) {
+          shellLog.error({
+            code: 'ERR_PROJECTION_OP_FAILED',
+            message: 'post-rename projection push failed (rename unaffected)',
+            data: { projectId: input.projectId, detail: error instanceof Error ? error.message : String(error) },
+          })
+        }
+      }
       notifyListChanged()
       return updated
     },

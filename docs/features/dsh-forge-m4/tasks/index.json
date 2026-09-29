@@ -417,7 +417,7 @@
         "2.gate",
         "3.3"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.4-lifecycle-projection-integration.md",
       "record": "records/3.4-lifecycle-projection-integration.md",
       "surface-type": "web",

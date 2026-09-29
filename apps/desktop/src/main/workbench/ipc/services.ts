@@ -67,6 +67,7 @@ import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import { createProjectLifecycleService, type RegisterProjectV2Input } from '../projects/lifecycle-service.ts'
 import { createProjectionReconcileService } from '../projection/service.ts'
+import { createLifecycleProjectionHooks } from '../projection/lifecycle-hooks.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -381,23 +382,35 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
   // registerProject 占位 hook 的真实载荷接线)。对账重算 = 3.1 内核
   // (diff → verdict 桥 → 状态机);relay 缺席 → 重试一次后 degraded
   // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留 —— 期望在库);事件经
-  // 同一 sink 批推(迁移/偏好/编排面 onEvent 同款单批直发形态)。
+  // 同一 sink 批推(迁移/偏好/编排面 onEvent 同款单批直发形态)。任务 3.4
+  // 扩:pushForRename(改名同步)/ buildRemovalPlan(移除 delete plan 组装,
+  // 行删除前)/ 回填终态 no-op(移除竞态)。
   const projection = createProjectionReconcileService({
     db,
     onEvents: events => sink(events),
     ...(deps.relayPresence === undefined ? {} : { relayPresence: deps.relayPresence }),
   })
 
+  // M4 任务 3.4:生命周期动词 × 投影的单一接线点(四操作映射矩阵见该模块
+  // 头注:注册 ensure/改名 rename plan/归档恢复零 op/移除 delete plan)。
+  const projectionHooks = createLifecycleProjectionHooks({
+    projection,
+    onEvents: events => sink(events),
+  })
+
   // M4 任务 1.3:项目生命周期域服务(v3·P1 批 —— 侦测/注册 v2/rename/
   // archive/restore/list;D11 三层比对 + 投影占位事件 + project_list_changed
   // 经同一 sink 批推,迁移/偏好/编排面 onEvent 同款直发形态)。任务 3.2
   // 接线:注册成功 → 期望占位 + 真实 plan push(projection 域组装;1.3 的
-  // 占位单 ensure plan 降级为 isolated 装配的兜底)。
+  // 占位单 ensure plan 降级为 isolated 装配的兜底)。任务 3.4 接线:改名
+  // 成功 → 自包含 plan push 含 rename op(onProjectionRenamed;归档项目零
+  // op 不推送)。
   const lifecycle = createProjectLifecycleService({
     db,
     docsRoot: workbenchPaths.docsRoot,
     onEvents: events => sink(events),
-    onProjectionExpectation: projectId => projection.pushForRegistration(projectId),
+    onProjectionExpectation: projectId => projectionHooks.onRegistered(projectId),
+    onProjectionRenamed: projectId => projectionHooks.onRenamed(projectId),
   })
 
   /** 目录直下列表(缺失/不可读 → 空数组;探测语境不放大 fs 噪声)。 */
@@ -523,11 +536,17 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
       removeProject(id: string): void {
         const wasActive = getActiveProjectId(db) === id
+        // M4 任务 3.4:投影 delete(语义扩展第一腿)—— plan 组装必须先于
+        // 行删除(期望并集随后 FK cascade 消失);组装失败不阻断删除
+        // (ERR_PROJECT_NOT_FOUND 唯一权威 = removeProjectRow)。
+        const removalPlan = projectionHooks.removalPlanBeforeDelete(id)
         removeProjectRow(db, id)
-        // TODO-hook(任务 3.4 投影接线):removeProject 的语义扩展 —— 投影
-        // delete op(dsh workspace 移除,plan 组装经 projection 域)+ 对账
-        // 期望清除(workspace_projection 行随 FK CASCADE 已随行删除,delete
-        // push 事件在此接线时补发)。
+        // 投影 delete(第二腿):行删除后发 delete plan push(relay 执行 dsh
+        // workspace 移除;回填按终态 no-op)。FK cascade 已随行清除期望快照
+        // (workspace_projection)与布局记忆(project_ui_state)。relay 缺席
+        // 世界 = 事件无人消费,dsh 侧可能残留 workspace(孤儿 = 用户自有
+        // 数据,原生可删)—— 删除动词不被阻断(PRD 必答④降级语义)。
+        if (removalPlan !== null) projectionHooks.emitRemovalPush(removalPlan)
         // TODO-hook(任务 4.2 拆出窗口):该项目的 detached 窗口关闭钩子
         // (壳层窗口注册表按 projectId 收回;不得提前引入跨相位实现)。
         if (wasActive) perception.retarget(null)

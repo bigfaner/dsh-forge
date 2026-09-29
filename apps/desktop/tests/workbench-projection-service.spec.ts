@@ -374,10 +374,16 @@ describe('reportProjectionOutcome — 回填矩阵 (AC-3)', () => {
     })
   })
 
-  it('未知 projectId → ERR_PROJECT_NOT_FOUND(动词唯一 reject 面)', async () => {
+  it('未知 projectId:retryProjection → ERR_PROJECT_NOT_FOUND;reportOutcome → 终态 no-op(3.4 移除竞态)', async () => {
     await withDb((db) => {
       const h = makeHarness(db)
-      expect(() => h.service.reportOutcome({ projectId: 'ghost', ok: true })).toThrowError(WorkbenchRepoError)
+      // 3.4 removeProject 竞态:delete plan 由 relay 异步执行,回填到达时
+      // 项目行已随 FK cascade 消失 —— 终态 no-op + log(relay fire-and-forget
+      // 面,plan 已执行,无可回填对象;不构成降级信号,零事件零状态迁移)。
+      expect(() => h.service.reportOutcome({ projectId: 'ghost', ok: true })).not.toThrow()
+      expect(() => h.service.reportOutcome({ projectId: 'ghost', ok: false, error: { code: 'x', message: 'y' } })).not.toThrow()
+      expect(projectionUpdated(h.events)).toEqual([])
+      // 用户面动词保持唯一 reject 面(调用方契约错,非投影失败)。
       expect(() => h.service.retryProjection({ projectId: 'ghost' })).toThrowError(WorkbenchRepoError)
     })
   })
@@ -454,14 +460,14 @@ describe('relay absent semantics — plan preserved + degraded (AC-4)', () => {
       expect(second).toEqual(first)
       const pushes = pushRequired(h.events)
       expect(pushes).toHaveLength(2)
-      const plan = (pushes[0] as { plan: { ops: unknown[] } }).plan
+      const plan = (pushes[0] as unknown as { plan: { ops: unknown[] } }).plan
       // 自包含全量:单 plan 收敛 B 的 rename + forge 子集相对序(ensure 序
       // 内嵌);用户自有 workspace 永不入 orderedIds(T1 Hard Rule)。
       expect(plan.ops).toEqual([
         { kind: 'rename', workspaceId: 'ws-b', title: 'B' },
         { kind: 'reorder', orderedIds: ['ws-a', 'ws-b'] },
       ])
-      expect((pushes[1] as { plan: { ops: unknown[] } }).plan.ops).toEqual(plan.ops) // 幂等:同输入同 plan
+      expect((pushes[1] as unknown as { plan: { ops: unknown[] } }).plan.ops).toEqual(plan.ops) // 幂等:同输入同 plan
     })
   })
 

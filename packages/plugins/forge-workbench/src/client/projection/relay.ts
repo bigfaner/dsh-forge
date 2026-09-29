@@ -145,7 +145,12 @@ export function canonicalOpsOf(ops: readonly ProjectionOp[]): ProjectionOp[] {
 export function insertBeforeLinksOf(orderedIds: readonly string[]): Array<{ workspaceId: string; beforeWorkspaceId: string }> {
   const links: Array<{ workspaceId: string; beforeWorkspaceId: string }> = []
   for (let i = orderedIds.length - 2; i >= 0; i -= 1) {
-    links.push({ workspaceId: orderedIds[i], beforeWorkspaceId: orderedIds[i + 1] })
+    // 循环界内恒有值;undefined 分支仅为 noUncheckedIndexedAccess 世界的
+    // 编译期防御(消费侧 3.4 集成 spec 以 apps/desktop 严格旗标组入程序)。
+    const workspaceId = orderedIds[i]
+    const beforeWorkspaceId = orderedIds[i + 1]
+    if (workspaceId === undefined || beforeWorkspaceId === undefined) continue
+    links.push({ workspaceId, beforeWorkspaceId })
   }
   return links
 }

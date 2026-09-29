@@ -18,9 +18,16 @@
 //     healthy;error → 上游错误码映射三码(workspace/invalid-path |
 //     name-conflict | move-invalid → ERR_PROJECTION_OP_FAILED detail 携
 //     原码;未列举码原样透传)→ recordProjectionDegraded + push_failed →
-//     degraded;
+//     degraded;项目行已不存在(3.4 removeProject 的 delete plan 回填竞态)
+//     → 终态 no-op + log(relay fire-and-forget 面,无可回填对象);
 //   - pushForRegistration:1.3 registerProject 占位 hook 的真实载荷接线 ——
-//     注册成功 → insertExpectationPlaceholder(期望在库)+ 真实 plan push。
+//     注册成功 → insertExpectationPlaceholder(期望在库)+ 真实 plan push;
+//   - pushForRename:3.4 renameProject 接线 —— 自包含 plan push(rename op
+//     由 planOpsForExpectation 派生;归档项目零 op 不推送);
+//   - buildRemovalPlan:3.4 removeProject 接线 —— delete plan 组装,必须在
+//     项目行删除【之前】调用(期望并集随后 FK cascade 消失;行删除后由
+//     lifecycle-hooks 发 projection_push_required,relay 执行后回填走终态
+//     no-op)。
 //
 // relay 不在场语义(Interface 2;禁静默丢弃):push 时 relayPresence 探测
 // 为假(渲染未装载/启动竞态)→ 重试一次(竞态窗口:订阅登记可能稍后到位)
@@ -51,7 +58,14 @@ import {
   recordProjectionDegraded,
   recordSuccessfulPush,
 } from './expectation-repo.ts'
-import { buildProjectionPlan, matchByPath, type WorkspaceSnapshotEntry, type WorkspaceSnapshotInput } from './plan.ts'
+import {
+  buildProjectionPlan,
+  buildRemovalPlan as buildRemovalPlanOf,
+  matchByPath,
+  type ProjectionPlan,
+  type WorkspaceSnapshotEntry,
+  type WorkspaceSnapshotInput,
+} from './plan.ts'
 import { nextProjectionState, reconcileVerdictEvent, type ProjectionEvent } from './state-machine.ts'
 
 /**
@@ -129,6 +143,13 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
   reportOutcome(input: ReportProjectionOutcomeInput): void
   /** 注册成功 hook(1.3 接线:期望占位 + 真实 plan push;不因投影失败抛错)。 */
   pushForRegistration(projectId: string): void
+  /** 改名 hook(3.4 接线:自包含 plan push 含 rename op;归档零 op 不推送)。 */
+  pushForRename(projectId: string): void
+  /**
+   * 移除 plan 组装(3.4 接线):必须在项目行删除之前调用(期望并集随后
+   * FK cascade 消失);行删除后的事件推送归 lifecycle-hooks/调用方。
+   */
+  buildRemovalPlan(projectId: string): ProjectionPlan
   /** 收尾:冲刷 pending 对账(同步末次重算,不丢状态迁移)。 */
   dispose(): void
 } {
@@ -245,6 +266,9 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
     return exp
   }
 
+  /** 宽容读:期望并集内的项目行(3.4 removeProject 回填竞态 = null)。 */
+  const findExpectation = (projectId: string) => listProjectionExpectations(db).find(row => row.projectId === projectId) ?? null
+
   return {
     submitSnapshot(workspaces: readonly WorkspaceSnapshotEntry[]): void {
       snapshot = [...workspaces]
@@ -292,7 +316,18 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
     },
 
     reportOutcome(input: ReportProjectionOutcomeInput): void {
-      const exp = requireExpectation(input.projectId)
+      // 3.4 removeProject 竞态:delete plan 由 relay 异步执行,回填到达时项目
+      // 行(及期望并集行)可能已随 FK cascade 消失 —— 终态 no-op + log(relay
+      // fire-and-forget 面;计划已执行,无可回填对象,不构成降级信号)。
+      const exp = findExpectation(input.projectId)
+      if (exp === null) {
+        shellLog.info({
+          code: 'WORKBENCH_PROJECTION_OUTCOME_TERMINAL',
+          message: `projection outcome for ${input.projectId} arrived after project removal (terminal no-op)`,
+          data: { projectId: input.projectId, ok: input.ok },
+        })
+        return
+      }
       if (input.ok) {
         // 期望 repo 回写:workspaceId 解析 = 实况 path 命中 → 既有 pushed id →
         // 占位哨兵(3.3 relay 随行快照使命中恒有真值;哨兵仅启动竞态窗口)。
@@ -316,6 +351,22 @@ export function createProjectionReconcileService(deps: ProjectionReconcileDeps):
       // 注册即占位(er-diagram「1:1 期望快照,注册即占位」)→ 真实 plan push。
       insertExpectationPlaceholder(db, projectId)
       pushPlan(projectId)
+    },
+
+    pushForRename(projectId: string): void {
+      // 改名同步 = 自包含 plan push(planOpsForExpectation 依实况派生 rename
+      // op;实况未知 = ensure 兜底,relay 的 create-后条件 rename 收敛 title)。
+      // 归档项目零 op(必答⑤:workspace 保留,dsh 侧不动)—— 不推送。
+      const exp = requireExpectation(projectId)
+      if (exp.archived) return
+      pushPlan(projectId)
+    },
+
+    buildRemovalPlan(projectId: string): ProjectionPlan {
+      // 3.4 removeProject:delete plan 组装(3.1 buildRemovalPlan:实况 path
+      // 命中 → pushedWorkspaceId 回退;皆无 = 空 ops = dsh 侧本无物可删)。
+      // 调用时序契约:必须在项目行删除之前(期望并集随后 FK cascade 消失)。
+      return buildRemovalPlanOf(requireExpectation(projectId), snapshot)
     },
 
     dispose(): void {
