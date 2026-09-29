@@ -95,6 +95,12 @@ export interface DocTabsRegistry {
   unregister(tabId: string, path: string): void
   /** The live tab id currently holding the path, if any. */
   tabIdOf(path: string): string | undefined
+  /**
+   * The live path a mounted doc tab holds, if any (M4 4.5's layout-memory
+   * reverse face): the collected blob's `doc` topic resolver reads a live
+   * tab's identity through it — the forward map's inverse, same lifetime.
+   */
+  pathOf(tabId: string): string | undefined
 }
 
 /**
@@ -103,12 +109,20 @@ export interface DocTabsRegistry {
  */
 export function createDocTabsRegistry(): DocTabsRegistry {
   const byPath = new Map<string, string>()
+  const byTab = new Map<string, string>()
   return {
-    register: (tabId, path) => { byPath.set(path, tabId) },
+    register: (tabId, path) => {
+      byPath.set(path, tabId)
+      byTab.set(tabId, path)
+    },
     unregister: (tabId, path) => {
-      if (byPath.get(path) === tabId) byPath.delete(path)
+      if (byPath.get(path) === tabId) {
+        byPath.delete(path)
+        if (byTab.get(tabId) === path) byTab.delete(tabId)
+      }
     },
     tabIdOf: path => byPath.get(path),
+    pathOf: tabId => byTab.get(tabId),
   }
 }
 

@@ -703,3 +703,53 @@ describe('seat behavior seams', () => {
     expect(toSidebarRightFace({ ...sidebarRight, openTabs: {} })).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// M4 4.5 — the layout-memory tree legs (the seat threading)
+// ---------------------------------------------------------------------------
+
+describe('M4 4.5: layout-memory tree threading (restore feed + collect sink)', () => {
+  const toggleOf = (id: string): HTMLElement =>
+    document.querySelector(`[data-dsh-forge-tree-project-toggle="${id}"]`)!
+
+  it('reports the browser layout transitions to onTreeLayoutChange (the collect sink)', async () => {
+    const world = await makeSeatWorld({ projects: [PROJECT_A, PROJECT_B], activeProjectId: PROJECT_A.id })
+    const reported: Array<{ expandedProjects: readonly string[] }> = []
+    const { unmount } = mountSeat(world, {
+      onTreeLayoutChange: (layout: { expandedProjects: readonly string[] }) => { reported.push(layout) },
+    })
+    // The boot default-expansion of the ACTIVE project reports outward (every
+    // layout transition — toggle, overflow, auto-expand, parent sync — the
+    // engine's single tap point).
+    await waitFor(() => {
+      expect(reported.some(layout => layout.expandedProjects.includes(PROJECT_A.id))).toBe(true)
+    })
+    unmount()
+  })
+
+  it('applies a pushed restored layout through the parent-fed seam (1.4 P4 wiring)', async () => {
+    const world = await makeSeatWorld({ projects: [PROJECT_A, PROJECT_B], activeProjectId: PROJECT_A.id })
+    const listeners = new Set<() => void>()
+    let restored: { expandedProjects: readonly string[]; expandedSessions: readonly string[]; overflowOpen: readonly string[] } | undefined
+    const source = {
+      get: () => restored,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    }
+    const { unmount } = mountSeat(world, { treeLayoutSource: source })
+    // Boot: nothing restored — the browser keeps its own default state (the
+    // active project auto-expanded).
+    await waitFor(() => { expect(toggleOf(PROJECT_A.id).getAttribute('aria-expanded')).toBe('true') })
+    // The engine load lands: the restored block (B expanded, A collapsed)
+    // applies through the controlled layout prop.
+    restored = { expandedProjects: [PROJECT_B.id], expandedSessions: [], overflowOpen: [] }
+    for (const listener of [...listeners]) listener()
+    await waitFor(() => {
+      expect(toggleOf(PROJECT_A.id).getAttribute('aria-expanded')).toBe('false')
+      expect(toggleOf(PROJECT_B.id).getAttribute('aria-expanded')).toBe('true')
+    })
+    unmount()
+  })
+})

@@ -159,6 +159,17 @@ export interface DetachedWindowRegistryFace {
   /** The live detached-window count of one project (the delete toast's number). */
   countFor(projectId: string): number
   /**
+   * The live detached-window ENTRIES of one project (M4 4.5's layout-memory
+   * collection source): each window's view + session target, as the
+   * window-changed events reported them — the blob's `detached` set folds
+   * them (rect stays the shell's own placement concern; the events do not
+   * carry it).
+   */
+  entriesFor(projectId: string): ReadonlyArray<{
+    readonly view: 'board' | 'conversation'
+    readonly target?: SessionTargetClient | undefined
+  }>
+  /**
    * Mark a project as being REMOVED (set BEFORE the removeProject verb, so
    * the closing windows' events can never race the mark): its closing
    * windows do NOT restore panes.
@@ -188,13 +199,17 @@ export interface WindowRecallSyncOptions {
  */
 export function installWindowRecallSync(options: WindowRecallSyncOptions): DetachedWindowRegistryFace & { dispose(): void } {
   const { face, getSidebarRight, getOpenSession } = options
-  /** The live detached set, mirrored from the events (windowId → projectId). */
-  const live = new Map<string, string>()
+  /** The live detached set, mirrored from the events (windowId → its identity). */
+  const live = new Map<string, { projectId: string; view: 'board' | 'conversation'; target?: SessionTargetClient | undefined }>()
   /** Projects whose removal is in flight (or done) — their windows never restore. */
   const removedProjects = new Set<string>()
   const unsubscribe = face.onChanged((event) => {
     if (event.type === 'detached-opened') {
-      live.set(event.windowId, event.projectId)
+      live.set(event.windowId, {
+        projectId: event.projectId,
+        view: event.view,
+        ...(event.target === undefined ? {} : { target: event.target }),
+      })
       return
     }
     live.delete(event.windowId)
@@ -212,10 +227,18 @@ export function installWindowRecallSync(options: WindowRecallSyncOptions): Detac
   return {
     countFor(projectId) {
       let count = 0
-      for (const owner of live.values()) {
-        if (owner === projectId) count += 1
+      for (const entry of live.values()) {
+        if (entry.projectId === projectId) count += 1
       }
       return count
+    },
+    entriesFor(projectId) {
+      const entries: Array<{ view: 'board' | 'conversation'; target?: SessionTargetClient | undefined }> = []
+      for (const entry of live.values()) {
+        if (entry.projectId !== projectId) continue
+        entries.push({ view: entry.view, ...(entry.target === undefined ? {} : { target: entry.target }) })
+      }
+      return entries
     },
     markRemoved(projectId) {
       removedProjects.add(projectId)

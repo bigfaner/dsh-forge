@@ -494,6 +494,13 @@ export interface RightbarTabsOptions extends ForgeTabFace {
   readonly windowVerb?: WindowVerbFaceClient | undefined
   /** The active project id resolver (the aside menu entry's project source). */
   readonly getActiveProjectId?: (() => string | null | undefined) | undefined
+  /**
+   * The SHARED doc-tabs registry (M4 4.5): the apply body owns the
+   * plugin-lifetime instance so the layout memory's `doc` topic resolver
+   * reads the same live (tabId ↔ path) pairs the open dedupe does. Absent =
+   * the installer creates its own (the pre-4.5 shape).
+   */
+  readonly docTabs?: DocTabsRegistry | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -553,8 +560,9 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
   // the doc bodies register their (tabId, path) on mount, and the overview's
   // open seam focuses a live tab for a re-opened path. Only live while the
   // controller face is (an absent face leaves the overview on its built-in
-  // openTab route — never a dead button).
-  const docTabs = createDocTabsRegistry()
+  // openTab route — never a dead button). M4 4.5: the apply body may supply
+  // the SHARED instance (the layout memory's topic resolver reads it too).
+  const docTabs = options.docTabs ?? createDocTabsRegistry()
   const openDocTab = sidebarRight === undefined
     ? undefined
     : (input: DocOpenInput): void => { focusOrOpenDoc(sidebarRight, docTabs, input) }

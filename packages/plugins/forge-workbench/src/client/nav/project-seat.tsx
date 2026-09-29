@@ -37,7 +37,7 @@ import type { ConfirmCardFace } from '../components/confirm-card/card-state'
 import type { SessionRowCommand, TreeTranslate } from '../components/project-tree/SessionRow'
 import { ProjectTreeBrowser } from '../components/project-tree/ProjectTreeBrowser'
 import type { ProjectRowCommand } from '../components/project-tree/ProjectRow'
-import type { TreeSession, TreeWorkspace } from '../components/project-tree/tree-derive'
+import type { TreeLayoutState, TreeSession, TreeWorkspace } from '../components/project-tree/tree-derive'
 import { ConfirmCard } from '../components/confirm-card/ConfirmCard'
 import {
   ArchiveConfirmDialog, RemoveProjectConfirmDialog,
@@ -225,6 +225,25 @@ export interface ProjectSeatFace {
    * Absent (hostless) = the delete flow keeps its 3.5 shape.
    */
   readonly detachedWindows?: DetachedWindowRegistryFace | undefined
+  /**
+   * The layout-memory tree feed (M4 4.5): the last RESTORED tree block of
+   * the active project, as an observable the seat reads through
+   * useSyncExternalStore into the browser's controlled `layout` prop (1.4's
+   * parent-fed seam — a restored layout lands whenever the engine's load
+   * does). Absent = the browser keeps its own default expansion state.
+   */
+  readonly treeLayoutSource?: {
+    get(): TreeLayoutState | undefined
+    subscribe(listener: () => void): () => void
+  } | undefined
+  /** The layout-memory tree collect sink (the browser's onLayoutChange leg). */
+  readonly onTreeLayoutChange?: ((layout: TreeLayoutState) => void) | undefined
+  /**
+   * The layout-memory removal clear (M4 4.5, 删除清除): threaded into the
+   * lifecycle deps so removeProjectNow disarms the pending debounced write
+   * BEFORE the verb. Absent = no layout memory in flight.
+   */
+  readonly forgetLayout?: ((projectId: string) => void) | undefined
 }
 
 /** Composed props of the `sidebar.workspaces` seat (the WorkbenchShell pattern). */
@@ -420,6 +439,14 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
     props.sessions?.subscribe ?? noopSubscribe,
     props.sessions?.getSnapshot ?? (() => EMPTY_SESSION_SNAPSHOT),
   )
+  // M4 4.5 — the layout-memory tree feed: the engine's last restored block,
+  // applied through the browser's parent-fed `layout` seam whenever the
+  // engine's per-project load lands (an absent source keeps the browser's
+  // own default expansion state — the exact pre-4.5 hostless shape).
+  const restoredTreeLayout = useSyncExternalStore(
+    props.treeLayoutSource?.subscribe ?? noopSubscribe,
+    props.treeLayoutSource?.get ?? (() => undefined),
+  )
   const reducedMotion = usePrefersReducedMotion()
 
   // ———— the tree data face (upstream snapshots → 1.4 derivation inputs) ————
@@ -534,7 +561,13 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
   /** The lifecycle actions' shared deps (toast = the seat's fixed surface). */
   const lifecycleDeps = store === undefined
     ? undefined
-    : { store, t, showToast: (message: string): void => { setToast(message) } } satisfies LifecycleActionDeps
+    : {
+      store,
+      t,
+      showToast: (message: string): void => { setToast(message) },
+      // M4 4.5 (删除清除): the layout memory disarms before the remove verb.
+      ...(props.forgetLayout === undefined ? {} : { forgetLayout: props.forgetLayout }),
+    } satisfies LifecycleActionDeps
 
   const onProjectCommand = (projectId: string, command: ProjectRowCommand): void => {
     if (lifecycleDeps === undefined) return // hostless seat: nothing to fire
@@ -600,6 +633,11 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
               onArchivedCommand={onArchivedCommand}
               onAdoptUngrouped={openCard}
               onAddProject={openCard}
+              // M4 4.5 — the layout-memory legs: the restored block feeds the
+              // parent-fed `layout` seam; every layout transition reports to
+              // the engine's collect sink (the debounced write's tree leg).
+              {...(restoredTreeLayout === undefined ? {} : { layout: restoredTreeLayout })}
+              {...(props.onTreeLayoutChange === undefined ? {} : { onLayoutChange: props.onTreeLayoutChange })}
               {...(props.expandSidebar === undefined ? {} : { onToggleCollapse: props.expandSidebar })}
             />
           )}

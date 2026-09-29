@@ -64,6 +64,12 @@ import { installMetadataBar } from './components/task-metadata/MetadataBar'
 import type { MetadataTaskSource } from './components/task-metadata/MetadataBar'
 import { installArchiveBanner } from './components/archive-banner/ArchiveBanner'
 import { ensureBoardActive, createSplitPaneStore, toRightbarTabsFace } from './views/rightbar/tabs-model'
+import type { OpenTabRow } from './views/rightbar/tabs-model'
+import { createDocTabsRegistry } from './views/rightbar/DocTree'
+import type { TreeLayoutState } from './components/project-tree/tree-derive'
+import { createLayoutMemoryEngine } from './layout/persistence'
+import type { LayoutMemoryEngine } from './layout/persistence'
+import type { Rect, SessionTarget } from './ipc-types'
 import { installRightbarTabs } from './views/rightbar/RightbarTabs'
 import { installSplitControls } from './views/rightbar/SplitControls'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
@@ -458,6 +464,30 @@ export type {
   RightbarCloseFace, RightbarSplitFace, SplitLayoutState, SplitPaneRow, SplitPaneSelection,
   SplitPaneStore, SplitPaneStoreOptions, SplitPaneView, SplitStepKey,
 } from './views/rightbar/tabs-model'
+// M4 task 4.5 — the layout-memory engine (tech-design §Interface 4): the
+// pure collect model (seam fragments → ProjectLayout v1; the 双轨 boundary
+// keeps the native rightbar's own session-scope persistence and the
+// 分组×排序 localStorage out of the blob), the replay planner/executor
+// (重放 open 操作序列: openTab/openResource legs + setWidth + detached
+// re-opens), and the debounce-write/project-lifetime persistence engine
+// (collect → trailing debounce → setProjectUiState; re-enter →
+// getProjectUiState → replay; 删除清除 disarm).
+export {
+  collectProjectLayout, collectRightbarPanes, collectTabOf, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN,
+  TOPIC_MAX_LENGTH, widthPctOfRatio,
+} from './layout/collect'
+export type {
+  CollectedTab, DetachedCollectEntry, RightbarCollectInput, SidebarGeometryFragment,
+} from './layout/collect'
+export { planLayoutReplay, replayProjectLayout } from './layout/replay'
+export type {
+  DetachedReplayFace, LayoutReplayFaces, LayoutReplayOp, LayoutReplayOutcome,
+  RightbarReplayFace, SidebarReplayFace, SplitReplayFace,
+} from './layout/replay'
+export { createLayoutMemoryEngine, LAYOUT_WRITE_DEBOUNCE_MS } from './layout/persistence'
+export type {
+  LayoutMemoryClock, LayoutMemoryEngine, LayoutMemoryEngineOptions, LayoutMemoryVerbs,
+} from './layout/persistence'
 export { PaneHeader } from './views/rightbar/PaneControls'
 export type { PaneControlsTranslate, PaneHeaderProps } from './views/rightbar/PaneControls'
 export {
@@ -773,11 +803,97 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
 
   // M4 task 4.4 — the C9 分屏 state home: ONE plugin-lifetime split store
   // shared by the 工作台头 [分屏] control (the conversation header utilities
-  // seat) and the board pane body's chrome (pane 头 + 分隔条). The
-  // onLayoutChange seam stays UNWIRED here (比例态经接口暴露 — the store's
-  // option surface IS the interface; 4.5's layout-memory collection is its
-  // consumer; nothing persists in this task).
-  const splitStore = createSplitPaneStore()
+  // seat) and the board pane body's chrome (pane 头 + 分隔条). M4 4.5 wires
+  // the onLayoutChange seam into the layout-memory collector (the store's
+  // option surface IS the interface — the 4.4 design note landed intact).
+  //
+  // M4 task 4.5 — the layout-memory engine (T4 全链, tech-design Interface 4):
+  // collect (seam fragments) → debounce → setProjectUiState; re-enter →
+  // getProjectUiState → replay the open-operation sequence. The engine is
+  // BRIDGE-GATED (hostless worlds keep the exact pre-4.5 shape) and its
+  // pointer subscription registers BEFORE the rightbar linkage watcher below,
+  // so the write-on-leave flush sees the pre-close tab set (离开前布局).
+  // The sidebar-geometry fragment stays unwired on the real chain: the
+  // vendored ILayout face is write-only (no width read) — the engine's
+  // optional source is the seam a future shell seat feeds; the blob's
+  // sidebar block defaults until then (documented degrade, never a gate).
+  const docTabsRegistry = createDocTabsRegistry()
+  const liveRightbarRows = (): readonly OpenTabRow[] =>
+    toRightbarTabsFace(optionalService('sidebarRight'))?.openTabs.getSnapshot() ?? []
+  let layoutMemory: LayoutMemoryEngine | undefined
+  const splitStore = createSplitPaneStore({
+    onLayoutChange: (split) => {
+      layoutMemory?.setRightbar({
+        split,
+        tabs: liveRightbarRows(),
+        topicOf: row => docTabsRegistry.pathOf(row.tabId),
+      })
+    },
+  })
+  layoutMemory = workbenchBridge === undefined || activeProjectStore === undefined
+    ? undefined
+    : createLayoutMemoryEngine({
+      verbs: workbenchBridge,
+      projectId: () => activeProjectStore.getSnapshot().activeProjectId,
+      getReplayFaces: () => ({
+        rightbar: toRightbarTabsFace(optionalService('sidebarRight')),
+        split: splitStore,
+        ...(windowVerb === undefined
+          ? {}
+          : {
+            // The detached replay leg: Interface 5's openDetached needs the
+            // OWNING project — the active pointer at replay time is it (the
+            // replay belongs to the project being entered); 未激活 skips.
+            detached: {
+              openDetached: (input: { view: 'board' | 'conversation'; target?: SessionTarget; rect?: Rect }) => {
+                const active = activeProjectStore.getSnapshot().activeProjectId
+                return active === null
+                  ? Promise.resolve(undefined)
+                  : windowVerb.openDetached({ ...input, projectId: active })
+              },
+            },
+          }),
+      }),
+    })
+  // The pointer-change reaction (flush old → load + replay new) — registered
+  // at engine birth, ahead of every later watcher.
+  const disposeLayoutPointerWatch = activeProjectStore === undefined
+    ? () => {}
+    : activeProjectStore.subscribe(() => { layoutMemory?.handleProjectChange() })
+  // The detached-set collect leg: the recall sync's registry mirrors the
+  // window-changed events (its subscription lands FIRST — this push reads
+  // the post-update set). Only the ACTIVE project's windows enter the blob.
+  const disposeLayoutWindowWatch = windowVerb === undefined || windowRecall === undefined || activeProjectStore === undefined
+    ? () => {}
+    : windowVerb.onChanged(() => {
+      const active = activeProjectStore.getSnapshot().activeProjectId
+      if (active === null) return
+      layoutMemory?.setDetached(windowRecall.entriesFor(active))
+    })
+  // The boot service-race retry: the boot replay may race the roster's late
+  // app-tier services (the 2.9 lesson) — if the rightbar face was absent at
+  // replay time, re-run the (idempotent) replay once it arrives (bounded).
+  const disposeLayoutBootRetry = layoutMemory === undefined ? () => {} : (() => {
+    if (toRightbarTabsFace(optionalService('sidebarRight')) !== undefined) return () => {}
+    let stopped = false
+    let tries = 0
+    const timer = setInterval(() => {
+      if (stopped) { clearInterval(timer); return }
+      tries += 1
+      if (toRightbarTabsFace(optionalService('sidebarRight')) !== undefined) {
+        stopped = true
+        clearInterval(timer)
+        layoutMemory?.replayNow()
+        return
+      }
+      if (tries >= 12) clearInterval(timer)
+    }, 500)
+    ;(timer as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.()
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+  })()
   // The 工作台头 [分屏] control: the [分屏] menu's picks resolve the controller
   // face LAZILY (the late-boot lesson — an apply-time read freezes an absent
   // service for the plugin's lifetime). The aside target resolver is ABSENT
@@ -806,6 +922,19 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
       get sidebarRight() { return liveSidebarRight() },
       // M4 4.3 (AC4): the delete flow's detached-window marks + counts.
       get detachedWindows() { return windowRecall },
+      // M4 4.5: the layout-memory tree legs — the restored block feeds the
+      // browser's parent-fed layout seam; every transition reports to the
+      // collector; the removal clear disarms the pending debounced write.
+      ...(layoutMemory === undefined
+        ? {}
+        : {
+          treeLayoutSource: {
+            get: () => layoutMemory?.getRestoredTree(),
+            subscribe: (listener: () => void) => layoutMemory?.subscribeRestoredTree(listener) ?? (() => {}),
+          },
+          onTreeLayoutChange: (layout: TreeLayoutState) => { layoutMemory?.setTree(layout) },
+          forgetLayout: (projectId: string) => { layoutMemory?.forget(projectId) },
+        }),
     })
   const disposeMetadataBar = installMetadataBar(ctx, {
     t,
@@ -858,6 +987,9 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
         // M4 4.4: the C9 split store (the pane 头 + 分隔条 chrome + the
         // pane-set watcher over the open-tab inventory).
         splitStore,
+        // M4 4.5: the SHARED doc-tabs registry — the layout memory's doc
+        // topic resolver reads the same live (tabId ↔ path) pairs.
+        docTabs: docTabsRegistry,
         // M4 4.3 (C10 ①): the [拆出为窗口] seams — the pane 头 动作位 (the
         // board origin) and the tab-menu entry (the aside origin). Both need
         // the window verb face; the menu entry also needs the project source.
@@ -947,6 +1079,10 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
   // boot routing hands it to the plugin-lifetime effect in apply().
   return () => {
     windowRecall?.dispose()
+    disposeLayoutBootRetry()
+    disposeLayoutWindowWatch()
+    disposeLayoutPointerWatch()
+    layoutMemory?.dispose()
     clearTimeout(graceTimer)
     disableRail()
     disposeToolBridge()

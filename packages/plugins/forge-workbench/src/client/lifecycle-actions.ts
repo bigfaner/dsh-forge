@@ -31,6 +31,13 @@ export interface LifecycleActionDeps {
   readonly t: (key: WorkbenchKey) => string
   /** The host's toast surface (the seat's fixed toast / the banner's own). */
   readonly showToast: (message: string) => void
+  /**
+   * The layout-memory removal clear (M4 4.5, 删除清除): called BEFORE the
+   * removeProject verb (the markRemoved ordering) so the engine's pending
+   * debounced write for the project can never land after the FK cascade and
+   * resurrect a project_ui_state row. Absent = no layout memory in flight.
+   */
+  readonly forgetLayout?: ((projectId: string) => void) | undefined
 }
 
 /** The quiet refresh: re-pull the registry; a failure keeps the last good state. */
@@ -92,6 +99,9 @@ export function restoreProjectNow(deps: LifecycleActionDeps, project: Project): 
  * recallProjectWindows hook closes them; the note counts them pre-verb).
  */
 export function removeProjectNow(deps: LifecycleActionDeps, project: Project, windowsClosedNote?: string): void {
+  // 删除清除 (M4 4.5): the layout memory disarms BEFORE the verb — its
+  // pending debounced write for this project dies with the FK cascade.
+  deps.forgetLayout?.(project.id)
   deps.store.bridge.removeProject(project.id)
     .then(
       async () => {
