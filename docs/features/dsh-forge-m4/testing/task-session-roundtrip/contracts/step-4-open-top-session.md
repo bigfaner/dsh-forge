@@ -10,14 +10,14 @@ anchors:
     page: "项目工作台·中间会话面板(C2,会话定位)"
     route: "project(顶层路径 = 会话打开通道 top session id;Interface 6)"
     requires_auth: false
-    layout: "挂接行顶层会话条目 → 打开并定位到会话视图(e2e 断言)"
+    layout: "挂接行顶层会话条目 → 打开并定位到会话视图"
 last_anchor_sync: "2026-09-30T00:00:00Z"
 ---
 
 # Contract: task-session-roundtrip / Step 4: 打开顶层派发会话
 
 <!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
-<!-- state-verification: full (顶层路径 = openSessionTarget(sessionId) 同一写路径;定位断言经 e2e;FT-109) -->
+<!-- state-verification: full (顶层路径 = ctx.uiWorkspace.openSession(sessionId) 唯一写路径(openSessionTarget 顶层入参);M1 sessionFocus 主进程通道 = 冻结 fallback 保留,不参与 M4 链路(Interface 6);定位断言经 e2e;FT-109) -->
 
 ## Outcome "success"
 - Preconditions: "挂接历史行呈现顶层会话条目,该会话存在且可打开"
@@ -44,10 +44,10 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
           - field: "role"
             value: "顶层派发会话(可打开)"
 - Input: "编排者点击挂接行的顶层会话条目"
-- Output: "经 M1 session-focus 语义的会话打开通道(Interface 6 顶层路径)打开该顶层会话并定位到会话视图(e2e 断言)"
+- Output: "该顶层会话经会话打开通道打开(与 subagent 打开同一通道,顶层入参 = 会话 id)并定位到会话视图"
 - State: "工作台定位到目标会话;任务→会话打开路径 ≤1 次点击"
 - Side-effect: "none"
-- Invariants: "顶层走 session-focus 语义、subagent 走 SubagentAddress(双通道分工)"
+- Invariants: "顶层与 subagent 同一会话打开通道、入参分工(会话 id vs subagent 地址三元组)"
 
 ## Journey Invariants
 

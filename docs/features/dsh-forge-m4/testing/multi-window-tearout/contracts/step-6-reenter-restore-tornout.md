@@ -7,7 +7,7 @@ sources:
   - docs/features/dsh-forge-m4/testing/multi-window-tearout/journey.md
 anchors:
   web:
-    page: "拆出窗口集合·重进恢复(UF10 States restored)"
+    page: "拆出窗口(C10)·重进恢复(UF10 States restored)"
     route: "project(重放 open-detached ops;rect 随行)"
     requires_auth: false
     layout: "重进 → 拆出窗口集合按各自视图类型/尺寸/位置重建;主窗 pane 结构同步恢复"
@@ -20,26 +20,32 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 <!-- state-verification: full (重放 = open-detached ops 序列,rect 优先于缺省几何;FT-102/FT-122;恢复态与离开时一致 e2e 断言) -->
 
 ## Outcome "success"
-- Preconditions: "项目已处于双拆出态(看板 + 会话两独立窗)并离开(窗口集合已记入记忆)"
+- Preconditions: "项目处于双拆出态(看板 + 会话两独立窗),各窗目标数据健全(会话与任务可解析),窗口集合与主窗 pane 结构已记入布局记忆"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
       - entity_type: "LayoutMemory"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
         field_constraints:
-          - field: "stored"
-            value: true
           - field: "detached"
-            value: "两个拆出窗条目(view/target/rect 各自记录)"
+            value: "两个拆出窗条目(看板/会话,view/target/rect 各自记录)"
           - field: "rightbar.panes"
             value: "主窗 pane 结构(离开前)"
 - Input: "编排者离开后重进该项目"
 - Output: "拆出窗口集合随项目记忆恢复:两个独立窗口按各自视图类型/尺寸/位置重建,主窗口 pane 结构同步恢复;恢复态与离开时一致(UF10 States restored)"
-- State: "窗口集重建 = 2;主窗 pane 结构恢复;恢复为异步面(断言前等待窗口集稳定)"
-- Side-effect: "重放开窗各发一次 detached-opened;失败开窗静默降级(保持主窗 pane 不丢视图)"
+- State: "窗口集重建 = 2;主窗 pane 结构恢复;恢复为异步过程,窗口集最终收敛为离开时集合"
+- Side-effect: "按记忆逐窗重建,各窗开窗事件恰好一次;失败开窗静默降级(保持主窗 pane 不丢视图)"
 
 ## Outcome "restore-target-missing"
 <!-- source: inferred -->

@@ -20,22 +20,26 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 <!-- state-verification: full (WindowRole 握手/标题/几何/事件均可核验;FT-100/FT-101/FT-102;窗口集镜像入布局记忆) -->
 
 ## Outcome "success"
-- Preconditions: "分屏工作台内选中某 pane(如看板视图), pane 菜单「拆出为窗口」可用"
+- Preconditions: "分屏工作台内选中某 pane(如看板视图)且主窗尚有其余内容 pane, pane 菜单「拆出为窗口」可用"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
-        field_constraints:
-          - field: "layout"
-            value: "分屏态(该 pane 在主窗在屏)"
       - entity_type: "Task"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+      - entity_type: "LayoutMemory"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "rightbar.panes"
+            value: "分屏态(该 pane 在主窗在屏,主窗尚有其余内容 pane)"
 - Input: "编排者点击「拆出为窗口」"
 - Output: "该视图迁入新独立窗口(标准壳窗,标题「<项目名> · <视图名>」);主窗口移除该 pane、其余 pane 按布局规则重排;拆出窗口集合记入布局记忆"
-- State: "窗口集 +1(detached-opened 事件);主窗 pane 集相应减少;拆出集合入 blob detached 块"
-- Side-effect: "windowOpenDetached 单向开窗;拆出窗安全接线同主窗(window-open 拒、will-navigate 锁 dsh-app:)"
+- State: "窗口集 +1;主窗 pane 集相应减少;布局记忆新增该拆出窗条目"
+- Side-effect: "拆出为单向开窗;拆出窗沿用主窗同源安全边界(外部导航一律拒绝,仅限应用内部跳转)"
 - Invariants: "detached = 派生快照显示面,非第二激活(BIZ-002)"
 
 ## Outcome "main-pane-rearrange"
@@ -46,8 +50,16 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
     entities:
       - entity_type: "Project"
         min_count: 1
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "LayoutMemory"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
         field_constraints:
-          - field: "layout"
+          - field: "rightbar.panes"
             value: "待拆出 pane = 主窗唯一内容 pane"
 - Input: "编排者拆出该视图"
 - Output: "主窗口移除该 pane 后按布局规则重排呈现,不出现空白主窗口死区;布局记忆与实际一致"
@@ -73,6 +85,23 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 - Input: "编排者经 pane 菜单点击「拆出为窗口」"
 - Output: "拆出动作对失效目标明确提示目标已失效/不可拆或不可用,不静默建出空窗口"
 - State: "窗口集不变;主窗 pane 保持"
+- Side-effect: "none"
+
+## Outcome "tearout-open-failed"
+<!-- source: inferred -->
+<!-- reasoning: journey Step 2(推自 FT-104 ERR_WINDOW_OPEN_FAILED × tech-design 窗口面传播「开窗失败 toast」);目标有效但窗口构造/文档加载失败 → 失败窗收回、主窗 pane 不丢视图 -->
+- Preconditions: "拆出目标有效,但独立窗口构造失败(窗口构造异常或文档加载失败)"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+- Input: "编排者经 pane 菜单点击「拆出为窗口」"
+- Output: "以 toast 明确提示开窗失败,不静默;失败的窗口被收回不留残窗;该视图保留在主窗 pane 不丢失"
+- State: "窗口集不变(失败窗不计入);主窗 pane 保持;布局记忆不变"
 - Side-effect: "none"
 
 ## Journey Invariants

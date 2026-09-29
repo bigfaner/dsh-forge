@@ -45,6 +45,33 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 - State: "纯读;挂接数据零变更"
 - Side-effect: "none"
 
+## Outcome "ended-lineage-unavailable"
+<!-- source: inferred -->
+<!-- reasoning: tech-design Interface 3「ended 挂接:会话已 disposed → byId 缺席 → 行可展开但血缘位『不可用』」× FT-112 ended 行可展开;触发规则 = ended 挂接的会话已 disposed(区别于 Step 3c 计算超时降级的触发源);布景 = disposed 会话经不声明 Session 表达(缺位即上游 byId 缺席) -->
+- Preconditions: "任务的挂接全部已 ended(无 active 挂接),其中至少一条挂接的会话已 disposed(上游会话快照缺席)"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "status"
+            value: "任一合法任务态(状态与挂接正交,BIZ-workbench-008)"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "ended(其会话已 disposed)"
+- Input: "编排者展开该 ended 挂接行"
+- Output: "行可展开、挂接历史条目照常呈现;血缘位呈「不可用」说明(会话已清理,血缘无从推导);不报错、不崩溃"
+- State: "ended 行展开态;血缘位不可用标注;触发源 = 会话 disposed(非计算超时,区别于 inference-degraded)"
+- Side-effect: "none"
+
 ## Journey Invariants
 
 - 血缘推断为唯一权威且纯只读:不落库、可随时重算;命名(任务 id + title)仅辅助,冲突时以血缘为准

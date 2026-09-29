@@ -33,12 +33,22 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         relationship_type: "belongs_to"
         parent_entity: "Project"
         field_constraints:
-          - field: "status"
-            value: "在位且分组保持(归档期间未移除)"
+          - field: "title"
+            value: "与 forge 期望名一致(归档期间从未移除)"
+          - field: "orderIdx"
+            value: "与 projects.sort_order 一致(归档期间保持)"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "cwd"
+            value: "canonical 落在该项目 workspace 投影路径下(分组经宿主 workspace 派生,非 Session 直挂 project 字段;归档期间分组保持,恢复后不破)"
 - Input: "编排者经左栏归档行菜单恢复项目(UF1:恢复/删除经行菜单)"
 - Output: "项目移回活跃区;投影不变化(workspace 未移除,会话分组保持)"
-- State: "archived=0;dsh 侧零变更(零投影 op)"
-- Side-effect: "project_list_changed 事件;零投影推送"
+- State: "archived=0;dsh 侧零变更(无投影推送)"
+- Side-effect: "项目列表变更通知;无投影推送"
+  <!-- FT-133:restoreProject = archived=0,投影不变、零投影 op;FT-135:通知经 workbench-events 通道 project_list_changed 载荷 -->
 - Invariants: "恢复不触碰投影面(归档期间 workspace 从未移除)"
 
 ## Journey Invariants

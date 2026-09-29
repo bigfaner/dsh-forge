@@ -25,16 +25,20 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
     entities:
       - entity_type: "Project"
         min_count: 1
-        field_constraints:
-          - field: "layout"
-            value: "分屏态(≥1 个 pane 在屏)"
       - entity_type: "Task"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+      - entity_type: "LayoutMemory"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
         field_constraints:
-          - field: "usage"
-            value: "看板视图数据面"
+          - field: "rightbar.panes"
+            value: "分屏态(≥1 个 pane 在屏)"
+    state_requirements:
+      - description: "选中 pane 呈看板视图,Task 为该看板数据面"
+        prerequisite_entity: "Task"
 - Input: "编排者在分屏工作台内选中某 pane(如看板视图),打开 pane 操作菜单"
 - Output: "「拆出为窗口」动作可用(拆出来源 = 工作台 pane)"
 - State: "纯菜单呈现;窗口集未变"

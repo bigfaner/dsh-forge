@@ -20,7 +20,7 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 <!-- state-verification: full (血缘 = 点击时纯只读重算,不落库;FT-106/FT-107/FT-108;预算 100ms 合作式死线) -->
 
 ## Outcome "success"
-- Preconditions: "active 挂接的顶层会话血缘树内存在 origin=subagent 会话(执行体按派发 prompt 注入的命名约定以「任务 id + title」命名 spawn)"
+- Preconditions: "active 挂接的顶层会话血缘树内存在 origin=subagent 会话且数量在上限内(≤20)、推断在预算内(≤100ms)完成(执行体按派发 prompt 注入的命名约定以「任务 id + title」命名 spawn)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -61,7 +61,7 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 
 ## Outcome "no-subagent-hit"
 <!-- source: journey Step 3b -->
-<!-- reasoning: 血缘树内无 origin=subagent 会话(如顶层会话自身执行);打开动作落到顶层派发会话,不误报 -->
+<!-- reasoning: 血缘树内无 origin=subagent 会话(如顶层会话自身执行);打开动作落到顶层派发会话,不误报;布景 = 不声明 SubagentSession(实体缺位即无命中) -->
 - Preconditions: "active 挂接顶层会话血缘树内无 origin=subagent 会话(如顶层会话自身执行)"
   fixture_spec:
     entities:
@@ -83,8 +83,8 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         relationship_type: "belongs_to"
         parent_entity: "SessionLink"
         field_constraints:
-          - field: "descendants"
-            value: "血缘树内无 subagent 会话"
+          - field: "role"
+            value: "顶层派发会话"
 - Input: "编排者点击绑定会话入口"
 - Output: "打开动作落到顶层派发会话;不误报 subagent、无空转报错"
 - State: "正常态(非错误);零降级日志"
@@ -102,14 +102,73 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
-    state_requirements:
-      - description: "血缘计算超预算或上游会话快照缺席/畸形(触发降级注入)"
-        prerequisite_entity: "Session"
+        field_constraints:
+          - field: "status"
+            value: "in_progress"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "active(挂接保持,不因降级撤销)"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "SessionLink"
+        field_constraints:
+          - field: "snapshot"
+            value: "在场但血缘树规模使计算 >100ms,或缺席/畸形(FT-106 两类降级触发源,均可布景)"
+      - entity_type: "SubagentSession"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Session"
+        field_constraints:
+          - field: "title"
+            value: "「任务 id + title」命名(在场;降级期暂不呈现)"
 - Input: "编排者察看挂接历史节/会话树"
 - Output: "降级为仅呈现顶层会话 + 血缘标注不可用说明(inference-degraded 态);恢复后自动回完整模式;不阻塞 dock 其余节"
 - State: "挂接保持、后代暂不呈现;单行结构化降级日志([forge-lineage] degraded);纯重算使下次调用自动恢复"
 - Side-effect: "none"
 - Invariants: "降级不打断呈现(BIZ-resilience-001)"
+
+## Outcome "descendant-cap-fold"
+<!-- source: inferred -->
+<!-- reasoning: FT-107(LINEAGE_DESCENDANT_LIMIT=20,后代列表至上限、尾部「查看全部」折叠,溢出不破坏 parent 树折叠)× BIZ-workbench-007;触发规则 = 血缘后代数 > 20 且推断在预算内完成(journey Step 3 后代呈现的规模上界) -->
+- Preconditions: "active 挂接顶层会话血缘树内 origin=subagent 会话数超过上限(>20),且推断在预算内(≤100ms)完成"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "status"
+            value: "in_progress"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "active"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "SessionLink"
+        field_constraints:
+          - field: "role"
+            value: "顶层派发会话(后代规模超上限)"
+      - entity_type: "SubagentSession"
+        min_count: 21
+        relationship_type: "belongs_to"
+        parent_entity: "Session"
+- Input: "编排者展开 active 挂接行,察看血缘后代列表"
+- Output: "后代列表呈现至 20 条上限,尾部「查看全部」折叠入口承接其余;溢出不破坏 parent 会话树归拢折叠"
+- State: "后代列表截断于上限、其余经折叠可达;推断只读不落库"
+- Side-effect: "none"
 
 ## Journey Invariants
 

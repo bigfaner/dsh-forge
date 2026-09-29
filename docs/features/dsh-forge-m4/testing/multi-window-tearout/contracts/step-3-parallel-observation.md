@@ -45,8 +45,7 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 
 ## Outcome "same-data-parallel"
 <!-- source: inferred -->
-<!-- reasoning: journey Step 3b(推自数据内核单一事实源 × BIZ-workbench-005 派生面失效-重建传播);两侧镜像同一数据面时状态一致更新 -->
-<!-- surface-web required_outcomes 映射:session-expired → 并行观察期间 detached 会话视图所依 dsh 会话通道不可用,拆出窗口内呈现明确错误 + 恢复引导(重试/重连),不静默空白、不丢已呈现内容 -->
+<!-- reasoning: journey Step 3b(推自 TECH-product-arch-003 数据内核单一事实源、窗口内容为派生视图);两侧镜像同一数据面时状态一致更新 -->
 - Preconditions: "同一数据面(如同一任务状态面)在主窗口与独立窗口两侧镜像呈现"
   fixture_spec:
     entities:
@@ -56,13 +55,13 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
-        field_constraints:
-          - field: "mirrored"
-            value: "同一任务状态面在两侧镜像呈现"
       - entity_type: "DetachedWindow"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+    state_requirements:
+      - description: "同一任务状态面在主窗与拆出窗两侧镜像呈现"
+        prerequisite_entity: "Task"
 - Input: "编排者两侧并行观察与操作该同一数据面"
 - Output: "状态以数据内核为事实源,两侧一致更新、互不覆盖互不丢失"
 - State: "两侧派生面收敛于同一内核状态"
@@ -76,21 +75,50 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
     entities:
       - entity_type: "Project"
         min_count: 2
-        field_constraints:
-          - field: "layout"
-            value: "A = 活跃且存在拆出窗;B = 可切换目标"
       - entity_type: "DetachedWindow"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
         field_constraints:
-          - field: "sourceProject"
+          - field: "projectId"
             value: "项目 A"
+    state_requirements:
+      - description: "主窗口当前在项目 A(活跃),项目 B 为可切换目标"
+        prerequisite_entity: "Project"
 - Input: "编排者主窗口经项目切换切到项目 B"
 - Output: "A 的拆出窗口仍以 A 上下文渲染(A/B 并行观察);拆出窗 = 派生快照的显示面、非第二激活"
 - State: "主窗 active_project_id = B;拆出窗绑定 projectId=A 不变"
 - Side-effect: "none"
 - Invariants: "单激活指针仅约束主窗"
+
+## Outcome "detached-session-expired"
+<!-- source: inferred -->
+<!-- reasoning: journey Step 3(推自 surface-web 强制项 session-expired × TECH-product-arch-003 数据内核事实源/派生视图);detached 会话视图所依 dsh 会话通道不可用 → 窗口内明确错误 + 恢复引导,不静默空白、不丢已呈现内容 -->
+<!-- surface-web required_outcomes 映射:session-expired → 并行观察期间 detached 会话视图所依 dsh 会话通道不可用,拆出窗口内呈现明确错误 + 恢复引导(重试/重连),不静默空白、不丢已呈现内容 -->
+- Preconditions: "拆出窗口正呈现会话类视图(conversation),其所依 dsh 会话通道不可用(会话已结束/通道断开)"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "status"
+            value: "通道不可用(会话已结束/断开)"
+      - entity_type: "DetachedWindow"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "view"
+            value: "conversation"
+- Input: "编排者在拆出窗口内观察会话视图,期间该会话通道变为不可用"
+- Output: "拆出窗口内呈现明确错误与恢复引导(重试/重连入口),不静默空白、不丢已呈现内容"
+- State: "拆出窗口保持打开;已呈现内容不丢失;数据内核状态不受影响"
+- Side-effect: "none"
+- Invariants: "数据内核恒为事实源,窗口内容为派生视图"
 
 ## Journey Invariants
 

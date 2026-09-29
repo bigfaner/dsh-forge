@@ -7,7 +7,7 @@ sources:
   - docs/features/dsh-forge-m4/testing/task-session-roundtrip/journey.md
 anchors:
   web:
-    page: "项目工作台·会话面板(subagent 定位)"
+    page: "项目工作台·中间会话面板(C2,subagent 会话定位)"
     route: "project(subagent 路径 = openSessionTarget(SubagentAddress) 原生 API)"
     requires_auth: false
     layout: "血缘命中行 [打开] → SubagentAddress 三元组原样入参(mode 成员原词);≤1 次点击"
@@ -36,6 +36,13 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         field_constraints:
           - field: "status"
             value: "active"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "SessionLink"
+        field_constraints:
+          - field: "role"
+            value: "顶层派发会话(血缘 parent,在场)"
       - entity_type: "SubagentSession"
         min_count: 1
         relationship_type: "belongs_to"
@@ -44,16 +51,16 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
           - field: "address"
             value: "SubagentAddress 三元组可解析(含 mode 成员)"
 - Input: "编排者点击执行 subagent 会话条目"
-- Output: "经 dsh 原生 SubagentAddress 打开该 subagent 会话;任务→会话打开路径 ≤1 次点击(e2e 断言)"
-- State: "会话视图定位到该 subagent 会话;零侵入(上游公共 seam)"
+- Output: "该 subagent 会话经原生打开通道打开(地址三元组入参,与顶层同一通道);任务→会话打开路径 ≤1 次点击"
+- State: "会话视图定位到该 subagent 会话;零侵入(插件槽位体系内,原生会话视图功能不受影响)"
 - Side-effect: "none"
 - Invariants: "subagent 走 SubagentAddress(双通道分工)"
 
 ## Outcome "open-target-missing"
-<!-- source: journey Step 5b -->
-<!-- reasoning: 打开通道对缺席上游服务/畸形目标/抛错 open 一律拒绝(ERR_SESSION_OPEN_FAILED),C5 侧 toast 呈 open-failed,不静默不崩溃(FT-109) -->
+<!-- source: inferred -->
+<!-- reasoning: journey Step 5b;打开通道对缺席上游服务/畸形目标/抛错 open 一律拒绝(ERR_SESSION_OPEN_FAILED),C5 侧 toast 呈 open-failed,不静默不崩溃(FT-109);触发规则 = 行展开持有的地址三元组陈旧(所指会话已不存在或已清理;fixture 以 SessionLink + 陈旧地址引用布景,不声明缺席目标实体) -->
 <!-- surface-web required_outcomes 映射:session-expired → 宿主/会话通道不可用使打开动作失败,呈现为 open-failed 明确错误 + 恢复引导,不静默 -->
-- Preconditions: "待打开会话已不存在或已清理"
+- Preconditions: "待打开会话已不存在或已清理(行展开持有的 subagent 地址三元组已陈旧)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -62,13 +69,20 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
-      - entity_type: "SubagentSession"
+      - entity_type: "SessionLink"
         min_count: 1
         relationship_type: "belongs_to"
-        parent_entity: "Session"
+        parent_entity: "Task"
         field_constraints:
           - field: "status"
-            value: "已不存在或已清理(目标缺失)"
+            value: "active(行展开持有陈旧 subagent 地址引用——所指目标已不存在或已清理)"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "SessionLink"
+        field_constraints:
+          - field: "role"
+            value: "顶层派发会话(在场)"
 - Input: "编排者点击会话条目"
 - Output: "明确错误提示「会话不存在或已清理」(open-failed 态);不静默、不崩溃"
 - State: "打开动作失败呈错误态;工作台状态不受损"

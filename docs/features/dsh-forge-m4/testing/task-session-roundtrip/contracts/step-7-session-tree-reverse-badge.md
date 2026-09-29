@@ -20,7 +20,7 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 <!-- state-verification: full (归拢断言 = 顶层列表零 subagent 条目 + 血缘树下收起呈现;SC7 族) -->
 
 ## Outcome "success"
-- Preconditions: "项目会话树含带 subagent 后代的 parent 会话;该任务的任务详情 dock 可对照"
+- Preconditions: "项目会话树含带 subagent 后代的 parent 会话;该任务的任务详情 dock 可对照;subagent 会话命名遵循「任务 id + title」约定(未被手工改名)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -29,10 +29,17 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "active"
       - entity_type: "Session"
         min_count: 1
         relationship_type: "belongs_to"
-        parent_entity: "Project"
+        parent_entity: "SessionLink"
         field_constraints:
           - field: "role"
             value: "parent 会话(带 subagent 后代)"
@@ -58,6 +65,20 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "active"
+      - entity_type: "Session"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "SessionLink"
+        field_constraints:
+          - field: "role"
+            value: "parent 会话"
       - entity_type: "SubagentSession"
         min_count: 1
         relationship_type: "belongs_to"

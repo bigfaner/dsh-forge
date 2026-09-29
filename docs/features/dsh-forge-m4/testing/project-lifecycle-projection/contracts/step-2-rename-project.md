@@ -7,10 +7,10 @@ sources:
   - docs/features/dsh-forge-m4/testing/project-lifecycle-projection/journey.md
 anchors:
   web:
-    page: "项目工作台·生命周期动作·改名"
-    route: "project(renameProject:纯 DB 改名 + 投影 rename op)"
+    page: "项目工作台·左栏项目树(C3)项目行 ⋯ 菜单·改名"
+    route: "project(改名入口 = 项目行 ⋯ 菜单,UF7「随时可改:左栏 ⋯ / 设置」)"
     requires_auth: false
-    layout: "改名确认 → forge 侧项目名更新 → 投影同步改名(dsh workspace 同名)"
+    layout: "左栏项目树(C3)项目行 ⋯ 菜单 → 改名确认 → forge 侧项目名更新 → 投影同步改名(dsh workspace 同名)"
 last_anchor_sync: "2026-09-30T00:00:00Z"
 ---
 
@@ -20,7 +20,7 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 <!-- state-verification: full (renameProject 语义 + rename op 经 relay 执行;FT-133/FT-125) -->
 
 ## Outcome "success"
-- Preconditions: "项目已注册,投影通道就绪(healthy)"
+- Preconditions: "项目已注册,投影通道就绪(healthy),且提交的新名为合法名(非空且非纯空白)"
   fixture_spec:
     entities:
       - entity_type: "Project"
@@ -36,27 +36,43 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
-- Input: "编排者修改项目名并确认"
-- Output: "forge 侧项目名更新;投影同步改名 → dsh 侧 workspace 同名(断言);会话分组随 workspace 保持;改名本身不被投影失败阻断(本地生效)"
+        field_constraints:
+          - field: "cwd"
+            value: "canonical 落在该项目 workspace 投影路径下(分组经宿主 workspace 派生,改名不迁移)"
+- Input: "编排者经左栏项目行 ⋯ 菜单修改项目名并确认"
+- Output: "forge 侧项目名更新;投影同步改名 → dsh 侧 workspace 同名;会话分组随 workspace 保持;改名本身不被投影失败阻断(本地生效)"
 - State: "forge displayName 更新;dsh workspace 同步改名;会话分组不变"
-- Side-effect: "rename op 单向推送;project_list_changed 事件"
+- Side-effect: "改名投影单向推送;项目列表变更通知"
+  <!-- FT-125:执行序 ensure→rename→reorder→delete,rename op 经 relay 执行;FT-135:通知经 workbench-events 通道 project_list_changed 载荷 -->
 - Invariants: "改名不被投影失败阻断(本地生效)"
 
 ## Outcome "rename-projection-failure"
 <!-- source: journey Step 2b -->
 <!-- reasoning: 必答④降级承诺——投影写入失败/通道不可达 → 本地生效 + 待重试 degraded(FT-126/FT-127) -->
 <!-- surface-web required_outcomes 映射:session-expired → 桌面壳无独立登录会话,最近似面 = 宿主/投影通道失联 mid-workflow,映射为降级态呈现——降级提示 + 手动「重试投影」,恢复后重试成功即两侧一致,无数据丢失 -->
-- Preconditions: "改名确认时投影写入失败(workspace 不可写或宿主通道不可达)"
+- Preconditions: "投影通道处于不可写态(workspace 不可写或宿主通道不可达;改名投影写入必经此通道)"
   fixture_spec:
     entities:
       - entity_type: "Project"
         min_count: 1
+        field_constraints:
+          - field: "displayName"
+            value: "改名前的既有名称"
+      - entity_type: "Workspace"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "path"
+            value: "期望投影路径在库(ensure 定位键)"
+          - field: "title"
+            value: "最近成功 title(rename 重推的 diff 基线)"
     state_requirements:
-      - description: "投影通道不可写(通道注错或宿主半身不可达)"
+      - description: "投影通道处于不可写态(通道注错或宿主半身不可达);恢复后可重试"
         prerequisite_entity: "Workspace"
 - Input: "编排者确认改名"
 - Output: "改名本地生效不被阻断;投影待重试(降级态);两侧最终一致可达成"
-- State: "forge displayName 已更新;投影 degraded、rename plan 保留;重试成功后两侧同名"
+- State: "forge displayName 已更新;投影 degraded、待重试投影期望保留;重试成功后两侧同名"
 - Side-effect: "降级不阻断本地写(Propagation Strategy:动词不因投影失败 reject)"
 
 ## Outcome "rename-blank-input"
@@ -71,6 +87,13 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         field_constraints:
           - field: "displayName"
             value: "既有名称(应保持不变)"
+      - entity_type: "Workspace"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "title"
+            value: "与 forge 期望名一致(dsh 侧零变更对照面)"
 - Input: "编排者提交空/纯空白新名"
 - Output: "即时校验提示,留在编辑态可修正;不发起投影写、两侧零变更"
 - State: "forge 与 dsh 两侧零变更"

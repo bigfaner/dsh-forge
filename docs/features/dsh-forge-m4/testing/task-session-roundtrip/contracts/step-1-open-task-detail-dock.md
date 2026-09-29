@@ -50,8 +50,8 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 - Invariants: "dock 与现有 TaskDetailPanel 同构(右缘滑入/无遮罩/焦点陷阱)"
 
 ## Outcome "no-session-link"
-<!-- source: journey Step 1b -->
-<!-- reasoning: in_progress ∧ 无 active 挂接 → 常规 + 未挂接标注位(执行中判定矩阵;FT-108 族);No-link [发起] 按任务终态禁用 -->
+<!-- source: inferred -->
+<!-- reasoning: journey Step 1b;in_progress ∧ 无 active 挂接 → 常规展示 + 未挂接标注(BIZ-workbench-008「执行中」判定:状态 × 挂接正交,in_progress 而无 active 挂接不得计入执行中);No-link [发起] 按任务终态禁用(todo#30) -->
 <!-- surface-web required_outcomes 映射:validation-error → 本旅程无表单输入面,映射为未挂接/目标缺失的错误态呈现(no-link / open-failed) -->
 - Preconditions: "任务 in_progress 但无 active 挂接(或全部挂接已 ended)"
   fixture_spec:
@@ -75,6 +75,33 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 - Input: "编排者打开该任务详情 dock"
 - Output: "常规展示 + 「未挂接会话」标注 + 发起入口(no-link 态);不误呈执行 subagent 标识"
 - State: "no-link 态呈现;不伪造血缘命中"
+- Side-effect: "none"
+
+## Outcome "launch-disabled-terminal"
+<!-- source: inferred -->
+<!-- reasoning: page-map C5 行「No-link 态 [发起] 按任务终态禁用(todo#30)」× journey Step 1b no-link 态的终态细分;触发规则 = 任务已处终态(completed/skipped/rejected,7 态状态机 IsTerminal)且无 active 挂接 -->
+- Preconditions: "任务已处于终态(completed/skipped/rejected 任一)且无 active 挂接(no-link 态)"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "status"
+            value: "终态(completed/skipped/rejected 任一)"
+      - entity_type: "SessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+        field_constraints:
+          - field: "status"
+            value: "ended(无 active 挂接)"
+- Input: "编排者打开该终态任务的详情 dock,察看 no-link 态发起入口"
+- Output: "「未挂接会话」标注照常呈现;[发起] 入口禁用(不可点击),不向终态任务提供发起新会话的入口"
+- State: "no-link 态 + 发起入口禁用;无新会话发起"
 - Side-effect: "none"
 
 ## Journey Invariants

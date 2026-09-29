@@ -7,7 +7,7 @@ sources:
   - docs/features/dsh-forge-m4/testing/project-lifecycle-projection/journey.md
 anchors:
   web:
-    page: "项目工作台·左栏项目树(C3)归档分区 + 生命周期动作·归档"
+    page: "项目工作台·左栏项目树(C3)归档分区"
     route: "project(archiveProject:archived=1;dsh 侧 workspace 保留)"
     requires_auth: false
     layout: "归档后项目行入左栏归档分区(降透明只读,不挂会话);归档行菜单提供恢复/删除"
@@ -33,16 +33,17 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         relationship_type: "belongs_to"
         parent_entity: "Project"
         field_constraints:
-          - field: "project"
-            value: "承载项目"
+          - field: "cwd"
+            value: "canonical 落在承载项目 workspace 投影路径下(分组经宿主 workspace 派生,非 Session 直挂 project 字段)"
       - entity_type: "Workspace"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
 - Input: "编排者执行归档并确认"
-- Output: "forge 侧项目移入归档分区(左栏降透明只读),项目会话列表不再展示(断言);dsh 侧 workspace 保留,会话仍按该项目 workspace 分组(断言,历史可按组找回)"
-- State: "archived=1;workspace 不移除(零投影 op);会话分组保持"
-- Side-effect: "project_list_changed 事件;零投影推送(必答⑤)"
+- Output: "forge 侧项目移入归档分区(左栏降透明只读),项目会话列表不再展示;dsh 侧 workspace 保留,会话仍按该项目 workspace 分组(历史可按组找回)"
+- State: "archived=1;workspace 不移除(无投影推送);会话分组保持"
+- Side-effect: "项目列表变更通知;无投影推送(必答⑤)"
+  <!-- FT-133:archiveProject = archived=1,dsh 侧不动、零投影 op;FT-135:通知经 workbench-events 通道 project_list_changed 载荷 -->
 - Invariants: "归档 ≠ 删除:归档恒保留 workspace 与按项目分组"
 
 ## Outcome "archived-partition-cross-project"
@@ -61,10 +62,17 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         relationship_type: "belongs_to"
         parent_entity: "Project"
         field_constraints:
-          - field: "project"
-            value: "归档项目(断言其不在当前工作台呈现)"
+          - field: "cwd"
+            value: "canonical 落在归档项目的 workspace 投影路径下(分组经宿主 workspace 派生;巡检断言其不在当前活跃项目工作台呈现)"
+      - entity_type: "Workspace"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "path"
+            value: "= 归档项目的 workspace 投影路径(归档不移除、dsh 侧保留;Session cwd 分组所引的宿主)"
 - Input: "编排者在当前活跃项目的工作台左栏定位归档分区,展开归档行菜单"
-- Output: "归档分区在任何活跃项目的左栏全项目树中均呈现;归档项目降透明只读、不挂会话;行菜单提供恢复/删除;该项目会话不在当前工作台呈现(UF1「不挂会话」断言)"
+- Output: "归档分区在任何活跃项目的左栏全项目树中均呈现;归档项目降透明只读、不挂会话;行菜单提供恢复/删除;该项目会话不在当前工作台呈现"
 - State: "纯读巡检;归档态与分区呈现保持"
 - Side-effect: "none"
 

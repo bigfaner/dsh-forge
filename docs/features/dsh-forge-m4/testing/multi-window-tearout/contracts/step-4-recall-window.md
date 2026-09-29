@@ -29,13 +29,13 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
         min_count: 1
         relationship_type: "belongs_to"
         parent_entity: "Project"
-        field_constraints:
-          - field: "origin"
-            value: "其视图原自主窗 pane(可原位恢复)"
+    state_requirements:
+      - description: "该拆出窗视图原自主窗 pane(收回可原位恢复)"
+        prerequisite_entity: "DetachedWindow"
 - Input: "编排者点击独立窗口 [收回](或直接经 OS 标题栏关闭——两者同语义)"
 - Output: "该视图 pane 即时回主窗口原位,不待重启;布局记忆更新为收回后结构(OS 标题栏关闭 ≡ 收回:tech-design Interface 5/ui-design C10)"
-- State: "窗口集 -1(detached-closed 恰好一次);主窗 pane 集恢复;记忆同步"
-- Side-effect: "close 时记忆窗口几何(供后续拆出/重放)"
+- State: "窗口集 -1;主窗 pane 集恢复;记忆同步(与实际窗口集恒一致)"
+- Side-effect: "关闭时记忆该窗几何(供后续拆出/重放复用)"
 - Invariants: "关闭 ≡ 收回:记忆与实际窗口集恒一致"
 
 ## Outcome "close-main-quit"
@@ -60,7 +60,34 @@ last_anchor_sync: "2026-09-30T00:00:00Z"
 - Input: "编排者关闭主窗口(OS 标题栏)"
 - Output: "应用退出(M1 单实例语义),全部拆出窗口随之关闭、不残留;重进按布局记忆恢复拆出态(UF10 restored)"
 - State: "进程退出;窗口集清空(不残留);记忆保持(重进恢复)"
-- Side-effect: "recallAll 编排;全部 detached-closed 事件各恰好一次"
+- Side-effect: "退出前统一收回全部拆出窗,每窗关闭恰好一次、不留残窗"
+
+## Outcome "recall-window-not-found"
+<!-- source: inferred -->
+<!-- reasoning: journey Step 4(推自 FT-104 ERR_WINDOW_NOT_FOUND × tech-design 窗口面传播「收回失败 log + 窗口关闭事件兜底」);windowId 失效不崩溃、不产生第二关闭效果 -->
+- Preconditions: "收回目标 windowId 已失效(该拆出窗口已被关闭并移出窗口集,收回请求仍以该 id 发出)"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "DetachedWindow"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "LayoutMemory"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+        field_constraints:
+          - field: "detached"
+            value: "与实际窗口集一致(失效窗口条目已移除)"
+    state_requirements:
+      - description: "该拆出窗口已关闭并移出窗口集,其 windowId 对收回请求已失效"
+        prerequisite_entity: "DetachedWindow"
+- Input: "编排者以该失效 windowId 发起收回"
+- Output: "收回失败仅记录日志并以窗口关闭事件兜底,不崩溃、不以错误弹窗打扰;窗口集与布局记忆保持一致"
+- State: "窗口集不变;记忆不变;不产生第二关闭效果"
+- Side-effect: "none"
 
 ## Journey Invariants
 
