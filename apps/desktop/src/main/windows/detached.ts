@@ -72,6 +72,8 @@ export interface DetachedHostWindow extends RegistryWindow {
   close(): void
   /** 文档加载终局(成功 resolve / 失败 reject)。 */
   whenLoaded(): Promise<void>
+  /** 标题更新(归档追加分;4.3)。 */
+  setTitle(title: string): void
 }
 
 /** 宿主窗口工厂 seam(生产 = index.ts 的 BrowserWindow 构造点)。 */
@@ -84,6 +86,8 @@ export interface DetachedWindowManagerDeps {
   readonly resolveProjectTitle: (projectId: string) => string | undefined
   /** 视图名本地化(壳引导接 i18n t();测试注入定值)。 */
   readonly viewLabel: (view: DetachedView) => string
+  /** 归档追加分本地化(标题追加「已归档」;ui-design C10 窗口语义,4.3)。 */
+  readonly archivedSuffix: () => string
   /** 主窗当前矩形(首窗居中基准;缺席 = 不定位,交 OS 缺省)。 */
   readonly getMainWindowBounds: () => Rect | undefined
   /** detached-opened/closed 推送落点(fan-out 面)。 */
@@ -99,6 +103,25 @@ export interface DetachedWindowManager {
   recallAllForProject(projectId: string): number
   /** 收回全部 detached(主窗关闭 = 退出的对账腿);返回收回数。 */
   recallAll(): number
+  /**
+   * 归档语义落题(任务 4.3,ui-design C10「归档 → 窗口保持可用,窗口标题
+   * 追加『已归档』」):记账 + 在窗标题即时刷新;此后该项目新开窗携带同样
+   * 后缀(restore 清除)。
+   */
+  setProjectArchived(projectId: string, archived: boolean): void
+}
+
+/**
+ * 标题组装(纯函数):「<项目名> · <视图名>[ · 已归档]」—— the ui-design
+ * C10 form. The archived suffix rides ONLY the title (归档 ≠ 关窗: the
+ * window stays usable).
+ */
+export function composeDetachedTitle(
+  projectTitle: string,
+  viewLabel: string,
+  archivedSuffix?: string | undefined,
+): string {
+  return archivedSuffix === undefined ? `${projectTitle} · ${viewLabel}` : `${projectTitle} · ${viewLabel} · ${archivedSuffix}`
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +197,15 @@ export function resolveDetachedGeometry(
 export function createDetachedWindowManager(deps: DetachedWindowManagerDeps): DetachedWindowManager {
   let windowSeq = 0
   let rememberedGeometry: Rect | undefined
+  /** 归档记账(标题后缀的开关;setProjectArchived 维护)。 */
+  const archivedProjects = new Set<string>()
+
+  /** 项目域标题组装(「<项目名> · <视图名>[ · 已归档]」)。 */
+  const titleOf = (projectId: string, view: DetachedView): string => composeDetachedTitle(
+    deps.resolveProjectTitle(projectId) ?? projectId,
+    deps.viewLabel(view),
+    archivedProjects.has(projectId) ? deps.archivedSuffix() : undefined,
+  )
 
   const detachEvent = (
     type: 'detached-opened' | 'detached-closed',
@@ -202,8 +234,7 @@ export function createDetachedWindowManager(deps: DetachedWindowManagerDeps): De
   return {
     openDetached(input) {
       const windowId = `detached-${String(++windowSeq)}`
-      const projectTitle = deps.resolveProjectTitle(input.projectId) ?? input.projectId
-      const title = `${projectTitle} · ${deps.viewLabel(input.view)}`
+      const title = titleOf(input.projectId, input.view)
       const geometry = resolveDetachedGeometry(input.rect, rememberedGeometry, deps.getMainWindowBounds())
 
       let host: DetachedHostWindow
@@ -263,6 +294,16 @@ export function createDetachedWindowManager(deps: DetachedWindowManagerDeps): De
 
     recallAll() {
       return closeAll(deps.registry.listDetached())
+    },
+
+    setProjectArchived(projectId, archived) {
+      if (archived) archivedProjects.add(projectId)
+      else archivedProjects.delete(projectId)
+      // 在窗即时刷新(不待重启 —— 收回语义同款时态);已销毁窗由注册表过滤。
+      for (const entry of deps.registry.listDetachedByProject(projectId)) {
+        if (entry.window.isDestroyed()) continue
+        ;(entry.window as DetachedHostWindow).setTitle(titleOf(projectId, entry.view))
+      }
     },
   }
 }

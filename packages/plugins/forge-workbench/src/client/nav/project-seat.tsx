@@ -47,6 +47,7 @@ import {
   type LifecycleActionDeps,
 } from '../lifecycle-actions'
 import type { Project } from '../ipc-types'
+import type { DetachedWindowRegistryFace } from '../window-role/recall'
 import { fillTemplate } from '../views/overview/format'
 import type { RightbarTabsFace } from '../views/rightbar/tabs-model'
 import { resetRightbarToDefault, toRightbarTabsFace } from '../views/rightbar/tabs-model'
@@ -217,6 +218,13 @@ export interface ProjectSeatFace {
   readonly uiWorkspace?: UiWorkspaceFace | undefined
   /** Rightbar collapse face; absent = the 右栏回默认 leg is a no-op. */
   readonly sidebarRight?: SidebarRightFace | undefined
+  /**
+   * The detached-window registry face (M4 4.3, AC4): the delete flow marks
+   * the project BEFORE the verb (its closing windows never restore panes)
+   * and counts its live windows for the「全部拆出窗口已关闭」toast.
+   * Absent (hostless) = the delete flow keeps its 3.5 shape.
+   */
+  readonly detachedWindows?: DetachedWindowRegistryFace | undefined
 }
 
 /** Composed props of the `sidebar.workspaces` seat (the WorkbenchShell pattern). */
@@ -636,7 +644,16 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
           onConfirm={() => {
             const target = pendingRemove
             setPendingRemove(null)
-            removeProjectNow(lifecycleDeps, target)
+            // M4 4.3 (AC4): mark BEFORE the verb (the closing windows' events
+            // can never race the mark — no pane restores for a gone project),
+            // and count the live windows for the closure toast's landing.
+            props.detachedWindows?.markRemoved(target.id)
+            const closedWindows = props.detachedWindows?.countFor(target.id) ?? 0
+            removeProjectNow(
+              lifecycleDeps,
+              target,
+              closedWindows > 0 ? t('window.toast.projectWindowsClosed') : undefined,
+            )
           }}
           onCancel={() => { setPendingRemove(null) }}
         />

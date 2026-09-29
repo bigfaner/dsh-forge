@@ -85,6 +85,17 @@ export const RIGHTBAR_TAB_SLOT = 'sidebar.right.pane.tab'
 export const RIGHTBAR_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'
 
 /**
+ * The right Sidebar's tab ACTIONS-MENU item seat (declared by ui-sidebar-right;
+ * list, session scope — the kit's own layout actions stay, this seat extends
+ * the menu's tail). M4 task 4.3 (ui-design §Component C10, the conversation
+ * origin): the subagentchat aside pane carries no forge pane 头 (its body is
+ * upstream ui-subagent's), so its [拆出为窗口] joins through this native
+ * tab-menu seat — the entry renders only for subagentchat tabs.
+ * 声明合并纯增量, 上游槽位机制零修改 (Hard Rule).
+ */
+export const DETACH_TAB_MENU_SLOT = 'sidebar.right.tab.menu.item'
+
+/**
  * The conversation's full-width entries ABOVE the composer card (declared by
  * ui-conversation as a child of the `conversation.content` factory; list,
  * session scope — the in-tree occupants are ui-conversation's TodoPanel,

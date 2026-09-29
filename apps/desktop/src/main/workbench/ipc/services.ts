@@ -137,6 +137,12 @@ export interface WorkbenchIpcServiceDeps {
    * 面。toast 通知口径留 4.3(GUI)。
    */
   readonly recallProjectWindows?: (projectId: string) => void
+  /**
+   * 归档/恢复 → 该项目 detached 窗标题刷新(任务 4.3;ui-design C10「标题
+   * 追加『已归档』」)。缺省 no-op(测试装配/窗口面不在场);boot 接线
+   * (main/index.ts)注入壳层窗口管理器的 setProjectArchived 面。
+   */
+  readonly markDetachedWindowsArchived?: (projectId: string, archived: boolean) => void
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -765,8 +771,19 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
       probeProjectPath: input => lifecycle.probeProjectPath(input),
       renameProject: input => lifecycle.renameProject(input),
-      archiveProject: input => lifecycle.archiveProject(input),
-      restoreProject: input => lifecycle.restoreProject(input),
+      // 任务 4.3(ui-design C10 窗口语义「归档 → 窗口保持可用,标题追加
+      // 『已归档』」):归档/恢复动词落地即刷新该项目 detached 窗标题
+      // (hook 缺省 no-op —— 窗口面不在场的世界;boot 接线注入)。
+      archiveProject: (input) => {
+        const updated = lifecycle.archiveProject(input)
+        deps.markDetachedWindowsArchived?.(updated.id, true)
+        return updated
+      },
+      restoreProject: (input) => {
+        const updated = lifecycle.restoreProject(input)
+        deps.markDetachedWindowsArchived?.(updated.id, false)
+        return updated
+      },
       listProjects: () => lifecycle.listProjects(),
 
       // —— M4 v3 投影动词(任务 3.2):委托 projection/service(对账重算 +

@@ -166,6 +166,7 @@ function createDetachedHostWindow(options: DetachedWindowHostOptions): DetachedH
     getBounds: () => win.getBounds(),
     close: () => { win.close() },
     whenLoaded: () => loaded,
+    setTitle: (title: string) => { win.setTitle(title) },
   }
 }
 
@@ -184,6 +185,8 @@ const detachedWindows = createDetachedWindowManager({
   createHostWindow: createDetachedHostWindow,
   resolveProjectTitle: projectId => resolveProjectTitleForWindows(projectId),
   viewLabel: view => t(view === 'board' ? 'window.view.board' : 'window.view.conversation'),
+  // 任务 4.3(ui-design C10):归档标题追加分。
+  archivedSuffix: () => t('window.archivedSuffix'),
   getMainWindowBounds: () => {
     // BrowserWindow 子集向下转型(注册表面只有 isDestroyed/webContents);
     // 存活主窗必有 getBounds。
@@ -500,6 +503,9 @@ void app.whenReady().then(async () => {
       // 任务 4.2(Interface 1 removeProject「拆出窗关闭」):项目移除 → 壳层
       // 注册表按 projectId 收回全部 detached 窗;toast 通知口径留 4.3(GUI)。
       recallProjectWindows: (projectId) => { detachedWindows.recallAllForProject(projectId) },
+      // 任务 4.3(C10 窗口语义):归档/恢复 → 该项目 detached 窗标题即时
+      // 追加/移除「已归档」(窗口保持可用)。
+      markDetachedWindowsArchived: (projectId, archived) => { detachedWindows.setProjectArchived(projectId, archived) },
     })
     installWorkbenchVerbs(
       (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },

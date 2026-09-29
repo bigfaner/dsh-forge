@@ -666,6 +666,10 @@ export type WorkbenchKey =
   | 'rightbar.split.pane.detach'
   | 'rightbar.split.pane.detachReserved'
   | 'rightbar.split.pane.close'
+  // M4 task 4.3 — Component C10, the 多窗口 client face (the detached
+  // window's [收回] and the delete flow's windows-closed toast).
+  | 'window.detached.recall'
+  | 'window.toast.projectWindowsClosed'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1333,6 +1337,8 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.split.pane.detach': 'Detach to window',
   'rightbar.split.pane.detachReserved': 'Multi-window arrives with M4 4.3',
   'rightbar.split.pane.close': 'Close pane',
+  'window.detached.recall': 'Recall',
+  'window.toast.projectWindowsClosed': 'The project was deleted — its detached windows were closed',
   // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': 'View task',

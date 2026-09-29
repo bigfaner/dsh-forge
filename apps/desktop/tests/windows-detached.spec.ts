@@ -46,6 +46,8 @@ interface FakeHostWindow extends DetachedHostWindow {
   failLoad(error: Error): void
   /** 测试面:移动窗口(记忆几何断言)。 */
   setBounds(next: Bounds): void
+  /** setTitle 调用记录(归档追加分断言面)。 */
+  titles: string[]
 }
 
 function makeHostFactory(state: { createError?: Error } = {}) {
@@ -61,6 +63,7 @@ function makeHostFactory(state: { createError?: Error } = {}) {
     const loadPromise = new Promise<void>((_resolve, reject) => { loadReject = reject })
     const window: FakeHostWindow = {
       options,
+      titles: [options.title],
       isDestroyed: () => destroyed,
       webContents: {
         id,
@@ -83,6 +86,7 @@ function makeHostFactory(state: { createError?: Error } = {}) {
       osClose: () => { window.close() },
       failLoad: (error: Error) => { loadReject?.(error) },
       setBounds: (next: Bounds) => { bounds = { ...next } },
+      setTitle: (title: string) => { window.titles.push(title) },
     }
     created.push(window)
     return window
@@ -113,6 +117,7 @@ function makeManager(overrides: Partial<Parameters<typeof createDetachedWindowMa
     createHostWindow: host.factory,
     resolveProjectTitle: projectId => (projectId === 'p-1' ? 'Demo Project' : undefined),
     viewLabel: view => (view === 'board' ? 'Board' : 'Conversation'),
+    archivedSuffix: () => 'Archived',
     getMainWindowBounds: () => undefined,
     emitWindowChanged: (event) => { events.push(event) },
     ...overrides,
@@ -410,6 +415,7 @@ describe('applyDetachedWindowSecurity (T3)', () => {
 async function withServicesHarness(
   recallProjectWindows: ((projectId: string) => void) | undefined,
   run: (verbs: Awaited<ReturnType<typeof import('../src/main/workbench/ipc/services.ts').createWorkbenchIpcServices>>['verbs'], repoDir: string) => Promise<void> | void,
+  markDetachedWindowsArchived?: ((projectId: string, archived: boolean) => void) | undefined,
 ): Promise<void> {
   const { openDatabase } = await import('../src/main/workbench/store/db.ts')
   const { createWorkbenchIpcServices } = await import('../src/main/workbench/ipc/services.ts')
@@ -432,6 +438,7 @@ async function withServicesHarness(
       onEvents: () => {},
       perception: { retarget: () => {}, rescan: () => {} },
       ...(recallProjectWindows === undefined ? {} : { recallProjectWindows }),
+      ...(markDetachedWindowsArchived === undefined ? {} : { markDetachedWindowsArchived }),
     })
     await run(assembly.verbs, repoDir)
     assembly.dispose()
@@ -465,6 +472,80 @@ describe('removeProject → detached window recall hook (services assembly)', ()
     await withServicesHarness(undefined, async (verbs, repoDir) => {
       const project = verbs.registerProject({ anchor: repoDir, docsPlacement: 'app' })
       expect(() => verbs.removeProject(project.id)).not.toThrow()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 任务 4.3 — 归档窗口语义(ui-design C10「归档 → 窗口保持可用,标题追加
+// 『已归档』」):composeDetachedTitle 纯函数 + manager.setProjectArchived
+// (在窗即时刷新 + 记账 + 新窗携带)+ archiveProject/restoreProject 服务 hook。
+// ---------------------------------------------------------------------------
+
+describe('composeDetachedTitle — the ui-design C10 title form', () => {
+  it('「<项目名> · <视图名>」 with the archived suffix appended only when present', async () => {
+    const { composeDetachedTitle } = await import('../src/main/windows/detached.ts')
+    expect(composeDetachedTitle('Demo', 'Board')).toBe('Demo · Board')
+    expect(composeDetachedTitle('Demo', 'Board', 'Archived')).toBe('Demo · Board · Archived')
+  })
+})
+
+describe('setProjectArchived — the archived title semantics (窗口保持可用)', () => {
+  it('archive refreshes the LIVE windows\' titles with the suffix (即时,不待重启)', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-1', view: 'board' })
+    manager.openDetached({ projectId: 'p-1', view: 'conversation' })
+    manager.openDetached({ projectId: 'p-9', view: 'board' })
+    expect(host.created.map(win => win.titles)).toEqual([
+      ['Demo Project · Board'],
+      ['Demo Project · Conversation'],
+      ['p-9 · Board'],
+    ])
+    manager.setProjectArchived('p-1', true)
+    expect(host.created[0]!.titles).toEqual(['Demo Project · Board', 'Demo Project · Board · Archived'])
+    expect(host.created[1]!.titles).toEqual(['Demo Project · Conversation', 'Demo Project · Conversation · Archived'])
+    // 其它项目的窗口不动。
+    expect(host.created[2]!.titles).toEqual(['p-9 · Board'])
+  })
+
+  it('windows opened AFTER the archive carry the suffix; restore clears live + future titles', () => {
+    const { host, manager } = makeManager()
+    manager.setProjectArchived('p-1', true)
+    manager.openDetached({ projectId: 'p-1', view: 'board' })
+    expect(host.created[0]!.options.title).toBe('Demo Project · Board · Archived')
+    manager.setProjectArchived('p-1', false)
+    expect(host.created[0]!.titles).toEqual(['Demo Project · Board · Archived', 'Demo Project · Board'])
+    manager.openDetached({ projectId: 'p-1', view: 'conversation' })
+    expect(host.created[1]!.options.title).toBe('Demo Project · Conversation')
+  })
+
+  it('recalled (destroyed) windows are filtered out of the title refresh', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-1', view: 'board' })
+    host.created[0]!.osClose()
+    expect(() => manager.setProjectArchived('p-1', true)).not.toThrow()
+  })
+})
+
+describe('archiveProject / restoreProject → detached title hook (services assembly)', () => {
+  it('the lifecycle verbs invoke the injected seam with (projectId, archived)', async () => {
+    const mark = vi.fn()
+    await withServicesHarness(undefined, async (verbs, repoDir) => {
+      const project = verbs.registerProject({ anchor: repoDir, docsPlacement: 'app' })
+      expect(mark).not.toHaveBeenCalled()
+      verbs.archiveProject({ projectId: project.id })
+      expect(mark).toHaveBeenCalledTimes(1)
+      expect(mark).toHaveBeenCalledWith(project.id, true)
+      verbs.restoreProject({ projectId: project.id })
+      expect(mark).toHaveBeenCalledTimes(2)
+      expect(mark).toHaveBeenLastCalledWith(project.id, false)
+    }, mark)
+  })
+
+  it('the hook stays optional (absent seam = archive/restore unaffected)', async () => {
+    await withServicesHarness(undefined, async (verbs, repoDir) => {
+      const project = verbs.registerProject({ anchor: repoDir, docsPlacement: 'app' })
+      expect(() => verbs.archiveProject({ projectId: project.id })).not.toThrow()
     })
   })
 })

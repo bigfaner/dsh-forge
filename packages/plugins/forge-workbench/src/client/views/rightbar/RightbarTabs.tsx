@@ -46,10 +46,12 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from '../../contract'
+import { DETACH_TAB_MENU_SLOT, RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from '../../contract'
 import type { ActiveProjectStore } from '../../store/active-project'
 import { INITIAL_ACTIVE_PROJECT_SNAPSHOT } from '../../store/active-project'
 import type { BoardSessionStore } from '../../store/board-session'
+import type { WindowVerbFaceClient } from '../../window-role/boot'
+import { detachConversationToWindow, parseSubagentChatAddress } from '../../window-role/recall'
 import { TasksView } from '../tasks/TasksView'
 import type { EnterSessionSeam } from '../tasks/detail/LinkHistory'
 import { GuideTab, GuideTabTitle, type ForgeTabFace } from './GuideTab'
@@ -106,6 +108,14 @@ export interface BoardTabFace extends ForgeTabFace {
    * instance); absent = the plain 2.1 pane body.
    */
   readonly split?: SplitPaneStore | undefined
+  /**
+   * The [拆出为窗口] verb seam (M4 4.3, C10): the pane 头's action fires it
+   * with the board's project (the ACTIVE project — the pane host's board
+   * source); the resolved promise says the window opened, and ONLY then does
+   * the body remove its pane (主窗 pane 移除). Absent = the 4.4 reserved
+   * 动作位 (disabled + tooltip) — hostless worlds never see a dead click.
+   */
+  readonly onDetachBoard?: ((projectId: string) => Promise<boolean>) | undefined
 }
 
 /**
@@ -116,12 +126,16 @@ export interface BoardTabFace extends ForgeTabFace {
  * probed).
  *
  * M4 4.4 (C9): while the split is ACTIVE the body gains the pane 头 (区名 +
- * the reserved [拆出为窗口] 动作位 + [关闭] — the close rides the tab's OWN
+ * the [拆出为窗口] 动作位 + [关闭] — the close rides the tab's OWN
  * actions, the native seat contract) and the 分隔条 at the left edge (the
  * a11y keyboard separator + the clamped drag, tabs-model/SplitControls).
+ * M4 4.3 wires the 动作位: the detach opens the detached window FIRST — the
+ * pane closes only on the resolved open (a failed window never loses the view).
  */
 export function BoardTabBody(
-  { useTabInfo, t, activeProject, session, onEnterSession, sessions, split }: BoardTabFace & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>,
+  {
+    useTabInfo, t, activeProject, session, onEnterSession, sessions, split, onDetachBoard,
+  }: BoardTabFace & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>,
 ): ReactNode {
   const snapshot = useSyncExternalStore(
     activeProject?.subscribe ?? (() => () => {}),
@@ -140,6 +154,16 @@ export function BoardTabBody(
   // callback only fires them).
   const closeTab = useTabInfo?.().tab.actions.close
   const closePane = (): void => { closeTab?.() }
+  // M4 4.3 (C10 ①): [拆出为窗口] → windowOpenDetached FIRST, 主窗 pane 移除
+  // only on the resolved open — a failed window keeps the pane (never a lost
+  // view). No resolved project yet = no dead click (the reserved seat).
+  const detachPane = onDetachBoard === undefined || projectId === undefined
+    ? undefined
+    : (): void => {
+      void onDetachBoard(projectId).then((opened) => {
+        if (opened) closePane()
+      })
+    }
   // The drag math's denominator: the pane's measured width lifted to the WHOLE
   // split's width through the pane's share (first pane = ratio, else 1-ratio;
   // the open order tracks the pane order in the common flow). Zero-measured
@@ -167,7 +191,12 @@ export function BoardTabBody(
         />
       )}
       {splitActive && (
-        <PaneHeader t={t} view="board" onClose={closePane} />
+        <PaneHeader
+          t={t}
+          view="board"
+          onClose={closePane}
+          {...detachPane === undefined ? {} : { onDetach: detachPane }}
+        />
       )}
       <TasksView
         key={projectId ?? 'unresolved'}
@@ -323,6 +352,84 @@ export function DepgraphTabBody(
 }
 
 // ---------------------------------------------------------------------------
+// The aside tab-menu [拆出为窗口] entry (M4 4.3 — the conversation origin)
+// ---------------------------------------------------------------------------
+
+/** The aside tab-menu entry's observed owner share (the kit's menu-item contract subset). */
+export interface DetachMenuOwnerShare {
+  /** The tab whose menu is open ({ id, kind, contentId } — the observed subset). */
+  readonly tab: { readonly id: string; readonly kind: string; readonly contentId: string }
+  /** Dismiss the menu (an item that acts MUST call this — the kit's own rule). */
+  readonly dismiss: () => void
+}
+
+/** The menu entry's injected face. */
+export interface DetachMenuFace {
+  /** The plugin locale seat. */
+  readonly t: ForgeTabFace['t']
+  /** The active project id resolver (absent → the entry renders nothing). */
+  readonly getProjectId: () => string | undefined
+  /** The [拆出为窗口] verb face (the shell's window registry). */
+  readonly windowVerb: WindowVerbFaceClient
+  /** The tab close seam (the pane removal after a resolved open). */
+  readonly closeTab: (tabId: string) => void
+}
+
+/** The menu entry's composed props (the owner share + the injected face). */
+export type DetachMenuItemProps = DetachMenuOwnerShare & DetachMenuFace
+
+/** The menu row (the 4.4 menu-row form: h30 r14 full-width row). */
+const DETACH_MENU_ROW_STYLE = {
+  alignItems: 'center',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '14px',
+  color: 'inherit',
+  cursor: 'pointer',
+  display: 'flex',
+  font: 'inherit',
+  fontSize: '13px',
+  gap: '8px',
+  height: '30px',
+  padding: '0 12px',
+  textAlign: 'left',
+  width: '100%',
+} as const
+
+/**
+ * The subagentchat tab's actions-menu [拆出为窗口] row (the 4.4 note's
+ * 「native tab-menu seat」 — the upstream-hosted aside pane carries no forge
+ * pane 头, its detach joins here): renders ONLY for a subagentchat tab (the
+ * contentId parses back into the lineage address triple); the pick opens
+ * the detached conversation window and closes the tab ONLY on the resolved
+ * open — and the menu dismisses either way (the kit's own rule).
+ * @returns the row, or null for any other tab kind.
+ */
+export function DetachMenuEntry({ tab, dismiss, t, getProjectId, windowVerb, closeTab }: DetachMenuItemProps): ReactNode {
+  const target = parseSubagentChatAddress(tab.contentId)
+  if (target === undefined) return null
+  const onPick = (): void => {
+    dismiss()
+    const projectId = getProjectId()
+    if (projectId === undefined) return
+    void detachConversationToWindow(windowVerb, projectId, target).then((opened) => {
+      if (opened) closeTab(tab.id)
+    })
+  }
+  return (
+    <button type="button" data-dsh-forge-detach-menu-item="" style={DETACH_MENU_ROW_STYLE} onClick={onPick}>
+      {t('rightbar.split.pane.detach')}
+    </button>
+  )
+}
+
+/** The aside detach menu entry's list id (the `sidebar.right.tab.menu.item` cell). */
+export const DETACH_MENU_ID = 'forge-detach-aside'
+
+/** The entry's order (the menu's extra-items tail, in registration order). */
+export const DETACH_MENU_ORDER = 100
+
+// ---------------------------------------------------------------------------
 // The installer
 // ---------------------------------------------------------------------------
 
@@ -373,6 +480,20 @@ export interface RightbarTabsOptions extends ForgeTabFace {
    * set; reaching the empty set IS the 全部 pane 关闭 → 回活跃区 transition).
    */
   readonly splitStore?: SplitPaneStore | undefined
+  /**
+   * The [拆出为窗口] verb seam (M4 4.3, C10 ①): threaded into the board pane
+   * body's pane 头 动作位 — the action opens the detached window; the pane
+   * closes only on the resolved promise. Absent = the reserved disabled seat.
+   */
+  readonly onDetachBoard?: ((projectId: string) => Promise<boolean>) | undefined
+  /**
+   * The shell's window verb face (M4 4.3): present + an active project
+   * resolver = the subagentchat tab's actions menu gains the [拆出为窗口]
+   * entry (the conversation origin); absent = no entry (hostless worlds).
+   */
+  readonly windowVerb?: WindowVerbFaceClient | undefined
+  /** The active project id resolver (the aside menu entry's project source). */
+  readonly getActiveProjectId?: (() => string | null | undefined) | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -408,7 +529,10 @@ function optionalService(ctx: ClientContext, name: string): unknown {
  * @returns disposer removing the definitions, the bodies, and the watcher.
  */
 export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOptions): () => void {
-  const { t, activeProjectStore, boardSession, onEnterSession, onOpenTask, readTaskSources, splitStore } = options
+  const {
+    t, activeProjectStore, boardSession, onEnterSession, onOpenTask, readTaskSources, splitStore,
+    onDetachBoard, windowVerb,
+  } = options
   const tabs = toTabRegistryFace(optionalService(ctx, 'sidebarRightTabs'))
   if (tabs === undefined) return () => {}
   const face: ForgeTabFace = { t }
@@ -456,6 +580,8 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     get sessions() { return options.sessions },
     // M4 4.4: the C9 split store (the pane 头 + 分隔条 chrome's state home).
     ...splitStore === undefined ? {} : { split: splitStore },
+    // M4 4.3: the [拆出为窗口] verb seam (the pane 头 动作位 goes live).
+    ...onDetachBoard === undefined ? {} : { onDetachBoard },
   }
   const overviewFace: OverviewTabFace = {
     t,
@@ -542,7 +668,37 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     })
   }
 
+  // The aside tab's actions-menu [拆出为窗口] entry (M4 4.3 — the conversation
+  // origin): ONE list registration under the kit's menu-item seat, rendered
+  // only for subagentchat tabs. 声明合并纯增量 — the kit's own layout actions
+  // stay untouched (Hard Rule).
+  const disposeDetachMenu = windowVerb === undefined || options.getActiveProjectId === undefined
+    ? () => {}
+    : ctx.slots.inject(DETACH_TAB_MENU_SLOT, () => {
+      const dispose = ctx.slots.register({
+        name: DETACH_TAB_MENU_SLOT,
+        id: DETACH_MENU_ID,
+        order: DETACH_MENU_ORDER,
+        registrant: 'forge-workbench: aside detach menu entry',
+        inject: (): DetachMenuFace => ({
+          t,
+          getProjectId: () => options.getActiveProjectId?.() ?? undefined,
+          windowVerb,
+          closeTab: (tabId: string): void => {
+            try {
+              sidebarRight?.close(tabId)
+            } catch {
+              // The rebind window mid session switch — the kit's close is a
+              // no-op then; the window opened, the tab settles natively.
+            }
+          },
+        }),
+      }, DetachMenuEntry)
+      return () => { dispose() }
+    })
+
   return () => {
+    disposeDetachMenu()
     disposeSplitWatch?.()
     disposeWatch?.()
     disposeDocTitle()

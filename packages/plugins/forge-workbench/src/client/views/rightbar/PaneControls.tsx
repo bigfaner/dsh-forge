@@ -7,15 +7,16 @@
  * it — the board body keeps feeding the SAME TasksView instance (AC5,
  * 功能面不缩水).
  *
- * The 动作位 is a RESERVED slot: [拆出为窗口] renders disabled with its
- * M4-4.3 tooltip until task 4.3 wires `onDetach` (多窗口 = the shell window
- * registry's verb; a reserved, visible, inert seat is the honest form — the
- * pane 头's shape ships complete, the action lands with its owner task).
+ * The 动作位 is WIRED by task 4.3 (C10 ①): `onDetach` present = the live
+ * [拆出为窗口] (windowOpenDetached first; the pane closes only on the
+ * resolved open — BoardTabBody's composition); absent = the reserved form
+ * (disabled + the 4.3 tooltip) — hostless worlds keep the honest inert seat.
  *
  * Upstream-hosted panes (the 会话旁置 `subagentchat` aside body is upstream
  * ui-subagent's — not a forge seat) carry no forge pane 头: their close rides
- * the native chip ×, and their detach joins the same 4.3 wiring through the
- * native tab-menu seat. 全部 pane 关闭 lands natively — the last non-guide
+ * the native chip ×, and their detach joins the 4.3 wiring through the native
+ * tab-menu seat (`sidebar.right.tab.menu.item` — RightbarTabs's
+ * DetachMenuEntry). 全部 pane 关闭 lands natively — the last non-guide
  * close collapses the column and the 活跃区 conversation is the single view
  * again (the model observes it; see tabs-model.ts).
  */

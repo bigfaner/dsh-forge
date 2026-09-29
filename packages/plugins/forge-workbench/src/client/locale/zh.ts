@@ -670,6 +670,9 @@ export const zh: Record<WorkbenchKey, string> = {
   'rightbar.split.pane.detach': '拆出为窗口',
   'rightbar.split.pane.detachReserved': '多窗口 · M4 4.3 接入',
   'rightbar.split.pane.close': '关闭',
+  // M4 task 4.3 —— C10 多窗口 client 面(detached 窗 [收回] / 删除项目关窗 toast)。
+  'window.detached.recall': '收回',
+  'window.toast.projectWindowsClosed': '项目已删除,其全部拆出窗口已关闭',
   // M4 task 2.7 —— C6 subagent 会话·任务元数据条(bound/ambiguous 双态;任务号方言为拉丁 mono,前缀随设计稿保留 task)。
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': '查看任务',

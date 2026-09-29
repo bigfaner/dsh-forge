@@ -54,6 +54,11 @@ import { createActiveProjectStore } from './store/active-project'
 import { createBoardSessionStore } from './store/board-session'
 import { createSessionOpenChannel } from './session-open'
 import type { SessionOpenTarget } from './session-open'
+import { getWindowVerbFace, routeWindowBoot } from './window-role/boot'
+import type { WindowVerbFaceClient } from './window-role/boot'
+import { installDetachedWindow } from './window-role/detached-view'
+import type { DetachedSessionOpenFace } from './window-role/detached-view'
+import { detachBoardToWindow, installWindowRecallSync } from './window-role/recall'
 import { toLineageSessionsSource } from './lineage'
 import { installMetadataBar } from './components/task-metadata/MetadataBar'
 import type { MetadataTaskSource } from './components/task-metadata/MetadataBar'
@@ -463,6 +468,40 @@ export type {
   ConversationHeaderUtilitiesZone, SplitControlSeatProps, SplitControlsFace, SplitControlsTranslate,
   SplitMenuControlProps, SplitSeparatorProps,
 } from './views/rightbar/SplitControls'
+// M4 task 4.3 — Component C10, the 多窗口 client face: the window-role boot
+// (the typed handshake consumer + the renderer routing), the detached
+// single-view assembly (board = the pinned TasksView panel + [收回]; the
+// conversation = the native panel + openSession(target) + the utilities-row
+// [收回]), and the 拆出/收回 actions + the main window's window-changed
+// reaction (pane restores, the delete-flow marks/counts).
+export {
+  getWindowVerbFace, isDetachedRole, routeWindowBoot, subagentTargetOf,
+} from './window-role/boot'
+export type {
+  DetachedViewKind, DetachedWindowRole, OpenDetachedInputClient, SessionTargetClient,
+  WindowBootRole, WindowBootHandlers, WindowChangedEventClient, WindowVerbFaceClient,
+} from './window-role/boot'
+export {
+  DETACHED_PANEL_ID, DETACHED_POLL_CEILING_MS, DETACHED_POLL_MS, DETACHED_RECALL_ID,
+  DETACHED_RECALL_ORDER, DetachedBoardPanel, DetachedRecallSeat, installDetachedWindow,
+} from './window-role/detached-view'
+export type {
+  DetachedBoardPanelProps, DetachedRecallSeatProps, DetachedSessionOpenFace,
+  DetachedViewTranslate, DetachedWindowOptions,
+} from './window-role/detached-view'
+export {
+  detachBoardToWindow, detachConversationToWindow, installWindowRecallSync,
+  parseSubagentChatAddress, restoreDetachedPane,
+} from './window-role/recall'
+export type {
+  DetachedWindowRegistryFace, OpenDetachedRect, PaneRestoreOutcome, RecallSessionFace,
+  RecallSidebarFace, WindowRecallSyncOptions,
+} from './window-role/recall'
+export {
+  DETACH_MENU_ID, DETACH_MENU_ORDER, DetachMenuEntry,
+} from './views/rightbar/RightbarTabs'
+export type { DetachMenuFace, DetachMenuItemProps, DetachMenuOwnerShare } from './views/rightbar/RightbarTabs'
+export { DETACH_TAB_MENU_SLOT } from './contract'
 export { createIpcConfirmCardFace } from './ipc/workbench'
 export { en } from './locale/en'
 export { zh } from './locale/zh'
@@ -493,16 +532,69 @@ export const inject = ['slots', 'locale']
 export const RAIL_GRACE_MS = 5_000
 
 /**
- * Client plugin body: register the bilingual dictionary, seat the view-key
- * machine + shared controller, then assemble the navigation forms — slot path
- * on arrival, rail on grace expiry, rail standing down when the preferred
- * path completes.
+ * Client plugin body: register the bilingual dictionary, then route the
+ * renderer's WINDOW ROLE before any heavy seat registers (M4 task 4.3,
+ * boot.ts): every window of the single-instance shell loads the same SPA,
+ * so the assembly asks the shell who it is — a detached window mounts its
+ * single view (无工作台头,区导航不可用), the main window (or a hostless
+ * world) assembles the full workbench below.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'forge-workbench: dictionaries')
   const t = ctx.locale.bind(NS)
 
+  // M4 task 4.3 — the C10 window-role boot (Interface 5's typed handshake
+  // over the preload verb face; the role never travels the URL). A hostless
+  // world (no dshForge) routes main SYNCHRONOUSLY — the boot contract the
+  // nav-form/slots specs assert; the real shell costs one IPC roundtrip.
+  const windowVerb = getWindowVerbFace()
+  const disposeBoot = routeWindowBoot(windowVerb, {
+    main: () => applyMainWindow(ctx, windowVerb),
+    detached: role => installDetachedWindow(ctx, {
+      t,
+      role,
+      // routeWindowBoot only reaches the detached arm with a live face.
+      face: windowVerb as WindowVerbFaceClient,
+      // The conversation leg's ONE openSession write path, resolved lazily
+      // (the upstream service registers after this plugin's apply). The
+      // narrow is minimal on purpose: the native API takes SessionId |
+      // SubagentAddress (Interface 6) — the 1.6 face narrows to string only.
+      getOpenSession: () => detachedOpenSessionFace(optionalServiceRead(ctx, 'uiWorkspace')),
+    }),
+  })
+  ctx.effect(() => () => { disposeBoot() }, 'forge-workbench: window-role boot')
+}
+
+/** A guarded optional service read (the apply body's own helper, detached-side twin). */
+function optionalServiceRead(ctx: ClientContext, name: string): unknown {
+  try {
+    return ctx.get(name, false)
+  } catch {
+    return undefined
+  }
+}
+
+/** The detached conversation leg's minimal openSession narrow (never a load gate). */
+function detachedOpenSessionFace(candidate: unknown): DetachedSessionOpenFace | undefined {
+  if (candidate === null || typeof candidate !== 'object') return undefined
+  return typeof (candidate as { openSession?: unknown }).openSession === 'function'
+    ? candidate as DetachedSessionOpenFace
+    : undefined
+}
+
+/**
+ * The MAIN-window workbench assembly (the pre-4.3 apply body + the 4.3
+ * window legs): view-key machine + controller, the renderer relays, the P1
+ * seats, the rightbar family, the C9 split store — and the C10 recall sync
+ * (window-changed → pane restores) + the [拆出为窗口] verb seams.
+ * @param ctx - client root context.
+ * @param windowVerb - the preload window verb face (absent = the C10 legs
+ * stay inert — hostless worlds keep the exact pre-4.3 shape).
+ * @returns the combined disposer.
+ */
+function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | undefined): () => void {
+  const t = ctx.locale.bind(NS)
   const store = createViewKeyStore(createLocalStoragePersistence())
   const controller = new ViewSwitchController(store)
   // M4 task 1.6 (裁决 #26 / page-map 启动默认落点): the boot lands on the
@@ -667,6 +759,18 @@ export function apply(ctx: ClientContext): void {
   const liveUiWorkspace = lazyUpstreamFace('uiWorkspace', 'openSession', toUiWorkspaceFace)
   const liveSidebarRight = lazyUpstreamFace('sidebarRight', 'openTab', toSidebarRightFace)
 
+  // M4 task 4.3 — the C10 recall sync: the MAIN window's window-changed
+  // reaction ([收回] / OS title-bar close → the pane returns HERE, 不待重启;
+  // a deleted project's closing windows never restore panes). Hostless (no
+  // window verb face) = the whole leg inert, the pre-4.3 shape exactly.
+  const windowRecall = windowVerb === undefined
+    ? undefined
+    : installWindowRecallSync({
+      face: windowVerb,
+      getSidebarRight: () => toRightbarTabsFace(optionalService('sidebarRight')),
+      getOpenSession: () => liveUiWorkspace(),
+    })
+
   // M4 task 4.4 — the C9 分屏 state home: ONE plugin-lifetime split store
   // shared by the 工作台头 [分屏] control (the conversation header utilities
   // seat) and the board pane body's chrome (pane 头 + 分隔条). The
@@ -700,6 +804,8 @@ export function apply(ctx: ClientContext): void {
       get sessions() { return liveSessionsFace() },
       get uiWorkspace() { return liveUiWorkspace() },
       get sidebarRight() { return liveSidebarRight() },
+      // M4 4.3 (AC4): the delete flow's detached-window marks + counts.
+      get detachedWindows() { return windowRecall },
     })
   const disposeMetadataBar = installMetadataBar(ctx, {
     t,
@@ -752,6 +858,16 @@ export function apply(ctx: ClientContext): void {
         // M4 4.4: the C9 split store (the pane 头 + 分隔条 chrome + the
         // pane-set watcher over the open-tab inventory).
         splitStore,
+        // M4 4.3 (C10 ①): the [拆出为窗口] seams — the pane 头 动作位 (the
+        // board origin) and the tab-menu entry (the aside origin). Both need
+        // the window verb face; the menu entry also needs the project source.
+        ...(windowVerb === undefined || activeProjectStore === undefined
+          ? {}
+          : {
+            onDetachBoard: (projectId: string) => detachBoardToWindow(windowVerb, projectId),
+            windowVerb,
+            getActiveProjectId: () => activeProjectStore.getSnapshot().activeProjectId,
+          }),
       })
       return true
     }
@@ -827,7 +943,10 @@ export function apply(ctx: ClientContext): void {
   // Node keeps the process reference alive otherwise; browsers have no unref.
   ;(graceTimer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
 
-  ctx.effect(() => () => {
+  // The combined disposer (the pre-4.3 effect cleanup + the 4.3 legs): the
+  // boot routing hands it to the plugin-lifetime effect in apply().
+  return () => {
+    windowRecall?.dispose()
     clearTimeout(graceTimer)
     disableRail()
     disposeToolBridge()
@@ -842,5 +961,5 @@ export function apply(ctx: ClientContext): void {
     disposeProjectPanelRow()
     activeProjectStore?.dispose()
     disposeSlotNav()
-  }, 'forge-workbench: navigation forms')
+  }
 }

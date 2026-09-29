@@ -87,8 +87,11 @@ export function restoreProjectNow(deps: LifecycleActionDeps, project: Project): 
  * 删除 — removeProject (投影 delete + FK cascade; the kernel clears the
  * pointer when the ACTIVE project goes). 删除当前项目 → the pointer falls to
  * the first remaining project, or the workbench lands on the 空态引导.
+ * M4 4.3 (AC4): `windowsClosedNote` — the caller-supplied note the toast
+ * appends when the removed project had detached windows (the kernel's
+ * recallProjectWindows hook closes them; the note counts them pre-verb).
  */
-export function removeProjectNow(deps: LifecycleActionDeps, project: Project): void {
+export function removeProjectNow(deps: LifecycleActionDeps, project: Project, windowsClosedNote?: string): void {
   deps.store.bridge.removeProject(project.id)
     .then(
       async () => {
@@ -98,7 +101,8 @@ export function removeProjectNow(deps: LifecycleActionDeps, project: Project): v
         if (snapshot.activeProjectId === null && fallback !== undefined) {
           deps.store.switchProject(fallback.id)
         }
-        deps.showToast(fillTemplate(deps.t('project.toast.removed'), { name: project.displayName }))
+        const removed = fillTemplate(deps.t('project.toast.removed'), { name: project.displayName })
+        deps.showToast(windowsClosedNote === undefined ? removed : `${removed}\n${windowsClosedNote}`)
       },
       () => { deps.showToast(deps.t('project.toast.actionFailed')) },
     )
