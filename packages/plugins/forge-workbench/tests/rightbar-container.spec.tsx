@@ -11,6 +11,7 @@ import {
 } from '../src/client/views/rightbar/RightbarTabs.tsx'
 import type { OpenTabRow, RightbarTabsFace } from '../src/client/views/rightbar/tabs-model.ts'
 import type { ActiveProjectSnapshot, ActiveProjectStore } from '../src/client/store/active-project.ts'
+import { createBoardSessionStore } from '../src/client/store/board-session.ts'
 import { en } from '../src/client/locale/en.ts'
 import type { WorkbenchKey } from '../src/client/locale/en.ts'
 
@@ -33,7 +34,12 @@ vi.mock('../src/client/views/tasks/TasksView.tsx', async () => {
   return {
     TasksView: (props: Record<string, unknown>) => {
       useEffect(() => { boardStub.mounts += 1 }, [])
-      boardStub.props.push({ projectId: props.projectId, host: props.host })
+      boardStub.props.push({
+        projectId: props.projectId,
+        host: props.host,
+        ...('session' in props ? { session: props.session } : {}),
+        ...('onEnterSession' in props ? { onEnterSession: props.onEnterSession } : {}),
+      })
       return <div data-mock-tasks-view={String(props.host)} />
     },
   }
@@ -239,6 +245,36 @@ describe('AC1/AC5: board = TasksView pane host; overview/doc/depgraph = empty mo
       const view = render(<Placeholder />)
       expect(view.container.innerHTML).toBe('')
     }
+  })
+})
+
+describe('AC1 (M4 2.7): the board body threads the plugin-lifetime legs', () => {
+  it('session + onEnterSession ride through to TasksView (conditional spread, absent = absent)', () => {
+    boardStub.props = []
+    const boardSession = createBoardSessionStore()
+    const onEnterSession = () => Promise.resolve()
+    render(<BoardTabBody t={t} session={boardSession} onEnterSession={onEnterSession} />)
+    expect(boardStub.props.at(-1)).toMatchObject({ host: 'pane', session: boardSession, onEnterSession })
+  })
+
+  it('the installer carries both options into the keyed board body inject face', () => {
+    const core = new SlotCore()
+    const registry = makeRegistry()
+    declareRightbarTree(core)
+    const boardSession = createBoardSessionStore()
+    const onEnterSession = () => Promise.resolve()
+    installRightbarTabs(makeFakeCtx(core, { sidebarRightTabs: registry.registry }), {
+      t,
+      boardSession,
+      onEnterSession,
+    })
+    const entry = core.entriesOfSlot(RIGHTBAR_TAB_SLOT).find(row => row.options.key === forgeTabId('board'))
+    const face = (entry?.inject as () => Record<string, unknown>)?.() as Record<string, unknown>
+    expect(face).toMatchObject({ t, session: boardSession, onEnterSession })
+    // Absent options stay ABSENT in the face (exactOptionalPropertyTypes discipline).
+    const dispose = installRightbarTabs(makeFakeCtx(new SlotCore(), {}), { t })
+    expect(dispose).toBeInstanceOf(Function)
+    dispose()
   })
 })
 

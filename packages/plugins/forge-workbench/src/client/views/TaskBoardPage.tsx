@@ -186,6 +186,14 @@ export interface TaskBoardPageProps {
   /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: import('../contract').SessionLaunchHandover | undefined
   /**
+   * The C5 [打开] dual-channel seam (M4 2.7, Interface 6): present = the
+   * 挂接历史 rows' [打开] goes live over the real channel (顶层 sessionId /
+   * subagent SubagentAddress; a rejecting promise surfaces the section's
+   * open-failed toast), AND the orchestration section's 「进入会话」 falls
+   * back to it when the M3 hand-over seat is absent (the pane host).
+   */
+  onEnterSession?: ((target: import('./tasks/detail/LinkHistory').SessionOpenTarget) => void | Promise<unknown>) | undefined
+  /**
    * The board session store (5.11 AC3/AC4): present = the plugin-lifetime
    * selection/scroll/badge memory (survives the launch round-trip's shell
    * unmount); absent = per-mount stores (the 5.8 behavior, unit tests).
@@ -728,24 +736,31 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   // 「进入会话」(the orchestration section's subagent jump): the M1 view-switch
   // contract rides the hand-over seat (切会话视图 + session locating), and the
   // 运行中徽标 write rides along (AC3/AC2: back on the board, the badge reads
-  // correctly off the store, unmount-surviving).
+  // correctly off the store, unmount-surviving). M4 2.7: a host WITHOUT the
+  // hand-over seat (the rightbar pane) rides the Interface 6 channel seam
+  // instead — same navigation, same badge write (the void M3 seam never
+  // surfaces the channel's rejections; the dock's OWN [打开] rows toast).
   const handleEnterSession = useCallback((sessionId: string): void => {
     if (props.projectId === undefined || props.codeRoot === undefined) return
     const taskKey = selectedRef.current.taskKey
     if (taskKey === undefined) return
     const task = allTasks.find(candidate => candidate.key === taskKey)
     if (task === undefined) return
-    props.onLaunched?.(sessionId, {
-      projectId: props.projectId,
-      codeRoot: props.codeRoot,
-      featureSlug: task.featureSlug,
-      localId: localIdOf(task.key),
-      title: task.title,
-    })
+    if (props.onLaunched !== undefined) {
+      props.onLaunched(sessionId, {
+        projectId: props.projectId,
+        codeRoot: props.codeRoot,
+        featureSlug: task.featureSlug,
+        localId: localIdOf(task.key),
+        title: task.title,
+      })
+    } else {
+      void props.onEnterSession?.(sessionId)
+    }
     if (props.session !== undefined) {
       props.session.markLinkActive(props.projectId, taskKey, sessionId)
     }
-  }, [props.projectId, props.codeRoot, props.onLaunched, props.session, allTasks])
+  }, [props.projectId, props.codeRoot, props.onLaunched, props.onEnterSession, props.session, allTasks])
 
   // The 编排角标谱's per-task state: the LATEST row per task (redispatch
   // mints a new row — latest-by-dispatchedAt is the live orchestration).
@@ -1030,6 +1045,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
               ? {}
               : { activeSessionId: activeLinks.get(selected.taskKey) })}
             {...(props.session === undefined ? {} : { onLinksLoaded: handleLinksLoaded })}
+            {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
             onClose={handleCloseDock}
             onNavigate={handleNavigate}
             {...(detailDispatchMount === undefined ? {} : { dispatch: detailDispatchMount })}

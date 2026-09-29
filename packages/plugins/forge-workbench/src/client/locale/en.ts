@@ -581,6 +581,10 @@ export type WorkbenchKey =
   | 'rightbar.guide.terminal.description'
   | 'rightbar.guide.browser.title'
   | 'rightbar.guide.browser.description'
+  // M4 task 2.7 — Component C6, the subagent 会话·任务元数据条.
+  | 'metadata.taskPrefix'
+  | 'metadata.viewTask'
+  | 'metadata.executing'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1169,4 +1173,8 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.guide.terminal.description': 'Run commands in the session workspace',
   'rightbar.guide.browser.title': 'Browser',
   'rightbar.guide.browser.description': 'Browse HTTP(S) pages',
+  // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
+  'metadata.taskPrefix': 'task',
+  'metadata.viewTask': 'View task',
+  'metadata.executing': 'This session is executing',
 }

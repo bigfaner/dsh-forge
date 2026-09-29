@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
+  ensureBoardActive, ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
   type OpenTabRow, type RightbarTabsFace,
 } from '../src/client/views/rightbar/tabs-model.ts'
 
@@ -158,5 +158,24 @@ describe('ensureOverviewActive (the §4.7 回概览 primitive)', () => {
     const without = makeFace(FULL_ROWS.filter(row => row.kind !== 'overview'), true)
     expect(ensureOverviewActive(without.face)).toBe(true)
     expect(without.log.opened).toEqual([['overview', undefined]])
+  })
+})
+
+describe('ensureBoardActive (M4 2.7 — the C6 「查看任务」 jump pane leg)', () => {
+  it('focuses the existing board tab', () => {
+    const { face, log } = makeFace(FULL_ROWS, true)
+    expect(ensureBoardActive(face)).toBe(true)
+    expect(log.focused).toEqual(['board-1'])
+    expect(log.opened).toEqual([])
+  })
+
+  it('opens one when no board tab lives', () => {
+    const without = makeFace(FULL_ROWS.filter(row => row.kind !== 'board'), true)
+    expect(ensureBoardActive(without.face)).toBe(true)
+    expect(without.log.opened).toEqual([['board', undefined]])
+  })
+
+  it('undefined face (service absent) is a no-op — the selection leg still opened the dock', () => {
+    expect(ensureBoardActive(undefined)).toBe(false)
   })
 })

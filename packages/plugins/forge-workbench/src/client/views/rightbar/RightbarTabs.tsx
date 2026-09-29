@@ -40,7 +40,9 @@ import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sideb
 import { RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from '../../contract'
 import type { ActiveProjectStore } from '../../store/active-project'
 import { INITIAL_ACTIVE_PROJECT_SNAPSHOT } from '../../store/active-project'
+import type { BoardSessionStore } from '../../store/board-session'
 import { TasksView } from '../tasks/TasksView'
+import type { EnterSessionSeam } from '../tasks/detail/LinkHistory'
 import { GuideTab, GuideTabTitle, type ForgeTabFace } from './GuideTab'
 import {
   forgeTabDefinitions, forgeTabId, RIGHTBAR_TAB_KINDS, type TabKind,
@@ -58,11 +60,19 @@ export type GuideBodyProps = ForgeTabFace
  * The board pane's injected face: the 2.1 dual-host contract — `host='pane'`
  * is the width form, and the ACTIVE-PROJECT pointer is the board's only
  * project source (the pane host feeds it; the detached window pins its own).
+ * M4 2.7 adds the two plugin-lifetime legs the board's C5/C6 faces ride: the
+ * board-session memory (the shared selection the C6 「查看任务」 jump opens
+ * the detail dock through) and the Interface 6 open seam (the channel behind
+ * the C5 [打开] rows — 2.7's session-open.ts).
  */
 export interface BoardTabFace extends ForgeTabFace {
   /** The plugin-lifetime active-project store; absent (hostless) = the board
    * stays on its resolving branch (no silent project). */
   readonly activeProject?: ActiveProjectStore | undefined
+  /** The plugin-lifetime board-session memory (5.11's designed client-apply tier — the C6→C5 dock bridge). */
+  readonly session?: BoardSessionStore | undefined
+  /** The Interface 6 dual-channel open seam (present = the C5 rows' [打开] goes live). */
+  readonly onEnterSession?: EnterSessionSeam | undefined
 }
 
 /**
@@ -72,7 +82,7 @@ export interface BoardTabFace extends ForgeTabFace {
  * to the board's own box (零宿主探测: the breakpoint is injected, never
  * probed).
  */
-export function BoardTabBody({ t, activeProject }: BoardTabFace): ReactNode {
+export function BoardTabBody({ t, activeProject, session, onEnterSession }: BoardTabFace): ReactNode {
   const snapshot = useSyncExternalStore(
     activeProject?.subscribe ?? (() => () => {}),
     activeProject?.getSnapshot ?? (() => INITIAL_ACTIVE_PROJECT_SNAPSHOT),
@@ -90,6 +100,8 @@ export function BoardTabBody({ t, activeProject }: BoardTabFace): ReactNode {
         host="pane"
         projectId={projectId}
         codeRoot={project?.codeRoot}
+        {...(session === undefined ? {} : { session })}
+        {...(onEnterSession === undefined ? {} : { onEnterSession })}
       />
     </div>
   )
@@ -133,6 +145,17 @@ export interface TabRegistryFace {
 export interface RightbarTabsOptions extends ForgeTabFace {
   /** The plugin-lifetime active-project pointer store (the linkage + board feed); absent = both legs inert. */
   readonly activeProjectStore?: ActiveProjectStore | undefined
+  /**
+   * The plugin-lifetime board-session memory (M4 2.7, the C6→C5 dock bridge):
+   * threaded into the board pane body — the shared selection the metadata
+   * bar's 「查看任务」 jump opens the detail dock through.
+   */
+  readonly boardSession?: BoardSessionStore | undefined
+  /**
+   * The Interface 6 open seam (M4 2.7): threaded into the board pane body so
+   * the C5 挂接历史 rows' [打开] rides the real channel (顶层/subagent 双通路).
+   */
+  readonly onEnterSession?: EnterSessionSeam | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -168,7 +191,7 @@ function optionalService(ctx: ClientContext, name: string): unknown {
  * @returns disposer removing the definitions, the bodies, and the watcher.
  */
 export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOptions): () => void {
-  const { t, activeProjectStore } = options
+  const { t, activeProjectStore, boardSession, onEnterSession } = options
   const tabs = toTabRegistryFace(optionalService(ctx, 'sidebarRightTabs'))
   if (tabs === undefined) return () => {}
   const face: ForgeTabFace = { t }
@@ -185,8 +208,14 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
   // definition id (arrival-order: each injection waits for the seat family's
   // declaration by ui-sidebar-right, exactly like the 1.6 seats). The four
   // non-board bodies share the { t } face; the board adds the active-project
-  // store (its only project source).
-  const boardFace: BoardTabFace = { t, ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore } }
+  // store (its only project source) plus 2.7's plugin-lifetime legs (the
+  // board-session memory + the Interface 6 open seam).
+  const boardFace: BoardTabFace = {
+    t,
+    ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
+    ...boardSession === undefined ? {} : { session: boardSession },
+    ...onEnterSession === undefined ? {} : { onEnterSession },
+  }
 
   const registerBody = (
     kind: TabKind,

@@ -63,6 +63,7 @@ import {
   createTaskBoardStore, INITIAL_TASK_BOARD_SNAPSHOT, type TaskBoardStore,
 } from '../../store/task-board'
 import { TaskBoardPage } from '../TaskBoardPage'
+import type { EnterSessionSeam } from './detail/LinkHistory'
 
 /** Inputs of {@link TasksView}. */
 export interface TasksViewProps {
@@ -93,6 +94,12 @@ export interface TasksViewProps {
   onLaunched?: SessionLaunchHandover | undefined
   /** The board session store (5.11 AC3/AC4): the plugin-lifetime memory. */
   session?: BoardSessionStore | undefined
+  /**
+   * The C5 [打开] dual-channel seam (M4 2.7): the Interface 6 channel behind
+   * the 挂接历史 rows' [打开] (顶层 sessionId / subagent SubagentAddress). A
+   * rejecting promise return surfaces the section's open-failed toast.
+   */
+  onEnterSession?: EnterSessionSeam | undefined
 }
 
 /** The view's column geometry (the page's container twin). */
@@ -172,6 +179,7 @@ export function TasksView(props: TasksViewProps) {
         dispatchFace={props.seat?.dispatchFace}
         {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
         {...(props.session === undefined ? {} : { session: props.session })}
+        {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
       />
     )
   }
@@ -212,6 +220,7 @@ export function TasksView(props: TasksViewProps) {
       reloadToken={reloadToken}
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
       {...(props.session === undefined ? {} : { session: props.session })}
+      {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
     />
   )
 }

@@ -50,13 +50,20 @@ import {
   toSessionsFace, toSidebarRightFace, toUiWorkspaceFace, toWorkspacesSource,
 } from './nav/project-seat'
 import { createActiveProjectStore } from './store/active-project'
+import { createBoardSessionStore } from './store/board-session'
+import { createSessionOpenChannel } from './session-open'
+import type { SessionOpenTarget } from './session-open'
+import { toLineageSessionsSource } from './lineage'
+import { installMetadataBar } from './components/task-metadata/MetadataBar'
+import type { MetadataTaskSource } from './components/task-metadata/MetadataBar'
+import { ensureBoardActive, toRightbarTabsFace } from './views/rightbar/tabs-model'
 import { installRightbarTabs } from './views/rightbar/RightbarTabs'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
 import { en } from './locale/en'
 import { zh } from './locale/zh'
 import type { WorkbenchKey } from './locale/en'
 
-export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, PROJECT_SEAT_PRIORITY, RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from './contract'
+export { MAIN_SLOT, NS, PANEL_ID, SIDEBAR_ORDER, SIDEBAR_SLOT, WORKSPACES_SLOT, PROJECT_SEAT_PRIORITY, RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT, CONVERSATION_DOCK_SLOT } from './contract'
 export { WorkbenchPanelIcon } from './WorkbenchPanelIcon'
 export { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from './WorkbenchShell'
 export type {
@@ -81,8 +88,32 @@ export type { BoardScrollMemory, BoardSessionStore } from './store/board-session
 // The session hand-over (M3 task 6.1 — the retired launch seat's surviving
 // slice): 切会话视图 + session locating, threaded into the shell by both
 // navigation forms.
-export { createSessionHandover } from './session-handover'
+export { createSessionHandover, uiWorkspaceOf } from './session-handover'
 export type { SessionHandover } from './session-handover'
+// M4 task 2.7 — the Interface 6 会话打开通道 (tech-design §Interface 6):
+// 顶层/subagent 双通路 over the ONE openSession write path (switch-first,
+// the handover discipline) + 旁置 over sidebarRight.openResource
+// (subagentChatAddress, the ui-subagent precedent); rejections surface the
+// C5 open-failed toast (2.6's contract). The M1 sessionFocus main-process
+// channel stays the frozen fallback, outside the M4 chain.
+export {
+  createSessionOpenChannel, isSubagentAddressTarget, SESSION_OPEN_ERROR,
+  SUBAGENT_CHAT_ADDRESS_PREFIX, subagentChatAddressOf,
+} from './session-open'
+export type { SessionOpenChannel, SessionOpenTarget } from './session-open'
+// M4 task 2.7 — Component C6, the subagent 会话·任务元数据条 (ui-design
+// §Component C6 / UF6): the derived three-state binding (血缘为准), the pure
+// bar, and the conversation.input.dock seat host + installer (the resolved
+// fallback seat — conversation.session single-slot shadowing would replace
+// the native panel, the forbidden form; see contract.ts's CONVERSATION_DOCK_SLOT).
+export {
+  deriveMetadataBinding, installMetadataBar, METADATA_BAR_DOCK_ID, METADATA_BAR_DOCK_ORDER,
+  MetadataBar, MetadataBarDock,
+} from './components/task-metadata/MetadataBar'
+export type {
+  MetadataBarBinding, MetadataBarDockProps, MetadataBarFace, MetadataBarProps,
+  MetadataDockZone, MetadataTaskSource,
+} from './components/task-metadata/MetadataBar'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
@@ -321,7 +352,7 @@ export {
 } from './views/rightbar/RightbarTabs'
 export type { BoardTabFace, RightbarTabsOptions, TabRegistryFace } from './views/rightbar/RightbarTabs'
 export {
-  ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
+  ensureBoardActive, ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
 } from './views/rightbar/tabs-model'
 export type { OpenTabRow, ProjectSwitchOutcome, RightbarTabsFace } from './views/rightbar/tabs-model'
 export { createIpcConfirmCardFace } from './ipc/workbench'
@@ -425,6 +456,56 @@ export function apply(ctx: ClientContext): void {
       uiWorkspace: toUiWorkspaceFace(optionalService('uiWorkspace')),
       sidebarRight: toSidebarRightFace(optionalService('sidebarRight')),
     })
+  // M4 task 2.7 — the Interface 6 会话打开通道 + the C6 metadata bar (tech-
+  // design §Interface 6 / §Integration #3). The channel is plugin-lifetime
+  // over the guarded upstream seams (顶层/subagent = the one openSession
+  // write path + switch-first; 旁置 = sidebarRight.openResource); the C5
+  // 挂接历史 rows' [打开] rides it through the board seam below, and the
+  // orchestration section's 「进入会话」 falls back to it when no hand-over
+  // seat rides (the pane host). The board-session store is 5.11's designed
+  // client-apply tier (selection/scroll/badge memory) — threaded into the
+  // board pane so the C6 「查看任务」 jump opens the detail dock in it.
+  const sessionOpen = createSessionOpenChannel(ctx, controller)
+  const enterSession = (target: SessionOpenTarget): Promise<void> => sessionOpen.openSessionTarget(target)
+  const boardSession = createBoardSessionStore()
+  // The C6 bar's data read (bridge-gated): the ACTIVE project's task list
+  // with each task's session_links — one batched read per subagent session
+  // view (点击时计算 discipline, 不落库); a failed detail read degrades that
+  // task to no-links (never a failed bar).
+  const metadataReadSources
+    = workbenchBridge === undefined || activeProjectStore === undefined
+      ? undefined
+      : async (): Promise<readonly MetadataTaskSource[] | undefined> => {
+        const snapshot = activeProjectStore.getSnapshot()
+        const projectId = snapshot.activeProjectId
+        if (projectId === null) return undefined
+        const board = await workbenchBridge.getTaskBoard(projectId)
+        const details = await Promise.all(board.tasks.map(async (task) => {
+          try {
+            return await workbenchBridge.getTaskDetail(projectId, task.key)
+          } catch {
+            return undefined
+          }
+        }))
+        return board.tasks.map((task, index) => ({
+          task: { key: task.key, title: task.title, status: task.status },
+          links: details[index]?.links ?? [],
+        }))
+      }
+  // The C6 → C5 双向跳转 leg: select FIRST (the shared board-session store —
+  // the dock opens with the pane when it mounts), then bring the board pane
+  // forward (focus-or-open, the ensureOverviewActive shape).
+  const metadataOpenTask = (taskKey: string): void => {
+    boardSession.selection.select(taskKey)
+    ensureBoardActive(toRightbarTabsFace(optionalService('sidebarRight')))
+  }
+  const disposeMetadataBar = installMetadataBar(ctx, {
+    t,
+    sessions: toLineageSessionsSource(optionalService('sessions')),
+    ...metadataReadSources === undefined ? {} : { readSources: metadataReadSources },
+    onOpenTask: metadataOpenTask,
+  })
+
   // M4 task 2.2 — the rightbar forge tabs (tech-design §Integration #5): the
   // five kinds mount into the native right column through the upstream public
   // seams (guarded throughout: an absent sidebarRightTabs keeps the family
@@ -432,6 +513,8 @@ export function apply(ctx: ClientContext): void {
   const disposeRightbarTabs = installRightbarTabs(ctx, {
     t,
     ...activeProjectStore === undefined ? {} : { activeProjectStore },
+    boardSession,
+    onEnterSession: enterSession,
   })
 
   let railDispose: (() => void) | undefined
@@ -498,6 +581,7 @@ export function apply(ctx: ClientContext): void {
     disposeLaunchRelay()
     disposeAnswerRelay()
     disposeWorkspacesSeat()
+    disposeMetadataBar()
     disposeRightbarTabs()
     disposeProjectPanelRow()
     activeProjectStore?.dispose()

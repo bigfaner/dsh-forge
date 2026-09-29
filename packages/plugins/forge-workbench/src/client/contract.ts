@@ -85,6 +85,22 @@ export const RIGHTBAR_TAB_SLOT = 'sidebar.right.pane.tab'
 export const RIGHTBAR_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'
 
 /**
+ * The conversation's full-width entries ABOVE the composer card (declared by
+ * ui-conversation as a child of the `conversation.content` factory; list,
+ * session scope — the in-tree occupants are ui-conversation's TodoPanel,
+ * the QueueDock, and ui-goal's GoalBar). M4 task 2.7 (tech-design §Integration
+ * #3, C6): the `conversation.session` seat named by the design is a SINGLE
+ * slot — SlotCore single slots SHADOW (a second registration would REPLACE
+ * the native ConversationSession, the wrapper/remount form the zero-invasion
+ * Hard Rule forbids) — so the task-period check (座位形态核对项) resolves to
+ * the design's OWN documented fallback: 「composer 上方 forge 自绘条, 数据面
+ * 不变」 rides THIS list slot. 声明合并纯增量, 上游槽位机制零修改; the
+ * declaration's type view is mirrored locally in the C6 module (ui-conversation
+ * is not a linked peer — the structural-twin discipline).
+ */
+export const CONVERSATION_DOCK_SLOT = 'conversation.input.dock'
+
+/**
  * Sidebar row position: ascending, default 0. `plugins` occupies 0, so the
  * workbench takes 10 — beside, not colliding with, the shipped entries
  * (spike §3.3 recommendation).

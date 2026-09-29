@@ -590,4 +590,8 @@ export const zh: Record<WorkbenchKey, string> = {
   'rightbar.guide.terminal.description': '在会话工作区运行命令',
   'rightbar.guide.browser.title': '浏览器',
   'rightbar.guide.browser.description': '浏览 HTTP(S) 网页',
+  // M4 task 2.7 —— C6 subagent 会话·任务元数据条(bound/ambiguous 双态;任务号方言为拉丁 mono,前缀随设计稿保留 task)。
+  'metadata.taskPrefix': 'task',
+  'metadata.viewTask': '查看任务',
+  'metadata.executing': '该会话执行中',
 }

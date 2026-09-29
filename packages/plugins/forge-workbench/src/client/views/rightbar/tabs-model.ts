@@ -139,6 +139,26 @@ export function ensureOverviewActive(face: RightbarTabsFace): boolean {
 }
 
 /**
+ * The 任务看板 activation (M4 2.7, the C6 bar's 双向跳转 leg): focus the
+ * column's existing board tab, or open one when none does — the same
+ * focus-or-open shape as {@link ensureOverviewActive} over the board kind.
+ * The board pane then presents the detail dock the jump's other leg (the
+ * shared board-session selection) has already opened.
+ * @param face - the controller subset (`undefined` = service absent: no-op).
+ * @returns true when a tab was focused or opened.
+ */
+export function ensureBoardActive(face: RightbarTabsFace | undefined): boolean {
+  if (face === undefined) return false
+  const board = openTabsOf(face).find(row => row.kind === 'board')
+  if (board !== undefined) {
+    face.focus(board.tabId)
+    return true
+  }
+  face.openTab('board')
+  return true
+}
+
+/**
  * The 裁决 #28-④ 换台重置 leg (the 1.6 deferred seam, now that the container
  * exists): the column back to its DEFAULT — 收起 + 开始页. Closes every
  * closable tab (the sole-docked guide survives — the native protection keeps
