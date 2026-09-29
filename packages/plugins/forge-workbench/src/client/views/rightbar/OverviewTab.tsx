@@ -1,0 +1,365 @@
+/**
+ * The 「项目概览」tab BODY (M4 task 2.3, layout §4.3/§4.4 + tech-design
+ * §Integration #5 / 交付线 1): 标题栏 + 概要信息区 (OverviewHeader — project
+ * name 随联动切换, paths 超长省略 + title 全称, 活跃 feature · 任务 done/total ·
+ * 运行中 N, archived ⚠) over the THREE sub-tabs (提案/feature/任务 — 默认
+ * feature, §4.3; the 设置 sub-tab was REMOVED, 裁决 #16-⑤) whose panes re-home
+ * the M3 faces zero-loss as the directory trees / task list the wireframe
+ * pins (§4.4①②③ — see the pane modules).
+ *
+ * Data (Implementation Notes): the v3 project rows through the plugin's
+ * active-project store (listProjects 1.3 client half) + the EXISTING
+ * feature_snapshot/task verbs — the feature board ONE read shared by the
+ * header (活跃 feature · done/total) and the feature pane, the task sources
+ * ONE read shared by the header (运行中 N) and the tasks pane (the C6
+ * metadata source twin — one bridge-side builder feeds both faces). 管线入口
+ * (M7) is out of M4 scope — no entry is rendered.
+ *
+ * Form selection (the TasksView/ProposalsPage one-rule): seat present or
+ * bridge ABSENT (jsdom / hostless) → the build-stage form over the injected
+ * seat / mock twins; bridge live → the real IPC chain below, keyed on the
+ * ACTIVE project (a project switch is a NEW mount — the host re-keys, the
+ * BoardTabBody precedent). Sub-tab switches NEVER remount the panes (the
+ * M3 返回不重拉 discipline: all three stay mounted, the inactive ones
+ * hidden), so the 概要信息区 stays live across switches by construction.
+ */
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { ReactNode } from 'react'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { FeatureBoardData } from '../../ipc-types'
+import type { FeatureBoardFace, ProposalFace } from '../../contract'
+import type { WorkbenchKey } from '../../locale/en'
+import { getWorkbenchIpcBridge, createIpcFeatureBoardFace, createIpcProposalFace } from '../../ipc/workbench'
+import type { WorkbenchIpcBridge } from '../../ipc/workbench'
+import { getWorkbenchEventSource } from '../../ipc/workbench-events'
+import { createMockFeatureBoardFace, createMockProposalsFace } from '../../mocks/workbench'
+import { INITIAL_ACTIVE_PROJECT_SNAPSHOT } from '../../store/active-project'
+import type { ActiveProjectStore } from '../../store/active-project'
+import type { EnterSessionSeam } from '../tasks/detail/LinkHistory'
+import type { TabKindTranslate } from './tab-kinds'
+import { OverviewHeader } from './OverviewHeader'
+import { ProposalsPane } from './subtabs/ProposalsPane'
+import { FeaturesPane } from './subtabs/FeaturesPane'
+import { TasksPane } from './subtabs/TasksPane'
+import { deriveActiveFeature, type OverviewTaskSource } from './overview-model'
+
+/** The three sub-tabs (§4.3 — 设置已移除, 裁决 #16-⑤). */
+export type OverviewSubtab = 'proposals' | 'features' | 'tasks'
+
+const SUBTABS: readonly OverviewSubtab[] = ['proposals', 'features', 'tasks']
+
+/** One 点文档名开文档 tab open (§4.5): the doc kind's identity, 2.4's seam. */
+export interface DocOpenInput {
+  /** The document's project-relative path (the read verb's argument form). */
+  readonly path: string
+  /** The tab-name form `slug/产物名称` (title = 全路径口径). */
+  readonly displayName: string
+}
+
+/** The test/build-stage injection seat (the M3 page-seat discipline). */
+export interface OverviewTabSeat {
+  /** The proposals face override (absent members fall back to the mock twin). */
+  readonly proposalsFace?: Partial<ProposalFace> | undefined
+  /** The feature-board face override (absent members fall back to the mock twin). */
+  readonly featureBoardFace?: Partial<FeatureBoardFace> | undefined
+  /** The task-sources read override (the C6 source twin). */
+  readonly taskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+}
+
+/** Inputs of {@link OverviewTab} (the legs the container threads; all optional
+ * so the bare hostless render degrades to the resolving skeleton). */
+export interface OverviewTabProps {
+  /** The locale seat (the plugin's bound `t`). */
+  readonly t: TabKindTranslate
+  /** The plugin-lifetime active-project store — the tab's ONLY project source. */
+  readonly activeProject?: ActiveProjectStore | undefined
+  /** The row-click → 任务详情 dock seam (the C6 查看任务 shape, wired 2.3). */
+  readonly onOpenTask?: ((taskKey: string) => void) | undefined
+  /** The ⟞ 直达会话 seam (Interface 6, 2.7's openSessionTarget). */
+  readonly onEnterSession?: EnterSessionSeam | undefined
+  /**
+   * The task-sources read (real chain — one bridge-side builder shared with
+   * the C6 metadata bar; absent = the 运行中 segment and the tasks pane's
+   * rows degrade silently, never a mock).
+   */
+  readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+  /** The test/build-stage seat — present wins over the bridge (one rule). */
+  readonly seat?: OverviewTabSeat | undefined
+  /** The slot runtime's tab-info hook (the openTab seam's carrier). */
+  readonly useTabInfo?: UseSidebarRightTabInfo | undefined
+}
+
+/** The tab's column. */
+const rootStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  minWidth: 0,
+} as const
+
+/** The sub-tab strip: 标签 max-width 140 省略 + 溢出横滚 (§4.3, AC4). */
+const SUBTAB_LABEL_MAX_WIDTH = '140px'
+const subtabStripStyle = {
+  display: 'flex',
+  gap: '4px',
+  minWidth: 0,
+  overflowX: 'auto',
+  padding: '8px 12px 0',
+} as const
+
+/** One sub-tab chip: bare text when inactive, filled pill when active. */
+const subtabStyle = {
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '8px',
+  color: 'inherit',
+  cursor: 'pointer',
+  flex: '0 1 auto',
+  font: 'inherit',
+  fontSize: '13px',
+  lineHeight: '20px',
+  maxWidth: SUBTAB_LABEL_MAX_WIDTH,
+  minWidth: 0,
+  overflow: 'hidden',
+  padding: '4px 10px',
+  textAlign: 'left',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+} as const
+
+const subtabActiveStyle = {
+  ...subtabStyle,
+  background: 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))',
+  fontWeight: 500,
+} as const
+
+/** The sub-tab content scroller (the panes stay MOUNTED; hidden ≠ unmounted). */
+const bodyStyle = {
+  flex: '1 1 auto',
+  minWidth: 0,
+  overflowY: 'auto',
+  paddingTop: '2px',
+} as const
+
+/** Skeleton gray rows (the family's resolving 态 twin). */
+const skeletonRowStyle = {
+  background: 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))',
+  borderRadius: '8px',
+  height: '28px',
+} as const
+
+const SUBTAB_LABEL_KEYS: Record<OverviewSubtab, WorkbenchKey> = {
+  proposals: 'rightbar.overview.subtab.proposals',
+  features: 'rightbar.overview.subtab.features',
+  tasks: 'rightbar.overview.subtab.tasks',
+}
+
+/** The noop subscription every optional store falls back to (never a throw). */
+const NOOP_SUBSCRIBE = (): (() => void) => () => {}
+
+/**
+ * The 项目概览 tab body. The whole face follows the ACTIVE project; an
+ * unresolved pointer (boot read in flight, or a hostless mount with no
+ * store) renders the resolving skeleton — the page OWNS its loading branch,
+ * never an error flash, never a silent mock project.
+ */
+export function OverviewTab(props: OverviewTabProps): ReactNode {
+  const { t } = props
+  // §4.3: 默认 feature sub-tab.
+  const [subtab, setSubtab] = useState<OverviewSubtab>('features')
+  // The 提案 pane's feature 互跳: switch to the feature sub-tab AND expand
+  // the target dir (the M3 badge-jump's pane form).
+  const [featuresFocus, setFeaturesFocus] = useState<string | undefined>(undefined)
+
+  const snapshot = useSyncExternalStore(
+    props.activeProject?.subscribe ?? NOOP_SUBSCRIBE,
+    props.activeProject?.getSnapshot ?? (() => INITIAL_ACTIVE_PROJECT_SNAPSHOT),
+  )
+  const projectId = snapshot.activeProjectId ?? undefined
+  const project = projectId === undefined
+    ? undefined
+    : snapshot.projects.find(row => row.id === projectId)
+
+  // The openTab seam (§4.5/§4.6): the slot runtime's own actions — doc opens
+  // carry the document identity in the `doc` params, depgraph rides the
+  // kind's bare open. Absent hook (hostless render) = inert seams.
+  const openTabAction = props.useTabInfo?.().tab.actions.openTab
+  const openDoc = (input: DocOpenInput): void => {
+    openTabAction?.('doc', { params: { path: input.path, displayName: input.displayName } })
+  }
+  const openDepgraph = (): void => { openTabAction?.('depgraph') }
+
+  // Form selection: bridge presence is fixed for the tab's life.
+  const [bridge] = useState<WorkbenchIpcBridge | undefined>(() => getWorkbenchIpcBridge())
+  const seatForm = props.seat !== undefined || bridge === undefined
+
+  // The proposals face (the pane owns its board load; the mock twin is seeded
+  // with the mount-time project — the host re-keys per project switch).
+  const [proposalsFace] = useState<ProposalFace>(() => {
+    if (!seatForm && bridge !== undefined) return createIpcProposalFace(bridge)
+    return createMockProposalsFace(projectId === undefined ? {} : { projectId })
+  })
+  // The feature board (ONE read, header + feature pane share it).
+  const [featureFace] = useState<FeatureBoardFace>(() => {
+    if (seatForm) return { ...createMockFeatureBoardFace(), ...props.seat?.featureBoardFace }
+    // seatForm false ⇒ bridge present (the one rule); the mock arm below is
+    // the unreachable-but-typed fallback.
+    return bridge === undefined ? createMockFeatureBoardFace() : createIpcFeatureBoardFace(bridge)
+  })
+  const [featureBoard, setFeatureBoard] = useState<FeatureBoardData | undefined>(undefined)
+  const [featurePhase, setFeaturePhase] = useState<'loading' | 'ready' | 'load-error'>('loading')
+  const [featureReload, setFeatureReload] = useState(0)
+
+  // The task sources (ONE read, header 运行中 + tasks pane share it; the C6
+  // source twin). Failure degrades silently (undefined rows, the C6 rule).
+  const readSources = seatForm ? props.seat?.taskSources : props.readTaskSources
+  const readSourcesRef = useRef(readSources)
+  readSourcesRef.current = readSources
+  const [taskSources, setTaskSources] = useState<readonly OverviewTaskSource[] | undefined>(undefined)
+  const [sourcesPhase, setSourcesPhase] = useState<'loading' | 'ready'>('loading')
+  const [sourcesReload, setSourcesReload] = useState(0)
+  const projectIdRef = useRef(projectId)
+  projectIdRef.current = projectId
+
+  // The feature board read: one per (project, reload) — the FeaturesPage
+  // discipline (a fresh project drops the old board; a reload keeps the last
+  // good one rendered while in flight).
+  const featureFaceRef = useRef(featureFace)
+  featureFaceRef.current = featureFace
+  useEffect(() => {
+    if (projectId === undefined) return
+    let alive = true
+    setFeaturePhase('loading')
+    setFeatureBoard(undefined)
+    featureFaceRef.current.loadFeatureBoard(projectId).then(
+      (board) => {
+        if (!alive) return
+        setFeatureBoard(board)
+        setFeaturePhase('ready')
+      },
+      () => {
+        if (alive) setFeaturePhase('load-error')
+      },
+    )
+    return () => { alive = false }
+  }, [projectId, featureReload])
+
+  // The task-sources read: one per (project, reload); rejection = degrade.
+  useEffect(() => {
+    if (projectId === undefined || readSourcesRef.current === undefined) return
+    let alive = true
+    readSourcesRef.current().then(
+      (rows) => {
+        if (!alive) return
+        setTaskSources(rows)
+        setSourcesPhase('ready')
+      },
+      () => {
+        if (alive) setSourcesPhase('ready')
+      },
+    )
+    return () => { alive = false }
+  }, [projectId, sourcesReload])
+
+  // The live leg (real chain): project-scoped pushes (sync / task_updated /
+  // feature_updated / stage / deviation) re-fire BOTH shared reads — the
+  // header's 随数据实时 (AC1). The proposals pane rides its OWN face's reflux
+  // channel (the M3 contract verbatim).
+  useEffect(() => {
+    if (seatForm || bridge === undefined) return
+    return getWorkbenchEventSource(bridge).subscribe((events) => {
+      const mine = events.some(event => 'projectId' in event && event.projectId === projectIdRef.current)
+      if (!mine) return
+      setFeatureReload(nonce => nonce + 1)
+      setSourcesReload(nonce => nonce + 1)
+    })
+  }, [seatForm, bridge])
+
+  const activeFeature = featureBoard === undefined ? undefined : deriveActiveFeature(featureBoard.features)
+
+  // Unresolved pointer = the resolving skeleton (the family discipline).
+  if (projectId === undefined || project === undefined) {
+    return (
+      <div
+        data-dsh-forge-overview=""
+        aria-busy="true"
+        style={{ ...rootStyle, padding: '12px', gap: '8px' }}
+      >
+        {[0, 1, 2, 3].map(index => <div key={index} aria-hidden="true" style={skeletonRowStyle} />)}
+      </div>
+    )
+  }
+
+  return (
+    <div data-dsh-forge-overview="" style={rootStyle}>
+      {/* 标题栏 + 概要信息区 (常显,三子 tab 共享,不随子 tab 切换变化). */}
+      <OverviewHeader
+        t={t}
+        project={project}
+        features={featureBoard?.features}
+        taskSources={taskSources}
+      />
+
+      {/* 子 tab 行: 提案/feature/任务 (设置已移除 #16-⑤). */}
+      <div role="tablist" aria-label={t('rightbar.overview.subtabs.label')} data-dsh-forge-overview-subtabs="" style={subtabStripStyle}>
+        {SUBTABS.map((kind) => {
+          const label = t(SUBTAB_LABEL_KEYS[kind])
+          return (
+            <button
+              key={kind}
+              type="button"
+              role="tab"
+              aria-selected={subtab === kind ? 'true' : 'false'}
+              data-dsh-forge-overview-subtab={kind}
+              title={label}
+              style={subtab === kind ? subtabActiveStyle : subtabStyle}
+              onClick={() => { setSubtab(kind) }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 子 tab 内容: all three stay MOUNTED (返回不重拉 — board data + scroll
+          survive switches by construction); the inactive ones stay hidden. */}
+      <div data-dsh-forge-overview-body="" style={bodyStyle}>
+        <div hidden={subtab !== 'proposals' ? true : undefined}>
+          <ProposalsPane
+            t={t}
+            projectId={projectId}
+            face={seatForm ? props.seat?.proposalsFace : proposalsFace}
+            onOpenDoc={openDoc}
+            onOpenFeature={(featureSlug) => {
+              setFeaturesFocus(featureSlug)
+              setSubtab('features')
+            }}
+          />
+        </div>
+        <div hidden={subtab !== 'features' ? true : undefined}>
+          <FeaturesPane
+            t={t}
+            board={featureBoard}
+            phase={featurePhase}
+            onRetry={() => { setFeatureReload(nonce => nonce + 1) }}
+            onOpenDoc={openDoc}
+            focusSlug={featuresFocus}
+          />
+        </div>
+        <div hidden={subtab !== 'tasks' ? true : undefined}>
+          <TasksPane
+            t={t}
+            sources={taskSources}
+            phase={sourcesPhase}
+            activeFeatureSlug={activeFeature?.slug}
+            archived={project.archived}
+            onOpenTask={props.onOpenTask ?? (() => {})}
+            {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
+            onOpenDepgraph={openDepgraph}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

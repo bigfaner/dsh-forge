@@ -585,6 +585,25 @@ export type WorkbenchKey =
   | 'metadata.taskPrefix'
   | 'metadata.viewTask'
   | 'metadata.executing'
+  // M4 task 2.3 — the 项目概览 tab interior (header + sub-tabs + panes).
+  | 'rightbar.overview.subtabs.label'
+  | 'rightbar.overview.subtab.proposals'
+  | 'rightbar.overview.subtab.features'
+  | 'rightbar.overview.subtab.tasks'
+  | 'rightbar.overview.archived'
+  | 'rightbar.overview.meta.workspace'
+  | 'rightbar.overview.meta.codeRoot'
+  | 'rightbar.overview.meta.status'
+  | 'rightbar.overview.meta.activeFeature'
+  | 'rightbar.overview.meta.tasksProgress'
+  | 'rightbar.overview.meta.running'
+  | 'rightbar.overview.doc.open'
+  | 'rightbar.overview.tasks.all'
+  | 'rightbar.overview.tasks.executing'
+  | 'rightbar.overview.tasks.idle'
+  | 'rightbar.overview.tasks.list'
+  | 'rightbar.overview.tasks.empty'
+  | 'rightbar.overview.tasks.gotoSession'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1173,6 +1192,25 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.guide.terminal.description': 'Run commands in the session workspace',
   'rightbar.guide.browser.title': 'Browser',
   'rightbar.guide.browser.description': 'Browse HTTP(S) pages',
+  // M4 task 2.3 — the 项目概览 tab interior (header + sub-tabs + panes).
+  'rightbar.overview.subtabs.label': 'Project overview sub-tabs',
+  'rightbar.overview.subtab.proposals': 'Proposals',
+  'rightbar.overview.subtab.features': 'Features',
+  'rightbar.overview.subtab.tasks': 'Tasks',
+  'rightbar.overview.archived': 'Archived',
+  'rightbar.overview.meta.workspace': 'Workspace',
+  'rightbar.overview.meta.codeRoot': 'Code root',
+  'rightbar.overview.meta.status': 'Status',
+  'rightbar.overview.meta.activeFeature': 'Active {slug}',
+  'rightbar.overview.meta.tasksProgress': 'Tasks {completed}/{total}',
+  'rightbar.overview.meta.running': 'Running {count}',
+  'rightbar.overview.doc.open': 'Open in tab',
+  'rightbar.overview.tasks.all': 'All tasks',
+  'rightbar.overview.tasks.executing': 'Executing ({count})',
+  'rightbar.overview.tasks.idle': 'No running task sessions.',
+  'rightbar.overview.tasks.list': 'Task list',
+  'rightbar.overview.tasks.empty': 'No tasks yet.',
+  'rightbar.overview.tasks.gotoSession': 'Go to session',
   // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': 'View task',

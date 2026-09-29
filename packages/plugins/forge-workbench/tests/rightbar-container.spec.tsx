@@ -18,9 +18,11 @@ import type { WorkbenchKey } from '../src/client/locale/en.ts'
 // M4 task 2.2 — AC1/AC4/AC5: the container installer over the REAL SlotCore
 // (the project-seat.spec pattern): the five definitions into the tab registry
 // face, the keyed bodies under the forge ids (board = the 2.1 dual-host
-// TasksView in pane form; overview/doc/depgraph = placeholder mounts that
-// render NOTHING), the guide chip title, the absent-service guards, and the
-// §4.7 linkage watcher over the active-project pointer.
+// TasksView in pane form; overview = 2.3's 项目概览 assembly, asserted here
+// only as the container's threading/re-key carrier — its interior has
+// rightbar-overview.spec; doc/depgraph = 2.4 placeholder mounts that render
+// NOTHING), the guide chip title, the absent-service guards, and the §4.7
+// linkage watcher over the active-project pointer.
 
 // The board body test stubs the assembled TasksView (its own assembly has its
 // suite — task-board-assembly.spec.tsx); the stub captures the HOST contract
@@ -217,7 +219,7 @@ describe('AC1: the container registers the five kinds + keyed bodies', () => {
   })
 })
 
-describe('AC1/AC5: board = TasksView pane host; overview/doc/depgraph = empty mounts', () => {
+describe('AC1/AC5: board = TasksView pane host; overview = 2.3 body; doc/depgraph = empty mounts', () => {
   it('the board body feeds the ACTIVE project in the pane form and re-keys per project', () => {
     boardStub.mounts = 0
     boardStub.props = []
@@ -240,8 +242,13 @@ describe('AC1/AC5: board = TasksView pane host; overview/doc/depgraph = empty mo
     expect(boardStub.props.at(-1)).toEqual({ projectId: undefined, host: 'pane' })
   })
 
-  it('the 2.3/2.4 placeholder mounts render NOTHING (SC2: 零空占位)', () => {
-    for (const Placeholder of [OverviewTabBody, DocTabBody, DepgraphTabBody]) {
+  it('the overview body (2.3) renders its resolving skeleton without a store; the 2.4 placeholder mounts render NOTHING', () => {
+    // 2.3 landed: the overview body is the real 项目概览 assembly — a bare
+    // mount (no store) owns its loading branch (the resolving skeleton).
+    const overview = render(<OverviewTabBody t={t} />)
+    expect(overview.container.querySelector('[data-dsh-forge-overview]')?.getAttribute('aria-busy')).toBe('true')
+    // The 2.4 interiors stay placeholder mounts (SC2: 零空占位).
+    for (const Placeholder of [DocTabBody, DepgraphTabBody]) {
       const view = render(<Placeholder />)
       expect(view.container.innerHTML).toBe('')
     }
@@ -275,6 +282,28 @@ describe('AC1 (M4 2.7): the board body threads the plugin-lifetime legs', () => 
     const dispose = installRightbarTabs(makeFakeCtx(new SlotCore(), {}), { t })
     expect(dispose).toBeInstanceOf(Function)
     dispose()
+  })
+})
+
+describe('AC1 (M4 2.3): the overview body threads its plugin-lifetime legs', () => {
+  it('the installer carries the overview options into the keyed overview body inject face', () => {
+    const core = new SlotCore()
+    const registry = makeRegistry()
+    declareRightbarTree(core)
+    const store = makeProjectStore('p1')
+    const onOpenTask = (taskKey: string): void => { void taskKey }
+    const onEnterSession = (): Promise<void> => Promise.resolve()
+    const readTaskSources = async (): Promise<undefined> => undefined
+    installRightbarTabs(makeFakeCtx(core, { sidebarRightTabs: registry.registry }), {
+      t,
+      activeProjectStore: store,
+      onOpenTask,
+      onEnterSession,
+      readTaskSources,
+    })
+    const entry = core.entriesOfSlot(RIGHTBAR_TAB_SLOT).find(row => row.options.key === forgeTabId('overview'))
+    const face = (entry?.inject as () => Record<string, unknown>)?.() as Record<string, unknown>
+    expect(face).toMatchObject({ t, activeProject: store, onOpenTask, onEnterSession, readTaskSources })
   })
 })
 

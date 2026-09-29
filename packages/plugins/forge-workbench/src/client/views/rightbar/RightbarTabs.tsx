@@ -10,11 +10,12 @@
  *              (tab-kinds.ts; guide = the extension TAKE-OVER of the shipped
  *              door page, overview/board/doc/depgraph = fresh kinds);
  *   stage two  the keyed `sidebar.right.pane.tab` bodies (guide → GuideTab,
- *              board → the 2.1 dual-host TasksView in its pane form, doc /
- *              depgraph / overview → PLACEHOLDER MOUNTS: 2.4/2.3 own the
- *              interiors; the placeholders render NOTHING — never an empty
- *              view or preset data, the SC2 discipline) + the guide chip
- *              title (`sidebar.right.pane.tab.title`);
+ *              board → the 2.1 dual-host TasksView in its pane form,
+ *              overview → 2.3's 项目概览 body (OverviewTab: 标题栏 + 概要信息
+ *              区 + the M3-face sub-tab panes), doc / depgraph → PLACEHOLDER
+ *              MOUNTS: 2.4 owns the interiors; the placeholders render
+ *              NOTHING — never an empty view or preset data, the SC2
+ *              discipline) + the guide chip title (`sidebar.right.pane.tab.title`);
  *   linkage    the §4.7 watcher — the active-project pointer drives
  *              tabs-model.followProjectSwitch (close the old project's
  *              doc/depgraph, return an expanded column to 项目概览). The
@@ -35,6 +36,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { RIGHTBAR_TAB_SLOT, RIGHTBAR_TAB_TITLE_SLOT } from '../../contract'
@@ -44,6 +46,8 @@ import type { BoardSessionStore } from '../../store/board-session'
 import { TasksView } from '../tasks/TasksView'
 import type { EnterSessionSeam } from '../tasks/detail/LinkHistory'
 import { GuideTab, GuideTabTitle, type ForgeTabFace } from './GuideTab'
+import { OverviewTab } from './OverviewTab'
+import type { OverviewTaskSource } from './overview-model'
 import {
   forgeTabDefinitions, forgeTabId, RIGHTBAR_TAB_KINDS, type TabKind,
 } from './tab-kinds'
@@ -108,12 +112,55 @@ export function BoardTabBody({ t, activeProject, session, onEnterSession }: Boar
 }
 
 /**
- * The 项目概览 placeholder mount (2.3 owns the interior: 标题栏 + 概要信息区
- * + 提案/feature/任务三子 tab). Renders NOTHING until then — an open tab is
- * never preset with an empty view (SC2: 知识区零空占位).
+ * The overview pane's injected face (M4 2.3): the shared locale seat plus the
+ * four plugin-lifetime legs the panes ride — the active-project store (the
+ * tab's ONLY project source), the row→dock seam (the C6 「查看任务」 shape:
+ * the shared board-session selection opens the dock, the board pane comes
+ * forward — wired in the apply), the Interface 6 open seam (⟞ 直达会话), and
+ * the task-sources read the header's 运行中 segment and the tasks pane share
+ * (the C6 metadata source twin — one bridge-side builder feeds both faces).
  */
-export function OverviewTabBody(): ReactNode {
-  return null
+export interface OverviewTabFace extends ForgeTabFace {
+  /** The plugin-lifetime active-project pointer store; absent = the resolving skeleton. */
+  readonly activeProject?: ActiveProjectStore | undefined
+  /** The row-click → 任务详情 dock seam (select + ensureBoardActive, the apply's wiring). */
+  readonly onOpenTask?: ((taskKey: string) => void) | undefined
+  /** The Interface 6 dual-channel open seam (⟞ 直达会话). */
+  readonly onEnterSession?: EnterSessionSeam | undefined
+  /** The shared `{ task, links }` read (real chain; absent = silent degrade). */
+  readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+}
+
+/** The 项目概览 body's composed props (the keyed-seat dispatch contract). */
+export type OverviewTabBodyProps =
+  & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>
+  & InjectFace<OverviewTabFace>
+
+/**
+ * The 项目概览 tab body (2.3's interior): 标题栏 + 概要信息区 + the
+ * 提案/feature/任务 sub-tabs (OverviewTab). The BODY re-keys per project —
+ * a project switch is a NEW mount (fresh faces seeded per project, the
+ * BoardTabBody precedent), while sub-tab switches stay inside the mount.
+ */
+export function OverviewTabBody(
+  { useTabInfo, t, activeProject, onOpenTask, onEnterSession, readTaskSources }: OverviewTabBodyProps,
+): ReactNode {
+  const snapshot = useSyncExternalStore(
+    activeProject?.subscribe ?? (() => () => {}),
+    activeProject?.getSnapshot ?? (() => INITIAL_ACTIVE_PROJECT_SNAPSHOT),
+  )
+  const projectId = snapshot.activeProjectId ?? undefined
+  return (
+    <OverviewTab
+      key={projectId ?? 'unresolved'}
+      t={t}
+      {...(activeProject === undefined ? {} : { activeProject })}
+      {...(onOpenTask === undefined ? {} : { onOpenTask })}
+      {...(onEnterSession === undefined ? {} : { onEnterSession })}
+      {...(readTaskSources === undefined ? {} : { readTaskSources })}
+      {...(useTabInfo === undefined ? {} : { useTabInfo })}
+    />
+  )
 }
 
 /**
@@ -153,9 +200,23 @@ export interface RightbarTabsOptions extends ForgeTabFace {
   readonly boardSession?: BoardSessionStore | undefined
   /**
    * The Interface 6 open seam (M4 2.7): threaded into the board pane body so
-   * the C5 挂接历史 rows' [打开] rides the real channel (顶层/subagent 双通路).
+   * the C5 挂接历史 rows' [打开] rides the real channel (顶层/subagent 双通路),
+   * and into the overview body (2.3) for the tasks pane's ⟞ 直达会话 entry.
    */
   readonly onEnterSession?: EnterSessionSeam | undefined
+  /**
+   * The overview tasks row's dock seam (M4 2.3): select through the shared
+   * board-session store + bring the board pane forward (the C6 「查看任务」
+   * shape) — wired in the client apply over the plugin-lifetime legs.
+   */
+  readonly onOpenTask?: ((taskKey: string) => void) | undefined
+  /**
+   * The overview's shared task-sources read (M4 2.3): the `{ task, links }`
+   * rows the 概要信息区's 运行中 segment and the tasks pane consume — the C6
+   * metadata source twin (the apply shares ONE bridge-side builder between
+   * both faces).
+   */
+  readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -191,7 +252,7 @@ function optionalService(ctx: ClientContext, name: string): unknown {
  * @returns disposer removing the definitions, the bodies, and the watcher.
  */
 export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOptions): () => void {
-  const { t, activeProjectStore, boardSession, onEnterSession } = options
+  const { t, activeProjectStore, boardSession, onEnterSession, onOpenTask, readTaskSources } = options
   const tabs = toTabRegistryFace(optionalService(ctx, 'sidebarRightTabs'))
   if (tabs === undefined) return () => {}
   const face: ForgeTabFace = { t }
@@ -206,26 +267,35 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
 
   // Stage two — the bodies + the guide chip title, each keyed under its own
   // definition id (arrival-order: each injection waits for the seat family's
-  // declaration by ui-sidebar-right, exactly like the 1.6 seats). The four
-  // non-board bodies share the { t } face; the board adds the active-project
-  // store (its only project source) plus 2.7's plugin-lifetime legs (the
-  // board-session memory + the Interface 6 open seam).
+  // declaration by ui-sidebar-right, exactly like the 1.6 seats). The guide /
+  // doc / depgraph bodies share the { t } face; the board adds the
+  // active-project store (its only project source) plus 2.7's plugin-lifetime
+  // legs (the board-session memory + the Interface 6 open seam); the overview
+  // adds its own project source + 2.3's legs (the dock seam, the ⟞ open seam,
+  // the shared task-sources read).
   const boardFace: BoardTabFace = {
     t,
     ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
     ...boardSession === undefined ? {} : { session: boardSession },
     ...onEnterSession === undefined ? {} : { onEnterSession },
   }
+  const overviewFace: OverviewTabFace = {
+    t,
+    ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
+    ...onOpenTask === undefined ? {} : { onOpenTask },
+    ...onEnterSession === undefined ? {} : { onEnterSession },
+    ...readTaskSources === undefined ? {} : { readTaskSources },
+  }
 
   const registerBody = (
     kind: TabKind,
     component: typeof GuideTab | typeof OverviewTabBody | typeof BoardTabBody | typeof DocTabBody | typeof DepgraphTabBody,
-    injectFace: ForgeTabFace | BoardTabFace,
+    injectFace: ForgeTabFace | BoardTabFace | OverviewTabFace,
   ): (() => void) => ctx.slots.inject(RIGHTBAR_TAB_SLOT, () => {
     const dispose = ctx.slots.register({
       name: RIGHTBAR_TAB_SLOT,
       key: forgeTabId(kind),
-      inject: (): ForgeTabFace | BoardTabFace => injectFace,
+      inject: (): ForgeTabFace | BoardTabFace | OverviewTabFace => injectFace,
       registrant: `forge-workbench: rightbar tab ${kind}`,
     }, component as typeof GuideTab)
     return () => { dispose() }
@@ -233,7 +303,7 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
 
   const disposeBodies = [
     registerBody('guide', GuideTab, face),
-    registerBody('overview', OverviewTabBody, face),
+    registerBody('overview', OverviewTabBody, overviewFace),
     registerBody('board', BoardTabBody, boardFace),
     registerBody('doc', DocTabBody, face),
     registerBody('depgraph', DepgraphTabBody, face),

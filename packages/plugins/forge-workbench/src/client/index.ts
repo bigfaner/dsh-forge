@@ -350,7 +350,26 @@ export type { ForgeTabFace, GuideTabProps, GuideTabTitleProps } from './views/ri
 export {
   BoardTabBody, DepgraphTabBody, DocTabBody, installRightbarTabs, OverviewTabBody, toTabRegistryFace,
 } from './views/rightbar/RightbarTabs'
-export type { BoardTabFace, RightbarTabsOptions, TabRegistryFace } from './views/rightbar/RightbarTabs'
+export type {
+  BoardTabFace, OverviewTabBodyProps, OverviewTabFace, RightbarTabsOptions, TabRegistryFace,
+} from './views/rightbar/RightbarTabs'
+// M4 task 2.3 — the 项目概览 tab interior: the assembled body (标题栏 + 概要信息
+// 区 + the 提案/feature/任务 sub-tab panes re-homing the M3 faces zero-loss),
+// the header, the three panes, and the pure derivation model.
+export { OverviewTab } from './views/rightbar/OverviewTab'
+export type { DocOpenInput, OverviewSubtab, OverviewTabProps, OverviewTabSeat } from './views/rightbar/OverviewTab'
+export { OverviewHeader } from './views/rightbar/OverviewHeader'
+export type { OverviewHeaderProps } from './views/rightbar/OverviewHeader'
+export {
+  activeLinkOf, countRunningSessions, deriveActiveFeature, deriveExecutingTasks, workspaceRootOf,
+} from './views/rightbar/overview-model'
+export type { OverviewTaskSource } from './views/rightbar/overview-model'
+export { ProposalsPane } from './views/rightbar/subtabs/ProposalsPane'
+export type { ProposalsPaneProps } from './views/rightbar/subtabs/ProposalsPane'
+export { FeaturesPane } from './views/rightbar/subtabs/FeaturesPane'
+export type { FeatureBoardPhase, FeaturesPaneProps } from './views/rightbar/subtabs/FeaturesPane'
+export { TasksPane } from './views/rightbar/subtabs/TasksPane'
+export type { TaskSourcesPhase, TasksPaneProps } from './views/rightbar/subtabs/TasksPane'
 export {
   ensureBoardActive, ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
 } from './views/rightbar/tabs-model'
@@ -510,11 +529,21 @@ export function apply(ctx: ClientContext): void {
   // five kinds mount into the native right column through the upstream public
   // seams (guarded throughout: an absent sidebarRightTabs keeps the family
   // unregistered; the linkage/board legs ride the active-project store).
+  // M4 task 2.3 adds the overview body's legs: the tasks row's dock seam (the
+  // C6 「查看任务」 shape — select through the shared board-session, then bring
+  // the board pane forward) and the shared task-sources read (the SAME builder
+  // the C6 metadata bar consumes — one bridge-side read feeds both faces).
+  const overviewOpenTask = (taskKey: string): void => {
+    boardSession.selection.select(taskKey)
+    ensureBoardActive(toRightbarTabsFace(optionalService('sidebarRight')))
+  }
   const disposeRightbarTabs = installRightbarTabs(ctx, {
     t,
     ...activeProjectStore === undefined ? {} : { activeProjectStore },
     boardSession,
     onEnterSession: enterSession,
+    onOpenTask: overviewOpenTask,
+    ...metadataReadSources === undefined ? {} : { readTaskSources: metadataReadSources },
   })
 
   let railDispose: (() => void) | undefined
