@@ -351,7 +351,8 @@ export {
   BoardTabBody, DepgraphTabBody, DocTabBody, installRightbarTabs, OverviewTabBody, toTabRegistryFace,
 } from './views/rightbar/RightbarTabs'
 export type {
-  BoardTabFace, OverviewTabBodyProps, OverviewTabFace, RightbarTabsOptions, TabRegistryFace,
+  BoardTabFace, DepgraphTabBodyProps, DepgraphTabFace, DocTabBodyProps, DocTabFace,
+  OverviewTabBodyProps, OverviewTabFace, RightbarTabsOptions, TabRegistryFace,
 } from './views/rightbar/RightbarTabs'
 // M4 task 2.3 — the 项目概览 tab interior: the assembled body (标题栏 + 概要信息
 // 区 + the 提案/feature/任务 sub-tab panes re-homing the M3 faces zero-loss),
@@ -370,6 +371,24 @@ export { FeaturesPane } from './views/rightbar/subtabs/FeaturesPane'
 export type { FeatureBoardPhase, FeaturesPaneProps } from './views/rightbar/subtabs/FeaturesPane'
 export { TasksPane } from './views/rightbar/subtabs/TasksPane'
 export type { TaskSourcesPhase, TasksPaneProps } from './views/rightbar/subtabs/TasksPane'
+// M4 task 2.4 — the 文档 tab + 依赖图 tab interiors: the doc-tree identity
+// model + registry (the AC1 dedupe) + chip title, the doc body (路径栏 h38 +
+// ↻ + 只读正文), the depgraph body (feature 下拉 + DAG/泳道双模式) and the
+// two mode views (the pure DAG build + the 7-态 lane grouping).
+export {
+  createDocTabsRegistry, docDisplayName, docEntryName, DocTabTitle, focusOrOpenDoc, parseDocPath,
+} from './views/rightbar/DocTree'
+export type { DocOpenOutcome, DocTabTitleProps, DocTabsRegistry, DocTarget } from './views/rightbar/DocTree'
+export { DocTab } from './views/rightbar/DocTab'
+export type { DocTabProps, DocTabSeat } from './views/rightbar/DocTab'
+export { createDepGraphModeMemory, DepGraphTab } from './views/rightbar/DepGraphTab'
+export type { DepGraphMode, DepGraphModeMemory, DepGraphTabProps, DepGraphTabSeat } from './views/rightbar/DepGraphTab'
+export {
+  buildDepGraph, DEP_COLUMN_GAP, DEP_NODE_HEIGHT, DEP_NODE_WIDTH,
+} from './views/rightbar/DagView'
+export type { DepGraphEdge, DepGraphLayout, DepGraphNode, DagViewProps, DepNodeCardProps } from './views/rightbar/DagView'
+export { groupDepLanes } from './views/rightbar/SwimlaneView'
+export type { DepLane, SwimlaneViewProps } from './views/rightbar/SwimlaneView'
 export {
   ensureBoardActive, ensureOverviewActive, followProjectSwitch, resetRightbarToDefault, toRightbarTabsFace,
 } from './views/rightbar/tabs-model'

@@ -194,12 +194,14 @@ describe('AC1: the container registers the five kinds + keyed bodies', () => {
     expect(registry.liveCount()).toBe(0)
   })
 
-  it('stage two: the five bodies under the forge ids + the guide chip title', () => {
+  it('stage two: the five bodies under the forge ids + the two live chip titles', () => {
     const dispose = installRightbarTabs(makeFakeCtx(core, { sidebarRightTabs: registry.registry }), { t })
     const bodyKeys = core.entriesOfSlot(RIGHTBAR_TAB_SLOT).map(entry => entry.options.key)
     expect(new Set(bodyKeys)).toEqual(new Set(RIGHTBAR_TAB_KINDS.map(kind => forgeTabId(kind))))
+    // 2.4 adds the doc chip title (slug/产物名称 from the params) beside the
+    // guide's — the depgraph kind keeps the registry's static 「依赖图」 title.
     const titleKeys = core.entriesOfSlot(RIGHTBAR_TAB_TITLE_SLOT).map(entry => entry.options.key)
-    expect(titleKeys).toEqual([forgeTabId('guide')])
+    expect(titleKeys).toEqual([forgeTabId('guide'), forgeTabId('doc')])
     dispose()
     expect(core.entriesOfSlot(RIGHTBAR_TAB_SLOT)).toEqual([])
     expect(core.entriesOfSlot(RIGHTBAR_TAB_TITLE_SLOT)).toEqual([])
@@ -242,16 +244,18 @@ describe('AC1/AC5: board = TasksView pane host; overview = 2.3 body; doc/depgrap
     expect(boardStub.props.at(-1)).toEqual({ projectId: undefined, host: 'pane' })
   })
 
-  it('the overview body (2.3) renders its resolving skeleton without a store; the 2.4 placeholder mounts render NOTHING', () => {
+  it('the overview body (2.3) renders its resolving skeleton without a store; the 2.4 bodies own their resolving branches', () => {
     // 2.3 landed: the overview body is the real 项目概览 assembly — a bare
     // mount (no store) owns its loading branch (the resolving skeleton).
     const overview = render(<OverviewTabBody t={t} />)
     expect(overview.container.querySelector('[data-dsh-forge-overview]')?.getAttribute('aria-busy')).toBe('true')
-    // The 2.4 interiors stay placeholder mounts (SC2: 零空占位).
-    for (const Placeholder of [DocTabBody, DepgraphTabBody]) {
-      const view = render(<Placeholder />)
-      expect(view.container.innerHTML).toBe('')
-    }
+    // 2.4 landed: the doc/depgraph bodies are the real interiors — a bare
+    // mount (no store) owns its loading branch (never an empty pane, the SC2
+    // discipline's resolving form).
+    const doc = render(<DocTabBody t={t} />)
+    expect(doc.container.querySelector('[data-dsh-forge-doc]')?.getAttribute('aria-busy')).toBe('true')
+    const depgraph = render(<DepgraphTabBody t={t} />)
+    expect(depgraph.container.querySelector('[data-dsh-forge-depgraph]')?.getAttribute('aria-busy')).toBe('true')
   })
 })
 

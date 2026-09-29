@@ -235,7 +235,7 @@
         "1.gate",
         "2.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.4-doc-depgraph-tabs.md",
       "record": "records/2.4-doc-depgraph-tabs.md",
       "surface-type": "web",

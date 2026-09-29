@@ -88,6 +88,12 @@ export interface OverviewTabProps {
   readonly seat?: OverviewTabSeat | undefined
   /** The slot runtime's tab-info hook (the openTab seam's carrier). */
   readonly useTabInfo?: UseSidebarRightTabInfo | undefined
+  /**
+   * The 点文档名 → 文档 tab open seam (M4 2.4): present wins over the built-in
+   * openTab route — the container wires the dedupe-aware focus-or-open here
+   * (AC1 重复打开激活既有). Absent = the built-in route (the 2.3 form).
+   */
+  readonly openDocTab?: ((input: DocOpenInput) => void) | undefined
 }
 
 /** The tab's column. */
@@ -183,11 +189,13 @@ export function OverviewTab(props: OverviewTabProps): ReactNode {
 
   // The openTab seam (§4.5/§4.6): the slot runtime's own actions — doc opens
   // carry the document identity in the `doc` params, depgraph rides the
-  // kind's bare open. Absent hook (hostless render) = inert seams.
+  // kind's bare open. Absent hook (hostless render) = inert seams. The 2.4
+  // container overrides the DOC route with its dedupe-aware seam (openDocTab)
+  // when one rides (重复打开激活既有); absent = this built-in route.
   const openTabAction = props.useTabInfo?.().tab.actions.openTab
-  const openDoc = (input: DocOpenInput): void => {
+  const openDoc = props.openDocTab ?? ((input: DocOpenInput): void => {
     openTabAction?.('doc', { params: { path: input.path, displayName: input.displayName } })
-  }
+  })
   const openDepgraph = (): void => { openTabAction?.('depgraph') }
 
   // Form selection: bridge presence is fixed for the tab's life.

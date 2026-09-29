@@ -604,6 +604,22 @@ export type WorkbenchKey =
   | 'rightbar.overview.tasks.list'
   | 'rightbar.overview.tasks.empty'
   | 'rightbar.overview.tasks.gotoSession'
+  // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
+  | 'rightbar.doc.readonly'
+  | 'rightbar.doc.reload'
+  | 'rightbar.doc.loading'
+  | 'rightbar.doc.loadError.title'
+  | 'rightbar.doc.loadError.retry'
+  | 'rightbar.depgraph.loading'
+  | 'rightbar.depgraph.loadError.title'
+  | 'rightbar.depgraph.loadError.retry'
+  | 'rightbar.depgraph.feature.label'
+  | 'rightbar.depgraph.feature.none'
+  | 'rightbar.depgraph.tasks.empty'
+  | 'rightbar.depgraph.lane.empty'
+  | 'rightbar.depgraph.mode.label'
+  | 'rightbar.depgraph.mode.dag'
+  | 'rightbar.depgraph.mode.lane'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
@@ -1211,6 +1227,22 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.overview.tasks.list': 'Task list',
   'rightbar.overview.tasks.empty': 'No tasks yet.',
   'rightbar.overview.tasks.gotoSession': 'Go to session',
+  // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
+  'rightbar.doc.readonly': 'Read-only',
+  'rightbar.doc.reload': 'Reload',
+  'rightbar.doc.loading': 'Loading document…',
+  'rightbar.doc.loadError.title': 'Document read failed',
+  'rightbar.doc.loadError.retry': 'Retry',
+  'rightbar.depgraph.loading': 'Loading dependency graph…',
+  'rightbar.depgraph.loadError.title': 'Dependency graph load failed',
+  'rightbar.depgraph.loadError.retry': 'Retry',
+  'rightbar.depgraph.feature.label': 'Select feature (this project only)',
+  'rightbar.depgraph.feature.none': 'No feature yet',
+  'rightbar.depgraph.tasks.empty': 'No tasks in this feature yet.',
+  'rightbar.depgraph.lane.empty': 'No tasks in this status',
+  'rightbar.depgraph.mode.label': 'Dependency graph view mode',
+  'rightbar.depgraph.mode.dag': 'DAG',
+  'rightbar.depgraph.mode.lane': 'Swimlane',
   // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
   'metadata.taskPrefix': 'task',
   'metadata.viewTask': 'View task',

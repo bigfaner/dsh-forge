@@ -12,10 +12,17 @@
  *   stage two  the keyed `sidebar.right.pane.tab` bodies (guide → GuideTab,
  *              board → the 2.1 dual-host TasksView in its pane form,
  *              overview → 2.3's 项目概览 body (OverviewTab: 标题栏 + 概要信息
- *              区 + the M3-face sub-tab panes), doc / depgraph → PLACEHOLDER
- *              MOUNTS: 2.4 owns the interiors; the placeholders render
- *              NOTHING — never an empty view or preset data, the SC2
- *              discipline) + the guide chip title (`sidebar.right.pane.tab.title`);
+ *              区 + the M3-face sub-tab panes), doc → 2.4's 文档 body
+ *              (DocTab: 路径栏 h38 + ↻ + 只读正文) and depgraph → 2.4's 依赖图
+ *              body (DepGraphTab: feature 下拉 + DAG/泳道双模式)) + the two
+ *              live chip titles (`sidebar.right.pane.tab.title`: the guide's
+ *              glyph chip and the doc kind's `slug/产物名称` from its params);
+ *   dedupe     the 文档可多开 · 重复打开激活既有 leg (2.4, AC1): one doc-tabs
+ *              registry per plugin lifetime — every MOUNTED doc body registers
+ *              (tabId, path), and the overview's open seam
+ *              (DocTree.focusOrOpenDoc) focuses the live tab of a re-opened
+ *              path instead of minting a duplicate (the native page dedupe
+ *              cannot key a `multiple` kind by its params);
  *   linkage    the §4.7 watcher — the active-project pointer drives
  *              tabs-model.followProjectSwitch (close the old project's
  *              doc/depgraph, return an expanded column to 项目概览). The
@@ -46,8 +53,11 @@ import type { BoardSessionStore } from '../../store/board-session'
 import { TasksView } from '../tasks/TasksView'
 import type { EnterSessionSeam } from '../tasks/detail/LinkHistory'
 import { GuideTab, GuideTabTitle, type ForgeTabFace } from './GuideTab'
-import { OverviewTab } from './OverviewTab'
+import { OverviewTab, type DocOpenInput } from './OverviewTab'
 import type { OverviewTaskSource } from './overview-model'
+import { DocTab } from './DocTab'
+import { DocTabTitle, createDocTabsRegistry, focusOrOpenDoc, type DocTabsRegistry } from './DocTree'
+import { DepGraphTab } from './DepGraphTab'
 import {
   forgeTabDefinitions, forgeTabId, RIGHTBAR_TAB_KINDS, type TabKind,
 } from './tab-kinds'
@@ -129,6 +139,13 @@ export interface OverviewTabFace extends ForgeTabFace {
   readonly onEnterSession?: EnterSessionSeam | undefined
   /** The shared `{ task, links }` read (real chain; absent = silent degrade). */
   readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+  /**
+   * The 点文档名 → 文档 tab open seam (M4 2.4): the dedupe-aware route —
+   * focus-or-open over the doc-tabs registry (AC1 重复打开激活既有). Absent
+   * (hostless, or the controller face is unavailable) = the overview keeps
+   * its own built-in openTab route.
+   */
+  readonly openDocTab?: ((input: DocOpenInput) => void) | undefined
 }
 
 /** The 项目概览 body's composed props (the keyed-seat dispatch contract). */
@@ -143,7 +160,7 @@ export type OverviewTabBodyProps =
  * BoardTabBody precedent), while sub-tab switches stay inside the mount.
  */
 export function OverviewTabBody(
-  { useTabInfo, t, activeProject, onOpenTask, onEnterSession, readTaskSources }: OverviewTabBodyProps,
+  { useTabInfo, t, activeProject, onOpenTask, onEnterSession, readTaskSources, openDocTab }: OverviewTabBodyProps,
 ): ReactNode {
   const snapshot = useSyncExternalStore(
     activeProject?.subscribe ?? (() => () => {}),
@@ -158,25 +175,89 @@ export function OverviewTabBody(
       {...(onOpenTask === undefined ? {} : { onOpenTask })}
       {...(onEnterSession === undefined ? {} : { onEnterSession })}
       {...(readTaskSources === undefined ? {} : { readTaskSources })}
+      {...(openDocTab === undefined ? {} : { openDocTab })}
       {...(useTabInfo === undefined ? {} : { useTabInfo })}
     />
   )
 }
 
 /**
- * The 文档 tab placeholder mount (2.4 owns the interior: 路径栏 + 只读正文;
- * the tab identity rides the `doc` navigation params). Renders NOTHING.
+ * The 文档 pane's injected face (M4 2.4): the shared locale seat, the
+ * plugin-lifetime project pointer (the tab's ONLY project source — the doc
+ * belongs to the current project; a project switch CLOSES the tab, the §4.7
+ * linkage), and the doc-tabs registry the body's mount registers into (the
+ * AC1 dedupe's liveness half).
  */
-export function DocTabBody(): ReactNode {
-  return null
+export interface DocTabFace extends ForgeTabFace {
+  /** The plugin-lifetime active-project pointer store; absent = the resolving skeleton. */
+  readonly activeProject?: ActiveProjectStore | undefined
+  /** The plugin-lifetime doc-tabs registry (AC1 dedupe); absent = unregistered. */
+  readonly docTabs?: DocTabsRegistry | undefined
+}
+
+/** The 文档 tab body's composed props (the keyed-seat dispatch contract). */
+export type DocTabBodyProps =
+  & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>
+  & InjectFace<DocTabFace>
+
+/**
+ * The 文档 tab body (2.4's interior): 路径栏 h38 (路径小字 + ↻ 重新读取 + 只读)
+ * over the read-only 正文 (the ONE MarkdownView). The tab identity rides the
+ * `doc` navigation params; the read routes through the M3 face verbs (DocTree
+ * parses the path — 零新读侧).
+ */
+export function DocTabBody(
+  { useTabInfo, t, activeProject, docTabs }: DocTabBodyProps,
+): ReactNode {
+  return (
+    <DocTab
+      t={t}
+      {...(activeProject === undefined ? {} : { activeProject })}
+      {...(docTabs === undefined ? {} : { docTabs })}
+      {...(useTabInfo === undefined ? {} : { useTabInfo })}
+    />
+  )
 }
 
 /**
- * The 依赖图 tab placeholder mount (2.4 owns the interior: feature 下拉 +
- * DAG/泳道双模式). Renders NOTHING.
+ * The 依赖图 pane's injected face (M4 2.4): the shared locale seat plus the
+ * legs the graph rides — the project pointer (the dropdown's 本项目 rows +
+ * the board reads), the row-click → 任务详情 dock seam (C6 select +
+ * ensureBoardActive — the SAME seam the overview's task rows use), and the
+ * shared task-sources read (the 会话中 pill's active-link map, the C6 source
+ * twin).
  */
-export function DepgraphTabBody(): ReactNode {
-  return null
+export interface DepgraphTabFace extends ForgeTabFace {
+  /** The plugin-lifetime active-project pointer store; absent = the resolving skeleton. */
+  readonly activeProject?: ActiveProjectStore | undefined
+  /** The 节点点击 → 任务详情 dock seam (select + ensureBoardActive, the apply's wiring). */
+  readonly onOpenTask?: ((taskKey: string) => void) | undefined
+  /** The shared `{ task, links }` read (real chain; absent = the pills degrade silently). */
+  readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+}
+
+/** The 依赖图 tab body's composed props (the keyed-seat dispatch contract). */
+export type DepgraphTabBodyProps =
+  & PropsRuntime<typeof RIGHTBAR_TAB_SLOT>
+  & InjectFace<DepgraphTabFace>
+
+/**
+ * The 依赖图 tab body (2.4's interior): the feature 名即下拉 (仅本项目 +
+ * 状态徽标 pill) over the DAG/泳道图 double mode sharing one node card
+ * (点击开任务详情 dock).
+ */
+export function DepgraphTabBody(
+  { useTabInfo, t, activeProject, onOpenTask, readTaskSources }: DepgraphTabBodyProps,
+): ReactNode {
+  return (
+    <DepGraphTab
+      t={t}
+      {...(activeProject === undefined ? {} : { activeProject })}
+      {...(onOpenTask === undefined ? {} : { onOpenTask })}
+      {...(readTaskSources === undefined ? {} : { readTaskSources })}
+      {...(useTabInfo === undefined ? {} : { useTabInfo })}
+    />
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +338,10 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
   if (tabs === undefined) return () => {}
   const face: ForgeTabFace = { t }
 
+  // The controller face: resolved ONCE here — the §4.7 linkage watcher AND the
+  // 文档 open dedupe seam below both consume it (guarded throughout).
+  const sidebarRight = toRightbarTabsFace(optionalService(ctx, 'sidebarRight'))
+
   // Stage one — the definitions, held by this fiber's effect (the
   // ui-sidebar-terminal precedent for an outside package's registration).
   const disposeTypes = ctx.effect(() => {
@@ -265,14 +350,26 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     return () => { for (const dispose of disposers.reverse()) dispose() }
   }, 'forge-workbench: rightbar tab types')
 
-  // Stage two — the bodies + the guide chip title, each keyed under its own
+  // The 文档 dedupe halves (M4 2.4, AC1): ONE registry per plugin lifetime —
+  // the doc bodies register their (tabId, path) on mount, and the overview's
+  // open seam focuses a live tab for a re-opened path. Only live while the
+  // controller face is (an absent face leaves the overview on its built-in
+  // openTab route — never a dead button).
+  const docTabs = createDocTabsRegistry()
+  const openDocTab = sidebarRight === undefined
+    ? undefined
+    : (input: DocOpenInput): void => { focusOrOpenDoc(sidebarRight, docTabs, input) }
+
+  // Stage two — the bodies + the live chip titles, each keyed under its own
   // definition id (arrival-order: each injection waits for the seat family's
-  // declaration by ui-sidebar-right, exactly like the 1.6 seats). The guide /
-  // doc / depgraph bodies share the { t } face; the board adds the
-  // active-project store (its only project source) plus 2.7's plugin-lifetime
-  // legs (the board-session memory + the Interface 6 open seam); the overview
-  // adds its own project source + 2.3's legs (the dock seam, the ⟞ open seam,
-  // the shared task-sources read).
+  // declaration by ui-sidebar-right, exactly like the 1.6 seats). The guide
+  // body shares the { t } face; the board adds the active-project store (its
+  // only project source) plus 2.7's plugin-lifetime legs (the board-session
+  // memory + the Interface 6 open seam); the overview adds its own project
+  // source + 2.3's legs (the dock seam, the ⟞ open seam, the shared
+  // task-sources read) + 2.4's dedupe-aware doc open; the doc body adds the
+  // project source + the registry; the depgraph body adds the project source
+  // + the dock seam + the shared task-sources read (the 会话中 pill).
   const boardFace: BoardTabFace = {
     t,
     ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
@@ -285,17 +382,29 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     ...onOpenTask === undefined ? {} : { onOpenTask },
     ...onEnterSession === undefined ? {} : { onEnterSession },
     ...readTaskSources === undefined ? {} : { readTaskSources },
+    ...openDocTab === undefined ? {} : { openDocTab },
+  }
+  const docFace: DocTabFace = {
+    t,
+    ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
+    docTabs,
+  }
+  const depgraphFace: DepgraphTabFace = {
+    t,
+    ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
+    ...onOpenTask === undefined ? {} : { onOpenTask },
+    ...readTaskSources === undefined ? {} : { readTaskSources },
   }
 
   const registerBody = (
     kind: TabKind,
     component: typeof GuideTab | typeof OverviewTabBody | typeof BoardTabBody | typeof DocTabBody | typeof DepgraphTabBody,
-    injectFace: ForgeTabFace | BoardTabFace | OverviewTabFace,
+    injectFace: ForgeTabFace | BoardTabFace | OverviewTabFace | DocTabFace | DepgraphTabFace,
   ): (() => void) => ctx.slots.inject(RIGHTBAR_TAB_SLOT, () => {
     const dispose = ctx.slots.register({
       name: RIGHTBAR_TAB_SLOT,
       key: forgeTabId(kind),
-      inject: (): ForgeTabFace | BoardTabFace | OverviewTabFace => injectFace,
+      inject: (): ForgeTabFace | BoardTabFace | OverviewTabFace | DocTabFace | DepgraphTabFace => injectFace,
       registrant: `forge-workbench: rightbar tab ${kind}`,
     }, component as typeof GuideTab)
     return () => { dispose() }
@@ -305,22 +414,28 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     registerBody('guide', GuideTab, face),
     registerBody('overview', OverviewTabBody, overviewFace),
     registerBody('board', BoardTabBody, boardFace),
-    registerBody('doc', DocTabBody, face),
-    registerBody('depgraph', DepgraphTabBody, face),
+    registerBody('doc', DocTabBody, docFace),
+    registerBody('depgraph', DepgraphTabBody, depgraphFace),
   ]
-  const disposeGuideTitle = ctx.slots.inject(RIGHTBAR_TAB_TITLE_SLOT, () => {
+  const registerTitle = (
+    kind: 'guide' | 'doc',
+    component: typeof GuideTabTitle | typeof DocTabTitle,
+  ): (() => void) => ctx.slots.inject(RIGHTBAR_TAB_TITLE_SLOT, () => {
     const dispose = ctx.slots.register({
       name: RIGHTBAR_TAB_TITLE_SLOT,
-      key: forgeTabId('guide'),
-      registrant: 'forge-workbench: rightbar tab guide title',
-    }, GuideTabTitle)
+      key: forgeTabId(kind),
+      registrant: `forge-workbench: rightbar tab ${kind} title`,
+    }, component as typeof GuideTabTitle)
     return () => { dispose() }
   })
+  const disposeGuideTitle = registerTitle('guide', GuideTabTitle)
+  // The doc chip rides its params (`slug/产物名称`) — without this seat every
+  // doc chip would show the registry's generic fallback (2.2's title thunk).
+  const disposeDocTitle = registerTitle('doc', DocTabTitle)
 
   // The §4.7 linkage: the active-project pointer drives the column. The
   // first observation is record-only (the model's own boot guard) and the
   // same-project pointer never fires (同项目切会话右栏不动).
-  const sidebarRight = toRightbarTabsFace(optionalService(ctx, 'sidebarRight'))
   let disposeWatch: (() => void) | undefined
   if (activeProjectStore !== undefined && sidebarRight !== undefined) {
     let seen: string | null = activeProjectStore.getSnapshot().activeProjectId
@@ -335,6 +450,7 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
 
   return () => {
     disposeWatch?.()
+    disposeDocTitle()
     disposeGuideTitle()
     for (const dispose of disposeBodies.reverse()) dispose()
     disposeTypes()
