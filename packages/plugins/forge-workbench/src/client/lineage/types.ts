@@ -195,11 +195,23 @@ const isFunction = (candidate: unknown): candidate is (...args: never[]) => unkn
  * Narrow the `ctx.sessions` service candidate onto the lineage read face
  * (the 1.6 `toSessionsFace` discipline: shape-validated once, absent or
  * partial services answer undefined — the derivation then degrades).
+ *
+ * M4 fix-1 (the C6 bar's dead-face root cause): the adapter BRIDGES like
+ * `toSessionsFace` — it captures the service's nested LIST STORE and answers
+ * a fresh `{ list: { getSnapshot } }` object, never the raw service. A
+ * long-lived consumer (the C6 bar's React props) holding the RAW service
+ * holds cordis's traceable proxy — when the api-controller fiber the proxy
+ * was minted against goes away, `service.list` answers undefined FOREVER
+ * after, the guarded read degrades to 仅顶层/unbound, and the bar silently
+ * never renders (the SC7 open-leg flake: the source reads healthy at adapt
+ * time, dead at render time). The captured store outlives proxy generations.
  */
 export function toLineageSessionsSource(candidate: unknown): LineageSessionsSource | undefined {
   if (!isObject(candidate) || !isObject(candidate.list)) return undefined
-  if (!isFunction(candidate.list.getSnapshot)) return undefined
-  return candidate as unknown as LineageSessionsSource
+  const list = candidate.list
+  if (!isFunction(list.getSnapshot)) return undefined
+  const nested = list as unknown as { getSnapshot(): unknown }
+  return { list: { getSnapshot: () => nested.getSnapshot() } }
 }
 
 /**

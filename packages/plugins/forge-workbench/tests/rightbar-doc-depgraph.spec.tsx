@@ -586,8 +586,10 @@ describe('AC5: the 联动 (project switch closes 文档/依赖图 tabs)', () => 
     const outcome = followProjectSwitch(face, 'p1', 'p2')
     expect(outcome.projectChanged).toBe(true)
     expect(outcome.closedTabIds).toEqual(['doc-a', 'doc-b', 'depgraph-1'])
-    // guide/overview/board rows are untouched; the column returns to 概览.
+    // guide/overview/board rows are untouched; the column returns to 概览 —
+    // fix-1 会话域 seam: through the MOUNTED-session openTab (the native
+    // per-pane page dedupe settles the focus), never the inventory focus.
     expect(calls.closed).toEqual(['doc-a', 'doc-b', 'depgraph-1'])
-    expect(calls.focused).toEqual(['overview-1'])
+    expect(calls.opened).toEqual(['overview'])
   })
 })

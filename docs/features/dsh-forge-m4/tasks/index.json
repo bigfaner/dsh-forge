@@ -317,7 +317,7 @@
         "2.7",
         "2.8"
       ],
-      "status": "blocked",
+      "status": "completed",
       "file": "2.9-sc7-e2e-subagent-stub.md",
       "record": "records/2.9-sc7-e2e-subagent-stub.md",
       "surface-type": "web",
@@ -705,7 +705,7 @@
       "title": "Fix: SC7 e2e 腿板内 dock 交互失稳(会话域右栏重组下的行展开/行点击)",
       "priority": "P0",
       "estimatedTime": "30min",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-1.md",
       "record": "records/fix-1.md",
       "breaking": true,

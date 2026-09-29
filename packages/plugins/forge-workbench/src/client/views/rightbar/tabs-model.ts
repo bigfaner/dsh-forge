@@ -122,40 +122,62 @@ export function followProjectSwitch(
 }
 
 /**
- * The 项目概览 activation (§4.7 回概览激活态): focus the column's existing
- * overview tab — a page kind is one-per-pane, so at most one pane holds one —
- * or open one when none does. Callers gate this on the column being EXPANDED.
+ * The MOUNTED-SCOPE focus-or-open (the 会话域 seam, fix-1): the right column
+ * is PER-SESSION — the seat binds the conversation's active session, and a
+ * session switch mounts that session's FRESH surface (collapsed, empty) —
+ * while `openTabs` is the CROSS-SESSION inventory (saved + adopted layouts of
+ * every session). An inventory row of a FOREIGN session is therefore not a
+ * focusable tab of the mounted surface: the controller's `focus` on it is a
+ * documented SILENT no-op, so an inventory-keyed focus-or-open after a
+ * session switch would neither focus nor open (the C6 「查看任务」/overview
+ * row seams landed nothing and the pane-hosted dock never mounted).
+ *
+ * The ONE command guaranteed to act on the MOUNTED session is `openTab`: the
+ * store's per-pane page uniqueness settles it on the pane's existing page of
+ * the kind (the focus outcome, verbatim) or opens one, and it reveals the
+ * column in the same step. A controller between seat bindings (the rebind
+ * window mid session switch) THROWS on every command — the guarded-adapter
+ * discipline degrades that to `false`, never a throw, never a load gate.
+ * @param face - the controller subset.
+ * @param kind - the page kind to activate ('overview' | 'board').
+ * @returns true when the mounted session's open was issued.
+ */
+function activateOnMountedSession(face: RightbarTabsFace, kind: 'overview' | 'board'): boolean {
+  try {
+    face.openTab(kind)
+    return true
+  } catch {
+    // No mounted session surface (the rebind window) or a drifted service:
+    // the leg degrades — the caller's other legs (e.g. the shared
+    // board-session selection) still ran.
+    return false
+  }
+}
+
+/**
+ * The 项目概览 activation (§4.7 回概览激活态): settle the mounted session's
+ * pane on its overview page — focus it through the native per-pane page
+ * dedupe when the pane holds one, open one when none does. Callers gate this
+ * on the column being EXPANDED.
  * @param face - the controller subset.
  * @returns true when a tab was focused or opened.
  */
 export function ensureOverviewActive(face: RightbarTabsFace): boolean {
-  const overview = openTabsOf(face).find(row => row.kind === 'overview')
-  if (overview !== undefined) {
-    face.focus(overview.tabId)
-    return true
-  }
-  face.openTab('overview')
-  return true
+  return activateOnMountedSession(face, 'overview')
 }
 
 /**
- * The 任务看板 activation (M4 2.7, the C6 bar's 双向跳转 leg): focus the
- * column's existing board tab, or open one when none does — the same
- * focus-or-open shape as {@link ensureOverviewActive} over the board kind.
- * The board pane then presents the detail dock the jump's other leg (the
- * shared board-session selection) has already opened.
+ * The 任务看板 activation (M4 2.7, the C6 bar's 双向跳转 leg): settle the
+ * MOUNTED session's pane on its board page — the same scope-correct shape as
+ * {@link ensureOverviewActive} over the board kind. The board pane then
+ * presents the detail dock the jump's other leg (the shared board-session
+ * selection) has already opened.
  * @param face - the controller subset (`undefined` = service absent: no-op).
  * @returns true when a tab was focused or opened.
  */
 export function ensureBoardActive(face: RightbarTabsFace | undefined): boolean {
   if (face === undefined) return false
-  const board = openTabsOf(face).find(row => row.kind === 'board')
-  if (board !== undefined) {
-    face.focus(board.tabId)
-    return true
-  }
-  face.openTab('board')
-  return true
+  return activateOnMountedSession(face, 'board')
 }
 
 /**

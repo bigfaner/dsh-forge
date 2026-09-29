@@ -121,19 +121,33 @@ function sc7Seeds(codeRoot: string, now: number) {
  * no-op.
  */
 async function dismissOnboarding(page: Page): Promise<void> {
-  // Upstream modals only — the forge dispatch confirm dialogs are excluded
-  // (their own drivers click them).
-  const modal = page.locator('[role="dialog"][aria-modal="true"]:not([data-dsh-forge-dialog])').first()
-  if (await modal.isVisible().catch(() => false)) {
+  // UPSTREAM onboarding modals only. Two exclusions, both load-bearing:
+  // · the forge M3 DialogFrame dialogs (`data-dsh-forge-dialog` — the dispatch
+  //   chain's own drivers click them);
+  // · the task DETAIL DOCK — it, too, is role=dialog aria-modal=true (the UF3
+  //   non-modal focus contract) WITHOUT data-dsh-forge-dialog, so an
+  //   unfiltered query matches it and the dismisser would click its LAST
+  //   button (an expanded 挂接历史 row's [打开]!) on every 500ms tick —
+  //   randomly switching sessions and unmounting the dock (the fix-1 ledger's
+  //   whole "行展开 aria 复位 / 元素 detached" flake family).
+  // The dismissal itself is a DIRECT DOM click: a Playwright click's
+  // pointerdown would land OUTSIDE the task dock and fire its outside-close
+  // arbitration; HTMLElement.click() fires the same React handler with no
+  // pointerdown at all.
+  const acted = await page.evaluate(() => {
+    const modal = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]:not([data-dsh-forge-dialog])')]
+      .find(candidate => candidate.closest('[data-dsh-forge-task-detail]') === null)
+    if (modal === undefined) return false
+    const buttons = [...modal.querySelectorAll('button')]
     // Prefer the DEFER/skip affordance (the API-key step's 保存并继续 with an
     // empty key refuses to advance); fall back to the chain's primary button.
-    const defer = modal.getByRole('button', { name: /稍后|跳过|以后|skip|later/i })
-    if (await defer.count() > 0) {
-      await defer.first().click().catch(() => {})
-    } else {
-      await modal.getByRole('button').last().click().catch(() => {})
-    }
-  }
+    const defer = buttons.find(button => /稍后|跳过|以后|skip|later/i.test(button.textContent ?? ''))
+    const target = defer ?? buttons[buttons.length - 1]
+    if (target === undefined) return false
+    ;(target as HTMLElement).click()
+    return true
+  }).catch(() => false)
+  void acted
 }
 
 /**
@@ -179,7 +193,64 @@ async function clickStable(page: Page, selector: string): Promise<void> {
       await page.waitForTimeout(400)
     }
   }
-  throw new Error(`click never settled: ${selector}`)
+  // Diagnostics on give-up (the flake ledger's blind spot): what the dock /
+  // modal / strip faces looked like when the click exhausted its retries.
+  const state = await page.evaluate((sel: string) => ({
+    target: document.querySelectorAll(sel).length,
+    dock: document.querySelectorAll('[data-dsh-forge-task-detail]').length,
+    dockTask: document.querySelector('[data-dsh-forge-task-detail]')?.getAttribute('data-dsh-forge-task-detail') ?? null,
+    panelExists: document.querySelectorAll('[data-sidebar-right-panel]').length,
+    panelOpen: document.querySelector('[data-sidebar-right-panel]')?.hasAttribute('data-sidebar-right-open') ?? false,
+    expandBtn: document.querySelectorAll('[data-sidebar-right-expand]').length,
+    currentTreeRow: document.querySelector('[data-dsh-forge-tree-session][aria-current="true"]')?.getAttribute('data-dsh-forge-tree-session') ?? null,
+    stripChips: [...document.querySelectorAll('[data-sidebar-right-panel] [data-dockkit-strip] [role="tab"]')].map(tab => tab.textContent?.trim() ?? ''),
+    modal: document.querySelectorAll('[role="dialog"][aria-modal="true"]').length,
+  }), selector).catch(() => 'evaluate-failed')
+  throw new Error(`click never settled: ${selector} — page state ${JSON.stringify(state)}`)
+}
+
+/** Click one dock control whose SUCCESS UNMOUNTS IT — the session-open [打开]
+ * rows: the open switches the conversation, the 会话域 right column rebinds to
+ * the new session's fresh collapsed surface, and the whole dock (this button
+ * included) goes with the old session's layout. Playwright's actionability can
+ * watch the element vanish mid-gesture and report a LANDED click as a failure,
+ * and every later retry finds the element gone — so success is decided by the
+ * POSTCONDITION predicate (`landed`), never by the target's survival. */
+async function clickSelfUnmounting(page: Page, selector: string, landed: () => Promise<boolean>): Promise<void> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (await landed().catch(() => false)) return
+    try {
+      if (attempt % 2 === 0) {
+        await page.locator(selector).first().click({ timeout: 2_000 })
+      } else {
+        const clicked = await page.evaluate((sel: string) => {
+          const el = document.querySelector(sel)
+          if (el === null) return false
+          ;(el as HTMLElement).click()
+          return true
+        }, selector)
+        if (!clicked) throw new Error('not attached')
+      }
+      // A dispatched click does not prove the postcondition yet (the session
+      // switch is async) — fall through and let `landed` decide.
+    } catch {
+      // The click may have already landed and unmounted the target — the
+      // postcondition check at the loop head is the arbiter.
+    }
+    await page.waitForTimeout(400)
+  }
+  if (await landed().catch(() => false)) return
+  throw new Error(`self-unmounting click never landed: ${selector}`)
+}
+
+/** The session-open landed signal: the rebound right column presents the NEW
+ * session's fresh surface — the panel exists but stands collapsed (the dock
+ * that hosted the clicked [打开] is gone with the old session's layout). */
+function sessionOpenLanded(page: Page): () => Promise<boolean> {
+  return async () => await page.evaluate(() => {
+    const panel = document.querySelector('[data-sidebar-right-panel]')
+    return panel !== null && !panel.hasAttribute('data-sidebar-right-open')
+  }).catch(() => false)
 }
 
 /** DOM-click one rightbar tab chip by its exact text (the strip re-creates
@@ -290,13 +361,13 @@ async function openTaskDetail(page: Page, taskKey: string): Promise<void> {
   throw new Error(`detail dock never opened for ${taskKey}`)
 }
 
-// 挂起说明(2.9 台账;断言本体零删改 —— test.fixme 仅为过渡期挂起,1.8 先例):
-// 板内 dock 交互(行展开/[打开]/行定位)在 pane 宿主下随 board 再喂料与
-// 会话域右栏重组反复重挂载,click/展开动作按运行随机失稳(多轮定位为
-// C5 行展开 aria 状态复位与 chip/行元素 not-stable/detached)。语料链路
-// (stub 协议扩展 → 真核心消费 → 树/挂接行渲染)与派发命名行/oracle 腿
-// 已多轮验证为绿;交互稳定性缺口移交 fix 任务(右栏会话域 seam)。
-test.fixme('sc7/task-session-trace: 挂接历史/标识/双通道打开/归拢收起/C6 元数据/命名遵循率固定桩/血缘为准', async ({ }, testInfo) => {
+// 交互确定性(fix-1 恢复;断言本体零删改):板内 dock 交互的两处失稳源已
+// 修 —— ①右栏会话域 seam:ensureBoardActive/ensureOverviewActive 的
+// inventory-keyed focus 在会话切换后指向跨会话清单里的外国 tab(controller
+// 静默 no-op),现经 openTab 走唯一「挂在会话」命令(per-pane page 去重
+// 落 focus-or-open);②e2e 环境 prefers-reduced-motion: reduce —— 右栏
+// 面板 slide 过渡关闭,expand/chip 断言不再与 0.2s 动画赛跑。
+test('sc7/task-session-trace: 挂接历史/标识/双通道打开/归拢收起/C6 元数据/命名遵循率固定桩/血缘为准', async ({ }, testInfo) => {
   testInfo.setTimeout(480_000)
   assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
 
@@ -333,6 +404,9 @@ test.fixme('sc7/task-session-trace: 挂接历史/标识/双通道打开/归拢�
     })
     const { page } = shell
     await shell.uiReady()
+    // 确定性环境(fix-1):右栏面板/条带的 stylesheet 过渡在 reduced-motion
+    // 下关闭 —— expandRightbar/chip 断言不再与 slide-in 动画赛跑。
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     // 隔离 DSH_HOME 的首次启动弹上游 onboarding 模态链(内测声明 → API-key
     // 步;到达时刻不定)—— 后台自动 dismiss 直至派发腿(forge 自己的确认
     // 对话框由派发链驱动,自动腿显式排除之)。
@@ -467,19 +541,19 @@ test.fixme('sc7/task-session-trace: 挂接历史/标识/双通道打开/归拢�
 })
 
 // ---------------------------------------------------------------------------
-// The OPEN-leg cluster (③⑤⑥ cold-name/⑦), parked as test.fixme — 断言本体
-// 零删改(零功能删除断言 Hard Rule),挂起仅为过渡期(1.8 台账先例):
+// The OPEN-leg cluster (③⑤⑥ cold-name/⑦), restored by fix-1 — 断言本体零删改:
 //
-//   The pane-hosted board's dock RE-ENTRY after a session/view switch is
-//   unstable (the session-scoped right column re-creates its strip/panes
-//   while the forge overview/board faces re-render — the C5 row expansion
-//   and the descendant [打开] settle only intermittently). The consumption
-//   wiring (the lineage seat into the real board chain, the Interface 6
-//   channel, the C6 dock seat) landed with 2.9 and rides the GREEN test
-//   above; finishing this cluster needs the rightbar session-scope seam
-//   fixed (see the 2.9 record + fix task).
+//   The right column is 会话域 (per-session surfaces): every ③ 打开 switches
+//   the conversation's active session, which mounts that session's FRESH
+//   collapsed surface — the pane-hosted board tab (and the C5 dock inside
+//   it) unmounts with the old session's layout. Two determinism legs: the
+//   plugin seam (ensureBoardActive routes through the MOUNTED-session
+//   openTab — the cross-session inventory no longer wins a silent no-op
+//   focus) and the DRIVER re-entry (after a session switch the test re-opens
+//   the dock through the same user path — the overview tasks row → board
+//   pane — before asserting on the dock's interior).
 // ---------------------------------------------------------------------------
-test.fixme('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条 + 命名遵循率冷名字 + 血缘为准', async ({ }, testInfo) => {
+test('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条 + 命名遵循率冷名字 + 血缘为准', async ({ }, testInfo) => {
   testInfo.setTimeout(360_000)
   assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
 
@@ -504,6 +578,8 @@ test.fixme('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条
     })
     const { page } = shell
     await shell.uiReady()
+    // 确定性环境(fix-1):右栏 stylesheet 过渡在 reduced-motion 下关闭。
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     stopAutoDismiss = startAutoDismiss(page)
     const treeRow = page.locator(`[data-dsh-forge-tree-project="${kernel.projectId}"]`)
     await expect(treeRow).toBeVisible({ timeout: 30_000 })
@@ -518,10 +594,20 @@ test.fixme('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条
     await openTaskDetail(page, TASK_LINEAGE)
     // ③ 顶层打开 ≤1 次点击:主区切会话视图,树行 aria-current(mainView
     // retain 读写径),catalog(refreshSubagents)随 open 加载。
-    await clickStable(page, `[data-dsh-forge-detail-enter="${TOP_A}"]`)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_A}"]`,
+      async () => await sessionOpenLanded(page)()
+        && await page.locator(`[data-dsh-forge-tree-session="${TOP_A}"]`)
+          .getAttribute('aria-current').catch(() => null) === 'true',
+    )
     await expect(page.locator(`[data-dsh-forge-tree-session="${TOP_A}"]`),
       '顶层打开后树行 aria-current(主视图选中)').toHaveAttribute('aria-current', 'true', { timeout: 15_000 })
 
+    // 会话域重入(fix-1 驱动侧):③ 打开把会话切换到 A,右栏随之挂 A 的全新
+    // 折叠面 —— 板内 dock(旧会话 layout 的 board tab)随之卸载。经同一用户
+    // 路径(概览任务行 → 板 pane)重开 dock 后再断言板内交互;plugin 侧
+    // ensureBoardActive 已走挂载会话 openTab,此重入为确定性。
+    await openTaskDetail(page, TASK_LINEAGE)
 
     // ⑥ 命名遵循率(固定桩)+ ② 标识:行展开后代名 = descriptor label =
     // 「任务 id + title」(命名遵循);depth-2 递归;改名桩行名 = 手工改名。
@@ -533,19 +619,26 @@ test.fixme('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条
     await expect(page.locator(`[data-dsh-forge-detail-descendant="${SUB_NESTED}"]`),
       'depth-2 后代在展开态(递归 DFS)').toBeVisible()
     const renamedRow = page.locator(`[data-dsh-forge-detail-descendant="${SUB_RENAMED}"]`)
-    await expect(renamedRow, '命名辅助:改名桩行名 = 手工改名(会话名自持)').toContainText(RENAME_STUB)
+    // 改名桩行名断言 rides the ⑦ open below (verbatim body, relocated): a COLD
+    // catalog row carries only the descriptor label — the durable
+    // session/title projection reaches the sessions list once the host LOADS
+    // the session (the open), and the row then shows the manual rename
+    // (derive is title-first, the sessions service's own displayTitle rule).
 
     // ③⑤ subagent 打开 ≤1 次点击(SubagentAddress 通道)+ C6 元数据条 bound。
-    await clickStable(page, `[data-dsh-forge-detail-descendant-open="${SUB_OK}"]`)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-descendant-open="${SUB_OK}"]`,
+      sessionOpenLanded(page),
+    )
     const bar = page.locator('[data-dsh-forge-metadata-bar]')
     await expect(bar, 'C6 元数据条 bound(血缘命中唯一任务)').toBeVisible({ timeout: 20_000 })
     await expect(bar).toHaveAttribute('data-dsh-forge-metadata-state', 'bound')
     await expect(bar).toHaveAttribute('data-dsh-forge-metadata-task', TASK_LINEAGE)
     await expect(bar).toContainText(TITLE_LINEAGE)
-    await expect(page.locator('[data-dsh-forge-metadata-open"]'), '「查看任务」ghost 在场').toBeVisible()
+    await expect(page.locator('[data-dsh-forge-metadata-open]'), '「查看任务」ghost 在场').toBeVisible()
 
     // ⑤ 双向:点击元数据条 → C5 任务详情(board pane 前置 + dock 打开)。
-    await page.locator('[data-dsh-forge-metadata-open"]').click()
+    await page.locator('[data-dsh-forge-metadata-open]').click()
     await expect(page.locator(`[data-dsh-forge-task-detail="${TASK_LINEAGE}"]`),
       '查看任务 → 任务详情 dock(双向互通)').toBeVisible({ timeout: 20_000 })
 
@@ -553,11 +646,23 @@ test.fixme('sc7/task-session-open-legs: 顶层/subagent 打开 + C6 元数据条
     // C6 条仍以血缘推导的任务标识呈现(静默矫正,非会话名)。
     await expandLinkRow(page, TOP_A)
     await expect(renamedRow).toBeVisible()
-    await clickStable(page, `[data-dsh-forge-detail-descendant-open="${SUB_RENAMED}"]`)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-descendant-open="${SUB_RENAMED}"]`,
+      sessionOpenLanded(page),
+    )
     await expect(page.locator('[data-dsh-forge-metadata-bar]'),
       '改名桩会话视图元数据条在场(血缘覆盖)').toBeVisible({ timeout: 20_000 })
     await expect(page.locator('[data-dsh-forge-metadata-bar]')).toHaveAttribute('data-dsh-forge-metadata-task', TASK_LINEAGE)
     await expect(page.locator('[data-dsh-forge-metadata-bar]'), '任务号 = 血缘推导(非会话名)').not.toContainText(RENAME_STUB)
+
+    // ⑥'(relocated, body verbatim): the open above made the host project the
+    // renamed session's durable title into the sessions list — re-enter the
+    // pane-hosted dock through the same user path and assert the row now
+    // shows the manual rename (会话名自持), while the C6 bar above held the
+    // LINEAGE identity (血缘为准) — the two faces stay distinct.
+    await openTaskDetail(page, TASK_LINEAGE)
+    await expandLinkRow(page, TOP_A)
+    await expect(renamedRow, '命名辅助:改名桩行名 = 手工改名(会话名自持)').toContainText(RENAME_STUB)
 
     expect(shell.pageErrors, `renderer pageerrors: ${shell.pageErrors.join(' | ')}`).toEqual([])
   } finally {

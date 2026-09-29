@@ -368,7 +368,10 @@ describe('AC4: the §4.7 linkage watcher (整栏跟随当前项目)', () => {
     )
     act(() => { store.set('p2') })
     expect(calls.closed).toEqual(['doc-1', 'depgraph-1'])
-    expect(calls.focused).toEqual(['overview-1'])
+    // fix-1 会话域 seam: the 回概览 activation routes through the MOUNTED-
+    // session openTab (the native per-pane page dedupe settles the focus);
+    // the inventory-keyed focus is retired.
+    expect(calls.opened).toEqual(['overview'])
   })
 
   it('the same project never fires (同项目切会话右栏不动)', () => {

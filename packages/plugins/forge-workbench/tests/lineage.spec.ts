@@ -412,6 +412,22 @@ describe('guarded duck-typed adapters', () => {
     expect(source).toBeDefined()
   })
 
+  it('toLineageSessionsSource BRIDGES: the adapter survives the raw service proxy dying (fix-1, the C6 bar root cause)', () => {
+    // A long-lived consumer (the C6 bar's React props) holds the adapter past
+    // the api-controller fiber that minted the service proxy — the raw
+    // service's members read undefined thereafter. The adapter must read
+    // through the CAPTURED list store, not the service object.
+    const snapshot = { ids: [], byId: { s1: { id: 's1', origin: 'subagent' as const } }, subagentsByParent: {} }
+    const service: { list?: { getSnapshot(): unknown } } = {
+      list: { getSnapshot: () => snapshot },
+    }
+    const source = toLineageSessionsSource(service)
+    expect(source).toBeDefined()
+    delete service.list // the proxy's member goes away
+    expect(service.list).toBeUndefined()
+    expect(source?.list.getSnapshot()).toBe(snapshot)
+  })
+
   it('缺 list / getSnapshot 非函数 / 非对象候选 → undefined (degrade, never throw)', () => {
     expect(toLineageSessionsSource(undefined)).toBeUndefined()
     expect(toLineageSessionsSource(null)).toBeUndefined()

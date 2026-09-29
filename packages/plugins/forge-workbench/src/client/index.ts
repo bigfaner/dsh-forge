@@ -552,7 +552,15 @@ export function apply(ctx: ClientContext): void {
   // identity churns per read — keying on the stable member keeps the adapter
   // identity stable across renders (React's subscription machinery requires
   // that). Still never a load gate: an absent service keeps the leg degraded.
-  const adapterMemo = new WeakMap<object, unknown>()
+  //
+  // M4 fix-1: the memo is keyed on (narrow, member) — the SAME service member
+  // feeds DIFFERENT faces (sessions.list narrows onto both toSessionsFace and
+  // toLineageSessionsSource), and a member-only key let whichever face was
+  // built first answer EVERY consumer of that member (the C6 bar received the
+  // FLAT SessionsFace where the lineage source was due — `.list` reads
+  // undefined on it, the bar silently unbound; which face won followed the
+  // boot render order, the fix-1 ledger's run-to-run coin flip).
+  const adapterMemo = new WeakMap<object, WeakMap<object, unknown>>()
   const lazyUpstreamFace = <T>(
     name: string,
     stableMember: string,
@@ -562,10 +570,15 @@ export function apply(ctx: ClientContext): void {
     const member = service?.[stableMember]
     if (typeof member !== 'object' && typeof member !== 'function') return undefined
     if (member === null) return undefined
-    const cached = adapterMemo.get(member)
+    let perNarrow = adapterMemo.get(narrow as unknown as object)
+    if (perNarrow === undefined) {
+      perNarrow = new WeakMap()
+      adapterMemo.set(narrow as unknown as object, perNarrow)
+    }
+    const cached = perNarrow.get(member)
     if (cached !== undefined) return cached as T
     const face = narrow(service)
-    if (face !== undefined) adapterMemo.set(member, face as unknown as object)
+    if (face !== undefined) perNarrow.set(member, face as unknown as object)
     return face
   }
   const liveWorkspaces = lazyUpstreamFace('workspaces', 'list', toWorkspacesSource)

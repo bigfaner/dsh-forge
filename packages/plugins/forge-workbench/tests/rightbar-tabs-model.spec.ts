@@ -66,12 +66,15 @@ describe('AC4 联动: followProjectSwitch (§4.7 整栏跟随当前项目)', () 
     expect(log.closed).toEqual(['doc-1', 'doc-2', 'depgraph-1'])
   })
 
-  it('expanded + overview open = FOCUS the existing overview (回概览激活态, no second open)', () => {
+  it('expanded + overview open = settle the pane on it (回概览激活态 — openTab focus path)', () => {
     const { face, log } = makeFace(FULL_ROWS, true)
     const outcome = followProjectSwitch(face, 'p1', 'p2')
     expect(outcome.overviewActivated).toBe(true)
-    expect(log.focused).toEqual(['overview-1'])
-    expect(log.opened).toEqual([])
+    // The scope-correct activation routes through the MOUNTED-session openTab
+    // (the store's per-pane page dedupe focuses the pane's own overview page);
+    // the inventory-keyed focus is gone with the 会话域 seam fix.
+    expect(log.opened).toEqual([['overview', undefined]])
+    expect(log.focused).toEqual([])
   })
 
   it('expanded + no overview = OPEN one (重复打开激活 the native per-pane page dedupe complements)', () => {
@@ -150,10 +153,11 @@ describe('AC1 guard: toRightbarTabsFace (the project-seat adapter discipline)', 
 })
 
 describe('ensureOverviewActive (the §4.7 回概览 primitive)', () => {
-  it('focuses the existing overview and opens one when absent', () => {
+  it('settles the mounted session on the overview page (openTab, whatever the inventory holds)', () => {
     const withOverview = makeFace(FULL_ROWS, true)
     expect(ensureOverviewActive(withOverview.face)).toBe(true)
-    expect(withOverview.log.focused).toEqual(['overview-1'])
+    expect(withOverview.log.opened).toEqual([['overview', undefined]])
+    expect(withOverview.log.focused).toEqual([])
 
     const without = makeFace(FULL_ROWS.filter(row => row.kind !== 'overview'), true)
     expect(ensureOverviewActive(without.face)).toBe(true)
@@ -162,17 +166,37 @@ describe('ensureOverviewActive (the §4.7 回概览 primitive)', () => {
 })
 
 describe('ensureBoardActive (M4 2.7 — the C6 「查看任务」 jump pane leg)', () => {
-  it('focuses the existing board tab', () => {
+  it('settles the mounted session on the board page (openTab, whatever the inventory holds)', () => {
     const { face, log } = makeFace(FULL_ROWS, true)
     expect(ensureBoardActive(face)).toBe(true)
-    expect(log.focused).toEqual(['board-1'])
-    expect(log.opened).toEqual([])
+    expect(log.opened).toEqual([['board', undefined]])
+    expect(log.focused).toEqual([])
   })
 
   it('opens one when no board tab lives', () => {
     const without = makeFace(FULL_ROWS.filter(row => row.kind !== 'board'), true)
     expect(ensureBoardActive(without.face)).toBe(true)
     expect(without.log.opened).toEqual([['board', undefined]])
+  })
+
+  it('never aims focus at a FOREIGN-session inventory row (the 会话域 seam — fix-1)', () => {
+    // After a session switch the mounted surface is fresh while the
+    // cross-session inventory still lists the OLD session's board tab — an
+    // inventory-keyed focus was the controller's silent no-op (the pane never
+    // came forward); the activation must go through openTab regardless.
+    const { face, log } = makeFace([{ tabId: 'foreign-board', kind: 'board' }], false)
+    expect(ensureBoardActive(face)).toBe(true)
+    expect(log.opened).toEqual([['board', undefined]])
+    expect(log.focused).toEqual([])
+  })
+
+  it('a controller with no mounted surface (the rebind window) degrades to false, never a throw', () => {
+    const { face } = makeFace(FULL_ROWS, true)
+    ;(face.openTab as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error('sidebarRight: no session surface is mounted')
+    })
+    expect(ensureBoardActive(face)).toBe(false)
+    expect(ensureOverviewActive(face)).toBe(false)
   })
 
   it('undefined face (service absent) is a no-op — the selection leg still opened the dock', () => {
