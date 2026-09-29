@@ -450,7 +450,7 @@
         "3.4",
         "3.5"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.6-sc3-sync-e2e.md",
       "record": "records/3.6-sc3-sync-e2e.md",
       "surface-type": "web",
