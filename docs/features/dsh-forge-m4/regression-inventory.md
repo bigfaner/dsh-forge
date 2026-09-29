@@ -1,6 +1,6 @@
 # dsh-forge M4 回归盘点定稿(P2 gate · 2.10)
 
-> 权威输入:1.8 任务文件尾节《迁移清单逐行执行记录》(初稿)、tech-design §Testing Strategy/§Integration Specs #9、prd-spec §导航迁移清单(必答②)与 §Success Criteria、1.8–2.9 + fix-1 各执行 record。本文 = P2 收口定稿,亦为 P4 4.7 SC5 终验的对照基线(零缩水二次断言)。
+> 权威输入:1.8 任务文件尾节《迁移清单逐行执行记录》(初稿)、tech-design §Testing Strategy/§Integration Specs #9、prd-spec §导航迁移清单(必答②)与 §Success Criteria、1.8–2.9 + fix-1 各执行 record。本文 = P2 收口定稿,亦为 P4 4.7 SC5 终验的对照基线(零缩水二次断言);§五 = 4.7 终验记录(SC1-SC7 汇总 + SC5/SC6 收口,2026-09-30)。
 > 执行日期:2026-09-29(2.10)。全量 e2e 终态:**384 测试 = 320 passed + 62 fixme(挂起台账,逐腿指针见下)+ 2 既有 skip,0 failed**;vitest 单测门 2109 passed + 2 skip 全绿。实例锁纪律:每批 launch 前探针,workers:1,真实 userData 逐腿隔离。
 
 ## 一、迁移清单七行逐行终验(必答②)
@@ -37,3 +37,39 @@ SC8(feature 阶段感知)已于 2026-09-27 裁决 #27 废止:UF4 阶段感知视
 - **D. 板内「进入会话」open-failed 呈现**:2.10 修复了板内 orchestration「进入会话」在死会话 id 上的未处理 renderer rejection(现经 wiring 层 catch 吸收,通道仍按 ERR_SESSION_OPEN_FAILED 拒绝);C5 行级 [打开] 已有 open-failed toast,板内入口的 toast 面未接(ui-design C5「不静默」口径)→ M6 收口。
 - **E. tech-design Open Questions 原项**:偏好/插件面正式归宿(用户裁决「暂时忽略」2026-09-28;过渡 = 逃生门 overview,入口 = 概览 tab 行尾设置链)、`sidebar.workspaces` 单槽覆盖机制核对(本设计即自绘口径)、C6 注入座位(已裁定 conversation.input.dock 回退座位,2.7 落地)、e2e subagent 血缘语料 stub 协议(2.9 已落地)、顺延记账(20 技能 → M6;四 CLI 动词 GUI 归宿 → M5/M6;影子 git + runtime_root → 存储实现里程碑)。
 - **F. 已归档会话恢复口径**:M4 范围内归档仅作用于项目(workspace 保留 + forge 侧归档分区);「已归档会话」的恢复面(C8 设置页裁撤后)未落正式归宿 —— 与 E 的设置面归宿同批裁决。
+
+## 五、P4 4.7 终验记录(2026-09-30:SC5 零缩水终验 + SC6 性能断言;里程碑收口)
+
+### SC1-SC7 状态汇总(M4 里程碑验收终态)
+
+| SC | 验收腿 | 终态 |
+|----|--------|------|
+| SC1 项目一级导航 | `m4/sc1-project-nav.spec.ts` ×2 + `forge-workbench-nav/view-switch-smoke` + 1.6 座位冒烟 | **绿** |
+| SC2 三区容器 | `m4/sc2-three-zone-full.spec.ts` + `m4/sc2-workbench-layout.spec.ts` ×2 | **绿** |
+| SC3 单向投影 | `m4/sc3-projection-sync.spec.ts` + `m4/sc3-projection-degrade.spec.ts` | **绿** |
+| SC4 分屏/多窗口 | `m4/sc4-split-windows.spec.ts` ×2(4.6) | **绿** |
+| SC5 零缩水回归 | `m4/sc5-zero-loss.spec.ts` ×2(台账静态二次断言 + 七行活面走查;4.7 新增)+ 全量 e2e 批次 | **绿**(本任务) |
+| SC6 性能预算 | `m4/sc6-performance.spec.ts` ×3(首屏/切换/投影;4.7 新增) | **绿**(本任务;数字见下) |
+| SC7 任务↔会话反查 | `m4/sc7-task-session-trace.spec.ts` ×2 | **绿** |
+| ~~SC8~~ | 已废止(§三;P4 终验清单 = SC1-SC7) | — |
+
+### 全量 e2e 终态(4.7 收口口径)
+
+- 终态计数:**393 = 329 passed + 62 fixme(挂起台账,指针见 §一/§四)+ 2 既有 skip,0 failed**(分块全量复跑对账:playwright `--list` 收集 393/185 文件;M1/chrome 与插件基建家族、m2 SC、看板与 workbench 家族、派发链、M3 SC 与旅程、m4 全族逐块全绿,workers:1,每腿 launch 前实例探针)。
+- 对照 2.10 基线(384 = 320 + 62 + 2):passed +9(SC4 四腿(4.6)+ SC5/SC6 五腿(4.7)),**零规格删除**;fixme 62 / 既有 skip 2 台账逐字不变(`sc5/ledger` 腿静态二次断言:marker 计数 + 七行绿证据锚点规格在场 + 零 SC8 腿)。
+- vitest 单测门:153 文件 2448 passed + 2 skip(46.9s)。
+
+### SC5 零缩水口径(终验陈述)
+
+零功能删除 = ① 既有规格断言本体零删改(1.8/2.10 的四处宿主方言改写均在「入口/寻址」面,§二 已档)② 全量 e2e 0 failed ③ 62 fixme 为**有档挂起**(开放项 A-F 逐腿指针在案;挂起 ≠ 删除,恢复以台账记账为凭)④ 七行绿证据锚点规格全部在场 ⑤ 七行活面二次断言(`sc5/rows-walk`:①导航首项+孤儿三重零残留+逃生门单页收缩 / ②看板 pane 节点全集+派发入口 / ③提案目录行+Pill+互跳+文档行 / ④feature 目录行+状态词表+docKind 文档行 / ⑤C7 确认卡唯一添加入口 / ⑥任务行→dock+派发入口可进可退 / ⑦boot 落 conversation+会话底座)⑥ 孤儿视图清零复核(retired TabBar/三容器/降级 rail/旧 TopBar·Switcher 入口,conversation 与逃生门两面零残留)。
+
+### SC6 性能断言终验记录(数字 = 2026-09-30 本机实测;硬门全过)
+
+- **首屏 ≤2s @500 任务**:median **574ms**(runs 575/566/574;median of 3 measured boots,预热靴不计)。口径 = M2 SC1 继承口径(t0 = 页内任务行 seam click 派发前一瞬 → t1 = 依赖树 500 节点齐全 + 两帧 rAF;app 启动段不在预算内,PRD「继承既有预算」)。诊断分解:boot(launch→uiReady)≈4.9s / switch(就绪→行 seam 前)≈2.8s / data(getTaskBoard 直调)≈20ms / launch→interactive 合计 ≈8.3s(**诊断面,非门**)。种子 = `sc1TaskSet` 500 任务/50 feature 真文件树 + 真动词注册 + 真索引(**写径**,读侧零 mock);测量靴间删 `project_ui_state` 行(布局记忆种子卫生,防 4.5 replay 预挂看板 pane 毒化窗口)。
+- **切换自基线(median)**:项目切换(左栏树行 A↔B)**64ms**;右栏 tab 概览→看板 chip(会话→看板;@500 节点齐 + 2rAF)**780ms** ← ≤2s 门(**M2 预算锚**);看板→概览 chip 1105ms;看板↔会话主面板切换(工作台逃生门 main ↔ conversation)**491ms**。逐样本 ≤5s(BIZ-workbench-005 感知/回流预算族)硬门全过。
+- **投影操作 ≤2s(逐样本硬门,3 轮 ×4 操作 = 18 样本)**:注册收敛 median **119ms**(max 457ms)/ 改名收敛 **120ms** / 删除收敛 **115ms** / 归档动词回程 **3ms**(dsh 侧零投影 op,workspace 保留窗外复核);**通道故障下注册动词回程 8ms 且不 reject**(降级不阻断,3.7 同口径)。
+- **切换不劣化基线方法(诚实口径,不虚构重构前数字)**:1.8 迁移前取证 = 绿名单(pass/fail 记录),**无重构前时基数字**;且 M4 前 IA 无右栏 tab/看板 pane 面(ProjectSwitcher/旧向导面与 M4 新面不可同口径对拍),git 历史锚点补测不具 like-for-like 可比性(任务注记的 heavy 路径,弃用)。落法 = ① **重构前已绿的预算腿在新 IA 上复断言**为不劣化锚(看板进入 ≤2s = M2 SC1 预算腿 —— 今 574ms(行 seam 冷进入)/780ms(chip 往返)双口径绿;≤5s 感知预算族逐样本绿);② 本节数字 = **M4 后基线行**,后续回归以本行为对照(零容忍超门,Hard Rule)。
+
+### quality-gate(4.7)
+
+compile(playwright 收集 393/185 零错)/ lint(触达文件 0 发现;`pnpm lint` 残留 = apps/desktop/e2e 既有 max-len/arrow-parens 存量债,非本任务文件)/ 单测(2448 passed + 2 skip)/ 全量 e2e 回归(393,0 failed)全绿。fmt:仓库无 fmt 配方(格式纪律由 oxlint @stylistic 承担 —— 与 1.3/1.6/2.8 记录同口径)。`forge quality-gate` CLI 在本任务 in_progress 态对管线 no-op(门 = 全任务完成后才跑),按前记录同法手工全跑四门(等价管线)。
