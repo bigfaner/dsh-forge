@@ -182,8 +182,15 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
           // The pointer may have moved again while the read was in flight —
           // a stale restore must not replay onto the wrong project.
           if (projectId() !== target) return
+          // Notify ONLY on a real tree-content change (the 4.6 SC4 e2e
+          // finding): the boot service-race retry re-reads an IDENTICAL
+          // layout, and an unconditional re-notify hands the browser a fresh
+          // (content-equal) reference whose parent-fed sync CLOBBERS the
+          // §2.3 activation auto-expand of a fresh project's group — the
+          // restore echo must be as silent as the write echo below.
+          const treeChanged = !sameTreeLayout(restoredTree, layout.tree)
           restoredTree = layout.tree
-          notifyRestored()
+          if (treeChanged) notifyRestored()
           const faces = options.getReplayFaces?.()
           if (faces === undefined) return
           const outcome = replayProjectLayout(layout, faces)

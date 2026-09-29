@@ -741,4 +741,31 @@ describe('replayNow — the boot service-race retry leg', () => {
     expect(reads.length).toBe(2)
     engine.dispose()
   })
+
+  it('an IDENTICAL re-read does not re-notify the restore feed (the boot retry must not clobber the §2.3 activation auto-expand)', async () => {
+    const { clock } = makeClock()
+    const { verbs, stored } = makeVerbs()
+    stored.set('p-1', collectProjectLayout({ tree: TREE }))
+    const engine = createLayoutMemoryEngine({ verbs, projectId: () => 'p-1', clock })
+    const notifications: number[] = []
+    const unsubscribe = engine.subscribeRestoredTree(() => { notifications.push(engine.getRestoredTree()?.expandedProjects.length ?? -1) })
+    engine.replayNow()
+    await flushMicrotasks()
+    expect(notifications.length, 'the first restore (undefined → content) notifies').toBe(1)
+    // The boot service-race retry re-reads the SAME stored layout: the
+    // content-equal restore echo stays silent — a re-notify would hand the
+    // browser a fresh parent-fed reference and clobber whatever the live
+    // tree did in between (4.6 SC4 e2e finding).
+    engine.replayNow()
+    await flushMicrotasks()
+    expect(notifications.length, 'the identical re-read notifies nothing').toBe(1)
+    expect(engine.getRestoredTree()).toEqual(TREE)
+    // A REAL content change (a different stored tree) still notifies.
+    stored.set('p-1', collectProjectLayout({ tree: { expandedProjects: ['p-9'], expandedSessions: [], overflowOpen: [] } }))
+    engine.replayNow()
+    await flushMicrotasks()
+    expect(notifications.length).toBe(2)
+    unsubscribe()
+    engine.dispose()
+  })
 })

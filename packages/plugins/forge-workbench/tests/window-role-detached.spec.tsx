@@ -14,7 +14,7 @@ import type { WorkbenchKey } from '../src/client/locale/en.ts'
 import { subagentChatAddressOf } from '../src/client/session-open.ts'
 import type { WindowVerbFaceClient } from '../src/client/window-role/boot.ts'
 import {
-  DETACHED_PANEL_ID, DETACHED_RECALL_ID, DetachedBoardPanel, installDetachedWindow,
+  DETACHED_PANEL_ID, DETACHED_PRESENT_LADDER_MS, DETACHED_RECALL_ID, DetachedBoardPanel, installDetachedWindow,
 } from '../src/client/window-role/detached-view.tsx'
 import type { DetachedWindowRole } from '../src/client/window-role/boot.ts'
 import { DetachMenuEntry } from '../src/client/views/rightbar/RightbarTabs.tsx'
@@ -184,6 +184,32 @@ describe('installDetachedWindow: the BOARD assembly', () => {
     live = true
     act(() => { vi.advanceTimersByTime(250) })
     expect(selectPanel).toHaveBeenCalledTimes(1)
+    dispose()
+  })
+
+  it('the presentation re-asserts across the boot bounce (4.6 SC4 e2e finding: the home-list hydration selectPanel(null) wipes an early present)', () => {
+    vi.useFakeTimers()
+    const core = new SlotCore()
+    declareMainSlot(core)
+    const selections: Array<string | null> = []
+    const layout = {
+      selectPanel: (id: string | null): void => { selections.push(id) },
+    }
+    const dispose = installDetachedWindow(makeFakeCtx(core, { layout }), { t, role: BOARD_ROLE, face: makeFace() })
+    expect(selections, 'the immediate presentation').toEqual([DETACHED_PANEL_ID])
+    // The boot bounce: the upstream home session list's hydration deselects.
+    layout.selectPanel(null)
+    expect(selections).toEqual([DETACHED_PANEL_ID, null])
+    // The ladder's rungs re-assert the idempotent select (delays 1s/1s/2s/3s).
+    act(() => { vi.advanceTimersByTime(1_000) })
+    expect(selections.at(-1), 'the first rung re-presents after the bounce').toBe(DETACHED_PANEL_ID)
+    act(() => { vi.advanceTimersByTime(6_000) })
+    expect(selections.filter(id => id === DETACHED_PANEL_ID),
+      'every rung re-asserts (initial + 4 rungs)').toHaveLength(1 + DETACHED_PRESENT_LADDER_MS.length)
+    // The ladder is BOUNDED: nothing fires after the last rung.
+    const settled = selections.length
+    act(() => { vi.advanceTimersByTime(10_000) })
+    expect(selections.length).toBe(settled)
     dispose()
   })
 

@@ -171,6 +171,18 @@ export const DETACHED_RECALL_ORDER = 200
 export const DETACHED_POLL_MS = 250
 export const DETACHED_POLL_CEILING_MS = 60_000
 
+/**
+ * The presentation re-assert ladder (4.6 SC4 e2e finding — the boot-bounce
+ * tolerance): the upstream home session list's hydration navigation ends in
+ * `selectPanel(null)` SECONDS after boot and wipes a presentation issued too
+ * early (the sc1 escape-door lesson — same race, same cure). Each rung
+ * re-issues the IDEMPOTENT select on a decaying cadence; the ladder is
+ * bounded and cannot fight user intent (the detached window carries no
+ * navigation surface by construction — nothing but the bounce ever deselects
+ * its panel).
+ */
+export const DETACHED_PRESENT_LADDER_MS: readonly number[] = [1_000, 1_000, 2_000, 3_000]
+
 /** The installer's inputs. */
 export interface DetachedWindowOptions {
   /** The plugin locale seat. */
@@ -212,6 +224,27 @@ function pollUntil<T>(live: () => T | undefined, act: (value: T) => void): () =>
 }
 
 /**
+ * Issue one panel presentation AND keep re-asserting it across the boot
+ * bounce ({@link DETACHED_PRESENT_LADDER_MS}): each rung re-issues the
+ * idempotent select; a rung that throws (a torn-down layout mid-boot) ends
+ * that rung quietly. @returns the ladder's disposer.
+ */
+function presentPanelAcrossBounce(present: () => void): () => void {
+  present()
+  const rungs = DETACHED_PRESENT_LADDER_MS.map(delay =>
+    setTimeout(() => {
+      try {
+        present()
+      } catch {
+        // A torn-down layout mid-boot — later rungs may still land; the
+        // window keeps its fallback view if none does.
+      }
+    }, delay),
+  )
+  return () => { for (const rung of rungs) clearTimeout(rung) }
+}
+
+/**
  * Install the detached window's whole client face (AC2's detached arm):
  * the board takes the `main` keyed slot with a FRESH panel id and presents
  * itself once the layout service is live; the conversation adds only the
@@ -232,7 +265,7 @@ export function installDetachedWindow(ctx: ClientContext, options: DetachedWindo
   }
 
   if (role.view === 'board') {
-    let disposePresent: (() => void) | undefined
+    let disposeLadder: (() => void) | undefined
     const disposeBoard = ctx.slots.inject(MAIN_SLOT, () => {
       const dispose = ctx.slots.register({
         name: MAIN_SLOT,
@@ -243,23 +276,29 @@ export function installDetachedWindow(ctx: ClientContext, options: DetachedWindo
       }, DetachedBoardPanel)
       // Present the panel once the layout service is live (it registers
       // during the native boot — earlier selects would throw on the
-      // unregistered key; the bounded poll retires the race).
-      disposePresent = pollUntil(() => {
+      // unregistered key; the bounded poll retires the race), AND keep
+      // re-asserting across the boot bounce (the home session list's
+      // hydration selectPanel(null) — the sc1 escape-door lesson, 4.6's
+      // SC4 e2e finding).
+      const disposePoll = pollUntil(() => {
         try {
           return ctx.get('layout', false) as { selectPanel(id: MainPanelId | null): void } | undefined
         } catch {
           return undefined
         }
       }, (layout) => {
-        try {
-          layout.selectPanel(DETACHED_PANEL_ID)
-        } catch {
-          // A torn-down layout mid-boot — the window keeps its fallback view.
-        }
+        disposeLadder = presentPanelAcrossBounce(() => {
+          try {
+            layout.selectPanel(DETACHED_PANEL_ID)
+          } catch {
+            // A torn-down layout mid-boot — the window keeps its fallback view.
+          }
+        })
       })
       return () => {
-        disposePresent?.()
-        disposePresent = undefined
+        disposeLadder?.()
+        disposeLadder = undefined
+        disposePoll()
         dispose()
       }
     })

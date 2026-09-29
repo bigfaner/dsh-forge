@@ -56,6 +56,13 @@ export interface LineageSeedSession {
   readonly mode?: 'one-shot' | 'continuable'
   /** The descriptor LABEL — the stub session NAME (命名遵循率 corpus). */
   readonly label?: string
+  /**
+   * Append one CLOSED turn (`turn/start` + `turn/end` completed) — flips the
+   * session-list summary's empty-log bit (blank=false), so the conversation
+   * renders the session CHROME (the header utilities row's own phase rule
+   * hides on blank sessions — SC4's C9 [分屏] seat rides that row).
+   */
+  readonly turnStart?: boolean
 }
 
 /** One journal 对拍 row (the dispatch stub's unified stream, fifth kind). */
@@ -99,6 +106,10 @@ export async function seedLineageCorpus(input: {
   const backend = new JsonlBackend(new Context(), { root: sessionsRoot })
   for (const seed of input.seeds) {
     const events: LineageSeedEvent[] = []
+    if (seed.turnStart === true) {
+      events.push({ type: 'turn/start', seq: events.length, time: seed.createdAt, data: { turn: 1 } })
+      events.push({ type: 'turn/end', seq: events.length, time: seed.createdAt, data: { turn: 1, reason: { kind: 'completed' } } })
+    }
     if (seed.mode !== undefined) {
       events.push({
         type: 'subagent/descriptor',
