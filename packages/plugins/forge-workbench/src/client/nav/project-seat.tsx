@@ -36,8 +36,16 @@ import { INITIAL_ACTIVE_PROJECT_SNAPSHOT } from '../store/active-project'
 import type { ConfirmCardFace } from '../components/confirm-card/card-state'
 import type { SessionRowCommand, TreeTranslate } from '../components/project-tree/SessionRow'
 import { ProjectTreeBrowser } from '../components/project-tree/ProjectTreeBrowser'
+import type { ProjectRowCommand } from '../components/project-tree/ProjectRow'
 import type { TreeSession, TreeWorkspace } from '../components/project-tree/tree-derive'
 import { ConfirmCard } from '../components/confirm-card/ConfirmCard'
+import {
+  ArchiveConfirmDialog, RemoveProjectConfirmDialog,
+} from '../components/confirm-dialog/ArchiveDeleteDialogs'
+import {
+  archiveProjectNow, commitProjectRename, removeProjectNow, restoreProjectNow,
+  type LifecycleActionDeps,
+} from '../lifecycle-actions'
 import type { Project } from '../ipc-types'
 import { fillTemplate } from '../views/overview/format'
 import type { RightbarTabsFace } from '../views/rightbar/tabs-model'
@@ -509,17 +517,33 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
     if (command === 'fork') void props.uiWorkspace?.forkSession(sessionId)
     if (command === 'archive') void props.uiWorkspace?.archiveSession(sessionId)
   }
-  const onProjectCommand = (projectId: string, command: 'rename' | 'remove' | 'restore'): void => {
-    // rename needs the C8 input surface and remove the C8 confirm (later M4
-    // lifecycle tasks); restore is verb-ready and confirm-free (C1 semantics).
-    if (command !== 'restore') return
-    void store?.bridge.restoreProject({ projectId }).catch(() => {
-      // The push-driven refresh keeps the tree truthful; the failure is quiet
-      // (the archived partition re-renders from the next good read).
-    })
+
+  // ———— the C8 lifecycle legs (task 3.5): the dialogs + the shared actions ————
+
+  /** The pending confirm targets (the ⋯ menu opens the matching dialog). */
+  const [pendingArchive, setPendingArchive] = useState<Project | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<Project | null>(null)
+  /** The lifecycle actions' shared deps (toast = the seat's fixed surface). */
+  const lifecycleDeps = store === undefined
+    ? undefined
+    : { store, t, showToast: (message: string): void => { setToast(message) } } satisfies LifecycleActionDeps
+
+  const onProjectCommand = (projectId: string, command: ProjectRowCommand): void => {
+    if (lifecycleDeps === undefined) return // hostless seat: nothing to fire
+    const project = storeSnapshot.projects.find(row => row.id === projectId)
+    if (project === undefined) return
+    // restore is confirm-free (C1 semantics); archive/remove pass the 必答⑤
+    // dialog; rename stays in the row (行内编辑 → onRename below).
+    if (command === 'restore') restoreProjectNow(lifecycleDeps, project)
+    if (command === 'archive') setPendingArchive(project)
+    if (command === 'remove') setPendingRemove(project)
   }
   const onArchivedCommand = (projectId: string, command: 'restore' | 'remove'): void => {
     onProjectCommand(projectId, command)
+  }
+  const onRename = (projectId: string, displayName: string): void => {
+    if (lifecycleDeps === undefined) return
+    commitProjectRename(lifecycleDeps, projectId, displayName)
   }
 
   // ———— render ————
@@ -564,6 +588,7 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
               onOpenSession={(sessionId) => { props.uiWorkspace?.openSession(sessionId) }}
               onSessionCommand={onSessionCommand}
               onProjectCommand={onProjectCommand}
+              onRename={onRename}
               onArchivedCommand={onArchivedCommand}
               onAdoptUngrouped={openCard}
               onAddProject={openCard}
@@ -585,6 +610,35 @@ export function ProjectSidebarSeat(props: ProjectSidebarSeatProps): ReactNode {
           onCancel={closeCard}
           onDone={onCardDone}
           onLocateRegistered={onLocateRegistered}
+        />
+      )}
+
+      {/* C8 生命周期确认 Dialog pair (task 3.5): the 必答⑤ copy dialogs the
+          ⋯ menu's 归档/删除 open; confirms ride the shared lifecycle actions
+          (verb → refresh → toast; 删除当前项目 falls the pointer to the
+          first remaining project or the 空态引导). */}
+      {pendingArchive !== null && lifecycleDeps !== undefined && (
+        <ArchiveConfirmDialog
+          t={t}
+          project={pendingArchive}
+          onConfirm={() => {
+            const target = pendingArchive
+            setPendingArchive(null)
+            archiveProjectNow(lifecycleDeps, target)
+          }}
+          onCancel={() => { setPendingArchive(null) }}
+        />
+      )}
+      {pendingRemove !== null && lifecycleDeps !== undefined && (
+        <RemoveProjectConfirmDialog
+          t={t}
+          project={pendingRemove}
+          onConfirm={() => {
+            const target = pendingRemove
+            setPendingRemove(null)
+            removeProjectNow(lifecycleDeps, target)
+          }}
+          onCancel={() => { setPendingRemove(null) }}
         />
       )}
 

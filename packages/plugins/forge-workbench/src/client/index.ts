@@ -57,6 +57,7 @@ import type { SessionOpenTarget } from './session-open'
 import { toLineageSessionsSource } from './lineage'
 import { installMetadataBar } from './components/task-metadata/MetadataBar'
 import type { MetadataTaskSource } from './components/task-metadata/MetadataBar'
+import { installArchiveBanner } from './components/archive-banner/ArchiveBanner'
 import { ensureBoardActive, toRightbarTabsFace } from './views/rightbar/tabs-model'
 import { installRightbarTabs } from './views/rightbar/RightbarTabs'
 import { MAIN_SLOT, NS, SIDEBAR_SLOT } from './contract'
@@ -115,6 +116,32 @@ export type {
   MetadataBarBinding, MetadataBarDockProps, MetadataBarFace, MetadataBarProps,
   MetadataDockZone, MetadataTaskSource,
 } from './components/task-metadata/MetadataBar'
+// M4 task 3.5 — C8 归宿②③: the lifecycle confirm dialogs + the shared
+// lifecycle actions, and Component C2's 归档横幅只读态 (the derived warn band
+// over the resolved conversation dock seat).
+export {
+  ArchiveConfirmDialog, RemoveProjectConfirmDialog,
+} from './components/confirm-dialog/ArchiveDeleteDialogs'
+export type { ArchiveConfirmDialogProps, RemoveProjectConfirmDialogProps } from './components/confirm-dialog/ArchiveDeleteDialogs'
+export {
+  archiveProjectNow, commitProjectRename, removeProjectNow, restoreProjectNow,
+} from './lifecycle-actions'
+export type { LifecycleActionDeps } from './lifecycle-actions'
+export {
+  ArchiveBanner, ArchiveBannerDock, ARCHIVE_BANNER_DOCK_ID, ARCHIVE_BANNER_DOCK_ORDER,
+  installArchiveBanner,
+} from './components/archive-banner/ArchiveBanner'
+export type { ArchiveBannerDockProps, ArchiveBannerFace, ArchiveBannerProps } from './components/archive-banner/ArchiveBanner'
+// M4 task 3.5 — C8 归宿①: the 概览 projection status row (mounted into
+// OverviewHeader) + the deviation fold.
+export {
+  DeviationList, DEVIATION_ADVICE_KEYS, DEVIATION_TYPE_KEYS,
+} from './components/projection/DeviationList'
+export type { DeviationListProps } from './components/projection/DeviationList'
+export {
+  ProjectionStatusRow, PROJECTION_DOT_STATE, PROJECTION_STATUS_TEXT_KEYS,
+} from './components/projection/ProjectionStatusRow'
+export type { ProjectionStatusRowProps } from './components/projection/ProjectionStatusRow'
 // Interface 1 DTO types, client half (task 5.1): the structural source the
 // 5.x build tasks render against (assembly swaps the mocks for IPC reads).
 // Task 5.5 added the board family (TaskStatus/ChangeSource/TaskSummary/
@@ -636,6 +663,14 @@ export function apply(ctx: ClientContext): void {
     ...metadataReadSources === undefined ? {} : { readSources: metadataReadSources },
     onOpenTask: metadataOpenTask,
   })
+  // M4 task 3.5 — Component C2's 归档横幅只读态: the derived warn band over
+  // the SAME resolved conversation dock seat (the C6 precedent — see
+  // ArchiveBanner's module doc); store-driven, so it renders exactly while
+  // the ACTIVE project carries the archived flag (hostless = inert).
+  const disposeArchiveBanner = installArchiveBanner(ctx, {
+    t,
+    ...activeProjectStore === undefined ? {} : { store: activeProjectStore },
+  })
 
   // The rightbar tab FAMILY's registration needs the `sidebarRightTabs`
   // registry SERVICE — which is itself absent at apply (the same late-boot
@@ -754,6 +789,7 @@ export function apply(ctx: ClientContext): void {
     disposeProjectionRelay()
     disposeWorkspacesSeat()
     disposeMetadataBar()
+    disposeArchiveBanner()
     disposeRightbarTabs()
     disposeProjectPanelRow()
     activeProjectStore?.dispose()

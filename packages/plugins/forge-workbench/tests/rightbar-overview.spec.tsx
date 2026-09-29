@@ -23,6 +23,13 @@ import type { WorkbenchKey } from '../src/client/locale/en.ts'
 // seam; 任务 list: 执行中分组 + 全量列表 + ⟞ 直达会话 + the 唯一 [依赖图]
 // button), and the 归档只读 state (执行中 hidden).
 
+// M4 task 3.5: the header's 投影状态行 (ProjectionStatusRow) pulls the real
+// StateDot into this graph — the jsdom mount stubs the primitives module
+// (the task-board-assembly precedent; the real glyphs ride the e2e).
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+  StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
+}))
+
 const t = (key: WorkbenchKey): string => en[key]
 
 // ---------------------------------------------------------------------------

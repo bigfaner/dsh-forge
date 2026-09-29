@@ -27,7 +27,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { FeatureBoardData } from '../../ipc-types'
+import type { FeatureBoardData, ProjectionState, ProjectionStatusRow } from '../../ipc-types'
 import type { FeatureBoardFace, ProposalFace } from '../../contract'
 import type { WorkbenchKey } from '../../locale/en'
 import { getWorkbenchIpcBridge, createIpcFeatureBoardFace, createIpcProposalFace } from '../../ipc/workbench'
@@ -65,6 +65,10 @@ export interface OverviewTabSeat {
   readonly featureBoardFace?: Partial<FeatureBoardFace> | undefined
   /** The task-sources read override (the C6 source twin). */
   readonly taskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+  /** The projection status read override (C8 归宿①; absent = the row stays away). */
+  readonly projectionStatus?: (() => Promise<ProjectionStatusRow | undefined>) | undefined
+  /** The [重试投影] seam override (the retryProjection verb twin). */
+  readonly retryProjection?: ((input: { projectId: string }) => Promise<{ state: ProjectionState }>) | undefined
 }
 
 /** Inputs of {@link OverviewTab} (the legs the container threads; all optional
@@ -153,6 +157,20 @@ const skeletonRowStyle = {
   background: 'var(--dsh-interactive-bg-hover, rgba(128, 128, 128, 0.2))',
   borderRadius: '8px',
   height: '28px',
+} as const
+
+/** The retry-feedback toast (the seat-toast geometry, z1100 under dialogs). */
+const toastStyle = {
+  background: 'var(--dsh-bg, Canvas)',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '14px',
+  bottom: '16px',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+  left: '16px',
+  maxWidth: '300px',
+  padding: '10px 12px',
+  position: 'fixed',
+  zIndex: 1100,
 } as const
 
 const SUBTAB_LABEL_KEYS: Record<OverviewSubtab, WorkbenchKey> = {
@@ -270,10 +288,87 @@ export function OverviewTab(props: OverviewTabProps): ReactNode {
     return () => { alive = false }
   }, [projectId, sourcesReload])
 
+  // ———— C8 归宿① (task 3.5): the projection status row's data leg ————
+  // ONE read per (project, reload) shared with the retry re-read; the event
+  // leg below re-fires it on every project-scoped push — projection_updated
+  // included (BIZ-005 失效-重建: the relay's outcome backfill lands the
+  // state machine transition ≤500ms after the batch).
+  const [projectionStatus, setProjectionStatus] = useState<ProjectionStatusRow | undefined>(undefined)
+  const [projectionReload, setProjectionReload] = useState(0)
+  const [projectionRetrying, setProjectionRetrying] = useState(false)
+  const [toast, setToast] = useState<string | undefined>(undefined)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => {
+    if (toastTimer.current !== undefined) clearTimeout(toastTimer.current)
+  }, [])
+  /** The 4s feedback toast (retry success); role=status per the a11y baseline. */
+  const showToast = (message: string): void => {
+    setToast(message)
+    if (toastTimer.current !== undefined) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => { setToast(undefined) }, 4000)
+  }
+  const readProjection = seatForm
+    ? props.seat?.projectionStatus
+    : bridge === undefined
+      ? undefined
+      : async (): Promise<ProjectionStatusRow | undefined> => {
+        // The verb answers the full table; the ACTIVE project's row is the tab's.
+        const id = projectIdRef.current
+        if (id === undefined) return undefined
+        const rows = await bridge.getProjectionStatus({ projectId: id })
+        return rows.find(row => row.projectId === id)
+      }
+  const readProjectionRef = useRef(readProjection)
+  readProjectionRef.current = readProjection
+  useEffect(() => {
+    if (projectId === undefined) return
+    let alive = true
+    setProjectionStatus(undefined) // a fresh project drops the old row
+    readProjectionRef.current?.().then(
+      (row) => { if (alive) setProjectionStatus(row) },
+      () => { if (alive) setProjectionStatus(undefined) }, // degrade silently
+    )
+    return () => { alive = false }
+  }, [projectId, projectionReload])
+  const retryProjection = seatForm
+    ? props.seat?.retryProjection
+    : bridge === undefined
+      ? undefined
+      : async (input: { projectId: string }): Promise<{ state: ProjectionState }> =>
+        bridge.retryProjection(input)
+  const retryProjectionRef = useRef(retryProjection)
+  retryProjectionRef.current = retryProjection
+  /**
+   * [重试投影] — the design's ONE projection retry action (BIZ-005: re-run
+   * the sync, not a view refresh). The verb re-pushes the idempotent plan;
+   * the immediate re-read decides the feedback — healthy → 成功 toast,
+   * anything else keeps the degraded presentation (保留降级态; a late
+   * relay backfill lands through the projection_updated event leg above).
+   */
+  const onRetryProjection = (): void => {
+    const face = retryProjectionRef.current
+    if (face === undefined || projectId === undefined || projectionRetrying) return
+    setProjectionRetrying(true)
+    face({ projectId }).then(
+      async () => {
+        const row = await readProjectionRef.current?.().catch(() => undefined)
+        setProjectionRetrying(false)
+        setProjectionStatus(row)
+        if (row?.state === 'healthy') showToast(t('rightbar.overview.projection.toastHealthy'))
+      },
+      () => {
+        // A shape/ERR_PROJECT_NOT_FOUND rejection keeps the row as-is (quiet).
+        setProjectionRetrying(false)
+      },
+    )
+  }
+
   // The live leg (real chain): project-scoped pushes (sync / task_updated /
-  // feature_updated / stage / deviation) re-fire BOTH shared reads — the
-  // header's 随数据实时 (AC1). The proposals pane rides its OWN face's reflux
-  // channel (the M3 contract verbatim).
+  // feature_updated / stage / deviation / projection_updated) re-fire ALL
+  // THREE shared reads — the header's 随数据实时 (AC1). projection_updated
+  // rides the same filter (the C8 status row's 失效-重建 leg, task 3.5).
+  // The proposals pane rides its OWN face's reflux channel (the M3 contract
+  // verbatim).
   useEffect(() => {
     if (seatForm || bridge === undefined) return
     return getWorkbenchEventSource(bridge).subscribe((events) => {
@@ -281,6 +376,7 @@ export function OverviewTab(props: OverviewTabProps): ReactNode {
       if (!mine) return
       setFeatureReload(nonce => nonce + 1)
       setSourcesReload(nonce => nonce + 1)
+      setProjectionReload(nonce => nonce + 1)
     })
   }, [seatForm, bridge])
 
@@ -301,12 +397,16 @@ export function OverviewTab(props: OverviewTabProps): ReactNode {
 
   return (
     <div data-dsh-forge-overview="" style={rootStyle}>
-      {/* 标题栏 + 概要信息区 (常显,三子 tab 共享,不随子 tab 切换变化). */}
+      {/* 标题栏 + 概要信息区 (常显,三子 tab 共享,不随子 tab 切换变化) —
+          the 投影状态行 rides the header (C8 归宿①; archived → absent). */}
       <OverviewHeader
         t={t}
         project={project}
         features={featureBoard?.features}
         taskSources={taskSources}
+        projection={projectionStatus}
+        projectionRetrying={projectionRetrying}
+        onRetryProjection={onRetryProjection}
       />
 
       {/* 子 tab 行: 提案/feature/任务 (设置已移除 #16-⑤). */}
@@ -368,6 +468,13 @@ export function OverviewTab(props: OverviewTabProps): ReactNode {
           />
         </div>
       </div>
+
+      {/* The [重试投影] success toast (4s, role=status 播报). */}
+      {toast !== undefined && (
+        <div role="status" aria-live="polite" data-dsh-forge-overview-toast="" style={toastStyle}>
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

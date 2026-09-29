@@ -63,6 +63,8 @@ export interface ProjectTreeBrowserProps {
   onOpenSession?: (sessionId: string) => void
   onSessionCommand?: (sessionId: string, command: SessionRowCommand) => void
   onProjectCommand?: (projectId: string, command: ProjectRowCommand) => void
+  /** The inline-rename commit (行内编辑 → renameProject verb at the seat). */
+  onRename?: (projectId: string, displayName: string) => void
   /** Archived partition rows: restore/remove (the 3.5 verbs, mocked now). */
   onArchivedCommand?: (projectId: string, command: 'restore' | 'remove') => void
   /** 未分组组头纳管入口. */
@@ -498,6 +500,7 @@ export function ProjectTreeBrowser(props: ProjectTreeBrowserProps) {
             onToggleExpanded={toggleProjectExpanded}
             onNewSession={props.onNewSession}
             onCommand={(projectId, command) => { props.onProjectCommand?.(projectId, command) }}
+            onRename={props.onRename}
           />
           {expanded && renderSessionBlock(group.project.id, group.sessions, showLineage, group.project.id)}
         </div>,

@@ -12,6 +12,22 @@ export type WorkbenchKey =
   | 'project.empty.body'
   | 'project.toast.registered'
   | 'project.toast.located'
+  // M4 task 3.5 — C8 归宿②③ lifecycle GUI (dialogs + toasts + C2 banner).
+  | 'project.toast.renamed'
+  | 'project.toast.archived'
+  | 'project.toast.restored'
+  | 'project.toast.removed'
+  | 'project.toast.actionFailed'
+  | 'project.archive.title'
+  | 'project.archive.promise'
+  | 'project.archive.confirm'
+  | 'project.remove.title'
+  | 'project.remove.promise'
+  | 'project.remove.confirm'
+  | 'project.dialog.cancel'
+  | 'project.banner.archived'
+  | 'project.banner.restore'
+  | 'project.banner.remove'
   | 'view.session'
   | 'rail.label'
   | 'chrome.addProject'
@@ -498,8 +514,10 @@ export type WorkbenchKey =
   | 'tree.session.archive'
   | 'tree.project.menu'
   | 'tree.project.rename'
+  | 'tree.project.archive'
   | 'tree.project.remove'
   | 'tree.project.restore'
+  | 'tree.project.renameInput'
   | 'tree.project.newSession'
   | 'tree.project.expand'
   | 'tree.project.collapse'
@@ -604,6 +622,22 @@ export type WorkbenchKey =
   | 'rightbar.overview.tasks.list'
   | 'rightbar.overview.tasks.empty'
   | 'rightbar.overview.tasks.gotoSession'
+  // M4 task 3.5 — C8 归宿① the 概览 projection status row (ui-design C8).
+  | 'rightbar.overview.meta.projection'
+  | 'rightbar.overview.projection.healthy'
+  | 'rightbar.overview.projection.degraded'
+  | 'rightbar.overview.projection.deviation'
+  | 'rightbar.overview.projection.pending'
+  | 'rightbar.overview.projection.retry'
+  | 'rightbar.overview.projection.details'
+  | 'rightbar.overview.projection.toastHealthy'
+  | 'projection.deviation.type.renamed'
+  | 'projection.deviation.type.deleted'
+  | 'projection.deviation.type.reordered'
+  | 'projection.deviation.adviceLabel'
+  | 'projection.deviation.advice.renamed'
+  | 'projection.deviation.advice.deleted'
+  | 'projection.deviation.advice.reordered'
   // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
   | 'rightbar.doc.readonly'
   | 'rightbar.doc.reload'
@@ -629,6 +663,21 @@ export const en: Record<WorkbenchKey, string> = {
   'project.empty.body': 'Add a code root folder to start the project workbench.',
   'project.toast.registered': 'Added {name} — switched to it as the active project',
   'project.toast.located': '{name} is already registered — opened',
+  'project.toast.renamed': 'Renamed to {name}',
+  'project.toast.archived': 'Archived {name}',
+  'project.toast.restored': 'Restored {name}',
+  'project.toast.removed': 'Removed {name} — sessions fell back to ungrouped',
+  'project.toast.actionFailed': 'The action failed — the list refreshes on the next change',
+  'project.archive.title': 'Archive project',
+  'project.archive.promise': 'The dsh workspace stays; sessions remain grouped by project.',
+  'project.archive.confirm': 'Archive',
+  'project.remove.title': 'Delete project',
+  'project.remove.promise': 'The projected workspace is removed; sessions fall back to ungrouped (history is NOT deleted).',
+  'project.remove.confirm': 'Delete',
+  'project.dialog.cancel': 'Cancel',
+  'project.banner.archived': 'Project archived (read-only)',
+  'project.banner.restore': 'Restore',
+  'project.banner.remove': 'Delete',
   'view.session': 'Sessions',
   'rail.label': 'Primary view switch',
   'chrome.addProject': 'Add project',
@@ -1123,8 +1172,10 @@ export const en: Record<WorkbenchKey, string> = {
   'tree.session.archive': 'Archive session',
   'tree.project.menu': 'Project menu',
   'tree.project.rename': 'Rename',
+  'tree.project.archive': 'Archive project',
   'tree.project.remove': 'Delete project',
   'tree.project.restore': 'Restore project',
+  'tree.project.renameInput': 'Project name',
   'tree.project.newSession': 'New session here',
   'tree.project.expand': 'Expand sessions',
   'tree.project.collapse': 'Collapse sessions',
@@ -1227,6 +1278,22 @@ export const en: Record<WorkbenchKey, string> = {
   'rightbar.overview.tasks.list': 'Task list',
   'rightbar.overview.tasks.empty': 'No tasks yet.',
   'rightbar.overview.tasks.gotoSession': 'Go to session',
+  // M4 task 3.5 — C8 归宿① the 概览 projection status row.
+  'rightbar.overview.meta.projection': 'Projection',
+  'rightbar.overview.projection.healthy': 'In sync with the dsh side',
+  'rightbar.overview.projection.degraded': 'Projection sync degraded',
+  'rightbar.overview.projection.deviation': 'Deviations from the dsh side',
+  'rightbar.overview.projection.pending': 'Pending reconcile',
+  'rightbar.overview.projection.retry': 'Retry projection',
+  'rightbar.overview.projection.details': 'Deviations {n}',
+  'rightbar.overview.projection.toastHealthy': 'Projection back in sync',
+  'projection.deviation.type.renamed': 'Renamed',
+  'projection.deviation.type.deleted': 'Deleted',
+  'projection.deviation.type.reordered': 'Reordered',
+  'projection.deviation.adviceLabel': 'Advice',
+  'projection.deviation.advice.renamed': 'Next reconcile rebuilds the index under the new dsh-side name',
+  'projection.deviation.advice.deleted': 'The entry disappears once the snapshot is rebuilt',
+  'projection.deviation.advice.reordered': 'Order follows the dsh side',
   // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
   'rightbar.doc.readonly': 'Read-only',
   'rightbar.doc.reload': 'Reload',

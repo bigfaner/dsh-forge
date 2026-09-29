@@ -14,11 +14,19 @@
  * its data (project snapshot, feature board, task sources) is loaded by
  * OverviewTab ABOVE the sub-tab boundary and never re-fires on a sub-tab
  * switch; a pending member simply omits its segment (no placeholder flash).
+ *
+ * M4 task 3.5 (C8 归宿①, page-map Shared Components「投影状态行 | 右栏概览」):
+ * the header also mounts the 投影状态行 — the ProjectionStatusRow meta row
+ * under the 状态 line. The row stays ABSENT for archived projects (概览转
+ * 只读 — the ⚠ line carries the state; 归档不对账, the workspace stays by
+ * design) and while the projection read is still in flight (the header's
+ * pending-member discipline: omit, never a placeholder flash).
  */
 import type { ReactNode } from 'react'
-import type { FeatureSummary, Project } from '../../ipc-types'
+import type { FeatureSummary, Project, ProjectionStatusRow as ProjectionStatusRowDto } from '../../ipc-types'
 import type { WorkbenchKey } from '../../locale/en'
 import { fillTemplate } from '../overview/format'
+import { ProjectionStatusRow } from '../../components/projection/ProjectionStatusRow'
 import {
   countRunningSessions, deriveActiveFeature, workspaceRootOf,
   type OverviewTaskSource,
@@ -34,6 +42,12 @@ export interface OverviewHeaderProps {
   features: readonly FeatureSummary[] | undefined
   /** The task sources (the 运行中 N segment). */
   taskSources: readonly OverviewTaskSource[] | undefined
+  /** The projection status row (C8 归宿①); undefined = in flight / archived → omit. */
+  projection?: ProjectionStatusRowDto | undefined
+  /** The [重试投影] seam (the owner fires the retryProjection verb). */
+  onRetryProjection?: (() => void) | undefined
+  /** The retry in-flight marker. */
+  projectionRetrying?: boolean | undefined
 }
 
 /** The tab's column layout (the GuideTab family's inline-token discipline). */
@@ -106,6 +120,9 @@ const STATUS_SEPARATOR = ' · '
  */
 export function OverviewHeader(props: OverviewHeaderProps): ReactNode {
   const { t, project, features, taskSources } = props
+  const projection = props.projection !== undefined && project?.archived !== true
+    ? props.projection
+    : undefined
   if (project === undefined) return null
   const workspace = workspaceRootOf(project.codeRoot)
   const active = features === undefined ? undefined : deriveActiveFeature(features)
@@ -160,6 +177,18 @@ export function OverviewHeader(props: OverviewHeaderProps): ReactNode {
               : statusSegments.join(STATUS_SEPARATOR)}
           </span>
         </div>
+        {/* 投影状态行 (C8 归宿①): present only when loaded AND not archived. */}
+        {projection !== undefined && (
+          <div style={metaRowStyle}>
+            <span style={metaKeyStyle}>{t('rightbar.overview.meta.projection')}</span>
+            <ProjectionStatusRow
+              t={t}
+              status={projection}
+              retrying={props.projectionRetrying}
+              {...(props.onRetryProjection === undefined ? {} : { onRetry: props.onRetryProjection })}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

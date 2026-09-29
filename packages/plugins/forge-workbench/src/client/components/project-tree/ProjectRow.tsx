@@ -4,9 +4,10 @@
  * swaps on hover for the rotating triangle caret (TriangleRightFill14 同构;
  * icon-zone click expands ANY project's sessions, 裁决 #18-①); row click =
  * the workbench switch (原位换台 belongs to the 1.6 seat); hover tail ＋
- * (在此新建会话) and ⋯ (重命名/删除项目 — the 3.5 verbs stay mocked at
- * build stage). Archived rows ride the read-only partition: 降透明 .6 + ⚠
- * badge, no sessions, no ＋, and the ⋯ menu flips to 恢复/删除.
+ * (在此新建会话) and ⋯ (the C8 lifecycle menu, task 3.5: 重命名 行内编辑 /
+ * 归档 → 确认 Dialog / 删除 → 确认 Dialog — the dialogs live at the seat).
+ * Archived rows ride the read-only partition: 降透明 .6 + ⚠ badge, no
+ * sessions, no ＋, and the ⋯ menu flips to 恢复/删除.
  */
 import { useEffect, useRef, useState } from 'react'
 import { IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -16,7 +17,7 @@ import type { TreeTranslate } from './SessionRow'
 import type { WorkbenchKey } from '../../locale/en'
 
 /** The ⋯ menu's project command vocabulary (active vs archived rows). */
-export type ProjectRowCommand = 'rename' | 'remove' | 'restore'
+export type ProjectRowCommand = 'rename' | 'archive' | 'remove' | 'restore'
 
 export interface ProjectRowProps {
   t: TreeTranslate
@@ -26,12 +27,19 @@ export interface ProjectRowProps {
   onOpen: (projectId: string) => void
   onToggleExpanded?: ((projectId: string) => void) | undefined
   onNewSession?: ((projectId: string) => void) | undefined
-  /** Active rows: rename/remove; archived rows: restore/remove (3.5 mock). */
+  /**
+   * The lifecycle commands that BUBBLE (archive/remove/restore — the seat
+   * owns their dialogs); 重命名 stays IN the row (行内编辑, the commit rides
+   * {@link onRename}).
+   */
   onCommand?: ((projectId: string, command: ProjectRowCommand) => void) | undefined
+  /** The inline-rename commit (Enter/blur with a changed, non-empty value). */
+  onRename?: ((projectId: string, displayName: string) => void) | undefined
 }
 
 const ACTIVE_COMMANDS: ReadonlyArray<{ command: ProjectRowCommand; key: WorkbenchKey; glyph: string }> = [
   { command: 'rename', key: 'tree.project.rename', glyph: '✎ ' },
+  { command: 'archive', key: 'tree.project.archive', glyph: '🗄 ' },
   { command: 'remove', key: 'tree.project.remove', glyph: '🗑 ' },
 ]
 
@@ -119,6 +127,19 @@ const menuItemStyle = {
   width: '100%',
 } as const
 
+/** The inline-rename input (行内编辑): inherits the name slot's flex behavior. */
+const renameInputStyle = {
+  ...nameStyle,
+  background: 'var(--dsh-bg, Canvas)',
+  border: '1px solid var(--dsh-border-color, CanvasText)',
+  borderRadius: '8px',
+  color: 'inherit',
+  font: 'inherit',
+  fontSize: '14px',
+  height: '24px',
+  padding: '0 6px',
+} as const
+
 /** One project row — active navigable, or archived read-only (降透明+⚠). */
 export function ProjectRow(props: ProjectRowProps) {
   const { t, project, expanded, active } = props
@@ -126,7 +147,9 @@ export function ProjectRow(props: ProjectRowProps) {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -136,6 +159,19 @@ export function ProjectRow(props: ProjectRowProps) {
     document.addEventListener('mousedown', onDocumentMouseDown)
     return () => { document.removeEventListener('mousedown', onDocumentMouseDown) }
   }, [menuOpen])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  /** The inline-rename commit: a changed, non-empty value fires onRename. */
+  const commitRename = (): void => {
+    const next = inputRef.current?.value.trim() ?? ''
+    setEditing(false)
+    if (next === '' || next === project.displayName) return
+    props.onRename?.(project.id, next)
+  }
+  const cancelRename = (): void => { setEditing(false) }
 
   const background = active
     ? 'var(--dsw-alias-interactive-bg-active, rgba(0, 0, 0, 0.1))'
@@ -213,7 +249,33 @@ export function ProjectRow(props: ProjectRowProps) {
         </span>
       )}
       {archived && <span aria-hidden="true" style={{ flex: 'none', width: '28px' }} />}
-      <span style={nameStyle}>{project.displayName}</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          data-dsh-forge-tree-project-rename-input={project.id}
+          type="text"
+          defaultValue={project.displayName}
+          aria-label={t('tree.project.renameInput')}
+          title={t('tree.project.renameInput')}
+          style={renameInputStyle}
+          onClick={(event) => { event.stopPropagation() }}
+          onKeyDown={(event) => {
+            // Enter commits / Esc cancels; both stop the ROW's switch handler.
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.stopPropagation()
+              commitRename()
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              event.stopPropagation()
+              cancelRename()
+            }
+          }}
+          onBlur={() => { commitRename() }}
+        />
+      ) : (
+        <span style={nameStyle}>{project.displayName}</span>
+      )}
       {archived && <span aria-label={t('tree.archivedBadge')} role="img" style={{ flex: 'none' }} title={t('tree.archivedBadge')}>⚠</span>}
       {!archived && (hovered || menuOpen) && (
         <span
@@ -274,7 +336,10 @@ export function ProjectRow(props: ProjectRowProps) {
               onClick={(event) => {
                 event.stopPropagation()
                 setMenuOpen(false)
-                props.onCommand?.(project.id, command)
+                // 重命名 stays in the row (行内编辑); the rest bubble to the
+                // seat's dialog/verb owners.
+                if (command === 'rename') setEditing(true)
+                else props.onCommand?.(project.id, command)
               }}
             >
               <span aria-hidden="true">{glyph}</span>

@@ -154,6 +154,7 @@ function renderTree(props: Partial<Parameters<typeof ProjectTreeBrowser>[0]> = {
   const onOpenSession = vi.fn()
   const onSessionCommand = vi.fn()
   const onProjectCommand = vi.fn()
+  const onRename = vi.fn()
   const onArchivedCommand = vi.fn()
   const onAdoptUngrouped = vi.fn()
   const onAddProject = vi.fn()
@@ -172,6 +173,7 @@ function renderTree(props: Partial<Parameters<typeof ProjectTreeBrowser>[0]> = {
       onOpenSession={onOpenSession}
       onSessionCommand={onSessionCommand}
       onProjectCommand={onProjectCommand}
+      onRename={onRename}
       onArchivedCommand={onArchivedCommand}
       onAdoptUngrouped={onAdoptUngrouped}
       onAddProject={onAddProject}
@@ -181,7 +183,7 @@ function renderTree(props: Partial<Parameters<typeof ProjectTreeBrowser>[0]> = {
     />,
   )
   return {
-    onOpenProject, onNewSession, onOpenSession, onSessionCommand, onProjectCommand,
+    onOpenProject, onNewSession, onOpenSession, onSessionCommand, onProjectCommand, onRename,
     onArchivedCommand, onAdoptUngrouped, onAddProject, onLayoutChange, onToggleCollapse,
   }
 }
@@ -410,15 +412,32 @@ describe('ProjectTreeBrowser: three-tier render + states', () => {
     expect(onNewSession).toHaveBeenCalledWith('p1')
   })
 
-  it('project hover ⋯ menu offers 重命名/删除 (via the 3.5-mocked callbacks)', () => {
-    const { onProjectCommand } = renderTree()
+  it('project hover ⋯ menu offers the C8 lifecycle trio (task 3.5): 重命名行内编辑 / 归档 / 删除', () => {
+    const { onProjectCommand, onRename } = renderTree()
     fireEvent.mouseEnter(projectRow('p1')!)
     fireEvent.click(projectRow('p1')!.querySelector('[data-dsh-forge-tree-project-more="p1"]')!)
     const menu = document.querySelector('[data-dsh-forge-tree-project-menu="p1"]')!
     const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map(el => el.textContent)
-    expect(items).toEqual(['✎ 重命名', '🗑 删除项目'])
+    expect(items).toEqual(['✎ 重命名', '🗄 归档项目', '🗑 删除项目'])
+    // 重命名 stays in the row (行内编辑): the input appears, Enter commits onRename.
     fireEvent.click(menu.querySelectorAll('[role="menuitem"]')[0]!)
-    expect(onProjectCommand).toHaveBeenCalledWith('p1', 'rename')
+    const input = projectRow('p1')!.querySelector('[data-dsh-forge-tree-project-rename-input="p1"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+    fireEvent.change(input, { target: { value: 'renamed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onRename).toHaveBeenCalledWith('p1', 'renamed')
+    expect(onProjectCommand).not.toHaveBeenCalledWith('p1', 'rename')
+    // 归档/删除 bubble (the dialogs live at the seat).
+    fireEvent.mouseEnter(projectRow('p1')!)
+    fireEvent.click(projectRow('p1')!.querySelector('[data-dsh-forge-tree-project-more="p1"]')!)
+    const menu2 = document.querySelector('[data-dsh-forge-tree-project-menu="p1"]')!
+    fireEvent.click(menu2.querySelectorAll('[role="menuitem"]')[1]!)
+    expect(onProjectCommand).toHaveBeenCalledWith('p1', 'archive')
+    fireEvent.mouseEnter(projectRow('p1')!)
+    fireEvent.click(projectRow('p1')!.querySelector('[data-dsh-forge-tree-project-more="p1"]')!)
+    const menu3 = document.querySelector('[data-dsh-forge-tree-project-menu="p1"]')!
+    fireEvent.click(menu3.querySelectorAll('[role="menuitem"]')[2]!)
+    expect(onProjectCommand).toHaveBeenCalledWith('p1', 'remove')
   })
 
   it('an empty expanded project group shows the 暂无会话 guidance wired to onNewSession', () => {
