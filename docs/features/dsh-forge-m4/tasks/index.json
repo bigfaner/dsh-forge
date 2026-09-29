@@ -187,7 +187,7 @@
         "2.4",
         "2.9"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.10-sc2-full-regression-inventory.md",
       "record": "records/2.10-sc2-full-regression-inventory.md",
       "surface-type": "web",
@@ -355,7 +355,7 @@
         "2.8",
         "2.9"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.summary.md",
       "record": "records/2.summary.md",
       "type": "doc.summary"
