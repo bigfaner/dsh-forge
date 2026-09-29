@@ -41,6 +41,7 @@ vi.mock('../src/client/views/tasks/TasksView.tsx', async () => {
         host: props.host,
         ...('session' in props ? { session: props.session } : {}),
         ...('onEnterSession' in props ? { onEnterSession: props.onEnterSession } : {}),
+        ...('sessions' in props ? { sessions: props.sessions } : {}),
       })
       return <div data-mock-tasks-view={String(props.host)} />
     },
@@ -286,6 +287,43 @@ describe('AC1 (M4 2.7): the board body threads the plugin-lifetime legs', () => 
     const dispose = installRightbarTabs(makeFakeCtx(new SlotCore(), {}), { t })
     expect(dispose).toBeInstanceOf(Function)
     dispose()
+  })
+})
+
+describe('M4 2.9: the board body threads the C5 lineage seat data leg', () => {
+  it('sessions rides through to TasksView (conditional spread; absent stays absent)', () => {
+    boardStub.props = []
+    const sessions = {
+      list: {
+        getSnapshot: () => ({ ids: [], byId: {} }),
+        subscribe: () => () => {},
+      },
+    }
+    render(<BoardTabBody t={t} sessions={sessions as never} />)
+    expect(boardStub.props.at(-1)).toMatchObject({ host: 'pane', sessions })
+    // Absent = the seat's data leg stays absent (the M2/M3 informational form).
+    boardStub.props = []
+    render(<BoardTabBody t={t} />)
+    expect(boardStub.props.at(-1)).not.toHaveProperty('sessions')
+  })
+
+  it('the installer carries the sessions option into the keyed board body inject face', () => {
+    const core = new SlotCore()
+    const registry = makeRegistry()
+    declareRightbarTree(core)
+    const sessions = {
+      list: {
+        getSnapshot: () => ({ ids: [], byId: {} }),
+        subscribe: () => () => {},
+      },
+    }
+    installRightbarTabs(makeFakeCtx(core, { sidebarRightTabs: registry.registry }), {
+      t,
+      sessions: sessions as never,
+    })
+    const entry = core.entriesOfSlot(RIGHTBAR_TAB_SLOT).find(row => row.options.key === forgeTabId('board'))
+    const face = (entry?.inject as () => Record<string, unknown>)?.() as Record<string, unknown>
+    expect(face).toMatchObject({ sessions })
   })
 })
 

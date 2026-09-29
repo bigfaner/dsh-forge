@@ -100,6 +100,12 @@ export interface TasksViewProps {
    * rejecting promise return surfaces the section's open-failed toast.
    */
   onEnterSession?: EnterSessionSeam | undefined
+  /**
+   * The upstream sessions source (M4 2.9): the C5 lineage seat's data leg —
+   * present = the detail dock's 挂接历史 rows gain the 行展开 face; absent =
+   * the section keeps its M2/M3 informational form (the seam discipline).
+   */
+  sessions?: import('../../nav/project-seat').SessionsFace | undefined
 }
 
 /** The view's column geometry (the page's container twin). */
@@ -221,6 +227,7 @@ export function TasksView(props: TasksViewProps) {
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
       {...(props.session === undefined ? {} : { session: props.session })}
       {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
+      {...(props.sessions === undefined ? {} : { sessions: props.sessions })}
     />
   )
 }

@@ -55,6 +55,7 @@ import { createMockTaskBoardFace } from '../mocks/workbench'
 import { createSelectedTaskStore } from '../store/selected-task'
 import type { BoardSessionStore } from '../store/board-session'
 import { fillTemplate } from './overview/format'
+import { lineageSnapshotOf } from '../lineage'
 import {
   DEFAULT_BOARD_FILTER, TaskToolbar, type BoardFilterState, type BoardSortKey, type BoardViewKey,
 } from './tasks/TaskToolbar'
@@ -217,6 +218,14 @@ export interface TaskBoardPageProps {
    * inject the mock twin through this prop).
    */
   dispatchFace?: Partial<DispatchFace> | undefined
+  /**
+   * The upstream sessions source (M4 2.9 — the C5 lineage seat's data leg):
+   * present = the detail dock's 挂接历史 rows gain the 行展开 face over the
+   * guarded snapshot read (a PRESENT seat with an absent snapshot = the
+   * inference-degraded form, 仅顶层 + 「不可用」); absent = the section keeps
+   * its M2/M3 informational form (the seam discipline).
+   */
+  sessions?: import('../nav/project-seat').SessionsFace | undefined
 }
 
 /**
@@ -382,6 +391,24 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     props.session?.subscribeLinks ?? (() => () => {}),
     props.session?.getActiveLinks ?? (() => NO_ACTIVE_LINKS),
   )
+
+  // The C5 lineage seat's data leg (M4 2.9 — the SC7 消费点 wiring): the
+  // upstream list snapshot rides the store's OWN identity (stable per set),
+  // and the guarded read (lineageSnapshotOf — absent/malformed → undefined =
+  // the inference-degraded form) re-derives per tick. A PRESENT seat is what
+  // turns the 挂接历史 rows expandable; the sessions SERVICE absent keeps the
+  // seat absent too (the M2/M3 informational form, the seam discipline).
+  const sessionsSource = props.sessions
+  const EMPTY_SESSIONS_LIST = useMemo(() => ({ ids: [] as string[], byId: {} }), [])
+  const sessionsList = useSyncExternalStore(
+    sessionsSource?.subscribe ?? (() => () => {}),
+    sessionsSource?.getSnapshot ?? (() => EMPTY_SESSIONS_LIST),
+  )
+  const linkLineage = useMemo<import('./tasks/TaskDetailPanel').TaskDetailPanelProps['linkLineage']>(() => {
+    if (sessionsSource === undefined) return undefined
+    void sessionsList // the store's tick drives the re-derivation
+    return { snapshot: lineageSnapshotOf({ list: { getSnapshot: () => sessionsList } }) }
+  }, [sessionsSource, sessionsList])
 
   // Outside-close arbitration (5.8): the dock closes on outside pointerdowns
   // EXCEPT presses on a board SELECTABLE — ui-design UF2 makes 点击节点/行 the
@@ -1041,6 +1068,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             codeRoot={props.codeRoot}
             reloadToken={detailReload}
             face={props.detailFace}
+            linkLineage={linkLineage}
             {...(selected.taskKey === undefined
               ? {}
               : { activeSessionId: activeLinks.get(selected.taskKey) })}

@@ -483,17 +483,6 @@ export function apply(ctx: ClientContext): void {
   })
   // The panellist「项目」row — order 首项, null-addressed (nav/panel-info).
   const disposeProjectPanelRow = installProjectPanelRow(ctx, { label: () => t('panel.project') })
-  const disposeWorkspacesSeat = activeProjectStore === undefined || workbenchBridge === undefined
-    ? () => {}
-    : installWorkspacesSeat(ctx, {
-      t,
-      store: activeProjectStore,
-      cardFace: createIpcConfirmCardFace(workbenchBridge),
-      workspaces: toWorkspacesSource(optionalService('workspaces')),
-      sessions: toSessionsFace(optionalService('sessions')),
-      uiWorkspace: toUiWorkspaceFace(optionalService('uiWorkspace')),
-      sidebarRight: toSidebarRightFace(optionalService('sidebarRight')),
-    })
   // M4 task 2.7 — the Interface 6 会话打开通道 + the C6 metadata bar (tech-
   // design §Interface 6 / §Integration #3). The channel is plugin-lifetime
   // over the guarded upstream seams (顶层/subagent = the one openSession
@@ -537,12 +526,6 @@ export function apply(ctx: ClientContext): void {
     boardSession.selection.select(taskKey)
     ensureBoardActive(toRightbarTabsFace(optionalService('sidebarRight')))
   }
-  const disposeMetadataBar = installMetadataBar(ctx, {
-    t,
-    sessions: toLineageSessionsSource(optionalService('sessions')),
-    ...metadataReadSources === undefined ? {} : { readSources: metadataReadSources },
-    onOpenTask: metadataOpenTask,
-  })
 
   // M4 task 2.2 — the rightbar forge tabs (tech-design §Integration #5): the
   // five kinds mount into the native right column through the upstream public
@@ -556,14 +539,104 @@ export function apply(ctx: ClientContext): void {
     boardSession.selection.select(taskKey)
     ensureBoardActive(toRightbarTabsFace(optionalService('sidebarRight')))
   }
-  const disposeRightbarTabs = installRightbarTabs(ctx, {
+
+  // M4 2.9 correction (SC7 消费点 wiring): the app-tier upstream services
+  // register AFTER this plugin's apply (the boot roster loads the api
+  // controllers at its tail), so a face captured ONCE at apply read
+  // `undefined` forever — the 1.6/2.7 upstream legs (the C3 tree's
+  // workspace/session rows, the C6 bar's snapshot) were silently dead on the
+  // real chain. The legs below resolve LAZILY (per face read, i.e. at render
+  // time — post-boot the services are live), memoized on the service's OWN
+  // stable member identity (the snapshot store / a stable method): cordis
+  // wraps every ctx.get answer in a fresh traceable proxy, so the SERVICE
+  // identity churns per read — keying on the stable member keeps the adapter
+  // identity stable across renders (React's subscription machinery requires
+  // that). Still never a load gate: an absent service keeps the leg degraded.
+  const adapterMemo = new WeakMap<object, unknown>()
+  const lazyUpstreamFace = <T>(
+    name: string,
+    stableMember: string,
+    narrow: (service: unknown) => T | undefined,
+  ): (() => T | undefined) => () => {
+    const service = optionalService(name) as Record<string, unknown> | undefined
+    const member = service?.[stableMember]
+    if (typeof member !== 'object' && typeof member !== 'function') return undefined
+    if (member === null) return undefined
+    const cached = adapterMemo.get(member)
+    if (cached !== undefined) return cached as T
+    const face = narrow(service)
+    if (face !== undefined) adapterMemo.set(member, face as unknown as object)
+    return face
+  }
+  const liveWorkspaces = lazyUpstreamFace('workspaces', 'list', toWorkspacesSource)
+  const liveSessionsFace = lazyUpstreamFace('sessions', 'list', toSessionsFace)
+  const liveSessionsSource = lazyUpstreamFace('sessions', 'list', toLineageSessionsSource)
+  const liveUiWorkspace = lazyUpstreamFace('uiWorkspace', 'openSession', toUiWorkspaceFace)
+  const liveSidebarRight = lazyUpstreamFace('sidebarRight', 'openTab', toSidebarRightFace)
+
+  // The registrations themselves stay AT APPLY (the slot/seat lifecycles are
+  // service-independent — deferring them behind ctx.inject tied the seat to
+  // cordis fiber re-evaluation, which unregisters/re-registers on every
+  // service notify and can strand the seat mid-boot).
+  const disposeWorkspacesSeat = activeProjectStore === undefined || workbenchBridge === undefined
+    ? () => {}
+    : installWorkspacesSeat(ctx, {
+      t,
+      store: activeProjectStore,
+      cardFace: createIpcConfirmCardFace(workbenchBridge),
+      get workspaces() { return liveWorkspaces() },
+      get sessions() { return liveSessionsFace() },
+      get uiWorkspace() { return liveUiWorkspace() },
+      get sidebarRight() { return liveSidebarRight() },
+    })
+  const disposeMetadataBar = installMetadataBar(ctx, {
     t,
-    ...activeProjectStore === undefined ? {} : { activeProjectStore },
-    boardSession,
-    onEnterSession: enterSession,
-    onOpenTask: overviewOpenTask,
-    ...metadataReadSources === undefined ? {} : { readTaskSources: metadataReadSources },
+    get sessions() { return liveSessionsSource() },
+    ...metadataReadSources === undefined ? {} : { readSources: metadataReadSources },
+    onOpenTask: metadataOpenTask,
   })
+
+  // The rightbar tab FAMILY's registration needs the `sidebarRightTabs`
+  // registry SERVICE — which is itself absent at apply (the same late-boot
+  // ordering; discovered by the 2.9 SC7 leg: the shipped door page stayed in
+  // force). Registrations cannot be lazy (they need the registry handle), so
+  // this leg installs on a BOUNDED AVAILABILITY POLL — the approval-answer
+  // relay's own precedent in this plugin (250ms cadence, ~60s ceiling; absent
+  // = the family never registers, the degrade the guard already owned).
+  const disposeRightbarTabs = (() => {
+    let stopped = false
+    let installed: (() => void) | undefined
+    const install = (): boolean => {
+      const tabs = optionalService('sidebarRightTabs')
+      if (tabs === undefined) return false
+      installed = installRightbarTabs(ctx, {
+        t,
+        ...activeProjectStore === undefined ? {} : { activeProjectStore },
+        boardSession,
+        onEnterSession: enterSession,
+        onOpenTask: overviewOpenTask,
+        ...metadataReadSources === undefined ? {} : { readTaskSources: metadataReadSources },
+        // The C5 lineage seat's data leg (SC7 消费点): the SAME guarded
+        // `ctx.sessions` read the metadata bar rides, threaded into the board
+        // pane so the detail dock's 挂接历史 rows gain the 行展开 face.
+        get sessions() { return liveSessionsFace() },
+      })
+      return true
+    }
+    if (!install()) {
+      const startedAt = Date.now()
+      const timer = setInterval(() => {
+        if (stopped) { clearInterval(timer); return }
+        if (install() || Date.now() - startedAt > 60_000) clearInterval(timer)
+      }, 250)
+      return () => {
+        stopped = true
+        clearInterval(timer)
+        installed?.()
+      }
+    }
+    return () => { installed?.() }
+  })()
 
   let railDispose: (() => void) | undefined
   let mainCommitted = false

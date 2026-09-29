@@ -31,6 +31,23 @@ export interface ApprovalJournalEntry extends ChannelStubEntry {
   readonly error?: string
 }
 
+/**
+ * A lineage-corpus journal row (the FIFTH stub kind, appended by the TEST
+ * half — 2.9's stub 扩展): the `parentSession`/`origin` header facts of one
+ * session seeded into the REAL persistence backend (tests/e2e/stubs/
+ * lineage-corpus.ts), the 对拍 anchor the SC7 leg cross-checks against the
+ * artifacts the host child actually consumed.
+ */
+export interface SessionSeededJournalEntry extends ChannelStubEntry {
+  readonly kind: 'session-seeded'
+  readonly cwd?: string
+  readonly parentSession?: string
+  readonly origin?: string
+  readonly mode?: string
+  readonly label?: string
+  readonly title?: string
+}
+
 export interface DispatchStub extends ChannelStub {
   readonly dir: string
   /** The env pair both host halves read (pass into the Electron launch env). */
@@ -46,6 +63,13 @@ export interface DispatchStub extends ChannelStub {
   injectToolExec(callId: string, args: unknown): void
   /** The approval rows of the unified journal. */
   readApprovals(): ApprovalJournalEntry[]
+  /**
+   * Append one lineage-corpus 对拍 row (the seeded header facts; the TEST
+   * half's own observation stream, beside `markSessionEnded`'s precedent).
+   */
+  noteSessionSeeded(entry: Omit<SessionSeededJournalEntry, 'kind' | 'at'>): void
+  /** The lineage-corpus rows of the unified journal. */
+  readSeeded(): SessionSeededJournalEntry[]
 }
 
 /**
@@ -77,5 +101,7 @@ export function createDispatchStub(dir: string): DispatchStub {
     injectApproval: (request) => { appendInject({ kind: 'approval', ...request }) },
     injectToolExec: (callId, args) => { appendInject({ kind: 'tool-exec', callId, arguments: args }) },
     readApprovals: () => channel.readJournal().filter((entry): entry is ApprovalJournalEntry => entry.kind === 'approval') as ApprovalJournalEntry[],
+    noteSessionSeeded: entry => { channel.appendJournal({ kind: 'session-seeded', at: new Date().toISOString(), ...entry }) },
+    readSeeded: () => channel.readJournal().filter((entry): entry is SessionSeededJournalEntry => entry.kind === 'session-seeded') as SessionSeededJournalEntry[],
   }
 }

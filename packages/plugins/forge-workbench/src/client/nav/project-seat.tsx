@@ -123,21 +123,59 @@ const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
 const isFunction = (candidate: unknown): candidate is (...args: never[]) => unknown =>
   typeof candidate === 'function'
 
-/** Narrow the `ctx.workspaces` service onto the read-only snapshot source. */
+/**
+ * Narrow the `ctx.workspaces` service onto the read-only snapshot source.
+ *
+ * M4 2.9 correction: the upstream service nests its store (`workspaces.list`),
+ * while this seat's face is flat — the 1.6 narrowing CAST the nested service
+ * onto the flat type, leaving the seat's data legs reading absent members
+ * (the tree rendered project rows over EMPTY workspace/session snapshots on
+ * the real chain; the unit tests fed flat fakes, so the gap never surfaced).
+ * The narrowing now BRIDGES: the returned adapter projects `list` onto the
+ * flat face, so the SC7 归拢 assertions read the REAL upstream snapshots.
+ */
 export function toWorkspacesSource(candidate: unknown): WorkspacesListSource | undefined {
   if (!isObject(candidate) || !isObject(candidate.list)) return undefined
   const list = candidate.list
   if (!isFunction(list.getSnapshot) || !isFunction(list.subscribe)) return undefined
-  return candidate as unknown as WorkspacesListSource
+  const nested = list as unknown as {
+    getSnapshot(): ReturnType<WorkspacesListSource['getSnapshot']>
+    subscribe(listener: () => void): () => void
+  }
+  return {
+    getSnapshot: () => nested.getSnapshot(),
+    subscribe: listener => nested.subscribe(listener),
+  }
 }
 
-/** Narrow the `ctx.sessions` service onto the list source (+ retainInfo probe). */
+/**
+ * Narrow the `ctx.sessions` service onto the list source (+ retainInfo probe)
+ * — the same 2.9 bridging correction as {@link toWorkspacesSource}: the flat
+ * face over the service's nested `sessions.list` store, `retainInfo` carried
+ * through unchanged.
+ */
 export function toSessionsFace(candidate: unknown): SessionsFace | undefined {
   if (!isObject(candidate) || !isObject(candidate.list)) return undefined
   const list = candidate.list
   if (!isFunction(list.getSnapshot) || !isFunction(list.subscribe)) return undefined
   if (candidate.retainInfo !== undefined && !isFunction(candidate.retainInfo)) return undefined
-  return candidate as unknown as SessionsFace
+  const nested = list as unknown as {
+    getSnapshot(): ReturnType<SessionsListSource['getSnapshot']>
+    subscribe(listener: () => void): () => void
+  }
+  const bridged: SessionsFace = {
+    getSnapshot: () => nested.getSnapshot(),
+    subscribe: listener => nested.subscribe(listener),
+  }
+  if (isFunction(candidate.retainInfo)) {
+    // Call THROUGH the service candidate (the traceable proxy): extracting
+    // the raw function would detach it from its `this` — the vendored
+    // service's retainInfo reads private fields (`retainObservers`) and
+    // crashes unbound (the SC7 corpus leg's seat-abdicate root cause).
+    const service = candidate as unknown as { retainInfo(sessionId: string): RetainInfoSource }
+    bridged.retainInfo = (sessionId: string) => service.retainInfo(sessionId)
+  }
+  return bridged
 }
 
 /** Narrow the `ctx.uiWorkspace` service onto the navigation subset. */

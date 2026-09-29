@@ -87,6 +87,13 @@ export interface BoardTabFace extends ForgeTabFace {
   readonly session?: BoardSessionStore | undefined
   /** The Interface 6 dual-channel open seam (present = the C5 rows' [打开] goes live). */
   readonly onEnterSession?: EnterSessionSeam | undefined
+  /**
+   * The upstream sessions source (M4 2.9 — the C5 lineage seat's data leg):
+   * present = the detail dock's 挂接历史 rows gain the 行展开 face over the
+   * guarded snapshot read (SC7 消费点 wiring); absent = the section keeps its
+   * M2/M3 informational form.
+   */
+  readonly sessions?: import('../../nav/project-seat').SessionsFace | undefined
 }
 
 /**
@@ -96,7 +103,7 @@ export interface BoardTabFace extends ForgeTabFace {
  * to the board's own box (零宿主探测: the breakpoint is injected, never
  * probed).
  */
-export function BoardTabBody({ t, activeProject, session, onEnterSession }: BoardTabFace): ReactNode {
+export function BoardTabBody({ t, activeProject, session, onEnterSession, sessions }: BoardTabFace): ReactNode {
   const snapshot = useSyncExternalStore(
     activeProject?.subscribe ?? (() => () => {}),
     activeProject?.getSnapshot ?? (() => INITIAL_ACTIVE_PROJECT_SNAPSHOT),
@@ -116,6 +123,7 @@ export function BoardTabBody({ t, activeProject, session, onEnterSession }: Boar
         codeRoot={project?.codeRoot}
         {...(session === undefined ? {} : { session })}
         {...(onEnterSession === undefined ? {} : { onEnterSession })}
+        {...(sessions === undefined ? {} : { sessions })}
       />
     </div>
   )
@@ -298,6 +306,12 @@ export interface RightbarTabsOptions extends ForgeTabFace {
    * both faces).
    */
   readonly readTaskSources?: (() => Promise<readonly OverviewTaskSource[] | undefined>) | undefined
+  /**
+   * The upstream sessions source (M4 2.9 — the C5 lineage seat's data leg):
+   * the guarded `ctx.sessions` read threaded into the board pane body so the
+   * detail dock's 挂接历史 rows gain the 行展开 face (SC7 消费点 wiring).
+   */
+  readonly sessions?: import('../../nav/project-seat').SessionsFace | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -375,6 +389,10 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
     ...activeProjectStore === undefined ? {} : { activeProject: activeProjectStore },
     ...boardSession === undefined ? {} : { session: boardSession },
     ...onEnterSession === undefined ? {} : { onEnterSession },
+    // M4 2.9: read through the OPTIONS object (a getter at the apply side may
+    // resolve the upstream service lazily — an eager destructure would freeze
+    // an absent service into the face for the plugin's lifetime).
+    get sessions() { return options.sessions },
   }
   const overviewFace: OverviewTabFace = {
     t,

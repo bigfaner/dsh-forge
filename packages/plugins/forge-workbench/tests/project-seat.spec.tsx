@@ -664,13 +664,28 @@ describe('seat behavior seams', () => {
   })
 
   it('the guarded service adapters narrow unknown candidates onto the seat faces', () => {
-    const workspaces = { list: { getSnapshot: () => ({}), subscribe: () => () => {} } }
-    expect(toWorkspacesSource(workspaces)).toBe(workspaces)
+    // M4 2.9 bridging: the upstream services NEST their store (`.list`) while
+    // the seat face is flat — the adapters must PROJECT (delegate), so the
+    // real chain's tree reads live snapshots instead of absent members.
+    const workspacesList = { getSnapshot: () => ({ items: [], archivedSessionIds: [] }), subscribe: () => () => {} }
+    const bridgedWorkspaces = toWorkspacesSource({ list: workspacesList })
+    expect(bridgedWorkspaces).toBeDefined()
+    expect(bridgedWorkspaces?.getSnapshot()).toEqual({ items: [], archivedSessionIds: [] })
     expect(toWorkspacesSource({ list: { getSnapshot: () => ({}) } })).toBeUndefined()
     expect(toWorkspacesSource(undefined)).toBeUndefined()
-    const sessions = { list: { getSnapshot: () => ({}), subscribe: () => () => {} }, retainInfo: () => ({}) }
-    expect(toSessionsFace(sessions)).toBe(sessions)
-    expect(toSessionsFace({ list: sessions.list, retainInfo: 'nope' })).toBeUndefined()
+    // An own-field-reading method: the bridge must call THROUGH the service
+    // (a detached extraction loses `this` — the SC7 corpus crash's shape: the
+    // vendored retainInfo reads private fields and throws unbound).
+    const service = {
+      marker: true,
+      list: { getSnapshot: () => ({ ids: [], byId: {} }), subscribe: () => () => {} },
+      retainInfo(this: { marker?: boolean }, id: string) { return `${String(this.marker === true)}:${id}` },
+    }
+    const bridgedSessions = toSessionsFace(service)
+    expect(bridgedSessions).toBeDefined()
+    expect(bridgedSessions?.getSnapshot()).toEqual({ ids: [], byId: {} })
+    expect((bridgedSessions?.retainInfo as unknown as (id: string) => string)?.('s1')).toBe('true:s1')
+    expect(toSessionsFace({ list: service.list, retainInfo: 'nope' })).toBeUndefined()
     const uiWorkspace = {
       startSession: () => {}, openSession: () => {}, forkSession: () => {}, archiveSession: () => {},
     }
