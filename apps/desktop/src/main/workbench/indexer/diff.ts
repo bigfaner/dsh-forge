@@ -12,6 +12,7 @@
 // 纯函数层:不触 db、不触 fs —— 分类单测无需库与 fixture(库级端到端在
 // scan 集成用例覆盖)。
 
+import type { ProjectionPlan } from '../projection/plan.ts'
 import type { ChangeSource, DispatchState, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
 
 /**
@@ -101,19 +102,10 @@ export type WorkbenchEvent =
 
 // —— M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序
 //    = ensure → rename → reorder → delete,幂等全量重推)——
+// 1.3 期声明于本文件;自 3.1 起唯一权威声明移至 projection/plan.ts(投影
+// 域内核),此处 re-export 维持事件面引用与既有导入路径不变(单源无漂移)。
 
-/** 投影四操作(Interface 1 ProjectionOp;仅 forge 所属子集相对序)。 */
-export type ProjectionOp =
-  | { readonly kind: 'ensure'; readonly canonicalPath: string; readonly title: string }
-  | { readonly kind: 'rename'; readonly workspaceId: string; readonly title: string }
-  | { readonly kind: 'delete'; readonly workspaceId: string }
-  | { readonly kind: 'reorder'; readonly orderedIds: readonly string[] }
-
-/** 一个项目的投影期望 plan(幂等全量重推;偏差 = diff 实况,明细不落表)。 */
-export interface ProjectionPlan {
-  readonly projectId: string
-  readonly ops: readonly ProjectionOp[]
-}
+export type { ProjectionOp, ProjectionPlan } from '../projection/plan.ts'
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 

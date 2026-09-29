@@ -24,6 +24,7 @@ import {
   type Project,
   type ProjectPatch,
   type ProjectRow,
+  type ProjectionState,
   type RegisterProjectInput,
   type RepoDb,
 } from './types.ts'
@@ -236,6 +237,32 @@ export function healProjectIdentity(db: RepoDb, heal: IdentityHeal): void {
     heal.identityVerified ? 1 : 0,
     heal.projectId,
   )
+}
+
+/**
+ * 投影状态机写位(任务 3.1;projection/state-machine 裁决结果的落库通道,
+ * 3.2 对账 service 消费):projects.projection_state CHECK 4 值词表由
+ * ProjectionState 类型承载(词表校验在类型面,SQL 端 CHECK 兜底)。未知
+ * id → ERR_PROJECT_NOT_FOUND。Hard Rule(单写者):projection 域经本函数
+ * 写 projects,不手写越层 SQL。
+ */
+export function setProjectProjectionState(db: RepoDb, id: string, state: ProjectionState): void {
+  const changes = db.prepare('UPDATE projects SET projection_state = ? WHERE id = ?').run(state, id)
+  if (Number(changes.changes) !== 1) {
+    throw new WorkbenchRepoError('ERR_PROJECT_NOT_FOUND', `project ${id} does not exist`)
+  }
+}
+
+/**
+ * dsh WorkspaceId 信息位写位(任务 3.1;er-diagram:「dsh 侧删除重建后由
+ * ensure 更新」):expectation-repo.recordSuccessfulPush 同事务镜像调用;
+ * 独立导出仅供 repos 层消费面复用。未知 id → ERR_PROJECT_NOT_FOUND。
+ */
+export function setProjectWorkspaceId(db: RepoDb, id: string, workspaceId: string | null): void {
+  const changes = db.prepare('UPDATE projects SET workspace_id = ? WHERE id = ?').run(workspaceId, id)
+  if (Number(changes.changes) !== 1) {
+    throw new WorkbenchRepoError('ERR_PROJECT_NOT_FOUND', `project ${id} does not exist`)
+  }
 }
 
 /**
