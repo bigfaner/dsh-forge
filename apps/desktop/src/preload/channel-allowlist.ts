@@ -94,6 +94,12 @@ export const WORKBENCH_VERB_CHANNELS = {
   archiveProject: 'dsh-forge:workbench-archive-project',
   restoreProject: 'dsh-forge:workbench-restore-project',
   listProjects: 'dsh-forge:workbench-list-projects',
+  // M4 v3 投影段(任务 3.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  retryProjection: 'dsh-forge:workbench-retry-projection',
+  getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
+  submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
+  reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
 } as const
 
 /**

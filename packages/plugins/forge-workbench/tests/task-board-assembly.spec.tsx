@@ -110,6 +110,11 @@ function baseBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIpcBr
     archiveProject: async () => ({}) as never,
     restoreProject: async () => ({}) as never,
     listProjects: async () => [],
+    // M4 v3 投影段(任务 3.2;presence check 全员可调)。
+    retryProjection: async () => ({ state: 'pending' }),
+    getProjectionStatus: async () => [],
+    submitWorkspaceSnapshot: async () => undefined,
+    reportProjectionOutcome: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as WorkbenchIpcBridge

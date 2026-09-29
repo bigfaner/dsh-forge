@@ -30,16 +30,18 @@
 //     既有项目 codeRoot / 仓外 doc 路径,复用 registry 单源比对)。
 //
 // 事件:仅经既有批量通道的载荷(onEvents sink 注入;≤500ms 合并在通道侧)。
-// registerProject 成功发 projection_push_required(占位 plan = 单 ensure op;
-// 3.x 投影全链接管 plan 组装/reorder/delete 与 relay 执行)+
-// project_list_changed;rename/archive/restore 发 project_list_changed;
-// 动词不因投影失败 reject(本任务无投影失败面 —— plan 仅占位事件)。
+// registerProject 成功发 projection_push_required(任务 3.2 起:
+// onProjectionExpectation hook 在场 = projection 域真实载荷 —— 期望占位 +
+// 自包含 plan 组装/relay 缺席降级归 projection/service;缺省兜底 = 1.3 占位
+// 单 ensure plan)+ project_list_changed;rename/archive/restore 发
+// project_list_changed;动词不因投影失败 reject(hook 异常仅 log)。
 //
 // removeProject 的语义扩展(投影 delete + 拆出窗关闭)在 ipc/services.ts 的
 // 既有动词装配处留 TODO-hook(依赖 3.4/4.2),本域不提前引入跨相位实现。
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { shellLog } from '../../log.ts'
 import {
   matchProjectIdentity,
   normalizeEntry,
@@ -109,6 +111,13 @@ export interface ProjectLifecycleDeps {
   readonly docsRoot: string
   /** 事件批推送端(sink;单批直发形态,合并在批量通道侧)。 */
   readonly onEvents: (events: readonly WorkbenchEvent[]) => void
+  /**
+   * 注册成功 → 投影期望占位 + 真实 plan push(任务 3.2 接线:ipc/services
+   * 注入 projection 域 pushForRegistration;期望占位 + 自包含 plan 组装归
+   * projection/service)。缺省 = 1.3 占位单 ensure plan 兜底(isolated 装配)。
+   * Hard Rule:hook 异常仅 log —— 注册语义永不因投影失败 reject。
+   */
+  readonly onProjectionExpectation?: (projectId: string) => void
 }
 
 /** 缺省显示名 = canonical 展示路径的最后一段目录名(与 repos 缺省同口径)。 */
@@ -271,18 +280,37 @@ export function createProjectLifecycleService(deps: ProjectLifecycleDeps): {
         customAuthorized,
       })
 
-      // —— 事件:投影期望 push 占位(3.x 接线)+ 列表变更 ——
-      // 占位 plan = 单 ensure op(注册即确保 workspace 在场;reorder/
-      // rename/delete 由 3.x 全量 plan 组装接替)。动词不因投影失败
-      // reject:本面无投影失败路径(plan 仅事件载荷)。
-      const plan: ProjectionPlan = {
-        projectId: project.id,
-        ops: [{ kind: 'ensure', canonicalPath: project.codeRoot, title: project.displayName }],
+      // —— 事件:投影期望 push + 列表变更 ——
+      // 任务 3.2 接线:onProjectionExpectation在场(ipc/services 真实装配)=
+      // projection 域接管(期望占位 insertExpectationPlaceholder + 真实自
+      // 包含 plan 经 projection_push_required 推送;relay 缺席降级归该域);
+      // 缺省(isolated 装配)= 1.3 占位单 ensure plan 兜底。Hard Rule
+      // (Propagation Strategy):注册/生命周期动词不因投影失败 reject ——
+      // hook 异常仅结构化 log,注册语义不受影响。
+      if (deps.onProjectionExpectation !== undefined) {
+        try {
+          deps.onProjectionExpectation(project.id)
+        } catch (error) {
+          shellLog.error({
+            code: 'ERR_PROJECTION_OP_FAILED',
+            message: 'post-register projection push failed (registration unaffected)',
+            data: { projectId: project.id, detail: error instanceof Error ? error.message : String(error) },
+          })
+        }
+      } else {
+        // 占位 plan = 单 ensure op(注册即确保 workspace 在场;全量 plan
+        // 组装归 projection 域,本兜底不承载 reorder/rename/delete)。
+        const plan: ProjectionPlan = {
+          projectId: project.id,
+          ops: [{ kind: 'ensure', canonicalPath: project.codeRoot, title: project.displayName }],
+        }
+        deps.onEvents([
+          { type: 'projection_push_required', projectId: project.id, plan },
+          { type: 'project_list_changed' },
+        ])
+        return project
       }
-      deps.onEvents([
-        { type: 'projection_push_required', projectId: project.id, plan },
-        { type: 'project_list_changed' },
-      ])
+      deps.onEvents([{ type: 'project_list_changed' }])
       return project
     },
 

@@ -66,6 +66,7 @@ import { createProposalsVerbService } from '../proposals/proposals-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
 import { createProjectLifecycleService, type RegisterProjectV2Input } from '../projects/lifecycle-service.ts'
+import { createProjectionReconcileService } from '../projection/service.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -119,6 +120,12 @@ export interface WorkbenchIpcServiceDeps {
    * migration/faults-stub.ts)。boot 接线(main/index.ts)传入。
    */
   readonly migrationFaults?: () => MigrationFaults | undefined
+  /**
+   * 投影 relay 在场探测(任务 3.2;ERR_PROJECTION_CHANNEL_UNAVAILABLE 的
+   * 判据 = 事件订阅登记非空)。缺省恒真 = 乐观直发(1.3 占位事件同款
+   * 行为);boot 接线(main/index.ts)注入 workbenchEvents.size 探测。
+   */
+  readonly relayPresence?: () => boolean
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -370,13 +377,27 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     backupsRoot: join(deps.userDataPath, 'workbench', 'backups'),
   }
 
+  // M4 任务 3.2:投影对账 service(Interface 1 v3·P3 批四动词的芯 + 1.3
+  // registerProject 占位 hook 的真实载荷接线)。对账重算 = 3.1 内核
+  // (diff → verdict 桥 → 状态机);relay 缺席 → 重试一次后 degraded
+  // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留 —— 期望在库);事件经
+  // 同一 sink 批推(迁移/偏好/编排面 onEvent 同款单批直发形态)。
+  const projection = createProjectionReconcileService({
+    db,
+    onEvents: events => sink(events),
+    ...(deps.relayPresence === undefined ? {} : { relayPresence: deps.relayPresence }),
+  })
+
   // M4 任务 1.3:项目生命周期域服务(v3·P1 批 —— 侦测/注册 v2/rename/
   // archive/restore/list;D11 三层比对 + 投影占位事件 + project_list_changed
-  // 经同一 sink 批推,迁移/偏好/编排面 onEvent 同款直发形态)。
+  // 经同一 sink 批推,迁移/偏好/编排面 onEvent 同款直发形态)。任务 3.2
+  // 接线:注册成功 → 期望占位 + 真实 plan push(projection 域组装;1.3 的
+  // 占位单 ensure plan 降级为 isolated 装配的兜底)。
   const lifecycle = createProjectLifecycleService({
     db,
     docsRoot: workbenchPaths.docsRoot,
     onEvents: events => sink(events),
+    onProjectionExpectation: projectId => projection.pushForRegistration(projectId),
   })
 
   /** 目录直下列表(缺失/不可读 → 空数组;探测语境不放大 fs 噪声)。 */
@@ -702,6 +723,13 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       archiveProject: input => lifecycle.archiveProject(input),
       restoreProject: input => lifecycle.restoreProject(input),
       listProjects: () => lifecycle.listProjects(),
+
+      // —— M4 v3 投影动词(任务 3.2):委托 projection/service(对账重算 +
+      //    幂等全量重推 + relay 回填映射;动词不因投影失败 reject)。 ——
+      retryProjection: input => projection.retryProjection(input),
+      getProjectionStatus: input => projection.getProjectionStatus(input),
+      submitWorkspaceSnapshot: input => projection.submitSnapshot(input.workspaces),
+      reportProjectionOutcome: input => projection.reportOutcome(input),
     },
 
     start(): void {
@@ -716,6 +744,9 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
     dispose(): void {
       perception.retarget(null)
+      // 3.2:冲刷 pending 对账(同步末次重算,不丢状态迁移;watcher 冲刷
+      // 批缓冲的同款收尾纪律)。
+      projection.dispose()
     },
   }
 }

@@ -380,6 +380,10 @@ void app.whenReady().then(async () => {
       // FAULTS);未设置 → 解析器恒 undefined,生产行为不变。
       migrationFaults: createMigrationFaultsResolver(),
       onEvents: workbenchEvents.sink,
+      // 3.2:投影 relay 在场探测 —— 事件订阅登记非空 = 渲染已装载(relay
+      // 可达);注册/重推在缺席时重试一次后 degraded
+      // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留禁静默丢弃)。
+      relayPresence: () => workbenchEvents.size > 0,
     })
     installWorkbenchVerbs(
       (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },

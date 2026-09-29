@@ -39,6 +39,8 @@ import type {
   RegisterProjectV2Input,
   RenameProjectInput,
 } from '../projects/lifecycle-service.ts'
+import type { DeviationRow, WorkspaceSnapshotEntry } from '../projection/index.ts'
+import type { ProjectionStatusRow, ReportProjectionOutcomeInput } from '../projection/service.ts'
 
 // Interface 1 中已由仓储/感知层定义的 DTO,以本模块为共享出口(避免渲染层
 // 直接依赖 main 内部模块路径)。SyncStatus = 感知层的 SyncStatusPayload
@@ -47,6 +49,9 @@ export type { ChangeSource, DocKind, Project, ProjectPatch, SessionLink, TaskSta
 export type { ApprovalState, DispatchState }
 export type { SyncStatus, WorkbenchEvent, MigrationPhase, ProjectionOp, ProjectionPlan, DetectReport }
 export type { FeatureStatus }
+// M4 v3(任务 3.2;投影动词面 DTO 单源 = projection 域——3.1 record 的
+// 「单源无漂移」约定:渲染面经本模块转出口,不另立双份声明)。
+export type { DeviationRow, WorkspaceSnapshotEntry, ProjectionStatusRow, ReportProjectionOutcomeInput }
 export type { RegisterProjectV2Input, RenameProjectInput, ProjectRefInput }
 // M4 v3(任务 1.3):registerProject 入参 = v1(M2/M3 向导,冻结面)| v2
 // (P1 批新面,anchor / docsPlacement 四值 / customAuthorized)。同一动词
@@ -185,6 +190,29 @@ export interface RecordSessionLinkInput {
 /** probeProjectPath 入参(C7 侦测;裸盘符/相对路径在归一化入口即拒)。 */
 export interface ProbeProjectPathInput {
   readonly path: string
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 投影动词 DTO(任务 3.2;tech-design §Interface 1 v3·P3 批四动词)
+// ---------------------------------------------------------------------------
+
+/** retryProjection 入参(幂等全量重推;归档项目零 op)。 */
+export interface RetryProjectionInput {
+  readonly projectId: string
+}
+
+/** getProjectionStatus 入参(projectId 缺省 = 全量状态行)。 */
+export interface GetProjectionStatusInput {
+  readonly projectId?: string
+}
+
+/**
+ * submitWorkspaceSnapshot 入参(client 上报原生 workspace 快照,follow 流;
+ * 形状校验在 handler 层 = 调用方契约错,主进程 log + debounce 对账在内核
+ * service —— T2:快照不落库、偏差不写表,零写放大)。
+ */
+export interface SubmitWorkspaceSnapshotInput {
+  readonly workspaces: readonly WorkspaceSnapshotEntry[]
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,6 +1049,36 @@ export interface WorkbenchVerbServices {
   restoreProject(input: ProjectRefInput): Project
   /** v3 扩展列全量(sort_order 注册序输出)。 */
   listProjects(): Project[]
+
+  // —— M4 v3 投影动词(任务 3.2;实现 = projection/service.ts 对账 service
+  //    经 services.ts 装配;Hard Rule:动词不因投影失败 reject —— 唯一
+  //    reject 面 = ERR_PROJECT_NOT_FOUND,投影结果异步事件呈现)——
+
+  /**
+   * 幂等全量重推:组装自包含 plan(单 plan 执行即收敛该项目全部期望状态,
+   * 含 forge 子集相对序)→ projection_push_required 事件(relay 消费)。
+   * relay 缺席 → 重试一次后 degraded(ERR_PROJECTION_CHANNEL_UNAVAILABLE
+   * 落 last_error),plan 保留(期望在库;禁静默丢弃)。归档项目零 op。
+   */
+  retryProjection(input: RetryProjectionInput): { readonly state: ProjectionState }
+  /**
+   * 状态行 + 偏差明细(deviations 对账重算物化,不落表 —— T2);projectId
+   * 缺省 = 全量。未知 projectId → ERR_PROJECT_NOT_FOUND。
+   */
+  getProjectionStatus(input: GetProjectionStatusInput): ProjectionStatusRow[]
+  /**
+   * client 上报原生 workspace 快照(follow 流):形状校验(handler 契约
+   * 面)+ 主进程结构化 log + debounce 对账重算(状态迁移 →
+   * projection_updated)。快照不落库、偏差不写表(零写放大)。
+   */
+  submitWorkspaceSnapshot(input: SubmitWorkspaceSnapshotInput): void
+  /**
+   * relay 回填:ok → 期望 repo 回写(recordSuccessfulPush)+ push_succeeded
+   * → healthy;error(code/message)→ 上游错误码映射
+   * (workspace/invalid-path|name-conflict|move-invalid →
+   * ERR_PROJECTION_OP_FAILED detail 携原码)→ push_failed → degraded。
+   */
+  reportProjectionOutcome(input: ReportProjectionOutcomeInput): void
 }
 
 // ---------------------------------------------------------------------------

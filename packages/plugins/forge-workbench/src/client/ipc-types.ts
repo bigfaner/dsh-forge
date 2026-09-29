@@ -603,6 +603,18 @@ export type WorkbenchEvent =
     readonly projectId: string
     readonly plan: ProjectionPlan
   }
+  // M4 v3 (task 3.2): the projection state reflux — reconcile passes
+  // (reconcile_match → healthy / reconcile_drift → deviation) and relay
+  // outcome backfill (push_succeeded/push_failed) drive the state machine;
+  // only actual transitions emit (idempotent self-spins stay silent), and the
+  // live-materialized deviation detail rides along when non-empty (never
+  // persisted — recomputed per reconcile, T2).
+  | {
+    readonly type: 'projection_updated'
+    readonly projectId: string
+    readonly state: ProjectionState
+    readonly deviations?: readonly DeviationRow[]
+  }
 
 // ---------------------------------------------------------------------------
 // M4 v3 project-center verb DTOs (task 1.3;main-side peers =
@@ -626,6 +638,78 @@ export interface ProjectionPlan {
   readonly projectId: string
   readonly ops: readonly ProjectionOp[]
 }
+
+// ---------------------------------------------------------------------------
+// M4 v3 projection verb DTOs (task 3.2;main-side peers =
+// apps/desktop/src/main/workbench/projection/{diff,service}.ts — both halves
+// derive from tech-design §Interface 1 v3·P3 batch)
+// ---------------------------------------------------------------------------
+
+/** 偏差行(DeviationRow twin;明细不落表,对账重算物化)。 */
+export interface DeviationRow {
+  readonly type: 'renamed' | 'deleted' | 'reordered'
+  readonly detail: string
+}
+
+/** client 上报的 workspace 实况条目(submitWorkspaceSnapshot 入参元素)。 */
+export interface WorkspaceSnapshotEntry {
+  readonly workspaceId: string
+  readonly path: string
+  readonly title: string
+  readonly orderIdx: number
+}
+
+/** getProjectionStatus 行(状态行 + 偏差明细;3.5 状态区数据源)。 */
+export interface ProjectionStatusRow {
+  readonly projectId: string
+  /** 期望名(= projects.display_name)。 */
+  readonly displayName: string
+  /** 期望投影路径(anchor canonical;ensure 定位键)。 */
+  readonly path: string
+  /** 期望序(= 注册序权威)。 */
+  readonly orderIdx: number
+  /** 归档位(归档不对账;workspace 保留语义)。 */
+  readonly archived: boolean
+  /** 状态机现值(pending/healthy/degraded/deviation)。 */
+  readonly state: ProjectionState
+  /** 最近成功投影的 dsh WorkspaceId(未推送 = null)。 */
+  readonly workspaceId: string | null
+  /** 最近成功 push 时间(ISO 8601;未推送 = null)。 */
+  readonly pushedAt: string | null
+  /** degraded 原因(上游映射串;健康 = null)。 */
+  readonly lastError: string | null
+  /** 偏差明细(renamed/deleted/reordered;drift 时非空)。 */
+  readonly deviations: readonly DeviationRow[]
+}
+
+/** retryProjection 入参(幂等全量重推;归档项目零 op)。 */
+export interface RetryProjectionInput {
+  readonly projectId: string
+}
+
+/** getProjectionStatus 入参(projectId 缺省 = 全量状态行)。 */
+export interface GetProjectionStatusInput {
+  readonly projectId?: string
+}
+
+/**
+ * submitWorkspaceSnapshot 入参(client 上报原生 workspace 快照,follow 流;
+ * 形状校验在 handler 层,主进程 log + debounce 对账在内核 —— T2:快照
+ * 不落库、偏差不写表,零写放大)。
+ */
+export interface SubmitWorkspaceSnapshotInput {
+  readonly workspaces: readonly WorkspaceSnapshotEntry[]
+}
+
+/**
+ * reportProjectionOutcome 入参(relay 回填):ok → 期望 repo 回写 + healthy;
+ * error(code/message)→ 上游错误码映射
+ * (workspace/invalid-path|name-conflict|move-invalid →
+ * ERR_PROJECTION_OP_FAILED detail 携原码)→ degraded + last_error。
+ */
+export type ReportProjectionOutcomeInput =
+  | { readonly projectId: string; readonly ok: true }
+  | { readonly projectId: string; readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
 
 /** probeProjectPath 入参(C7 侦测;裸盘符/相对路径在归一化入口即拒)。 */
 export interface ProbeProjectPathInput {

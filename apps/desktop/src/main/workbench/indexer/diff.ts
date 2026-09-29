@@ -13,7 +13,8 @@
 // scan 集成用例覆盖)。
 
 import type { ProjectionPlan } from '../projection/plan.ts'
-import type { ChangeSource, DispatchState, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
+import type { DeviationRow } from '../projection/diff.ts'
+import type { ChangeSource, DispatchState, DocKind, FeatureStatus, ProjectionState, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
 
 /**
  * Interface 1 WorkbenchEvent(indexer 产出的变更事件;2.6 watcher 经
@@ -98,6 +99,18 @@ export type WorkbenchEvent =
     readonly type: 'projection_push_required'
     readonly projectId: string
     readonly plan: ProjectionPlan
+  }
+  // M4 v3(任务 3.2;tech-design §Interface 1 事件 v3 扩展·投影段):投影域
+  // 状态回流 projection_updated { projectId, state, deviations? } —— 对账
+  // 重算(reconcile_match/reconcile_drift)与 relay 回填(push_succeeded/
+  // push_failed)驱动的状态机迁移通知;仅实际迁移发(幂等自旋零噪音),
+  // 偏差明细非空随行(对账重算物化,不落表 —— T2)。
+  | {
+    readonly type: 'projection_updated'
+    readonly projectId: string
+    readonly state: ProjectionState
+    /** 偏差明细(drift 迁移时非空随行;renamed/deleted/reordered)。 */
+    readonly deviations?: readonly DeviationRow[]
   }
 
 // —— M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序

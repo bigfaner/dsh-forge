@@ -170,6 +170,11 @@ function fakeServices(): WorkbenchVerbServices {
     archiveProject: vi.fn(() => PROJECT),
     restoreProject: vi.fn(() => PROJECT),
     listProjects: vi.fn(() => [PROJECT]),
+    // M4 v3 投影段(任务 3.2)。
+    retryProjection: vi.fn(() => ({ state: 'pending' })),
+    getProjectionStatus: vi.fn(() => []),
+    submitWorkspaceSnapshot: vi.fn(() => undefined),
+    reportProjectionOutcome: vi.fn(() => undefined),
   } as unknown as WorkbenchVerbServices
 }
 
@@ -216,7 +221,7 @@ function installed(services: WorkbenchVerbServices, subscriptions?: WorkbenchEve
 // ---------------------------------------------------------------------------
 
 describe('workbench verb routing table', () => {
-  it('contains exactly the fifty-six whitelisted verb channels, one per verb', () => {
+  it('contains exactly the sixty whitelisted verb channels, one per verb', () => {
     expect(Object.values(WORKBENCH_VERB_CHANNELS).sort()).toEqual([
       'dsh-forge:workbench-activate-project',
       'dsh-forge:workbench-advance-stage',
@@ -233,6 +238,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-get-feature-board',
       'dsh-forge:workbench-get-migration-status',
       'dsh-forge:workbench-get-prefs',
+      'dsh-forge:workbench-get-projection-status',
       'dsh-forge:workbench-get-proposal-board',
       'dsh-forge:workbench-get-stage-gate',
       'dsh-forge:workbench-get-state',
@@ -259,11 +265,14 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-register-project',
       'dsh-forge:workbench-remove-project',
       'dsh-forge:workbench-rename-project',
+      'dsh-forge:workbench-report-projection-outcome',
       'dsh-forge:workbench-restore-project',
+      'dsh-forge:workbench-retry-projection',
       'dsh-forge:workbench-set-plugin-enabled',
       'dsh-forge:workbench-set-prefs',
       'dsh-forge:workbench-stage-summarize',
       'dsh-forge:workbench-start-migration',
+      'dsh-forge:workbench-submit-workspace-snapshot',
       'dsh-forge:workbench-subscribe-events',
       'dsh-forge:workbench-task-add',
       'dsh-forge:workbench-task-claim',
@@ -275,7 +284,7 @@ describe('workbench verb routing table', () => {
       'dsh-forge:workbench-unsubscribe-events',
       'dsh-forge:workbench-update-project',
     ])
-    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(56)
+    expect(new Set(Object.values(WORKBENCH_VERB_CHANNELS)).size).toBe(60)
   })
 
   it('M3 tasks segment stays append-only — the sixteen M2 verb definitions are untouched', () => {
@@ -342,6 +351,11 @@ describe('workbench verb routing table', () => {
       'archiveProject',
       'restoreProject',
       'listProjects',
+      // M4 v3 投影段(任务 3.2 追加;Hard Rule 延续:追加式修改)。
+      'retryProjection',
+      'getProjectionStatus',
+      'submitWorkspaceSnapshot',
+      'reportProjectionOutcome',
     ])
   })
 
@@ -384,10 +398,10 @@ describe('workbench verb routing table', () => {
     }
   })
 
-  it('registers exactly the 56 channels and routes each verb to its service call with validated args', () => {
+  it('registers exactly the 60 channels and routes each verb to its service call with validated args', () => {
     const services = fakeServices()
     const { handlers } = installed(services)
-    expect(handlers.size).toBe(56)
+    expect(handlers.size).toBe(60)
 
     const C = WORKBENCH_VERB_CHANNELS
     expect(handlers.get(C.getState)?.(OWNED)).toMatchObject({ activeProjectId: 'p-1' })
@@ -547,6 +561,37 @@ describe('workbench verb routing table', () => {
     handlers.get(C.listProjects)?.(OWNED)
     expect(services.listProjects).toHaveBeenCalledTimes(1)
 
+    // M4 v3 投影段(任务 3.2):input 形状校验(快照形状 = T2 第一道)+
+    // 服务转发;对账重算/上游错误码映射/通道缺席降级在内核
+    // (projection/service.ts),本层零内联业务。
+    handlers.get(C.retryProjection)?.(OWNED, { projectId: 'p-1' })
+    expect(services.retryProjection).toHaveBeenCalledWith({ projectId: 'p-1' })
+
+    handlers.get(C.getProjectionStatus)?.(OWNED, { projectId: 'p-1' })
+    expect(services.getProjectionStatus).toHaveBeenCalledWith({ projectId: 'p-1' })
+    handlers.get(C.getProjectionStatus)?.(OWNED)
+    expect(services.getProjectionStatus).toHaveBeenLastCalledWith({})
+
+    handlers.get(C.submitWorkspaceSnapshot)?.(OWNED, {
+      workspaces: [{ workspaceId: 'ws-1', path: 'Z:/demo', title: 'demo', orderIdx: 0 }],
+    })
+    expect(services.submitWorkspaceSnapshot).toHaveBeenCalledWith({
+      workspaces: [{ workspaceId: 'ws-1', path: 'Z:/demo', title: 'demo', orderIdx: 0 }],
+    })
+
+    handlers.get(C.reportProjectionOutcome)?.(OWNED, { projectId: 'p-1', ok: true })
+    expect(services.reportProjectionOutcome).toHaveBeenCalledWith({ projectId: 'p-1', ok: true })
+    handlers.get(C.reportProjectionOutcome)?.(OWNED, {
+      projectId: 'p-1',
+      ok: false,
+      error: { code: 'workspace/invalid-path', message: 'bad anchor path' },
+    })
+    expect(services.reportProjectionOutcome).toHaveBeenCalledWith({
+      projectId: 'p-1',
+      ok: false,
+      error: { code: 'workspace/invalid-path', message: 'bad anchor path' },
+    })
+
     // registerProject v2 face (任务 1.3):anchor/docsPlacement 形状放行后
     // 原样转发(v1 断言见上,双形态同一动词通道)。
     handlers.get(C.registerProject)?.(OWNED, { anchor: 'Z:/demo', docsPlacement: 'app' })
@@ -592,6 +637,18 @@ describe('workbench verb routing table', () => {
       ['receiveApproval non-string sessionId (task 3.5)', () => handlers.get(C.receiveApproval)?.(OWNED, { dispatchId: 'd-1', sessionId: 42, payload: {} })],
       ['stageSummarize stage outside vocab (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'shipped', goal: 'g', summary: 's' })],
       ['stageSummarize empty goal (task 4.1)', () => handlers.get(C.stageSummarize)?.(OWNED, { projectId: 'p-1', featureSlug: 'alpha', stage: 'design', goal: '', summary: 's' })],
+      // M4 v3 投影段(任务 3.2):快照形状 = T2 缓解第一道(畸形快照
+      // 不进对账面);outcome 形状(ok 布尔 + error.code/message)。
+      ['snapshot workspaces not array (task 3.2)', () => handlers.get(C.submitWorkspaceSnapshot)?.(OWNED, { workspaces: 'ws-1' })],
+      ['snapshot entry missing path (task 3.2)', () => handlers.get(C.submitWorkspaceSnapshot)?.(OWNED, { workspaces: [{ workspaceId: 'ws-1', title: 'demo', orderIdx: 0 }] })],
+      ['snapshot entry orderIdx not finite (task 3.2)', () => handlers.get(C.submitWorkspaceSnapshot)?.(OWNED, { workspaces: [{ workspaceId: 'ws-1', path: 'Z:/demo', title: 'demo', orderIdx: Number.NaN }] })],
+      ['snapshot duplicate workspaceId (task 3.2)', () => handlers.get(C.submitWorkspaceSnapshot)?.(OWNED, { workspaces: [
+        { workspaceId: 'ws-1', path: 'Z:/demo', title: 'demo', orderIdx: 0 },
+        { workspaceId: 'ws-1', path: 'Z:/other', title: 'other', orderIdx: 1 },
+      ] })],
+      ['outcome ok not boolean (task 3.2)', () => handlers.get(C.reportProjectionOutcome)?.(OWNED, { projectId: 'p-1', ok: 'yes' })],
+      ['outcome error missing code (task 3.2)', () => handlers.get(C.reportProjectionOutcome)?.(OWNED, { projectId: 'p-1', ok: false, error: { message: 'boom' } })],
+      ['retryProjection missing projectId (task 3.2)', () => handlers.get(C.retryProjection)?.(OWNED, {})],
     ]
     for (const [label, run] of cases) {
       const error = toCapture(run) as WorkbenchIpcError
@@ -608,6 +665,9 @@ describe('workbench verb routing table', () => {
     expect(services.featureStatus).not.toHaveBeenCalled()
     expect(services.receiveApproval).not.toHaveBeenCalled()
     expect(services.stageSummarize).not.toHaveBeenCalled()
+    expect(services.submitWorkspaceSnapshot).not.toHaveBeenCalled()
+    expect(services.reportProjectionOutcome).not.toHaveBeenCalled()
+    expect(services.retryProjection).not.toHaveBeenCalled()
   })
 
   it('maps shape violations to the ERR_WORKBENCH_DB envelope without reaching the service', () => {

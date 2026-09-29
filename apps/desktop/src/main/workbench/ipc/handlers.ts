@@ -20,6 +20,7 @@ import type {
   DecideApprovalInput,
   DispatchTasksInput,
   DocKind,
+  GetProjectionStatusInput,
   ReceiveApprovalVerbInput,
   KnowledgeFactInput,
   KnowledgeForensicInput,
@@ -33,6 +34,7 @@ import type {
   RecordSessionLinkInput,
   RegisterProjectInput,
   RenameProjectInput,
+  RetryProjectionInput,
   StageSummarizeInput,
   TaskAddInput,
   TaskClaimInput,
@@ -187,7 +189,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
 // + dispatch host 回调段 3 条(任务 3.5)+ stages 写段 2 条(任务 4.1)
-// + M4 v3 项目中心段 5 条(任务 1.3)= 56 条白名单通道)
+// + M4 v3 项目中心段 5 条(任务 1.3)+ 投影段 4 条(任务 3.2)
+// = 60 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -742,6 +745,71 @@ export function installWorkbenchVerbs(
   })
 
   register(C.listProjects, () => services.listProjects())
+
+  // —— M4 v3 投影段(任务 3.2):四条对账动词。Hard Rule 延续 —— 本层只做
+  //    sender 校验 + 参数形状校验(快照形状 = T2 缓解的第一道:调用方契约
+  //    错在此拒绝,畸形快照不进入对账面)+ 服务调用 + 错误映射;对账重算/
+  //    上游错误码映射/通道缺席降级全部在内核服务面(projection/service.ts),
+  //    不信任 renderer 语义(T2);动词不因投影失败 reject —— 唯一 reject
+  //    面 = ERR_PROJECT_NOT_FOUND 与形状契约错。 ——
+
+  register(C.retryProjection, (args) => {
+    const input = requireObject('retryProjection', 'input', args[0])
+    requireString('retryProjection', 'input.projectId', input.projectId)
+    return services.retryProjection(input as unknown as RetryProjectionInput)
+  })
+
+  register(C.getProjectionStatus, (args) => {
+    if (args[0] === undefined || args[0] === null) {
+      return services.getProjectionStatus({})
+    }
+    const input = requireObject('getProjectionStatus', 'input', args[0])
+    optionalString('getProjectionStatus', 'input.projectId', input.projectId)
+    return services.getProjectionStatus(input as unknown as GetProjectionStatusInput)
+  })
+
+  register(C.submitWorkspaceSnapshot, (args) => {
+    const input = requireObject('submitWorkspaceSnapshot', 'input', args[0])
+    if (!Array.isArray(input.workspaces)) {
+      throw new Error(`workbench.submitWorkspaceSnapshot: input.workspaces must be an array (got ${typeof input.workspaces})`)
+    }
+    const seen = new Set<string>()
+    const workspaces = input.workspaces.map((entry, index) => {
+      const record = requireObject('submitWorkspaceSnapshot', `workspaces[${String(index)}]`, entry)
+      const workspaceId = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].workspaceId`, record.workspaceId)
+      if (seen.has(workspaceId)) {
+        throw new Error(`workbench.submitWorkspaceSnapshot: duplicate workspaceId ${workspaceId} in workspaces[${String(index)}]`)
+      }
+      seen.add(workspaceId)
+      const path = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].path`, record.path)
+      const title = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].title`, record.title)
+      if (typeof record.orderIdx !== 'number' || !Number.isFinite(record.orderIdx)) {
+        throw new Error(`workbench.submitWorkspaceSnapshot: workspaces[${String(index)}].orderIdx must be a finite number (got ${typeof record.orderIdx})`)
+      }
+      return { workspaceId, path, title, orderIdx: record.orderIdx }
+    })
+    return services.submitWorkspaceSnapshot({ workspaces })
+  })
+
+  register(C.reportProjectionOutcome, (args) => {
+    const input = requireObject('reportProjectionOutcome', 'input', args[0])
+    requireString('reportProjectionOutcome', 'input.projectId', input.projectId)
+    if (typeof input.ok !== 'boolean') {
+      throw new Error(`workbench.reportProjectionOutcome: input.ok must be a boolean (got ${typeof input.ok})`)
+    }
+    if (input.ok === true) {
+      return services.reportProjectionOutcome({ projectId: input.projectId, ok: true })
+    }
+    const error = requireObject('reportProjectionOutcome', 'input.error', input.error)
+    return services.reportProjectionOutcome({
+      projectId: input.projectId,
+      ok: false,
+      error: {
+        code: requireString('reportProjectionOutcome', 'input.error.code', error.code),
+        message: requireString('reportProjectionOutcome', 'input.error.message', error.message),
+      },
+    })
+  })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

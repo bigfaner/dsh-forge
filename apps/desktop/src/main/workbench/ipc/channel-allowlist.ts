@@ -124,6 +124,17 @@ export const WORKBENCH_VERB_CHANNELS = {
   archiveProject: 'dsh-forge:workbench-archive-project',
   restoreProject: 'dsh-forge:workbench-restore-project',
   listProjects: 'dsh-forge:workbench-list-projects',
+  // —— M4 v3 投影段(任务 3.2 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P3 批四动词
+  //    (retryProjection 幂等全量重推 / getProjectionStatus 状态行+偏差明细 /
+  //    submitWorkspaceSnapshot 对账收数 / reportProjectionOutcome relay 回填);
+  //    对账语义/上游错误码映射/通道缺席降级在内核(projection/service.ts),
+  //    通道面零特权。事件 projection_push_required/projection_updated 走既有
+  //    批量通道,非动词。 ——
+  retryProjection: 'dsh-forge:workbench-retry-projection',
+  getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
+  submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
+  reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
 } as const
 
 /**

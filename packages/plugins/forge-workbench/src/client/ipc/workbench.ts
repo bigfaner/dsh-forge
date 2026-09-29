@@ -40,8 +40,10 @@ import type {
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, ProbeProjectPathInput, Project, ProjectRefInput, ProposalBoardData, ProposalDoc,
-  ReceiveApprovalInput, RenameProjectInput,
+  PrefScope, ProbeProjectPathInput, Project, ProjectionState, ProjectionStatusRow,
+  ProjectRefInput, ProposalBoardData, ProposalDoc,
+  ReceiveApprovalInput, RenameProjectInput, ReportProjectionOutcomeInput,
+  RetryProjectionInput, SubmitWorkspaceSnapshotInput, GetProjectionStatusInput,
   StageArtifactsReport, FeatureSummary,
   StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
   ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, RegisterProjectInputV2, SessionLink,
@@ -214,6 +216,20 @@ export interface WorkbenchIpcBridge {
   archiveProject(input: ProjectRefInput): Promise<Project>
   restoreProject(input: ProjectRefInput): Promise<Project>
   listProjects(): Promise<Project[]>
+  /**
+   * M4 v3 projection verbs (task 3.2): the reconcile service's verb face —
+   * consumed by the projection relay (3.3: the snapshot follow-flow reports
+   * here and backfills outcomes; it consumes projection_push_required through
+   * onEvents) and the projection status surface (3.5). retryProjection
+   * re-pushes the idempotent self-contained plan; getProjectionStatus answers
+   * the state rows with live-materialized deviation detail; neither verb
+   * rejects on projection failure (only ERR_PROJECT_NOT_FOUND / shape
+   * violations — Propagation Strategy).
+   */
+  retryProjection(input: RetryProjectionInput): Promise<{ state: ProjectionState }>
+  getProjectionStatus(input?: GetProjectionStatusInput): Promise<ProjectionStatusRow[]>
+  submitWorkspaceSnapshot(input: SubmitWorkspaceSnapshotInput): Promise<void>
+  reportProjectionOutcome(input: ReportProjectionOutcomeInput): Promise<void>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -242,6 +258,9 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   'getProposalBoard', 'readProposalDoc',
   // M4 v3 project-center verbs (task 1.3; C7 card / project tree consume in 2.x).
   'probeProjectPath', 'renameProject', 'archiveProject', 'restoreProject', 'listProjects',
+  // M4 v3 projection verbs (task 3.2; the 3.3 relay + 3.5 status surface
+  // consume them — the presence check stays whole-surface per the one rule).
+  'retryProjection', 'getProjectionStatus', 'submitWorkspaceSnapshot', 'reportProjectionOutcome',
 ]
 
 /**

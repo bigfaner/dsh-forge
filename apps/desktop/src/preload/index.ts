@@ -11,10 +11,16 @@ import type {
   DispatchRow,
   DispatchTasksInput,
   DispatchTasksResult,
+  GetProjectionStatusInput,
   ProbeProjectPathInput,
+  ProjectionState,
+  ProjectionStatusRow,
   ProjectRefInput,
   ReceiveApprovalVerbInput,
   RenameProjectInput,
+  ReportProjectionOutcomeInput,
+  RetryProjectionInput,
+  SubmitWorkspaceSnapshotInput,
   FeatureBoardData,
   FeatureDoc,
   FeatureListEntry,
@@ -226,6 +232,26 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.restoreProject, input) as Promise<Project>,
     listProjects: (): Promise<Project[]> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listProjects) as Promise<Project[]>,
+    // M4 v3 projection verbs (task 3.2): the reconcile service's verb face —
+    // consumed by the projection relay (3.3: submitWorkspaceSnapshot follow-flow
+    // + reportProjectionOutcome backfill) and the projection status surface
+    // (3.5). retryProjection re-pushes the idempotent self-contained plan
+    // (projection_push_required through onEvents; relay absent → one retry,
+    // then degraded ERR_PROJECTION_CHANNEL_UNAVAILABLE with the plan preserved
+    // — never silently dropped). getProjectionStatus answers the state rows
+    // with live-materialized deviation detail. submitWorkspaceSnapshot is
+    // shape-checked here (T2 first gate), main-process logged and reconciled on
+    // a debounce — never a write amplifier. None of these verbs reject on
+    // projection failure (Propagation Strategy): only ERR_PROJECT_NOT_FOUND
+    // for unknown ids and shape-contract violations.
+    retryProjection: (input: RetryProjectionInput): Promise<{ state: ProjectionState }> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.retryProjection, input) as Promise<{ state: ProjectionState }>,
+    getProjectionStatus: (input?: GetProjectionStatusInput): Promise<ProjectionStatusRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectionStatus, input) as Promise<ProjectionStatusRow[]>,
+    submitWorkspaceSnapshot: (input: SubmitWorkspaceSnapshotInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.submitWorkspaceSnapshot, input) as Promise<void>,
+    reportProjectionOutcome: (input: ReportProjectionOutcomeInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.reportProjectionOutcome, input) as Promise<void>,
     // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
     // planes over the registered project's doc root (fact/lesson/research
     // read + append-only write; forensic machine-global read-only — no
