@@ -111,3 +111,19 @@ export const WORKBENCH_VERB_CHANNELS = {
  * Not an invokable verb; the renderer only subscribes.
  */
 export const WORKBENCH_EVENT_CHANNEL = 'dsh-forge:workbench-events'
+
+// M4 任务 4.2:壳层窗口动词组(preload copy — source of truth =
+// src/main/windows/channels.ts;非 workbench 前缀,tech-design §Interface 5
+// 「新 shell 动词组」)。drift 锁 = tests/windows-role.spec.ts deep-equal 断言。
+/** The window verb whitelist (preload copy — see module header). */
+export const WINDOW_VERB_CHANNELS = {
+  openDetached: 'dsh-forge:window-open-detached',
+  getRole: 'dsh-forge:window-get-role',
+  recall: 'dsh-forge:window-recall',
+} as const
+
+/**
+ * Main → renderer window-changed push channel (preload copy). Not an
+ * invokable verb; the renderer only subscribes (payload = WindowChangedEvent).
+ */
+export const WINDOW_CHANGED_CHANNEL = 'dsh-forge:window-changed'

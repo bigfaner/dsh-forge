@@ -18,6 +18,8 @@ export type CopyKey =
   | 'crash.title' | 'crash.restarting' | 'crash.restoring' | 'crash.recovered' | 'crash.failed'
   | 'toast.manualSwitch'       // 「请手动切换到会话 {title}」
   | 'toast.notifyDisabled'     // 「系统通知已禁用,可在系统设置中开启」(F3 权限被拒一次性提示)
+  | 'window.view.board'        // detached 窗口标题的视图名(任务 4.2「<项目名> · <视图名>」)
+  | 'window.view.conversation'
 
 export const zh: Record<CopyKey, string> = {
   'tray.show': '显示主窗口',
@@ -35,6 +37,8 @@ export const zh: Record<CopyKey, string> = {
   'crash.failed': '恢复失败,请重启应用',
   'toast.manualSwitch': '请手动切换到会话 {title}',
   'toast.notifyDisabled': '系统通知已禁用,可在系统设置中开启',
+  'window.view.board': '看板',
+  'window.view.conversation': '会话',
 }
 
 export const en: Record<CopyKey, string> = {
@@ -53,6 +57,8 @@ export const en: Record<CopyKey, string> = {
   'crash.failed': 'Recovery failed — please restart the app',
   'toast.manualSwitch': 'Please switch to session {title} manually',
   'toast.notifyDisabled': 'System notifications are disabled; you can enable them in system settings',
+  'window.view.board': 'Board',
+  'window.view.conversation': 'Conversation',
 }
 
 export const dictionaries: Record<Locale, Record<CopyKey, string>> = { zh, en }

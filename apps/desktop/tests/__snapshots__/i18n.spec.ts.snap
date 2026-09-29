@@ -17,6 +17,8 @@ exports[`CopyKey union coverage > en snapshot 1`] = `
   "tray.show": "Show main window",
   "update.aria.close": "Close",
   "update.viewRelease": "View release notes",
+  "window.view.board": "Board",
+  "window.view.conversation": "Conversation",
 }
 `;
 
@@ -37,5 +39,7 @@ exports[`CopyKey union coverage > zh snapshot 1`] = `
   "tray.show": "显示主窗口",
   "update.aria.close": "关闭",
   "update.viewRelease": "查看更新",
+  "window.view.board": "看板",
+  "window.view.conversation": "会话",
 }
 `;

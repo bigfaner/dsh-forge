@@ -130,6 +130,13 @@ export interface WorkbenchIpcServiceDeps {
    * 行为);boot 接线(main/index.ts)注入 workbenchEvents.size 探测。
    */
   readonly relayPresence?: () => boolean
+  /**
+   * 项目移除时收回该项目全部 detached 窗口(任务 4.2;tech-design
+   * §Interface 1 removeProject「拆出窗关闭」)。缺省 no-op(测试装配/
+   * 窗口面不在场);boot 接线(main/index.ts)注入壳层窗口注册表收回
+   * 面。toast 通知口径留 4.3(GUI)。
+   */
+  readonly recallProjectWindows?: (projectId: string) => void
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -563,8 +570,11 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
         // 世界 = 事件无人消费,dsh 侧可能残留 workspace(孤儿 = 用户自有
         // 数据,原生可删)—— 删除动词不被阻断(PRD 必答④降级语义)。
         if (removalPlan !== null) projectionHooks.emitRemovalPush(removalPlan)
-        // TODO-hook(任务 4.2 拆出窗口):该项目的 detached 窗口关闭钩子
-        // (壳层窗口注册表按 projectId 收回;不得提前引入跨相位实现)。
+        // 任务 4.2(Interface 1 removeProject「拆出窗关闭」):行删除后收回
+        // 该项目全部 detached 窗口(壳层注册表按 projectId 关窗;每窗
+        // 'closed' 路径自带 detached-closed 事件兜底)。窗面不在场/收回
+        // 失败不阻断删除 —— 项目行已删,残留窗口随主窗关闭对账。
+        deps.recallProjectWindows?.(id)
         if (wasActive) perception.retarget(null)
         // M4 任务 1.3:移除即列表变更(project_list_changed;DB 删除 + FK
         // cascade 已由 repos 事务承载)。

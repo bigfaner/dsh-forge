@@ -1,9 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { RecoveryState } from '../main/crash-recovery/index.ts'
+import type { WindowChangedEvent, OpenDetachedInput } from '../main/windows/detached.ts'
+import type { WindowRole } from '../main/windows/role.ts'
 // Preload-local copy of the workbench channel table — the sandboxed preload
 // cannot require relative bundle chunks, so it must not share modules with the
 // main bundle (see ./channel-allowlist.ts header; sync locked by tests).
-import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
+import {
+  WINDOW_CHANGED_CHANNEL,
+  WINDOW_VERB_CHANNELS,
+  WORKBENCH_EVENT_CHANNEL,
+  WORKBENCH_VERB_CHANNELS,
+} from './channel-allowlist.ts'
 import type {
   ApprovalRow,
   DecideApprovalInput,
@@ -135,6 +142,29 @@ contextBridge.exposeInMainWorld('dshForge', {
       const listener = (_event: Electron.IpcRendererEvent, payload: { state: RecoveryState; reason?: string }): void => callback(payload)
       ipcRenderer.on('dsh-forge:recovery-state', listener)
       return () => ipcRenderer.removeListener('dsh-forge:recovery-state', listener)
+    },
+  },
+  // M4 Interface 5 (task 4.2): shell window-management verbs — a NEW
+  // non-workbench channel family (dsh-forge:window-*). windowGetRole is the
+  // typed boot handshake every window (main included) may query: the role is
+  // resolved main-side from the window registry by webContents identity and
+  // NEVER travels through the URL (M1 spike-3 discipline). Rejections for the
+  // error verbs arrive as the { code, message, detail? } envelope
+  // (ERR_WINDOW_NOT_FOUND / ERR_WINDOW_OPEN_FAILED).
+  window: {
+    openDetached: (input: OpenDetachedInput): Promise<{ windowId: string }> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.openDetached, input) as Promise<{ windowId: string }>,
+    getRole: (): Promise<WindowRole | null> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.getRole) as Promise<WindowRole | null>,
+    recall: (windowId: string): Promise<void> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.recall, { windowId }) as Promise<void>,
+    // Push-only subscription (no register verb): the main process is the sole
+    // sender; payload = { type: 'detached-opened' | 'detached-closed', windowId,
+    // projectId, view, target? }.
+    onChanged: (callback: (event: WindowChangedEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: WindowChangedEvent): void => callback(payload)
+      ipcRenderer.on(WINDOW_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(WINDOW_CHANGED_CHANNEL, listener)
     },
   },
   // M2 Interface 1: workbench data-plane semantic verbs (task 2.7). Each verb

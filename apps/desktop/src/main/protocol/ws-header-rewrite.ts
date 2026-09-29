@@ -1,5 +1,7 @@
 // WebSocket header-rewrite decision logic (ported from upstream
-// apps/desktop/src/main.ts onBeforeSendHeaders, lines ~431-442).
+// apps/desktop/src/main.ts onBeforeSendHeaders, lines ~431-442; generalized
+// per-window by M4 task 4.2 — tech-design §Interfaces·Interface 5「carriage/
+// WS 改写逐 webContents 注册」).
 //
 // The renderer's stream client opens a DIRECT WebSocket to the Host
 // (ws://127.0.0.1:19387/api/remote.mux, streamBaseUrl = host origin from the
@@ -8,9 +10,10 @@
 // authority-bound SameSite=Strict cookie is not attached cross-site (401).
 // The shell main process therefore rewrites those WS request headers before
 // they leave the session: origin → host origin, cookie → host cookie,
-// sec-fetch-site → same-origin. Anything that is not exactly the main window
-// speaking for dsh-app://app toward the bound host authority is left alone
-// (or cancelled for a foreign origin claiming our scheme).
+// sec-fetch-site → same-origin. Anything that is not exactly a shell-owned
+// window (main or detached — the registry's live webContents id set) speaking
+// for dsh-app://app toward the bound host authority is left alone (or
+// cancelled for a foreign origin claiming our scheme).
 
 import { SHELL_APP_ORIGIN } from './constants.ts'
 
@@ -23,8 +26,8 @@ export interface WsHeaderRewriteInput {
   readonly hostUrl: string | undefined
   /** Host authority cookie — undefined while no host is bound. */
   readonly hostCookie: string | undefined
-  /** webContents id of the primary window (undefined when no window exists). */
-  readonly mainWebContentsId: number | undefined
+  /** Live webContents ids of every shell-owned window (main + detached); undefined when the registry is empty. */
+  readonly shellWebContentsIds: ReadonlySet<number> | undefined
   /** Request details as delivered by webRequest.onBeforeSendHeaders. */
   readonly details: {
     readonly url: string
@@ -40,9 +43,13 @@ export type WsHeaderRewriteResult =
   | { readonly passthrough: false; readonly cancel: false; readonly requestHeaders: Record<string, string> }
 
 export function resolveWsHeaderRewrite(input: WsHeaderRewriteInput): WsHeaderRewriteResult {
-  const { hostUrl, hostCookie, mainWebContentsId, details } = input
+  const { hostUrl, hostCookie, shellWebContentsIds, details } = input
   if (hostUrl === undefined || hostCookie === undefined) return { passthrough: true }
-  if (mainWebContentsId === undefined || details.webContentsId !== mainWebContentsId) {
+  if (
+    shellWebContentsIds === undefined
+    || details.webContentsId === undefined
+    || !shellWebContentsIds.has(details.webContentsId)
+  ) {
     return { passthrough: true }
   }
   const target = new URL(hostUrl)
