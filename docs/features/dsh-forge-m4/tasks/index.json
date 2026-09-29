@@ -694,7 +694,7 @@
       "dependencies": [
         "T-test-gen-journeys"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "eval-journey.md",
       "record": "records/eval-journey.md",
       "mainSession": true,
