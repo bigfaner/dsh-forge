@@ -20,8 +20,7 @@ import {
   waitForOrchBadge,
   waitForPromptRow,
   WorldManager,
-  bridgeInvoke,
-} from '../_lib/journey-world.ts'
+  bridgeInvoke, openBoardPane } from '../_lib/journey-world.ts'
 import { verifyPromptInjection } from '../../stubs/oracle.ts'
 import {
   BOOL_KEY,
@@ -38,10 +37,7 @@ import type { KernelWorld } from '../_lib/journey-world.ts'
 const COVERAGE_KEY = 'coverage.coding.feature'
 const TASK_1 = 'prefs-loop/1'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('smoke/preferences-tiered-override: 打开面板 → 三级查看与覆盖序(默认→全局→项目→feature)→ 修改保存 → 清除回落 → 全局兜底 → 派发消费生效值(oracle)', async ({ }, testInfo) => {
+test('smoke/preferences-tiered-override: 打开面板 → 三级查看与覆盖序(默认→全局→项目→feature)→ 修改保存 → 清除回落 → 全局兜底 → 派发消费生效值(oracle)', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildMainWorld(freshRoot('prefs-smoke'))
@@ -103,7 +99,7 @@ test.fixme('smoke/preferences-tiered-override: 打开面板 → 三级查看与�
     await settlePrefsToast(page)
 
     // ---- Step 5:派发消费生效值(feature 66 仍压过全局 88)--------------
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await dispatchFromBoard(page, [TASK_1])
     await waitForOrchBadge(page, TASK_1, 'running', 20_000)
     const row = (await getDispatchRows(page, world.projectId)).find(candidate => candidate.taskKey === TASK_1)

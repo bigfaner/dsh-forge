@@ -32,7 +32,7 @@ import { expect, test } from '@playwright/test'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
 import { TASK_STATUSES } from '../fixtures/task-generator.ts'
 import { registerFixtureProject } from '../fixtures/forge-project.ts'
-import { switchToWorkbench, waitForTreeNodes, cleanupViewKey, closeAndAwaitExit, openTasksBoard } from '../tests/m2/helpers/restart-app.ts'
+import { switchToWorkbench, waitForTreeNodes, cleanupViewKey, closeAndAwaitExit, openTasksBoard, openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 import {
   BOARD_LOADING_SEED, BOARD_SEED, diffSamples, disposeBoardJourney, emptyTaskSet,
   groundOf, labelsOf, readBoard, readForgeIndexTruth, readTerminalStatuses,
@@ -41,10 +41,9 @@ import {
 import { zh } from '../../../../packages/plugins/forge-workbench/src/client/locale/zh.ts'
 import { en } from '../../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-1/success [@web-e2e @journey task-board-browsing]: default DAG + three-view/model consistency (12 tasks, dual oracle channel) + sync idle', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-1/success [@web-e2e @journey task-board-browsing]: default DAG + three-view/model consistency (12 tasks, dual oracle channel) + sync idle', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -118,13 +117,13 @@ test.fixme('step-1/success [@web-e2e @journey task-board-browsing]: default DAG 
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map(row => ({
         key: row.getAttribute('data-dsh-forge-task-row') ?? '',
-        title: row.children[1]?.textContent ?? '',
-        statusText: row.children[2]?.textContent ?? '',
-        feature: row.children[3]?.textContent ?? '',
-        branch: row.children[4]?.textContent ?? '',
-        worktree: row.children[5]?.textContent ?? '',
+        title: row.children[row.children.length - 7]?.textContent ?? '',
+        statusText: row.children[row.children.length - 6]?.textContent ?? '',
+        feature: row.children[row.children.length - 5]?.textContent ?? '',
+        branch: row.children[row.children.length - 4]?.textContent ?? '',
+        worktree: row.children[row.children.length - 3]?.textContent ?? '',
         sourceBadge: row.querySelector('[data-dsh-forge-badge^="source:"]')?.getAttribute('data-dsh-forge-badge') ?? null,
-        updatedAt: row.children[7]?.textContent ?? '',
+        updatedAt: row.children[row.children.length - 1]?.textContent ?? '',
       })))
       expect(rows.length, '列表行数 = 任务全集').toBe(set.facts.taskCount)
       const labelToStatus = new Map<string, string>()
@@ -182,7 +181,7 @@ test.fixme('step-1/success [@web-e2e @journey task-board-browsing]: default DAG 
   }
 })
 
-test.fixme('step-1/read-error [@web-e2e @journey task-board-browsing]: corrupt index.json → FT-056 sync-error toolbar + last-good board, retry after restore converges to the files', async ({ }, testInfo) => {
+test('step-1/read-error [@web-e2e @journey task-board-browsing]: corrupt index.json → FT-056 sync-error toolbar + last-good board, retry after restore converges to the files', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -251,8 +250,8 @@ test.fixme('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-tas
       await registerFixtureProject(page, project)
       // 零任务看板没有树面板 —— 手动导航(不走 openTasksBoard 的节点等待)。
       await switchToWorkbench(page)
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       const emptyCard = page.locator('[data-dsh-forge-task-board-empty]')
       await expect(emptyCard, '空(empty)态卡可见').toBeVisible({ timeout: 15_000 })
       await expect(
@@ -272,7 +271,7 @@ test.fixme('step-1/empty-state [@web-e2e @journey task-board-browsing]: zero-tas
   }
 })
 
-test.fixme('step-1/loading-state [@web-e2e @journey task-board-browsing]: skeleton shows before ready and error/empty never appear during loading (armed observer, 96 tasks)', async ({ }, testInfo) => {
+test('step-1/loading-state [@web-e2e @journey task-board-browsing]: skeleton shows before ready and error/empty never appear during loading (armed observer, 96 tasks)', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const set = generateTaskSet({ seed: BOARD_LOADING_SEED, taskCount: 96, featureCount: 8, danglingRate: 0.1, recordRate: 0.4 })
@@ -319,13 +318,8 @@ test.fixme('step-1/loading-state [@web-e2e @journey task-board-browsing]: skelet
         })
         observer.observe(document.body, { childList: true, subtree: true })
       })
-      // 点击「任务」tab(进入任务看板 —— loading 窗口开启)。
-      await page.evaluate(() => {
-        const tab = Array.from(document.querySelectorAll('[data-dsh-forge-shell] [role="tab"]'))
-          .find((el) => { const text = (el.textContent ?? '').trim(); return text === '任务' || text === 'Tasks' })
-        if (tab === undefined) throw new Error('tasks tab not found inside the workbench shell')
-        ;(tab as HTMLElement).click()
-      })
+      // 打开任务看板(2.10 新宿主:概览任务行 seam —— loading 窗口开启)。
+      await openBoardPane(page)
       // 数据就绪:96 节点齐全 → 转入正常树视图。
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
 

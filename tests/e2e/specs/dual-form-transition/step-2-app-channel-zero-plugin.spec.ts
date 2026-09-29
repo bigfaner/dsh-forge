@@ -38,6 +38,7 @@ import {
 } from '../_lib/journey-world.ts'
 import { buildFilesWorld, buildRegisteredWorld, CLI_FEATURE, DUAL_FEATURE } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
+import { switchToWorkbench } from '../_lib/journey-world.ts'
 
 test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道日常管线零插件依赖', () => {
   const manager = new WorldManager()
@@ -54,10 +55,7 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
   })
 
   // Outcome "success" — 日常管线 + 零 spawn 双面(进程 + 日志)。
-  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-  test.fixme('step2/success: the app-channel daily pipeline (dispatch → execute → submit) spawns ZERO frozen-CC-plugin / CLI processes (process + log level); ≤5s reflow; session-actor audit', async ({ }, testInfo) => {
+  test('step2/success: the app-channel daily pipeline (dispatch → execute → submit) spawns ZERO frozen-CC-plugin / CLI processes (process + log level); ≤5s reflow; session-actor audit', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world
@@ -127,6 +125,7 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     expect(Date.now() - tWrite, '回流 ≤5s 口径(轮询上界内)').toBeLessThanOrEqual(REFLOW_BUDGET_MS + 15_000)
 
     // 偏离标记呈现(项目卡)+ 幂等重摄入审计(migration_event reingest 留档)。
+    await switchToWorkbench(page) // 2.10 恢复注记:同文件前序测试离开逃生门落点,重入需显式归位。
     // M4 1.8 迁移改写:逃生门即 overview 单页(harness boot 落点),无需 tab 归位。
     const displayName = world.kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
@@ -144,10 +143,7 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
   })
 
   // Outcome "git-hook-intact" — 既有 hook 照旧触发,应用不改动。
-  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-  test.fixme('step2/git-hook-intact: a pre-existing verify-task-done hook keeps firing; registration/migration/app usage never touch the hook file', async ({ }, testInfo) => {
+  test('step2/git-hook-intact: a pre-existing verify-task-done hook keeps firing; registration/migration/app usage never touch the hook file', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     // 既有仓内文档项目 + M3 之前安装的 hook(pre-commit 形,verify-task-done)。
     const hookRoot = join(mkdtempSync(join(tmpdir(), 'dual-hook-')), 'repo')

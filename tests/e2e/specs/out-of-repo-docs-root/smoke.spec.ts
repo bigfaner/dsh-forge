@@ -11,15 +11,12 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { freshRoot, gitStatusPorcelain, proposalMarkdown, recordMarkdown, snapshotTree, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
+import { freshRoot, gitStatusPorcelain, proposalMarkdown, recordMarkdown, snapshotTree, WorldManager, bridgeInvoke, openBoardPane, openOverviewPane } from '../_lib/journey-world.ts'
 import { buildPureWorld, managedDocRoot, OOR_FEATURE, registerExternalViaWizard } from './harness.ts'
 
 const TASK_KEY = `${OOR_FEATURE}/1`
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(external 行)→ 多类资产读写落文档根(板呈现)→ 代码仓零新增(git 断言)', async ({ }, testInfo) => {
+test('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(external 行)→ 多类资产读写落文档根(板呈现)→ 代码仓零新增(git 断言)', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildPureWorld(freshRoot('oor-smoke'))
@@ -32,7 +29,7 @@ test.fixme('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(ext
     const repoBaseline = snapshotTree(kernel.codeRoot)
 
     // ---- Step 1:文档位置步骤(默认仓外三面)--------------------------
-    await page.locator('[data-dsh-forge-add-project]').click()
+    await page.locator('[data-dsh-forge-overview-register]').click() // 1.8 起注册入口 = 概览空态 CTA
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(kernel.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -61,7 +58,7 @@ test.fixme('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(ext
     const projectId = (await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])).activeProjectId as string
 
     // ① 任务:派发 → stub 执行 → claim/submit。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_KEY}"]`)).toBeVisible({ timeout: 20_000 })
     await page.locator('[data-dsh-forge-dispatch-entry]').click()
     await page.locator(`[data-dsh-forge-select-chk="${TASK_KEY}"] [data-dsh-forge-select-chk-input]`).check()
@@ -96,8 +93,8 @@ test.fixme('smoke/out-of-repo-docs-root: 向导默认仓外 → 授权注册(ext
     writeFileSync(join(proposalDir, 'proposal.md'), proposalMarkdown({
       status: 'draft', author: 'oor-smoke-agent', created: '2026-09-25', title: 'oor smoke 提案', mark: 'oor smoke 提案锚点。',
     }), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
-    await expect(page.locator('[data-dsh-forge-proposal-row="oor-smoke-proposal"]'), 'Step 3:提案板行(仓外回流)').toBeVisible({ timeout: 20_000 })
+    await openOverviewPane(page, 'proposals')
+    await expect(page.locator('[data-dsh-forge-overview-prop-dir="oor-smoke-proposal"]'), 'Step 3:提案板行(仓外回流)').toBeVisible({ timeout: 20_000 })
 
     // Invariant:代码仓零新增过程文档。
     expect(existsSync(join(kernel.codeRoot, 'docs')), '代码仓内 docs/ 不存在').toBe(false)

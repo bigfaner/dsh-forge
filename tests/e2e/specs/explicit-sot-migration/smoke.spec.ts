@@ -10,14 +10,15 @@
 // journey.md (Happy Path Steps 1-4) + contracts/step-{1..4}-*.md success faces.
 
 import { expect, test } from '@playwright/test'
-import { freshRoot, openKernelDb, WorldManager } from '../_lib/journey-world.ts'
+import { freshRoot, openKernelDb, WorldManager, openBoardPane } from '../_lib/journey-world.ts'
 import { assertMigratedEndState, buildFilesWorld, readProjectRow, snapshotDocTree } from './harness.ts'
 // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
 // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
 
-test.fixme('smoke/explicit-sot-migration: 发现入口 → 显式确认(备份说明)→ 原子执行(close-guard + 对拍零差异)→ 终态(看板全量承载 + md 原样 + 五相审计)', async ({ }, testInfo) => {
+test('smoke/explicit-sot-migration: 发现入口 → 显式确认(备份说明)→ 原子执行(close-guard + 对拍零差异)→ 终态(看板全量承载 + md 原样 + 五相审计)', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildFilesWorld(freshRoot('sot-mig-smoke'))
@@ -62,7 +63,7 @@ test.fixme('smoke/explicit-sot-migration: 发现入口 → 显式确认(备份�
     await expect(card.locator('[data-dsh-forge-migration-pill="migrated"]'), 'Step 4:Pill 翻转已迁移').toBeVisible({ timeout: 15_000 })
     await expect(card.locator('[data-dsh-forge-migration-entry]'), 'Step 4:入口退役').toHaveCount(0)
 
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     for (const task of kernel.set.features[0]?.tasks ?? []) {
       await expect(page.locator(`[data-dsh-forge-node-card="${kernel.featureSlug}/${task.localId}"]`),
         `Step 4:看板承载 ${task.localId}`).toBeVisible({ timeout: 20_000 })

@@ -35,13 +35,14 @@ test.describe.serial('task-dispatch-execution-loop / step 2: 发起派发并过�
   })
 
   // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
   // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "artifacts-complete" — 产物齐全 → 无警告直达确认;确定性纯读。
-  test.fixme('step2/artifacts-complete: artifacts matrix satisfied → no warning, direct confirm dialog; check is deterministic and read-only (zero journal)', async ({ }, testInfo) => {
+  test('step2/artifacts-complete: artifacts matrix satisfied → no warning, direct confirm dialog; check is deterministic and read-only (zero journal)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
-    const world = await manager.acquire(main as KernelWorld, 'main')
+    const world = await manager.acquire(main as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     await startBoardDispatch(page, TASK_1)
@@ -73,12 +74,12 @@ test.describe.serial('task-dispatch-execution-loop / step 2: 发起派发并过�
   })
 
   // Outcome "artifacts-missing-warning" — 缺失 → 警告清单(warn 不阻断),零派发。
-  test.fixme('step2/artifacts-missing-warning: design/ absent → warning dialog with the one-item missing list; zero dispatch rows', async ({ }, testInfo) => {
+  test('step2/artifacts-missing-warning: design/ absent → warning dialog with the one-item missing list; zero dispatch rows', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
     // The missing-artifacts kernel is built here (its app world replaces the
     // main world's — the manager closes the previous app before booting).
     missing = await buildMissingWorld(freshRoot('disp-loop-s2b'))
-    const world = await manager.acquire(missing, 'missing')
+    const world = await manager.acquire(missing, 'missing', { tab: 'workbench/tasks' })
     const { page } = world
 
     await startBoardDispatch(page, MISSING_TASK)
@@ -101,9 +102,9 @@ test.describe.serial('task-dispatch-execution-loop / step 2: 发起派发并过�
   })
 
   // Outcome "acknowledged-continue" — 确认面是唯一继续通道;确认后派发成功。
-  test.fixme('step2/acknowledged-continue: explicit continue past the warning → confirm → dispatch succeeds (running row + prompt injected)', async ({ }, testInfo) => {
+  test('step2/acknowledged-continue: explicit continue past the warning → confirm → dispatch succeeds (running row + prompt injected)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
-    const world = await manager.acquire(missing as KernelWorld, 'missing')
+    const world = await manager.acquire(missing as KernelWorld, 'missing', { tab: 'workbench/tasks' })
     const { page } = world
 
     // 自上一 outcome 的警告对话框继续(对话框仍呈现中)。

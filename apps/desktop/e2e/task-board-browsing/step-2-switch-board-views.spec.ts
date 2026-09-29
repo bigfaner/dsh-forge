@@ -24,10 +24,9 @@ import {
   setUpBoardJourney,
 } from './helpers.ts'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-2/success [@web-e2e @journey task-board-browsing]: grouped 7-state columns + list view fields vs the model; switch keeps filter, snapshot unchanged', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-2/success [@web-e2e @journey task-board-browsing]: grouped 7-state columns + list view fields vs the model; switch keeps filter, snapshot unchanged', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -68,8 +67,8 @@ test.fixme('step-2/success [@web-e2e @journey task-board-browsing]: grouped 7-st
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map(row => ({
         key: row.getAttribute('data-dsh-forge-task-row') ?? '',
-        branch: row.children[4]?.textContent ?? '',
-        worktree: row.children[5]?.textContent ?? '',
+        branch: row.children[row.children.length - 4]?.textContent ?? '',
+        worktree: row.children[row.children.length - 3]?.textContent ?? '',
       })))
       expect(diffSamples(allKeys, rows.map(row => row.key)), '列表视图任务集合与 forge 数据一致(集合等价)').toEqual([])
       const nonPlaceholder = rows.filter(row => row.branch !== '—' || row.worktree !== '—')

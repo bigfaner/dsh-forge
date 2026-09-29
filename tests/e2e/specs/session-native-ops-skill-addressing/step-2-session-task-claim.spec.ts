@@ -44,11 +44,12 @@ test.describe.serial('session-native-ops-skill-addressing / step 2: 会话内任
   }
 
   // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
   // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "success" — 合法领取 + actor 审计 + ≤5s 回流。
-  test.fixme('step2/success: claim through the dsh tool face → in_progress, updated_by = session:<id>, ≤5s board reflow', async ({ }, testInfo) => {
+  test('step2/success: claim through the dsh tool face → in_progress, updated_by = session:<id>, ≤5s board reflow', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main')
     const { page } = world

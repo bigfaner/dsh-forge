@@ -11,15 +11,14 @@ import { expect, test } from '@playwright/test'
 import { HELLO_WORLD, PRODUCT_CONFIG, expectRosterContains, sha256File } from '../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
-import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from '../tests/m2/helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes, openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 import { expectTwoTierSectionCensus, journeyBundles, journeyStageTarballs, readOverlay } from './helpers.ts'
 
 const SAMPLE_B = '@dsh-forge/plugin-hello-world-sample-b'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('plugin-management journey smoke: two-tier census → disable (confirm, overlay written) → board unaffected → enable (overlay cleared) → manifest bytes never move', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('plugin-management journey smoke: two-tier census → disable (confirm, overlay written) → board unaffected → enable (overlay cleared) → manifest bytes never move', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   const set = generateTaskSet({ seed: 'pmsmoke', taskCount: 8, featureCount: 2, danglingRate: 0, recordRate: 0 })
@@ -62,12 +61,12 @@ test.fixme('plugin-management journey smoke: two-tier census → disable (confir
       await expect(page.locator(`[data-dsh-forge-plugin-row="${SAMPLE_B}"]`), '对照第三方不受影响').toHaveAttribute('data-enabled', 'true')
 
       // 核心能力不受影响:任务看板照常渲染。
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
 
       // ---- Step 4→5:启用(直接动词)→ 回看:两级复位、清单字节不变 -------
-      await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+      await switchToWorkbench(page)
       await helloRow.locator('[data-dsh-forge-plugin-action="enable"]').click()
       await expect(helloRow).toHaveAttribute('data-enabled', 'true', { timeout: 15_000 })
       expect(readOverlay(overlayPath), '启用后覆盖文件空集').toEqual({ disabled: [] })

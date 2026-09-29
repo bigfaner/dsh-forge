@@ -87,10 +87,9 @@ test('step-4/success [@web-e2e @journey plugin-management]: enable restores the 
   }
 })
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-4/restart-persistence [@web-e2e @journey plugin-management]: the disabled state survives a restart — roster, overlay and the core board all persist', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-4/restart-persistence [@web-e2e @journey plugin-management]: the disabled state survives a restart — roster, overlay and the core board all persist', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   const set = generateTaskSet({ seed: 'pm4rb', taskCount: 8, featureCount: 2, danglingRate: 0, recordRate: 0 })
@@ -146,7 +145,7 @@ test.fixme('step-4/restart-persistence [@web-e2e @journey plugin-management]: th
         // 核心能力:已注册项目看板照常(注册随 userData 跨靴持久)。
         await openTasksBoard(page, set.facts.taskCount)
 
-        await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+        await switchToWorkbench(page)
         await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeVisible()
         await expect(helloRow, '禁用态跨靴持久(行呈现已停用)').toHaveAttribute('data-enabled', 'false', { timeout: 30_000 })
         await expect(page.locator(`[data-dsh-forge-plugin-row="${SAMPLE_B}"]`), '对照行启用态不受牵连').toHaveAttribute('data-enabled', 'true')

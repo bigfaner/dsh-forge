@@ -127,10 +127,9 @@ async function assertDetailFace(
   await expect(page.locator('[data-dsh-forge-task-detail]')).toHaveCount(0)
 }
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-5/success [@web-e2e @journey task-board-browsing]: detail dock renders description/dep-chain/records for both record sources + links empty state', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-5/success [@web-e2e @journey task-board-browsing]: detail dock renders description/dep-chain/records for both record sources + links empty state', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -164,7 +163,7 @@ test.fixme('step-5/success [@web-e2e @journey task-board-browsing]: detail dock 
   }
 })
 
-test.fixme('step-5/single-task-error [@web-e2e @journey task-board-browsing]: structural removal while the dock is open → UF3 error card + retry; other tasks unaffected; restore reloads', async ({ }, testInfo) => {
+test('step-5/single-task-error [@web-e2e @journey task-board-browsing]: structural removal while the dock is open → UF3 error card + retry; other tasks unaffected; restore reloads', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })

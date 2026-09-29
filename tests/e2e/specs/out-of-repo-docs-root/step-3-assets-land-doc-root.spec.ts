@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { freshRoot, gitStatusPorcelain, normPath, proposalMarkdown, recordMarkdown, snapshotTree, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
+import { freshRoot, gitStatusPorcelain, normPath, proposalMarkdown, recordMarkdown, snapshotTree, WorldManager, bridgeInvoke, openBoardPane, openOverviewPane } from '../_lib/journey-world.ts'
 import { buildLegacyWorld, buildPureWorld, managedDocRoot, OOR_FEATURE, registerExternalViaWizard } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
@@ -39,11 +39,12 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
   })
 
   // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
   // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "success" — 四类资产同源仓外 + 代码仓零新增。
-  test.fixme('step3/success: tasks/records/stage-assets/proposals all read+write at the doc root; boards render them; the code repo workspace stays clean (git face)', async ({ }, testInfo) => {
+  test('step3/success: tasks/records/stage-assets/proposals all read+write at the doc root; boards render them; the code repo workspace stays clean (git face)', async ({ }, testInfo) => {
     testInfo.setTimeout(900_000)
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page, stub } = world
@@ -61,7 +62,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
     const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])
     const projectId = state.activeProjectId as string
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_KEY}"]`), '任务读回(仓外文档根)').toBeVisible({ timeout: 20_000 })
 
     // ① 任务:派发(产物齐 → 直达确认)→ stub 执行 → 记录落仓外 → claim/submit。
@@ -102,8 +103,8 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     writeFileSync(join(proposalDir, 'proposal.md'), proposalMarkdown({
       status: 'draft', author: 'oor-agent', created: '2026-09-25', title: 'oor 仓外提案语料', mark: PROPOSAL_MARK,
     }), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
-    await expect(page.locator('[data-dsh-forge-proposal-row="oor-pipeline-proposal"]'), 'proposals/ 落仓外 → 提案板行').toBeVisible({ timeout: 20_000 })
+    await openOverviewPane(page, 'proposals')
+    await expect(page.locator('[data-dsh-forge-overview-prop-dir="oor-pipeline-proposal"]'), 'proposals/ 落仓外 → 提案板行').toBeVisible({ timeout: 20_000 })
 
     // 代码仓零新增过程文档(3b 并档:各资产类型 ≥1 后的 git 级检查)。
     expect(existsSync(join((pure as KernelWorld).codeRoot, 'docs')), '代码仓内 docs/ 根本不存在').toBe(false)
@@ -112,6 +113,10 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
   })
 
   // Outcome "legacy-in-repo-docs-invisible" — 仓内既有文档不被呈现、零搬迁。
+  // [M4 1.8 e2e 迁移·迁移清单 第②④行 · 2.10 复核后仍挂起] 本腿断言依赖「无任务行语料下打开看板」
+  // (files-authority 零 index.json 语料 → 概览任务子 tab 零行 → 看板 pane 无 UI 开口)与已退役
+  // M3 阶段资产面板浏览面(右栏 pane 族未承接 —— 2.10 盘点开放项);断言本体零删改,
+  // 待看板 pane 直达开口(＋ 拆出窗口形态)或资产面板 pane 承接后恢复。
   test.fixme('step3/legacy-in-repo-docs-invisible: the legacy tree (in-repo docs, NO index.json) registers default-external: no migration step, views address the external root, in-repo files untouched', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(legacy as KernelWorld, 'legacy', { activate: false, tab: 'workbench/overview' })
@@ -119,7 +124,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     const legacyTreeBefore = snapshotTree((legacy as KernelWorld).codeRoot)
 
     // 向导:默认仓外;不插入迁移步骤(未检出 index.json)。
-    await page.locator('[data-dsh-forge-add-project]').click()
+    await page.locator('[data-dsh-forge-overview-register]').click() // 1.8 起注册入口 = 概览空态 CTA
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill((legacy as KernelWorld).codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -138,7 +143,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     // 任务视图可寻址:空语料 = 看板空态卡呈现(任务卡/提案行仅在语料非空
     // 时存在,生成稿曾误以为空态也有行元素)。
     await expect(page.locator('[data-dsh-forge-task-board-empty]'),
@@ -150,7 +155,7 @@ test.describe.serial('out-of-repo-docs-root / step 3: 过程资产读写落于�
   })
 
   // Outcome "remove-registration" — 移除 = 仅自有数据级联;仓内零触碰。
-  test.fixme('step3/remove-registration: removing the registration cascades ONLY app-owned data; repo files + forge data untouched; re-registering the same root works', async ({ }, testInfo) => {
+  test('step3/remove-registration: removing the registration cascades ONLY app-owned data; repo files + forge data untouched; re-registering the same root works', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page } = world

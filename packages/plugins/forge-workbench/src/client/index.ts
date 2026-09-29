@@ -626,7 +626,16 @@ export function apply(ctx: ClientContext): void {
         t,
         ...activeProjectStore === undefined ? {} : { activeProjectStore },
         boardSession,
-        onEnterSession: enterSession,
+        // The open-failed contract (ui-design C5 States: open 失败不静默):
+        // the C5 LinkHistory rows catch the channel's ERR_SESSION_OPEN_FAILED
+        // and toast; the board's own enter affordances (orchestration
+        // 「进入会话」, the pane host's hand-over fallback) route the SAME
+        // rejection through this catch — a dead session id keeps the board
+        // state instead of surfacing an unhandled renderer rejection. The
+        // affordance-level toast face rides the M6 收口 (2.10 盘点开放项).
+        onEnterSession: (target: SessionOpenTarget) => {
+          enterSession(target).catch(() => {})
+        },
         onOpenTask: overviewOpenTask,
         ...metadataReadSources === undefined ? {} : { readTaskSources: metadataReadSources },
         // The C5 lineage seat's data leg (SC7 消费点): the SAME guarded

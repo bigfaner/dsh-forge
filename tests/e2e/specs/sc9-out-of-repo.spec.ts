@@ -41,6 +41,7 @@ import { launchWorkbenchShell, freshUserDataDir } from '../helpers/app.ts'
 import type { PluginShell } from '../../../apps/desktop/e2e/helpers/plugins.ts'
 import type { GeneratedFeature, GeneratedTask, GeneratedTaskSet } from '../../../apps/desktop/e2e/fixtures/task-generator.ts'
 import { writeForgeProject } from '../../../apps/desktop/e2e/fixtures/forge-project.ts'
+import { openBoardPane, openOverviewPane } from './_lib/journey-world.ts'
 
 // ---------------------------------------------------------------------------
 // Shared helpers (SC1/SC4/SC5 precedents)
@@ -197,10 +198,7 @@ function writeSc9aDocCorpus(docRoot: string): { readonly featuresRoot: string; r
 // Leg 1
 // ---------------------------------------------------------------------------
 
-// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('sc9/default-out-of-repo: wizard doc-location default = app-managed out-of-repo path; tasks/records/stage-assets/proposals read+write land at the doc root; code repo gains ZERO process docs (git status + file faces)', async ({ }, testInfo) => {
+test('sc9/default-out-of-repo: wizard doc-location default = app-managed out-of-repo path; tasks/records/stage-assets/proposals read+write land at the doc root; code repo gains ZERO process docs (git status + file faces)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule(回归纪律)— the instance-lock probe runs BEFORE any launch.
@@ -235,7 +233,7 @@ test.fixme('sc9/default-out-of-repo: wizard doc-location default = app-managed o
     await switchToWorkbench(page)
 
     // ---- AC-1 注册向导:文档位置步骤默认值 = 仓外应用管理路径 -------------
-    await page.locator('[data-dsh-forge-add-project]').click()
+    await page.locator('[data-dsh-forge-overview-register]').click() // 1.8 起注册入口 = 概览空态 CTA
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -291,7 +289,23 @@ test.fixme('sc9/default-out-of-repo: wizard doc-location default = app-managed o
     // 显式激活 → 任务 tab → 看板读回(读面经文档根)。
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // 2.10 右栏宿主 store 推送位(同 bootAppWorld):裸 card-activate 不发
+    // project_list_changed —— 同值 renameProject(纯 DB)推列表变更,概览/
+    // 看板 pane 绑定的 active-project store 随之重读。
+    await page.evaluate(async () => {
+      const bridge = (globalThis as { dshForge?: { workbench?: {
+        getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+        renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+      } } }).dshForge?.workbench
+      if (bridge === undefined) return
+      const state = await bridge.getState()
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      await bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${SC9A_TASK_KEY}"]`), '迁移摄入任务上看板(文档根读面)').toBeVisible({ timeout: 20_000 })
 
     // ---- AC-1 任务读写在文档根:派发(产物齐 → 直达确认)→ stub 执行 -----
@@ -361,8 +375,8 @@ test.fixme('sc9/default-out-of-repo: wizard doc-location default = app-managed o
       title: 'SC9 仓外提案语料',
       mark: SC9A_PROPOSAL_MARK,
     }), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
-    await expect(page.locator('[data-dsh-forge-proposal-row="sc9-alpha-proposal"]'),
+    await openOverviewPane(page, 'proposals')
+    await expect(page.locator('[data-dsh-forge-overview-prop-dir="sc9-alpha-proposal"]'),
       'proposals/ 落文档根 → 提案板行(感知回流)').toBeVisible({ timeout: 20_000 })
 
     // ---- AC-1 代码仓零新增过程文档(git status/文件断言)------------------
@@ -441,7 +455,7 @@ function sc9bTaskSet(): GeneratedTaskSet {
   }
 }
 
-test.fixme('sc9/in-repo-compat: existing in-repo docs project registers (explicit in_repo) + migrates in place; reads/writes keep landing at the original in-repo seats; the app-managed docs root is never created', async ({ }, testInfo) => {
+test('sc9/in-repo-compat: existing in-repo docs project registers (explicit in_repo) + migrates in place; reads/writes keep landing at the original in-repo seats; the app-managed docs root is never created', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule(回归纪律)— the instance-lock probe runs BEFORE any launch.
@@ -459,7 +473,7 @@ test.fixme('sc9/in-repo-compat: existing in-repo docs project registers (explici
     await switchToWorkbench(page)
 
     // ---- AC-2 注册(既有仓内文档项目;向导显式选仓内)---------------------
-    await page.locator('[data-dsh-forge-add-project]').click()
+    await page.locator('[data-dsh-forge-overview-register]').click() // 1.8 起注册入口 = 概览空态 CTA
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(written.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -504,7 +518,23 @@ test.fixme('sc9/in-repo-compat: existing in-repo docs project registers (explici
     await expect(card).toBeVisible({ timeout: 30_000 })
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // 2.10 右栏宿主 store 推送位(同 bootAppWorld):裸 card-activate 不发
+    // project_list_changed —— 同值 renameProject(纯 DB)推列表变更,概览/
+    // 看板 pane 绑定的 active-project store 随之重读。
+    await page.evaluate(async () => {
+      const bridge = (globalThis as { dshForge?: { workbench?: {
+        getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+        renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+      } } }).dshForge?.workbench
+      if (bridge === undefined) return
+      const state = await bridge.getState()
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      await bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${SC9B_TASK_KEY}"]`), '看板读回(仓内文档树)').toBeVisible({ timeout: 20_000 })
 
     // ---- AC-2 写读正常(动词面;文件落仓内原位)---------------------------

@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test'
 import {
   BASE_BUNDLES, FORGE_WORKBENCH, FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball, launchPluginShell,
 } from '../helpers/plugins.ts'
+import { openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 
 // Task 5.15 e2e smoke (AC6): the tasks page's MAIN PATH over the REAL IPC
 // chain — the dshForge.workbench bridge carries registration + activation,
@@ -84,10 +85,9 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
   throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
 }
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation refresh over the real IPC chain', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation refresh over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
   const shell = await launchPluginShell({ bundles: tasksBundles(), stageTarballs: tasksTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-tasks-smoke-')), 'user-data') })
   try {
@@ -107,14 +107,20 @@ test.fixme('5.15/tasks-smoke: three views + dock linkage + a ≤5s real-mutation
       }
       const project = await bridge.registerProject({ codeRoot, docLocationType: 'in_repo' })
       await bridge.activateProject(project.id)
+      // 2.10:同注册位推送(见 registerFixtureProject)—— 右栏宿主绑定的
+      // active-project store 靠 project_list_changed 重读;裸动词对 race 不确定。
+      if (bridge.renameProject !== undefined) {
+        const displayName = codeRoot.split(/[\/]/).filter(part => part !== '').pop() ?? project.id
+        await bridge.renameProject({ projectId: project.id, displayName })
+      }
       return project
     }, fixtureRoot)
     expect(typeof registered.id).toBe('string')
 
     // The tasks tab over the assembled view.
     await switchToWorkbench(page)
-    await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-    await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+    await openBoardPane(page)
+    await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
 
     // View A (依赖树, the default) renders the REAL engine over REAL data;
     // the view switcher walks A → B → C and back (AC6 三视图切换).

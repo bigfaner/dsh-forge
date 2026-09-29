@@ -132,7 +132,7 @@ export async function groupedStatusEntries(page: Page): Promise<Array<[string, s
 export async function listRowStatusTexts(page: Page): Promise<Array<[string, string]>> {
   return await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map((row) => {
     const key = row.getAttribute('data-dsh-forge-task-row') ?? ''
-    const statusText = row.children[2]?.textContent ?? ''
+    const statusText = row.children[row.children.length - 6]?.textContent ?? ''
     return [key, statusText] as [string, string]
   }))
 }
@@ -141,7 +141,7 @@ export async function listRowStatusTexts(page: Page): Promise<Array<[string, str
 export async function listRowStatus(page: Page, taskKey: string): Promise<string | undefined> {
   return await page.evaluate((key: string) => {
     const row = document.querySelector(`[data-dsh-forge-task-row="${key}"]`)
-    return row?.children[2]?.textContent ?? undefined
+    return row?.children[row.children.length - 6]?.textContent ?? undefined
   }, taskKey)
 }
 

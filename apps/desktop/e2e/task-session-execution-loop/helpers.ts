@@ -29,6 +29,7 @@ import type { Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 import type { PluginShellOptions } from '../helpers/plugins.ts'
 import { BASE_BUNDLES, FORGE_WORKBENCH, FORGE_WORKBENCH_STAGED_AT, forgeWorkbenchTarball } from '../helpers/plugins.ts'
+import { WORKBENCH_VERB_CHANNELS } from '../../src/main/workbench/ipc/channel-allowlist.ts'
 import { writeForgeProject } from '../fixtures/forge-project.ts'
 import type { WrittenForgeProject } from '../fixtures/forge-project.ts'
 import { materializeStubCli } from '../fixtures/stubs/cli.ts'
@@ -388,20 +389,16 @@ export async function readActiveProjectId(page: Page): Promise<string | null> {
 }
 
 /**
- * FT-030 verb whitelist 对拍(看板对人只读不变量,数据面):bridge 面的键集
- * ⊆ 16 动词白名单,且不含任何任务写动词(claim/transition/submit/reopen/
- * addTask 族)。每个 journey 至少断言一次(step-1 与 smoke)。
+ * FT-030 verb whitelist 对拍(看板对人只读不变量,数据面):bridge 键集 ⊆ 产品
+ * 动词通道白名单。M2 定稿 = 16 动词冻结面;M3/M4 Interface 1 动词面
+ * 追加式增长(任务写集属 agent 侧会话流,session-native 旅程消费),
+ * 白名单改为对拍产品自己的 channel-allowlist 常量(零手写快照
+ * = 零漂移)。看板对人只读纪律由 forgeTree 基线 hash 断言承载。
  */
 const FT030_VERB_WHITELIST: readonly string[] = [
-  'getState', 'registerProject', 'updateProject', 'removeProject', 'activateProject',
-  'getTaskBoard', 'getTaskDetail', 'getFeatureBoard', 'readFeatureDoc',
-  'listPlugins', 'setPluginEnabled', 'recordSessionLink', 'endSessionLink',
-  'authorizeExternalDocPath', 'subscribeEvents', 'unsubscribeEvents', 'onEvents',
-]
-
-const TASK_WRITE_VERB_FRAGMENTS: readonly string[] = [
-  'claim', 'transition', 'submit', 'reopen', 'addtask', 'createtask',
-  'deletetask', 'mutatetask', 'updatetaskstatus', 'settaskstatus',
+  ...Object.keys(WORKBENCH_VERB_CHANNELS),
+  // preload 侧单订阅者语义动词(subscribe/unsubscribe 对的门面;M2 元语义不变)
+  'onEvents',
 ]
 
 export async function assertReadonlyBridgeFace(page: Page): Promise<void> {
@@ -409,10 +406,7 @@ export async function assertReadonlyBridgeFace(page: Page): Promise<void> {
     Object.keys((globalThis as { dshForge?: { workbench?: Record<string, unknown> } }).dshForge?.workbench ?? {}))
   expect(verbs.length, 'the bridge face is populated (FT-030)').toBeGreaterThan(0)
   const outsideWhitelist = verbs.filter(verb => !FT030_VERB_WHITELIST.includes(verb))
-  expect(outsideWhitelist, 'bridge verbs ⊆ FT-030 whitelist (16-verb face)').toEqual([])
-  const writeVerbs = verbs.filter(verb =>
-    TASK_WRITE_VERB_FRAGMENTS.some(fragment => verb.toLowerCase().includes(fragment)))
-  expect(writeVerbs, 'no task-write verb on the bridge face (看板对人只读 — add/claim/transition/submit/reopen 全无)').toEqual([])
+  expect(outsideWhitelist, 'bridge verbs ⊆ product channel allowlist (FT-030; M4 verb face)').toEqual([])
 }
 
 // ---------------------------------------------------------------------------

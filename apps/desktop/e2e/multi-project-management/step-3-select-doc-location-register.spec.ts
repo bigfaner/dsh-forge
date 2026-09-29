@@ -50,7 +50,8 @@ function journeyBundles(): ReadonlyArray<{ name: string; source?: string; mandat
 const cardOf = (page: Page, name: string) => page.locator('[data-dsh-forge-project-card]', { hasText: name }).first()
 
 // [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
 // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 test.fixme('step-3/success [@web-e2e @journey multi-project-management]: in_repo default completes registration in 3 steps, explicit activate keeps single activation, zero project-dir writes', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)

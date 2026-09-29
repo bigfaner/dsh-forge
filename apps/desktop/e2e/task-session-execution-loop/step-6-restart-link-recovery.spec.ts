@@ -30,10 +30,9 @@ async function openDock(page: Page, taskKey: string): Promise<void> {
   await expect(page.locator(`[data-dsh-forge-task-detail="${taskKey}"]`)).toBeVisible({ timeout: 15_000 })
 }
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-6/success [@web-e2e @journey task-session-execution-loop]: restart keeps the active link — badge re-lights off the authoritative read', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-6/success [@web-e2e @journey task-session-execution-loop]: restart keeps the active link — badge re-lights off the authoritative read', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()
@@ -83,7 +82,7 @@ test.fixme('step-6/success [@web-e2e @journey task-session-execution-loop]: rest
   }
 })
 
-test.fixme('step-6/multi-history-recovery [@web-e2e @journey task-session-execution-loop]: restart keeps the full link history — newest-first active + ended rows match the index read', async ({ }, testInfo) => {
+test('step-6/multi-history-recovery [@web-e2e @journey task-session-execution-loop]: restart keeps the full link history — newest-first active + ended rows match the index read', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setup = setUpJourney()

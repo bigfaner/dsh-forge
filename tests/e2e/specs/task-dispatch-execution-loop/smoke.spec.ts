@@ -20,7 +20,7 @@ import {
   measureReflow,
   openKernelDb,
   recomputePresynth,
-  switchToWorkbench,
+  switchToWorkbench, openBoardPane,
   waitForOrchBadge,
   waitForPromptRows,
   WorldManager,
@@ -30,15 +30,12 @@ import { verifyPromptInjection } from '../../stubs/oracle.ts'
 import { buildMainWorld, FEATURE, TASK_1, TASK_2, TASK_3 } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成注入(oracle)→ 审批批准 → 进入会话返回 → claim/submit ×3 回流 ≤5s → 板 = 内核', async ({ }, testInfo) => {
+test('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成注入(oracle)→ 审批批准 → 进入会话返回 → claim/submit ×3 回流 ≤5s → 板 = 内核', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)
   const manager = new WorldManager()
   const kernel = await buildMainWorld(freshRoot('disp-loop-smoke'))
   try {
-    const world = await manager.acquire(kernel, 'main')
+    const world = await manager.acquire(kernel, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -113,7 +110,10 @@ test.fixme('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预
     await expect(orch).toBeVisible({ timeout: 10_000 })
     await orch.locator('[data-dsh-forge-orch-enter-session]').click()
     await expect(page.locator('[data-dsh-forge-shell]'), 'session 视图接管').toBeHidden({ timeout: 15_000 })
+    // 2.10 新宿主:会话切换重置会话域右栏(#28-④)—— 返回 = 逃生门往返 +
+    // 同一用户路径重开看板(概览任务行 seam);断言本体零删改。
     await switchToWorkbench(page)
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_1}"]`), '返回来源页(任务看板)').toBeVisible({ timeout: 20_000 })
 
     // ---- Step 7:agent 提交 ×3 → 逐笔 ≤5s 回流 ------------------------------

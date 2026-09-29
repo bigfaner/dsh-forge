@@ -49,6 +49,7 @@ import { registerProject } from '../../../apps/desktop/src/main/workbench/repos/
 import { scanForgeFiles } from '../../../apps/desktop/src/main/workbench/indexer/scan.ts'
 import { createMigrationService } from '../../../apps/desktop/src/main/workbench/migration/pipeline.ts'
 import type { RepoDb } from '../../../apps/desktop/src/main/workbench/repos/types.ts'
+import { openBoardPane } from './_lib/journey-world.ts'
 
 // ---------------------------------------------------------------------------
 // The SC7 registered corpus: one artifacts-complete feature + one dispatchable
@@ -391,10 +392,7 @@ async function waitForPromptRow(shell: PluginShell, stub: DispatchStub, sessionI
 // The SC7 leg
 // ---------------------------------------------------------------------------
 
-// [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('sc7/dual-form: registered daily pipeline (dispatch→execute→submit) spawns ZERO frozen-CC-plugin/CLI processes (process+log level) while the unregistered project\'s real forge CLI runs unaffected (subprocess, app live)', async ({ }, testInfo) => {
+test('sc7/dual-form: registered daily pipeline (dispatch→execute→submit) spawns ZERO frozen-CC-plugin/CLI processes (process+log level) while the unregistered project\'s real forge CLI runs unaffected (subprocess, app live)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   // Hard Rule / AC-3(回归纪律)— the instance-lock probe runs BEFORE any launch.
@@ -431,7 +429,23 @@ test.fixme('sc7/dual-form: registered daily pipeline (dispatch→execute→submi
     await expect(card).toBeVisible({ timeout: 30_000 })
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // 2.10 右栏宿主 store 推送位(同 bootAppWorld):裸 card-activate 不发
+    // project_list_changed —— 同值 renameProject(纯 DB)推列表变更,概览/
+    // 看板 pane 绑定的 active-project store 随之重读。
+    await page.evaluate(async () => {
+      const bridge = (globalThis as { dshForge?: { workbench?: {
+        getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+        renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+      } } }).dshForge?.workbench
+      if (bridge === undefined) return
+      const state = await bridge.getState()
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      await bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_KEY}"]`)).toBeVisible({ timeout: 20_000 })
 
     const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])

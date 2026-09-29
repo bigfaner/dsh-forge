@@ -23,10 +23,9 @@ import {
   BOARD_SEED, disposeBoardJourney, groundOf, readBoard, setUpBoardJourney,
 } from './helpers.ts'
 
-// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-// P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
-// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
-test.fixme('step-4/success [@web-e2e @journey task-board-browsing]: code-faithful form — zero worktree badge in all three views, bridge projects the dialect (branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
+test('step-4/success [@web-e2e @journey task-board-browsing]: code-faithful form — zero worktree badge in all three views, bridge projects the dialect (branch 恒 null / worktree 恒 false)', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
   const set = generateTaskSet({ seed: BOARD_SEED, taskCount: 12, featureCount: 2, danglingRate: 0.15, recordRate: 0.4 })
@@ -59,7 +58,7 @@ test.fixme('step-4/success [@web-e2e @journey task-board-browsing]: code-faithfu
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       expect(await page.locator('[data-dsh-forge-badge="worktree"]').count(), '视图 C 零 worktree 徽标').toBe(0)
       const worktreeCells = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]'))
-        .map(row => row.children[5]?.textContent ?? ''))
+        .map(row => row.children[row.children.length - 3]?.textContent ?? ''))
       expect(worktreeCells.filter(cell => cell !== '—'), 'worktree 列恒「—」空占位').toEqual([])
 
       // 任务详情侧板:无 worktree 徽标;summary 如实为空(单任务深读)。

@@ -49,13 +49,14 @@ test.describe.serial('task-dispatch-execution-loop / step 5: 处理审批请求'
   }
 
   // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
   // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "approve-success" — 可见可操作 + 显式批准 + 双侧收据。
-  test.fixme('step5/approve-success: injected approval visible (dock + body + source) → explicit approve → back to running ≤5s + allowed-once receipt + audit row', async ({ }, testInfo) => {
+  test('step5/approve-success: injected approval visible (dock + body + source) → explicit approve → back to running ≤5s + allowed-once receipt + audit row', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -109,9 +110,9 @@ test.describe.serial('task-dispatch-execution-loop / step 5: 处理审批请求'
   })
 
   // Outcome "reject" — 拒绝为可审计决策;呈现不误报完成。
-  test.fixme('step5/reject: explicit reject → back to running + rejected receipt + audit; the task does NOT render completed', async ({ }, testInfo) => {
+  test('step5/reject: explicit reject → back to running + rejected receipt + audit; the task does NOT render completed', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -149,9 +150,9 @@ test.describe.serial('task-dispatch-execution-loop / step 5: 处理审批请求'
   })
 
   // Outcome "already-decided" — 决策一次性:重复决策被拒,首次决策为终局审计。
-  test.fixme('step5/already-decided: deciding an already-decided entry again → ERR_APPROVAL_DECIDED; the first decision is never rewritten', async ({ }, testInfo) => {
+  test('step5/already-decided: deciding an already-decided entry again → ERR_APPROVAL_DECIDED; the first decision is never rewritten', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -193,9 +194,9 @@ test.describe.serial('task-dispatch-execution-loop / step 5: 处理审批请求'
 
   // Outcome "channel-unavailable" — 通道异常呈现 + 恢复;无半状态(SC3 口径:
   // running→failed 的真链路可达面 = launch 注错;恢复 = 重派发)。
-  test.fixme('step5/channel-unavailable: channel fault (launch injection) → failed row with reason + redispatch recovery, no residual half state', async ({ }, testInfo) => {
+  test('step5/channel-unavailable: channel fault (launch injection) → failed row with reason + redispatch recovery, no residual half state', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 

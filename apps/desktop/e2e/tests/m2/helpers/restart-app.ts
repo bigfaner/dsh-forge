@@ -19,7 +19,6 @@
 // 6.3 diff — surgical-change discipline).
 import { execSync } from 'node:child_process'
 import type { Page } from '@playwright/test'
-import { expect } from '@playwright/test'
 import { isProcessAlive } from '../../../helpers/fixture-app.ts'
 import { launchPluginShell } from '../../../helpers/plugins.ts'
 import type { PluginShell, PluginShellOptions } from '../../../helpers/plugins.ts'
@@ -139,19 +138,152 @@ export async function waitForTreeNodes(page: Page, expectedNodes: number, timeou
 }
 
 /**
- * Navigate to the populated task board: workbench row → 任务 tab → view-A
- * panel with the full node population. Safe to re-run after a launch's
- * 切会话视图 (the keyed main slot re-mounts the whole shell).
+ * Open the task board's P2 host: the rightbar pane family's 任务看板 tab
+ * (M4 task 2.10, 迁移清单 第②行 — 2.1's dual-host TasksView in its pane
+ * form). The board's ONLY UI opener is the overview tasks subtab's row seam
+ * (select + ensureBoardActive), so the route is: expand the collapsed
+ * column → bring the 项目概览 tab forward (chip, or the 开始页 card on a
+ * fresh column) → activate the 任务 subtab → click one task row. Every step
+ * is postcondition-driven (the session-scoped right column can re-mount its
+ * tabs while settling — direct DOM clicks + a visible-board arbiter, the
+ * 2.9/fix-1 discipline).
  *
- * @deprecated M4 task 1.8 (迁移清单 #9 / 必答② 第②行): the 任务 tab and the
- * tasks main view retired with 1.7 — the board re-homes into the rightbar
- * pane family (P2 2.1/2.2). Kept for the test.fixme'd board specs' compile
- * face; restored to a live path with the P2 hosts.
+ * Requires ≥1 task in the ACTIVE project's corpus (the row seam is the
+ * opener); a zero-task corpus has no board entry — that leg stays parked
+ * (2.10 regression-inventory 开放项).
+ */
+export async function openBoardPane(page: Page): Promise<void> {
+  for (let round = 0; round < 12; round += 1) {
+    if (await isBoardPaneLive(page)) {
+      // The row seam opens the detail dock as its other leg — retire it so
+      // the board face starts clean (the dispatch chain's own stray guard
+      // would close it too; here it is deterministic).
+      await page.evaluate(() => {
+        const dock = document.querySelector('[data-dsh-forge-task-detail]')
+        if (dock === null) return
+        const close = dock.querySelector('[data-dsh-forge-detail-close]') as HTMLElement | null
+        close?.click()
+      }).catch(() => {})
+      return
+    }
+    await navigateBoardColumnRound(page, true)
+  }
+  // Diagnostics on give-up (what the column / overview faces looked like).
+  const state = await page.evaluate(() => ({
+    panelExists: document.querySelectorAll('[data-sidebar-right-panel]').length,
+    panelOpen: document.querySelector('[data-sidebar-right-panel]')?.hasAttribute('data-sidebar-right-open') ?? false,
+    expandBtn: document.querySelectorAll('[data-sidebar-right-expand]').length,
+    stripChips: [...document.querySelectorAll('[data-sidebar-right-panel] [role="tab"]')].map(tab => tab.textContent?.trim() ?? ''),
+    guideCards: [...document.querySelectorAll('[data-dsh-forge-guide-card]')].map(card => card.getAttribute('data-dsh-forge-guide-card') ?? ''),
+    overview: document.querySelectorAll('[data-dsh-forge-overview]').length,
+    overviewVisible: (document.querySelector('[data-dsh-forge-overview]') as HTMLElement | null)?.offsetParent !== null,
+    subtabTasks: document.querySelectorAll('[data-dsh-forge-overview-subtab="tasks"]').length,
+    taskRows: document.querySelectorAll('[data-dsh-forge-overview-task]').length,
+    board: document.querySelectorAll('[data-dsh-forge-task-board]').length,
+    treeSeat: document.querySelectorAll('[data-dsh-forge-project-seat]').length,
+  })).catch(() => 'evaluate-failed')
+  throw new Error(`board pane never opened (rightbar: column → 项目概览 → 任务 subtab → row seam) — page state ${JSON.stringify(state)}`)
+}
+
+
+/** Is the board pane mounted AND visible? */
+async function isBoardPaneLive(page: Page): Promise<boolean> {
+  return await page.evaluate(() => {
+    const board = document.querySelector('[data-dsh-forge-task-board]')
+    return board !== null && (board as HTMLElement).offsetParent !== null
+  }).catch(() => false)
+}
+
+/** One navigation round toward the board: door exit → column → overview →
+ * tasks subtab (+ the row-seam click when `clickRow`). */
+async function navigateBoardColumnRound(page: Page, clickRow: boolean): Promise<void> {
+  // Step 0 — leave the escape door: the rightbar is the conversation-side
+  // column; the workbench door (forge's shell in the main slot) displaces
+  // it. Clicking the panellist「项目」row is selectPanel(null) — back to
+  // the native home, where the column lives.
+  await page.evaluate(() => {
+    if (document.querySelector('[data-dsh-forge-shell]') === null) return
+    const row = document.querySelector('[aria-label="项目"], [aria-label="Project"]') as HTMLElement | null
+    const newSession = [...document.querySelectorAll('button')]
+      .find(button => /新建会话|New Session/.test(button.textContent ?? ''))
+    const target = row ?? newSession
+    target?.click()
+  }).catch(() => {})
+  await page.waitForTimeout(500)
+  // Step 1 — the column: expand, then the overview tab forward.
+  await page.evaluate(() => {
+    const panel = document.querySelector('[data-sidebar-right-panel]')
+    if (panel !== null && !panel.hasAttribute('data-sidebar-right-open')) {
+      const expand = document.querySelector('[data-sidebar-right-expand]') as HTMLElement | null
+      expand?.click()
+      return
+    }
+    const tabs = [...document.querySelectorAll('[data-sidebar-right-panel] [role="tab"]')]
+    const chip = tabs.find(tab => /^(项目概览|Project overview)$/.test(tab.textContent?.trim() ?? ''))
+    if (chip !== undefined) {
+      ;(chip as HTMLElement).click()
+      return
+    }
+    const card = document.querySelector('[data-dsh-forge-guide-card="overview"]') as HTMLElement | null
+    card?.click()
+  }).catch(() => {})
+  await page.waitForTimeout(600)
+  // Step 2 — the tasks subtab (+ the row seam, ATOMICALLY: the overview
+  // body re-mounts between protocol round-trips otherwise).
+  await page.evaluate((open: boolean) => {
+    const overview = document.querySelector('[data-dsh-forge-overview]')
+    if (overview === null || (overview as HTMLElement).offsetParent === null) return
+    const subtab = document.querySelector('[data-dsh-forge-overview-subtab="tasks"]') as HTMLElement | null
+    subtab?.click()
+    if (!open) return
+    const row = document.querySelector('[data-dsh-forge-overview-task]') as HTMLElement | null
+    row?.click()
+  }, clickRow).catch(() => {})
+  await page.waitForTimeout(700)
+}
+
+/**
+ * Prepare the board entry WITHOUT the opening click: leave the escape door,
+ * expand the column, bring 项目概览 forward, activate the 任务 subtab. The
+ * postcondition = the subtab active with its task rows mounted (the seam's
+ * clickable face). The timing legs then time the row click itself.
+ */
+export async function prepareBoardEntry(page: Page): Promise<void> {
+  for (let round = 0; round < 14; round += 1) {
+    const ready = await page.evaluate(() => {
+      const tab = document.querySelector('[data-dsh-forge-overview-subtab="tasks"]')
+      const selected = tab?.getAttribute('aria-selected') === 'true'
+      const overview = document.querySelector('[data-dsh-forge-overview]')
+      const overviewVisible = overview !== null && (overview as HTMLElement).offsetParent !== null
+      const row = document.querySelector('[data-dsh-forge-overview-task]')
+      return selected && overviewVisible && row !== null
+    }).catch(() => false)
+    if (ready) return
+    await navigateBoardColumnRound(page, false)
+  }
+  throw new Error('board entry never prepared (rightbar: column → 项目概览 → 任务 subtab)')
+}
+
+/**
+ * Click the first overview task row — the board-opening seam (select +
+ * ensureBoardActive). Exported for the timing legs that need t0 + click in
+ * ONE evaluate round-trip.
+ */
+export async function clickBoardEntryRow(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const row = document.querySelector('[data-dsh-forge-overview-task]') as HTMLElement | null
+    row?.click()
+  }).catch(() => {})
+}
+
+/**
+ * Navigate to the populated task board (M4 re-homing, task 2.10 / 迁移清单
+ * 第②行): the rightbar 任务看板 pane, view-A panel with the full node
+ * population. The parked board specs' assertion bodies stay verbatim — only
+ * this entry plumbing changed hosts (view-key → tab-kind addressing).
  */
 export async function openTasksBoard(page: Page, expectedNodes: number): Promise<void> {
-  await switchToWorkbench(page)
-  await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-  await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+  await openBoardPane(page)
   await waitForTreeNodes(page, expectedNodes, 60_000)
 }
 

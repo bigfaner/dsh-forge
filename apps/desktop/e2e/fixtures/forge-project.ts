@@ -163,11 +163,22 @@ export function removeForgeProject(root: string): void {
  * inside the verb).
  */
 export interface RegisterBridge {
-  registerProject(input: { codeRoot: string; docLocationType: 'in_repo' | 'external'; docLocationPath?: string }): Promise<{ id: string }>
+  registerProject(input: { codeRoot: string; docLocationType: 'in_repo' | 'external'; docLocationPath?: string }): Promise<{ id: string; displayName?: string }>
   activateProject(id: string): Promise<void>
+  renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
 }
 
-/** Register + activate a written fixture over the real renderer bridge. */
+/**
+ * Register + activate a written fixture over the real renderer bridge.
+ *
+ * M4 (2.10): the bare v1 register/activate pair writes the rows WITHOUT the
+ * `project_list_changed` push the client's active-project store re-reads on
+ * (the M2 views read verbs per-mount, but the P2 rightbar hosts bind to the
+ * store). A same-name `renameProject` rides along — a pure-DB, zero-fs write
+ * whose lifecycle push refreshes the store deterministically (the store then
+ * sees BOTH the registered row and the activation pointer; the direct
+ * register→activate→push race leaves the store on a pointer-less snapshot).
+ */
 export async function registerFixtureProject(page: import('@playwright/test').Page, project: WrittenForgeProject): Promise<string> {
   const external = project.docsRoot !== project.codeRoot
   return await page.evaluate(async (input: { codeRoot: string; docsRoot: string; external: boolean }) => {
@@ -179,6 +190,12 @@ export async function registerFixtureProject(page: import('@playwright/test').Pa
       ? { codeRoot: input.codeRoot, docLocationType: 'external', docLocationPath: input.docsRoot }
       : { codeRoot: input.codeRoot, docLocationType: 'in_repo' })
     await bridge.activateProject(registered.id)
+    if (bridge.renameProject !== undefined) {
+      const displayName = registered.displayName
+        ?? input.codeRoot.split(/[\\/]/).filter(part => part !== '').pop()
+        ?? registered.id
+      await bridge.renameProject({ projectId: registered.id, displayName })
+    }
     return registered.id
   }, { codeRoot: project.codeRoot, docsRoot: project.docsRoot, external })
 }

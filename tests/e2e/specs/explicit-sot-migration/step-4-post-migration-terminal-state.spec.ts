@@ -12,7 +12,7 @@
 // TaskMarkdownFile(+ ForgeProjectCodeRoot for the wizard leg)。
 
 import { expect, test, type Page } from '@playwright/test'
-import { buildKernelWorld, freshRoot, normPath, openKernelDb, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
+import { buildKernelWorld, freshRoot, normPath, openKernelDb, WorldManager, bridgeInvoke, openBoardPane } from '../_lib/journey-world.ts'
 import {
   assertMigratedEndState,
   buildFilesWorld,
@@ -79,10 +79,11 @@ test.describe.serial('explicit-sot-migration / step 4: 迁移后终态确认', (
 
   // Outcome "success" — the overview-path terminal state (board + tree + entry).
   // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
-  // P2 右栏 pane / 概览子 tab(2.1–2.4)落座后按新宿主恢复,2.10 全量复跑收口。
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
   // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-  test.fixme('step4/success: post-migration terminal state — done copy, board carries ALL tasks (parity zero-diff), entry gone, doc-tree harness assertions', async ({ }, testInfo) => {
+  test('step4/success: post-migration terminal state — done copy, board carries ALL tasks (parity zero-diff), entry gone, doc-tree harness assertions', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'a', { tab: 'workbench/overview' })
     await migrateOverview(world)
@@ -94,7 +95,7 @@ test.describe.serial('explicit-sot-migration / step 4: 迁移后终态确认', (
     await expect(card.locator('[data-dsh-forge-migration-entry]'), '「可迁移」入口消失').toHaveCount(0)
 
     // 看板承载全部任务(与迁移前任务全集一致)。
-    await world.page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(world.page) // 2.10 新宿主:右栏任务看板 pane
     for (const task of (kernel as KernelWorld).set.features[0]?.tasks ?? []) {
       await expect(world.page.locator(`[data-dsh-forge-node-card="${(kernel as KernelWorld).featureSlug}/${task.localId}"]`),
         `看板承载:${task.localId}`).toBeVisible({ timeout: 20_000 })
