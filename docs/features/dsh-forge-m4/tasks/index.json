@@ -667,7 +667,7 @@
       "dependencies": [
         "T-test-run"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "consolidate-specs.md",
       "record": "records/consolidate-specs.md",
       "type": "doc.consolidate"
