@@ -63,6 +63,7 @@ import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
 import { TaskDetailPanel, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import { isThenable } from './tasks/detail/LinkHistory'
 import { detailDockWidthOf, type BoardHostForm } from './tasks/launch/LaunchStates'
 import type { DagDecorMount } from './tasks/dag/build-graph'
 import { hasDispatchableEntry, type DispatchVerbs } from './tasks/dispatch/selection-mode'
@@ -765,8 +766,10 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   // 运行中徽标 write rides along (AC3/AC2: back on the board, the badge reads
   // correctly off the store, unmount-surviving). M4 2.7: a host WITHOUT the
   // hand-over seat (the rightbar pane) rides the Interface 6 channel seam
-  // instead — same navigation, same badge write (the void M3 seam never
-  // surfaces the channel's rejections; the dock's OWN [打开] rows toast).
+  // instead — same navigation, same badge write (this enter is
+  // fire-and-forget: a channel rejection is swallowed PER-SITE below — the
+  // affordance-level toast rides the M6 收口 — while the dock's OWN [打开]
+  // rows catch the same seam's rejecting return and toast).
   const handleEnterSession = useCallback((sessionId: string): void => {
     if (props.projectId === undefined || props.codeRoot === undefined) return
     const taskKey = selectedRef.current.taskKey
@@ -782,7 +785,11 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
         title: task.title,
       })
     } else {
-      void props.onEnterSession?.(sessionId)
+      // Fire-and-forget enter: swallow the channel's rejection per-site (an
+      // unhandled renderer rejection would crash the board host); the C5
+      // dock's [打开] rows are the same seam's toast-carrying face.
+      const entering = props.onEnterSession?.(sessionId)
+      if (entering !== undefined && isThenable(entering)) entering.catch(() => {})
     }
     if (props.session !== undefined) {
       props.session.markLinkActive(props.projectId, taskKey, sessionId)

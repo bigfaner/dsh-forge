@@ -190,8 +190,13 @@ function linkRangeTitle(link: SessionLink): string {
   return link.endedAt === null ? link.startedAt : `${link.startedAt} — ${link.endedAt}`
 }
 
-/** A promise-like return of the open seam (void implementations never toast). */
-const isThenable = (value: void | Promise<unknown>): value is Promise<unknown> =>
+/**
+ * A promise-like return of the open seam (void implementations never toast).
+ * Exported for the seam's fire-and-forget consumers (TasksPane's ⟞, the
+ * board's enter handler): they run the same guard to swallow a rejecting
+ * return per-site, mirroring this section's own toast discipline.
+ */
+export const isThenable = (value: void | Promise<unknown>): value is Promise<unknown> =>
   typeof (value as Promise<unknown> | undefined)?.then === 'function'
 
 /**

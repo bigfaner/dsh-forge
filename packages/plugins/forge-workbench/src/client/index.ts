@@ -969,15 +969,15 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
         ...activeProjectStore === undefined ? {} : { activeProjectStore },
         boardSession,
         // The open-failed contract (ui-design C5 States: open 失败不静默):
-        // the C5 LinkHistory rows catch the channel's ERR_SESSION_OPEN_FAILED
-        // and toast; the board's own enter affordances (orchestration
-        // 「进入会话」, the pane host's hand-over fallback) route the SAME
-        // rejection through this catch — a dead session id keeps the board
-        // state instead of surfacing an unhandled renderer rejection. The
-        // affordance-level toast face rides the M6 收口 (2.10 盘点开放项).
-        onEnterSession: (target: SessionOpenTarget) => {
-          enterSession(target).catch(() => {})
-        },
+        // the seam RETURNS the Interface 6 channel's promise — the C5
+        // LinkHistory rows catch the ERR_SESSION_OPEN_FAILED rejection and
+        // surface the open-failed toast (2.6's AC). The fire-and-forget enter
+        // affordances (the board's orchestration 「进入会话」/pane-host
+        // fallback, the overview's ⟞) swallow the SAME rejection per-site at
+        // their own call points — a dead session id keeps the board state
+        // instead of an unhandled renderer rejection. The affordance-level
+        // toast face rides the M6 收口 (2.10 盘点开放项).
+        onEnterSession: (target: SessionOpenTarget) => enterSession(target),
         onOpenTask: overviewOpenTask,
         ...metadataReadSources === undefined ? {} : { readTaskSources: metadataReadSources },
         // The C5 lineage seat's data leg (SC7 消费点): the SAME guarded

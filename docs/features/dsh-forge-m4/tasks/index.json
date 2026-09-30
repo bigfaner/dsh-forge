@@ -741,7 +741,7 @@
       "title": "Fix: C5 open-failed toast unreachable — board onEnterSession wiring swallows the channel rejection (P-6 residual)",
       "priority": "P0",
       "estimatedTime": "30min",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-4.md",
       "record": "records/fix-4.md",
       "breaking": true,
@@ -832,7 +832,7 @@
       "dependencies": [
         "T-test-gen-scripts"
       ],
-      "status": "blocked",
+      "status": "pending",
       "file": "run-test.md",
       "record": "records/run-test.md",
       "surface-key": ".",

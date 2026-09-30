@@ -21,7 +21,7 @@ import type { ReactNode } from 'react'
 import type { WorkbenchKey } from '../../../locale/en'
 import { taskStatusShortLabel } from '../../../i18n/task-status'
 import { fillTemplate } from '../../overview/format'
-import type { EnterSessionSeam } from '../../tasks/detail/LinkHistory'
+import { isThenable, type EnterSessionSeam } from '../../tasks/detail/LinkHistory'
 import { activeLinkOf, deriveExecutingTasks, type OverviewTaskSource } from '../overview-model'
 
 /** The sources read's phase (OverviewTab owns the read; the pane renders it). */
@@ -254,7 +254,12 @@ export function TasksPane(props: TasksPaneProps): ReactNode {
                     title={t('rightbar.overview.tasks.gotoSession')}
                     onClick={(event) => {
                       event.stopPropagation()
-                      void props.onEnterSession?.(link.sessionId)
+                      // Fire-and-forget enter: the seam may return the open
+                      // channel's REJECTING promise — swallow per-site (this
+                      // affordance's own toast face rides the M6 收口; the C5
+                      // dock's [打开] rows are the seam's toast-carrying face).
+                      const entering = props.onEnterSession?.(link.sessionId)
+                      if (isThenable(entering)) entering.catch(() => {})
                     }}
                   >
                     ⟞ {t('rightbar.overview.tasks.gotoSession')}
