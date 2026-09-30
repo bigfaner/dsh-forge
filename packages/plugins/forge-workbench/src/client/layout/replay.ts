@@ -103,6 +103,17 @@ export interface RightbarReplayFace {
     readonly preferNewPane?: boolean
     readonly params?: { readonly path: string; readonly displayName: string } | { readonly featureSlug?: string }
   }): void
+  /**
+   * The cross-session open-tab inventory (optional; the controller face
+   * carries it) — the singleton-kind dedupe probe: an already-open
+   * overview/board row is FOCUSED instead of opened, so a replay that wins
+   * the boot ordering against the native per-session restore cannot
+   * double-seat the pane (the restore adds its own copy when it lands
+   * after the replay's open).
+   */
+  readonly openTabs?: { getSnapshot(): readonly { readonly tabId: string; readonly kind: string }[] } | undefined
+  /** Focus one tab of the mounted session (optional, same face's verb). */
+  readonly focus?: ((tabId: string) => void) | undefined
 }
 
 /** The C9 ratio leg's face (the split store's `setRatio`). */
@@ -133,6 +144,16 @@ export interface LayoutReplayOutcome {
   readonly degraded: number
 }
 
+/** What one op-set pass did, with the degraded subset kept for the retry leg. */
+export interface LayoutReplayPass {
+  /** Ops that issued against a live face. */
+  readonly issued: number
+  /** Ops that degraded (absent face, a thrown verb, an unidentifiable doc). */
+  readonly degraded: number
+  /** The degraded ops in plan order — the ONLY ops a retry re-issues. */
+  readonly failedOps: readonly LayoutReplayOp[]
+}
+
 /**
  * Execute the replay plan against the resolved faces (AC2): strictly
  * sequenced, per-op guarded — one degraded op never aborts the rest (the
@@ -143,30 +164,44 @@ export interface LayoutReplayOutcome {
  */
 export function replayProjectLayout(layout: ProjectLayout, faces: LayoutReplayFaces): LayoutReplayOutcome {
   const ops = planLayoutReplay(layout)
+  const pass = replayOps(ops, faces)
+  return { planned: ops.length, issued: pass.issued, degraded: pass.degraded }
+}
+
+/**
+ * Run ONE pass over an op subset ({@link replayProjectLayout}'s executor,
+ * extracted so the engine's degraded-retry leg can re-issue ONLY the ops that
+ * degraded — a failed open never landed anything, so its retry cannot
+ * duplicate a tab; an op that issued is never re-run).
+ * @param ops - the ops to execute, in order.
+ * @param faces - the replay legs, all optional (an absent face degrades its leg).
+ * @returns the pass counts plus the degraded subset for the next retry.
+ */
+export function replayOps(ops: readonly LayoutReplayOp[], faces: LayoutReplayFaces): LayoutReplayPass {
   let issued = 0
-  let degraded = 0
+  const failedOps: LayoutReplayOp[] = []
   for (const op of ops) {
     try {
       switch (op.op) {
         case 'sidebar-width': {
-          if (faces.sidebar?.setWidth === undefined) { degraded += 1; break }
+          if (faces.sidebar?.setWidth === undefined) { failedOps.push(op); break }
           faces.sidebar.setWidth(op.width)
           issued += 1
           break
         }
         case 'sidebar-collapse': {
-          if (faces.sidebar?.setCollapsed === undefined) { degraded += 1; break }
+          if (faces.sidebar?.setCollapsed === undefined) { failedOps.push(op); break }
           faces.sidebar.setCollapsed(op.collapsed)
           issued += 1
           break
         }
         case 'open-tab': {
           const rightbar = faces.rightbar
-          if (rightbar === undefined) { degraded += 1; break }
+          if (rightbar === undefined) { failedOps.push(op); break }
           if (op.kind === 'doc') {
-            if (op.topic === undefined) { degraded += 1; break }
+            if (op.topic === undefined) { failedOps.push(op); break }
             const params = docParamsOf(op.topic)
-            if (params === undefined) { degraded += 1; break }
+            if (params === undefined) { failedOps.push(op); break }
             rightbar.openTab('doc', { params, ...(op.preferNewPane ? { preferNewPane: true } : {}) })
             issued += 1
             break
@@ -179,19 +214,32 @@ export function replayProjectLayout(layout: ProjectLayout, faces: LayoutReplayFa
             issued += 1
             break
           }
+          // The SINGLETON kinds (overview/board — one address each): an
+          // already-open row is focused, never re-opened. The native
+          // per-session restore may land AFTER this replay's opens (the boot
+          // ordering the degraded-retry leg can flip) and it does NOT dedupe
+          // against replay-opened tabs — probing the inventory first keeps
+          // 恢复态 one board however the two tracks order.
+          const existing = rightbar.openTabs?.getSnapshot()
+            .find(row => row.kind === op.kind)
+          if (existing !== undefined && rightbar.focus !== undefined) {
+            rightbar.focus(existing.tabId)
+            issued += 1
+            break
+          }
           rightbar.openTab(op.kind, op.preferNewPane ? { preferNewPane: true } : {})
           issued += 1
           break
         }
         case 'split-ratio': {
-          if (faces.split === undefined) { degraded += 1; break }
+          if (faces.split === undefined) { failedOps.push(op); break }
           faces.split.setRatio(op.ratio)
           issued += 1
           break
         }
         case 'open-detached': {
           const detached = faces.detached
-          if (detached === undefined) { degraded += 1; break }
+          if (detached === undefined) { failedOps.push(op); break }
           void detached.openDetached({
             view: op.view,
             ...(op.target === undefined ? {} : { target: op.target }),
@@ -204,8 +252,8 @@ export function replayProjectLayout(layout: ProjectLayout, faces: LayoutReplayFa
     } catch {
       // A thrown verb (the rebind window mid session switch, a drifted
       // service): this op degrades, the sequence continues.
-      degraded += 1
+      failedOps.push(op)
     }
   }
-  return { planned: ops.length, issued, degraded }
+  return { issued, degraded: failedOps.length, failedOps }
 }

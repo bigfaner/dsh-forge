@@ -121,9 +121,23 @@ test.describe.serial('project-registration-projection / step 4: 确认添加项�
       '实况零投递(降级为无投影继续运行)').toBeUndefined()
 
     // 恢复 + GUI 重试:[重试投影] → healthy + 实况落位(两侧一致)。
+    //
+    // P-3 口径(r3 裁决:测试侧用户径补全,非产品缺口 —— 断言零弱化):本世界
+    // 零会话语料,而概览(degraded 状态行 + [重试投影] 的家)挂载在原生
+    // per-session 右栏座上 —— 零会话世界整列不挂载,与通道故障无关。原位生效
+    // 按设计只切指针(1.5/1.6 AC「树刷新 + 活跃指针切换」),故下方对新项目行
+    // 的点击是 #28 同项目零动作,startSession 不会发生。green 诸世界(sc3-
+    // degrade ③ / j3)的激活点击都是真换台(null→项目)且带会话语料 —— 本腿
+    // 补同款真换台(基线 → 新项目)呈现右栏;换台重置的 startSession 在新项目
+    // 无 workspace(零投递)时走原生 current/recent 兜底(基线 workspace 已随
+    // boot 期健康投影落位)→ 会话挂载 → 右栏在座。内核降级腿(degraded + plan
+    // 保留)已在上文独立断言;本段承载呈现面与重试恢复。
+    await page.locator(`[data-dsh-forge-tree-project="${kernel.projectId}"]`).click()
+    await expect(page.locator(`[data-dsh-forge-tree-project="${kernel.projectId}"]`),
+      '真换台之一:基线行激活(右栏挂载的用户径)').toHaveAttribute('aria-current', 'true', { timeout: 15_000 })
     await page.locator(`[data-dsh-forge-tree-project="${added?.id as string}"]`).click()
     await expect(page.locator(`[data-dsh-forge-tree-project="${added?.id as string}"]`),
-      '新项目行激活').toHaveAttribute('aria-current', 'true', { timeout: 15_000 })
+      '真换台之二:新项目行激活(原位换台 #28)').toHaveAttribute('aria-current', 'true', { timeout: 15_000 })
     await openOverviewForActiveProject(page, added?.displayName as string, `[data-dsh-forge-tree-project="${added?.id as string}"]`)
     const statusRow = page.locator('[data-dsh-forge-projection-status]')
     await expect(statusRow, 'degraded 状态行(降级提示)').toHaveAttribute('data-state', 'degraded', { timeout: 15_000 })

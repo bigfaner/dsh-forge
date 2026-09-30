@@ -17,7 +17,9 @@ import {
 import type { RightbarCollectInput } from '../src/client/layout/collect.ts'
 import { planLayoutReplay, replayProjectLayout } from '../src/client/layout/replay.ts'
 import type { LayoutReplayFaces, LayoutReplayOp } from '../src/client/layout/replay.ts'
-import { createLayoutMemoryEngine, LAYOUT_WRITE_DEBOUNCE_MS } from '../src/client/layout/persistence.ts'
+import {
+  createLayoutMemoryEngine, LAYOUT_REPLAY_RETRY_LIMIT, LAYOUT_REPLAY_RETRY_MS, LAYOUT_WRITE_DEBOUNCE_MS,
+} from '../src/client/layout/persistence.ts'
 import type { LayoutMemoryClock, LayoutMemoryVerbs } from '../src/client/layout/persistence.ts'
 
 // ---------------------------------------------------------------------------
@@ -363,6 +365,32 @@ describe('AC2: replay — the open-operation sequence', () => {
       'detached:conversation',
     ])
     expect(outcome).toEqual({ planned: 9, issued: 9, degraded: 0 })
+  })
+
+  it('SINGLETON kinds focus an already-open row instead of opening (the native-restore ordering never double-seats the board)', () => {
+    const opened: string[] = []
+    const focused: string[] = []
+    const faces: LayoutReplayFaces = {
+      rightbar: {
+        openTab: (kind) => { opened.push(kind) },
+        focus: (tabId) => { focused.push(tabId) },
+        openTabs: { getSnapshot: () => [{ tabId: 'tab-o1', kind: 'overview' }, { tabId: 'tab-b1', kind: 'board' }] },
+      },
+      split: { setRatio: () => true },
+    }
+    const layout = collectProjectLayout({
+      rightbar: {
+        split: splitOf([{ view: 'board', tabId: 't-b' }], 0.5),
+        tabs: rows(['t-1', 'overview'], ['t-b', 'board']),
+      },
+    })
+    const outcome = replayProjectLayout(layout, faces)
+    // The restored overview/board rows are FOCUSED (the native per-session
+    // restore landed first); the replay adds nothing — 恢复态 stays one board
+    // however the two tracks order (the retry leg can flip the ordering).
+    expect(opened).toEqual([])
+    expect(focused.sort()).toEqual(['tab-b1', 'tab-o1'])
+    expect(outcome).toEqual({ planned: 3, issued: 3, degraded: 0 })
   })
 
   it('degrades per-op (absent faces, thrown verbs, unparseable doc topics) without aborting', () => {
@@ -816,6 +844,103 @@ describe('replayNow — the boot service-race retry leg', () => {
     await flushMicrotasks()
     expect(notifications.length).toBe(2)
     unsubscribe()
+    engine.dispose()
+  })
+})
+
+describe('degraded-replay retry — the boot seat-race arm (failed subset only, bounded)', () => {
+  /** The boot-race world: the rightbar FACE exists but its controller throws
+   * between seat bindings — every open degrades on the first pass. */
+  const makeThrowingRightbar = (): {
+    readonly opened: string[]
+    seatBound: boolean
+    readonly face: { openTab(kind: string, options?: { params?: unknown }): void }
+  } => {
+    const opened: string[] = []
+    const state = { seatBound: false }
+    return {
+      opened,
+      get seatBound() { return state.seatBound },
+      set seatBound(value: boolean) { state.seatBound = value },
+      face: {
+        openTab(kind, options) {
+          if (!state.seatBound) throw new Error('controller between seat bindings')
+          opened.push(kind + (options?.params !== undefined ? `:${String((options.params as { path?: string }).path ?? '')}` : ''))
+        },
+      },
+    }
+  }
+
+  it('re-issues ONLY the degraded ops once the seat binds (a failed open landed nothing — no duplicates)', async () => {
+    const { clock, advance, pending } = makeClock()
+    const { verbs, stored } = makeVerbs()
+    stored.set('p-1', collectProjectLayout({
+      rightbar: {
+        split: splitOf([{ view: 'board', tabId: 't-b' }], 0.4),
+        tabs: rows(['t-1', 'overview'], ['t-b', 'board']),
+      },
+    }))
+    const rightbar = makeThrowingRightbar()
+    const ratios: number[] = []
+    const engine = createLayoutMemoryEngine({
+      verbs,
+      projectId: () => 'p-1',
+      clock,
+      getReplayFaces: () => ({ rightbar: rightbar.face, split: { setRatio: ratio => { ratios.push(ratio); return true } } }),
+    })
+    engine.replayNow()
+    await flushMicrotasks()
+    // First pass: the two opens degrade (the seat window); the ratio op rides
+    // a live face and issues immediately — only the failed subset retries.
+    expect(rightbar.opened).toEqual([])
+    expect(ratios).toEqual([0.4])
+    rightbar.seatBound = true
+    advance(LAYOUT_REPLAY_RETRY_MS)
+    expect(rightbar.opened.sort()).toEqual(['board', 'overview'])
+    for (let step = 0; step < 12; step += 1) advance(LAYOUT_REPLAY_RETRY_MS)
+    expect(rightbar.opened.length, 'the issued ops are never re-run (no duplicates)').toBe(2)
+    expect(ratios, 'the issued ratio op is never re-run either').toEqual([0.4])
+    expect(pending()).toBe(0)
+    engine.dispose()
+  })
+
+  it('a seat that never binds stops at the bound (no retry storm)', async () => {
+    const { clock, advance, pending } = makeClock()
+    const { verbs, stored } = makeVerbs()
+    stored.set('p-1', collectProjectLayout({ rightbar: { split: splitOf([]), tabs: rows(['t-1', 'overview']) } }))
+    const rightbar = makeThrowingRightbar()
+    const log: string[] = []
+    const engine = createLayoutMemoryEngine({
+      verbs, projectId: () => 'p-1', clock, log: message => log.push(message),
+      getReplayFaces: () => ({ rightbar: rightbar.face }),
+    })
+    engine.replayNow()
+    await flushMicrotasks()
+    for (let step = 0; step < LAYOUT_REPLAY_RETRY_LIMIT + 2; step += 1) advance(LAYOUT_REPLAY_RETRY_MS)
+    expect(rightbar.opened).toEqual([])
+    expect(pending(), 'the series terminates at the bound').toBe(0)
+    expect(log.some(line => line.includes('replay degraded')), 'the degrade was logged').toBe(true)
+    engine.dispose()
+  })
+
+  it('a stale series never replays onto the wrong project (the pointer-move guard)', async () => {
+    const { clock, advance } = makeClock()
+    const { verbs, stored } = makeVerbs()
+    stored.set('p-1', collectProjectLayout({ rightbar: { split: splitOf([]), tabs: rows(['t-1', 'overview']) } }))
+    const rightbar = makeThrowingRightbar()
+    let pointer: string | null = 'p-1'
+    const engine = createLayoutMemoryEngine({
+      verbs, projectId: () => pointer, clock,
+      getReplayFaces: () => ({ rightbar: rightbar.face }),
+    })
+    engine.replayNow()
+    await flushMicrotasks()
+    pointer = 'p-2' // the switch: the wiring's handleProjectChange cancels the
+    // timer via resetFragments; the guard inside a fired timer is the second
+    // line — neither may replay p-1's ops after the move.
+    rightbar.seatBound = true
+    for (let step = 0; step < 12; step += 1) advance(LAYOUT_REPLAY_RETRY_MS)
+    expect(rightbar.opened, 'the stale series never fires').toEqual([])
     engine.dispose()
   })
 })

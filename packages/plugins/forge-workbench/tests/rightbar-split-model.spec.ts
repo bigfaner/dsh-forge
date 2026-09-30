@@ -216,6 +216,34 @@ describe('AC1/AC3: the split store — 增删流 / 即时存 / the report seam',
     expect(reported.at(-1)).toEqual({ panes: [], ratio: SPLIT_RATIO_RESET })
   })
 
+  it('the empty transition RESETS a moved ratio (换台重置 for the C9 share — P-7: the plugin-lifetime store never carries the previous split\'s share into another project\'s first collect)', () => {
+    // The 换台 shape: a moved share, then the switch closes every closable tab
+    // → the inventory publish empties the pane set → the share resets.
+    const store = createSplitPaneStore()
+    store.reconcile([
+      { tabId: 'board-1', kind: 'board' },
+      { tabId: 'board-2', kind: 'board' },
+    ])
+    store.setRatio(0.3)
+    expect(store.getSnapshot().ratio).toBe(0.3)
+    store.reconcile([{ tabId: 'guide-1', kind: 'guide' }])
+    expect(store.getSnapshot(), 'reconcile 空集 = 比例复位(比例是活动 split 的属性)')
+      .toEqual({ panes: [], ratio: SPLIT_RATIO_RESET })
+    // The next project's first pane open carries the RESET share — never the
+    // previous project's 30 (the cross-project blob leak this pins).
+    const { face } = makeFace()
+    store.openPane(face, { view: 'board' })
+    expect(store.getSnapshot().ratio).toBe(SPLIT_RATIO_RESET)
+    // The pane-头 close leg empties the set the same way (store-side removal):
+    // a split re-formed afterwards must also start from the baseline share.
+    store.reconcile([{ tabId: 'board-9', kind: 'board' }])
+    store.setRatio(0.7)
+    const closeFake = makeCloseFace([{ tabId: 'board-9', kind: 'board' }])
+    store.closePane(closeFake.face, 'board')
+    expect(store.getSnapshot(), 'closePane 清空 = 同款比例复位')
+      .toEqual({ panes: [], ratio: SPLIT_RATIO_RESET })
+  })
+
   it('setRatio clamps and reports EVERY commit (即时存 — no preview-then-settle)', () => {
     const reported: SplitLayoutState[] = []
     const store = createSplitPaneStore({ onLayoutChange: layout => reported.push(layout) })

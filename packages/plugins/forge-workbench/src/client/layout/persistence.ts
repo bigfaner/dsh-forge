@@ -29,6 +29,13 @@
  *     removal, storage faults) logs and drops — never a throw, never a
  *     retry storm. The kernel re-validates every write anyway (4.1's
  *     server-side second gate).
+ *   - degraded-replay retry (the boot race's second arm): the first replay
+ *     pass may run before the rightbar SEAT binds (the face exists; its
+ *     controller throws between seat bindings) — the degraded ops are
+ *     re-issued on a bounded clock retry (ONLY the failed subset, so a
+ *     retry can never duplicate a tab); a pointer move or teardown cancels
+ *     the series. The apply's boot-race retry covers the face-ABSENT arm;
+ *     this leg covers the seat-unbound arm.
  *
  * The write debounce interval (800ms trailing) rides `clock` injection for
  * test determinism; the restore feed exposes the last restored tree block
@@ -44,7 +51,7 @@ import {
   type RightbarCollectInput,
   type SidebarGeometryFragment,
 } from './collect'
-import { replayProjectLayout, type LayoutReplayFaces } from './replay'
+import { planLayoutReplay, replayOps, type LayoutReplayFaces, type LayoutReplayOp } from './replay'
 
 /**
  * The 4.1 verb subset the engine rides (the bridge's ui-state pair).
@@ -58,6 +65,15 @@ export interface LayoutMemoryVerbs {
 
 /** The trailing-debounce interval (AC1: coalesce drag bursts into one write). */
 export const LAYOUT_WRITE_DEBOUNCE_MS = 800
+
+/**
+ * The degraded-replay retry cadence (the boot race's second arm): ops that
+ * degraded because the rightbar seat had not bound yet are re-issued on this
+ * interval, bounded by {@link LAYOUT_REPLAY_RETRY_LIMIT} attempts.
+ */
+export const LAYOUT_REPLAY_RETRY_MS = 500
+/** The retry bound (500ms × 6 = a 3s boot window; then the pass stays degraded). */
+export const LAYOUT_REPLAY_RETRY_LIMIT = 6
 
 /** The clock seam (test determinism; the default is the platform timer). */
 export interface LayoutMemoryClock {
@@ -147,6 +163,7 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
   let lastSeenProject: string | null = projectId()
   let dirty = false
   let timer: unknown
+  let replayRetryTimer: unknown
   const restoredListeners = new Set<() => void>()
 
   const notifyRestored = (): void => {
@@ -157,6 +174,14 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
     if (timer !== undefined) {
       clock.clearTimeout(timer)
       timer = undefined
+    }
+  }
+
+  /** A new project's replay (or teardown) supersedes any pending retry series. */
+  const cancelReplayRetry = (): void => {
+    if (replayRetryTimer !== undefined) {
+      clock.clearTimeout(replayRetryTimer)
+      replayRetryTimer = undefined
     }
   }
 
@@ -183,6 +208,36 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
         // fault: log + drop — the next seam report reschedules cleanly.
         log(`layout-memory: setProjectUiState rejected for ${forProject}: ${String(error)}`)
       })
+  }
+
+  /**
+   * The degraded-replay retry leg (the boot race's second arm): the FIRST
+   * pass may run before the rightbar SEAT binds (the face exists, but its
+   * controller throws between seat bindings) — every open-tab op degrades
+   * and, unlike the face-absent arm the apply's boot-race retry covers,
+   * nothing would ever re-run them. Re-issues ONLY the degraded subset (a
+   * failed open landed nothing, so its retry cannot duplicate a tab), on the
+   * injected clock, bounded; a pointer move or teardown cancels the series.
+   */
+  const scheduleDegradedReplayRetry = (target: string, pendingOps: readonly LayoutReplayOp[], attempt: number): void => {
+    if (pendingOps.length === 0 || attempt >= LAYOUT_REPLAY_RETRY_LIMIT) return
+    cancelReplayRetry()
+    replayRetryTimer = clock.setTimeout(() => {
+      replayRetryTimer = undefined
+      // Stale series: the pointer moved on (a switch/teardown re-ran or
+      // cancelled this leg) — the new project's own replay owns the future.
+      if (projectId() !== target) return
+      const faces = options.getReplayFaces?.()
+      if (faces === undefined) {
+        scheduleDegradedReplayRetry(target, pendingOps, attempt + 1)
+        return
+      }
+      const pass = replayOps(pendingOps, faces)
+      if (pass.degraded > 0) {
+        log(`layout-memory: replay retry ${String(attempt + 1)} still degraded ${String(pass.degraded)} op(s)`)
+        scheduleDegradedReplayRetry(target, pass.failedOps, attempt + 1)
+      }
+    }, LAYOUT_REPLAY_RETRY_MS)
   }
 
   const loadAndReplay = (target: string): void => {
@@ -213,8 +268,12 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
           if (treeChanged) notifyRestored()
           const faces = options.getReplayFaces?.()
           if (faces === undefined) return
-          const outcome = replayProjectLayout(layout, faces)
-          if (outcome.degraded > 0) log(`layout-memory: replay degraded ${String(outcome.degraded)}/${String(outcome.planned)} ops`)
+          const ops = planLayoutReplay(layout)
+          const pass = replayOps(ops, faces)
+          if (pass.degraded > 0) {
+            log(`layout-memory: replay degraded ${String(pass.degraded)}/${String(ops.length)} ops`)
+            scheduleDegradedReplayRetry(target, pass.failedOps, 0)
+          }
         },
         (error) => {
           // 恢复失败 → 默认布局: the read itself failed — nothing replays,
@@ -233,6 +292,7 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
     restoredTree = undefined
     dirty = false
     cancelPending()
+    cancelReplayRetry()
     notifyRestored()
   }
 
@@ -301,6 +361,7 @@ export function createLayoutMemoryEngine(options: LayoutMemoryEngineOptions): La
     },
     dispose() {
       cancelPending()
+      cancelReplayRetry()
       restoredListeners.clear()
       resetFragments()
     },

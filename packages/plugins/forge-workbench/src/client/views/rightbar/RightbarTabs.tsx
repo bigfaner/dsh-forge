@@ -501,6 +501,19 @@ export interface RightbarTabsOptions extends ForgeTabFace {
    * the installer creates its own (the pre-4.5 shape).
    */
   readonly docTabs?: DocTabsRegistry | undefined
+  /**
+   * The rightbar-inventory collect seam (4.5 wiring completion): fired on
+   * every open-tab inventory PUBLISH (a forge-kind tab opening or closing
+   * without any split/pane change — a doc tab opened from the overview is
+   * the canonical case). The blob's `rightbar.panes` is defined OVER the
+   * inventory (collect.ts's `RightbarCollectInput.tabs`), so a forge-owned
+   * tab joining the column is a rightbar-fragment change the layout memory
+   * must mirror; sampling the rows only when the split store reports left
+   * tab-only opens outside every collect seam (the stored memory silently
+   * missed them — the restore-target-missing contract's fixture premise).
+   * Absent = no extra collect (the pre-seam shape).
+   */
+  readonly onInventoryChange?: (() => void) | undefined
 }
 
 const isObject = (candidate: unknown): candidate is Record<string, unknown> =>
@@ -667,12 +680,17 @@ export function installRightbarTabs(ctx: ClientContext, options: RightbarTabsOpt
   // open-tab inventory — native chip × closes, the §4.7 project-switch closes
   // and any C5-opened aside all land in the pane set through ONE source. The
   // boot reconcile seeds the set from whatever is already open (e.g. a board
-  // the guide door seated before the split began).
+  // the guide door seated before the split began). The SAME publish feeds the
+  // 4.5 collect seam (`onInventoryChange`): a forge-kind tab joining or
+  // leaving the column with no split-state change (a doc tab opened from the
+  // overview) is a rightbar-fragment change the layout memory must collect —
+  // the store's own reports sample the inventory only at split commits.
   let disposeSplitWatch: (() => void) | undefined
-  if (splitStore !== undefined && sidebarRight !== undefined) {
-    splitStore.reconcile(sidebarRight.openTabs.getSnapshot())
+  if (sidebarRight !== undefined && (splitStore !== undefined || options.onInventoryChange !== undefined)) {
+    if (splitStore !== undefined) splitStore.reconcile(sidebarRight.openTabs.getSnapshot())
     disposeSplitWatch = sidebarRight.openTabs.subscribe?.(() => {
-      splitStore.reconcile(sidebarRight.openTabs.getSnapshot())
+      splitStore?.reconcile(sidebarRight.openTabs.getSnapshot())
+      options.onInventoryChange?.()
     })
   }
 

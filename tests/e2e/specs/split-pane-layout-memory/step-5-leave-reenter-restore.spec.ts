@@ -175,18 +175,25 @@ test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复',
     await expect(composerInput(page), '会话体挂载').toBeVisible({ timeout: 20_000 })
 
     // 摆布局:board pane(健全目标)+ doc tab(将被删除的目标)。
+    // r3 语料修正:doc 目标 = manifest(真单文件:在世可读、删除是真删除)。
+    // 原 tasks 行是迁移世界的幽灵档 —— v3 迁移把 tasks/index.json 归档为
+    // index.json.migrated-*,readFeatureDoc('tasks') 在【删除前】就 ENOENT
+    // (world1 即错误卡),而 rmSync(tasks.md) 删的是从未存在的文件(空操作),
+    // 「健全 pane → 删除目标 → 重进降级」的前提从未成立。manifest.md 由
+    // fixture 恒写、读取走 DOC_KIND_ANCHORS 同锚点 —— 前提坐实。
     await expandRightbar(page)
     await pickSplitBoard(page)
     await expect(page.locator('[data-dsh-forge-task-board]'), 'board pane 在场(健全 pane)').toBeVisible({ timeout: 20_000 })
     await focusOverviewSubtab(page, 'features', '[data-dsh-forge-overview-features]')
-    await clickStable(page, `[data-dsh-forge-overview-doc="features/sp-split/tasks"]`)
-    await expect(page.locator('[data-dsh-forge-doc]'),
-      'doc tab 打开(pane 目标语料)').toBeVisible({ timeout: 15_000 })
+    await clickStable(page, `[data-dsh-forge-overview-doc="features/sp-split/manifest"]`)
+    await expect(page.locator(`[data-dsh-forge-doc="docs/features/sp-split/manifest"]`),
+      'doc tab 打开且正文可读(pane 目标语料 = 健全目标)').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-dsh-forge-doc-error]'), '健全目标零错误面').toHaveCount(0)
     await page.waitForTimeout(1_600)
 
     // 布景:删除 doc 目标文件(重进后该 pane 的目标缺失)。
-    const docPath = join(kernel.featuresRoot, 'sp-split', 'tasks.md')
-    rmSync(docPath, { force: true })
+    const docPath = join(kernel.featuresRoot, 'sp-split', 'manifest.md')
+    rmSync(docPath, { force: true, maxRetries: 20, retryDelay: 250 })
 
     // 离开重进(冷重启路径)。
     const userDataDir = kernel.userDataDir

@@ -461,6 +461,20 @@ export function createSplitPaneStore(options: SplitPaneStoreOptions = {}): Split
     options.onLayoutChange?.(next)
     for (const listener of [...listeners]) listener()
   }
+  /**
+   * The empty-pane-set transition's ratio leg (裁决 #28-④ 换台重置, the seam
+   * 4.5's project-domain blobs surfaced): reaching NO panes ends the split —
+   * the 回活跃区单视图 transition — and the C9 share is state OF an active
+   * split, so it resets to the baseline. This plugin-lifetime store otherwise
+   * carries the previous split's share across a project switch (the 换台
+   * closes every closable tab → the inventory empties), and the NEXT
+   * project's first collect would persist the previous project's share into
+   * that project's own `project_ui_state` blob — the cross-project leak the
+   * layout-isolation contract pins (Interface 4 项目域, P-7).
+   */
+  const commit = (next: SplitLayoutState): void => {
+    report(next.panes.length === 0 ? { panes: [], ratio: SPLIT_RATIO_RESET } : next)
+  }
   return {
     getSnapshot: () => layout,
     subscribe(listener: () => void): () => void {
@@ -487,7 +501,7 @@ export function createSplitPaneStore(options: SplitPaneStoreOptions = {}): Split
           ?? deriveSplitPanes(face.openTabs.getSnapshot()).filter(row => row.view === view).at(-1)?.tabId
         if (tabId === undefined) return false
         face.close(tabId)
-        report({ ...layout, panes: layout.panes.toSpliced(index, 1) })
+        commit({ ...layout, panes: layout.panes.toSpliced(index, 1) })
         return true
       }
       return false
@@ -526,7 +540,7 @@ export function createSplitPaneStore(options: SplitPaneStoreOptions = {}): Split
         changed = true
       }
       if (!changed) return
-      report({ ...layout, panes: next })
+      commit({ ...layout, panes: next })
     },
   }
 }

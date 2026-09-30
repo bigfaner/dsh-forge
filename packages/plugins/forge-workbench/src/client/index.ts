@@ -990,6 +990,19 @@ function applyMainWindow(ctx: ClientContext, windowVerb: WindowVerbFaceClient | 
         // M4 4.5: the SHARED doc-tabs registry — the layout memory's doc
         // topic resolver reads the same live (tabId ↔ path) pairs.
         docTabs: docTabsRegistry,
+        // 4.5 wiring completion — the rightbar-inventory collect seam: every
+        // open-tab publish collects the rightbar fragment (the same shape the
+        // split store's onLayoutChange builds), so a forge-kind tab opening
+        // with no split change (a doc tab from the overview) still reaches the
+        // project's layout memory — without it the stored blob silently missed
+        // tab-only opens (the restore-target-missing contract's premise).
+        onInventoryChange: () => {
+          layoutMemory?.setRightbar({
+            split: splitStore.getSnapshot(),
+            tabs: liveRightbarRows(),
+            topicOf: row => docTabsRegistry.pathOf(row.tabId),
+          })
+        },
         // M4 4.3 (C10 ①): the [拆出为窗口] seams — the pane 头 动作位 (the
         // board origin) and the tab-menu entry (the aside origin). Both need
         // the window verb face; the menu entry also needs the project source.
