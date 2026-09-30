@@ -51,6 +51,17 @@ test.describe.serial('task-session-roundtrip / step 3: 识别执行 subagent 会
     await registerRtLinks(page, kernel)
 
     await openTaskDetail(page, TASK_MAIN)
+    // 命名面前置:先经行尾 [打开] 打开 TOP_A —— catalog(refreshSubagents)随
+    // open 加载(sc7 ①⑥ 纪律:cold 行只承 byId 结构,行名退 displayTitle =
+    // cwd 尾段「repo」;「任务 id + title」经 catalog label 面随 open 浮出)。
+    // calibration r2:round 1 冷展开即断言命名,与 sc7 已证口径相悖 —— 断言
+    // 本体零改动,仅按已证可用点排序(打开 → 会话切换 → sc7 fix-1 同用户径
+    // 重入 dock → 展开 → 断言)。
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_A}"]`,
+      sessionOpenLanded(page),
+    )
+    await openTaskDetail(page, TASK_MAIN)
     await expandLinkRow(page, TOP_A)
     // 命名遵循:后代行名 = descriptor label = 「任务 id + title」。
     const subOkRow = page.locator(`[data-dsh-forge-detail-descendant="${SUB_OK}"]`)

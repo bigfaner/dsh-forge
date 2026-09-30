@@ -270,18 +270,25 @@ export function startAutoDismiss(page: Page): () => void {
 
 /** Click one locator RETRYING across pane re-layouts (DOM clicks after the
  * first grace attempts fire the React handler reliably). */
-export async function clickStable(page: Page, selector: string): Promise<void> {
+export async function clickStable(page: Page, selector: string, hasText?: RegExp): Promise<void> {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       if (attempt < 4) {
-        await page.locator(selector).first().click({ timeout: 2_000, force: attempt % 2 === 1 })
+        const locator = hasText === undefined
+          ? page.locator(selector).first()
+          : page.locator(selector, { hasText }).first()
+        await locator.click({ timeout: 2_000, force: attempt % 2 === 1 })
       } else {
-        const clicked = await page.evaluate((sel: string) => {
-          const el = document.querySelector(sel)
-          if (el === null) return false
-          ;(el as HTMLElement).click()
+        // DOM-click fallback(词面过滤径:遍历匹配,首个 textContent 命中)。
+        const clicked = await page.evaluate(({ sel, filter }: { sel: string, filter: string | null }) => {
+          const nodes = [...document.querySelectorAll(sel)]
+          const hit = filter === null
+            ? nodes[0]
+            : nodes.find(node => (node.textContent ?? '').search(new RegExp(filter, 'u')) >= 0)
+          if (hit === undefined) return false
+          ;(hit as HTMLElement).click()
           return true
-        }, selector)
+        }, { sel: selector, filter: hasText === undefined ? null : hasText.source })
         if (!clicked) throw new Error('not attached')
       }
       return
@@ -672,19 +679,28 @@ export async function openLifecycleMenu(page: Page, projectId: string): Promise<
     `[data-dsh-forge-tree-project="${projectId}"], [data-dsh-forge-tree-archived-row="${projectId}"]`,
   ).first()
   await expect(row).toBeVisible({ timeout: 15_000 })
-  await row.hover()
-  const more = page.locator(`[data-dsh-forge-tree-project-more="${projectId}"]`)
-  await expect(more, '⋯ 尾动作在场(hover 揭示)').toBeVisible({ timeout: 5_000 })
-  await more.click()
+  // r2 harden(整环重试):降级态下树行随状态 pill 更新重渲染 —— ⋯ 点击可
+  // 落在即将被替换的行上,菜单锚定的行卸载即菜单不挂载/即闭。单点 harden
+  //(clickStable)只搬动了竞态位置(round 2 实测:click 落定 → 菜单 5s 不在
+  // 座)。hover→click→菜单在座 的整环带界重试才是确定性承载。
+  for (let round = 0; round < 8; round += 1) {
+    await row.hover().catch(() => {})
+    const more = page.locator(`[data-dsh-forge-tree-project-more="${projectId}"]`)
+    await expect(more, '⋯ 尾动作在场(hover 揭示)').toBeVisible({ timeout: 5_000 })
+    await clickStable(page, `[data-dsh-forge-tree-project-more="${projectId}"]`)
+    const menu = page.locator(`[data-dsh-forge-tree-project-menu="${projectId}"]`)
+    if (await menu.isVisible().catch(() => false)) return
+    await page.waitForTimeout(600)
+  }
   await expect(page.locator(`[data-dsh-forge-tree-project-menu="${projectId}"]`),
-    '生命周期菜单在座').toBeVisible({ timeout: 5_000 })
+    '生命周期菜单在座(带界整环重试后)').toBeVisible({ timeout: 5_000 })
 }
 
-/** 菜单项点击(词面 = zh locale 键值;菜单一次仅一行持有)。 */
+/** 菜单项点击(词面 = zh locale 键值;菜单一次仅一行持有;r2 同款 harden)。 */
 export async function clickMenuItem(page: Page, projectId: string, label: RegExp): Promise<void> {
   const item = page.locator(`[data-dsh-forge-tree-project-menu="${projectId}"] [role="menuitem"]`, { hasText: label })
   await expect(item).toBeVisible({ timeout: 5_000 })
-  await item.click()
+  await clickStable(page, `[data-dsh-forge-tree-project-menu="${projectId}"] [role="menuitem"]`, label)
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +774,30 @@ export async function ensureBoardPaneDetachable(page: Page): Promise<void> {
 export async function splitRatioPercent(page: Page): Promise<string | null> {
   return await page.evaluate(() =>
     document.querySelector('[data-dsh-forge-split-separator]')?.getAttribute('aria-valuenow') ?? null)
+}
+
+/**
+ * Atomic probe-and-click for the C9 pane 头 [拆出为窗口] (r2 harden):the pane
+ * header's mount face FLAPS in the tearout worlds (round 2 full-lane replays:
+ * ensureBoardPaneDetachable's visible+enabled postcondition held, the button
+ * unmounted within the ensure→click gap, and clickStable then retried against
+ * an absent element for its whole budget). Presence-probe and DOM-click ride
+ * ONE evaluate — zero gap; button absence re-runs the 分屏 user path
+ * (pickSplitBoard) periodically to re-mount the header.
+ */
+export async function clickPaneDetachStable(page: Page): Promise<void> {
+  for (let round = 0; round < 40; round += 1) {
+    const landed = await page.evaluate(() => {
+      const el = document.querySelector('[data-dsh-forge-pane-detach]') as HTMLElement | null
+      if (el === null) return false
+      el.click()
+      return true
+    }).catch(() => false)
+    if (landed) return
+    if (round % 5 === 4) await pickSplitBoard(page).catch(() => {})
+    await page.waitForTimeout(500)
+  }
+  throw new Error('pane detach never landed (button absent for the whole budget)')
 }
 
 /**

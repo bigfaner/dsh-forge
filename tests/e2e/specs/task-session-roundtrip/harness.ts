@@ -48,6 +48,8 @@ export const TOP_M = 'rt-sess-top-many' // 查看全部语料(MANY 后代)
 export const TOP_PLAIN = 'rt-sess-top-plain' // 无后代顶层(3b 无命中)
 export const TOP_AMB = 'rt-sess-top-amb' // 一话多任务共用顶层
 export const SUB_AMB = 'rt-sess-sub-amb'
+export const TOP_U = 'rt-sess-top-unbound' // 零挂接顶层(C6 unbound 腿语料)
+export const SUB_U = 'rt-sess-sub-unbound' // 零覆盖 subagent(祖先链零挂接命中)
 export const GHOST_SESSION = 'rt-ghost-session' // 从不落盘(幽灵挂接)
 export const RENAME_STUB = '手工改名桩 rt renamed stub'
 
@@ -76,6 +78,11 @@ export function rtSeeds(codeRoot: string, now: number) {
     { sessionId: TOP_PLAIN, cwd: codeRoot, createdAt: now - 30_000, title: 'RT 无后代顶层', turnStart: true },
     { sessionId: TOP_AMB, cwd: codeRoot, createdAt: now - 20_000, title: 'RT 一话多任务顶层', turnStart: true },
     { sessionId: SUB_AMB, cwd: codeRoot, createdAt: now - 19_000, parentSession: TOP_AMB, origin: 'subagent' as const, mode: 'continuable' as const, label: namingCompliantName(TASK_AMB1, TITLE_AMB1), title: namingCompliantName(TASK_AMB1, TITLE_AMB1) },
+    // 零挂接顶层对(C6 unbound 腿):registerRtLinks 不触及 —— 其后代祖先链
+    // 对任何任务零挂接命中(badge 路径覆盖 active AND ended,metadata-bar 单测
+    // 口径;真零覆盖才承载 unbound 面)。
+    { sessionId: TOP_U, cwd: codeRoot, createdAt: now - 40_000, title: 'RT 零挂接顶层', turnStart: true },
+    { sessionId: SUB_U, cwd: codeRoot, createdAt: now - 39_000, parentSession: TOP_U, origin: 'subagent' as const, mode: 'continuable' as const, label: 'RT 零挂接 subagent', title: 'RT 零挂接 subagent' },
   ]
   for (let index = 0; index < MANY_DESCENDANT_COUNT; index += 1) {
     seeds.push({
@@ -112,14 +119,21 @@ export async function bootRtWorld(manager: M4WorldManager, tag: string, built: {
  * Register the 挂接 history through the REAL verbs(recordSessionLink /
  * endSessionLink):TASK_MAIN = active(TOP_A)+ ended(M 新于 B);GHOST = active
  * (幽灵会话);PLAIN = active(无后代顶层);AMB1/AMB2 = 双 active(TOP_AMB)。
+ *
+ * 记录序 = 旅程时序(B 最早 ended → M ended → A 最新 active)。calibration
+ * (T-test-run r2):round 1 以 A→B→M 登记致 A 被 4.2 发起侧收敛
+ * supersede 成 ended(services.recordSessionLink 先 supersedeActiveSessionLinks
+ * —— 同任务换会话再发起 = 旧 active 置 ended,spike-1 §5/Story2 AC3 口径),
+ * 「active A + ended B/M」的契约布景本身时序错置 —— 契约状态可达,按真实
+ * 历史序登记即可;断言零改动。
  */
 export async function registerRtLinks(page: import('@playwright/test').Page, kernel: KernelWorld): Promise<void> {
   const { bridgeInvoke } = await import('../_lib/m4-world.ts')
-  await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_MAIN, sessionId: TOP_A }])
   const linkB = await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_MAIN, sessionId: TOP_B }])
   await bridgeInvoke<void>(page, 'endSessionLink', [linkB.id])
   const linkM = await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_MAIN, sessionId: TOP_M }])
   await bridgeInvoke<void>(page, 'endSessionLink', [linkM.id])
+  await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_MAIN, sessionId: TOP_A }])
   await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_PLAIN, sessionId: TOP_PLAIN }])
   await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_GHOST, sessionId: GHOST_SESSION }])
   await bridgeInvoke<{ id: string }>(page, 'recordSessionLink', [{ projectId: kernel.projectId, taskKey: TASK_AMB1, sessionId: TOP_AMB }])

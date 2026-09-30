@@ -5,19 +5,20 @@
 //             状态/所属 feature;点击跳回任务详情 dock(双向互通);
 //   multi-task-ambiguity — 一话多任务:「该会话执行中」会话级标注(ambiguous
 //             态;无任务号、无跳转);
-//   unbound-no-metadata — 血缘反推零命中(挂接已全部 ended):元数据条不
-//             呈现(unbound 态渲染为空)。
+//   unbound-no-metadata — 血缘反推零命中(祖先链零挂接 —— badge 路径覆盖
+//             active AND ended,真零覆盖语料承载):元数据条不呈现(unbound
+//             态渲染为空;契约原「ended 挂接→零命中」口径缺口见腿内注记)。
 // fixture_spec: Project ×1 + Task(bound/ambiguous/unbound 三态语料)+
 // SessionLink + Session + SubagentSession。
 // Techniques: sc7 ⑤(metadata-bar 三态 + 查看任务双向跳回)。
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickSelfUnmounting, expandLinkRow, M4WorldManager,
-  openTaskDetail, sessionOpenLanded, startAutoDismiss,
+  activateProjectByTreeRow, clickSelfUnmounting, clickStable, ensureProjectGroupExpanded,
+  expandLinkRow, M4WorldManager, openTaskDetail, sessionOpenLanded, startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import {
-  SUB_AMB, SUB_B, SUB_OK, TASK_AMB1, TASK_MAIN, TITLE_MAIN, TOP_A, TOP_AMB, TOP_B,
+  SUB_AMB, SUB_OK, SUB_U, TASK_AMB1, TASK_MAIN, TITLE_MAIN, TOP_A, TOP_AMB, TOP_U,
   bootRtWorld, buildRtJourneyRoot, registerRtLinks,
 } from './harness.ts'
 
@@ -41,6 +42,16 @@ test.describe.serial('task-session-roundtrip / step 6: 查看 subagent 会话任
     await registerRtLinks(page, kernel)
 
     // 打开 subagent 会话(血缘命中唯一任务 = TASK_MAIN 的 active 挂接)。
+    // calibration r2:先开 TOP_A —— catalog(refreshSubagents)随 open 加载后,
+    // 后代行的地址 mode = descriptor verbatim(continuable);cold 行走 byId
+    // 回填兜底地址(one-shot)→ 会话以只读形态打开,conversation.input.dock
+    // 不挂载,C6 条所在 dock 面结构性缺席(sc7 ①⑥ 同款已证口径)。
+    await openTaskDetail(page, TASK_MAIN)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_A}"]`,
+      sessionOpenLanded(page),
+    )
+    // sc7 fix-1 重入纪律:会话切换卸载板内 dock → 同一用户径重开。
     await openTaskDetail(page, TASK_MAIN)
     await expandLinkRow(page, TOP_A)
     await clickSelfUnmounting(
@@ -71,6 +82,13 @@ test.describe.serial('task-session-roundtrip / step 6: 查看 subagent 会话任
     await registerRtLinks(page, kernel)
 
     // 双任务共用 TOP_AMB(两条 active 挂接)→ 打开 SUB_AMB。
+    // calibration r2 同 success 腿:先开 TOP_AMB(catalog 地址 mode = verbatim,
+    // 非冷行 one-shot 兜底),再开 SUB_AMB。
+    await openTaskDetail(page, TASK_AMB1)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_AMB}"]`,
+      sessionOpenLanded(page),
+    )
     await openTaskDetail(page, TASK_AMB1)
     await expandLinkRow(page, TOP_AMB)
     await clickSelfUnmounting(
@@ -98,12 +116,16 @@ test.describe.serial('task-session-roundtrip / step 6: 查看 subagent 会话任
     await activateProjectByTreeRow(page, kernel.projectId)
     await registerRtLinks(page, kernel)
 
-    // TOP_B 的挂接已全部 ended(TASK_MAIN 对 TOP_B 为 ended)→ 打开 SUB_B
-    // = 反推零命中(active 链路缺位)。
-    await openTaskDetail(page, TASK_MAIN)
-    await expandLinkRow(page, TOP_B)
+    // 零覆盖布景(calibration r2):TOP_U 语料对无任何挂接 → SUB_U 祖先链对
+    // 任何任务零命中。契约原布景「ended 挂接 → 零命中」与产品钉死口径冲突
+    // (metadata-bar.spec:97「an ENDED link still covers — badges span active
+    // AND ended links」;ended 挂接行照常 badge)—— unbound 面改由真零覆盖
+    // 语料承载(断言本体零改动;契约口径缺口已记录 eval-consistency 随行)。
+    // 树径打开(零挂接会话不经任何 dock 行):展开 TOP_U → 行点击 = 原生打开。
+    await ensureProjectGroupExpanded(page, kernel.projectId)
+    await clickStable(page, `[data-dsh-forge-tree-caret="${TOP_U}"]`)
     await clickSelfUnmounting(
-      page, `[data-dsh-forge-detail-descendant-open="${SUB_B}"]`,
+      page, `[data-dsh-forge-tree-session="${SUB_U}"]`,
       sessionOpenLanded(page),
     )
     // unbound:条不呈现(零任务号/状态/跳转;原生会话视图形态保持)。

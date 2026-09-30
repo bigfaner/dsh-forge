@@ -56,6 +56,20 @@ export async function shellWindowCount(electronApp: ElectronApplication): Promis
     .catch(() => 0)
 }
 
+/**
+ * Every live window's OS title via the MAIN process (the P-1 discipline:
+ * detached titles live on `BrowserWindow.getTitle()` — the composeDetachedTitle
+ * value the page-title-updated guard keeps authoritative; the renderer's own
+ * `document.title` (page.title()) is the vendored SPA's fallback and NEVER
+ * carries the composed project title post-fix-3).
+ * @returns the titles ([] once the process is gone).
+ */
+export async function osWindowTitles(electronApp: ElectronApplication): Promise<readonly string[]> {
+  return await electronApp
+    .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.getTitle()))
+    .catch(() => [] as string[])
+}
+
 /** The main process's pid (null once unreachable). */
 export async function shellMainPid(electronApp: ElectronApplication): Promise<number | null> {
   return await electronApp.evaluate(() => process.pid).catch(() => null)
@@ -81,14 +95,20 @@ export async function shellWindowStates(electronApp: ElectronApplication): Promi
  * @param electronApp - the running application.
  * @param projectId - the source project the window was detached FROM.
  * @param timeoutMs - the marker budget (window open + SPA boot + handshake).
+ * @param options.exclude - pages to SKIP (calibration r2, P-2: two same-marker
+ *   windows coexist after a second detach — the matcher must return the NEW
+ *   window, never the already-matched first one; the poll's first iteration
+ *   would otherwise deterministically hit the older match).
  * @returns the page and its pageerror tap.
  */
 export async function waitForDetachedBoard(
   electronApp: ElectronApplication,
   projectId: string,
   timeoutMs = 30_000,
+  options: { readonly exclude?: readonly Page[] } = {},
 ): Promise<DetachedBoardWindow> {
   const deadline = Date.now() + timeoutMs
+  const excluded = options.exclude ?? []
   const errorsByPage = new Map<Page, string[]>()
   const tapErrors = (page: Page): void => {
     if (errorsByPage.has(page)) return
@@ -101,6 +121,7 @@ export async function waitForDetachedBoard(
   }
   while (Date.now() < deadline) {
     for (const page of electronApp.windows()) {
+      if (excluded.includes(page)) continue
       tapErrors(page)
       const found = await page
         .evaluate(
@@ -228,7 +249,17 @@ export async function quitShellAssertZeroWindows(electronApp: ElectronApplicatio
     }
     if (isProcessAlive(pid)) throw new Error(`electron main pid ${String(pid)} still alive ${String(timeoutMs)}ms after quit`)
   }
-  // ③ the Hard Rule's face: the Playwright window count is zero (no handle leak).
-  const leaked = electronApp.windows().length
+  // ③ the Hard Rule's face: the Playwright window count is zero (no handle
+  //    leak). The driver's window-set drains ASYNCHRONOUSLY after the process
+  //    exit — under load the handles can outlive the pid by seconds (r2
+  //    full-lane replays: 1-3 phantom pages at the immediate check, zero at
+  //    every earlier poll). Bounded drain wait; the Rule stays absolute —
+  //    anything still alive at the deadline is a real leak and throws.
+  const drainDeadline = Date.now() + 10_000
+  let leaked = electronApp.windows().length
+  while (leaked !== 0 && Date.now() < drainDeadline) {
+    await new Promise(resolve => setTimeout(resolve, WINDOW_POLL_MS))
+    leaked = electronApp.windows().length
+  }
   if (leaked !== 0) throw new Error(`playwright window handles leaked: ${String(leaked)} page(s) survive the app exit`)
 }

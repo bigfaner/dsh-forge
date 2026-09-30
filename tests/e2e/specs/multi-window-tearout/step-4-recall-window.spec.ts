@@ -24,7 +24,7 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, ensureBoardPaneDetachable, M4WorldManager,
+  activateProjectByTreeRow, clickStable, clickPaneDetachStable, ensureBoardPaneDetachable, M4WorldManager,
   readLayoutBlob, startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import {
@@ -56,7 +56,7 @@ test.describe.serial('multi-window-tearout / step 4: 收回独立窗口(关闭 �
     await reachTearoutReady(page, kernel.projectId)
 
     // 就位:拆出(主窗 board pane 移除)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await expect(page.locator('[data-dsh-forge-task-board]'),
       '主窗 board pane 已移除(拆出对照)').toHaveCount(0, { timeout: 15_000 })
@@ -91,7 +91,7 @@ test.describe.serial('multi-window-tearout / step 4: 收回独立窗口(关闭 �
     // 就位:拆出态(主窗 + ≥1 拆出窗)+ 拆出集合落库(去抖 flush;重进恢复
     // 的记忆前提)。pane 头动作位先证在场可用(拆出走 C9 分屏径的重进竞态面)。
     await ensureBoardPaneDetachable(page)
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     expect(await shellWindowCount(world.shell.electronApp), '双窗在册(拆出态)').toBe(2)
     await page.waitForTimeout(1_600)

@@ -129,25 +129,32 @@ test.describe.serial('project-lifecycle-projection / step 1: 查看投影状态'
     await waitForStatus(page, other.projectId, row => row.state === 'healthy' && row.deviations.length === 0, 'B healthy')
     await waitForProjectionQuiescence(page, world.mainLog)
 
-    // 注入手改:A 改名 + 前插至 B 之前(乱序)+ B 删除(经 submitWorkspaceSnapshot
-    // = Implementation Notes 的「手改 dsh 侧」形态:快照仅含 A-改名行)。
+    // 注入手改(两相,calibration r2):契约三分语义(renamed/deleted/
+    // reordered)全保留 —— round 1 的单快照组合布景(A 改名前插 + B 删除)
+    // 使乱序判定结构性不可达:reordered 仅比对「已推送且实况命中」成员彼此
+    // 相对序(diff.ts 口径:仅比对已推送成员彼此的相对序),B 被删除后可比对
+    // 集塌缩至 1,相对序无从分歧;契约把两类偏差钉在同一快照上与该口径冲突
+    // (eval-consistency follow-up 已记录)。两相注入:① 乱序+改名(B 在场,
+    // A 前插构成真实相对序分歧)→ ② 删除(B 退场)。
     const before = readLiveRegistry(dshHome) as NonNullable<ReturnType<typeof readLiveRegistry>>
     const rowA = rowAtAnchor(before, kernel.codeRoot)
     const rowB = rowAtAnchor(before, other.codeRoot)
     expect(rowA, '手改基线:A workspace 在座').toBeDefined()
     expect(rowB, '手改基线:B workspace 在座').toBeDefined()
     const projectionSurfaceBefore = JSON.stringify(before.order.map(row => ({ path: row.path, title: row.title })))
-    // 手改快照走 sc3-degrade ① 的成形:A 改名前插(orderIdx 0)+ B 删除
-    // (快照不含 B 行);其余行(宿主自留位 —— 宿主前插行不在 forge 写面,
-    // 比对口径同 sc3 的 projectionSurface)原样保留,快照才是对账可收敛输入。
+    // 其余行(宿主自留位 —— 宿主前插行不在 forge 写面,比对口径同 sc3 的
+    // projectionSurface)原样保留,快照才是对账可收敛输入。
     const survivors = before.order.filter(row => row !== rowA && row !== rowB)
-    const drifted = [
+    // 相 ①:A 改名前插(orderIdx 0)+ B 保留(orderIdx 1;forge 期望序 = B 前
+    // A 后 —— registerLcProjects 先 B 后 A,相对序分歧成立)。
+    const driftedPhase1 = [
       { workspaceId: (rowA as { workspaceId: string }).workspaceId, path: (rowA as { path: string }).path, title: MANUAL_RENAMED, orderIdx: 0 },
-      ...survivors.map((row, index) => ({ workspaceId: row.workspaceId, path: row.path, title: row.title, orderIdx: index + 1 })),
+      { workspaceId: (rowB as { workspaceId: string }).workspaceId, path: (rowB as { path: string }).path, title: (rowB as { title: string }).title, orderIdx: 1 },
+      ...survivors.map((row, index) => ({ workspaceId: row.workspaceId, path: row.path, title: row.title, orderIdx: index + 2 })),
     ]
-    await bridgeInvoke(page, 'submitWorkspaceSnapshot', [{ workspaces: drifted }])
+    await bridgeInvoke(page, 'submitWorkspaceSnapshot', [{ workspaces: driftedPhase1 }])
 
-    // 偏差呈现:A renamed + reordered;B deleted(明细 = 差异事实)。
+    // 偏差呈现(相 ①):A renamed + reordered;B reordered(明细 = 差异事实)。
     const aDeviation = await waitForStatus(page, kernel.projectId, row =>
       row.state === 'deviation'
       && row.deviations.some(d => d.type === 'renamed' && d.detail.includes(MANUAL_RENAMED))
@@ -155,6 +162,12 @@ test.describe.serial('project-lifecycle-projection / step 1: 查看投影状态'
     'A deviation:renamed(手改新名)+ reordered(order drift)')
     expect(aDeviation.deviations.find(d => d.type === 'renamed')?.detail,
       'renamed detail 携两侧名(差异事实)').toContain(CARRIER)
+    await waitForStatus(page, other.projectId, row =>
+      row.state === 'deviation' && row.deviations.some(d => d.type === 'reordered' && d.detail.includes('order drift')),
+    'B deviation:reordered(相对序分歧的另一半成员)')
+
+    // 相 ②:B 删除(快照退场 B 行)→ B deleted(与相 ① 的乱序偏差独立呈现)。
+    await bridgeInvoke(page, 'submitWorkspaceSnapshot', [{ workspaces: driftedPhase1.filter(row => row.workspaceId !== (rowB as { workspaceId: string }).workspaceId) }])
     await waitForStatus(page, other.projectId, row =>
       row.state === 'deviation' && row.deviations.some(d => d.type === 'deleted' && d.detail.includes('workspace gone')),
     'B deviation:deleted(workspace gone)')

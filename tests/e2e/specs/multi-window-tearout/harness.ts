@@ -19,8 +19,8 @@ import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import { seedLineageCorpus } from '../../stubs/lineage-corpus.ts'
 import {
-  bootM4World, ensureProjectGroupExpanded, ensureSplitActive, freshRoot, m4Env,
-  openTreeSession, pickSplitBoard, type M4World, type M4WorldManager,
+  bootM4World, ensureBoardPaneDetachable, ensureProjectGroupExpanded, ensureSplitActive,
+  freshRoot, m4Env, openTreeSession, pickSplitBoard, type M4World, type M4WorldManager,
 } from '../_lib/m4-world.ts'
 import { buildKernelWorld, handBuiltTaskSet, type KernelWorld, type TaskSpec } from '../_lib/journey-world.ts'
 import { writeForgeProject } from '../../../../apps/desktop/e2e/fixtures/forge-project.ts'
@@ -110,6 +110,12 @@ export async function reachTearoutReady(page: Page, projectId: string): Promise<
     .waitFor({ state: 'visible', timeout: 20_000 })
   await pickSplitBoard(page)
   await ensureSplitActive(page)
+  // calibration r2(plumbing harden):后置条件收紧到消费者真实所需 —— 拆出
+  // 动作位在场且可用(pane 头挂载 = split-active ∧ 该 pane 为 board)。round 2
+  // 实测两例:separator 在场(ensureSplitActive 通过)而 board pane 未落位,
+  // 后续 clickStable(pane-detach) 19s 不可达 —— ensureBoardPaneDetachable
+  // 的自愈环(pickSplitBoard 重试)正是该后置条件的确定性承载。
+  await ensureBoardPaneDetachable(page)
 }
 
 /** The session composer's contenteditable host。 */

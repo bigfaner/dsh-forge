@@ -23,7 +23,7 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, M4WorldManager, readLayoutBlob,
+  activateProjectByTreeRow, clickStable, clickPaneDetachStable, M4WorldManager, readLayoutBlob,
   startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
@@ -51,7 +51,7 @@ test.describe.serial('multi-window-tearout / step 2: 拆出为独立窗口', () 
       document.querySelectorAll('[data-dsh-forge-pane-region]').length)
 
     // 拆出(pane 头动作;主进程 windowOpenDetached → 同源 SPA 重载 + role 握手)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
 
     // 独立窗:标题「<项目名> · <视图名>」(C10 form;projectTitle · viewLabel)。
@@ -101,7 +101,7 @@ test.describe.serial('multi-window-tearout / step 2: 拆出为独立窗口', () 
       '唯一内容 pane = board(拆出对象就位)').toBeVisible({ timeout: 15_000 })
 
     // 拆出该唯一内容 pane。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await page.waitForTimeout(1_000)
 

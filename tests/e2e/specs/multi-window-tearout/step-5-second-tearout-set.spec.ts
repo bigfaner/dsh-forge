@@ -18,10 +18,10 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, bridgeInvoke, clickStable, ensureBoardPaneDetachable,
+  activateProjectByTreeRow, bridgeInvoke, clickStable, clickPaneDetachStable, ensureBoardPaneDetachable,
   M4WorldManager, readLayoutBlob, startAutoDismiss,
 } from '../_lib/m4-world.ts'
-import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
+import { osWindowTitles, shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
 import { bootMwWorld, buildMwJourneyRoot, reachTearoutReady } from './harness.ts'
 
 test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集合复数)', () => {
@@ -44,7 +44,7 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await reachTearoutReady(page, kernel.projectId)
 
     // 第一次拆出(主窗 board pane 移除)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const first = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await expect(page.locator('[data-dsh-forge-task-board]'),
       '主窗 board pane 已移除(第一次拆出)').toHaveCount(0, { timeout: 15_000 })
@@ -54,8 +54,11 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await ensureBoardPaneDetachable(page)
     await expect(page.locator('[data-dsh-forge-pane-detach]'),
       '第二次拆出的 pane 头动作位在场').toBeVisible({ timeout: 15_000 })
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
-    const second = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
+    await clickPaneDetachStable(page)
+    // calibration r2(P-2):排除首窗匹配 —— 两窗同标记并存时,匹配器必须命中
+    // 新窗(round 1 的匹配器首轮迭代确定性地返回既有匹配页,「同窗复用」的
+    // 读数一半是匹配器歧义;窗集计数断言独立承载「新窗真被创建」的裁决)。
+    const second = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000, { exclude: [first.page] })
     expect(first.page !== second.page, '两个独立窗(不同 page 身份)').toBe(true)
     await expect.poll(() => shellWindowCount(world.shell.electronApp),
       { timeout: 15_000, message: '窗口集 = 3(主窗 + 两独立窗)' }).toBe(3)
@@ -82,7 +85,7 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await reachTearoutReady(page, kernel.projectId)
 
     // 第一次拆出 + 调整几何(移动 + 缩放,偏离缺省 960×640 居中)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const first = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await first.page.setViewportSize({ width: 800, height: 520 })
     const moved = await first.page.evaluate(() => { window.moveTo(140, 160); return true }).catch(() => false)
@@ -97,7 +100,11 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await page.waitForTimeout(1_600)
 
     // 再拆出:新窗按记忆几何打开(宽 = 调整后值,非缺省 960)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    // calibration r2(再拆出必走分屏径):收回后右栏可能回到单 pane 姿态
+    //(pane 头仅 ≥2 C9 pane 挂载)—— ensureBoardPaneDetachable 的自愈环承载
+    // 分屏用户径,直达拆出动作位的确定性后置条件。
+    await ensureBoardPaneDetachable(page)
+    await clickPaneDetachStable(page)
     const second = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     const rect = await second.page.evaluate(() => ({
       w: window.innerWidth, h: window.innerHeight, x: window.screenX, y: window.screenY,
@@ -118,24 +125,29 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await reachTearoutReady(page, kernel.projectId)
 
     // 就位:拆出 + 集合落库。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await page.waitForTimeout(1_600)
-    const titleBefore = await detached.page.title()
+    // 标题读数 = 主进程 BrowserWindow.getTitle()(P-1 纪律:composeDetachedTitle
+    // 归主进程,page.title()= 渲染层 document.title = 宿主 SPA 自置值,fix-3
+    // 守卫后恒不承载组装题;本腿 round 1 为 DNR,首次实跑即暴露读数源错置)。
+    const detachedOsTitle = async (): Promise<string> =>
+      (await osWindowTitles(world.shell.electronApp)).find(title => title.includes('· 看板')) ?? ''
+    const titleBefore = await detachedOsTitle()
 
     // ---- 支路一:归档 → 窗保持可用 + 标题追加「已归档」。---------------
     await bridgeInvoke<unknown>(page, 'archiveProject', [{ projectId: kernel.projectId }])
     await expect(detached.page.locator(`[data-dsh-forge-detached-project="${kernel.projectId}"]`),
       '归档:拆出窗保持可用(归档 ≠ 关窗)').toBeVisible()
-    await expect.poll(() => detached.page.title(),
-      { timeout: 15_000, message: '归档:标题追加「已归档」' }).toContain('已归档')
+    await expect.poll(detachedOsTitle,
+      { timeout: 15_000, message: '归档:标题追加「已归档」(OS 题,主进程权威)' }).toContain('已归档')
 
     // ---- 支路二:恢复 → 后缀即时清除、窗保持。---------------------------
     await bridgeInvoke<unknown>(page, 'restoreProject', [{ projectId: kernel.projectId }])
     await expect(detached.page.locator(`[data-dsh-forge-detached-project="${kernel.projectId}"]`),
       '恢复:窗保持可用').toBeVisible()
-    await expect.poll(() => detached.page.title(),
-      { timeout: 15_000, message: '恢复:后缀「已归档」即时清除' }).toBe(titleBefore)
+    await expect.poll(detachedOsTitle,
+      { timeout: 15_000, message: '恢复:后缀「已归档」即时清除(OS 题,主进程权威)' }).toBe(titleBefore)
 
     // ---- 支路三:删除 → 该项目全部拆出窗关闭 + 记忆随删清除。-----------
     await page.evaluate(() => { localStorage.removeItem('dsh.forge.workbench.view') }).catch(() => {})

@@ -59,6 +59,14 @@ test.describe.serial('task-session-roundtrip / step 7: 会话树反向标识', (
       'C1 展开后 depth-2 后代在场(递归血缘)').toBeVisible({ timeout: 10_000 })
 
     // 反查互证:dock 侧行展开亦识别同一任务归属(命名遵循行 + 任务 id)。
+    // 命名面前置 = 先开 TOP_A(catalog 随 open 加载,sc7 ①⑥ 纪律;calibration
+    // r2 同 step-3):cold 行只承结构,行名退 displayTitle = cwd 尾段「repo」。
+    await openTaskDetail(page, TASK_MAIN)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_A}"]`,
+      sessionOpenLanded(page),
+    )
+    // sc7 fix-1 重入纪律:会话切换卸载板内 dock → 同一用户径重开。
     await openTaskDetail(page, TASK_MAIN)
     await expandLinkRow(page, TOP_A)
     await expect(page.locator(`[data-dsh-forge-detail-descendant="${SUB_OK}"]`),
@@ -92,6 +100,16 @@ test.describe.serial('task-session-roundtrip / step 7: 会话树反向标识', (
     await expect(renamedRow, '改名桩行在场(dock 反查不受改名影响)').toBeVisible({ timeout: 10_000 })
 
     // 打开不受改名影响(SubagentAddress 走血缘地址;打开后 C6 以血缘推导)。
+    // calibration r2 同 step-6:先开 TOP_A(catalog 加载;否则冷行兜底地址
+    // one-shot → 只读形态打开,conversation.input.dock 不挂载,C6 条所在面
+    // 结构性缺席)→ sc7 fix-1 同用户径重入 → 再开改名桩后代。
+    await openTaskDetail(page, TASK_MAIN)
+    await clickSelfUnmounting(
+      page, `[data-dsh-forge-detail-enter="${TOP_A}"]`,
+      sessionOpenLanded(page),
+    )
+    await openTaskDetail(page, TASK_MAIN)
+    await expandLinkRow(page, TOP_A)
     await clickSelfUnmounting(
       page, `[data-dsh-forge-detail-descendant-open="${SUB_RENAMED}"]`,
       sessionOpenLanded(page),

@@ -19,7 +19,7 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, M4WorldManager, startAutoDismiss,
+  activateProjectByTreeRow, clickStable, clickPaneDetachStable, M4WorldManager, startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import { openBoardPane } from '../_lib/journey-world.ts'
 import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
@@ -45,7 +45,7 @@ test.describe.serial('multi-window-tearout / step 3: 并行观察与操作', () 
     await reachTearoutReady(page, kernel.projectId)
 
     // 拆出看板 pane → 双窗并行。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     expect(await shellWindowCount(world.shell.electronApp), '双窗在册').toBe(2)
 
@@ -77,7 +77,7 @@ test.describe.serial('multi-window-tearout / step 3: 并行观察与操作', () 
     await reachTearoutReady(page, kernel.projectId)
 
     // 拆出看板;主窗重开看板(同一数据面在两侧镜像呈现)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_BOARD}"]`),
@@ -111,7 +111,7 @@ test.describe.serial('multi-window-tearout / step 3: 并行观察与操作', () 
     await reachTearoutReady(page, kernel.projectId)
 
     // 拆出 A 的看板 → 主窗切 B。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     const rowB = page.locator(`[data-dsh-forge-tree-project="${other.projectId}"]`)
     await rowB.click()

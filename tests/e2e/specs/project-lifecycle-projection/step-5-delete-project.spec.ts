@@ -8,7 +8,8 @@
 //   confirm-cancel-zero-change — 确认对话取消:零变更(条目/workspace/分组/
 //             布局记忆全保持,零投影写);
 //   delete-projection-failure — 通道故障删除:本地删除生效(条目/布局/级联
-//             清除),dsh 侧 workspace 逗留(内核注释口径;重试面注记见 header)。
+//             清除),dsh 侧 workspace 随 fire-and-forget 删除 push 收敛移除
+//             (calibration r2 口径:注错缝仅盖 pushPlan;见腿内注记)。
 // fixture_spec: Project ×2 + Session(cwd 落承载 workspace)+ LayoutMemory ×2
 // (承载 + 其余项目;经 UI 用户径开 board pane 落库)。
 // Techniques: sc3-sync ④(删除语义 + 退未分组 + 历史可读)/ sc4(readLayoutBlob
@@ -17,10 +18,13 @@
 // VERIFY(kernel-comment ruling consumed, delete-projection-failure):删除投影
 // push = fire-and-forget(buildRemovalPlan 先于行删除组装 → 行删除 → emit;
 // FK cascade 随行清期望快照)。通道故障下无持久重试载体 —— 内核注释原文
-// 「removal proceeds; dsh-side workspace may linger」;契约 Step 5e 自身即
-// 补全口径(PRD 对账 open question)。本腿钉确定性核:本地删除生效 + 布局
-// 清除 + workspace 逗留 + 零崩溃;「恢复后重试成功 → workspace 移除」随
-// 5e 的 PRD 对账落缝(不伪造无载体的重试腿)。
+// 「removal proceeds; dsh-side workspace may linger」的指涉 = relay 缺席
+// 世界(事件无人消费);DSH_FORGE_PROJECTION_FAULTS 注错面仅盖 pushPlan 的
+// relay 在场探测(faults-stub.ts 口径),lifecycle-hooks.emitRemovalPush 直发
+// onEvents 不受盖 → 本缝下删除 deterministic 收敛。calibration r2:round 1
+// 把「may linger」钉成承诺性可观测与本缝行为相反(实测移除);契约 Step 5e
+// 口径缺口已记录 eval-consistency follow-up。本腿钉:本地删除生效 + 布局
+// 清除 + dsh 侧收敛移除 + 零崩溃。
 
 import { expect, test } from '@playwright/test'
 import { createProjectionFaultStub } from '../../stubs/projection-faults.ts'
@@ -255,10 +259,16 @@ test.describe.serial('project-lifecycle-projection / step 5: 删除项目(经确
       '树行零残留').toHaveCount(0, { timeout: 15_000 })
     expect(await readLayoutBlob(kernel.userDataDir, kernel.projectId),
       '布局记忆随删除清除(本地链完整)').toBeUndefined()
-    // dsh 侧:workspace 逗留(删除 push 未达;内核注释口径 —— may linger)。
+    // dsh 侧(calibration r2):删除投影 push = fire-and-forget ——
+    // lifecycle-hooks.emitRemovalPush 直发 onEvents,不经 pushPlan 的
+    // relay 在场探测(faults-stub 注错面仅盖 pushPlan:DSH_FORGE_PROJECTION_
+    // FAULTS 使 probe 恒假 → 注册/改名/对账 push 降级;删除通道不受盖)。
+    // 内核注释「may linger」的指涉 = relay 缺席世界(hostless,事件无人消费),
+    // 非本注错缝 —— 契约把许可性注释钉成承诺性可观测,与本缝结构上可达的
+    // 行为相反(实测 deterministic 收敛;口径缺口已记录 eval-consistency)。
     await page.waitForTimeout(1_500)
     expect(rowAtAnchor(readLiveRegistry(dshHome) as NonNullable<ReturnType<typeof readLiveRegistry>>, kernel.codeRoot),
-      '通道故障:workspace 逗留(零投递;恢复承载随 5e PRD 对账)').toBeDefined()
+      '通道故障(仅盖 pushPlan):删除 fire-and-forget 直发收敛(workspace 移除;linger 属 relay 缺席世界)').toBeUndefined()
     // 应用不崩溃(降级不静默:无渲染错误,工作台可继续)。
     await expect(page.locator('[data-dsh-forge-project-seat]'), '工作台在场(零崩溃)').toBeVisible()
     expect(world.shell.pageErrors, `renderer pageerrors: ${world.shell.pageErrors.join(' | ')}`).toEqual([])

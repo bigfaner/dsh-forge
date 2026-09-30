@@ -10,7 +10,7 @@
 
 import { expect, test, _electron } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, M4WorldManager, startAutoDismiss,
+  activateProjectByTreeRow, clickPaneDetachStable, M4WorldManager, startAutoDismiss
 } from '../_lib/m4-world.ts'
 import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
 import { MAIN_PATH } from '../../../../apps/desktop/e2e/helpers/plugins.ts'
@@ -55,7 +55,7 @@ test.describe.serial('multi-window-tearout / step 1: 选中待拆出视图', () 
     await reachTearoutReady(page, kernel.projectId)
 
     // 就位:拆出窗在册(双窗)。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     expect(await shellWindowCount(world.shell.electronApp), '双窗口在册(主窗 + 拆出窗)').toBe(2)
     const mainPid = await world.shell.electronApp.evaluate(() => process.pid)

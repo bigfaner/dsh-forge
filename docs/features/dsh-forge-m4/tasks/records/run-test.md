@@ -1,6 +1,6 @@
 ---
 status: "blocked"
-started: "2026-09-30 08:12"
+started: "2026-09-30 18:13"
 completed: "N/A"
 time_spent: ""
 ---
@@ -8,36 +8,39 @@ time_spent: ""
 # Task Record: T-test-run Run Web E2E Test
 
 ## Summary
-M4 契约派生 Web E2E 执行腿(forge:run-tests skill;web-dev→web-probe(收集 479/226 = 4.7 基线 393 + 本批 86)→逐旅程 web-test-m3×6→web-teardown;workers:1 + 每批次前实例锁探针 + 真 userData;三件套先重建)。首跑 86 = 27 passed/28 failed/31 did-not-run(serial 级联);两轮【测试侧管线修复】(零产品代码改动、零断言语义弱化)后终态 86 = 60 passed/14 failed/12 did-not-run。修复明细:①m4-world M4WorldManager.closeLive 裸 electronApp.close() 后 vendored host 子进程(19387)逗留致下一腿锁探针误报 —— 补 journey-world killLive 同款整树击杀+等真退出,并增 release() 公面(手动 launch 腿首线探针前提);②ensureOverviewTabOpen 新助手(fresh boot 落开始引导页,forge 概览 tab 须经 chip/引导卡用户径打开)接进 focusOverviewSubtab/openTaskDetail(J1 三腿 + J6 全旅程 dock 开启根因);③project-lifecycle harness 缺 expect 运行时导入(4 腿 ReferenceError);④registerLcProjects 真动词 rename 落 lc-carrier/lc-other(registerFixtureProject 以路径尾段命名 repo/repo-b,概览标题门永不匹配);⑤registration 世界改 register:false + post-boot 真动词基线注册(pre-boot repo 写径不触投影链 —— registered 侦测/同名同序投影收敛根因,sc3 纪律);⑥预览行/nogit 侦测文案对齐产品 copy(沿用仓内→已检出 forge 文档/仓内→可 PR 评审/nogit 全串);⑦registered-duplicate 重塑为快车道终态三元组(§5.4 侦测即自动落位:卡收起+toast 已注册·已打开+指针;卡内瞬态面=单测权威);⑧split-pane step5 收起前提坐实(默认收起组单次 caret 点击=展开;先证展开再收起)+ 冷重启走 release;⑨multi-window:独立窗标题改读主进程 OS 窗题(标题归主进程;page.title()=渲染层 document.title)+ 再拆出改 C9 分屏径(pane 头仅 ≥2 pane 挂载;M3 openBoardPane 单 pane 面不承载动作位)+ ensureBoardPaneDetachable 前置;⑩step4 子 tab 集读取移至 dock 交互前(ensureBoardActive 换 active tab 后概览体卸载);⑪feature 目录行 fresh board 自动展开(§4.4②)以 aria-expanded 为准补点。终态 14 失败全部为【产品行为候选缺陷】,逐条证据+指针落 testing/results/latest.md(P-1 拆出窗标题被渲染层 document.title 覆写→fix-3;P-2 二次拆出复用既有窗;P-3 通道故障活跃期概览/degraded-重试面不可达(会话工作区未绑+右栏不挂载);P-4 deviation 上移方向 reordered 不上报(下移方向 sc3 已证可报);P-5 通道故障删除 dsh 行仍被移除(linger 口径);P-6 挂接行 TOP_A 误呈 ended + 预种标题不浮面(树/后代行均呈 repo);P-7 C9 比例跨项目串扰入 B blob)。fix 任务族受一源一活跃 fix 门限制:fix-3(P-1)先行,P-2~P-7 以报告为凭逐个续开。回归面:本任务零产品/src 改动(diff 仅 6 旅程 spec+m4-world+2 harness),4.7 全量基线(393=329+62 fixme+2 skip,0 failed,tarball-stable)承载未触规格;代表性探针复跑绿(m4/sc3-projection-degrade 17.2s + apps/desktop/e2e/shell.spec.ts 986ms);每轮修复后 compile 门复验 479/226 零收集错误。
+M4 run-test round 2(fix-3 后续跑;forge:run-tests skill;web-dev→web-probe(479/226)→逐旅程 web-test-m3×6→web-teardown;workers:1 + 每批前实例锁探针;三件套新鲜度核对后零重建)。round 1 终态 60/14/12 → 本轮终态 86 = 81 passed / 3 failed / 2 did-not-run(serial 级联):+21 通过、11/14 失败清除,零产品/src 改动。三分法裁决逐缺口落实:【校准族 ×5(断言零弱化,逐处 in-file 注释引设计源)】P-6A supersede —— services.recordSessionLink 先 supersedeActiveSessionLinks(4.2 发起侧收敛,spike-1 §5/Story2 AC3),harness 按 A→B→M 错序登记致 TOP_A 被 end,契约布景本身时序错置 → 按旅程时序(B ended→M ended→A 最新 active)重排;P-6B 冷面 —— catalog(refreshSubagents)与 durable title 投影均随 open 加载(sc7 已证纪律),冷行名退 displayTitle=cwd 尾段「repo」、冷行地址走 one-shot 兜底 → 只读形态打开无 conversation.input.dock(C6 条所在),命名/C6 断言改 ride opened state(行内 [打开] + sc7 fix-1 同用户径重入);step6/unbound 契约「ended 挂接→零命中」与单测钉死口径冲突(metadata-bar.spec:97 badge 覆盖 active AND ended)→ 改真零覆盖语料(TOP_U/SUB_U 零挂接对);P-4 —— diff.ts「reordered 仅比对已推送且实况命中成员彼此相对序」,组合布景(B 删除)使集合塌缩至 1 结构性不可报 → 拆两相注入(乱序+改名 B 在场 → B 退场删除),三分语义全数真exercise;P-5 —— emitRemovalPush 直发 onEvents 不经 pushPlan 的 relay 在场探测(faults-stub 注错面仅盖 pushPlan),「may linger」指涉 relay 缺席世界,本缝下删除 deterministic 收敛 → 断言对齐实测交付行为(绿 ×2)。【管线族】P-2 waitForDetachedBoard 匹配器歧义(两同标记窗时首轮迭代确定性返回旧窗)→ exclude 参数(窗集计数独立证新窗创建);j5 pane 头挂载抖动(ensure→click 有缝)→ clickPaneDetachStable 原子 probe-and-click + 周期 pickSplitBoard 自愈;降态树行重渲染杀菜单 popover → openLifecycleMenu 整环带界重试;Playwright 句柄排空滞后进程退出(负载下)→ 泄漏硬门前置有界排空等待;独立窗题断言改主进程 osWindowTitles(P-1 纪律,fix-3 后渲染层 document.title 恒不承载组装题);clickStable 增可选 hasText。【产品缺口族 ×3(证据两轮复现/源码定位)】P-3 故障先于首投影注册 → dsh workspace 零投递 → 会话列未绑 + 原生右栏整列不挂载 → 概览/degraded-[重试投影] 面在其存在的状态不可达(healthy 后注错的对账腿全绿 —— 缺口特定于 fault-before-first-projection);P-6C 幽灵挂接打开无 toast —— client/index.ts:977 onEnterSession 以 void 包装吞掉 channel reject,LinkHistory.openTarget 只对 thenable reject 起 toast,违 2.6 AC「打开失败不静默」→ fix-4 已开(透传 promise + 两处 fire-and-forget 调用点自带 catch:TasksPane.tsx:257/TaskBoardPage.tsx:785);P-7 C9 比例跨项目串扰 —— plugin-lifetime splitStore 换台不重置,B 首写把 A 的 30 持久进 B blob,违布局按项目隔离 + 裁决 #28-④「换台重置」(1.6 延迟缝)。fix 门:fix-4(P-6C)为本轮唯一新开,P-3/P-7 以报告为凭候后继续开(一源一活跃)。契约口径缺口(P-4 组合布景/P-5 linger/step6 ended 链路)已录 eval-consistency follow-up。回归面:零产品/src 改动(diff = 15 个 tests/e2e/ 下 spec/harness/helper 文件),共享助手改动全为增量(新导出 + 可选参 + 重试环);compile 门每轮复验 479/226 零收集错误。
 
 ## Changes
 
 ### Files Created
-- docs/features/dsh-forge-m4/testing/results/latest.md
+- docs/features/dsh-forge-m4/tasks/fix-4.md
 
 ### Files Modified
+- docs/features/dsh-forge-m4/testing/results/latest.md
+- tests/e2e/helpers/windows.ts
 - tests/e2e/specs/_lib/m4-world.ts
-- tests/e2e/specs/project-workbench-home/step-4-three-zone-container.spec.ts
-- tests/e2e/specs/project-workbench-home/step-5-forge-views-adoption.spec.ts
-- tests/e2e/specs/project-workbench-home/step-6-restart-restore.spec.ts
-- tests/e2e/specs/project-registration-projection/harness.ts
-- tests/e2e/specs/project-registration-projection/smoke.spec.ts
-- tests/e2e/specs/project-registration-projection/step-2-path-probe.spec.ts
-- tests/e2e/specs/project-registration-projection/step-3-doc-placement-preview.spec.ts
-- tests/e2e/specs/project-lifecycle-projection/harness.ts
-- tests/e2e/specs/project-lifecycle-projection/step-1-projection-status.spec.ts
-- tests/e2e/specs/split-pane-layout-memory/step-5-leave-reenter-restore.spec.ts
+- tests/e2e/specs/multi-window-tearout/harness.ts
 - tests/e2e/specs/multi-window-tearout/smoke.spec.ts
+- tests/e2e/specs/multi-window-tearout/step-1-select-pane-tearout.spec.ts
 - tests/e2e/specs/multi-window-tearout/step-2-tearout-window.spec.ts
+- tests/e2e/specs/multi-window-tearout/step-3-parallel-observation.spec.ts
 - tests/e2e/specs/multi-window-tearout/step-4-recall-window.spec.ts
 - tests/e2e/specs/multi-window-tearout/step-5-second-tearout-set.spec.ts
 - tests/e2e/specs/multi-window-tearout/step-6-reenter-restore-tornout.spec.ts
+- tests/e2e/specs/project-lifecycle-projection/step-1-projection-status.spec.ts
+- tests/e2e/specs/project-lifecycle-projection/step-5-delete-project.spec.ts
+- tests/e2e/specs/task-session-roundtrip/harness.ts
+- tests/e2e/specs/task-session-roundtrip/smoke.spec.ts
+- tests/e2e/specs/task-session-roundtrip/step-3-identify-subagent-session.spec.ts
+- tests/e2e/specs/task-session-roundtrip/step-6-subagent-metadata-roundtrip.spec.ts
+- tests/e2e/specs/task-session-roundtrip/step-7-session-tree-reverse-badge.spec.ts
 
 ### Key Decisions
-- 执行纪律:任务约束「MUST 经 forge:run-tests skill、MUST NOT 直跑 runner」以 just 配方承载(web-dev/web-probe/web-test-m3/web-teardown);M4 旅程落 tests/e2e/specs/<journey>/ = forge-m3-e2e 项目,故逐旅程走 web-test-m3(4.7 全量分块同款 workers:1 + 每批前实例探针)
-- 测试侧修复边界:仅生成器方言/种子/生命周期管线(选择器漂移、发明文案、缺失导入、pre-boot 写径、M3 单 pane 方言、标题读错面、锁竞态),断言语义零弱化 —— 需语义重塑处(registered 快车道)以契约终态三元组承载且注明单测权威面
-- 14 残余失败全数录为产品行为候选(P-1~P-7,证据+代码指针+快照路径落报告);fix-3(P-1 标题)已建,P-2~P-7 受一源一活跃 fix 门限逐个续开 —— 不在 run-test 任务内修产品代码
-- 回归口径诚实陈述:零产品/src 改动故 4.7 基线承载;代表性探针(sc3-projection-degrade/shell)复跑绿;全量 393 未在本任务重跑(同字节承载 + 时间预算),记录在案
+- 三分法裁决口径:每个 standing failure 先对设计权威(repo 注释口径/单测钉死语义/裁决编号/任务 AC)取证再分类 —— 契约布景与文档化产品语义冲突 = 测试侧校准(断言本体零改动、in-file 注明设计源与缺口记录);产品行为违其自身 AC/裁决 = 产品缺口。本轮 14 失败 → 5 校准族 + 2 管线族 + 3 产品缺口(P-1 已修)+ P-2 匹配器歧义
+- P-6 簇分解:非单一根因 —— supersede 时序(5 测)+ 冷面可用点(命名/C6,4 测)为测试侧;产品切片仅 open-failed toast 接线吞错(1 测,fix-4 承载);「P-6 若成立为单因」的预设被证据修正为族分解
+- 一源一活跃 fix 门遵守:仅开 fix-4(P-6C,根因行级定位 + 修法/验证面/回归面齐备);P-3/P-7 记录在案候后继续开,不在 run-test 任务内修产品代码
+- 口径缺口回流:三处契约期望与设计口径冲突(P-4 组合布景、P-5 linger 过钉、step6 ended→零命中)全部校准并注明,登记 eval-consistency follow-up —— 契约面本身需对齐文档化语义
+- 终态数字诚实口径:每旅程终数取自最终代码态的整旅程跑;最后落地的一处 harden 涉及的文件(j3 故障腿/j5 step6)以最终代码复跑绿收数(含一次 90s uiReady 负载 flake 的干净复跑 1.0m),全程日志 .forge/e2e-logs/final*.log 在案
 
 ## Cases Generated
 86
@@ -49,7 +52,7 @@ M4 契约派生 Web E2E 执行腿(forge:run-tests skill;web-dev→web-probe(收�
 无
 
 ## Test Results
-86 = 60 passed / 14 failed / 12 did-not-run(serial 级联);首跑 27/28/31 → 两轮测试侧管线修复后 +33 通过。逐旅程:workbench-home 10/10 GREEN;registration 12+1F+1DNR;lifecycle 13+2F+1DNR;split-pane 12+1F+1DNR;multi-window 9+3F+3DNR;task-session-roundtrip 4+7F+6DNR。14 失败 = 产品行为候选 P-1~P-7(详见 docs/features/dsh-forge-m4/testing/results/latest.md;fix-3 已建承载 P-1)。compile 门 479/226 绿;回归探针 sc3+shell 绿;4.7 全量基线承载(零产品改动)
+86 = 81 passed / 3 failed / 2 did-not-run(serial 级联);round 1 60/14/12 → round 2 +21 通过。逐旅程:workbench-home 10/10 GREEN;registration 12+1F(P-3 概览/重试面不可达)+1DNR;lifecycle 16/16 GREEN;split-pane 12+1F(P-7 C9 比例跨项目串扰)+1DNR;multi-window 15/15 GREEN;task-session-roundtrip 16+1F(P-6C open-failed toast 不浮面,fix-4 已开)。3 失败 = 确证产品缺口(源码定位 + 两轮复现);2 DNR 均为其 serial 级联。compile 门 479/226 绿;零产品/src 改动,4.7 全量基线承载;契约口径缺口 ×3 录 eval-consistency follow-up
 
 ## Acceptance Criteria
 - [ ] All test cases MUST pass — no skipped tests, no expected failures, no TODO placeholders

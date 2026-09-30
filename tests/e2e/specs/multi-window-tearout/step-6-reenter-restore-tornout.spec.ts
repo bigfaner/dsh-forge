@@ -20,8 +20,8 @@
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, ensureBoardPaneDetachable, M4WorldManager,
-  readLayoutBlob, startAutoDismiss,
+  activateProjectByTreeRow, clickPaneDetachStable, ensureBoardPaneDetachable, M4WorldManager,
+  readLayoutBlob, startAutoDismiss
 } from '../_lib/m4-world.ts'
 import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
 import { launchWorkbenchShell } from '../../helpers/app.ts'
@@ -49,11 +49,11 @@ test.describe.serial('multi-window-tearout / step 6: 离开重进恢复拆出态
 
     // 就位:双拆出(集合 = 2;见 step-5 类型边界注记 —— 双 board 窗承载)。
     await ensureBoardPaneDetachable(page)
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     // 第二次拆出:C9 分屏用户径重开 board pane(pane 头仅在 ≥2 pane 时挂载)。
     await ensureBoardPaneDetachable(page)
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await expect.poll(() => shellWindowCount(world.shell.electronApp),
       { timeout: 15_000, message: '离开前窗口集 = 3(主窗 + 两拆出窗)' }).toBe(3)
@@ -106,7 +106,7 @@ test.describe.serial('multi-window-tearout / step 6: 离开重进恢复拆出态
     await reachTearoutReady(page, kernel.projectId)
 
     // 就位:一拆出窗 + 集合落库。
-    await clickStable(page, '[data-dsh-forge-pane-detach]')
+    await clickPaneDetachStable(page)
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await page.waitForTimeout(1_600)
     await expect.poll(async () => JSON.stringify((await readLayoutBlob(kernel.userDataDir, kernel.projectId))?.detached ?? {}),
