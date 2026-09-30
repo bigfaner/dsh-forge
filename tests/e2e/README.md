@@ -66,3 +66,32 @@ just web-test-m3 dual-form-transition/                                        # 
 件 skip 空测试,故不生成占位;② dual-form 腿需本机可解析的真实 forge CLI
 (`where.exe forge`,SC7 同前提);③ 全量契约派生腿运行时长为小时级(每文件独
 立世界,单实例串行),按旅程增量跑。
+
+## 契约派生腿 · M4(T-test-gen-scripts,tests/e2e/specs/&lt;journey&gt;/)
+
+`tests/e2e/specs/<m4-journey>/`(6 旅程,dsh-forge-m4 gen-journeys → gen-contracts
+→ **gen-test-scripts** 产物;35 契约 / 87 Outcome):与 M3 派生腿同构 —— 每旅程 =
+`harness.ts`(旅程语料世界 + 面向方言)+ `step-*.spec.ts`(每 Contract 步一文件,
+每 Outcome 一测试,`test.describe.serial`)+ `smoke.spec.ts`(全 happy path 单测
+试)。公共装置在 `specs/_lib/m4-world.ts`(M4 SC 腿技术基座:隔离 DSH_HOME 的
+app 世界 + REAL session-persistence 预种通道、实况 workspace.json 读卡、
+getProjectionStatus 内核面、project_ui_state 布局面、树/C8/C7/C5/C9/C10 面向
+方言)。旅程与 SC 腿同跑同纪律(workers:1 单实例 + 实例锁探针 + 隔离 userData):
+
+| 旅程 | 契约步 | 承载面 |
+|---|---|---|
+| `project-workbench-home/` | 6 步 10 Outcome | 首屏/树枚举/切换/三区/收纳巡检/重启恢复(500 任务 ≤2s 计测) |
+| `project-registration-projection/` | 5 步 13 Outcome | C7 卡六态侦测/三档门控/注册投影同名同序/通道注错重试/DF002 归组 |
+| `project-lifecycle-projection/` | 5 步 16 Outcome | healthy/degraded/deviation 状态面/改名/归档≠删除/恢复/删除级联 |
+| `split-pane-layout-memory/` | 6 步 13 Outcome | C9 分屏用户径/钳制 30–70/blob 记忆/重进重放/跨项目隔离 |
+| `multi-window-tearout/` | 6 步 18 Outcome | C10 拆出/并行互不干扰/收回/驻留+退出漏斗/重进恢复拆出态 |
+| `task-session-roundtrip/` | 7 步 17 Outcome | C5 挂接历史/血缘标识/双通道打开/C6 三态/树归拢互证 |
+
+注:① 6 个 Outcome 的注入缝缺席或真链不可达(工作台数据通道故障 / 窗口开窗
+故障 / detached 会话通道 / 失效 windowId 收回 / 血缘推断超时 / 拆出侧失效目
+标),已在各文件头注明 DEFERRED + 权威承载(cross-ref 单测矩阵或同通道族腿),
+质量门禁止无条件 skip 占位;② 若干 Outcome 以可达核承载(路径降级角标 =
+sync-error 通道、可写性复检提示面、改名空名提示面、删除投影重试、三 pane 字
+面 = vendored 双 pane 预算、树面 20 上限 = dock 权威面、已归档会话解除归档 =
+上游原生设置面 N/A 裁决),文件头 VERIFY 注记逐条落依据;③ 全量 M4 派生腿运
+行时长为小时级(每文件独立世界),按旅程增量跑。
