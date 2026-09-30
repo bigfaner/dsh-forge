@@ -22,7 +22,8 @@ import {
   splitRatioPercent, startAutoDismiss, expandRightbar,
 } from '../_lib/m4-world.ts'
 import { openBoardPane } from '../_lib/journey-world.ts'
-import { bootSpWorld, buildSpJourneyRoot, composerInput, TOP_A, TOP_B } from './harness.ts'
+import { launchWorkbenchShell } from '../../helpers/app.ts'
+import { bootSpWorld, buildSpJourneyRoot, composerInput, SUB_A, TOP_A, TOP_B } from './harness.ts'
 
 test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复', () => {
   const manager = new M4WorldManager()
@@ -52,7 +53,14 @@ test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复',
     await commitSplitRatioToFloor(page)
     await expect.poll(() => splitRatioPercent(page),
       { timeout: 10_000, message: '比例落位 30' }).toBe('30')
-    await clickStable(page, `[data-dsh-forge-tree-caret="${TOP_A}"]`).catch(() => {})
+    // subagent 收起姿态调整(TOP_A 展开→收起):单次 caret 点击会把默认收起的
+    // 组展开 —— 先证展开、再收起,「离开前 = 收起」前提坐实(可验证,不裸点)。
+    await clickStable(page, `[data-dsh-forge-tree-caret="${TOP_A}"]`)
+    await expect(page.locator(`[data-dsh-forge-tree-session="${SUB_A}"]`),
+      'TOP_A 展开(subagent 后代行呈现)').toBeVisible({ timeout: 10_000 })
+    await clickStable(page, `[data-dsh-forge-tree-caret="${TOP_A}"]`)
+    await expect(page.locator(`[data-dsh-forge-tree-session="${SUB_A}"]`),
+      'TOP_A 收起(离开前姿态 = 收起)').toHaveCount(0, { timeout: 10_000 })
     await page.waitForTimeout(1_600)
     await expect.poll(async () => (await readLayoutBlob(kernel.userDataDir, kernel.projectId))?.rightbar,
       { timeout: 15_000, message: '布局入 blob(widthPct=30)' }).toMatchObject({ widthPct: 30 })
@@ -63,8 +71,9 @@ test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复',
     const rootDir = world.root
     const dshHome = world.dshHome
     stopAutoDismiss()
-    await world.shell.close()
-    const { launchWorkbenchShell } = await import('../../helpers/app.ts')
+    // tree-kill + 等真正退出(manager.release;裸 shell.close() 后 host 子进程
+    // (19387)可能仍在,首线探针即误报外部实例)。
+    await manager.release()
     const { assertNoActiveDshForgeInstances } = await import('../../helpers/instance-lock.ts')
     assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
     const reborn = await launchWorkbenchShell({ userDataDir, rootDir, env: { DSH_HOME: dshHome, DEEPSEEK_API_KEY: 'm4-e2e-stub-key' } })
@@ -87,8 +96,8 @@ test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复',
       await ensureSplitActive(page2)
       await expect.poll(() => splitRatioPercent(page2),
         { timeout: 10_000, message: '重进:比例恢复(30)' }).toBe('30')
-      // subagent 收起状态恢复(默认收起 = 离开前收起态)。
-      await expect(page2.locator('[data-dsh-forge-tree-kind="subagent"]'),
+      // subagent 收起状态恢复(SUB_A 行承载 kind=subagent;离开前 = 收起)。
+      await expect(page2.locator(`[data-dsh-forge-tree-session="${SUB_A}"]`),
         '重进:subagent 收起状态恢复(离开前 = 收起)').toHaveCount(0)
       expect(reborn.pageErrors, `renderer pageerrors: ${reborn.pageErrors.join(' | ')}`).toEqual([])
     } finally {
@@ -184,8 +193,9 @@ test.describe.serial('split-pane-layout-memory / step 5: 离开并重进恢复',
     const rootDir = world.root
     const dshHome = world.dshHome
     stopAutoDismiss()
-    await world.shell.close()
-    const { launchWorkbenchShell } = await import('../../helpers/app.ts')
+    // tree-kill + 等真正退出(manager.release;裸 shell.close() 后 host 子进程
+    // (19387)可能仍在,首线探针即误报外部实例)。
+    await manager.release()
     const { assertNoActiveDshForgeInstances } = await import('../../helpers/instance-lock.ts')
     assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
     const reborn = await launchWorkbenchShell({ userDataDir, rootDir, env: { DSH_HOME: dshHome, DEEPSEEK_API_KEY: 'm4-e2e-stub-key' } })

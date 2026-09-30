@@ -18,8 +18,8 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, bridgeInvoke, clickStable, M4WorldManager,
-  readLayoutBlob, startAutoDismiss,
+  activateProjectByTreeRow, bridgeInvoke, clickStable, ensureBoardPaneDetachable,
+  M4WorldManager, readLayoutBlob, startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import { shellWindowCount, waitForDetachedBoard } from '../../helpers/windows.ts'
 import { bootMwWorld, buildMwJourneyRoot, reachTearoutReady } from './harness.ts'
@@ -49,9 +49,9 @@ test.describe.serial('multi-window-tearout / step 5: 再拆出第二视图(集�
     await expect(page.locator('[data-dsh-forge-task-board]'),
       '主窗 board pane 已移除(第一次拆出)').toHaveCount(0, { timeout: 15_000 })
 
-    // 第二次拆出:重开 board pane(同一用户径)→ 再拆出。
-    const { openBoardPane } = await import('../_lib/journey-world.ts')
-    await openBoardPane(page)
+    // 第二次拆出:重开 board pane 走 C9 分屏用户径(pane 头仅在 ≥2 pane 时
+    // 挂载;M3 openBoardPane 单 pane 面不承载动作位)→ 再拆出。
+    await ensureBoardPaneDetachable(page)
     await expect(page.locator('[data-dsh-forge-pane-detach]'),
       '第二次拆出的 pane 头动作位在场').toBeVisible({ timeout: 15_000 })
     await clickStable(page, '[data-dsh-forge-pane-detach]')

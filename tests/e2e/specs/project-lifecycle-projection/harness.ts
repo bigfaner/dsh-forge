@@ -12,10 +12,10 @@
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { seedLineageCorpus } from '../../stubs/lineage-corpus.ts'
 import {
-  bootM4World, clickMenuItem, freshRoot, m4Env, openLifecycleMenu,
+  bootM4World, bridgeInvoke, clickMenuItem, freshRoot, m4Env, openLifecycleMenu,
   type M4World, type M4WorldManager,
 } from '../_lib/m4-world.ts'
 import { buildKernelWorld, handBuiltTaskSet, type KernelWorld, type TaskSpec } from '../_lib/journey-world.ts'
@@ -82,6 +82,11 @@ export async function registerLcProjects(built: LcJourneyRoot, page: import('@pl
     ({ codeRoot, docsRoot, indexPaths: [], manifestPaths: [], featuresDir: join(docsRoot, 'docs', 'features') })
   const otherId = await registerFixtureProject(page, asWritten(built.other.codeRoot, built.other.codeRoot))
   const carrierId = await registerFixtureProject(page, asWritten(built.kernel.codeRoot, built.kernel.docsRoot))
+  // 显示名对齐旅程语料(registerFixtureProject 以路径尾段命名 —— "repo"/
+  // "repo-b";经【真动词】rename 落 CARRIER/OTHER,概览标题面与断言语汇一致,
+  // 亦不触后续 lifecycle 改名腿的前提)。
+  await bridgeInvoke<unknown>(page, 'renameProject', [{ projectId: carrierId, displayName: CARRIER }])
+  await bridgeInvoke<unknown>(page, 'renameProject', [{ projectId: otherId, displayName: OTHER }])
   ;(built.other as { projectId: string }).projectId = otherId
   ;(built.kernel as { projectId: string }).projectId = carrierId
   return { carrierId, otherId }

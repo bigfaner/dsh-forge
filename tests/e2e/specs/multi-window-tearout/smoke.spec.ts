@@ -9,15 +9,14 @@
 
 import { expect, test } from '@playwright/test'
 import {
-  activateProjectByTreeRow, clickStable, M4WorldManager, readLayoutBlob,
-  startAutoDismiss,
+  activateProjectByTreeRow, clickStable, ensureBoardPaneDetachable, M4WorldManager,
+  readLayoutBlob, startAutoDismiss,
 } from '../_lib/m4-world.ts'
 import {
   quitShellAssertZeroWindows, shellWindowCount, waitForDetachedBoard,
 } from '../../helpers/windows.ts'
 import { launchWorkbenchShell } from '../../helpers/app.ts'
 import { assertNoActiveDshForgeInstances } from '../../helpers/instance-lock.ts'
-import { openBoardPane } from '../_lib/journey-world.ts'
 import { bootMwWorld, buildMwJourneyRoot, composerInput, reachTearoutReady, TASK_BOARD } from './harness.ts'
 
 test('smoke/multi-window-tearout: 拆出 → 并行 → 收回 → 复数 → 重进恢复(单世界 happy path)', async ({ }, testInfo) => {
@@ -37,9 +36,14 @@ test('smoke/multi-window-tearout: 拆出 → 并行 → 收回 → 复数 → �
       'Step 1:[拆出为窗口] 动作位在场').toBeVisible({ timeout: 10_000 })
 
     // ---- Step 2:拆出(独立窗 + 标题 + 主窗 pane 移除)。----------------
+    await ensureBoardPaneDetachable(page)
     await clickStable(page, '[data-dsh-forge-pane-detach]')
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
-    expect(await detached.page.title(), 'Step 2:独立窗标题「项目 · 视图」').toContain('·')
+    // 标题归主进程(M4 窗口角色契约)—— OS 窗题经主进程面读取。
+    const osTitles = await world.shell.electronApp.evaluate(
+      ({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.getTitle()))
+    expect(osTitles.some(title => title.includes('·')),
+      `Step 2:独立窗标题「项目 · 视图」(实测 OS titles ${JSON.stringify(osTitles)})`).toBe(true)
     await expect(page.locator('[data-dsh-forge-task-board]'),
       'Step 2:主窗移除该 pane').toHaveCount(0, { timeout: 15_000 })
     expect(await shellWindowCount(world.shell.electronApp), 'Step 2:窗口集 +1').toBe(2)
@@ -61,10 +65,12 @@ test('smoke/multi-window-tearout: 拆出 → 并行 → 收回 → 复数 → �
       { timeout: 15_000, message: 'Step 4:窗口集 -1' }).toBe(1)
 
     // ---- Step 5:再拆出(集合复数 = 2)。-------------------------------
-    await openBoardPane(page)
+    // 再拆出走 C9 分屏用户径(pane 头仅在 ≥2 pane 时挂载;M3 openBoardPane
+    // 单 pane 面不承载动作位)。
+    await ensureBoardPaneDetachable(page)
     await clickStable(page, '[data-dsh-forge-pane-detach]')
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
-    await openBoardPane(page)
+    await ensureBoardPaneDetachable(page)
     await clickStable(page, '[data-dsh-forge-pane-detach]')
     await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
     await expect.poll(() => shellWindowCount(world.shell.electronApp),

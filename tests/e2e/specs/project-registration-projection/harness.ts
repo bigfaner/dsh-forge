@@ -25,6 +25,7 @@ import {
   bootM4World, freshRoot, m4Env, type M4World, type M4WorldManager,
 } from '../_lib/m4-world.ts'
 import { buildKernelWorld, type KernelWorld } from '../_lib/journey-world.ts'
+import { registerFixtureProject } from '../../../../apps/desktop/e2e/fixtures/forge-project.ts'
 
 /** The baseline project's feature (the 同名同序 baseline corpus). */
 export const BASE_FEATURE = 'reg-base'
@@ -93,6 +94,9 @@ export async function buildRegJourneyRoot(options: { readonly seedGroupingSessio
   const kernel = await buildKernelWorld(root, {
     feature: { slug: BASE_FEATURE, status: 'in-progress', docKinds: ['tasks'], seed: 'dsh-forge-m4-reg' },
     tasks: [{ stem: '1.1', localId: '1.1', title: 'reg baseline task', status: 'pending', type: 'coding.feature', dependencies: [] }],
+    // 基线走 post-boot 真动词注册(pre-boot repo 写径不触投影链 —— registered
+    // 侦测/同名同序投影断言的语料前提;sc3 纪律,与 lifecycle 旅程同构)。
+    register: false,
   })
   const fixtures = buildProbeFixtures(root)
   const dshHome = join(root, 'dsh-home')
@@ -112,10 +116,21 @@ export async function buildRegJourneyRoot(options: { readonly seedGroupingSessio
 
 /** Boot the registration world over the journey root (isolated DSH_HOME). */
 export async function bootRegWorld(manager: M4WorldManager, tag: string, built: RegJourneyRoot, extraEnv: Record<string, string> = {}): Promise<M4World> {
-  return await manager.acquire(async () => await bootM4World({
+  const world = await manager.acquire(async () => await bootM4World({
     tag, root: built.root, dshHome: built.dshHome, kernel: built.kernel,
     env: m4Env(built.dshHome, extraEnv),
   }))
+  // 基线项目经【真动词】注册落位(registerProject → activateProject;投影链
+  // 全程在场 —— registered 快车道侦测与「基线居首」序断言的语料前提)。
+  const kernel = built.kernel as { projectId: string }
+  kernel.projectId = await registerFixtureProject(world.page, {
+    codeRoot: built.kernel.codeRoot,
+    docsRoot: built.kernel.docsRoot,
+    indexPaths: [],
+    manifestPaths: [],
+    featuresDir: join(built.kernel.docsRoot, 'docs', 'features'),
+  })
+  return world
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +145,7 @@ export const DETECT_COPY = {
   missing: '路径不存在',
   unreadable: '目录不可读',
   parent: '该目录下含多个 git 仓库',
-  nogit: '未检测到 git — 文档将由应用管理',
+  nogit: '未检测到 git — 无需 git,文档将由应用管理(不写入本目录)',
   invalid: '路径无效',
 } as const
 

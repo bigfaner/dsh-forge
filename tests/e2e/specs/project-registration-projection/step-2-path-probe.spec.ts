@@ -85,10 +85,12 @@ test.describe.serial('project-registration-projection / step 2: 给定代码区�
     await openAddCard(page)
 
     // 提交基线项目的代码根(realpath 归一命中)。
+    // 快车道(§5.4):registered 侦测【即自动落位】—— 卡收起 + 原位换台 +
+    // toast「{name}」已注册 · 已打开;卡内 registered 态/禁用面为瞬态
+    // (ConfirmCard 单测权威),e2e 以终态三元组承载(卡收起 + toast + 指针)。
     await typeCodePath(page, kernel.codeRoot)
-    await waitDetect(page, DETECT_COPY.registered, 'registered(同一代码根仅一个项目)')
-    expect(await submitDisabled(page), 'registered 态:添加禁用').toBe(true)
-    // 快车道 toast:已注册 · 已打开(不出卡流程 → 卡随之收起,原位换台)。
+    await expect(page.locator('[data-dsh-forge-dialog="confirm-card"]'),
+      '快车道:卡收起(不出卡流程)').toHaveCount(0, { timeout: 15_000 })
     await expect(page.locator('[data-dsh-forge-project-toast]'),
       '快车道 toast(已注册 · 已打开)').toContainText(/已注册 · 已打开/, { timeout: 15_000 })
     // 指针落既有项目(快车道打开语义)。

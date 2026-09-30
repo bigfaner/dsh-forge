@@ -49,8 +49,14 @@ test.describe.serial('project-workbench-home / step 5: 巡检 forge 视图归属
     await expect(page.locator(`[data-dsh-forge-overview-feature-dir="${FEATURE}"]`),
       'feature 目录行在场').toBeVisible({ timeout: 20_000 })
     // 展开目录 → 文档行(prd/design/tasks = 语料 docKinds;阶段资产 = stages
-    // 目录的 StageAsset 面承载,M3 阶段资产面板零缩水收纳)。
-    await clickStable(page, `[data-dsh-forge-overview-feature-dir="${FEATURE}"]`)
+    // 目录的 StageAsset 面承载,M3 阶段资产面板零缩水收纳)。首个目录行在
+    // fresh board 落位时已自动展开(§4.4②)—— 以 aria-expanded 为准补点击,
+    // 盲点会把它收起。
+    const featureDir = page.locator(`[data-dsh-forge-overview-feature-dir="${FEATURE}"]`)
+    if (await featureDir.getAttribute('aria-expanded') !== 'true') {
+      await clickStable(page, `[data-dsh-forge-overview-feature-dir="${FEATURE}"]`)
+    }
+    await expect(featureDir).toHaveAttribute('aria-expanded', 'true', { timeout: 10_000 })
     for (const kind of ['prd', 'design', 'tasks'] as const) {
       await expect(page.locator(`[data-dsh-forge-overview-doc="features/${FEATURE}/${kind}"]`),
         `feature 文档行 ${kind} 在场(M3 docKind 集完整)`).toBeVisible({ timeout: 20_000 })

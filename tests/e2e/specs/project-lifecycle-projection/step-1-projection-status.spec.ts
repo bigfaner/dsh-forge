@@ -137,8 +137,13 @@ test.describe.serial('project-lifecycle-projection / step 1: 查看投影状态'
     expect(rowA, '手改基线:A workspace 在座').toBeDefined()
     expect(rowB, '手改基线:B workspace 在座').toBeDefined()
     const projectionSurfaceBefore = JSON.stringify(before.order.map(row => ({ path: row.path, title: row.title })))
+    // 手改快照走 sc3-degrade ① 的成形:A 改名前插(orderIdx 0)+ B 删除
+    // (快照不含 B 行);其余行(宿主自留位 —— 宿主前插行不在 forge 写面,
+    // 比对口径同 sc3 的 projectionSurface)原样保留,快照才是对账可收敛输入。
+    const survivors = before.order.filter(row => row !== rowA && row !== rowB)
     const drifted = [
       { workspaceId: (rowA as { workspaceId: string }).workspaceId, path: (rowA as { path: string }).path, title: MANUAL_RENAMED, orderIdx: 0 },
+      ...survivors.map((row, index) => ({ workspaceId: row.workspaceId, path: row.path, title: row.title, orderIdx: index + 1 })),
     ]
     await bridgeInvoke(page, 'submitWorkspaceSnapshot', [{ workspaces: drifted }])
 

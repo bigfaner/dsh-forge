@@ -46,7 +46,7 @@ test('smoke/project-registration-projection: 开卡 → 侦测 → 三档预览 
 
     // ---- Step 3:文档位置预览(repo-existing 沿用仓内)------------------
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      'Step 3:预选 = 沿用仓内(证据三档门控)').toContainText('沿用仓内', { timeout: 15_000 })
+      'Step 3:预选 = 沿用仓内(证据三档门控)').toContainText('已检出 forge 文档', { timeout: 15_000 })
     await expect(page.locator('[data-dsh-forge-confirm-preview-path]'),
       'Step 3:预览路径 = 仓内 docs').toContainText('docs')
 

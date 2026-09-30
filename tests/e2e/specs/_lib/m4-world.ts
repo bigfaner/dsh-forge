@@ -26,6 +26,7 @@
 // discipline — workers:1 lane plus the launch-time probe), and everything
 // torn down in afterAll regardless of outcome. No cross-file state.
 
+import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
@@ -119,6 +120,13 @@ export class M4WorldManager {
     this.roots.add(world.root)
   }
 
+  /** Close the LIVE app only (tree-kill + wait-for-exit; tracked roots stay
+   * for closeAll) — a serial file's next manual-launch test needs the machine
+   * free of instances BEFORE its first-line lock probe. */
+  async release(): Promise<void> {
+    await this.closeLive()
+  }
+
   get live(): M4World | null {
     return this.world
   }
@@ -127,6 +135,26 @@ export class M4WorldManager {
     const world = this.world
     if (world === null) return
     this.world = null
+    // Windows:整树击杀 + 等真正退出(journey-world killLive 的 M3 纪律 ——
+    // electronApp.close() 返回时 vendored host 子进程(持 19387)可能仍在,
+    // 下一个 world 的锁探针随即 fail-fast,上一腿被误判为外部实例)。
+    const proc = world.shell.electronApp.process()
+    const pid = proc.pid
+    try {
+      proc.kill()
+    } catch {
+      // 已退出即忽略。
+    }
+    if (process.platform === 'win32' && pid !== undefined) {
+      try {
+        execSync(`taskkill /PID ${String(pid)} /T /F`, { timeout: 15_000, stdio: 'ignore' })
+      } catch {
+        // 已退出即忽略(竞态无害)。
+      }
+    }
+    for (let i = 0; i < 20 && proc.exitCode === null; i += 1) {
+      await new Promise(resolve => { setTimeout(resolve, 500) })
+    }
     await world.shell.close().catch(() => {})
   }
 
@@ -362,8 +390,34 @@ export async function openOverviewForActiveProject(page: Page, expectedTitle: st
   throw new Error(`overview pane never showed the active project ${expectedTitle}`)
 }
 
+/** Ensure the 项目概览 rightbar TAB is open (a fresh boot starts on the
+ * 开始 guide tab — the forge overview pane mounts only through the user
+ * path: an existing rightbar tab chip first, else the 开始 page's overview
+ * door card; the openOverviewForActiveProject fallback shape). */
+export async function ensureOverviewTabOpen(page: Page): Promise<void> {
+  for (let round = 0; round < 12; round += 1) {
+    await expandRightbar(page).catch(() => {})
+    const live = await page.evaluate(() => {
+      const overview = document.querySelector('[data-dsh-forge-overview]') as HTMLElement | null
+      if (overview !== null && overview.offsetParent !== null) return true
+      const chip = [...document.querySelectorAll('[data-sidebar-right-panel] [role="tab"]')]
+        .find(tab => /^(项目概览|Project overview)$/.test(tab.textContent?.trim() ?? ''))
+      if (chip !== undefined) {
+        ;(chip as HTMLElement).click()
+        return false
+      }
+      ;(document.querySelector('[data-dsh-forge-guide-card="overview"]') as HTMLElement | null)?.click()
+      return false
+    }).catch(() => false)
+    if (live) return
+    await page.waitForTimeout(600)
+  }
+  throw new Error('overview tab never opened (tab chip → 开始 guide-card user path)')
+}
+
 /** Activate one overview SUBTAB (postcondition = selected + pane visible). */
 export async function focusOverviewSubtab(page: Page, kind: 'proposals' | 'features' | 'tasks', paneRoot: string): Promise<void> {
+  await ensureOverviewTabOpen(page)
   for (let round = 0; round < 10; round += 1) {
     const active = await page.evaluate((input: { kind: string, pane: string }) => {
       const overview = document.querySelector('[data-dsh-forge-overview]')
@@ -395,6 +449,7 @@ export async function openTaskDetail(page: Page, taskKey: string): Promise<void>
   const dock = page.locator(`[data-dsh-forge-task-detail="${taskKey}"]`)
   for (let attempt = 0; attempt < 6; attempt += 1) {
     await expandRightbar(page)
+    await ensureOverviewTabOpen(page).catch(() => {})
     // Opener A — the overview tasks subtab row.
     for (let round = 0; round < 8; round += 1) {
       const overviewLive = await page.evaluate(() => {
@@ -678,6 +733,25 @@ export async function ensureSplitActive(page: Page): Promise<void> {
     await page.waitForTimeout(700)
   }
   throw new Error('C9 split never became active (≥2 C9 panes)')
+}
+
+/**
+ * Ensure the board pane is present AND its C9 pane header carries the LIVE
+ * [拆出为窗口] action位: the pane header mounts only while the split is
+ * ACTIVE (≥ 2 C9 panes — a single-view board carries no pane header, the
+ * PaneControls contract), so a re-tearout goes through the 分屏 user path
+ * (never the M3 openBoardPane single-pane dialect). Postcondition = the
+ * detach button visible AND enabled.
+ */
+export async function ensureBoardPaneDetachable(page: Page): Promise<void> {
+  for (let round = 0; round < 10; round += 1) {
+    const detach = page.locator('[data-dsh-forge-pane-detach]').first()
+    if (await detach.isVisible().catch(() => false)
+      && await detach.isEnabled().catch(() => false)) return
+    await pickSplitBoard(page).catch(() => {})
+    await page.waitForTimeout(600)
+  }
+  throw new Error('board pane never became detachable (C9 pane header action位 not mounted/enabled)')
 }
 
 /** The separator's committed percentage (the model ratio's aria face). */

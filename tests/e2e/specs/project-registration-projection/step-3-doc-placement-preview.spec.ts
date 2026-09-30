@@ -42,7 +42,7 @@ test.describe.serial('project-registration-projection / step 3: 核查文档位�
     await typeCodePath(page, fixtures.forgeRepo)
     await waitDetect(page, DETECT_COPY.gitForge, 'repo-existing 语料')
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      '预览行 = 沿用仓内已检出的 forge 文档(repo-existing)').toContainText('沿用仓内', { timeout: 15_000 })
+      '预览行 = 沿用仓内已检出的 forge 文档(repo-existing)').toContainText('已检出 forge 文档', { timeout: 15_000 })
     // ✎ 展开才见模式+路径(默认收起:模式面未渲染)。
     await expect(page.locator('[data-dsh-forge-confirm-mode="repo-existing"]'),
       '✎ 默认收起(模式 radio 未渲染)').toHaveCount(0)
@@ -56,7 +56,7 @@ test.describe.serial('project-registration-projection / step 3: 核查文档位�
     await typeCodePath(page, fixtures.gitOnlyRepo)
     await waitDetect(page, DETECT_COPY.git, 'repo-new 语料')
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      '预览行 = 仓内(repo-new;懒物化告知)').toContainText('仓内', { timeout: 15_000 })
+      '预览行 = 仓内(repo-new;懒物化告知)').toContainText('可 PR 评审', { timeout: 15_000 })
     await expect(page.locator('[data-dsh-forge-confirm-preview-path]'),
       'repo-new 预览路径 = <root>/docs').toContainText(/[/\\]docs$/)
 
@@ -87,14 +87,14 @@ test.describe.serial('project-registration-projection / step 3: 核查文档位�
     // P1 = forge 树仓(repo-existing)→ 预览 = 沿用仓内。
     await typeCodePath(page, fixtures.forgeRepo)
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      'P1 预选 = 沿用仓内(forge 树证据)').toContainText('沿用仓内', { timeout: 15_000 })
+      'P1 预选 = 沿用仓内(forge 树证据)').toContainText('已检出 forge 文档', { timeout: 15_000 })
     // P2 = 仅 .git 仓(repo-new)→ 预览即时重估(不携带 P1 的档位)。
     await typeCodePath(page, fixtures.gitOnlyRepo)
     await waitDetect(page, DETECT_COPY.git, 'P2 重侦测')
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      'P2 预选重估 = 仓内(仅 .git 证据;P1 档位零携带)').toContainText('仓内', { timeout: 15_000 })
+      'P2 预选重估 = 仓内(仅 .git 证据;P1 档位零携带)').toContainText('可 PR 评审', { timeout: 15_000 })
     await expect(page.locator('[data-dsh-forge-confirm-preview-note]'),
-      'P2 预选 ≠ 沿用仓内(黏性禁令)').not.toContainText('沿用仓内')
+      'P2 预选 ≠ 沿用仓内(黏性禁令)').not.toContainText('已检出 forge 文档')
     // P3 = 零 git → 预选再重估为应用管理(逐路径纯计算)。
     await typeCodePath(page, fixtures.nogitDir)
     await waitDetect(page, DETECT_COPY.nogit, 'P3 重侦测')

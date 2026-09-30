@@ -55,8 +55,12 @@ test.describe.serial('multi-window-tearout / step 2: 拆出为独立窗口', () 
     const detached = await waitForDetachedBoard(world.shell.electronApp, kernel.projectId, 30_000)
 
     // 独立窗:标题「<项目名> · <视图名>」(C10 form;projectTitle · viewLabel)。
-    const title = await detached.page.title()
-    expect(title, `独立窗标题 = 项目 · 视图(实测 ${title})`).toContain('·')
+    // 标题归主进程(M4 窗口角色契约)—— OS 窗题经主进程面读取;
+    // page.title() 读的是渲染层 document.title,非 OS 窗题。
+    const osTitles = await world.shell.electronApp.evaluate(
+      ({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.getTitle()))
+    expect(osTitles.some(title => title.includes('·')),
+      `独立窗标题 = 项目 · 视图(实测 OS titles ${JSON.stringify(osTitles)})`).toBe(true)
     // detached 装配:[收回] 条 + 单视图(钉死来源项目)。
     await expect(detached.page.locator('[data-dsh-forge-detached-recall]'),
       'detached [收回] 条在场(单视图装配)').toBeVisible({ timeout: 15_000 })

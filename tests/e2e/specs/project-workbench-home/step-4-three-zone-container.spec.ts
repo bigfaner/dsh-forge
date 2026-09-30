@@ -72,6 +72,13 @@ test.describe.serial('project-workbench-home / step 4: 同页核查三区容器'
       await expect(page.locator(`[data-dsh-forge-overview-task="${key}"]`),
         `任务列表行 ${key} 在场(概览任务面语料一致)`).toBeVisible({ timeout: 20_000 })
     }
+    // 子 tab 集恰为三面(扩展位未启用即不渲染)—— 在 dock 交互前读:任务行
+    // 点击会 bring board pane forward,概览 tab 非 active 时其体卸载。
+    const subtabs = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-dsh-forge-overview-subtab]')]
+        .map(tab => tab.getAttribute('data-dsh-forge-overview-subtab') ?? ''))
+    expect(subtabs.sort(), '概览子 tab 集 = 提案/feature/任务(扩展位未启用即不渲染)').toEqual(['features', 'proposals', 'tasks'])
+
     // 既有操作可达(同页可操作面):任务行点击 → 任务详情 dock。
     await clickStable(page, `[data-dsh-forge-overview-task="${TASK_FREE}"]`)
     await expect(page.locator(`[data-dsh-forge-task-detail="${TASK_FREE}"]`),
@@ -89,11 +96,6 @@ test.describe.serial('project-workbench-home / step 4: 同页核查三区容器'
     for (const chip of tabChips) {
       expect(chip, `在场 tab 均为功能面(无空 tab):${chip}`).not.toBe('')
     }
-    // 管线入口(未启用扩展位)不渲染:子 tab 集恰为三面,无管线/知识扩展位 tab。
-    const subtabs = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-dsh-forge-overview-subtab]')]
-        .map(tab => tab.getAttribute('data-dsh-forge-overview-subtab') ?? ''))
-    expect(subtabs.sort(), '概览子 tab 集 = 提案/feature/任务(扩展位未启用即不渲染)').toEqual(['features', 'proposals', 'tasks'])
     expect(world.shell.pageErrors, `renderer pageerrors: ${world.shell.pageErrors.join(' | ')}`).toEqual([])
   })
 })

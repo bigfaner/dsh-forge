@@ -139,6 +139,9 @@ test.describe.serial('project-workbench-home / step 6: 重启恢复活跃项目'
   // Outcome "last-active-deleted" — 上次活跃已删除:落点合法、无报错残留。
   test('step6/last-active-deleted: 上次活跃项目已删除 —— 重启落到合法落点 + 指针不指向已删 id + 无报错', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
+    // 上一腿(serial 文件内)adopt 的 reborn world 仍在场 —— 先关净本机再探针
+    // (手动 launch 腿的机器独占前提;release = tree-kill + 等真正退出)。
+    await manager.release()
     assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
     stopAutoDismiss()
 
