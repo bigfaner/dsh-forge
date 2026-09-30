@@ -161,7 +161,12 @@ function createDetachedHostWindow(options: DetachedWindowHostOptions): DetachedH
   return {
     isDestroyed: () => win.isDestroyed(),
     webContents: win.webContents,
-    on: (event, listener) => { win.on(event, listener) },
+    // 标题归主进程(P-1 fix):page-title-updated 同 'close' 一并直通
+    // BrowserWindow —— preventDefault 由 manager 的守卫调用(仅 detached 径)。
+    on: (event: 'close' | 'page-title-updated', listener: (...args: never[]) => void) => {
+      if (event === 'close') win.on(event, listener as () => void)
+      else win.on(event, listener as (event: { preventDefault(): void }, title: string) => void)
+    },
     once: (event, listener) => { win.once(event, listener) },
     getBounds: () => win.getBounds(),
     close: () => { win.close() },

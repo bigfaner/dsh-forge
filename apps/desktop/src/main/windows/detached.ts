@@ -6,7 +6,9 @@
 // 主窗;此后记忆上次尺寸/位置(进程内记忆;项目域持久化 rect 由 4.5 布局
 // 引擎经入参重放)。收回 = close();OS 标题栏关闭与 windowRecall 汇入同一
 // 'closed' 终态路径(移除 + detached-closed 事件,恰好一次)—— 语义等价
-// 是设计要求,非巧合。
+// 是设计要求,非巧合。标题权威归主进程:composeDetachedTitle 组装 +
+// page-title-updated preventDefault 挡下渲染层 document.title 申请(P-1
+// fix;仅 detached 径,M1 主窗标题行为不动)。
 //
 // 安全(§Security·T3):新窗同 SHELL_WEB_PREFERENCES(壳引导构造点传入)、
 // will-navigate 锁 dsh-app:、window-open 拒 —— 可接线部分抽为
@@ -67,6 +69,12 @@ export interface DetachedWindowHostOptions {
 /** 宿主窗口最小面(BrowserWindow 结构子集;DI 假体同构)。 */
 export interface DetachedHostWindow extends RegistryWindow {
   on(event: 'close', listener: () => void): void
+  /**
+   * 渲染层 document.title 申请改窗题(Electron 原生应用面)。标题归主进程
+   * (窗口角色 boot 契约;P-1 fix):manager 在此事件 preventDefault 挡下
+   * 渲染层申请并重申主进程组装值 —— 仅 detached 窗口径,M1 主窗不挂。
+   */
+  on(event: 'page-title-updated', listener: (event: { preventDefault(): void }, title: string) => void): void
   once(event: 'closed', listener: () => void): void
   getBounds(): Rect
   close(): void
@@ -218,7 +226,16 @@ export function createDetachedWindowManager(deps: DetachedWindowManagerDeps): De
     ...(entry.target === undefined ? {} : { target: entry.target }),
   })
 
-  const adoptHostWindow = (host: DetachedHostWindow, windowId: string): void => {
+  const adoptHostWindow = (host: DetachedHostWindow, windowId: string, composeTitle: () => string): void => {
+    // 标题归主进程(P-1 fix,窗口角色 boot 契约):渲染层 document.title 的
+    // 原生应用面是 page-title-updated —— preventDefault 挡下该申请,并重申
+    // 主进程组装值(「<项目名> · <视图名>[ · 已归档]」;归档追加分随
+    // composeTitle 在事件时点即时合并,不待下一次开窗)。仅 detached 窗口
+    // 径:M1 主窗无此守卫,标题行为保持 byte-stable。
+    host.on('page-title-updated', (event) => {
+      event.preventDefault()
+      if (!host.isDestroyed()) host.setTitle(composeTitle())
+    })
     // OS 标题栏关闭 ≡ recall:'close'(关闭请求,几何仍可读)记忆尺寸/位置,
     // 'closed'(销毁终态)做注册表移除 + detached-closed —— 两条关闭来源
     // 汇入同一编排,事件恰好一次(registry.removeDetached 是唯一移除口)。
@@ -257,7 +274,7 @@ export function createDetachedWindowManager(deps: DetachedWindowManagerDeps): De
         ...(input.target === undefined ? {} : { target: input.target }),
         window: host,
       })
-      adoptHostWindow(host, windowId)
+      adoptHostWindow(host, windowId, () => titleOf(input.projectId, input.view))
       deps.emitWindowChanged({
         type: 'detached-opened',
         windowId,

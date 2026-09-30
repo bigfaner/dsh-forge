@@ -48,6 +48,11 @@ interface FakeHostWindow extends DetachedHostWindow {
   setBounds(next: Bounds): void
   /** setTitle 调用记录(归档追加分断言面)。 */
   titles: string[]
+  /**
+   * 模拟渲染层改 document.title(Electron page-title-updated 语义);
+   * 返回守卫是否 preventDefault(= 渲染层申请被挡,窗题不落地)。
+   */
+  rendererSetTitle(title: string): boolean
 }
 
 function makeHostFactory(state: { createError?: Error } = {}) {
@@ -57,6 +62,7 @@ function makeHostFactory(state: { createError?: Error } = {}) {
     const id = ++contentsSeq
     const closeListeners: Array<() => void> = []
     const closedListeners: Array<() => void> = []
+    const titleListeners: Array<(event: { preventDefault(): void }, title: string) => void> = []
     let destroyed = false
     let bounds: Bounds = { x: options.x ?? 0, y: options.y ?? 0, width: options.width, height: options.height }
     let loadReject: ((error: Error) => void) | undefined
@@ -70,7 +76,10 @@ function makeHostFactory(state: { createError?: Error } = {}) {
         isDestroyed: () => destroyed,
         send: () => {},
       },
-      on: (_event, listener) => { closeListeners.push(listener) },
+      on: (event: 'close' | 'page-title-updated', listener: (...args: never[]) => void) => {
+        if (event === 'close') closeListeners.push(listener as () => void)
+        else titleListeners.push(listener as (event: { preventDefault(): void }, title: string) => void)
+      },
       once: (event, listener) => {
         if (event === 'closed') closedListeners.push(listener)
       },
@@ -86,6 +95,13 @@ function makeHostFactory(state: { createError?: Error } = {}) {
       osClose: () => { window.close() },
       failLoad: (error: Error) => { loadReject?.(error) },
       setBounds: (next: Bounds) => { bounds = { ...next } },
+      rendererSetTitle: (title: string) => {
+        let prevented = false
+        for (const listener of [...titleListeners]) {
+          listener({ preventDefault: () => { prevented = true } }, title)
+        }
+        return prevented
+      },
       setTitle: (title: string) => { window.titles.push(title) },
     }
     created.push(window)
@@ -327,6 +343,7 @@ describe('openDetached — failure codes', () => {
       createHostWindow: host.factory,
       resolveProjectTitle: () => undefined,
       viewLabel: () => 'Board',
+      archivedSuffix: () => 'Archived',
       getMainWindowBounds: () => undefined,
       emitWindowChanged: () => {},
     })
@@ -473,6 +490,62 @@ describe('removeProject → detached window recall hook (services assembly)', ()
       const project = verbs.registerProject({ anchor: repoDir, docsPlacement: 'app' })
       expect(() => verbs.removeProject(project.id)).not.toThrow()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fix-3(P-1)— 标题归主进程(窗口角色 boot 契约):渲染层 document.title 的
+// 原生应用面(page-title-updated)被 preventDefault 挡下,主进程组装值重申;
+// 归档追加分随事件时点即时合并(不待下一次开窗)。
+// ---------------------------------------------------------------------------
+
+describe('page-title-updated — title authority (标题归主进程)', () => {
+  it('renderer document.title attempts are prevented; the composed title is re-asserted', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-1', view: 'board' })
+    const win = host.created[0]!
+    expect(win.titles).toEqual(['Demo Project · Board'])
+
+    const prevented = win.rendererSetTitle('DSH 本地构建')
+
+    expect(prevented, 'page-title-updated 被 preventDefault(渲染层申请被挡)').toBe(true)
+    expect(win.titles).toEqual(['Demo Project · Board', 'Demo Project · Board'])
+  })
+
+  it('re-assertion merges the archived suffix at event time (归档追加分即时合并)', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-1', view: 'conversation' })
+    manager.setProjectArchived('p-1', true)
+    const win = host.created[0]!
+
+    win.rendererSetTitle('MW 顶层会话 B — DSH 本地构建')
+
+    expect(win.titles).toEqual([
+      'Demo Project · Conversation', // 构造期组装值
+      'Demo Project · Conversation · Archived', // setProjectArchived 即时刷新
+      'Demo Project · Conversation · Archived', // 守卫重申(追加分在场)
+    ])
+  })
+
+  it('after restore, a renderer attempt re-asserts WITHOUT the suffix', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-1', view: 'board' })
+    manager.setProjectArchived('p-1', true)
+    manager.setProjectArchived('p-1', false)
+    const win = host.created[0]!
+
+    win.rendererSetTitle('DSH 本地构建')
+
+    expect(win.titles.at(-1)).toBe('Demo Project · Board')
+  })
+
+  it('repeated renderer attempts are idempotently re-asserted (no foreign title lands)', () => {
+    const { host, manager } = makeManager()
+    manager.openDetached({ projectId: 'p-9', view: 'board' })
+    const win = host.created[0]!
+    win.rendererSetTitle('t1')
+    win.rendererSetTitle('t2')
+    expect(win.titles).toEqual(['p-9 · Board', 'p-9 · Board', 'p-9 · Board'])
   })
 })
 
