@@ -24,6 +24,7 @@ status: tasks
 | Page Map | design/page-map.md | 视图键/布局态寻址(无路由):project 工作台 = conversation+注入层、任务看板双宿主 pane、概览逃生门、拆出窗口 WindowRole;旧 workbench/* 四 tab 键退役 |
 | Decision(上游裁决) | ../../decisions/project-storage-and-knowledge.md | 项目存储与知识库架构 D1–D12:三区存储/知识库两级插件挂载/项目创建证据门控(§5 v2);UF7/C7 上游权威 |
 | Reference | ui/dsh-home-layout.md | dsh 现有 home(会话视图)三态布局基线:左栏/主区/右栏(文件面板)分区线框、浅色主题样式令牌、M4 布局规律 |
+| Specs(已集成) | specs/ | consolidate-specs 提取(2026-10-01,[auto-specs]):biz-specs 10 CROSS/3 LOCAL、tech-specs 11 CROSS/2 LOCAL;新增 BIZ-workbench-013/014 + TECH-ui-reuse-004/005、TECH-host-007、TECH-data-kernel-007、TECH-window-001(shell-windows.md 新文件);M4 规划期撞号条目 006-008 修复为 010-012;15 处执行期修订块(docs/business-rules + docs/conventions) |
 
 ## Traceability
 

@@ -1,6 +1,6 @@
 ---
-title: "数据内核工程约束(schema 演进 · 单写者)"
-domains: [data-kernel, sqlite, schema, migration, taskkey, statemachine, repo-service]
+title: "数据内核工程约束(schema 演进 · 单写者 · 项目域 UI 状态)"
+domains: [data-kernel, sqlite, schema, migration, taskkey, repo-service, ui-state-blob]
 ---
 
 # 数据内核工程约束(schema 演进 · 单写者)
@@ -11,6 +11,9 @@ domains: [data-kernel, sqlite, schema, migration, taskkey, statemachine, repo-se
 
 **Requirement**: 数据内核 schema 变更一律以版本化增量迁移交付(v1→v2→…);每个版本**只增不删**——既有表与列全保留,新能力经 ALTER 增列/新表承载;载体 = 四件套——`design/schema.sql` 为**设计投影**,运行时权威 = `migrate.ts` MIGRATIONS 版本段 + 内联 TS 常量,**两者由漂移对账测试强制同步**(剥注释按 `;` 切分——中文注释含分号;空白归一化;语句数反空转锚点);每版本段**各自事务**顺序执行,schema_version 单行只进不退,库版本 > 已知即拒开(ERR_WORKBENCH_DB),失败即启动失败(显式错误路径,不降级静默);PRAGMA(WAL/foreign_keys)为连接级设置由 db.ts 每次开库应用,不入 DDL;快照/索引类表(`task_snapshot`/`stage_asset`/`proposal_snapshot`)定位为派生可重建,不承载权威语义。
 **Context**: M2 v1 → M3 v2 首次实践(2026-09-23);双载体下 SQLite 单写者 = Electron 主进程内核,schema 演进须与「零半迁移/可对拍」纪律同构。
+
+**M4 修订(2026-10-01,M4 交付生效)**:v3 增量实践 = projects ALTER ×10 + project_ui_state + workspace_projection + 2 索引(14 语句漂移对账);`{version:3}` 自有事务 + **事务内 TS 回填**(best-effort 归一化/docs_placement 映射/sort_order←created_at;折叠碰撞 UPDATE 违例整段回滚显式失败);迁移器契约扩展 = SchemaMigration.up + **MigrationContext(docsRoot)** 形参(db.ts 自 db 放置单源推导);CHECK 静态词表延续(projection_state 4 值/docs_placement 5 值);**过渡性本地实现收编纪律**——过渡性副本(如 1.1 归一化本地实现)在正式单源落地后立即 import 收编(纯重排行为不变)。
+**Source**: features/dsh-forge-m4 tasks/records/1.1、1.2
 **Scope**: [CROSS]
 **Source**: features/dsh-forge-m3/design/schema.sql;features/dsh-forge-m3/design/er-diagram.md;features/dsh-forge-m2/design/tech-design.md §Data Models
 
@@ -52,3 +55,13 @@ domains: [data-kernel, sqlite, schema, migration, taskkey, statemachine, repo-se
 **Context**: M3 六域一致实践(task-repo/dispatch-repo/approval-repo/proposals 索引器/deviation hook);M4 新域(知识库等)沿用,防旁路直写。
 **Scope**: [CROSS]
 **Source**: feature/dsh-forge-m3(隐式规则,漂移扫描期提取;tasks/records/1.3、3.3、4.2、5.3;apps/desktop/src/main/workbench/*/)
+
+**M4 沿用确认(2026-10-01)**:M4 三新域(projects-identity/projection/ui-state)+ 壳层 windows 域均按本模式落地(repo 唯一写入口 + service 动词面;projection 域经 repos 写 projects 不越层)。
+**Source**: features/dsh-forge-m4 tasks/records/1.2、3.1、4.1、4.2
+
+### TECH-data-kernel-007: 项目域 UI 状态 blob 纪律(白名单 · 钳制分治 · stored · 迟到写双保险)
+
+**Requirement**: 项目域 UI 状态(布局记忆等)以 blob 落 `project_ui_state.layout_json`,内核持 schema **唯一权威**:sanitize 白名单纯函数**永不抛错**——严格未知键拒绝(顶层/嵌套每层)、**值域 vs 钳制分治**(越界值域 = 违规重置;越界范围 = 修复型夹紧后仍合法)、枚举词表/界长校验;违规/损坏 JSON → 默认布局 + ERR_LAYOUT_INVALID 结构化 log(**不弹错、不拒动词面**;唯一 reject 面 = ERR_PROJECT_NOT_FOUND);服务端二次校验(客户端 debounce / 内核同步校验落库,两半分属);读侧回传**行存在信号**(stored 布尔:无行 = 默认 + false;违规重置行仍 true——行在即记忆语义在;client 桥孪生为可选 additive);**迟到写双保险**(引擎 forget 于删除动词前 disarm pending 写 + 内核 ERR_PROJECT_NOT_FOUND 拒绝,防 FK cascade 后复活行);枚举 canonical 落内核、client 侧保留表结构孪生 + drift 断言锁同序同集(插件不可依赖 app)。
+**Context**: M4 T4 裁决(布局记忆 SQLite 化;PRD「项目删除随之清除」→ FK cascade);fix-2 stored 修法(默认 blob 与合法空记忆内容同形,行存在性才是无损判据);M5+ 新增项目域 UI 状态(todo 板姿态等)沿用。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m4 TECH-008(design/tech-design.md §Interface 4;tasks/records/4.1、4.5、fix-2)

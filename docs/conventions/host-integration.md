@@ -1,6 +1,6 @@
 ---
 title: "dsh 宿主与外部进程集成约定"
-domains: [dsh-host, cordis, session-channel, tool-bridge, model-facing-tools, approval-routing, presynthesis]
+domains: [dsh-host, cordis, session-channel, tool-bridge, presynthesis, approval-routing, remote-relay]
 ---
 
 # dsh 宿主与外部进程集成约定
@@ -53,3 +53,13 @@ domains: [dsh-host, cordis, session-channel, tool-bridge, model-facing-tools, ap
 **Context**: M3 spike-3 四候选裁决;零上游配合、持久可重放、逐字符可断言;预合成归内核不归 host(docs/decisions/architecture.md 2026-09-23);追加行文案收窄为 bash 归因 + 过渡期 CLI。
 **Scope**: [CROSS]
 **Source**: feature/dsh-forge-m3 TECH-004(design/spike-3-systemprompt-contract.md;design/tech-design.md §Interface 3;tasks/records/3.4、6.2、6.3)
+
+**M4 修订(2026-10-01,M4 交付生效)**:追加行**两行化**——appendix = 归因行 + 命名行(「执行本任务时,你 spawn 的 subagent 会话须以『\<taskKey\> \<title\>』命名」;M4 必答⑥ 命名约定的注入载体);ATTRIBUTION_MARKER/NAMING_MARKER 同源定义 templates.ts 单一构造点;e2e oracle 第三查由「恰好一行追加」升级为「**恰好两行 + 逐行前缀对拍**」(剥预合成前缀后 `\n\n`,失败码 appendix-not-two-lines,对前缀损坏与尾部增删均敏感);prompt_hash 口径不变 = sha256(预合成内容 + 追加行全文);追加行在 Go 对拍集内仍为零(forge-cli 模板基线不受影响);多模式一致性 = 结构性保证(追加行仅内核 composeFirstUserMessage 一处构造,标准/PTC/极简为 host 侧预设无分支)。
+**Source**: features/dsh-forge-m4 design/tech-design.md §Interface 7;tasks/records/2.8
+
+### TECH-host-007: 上游数据面消费 = 读写双缝 + duck-typed 通道孪生 + relay 重试单源
+
+**Requirement**: client 半身消费上游数据面一律**读写双缝**:写走 raw remote(`ctx.get('remote.<ns>')` 生成远端命名空间,RemoteResult 判别联合,错误码精确可读零字符串解析),读走客户端服务面(follow 流物化源,如 ctx.workspaces.list)——读写各自取上游公共面,relay 不复用 UI 服务乐观合并;**duck-typed 通道结构孪生**:对外部上游接口重声明而非类型导入(形状以 vendored types 为准,零 any 穿透;vendored 事实适配点显式注记模块头,漂移经 vendored 升级显式适配——先例:WorkspaceChannel 的 create 无 title 参 → create-后条件 rename、delete 非幂等 → relay 折成功、insertBefore 应答完整序);relay 在场判据 = **既有事件订阅登记非空**(零新裸通道);缺席重试一次(500ms 竞态窗)后 degraded,**plan 保留禁静默丢弃**(期望状态在库,任何时刻幂等重推);装载后重放仅限「plan 从未被消费」的通道缺席语义(op 失败型 degraded 是用户重试面);**重试策略单源在内核**(relay 侧不建本地重试策略);执行后快照**本地合并先行** outcome 上报(写不经客户端乐观合并则必须自补合并,否则 outcome-ok 以陈旧快照写占位哨兵);快照 phase=pending / 从未建立不上报(**空 ≠ 未知**,局部快照会被对账读作「注册表仅此」)。
+**Context**: M4 T3 裁决(投影走 client relay 直调上游 workspaceController remote 动词,零新增 host 半身代码、零上游修改);渲染进程被攻破面最大能力 = 上游动词集(与原生 UI 同权无提权);M5+ 新增上游数据面消费沿用本模式。
+**Scope**: [CROSS]
+**Source**: feature/dsh-forge-m4 TECH-006(design/tech-design.md §Interface 2;tasks/records/3.3、3.4)

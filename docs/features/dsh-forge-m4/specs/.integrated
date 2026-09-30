@@ -1,0 +1,41 @@
+feature: "dsh-forge-m4"
+integrated: "2026-10-01"
+mode: "non-interactive (auto-integrate all CROSS items, [auto-specs])"
+biz_count: 2
+tech_count: 5
+new_entries:
+  - BIZ-workbench-013: 布局记忆项目域(删除即清除/用户级分治/stored 存在性判别)
+  - BIZ-workbench-014: 拆出窗口语义(单实例不变/钉项目/关闭≡收回/标题归主进程)
+  - TECH-ui-reuse-004: 上游 UI 槽位消费纪律(single/list 分型 + priority + 结构孪生)
+  - TECH-ui-reuse-005: 双宿主组件纪律(props 化/几何单源/默认形态 verbatim 锁证)
+  - TECH-host-007: 上游数据面读写双缝 + duck-typed 通道孪生 + relay 重试单源
+  - TECH-data-kernel-007: 项目域 UI 状态 blob 纪律(白名单/钳制分治/stored/迟到写双保险)
+  - TECH-window-001: 壳层多窗口工程(注册表/role 零 URL 面/fan-out/单一汇流/标题权威)
+id_repairs:
+  - workbench.md M4 规划期 006/007/008(投影/subagent 归拢/执行中)→ 010/011/012(与 M3 条目撞号,违反 max+1 序规则;M3 条目原号不动;历史文档旧号不回写,映射注记在 workbench.md 头部)
+revisions:
+  - BIZ-workbench-001: +M4 修订块(docsPlacement 证据三档 + custom 收窄 + app 档内核派生)
+  - BIZ-workbench-002: +M4 修订块(三层身份归一化 + code_root_key 折叠 UNIQUE + boot 恢复/原位换台)
+  - BIZ-workbench-003: +M4 修订块(硬校验收窄,forge 检出门禁与 ERR_FORGE_NOT_DETECTED 废止为信息态;v1 冻结面例外)
+  - BIZ-workbench-004: +M4 增补块(追加行两行化 = 归因 + 命名)
+  - BIZ-workbench-005: +M4 扩展块(工作台首屏/投影四操作 ≤2s + 实测基线)
+  - BIZ-workbench-010: +M4 执行期增补块(偏差物化零落表/归档不对账/收敛单源/复连语义)
+  - BIZ-workbench-011: +M4 执行期增补块(降级双因同型/ended 快照不可用座位/徽标覆盖判定)
+  - BIZ-resilience-001: +M4 注记(可操作降级呈现族)
+  - TECH-host-006: +M4 修订块(追加行两行化 + oracle 两行前缀对拍)
+  - TECH-electron-ipc-002: +M4 修订块(51 → 62 通道 + dsh-forge:window-* 壳层动词组)
+  - TECH-ui-reuse-002: +M4 修订块(视图键族收缩 + panellist null 寻址 + 逃生门单成员)
+  - TECH-data-kernel-001: +M4 修订块(v3 增量实践 + MigrationContext 契约 + 收编纪律)
+  - TECH-data-kernel-006: +M4 沿用确认注记(三新域 + windows 域)
+  - TECH-testing-001: +M4 扩面块(实况 durable 断言/故障注入 env+控制文件缝/REAL persistence 种盘/多窗口 helper/构建新鲜度/fixme 台账/flake 双证/测量卫生/时序纪律)
+  - TECH-product-arch-004: +M4 修订块(CLI/CC 插件收口顺延 M6,路线图重定题)
+new_files:
+  - docs/conventions/shell-windows.md
+domains_rederived:
+  - docs/business-rules/workbench.md
+  - docs/business-rules/resilience.md
+  - docs/conventions/host-integration.md
+  - docs/conventions/data-kernel.md
+  - docs/conventions/ui-reuse.md
+  - docs/conventions/testing.md
+replaced: []
