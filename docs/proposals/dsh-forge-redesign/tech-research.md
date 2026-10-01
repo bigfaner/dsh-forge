@@ -166,8 +166,83 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 - **标准模式零 patch**：standard 组合的 skill-filesystem 行用默认根（无 customSkillDirs）——**用户根 / bundled 根是全局通道**（§1.2）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
 - 已知取舍：跨根同名技能按 rank 决胜（custom 300 优先于 user 400）——远征/突击下 customSkillDirs 版本胜出，标准模式下走全局根版本，内容同源无分叉；目录呈现与去重语义入 S6 验证。
 
+### 5.6 出厂双预设完整示例（profile patch YAML，2026-10-02 增补）
+
+> 格式严格镜像上游 `packages/bundle/web-app/presets/*.patch.yml`（§1.2 已核实的机制与方言）。最小骨架 = README 两行（registry 行 + 一行 preset 声明）；以下是产品级完整形态。包名 `@dsh-forge/*` 为示意（P1 定名）；安装形态 = profile `node_modules`（本仓 host-profile 先例）。`baseUrl` 为 loader 提供的解析基（§1.2 activate 的 `ctx.extend({ baseUrl })`）。
+
+```yaml
+# ══ forge profile cordis.patch.yml：registry 默认覆写 ══════════════════════
+# 按 row id patch（非 insert）——覆盖 web-app 出厂行的 default: standard
+- id: agent-preset-registry
+  config:
+    default: expedition          # 用户经设置页改 selectedDefault（volatile，优先于此）
+
+# ══ 远征模式（presets/expedition.patch.yml）════════════════════════════════
+- insert:
+    - id: preset-expedition
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: expedition
+        name: 远征模式            # 自带 name → 不走 locale 字典，显示名直出（§1.2 display.ts）
+        description: 完整 SDD 管线：proposal → PRD → 设计 → 契约 → 任务 → 执行
+        order: 1                 # hero chip 排序（order 升序，其次 id）
+        plugins:
+          # ── persona（铁律：只谈作风，不谈角色与工具禁令，§5.3）─────────
+          #    角色规格归 dispatch prompt；「FORBIDDEN: …」式规则禁止出现在此
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                You are a coding agent powered by the {{model}} model.
+                严谨、全流程、不跳步、证据驱动；规格先行，验收标准先于实现；
+                每一步留下可核查的记录。
+              suffix: Your working directory is {{cwd}}.
+          # ── 镜像 standard 的基础行（§5.2 ③：完整清单 = 上游 standard.patch.yml，
+          #    此处示样两行；上游演进经契约面清单 + 机械 diff 跟踪）─────────
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          # ……（tool-bash / tool-fs / tool-fs-search / tool-jobs /
+          #      plan-mode 组 / compaction 组 / delegation 组 /
+          #      tool-ask-user / tool-todo / tool-web / present：同 standard）
+          # ── 技能暴露（§5.2：L1 边界的物理载体 = 此行配置）───────────────
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:              # 默认根保持开启（includeDefaultRoots 默认 true）
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/plugin-brainstorm/package.json')), 'skills')
+                # ……（plugin-forge / plugin-forge-spec / plugin-knowledge 同式）
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          # ── forge 增量行 ────────────────────────────────────────────────
+          - id: plugin-forge
+            name: '@dsh-forge/plugin-forge'
+          - id: plugin-forge-spec      # 仅远征（L1：突击物理不可见）
+            name: '@dsh-forge/plugin-forge-spec'
+          - id: plugin-knowledge
+            name: '@dsh-forge/plugin-knowledge'
+
+# ══ 突击模式（presets/blitz.patch.yml）：与远征仅三处差异 ═════════════════
+#   ① persona prefix 换突击作风（短促突击、直奔要害、单写路径纪律不折扣）
+#   ② plugins 删 plugin-forge-spec 行
+#   ③ customSkillDirs 删 plugin-forge-spec 目录（规格技能物理隔离）
+#   id: blitz / name: 突击模式 / description: proposal 直达任务执行 / order: 2
+```
+
+配套语义（全部 §1.2 已核实）：
+
+- **用户编辑优先**：Web 编辑器保存 = profile patch 按 row id（如 `preset-expedition`）覆写 `config.plugins`，**替换整表**——用户改造不丢，但也不与出厂行自动合并。
+- **显示名**：自带 `name` 的声明不走 locale 字典（`isBuiltInPreset` 判定 name 为空才算出厂内置）——中文显示名「远征模式/突击模式」直出，无需翻译通道。
+- **blank 锁**：两预设均受 `select` 的 blank-session 锁约束——首轮后不可切换（§5 平台保证）。
+- **S5/S6 判定物**：此 YAML 即两个 spike 的实施底稿——S5 验证 insert + registry default patch 实跑，S6 验证 customSkillDirs 表达式与全局根并存。
+
 ## 版本历史
 
+- 2026-10-02：新增 §5.6 出厂双预设完整示例（profile patch YAML）——registry default 按 row id patch 覆写；远征全量形态（persona 铁律示样 / 镜像 standard 基础行省略号 / skill-filesystem customSkillDirs 表达式 / forge 增量行）；突击三处差异；配套语义（用户编辑整表覆写、自带 name 绕过 locale 字典、blank 锁）；即 S5/S6 实施底稿。
 - 2026-10-02：新增 §5.5 brainstorm 三模式共享——提取为独立最小技能工件 `plugin-brainstorm`（沉淀判据双命中：第三类消费者 + 零耦合）；远征/突击经 customSkillDirs，标准模式**零 patch**走默认根全局通道（宿主环境变量 `DSH_BUNDLED_SKILL_DIR`/`DSH_HOME`）；§1.2 补技能绑定通道（技能不随插件自动注册；customSkillDirs/默认根/rank 决胜/bundled 根）；§5.2 补 skill-filesystem 行为技能暴露物理载体 + 完整定义镜像 standard 基础行备注；新增 S6 spike。
 - 2026-10-02：轻装模式更名**突击模式**（机器值 `light` → `blitz`）；§5 补平台级保证（`select` blank-session 锁使「一会话一模式」由机制强制，恢复/分叉按 `agentPreset` 投影重建组合）。§1.2 全文重写为预设机制「原理与实现」（源码重核：registry/声明行/挂载三层角色、Generation 修订与引用计数、bindScopeParent 绑定、composeFrom 精确修订继承、blank 锁与日志重建、bundle/web-app 出厂 patch 形态、standard 定义实证、locale 显示解析）。
 - 2026-10-02：新增 §5 模式预设迁移——full/quick 升格为出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；forge 插件切核心/规格两包（防腐 L1：轻装会话物理隔离规格技能）；persona 撰写铁律（只谈作风不谈角色与工具禁令）保 §2 v3 相容；manifest `mode` 保留为功能溯源（与会话预设解耦）；S5 扩为双预设验证。
