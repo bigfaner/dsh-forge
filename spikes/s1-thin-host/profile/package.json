@@ -1,0 +1,18 @@
+{
+  "name": "dsh-profile-dsh-forge-s1",
+  "private": true,
+  "version": "0.0.0",
+  "description": "S1 spike profile project: official web bundles (@deepseek-ai/dsh-base + @deepseek-ai/dsh-web-app) with a custom user patch layer (official row + reserved @dsh-forge rows).",
+  "dependencies": {
+    "@deepseek-ai/dsh-base": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-web-app": "0.2.0-rc.2"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app"
+      ]
+    }
+  }
+}

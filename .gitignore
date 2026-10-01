@@ -10,3 +10,8 @@ docs/features/*/tasks/index.json.lock
 docs/features/*/testing/results/
 tests/results/
 docs/proposals/dsh-desktop/proposal.md
+
+# Node / spikes runtime artifacts (lockfiles ARE committed)
+node_modules/
+spikes/s1-thin-host/.dsh-home/
+spikes/s1-thin-host/profile/cordis.yml

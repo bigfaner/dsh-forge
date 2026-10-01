@@ -1,0 +1,21 @@
+# dsh-forge S1 spike — 产品 profile 用户层雏形。
+# 注意：patch 按 row id 整体替换该行 config（非深合并），保留字段须重述
+# （上游 app-boot README：「A user patch replaces the whole matched config」）。
+
+# ── 官方行（按 id 定位 web-app 出厂行：与出厂值一致的 no-op 重述，
+#    验证「官方行 + 产品层」的叠放次序——用户层在所有 bundle 层之后）──
+- id: system-prompt
+  config:
+    personaSuffix: Your working directory is {{cwd}}.
+    personaPrefix: >-
+      You are a coding agent powered by the {{model}} model.
+
+# ── 预留产品插件行（@dsh-forge/core / @dsh-forge/knowledge 包尚未发布；
+#    disabled 预留位 = 行合法但不挂载，1.4 正式装配时转正启用）──
+- insert:
+    - id: dsh-forge-core
+      name: '@dsh-forge/core'
+      disabled: true
+    - id: dsh-forge-knowledge
+      name: '@dsh-forge/knowledge'
+      disabled: true

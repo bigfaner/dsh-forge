@@ -1,0 +1,9 @@
+
+[S1] mode=auto userLayer=off runtime=electron 44.0.0
+[S1] DIRECT-IN-MAIN VERDICT: attempting boot inside Electron main…
+[S1] profile loaded: layers=@deepseek-ai/dsh-base + @deepseek-ai/dsh-web-app userPatches=0 skipped=0
+dsh web: http://127.0.0.1:19387/?token=REDACTED
+[S1] BOOT READY via=direct
+[S1] WINDOW did-finish-load url=http://127.0.0.1:19387/?token=REDACTED
+[S1] INJECTIONS count=12 sample={"kind":"style","text":":root{color-scheme:light}body{background-color:#fff;--dsh-boot-bg:#fff}@media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background-color:#151517;--dsh-boot-bg:#151517}}"}
+[S1] SPIKE SUCCESS — auto exit

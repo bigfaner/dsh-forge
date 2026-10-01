@@ -60,7 +60,7 @@ status: Draft
 ### Dependencies
 
 - **上游 npm（全部精确 pin，0.2.0-rc.2）**：`@deepseek-ai/dsh-app-boot` / `dsh-client-web` / `dsh-workspace` / `dsh-host-webserver` / `dsh-system-prompt`（经 profile 间接）/ 官方 `ui-*`（sidebar / chat / conversation / dockkit / theme / primitives）+ Cordis 运行时。lockfile 入库，P1 期不开升级窗口。
-- **产品依赖**：`better-sqlite3`（SQLite，Electron prebuilds）、`electron` 44 + `electron-builder` 26（NSIS，继承旧线 M1 资产模式）、`gray-matter`（frontmatter 解析）。
+- **产品依赖**：`better-sqlite3`（SQLite，Electron prebuilds）、`electron` 44（**S1 实测精确 `44.0.0`——`node-addon-require-builtin` 指纹门仅接受 43.0.0/44.0.0/45.0.0-alpha.6，见 G1 第 8 项 pin**）+ `electron-builder` 26（NSIS，继承旧线 M1 资产模式）、`gray-matter`（frontmatter 解析）。
 - **开发依赖**：TypeScript、vitest、Playwright（`_electron`）、oxlint、vite。
 
 ### Monorepo 工程规范与协作机制
@@ -440,7 +440,7 @@ core（双域）单测覆盖率 80%；G0–G2 全绿为里程碑门（架构基�
 
 ### 契约面清单（G1 pin 池，P1 起步版——架构基线 §6 的落实）
 
-1. boot manifest 注入格式（`{url, injections}` + `applyIndexInjections`）；2. `__DSH_TRANSPORT__` carrier；3. slot 洞名（`sidebar` / `sidebar.workspaces` / 子洞）与 injected props；4. `ctx.workspaceRegistry` API（create 幂等 / delete 保目录保日志 / get / list 语义）；5. 官方 ui-\* props（chat/conversation/dockkit/theme——S2 清点后逐项入池）；6. `ctx.systemPrompt.section` 注册与 order 约定；7. Cordis 服务定义/注入模式（`forgeProjects` / `forgeKnowledge`）；8. dsh profile 目录形状（`loadProfileDirectory` / `runProfile` 签名，S1 pin）。agent-preset 行格式随 M3 入池。
+1. boot manifest 注入格式（`{url, injections}` + `applyIndexInjections`）；2. `__DSH_TRANSPORT__` carrier；3. slot 洞名（`sidebar` / `sidebar.workspaces` / 子洞）与 injected props；4. `ctx.workspaceRegistry` API（create 幂等 / delete 保目录保日志 / get / list 语义）；5. 官方 ui-\* props（chat/conversation/dockkit/theme——S2 清点后逐项入池）；6. `ctx.systemPrompt.section` 注册与 order 约定；7. Cordis 服务定义/注入模式（`forgeProjects` / `forgeKnowledge`）；8. dsh profile 目录形状（`loadProfileDirectory` / `runProfile` 签名）——**S1 已 pin（2026-10-02，spike `spikes/s1-thin-host/` 实测，裁决=直跑可行不触发 fallback）**：`loadProfileDirectory(binName, dir, installAnchor, {userLayer?}) → Profile`（`@deepseek-ai/dsh-app-boot`）；`runProfile({environment, profile, resolvedProfile?, patchFiles, args, packageManager?}) → Promise<{ctx, shutdown}>`（`@deepseek-ai/dsh/profile-boot`，就绪后 `ctx.connection.authenticatedUrl()` + `ctx.webServer.collectIndexInjections()`）；profile 目录 = `package.json`（`dsh.profile.bundles`）+ `cordis.patch.yml` 用户层 + `pnpm-workspace.yaml`（hoisted）+ `node_modules`，`cordis.yml` 空根每启重写；硬约束：Electron 精确 `44.0.0`（addon 指纹门）、运行时包集合须补 peer 闭包（19 包清单见 spike）、DSH_HOME 重定向隔离、ESM main 禁顶层 await `whenReady()`——完整 pin 与证据见 `spikes/s1-thin-host/README.md`。agent-preset 行格式随 M3 入池。
 
 ### References
 

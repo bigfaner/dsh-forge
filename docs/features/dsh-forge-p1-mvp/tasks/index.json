@@ -10,7 +10,7 @@
       "title": "S1 spike：薄宿主 runProfile 直跑可行性裁决",
       "priority": "P0",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.1-s1-spike-thin-host.md",
       "record": "records/1.1-s1-spike-thin-host.md",
       "surface-type": "web",
