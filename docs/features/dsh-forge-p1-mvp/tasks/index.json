@@ -1,0 +1,745 @@
+{
+  "feature": "dsh-forge-p1-mvp",
+  "prd": "prd/prd-spec.md",
+  "design": "design/tech-design.md",
+  "proposal": "docs/proposals/dsh-forge-p1-mvp/proposal.md",
+  "created": "2026-10-02",
+  "tasks": {
+    "1.1-s1-spike-thin-host": {
+      "id": "1.1",
+      "title": "S1 spike：薄宿主 runProfile 直跑可行性裁决",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "pending",
+      "file": "1.1-s1-spike-thin-host.md",
+      "record": "records/1.1-s1-spike-thin-host.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.2-monorepo-scaffold": {
+      "id": "1.2",
+      "title": "Monorepo 五工件骨架 + G0–G2 质量门基建",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "status": "pending",
+      "file": "1.2-monorepo-scaffold.md",
+      "record": "records/1.2-monorepo-scaffold.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.3-contracts-package": {
+      "id": "1.3",
+      "title": "packages/contracts：跨工件契约层（DTO / 错误码 / frontmatter 常量 / 通道名）",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.2"
+      ],
+      "status": "pending",
+      "file": "1.3-contracts-package.md",
+      "record": "records/1.3-contracts-package.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "1.4-host-assembly": {
+      "id": "1.4",
+      "title": "薄宿主装配：apps/host 四基础子模块 + profile 首启落地",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.1",
+        "1.3"
+      ],
+      "status": "pending",
+      "file": "1.4-host-assembly.md",
+      "record": "records/1.4-host-assembly.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.5-web-shell-boot": {
+      "id": "1.5",
+      "title": "apps/web 壳接入（boot manifest 消费 + carrier + S2 契约清点）",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.4"
+      ],
+      "status": "pending",
+      "file": "1.5-web-shell-boot.md",
+      "record": "records/1.5-web-shell-boot.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "1.gate": {
+      "id": "1.gate",
+      "title": "Phase 1 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "1.summary"
+      ],
+      "status": "pending",
+      "file": "1.gate.md",
+      "record": "records/1.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "1.summary": {
+      "id": "1.summary",
+      "title": "Phase 1 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5"
+      ],
+      "status": "pending",
+      "file": "1.summary.md",
+      "record": "records/1.summary.md",
+      "type": "doc.summary"
+    },
+    "2.1-core-db-schema": {
+      "id": "2.1",
+      "title": "core/db 基座：SQLite 句柄唯一落点 + schema v1 前向迁移（五表）",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.1-core-db-schema.md",
+      "record": "records/2.1-core-db-schema.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.10-add-project-flow": {
+      "id": "2.10",
+      "title": "UF-3 组装：两段模态流程（状态机 + 取消点语义 + 确认执行 + 反馈）",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.9",
+        "2.4",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.10-add-project-flow.md",
+      "record": "records/2.10-add-project-flow.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.11-session-panel-uf4": {
+      "id": "2.11",
+      "title": "UF-4 会话面板三 tab（对话真实往返 / 轨迹最简台账 / 召回占位）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.5",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.11-session-panel-uf4.md",
+      "record": "records/2.11-session-panel-uf4.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.12-workbench-assembly": {
+      "id": "2.12",
+      "title": "工作台 Page Assembly：三区装配 + hero 相位（UF-2）+ SC1 骨架断言起步",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.7",
+        "2.10",
+        "2.11",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.12-workbench-assembly.md",
+      "record": "records/2.12-workbench-assembly.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.13-g1-pin-m0": {
+      "id": "2.13",
+      "title": "G1 契约面 pin 池 M0 批（boot manifest / slot 洞名 / registry 语义 / profile 形状）",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.4",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.13-g1-pin-m0.md",
+      "record": "records/2.13-g1-pin-m0.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.14-smoke-migration": {
+      "id": "2.14",
+      "title": "冒烟断言骨架组迁移起步（smoke-ui 196 → e2e 底稿）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.12",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.14-smoke-migration.md",
+      "record": "records/2.14-smoke-migration.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.2-forge-register-chain": {
+      "id": "2.2",
+      "title": "core·forge 域：registerProject 四步补偿链 + ctx.forgeProjects 注册",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.1",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.2-forge-register-chain.md",
+      "record": "records/2.2-forge-register-chain.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.3-forge-reconcile-queries": {
+      "id": "2.3",
+      "title": "core·forge 域：启动对账 reconcileAtStartup + 项目查询面",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.2",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.3-forge-reconcile-queries.md",
+      "record": "records/2.3-forge-reconcile-queries.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.4-rpc-face-projects": {
+      "id": "2.4",
+      "title": "IPC RPC 面机制 + forge:projects/* 通道（三处一体）",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "2.2",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.4-rpc-face-projects.md",
+      "record": "records/2.4-rpc-face-projects.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.5-zones-skeleton": {
+      "id": "2.5",
+      "title": "web/zones 三区骨架：视图互换（UF-5）+ dock 页签跟随（UF-7 机制）",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.5-zones-skeleton.md",
+      "record": "records/2.5-zones-skeleton.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.6-web-base-components": {
+      "id": "2.6",
+      "title": "web/components 领域无关基础组件（MarkdownDoc / StateChip / HeatBadge / EmptyState）",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.6-web-base-components.md",
+      "record": "records/2.6-web-base-components.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "2.7-sidebar-uf1": {
+      "id": "2.7",
+      "title": "ForgeSidebar（UF-1）：槽位路线 A 替换 + 项目树/会话列表实时读",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.4",
+        "2.5",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.7-sidebar-uf1.md",
+      "record": "records/2.7-sidebar-uf1.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.8-add-project-browser": {
+      "id": "2.8",
+      "title": "UF-3 段一：DirectoryBrowser 文件浏览器（已注册标记 = 预检可视化）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.4",
+        "2.6",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.8-add-project-browser.md",
+      "record": "records/2.8-add-project-browser.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.9-add-project-form": {
+      "id": "2.9",
+      "title": "UF-3 段二：RegisterForm 注册表单（回填/默认值/派生/联动）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.8",
+        "1.gate"
+      ],
+      "status": "pending",
+      "file": "2.9-add-project-form.md",
+      "record": "records/2.9-add-project-form.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "2.gate": {
+      "id": "2.gate",
+      "title": "Phase 2 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "2.summary"
+      ],
+      "status": "pending",
+      "file": "2.gate.md",
+      "record": "records/2.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "2.summary": {
+      "id": "2.summary",
+      "title": "Phase 2 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "2.1",
+        "2.10",
+        "2.11",
+        "2.12",
+        "2.13",
+        "2.14",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "2.8",
+        "2.9"
+      ],
+      "status": "pending",
+      "file": "2.summary.md",
+      "record": "records/2.summary.md",
+      "type": "doc.summary"
+    },
+    "3.1-knowledge-parse-index": {
+      "id": "3.1",
+      "title": "core·知识域：frontmatter 解析 + rebuildIndex 可重建索引",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.1-knowledge-parse-index.md",
+      "record": "records/3.1-knowledge-parse-index.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.2-knowledge-search-recall": {
+      "id": "3.2",
+      "title": "core·知识域：search / readAbstract 检索面 + knowledge_recall_logs + 热度",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.1",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.2-knowledge-search-recall.md",
+      "record": "records/3.2-knowledge-search-recall.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.3-knowledge-browse-queries": {
+      "id": "3.3",
+      "title": "core·知识域：浏览查询面 listEntries / getEntryDetail / sessionRecall",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.1",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.3-knowledge-browse-queries.md",
+      "record": "records/3.3-knowledge-browse-queries.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.4-knowledge-plugin": {
+      "id": "3.4",
+      "title": "knowledge 插件：召回 tool 双件 + forge:knowledge 系统提示词段",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.2",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.4-knowledge-plugin.md",
+      "record": "records/3.4-knowledge-plugin.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.5-rpc-knowledge": {
+      "id": "3.5",
+      "title": "forge:knowledge/* RPC 通道（browse/listEntries/entryDetail/heat/sessionRecall）",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "3.3",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.5-rpc-knowledge.md",
+      "record": "records/3.5-rpc-knowledge.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.6-knowledge-browse-ui": {
+      "id": "3.6",
+      "title": "UF-6 浏览主体：工具栏 + 域目录树 + 卡片网格（热度徽章）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.5",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.6-knowledge-browse-ui.md",
+      "record": "records/3.6-knowledge-browse-ui.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.7-knowledge-drawer": {
+      "id": "3.7",
+      "title": "UF-6 详情抽屉：摘要块 + 两列元数据 + Markdown 正文（MarkdownDoc body）",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.5",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.7-knowledge-drawer.md",
+      "record": "records/3.7-knowledge-drawer.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.8-knowledge-integration": {
+      "id": "3.8",
+      "title": "M1 集成：知识视图填入 + UF-4 召回 tab 真实数据接线",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "dependencies": [
+        "3.6",
+        "3.7",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.8-knowledge-integration.md",
+      "record": "records/3.8-knowledge-integration.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "3.9-g1-pin-m1": {
+      "id": "3.9",
+      "title": "G1 契约面 pin 池 M1 批（systemPrompt.section / Cordis 服务注入 / tool 面 / ui-* props 收口）",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "3.4",
+        "2.gate"
+      ],
+      "status": "pending",
+      "file": "3.9-g1-pin-m1.md",
+      "record": "records/3.9-g1-pin-m1.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "3.gate": {
+      "id": "3.gate",
+      "title": "Phase 3 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "3.summary"
+      ],
+      "status": "pending",
+      "file": "3.gate.md",
+      "record": "records/3.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "3.summary": {
+      "id": "3.summary",
+      "title": "Phase 3 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9"
+      ],
+      "status": "pending",
+      "file": "3.summary.md",
+      "record": "records/3.summary.md",
+      "type": "doc.summary"
+    },
+    "4.1-installer-pipeline": {
+      "id": "4.1",
+      "title": "Windows 安装包管线（electron-builder NSIS + extraResources + sqlite prebuilds）",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.1-installer-pipeline.md",
+      "record": "records/4.1-installer-pipeline.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.2-flywheel-e2e": {
+      "id": "4.2",
+      "title": "MVP 门第一步：飞轮 6 步链端到端走查（dogfood 模型）",
+      "priority": "P0",
+      "estimatedTime": "4h",
+      "dependencies": [
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.2-flywheel-e2e.md",
+      "record": "records/4.2-flywheel-e2e.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "high"
+    },
+    "4.3-installer-smoke": {
+      "id": "4.3",
+      "title": "MVP 门第二步：Windows 安装包启动冒烟（4 步）",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "3.gate"
+      ],
+      "status": "pending",
+      "file": "4.3-installer-smoke.md",
+      "record": "records/4.3-installer-smoke.md",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
+    "4.gate": {
+      "id": "4.gate",
+      "title": "Phase 4 Gate",
+      "priority": "P0",
+      "estimatedTime": "1h",
+      "dependencies": [
+        "4.summary"
+      ],
+      "status": "pending",
+      "file": "4.gate.md",
+      "record": "records/4.gate.md",
+      "breaking": true,
+      "type": "gate"
+    },
+    "4.summary": {
+      "id": "4.summary",
+      "title": "Phase 4 Summary",
+      "priority": "P0",
+      "estimatedTime": "15min",
+      "dependencies": [
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "status": "pending",
+      "file": "4.summary.md",
+      "record": "records/4.summary.md",
+      "type": "doc.summary"
+    },
+    "consolidate-specs": {
+      "id": "T-specs-consolidate",
+      "title": "Consolidate Specs",
+      "priority": "P2",
+      "estimatedTime": "20min",
+      "dependencies": [
+        "T-test-run"
+      ],
+      "status": "pending",
+      "file": "consolidate-specs.md",
+      "record": "records/consolidate-specs.md",
+      "type": "doc.consolidate"
+    },
+    "eval-journey": {
+      "id": "T-eval-journey",
+      "title": "Evaluate Journey Quality",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "T-test-gen-journeys"
+      ],
+      "status": "pending",
+      "file": "eval-journey.md",
+      "record": "records/eval-journey.md",
+      "mainSession": true,
+      "type": "eval.journey"
+    },
+    "gen-journeys": {
+      "id": "T-test-gen-journeys",
+      "title": "Generate Test Journeys",
+      "priority": "P1",
+      "estimatedTime": "20-30min",
+      "dependencies": [
+        "1.1",
+        "2.9",
+        "3.7",
+        "4.1",
+        "1.2",
+        "2.10",
+        "2.13",
+        "2.7",
+        "2.8",
+        "3.4",
+        "2.4",
+        "3.3",
+        "3.8",
+        "3.9",
+        "2.11",
+        "4.2",
+        "1.3",
+        "2.14",
+        "3.5",
+        "2.2",
+        "2.6",
+        "3.2",
+        "4.3",
+        "1.4",
+        "2.1",
+        "2.3",
+        "3.1",
+        "1.5",
+        "2.12",
+        "2.5",
+        "3.6"
+      ],
+      "status": "pending",
+      "file": "gen-journeys.md",
+      "record": "records/gen-journeys.md",
+      "type": "test.gen-journeys"
+    },
+    "gen-test-scripts": {
+      "id": "T-test-gen-scripts",
+      "title": "Generate Web E2E Test Scripts",
+      "priority": "P1",
+      "estimatedTime": "1-2h",
+      "dependencies": [
+        "T-eval-journey"
+      ],
+      "status": "pending",
+      "file": "gen-test-scripts.md",
+      "record": "records/gen-test-scripts.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.gen-scripts"
+    },
+    "run-test": {
+      "id": "T-test-run",
+      "title": "Run Web E2E Test",
+      "priority": "P1",
+      "estimatedTime": "30min-1h",
+      "dependencies": [
+        "T-test-gen-scripts"
+      ],
+      "status": "pending",
+      "file": "run-test.md",
+      "record": "records/run-test.md",
+      "surface-key": ".",
+      "surface-type": "web",
+      "type": "test.run"
+    }
+  },
+  "statusEnum": [
+    "pending",
+    "in_progress",
+    "completed",
+    "blocked",
+    "suspended",
+    "skipped",
+    "rejected"
+  ],
+  "priorityEnum": [
+    "P0",
+    "P1",
+    "P2"
+  ]
+}

@@ -1,0 +1,41 @@
+[
+  {
+    "phase": 1,
+    "name": "M0 基座：工程骨架 + 薄宿主 + 壳接入",
+    "source": "design",
+    "gates": [
+      {
+        "afterPhase": 1,
+        "description": "基座门：薄宿主加载产品 profile 并出窗（S1 裁决回填：直跑 / fallback vendor）；壳渲染官方 ui-* 注入件；S2 清单（ui-* props / 轨迹数据源）回填 G1 pin 池；G0 全绿。"
+      }
+    ]
+  },
+  {
+    "phase": 2,
+    "name": "M0 主体：三区工作台 + 项目注册 + 真实会话",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 2,
+        "description": "M0 走线架门：原生首屏立起（SC1 骨架断言组）；项目注册全流程（SC12 补偿/防误删/幂等/对账四断言 + SC13 走查）；真实会话往返/恢复（SC6①②）；无投影纪律（SC2）；G0–G2 全绿。"
+      }
+    ]
+  },
+  {
+    "phase": 3,
+    "name": "M1 知识飞轮第一圈：解析/索引 → 召回 → 事件 → tab/热度",
+    "source": "PRD-explicit",
+    "gates": [
+      {
+        "afterPhase": 3,
+        "description": "M1 完备门：召回链路断言全过（SC10 P1 子集：域过滤/关键词/摘要先行/知识段/多步检索链）；事件↔召回 tab↔热度三方一致（场景⑥）；frontmatter 契约解析容错；G1 M1 pin 入池。"
+      }
+    ]
+  },
+  {
+    "phase": 4,
+    "name": "MVP 门：飞轮端到端走查 + Windows 安装包冒烟",
+    "source": "PRD-explicit",
+    "gates": []
+  }
+]
