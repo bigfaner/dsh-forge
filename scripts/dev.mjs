@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// `pnpm dev` —— 并行：vite dev server（apps/web）+ `tsc -b --watch`（全拓扑）
+// `pnpm dev` —— 并行：apps/web `vite build --watch`（壳非独立应用——母本裁决：bare vite serve
+// 无 __DSH_BOOT__ 注入；宿主载 build dist，1.5 起 watch 迭代）+ `tsc -b --watch`（全拓扑）
 // + electron（指 dev profile：DSH_FORGE_DEV_PROFILE=dev，开发 profile 直链
 // workspace 构建产物，免整包组装——1.4 接线消费该环境变量）。
 // electron 面守卫：apps/host/dist/main.js 就绪后才拉起（1.4 落地宿主前仅跑前两者）。
@@ -25,7 +26,7 @@ function start(name, cmd, env = {}) {
   console.log(`[dev] ${name}: ${cmd}`)
 }
 
-start('vite', 'pnpm -C apps/web dev')
+start('vite', 'pnpm -C apps/web watch')
 start('tsc', 'pnpm exec tsc -b --watch')
 
 const HOST_MAIN = join(ROOT, 'apps/host/dist/main.js')

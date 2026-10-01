@@ -1,6 +1,8 @@
 // 主窗口创建（定位：基础——窗口生命周期；Security Mitigations：contextIsolation、
 // 无 remote content、nodeIntegration 关）。BrowserWindow 以注入方式进入（测试可换 fake）。
 export interface BrowserWindowLike {
+  /** ws 改写栏的主窗口归属判定面（1.5：installShellStreamRewrite 消费） */
+  readonly webContents: { readonly id: number }
   loadURL(url: string): Promise<void>
   on(event: string, listener: () => void): void
   show(): void

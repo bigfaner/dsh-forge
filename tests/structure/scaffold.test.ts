@@ -173,7 +173,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
   it('五工件入口占位与 vite 入口就位（无业务代码）', () => {
     for (const f of [
       'apps/host/src/main.ts',
-      'apps/web/src/main.tsx',
+      'apps/web/src/main.ts',
       'apps/web/index.html',
       'apps/web/vite.config.ts',
       'packages/contracts/src/index.ts',

@@ -1,0 +1,16 @@
+/* 全局基底（定位：基础）——令牌引入与全局样式。
+ * 纪律：仅消费 --dsw-* 令牌（色/字/距零裸值，lint-tokens 机械执行）。
+ * 令牌由官方 ui-theme client bundle 激活时注入（boot 注入行装载）——壳页先于此为
+ * 壳内核 boot 页（自带样式）；token 未注入期取回退关键字，不取裸值。 */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--dsw-font-family, inherit);
+  background: var(--dsw-alias-bg-base, transparent);
+  color: var(--dsw-alias-label-primary, inherit);
+}

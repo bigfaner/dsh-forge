@@ -13,7 +13,25 @@ export default defineConfig({
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
-      { test: { name: 'web', include: ['apps/web/src/**/*.test.{ts,tsx}'] } },
+      {
+        test: {
+          name: 'web',
+          include: ['apps/web/src/**/*.test.{ts,tsx}'],
+          // dsh-client-* lib 携带 .css 副产物（boot 页/组件样式）——外部化（默认）会让 Node
+          // 直载 .css 报 Unknown file extension；内联走 vite 转换管道（css 按 test.css 默认桩化）
+          server: {
+            deps: {
+              inline: [
+                '@deepseek-ai/dsh-client-web',
+                '@deepseek-ai/dsh-client-store',
+                '@deepseek-ai/dsh-client-ui-primitives',
+                '@deepseek-ai/dsh-client-ui-slots',
+                '@deepseek-ai/dsh-client-ui-dockkit',
+              ],
+            },
+          },
+        },
+      },
     ],
   },
 })
