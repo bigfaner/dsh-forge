@@ -32,7 +32,7 @@ intent: "tech-research"
 
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
-> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。合并后：预设退回**纯环境**（工具面 + 知识提示词段；persona 行可选，只放通用工作风格）。
+> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——出厂 forge 预设 = 纯环境定义（工具面 + 知识提示词段，不配 persona 行），executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。
 
 | forge 3.x 组件 | v3 落点 |
 |---|---|
@@ -52,9 +52,14 @@ intent: "tech-research"
 ```
 run-tasks skill（forge 预设会话内）
   → taskClaim tool → state-layer
-  → dispatchPrompt = executorConstraints + taskPrompt(key) 策略   ← 派发前一次性合成（纯函数）
-  → subagent(prompt = dispatchPrompt, agentOptions{model}, 阻塞)
-       ├─ 执行策略（含 knowledge recall）
+  → dispatchPrompt = 约束块 + 动态信息块 + 策略块          ← 派发前一次性合成（纯函数）
+  │    ① executorConstraints（迁移自 task-executor.md 硬约束/错误分诊/暂停协议）
+  │    ② 动态信息块：state-layer 实时取数——TASK_ID/FILE/TYPE/CATEGORY、
+  │       BLOCKERS 依赖现状快照（新增，老 forge 无）、PHASE_SUMMARY（跨相位）、
+  │       COVERAGE（三级优先）、SURFACE/COMPLEXITY、KNOWLEDGE_DOMAIN（项目默认召回域）
+  │    ③ 类型策略块（TS 模板函数）
+  → subagent(prompt = dispatchPrompt, agentOptions{model}, 阻塞)   ← 匿名子代理，动态派发
+       ├─ 执行策略（含 knowledge recall，域参数来自 ②）
        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
        ├─ git-commit skill
        └─ 迷路？重调 taskPrompt(key) 恢复（合成是纯函数）
@@ -81,7 +86,7 @@ run-tasks skill（forge 预设会话内）
 
 **新设计核心裁决：模板从「md 文件 + 运行时校验」升格为「TS 模板函数」**——字段拼写错编译期抓（防腐 L2）、条件段用原生 if、函数签名即 frontmatter 元数据、零引擎依赖；`satisfies Record<TaskType, Template>` exhaustive 路由强于老的对应性校验。组件：
 
-- `PromptData` 接口（taskKey/taskFile/category/featureSlug/phaseSummary?/coverage?/surface?/complexity）；
+- `PromptData` 接口（taskKey/taskFile/category/featureSlug/phaseSummary?/coverage?/surface?/complexity，**v3 增：blockers 快照 / knowledgeDomain**）；
 - 每类型一个模板函数（`codingFix(d): string`），路由表 exhaustive；
 - `synthesize(task, ctx)` 纯函数：`fixRecordMissed` 特殊路由覆盖 + `buildData`（PhaseDetect / resolveCoverage 注入）；
 - `taskPrompt` tool（host 半身）：`stateStore.byKey` → `synthesize` → 返回策略文本；
@@ -93,6 +98,7 @@ run-tasks skill（forge 预设会话内）
 
 ## 版本历史
 
+- 2026-10-02：v3 定稿——task-executor **不采用预设身份**：出厂 forge 预设 = 纯环境定义（不配 persona 行），executor = 动态派发的匿名子代理，行为规格全部来自派发前合成的 dispatch prompt；动态信息块强化（blockers 现状快照、knowledgeDomain 注入）。
 - 2026-10-02：v3 修订——合并稳定/动态层：dispatcher 派发前一次性合成完整 dispatch prompt（约束块 + 策略）；修复 v2 隐性矛盾（组合继承下 persona 共享导致 dispatcher 背上 executor 的 claim 禁令）；预设退回纯环境，persona 行可选；§4 同步改为预拉 + 重拉恢复。
 - 2026-10-02：新增 §4 动态提示词组装设计（taskPrompt：TS 模板函数 + exhaustive 路由 + 纯函数合成 + executor 自拉保真）。
 - 2026-10-02：初版。subagent / preset / persona 机制核实（含两项负结论：无子代预设覆写、无超时）；task-executor 迁移方案 v2（预设管稳定层、prompt 管动态层）；spike 清单 S1–S5。

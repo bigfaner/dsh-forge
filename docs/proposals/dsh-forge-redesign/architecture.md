@@ -31,7 +31,7 @@ intent: "architecture-baseline"
 | `knowledge/` 知识链路 | 知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+使用事件）、审核与合并队列、晋升流 | 会话编排、知识注入决策（agent 自行决定）、代码仓与文档位置写入 | 产品主线（P2 重头） |
 | `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
 | `plugin-forge/` forge 插件 | SDD 管线技能（eval-\* 裁剪）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
-| profile 出厂预设 | **forge 模式的物理形态**：`@deepseek-ai/dsh-agent-preset` 一行组合 plugin-forge + plugin-knowledge（工具面/知识面；persona 行可选，只放通用工作风格——executor 特有约束走 dispatch prompt，见《技术预研笔记》§2 v3），经 profile patch 安装（`cordis.patch.yml` 同机制） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
+| profile 出厂预设 | **forge 模式的物理形态**：`@deepseek-ai/dsh-agent-preset` 一行组合 plugin-forge + plugin-knowledge——**纯环境定义**（工具面 + 知识提示词段，不含 persona；task-executor 不采用预设身份，其全部行为规格 = 派发前合成的 dispatch prompt，见《技术预研笔记》§2 v3），经 profile patch 安装（`cordis.patch.yml` 同机制） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
 
 **依赖方向（单向）**：`web` →（能力面 RPC）→ `state-layer` / `knowledge`；`plugin-forge` → `state-layer`；`plugin-knowledge` → `knowledge`；`host` 组装一切但不含业务。不存在反向 import；`state-layer` / `knowledge` 不 import UI 与插件；**`knowledge` 不依赖 `state-layer`**（头号沉淀候选的场景隔离禁令）。
 
