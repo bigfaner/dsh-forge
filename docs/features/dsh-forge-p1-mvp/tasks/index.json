@@ -229,7 +229,7 @@
         "2.2",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.3-forge-reconcile-queries.md",
       "record": "records/2.3-forge-reconcile-queries.md",
       "surface-type": "web",

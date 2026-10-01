@@ -32,6 +32,10 @@ class StubRegistry implements WorkspaceRegistryPort {
     return ws
   }
 
+  get(id: string): WorkspaceLike | undefined {
+    return this.records.get(id) // 未知 id → undefined（上游 get 语义，2.3 对账消费）
+  }
+
   list(): WorkspaceLike[] {
     return [...this.records.values()]
   }

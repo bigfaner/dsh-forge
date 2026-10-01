@@ -22,6 +22,7 @@ function stubCtx() {
   const records = new Map<string, WorkspaceLike>()
   const registry = {
     records,
+    get: (id: string): WorkspaceLike | undefined => records.get(id),
     list: (): WorkspaceLike[] => [...records.values()],
     async create(path: string): Promise<WorkspaceLike> {
       const ws = { id: randomUUID(), path }
@@ -45,13 +46,15 @@ function stubCtx() {
 }
 
 describe('service.ts 装配：ctx.forgeProjects 注册（Plugin.Function 形态）', () => {
-  it('默认导出函数插件：inject=workspaceRegistry，provide forgeProjects（registerProject 面）', () => {
+  it('默认导出函数插件：inject=workspaceRegistry，provide forgeProjects（Interface 1 全五法面——2.3 并齐）', () => {
     const { ctx, provided } = stubCtx()
     const dispose = corePlugin(ctx, { dbFile: dbPath() })
     expect(corePlugin.inject).toEqual(['workspaceRegistry'])
-    const svc = provided.get('forgeProjects') as { registerProject: unknown } | undefined
+    const svc = provided.get('forgeProjects') as Record<string, unknown> | undefined
     expect(svc).toBeDefined()
-    expect(typeof svc?.registerProject).toBe('function')
+    for (const method of ['registerProject', 'listProjects', 'getProject', 'updateProject', 'reconcileAtStartup']) {
+      expect(typeof svc?.[method]).toBe('function')
+    }
     expect(typeof dispose).toBe('function')
     dispose()
   })

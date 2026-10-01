@@ -10,10 +10,12 @@ export interface WorkspaceLike {
   readonly path: string
 }
 
-/** registry 官方面子集（仅补偿链消费的方法；2.3 对账 get/create 复用同面） */
+/** registry 官方面子集（补偿链 + 启动对账（2.3 起 get 入面）消费的方法） */
 export interface WorkspaceRegistryPort {
   /** 同步工作区投影（durable registry order，无持久化读） */
   list(): readonly WorkspaceLike[]
+  /** 按 id 查工作区；未知 id → undefined（上游 get 同步查表语义——对账逐项校验 path 消费） */
+  get(id: string): WorkspaceLike | undefined
   /** 为既有目录创建或复用工作区（幂等：同 canonical path 返回既有实体） */
   create(path: string, title?: string): Promise<WorkspaceLike>
   /** 删除注册记录（保留目录与全部会话日志）；未知 id 幂等 no-op 返回 false */
