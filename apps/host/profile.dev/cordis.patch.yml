@@ -10,6 +10,12 @@
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 
+# ── 官方行（置停）：client-hmr 全图 sync 会以宿主最新图对账掉壳掌舵追加的产品 client 行
+#    （S2 清单残留 #3；2.7 实证：产品插件激活 ~145ms 后被 prune，槽位注册级联回收）。
+#    产品组合静态（随应用发版更新），P1 无 HMR 面——重启/刷新即重掌舵，不需要热替换链。
+- id: client-hmr
+  disabled: true
+
 # ── 预留产品插件行（@dsh-forge/core / @dsh-forge/knowledge；
 #    disabled 预留位 = 行合法但不挂载——2.x/3.x 产品插件 bundle 就绪后转正启用，
 #    dev 形态届时改为链 workspace 构建产物）──

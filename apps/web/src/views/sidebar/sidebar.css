@@ -1,0 +1,233 @@
+/* 左栏工作区面板样式（定位：业务——UF-1，sidebar.workspaces 占用者）。
+ * 纪律：令牌唯一（色/字/圆角零裸值一律 --dsw-*，lint-tokens 机械执行）；行形态对齐官方
+ * ui-workspace Rows 刻度（sessionRow h32 / projectRow h34 / hover interactive-bg / radius md）。
+ * dsw-raw 豁免理由（执行记录同步）：行内 2/4/6/8px 与 16/26px 缩进 = 官方 sidebar 行语言
+ * 原值——官方主题无间距标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条
+ * 「形态对齐官方」优先，取官方原值；块级留白用行高令牌刻度。 */
+
+/* 面板根：占满壳的 workspaces 区域（几何/收展归壳） */
+.dswf-sidebar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── 知识库入口行（宽态；官方导航行形态） ── */
+.dswf-sidebar-entryrow {
+  display: flex;
+  flex: none;
+  padding: 4px 8px; /* dsw-raw 官方行语言刻度 */
+}
+
+.dswf-sidebar-entry {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 8px; /* dsw-raw 官方行语言 */
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: var(--dsw-font-s-14);
+  user-select: none;
+}
+
+.dswf-sidebar-entry:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-sidebar-entry-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 项目区（滚动主体） ── */
+.dswf-sidebar-projects {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px var(--dsw-font-xs-13-line-height); /* dsw-raw 上/右 4px 8px 官方行刻度；底 20px 行高刻度 */
+}
+
+.dswf-sidebar-sectionlabel {
+  flex: none;
+  padding: 2px 8px 4px; /* dsw-raw 官方 section 头刻度 */
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 项目块（官方 DisclosureRow 承载行本体——此处只补归档弱化与空项目占位） */
+.dswf-sidebar-project {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dswf-sidebar-project[data-archived] .dswf-sidebar-project-title {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 空项目占位行（UF-1 States：项目下「暂无会话」） */
+.dswf-sidebar-no-session {
+  flex: none;
+  padding: 2px 8px 6px 26px; /* dsw-raw 官方行内缩进刻度 */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型） ── */
+.dswf-sidebar-sessions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dswf-sidebar-session {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  gap: 0; /* 官方 sessionRow：槽位间用 margin 不用 gap */
+  padding: 0 8px; /* dsw-raw 官方行语言 */
+  padding-inline-start: 26px; /* dsw-raw 官方层级缩进刻度 */
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: var(--dsw-font-s-14);
+  text-align: start;
+  user-select: none;
+}
+
+.dswf-sidebar-session:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-sidebar-session[data-selected] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 状态点槽位（官方 16px 前导槽） */
+.dswf-sidebar-session-dot {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-sidebar-session-title {
+  min-width: 0;
+  margin: 0 6px 0 4px; /* dsw-raw 官方行语言 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-sidebar-session-time {
+  flex: none;
+  margin-left: auto;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 行级骨架（账本 pending） ── */
+.dswf-sidebar-skeleton {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px; /* dsw-raw 官方行间距 */
+  padding: 8px; /* dsw-raw 官方行刻度 */
+}
+
+.dswf-sidebar-skeleton-row {
+  height: 32px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* ── 项目错误条（RPC 失败 fail-soft 相位） ── */
+.dswf-sidebar-error {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw 行内刻度 */
+  margin: 8px; /* dsw-raw 行刻度 */
+  padding: 4px 8px; /* dsw-raw 行内刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-sidebar-retry {
+  margin-left: auto;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: pointer;
+}
+
+/* ── 收起态 rail（56px 图标列；几何与收展归壳，此处只排图标） ── */
+.dswf-sidebar-rail {
+  align-items: center;
+  gap: 2px; /* dsw-raw 官方 rail 刻度 */
+  padding: 2px 0; /* dsw-raw 官方 rail 刻度 */
+}
+
+.dswf-sidebar-railbtn {
+  display: inline-flex;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-sidebar-railbtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 品牌行件（sidebar.brand.mark / sidebar.brand.name 洞位内容；行本体归壳） ── */
+.dswf-sidebar-brand-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary-invert);
+  font: var(--dsw-font-xs-strong-13);
+  user-select: none;
+}
+
+.dswf-sidebar-brand-name {
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  user-select: none;
+  white-space: nowrap;
+}
+

@@ -3,6 +3,8 @@
 //    （官方 ui-theme 令牌样式入页 + 官方 sidebar 组件可见）
 //  AC3 carrier 承载 dsh 面 RPC 往返（__DSH_TRANSPORT__ 就位 + 连接层 /api 通道一往返）
 //  掌舵链自证：产品 client 插件入图激活（__DSH_FORGE_CLIENT__ 标记 = Loader 激活证据）
+// 2.7 增面：槽位路线 A 实跑判定——产品面板占用官方 sidebar 壳 sidebar.workspaces 洞位
+//  （壳仍在 = 折叠/导航/快捷键继承；洞内 = 产品面板 data-dswf-sidebar）。
 // 隔离：独立 userData（e2e 单实例纪律，沿 host-boot.spec）。
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -72,6 +74,12 @@ test('AC1–AC3 dev 形态：自有壳载入 + 官方 ui-* 渲染 + carrier RPC 
     expect(rpc.type).toBe('server-response')
     expect(rpc.ok).toBe(true)
     expect(Array.isArray(rpc.items)).toBe(true)
+
+    // 2.7 槽位路线 A 实跑判定：官方 sidebar 壳在场（上方 nav 可见 = 壳与折叠/导航/快捷键继承）
+    // 且 workspaces 洞位被产品面板占用（data-dswf-sidebar 宽态/rail 态 + 知识库入口在场；
+    // 官方 ui-workspace 浏览器被 priority -100 影子——单测面 pin，此处在场断言取 DOM 证据）
+    await expect(page.locator('#root [data-dswf-sidebar]').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('#root [data-dswf-sidebar] [data-dswf-nav="knowledge"]').first()).toBeVisible()
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })

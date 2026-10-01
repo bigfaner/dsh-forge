@@ -40,12 +40,14 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   })
 
-  it('cordis.patch.yml 模板：官方行 + @dsh-forge/core / @dsh-forge/knowledge 产品行（disabled 预留）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/core / @dsh-forge/knowledge 产品行（disabled 预留）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
+    // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
+    expect(patch).toContain('- id: client-hmr')
+    expect(patch).toContain('disabled: true')
     expect(patch).toContain("name: '@dsh-forge/core'")
     expect(patch).toContain("name: '@dsh-forge/knowledge'")
-    expect(patch).toContain('disabled: true')
   })
 
   it('pnpm-workspace.yaml 模板：hoisted + autoInstallPeers false（S1 pin 形状）', () => {
@@ -105,9 +107,10 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies).toEqual(packaged.dependencies)
     expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
   })
-  it('cordis.patch.yml 语义一致（官方行 + 两产品行 disabled）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行 disabled）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
     expect(dev).toContain('- id: system-prompt')
+    expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
   })
