@@ -80,6 +80,8 @@ intent: "architecture-baseline"
 
 ## 5. 演进纪律与版本管理
 
+> 迭代节奏：阶段内按里程碑推进（单人 1–2 周/个，交付可演示增量 + G0–G2 门全绿；里程碑定义见总纲 §演进路书）。
+
 ### 5.1 上游追踪与升级节奏
 
 发布形态核实见《技术预研笔记》§1.5：上游无 git tag、无 CHANGELOG，workspace 锁步发布，活跃线挂 npm `next` dist-tag。
@@ -134,6 +136,7 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：§5 补迭代节奏引言（里程碑 = 1–2 周可演示增量 + G0–G2 门；定义见总纲 §演进路书，路书已敏捷化重切为 M0–M8，P1 = M0–M1 即 MVP）。
 - 2026-10-02：Markdown 渲染一致性定为硬纪律——`MarkdownDoc` 单一包装入口（variant 判定：文档面 body / 嵌入预览 compact）、ui-primitives ↔ ui-chat 版本锁步、L3 增机械断言（版本对齐 + 同 fixture 跨文档面 computed style）。
 - 2026-10-02：原型基线同步——`web/` 工件行按重构原型更新（左栏导航 rail、中区一等公民视图互换（会话 ⇄ 知识库三页签）、右栏 dock 页签跟随项目、任务三视图列表/DAG/泳道 feature 绑定）；路线调整见总纲版本历史。
 - 2026-10-02：§5 扩为「演进纪律与版本管理」四子节——5.1 上游追踪与升级节奏（精确 pin + lockfile 入库、节奏化升级窗口、diff 即 changelog、功能雷达三问过滤）；5.2 升级测试门（升级分支零主干 bump；G0 编译 / G1 契约面回归 / G2 功能回归 / G3 冒烟 dogfood 四道门全绿方可合并；测试盲区显式记账；回滚 = pin 回退 + lockfile 恢复）；5.3 产品 semver + git tag + CHANGELOG 必备 + 发布门同池；5.4 schema 前向单向、旧应用打开新 schema 明确拒绝。发布形态依据 = 《技术预研笔记》§1.5。
