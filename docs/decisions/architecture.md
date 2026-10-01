@@ -19,3 +19,5 @@
 | 2026-09-23 | dsh-forge-m3 | 已迁移项目外部写 = watcher 检出后幂等自动重摄入 + 项目/feature 偏离标记,不阻断外部会话 | SQLite 保持权威一致、偏离可观察;弃「仅告警不摄入」(持续分叉) | 同上 §Interface 4 裁决 T3 |
 | 2026-09-23 | dsh-forge-m3 | systemPrompt 预合成归内核(三要素确定性组装 + prompt_hash 落库),host 半身仅持 subagent 创建 | 三要素数据(偏好/阶段资产)在内核,单查询可断言;host 合成则双查询且断言弱 | 同上 §Interface 3/§Appendix |
 | 2026-09-28 | dsh-forge-m4 | 工作台承载 = 原生 home 增强层:conversation 面板 + 左栏 sidebar.workspaces 座位注入 + 原生 rightbar 挂 forge tabs | 会话视图零重挂载、启动首屏天然成立(默认面板)、分屏用原生 pane;弃 forge 主面板自建容器 | dsh-forge-m4/design/tech-design.md §Overview 裁决 T1 |
+| 2026-10-02 | dsh-forge-p1-mvp | 数据内核合一为 core(forge 域 + 知识域双模块,对外双服务 forgeProjects/forgeKnowledge,单 SQLite 句柄),knowledge 仅存 dsh 插件;沉淀分离降为模块级禁令 | L1「sqlite 句柄唯一持有」与独立知识包写库互斥;包级分离属预设,提炼判据触发时再机械抽包 | dsh-forge-p1-mvp/design/tech-design.md §Architecture |
+| 2026-10-02 | dsh-forge-p1-mvp | 五工件定名 apps/{host,web} + packages/{contracts,core,knowledge};子模块基础/业务二分 + 依赖铁律 + 修改落点速查 | 业界常规命名通俗(state-layer 行话/plugin-knowledge 冗长);总纲「应用状态层」保留为概念术语;二分防业务混基础与改错地方 | dsh-forge-p1-mvp/design/tech-design.md §Monorepo |
