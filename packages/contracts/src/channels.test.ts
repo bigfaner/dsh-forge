@@ -1,7 +1,14 @@
 // 1.3 AC3 —— 通道名常量 pin（Interface 4：Web RPC 面，两域全通道）。
 // 权威来源：tech-design §Interface 4（`forge:projects/*` ｜ `forge:knowledge/*`）。
+// 2.8 增补：`forge:fs/*` 宿主文件系统浏览面（任务 2.8 Hard Rules——目录读取经 RPC，
+// renderer 不开 Node fs 通道；只读列举）。allowlist 扩为十一通道。
 import { describe, expect, it } from 'vitest'
-import { FORGE_CHANNEL_ALLOWLIST, KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from './channels.js'
+import {
+  FORGE_CHANNEL_ALLOWLIST,
+  FS_CHANNELS,
+  KNOWLEDGE_CHANNELS,
+  PROJECTS_CHANNELS,
+} from './channels.js'
 
 describe('AC3 通道名常量覆盖 Interface 4 两域全部通道', () => {
   it('forge:projects/* 五通道（register/list/get/update/reconcile）', () => {
@@ -24,11 +31,21 @@ describe('AC3 通道名常量覆盖 Interface 4 两域全部通道', () => {
     })
   })
 
-  it('allowlist = 两域十通道全列、无重复（main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(10)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(10)
+  it('forge:fs/* 浏览面（listDir——UF-3 文件浏览器数据源，只读目录列举）', () => {
+    expect(FS_CHANNELS).toEqual({
+      listDir: 'forge:fs/listDir',
+    })
+  })
+
+  it('allowlist = 两域 + fs 面十一通道全列、无重复（main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(11)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(11)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
-      [...Object.values(PROJECTS_CHANNELS), ...Object.values(KNOWLEDGE_CHANNELS)].sort(),
+      [
+        ...Object.values(PROJECTS_CHANNELS),
+        ...Object.values(KNOWLEDGE_CHANNELS),
+        ...Object.values(FS_CHANNELS),
+      ].sort(),
     )
   })
 

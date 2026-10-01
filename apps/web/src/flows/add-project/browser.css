@@ -1,0 +1,205 @@
+/* UF-3 段一·文件浏览器样式（定位：业务——flows/add-project，2.8）。
+ * 纪律：令牌唯一（色/字/圆角/间距零裸值一律 --dsw-*，lint-tokens 机械执行）；行形态对齐
+ * 官方列表行刻度（行高 32 / hover interactive-bg / radius md——sidebar.css 同款官方行语言）。
+ * dsw-raw 豁免理由（执行记录同步）：行内 2/4/6/8px 间距 = 官方行语言原值——官方主题无
+ * 间距标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条「形态对齐官方」优先，
+ * 取官方原值；块级留白用行高令牌刻度。 */
+
+/* ── 浏览器本体（2.10 模态壳内嵌；自带纵向布局） ── */
+.dswf-fb {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+}
+
+/* ── 顶部条：上一级钮 + 面包屑 ── */
+.dswf-fb-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+}
+
+.dswf-fb-crumb {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px; /* dsw-raw 官方面包屑刻度 */
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-fb-crumb-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px; /* dsw-raw 官方行语言 */
+  min-width: 0;
+}
+
+.dswf-fb-crumb-seg {
+  border: none;
+  padding: 2px 4px; /* dsw-raw 官方面包屑刻度 */
+  background: transparent;
+  border-radius: var(--dsw-radius-sm);
+  font: inherit;
+  font-family: inherit;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.dswf-fb-crumb-seg:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-fb-crumb-sep {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-fb-crumb-current {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-strong-13);
+  cursor: default;
+}
+
+/* ── 目录列表（官方行语言：行高 32 / hover / radius md） ── */
+.dswf-fb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 官方行间距 */
+  min-height: 0;
+  height: 256px; /* 原型 fb-list 定高刻度（滚动主体） */
+  padding: 6px; /* dsw-raw 官方列表内衬刻度 */
+  box-sizing: border-box;
+  overflow-y: auto;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+}
+
+.dswf-fb-item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px; /* dsw-raw 官方行语言 */
+  height: 32px;
+  padding: 0 8px; /* dsw-raw 官方行语言 */
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dswf-fb-item:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-fb-item[data-selected] {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dswf-fb-item[data-selected] .dswf-fb-item-icon {
+  color: var(--dsw-alias-label-primary-bluish);
+}
+
+.dswf-fb-item-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-fb-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-fb-item .dswf-fb-reg {
+  flex: none;
+}
+
+.dswf-fb-empty {
+  flex: none;
+  padding: var(--dsw-font-xs-13-line-height) 8px; /* dsw-raw 行内 8px 官方刻度 */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* ── 行级骨架（列举在途） ── */
+.dswf-fb-skeleton {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px; /* dsw-raw 官方行间距 */
+  padding: 8px 0; /* dsw-raw 官方行刻度 */
+}
+
+.dswf-fb-skeleton-row {
+  height: 32px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* ── 错误条（AC4 拦截：不出浏览器态——原目录条 + 重试） ── */
+.dswf-fb-error {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px; /* dsw-raw 行内刻度 */
+  padding: 4px 8px; /* dsw-raw 行内刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-fb-error-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-fb-retry {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: pointer;
+}
+
+/* ── 底部：提示 + 确认钮（「下一步」/「选择此文件夹」） ── */
+.dswf-fb-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+}
+
+.dswf-fb-hint {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-fb-confirm {
+  flex: none;
+}

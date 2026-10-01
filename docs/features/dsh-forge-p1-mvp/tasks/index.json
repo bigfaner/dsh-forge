@@ -309,7 +309,7 @@
         "2.6",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.8-add-project-browser.md",
       "record": "records/2.8-add-project-browser.md",
       "surface-type": "web",

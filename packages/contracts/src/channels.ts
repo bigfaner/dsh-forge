@@ -25,13 +25,22 @@ export const KNOWLEDGE_CHANNELS = {
 
 export type KnowledgeChannel = (typeof KNOWLEDGE_CHANNELS)[keyof typeof KNOWLEDGE_CHANNELS]
 
-/** 两域通道全集（键 = 通道方法名，与 dto/rpc.ts 请求/响应映射的键一一对应） */
+/** forge:fs/*（宿主文件系统浏览面——UF-3 文件浏览器数据源；只读目录列举，任务 2.8：
+ * 本机目录读取经 RPC，renderer 不开 Node fs 通道） */
+export const FS_CHANNELS = {
+  listDir: 'forge:fs/listDir',
+} as const
+
+export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS]
+
+/** 通道全集（键 = 通道方法名，与 dto/rpc.ts 请求/响应映射的键一一对应） */
 export const FORGE_CHANNELS = {
   ...PROJECTS_CHANNELS,
   ...KNOWLEDGE_CHANNELS,
+  ...FS_CHANNELS,
 } as const
 
-export type ForgeChannel = ProjectsChannel | KnowledgeChannel
+export type ForgeChannel = ProjectsChannel | KnowledgeChannel | FsChannel
 
 /** main 侧 IPC allowlist 唯一源（未知通道拒绝——electron-ipc-security 约定，继承自 1.4） */
 export const FORGE_CHANNEL_ALLOWLIST: readonly ForgeChannel[] = Object.values(FORGE_CHANNELS)

@@ -1,6 +1,7 @@
 // 2.4 AC1/AC2/AC3 renderer 层——forge:projects/* client：typed 结果、通道常量唯一源、信封反序列化。
+// 2.8 增 fs 面（forge:fs/listDir）：通道常量唯一源 + 缺省主目录请求负载形状。
 import { describe, expect, it, vi } from 'vitest'
-import { PROJECTS_CHANNELS, type RpcResult } from '@dsh-forge/contracts'
+import { FS_CHANNELS, PROJECTS_CHANNELS, type DirListing, type RpcResult } from '@dsh-forge/contracts'
 import { createForgeRpcClient } from './client.js'
 import { RpcClientError } from './errors.js'
 
@@ -78,6 +79,34 @@ describe('AC3 通道名仅出自 contracts 常量', () => {
     await client.projects.update('p-9', { name: 'renamed' })
     expect(t.calls[0]?.payload).toEqual({ id: 'p-9' })
     expect(t.calls[1]?.payload).toEqual({ id: 'p-9', patch: { name: 'renamed' } })
+  })
+})
+
+describe('2.8 fs 面（forge:fs/listDir——文件浏览器数据源）', () => {
+  const listing: DirListing = {
+    path: 'Z:\\project',
+    parentPath: 'Z:\\',
+    entries: [
+      { name: 'ai', path: 'Z:\\project\\ai' },
+      { name: 'dsh', path: 'Z:\\project\\dsh' },
+    ],
+  }
+
+  it('通道名 = FS_CHANNELS.listDir 常量值本尊；typed DirListing 返回', async () => {
+    const t = fakeTransport()
+    t.respondWith(() => ({ ok: true, data: listing } as RpcResult<DirListing>))
+    const client = createForgeRpcClient(t.transport)
+    await expect(client.fs.listDir('Z:\\project')).resolves.toBe(listing)
+    expect(t.calls).toEqual([{ channel: FS_CHANNELS.listDir, payload: { dirPath: 'Z:\\project' } }])
+  })
+
+  it('dirPath 缺省 = 主目录请求（负载 { dirPath: undefined } → IPC 结构化克隆后 {}）', async () => {
+    const t = fakeTransport()
+    t.respondWith(() => ({ ok: true, data: listing } as RpcResult<DirListing>))
+    const client = createForgeRpcClient(t.transport)
+    await client.fs.listDir()
+    expect(t.calls[0]?.channel).toBe('forge:fs/listDir')
+    expect(t.calls[0]?.payload).toEqual({ dirPath: undefined })
   })
 })
 

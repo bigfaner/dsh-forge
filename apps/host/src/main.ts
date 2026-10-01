@@ -6,7 +6,7 @@
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, protocol, session } from 'electron'
 import { bootDshHost } from './boot/index.js'
-import { BOOT_CHANNEL, createForgeIpc, registerBootChannel } from './ipc/index.js'
+import { BOOT_CHANNEL, createForgeIpc, registerBootChannel, registerFsChannels } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
   acquireSingleInstance, authenticateWebHost, createMainWindow, createShellProtocolHandler,
@@ -48,6 +48,7 @@ void (async () => {
     let mainWindow: BrowserWindowLike | undefined
     installShellStreamRewrite(session.defaultSession.webRequest, () => hostRef, (id) => mainWindow?.webContents.id === id)
     const forgeIpc = createForgeIpc(ipcMain) // forge:* 域面（handler 本体 2.4/3.5 注册进此机制）
+    registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })

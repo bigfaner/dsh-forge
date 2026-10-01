@@ -4,6 +4,7 @@
 // 会抹平结构化对象，故错误不走 promise 拒绝而走信封——2.4 RPC 面机制消费本契约）。
 // 定位铁律：纯类型，零逻辑零依赖。
 import type { RpcErrorPayload } from '../errors.js'
+import type { DirListing, ListDirRequest } from './fs.js'
 import type {
   DomainNode,
   EntryDetail,
@@ -73,4 +74,14 @@ export interface KnowledgeChannelResponses {
   entryDetail: EntryDetail
   heat: Map<number, number>
   sessionRecall: RecallGroup[]
+}
+
+/** forge:fs/* 请求负载（键 = FS_CHANNELS 键；listDir 缺省 = 用户主目录） */
+export interface FsChannelRequests {
+  listDir: ListDirRequest
+}
+
+/** forge:fs/* 响应负载（键 = FS_CHANNELS 键） */
+export interface FsChannelResponses {
+  listDir: DirListing
 }

@@ -2,9 +2,13 @@
 // 通道名仅出自 contracts 常量（禁字面量）；负载形状 = dto/rpc.ts 请求/响应映射；
 // 信封拆装：RpcOk → data 原样返回；RpcErr → 抛 RpcClientError（typed error 反序列化）；
 // 形状非法 fail-loud（不静默捏造结果）。3.5 knowledge 通道同型扩展（只增面不改建制）。
+// 2.8 增 fs 面（forge:fs/listDir——文件浏览器数据源；三处一体：contracts → 本文件 → host ipc）。
 import {
+  FS_CHANNELS,
   PROJECTS_CHANNELS,
+  type DirListing,
   type GetProjectRequest,
+  type ListDirRequest,
   type Project,
   type ProjectPatch,
   type ProjectSummary,
@@ -38,9 +42,16 @@ export interface ForgeProjectsRpc {
   reconcile(): Promise<ReconcileReport>
 }
 
+/** forge:fs/* 面方法集（宿主文件系统浏览面——只读目录列举，renderer 不开 Node fs 通道） */
+export interface ForgeFsRpc {
+  /** dirPath 缺省 = 用户主目录（浏览器起始态） */
+  listDir(dirPath?: string): Promise<DirListing>
+}
+
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
 export interface ForgeRpcClient {
   readonly projects: ForgeProjectsRpc
+  readonly fs: ForgeFsRpc
 }
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
@@ -56,6 +67,10 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
           patch,
         } satisfies UpdateProjectRequest),
       reconcile: () => invokeRpc<ReconcileReport>(transport, PROJECTS_CHANNELS.reconcile),
+    },
+    fs: {
+      listDir: (dirPath) =>
+        invokeRpc<DirListing>(transport, FS_CHANNELS.listDir, { dirPath } satisfies ListDirRequest),
     },
   }
 }

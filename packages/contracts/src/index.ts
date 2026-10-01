@@ -5,6 +5,7 @@
 export * from './channels.js'
 export * from './errors.js'
 export * from './frontmatter.js'
+export * from './dto/fs.js'
 export * from './dto/knowledge.js'
 export * from './dto/project.js'
 export * from './dto/rpc.js'
