@@ -53,36 +53,17 @@ intent: "tech-research"
 
 ### 1.4 能力扩展体系（插件之外，2026-10-02 核实）
 
-> 由「标准模式如何不写插件加技能」起的系统盘点；各条目经源码/README 核实（`skill-filesystem/src`、`context/agent-instructions/README`、`mcp/mcp-client/README`、`hooks/README`、`docs/capability-seams.md`）。
+> 全量配置手册已独立成册：**《dsh 扩展体系参考》**（`dsh-extensions.md`，含各体系配置示例）。此处仅留结论索引：
 
-**① 技能目录（filesystem skills，纯文件）**——五类根 + rank 决胜（§1.2）：
+- **①技能目录**（filesystem skills）：五类根（项目 `.dsh`/`.agents` 100/200、custom 300、用户 `$DSH_HOME`/`$DSH_AGENTS_HOME` 400/500、bundled）+ rank 决胜。**标准模式加技能 = 把 `<name>/SKILL.md` 丢进项目或用户根**——零插件零 patch，watch 热更新。人类命令（`ctx.commands`）只能插件注册；`user-invocable` 技能即文件系统侧用户可调面。
+- **②AGENTS.md 链**（`dsh-agent-instructions`，dsh-base 默认含）：用户全局 + 项目链（宽→窄 + `.local` 叠加 + 同容去重）注入 durable 基线消息。
+- **③MCP**（`dsh-mcp-client` 配置行）：stdio / streamable-http，工具名 `mcp__<server>__<tool>`。
+- **④hooks 兼容桥**（`dsh-hooks-claude-code`/`-codex`）：指向既有 `hooks.json`，可阻断/附上下文/强制续轮。
+- **⑤预设与 persona**（声明式数据行）：§1.2/§5.6。
+- **⑥profile patch 与设置面**：按 row id patch 任意行 config + volatile 字段。
+- **⑦外部 agent provider**：`subagent-codex`/`-claude-code`/`-acp` 组合行翻开关。
 
-| 根 | 位置 | rank | 作用域 |
-|---|---|---|---|
-| 项目根 | `<gitRoot>/.dsh/skills`、`<gitRoot>/.agents/skills` | 100 / 200 | 随仓库走，可 git 共享 |
-| custom | 组合内 `customSkillDirs` | 300 | 单组合显式指定 |
-| 用户根 | `$DSH_HOME/skills`（默认 `~/.dsh`）、`$DSH_AGENTS_HOME/skills`（默认 `~/.agents`） | 400 / 500 | 跨项目全局 |
-| bundled | `$DSH_BUNDLED_SKILL_DIR` | bundled | app 级 |
-
-- **标准模式加技能的答案**：standard 组合的 skill-filesystem 行只用默认根 → 把 `<name>/SKILL.md` 丢进项目或用户根即完成。零插件、零 patch、chokidar watch 热更新即时可见。
-- 技能形态：目录式 `<name>/SKILL.md`（+ `references/`、`templates/`）或扁平 `.md`；frontmatter 必填 `name`/`description`，可选 `whenToUse`/`metadata` 与调用策略 `disable-model-invocation` / `user-invocable`。
-- 人类命令（`ctx.commands`，如 `/plan`、`/feedback`）**只能插件注册**；文件系统可写的用户可调面 = `user-invocable` 技能（经 `ctx.sessionSkillCatalog` 列出，不激活冷 Agent）。
-
-**② 指令文件（AGENTS.md 链，纯文件）**——`dsh-agent-instructions`（dsh-base 默认含，`maxBytes: 65536`）：首个请求注入一条 durable 基线消息 = 用户全局 `$DSH_HOME/AGENTS.md` + 项目链（项目根→cwd 宽→窄；候选 `AGENTS.md`/`CLAUDE.md` + `AGENTS.local.md`/`CLAUDE.local.md` 叠加层；同容去重）。预算策略：先整丢宽文件、最后才截断最窄文件；文件系统操作触达更深目录后自动补载新适用文件；基线是普通 sourced 消息（可回放/压缩/恢复）。
-
-**③ MCP 服务器（配置行）**——`dsh-mcp-client` 每服务器一行：`stdio`（command/args/env/cwd，启动前探测协商）或 `streamable-http`（url/headers）；工具注册为 `mcp__<server>__<tool>`（与 Claude Code/Codex 命名同形，历史与权限规则跨重启稳定）；重连指数退避；`failOnStartupError` 可选激活即拒。外部能力接入主力通道，默认零启用。
-
-**④ Hooks 兼容桥（配置行）**——`dsh-hooks-claude-code` / `dsh-hooks-codex`：`configPath` 指向既有 `hooks.json`，命令钩子在会话/提示/工具/停止/子代理时刻触发，可阻断提示或工具调用（模型可见理由）、附加上下文、强制续轮——存量钩子零重写迁移。
-
-**⑤ 预设与 persona（声明式数据行）**——§1.2 全文：YAML 数据行即扩展，无代码；Web 编辑器保存 = profile patch。
-
-**⑥ Profile patch 与设置面**——按 row id patch 任意行 config（config-editor 持久化 + HMR 生效）；设置页改 volatile 字段（如预设 `selectedDefault`）。配置即扩展。
-
-**⑦ 外部 agent provider（配置行启用）**——`subagent-codex` / `subagent-claude-code` / `subagent-acp`：外部 CLI / ACP agent 接为委托 provider（standard 定义中 disabled，启用 = 组合行翻开关，经 `ctx.subagents` seam 注册）。
-
-长尾（一句话级）：workflow 脚本（JS 编排子代理，`tool-workflow`）、webhook（`webhook-github` 入站转计划消息）、LSP（`lsp-stdio` 导航）、凭据（settings 面，`credentials` seam）、UI 主题令牌（`web-styling`）。
-
-**对 forge 产品的意义**：①已用于 §5.5（brainstorm 全局根通道）；②的 AGENTS.md 链是「项目约定注入」的现成载体（观察项，非计划）；③④与 forge 正交，用户自便；⑤⑥⑦ = §5 模式预设迁移的机制底座。
+**对 forge 产品的意义**：①用于 §5.5（brainstorm 全局根通道）；②是「项目约定注入」现成载体（观察项）；③④正交；⑤⑥⑦ = §5 模式预设迁移的机制底座。
 
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
@@ -275,6 +256,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：扩展体系独立成册——《dsh 扩展体系参考》（`dsh-extensions.md`）：各体系配置示例详解（技能三配置方式/AGENTS.md 链/MCP 双传输与字段表/hooks 事件表/预设/persona/patch/provider/长尾/forge 映射）；§1.4 收缩为结论索引 + 指针。
 - 2026-10-02：新增 §1.4 能力扩展体系（插件之外）——①技能目录五类根全表（标准模式加技能答案：SKILL.md 丢项目/用户根，零插件零 patch 热更新；人类命令只能插件注册，user-invocable 技能即文件系统侧用户可调面）；②AGENTS.md 指令链；③MCP 配置行；④hooks 兼容桥；⑤预设/persona 数据行；⑥profile patch 与设置面；⑦外部 agent provider；长尾与 forge 关联。
 - 2026-10-02：新增 §5.6 出厂双预设完整示例（profile patch YAML）——registry default 按 row id patch 覆写；远征全量形态（persona 铁律示样 / 镜像 standard 基础行省略号 / skill-filesystem customSkillDirs 表达式 / forge 增量行）；突击三处差异；配套语义（用户编辑整表覆写、自带 name 绕过 locale 字典、blank 锁）；即 S5/S6 实施底稿。
 - 2026-10-02：新增 §5.5 brainstorm 三模式共享——提取为独立最小技能工件 `plugin-brainstorm`（沉淀判据双命中：第三类消费者 + 零耦合）；远征/突击经 customSkillDirs，标准模式**零 patch**走默认根全局通道（宿主环境变量 `DSH_BUNDLED_SKILL_DIR`/`DSH_HOME`）；§1.2 补技能绑定通道（技能不随插件自动注册；customSkillDirs/默认根/rank 决胜/bundled 根）；§5.2 补 skill-filesystem 行为技能暴露物理载体 + 完整定义镜像 standard 基础行备注；新增 S6 spike。
