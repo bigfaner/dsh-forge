@@ -72,6 +72,23 @@ intent: "new-feature"
 
 命名辨析（避免误引）：`@deepseek-ai/dsh-web`（packages/web/web）是 ctx.web 能力插件，与 UI 无关；`packages/host/*` 是宿主侧插件；`apps/web` 与 `apps/desktop-host` 是应用。
 
+### dsh 源码 vendor 裁决（发布状态核实 2026-10-02）
+
+上游 npm 发布状态：`@deepseek-ai/dsh`（CLI/profile-boot）、`dsh-client-web`（壳内核）、全部 `ui-*`、`dsh-host-webserver`、`dsh-workspace`、`dsh-app-boot` 均 **public**；唯一 **private 不发布**的是 `@deepseek-ai/dsh-desktop-host`（Electron 宿主进程，本体仅 ~122 行 main + office/更新/退出巡检附件，其全部依赖均为公开包）。裁决：
+
+- **主线 = B 自写薄宿主**：自有 ~100 行宿主入口（`loadProfileDirectory` + `runProfile` + `{url, injections}` IPC 上报），依赖全走 npm 公开包——**彻底去 vendor**，与零代码新分支的纯净起点一致；
+- **fallback = A 继续 vendor desktop-host**（现行 `packages/desktop-host-vendor` 模式）：仅在 B 的 spike 失败（runProfile 等 0.x API 不可用/面不足）时启用；
+- 前端/UI 侧零 vendor（全 npm 依赖 + 版本精确锁定）。
+
+### 知识库数据形态与视图（2026-10-02 定向）
+
+**知识一律以 Markdown 文档承载**；frontmatter 承载结构化元数据——摘要、关键词、状态、作者、修改时间等。应用解析 frontmatter 驱动两级视图：
+
+- **知识列表页**：各知识卡片由 frontmatter 字段构建（标题/摘要/关键词/状态/时间等，支持按关键词、状态过滤）；
+- **知识详情页**：基础信息表单区展示 frontmatter（只读渲染），文档区只展示正文（frontmatter 不混入正文显示）。
+
+约束：frontmatter schema 为应用与技能双方共享的契约（技能/agent 写知识时须带合规 frontmatter）；正文与元数据分离渲染；沿用只读纪律——应用只读渲染不代写，元数据编辑由用户或 agent 侧完成。
+
 ### 项目 ↔ 工作区映射（引用而不复制）
 
 dsh 的 Workspace（`@deepseek-ai/dsh-workspace`，经 `ctx.workspaceRegistry`）= 稳定 uuid + canonical path + 有序会话账本。衔接原则：**项目记录持有 `workspaceId` 引用，join key = canonical path；会话列表每次经 dsh workspace API 实时读取，应用数据库不存会话账本副本**。应用侧只存自己的扩展字段（文档位置、知识目录、任务/feature 状态），dsh 的归 dsh——此为「无投影」纪律在项目映射上的落实。
@@ -203,7 +220,7 @@ SDD 管线技能（brainstorm→PRD→设计→任务→执行）**单独做成�
 - [ ] SC2 无投影断言：代码库中不存在快照同步/回流/watch 感知类投影机制；任务/feature/提案状态全部从应用数据库直读，看板首屏 ≤2s @500 任务。
 - [ ] SC3 只读纪律：应用运行全程对代码仓与知识目录零写入（文件系统级监控验证一次全流程操作）。
 - [ ] SC4 文档归属：注册项目时可选择 proposal/PRD/design 仓内（默认）/仓外；两模式下文档浏览/跳转均可用（e2e 各覆盖一条路径）。
-- [ ] SC5 知识两面板：左栏「知识库」面板可浏览/检索项目级与全局知识（不注入会话——知识使用由 agent 自行决定）；右栏项目知识 dock 可展示当前项目知识（e2e 各一条）。
+- [ ] SC5 知识两面板：左栏「知识库」面板可浏览/检索项目级与全局知识（不注入会话——知识使用由 agent 自行决定）；右栏项目知识 dock 可展示当前项目知识；知识卡片/详情由 frontmatter 解析驱动（列表卡片字段 + 详情基础信息表单 + 正文区不含 frontmatter，e2e 各一条）。
 - [ ] SC6 会话主链路：从工作台发起/恢复 dsh 会话、会话挂接任务元数据可见（继承 M2/M4 已验证能力，新载体下重验）。
 - [ ] SC7 任务状态主链路：任务领取/提交/状态变更由管线技能写入应用状态层（写 API），看板即时反映；应用自身不发起任何编排动作（只看不管边界内验证：状态直读 + 技能侧写入）。
 - [ ] SC8 零代码分支纪律：新分支不含旧工作台视图/投影层代码（代码审计断言，白名单仅壳层基建与可复用工具）。
