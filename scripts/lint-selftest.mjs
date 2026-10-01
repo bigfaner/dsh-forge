@@ -66,10 +66,16 @@ const FIXTURES = [
     code: `export const s = { fontSize: '12px', color: '#00ff00' } as const\n`,
     token: true,
   },
+  {
+    // 正样例：行尾 dsw-raw 豁免（块注释剥离不吞判据——2.7 修复的行为 pin）
+    path: 'apps/web/src/styles/_lintpos_raw_exempt.css',
+    code: `.x { padding: 6px; /* dsw-raw 自测豁免：官方行语言刻度 */ gap: 4px; }\n`,
+    tokenExempt: true,
+  },
 ]
 
 function sweep() {
-  // 清扫可能的历史残留（前缀约定；.gitignore 亦兜底）
+  // 清扫可能的历史残留（前缀约定；.gitignore 亦兜底——含正样例 _lintpos_ 前缀）
   for (const base of ['apps', 'packages']) {
     const stack = [join(ROOT, base)]
     while (stack.length > 0) {
@@ -77,7 +83,7 @@ function sweep() {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name)
         if (statSync(p).isDirectory()) stack.push(p)
-        else if (name.startsWith('_lintneg_')) rmSync(p, { force: true })
+        else if (name.startsWith('_lintneg_') || name.startsWith('_lintpos_')) rmSync(p, { force: true })
       }
     }
   }
@@ -151,7 +157,7 @@ try {
     }
   }
 
-  // —— 令牌 lint 面：两个样例文件一并断言 ——
+  // —— 令牌 lint 面：负样例断言拦截 + 豁免正样例断言放行 ——
   const tokenFixtures = FIXTURES.filter((f) => f.token)
   const tok = runNode('scripts/lint-tokens.mjs')
   const tokOut = `${tok.stdout ?? ''}${tok.stderr ?? ''}`
@@ -163,6 +169,16 @@ try {
     } else {
       verified++
       console.log(`[selftest] ok ${rel2} → 令牌 lint 拦截`)
+    }
+  }
+  for (const fx of FIXTURES.filter((f) => f.tokenExempt)) {
+    const rel2 = relative(ROOT, join(ROOT, fx.path)).split('\\').join('/')
+    if (tokOut.includes(rel2)) {
+      failed = true
+      console.error(`[selftest] FAIL ${rel2} 行尾 dsw-raw 豁免未生效（被令牌 lint 误拦）`)
+    } else {
+      verified++
+      console.log(`[selftest] ok ${rel2} → dsw-raw 豁免放行`)
     }
   }
 } finally {

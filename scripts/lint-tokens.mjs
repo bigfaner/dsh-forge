@@ -107,10 +107,13 @@ function valueOk(value, prop, file, line, no) {
 }
 
 function lintCss(file, src) {
-  const text = stripBlockComments(src)
+  // 注释置空但保换行（行号与源文件对齐）；豁免判据另取原始行——行尾 /* dsw-raw */ 会随
+  // 注释置空消失（首例 = 2.7 官方 sidebar 行语言刻度：2/4/6/8px 无间距令牌，形态对齐优先）。
+  const rawLines = src.split('\n')
+  const text = src.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
   text.split('\n').forEach((line, i) => {
     const no = i + 1
-    if (exempt(line)) return
+    if (exempt(line) || exempt(rawLines[i] ?? line)) return
     const hex = line.match(/#[0-9a-fA-F]{3,8}\b/)
     if (hex) errors.push(`${file}:${no} [token-lint] 裸色值 ${hex[0]} —— 须 var(--dsw-*)`)
     if (/\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/i.test(line)) {
