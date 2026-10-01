@@ -31,6 +31,7 @@ intent: "architecture-baseline"
 | `knowledge/` 知识链路 | 知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+使用事件）、审核与合并队列、晋升流 | 会话编排、知识注入决策（agent 自行决定）、代码仓与文档位置写入 | 产品主线（P2 重头） |
 | `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
 | `plugin-forge/` forge 插件 | SDD 管线技能（eval-\* 裁剪）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
+| profile 出厂预设 | **forge 模式的物理形态**：`@deepseek-ai/dsh-agent-preset` 一行组合 plugin-forge + plugin-knowledge + persona 行（工具面/知识面/人格），经 profile patch 安装（`cordis.patch.yml` 同机制） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
 
 **依赖方向（单向）**：`web` →（能力面 RPC）→ `state-layer` / `knowledge`；`plugin-forge` → `state-layer`；`plugin-knowledge` → `knowledge`；`host` 组装一切但不含业务。不存在反向 import；`state-layer` / `knowledge` 不 import UI 与插件；**`knowledge` 不依赖 `state-layer`**（头号沉淀候选的场景隔离禁令）。
 
@@ -80,12 +81,13 @@ intent: "architecture-baseline"
 
 - **单机单活跃分支**为状态层显式假设：分支切换后文档引用（`descPath` / `manifest_path`）允许悬空，UI 只读缺省渲染并标注——P3 设计断言；多机同步明确划出 v1 边界外。
 - **知识资产备份/迁移**入 P4 范围（总纲同步）：两库路径可配置（允许指向用户自选同步/备份位置）+ 状态库导出/导入。
-- **上游契约面清单**为 P1 设计产物：boot manifest 注入格式、slot 洞名、workspace registry API、`__DSH_TRANSPORT__` carrier、ui-\* props——逐项 pin 版本 + 适配测试。
+- **上游契约面清单**为 P1 设计产物：boot manifest 注入格式、slot 洞名、workspace registry API、`__DSH_TRANSPORT__` carrier、ui-\* props、**agent-preset-registry 行格式（含 persona 行模板）、tool-subagent 请求面（agentOptions / toolFilter——无超时与子代预设覆写，已核实负结论）、subagent 组合继承语义**——逐项 pin 版本 + 适配测试。机制核实记录见《技术预研笔记》（`tech-research.md`）。
 - **schema 版本表 + 迁移函数惯例**入状态层设计；断言「知识索引重建失败不阻塞旧版运行」。
 - **四信号分期点亮**为 P2 排序依据：审核 + 使用计数先行，agent 反馈信号随知识插件到位。
 - **沉淀候选清单**随每次阶段设计评审固定过一遍（不靠自觉开提炼案）。
 
 ## 版本历史
 
+- 2026-10-02：预研落实——工件版图补 profile 出厂预设（agent-preset + persona 组合 = forge 模式物理形态）；契约面清单补 preset / persona / subagent 面（含两项负结论）；task-executor 迁移方案 v2 与 spike 清单另立《技术预研笔记》（`tech-research.md`）。分工纪律：原型/UI 线归用户，产品线侧只做架构设计与技术预研。
 - 2026-10-02：对抗式审核落实——新增 §2 AI 协作防腐机制（公理 + 腐化形态 + 五层防线）与 §6 已知边界与工程配套；原则 5「可机械验证优先」；评审问句升三问；依赖方向补 `knowledge` ↛ `state-layer` 禁令；工件物理分色定为尽早。
 - 2026-10-02：初版。随总纲「产品形态」修订（场景包两层模型退役）建立；状态层细则出自 forge 具体设计（具体表结构 + 状态机常量 + 动词 API）。
