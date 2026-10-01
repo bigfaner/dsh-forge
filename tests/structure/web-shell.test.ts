@@ -138,3 +138,46 @@ describe('components 基础组件 pin（2.6）', () => {
     expect(offenders, `业务语义渗入基础组件（RPC/contracts）: ${offenders.join(', ')}`).toEqual([])
   })
 })
+
+describe('views/session 会话面板 pin（2.11）', () => {
+  it('模块面就位：面板组装 + 台账行组件 + 转录投影 + 样式 + barrel', () => {
+    for (const f of [
+      'apps/web/src/views/session/SessionPanel.tsx',
+      'apps/web/src/views/session/TrajectoryLedger.tsx',
+      'apps/web/src/views/session/transcript.ts',
+      'apps/web/src/views/session/session.css',
+      'apps/web/src/views/session/index.ts',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    const barrel = read('apps/web/src/views/session/index.ts')
+    for (const name of ['SessionPanel', 'TrajectoryLedger', 'transcript']) {
+      expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
+    }
+  })
+
+  it('Hard Rule 官方件复用：对话面 = chatSurface 注入位（零自绘会话 UI）+ 页签条 = 官方 SegmentedTabs', () => {
+    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
+    expect(panel).toContain('readonly chatSurface: ReactNode')
+    expect(panel).toContain("from '@deepseek-ai/dsh-client-ui-primitives'")
+    expect(panel).toContain('SegmentedTabs')
+    // 零自绘会话 UI：面板源不含消息气泡/输入框类自绘组件面（转录/输入/滚动全归官方注入面）
+    expect(panel).not.toMatch(/composer|textarea|messageInput/i)
+  })
+
+  it('AC-4 keep-alive 机制 pin：三 pane 常挂载（hidden 切显隐不卸载）+ hidden 守卫样式', () => {
+    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
+    for (const pane of ['chat', 'trajectory', 'recall']) {
+      expect(panel, `pane ${pane} 缺席`).toContain(`data-dswf-pane="${pane}"`)
+    }
+    expect(panel).toContain('hidden={activeTab !== ')
+    const css = read('apps/web/src/views/session/session.css')
+    expect(css).toContain('.dswf-session-pane[hidden]')
+  })
+
+  it('AC-5 召回占位 pin：缺省 EmptyState 文案 + recall 注入接线位', () => {
+    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
+    expect(panel).toContain('本会话暂无召回')
+    expect(panel).toContain('readonly recall?: ReactNode')
+  })
+})

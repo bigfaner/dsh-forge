@@ -1,0 +1,88 @@
+/* 会话面板样式（定位：业务——UF-4）——结构基准 = 原型 conv-root（顶部页签 + 三相位 body，
+ * data-view 切显隐）；视觉一律官方令牌（令牌唯一：色/字/距零裸值，lint-tokens 机械执行）。
+ * 官方会话面（chatSurface 注入内容）自带样式（官方件复用——本文件零会话 UI 自绘）：
+ * 消息气泡/输入框/滚动容器样式一概归官方 ui-chat/ui-conversation。 */
+
+/* 面板骨架：页签行 + body（三 pane 叠放，激活占位） */
+.dswf-session-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+.dswf-session-tabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0 var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-session-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* hidden 属性守卫：pane 类 display 声明不得穿透隐藏语义（沿 zones 同型） */
+.dswf-session-pane[hidden] {
+  display: none !important;
+}
+
+/* pane：全宽占位（对话 pane 内容 = 官方面自排；轨迹/召回自绘行占满滚动） */
+.dswf-session-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── 轨迹台账（最简：时序列表行） ── */
+
+.dswf-traj-ledger {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-traj-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-s-14-line-height);
+  min-width: 0;
+}
+
+/* 行首标签（用户/助手/工具/系统/错误）：三级文本等宽收缩 */
+.dswf-traj-who {
+  flex: none;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 行文本：正文刻度，主文本色；长文本截断（台账行 = 摘要面，不换行铺开） */
+.dswf-traj-text {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-traj-row-error .dswf-traj-text {
+  color: var(--dsw-alias-label-error);
+}
+
+/* 工具相位徽章：右对齐收缩 */
+.dswf-traj-phase {
+  margin-left: auto;
+  flex: none;
+}
