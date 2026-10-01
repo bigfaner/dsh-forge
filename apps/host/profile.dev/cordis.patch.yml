@@ -1,0 +1,22 @@
+# dsh-forge dev profile — 产品用户层（与打包形态模板 apps/host/src/profile/template.ts 同源语义）。
+# 注意：patch 按 row id 整体替换该行 config（非深合并），保留字段须重述
+# （上游 app-boot README：「A user patch replaces the whole matched config」）。
+
+# ── 官方行（按 id 定位 web-app 出厂行：与出厂值一致的 no-op 重述，
+#    验证「官方行 + 产品层」的叠放次序——用户层在所有 bundle 层之后）──
+- id: system-prompt
+  config:
+    personaSuffix: Your working directory is {{cwd}}.
+    personaPrefix: >-
+      You are a coding agent powered by the {{model}} model.
+
+# ── 预留产品插件行（@dsh-forge/core / @dsh-forge/knowledge；
+#    disabled 预留位 = 行合法但不挂载——2.x/3.x 产品插件 bundle 就绪后转正启用，
+#    dev 形态届时改为链 workspace 构建产物）──
+- insert:
+    - id: dsh-forge-core
+      name: '@dsh-forge/core'
+      disabled: true
+    - id: dsh-forge-knowledge
+      name: '@dsh-forge/knowledge'
+      disabled: true

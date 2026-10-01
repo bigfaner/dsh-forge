@@ -9,6 +9,13 @@ packages:
 #     node apps/host/node_modules/electron/install.js   （1.4 启动前执行）
 allowBuilds:
   electron: true
+  # 1.4 运行时闭包原生包（spike S1 profile 同款 allowBuilds——均带 prebuild，
+  # 脚本仅取 prebuild 免 MSVC 编译；S1 实测约束 5）
+  '@deepseek-ai/dsh-subprocess-local': true
+  '@google/genai': true
+  koffi: true
+  node-pty: true
+  protobufjs: true
 
 minimumReleaseAgeExclude:
   - vite@8.3.2

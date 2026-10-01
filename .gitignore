@@ -28,3 +28,5 @@ playwright-report/
 
 # lint selftest crash leftovers (scripts/lint-selftest.mjs sweeps on each run)
 **/_lintneg_*
+# host dev profile runtime artifacts (template files ARE committed; cordis.yml boot-rewritten)
+apps/host/profile.dev/cordis.yml
