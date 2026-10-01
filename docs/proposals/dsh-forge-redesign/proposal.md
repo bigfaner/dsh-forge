@@ -99,7 +99,7 @@ intent: "new-feature"
 4. forge 专属 UI（知识面板、项目树增强、dock 面板）做成产品自有 client 插件，与上同机制共存。
 5. 否决"把 ui-* 静态打进 dist"——那是与 client module system 对抗的重度 fork，升级合并成本高，非最优。
 
-**Markdown 渲染复用（2026-10-02 定向）**：正文渲染一律复用官方 `ui-primitives` 的 `MarkdownText` 族（不可信 GFM + TeX、流式增量渲染、`MarkdownDelegateProvider` 文件链接行号跳转 `#L24`、`pathImages` 本地图片）——知识详情抽屉 / dock 知识文档页签 / 文档 tab（proposal/PRD/design 只读）/ 抽取稿预览统一消费，**不自制渲染器**；会话面板经 ui-chat 同源，视觉一致由同组件 + `--dsw-*` 令牌双保险。机制与消费契约见《技术预研笔记》§1.6。
+**Markdown 渲染复用（2026-10-02 定向）**：正文渲染一律复用官方 `ui-primitives` 的 `MarkdownText` 族（不可信 GFM + TeX、流式增量渲染、`MarkdownDelegateProvider` 文件链接行号跳转 `#L24`、`pathImages` 本地图片）——知识详情抽屉 / dock 知识文档页签 / 文档 tab（proposal/PRD/design 只读）/ 抽取稿预览统一消费，**不自制渲染器**；会话面板经 ui-chat 同源，视觉一致由同组件 + `--dsw-*` 令牌双保险。**风格一致为硬纪律**：产品内唯一包装入口（`MarkdownDoc`）+ variant 判定规则（文档面 `body` / 嵌入预览 `compact`）+ ui-primitives 与 ui-chat 版本锁步 + 跨面 computed style 机械断言——细则见《架构基线》。
 
 **槽位可替换性（sidebar 示例，源码核实）**：官方 ui-sidebar 本质只是 `'sidebar'` 槽位的占用者（`ctx.slots.inject('sidebar', ...)` 注册槽位树：`sidebar.workspaces` / `sidebar.panellist` / `sidebar.settings` 等子洞）；ui-workspace 等生态插件不依赖官方包本身，只按洞名注入（`inject('sidebar.workspaces', ..., WorkspaceBrowser)`）。替换有两条路线：**A（默认）保留官方 sidebar 壳，自有插件替换 `sidebar.workspaces` 占用者**——自有项目树/知识面板，成本最小，壳的折叠/导航/快捷键白拿；**B 整壳替换 `'sidebar'` 槽位占用者**——须复刻槽位契约（洞名 + injected props），契约漂移风险自担。无论 A/B，均为清单级增删，不碰前端构建。
 

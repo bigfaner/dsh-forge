@@ -39,7 +39,12 @@ intent: "architecture-baseline"
 
 **单一写入路径**：状态写只经 `state-layer` 服务（UI 动作与 forge tool 同门）；知识写只经知识能力面（UI 管理面与知识插件 tool 同门）。数据库无第二写者。
 
-**库消费基座**：markdown 正文渲染复用官方 `ui-primitives`（`MarkdownText` 族，静态 ESM 库消费——不可信 GFM + TeX、流式增量、文件链接行号跳转；机制与消费契约见《技术预研笔记》§1.6），不自建渲染器；与 ui-theme 令牌同属库性质消费通道。
+**库消费基座与 Markdown 渲染一致性（2026-10-02 定向）**：markdown 正文渲染复用官方 `ui-primitives`（`MarkdownText` 族，静态 ESM 库消费——机制与消费契约见《技术预研笔记》§1.6），不自建渲染器。**风格一致是硬纪律**，四条防线：
+
+1. **单一包装组件**：`web/` 内唯一入口 `MarkdownDoc`——封装 `MarkdownText` variant 选择、`MarkdownDelegateProvider`（`openFile` 接产品统一「在编辑器中打开」动作）、`pathImages` 词汇表、容器排版类（仅 `--dsw-*` 令牌）。详情抽屉 / dock 知识文档页签 / 文档 tab / 抽取稿预览**一律经此包装**，禁止各面直接散用 `MarkdownText`。
+2. **variant 判定规则**：一等文档面（详情抽屉、dock 文档页签、文档 tab）= `body`；嵌入卡片与次要内容（抽取稿预览、摘要块）= `compact`——不得逐面自选。
+3. **版本锁步**：静态消费的 `ui-primitives` 必须与 boot manifest 中 ui-chat 所携带的同源渲染器出自**同一上游发布版本**——升级窗口统一 bump（§5.1），禁止单独升级一方。
+4. **机械断言（入 L3 池）**：① 版本对齐检查（`package.json` 的 ui-primitives pin ↔ boot manifest 中 ui-chat 版本同源）；② 同一 fixture 文档在各文档面渲染，对关键元素（标题/正文/代码/链接/表格）断言 computed style 一致（字体、字号、行高、令牌色计算值）。
 
 **插件化的真实动机**：其一，dsh tool 须以插件形态注册（机械要求）；其二，技能线与产品壳迭代节奏不同（管理便利）。非可替换机制——两个插件均无 client 半身，全部 UI 在 `web/`。
 
@@ -55,7 +60,7 @@ intent: "architecture-baseline"
 |---|---|---|
 | L1 硬边界 | 物理工件 + import 规则（dependency-cruiser / eslint no-restricted-paths / TS project references）；sqlite 句柄仅 `state-layer` 可持有 | 隐式跨界——越界即编译/lint 红，agent 无法「悄悄」做 |
 | L2 类型契约 | 跨边界 API 全类型化 + contract tests；DB schema 版本表 + 迁移函数 | 接口/schema 漂移——编译器当防腐官 |
-| L3 机械断言池 | 无投影审计（禁 watch/回流模块）、CSS 令牌 lint（禁裸色值/字号）、依赖规则、上游契约面回归（slot 洞名 / boot manifest 形状）——CI 常驻 + 阶段回归 | 约定侵蚀——断言红灯，而非评审意见 |
+| L3 机械断言池 | 无投影审计（禁 watch/回流模块）、CSS 令牌 lint（禁裸色值/字号）、依赖规则、上游契约面回归（slot 洞名 / boot manifest 形状）、**Markdown 渲染一致性（ui-primitives ↔ ui-chat 版本对齐 + 同 fixture 跨文档面 computed style 断言）**——CI 常驻 + 阶段回归 | 约定侵蚀——断言红灯，而非评审意见 |
 | L4 流程方向盘 | SDD 管线本身（设计先行、小步任务、执行记录）；阶段设计评审固定过沉淀候选清单与断言池 | 平行实现、大爆炸改动——agent 的方向盘是设计文档，不是自由发挥 |
 | L5 知识闭环 | 架构决策与教训入知识库 → 后续会话召回；腐化被纠正时沉淀 lesson | 同类腐化复发——防腐资产的复利形态 |
 
@@ -129,6 +134,7 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：Markdown 渲染一致性定为硬纪律——`MarkdownDoc` 单一包装入口（variant 判定：文档面 body / 嵌入预览 compact）、ui-primitives ↔ ui-chat 版本锁步、L3 增机械断言（版本对齐 + 同 fixture 跨文档面 computed style）。
 - 2026-10-02：原型基线同步——`web/` 工件行按重构原型更新（左栏导航 rail、中区一等公民视图互换（会话 ⇄ 知识库三页签）、右栏 dock 页签跟随项目、任务三视图列表/DAG/泳道 feature 绑定）；路线调整见总纲版本历史。
 - 2026-10-02：§5 扩为「演进纪律与版本管理」四子节——5.1 上游追踪与升级节奏（精确 pin + lockfile 入库、节奏化升级窗口、diff 即 changelog、功能雷达三问过滤）；5.2 升级测试门（升级分支零主干 bump；G0 编译 / G1 契约面回归 / G2 功能回归 / G3 冒烟 dogfood 四道门全绿方可合并；测试盲区显式记账；回滚 = pin 回退 + lockfile 恢复）；5.3 产品 semver + git tag + CHANGELOG 必备 + 发布门同池；5.4 schema 前向单向、旧应用打开新 schema 明确拒绝。发布形态依据 = 《技术预研笔记》§1.5。
 - 2026-10-02：可读性梳理（内容不变，语句重写；工件版图行内措辞微调，如 brainstorm「产出 proposal」）。
