@@ -54,7 +54,10 @@ const TS_PROP_MAP = new Map(
 const PERCENT = /^-?\d+(?:\.\d+)?%$/
 const KEYWORDS =
   /^(?:0|none|auto|inherit|initial|unset|revert|revert-layer|transparent|currentcolor)$/i
-const DSW_VAR = /^var\(--dsw-[a-z0-9-]+(?:,([^()]*))?$/i
+// 令牌引用：var(--dsw-*)（闭合括号）或带回退——回退本身须干净（关键字/百分比/嵌套 --dsw 令牌，
+// 不带裸数值）。原版正则漏了闭合括号（首例 var 值入 TOKEN_PROP 时暴露——var(--dsw-x) 全员误报）。
+const DSW_VAR = /^var\(--dsw-[a-z0-9-]+(?:,([^()]*))?\)$/i
+const DSW_VAR_PLAIN = /^var\(--dsw-[a-z0-9-]+\)$/i
 
 const errors = []
 
@@ -76,7 +79,12 @@ function atomOk(atom) {
   if (!a) return true
   if (KEYWORDS.test(a)) return true
   if (PERCENT.test(a)) return true
-  if (DSW_VAR.test(a)) return true
+  if (DSW_VAR.test(a)) {
+    // 回退值（如有）同样须干净：关键字 / 百分比 / 嵌套 --dsw 令牌——不放宽裸数值
+    const fallback = a.match(DSW_VAR)?.[1]?.trim()
+    if (fallback === undefined || fallback === '') return true
+    return KEYWORDS.test(fallback) || PERCENT.test(fallback) || DSW_VAR_PLAIN.test(fallback)
+  }
   if (/^var\(/i.test(a)) return false // 非 --dsw 令牌引用
   if (/^calc\(/i.test(a)) {
     const hasToken = /var\(--dsw-/i.test(a)

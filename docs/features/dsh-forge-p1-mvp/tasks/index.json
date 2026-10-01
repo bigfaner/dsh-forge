@@ -275,7 +275,7 @@
       "dependencies": [
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.6-web-base-components.md",
       "record": "records/2.6-web-base-components.md",
       "surface-type": "web",

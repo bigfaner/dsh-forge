@@ -1,0 +1,40 @@
+/* 基础组件样式（定位：基础）——EmptyState 自绘面（官方无空态件）；StateChip/HeatBadge/MarkdownDoc
+ * 复用官方件自带样式，本文件不重复。
+ * 纪律：令牌唯一（色/字/距零裸值，lint-tokens 机械执行）。间距刻度不自创（排版基线：
+ * 令牌取值）——官方主题无间距标尺令牌，纵向刻度取官方排版令牌（行高刻度 = 官方字号体系
+ * 的固有刻度），不引入平行体系。 */
+
+/* 空态容器：居中占满所在槽位（与 zones 占位同型：margin auto + flex 居中） */
+.dswf-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--dsw-font-base-16-line-height);
+  text-align: center;
+}
+
+/* 标题：文档级标题刻度（官方 20/28 排版令牌） */
+.dswf-empty-title {
+  margin: 0;
+  font: var(--dsw-font-l-20);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 描述：正文书体（官方 16/24 排版令牌），三级文本 */
+.dswf-empty-description {
+  margin: 0;
+  font: var(--dsw-font-base-16);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 引导插槽：消费方注入（CTA / 清除过滤入口），自带交互样式 */
+.dswf-empty-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

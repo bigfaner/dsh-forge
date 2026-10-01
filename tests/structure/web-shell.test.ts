@@ -1,12 +1,20 @@
 // 任务 1.5 结构 pin —— 壳接入装配纪律（源面同步 + vite 产物形状 + 令牌面就位）。
 // 权威：tech-design Integration「boot manifest 掌舵 → dsh-client-web 壳内核」+ S2 清单。
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
+
+function* walk(dir: string): Generator<string> {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
+    if (statSync(p).isDirectory()) yield* walk(p)
+    else yield p
+  }
+}
 
 describe('壳接入装配 pin（1.5）', () => {
   it('main.ts 掌舵 id 字面量 = client-plugin FORGE_CLIENT_PLUGIN_ID（不经 import 共享——防公共 chunk 拆分）', () => {
@@ -80,5 +88,53 @@ describe('zones 三区骨架 pin（2.5）', () => {
     expect(css).toContain('width: 0') // 收起轨道归零（原型同型）
     expect(css).toMatch(/data-dswf-dock=collapsed/)
     expect(css).toMatch(/data-dswf-dock=hidden/)
+  })
+})
+
+describe('components 基础组件 pin（2.6）', () => {
+  it('模块面就位：四组件 + 样式 + barrel', () => {
+    for (const f of [
+      'apps/web/src/components/MarkdownDoc.tsx',
+      'apps/web/src/components/StateChip.tsx',
+      'apps/web/src/components/HeatBadge.tsx',
+      'apps/web/src/components/EmptyState.tsx',
+      'apps/web/src/components/components.css',
+      'apps/web/src/components/index.ts',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    const barrel = read('apps/web/src/components/index.ts')
+    for (const name of ['EmptyState', 'HeatBadge', 'MarkdownDoc', 'StateChip']) {
+      expect(barrel).toContain(`export * from './${name}.js'`)
+    }
+  })
+
+  it('Hard Rule 渲染纪律：MarkdownText 裸渲染器仅 MarkdownDoc 一处 import（产品内其余禁直用）', () => {
+    const offenders: string[] = []
+    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+      if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.tsx') || p.endsWith('.test.ts')) continue
+      const src = readFileSync(p, 'utf8')
+      if (/from '@deepseek-ai\/dsh-client-ui-primitives'/.test(src) && /MarkdownText/.test(src)) {
+        if (!p.replaceAll('\\', '/').endsWith('components/MarkdownDoc.tsx')) {
+          offenders.push(p.replaceAll('\\', '/'))
+        }
+      }
+    }
+    expect(offenders, `裸渲染器直用（须改经 MarkdownDoc 包装）: ${offenders.join(', ')}`).toEqual([])
+    expect(read('apps/web/src/components/MarkdownDoc.tsx')).toContain(
+      "import { MarkdownText, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'",
+    )
+  })
+
+  it('零业务语义：components 模块禁 RPC 面 / contracts DTO 引入（AC-3 机械面——props 保持原始形状）', () => {
+    const offenders: string[] = []
+    for (const p of walk(join(ROOT, 'apps/web/src/components'))) {
+      if (!/\.(ts|tsx)$/.test(p)) continue
+      const src = readFileSync(p, 'utf8')
+      if (/\.\.\/rpc\//.test(src) || /@dsh-forge\/contracts/.test(src)) {
+        offenders.push(p.replaceAll('\\', '/'))
+      }
+    }
+    expect(offenders, `业务语义渗入基础组件（RPC/contracts）: ${offenders.join(', ')}`).toEqual([])
   })
 })
