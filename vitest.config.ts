@@ -9,6 +9,10 @@ export default defineConfig({
     passWithNoTests: true,
     projects: [
       { test: { name: 'structure', include: ['tests/structure/**/*.test.ts'] } },
+      // 契约面 pin 回归池（G1，2.13 起步）：pin 对象 = 上游 @deepseek-ai/* 精确 pin 版本
+      // 0.2.0-rc.2 的公开面（npm 包导出与运行时契约），与 core/web 单测分池——
+      // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。
+      { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },

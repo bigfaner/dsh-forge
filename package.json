@@ -17,6 +17,7 @@
     "lint:selftest": "node scripts/lint-selftest.mjs",
     "lint:types": "tsc -b",
     "test": "vitest run",
+    "test:contract": "vitest run --project contract",
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
