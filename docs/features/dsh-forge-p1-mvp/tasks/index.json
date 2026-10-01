@@ -114,7 +114,7 @@
       "dependencies": [
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.1-core-db-schema.md",
       "record": "records/2.1-core-db-schema.md",
       "surface-type": "web",

@@ -16,6 +16,9 @@ allowBuilds:
   koffi: true
   node-pty: true
   protobufjs: true
+  # 2.1 SQLite 引擎（13.0.3 零安装脚本，prebuilds/ 随包分发含 win32-x64——
+  # allowBuilds 仅消 pnpm ignored-builds 门，无编译动作）
+  better-sqlite3: true
 
 minimumReleaseAgeExclude:
   - vite@8.3.2
