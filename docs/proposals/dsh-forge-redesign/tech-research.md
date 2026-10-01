@@ -30,15 +30,15 @@ intent: "tech-research"
 
 - `packages/subagent/subagent-in-process-driver/tests/preset-inheritance.spec.ts`："a child runs on the preset its parent runs on"。dispatcher 会话跑 forge 预设 → executor 子代自动获得 forge tools、knowledge 提示词段、persona——稳定层零注入成本。
 
-## 2. task-executor 迁移方案 v2：预设管稳定层，prompt 管动态层
+## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
-> 修正记录：v1 方案（对话轮）断言「dsh 无具名 agent 机制、人格须 prompt 化」——不准确。预设 + persona 恢复了具名能力且更强（组合级而非仅人格级）；v1 担忧的「约束注入模板漂移」因人格进 persona 而消除。
+> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。合并后：预设退回**纯环境**（工具面 + 知识提示词段；persona 行可选，只放通用工作风格）。
 
-| forge 3.x 组件 | v2 落点 |
+| forge 3.x 组件 | v3 落点 |
 |---|---|
-| `agents/task-executor.md`（硬约束 + 执行协议人格） | 出厂 forge 预设的 **persona prefix** |
+| `agents/task-executor.md`（硬约束 + 执行协议人格） | **dispatch prompt 的约束块**（单一来源 TS 模块，synthesize 前置拼接） |
 | executor 工具面 | 预设组合（plugin-forge + plugin-knowledge + 基础）；需收窄用 `toolFilter` |
-| `forge prompt get-by-task-id`（类型策略合成） | forge 插件 tool `taskPrompt(taskId)`——**动态层**，分发 prompt 携带 |
+| `forge prompt get-by-task-id`（类型策略合成） | forge 插件 tool `taskPrompt(key)`——**dispatcher 派发前预拉合成**；executor 保留重拉恢复 |
 | `commands/run-tasks.md`（分发循环） | forge 插件 skill；`subagent` 阻塞调用（`run_in_background: false`） |
 | `forge task claim/add/status/submit` | state-layer API + forge 插件 tool（SC7 缝） |
 | submit-task skill + quality gate 序列 | `taskSubmit` tool 内置 gate（compile→fmt→lint→test，插件逻辑） |
@@ -52,14 +52,16 @@ intent: "tech-research"
 ```
 run-tasks skill（forge 预设会话内）
   → taskClaim tool → state-layer
-  → subagent(prompt = taskPrompt 策略块, agentOptions{model}, 阻塞)   ← 人格/工具/知识面由预设继承
+  → dispatchPrompt = executorConstraints + taskPrompt(key) 策略   ← 派发前一次性合成（纯函数）
+  → subagent(prompt = dispatchPrompt, agentOptions{model}, 阻塞)
        ├─ 执行策略（含 knowledge recall）
        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
-       └─ git-commit skill
+       ├─ git-commit skill
+       └─ 迷路？重调 taskPrompt(key) 恢复（合成是纯函数）
   → taskStatus 验证 → 循环 / fix-task（taskAdd + block 边）
 ```
 
-已知取舍：dispatcher 与 executor **同构预设**（v1 接受——两者工具需求高度重叠，"executor 禁 claim"在旧 forge 本就是 prompt 约束而非工具面隔离；上游若日后支持子代预设覆写再异构化）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
+已知取舍：约束块从系统提示降为初始 prompt——dsh 两个负结论下的**唯一差异化通道**，约束标记（`<EXTREMELY-IMPORTANT>` 等）原样保留以补偿位置弱化；合成单点（约束块 + 策略模板同函数族）杜绝模板漂移；dispatch prompt 整体落入子代持久会话日志，审计原子性优于分散记录。老 6 步执行协议简化为 4 步（Validate 拉取步消失：Initialize 并入、Execute/Submit/Commit/Done）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
 
 ## 3. 待验证清单（P1 spike 项，需实跑）
 
@@ -83,7 +85,7 @@ run-tasks skill（forge 预设会话内）
 - 每类型一个模板函数（`codingFix(d): string`），路由表 exhaustive；
 - `synthesize(task, ctx)` 纯函数：`fixRecordMissed` 特殊路由覆盖 + `buildData`（PhaseDetect / resolveCoverage 注入）；
 - `taskPrompt` tool（host 半身）：`stateStore.byKey` → `synthesize` → 返回策略文本；
-- **executor 自拉保持**（恢复语义保真）；dispatcher 分发 prompt 仍一句 `Execute task <key>`。
+- **dispatcher 预拉合成**（v3）：派发前 `dispatchPrompt = executorConstraints + synthesize(task, ctx)` 一次性拼接；executor 侧 `taskPrompt` 保留，仅用于迷路重拉恢复（合成是纯函数）。
 
 上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 state-layer）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
 
@@ -91,5 +93,6 @@ run-tasks skill（forge 预设会话内）
 
 ## 版本历史
 
+- 2026-10-02：v3 修订——合并稳定/动态层：dispatcher 派发前一次性合成完整 dispatch prompt（约束块 + 策略）；修复 v2 隐性矛盾（组合继承下 persona 共享导致 dispatcher 背上 executor 的 claim 禁令）；预设退回纯环境，persona 行可选；§4 同步改为预拉 + 重拉恢复。
 - 2026-10-02：新增 §4 动态提示词组装设计（taskPrompt：TS 模板函数 + exhaustive 路由 + 纯函数合成 + executor 自拉保真）。
 - 2026-10-02：初版。subagent / preset / persona 机制核实（含两项负结论：无子代预设覆写、无超时）；task-executor 迁移方案 v2（预设管稳定层、prompt 管动态层）；spike 清单 S1–S5。
