@@ -55,7 +55,7 @@ db-schema: "yes"
 
 ### Out of Scope
 
-- M2+：任务域整体（state-layer 转正 / 任务三视图 / forge tool 对接 / SC6③）、文档归属选择与文档 tab（SC4）、对账卡完整 UI、概览页内容。
+- M2+：任务域整体（应用状态层转正（core · forge 域）/ 任务三视图 / forge tool 对接 / SC6③）、文档归属选择与文档 tab（SC4）、对账卡完整 UI、概览页内容。
 - M3+：出厂双预设、plugin-forge 拆包、brainstorm 共享；forge 插件并行轨整体（独立工程）。
 - M4+：抽取、契约校验拒收、审核工作台、合并队列、知识写入 tool、知识段续写（写作契约与抽取时机）。
 - M5+：置信度四信号、徽章、阈值过滤、时间衰减。
