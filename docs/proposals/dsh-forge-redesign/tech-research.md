@@ -82,6 +82,13 @@ intent: "tech-research"
 - **官方插件先例**：`ui-sidebar-documentpreview`（侧栏文档预览）即以本库渲染 markdown 文档——dock 知识文档页签的结构同款。
 - **forge 消费点**：知识详情抽屉正文 / dock 知识文档页签（canonical 路径栏 + 只读徽标 + `openFile` 行号跳转）/ 文档 tab（proposal/PRD/design 只读浏览）/ 会话沉淀与抽取稿预览（compact）；会话面板本体走 ui-chat（boot manifest 运行时插件），同源渲染器保证视觉一致。版本随上游 pin 锁步。
 
+### 1.7 workspace registry 写入面（`packages/workspace/workspace/src/index.ts`，2026-10-02 核实）
+
+- **`create(path, title?)`**：canonicalize（realpath，须存在且为目录）→ 建/复用注册；同 canonical path 幂等，**返回值不区分新建与命中既有**（"Returns the existing or newly durable workspace"）——ownership 判定须由调用方预检承担。
+- **`delete(id)`**：删除**注册记录**，但**保留目录与全部会话日志**（"Delete one workspace registration while retaining its directory and every session log"）；durable order 先更新、表删除失败则回滚恢复实体；unknown id 为幂等 no-op——**天然适配补偿事务**。registry 内部本就将 create rollback 列为 delete 的合法场景（invariant：cache 移除后方可删）。
+- **查询面**：`get(id)` / `list()`（durable 序投影）；**无按路径查询** → ownership 预检 = `list()` 后按实体 canonical path 匹配。
+- 补偿设计（总纲 §项目↔工作区映射 ①–④）与 SC12 验收即基于此面；实跑验证入 S7。
+
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
 > 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。（出厂预设形态后经 §5 修正：纯环境单预设 → 远征/突击双预设，persona 复入但只限作风层；executor 角色规格仍唯一来自 dispatch prompt，本裁决实质不变。）
@@ -129,6 +136,7 @@ run-tasks skill（forge 预设会话内）
 | S4 | workspace registry create 幂等 | 同 canonical path 两次 `create()` | 返回同一实体（上游文档语义） |
 | S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/突击，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
 | S6 | 标准模式技能注入通道 | 宿主环境变量重定向（`DSH_BUNDLED_SKILL_DIR` vs `DSH_HOME`）指向产品技能根；与 customSkillDirs 并存场景 | standard 会话技能目录含 brainstorm；跨根同名 rank 去重呈现符合预期 |
+| S7 | 项目创建补偿链 | 模拟应用侧写失败/流程取消：create → 失败 → `registry.delete` 补偿；同路径既有工作区重复注册再走失败路径 | 补偿后 dsh 无孤儿注册且目录/会话日志保留；幂等命中工作区未被误删；补偿幂等（重复调用 no-op） |
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5/S6 为预研新增。）
 
@@ -273,6 +281,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：新增 §1.7 workspace registry 写入面核实（create 幂等但不区分新建/命中；delete 删注册保目录保会话日志、幂等；无按路径查询 → ownership 预检经 list()）；新增 S7 spike（项目创建补偿链实跑：失败/取消补偿、幂等命中防误删、补偿幂等）——配套总纲 §项目↔工作区映射 ①–④ 补偿流程与 SC12。
 - 2026-10-02：新增 §1.6 官方 Markdown 渲染核实——`ui-primitives` 纯 React 原子库（zero cordis，静态 ESM 库消费）：`MarkdownText` 不可信 GFM+TeX / `MarkdownDelegateProvider` 文件链接行号跳转 / `CodeBlock` / `pathImages` / 流式增量渲染 / 工具结果卡族；官方插件先例 ui-sidebar-documentpreview；forge 消费点映射（详情抽屉/dock 文档页签/文档 tab/抽取稿预览）。
 - 2026-10-02：新增 §1.5 上游发布形态核实——无 git tag、无 CHANGELOG；workspace 锁步发布；dist-tags 实查（`next` = 活跃线 0.2.0-rc.2，`latest` 陈旧）→ 追新盯 `next`；本地仓为差异阅读源；版本管理机制指针至《架构基线》§5。
 - 2026-10-02：可读性梳理（内容不变，语句重写；S5/S6 来源注记合并为一句）。
