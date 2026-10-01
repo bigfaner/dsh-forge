@@ -5,7 +5,7 @@ status: "Accepted"
 intent: "architecture-baseline"
 ---
 
-<!-- 本文档 = 总纲（proposal.md）的技术配套：把 §产品形态 原则落实为模块/包能力边界与演进纪律。宪法级原则以总纲为准；本文边界划分随各阶段设计细化，调整记录于文末版本历史。 -->
+<!-- 本文档 = 总纲（proposal.md）的技术配套：把 §产品形态 原则落实为模块/包能力边界与演进纪律。宪法级原则以总纲为准；本文边界划分随各阶段设计细化，调整记录于文末版本历史。2026-10-02 可读性梳理（内容不变，语句重写）。 -->
 
 # dsh-forge 架构基线 —— 模块与包的能力边界
 
@@ -17,7 +17,7 @@ intent: "architecture-baseline"
 4. **基础能力迭代沉淀**：证据驱动提炼；未来新产品 = 在沉淀的基础能力上快速搭建（届时另立提案）。
 5. **可机械验证优先**（2026-10-02 增补）：纪律优先落为 lint / 测试 / CI / 类型约束；落不成的才靠人工评审，且必须显式列入评审清单——禁止只活在 prose 里。
 
-**设计评审问句**（替代已退役的「换场景包还成立吗」）：**forge 需要吗？边界干净吗？能机械验证吗？**——任何以「未来新产品/新场景」为由的预先抽象，按定义为过度设计，当场砍。
+**设计评审问句**（替代已退役的「换场景包还成立吗」）：**forge 需要吗？边界干净吗？能机械验证吗？**任何以「未来新产品/新场景」为由的预先抽象，按定义为过度设计，当场砍。
 
 ## 1. 工件版图
 
@@ -30,22 +30,22 @@ intent: "architecture-baseline"
 | `state-layer/` forge 状态层 | features/tasks/proposals 存储 + 动词 API（claim/submit/…）+ 转移校验 + 依赖终态守卫 + append-only 执行记录 + 任务↔会话挂接表 | UI、技能、文档路径语义（docPath 为不透明字段）、dsh 会话账本（实时读，不复制） | 产品主线 |
 | `knowledge/` 知识链路 | 知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+使用事件）、审核与合并队列、晋升流 | 会话编排、知识注入决策（agent 自行决定）、代码仓与文档位置写入 | 产品主线（P2 重头） |
 | `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
-| `plugin-forge/` forge 管线核心插件 | 双模式共用技能（brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
+| `plugin-forge/` forge 管线核心插件 | 双模式共用技能（quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
 | `plugin-forge-spec/` forge 规格深化插件 | 仅远征组合的规格技能（write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者） | 状态存储（只消费）；突击会话不在组合内（物理边界，见《技术预研笔记》§5） | 独立工件、独立发版 |
-| `plugin-brainstorm/` brainstorm 技能工件 | 结构化探索技能（→ proposal 产出）；远征/突击经 customSkillDirs 接入，标准模式经默认技能根全局通道（宿主环境变量）共享 | 一切后端依赖（零耦合：不依赖 state-layer / knowledge——沉淀判据双命中，见《技术预研笔记》§5.5） | 独立工件、独立发版 |
-| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-brainstorm + plugin-forge + plugin-forge-spec + plugin-knowledge + 远征 persona + skill-filesystem 行）/ 突击模式（`blitz` = plugin-brainstorm + plugin-forge + plugin-knowledge + 突击 persona + skill-filesystem 行），经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一 = 派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
+| `plugin-brainstorm/` brainstorm 技能工件 | 结构化探索技能（产出 proposal）；远征/突击经 customSkillDirs 接入，标准模式经默认技能根全局通道（宿主环境变量）共享 | 一切后端依赖（零耦合：不依赖 state-layer / knowledge——沉淀判据双命中，见《技术预研笔记》§5.5） | 独立工件、独立发版 |
+| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-brainstorm + plugin-forge + plugin-forge-spec + plugin-knowledge + 远征 persona + skill-filesystem 行）；突击模式（`blitz` = plugin-brainstorm + plugin-forge + plugin-knowledge + 突击 persona + skill-filesystem 行）。经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一来自派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
 
 **依赖方向（单向）**：`web` →（能力面 RPC）→ `state-layer` / `knowledge`；`plugin-forge(-spec)` → `state-layer`；`plugin-knowledge` → `knowledge`；`host` 组装一切但不含业务。不存在反向 import；`state-layer` / `knowledge` 不 import UI 与插件；**`knowledge` 不依赖 `state-layer`**（头号沉淀候选的场景隔离禁令）。
 
 **单一写入路径**：状态写只经 `state-layer` 服务（UI 动作与 forge tool 同门）；知识写只经知识能力面（UI 管理面与知识插件 tool 同门）。数据库无第二写者。
 
-**插件化的真实动机**：① dsh tool 须以插件形态注册（机械要求）；② 技能线与产品壳迭代节奏不同（管理便利）。非可替换机制——两个插件均无 client 半身，全部 UI 在 `web/`。
+**插件化的真实动机**：其一，dsh tool 须以插件形态注册（机械要求）；其二，技能线与产品壳迭代节奏不同（管理便利）。非可替换机制——两个插件均无 client 半身，全部 UI 在 `web/`。
 
 ## 2. AI 协作防腐机制
 
 > 公理（2026-10-02 定向）：AI coding 时代 code is cheap——代码可廉价重生成，**昂贵且复利的是约束与意图的丢失**（「越写越腐化」）。防腐 = 把约束从 prose 变成机器资产；瓶颈从「写」移到「审与断」，架构的职责是让审断可机械化。护栏：code is cheap ≠ 抽象免费——错误抽象误导 agent 高速奔跑，预设通用性仍是过度设计。
 
-**要防的 agent 腐化形态**：隐式跨界（import 禁区 / 绕过单一写入路径直写 DB / UI 里补业务逻辑）、平行实现（复制既有能力改一份）、prose 约定侵蚀（裸色值、绕能力面——第三个会话后无人察觉）、schema/接口漂移（无迁移、私扩字段）、死代码与影子路径累积。
+**要防的 agent 腐化形态**：隐式跨界（import 禁区 / 绕过单一写入路径直写 DB / UI 里补业务逻辑）；平行实现（复制既有能力改一份）；prose 约定侵蚀（裸色值、绕能力面——第三个会话后无人察觉）；schema/接口漂移（无迁移、私扩字段）；死代码与影子路径累积。
 
 **五层防线（每层都必须可机械验证）**：
 
@@ -90,6 +90,7 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：可读性梳理（内容不变，语句重写；工件版图行内措辞微调，如 brainstorm「产出 proposal」）。
 - 2026-10-02：brainstorm 三模式共享落实——工件版图新增 `plugin-brainstorm/`（沉淀判据双命中：第三类消费者「标准模式」+ 零耦合）；出厂双预设组合更新（含 skill-filesystem 行；标准模式经默认技能根全局通道零 patch 共享，宿主环境变量注入）。技能绑定机制补入《技术预研笔记》§1.2（技能不随插件自动注册，customSkillDirs + 默认根 + rank 决胜）。
 - 2026-10-02：轻装模式更名突击模式（`light` → `blitz`）；预设机制「原理与实现」补入《技术预研笔记》§1.2（含 `select` blank-session 平台锁——「一会话一模式」由机制强制，与出厂双预设设计闭环）。
 - 2026-10-02：模式预设迁移落实（详见《技术预研笔记》§5）——forge 插件切 `plugin-forge`（管线核心，双模式共用）/ `plugin-forge-spec`（规格深化，仅远征）两工件；profile 出厂预设 → 出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；persona 铁律「只谈作风，不谈角色与工具禁令」写入工件版图（组合继承下 executor 继承作风、角色规格仍 = dispatch prompt）。

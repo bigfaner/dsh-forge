@@ -144,6 +144,8 @@ LN  <cwd>/AGENTS.md                     ← 会话工作目录（最窄）
 
 ### 2.3 配置
 
+`dsh-base` 已默认包含此插件（`maxBytes: 65536`）；需要调整行为时按下表覆写：
+
 ```yaml
 - name: '@deepseek-ai/dsh-agent-instructions'
   config:
@@ -316,5 +318,6 @@ persona 行（挂组合内，只谈作风）字段：`prefix`（必填）、`suf
 
 ## 版本历史
 
+- 2026-10-02：可读性梳理（内容不变；§2.3 补配置引导句）。
 - 2026-10-02：§2 重构——分层结构（L0 全局 + 项目链 base→local）、触发时机三类（首个 `agent/pre-step` 基线 / touch 驱动增量刷新含四情形表 / resume digest 对账保 KV cache）、宽→窄顺序与预算同向、边界五条（shell 导航不触发、无 watcher、PTC 推迟、symlink 信任边界、`</system-reminder>` 转义）。
 - 2026-10-02：初版——自《技术预研笔记》§1.4 独立成册；技能（五类根/格式/三配置方式/行为语义）、AGENTS.md 链、MCP（双传输/字段表/行为）、hooks 桥（配置/事件表/运行语义）、预设与 persona、profile patch、外部 provider、长尾表、forge 映射。

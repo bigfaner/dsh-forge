@@ -5,7 +5,7 @@ status: "Active"
 intent: "tech-research"
 ---
 
-<!-- 本文档 = 《架构基线》的技术预研配套：对上游 dsh 源码的核实结论、迁移方案、待验证 spike 清单。分工纪律（2026-10-02）：原型/UI 线归用户；本线只做架构设计与技术预研。 -->
+<!-- 本文档 = 《架构基线》的技术预研配套：对上游 dsh 源码的核实结论、迁移方案、待验证 spike 清单。分工纪律（2026-10-02）：原型/UI 线归用户；本线只做架构设计与技术预研。2026-10-02 可读性梳理（内容不变，语句重写）。 -->
 
 # dsh-forge 技术预研笔记
 
@@ -26,17 +26,18 @@ intent: "tech-research"
 
 - **registry 服务行** `@deepseek-ai/dsh-agent-preset-registry`（`index.ts`，TypertRemoteService，inject `loader`/`sessionProjections`）：config 仅 `default`（必填，部署默认）+ `selectedDefault`（volatile，用户经设置页改，**优先于 default**）；注册 `agentPreset` 会话投影。
 - **声明行** `@deepseek-ai/dsh-agent-preset`（30 行纯载体）：config = `{id, name?, description?, order?, plugins[]}`；`Service.init` 即 `agentPresets.register(config)`，无任何自有逻辑。
-- **挂载内部**（`mount.ts`）：每条声明**急切激活**——registry 专属 scope 内建内存 Loader 树（`PresetTree extends EntryTree`，`write()` 空操作：**定义不落盘，持久化只属 profile 编辑器**）→ 行审计（import 失败 / 激活失败 / 等待服务三态）→ **root 域服务泄漏检查**（preset 服务必须 isolate realm，泄漏即拒绝挂载）→ 世代（Generation）入册。profile 兼容策略先于挂载：被拒插件 mounts disabled，审计读作「有意停用」而非失败。
+- **挂载内部**（`mount.ts`）：每条声明**急切激活**。流程为：registry 专属 scope 内建内存 Loader 树（`PresetTree extends EntryTree`，`write()` 空操作——**定义不落盘，持久化只属 profile 编辑器**）→ 行审计（import 失败 / 激活失败 / 等待服务三态）→ **root 域服务泄漏检查**（preset 服务必须 isolate realm，泄漏即拒绝挂载）→ 世代（Generation）入册。profile 兼容策略先于挂载：被拒插件 mounts disabled，审计读作「有意停用」而非失败。
 
-**修订与复用**：声明更新/删除 → 旧世代 retired；活 Agent、子代、历史读**持引用继续用旧树**，引用计数清零才真正 dispose（"existing Agents retain the composition they already use"）。挂载失败是 final，但定义保持 roster 可见（`broken` 诊断行）；已挂树的 pending 行（等 Host 服务）在 Host Loader 树 settle 后**每次读取重审计**——启动顺序不决定成败。
+**修订与复用**：声明更新/删除后，旧世代 retired；活 Agent、子代、历史读**持引用继续用旧树**，引用计数清零才真正 dispose（"existing Agents retain the composition they already use"）。挂载失败是 final，但定义保持 roster 可见（`broken` 诊断行）；已挂树的 pending 行（等 Host 服务）在 Host Loader 树 settle 后**每次读取重审计**——启动顺序不决定成败。
 
 **绑定与继承**：Agent setup → `mount(ctx, id?)` → retain 当前世代（引用计数）→ `bindScopeParent`：Agent scope 父链挂到世代 standing key，**父链即可见性**（预设树不在 Agent fiber 之下，`standingMountFor` 按父链反查）。子代 `composeFrom`：join 父代**精确修订**（非按 id 重解析——父预设热更后子代仍用旧世代）；子代已有绑定即 throw。`serviceForAgent` 按同一关系取「该 Agent 的预设内服务实例」。
 
 **会话切换锁与日志重建**：`select` Remote **仅 blank session 可用**（turnBoundary 投影：无开放回合且零历史回合，否则 `agent-preset/locked`「This session has already started」）——**预设选择在首轮后平台级锁死**。切换 = recompose（重绑 + `tools/change`）+ 追加 `agent-preset/selected` 会话事件（per-agent 串行化）。重建读 `agentPreset` 投影而非 header：创建 header 是 deep-frozen 起始事实，blank 期选择以事件覆盖；"model-visible ⟺ logged" 规则——预设决定模型看到的 tool schemas 与提示词段，故必须入日志。重启恢复按 id 取**当前**定义；定义缺失 reject。
 
-**出厂实现形态**（`packages/bundle/web-app`）：`cordis.patch.yml` 插 registry 行（`default: standard`）；`presets/{standard,ptc,minimal,cordis}.patch.yml` 各插一行 preset 声明（`package.json` 的 `dsh.bundle.patch` 排序）。`plugins` 列表 = 完整 cordis entry list，`standard` 定义实证：persona 行（prefix/suffix 模板变量 `{{model}}`/`{{cwd}}`）、agent-instructions、工具行（支持 `disabled: !!js process.platform === 'win32'` 平台条件）、`cordis:group` 嵌套组（`group: true` + isolate realm：planMode / compaction / delegation 全家——subagent spawn/fork、workflow-ptc、ralph disabled 等）。**Web 编辑器保存 = profile patch 按 row id 覆写 `config.plugins`**（用户编辑优先于出厂行）。出厂四 id（`standard`/`ptc`/`minimal`/`cordis`）显示文案走 locale 字典（`presetStandardName`…，中文即「标准模式」「PTC 模式」）；自带 `name` 的用户声明不翻译（`name ?? id` 兜底，`display.ts`）。
+**出厂实现形态**（`packages/bundle/web-app`）：`cordis.patch.yml` 插 registry 行（`default: standard`）；`presets/{standard,ptc,minimal,cordis}.patch.yml` 各插一行 preset 声明（`package.json` 的 `dsh.bundle.patch` 排序）。`plugins` 列表 = 完整 cordis entry list。`standard` 定义实证：persona 行（prefix/suffix 模板变量 `{{model}}`/`{{cwd}}`）、agent-instructions、工具行（支持 `disabled: !!js process.platform === 'win32'` 平台条件）、`cordis:group` 嵌套组（`group: true` + isolate realm：planMode / compaction / delegation 全家——subagent spawn/fork、workflow-ptc、ralph disabled 等）。**Web 编辑器保存 = profile patch 按 row id 覆写 `config.plugins`**（用户编辑优先于出厂行）。出厂四 id（`standard`/`ptc`/`minimal`/`cordis`）显示文案走 locale 字典（`presetStandardName`…，中文即「标准模式」「PTC 模式」）；自带 `name` 的用户声明不翻译（`name ?? id` 兜底，`display.ts`）。
 
 **技能绑定通道**（`packages/skill/skill-filesystem/src/index.ts` 源码核实）：技能**不随插件挂载自动注册**——组合内须有 `@deepseek-ai/dsh-skill-filesystem` 行，其配置决定技能目录集：
+
 - `customSkillDirs`（rank 300）：显式目录列表；`cordis` 预设实证——`!!js` 表达式解析 `@deepseek-ai/dsh-agent-preset` 包的 `skills/` 目录接入组合；
 - 默认根（`includeDefaultRoots: true` 默认开）：项目根（git 根定位）`.dsh/skills`（100）/ `.agents/skills`（200）+ 用户根 `$DSH_HOME/skills`（默认 `~/.dsh`，400）/ `$DSH_AGENTS_HOME/skills`（默认 `~/.agents`，500）+ **bundled 根 `$DSH_BUNDLED_SKILL_DIR`（app 级技能通道）**——用户根与 bundled 根均可经宿主环境变量重定向，**对所有挂默认根的组合全局生效**；
 - rank 决胜同名（数值小者优先）；frontmatter 携带 invocation 策略（`disable-model-invocation` / `user-invocable`）；chokidar watch 目录热更新。
@@ -93,14 +94,14 @@ run-tasks skill（forge 预设会话内）
   │       COVERAGE（三级优先）、SURFACE/COMPLEXITY、KNOWLEDGE_DOMAIN（项目默认召回域）
   │    ③ 类型策略块（TS 模板函数）
   → subagent(prompt = dispatchPrompt, agentOptions{model}, 阻塞)   ← 匿名子代理，动态派发
-       ├─ 执行策略（含 knowledge recall，域参数来自 ②）
-       ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
-       ├─ git-commit skill
+        ├─ 执行策略（含 knowledge recall，域参数来自 ②）
+        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
+        ├─ git-commit skill
   → taskStatus 验证 → 循环 / fix-task（taskAdd + block 边）
     恢复唯一出口 = dispatcher 外环：record 缺失 → 重派（按当前状态重新合成简报，优于重拉旧文本）
 ```
 
-已知取舍：约束块从系统提示降为初始 prompt——dsh 两个负结论下的**唯一差异化通道**，约束标记（`<EXTREMELY-IMPORTANT>` 等）原样保留以补偿位置弱化；合成单点（约束块 + 策略模板同函数族）杜绝模板漂移；dispatch prompt 整体落入子代持久会话日志，审计原子性优于分散记录。老 6 步执行协议简化为 4 步（Validate 拉取步消失：Initialize 并入、Execute/Submit/Commit/Done）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
+已知取舍：约束块从系统提示降为初始 prompt——这是 dsh 两个负结论下的**唯一差异化通道**，约束标记（`<EXTREMELY-IMPORTANT>` 等）原样保留以补偿位置弱化；合成单点（约束块 + 策略模板同函数族）杜绝模板漂移；dispatch prompt 整体落入子代持久会话日志，审计原子性优于分散记录。老 6 步执行协议简化为 4 步（Validate 拉取步消失：Initialize 并入、Execute/Submit/Commit/Done）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
 
 ## 3. 待验证清单（P1 spike 项，需实跑）
 
@@ -113,7 +114,7 @@ run-tasks skill（forge 预设会话内）
 | S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/突击，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
 | S6 | 标准模式技能注入通道 | 宿主环境变量重定向（`DSH_BUNDLED_SKILL_DIR` vs `DSH_HOME`）指向产品技能根；与 customSkillDirs 并存场景 | standard 会话技能目录含 brainstorm；跨根同名 rank 去重呈现符合预期 |
 
-（S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
+（S1–S4 继承总纲 vendor 裁决与 P1 输入；S5/S6 为预研新增。）
 
 ## 4. 动态提示词组装设计（2026-10-02）
 
@@ -124,7 +125,7 @@ run-tasks skill（forge 预设会话内）
 - `PromptData` 接口（taskKey/taskFile/category/featureSlug/phaseSummary?/coverage?/surface?/complexity，**v3 增：blockers 快照 / knowledgeDomain**）；
 - 每类型一个模板函数（`codingFix(d): string`），路由表 exhaustive；
 - `synthesize(task, ctx)` 纯函数：`buildData`（PhaseDetect / resolveCoverage 注入）+ 模板渲染（`fixRecordMissed` 路由取消，见下）；
-- **合成内聚于 `taskClaim`**（v3 定稿后）：claim 返回值携带 `dispatchPrompt = executorConstraints + synthesize(task, ctx)`，dispatcher 拿到即派发——**独立 `taskPrompt` tool 取消**：完整简报作为初始 prompt 持久落入子会话日志，不会丢失；恢复唯一出口 = dispatcher 外环（record 缺失重派按**当前状态重新合成**，优于重拉旧文本），fix-record 简报为 run-tasks skill 内置静态文本（单一模板、非类型路由）。
+- **合成内聚于 `taskClaim`**（v3 定稿后）：claim 返回值携带 `dispatchPrompt = executorConstraints + synthesize(task, ctx)`，dispatcher 拿到即派发。**独立 `taskPrompt` tool 取消**：完整简报作为初始 prompt 持久落入子会话日志，不会丢失；恢复唯一出口 = dispatcher 外环（record 缺失重派按**当前状态重新合成**，优于重拉旧文本），fix-record 简报为 run-tasks skill 内置静态文本（单一模板、非类型路由）。
 
 上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 state-layer）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
 
@@ -141,7 +142,7 @@ run-tasks skill（forge 预设会话内）
 | full 模式 | 远征模式 | `expedition` |
 | quick 模式 | 突击模式 | `blitz` |
 
-远征 ↔ 突击，军事对仗：远征 = 全装长途战役（辎重齐备、步步为营——PRD/设计/契约/测试脚本），突击 = 短促突击（集中兵力直奔要害——proposal 直达任务执行）。突击减的是**仪式**（规格文档流程），不减**纪律**（任务表、单写路径、执行记录、提交规范、验证门原样）——是精确打击，不是乱拳猛攻。规模语义同构：突击只适合小目标，目标膨胀 → 建议转入远征（新会话续跑，工件在盘上衔接）。
+远征与突击构成军事对仗：远征 = 全装长途战役（辎重齐备、步步为营——PRD/设计/契约/测试脚本），突击 = 短促突击（集中兵力直奔要害——proposal 直达任务执行）。突击减的是**仪式**（规格文档流程），不减**纪律**（任务表、单写路径、执行记录、提交规范、验证门原样）——是精确打击，不是乱拳猛攻。规模语义同构：突击只适合小目标，目标膨胀 → 建议转入远征（新会话续跑，工件在盘上衔接）。
 
 ### 5.2 组合定义（出厂双预设）
 
@@ -168,7 +169,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ### 5.4 模式的两处解耦
 
-1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|blitz` = 功能溯源事实（quick-tasks / breakdown-tasks 写入），下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的突击功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
+1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|blitz` = 功能溯源事实（quick-tasks / breakdown-tasks 写入）。下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的突击功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
 2. **确认门 ≠ 模式**：`auto.runTasks.quick/full` 自动跑闸门属 forge 配置（→ dsh-forge 偏好面），随迁移原样保留，与预设正交。
 
 ### 5.5 brainstorm 三模式共享（跨预设技能，2026-10-02 增补）
@@ -256,6 +257,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：可读性梳理（内容不变，语句重写；S5/S6 来源注记合并为一句）。
 - 2026-10-02：扩展体系独立成册——《dsh 扩展体系参考》（`dsh-extensions.md`）：各体系配置示例详解（技能三配置方式/AGENTS.md 链/MCP 双传输与字段表/hooks 事件表/预设/persona/patch/provider/长尾/forge 映射）；§1.4 收缩为结论索引 + 指针。
 - 2026-10-02：新增 §1.4 能力扩展体系（插件之外）——①技能目录五类根全表（标准模式加技能答案：SKILL.md 丢项目/用户根，零插件零 patch 热更新；人类命令只能插件注册，user-invocable 技能即文件系统侧用户可调面）；②AGENTS.md 指令链；③MCP 配置行；④hooks 兼容桥；⑤预设/persona 数据行；⑥profile patch 与设置面；⑦外部 agent provider；长尾与 forge 关联。
 - 2026-10-02：新增 §5.6 出厂双预设完整示例（profile patch YAML）——registry default 按 row id patch 覆写；远征全量形态（persona 铁律示样 / 镜像 standard 基础行省略号 / skill-filesystem customSkillDirs 表达式 / forge 增量行）；突击三处差异；配套语义（用户编辑整表覆写、自带 name 绕过 locale 字典、blank 锁）；即 S5/S6 实施底稿。
