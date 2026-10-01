@@ -76,6 +76,15 @@ intent: "new-feature"
 
 dsh 的 Workspace（`@deepseek-ai/dsh-workspace`，经 `ctx.workspaceRegistry`）= 稳定 uuid + canonical path + 有序会话账本。衔接原则：**项目记录持有 `workspaceId` 引用，join key = canonical path；会话列表每次经 dsh workspace API 实时读取，应用数据库不存会话账本副本**。应用侧只存自己的扩展字段（文档位置、知识目录、任务/feature 状态），dsh 的归 dsh——此为「无投影」纪律在项目映射上的落实。
 
+**具体机制（源码核实，2026-10-02）**：
+
+1. **注册 = 先 dsh 后自家**：`ctx.workspaceRegistry.create(projectDir)` 返回实体（uuid + canonical path），应用库 `projects` 表只存 `workspace_id` 外键 + 自有扩展字段（文档位置、知识目录、归档态）——**无会话列表字段**。`create()` 对同 canonical path 幂等（上游语义 "Returns the existing or newly durable workspace"）。
+2. **对账钥匙 = canonical path**：应用库同时存 `ws.path`；启动时校验 `registry.get(workspace_id)?.path === project.canonical_path`，失配则按 canonical path 在 `registry.list()` 中找回，找不回则重新 `create()`（幂等安全）→ 单向修引用，不产生数据复制。
+3. **会话列表实时读**：左栏渲染时直接 `registry.get(workspace_id).sessionIds` → 逐 id 取会话头（标题/状态点/相对时间）；renderer 侧经 `packages/api/workspace-controller` RPC 面等价调用。零缓存零副本，dsh 侧增删天然一致。
+4. **写权在 dsh**：会话的 attach/detach/排序由 dsh 侧（会话启动自动挂接或经其 API）维护，应用不写账本。
+
+**与 M4 投影的本质区别**：投影方案存 sessionIds 快照副本、需 watch/感知/回流（DF003）追平；本方案应用只持外键，UI 渲染直问本体——无快照、无回流、无感知机制，概念只剩「外键 + 对账」。
+
 ### 管线归属
 
 SDD 管线技能（brainstorm→PRD→设计→任务→执行）**单独做成一个独立 dsh 插件**——与工作台产品解耦，可独立分发与启停；应用只看不管（不做原生编排），未来再评估。
