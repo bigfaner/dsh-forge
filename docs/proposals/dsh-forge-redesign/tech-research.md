@@ -54,7 +54,7 @@ intent: "tech-research"
 
 ### 1.4 能力扩展体系（插件之外，2026-10-02 核实）
 
-> 全量配置手册已独立成册：**《dsh 扩展体系参考》**（`dsh-extensions.md`，含各体系配置示例）。此处仅留结论索引：
+> 全量配置手册已独立成册：**《dsh 扩展体系参考》**（`dsh-extensions.md`，含各体系配置示例）。此处仅留结论索引：：**《dsh 扩展体系参考》**（`dsh-extensions.md`，含各体系配置示例）。此处仅留结论索引：
 
 - **①技能目录**（filesystem skills）：五类根（项目 `.dsh`/`.agents` 100/200、custom 300、用户 `$DSH_HOME`/`$DSH_AGENTS_HOME` 400/500、bundled）+ rank 决胜。**标准模式加技能 = 把 `<name>/SKILL.md` 丢进项目或用户根**——零插件零 patch，watch 热更新。人类命令（`ctx.commands`）只能插件注册；`user-invocable` 技能即文件系统侧用户可调面。
 - **②AGENTS.md 链**（`dsh-agent-instructions`，dsh-base 默认含）：用户全局 + 项目链（宽→窄 + `.local` 叠加 + 同容去重）注入 durable 基线消息。
@@ -65,6 +65,13 @@ intent: "tech-research"
 - **⑦外部 agent provider**：`subagent-codex`/`-claude-code`/`-acp` 组合行翻开关。
 
 **对 forge 产品的意义**：①用于 §5.5（brainstorm 全局根通道）；②是「项目约定注入」现成载体（观察项）；③④正交；⑤⑥⑦ = §5 模式预设迁移的机制底座。
+
+### 1.5 上游发布形态与追踪（2026-10-02 核实）
+
+- 上游**无 git tag、无 CHANGELOG**；workspace 包锁步发布（抽查 `dsh-client-web` / `dsh-app-boot` dist-tags 一致）。
+- npm dist-tags（registry 实查）：`next` = 活跃线（`0.2.0-rc.2`）；`alpha` = 旧线（`0.1.7-alpha.2`）；`latest` 陈旧（`0.0.1-rc.1` / `0.1.0-rc.6`）——**追踪最新 = 盯 `next`**。
+- 本地源码仓即差异阅读源：`git log` 读代码差异，diff `docs/`（随代码再生成）读能力面变化总览。
+- 升级策略与版本管理机制（节奏、四道测试门、发布、回滚、schema 前向单向）见《架构基线》§5。
 
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
@@ -257,6 +264,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：新增 §1.5 上游发布形态核实——无 git tag、无 CHANGELOG；workspace 锁步发布；dist-tags 实查（`next` = 活跃线 0.2.0-rc.2，`latest` 陈旧）→ 追新盯 `next`；本地仓为差异阅读源；版本管理机制指针至《架构基线》§5。
 - 2026-10-02：可读性梳理（内容不变，语句重写；S5/S6 来源注记合并为一句）。
 - 2026-10-02：扩展体系独立成册——《dsh 扩展体系参考》（`dsh-extensions.md`）：各体系配置示例详解（技能三配置方式/AGENTS.md 链/MCP 双传输与字段表/hooks 事件表/预设/persona/patch/provider/长尾/forge 映射）；§1.4 收缩为结论索引 + 指针。
 - 2026-10-02：新增 §1.4 能力扩展体系（插件之外）——①技能目录五类根全表（标准模式加技能答案：SKILL.md 丢项目/用户根，零插件零 patch 热更新；人类命令只能插件注册，user-invocable 技能即文件系统侧用户可调面）；②AGENTS.md 指令链；③MCP 配置行；④hooks 兼容桥；⑤预设/persona 数据行；⑥profile patch 与设置面；⑦外部 agent provider；长尾与 forge 关联。
