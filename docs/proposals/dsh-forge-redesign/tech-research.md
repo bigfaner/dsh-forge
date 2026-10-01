@@ -20,11 +20,25 @@ intent: "tech-research"
   1. **无子代预设覆写**——子代只能继承父组合，dispatcher/executor 无法异构预设；
   2. **无超时参数**——旧 forge 的 30min 任务超时机制不提供，须 skill 层纪律 + interrupt 兜底。
 
-### 1.2 Agent 预设与 persona（`packages/preset/*`）
+### 1.2 Agent 预设与 persona（`packages/preset/*`，2026-10-02 源码重核）
 
-- **预设 = 具名声明式组合**，决定 Agent 的工具、提示词段、技能（`agent-preset-registry/README.md`）。定义本体 = 普通插件行；新增/覆盖 = profile bundle patch（plugin_manager `insert` 一行 `@deepseek-ai/dsh-agent-preset`；本仓 forge-workbench `cordis.patch.yml` 为同机制先例）。
-- **persona 行**（`packages/preset/persona`）：预设内注册 persona prefix/suffix 提示词段（shadow 全局默认）；`complete: true` 可使其成为唯一系统提示词；支持 `{{…}}` 模板变量。README 原话："Without this row, a preset could change an agent's tools but never its identity."
-- **UI 面**（`packages/client/ui-agent-preset`）：设置「Agent 预设」管理页、新建会话 hero chip、会话头预设标签；切换 = 会话重组（`agent-preset/selected` 事件）。
+**三层角色**（声明与运行彻底分离）：
+
+- **registry 服务行** `@deepseek-ai/dsh-agent-preset-registry`（`index.ts`，TypertRemoteService，inject `loader`/`sessionProjections`）：config 仅 `default`（必填，部署默认）+ `selectedDefault`（volatile，用户经设置页改，**优先于 default**）；注册 `agentPreset` 会话投影。
+- **声明行** `@deepseek-ai/dsh-agent-preset`（30 行纯载体）：config = `{id, name?, description?, order?, plugins[]}`；`Service.init` 即 `agentPresets.register(config)`，无任何自有逻辑。
+- **挂载内部**（`mount.ts`）：每条声明**急切激活**——registry 专属 scope 内建内存 Loader 树（`PresetTree extends EntryTree`，`write()` 空操作：**定义不落盘，持久化只属 profile 编辑器**）→ 行审计（import 失败 / 激活失败 / 等待服务三态）→ **root 域服务泄漏检查**（preset 服务必须 isolate realm，泄漏即拒绝挂载）→ 世代（Generation）入册。profile 兼容策略先于挂载：被拒插件 mounts disabled，审计读作「有意停用」而非失败。
+
+**修订与复用**：声明更新/删除 → 旧世代 retired；活 Agent、子代、历史读**持引用继续用旧树**，引用计数清零才真正 dispose（"existing Agents retain the composition they already use"）。挂载失败是 final，但定义保持 roster 可见（`broken` 诊断行）；已挂树的 pending 行（等 Host 服务）在 Host Loader 树 settle 后**每次读取重审计**——启动顺序不决定成败。
+
+**绑定与继承**：Agent setup → `mount(ctx, id?)` → retain 当前世代（引用计数）→ `bindScopeParent`：Agent scope 父链挂到世代 standing key，**父链即可见性**（预设树不在 Agent fiber 之下，`standingMountFor` 按父链反查）。子代 `composeFrom`：join 父代**精确修订**（非按 id 重解析——父预设热更后子代仍用旧世代）；子代已有绑定即 throw。`serviceForAgent` 按同一关系取「该 Agent 的预设内服务实例」。
+
+**会话切换锁与日志重建**：`select` Remote **仅 blank session 可用**（turnBoundary 投影：无开放回合且零历史回合，否则 `agent-preset/locked`「This session has already started」）——**预设选择在首轮后平台级锁死**。切换 = recompose（重绑 + `tools/change`）+ 追加 `agent-preset/selected` 会话事件（per-agent 串行化）。重建读 `agentPreset` 投影而非 header：创建 header 是 deep-frozen 起始事实，blank 期选择以事件覆盖；"model-visible ⟺ logged" 规则——预设决定模型看到的 tool schemas 与提示词段，故必须入日志。重启恢复按 id 取**当前**定义；定义缺失 reject。
+
+**出厂实现形态**（`packages/bundle/web-app`）：`cordis.patch.yml` 插 registry 行（`default: standard`）；`presets/{standard,ptc,minimal,cordis}.patch.yml` 各插一行 preset 声明（`package.json` 的 `dsh.bundle.patch` 排序）。`plugins` 列表 = 完整 cordis entry list，`standard` 定义实证：persona 行（prefix/suffix 模板变量 `{{model}}`/`{{cwd}}`）、agent-instructions、工具行（支持 `disabled: !!js process.platform === 'win32'` 平台条件）、`cordis:group` 嵌套组（`group: true` + isolate realm：planMode / compaction / delegation 全家——subagent spawn/fork、workflow-ptc、ralph disabled 等）。**Web 编辑器保存 = profile patch 按 row id 覆写 `config.plugins`**（用户编辑优先于出厂行）。出厂四 id（`standard`/`ptc`/`minimal`/`cordis`）显示文案走 locale 字典（`presetStandardName`…，中文即「标准模式」「PTC 模式」）；自带 `name` 的用户声明不翻译（`name ?? id` 兜底，`display.ts`）。
+
+**persona 行**（`packages/preset/persona`）：预设组合内注册 persona prefix/suffix 提示词段（shadow 全局默认）；`complete: true` 可使其成为唯一系统提示词；支持 `{{…}}` 模板变量。README 原话："Without this row, a preset could change an agent's tools but never its identity." 必须挂 agent scope（组合内）——全局挂载与 prompt registry 的 persona 注册冲突，fail loud。
+
+**UI 面**（`packages/client/ui-agent-preset`）：设置「Agent 预设」管理页、新建会话 hero chip、会话头预设标签。
 
 ### 1.3 组合继承（子代继承父预设）
 
@@ -32,7 +46,7 @@ intent: "tech-research"
 
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
-> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。（出厂预设形态后经 §5 修正：纯环境单预设 → 远征/轻装双预设，persona 复入但只限作风层；executor 角色规格仍唯一来自 dispatch prompt，本裁决实质不变。）
+> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。（出厂预设形态后经 §5 修正：纯环境单预设 → 远征/突击双预设，persona 复入但只限作风层；executor 角色规格仍唯一来自 dispatch prompt，本裁决实质不变。）
 
 | forge 3.x 组件 | v3 落点 |
 |---|---|
@@ -75,7 +89,7 @@ run-tasks skill（forge 预设会话内）
 | S2 | boot manifest 注入实跑 | 自有 vite 入口 + `dsh-client-web` 壳 + injections 掌舵 | ui-\* 运行期加载成功 |
 | S3 | slot 洞位替换（路线 A） | 自有插件替换 `sidebar.workspaces` 占用者 | 原型左栏三件套可挂载 |
 | S4 | workspace registry create 幂等 | 同 canonical path 两次 `create()` | 返回同一实体（上游文档语义） |
-| S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/轻装，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
+| S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/突击，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
 
@@ -94,28 +108,28 @@ run-tasks skill（forge 预设会话内）
 
 不迁移的过渡 hack：`{{TASK_ID}}` 大写桥接、`TASK_CATEGORY` 后处理注入。改良：每类型快照测试（fixture 任务 → prompt 输出断言）；策略第一步由「读 docs/business-rules/ 目录」改为**知识召回指令**（组合继承使 executor 天然带召回 tool）；TASK_FILE 悬空容忍（对抗审核处置③）写入模板指示。边界：persona 的 `{{…}}` 变量属系统提示层（prompt registry），策略层组装不混用——人格归预设、策略归本设计。
 
-## 5. 模式预设迁移：远征 / 轻装（2026-10-02）
+## 5. 模式预设迁移：远征 / 突击（2026-10-02）
 
-旧 forge 的模式 = 管线路由开关（`/quick` 命令 vs 完整管线入口），语义散落在命令逻辑、manifest `mode:` 字段、SKIP_EVAL_GATE 任务上下文注入、知识抽取规则的 mode 上下文里。dsh Agent 预设（§1.2）给出更干净的物理形态：**模式 = 会话级预设**，新建会话时经 hero chip 选定（UI 已内建），一会话一模式，与「一会话一功能」纪律同构。
+旧 forge 的模式 = 管线路由开关（`/quick` 命令 vs 完整管线入口），语义散落在命令逻辑、manifest `mode:` 字段、SKIP_EVAL_GATE 任务上下文注入、知识抽取规则的 mode 上下文里。dsh Agent 预设（§1.2）给出更干净的物理形态：**模式 = 会话级预设**，新建会话时经 hero chip 选定（UI 已内建），一会话一模式，与「一会话一功能」纪律同构。且这是**平台级保证而非纪律**：`select` 的 blank-session 锁（§1.2）使首轮后预设不可切换，升级 = 开新会话（工件在盘上自然续接）；恢复/分叉会话按 `agentPreset` 投影重建同款组合，模式随会话存活。
 
 ### 5.1 命名
 
 | 旧名 | 新显示名 | 机器值 |
 |---|---|---|
 | full 模式 | 远征模式 | `expedition` |
-| quick 模式 | 轻装模式 | `light` |
+| quick 模式 | 突击模式 | `blitz` |
 
-远征 ↔ 轻装同属远行隐喻族：远征 = 全装长途（PRD/设计/契约 = 辎重），轻装 = 轻装上路（proposal 即全部给养）。「轻装」减的是**行李**（文档仪式），不减**纪律**（任务表、单写路径、执行记录、提交规范原样保留）——规避「quick」自带的赶工/省步骤暗示。且自带规模语义：轻装只适合短途，与旧规则「scope 膨胀 → 建议转 full」同构（升级路径 = 换远征会话续跑，工件在盘上自然衔接）。
+远征 ↔ 突击，军事对仗：远征 = 全装长途战役（辎重齐备、步步为营——PRD/设计/契约/测试脚本），突击 = 短促突击（集中兵力直奔要害——proposal 直达任务执行）。突击减的是**仪式**（规格文档流程），不减**纪律**（任务表、单写路径、执行记录、提交规范、验证门原样）——是精确打击，不是乱拳猛攻。规模语义同构：突击只适合小目标，目标膨胀 → 建议转入远征（新会话续跑，工件在盘上衔接）。
 
 ### 5.2 组合定义（出厂双预设）
 
 | 预设 | plugins | persona（作风示意） |
 |---|---|---|
 | 远征模式（出厂默认） | plugin-forge + **plugin-forge-spec** + plugin-knowledge + persona 行 | 严谨、全流程、不跳步、证据驱动 |
-| 轻装模式 | plugin-forge + plugin-knowledge + persona 行 | 经济、直奔任务、单写路径纪律不折扣 |
+| 突击模式 | plugin-forge + plugin-knowledge + persona 行 | 短促突击、直奔要害、单写路径纪律不折扣 |
 
 - registry `default` 出厂指向远征；用户可经 UI 改（`selectedDefault` 易失字段，README 语义）。
-- **forge 插件按模式切两包**：`plugin-forge`（管线核心，双模式共用：brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ `plugin-forge-spec`（规格深化，仅远征组合：write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者）。动机 = 防腐 L1：**物理边界优于提示词纪律**——轻装会话字面上无法调用 write-prd，而非「被叮嘱不要」；副产收益 = 轻装会话省下规格技能清单 token。此切分不违总纲「插件切分 = 管理便利，非可替换机制」：模式是同一产品的两种节奏，非场景替换。最终技能归置由插件工程线（总纲 P1 并行轨）细化，本节定切分原则。
+- **forge 插件按模式切两包**：`plugin-forge`（管线核心，双模式共用：brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ `plugin-forge-spec`（规格深化，仅远征组合：write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者）。动机 = 防腐 L1：**物理边界优于提示词纪律**——突击会话字面上无法调用 write-prd，而非「被叮嘱不要」；副产收益 = 突击会话省下规格技能清单 token。此切分不违总纲「插件切分 = 管理便利，非可替换机制」：模式是同一产品的两种节奏，非场景替换。最终技能归置由插件工程线（总纲 P1 并行轨）细化，本节定切分原则。
 - 模式 prose（入口路由、升级规则）写进 persona prefix——预设组合内挂 `dsh-persona` 行即载体，无需自制模式插件。
 
 ### 5.3 与 §2 v3 的相容（persona 撰写铁律）
@@ -124,15 +138,16 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 > **persona 只谈作风，不谈角色与工具禁令。**
 
-组合继承（§1.3）下 executor 子代继承模式 persona：远征 executor 严谨、轻装 executor 经济——继承不再是 v2 时代的矛盾源，而是模式作风对执行粒度的自然延伸。角色与任务规格仍唯一来自 dispatch prompt（§2/§4）；任何「FORBIDDEN: …」式规则禁止写入 persona。已知代价：远征 executor 子代背负规格技能清单的 token 开销（技能目录行量级，每行一句描述）——组合继承的既定取舍，换取稳定层零注入。
+组合继承（§1.3）下 executor 子代继承模式 persona：远征 executor 严谨、突击 executor 迅捷——继承不再是 v2 时代的矛盾源，而是模式作风对执行粒度的自然延伸。角色与任务规格仍唯一来自 dispatch prompt（§2/§4）；任何「FORBIDDEN: …」式规则禁止写入 persona。已知代价：远征 executor 子代背负规格技能清单的 token 开销（技能目录行量级，每行一句描述）——组合继承的既定取舍，换取稳定层零注入。
 
 ### 5.4 模式的两处解耦
 
-1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|light` = 功能溯源事实（quick-tasks / breakdown-tasks 写入），下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的轻装功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
+1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|blitz` = 功能溯源事实（quick-tasks / breakdown-tasks 写入），下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的突击功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
 2. **确认门 ≠ 模式**：`auto.runTasks.quick/full` 自动跑闸门属 forge 配置（→ dsh-forge 偏好面），随迁移原样保留，与预设正交。
 
 ## 版本历史
 
+- 2026-10-02：轻装模式更名**突击模式**（机器值 `light` → `blitz`）；§5 补平台级保证（`select` blank-session 锁使「一会话一模式」由机制强制，恢复/分叉按 `agentPreset` 投影重建组合）。§1.2 全文重写为预设机制「原理与实现」（源码重核：registry/声明行/挂载三层角色、Generation 修订与引用计数、bindScopeParent 绑定、composeFrom 精确修订继承、blank 锁与日志重建、bundle/web-app 出厂 patch 形态、standard 定义实证、locale 显示解析）。
 - 2026-10-02：新增 §5 模式预设迁移——full/quick 升格为出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；forge 插件切核心/规格两包（防腐 L1：轻装会话物理隔离规格技能）；persona 撰写铁律（只谈作风不谈角色与工具禁令）保 §2 v3 相容；manifest `mode` 保留为功能溯源（与会话预设解耦）；S5 扩为双预设验证。
 - 2026-10-02：取消 taskPrompt tool——合成内聚于 `taskClaim` 返回值（dispatchPrompt 随 claim 返回，dispatcher 拿到即派发）；简报作为初始 prompt 持久在子会话不丢失，恢复唯一出口 = dispatcher 外环（重派按当前状态重新合成）；fix-record 简报改由 skill 内置静态文本，synthesize 去掉 fixRecordMissed 路由。
 - 2026-10-02：v3 定稿——task-executor **不采用预设身份**：出厂 forge 预设 = 纯环境定义（不配 persona 行），executor = 动态派发的匿名子代理，行为规格全部来自派发前合成的 dispatch prompt；动态信息块强化（blockers 现状快照、knowledgeDomain 注入）。
