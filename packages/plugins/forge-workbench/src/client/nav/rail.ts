@@ -23,10 +23,8 @@
 import { createElement, useSyncExternalStore, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { IconBranchOutline16, IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotSelectorHook, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ViewKeySnapshot, ViewKeyStore, WorkbenchTabKey } from '../store/view-key'
-import type { BoardSessionStore } from '../store/board-session'
-import type { SessionHandover } from '../session-handover'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ViewKeyStore } from '../store/view-key'
 import { WorkbenchShell } from '../WorkbenchShell'
 import type { ViewCarrier, ViewSwitchController } from './view-switch'
 
@@ -47,10 +45,6 @@ export interface RailNavOptions {
   readonly t: TranslateNS<'workbench'>
   /** Whether the rail also owns the workbench surface (see {@link RailContentMode}). */
   readonly content: RailContentMode
-  /** The session hand-over seat (5.11; M3 6.1 slimmed) — threaded into the overlay's shell (form parity with the slot path). */
-  readonly launch?: SessionHandover | undefined
-  /** The board session store (5.11 AC3/AC4) — threaded into the overlay's shell. */
-  readonly boardSession?: BoardSessionStore | undefined
 }
 
 /** The rail column's geometry (ui-design: 宽 48px,主窗口左缘,垂直两枚 icon 按钮). */
@@ -148,7 +142,10 @@ function RailChrome(props: RailNavOptions): ReactNode {
  * The workbench overlay (overlay mode only): fixed beside the rail, faded
  * with the session view, and — deliberately — NOT unmounted on switch-out:
  * the shell keeps its session-memory state (ui-design 切出后保留), exactly the
- * retention the keyed slot path gets from the machine carrying the tab.
+ * retention the keyed slot path gets from the machine. Since M4 1.7 the
+ * overlay's shell is the overview ESCAPE DOOR single page — the retired tab
+ * face (the machine as a hooks source + the tab/subview actions) is gone,
+ * so the mount carries only the locale seat.
  */
 function RailOverlay(props: RailNavOptions): ReactNode {
   const view = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
@@ -171,19 +168,7 @@ function RailOverlay(props: RailNavOptions): ReactNode {
   },
   createElement(WorkbenchShell, {
     t: props.t,
-    useViewKey: bindViewKeyHook(props.store),
-    selectWorkbenchTab: (tab: WorkbenchTabKey) => { props.controller.switchWorkbenchTab(tab) },
-    openFeatureDetail: (slug: string) => { props.controller.openFeatureDetail(slug) },
-    openProposalDetail: (slug: string) => { props.controller.openProposalDetail(slug) },
-    ...(props.launch === undefined ? {} : { launch: props.launch }),
-    ...(props.boardSession === undefined ? {} : { boardSession: props.boardSession }),
   }))
-}
-
-/** Bind the store as the shell's `useViewKey` selector (the hand-bound twin of the slot registration's synthesized hook). */
-function bindViewKeyHook(store: ViewKeyStore): SnapshotSelectorHook<ViewKeySnapshot> {
-  return <S>(selector: (snapshot: ViewKeySnapshot) => S): S =>
-    useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))
 }
 
 /**

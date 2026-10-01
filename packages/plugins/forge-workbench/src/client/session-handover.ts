@@ -14,6 +14,7 @@
  * hand-over.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { LineageSubagentAddress } from './lineage'
 import type { ViewSwitchController } from './nav/view-switch'
 
 /** The hand-over seat the shell threads into the board (the launch seat's M3 form). */
@@ -22,8 +23,13 @@ export interface SessionHandover {
   onLaunched(sessionId: string): void
 }
 
-/** The uiWorkspace read (spike-1 §2.2: openSession is the runtime session locator). */
-function uiWorkspaceOf(ctx: ClientContext): { openSession(target: string): void } | undefined {
+/**
+ * The uiWorkspace read (spike-1 §2.2: openSession is the runtime session
+ * locator). The native API's target IS `SessionId | SubagentAddress` — the
+ * widened param is the honest face (M4 2.7: the Interface 6 channel's
+ * subagent path rides the SAME one write path through this reader).
+ */
+export function uiWorkspaceOf(ctx: ClientContext): { openSession(target: string | LineageSubagentAddress): void } | undefined {
   let candidate: unknown
   try {
     candidate = ctx.get('uiWorkspace', false)

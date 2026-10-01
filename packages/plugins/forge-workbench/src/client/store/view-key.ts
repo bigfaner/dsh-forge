@@ -1,51 +1,56 @@
 /**
- * The view-key state machine (task 3.3) — the single addressing authority for
- * the dual-view switch. The upstream SPA has no router (M1 spike-3), so pages
- * address by VIEW KEY (page-map §Pages): the top level is the dual view
- * (`session` = the inherited upstream GUI, `workbench` = this plugin), and the
- * workbench interior addresses by `workbench/<page>` keys. State gates, not
- * routes, carry the equivalence (no URL, no reload).
+ * The view-key state machine (task 3.3; M4 task 1.7 retired the workbench
+ * tab family) — the single addressing authority for the dual-view switch.
+ * The upstream SPA has no router (M1 spike-3), so pages address by VIEW KEY
+ * (page-map §Pages): the top level is the dual view (`session` = the
+ * inherited upstream GUI — the `project` workbench under 裁决 T1 —,
+ * `workbench` = this plugin's overview ESCAPE DOOR), and the workbench
+ * interior is a SINGLE page: `workbench/overview` (SC5 过渡载体; the
+ * tasks/features/proposals `:slug` keys were retired with Integration 6 —
+ * those boards re-home into the rightbar pane family in P2). State gates,
+ * not routes, carry the equivalence (no URL, no reload).
  *
  * Both navigation forms (upstream slot path / fallback rail) drive THIS
  * machine — any interaction divergence between the forms is a defect (task
  * Hard Rules, decision D3). The machine is a plain observable store
- * (getSnapshot/subscribe, the HostObservable currency): the slot registration
- * exposes it as an inject-hooks source (framework-synthesized `useViewKey`
- * selector) and the rail reads it directly.
+ * (getSnapshot/subscribe, the HostObservable currency): the slot
+ * registration and the rail read it directly.
  *
- * Persistence (AC4): the last top-level view and its workbench tab survive a
- * restart through localStorage (the upstream `dsh.*` snapshot-store
- * precedent, e.g. `dsh.sessions.current`); a first boot with no stored value
- * defaults to the session view. The feature-detail and proposal-detail slugs
- * stay session-scoped (page-map keeps the breadcrumbs in 会话期), so they are
- * never persisted.
+ * Persistence (AC4): the last top-level view survives a restart through
+ * localStorage (the upstream `dsh.*` snapshot-store precedent, e.g.
+ * `dsh.sessions.current`); a first boot with no stored value defaults to
+ * the session view. The persisted `workbenchTab` member keeps its shape so
+ * stored projections written by M2/M3 sessions (which may name a RETIRED
+ * tab) hydrate safely: the guard resets any non-member tab to
+ * `workbench/overview` — old localStorage never throws, never resurrects a
+ * retired view.
  */
 
-/** The top-level dual view: the inherited upstream GUI or this workbench. */
+/** The top-level dual view: the inherited upstream GUI or the workbench escape door. */
 export type TopLevelView = 'session' | 'workbench'
 
-/** The four workbench tabs (page-map view keys, ui-design tab 条). */
-export type WorkbenchTabKey =
-  | 'workbench/overview'
-  | 'workbench/proposals'
-  | 'workbench/tasks'
-  | 'workbench/features'
+/**
+ * The workbench interior's single view key (M4 task 1.7): the overview
+ * escape door — `workbench/overview` is the whole interior, so the type has
+ * exactly one member. The retired M2/M3 keys (`workbench/tasks`,
+ * `workbench/features`, `workbench/proposals[:slug]`) are no longer members:
+ * `isWorkbenchTabKey` rejects them, hydrate resets them.
+ */
+export type WorkbenchTabKey = 'workbench/overview'
 
 /**
- * Every workbench tab, in tab-strip order — M3 revision (PRD Navigation
- * Architecture, 2026-09-23 裁决): 概览 / 提案 / Feature / 任务 — the proposals
- * board second, Feature third, tasks LAST; the M2 order was
- * 概览 / 任务 / feature. Stored projections from M2 stay VALID (every key it
- * ever persisted remains a member), so the reorder needs no migration.
+ * The workbench tab set — the escape door alone (Integration 6: VIEW_MOUNT_TABLE
+ * 无死键; the boards live in the rightbar pane family / P2 hosts).
  */
 export const WORKBENCH_TABS: readonly WorkbenchTabKey[] = [
-  'workbench/overview', 'workbench/proposals', 'workbench/features', 'workbench/tasks',
+  'workbench/overview',
 ]
 
 /**
- * Reserved key prefix for the 5.x dialog overlays (`workbench/dialog/<name>`:
+ * Reserved key prefix for the dialog overlays (`workbench/dialog/<name>`:
  * wizard, confirmations, launch errors). Reserved as key grammar + a mapping
- * entry only — dialog transitions land with the views that own them.
+ * entry only — the register wizard still mounts in the escape door's dialog
+ * layer.
  */
 export const WORKBENCH_DIALOG_PREFIX = 'workbench/dialog/'
 
@@ -58,25 +63,18 @@ export function isWorkbenchTabKey(value: unknown): value is WorkbenchTabKey {
 export interface ViewKeySnapshot {
   /** Active top-level view (`session` also covers non-workbench global panels: the dual view is binary). */
   readonly view: TopLevelView
-  /** Active workbench tab; survives 会话⇄工作台 switches (ui-design keeps workbench view state in session memory). */
-  readonly workbenchTab: WorkbenchTabKey
-  /** Active feature-detail subview slug, or undefined on a plain tab (session-scoped, never persisted). */
-  readonly featureSlug: string | undefined
   /**
-   * Active proposal-detail subview slug (task 5.5, page-map 提案看板 Route
-   * Parameters), or undefined on the plain board. Session-scoped exactly like
-   * {@link featureSlug} — never persisted — and cleared by the same
-   * tab-action rule (the subview return stack).
+   * Active workbench tab; the escape door is the only member, so this is
+   * constant `'workbench/overview'` — the field keeps the persisted
+   * projection's shape stable across the M4 retirement.
    */
-  readonly proposalSlug?: string | undefined
+  readonly workbenchTab: WorkbenchTabKey
 }
 
-/** First-boot / reset state: the session view on the overview tab (AC4). */
+/** First-boot / reset state: the session view on the overview escape door (AC4). */
 export const INITIAL_VIEW_KEY: ViewKeySnapshot = Object.freeze({
   view: 'session',
   workbenchTab: 'workbench/overview',
-  featureSlug: undefined,
-  proposalSlug: undefined,
 })
 
 /** The persisted projection of the machine (what survives a restart). */
@@ -141,7 +139,9 @@ export function createLocalStoragePersistence(): ViewKeyPersistence {
 
 /**
  * Validate a persisted projection back into a snapshot: unknown or corrupt
- * values reset to the first-boot default (never throw on stored data).
+ * values reset to the first-boot default (never throw on stored data). A
+ * stored tab naming a RETIRED M2/M3 key is "unknown" under the shrunk
+ * grammar — the escape door wins (the retire-in-place hydration contract).
  * @param persisted - the value persistence read (may be malformed).
  * @returns the hydrated initial snapshot.
  */
@@ -157,8 +157,6 @@ export function hydratePersistedViewKey(persisted: unknown): ViewKeySnapshot {
     workbenchTab: isWorkbenchTabKey(candidate.workbenchTab)
       ? candidate.workbenchTab
       : 'workbench/overview',
-    featureSlug: undefined,
-    proposalSlug: undefined,
   })
 }
 
@@ -168,21 +166,10 @@ export interface ViewKeyStore {
   getSnapshot(): ViewKeySnapshot
   /** Subscribe to transitions (called after the snapshot changed). */
   subscribe(listener: () => void): () => void
-  /** Switch to the session (upstream) view; the workbench tab is retained. */
+  /** Switch to the session (upstream) view. */
   selectSession(): void
-  /** Switch to the workbench view, optionally targeting a tab. */
-  selectWorkbench(tab?: WorkbenchTabKey): void
-  /** Switch the workbench interior tab (leaves the workbench view). */
-  selectWorkbenchTab(tab: WorkbenchTabKey): void
-  /** Open a feature-detail subview (the features tab with a slug). */
-  openFeatureDetail(slug: string): void
-  /**
-   * Open a proposal-detail subview (task 5.5): the proposals tab carrying a
-   * slug — the machine's own subview-addressing transition for the UF5 board,
-   * the exact feature-detail discipline. The return trip is
-   * `selectWorkbenchTab('workbench/proposals')` (the machine clears the slug).
-   */
-  openProposalDetail(slug: string): void
+  /** Switch to the workbench escape door (the overview single page). */
+  selectWorkbench(): void
   /**
    * Adopt a top-level view the carrier already reflects (external selection:
    * upstream sidebar row, panel lifecycle). Same state space as select* —
@@ -203,10 +190,7 @@ export function createViewKeyStore(persistence?: ViewKeyPersistence): ViewKeySto
   const listeners = new Set<() => void>()
 
   const commit = (next: ViewKeySnapshot): void => {
-    if (next.view === snapshot.view
-      && next.workbenchTab === snapshot.workbenchTab
-      && next.featureSlug === snapshot.featureSlug
-      && next.proposalSlug === snapshot.proposalSlug) return
+    if (next.view === snapshot.view && next.workbenchTab === snapshot.workbenchTab) return
     snapshot = Object.freeze(next)
     persist.write({ view: snapshot.view, workbenchTab: snapshot.workbenchTab })
     for (const listener of [...listeners]) listener()
@@ -221,42 +205,9 @@ export function createViewKeyStore(persistence?: ViewKeyPersistence): ViewKeySto
     selectSession(): void {
       commit({ ...snapshot, view: 'session' })
     },
-    selectWorkbench(tab?: WorkbenchTabKey): void {
-      commit({
-        view: 'workbench',
-        workbenchTab: tab ?? snapshot.workbenchTab,
-        featureSlug: tab === undefined ? snapshot.featureSlug : undefined,
-        proposalSlug: tab === undefined ? snapshot.proposalSlug : undefined,
-      })
-    },
-    selectWorkbenchTab(tab: WorkbenchTabKey): void {
-      // The tab strip is the top of BOTH subview return stacks: any tab
-      // action pops the feature detail AND the proposal detail (re-selecting
-      // a tab from its own :slug subview is the breadcrumb-return contract).
-      commit({
-        view: 'workbench',
-        workbenchTab: tab,
-        featureSlug: undefined,
-        proposalSlug: undefined,
-      })
-    },
-    openFeatureDetail(slug: string): void {
-      // Entering the features page pops the proposals subview stack like
-      // every cross-page transition (the 提案 tab is the board's return path).
-      commit({
-        view: 'workbench',
-        workbenchTab: 'workbench/features',
-        featureSlug: slug,
-        proposalSlug: undefined,
-      })
-    },
-    openProposalDetail(slug: string): void {
-      commit({
-        view: 'workbench',
-        workbenchTab: 'workbench/proposals',
-        featureSlug: undefined,
-        proposalSlug: slug,
-      })
+    selectWorkbench(): void {
+      // The interior is the single overview page — no tab dimension to carry.
+      commit({ view: 'workbench', workbenchTab: 'workbench/overview' })
     },
     adoptView(view: TopLevelView): void {
       commit({ ...snapshot, view })

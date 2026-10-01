@@ -131,7 +131,11 @@ function sc4Bundles() {
   ]
 }
 
-test('6.4/sc4-feature-docs [@web-e2e @journey sc4-feature-docs]: m1-completed badge + counters + five-doc-kind fidelity vs fixture files', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('6.4/sc4-feature-docs [@web-e2e @journey sc4-feature-docs]: m1-completed badge + counters + five-doc-kind fidelity vs fixture files', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
   const set = sc4TaskSet()

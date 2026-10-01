@@ -1,18 +1,30 @@
 /**
- * The UF2 tasks tab's COMPLETION assembly (task 5.15, Implementation Notes
- * file): the component the shell now mounts on the tasks seat — it swaps the
- * 5.5/5.8 build-stage page's mocked data plane for the REAL IPC chain (mock
- * 全撤 in the real host: no mock twin ever executes when the dshForge bridge
- * is live).
+ * The 任务看板 assembled view (task 5.15; M4 2.1 re-homed HOST-AGNOSTIC —
+ * tech-design §Integration #5): the board mounts in TWO hosts, and this
+ * component carries ZERO host knowledge of its own (去 TabBar/视图键耦合 —
+ * no view-key import, no chrome assumption; the retired `workbench/tasks`
+ * main-panel seat is gone since 1.7). The hosts:
+ *
+ *   the rightbar pane (2.2, `TabKind='board'`) — injects `host="pane"` (the
+ *     width breakpoint: the board's fixed-geometry chrome contracts to the
+ *     board's own box) and feeds `projectId` from the ACTIVE project;
+ *   the detached window (4.3, `view='board'`) — the default `host="window"`
+ *     (the M2/M3 geometry verbatim) with `projectId` PINNED to the source
+ *     project (不随主窗激活指针 — the prop is the board's only project
+ *     source; nothing here reads an active-project pointer).
+ *
+ * It swaps the 5.5/5.8 build-stage page's mocked data plane for the REAL IPC
+ * chain (mock 全撤 in the real host: no mock twin ever executes when the
+ * dshForge bridge is live).
  *
  * Form selection (one rule, no page knowledge — the OverviewView/FeaturesView
  * precedent):
- *   seat present (the shell's `taskBoard` prop — the explicit test/build
- *     injection) or bridge ABSENT (jsdom / hostless mounts)
+ *   seat present (the explicit test/build injection) or bridge ABSENT (jsdom /
+ *     hostless mounts)
  *       → TaskBoardPage on the injected/mock faces, exactly the 5.5/5.8
  *         behavior;
- *   bridge live and no seat (the real desktop host), projectId still
- *     unresolved (the chrome's first getState in flight)
+ *   bridge live and no seat (the real host), projectId still unresolved (the
+ *     host's first getState in flight)
  *       → the resolving skeleton (the tab page owns its loading branch —
  *         never the build-stage mock fixtures, never an error flash);
  *   bridge live, no seat, project resolved
@@ -46,17 +58,32 @@ import {
   createIpcDispatchFace, createIpcTaskDetailFace, getWorkbenchIpcBridge,
 } from '../../ipc/workbench'
 import type { WorkbenchIpcBridge } from '../../ipc/workbench'
+import type { BoardHostForm } from './launch/LaunchStates'
 import {
   createTaskBoardStore, INITIAL_TASK_BOARD_SNAPSHOT, type TaskBoardStore,
 } from '../../store/task-board'
 import { TaskBoardPage } from '../TaskBoardPage'
+import type { EnterSessionSeam } from './detail/LinkHistory'
 
 /** Inputs of {@link TasksView}. */
 export interface TasksViewProps {
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   t: (key: WorkbenchKey) => string
-  /** The active project the board reads (the Interface 1 verb argument). */
+  /**
+   * The project the board reads (the Interface 1 verb argument) — the board's
+   * ONLY project source (M4 2.1 双宿主): the pane host feeds the ACTIVE
+   * project's id; the detached-window host PINS the source project's id
+   * (不随主窗激活指针 — a main-window activation change never re-points that
+   * board; a project switch is a re-key, i.e. a NEW mount).
+   */
   projectId?: string | undefined
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主 — injected, never probed):
+   * 'window' (default) = the detached window's window-grade geometry verbatim;
+   * 'pane' = the rightbar pane's narrow form (the docks/float bar contract to
+   * the board's own box). See {@link BoardHostForm}.
+   */
+  host?: BoardHostForm | undefined
   /** The active project's codeRoot (the UF5 entries' launch ref, 5.11). */
   codeRoot?: string | undefined
   /** The UF3 selection seam OBSERVATION (the assembly's per-activation hook). */
@@ -67,6 +94,18 @@ export interface TasksViewProps {
   onLaunched?: SessionLaunchHandover | undefined
   /** The board session store (5.11 AC3/AC4): the plugin-lifetime memory. */
   session?: BoardSessionStore | undefined
+  /**
+   * The C5 [打开] dual-channel seam (M4 2.7): the Interface 6 channel behind
+   * the 挂接历史 rows' [打开] (顶层 sessionId / subagent SubagentAddress). A
+   * rejecting promise return surfaces the section's open-failed toast.
+   */
+  onEnterSession?: EnterSessionSeam | undefined
+  /**
+   * The upstream sessions source (M4 2.9): the C5 lineage seat's data leg —
+   * present = the detail dock's 挂接历史 rows gain the 行展开 face; absent =
+   * the section keeps its M2/M3 informational form (the seam discipline).
+   */
+  sessions?: import('../../nav/project-seat').SessionsFace | undefined
 }
 
 /** The view's column geometry (the page's container twin). */
@@ -95,10 +134,11 @@ export function TasksView(props: TasksViewProps) {
   const [bridge] = useState<WorkbenchIpcBridge | undefined>(() => getWorkbenchIpcBridge())
   const seatForm = props.seat !== undefined || bridge === undefined
 
-  // The real chain's fixed identities: one store per view mount (the shell
-  // re-keys the view per active project — a project switch is a NEW store,
-  // the page-session scope the feature-board store set) + the dock's IPC
-  // face. The store subscribes its event leg AT CREATION (the page's
+  // The real chain's fixed identities: one store per view mount (the HOST
+  // re-keys the view per project — the pane host on active-project switches,
+  // the detached window never; a project switch is a NEW store, the
+  // page-session scope the feature-board store set) + the dock's IPC face.
+  // The store subscribes its event leg AT CREATION (the page's
   // lifetime subscription) and detaches on unmount.
   const [store] = useState<TaskBoardStore | undefined>(() =>
     seatForm || props.projectId === undefined ? undefined : createTaskBoardStore(bridge, props.projectId))
@@ -137,6 +177,7 @@ export function TasksView(props: TasksViewProps) {
       <TaskBoardPage
         t={props.t}
         projectId={props.projectId}
+        host={props.host}
         codeRoot={props.codeRoot}
         onSelect={props.onSelect}
         face={props.seat?.face}
@@ -144,6 +185,7 @@ export function TasksView(props: TasksViewProps) {
         dispatchFace={props.seat?.dispatchFace}
         {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
         {...(props.session === undefined ? {} : { session: props.session })}
+        {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
       />
     )
   }
@@ -168,13 +210,14 @@ export function TasksView(props: TasksViewProps) {
   }
 
   // The real chain: the store-backed board face + the IPC detail face over
-  // the resolved active project; the store's publishes re-feed the page
+  // the resolved project; the store's publishes re-feed the page
   // through reloadToken (rows update in place — never a remount). Since 3.9
   // the dispatch face rides along (the UF1 orchestration surface).
   return (
     <TaskBoardPage
       t={props.t}
       projectId={props.projectId}
+      host={props.host}
       codeRoot={props.codeRoot}
       onSelect={props.onSelect}
       face={boardFace}
@@ -183,6 +226,8 @@ export function TasksView(props: TasksViewProps) {
       reloadToken={reloadToken}
       {...(props.onLaunched === undefined ? {} : { onLaunched: props.onLaunched })}
       {...(props.session === undefined ? {} : { session: props.session })}
+      {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
+      {...(props.sessions === undefined ? {} : { sessions: props.sessions })}
     />
   )
 }

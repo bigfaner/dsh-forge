@@ -12,7 +12,6 @@ import {
 } from '../src/client/mocks/workbench.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
 import type { Project, WorkbenchState } from '../src/client/ipc-types.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.3 — the UF1 overview page BUILD units (mocked face; 5.14 wires the
 // IPC verbs). AC map:
@@ -466,32 +465,9 @@ describe('OverviewPage: the UF6 plugin-section seat (5.12 fills it)', () => {
   })
 })
 
-describe('WorkbenchShell: the overview mount + assembly seat (5.1 → 5.3)', () => {
-  /** A controllable view face (the chrome.spec pattern). */
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench',
-      workbenchTab: 'workbench/overview',
-      featureSlug: undefined,
-      ...initial,
-    }
-    const selectWorkbenchTab = vi.fn((tab: WorkbenchTabKey) => {
-      snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-    })
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab,
-        openFeatureDetail: (slug: string) => {
-          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
-        },
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-    }
-  }
-
-  it('mounts the page inside the reserved overview container (each tab owns its page since 5.9)', async () => {
-    const face = makeViewFace()
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
+describe('WorkbenchShell: the overview escape door mount + assembly seat (5.1 → 5.3; M4 1.7)', () => {
+  it('mounts the page inside the reserved overview container (the escape door IS the interior)', async () => {
+    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} />)
     const seat = document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]') as HTMLElement
     await waitFor(() => {
       expect(seat.querySelector('[data-dsh-forge-overview]')).not.toBeNull()
@@ -502,10 +478,9 @@ describe('WorkbenchShell: the overview mount + assembly seat (5.1 → 5.3)', () 
 
   it('the page register CTA fires the shell addProject seam (the 5.4 wizard entry)', async () => {
     const addProject = vi.fn()
-    const face = makeViewFace()
     render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props} addProject={addProject}
+        t={t.en as WorkbenchShellProps['t']} addProject={addProject}
         overview={{ face: { loadState: async () => MOCK_EMPTY_WORKBENCH_STATE } }}
       />,
     )
@@ -517,10 +492,9 @@ describe('WorkbenchShell: the overview mount + assembly seat (5.1 → 5.3)', () 
   })
 
   it('the overview seat passes the 5.14 signals through (lostProjectIds → error card)', async () => {
-    const face = makeViewFace()
     render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props}
+        t={t.en as WorkbenchShellProps['t']}
         overview={{ lostProjectIds: [ACTIVE_ID] }}
       />,
     )

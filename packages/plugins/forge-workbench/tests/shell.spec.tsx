@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchPanelIcon } from '../src/client/WorkbenchPanelIcon.tsx'
 import { WorkbenchShell, VIEW_MOUNT_TABLE, resolveViewMount } from '../src/client/WorkbenchShell.tsx'
-import { MOCK_WORKBENCH_STATE } from '../src/client/mocks/workbench.ts'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
+
+// M4 task 1.7 (旧视图退役, tech-design §Integration #6): the `workbench`
+// main panel is the OVERVIEW ESCAPE DOOR single page — the VIEW_MOUNT_TABLE
+// carries no dead keys, the M2/M3 chrome (top bar / tab strip / project
+// switcher / state gate) renders nowhere, the UF1 overview assembly mounts
+// in the reserved container (SC5 过渡载体), and the panel-lifecycle
+// notifications still fire on mount/unmount.
 
 // The upstream icons/dots resolve through the module table at runtime
 // (browser bundle); the npm node entry carries undeclared transitive deps
@@ -18,16 +23,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
 }))
 
-// Since 5.6 the tasks tab's DEFAULT view is the DAG — the real ReactFlow
-// needs d3-zoom + ResizeObserver (absent in jsdom), so the shell renders
-// that mount through the lib-boundary standin (real engine rides e2e).
-vi.mock('@xyflow/react', async () => await import('./helpers/xyflow-standin'))
-
-// Task 3.2 AC2 (the slot shell renders — placeholder + flow provider + `t`
-// seat) extended by task 3.3: the view face drives the tab strip
-// (role=tab/aria-selected, AC6) and the view-key → container mapping table
-// (AC5); the panel-lifecycle notifications fire on mount/unmount.
-
 type Dict = Record<WorkbenchKey, string>
 
 /** Translate bound like the locale face does (t(key, params)). */
@@ -35,133 +30,62 @@ const bind = (dict: Dict) => (key: WorkbenchKey): string => dict[key]
 
 const t = { en: bind(en), zh: bind(zh) }
 
-/**
- * A controllable view face: `set` mutates the snapshot the selector reads,
- * `selectWorkbenchTab` / `openFeatureDetail` record the shell's actions (the
- * store side of the transitions lives in the controller specs).
- */
-function makeFace(initial: Partial<ViewKeySnapshot> = {}): {
-  props: Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail' | 'openProposalDetail'>
-} {
-  let snapshot: ViewKeySnapshot = {
-    view: 'workbench',
-    workbenchTab: 'workbench/overview',
-    featureSlug: undefined,
-    proposalSlug: undefined,
-    ...initial,
-  }
-  return {
-    props: {
-      useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-      selectWorkbenchTab: (tab: WorkbenchTabKey) => {
-        snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined, proposalSlug: undefined }
-      },
-      openFeatureDetail: (slug: string) => {
-        snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug, proposalSlug: undefined }
-      },
-      openProposalDetail: (slug: string) => {
-        snapshot = { ...snapshot, workbenchTab: 'workbench/proposals', proposalSlug: slug, featureSlug: undefined }
-      },
-    },
-  }
-}
-
 afterEach(() => cleanup())
 
-describe('WorkbenchShell: the 3.2 container, view-key driven (AC5)', () => {
-  it('renders the shell title, the tab strip, and the UF4 feature board on the features seat', async () => {
-    // Tasks 5.3/5.5/5.9 filled all three seats (their own suites cover the
-    // overview/tasks mounts) — the features tab now carries the UF4 page
-    // (the 3.2 placeholder retired with it), over the shared mock registry's
-    // ACTIVE project (no state gate).
-    const face = makeFace({ workbenchTab: 'workbench/features' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(screen.getByText(en['shell.title'])).toBeDefined()
-    await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-feature-card="dsh-forge-m2"]')).not.toBeNull()
-    })
-    expect(document.querySelector('[data-dsh-forge-plugin="forge-workbench"]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-forge-shell]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-forge-tabs]')).not.toBeNull()
-  })
-
-  it('reads the locale seat — the same component renders zh copy (tabs included)', () => {
-    const face = makeFace()
-    render(<WorkbenchShell t={t.zh as WorkbenchShellProps['t']} {...face.props} />)
-    expect(screen.getByText(zh['shell.title'])).toBeDefined()
-    expect(screen.getByText(zh['tab.overview'])).toBeDefined()
-    expect(screen.getByText(zh['tab.features'])).toBeDefined()
-  })
-
-  it('reserves every page-map view key in the mapping table (5.x mount points + 5.5 proposals family)', () => {
+describe('WorkbenchShell: the M4 1.7 escape door — mount table 无死键', () => {
+  it('reserves exactly the surviving view keys in the mapping table (孤儿视图清零 unit 口径)', () => {
+    // The retired keys (workbench/tasks|features|proposals[:slug]) are gone:
+    // the table is the escape door's single interior page + the dialog
+    // family — the assertion basis the 1.8 e2e migration consumes.
     expect(Object.keys(VIEW_MOUNT_TABLE)).toEqual([
       'workbench/overview',
-      'workbench/proposals',
-      'workbench/tasks',
-      'workbench/features',
-      'workbench/features/:slug',
-      'workbench/proposals/:slug',
       'workbench/dialog/*',
     ])
-    expect(resolveViewMount('workbench/overview', undefined)).toBe('dsh-forge-view-overview')
-    expect(resolveViewMount('workbench/proposals', undefined)).toBe('dsh-forge-view-proposals')
-    expect(resolveViewMount('workbench/tasks', undefined)).toBe('dsh-forge-view-tasks')
-    expect(resolveViewMount('workbench/features', undefined)).toBe('dsh-forge-view-features')
-    expect(resolveViewMount('workbench/features', 'dsh-forge-m2')).toBe('dsh-forge-view-feature-detail')
-    expect(resolveViewMount('workbench/proposals', undefined, 'dsh-forge-m2')).toBe('dsh-forge-view-proposal-detail')
+    expect(resolveViewMount('workbench/overview')).toBe('dsh-forge-view-overview')
   })
 
-  it('mounts the container the active view key addresses — a tab switch swaps it', () => {
-    const face = makeFace()
-    const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).not.toBeNull()
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false'])
-    // The tab action performs the machine transition (mutation here mirrors
-    // the controller's), then the selector re-reads on rerender. tabs[1] is
-    // now the SECOND tab — the proposals board (M3 order).
-    ;(tabs[1] as HTMLButtonElement).click()
-    view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposals"]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeNull()
-    expect(
-      (document.querySelector('[data-dsh-forge-tab="workbench/proposals"]') as HTMLElement).getAttribute('aria-selected'),
-    ).toBe('true')
+  it('renders the overview page in its reserved container over the shared mock registry (build form)', async () => {
+    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} />)
+    expect(document.querySelector('[data-dsh-forge-plugin="forge-workbench"]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-shell]')).not.toBeNull()
+    const seat = document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]') as HTMLElement
+    expect(seat).not.toBeNull()
+    await waitFor(() => {
+      expect(seat.querySelector('[data-dsh-forge-overview]')).not.toBeNull()
+    })
+    // The page runs its own mock twin: the populated fixture's cards appear.
+    expect(seat.querySelectorAll('[data-dsh-forge-project-card]')).toHaveLength(2)
   })
 
-  it('the feature-detail subview addresses its own reserved container', () => {
-    const face = makeFace({ workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m2' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-feature-detail"]')).not.toBeNull()
+  it('renders NO retired chrome: no tab strip, no top bar, no switcher, no gate (一次性替换, 不留双轨)', () => {
+    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} />)
+    expect(document.querySelector('[data-dsh-forge-tabs]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-tab]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-topbar]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-add-project]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-switcher]')).toBeNull()
+    expect(document.querySelector('[data-dsh-forge-gate]')).toBeNull()
+    // The retired view keys address nothing: no board containers exist.
+    for (const retired of ['dsh-forge-view-tasks', 'dsh-forge-view-features', 'dsh-forge-view-proposals']) {
+      expect(document.querySelector(`[data-dsh-forge-view="${retired}"]`)).toBeNull()
+    }
   })
 
-  it('the proposal-detail subview addresses its own reserved container (5.5)', () => {
-    const face = makeFace({ workbenchTab: 'workbench/proposals', proposalSlug: 'dsh-forge-m2' })
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-proposal-detail"]')).not.toBeNull()
+  it('reads the locale seat — the same component renders zh copy', async () => {
+    render(<WorkbenchShell t={t.zh as WorkbenchShellProps['t']} />)
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-overview]')).not.toBeNull()
+    })
   })
 })
 
-describe('WorkbenchShell: aria and lifecycle (AC6)', () => {
-  it('exposes the tab strip with role=tablist and aria-selected per ui-design global rules', () => {
-    const face = makeFace()
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    const list = document.querySelector('[data-dsh-forge-tabs]')
-    expect(list?.getAttribute('role')).toBe('tablist')
-    expect(list?.getAttribute('aria-label')).toBe(en['tabs.label'])
-    const tasksTab = document.querySelector('[data-dsh-forge-tab="workbench/tasks"]') as HTMLButtonElement
-    expect(tasksTab.getAttribute('role')).toBe('tab')
-    expect(tasksTab.getAttribute('aria-selected')).toBe('false')
-    expect(tasksTab.textContent).toBe(en['tab.tasks'])
-  })
-
-  it('fires notifyPresented on mount and notifyDismissed on unmount (external-selection sync)', () => {
+describe('WorkbenchShell: panel lifecycle (AC6, external-selection sync)', () => {
+  it('fires notifyPresented on mount and notifyDismissed on unmount', () => {
     const notifyPresented = vi.fn()
     const notifyDismissed = vi.fn()
-    const face = makeFace()
     const view = render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props}
+        t={t.en as WorkbenchShellProps['t']}
         notifyPresented={notifyPresented} notifyDismissed={notifyDismissed}
       />,
     )
@@ -169,41 +93,6 @@ describe('WorkbenchShell: aria and lifecycle (AC6)', () => {
     expect(notifyDismissed).not.toHaveBeenCalled()
     view.unmount()
     expect(notifyDismissed).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('WorkbenchShell: project switch retires the feature-detail selection (6.4 SC5-2)', () => {
-  it('an active-project change fires the tab action that clears the slug; same-project rerenders and slug-less switches never do', () => {
-    const projects = MOCK_WORKBENCH_STATE.projects
-    let snapshot: ViewKeySnapshot = { view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'demo-slug' }
-    const selectWorkbenchTab = vi.fn()
-    const props = {
-      useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-      selectWorkbenchTab,
-      openFeatureDetail: (slug: string) => { snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug } },
-      workbenchState: { ...MOCK_WORKBENCH_STATE, activeProjectId: projects[0].id },
-      activateProject: vi.fn(),
-      addProject: vi.fn(),
-    }
-    const view = render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...props} />)
-    // First resolution (undefined → id) arms the tracker; nothing to clear yet.
-    expect(selectWorkbenchTab).not.toHaveBeenCalled()
-
-    // Same project, different slug (a fresh detail open): NOT a switch.
-    snapshot = { ...snapshot, featureSlug: 'another-slug' }
-    view.rerender(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...props} />)
-    expect(selectWorkbenchTab).not.toHaveBeenCalled()
-
-    // The switch: the machine's own slug-clearing transition (tab action)
-    // fires with the CURRENT tab retained.
-    view.rerender(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...props}
-        workbenchState={{ ...MOCK_WORKBENCH_STATE, activeProjectId: projects[1].id }}
-      />,
-    )
-    expect(selectWorkbenchTab).toHaveBeenCalledTimes(1)
-    expect(selectWorkbenchTab).toHaveBeenCalledWith('workbench/features')
   })
 })
 

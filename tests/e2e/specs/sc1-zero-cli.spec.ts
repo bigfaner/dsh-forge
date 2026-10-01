@@ -48,6 +48,7 @@ import { freshUserDataDir, launchWorkbenchShell } from '../helpers/app.ts'
 import type { PluginShell } from '../../../apps/desktop/e2e/helpers/plugins.ts'
 import { zh } from '../../../packages/plugins/forge-workbench/src/client/locale/zh.ts'
 import { en } from '../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
+import { openBoardPane } from './_lib/journey-world.ts'
 
 // ---------------------------------------------------------------------------
 // Constants: the 15 mandatory skills (PRD 技能迁移划分表), status labels, budgets
@@ -326,7 +327,7 @@ test('sc1/zero-cli: wizard migration → board dispatch → stub subagent → to
     assertSkillsResolve(shell.profileDir)
 
     // ---- AC-1 注册(向导迁移路径)----------------------------------------
-    await page.locator('[data-dsh-forge-add-project]').click()
+    await page.locator('[data-dsh-forge-overview-register]').click() // 1.8 起注册入口 = 概览空态 CTA
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(corpus.codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -359,9 +360,25 @@ test('sc1/zero-cli: wizard migration → board dispatch → stub subagent → to
     await expect(card).toBeVisible({ timeout: 30_000 })
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
+    // 2.10 右栏宿主 store 推送位(同 bootAppWorld):裸 card-activate 不发
+    // project_list_changed —— 同值 renameProject(纯 DB)推列表变更,概览/
+    // 看板 pane 绑定的 active-project store 随之重读。
+    await page.evaluate(async () => {
+      const bridge = (globalThis as { dshForge?: { workbench?: {
+        getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+        renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+      } } }).dshForge?.workbench
+      if (bridge === undefined) return
+      const state = await bridge.getState()
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      await bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+
 
     // ---- AC-1 派发(看板)------------------------------------------------
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await expect(page.locator('[data-dsh-forge-dispatch-entry]'), '派发入口在场(有可派发任务)').toBeVisible({ timeout: 20_000 })
     await expect(page.locator(`[data-dsh-forge-node-card="${target.key}"]`)).toBeVisible({ timeout: 20_000 })
 

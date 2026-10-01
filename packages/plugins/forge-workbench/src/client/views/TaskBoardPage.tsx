@@ -1,12 +1,13 @@
 /**
- * The UF2 任务看板 page, BUILD half (task 5.5): the page the shell mounts
- * into its reserved `workbench/tasks` seat — the four-state machine the
- * tech-design test plan demands (loading 骨架 / empty 空态卡 / error 重试卡 /
- * populated) over the Interface 1 DTOs through the TaskBoardFace seam. The
- * build stage defaults to the shared mock twin
- * (mocks/workbench.createMockTaskBoardFace); the 5.15 assembly task injects
- * the IPC verbs + the real event push. No IPC runtime is touched here (the
- * 5.x BUILD layering rule).
+ * The UF2 任务看板 page, BUILD half (task 5.5): the board's interior page —
+ * since M4 2.1 mounted by {@link TasksView} in either host (the rightbar
+ * pane / the detached window; the retired `workbench/tasks` main-panel seat
+ * is gone since 1.7) — the four-state machine the tech-design test plan
+ * demands (loading 骨架 / empty 空态卡 / error 重试卡 / populated) over the
+ * Interface 1 DTOs through the TaskBoardFace seam. The build stage defaults
+ * to the shared mock twin (mocks/workbench.createMockTaskBoardFace); the
+ * 5.15 assembly task injects the IPC verbs + the real event push. No IPC
+ * runtime is touched here (the 5.x BUILD layering rule).
  *
  * Scope of this half (the task split): the toolbar + the three views —
  * 视图 A 依赖树 (5.6, the DEFAULT per ui-design) / 视图 B 状态分组 / 视图 C
@@ -54,13 +55,16 @@ import { createMockTaskBoardFace } from '../mocks/workbench'
 import { createSelectedTaskStore } from '../store/selected-task'
 import type { BoardSessionStore } from '../store/board-session'
 import { fillTemplate } from './overview/format'
+import { lineageSnapshotOf } from '../lineage'
 import {
   DEFAULT_BOARD_FILTER, TaskToolbar, type BoardFilterState, type BoardSortKey, type BoardViewKey,
 } from './tasks/TaskToolbar'
 import { DepTreeView } from './tasks/DepTreeView'
 import { StatusBoard } from './tasks/StatusBoard'
 import { TaskList } from './tasks/TaskList'
-import { TaskDetailPanel, DETAIL_DOCK_WIDTH, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import { TaskDetailPanel, type TaskDetailDispatchMount } from './tasks/TaskDetailPanel'
+import { isThenable } from './tasks/detail/LinkHistory'
+import { detailDockWidthOf, type BoardHostForm } from './tasks/launch/LaunchStates'
 import type { DagDecorMount } from './tasks/dag/build-graph'
 import { hasDispatchableEntry, type DispatchVerbs } from './tasks/dispatch/selection-mode'
 import { DetailJumpButton, SelectionCheckbox, SelectionLayer, useDispatchSelection } from './tasks/dispatch/SelectionLayer'
@@ -158,10 +162,18 @@ export function featureSlugsOf(tasks: readonly TaskSummary[]): string[] {
 
 /** Inputs of {@link TaskBoardPage}. */
 export interface TaskBoardPageProps {
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   t: (key: WorkbenchKey) => string
   /** The active project the board reads (the Interface 1 verb argument). */
   projectId?: string | undefined
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主 — injected, never probed;
+   * TasksView threads it through both assembly forms): 'window' (default) =
+   * the M2/M3 geometry verbatim; 'pane' = the side docks, the float bar, and
+   * this page's dock-open flow inset contract to the board's own box. See
+   * {@link BoardHostForm} / {@link detailDockWidthOf}.
+   */
+  host?: BoardHostForm | undefined
   /**
    * The active project's codeRoot — present mounts the dock's UF5
    * panel-primary launch entry AND the DAG node cards' hover triggers (5.11).
@@ -175,6 +187,14 @@ export interface TaskBoardPageProps {
   detailFace?: Partial<TaskDetailFace> | undefined
   /** The session jump hand-over (5.11; M3 6.1: the dispatch chain's 「进入会话」 seam). */
   onLaunched?: import('../contract').SessionLaunchHandover | undefined
+  /**
+   * The C5 [打开] dual-channel seam (M4 2.7, Interface 6): present = the
+   * 挂接历史 rows' [打开] goes live over the real channel (顶层 sessionId /
+   * subagent SubagentAddress; a rejecting promise surfaces the section's
+   * open-failed toast), AND the orchestration section's 「进入会话」 falls
+   * back to it when the M3 hand-over seat is absent (the pane host).
+   */
+  onEnterSession?: ((target: import('./tasks/detail/LinkHistory').SessionOpenTarget) => void | Promise<unknown>) | undefined
   /**
    * The board session store (5.11 AC3/AC4): present = the plugin-lifetime
    * selection/scroll/badge memory (survives the launch round-trip's shell
@@ -199,6 +219,14 @@ export interface TaskBoardPageProps {
    * inject the mock twin through this prop).
    */
   dispatchFace?: Partial<DispatchFace> | undefined
+  /**
+   * The upstream sessions source (M4 2.9 — the C5 lineage seat's data leg):
+   * present = the detail dock's 挂接历史 rows gain the 行展开 face over the
+   * guarded snapshot read (a PRESENT seat with an absent snapshot = the
+   * inference-degraded form, 仅顶层 + 「不可用」); absent = the section keeps
+   * its M2/M3 informational form (the seam discipline).
+   */
+  sessions?: import('../nav/project-seat').SessionsFace | undefined
 }
 
 /**
@@ -364,6 +392,24 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     props.session?.subscribeLinks ?? (() => () => {}),
     props.session?.getActiveLinks ?? (() => NO_ACTIVE_LINKS),
   )
+
+  // The C5 lineage seat's data leg (M4 2.9 — the SC7 消费点 wiring): the
+  // upstream list snapshot rides the store's OWN identity (stable per set),
+  // and the guarded read (lineageSnapshotOf — absent/malformed → undefined =
+  // the inference-degraded form) re-derives per tick. A PRESENT seat is what
+  // turns the 挂接历史 rows expandable; the sessions SERVICE absent keeps the
+  // seat absent too (the M2/M3 informational form, the seam discipline).
+  const sessionsSource = props.sessions
+  const EMPTY_SESSIONS_LIST = useMemo(() => ({ ids: [] as string[], byId: {} }), [])
+  const sessionsList = useSyncExternalStore(
+    sessionsSource?.subscribe ?? (() => () => {}),
+    sessionsSource?.getSnapshot ?? (() => EMPTY_SESSIONS_LIST),
+  )
+  const linkLineage = useMemo<import('./tasks/TaskDetailPanel').TaskDetailPanelProps['linkLineage']>(() => {
+    if (sessionsSource === undefined) return undefined
+    void sessionsList // the store's tick drives the re-derivation
+    return { snapshot: lineageSnapshotOf({ list: { getSnapshot: () => sessionsList } }) }
+  }, [sessionsSource, sessionsList])
 
   // Outside-close arbitration (5.8): the dock closes on outside pointerdowns
   // EXCEPT presses on a board SELECTABLE — ui-design UF2 makes 点击节点/行 the
@@ -552,7 +598,8 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     // subscribes per active project; undefined projectId accepts all — the
     // build-stage page has no real project binding yet).
     const mine = (event: WorkbenchEvent): boolean =>
-      projectIdRef.current === undefined || event.projectId === projectIdRef.current
+      projectIdRef.current === undefined
+      || ('projectId' in event && event.projectId === projectIdRef.current)
     // The UF1 orchestration reflux (task 3.9, ≤5s 免手动刷新): dispatch_updated
     // drives the 编排角标谱 — rows re-read in place (attribute-level: the
     // views keep their filter/scroll/focus state), the announcement rides
@@ -717,24 +764,37 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
   // 「进入会话」(the orchestration section's subagent jump): the M1 view-switch
   // contract rides the hand-over seat (切会话视图 + session locating), and the
   // 运行中徽标 write rides along (AC3/AC2: back on the board, the badge reads
-  // correctly off the store, unmount-surviving).
+  // correctly off the store, unmount-surviving). M4 2.7: a host WITHOUT the
+  // hand-over seat (the rightbar pane) rides the Interface 6 channel seam
+  // instead — same navigation, same badge write (this enter is
+  // fire-and-forget: a channel rejection is swallowed PER-SITE below — the
+  // affordance-level toast rides the M6 收口 — while the dock's OWN [打开]
+  // rows catch the same seam's rejecting return and toast).
   const handleEnterSession = useCallback((sessionId: string): void => {
     if (props.projectId === undefined || props.codeRoot === undefined) return
     const taskKey = selectedRef.current.taskKey
     if (taskKey === undefined) return
     const task = allTasks.find(candidate => candidate.key === taskKey)
     if (task === undefined) return
-    props.onLaunched?.(sessionId, {
-      projectId: props.projectId,
-      codeRoot: props.codeRoot,
-      featureSlug: task.featureSlug,
-      localId: localIdOf(task.key),
-      title: task.title,
-    })
+    if (props.onLaunched !== undefined) {
+      props.onLaunched(sessionId, {
+        projectId: props.projectId,
+        codeRoot: props.codeRoot,
+        featureSlug: task.featureSlug,
+        localId: localIdOf(task.key),
+        title: task.title,
+      })
+    } else {
+      // Fire-and-forget enter: swallow the channel's rejection per-site (an
+      // unhandled renderer rejection would crash the board host); the C5
+      // dock's [打开] rows are the same seam's toast-carrying face.
+      const entering = props.onEnterSession?.(sessionId)
+      if (entering !== undefined && isThenable(entering)) entering.catch(() => {})
+    }
     if (props.session !== undefined) {
       props.session.markLinkActive(props.projectId, taskKey, sessionId)
     }
-  }, [props.projectId, props.codeRoot, props.onLaunched, props.session, allTasks])
+  }, [props.projectId, props.codeRoot, props.onLaunched, props.onEnterSession, props.session, allTasks])
 
   // The 编排角标谱's per-task state: the LATEST row per task (redispatch
   // mints a new row — latest-by-dispatchedAt is the live orchestration).
@@ -811,6 +871,11 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
 
   const populated = phase === 'ready' && board !== undefined && allTasks.length > 0
   const noMatch = populated && visibleTasks.length === 0
+  // The host-form dock width (M4 2.1): the window form keeps the UF3 geometry
+  // verbatim; the pane form caps the strip at the board's own box — the inset
+  // below and BOTH docks (TaskDetailPanel + ApprovalPanel) share this one
+  // mapping so the strip and the overlay can never disagree.
+  const dockWidth = detailDockWidthOf(props.host ?? 'window')
 
   // The active view panel (A/B/C — one tabpanel at a time, each labelled back
   // by its toolbar tab; view A is the DAG, default since 5.6). Since 3.9 the
@@ -822,6 +887,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
     <SelectionLayer
       controller={selectionController}
       t={props.t}
+      host={props.host}
       onOpenDetail={handleOpenDetailFromSelection}
     >
       {view === 'tree'
@@ -889,7 +955,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
         // close — the views shrink, they never slide under the overlay (the
         // minWidth 0 chain + B's own overflowX keep horizontal scrolling sane).
         // Since 3.9 EITHER dock (detail OR approval — 同层互斥) claims the strip.
-        ...(selected.open || approvalDockOpen ? { paddingRight: DETAIL_DOCK_WIDTH } : {}),
+        ...(selected.open || approvalDockOpen ? { paddingRight: dockWidth } : {}),
       }}
     >
       {phase === 'loading' && (
@@ -1005,13 +1071,16 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
             t={props.t}
             taskKey={selected.open ? (selected.taskKey ?? null) : null}
             projectId={props.projectId}
+            host={props.host}
             codeRoot={props.codeRoot}
             reloadToken={detailReload}
             face={props.detailFace}
+            linkLineage={linkLineage}
             {...(selected.taskKey === undefined
               ? {}
               : { activeSessionId: activeLinks.get(selected.taskKey) })}
             {...(props.session === undefined ? {} : { onLinksLoaded: handleLinksLoaded })}
+            {...(props.onEnterSession === undefined ? {} : { onEnterSession: props.onEnterSession })}
             onClose={handleCloseDock}
             onNavigate={handleNavigate}
             {...(detailDispatchMount === undefined ? {} : { dispatch: detailDispatchMount })}
@@ -1025,6 +1094,7 @@ export function TaskBoardPage(props: TaskBoardPageProps) {
           <ApprovalPanel
             controller={approvals}
             t={props.t}
+            host={props.host}
             titleOf={taskKey => allTasks.find(task => task.key === taskKey)?.title}
             onOpenDetail={openDetailFromApproval}
           />

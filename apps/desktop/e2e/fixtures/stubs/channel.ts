@@ -61,6 +61,13 @@ export interface ChannelStub {
   readPrompts(): ChannelStubEntry[]
   /** The end-event marker: appends the third journal state. */
   markSessionEnded(sessionId: string): void
+  /**
+   * Raw test-side journal append (M4 2.9): observation rows the TEST half owns
+   * (the lineage-corpus 对拍 rows) — the same stream discipline as
+   * {@link markSessionEnded}, generalized over looser kinds than the channel's
+   * own three.
+   */
+  appendJournal(entry: { readonly kind: string } & Record<string, unknown>): void
 }
 
 /**
@@ -72,7 +79,7 @@ export function createChannelStub(dir: string): ChannelStub {
   writeFileSync(join(dir, 'control.json'), `${JSON.stringify({}, undefined, 2)}\n`)
   writeFileSync(join(dir, 'journal.jsonl'), '')
   const journalPath = join(dir, 'journal.jsonl')
-  const appendJournal = (entry: ChannelStubEntry): void => {
+  const appendJournal = (entry: { readonly kind: string } & Record<string, unknown>): void => {
     const existing = readFileSync(journalPath, 'utf8')
     writeFileSync(journalPath, `${existing}${JSON.stringify(entry)}\n`)
   }
@@ -101,5 +108,6 @@ export function createChannelStub(dir: string): ChannelStub {
       return this.readJournal().filter(entry => entry.kind === 'prompt')
     },
     markSessionEnded: (sessionId) => { appendJournal({ kind: 'session-ended', at: new Date().toISOString(), sessionId }) },
+    appendJournal: (entry) => { appendJournal(entry) },
   }
 }

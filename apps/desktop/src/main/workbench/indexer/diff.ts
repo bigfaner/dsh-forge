@@ -12,7 +12,9 @@
 // 纯函数层:不触 db、不触 fs —— 分类单测无需库与 fixture(库级端到端在
 // scan 集成用例覆盖)。
 
-import type { ChangeSource, DispatchState, DocKind, FeatureStatus, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
+import type { ProjectionPlan } from '../projection/plan.ts'
+import type { DeviationRow } from '../projection/diff.ts'
+import type { ChangeSource, DispatchState, DocKind, FeatureStatus, ProjectionState, TaskSnapshot, FeatureSnapshot, SyncState } from '../repos/types.ts'
 
 /**
  * Interface 1 WorkbenchEvent(indexer 产出的变更事件;2.6 watcher 经
@@ -86,6 +88,37 @@ export type WorkbenchEvent =
     readonly projectId: string
     readonly featureSlug: string
   }
+  // M4 v3(任务 1.3;tech-design §Interface 1 事件 v3 扩展):项目中心域信号。
+  // project_list_changed = 注册/改名/归档/恢复/移除任何改变项目列表(或其
+  // 行内容)的动词完成通知(载荷 {},消费面重拉 listProjects/getState);
+  // projection_push_required = 投影期望 push 请求(relay 消费,Interface 2)。
+  // 1.3 的 registerProject 成功即发 projection_push_required 占位 plan
+  // (单 ensure op;3.x 投影全链接管 plan 组装与 reorder/delete 扩展)。
+  | { readonly type: 'project_list_changed' }
+  | {
+    readonly type: 'projection_push_required'
+    readonly projectId: string
+    readonly plan: ProjectionPlan
+  }
+  // M4 v3(任务 3.2;tech-design §Interface 1 事件 v3 扩展·投影段):投影域
+  // 状态回流 projection_updated { projectId, state, deviations? } —— 对账
+  // 重算(reconcile_match/reconcile_drift)与 relay 回填(push_succeeded/
+  // push_failed)驱动的状态机迁移通知;仅实际迁移发(幂等自旋零噪音),
+  // 偏差明细非空随行(对账重算物化,不落表 —— T2)。
+  | {
+    readonly type: 'projection_updated'
+    readonly projectId: string
+    readonly state: ProjectionState
+    /** 偏差明细(drift 迁移时非空随行;renamed/deleted/reordered)。 */
+    readonly deviations?: readonly DeviationRow[]
+  }
+
+// —— M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序
+//    = ensure → rename → reorder → delete,幂等全量重推)——
+// 1.3 期声明于本文件;自 3.1 起唯一权威声明移至 projection/plan.ts(投影
+// 域内核),此处 re-export 维持事件面引用与既有导入路径不变(单源无漂移)。
+
+export type { ProjectionOp, ProjectionPlan } from '../projection/plan.ts'
 
 // —— M3 v2 事件词表(任务 1.4 起;tech-design §Interface 1 事件扩展)——
 

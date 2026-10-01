@@ -36,6 +36,7 @@ describe('CopyKey union coverage', () => {
       'toast.manualSwitch', 'toast.notifyDisabled',
       'tray.quit', 'tray.show',
       'update.aria.close', 'update.viewRelease',
+      'window.view.board', 'window.view.conversation', 'window.archivedSuffix',
     ].sort())
   })
 

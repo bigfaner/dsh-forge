@@ -14,6 +14,11 @@ import { REFLOW_BUDGET_MS, assertSkillsResolve, freshRoot, measureReflow, openKe
 import { buildMainWorld, SESS_FEATURE, TASK_1 } from './harness.ts'
 
 const RECORD_MARK = 'sess-ops smoke 执行记录锚点。'
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
 
 test('smoke/session-native-ops-skill-addressing: 只读查询(看板同口径)→ claim(actor 审计 + ≤5s 回流)→ 记录先落 + submit(终态 + 记录渲染 + 三方一致)→ 15 技能扁平名解析(仓零新增)', async ({ }, testInfo) => {
   testInfo.setTimeout(900_000)

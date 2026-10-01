@@ -46,7 +46,7 @@ import {
 import type { BundleEntry } from '../../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../../fixtures/forge-project.ts'
 import { generateTaskSet } from '../../fixtures/task-generator.ts'
-import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from './helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes, openBoardPane } from './helpers/restart-app.ts'
 
 /** hello-world 的 staged tarball 通道(3.2 scaffold 同款约定,journey 自带)。 */
 const HELLO_WORLD_STAGED_AT = 'plugin-tarballs/dsh-forge-plugin-hello-world-0.1.0.tgz'
@@ -114,6 +114,8 @@ function readOverlay(overlayPath: string): { disabled: string[] } | undefined {
   return JSON.parse(readFileSync(overlayPath, 'utf8')) as { disabled: string[] }
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('6.5/sc6-plugin-model [@web-e2e @journey sc6-plugin-model]: mandatory rows carry no disable channel + malformed-overlay guard + third-party toggle roundtrip', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
@@ -267,12 +269,12 @@ test('6.5/sc6-plugin-model [@web-e2e @journey sc6-plugin-model]: mandatory rows 
 
         // 工作台核心不受影响:已注册项目的看板照常渲染。
         await switchToWorkbench(page)
-        await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-        await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+        await openBoardPane(page)
+        await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
         await waitForTreeNodes(page, set.facts.taskCount, 60_000)
 
         // 启用(直接动词,无确认)→ 行态翻转 + 覆盖文件清空。
-        await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+        await switchToWorkbench(page)
         await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeVisible()
         const helloRow = page.locator(`[data-dsh-forge-plugin-row="${HELLO_WORLD}"]`)
         await expect(helloRow).toBeVisible({ timeout: 30_000 })

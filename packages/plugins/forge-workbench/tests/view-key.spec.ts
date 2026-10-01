@@ -5,10 +5,14 @@ import {
 } from '../src/client/store/view-key.ts'
 import type { PersistedViewKey, ViewKeyPersistence } from '../src/client/store/view-key.ts'
 
-// Task 3.3 AC4 + page-map 视图键寻址: the state machine owns the dual-view
-// addressing both navigation forms share. Persistence (restart 回到上次视图),
-// first-boot default (首次启动默认会话视图), retention (工作台 tab 在切出后保留),
-// and the reserved key grammar are all machine-level contracts.
+// Task 3.3 AC4 + page-map 视图键寻址, M4 task 1.7 收口后: the state machine
+// owns the dual-view addressing both navigation forms share — the top-level
+// 会话⇄工作台 switch over an interior that is the overview ESCAPE DOOR
+// alone (Integration 6 retired the tasks/features/proposals `[:slug]` tab
+// family). Persistence (restart 回到上次视图), first-boot default (首次启动
+// 默认会话视图), and the retire-in-place hydration guard (old localStorage
+// naming a retired tab must reset, never throw, never resurrect the view)
+// are machine-level contracts.
 
 /** In-memory persistence double with readable written values. */
 function memoryPersistence(initial?: PersistedViewKey): ViewKeyPersistence & { written: PersistedViewKey[] } {
@@ -21,22 +25,23 @@ function memoryPersistence(initial?: PersistedViewKey): ViewKeyPersistence & { w
   }
 }
 
-describe('view-key machine: first boot and defaults (AC4)', () => {
-  it('defaults to the session view on the overview tab when nothing is persisted', () => {
+describe('view-key machine: first boot and the retired grammar (AC4 / Integration 6)', () => {
+  it('defaults to the session view on the overview escape door when nothing is persisted', () => {
     const store = createViewKeyStore(memoryPersistence())
     expect(store.getSnapshot()).toEqual(INITIAL_VIEW_KEY)
     expect(store.getSnapshot().view).toBe('session')
   })
 
-  it('reserves the key grammar: the four M3 tabs in strip order plus the dialog prefix', () => {
-    // M3 revision (task 5.5, PRD Navigation Architecture): 概览/提案/Feature/任务
-    // — the proposals board second, Feature third, tasks last.
-    expect(WORKBENCH_TABS).toEqual([
-      'workbench/overview', 'workbench/proposals', 'workbench/features', 'workbench/tasks',
-    ])
+  it('reserves the shrunk key grammar: the escape door alone plus the dialog prefix — no retired tab keys', () => {
+    // 孤儿视图清零 (unit-level assertion口径, 供 1.8 e2e 消费): the machine's
+    // interior state space is exactly the escape door; every M2/M3 tab key
+    // is a non-member.
+    expect(WORKBENCH_TABS).toEqual(['workbench/overview'])
     expect(WORKBENCH_DIALOG_PREFIX).toBe('workbench/dialog/')
-    expect(isWorkbenchTabKey('workbench/proposals')).toBe(true)
-    expect(isWorkbenchTabKey('workbench/tasks')).toBe(true)
+    expect(isWorkbenchTabKey('workbench/overview')).toBe(true)
+    for (const retired of ['workbench/tasks', 'workbench/features', 'workbench/proposals']) {
+      expect(isWorkbenchTabKey(retired)).toBe(false)
+    }
     expect(isWorkbenchTabKey('workbench/dialog/wizard')).toBe(false)
     expect(isWorkbenchTabKey('session')).toBe(false)
   })
@@ -54,56 +59,13 @@ describe('view-key machine: transitions (AC1/AC2 domain)', () => {
     expect(persistence.written.at(-1)).toEqual({ view: 'session', workbenchTab: 'workbench/overview' })
   })
 
-  it('retains the workbench tab across a switch-out (会话期内存保留, ui-design)', () => {
+  it('the workbench interior is the escape door single page on every entry', () => {
     const store = createViewKeyStore(memoryPersistence())
-    store.selectWorkbench('workbench/tasks')
-    store.selectSession()
-    expect(store.getSnapshot()).toEqual({ view: 'session', workbenchTab: 'workbench/tasks', featureSlug: undefined })
     store.selectWorkbench()
-    expect(store.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/tasks', featureSlug: undefined })
-  })
-
-  it('tab switches target the workbench view and clear the feature subview; detail opens set it', () => {
-    const store = createViewKeyStore(memoryPersistence())
-    store.selectWorkbenchTab('workbench/features')
-    expect(store.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined })
-    store.openFeatureDetail('dsh-forge-m2')
-    expect(store.getSnapshot()).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m2',
-    })
-    store.selectWorkbenchTab('workbench/overview')
-    expect(store.getSnapshot().featureSlug).toBeUndefined()
-  })
-
-  it('proposal detail rides the same subview discipline (5.5): open sets the slug, tab actions clear it', () => {
-    const persistence = memoryPersistence()
-    const store = createViewKeyStore(persistence)
-    store.selectWorkbench('workbench/proposals')
-    store.openProposalDetail('dsh-forge-m2')
-    expect(store.getSnapshot()).toEqual({
-      view: 'workbench',
-      workbenchTab: 'workbench/proposals',
-      featureSlug: undefined,
-      proposalSlug: 'dsh-forge-m2',
-    })
-    // Session-scoped: the persisted projection keeps only the tab (never the slug).
-    expect(persistence.written.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/proposals' })
-    // The breadcrumb return: re-selecting the proposals tab clears the slug.
-    store.selectWorkbenchTab('workbench/proposals')
-    expect(store.getSnapshot().proposalSlug).toBeUndefined()
-    // The 互跳 origin path: a proposal detail survives the session round trip
-    // (selectSession keeps the whole interior), and entering the features
-    // page pops the proposals subview stack (the 提案 tab is the return path).
-    store.openProposalDetail('skill-marketplace')
+    expect(store.getSnapshot().workbenchTab).toBe('workbench/overview')
     store.selectSession()
     store.selectWorkbench()
-    expect(store.getSnapshot().proposalSlug).toBe('skill-marketplace')
-    store.openFeatureDetail('dsh-forge-m3')
-    expect(store.getSnapshot()).toMatchObject({ workbenchTab: 'workbench/features', proposalSlug: undefined })
-    // Every tab action clears BOTH subview stacks (the M2 rule, extended).
-    store.openProposalDetail('forge-tui')
-    store.selectWorkbenchTab('workbench/tasks')
-    expect(store.getSnapshot()).toMatchObject({ proposalSlug: undefined, featureSlug: undefined })
+    expect(store.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
   })
 
   it('adopts an external top-level view through the same transition path', () => {
@@ -128,36 +90,40 @@ describe('view-key machine: transitions (AC1/AC2 domain)', () => {
   })
 })
 
-describe('view-key machine: restart persistence and hostile input (AC4)', () => {
+describe('view-key machine: restart persistence and hostile input (AC4 + the 1.7 retire guard)', () => {
   it('hydrates a valid persisted projection: 重启回到上次视图', () => {
-    const store = createViewKeyStore(memoryPersistence({ view: 'workbench', workbenchTab: 'workbench/features' }))
-    expect(store.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined })
+    const store = createViewKeyStore(memoryPersistence({ view: 'workbench', workbenchTab: 'workbench/overview' }))
+    expect(store.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
+  })
+
+  it('retire-in-place: a stored tab naming a RETIRED M2/M3 key resets to the escape door, never resurrects the view', () => {
+    // localStorage 兼容 under the shrunk grammar (Integration 6): old stored
+    // projections ({view:'workbench', workbenchTab:'workbench/tasks'} from an
+    // M2/M3 session) hydrate to the overview escape door — the whole
+    // projection never resets when the view itself is valid.
+    for (const retired of ['workbench/tasks', 'workbench/features', 'workbench/proposals']) {
+      expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: retired }))
+        .toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
+    }
   })
 
   it('resets hostile input safely: unknown view resets the whole projection; unknown tab defaults the tab', () => {
     expect(hydratePersistedViewKey({ view: 'plugins', workbenchTab: 'workbench/tasks' })).toEqual(INITIAL_VIEW_KEY)
     // A VALID view with an unknown/corrupt tab recovers the closest safe
-    // state: the workbench view on the default tab, never a half-reset.
+    // state: the workbench view on the escape door, never a half-reset.
     expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/dialog/wizard' })).toEqual(
       { ...INITIAL_VIEW_KEY, view: 'workbench' },
     )
     expect(hydratePersistedViewKey('not-an-object')).toEqual(INITIAL_VIEW_KEY)
     expect(hydratePersistedViewKey(null)).toEqual(INITIAL_VIEW_KEY)
-    expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/features' }).view).toBe('workbench')
-    // The M3 key set hydrates like any M2 key (localStorage 兼容: old stored
-    // values stay valid under the new order — no migration needed).
-    expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/proposals' }))
-      .toEqual({ ...INITIAL_VIEW_KEY, view: 'workbench', workbenchTab: 'workbench/proposals' })
-    expect(hydratePersistedViewKey({ view: 'workbench', workbenchTab: 'workbench/tasks' }).workbenchTab)
-      .toBe('workbench/tasks')
   })
 
   it('persists through localStorage under the dsh.* key, surviving store recreation', () => {
     const persistence = createLocalStoragePersistence()
     // Node context: no localStorage — the in-memory shadow still round-trips.
-    createViewKeyStore(persistence).selectWorkbench('workbench/tasks')
+    createViewKeyStore(persistence).selectWorkbench()
     const reborn = createViewKeyStore(persistence)
-    expect(reborn.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/tasks', featureSlug: undefined })
+    expect(reborn.getSnapshot()).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
     expect(VIEW_KEY_STORAGE_KEY).toBe('dsh.forge.workbench.view')
   })
 })

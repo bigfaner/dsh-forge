@@ -45,10 +45,15 @@ test.describe.serial('task-dispatch-execution-loop / step 4: 确认预合成专�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 三要素在场(标识 + oracle + 锚点),无自跑合成调用。
   test('step4/success: detail panel presynth markers + oracle four-piece + three-element anchors (protocol / stage asset / effective pref 62%)', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -105,7 +110,7 @@ test.describe.serial('task-dispatch-execution-loop / step 4: 确认预合成专�
   // Outcome "summary-updated-new-dispatch" — 资产覆盖更新 → 新派发反映最新;既有行不追溯。
   test('step4/summary-updated-new-dispatch: overwritten stage asset → new dispatch anchors the same file with the LATEST content; the old row prompt_hash is untouched', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 

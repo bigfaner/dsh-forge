@@ -147,6 +147,8 @@ function sc3Bundles() {
   ]
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('6.3/sc3-reflow-source [@web-e2e @journey sc3-reflow-source]: ≤5s reflow with source attribution + ended-link retrospection', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 

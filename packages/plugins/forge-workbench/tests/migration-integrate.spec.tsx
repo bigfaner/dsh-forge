@@ -51,16 +51,19 @@ const PROJECT_MIGRATABLE: Project = {
   id: 'p-mig', displayName: 'legacy-forge', codeRoot: 'Z:/repo/legacy-forge',
   docLocationType: 'in_repo', docLocationPath: null,
   createdAt: '2026-09-01T00:00:00.000Z', lastActivatedAt: null,
+  archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
 }
 const PROJECT_MIGRATED: Project = {
   id: 'p-done', displayName: 'moved-on', codeRoot: 'Z:/repo/moved-on',
   docLocationType: 'in_repo', docLocationPath: null,
   createdAt: '2026-09-01T00:00:00.000Z', lastActivatedAt: null,
+  archived: false, sortOrder: 1, projectionState: 'pending', docsPlacement: 'repo-existing',
 }
 const PROJECT_BARE: Project = {
   id: 'p-bare', displayName: 'fresh-start', codeRoot: 'Z:/repo/fresh-start',
   docLocationType: 'in_repo', docLocationPath: null,
   createdAt: '2026-09-01T00:00:00.000Z', lastActivatedAt: null,
+  archived: false, sortOrder: 2, projectionState: 'pending', docsPlacement: 'repo-existing',
 }
 const STATE: WorkbenchState = {
   projects: [PROJECT_MIGRATABLE, PROJECT_MIGRATED, PROJECT_BARE],

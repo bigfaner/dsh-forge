@@ -7,18 +7,30 @@
 /** Dictionary key union of the workbench namespace (LocaleNamespaceMap merge target). */
 export type WorkbenchKey =
   | 'panel'
-  | 'shell.title'
+  | 'panel.project'
+  | 'project.empty.title'
+  | 'project.empty.body'
+  | 'project.toast.registered'
+  | 'project.toast.located'
+  // M4 task 3.5 — C8 归宿②③ lifecycle GUI (dialogs + toasts + C2 banner).
+  | 'project.toast.renamed'
+  | 'project.toast.archived'
+  | 'project.toast.restored'
+  | 'project.toast.removed'
+  | 'project.toast.actionFailed'
+  | 'project.archive.title'
+  | 'project.archive.promise'
+  | 'project.archive.confirm'
+  | 'project.remove.title'
+  | 'project.remove.promise'
+  | 'project.remove.confirm'
+  | 'project.dialog.cancel'
+  | 'project.banner.archived'
+  | 'project.banner.restore'
+  | 'project.banner.remove'
   | 'view.session'
   | 'rail.label'
-  | 'tabs.label'
-  | 'tab.overview'
-  | 'tab.proposals'
-  | 'tab.tasks'
-  | 'tab.features'
   | 'chrome.addProject'
-  | 'switcher.label'
-  | 'switcher.empty'
-  | 'switcher.emptyHint'
   | 'gate.title'
   | 'gate.body'
   | 'gate.register'
@@ -356,6 +368,16 @@ export type WorkbenchKey =
   | 'detail.links.active'
   | 'detail.links.ended'
   | 'detail.links.enter'
+  | 'detail.links.open'
+  | 'detail.links.launch'
+  | 'detail.links.launch.terminal'
+  | 'detail.links.lineage.unavailable'
+  | 'detail.links.lineage.expand'
+  | 'detail.links.lineage.collapse'
+  | 'detail.links.descendants.empty'
+  | 'detail.links.descendants.more'
+  | 'detail.links.openFailed'
+  | 'detail.links.openFailed.dismiss'
   | 'detail.launch.reserved'
   | 'features.loading'
   | 'features.loadError.title'
@@ -474,22 +496,207 @@ export type WorkbenchKey =
   | 'proposals.status.accepted'
   | 'proposals.status.rejected'
   | 'proposals.status.superseded'
+  | 'tree.label'
+  | 'tree.search.placeholder'
+  | 'tree.search.open'
+  | 'tree.search.exit'
+  | 'tree.viewOptions'
+  | 'tree.viewOptions.group'
+  | 'tree.viewOptions.group.tree'
+  | 'tree.viewOptions.group.byProject'
+  | 'tree.viewOptions.group.flat'
+  | 'tree.viewOptions.sort'
+  | 'tree.viewOptions.sort.manual'
+  | 'tree.viewOptions.sort.recent'
+  | 'tree.session.menu'
+  | 'tree.session.rename'
+  | 'tree.session.fork'
+  | 'tree.session.archive'
+  | 'tree.project.menu'
+  | 'tree.project.rename'
+  | 'tree.project.archive'
+  | 'tree.project.remove'
+  | 'tree.project.restore'
+  | 'tree.project.renameInput'
+  | 'tree.project.newSession'
+  | 'tree.project.expand'
+  | 'tree.project.collapse'
+  | 'tree.archivedSection'
+  | 'tree.archivedBadge'
+  | 'tree.overflow.expand'
+  | 'tree.overflow.collapse'
+  | 'tree.ungrouped'
+  | 'tree.ungrouped.adopt'
+  | 'tree.empty.title'
+  | 'tree.empty.newSession'
+  | 'tree.degraded'
+  | 'tree.dot.awaitingInput'
+  | 'tree.dot.running'
+  | 'tree.dot.subagentRunning'
+  | 'tree.dot.subagentRunningCount'
+  | 'tree.caret.expand'
+  | 'tree.caret.collapse'
+  | 'tree.time.justNow'
+  | 'tree.time.minutes'
+  | 'tree.time.hours'
+  | 'tree.time.days'
+  | 'tree.rail.collapse'
+  | 'tree.rail.newSession'
+  | 'tree.rail.search'
+  | 'tree.rail.settings'
+  | 'confirmCard.title'
+  | 'confirmCard.subtitle'
+  | 'confirmCard.close'
+  | 'confirmCard.code.label'
+  | 'confirmCard.code.placeholder'
+  | 'confirmCard.code.browse'
+  | 'confirmCard.name.label'
+  | 'confirmCard.name.placeholder'
+  | 'confirmCard.docs.label'
+  | 'confirmCard.docs.edit'
+  | 'confirmCard.trace'
+  | 'confirmCard.advanced.summary'
+  | 'confirmCard.advanced.placeholder'
+  | 'confirmCard.custom.note'
+  | 'confirmCard.custom.pendingAuth'
+  | 'confirmCard.auth.outside'
+  | 'confirmCard.auth.grant'
+  | 'confirmCard.auth.granted'
+  | 'confirmCard.auth.failed'
+  | 'confirmCard.mode.app'
+  | 'confirmCard.mode.appOption'
+  | 'confirmCard.mode.repo-new'
+  | 'confirmCard.mode.repo-newOption'
+  | 'confirmCard.mode.repo-existing'
+  | 'confirmCard.mode.repo-existingOption'
+  | 'confirmCard.mode.custom'
+  | 'confirmCard.docsPath.placeholder'
+  | 'confirmCard.cancel'
+  | 'confirmCard.submit'
+  | 'confirmCard.submit.busy'
+  | 'confirmCard.submit.failed'
+  | 'confirmCard.detect.probing'
+  | 'confirmCard.detect.invalid'
+  | 'confirmCard.detect.registered'
+  | 'confirmCard.detect.missing'
+  | 'confirmCard.detect.notDir'
+  | 'confirmCard.detect.unreadable'
+  | 'confirmCard.detect.parent'
+  | 'confirmCard.detect.git'
+  | 'confirmCard.detect.gitForge'
+  | 'confirmCard.detect.nogit'
+  | 'confirmCard.note.repo-existing'
+  | 'confirmCard.note.repo-new'
+  | 'confirmCard.note.app'
+  | 'rightbar.tab.guide'
+  | 'rightbar.tab.overview'
+  | 'rightbar.tab.board'
+  | 'rightbar.tab.doc'
+  | 'rightbar.tab.depgraph'
+  | 'rightbar.guide.overview.title'
+  | 'rightbar.guide.overview.description'
+  | 'rightbar.guide.terminal.title'
+  | 'rightbar.guide.terminal.description'
+  | 'rightbar.guide.browser.title'
+  | 'rightbar.guide.browser.description'
+  // M4 task 2.7 — Component C6, the subagent 会话·任务元数据条.
+  | 'metadata.taskPrefix'
+  | 'metadata.viewTask'
+  | 'metadata.executing'
+  // M4 task 2.3 — the 项目概览 tab interior (header + sub-tabs + panes).
+  | 'rightbar.overview.subtabs.label'
+  | 'rightbar.overview.subtab.proposals'
+  | 'rightbar.overview.subtab.features'
+  | 'rightbar.overview.subtab.tasks'
+  | 'rightbar.overview.archived'
+  | 'rightbar.overview.meta.workspace'
+  | 'rightbar.overview.meta.codeRoot'
+  | 'rightbar.overview.meta.status'
+  | 'rightbar.overview.meta.activeFeature'
+  | 'rightbar.overview.meta.tasksProgress'
+  | 'rightbar.overview.meta.running'
+  | 'rightbar.overview.doc.open'
+  | 'rightbar.overview.tasks.all'
+  | 'rightbar.overview.tasks.executing'
+  | 'rightbar.overview.tasks.idle'
+  | 'rightbar.overview.tasks.list'
+  | 'rightbar.overview.tasks.empty'
+  | 'rightbar.overview.tasks.gotoSession'
+  // M4 task 3.5 — C8 归宿① the 概览 projection status row (ui-design C8).
+  | 'rightbar.overview.meta.projection'
+  | 'rightbar.overview.projection.healthy'
+  | 'rightbar.overview.projection.degraded'
+  | 'rightbar.overview.projection.deviation'
+  | 'rightbar.overview.projection.pending'
+  | 'rightbar.overview.projection.retry'
+  | 'rightbar.overview.projection.details'
+  | 'rightbar.overview.projection.toastHealthy'
+  | 'projection.deviation.type.renamed'
+  | 'projection.deviation.type.deleted'
+  | 'projection.deviation.type.reordered'
+  | 'projection.deviation.adviceLabel'
+  | 'projection.deviation.advice.renamed'
+  | 'projection.deviation.advice.deleted'
+  | 'projection.deviation.advice.reordered'
+  // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
+  | 'rightbar.doc.readonly'
+  | 'rightbar.doc.reload'
+  | 'rightbar.doc.loading'
+  | 'rightbar.doc.loadError.title'
+  | 'rightbar.doc.loadError.retry'
+  | 'rightbar.depgraph.loading'
+  | 'rightbar.depgraph.loadError.title'
+  | 'rightbar.depgraph.loadError.retry'
+  | 'rightbar.depgraph.feature.label'
+  | 'rightbar.depgraph.feature.none'
+  | 'rightbar.depgraph.tasks.empty'
+  | 'rightbar.depgraph.lane.empty'
+  | 'rightbar.depgraph.mode.label'
+  | 'rightbar.depgraph.mode.dag'
+  | 'rightbar.depgraph.mode.lane'
+  // M4 task 4.4 — Component C9, the 分屏 controls (the [分屏] menu, the pane
+  // 头, and the 分隔条's a11y labels).
+  | 'rightbar.split.menu'
+  | 'rightbar.split.menu.board'
+  | 'rightbar.split.menu.aside'
+  | 'rightbar.split.menu.asideUnavailable'
+  | 'rightbar.split.separator'
+  | 'rightbar.split.pane.board'
+  | 'rightbar.split.pane.sessionAside'
+  | 'rightbar.split.pane.detach'
+  | 'rightbar.split.pane.detachReserved'
+  | 'rightbar.split.pane.close'
+  // M4 task 4.3 — Component C10, the 多窗口 client face (the detached
+  // window's [收回] and the delete flow's windows-closed toast).
+  | 'window.detached.recall'
+  | 'window.toast.projectWindowsClosed'
 
 /** English copy (the fallback locale). */
 export const en: Record<WorkbenchKey, string> = {
   'panel': 'Workbench',
-  'shell.title': 'forge workbench',
+  'panel.project': 'Project',
+  'project.empty.title': 'No projects yet',
+  'project.empty.body': 'Add a code root folder to start the project workbench.',
+  'project.toast.registered': 'Added {name} — switched to it as the active project',
+  'project.toast.located': '{name} is already registered — opened',
+  'project.toast.renamed': 'Renamed to {name}',
+  'project.toast.archived': 'Archived {name}',
+  'project.toast.restored': 'Restored {name}',
+  'project.toast.removed': 'Removed {name} — sessions fell back to ungrouped',
+  'project.toast.actionFailed': 'The action failed — the list refreshes on the next change',
+  'project.archive.title': 'Archive project',
+  'project.archive.promise': 'The dsh workspace stays; sessions remain grouped by project.',
+  'project.archive.confirm': 'Archive',
+  'project.remove.title': 'Delete project',
+  'project.remove.promise': 'The projected workspace is removed; sessions fall back to ungrouped (history is NOT deleted).',
+  'project.remove.confirm': 'Delete',
+  'project.dialog.cancel': 'Cancel',
+  'project.banner.archived': 'Project archived (read-only)',
+  'project.banner.restore': 'Restore',
+  'project.banner.remove': 'Delete',
   'view.session': 'Sessions',
   'rail.label': 'Primary view switch',
-  'tabs.label': 'Workbench views',
-  'tab.overview': 'Overview',
-  'tab.proposals': 'Proposals',
-  'tab.tasks': 'Tasks',
-  'tab.features': 'Features',
   'chrome.addProject': 'Add project',
-  'switcher.label': 'Active project',
-  'switcher.empty': 'No projects yet',
-  'switcher.emptyHint': 'Register a forge project to activate the workbench.',
   'gate.title': 'No active project',
   'gate.body': 'Tasks and features are organized per project. Register a project to unlock these views.',
   'gate.register': 'Register a project',
@@ -827,6 +1034,16 @@ export const en: Record<WorkbenchKey, string> = {
   'detail.links.active': 'Active',
   'detail.links.ended': 'Ended',
   'detail.links.enter': 'Enter session',
+  'detail.links.open': 'Open',
+  'detail.links.launch': 'Launch',
+  'detail.links.launch.terminal': 'The task is in a terminal state — launching a new session is disabled.',
+  'detail.links.lineage.unavailable': 'Unavailable',
+  'detail.links.lineage.expand': 'Expand subagent lineage',
+  'detail.links.lineage.collapse': 'Collapse subagent lineage',
+  'detail.links.descendants.empty': 'No subagent sessions under this link.',
+  'detail.links.descendants.more': 'Show all {n}',
+  'detail.links.openFailed': 'Session not found or already cleaned up.',
+  'detail.links.openFailed.dismiss': 'Dismiss',
   'detail.launch.reserved': 'The session launch entry arrives with task 5.11.',
   'features.loading': 'Loading features…',
   'features.loadError.title': 'Failed to load the feature board',
@@ -951,4 +1168,179 @@ export const en: Record<WorkbenchKey, string> = {
   'proposals.status.accepted': 'Accepted',
   'proposals.status.rejected': 'Rejected',
   'proposals.status.superseded': 'Superseded',
+  // C3 left-rail project tree (task 1.4; ui-design §Component C3 +
+  // workbench-layout-v2 §2 — the ⋯ menu items are the dsh Rows.tsx trio).
+  'tree.label': 'Projects',
+  'tree.search.placeholder': 'Search projects & sessions…',
+  'tree.search.open': 'Search',
+  'tree.search.exit': 'Exit search',
+  'tree.viewOptions': 'View options',
+  'tree.viewOptions.group': 'Grouping',
+  'tree.viewOptions.group.tree': 'By project tree',
+  'tree.viewOptions.group.byProject': 'By project',
+  'tree.viewOptions.group.flat': 'Single list',
+  'tree.viewOptions.sort': 'Sorting',
+  'tree.viewOptions.sort.manual': 'Manual',
+  'tree.viewOptions.sort.recent': 'Recently updated',
+  'tree.session.menu': 'Session menu',
+  'tree.session.rename': 'Rename',
+  'tree.session.fork': 'Fork session',
+  'tree.session.archive': 'Archive session',
+  'tree.project.menu': 'Project menu',
+  'tree.project.rename': 'Rename',
+  'tree.project.archive': 'Archive project',
+  'tree.project.remove': 'Delete project',
+  'tree.project.restore': 'Restore project',
+  'tree.project.renameInput': 'Project name',
+  'tree.project.newSession': 'New session here',
+  'tree.project.expand': 'Expand sessions',
+  'tree.project.collapse': 'Collapse sessions',
+  'tree.archivedSection': 'Archived ({n})',
+  'tree.archivedBadge': 'Archived (read-only)',
+  'tree.overflow.expand': 'Show {n} more sessions',
+  'tree.overflow.collapse': 'Collapse',
+  'tree.ungrouped': 'Ungrouped',
+  'tree.ungrouped.adopt': 'Adopt',
+  'tree.empty.title': 'No sessions yet',
+  'tree.empty.newSession': '+ New session',
+  'tree.degraded': 'Lineage unavailable — top-level sessions only; it restores automatically.',
+  'tree.dot.awaitingInput': 'Awaiting input',
+  'tree.dot.running': 'Running',
+  'tree.dot.subagentRunning': 'Subagent running',
+  'tree.dot.subagentRunningCount': '{n} subagents running',
+  'tree.caret.expand': 'Expand descendants',
+  'tree.caret.collapse': 'Collapse descendants',
+  'tree.time.justNow': 'now',
+  'tree.time.minutes': '{n} min',
+  'tree.time.hours': '{n} h',
+  'tree.time.days': '{n} d',
+  'tree.rail.collapse': 'Expand sidebar',
+  'tree.rail.newSession': 'New session',
+  'tree.rail.search': 'Search',
+  'tree.rail.settings': 'Settings',
+  // C7 添加项目确认卡 (task 1.5; vocabulary: Add project / Docs location)
+  'confirmCard.title': 'Add project',
+  'confirmCard.subtitle': 'Just point at the code folder — the docs location is pre-picked by detection, ✎ to change',
+  'confirmCard.close': 'Close',
+  'confirmCard.code.label': 'Code area',
+  'confirmCard.code.placeholder': 'Drag / paste / browse the code folder',
+  'confirmCard.code.browse': 'Browse…',
+  'confirmCard.name.label': 'Project name',
+  'confirmCard.name.placeholder': 'Folder name, editable',
+  'confirmCard.docs.label': 'Docs location',
+  'confirmCard.docs.edit': 'Change docs location',
+  'confirmCard.trace': 'Process trace · app data directory (this machine, not in git)',
+  'confirmCard.advanced.summary': 'Advanced: custom docs path (outside the code area requires authorization)',
+  'confirmCard.advanced.placeholder': 'Absolute path of a custom docs location',
+  'confirmCard.custom.note': 'Custom docs location',
+  'confirmCard.custom.pendingAuth': ' · authorization pending',
+  'confirmCard.auth.outside': 'Outside the code area — explicit authorization is required before use (advanced custom only)',
+  'confirmCard.auth.grant': 'Authorize this location',
+  'confirmCard.auth.granted': 'Authorized · recheck passed',
+  'confirmCard.auth.failed': 'Authorization recheck failed — the location is unreadable; fix the path and retry',
+  'confirmCard.mode.app': 'App-managed',
+  'confirmCard.mode.appOption': 'App-managed (app data directory, not in git)',
+  'confirmCard.mode.repo-new': 'In repo',
+  'confirmCard.mode.repo-newOption': 'In repo (committed with git, PR-reviewable)',
+  'confirmCard.mode.repo-existing': 'Reuse in-repo',
+  'confirmCard.mode.repo-existingOption': 'Reuse the detected in-repo forge docs',
+  'confirmCard.mode.custom': 'Custom',
+  'confirmCard.docsPath.placeholder': '<code-area>/docs',
+  'confirmCard.cancel': 'Cancel (Esc)',
+  'confirmCard.submit': 'Add project',
+  'confirmCard.submit.busy': 'Adding…',
+  'confirmCard.submit.failed': 'Add failed — kept open in the card to fix (never silent)',
+  'confirmCard.detect.probing': 'Detecting…',
+  'confirmCard.detect.invalid': 'Invalid path — an absolute path is required; bare drives and relative paths are rejected',
+  'confirmCard.detect.registered': 'Already registered — one project per code root',
+  'confirmCard.detect.missing': 'Path does not exist — the code area must be an existing directory (exists · readable are the registration checks; writability is re-checked at runtime, never a gate)',
+  'confirmCard.detect.notDir': 'Path is not a directory — the code area must be an existing directory',
+  'confirmCard.detect.unreadable': 'Directory unreadable — the hard checks are exists + directory + readable',
+  'confirmCard.detect.parent': 'Multiple git repositories under this directory — did you mean one of these:',
+  'confirmCard.detect.git': '✓ git repository',
+  'confirmCard.detect.gitForge': '✓ git repository · forge docs tree detected',
+  'confirmCard.detect.nogit': 'No git detected — git is not required; docs will be app-managed (nothing is written into this directory)',
+  'confirmCard.note.repo-existing': 'Forge docs detected — reusing in-repo (follows git)',
+  'confirmCard.note.repo-new': 'Committed with git · PR-reviewable',
+  'confirmCard.note.app': 'App data directory (this machine) · app-managed, not in git',
+  // M4 task 2.2 — the rightbar forge tabs (kinds + 开始页 cards).
+  'rightbar.tab.guide': 'Start',
+  'rightbar.tab.overview': 'Project overview',
+  'rightbar.tab.board': 'Task board',
+  'rightbar.tab.doc': 'Document',
+  'rightbar.tab.depgraph': 'Dependency graph',
+  'rightbar.guide.overview.title': 'Project overview',
+  'rightbar.guide.overview.description': 'Proposals · features · tasks at a glance',
+  'rightbar.guide.terminal.title': 'New terminal',
+  'rightbar.guide.terminal.description': 'Run commands in the session workspace',
+  'rightbar.guide.browser.title': 'Browser',
+  'rightbar.guide.browser.description': 'Browse HTTP(S) pages',
+  // M4 task 2.3 — the 项目概览 tab interior (header + sub-tabs + panes).
+  'rightbar.overview.subtabs.label': 'Project overview sub-tabs',
+  'rightbar.overview.subtab.proposals': 'Proposals',
+  'rightbar.overview.subtab.features': 'Features',
+  'rightbar.overview.subtab.tasks': 'Tasks',
+  'rightbar.overview.archived': 'Archived',
+  'rightbar.overview.meta.workspace': 'Workspace',
+  'rightbar.overview.meta.codeRoot': 'Code root',
+  'rightbar.overview.meta.status': 'Status',
+  'rightbar.overview.meta.activeFeature': 'Active {slug}',
+  'rightbar.overview.meta.tasksProgress': 'Tasks {completed}/{total}',
+  'rightbar.overview.meta.running': 'Running {count}',
+  'rightbar.overview.doc.open': 'Open in tab',
+  'rightbar.overview.tasks.all': 'All tasks',
+  'rightbar.overview.tasks.executing': 'Executing ({count})',
+  'rightbar.overview.tasks.idle': 'No running task sessions.',
+  'rightbar.overview.tasks.list': 'Task list',
+  'rightbar.overview.tasks.empty': 'No tasks yet.',
+  'rightbar.overview.tasks.gotoSession': 'Go to session',
+  // M4 task 3.5 — C8 归宿① the 概览 projection status row.
+  'rightbar.overview.meta.projection': 'Projection',
+  'rightbar.overview.projection.healthy': 'In sync with the dsh side',
+  'rightbar.overview.projection.degraded': 'Projection sync degraded',
+  'rightbar.overview.projection.deviation': 'Deviations from the dsh side',
+  'rightbar.overview.projection.pending': 'Pending reconcile',
+  'rightbar.overview.projection.retry': 'Retry projection',
+  'rightbar.overview.projection.details': 'Deviations {n}',
+  'rightbar.overview.projection.toastHealthy': 'Projection back in sync',
+  'projection.deviation.type.renamed': 'Renamed',
+  'projection.deviation.type.deleted': 'Deleted',
+  'projection.deviation.type.reordered': 'Reordered',
+  'projection.deviation.adviceLabel': 'Advice',
+  'projection.deviation.advice.renamed': 'Next reconcile rebuilds the index under the new dsh-side name',
+  'projection.deviation.advice.deleted': 'The entry disappears once the snapshot is rebuilt',
+  'projection.deviation.advice.reordered': 'Order follows the dsh side',
+  // M4 task 2.4 — the 文档 tab + 依赖图 tab interiors.
+  'rightbar.doc.readonly': 'Read-only',
+  'rightbar.doc.reload': 'Reload',
+  'rightbar.doc.loading': 'Loading document…',
+  'rightbar.doc.loadError.title': 'Document read failed',
+  'rightbar.doc.loadError.retry': 'Retry',
+  'rightbar.depgraph.loading': 'Loading dependency graph…',
+  'rightbar.depgraph.loadError.title': 'Dependency graph load failed',
+  'rightbar.depgraph.loadError.retry': 'Retry',
+  'rightbar.depgraph.feature.label': 'Select feature (this project only)',
+  'rightbar.depgraph.feature.none': 'No feature yet',
+  'rightbar.depgraph.tasks.empty': 'No tasks in this feature yet.',
+  'rightbar.depgraph.lane.empty': 'No tasks in this status',
+  'rightbar.depgraph.mode.label': 'Dependency graph view mode',
+  'rightbar.depgraph.mode.dag': 'DAG',
+  'rightbar.depgraph.mode.lane': 'Swimlane',
+  // M4 task 4.4 — Component C9, the 分屏 controls.
+  'rightbar.split.menu': 'Split view',
+  'rightbar.split.menu.board': 'Task board',
+  'rightbar.split.menu.aside': 'Session aside',
+  'rightbar.split.menu.asideUnavailable': 'No subagent session to aside yet — open one from a task\'s linked sessions first',
+  'rightbar.split.separator': 'Split ratio',
+  'rightbar.split.pane.board': 'Task board',
+  'rightbar.split.pane.sessionAside': 'Session aside',
+  'rightbar.split.pane.detach': 'Detach to window',
+  'rightbar.split.pane.detachReserved': 'Multi-window arrives with M4 4.3',
+  'rightbar.split.pane.close': 'Close pane',
+  'window.detached.recall': 'Recall',
+  'window.toast.projectWindowsClosed': 'The project was deleted — its detached windows were closed',
+  // M4 task 2.7 — the C6 subagent 会话·任务元数据条 (bound/ambiguous states).
+  'metadata.taskPrefix': 'task',
+  'metadata.viewTask': 'View task',
+  'metadata.executing': 'This session is executing',
 }

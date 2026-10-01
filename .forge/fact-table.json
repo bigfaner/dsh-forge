@@ -969,6 +969,391 @@
       "confidence": "inferred",
       "updated_at": "2026-09-25T00:59:32Z",
       "citation": "apps/desktop/src/main/workbench/store/schema-v2.ts:17-138"
+    },
+    {
+      "fact_id": "FT-098",
+      "source": "static",
+      "subject": "workbench IPC verb whitelist size and M4 additions",
+      "kind": "signature",
+      "value": "62 verbs on dsh-forge:workbench-<kebab> channels; M4 additions: probeProjectPath, renameProject, archiveProject, restoreProject, listProjects, retryProjection, getProjectionStatus, submitWorkspaceSnapshot, reportProjectionOutcome, getProjectUiState, setProjectUiState",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/channel-allowlist.ts:25-146"
+    },
+    {
+      "fact_id": "FT-099",
+      "source": "static",
+      "subject": "shell window verb channels",
+      "kind": "signature",
+      "value": {
+        "openDetached": "dsh-forge:window-open-detached",
+        "getRole": "dsh-forge:window-get-role",
+        "recall": "dsh-forge:window-recall",
+        "eventPush": "dsh-forge:window-changed (main-to-renderer only)"
+      },
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/channels.ts:15-25"
+    },
+    {
+      "fact_id": "FT-100",
+      "source": "static",
+      "subject": "window role typed handshake (detached boot)",
+      "kind": "signature",
+      "value": "WindowRole = {kind:'main'} | {kind:'detached', windowId, projectId, view, target?}; supplied by main-process registry matched on webContents id, never via URL; unknown sender -> null (renderer falls back to main semantics)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/role.ts:16-48"
+    },
+    {
+      "fact_id": "FT-101",
+      "source": "static",
+      "subject": "detached window title format",
+      "kind": "output_format",
+      "value": "「<项目名> · <视图名>[ · 已归档]」; archived suffix rides only the title (window stays usable)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/detached.ts:107-125"
+    },
+    {
+      "fact_id": "FT-102",
+      "source": "static",
+      "subject": "detached window default geometry",
+      "kind": "output_format",
+      "value": "960x640 centered on main window for the first detached window; priority = replay rect > in-process remembered geometry > default",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/detached.ts:29-30,173-191"
+    },
+    {
+      "fact_id": "FT-103",
+      "source": "static",
+      "subject": "OS close equivalence with recall",
+      "kind": "side_effect",
+      "value": "OS title-bar close and windowRecall converge on the same 'closed' orchestration: registry removal + detached-closed event exactly once; 'close' remembers geometry",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/detached.ts:221-232"
+    },
+    {
+      "fact_id": "FT-104",
+      "source": "static",
+      "subject": "window management error codes",
+      "kind": "error_code",
+      "value": "ERR_WINDOW_NOT_FOUND (windowId invalid at recall) / ERR_WINDOW_OPEN_FAILED (construction throw or document load failure -> recall the window)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/detached.ts:46-56,240-279"
+    },
+    {
+      "fact_id": "FT-105",
+      "source": "static",
+      "subject": "detached window lifecycle hooks",
+      "kind": "side_effect",
+      "value": "recallAllForProject(projectId) on project removal; recallAll() on main-window close (app quit); setProjectArchived refreshes live window titles immediately (restore clears)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/windows/detached.ts:97-111,291-307"
+    },
+    {
+      "fact_id": "FT-106",
+      "source": "static",
+      "subject": "lineage computation budget and degrade",
+      "kind": "precondition",
+      "value": "LINEAGE_BUDGET_MS=100 cooperative deadline (checkpoint every 64 nodes); degrade reasons snapshot-absent / budget-expired; degrade is silent to the user with one structured log line [forge-lineage] degraded; next call auto-recovers (pure recompute)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/lineage/budget.ts:18-83"
+    },
+    {
+      "fact_id": "FT-107",
+      "source": "static",
+      "subject": "lineage descendant display cap",
+      "kind": "output_format",
+      "value": "LINEAGE_DESCENDANT_LIMIT=20 — descendant list renders up to the cap, tail shows the 「查看全部」 fold (必答⑥); overflow never breaks the parent-tree folding",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/lineage/derive.ts:30,202"
+    },
+    {
+      "fact_id": "FT-108",
+      "source": "static",
+      "subject": "lineage derivation purity",
+      "kind": "precondition",
+      "value": "click-time read-only derivation joining upstream ctx.sessions (byId + subagentsByParent) with kernel session_links; no standing index, no persistence, no write path; address authority = SubagentListEntry mode triple",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/lineage/derive.ts:1-13"
+    },
+    {
+      "fact_id": "FT-109",
+      "source": "static",
+      "subject": "Interface 6 session open channel",
+      "kind": "signature",
+      "value": "openSessionTarget accepts a TOP session id or a SubagentAddress triple (mode member verbatim); openSessionTargetAside opens a right-column pane without view switch; rejections carry ERR_SESSION_OPEN_FAILED surfaced by the C5 open-failed toast (never silent)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/session-open.ts:1-45"
+    },
+    {
+      "fact_id": "FT-110",
+      "source": "static",
+      "subject": "C6 subagent session metadata bar states",
+      "kind": "output_format",
+      "value": "bound (unique lineage hit: task key/title/status Pill + 查看任务 ghost, click jumps to C5 dock) / ambiguous (multi-task session: 该会话执行中 secondary text, no task number, no jump) / unbound (renders nothing); lineage authoritative, naming auxiliary (silent correction by construction); seat = conversation.input.dock above composer",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/components/task-metadata/MetadataBar.tsx:1-20"
+    },
+    {
+      "fact_id": "FT-111",
+      "source": "static",
+      "subject": "C5 task-detail dock contract",
+      "kind": "output_format",
+      "value": "right-edge dock min(440px,45vw) on window host / min(440px,100%) on pane host, z100, slide-in, NO mask (board stays interactive); focus trap with Esc/✕/outside-pointerdown close + focus return; task switch keeps detail up with aria-busy (no flicker)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/tasks/TaskDetailPanel.tsx:10-23; views/tasks/launch/LaunchStates.tsx:35,59"
+    },
+    {
+      "fact_id": "FT-112",
+      "source": "static",
+      "subject": "C5 link-history section shape",
+      "kind": "output_format",
+      "value": "挂接历史 accordion: active/ended links ordered 新→旧 (newest first); ended rows expandable; M4 enhancement rides inside: row expand shows lineage descendants + [打开] dual channel (top/subagent) + No-link [发起] entry",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/tasks/TaskDetailPanel.tsx:4-7"
+    },
+    {
+      "fact_id": "FT-113",
+      "source": "static",
+      "subject": "rightbar forge tab-kind whitelist",
+      "kind": "signature",
+      "value": "TabKind = 'guide' | 'overview' | 'board' | 'doc' | 'depgraph' (five kinds; the same enum the project layout blob replays)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/rightbar/tab-kinds.ts:37"
+    },
+    {
+      "fact_id": "FT-114",
+      "source": "static",
+      "subject": "C9 split ratio clamp",
+      "kind": "precondition",
+      "value": "SPLIT_RATIO_MIN=0.3 / SPLIT_RATIO_MAX=0.7; clampSplitRatio bounds every drag/keyboard step (ArrowLeft/Right step); no pane shrinks below the readable minimum",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/views/rightbar/tabs-model.ts:241-257,294-295"
+    },
+    {
+      "fact_id": "FT-115",
+      "source": "static",
+      "subject": "session group overflow fold threshold",
+      "kind": "output_format",
+      "value": "TREE_OVERFLOW_LIMIT=5 — per-group sessions beyond 5 fold into 「展开其余 N 个会话」; overflowOpen state rides the layout memory",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/components/project-tree/tree-derive.ts:93"
+    },
+    {
+      "fact_id": "FT-116",
+      "source": "static",
+      "subject": "layout write debounce",
+      "kind": "side_effect",
+      "value": "LAYOUT_WRITE_DEBOUNCE_MS=800 trailing write coalesces drag bursts into ONE setProjectUiState; project switch flushes the OLD project immediately (write-on-leave) then resets fragments and replays the new",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/persistence.ts:60,272-281"
+    },
+    {
+      "fact_id": "FT-117",
+      "source": "static",
+      "subject": "layout forget-before-remove ordering",
+      "kind": "precondition",
+      "value": "forget(projectId) cancels the removed project pending write + drops fragments BEFORE the removeProject verb, so no debounced write can resurrect a cascaded project_ui_state row",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/persistence.ts:110-113,290-296"
+    },
+    {
+      "fact_id": "FT-118",
+      "source": "static",
+      "subject": "no-row default layout semantics",
+      "kind": "precondition",
+      "value": "getProjectUiState answers {layout: default blob, stored:false} for a project with no project_ui_state row; stored !== true -> NOTHING replays (SC7 fix-2: default blob never publishes an empty tree over the activation auto-expand)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/persistence.ts:190-204"
+    },
+    {
+      "fact_id": "FT-119",
+      "source": "static",
+      "subject": "ProjectLayout v1 blob shape",
+      "kind": "signature",
+      "value": "{version:1, sidebar:{collapsed, width?}, tree:{expandedProjects, expandedSessions, overflowOpen}, rightbar:{widthPct?, panes:[{tabs:[{kind, topic?}]}]}, detached:[{view, target?, rect?}]}",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/collect.ts:171-205"
+    },
+    {
+      "fact_id": "FT-120",
+      "source": "static",
+      "subject": "layout numeric bands",
+      "kind": "precondition",
+      "value": "widthPct = ratio x 100 clamped to [30,70]; sidebar width band [264,420] px (out-of-band width omitted)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/collect.ts:57-58,104-108"
+    },
+    {
+      "fact_id": "FT-121",
+      "source": "static",
+      "subject": "layout blob whitelist boundaries",
+      "kind": "precondition",
+      "value": "tab kinds outside the five forge kinds (subagentchat/terminal/browser) have NO v1 slot and are dropped; a doc tab persists only with a resolvable topic (<=512 chars); depgraph topic optional; 分组×排序 view options NEVER enter the blob",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/collect.ts:28-40,122-128"
+    },
+    {
+      "fact_id": "FT-122",
+      "source": "static",
+      "subject": "layout replay operation sequence",
+      "kind": "signature",
+      "value": "replay = ordered open ops: sidebar-width -> sidebar-collapse -> open-tab per pane (later panes first tab preferNewPane) -> split-ratio (only with >=2 panes) -> open-detached (rect rides); per-op guarded (one degraded op never aborts the rest); invalid blob kernel-sanitized to default (empty plan); 恢复态 = 离开前布局",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/layout/replay.ts:21-29,64-90"
+    },
+    {
+      "fact_id": "FT-123",
+      "source": "static",
+      "subject": "projection state machine",
+      "kind": "signature",
+      "value": "4 states pending/healthy/degraded/deviation over a full 4x4 transition matrix; push_succeeded -> healthy (idempotent re-push converges deviation too), push_failed -> degraded, reconcile_drift -> deviation (present-only), reconcile_match -> healthy; unknown combos keep current state",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projection/state-machine.ts:37-71"
+    },
+    {
+      "fact_id": "FT-124",
+      "source": "static",
+      "subject": "reconcile verdict bridge",
+      "kind": "signature",
+      "value": "diff verdict match -> reconcile_match, drift -> reconcile_drift; unprojected and archived -> no transition",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projection/state-machine.ts:74-82"
+    },
+    {
+      "fact_id": "FT-125",
+      "source": "static",
+      "subject": "projection relay execution order",
+      "kind": "signature",
+      "value": "plan execution order: ensure (sort_order asc) -> rename -> reorder (insertBefore chain, tail-to-head) -> delete; a single op failure does not abort the stream; upstream 'workspace/not-found' on delete folds as success; vendored create takes no title (ensure title converges via conditional rename)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/projection/relay.ts:17-27"
+    },
+    {
+      "fact_id": "FT-126",
+      "source": "static",
+      "subject": "projection channel-absent semantics",
+      "kind": "error_code",
+      "value": "relay absent at push -> retry once -> still absent -> degraded with ERR_PROJECTION_CHANNEL_UNAVAILABLE in last_error, plan retained; retryProjection = idempotent full re-push (single plan converges all expectations incl. forge-subset relative order); archived projects and vanished rows skip",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projection/service.ts:1-55"
+    },
+    {
+      "fact_id": "FT-127",
+      "source": "static",
+      "subject": "projection outcome error mapping",
+      "kind": "error_code",
+      "value": "upstream codes workspace/invalid-path | name-conflict | move-invalid -> ERR_PROJECTION_OP_FAILED (detail carries the original code); unlisted codes pass through; ok outcome -> recordSuccessfulPush + push_succeeded -> healthy; project row already gone -> terminal no-op + log",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projection/service.ts:1-55"
+    },
+    {
+      "fact_id": "FT-128",
+      "source": "static",
+      "subject": "projection fault-injection seam",
+      "kind": "precondition",
+      "value": "DSH_FORGE_PROJECTION_FAULTS env carries a control-file path; vocabulary includes channel:'unavailable' (e2e degrade leg); defaults off in every shipped boot",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projection/faults-stub.ts:27-52"
+    },
+    {
+      "fact_id": "FT-129",
+      "source": "static",
+      "subject": "registerProject hard checks",
+      "kind": "error_code",
+      "value": "exactly 2: anchor exists + directory + readable -> else ERR_CODE_ROOT_UNREADABLE; cross-project unique via D11 identity (canonical -> pathKey -> (dev,ino)) -> else ERR_PROJECT_EXISTS carrying fast-lane payload {projectId, displayName, codeRoot, tier} (hit also self-heals stale storage keys)",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projects/lifecycle-service.ts:12-22"
+    },
+    {
+      "fact_id": "FT-130",
+      "source": "static",
+      "subject": "docsPlacement mapping",
+      "kind": "signature",
+      "value": "repo-existing / repo-new -> (in_repo, NULL; repo-new lazy-materializes <anchor>/docs); app -> (external, kernel-derived <docsRoot>/<folder>, mkdir idempotent, no authorization needed); custom -> (external, docsPath) requires authorization on file (ERR_EXTERNAL_PATH_UNREADABLE) + readability + conflict checks",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projects/lifecycle-service.ts:24-32"
+    },
+    {
+      "fact_id": "FT-131",
+      "source": "static",
+      "subject": "probeProjectPath DetectReport shape",
+      "kind": "signature",
+      "value": "{canonicalPath (realpath.native), pathKey (win32-folded), identity(dev,ino), exists, isDir, readable, registered fast-lane {projectId, displayName}, gitRoot (top-level .git), forgeTreeHit (<root>/docs/features + manifest.md), childRepos (chips only when >=2)}; entry-rejected input -> zero-fs-facts report",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projects-identity/detect.ts:43-69"
+    },
+    {
+      "fact_id": "FT-132",
+      "source": "static",
+      "subject": "confirm-card phase machine",
+      "kind": "output_format",
+      "value": "CardPhase priority: invalid-entry (empty | relative | bare-drive-or-root) > registered fast lane > missing (not-exists | not-dir | unreadable) > parent (>=2 childRepos) > valid (gitRoot present) > nogit (informational, not an error); EvidenceTier = repo-existing | repo-new | app",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "packages/plugins/forge-workbench/src/client/components/confirm-card/card-state.ts:50,84,104-135"
+    },
+    {
+      "fact_id": "FT-133",
+      "source": "static",
+      "subject": "project lifecycle verb semantics",
+      "kind": "signature",
+      "value": "renameProject = pure DB rename + projection rename plan push (local effect never blocked by projection failure); archiveProject = archived=1 (dsh workspace kept, zero projection ops); restoreProject = archived=0 (projection unchanged); removeProject = buildRemovalPlan BEFORE row delete + FK cascade + detached-window closes; listProjects v3 columns archived/sortOrder/projectionState/docsPlacement in registration order",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/projects/lifecycle-service.ts:1-45"
+    },
+    {
+      "fact_id": "FT-134",
+      "source": "static",
+      "subject": "active project pointer",
+      "kind": "precondition",
+      "value": "active_project_id lives in a single app_state row (at most one); project removal clears the pointer in the same transaction (no auto-activate of the next project); getState exposes activeProjectId: string | null",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/repos/app-state.ts:7-14; repos/projects.ts:303; ipc/types.ts:177"
+    },
+    {
+      "fact_id": "FT-135",
+      "source": "static",
+      "subject": "workbench event batch channel payloads",
+      "kind": "output_format",
+      "value": "main->renderer events coalesce on dsh-forge:workbench-events (<=500ms); M4 payloads: project_list_changed, projection_push_required {projectId, plan}, projection_updated (state transitions + deviation rows); window events detached-opened / detached-closed on dsh-forge:window-changed",
+      "confidence": "inferred",
+      "updated_at": "2026-09-30T00:00:00Z",
+      "citation": "apps/desktop/src/main/workbench/ipc/channel-allowlist.ts:148-153; windows/channels.ts:11-25"
     }
   ]
 }

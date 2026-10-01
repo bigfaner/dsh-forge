@@ -14,14 +14,13 @@ import {
 } from '../src/client/i18n/errors.ts'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../src/client/paths.ts'
 import {
-  MOCK_NOW, MOCK_WORKBENCH_PATHS, MOCK_WORKBENCH_STATE, MOCK_WIZARD_EXTERNAL_OK,
+  MOCK_EMPTY_WORKBENCH_STATE, MOCK_NOW, MOCK_WORKBENCH_PATHS, MOCK_WORKBENCH_STATE, MOCK_WIZARD_EXTERNAL_OK,
   MOCK_WIZARD_EXTERNAL_UNREADABLE, MOCK_WIZARD_FEATURE_TOTAL, MOCK_WIZARD_NO_FORGE_ROOT,
   MOCK_WIZARD_OK_ROOT, MOCK_WIZARD_TASK_TOTAL, MOCK_WIZARD_UNREADABLE_ROOT,
   createMockRegisterWizardFace,
 } from '../src/client/mocks/workbench.ts'
 import type { CodeRootProbeResult, WorkbenchShellProps } from '../src/client/contract.ts'
 import type { Project, WorkbenchState } from '../src/client/ipc-types.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.4 — the UF1 register wizard BUILD units (mocked face; 5.14 wires the
 // IPC verbs). AC map:
@@ -515,6 +514,7 @@ describe('RegisterWizard: step ③ summary + submit', () => {
         id: 'p1', displayName: 'demo', codeRoot: MOCK_WIZARD_OK_ROOT,
         docLocationType: 'in_repo', docLocationPath: null,
         createdAt: MOCK_NOW, lastActivatedAt: null,
+        archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
       })
     })
     await waitFor(() => { expect(onClose).toHaveBeenCalledTimes(1) })
@@ -772,34 +772,23 @@ describe('RegisterWizard: dialog discipline', () => {
 // Shell integration: the addProject / repoint seams own the wizard
 // ---------------------------------------------------------------------------
 
-describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)', () => {
-  /** A controllable view face (the overview.spec pattern). */
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench',
-      workbenchTab: 'workbench/overview',
-      featureSlug: undefined,
-      ...initial,
-    }
-    const selectWorkbenchTab = vi.fn((tab: WorkbenchTabKey) => {
-      snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-    })
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab,
-        openFeatureDetail: (slug: string) => {
-          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
-        },
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-    }
+describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4; M4 1.7 re-entry)', () => {
+  // The escape door's register entry is the page's own empty-state CTA (the
+  // chrome「添加项目」 button retired with 1.7) — the seat face below serves
+  // the empty registry so the 空态卡 carries the trigger.
+  const emptyOverviewSeat = {
+    face: { loadState: async () => MOCK_EMPTY_WORKBENCH_STATE },
   }
 
-  it('chrome 「添加项目」 opens the wizard; a clean Esc closes it and focus returns to the trigger', async () => {
-    const face = makeViewFace()
-    render(<WorkbenchShell t={t.en as WorkbenchShellProps['t']} {...face.props} />)
-    await waitFor(() => { expect($('[data-dsh-forge-add-project]')).not.toBeNull() })
-    const trigger = $('[data-dsh-forge-add-project]') as HTMLButtonElement
+  it('the page register CTA opens the wizard; a clean Esc closes it and focus returns to the trigger', async () => {
+    render(
+      <WorkbenchShell
+        t={t.en as WorkbenchShellProps['t']}
+        overview={emptyOverviewSeat}
+      />,
+    )
+    await waitFor(() => { expect($('[data-dsh-forge-overview-register]')).not.toBeNull() })
+    const trigger = $('[data-dsh-forge-overview-register]') as HTMLButtonElement
     // Browsers focus a button before its click lands; jsdom does not — prime it
     // so the opener's focus snapshot has something to restore.
     trigger.focus()
@@ -811,10 +800,9 @@ describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)',
   })
 
   it('the overview lost-card 重新指向 opens the EDIT mode prefilled with the active row', async () => {
-    const face = makeViewFace()
     render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props}
+        t={t.en as WorkbenchShellProps['t']}
         overview={{ lostProjectIds: [ACTIVE_PROJECT.id] }}
       />,
     )
@@ -830,16 +818,17 @@ describe('WorkbenchShell: the register seams open the wizard (5.1/5.3 → 5.4)',
       id: 'assembled-1', displayName: 'demo', codeRoot: MOCK_WIZARD_OK_ROOT,
       docLocationType: 'in_repo' as const, docLocationPath: null,
       createdAt: MOCK_NOW, lastActivatedAt: null,
+      archived: false, sortOrder: 0, projectionState: 'pending' as const, docsPlacement: 'repo-existing' as const,
     }))
-    const face = makeViewFace()
     render(
       <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']} {...face.props}
+        t={t.en as WorkbenchShellProps['t']}
+        overview={emptyOverviewSeat}
         wizard={{ face: { registerProject } }}
       />,
     )
-    await waitFor(() => { expect($('[data-dsh-forge-add-project]')).not.toBeNull() })
-    fireEvent.click($('[data-dsh-forge-add-project]'))
+    await waitFor(() => { expect($('[data-dsh-forge-overview-register]')).not.toBeNull() })
+    fireEvent.click($('[data-dsh-forge-overview-register]'))
     fireEvent.change(pathInput(), { target: { value: MOCK_WIZARD_OK_ROOT } })
     await waitFor(() => { expect(next().disabled).toBe(false) })
     fireEvent.click(next())

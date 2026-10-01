@@ -30,6 +30,8 @@ async function openDock(page: Page, taskKey: string): Promise<void> {
   await expect(page.locator(`[data-dsh-forge-task-detail="${taskKey}"]`)).toBeVisible({ timeout: 15_000 })
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-6/success [@web-e2e @journey task-session-execution-loop]: restart keeps the active link — badge re-lights off the authoritative read', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 

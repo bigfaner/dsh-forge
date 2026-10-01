@@ -14,7 +14,7 @@
  * so these are the contract-stable identifiers, not placeholders.
  */
 import type {
-  GlobalStandardProps, PropsLocale, PropsRuntime, SnapshotSelectorHook,
+  GlobalStandardProps, PropsLocale, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the `main` keyed slot declaration + MainPanelId brand into
 // this program's SlotMap view (declared by ui-layout).
@@ -22,9 +22,6 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the `sidebar.panellist` list declaration + its owner props
 // into this program's SlotMap view (declared by ui-sidebar).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type { ViewKeySnapshot, WorkbenchTabKey } from './store/view-key'
-import type { BoardSessionStore } from './store/board-session'
-import type { SessionHandover } from './session-handover'
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
   DocKind, FeatureBoardData, FeatureDoc, FeatureSummary, MigrationStarted, MigrationStatus,
@@ -51,6 +48,70 @@ export const MAIN_SLOT = 'main'
 export const SIDEBAR_SLOT = 'sidebar.panellist'
 
 /**
+ * The sidebar's workspace/session browsing region (declared by ui-sidebar;
+ * single, root scope — ui-workspace registers the native browser at the
+ * default priority 0). M4 task 1.6: the forge project tree SHADOWS that
+ * occupant (替换渲染) by registering at {@link PROJECT_SEAT_PRIORITY} —
+ * SlotCore's single-slot rule: entries sharing the cell coexist at distinct
+ * priorities and the LOWEST renders, an entry crash abdicates down to the
+ * next (the native browser stays the degradation fallback). 声明合并纯增量,
+ * 上游槽位机制零修改 (tech-design §Integration #1; Hard Rule T1/vendored).
+ */
+export const WORKSPACES_SLOT = 'sidebar.workspaces'
+
+/**
+ * The forge project-tree seat's shadowing rank — below ui-workspace's default
+ * 0, so the forge browser wins the cell (lowest renders) while the shadowed
+ * native entry stays registered (crash/teardown fallback).
+ */
+export const PROJECT_SEAT_PRIORITY = -100
+
+/**
+ * The right Sidebar's tab-BODY seat (declared by ui-sidebar-right as a child
+ * of `rightbar.session`; keyed, session scope). M4 task 2.2 (tech-design
+ * §Integration #5): the forge tab kinds — guide/overview/board/doc/depgraph —
+ * register their bodies here, each under its own definition id, exactly as an
+ * upstream type shipped from another package does (`ui-sidebar-terminal` is
+ * the live precedent). 声明合并纯增量, 上游槽位机制零修改 (Hard Rule).
+ */
+export const RIGHTBAR_TAB_SLOT = 'sidebar.right.pane.tab'
+
+/**
+ * The right Sidebar's tab-chip TITLE seat (the same dispatch for what the
+ * chip shows; keyed, session scope). Registering is optional — without an
+ * entry the chip shows the registry title captured at open time; the forge
+ * guide registers one so its chip keeps the compass glyph.
+ */
+export const RIGHTBAR_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'
+
+/**
+ * The right Sidebar's tab ACTIONS-MENU item seat (declared by ui-sidebar-right;
+ * list, session scope — the kit's own layout actions stay, this seat extends
+ * the menu's tail). M4 task 4.3 (ui-design §Component C10, the conversation
+ * origin): the subagentchat aside pane carries no forge pane 头 (its body is
+ * upstream ui-subagent's), so its [拆出为窗口] joins through this native
+ * tab-menu seat — the entry renders only for subagentchat tabs.
+ * 声明合并纯增量, 上游槽位机制零修改 (Hard Rule).
+ */
+export const DETACH_TAB_MENU_SLOT = 'sidebar.right.tab.menu.item'
+
+/**
+ * The conversation's full-width entries ABOVE the composer card (declared by
+ * ui-conversation as a child of the `conversation.content` factory; list,
+ * session scope — the in-tree occupants are ui-conversation's TodoPanel,
+ * the QueueDock, and ui-goal's GoalBar). M4 task 2.7 (tech-design §Integration
+ * #3, C6): the `conversation.session` seat named by the design is a SINGLE
+ * slot — SlotCore single slots SHADOW (a second registration would REPLACE
+ * the native ConversationSession, the wrapper/remount form the zero-invasion
+ * Hard Rule forbids) — so the task-period check (座位形态核对项) resolves to
+ * the design's OWN documented fallback: 「composer 上方 forge 自绘条, 数据面
+ * 不变」 rides THIS list slot. 声明合并纯增量, 上游槽位机制零修改; the
+ * declaration's type view is mirrored locally in the C6 module (ui-conversation
+ * is not a linked peer — the structural-twin discipline).
+ */
+export const CONVERSATION_DOCK_SLOT = 'conversation.input.dock'
+
+/**
  * Sidebar row position: ascending, default 0. `plugins` occupies 0, so the
  * workbench takes 10 — beside, not colliding with, the shipped entries
  * (spike §3.3 recommendation).
@@ -58,43 +119,11 @@ export const SIDEBAR_SLOT = 'sidebar.panellist'
 export const SIDEBAR_ORDER = 10
 
 /**
- * The view face the main registration injects (task 3.3) and the fallback
- * rail reproduces verbatim — the same face in both forms is what makes the
- * two shells behaviorally identical by construction.
- */
-export interface WorkbenchViewFace {
-  /**
-   * Selector hook over the view-key machine — the upstream selector-hook
-   * currency (`usePanelInfo` precedent). Framework-synthesized from the
-   * registration's inject hooks compartment in the slot path; hand-bound in
-   * the rail.
-   */
-  useViewKey: SnapshotSelectorHook<ViewKeySnapshot>
-  /** Switch the workbench interior tab (the shell's tab-strip action). */
-  selectWorkbenchTab: (tab: WorkbenchTabKey) => void
-  /**
-   * Open the feature-detail subview (task 5.9): the machine's own
-   * `openFeatureDetail(slug)` — the features tab carrying a slug, the single
-   * subview-addressing path (no second router). The return trip rides
-   * `selectWorkbenchTab('workbench/features')`, which clears the slug.
-   */
-  openFeatureDetail: (slug: string) => void
-  /**
-   * Open the proposal-detail subview (task 5.5, UF5): the machine's own
-   * `openProposalDetail(slug)` — the proposals tab carrying a slug, the same
-   * subview-addressing discipline as {@link openFeatureDetail}. The return
-   * trip rides `selectWorkbenchTab('workbench/proposals')`, which clears the
-   * slug (the breadcrumb-return contract). Optional member: the machine
-   * action is REQUIRED on the store (the authority); the face may omit it
-   * only in stale build-stage doubles, where the page's open seam no-ops.
-   */
-  openProposalDetail?: ((slug: string) => void) | undefined
-}
-
-/**
  * Panel-lifecycle notifications (slot path only: the keyed main slot mounts
  * the shell only while it is the selected panel — mount/unmount IS the
- * external-selection signal).
+ * external-selection signal). Since M4 1.7 this pair is the registration's
+ * whole inject face — the retired view face (useViewKey / tab & subview
+ * actions) died with the tab family the escape door collapsed.
  */
 export interface WorkbenchPanelLifecycle {
   /** The workbench panel became the active main panel (an external actor selected it). */
@@ -104,17 +133,15 @@ export interface WorkbenchPanelLifecycle {
 }
 
 /**
- * The chrome's data + action face (task 5.1, UI dependency layering): the
- * 5.x BUILD stage renders against DTO types + the shared mock (the shell
- * defaults to mocks/workbench.ts when the face is absent), and the 5.14-5.16
- * ASSEMBLY tasks inject the IPC-backed implementation — the seam is these
- * three members, no shell rewrite.
+ * The chrome's data + action face (task 5.1, UI dependency layering; M4 1.7
+ * slimmed with the retired project switcher — 项目切换 now lives in the C3
+ * left tree): the 5.x BUILD stage renders against DTO types + the shared
+ * mock (the shell defaults to mocks/workbench.ts when the face is absent),
+ * and the 5.14 ASSEMBLY injects the IPC-backed implementation.
  */
 export interface WorkbenchChromeFace {
   /** Interface 1 workbench.getState()'s assembly (projects + single activation + plugin rows). */
   readonly workbenchState: WorkbenchState
-  /** Interface 1 activateProject(id) — single activation; build stage = local stub. */
-  readonly activateProject: (id: string) => void
   /** The register entry — the 5.4 wizard owns the dialog; stubbed until it lands. */
   readonly addProject: () => void
 }
@@ -564,17 +591,22 @@ export interface WorkbenchProposalsSeat {
 export type SessionLaunchHandover = (sessionId: string, task: SessionLaunchTaskRef) => void
 
 /**
- * Composed props of the main-panel shell component. The framework standard
- * kit (GlobalStandardProps — `usePanelInfo` & co.) is deliberately omitted
- * from the requirement: the fallback rail mounts the SAME component outside
- * the slot tree, where no framework kit exists, and the shell renders
- * identically in both forms (Hard Rule). The framework still injects its kit
- * in the slot path — extra props a component doesn't read are harmless.
+ * Composed props of the main-panel shell component — the M4 1.7 escape-door
+ * shape: the runtime/locale shares, the panel-lifecycle notifications, the
+ * chrome face, and the overview/wizard assembly seats. The retired members
+ * (the view face, the taskBoard/features/proposals seats, the launch
+ * hand-over, the board session store) died with the boards' main-panel
+ * hosts; their components survive for the P2 rightbar re-homing. The
+ * framework standard kit (GlobalStandardProps — `usePanelInfo` & co.) is
+ * deliberately omitted from the requirement: the fallback rail mounts the
+ * SAME component outside the slot tree, where no framework kit exists, and
+ * the shell renders identically in both forms (Hard Rule). The framework
+ * still injects its kit in the slot path — extra props a component doesn't
+ * read are harmless.
  */
 export type WorkbenchShellProps =
   & Omit<PropsRuntime<typeof MAIN_SLOT, typeof PANEL_ID>, keyof GlobalStandardProps>
   & PropsLocale<typeof NS>
-  & WorkbenchViewFace
   & Partial<WorkbenchPanelLifecycle>
   /** The chrome face is partial: absent members fall back to the build-stage mock (task 5.1). */
   & Partial<WorkbenchChromeFace>
@@ -582,25 +614,6 @@ export type WorkbenchShellProps =
   & { overview?: WorkbenchOverviewSeat }
   /** The register wizard's assembly seat (task 5.4): absent = the wizard-local mock twin. */
   & { wizard?: RegisterWizardSeat }
-  /** The task board's assembly seat (task 5.5): absent = the board-local mock twin. */
-  & { taskBoard?: TaskBoardSeat }
-  /** The feature board's assembly seat (task 5.9): absent = the page-local mock twins. */
-  & { features?: WorkbenchFeaturesSeat }
-  /** The proposals board's assembly seat (task 5.5, UF5): absent = the page-local mock twin (real chain = the shell's IPC face). */
-  & { proposals?: WorkbenchProposalsSeat }
-  /**
-   * The session hand-over seat (task 5.11; M3 6.1 slimmed to the hand-over
-   * alone — session-handover.ts): 切会话视图 + session locating for the
-   * dispatch chain's 「进入会话」 jump. Absent = the board's jump seam stays
-   * unwired (hostless mounts, 5.x unit tests).
-   */
-  & { launch?: SessionHandover }
-  /**
-   * The board session store (task 5.11, AC3/AC4): the plugin-lifetime memory
-   * (selection + scroll + active-link badges) that survives the launch
-   * round-trip's shell unmount. Absent = per-mount stores (5.8 behavior).
-   */
-  & { boardSession?: BoardSessionStore }
 
 /** Composed props of the sidebar icon (the sidebar's icon share). */
 export type WorkbenchPanelIconProps = PropsRuntime<typeof SIDEBAR_SLOT>

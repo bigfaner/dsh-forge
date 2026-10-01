@@ -50,6 +50,8 @@ function stepThreeFixture(): { set: GeneratedTaskSet; root: string; project: Wri
   const mutator = createFixtureMutator(set, project)
   return { set, root, project, stub, mutator }
 }
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 
 test('step-3/success [@web-e2e @journey dual-form-consistency]: alternating terminal/session writes both reflow ≤5s with per-change correct source marks; final four-way agreement', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
@@ -114,6 +116,8 @@ test('step-3/success [@web-e2e @journey dual-form-consistency]: alternating term
     expect(existsSync(root)).toBe(false)
   }
 })
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 
 test('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consistency]: late claim on a completed task is not applied — board/terminal/file agree, no half-write (CLI-side rejection not observable from the workbench surface)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
@@ -165,6 +169,8 @@ test('step-3/simultaneous-late-op-rejected [@web-e2e @journey dual-form-consiste
   }
 })
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consistency]: pending→claim→transition sequential composition lands on both sides; final four-way agreement, no half-write', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepThreeFixture()
@@ -213,6 +219,8 @@ test('step-3/simultaneous-late-op-accepted [@web-e2e @journey dual-form-consiste
   }
 })
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-3/structural-change-flowback [@web-e2e @journey dual-form-consistency]: terminal task ADD/REMOVE reflows ≤5s; board task set equals the file set both ways, no orphan after removal', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub } = stepThreeFixture()

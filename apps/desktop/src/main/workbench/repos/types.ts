@@ -19,6 +19,21 @@ import type { DatabaseSyncLike } from '../store/db.ts'
 /** 文档位置三分模型(er-diagram projects.doc_location_type)。 */
 export type DocLocationType = 'in_repo' | 'external'
 
+/**
+ * M4 v3 证据三档落位(schema-v3 projects.docs_placement CHECK 同源):
+ * repo-existing(仓内已有树)/ repo-new(仓内新建,懒物化)/ app(内核
+ * docsRoot 派生)/ custom(仓外自定义,须显式授权);legacy = v3 迁移前
+ * 值冻结(仅迁移回填不可归类行)。
+ */
+export type DocsPlacement = 'repo-existing' | 'repo-new' | 'app' | 'custom' | 'legacy'
+
+/**
+ * M4 v3 投影状态机(schema-v3 projects.projection_state CHECK 同源):
+ * pending(待对账收数/未投影)→ healthy;上游操作失败/relay 不在场 →
+ * degraded(可重试);对账 diff 检出 dsh 侧手改 → deviation(仅呈现)。
+ */
+export type ProjectionState = 'pending' | 'healthy' | 'degraded' | 'deviation'
+
 /** 挂接状态机(er-diagram session_links.status):事件驱动迁移,ended 不删行。 */
 export type SessionLinkStatus = 'active' | 'ended'
 
@@ -63,6 +78,16 @@ export interface Project {
   readonly createdAt: string
   /** 激活迁移时间;单激活真值在 app_state。 */
   readonly lastActivatedAt: string | null
+  // —— M4 v3 增列(schema-v3 ALTER;迁移 DEFAULT 承载存量行,v2 注册/
+  //    listProjects 动词按 tech-design §Interface 1 恒投影)——
+  /** 归档位(归档 ≠ 删除:dsh 侧 workspace 保留,forge 侧归档分区)。 */
+  readonly archived: boolean
+  /** 注册序(= 投影「同名同序」的 forge 侧权威)。 */
+  readonly sortOrder: number
+  /** 投影状态机单值(3.x 对账接线前恒 'pending')。 */
+  readonly projectionState: ProjectionState
+  /** 证据三档落位 + custom(仓内落点永不继承)。 */
+  readonly docsPlacement: DocsPlacement
 }
 
 export interface RegisterProjectInput {
@@ -151,7 +176,10 @@ export interface SyncState {
 // Storage rows(snake_case,schema-v1.sql 投影)
 // ---------------------------------------------------------------------------
 
-/** projects 表行(schema-v1.sql)。 */
+/**
+ * projects 表行(schema-v1.sql 基底 + v3 增列:身份/归档/顺序/落位/投影;
+ * v2 增列 data_authority 等由 M3 面 consumed,此处投影本域读写所需列)。
+ */
 export interface ProjectRow {
   readonly id: string
   readonly display_name: string
@@ -160,6 +188,22 @@ export interface ProjectRow {
   readonly doc_location_path: string | null
   readonly created_at: string
   readonly last_activated_at: string | null
+  // —— M4 v3 增列(schema-v3 ALTER ×10;DEFAULT 承载存量行)——
+  /** 平台折叠比较键(win32 大写折叠;UNIQUE 落此列;NULL = 悬挂/回填失败)。 */
+  readonly code_root_key: string | null
+  /** (dev,ino) 物理仲裁位;仅仲裁不作键。 */
+  readonly identity_dev: string | null
+  readonly identity_ino: string | null
+  /** realpath 失败(网络盘离线字符串回退)= 0。 */
+  readonly identity_verified: number
+  readonly archived: number
+  readonly sort_order: number
+  readonly docs_placement: DocsPlacement
+  /** 仓外授权位(仅 custom = 1;BIZ-001/003 收窄)。 */
+  readonly custom_authorized: number
+  readonly projection_state: ProjectionState
+  /** dsh WorkspaceId 信息位(投影成功后回填)。 */
+  readonly workspace_id: string | null
 }
 
 /** session_links 表行(schema-v1.sql)。 */
@@ -221,6 +265,11 @@ export function toProject(row: ProjectRow): Project {
     docLocationPath: row.doc_location_path,
     createdAt: row.created_at,
     lastActivatedAt: row.last_activated_at,
+    // M4 v3 增列投影(tech-design §Interface 1 listProjects 扩展列)。
+    archived: row.archived === 1,
+    sortOrder: row.sort_order,
+    projectionState: row.projection_state,
+    docsPlacement: row.docs_placement,
   }
 }
 

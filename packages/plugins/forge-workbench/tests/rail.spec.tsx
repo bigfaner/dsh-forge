@@ -105,9 +105,9 @@ describe('rail: switching behavior — item-by-item identical to the slot path (
   })
 
   it('click 会话 → session view: persisted, overlay faded, shell STAYS mounted (会话期内存保留)', async () => {
-    const { writes } = await mountRail('overlay', { view: 'workbench', workbenchTab: 'workbench/tasks' })
+    const { writes } = await mountRail('overlay', { view: 'workbench', workbenchTab: 'workbench/overview' })
     await act(async () => { button('session').click() })
-    expect(writes.at(-1)).toEqual({ view: 'session', workbenchTab: 'workbench/tasks' })
+    expect(writes.at(-1)).toEqual({ view: 'session', workbenchTab: 'workbench/overview' })
     const panel = overlay() as HTMLElement
     expect(panel.style.visibility).toBe('hidden')
     expect(panel.style.opacity).toBe('0')
@@ -117,22 +117,19 @@ describe('rail: switching behavior — item-by-item identical to the slot path (
   })
 
   it('restores the persisted workbench view on mount — the same restart contract the slot carrier projects', async () => {
-    await mountRail('overlay', { view: 'workbench', workbenchTab: 'workbench/features' })
+    await mountRail('overlay', { view: 'workbench', workbenchTab: 'workbench/overview' })
     expect(button('workbench').getAttribute('aria-selected')).toBe('true')
     expect((overlay() as HTMLElement).style.visibility).toBe('visible')
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-features"]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).not.toBeNull()
   })
 
-  it('the shell inside the overlay is the SAME component with the SAME face: tabs switch the mapped container', async () => {
+  it('the shell inside the overlay is the SAME escape-door component the slot path mounts (form parity)', async () => {
     const { store } = await mountRail('overlay', { view: 'workbench', workbenchTab: 'workbench/overview' })
     expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-overview"]')).not.toBeNull()
-    const tasksTab = document.querySelector('[data-dsh-forge-tab="workbench/tasks"]') as HTMLButtonElement
-    expect(tasksTab.getAttribute('role')).toBe('tab')
-    expect(tasksTab.getAttribute('aria-selected')).toBe('false')
-    await act(async () => { tasksTab.click() })
-    expect(tasksTab.getAttribute('aria-selected')).toBe('true')
-    expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"]')).not.toBeNull()
-    expect(store.getSnapshot().workbenchTab).toBe('workbench/tasks')
+    // M4 1.7: the interior has no tab strip — the rail's toggle pair is the
+    // only chrome, and the machine's interior stays the escape door.
+    expect(document.querySelector('[data-dsh-forge-tabs]')).toBeNull()
+    expect(store.getSnapshot().workbenchTab).toBe('workbench/overview')
   })
 })
 

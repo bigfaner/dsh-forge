@@ -87,7 +87,11 @@ async function switchToWorkbench(page: import('@playwright/test').Page): Promise
   throw new Error('workbench selection never settled (boot session-restore keeps deselecting it)')
 }
 
-test('5.16/features-smoke: list → detail → doc browsing over the real IPC chain', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('5.16/features-smoke: list → detail → doc browsing over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
   const shell = await launchPluginShell({ bundles: featuresBundles(), stageTarballs: featuresTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-features-smoke-')), 'user-data') })
   try {

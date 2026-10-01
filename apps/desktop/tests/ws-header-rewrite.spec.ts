@@ -10,7 +10,7 @@ function baseInput(overrides: Partial<Parameters<typeof resolveWsHeaderRewrite>[
   return {
     hostUrl: HOST_URL,
     hostCookie: HOST_COOKIE,
-    mainWebContentsId: 7,
+    shellWebContentsIds: new Set([7]),
     details: {
       url: STREAM_URL,
       webContentsId: 7,
@@ -26,9 +26,29 @@ describe('resolveWsHeaderRewrite (upstream main.ts port)', () => {
     expect(resolveWsHeaderRewrite(baseInput({ hostCookie: undefined }))).toEqual({ passthrough: true })
   })
 
-  it('passes through when the request is not from the main window', () => {
-    expect(resolveWsHeaderRewrite(baseInput({ mainWebContentsId: undefined }))).toEqual({ passthrough: true })
+  it('passes through when the request is not from a shell-owned window', () => {
+    expect(resolveWsHeaderRewrite(baseInput({ shellWebContentsIds: undefined }))).toEqual({ passthrough: true })
+    expect(resolveWsHeaderRewrite(baseInput({ shellWebContentsIds: new Set<number>([]) }))).toEqual({ passthrough: true })
     expect(resolveWsHeaderRewrite(baseInput({ details: { ...baseInput().details, webContentsId: 42 } }))).toEqual({ passthrough: true })
+    const noIdDetails = { ...baseInput().details, webContentsId: undefined }
+    expect(resolveWsHeaderRewrite(baseInput({ details: noIdDetails }))).toEqual({ passthrough: true })
+  })
+
+  it('rewrites for a detached window registered in the shell webContents set (task 4.2 per-window registration)', () => {
+    // 主窗 7 + detached 9 同集注册:两窗的 WS 流量同判,主窗行为不变。
+    const result = resolveWsHeaderRewrite(baseInput({
+      shellWebContentsIds: new Set([7, 9]),
+      details: { url: STREAM_URL, webContentsId: 9, requestHeaders: { Origin: SHELL_APP_ORIGIN, 'Sec-Fetch-Site': 'cross-site' } },
+    }))
+    expect(result).toEqual({
+      passthrough: false,
+      cancel: false,
+      requestHeaders: {
+        origin: 'http://127.0.0.1:19387',
+        'sec-fetch-site': 'same-origin',
+        cookie: HOST_COOKIE,
+      },
+    })
   })
 
   it('passes through when the requested host differs from the host authority', () => {
@@ -46,7 +66,7 @@ describe('resolveWsHeaderRewrite (upstream main.ts port)', () => {
     expect(resolveWsHeaderRewrite(input)).toEqual({ passthrough: false, cancel: true })
   })
 
-  it('rewrites origin, injects the host cookie and forces sec-fetch-site for main-window shell traffic', () => {
+  it('rewrites origin, injects the host cookie and forces sec-fetch-site for shell-window traffic', () => {
     const result = resolveWsHeaderRewrite(baseInput())
     expect(result).toEqual({
       passthrough: false,

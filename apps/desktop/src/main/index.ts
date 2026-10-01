@@ -31,11 +31,23 @@ import { syncProfileSkillDirs, type SkillDirSyncAlert } from './host-profile/ski
 import type { UpdateCheck } from './update-checker/index.ts'
 import { installShellVerbs, createRestartSequence, SHELL_PUSH_CHANNELS } from './ipc/index.ts'
 import { WS_REWRITE_URL_FILTER, resolveWsHeaderRewrite } from './protocol/ws-header-rewrite.ts'
+import {
+  applyDetachedWindowSecurity,
+  createDetachedWindowManager,
+  createWindowPushFanout,
+  createWindowRegistry,
+  installWindowVerbs,
+  resolveWindowRole,
+  WINDOW_CHANGED_CHANNEL,
+  type DetachedHostWindow,
+  type DetachedWindowHostOptions,
+} from './windows/index.ts'
 import { createPluginEnableGuard } from './plugin-runtime/guard.ts'
 import { openDatabase } from './workbench/store/db.ts'
 import { createWorkbenchEventSubscriptions, installWorkbenchVerbs } from './workbench/ipc/handlers.ts'
 import { createWorkbenchIpcServices } from './workbench/ipc/services.ts'
 import { createMigrationFaultsResolver } from './workbench/migration/faults-stub.ts'
+import { createProjectionFaultsResolver } from './workbench/projection/faults-stub.ts'
 import { readPluginManifestBundles } from './workbench/ipc/plugins.ts'
 
 // Electron shell main entry.
@@ -116,6 +128,108 @@ function resolveProfileDir(): string {
   return process.env.DSH_FORGE_PROFILE_DIR ?? join(app.getPath('userData'), 'host-profile')
 }
 
+// ---------------------------------------------------------------------------
+// M4 task 4.2 — 壳层窗口面(tech-design §Interfaces·Interface 5)。主窗
+// createWindow 之上零改动(byte-stable);detached 宿主窗口在此构造:
+// 同源 SPA 重载(SHELL_APP_URL/dev)、同 SHELL_WEB_PREFERENCES(T3)、
+// window-open 拒 + will-navigate 锁 dsh-app:(applyDetachedWindowSecurity,
+// 纯函数面,行为与主窗同款)。角色不经 URL —— 新窗 boot 经
+// dsh-forge:window-get-role 握手(role.ts 按注册表供给)。
+// ---------------------------------------------------------------------------
+
+function createDetachedHostWindow(options: DetachedWindowHostOptions): DetachedHostWindow {
+  const win = new BrowserWindow({
+    width: options.width,
+    height: options.height,
+    ...(options.x === undefined ? {} : { x: options.x, y: options.y }),
+    show: false,
+    autoHideMenuBar: true,
+    title: options.title,
+    // T3 缓解:与主窗同一冻结安全基线(contextIsolation/sandbox/webSecurity)。
+    webPreferences: SHELL_WEB_PREFERENCES,
+  })
+  win.once('ready-to-show', () => win.show())
+  applyDetachedWindowSecurity(win, { openExternal: (url) => { void shell.openExternal(url) } })
+  win.webContents.on('render-process-gone', (_event, details) => {
+    shellLog.error({
+      code: 'ERR_RENDERER_GONE',
+      message: 'detached shell renderer process terminated',
+      data: { reason: details.reason, exitCode: details.exitCode },
+    })
+  })
+  const loaded = DEV_SERVER_URL ? win.loadURL(DEV_SERVER_URL) : win.loadURL(SHELL_APP_URL)
+  return {
+    isDestroyed: () => win.isDestroyed(),
+    webContents: win.webContents,
+    // 标题归主进程(P-1 fix):page-title-updated 同 'close' 一并直通
+    // BrowserWindow —— preventDefault 由 manager 的守卫调用(仅 detached 径)。
+    on: (event: 'close' | 'page-title-updated', listener: (...args: never[]) => void) => {
+      if (event === 'close') win.on(event, listener as () => void)
+      else win.on(event, listener as (event: { preventDefault(): void }, title: string) => void)
+    },
+    once: (event, listener) => { win.once(event, listener) },
+    getBounds: () => win.getBounds(),
+    close: () => { win.close() },
+    whenLoaded: () => loaded,
+    setTitle: (title: string) => { win.setTitle(title) },
+  }
+}
+
+/** 窗口注册表(主窗 + detached 集):role 供给 / fan-out / WS 注册的单一权威。 */
+const windowRegistry = createWindowRegistry()
+
+/** 壳推送泛化(update-state/recovery-state/window-changed 逐存活窗直发)。 */
+const windowPush = createWindowPushFanout({ targets: () => windowRegistry.liveWebContents() })
+
+// 项目名解析(workbench 内核在场后注入;缺席回退 projectId —— 标题不因
+// 数据面未起而失败)。late-bound:manager 在模块域构造,db 在 app-ready 后打开。
+let resolveProjectTitleForWindows: (projectId: string) => string | undefined = () => undefined
+
+const detachedWindows = createDetachedWindowManager({
+  registry: windowRegistry,
+  createHostWindow: createDetachedHostWindow,
+  resolveProjectTitle: projectId => resolveProjectTitleForWindows(projectId),
+  viewLabel: view => t(view === 'board' ? 'window.view.board' : 'window.view.conversation'),
+  // 任务 4.3(ui-design C10):归档标题追加分。
+  archivedSuffix: () => t('window.archivedSuffix'),
+  getMainWindowBounds: () => {
+    // BrowserWindow 子集向下转型(注册表面只有 isDestroyed/webContents);
+    // 存活主窗必有 getBounds。
+    type MainWithBounds = BrowserWindow & { getBounds(): { x: number; y: number; width: number; height: number } }
+    const main = windowRegistry.getMainWindow() as MainWithBounds | undefined
+    return main === undefined ? undefined : main.getBounds()
+  },
+  emitWindowChanged: (event) => { windowPush.push(WINDOW_CHANGED_CHANNEL, event) },
+})
+
+// Interface 5 动词组(dsh-forge:window-*;非 workbench 前缀)。窗口动词在
+// 模块域注册(与 installShellVerbs 同期):窗口只会在 app-ready 后开,
+// late-bound 依赖(getMainWindowBounds/resolveProjectTitle)届时已在场。
+installWindowVerbs(
+  (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
+  {
+    openDetached: input => detachedWindows.openDetached(input),
+    getRole: sender => resolveWindowRole(windowRegistry, sender),
+    recall: windowId => detachedWindows.recall(windowId),
+  },
+)
+
+/**
+ * 主窗落位登记(boot/activate/second-instance 三个创建位共用):注册表
+ * 入册 + 'closed' 对账 —— 主窗关闭 = 退出应用(M1 语义),detached 随之
+ * 关闭(Interface 5 单实例对账腿;window-all-closed 之后照常退出)。
+ */
+let adoptedMainWindow: BrowserWindow | undefined
+function adoptMainWindow(win: BrowserWindow): void {
+  windowRegistry.setMainWindow(win)
+  if (adoptedMainWindow === win) return
+  adoptedMainWindow = win
+  win.once('closed', () => {
+    if (windowRegistry.getMainWindow() === win) windowRegistry.setMainWindow(undefined)
+    detachedWindows.recallAll()
+  })
+}
+
 // Task 2 (ui-plugin-foundation): the product-level plugin-bundles config is
 // the plugin tree's single source of truth. Resolved like the other resource
 // seams (env override > packaged resources dir > workspace resources/); read
@@ -155,6 +269,8 @@ let hostHandle: HostHandle | undefined
 
 function focusPrimaryWindow(): void {
   mainWindow = focusShellWindow(mainWindow, createWindow) as BrowserWindow
+  // 任务 4.2:主窗(含 second-instance/tray 恢复新建)入册窗口注册表。
+  adoptMainWindow(mainWindow)
 }
 
 // Interface 5 (session focus), frozen fallback per spike-3: no runtime
@@ -176,13 +292,14 @@ export const updateChecker = createUpdateChecker({
   openExternal: url => shell.openExternal(url),
 })
 
-// Main → renderer push seam (task 5.3 integration): state pushes go only to
-// the live primary window's webContents (the dsh-app:// main document). A
+// Main → renderer push seam (task 5.3 integration; generalized by task 4.2 —
+// Interface 5「事件推送按 webContents fan-out」): state pushes go to every
+// live shell window's webContents (main + detached, registry-supplied). A
 // missing/destroyed window drops the push silently — the renderer catches up
-// through the getState pull verbs after (re)mount.
+// through the getState pull verbs after (re)mount. With no detached windows
+// open this is byte-stable with the M1 single-main-window behavior.
 function pushToRenderer(channel: string, payload: unknown): void {
-  if (mainWindow === undefined || mainWindow.isDestroyed()) return
-  mainWindow.webContents.send(channel, payload)
+  windowPush.push(channel, payload)
 }
 
 // UF3 banner state machine (task 5.3): main owns the phase (hidden / queued /
@@ -364,6 +481,7 @@ void app.whenReady().then(async () => {
     const userDataPath = app.getPath('userData')
     const workbenchDb = await openDatabase(userDataPath)
     const workbenchEvents = createWorkbenchEventSubscriptions()
+    const projectionFaults = createProjectionFaultsResolver()
     const pluginBundlesPath = resolvePluginBundlesConfigPath()
     const workbenchIpc = createWorkbenchIpcServices({
       db: workbenchDb.db,
@@ -380,6 +498,19 @@ void app.whenReady().then(async () => {
       // FAULTS);未设置 → 解析器恒 undefined,生产行为不变。
       migrationFaults: createMigrationFaultsResolver(),
       onEvents: workbenchEvents.sink,
+      // 3.2:投影 relay 在场探测 —— 事件订阅登记非空 = 渲染已装载(relay
+      // 可达);注册/重推在缺席时重试一次后 degraded
+      // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留禁静默丢弃)。
+      // 3.7(SC3 e2e):投影通道注错缝(env 缝族,DSH_FORGE_PROJECTION_
+      // FAULTS 控制文件随探测重读)—— channel:'unavailable' 使探测恒假;
+      // 未设置 → 解析器恒 undefined,生产行为不变。
+      relayPresence: () => projectionFaults()?.channel !== 'unavailable' && workbenchEvents.size > 0,
+      // 任务 4.2(Interface 1 removeProject「拆出窗关闭」):项目移除 → 壳层
+      // 注册表按 projectId 收回全部 detached 窗;toast 通知口径留 4.3(GUI)。
+      recallProjectWindows: (projectId) => { detachedWindows.recallAllForProject(projectId) },
+      // 任务 4.3(C10 窗口语义):归档/恢复 → 该项目 detached 窗标题即时
+      // 追加/移除「已归档」(窗口保持可用)。
+      markDetachedWindowsArchived: (projectId, archived) => { detachedWindows.setProjectArchived(projectId, archived) },
     })
     installWorkbenchVerbs(
       (channel, listener) => { ipcMain.handle(channel, listener as Parameters<typeof ipcMain.handle>[1]) },
@@ -387,6 +518,10 @@ void app.whenReady().then(async () => {
       workbenchEvents,
     )
     workbenchIpc.start()
+    // 任务 4.2:detached 窗口标题的项目名解析挂接(workbench 内核 = 单一
+    // 数据面;listProjects 动词复用,零第二读路径)。
+    resolveProjectTitleForWindows = projectId =>
+      workbenchIpc.verbs.listProjects().find(project => project.id === projectId)?.displayName
     shellLog.info({
       code: 'WORKBENCH_READY',
       message: 'workbench data kernel booted; dshForge.workbench verb face installed',
@@ -429,7 +564,9 @@ void app.whenReady().then(async () => {
     const result = resolveWsHeaderRewrite({
       hostUrl: binding?.url,
       hostCookie: binding?.cookie,
-      mainWebContentsId: mainWindow === undefined || mainWindow.isDestroyed() ? undefined : mainWindow.webContents.id,
+      // 任务 4.2(Interface 5「carriage/WS 改写逐 webContents 注册」):壳名下
+      // 全部存活窗口(主窗 + detached)的 WS 流量同判;主窗行为不变。
+      shellWebContentsIds: windowRegistry.liveWebContentsIds(),
       details: { url: details.url, webContentsId: details.webContentsId, requestHeaders: details.requestHeaders },
     })
     if (result.passthrough) {
@@ -553,6 +690,8 @@ void app.whenReady().then(async () => {
   })
 
   mainWindow = createWindow()
+  // 任务 4.2:boot 主窗入册(role 供给 / fan-out / WS 注册的主窗腿)。
+  adoptMainWindow(mainWindow)
 
   // Interface 3 (UF3 / F4 / SC6): the update check starts at app-ready and
   // must resolve within 60s of startup. It never blocks startup and never
@@ -585,7 +724,10 @@ void app.whenReady().then(async () => {
   })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      mainWindow = createWindow()
+      adoptMainWindow(mainWindow)
+    }
   })
 })
 

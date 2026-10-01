@@ -23,12 +23,14 @@ import { expect, test } from '@playwright/test'
 import { HELLO_WORLD, PRODUCT_CONFIG, sha256File } from '../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
-import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from '../tests/m2/helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes, openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 import { assertTreesIdentical, hashTree } from '../tests/m2/helpers/tree-hash.ts'
 import { expectTwoTierSectionCensus, journeyBundles, journeyStageTarballs, readOverlay, writeOverlayFile } from './helpers.ts'
 
 const SAMPLE_B = '@dsh-forge/plugin-hello-world-sample-b'
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-3/success [@web-e2e @journey plugin-management]: confirm disables only the target — overlay exactly {disabled:[target]}, comparison row intact, forge data zero-damage', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
@@ -76,8 +78,8 @@ test('step-3/success [@web-e2e @journey plugin-management]: confirm disables onl
       expect(readOverlay(overlayPath), '禁用写且仅写覆盖文件(恰含目标名)').toEqual({ disabled: [HELLO_WORLD] })
 
       // 核心能力不受影响:任务看板照常渲染。
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
 
       // 跨面:forge 数据零损坏 + 产品清单/journey 配置字节不变。

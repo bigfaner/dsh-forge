@@ -337,8 +337,8 @@ describe('integration: M2 overview regression beside the section (AC4)', () => {
 // ---------------------------------------------------------------------------
 
 const REAL_PROJECTS: Project[] = [
-  { id: 'real-p1', displayName: 'real-one', codeRoot: 'Z:\\real\\one', docLocationType: 'in_repo', docLocationPath: null, createdAt: '', lastActivatedAt: null },
-  { id: 'real-p2', displayName: 'real-two', codeRoot: 'Z:\\real\\two', docLocationType: 'in_repo', docLocationPath: null, createdAt: '', lastActivatedAt: null },
+  { id: 'real-p1', displayName: 'real-one', codeRoot: 'Z:\\real\\one', docLocationType: 'in_repo', docLocationPath: null, createdAt: '', lastActivatedAt: null, archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing' },
+  { id: 'real-p2', displayName: 'real-two', codeRoot: 'Z:\\real\\two', docLocationType: 'in_repo', docLocationPath: null, createdAt: '', lastActivatedAt: null, archived: false, sortOrder: 1, projectionState: 'pending', docsPlacement: 'repo-existing' },
 ]
 
 /** One bridge-backed boolean row (value true — the mock twin's default is false). */

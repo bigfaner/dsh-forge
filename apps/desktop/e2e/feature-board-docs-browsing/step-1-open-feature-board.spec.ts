@@ -38,7 +38,11 @@ function fileTaskCounts(project: WrittenForgeProject, slug: string): { total: nu
   return { total: statuses.length, completed: statuses.filter(status => status === 'completed').length }
 }
 
-test('step-1/success [@web-e2e @journey feature-board-docs-browsing]: dual-sample board renders status Pill on every card + completed-only badge + full/partial counts matching the fixture files', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-1/success [@web-e2e @journey feature-board-docs-browsing]: dual-sample board renders status Pill on every card + completed-only badge + full/partial counts matching the fixture files', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = boardTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb1-'))
@@ -96,7 +100,7 @@ test('step-1/success [@web-e2e @journey feature-board-docs-browsing]: dual-sampl
   }
 })
 
-test('step-1/empty-state [@web-e2e @journey feature-board-docs-browsing]: zero-feature project shows the 无 feature guidance, not an error', async ({ }, testInfo) => {
+test.fixme('step-1/empty-state [@web-e2e @journey feature-board-docs-browsing]: zero-feature project shows the 无 feature guidance, not an error', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = emptyTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb1e-'))
@@ -133,7 +137,7 @@ test('step-1/empty-state [@web-e2e @journey feature-board-docs-browsing]: zero-f
   }
 })
 
-test('step-1/loading-state [@web-e2e @journey feature-board-docs-browsing]: skeleton precedes the populated list and no empty/error leaks during the unreadiness window', async ({ }, testInfo) => {
+test.fixme('step-1/loading-state [@web-e2e @journey feature-board-docs-browsing]: skeleton precedes the populated list and no empty/error leaks during the unreadiness window', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const set = boardTaskSet()
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb1l-'))

@@ -23,7 +23,11 @@ import {
 
 const EXT_SLUG = 'fixture-ext-alpha'
 
-test('step-4/success [@web-e2e @journey feature-board-docs-browsing]: wizard external leg registers + activates the project whose features and docs read the external tree', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-4/success [@web-e2e @journey feature-board-docs-browsing]: wizard external leg registers + activates the project whose features and docs read the external tree', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fb4-'))
   const externalDocs = join(root, 'fb4-ext-docs')

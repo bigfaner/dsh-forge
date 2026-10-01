@@ -43,10 +43,15 @@ test.describe.serial('task-dispatch-execution-loop / step 3: 确认派发,subage
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 确认派发 → 并行 3 subagent 独立启动(行/会话/角标三面)。
   test('step3/success: confirmed 3-task batch → one batch_id, 3 independent rows/sessions, running badges, ≤3s interactive, oracle ×3', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -110,7 +115,7 @@ test.describe.serial('task-dispatch-execution-loop / step 3: 确认派发,subage
   test('step3/type-not-dispatchable: restricted type (eval.contract) dispatch → explicit error dialog, zero rows, zero subagents', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     restricted = await buildRestrictedWorld(freshRoot('disp-loop-s3r'))
-    const world = await manager.acquire(restricted, 'restricted')
+    const world = await manager.acquire(restricted, 'restricted', { tab: 'workbench/tasks' })
     const { page } = world
 
     // 全链驱动:进入选择 → 勾选受限任务 → 派发 → 确认 → 动词拒绝(受限
@@ -139,7 +144,7 @@ test.describe.serial('task-dispatch-execution-loop / step 3: 确认派发,subage
   // Outcome "launch-failed" — host 启动回调失败 → 行 failed + 原因;独立行独立结局。
   test('step3/launch-failed: stub create failure → row failed with reason; after clearing the fault a fresh dispatch runs (independent rows, old row preserved)', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 

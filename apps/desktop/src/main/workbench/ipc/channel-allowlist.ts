@@ -114,6 +114,35 @@ export const WORKBENCH_VERB_CHANNELS = {
   receiveApproval: 'dsh-forge:workbench-receive-approval',
   notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
   notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
+  // —— M4 v3 项目中心段(任务 1.3 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P1 批:侦测
+  //    (probeProjectPath)+ 生命周期四新动词(rename/archive/restore/list);
+  //    registerProject/removeProject 复用既有通道(v2 入参/语义扩展,通道
+  //    面零特权,校验语义在内核 projects/lifecycle-service)。 ——
+  probeProjectPath: 'dsh-forge:workbench-probe-project-path',
+  renameProject: 'dsh-forge:workbench-rename-project',
+  archiveProject: 'dsh-forge:workbench-archive-project',
+  restoreProject: 'dsh-forge:workbench-restore-project',
+  listProjects: 'dsh-forge:workbench-list-projects',
+  // —— M4 v3 投影段(任务 3.2 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P3 批四动词
+  //    (retryProjection 幂等全量重推 / getProjectionStatus 状态行+偏差明细 /
+  //    submitWorkspaceSnapshot 对账收数 / reportProjectionOutcome relay 回填);
+  //    对账语义/上游错误码映射/通道缺席降级在内核(projection/service.ts),
+  //    通道面零特权。事件 projection_push_required/projection_updated 走既有
+  //    批量通道,非动词。 ——
+  retryProjection: 'dsh-forge:workbench-retry-projection',
+  getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
+  submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
+  reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
+  // —— M4 v3 ui-state 段(任务 4.1 追加;Hard Rule 延续:追加式修改,既有
+  //    动词定义不改写)。动词面 = tech-design §Interface 1 v3·P4 批两动词
+  //    (getProjectUiState/setProjectUiState 布局记忆读写,project_ui_state
+  //    承载);ProjectLayout v1 白名单校验在内核域面(ui-state/
+  //    layout-schema.ts —— 违规重置默认 + ERR_LAYOUT_INVALID log,不拒写
+  //    面),通道面零特权。 ——
+  getProjectUiState: 'dsh-forge:workbench-get-project-ui-state',
+  setProjectUiState: 'dsh-forge:workbench-set-project-ui-state',
 } as const
 
 /**

@@ -35,6 +35,7 @@ import type { GeneratedRecord, GeneratedTaskStatus } from '../../fixtures/task-g
 import { en } from '../../../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
 import type { WorkbenchKey } from '../../../../../packages/plugins/forge-workbench/src/client/locale/en.ts'
 import { zh } from '../../../../../packages/plugins/forge-workbench/src/client/locale/zh.ts'
+import { openBoardPane, prepareBoardEntry } from './helpers/restart-app.ts'
 
 /** AC2 budget: median of 3 measured boots must be ≤ 2s (no CI relaxation). */
 const FIRST_INTERACTIVE_BUDGET_MS = 2_000
@@ -235,6 +236,8 @@ async function waitForTreeNodes(page: Page, expectedNodes: number, timeout = 45_
   }, expectedNodes, { timeout })
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('6.2/sc1-board-consistency [@web-e2e @journey sc1-board-consistency]: three-view data vs forge-derived truth + 500-task first interactive ≤2s (median of 3)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
@@ -305,8 +308,8 @@ test('6.2/sc1-board-consistency [@web-e2e @journey sc1-board-consistency]: three
       expect(typeof projectId).toBe('string')
 
       await switchToWorkbench(page)
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       await waitForTreeNodes(page, expectedNodes, 60_000)
 
       // ---- AC1 · view A(依赖树): edge set = fixture blockers 全集 ----------
@@ -373,13 +376,13 @@ test('6.2/sc1-board-consistency [@web-e2e @journey sc1-board-consistency]: three
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map(row => ({
         key: row.getAttribute('data-dsh-forge-task-row') ?? '',
-        title: row.children[1]?.textContent ?? '',
-        statusText: row.children[2]?.textContent ?? '',
-        feature: row.children[3]?.textContent ?? '',
-        branch: row.children[4]?.textContent ?? '',
-        worktree: row.children[5]?.textContent ?? '',
+        title: row.children[row.children.length - 7]?.textContent ?? '',
+        statusText: row.children[row.children.length - 6]?.textContent ?? '',
+        feature: row.children[row.children.length - 5]?.textContent ?? '',
+        branch: row.children[row.children.length - 4]?.textContent ?? '',
+        worktree: row.children[row.children.length - 3]?.textContent ?? '',
         sourceBadge: row.querySelector('[data-dsh-forge-badge^="source:"]')?.getAttribute('data-dsh-forge-badge') ?? null,
-        updatedAt: row.children[7]?.textContent ?? '',
+        updatedAt: row.children[row.children.length - 1]?.textContent ?? '',
       })))
       expect(rows.length, 'view C row count').toBe(expectedNodes)
       const rowByKey = new Map(rows.map(row => [row.key, row] as const))
@@ -528,16 +531,14 @@ test('6.2/sc1-board-consistency [@web-e2e @journey sc1-board-consistency]: three
           throw new Error(`measured run ${String(run)}: persisted active project missing (got ${String(projectId)})`)
         }
         const switchStart = Date.now()
-        await switchToWorkbench(page)
+        await prepareBoardEntry(page)
         const switchMs = Date.now() - switchStart
-        // t0 + tab click in ONE evaluate: the window opens exactly at the
-        // click dispatch (启动就绪 → 进入任务页), no driver latency inside.
+        // t0 + row click in ONE evaluate: the window opens exactly at the
+        // click dispatch (启动就绪 → 看板 pane 开启), no driver latency inside.
         await page.evaluate(() => {
-          const tab = Array.from(document.querySelectorAll('[data-dsh-forge-shell] [role="tab"]'))
-            .find((el) => { const text = (el.textContent ?? '').trim(); return text === '任务' || text === 'Tasks' })
-          if (tab === undefined) throw new Error('tasks tab not found inside the workbench shell')
           (globalThis as { __sc1t0?: number }).__sc1t0 = performance.now()
-          ;(tab as HTMLElement).click()
+          const row = document.querySelector('[data-dsh-forge-overview-task]') as HTMLElement | null
+          row?.click()
         })
         await waitForTreeNodes(page, expectedNodes)
         // t1: two rAFs after the full population = first paint settled; the

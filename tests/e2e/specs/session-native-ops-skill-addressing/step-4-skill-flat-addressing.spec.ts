@@ -91,7 +91,7 @@ test.describe.serial('session-native-ops-skill-addressing / step 4: 技能集扁
     const drifted = [...lines.slice(0, entryIdx), `${entryIndent}${userEntry}`, ...lines.slice(entryIdx + 1)].join('\n')
     // 杀前停在概览(session-restore 复现该视图;重启腿的激活块在概览找项
     // 目卡 —— 留在任务页则复现为任务页,卡片不可寻)。
-    await first.page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    // M4 1.8 迁移改写:逃生门即 overview 单页(harness boot 落点),无需 tab 归位。
     await manager.killLive()
     writeFileSync(patchPath, drifted, 'utf8')
 

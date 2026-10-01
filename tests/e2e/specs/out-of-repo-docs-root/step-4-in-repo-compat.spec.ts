@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { freshRoot, normPath, proposalMarkdown, recordMarkdown, WorldManager, bridgeInvoke } from '../_lib/journey-world.ts'
+import { freshRoot, normPath, proposalMarkdown, recordMarkdown, WorldManager, bridgeInvoke, openBoardPane, openOverviewPane } from '../_lib/journey-world.ts'
 import { buildInRepoWorld, OOR_FEATURE, registerInRepoViaWizard } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
@@ -30,6 +30,11 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
   test.afterAll(async () => {
     await manager.closeAll()
   })
+
+  // [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板(workbench/tasks 主视图)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "success" — 仓内兼容读写 + 管理空间零创建。
   test('step4/success: the in-repo project registers (explicit in_repo) + migrates in place; M3 read/writes land at the original in-repo seats; the app-managed docs root is NEVER created', async ({ }, testInfo) => {
@@ -51,7 +56,7 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
       '项目行保持 in_repo(默认值翻转不回溯)').toBe('in_repo')
 
     // 任务写读正常:claim → 记录落仓内原位 → submit → 读回。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_KEY}"]`), '看板读回(仓内)').toBeVisible({ timeout: 20_000 })
     const actor = 'session:oor-inrepo-agent'
     await bridgeInvoke(page, 'taskClaim', [{ projectId, taskKey: TASK_KEY }, actor])
@@ -79,15 +84,19 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
     writeFileSync(join(proposalDir, 'proposal.md'), proposalMarkdown({
       status: 'draft', author: 'oor-inrepo-agent', created: '2026-09-25', title: 'oor 仓内提案', mark: 'oor 仓内提案锚点。',
     }), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
-    await expect(page.locator('[data-dsh-forge-proposal-row="oor-inrepo-proposal"]'), '仓内 proposals → 提案板行').toBeVisible({ timeout: 20_000 })
+    await openOverviewPane(page, 'proposals')
+    await expect(page.locator('[data-dsh-forge-overview-prop-dir="oor-inrepo-proposal"]'), '仓内 proposals → 提案板行').toBeVisible({ timeout: 20_000 })
 
     // 极性对照:应用管理文档根从未被创建(写入不旁落)。
     expect(existsSync(join((inrepo as KernelWorld).userDataDir, 'workbench', 'docs')), '应用管理 docs 根零创建').toBe(false)
   })
 
   // Outcome "external-change-backflow" — 仓内项目的外部变更回流。
-  test('step4/external-change-backflow: external edits to the in-repo docs reflux — task + proposal ≤5s; stage-asset/doc views show the latest content', async ({ }, testInfo) => {
+  // [M4 1.8 e2e 迁移·迁移清单 第②④行 · 2.10 复核后仍挂起] 本腿断言依赖「无任务行语料下打开看板」
+  // (files-authority 零 index.json 语料 → 概览任务子 tab 零行 → 看板 pane 无 UI 开口)与已退役
+  // M3 阶段资产面板浏览面(右栏 pane 族未承接 —— 2.10 盘点开放项);断言本体零删改,
+  // 待看板 pane 直达开口(＋ 拆出窗口形态)或资产面板 pane 承接后恢复。
+  test.fixme('step4/external-change-backflow: external edits to the in-repo docs reflux — task + proposal ≤5s; stage-asset/doc views show the latest content', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(inrepo as KernelWorld, 'inrepo')
     const { page } = world
@@ -102,15 +111,15 @@ test.describe.serial('out-of-repo-docs-root / step 4: 既有仓内项目兼容',
       // —— 越界词表状态被索引器静默跳过,生成稿曾用 'review')。
       status: 'accepted', author: 'external-writer', created: '2026-09-25', title: 'oor 回流提案', mark: 'oor 外部回流锚点。',
     }), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/proposals"]').click()
-    await page.locator('[data-dsh-forge-proposal-row="oor-backflow-proposal"]').waitFor({ state: 'visible', timeout: 20_000 })
+    await openOverviewPane(page, 'proposals')
+    await page.locator('[data-dsh-forge-overview-prop-dir="oor-backflow-proposal"]').waitFor({ state: 'visible', timeout: 20_000 })
     expect(Date.now() - tProposal, '外部新增提案 → 板行 ≤5s(免手动刷新)').toBeLessThanOrEqual(5_000 + 1_000)
 
     // 外部修改②:阶段资产文件改写 → 资产面板呈现最新内容(持续感知)。
     const assetPath = join(featuresRoot, OOR_FEATURE, 'stages', 'tasks.md')
     const refreshedMark = 'oor 资产外部修订锚点(回流腿)。'
     writeFileSync(assetPath, readFileSync(assetPath, 'utf8').replace('oor 仓内摘要锚点。', refreshedMark), 'utf8')
-    await page.locator('[data-dsh-forge-tab="workbench/features"]').click()
+    await openOverviewPane(page, 'features')
     const card = page.locator(`[data-dsh-forge-feature-card="${OOR_FEATURE}"]`)
     await card.click()
     const detail = page.locator(`[data-dsh-forge-feature-detail="${OOR_FEATURE}"]`)

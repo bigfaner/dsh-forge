@@ -32,10 +32,15 @@ test.describe.serial('task-dispatch-execution-loop / step 1: 看板浏览并多�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 可派发集只含依赖满足+状态允许任务;选择会话期内存;板 = 内核。
   test('step1/success: browse the board, multi-select 3 zero-dep tasks; board rows match the kernel (count/status/deps parity)', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     // 板呈现:任务卡齐(3 个可派发 + 占用 + 依赖未满足 + 备用)。
@@ -73,7 +78,7 @@ test.describe.serial('task-dispatch-execution-loop / step 1: 看板浏览并多�
   // Outcome "deps-unmet-selection-blocked" — 全批前置校验:依赖未满足不可选,零派发。
   test('step1/deps-unmet-selection-blocked: the deps-unmet task cannot enter the selection (disabled + blocker tooltip); zero subagents started', async ({ }, testInfo) => {
     testInfo.setTimeout(180_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     await page.locator('[data-dsh-forge-dispatch-entry]').click()
@@ -100,7 +105,7 @@ test.describe.serial('task-dispatch-execution-loop / step 1: 看板浏览并多�
   // Outcome "no-dispatchable-idle" — 无可派发任务 → 入口禁用 + 引导,无可点选路径。
   test('step1/no-dispatchable-idle: with every dispatchable task claimed the dispatch entry disables with guidance and no selection path exists', async ({ }, testInfo) => {
     testInfo.setTimeout(300_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     // 消耗全部可派发任务:领取 2/3/5 直连,领取 1 经 measureReflow(顺带钉

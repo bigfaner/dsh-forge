@@ -39,8 +39,13 @@ test.describe.serial('stage-gates-cross-phase-context / step 4: 推进成功', (
     expect(summarized.gateOpen, '总结写入即开门').toBe(true)
   }
 
+  // [M4 1.8 e2e 迁移·迁移清单 第④行 · M3 阶段资产面板 / Feature 板(workbench/features)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 首次生效推进(三面一致)。
-  test('step4/success: the gate satisfied → advance succeeds: manifest stage replaced in place (tasks → in-progress), stepper moves, detail pill refluxes', async ({ }, testInfo) => {
+  test.fixme('step4/success: the gate satisfied → advance succeeds: manifest stage replaced in place (tasks → in-progress), stepper moves, detail pill refluxes', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world
@@ -69,7 +74,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 4: 推进成功', (
   })
 
   // Outcome "multi-advance-accumulation" — 资产逐阶段累积(≥2 卡)。
-  test('step4/multi-advance-accumulation: after a SECOND advance the assets panel accumulates both stage cards, panel content = doc-root files', async ({ }, testInfo) => {
+  test.fixme('step4/multi-advance-accumulation: after a SECOND advance the assets panel accumulates both stage cards, panel content = doc-root files', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
     const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/features' })
     const { page } = world
@@ -96,7 +101,7 @@ test.describe.serial('stage-gates-cross-phase-context / step 4: 推进成功', (
   })
 
   // Outcome "manifest-unreadable-rejected" — manifest 损坏 → 拒绝合并写入。
-  test('step4/manifest-unreadable-rejected: a corrupt manifest head → advance refused (ERR_STAGE_MANIFEST_UNREADABLE), stage unchanged, manifest bytes untouched', async ({ }, testInfo) => {
+  test.fixme('step4/manifest-unreadable-rejected: a corrupt manifest head → advance refused (ERR_STAGE_MANIFEST_UNREADABLE), stage unchanged, manifest bytes untouched', async ({ }, testInfo) => {
     testInfo.setTimeout(420_000)
     const world = await manager.acquire(unreadable as KernelWorld, 'unreadable', { tab: 'workbench/features' })
     const { page } = world

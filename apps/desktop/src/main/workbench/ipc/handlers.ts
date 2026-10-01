@@ -20,6 +20,8 @@ import type {
   DecideApprovalInput,
   DispatchTasksInput,
   DocKind,
+  GetProjectionStatusInput,
+  GetProjectUiStateInput,
   ReceiveApprovalVerbInput,
   KnowledgeFactInput,
   KnowledgeForensicInput,
@@ -27,9 +29,14 @@ import type {
   KnowledgeResearchInput,
   PrefEntry,
   PrefScope,
+  ProbeProjectPathInput,
   ProjectPatch,
+  ProjectRefInput,
   RecordSessionLinkInput,
   RegisterProjectInput,
+  RenameProjectInput,
+  RetryProjectionInput,
+  SetProjectUiStateInput,
   StageSummarizeInput,
   TaskAddInput,
   TaskClaimInput,
@@ -184,7 +191,8 @@ export function createWorkbenchEventSubscriptions(): WorkbenchEventSubscriptions
 // + 知识系/feature 读段 6 条(任务 2.2)+ prefs 段 3 条(任务 3.1)
 // + stages 读段 3 条(任务 3.2)+ dispatch 段 5 条(任务 3.3)
 // + dispatch host 回调段 3 条(任务 3.5)+ stages 写段 2 条(任务 4.1)
-// = 49 条白名单通道)
+// + M4 v3 项目中心段 5 条(任务 1.3)+ 投影段 4 条(任务 3.2)
+// + ui-state 段 2 条(任务 4.1)= 62 条白名单通道)
 // ---------------------------------------------------------------------------
 
 /**
@@ -225,10 +233,36 @@ export function installWorkbenchVerbs(
 
   register(C.getState, () => services.getState())
 
+  // M4 v3(任务 1.3):registerProject 收 v1 | v2 双形态 —— anchor/docsPlacement
+  // 在场即 v2(P1 批新面,docsPlacement 词表 + repo-new/custom 必填 docsPath +
+  // custom 必填 customAuthorized=true 的形状契约在此;D11 硬校验在内核
+  // lifecycle-service),否则 v1(M2/M3 向导冻结面,校验不变)。
+  const DOC_PLACEMENTS: ReadonlySet<string> = new Set(['repo-existing', 'repo-new', 'app', 'custom'])
+
   register(C.registerProject, (args) => {
     const input = requireObject('registerProject', 'input', args[0])
-    requireString('registerProject', 'input.codeRoot', input.codeRoot)
-    requireString('registerProject', 'input.docLocationType', input.docLocationType)
+    const isV2 = input.anchor !== undefined || input.docsPlacement !== undefined
+    if (isV2) {
+      requireString('registerProject', 'input.anchor', input.anchor)
+      optionalString('registerProject', 'input.displayName', input.displayName)
+      const docsPlacement = requireString('registerProject', 'input.docsPlacement', input.docsPlacement)
+      if (!DOC_PLACEMENTS.has(docsPlacement)) {
+        throw new Error(`workbench.registerProject: input.docsPlacement must be one of repo-existing/repo-new/app/custom (got ${docsPlacement})`)
+      }
+      optionalString('registerProject', 'input.docsPath', input.docsPath)
+      if ((docsPlacement === 'repo-new' || docsPlacement === 'custom') && (typeof input.docsPath !== 'string' || input.docsPath === '')) {
+        throw new Error(`workbench.registerProject: input.docsPath is required when docsPlacement is ${docsPlacement}`)
+      }
+      if (input.customAuthorized !== undefined && typeof input.customAuthorized !== 'boolean') {
+        throw new Error(`workbench.registerProject: input.customAuthorized must be a boolean when present (got ${typeof input.customAuthorized})`)
+      }
+      if (docsPlacement === 'custom' && input.customAuthorized !== true) {
+        throw new Error('workbench.registerProject: input.customAuthorized must be true when docsPlacement is custom (explicit consent, BIZ-workbench-001/003)')
+      }
+    } else {
+      requireString('registerProject', 'input.codeRoot', input.codeRoot)
+      requireString('registerProject', 'input.docLocationType', input.docLocationType)
+    }
     return services.registerProject(input as unknown as RegisterProjectInput)
   })
 
@@ -681,6 +715,123 @@ export function installWorkbenchVerbs(
       requireString('notifyLaunchFailed', 'dispatchId', args[0]),
       requireString('notifyLaunchFailed', 'error', args[1]),
     ))
+
+  // —— M4 v3 项目中心段(任务 1.3):侦测 + 生命周期四新动词。Hard Rule
+  //    延续 —— 本层只做 sender 校验 + 参数形状校验 + 服务调用 + 错误映射;
+  //    D11 三层比对/硬校验、事件推送与投影占位全部在内核服务面
+  //    (projects/lifecycle-service),不信任 renderer 语义(T4)。 ——
+
+  register(C.probeProjectPath, (args) => {
+    const input = requireObject('probeProjectPath', 'input', args[0])
+    requireString('probeProjectPath', 'input.path', input.path)
+    return services.probeProjectPath(input as unknown as ProbeProjectPathInput)
+  })
+
+  register(C.renameProject, (args) => {
+    const input = requireObject('renameProject', 'input', args[0])
+    requireString('renameProject', 'input.projectId', input.projectId)
+    requireString('renameProject', 'input.displayName', input.displayName)
+    return services.renameProject(input as unknown as RenameProjectInput)
+  })
+
+  register(C.archiveProject, (args) => {
+    const input = requireObject('archiveProject', 'input', args[0])
+    requireString('archiveProject', 'input.projectId', input.projectId)
+    return services.archiveProject(input as unknown as ProjectRefInput)
+  })
+
+  register(C.restoreProject, (args) => {
+    const input = requireObject('restoreProject', 'input', args[0])
+    requireString('restoreProject', 'input.projectId', input.projectId)
+    return services.restoreProject(input as unknown as ProjectRefInput)
+  })
+
+  register(C.listProjects, () => services.listProjects())
+
+  // —— M4 v3 投影段(任务 3.2):四条对账动词。Hard Rule 延续 —— 本层只做
+  //    sender 校验 + 参数形状校验(快照形状 = T2 缓解的第一道:调用方契约
+  //    错在此拒绝,畸形快照不进入对账面)+ 服务调用 + 错误映射;对账重算/
+  //    上游错误码映射/通道缺席降级全部在内核服务面(projection/service.ts),
+  //    不信任 renderer 语义(T2);动词不因投影失败 reject —— 唯一 reject
+  //    面 = ERR_PROJECT_NOT_FOUND 与形状契约错。 ——
+
+  register(C.retryProjection, (args) => {
+    const input = requireObject('retryProjection', 'input', args[0])
+    requireString('retryProjection', 'input.projectId', input.projectId)
+    return services.retryProjection(input as unknown as RetryProjectionInput)
+  })
+
+  register(C.getProjectionStatus, (args) => {
+    if (args[0] === undefined || args[0] === null) {
+      return services.getProjectionStatus({})
+    }
+    const input = requireObject('getProjectionStatus', 'input', args[0])
+    optionalString('getProjectionStatus', 'input.projectId', input.projectId)
+    return services.getProjectionStatus(input as unknown as GetProjectionStatusInput)
+  })
+
+  register(C.submitWorkspaceSnapshot, (args) => {
+    const input = requireObject('submitWorkspaceSnapshot', 'input', args[0])
+    if (!Array.isArray(input.workspaces)) {
+      throw new Error(`workbench.submitWorkspaceSnapshot: input.workspaces must be an array (got ${typeof input.workspaces})`)
+    }
+    const seen = new Set<string>()
+    const workspaces = input.workspaces.map((entry, index) => {
+      const record = requireObject('submitWorkspaceSnapshot', `workspaces[${String(index)}]`, entry)
+      const workspaceId = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].workspaceId`, record.workspaceId)
+      if (seen.has(workspaceId)) {
+        throw new Error(`workbench.submitWorkspaceSnapshot: duplicate workspaceId ${workspaceId} in workspaces[${String(index)}]`)
+      }
+      seen.add(workspaceId)
+      const path = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].path`, record.path)
+      const title = requireString('submitWorkspaceSnapshot', `workspaces[${String(index)}].title`, record.title)
+      if (typeof record.orderIdx !== 'number' || !Number.isFinite(record.orderIdx)) {
+        throw new Error(`workbench.submitWorkspaceSnapshot: workspaces[${String(index)}].orderIdx must be a finite number (got ${typeof record.orderIdx})`)
+      }
+      return { workspaceId, path, title, orderIdx: record.orderIdx }
+    })
+    return services.submitWorkspaceSnapshot({ workspaces })
+  })
+
+  register(C.reportProjectionOutcome, (args) => {
+    const input = requireObject('reportProjectionOutcome', 'input', args[0])
+    requireString('reportProjectionOutcome', 'input.projectId', input.projectId)
+    if (typeof input.ok !== 'boolean') {
+      throw new Error(`workbench.reportProjectionOutcome: input.ok must be a boolean (got ${typeof input.ok})`)
+    }
+    if (input.ok === true) {
+      return services.reportProjectionOutcome({ projectId: input.projectId, ok: true })
+    }
+    const error = requireObject('reportProjectionOutcome', 'input.error', input.error)
+    return services.reportProjectionOutcome({
+      projectId: input.projectId,
+      ok: false,
+      error: {
+        code: requireString('reportProjectionOutcome', 'input.error.code', error.code),
+        message: requireString('reportProjectionOutcome', 'input.error.message', error.message),
+      },
+    })
+  })
+
+  // —— M4 v3 ui-state 段(任务 4.1):布局记忆两动词。Hard Rule 延续 ——
+  //    本层只做 sender 校验 + 参数形状校验(调用方契约错在此拒绝;layout
+  //    仅须为对象)+ 服务调用 + 错误映射;ProjectLayout v1 白名单校验
+  //    (违规 → 默认布局 + ERR_LAYOUT_INVALID log,不拒写面)在内核域面
+  //    (ui-state/layout-schema.ts 经 services.ts 装配),不信任 renderer
+  //    语义(T5 服务端第二道防线;客户端 debounce 属 4.5)。 ——
+
+  register(C.getProjectUiState, (args) => {
+    const input = requireObject('getProjectUiState', 'input', args[0])
+    requireString('getProjectUiState', 'input.projectId', input.projectId)
+    return services.getProjectUiState(input as unknown as GetProjectUiStateInput)
+  })
+
+  register(C.setProjectUiState, (args) => {
+    const input = requireObject('setProjectUiState', 'input', args[0])
+    requireString('setProjectUiState', 'input.projectId', input.projectId)
+    requireObject('setProjectUiState', 'input.layout', input.layout)
+    return services.setProjectUiState(input as unknown as SetProjectUiStateInput)
+  })
 
   // 订阅/退订:需要 event.sender(webContents)做登记,独立于 args 路径。
   const registerSenderVerb = (

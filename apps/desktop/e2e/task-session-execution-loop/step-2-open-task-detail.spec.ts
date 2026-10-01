@@ -30,6 +30,8 @@ import {
   disposeJourney, expectedDepChain, groundOf, pickTaskKey, readBoard, readTaskDetail, setUpJourney,
 } from './helpers.ts'
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-2/success [@web-e2e @journey task-session-execution-loop]: detail dock renders forge verbatim description, topological dep chain, records + no write affordance', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
@@ -159,8 +161,8 @@ test('step-2/worktree-trace-visible [@web-e2e @journey task-session-execution-lo
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map(row => ({
         key: row.getAttribute('data-dsh-forge-task-row') ?? '',
-        branch: row.children[4]?.textContent ?? '',
-        worktree: row.children[5]?.textContent ?? '',
+        branch: row.children[row.children.length - 4]?.textContent ?? '',
+        worktree: row.children[row.children.length - 3]?.textContent ?? '',
       })))
       expect(rows.length).toBe(set.facts.taskCount)
       const nonPlaceholder = rows.filter(row => row.branch !== '—' || row.worktree !== '—')

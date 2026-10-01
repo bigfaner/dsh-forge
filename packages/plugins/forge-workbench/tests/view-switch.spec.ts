@@ -5,10 +5,13 @@ import type { PersistedViewKey, ViewKeySnapshot } from '../src/client/store/view
 import type { ViewCarrier } from '../src/client/nav/view-switch.ts'
 
 // Task 3.3 Hard Rule (两形态行为契约逐项一致) is structural: BOTH forms call
-// the same controller methods, which transition the same machine, persist the
-// same projection, and project onto the single live carrier. These tests pin
-// the write path, the attach-time projection (the restart restore), carrier
-// exclusivity, and the external-adoption no-loop guarantee.
+// the same controller methods, which transition the same machine, persist
+// the same projection, and project onto the single live carrier. M4 task
+// 1.7 collapsed the controller's face with the tab family's retirement —
+// the binary 会话⇄工作台 switch (the workbench side = the overview escape
+// door) is the whole write path now. These tests pin that path, the
+// attach-time projection (the restart restore), carrier exclusivity, and
+// the external-adoption no-loop guarantee.
 
 function makeController(initial?: PersistedViewKey): {
   controller: ViewSwitchController
@@ -37,73 +40,28 @@ describe('ViewSwitchController: the one write path (AC1/AC2)', () => {
     const carrier = recordingCarrier('slot')
     controller.attach(carrier)
     controller.switchWorkbench()
-    expect(carrier.presented.at(-1)?.view).toBe('workbench')
+    expect(carrier.presented.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
     expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
     controller.switchSession()
-    expect(carrier.presented.at(-1)?.view).toBe('session')
+    expect(carrier.presented.at(-1)).toEqual({ view: 'session', workbenchTab: 'workbench/overview' })
     expect(persist.at(-1)).toEqual({ view: 'session', workbenchTab: 'workbench/overview' })
-  })
-
-  it('switchWorkbenchTab projects and persists the tab (identical action in both forms)', () => {
-    const { controller, persist } = makeController()
-    const carrier = recordingCarrier('rail')
-    controller.attach(carrier)
-    controller.switchWorkbenchTab('workbench/features')
-    expect(carrier.presented.at(-1)).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined,
-    })
-    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
-  })
-
-  it('openFeatureDetail (5.9) transitions the subview slug and projects it; the slug never persists', () => {
-    const { controller, persist } = makeController()
-    const carrier = recordingCarrier('slot')
-    controller.attach(carrier)
-    controller.openFeatureDetail('dsh-forge-m2')
-    expect(carrier.presented.at(-1)).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: 'dsh-forge-m2',
-    })
-    // Session-scoped slug: the persisted projection keeps only the tab.
-    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/features' })
-    // The return trip: the tab action clears the slug (the return stack).
-    controller.switchWorkbenchTab('workbench/features')
-    expect(carrier.presented.at(-1)).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/features', featureSlug: undefined,
-    })
-  })
-
-  it('openProposalDetail (5.5, UF5) rides the same one write path — transition, projection, no persistence', () => {
-    const { controller, persist } = makeController()
-    const carrier = recordingCarrier('rail')
-    controller.attach(carrier)
-    controller.openProposalDetail('dsh-forge-m2')
-    expect(carrier.presented.at(-1)).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/proposals', featureSlug: undefined, proposalSlug: 'dsh-forge-m2',
-    })
-    // Session-scoped slug: the persisted projection keeps only the tab.
-    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/proposals' })
-    // The breadcrumb return: the tab action clears the slug.
-    controller.switchWorkbenchTab('workbench/proposals')
-    expect(carrier.presented.at(-1)).toEqual({
-      view: 'workbench', workbenchTab: 'workbench/proposals', featureSlug: undefined, proposalSlug: undefined,
-    })
   })
 
   it('presents WITHOUT a live carrier (grace window) — the transition and persist still land', () => {
     const { controller, persist } = makeController()
-    controller.switchWorkbench('workbench/tasks')
+    controller.switchWorkbench()
     expect(controller.form).toBeUndefined()
-    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/tasks' })
+    expect(persist.at(-1)).toEqual({ view: 'workbench', workbenchTab: 'workbench/overview' })
   })
 })
 
 describe('ViewSwitchController: carrier lifecycle', () => {
   it('attach projects the current snapshot — the attach-time projection IS the restart restore', () => {
-    const { controller } = makeController({ view: 'workbench', workbenchTab: 'workbench/tasks' })
+    const { controller } = makeController({ view: 'workbench', workbenchTab: 'workbench/overview' })
     const carrier = recordingCarrier('slot')
     controller.attach(carrier)
     expect(carrier.presented).toEqual([{
-      view: 'workbench', workbenchTab: 'workbench/tasks', featureSlug: undefined,
+      view: 'workbench', workbenchTab: 'workbench/overview',
     }])
   })
 
@@ -155,7 +113,7 @@ describe('ViewSwitchController: external selection sync (AC1 slot path)', () => 
 
 describe('ViewSwitchController: the one-shot boot-restore hold (AC4 vs the upstream session auto-restore)', () => {
   it('an armed hold re-presents the restored workbench view on the FIRST external dismissal, then adopts normally', () => {
-    const { controller, persist } = makeController({ view: 'workbench', workbenchTab: 'workbench/features' })
+    const { controller, persist } = makeController({ view: 'workbench', workbenchTab: 'workbench/overview' })
     const carrier = recordingCarrier('slot')
     controller.armRestoreHold()
     controller.attach(carrier)

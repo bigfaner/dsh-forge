@@ -40,7 +40,10 @@ import type { ApprovalState, WorkbenchEvent } from '../../../ipc-types'
 import { normalizeWorkbenchVerbError } from '../../../ipc/workbench'
 import { fillTemplate } from '../../overview/format'
 import { ChromeButton } from '../../../components/chrome/ChromeButton'
-import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, ghostButtonStyle, LaunchSpinner, primaryButtonStyle } from '../launch/LaunchStates'
+import {
+  detailDockWidthOf, DETAIL_DOCK_Z, focusablesOf, ghostButtonStyle, LaunchSpinner, primaryButtonStyle,
+  type BoardHostForm,
+} from '../launch/LaunchStates'
 import type { DispatchTranslate } from './DispatchBadge'
 
 // ---------------------------------------------------------------------------
@@ -381,7 +384,12 @@ export function useApprovals(options: ApprovalDockOptions): ApprovalDockControll
 // The dock presentation
 // ---------------------------------------------------------------------------
 
-/** The dock geometry — the TaskDetailPanel 同构 twin (min(440px, 45vw), z100). */
+/**
+ * The dock geometry — the TaskDetailPanel 同构 twin (z100). The WIDTH is
+ * host-form-dependent (M4 2.1) and applied at the render site through
+ * {@link detailDockWidthOf} (window = `min(440px, 45vw)` verbatim, pane =
+ * capped at the board's own box).
+ */
 const dockStyle = {
   background: 'var(--dsw-alias-bg-layer-2, var(--dsh-bg, Canvas))',
   borderLeft: '1px solid var(--dsh-border-color, CanvasText)',
@@ -397,7 +405,6 @@ const dockStyle = {
   position: 'absolute',
   right: '0',
   top: '0',
-  width: DETAIL_DOCK_WIDTH,
   zIndex: DETAIL_DOCK_Z,
 } as const
 
@@ -559,8 +566,16 @@ const toastCardStyle = {
 export interface ApprovalPanelProps {
   /** The controller (the page's `useApprovals` machine). */
   readonly controller: ApprovalDockController
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   readonly t: DispatchTranslate
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主, threaded by TaskBoardPage):
+   * 'window' (default) = the dock + the toast anchor to the window viewport
+   * (the M2/M3 geometry verbatim); 'pane' = both contract to the board's own
+   * box (`min(440px, 100%)` dock, board-anchored toast). See
+   * {@link detailDockWidthOf}.
+   */
+  readonly host?: BoardHostForm | undefined
   /**
    * Task-title resolution (the entry's 次文字); absent → the task key's
    * local id (the dock never blocks on board data it does not own).
@@ -727,6 +742,7 @@ export function ApprovalPanel(props: ApprovalPanelProps) {
           tabIndex={-1}
           style={{
             ...dockStyle,
+            width: detailDockWidthOf(props.host ?? 'window'),
             transform: entered ? 'translateX(0)' : 'translateX(100%)',
             transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
@@ -792,7 +808,16 @@ export function ApprovalPanel(props: ApprovalPanelProps) {
         </div>
       )}
       {snapshot.error !== null && (
-        <div role="status" aria-live="polite" data-dsh-forge-approval-toast="" style={toastCardStyle}>
+        <div
+          role="status"
+          aria-live="polite"
+          data-dsh-forge-approval-toast=""
+          // M4 2.1 双宿主: the window form pins the toast to the window's
+          // bottom-right (M2/M3 verbatim); the pane form anchors it to the
+          // board's own box (the dock strip's absolute twin — a fixed toast
+          // would land outside the rightbar pane, over the conversation).
+          style={{ ...toastCardStyle, position: props.host === 'pane' ? 'absolute' : 'fixed' }}
+        >
           <div style={{ alignItems: 'center', display: 'flex', gap: '8px', width: '100%' }}>
             <strong style={{ fontSize: '14px', lineHeight: '22px' }}>{t('tasks.approval.error.title')}</strong>
             <ChromeButton

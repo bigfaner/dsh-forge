@@ -12,7 +12,7 @@
 // harness.buildMainWorld + the in-test dispatch.
 
 import { expect, test } from '@playwright/test'
-import { dispatchFromBoard, freshRoot, getDispatchRows, waitForOrchBadge, WorldManager, bridgeInvoke, switchToWorkbench } from '../_lib/journey-world.ts'
+import { dispatchFromBoard, freshRoot, getDispatchRows, waitForOrchBadge, WorldManager, bridgeInvoke, switchToWorkbench, openBoardPane } from '../_lib/journey-world.ts'
 import { buildMainWorld, TASK_1 } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
 
@@ -28,10 +28,15 @@ test.describe.serial('task-dispatch-execution-loop / step 6: 进入会话界面�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "success" — 自哪来回哪去(session ↔ workbench/tasks)。
   test('step6/success: enter-session from the orchestration entry → the session view takes over (workbench shell leaves) → return lands back on the task board', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     // 前置:一条 running 派发(session_id 已回填)。
@@ -53,8 +58,11 @@ test.describe.serial('task-dispatch-execution-loop / step 6: 进入会话界面�
     const shellPanel = page.locator('[data-dsh-forge-shell]')
     await expect(shellPanel, 'session 视图接管(工作台壳退场)').toBeHidden({ timeout: 15_000 })
 
-    // 返回:经侧栏工作台行回到任务看板(返回来源页 —— 视图键内存切换)。
+    // 返回:经侧栏工作台行回到任务看板(返回来源页)。2.10 新宿主:会话
+    // 切换重置会话域右栏(#28-④)—— 返回 = 逃生门往返 + 同一用户路径重开
+    // 看板(概览任务行 seam);数据面断言零删改。
     await switchToWorkbench(page)
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_1}"]`), '返回 → 任务看板(来源页)').toBeVisible({ timeout: 20_000 })
 
     // State:数据内核零变更(视图切换纯内存)。

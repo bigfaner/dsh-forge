@@ -28,6 +28,8 @@ import {
   setUpBoardJourney,
 } from './helpers.ts'
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行 · M2 看板] 2.10 已按新宿主恢复:入口 = 右栏
+// 任务看板 pane(openTasksBoard:概览任务行 seam);断言本体零删改。
 test('task-board-browsing journey smoke [@web-e2e @journey task-board-browsing]: board → views → filter → worktree (code-faithful) → detail, read-only throughout', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
@@ -77,7 +79,7 @@ test('task-board-browsing journey smoke [@web-e2e @journey task-board-browsing]:
       await page.locator('[data-dsh-forge-board-view="list"]').click()
       await expect(page.locator('[data-dsh-forge-board-panel="list"]')).toBeVisible({ timeout: 30_000 })
       const branchCells = await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]'))
-        .map(row => `${row.children[4]?.textContent ?? ''}/${row.children[5]?.textContent ?? ''}`))
+        .map((row) => { const cells = row.children; const n = cells.length; return `${cells[n - 4]?.textContent ?? ''}/${cells[n - 3]?.textContent ?? ''}` }))
       expect(branchCells.filter(cell => cell !== '—/—'), 'Step 2:分支/worktree 列恒空占位(FT-032)').toEqual([])
 
       // ---- Step 3:筛选与排序 ----------------------------------------------

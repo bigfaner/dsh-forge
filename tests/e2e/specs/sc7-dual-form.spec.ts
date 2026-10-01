@@ -49,6 +49,7 @@ import { registerProject } from '../../../apps/desktop/src/main/workbench/repos/
 import { scanForgeFiles } from '../../../apps/desktop/src/main/workbench/indexer/scan.ts'
 import { createMigrationService } from '../../../apps/desktop/src/main/workbench/migration/pipeline.ts'
 import type { RepoDb } from '../../../apps/desktop/src/main/workbench/repos/types.ts'
+import { openBoardPane } from './_lib/journey-world.ts'
 
 // ---------------------------------------------------------------------------
 // The SC7 registered corpus: one artifacts-complete feature + one dispatchable
@@ -428,7 +429,23 @@ test('sc7/dual-form: registered daily pipeline (dispatch→execute→submit) spa
     await expect(card).toBeVisible({ timeout: 30_000 })
     await card.locator('[data-dsh-forge-card-action="activate"]').click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // 2.10 右栏宿主 store 推送位(同 bootAppWorld):裸 card-activate 不发
+    // project_list_changed —— 同值 renameProject(纯 DB)推列表变更,概览/
+    // 看板 pane 绑定的 active-project store 随之重读。
+    await page.evaluate(async () => {
+      const bridge = (globalThis as { dshForge?: { workbench?: {
+        getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+        renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+      } } }).dshForge?.workbench
+      if (bridge === undefined) return
+      const state = await bridge.getState()
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      await bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_KEY}"]`)).toBeVisible({ timeout: 20_000 })
 
     const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])

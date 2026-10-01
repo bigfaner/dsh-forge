@@ -13,8 +13,9 @@
 //
 // 口径与纪律:
 //   - 组装产物 = EXECUTOR_PREAMBLE + 渲染后类型协议 = 预合成内容;组合首条
-//     消息 = 预合成内容 + "\n\n" + 追加行(spike-3 §3/§4);prompt_hash =
-//     sha256(组合消息)由 dispatch-service 随行落库(hash.ts 提供 oracle)。
+//     消息 = 预合成内容 + "\n\n" + 两行追加(归因行 + 命名行,Interface 7
+//     两行化,任务 2.8;spike-3 §3/§4);prompt_hash = sha256(组合消息,含
+//     追加行全文)由 dispatch-service 随行落库(hash.ts 提供 oracle)。
 //   - dispatch 预铸 sessionId(spike-3 §4 落库时机):compose 一次铸造
 //     `session-<uuid>`(M2 caller-minted 同形,create({sessionId}) 幂等 adopt),
 //     组合消息确定 → hash 与 launch 解耦,重派发不因会话重建漂移。
@@ -52,6 +53,8 @@ import {
   PROMPT_TEMPLATES,
   SYSTEM_TYPES,
   attributionLine,
+  namingLine,
+  type NamingSubject,
 } from './templates.ts'
 
 // ---------------------------------------------------------------------------
@@ -433,9 +436,13 @@ export function composePresynthContent(input: PresynthContextInput, opts?: { rea
   return `${EXECUTOR_PREAMBLE}${body}`
 }
 
-/** 组合首条消息 = 预合成内容原文 + "\n\n" + 追加行(原文不改写,仅尾部追加)。 */
-export function composeFirstUserMessage(presynthContent: string, sessionId: string): string {
-  return `${presynthContent}\n\n${attributionLine(sessionId)}`
+/**
+ * 组合首条消息 = 预合成内容原文 + "\n\n" + 两行追加(归因行 + 命名行;
+ * 原文不改写,仅尾部追加)。命名行 = Interface 7 命名约定注入(taskKey +
+ * title;约定非绑定权威,血缘为准)。追加行不在 Go 对拍集内。
+ */
+export function composeFirstUserMessage(presynthContent: string, sessionId: string, task: NamingSubject): string {
+  return `${presynthContent}\n\n${attributionLine(sessionId)}\n${namingLine(task)}`
 }
 
 /**
@@ -490,7 +497,7 @@ export function createPresynthEngine(deps: PresynthEngineDeps): PresynthEngine {
     }
     const content = composePresynthContent(loadPresynthContext(deps, featuresRoot, task), opts)
     const sessionId = mintDispatchSessionId()
-    return { content, injection: { sessionId, message: composeFirstUserMessage(content, sessionId) } }
+    return { content, injection: { sessionId, message: composeFirstUserMessage(content, sessionId, task) } }
   }
   return {
     compose(task, opts) {

@@ -19,8 +19,7 @@ import {
   waitForOrchBadge,
   waitForPromptRow,
   WorldManager,
-  bridgeInvoke,
-} from '../_lib/journey-world.ts'
+  bridgeInvoke, openBoardPane, switchToWorkbench } from '../_lib/journey-world.ts'
 import { verifyPromptInjection } from '../../stubs/oracle.ts'
 import { COVERAGE_KEY, buildMainWorld } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
@@ -45,7 +44,7 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
   async function setCoverageThroughSurface(world: Awaited<ReturnType<WorldManager['acquire']>>, percentage: string): Promise<void> {
     const { page } = world
     const slug = (kernel as KernelWorld).featureSlug
-    await page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    await switchToWorkbench(page)
     await expect(page.locator('[data-dsh-forge-prefs-section]'), '偏好面在场').toBeVisible({ timeout: 30_000 })
     await page.locator('[data-dsh-forge-pref-tier="feature"]').click()
     await page.locator('[data-dsh-forge-prefs-feature-trigger]').click()
@@ -59,6 +58,11 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
     const dismiss = page.locator('[data-dsh-forge-prefs-toast-dismiss]')
     if (await dismiss.isVisible().catch(() => false)) await dismiss.click()
   }
+
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
   // Outcome "success" — 修改后派发消费新生效值(55%)。
   test('step5/success: post-change dispatch injects the NEW effective value (55%); the registry default 80 retreats; editing surface and dispatch consume the same resolution', async ({ }, testInfo) => {
@@ -76,7 +80,7 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
     expect(rows.find(row => row.key === COVERAGE_KEY)?.value, '编辑面生效值 = 55%(getPrefs 同源)').toEqual({ type: 'percentage', percentage: 55 })
 
     // 派发任务一 → 注入反映新生效值。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await dispatchFromBoard(page, [TASK_1])
     await waitForOrchBadge(page, TASK_1, 'running', 20_000)
     const row = (await getDispatchRows(page, world.projectId)).find(candidate => candidate.taskKey === TASK_1)
@@ -119,7 +123,7 @@ test.describe.serial('preferences-tiered-override / step 5: 派发链消费生�
     await setCoverageThroughSurface(world, '66')
 
     // 修改后再派发(任务三)→ 消费 66。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await dispatchFromBoard(page, [TASK_3])
     await waitForOrchBadge(page, TASK_3, 'running', 20_000)
     const postRow = (await getDispatchRows(page, world.projectId)).find(candidate => candidate.taskKey === TASK_3)

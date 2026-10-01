@@ -34,6 +34,7 @@
 import type {
   ApprovalRow, DispatchedRow, DispatchRow, DispatchState, DocKind, FeatureBoardData, FeatureDoc,
   FeatureStatus, FeatureSummary,
+  DetectReport,
   MigrationPhase, MigrationPhaseResult, MigrationStatus,
   WorkbenchPaths,
   MissingItem, PluginRow, PrefEntry, PrefRow, PrefScope, Project, ProjectPatch,
@@ -49,6 +50,7 @@ import type {
   TaskBoardFace, TaskDetailFace,
 } from '../contract'
 import { directoryNameOf, normalizePathForCompare, samePath } from '../paths'
+import { checkEntry, type ConfirmCardFace } from '../components/confirm-card/card-state'
 
 /**
  * The two-tier plugin fixture (task 5.12 widens it to the REAL product-
@@ -86,6 +88,11 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
       docLocationPath: null,
       createdAt: '2026-09-20T08:12:00.000Z',
       lastActivatedAt: '2026-09-22T06:40:00.000Z',
+      // M4 v3 columns (task 1.3): healthy in-repo registrant.
+      archived: false,
+      sortOrder: 0,
+      projectionState: 'pending',
+      docsPlacement: 'repo-existing',
     }),
     // Task 5.3 widens the fixture for the project-card field matrix: an
     // external doc location (the 仓外 badge) and a never-activated project.
@@ -97,6 +104,12 @@ export const MOCK_WORKBENCH_STATE: WorkbenchState = Object.freeze({
       docLocationPath: 'Z:\\docs\\electron-course',
       createdAt: '2026-09-21T10:02:00.000Z',
       lastActivatedAt: null,
+      // M4 v3 columns (task 1.3): the custom-placement corner (columns inert
+      // in the M3 views — no archived-partition UI until the M4 tree lands).
+      archived: false,
+      sortOrder: 1,
+      projectionState: 'degraded',
+      docsPlacement: 'custom',
     }),
   ]),
   activeProjectId: '6f1a2d3e-8b44-4c9a-9d01-3c7f5a2b9e10',
@@ -228,6 +241,38 @@ export function createMockRegisterWizardFace(
   }
   const findByRoot = (codeRoot: string): Project | undefined =>
     projects.find(project => samePath(project.codeRoot, codeRoot))
+  /** Shared insert tail (both input faces): UNIQUE root + conflict → error rows. */
+  const insertRegistered = (
+    codeRoot: string,
+    docLocationType: 'in_repo' | 'external',
+    rawDocPath: string | null | undefined,
+    explicitName: string | undefined,
+    docsPlacement: Project['docsPlacement'],
+  ): Project => {
+    if (findByRoot(codeRoot) !== undefined) {
+      verbError('ERR_PROJECT_EXISTS', `build-stage mock: ${codeRoot} is already registered`)
+    }
+    if (docLocationType === 'external' && samePath(rawDocPath ?? '', codeRoot)) {
+      verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
+    }
+    seq += 1
+    const project: Project = {
+      id: `mock-wizard-project-${String(seq).padStart(4, '0')}`,
+      displayName: explicitName !== undefined && explicitName.trim() !== '' ? explicitName.trim() : directoryNameOf(codeRoot),
+      codeRoot,
+      docLocationType,
+      docLocationPath: docLocationType === 'external' ? (rawDocPath ?? null) : null,
+      createdAt: MOCK_NOW,
+      lastActivatedAt: null,
+      // v3 列:注册序递增;新注册恒未归档/pending。
+      archived: false,
+      sortOrder: seq,
+      projectionState: 'pending',
+      docsPlacement,
+    }
+    projects = [...projects, project]
+    return project
+  }
   return {
     authorizeExternalDocPath: async (path: string) => {
       // 6.4: mirror the registry's persisted record (idempotent upsert, no fs).
@@ -259,28 +304,31 @@ export function createMockRegisterWizardFace(
       return { ok: true }
     },
     registerProject: async (input: RegisterProjectInput) => {
-      // Interface 1: codeRoot is normalized at registration (绝对路径规范化).
-      const codeRoot = normalizePathForCompare(input.codeRoot)
-      if (findByRoot(codeRoot) !== undefined) {
-        return verbError('ERR_PROJECT_EXISTS', `build-stage mock: ${codeRoot} is already registered`)
+      // Interface 1 (M4 任务 1.3 双形态):v2(anchor/docsPlacement)按落位映射
+      // 折成存储形态(app/custom → external,app 派生 <docsRoot>/<文件夹名>);
+      // v1 原样(in_repo→repo-existing / external→custom)。
+      if ('anchor' in input) {
+        const codeRoot = normalizePathForCompare(input.anchor)
+        const external = input.docsPlacement === 'app' || input.docsPlacement === 'custom'
+        return insertRegistered(
+          codeRoot,
+          external ? 'external' : 'in_repo',
+          input.docsPlacement === 'custom'
+            ? (input.docsPath ?? '')
+            : (input.docsPlacement === 'app'
+              ? `${MOCK_WORKBENCH_PATHS.docsRoot}/${directoryNameOf(codeRoot)}`
+              : null),
+          input.displayName,
+          input.docsPlacement,
+        )
       }
-      if (input.docLocationType === 'external' && samePath(input.docLocationPath ?? '', codeRoot)) {
-        return verbError('ERR_DOC_PATH_CONFLICT', 'build-stage mock: external docs path equals the code root')
-      }
-      seq += 1
-      const project: Project = {
-        id: `mock-wizard-project-${String(seq).padStart(4, '0')}`,
-        displayName: input.displayName !== undefined && input.displayName.trim() !== ''
-          ? input.displayName.trim()
-          : directoryNameOf(codeRoot),
-        codeRoot,
-        docLocationType: input.docLocationType,
-        docLocationPath: input.docLocationType === 'external' ? (input.docLocationPath ?? null) : null,
-        createdAt: MOCK_NOW,
-        lastActivatedAt: null,
-      }
-      projects = [...projects, project]
-      return project
+      return insertRegistered(
+        normalizePathForCompare(input.codeRoot),
+        input.docLocationType,
+        input.docLocationPath ?? null,
+        input.displayName,
+        input.docLocationType === 'external' ? 'custom' : 'repo-existing',
+      )
     },
     updateProject: async (id: string, patch: ProjectPatch) => {
       const current = projects.find(project => project.id === id)
@@ -304,6 +352,130 @@ export function createMockRegisterWizardFace(
       }
       projects = projects.map(project => (project.id === id ? updated : project))
       return updated
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// C7 添加项目确认卡, task 1.5 (mock 侦测动词独立构建; 1.6 wires the real
+// probeProjectPath / registerProject verbs)
+// ---------------------------------------------------------------------------
+
+/** Parent-dir fixture (§5.4 父目录误选): three direct child repos → chips. */
+export const MOCK_CARD_PARENT_ROOT = 'Z:/project/dsh'
+/** Missing-path fixture (硬校验 ①: 存在). */
+export const MOCK_CARD_MISSING_ROOT = 'Z:/project/ghost-repo'
+/** No-git fixture (信息态主路径: 零 git 强制,一等公民). */
+export const MOCK_CARD_NOGIT_ROOT = 'Z:/project/plain-demo'
+/** Git + forge-tree fixture (最强证据: 沿用仓内). */
+export const MOCK_CARD_FORGE_ROOT = 'Z:/work/legacy-repo'
+/** Unreadable-dir fixture (硬校验 ①: 可读). */
+export const MOCK_CARD_UNREADABLE_ROOT = 'Z:/work/locked-repo'
+
+/** The parent fixture's child repos (chip rows; name + path pairs). */
+export const MOCK_CARD_PARENT_CHILDREN: ReadonlyArray<{ name: string; path: string }> = Object.freeze(
+  ['demo-app', 'legacy-repo', 'plain-demo'].map(name => Object.freeze({ name, path: `${MOCK_CARD_PARENT_ROOT}/${name}` })),
+)
+
+/**
+ * The C7 confirm card's build-stage face (task 1.5): a STATEFUL local twin of
+ * the Interface 1 v3 verb pair over a closure-held registry — the detection
+ * verb mirrors workbench/projects-identity/detect.ts's report semantics
+ * (rejected entries → the pathKey=null report; the registered fast lane keys
+ * off the state's code roots via the D11 folded compare), and registerProject
+ * accepts ONLY the v2 face ({anchor, docsPlacement, …} — the card's single
+ * write): UNIQUE root → ERR_PROJECT_EXISTS; app/custom fold to the storage
+ * external form with the kernel-derived docs root for app. An unknown
+ * absolute path detects as a plain git repo (the wizard twin's permissive
+ * default). authorizeExternalDocPath reuses the unreadable external fixture
+ * (ERR_EXTERNAL_PATH_UNREADABLE → the card's 授权行错误态).
+ */
+export function createMockConfirmCardFace(
+  initial: WorkbenchState = MOCK_WORKBENCH_STATE,
+): ConfirmCardFace {
+  let projects: readonly Project[] = initial.projects
+  let seq = 0
+  const findByRoot = (anchor: string): Project | undefined =>
+    projects.find(project => samePath(project.codeRoot, anchor))
+  const rejected = (input: string): DetectReport => ({
+    input,
+    canonicalPath: null,
+    pathKey: null,
+    identity: null,
+    exists: false,
+    isDir: false,
+    readable: false,
+    registered: null,
+    gitRoot: null,
+    forgeTreeHit: false,
+    childRepos: [],
+  })
+  return {
+    probeProjectPath: async (input) => {
+      const entry = checkEntry(input.path)
+      if (!entry.ok) return rejected(input.path)
+      const base = normalizePathForCompare(entry.path)
+      const registeredRow = findByRoot(base)
+      const common = {
+        input: input.path,
+        canonicalPath: base,
+        pathKey: base.toUpperCase(),
+        identity: { dev: '1', ino: '2' },
+        registered: registeredRow === undefined
+          ? null
+          : { projectId: registeredRow.id, displayName: registeredRow.displayName },
+      }
+      if (samePath(base, MOCK_CARD_MISSING_ROOT)) {
+        return { ...common, exists: false, isDir: false, readable: false, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      const dir = { exists: true, isDir: true }
+      if (samePath(base, MOCK_CARD_UNREADABLE_ROOT)) {
+        return { ...common, ...dir, readable: false, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      if (samePath(base, MOCK_CARD_PARENT_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: null, forgeTreeHit: false, childRepos: MOCK_CARD_PARENT_CHILDREN }
+      }
+      if (samePath(base, MOCK_CARD_NOGIT_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: null, forgeTreeHit: false, childRepos: [] }
+      }
+      if (samePath(base, MOCK_CARD_FORGE_ROOT)) {
+        return { ...common, ...dir, readable: true, gitRoot: base, forgeTreeHit: true, childRepos: [] }
+      }
+      // Permissive default: a plain git repo without a forge tree (the
+      // prototype's default tier — 仓内新建).
+      return { ...common, ...dir, readable: true, gitRoot: base, forgeTreeHit: false, childRepos: [] }
+    },
+    registerProject: async (input) => {
+      const root = normalizePathForCompare(input.anchor)
+      if (findByRoot(root) !== undefined) {
+        throw { code: 'ERR_PROJECT_EXISTS', message: `build-stage mock: ${input.anchor} is already registered` }
+      }
+      seq += 1
+      const external = input.docsPlacement === 'app' || input.docsPlacement === 'custom'
+      const project: Project = {
+        id: `mock-confirm-project-${String(seq).padStart(4, '0')}`,
+        displayName: input.displayName !== undefined && input.displayName.trim() !== ''
+          ? input.displayName.trim()
+          : directoryNameOf(root),
+        codeRoot: root,
+        docLocationType: external ? 'external' : 'in_repo',
+        docLocationPath: external
+          ? (input.docsPlacement === 'custom' ? (input.docsPath ?? '') : `${MOCK_WORKBENCH_PATHS.docsRoot}/${directoryNameOf(root)}`)
+          : null,
+        createdAt: MOCK_NOW,
+        lastActivatedAt: null,
+        archived: false,
+        sortOrder: seq,
+        projectionState: 'pending',
+        docsPlacement: input.docsPlacement,
+      }
+      projects = [...projects, project]
+      return project
+    },
+    authorizeExternalDocPath: async (path) => {
+      if (samePath(path, MOCK_WIZARD_EXTERNAL_UNREADABLE)) {
+        throw { code: 'ERR_EXTERNAL_PATH_UNREADABLE', message: `build-stage mock: ${path} is unreadable` }
+      }
     },
   }
 }

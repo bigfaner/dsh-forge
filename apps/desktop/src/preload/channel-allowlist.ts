@@ -87,6 +87,23 @@ export const WORKBENCH_VERB_CHANNELS = {
   receiveApproval: 'dsh-forge:workbench-receive-approval',
   notifySessionStarted: 'dsh-forge:workbench-notify-session-started',
   notifyLaunchFailed: 'dsh-forge:workbench-notify-launch-failed',
+  // M4 v3 项目中心段(任务 1.3 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  probeProjectPath: 'dsh-forge:workbench-probe-project-path',
+  renameProject: 'dsh-forge:workbench-rename-project',
+  archiveProject: 'dsh-forge:workbench-archive-project',
+  restoreProject: 'dsh-forge:workbench-restore-project',
+  listProjects: 'dsh-forge:workbench-list-projects',
+  // M4 v3 投影段(任务 3.2 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  retryProjection: 'dsh-forge:workbench-retry-projection',
+  getProjectionStatus: 'dsh-forge:workbench-get-projection-status',
+  submitWorkspaceSnapshot: 'dsh-forge:workbench-submit-workspace-snapshot',
+  reportProjectionOutcome: 'dsh-forge:workbench-report-projection-outcome',
+  // M4 v3 ui-state 段(任务 4.1 追加;与 main 侧同键同值,drift 锁 =
+  // tests/workbench-ipc.spec.ts deep-equal 断言)。
+  getProjectUiState: 'dsh-forge:workbench-get-project-ui-state',
+  setProjectUiState: 'dsh-forge:workbench-set-project-ui-state',
 } as const
 
 /**
@@ -94,3 +111,19 @@ export const WORKBENCH_VERB_CHANNELS = {
  * Not an invokable verb; the renderer only subscribes.
  */
 export const WORKBENCH_EVENT_CHANNEL = 'dsh-forge:workbench-events'
+
+// M4 任务 4.2:壳层窗口动词组(preload copy — source of truth =
+// src/main/windows/channels.ts;非 workbench 前缀,tech-design §Interface 5
+// 「新 shell 动词组」)。drift 锁 = tests/windows-role.spec.ts deep-equal 断言。
+/** The window verb whitelist (preload copy — see module header). */
+export const WINDOW_VERB_CHANNELS = {
+  openDetached: 'dsh-forge:window-open-detached',
+  getRole: 'dsh-forge:window-get-role',
+  recall: 'dsh-forge:window-recall',
+} as const
+
+/**
+ * Main → renderer window-changed push channel (preload copy). Not an
+ * invokable verb; the renderer only subscribes (payload = WindowChangedEvent).
+ */
+export const WINDOW_CHANGED_CHANNEL = 'dsh-forge:window-changed'

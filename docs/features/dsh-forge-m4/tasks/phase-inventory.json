@@ -1,0 +1,46 @@
+[
+  {
+    "phase": 1,
+    "name": "项目一级导航重组 + 项目页骨架(原生 home 增强层:启动首屏/左栏全项目树/panellist「项目」/C7 确认卡/旧视图退役/e2e 迁移)",
+    "source": "PRD-explicit(PRD §Phase 规划 P1 + tech-design §PRD Coverage Map Phase 映射:P1 = I1 侦测/注册 + C7 卡 + 左栏树 + panellist + 退役(Integration 6)+ SC1/SC2 面)",
+    "gates": [
+      {
+        "afterPhase": 1,
+        "description": "SC1 + SC2 布局面;迁移清单执行完毕(孤儿视图清零断言可过;M2/M3 既有 e2e 规格改写后全绿)"
+      }
+    ]
+  },
+  {
+    "phase": 2,
+    "name": "任务↔会话反查 + 右栏 M3 面收纳 + 回归盘点定稿(lineage/C5 dock 增强/C6 元数据条/TasksView 双宿主/右栏 forge tabs/追加行两行化)",
+    "source": "PRD-explicit(PRD §Phase 规划 P2 + tech-design Phase 映射:P2 = lineage + C5/C6 + 右栏 tabs 收纳(Integration 5)+ 回归盘点)",
+    "gates": [
+      {
+        "afterPhase": 2,
+        "description": "SC2 全量 + SC7;回归清单全绿基线(SC8 已废止 #27;subagent 血缘语料 stub 扩展就绪)"
+      }
+    ]
+  },
+  {
+    "phase": 3,
+    "name": "workspaceRegistry 单向投影(内核 projection 域/client relay 直调上游 remote/对账偏差/C8 投影与生命周期 GUI)",
+    "source": "PRD-explicit(PRD §Phase 规划 P3 + tech-design Phase 映射:P3 = projection 全链 + 对账)",
+    "gates": [
+      {
+        "afterPhase": 3,
+        "description": "SC3:同名同序/改名同步/归档保留/删除移除/派发归组/偏差不回流/降级不阻断 e2e 全绿"
+      }
+    ]
+  },
+  {
+    "phase": 4,
+    "name": "分屏/多窗口 + 布局记忆 + 全量验收(ui-state/壳层 windows/C9 分屏/C10 拆出/布局恢复/SC4-SC6 收口)",
+    "source": "PRD-explicit(PRD §Phase 规划 P4 + tech-design Phase 映射:P4 = 分屏/多窗口/布局记忆 + 全量验收)",
+    "gates": [
+      {
+        "afterPhase": 4,
+        "description": "SC4 + SC5 + SC6;里程碑收口(quality-gate 全量通过;分屏先于多窗口在相位内已兑现)"
+      }
+    ]
+  }
+]

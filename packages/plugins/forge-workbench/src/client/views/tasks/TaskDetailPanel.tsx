@@ -7,7 +7,9 @@
  * reserved disabled placeholder), and the four accordion sections: 描述
  * (MarkdownView read-only) / 依赖链 (topological, same blocker path as the
  * DAG) / 执行记录 (timeline with per-entry 来源 badges) / 挂接历史 (active/
- * ended links, 新→旧). The 5.8 integrate task mounts this dock into the
+ * ended links, 新→旧; since M4 2.6 the C5 enhancement rides INSIDE that
+ * section — 行展开血缘后代 + [打开] 双通道 + No-link [发起], seam-gated).
+ * The 5.8 integrate task mounts this dock into the
  * board page (TasksView + the selection store); the 5.15 assembly swaps
  * the mock face for the Interface 1 getTaskDetail verb.
  *
@@ -39,25 +41,28 @@ import { ChromeButton } from '../../components/chrome/ChromeButton'
 import { MarkdownView } from '../../components/common/MarkdownView'
 import { createMockTaskDetailFace } from '../../mocks/workbench'
 import { SessionBadge } from './SessionBadge'
-import { DETAIL_DOCK_WIDTH, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle } from './launch/LaunchStates'
+import { detailDockWidthOf, DETAIL_DOCK_Z, focusablesOf, primaryButtonStyle, type BoardHostForm } from './launch/LaunchStates'
 import { badgeStyle, sourceBadgeStyle } from './TaskRow'
 import { DepChain } from './detail/DepChain'
 import { DetailStatusPill } from './detail/ProgressDots'
 import { LinkHistory } from './detail/LinkHistory'
+import type { LinkHistoryLineageSeat, SessionOpenTarget } from './detail/LinkHistory'
 import { RecordsTimeline } from './detail/RecordsTimeline'
 import { ApprovalReturnButton } from './dispatch/ApprovalPanel'
 import {
   currentDispatchRow, DispatchExecuteButton, OrchestrationSection, useDetailDispatchChain,
   type DetailDispatchVerbs,
 } from './dispatch/OrchestrationSection'
+import { isTerminalTaskStatus } from './dispatch/selection-mode'
 import type { SelectionTaskEntry } from './dispatch/selection-mode'
 
 /** ui-design 层叠: the detail dock rides z100 (dialogs z1200, toasts z1100). */
 // Since 3.9 the constants live in launch/LaunchStates.tsx (the dock family's
 // acyclic shared home — the approval panel imports this module's components,
 // so a same-module declaration would cycle); re-exported for the 5.8-era
-// consumers that address them here (TaskBoardPage's inset, the specs).
-export { DETAIL_DOCK_Z, DETAIL_DOCK_WIDTH }
+// consumers that address them here (the specs — since M4 2.1 the page's inset
+// goes through detailDockWidthOf's host mapping instead).
+export { DETAIL_DOCK_Z, DETAIL_DOCK_WIDTH } from './launch/LaunchStates'
 
 /** Inputs of {@link TaskDetailPanel}. */
 export interface TaskDetailPanelProps {
@@ -71,6 +76,12 @@ export interface TaskDetailPanelProps {
   taskKey?: string | null | undefined
   /** The active project — the loadDetail verb argument + the launch ref. */
   projectId?: string | undefined
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主, threaded by TaskBoardPage):
+   * 'window' (default) = the UF3 dock geometry `min(440px, 45vw)` verbatim;
+   * 'pane' = the dock caps at the board's own box. See {@link detailDockWidthOf}.
+   */
+  host?: BoardHostForm | undefined
   /**
    * The project codeRoot (project context; the M2 launch entry that consumed
    * it retired with the ForgeBridge chain — task 6.1).
@@ -99,8 +110,20 @@ export interface TaskDetailPanelProps {
   onClose: () => void
   /** Dep-chain item activation — re-target the selection to that task (AC: 可点击跳转选中). */
   onNavigate?: ((taskKey: string) => void) | undefined
-  /** 「进入会话」 seam — absent link rows stay informational (SC3-3/6.3 wire the jump). */
-  onEnterSession?: ((sessionId: string) => void) | undefined
+  /**
+   * 「打开」 dual-channel seam (M4 2.6, tech-design §Integration #2 — M3's
+   * 进入会话 seam EXTENDED over Interface 6's both target shapes): a TOP
+   * link row passes its sessionId string; a lineage descendant entry passes
+   * the hit's SubagentAddress triple. Absent link rows stay informational;
+   * the channel implementation is 2.7's session-open.ts.
+   */
+  onEnterSession?: ((target: SessionOpenTarget) => void | Promise<unknown>) | undefined
+  /**
+   * The C5 挂接历史 lineage seat (M4 2.6): PRESENT = the lineage capability
+   * is wired behind the board — the links section's 行展开 + degraded
+   * presentation ride it; `snapshot` absent within = inference-degraded.
+   */
+  linkLineage?: LinkHistoryLineageSeat | undefined
   /**
    * The UF1 orchestration mount (task 3.9): present = the M3 dispatch form
    * (派发执行 primary + 编排 partition + the approval round-trip head);
@@ -109,7 +132,12 @@ export interface TaskDetailPanelProps {
   dispatch?: TaskDetailDispatchMount | undefined
 }
 
-/** The dock geometry (ui-design UF3 Placement): right edge, min(440px, 45vw), bg-layer-2, left border. */
+/**
+ * The dock geometry (ui-design UF3 Placement): right edge, bg-layer-2, left
+ * border. The WIDTH is host-form-dependent (M4 2.1) and applied at the render
+ * site through {@link detailDockWidthOf} — the window form's ui-design value
+ * `min(440px, 45vw)` verbatim, the pane form capped at the board's own box.
+ */
 const dockStyle = {
   background: 'var(--dsw-alias-bg-layer-2, var(--dsh-bg, Canvas))',
   borderLeft: '1px solid var(--dsh-border-color, CanvasText)',
@@ -125,7 +153,6 @@ const dockStyle = {
   position: 'absolute',
   right: '0',
   top: '0',
-  width: DETAIL_DOCK_WIDTH,
   zIndex: DETAIL_DOCK_Z,
 } as const
 
@@ -419,6 +446,7 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
       tabIndex={-1}
       style={{
         ...dockStyle,
+        width: detailDockWidthOf(props.host ?? 'window'),
         transform: entered ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
@@ -575,7 +603,20 @@ export function TaskDetailPanel(props: TaskDetailPanelProps) {
             <RecordsTimeline t={props.t} records={detail.records} />
           </DetailSection>
           <DetailSection t={props.t} id="links" titleKey="detail.section.links">
-            <LinkHistory t={props.t} links={detail.links} onEnterSession={props.onEnterSession} />
+            {/* C5 挂接历史 增强 (M4 2.6): the lineage seat + the No-link [发起]
+                seam — the [发起] rides the SAME dispatch controller as the head
+                primary (ONE chain, the M3 发起链) and todo#30 disables it on
+                terminal task states. Absent seams keep the M2/M3 form. */}
+            <LinkHistory
+              t={props.t}
+              links={detail.links}
+              {...(props.linkLineage === undefined ? {} : { lineage: props.linkLineage })}
+              onEnterSession={props.onEnterSession}
+              {...(dispatchMount === undefined ? {} : {
+                onLaunch: () => { detailController.startDispatch() },
+                launchDisabled: isTerminalTaskStatus(detail.summary.status),
+              })}
+            />
           </DetailSection>
         </>
       )}

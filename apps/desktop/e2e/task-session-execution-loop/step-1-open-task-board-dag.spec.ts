@@ -23,7 +23,7 @@
 import { spawnSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { registerFixtureProject } from '../fixtures/forge-project.ts'
-import { switchToWorkbench, waitForTreeNodes, cleanupViewKey, closeAndAwaitExit } from '../tests/m2/helpers/restart-app.ts'
+import { prepareBoardEntry, waitForTreeNodes, cleanupViewKey, closeAndAwaitExit } from '../tests/m2/helpers/restart-app.ts'
 import {
   assertReadonlyBridgeFace, diffSamples, disposeJourney, groundOf, readBoard,
   readForgeIndexTruth, setUpJourney,
@@ -32,6 +32,8 @@ import {
 /** Setup 实际任务规模的首屏预算(契约 Output:首屏 2 秒内可交互)。 */
 const FIRST_INTERACTIVE_BUDGET_MS = 2_000
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-1/success [@web-e2e @journey task-session-execution-loop]: task board DAG vs forge files (dual channel) + first interactive ≤2s + read-only face', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
 
@@ -53,13 +55,11 @@ test('step-1/success [@web-e2e @journey task-session-execution-loop]: task board
       expect(typeof projectId).toBe('string')
 
       // ---- 首屏 ≤2s(sc1 口径,单发:t0+click 同一 evaluate,零驱动延迟)--
-      await switchToWorkbench(page)
+      await prepareBoardEntry(page)
       await page.evaluate(() => {
-        const tab = Array.from(document.querySelectorAll('[data-dsh-forge-shell] [role="tab"]'))
-          .find((el) => { const text = (el.textContent ?? '').trim(); return text === '任务' || text === 'Tasks' })
-        if (tab === undefined) throw new Error('tasks tab not found inside the workbench shell')
         (globalThis as { __tselT0?: number }).__tselT0 = performance.now()
-        ;(tab as HTMLElement).click()
+        const row = document.querySelector('[data-dsh-forge-overview-task]') as HTMLElement | null
+        row?.click()
       })
       await waitForTreeNodes(page, set.facts.taskCount)
       const { t0, t1 } = await page.evaluate(() => new Promise<{ t0: number; t1: number }>((resolve) => {

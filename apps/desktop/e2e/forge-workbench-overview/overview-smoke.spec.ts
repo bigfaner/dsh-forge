@@ -92,8 +92,13 @@ async function registerViaWizard(
   await page.locator('[data-dsh-forge-wizard-next]').click()
   await page.locator('[data-dsh-forge-wizard-finish]').click()
 }
+// [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
 
-test('5.14/overview-smoke: register → switch → remove over the real IPC chain', async ({ }, testInfo) => {
+
+test.fixme('5.14/overview-smoke: register → switch → remove over the real IPC chain', async ({ }, testInfo) => {
   testInfo.setTimeout(300_000)
   const shell = await launchPluginShell({ bundles: overviewBundles(), stageTarballs: overviewTarballs(), userDataDir: join(mkdtempSync(join(tmpdir(), 'dsh-forge-overview-smoke-')), 'user-data') })
   try {

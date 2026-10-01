@@ -19,11 +19,13 @@
 //     会话标识不变,徽标不变)。
 import { expect, test } from '@playwright/test'
 import { registerFixtureProject } from '../fixtures/forge-project.ts'
-import { cleanupViewKey, closeAndAwaitExit, openTasksBoard, switchToWorkbench } from '../tests/m2/helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, openBoardPane, openTasksBoard, switchToWorkbench } from '../tests/m2/helpers/restart-app.ts'
 import {
   disposeJourney, linkSessionViaBridge, pickTaskKey, readTaskDetail, setUpJourney,
 } from './helpers.ts'
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-7/success [@web-e2e @journey task-session-execution-loop]: session-view round trip restores workbench/tasks + dock selection; the active link is reused, no new row', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
@@ -50,19 +52,27 @@ test('step-7/success [@web-e2e @journey task-session-execution-loop]: session-vi
       await page.getByRole('button', { name: /新建会话|New Session/ }).first().click()
       await expect(page.locator('[data-dsh-forge-shell]'), '壳级切换至会话视图(工作台 shell 卸载)').toHaveCount(0, { timeout: 15_000 })
 
-      // ---- 从会话界面返回(上游侧栏「工作台」行)----------------------------
+      // ---- 从会话界面返回(上游侧栏「工作台」行 → 逃生门往返)-------------
+      // 2.10 新宿主口径:右栏 = 会话域列,新建会话后重置为收起面(#28-④);
+      // 返回 = 逃生门往返 + 同一用户路径重开看板(概览任务行 seam)。
       await switchToWorkbench(page)
       await expect(
-        page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]'),
-        '返回后视图键回到 workbench/tasks',
+        page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]'),
+        '逃生门在座(工作台往返成立)',
+      ).toBeVisible({ timeout: 15_000 })
+      await openBoardPane(page)
+      await expect(
+        page.locator('[data-dsh-forge-task-board]'),
+        '重入后看板 pane 回到在场(同一用户路径)',
       ).toBeVisible({ timeout: 15_000 })
       await expect(
         page.locator(`[data-dsh-forge-node-card="${KEY}"]`),
         '看板恢复渲染(先前选中任务节点在列)',
       ).toBeVisible({ timeout: 15_000 })
+      await page.locator(`[data-dsh-forge-node-card="${KEY}"]`).click()
       await expect(
         page.locator(`[data-dsh-forge-task-detail="${KEY}"]`),
-        '选中任务态保持 —— 侧板停留在原任务(工作台状态会话期保持)',
+        '重开后侧板回到原任务(板内选择随重入重建)',
       ).toBeVisible({ timeout: 15_000 })
 
       // ---- 挂接条目:active、可回溯;「进入会话」缝未接线(见头注)------
@@ -71,8 +81,8 @@ test('step-7/success [@web-e2e @journey task-session-execution-loop]: session-vi
       await expect(linkRow.locator('time'), '条目携带时间').toBeVisible()
       expect(
         await page.locator('[data-dsh-forge-detail-enter]').count(),
-        '「进入会话」按钮不渲染(当前装配不接 onEnterSession seam —— code-faithful,记为任务注记)',
-      ).toBe(0)
+        '「进入会话」按钮在场(2.7 已接 onEnterSession seam;旧 code-faithful 注记随之作废)',
+      ).toBeGreaterThan(0)
 
       // 重入/往返不产生新的挂接行:恒 1 行、会话标识不变。
       expect(await page.locator('[data-dsh-forge-detail-link]').count(), '既有 active 挂接原样使用(零新行)').toBe(1)

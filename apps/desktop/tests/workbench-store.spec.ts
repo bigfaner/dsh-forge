@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,6 +6,7 @@ import { openDatabase, WorkbenchDbError, type DatabaseSyncLike, type SqliteModul
 import { LATEST_SCHEMA_VERSION, readSchemaVersion } from '../src/main/workbench/store/migrate.ts'
 import { SCHEMA_V1_SQL } from '../src/main/workbench/store/schema-v1.ts'
 import { SCHEMA_V2_SQL } from '../src/main/workbench/store/schema-v2.ts'
+import { SCHEMA_V3_SQL } from '../src/main/workbench/store/schema-v3.ts'
 
 // Task 2.1 — SQLite store foundation (node:sqlite, <userData>/workbench/
 // workbench.db). Boot probe failure must surface as structured
@@ -18,6 +19,13 @@ import { SCHEMA_V2_SQL } from '../src/main/workbench/store/schema-v2.ts'
 // (projects / feature_snapshot) + 7 new tables + the v2 indexes from
 // docs/features/dsh-forge-m3/design/schema.sql, carried by the inline
 // SCHEMA_V2_SQL constant and drift-guarded against that design file.
+//
+// Task 1.1 (M4) — schema v3 incremental migration (only-add): projects
+// ALTER ×10 (D11 identity / archived / sort_order / docs_placement /
+// projection_state) + 2 new tables (project_ui_state / workspace_projection)
+// + 2 indexes from docs/features/dsh-forge-m4/design/schema.sql, carried by
+// the inline SCHEMA_V3_SQL constant (drift-guarded) with the in-transaction
+// TS backfill of the new columns for existing rows.
 
 const scratches: string[] = []
 
@@ -82,6 +90,16 @@ const V2_INDEXES = [
   'idx_migration_project',
   'idx_task_feature',
   'idx_task_status',
+] as const
+
+const V3_TABLES = [
+  'project_ui_state',
+  'workspace_projection',
+] as const
+
+const V3_INDEXES = [
+  'idx_projects_code_root_key',
+  'idx_projects_sort_order',
 ] as const
 
 function insertProject(db: DatabaseSyncLike, id: string, docLocationType: string, docLocationPath?: string): void {
@@ -150,13 +168,13 @@ describe('openDatabase — fresh create (AC1, AC2)', () => {
     }
   })
 
-  it('executes the full DDL (v1 + v2): 13 domain tables + schema_version, all indexes', async () => {
+  it('executes the full DDL (v1 + v2 + v3): 15 domain tables + schema_version, all indexes', async () => {
     const { db } = await openDatabase(makeScratch())
     try {
       const tables = queryNames(db, 'table')
-      expect(tables).toEqual([...DOMAIN_TABLES, ...V2_TABLES, 'schema_version'].slice().sort())
+      expect(tables).toEqual([...DOMAIN_TABLES, ...V2_TABLES, ...V3_TABLES, 'schema_version'].slice().sort())
       const indexes = queryNames(db, 'index')
-      expect(indexes).toEqual([...V1_INDEXES, ...V2_INDEXES].slice().sort())
+      expect(indexes).toEqual([...V1_INDEXES, ...V2_INDEXES, ...V3_INDEXES].slice().sort())
     } finally {
       db.close()
     }
@@ -413,7 +431,7 @@ describe('v2 incremental migration (task 1.1)', () => {
     expect(sqlStatements(SCHEMA_V2_SQL)).toEqual(design)
   })
 
-  it('upgrades a v1 database in place to v2: version bump, v1 rows verbatim, new columns default (AC3, AC5)', async () => {
+  it('upgrades a v1 database in place to v3 (walking v2 + v3): version bump, v1 rows verbatim, new columns default (AC3, AC5)', async () => {
     const userData = makeScratch()
     await makeV1Database(userData, (db) => {
       insertProject(db, 'p1', 'in_repo')
@@ -432,8 +450,8 @@ describe('v2 incremental migration (task 1.1)', () => {
     const { db, recovery } = await openDatabase(userData)
     try {
       expect(recovery).toBeUndefined()
-      expect(LATEST_SCHEMA_VERSION).toBe(2)
-      expect(readSchemaVersion(db)).toBe(2)
+      expect(LATEST_SCHEMA_VERSION).toBe(3)
+      expect(readSchemaVersion(db)).toBe(3)
       expect(db.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
       // v1 data verbatim — zero destruction:
       expect(db.prepare('SELECT COUNT(*) AS c FROM projects').get()).toMatchObject({ c: 1 })
@@ -492,11 +510,11 @@ describe('v2 incremental migration (task 1.1)', () => {
     }
   })
 
-  it('reopening an upgraded v2 database is a no-op (AC3, idempotent re-run)', async () => {
+  it('reopening an upgraded database is a no-op (AC3, idempotent re-run)', async () => {
     const userData = makeScratch()
     await makeV1Database(userData, db => insertProject(db, 'p1', 'in_repo'))
     const first = await openDatabase(userData)
-    expect(readSchemaVersion(first.db)).toBe(2)
+    expect(readSchemaVersion(first.db)).toBe(3)
     first.db.prepare(
       'INSERT INTO prefs (scope, scope_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)',
     ).run('global', '', 'auto.dispatch', '{"mode":"batch"}', TS)
@@ -504,7 +522,7 @@ describe('v2 incremental migration (task 1.1)', () => {
 
     const second = await openDatabase(userData)
     try {
-      expect(readSchemaVersion(second.db)).toBe(2)
+      expect(readSchemaVersion(second.db)).toBe(3)
       expect(second.db.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
       expect(second.db.prepare("SELECT value_json FROM prefs WHERE scope = 'global' AND scope_id = '' AND key = 'auto.dispatch'").get())
         .toEqual({ value_json: '{"mode":"batch"}' })
@@ -668,6 +686,328 @@ describe('v2 row-level CHECK vocabularies (task 1.1, AC4)', () => {
         'INSERT INTO approval_request (id, dispatch_id, project_id, task_key, session_id, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run('a2', 'no-such-dispatch', 'p1', 'feat/1.2', 'session-y', '{}', TS)).toThrow(/constraint/i)
       expect(db.prepare('SELECT COUNT(*) AS c FROM approval_request').get()).toMatchObject({ c: 1 })
+    } finally {
+      db.close()
+    }
+  })
+})
+
+describe('v3 incremental migration (task 1.1)', () => {
+  /** v2 库 fixture(M3 壳遗留):full v1+v2 DDL,schema_version = 2,可选种子行。 */
+  async function makeV2Database(userData: string, seed?: (db: DatabaseSyncLike) => void): Promise<string> {
+    const dbPath = dbPathOf(userData)
+    mkdirSync(join(userData, 'workbench'), { recursive: true })
+    const { DatabaseSync } = await import('node:sqlite')
+    const raw: DatabaseSyncLike = new DatabaseSync(dbPath)
+    try {
+      raw.exec(SCHEMA_V1_SQL)
+      raw.exec(SCHEMA_V2_SQL)
+      raw.exec('DELETE FROM schema_version')
+      raw.exec('INSERT INTO schema_version (version) VALUES (2)')
+      seed?.(raw)
+    } finally {
+      raw.close()
+    }
+    return dbPath
+  }
+
+  /** 平台折叠口径(与 migrate.ts 回填一致:win32 大写折叠,其他平台原样)。 */
+  const fold = (path: string): string => (process.platform === 'win32' ? path.toUpperCase() : path)
+
+  interface SeedProjectInput {
+    readonly id: string
+    readonly codeRoot: string
+    readonly type: 'in_repo' | 'external'
+    readonly docPath?: string
+    readonly createdAt: string
+  }
+
+  /** Raw v1 方言 insert(绕过 repos 注册链:回填测试只关心已存在的行)。 */
+  function insertSeedProject(db: DatabaseSyncLike, input: SeedProjectInput): void {
+    db.prepare(
+      'INSERT INTO projects (id, display_name, code_root, doc_location_type, doc_location_path, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(input.id, input.id, input.codeRoot, input.type, input.docPath ?? null, input.createdAt)
+  }
+
+  it('applies the v3 segment on fresh create: 10 new projects columns + 2 new tables + 2 indexes; a v1-shaped insert picks up the designed defaults (AC1, AC5)', async () => {
+    const { db } = await openDatabase(makeScratch())
+    try {
+      expect(queryNames(db, 'table')).toEqual(expect.arrayContaining([...V3_TABLES]))
+      expect(queryNames(db, 'index')).toEqual(expect.arrayContaining([...V3_INDEXES]))
+      expect(columnNames(db, 'projects')).toEqual(
+        expect.arrayContaining([
+          'code_root_key', 'identity_dev', 'identity_ino', 'identity_verified',
+          'archived', 'sort_order', 'docs_placement', 'custom_authorized',
+          'projection_state', 'workspace_id',
+        ]),
+      )
+      insertProject(db, 'p1', 'in_repo')
+      expect(db.prepare(
+        'SELECT code_root_key, identity_dev, identity_ino, identity_verified, archived, sort_order, docs_placement, custom_authorized, projection_state, workspace_id FROM projects',
+      ).get()).toEqual({
+        code_root_key: null, identity_dev: null, identity_ino: null, identity_verified: 1,
+        archived: 0, sort_order: 0, docs_placement: 'legacy', custom_authorized: 0,
+        projection_state: 'pending', workspace_id: null,
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('schema-v3.ts inline constant reconciles with the m4 design/schema.sql statement by statement (drift guard)', () => {
+    const designSql = readFileSync(
+      new URL('../../../docs/features/dsh-forge-m4/design/schema.sql', import.meta.url),
+      'utf8',
+    )
+    const design = sqlStatements(designSql)
+    // Anti-vacuous guard: the v3 segment is 10 ALTER + 2 CREATE TABLE +
+    // 2 CREATE INDEX = 14 statements.
+    expect(design).toHaveLength(14)
+    expect(sqlStatements(SCHEMA_V3_SQL)).toEqual(design)
+  })
+
+  it('upgrades a v2 database in place to v3 with the in-transaction backfill matrix, then reruns as a no-op (AC2, AC3, AC5)', async () => {
+    const userData = makeScratch()
+    const repoScratch = makeScratch()
+    const realRepo = join(repoScratch, 'repo-alpha')
+    mkdirSync(realRepo, { recursive: true })
+    const realRepoKey = fold(realpathSync.native(realRepo).replaceAll('\\', '/'))
+    const docsRoot = join(userData, 'workbench', 'docs')
+    const customDocPath = join(repoScratch, 'forge-docs').replaceAll('\\', '/')
+    await makeV2Database(userData, (db) => {
+      // created_at 升序 = 期望的 sort_order 注册序(0..3)。
+      insertSeedProject(db, { id: 'p-offline', codeRoot: 'C:/repos/gone-project', type: 'in_repo', createdAt: '2026-09-20T00:00:00.000Z' })
+      insertSeedProject(db, { id: 'p-inrepo', codeRoot: realRepo.replaceAll('\\', '/'), type: 'in_repo', createdAt: '2026-09-21T00:00:00.000Z' })
+      insertSeedProject(db, {
+        id: 'p-app', codeRoot: 'C:/code/app-hosted', type: 'external',
+        docPath: join(docsRoot, 'app-hosted').replaceAll('\\', '/'), createdAt: '2026-09-22T00:00:00.000Z',
+      })
+      insertSeedProject(db, {
+        id: 'p-custom', codeRoot: 'C:/code/custom-project', type: 'external',
+        docPath: customDocPath, createdAt: '2026-09-23T00:00:00.000Z',
+      })
+      // 授权在案(registry/authorize.ts 的 app_state 保留键,原样形态)。
+      db.prepare('INSERT INTO app_state (key, value) VALUES (?, ?)').run(
+        'external_doc_authorizations',
+        JSON.stringify([{ path: customDocPath, authorizedAt: '2026-09-23T00:00:00.000Z' }]),
+      )
+      // v2 自有数据(零破坏断言用)。
+      db.prepare(
+        'INSERT INTO task (project_id, task_key, feature_slug, title, status, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run('p-custom', 'feat/1.1', 'feat', 'v2 task row', 'completed', TS)
+      db.prepare(
+        'INSERT INTO prefs (scope, scope_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)',
+      ).run('project', 'p-inrepo', 'auto.dispatch', '{"mode":"batch"}', TS)
+    })
+
+    const { db, recovery } = await openDatabase(userData)
+    try {
+      expect(recovery).toBeUndefined()
+      expect(LATEST_SCHEMA_VERSION).toBe(3)
+      expect(readSchemaVersion(db)).toBe(3)
+      expect(db.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
+
+      // —— 回填矩阵 ——
+      interface V3Row {
+        readonly id: string
+        readonly code_root_key: string | null
+        readonly identity_dev: string | null
+        readonly identity_ino: string | null
+        readonly identity_verified: number
+        readonly docs_placement: string
+        readonly custom_authorized: number
+        readonly sort_order: number
+        readonly projection_state: string
+        readonly archived: number
+        readonly workspace_id: string | null
+      }
+      const rows = db.prepare(
+        'SELECT id, code_root_key, identity_dev, identity_ino, identity_verified, docs_placement, custom_authorized, sort_order, projection_state, archived, workspace_id FROM projects',
+      ).all() as V3Row[]
+      const byId = new Map(rows.map(row => [row.id, row]))
+      // realpath 失败(路径已不存在)→ 字符串回退 + identity_verified=0,物理位留空。
+      expect(byId.get('p-offline')).toMatchObject({
+        code_root_key: fold('C:/repos/gone-project'), identity_dev: null, identity_ino: null,
+        identity_verified: 0, docs_placement: 'repo-existing', custom_authorized: 0,
+        sort_order: 0, projection_state: 'pending', archived: 0, workspace_id: null,
+      })
+      // realpath 成功 → 折叠比较键 + (dev,ino) 物理位 + verified=1。
+      expect(byId.get('p-inrepo')).toMatchObject({
+        code_root_key: realRepoKey, identity_verified: 1, docs_placement: 'repo-existing',
+        custom_authorized: 0, sort_order: 1, projection_state: 'pending',
+      })
+      expect(byId.get('p-inrepo')?.identity_dev).toEqual(expect.any(String))
+      expect(byId.get('p-inrepo')?.identity_ino).toEqual(expect.any(String))
+      // external 位于内核 docsRoot 之下 → 'app'(无需仓外授权位)。
+      expect(byId.get('p-app')).toMatchObject({
+        docs_placement: 'app', custom_authorized: 0, sort_order: 2, projection_state: 'pending',
+      })
+      // external 他处 + 授权在案 → 'custom' + custom_authorized=1。
+      expect(byId.get('p-custom')).toMatchObject({
+        docs_placement: 'custom', custom_authorized: 1, sort_order: 3, projection_state: 'pending',
+      })
+      // 回填只读:app 管理文档根未被置备(置备属注册/重指向动词)。
+      expect(existsSync(docsRoot)).toBe(false)
+
+      // —— v1/v2 数据零破坏 ——
+      expect(db.prepare('SELECT COUNT(*) AS c FROM projects').get()).toMatchObject({ c: 4 })
+      expect(db.prepare('SELECT task_key, feature_slug, title, status FROM task').all()).toEqual([
+        { task_key: 'feat/1.1', feature_slug: 'feat', title: 'v2 task row', status: 'completed' },
+      ])
+      expect(db.prepare("SELECT value_json FROM prefs WHERE scope = 'project' AND scope_id = 'p-inrepo' AND key = 'auto.dispatch'").get())
+        .toEqual({ value_json: '{"mode":"batch"}' })
+      expect(db.prepare('SELECT COUNT(*) AS c FROM app_state').get()).toMatchObject({ c: 1 })
+    } finally {
+      db.close()
+    }
+
+    // 幂等重跑:升级后再开库 = no-op(版本不退、行数不变、回填值稳定)。
+    const second = await openDatabase(userData)
+    try {
+      expect(second.recovery).toBeUndefined()
+      expect(readSchemaVersion(second.db)).toBe(3)
+      expect(second.db.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
+      expect(second.db.prepare('SELECT COUNT(*) AS c FROM projects').get()).toMatchObject({ c: 4 })
+      expect(second.db.prepare("SELECT code_root_key, identity_verified FROM projects WHERE id = 'p-inrepo'").get())
+        .toEqual({ code_root_key: realRepoKey, identity_verified: 1 })
+    } finally {
+      second.db.close()
+    }
+  })
+
+  it('a folded code_root_key collision fails the migration explicitly (AC2: 折叠键碰撞 = 迁移失败显式暴露)', async () => {
+    const userData = makeScratch()
+    const dbPath = await makeV2Database(userData, (db) => {
+      // v1 UNIQUE(code_root) 大小写敏感:两行存储值不同,win32 折叠后同键。
+      insertSeedProject(db, { id: 'p-a', codeRoot: 'C:/repos/alpha', type: 'in_repo', createdAt: TS })
+      insertSeedProject(db, { id: 'p-b', codeRoot: 'c:/repos/ALPHA', type: 'in_repo', createdAt: TS })
+    })
+
+    let caught: unknown
+    try {
+      await openDatabase(userData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(WorkbenchDbError)
+    expect((caught as WorkbenchDbError).message).toMatch(/migrat/)
+
+    const { DatabaseSync } = await import('node:sqlite')
+    const verify = new DatabaseSync(dbPath)
+    try {
+      // 整段回滚:版本停在 2,v3 增列未落地,库文件原样(非损坏,无备份)。
+      expect(verify.prepare('SELECT MAX(version) AS v FROM schema_version').get()).toMatchObject({ v: 2 })
+      expect(verify.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
+      expect(columnNames(verify, 'projects')).not.toContain('code_root_key')
+      expect(verify.prepare('SELECT COUNT(*) AS c FROM projects').get()).toMatchObject({ c: 2 })
+      expect(readdirSync(join(userData, 'workbench')).filter(name => name.includes('.corrupt-'))).toEqual([])
+    } finally {
+      verify.close()
+    }
+  })
+
+  it('v3 segment is atomic: a mid-segment failure rolls back the ALTERs and leaves the v2 library untouched (AC1)', async () => {
+    const userData = makeScratch()
+    const dbPath = await makeV2Database(userData, (db) => {
+      insertSeedProject(db, { id: 'p1', codeRoot: 'C:/repos/alpha', type: 'in_repo', createdAt: TS })
+      // 与段内 CREATE TABLE project_ui_state 撞名:10 条 ALTER 已跑,死在这里
+      // —— 整段必须随之回滚,不留半迁移态。
+      db.exec('CREATE TABLE project_ui_state (sentinel INTEGER)')
+    })
+
+    let caught: unknown
+    try {
+      await openDatabase(userData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(WorkbenchDbError)
+    expect((caught as WorkbenchDbError).message).toMatch(/migrat/)
+
+    const { DatabaseSync } = await import('node:sqlite')
+    const verify = new DatabaseSync(dbPath)
+    try {
+      expect(verify.prepare('SELECT MAX(version) AS v FROM schema_version').get()).toMatchObject({ v: 2 })
+      expect(verify.prepare('SELECT COUNT(*) AS c FROM schema_version').get()).toMatchObject({ c: 1 })
+      expect(columnNames(verify, 'projects')).not.toContain('code_root_key')
+      expect(verify.prepare('SELECT COUNT(*) AS c FROM projects').get()).toMatchObject({ c: 1 })
+      expect(readdirSync(join(userData, 'workbench')).filter(name => name.includes('.corrupt-'))).toEqual([])
+    } finally {
+      verify.close()
+    }
+  })
+
+  it('idx_projects_code_root_key enforces fold-key uniqueness (AC1)', async () => {
+    const { db } = await openDatabase(makeScratch())
+    try {
+      insertProject(db, 'p1', 'in_repo')
+      insertProject(db, 'p2', 'external', 'C:/docs/p2')
+      const setKey = (id: string, key: string): void => {
+        db.prepare('UPDATE projects SET code_root_key = ? WHERE id = ?').run(key, id)
+      }
+      setKey('p1', 'C:/REPOS/A')
+      // UNIQUE 落比较键列:同键的第二行被拒。折叠本身是应用层单源(D11:不用
+      // NOCASE —— 索引按存储值判重,写入面恒存折叠键;折叠碰撞在回填的
+      // 迁移失败用例中显式暴露)。
+      expect(() => setKey('p2', 'C:/REPOS/A')).toThrow(/constraint/i)
+      setKey('p2', 'C:/REPOS/B')
+      expect(db.prepare('SELECT COUNT(*) AS c FROM projects WHERE code_root_key IS NOT NULL').get()).toMatchObject({ c: 2 })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('v3 FK contracts: CASCADE clears both new tables on project delete; dangling parents rejected (AC1)', async () => {
+    const { db } = await openDatabase(makeScratch())
+    try {
+      insertProject(db, 'p1', 'in_repo')
+      db.prepare('INSERT INTO project_ui_state (project_id, updated_at) VALUES (?, ?)').run('p1', TS)
+      db.prepare(
+        'INSERT INTO workspace_projection (project_id, workspace_id, path, title, order_idx, pushed_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run('p1', 'ws-1', 'C:/code/p1', 'p1', 0, TS)
+      // layout_json 落默认 '{}'。
+      expect(db.prepare('SELECT layout_json FROM project_ui_state').get()).toEqual({ layout_json: '{}' })
+      // FK:引用不存在的项目被拒(两张新表各一腿)。
+      expect(() => db.prepare('INSERT INTO project_ui_state (project_id, updated_at) VALUES (?, ?)').run('no-such-project', TS)).toThrow(/constraint/i)
+      expect(() => db.prepare(
+        'INSERT INTO workspace_projection (project_id, workspace_id, path, title, order_idx, pushed_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run('no-such-project', 'ws-2', 'C:/x', 'x', 0, TS)).toThrow(/constraint/i)
+      // CASCADE:项目删除 → 两张 1:1 子表随之清除。
+      db.prepare('DELETE FROM projects WHERE id = ?').run('p1')
+      expect(db.prepare('SELECT COUNT(*) AS c FROM project_ui_state').get()).toMatchObject({ c: 0 })
+      expect(db.prepare('SELECT COUNT(*) AS c FROM workspace_projection').get()).toMatchObject({ c: 0 })
+    } finally {
+      db.close()
+    }
+  })
+})
+
+describe('v3 row-level CHECK vocabularies (task 1.1, AC4)', () => {
+  it('docs_placement accepts the 5 values and rejects anything else', async () => {
+    const { db } = await openDatabase(makeScratch())
+    try {
+      insertProject(db, 'p1', 'in_repo')
+      const setPlacement = (value: string): void => {
+        db.prepare('UPDATE projects SET docs_placement = ? WHERE id = ?').run(value, 'p1')
+      }
+      for (const value of ['repo-existing', 'repo-new', 'app', 'custom', 'legacy']) setPlacement(value)
+      expect(() => setPlacement('inside-repo')).toThrow(/constraint/i)
+      expect(db.prepare('SELECT docs_placement FROM projects').get()).toEqual({ docs_placement: 'legacy' })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('projection_state accepts the 4 values and rejects anything else', async () => {
+    const { db } = await openDatabase(makeScratch())
+    try {
+      insertProject(db, 'p1', 'in_repo')
+      const setState = (value: string): void => {
+        db.prepare('UPDATE projects SET projection_state = ? WHERE id = ?').run(value, 'p1')
+      }
+      for (const value of ['pending', 'healthy', 'degraded', 'deviation']) setState(value)
+      expect(() => setState('unknown')).toThrow(/constraint/i)
+      expect(db.prepare('SELECT projection_state FROM projects').get()).toEqual({ projection_state: 'deviation' })
     } finally {
       db.close()
     }

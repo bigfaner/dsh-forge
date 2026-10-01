@@ -134,15 +134,17 @@ async function resolveSqliteModule(deps: OpenDatabaseDeps): Promise<SqliteModule
 /**
  * Open the database file, apply the connection PRAGMAs and migrate to the
  * latest schema. On failure the handle is closed (renames on win32 require
- * it) and the raw error is rethrown for the caller to classify.
+ * it) and the raw error is rethrown for the caller to classify. `docsRoot`
+ * (kernel-managed external docs root) feeds the v3 backfill's legacy
+ * external → 'app' classification.
  */
-function openAndMigrate(mod: SqliteModuleLike, dbPath: string): DatabaseSyncLike {
+function openAndMigrate(mod: SqliteModuleLike, dbPath: string, docsRoot: string): DatabaseSyncLike {
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new mod.DatabaseSync(dbPath)
   try {
     db.exec('PRAGMA journal_mode = WAL')
     db.exec('PRAGMA foreign_keys = ON')
-    migrateDatabase(db)
+    migrateDatabase(db, { docsRoot })
     return db
   } catch (error) {
     try {
@@ -202,8 +204,11 @@ export async function openDatabase(
   // Probe first: a failed probe must leave no filesystem state behind.
   const mod = await resolveSqliteModule(deps)
   const dbPath = join(userDataPath, WORKBENCH_DIR, DB_FILE_NAME)
+  // v3 回填的 app 管理文档根(<userData>/workbench/docs —— 与 ipc/services.ts
+  // workbenchPaths.docsRoot 同一放置规则,自 db 放置单一源推导)。
+  const docsRoot = join(dirname(dbPath), 'docs')
   try {
-    const db = openAndMigrate(mod, dbPath)
+    const db = openAndMigrate(mod, dbPath, docsRoot)
     return { db, path: dbPath }
   } catch (error) {
     if (error instanceof WorkbenchDbError) throw error
@@ -220,7 +225,7 @@ export async function openDatabase(
       )
     }
     try {
-      const db = openAndMigrate(mod, dbPath)
+      const db = openAndMigrate(mod, dbPath, docsRoot)
       shellLog.warn({
         code: 'ERR_WORKBENCH_DB',
         message: 'workbench database was corrupt; the original file was backed up and an empty database rebuilt',

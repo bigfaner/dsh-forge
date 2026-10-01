@@ -45,6 +45,8 @@ function stepFourFixture(): { set: GeneratedTaskSet; root: string; project: Writ
   return { set, root, project, stub, mutator }
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-4/success [@web-e2e @journey dual-form-consistency]: SC7 round-trip integrity after alternation — serializer round-trip + board≡files + zero workbench-owned artifacts in the forge tree', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepFourFixture()
@@ -116,6 +118,8 @@ test('step-4/success [@web-e2e @journey dual-form-consistency]: SC7 round-trip i
   }
 })
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-4/offline-terminal-changes [@web-e2e @journey dual-form-consistency]: pre-boot terminal changes surface on the initial scan, complete and correctly attributed ([终端], SessionLink-0)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
   const { set, root, project, stub, mutator } = stepFourFixture()

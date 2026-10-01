@@ -51,6 +51,7 @@ domains: [architecture, plugins, two-tier-plugin, product-config, data-kernel, c
 - M2 即过渡形态:应用看板经 spawn CLI 只读查询 + prompt 获取(DF001),写操作仍由 agent 会话/终端执行。
 - 形态细节由 M2 SC8(dsh 插件机制 vs forge skill/hook/subagent 语义等价性 spike)与 M4 设计定;spike 结论未出前禁止假设结论。
 - **M3 收口(2026-09-25 记账)**:终点形态已落地——ForgeBridge/spawn CLI 链退役,应用出包与执行链零 forge CLI 依赖(SC1/G1 断言);任务写集/读集/知识系/偏好/阶段/提案均经 dsh tool + 内核 API;forge 仓 CLI 停止发布与 CC 插件最终收口归 M4。
+- **M4 修订(2026-10-01,路线图重定题)**:M4 已重定题为「项目中心工作台(IA 基石)」(2026-09-24 路线图修订:M5 = 任务调度补全 / M6 = 质量与收口 / M7 = 模式化管线),本条「归 M4」的收口顺延——CC 插件与 forge 仓 CLI 发布收口 → **M6**;20 技能归宿 → M6 收口期;quality-gate/cleanup/worktree/verify-task-done 四 CLI 动词 GUI 归宿 → M5/M6;影子 git + runtime_root ①② → 存储实现里程碑(features/dsh-forge-m4/regression-inventory.md §四 E)。
 
 ### TECH-product-arch-005: 插件工程产物 vendor-free 纪律(机器门禁)
 

@@ -112,18 +112,23 @@ describe('forge-workbench client half: the navigation slot pair (AC2, spike §3)
     disposeParent()
   })
 
-  it('adds the sidebar row: id workbench, order 10, icon component, locale-aware label', () => {
+  it('adds the sidebar rows: the M1 workbench row (id workbench, order 10) + the M4「项目」row (first, null-addressed)', () => {
     const core = new SlotCore()
     apply(makeFakeCtx(core))
     const disposeParent = declareNavigationSlots(core)
 
     const entries = core.entries(SIDEBAR_SLOT)
-    expect(entries).toHaveLength(1)
+    // M4 task 1.6: apply now contributes the panellist「项目」row beside the
+    // M1 workbench row (order 首项, null address — nav/panel-info.ts).
+    expect(entries).toHaveLength(2)
     // SlotCore normalizes the list entry to {id, order}; the label thunk and
-    // locale resolve into the row's presentation metadata upstream.
-    expect(entries[0]?.options.id).toBe('workbench')
-    expect(entries[0]?.options.order).toBe(10)
-    expect(entries[0]?.component).toBe(WorkbenchPanelIcon)
+    // locale resolve into the row's presentation metadata upstream. (Ledger
+    // order = registration order: the「项目」row installs first.)
+    expect(entries[0]?.options.id).toBeNull()
+    expect(entries[0]?.options.order).toBe(-100)
+    expect(entries[1]?.options.id).toBe('workbench')
+    expect(entries[1]?.options.order).toBe(10)
+    expect(entries[1]?.component).toBe(WorkbenchPanelIcon)
     disposeParent()
   })
 })

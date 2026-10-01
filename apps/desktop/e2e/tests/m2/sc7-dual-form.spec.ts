@@ -135,7 +135,7 @@ async function groupedStatusEntries(page: Page): Promise<Array<[string, string]>
 async function listRowStatusTexts(page: Page): Promise<Array<[string, string]>> {
   return await page.evaluate(() => Array.from(document.querySelectorAll('[data-dsh-forge-task-row]')).map((row) => {
     const key = row.getAttribute('data-dsh-forge-task-row') ?? ''
-    const statusText = row.children[2]?.textContent ?? ''
+    const statusText = row.children[row.children.length - 6]?.textContent ?? ''
     return [key, statusText] as [string, string]
   }))
 }
@@ -144,7 +144,7 @@ async function listRowStatusTexts(page: Page): Promise<Array<[string, string]>> 
 async function listRowStatus(page: Page, taskKey: string): Promise<string | undefined> {
   return await page.evaluate((key: string) => {
     const row = document.querySelector(`[data-dsh-forge-task-row="${key}"]`)
-    return row?.children[2]?.textContent ?? undefined
+    return row?.children[row.children.length - 6]?.textContent ?? undefined
   }, taskKey)
 }
 
@@ -159,6 +159,8 @@ async function boardStatusOf(page: Page, projectId: string, taskKey: string): Pr
   }, { id: projectId, key: taskKey })
 }
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('6.5/sc7-dual-form [@web-e2e @journey sc7-dual-form]: terminal forge task status vs app board status sets + alternating same-source writes', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 

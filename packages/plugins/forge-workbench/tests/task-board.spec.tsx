@@ -6,17 +6,16 @@ import {
 } from '../src/client/views/TaskBoardPage.tsx'
 import { TaskBoardPage } from '../src/client/views/TaskBoardPage.tsx'
 import type { TaskBoardPageProps } from '../src/client/views/TaskBoardPage.tsx'
+import { TasksView } from '../src/client/views/tasks/TasksView.tsx'
 import { DEFAULT_BOARD_FILTER, type BoardViewKey } from '../src/client/views/tasks/TaskToolbar.tsx'
-import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import { zh } from '../src/client/locale/zh.ts'
 import {
   MOCK_TASK_BOARD, MOCK_TASK_BOARD_EMPTY, MOCK_TASK_BOARD_SYNC_ERROR, createMockTaskBoardFace,
+  createMockDispatchFace, createMockTaskDetailFace,
 } from '../src/client/mocks/workbench.ts'
-import type { TaskBoardData, TaskSummary, WorkbenchEvent } from '../src/client/ipc-types.ts'
+import type { DispatchRow, TaskBoardData, TaskSummary, WorkbenchEvent } from '../src/client/ipc-types.ts'
 import type { TaskBoardFace } from '../src/client/contract.ts'
-import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.5 — the UF2 board BUILD units (mocked face; 5.15 wires the IPC
 // verbs). AC map:
@@ -827,45 +826,83 @@ describe('toolbar controls: the dropdown keyboard contract (WAI-ARIA menu, Proje
   })
 })
 
-describe('shell integration: the tasks seat mounts the board', () => {
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined, ...initial,
-    }
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab: (tab: WorkbenchTabKey) => {
-          snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-        },
-        openFeatureDetail: (slug: string) => {
-          snapshot = { ...snapshot, workbenchTab: 'workbench/features', featureSlug: slug }
-        },
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-    }
-  }
-
-  it('renders the board inside the reserved workbench/tasks container, seat-wired', async () => {
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/tasks' })
+describe('the tasks seat wires the board (re-hosted M4 1.7: the view mounts directly)', () => {
+  it('renders the seat-wired board; a card activation hands the task to onSelect', async () => {
     const onSelect = vi.fn()
     const face = makeFace()
     render(
-      <WorkbenchShell
-        t={t.en as WorkbenchShellProps['t']}
-        {...viewFace.props}
-        taskBoard={{ face: { loadBoard: face.loadBoard as TaskBoardFace['loadBoard'] }, onSelect }}
+      <TasksView
+        t={t.en as (key: WorkbenchKey) => string}
+        projectId="p-shell"
+        onSelect={onSelect}
+        seat={{ face: { loadBoard: face.loadBoard as TaskBoardFace['loadBoard'] } }}
       />,
     )
     await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-toolbar]')).not.toBeNull()
+      expect(document.querySelector('[data-dsh-forge-task-toolbar]')).not.toBeNull()
     })
     // The board's default view is the DAG (5.6); switch to view B for the
     // card-click leg of the seat wiring.
     fireEvent.click(document.querySelector('[data-dsh-forge-board-view="grouped"]') as HTMLElement)
     await waitFor(() => {
-      expect(document.querySelector('[data-dsh-forge-view="dsh-forge-view-tasks"] [data-dsh-forge-task-card="dsh-forge-m2/5.5"]')).not.toBeNull()
+      expect(document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.5"]')).not.toBeNull()
     })
     fireEvent.click(document.querySelector('[data-dsh-forge-task-card="dsh-forge-m2/5.5"]') as HTMLElement)
     expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M4 task 2.7 — the C5 [打开] wiring (props.onEnterSession → the dock's
+// LinkHistory rows go live over the Interface 6 channel seam)
+// ---------------------------------------------------------------------------
+
+describe('M4 2.7: onEnterSession wires the dock link rows open', () => {
+  const KEY = 'dsh-forge-m2/6.1' // MOCK_TASK_DETAIL_RICH: an active + an ended link
+  const OPEN = '[data-dsh-forge-detail-enter="session-a3f2c9d1"]'
+
+  async function openDock(props: Partial<TaskBoardPageProps> = {}): Promise<void> {
+    await renderBoard({ ...props, detailFace: createMockTaskDetailFace() })
+    switchView('list')
+    await waitFor(() => {
+      expect(document.querySelector(`[data-dsh-forge-task-row="${KEY}"]`)).not.toBeNull()
+    })
+    fireEvent.click(document.querySelector(`[data-dsh-forge-task-row="${KEY}"]`) as HTMLElement)
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-detail-header]')).not.toBeNull()
+    })
+  }
+
+  it('present seam: the top link row gains [打开]; the click rides the seam', async () => {
+    const onEnterSession = vi.fn(() => Promise.resolve())
+    await openDock({ onEnterSession })
+    await waitFor(() => { expect(document.querySelector(OPEN)).not.toBeNull() })
+    fireEvent.click(document.querySelector(OPEN) as HTMLElement)
+    expect(onEnterSession).toHaveBeenCalledWith('session-a3f2c9d1')
+  })
+
+  it('the orchestration 「进入会话」 falls back to the channel seam when no hand-over seat rides (the pane host)', async () => {
+    const onEnterSession = vi.fn()
+    const running: DispatchRow = {
+      id: 'dsp-2.7', batchId: 'batch-2.7', projectId: 'p1', featureSlug: 'dsh-forge-m2',
+      taskKey: KEY, state: 'running', sessionId: 'session-orch-1', promptHash: 'hash-2.7',
+      actor: 'workbench', dispatchedAt: '2026-09-28T07:00:00.000Z', endedAt: null, error: null,
+    }
+    await openDock({ onEnterSession, projectId: 'p1', codeRoot: 'Z:/code', dispatchFace: createMockDispatchFace({ rows: [running] }) })
+    const enter = await waitFor(() => {
+      const node = document.querySelector('[data-dsh-forge-orch-enter-session]')
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+    fireEvent.click(enter)
+    expect(onEnterSession).toHaveBeenCalledWith('session-orch-1')
+  })
+
+  it('absent seam: the rows stay informational (the 2.6 seam discipline)', async () => {
+    await openDock()
+    await waitFor(() => {
+      expect(document.querySelector('[data-dsh-forge-detail-links]')).not.toBeNull()
+    })
+    expect(document.querySelector(OPEN)).toBeNull()
   })
 })

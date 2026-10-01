@@ -16,11 +16,30 @@
  * they consume — the same incremental growth the main-side module followed.
  */
 
+import type { TabKind } from './views/rightbar/tab-kinds'
+
 /**
  * Where a project's feature documents live (Interface 1): inside the repo, or
  * an explicitly authorized external path.
  */
 export type DocLocationType = 'in_repo' | 'external'
+
+/**
+ * M4 v3 证据三档落位(tech-design §Interface 1;main-side peer =
+ * repos/types.ts DocsPlacement,schema-v3 projects.docs_placement CHECK 同源):
+ * repo-existing(仓内已有树)/ repo-new(仓内新建,懒物化)/ app(内核
+ * docsRoot 派生)/ custom(仓外自定义,须显式授权);legacy = v3 迁移前值
+ * 冻结(仅迁移回填不可归类行)。
+ */
+export type DocsPlacement = 'repo-existing' | 'repo-new' | 'app' | 'custom' | 'legacy'
+
+/**
+ * M4 v3 投影状态机(tech-design §Interface 1;schema-v3
+ * projects.projection_state CHECK 同源):pending → healthy;上游操作失败
+ * / relay 不在场 → degraded(可重试);对账 diff 检出 dsh 侧手改 →
+ * deviation(仅呈现,无反向写)。
+ */
+export type ProjectionState = 'pending' | 'healthy' | 'degraded' | 'deviation'
 
 /**
  * A registered project (workbench-owned state, single source of truth in the
@@ -38,20 +57,54 @@ export interface Project {
   /** ISO 8601 UTC. */
   readonly createdAt: string
   readonly lastActivatedAt: string | null
+  // —— M4 v3 增列(任务 1.3;main-side peer = repos/types.ts Project)——
+  /** 归档位(归档 ≠ 删除:dsh 侧 workspace 保留,forge 侧归档分区)。 */
+  readonly archived: boolean
+  /** 注册序(= 投影「同名同序」的 forge 侧权威)。 */
+  readonly sortOrder: number
+  /** 投影状态机单值(3.x 对账接线前恒 'pending')。 */
+  readonly projectionState: ProjectionState
+  /** 证据三档落位 + custom(仓内落点永不继承)。 */
+  readonly docsPlacement: DocsPlacement
 }
 
 /**
- * Interface 1 registerProject input: the three-step wizard's submit payload
- * (task 5.4). `displayName` omitted / empty means 缺省 = the codeRoot
- * directory name; `docLocationPath` is required (and ≠ codeRoot) when
- * external, always null when in_repo.
+ * Interface 1 registerProject input, v1 face (the three-step wizard's submit
+ * payload, task 5.4 — the M2/M3 frozen shape). `displayName` omitted / empty
+ * means 缺省 = the codeRoot directory name; `docLocationPath` is required
+ * (and ≠ codeRoot) when external, always null when in_repo.
  */
-export interface RegisterProjectInput {
+export interface RegisterProjectInputV1 {
   readonly codeRoot: string
   readonly docLocationType: DocLocationType
   readonly docLocationPath?: string | null
   readonly displayName?: string
 }
+
+/**
+ * Interface 1 registerProject input, v2 face (M4 task 1.3;the C7 确认卡's
+ * submit payload). Hard checks are exactly two kernel-side (anchor exists +
+ * dir + readable; cross-project uniqueness via the D11 three-tier identity);
+ * `docsPath` is required for repo-new / custom; `customAuthorized: true` is
+ * required for custom (BIZ-001/003 收窄).
+ */
+export interface RegisterProjectInputV2 {
+  /** 代码根目录(D11 anchor;bare drives / relative paths rejected at entry). */
+  readonly anchor: string
+  /** 缺省 = 文件夹名。 */
+  readonly displayName?: string
+  readonly docsPlacement: 'repo-existing' | 'repo-new' | 'app' | 'custom'
+  /** repo-new / custom 必填;app = kernel-derived. */
+  readonly docsPath?: string
+  /** custom 必填 true. */
+  readonly customAuthorized?: boolean
+}
+
+/**
+ * Interface 1 registerProject input(M4 任务 1.3 起的双形态联合:同一动词
+ * 通道收 v1 | v2 —— v1 = M2/M3 向导冻结面,v2 = P1 批新面,2.x C7 卡接线)。
+ */
+export type RegisterProjectInput = RegisterProjectInputV1 | RegisterProjectInputV2
 
 /**
  * Interface 1 updateProject patch: rename = `displayName`; repoint = the doc
@@ -540,6 +593,233 @@ export type WorkbenchEvent =
     readonly approvalId: string
     readonly taskKey: string
   }
+  // M4 v3 (task 1.3, tech-design §Interface 1 事件 v3 扩展): project-center
+  // signals. project_list_changed = any register/rename/archive/restore/remove
+  // completion (empty payload — consumers re-pull listProjects/getState);
+  // projection_push_required = the projection relay's work item (Interface 2;
+  // task 1.3's registerProject emits the placeholder plan — a single ensure
+  // op; 3.x generalizes the plan assembly).
+  | { readonly type: 'project_list_changed' }
+  | {
+    readonly type: 'projection_push_required'
+    readonly projectId: string
+    readonly plan: ProjectionPlan
+  }
+  // M4 v3 (task 3.2): the projection state reflux — reconcile passes
+  // (reconcile_match → healthy / reconcile_drift → deviation) and relay
+  // outcome backfill (push_succeeded/push_failed) drive the state machine;
+  // only actual transitions emit (idempotent self-spins stay silent), and the
+  // live-materialized deviation detail rides along when non-empty (never
+  // persisted — recomputed per reconcile, T2).
+  | {
+    readonly type: 'projection_updated'
+    readonly projectId: string
+    readonly state: ProjectionState
+    readonly deviations?: readonly DeviationRow[]
+  }
+
+// ---------------------------------------------------------------------------
+// M4 v3 project-center verb DTOs (task 1.3;main-side peers =
+// apps/desktop/src/main/workbench/projects-identity/detect.ts and
+// projects/lifecycle-service.ts — both halves derive from tech-design
+// §Interface 1 v3)
+// ---------------------------------------------------------------------------
+
+/**
+ * M4 v3 投影 plan 形态(tech-design §Interface 1 投影段;relay 执行序 =
+ * ensure → rename → reorder → delete,幂等全量重推;仅 forge 所属子集相对序)。
+ */
+export type ProjectionOp =
+  | { readonly kind: 'ensure'; readonly canonicalPath: string; readonly title: string }
+  | { readonly kind: 'rename'; readonly workspaceId: string; readonly title: string }
+  | { readonly kind: 'delete'; readonly workspaceId: string }
+  | { readonly kind: 'reorder'; readonly orderedIds: readonly string[] }
+
+/** 一个项目的投影期望 plan(幂等全量重推;偏差 = diff 实况,明细不落表)。 */
+export interface ProjectionPlan {
+  readonly projectId: string
+  readonly ops: readonly ProjectionOp[]
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 projection verb DTOs (task 3.2;main-side peers =
+// apps/desktop/src/main/workbench/projection/{diff,service}.ts — both halves
+// derive from tech-design §Interface 1 v3·P3 batch)
+// ---------------------------------------------------------------------------
+
+/** 偏差行(DeviationRow twin;明细不落表,对账重算物化)。 */
+export interface DeviationRow {
+  readonly type: 'renamed' | 'deleted' | 'reordered'
+  readonly detail: string
+}
+
+/** client 上报的 workspace 实况条目(submitWorkspaceSnapshot 入参元素)。 */
+export interface WorkspaceSnapshotEntry {
+  readonly workspaceId: string
+  readonly path: string
+  readonly title: string
+  readonly orderIdx: number
+}
+
+/** getProjectionStatus 行(状态行 + 偏差明细;3.5 状态区数据源)。 */
+export interface ProjectionStatusRow {
+  readonly projectId: string
+  /** 期望名(= projects.display_name)。 */
+  readonly displayName: string
+  /** 期望投影路径(anchor canonical;ensure 定位键)。 */
+  readonly path: string
+  /** 期望序(= 注册序权威)。 */
+  readonly orderIdx: number
+  /** 归档位(归档不对账;workspace 保留语义)。 */
+  readonly archived: boolean
+  /** 状态机现值(pending/healthy/degraded/deviation)。 */
+  readonly state: ProjectionState
+  /** 最近成功投影的 dsh WorkspaceId(未推送 = null)。 */
+  readonly workspaceId: string | null
+  /** 最近成功 push 时间(ISO 8601;未推送 = null)。 */
+  readonly pushedAt: string | null
+  /** degraded 原因(上游映射串;健康 = null)。 */
+  readonly lastError: string | null
+  /** 偏差明细(renamed/deleted/reordered;drift 时非空)。 */
+  readonly deviations: readonly DeviationRow[]
+}
+
+/** retryProjection 入参(幂等全量重推;归档项目零 op)。 */
+export interface RetryProjectionInput {
+  readonly projectId: string
+}
+
+/** getProjectionStatus 入参(projectId 缺省 = 全量状态行)。 */
+export interface GetProjectionStatusInput {
+  readonly projectId?: string
+}
+
+/**
+ * submitWorkspaceSnapshot 入参(client 上报原生 workspace 快照,follow 流;
+ * 形状校验在 handler 层,主进程 log + debounce 对账在内核 —— T2:快照
+ * 不落库、偏差不写表,零写放大)。
+ */
+export interface SubmitWorkspaceSnapshotInput {
+  readonly workspaces: readonly WorkspaceSnapshotEntry[]
+}
+
+/**
+ * reportProjectionOutcome 入参(relay 回填):ok → 期望 repo 回写 + healthy;
+ * error(code/message)→ 上游错误码映射
+ * (workspace/invalid-path|name-conflict|move-invalid →
+ * ERR_PROJECTION_OP_FAILED detail 携原码)→ degraded + last_error。
+ */
+export type ReportProjectionOutcomeInput =
+  | { readonly projectId: string; readonly ok: true }
+  | { readonly projectId: string; readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
+
+/** probeProjectPath 入参(C7 侦测;裸盘符/相对路径在归一化入口即拒)。 */
+export interface ProbeProjectPathInput {
+  readonly path: string
+}
+
+/**
+ * Interface 1 DetectReport(M4 任务 1.3;main-side peer =
+ * projects-identity/detect.ts verbatim)— the C7 确认卡's detection data:
+ * normalization facts + three-tier registered fast lane + bounded evidence
+ * probes (gitRoot / forgeTreeHit / childRepos chips).
+ */
+export interface DetectReport {
+  readonly input: string
+  /** realpath.native canonical; null when realpath failed (string fallback). */
+  readonly canonicalPath: string | null
+  /** win32-folded comparison key; null only when the entry itself was rejected. */
+  readonly pathKey: string | null
+  readonly identity: { readonly dev: string; readonly ino: string } | null
+  readonly exists: boolean
+  readonly isDir: boolean
+  readonly readable: boolean
+  /** pathKey or (dev,ino) hit → fast lane { projectId, displayName }. */
+  readonly registered: { readonly projectId: string; readonly displayName: string } | null
+  /** Set when the probed root itself carries a top-level `.git`. */
+  readonly gitRoot: string | null
+  /** `<root>/docs/features` + direct manifest.md existence (D1 tree signal). */
+  readonly forgeTreeHit: boolean
+  /** Direct child repos; chips only when ≥2 (parent-dir mis-pick signal). */
+  readonly childRepos: ReadonlyArray<{ readonly name: string; readonly path: string }>
+}
+
+/** renameProject 入参(纯 DB 改名,零 fs)。 */
+export interface RenameProjectInput {
+  readonly projectId: string
+  readonly displayName: string
+}
+
+/** archiveProject / restoreProject 入参。 */
+export interface ProjectRefInput {
+  readonly projectId: string
+}
+
+// ---------------------------------------------------------------------------
+// M4 v3 ui-state verb DTOs (task 4.1;main-side peer =
+// apps/desktop/src/main/workbench/ui-state/layout-schema.ts — the CANONICAL
+// ProjectLayout v1 declaration). This twin is local per the plugin-cannot-
+// -import-app precedent; TabKind reuses 2.2's table (views/rightbar/
+// tab-kinds.ts) so the plugin keeps a single declaration, and the kernel ↔
+// client lockstep is locked by the drift assertion in apps/desktop/tests/
+// workbench-ui-state.spec.ts.
+// ---------------------------------------------------------------------------
+
+/**
+ * detached 窗口的会话定位(§Data Models:SessionId | SubagentAddress)——
+ * 顶层会话 = sessionId;subagent = (parent, child, mode) 三元组(恰一形态)。
+ */
+export type SessionTarget =
+  | { readonly sessionId: string }
+  | { readonly parentSessionId: string; readonly childSessionId: string; readonly mode: 'one-shot' | 'continuable' }
+
+/** detached 窗口矩形(Interface 4 detached[].rect;4.2 windowOpenDetached 同参)。 */
+export interface Rect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Interface 4 ProjectLayout v1(布局记忆 blob,项目域):sidebar 宽/收起、
+ * tree 三集、rightbar 比例/panes·tabs、detached 窗口集。恢复 = 4.5 重放
+ * open 操作序列;分组×排序视图选项 = localStorage 用户级(C3 口径),
+ * 不入本形态(Hard Rule 双轨边界)。
+ */
+export interface ProjectLayout {
+  readonly version: 1
+  readonly sidebar: { readonly collapsed: boolean; readonly width?: number }
+  readonly tree: {
+    readonly expandedProjects: readonly string[]
+    readonly expandedSessions: readonly string[]
+    readonly overflowOpen: readonly string[]
+  }
+  readonly rightbar: {
+    readonly widthPct?: number
+    readonly panes: ReadonlyArray<{ readonly tabs: ReadonlyArray<{ readonly kind: TabKind; readonly topic?: string }> }>
+  }
+  readonly detached: ReadonlyArray<{
+    readonly view: 'board' | 'conversation'
+    readonly target?: SessionTarget
+    readonly rect?: Rect
+  }>
+}
+
+/** getProjectUiState 入参(无行 = 默认布局)。 */
+export interface GetProjectUiStateInput {
+  readonly projectId: string
+}
+
+/**
+ * setProjectUiState 入参(client debounce(4.5)之上的服务端第二道校验:
+ * 非法 blob 落库为默认布局 + ERR_LAYOUT_INVALID log,动词不拒 —— 唯一
+ * reject 面 = ERR_PROJECT_NOT_FOUND)。
+ */
+export interface SetProjectUiStateInput {
+  readonly projectId: string
+  readonly layout: ProjectLayout
+}
 
 // ---------------------------------------------------------------------------
 // Migration family, UF3 (task 1.6's consumption; the main-side peer is

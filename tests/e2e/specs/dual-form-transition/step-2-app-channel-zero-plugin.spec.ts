@@ -38,6 +38,7 @@ import {
 } from '../_lib/journey-world.ts'
 import { buildFilesWorld, buildRegisteredWorld, CLI_FEATURE, DUAL_FEATURE } from './harness.ts'
 import type { KernelWorld } from '../_lib/journey-world.ts'
+import { switchToWorkbench } from '../_lib/journey-world.ts'
 
 test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道日常管线零插件依赖', () => {
   const manager = new WorldManager()
@@ -115,7 +116,8 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     writeFileSync(join(tasksDir, 'index.json'), `${JSON.stringify(reproduced, undefined, 2)}\n`, 'utf8')
 
     // 变更回流看板(≤5s 感知口径):任务 2 → in_progress。
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    // M4 1.8 迁移改写:看板视图已退役(P2 右栏 pane 重宿主),回流断言原样
+    // 保留 —— 判据面 = getTaskBoard 动词读数(内核态,与视图挂载无关)。
     await expect(async () => {
       const board = await bridgeInvoke<{ tasks: Array<{ key: string; status: string }> }>(page, 'getTaskBoard', [world.projectId])
       expect(board.tasks.find(row => row.key === 'dual-form/2')?.status, '外部写重摄入回流(任务 2 → in_progress)').toBe('in_progress')
@@ -123,7 +125,8 @@ test.describe.serial('dual-form-transition / step 2: 已注册项目应用通道
     expect(Date.now() - tWrite, '回流 ≤5s 口径(轮询上界内)').toBeLessThanOrEqual(REFLOW_BUDGET_MS + 15_000)
 
     // 偏离标记呈现(项目卡)+ 幂等重摄入审计(migration_event reingest 留档)。
-    await page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    await switchToWorkbench(page) // 2.10 恢复注记:同文件前序测试离开逃生门落点,重入需显式归位。
+    // M4 1.8 迁移改写:逃生门即 overview 单页(harness boot 落点),无需 tab 归位。
     const displayName = world.kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await expect(card).toBeVisible({ timeout: 30_000 })

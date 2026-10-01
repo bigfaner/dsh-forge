@@ -16,7 +16,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { buildKernelWorld, type KernelWorld, type TaskSpec } from '../_lib/journey-world.ts'
+import { buildKernelWorld, switchToWorkbench, type KernelWorld, type TaskSpec } from '../_lib/journey-world.ts'
 
 export const OOR_FEATURE = 'oor-docs-root'
 
@@ -71,7 +71,10 @@ export async function buildInRepoWorld(root: string): Promise<KernelWorld> {
 /** Register through the wizard with the DEFAULT external doc root (authorized). */
 export async function registerExternalViaWizard(page: Page, codeRoot: string, options: { expectMigration?: boolean } = {}): Promise<void> {
   const expectMigration = options.expectMigration ?? true
-  await page.locator('[data-dsh-forge-add-project]').click()
+  // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+  // 2.10 恢复注记:同文件前序腿经看板 pane 离开逃生门 —— CTA 在逃生门空态,先归位。
+  await switchToWorkbench(page)
+  await page.locator('[data-dsh-forge-overview-register]').click()
   await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
   await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]'), 'forge 检出通过').toBeVisible({ timeout: 15_000 })
@@ -103,7 +106,8 @@ export async function registerExternalViaWizard(page: Page, codeRoot: string, op
 
 /** Register through the wizard EXPLICITLY in-repo (migration ON). */
 export async function registerInRepoViaWizard(page: Page, codeRoot: string): Promise<void> {
-  await page.locator('[data-dsh-forge-add-project]').click()
+  // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+  await page.locator('[data-dsh-forge-overview-register]').click()
   await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-dsh-forge-wizard-path-input]').fill(codeRoot)
   await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })

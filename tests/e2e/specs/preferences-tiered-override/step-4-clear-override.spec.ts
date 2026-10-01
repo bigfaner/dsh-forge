@@ -67,7 +67,7 @@ test.describe.serial('preferences-tiered-override / step 4: 清除覆盖回落',
     const rowsAfterFirstClear = await bridgeInvoke<Array<{ key: string; value: unknown; source: string | null }>>(page, 'getPrefs', [scope])
 
     // 重新设置同键 feature 级覆盖(经编辑面写口)。
-    await page.locator('[data-dsh-forge-tab="workbench/overview"]').click()
+    // M4 1.8 迁移改写:逃生门即 overview 单页,无需 tab 归位。
     await waitPrefsReady(page)
     await switchPrefTier(page, 'feature')
     await pickPrefFeature(page, slug, 'auto')

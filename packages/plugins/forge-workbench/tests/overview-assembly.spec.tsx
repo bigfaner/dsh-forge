@@ -15,7 +15,6 @@ import type {
 } from '../src/client/ipc-types.ts'
 import type { WorkbenchIpcBridge } from '../src/client/ipc/workbench.ts'
 import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.14 — the UF1 overview ASSEMBLY units (real IPC over the
 // window.dshForge.workbench boundary; jsdom fakes, no Electron):
@@ -65,6 +64,8 @@ afterEach(() => {
 const project = (id: string, displayName: string, codeRoot: string): Project => ({
   id, displayName, codeRoot, docLocationType: 'in_repo', docLocationPath: null,
   createdAt: '2026-09-22T08:00:00.000Z', lastActivatedAt: null,
+  // M4 v3 columns (task 1.3).
+  archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
 })
 
 const REAL_PROJECTS: Project[] = [
@@ -226,6 +227,20 @@ function installBridge(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchIp
     // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
     getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
     readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
+    // M4 v3 项目中心段(任务 1.3;presence check 全员可调)。
+    probeProjectPath: async () => ({}) as never,
+    renameProject: async () => ({}) as never,
+    archiveProject: async () => ({}) as never,
+    restoreProject: async () => ({}) as never,
+    listProjects: async () => [],
+    // M4 v3 投影段(任务 3.2;presence check 全员可调)。
+    retryProjection: async () => ({ state: 'pending' }),
+    getProjectionStatus: async () => [],
+    submitWorkspaceSnapshot: async () => undefined,
+    reportProjectionOutcome: async () => undefined,
+    // M4 v3 ui-state 段(任务 4.1;presence check 全员可调;值面 4.5 前无消费)。
+    getProjectUiState: async () => undefined,
+    setProjectUiState: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge
@@ -451,40 +466,19 @@ describe('OverviewView: form selection + the real chain', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Shell integration (AC2/AC3/AC4): the whole family over the real bridge
+// Shell integration (AC2/AC3/AC4): the whole family over the real bridge —
+// the M4 1.7 escape-door form (no chrome switcher; the page's own cards are
+// the register/activate/rename/remove surface)
 // ---------------------------------------------------------------------------
 
-/** The view-key machine harness (the feature-board-assembly precedent). */
-function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-  let snapshot: ViewKeySnapshot = {
-    view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined, ...initial,
-  }
-  const selectWorkbenchTab = vi.fn((tab: WorkbenchTabKey) => {
-    snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-  })
-  const openFeatureDetail = vi.fn((slug: string) => {
-    snapshot = { view: 'workbench', workbenchTab: 'workbench/features', featureSlug: slug }
-  })
-  return {
-    props: {
-      useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-      selectWorkbenchTab,
-      openFeatureDetail,
-    } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-    selectWorkbenchTab,
-  }
-}
-
-async function renderShell(registry: ReturnType<typeof registryBridge>) {
+async function renderShell(registry: ReturnType<typeof registryBridge>, cards = 2) {
   installBridge(registry.fake)
-  const viewFace = makeViewFace()
-  render(<WorkbenchShell t={t as WorkbenchShellProps['t']} {...viewFace.props} />)
-  await waitFor(() => { expect($$('[data-dsh-forge-project-card]')).toHaveLength(2) })
-  return { viewFace }
+  render(<WorkbenchShell t={t as WorkbenchShellProps['t']} />)
+  await waitFor(() => { expect($$('[data-dsh-forge-project-card]')).toHaveLength(cards) })
 }
 
 describe('shell integration: the overview family over the real bridge', () => {
-  it('mock 全撤: the chrome switcher AND the grid render the bridge registry; ONE getState serves the first paint', async () => {
+  it('mock 全撤: the grid renders the bridge registry; ONE getState serves the first paint', async () => {
     const registry = registryBridge()
     await renderShell(registry)
     // The grid: real rows, never the mock fixtures.
@@ -492,16 +486,19 @@ describe('shell integration: the overview family over the real bridge', () => {
     for (const id of MOCK_IDS) {
       expect(document.querySelector(`[data-dsh-forge-project-card="${id}"]`)).toBeNull()
     }
-    // The chrome: the switcher trigger names the REAL active project.
-    expect($('[data-dsh-forge-switcher-trigger]').textContent).toContain('real-one')
-    // AC3: the chrome kick + the page's first loadState coalesced into one read.
+    // AC3: the shell's kick + the page's first loadState coalesced into one read.
     expect(registry.calls.getState).toBe(1)
   })
 
   it('AC4: register through the wizard → the new card is immediately visible + the 提示可切换 toast', async () => {
-    const registry = registryBridge()
-    await renderShell(registry)
-    fireEvent.click($('[data-dsh-forge-add-project]'))
+    // The escape door's register entry is the page's own empty-state CTA
+    // (the chrome「添加项目」 button retired with 1.7) — the registry starts
+    // EMPTY so the 空态卡 carries it.
+    const registry = registryBridge({ projects: [], activeProjectId: null, plugins: [...REAL_PLUGIN_ROWS] })
+    installBridge(registry.fake)
+    render(<WorkbenchShell t={t as WorkbenchShellProps['t']} />)
+    await waitFor(() => { expect($('[data-dsh-forge-overview-empty]')).not.toBeNull() })
+    fireEvent.click($('[data-dsh-forge-overview-register]'))
     await waitFor(() => { expect($('[data-dsh-forge-wizard-path-input]')).not.toBeNull() })
     // Step ①: the build-stage probe twin is permissive for unknown paths —
     // the REAL validation is the submit verb below.
@@ -541,8 +538,6 @@ describe('shell integration: the overview family over the real bridge', () => {
       expect($('[data-dsh-forge-project-card="real-p2"]').getAttribute('data-active')).toBe('true')
       expect($('[data-dsh-forge-project-card="real-p1"]').getAttribute('data-active')).toBe('false')
     })
-    // The chrome marker moved with the same read model.
-    expect($('[data-dsh-forge-switcher-trigger]').textContent).toContain('real-two')
   })
 
   it('rename through the card fires updateProject(id, { displayName }) and refreshes', async () => {
@@ -574,21 +569,9 @@ describe('shell integration: the overview family over the real bridge', () => {
       expect($('[data-dsh-forge-project-card="real-p2"]').getAttribute('data-active')).toBe('false')
     })
     expect($('[data-dsh-forge-overview-toast]')).toBeNull()
-    expect($('[data-dsh-forge-switcher-trigger]').textContent).not.toContain('real-one')
   })
 
-  it('the chrome switcher activation goes through the real verb too', async () => {
-    const registry = registryBridge()
-    await renderShell(registry)
-    fireEvent.click($('[data-dsh-forge-switcher-trigger]'))
-    fireEvent.click($('[data-dsh-forge-switcher-item="real-p2"]'))
-    await waitFor(() => { expect(registry.calls.activateProject).toEqual(['real-p2']) })
-    await waitFor(() => {
-      expect($('[data-dsh-forge-switcher-trigger]').textContent).toContain('real-two')
-    })
-  })
-
-  it('AC1: a failing first getState surfaces the page\'s retryable load-error card (boundary end-to-end)', async () => {
+  it("AC1: a failing first getState surfaces the page's retryable load-error card (boundary end-to-end)", async () => {
     let fail = true
     const registry = registryBridge()
     installBridge({
@@ -598,11 +581,12 @@ describe('shell integration: the overview family over the real bridge', () => {
         return registry.fake.getState()
       },
     })
-    const viewFace = makeViewFace()
-    render(<WorkbenchShell t={t as WorkbenchShellProps['t']} {...viewFace.props} />)
+    render(<WorkbenchShell t={t as WorkbenchShellProps['t']} />)
     await waitFor(() => { expect($('[data-dsh-forge-overview-load-error]')).not.toBeNull() })
-    // The chrome never fell back to the mock fixtures while unresolved.
-    expect($('[data-dsh-forge-switcher-trigger]').textContent).not.toContain('dsh-forge')
+    // The shell never fell back to the mock fixtures while unresolved.
+    for (const id of MOCK_IDS) {
+      expect(document.querySelector(`[data-dsh-forge-project-card="${id}"]`)).toBeNull()
+    }
     fail = false
     fireEvent.click($('[data-dsh-forge-overview-retry]'))
     await waitFor(() => { expect($$('[data-dsh-forge-project-card]')).toHaveLength(2) })

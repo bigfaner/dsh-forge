@@ -43,10 +43,15 @@ test.describe.serial('task-dispatch-execution-loop / step 7: agent 提交后状�
     await manager.closeAll()
   })
 
+  // [M4 1.8 e2e 迁移·迁移清单 第②⑥行 · 看板派发链(发起链断言不变,随看板新宿主恢复)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+  // 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+
   // Outcome "backflow-success" — claim/submit 留 actor;回流 ≤5s;记录入内核。
   test('step7/backflow-success: claim → submit through the dsh tool verb face → ≤5s reflow per write, completed state, actor audit + rendered record', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     await dispatchFromBoard(page, [TASK_1])
@@ -92,7 +97,7 @@ test.describe.serial('task-dispatch-execution-loop / step 7: agent 提交后状�
   // Outcome "redispatch" — 失败呈现 + 二次确认 + 新行承载重试(旧行审计保留)。
   test('step7/redispatch: failed card + reason → explicit redispatch (double confirm) → new subagent running; the failed row stays as audit trail', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -146,7 +151,7 @@ test.describe.serial('task-dispatch-execution-loop / step 7: agent 提交后状�
   // Outcome "concurrent-serial-backflow" — 多笔提交逐笔回流,互不串扰。
   test('step7/concurrent-serial-backflow: two parallel subagents submit one after another → each reflows ≤5s independently; final board = kernel rows', async ({ }, testInfo) => {
     testInfo.setTimeout(600_000)
-    const world = await manager.acquire(kernel as KernelWorld, 'main')
+    const world = await manager.acquire(kernel as KernelWorld, 'main', { tab: 'workbench/tasks' })
     const { page } = world
 
     await dispatchFromBoard(page, [TASK_3, TASK_5])

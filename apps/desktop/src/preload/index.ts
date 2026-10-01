@@ -1,16 +1,36 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { RecoveryState } from '../main/crash-recovery/index.ts'
+import type { WindowChangedEvent, OpenDetachedInput } from '../main/windows/detached.ts'
+import type { WindowRole } from '../main/windows/role.ts'
 // Preload-local copy of the workbench channel table — the sandboxed preload
 // cannot require relative bundle chunks, so it must not share modules with the
 // main bundle (see ./channel-allowlist.ts header; sync locked by tests).
-import { WORKBENCH_EVENT_CHANNEL, WORKBENCH_VERB_CHANNELS } from './channel-allowlist.ts'
+import {
+  WINDOW_CHANGED_CHANNEL,
+  WINDOW_VERB_CHANNELS,
+  WORKBENCH_EVENT_CHANNEL,
+  WORKBENCH_VERB_CHANNELS,
+} from './channel-allowlist.ts'
 import type {
   ApprovalRow,
   DecideApprovalInput,
+  DetectReport,
   DispatchRow,
   DispatchTasksInput,
   DispatchTasksResult,
+  GetProjectionStatusInput,
+  GetProjectUiStateInput,
+  ProbeProjectPathInput,
+  ProjectionState,
+  ProjectionStatusRow,
+  ProjectLayout,
+  ProjectRefInput,
   ReceiveApprovalVerbInput,
+  RenameProjectInput,
+  ReportProjectionOutcomeInput,
+  RetryProjectionInput,
+  SetProjectUiStateInput,
+  SubmitWorkspaceSnapshotInput,
   FeatureBoardData,
   FeatureDoc,
   FeatureListEntry,
@@ -124,6 +144,29 @@ contextBridge.exposeInMainWorld('dshForge', {
       return () => ipcRenderer.removeListener('dsh-forge:recovery-state', listener)
     },
   },
+  // M4 Interface 5 (task 4.2): shell window-management verbs — a NEW
+  // non-workbench channel family (dsh-forge:window-*). windowGetRole is the
+  // typed boot handshake every window (main included) may query: the role is
+  // resolved main-side from the window registry by webContents identity and
+  // NEVER travels through the URL (M1 spike-3 discipline). Rejections for the
+  // error verbs arrive as the { code, message, detail? } envelope
+  // (ERR_WINDOW_NOT_FOUND / ERR_WINDOW_OPEN_FAILED).
+  window: {
+    openDetached: (input: OpenDetachedInput): Promise<{ windowId: string }> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.openDetached, input) as Promise<{ windowId: string }>,
+    getRole: (): Promise<WindowRole | null> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.getRole) as Promise<WindowRole | null>,
+    recall: (windowId: string): Promise<void> =>
+      ipcRenderer.invoke(WINDOW_VERB_CHANNELS.recall, { windowId }) as Promise<void>,
+    // Push-only subscription (no register verb): the main process is the sole
+    // sender; payload = { type: 'detached-opened' | 'detached-closed', windowId,
+    // projectId, view, target? }.
+    onChanged: (callback: (event: WindowChangedEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: WindowChangedEvent): void => callback(payload)
+      ipcRenderer.on(WINDOW_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(WINDOW_CHANGED_CHANNEL, listener)
+    },
+  },
   // M2 Interface 1: workbench data-plane semantic verbs (task 2.7). Each verb
   // maps to exactly one whitelisted channel (channel-allowlist.ts is the shared
   // source — no hand-written channel strings, no generic invoke passthrough).
@@ -199,6 +242,63 @@ contextBridge.exposeInMainWorld('dshForge', {
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeCodeRoot, input) as Promise<ProbeCodeRootResult>,
     getWorkbenchPaths: (): Promise<WorkbenchPaths> =>
       ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getWorkbenchPaths) as Promise<WorkbenchPaths>,
+    // M4 v3 project-center verbs (task 1.3): probeProjectPath answers the C7
+    // detection report (D11 identity + registered fast lane + evidence probes —
+    // read-only, path-level failures degrade into the report shape); the
+    // lifecycle four (rename / archive / restore / listProjects) carry the v3
+    // columns (archived / sortOrder / projectionState / docsPlacement). The
+    // registerProject verb above now ALSO accepts the v2 input shape
+    // ({ anchor, docsPlacement, … }) alongside the M2/M3 v1 shape. Rejections
+    // arrive as the same { code, message, detail? } envelope
+    // (ERR_PROJECT_EXISTS with the registered fast-lane payload in detail /
+    // ERR_CODE_ROOT_UNREADABLE / ERR_EXTERNAL_PATH_UNREADABLE /
+    // ERR_PROJECT_NOT_FOUND); successful mutations push
+    // project_list_changed (and projection_push_required placeholders) through
+    // onEvents.
+    probeProjectPath: (input: ProbeProjectPathInput): Promise<DetectReport> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.probeProjectPath, input) as Promise<DetectReport>,
+    renameProject: (input: RenameProjectInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.renameProject, input) as Promise<Project>,
+    archiveProject: (input: ProjectRefInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.archiveProject, input) as Promise<Project>,
+    restoreProject: (input: ProjectRefInput): Promise<Project> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.restoreProject, input) as Promise<Project>,
+    listProjects: (): Promise<Project[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.listProjects) as Promise<Project[]>,
+    // M4 v3 projection verbs (task 3.2): the reconcile service's verb face —
+    // consumed by the projection relay (3.3: submitWorkspaceSnapshot follow-flow
+    // + reportProjectionOutcome backfill) and the projection status surface
+    // (3.5). retryProjection re-pushes the idempotent self-contained plan
+    // (projection_push_required through onEvents; relay absent → one retry,
+    // then degraded ERR_PROJECTION_CHANNEL_UNAVAILABLE with the plan preserved
+    // — never silently dropped). getProjectionStatus answers the state rows
+    // with live-materialized deviation detail. submitWorkspaceSnapshot is
+    // shape-checked here (T2 first gate), main-process logged and reconciled on
+    // a debounce — never a write amplifier. None of these verbs reject on
+    // projection failure (Propagation Strategy): only ERR_PROJECT_NOT_FOUND
+    // for unknown ids and shape-contract violations.
+    retryProjection: (input: RetryProjectionInput): Promise<{ state: ProjectionState }> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.retryProjection, input) as Promise<{ state: ProjectionState }>,
+    getProjectionStatus: (input?: GetProjectionStatusInput): Promise<ProjectionStatusRow[]> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectionStatus, input) as Promise<ProjectionStatusRow[]>,
+    submitWorkspaceSnapshot: (input: SubmitWorkspaceSnapshotInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.submitWorkspaceSnapshot, input) as Promise<void>,
+    reportProjectionOutcome: (input: ReportProjectionOutcomeInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.reportProjectionOutcome, input) as Promise<void>,
+    // M4 v3 ui-state verbs (task 4.1): the layout-memory pair over
+    // project_ui_state — the 4.5 layout engine consumes them (collect →
+    // debounce → setProjectUiState; re-enter → getProjectUiState → replay the
+    // open sequence). Neither verb rejects on an invalid layout blob: the v1
+    // whitelist failure lands as the default layout with an ERR_LAYOUT_INVALID
+    // log main-side (read = corrupt stored blob, write = the server-side
+    // re-validation above the client debounce). Only ERR_PROJECT_NOT_FOUND
+    // rejections ride the { code, message, detail? } envelope.
+    // fix-2:stored(行存在信号)随 layout 一并回传 —— 4.5 布局引擎以它
+    // 区分「从未记过」(默认 blob,不重放 tree)与「记过」。
+    getProjectUiState: (input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout; stored: boolean }> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.getProjectUiState, input) as Promise<{ layout: ProjectLayout; stored: boolean }>,
+    setProjectUiState: (input: SetProjectUiStateInput): Promise<void> =>
+      ipcRenderer.invoke(WORKBENCH_VERB_CHANNELS.setProjectUiState, input) as Promise<void>,
     // M3 knowledge + feature-read verbs (task 2.2, D4): action-dispatched data
     // planes over the registered project's doc root (fact/lesson/research
     // read + append-only write; forensic machine-global read-only — no

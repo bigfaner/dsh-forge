@@ -407,6 +407,20 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
     getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
     readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
+    // M4 v3 项目中心段(任务 1.3;presence check 全员可调)。
+    probeProjectPath: async () => ({}) as never,
+    renameProject: async () => ({}) as never,
+    archiveProject: async () => ({}) as never,
+    restoreProject: async () => ({}) as never,
+    listProjects: async () => [],
+    // M4 v3 投影段(任务 3.2;presence check 全员可调)。
+    retryProjection: async () => ({ state: 'pending' }),
+    getProjectionStatus: async () => [],
+    submitWorkspaceSnapshot: async () => undefined,
+    reportProjectionOutcome: async () => undefined,
+    // M4 v3 ui-state 段(任务 4.1;presence check 全员可调;值面 4.5 前无消费)。
+    getProjectUiState: async () => undefined,
+    setProjectUiState: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge
@@ -416,6 +430,7 @@ const REAL_STATE: WorkbenchState = {
   projects: [{
     id: PROJECT_ID, displayName: 'real', codeRoot: 'Z:\\real', docLocationType: 'in_repo',
     docLocationPath: null, createdAt: '2026-09-22T08:00:00.000Z', lastActivatedAt: null,
+    archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
   }],
   activeProjectId: PROJECT_ID,
   plugins: [],

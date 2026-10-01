@@ -21,7 +21,7 @@ import type { Page } from '@playwright/test'
 import { HELLO_WORLD } from '../helpers/plugins.ts'
 import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-project.ts'
 import { generateTaskSet } from '../fixtures/task-generator.ts'
-import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from '../tests/m2/helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes, openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 import { expectTwoTierSectionCensus, journeyBundles, journeyStageTarballs, readOverlay, writeOverlayFile } from './helpers.ts'
 
 const SAMPLE_B = '@dsh-forge/plugin-hello-world-sample-b'
@@ -93,6 +93,8 @@ test('step-2/success [@web-e2e @journey plugin-management]: disable click opens 
   }
 })
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling while a recorded session link is active retires only the plugin — the link row and board survive', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
@@ -128,8 +130,8 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
 
       // 会话在线使用面:看板 + 任务 dock 内该挂接行 active。
       await switchToWorkbench(page)
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
       const taskKey1 = `${feature1.slug}/${task1.localId}`
       await page.locator(`[data-dsh-forge-node-card="${taskKey1}"]`).click()
@@ -140,7 +142,7 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
       await expect(linkRow.locator('[data-dsh-forge-badge="link:active"]')).toBeVisible()
 
       // Input:此在线使用状态下发起禁用并确认。
-      await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+      await switchToWorkbench(page)
       const helloRow = page.locator(`[data-dsh-forge-plugin-row="${HELLO_WORLD}"]`)
       await helloRow.locator('[data-dsh-forge-plugin-action="disable"]').click()
       await expect(page.locator('[data-dsh-forge-plugin-confirm]')).toBeVisible({ timeout: 10_000 })
@@ -153,7 +155,7 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
       // 看板仍渲染 + 挂接关系保持(存续面;退出说明面未落地 —— 见头注
       // divergence note)。工作台 tab 往返会重挂视图、dock 选择不复原 ——
       // 契约面是「会话本体与挂接关系保持」:重开 dock 断言挂接行仍 active。
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
+      await openBoardPane(page)
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
       await page.locator(`[data-dsh-forge-node-card="${taskKey1}"]`).click()
       await expect(dock, '任务 dock 可再开(会话使用面存续)').toBeVisible({ timeout: 15_000 })
@@ -165,7 +167,7 @@ test('step-2/in-session-disable [@web-e2e @journey plugin-management]: disabling
       await expect(page.locator('[data-dsh-forge-detail-link="session-pm2-in-0001"] [data-dsh-forge-badge="link:active"]'))
         .toBeVisible({ timeout: 15_000 })
       // 对照:另一第三方不受影响(「仅该插件」收敛)— 插件行在概览页。
-      await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+      await switchToWorkbench(page)
       await expect(page.locator(`[data-dsh-forge-plugin-row="${SAMPLE_B}"]`)).toHaveAttribute('data-enabled', 'true')
 
       expect(shell.pageErrors, `renderer pageerrors: ${shell.pageErrors.join(' | ')}`).toEqual([])

@@ -25,7 +25,7 @@ import { registerFixtureProject, writeForgeProject } from '../fixtures/forge-pro
 import { generateTaskSet } from '../fixtures/task-generator.ts'
 import { materializeStubCli } from '../fixtures/stubs/cli.ts'
 import { createChannelStub } from '../fixtures/stubs/channel.ts'
-import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes } from '../tests/m2/helpers/restart-app.ts'
+import { cleanupViewKey, closeAndAwaitExit, createAppSessionFactory, switchToWorkbench, waitForTreeNodes, openBoardPane } from '../tests/m2/helpers/restart-app.ts'
 import { assertTreesIdentical, hashTree } from '../tests/m2/helpers/tree-hash.ts'
 import { expectTwoTierSectionCensus, journeyBundles, journeyStageTarballs, writeOverlayFile } from './helpers.ts'
 
@@ -81,6 +81,8 @@ test('step-5/success [@web-e2e @journey plugin-management]: after a disable→en
   }
 })
 
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 test('step-5/core-capability-unaffected [@web-e2e @journey plugin-management]: with the target preset-disabled the board, detail dock and launch entry all work; the enabled comparison plugin stays in', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)
 
@@ -124,8 +126,8 @@ test('step-5/core-capability-unaffected [@web-e2e @journey plugin-management]: w
 
       // 核心能力 1:任务看板 —— 依赖树(视图 A)全量渲染。
       await switchToWorkbench(page)
-      await page.getByRole('tab', { name: /^任务$|^Tasks$/ }).click()
-      await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-tasks"]')).toBeVisible()
+      await openBoardPane(page)
+      await expect(page.locator('[data-dsh-forge-task-board]')).toBeVisible()
       await waitForTreeNodes(page, set.facts.taskCount, 60_000)
       // …… 状态分组视图可切换并渲染(7 列 board)。
       await page.locator('[data-dsh-forge-board-view="grouped"]').click()
@@ -144,7 +146,7 @@ test('step-5/core-capability-unaffected [@web-e2e @journey plugin-management]: w
 
       // 插件面:已停用目标行的退出说明 hint(最近 landed 面,见头注)非空;
       // 对照第三方行启用不受影响。
-      await page.getByRole('tab', { name: /^概览$|^Overview$/ }).click()
+      await switchToWorkbench(page)
       await expect(page.locator('[data-dsh-forge-view="dsh-forge-view-overview"]')).toBeVisible()
       const helloRow = page.locator(`[data-dsh-forge-plugin-row="${HELLO_WORLD}"]`)
       await expect(helloRow).toHaveAttribute('data-enabled', 'false', { timeout: 30_000 })

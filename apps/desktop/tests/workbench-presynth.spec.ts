@@ -6,7 +6,8 @@
 //            三级解析 + task frontmatter 覆盖优先级);组合消息逐字符断言。
 //   AC-2 prompt_hash 口径 — sha256(组合首条消息)落 dispatch 行(引擎经
 //            dispatch-service 全链);hash oracle 复用 M2 journal 逐字符比对
-//            形态(接口预留:hash 全等/前缀逐字节/恰好一行追加)。
+//            形态(接口预留:hash 全等/前缀逐字节/恰好两行追加 + 逐行前缀
+//            对拍 —— Interface 7,任务 2.8 两行化口径)。
 //   AC-3 模板映射 — spike-4 清单全覆盖(逐类型路由 + 特征片段;surface
 //            后缀回退;fix-record-missed 旗标路由);受限/被机制取代类型
 //            派发面封闭;模板库完整性校验(ValidatePromptTemplates 契约
@@ -51,8 +52,10 @@ import {
   DISPATCH_RESTRICTED_TYPES,
   EXECUTOR_PREAMBLE,
   MECHANISM_REPLACED_TYPES,
+  NAMING_MARKER,
   PROMPT_TEMPLATES,
   attributionLine,
+  namingLine,
 } from '../src/main/workbench/dispatch/presynth/templates.ts'
 import { ATTRIBUTION_MARKER, checkInjectionOracle, promptHashOf } from '../src/main/workbench/dispatch/presynth/hash.ts'
 import { replaceStageAssets } from '../src/main/workbench/stages/stage-asset-index.ts'
@@ -295,13 +298,34 @@ describe('AC-1 three-element assembly — section-by-section character assertion
     expect(presynth).toContain('### Step 1.5: Spec-Code Conflict Scan')
   })
 
-  it('renders the composed first user message character-for-character (presynth + "\\n\\n" + one attribution line)', () => {
+  it('renders the composed first user message character-for-character (presynth + "\\n\\n" + two appendix lines: attribution + naming)', () => {
     const presynth = 'CONTENT-原文\r\nunicode ✓ µ — trailing   \n'
-    const message = composeFirstUserMessage(presynth, 'session-abc')
-    expect(message).toBe(`${presynth}\n\n${attributionLine('session-abc')}`)
+    const subject = { taskKey: 'alpha/1.1', title: 'demo task' }
+    const message = composeFirstUserMessage(presynth, 'session-abc', subject)
+    expect(message).toBe(`${presynth}\n\n${attributionLine('session-abc')}\n${namingLine(subject)}`)
     expect(message.startsWith(presynth)).toBe(true) // 原文不改写(前缀逐字节)
-    expect(message.split(ATTRIBUTION_MARKER).length - 1).toBe(1) // 恰好一行追加
+    // 恰好两行 + 逐行前缀对拍(Interface 7 口径,任务 2.8)
+    const [attribution, naming] = message.slice(presynth.length + 2).split('\n')
+    expect(message.slice(presynth.length + 2).split('\n')).toHaveLength(2)
+    expect(attribution?.startsWith(ATTRIBUTION_MARKER)).toBe(true) // 第一行 = 归因行
+    expect(naming?.startsWith(NAMING_MARKER)).toBe(true) // 第二行 = 命名行
+    expect(message.split(ATTRIBUTION_MARKER).length - 1).toBe(1)
+    expect(message.split(NAMING_MARKER).length - 1).toBe(1)
     expect(message).toContain('FORGE_ACTOR=session:session-abc') // 值与 dispatch.session_id 同键
+    expect(message).toContain('『alpha/1.1 demo task』') // 命名行文案含 taskKey + title
+  })
+
+  it('keeps the two-line appendix identical regardless of the type protocol (mode-agnostic single construction point)', () => {
+    // 审计结论(任务 2.8):追加行仅在内核 composeFirstUserMessage 一处构造,
+    // dispatch-service → launch-port → host 通道对任何会话预设(标准/PTC/极简)
+    // 逐字符交付(零改写)—— 一致性 = 结构性保证;此处以两个类型协议的
+    // 差异正文反证追加行与协议路由/派发模式无关。
+    const subject = { taskKey: 'alpha/1.1', title: 'demo task' }
+    const featureMsg = composeFirstUserMessage('FEATURE-CONTENT', 'session-m', subject)
+    const docMsg = composeFirstUserMessage('DOC-CONTENT', 'session-m', subject)
+    const tailOf = (content: string, message: string): string => message.slice(content.length + 2)
+    expect(tailOf('FEATURE-CONTENT', featureMsg)).toBe(tailOf('DOC-CONTENT', docMsg))
+    expect(tailOf('DOC-CONTENT', docMsg)).toBe(`${attributionLine('session-m')}\n${namingLine(subject)}`)
   })
 
   it('reflects the real three-tier prefs chain through the engine (registry default → project → feature)', async () => {
@@ -349,14 +373,14 @@ describe('AC-1 three-element assembly — section-by-section character assertion
 
 describe('AC-2 prompt_hash — spike-3 口径 over the composed first user message', () => {
   it('computes sha256(utf-8) hex lowercase of the combined message (M2 e2e 同式)', () => {
-    const message = composeFirstUserMessage('正文', 'session-x')
+    const message = composeFirstUserMessage('正文', 'session-x', { taskKey: 'alpha/1.1', title: 'demo task' })
     expect(promptHashOf(message)).toBe(sha256(message))
     expect(promptHashOf(message)).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('lands prompt_hash = sha256(injection) on the dispatch row with the pre-minted session id (engine → dispatch-service 全链)', async () => {
     const seed = await seedProject()
-    seedTask(seed)
+    const task = seedTask(seed)
     writeTaskDoc(seed, 'alpha/tasks/1.1.md')
     seedStageAssets(seed, ['prd'])
     const engine = createPresynthEngine({ db: seed.db, resolveFeaturesRoot: () => seed.featuresRoot })
@@ -386,19 +410,24 @@ describe('AC-2 prompt_hash — spike-3 口径 over the composed first user messa
     expect(input.promptHash).toBe(row.promptHash)
     expect(row.state).toBe('running') // host 回报同 session → starting→running
 
-    // 注入形态:前导段开头 + 尾部恰好一行归因(值 = 预铸 session)
+    // 注入形态:前导段开头 + 尾部两行追加(归因行值 = 预铸 session;命名行
+    // 文案 = taskKey + title)
+    const appendix = `${attributionLine(row.sessionId as string)}\n${namingLine(task)}`
     expect(input.prompt.startsWith(EXECUTOR_PREAMBLE)).toBe(true)
-    expect(input.prompt.endsWith(attributionLine(row.sessionId as string))).toBe(true)
+    expect(input.prompt.endsWith(appendix)).toBe(true)
     expect(input.prompt.split(ATTRIBUTION_MARKER).length - 1).toBe(1)
+    expect(input.prompt.split(NAMING_MARKER).length - 1).toBe(1)
+    expect(input.prompt).toContain(`『${task.taskKey} ${task.title}』命名`)
 
     // oracle 四件套的内核侧三查(journal text 以通道投递串本身体现)
-    const presynth = input.prompt.slice(0, input.prompt.length - attributionLine(row.sessionId as string).length - 2)
+    const presynth = input.prompt.slice(0, input.prompt.length - appendix.length - 2)
     expect(checkInjectionOracle({ journalText: input.prompt, presynthContent: presynth, promptHash: row.promptHash })).toEqual({ ok: true })
   })
 
-  it('exposes the M2-journal-shaped oracle: hash equality / byte prefix / exactly one attribution line', () => {
+  it('exposes the M2-journal-shaped oracle: hash equality / byte prefix / exactly two appendix lines with per-line prefixes', () => {
     const presynth = '原文\r\nunicode ✓\n'
-    const message = composeFirstUserMessage(presynth, 'session-1')
+    const subject = { taskKey: 'alpha/1.1', title: 'demo task' }
+    const message = composeFirstUserMessage(presynth, 'session-1', subject)
     const hash = promptHashOf(message)
     expect(checkInjectionOracle({ journalText: message, presynthContent: presynth, promptHash: hash })).toEqual({ ok: true })
     // ① 尾部篡改 → hash 失配(前缀仍逐字节)
@@ -407,10 +436,14 @@ describe('AC-2 prompt_hash — spike-3 口径 over the composed first user messa
     // ② 前缀改写 → prefix-rewritten(hash 同时失配)
     expect(checkInjectionOracle({ journalText: `rewritten${message}`, presynthContent: presynth, promptHash: hash }).failures)
       .toContain('prefix-rewritten')
-    // ③ 归因行翻倍 → attribution-not-single-line
+    // ③ 归因行翻倍 → appendix-not-two-lines(两行形态破坏:第三行不再以命名前缀开头)
     const doubled = `${message}\n${attributionLine('session-1')}`
     expect(checkInjectionOracle({ journalText: doubled, presynthContent: presynth, promptHash: promptHashOf(doubled) }).failures)
-      .toEqual(['attribution-not-single-line'])
+      .toEqual(['appendix-not-two-lines'])
+    // ③' 命名行缺失(仅剩归因行)→ appendix-not-two-lines(恰好一行 ≠ 恰好两行)
+    const noNaming = `${presynth}\n\n${attributionLine('session-1')}`
+    expect(checkInjectionOracle({ journalText: noNaming, presynthContent: presynth, promptHash: promptHashOf(noNaming) }).failures)
+      .toEqual(['appendix-not-two-lines'])
   })
 
   it('mints caller-minted session ids in the M2 shape (create({sessionId}) 幂等 adopt 面)', () => {

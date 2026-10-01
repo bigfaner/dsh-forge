@@ -15,13 +15,18 @@
  */
 import { fillTemplate } from '../../overview/format'
 import { ChromeButton } from '../../../components/chrome/ChromeButton'
-import { ghostButtonStyle, LaunchSpinner, primaryButtonStyle } from '../launch/LaunchStates'
+import { ghostButtonStyle, LaunchSpinner, primaryButtonStyle, type BoardHostForm } from '../launch/LaunchStates'
 import type { DispatchTranslate } from './SelectionLayer'
 
 /** ui-design 层叠: the selection float bar sits at z200 (侧板 z100 < 本条 < toast z1100). */
 export const FLOAT_BAR_Z = 200
 
-const barStyle = {
+/**
+ * The bar's anchoring base (M4 2.1 双宿主): the shared geometry minus the
+ * host-dependent members (position + the width cap) — those are composed at
+ * the render site from the host form.
+ */
+const barBaseStyle = {
   alignItems: 'center',
   background: 'var(--dsh-bg, Canvas)',
   border: '1px solid var(--dsh-border-color, CanvasText)',
@@ -31,12 +36,24 @@ const barStyle = {
   display: 'flex',
   gap: '10px',
   left: '50%',
-  maxWidth: 'calc(100vw - 32px)',
   padding: '8px 14px',
-  position: 'fixed',
   transform: 'translateX(-50%)',
   zIndex: FLOAT_BAR_Z,
 } as const
+
+/**
+ * The host-form overlay: the window form (default) pins the bar to the
+ * WINDOW's bottom-center, viewport-capped (the M2/M3 geometry verbatim); the
+ * pane form anchors it INSIDE the board's own box — `absolute` resolves
+ * against the page root (the nearest positioned ancestor), and the cap
+ * follows the board's width (100vw of the surrounding window would let the
+ * bar span the conversation panel beside the pane).
+ */
+function barStyleOf(host: BoardHostForm): Record<string, string | number> {
+  return host === 'pane'
+    ? { ...barBaseStyle, position: 'absolute', maxWidth: 'calc(100% - 32px)' }
+    : { ...barBaseStyle, position: 'fixed', maxWidth: 'calc(100vw - 32px)' }
+}
 
 const countStyle = {
   fontSize: '14px',
@@ -46,8 +63,14 @@ const countStyle = {
 
 /** Inputs of {@link SelectionFloatBar}. */
 export interface SelectionFloatBarProps {
-  /** The locale seat (the shell's `t`). */
+  /** The locale seat (the host's `t`). */
   readonly t: DispatchTranslate
+  /**
+   * The host's width breakpoint (M4 2.1 双宿主, threaded by SelectionLayer):
+   * 'window' (default) = window-fixed, viewport-capped (M2/M3 verbatim);
+   * 'pane' = anchored inside the board's own box. See {@link barStyleOf}.
+   */
+  readonly host?: BoardHostForm | undefined
   /** The live selection count (已选 N 项 — updates in real time). */
   readonly count: number
   /** A verb leg is in flight (spinner face + disabled buttons). */
@@ -73,7 +96,7 @@ export function SelectionFloatBar(props: SelectionFloatBarProps) {
       role="toolbar"
       aria-label={t('tasks.dispatch.float.label')}
       data-dsh-forge-dispatch-float-bar=""
-      style={barStyle}
+      style={barStyleOf(props.host ?? 'window')}
       onClick={(event) => { event.stopPropagation() }}
     >
       <span tabIndex={0} data-dsh-forge-dispatch-count="" style={countStyle}>

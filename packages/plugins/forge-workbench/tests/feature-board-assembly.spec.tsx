@@ -9,13 +9,10 @@ import { createFeatureDocsCache } from '../src/client/store/feature-board.ts'
 import { FeaturesView } from '../src/client/views/features/FeaturesView.tsx'
 import type { FeaturesViewProps } from '../src/client/views/features/FeaturesView.tsx'
 import { FeaturesPage } from '../src/client/views/FeaturesPage.tsx'
-import { WorkbenchShell } from '../src/client/WorkbenchShell.tsx'
 import { FeatureDocs } from '../src/client/views/features/FeatureDocs.tsx'
 import { en, type WorkbenchKey } from '../src/client/locale/en.ts'
 import type { DocKind, FeatureBoardData, FeatureDoc, WorkbenchState } from '../src/client/ipc-types.ts'
 import type { WorkbenchIpcBridge } from '../src/client/ipc/workbench.ts'
-import type { WorkbenchShellProps } from '../src/client/contract.ts'
-import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-key.ts'
 
 // Task 5.16 — the UF4 features ASSEMBLY units (real IPC over the
 // window.dshForge.workbench boundary; jsdom fakes, no Electron):
@@ -26,8 +23,9 @@ import type { ViewKeySnapshot, WorkbenchTabKey } from '../src/client/store/view-
 //       才显错), envelope rejections normalized at the boundary
 //   AC1/AC4/AC5 ride the unchanged 5.9 legs (feature-board.spec.tsx).
 
-// The shell integration renders the real WorkbenchShell — the task-board.spec
-// standins for the ui-primitives / ReactFlow lib boundaries.
+// These units render the assembled FeaturesView directly (M4 1.7 re-host:
+// the retired shell mount went with the main-panel view key) — the
+// ui-primitives / ReactFlow lib boundaries get the task-board.spec standins.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconBranchOutline16: () => null,
   StateDot: (props: { state: string }) => <span data-mock-state-dot={props.state} />,
@@ -114,6 +112,20 @@ function fullBridgeFake(overrides: Partial<WorkbenchIpcBridge> = {}): WorkbenchI
     // M3 proposals 读段(任务 5.3;BRIDGE_MEMBERS presence check 全员可调)。
     getProposalBoard: async () => ({ proposals: [], generatedAt: '', proposalsRoot: 'Z:/docs/proposals' }),
     readProposalDoc: async () => ({ kind: 'proposal', markdown: '' }),
+    // M4 v3 项目中心段(任务 1.3;presence check 全员可调)。
+    probeProjectPath: async () => ({}) as never,
+    renameProject: async () => ({}) as never,
+    archiveProject: async () => ({}) as never,
+    restoreProject: async () => ({}) as never,
+    listProjects: async () => [],
+    // M4 v3 投影段(任务 3.2;presence check 全员可调)。
+    retryProjection: async () => ({ state: 'pending' }),
+    getProjectionStatus: async () => [],
+    submitWorkspaceSnapshot: async () => undefined,
+    reportProjectionOutcome: async () => undefined,
+    // M4 v3 ui-state 段(任务 4.1;presence check 全员可调;值面 4.5 前无消费)。
+    getProjectUiState: async () => undefined,
+    setProjectUiState: async () => undefined,
     onEvents: () => () => {},
     ...overrides,
   } as unknown as WorkbenchIpcBridge
@@ -403,6 +415,7 @@ const REAL_STATE: WorkbenchState = {
   projects: [{
     id: 'real-proj-1', displayName: 'real', codeRoot: 'Z:\\real', docLocationType: 'in_repo',
     docLocationPath: null, createdAt: '2026-09-22T08:00:00.000Z', lastActivatedAt: null,
+    archived: false, sortOrder: 0, projectionState: 'pending', docsPlacement: 'repo-existing',
   }],
   activeProjectId: 'real-proj-1',
   plugins: [],
@@ -512,59 +525,5 @@ describe('FeaturesView: the real chain (bridge live, seat absent)', () => {
     render(<FeaturesView t={t} seat={{ face: { loadFeatureBoard } }} chromeProjectId="chrome-p" />)
     await waitFor(() => { expect($('[data-dsh-forge-feature-card="real-feature-x"]')).not.toBeNull() })
     expect(loadFeatureBoard).toHaveBeenCalledWith('chrome-p') // the chrome projection passthrough
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Shell integration: the features branch mounts the assembly
-// ---------------------------------------------------------------------------
-
-describe('shell integration: the features branch rides FeaturesView', () => {
-  function makeViewFace(initial: Partial<ViewKeySnapshot> = {}) {
-    let snapshot: ViewKeySnapshot = {
-      view: 'workbench', workbenchTab: 'workbench/overview', featureSlug: undefined, ...initial,
-    }
-    const openFeatureDetail = vi.fn((slug: string) => {
-      snapshot = { view: 'workbench', workbenchTab: 'workbench/features', featureSlug: slug }
-    })
-    const selectWorkbenchTab = vi.fn((tab: WorkbenchTabKey) => {
-      snapshot = { ...snapshot, workbenchTab: tab, featureSlug: undefined }
-    })
-    return {
-      props: {
-        useViewKey: (selector: (current: ViewKeySnapshot) => ViewKeySnapshot) => selector(snapshot),
-        selectWorkbenchTab,
-        openFeatureDetail,
-      } satisfies Pick<WorkbenchShellProps, 'useViewKey' | 'selectWorkbenchTab' | 'openFeatureDetail'>,
-      openFeatureDetail,
-      selectWorkbenchTab,
-    }
-  }
-
-  it('bridge live + no seat: the REAL chain through the shell (mock 全撤 at the mount site)', async () => {
-    const calls = installBridge()
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/features' })
-    render(
-      <WorkbenchShell t={t as WorkbenchShellProps['t']} {...viewFace.props} />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-feature-card="real-feature-x"]')).not.toBeNull() })
-    expect(calls.getFeatureBoard).toEqual(['real-proj-1'])
-    // Enter the detail through the machine; the doc reads over the verb.
-    fireEvent.click($('[data-dsh-forge-feature-card="real-feature-x"]'))
-    expect(viewFace.openFeatureDetail).toHaveBeenCalledWith('real-feature-x')
-  })
-
-  it('seat injected: the 5.9 form through the shell (the explicit seam still addresses FeaturesPage)', async () => {
-    const loadFeatureBoard = vi.fn(async () => REAL_BOARD)
-    const viewFace = makeViewFace({ workbenchTab: 'workbench/features' })
-    render(
-      <WorkbenchShell
-        t={t as WorkbenchShellProps['t']}
-        features={{ face: { loadFeatureBoard } }}
-        {...viewFace.props}
-      />,
-    )
-    await waitFor(() => { expect($('[data-dsh-forge-feature-card="real-feature-x"]')).not.toBeNull() })
-    expect(loadFeatureBoard).toHaveBeenCalledTimes(1)
   })
 })

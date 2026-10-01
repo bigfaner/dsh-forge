@@ -20,7 +20,7 @@ import {
   measureReflow,
   openKernelDb,
   recomputePresynth,
-  switchToWorkbench,
+  switchToWorkbench, openBoardPane,
   waitForOrchBadge,
   waitForPromptRows,
   WorldManager,
@@ -35,7 +35,7 @@ test('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成
   const manager = new WorldManager()
   const kernel = await buildMainWorld(freshRoot('disp-loop-smoke'))
   try {
-    const world = await manager.acquire(kernel, 'main')
+    const world = await manager.acquire(kernel, 'main', { tab: 'workbench/tasks' })
     const { page, stub } = world
     if (stub === null) throw new Error('the dispatch stub must ride this world')
 
@@ -110,7 +110,10 @@ test('smoke/task-dispatch-execution-loop: 看板多选并行派发 → 预合成
     await expect(orch).toBeVisible({ timeout: 10_000 })
     await orch.locator('[data-dsh-forge-orch-enter-session]').click()
     await expect(page.locator('[data-dsh-forge-shell]'), 'session 视图接管').toBeHidden({ timeout: 15_000 })
+    // 2.10 新宿主:会话切换重置会话域右栏(#28-④)—— 返回 = 逃生门往返 +
+    // 同一用户路径重开看板(概览任务行 seam);断言本体零删改。
     await switchToWorkbench(page)
+    await openBoardPane(page)
     await expect(page.locator(`[data-dsh-forge-node-card="${TASK_1}"]`), '返回来源页(任务看板)').toBeVisible({ timeout: 20_000 })
 
     // ---- Step 7:agent 提交 ×3 → 逐笔 ≤5s 回流 ------------------------------

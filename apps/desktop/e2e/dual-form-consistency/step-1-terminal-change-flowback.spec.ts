@@ -47,6 +47,8 @@ function stepOneFixture(): { set: GeneratedTaskSet; root: string; project: Writt
   const mutator = createFixtureMutator(set, project)
   return { set, root, project, stub, mutator }
 }
+// [M4 1.8 e2e 迁移·迁移清单 第②行] 2.10 已按新宿主恢复:入口 = 右栏任务看板 pane
+// (openTasksBoard/openBoardPane:概览任务行 seam + registerFixtureProject 的列表推送位);断言本体零删改。
 
 test('step-1/success [@web-e2e @journey dual-form-consistency]: terminal change flowbacks ≤5s with [终端] source (board entered after the change)', async ({ }, testInfo) => {
   testInfo.setTimeout(600_000)

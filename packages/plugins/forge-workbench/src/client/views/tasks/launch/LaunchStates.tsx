@@ -34,6 +34,31 @@ export const TOAST_Z = 1100
 export const DETAIL_DOCK_Z = 100
 export const DETAIL_DOCK_WIDTH = 'min(440px, 45vw)'
 
+/**
+ * The board's host forms (M4 2.1 双宿主, tech-design §Integration #5): the
+ * WIDTH BREAKPOINT the host INJECTS — the component never probes its own
+ * container (零宿主探测 Hard Rule). 'window' (the default) = a window-grade
+ * surface: the detached window's form (4.3's `view='board'`) wearing the
+ * M2/M3 main-panel geometry VERBATIM; 'pane' = the narrow rightbar pane form
+ * (2.2's `TabKind='board'`) — the board's fixed-geometry chrome (side docks,
+ * selection float bar, approval toast) contracts to the board's own box.
+ * Lives beside {@link DETAIL_DOCK_WIDTH} for the same acyclic-shared-home
+ * reason (every dock/chrome consumer reaches this module already).
+ */
+export type BoardHostForm = 'window' | 'pane'
+
+/**
+ * The side-dock strip's width for a host form — the page insets its flow
+ * layout by exactly this value while EITHER dock is open. The window form
+ * keeps the ui-design UF3 geometry verbatim; the pane form caps at the
+ * BOARD's own width (45vw of the surrounding window would swallow a rightbar
+ * pane whole) — `100%` resolves against the page root for the
+ * absolute-anchored docks and against the same box for the flow inset.
+ */
+export function detailDockWidthOf(host: BoardHostForm): string {
+  return host === 'pane' ? 'min(440px, 100%)' : DETAIL_DOCK_WIDTH
+}
+
 /** ui-dialog geometry: full-screen mask (mask-1 + 2px blur) with a centered r24 card. */
 const maskStyle = {
   alignItems: 'center',

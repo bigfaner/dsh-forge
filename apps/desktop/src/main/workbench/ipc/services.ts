@@ -18,6 +18,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { shellLog } from '../../log.ts'
 import { DOC_KIND_ANCHORS } from '../indexer/parse-feature.ts'
 import { parseFeatureTasks, readTaskIndex, type TaskIndexEntries } from '../indexer/parse-task.ts'
 import { resolveFeaturesDir, resolveProposalsDir, scanForgeFiles, type ScanOutcome, type ScanTarget } from '../indexer/scan.ts'
@@ -65,6 +66,11 @@ import { createStageWriteService } from '../stages/advance-service.ts'
 import { createProposalsVerbService } from '../proposals/proposals-service.ts'
 import { createDispatchVerbService } from '../dispatch/dispatch-service.ts'
 import { createPresynthEngine } from '../dispatch/presynth/assemble.ts'
+import { createProjectLifecycleService, type RegisterProjectV2Input } from '../projects/lifecycle-service.ts'
+import { createProjectionReconcileService } from '../projection/service.ts'
+import { createLifecycleProjectionHooks } from '../projection/lifecycle-hooks.ts'
+import { DEFAULT_PROJECT_LAYOUT, sanitizeProjectLayout } from '../ui-state/layout-schema.ts'
+import { getProjectUiStateRow, saveProjectLayout } from '../ui-state/ui-state-repo.ts'
 import type {
   FeatureBoardData,
   FeatureDoc,
@@ -118,6 +124,25 @@ export interface WorkbenchIpcServiceDeps {
    * migration/faults-stub.ts)。boot 接线(main/index.ts)传入。
    */
   readonly migrationFaults?: () => MigrationFaults | undefined
+  /**
+   * 投影 relay 在场探测(任务 3.2;ERR_PROJECTION_CHANNEL_UNAVAILABLE 的
+   * 判据 = 事件订阅登记非空)。缺省恒真 = 乐观直发(1.3 占位事件同款
+   * 行为);boot 接线(main/index.ts)注入 workbenchEvents.size 探测。
+   */
+  readonly relayPresence?: () => boolean
+  /**
+   * 项目移除时收回该项目全部 detached 窗口(任务 4.2;tech-design
+   * §Interface 1 removeProject「拆出窗关闭」)。缺省 no-op(测试装配/
+   * 窗口面不在场);boot 接线(main/index.ts)注入壳层窗口注册表收回
+   * 面。toast 通知口径留 4.3(GUI)。
+   */
+  readonly recallProjectWindows?: (projectId: string) => void
+  /**
+   * 归档/恢复 → 该项目 detached 窗标题刷新(任务 4.3;ui-design C10「标题
+   * 追加『已归档』」)。缺省 no-op(测试装配/窗口面不在场);boot 接线
+   * (main/index.ts)注入壳层窗口管理器的 setProjectArchived 面。
+   */
+  readonly markDetachedWindowsArchived?: (projectId: string, archived: boolean) => void
 }
 
 /** 装配产物:动词服务面 + boot 恢复 + 收尾。 */
@@ -180,6 +205,19 @@ function readTaskDescription(entries: TaskIndexEntries, tasksDir: string, localI
     }
   }
   return ''
+}
+
+/**
+ * ERR_LAYOUT_INVALID 落 log(任务 4.1;tech-design §Error Types & Codes 该行
+ * 口径:重置默认布局 + log,不弹错、不拒动词面)。读/写两相位共用 —— 读侧
+ * = 行内 blob 违规;写侧 = 服务端二次校验拦下的非法入参(落库为默认布局)。
+ */
+function logLayoutInvalid(phase: 'read' | 'write', projectId: string, reason: string | null): void {
+  shellLog.warn({
+    code: 'ERR_LAYOUT_INVALID',
+    message: `project ${projectId} layout blob failed the v1 whitelist schema and was reset to the default layout (${phase})`,
+    ...(reason === null ? {} : { data: { projectId, phase, reason } }),
+  })
 }
 
 export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): WorkbenchIpcServiceAssembly {
@@ -369,6 +407,41 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
     backupsRoot: join(deps.userDataPath, 'workbench', 'backups'),
   }
 
+  // M4 任务 3.2:投影对账 service(Interface 1 v3·P3 批四动词的芯 + 1.3
+  // registerProject 占位 hook 的真实载荷接线)。对账重算 = 3.1 内核
+  // (diff → verdict 桥 → 状态机);relay 缺席 → 重试一次后 degraded
+  // (ERR_PROJECTION_CHANNEL_UNAVAILABLE,plan 保留 —— 期望在库);事件经
+  // 同一 sink 批推(迁移/偏好/编排面 onEvent 同款单批直发形态)。任务 3.4
+  // 扩:pushForRename(改名同步)/ buildRemovalPlan(移除 delete plan 组装,
+  // 行删除前)/ 回填终态 no-op(移除竞态)。
+  const projection = createProjectionReconcileService({
+    db,
+    onEvents: events => sink(events),
+    ...(deps.relayPresence === undefined ? {} : { relayPresence: deps.relayPresence }),
+  })
+
+  // M4 任务 3.4:生命周期动词 × 投影的单一接线点(四操作映射矩阵见该模块
+  // 头注:注册 ensure/改名 rename plan/归档恢复零 op/移除 delete plan)。
+  const projectionHooks = createLifecycleProjectionHooks({
+    projection,
+    onEvents: events => sink(events),
+  })
+
+  // M4 任务 1.3:项目生命周期域服务(v3·P1 批 —— 侦测/注册 v2/rename/
+  // archive/restore/list;D11 三层比对 + 投影占位事件 + project_list_changed
+  // 经同一 sink 批推,迁移/偏好/编排面 onEvent 同款直发形态)。任务 3.2
+  // 接线:注册成功 → 期望占位 + 真实 plan push(projection 域组装;1.3 的
+  // 占位单 ensure plan 降级为 isolated 装配的兜底)。任务 3.4 接线:改名
+  // 成功 → 自包含 plan push 含 rename op(onProjectionRenamed;归档项目零
+  // op 不推送)。
+  const lifecycle = createProjectLifecycleService({
+    db,
+    docsRoot: workbenchPaths.docsRoot,
+    onEvents: events => sink(events),
+    onProjectionExpectation: projectId => projectionHooks.onRegistered(projectId),
+    onProjectionRenamed: projectId => projectionHooks.onRenamed(projectId),
+  })
+
   /** 目录直下列表(缺失/不可读 → 空数组;探测语境不放大 fs 噪声)。 */
   const listSubdirs = (dir: string): readonly string[] => {
     try {
@@ -465,6 +538,11 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       },
 
       registerProject(input: RegisterProjectInput): Project {
+        // M4 任务 1.3:v2 入参(anchor/docsPlacement)走 D11 生命周期链;
+        // v1 入参(M2/M3 向导冻结面)走 registry 链,行为不变。
+        if ('anchor' in input) {
+          return lifecycle.registerProject(input as RegisterProjectV2Input)
+        }
         provisionAppManagedDocRoot(input.docLocationType, input.docLocationPath)
         return registerProjectValidated(db, input)
       },
@@ -487,8 +565,26 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
       removeProject(id: string): void {
         const wasActive = getActiveProjectId(db) === id
+        // M4 任务 3.4:投影 delete(语义扩展第一腿)—— plan 组装必须先于
+        // 行删除(期望并集随后 FK cascade 消失);组装失败不阻断删除
+        // (ERR_PROJECT_NOT_FOUND 唯一权威 = removeProjectRow)。
+        const removalPlan = projectionHooks.removalPlanBeforeDelete(id)
         removeProjectRow(db, id)
+        // 投影 delete(第二腿):行删除后发 delete plan push(relay 执行 dsh
+        // workspace 移除;回填按终态 no-op)。FK cascade 已随行清除期望快照
+        // (workspace_projection)与布局记忆(project_ui_state)。relay 缺席
+        // 世界 = 事件无人消费,dsh 侧可能残留 workspace(孤儿 = 用户自有
+        // 数据,原生可删)—— 删除动词不被阻断(PRD 必答④降级语义)。
+        if (removalPlan !== null) projectionHooks.emitRemovalPush(removalPlan)
+        // 任务 4.2(Interface 1 removeProject「拆出窗关闭」):行删除后收回
+        // 该项目全部 detached 窗口(壳层注册表按 projectId 关窗;每窗
+        // 'closed' 路径自带 detached-closed 事件兜底)。窗面不在场/收回
+        // 失败不阻断删除 —— 项目行已删,残留窗口随主窗关闭对账。
+        deps.recallProjectWindows?.(id)
         if (wasActive) perception.retarget(null)
+        // M4 任务 1.3:移除即列表变更(project_list_changed;DB 删除 + FK
+        // cascade 已由 repos 事务承载)。
+        sink([{ type: 'project_list_changed' }])
       },
 
       activateProject(id: string): void {
@@ -669,6 +765,54 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
       // —— M3 UF3 集成读(任务 1.7)——
       probeCodeRoot: input => probeCodeRootImpl(input),
       getWorkbenchPaths: () => workbenchPaths,
+
+      // —— M4 v3 项目中心动词(任务 1.3):委托 projects/lifecycle-service
+      //    (D11 侦测/注册 v2/生命周期;事件经同一 sink 批推)。 ——
+
+      probeProjectPath: input => lifecycle.probeProjectPath(input),
+      renameProject: input => lifecycle.renameProject(input),
+      // 任务 4.3(ui-design C10 窗口语义「归档 → 窗口保持可用,标题追加
+      // 『已归档』」):归档/恢复动词落地即刷新该项目 detached 窗标题
+      // (hook 缺省 no-op —— 窗口面不在场的世界;boot 接线注入)。
+      archiveProject: (input) => {
+        const updated = lifecycle.archiveProject(input)
+        deps.markDetachedWindowsArchived?.(updated.id, true)
+        return updated
+      },
+      restoreProject: (input) => {
+        const updated = lifecycle.restoreProject(input)
+        deps.markDetachedWindowsArchived?.(updated.id, false)
+        return updated
+      },
+      listProjects: () => lifecycle.listProjects(),
+
+      // —— M4 v3 投影动词(任务 3.2):委托 projection/service(对账重算 +
+      //    幂等全量重推 + relay 回填映射;动词不因投影失败 reject)。 ——
+      retryProjection: input => projection.retryProjection(input),
+      getProjectionStatus: input => projection.getProjectionStatus(input),
+      submitWorkspaceSnapshot: input => projection.submitSnapshot(input.workspaces),
+      reportProjectionOutcome: input => projection.reportOutcome(input),
+
+      // —— M4 v3 ui-state 动词(任务 4.1):布局记忆读写(Interface 1 v3·P4
+      //    批两动词)。schema 白名单校验 = 服务端第二道防线(客户端 debounce
+      //    之上;T5):非法 blob 落库为默认布局 + ERR_LAYOUT_INVALID log,
+      //    不拒动词面;唯一 reject 面 = ERR_PROJECT_NOT_FOUND。 ——
+      getProjectUiState: (input) => {
+        assertProjectExists(db, input.projectId)
+        const row = getProjectUiStateRow(db, input.projectId)
+        // fix-2:stored = 行存在信号 —— 无行 = 默认布局 + stored:false(4.5
+        // 引擎以该信号区分「从未记过」与「记过」:默认 blob 不重放 tree,
+        // §2.3 激活自动展开得以在首启存活)。
+        if (row === null) return { layout: DEFAULT_PROJECT_LAYOUT, stored: false }
+        if (row.reset) logLayoutInvalid('read', input.projectId, row.reason)
+        return { layout: row.layout, stored: true }
+      },
+      setProjectUiState: (input) => {
+        assertProjectExists(db, input.projectId)
+        const sanitized = sanitizeProjectLayout(input.layout)
+        if (sanitized.reset) logLayoutInvalid('write', input.projectId, sanitized.reason)
+        saveProjectLayout(db, input.projectId, sanitized.layout, new Date().toISOString())
+      },
     },
 
     start(): void {
@@ -683,6 +827,9 @@ export function createWorkbenchIpcServices(deps: WorkbenchIpcServiceDeps): Workb
 
     dispose(): void {
       perception.retarget(null)
+      // 3.2:冲刷 pending 对账(同步末次重算,不丢状态迁移;watcher 冲刷
+      // 批缓冲的同款收尾纪律)。
+      projection.dispose()
     },
   }
 }

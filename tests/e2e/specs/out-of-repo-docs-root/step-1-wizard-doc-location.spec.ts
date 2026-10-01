@@ -37,7 +37,8 @@ test.describe.serial('out-of-repo-docs-root / step 1: 注册向导到达文档�
     const world = await manager.acquire(pure as KernelWorld, 'pure', { activate: false, tab: 'workbench/overview' })
     const { page } = world
 
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill((pure as KernelWorld).codeRoot)
     await expect(page.locator('[data-dsh-forge-wizard-probe="detected"]')).toBeVisible({ timeout: 15_000 })
@@ -77,7 +78,8 @@ test.describe.serial('out-of-repo-docs-root / step 1: 注册向导到达文档�
     const bareDir = join((pure as KernelWorld).root, 'bare-dir')
     mkdirSync(bareDir, { recursive: true })
 
-    await page.locator('[data-dsh-forge-add-project]').click()
+    // M4 1.8 迁移改写:注册向导入口 = 概览空态 CTA(TopBar add-project 随 chrome 退役)。
+    await page.locator('[data-dsh-forge-overview-register]').click()
     await expect(page.locator('[data-dsh-forge-dialog="register-wizard"]')).toBeVisible({ timeout: 10_000 })
     await page.locator('[data-dsh-forge-wizard-path-input]').fill(bareDir)
     await expect(page.locator('[data-dsh-forge-wizard-probe="failed"]'), 'forge 数据未检出 → probe failed(role=alert)').toBeVisible({ timeout: 15_000 })

@@ -5,7 +5,8 @@
 //   ① sha256(journal.text) === dispatch.prompt_hash        — kernel
 //     `checkInjectionOracle` (apps/desktop/.../dispatch/presynth/hash.ts);
 //   ② journal.text 以预合成内容逐字节开头(原文不改写)          —同上;
-//   ③ 追加行恰好一行(ATTRIBUTION_MARKER 计数 = 1)           —同上;
+//   ③ 追加行恰好两行 + 逐行前缀对拍(归因行 ATTRIBUTION_MARKER /
+//     命名行 NAMING_MARKER 前缀;Interface 7,任务 2.8 两行化口径)—同上;
 //   ④ requestId 确定性 = deriveLaunchRequestId(sessionId,
 //     journal.text)(重放幂等)— host `dispatch-launch/channel.ts`.
 // The e2e side contributes check ④ plus the byte-exact retrieval corpus
@@ -14,6 +15,7 @@
 // Consumers: 6.5 (SC3 注入内容断言) and any leg needing journal↔hash parity.
 
 import { ATTRIBUTION_MARKER, checkInjectionOracle, promptHashOf, type InjectionOracleFailure } from '../../../apps/desktop/src/main/workbench/dispatch/presynth/hash.ts'
+import { namingLine, type NamingSubject } from '../../../apps/desktop/src/main/workbench/dispatch/presynth/templates.ts'
 import { deriveLaunchRequestId } from '../../../packages/plugins/forge-workbench/src/host/dispatch-launch/channel.ts'
 
 /** Oracle failure codes (kernel three + the host-side requestId check). */
@@ -56,9 +58,12 @@ export function verifyPromptInjection(input: PromptOracleInput): PromptOracleRes
 /** sha256 of a composed message (re-export of the kernel 口径 for leg convenience). */
 export { promptHashOf, ATTRIBUTION_MARKER }
 
-/** Compose a journal-shaped first user message: presynth content + exactly one attribution line. */
-export function composeFirstUserMessage(presynthContent: string, sessionId: string): string {
-  return `${presynthContent}\n\n${ATTRIBUTION_MARKER} session:${sessionId}\n`
+/** Default naming subject for stub-composed messages (legs may pass their own task identity). */
+export const STUB_NAMING_SUBJECT: NamingSubject = { taskKey: 'stub/0.1', title: 'stub naming subject' }
+
+/** Compose a journal-shaped first user message: presynth content + the two-line appendix (attribution + naming). */
+export function composeFirstUserMessage(presynthContent: string, sessionId: string, task: NamingSubject = STUB_NAMING_SUBJECT): string {
+  return `${presynthContent}\n\n${ATTRIBUTION_MARKER} session:${sessionId}\n${namingLine(task)}`
 }
 
 /**

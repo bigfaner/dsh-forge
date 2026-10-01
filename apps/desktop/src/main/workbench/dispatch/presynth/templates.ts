@@ -3,8 +3,9 @@
 // 移植权威源 = forge-cli `pkg/prompt/templates`(2026-09-23 逐文件核对,
 // spike-4 §2 清单)+ 包装协议前导段(spike-4 §5.2:`plugins/forge/agents/
 // task-executor.md` 六步 + 硬约束 + Pause Protocol + DONE 格式,无独立注入
-// 宿主,并入预合成内容)+ 追加行文案(spike-3 §3:恰好一行/原文不改写/
-// 模板常量/sessionId 的函数,字节归 3.4 定稿)。
+// 宿主,并入预合成内容)+ 追加行文案(spike-3 §3 定稿;M4 Interface 7 两行
+// 化:归因行 + 命名行,任务 2.8 —— 原文不改写/模板常量/追加行不在 Go
+// 对拍集内)。
 //
 // 库成员(spike-4 §7):`pkg/prompt/templates` 21 文件中 20 个入库 —— 19 个
 // 类型协议(gate / doc.summary 被 I5 机制取代不入库:门 = checkStageArtifacts
@@ -101,19 +102,39 @@ Notes: \`forge_task_add\` has built-in dedup. Listing the source task in blocker
 `
 
 // ---------------------------------------------------------------------------
-// 追加行(spike-3 §3:文案收窄 + 字节定稿归 3.4)
+// 追加行(spike-3 §3 文案收窄;M4 Interface 7 两行化:归因行 + 命名行,任务 2.8)
 // ---------------------------------------------------------------------------
 
 /**
- * 归因追加行(M3 定稿文案):恰好一行、只在尾部、原文不改写、模板常量、
- * 确定性 = sessionId 的函数(可入 hash)。语义收窄(spike-2 §2 / spike-3
- * §3):dsh tool 写集 actor 已结构化(exec.agent.session.id,零 env 载体),
- * 追加行只覆盖「bash 内 shell 动作归因(git commit 等)+ 外部 CLI 过渡期」,
- * 值仍 \`session:<sessionId>\`(与 dispatch.session_id 同键)。标记前缀沿用
- * M2 oracle 计数锚点(\`[dsh-forge workbench] Attribution:\`)。
+ * 归因追加行(M3 定稿文案;M4 起为两行追加的第一行):只在尾部、原文不改写、
+ * 模板常量、确定性 = sessionId 的函数(可入 hash)。语义收窄(spike-2 §2 /
+ * spike-3 §3):dsh tool 写集 actor 已结构化(exec.agent.session.id,零 env
+ * 载体),追加行只覆盖「bash 内 shell 动作归因(git commit 等)+ 外部 CLI
+ * 过渡期」,值仍 \`session:<sessionId>\`(与 dispatch.session_id 同键)。
+ * 标记前缀沿用 M2 oracle 计数锚点(\`[dsh-forge workbench] Attribution:\`)。
  */
 export function attributionLine(sessionId: string): string {
   return `[dsh-forge workbench] Attribution: dsh tool calls in this session already carry your session actor; for shell actions run in bash (e.g. git commit) and any external CLI still used during the transition, prefix the command with the environment assignment FORGE_ACTOR=session:${sessionId} (example: FORGE_ACTOR=session:${sessionId} git commit -m "...") so the change is marked as session-sourced.`
+}
+
+/** 命名行的稳定前缀(两行纪律的逐行前缀对拍锚点;Interface 7 定稿文案前导段)。 */
+export const NAMING_MARKER = '执行本任务时,你 spawn 的 subagent 会话须以『'
+
+/** 命名行主体(任务标识输入;AuthoritativeTask 结构性满足 —— taskKey = 看板限定地址)。 */
+export interface NamingSubject {
+  readonly taskKey: string
+  readonly title: string
+}
+
+/**
+ * 命名追加行(M4 Interface 7 / Story 7,任务 2.8):「执行本任务时,你
+ * spawn 的 subagent 会话须以『<taskKey> <title>』命名」。确定性 = taskKey +
+ * title 的函数(可入 hash);追加行不在 Go 对拍集内(forge-cli 模板基线零
+ * 影响)。Hard Rule:命名 = 约定非绑定权威 —— 推断以血缘为准(T2,任务
+ * 2.5 client 推导服务),命名行仅承担可读性 + 双重校验。
+ */
+export function namingLine(task: NamingSubject): string {
+  return `${NAMING_MARKER}${task.taskKey} ${task.title}』命名`
 }
 
 // ---------------------------------------------------------------------------

@@ -20,8 +20,7 @@ import {
   waitForOrchBadge,
   waitForPromptRow,
   WorldManager,
-  bridgeInvoke,
-} from '../_lib/journey-world.ts'
+  bridgeInvoke, openBoardPane } from '../_lib/journey-world.ts'
 import { verifyPromptInjection } from '../../stubs/oracle.ts'
 import {
   BOOL_KEY,
@@ -100,7 +99,7 @@ test('smoke/preferences-tiered-override: 打开面板 → 三级查看与覆盖�
     await settlePrefsToast(page)
 
     // ---- Step 5:派发消费生效值(feature 66 仍压过全局 88)--------------
-    await page.locator('[data-dsh-forge-tab="workbench/tasks"]').click()
+    await openBoardPane(page)
     await dispatchFromBoard(page, [TASK_1])
     await waitForOrchBadge(page, TASK_1, 'running', 20_000)
     const row = (await getDispatchRows(page, world.projectId)).find(candidate => candidate.taskKey === TASK_1)

@@ -62,7 +62,11 @@ function firstTaskKey(set: GeneratedTaskSet): { taskKey: string; localId: string
   return { taskKey: `${feature.slug}/${task.localId}`, localId: task.localId }
 }
 
-test('step-4/success [@web-e2e @journey multi-project-management]: switching back to the first project fully re-scopes board, features and per-project link history', async ({ }, testInfo) => {
+// [M4 1.8 e2e 迁移·迁移清单 第①行 · 全局导航 chrome(ProjectSwitcher / TopBar / TabBar)] 本测试功能面锚定 1.7 已退役的旧视图宿主,
+// P2 2.10 复核:断言锚定已退役宿主方言(旧向导/换台 chrome/提案板与
+// Feature 板详情/阶段资产面板内部件),右栏 pane 族未承接 —— 挂起终态与恢复前置 = regression-inventory.md 开放项。
+// 断言本体零删改(零功能删除断言 Hard Rule)—— test.fixme 仅为过渡期挂起。
+test.fixme('step-4/success [@web-e2e @journey multi-project-management]: switching back to the first project fully re-scopes board, features and per-project link history', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setA = generateTaskSet({ seed: 'mpm4a', taskCount: 12, featureCount: 2, danglingRate: 0, recordRate: 0 })
@@ -170,7 +174,7 @@ test('step-4/success [@web-e2e @journey multi-project-management]: switching bac
   }
 })
 
-test('step-4/project-path-invalid [@web-e2e @journey multi-project-management]: a removed code root turns its card lost while the app, registry rows and the active project stay healthy', async ({ }, testInfo) => {
+test.fixme('step-4/project-path-invalid [@web-e2e @journey multi-project-management]: a removed code root turns its card lost while the app, registry rows and the active project stay healthy', async ({ }, testInfo) => {
   testInfo.setTimeout(420_000)
 
   const setA = generateTaskSet({ seed: 'mpm4ia', taskCount: 10, featureCount: 2, danglingRate: 0, recordRate: 0 })

@@ -356,14 +356,21 @@ export interface BootOptions {
   readonly env?: Record<string, string>
   /** Keep the ambient PATH (default false = the clean-PATH preset). */
   readonly cleanPath?: boolean
-  /** Activate the kernel's project and settle on a tab (default 'workbench/tasks'). */
+  /** Activate the kernel's project (default true — the project-card settle). */
   readonly activate?: boolean
+  /**
+   * M4 task 2.10 (迁移清单 第②③④行 restore): the retired workbench tab keys
+   * now ROUTE to their new rightbar hosts after activation —
+   * workbench/tasks → the 任务看板 pane (openBoardPane); workbench/proposals
+   * / workbench/features → the 项目概览 subtab (openOverviewPane);
+   * workbench/overview → the escape door (the boot default; no-op).
+   */
   readonly tab?: 'workbench/overview' | 'workbench/proposals' | 'workbench/features' | 'workbench/tasks'
   /** Skip the instance-lock probe (default false — the Hard Rule runs it). */
   readonly skipLockProbe?: boolean
 }
 
-/** Boot the app world over one kernel world (launch → uiReady → workbench → activate → tab). */
+/** Boot the app world over one kernel world (launch → uiReady → workbench(escape door) → activate). */
 export async function bootAppWorld(kernel: KernelWorld, tag: string, options: BootOptions = {}): Promise<AppWorld> {
   if ((options.skipLockProbe ?? false) === false) assertNoActiveDshForgeInstances({ excludePids: new Set([process.pid]) })
   const stubDir = mkdtempSync(join(tmpdir(), `dsh-forge-m3-${tag}-stub-`))
@@ -383,12 +390,8 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
   await switchToWorkbench(page)
   let projectId = kernel.projectId
   if ((options.activate ?? true) === true) {
-    // 激活块在概览找项目卡;同 UserData 重启(会话恢复)可能落在其它视图
-    // —— 先归位概览(已选中即零操作)。
-    const overviewTab = page.locator('[data-dsh-forge-tab="workbench/overview"]')
-    if (await overviewTab.getAttribute('aria-selected').catch(() => null) !== 'true') {
-      await overviewTab.click()
-    }
+    // 激活块在逃生门(overview 单页)找项目卡;1.7 后 workbench 内景即概览,
+    // 无 tab 可归位 —— shell 挂载即达(迁移清单 #9/1.8)。
     const displayName = kernel.codeRoot.split(/[\\/]/).filter(part => part !== '').pop() as string
     const card = page.locator('[data-dsh-forge-project-card]', { hasText: displayName }).first()
     await expect(card).toBeVisible({ timeout: 30_000 })
@@ -397,15 +400,158 @@ export async function bootAppWorld(kernel: KernelWorld, tag: string, options: Bo
     const activateBtn = card.locator('[data-dsh-forge-card-action="activate"]')
     if (await activateBtn.isEnabled()) await activateBtn.click()
     await expect(card).toHaveAttribute('data-active', 'true', { timeout: 10_000 })
-    const state = await bridgeInvoke<{ activeProjectId: string | null }>(page, 'getState', [])
+    const state = await bridgeInvoke<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>(page, 'getState', [])
     projectId = state.activeProjectId as string
     await expect(projectId, '激活项目在座(= 语料注册行)').toBe(kernel.projectId)
+    // M4 2.10: the escape-door card's activate rides the bare verb — the
+    // rightbar hosts (board/overview panes) bind the client active-project
+    // store, which re-reads only on project_list_changed. A same-name
+    // renameProject (pure-DB, zero fs) pushes the refresh deterministically.
+    const storeNudgeName = state.projects.find(row => row.id === projectId)?.displayName
+      ?? kernel.codeRoot.split(/[\/]/).filter(part => part !== '').pop()
+      ?? projectId
+    await bridgeInvoke<unknown>(page, 'renameProject', [{ projectId, displayName: storeNudgeName }]).catch(() => {})
   }
-  const tab = options.tab ?? 'workbench/tasks'
-  if (tab !== 'workbench/overview') {
-    await page.locator(`[data-dsh-forge-tab="${tab}"]`).click()
+  // M4 task 2.10: route the retired tab keys to their new rightbar hosts
+  // (entry plumbing only — the parked specs' assertion bodies ride verbatim).
+  if (options.tab === 'workbench/tasks') {
+    await openBoardPane(page)
+  } else if (options.tab === 'workbench/proposals' || options.tab === 'workbench/features') {
+    await openOverviewPane(page, options.tab === 'workbench/proposals' ? 'proposals' : 'features')
   }
   return { tag, shell, page, stub, stubDir, kernel, root: kernel.root, projectId, mainLog }
+}
+
+/** Is the board pane mounted AND visible? (the pane-family TasksView host) */
+async function isBoardPaneLive(page: Page): Promise<boolean> {
+  return await page.evaluate(() => {
+    const board = document.querySelector('[data-dsh-forge-task-board]')
+    return board !== null && (board as HTMLElement).offsetParent !== null
+  }).catch(() => false)
+}
+
+/** One navigation round toward the rightbar hosts (door exit → column →
+ * overview tab → the given subtab, + the board row seam when `clickRow`). */
+async function navigateRightbarRound(page: Page, subtabKind: 'tasks' | 'proposals' | 'features', clickRow: boolean): Promise<void> {
+  // Step 0 — leave the escape door: the rightbar is the conversation-side
+  // column; the workbench door (forge's shell in the main slot) displaces it.
+  await page.evaluate(() => {
+    if (document.querySelector('[data-dsh-forge-shell]') === null) return
+    const row = document.querySelector('[aria-label="项目"], [aria-label="Project"]') as HTMLElement | null
+    const newSession = [...document.querySelectorAll('button')]
+      .find(button => /新建会话|New Session/.test(button.textContent ?? ''))
+    const target = row ?? newSession
+    target?.click()
+  }).catch(() => {})
+  await page.waitForTimeout(500)
+  // Step 0.5 — the store refresh nudge: the bare verbs (fixture registration,
+  // wizard-side v1 register, card activate) write WITHOUT project_list_changed,
+  // and the rightbar hosts bind the client active-project store which re-reads
+  // only on that push. A resolving overview (no subtab strip) gets a same-name
+  // renameProject — pure-DB, zero fs — whose lifecycle push refreshes the store.
+  await page.evaluate(() => {
+    const overview = document.querySelector('[data-dsh-forge-overview]')
+    if (overview === null) return
+    const bridge = (globalThis as { dshForge?: { workbench?: {
+      getState(): Promise<{ activeProjectId: string | null; projects: Array<{ id: string; displayName?: string }> }>
+      renameProject(input: { projectId: string; displayName: string }): Promise<unknown>
+    } } }).dshForge?.workbench
+    if (bridge === undefined) return
+    void bridge.getState().then(state => {
+      const id = state.activeProjectId
+      if (id === null) return
+      const name = state.projects.find(row => row.id === id)?.displayName ?? id
+      void bridge.renameProject({ projectId: id, displayName: name }).catch(() => {})
+    })
+  }).catch(() => {})
+  await page.waitForTimeout(400)
+  // Step 1 — the column: expand, then the overview tab forward.
+  await page.evaluate(() => {
+    const panel = document.querySelector('[data-sidebar-right-panel]')
+    if (panel !== null && !panel.hasAttribute('data-sidebar-right-open')) {
+      const expand = document.querySelector('[data-sidebar-right-expand]') as HTMLElement | null
+      expand?.click()
+      return
+    }
+    const tabs = [...document.querySelectorAll('[data-sidebar-right-panel] [role="tab"]')]
+    const chip = tabs.find(tab => /^(项目概览|Project overview)$/.test(tab.textContent?.trim() ?? ''))
+    if (chip !== undefined) {
+      ;(chip as HTMLElement).click()
+      return
+    }
+    const card = document.querySelector('[data-dsh-forge-guide-card="overview"]') as HTMLElement | null
+    card?.click()
+  }).catch(() => {})
+  await page.waitForTimeout(600)
+  // Step 2 — the target subtab (+ the board row seam, ATOMICALLY).
+  await page.evaluate((input: { kind: string, open: boolean }) => {
+    const overview = document.querySelector('[data-dsh-forge-overview]')
+    if (overview === null || (overview as HTMLElement).offsetParent === null) return
+    const subtab = document.querySelector(`[data-dsh-forge-overview-subtab="${input.kind}"]`) as HTMLElement | null
+    subtab?.click()
+    if (!input.open) return
+    const row = document.querySelector('[data-dsh-forge-overview-task]') as HTMLElement | null
+    row?.click()
+  }, { kind: subtabKind, open: clickRow }).catch(() => {})
+  await page.waitForTimeout(700)
+}
+
+/**
+ * Open the 任务看板 pane (M4 task 2.10, 迁移清单 第②行): the overview tasks
+ * subtab's row seam is the board's only UI opener (select +
+ * ensureBoardActive). Postcondition-driven across the session-scoped column's
+ * settling re-mounts. Requires ≥1 task in the active corpus.
+ */
+export async function openBoardPane(page: Page): Promise<void> {
+  for (let round = 0; round < 12; round += 1) {
+    if (await isBoardPaneLive(page)) {
+      await page.evaluate(() => {
+        const dock = document.querySelector('[data-dsh-forge-task-detail]')
+        if (dock === null) return
+        const close = dock.querySelector('[data-dsh-forge-detail-close]') as HTMLElement | null
+        close?.click()
+      }).catch(() => {})
+      return
+    }
+    await navigateRightbarRound(page, 'tasks', true)
+  }
+  const state = await page.evaluate(() => ({
+    shell: document.querySelectorAll('[data-dsh-forge-shell]').length,
+    panelExists: document.querySelectorAll('[data-sidebar-right-panel]').length,
+    panelOpen: document.querySelector('[data-sidebar-right-panel]')?.hasAttribute('data-sidebar-right-open') ?? false,
+    stripChips: [...document.querySelectorAll('[data-sidebar-right-panel] [role="tab"]')].map(tab => tab.textContent?.trim() ?? ''),
+    overview: document.querySelectorAll('[data-dsh-forge-overview]').length,
+    overviewVisible: (document.querySelector('[data-dsh-forge-overview]') as HTMLElement | null)?.offsetParent !== null,
+    subtabTasks: document.querySelectorAll('[data-dsh-forge-overview-subtab="tasks"]').length,
+    taskRows: document.querySelectorAll('[data-dsh-forge-overview-task]').length,
+    board: document.querySelectorAll('[data-dsh-forge-task-board]').length,
+  })).catch(() => 'evaluate-failed')
+  throw new Error(`board pane never opened (rightbar: column → 项目概览 → 任务 subtab → row seam) — page state ${JSON.stringify(state)}`)
+}
+
+/**
+ * Bring the 项目概览 tab forward and activate one SUBTAB (迁移清单 第③④行 —
+ * the M3 提案板 / 阶段资产面板's pane hosts). Postcondition = the pane root
+ * visible under the selected subtab.
+ */
+export async function openOverviewPane(page: Page, subtab: 'proposals' | 'features' | 'tasks'): Promise<void> {
+  const paneRoot = subtab === 'proposals'
+    ? '[data-dsh-forge-overview-proposals]'
+    : subtab === 'features'
+      ? '[data-dsh-forge-overview-features]'
+      : '[data-dsh-forge-overview-tasks]'
+  for (let round = 0; round < 14; round += 1) {
+    const ready = await page.evaluate((input: { kind: string, pane: string }) => {
+      const tab = document.querySelector(`[data-dsh-forge-overview-subtab="${input.kind}"]`)
+      const selected = tab?.getAttribute('aria-selected') === 'true'
+      const pane = document.querySelector(input.pane)
+      const visible = pane !== null && (pane as HTMLElement).offsetParent !== null
+      return selected && visible
+    }, { kind: subtab, pane: paneRoot }).catch(() => false)
+    if (ready) return
+    await navigateRightbarRound(page, subtab, false)
+  }
+  throw new Error(`overview subtab never activated: ${subtab}`)
 }
 
 /** Close one app world (graceful shell close + stub dir removal; root stays for relaunch legs). */
@@ -557,6 +703,10 @@ export async function dispatchFromBoard(page: Page, taskKeys: readonly string[])
     await strayDetail.locator('[data-dsh-forge-detail-close]').click().catch(() => {})
     await expect(strayDetail).toHaveCount(0, { timeout: 5_000 }).catch(() => {})
   }
+  // M4 2.10: the board pane is the dispatch chain's host — bring it forward
+  // first (idempotent; the callers' boards may have been reset by a session
+  // switch since their last open).
+  await openBoardPane(page)
   // 派发链位:上一链 busy 相位期间 entry 为 no-op(idle→selecting 才有效)
   // —— 等链位归 idle(entry-active=false)再进入。
   const entry = page.locator('[data-dsh-forge-dispatch-entry]')
@@ -585,6 +735,7 @@ export async function dispatchFromBoard(page: Page, taskKeys: readonly string[])
  * dialog is on screen (the caller asserts + drives the rest of the chain).
  */
 export async function startBoardDispatch(page: Page, taskKey: string): Promise<void> {
+  await openBoardPane(page)
   await page.locator('[data-dsh-forge-dispatch-entry]').click()
   await expect(page.locator('[data-dsh-forge-selection-layer="active"]')).toBeVisible({ timeout: 10_000 })
   await page.locator(`[data-dsh-forge-select-chk="${taskKey}"] [data-dsh-forge-select-chk-input]`).check()
@@ -623,6 +774,9 @@ export async function waitForPromptRows(page: Page, stub: DispatchStub, count: n
 /** t0 → t1: an apply() write → the card first shows the [会话] badge + the new status short label. */
 export async function measureReflow(page: Page, taskKey: string, status: 'in_progress' | 'completed', apply: () => Promise<void>): Promise<number> {
   const labels = shortLabelsOf(status)
+  // M4 2.10: the card face lives in the board pane — bring it forward BEFORE
+  // t0 (the budget measures apply→render, not the pane navigation).
+  await openBoardPane(page)
   const t0 = Date.now()
   await apply()
   await page.waitForFunction((input: { key: string; labels: string[] }) => {

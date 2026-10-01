@@ -34,16 +34,21 @@
  */
 import type {
   ApprovalRow, DecideApprovalInput, DispatchRow, DispatchTasksInput, DispatchTasksResult,
-  DocKind, FeatureBoardData, FeatureDoc,
+  DetectReport, DocKind, FeatureBoardData, FeatureDoc,
   FeatureListEntry, FeatureStatusReport,
   KnowledgeFactEntry, KnowledgeFactInput, KnowledgeFactListResult, KnowledgeFactSummaryResult,
   KnowledgeForensicInput, KnowledgeForensicResult, KnowledgeLesson, KnowledgeLessonInput,
   KnowledgeLessonListResult, KnowledgeResearchInput, KnowledgeResearchListResult,
   KnowledgeResearchReport, MigrationStarted, MigrationStatus, PluginRow, PrefEntry, PrefRow,
-  PrefScope, Project, ProposalBoardData, ProposalDoc, ReceiveApprovalInput,
+  PrefScope, ProbeProjectPathInput, Project, ProjectionState, ProjectionStatusRow,
+  ProjectLayout, ProjectRefInput, ProposalBoardData, ProposalDoc,
+  GetProjectUiStateInput, SetProjectUiStateInput,
+  ReceiveApprovalInput, RenameProjectInput, ReportProjectionOutcomeInput,
+  RetryProjectionInput, SubmitWorkspaceSnapshotInput, GetProjectionStatusInput,
   StageArtifactsReport, FeatureSummary,
   StageAssetRow, StageGateInfo, StageSummarizeInput, StageSummarizeResult,
-  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, SessionLink, TaskActor, TaskAddInput,
+  ProjectPatch, RecordSessionLinkInput, RegisterProjectInput, RegisterProjectInputV2, SessionLink,
+  TaskActor, TaskAddInput,
   TaskBoardData, TaskClaimInput, TaskDetail, TaskGetInput, TaskQueryInput, TaskReopenInput,
   TaskSubmitInput, TaskSummary, TaskTransitionInput, WorkbenchEvent, WorkbenchPaths,
   WorkbenchState, WorkbenchVerbError,
@@ -52,6 +57,7 @@ import type {
   CodeRootProbeResult, DispatchFace, FeatureBoardFace, FeatureDocFace, MigrationFace, OverviewFace,
   PluginFace, ProposalFace, RegisterWizardFace, StageFace, TaskBoardFace, TaskDetailFace,
 } from '../contract'
+import type { ConfirmCardFace } from '../components/confirm-card/card-state'
 import { getWorkbenchEventSource } from './workbench-events'
 import { dispatchLaunchRelayOf } from './dispatch-relay'
 import { approvalAnswerRelayOf } from './approval-answer'
@@ -194,6 +200,52 @@ export interface WorkbenchIpcBridge {
    */
   getProposalBoard(projectId: string): Promise<ProposalBoardData>
   readProposalDoc(input: { projectId: string; slug: string; kind: 'proposal' | 'eval' }): Promise<ProposalDoc>
+  /**
+   * M4 v3 project-center verbs (task 1.3): probeProjectPath answers the C7
+   * detection report (D11 identity + registered fast lane + bounded evidence
+   * probes — read-only); the lifecycle four carry the v3 columns
+   * (archived / sortOrder / projectionState / docsPlacement). registerProject
+   * above additionally accepts the v2 input ({ anchor, docsPlacement, … }).
+   * Rejections ride the same `{ code, message, detail? }` envelope
+   * (ERR_PROJECT_EXISTS with the registered fast-lane payload in detail /
+   * ERR_CODE_ROOT_UNREADABLE / ERR_EXTERNAL_PATH_UNREADABLE /
+   * ERR_PROJECT_NOT_FOUND); mutations push project_list_changed (and the
+   * projection_push_required placeholder) through onEvents.
+   */
+  probeProjectPath(input: ProbeProjectPathInput): Promise<DetectReport>
+  renameProject(input: RenameProjectInput): Promise<Project>
+  archiveProject(input: ProjectRefInput): Promise<Project>
+  restoreProject(input: ProjectRefInput): Promise<Project>
+  listProjects(): Promise<Project[]>
+  /**
+   * M4 v3 projection verbs (task 3.2): the reconcile service's verb face —
+   * consumed by the projection relay (3.3: the snapshot follow-flow reports
+   * here and backfills outcomes; it consumes projection_push_required through
+   * onEvents) and the projection status surface (3.5). retryProjection
+   * re-pushes the idempotent self-contained plan; getProjectionStatus answers
+   * the state rows with live-materialized deviation detail; neither verb
+   * rejects on projection failure (only ERR_PROJECT_NOT_FOUND / shape
+   * violations — Propagation Strategy).
+   */
+  retryProjection(input: RetryProjectionInput): Promise<{ state: ProjectionState }>
+  getProjectionStatus(input?: GetProjectionStatusInput): Promise<ProjectionStatusRow[]>
+  submitWorkspaceSnapshot(input: SubmitWorkspaceSnapshotInput): Promise<void>
+  reportProjectionOutcome(input: ReportProjectionOutcomeInput): Promise<void>
+  /**
+   * M4 v3 ui-state verbs (task 4.1): the layout-memory pair over
+   * project_ui_state — the 4.5 layout engine consumes them (collect →
+   * debounce → setProjectUiState; re-enter → getProjectUiState → replay).
+   * Neither verb rejects on an invalid layout blob (whitelist failure →
+   * default layout + ERR_LAYOUT_INVALID log main-side); only
+   * ERR_PROJECT_NOT_FOUND rejections ride the envelope.
+   *
+   * fix-2 additive: `stored` = the row-exists signal (false = the project
+   * never persisted a layout — the returned layout IS the default blob);
+   * optional so an older host surface stays shape-compatible, and the
+   * engine treats anything but `true` as the default-blob path.
+   */
+  getProjectUiState(input: GetProjectUiStateInput): Promise<{ layout: ProjectLayout; stored?: boolean }>
+  setProjectUiState(input: SetProjectUiStateInput): Promise<void>
 }
 
 /** Every member the presence check walks (keep in lockstep with the interface). */
@@ -220,6 +272,14 @@ const BRIDGE_MEMBERS: readonly (keyof WorkbenchIpcBridge)[] = [
   // M3 proposals read verbs (task 5.3; the tool-bridge pump's proposal legs
   // dispatch here; the UF5 client face lands with 5.4).
   'getProposalBoard', 'readProposalDoc',
+  // M4 v3 project-center verbs (task 1.3; C7 card / project tree consume in 2.x).
+  'probeProjectPath', 'renameProject', 'archiveProject', 'restoreProject', 'listProjects',
+  // M4 v3 projection verbs (task 3.2; the 3.3 relay + 3.5 status surface
+  // consume them — the presence check stays whole-surface per the one rule).
+  'retryProjection', 'getProjectionStatus', 'submitWorkspaceSnapshot', 'reportProjectionOutcome',
+  // M4 v3 ui-state verbs (task 4.1; the 4.5 layout engine consumes them —
+  // the presence check stays whole-surface per the one rule).
+  'getProjectUiState', 'setProjectUiState',
 ]
 
 /**
@@ -649,6 +709,45 @@ export function createIpcRegisterWizardVerbs(
     updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
       try {
         return await bridge.updateProject(id, patch)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    authorizeExternalDocPath: async (path: string): Promise<void> => {
+      try {
+        await bridge.authorizeExternalDocPath(path)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+  }
+}
+
+/**
+ * The C7 confirm card's IPC face (M4 task 1.6 — the 1.5 build stage's real
+ * chain): probeProjectPath (the D11 detection report) + registerProject (the
+ * v2 face — the card's single write) + authorizeExternalDocPath (the 仓外自
+ * 定义 explicit-authorization record, BIZ-001/003 收窄). Every member mirrors
+ * its §Interface 1 v3 verb one-to-one with rejections renormalized to the
+ * serialized {@link WorkbenchVerbError} shape (ERR_PROJECT_EXISTS with the
+ * registered fast-lane payload / ERR_CODE_ROOT_UNREADABLE /
+ * ERR_EXTERNAL_PATH_UNREADABLE), so the card's state machine runs against the
+ * real codes from day one.
+ */
+export function createIpcConfirmCardFace(bridge: WorkbenchIpcBridge): ConfirmCardFace {
+  return {
+    probeProjectPath: async (input: ProbeProjectPathInput): Promise<DetectReport> => {
+      try {
+        return await bridge.probeProjectPath(input)
+      } catch (error) {
+        renormalize(error)
+      }
+    },
+    registerProject: async (input: RegisterProjectInputV2): Promise<Project> => {
+      try {
+        // The v2 face rides the same dual-shaped verb channel main-side
+        // ('anchor' in input routes to the D11 lifecycle chain).
+        return await bridge.registerProject(input)
       } catch (error) {
         renormalize(error)
       }
