@@ -108,25 +108,41 @@ forge 产品用法：远征/突击走 b（customSkillDirs 接插件包技能）�
 
 ## 2. 指令文件（AGENTS.md 链）
 
-来源：`packages/context/agent-instructions/README.md`。`dsh-base` 默认含（`maxBytes: 65536`）。
+来源：`packages/context/agent-instructions/README.md`（含 Model Experience 全节）。`dsh-base` 默认含（`maxBytes: 65536`）。
 
-### 2.1 机制
-
-首个请求注入一条 durable 基线消息（普通 sourced `user/message` 事件，可回放/压缩/恢复）：
+### 2.1 分层结构
 
 ```
-$DSH_HOME/AGENTS.md            ← 用户全局（最宽）
-<gitRoot>/AGENTS.md            ← 项目链起点
-<gitRoot>/packages/cli/AGENTS.md    ← 中间目录
-<gitRoot>/packages/cli/CLAUDE.md    ← 候选并列（同容去重，不重复注入）
-<cwd>/AGENTS.local.md          ← 最窄 + 本地叠加层（惯例不入 git）
+L0  $DSH_HOME/AGENTS.md                 ← 用户全局（唯一，无 local 叠加）
+L1  <gitRoot>/AGENTS.md                 ← 项目链起点（最宽）
+L2  <gitRoot>/packages/app/AGENTS.md    ← 中间目录
+LN  <cwd>/AGENTS.md                     ← 会话工作目录（最窄）
+    每目录内：base 候选（AGENTS.md → CLAUDE.md）→ local 叠加（AGENTS.local.md → CLAUDE.local.md）
 ```
 
-- 顺序宽→窄；`CLAUDE.md` 与 `AGENTS.md` 内容相同（trim 后）只渲染一次。
-- 预算策略：整条链渲染超 `maxBytes` 时**先整丢宽文件、最后才截断最窄文件**，并输出可见的 `Workspace instruction budget ...` 通知。
-- 刷新：成功的 `read`/`write`/`edit` 触达更深目录后，下一请求自动补载新适用文件；变更替换、消失/重复产生移除通知；会话恢复按 digest 对账。
+- 优先级语义（注入模板明文）：**更具体的指令压过更宽的**，但不覆盖 system/developer/直接用户指令。
+- 同目录去重按内容：trim 后字节相同只渲染一次；**漂移过的副本全量并列加载**。
 
-### 2.2 配置
+### 2.2 触发时机与加载顺序
+
+**① 基线注入**——会话**首个合格的 `agent/pre-step`**（非会话创建时）：整条链渲染为一条 durable user 消息，折叠进 entering batch、紧跟 claimed messages。空链零注入。
+
+**② 增量刷新（touch 驱动，无 watcher）**——成功的**第一方** `read`/`write`/`edit` 产生 touch（经父执行 token 冒泡），enclosing step durable 后由 projection 对账，**下一请求**注入：
+
+| 情形 | 注入 |
+|---|---|
+| 触达更深目录 | `Additional instructions from: <path>`（附目录适用声明） |
+| 文件变更 | `Updated instructions from: <path>` + 替换内容 |
+| 消失 / 变同容重复 | removal notice |
+| 路径与 digest 均未变 | 永不再注入 |
+
+**③ 恢复 / 重进入**——resume 按 digest 对账：可见基线兼容（发现规则/优先级/项目根/预算未变）则复用原消息保 KV cache；不兼容则后续位置追加完整替换。
+
+顺序：宽→窄单遍（用户全局 → 项目根 → … → cwd，每目录 base → local）；预算同向——先整丢宽文件、最后截断最窄。
+
+**边界**：shell 导航（`cd`）不触发发现（只认结构化 fs 工具）；外部编辑下次第一方 fs 操作 / resume / pre-step 才可见；PTC 模式增量消息推迟到外层 `run_code` 结果后；符号链接跨信任边界跟随（不受信仓库配 fs 策略门）；内容中字面 `</system-reminder>` 被转义。
+
+### 2.3 配置
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-instructions'
@@ -300,4 +316,5 @@ persona 行（挂组合内，只谈作风）字段：`prefix`（必填）、`suf
 
 ## 版本历史
 
+- 2026-10-02：§2 重构——分层结构（L0 全局 + 项目链 base→local）、触发时机三类（首个 `agent/pre-step` 基线 / touch 驱动增量刷新含四情形表 / resume digest 对账保 KV cache）、宽→窄顺序与预算同向、边界五条（shell 导航不触发、无 watcher、PTC 推迟、symlink 信任边界、`</system-reminder>` 转义）。
 - 2026-10-02：初版——自《技术预研笔记》§1.4 独立成册；技能（五类根/格式/三配置方式/行为语义）、AGENTS.md 链、MCP（双传输/字段表/行为）、hooks 桥（配置/事件表/运行语义）、预设与 persona、profile patch、外部 provider、长尾表、forge 映射。
