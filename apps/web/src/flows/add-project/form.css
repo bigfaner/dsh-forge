@@ -1,0 +1,135 @@
+/* UF-3 段二·注册表单样式（定位：业务——flows/add-project，2.9）。
+ * 纪律：令牌唯一（色/字/圆角/间距零裸值一律 --dsw-*，lint-tokens 机械执行）；输入行刻度
+ * 对齐官方面包屑/行语言（高 30 / border-l2 / radius md——browser.css 同款官方刻度）。
+ * dsw-raw 豁免理由（执行记录同步）：行内 4/6/8px 间距 = 官方行语言原值——官方主题无间距
+ * 标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条「形态对齐官方」优先，
+ * 取官方原值；块级留白用行高令牌刻度。 */
+
+/* ── 表单本体（2.10 模态壳内嵌；自带纵向布局） ── */
+.dswf-rf {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--dsw-font-s-14-line-height); /* 块级留白 = 行高刻度 */
+}
+
+/* ── 字段行：标签 + 输入线（+ 提示/错误行） ── */
+.dswf-rf-row {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px; /* dsw-raw 官方行内刻度 */
+  min-width: 0;
+}
+
+.dswf-rf-labelrow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px; /* dsw-raw 官方行内刻度 */
+}
+
+.dswf-rf-label {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-rf-relation {
+  flex: none;
+}
+
+.dswf-rf-line {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+  min-width: 0;
+}
+
+.dswf-rf-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 8px; /* dsw-raw 官方面包屑内衬刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+}
+
+.dswf-rf-input:focus {
+  outline: none;
+  border-color: var(--dsw-alias-label-primary-bluish);
+}
+
+.dswf-rf-input[readonly] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 只读派生行（任务清单与记录）：底面弱化区隔可编辑字段 */
+.dswf-rf-static {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dswf-rf-sidebtn {
+  flex: none;
+}
+
+.dswf-rf-hint {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 字段错误行（AC5 拦截呈现——不出表单） */
+.dswf-rf-issue {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-error);
+}
+
+/* ── 底部：提交说明 + 「确认」 ── */
+.dswf-rf-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+}
+
+.dswf-rf-footnote {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-rf-confirm {
+  flex: none;
+}
+
+/* ── 浏览改选面板（表单相位 ⇄ 浏览相位；DirectoryBrowser 槽位） ── */
+.dswf-rf-browsepanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+}
+
+.dswf-rf-browsebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+}
+
+.dswf-rf-browsetitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}

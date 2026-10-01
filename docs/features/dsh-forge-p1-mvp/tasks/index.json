@@ -325,7 +325,7 @@
         "2.8",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.9-add-project-form.md",
       "record": "records/2.9-add-project-form.md",
       "surface-type": "web",
