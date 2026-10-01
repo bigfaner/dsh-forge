@@ -32,7 +32,7 @@ intent: "tech-research"
 
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
-> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——出厂 forge 预设 = 纯环境定义（工具面 + 知识提示词段，不配 persona 行），executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。
+> 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。（出厂预设形态后经 §5 修正：纯环境单预设 → 远征/轻装双预设，persona 复入但只限作风层；executor 角色规格仍唯一来自 dispatch prompt，本裁决实质不变。）
 
 | forge 3.x 组件 | v3 落点 |
 |---|---|
@@ -75,7 +75,7 @@ run-tasks skill（forge 预设会话内）
 | S2 | boot manifest 注入实跑 | 自有 vite 入口 + `dsh-client-web` 壳 + injections 掌舵 | ui-\* 运行期加载成功 |
 | S3 | slot 洞位替换（路线 A） | 自有插件替换 `sidebar.workspaces` 占用者 | 原型左栏三件套可挂载 |
 | S4 | workspace registry create 幂等 | 同 canonical path 两次 `create()` | 返回同一实体（上游文档语义） |
-| S5 | 预设 patch 安装 | profile `insert` agent-preset 行（含 persona 行） | 新会话 hero chip 出现 forge 模式 |
+| S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/轻装，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
 
@@ -94,8 +94,46 @@ run-tasks skill（forge 预设会话内）
 
 不迁移的过渡 hack：`{{TASK_ID}}` 大写桥接、`TASK_CATEGORY` 后处理注入。改良：每类型快照测试（fixture 任务 → prompt 输出断言）；策略第一步由「读 docs/business-rules/ 目录」改为**知识召回指令**（组合继承使 executor 天然带召回 tool）；TASK_FILE 悬空容忍（对抗审核处置③）写入模板指示。边界：persona 的 `{{…}}` 变量属系统提示层（prompt registry），策略层组装不混用——人格归预设、策略归本设计。
 
+## 5. 模式预设迁移：远征 / 轻装（2026-10-02）
+
+旧 forge 的模式 = 管线路由开关（`/quick` 命令 vs 完整管线入口），语义散落在命令逻辑、manifest `mode:` 字段、SKIP_EVAL_GATE 任务上下文注入、知识抽取规则的 mode 上下文里。dsh Agent 预设（§1.2）给出更干净的物理形态：**模式 = 会话级预设**，新建会话时经 hero chip 选定（UI 已内建），一会话一模式，与「一会话一功能」纪律同构。
+
+### 5.1 命名
+
+| 旧名 | 新显示名 | 机器值 |
+|---|---|---|
+| full 模式 | 远征模式 | `expedition` |
+| quick 模式 | 轻装模式 | `light` |
+
+远征 ↔ 轻装同属远行隐喻族：远征 = 全装长途（PRD/设计/契约 = 辎重），轻装 = 轻装上路（proposal 即全部给养）。「轻装」减的是**行李**（文档仪式），不减**纪律**（任务表、单写路径、执行记录、提交规范原样保留）——规避「quick」自带的赶工/省步骤暗示。且自带规模语义：轻装只适合短途，与旧规则「scope 膨胀 → 建议转 full」同构（升级路径 = 换远征会话续跑，工件在盘上自然衔接）。
+
+### 5.2 组合定义（出厂双预设）
+
+| 预设 | plugins | persona（作风示意） |
+|---|---|---|
+| 远征模式（出厂默认） | plugin-forge + **plugin-forge-spec** + plugin-knowledge + persona 行 | 严谨、全流程、不跳步、证据驱动 |
+| 轻装模式 | plugin-forge + plugin-knowledge + persona 行 | 经济、直奔任务、单写路径纪律不折扣 |
+
+- registry `default` 出厂指向远征；用户可经 UI 改（`selectedDefault` 易失字段，README 语义）。
+- **forge 插件按模式切两包**：`plugin-forge`（管线核心，双模式共用：brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ `plugin-forge-spec`（规格深化，仅远征组合：write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者）。动机 = 防腐 L1：**物理边界优于提示词纪律**——轻装会话字面上无法调用 write-prd，而非「被叮嘱不要」；副产收益 = 轻装会话省下规格技能清单 token。此切分不违总纲「插件切分 = 管理便利，非可替换机制」：模式是同一产品的两种节奏，非场景替换。最终技能归置由插件工程线（总纲 P1 并行轨）细化，本节定切分原则。
+- 模式 prose（入口路由、升级规则）写进 persona prefix——预设组合内挂 `dsh-persona` 行即载体，无需自制模式插件。
+
+### 5.3 与 §2 v3 的相容（persona 撰写铁律）
+
+v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不变；本节将出厂预设从「纯环境（无 persona）」修正为「双模式预设（含 persona）」。相容性由一条铁律保证：
+
+> **persona 只谈作风，不谈角色与工具禁令。**
+
+组合继承（§1.3）下 executor 子代继承模式 persona：远征 executor 严谨、轻装 executor 经济——继承不再是 v2 时代的矛盾源，而是模式作风对执行粒度的自然延伸。角色与任务规格仍唯一来自 dispatch prompt（§2/§4）；任何「FORBIDDEN: …」式规则禁止写入 persona。已知代价：远征 executor 子代背负规格技能清单的 token 开销（技能目录行量级，每行一句描述）——组合继承的既定取舍，换取稳定层零注入。
+
+### 5.4 模式的两处解耦
+
+1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|light` = 功能溯源事实（quick-tasks / breakdown-tasks 写入），下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的轻装功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
+2. **确认门 ≠ 模式**：`auto.runTasks.quick/full` 自动跑闸门属 forge 配置（→ dsh-forge 偏好面），随迁移原样保留，与预设正交。
+
 ## 版本历史
 
+- 2026-10-02：新增 §5 模式预设迁移——full/quick 升格为出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；forge 插件切核心/规格两包（防腐 L1：轻装会话物理隔离规格技能）；persona 撰写铁律（只谈作风不谈角色与工具禁令）保 §2 v3 相容；manifest `mode` 保留为功能溯源（与会话预设解耦）；S5 扩为双预设验证。
 - 2026-10-02：取消 taskPrompt tool——合成内聚于 `taskClaim` 返回值（dispatchPrompt 随 claim 返回，dispatcher 拿到即派发）；简报作为初始 prompt 持久在子会话不丢失，恢复唯一出口 = dispatcher 外环（重派按当前状态重新合成）；fix-record 简报改由 skill 内置静态文本，synthesize 去掉 fixRecordMissed 路由。
 - 2026-10-02：v3 定稿——task-executor **不采用预设身份**：出厂 forge 预设 = 纯环境定义（不配 persona 行），executor = 动态派发的匿名子代理，行为规格全部来自派发前合成的 dispatch prompt；动态信息块强化（blockers 现状快照、knowledgeDomain 注入）。
 - 2026-10-02：v3 修订——合并稳定/动态层：dispatcher 派发前一次性合成完整 dispatch prompt（约束块 + 策略）；修复 v2 隐性矛盾（组合继承下 persona 共享导致 dispatcher 背上 executor 的 claim 禁令）；预设退回纯环境，persona 行可选；§4 同步改为预拉 + 重拉恢复。
