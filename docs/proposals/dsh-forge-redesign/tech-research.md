@@ -73,6 +73,15 @@ intent: "tech-research"
 - 本地源码仓即差异阅读源：`git log` 读代码差异，diff `docs/`（随代码再生成）读能力面变化总览。
 - 升级策略与版本管理机制（节奏、四道测试门、发布、回滚、schema 前向单向）见《架构基线》§5。
 
+### 1.6 官方 Markdown 渲染（`packages/client/ui-primitives`，2026-10-02 核实）
+
+- **形态**：纯 React 原子库（zero cordis），**静态 ESM 库消费**（Web-shell build input：保留第三方 import，消费方 vite 供 dev 依赖——micromark/mdast、KaTeX、Shiki 等）；主题走 `--dsw-*` 令牌；本地化文案一律经 required label props（漏传过不了类型检查，包内无语言兜底）。
+- **核心组件**：`MarkdownText`（不可信 GFM + TeX——丢弃 raw HTML、封禁不安全链接/图片；`variant="body"|"compact"` 两档）+ `MarkdownDelegateProvider`（`openExternalLink` / `openFile` 导航委托——本地文件链接可点，支持 `#L24` / `#L24-L30` 行号片段、percent escape、区间开于首行）+ `CodeBlock`（opt-in 行号、复制排除 gutter、共享 toolbar）+ `pathImages` 词汇表（本地媒体路径 → 可显示 URL，settled 后生效；支持 `dsh-app://` 路由）。
+- **流式渲染**：增量 parse（冻结已完成块、仅重解析尾部）、Shiki 语法状态续亮、完成行入固定尺寸 React 组——会话回复流式场景即用。
+- **配套件**：`TerminalBlock` / `ReadBlock` / `DiffBlock` / `SearchBlock` / `WebBlock`（工具结果卡，ANSI 处理）与 `JsonTree` / `JsonBlock`；`ImageLightbox` / `HoverCard`（图片预览与缩略卡）。
+- **官方插件先例**：`ui-sidebar-documentpreview`（侧栏文档预览）即以本库渲染 markdown 文档——dock 知识文档页签的结构同款。
+- **forge 消费点**：知识详情抽屉正文 / dock 知识文档页签（canonical 路径栏 + 只读徽标 + `openFile` 行号跳转）/ 文档 tab（proposal/PRD/design 只读浏览）/ 会话沉淀与抽取稿预览（compact）；会话面板本体走 ui-chat（boot manifest 运行时插件），同源渲染器保证视觉一致。版本随上游 pin 锁步。
+
 ## 2. task-executor 迁移方案 v3：派发前一次性合成完整 dispatch prompt（2026-10-02 修订）
 
 > 演进记录：v1（对话轮）「人格 prompt 化」→ v2「人格进预设 persona」→ **v3 合并稳定/动态层（定稿）**。v3 动机之一是 v2 的隐性缺陷：**组合继承使 dispatcher 与 executor 共享 persona**（负结论①），而 task-executor 约束「FORBIDDEN: forge task claim」与 dispatcher 的核心动作 taskClaim 直接冲突——executor 特有约束不能放在共享系统层。dsh 请求面无 per-spawn 系统提示注入（负结论②），prompt 参数是唯一差异化通道。**定稿裁决：task-executor 不采用预设身份**——executor 是动态派发的匿名子代理，其全部行为规格 = 派发前综合动态信息合成的 dispatch prompt。（出厂预设形态后经 §5 修正：纯环境单预设 → 远征/突击双预设，persona 复入但只限作风层；executor 角色规格仍唯一来自 dispatch prompt，本裁决实质不变。）
@@ -264,6 +273,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：新增 §1.6 官方 Markdown 渲染核实——`ui-primitives` 纯 React 原子库（zero cordis，静态 ESM 库消费）：`MarkdownText` 不可信 GFM+TeX / `MarkdownDelegateProvider` 文件链接行号跳转 / `CodeBlock` / `pathImages` / 流式增量渲染 / 工具结果卡族；官方插件先例 ui-sidebar-documentpreview；forge 消费点映射（详情抽屉/dock 文档页签/文档 tab/抽取稿预览）。
 - 2026-10-02：新增 §1.5 上游发布形态核实——无 git tag、无 CHANGELOG；workspace 锁步发布；dist-tags 实查（`next` = 活跃线 0.2.0-rc.2，`latest` 陈旧）→ 追新盯 `next`；本地仓为差异阅读源；版本管理机制指针至《架构基线》§5。
 - 2026-10-02：可读性梳理（内容不变，语句重写；S5/S6 来源注记合并为一句）。
 - 2026-10-02：扩展体系独立成册——《dsh 扩展体系参考》（`dsh-extensions.md`）：各体系配置示例详解（技能三配置方式/AGENTS.md 链/MCP 双传输与字段表/hooks 事件表/预设/persona/patch/provider/长尾/forge 映射）；§1.4 收缩为结论索引 + 指针。

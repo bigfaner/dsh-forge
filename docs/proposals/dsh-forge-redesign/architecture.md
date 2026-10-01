@@ -39,6 +39,8 @@ intent: "architecture-baseline"
 
 **单一写入路径**：状态写只经 `state-layer` 服务（UI 动作与 forge tool 同门）；知识写只经知识能力面（UI 管理面与知识插件 tool 同门）。数据库无第二写者。
 
+**库消费基座**：markdown 正文渲染复用官方 `ui-primitives`（`MarkdownText` 族，静态 ESM 库消费——不可信 GFM + TeX、流式增量、文件链接行号跳转；机制与消费契约见《技术预研笔记》§1.6），不自建渲染器；与 ui-theme 令牌同属库性质消费通道。
+
 **插件化的真实动机**：其一，dsh tool 须以插件形态注册（机械要求）；其二，技能线与产品壳迭代节奏不同（管理便利）。非可替换机制——两个插件均无 client 半身，全部 UI 在 `web/`。
 
 ## 2. AI 协作防腐机制
