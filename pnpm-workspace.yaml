@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Electron 精确 pin 44.0.0（S1 实测指纹门：node-addon-require-builtin 仅接受
+# 43.0.0 / 44.0.0 / 45.0.0-alpha.6——升级 Electron = 等上游扩展指纹清单）。
+# 本机 pnpm 11 不执行 electron 安装脚本（spike S1 记录），二进制按需补齐：
+#   ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+#     node apps/host/node_modules/electron/install.js   （1.4 启动前执行）
+allowBuilds:
+  electron: true
+
+minimumReleaseAgeExclude:
+  - vite@8.3.2

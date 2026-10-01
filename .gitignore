@@ -15,3 +15,16 @@ docs/proposals/dsh-desktop/proposal.md
 node_modules/
 spikes/s1-thin-host/.dsh-home/
 spikes/s1-thin-host/profile/cordis.yml
+
+# TS build outputs (tsc -b emits; web declarations -> dist-types)
+**/dist/
+**/dist-types/
+**/*.tsbuildinfo
+
+# Test / tooling artifacts
+coverage/
+test-results/
+playwright-report/
+
+# lint selftest crash leftovers (scripts/lint-selftest.mjs sweeps on each run)
+**/_lintneg_*

@@ -1,0 +1,21 @@
+{
+  "name": "@dsh-forge/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "跨工件类型/常量（RPC DTO、frontmatter 契约常量、错误码、IPC 通道名）——零逻辑零依赖（依赖铁律：契约层不依赖任何包）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

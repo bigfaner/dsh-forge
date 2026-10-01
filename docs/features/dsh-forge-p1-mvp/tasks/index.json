@@ -22,7 +22,7 @@
       "title": "Monorepo 五工件骨架 + G0–G2 质量门基建",
       "priority": "P0",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.2-monorepo-scaffold.md",
       "record": "records/1.2-monorepo-scaffold.md",
       "surface-type": "web",

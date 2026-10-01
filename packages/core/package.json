@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "数据内核（唯一 SQLite 句柄）：forge 域（projects/补偿链/对账）+ 知识域（索引/召回/热度），对外双服务 ctx.forgeProjects / ctx.forgeKnowledge。",
+  "main": "./dist/service.js",
+  "types": "./dist/service.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/service.d.ts",
+      "import": "./dist/service.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*"
+  }
+}

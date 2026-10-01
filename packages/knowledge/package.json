@@ -1,0 +1,25 @@
+{
+  "name": "@dsh-forge/knowledge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "dsh 插件：knowledge.search / read-abstract tool + forge:knowledge 系统提示词知识段（运行期经 Cordis inject forgeKnowledge，仅类型依赖 core）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/core": "workspace:*"
+  }
+}

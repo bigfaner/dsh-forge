@@ -1,0 +1,20 @@
+{
+  "name": "@dsh-forge/host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Electron 薄宿主（main ~100 行纪律）：profile 组装、boot manifest 掌舵、{url,injections} IPC、窗口生命周期；无业务。",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/core": "workspace:*",
+    "@dsh-forge/knowledge": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "44.0.0"
+  }
+}
