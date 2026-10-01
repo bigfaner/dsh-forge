@@ -1,7 +1,7 @@
 // 视图态机骨架（定位：基础）——三区工作台的中心视图态（SC1 互换 / SC8 知识模式右栏隐藏恢复、页签跟随）。
 // 纯状态机（零隐藏态）：zones/（2.5 三区骨架）消费本态渲染容器与互换机制；域内容（views/flows）
 // 经 zones 槽位挂载，本模块不含任何域语义（Hard Rule：shell/ 基础定位）。
-// 骨架态 = 2.x 前的最小闭环 + 转移表 pin（2.5 起 zones 消费，域事件映射到本事件面）。
+// React 绑定（对接面）= use-shell-view.ts；域事件映射到本事件面经 dispatch 驱动。
 
 /** 中区视图（会话 ⇄ 知识互换；SC1） */
 export type CenterPane = 'session' | 'knowledge'
@@ -35,11 +35,11 @@ export type ShellViewEvent =
   | { readonly type: 'select-session'; readonly sessionId: string }
   | { readonly type: 'clear-session' }
 
-/** 初始态：会话视图、右栏在、无锚（首启空态——项目/会话主链路 2.x 接入后由事件驱动） */
+/** 初始态：会话视图、右栏收起（UF-7 默认轨道归零）、无锚（首启空态——项目/会话主链路 2.x 接入后由事件驱动） */
 export function createShellViewState(): ShellViewState {
   return {
     center: 'session',
-    rightDock: true,
+    rightDock: false,
     rightDockPreference: null,
     focus: { projectId: null, sessionId: null },
   }
@@ -47,7 +47,7 @@ export function createShellViewState(): ShellViewState {
 
 /**
  * 视图态转移（纯函数；转移表闭合，default 分支 never 收口——新增事件须同步扩本函数）。
- *   show-session      → center='session'；右栏恢复（用户显式偏好优先，否则默认显示）
+ *   show-session      → center='session'；右栏恢复（用户显式偏好优先，否则默认收起 UF-7）
  *   show-knowledge    → center='knowledge'；右栏隐藏（SC8；偏好不改写——隐藏是视图联动非用户选择）
  *   toggle-right-dock → rightDock 取反并记为用户显式偏好（知识视图内手动开启 = 显式选择，回会话保留）
  *   select-project    → focus.projectId 更新（跨视图保留 = 页签跟随项目）；不切视图（选择 ≠ 导航）
@@ -57,7 +57,7 @@ export function createShellViewState(): ShellViewState {
 export function dispatchShellView(state: ShellViewState, event: ShellViewEvent): ShellViewState {
   switch (event.type) {
     case 'show-session':
-      return { ...state, center: 'session', rightDock: state.rightDockPreference ?? true }
+      return { ...state, center: 'session', rightDock: state.rightDockPreference ?? false }
     case 'show-knowledge':
       return { ...state, center: 'knowledge', rightDock: false }
     case 'toggle-right-dock': {

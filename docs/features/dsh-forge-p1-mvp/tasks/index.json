@@ -260,7 +260,7 @@
       "dependencies": [
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.5-zones-skeleton.md",
       "record": "records/2.5-zones-skeleton.md",
       "surface-type": "web",

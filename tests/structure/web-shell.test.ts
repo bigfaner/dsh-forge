@@ -55,3 +55,30 @@ describe('壳接入装配 pin（1.5）', () => {
     expect(main).not.toContain('manifest.url })') // 主窗口不再直载官方前端 URL
   })
 })
+
+describe('zones 三区骨架 pin（2.5）', () => {
+  it('模块面就位：容器/槽位/dock 跟随/barrel/样式 + shell 视图态机对接 hook', () => {
+    for (const f of [
+      'apps/web/src/zones/WorkbenchZones.tsx',
+      'apps/web/src/zones/slots.ts',
+      'apps/web/src/zones/dock.ts',
+      'apps/web/src/zones/zones.css',
+      'apps/web/src/zones/index.ts',
+      'apps/web/src/shell/use-shell-view.ts',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    expect(read('apps/web/src/zones/index.ts')).toContain("export * from './WorkbenchZones.js'")
+    expect(read('apps/web/src/shell/index.ts')).toContain("export * from './use-shell-view.js'")
+  })
+
+  it('UF-7 默认收起 pin（view-state 初始态与恢复口径）+ dock 轨道归零样式', () => {
+    const viewState = read('apps/web/src/shell/view-state.ts')
+    expect(viewState).toContain('rightDock: false') // 初始收起（轨道归零；PRD UF-7 默认）
+    expect(viewState).toContain('rightDockPreference ?? false') // 无显式偏好恢复默认收起
+    const css = read('apps/web/src/zones/zones.css')
+    expect(css).toContain('width: 0') // 收起轨道归零（原型同型）
+    expect(css).toMatch(/data-dswf-dock=collapsed/)
+    expect(css).toMatch(/data-dswf-dock=hidden/)
+  })
+})

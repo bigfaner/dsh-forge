@@ -1,0 +1,92 @@
+/* 三区骨架布局（定位：基础）——结构基准 = 第一版原型（布局结构以原型为准，视觉细节官方令牌）。
+ * 纪律：令牌唯一（色/字/距/圆角/阴影零裸值一律 --dsw-*，lint-tokens 机械执行）；
+ * 布局尺寸（宽度/高度/边线宽）按原型结构取值，不在令牌面。 */
+
+/* 容器：左 rail + 主区（中区 + 右 dock） */
+.dswf-zones {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 左 rail 常驻（宽度与收起由 rail 内容自管理——官方 sidebar 形态，UF-1/2.7） */
+.dswf-zones-rail {
+  flex: none;
+  min-width: 0;
+}
+
+.dswf-zones-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 中区：一等公民视图槽——两面板常挂载，hidden 切显隐（keep-alive，状态保留） */
+.dswf-zones-center {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.dswf-zone {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* hidden 属性守卫：类 display 声明不得穿透隐藏语义 */
+[hidden] {
+  display: none !important;
+}
+
+/* 右 dock 轨道：展开 = 页签条 + 内容区（宽度取原型 --rightbar-w 量级）；
+ * 收起/强制隐藏 = 轨道归零（原型同型：width 0 + overflow hidden + 无边线；
+ * visibility 补位——零宽轨道内不可聚焦、不进可达性树）。内容常挂载（状态保留）。 */
+.dswf-zones-dock {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 340px;
+  min-width: 0;
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dswf-zones-dock[data-dswf-dock=collapsed],
+.dswf-zones-dock[data-dswf-dock=hidden] {
+  width: 0;
+  min-width: 0;
+  border-left: none;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.dswf-zones-dock-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-zones-dock-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 机制占位（槽位缺省渲染；2.6 EmptyState 就位后由装配替换） */
+.dswf-zone-placeholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}

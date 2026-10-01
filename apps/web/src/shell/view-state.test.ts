@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { createShellViewState, dispatchShellView } from './view-state.js'
 
 describe('初始态', () => {
-  it('会话视图 + 右栏在 + 无锚 + 无显式偏好', () => {
+  it('会话视图 + 右栏收起（UF-7 默认轨道归零） + 无锚 + 无显式偏好', () => {
     expect(createShellViewState()).toEqual({
       center: 'session',
-      rightDock: true,
+      rightDock: false,
       rightDockPreference: null,
       focus: { projectId: null, sessionId: null },
     })
@@ -15,14 +15,23 @@ describe('初始态', () => {
 })
 
 describe('SC8 知识模式右栏隐藏/恢复', () => {
-  it('进知识视图右栏隐藏；无显式偏好时回会话恢复显示', () => {
+  it('进知识视图右栏强制隐藏（已展开也隐藏，偏好不被联动改写）；回会话按记忆恢复原展开态', () => {
     let s = createShellViewState()
+    s = dispatchShellView(s, { type: 'toggle-right-dock' })
+    expect(s.rightDock).toBe(true)
     s = dispatchShellView(s, { type: 'show-knowledge' })
     expect(s.center).toBe('knowledge')
     expect(s.rightDock).toBe(false)
+    expect(s.rightDockPreference).toBe(true)
     s = dispatchShellView(s, { type: 'show-session' })
     expect(s.center).toBe('session')
     expect(s.rightDock).toBe(true)
+  })
+  it('从未显式切换：往返知识视图保持默认收起（恢复口径 = 偏好 ?? false）', () => {
+    let s = createShellViewState()
+    s = dispatchShellView(s, { type: 'show-knowledge' })
+    s = dispatchShellView(s, { type: 'show-session' })
+    expect(s.rightDock).toBe(false)
   })
   it('知识视图内手动开启 = 显式偏好，回会话保留', () => {
     let s = createShellViewState()
@@ -33,10 +42,12 @@ describe('SC8 知识模式右栏隐藏/恢复', () => {
     s = dispatchShellView(s, { type: 'show-session' })
     expect(s.rightDock).toBe(true)
   })
-  it('会话视图手动隐藏 = 显式偏好，往返知识视图后保留', () => {
+  it('会话视图手动展开再收起 = 显式偏好 false，往返知识视图后保留', () => {
     let s = createShellViewState()
     s = dispatchShellView(s, { type: 'toggle-right-dock' })
+    s = dispatchShellView(s, { type: 'toggle-right-dock' })
     expect(s.rightDock).toBe(false)
+    expect(s.rightDockPreference).toBe(false)
     s = dispatchShellView(s, { type: 'show-knowledge' })
     s = dispatchShellView(s, { type: 'show-session' })
     expect(s.rightDock).toBe(false)
