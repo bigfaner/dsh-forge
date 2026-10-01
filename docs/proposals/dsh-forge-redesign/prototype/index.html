@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dsh-forge · 知识工作台 — 重构总纲原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+
+    <!-- ═══════════ 左栏:知识库面板(项目树上方)+ 全项目树/会话列表 ═══════════ -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <!-- 品牌行 h60:整块 = 新会话快捷;行尾收起开关 -->
+      <div class="sb-brand" id="sb-brand" title="新会话(点击品牌行即新建)">
+        <span class="app-brand-mark" aria-hidden="true">知</span>
+        <span class="sb-wordmark">dsh-forge</span>
+        <button class="icon-btn sb-collapse" id="sb-collapse" aria-label="收起左侧栏" title="收起左侧栏">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+
+      <!-- 新会话:独占一行 h38 r12 -->
+      <div class="sb-new">
+        <button class="sb-new-btn" id="sb-new-btn">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          <span>新会话</span>
+        </button>
+      </div>
+
+      <!-- 知识库菜单入口(点击打开右栏知识面板 —— 左栏只放菜单与导航) -->
+      <div class="sb-new">
+        <button class="sb-kn-btn" id="sb-kn-btn" data-act="open-kb-panel" title="打开知识库(右栏统一页面:检索 / 下钻项目·会话)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>
+          </svg>
+          <span>知识库</span>
+          <span class="sb-nav-badge" id="kn-pending-badge" hidden title="待审核条目数"></span>
+        </button>
+      </div>
+
+      <!-- 项目树 + 会话列表(dsh 行语言) -->
+      <nav class="sb-projects" id="pj-zone" aria-label="项目与会话">
+        <div class="sb-head" id="pj-head">
+          <span class="sb-label">项目</span>
+          <div class="sb-actions">
+            <button class="icon-btn" id="pj-search-btn" data-act="pj-search-toggle" aria-label="搜索项目与会话" title="搜索(项目名 + 会话标题)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            </button>
+            <button class="icon-btn" data-act="pj-view-menu" aria-label="视图选项" title="视图选项(原型:按项目树)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+            </button>
+            <button class="icon-btn" data-act="add-project" aria-label="添加项目" title="添加项目">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v5M9.5 12.5h5"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="sb-searchrow" id="pj-searchrow" hidden>
+          <input id="pj-q" type="text" placeholder="过滤项目名 / 会话标题…" aria-label="项目与会话过滤">
+        </div>
+        <div class="sb-list" id="pj-list"></div>
+      </nav>
+
+      <!-- 底部设置行 -->
+      <div class="sb-settings" id="sb-settings" data-act="settings-toast">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.2 2.6 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4z"/></svg>
+        <span>设置</span>
+        <span class="conn-pill" style="margin-left:auto"><span class="state-dot ok" aria-hidden="true"></span>已连接</span>
+      </div>
+      <!-- 宽度拖柄(右缘 8px 命中条) -->
+      <div class="sb-resize" id="sb-resize" role="separator" aria-orientation="vertical" aria-label="左侧栏宽度(264–420)" tabindex="0"></div>
+
+      <!-- 收起态 56px rail -->
+      <div class="sb-rail" id="sb-rail" hidden>
+        <button class="icon-btn" data-act="sb-expand" aria-label="展开左侧栏" title="展开左侧栏">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="icon-btn" data-act="new-session" aria-label="新会话" title="新会话">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" data-act="open-kb-panel" aria-label="知识库" title="知识库(打开右栏知识面板)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+        </button>
+        <button class="icon-btn" data-act="sb-expand-search" aria-label="搜索" title="搜索(展开侧栏并聚焦)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        </button>
+        <span style="flex:1"></span>
+        <button class="icon-btn" data-act="settings-toast" aria-label="设置" title="设置">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.2 2.6 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ═══════════ 中区 + 右栏 ═══════════ -->
+    <main class="app-main">
+      <div class="workbench-body" id="split-root">
+
+        <!-- 中区:会话面板 ⇄ 知识库面板(一等公民视图互换;左栏菜单切换) -->
+        <div class="center-zone" id="center-zone" data-view="conv">
+
+        <!-- 中区:dsh 会话面板(对话/轨迹/知识召回) -->
+        <div class="conv-root" id="conv-root" data-phase="active" data-view="conv">
+          <div class="conv-header" id="conv-header">
+            <div class="conv-title-row">
+              <nav class="conv-crumbs" id="conv-crumbs" aria-label="会话位置"></nav>
+              <div class="conv-actions" id="conv-actions"></div>
+              <div class="conv-utils" id="conv-utils">
+                <!-- utilities 图标簇(dsh 同构):📁▾ 在编辑器中打开 + 面板钮 toggle -->
+                <button class="icon-btn" data-act="open-in-editor" aria-label="在编辑器中打开工作区" title="在编辑器中打开工作区">
+                  <span class="conv-util-fold">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 9l5 5 5-5" transform="translate(-1 -1)"/></svg>
+                  </span>
+                </button>
+                <!-- 面板钮:常显 toggle(收起 ↔ 展开右栏) -->
+                <button class="icon-btn conv-corner" id="rb-corner-expand" data-act="dock-toggle" aria-label="展开右侧栏" title="展开/收起右侧栏">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="conv-tabs" role="tablist" aria-label="会话视图">
+              <button class="conv-tab active" role="tab" aria-selected="true" data-act="conv-view" data-view="conv">对话</button>
+              <button class="conv-tab" role="tab" aria-selected="false" data-act="conv-view" data-view="traj">轨迹</button>
+              <button class="conv-tab" role="tab" aria-selected="false" data-act="conv-view" data-view="kn">知识召回</button>
+            </div>
+          </div>
+
+          <div class="conv-body" id="conv-body">
+            <div class="conv-colhandle l" id="col-l" role="separator" aria-orientation="vertical" aria-label="内容列宽(左拖柄)" tabindex="0"></div>
+            <div class="conv-colhandle r" id="col-r" role="separator" aria-orientation="vertical" aria-label="内容列宽(右拖柄)" tabindex="0"></div>
+
+            <div class="conv-col">
+              <div class="conv-transcript" id="conv-transcript"></div>
+            </div>
+
+            <!-- hero 相位(新会话):header 塌缩,右上角零图标 -->
+            <div class="conv-hero" id="conv-hero">
+              <div class="conv-hero-logo" aria-hidden="true">🐋</div>
+              <div class="conv-hero-greet">探索未至之境</div>
+              <span class="pill" style="margin-top:2px">预览版</span>
+            </div>
+
+            <!-- 悬浮输入卡(r22):Enter 发送 -->
+            <div class="composer-seat">
+              <div class="conv-heropickers" id="hero-pickers">
+                <button class="pill is-button" data-act="hero-project-menu" aria-haspopup="menu" title="项目(选择目标项目)">
+                  <span aria-hidden="true">📁</span> <span id="hp-proj-name"></span> <span aria-hidden="true">▾</span>
+                </button>
+                <button class="pill is-button" data-act="hero-mode-toast" aria-haspopup="menu" title="模式(原型示意)">
+                  <span aria-hidden="true">⚙</span> <span>标准模式</span> <span aria-hidden="true">▾</span>
+                </button>
+              </div>
+              <div class="composer-card">
+                <div class="composer-input" id="composer-input" contenteditable="plaintext-only"
+                     data-placeholder="发消息…(原型:发送后演示 agent 召回知识链路)" aria-label="会话输入" aria-multiline="true"></div>
+                <div class="composer-row">
+                  <div class="composer-tools">
+                    <button class="composer-add" data-act="composer-slash" aria-label="命令菜单" title="/ 斜杠命令 · @ 引用(原型示意)">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <button class="composer-model" data-act="composer-mode-toast" title="模式(原型示意)">标准模式</button>
+                  </div>
+                  <button class="composer-model composer-model-right" data-act="composer-model-toast" title="模型选择(原型示意)">DeepSeek · V3.2</button>
+                  <button class="composer-send" id="composer-send" data-act="composer-send" aria-label="发送" title="发送(Enter)">
+                    <svg class="i-send" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z" fill="currentColor"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="composer-status" id="composer-status"></div>
+            </div>
+
+            <!-- 轨迹 tab:执行台账(原型罐头) -->
+            <div class="traj-panel" id="traj-panel">
+              <div class="traj-toolbar">
+                <button class="traj-tb" data-act="traj-toast" data-msg="时长统计(原型示意)">⏱ 时长</button>
+                <button class="traj-tb" data-act="traj-collapse-rounds" aria-pressed="false">⊞ 轮次收展</button>
+                <span style="flex:1"></span>
+                <button class="traj-tb" data-act="traj-toast" data-msg="轨迹搜索(原型示意)">🔍 搜索</button>
+              </div>
+              <div class="traj-ledger" id="traj-ledger" role="list" aria-label="执行台账"></div>
+            </div>
+
+            <!-- 知识召回 tab:当前会话召回了哪些知识(使用事件驱动) -->
+            <div class="knrec-panel" id="knrec-panel" aria-label="会话知识召回"></div>
+          </div>
+        </div>
+
+        <!-- 中区:知识库面板(一等公民 —— 与会话面板同规格;范围下钻 + 域目录 + 卡片网格) -->
+        <section class="knview" id="knview" hidden aria-label="知识库">
+          <header class="knview-header">
+            <div class="knview-title-row">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>
+              </svg>
+              <span class="knview-title">知识库</span>
+              <button class="pill is-button kb-scope-pill" id="kb-scope-btn" data-act="kb-scope-menu" aria-haspopup="menu" title="范围(默认全部知识,可下钻到项目 / 会话)">
+                <span class="ellipsis" id="kb-scope-label">全部知识</span> <span aria-hidden="true">▾</span>
+              </button>
+              <button class="icon-btn" id="kb-back" data-act="kb-exit-session" aria-label="返回项目范围" title="返回项目范围" hidden>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <!-- 知识模式 = 整体切换:不设右栏开关 / 动作钮(右栏在知识模式下隐藏;抽取入口在工具栏) -->
+            </div>
+          </header>
+
+          <!-- 知识库内部页签:浏览 | 统计分析 | 召回日志 -->
+          <div class="knview-tabs" role="tablist" aria-label="知识库视图">
+            <button class="knview-tab active" role="tab" aria-selected="true" data-act="kn-tab" data-t="browse">浏览</button>
+            <button class="knview-tab" role="tab" aria-selected="false" data-act="kn-tab" data-t="stats">统计分析</button>
+            <button class="knview-tab" role="tab" aria-selected="false" data-act="kn-tab" data-t="rlog">召回日志</button>
+          </div>
+
+          <!-- 工具栏:常驻搜索 + 过滤 chips(浏览页签) -->
+          <div class="knview-toolbar">
+            <div class="kb-searchrow" id="kb-searchrow">
+              <svg class="kb-search-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <input id="kb-q" type="text" placeholder="搜索标题 / 摘要 / 关键词…" aria-label="知识检索">
+              <button class="icon-btn kb-search-clear" id="kb-clear" data-act="kb-clear-search" aria-label="清除搜索" title="清除(Esc)" hidden>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            </div>
+            <div class="kb-filters" id="kb-filters"></div>
+          </div>
+
+          <!-- 主体:左轨(域目录 + 会话下钻)+ 卡片网格 -->
+          <div class="knview-body">
+            <aside class="knview-rail">
+              <div class="kb-dom-wrap" id="kb-dom-wrap">
+                <button class="kb-dom-head" data-act="kb-dom-collapse" aria-expanded="true">
+                  <span class="dom-caret">▶</span><span>目录(域)</span><span style="flex:1"></span>
+                  <span class="t-aux" id="kb-dom-hint" style="font-size:10.5px"></span>
+                </button>
+                <div class="kb-dom" id="kb-dom" role="tree" aria-label="域目录(目录即域,最多三层)"></div>
+              </div>
+              <div class="kb-drill" id="kb-drill" hidden></div>
+              <div class="kb-foot" id="kb-foot"></div>
+            </aside>
+            <div class="knview-main">
+              <div class="kb-banner" id="kb-banner" hidden></div>
+              <div class="kb-hitinfo" id="kb-hitinfo" hidden></div>
+              <div class="kb-cards" id="kb-cards"></div>
+            </div>
+          </div>
+
+          <!-- 统计分析页签:时间过滤 + 逐级下钻 + 自由分析 -->
+          <div class="knstats" id="knstats" aria-label="知识统计分析"></div>
+
+          <!-- 召回日志页签:轨迹级(时间 / trace_id / 项目 / 会话 / 参数 / 命中 / 耗时) -->
+          <div class="knrlog" id="knrlog" aria-label="召回日志"></div>
+        </section>
+        </div>
+
+        <!-- 右栏:dock 页签容器(默认收起,轨道归零) -->
+        <div class="rightbar-wrap is-collapsed" id="rb-wrap">
+          <div class="rb-resize" id="rb-resize" role="separator" aria-orientation="vertical"
+               aria-label="右侧栏宽度(拖拽调整;300–70% 视口)" tabindex="0"></div>
+          <aside class="rightbar" aria-label="右侧栏 dock">
+            <div class="rb-strip" role="tablist" aria-label="dock 页签">
+              <div class="rb-chips" id="rb-chips"></div>
+              <div class="rb-tail">
+                <button class="icon-btn" data-act="dock-fullscreen" aria-label="全屏(覆盖会话列)" title="全屏(覆盖会话列)">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                </button>
+                <button class="icon-btn" data-act="dock-toggle" aria-label="收起右侧栏" title="收起右侧栏">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="rb-body" id="rb-body"></div>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 浮层根:菜单/气泡/对话框/Toast -->
+  <div id="layer-root"></div>
+
+  <!-- 知识详情抽屉(右侧滑入;点知识卡片打开,非 dock 页签) -->
+  <aside class="kn-drawer" id="kn-drawer" hidden aria-label="知识详情抽屉"></aside>
+
+  <!-- 原型工具(评审) -->
+  <div class="proto-tools" id="proto-tools">
+    <div class="proto-tools-head">
+      <span>原型工具</span>
+      <button class="icon-btn" data-act="proto-tools-toggle" aria-label="收起原型工具" title="收起/展开">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+    <div class="proto-tools-body" id="proto-tools-body">
+      <div class="proto-row">
+        <span class="proto-label">主题</span>
+        <button class="btn btn-ghost btn-sm" data-act="theme-toggle">切换亮/暗</button>
+      </div>
+      <div class="proto-row">
+        <span class="proto-label">模拟时间</span>
+        <div class="seg" id="sim-time-seg">
+          <button class="seg-btn active" data-act="sim-time" data-days="0">现在</button>
+          <button class="seg-btn" data-act="sim-time" data-days="30">+30天</button>
+          <button class="seg-btn" data-act="sim-time" data-days="90">+90天</button>
+        </div>
+      </div>
+      <div class="proto-row">
+        <span class="proto-label">演示</span>
+        <button class="btn btn-ghost btn-sm" data-act="demo-external">模拟外部改动知识目录</button>
+      </div>
+      <div class="proto-row">
+        <span class="proto-label">数据</span>
+        <button class="btn btn-ghost btn-sm btn-danger-text" data-act="reset-data">重置种子数据</button>
+      </div>
+      <p class="proto-note">模拟时间影响置信度时间衰减与相对时间;置信度读取时动态计算,不落盘。</p>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
