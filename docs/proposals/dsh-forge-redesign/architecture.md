@@ -32,7 +32,8 @@ intent: "architecture-baseline"
 | `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
 | `plugin-forge/` forge 管线核心插件 | 双模式共用技能（brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
 | `plugin-forge-spec/` forge 规格深化插件 | 仅远征组合的规格技能（write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者） | 状态存储（只消费）；突击会话不在组合内（物理边界，见《技术预研笔记》§5） | 独立工件、独立发版 |
-| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-forge + plugin-forge-spec + plugin-knowledge + 远征 persona）/ 突击模式（`blitz` = plugin-forge + plugin-knowledge + 突击 persona），经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一 = 派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
+| `plugin-brainstorm/` brainstorm 技能工件 | 结构化探索技能（→ proposal 产出）；远征/突击经 customSkillDirs 接入，标准模式经默认技能根全局通道（宿主环境变量）共享 | 一切后端依赖（零耦合：不依赖 state-layer / knowledge——沉淀判据双命中，见《技术预研笔记》§5.5） | 独立工件、独立发版 |
+| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-brainstorm + plugin-forge + plugin-forge-spec + plugin-knowledge + 远征 persona + skill-filesystem 行）/ 突击模式（`blitz` = plugin-brainstorm + plugin-forge + plugin-knowledge + 突击 persona + skill-filesystem 行），经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一 = 派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
 
 **依赖方向（单向）**：`web` →（能力面 RPC）→ `state-layer` / `knowledge`；`plugin-forge(-spec)` → `state-layer`；`plugin-knowledge` → `knowledge`；`host` 组装一切但不含业务。不存在反向 import；`state-layer` / `knowledge` 不 import UI 与插件；**`knowledge` 不依赖 `state-layer`**（头号沉淀候选的场景隔离禁令）。
 
@@ -89,6 +90,7 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：brainstorm 三模式共享落实——工件版图新增 `plugin-brainstorm/`（沉淀判据双命中：第三类消费者「标准模式」+ 零耦合）；出厂双预设组合更新（含 skill-filesystem 行；标准模式经默认技能根全局通道零 patch 共享，宿主环境变量注入）。技能绑定机制补入《技术预研笔记》§1.2（技能不随插件自动注册，customSkillDirs + 默认根 + rank 决胜）。
 - 2026-10-02：轻装模式更名突击模式（`light` → `blitz`）；预设机制「原理与实现」补入《技术预研笔记》§1.2（含 `select` blank-session 平台锁——「一会话一模式」由机制强制，与出厂双预设设计闭环）。
 - 2026-10-02：模式预设迁移落实（详见《技术预研笔记》§5）——forge 插件切 `plugin-forge`（管线核心，双模式共用）/ `plugin-forge-spec`（规格深化，仅远征）两工件；profile 出厂预设 → 出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；persona 铁律「只谈作风，不谈角色与工具禁令」写入工件版图（组合继承下 executor 继承作风、角色规格仍 = dispatch prompt）。
 - 2026-10-02：预研落实——工件版图补 profile 出厂预设（agent-preset + persona 组合 = forge 模式物理形态）；契约面清单补 preset / persona / subagent 面（含两项负结论）；task-executor 迁移方案 v2 与 spike 清单另立《技术预研笔记》（`tech-research.md`）。分工纪律：原型/UI 线归用户，产品线侧只做架构设计与技术预研。

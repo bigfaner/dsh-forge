@@ -36,6 +36,13 @@ intent: "tech-research"
 
 **出厂实现形态**（`packages/bundle/web-app`）：`cordis.patch.yml` 插 registry 行（`default: standard`）；`presets/{standard,ptc,minimal,cordis}.patch.yml` 各插一行 preset 声明（`package.json` 的 `dsh.bundle.patch` 排序）。`plugins` 列表 = 完整 cordis entry list，`standard` 定义实证：persona 行（prefix/suffix 模板变量 `{{model}}`/`{{cwd}}`）、agent-instructions、工具行（支持 `disabled: !!js process.platform === 'win32'` 平台条件）、`cordis:group` 嵌套组（`group: true` + isolate realm：planMode / compaction / delegation 全家——subagent spawn/fork、workflow-ptc、ralph disabled 等）。**Web 编辑器保存 = profile patch 按 row id 覆写 `config.plugins`**（用户编辑优先于出厂行）。出厂四 id（`standard`/`ptc`/`minimal`/`cordis`）显示文案走 locale 字典（`presetStandardName`…，中文即「标准模式」「PTC 模式」）；自带 `name` 的用户声明不翻译（`name ?? id` 兜底，`display.ts`）。
 
+**技能绑定通道**（`packages/skill/skill-filesystem/src/index.ts` 源码核实）：技能**不随插件挂载自动注册**——组合内须有 `@deepseek-ai/dsh-skill-filesystem` 行，其配置决定技能目录集：
+- `customSkillDirs`（rank 300）：显式目录列表；`cordis` 预设实证——`!!js` 表达式解析 `@deepseek-ai/dsh-agent-preset` 包的 `skills/` 目录接入组合；
+- 默认根（`includeDefaultRoots: true` 默认开）：项目根（git 根定位）`.dsh/skills`（100）/ `.agents/skills`（200）+ 用户根 `$DSH_HOME/skills`（默认 `~/.dsh`，400）/ `$DSH_AGENTS_HOME/skills`（默认 `~/.agents`，500）+ **bundled 根 `$DSH_BUNDLED_SKILL_DIR`（app 级技能通道）**——用户根与 bundled 根均可经宿主环境变量重定向，**对所有挂默认根的组合全局生效**；
+- rank 决胜同名（数值小者优先）；frontmatter 携带 invocation 策略（`disable-model-invocation` / `user-invocable`）；chokidar watch 目录热更新。
+
+**预设绑定 tool 与 skill 均为组合级**：tool = 插件行进出 `plugins` 列表（standard vs cordis 实证：cordis 多 `tool-cordis` 行）；skill = `skill-filesystem` 行的目录集差异（cordis 接 creator 技能、standard 只用默认根）。另有 per-spawn `toolFilter`（继承组合内的运行时工具收窄，§1.1）。
+
 **persona 行**（`packages/preset/persona`）：预设组合内注册 persona prefix/suffix 提示词段（shadow 全局默认）；`complete: true` 可使其成为唯一系统提示词；支持 `{{…}}` 模板变量。README 原话："Without this row, a preset could change an agent's tools but never its identity." 必须挂 agent scope（组合内）——全局挂载与 prompt registry 的 persona 注册冲突，fail loud。
 
 **UI 面**（`packages/client/ui-agent-preset`）：设置「Agent 预设」管理页、新建会话 hero chip、会话头预设标签。
@@ -90,6 +97,7 @@ run-tasks skill（forge 预设会话内）
 | S3 | slot 洞位替换（路线 A） | 自有插件替换 `sidebar.workspaces` 占用者 | 原型左栏三件套可挂载 |
 | S4 | workspace registry create 幂等 | 同 canonical path 两次 `create()` | 返回同一实体（上游文档语义） |
 | S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/突击，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
+| S6 | 标准模式技能注入通道 | 宿主环境变量重定向（`DSH_BUNDLED_SKILL_DIR` vs `DSH_HOME`）指向产品技能根；与 customSkillDirs 并存场景 | standard 会话技能目录含 brainstorm；跨根同名 rank 去重呈现符合预期 |
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
 
@@ -125,12 +133,16 @@ run-tasks skill（forge 预设会话内）
 
 | 预设 | plugins | persona（作风示意） |
 |---|---|---|
-| 远征模式（出厂默认） | plugin-forge + **plugin-forge-spec** + plugin-knowledge + persona 行 | 严谨、全流程、不跳步、证据驱动 |
-| 突击模式 | plugin-forge + plugin-knowledge + persona 行 | 短促突击、直奔要害、单写路径纪律不折扣 |
+| 远征模式（出厂默认） | plugin-brainstorm + plugin-forge + **plugin-forge-spec** + plugin-knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/forge-spec/knowledge 技能目录） | 严谨、全流程、不跳步、证据驱动 |
+| 突击模式 | plugin-brainstorm + plugin-forge + plugin-knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/knowledge 技能目录） | 短促突击、直奔要害、单写路径纪律不折扣 |
+
+（示意列——完整定义 = 镜像 `standard` 基础行 + forge 增量行，见下方备注③。）
 
 - registry `default` 出厂指向远征；用户可经 UI 改（`selectedDefault` 易失字段，README 语义）。
-- **forge 插件按模式切两包**：`plugin-forge`（管线核心，双模式共用：brainstorm / quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ `plugin-forge-spec`（规格深化，仅远征组合：write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者）。动机 = 防腐 L1：**物理边界优于提示词纪律**——突击会话字面上无法调用 write-prd，而非「被叮嘱不要」；副产收益 = 突击会话省下规格技能清单 token。此切分不违总纲「插件切分 = 管理便利，非可替换机制」：模式是同一产品的两种节奏，非场景替换。最终技能归置由插件工程线（总纲 P1 并行轨）细化，本节定切分原则。
+- **forge 插件按模式切两包**：`plugin-forge`（管线核心，双模式共用：quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs；brainstorm 已提取，见 §5.5）+ `plugin-forge-spec`（规格深化，仅远征组合：write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者）。动机 = 防腐 L1：**物理边界优于提示词纪律**——突击会话字面上无法调用 write-prd，而非「被叮嘱不要」；副产收益 = 突击会话省下规格技能清单 token。此切分不违总纲「插件切分 = 管理便利，非可替换机制」：模式是同一产品的两种节奏，非场景替换。最终技能归置由插件工程线（总纲 P1 并行轨）细化，本节定切分原则。
+- **技能暴露的物理载体 = `skill-filesystem` 行的 `customSkillDirs`**（§1.2：技能不随插件挂载自动注册，cordis 预设同款模式）——L1 边界在技能侧同样落在该行配置：突击组合的目录集不含 plugin-forge-spec 的 skills/。默认根保持开启（项目/用户技能目录照常可用）。
 - 模式 prose（入口路由、升级规则）写进 persona prefix——预设组合内挂 `dsh-persona` 行即载体，无需自制模式插件。
+- ③ 双预设定义 = 完整 cordis entry list（镜像 `standard` 基础行：工具 / plan-mode / compaction / delegation 组 + forge 增量行）——上游基础行演进属契约面跟踪（总纲 P1 交付物），机械 diff 检测漂移。
 
 ### 5.3 与 §2 v3 的相容（persona 撰写铁律）
 
@@ -145,8 +157,18 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 1. **会话节奏 ≠ 功能溯源**：preset = 会话节奏（新建时选定）；manifest `mode: expedition|blitz` = 功能溯源事实（quick-tasks / breakdown-tasks 写入），下游消费（run-tasks、consolidate-specs 漂移模式、eval 门豁免、知识抽取 mode 上下文）**一律读 manifest 不读预设**——远征会话打开旧的突击功能，整数 ID / 无 stage-gate / eval 豁免照旧生效。
 2. **确认门 ≠ 模式**：`auto.runTasks.quick/full` 自动跑闸门属 forge 配置（→ dsh-forge 偏好面），随迁移原样保留，与预设正交。
 
+### 5.5 brainstorm 三模式共享（跨预设技能，2026-10-02 增补）
+
+需求：brainstorm 供**标准模式（dsh 出厂）、突击、远征**三模式使用。裁决：
+
+- **提取为独立最小技能工件 `plugin-brainstorm`**（从 plugin-forge 管线核心移出）。依据：《架构基线》§4 沉淀判据两条同时命中——第三类真实消费者出现（标准模式 = 非 forge 组合）、零耦合全契约（brainstorm 纯文档读写 + 提问，不依赖 state-layer / knowledge）。这是版图中第一个按判据（而非预设计）沉淀出的共享技能工件。
+- **远征/突击**：组合内 skill-filesystem 行的 `customSkillDirs` 指向其包内 `skills/`（§5.2，cordis 预设先例）。
+- **标准模式零 patch**：standard 组合的 skill-filesystem 行用默认根（无 customSkillDirs）——**用户根 / bundled 根是全局通道**（§1.2）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
+- 已知取舍：跨根同名技能按 rank 决胜（custom 300 优先于 user 400）——远征/突击下 customSkillDirs 版本胜出，标准模式下走全局根版本，内容同源无分叉；目录呈现与去重语义入 S6 验证。
+
 ## 版本历史
 
+- 2026-10-02：新增 §5.5 brainstorm 三模式共享——提取为独立最小技能工件 `plugin-brainstorm`（沉淀判据双命中：第三类消费者 + 零耦合）；远征/突击经 customSkillDirs，标准模式**零 patch**走默认根全局通道（宿主环境变量 `DSH_BUNDLED_SKILL_DIR`/`DSH_HOME`）；§1.2 补技能绑定通道（技能不随插件自动注册；customSkillDirs/默认根/rank 决胜/bundled 根）；§5.2 补 skill-filesystem 行为技能暴露物理载体 + 完整定义镜像 standard 基础行备注；新增 S6 spike。
 - 2026-10-02：轻装模式更名**突击模式**（机器值 `light` → `blitz`）；§5 补平台级保证（`select` blank-session 锁使「一会话一模式」由机制强制，恢复/分叉按 `agentPreset` 投影重建组合）。§1.2 全文重写为预设机制「原理与实现」（源码重核：registry/声明行/挂载三层角色、Generation 修订与引用计数、bindScopeParent 绑定、composeFrom 精确修订继承、blank 锁与日志重建、bundle/web-app 出厂 patch 形态、standard 定义实证、locale 显示解析）。
 - 2026-10-02：新增 §5 模式预设迁移——full/quick 升格为出厂双预设：远征模式（`expedition`，默认）/ 轻装模式（`light`）；forge 插件切核心/规格两包（防腐 L1：轻装会话物理隔离规格技能）；persona 撰写铁律（只谈作风不谈角色与工具禁令）保 §2 v3 相容；manifest `mode` 保留为功能溯源（与会话预设解耦）；S5 扩为双预设验证。
 - 2026-10-02：取消 taskPrompt tool——合成内聚于 `taskClaim` 返回值（dispatchPrompt 随 claim 返回，dispatcher 拿到即派发）；简报作为初始 prompt 持久在子会话不丢失，恢复唯一出口 = dispatcher 外环（重派按当前状态重新合成）；fix-record 简报改由 skill 内置静态文本，synthesize 去掉 fixRecordMissed 路由。
