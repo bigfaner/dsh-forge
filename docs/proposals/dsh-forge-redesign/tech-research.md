@@ -73,6 +73,23 @@ run-tasks skill（forge 预设会话内）
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
 
+## 4. 动态提示词组装设计（taskPrompt，2026-10-02）
+
+老 forge 机制（`forge-cli/pkg/prompt/prompt.go` 源码核实）：21 个类型模板（go:embed）+ `promptTemplateData`（11 字段，空串省略条件段）+ `Synthesize()` 纯函数合成 + `ValidatePromptTemplates()` 启动校验（类型↔模板一一对应、零值可执行抓拼写错）；executor 分发 prompt 仅一句 `Execute task <ID>`，策略自拉且中途可重拉恢复。
+
+**新设计核心裁决：模板从「md 文件 + 运行时校验」升格为「TS 模板函数」**——字段拼写错编译期抓（防腐 L2）、条件段用原生 if、函数签名即 frontmatter 元数据、零引擎依赖；`satisfies Record<TaskType, Template>` exhaustive 路由强于老的对应性校验。组件：
+
+- `PromptData` 接口（taskKey/taskFile/category/featureSlug/phaseSummary?/coverage?/surface?/complexity）；
+- 每类型一个模板函数（`codingFix(d): string`），路由表 exhaustive；
+- `synthesize(task, ctx)` 纯函数：`fixRecordMissed` 特殊路由覆盖 + `buildData`（PhaseDetect / resolveCoverage 注入）；
+- `taskPrompt` tool（host 半身）：`stateStore.byKey` → `synthesize` → 返回策略文本；
+- **executor 自拉保持**（恢复语义保真）；dispatcher 分发 prompt 仍一句 `Execute task <key>`。
+
+上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 state-layer）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
+
+不迁移的过渡 hack：`{{TASK_ID}}` 大写桥接、`TASK_CATEGORY` 后处理注入。改良：每类型快照测试（fixture 任务 → prompt 输出断言）；策略第一步由「读 docs/business-rules/ 目录」改为**知识召回指令**（组合继承使 executor 天然带召回 tool）；TASK_FILE 悬空容忍（对抗审核处置③）写入模板指示。边界：persona 的 `{{…}}` 变量属系统提示层（prompt registry），策略层组装不混用——人格归预设、策略归本设计。
+
 ## 版本历史
 
+- 2026-10-02：新增 §4 动态提示词组装设计（taskPrompt：TS 模板函数 + exhaustive 路由 + 纯函数合成 + executor 自拉保真）。
 - 2026-10-02：初版。subagent / preset / persona 机制核实（含两项负结论：无子代预设覆写、无超时）；task-executor 迁移方案 v2（预设管稳定层、prompt 管动态层）；spike 清单 S1–S5。
