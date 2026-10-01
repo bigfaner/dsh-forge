@@ -38,7 +38,7 @@ intent: "tech-research"
 |---|---|
 | `agents/task-executor.md`（硬约束 + 执行协议人格） | **dispatch prompt 的约束块**（单一来源 TS 模块，synthesize 前置拼接） |
 | executor 工具面 | 预设组合（plugin-forge + plugin-knowledge + 基础）；需收窄用 `toolFilter` |
-| `forge prompt get-by-task-id`（类型策略合成） | forge 插件 tool `taskPrompt(key)`——**dispatcher 派发前预拉合成**；executor 保留重拉恢复 |
+| `forge prompt get-by-task-id`（类型策略合成） | **并入 `taskClaim` 返回值**（`dispatchPrompt` 随 claim 一起返回，合成内聚于 claim 流程；**独立 taskPrompt tool 取消**——简报持久在子会话不丢失，恢复由 dispatcher 外环承担） |
 | `commands/run-tasks.md`（分发循环） | forge 插件 skill；`subagent` 阻塞调用（`run_in_background: false`） |
 | `forge task claim/add/status/submit` | state-layer API + forge 插件 tool（SC7 缝） |
 | submit-task skill + quality gate 序列 | `taskSubmit` tool 内置 gate（compile→fmt→lint→test，插件逻辑） |
@@ -51,8 +51,7 @@ intent: "tech-research"
 
 ```
 run-tasks skill（forge 预设会话内）
-  → taskClaim tool → state-layer
-  → dispatchPrompt = 约束块 + 动态信息块 + 策略块          ← 派发前一次性合成（纯函数）
+  → taskClaim tool → state-layer（返回值携带 dispatchPrompt = 约束块 + 动态信息块 + 策略块）
   │    ① executorConstraints（迁移自 task-executor.md 硬约束/错误分诊/暂停协议）
   │    ② 动态信息块：state-layer 实时取数——TASK_ID/FILE/TYPE/CATEGORY、
   │       BLOCKERS 依赖现状快照（新增，老 forge 无）、PHASE_SUMMARY（跨相位）、
@@ -62,8 +61,8 @@ run-tasks skill（forge 预设会话内）
        ├─ 执行策略（含 knowledge recall，域参数来自 ②）
        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
        ├─ git-commit skill
-       └─ 迷路？重调 taskPrompt(key) 恢复（合成是纯函数）
   → taskStatus 验证 → 循环 / fix-task（taskAdd + block 边）
+    恢复唯一出口 = dispatcher 外环：record 缺失 → 重派（按当前状态重新合成简报，优于重拉旧文本）
 ```
 
 已知取舍：约束块从系统提示降为初始 prompt——dsh 两个负结论下的**唯一差异化通道**，约束标记（`<EXTREMELY-IMPORTANT>` 等）原样保留以补偿位置弱化；合成单点（约束块 + 策略模板同函数族）杜绝模板漂移；dispatch prompt 整体落入子代持久会话日志，审计原子性优于分散记录。老 6 步执行协议简化为 4 步（Validate 拉取步消失：Initialize 并入、Execute/Submit/Commit/Done）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
@@ -80,7 +79,7 @@ run-tasks skill（forge 预设会话内）
 
 （S1–S4 继承总纲 vendor 裁决与 P1 输入；S5 为预研新增。）
 
-## 4. 动态提示词组装设计（taskPrompt，2026-10-02）
+## 4. 动态提示词组装设计（2026-10-02）
 
 老 forge 机制（`forge-cli/pkg/prompt/prompt.go` 源码核实）：21 个类型模板（go:embed）+ `promptTemplateData`（11 字段，空串省略条件段）+ `Synthesize()` 纯函数合成 + `ValidatePromptTemplates()` 启动校验（类型↔模板一一对应、零值可执行抓拼写错）；executor 分发 prompt 仅一句 `Execute task <ID>`，策略自拉且中途可重拉恢复。
 
@@ -88,9 +87,8 @@ run-tasks skill（forge 预设会话内）
 
 - `PromptData` 接口（taskKey/taskFile/category/featureSlug/phaseSummary?/coverage?/surface?/complexity，**v3 增：blockers 快照 / knowledgeDomain**）；
 - 每类型一个模板函数（`codingFix(d): string`），路由表 exhaustive；
-- `synthesize(task, ctx)` 纯函数：`fixRecordMissed` 特殊路由覆盖 + `buildData`（PhaseDetect / resolveCoverage 注入）；
-- `taskPrompt` tool（host 半身）：`stateStore.byKey` → `synthesize` → 返回策略文本；
-- **dispatcher 预拉合成**（v3）：派发前 `dispatchPrompt = executorConstraints + synthesize(task, ctx)` 一次性拼接；executor 侧 `taskPrompt` 保留，仅用于迷路重拉恢复（合成是纯函数）。
+- `synthesize(task, ctx)` 纯函数：`buildData`（PhaseDetect / resolveCoverage 注入）+ 模板渲染（`fixRecordMissed` 路由取消，见下）；
+- **合成内聚于 `taskClaim`**（v3 定稿后）：claim 返回值携带 `dispatchPrompt = executorConstraints + synthesize(task, ctx)`，dispatcher 拿到即派发——**独立 `taskPrompt` tool 取消**：完整简报作为初始 prompt 持久落入子会话日志，不会丢失；恢复唯一出口 = dispatcher 外环（record 缺失重派按**当前状态重新合成**，优于重拉旧文本），fix-record 简报为 run-tasks skill 内置静态文本（单一模板、非类型路由）。
 
 上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 state-layer）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
 
@@ -98,6 +96,7 @@ run-tasks skill（forge 预设会话内）
 
 ## 版本历史
 
+- 2026-10-02：取消 taskPrompt tool——合成内聚于 `taskClaim` 返回值（dispatchPrompt 随 claim 返回，dispatcher 拿到即派发）；简报作为初始 prompt 持久在子会话不丢失，恢复唯一出口 = dispatcher 外环（重派按当前状态重新合成）；fix-record 简报改由 skill 内置静态文本，synthesize 去掉 fixRecordMissed 路由。
 - 2026-10-02：v3 定稿——task-executor **不采用预设身份**：出厂 forge 预设 = 纯环境定义（不配 persona 行），executor = 动态派发的匿名子代理，行为规格全部来自派发前合成的 dispatch prompt；动态信息块强化（blockers 现状快照、knowledgeDomain 注入）。
 - 2026-10-02：v3 修订——合并稳定/动态层：dispatcher 派发前一次性合成完整 dispatch prompt（约束块 + 策略）；修复 v2 隐性矛盾（组合继承下 persona 共享导致 dispatcher 背上 executor 的 claim 禁令）；预设退回纯环境，persona 行可选；§4 同步改为预拉 + 重拉恢复。
 - 2026-10-02：新增 §4 动态提示词组装设计（taskPrompt：TS 模板函数 + exhaustive 路由 + 纯函数合成 + executor 自拉保真）。
