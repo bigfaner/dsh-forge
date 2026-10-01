@@ -27,17 +27,16 @@ intent: "architecture-baseline"
 |---|---|---|---|
 | `host/` 薄宿主 | 进程入口、profile 加载、boot manifest 组装（官方 ui-\* 选型 + 产品自有 client 插件注入）、`{url, injections}` IPC | 一切业务语义 | 随上游锁定版 |
 | `web/` 三区工作台 | 自有 vite 入口 + `dsh-client-web` 壳内核；左栏导航 rail（品牌行/新会话/知识库入口/项目树+会话列表）；中区一等公民视图互换（会话面板：对话/轨迹/知识召回 ⇄ 知识库面板：浏览/统计分析/召回日志）；右栏 dock 页签容器（页签跟随所属项目）；任务三视图（列表/DAG/泳道，feature 绑定）；`--dsw-*` 令牌纪律 | 状态/知识的写逻辑（只调 API） | 产品主线 |
-| `state-layer/` forge 状态层 | features/tasks/proposals 存储 + 动词 API（claim/submit/…）+ 转移校验 + 依赖终态守卫 + append-only 执行记录 + 任务↔会话挂接表 | UI、技能、文档路径语义（docPath 为不透明字段）、dsh 会话账本（实时读，不复制） | 产品主线 |
-| `knowledge/` 知识链路 | 知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+使用事件）、审核与合并队列、晋升流 | 会话编排、知识注入决策（agent 自行决定）、代码仓与文档位置写入 | 产品主线（P2 重头） |
-| `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
-| `plugin-forge/` forge 管线核心插件 | 双模式共用技能（quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ 命令 tool（消费 state-layer API） | 状态存储（只消费） | 独立工件、独立发版 |
+| `core/` 数据内核 | **唯一 SQLite 句柄持有者 · 双域**——forge 域：features/tasks/proposals 存储 + 动词 API（claim/submit/…）+ 转移校验 + 依赖终态守卫 + append-only 执行记录 + 任务↔会话挂接表；知识域：知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+召回日志）、审核与合并队列、晋升流。对外双服务 `ctx.forgeProjects` / `ctx.forgeKnowledge`（总纲概念「应用状态层」的物化） | UI、技能、文档路径语义（docPath 为不透明字段）、dsh 会话账本（实时读，不复制）、知识注入决策（agent 自行决定）、代码仓与文档位置写入；**包内知识域 ↛ forge 域（模块级禁令）** | 产品主线 |
+| `knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
+| `plugin-forge/` forge 管线核心插件 | 双模式共用技能（quick-tasks / run-tasks / fix 链 / submit-task / git 纪律 / run-tests / consolidate-specs）+ 命令 tool（消费 core API） | 状态存储（只消费） | 独立工件、独立发版 |
 | `plugin-forge-spec/` forge 规格深化插件 | 仅远征组合的规格技能（write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval 幸存者） | 状态存储（只消费）；突击会话不在组合内（物理边界，见《技术预研笔记》§5） | 独立工件、独立发版 |
-| `plugin-brainstorm/` brainstorm 技能工件 | 结构化探索技能（产出 proposal）；远征/突击经 customSkillDirs 接入，标准模式经默认技能根全局通道（宿主环境变量）共享 | 一切后端依赖（零耦合：不依赖 state-layer / knowledge——沉淀判据双命中，见《技术预研笔记》§5.5） | 独立工件、独立发版 |
-| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-brainstorm + plugin-forge + plugin-forge-spec + plugin-knowledge + 远征 persona + skill-filesystem 行）；突击模式（`blitz` = plugin-brainstorm + plugin-forge + plugin-knowledge + 突击 persona + skill-filesystem 行）。经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一来自派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
+| `plugin-brainstorm/` brainstorm 技能工件 | 结构化探索技能（产出 proposal）；远征/突击经 customSkillDirs 接入，标准模式经默认技能根全局通道（宿主环境变量）共享 | 一切后端依赖（零耦合：不依赖 core 任何域——沉淀判据双命中，见《技术预研笔记》§5.5） | 独立工件、独立发版 |
+| profile 出厂双预设 | **forge 模式的物理形态**：远征模式（`expedition`，出厂默认 = plugin-brainstorm + plugin-forge + plugin-forge-spec + knowledge + 远征 persona + skill-filesystem 行）；突击模式（`blitz` = plugin-brainstorm + plugin-forge + knowledge + 突击 persona + skill-filesystem 行）。经 profile patch 安装（`cordis.patch.yml` 同机制）。**persona 只谈作风，不谈角色与工具禁令**——组合继承下 executor 继承模式作风，其角色规格仍唯一来自派发前合成的 dispatch prompt（见《技术预研笔记》§2/§5） | 会话编排（预设是环境配置，产品只看不管）；干预用户自定义预设 | 随产品交付 |
 
-**依赖方向（单向）**：`web` →（能力面 RPC）→ `state-layer` / `knowledge`；`plugin-forge(-spec)` → `state-layer`；`plugin-knowledge` → `knowledge`；`host` 组装一切但不含业务。不存在反向 import；`state-layer` / `knowledge` 不 import UI 与插件；**`knowledge` 不依赖 `state-layer`**（头号沉淀候选的场景隔离禁令）。
+**依赖方向（单向）**：`web` →（能力面 RPC）→ `core`（forge 域 + 知识域双服务）；`plugin-forge(-spec)` → `core`；`knowledge` 插件 → `core`（仅 `forgeKnowledge` 服务类型，运行期 Cordis 注入）；`host` 组装一切但不含业务。不存在反向 import；`core` 不 import UI 与插件；**`core` 包内知识域 ↛ forge 域（模块级禁令）**——头号沉淀候选的边界保持，触发提炼判据（§4）时机械抽包。
 
-**单一写入路径**：状态写只经 `state-layer` 服务（UI 动作与 forge tool 同门）；知识写只经知识能力面（UI 管理面与知识插件 tool 同门）。数据库无第二写者。
+**单一写入路径**：状态写只经 `core` 服务（UI 动作与 forge tool 同门）；知识写只经知识能力面（UI 管理面与知识插件 tool 同门）。数据库无第二写者。
 
 **库消费基座与 Markdown 渲染一致性（2026-10-02 定向）**：markdown 正文渲染复用官方 `ui-primitives`（`MarkdownText` 族，静态 ESM 库消费——机制与消费契约见《技术预研笔记》§1.6），不自建渲染器。**风格一致是硬纪律**，四条防线：
 
@@ -58,7 +57,7 @@ intent: "architecture-baseline"
 
 | 层 | 机制 | 对抗的腐化 |
 |---|---|---|
-| L1 硬边界 | 物理工件 + import 规则（dependency-cruiser / eslint no-restricted-paths / TS project references）；sqlite 句柄仅 `state-layer` 可持有 | 隐式跨界——越界即编译/lint 红，agent 无法「悄悄」做 |
+| L1 硬边界 | 物理工件 + import 规则（dependency-cruiser / eslint no-restricted-paths / TS project references）；sqlite 句柄仅 `core` 可持有 | 隐式跨界——越界即编译/lint 红，agent 无法「悄悄」做 |
 | L2 类型契约 | 跨边界 API 全类型化 + contract tests；DB schema 版本表 + 迁移函数 | 接口/schema 漂移——编译器当防腐官 |
 | L3 机械断言池 | 无投影审计（禁 watch/回流模块）、CSS 令牌 lint（禁裸色值/字号）、依赖规则、上游契约面回归（slot 洞名 / boot manifest 形状）、**Markdown 渲染一致性（ui-primitives ↔ ui-chat 版本对齐 + 同 fixture 跨文档面 computed style 断言）**——CI 常驻 + 阶段回归 | 约定侵蚀——断言红灯，而非评审意见 |
 | L4 流程方向盘 | SDD 管线本身（设计先行、小步任务、执行记录）；阶段设计评审固定过沉淀候选清单与断言池 | 平行实现、大爆炸改动——agent 的方向盘是设计文档，不是自由发挥 |
@@ -136,6 +135,8 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：**包名定稿（P1 设计期，用户定向）**——`state-layer` → **`core`**（monorepo 业界常规命名、通俗；总纲「应用状态层」保留为概念术语＝数据访问面，不再作物实名）；`plugin-knowledge` → **`knowledge`**（dsh 插件，名简化）。工件版图行名、依赖方向、L1 句柄条款、出厂双预设组合同步；M2 里程碑行的「state-layer 转正」表述指概念（应用状态层），物化为 core 的 forge 域。
+- 2026-10-02：**工件拆并：knowledge 并入 state-layer（P1 设计期裁决，用户定向）**——动机：L1「sqlite 句柄仅 state-layer 可持有」与「knowledge 独立包写库」互斥，二保一不如合一；知识域沉淀分离降为**模块级禁令**（包内知识域 ↛ forge 域，lint 机械执行），提炼判据触发时机械抽包（证据驱动，非预设）；对外双服务 `ctx.forgeProjects` / `ctx.forgeKnowledge` 不变，UI/插件消费缝零影响。工件版图两行并一行，依赖方向同步。（注：state-layer 随后定名 core，见上条）
 - 2026-10-02：随路表自举重切同步——§6 阶段引用改里程碑口径：单机单活跃分支断言 → M2；四信号分期 → P3（M4–M7）；备份/迁移 → P4（M8）。
 - 2026-10-02：§5 补迭代节奏引言（里程碑 = 1–2 周可演示增量 + G0–G2 门；定义见总纲 §演进路书，路书已敏捷化重切为 M0–M8，P1 = M0–M1 即 MVP）。
 - 2026-10-02：Markdown 渲染一致性定为硬纪律——`MarkdownDoc` 单一包装入口（variant 判定：文档面 body / 嵌入预览 compact）、ui-primitives ↔ ui-chat 版本锁步、L3 增机械断言（版本对齐 + 同 fixture 跨文档面 computed style）。

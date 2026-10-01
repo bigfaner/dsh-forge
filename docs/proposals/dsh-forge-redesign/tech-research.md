@@ -96,12 +96,12 @@ intent: "tech-research"
 | forge 3.x 组件 | v3 落点 |
 |---|---|
 | `agents/task-executor.md`（硬约束 + 执行协议人格） | **dispatch prompt 的约束块**（单一来源 TS 模块，synthesize 前置拼接） |
-| executor 工具面 | 预设组合（plugin-forge + plugin-knowledge + 基础）；需收窄用 `toolFilter` |
+| executor 工具面 | 预设组合（plugin-forge + knowledge + 基础）；需收窄用 `toolFilter` |
 | `forge prompt get-by-task-id`（类型策略合成） | **并入 `taskClaim` 返回值**（`dispatchPrompt` 随 claim 一起返回，合成内聚于 claim 流程；**独立 taskPrompt tool 取消**——简报持久在子会话不丢失，恢复由 dispatcher 外环承担） |
 | `commands/run-tasks.md`（分发循环） | forge 插件 skill；`subagent` 阻塞调用（`run_in_background: false`） |
-| `forge task claim/add/status/submit` | state-layer API + forge 插件 tool（SC7 缝） |
+| `forge task claim/add/status/submit` | core API + forge 插件 tool（SC7 缝） |
 | submit-task skill + quality gate 序列 | `taskSubmit` tool 内置 gate（compile→fmt→lint→test，插件逻辑） |
-| fix-task 链（`--source-task-id --block-source`、完成自动恢复） | state-layer blockers 边 + 插件 submit 钩子 |
+| fix-task 链（`--source-task-id --block-source`、完成自动恢复） | core blockers 边 + 插件 submit 钩子 |
 | `model: sonnet` | delegation `agentOptions` 或预设级模型选择设置 |
 | Step 1 读项目知识（`docs/business-rules/` 等） | **知识插件召回 tool**（域过滤 + 置信度）——迁移最大增益点 |
 | `memory: project` | 无直接等价物，由知识召回承接意图 |
@@ -110,15 +110,15 @@ intent: "tech-research"
 
 ```
 run-tasks skill（forge 预设会话内）
-  → taskClaim tool → state-layer（返回值携带 dispatchPrompt = 约束块 + 动态信息块 + 策略块）
+  → taskClaim tool → core（返回值携带 dispatchPrompt = 约束块 + 动态信息块 + 策略块）
   │    ① executorConstraints（迁移自 task-executor.md 硬约束/错误分诊/暂停协议）
-  │    ② 动态信息块：state-layer 实时取数——TASK_ID/FILE/TYPE/CATEGORY、
+  │    ② 动态信息块：core 实时取数——TASK_ID/FILE/TYPE/CATEGORY、
   │       BLOCKERS 依赖现状快照（新增，老 forge 无）、PHASE_SUMMARY（跨相位）、
   │       COVERAGE（三级优先）、SURFACE/COMPLEXITY、KNOWLEDGE_DOMAIN（项目默认召回域）
   │    ③ 类型策略块（TS 模板函数）
   → subagent(prompt = dispatchPrompt, agentOptions{model}, 阻塞)   ← 匿名子代理，动态派发
         ├─ 执行策略（含 knowledge recall，域参数来自 ②）
-        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ state-layer
+        ├─ taskSubmit tool（gate + record + blockers 恢复钩子）→ core
         ├─ git-commit skill
   → taskStatus 验证 → 循环 / fix-task（taskAdd + block 边）
     恢复唯一出口 = dispatcher 外环：record 缺失 → 重派（按当前状态重新合成简报，优于重拉旧文本）
@@ -151,7 +151,7 @@ run-tasks skill（forge 预设会话内）
 - `synthesize(task, ctx)` 纯函数：`buildData`（PhaseDetect / resolveCoverage 注入）+ 模板渲染（`fixRecordMissed` 路由取消，见下）；
 - **合成内聚于 `taskClaim`**（v3 定稿后）：claim 返回值携带 `dispatchPrompt = executorConstraints + synthesize(task, ctx)`，dispatcher 拿到即派发。**独立 `taskPrompt` tool 取消**：完整简报作为初始 prompt 持久落入子会话日志，不会丢失；恢复唯一出口 = dispatcher 外环（record 缺失重派按**当前状态重新合成**，优于重拉旧文本），fix-record 简报为 run-tasks skill 内置静态文本（单一模板、非类型路由）。
 
-上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 state-layer）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
+上下文注入原则原样迁移：PhaseSummary 仅跨相位注入（相位 = 键约定 `feature/N.M` 的 N，完成状态查 core）；coverage 三级优先（task payload > forge 配置 > 默认；cleanup/refactor 强制 maintain）。
 
 不迁移的过渡 hack：`{{TASK_ID}}` 大写桥接、`TASK_CATEGORY` 后处理注入。改良：每类型快照测试（fixture 任务 → prompt 输出断言）；策略第一步由「读 docs/business-rules/ 目录」改为**知识召回指令**（组合继承使 executor 天然带召回 tool）；TASK_FILE 悬空容忍（对抗审核处置③）写入模板指示。边界：persona 的 `{{…}}` 变量属系统提示层（prompt registry），策略层组装不混用——人格归预设、策略归本设计。
 
@@ -172,8 +172,8 @@ run-tasks skill（forge 预设会话内）
 
 | 预设 | plugins | persona（作风示意） |
 |---|---|---|
-| 远征模式（出厂默认） | plugin-brainstorm + plugin-forge + **plugin-forge-spec** + plugin-knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/forge-spec/knowledge 技能目录） | 严谨、全流程、不跳步、证据驱动 |
-| 突击模式 | plugin-brainstorm + plugin-forge + plugin-knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/knowledge 技能目录） | 短促突击、直奔要害、单写路径纪律不折扣 |
+| 远征模式（出厂默认） | plugin-brainstorm + plugin-forge + **plugin-forge-spec** + knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/forge-spec/knowledge 技能目录） | 严谨、全流程、不跳步、证据驱动 |
+| 突击模式 | plugin-brainstorm + plugin-forge + knowledge + persona 行 + skill-filesystem 行（customSkillDirs = brainstorm/forge/knowledge 技能目录） | 短促突击、直奔要害、单写路径纪律不折扣 |
 
 （示意列——完整定义 = 镜像 `standard` 基础行 + forge 增量行，见下方备注③。）
 
@@ -200,7 +200,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 需求：brainstorm 供**标准模式（dsh 出厂）、突击、远征**三模式使用。裁决：
 
-- **提取为独立最小技能工件 `plugin-brainstorm`**（从 plugin-forge 管线核心移出）。依据：《架构基线》§4 沉淀判据两条同时命中——第三类真实消费者出现（标准模式 = 非 forge 组合）、零耦合全契约（brainstorm 纯文档读写 + 提问，不依赖 state-layer / knowledge）。这是版图中第一个按判据（而非预设计）沉淀出的共享技能工件。
+- **提取为独立最小技能工件 `plugin-brainstorm`**（从 plugin-forge 管线核心移出）。依据：《架构基线》§4 沉淀判据两条同时命中——第三类真实消费者出现（标准模式 = 非 forge 组合）、零耦合全契约（brainstorm 纯文档读写 + 提问，不依赖 core / knowledge）。这是版图中第一个按判据（而非预设计）沉淀出的共享技能工件。
 - **远征/突击**：组合内 skill-filesystem 行的 `customSkillDirs` 指向其包内 `skills/`（§5.2，cordis 预设先例）。
 - **标准模式零 patch**：standard 组合的 skill-filesystem 行用默认根（无 customSkillDirs）——**用户根 / bundled 根是全局通道**（§1.4 ①）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
 - 已知取舍：跨根同名技能按 rank 决胜（custom 300 优先于 user 400）——远征/突击下 customSkillDirs 版本胜出，标准模式下走全局根版本，内容同源无分叉；目录呈现与去重语义入 S6 验证。
@@ -254,7 +254,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
             config:              # 默认根保持开启（includeDefaultRoots 默认 true）
               customSkillDirs:
                 - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/plugin-brainstorm/package.json')), 'skills')
-                # ……（plugin-forge / plugin-forge-spec / plugin-knowledge 同式）
+                # ……（plugin-forge / plugin-forge-spec / knowledge 同式）
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           # ── forge 增量行 ────────────────────────────────────────────────
@@ -262,8 +262,8 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
             name: '@dsh-forge/plugin-forge'
           - id: plugin-forge-spec      # 仅远征（L1：突击物理不可见）
             name: '@dsh-forge/plugin-forge-spec'
-          - id: plugin-knowledge
-            name: '@dsh-forge/plugin-knowledge'
+          - id: knowledge
+            name: '@dsh-forge/knowledge'
 
 # ══ 突击模式（presets/blitz.patch.yml）：与远征仅三处差异 ═════════════════
 #   ① persona prefix 换突击作风（短促突击、直奔要害、单写路径纪律不折扣）
@@ -281,6 +281,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 ## 版本历史
 
+- 2026-10-02：**包名同步**（随架构基线定名）——全文 `plugin-knowledge` → `knowledge`（dsh 插件）、`state-layer` → `core`（数据内核，概念「应用状态层」物化）；§5 组合表与 §5.6 profile patch YAML 中的插件 id/name 同步，M3 实施草案直接可用。
 - 2026-10-02：新增 §1.7 workspace registry 写入面核实（create 幂等但不区分新建/命中；delete 删注册保目录保会话日志、幂等；无按路径查询 → ownership 预检经 list()）；新增 S7 spike（项目创建补偿链实跑：失败/取消补偿、幂等命中防误删、补偿幂等）——配套总纲 §项目↔工作区映射 ①–④ 补偿流程与 SC12。
 - 2026-10-02：新增 §1.6 官方 Markdown 渲染核实——`ui-primitives` 纯 React 原子库（zero cordis，静态 ESM 库消费）：`MarkdownText` 不可信 GFM+TeX / `MarkdownDelegateProvider` 文件链接行号跳转 / `CodeBlock` / `pathImages` / 流式增量渲染 / 工具结果卡族；官方插件先例 ui-sidebar-documentpreview；forge 消费点映射（详情抽屉/dock 文档页签/文档 tab/抽取稿预览）。
 - 2026-10-02：新增 §1.5 上游发布形态核实——无 git tag、无 CHANGELOG；workspace 锁步发布；dist-tags 实查（`next` = 活跃线 0.2.0-rc.2，`latest` 陈旧）→ 追新盯 `next`；本地仓为差异阅读源；版本管理机制指针至《架构基线》§5。
