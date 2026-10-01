@@ -26,7 +26,7 @@ intent: "architecture-baseline"
 | 工件 | 能力边界（做什么） | 不做什么 | 迭代节奏 |
 |---|---|---|---|
 | `host/` 薄宿主 | 进程入口、profile 加载、boot manifest 组装（官方 ui-\* 选型 + 产品自有 client 插件注入）、`{url, injections}` IPC | 一切业务语义 | 随上游锁定版 |
-| `web/` 三区工作台 | 自有 vite 入口 + `dsh-client-web` 壳内核；左栏（知识库面板/项目树/会话列表）、中区（dsh 会话）、右栏 dock；看板/管线视图（forge 七态直渲染）；`--dsw-*` 令牌纪律 | 状态/知识的写逻辑（只调 API） | 产品主线 |
+| `web/` 三区工作台 | 自有 vite 入口 + `dsh-client-web` 壳内核；左栏导航 rail（品牌行/新会话/知识库入口/项目树+会话列表）；中区一等公民视图互换（会话面板：对话/轨迹/知识召回 ⇄ 知识库面板：浏览/统计分析/召回日志）；右栏 dock 页签容器（页签跟随所属项目）；任务三视图（列表/DAG/泳道，feature 绑定）；`--dsw-*` 令牌纪律 | 状态/知识的写逻辑（只调 API） | 产品主线 |
 | `state-layer/` forge 状态层 | features/tasks/proposals 存储 + 动词 API（claim/submit/…）+ 转移校验 + 依赖终态守卫 + append-only 执行记录 + 任务↔会话挂接表 | UI、技能、文档路径语义（docPath 为不透明字段）、dsh 会话账本（实时读，不复制） | 产品主线 |
 | `knowledge/` 知识链路 | 知识目录解析、frontmatter 契约校验、索引（可重建缓存）、动态置信度（四信号读取时计算）、召回能力面（域过滤+关键词+阈值+理由+使用事件）、审核与合并队列、晋升流 | 会话编排、知识注入决策（agent 自行决定）、代码仓与文档位置写入 | 产品主线（P2 重头） |
 | `plugin-knowledge/` 知识插件 | dsh tool：召回四动词 + 写入 tool（契约校验，与 UI 管理面同后端）；系统提示词知识段组装 | 管线/SDD 任何语义 | 随产品交付 |
@@ -127,6 +127,7 @@ intent: "architecture-baseline"
 
 ## 版本历史
 
+- 2026-10-02：原型基线同步——`web/` 工件行按重构原型更新（左栏导航 rail、中区一等公民视图互换（会话 ⇄ 知识库三页签）、右栏 dock 页签跟随项目、任务三视图列表/DAG/泳道 feature 绑定）；路线调整见总纲版本历史。
 - 2026-10-02：§5 扩为「演进纪律与版本管理」四子节——5.1 上游追踪与升级节奏（精确 pin + lockfile 入库、节奏化升级窗口、diff 即 changelog、功能雷达三问过滤）；5.2 升级测试门（升级分支零主干 bump；G0 编译 / G1 契约面回归 / G2 功能回归 / G3 冒烟 dogfood 四道门全绿方可合并；测试盲区显式记账；回滚 = pin 回退 + lockfile 恢复）；5.3 产品 semver + git tag + CHANGELOG 必备 + 发布门同池；5.4 schema 前向单向、旧应用打开新 schema 明确拒绝。发布形态依据 = 《技术预研笔记》§1.5。
 - 2026-10-02：可读性梳理（内容不变，语句重写；工件版图行内措辞微调，如 brainstorm「产出 proposal」）。
 - 2026-10-02：brainstorm 三模式共享落实——工件版图新增 `plugin-brainstorm/`（沉淀判据双命中：第三类消费者「标准模式」+ 零耦合）；出厂双预设组合更新（含 skill-filesystem 行；标准模式经默认技能根全局通道零 patch 共享，宿主环境变量注入）。技能绑定机制补入《技术预研笔记》§1.2（技能不随插件自动注册，customSkillDirs + 默认根 + rank 决胜）。
