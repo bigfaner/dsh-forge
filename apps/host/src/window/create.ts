@@ -28,6 +28,18 @@ export async function createMainWindow(
     height: 900,
     title: options.title,
     show: false,
+    // 窗口形态（fix-2，UI 走查 §2.1）：隐藏原生标题栏，窗口钮以 Windows Window Controls
+    // Overlay 原生保留右上角（dsh 官方桌面形态基准；不自绘标题栏/窗口钮/拖拽条——后续里程碑面）
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      // 官方主题令牌静态实值（dsh-client-ui-theme 浅色 scope = 原型基准默认形态）：
+      // --dsw-alias-bg-base → --dsw-static-neutral-bluish-00；symbolColor ← label-primary →
+      // --dsw-static-neutral-bluish-1000。主题令牌属 renderer 面——host 无主题联动机制
+      // （暗色 scope 对应实值 neutral-bluish-950 / -50，随机制裁决同步此注记）
+      color: '#fff',
+      symbolColor: '#0f1115',
+      height: 32, // Windows 官方系统 caption 刻度（100% DPI）
+    },
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,
