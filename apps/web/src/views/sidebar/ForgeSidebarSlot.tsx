@@ -9,6 +9,7 @@
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
 import { sidebarActions } from './sidebar-actions.js'
 import {
@@ -53,6 +54,10 @@ export function ForgeSidebarSlot({
   const workspacesSnap = useSyncExternalStore(subscribeWorkspaces, readWorkspaces, readWorkspaces)
   const [projectsState, retryProjects] = useForgeProjects(workspacesSnap)
   const actions = sidebarActions(openSession)
+  // 「＋」入口 → 添加项目流程打开缝（跨单元直达流程宿主；缺席 fail-soft warn——2.12 装配前 no-op）
+  const onAddProject = useCallback(() => {
+    openAddProjectFlow()
+  }, [])
   const { tree, loading, currentSessionId } = buildSidebarTree({
     projects: projectsState.phase === 'ready' ? projectsState.projects : [],
     sessions: sessionsSnap,
@@ -69,6 +74,7 @@ export function ForgeSidebarSlot({
       hasProjects={projectsState.phase === 'ready' && projectsState.projects.length > 0}
       projectsError={projectsState.phase === 'error' ? projectsState.message : undefined}
       onOpenKnowledge={actions.onOpenKnowledge}
+      onAddProject={onAddProject}
       onSessionActivate={actions.onSessionActivate}
       onRetryProjects={retryProjects}
       now={Date.now()}

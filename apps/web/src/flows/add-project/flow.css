@@ -1,0 +1,115 @@
+/* UF-3 组装·添加项目流程样式（定位：业务——flows/add-project，2.10 模态壳内容区）。
+ * 纪律：令牌唯一（色/字/圆角/间距零裸值一律 --dsw-*，lint-tokens 机械执行）；浏览器/表单
+ * 本体样式各归 browser.css / form.css，本件只承载流程层（步骤条 / 保挂载隐藏守卫 /
+ * 执行态 / 反馈面板）。
+ * dsw-raw 豁免理由（执行记录同步）：行内 4/6/8px 间距 = 官方行语言原值——官方主题无间距
+ * 标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条「形态对齐官方」优先，
+ * 取官方原值；块级留白用行高令牌刻度（同 browser.css/form.css 既有口径）。 */
+
+/* ── 模态内容区宽度口径（官方 Modal contentClassName 挂点——两段浏览器/表单的最小可用宽度；
+ * 高度自适应随内容，超出滚动归官方 Modal 机制） ── */
+.dswf-ap-modal {
+  width: 560px;
+  max-width: 90vw;
+}
+
+/* ── 流程根（模态内容区内：纵向布局） ── */
+.dswf-ap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+}
+
+/* ── 段二步骤条（第二步标题 + 返回上一步） ── */
+.dswf-ap-stepbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+}
+
+.dswf-ap-steptitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ap-back {
+  flex: none;
+}
+
+/* ── 表单保挂载包裹（repick 相位 hidden——同位元素不重挂，AC5 已填状态保留） ── */
+.dswf-ap-form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* hidden 守卫：作者 display 覆盖 UA 隐藏——显式归零（漏写即 repick 相位表单泄漏可见） */
+.dswf-ap-form[hidden] {
+  display: none;
+}
+
+/* ── 执行态（AC2：进度指示 + 不可交互中断） ── */
+.dswf-ap-exec {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+  padding: 4px 0 var(--dsw-font-xs-13-line-height); /* dsw-raw 上 4px 官方行刻度 */
+}
+
+.dswf-ap-exec-title {
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 反馈面板（成功/失败同构：徽章行 + 说明 + 尾部动作） ── */
+.dswf-ap-feedback {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+  padding: 4px 0 var(--dsw-font-xs-13-line-height); /* dsw-raw 上 4px 官方行刻度 */
+}
+
+.dswf-ap-feedback-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px; /* dsw-raw 官方行语言 */
+}
+
+.dswf-ap-feedback-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ap-note {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 失败原始原因（RPC message——弱化呈现，归类与处置说明为主） */
+.dswf-ap-raw {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ap-feedback-foot {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+}

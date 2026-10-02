@@ -131,7 +131,7 @@
         "2.4",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.10-add-project-flow.md",
       "record": "records/2.10-add-project-flow.md",
       "surface-type": "web",

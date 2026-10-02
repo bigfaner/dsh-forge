@@ -55,6 +55,17 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
     }
   })
 
+  it('项目区「＋」入口在场（UF-3 流程打开缝接线——槽位层绑定 openAddProjectFlow）', () => {
+    Date.now = () => NOW
+    try {
+      const markup = renderSlot(ledger([]))
+      expect(markup).toContain('data-dswf-nav="add-project"')
+      expect(markup).toContain('aria-label="添加项目"')
+    } finally {
+      Date.now = realDateNow
+    }
+  })
+
   it('rail 态：owner share wide=false 透传（壳收展机制继承）', () => {
     const markup = renderToStaticMarkup(
       <ForgeSidebarSlot

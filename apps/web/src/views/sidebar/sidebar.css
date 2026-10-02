@@ -59,11 +59,42 @@
   padding: 4px 8px var(--dsw-font-xs-13-line-height); /* dsw-raw 上/右 4px 8px 官方行刻度；底 20px 行高刻度 */
 }
 
-.dswf-sidebar-sectionlabel {
+.dswf-sidebar-sectionhead {
+  display: flex;
   flex: none;
-  padding: 2px 8px 4px; /* dsw-raw 官方 section 头刻度 */
+  align-items: center;
+  gap: 4px; /* dsw-raw 官方行内刻度 */
+  padding: 2px 0 4px 0; /* dsw-raw 官方 section 头刻度 */
+}
+
+.dswf-sidebar-sectionlabel {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px; /* dsw-raw 官方 section 头刻度 */
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* 「＋」添加项目入口（UF-3 流程入口——图标钮，行语言 hover 同官方） */
+.dswf-sidebar-add {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px; /* dsw-raw 官方行内小钮刻度 */
+  height: 26px; /* dsw-raw 官方行内小钮刻度 */
+  box-sizing: border-box;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dswf-sidebar-add:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 /* 项目块（官方 DisclosureRow 承载行本体——此处只补归档弱化与空项目占位） */

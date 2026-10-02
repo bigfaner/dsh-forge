@@ -47,6 +47,16 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
     expect(markup).toContain('知识库')
   })
 
+  it('项目区「＋」添加入口在场（UF-3 入口接线点——回调出，触发归槽位接线层）', () => {
+    const withEntry = panel({ onAddProject: () => {} })
+    expect(withEntry).toContain('data-dswf-nav="add-project"')
+    expect(withEntry).toContain('aria-label="添加项目"')
+  })
+
+  it('「＋」入口缺席容忍（onAddProject 未注入 = 不呈现——纯展示件零缺省动作）', () => {
+    expect(panel({ onAddProject: undefined })).not.toContain('data-dswf-nav="add-project"')
+  })
+
   it('项目节点（官方 DisclosureRow 形态）+ 会话行四件：状态点/标题/相对时间/选中', () => {
     expect(markup).toContain('data-dswf-project="p1"')
     expect(markup).toContain('data-disclosure-row')

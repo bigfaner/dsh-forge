@@ -10,6 +10,7 @@ import {
   DisclosureRow,
   IconDeliverDocRegular,
   IconFolderCloseRegular,
+  IconPlusOutlineRegular,
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -43,6 +44,8 @@ export interface ForgeWorkspacePanelProps {
   readonly projectsError?: string
   /** 知识库入口回调（视图切换 show-knowledge——AC3） */
   readonly onOpenKnowledge?: () => void
+  /** 「＋」添加项目入口（UF-3 流程打开缝——槽位层绑定 openAddProjectFlow；缺席 = 不呈现） */
+  readonly onAddProject?: () => void
   /** 会话行回调（打开会话 + select-session——AC5） */
   readonly onSessionActivate?: (sessionId: string) => void
   /** 项目列表重试（错误条相位） */
@@ -166,6 +169,7 @@ export function ForgeWorkspacePanel({
   hasProjects,
   projectsError,
   onOpenKnowledge,
+  onAddProject,
   onSessionActivate,
   onRetryProjects,
   now,
@@ -208,7 +212,21 @@ export function ForgeWorkspacePanel({
         <KnowledgeEntry onClick={onOpenKnowledge} />
       </div>
       <div className="dswf-sidebar-projects">
-        <div className="dswf-sidebar-sectionlabel">项目</div>
+        <div className="dswf-sidebar-sectionhead">
+          <div className="dswf-sidebar-sectionlabel">项目</div>
+          {onAddProject === undefined ? null : (
+            <button
+              type="button"
+              className="dswf-sidebar-add"
+              data-dswf-nav="add-project"
+              aria-label="添加项目"
+              title="添加项目"
+              onClick={onAddProject}
+            >
+              <IconPlusOutlineRegular size={16} />
+            </button>
+          )}
+        </div>
         {projectsError !== undefined ? (
           <div className="dswf-sidebar-error" data-dswf-error role="alert">
             <span>项目列表加载失败</span>
