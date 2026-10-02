@@ -16,6 +16,9 @@ export interface IndexReport {
 /** search 入参（域前缀可选，省略 = 全域） */
 export interface SearchQuery {
   projectId: string
+  /** dsh 会话 id（recall_logs tab 分组键；插件 3.4 从会话上下文解析传入——ER session_id NOT NULL / DF004。
+   *  缺省空串 = 无会话上下文（不进任何会话 tab）。 */
+  sessionId?: string
   /** 域前缀（目录路径前缀匹配） */
   domainPrefix?: string
   /** 关键词细分（keywords 维度） */
@@ -39,6 +42,8 @@ export interface SearchHit {
 /** readAbstract 入参 */
 export interface ReadAbstractQuery {
   projectId: string
+  /** dsh 会话 id（同 SearchQuery.sessionId——recall_logs tab 分组键） */
+  sessionId?: string
   entryId: number
 }
 
@@ -122,6 +127,8 @@ export interface RecallQuerySnapshot {
   domainPrefix?: string
   keywords?: string[]
   text?: string
+  /** read-abstract 动词的调用参数（search 行不带） */
+  entryId?: number
 }
 
 /** 召回分组行内的单条命中展开（快照字段抗索引重建） */
