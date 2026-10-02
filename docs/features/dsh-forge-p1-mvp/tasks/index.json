@@ -444,7 +444,7 @@
         "3.3",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.5-rpc-knowledge.md",
       "record": "records/3.5-rpc-knowledge.md",
       "surface-type": "web",

@@ -1,5 +1,5 @@
 // 任务 3.3 装配收口测试 —— service.ts 插件注册 ctx.forgeKnowledge 双服务面完整
-// （Interface 2 逐项对齐：七法齐全 + 装配后端到端冒烟——含 listEntries 静默重建路径）。
+// （Interface 2 逐项对齐：七法齐全 + 3.5 browse 聚合法 + 装配后端到端冒烟——含 listEntries 静默重建路径）。
 // 形态：CoreContextFace 结构化桩（provide 记账）+ registry 桩（知识域冒烟不经注册链路，
 // projects 行经第二连接直插——注册链路归 forge 域 2.2 已测）。
 import { randomUUID } from 'node:crypto'
@@ -48,7 +48,7 @@ function startPlugin(home: string): { services: Map<string, unknown>; dispose: (
   return { services, dispose }
 }
 
-it('ctx.forgeKnowledge 双服务面完整：与 Interface 2 逐项对齐（七法精确）', () => {
+it('ctx.forgeKnowledge 双服务面完整：Interface 2 七法 + 3.5 browse 聚合法（八法精确）', () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
   dirs.push(home)
   const { services, dispose } = startPlugin(home)
@@ -56,7 +56,7 @@ it('ctx.forgeKnowledge 双服务面完整：与 Interface 2 逐项对齐（七�
     expect([...services.keys()].sort()).toEqual(['forgeKnowledge', 'forgeProjects']) // 双服务面
     const knowledge = services.get('forgeKnowledge') as KnowledgeService
     expect(Object.keys(knowledge).sort()).toEqual([
-      'getEntryDetail', 'heatByEntry', 'listEntries', 'readAbstract',
+      'browse', 'getEntryDetail', 'heatByEntry', 'listEntries', 'readAbstract',
       'rebuildIndex', 'search', 'sessionRecall',
     ])
   } finally {

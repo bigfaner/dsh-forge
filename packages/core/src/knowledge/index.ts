@@ -36,6 +36,8 @@ export {
   aggregateDomainTree,
   createKnowledgeBrowseService,
   recallStats,
+  type BrowseQuery,
+  type KnowledgeBrowseFace,
   type KnowledgeBrowseService,
   type KnowledgeBrowseServiceDeps,
 } from './browse-service.js'

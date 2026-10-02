@@ -145,6 +145,19 @@ describe('listEntries 过滤语义（AC1·UF-6）', () => {
     }
   })
 
+  it('3.5 browse 聚合法 = listEntries 底表 × aggregateDomainTree（通道 handler 本体；经静默重建路径）', async () => {
+    const f = fixture() // 不预建索引 → browse 复用 listEntries 静默重建联动（底表口径不漂移）
+    const svc = createKnowledgeBrowseService({ db: f.db })
+    const tree = await svc.browse({ projectId: f.projectId })
+    expect(tree).toEqual([
+      { domainPath: '前端', label: '前端', depth: 1, entryCount: 2 },
+      { domainPath: '后端', label: '后端', depth: 1, entryCount: 3 },
+      { domainPath: '编程', label: '编程', depth: 1, entryCount: 1 }, // 含子域（编程/java）
+      { domainPath: '编程/java', label: 'java', depth: 2, entryCount: 1 },
+    ]) // depth 升序再 domainPath 升序（父先于子）
+    expect(keyLogsOf(f.db).at(-1)).toMatchObject({ level: 'warn', scope: 'index' }) // 底表走 listEntries 静默重建
+  })
+
   it('热度徽章数据与 heatByEntry 同源（search 后卡片 heat = 事件计数；未召回条目 = 0）', async () => {
     const f = fixture({ rebuild: true })
     const recall = createKnowledgeRecallService({ db: f.db })

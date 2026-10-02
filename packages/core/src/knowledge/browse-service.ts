@@ -1,4 +1,5 @@
-// 知识域浏览查询服务（3.3：listEntries / getEntryDetail / sessionRecall）。定位：业务。
+// 知识域浏览查询服务（3.3：listEntries / getEntryDetail / sessionRecall；3.5：browse 域树聚合
+// ——forge:knowledge/browse 通道 handler 本体挂接）。定位：业务。
 // 语义（tech-design §Interface 2 + ER KNOWLEDGE_RECALL_LOGS + UF-4/UF-6）：
 // · listEntries = 索引缓存直读（title/summary/keywords/status/domainPath）+ 事件热度 join
 //   （heatByEntry 同口径单表计数）+ updated 展示位按需读文件（frontmatter.updated 缺省 mtime；
@@ -43,8 +44,19 @@ export interface KnowledgeBrowseServiceDeps {
   indexService?: Pick<KnowledgeIndexService, 'rebuildIndex'>
 }
 
-/** 3.3 服务面：listEntries / getEntryDetail / sessionRecall */
-export type KnowledgeBrowseService = Pick<KnowledgeService, 'listEntries' | 'getEntryDetail' | 'sessionRecall'>
+/** browse 聚合入参（forge:knowledge/browse 通道负载同构——dto/rpc.ts browse 行） */
+export interface BrowseQuery {
+  projectId: string
+}
+
+/** 3.5 browse 聚合面（通道 handler 本体）：listEntries 兼作底表 → aggregateDomainTree 域树 */
+export interface KnowledgeBrowseFace {
+  browse(q: BrowseQuery): Promise<DomainNode[]>
+}
+
+/** 3.3 服务面 + 3.5 browse 聚合：listEntries / getEntryDetail / sessionRecall / browse */
+export type KnowledgeBrowseService = Pick<KnowledgeService, 'listEntries' | 'getEntryDetail' | 'sessionRecall'> &
+  KnowledgeBrowseFace
 
 // ── 纯函数：域树聚合（forge:knowledge/browse 消费） ──
 
@@ -235,37 +247,43 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     }
   }
 
+  /** listEntries 本体（browse 聚合与通道面共用同一实现——底表口径不漂移） */
+  const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
+    requireProject(q.projectId, 'listEntries')
+
+    let rows = selectRows(q)
+    if (rows.length === 0) {
+      await rebuildMissingIndex(q.projectId) // 零行 = 索引缺失 → 静默重建联动（进面板按需重建）
+      rows = selectRows(q) // 空目录重建后仍零行 = 合法空结果
+    }
+
+    const keyword = q.keyword?.trim().toLowerCase() ?? ''
+    const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
+    const knowledgeDir = selectKnowledgeDir.get(q.projectId)!.knowledge_dir
+
+    return rows
+      .filter((row) => {
+        if (keyword === '') return true // 关键词细分 = keywords 维度（大小写不敏感子串）
+        const keywords = JSON.parse(row.keywords) as string[]
+        return keywords.some((k) => k.toLowerCase().includes(keyword))
+      })
+      .map((row) => ({
+        entryId: row.id,
+        title: row.title,
+        summary: row.summary,
+        keywords: JSON.parse(row.keywords) as string[],
+        status: row.status,
+        domainPath: row.domain_path,
+        updated: readCardUpdated(knowledgeDir, row),
+        heat: heatByEntry.get(row.id) ?? 0, // 热度徽章 = 使用事件计数（heatByEntry 同源单表）
+      }))
+  }
+
   return {
-    async listEntries(q: ListEntriesQuery): Promise<KnowledgeCard[]> {
-      requireProject(q.projectId, 'listEntries')
+    /** 3.5：域树聚合（forge:knowledge/browse handler 本体）——listEntries 全域底表 → 纯函数聚合 */
+    browse: async (q: BrowseQuery): Promise<DomainNode[]> => aggregateDomainTree(await listEntries({ projectId: q.projectId })),
 
-      let rows = selectRows(q)
-      if (rows.length === 0) {
-        await rebuildMissingIndex(q.projectId) // 零行 = 索引缺失 → 静默重建联动（进面板按需重建）
-        rows = selectRows(q) // 空目录重建后仍零行 = 合法空结果
-      }
-
-      const keyword = q.keyword?.trim().toLowerCase() ?? ''
-      const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
-      const knowledgeDir = selectKnowledgeDir.get(q.projectId)!.knowledge_dir
-
-      return rows
-        .filter((row) => {
-          if (keyword === '') return true // 关键词细分 = keywords 维度（大小写不敏感子串）
-          const keywords = JSON.parse(row.keywords) as string[]
-          return keywords.some((k) => k.toLowerCase().includes(keyword))
-        })
-        .map((row) => ({
-          entryId: row.id,
-          title: row.title,
-          summary: row.summary,
-          keywords: JSON.parse(row.keywords) as string[],
-          status: row.status,
-          domainPath: row.domain_path,
-          updated: readCardUpdated(knowledgeDir, row),
-          heat: heatByEntry.get(row.id) ?? 0, // 热度徽章 = 使用事件计数（heatByEntry 同源单表）
-        }))
-    },
+    listEntries,
 
     async getEntryDetail(q): Promise<EntryDetail> {
       requireProject(q.projectId, 'getEntryDetail')

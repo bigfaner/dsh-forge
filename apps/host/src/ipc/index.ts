@@ -2,6 +2,7 @@
 export * from './boot-channel.js'
 export * from './forge-channels.js'
 export * from './fs-rpc.js'
+export * from './knowledge-rpc.js'
 export * from './preload-api.js'
 export * from './projects-rpc.js'
 export * from './rpc-envelope.js'
