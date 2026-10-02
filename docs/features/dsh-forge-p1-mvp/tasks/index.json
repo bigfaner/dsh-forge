@@ -509,7 +509,7 @@
         "3.4",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.9-g1-pin-m1.md",
       "record": "records/3.9-g1-pin-m1.md",
       "surface-type": "web",

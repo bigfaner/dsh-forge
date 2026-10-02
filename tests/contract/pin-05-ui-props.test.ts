@@ -1,4 +1,5 @@
-// G1 pin ⑤（S2 清单处置）：官方 ui-* props——逐项入池或显式记残留（任务 2.13 AC3，供 3.9 收口）。
+// G1 pin ⑤（S2 清单处置）：官方 ui-* props——逐项入池或显式记残留（任务 2.13 AC3；
+// 残留清单已于任务 3.9 收口，见下方「3.9 收口」台账）。
 // 权威：tech-design Appendix 契约面清单第 5 项 + S2 清点（spikes/s2-web-shell-inventory.md §2/§3）。
 //
 // ── 已入池（本文件 + pin-03）───────────────────────────────────────────────────
@@ -13,15 +14,24 @@
 // ⑤ ui-dockkit：零 cordis 静态库（无 dsh.client 声明——非 boot 插件，web 锚构建期消费）
 // （S2 残留 #1 sidebar 槽位 props 已由 pin-03 入池——处置完成）
 //
-// ── 残留（显式列出，供 3.9 收口）─────────────────────────────────────────────
-// R1 ui-chat/ui-conversation 服务级 cordis inject 清单（['slots','sessions','fileUpload',…]——
-//    运行期注册面，无随包分发稳定文本锚）→ e2e/dogfood 验证（S2 §4#2 同处置）
-// R2 uiConversation.binding().target() 快照通道 + ConversationViewDefinition 组装线（运行期服务
-//    面）→ 2.11 消费时经 e2e 断言，或升级窗展开 types 后再入池
-// R3 ui-theme 8 张样式表清单与 installThemeStyles 注入细节（内部配置）→ e2e 已断言
-//    style[data-plugin] 激活面（S2 §1），清单枚举不 pin（防脆断）
-// R4 ConversationTimelineSnapshot / ConversationTurnDataMap 深层 wire 形状 → 2.11 按需（S2 §4#5）
-// R5 HMR 全图 sync / locale 面细节 → S2 §4#3/#4（观察项 / 2.x 随需）
+// ── 3.9 收口（Open Question ① 全量处置记录：入池 / 显式豁免及理由）───────────────
+// R1 → 入池（⑤-7）：四包 apply 级运行期 inject 数组——lib/client.js 保留源注释
+//      「Services required by … plugin」与 `inject = [...]` 字面量（稳定锚；S2 期
+//      「无随包分发稳定文本锚」判定修正）；含 dsh.client 包级清单（⑤-2~⑤-5）未见的
+//      运行期服务名（remote / remote.session / sidebarRight / configForms）。
+// R2 → 入池（⑤-8）：uiConversation 快照通道类型面——assembly.d.ts（ConversationBinding
+//      4 成员 + UiConversation extends Service + binding 签名）+ index.d.ts（Context 双属性行
+//      conversation + uiConversation——S2 §2.2「ctx.uiConversation」单属性表述修正）+
+//      ConversationViewSnapshotMap chat/trajectory 行 + ChatSnapshot 成员集（S2 期
+//      「运行期服务面、无随包 types」判定修正——types 实随包分发）。
+// R3 → 显式豁免：ui-theme 8 张样式表清单枚举 = 插件内部配置（e2e 已断言
+//      style[data-plugin] 激活面，S2 §1）；逐张枚举 pin 属内部实现细节（Hard Rule 防脆断）。
+// R4 → 显式豁免：ConversationTimelineSnapshot / ConversationTurnDataMap 深层 wire 形状——
+//      2.11 终裁形态 (a)（自有 views/session 三 tab 组装，数据源 = forge:knowledge/* RPC），
+//      P1 无逐行轨迹渲染消费方；轨迹级契约已由 ⑤-4（TrajectorySnapshot/贡献 8 类）入池。
+// R5 → 显式豁免：HMR 全图 sync = client-hmr 置停（profile cordis.patch.yml disabled——产品
+//      组合静态，P1 无热替换面，重启/刷新即重掌舵）；locale 面细节（LocaleNamespaceMap 扩展
+//      等）2.x 视图任务未消费，随需入池（S2 §4#3/#4 处置维持）。
 import { describe, expect, it } from 'vitest'
 import {
   dshClientDecl,
@@ -226,5 +236,126 @@ describe('pin ⑤-6 ui-dockkit（S2 §2.5：零 cordis 静态库——非 boot �
     const pkg = upstreamPkg('web', '@deepseek-ai/dsh-client-ui-dockkit')
     expect(pkg['dsh']).toBeUndefined() // 非 boot 插件：不进 boot manifest 组合装载
     expect(pkg['dependencies']).toBeUndefined() // 零运行时依赖（静态库）
+  })
+})
+
+// ── 3.9 M1 批：R1/R2 收口入池（处置台账见文件头）──────────────────────────────
+
+/** 提取 client bundle 内全部 `inject = [...]` 数组字面量（apply 级运行期依赖清单） */
+function bundleInjectArrays(name: string): string[][] {
+  const text = readUpstream('profile', name, 'lib/client.js')
+  return [...text.matchAll(/inject = \[\s*((?:"[^"]+"\s*,?\s*)*)\]/g)].map((m) =>
+    [...(m[1] ?? '').matchAll(/"([^"]+)"/g)].map((x) => x[1] as string),
+  )
+}
+
+/** 提取 interface 成员名集合（属性 + 方法 + 泛型方法行——interfaceMembers 的方法面本地扩展） */
+function faceMembers(rawTypes: string, interfaceName: string): string[] {
+  const block = rawTypes.match(new RegExp(`export interface ${interfaceName} \\{\\n([\\s\\S]*?)\\n\\}`))?.[1]
+  expect(block, `d.ts 未找到 export interface ${interfaceName}`).toBeTruthy()
+  const members = new Set<string>()
+  for (const line of (block ?? '').split('\n')) {
+    const m = line.match(/^ {4}(?:readonly )?([A-Za-z_$][\w$]*)\??\s*[(:<]/)
+    if (m) members.add(m[1] as string)
+  }
+  return [...members].sort()
+}
+
+/** ConversationViewSnapshotMap 模块增强块内验行（块内 JSDoc 行不受影响——按原始文本提取） */
+function snapshotMapRow(rawTypes: string, row: string): boolean {
+  // 基声明（ui-conversation 自有 contract）为空块且闭括无缩进；增强块闭括 4 空格缩进——二分锚定
+  const block = rawTypes.match(/interface ConversationViewSnapshotMap \{([\s\S]*?)\n    \}/)?.[1]
+  return block !== undefined && block.includes(`${row};`)
+}
+
+describe('pin ⑤-7 R1 收口：apply 级运行期 inject 数组（bundle 注释锚「Services required by」）', () => {
+  it('ui-chat：10 服务（dsh.client 包级 11 包之外——运行期服务名含 remote.session / sidebarRight）', () => {
+    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-chat')).toContainEqual([
+      'slots',
+      'sessions',
+      'uiWorkspace',
+      'uiSession',
+      'uiConversation',
+      'locale',
+      'configForms',
+      'remote',
+      'remote.session',
+      'sidebarRight',
+    ])
+  })
+
+  it('ui-conversation：7 服务（S2 §2.2 服务注入面原清单）', () => {
+    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-conversation')).toContainEqual([
+      'slots',
+      'sessions',
+      'fileUpload',
+      'uiSession',
+      'uiWorkspace',
+      'locale',
+      'configForms',
+    ])
+  })
+
+  it('ui-trajectory：5 服务（无自有服务，仅官方注入面）', () => {
+    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-trajectory')).toContainEqual([
+      'slots',
+      'sessions',
+      'uiSession',
+      'uiConversation',
+      'locale',
+    ])
+  })
+
+  it('ui-theme：4 服务（令牌供体的注册期依赖）', () => {
+    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-theme')).toContainEqual([
+      'slots',
+      'locale',
+      'remote',
+      'configForms',
+    ])
+  })
+})
+
+describe('pin ⑤-8 R2 收口：uiConversation 快照通道类型面（binding().target() 数据源契约）', () => {
+  const assembly = readUpstream('profile', '@deepseek-ai/dsh-client-ui-conversation', 'lib/types/client/conversation/assembly.d.ts')
+  const clientIndex = readUpstream('profile', '@deepseek-ai/dsh-client-ui-conversation', 'lib/types/client/index.d.ts')
+  const chatSnapshot = readUpstream('profile', '@deepseek-ai/dsh-client-ui-chat', 'lib/types/client/contract/snapshot.d.ts')
+  const trajectoryContract = readUpstream(
+    'profile',
+    '@deepseek-ai/dsh-client-ui-trajectory',
+    'lib/types/client/trajectory-contract.d.ts',
+  )
+
+  it('ConversationBinding 成员集 = {snapshot, openTurn, activate, target}（会话绑定快照通道）', () => {
+    expect(faceMembers(assembly, 'ConversationBinding')).toEqual(['activate', 'openTurn', 'snapshot', 'target'])
+  })
+
+  it('UiConversation extends Service + binding(source) 签名（root 服务官方注册径）', () => {
+    const types = norm(assembly)
+    expect(types).toContain('UiConversation extends Service')
+    expect(types).toContain('binding(source: SessionBinding | SessionId): ConversationBinding')
+  })
+
+  it('Context 双属性行：conversation（动作面）+ uiConversation（装配面）——S2 单属性表述修正', () => {
+    const types = norm(clientIndex)
+    expect(types).toContain("conversation: import('./service.ts').IConversation;")
+    expect(types).toContain("uiConversation: import('./conversation/assembly.ts').UiConversation;")
+  })
+
+  it('ConversationViewSnapshotMap 双行：chat: ChatSnapshot（ui-chat 扩展）+ trajectory: TrajectorySnapshot（ui-trajectory 扩展）', () => {
+    // 增强块内含 JSDoc 行——按块提取后验行（norm 压缩会被注释残片干扰）
+    expect(snapshotMapRow(chatSnapshot, 'chat: ChatSnapshot'), 'ui-chat 扩展 chat 行').toBe(true)
+    expect(snapshotMapRow(trajectoryContract, 'trajectory: TrajectorySnapshot'), 'ui-trajectory 扩展 trajectory 行').toBe(true)
+  })
+
+  it('ChatSnapshot 成员集 = 6（order/nodes/locations/navigation/timeline/legacy——S2 §2.1 转录数据源）', () => {
+    expect(interfaceMembers(chatSnapshot, 'ChatSnapshot')).toEqual([
+      'legacy',
+      'locations',
+      'navigation',
+      'nodes',
+      'order',
+      'timeline',
+    ])
   })
 })
