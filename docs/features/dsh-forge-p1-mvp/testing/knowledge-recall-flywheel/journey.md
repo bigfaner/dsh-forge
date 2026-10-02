@@ -1,0 +1,154 @@
+---
+feature: "dsh-forge-p1-mvp"
+journey: "knowledge-recall-flywheel"
+risk_level: "High"
+golden_path: true
+surface_types: ["web"]
+surface_keys: ["web"]
+sources:
+  - docs/features/dsh-forge-p1-mvp/prd/prd-user-stories.md
+  - docs/features/dsh-forge-p1-mvp/prd/prd-spec.md
+  - docs/features/dsh-forge-p1-mvp/prd/prd-ui-functions.md
+  - docs/proposals/dsh-forge-p1-mvp/proposal.md
+generated: "2026-10-03"
+---
+
+# Journey: knowledge-recall-flywheel
+
+**Risk Level**: High
+
+<!-- Risk Classification Criteria:
+  High   = Workflow involves state mutation, data loss risk, or irreversible operations
+  Medium = Workflow involves multi-step interaction without irreversible side effects
+  Low    = Workflow is read-only or purely observational
+-->
+
+## Overview
+
+知识飞轮第一圈端到端（Golden Path）：注册项目 → 发起真实 dsh 会话（系统提示词含最简知识段）→ 提出项目问题 → agent 依指引自主完成 agentic search 多步检索链（search → read-abstract）→ 回答基于命中知识呈现 → 使用事件落状态层、会话知识召回 tab 出现条目 → 知识卡片热度 +1——「哪些知识在哪些会话被用了」可见，飞轮第一圈转起来。
+
+**PRD 溯源**: Story 4（全部 3 条 AC：系统提示词知识段 / agentic search 多步链 / 使用事件与召回 tab 与热度一致）+ Story 1 happy path（注册段）+ Story 2 第 1 条 AC（真实往返段）+ Story 3 第 3 条 AC（热度一致段）；流程三与召回飞轮流 Mermaid（prd-spec）；UF-4（知识召回 tab）、UF-6（卡片热度）；提案 Key Scenario「召回飞轮（核心）」「MVP 门走查」、SC10（召回核心子集）、SC-MVP 前半（6 步链不间断演示）。
+
+## Setup
+
+- 目标项目的工作区目录就位，其知识库目录（`<工作区>/.knowledge`）含分域组织的前端域 / 后端域知识文件（frontmatter 合规，前端域存在与待问问题相关的知识条目）
+- dsh 会话运行时可用（模型 API 凭证归 dsh profile 域，产品不经手）
+- 应用处于零项目状态（本 Journey 从注册开始走全链）
+
+## Happy Path
+
+### Step 1: 注册项目（含知识库目录）
+
+**User Action**: hero 空态 → 添加项目两段式流程，选定工作区目录（知识库目录取默认 `<工作区>/.knowledge`），注册表单点「确认」
+
+**Expected Result**: 注册成功，左栏出现项目与 dsh 会话列表；项目知识目录被解析进应用侧索引（可重建缓存）
+
+### Step 2: 发起真实 dsh 会话
+
+**User Action**: 点「新会话」按钮建立会话
+
+**Expected Result**: 会话建立，其系统提示词含最简知识段——知识库存在声明、召回流程指引（遇项目问题先 search 相应域、摘要先行、按需 read-abstract）与工具说明
+
+### Step 3: 提出前端域项目问题
+
+**User Action**: 在对话 tab 以自然语言提出一个前端域的项目问题
+
+**Expected Result**: agent 依知识段指引决定检索路径——用户无需指定域或工具，agent 依问题自主选域
+
+### Step 4: agent 自主完成多步检索链（agentic search）
+
+**User Action**: 将问题交由 agent 处理（agent 经知识插件召回 tool 自主编排检索）
+
+**Expected Result**: agent 自主完成 `search`（选前端域前缀 + 关键词细分）→ 命中知识 → `read-abstract` 读摘要的多步检索链；检索链可在「轨迹」tab 观察为工具调用时序
+
+### Step 5: 回答基于命中知识呈现
+
+**User Action**: 等待 agent 完成回答
+
+**Expected Result**: 回答呈现于对话 tab 且内容基于命中知识；会话继续可用（可继续追问）
+
+### Step 6: 查看会话知识召回 tab
+
+**User Action**: 切到会话「知识召回」页签
+
+**Expected Result**: 统计头（召回次数 / 覆盖条数）与该知识的分组行（动词明细 / 最近时间 / 热度徽章）呈现；条目与状态层使用事件数据一致
+
+### Step 7: 验证知识卡片热度闭环
+
+**User Action**: 左栏进入「知识库」浏览视图，查看该命中知识的卡片
+
+**Expected Result**: 卡片热度较召回前 +1，数字与使用事件计数一致（热度与召回 tab 同源）
+
+## Edge Cases
+
+### Step 2b: 项目未配置知识目录的会话
+
+**Precondition**: 项目知识目录未配置（或目录为空）
+
+**User Action**: 建立新会话并发起对话
+
+**Expected Result**: 会话正常可用（不报错）；系统提示词不含知识段（无知识库可召回），agent 直接走常规检索原语
+
+### Step 4b: search 域前缀过滤正确性
+
+**Precondition**: 知识库同时存在前端域与后端域知识条目
+
+**User Action**: 以「前端」域前缀发起 search 查询
+
+**Expected Result**: 前端域查询不返回后端域条目——域前缀过滤正确，命中集只含前端域知识
+
+### Step 4c: 域前缀省略 = 全域检索
+
+**Precondition**: agent 依问题性质判断无需限定域（省略域前缀参数）
+
+**User Action**: 发起不带域前缀的 search 查询
+
+**Expected Result**: 检索跨全域进行，命中不受域限制；域选择是 agent 自主决策而非用户指定
+
+### Step 4d: search 无命中时转常规检索
+
+**Precondition**: 知识库中不存在与问题相关的知识
+
+**User Action**: agent 完成 search 后未获命中
+
+**Expected Result**: agent 转常规检索原语（grep / glob 等）继续处理，回答正常完成不阻塞、不出错；无使用事件落库（未发生召回）
+
+### Step 4e: read-abstract 摘要先行（正文不整段注入）
+
+**Precondition**: 命中知识的正文较长（超出 token 预算极简值）
+
+**User Action**: agent 对命中知识执行 read-abstract
+
+**Expected Result**: 默认返回摘要而非整段正文——token 预算受控，agent 按需决定是否继续读取
+
+### Step 6b: 本会话暂无召回占位
+
+**Precondition**: 会话尚未发生任何知识召回
+
+**User Action**: 切到「知识召回」页签
+
+**Expected Result**: 呈现「本会话暂无召回」占位（不报错、无空列表）
+
+### Step 6c: 召回条目跳转知识详情
+
+**Precondition**: 召回 tab 存在分组行条目
+
+**User Action**: 点一条知识分组行
+
+**Expected Result**: 跳转打开对应知识详情抽屉（UF-6）；若索引未命中该知识（已被外部删除），行级失效标注，不阻塞列表其它条目
+
+### Step 7b: 事件即时累积
+
+**Precondition**: 同一会话中已发生过一次召回（tab 已有条目）
+
+**User Action**: 发送新消息触发新一次召回，再查看召回 tab 与卡片热度
+
+**Expected Result**: 新召回发生后召回 tab 条目即时累积、对应卡片热度再 +1；全部数字与使用事件表保持一致
+
+## Journey Invariants
+
+- 每次召回于执行点记一次使用事件（事件表可查）；会话知识召回 tab、卡片热度与事件计数同源一致
+- 检索原语与 grep / glob 同位：agent 自主编排多步检索（agentic search），无应用侧检索管线
+- read-abstract 默认摘要先行——正文不整段注入
+- 应用对代码仓、文档位置与知识目录零写入（只读纪律）；使用事件只落应用状态层
+- 会话三页签（对话 / 轨迹 / 知识召回）切换不重置会话状态
