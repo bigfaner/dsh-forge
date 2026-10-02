@@ -3,6 +3,7 @@
 // 会话锚跟随 / 项目数拉取）经纯发布函数与相位机语义覆盖，实机行为归 e2e（workbench-sc1.spec）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ProjectSummary } from '@dsh-forge/contracts'
 import { createShellViewState, dispatchShellView, type ShellViewState } from '../shell/view-state.js'
 import type { ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
 import { globalDockTab } from '../zones/dock.js'
@@ -10,6 +11,7 @@ import {
   chatKitOf,
   ForgeWorkbenchPanel,
   nextLastReadyCount,
+  projectAnchorOf,
   sessionAnchorEvent,
   sessionZonePhase,
   WorkbenchAssembly,
@@ -50,6 +52,7 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
         view={view()}
         phase={phase}
         chatSurface={<b data-t="chat" />}
+        knowledge={<b data-t="knowledge" />}
         dockTabs={dockTabs}
         onToggleDock={() => {}}
         onAddProject={() => {}}
@@ -73,15 +76,19 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
     expect(markup).toContain('aria-label="展开右侧栏"')
     expect(markup).not.toContain('data-dswf-hero')
   })
+  it('session 相位：召回 tab 注入位落在召回 pane（3.8 装配产物）', () => {
+    const markup = render('session', { recall: <b data-t="recall" /> })
+    expect(markup).toContain('data-t="recall"')
+  })
   it('settling 相位：校平位（aria-busy），无 hero 无会话面板', () => {
     const markup = render('settling')
     expect(markup).toContain('data-dswf-settling')
     expect(markup).not.toContain('data-dswf-hero')
     expect(markup).not.toContain('dswf-session-panel')
   })
-  it('知识视图槽 = M0 空态占位（机制已立，浏览面 M1 填入）——任何相位下常挂载', () => {
+  it('知识视图槽 = KnowledgeView 注入（3.8 自 M0 占位填入 UF-6 浏览面）——任何相位下常挂载', () => {
     for (const phase of ['settling', 'hero', 'session'] as const) {
-      expect(render(phase)).toContain('data-dswf-knowledge-m0')
+      expect(render(phase)).toContain('data-t="knowledge"')
     }
   })
   it('dock 相位跟随视图态（收起角钮 ↔ 展开角钮文案）', () => {
@@ -136,6 +143,48 @@ describe('nextLastReadyCount 项目数相位计数（注册成功永久让位的
   })
 })
 
+describe('projectAnchorOf 当前项目锚推导（3.8：知识视图/召回 tab 范围锚）', () => {
+  const project = (id: string, workspaceId: string): ProjectSummary => ({
+    id,
+    workspaceId,
+    name: `项目 ${id}`,
+    wsPath: `Z:\\ws\\${id}`,
+    archived: false,
+  })
+  const workspaces = (items: ReadonlyArray<{ workspaceId: string; sessionIds: readonly string[] }>) => ({
+    items,
+  })
+  it('会话锚在场：归属 workspace 名下项目命中', () => {
+    const out = projectAnchorOf({
+      sessionId: 's-1',
+      workspaces: workspaces([{ workspaceId: 'ws-a', sessionIds: ['s-0', 's-1'] }]),
+      projects: [project('p-a', 'ws-a'), project('p-b', 'ws-b')],
+    })
+    expect(out).toBe('p-a')
+  })
+  it('会话未归属任何 workspace / 快照缺席：唯一项目兜底（单人无歧义相位）', () => {
+    const single = [project('p-a', 'ws-a')]
+    expect(projectAnchorOf({ sessionId: 's-x', workspaces: workspaces([]), projects: single })).toBe('p-a')
+    expect(projectAnchorOf({ sessionId: null, workspaces: null, projects: single })).toBe('p-a')
+    expect(projectAnchorOf({ sessionId: null, workspaces: workspaces([{ workspaceId: 'ws-a', sessionIds: [] }]), projects: single })).toBe('p-a')
+  })
+  it('多项目无会话锚/未匹配 = null（不猜首个——浏览与召回面按无锚降级）', () => {
+    const multi = [project('p-a', 'ws-a'), project('p-b', 'ws-b')]
+    expect(projectAnchorOf({ sessionId: null, workspaces: null, projects: multi })).toBeNull()
+    expect(
+      projectAnchorOf({ sessionId: 's-x', workspaces: workspaces([{ workspaceId: 'ws-c', sessionIds: ['s-x'] }]), projects: multi }),
+    ).toBeNull()
+  })
+  it('会话归属 workspace 未注册为项目（裸 workspace 非产品对象）= 不命中该 workspace', () => {
+    const out = projectAnchorOf({
+      sessionId: 's-1',
+      workspaces: workspaces([{ workspaceId: 'ws-bare', sessionIds: ['s-1'] }]),
+      projects: [project('p-a', 'ws-a'), project('p-b', 'ws-b')],
+    })
+    expect(out).toBeNull()
+  })
+})
+
 describe('chatKitOf 官方会话面 kit 组装（缺席降级判据）', () => {
   const hook = () => undefined
   const factory = () => null
@@ -160,7 +209,7 @@ describe('ForgeWorkbenchPanel SSR 面板渲染（效应面零执行——装配�
     expect(markup).toContain('data-dswf-workbench')
     expect(markup).toContain('data-dswf-phase="settling"')
     expect(markup).toContain('data-dswf-settling')
-    expect(markup).toContain('data-dswf-knowledge-m0')
+    expect(markup).toContain('data-dswf-knowledge-view') // 3.8：知识视图槽 = KnowledgeView（M0 占位已替换；settling 相位无会话面板——召回面归 session 相位装配测试）
     expect(markup).toContain('data-dswf-dock="collapsed"')
   })
   it('kit 齐备 + useWorkspaces 在场：面板渲染不炸（SSR 首帧仍校平位——效应面归 e2e；嵌入产物入位见 WorkbenchAssembly/ChatSurface 组）', () => {

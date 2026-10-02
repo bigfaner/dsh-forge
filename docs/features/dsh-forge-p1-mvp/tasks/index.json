@@ -493,7 +493,7 @@
         "3.7",
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.8-knowledge-integration.md",
       "record": "records/3.8-knowledge-integration.md",
       "surface-type": "web",

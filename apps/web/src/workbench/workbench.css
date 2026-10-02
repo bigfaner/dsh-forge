@@ -63,13 +63,6 @@
   margin-top: 8px; /* dsw-raw 原型 hero 动作区间距刻度 */
 }
 
-/* 知识视图 M0 占位（占满知识视图槽） */
-.dswf-knowledge-m0 {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
-
 /* 对话面降级占位（kit 缺席——装配断裂可见不炸壳） */
 .dswf-chat-absent {
   display: flex;

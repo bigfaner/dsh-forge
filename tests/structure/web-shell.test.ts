@@ -264,12 +264,11 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
   })
 })
 
-describe('workbench 工作台装配 pin（2.12）', () => {
-  it('模块面就位：装配面板 + hero 相位 + 知识 M0 占位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel', () => {
+describe('workbench 工作台装配 pin（2.12 + 3.8）', () => {
+  it('模块面就位：装配面板 + hero 相位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel（3.8：知识视图/召回 tab 经 views 注入，M0 占位件已退役）', () => {
     for (const f of [
       'apps/web/src/workbench/WorkbenchPanel.tsx',
       'apps/web/src/workbench/HeroEmpty.tsx',
-      'apps/web/src/workbench/KnowledgeM0.tsx',
       'apps/web/src/workbench/ChatSurface.tsx',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/workbench/workbench.css',
@@ -278,9 +277,13 @@ describe('workbench 工作台装配 pin（2.12）', () => {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/workbench/index.ts')
-    for (const name of ['ChatSurface', 'HeroEmpty', 'KnowledgeM0', 'WorkbenchPanel', 'workbench-bridge']) {
+    for (const name of ['ChatSurface', 'HeroEmpty', 'WorkbenchPanel', 'workbench-bridge']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
+    // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经装配态）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/knowledge/KnowledgeView.tsx')), 'KnowledgeView 缺席').toBe(true)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx')), 'RecallTab 缺席').toBe(true)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts')), 'recall-model 缺席').toBe(true)
   })
 
   it('Hard Rule hero 单一条件：呈现判据唯一落点 sessionZonePhase（正零才 hero），HeroEmpty 零判据零数据源', () => {

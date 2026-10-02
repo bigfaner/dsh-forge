@@ -1,16 +1,18 @@
 # views/session/
 
-定位：**业务** —— UF-4 会话面板三 tab 组装（对话注入面 / 轨迹最简台账 / 召回占位）。填充：2.11。
-边界：禁 import `../knowledge/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦）。
+定位：**业务** —— UF-4 会话面板三 tab 组装（对话注入面 / 轨迹最简台账 / 召回数据面）。填充：2.11 + 3.8（召回 tab 接线）。
+边界：禁 import `../knowledge/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦；召回行跳转抽屉经装配态，`onOpenEntry` 回调由 workbench 注入）。
 
 ## 组成
 
 | 文件 | 职责 |
 |---|---|
-| `SessionPanel.tsx` | 面板组装：顶部三页签（官方 SegmentedTabs）+ 三 tab keep-alive 容器（切换仅 hidden 不卸载——AC-4 草稿/滚动保持机制） |
+| `SessionPanel.tsx` | 面板组装：顶部三页签（官方 SegmentedTabs）+ 三 tab keep-alive 容器（切换仅 hidden 不卸载——AC-4 草稿/滚动保持机制）；`recall` 注入位（3.8 = 装配产物 RecallTab） |
+| `RecallTab.tsx` | 召回 tab 数据面（3.8）：`useSessionRecall` 装载（sessionRecall 单通道；visible 翻转重拉 = AC-4 即时累积）+ `RecallTabBody` 纯渲染（统计头/分组行/失效标注/空态/错误条）+ `mapRecallError`/`fetchSessionRecall` 纯异步面 |
+| `recall-model.ts` | 纯派生层：`recallStatsOf`（统计头口径——次数 = 分组数/覆盖 = 身份键去重，与 core hitIdentity 同口径）+ `recallRowsOf`（按知识折叠行——动词明细/最近时间/事件计数/热度原样）+ `recallTimeLabel`（官方 relativeTime 桶化——同级互禁下的平行小件，与 cardTimeLabel 口径互指） |
 | `TrajectoryLedger.tsx` | 轨迹 tab 最简台账（时序列表 + 四类行组件：消息/工具/事件/错误） |
 | `transcript.ts` | 转录视图模型（`TranscriptEntry` 最小消费切片）+ 台账投影（`buildTrajectoryLedger` 纯函数——AC-3 一致性锚） |
-| `session.css` | 面板与台账行样式（全令牌；会话 UI 自绘为零——对话面样式归官方件） |
+| `session.css` | 面板与台账/召回行样式（全令牌；会话 UI 自绘为零——对话面样式归官方件） |
 
 ## 数据契约（props 进出，运行期绑定归装配 2.12）
 
@@ -33,8 +35,11 @@
   | `system` | CompactionSummary / ContextMessage / ModelRetry / TodoItem / UnknownSurface |
 
   wire 判别值 → 语义类的实跑映射归装配层锚定（S2 残留 §4-5：随 2.12 装配实跑入 G1 pin 池，2.13 收口）。
-- **召回 tab**：`recall?: ReactNode` 注入位——P1 缺省占位空态「本会话暂无召回」；3.8 接线
-  `forge:knowledge/sessionRecall`（统计头 + 知识分组行，热度 = 事件计数断言）。
+- **召回 tab**：`recall?: ReactNode` 注入位——3.8 装配产物 = `RecallTab`（`forge:knowledge/sessionRecall`
+  单通道；统计头 = `recallStatsOf`，分组行 = `recallRowsOf` 按知识折叠——动词明细/最近时间/热度徽章
+  原样呈现；`visible` 翻转重拉 = AC-4 即时累积；无会话/项目锚 = 静态空态不拉取；entryId null 行级
+  失效标注不阻塞列表；命中行点击 → `onOpenEntry(entryId)` 装配回调（切知识视图 + 开抽屉））。
+  缺省占位空态「本会话暂无召回」保持为非壳载体/单测面。数据行/热度三方一致实机面 = dogfood（4.2）。
 
 ## 状态语义
 

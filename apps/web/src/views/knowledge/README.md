@@ -1,13 +1,14 @@
 # views/knowledge/
 
-定位：**业务** —— 知识浏览（域树/卡片/抽屉/工具栏）。填充：3.6（浏览主体）/ 3.7（详情抽屉）。
-边界：禁 import `../session/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦）。
+定位：**业务** —— 知识浏览（域树/卡片/抽屉/工具栏/视图装配壳）。填充：3.6（浏览主体）/ 3.7（详情抽屉）/ 3.8（知识视图挂载 + 召回跳转复用）。
+边界：禁 import `../session/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦；召回 tab 跳转经 workbench 装配态注入 `openEntryId`，不直引）。
 
-## 模块面（3.6 浏览主体 + 3.7 详情抽屉）
+## 模块面（3.6 浏览主体 + 3.7 详情抽屉 + 3.8 视图装配壳）
 
 | 文件 | 职责 |
 |---|---|
 | `browse-model.ts` | 纯派生层：过滤态机（`browseFilterReducer`）/ 查询透传（`entriesQueryOf`）/ 网格相位推导（`browseFaceState`）/ 域树行投影（`domainRows`）/ 卡片时间标签（`cardTimeLabel`） |
+| `KnowledgeView.tsx` | 知识视图装配壳（3.8）：`KnowledgeBrowse` + `EntryDrawer` 组合挂 zones 知识槽；`openEntryId` 进出（卡片点击与召回 tab 跳转两入口共用的抽屉打开态——态归 workbench 装配持有）；无项目锚 = 引导空态（`data-dswf-knowledge-view` = 视图在场锚） |
 | `use-knowledge-browse.ts` | 数据装载 hook：`forge:knowledge/browse + listEntries` ∥ `forge:projects/get`（项目名 + 知识目录位置）；过滤重拉 + 竞态守卫（seq）；typed error → `rpcUiState` 三态映射 |
 | `KnowledgeToolbar.tsx` | 工具栏：官方 Input（关键词受控件，Esc 清空）+ 官方 Pill（范围显示——P1 项目级） |
 | `DomainTree.tsx` | 左轨域目录树（~224px）：「全部域」根行 + 聚合节点行（常展开 ≤3 层，自绘领域行吃令牌） |
@@ -40,6 +41,6 @@
 
 ## 残留（按任务依赖序）
 
-- 知识视图槽位挂载（zones slots.knowledge 自 M0 占位填入浏览面）+ 抽屉装配（`onEntryOpen(entryId)` → `EntryDrawer` 态接线）+ UF-4 召回 tab 分组行跳转复用 = 3.8。
-- 实机 e2e（场景④ UI 侧 / 抽屉三区与 AC2 正文区断言 / Esc/✕ 关闭回网格且过滤态保持 / 热度一致性三方断言 / 索引静默重建走查）= 3.8 装配 + 4.2（本任务面 = 模块契约面：纯函数 + 纯异步面 + 全相位静态渲染 + 结构 pin）。
+- ~~知识视图槽位挂载 + 抽屉装配 + UF-4 召回 tab 分组行跳转复用~~ = 3.8 已落地（`KnowledgeView` 挂 zones 知识槽；`openEntryId` 装配态两入口共用——卡片点击 / 召回行跳转经 workbench `openKnowledgeEntry`：切知识视图 + 开抽屉）。
+- 实机 e2e 数据面（真数据卡片/抽屉/热度一致性三方断言/索引静默重建走查）= host 通道装配转正（`knowledge-integration.spec.ts` 组二，SMOKE-LEDGER §5）+ dogfood（4.2）；本任务面 = 模块契约面：纯函数 + 纯异步面 + 全相位静态渲染 + 结构 pin。
 - 域树收合交互、状态 chips 阈值、「从会话抽取」chip、统计/召回日志页签、抽屉动作区（审核/移动/编辑元数据）= M4+（PRD UF-6 排除项）。

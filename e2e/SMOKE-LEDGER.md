@@ -37,7 +37,7 @@
 
 | 原断言（行号） | 原文 | e2e 载体（组一） | 适配记录 |
 |---|---|---|---|
-| L50 | 点「知识库」→ 中区切换为知识视图 | 点 `[data-dswf-nav="knowledge"]` → `[data-dswf-knowledge-m0]` 可见 + `data-dswf-view="knowledge"` | M0 语义：知识视图 = 空态占位断言（任务 AC2 既定口径） |
+| L50 | 点「知识库」→ 中区切换为知识视图 | 点 `[data-dswf-nav="knowledge"]` → `[data-dswf-knowledge-view]` 可见 + `data-dswf-view="knowledge"` | 载体适配（3.8）：M0 占位锚 `data-dswf-knowledge-m0` → M1 浏览面装配壳锚 `data-dswf-knowledge-view`（UF-6 主体 + 抽屉挂载，无项目锚 = 壳内引导空态）——「知识视图在场」断言语义不变 |
 | L51 | 打开不占用右栏(dock 仍收起) | 知识模式下 `[data-dswf-dock="hidden"]` + 切回后恢复 `collapsed` | 载体适配：M0 将原型 `is-collapsed` 单类位细分为 collapsed（会话视图收起）/hidden（知识模式强制）两相位——「右栏不被占用」语义（轨道不可见）不变 |
 | L52 | 右上角两个图标按钮已移除(知识模式无右栏入口) | `.dswf-zones-main` 内可见「展开」入口计数 = 0（负向） | 载体适配：原型钉两个具体图标钮；M0 钉可达面全集（角位钮/轨道钮均不在知识模式可达）——「知识模式无右栏入口」语义不变 |
 | L59 | 会话视图可展开右栏 | session 相位点角位钮 `.dswf-workbench-docktoggle` → expanded；hero 相位桥派发（无角位钮） | 载体适配：原型 `#rb-corner-expand` → M0 会话区角位开关（同位语义） |
@@ -117,7 +117,7 @@
 | L359–L363 | 元数据编辑对话框 + 保存回写 | M6 | |
 | L366–L380 | @ 引用跳会话（当前/新会话 + 输入卡预填） | M7（知识 ↔ 会话联动） | 含 L377/L378「hero 草稿相位」（原型 hero = 会话草稿相位，非 UF-2 首用空态——见 §2 hero 组注记） |
 | L383–L468 | 召回日志页签（轨迹行/动词过滤/详情/成因示例/迁移） | M7 | |
-| L478–L490 | 会话知识召回 tab 内容（激活/统计头/列表/反馈/详情跳转） | M1（3.8 接线）/M7（反馈按钮完整形态） | M0 已有三 tab 占位（组一 L45）；tab 内容接线归 3.8 |
+| L478–L490 | 会话知识召回 tab 内容（激活/统计头/列表/反馈/详情跳转） | M1（3.8 接线）/M7（反馈按钮完整形态） | 3.8 已接线（统计头/分组行/跳转/失效标注——组件面 + 结构/空态 e2e 组一承载，`knowledge-integration.spec.ts`）；数据行与反馈按钮 = 事件数据面（§5 dogfood 4.2）/ M7 |
 | L497–L536 | 会话演示（输入卡/工具行命中卡/发送召回/热度联动/即时入日志） | M7 + dogfood（4.2） | 发送链路 = dogfood 冒烟面（tech-design 会话链路行） |
 | L548–L554 | 审核工作台（队列/合并） | M4 | |
 | L560–L570 | 抽取（入口 chip/对话框/落库） | M4 | |
@@ -143,10 +143,12 @@
 
 | 缺口 | 影响行 | 转正条件 |
 |---|---|---|
-| host 侧 `forge:projects/*` 通道未装配（`apps/host/src/main.ts` 未接 `registerProjectsChannels` + profile `dsh-forge-core` 行 `disabled: true`——2.12 实证，2.14 复核仍在） | hero 组（UF-2 AC）、L814、L820、L766 实机面；L474 产品会话行载体 | host 集成任务：core 插件 bundle 进 profile（vendored 四步链）+ `bootDshHost` 面世 `ctx.forgeProjects` + main.ts 接线——落位后组三自动转正执行（skip 门 = 相位 ≠ hero） |
+| host 侧 `forge:projects/*` 通道未装配（`apps/host/src/main.ts` 未接 `registerProjectsChannels` + profile `dsh-forge-core` 行 `disabled: true`——2.12 实证，2.14 复核仍在；3.8 复核含 `forge:knowledge/*` 同缺口） | hero 组（UF-2 AC）、L814、L820、L766 实机面；L474 产品会话行载体；3.8 组二（注册 → 浏览真数据/抽屉/AC-5 真通道面——`e2e/specs/knowledge-integration.spec.ts`） | host 集成任务：core 插件 bundle 进 profile（vendored 四步链）+ `bootDshHost` 面世 `ctx.forgeProjects` + main.ts 接线（projects + knowledge 两面）——落位后组三与 knowledge-integration 组二自动转正执行（skip 门 = 通道探测拒绝） |
+| 3.8 召回 tab 三方一致（AC-2：事件 ↔ tab ↔ 热度）与即时累积（AC-4）的**事件数据面**无注入通道（事件由 agent 检索链落库——dogfood 面） | L478–L490 数据行（结构/空态面已由 3.8 组一承载）；L497–L536（发送召回/热度联动） | dogfood 走查（4.2，真实模型多步检索链）；UI 侧三方投影一致性（统计头口径/行折叠计数 = 热度）由 `apps/web/src/views/session/recall-model.test.ts` 单测 pin（2026-10-02，3.8） |
 | 官方 `remote.mux` ws 重连 console 噪音 | L824 console 全口径 | host ws 面治理后恢复原型全口径（pageerror + console error） |
 
 ## 6. G2 门接入
 
 - 入口 = `pnpm test:e2e`（`e2e/playwright.config.ts`，globalSetup 前置构建 apps/web dist——幂等重跑）。
 - 骨架组套件 = `e2e/specs/smoke-skeleton.spec.ts`（三用例：组一/组二实机全绿 + 组三条件留痕 skip）；重复跑验证记录见任务 2.14 执行记录。
+- 3.8 集成套件 = `e2e/specs/knowledge-integration.spec.ts`（两用例：组一知识视图/召回 tab 接线实机全绿 + 组二真数据面条件留痕 skip——§5 通道缺口）。

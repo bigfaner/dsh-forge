@@ -174,10 +174,12 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     expect(l3.entryHeight, 'L3·左栏行高 = 官方 projectRow 刻度 h34').toBe(34)
     expect(l3.entryFontSize, 'L3·左栏行字号 = 官方 14px 刻度').toBe('14px')
 
-    // ── 视图互换组（smoke SC5 骨架行；M0 语义：知识视图 = 空态占位）──
-    // L50 点「知识库」→ 中区切换为知识视图
+    // ── 视图互换组（smoke SC5 骨架行；M1 语义：知识视图 = UF-6 浏览面装配壳，3.8）──
+    // L50 点「知识库」→ 中区切换为知识视图（载体适配，台账 #L50：M0 占位锚 data-dswf-knowledge-m0
+    // → M1 浏览面装配壳锚 data-dswf-knowledge-view——「知识视图在场」断言语义不变；
+    // 无项目锚（host 通道前置缺口期）= 壳内引导空态，结构位不变）
     await page.locator('[data-dswf-nav="knowledge"]').first().click()
-    await expect(page.locator('[data-dswf-knowledge-m0]').first()).toBeVisible()
+    await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible()
     await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
     if (phase === 'session') {
       await expect(page.locator('.dswf-session-panel').first()).toBeHidden()
@@ -197,7 +199,7 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     // L66/L474 切回会话视图（载体适配，台账 #12/#99：M0 无产品会话行期 = 桥派发同径转移）
     await bridgeDispatch(page, 'show-session')
     await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-knowledge-m0]').first()).toBeHidden()
+    await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeHidden()
     // （L8 后半：收起态往返知识模式 → 恢复收起——「不占用」的回归面）
     await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
 

@@ -448,3 +448,13 @@
   min-height: 0;
   padding: var(--dsw-font-s-14-line-height);
 }
+
+/* ── 知识视图装配壳（3.8：浏览主体 + 详情抽屉挂载——zones 知识槽占满）── */
+.dswf-kn-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}

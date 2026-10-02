@@ -8,9 +8,8 @@ hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作�
 
 | 文件 | 职责 |
 |---|---|
-| `WorkbenchPanel.tsx` | 装配面板（`main.conversation` 洞位占用者）：`sessionZonePhase` 相位机（Hard Rule hero 单一条件）+ `WorkbenchAssembly` 三区槽位装配（纯渲染）+ 效应面（桥发布 / 官方会话锚跟随 / 项目数三锚重拉）+ UF-3 流程宿主挂载 |
+| `WorkbenchPanel.tsx` | 装配面板（`main.conversation` 洞位占用者）：`sessionZonePhase` 相位机（Hard Rule hero 单一条件）+ `WorkbenchAssembly` 三区槽位装配（纯渲染）+ 效应面（桥发布 / 官方会话锚跟随 / 项目数三锚重拉 / 3.8：`projectAnchorOf` 项目锚推导 + 抽屉打开态 + 召回 tab 激活锚）+ UF-3 流程宿主挂载 |
 | `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「＋添加项目」CTA——官方 Button；零判据零数据源） |
-| `KnowledgeM0.tsx` | 知识视图 M0 空态占位（UF-5 知识视图槽 M0 相位；浏览最小面 M1（3.6）填入） |
 | `ChatSurface.tsx` | 对话 tab 官方会话面嵌入（S2 嵌入配方：`conversation.content` 工厂 variant=embedded × `conversation.session` owner view='chat'——upstream ui-subagent sidebar-chat 同型先例；kit 窄面 + 缺席降级占位） |
 | `workbench-bridge.ts` | 工作台桥发布面（`__DSH_FORGE_WORKBENCH__` 发布侧；读取侧 = views/sidebar/sidebar-actions） |
 | `workbench.css` | 装配样式（容器 = 官方 ConversationRoot 同型几何；hero/校平位/dock 角钮全令牌 + 原型刻度 dsw-raw 注记） |
@@ -20,11 +19,15 @@ hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作�
 - **左栏 rail** = 官方 ui-sidebar 壳（槽位路线 A，2.7：ForgeSidebarSlot 占 `sidebar.workspaces` +
   品牌行内容洞位）——zones rail 槽不注入（空轨），折叠/导航/快捷键白拿。
 - **中区会话视图** = `SessionPanel`（2.11）入 `slots.session`，`chatSurface` = ChatSurface
-  （官方会话面嵌入——转录/输入/草稿/滚动位全官方面自持）。
+  （官方会话面嵌入——转录/输入/草稿/滚动位全官方面自持）；召回 tab（3.8）= `RecallTab`
+  注入（sessionRecall 单通道 + visible 激活重拉锚；命中行点击 → 抽屉打开 + show-knowledge）。
 - **hero 相位（UF-2）** = 项目数 **正零** 时中区替换呈现（Hard Rule：仅由项目数驱动，单一条件；
   注册成功即永久让位——P1 无项目删除、archived 随行计数不回落）。CTA → `openAddProjectFlow()`。
-- **知识视图** = `KnowledgeM0` 入 `slots.knowledge`（常挂载 keep-alive）；视图互换/右栏联动机制
-  归 zones 容器（2.5）。
+- **知识视图** = `KnowledgeView`（3.8）入 `slots.knowledge`（常挂载 keep-alive；UF-6 浏览面 +
+  详情抽屉——无项目锚 = 引导空态）；视图互换/右栏联动机制归 zones 容器（2.5）。
+- **当前项目锚（3.8）** = `projectAnchorOf`（会话锚 → workspace 归属 → 项目；无锚兜底唯一项目；
+  多项目无锚 = null）——知识视图与召回 tab 共用范围锚；抽屉打开态（`drawerEntryId`）为
+  知识卡片与召回行两入口共用的装配态（Hard Rule：跨视图跳转经装配态，不直引组件）。
 - **右栏 dock** = zones dock 轨道（UF-7 机制）+ M0 占位页签集（全局「开始」）；会话区右上角
   常显收展开关（原型 conv-corner 同位）。
 - **模态层** = `AddProjectFlow` 宿主（mount 期发布 `__DSH_FORGE_ADD_PROJECT_FLOW__` 打开缝）。

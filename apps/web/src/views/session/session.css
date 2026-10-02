@@ -86,3 +86,188 @@
   margin-left: auto;
   flex: none;
 }
+
+/* ── 知识召回 tab（3.8：统计头 + 按知识分组行——动词明细/最近时间/热度徽章）── */
+
+.dswf-recall-tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 统计头（召回次数/覆盖条数——recallStatsOf 纯投影） */
+.dswf-recall-stats {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-statsep {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 分组行列表（可滚动台账面——行语言对齐轨迹台账同族） */
+.dswf-recall-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 0;
+  margin: 0;
+  padding: var(--dsw-font-s-14-line-height);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dswf-recall-row {
+  flex: none;
+  min-width: 0;
+}
+
+/* 行本体（命中 = 按钮，可点跳详情抽屉；失效 = div 不可点） */
+.dswf-recall-rowbtn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  width: 100%;
+  min-width: 0;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+
+button.dswf-recall-rowbtn {
+  cursor: pointer;
+}
+
+button.dswf-recall-rowbtn:hover {
+  border-color: var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* 行主区：标题 + 域 + 失效标注 */
+.dswf-recall-rowmain {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-recall-rowtitle {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-recall-rowdomain {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 行级失效标注（AC3：entryId 未命中 = 索引重建后 ID 漂移——行保留不阻塞列表） */
+.dswf-recall-stale {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-row.is-stale .dswf-recall-rowtitle {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 行元区：动词明细 + 最近时间 + 热度徽章 */
+.dswf-recall-rowmeta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  flex-wrap: wrap;
+}
+
+.dswf-recall-verb {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-time {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-recall-heat {
+  margin-left: auto;
+}
+
+/* 装载骨架（行级——sidebar 骨架同形制） */
+.dswf-recall-skeleton {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-recall-skeleton-row {
+  height: var(--dsw-font-l-20-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* 空/错误/装载面容器（EmptyState / 错误条居中占满） */
+.dswf-recall-face {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 错误条（fail-soft：通道/typed error 统一错误条 + 重试——browse 面同族形制） */
+.dswf-recall-error {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-retry {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: pointer;
+}
+
+.dswf-recall-retry:hover {
+  color: var(--dsw-alias-link);
+}
