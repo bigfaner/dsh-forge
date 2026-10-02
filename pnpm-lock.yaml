@@ -274,9 +274,6 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@dsh-forge/core':
-        specifier: workspace:*
-        version: link:../core
 
 packages:
 

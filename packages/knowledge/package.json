@@ -19,7 +19,6 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*",
-    "@dsh-forge/core": "workspace:*"
+    "@dsh-forge/contracts": "workspace:*"
   }
 }
