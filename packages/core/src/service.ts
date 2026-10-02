@@ -1,5 +1,7 @@
 // @dsh-forge/core 插件定义（定位：装配）——注册 ctx.forgeProjects（2.2：registerProject
-// 四步补偿链；ctx.forgeKnowledge 服务 3.x 知识域任务装配）。无逻辑：开句柄 → 注册服务 → 交出 disposer。
+// 四步补偿链）与 ctx.forgeKnowledge（3.3 收口：Interface 2 全七法——rebuildIndex/search/
+// readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall）。无逻辑：开句柄 →
+// 注册双服务 → 交出 disposer。
 // 形态：Cordis Plugin.Function——loader 取 default 导出（exports.default ?? exports，上游核实）；
 // inject 依赖声明（仅 workspaceRegistry 可用时加载）；返回句柄 disposer（fiber 卸载时关库，
 // 单句柄生命周期）。core 不依赖 cordis 编译期包：ctx 以结构化最小面（CoreContextFace）消费，
@@ -7,6 +9,7 @@
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort } from './forge/registry.js'
+import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
@@ -31,6 +34,7 @@ const corePlugin: CorePlugin = Object.assign(
   (ctx: CoreContextFace, config: CorePluginConfig): () => void => {
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
     ctx.reflect.provide('forgeProjects', createProjectService({ db, registry: ctx.workspaceRegistry }))
+    ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
     return () => db.close() // fiber disposer：卸载即关库
   },
   { inject: ['workspaceRegistry'] as const },

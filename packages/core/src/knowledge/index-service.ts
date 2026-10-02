@@ -45,6 +45,12 @@ export function createKnowledgeIndexService(deps: KnowledgeIndexServiceDeps): Kn
     `SELECT knowledge_dir FROM projects WHERE id = ?`,
   )
   const deleteByProject = db.prepare(`DELETE FROM knowledge_entries WHERE project_id = ?`)
+  // 重建前清召回日志条目引用（ER KNOWLEDGE_RECALL_LOGS.entry_id「条目已重建清除（行保留）」）：
+  // schema 蓝本 FK 无 ON DELETE 动作，引用未清则召回在场时重建恒失败（FOREIGN KEY constraint）。
+  // 行保留 + entry_id 置 NULL（frontmatter_id 快照保留——热度兜底分组键）。
+  const clearRecallEntryRefs = db.prepare(
+    `UPDATE knowledge_recall_logs SET entry_id = NULL WHERE project_id = ? AND entry_id IS NOT NULL`,
+  )
   const insertEntry = db.prepare(
     `INSERT INTO knowledge_entries (
        project_id, frontmatter_id, rel_path, domain_path, title, summary, keywords, status, digest, indexed_at
@@ -95,8 +101,9 @@ export function createKnowledgeIndexService(deps: KnowledgeIndexServiceDeps): Kn
         }
       }
 
-      // 整表事务重建：删旧插新原子生效（幂等——重跑零重复零漂移）
+      // 整表事务重建：清引用 → 删旧插新原子生效（幂等——重跑零重复零漂移）
       withTransaction(db, () => {
+        clearRecallEntryRefs.run(projectId)
         deleteByProject.run(projectId)
         for (const row of rows) insertEntry.run(...row)
       })

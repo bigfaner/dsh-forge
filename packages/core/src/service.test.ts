@@ -1,0 +1,95 @@
+// 任务 3.3 装配收口测试 —— service.ts 插件注册 ctx.forgeKnowledge 双服务面完整
+// （Interface 2 逐项对齐：七法齐全 + 装配后端到端冒烟——含 listEntries 静默重建路径）。
+// 形态：CoreContextFace 结构化桩（provide 记账）+ registry 桩（知识域冒烟不经注册链路，
+// projects 行经第二连接直插——注册链路归 forge 域 2.2 已测）。
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, expect, it } from 'vitest'
+import type { KnowledgeService } from '@dsh-forge/contracts'
+import type { WorkspaceLike, WorkspaceRegistryPort } from './forge/registry.js'
+import corePlugin, { type CoreContextFace } from './service.js'
+import { openDatabase } from './db/index.js'
+import type Database from 'better-sqlite3'
+
+const dirs: string[] = []
+const dbs: Database.Database[] = []
+
+afterAll(() => {
+  for (const db of dbs) db.close()
+  for (const d of dirs) rmSync(d, { recursive: true, force: true })
+})
+
+/** registry 结构化桩（本测试不经注册链路——形状兼容即可） */
+function stubRegistry(): WorkspaceRegistryPort {
+  const ws: WorkspaceLike = { id: randomUUID(), path: 'C:\\stub-ws' }
+  return {
+    list: () => [ws],
+    get: (id: string) => (id === ws.id ? ws : undefined),
+    create: async () => ws,
+    delete: async () => true,
+  }
+}
+
+/** 起插件（provide 记账）→ 返回 { services, dispose } */
+function startPlugin(home: string): { services: Map<string, unknown>; dispose: () => void } {
+  const services = new Map<string, unknown>()
+  const ctx: CoreContextFace = {
+    workspaceRegistry: stubRegistry(),
+    reflect: {
+      provide(name: string, value?: unknown) {
+        services.set(name, value)
+        return () => services.delete(name)
+      },
+    },
+  }
+  const dispose = corePlugin(ctx, { dbFile: join(home, 'state.db') })
+  return { services, dispose }
+}
+
+it('ctx.forgeKnowledge 双服务面完整：与 Interface 2 逐项对齐（七法精确）', () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home)
+  const { services, dispose } = startPlugin(home)
+  try {
+    expect([...services.keys()].sort()).toEqual(['forgeKnowledge', 'forgeProjects']) // 双服务面
+    const knowledge = services.get('forgeKnowledge') as KnowledgeService
+    expect(Object.keys(knowledge).sort()).toEqual([
+      'getEntryDetail', 'heatByEntry', 'listEntries', 'readAbstract',
+      'rebuildIndex', 'search', 'sessionRecall',
+    ])
+  } finally {
+    dispose()
+  }
+})
+
+it('装配后端到端冒烟：forgeKnowledge.listEntries 经静默重建返回卡片（真实 SQLite + 知识目录）', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home)
+  const knowledgeDir = join(home, 'knowledge')
+  mkdirSync(knowledgeDir)
+  writeFileSync(join(knowledgeDir, '索引.md'), '---\nsummary: 冒烟摘要\nkeywords: [smoke]\n---\n冒烟正文', 'utf8')
+
+  const { services, dispose } = startPlugin(home)
+  try {
+    // 插件已建库——第二连接直插 projects 行（WAL 多连接可见）
+    const conn = openDatabase(join(home, 'state.db'))
+    dbs.push(conn)
+    const projectId = randomUUID()
+    const now = new Date().toISOString()
+    conn.prepare(
+      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?, ?)`,
+    ).run(projectId, randomUUID(), 'C:\\smoke-ws', '冒烟项目', join(home, '.forge'), knowledgeDir, now, now)
+
+    const knowledge = services.get('forgeKnowledge') as KnowledgeService
+    const cards = await knowledge.listEntries({ projectId }) // 零行索引 → 静默重建路径
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toMatchObject({ title: '索引', summary: '冒烟摘要', keywords: ['smoke'], domainPath: '', heat: 0 })
+    const detail = await knowledge.getEntryDetail({ projectId, entryId: cards[0]!.entryId })
+    expect(detail.body).toBe('冒烟正文')
+  } finally {
+    dispose()
+  }
+})
