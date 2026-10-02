@@ -3,7 +3,8 @@
 // AC2 一次性执行守卫（beginExecute 仅 form 相位放行——双发 no-op 的机制半边）、
 // AC3 成功落位（result 携带）、AC4 失败落位 + typed error code → 文案映射
 // （补偿已执行/挂接保护/补偿失败三口径 + 未知错误兜底）、AC5 关闭意图三分
-// （cancel/dismiss/ignore——Esc/✕ 仅取消点窗口内有效的机制半边）。
+// （cancel/dismiss/ignore——Esc/✕ 仅取消点窗口内有效的机制半边）、
+// fix-3 模态宽度口径拆分（modalContentClassName：浏览器相位加宽 680——表单/终局相位基宽 560）。
 import { describe, expect, it } from 'vitest'
 import type { ErrorCode, RegisterResult } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc/index.js'
@@ -17,6 +18,7 @@ import {
   finishExecute,
   initialFlowState,
   isCancelPoint,
+  modalContentClassName,
   registerFailureCopy,
   selectDirectory,
   toFlowFailure,
@@ -127,6 +129,20 @@ describe('取消点窗口（isCancelPoint / closeIntentOf：AC1 + AC5）', () =>
     expect(closeIntentOf(atExecuting())).toBe('ignore')
     expect(closeIntentOf(finishExecute(atExecuting(), RESULT))).toBe('ignore')
     expect(closeIntentOf(failExecute(atExecuting(), { code: null, message: 'x', compensated: false }))).toBe('dismiss')
+  })
+})
+
+describe('模态宽度口径拆分（modalContentClassName：fix-3 浏览器相位加宽）', () => {
+  it('浏览器相位（browser / repick）→ 基类 + 加宽修饰（680 刻度随 .dswf-ap-modal-wide）', () => {
+    expect(modalContentClassName('browser')).toBe('dswf-ap-modal dswf-ap-modal-wide')
+    expect(modalContentClassName('repick')).toBe('dswf-ap-modal dswf-ap-modal-wide')
+  })
+
+  it('表单与终局相位（form/executing/success/failure）→ 仅基类（560 基宽不动——Hard Rule）', () => {
+    expect(modalContentClassName('form')).toBe('dswf-ap-modal')
+    expect(modalContentClassName('executing')).toBe('dswf-ap-modal')
+    expect(modalContentClassName('success')).toBe('dswf-ap-modal')
+    expect(modalContentClassName('failure')).toBe('dswf-ap-modal')
   })
 })
 

@@ -83,6 +83,17 @@ export function closeIntentOf(state: FlowState): CloseIntent {
   return 'ignore'
 }
 
+/**
+ * 模态内容区宽度口径映射（fix-3 走查放大：浏览器相位 browser/repick → 加宽 680；
+ * 表单与终局相位（executing/success/failure）→ 基宽 560——宽度刻度见 flow.css
+ * `.dswf-ap-modal` / `.dswf-ap-modal-wide`，挂点 = 官方 Modal contentClassName）。
+ */
+export function modalContentClassName(phase: FlowPhase): string {
+  return phase === 'browser' || phase === 'repick'
+    ? 'dswf-ap-modal dswf-ap-modal-wide'
+    : 'dswf-ap-modal'
+}
+
 /** typed error 归一：RpcClientError → code + compensated 判定；其余 → code null 原样文案 */
 export function toFlowFailure(error: unknown): FlowFailure {
   if (error instanceof RpcClientError) {

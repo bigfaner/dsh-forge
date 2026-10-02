@@ -76,8 +76,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px; /* dsw-raw 官方行间距 */
-  min-height: 0;
-  height: 256px; /* 原型 fb-list 定高刻度（滚动主体） */
+  min-height: 256px; /* 原型 fb-list 定高刻度 = 放大下限（fix-3 走查放大后不低于原型） */
+  height: min(50vh, 480px); /* fix-3 走查放大：视口比例上限 480（滚动主体；矮窗回落下限） */
   padding: 6px; /* dsw-raw 官方列表内衬刻度 */
   box-sizing: border-box;
   overflow-y: auto;
