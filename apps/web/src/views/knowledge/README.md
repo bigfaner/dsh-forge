@@ -3,7 +3,7 @@
 定位：**业务** —— 知识浏览（域树/卡片/抽屉/工具栏）。填充：3.6（浏览主体）/ 3.7（详情抽屉）。
 边界：禁 import `../session/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦）。
 
-## 模块面（3.6 浏览主体）
+## 模块面（3.6 浏览主体 + 3.7 详情抽屉）
 
 | 文件 | 职责 |
 |---|---|
@@ -13,6 +13,7 @@
 | `DomainTree.tsx` | 左轨域目录树（~224px）：「全部域」根行 + 聚合节点行（常展开 ≤3 层，自绘领域行吃令牌） |
 | `KnowledgeCardGrid.tsx` | auto-fill 卡片网格 + 主体四态（骨架/卡片/过滤无结果+清除入口/空库引导）+ 错误态（错误条/不可用空态） |
 | `KnowledgeBrowse.tsx` | 装配：`KnowledgeBrowse`（hook 装载壳——3.8 挂知识视图槽）+ `KnowledgeBrowseBody`（纯渲染，全相位静态可测） |
+| `EntryDrawer.tsx` | 详情抽屉（3.7）：`EntryDrawer`（装载壳——`useEntryDetail` 按需拉取 + `useEntryDrawerEscape` Esc 捕获）+ `EntryDrawerBody`（纯渲染三相位）+ `entryMetaRows`（两列元数据投影）+ `fetchEntryDetail`（纯异步面） |
 
 ## 关键口径
 
@@ -27,9 +28,18 @@
 
 `data-dswf-kn-browse`（主体）· `data-dswf-kn-toolbar` · `data-dswf-kn-tree` / `data-dswf-domain="<path>"`（域行——场景④ 前端域选择）· `data-dswf-kn-cards` / `data-dswf-entry="<id>"`（卡片；热度一致性断言选择器 = `[data-dswf-entry] .dswf-heat-badge`）· `data-dswf-skeleton`（加载/重建骨架）· `data-dswf-clear-filters`（清除过滤入口）· `data-dswf-kn-error` / `data-dswf-kn-retry`（错误面）。
 
+抽屉（3.7）：`data-dswf-kn-drawer`（滑入层——在场即打开态）· `data-dswf-kn-drawer-close`（✕ 关闭位）· `data-dswf-kn-summary`（摘要块）/ `data-dswf-kn-meta` + `data-dswf-kn-meta-row="<key>"`（两列元数据五行）/ `data-dswf-kn-body`（正文区——AC2 断言面：该区内不得出现 frontmatter 字段/摘要/关键词字面量）· `data-dswf-kn-drawer-skeleton`（详情拉取骨架）· `data-dswf-kn-drawer-retry`（错误面重试）。
+
+## 关键口径（3.7 详情抽屉）
+
+- **三区呈现序 = 摘要块（summary 先行：条目标题 + 摘要）→ 两列元数据（域/状态/关键词/作者/更新时间；关键词整行，其余半行两列）→ Markdown 正文**（`MarkdownDoc` variant=body 统一包装——Hard Rule：抽屉内禁裸 MarkdownText）。
+- **正文按需读取**：打开（entryId 变更）才拉 `forge:knowledge/entryDetail`，全库通道（browse/listEntries/heat）零调用；竞态守卫同浏览面（seq 序号）。
+- **关闭回浏览上下文**：抽屉不持有过滤态（旁挂层）；Esc 捕获阶段拦截（抽屉先于工具栏清空——`stopPropagation` 防「关抽屉连带清空关键词」）；✕/Esc 均 `onClose` 上抛装配方。
+- **形态对齐官方 dockkit 浮层**：层级 `--dsh-dockkit-float-layer`（回退 60）+ 抬升面 `--dsw-elevation-prominent`（描边回弹 border-l2）+ 粘顶栏行尾关闭位 + 右缘滑入动画；布局结构 = 原型 kn-drawer（min(520px, 52vw) 全高）。
+- **错误面**：typed error 经 `rpcUiState` 三态（ENTRY_NOT_FOUND/INDEX_STALE/目录非法 → 不可用空态；其余 → 错误条），均带重试。
+
 ## 残留（按任务依赖序）
 
-- 详情抽屉（摘要块 + 两列元数据 + Markdown 正文）= 3.7（`EntryDrawer.tsx`，经 `onEntryOpen` 注入——本模块已留接线位）。
-- 知识视图槽位挂载（zones slots.knowledge 自 M0 占位填入浏览面）+ UF-4 召回 tab 接线 = 3.8。
-- 实机 e2e（场景④ UI 侧 / 热度一致性三方断言 / 索引静默重建走查）= 3.8 装配 + 4.2（本任务面 = 模块契约面：纯函数 + 纯异步面 + 全相位静态渲染）。
-- 域树收合交互、状态 chips 阈值、「从会话抽取」chip、统计/召回日志页签 = M4+（PRD UF-6 排除项）。
+- 知识视图槽位挂载（zones slots.knowledge 自 M0 占位填入浏览面）+ 抽屉装配（`onEntryOpen(entryId)` → `EntryDrawer` 态接线）+ UF-4 召回 tab 分组行跳转复用 = 3.8。
+- 实机 e2e（场景④ UI 侧 / 抽屉三区与 AC2 正文区断言 / Esc/✕ 关闭回网格且过滤态保持 / 热度一致性三方断言 / 索引静默重建走查）= 3.8 装配 + 4.2（本任务面 = 模块契约面：纯函数 + 纯异步面 + 全相位静态渲染 + 结构 pin）。
+- 域树收合交互、状态 chips 阈值、「从会话抽取」chip、统计/召回日志页签、抽屉动作区（审核/移动/编辑元数据）= M4+（PRD UF-6 排除项）。

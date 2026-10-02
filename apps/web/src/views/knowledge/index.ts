@@ -2,6 +2,7 @@
 // 边界：禁 import ../session/（依赖铁律③ 同级业务互禁）。
 export * from './browse-model.js'
 export * from './DomainTree.js'
+export * from './EntryDrawer.js'
 export * from './KnowledgeBrowse.js'
 export * from './KnowledgeCardGrid.js'
 export * from './KnowledgeToolbar.js'

@@ -226,6 +226,44 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
   })
 })
 
+describe('views/knowledge 详情抽屉 pin（3.7）', () => {
+  it('模块面就位：EntryDrawer（hook + 纯渲染体 + 元数据投影）+ barrel 出口', () => {
+    for (const f of ['apps/web/src/views/knowledge/EntryDrawer.tsx']) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    const barrel = read('apps/web/src/views/knowledge/index.ts')
+    expect(barrel, 'EntryDrawer 未出 barrel').toContain("export * from './EntryDrawer.js'")
+  })
+
+  it('Hard Rule 渲染纪律 + 按需读取：正文唯一经 MarkdownDoc（variant=body）；数据唯一通道 = entryDetail（不预载全库）', () => {
+    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    expect(drawer).toContain('MarkdownDoc')
+    expect(drawer, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
+    expect(drawer).toContain('variant="body"')
+    expect(drawer).toContain('client.knowledge.entryDetail')
+    expect(drawer, '抽屉不预载全库（browse/listEntries/heat 均非详情通道）').not.toMatch(
+      /\.knowledge\.(browse|listEntries|heat|sessionRecall)/,
+    )
+  })
+
+  it('AC3 关闭路径：✕ 锚（顶栏行尾 aria-label）+ Esc 捕获接线（抽屉先于工具栏清空——浏览上下文保持）', () => {
+    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    expect(drawer).toContain('data-dswf-kn-drawer-close')
+    expect(drawer).toContain('aria-label="关闭抽屉"')
+    expect(drawer).toContain("addEventListener('keydown'")
+    expect(drawer).toContain('stopPropagation')
+  })
+
+  it('AC4 形态对齐官方 dockkit 抽屉形态：层级令牌 + 抬升面 + 滑入动画 + 右缘全高（不自发明平行模式）', () => {
+    const css = read('apps/web/src/views/knowledge/knowledge.css')
+    expect(css).toContain('.dswf-kn-drawer {')
+    expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
+    expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = dockkit .float 同配方
+    expect(css).toMatch(/@keyframes dswf-kn-drawer-in/) // 滑入
+    expect(css.match(/\.dswf-kn-drawer \{[\s\S]*?position: fixed;/)).not.toBeNull() // 右缘全高滑入层
+  })
+})
+
 describe('workbench 工作台装配 pin（2.12）', () => {
   it('模块面就位：装配面板 + hero 相位 + 知识 M0 占位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel', () => {
     for (const f of [
