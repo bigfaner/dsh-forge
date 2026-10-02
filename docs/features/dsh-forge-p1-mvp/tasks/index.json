@@ -380,7 +380,7 @@
       "dependencies": [
         "2.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.1-knowledge-parse-index.md",
       "record": "records/3.1-knowledge-parse-index.md",
       "surface-type": "web",
