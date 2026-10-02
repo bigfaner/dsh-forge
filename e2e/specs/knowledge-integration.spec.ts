@@ -45,6 +45,53 @@ async function waitShellReady(page: Page): Promise<void> {
   )
 }
 
+/**
+ * 官方首启引导遮罩处置（host 集成转正 4.2/fix-1 后 fresh userData 必现，未收起即拦截
+ * 一切指针交互——locator 可解析但 click 恒超时，4.2 实证）：
+ * 1. 「预览版说明」= 叠层预确认（`ui-settings-general.welcomeNoticeVersion` 等值预确认，
+ *    沿 flywheel.spec dogfood 同径）——隔离 userData 内点「继续」的确认写回不可依赖
+ *    （设置写路径 quirk，4.2 探针实证：点击成功模态不退），运行期收不掉，只能预免。
+ * 2. 「添加一个 API Key」onboarding（deepseek-official 凭据缺席触发）= 运行期点
+ *    「稍后配置」本地收起（fallback 循环，窗口期轮询——模态挂载可晚于工作台可见数秒）。
+ */
+const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（flywheel.spec 同源）
+
+/** 预确认叠层落地（返回路径——launchHost env DSH_FORGE_PATCH_FILES 消费；finally 删） */
+function writeAckOverlay(): string {
+  const target = join(
+    tmpdir(),
+    `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`,
+  )
+  writeFileSync(
+    target,
+    [
+      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
+      '- id: ui-settings-general',
+      '  config:',
+      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+  return target
+}
+
+/** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归叠层预免） */
+async function dismissOnboardingModals(page: Page): Promise<void> {
+  const deadline = Date.now() + 15_000
+  for (let dismissed = 0; dismissed < 3; dismissed++) {
+    const dismissButton = page
+      .locator('[role="dialog"] button', { hasText: /^稍后配置$/ })
+      .first()
+    while (!(await dismissButton.isVisible().catch(() => false))) {
+      if (Date.now() > deadline) return // 窗口期内无模态 = 无 API Key onboarding（凭据在场面）
+      await page.waitForTimeout(500)
+    }
+    await dismissButton.click({ timeout: 10_000 })
+    await page.waitForTimeout(1_000)
+  }
+}
+
 /** 相位稳定门（settling 收敛） */
 async function stablePhase(page: Page): Promise<'hero' | 'session'> {
   await page.waitForFunction(
@@ -100,18 +147,26 @@ async function enterDir(page: Page, name: string): Promise<void> {
 /**
  * host 数据通道探测（组二门）：forge:knowledge/listEntries + forge:projects/list 两面任一
  * 未注册（ipcRenderer invoke 拒绝 "No handler"）= 前置缺口在期 → 组二留痕 skip（§5 转正条件）。
+ * 通道在场判定只认 "No handler" 拒绝面：域层 fail-loud 裸错（如 __probe__ 项目 id 未命中
+ * projects 行——bare Error 不入信封、经 invoke 拒绝上抛）与 typed 信封 {ok:false} 都是通道
+ * 在场的证明（4.2 转正实证：裸错曾被误读为缺口致组二恒 skip）。
  */
 async function hostDataChannelsLive(page: Page): Promise<boolean> {
   return page.evaluate(async () => {
     const forge = (globalThis as { dshForge?: { invoke(c: string, p?: unknown): Promise<unknown> } }).dshForge
     if (forge === undefined) return false
-    try {
-      await forge.invoke('forge:projects/list')
-      await forge.invoke('forge:knowledge/listEntries', { projectId: '__probe__' })
-      return true
-    } catch {
-      return false
+    const arrived = async (channel: string, payload?: unknown): Promise<boolean> => {
+      try {
+        await forge.invoke(channel, payload)
+        return true
+      } catch (error) {
+        return !String(error).includes('No handler')
+      }
     }
+    return (
+      (await arrived('forge:projects/list')) &&
+      (await arrived('forge:knowledge/listEntries', { projectId: '__probe__' }))
+    )
   })
 }
 
@@ -122,8 +177,10 @@ async function hostDataChannelsLive(page: Page): Promise<boolean> {
 test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-kni-'))
+  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
+    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19670 + (process.pid % 200)),
   })
@@ -133,6 +190,7 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
     page.on('pageerror', (error) => pageErrors.push(String(error)))
     await waitShellReady(page)
     await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
+    await dismissOnboardingModals(page)
     const phase = await stablePhase(page)
 
     // AC-1：知识视图 = UF-6 浏览面装配壳（M0 占位已替换）；无项目锚 = 引导空态（确定性：
@@ -173,6 +231,7 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })
+    rmSync(ackOverlay, { force: true })
   }
 })
 
@@ -185,8 +244,10 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-knix-'))
   const fixture = makeKnowledgeFixture()
+  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
+    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19690 + (process.pid % 200)),
   })
@@ -194,6 +255,7 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     const page: Page = await app.firstWindow()
     await waitShellReady(page)
     await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
+    await dismissOnboardingModals(page)
     await stablePhase(page)
     // 前置门：host forge:projects/* + forge:knowledge/* 通道装配（core 插件入 profile +
     // main.ts 接线——独立 host 集成任务，SMOKE-LEDGER §5）。留痕跳过，不弱化断言。
@@ -244,5 +306,6 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await app.close()
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
+    rmSync(ackOverlay, { force: true })
   }
 })
