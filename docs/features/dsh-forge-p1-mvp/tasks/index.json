@@ -197,7 +197,7 @@
         "2.12",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.14-smoke-migration.md",
       "record": "records/2.14-smoke-migration.md",
       "surface-type": "web",
