@@ -43,17 +43,21 @@
   display: none !important;
 }
 
-/* 右 dock 轨道：展开 = 页签条 + 内容区（宽度取原型 --rightbar-w 量级）；
- * 收起/强制隐藏 = 轨道归零（原型同型：width 0 + overflow hidden + 无边线；
- * visibility 补位——零宽轨道内不可聚焦、不进可达性树）。内容常挂载（状态保留）。 */
+/* 右 dock 轨道：展开 = 页签条 + 内容区；宽度 = 机制内态经 --dswf-dock-width 内联注入
+ * （WorkbenchZones fix-4 拖拽调宽，回退 340px；300px–70vw 原型刻度由 min/max 兜底——
+ * 推导收敛见 dock-width.ts）。收起/强制隐藏 = 轨道归零（原型同型：width 0 + overflow
+ * hidden + 无边线；visibility 补位——零宽轨道内不可聚焦、不进可达性树）。内容常挂载
+ * （状态保留）。背景面 = bg-base（fix-4 走查点名偏差对齐原型 rightbar；发线分隔）。 */
 .dswf-zones-dock {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
-  width: 340px;
-  min-width: 0;
+  width: var(--dswf-dock-width, 340px);
+  min-width: 300px;
+  max-width: 70vw;
   border-left: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1);
+  background: var(--dsw-alias-bg-base);
 }
 
 .dswf-zones-dock[data-dswf-dock=collapsed],
@@ -65,12 +69,55 @@
   visibility: hidden;
 }
 
+/* 调宽手柄（原型 #rb-resize 同型）：左缘 8px 命中区跨缘居中（-4px 半区跨进中区，
+ * 分隔线两侧皆可抓取）；hover/focus 高亮 = interactive-bg-hover 令牌（原型同源）。 */
+.dswf-zones-dock-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 6;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none; /* 官方 dockkit divider 同型：拖拽期屏蔽触摸滚动 */
+}
+
+.dswf-zones-dock-resize:hover,
+.dswf-zones-dock-resize:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 页签条（fix-4 分区整理）：页签区 flex:1 + 收展钮尾部 flex:none（原型 rb-tail 同构位）。
+ * dsw-raw 豁免（执行记录同步）：内衬 4px 8px 与 gap 8px = 官方行语言刻度（sidebar.css
+ * 行语言同源，官方主题无间距标尺令牌——形态对齐官方优先）；padding-right 经 WCO
+ * titlebar-area 避让原生窗口控制钮区（fix-2 实测右上 ~136×32；非 WCO 环境回退 0）。 */
 .dswf-zones-dock-strip {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 0;
-  padding: 0;
+  gap: 8px; /* dsw-raw 官方行语言刻度 */
+  padding: 4px 8px; /* dsw-raw 官方行语言刻度 */
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw)); /* dsw-raw WCO 控制钮区避让（env 几何值，非令牌面） */
   border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-zones-dock-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 官方 SegmentedTabs 根为等分网格（repeat(n, 1fr)）——在 flex:1 分区内会满宽拉伸，
+ * 收敛回内容宽（原型 chips 收缩形态；多页签挤压时 1fr 轨自缩不溢出分区）。
+ * 仅约束容器内几何，官方件本体样式零改写。 */
+.dswf-zones-dock-tabs > * {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.dswf-zones-dock-tail {
+  flex: none;
+  display: flex;
+  align-items: center;
 }
 
 .dswf-zones-dock-body {
@@ -78,6 +125,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  padding: 4px 16px 20px; /* dsw-raw 原型 rb-body 内衬刻度（styles.css :829） */
 }
 
 /* 机制占位（槽位缺省渲染；2.6 EmptyState 就位后由装配替换） */

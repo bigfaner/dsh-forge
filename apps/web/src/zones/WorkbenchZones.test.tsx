@@ -143,6 +143,40 @@ describe('UF-7 dock 轨道（默认收起归零 ↔ 页签条 + 内容区）', (
   })
 })
 
+describe('fix-4 dock 视觉整理（strip 分区 / 调宽手柄 / 宽度内态注入）', () => {
+  it('strip 分区呈现：页签区（flex 容器位）在前、收展钮尾部在后（原型 rb-tail 同构位）', () => {
+    const markup = render({ onToggleDock: () => {} })
+    expect(markup).toContain('class="dswf-zones-dock-tabs"')
+    expect(markup).toContain('class="dswf-zones-dock-tail"')
+    // 分区次序：strip → 页签区 → 尾部（收展钮入尾部容器——官方 Button 原样）
+    const order = [
+      markup.indexOf('dswf-zones-dock-strip'),
+      markup.indexOf('dswf-zones-dock-tabs'),
+      markup.indexOf('dswf-zones-dock-tail'),
+      markup.indexOf('收起 dock'),
+    ]
+    for (const at of order) expect(at, '分区锚点在场').toBeGreaterThanOrEqual(0)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+  it('调宽手柄：separator 语义 + 垂直向 + 键盘可达（原型 #rb-resize 同型 a11y 面）', () => {
+    const markup = render()
+    expect(markup).toContain('class="dswf-zones-dock-resize"')
+    expect(markup).toContain('role="separator"')
+    expect(markup).toContain('aria-orientation="vertical"')
+    expect(markup).toContain('tabindex="0"')
+    expect(markup).toContain('aria-label="右侧栏宽度')
+  })
+  it('宽度内态注入：--dswf-dock-width 默认 340px；与三态相位属性并存（收起/强制隐藏不改写）', () => {
+    expect(dockTag(render())).toContain('--dswf-dock-width:340px')
+    const collapsed = render({ view: view({ rightDock: false }) })
+    expect(dockTag(collapsed)).toContain('data-dswf-dock="collapsed"')
+    expect(dockTag(collapsed)).toContain('--dswf-dock-width:340px')
+    const hidden = render({ view: view({ center: 'knowledge', rightDock: true }) })
+    expect(dockTag(hidden)).toContain('data-dswf-dock="hidden"')
+    expect(dockTag(hidden)).toContain('--dswf-dock-width:340px')
+  })
+})
+
 describe('UF-7 页签跟随（可见集口径 + 不打断中区）', () => {
   it('可见集 = 当前项目页签 + 全局页签（p1 不见 p2 页签；p2 不见 p1；无锚仅全局）', () => {
     const atP1 = render({ view: view({ rightDock: true, focus: { projectId: 'p1', sessionId: null } }) })

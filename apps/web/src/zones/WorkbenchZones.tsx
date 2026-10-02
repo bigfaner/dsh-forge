@@ -4,8 +4,16 @@
 // 页签条 = 官方 SegmentedTabs、控制钮 = 官方 Button；dockkit DockSurface 拆分/浮动引擎 2.6+ 消费
 // （S2 清单 §2.5），本件只承载轨道收展 + 页签跟随机制。
 // 状态唯一源 = shell 视图态机（props 注入，经 useShellView 对接）；激活页签为本件机制内态
-// （推导回落/恢复语义见 dock.ts resolveActiveDockTab）。
-import { useState, type ReactNode } from 'react'
+// （推导回落/恢复语义见 dock.ts resolveActiveDockTab）；轨道宽度亦为本件机制内态（fix-4 拖拽
+// 调宽——dock-width.ts 纯函数面 + 手柄 pointer 胶水；与三态相位正交，keep-alive 常挂载即会话内记忆）。
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { Button, SegmentedTabs, type SegmentedTab } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ShellViewState } from '../shell/view-state.js'
 import {
@@ -13,6 +21,12 @@ import {
   visibleDockTabs,
   type DockTabSet,
 } from './dock.js'
+import {
+  DOCK_WIDTH_DEFAULT,
+  dockWidthFromDrag,
+  dockWidthFromKey,
+  type DockResizeKey,
+} from './dock-width.js'
 import type { WorkbenchZoneSlots } from './slots.js'
 import './zones.css'
 
@@ -64,6 +78,36 @@ export function WorkbenchZones({ view, dockTabs, slots, onToggleDock }: Workbenc
   // 激活页签 = 机制内态（用户显式选择）+ 推导回落（切项目自动落到新集首个，切回恢复原选择）
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null)
   const activeTab = resolveActiveDockTab(visibleTabs, selectedTabId)
+  // 轨道宽度 = 机制内态（fix-4）：与三态相位正交（收起/强制隐藏不改写，展开沿用记忆值）；
+  // 经 --dswf-dock-width 内联注入由 CSS 消费（collapsed/hidden 规则收零轨道不受内联影响）。
+  const [dockWidth, setDockWidth] = useState(DOCK_WIDTH_DEFAULT)
+
+  // 调宽手柄交互胶水（宽度值收敛为纯状态——推导面 dock-width.ts 可测）：
+  // pointerdown 捕获 → move 增量收敛 → up/lost 释放；键盘 ←/→ 步进（原型同型 a11y 面）。
+  const resizeLastXRef = useRef<number | null>(null)
+  const onResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    event.preventDefault()
+    resizeLastXRef.current = event.clientX
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  const onResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (resizeLastXRef.current === null) return
+    const dragDx = event.clientX - resizeLastXRef.current
+    resizeLastXRef.current = event.clientX
+    setDockWidth((current) => dockWidthFromDrag(current, dragDx, window.innerWidth))
+  }
+  const onResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    resizeLastXRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+  const onResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const key: DockResizeKey = event.key
+    setDockWidth((current) => dockWidthFromKey(current, key, window.innerWidth))
+  }
 
   const tabItems = visibleTabs.map(
     (tab): SegmentedTab<string> => ({
@@ -98,26 +142,48 @@ export function WorkbenchZones({ view, dockTabs, slots, onToggleDock }: Workbenc
             {slots?.knowledge ?? <PanePlaceholder kind="knowledge" />}
           </section>
         </div>
-        <aside className="dswf-zones-dock" data-dswf-dock={dockMode} aria-label="dock 面板">
+        <aside
+          className="dswf-zones-dock"
+          data-dswf-dock={dockMode}
+          aria-label="dock 面板"
+          style={{ '--dswf-dock-width': `${dockWidth}px` } as CSSProperties}
+        >
+          {/* 调宽手柄（原型 #rb-resize 同型：左缘 8px 命中区 + hover/focus 令牌高亮） */}
+          <div
+            className="dswf-zones-dock-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="右侧栏宽度（拖拽或左右方向键调整；300px–70% 视口）"
+            tabIndex={0}
+            onPointerDown={onResizePointerDown}
+            onPointerMove={onResizePointerMove}
+            onPointerUp={onResizePointerEnd}
+            onLostPointerCapture={onResizePointerEnd}
+            onKeyDown={onResizeKeyDown}
+          />
           <div className="dswf-zones-dock-strip">
-            {activeTab !== null ? (
-              <SegmentedTabs
-                label="dock 页签"
-                items={tabItems as [SegmentedTab<string>, ...SegmentedTab<string>[]]}
-                value={activeTab.id}
-                onChange={setSelectedTabId}
-              />
-            ) : null}
+            <div className="dswf-zones-dock-tabs">
+              {activeTab !== null ? (
+                <SegmentedTabs
+                  label="dock 页签"
+                  items={tabItems as [SegmentedTab<string>, ...SegmentedTab<string>[]]}
+                  value={activeTab.id}
+                  onChange={setSelectedTabId}
+                />
+              ) : null}
+            </div>
             {onToggleDock !== undefined ? (
-              <Button
-                variant="toolbar"
-                size="sm"
-                className="dswf-zones-dock-toggle"
-                aria-label={dockMode === 'expanded' ? '收起 dock' : '展开 dock'}
-                onClick={onToggleDock}
-              >
-                {dockMode === 'expanded' ? '»' : '«'}
-              </Button>
+              <div className="dswf-zones-dock-tail">
+                <Button
+                  variant="toolbar"
+                  size="sm"
+                  className="dswf-zones-dock-toggle"
+                  aria-label={dockMode === 'expanded' ? '收起 dock' : '展开 dock'}
+                  onClick={onToggleDock}
+                >
+                  {dockMode === 'expanded' ? '»' : '«'}
+                </Button>
+              </div>
             ) : null}
           </div>
           <div
