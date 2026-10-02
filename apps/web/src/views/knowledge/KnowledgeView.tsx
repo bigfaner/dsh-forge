@@ -14,6 +14,8 @@ import './knowledge.css'
 export interface KnowledgeViewProps {
   /** 当前项目 id（浏览范围——P1 项目级；null = 无项目锚 → 引导空态不拉取） */
   readonly projectId: string | null
+  /** 视图激活态（缺省 true = 常挂载直载；装配注入 view.center === 'knowledge'——隐藏期 hold、激活翻转全量重拉刷新热度，AC3 即时累积） */
+  readonly active?: boolean
   /** 抽屉打开条目（null = 关闭；卡片点击与召回 tab 跳转两入口共用此态） */
   readonly openEntryId: number | null
   /** 抽屉打开态变更（卡片点击 → entryId；✕/Esc 关闭 → null——态归装配持有） */
@@ -30,6 +32,7 @@ export interface KnowledgeViewProps {
  */
 export function KnowledgeView({
   projectId,
+  active,
   openEntryId,
   onOpenEntryChange,
   makeClient,
@@ -49,6 +52,7 @@ export function KnowledgeView({
     <div className="dswf-kn-view" data-dswf-knowledge-view="" data-dswf-kn-anchor={projectId}>
       <KnowledgeBrowse
         projectId={projectId}
+        active={active}
         makeClient={makeClient}
         now={now}
         onEntryOpen={(entryId) => {

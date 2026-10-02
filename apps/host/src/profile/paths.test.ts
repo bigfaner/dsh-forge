@@ -10,6 +10,9 @@ describe('resolveHostPaths 双形态', () => {
     expect(paths.form).toBe('packaged')
     expect(paths.profileDir.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/profile')
     expect(paths.dshHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/dsh-home')
+    // 4.2 装配期路径：状态库 + knowledge 绑定表（boot overlay 注入 / host 维护）
+    expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/state.db')
+    expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/knowledge-bindings.json')
   })
 
   it('dev 形态：DSH_FORGE_DEV_PROFILE 真值 → workspace 预组装 profile.dev 目录', () => {

@@ -244,19 +244,26 @@ export function browseActions(
 }
 
 /**
- * 知识浏览装载 hook（mount / projectId / 过滤态 / 重试 四锚重装载）。
+ * 知识浏览装载 hook（mount / projectId / 过滤态 / 重试 / 激活翻转 五锚重装载）。
  * 判定/在途/落点/动作全部经纯函数（browseLoadPlan / pendingBrowseState /
  * applyBrowseLoad / browseActions）——effect 仅编排：refs 快照 → 装载 → 序号守卫落点。
+ * 激活语义（AC3 即时累积——RecallTab AC4 同型）：隐藏期 hold（不装载不清场，数据保持），
+ * 激活翻转（false→true）即全量重拉（epoch 递增 → fullKey 变更 → bundle 三路并发——
+ * 热度等使用事件计数随激活刷新，卡片缓存先行不闪骨架）。
  * @param projectId - 当前项目（视图态注入——3.8 装配接线）
  * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ * @param active - 视图激活态（缺省 true = 无激活机制面——单测/常挂载直载）
  */
 export function useKnowledgeBrowse(
   projectId: string,
   makeClient: RpcClientFactory = defaultClient,
+  active = true,
 ): readonly [KnowledgeBrowseState, KnowledgeBrowseActions] {
   const [filter, dispatchFilter] = useReducer(browseFilterReducer, EMPTY_FILTER)
   const [state, setState] = useState<KnowledgeBrowseState>(initialBrowseState)
   const [nonce, setNonce] = useState(0)
+  const [activation, setActivation] = useState(0)
+  const wasActiveRef = useRef(active)
   const fullKeyRef = useRef('')
   const projectRef = useRef(projectId)
   const hasBundleRef = useRef(false)
@@ -267,15 +274,23 @@ export function useKnowledgeBrowse(
     dispatchFilter({ type: 'clear-filters' })
   }, [projectId])
 
+  // 激活翻转 epoch（false→true 递增；true→false 不触发——隐藏期零装载）
   useEffect(() => {
+    if (!wasActiveRef.current && active) setActivation((n) => n + 1)
+    wasActiveRef.current = active
+  }, [active])
+
+  useEffect(() => {
+    if (!active) return // 隐藏期 hold（keep-alive 数据保持，激活期重拉刷新）
+    const fullKey = `${projectId}#${nonce}#${activation}`
     const plan = browseLoadPlan({
-      fullKey: `${projectId}#${nonce}`,
+      fullKey,
       lastFullKey: fullKeyRef.current,
       projectId,
       lastProjectId: projectRef.current,
       hasBundle: hasBundleRef.current,
     })
-    fullKeyRef.current = `${projectId}#${nonce}`
+    fullKeyRef.current = fullKey
     projectRef.current = projectId
     const seq = ++seqRef.current
     const client = makeClient()
@@ -296,7 +311,7 @@ export function useKnowledgeBrowse(
     return () => {
       alive = false
     }
-  }, [projectId, nonce, filter, makeClient])
+  }, [projectId, nonce, activation, filter, makeClient, active])
 
   const retry = useCallback(() => {
     setNonce((n) => n + 1)

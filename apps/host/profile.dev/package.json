@@ -2,10 +2,15 @@
   "name": "dsh-forge-profile-dev",
   "private": true,
   "version": "0.0.0",
-  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件行预留；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
+  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件 @dsh-forge/{contracts,core,knowledge} link 三件 + 原生依赖兜底；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
   "dependencies": {
     "@deepseek-ai/dsh-base": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-web-app": "0.2.0-rc.2"
+    "@deepseek-ai/dsh-web-app": "0.2.0-rc.2",
+    "@dsh-forge/contracts": "link:../../../packages/contracts",
+    "@dsh-forge/core": "link:../../../packages/core",
+    "@dsh-forge/knowledge": "link:../../../packages/knowledge",
+    "better-sqlite3": "13.0.3",
+    "gray-matter": "4.0.3"
   },
   "dsh": {
     "profile": {

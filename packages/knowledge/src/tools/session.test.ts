@@ -1,7 +1,11 @@
 // 3.4 单测 —— 会话上下文解析（sessionContextOf / createProjectResolver / unboundSessionError）。
 // 口径：官方 sessionCwd 同型（header.cwd 为读取位）；sessionId 缺省空串 = 无会话上下文
 //（contracts SearchQuery.sessionId 注释）；绑定表归一整串相等（win32 大小写/斜杠不敏感）。
-import { describe, expect, it } from 'vitest'
+// 4.2：bindingsFile 动态面（host 装配方维护——执行点惰性读取，条目优先于静态表）。
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ToolExecFace } from './faces.js'
 import { createProjectResolver, sessionContextOf, unboundSessionError } from './session.js'
 
@@ -48,6 +52,57 @@ describe('createProjectResolver（cwd → projectId 绑定表）', () => {
     const resolver = createProjectResolver([{ wsPath: '/ws/Demo', projectId: 'p-1' }])
     const expected = process.platform === 'win32' ? 'p-1' : undefined
     expect(resolver('/ws/demo')).toBe(expected)
+  })
+})
+
+describe('createProjectResolver（bindingsFile 动态面——4.2）', () => {
+  let dir: string
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-bindings-'))
+  })
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('文件条目命中（执行点惰性读取——写入后无需重建解析器）', () => {
+    const file = join(dir, 'b1.json')
+    writeFileSync(file, JSON.stringify({ version: 1, projects: [{ wsPath: 'C:\\ws\\live', projectId: 'p-live' }] }), 'utf8')
+    const resolver = createProjectResolver([], file)
+    expect(resolver('C:\\ws\\live')).toBe('p-live')
+    // 装配方刷新后（host registerProject 增量锚）下一次 exec 即见新绑定
+    writeFileSync(file, JSON.stringify({ version: 1, projects: [{ wsPath: 'C:\\ws\\new', projectId: 'p-new' }] }), 'utf8')
+    expect(resolver('C:\\ws\\new')).toBe('p-new')
+    expect(resolver('C:\\ws\\live')).toBeUndefined()
+  })
+
+  it('文件条目优先于静态表（装配方最新事实）；文件无该条 → 回落静态', () => {
+    const file = join(dir, 'b2.json')
+    writeFileSync(file, JSON.stringify({ version: 1, projects: [{ wsPath: 'C:\\ws\\a', projectId: 'p-dyn' }] }), 'utf8')
+    const resolver = createProjectResolver([{ wsPath: 'C:\\ws\\a', projectId: 'p-static' }, { wsPath: 'C:\\ws\\b', projectId: 'p-static-b' }], file)
+    expect(resolver('C:\\ws\\a')).toBe('p-dyn')
+    expect(resolver('C:\\ws\\b')).toBe('p-static-b')
+  })
+
+  it('读失败/形状非法 → fail-soft 回落静态表（不抛）', () => {
+    const missing = join(dir, 'nope.json')
+    const resolver = createProjectResolver([{ wsPath: 'C:\\ws\\s', projectId: 'p-s' }], missing)
+    expect(resolver('C:\\ws\\s')).toBe('p-s')
+    const bad = join(dir, 'bad.json')
+    writeFileSync(bad, '{"version": 9, "projects": [{"wsPath": "C:\\ws\\x", "projectId": "p-x"}]}', 'utf8')
+    expect(createProjectResolver([{ wsPath: 'C:\\ws\\s', projectId: 'p-s' }], bad)('C:\\ws\\x')).toBeUndefined()
+    writeFileSync(bad, 'not json', 'utf8')
+    expect(createProjectResolver([{ wsPath: 'C:\\ws\\s', projectId: 'p-s' }], bad)('C:\\ws\\s')).toBe('p-s')
+  })
+
+  it('文件行形状防御：非对象行/字段缺型跳过（不炸整表）', () => {
+    const file = join(dir, 'b3.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ version: 1, projects: ['nope', { wsPath: 1, projectId: 'x' }, { wsPath: 'C:\\ws\\ok', projectId: 'p-ok' }] }),
+      'utf8',
+    )
+    const resolver = createProjectResolver([], file)
+    expect(resolver('C:\\ws\\ok')).toBe('p-ok')
   })
 })
 

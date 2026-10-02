@@ -12,10 +12,12 @@ import { createKnowledgeTools, createProjectResolver } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
 
-/** 插件配置（profile cordis.patch.yml 行 config） */
+/** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
 export interface KnowledgePluginConfig {
   /** 会话 cwd → projectId 绑定表（wsPath 与 projects.ws_path 同口径 canonical path） */
   projects?: readonly ProjectBinding[]
+  /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表；4.2） */
+  bindingsFile?: string
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -29,7 +31,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
   (ctx: KnowledgeContextFace, config: KnowledgePluginConfig = {}): (() => void) => {
     const tools = createKnowledgeTools({
       knowledge: ctx.forgeKnowledge,
-      resolveProjectId: createProjectResolver(config.projects ?? []),
+      resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
     })
     const disposers = [
       ctx.tools.register(tools.search),

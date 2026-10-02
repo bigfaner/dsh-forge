@@ -49,12 +49,12 @@ function renderHit(hit: SearchHit): string {
   return `- [${hit.domainPath}] ${hit.title} (${id}, score ${hit.score.toFixed(2)}) — ${hit.summary}`
 }
 
-/** SearchHit 数组 → 模型可见文本（零命中显式声明，供 agent 决策回落检索原语） */
+/** SearchHit 数组 → 模型可见文本（零命中显式声明 + 收窄查询自纠提示，供 agent 决策回落检索原语） */
 function renderHits(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
   const hits = value as readonly SearchHit[]
   const body =
     hits.length === 0
-      ? '(no knowledge entries matched — fall back to regular retrieval such as grep/glob)'
+      ? '(no knowledge entries matched — try a shorter query first: a single keyword tag or one short text term; then fall back to regular retrieval such as grep/glob)'
       : hits.map(renderHit).join('\n')
   return [{ type: 'text', text: body }]
 }
@@ -82,7 +82,7 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
   return {
     name: 'knowledge.search',
     description:
-      'Search the registered project knowledge base (summary-first). Omit domain_prefix to search all domains; combine with keywords or free text to narrow. Returns matching entries with title, summary, domain path, and score.',
+      'Search the registered project knowledge base (summary-first). Omit domain_prefix to search all domains; combine with keywords or free text to narrow. Matching is strict — keyword tags must match an entry keyword exactly (AND) and text is a substring match — so keep queries short: start with one high-signal keyword or a short text term, then refine. Returns matching entries with title, summary, domain path, and score.',
     parameters: {
       type: 'object',
       properties: {
@@ -93,11 +93,13 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
         keywords: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional keyword tags to narrow matches within the knowledge base.',
+          description:
+            'Optional keyword tags to narrow matches — every tag must match an entry keyword exactly (AND narrowing), so pass only high-confidence tags (one or two).',
         },
         text: {
           type: 'string',
-          description: 'Optional free-text query matched against entry titles and summaries.',
+          description:
+            'Optional free-text query, matched as a case-insensitive substring against entry titles and summaries — use a short term or phrase, not a full question sentence.',
         },
         limit: {
           type: 'integer',

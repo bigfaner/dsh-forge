@@ -98,21 +98,26 @@ describe('forwardToHost（转发：origin 校验 + 头改写 + 流保真）', ()
 })
 
 describe('rewriteStreamHeaders / installShellStreamRewrite（ws 握手改写）', () => {
-  it('目标 = Host host 时改写 origin/cookie/sec-fetch-site；他 host 不动', () => {
+  it('目标 = Host origin（按请求 URL——Chromium ws 握手无 Host 头）时改写 origin/cookie/sec-fetch-site；他 origin 不动', () => {
     const rewritten = rewriteStreamHeaders(
-      { Host: '127.0.0.1:19500', Origin: SHELL_PAGE_ORIGIN },
+      { Origin: SHELL_PAGE_ORIGIN },
+      'ws://127.0.0.1:19500/api/remote.mux',
       { url: 'http://127.0.0.1:19500/', cookie: 'k=v' },
     )
     expect(rewritten?.requestHeaders.origin).toBe('http://127.0.0.1:19500')
     expect(rewritten?.requestHeaders.cookie).toBe('k=v')
     expect(rewritten?.requestHeaders['sec-fetch-site']).toBe('same-origin')
-    expect(rewriteStreamHeaders({ Host: 'elsewhere' }, { url: 'http://127.0.0.1:19500/', cookie: 'k=v' })).toBeUndefined()
+    // 非 Host origin（他端口）与非法 URL 不动
+    expect(
+      rewriteStreamHeaders({}, 'ws://127.0.0.1:19999/api/remote.mux', { url: 'http://127.0.0.1:19500/', cookie: 'k=v' }),
+    ).toBeUndefined()
+    expect(rewriteStreamHeaders({}, 'not a url', { url: 'http://127.0.0.1:19500/', cookie: 'k=v' })).toBeUndefined()
   })
   it('安装器：Host 未就绪或非主窗口 → 空改写透传', () => {
     const seen: unknown[] = []
     const webRequest: WebRequestLike = {
       onBeforeSendHeaders(_filter, listener) {
-        listener({ url: 'ws://127.0.0.1:19500/api/remote.mux', webContentsId: 7, requestHeaders: { Host: '127.0.0.1:19500' } }, (change) => {
+        listener({ url: 'ws://127.0.0.1:19500/api/remote.mux', webContentsId: 7, requestHeaders: { Origin: SHELL_PAGE_ORIGIN } }, (change) => {
           seen.push(change)
         })
       },

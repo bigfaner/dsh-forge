@@ -201,16 +201,25 @@ export function registerShellScheme(protocol: ProtocolLike): void {
 }
 
 /**
- * ws 升级请求改写（纯函数）：仅当目标是 Host origin 时，页 origin → Host origin、附认证
- * cookie、sec-fetch-site 改 same-origin（Host 的 CSRF/信任栏仅认同源握手）。
+ * ws 升级请求改写（纯函数）：仅当请求目标是 Host origin 时，页 origin → Host origin、
+ * 附认证 cookie、sec-fetch-site 改 same-origin（Host 的 CSRF/信任栏仅认同源握手）。
+ * 目标判定按请求 URL（Electron 44/Chromium 152 的 onBeforeSendHeaders 不携带 Host 头——
+ * 4.2 e2e 实证：ws 握手 headers 无 Host，按头过滤恒不中致 401 重连环；URL 的 authority
+ * 由网络栈落到真实 Host 头，比对等价且不缺席）。
  */
 export function rewriteStreamHeaders(
   requestHeaders: Record<string, string>,
+  requestUrl: string,
   host: { url: string; cookie: string },
 ): { requestHeaders: Record<string, string> } | undefined {
   const target = new URL(host.url)
-  const headers = Object.fromEntries(Object.entries(requestHeaders).map(([name, value]) => [name.toLowerCase(), value]))
-  if (headers.host !== target.host) return undefined
+  let source: URL
+  try {
+    source = new URL(requestUrl)
+  } catch {
+    return undefined
+  }
+  if (source.host !== target.host) return undefined
   return {
     requestHeaders: {
       ...requestHeaders,
@@ -222,10 +231,10 @@ export function rewriteStreamHeaders(
 }
 
 /**
- * 安装 ws 改写栏（ws://127.0.0.1/* 全量拦——按 Host 头过滤在改写函数内完成；母本同布局）。
+ * 安装 ws 改写栏（ws://127.0.0.1/* 全量拦——目标 origin 过滤在改写函数内按请求 URL 完成）。
  * @param webRequest - session webRequest 面
  * @param host - Host 就绪面
- * @param ownsWebContentsId - 限定主窗口（他页 ws 不改写、不取消——母本 callback({}) 同语义）
+ * @param ownsWebContentsId - 限定主窗口（他页 ws 不改写、不取消——callback({}) 同语义）
  */
 export function installShellStreamRewrite(
   webRequest: WebRequestLike,
@@ -238,6 +247,6 @@ export function installShellStreamRewrite(
       callback({})
       return
     }
-    callback(rewriteStreamHeaders(details.requestHeaders, ready) ?? {})
+    callback(rewriteStreamHeaders(details.requestHeaders, details.url, ready) ?? {})
   })
 }

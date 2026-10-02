@@ -40,14 +40,24 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   })
 
-  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/core / @dsh-forge/knowledge 产品行（disabled 预留）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/core / @dsh-forge/knowledge 产品行（4.2 转正启用）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
     // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
     expect(patch).toContain('- id: client-hmr')
     expect(patch).toContain('disabled: true')
-    expect(patch).toContain("name: '@dsh-forge/core'")
-    expect(patch).toContain("name: '@dsh-forge/knowledge'")
+    // 产品两行启用（4.2——SMOKE-LEDGER §5 转正）：insert 块无 disabled；行 config 不在
+    // 用户层书写（dbFile / bindingsFile = boot overlay 装配期注入，见 boot/overlay.ts）
+    expect(patch).toContain(
+      [
+        '- insert:',
+        '    - id: dsh-forge-core',
+        "      name: '@dsh-forge/core'",
+        '    - id: dsh-forge-knowledge',
+        "      name: '@dsh-forge/knowledge'",
+      ].join('\n'),
+    )
+    expect(patch).not.toContain('disabled: true\n    - id: dsh-forge-knowledge')
   })
 
   it('pnpm-workspace.yaml 模板：hoisted + autoInstallPeers false（S1 pin 形状）', () => {
@@ -98,21 +108,32 @@ describe('落地机制边界', () => {
 
 describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）', () => {
   const devDir = join(import.meta.dirname, '..', '..', 'profile.dev')
-  it('package.json 依赖与 bundles 一致（dev 直链 workspace 形态同源）', () => {
+  it('package.json：官方 bundle 行与模板逐键一致 + 产品插件 link 三件与原生依赖兜底（4.2 dev 直链）', () => {
     const dev = JSON.parse(readFileSync(join(devDir, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
       dsh: { profile: { bundles: string[] } }
     }
     const packaged = JSON.parse(PROFILE_TEMPLATE_FILES['package.json']!) as typeof dev
-    expect(dev.dependencies).toEqual(packaged.dependencies)
+    // 官方 bundle 逐键一致（模板全集 ⊆ dev——dev 另有产品插件行）
+    for (const [name, version] of Object.entries(packaged.dependencies)) {
+      expect(dev.dependencies[name], `dev profile 缺官方行 ${name}`).toBe(version)
+    }
     expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
+    // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
+    expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
+    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
+    expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
+    // core 运行期原生依赖（prebuilds 随包分发；兜底供非 realpath 解析路径）
+    expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
+    expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
-  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行 disabled）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行启用——4.2 转正）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
     expect(dev).toContain('- id: system-prompt')
     expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
+    expect(dev).not.toMatch(/dsh-forge-(core|knowledge)[\s\S]{0,80}disabled/)
   })
   it('pnpm-workspace.yaml 全文一致', () => {
     const dev = readFileSync(join(devDir, 'pnpm-workspace.yaml'), 'utf8')

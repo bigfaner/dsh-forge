@@ -21,6 +21,10 @@ export interface HostPaths {
   dshHome: string
   /** installAnchor = @deepseek-ai/dsh/package.json 绝对路径（runtime resolution 锚） */
   installAnchor: string
+  /** 应用状态库（core 插件 dbFile——boot overlay 行注入；4.2） */
+  stateDb: string
+  /** knowledge 插件绑定表文件（会话 cwd → projectId；host 装配方维护，4.2） */
+  bindingsFile: string
 }
 
 export interface PathEnv {
@@ -50,6 +54,8 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
       env.DSH_FORGE_INSTALL_ANCHOR !== undefined && env.DSH_FORGE_INSTALL_ANCHOR !== ''
         ? resolveFromHost(env.DSH_FORGE_INSTALL_ANCHOR)
         : createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json'),
+    stateDb: join(userData, 'state.db'),
+    bindingsFile: join(userData, 'knowledge-bindings.json'),
   }
 }
 

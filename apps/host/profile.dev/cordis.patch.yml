@@ -16,13 +16,14 @@
 - id: client-hmr
   disabled: true
 
-# ── 预留产品插件行（@dsh-forge/core / @dsh-forge/knowledge；
-#    disabled 预留位 = 行合法但不挂载——2.x/3.x 产品插件 bundle 就绪后转正启用，
-#    dev 形态届时改为链 workspace 构建产物）──
+# ── 产品插件行（4.2 转正启用——SMOKE-LEDGER §5 转正条件落位）：
+#    core = 单 SQLite 句柄双服务（ctx.forgeProjects / ctx.forgeKnowledge）；
+#    knowledge = 召回 tool 双件 + forge:knowledge 系统提示词段。
+#    config 不在用户层书写（dbFile / bindingsFile 属应用装配期路径——runProfile
+#    boot overlay 按 userData 逐启生成，见 apps/host/src/boot/overlay.ts）。
+#    dev 形态链 workspace 构建产物（package.json link: 三件）。──
 - insert:
     - id: dsh-forge-core
       name: '@dsh-forge/core'
-      disabled: true
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
-      disabled: true

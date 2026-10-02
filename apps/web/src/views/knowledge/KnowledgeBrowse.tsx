@@ -23,6 +23,8 @@ export interface KnowledgeBrowseProps {
   readonly projectId: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
+  /** 视图激活态（缺省 true；false = 隐藏期 hold，激活翻转全量重拉——AC3 即时累积，4.2 fix-1） */
+  readonly active?: boolean
   /** 卡片时间标签基准（缺省当次渲染时刻） */
   readonly now?: number
   /** 卡片点击 → 详情抽屉打开（3.7/3.8 装配；缺席 = 不可点开） */
@@ -98,7 +100,7 @@ export function KnowledgeBrowseBody({
  * 浏览主体装载壳（hook 装配——数据 + 过滤态机单一来源；3.8 挂知识视图槽）。
  * 首装零数据期呈现骨架（索引直读即瞬时翻卡——AC5 首显不阻塞）。
  */
-export function KnowledgeBrowse({ projectId, makeClient, now, onEntryOpen }: KnowledgeBrowseProps): ReactNode {
-  const [state, actions] = useKnowledgeBrowse(projectId, makeClient)
+export function KnowledgeBrowse({ projectId, makeClient, active, now, onEntryOpen }: KnowledgeBrowseProps): ReactNode {
+  const [state, actions] = useKnowledgeBrowse(projectId, makeClient, active)
   return <KnowledgeBrowseBody state={state} actions={actions} now={now} onEntryOpen={onEntryOpen} />
 }

@@ -6,7 +6,10 @@
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, protocol, session } from 'electron'
 import { bootDshHost } from './boot/index.js'
-import { BOOT_CHANNEL, createForgeIpc, registerBootChannel, registerFsChannels } from './ipc/index.js'
+import {
+  BOOT_CHANNEL, createForgeIpc, refreshKnowledgeBindings, registerBootChannel, registerFsChannels,
+  registerKnowledgeChannels, registerProjectsChannels, withKnowledgeBindingsRefresh,
+} from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
   acquireSingleInstance, authenticateWebHost, createMainWindow, createShellProtocolHandler,
@@ -38,7 +41,13 @@ void (async () => {
     }
     const envPort = Number(process.env.DSH_FORGE_PORT ?? '')
     const port = Number.isInteger(envPort) && envPort > 0 ? envPort : 19400 + (process.pid % 400)
-    const host = await bootDshHost({ profileDir: paths.profileDir, installAnchor: paths.installAnchor, port })
+    const host = await bootDshHost({
+      profileDir: paths.profileDir,
+      installAnchor: paths.installAnchor,
+      port,
+      stateDb: paths.stateDb,
+      bindingsFile: paths.bindingsFile,
+    })
     const cookie = await authenticateWebHost(host.manifest.url) // 认证 URL → authority cookie（转发/ws 用）
     let hostRef: { url: string; cookie: string } | undefined = { url: host.manifest.url, cookie }
     protocol.handle(SHELL_SCHEME, createShellProtocolHandler({
@@ -49,6 +58,19 @@ void (async () => {
     installShellStreamRewrite(session.defaultSession.webRequest, () => hostRef, (id) => mainWindow?.webContents.id === id)
     const forgeIpc = createForgeIpc(ipcMain) // forge:* 域面（handler 本体 2.4/3.5 注册进此机制）
     registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
+    // 产品双服务接线（4.2——SMOKE-LEDGER §5 转正）：core 插件经 profile 装配 provide，
+    // boot 面世后注册 forge:projects/* + forge:knowledge/* 两面；knowledge 绑定表随
+    // boot 全量刷新 + 注册增量刷新（fail-soft——服务缺席记日志不注册，壳面不受损）
+    if (host.services.forgeProjects !== undefined) {
+      registerProjectsChannels(
+        forgeIpc,
+        withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile),
+      )
+      void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
+    } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')
+    if (host.services.forgeKnowledge !== undefined) {
+      registerKnowledgeChannels(forgeIpc, host.services.forgeKnowledge)
+    } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })

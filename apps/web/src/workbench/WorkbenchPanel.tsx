@@ -268,6 +268,7 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
         knowledge={
           <KnowledgeView
             projectId={projectId}
+            active={view.center === 'knowledge'}
             openEntryId={drawerEntryId}
             onOpenEntryChange={setDrawerEntryId}
           />
