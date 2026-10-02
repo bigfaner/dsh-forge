@@ -1,0 +1,17 @@
+packages:
+  - .
+
+nodeLinker: hoisted
+# 与 profile.dev（S1 pin 形状 autoInstallPeers: false）的刻意差异：
+# 打包树必须自足完整——dev 形态靠 installAnchor 工作树侧的 resolution 补 peer
+# 缺口（.pnpm 隐藏仓），安装包 resources 树无此兜底；peer-only 包（如
+# @deepseek-ai/dsh-scope）不装全则 ESM 链式 import 在打包形态 ERR_MODULE_NOT_FOUND
+# （4.1 探针实证）。autoInstallPeers: true 令 pnpm 补齐全部缺席 peer。
+autoInstallPeers: true
+allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': true
+  '@google/genai': true
+  better-sqlite3: true
+  koffi: true
+  node-pty: true
+  protobufjs: true

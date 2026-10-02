@@ -11,6 +11,8 @@
 //   runProfile({environment, profile, resolvedProfile, patchFiles, args, packageManager?})
 //     → { ctx, shutdown }；就绪后 ctx.connection.authenticatedUrl(base) + ctx.webServer.collectIndexInjections()
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DomainNode, KnowledgeService, ProjectService } from '@dsh-forge/contracts'
 import {
@@ -35,6 +37,8 @@ export interface BootDshOptions {
   stateDb: string
   /** knowledge 绑定表文件绝对路径（bindingsFile——boot overlay 注入；4.2） */
   bindingsFile: string
+  /** 安装包 resources 根（4.1 打包形态；boot child 取 runtime/host-dist 真实文件入口） */
+  resourcesDir?: string
 }
 
 /** 产品双服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
@@ -59,7 +63,7 @@ const SHUTDOWN_GRACE_MS = 6_000
 
 /** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals） */
 export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandle> {
-  const childEntry = fileURLToPath(new URL('./child.js', import.meta.url))
+  const childEntry = resolveChildEntry(import.meta.url, options.resourcesDir)
   const child = spawn(process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
@@ -102,6 +106,23 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
     },
     shutdown: () => shutdownChild(child),
   }
+}
+
+/**
+ * boot child 真实文件入口解析（4.1 打包形态缝）。
+ * dev：本模块同目录 dist（apps/host/dist/boot/child.js——workspace 树解析邻接）。
+ * packaged：{resources}/runtime/host-dist/boot/child.js——ELECTRON_RUN_AS_NODE 派生进程
+ * 只读真实文件（asar 不可读），且其 ESM import（@deepseek-ai/dsh-app-boot /
+ * @deepseek-ai/dsh/profile-boot）沿目录上溯解析，须与运行时 node_modules 同容器相邻
+ * （assemble-installer-resources.mjs 物化布局）。resourcesDir 给定但 host-dist 缺席
+ * （半成型资源）→ 回退 dev 入口（失败面交 spawn 的 ENOENT 兜底显形）。
+ */
+export function resolveChildEntry(moduleUrl: string, resourcesDir?: string): string {
+  if (resourcesDir !== undefined) {
+    const packaged = join(resourcesDir, 'runtime', 'host-dist', 'boot', 'child.js')
+    if (existsSync(packaged)) return packaged
+  }
+  return fileURLToPath(new URL('./child.js', moduleUrl))
 }
 
 /** ready/fatal/早退三态等待（close 早于 ready = boot 失败——错误面取退出码；error = spawn 失败） */

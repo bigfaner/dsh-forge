@@ -30,3 +30,6 @@ playwright-report/
 **/_lintneg_*
 # host dev profile runtime artifacts (template files ARE committed; cordis.yml boot-rewritten)
 apps/host/profile.dev/cordis.yml
+
+# Installer pipeline artifacts (4.1: staging/app/installer + probes)
+release/

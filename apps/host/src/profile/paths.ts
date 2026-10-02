@@ -6,6 +6,12 @@
 //   DSH_FORGE_PROFILE_DIR  显式 profile 目录（两形态通用覆盖；e2e/调试用）
 //   DSH_FORGE_INSTALL_ANCHOR 显式 installAnchor（@deepseek-ai/dsh/package.json 绝对路径）
 //   DSH_FORGE_USER_DATA    userData 覆盖（e2e 隔离；main 侧 app.setPath 消费）
+//   DSH_FORGE_RESOURCES_DIR 安装包 resources 根（4.1 打包形态；main 侧 app.isPackaged 时
+//                           自 process.resourcesPath 注入，e2e 以 staging/已安装目录模拟）——
+//                           置位后 installAnchor 取 {resources}/runtime/package.json（合成
+//                           anchor 清单，assemble-installer-resources.mjs 物化），壳 dist 取
+//                           {resources}/web-dist（resolveWebDistDir 同源消费），boot child
+//                           入口取 {resources}/runtime/host-dist（run.ts resolveChildEntry）
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,18 +25,21 @@ export interface HostPaths {
   profileDir: string
   /** 重定向后的 DSH_HOME（S1 pin：runProfile 触碰 $DSH_HOME，产品须隔离到应用数据目录） */
   dshHome: string
-  /** installAnchor = @deepseek-ai/dsh/package.json 绝对路径（runtime resolution 锚） */
+  /** installAnchor（runtime resolution 锚；打包形态 = resources 合成 anchor 清单） */
   installAnchor: string
   /** 应用状态库（core 插件 dbFile——boot overlay 行注入；4.2） */
   stateDb: string
   /** knowledge 插件绑定表文件（会话 cwd → projectId；host 装配方维护，4.2） */
   bindingsFile: string
+  /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
+  resourcesDir?: string
 }
 
 export interface PathEnv {
   DSH_FORGE_DEV_PROFILE?: string
   DSH_FORGE_PROFILE_DIR?: string
   DSH_FORGE_INSTALL_ANCHOR?: string
+  DSH_FORGE_RESOURCES_DIR?: string
 }
 
 /** apps/host 包根（本模块位于 {src|dist}/profile/ 下，上溯三级；dev 形态默认 profile 目录锚） */
@@ -46,6 +55,10 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
       : dev
         ? join(hostRoot(), 'profile.dev')
         : join(userData, 'profile')
+  const resourcesDir =
+    env.DSH_FORGE_RESOURCES_DIR !== undefined && env.DSH_FORGE_RESOURCES_DIR !== ''
+      ? resolveFromHost(env.DSH_FORGE_RESOURCES_DIR)
+      : undefined
   return {
     form: dev ? 'dev' : 'packaged',
     profileDir,
@@ -53,9 +66,12 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     installAnchor:
       env.DSH_FORGE_INSTALL_ANCHOR !== undefined && env.DSH_FORGE_INSTALL_ANCHOR !== ''
         ? resolveFromHost(env.DSH_FORGE_INSTALL_ANCHOR)
-        : createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json'),
+        : resourcesDir !== undefined
+          ? join(resourcesDir, 'runtime', 'package.json')
+          : createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json'),
     stateDb: join(userData, 'state.db'),
     bindingsFile: join(userData, 'knowledge-bindings.json'),
+    resourcesDir,
   }
 }
 

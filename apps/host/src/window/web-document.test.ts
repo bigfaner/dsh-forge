@@ -167,4 +167,19 @@ describe('resolveWebDistDir', () => {
     expect(def.replace(/\\/g, '/')).toMatch(/apps[/]web[/]dist$/)
     expect(resolveWebDistDir({ DSH_FORGE_WEB_DIST: 'x/y' }).replace(/\\/g, '/')).toMatch(/apps[/]host[/]x[/]y$/)
   })
+
+  it('4.1 打包形态：DSH_FORGE_RESOURCES_DIR 置位 → {resources}/web-dist（extraResources 物化位）', () => {
+    // 绝对 resources 根直取（win32 join 拼接绝对路径会产出废路径——实测坑）
+    const abs = resolveWebDistDir({ DSH_FORGE_RESOURCES_DIR: 'X:/install/resources' })
+    expect(abs.replace(/\\/g, '/')).toBe('X:/install/resources/web-dist')
+    // 相对锚 hostRoot（与 profile/paths resolveFromHost 同语义）
+    expect(resolveWebDistDir({ DSH_FORGE_RESOURCES_DIR: 'rel/res' }).replace(/\\/g, '/')).toMatch(
+      /apps[/]host[/]rel[/]res[/]web-dist$/,
+    )
+  })
+
+  it('DSH_FORGE_WEB_DIST 显式覆盖仍最优先（调试口径，压过 resources 默认）', () => {
+    const over = resolveWebDistDir({ DSH_FORGE_WEB_DIST: 'x/y', DSH_FORGE_RESOURCES_DIR: 'X:/res' })
+    expect(over.replace(/\\/g, '/')).toMatch(/apps[/]host[/]x[/]y$/)
+  })
 })

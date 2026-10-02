@@ -19,6 +19,7 @@ import {
 
 app.setName('dsh-forge') // userData = {app-data}/dsh-forge（profile 首启落地根）
 if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA)
+if (app.isPackaged) process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
 registerShellScheme(protocol) // 特权 scheme 注册一次性，须先于 app ready
 
 const watchdog = setTimeout(() => {
@@ -47,6 +48,7 @@ void (async () => {
       port,
       stateDb: paths.stateDb,
       bindingsFile: paths.bindingsFile,
+      resourcesDir: paths.resourcesDir, // 4.1：打包形态 boot child 取 runtime/host-dist 入口
     })
     const cookie = await authenticateWebHost(host.manifest.url) // 认证 URL → authority cookie（转发/ws 用）
     let hostRef: { url: string; cookie: string } | undefined = { url: host.manifest.url, cookie }

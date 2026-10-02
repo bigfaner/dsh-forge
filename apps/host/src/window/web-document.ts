@@ -7,7 +7,7 @@
 //   - ws://127.0.0.1/* 升级请求 = 页 origin 改写为 Host origin + 附 cookie（/api/remote.mux
 //     相对 streamBaseUrl 直连 webserver，carrier.streamBaseUrl 提供基址）
 import { readFile } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 import { hostRoot } from '../profile/paths.js'
 
 /** 壳 scheme（standard/secure/fetch/stream 特权面——须 app ready 前注册） */
@@ -52,13 +52,22 @@ export interface WebRequestLike {
 
 /**
  * 壳 dist 根解析：dev = workspace apps/web/dist（hostRoot 上溯）；DSH_FORGE_WEB_DIST 覆盖
- * （绝对或相对 hostRoot；e2e/打包形态消费——4.1 electron-builder extraResources 定形后接续）。
+ * （绝对或相对 hostRoot）；打包形态默认 = {resources}/web-dist（DSH_FORGE_RESOURCES_DIR
+ * 置位时——4.1 extraResources 定形：assemble-installer-resources.mjs 物化 web-dist）。
  */
-export function resolveWebDistDir(env: { DSH_FORGE_WEB_DIST?: string }): string {
+export function resolveWebDistDir(env: { DSH_FORGE_WEB_DIST?: string; DSH_FORGE_RESOURCES_DIR?: string }): string {
   if (env.DSH_FORGE_WEB_DIST !== undefined && env.DSH_FORGE_WEB_DIST !== '') {
-    return join(hostRoot(), env.DSH_FORGE_WEB_DIST)
+    return resolveFromHost(env.DSH_FORGE_WEB_DIST)
+  }
+  if (env.DSH_FORGE_RESOURCES_DIR !== undefined && env.DSH_FORGE_RESOURCES_DIR !== '') {
+    return join(resolveFromHost(env.DSH_FORGE_RESOURCES_DIR), 'web-dist')
   }
   return join(hostRoot(), '..', 'web', 'dist')
+}
+
+/** 相对路径锚 hostRoot（与 profile/paths.ts resolveFromHost 同语义；绝对值原样） */
+function resolveFromHost(p: string): string {
+  return isAbsolute(p) ? p : join(hostRoot(), p)
 }
 
 /**

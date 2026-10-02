@@ -42,3 +42,34 @@ describe('resolveHostPaths 双形态', () => {
     expect(hostRoot().replaceAll('\\', '/')).toMatch(/apps\/host$/)
   })
 })
+
+// 4.1 打包形态资源根：DSH_FORGE_RESOURCES_DIR 置位 → installAnchor = {resources}/runtime/package.json
+// （合成 anchor 清单，assemble-installer-resources.mjs 物化；main 侧 app.isPackaged 注入）
+describe('resolveHostPaths 打包资源根（DSH_FORGE_RESOURCES_DIR）', () => {
+  it('置位 → anchor = {resources}/runtime/package.json + resourcesDir 透出', () => {
+    const paths = resolveHostPaths({ DSH_FORGE_RESOURCES_DIR: 'X:/install/resources' }, 'C:/ud')
+    expect(paths.resourcesDir).toBe('X:/install/resources')
+    expect(paths.installAnchor.replaceAll('\\', '/')).toBe('X:/install/resources/runtime/package.json')
+  })
+
+  it('相对 resources 根锚 host 根（与 DSH_FORGE_PROFILE_DIR 同语义）', () => {
+    const rel = resolveHostPaths({ DSH_FORGE_RESOURCES_DIR: 'rel/res' }, 'C:/ud')
+    expect(rel.resourcesDir).toBe(join(hostRoot(), 'rel/res'))
+    expect(rel.installAnchor).toBe(join(hostRoot(), 'rel/res', 'runtime', 'package.json'))
+  })
+
+  it('DSH_FORGE_INSTALL_ANCHOR 显式覆盖优先于 resources 推导（调试口径）', () => {
+    const over = resolveHostPaths(
+      { DSH_FORGE_RESOURCES_DIR: 'X:/install/resources', DSH_FORGE_INSTALL_ANCHOR: 'X:/other/pkg.json' },
+      'C:/ud',
+    )
+    expect(over.installAnchor).toBe('X:/other/pkg.json')
+    expect(over.resourcesDir).toBe('X:/install/resources')
+  })
+
+  it('未置位 → 无 resourcesDir，anchor 回退 workspace 解析（dev/调试形态）', () => {
+    const paths = resolveHostPaths({}, 'C:/ud')
+    expect(paths.resourcesDir).toBeUndefined()
+    expect(existsSync(paths.installAnchor)).toBe(true)
+  })
+})
