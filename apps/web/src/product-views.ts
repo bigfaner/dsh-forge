@@ -7,6 +7,7 @@
 // 求值序保证：main.ts 同步 import 本模块（页面模块求值期），插件 bundle 经 boot 注入
 // 在就绪门放行后才装载——发布恒先于消费（缺席 = 装配断裂，插件 apply fail-loud）。
 import type { ComponentType } from 'react'
+import { ForgeWorkbenchPanel, type ForgeWorkbenchPanelProps } from './workbench/index.js'
 import {
   ForgeBrandMark,
   ForgeBrandName,
@@ -24,6 +25,8 @@ export interface ForgePublishedViews {
   readonly ForgeBrandMark: ComponentType<ForgeBrandMarkProps>
   /** sidebar.brand.name 洞位内容（dsh-forge 字标） */
   readonly ForgeBrandName: ComponentType<ForgeBrandNameProps>
+  /** main.conversation 洞位占用者（工作台装配面板：三区装配 + hero 相位 UF-2 + UF-3 流程宿主 + 工作台桥） */
+  readonly ForgeWorkbenchPanel: ComponentType<ForgeWorkbenchPanelProps>
 }
 
 declare global {
@@ -35,4 +38,5 @@ declare global {
   ForgeSidebarSlot,
   ForgeBrandMark,
   ForgeBrandName,
+  ForgeWorkbenchPanel,
 }

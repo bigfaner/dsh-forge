@@ -165,7 +165,7 @@
         "2.11",
         "1.gate"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.12-workbench-assembly.md",
       "record": "records/2.12-workbench-assembly.md",
       "surface-type": "web",

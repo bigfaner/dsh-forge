@@ -1,11 +1,13 @@
-// client-plugin 单测 —— 产品 client 插件形状 + 槽位路线 A 注册面（2.7 AC1）。
-// 装载/激活链（掌舵 → 注册 → 物化 → Loader 激活）由 e2e（web-shell.spec）自证；
+// client-plugin 单测 —— 产品 client 插件形状 + 槽位路线 A 注册面（2.7 AC1）+
+// 工作台装配占位注册（2.12：main.conversation 影子替换官方 ConversationRoot）。
+// 装载/激活链（掌舵 → 注册 → 物化 → Loader 激活）由 e2e（web-shell.spec / workbench-sc1.spec）自证；
 // id 同源 pin（main.ts 字面量 ↔ 常量）在 tests/structure/web-shell.test.ts（node 面测试）。
-// 洞名/影子优先级/注入面 = G1 契约面清单第 3 项（S2 残留 #1——本任务清点入池）的常量 pin。
+// 洞名/影子优先级/注入面 = G1 契约面清单第 3 项（S2 残留 #1——2.7 清点入池）的常量 pin。
 import { describe, expect, it, vi } from 'vitest'
 import {
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
+  MAIN_CONVERSATION_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
   SIDEBAR_BRAND_NAME_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
@@ -55,8 +57,18 @@ function fakeClientCtx(): { ctx: ForgeClientCtx; registers: RegisterCall[]; inje
 }
 
 /** 假产品视图发布面 */
-function publishFakeViews(): { ForgeSidebarSlot: unknown; ForgeBrandMark: unknown; ForgeBrandName: unknown } {
-  const views = { ForgeSidebarSlot: 'COMP:sidebar-slot', ForgeBrandMark: 'COMP:brand-mark', ForgeBrandName: 'COMP:brand-name' }
+function publishFakeViews(): {
+  ForgeSidebarSlot: unknown
+  ForgeBrandMark: unknown
+  ForgeBrandName: unknown
+  ForgeWorkbenchPanel: unknown
+} {
+  const views = {
+    ForgeSidebarSlot: 'COMP:sidebar-slot',
+    ForgeBrandMark: 'COMP:brand-mark',
+    ForgeBrandName: 'COMP:brand-name',
+    ForgeWorkbenchPanel: 'COMP:workbench-panel',
+  }
   ;(globalThis as { __DSH_FORGE_VIEWS__?: unknown }).__DSH_FORGE_VIEWS__ = views
   return views
 }
@@ -86,11 +98,16 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
 })
 
 describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内容洞位）', () => {
-  it('三洞位经 slots.inject 声明依赖；workspaces 注册 = 发布组件 + 影子优先级；诊断回填落座', () => {
+  it('sidebar 三洞位经 slots.inject 声明依赖；workspaces 注册 = 发布组件 + 影子优先级；诊断回填落座', () => {
     const views = publishFakeViews()
     const { ctx, registers, injectedKeys } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    expect(injectedKeys).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT])
+    expect(injectedKeys).toEqual([
+      SIDEBAR_WORKSPACES_SLOT,
+      SIDEBAR_BRAND_MARK_SLOT,
+      SIDEBAR_BRAND_NAME_SLOT,
+      MAIN_CONVERSATION_SLOT,
+    ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
     expect(workspaces).toBeDefined()
     expect(workspaces!.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
@@ -120,6 +137,26 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     })
     ;(face as { openSession: (id: string) => void }).openSession('s-1')
     expect(open).toHaveBeenCalledWith('s-1')
+    unpublishViews()
+  })
+
+  it('工作台装配占位（2.12）：main.conversation 影子注册（发布组件 + 影子优先级 + 无注入面——数据走官方 kit/自有 RPC）；诊断回填落座', () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const main = registers.find((r) => r.key === MAIN_CONVERSATION_SLOT)
+    expect(main).toBeDefined()
+    expect(main!.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
+    expect(main!.options.priority).toBeLessThan(0) // lowest renders——影子官方 ConversationRoot（priority 0）
+    expect(main!.component).toBe(views.ForgeWorkbenchPanel)
+    expect(main!.options.inject).toBeUndefined() // 官方 kit（PropsRuntime）+ 自有 forge RPC——无插件注入面
+    const marker = (
+      globalThis as {
+        __DSH_FORGE_CLIENT__?: { mainPanel?: { registered?: string[]; error?: string } }
+      }
+    ).__DSH_FORGE_CLIENT__
+    expect(marker?.mainPanel?.registered).toEqual([MAIN_CONVERSATION_SLOT])
+    expect(marker?.mainPanel?.error).toBeUndefined()
     unpublishViews()
   })
 

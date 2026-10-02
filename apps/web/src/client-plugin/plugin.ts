@@ -4,6 +4,8 @@
 // 展开宽）/新会话/快捷键全部白拿（AC1）。组件本体不进本 bundle（classic script 自含
 // 纪律 + React 单例）——经壳 bundle 发布面 __DSH_FORGE_VIEWS__ 递达（缺席 = 装配断裂
 // fail-loud）。
+// 2.12：工作台装配 —— main.conversation 洞位影子替换（三区工作台占用中区；官方会话面经
+// conversation.content 工厂嵌入配方回接，见 workbench/ChatSurface.tsx）。
 // 契约依据（上游 0.2.0-rc.2 源码核实，G1 契约面清单第 3 项——S2 残留 #1 清点入池）：
 //   - ui-sidebar slots.ts：'sidebar.workspaces' single/root，owner = SidebarSectionOwnerProps
 //     { wide, expandSidebar }；'sidebar.brand.mark' owner { size }；'sidebar.brand.name'
@@ -26,6 +28,13 @@ export const SIDEBAR_WORKSPACES_SLOT = 'sidebar.workspaces'
 /** 洞名：品牌行字标 / 字名（壳拥有品牌行；内容洞位 = 产品品牌件） */
 export const SIDEBAR_BRAND_MARK_SLOT = 'sidebar.brand.mark'
 export const SIDEBAR_BRAND_NAME_SLOT = 'sidebar.brand.name'
+/**
+ * 洞名：官方 ui-conversation 的中区主面板会话壳（single/session-maybe；官方占用者
+ * ConversationRoot 缺省 priority 0）。工作台装配（2.12）影子替换：三区工作台
+ * （左 rail = 官方 sidebar 壳路线 A；中/右 = zones 容器）占用中区——官方会话面经
+ * conversation.content 工厂嵌入配方回接（对话 tab），数据/动作走官方 kit + 自有 forge RPC。
+ */
+export const MAIN_CONVERSATION_SLOT = 'main.conversation'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 
@@ -59,6 +68,7 @@ export interface ForgeViewsGlobal {
     ForgeSidebarSlot: unknown
     ForgeBrandMark: unknown
     ForgeBrandName: unknown
+    ForgeWorkbenchPanel: unknown
   }
 }
 
@@ -76,7 +86,7 @@ export interface ForgeClientPlugin {
 }
 
 /** 槽位注册诊断（registered = 声明回调内实际落座的洞位；error = 注册链失败因——e2e/排障面） */
-export interface SidebarSlotDiagnostics {
+export interface SlotRegistrationDiagnostics {
   readonly registered?: readonly string[]
   readonly error?: string
 }
@@ -85,11 +95,14 @@ export interface SidebarSlotDiagnostics {
 export interface ForgeClientActiveMarker {
   readonly plugin: string
   readonly activatedAt: number
-  readonly sidebar?: SidebarSlotDiagnostics
+  /** sidebar 族洞位（workspaces 替换 + 品牌行内容） */
+  readonly sidebar?: SlotRegistrationDiagnostics
+  /** 中区主面板洞位（main.conversation 工作台装配，2.12） */
+  readonly mainPanel?: SlotRegistrationDiagnostics
 }
 
 /** 洞位注册一行（注入面经 make 产出；落座后回填诊断） */
-function registerSidebarSlot(
+function registerSlotEntry(
   ctx: ForgeClientCtx,
   key: string,
   diagnostics: { registered?: string[] },
@@ -119,11 +132,13 @@ export function forgeClientPlugin(): ForgeClientPlugin {
     name: FORGE_CLIENT_PLUGIN_ID,
     inject: [...FORGE_CLIENT_INJECT],
     apply(ctx: unknown) {
-      const diagnostics: { registered?: string[]; error?: string } = {}
+      const sidebarDiagnostics: { registered?: string[]; error?: string } = {}
+      const mainPanelDiagnostics: { registered?: string[]; error?: string } = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
         activatedAt: Date.now(),
-        sidebar: diagnostics,
+        sidebar: sidebarDiagnostics,
+        mainPanel: mainPanelDiagnostics,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
@@ -133,7 +148,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
 
         // 工作区洞位替换（AC1）：注入面携带 dsh 面数据源与动作（面板侧 useSyncExternalStore 直读）
-        registerSidebarSlot(clientCtx, SIDEBAR_WORKSPACES_SLOT, diagnostics, () =>
+        registerSlotEntry(clientCtx, SIDEBAR_WORKSPACES_SLOT, sidebarDiagnostics, () =>
           clientCtx.slots.register(
             {
               name: SIDEBAR_WORKSPACES_SLOT,
@@ -151,20 +166,31 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         )
 
         // 品牌行内容洞位（行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession）
-        registerSidebarSlot(clientCtx, SIDEBAR_BRAND_MARK_SLOT, diagnostics, () =>
+        registerSlotEntry(clientCtx, SIDEBAR_BRAND_MARK_SLOT, sidebarDiagnostics, () =>
           clientCtx.slots.register(
             { name: SIDEBAR_BRAND_MARK_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
             views.ForgeBrandMark,
           ),
         )
-        registerSidebarSlot(clientCtx, SIDEBAR_BRAND_NAME_SLOT, diagnostics, () =>
+        registerSlotEntry(clientCtx, SIDEBAR_BRAND_NAME_SLOT, sidebarDiagnostics, () =>
           clientCtx.slots.register(
             { name: SIDEBAR_BRAND_NAME_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
             views.ForgeBrandName,
           ),
         )
+
+        // 中区主面板洞位替换（2.12 工作台装配）：三区工作台占用中区——无插件注入面
+        // （官方 PropsRuntime kit 直达组件 props + 自有 forge RPC；official ConversationRoot
+        // 仍持有洞位声明——children 不重声明，避免与官方占用者声明冲突）
+        registerSlotEntry(clientCtx, MAIN_CONVERSATION_SLOT, mainPanelDiagnostics, () =>
+          clientCtx.slots.register(
+            { name: MAIN_CONVERSATION_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+            views.ForgeWorkbenchPanel,
+          ),
+        )
       } catch (error) {
-        diagnostics.error = error instanceof Error ? error.message : String(error)
+        sidebarDiagnostics.error = error instanceof Error ? error.message : String(error)
+        mainPanelDiagnostics.error = sidebarDiagnostics.error
       }
     },
   }

@@ -181,3 +181,54 @@ describe('views/session 会话面板 pin（2.11）', () => {
     expect(panel).toContain('readonly recall?: ReactNode')
   })
 })
+
+describe('workbench 工作台装配 pin（2.12）', () => {
+  it('模块面就位：装配面板 + hero 相位 + 知识 M0 占位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel', () => {
+    for (const f of [
+      'apps/web/src/workbench/WorkbenchPanel.tsx',
+      'apps/web/src/workbench/HeroEmpty.tsx',
+      'apps/web/src/workbench/KnowledgeM0.tsx',
+      'apps/web/src/workbench/ChatSurface.tsx',
+      'apps/web/src/workbench/workbench-bridge.ts',
+      'apps/web/src/workbench/workbench.css',
+      'apps/web/src/workbench/index.ts',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    const barrel = read('apps/web/src/workbench/index.ts')
+    for (const name of ['ChatSurface', 'HeroEmpty', 'KnowledgeM0', 'WorkbenchPanel', 'workbench-bridge']) {
+      expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
+    }
+  })
+
+  it('Hard Rule hero 单一条件：呈现判据唯一落点 sessionZonePhase（正零才 hero），HeroEmpty 零判据零数据源', () => {
+    const panel = read('apps/web/src/workbench/WorkbenchPanel.tsx')
+    expect(panel).toContain('export function sessionZonePhase')
+    expect(panel).toContain('input.lastReadyCount === 0')
+    const hero = read('apps/web/src/workbench/HeroEmpty.tsx')
+    expect(hero).not.toMatch(/projects|useForgeProjects|phase/)
+    expect(hero).toContain('＋ 添加项目')
+  })
+
+  it('装配占位注册 pin：product-views 发布 ForgeWorkbenchPanel；client-plugin 影子注册 main.conversation（与 sidebar 同键面）', () => {
+    const views = read('apps/web/src/product-views.ts')
+    expect(views).toContain('ForgeWorkbenchPanel')
+    expect(views).toContain("./workbench/index.js")
+    const plugin = read('apps/web/src/client-plugin/plugin.ts')
+    expect(plugin).toContain("export const MAIN_CONVERSATION_SLOT = 'main.conversation'")
+    expect(plugin).toContain('views.ForgeWorkbenchPanel')
+  })
+
+  it('工作台桥键面一致：workbench-bridge（发布侧）与 sidebar-actions（读取侧）同键 __DSH_FORGE_WORKBENCH__', () => {
+    expect(read('apps/web/src/workbench/workbench-bridge.ts')).toContain('__DSH_FORGE_WORKBENCH__')
+    expect(read('apps/web/src/views/sidebar/sidebar-actions.ts')).toContain('__DSH_FORGE_WORKBENCH__')
+  })
+
+  it('官方会话面嵌入配方 pin（S2 §2.1/§2.2，upstream ui-subagent 同型）：conversation.content 工厂 variant=embedded + conversation.session view=chat', () => {
+    const chat = read('apps/web/src/workbench/ChatSurface.tsx')
+    expect(chat).toContain("'conversation.content'")
+    expect(chat).toContain("variant: 'embedded'")
+    expect(chat).toContain("'conversation.session'")
+    expect(chat).toContain("view: 'chat'")
+  })
+})

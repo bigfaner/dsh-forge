@@ -1,0 +1,80 @@
+/* 工作台装配样式（定位：装配）。
+ * 容器刻度 = 官方 ConversationRoot root 同型（背景/列向/100% 高——占用同一洞位的等价几何）；
+ * hero / 校平位 / dock 角钮 = 产品自绘（官方无对应件），令牌唯一 + 原型结构刻度（dsw-raw 注明）。 */
+
+/* 装配根：占满 main.conversation 洞位（官方 ConversationRoot 同型几何） */
+.dswf-workbench {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* 校平位（项目数未就绪——防会话面/hero 首启闪现跳变） */
+.dswf-workbench-settling {
+  flex: 1;
+}
+
+/* 会话区包装：dock 角位常显开关（原型 conv-corner 同位——会话视图右上角） */
+.dswf-workbench-session {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dswf-workbench-docktoggle {
+  position: absolute;
+  top: 4px; /* dsw-raw 原型角位刻度 */
+  right: 8px; /* dsw-raw 原型角位刻度 */
+  z-index: 1;
+}
+
+/* UF-2 hero 相位：中区居中引导（价值一句话 + CTA；原型 hero 居中栈同构） */
+.dswf-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px; /* dsw-raw 原型 hero 栈距刻度 */
+  padding: 0 24px; /* dsw-raw 原型 hero 内距刻度 */
+  text-align: center;
+}
+
+.dswf-hero-title {
+  margin: 0;
+  font: var(--dsw-font-l-20);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-hero-sub {
+  margin: 0;
+  font-size: var(--dsw-font-s-14);
+  line-height: var(--dsw-font-s-14-line-height);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-hero-actions {
+  margin-top: 8px; /* dsw-raw 原型 hero 动作区间距刻度 */
+}
+
+/* 知识视图 M0 占位（占满知识视图槽） */
+.dswf-knowledge-m0 {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 对话面降级占位（kit 缺席——装配断裂可见不炸壳） */
+.dswf-chat-absent {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
