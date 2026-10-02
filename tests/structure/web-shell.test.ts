@@ -182,6 +182,50 @@ describe('views/session 会话面板 pin（2.11）', () => {
   })
 })
 
+describe('views/knowledge 知识浏览 pin（3.6）', () => {
+  it('模块面就位：纯模型 + 装载 hook + 三件（工具栏/域树/网格）+ 装配 + 样式 + barrel', () => {
+    for (const f of [
+      'apps/web/src/views/knowledge/browse-model.ts',
+      'apps/web/src/views/knowledge/use-knowledge-browse.ts',
+      'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
+      'apps/web/src/views/knowledge/DomainTree.tsx',
+      'apps/web/src/views/knowledge/KnowledgeCardGrid.tsx',
+      'apps/web/src/views/knowledge/KnowledgeBrowse.tsx',
+      'apps/web/src/views/knowledge/knowledge.css',
+      'apps/web/src/views/knowledge/index.ts',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+    const barrel = read('apps/web/src/views/knowledge/index.ts')
+    for (const name of ['browse-model', 'DomainTree', 'KnowledgeBrowse', 'KnowledgeCardGrid', 'KnowledgeToolbar', 'use-knowledge-browse']) {
+      expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
+    }
+  })
+
+  it('Hard Rule 域过滤前缀语义：domainPrefix 唯一透传点（entriesQueryOf）——网格/树零客户端过滤逻辑', () => {
+    const model = read('apps/web/src/views/knowledge/browse-model.ts')
+    expect(model).toContain('query.domainPrefix = filter.domain')
+    const grid = read('apps/web/src/views/knowledge/KnowledgeCardGrid.tsx')
+    expect(grid, '网格不得自建过滤语义（cards 服务端结果原样渲染）').not.toMatch(/domainPrefix|\.filter\(/)
+    const tree = read('apps/web/src/views/knowledge/DomainTree.tsx')
+    expect(tree, '域树只投影聚合节点（计数语义归 core aggregateDomainTree）').not.toContain('domainPrefix')
+  })
+
+  it('Hard Rule 官方件复用 + 自绘限域：工具栏 = 官方 Input/Pill；卡片热度 = HeatBadge(card.heat 原样)', () => {
+    const toolbar = read('apps/web/src/views/knowledge/KnowledgeToolbar.tsx')
+    expect(toolbar).toContain("from '@deepseek-ai/dsh-client-ui-primitives'")
+    expect(toolbar).toContain('Input')
+    expect(toolbar).toContain('Pill')
+    const grid = read('apps/web/src/views/knowledge/KnowledgeCardGrid.tsx')
+    expect(grid).toContain('HeatBadge')
+    expect(grid).toContain('count={card.heat}')
+    expect(grid).toContain('StateChip')
+    // 自绘面仅限领域组件类（域树行/卡片），吃令牌（knowledge.css 零裸值由 token-lint 机械执行）
+    expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-dom-row')
+    expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-card')
+  })
+})
+
 describe('workbench 工作台装配 pin（2.12）', () => {
   it('模块面就位：装配面板 + hero 相位 + 知识 M0 占位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel', () => {
     for (const f of [

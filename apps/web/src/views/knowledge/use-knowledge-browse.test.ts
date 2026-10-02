@@ -1,0 +1,336 @@
+// use-knowledge-browse 单测 —— 装载纯异步面（AC3 热度同源透传 / AC4 空库与目录位置 /
+// typed error 三态映射 / AC1·AC2 过滤查询透传）。
+// 口径沿 use-forge-projects 先例：hook 的 effect 胶水不在 Node 测面（renderToStaticMarkup
+// 不跑 effect）；纯异步面（loadBrowseBundle / fetchFilteredCards / mapBrowseError /
+// runFullLoad）全量单测，effect 组装归 3.8 装配 + e2e。
+import { describe, expect, it } from 'vitest'
+import type { DomainNode, KnowledgeCard, Project } from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
+import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/index.js'
+import { RpcClientError } from '../../rpc/errors.js'
+import { EMPTY_FILTER, type BrowseFilterEvent } from './browse-model.js'
+import {
+  applyBrowseLoad,
+  browseActions,
+  browseLoadPlan,
+  fetchFilteredCards,
+  initialBrowseState,
+  loadBrowseBundle,
+  mapBrowseError,
+  pendingBrowseState,
+  runFullLoad,
+  type BrowseBundle,
+  type KnowledgeBrowseState,
+} from './use-knowledge-browse.js'
+
+const CARDS: readonly KnowledgeCard[] = [
+  {
+    entryId: 1,
+    title: '安全编码规范',
+    summary: '输入校验与输出编码基线',
+    keywords: ['安全', 'xss'],
+    status: 'draft',
+    domainPath: '前端',
+    updated: '2026-10-01T08:00:00.000Z',
+    heat: 3,
+  },
+  {
+    entryId: 2,
+    title: '网关限流手册',
+    summary: '令牌桶参数与降级顺序',
+    keywords: ['限流'],
+    status: 'published',
+    domainPath: '后端',
+    updated: '2026-09-30T08:00:00.000Z',
+    heat: 0,
+  },
+]
+
+const NODES: readonly DomainNode[] = [
+  { domainPath: '前端', label: '前端', depth: 1, entryCount: 1 },
+  { domainPath: '后端', label: '后端', depth: 1, entryCount: 1 },
+]
+
+const PROJECT: Project = {
+  id: 'p-1',
+  workspaceId: 'w-1',
+  wsPath: 'Z:/ws/demo',
+  name: 'demo',
+  forgeDir: 'Z:/ws/demo/.forge',
+  forgeDirExternal: false,
+  knowledgeDir: 'Z:/ws/demo/.knowledge',
+  archived: false,
+  createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
+}
+
+/** 通道 responder 替身（按通道分发——捕获请求负载以断言查询形状） */
+function clientResponding(
+  respond: (channel: string, payload: unknown) => unknown | Promise<unknown>,
+): ForgeRpcClient {
+  return createForgeRpcClient(async (channel, payload) => {
+    const data = await respond(channel, payload)
+    return { ok: true, data }
+  })
+}
+
+function bundleClient(overrides: { listEntries?: (q: unknown) => unknown } = {}): ForgeRpcClient {
+  return clientResponding((channel, payload) => {
+    if (channel === KNOWLEDGE_CHANNELS.listEntries) return overrides.listEntries?.(payload) ?? CARDS
+    if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
+    if (channel === PROJECTS_CHANNELS.get) return PROJECT
+    throw new Error(`unexpected channel: ${channel}`)
+  })
+}
+
+describe('loadBrowseBundle（全量装载）', () => {
+  it('三路并发归一：cards/nodes/total（= 全量计数）/ 项目名 + 知识目录位置（AC4 空库引导数据）', async () => {
+    const out = await loadBrowseBundle(bundleClient(), 'p-1')
+    expect(out).toEqual({
+      ok: true,
+      data: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:/ws/demo/.knowledge' },
+    })
+  })
+
+  it('projects.get null / 失败 → fail-soft（名称空 + 目录 null，浏览主数据不受累）', async () => {
+    const nullProject = clientResponding((channel) => {
+      if (channel === KNOWLEDGE_CHANNELS.listEntries) return CARDS
+      if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
+      if (channel === PROJECTS_CHANNELS.get) return null
+      throw new Error('unexpected')
+    })
+    await expect(loadBrowseBundle(nullProject, 'p-1')).resolves.toEqual({
+      ok: true,
+      data: { cards: CARDS, nodes: NODES, total: 2, projectName: '', knowledgeDir: null },
+    })
+
+    const failingProject = clientResponding((channel) => {
+      if (channel === KNOWLEDGE_CHANNELS.listEntries) return CARDS
+      if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
+      if (channel === PROJECTS_CHANNELS.get) throw new Error('projects 通道缺席')
+      throw new Error('unexpected')
+    })
+    const soft = await loadBrowseBundle(failingProject, 'p-1')
+    expect(soft.ok && soft.data.knowledgeDir).toBeNull()
+  })
+
+  it('主数据 typed error（ERR_INDEX_STALE——索引缺失静默重建失败）→ empty-state 面', async () => {
+    const stale = clientResponding((channel) => {
+      if (channel === KNOWLEDGE_CHANNELS.listEntries) {
+        throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '索引缺失且静默重建失败', data: { projectId: 'p-1' } })
+      }
+      if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
+      if (channel === PROJECTS_CHANNELS.get) return PROJECT
+      throw new Error('unexpected')
+    })
+    const out = await loadBrowseBundle(stale, 'p-1')
+    expect(out).toEqual({
+      ok: false,
+      error: { message: '索引缺失且静默重建失败', uiState: 'empty-state' },
+    })
+  })
+
+  it('传输层失败 → 错误条面（fail-soft 不抛）', async () => {
+    const broken = createForgeRpcClient(async () => {
+      throw new Error('通道未注册')
+    })
+    const out = await loadBrowseBundle(broken, 'p-1')
+    expect(out).toEqual({ ok: false, error: { message: '通道未注册', uiState: 'error-bar' } })
+  })
+})
+
+describe('fetchFilteredCards（过滤重拉）', () => {
+  it('AC1 域前缀查询透传：listEntries 收 domainPrefix（前缀语义归 core——客户端零过滤）', async () => {
+    const seen: unknown[] = []
+    const client = bundleClient({
+      listEntries: (q) => {
+        seen.push(q)
+        return CARDS
+      },
+    })
+    const out = await fetchFilteredCards(client, 'p-1', { domain: '前端', keyword: '' })
+    expect(seen).toEqual([{ projectId: 'p-1', domainPrefix: '前端' }])
+    expect(out.ok && out.data).toBe(CARDS)
+  })
+
+  it('AC2 组合过滤查询（域 + 关键词）；未过滤 = 仅 projectId', async () => {
+    const seen: unknown[] = []
+    const client = bundleClient({
+      listEntries: (q) => {
+        seen.push(q)
+        return CARDS
+      },
+    })
+    await fetchFilteredCards(client, 'p-1', { domain: '前端', keyword: '安全' })
+    await fetchFilteredCards(client, 'p-1', EMPTY_FILTER)
+    expect(seen).toEqual([
+      { projectId: 'p-1', domainPrefix: '前端', keyword: '安全' },
+      { projectId: 'p-1' },
+    ])
+  })
+
+  it('ERR_INVALID_KNOWLEDGE_DIR（知识目录不可达）→ empty-state 面', async () => {
+    const client = bundleClient({
+      listEntries: () => {
+        throw new RpcClientError({ code: 'ERR_INVALID_KNOWLEDGE_DIR', message: '知识目录不可达' })
+      },
+    })
+    await expect(fetchFilteredCards(client, 'p-1', { keyword: 'x' })).resolves.toEqual({
+      ok: false,
+      error: { message: '知识目录不可达', uiState: 'empty-state' },
+    })
+  })
+})
+
+describe('runFullLoad（全量装载 + 过滤补拉）', () => {
+  it('过滤在场 → bundle 后追过滤视图（cards 与过滤条件一致，total 仍取全量）', async () => {
+    const seen: unknown[] = []
+    const client = bundleClient({
+      listEntries: (q) => {
+        seen.push(q)
+        // 未过滤（bundle 底表）= 全量；过滤视图 = 只回「前端」条目
+        return 'domainPrefix' in (q as object) ? CARDS.slice(0, 1) : CARDS
+      },
+    })
+    const out = await runFullLoad(client, 'p-1', { domain: '前端', keyword: '' })
+    expect(seen).toEqual([{ projectId: 'p-1' }, { projectId: 'p-1', domainPrefix: '前端' }])
+    expect(out).toEqual({
+      kind: 'bundle',
+      bundle: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:/ws/demo/.knowledge' },
+      cards: CARDS.slice(0, 1),
+    })
+  })
+
+  it('未过滤 → 单次全量（cards = 全量底表）', async () => {
+    const seen: unknown[] = []
+    const client = bundleClient({
+      listEntries: (q) => {
+        seen.push(q)
+        return CARDS
+      },
+    })
+    const out = await runFullLoad(client, 'p-1', EMPTY_FILTER)
+    expect(seen).toEqual([{ projectId: 'p-1' }])
+    expect(out.kind === 'bundle' && out.cards).toBe(CARDS)
+  })
+
+  it('补拉失败 → error 落点（不打散错误面）', async () => {
+    let calls = 0
+    const client = bundleClient({
+      listEntries: () => {
+        calls += 1
+        if (calls > 1) throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '重拉失败' })
+        return CARDS
+      },
+    })
+    const out = await runFullLoad(client, 'p-1', { keyword: '安全' })
+    expect(out).toEqual({ kind: 'error', error: { message: '重拉失败', uiState: 'empty-state' } })
+  })
+})
+
+describe('mapBrowseError（错误归一）', () => {
+  it('RpcClientError → rpcUiState(code) 三态映射（AC 消费约定）', () => {
+    expect(mapBrowseError(new RpcClientError({ code: 'ERR_ENTRY_NOT_FOUND', message: 'm' }))).toEqual({
+      message: 'm',
+      uiState: 'empty-state',
+    })
+    expect(mapBrowseError(new RpcClientError({ code: 'ERR_PROJECT_WRITE', message: 'm' }))).toEqual({
+      message: 'm',
+      uiState: 'error-bar',
+    })
+  })
+
+  it('非 typed error（传输/构造期）→ 错误条 + message 归一', () => {
+    expect(mapBrowseError(new Error('boom'))).toEqual({ message: 'boom', uiState: 'error-bar' })
+    expect(mapBrowseError('raw')).toEqual({ message: 'raw', uiState: 'error-bar' })
+  })
+})
+
+describe('browseLoadPlan（装载判定——AC5 缓存先行 ⇄ 清场骨架）', () => {
+  it('首装（无全量键且无数据）→ 全量 + 清场（骨架相位）', () => {
+    expect(
+      browseLoadPlan({ fullKey: 'p-1#0', lastFullKey: '', projectId: 'p-1', lastProjectId: 'p-1', hasBundle: false }),
+    ).toEqual({ isFull: true, mustClear: true })
+  })
+
+  it('过滤重拉（全量键不变）→ 非全量不清场（旧卡片保持可见）', () => {
+    expect(
+      browseLoadPlan({ fullKey: 'p-1#0', lastFullKey: 'p-1#0', projectId: 'p-1', lastProjectId: 'p-1', hasBundle: true }),
+    ).toEqual({ isFull: false, mustClear: false })
+  })
+
+  it('同项目重试（全量键变化但已持有数据）→ 全量重验不清场（缓存先行）', () => {
+    expect(
+      browseLoadPlan({ fullKey: 'p-1#1', lastFullKey: 'p-1#0', projectId: 'p-1', lastProjectId: 'p-1', hasBundle: true }),
+    ).toEqual({ isFull: true, mustClear: false })
+  })
+
+  it('跨项目切换 → 全量 + 清场（旧项目卡片不得残留）', () => {
+    expect(
+      browseLoadPlan({ fullKey: 'p-2#0', lastFullKey: 'p-1#0', projectId: 'p-2', lastProjectId: 'p-1', hasBundle: true }),
+    ).toEqual({ isFull: true, mustClear: true })
+  })
+})
+
+describe('pendingBrowseState / applyBrowseLoad（状态转移）', () => {
+  const ready: KnowledgeBrowseState = {
+    ...initialBrowseState(),
+    phase: 'ready',
+    busy: false,
+    cards: CARDS,
+    nodes: NODES,
+    total: 2,
+    projectName: 'demo',
+    knowledgeDir: 'Z:/ws/demo/.knowledge',
+    filter: { domain: '前端', keyword: '' },
+  }
+
+  it('在途：清场 = 初始骨架（过滤态保留）；不清场 = 旧内容 + busy', () => {
+    const cleared = pendingBrowseState(ready, true)
+    expect(cleared).toEqual({ ...initialBrowseState(), filter: { domain: '前端', keyword: '' } })
+    const kept = pendingBrowseState(ready, false)
+    expect(kept.cards).toBe(CARDS)
+    expect(kept.busy).toBe(true)
+  })
+
+  it('bundle 落点：全量元数据 + 卡片（过滤补拉后的视图）；cards 落点：仅换卡片；error 落点：旧域树保持', () => {
+    const bundle: BrowseBundle = { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:/k' }
+    const fromBundle = applyBrowseLoad(initialBrowseState(), { kind: 'bundle', bundle, cards: CARDS.slice(0, 1) })
+    expect(fromBundle).toMatchObject({ phase: 'ready', busy: false, cards: CARDS.slice(0, 1), total: 2, knowledgeDir: 'Z:/k' })
+
+    const refetched = applyBrowseLoad(ready, { kind: 'cards', cards: CARDS.slice(0, 1) })
+    expect(refetched.cards).toEqual(CARDS.slice(0, 1))
+    expect(refetched.nodes).toBe(NODES) // 过滤重拉不动域树
+
+    const errored = applyBrowseLoad(ready, { kind: 'error', error: { message: 'm', uiState: 'error-bar' } })
+    expect(errored.phase).toBe('error')
+    expect(errored.nodes).toBe(NODES) // 错误不抹既有域树/项目元数据
+  })
+})
+
+describe('browseActions（动作绑定——过滤态机事件形状 + 重试）', () => {
+  it('四动作：selectDomain/setKeyword/clearFilters 派发对应事件；retry 递增 nonce', () => {
+    const events: BrowseFilterEvent[] = []
+    let retries = 0
+    const actions = browseActions(
+      (event) => {
+        events.push(event)
+      },
+      () => {
+        retries += 1
+      },
+    )
+    actions.selectDomain('前端')
+    actions.selectDomain(undefined)
+    actions.setKeyword('css')
+    actions.clearFilters()
+    actions.retry()
+    expect(events).toEqual([
+      { type: 'select-domain', domain: '前端' },
+      { type: 'select-domain', domain: undefined },
+      { type: 'set-keyword', keyword: 'css' },
+      { type: 'clear-filters' },
+    ])
+    expect(retries).toBe(1)
+  })
+})

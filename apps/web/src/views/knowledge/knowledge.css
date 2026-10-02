@@ -1,0 +1,253 @@
+/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格）。
+ * 结构基准 = 原型 knview（工具栏 / 左轨 224px / 主区 auto-fill 网格——布局结构以原型为准）；
+ * 视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值，lint-tokens 机械执行）。
+ * dsw-raw 豁免（执行记录同步）：左轨 224px / 域树行高 24px 与行内 2/5/6px / 层级缩进
+ * 13px 每层 + 基距 6px / 检索宽 460px / 骨架卡高 96px = 原型结构刻度——官方主题无间距
+ * 标尺令牌（2.7 sidebar.css 同款豁免先例，形态对齐原型优先）；块级留白取行高令牌刻度。 */
+
+/* ── 主体骨架：工具栏 +（左轨 | 主区） ── */
+.dswf-kn-browse {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* ── 工具栏（范围 Pill + 官方 Input 检索——UF-6 P1 项目级范围显示） ── */
+.dswf-kn-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-kn-scope {
+  flex: none;
+}
+
+.dswf-kn-searchrow {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  max-width: 460px; /* dsw-raw 原型工具栏检索宽刻度 */
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-search {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── 主体行：左轨域树 + 网格主区 ── */
+.dswf-kn-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.dswf-kn-rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 224px; /* dsw-raw 原型左轨宽刻度 */
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: var(--dsw-font-xs-13-line-height);
+  border-right: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-kn-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-l-20-line-height) var(--dsw-font-l-20-line-height);
+}
+
+/* ── 域目录树（自绘领域组件——官方无域树行件；常展开 ≤3 层） ── */
+.dswf-kn-dom {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 原型域树行间刻度 */
+  min-height: 0;
+}
+
+.dswf-kn-dom-head {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+.dswf-kn-dom-row {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* dsw-raw 原型域树行内刻度 */
+  height: 24px; /* dsw-raw 原型域树行刻度 */
+  box-sizing: border-box;
+  padding: 0 6px; /* dsw-raw 原型域树行内刻度 */
+  padding-inline-start: calc(6px + var(--dswf-depth, 0) * 13px); /* dsw-raw 原型层级缩进刻度（depth 变量由行注入） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  text-align: start;
+  user-select: none;
+}
+
+.dswf-kn-dom-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-dom-row[data-active] {
+  background: var(--dsw-alias-interactive-bg-active);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-kn-dom-count {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 卡片网格（auto-fill 多列——原型 kb-cards 同型） ── */
+.dswf-kn-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 原型网格列刻度（minmax 非令牌面） */
+  gap: var(--dsw-font-xs-13-line-height);
+  align-items: start;
+  align-content: start;
+}
+
+.dswf-kn-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+.dswf-kn-card:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-kn-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-card-abs {
+  display: -webkit-box;
+  overflow: hidden;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dswf-kn-card-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-kn-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-kn-card-dom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-kn-card-time {
+  flex: none;
+  margin-left: auto;
+}
+
+/* ── 网格骨架（首装/索引重建中——UF-6 States「加载中」） ── */
+.dswf-kn-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 原型网格列刻度（minmax 非令牌面） */
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-skeleton-card {
+  height: 96px; /* dsw-raw 原型卡片骨架刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* ── 错误条 + 小文本动作钮（行内引导动作——sidebar-retry 同型行语言） ── */
+.dswf-kn-error {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-kn-textaction {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: pointer;
+}
+
+.dswf-kn-textaction:hover {
+  color: var(--dsw-alias-link);
+}
