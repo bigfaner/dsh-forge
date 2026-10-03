@@ -940,7 +940,7 @@
       "dependencies": [
         "T-test-gen-scripts"
       ],
-      "status": "pending",
+      "status": "skipped",
       "file": "run-test.md",
       "record": "records/run-test.md",
       "surface-key": ".",
