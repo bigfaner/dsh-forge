@@ -733,11 +733,12 @@
       "title": "Fix: 知识浏览关键词交互缺陷——键入被弹回 + 卡片网格整体消失落「尚无知识」空库面（实测复现）",
       "priority": "P1",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-5.md",
       "record": "records/fix-5.md",
       "surface-type": "web",
       "type": "coding.fix",
+      "blockedReason": "no implementation found",
       "complexity": "high"
     },
     "fix-6": {

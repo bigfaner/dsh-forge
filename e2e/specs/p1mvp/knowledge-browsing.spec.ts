@@ -340,7 +340,8 @@ test('@web-e2e @p1mvp knowledge-browsing·冒烟：浏览→过滤→细分→�
     await expect(drawer).toHaveCount(0)
     await expect(cardByTitle(page, '部署规范'), '关闭抽屉后过滤条件不丢（无需重新过滤）').toBeVisible()
     await expect(cardByTitle(page, '构建规范'), '关键词过滤仍生效').toHaveCount(0)
-    // 注：搜索框显示层与过滤态解耦（抽屉往返后输入框呈现空——过滤条件以网格口径断言）
+    // 受控值与过滤态一致（fix-5：消费面取 reducer 实时过滤态——抽屉往返后输入框保持「部署」）
+    await expect(search, '输入框呈现当前关键词（受控值不弹回）').toHaveValue('部署')
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
@@ -491,23 +492,22 @@ test('@web-e2e @p1mvp knowledge-browsing·Step2b/2c 中层子树包含 + 组合�
     // 服务端口径（硬断言——命中确定性 fixture 契约）
     const zeroHit = await forgeInvoke<readonly KnowledgeCardLike[]>(page, 'forge:knowledge/listEntries', { projectId, domainPrefix: '前端', keyword: 'qz9' })
     expect(zeroHit, '组合过滤零命中（服务端口径——qz9 全字段不含）').toHaveLength(0)
-    // UI 口径（soft——缺陷信号承载）：实测 qz9 零结果窗内 UI 过滤态清场卡死
-    // （input 清空 + 域选择复位「全部域」+ cards=0 呈空库引导且不再收敛，RPC 面健康
-    //  返回 4 条；复现 4/4——疑 use-knowledge-browse 过滤态与装载竞态）。soft 记账，
-    //  转正 = 竞态修复；清除恢复入口断言随卡死态不可达（健康路径的过滤恢复已由
-    //  冒烟「Step 5 关闭抽屉回上下文」承载——过滤条件不丢口径）。
-    await page.locator('[data-dswf-domain="前端"]').click()
-    await page.locator('[data-dswf-kn-toolbar] input').fill('qz9')
-    let noResult = false
-    for (let attempt = 0; attempt < 3 && !noResult; attempt++) {
-      await page.waitForTimeout(2_500)
-      noResult = await page.getByText('当前域与关键词组合下没有知识条目').isVisible().catch(() => false)
-      if (!noResult) {
-        await page.locator('[data-dswf-domain="前端"]').click()
-        await page.locator('[data-dswf-kn-toolbar] input').fill('qz9')
-      }
-    }
-    expect.soft(noResult, '[缺陷信号] 空结果提示 + 清除入口（UF-6 States）——UI 零结果窗过滤态清场卡死（见上注）').toBe(true)
+    // UI 口径（fix-5 转正——曾为缺陷信号 soft 记账：受控值被滞后过滤快照弹回 + 零命中
+    // 误落空库引导面且不再收敛；修复 = consumedBrowseState 消费面取 reducer 实时过滤态）
+    const search = page.locator('[data-dswf-kn-toolbar] input')
+    await search.fill('qz9')
+    await expect(search, '受控值即时更新（键入不弹回）').toHaveValue('qz9')
+    await expect(page.locator('.dswf-kn-searchclear'), '工具栏清除钮在场').toBeVisible()
+    await expect(
+      page.getByText('当前域与关键词组合下没有知识条目'),
+      '空结果提示（UF-6 States 无结果面）',
+    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-dswf-clear-filters]'), '清除过滤入口在场').toBeVisible()
+    // 清除恢复（无结果面入口）：域 + 关键词一并复位 → 全量卡片回归、受控值清空
+    await page.locator('[data-dswf-clear-filters]').click()
+    await expect(cardByTitle(page, '部署规范'), '清除过滤恢复全量（本域条目）').toBeVisible({ timeout: 15_000 })
+    await expect(cardByTitle(page, '回滚手册'), '清除过滤恢复全量（跨域条目）').toBeVisible()
+    await expect(search).toHaveValue('')
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
@@ -542,6 +542,85 @@ test('@web-e2e @p1mvp knowledge-browsing·Step3b blank-keyword-no-tighten：纯�
     await expect(cardByTitle(launched.page, '部署规范'), '空白关键词：域过滤结果保持').toBeVisible()
     await expect(cardByTitle(launched.page, '构建规范'), '空白不剔除命中条目').toBeVisible()
     await expect(launched.page.getByText('当前域与关键词组合下没有知识条目'), '不进入空结果态').toHaveCount(0)
+  } finally {
+    if (launched !== undefined) {
+      await closeApp(launched.app)
+      rmSync(launched.ackOverlay, { force: true })
+    }
+    await rmDirBestEffort(userData)
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fix-5 关键词交互回归（AC5 补 4.2/3.8 盲区——本文件其余用例均为 RPC 直注注册，
+// 此处走向导注册全径）：知识视图 → 键入不存在关键词 → 无结果面（非空库引导）→
+// 清除恢复（无结果面入口 + Esc 两通道）。实机症状：受控值被滞后过滤快照弹回 +
+// 零命中误落「尚无知识」空库面不再收敛（复现 4/4）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 浏览器行定位（名称精确匹配——「已注册」标记与目录名零空白拼接边界，project-registration 同口径） */
+function wizardDirRow(page: Page, name: string): ReturnType<Page['locator']> {
+  return page.locator('.dswf-fb-item', { hasText: new RegExp(`(?:^|\\s)${name}(?=\\s|$|[^\\w.-])`) }).first()
+}
+
+/** 双击进入目录并等待列举就绪（面包屑出现目标段） */
+async function wizardEnterDir(page: Page, name: string): Promise<void> {
+  await wizardDirRow(page, name).dblclick()
+  await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
+}
+
+test('@web-e2e @p1mvp knowledge-browsing·关键词交互回归（fix-5）：向导注册 → 零命中无结果面 → 清除/Esc 恢复', async () => {
+  test.setTimeout(300_000)
+  const fixtureRoot = makeKnowledgeFixture()
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-kb-kw-ud-'))
+  let launched: Launched | undefined
+  try {
+    launched = await launch(userData)
+    const page = launched.page
+
+    // 向导注册（hero CTA → 文件浏览器 → 表单默认 → 成功收起）
+    await page.locator('[data-dswf-cta="add-project"]').click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible({ timeout: 20_000 })
+    for (const segment of ['AppData', 'Local', 'Temp']) await wizardEnterDir(page, segment)
+    await wizardEnterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await wizardDirRow(page, 'kb-demo').click()
+    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 20_000 })
+
+    // 知识视图（全量卡片就位）
+    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 30_000 })
+    await expect(cardByTitle(page, '部署规范'), '向导注册后全量卡片在场').toBeVisible({ timeout: 30_000 })
+
+    // 键入不存在关键词（qz9 全字段不含）→ 受控值在场 + 无结果面 + 清除入口
+    const search = page.locator('[data-dswf-kn-toolbar] input')
+    await search.click()
+    await search.fill('qz9')
+    await expect(search, '受控值即时更新（键入不弹回）').toHaveValue('qz9')
+    await expect(page.locator('.dswf-kn-searchclear'), '工具栏清除钮在场').toBeVisible()
+    await expect(
+      page.getByText('当前域与关键词组合下没有知识条目'),
+      '无结果面（UF-6 States——非空库引导）',
+    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('尚无知识'), '空库引导不在场').toHaveCount(0)
+
+    // 清除恢复①：无结果面「清除过滤」入口 → 全量回归、受控值清空
+    await page.locator('[data-dswf-clear-filters]').click()
+    await expect(cardByTitle(page, '部署规范'), '清除过滤恢复全量（本域）').toBeVisible({ timeout: 15_000 })
+    await expect(cardByTitle(page, '回滚手册'), '清除过滤恢复全量（跨域）').toBeVisible()
+    await expect(search).toHaveValue('')
+
+    // 清除恢复②：再键入 → Esc（输入框原地清空——原型 kb-clear）→ 全量回归
+    await search.click()
+    await search.fill('qz9')
+    await expect(page.getByText('当前域与关键词组合下没有知识条目')).toBeVisible({ timeout: 15_000 })
+    await page.keyboard.press('Escape')
+    await expect(search, 'Esc 清空受控值').toHaveValue('')
+    await expect(cardByTitle(page, '部署规范'), 'Esc 清除后全量恢复').toBeVisible({ timeout: 15_000 })
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)

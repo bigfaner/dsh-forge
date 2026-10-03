@@ -221,6 +221,17 @@ export function applyBrowseLoad(prev: KnowledgeBrowseState, out: LoadApply): Kno
 }
 
 /**
+ * 消费态合成（纯函数）：装载态 × 实时过滤态 → hook 输出态（fix-5）。
+ * 过滤态单一来源 = reducer——装载态内部携带的 filter 是上一次装载转移保留的快照，
+ * 过滤派发（set-keyword/select-domain/clear-filters）不经过装载转移，快照必然滞后；
+ * 消费面（工具栏受控值、域树高亮、无结果 ⇄ 空库分流）若读滞后快照，键入即被弹回、
+ * 零命中误落空库引导面。本函数把实时过滤态盖写进消费态（同引用 = 原样返回，零合成）。
+ */
+export function consumedBrowseState(state: KnowledgeBrowseState, filter: BrowseFilter): KnowledgeBrowseState {
+  return state.filter === filter ? state : { ...state, filter }
+}
+
+/**
  * 动作绑定（纯函数——browser-actions 同形制）：过滤态机事件形状 + 重试 nonce 递增可单测。
  */
 export function browseActions(
@@ -247,6 +258,8 @@ export function browseActions(
  * 知识浏览装载 hook（mount / projectId / 过滤态 / 重试 / 激活翻转 五锚重装载）。
  * 判定/在途/落点/动作全部经纯函数（browseLoadPlan / pendingBrowseState /
  * applyBrowseLoad / browseActions）——effect 仅编排：refs 快照 → 装载 → 序号守卫落点。
+ * 输出态经 consumedBrowseState 合成（fix-5）：过滤态消费面取 reducer 实时值——
+ * 装载态内部的 filter 快照滞后于过滤派发，受控输入/空态分流不得读它。
  * 激活语义（AC3 即时累积——RecallTab AC4 同型）：隐藏期 hold（不装载不清场，数据保持），
  * 激活翻转（false→true）即全量重拉（epoch 递增 → fullKey 变更 → bundle 三路并发——
  * 热度等使用事件计数随激活刷新，卡片缓存先行不闪骨架）。
@@ -317,7 +330,8 @@ export function useKnowledgeBrowse(
     setNonce((n) => n + 1)
   }, [])
   const actions = browseActions(dispatchFilter, retry)
-  return [state, actions] as const
+  // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值
+  return [consumedBrowseState(state, filter), actions] as const
 }
 
 /** 缺省构造：preload 传输真身（缺席由 mapBrowseError 收敛为错误条——非 Electron 载体不炸壳） */

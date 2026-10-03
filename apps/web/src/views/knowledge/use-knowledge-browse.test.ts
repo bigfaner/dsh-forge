@@ -8,11 +8,12 @@ import type { DomainNode, KnowledgeCard, Project } from '@dsh-forge/contracts'
 import { KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
 import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
-import { EMPTY_FILTER, type BrowseFilterEvent } from './browse-model.js'
+import { browseFaceState, EMPTY_FILTER, hasActiveFilter, type BrowseFilterEvent } from './browse-model.js'
 import {
   applyBrowseLoad,
   browseActions,
   browseLoadPlan,
+  consumedBrowseState,
   fetchFilteredCards,
   initialBrowseState,
   loadBrowseBundle,
@@ -305,6 +306,53 @@ describe('pendingBrowseState / applyBrowseLoad（状态转移）', () => {
     const errored = applyBrowseLoad(ready, { kind: 'error', error: { message: 'm', uiState: 'error-bar' } })
     expect(errored.phase).toBe('error')
     expect(errored.nodes).toBe(NODES) // 错误不抹既有域树/项目元数据
+  })
+})
+
+describe('consumedBrowseState（消费态合成——fix-5：过滤态单一来源 = reducer 实时值）', () => {
+  const loaded: KnowledgeBrowseState = {
+    ...initialBrowseState(),
+    phase: 'ready',
+    cards: CARDS,
+    nodes: NODES,
+    total: 2,
+    projectName: 'demo',
+    knowledgeDir: 'Z:/ws/demo/.knowledge',
+  }
+
+  it('装载态 filter 快照滞后（过滤派发不经装载转移）→ 消费面取实时过滤态：受控值即时在场', () => {
+    // 键入零命中关键词：装载态内部 filter 仍是空快照，消费态必须呈现实时 'zzz'
+    const consumed = consumedBrowseState(loaded, { keyword: 'zzz' })
+    expect(consumed.filter, '受控输入值/清除钮判据取实时关键词').toEqual({ keyword: 'zzz' })
+    expect(consumed.cards, '装载字段原样透传（缓存先行不丢卡）').toBe(CARDS)
+    expect(consumed.nodes).toBe(NODES)
+  })
+
+  it('零命中落点后实时过滤态仍驱动「无结果」面（防误落空库引导——实机症状回归）', () => {
+    const zeroHit = applyBrowseLoad(loaded, { kind: 'cards', cards: [] })
+    expect(zeroHit.cards).toHaveLength(0)
+    expect(zeroHit.filter, '落点应用的内部快照仍滞后（装载转移保留旧过滤）').toEqual(EMPTY_FILTER)
+    const consumed = consumedBrowseState(zeroHit, { keyword: 'zzz' })
+    const face = browseFaceState({
+      phase: consumed.phase,
+      cardCount: consumed.cards.length,
+      filterActive: hasActiveFilter(consumed.filter),
+    })
+    expect(face, '过滤在场 + 零卡 = 无结果（清除入口）而非空库引导').toBe('no-results')
+  })
+
+  it('域过滤组合同样取实时态（select-domain 与关键词互不复位）', () => {
+    const consumed = consumedBrowseState(loaded, { domain: '前端', keyword: '安全' })
+    expect(consumed.filter).toEqual({ domain: '前端', keyword: '安全' })
+  })
+
+  it('清除过滤复位实时透传：消费面回空过滤（域树高亮/受控值同步复位）', () => {
+    const consumed = consumedBrowseState(loaded, EMPTY_FILTER)
+    expect(consumed.filter).toEqual(EMPTY_FILTER)
+  })
+
+  it('过滤态同引用 → 原装载态原样返回（未过滤常态零对象合成）', () => {
+    expect(consumedBrowseState(loaded, EMPTY_FILTER)).toBe(loaded)
   })
 })
 
