@@ -40,8 +40,8 @@
 | L50 | 点「知识库」→ 中区切换为知识视图 | 点 `[data-dswf-nav="knowledge"]` → `[data-dswf-knowledge-view]` 可见 + `data-dswf-view="knowledge"` | 载体适配（3.8）：M0 占位锚 `data-dswf-knowledge-m0` → M1 浏览面装配壳锚 `data-dswf-knowledge-view`（UF-6 主体 + 抽屉挂载，无项目锚 = 壳内引导空态）——「知识视图在场」断言语义不变 |
 | L51 | 打开不占用右栏(dock 仍收起) | 知识模式下 `[data-dswf-dock="hidden"]` + 切回后恢复 `collapsed` | 载体适配：M0 将原型 `is-collapsed` 单类位细分为 collapsed（会话视图收起）/hidden（知识模式强制）两相位——「右栏不被占用」语义（轨道不可见）不变 |
 | L52 | 右上角两个图标按钮已移除(知识模式无右栏入口) | `.dswf-zones-main` 内可见「展开」入口计数 = 0（负向） | 载体适配：原型钉两个具体图标钮；M0 钉可达面全集（角位钮/轨道钮均不在知识模式可达）——「知识模式无右栏入口」语义不变 |
-| L59 | 会话视图可展开右栏 | session 相位点角位钮 `.dswf-workbench-docktoggle` → expanded；hero 相位桥派发（无角位钮） | 载体适配：原型 `#rb-corner-expand` → M0 会话区角位开关（同位语义） |
-| L62 | 整体切换:进入知识模式 → 已开右栏也隐藏(内容让位) | `[data-dswf-dock="hidden"]` + tabpanel 仍挂载 | 无适配（keep-alive 常挂载为 M0 机制面） |
+| L59 | 会话视图可展开右栏 | session 相位点角位钮 `.dswf-workbench-docktoggle` → expanded；hero 相位桥派发（无角位钮） | 载体适配：原型 `#rb-corner-expand` → M0 会话区角位开关（同位语义）；fix-10 锚迁移：展开态页签条 `.dswf-zones-dock-strip [role=tab]` → `[data-dswf-dock] [data-dockkit-strip] [role=tab]`（自绘 strip 退役，官方 chips 锚——「页签条在场」语义不变） |
+| L62 | 整体切换:进入知识模式 → 已开右栏也隐藏(内容让位) | `[data-dswf-dock="hidden"]` + 页签体仍挂载（`[data-dockkit-content]`） | 载体适配（fix-10）：官方 kit 页签体无 `role=tabpanel`（chip `role=tab`/条 `role=tablist` 保持）——「内容仍挂载」锚迁移官方 body 锚 `data-dockkit-content`，keep-alive 语义不变（官方 `keepMounted` 保留策略承接常挂载机制） |
 | L66 | 切回会话视图 → 右栏恢复展开(状态保留) | 桥派发 `show-session` → `data-dswf-view="session"` + dock expanded | 载体适配：原型点会话行；M0 无产品会话行期 = 工作台桥同径转移（转移表面同源 view-state 状态机） |
 | L474 | 点会话行 → 中区切回会话视图 | 同 L66 载体（`show-session` 同径转移） | 载体适配：产品会话行实机驱动随项目/会话链路（host 通道装配后）转正；机制面（`sessionAnchorEvent` 官方锚跟随）单测 pin（2.12） |
 
@@ -50,6 +50,7 @@
 | 原断言（行号） | 原文 | e2e 载体（组一） | 适配记录 |
 |---|---|---|---|
 | L689 | 收起(轨道归零,同图标) | 角位钮再点 → collapsed + computed width 0px | 无适配（computed 样本入 L3 池）；按项目页签集切换（L719–L726）随域页签登记归 M2（§3） |
+| —（原型行缺席） | fix-10 官方 dockkit 基座回归（新增 dock 基座行为冒烟面） | 官方 surface 在场（`data-dockkit-drop-zones="horizontal"` = DockLayout 横条形/Sidebar 形态）+ 官方分栏控件在场（340px 窄轨由官方 room 规则禁用）+ chrome 角位收展钮（官方置位 `data-dockkit-strip-chrome`）+ 添加钮缺席（canAddTab 产品口径）+ 全局页签不可关闭（canCloseTab 口径——关闭控件计数 0） | fix-10 新增（非 smoke 迁移行——AC「新增 dock 基座行为回归：P1 至少官方控件在场与默认形态断言」）；断言源 = fix-10 任务 AC + 官方 kit DOM 契约（`data-dockkit-*` 稳定锚） |
 
 ### 组二：向导两段走查（smoke「添加项目」段 ①–④ + ⑤ 条件）
 

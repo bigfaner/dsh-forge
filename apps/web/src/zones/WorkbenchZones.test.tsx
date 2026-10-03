@@ -1,7 +1,9 @@
-// zones/WorkbenchZones 组件单测 —— 三区骨架机制 pin（UF-5 视图互换 / UF-7 dock 轨道与页签跟随）。
-// 断言锚点 = UF-5/UF-7 Validation Rules 全部三条：知识模式右栏不可见（已展开也隐藏）/ 状态保留
-// （keep-alive：双面板与 dock 内容常挂载，hidden/宽度切显隐不卸载）/ 可见集口径。
-// 渲染面用 react-dom/server（SSR 直渲）；点击交互与计算样式面归 e2e（2.12/2.14）。
+// zones/WorkbenchZones 组件单测 —— 三区骨架机制 pin（UF-5 视图互换 / UF-7 dock 官方基座装载）。
+// fix-10：右栏内部 = 官方 ui-dockkit 面（DockController 状态机 + DockLayout 渲染）——断言锚 =
+// 官方 DOM 契约（data-dockkit-* 稳定锚 + role=tab/tablist）；UF-7 Validation 三条保持：
+// 知识模式右栏不可见（已展开也隐藏）/ 状态保留（官方 keepMounted 常挂载——hidden 切显隐不
+// 卸载）/ 可见集口径。页签跟随映射与焦点恢复语义 = dock-kit.test.ts 真件直测；登记表口径
+// 语义锚 = dock.test.ts。渲染面用 react-dom/server（SSR 直渲）；点击交互与计算样式面归 e2e。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
@@ -56,7 +58,7 @@ describe('dockTrackMode 推导（UF-5/UF-7 联动）', () => {
 })
 
 describe('三区结构与槽位注入（zones 无域内容——视图内容经槽位注入）', () => {
-  it('rail / 中区会话 / 中区知识 / dock 四槽位内容渲染进对应区（槽位契约自证）', () => {
+  it('rail / 中区会话 / 中区知识 三槽位内容渲染进对应区（槽位契约自证）', () => {
     const markup = renderToStaticMarkup(
       <WorkbenchZones
         view={view()}
@@ -79,9 +81,57 @@ describe('三区结构与槽位注入（zones 无域内容——视图内容经�
     expect(markup).toContain('data-dswf-placeholder="knowledge"')
     expect(markup).toContain('data-dswf-placeholder="dock-tab"')
   })
-  it('renderDockTab 槽位渲染域内容进 tabpanel；缺席 = 内容占位', () => {
+  it('renderDockTab 槽位渲染域内容进官方页签体；缺席 = 内容占位', () => {
     expect(render({ slots: { renderDockTab: (tab) => <b data-t={tab.id} /> } })).toContain('data-t="start"')
     expect(render()).toContain('内容占位')
+  })
+  it('rail 槽缺省渲染空轨；空登记表 = 官方空窗格面（emptyPane 中文化）', () => {
+    const markup = renderToStaticMarkup(<WorkbenchZones view={view()} dockTabs={[]} />)
+    expect(markup).toContain('class="dswf-zones-rail"')
+    expect(markup).toContain('data-dockkit-empty')
+    expect(markup).toContain('无打开的页签')
+  })
+})
+
+describe('官方 dockkit 基座装载（fix-10 官方面 pin——零自绘 strip/手柄退役）', () => {
+  it('官方面在场：surface（横条形 dropZones）+ chips 页签条（role=tablist/tab）+ 页签体 + 初始「开始」页签', () => {
+    const markup = render()
+    expect(markup).toContain('data-dockkit-surface')
+    expect(markup).toContain('data-dockkit-drop-zones="horizontal"')
+    expect(markup).toContain('role="tablist"')
+    expect(markup).toMatch(/role="tab"[^>]*data-dockkit-tab=/)
+    expect(markup).toContain('data-dockkit-content')
+    expect(markup).toContain('开始')
+  })
+  it('自研轨道退役：无自绘 strip/手柄/页签条痕迹（fix-4 路线退役面）', () => {
+    const markup = render({ onToggleDock: () => {} })
+    expect(markup).not.toContain('dswf-zones-dock-strip')
+    expect(markup).not.toContain('dswf-zones-dock-resize')
+    expect(markup).not.toContain('SegmentedTabs')
+  })
+  it('官方控件在场：分栏钮（窄轨由官方 room 规则裁决禁用态）', () => {
+    const markup = render()
+    expect(markup).toContain('data-dockkit-split-button')
+    expect(markup).toContain('aria-label="分栏"')
+  })
+  it('添加钮 = 产品口径缺席（canAddTab 政策面——P1 无可添内容）', () => {
+    expect(render()).not.toContain('data-dockkit-add-tab')
+  })
+  it('全局页签不可关闭（canCloseTab 口径）：关闭控件缺席 + 单页签静默 chips（官方 quiet 形态）', () => {
+    const markup = render()
+    expect(markup).not.toContain('data-dockkit-tab-close')
+    expect(markup).toContain('data-dockkit-tab-quiet')
+  })
+  it('chrome 角位 = 右栏收展钮（官方置位于右上窗格条尾；语义与现有 toggle 同径）', () => {
+    const withToggle = render({ onToggleDock: () => {} })
+    expect(withToggle).toContain('data-dockkit-strip-chrome')
+    expect(withToggle).toContain('aria-label="收起 dock"')
+    expect(render()).not.toContain('data-dockkit-strip-chrome')
+  })
+  it('文案全中文化（官方 DockLabels 契约由产品供文案，含可访问名）', () => {
+    const markup = render()
+    expect(markup).toContain('aria-label="分栏"') // 可访问名随 labels 面（splitPane；关闭/浮动同源 labels）
+    expect(renderToStaticMarkup(<WorkbenchZones view={view()} dockTabs={[]} />)).toContain('无打开的页签')
   })
 })
 
@@ -106,10 +156,10 @@ describe('UF-5 视图互换（整体切换 + 零状态丢失）', () => {
     const markup = render({ view: view({ center: 'knowledge', rightDock: true }) })
     expect(dockTag(markup)).toContain('data-dswf-dock="hidden"')
   })
-  it('dock 内容在强制隐藏期仍挂载（页签条与内容不卸载——右栏展开态/内容保留）', () => {
+  it('dock 官方面在强制隐藏期仍挂载（chips 条与页签体不卸载——官方 keepMounted 保留，右栏展开态/内容保留）', () => {
     const markup = render({ view: view({ center: 'knowledge', rightDock: true }) })
-    expect(markup).toContain('role="tablist"')
-    expect(markup).toContain('role="tabpanel"')
+    expect(markup).toContain('data-dockkit-strip')
+    expect(markup).toContain('data-dockkit-content')
     expect(markup).toContain('开始')
   })
   it('切回按记忆恢复原展开态（视图态机链：展开 → 知识 → 回会话 = expanded）', () => {
@@ -126,70 +176,19 @@ describe('UF-5 视图互换（整体切换 + 零状态丢失）', () => {
   })
 })
 
-describe('UF-7 dock 轨道（默认收起归零 ↔ 页签条 + 内容区）', () => {
+describe('UF-7 dock 轨道（默认收起归零 ↔ 官方页签条 + 内容区）', () => {
   it('默认态 = 收起（data-dswf-dock=collapsed；轨道归零样式由 zones.css/结构 pin 另证）', () => {
     expect(dockTag(render({ view: view() }))).toContain('data-dswf-dock="collapsed"')
   })
-  it('展开 = 页签条（官方 SegmentedTabs → role=tablist）+ 内容区（role=tabpanel）+ 默认激活首个可见页签', () => {
+  it('展开 = 官方 chips 页签条 + 页签体（rightDock↔官方 expanded 映射——首渲染即一致）', () => {
     const markup = render()
-    expect(markup).toContain('role="tablist"')
-    expect(markup).toContain('aria-label="dock 页签"')
-    expect(markup).toContain('role="tabpanel"')
-    expect(markup).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>开始<\/button>/)
-  })
-  it('onToggleDock 在场 → 收展控制钮（官方 Button）；缺席 → 无控制面', () => {
-    expect(render({ onToggleDock: () => {} })).toContain('aria-label="收起 dock"')
-    expect(render()).not.toContain('aria-label="收起 dock"')
+    expect(dockTag(markup)).toContain('data-dswf-dock="expanded"')
+    expect(markup).toContain('data-dockkit-strip')
+    expect(markup).toContain('data-dockkit-content')
   })
 })
 
-describe('fix-4 dock 视觉整理（strip 分区 / 调宽手柄 / 宽度内态注入）', () => {
-  it('strip 分区呈现：页签区（flex 容器位）在前、收展钮尾部在后（原型 rb-tail 同构位）', () => {
-    const markup = render({ onToggleDock: () => {} })
-    expect(markup).toContain('class="dswf-zones-dock-tabs"')
-    expect(markup).toContain('class="dswf-zones-dock-tail"')
-    // 分区次序：strip → 页签区 → 尾部（收展钮入尾部容器——官方 Button 原样）
-    const order = [
-      markup.indexOf('dswf-zones-dock-strip'),
-      markup.indexOf('dswf-zones-dock-tabs'),
-      markup.indexOf('dswf-zones-dock-tail'),
-      markup.indexOf('收起 dock'),
-    ]
-    for (const at of order) expect(at, '分区锚点在场').toBeGreaterThanOrEqual(0)
-    expect([...order].sort((a, b) => a - b)).toEqual(order)
-  })
-  it('调宽手柄：separator 语义 + 垂直向 + 键盘可达（原型 #rb-resize 同型 a11y 面）', () => {
-    const markup = render()
-    expect(markup).toContain('class="dswf-zones-dock-resize"')
-    expect(markup).toContain('role="separator"')
-    expect(markup).toContain('aria-orientation="vertical"')
-    expect(markup).toContain('tabindex="0"')
-    expect(markup).toContain('aria-label="右侧栏宽度')
-  })
-  it('宽度内态注入：--dswf-dock-width 默认 340px；与三态相位属性并存（收起/强制隐藏不改写）', () => {
-    expect(dockTag(render())).toContain('--dswf-dock-width:340px')
-    const collapsed = render({ view: view({ rightDock: false }) })
-    expect(dockTag(collapsed)).toContain('data-dswf-dock="collapsed"')
-    expect(dockTag(collapsed)).toContain('--dswf-dock-width:340px')
-    const hidden = render({ view: view({ center: 'knowledge', rightDock: true }) })
-    expect(dockTag(hidden)).toContain('data-dswf-dock="hidden"')
-    expect(dockTag(hidden)).toContain('--dswf-dock-width:340px')
-  })
-})
-
-describe('UF-7 页签跟随（可见集口径 + 不打断中区）', () => {
-  it('可见集 = 当前项目页签 + 全局页签（p1 不见 p2 页签；p2 不见 p1；无锚仅全局）', () => {
-    const atP1 = render({ view: view({ rightDock: true, focus: { projectId: 'p1', sessionId: null } }) })
-    expect(atP1).toContain('P1 文档')
-    expect(atP1).not.toContain('P2 文档')
-    const atP2 = render({ view: view({ rightDock: true, focus: { projectId: 'p2', sessionId: null } }) })
-    expect(atP2).toContain('P2 文档')
-    expect(atP2).not.toContain('P1 文档')
-    const atNone = render({ view: view({ rightDock: true, focus: { projectId: null, sessionId: null } }) })
-    expect(atNone).toContain('开始')
-    expect(atNone).not.toContain('P1 文档')
-    expect(atNone).not.toContain('P2 文档')
-  })
+describe('UF-7 页签跟随（不打断中区；可见集口径锚归 dock-kit/dock 单测）', () => {
   it('项目切换不打断中区面板：会话视图在项目切换渲染间保持可见（选择 ≠ 导航）', () => {
     const atP1 = render({ view: view({ focus: { projectId: 'p1', sessionId: null } }) })
     const atP2 = render({ view: view({ focus: { projectId: 'p2', sessionId: null } }) })
@@ -201,14 +200,9 @@ describe('UF-7 页签跟随（可见集口径 + 不打断中区）', () => {
 })
 
 describe('占位内容域（ReactNode 槽位注入不局限于文本）', () => {
-  it('renderDockTab 收到激活页签记录（域渲染面契约）', () => {
+  it('renderDockTab 收到激活页签记录（域渲染面契约——初始「开始」页签）', () => {
     const seen: string[] = []
     render({ slots: { renderDockTab: (tab) => { seen.push(tab.id); return <b>{tab.label}</b> } } })
     expect(seen).toEqual(['start'])
-  })
-  it('rail 槽缺省渲染空轨（rail 常驻归 rail 内容自管理）', () => {
-    const markup = renderToStaticMarkup(<WorkbenchZones view={view()} dockTabs={[]} />)
-    expect(markup).toContain('class="dswf-zones-rail"')
-    expect(markup).toContain('data-dswf-placeholder="dock-empty"')
   })
 })

@@ -13,8 +13,9 @@
 //   - 侧栏：[data-dswf-sidebar=wide|rail]；[data-dswf-project]/[data-dswf-session]；暂无会话 .dswf-sidebar-no-session；
 //     骨架 [data-dswf-skeleton]；空态 [data-dswf-empty]（ForgeWorkspacePanel.test 核实）
 //   - 官方壳：折叠钮 session.new/toggle.collapse 词条（dsh-client-ui-sidebar i18n：新会话/收起侧边栏/打开侧边栏）
-//   - dock：[data-dswf-dock=collapsed|expanded|hidden]；strip 页签 .dswf-zones-dock-strip [role=tab]
-//     （M0_DOCK_TABS = 全局「开始」单页签——WorkbenchPanel.tsx:67）
+//   - dock：[data-dswf-dock=collapsed|expanded|hidden]；strip 页签 [data-dswf-dock] [data-dockkit-strip]
+//     [role=tab]（fix-10 官方 dockkit 基座——自绘 strip 退役，官方 DOM 契约锚）；M0_DOCK_TABS =
+//     全局「开始」单页签（WorkbenchPanel.tsx:67）
 //   - composer：[data-dswf-pane=chat] textarea|contenteditable；工作区芯片 默认工作区|选择工作区 → [role=menu]
 //   - 会话文件：{userData}/dsh-home/sessions/<sanitized-cwd>/session-<id>/session[.vN].jsonl[.zstd]
 //     （system/message + tool/call 事件——flywheel.spec 解码器同源）
@@ -395,7 +396,10 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     // ── Step 5 success：视图互换且右栏状态保留（dock 展开 + 草稿 + 知识模式隐藏 + 切回恢复） ──
     await page.locator('.dswf-workbench-docktoggle').click()
     await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-    await expect(page.locator('.dswf-zones-dock-strip [role="tab"]').first(), '页签条在场').toBeVisible()
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]').first(),
+      '页签条在场',
+    ).toBeVisible()
     // 预输入草稿「待发问题」不发送（值断言在切回后以 evaluate 双形态承载）
     await composer.click()
     await page.keyboard.insertText('待发问题')
@@ -577,7 +581,10 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢�
     // 展开右栏 → 页签条在场（M0 全局「开始」页签——shipped 全集）
     await page.locator('.dswf-workbench-docktoggle').click()
     await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-    await expect(page.locator('.dswf-zones-dock-strip [role="tab"]', { hasText: '开始' }), '全局页签常驻可见').toBeVisible()
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
+      '全局页签常驻可见',
+    ).toBeVisible()
 
     // 知识模式：右栏隐藏（内容让位）+ 中区面板不被打断（挂载保持）
     await page.locator('[data-dswf-nav="knowledge"]').first().click()

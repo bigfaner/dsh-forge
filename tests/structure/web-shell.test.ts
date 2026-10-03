@@ -65,11 +65,12 @@ describe('壳接入装配 pin（1.5）', () => {
 })
 
 describe('zones 三区骨架 pin（2.5）', () => {
-  it('模块面就位：容器/槽位/dock 跟随/barrel/样式 + shell 视图态机对接 hook', () => {
+  it('模块面就位：容器/槽位/dock 跟随/dock 基座映射/barrel/样式 + shell 视图态机对接 hook', () => {
     for (const f of [
       'apps/web/src/zones/WorkbenchZones.tsx',
       'apps/web/src/zones/slots.ts',
       'apps/web/src/zones/dock.ts',
+      'apps/web/src/zones/dock-kit.ts',
       'apps/web/src/zones/zones.css',
       'apps/web/src/zones/index.ts',
       'apps/web/src/shell/use-shell-view.ts',
@@ -88,6 +89,22 @@ describe('zones 三区骨架 pin（2.5）', () => {
     expect(css).toContain('width: 0') // 收起轨道归零（原型同型）
     expect(css).toMatch(/data-dswf-dock=collapsed/)
     expect(css).toMatch(/data-dswf-dock=hidden/)
+  })
+
+  it('fix-10 官方 dockkit 基座 pin：右栏 = 官方面（DockController/DockLayout），自研轨道退役', () => {
+    const zones = read('apps/web/src/zones/WorkbenchZones.tsx')
+    expect(zones).toContain("from '@deepseek-ai/dsh-client-ui-dockkit'") // 依赖口径：官方静态装配线（S2；版本 pin 0.2.0-rc.2）
+    expect(zones).toContain('DockLayout') // 横条形右栏 = README 推荐 Sidebar 形态件
+    expect(zones).not.toContain('SegmentedTabs') // 自研页签条退役（官方 chips 承接）
+    expect(zones).not.toContain('dswf-zones-dock-resize') // 自研调宽手柄退役（fix-4 路线）
+    expect(existsSync(join(ROOT, 'apps/web/src/zones/dock-width.ts')), 'dock-width.ts 应已退役').toBe(false)
+    const dockKit = read('apps/web/src/zones/dock-kit.ts')
+    expect(dockKit).toContain('DOCK_LABELS_ZH') // 文案全中文化（DockLabels 契约产品供文案）
+    expect(dockKit).toContain('syncDockTabs') // 页签跟随项目 = 官方 intents 驱动路径
+    expect(dockKit).toContain('setExpanded') // rightDock ↔ 官方 expanded 映射（view-state 零改动）
+    const css = read('apps/web/src/zones/zones.css')
+    expect(css).toMatch(/data-dockkit-strip/) // WCO 避让经容器级官方锚（官方 strip 无自避让面）
+    expect(css).not.toContain('--dswf-dock-width') // 容器宽度态退役（官方 collapsed/expanded 呈现语义接管）
   })
 })
 

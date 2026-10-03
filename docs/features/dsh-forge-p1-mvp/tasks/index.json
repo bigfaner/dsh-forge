@@ -685,7 +685,7 @@
       "title": "Fix: dock 全面对齐 dsh——官方 ui-dockkit 基座替换自研轨道（DockSurface/Controller/FloatLayer）+ dsh-forge 内容叠加",
       "priority": "P1",
       "estimatedTime": "6h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-10.md",
       "record": "records/fix-10.md",
       "surface-type": "web",

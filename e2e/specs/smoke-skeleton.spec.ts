@@ -260,14 +260,54 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
       await bridgeDispatch(page, 'toggle-right-dock')
     }
     await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-    // 页签跟随底稿：展开轨道 = 页签条（M0 全局「开始」单页签）+ 内容常挂载（keep-alive）
-    await expect(page.locator('.dswf-zones-dock-strip [role="tab"]', { hasText: '开始' })).toBeVisible()
-    await expect(page.locator('[data-dswf-dock] [role="tabpanel"]').first()).toBeAttached()
+    // 页签跟随底稿：展开轨道 = 官方 chips 页签条（M0 全局「开始」单页签）+ 内容常挂载
+    // （fix-10 台账 #L59：自绘 SegmentedTabs strip 退役——锚迁移官方 DOM 契约 data-dockkit-strip）
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
+    ).toBeVisible()
+    // （fix-10 台账 #L62：官方 kit 页签体无 role=tabpanel——「内容挂载」锚迁移官方 body 锚
+    // data-dockkit-content，keep-alive 语义不变（官方 keepMounted 保留策略））
+    await expect(page.locator('[data-dswf-dock] [data-dockkit-content]').first()).toBeAttached()
+
+    // ── fix-10 官方 dockkit 基座回归（新增 dock 基座行为冒烟：官方面在场与默认形态）──
+    // 官方 surface（横条形 dropZones = DockLayout/Sidebar 形态）+ 分栏钮（340px 窄轨由官方
+    // room 规则禁用为宽度不足——控件在场、禁用态官方语义）+ chrome 角位收展钮（官方置位）；
+    // 添加钮 = canAddTab 产品口径缺席（P1 无可添内容面）；全局「开始」页签不可关闭
+    // （canCloseTab 口径——关闭控件缺席，官方 quiet 单 chips 形态）。
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-surface]').first(),
+      'fix-10·官方 dockkit surface 在场',
+    ).toBeAttached()
+    expect(
+      await page
+        .locator('[data-dswf-dock] [data-dockkit-surface]')
+        .first()
+        .getAttribute('data-dockkit-drop-zones'),
+      'fix-10·横条形右栏（DockLayout Sidebar 形态）',
+    ).toBe('horizontal')
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-split-button]').first(),
+      'fix-10·官方分栏控件在场',
+    ).toBeAttached()
+    await expect(
+      page.locator('[data-dswf-dock] [data-dockkit-strip-chrome] button[aria-label="收起 dock"]').first(),
+      'fix-10·chrome 角位 = 右栏收展钮（官方置位）',
+    ).toBeAttached()
+    expect(
+      await page.locator('[data-dswf-dock] [data-dockkit-add-tab]').count(),
+      'fix-10·添加钮 = 产品口径缺席',
+    ).toBe(0)
+    expect(
+      await page.locator('[data-dswf-dock] [data-dockkit-tab-close]').count(),
+      'fix-10·全局页签不可关闭（canCloseTab 口径）',
+    ).toBe(0)
 
     // L11 整体切换：进入知识模式 → 已开右栏也隐藏（内容让位）
     await page.locator('[data-dswf-nav="knowledge"]').first().click()
     await expect(page.locator('[data-dswf-dock="hidden"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-dock] [role="tabpanel"]').first()).toBeAttached()
+    // （fix-10 台账 #L62：tabpanel 锚迁移官方 body 锚 data-dockkit-content——官方面与内容
+    // 在强制隐藏期仍挂载，keep-alive 语义不变）
+    await expect(page.locator('[data-dswf-dock] [data-dockkit-content]').first()).toBeAttached()
     // L12 切回会话视图 → 右栏恢复展开（状态保留）
     await bridgeDispatch(page, 'show-session')
     await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
