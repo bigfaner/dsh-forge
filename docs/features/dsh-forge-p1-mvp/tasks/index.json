@@ -757,11 +757,12 @@
       "title": "Fix（fix-3 回炉）: 模态宽度仍未落卡片挂点——裁切未修且浏览器相位加剧至 300px（几何复测实锤）",
       "priority": "P0",
       "estimatedTime": "45min",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-7.md",
       "record": "records/fix-7.md",
       "surface-type": "web",
       "type": "coding.fix",
+      "blockedReason": "no implementation found",
       "complexity": "medium"
     },
     "fix-8": {

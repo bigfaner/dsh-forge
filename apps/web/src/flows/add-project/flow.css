@@ -6,18 +6,19 @@
  * 标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条「形态对齐官方」优先，
  * 取官方原值；块级留白用行高令牌刻度（同 browser.css/form.css 既有口径）。 */
 
-/* ── 模态内容区宽度口径（官方 Modal contentClassName 挂点——表单/执行/反馈相位基宽；
- * 高度自适应随内容，超出滚动归官方 Modal 机制） ── */
-.dswf-ap-modal {
-  width: 560px;
-  max-width: 90vw;
+/* ── 模态卡片宽度口径（官方 Modal className 挂点——落对话框卡片 clsx(css.dialog, className)，
+ * fix-7 回炉：fix-3 误挂内容层致 380 卡片裁切 560/680 内容；内容层不再自带宽度，官方
+ * .content 自身 width:100% 随卡片；高度自适应随内容，超出滚动归官方 Modal 机制；
+ * 小窗上限 = min 的 100% 腿（官方 .root 24px padding 盒内取宽——90vw 口径由此收编）） ── */
+.dswf-ap-dialog {
+  width: min(560px, 100%);
 }
 
 /* ── 浏览器相位加宽（fix-3 走查第 1 轮：段一/重选浏览面积不足——有意超出原型 520 的体验
- * 改进；与 .dswf-ap-modal 组合挂点，90vw 上限沿基类；宽度口径拆分见 flow-model
- * modalContentClassName（browser/repick → wide，其余相位基宽 560）） ── */
-.dswf-ap-modal-wide {
-  width: 680px;
+ * 改进；与 .dswf-ap-dialog 组合挂卡片；宽度口径拆分见 flow-model modalClassName
+ * （browser/repick → wide，其余相位基宽 560）） ── */
+.dswf-ap-dialog-wide {
+  width: min(680px, 100%);
 }
 
 /* ── 流程根（模态内容区内：纵向布局） ── */

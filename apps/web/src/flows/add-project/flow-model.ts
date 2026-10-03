@@ -84,14 +84,15 @@ export function closeIntentOf(state: FlowState): CloseIntent {
 }
 
 /**
- * 模态内容区宽度口径映射（fix-3 走查放大：浏览器相位 browser/repick → 加宽 680；
- * 表单与终局相位（executing/success/failure）→ 基宽 560——宽度刻度见 flow.css
- * `.dswf-ap-modal` / `.dswf-ap-modal-wide`，挂点 = 官方 Modal contentClassName）。
+ * 模态卡片宽度口径映射（fix-7 回炉：挂点 = 官方 Modal className——落对话框卡片
+ * （clsx(css.dialog, className)），fix-3 误挂 contentClassName 内容层致卡片 380 裁切）。
+ * 浏览器相位 browser/repick → 加宽 680；表单与终局相位（executing/success/failure）
+ * → 基宽 560——宽度刻度见 flow.css `.dswf-ap-dialog` / `.dswf-ap-dialog-wide`。
  */
-export function modalContentClassName(phase: FlowPhase): string {
+export function modalClassName(phase: FlowPhase): string {
   return phase === 'browser' || phase === 'repick'
-    ? 'dswf-ap-modal dswf-ap-modal-wide'
-    : 'dswf-ap-modal'
+    ? 'dswf-ap-dialog dswf-ap-dialog-wide'
+    : 'dswf-ap-dialog'
 }
 
 /** typed error 归一：RpcClientError → code + compensated 判定；其余 → code null 原样文案 */

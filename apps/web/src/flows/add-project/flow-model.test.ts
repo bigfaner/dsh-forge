@@ -4,7 +4,8 @@
 // AC3 成功落位（result 携带）、AC4 失败落位 + typed error code → 文案映射
 // （补偿已执行/挂接保护/补偿失败三口径 + 未知错误兜底）、AC5 关闭意图三分
 // （cancel/dismiss/ignore——Esc/✕ 仅取消点窗口内有效的机制半边）、
-// fix-3 模态宽度口径拆分（modalContentClassName：浏览器相位加宽 680——表单/终局相位基宽 560）。
+// fix-3/fix-7 模态卡片宽度口径拆分（modalClassName：浏览器相位加宽 680——表单/终局相位
+// 基宽 560；挂点 = 官方 Modal className 卡片（fix-7 回炉：不再挂内容层））。
 import { describe, expect, it } from 'vitest'
 import type { ErrorCode, RegisterResult } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc/index.js'
@@ -18,7 +19,7 @@ import {
   finishExecute,
   initialFlowState,
   isCancelPoint,
-  modalContentClassName,
+  modalClassName,
   registerFailureCopy,
   selectDirectory,
   toFlowFailure,
@@ -132,17 +133,17 @@ describe('取消点窗口（isCancelPoint / closeIntentOf：AC1 + AC5）', () =>
   })
 })
 
-describe('模态宽度口径拆分（modalContentClassName：fix-3 浏览器相位加宽）', () => {
-  it('浏览器相位（browser / repick）→ 基类 + 加宽修饰（680 刻度随 .dswf-ap-modal-wide）', () => {
-    expect(modalContentClassName('browser')).toBe('dswf-ap-modal dswf-ap-modal-wide')
-    expect(modalContentClassName('repick')).toBe('dswf-ap-modal dswf-ap-modal-wide')
+describe('模态卡片宽度口径拆分（modalClassName：fix-3 浏览器相位加宽 + fix-7 卡片挂点回炉）', () => {
+  it('浏览器相位（browser / repick）→ 卡片基类 + 加宽修饰（680 刻度随 .dswf-ap-dialog-wide）', () => {
+    expect(modalClassName('browser')).toBe('dswf-ap-dialog dswf-ap-dialog-wide')
+    expect(modalClassName('repick')).toBe('dswf-ap-dialog dswf-ap-dialog-wide')
   })
 
-  it('表单与终局相位（form/executing/success/failure）→ 仅基类（560 基宽不动——Hard Rule）', () => {
-    expect(modalContentClassName('form')).toBe('dswf-ap-modal')
-    expect(modalContentClassName('executing')).toBe('dswf-ap-modal')
-    expect(modalContentClassName('success')).toBe('dswf-ap-modal')
-    expect(modalContentClassName('failure')).toBe('dswf-ap-modal')
+  it('表单与终局相位（form/executing/success/failure）→ 仅卡片基类（560 基宽不动——Hard Rule）', () => {
+    expect(modalClassName('form')).toBe('dswf-ap-dialog')
+    expect(modalClassName('executing')).toBe('dswf-ap-dialog')
+    expect(modalClassName('success')).toBe('dswf-ap-dialog')
+    expect(modalClassName('failure')).toBe('dswf-ap-dialog')
   })
 })
 

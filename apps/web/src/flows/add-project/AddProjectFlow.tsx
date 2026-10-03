@@ -26,7 +26,7 @@ import { flowActions, rpcRegisterSource, type RegisterSource } from './flow-acti
 import {
   registerFailureCopy,
   initialFlowState,
-  modalContentClassName,
+  modalClassName,
   type FlowState,
 } from './flow-model.js'
 import { publishAddProjectFlow } from './flow-open.js'
@@ -290,7 +290,7 @@ export function AddProjectFlow({
       onClose={actions.requestClose}
       title="添加项目"
       closeLabel="关闭"
-      contentClassName={modalContentClassName(flow.phase)}
+      className={modalClassName(flow.phase)}
     >
       <AddProjectFlowView
         state={flow}

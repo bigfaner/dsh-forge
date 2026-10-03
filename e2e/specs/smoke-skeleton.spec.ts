@@ -328,6 +328,36 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await expect(confirmBtn).toBeDisabled()
     await expect(confirmBtn).toHaveText('下一步')
 
+    // ── fix-7 几何防回归（L3 式 computed 断言——防「单测绿但视觉裁切」）：段一卡片宽 + 无裁切 ──
+    const browserGeo = await page.evaluate(() => {
+      const rect = (el: Element | null) =>
+        el
+          ? {
+              x: Math.round(el.getBoundingClientRect().x),
+              w: Math.round(el.getBoundingClientRect().width),
+              right: Math.round(el.getBoundingClientRect().right),
+            }
+          : null
+      const dialog = document.querySelector('[role="dialog"]')
+      return {
+        dialog: rect(dialog),
+        content: rect(dialog?.querySelector('[class*="_content_"]') ?? null),
+        list: rect(document.querySelector('.dswf-fb-list')),
+      }
+    })
+    // 浏览器相位卡片 = 加宽 680（官方 Modal className 卡片挂点；1440 窗不触 min 的 100% 腿）
+    expect(browserGeo.dialog?.w, 'L3·浏览器相位卡片宽 680（className 卡片挂点）').toBe(680)
+    // 目录列表左缘 ≥ 卡片左缘（fix-3/fix-7 整改项：内容溢出卡片左缘会被卡片 overflow:hidden 裁切）
+    expect(
+      browserGeo.list?.x,
+      'L3·浏览器相位目录列表左缘 ≥ 卡片左缘（无左裁切）',
+    ).toBeGreaterThanOrEqual(browserGeo.dialog!.x)
+    // 内容右缘 = 卡片右缘（内容层不自带宽度，官方 .content width:100% 随卡片——等值即无溢出）
+    expect(
+      browserGeo.content?.right,
+      'L3·浏览器相位内容右缘 = 卡片右缘（无溢出）',
+    ).toBe(browserGeo.dialog!.right)
+
     // 导航至夹具根（home → AppData → Local → Temp → 夹具；名称精确匹配防误中）
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
@@ -338,6 +368,36 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await expect(confirmBtn).toBeEnabled()
     await confirmBtn.click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+
+    // ── fix-7 几何防回归（L3 式 computed 断言）：段二卡片宽 + label 全可见 ──
+    const formGeo = await page.evaluate(() => {
+      const rect = (el: Element | null) =>
+        el
+          ? {
+              x: Math.round(el.getBoundingClientRect().x),
+              w: Math.round(el.getBoundingClientRect().width),
+              right: Math.round(el.getBoundingClientRect().right),
+            }
+          : null
+      const dialog = document.querySelector('[role="dialog"]')
+      return {
+        dialog: rect(dialog),
+        content: rect(dialog?.querySelector('[class*="_content_"]') ?? null),
+        label: rect(document.querySelector('.dswf-rf-label')),
+      }
+    })
+    // 表单相位卡片 = 基宽 560（终局相位同刻度）
+    expect(formGeo.dialog?.w, 'L3·表单相位卡片宽 560').toBe(560)
+    // 走查人两轮复报的阻断项：label 左缘 ≥ 卡片左缘（全可见——fix-3 实测 label x 落卡片左缘外被裁）
+    expect(
+      formGeo.label?.x,
+      'L3·表单相位 label 左缘 ≥ 卡片左缘（全可见）',
+    ).toBeGreaterThanOrEqual(formGeo.dialog!.x)
+    // 内容右缘 = 卡片右缘（无溢出）
+    expect(
+      formGeo.content?.right,
+      'L3·表单相位内容右缘 = 卡片右缘（无溢出）',
+    ).toBe(formGeo.dialog!.right)
 
     // ── 段二表单（smoke ② 组）──
     const ws = page.locator('[data-dswf-rf-ws]')
