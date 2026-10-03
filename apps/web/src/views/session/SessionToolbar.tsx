@@ -1,6 +1,10 @@
-// 会话面板顶部 toolbar（fix-9）——对齐 dsh 布局：官方 conversation.session.header 槽位的
-// titleRow 行语言（lineage 血统簇 + actions 动作区 + utilities 工具簇 + corner 角位四座），
-// 经官方件组合承载（Button toolbar/sm + 官方图标——Hard Rule 官方件复用优先）。
+// 会话面板头部 titleRow 行（fix-9 建立 / fix-13 融合）——对齐 dsh 布局：官方
+// conversation.session.header 槽位的 titleRow 行语言（lineage 血统簇 + actions 动作区 +
+// utilities 工具簇 + corner 角位四座），经官方件组合承载（Button toolbar/sm + 官方图标
+// ——Hard Rule 官方件复用优先）。fix-13 起 titleRow 与页签行融合为 .dswf-session-header
+// 一体头部单元（本组件根 = titleRow 座行，容器刻度/发线归 SessionPanel 头部容器——
+// 「浮一条工具栏 + 一个页签控件」两截形态退役；页签行语言决策变更：SegmentedTabs 分段
+// 控件 → 官方 ConversationRoot .tabs 扁平页签，注记见 SessionPanel.tsx 头）。
 // 装配路径裁决（fix-9 Implementation Notes 两路径，以 S2 槽面清点为准）：
 //   嵌入配方（conversation.content variant=embedded）不透出 header 槽位——upstream
 //   ui-conversation ConversationContent（lib/client.js data-conversation-content 产物树）
@@ -12,8 +16,8 @@
 //   面板三页签（PRD UF-4 终裁形态 (a)）叠加成平行页签行，违 Hard Rule「三页签形态零变化」
 //   → 取「官方件组合在 SessionPanel 内组装」路径。
 // 行刻度 = 官方 ConversationRoot.module.css titleRow 镜像（titleRow min-height 30 /
-// header 内衬 10-28-0-20 / titleCluster gap 10 / headerUtilities gap 8 + margin-left 20 /
-// crumb current 主色 500——session.css dsw-raw 注记逐处说明）。
+// header 内衬 10-28-0-20（fix-13 迁容器）/ titleCluster gap 10 / headerUtilities gap 8 +
+// margin-left 20 / crumb current 主色 500——session.css dsw-raw 注记逐处说明）。
 // P1 最简面：lineage = 当前会话标题（官方 sessions 账本 displayTitle 直读——SC2 零缓存，
 // sidebar-model 会话头同源字段；无会话 = 空位不猜标题）；actions = 空位保留（M2 任务域）；
 // utilities = 「在编辑器中打开工作区」占位钮（title 注明；动作归后续里程碑——宿主

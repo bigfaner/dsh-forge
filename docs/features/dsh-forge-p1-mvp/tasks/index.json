@@ -721,7 +721,7 @@
       "title": "Fix: 两处 dsh 原生对齐偏差——① 侧栏项目区图标钮带常驻底色（toolbar 变体误用）② 会话头部单元两截化（应对齐原生 titleRow+扁平页签一体头部）",
       "priority": "P1",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-13.md",
       "record": "records/fix-13.md",
       "surface-type": "web",

@@ -75,8 +75,10 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 头部动作区（fix-6：搜索/视图选项 = 官方 Button toolbar/sm——形态官方自持，
- * 此处只管排布；原型 sb-actions 四件基准：label + 搜索 + 视图 + ＋） ── */
+/* ── 头部动作区（fix-6 搜索/视图选项 = 官方 Button；fix-13 变体校正 toolbar → ghost——
+ * 官方侧栏行语言图标钮 = 透明底 + 仅 hover 底（Button.module.css .ghost），toolbar 变体
+ * 常驻 tool-bar-fill 底色与侧栏行语言不形——形态官方件自持，此处只管排布；
+ * 原型 sb-actions 四件基准：label + 搜索 + 视图 + ＋） ── */
 .dswf-sidebar-headbtn {
   flex: none;
 }

@@ -5,7 +5,7 @@
 // 点击切换与状态保持（草稿/滚动）实机面归 e2e（2.12 装配 + 2.14 冒烟 + dogfood）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SessionPanel, type SessionPanelProps } from './SessionPanel.js'
+import { SessionPanel, nextTabIndex, type SessionPanelProps } from './SessionPanel.js'
 import type { TranscriptEntry } from './transcript.js'
 
 /** 恢复链路样本（AC-2：打开既有会话——转录全量成行） */
@@ -29,16 +29,37 @@ const paneTag = (markup: string, pane: 'chat' | 'trajectory' | 'recall'): string
 }
 
 describe('SessionPanel 三 tab 容器（UF-4）', () => {
-  it('tab 条 = 官方 SegmentedTabs 三签（对话/轨迹/知识召回），aria 接线 tab→tabpanel', () => {
+  it('tab 条 = 官方 ConversationRoot 页签行语言（fix-13：扁平文字钮三签 对话/轨迹/知识召回），aria 接线 tab→tabpanel', () => {
     const markup = render()
     expect(markup).toContain('对话')
     expect(markup).toContain('轨迹')
     expect(markup).toContain('知识召回')
+    expect(markup).toContain('role="tablist"')
+    expect(markup).toContain('aria-label="会话视图"')
     expect(markup).toContain('id="dswf-session-tab-chat"')
+    // 官方 .tab 行语言锚：role=tab + aria-selected + aria-controls（SegmentedTabs 同接线保持）
+    expect(markup).toContain('role="tab"')
+    expect(markup).toContain('aria-selected="true"')
+    expect(markup).toContain('aria-controls="dswf-session-pane-chat"')
+    expect(markup.match(/role="tab"/g)).toHaveLength(3) // e2e L45 count=3 锚零褪色
+    // 激活页签 = .dswf-session-tab-active 变色类（官方 .tabActive 行语言）
+    expect(markup).toContain('dswf-session-tab dswf-session-tab-active')
     const chatPane = paneTag(markup, 'chat')
     expect(chatPane).toContain('id="dswf-session-pane-chat"')
     expect(chatPane).toContain('aria-labelledby="dswf-session-tab-chat"')
     expect(chatPane).toContain('role="tabpanel"')
+  })
+
+  it('fix-13 头部单元：titleRow 注入与页签行同容器（官方 .header 一体头部，两截形态退役）', () => {
+    const markup = render({ toolbar: <i data-t="toolbar" /> })
+    const headerOpen = markup.indexOf('<header class="dswf-session-header">')
+    const titleRow = markup.indexOf('data-t="toolbar"')
+    const tabs = markup.indexOf('dswf-session-tabs')
+    const body = markup.indexOf('dswf-session-body')
+    expect(headerOpen, '头部单元容器在场（官方 .header 同构）').toBeGreaterThanOrEqual(0)
+    expect(titleRow).toBeGreaterThan(headerOpen)
+    expect(tabs).toBeGreaterThan(titleRow) // titleRow 之上、页签行之下
+    expect(body).toBeGreaterThan(tabs) // 页签行在 body 之前（发线容器包含两行）
   })
 
   it('AC-4 keep-alive：默认对话激活——三 pane 同时在场，非激活仅 hidden（不卸载即不重置）', () => {
@@ -98,5 +119,22 @@ describe('SessionPanel 三 tab 容器（UF-4）', () => {
   it('转录缺席（新会话）：轨迹 pane 空态呈现（台账空态，不炸）', () => {
     const markup = render({ transcript: undefined })
     expect(markup).toContain('暂无轨迹')
+  })
+})
+
+describe('nextTabIndex 键盘轮焦推导（fix-13——原 SegmentedTabs 轮焦语义保持）', () => {
+  it('Left/Right 循环（首末回绕）+ Home/End 首末', () => {
+    expect(nextTabIndex('ArrowRight', 0, 3)).toBe(1)
+    expect(nextTabIndex('ArrowRight', 2, 3)).toBe(0) // 末位回绕首位
+    expect(nextTabIndex('ArrowLeft', 0, 3)).toBe(2) // 首位回绕末位
+    expect(nextTabIndex('ArrowLeft', 2, 3)).toBe(1)
+    expect(nextTabIndex('Home', 2, 3)).toBe(0)
+    expect(nextTabIndex('End', 0, 3)).toBe(2)
+  })
+
+  it('非轮焦键 = null（不拦截——普通键入穿透输入面）', () => {
+    expect(nextTabIndex('a', 0, 3)).toBeNull()
+    expect(nextTabIndex('Enter', 1, 3)).toBeNull()
+    expect(nextTabIndex('Escape', 1, 3)).toBeNull()
   })
 })

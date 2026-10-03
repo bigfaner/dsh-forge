@@ -173,11 +173,16 @@ describe('views/session 会话面板 pin（2.11）', () => {
     }
   })
 
-  it('Hard Rule 官方件复用：对话面 = chatSurface 注入位（零自绘会话 UI）+ 页签条 = 官方 SegmentedTabs', () => {
+  it('Hard Rule 官方件复用：对话面 = chatSurface 注入位（零自绘会话 UI）+ 页签条 = 官方 ConversationRoot 页签行语言（fix-13）', () => {
     const panel = read('apps/web/src/views/session/SessionPanel.tsx')
     expect(panel).toContain('readonly chatSurface: ReactNode')
-    expect(panel).toContain("from '@deepseek-ai/dsh-client-ui-primitives'")
-    expect(panel).toContain('SegmentedTabs')
+    // fix-13 决策变更：SegmentedTabs 分段控件退役 → 官方 .tabs/.tab/.tabActive 行语言复刻
+    //（官方主题无公开页签件可 import——刻度实值 dsw-raw 注记，pin 新决策形态）
+    expect(panel).toContain('dswf-session-header')
+    expect(panel).toContain('dswf-session-tabs')
+    expect(panel).toContain('role="tab"')
+    // SegmentedTabs 分段控件于会话面板退役（import 面随形态退役——官方行语言复刻接管）
+    expect(panel).not.toMatch(/import\s*\{[^}]*SegmentedTabs/)
     // 零自绘会话 UI：面板源不含消息气泡/输入框类自绘组件面（转录/输入/滚动全归官方注入面）
     expect(panel).not.toMatch(/composer|textarea|messageInput/i)
   })

@@ -2,7 +2,8 @@
 // 产品面板本体）。纯展示件：数据进（tree/loading/current）、回调出（导航动作），装配缝 =
 // ForgeSidebarSlot（洞位注册真身，plugin 经产品视图发布面引用）。
 // 形态纪律（Hard Rule 官方件复用）：项目节点 = 官方 DisclosureRow；状态点 = 官方 StateDot；
-// 悬停提示 = 官方 Tooltip；头部图标钮 = 官方 Button（toolbar/sm）+ 官方图标件；过滤输入 =
+// 悬停提示 = 官方 Tooltip；头部图标钮 = 官方 Button（ghost/sm——侧栏行语言透明底 + 仅 hover
+// 底，fix-13：toolbar 变体常驻底色误用退役）+ 官方图标件；过滤输入 =
 // 官方 Input；视图选项弹层 = 官方 Menu（fix-6 补齐——原型 sb-head 四件基准）；
 // 行语言（高 32/34、hover interactive-bg、radius md）对齐官方 sidebar 行形态
 // （ui-workspace Rows 同型刻度），本文件零平行发明。
@@ -293,7 +294,7 @@ export function SidebarProjectsZone({
       <div className="dswf-sidebar-sectionhead">
         <div className="dswf-sidebar-sectionlabel">项目</div>
         <Button
-          variant="toolbar"
+          variant="ghost"
           size="sm"
           className="dswf-sidebar-headbtn"
           data-dswf-search-toggle=""
@@ -318,7 +319,7 @@ export function SidebarProjectsZone({
           portal
           anchor={
             <Button
-              variant="toolbar"
+              variant="ghost"
               size="sm"
               className="dswf-sidebar-headbtn"
               data-dswf-view-menu=""
