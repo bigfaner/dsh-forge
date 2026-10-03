@@ -19,6 +19,7 @@ status: tasks
 | ER Diagram | design/er-diagram.md | 五表 ER：projects / knowledge_entries（缓存）/ knowledge_recall_logs（单表双消费面：tab + 热度）/ app_key_logs（关键日志）/ schema_meta |
 | SQL Schema | design/schema.sql | SQLite DDL（schema v1；better-sqlite3；WAL + FK + CHECK 约束 + 索引） |
 | Page Map | design/page-map.md | 单页三区视图态映射（无 URL 路由）：workbench/session ⇄ workbench/knowledge + 两段式注册模态 + hero 相位 |
+| Specs Consolidation | specs/ | 规格沉淀（[auto-specs] 2026-10-03）：biz-specs 15 条（14 CROSS 已集成 docs/business-rules/ 三文件）+ tech-specs 15 条（全 CROSS 已集成 docs/conventions/ 五文件）；review-choices + .integrated 标记 |
 
 ## Traceability
 
