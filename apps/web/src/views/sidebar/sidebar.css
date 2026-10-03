@@ -277,15 +277,12 @@
 }
 
 /* ── 品牌行件（sidebar.brand.mark / sidebar.brand.name 洞位内容；行本体归壳） ── */
+/* fix-15：mark 改「书 + 闪电」内联 SVG（docs/brand 母版）——废弃深色填充底/反色对
+ * （浅色主题近黑方块根因）；单 currentColor 描形，外层色取 bluish 强调令牌随主题自适应 */
 .dswf-sidebar-brand-mark {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  justify-content: center;
   border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-brand-primary);
-  color: var(--dsw-alias-brand-primary-invert);
-  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
   user-select: none;
 }
 

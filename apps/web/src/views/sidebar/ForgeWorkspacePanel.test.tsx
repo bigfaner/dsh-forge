@@ -124,11 +124,19 @@ describe('收起态 rail（AC4：图标保留悬停提示）', () => {
 })
 
 describe('品牌行件（壳品牌行的内容洞位）', () => {
-  it('mark：尺寸随壳请求 + 「知」字标', () => {
+  it('mark：「书 + 闪电」内联 SVG（fix-15）——尺寸随壳请求 + currentColor 单色 + aria-hidden', () => {
     const markup = renderToStaticMarkup(<ForgeBrandMark size={24} />)
-    expect(markup).toContain('知')
-    expect(markup).toContain('width:24px')
-    expect(markup).toContain('height:24px')
+    // 母版几何（docs/brand/dsh-forge-mark.svg）：闪电 + 左右书页三路径，viewBox 缩放
+    expect(markup).toContain('viewBox="0 0 24 24"')
+    expect(markup).toContain('width="24"')
+    expect(markup).toContain('height="24"')
+    expect(markup).toContain('aria-hidden="true"')
+    // 单色纪律（docs/brand 禁用约定）：三路径全 currentColor，零固定色值
+    expect(markup.match(/fill="currentColor"/g)).toHaveLength(3)
+    // 旧「知」字方块已退役（近黑方块根修对象）
+    expect(markup).not.toContain('知')
+    // 尺寸随壳请求缩放（品牌行/rail 24，其它请求同型缩放）
+    expect(renderToStaticMarkup(<ForgeBrandMark size={16} />)).toContain('width="16"')
   })
   it('name：dsh-forge 字标（自持内容）', () => {
     expect(renderToStaticMarkup(<ForgeBrandName />)).toContain('dsh-forge')

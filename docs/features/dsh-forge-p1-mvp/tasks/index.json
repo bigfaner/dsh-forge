@@ -745,7 +745,7 @@
       "title": "Fix: 品牌标识替换——「知识就是力量」新 mark（docs/brand 母版）+ 根修左上角品牌方块近黑问题（深底填充废弃，currentColor 令牌适配）",
       "priority": "P1",
       "estimatedTime": "1h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-15.md",
       "record": "records/fix-15.md",
       "surface-type": "web",
