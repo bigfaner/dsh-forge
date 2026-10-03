@@ -7,8 +7,9 @@
 // kit 面 = main.conversation 占用者运行期注入（官方 PropsRuntime 消费切片）：
 // useSession/useSessions 观察钩子 + renderFactorySlot 工厂渲染器；缺席任一 = 降级占位
 // （非壳载体/单测——不炸壳）。装配持有运行期绑定（2.11 README 数据契约「对话 tab」行）。
-// 残留（2.13/2.14）：ChatSnapshot wire 判别值 → TranscriptEntry 语义类映射（轨迹 tab 数据）
-// 与 conversationPhase 完整相位（settling）随装配实跑锚定入 G1 pin 池。
+// 残留（2.13/2.14）：ChatSnapshot wire 判别值 → TranscriptEntry 语义类映射已随 fix-11 接线
+// （WorkbenchPanel.transcriptOfChatSnapshot——useConversation 标准钩子 + legacy 兼容切片，
+// 随实跑入 G1 pin 池）；conversationPhase 完整相位（settling）仍待锚定。
 import type { ReactNode } from 'react'
 import './workbench.css'
 

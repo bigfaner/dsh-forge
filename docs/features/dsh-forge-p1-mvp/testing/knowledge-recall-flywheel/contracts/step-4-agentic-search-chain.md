@@ -85,7 +85,11 @@ last_anchor_sync: "2026-10-03T04:03:45+08:00"
 
 ## Outcome "no-hit-fallback-regular-retrieval"
 <!-- 溯源: journey Step 4d（search 无命中时转常规检索；依场景隔离无关库工作区独立启动） -->
-<!-- fact-note: fact RECALL_LOG_RECORDED——零命中 search 在 shipped 代码记哨兵行（零命中调用计入召回次数口径）；旅程断言「无使用事件落库 + 召回 tab 保持占位」按零命中不产生可呈现召回的口径声明，哨兵行是否计入统计属口径裁决点 -->
+<!-- fact-note: fact RECALL_LOG_RECORDED——零命中 search 在 shipped 代码记哨兵行 -->
+<!-- adjudication: fix-11 裁决（哨兵行口径，2026-10-03）——零命中 search = 已发生的召回事件：
+     哨兵行为 RecallGroup 契约一等分组（hitCount=0 / hits=[]），计入召回次数、不计覆盖与热度
+     （heatByEntry 排除哨兵行）。召回 tab 呈「召回次数 ≥1 · 覆盖知识 0」；「本会话暂无召回」
+     占位语义 = 零召回事件（Step 7b 面），非「零命中」。原「召回 tab 保持占位」期望随之撤销。 -->
 - Preconditions: "知识库中不存在与问题相关的知识（依 Setup 场景隔离：无关库工作区，全字段不含「部署」「构建」——Q1 无命中确定）"
   fixture_spec:
     entities:
@@ -95,9 +99,9 @@ last_anchor_sync: "2026-10-03T04:03:45+08:00"
           - field: "knowledge_dir"
             value: "无关库（全字段不含「部署」「构建」）——专属工作区独立启动"
 - Input: "在对话 tab 发送 Q1（search 未获命中为该库态下的确定前置，非用户动作）"
-- Output: "agent 转常规检索原语（grep / glob 等）继续处理，回答正常完成不阻塞、不出错；无使用事件落库（未发生召回；召回 tab 保持占位态，与 Step 7b 互证）"
-- State: "零召回（未发生命中链）；无知识使用事件"
-- Side-effect: "none（无召回事件）"
+- Output: "agent 转常规检索原语（grep / glob 等）继续处理，回答正常完成不阻塞、不出错；无知识使用事件落库（热度面排除哨兵行）；召回 tab 若 agent 实走知识检索则记零命中召回（次数 ≥1、覆盖 0——哨兵行口径），未实走则保持占位（模型自主，soft 承载）"
+- State: "无命中召回链；无知识使用事件（热度基线保持 0）"
+- Side-effect: "至多零命中哨兵行落 knowledge_recall_logs（计数不含覆盖/热度）"
 
 ## Outcome "abstract-first-long-body"
 <!-- 溯源: journey Step 4e（read-abstract 摘要先行——正文不整段注入）；基线 K2 正文数量级超长，必超 token 预算极简值（阈值设计期定，UNKNOWN） -->

@@ -76,4 +76,17 @@ describe('页签跟随与锚', () => {
     expect(s.focus.sessionId).toBeNull()
     expect(s.center).toBe('session')
   })
+  it('select-session 回会话视图右栏按偏好恢复（fix-11：与 show-session 同径——知识视图隐藏后会话行切回不得钉在收起态）', () => {
+    // 展开偏好 → 知识视图（强制隐藏）→ 会话行切回 = 恢复展开
+    let s = dispatchShellView(createShellViewState(), { type: 'toggle-right-dock' })
+    s = dispatchShellView(s, { type: 'show-knowledge' })
+    expect(s.rightDock).toBe(false)
+    s = dispatchShellView(s, { type: 'select-session', sessionId: 's1' })
+    expect(s.center).toBe('session')
+    expect(s.rightDock).toBe(true)
+    // 无显式偏好（默认收起）→ 切回保持收起
+    let t = dispatchShellView(createShellViewState(), { type: 'show-knowledge' })
+    t = dispatchShellView(t, { type: 'select-session', sessionId: 's2' })
+    expect(t.rightDock).toBe(false)
+  })
 })

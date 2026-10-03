@@ -38,8 +38,8 @@ export const MAIN_CONVERSATION_SLOT = 'main.conversation'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 
-/** 插件依赖的服务名（cordis inject——apply 等待三服务在场；与官方 ui-workspace 同型先例） */
-export const FORGE_CLIENT_INJECT = ['slots', 'sessions', 'workspaces'] as const
+/** 插件依赖的服务名（cordis inject——apply 等待四服务在场；与官方 ui-workspace 同型先例） */
+export const FORGE_CLIENT_INJECT = ['slots', 'sessions', 'uiWorkspace', 'workspaces'] as const
 
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
 export interface ForgeSlotsService {
@@ -49,12 +49,23 @@ export interface ForgeSlotsService {
   register(options: { name: string; priority?: number; inject?: () => object }, component: unknown): () => void
 }
 
-/** dsh 会话服务窄面（ISessions 消费切片：账本快照源 + 打开） */
+/** dsh 会话服务窄面（ISessions 消费切片：账本快照源——Session Controller client 无 open 面） */
 export interface ForgeSessionsService {
   /** 会话账本快照源（实时读——零缓存零副本的源本体） */
   readonly list: unknown
-  /** 选择会话为当前（官方面：会话视图打开） */
-  open(sessionId: string): void
+}
+
+/**
+ * dsh 工作区 UI 服务窄面（UiWorkspace 消费切片）。fix-11：会话行打开的正确官方面 =
+ * uiWorkspace.openSession（「Select a Session and show its Conversation as one UI
+ * navigation action」——内部 retain(mainView) + selection 一体，历史恢复经此驱动）；
+ * Session Controller 的 sessions 服务无 open 方法（retain/using/create/…），旧接线
+ * sessions.open 每次行点击即 TypeError——会话切换/恢复全链从未生效（sw Step4/5 首次
+ * 实跑暴露）。
+ */
+export interface ForgeUiWorkspaceService {
+  /** 选择会话为当前并呈现其会话面（官方导航动作面） */
+  openSession(target: string): void
 }
 
 /** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源） */
@@ -75,7 +86,7 @@ export interface ForgeViewsGlobal {
 /** 插件 apply 的 ctx 窄面（cordis Context 消费切片——get 解析注入服务） */
 export interface ForgeClientCtx {
   readonly slots: ForgeSlotsService
-  get(name: 'sessions' | 'workspaces'): unknown
+  get(name: 'sessions' | 'uiWorkspace' | 'workspaces'): unknown
 }
 
 /** cordis 插件最小结构面（免引 cordis 运行时——bundle 零外部 import，保 classic script 形状） */
@@ -145,6 +156,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       try {
         const views = publishedViews()
         const sessions = clientCtx.get('sessions') as ForgeSessionsService
+        const uiWorkspace = clientCtx.get('uiWorkspace') as ForgeUiWorkspaceService
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
 
         // 工作区洞位替换（AC1）：注入面携带 dsh 面数据源与动作（面板侧 useSyncExternalStore 直读）
@@ -157,7 +169,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 sessions: sessions.list,
                 workspaces: workspaces.list,
                 openSession: (sessionId: string): void => {
-                  sessions.open(sessionId)
+                  // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体）
+                  uiWorkspace.openSession(sessionId)
                 },
               }),
             },

@@ -28,7 +28,7 @@ interface RegisterCall {
   component: unknown
 }
 
-/** 假 ctx：slots 收集 inject/register，sessions/workspaces 经 get 递达 */
+/** 假 ctx：slots 收集 inject/register，sessions/uiWorkspace/workspaces 经 get 递达 */
 function fakeClientCtx(): { ctx: ForgeClientCtx; registers: RegisterCall[]; injectedKeys: string[]; open: ReturnType<typeof vi.fn> } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -43,12 +43,15 @@ function fakeClientCtx(): { ctx: ForgeClientCtx; registers: RegisterCall[]; inje
       return () => {}
     },
   }
-  const sessions = { list: { tag: 'sessions-list' }, open }
+  // fix-11：Session Controller 面仅账本快照源；打开动作 = uiWorkspace.openSession（官方导航面）
+  const sessions = { list: { tag: 'sessions-list' } }
+  const uiWorkspace = { openSession: open }
   const workspaces = { list: { tag: 'workspaces-list' } }
   const ctx: ForgeClientCtx = {
     slots,
     get: (name) => {
       if (name === 'sessions') return sessions
+      if (name === 'uiWorkspace') return uiWorkspace
       if (name === 'workspaces') return workspaces
       throw new Error(`unexpected service: ${name}`)
     },
@@ -78,14 +81,14 @@ function unpublishViews(): void {
 }
 
 describe('forgeClientPlugin 形状（cordis 插件面）', () => {
-  it('name = 注册键；inject = 三服务（slots/sessions/workspaces）；apply 幂等立激活标记', () => {
+  it('name = 注册键；inject = 四服务（slots/sessions/uiWorkspace/workspaces——fix-11 打开面改 uiWorkspace）；apply 幂等立激活标记', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string } }).__DSH_FORGE_CLIENT__
     delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     const views = publishFakeViews()
     const plugin = forgeClientPlugin()
     expect(plugin.name).toBe(FORGE_CLIENT_PLUGIN_ID)
     expect(plugin.inject).toEqual([...FORGE_CLIENT_INJECT])
-    expect(plugin.inject).toEqual(['slots', 'sessions', 'workspaces'])
+    expect(plugin.inject).toEqual(['slots', 'sessions', 'uiWorkspace', 'workspaces'])
     plugin.apply(fakeClientCtx().ctx)
     const active = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string; activatedAt: number } }).__DSH_FORGE_CLIENT__
     expect(active?.plugin).toBe(FORGE_CLIENT_PLUGIN_ID)
@@ -124,7 +127,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     unpublishViews()
   })
 
-  it('注入面 = dsh 账本/归属快照源 + openSession（面板数据与动作的唯一通道）', () => {
+  it('注入面 = dsh 账本/归属快照源 + openSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession——Session Controller 无 open 面）', () => {
     publishFakeViews()
     const { ctx, registers, open } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)

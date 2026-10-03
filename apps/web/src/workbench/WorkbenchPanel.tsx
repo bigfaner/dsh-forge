@@ -5,9 +5,12 @@
 // 填入）/ HeroEmpty → 项目数 0 时中区替换呈现 / dock 占位页签 → 右栏 UF-7 机制）+ UF-4
 // 召回 tab 数据接线（RecallTab——sessionRecall 单通道；跨视图跳转缝：召回行点击 →
 // 抽屉打开态（本装配持有）+ show-knowledge 视图切换——Hard Rule 经视图态/槽位不直引组件）
-// + 承载 UF-3 流程宿主（AddProjectFlow 模态 + __DSH_FORGE_ADD_PROJECT_FLOW__ 打开缝发布
-// ——hero CTA / 项目树「＋」两入口）+ 工作台桥发布（__DSH_FORGE_WORKBENCH__——左栏导航
-// 视图切换缝）。
+// + UF-4 轨迹 tab 数据接线（fix-11：TranscriptAnchor 订阅官方 ConversationSnapshot
+// （useConversation 标准钩子）→ ChatSnapshot.legacy 兼容切片 → TranscriptEntry[]——wire
+// 判别值 → 语义类映射表 = transcriptOfChatSnapshot 纯函数，锚定本装配层（views/session
+// README 表的实跑收口，原 2.13 残留））+ 承载 UF-3 流程宿主（AddProjectFlow 模态 +
+// __DSH_FORGE_ADD_PROJECT_FLOW__ 打开缝发布——hero CTA / 项目树「＋」两入口）+ 工作台桥
+// 发布（__DSH_FORGE_WORKBENCH__——左栏导航视图切换缝）。
 // 左栏 rail = 官方 ui-sidebar 壳（槽位路线 A，2.7——折叠/导航/快捷键白拿），zones rail 槽
 // 保持空轨；官方会话锚跟随：会话激活（官方新会话/品牌行）→ select-session 回会话视图
 // （UF-5「再次点新会话/会话行/品牌行 → 切回会话视图」的装配侧接缝）。
@@ -21,6 +24,7 @@ import { RecallTab } from '../views/session/RecallTab.js'
 import { SessionPanel } from '../views/session/SessionPanel.js'
 import type { SessionTabId } from '../views/session/SessionPanel.js'
 import { SessionToolbar } from '../views/session/SessionToolbar.js'
+import type { TranscriptEntry } from '../views/session/transcript.js'
 import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
 import { KnowledgeView } from '../views/knowledge/KnowledgeView.js'
@@ -47,6 +51,8 @@ export interface ForgeWorkbenchPanelProps {
   /** 会话面观察钩子（ChatSurface 相位推导） */
   readonly useSession?: KitSelectorHook
   readonly useSessions?: KitSelectorHook
+  /** 会话装配观察钩子（ConversationSnapshot——轨迹 tab 转录数据源，fix-11；缺席 = 轨迹台账空态） */
+  readonly useConversation?: KitSelectorHook
   /** workspace 归属观察钩子（hero 刷新锚——外部注册 dsh create 后快照身份变化即重拉项目数） */
   readonly useWorkspaces?: KitSelectorHook
   /** 工厂槽渲染器（conversation.content 嵌入配方） */
@@ -134,6 +140,176 @@ export function chatKitOf(props: ForgeWorkbenchPanelProps): ChatSurfaceKit | und
   }
 }
 
+// ── UF-4 轨迹 tab 转录接线（fix-11：官方 ChatSnapshot → TranscriptEntry，装配层映射锚） ──
+
+/** 官方 ConversationSnapshot 窄形状（上游 useConversation 消费切片——views.get('chat') 通道） */
+export interface ConversationSnapshotMirror {
+  readonly views?: { get?(target: string): unknown }
+}
+
+/** ChatSnapshot.legacy 兼容切片窄形状（上游 ConversationNode[]/runningCalls/partial——轨迹映射数据源） */
+export interface ChatSnapshotMirror {
+  readonly legacy?: {
+    readonly nodes?: readonly ConversationNodeMirror[]
+    readonly runningCalls?: readonly RunningToolCallMirror[]
+    readonly partial?: PartialAssistantMirror | null
+  }
+}
+
+/** 官方 ConversationNode 窄形状（wire 判别 = kind 字段族——records.d.ts 结构兼容面） */
+export interface ConversationNodeMirror {
+  readonly kind?: string
+  readonly seq?: number
+  readonly turn?: number
+  readonly text?: string
+  readonly message?: string
+  readonly summary?: string | null
+  readonly type?: string
+  readonly name?: string | null
+  readonly args?: string | null
+  readonly callId?: string
+  readonly call?: { readonly name?: string } | null
+  readonly content?: readonly ContentTextBlockMirror[]
+  readonly blocks?: readonly ContentTextBlockMirror[]
+}
+
+/** 官方 RunningToolCall 窄形状（preparing|start——在途调用，无结果态） */
+export interface RunningToolCallMirror {
+  readonly phase?: string
+  readonly name?: string
+  readonly callId?: string
+}
+
+/** 官方 PartialAssistant 窄形状（流式在途回答——无 seq，台账尾行呈现） */
+export interface PartialAssistantMirror {
+  readonly turn?: number
+  readonly blocks?: readonly ContentTextBlockMirror[]
+}
+
+/** ContentBlock/AssistantBlock 文本块子面 */
+interface ContentTextBlockMirror {
+  readonly type?: string
+  readonly kind?: string
+  readonly text?: string
+}
+
+/** 文本块拼接（user/context 的 content 与 assistant 的 blocks 同一投影——非文本块跳过） */
+function textOfBlocks(blocks: readonly ContentTextBlockMirror[] | undefined): string {
+  if (blocks === undefined) return ''
+  return blocks
+    .filter((b) => (b.type ?? b.kind) === 'text' && typeof b.text === 'string')
+    .map((b) => b.text ?? '')
+    .join('\n')
+}
+
+/** 系统事件行文本（context → 内容文本；compaction → 摘要；unknown → 事件类型；其余缺省空串） */
+function systemTextOf(node: ConversationNodeMirror): string {
+  if (node.kind === 'context') return textOfBlocks(node.content)
+  if (node.kind === 'compaction') return node.summary ?? ''
+  if (node.kind === 'unknown') return node.type ?? ''
+  return ''
+}
+
+/**
+ * ChatSnapshot.legacy → TranscriptEntry[]（纯函数，装配层锚定——views/session README 映射表
+ * 的 wire 判别值实跑收口）。判别 = ConversationNode.kind 字段族：
+ *   user/steering → user-message；assistant → assistant-message；command → command；
+ *   tool-result → tool-result（工具名 = call.name，窗口截断回落 callId——上游卡片头同径）；
+ *   turn-error/turn-max-tokens → turn-error；context/model-retry/compaction/unknown → system；
+ *   runningCalls（preparing|start 在途，Wire 类型 RunningToolCall = 两者并集）→ tool-running；
+ *   partial（流式回答，无 seq）→ assistant-message 尾行（seq = MAX_SAFE_INTEGER——回合落定
+ *   即让位于带真实 seq 的 AssistantMessage 节点）。
+ * 未知 kind / 形状漂移行跳过（fail-soft 不炸壳）；输入不被变异。
+ */
+export function transcriptOfChatSnapshot(chat: ChatSnapshotMirror): readonly TranscriptEntry[] {
+  const legacy = chat.legacy
+  const nodes = legacy?.nodes ?? []
+  const runningCalls = legacy?.runningCalls ?? []
+  const entries: TranscriptEntry[] = []
+  for (const node of nodes) {
+    const base = { key: '', seq: typeof node.seq === 'number' ? node.seq : 0, turn: node.turn }
+    switch (node.kind) {
+      case 'user':
+      case 'steering':
+        entries.push({ ...base, key: `${String(node.kind)}:${String(base.seq)}`, kind: 'user-message', text: textOfBlocks(node.content) })
+        break
+      case 'assistant':
+        entries.push({ ...base, key: `assistant:${String(base.seq)}`, kind: 'assistant-message', text: textOfBlocks(node.blocks) })
+        break
+      case 'command':
+        entries.push({
+          ...base,
+          key: `command:${String(base.seq)}`,
+          kind: 'command',
+          // args 为官方逐字原文（自带分隔空白——records.d.ts：verbatim rawInput after the name）
+          text: `${node.name ?? ''}${node.args ?? ''}`,
+        })
+        break
+      case 'tool-result':
+        entries.push({
+          ...base,
+          key: `tool-result:${String(base.seq)}:${node.callId ?? ''}`,
+          kind: 'tool-result',
+          toolName: node.call?.name ?? node.callId ?? '',
+        })
+        break
+      case 'turn-error':
+      case 'turn-max-tokens':
+        entries.push({ ...base, key: `${String(node.kind)}:${String(base.seq)}`, kind: 'turn-error', text: node.message ?? '' })
+        break
+      case 'context':
+      case 'model-retry':
+      case 'compaction':
+      case 'unknown':
+        entries.push({ ...base, key: `${String(node.kind)}:${String(base.seq)}`, kind: 'system', text: systemTextOf(node) })
+        break
+      default:
+        // 未知 wire 判别（上游扩展/形状漂移）跳过——fail-soft
+        break
+    }
+  }
+  for (const call of runningCalls) {
+    entries.push({
+      key: `tool-running:${call.callId ?? call.name ?? ''}`,
+      seq: Number.MAX_SAFE_INTEGER - 1,
+      kind: 'tool-running',
+      toolName: call.name ?? call.callId ?? '',
+    })
+  }
+  if (legacy?.partial !== undefined && legacy.partial !== null) {
+    entries.push({
+      key: `partial:${String(legacy.partial.turn ?? '')}`,
+      seq: Number.MAX_SAFE_INTEGER,
+      kind: 'assistant-message',
+      turn: legacy.partial.turn,
+      text: textOfBlocks(legacy.partial.blocks),
+    })
+  }
+  return entries
+}
+
+/**
+ * 转录锚子件（fix-11）：订阅官方会话装配快照（useConversation 标准钩子——main.conversation
+ * 占用者 props 面直递），投影 ChatSnapshot → TranscriptEntry[] 上抛（快照对象身份稳定——
+ * uSES 选择器零派生对象；转录行副本经装配态注入 SessionPanel，对话面本体仍官方面自持）。
+ * 导出面 = 单测（SSR 直驱伪钩子——WorkspacesAnchor 同形制）。
+ */
+export function TranscriptAnchor({
+  hook,
+  onChange,
+}: {
+  readonly hook: KitSelectorHook
+  readonly onChange: (entries: readonly TranscriptEntry[]) => void
+}): ReactNode {
+  const chat = hook((s) => (s as ConversationSnapshotMirror | undefined)?.views?.get?.('chat')) as
+    | ChatSnapshotMirror
+    | undefined
+  useEffect(() => {
+    onChange(chat === undefined ? [] : transcriptOfChatSnapshot(chat))
+  }, [chat, onChange])
+  return null
+}
+
 /**
  * 会话 toolbar 官方账本绑定子件（fix-9——kit 观察钩子于本件内无条件调用）：标题直读官方
  * sessions 账本（byId[sessionId].displayTitle——sidebar-model 会话头同源字段，SC2 零缓存
@@ -167,6 +343,8 @@ export interface WorkbenchAssemblyProps {
   readonly phase: SessionZonePhase
   /** 对话 tab 内容（官方会话面嵌入 / 降级占位） */
   readonly chatSurface: ReactNode
+  /** 转录条目切片（轨迹 tab 台账数据源——fix-11 TranscriptAnchor 装配产物；缺省空台账） */
+  readonly transcript?: readonly TranscriptEntry[]
   /** 会话面板顶部 toolbar（fix-9：SessionToolbar 装配产物——账本绑定/降级两径经
    * ForgeWorkbenchPanel 组装；session 相位恒在场） */
   readonly sessionToolbar: ReactNode
@@ -194,6 +372,7 @@ export function WorkbenchAssembly({
   view,
   phase,
   chatSurface,
+  transcript,
   sessionToolbar,
   knowledge,
   recall,
@@ -212,6 +391,7 @@ export function WorkbenchAssembly({
         <SessionPanel
           chatSurface={chatSurface}
           toolbar={sessionToolbar}
+          transcript={transcript}
           recall={recall}
           onTabChange={onSessionTab}
         />
@@ -283,6 +463,12 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
   const [drawerEntryId, setDrawerEntryId] = useState<number | null>(null)
   // 召回 tab 激活锚（AC4 即时累积：visible 翻转 → RecallTab 重拉）
   const [activeSessionTab, setActiveSessionTab] = useState<SessionTabId>('chat')
+  // 轨迹 tab 转录切片（fix-11：TranscriptAnchor 订阅官方 ChatSnapshot 投影上抛——快照身份
+  // 驱动重投影，非受控装载；会话切换/无会话 = 空台账回落）
+  const [transcript, setTranscript] = useState<readonly TranscriptEntry[]>([])
+  const handleTranscript = useCallback((entries: readonly TranscriptEntry[]): void => {
+    setTranscript(entries)
+  }, [])
   // 召回行跳转（Hard Rule 跨视图解耦）：抽屉打开 + 整体切知识视图（UF-5 同径转移面）
   const openKnowledgeEntry = useCallback(
     (entryId: number) => {
@@ -314,6 +500,7 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
         view={view}
         phase={phase}
         chatSurface={chatKit !== undefined ? <ChatSurface kit={chatKit} /> : <ChatSurfaceAbsent />}
+        transcript={transcript}
         sessionToolbar={sessionToolbar}
         knowledge={
           <KnowledgeView
@@ -348,6 +535,11 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
           身份变化 = 项目数重拉锚，快照本体 = 项目锚推导输入——不落地 dsh 账本行副本） */}
       {props.useWorkspaces !== undefined ? (
         <WorkspacesAnchor hook={props.useWorkspaces} onChange={handleWorkspacesSnap} />
+      ) : null}
+      {/* 轨迹转录锚（fix-11：kit hook 在场才挂载——钩子于子件内无条件调用；ChatSnapshot
+          投影上抛 → SessionPanel 轨迹台账；官方对话面本体不经手——零再排序零缓存） */}
+      {props.useConversation !== undefined ? (
+        <TranscriptAnchor hook={props.useConversation} onChange={handleTranscript} />
       ) : null}
     </div>
   )

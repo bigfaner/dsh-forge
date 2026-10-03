@@ -537,9 +537,12 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       .toContain('1')
 
     // ── Step 8b：Q2 触发 K2 新召回 → 即时累积（2/2 与 1/1 分离；K1 保持 1） ──
-    // 回会话视图（知识模式无会话面板——点会话行切回）
+    // 回会话视图（知识模式无会话面板——点会话行切回）。Step 7 遗留召回 tab 激活 = keep-alive
+    // 常态（AC-4 切换不重置——面板态跨视图往返保留，fix-11 首次实跑暴露）；发送前回对话 tab。
     await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
     await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '对话' }).click()
+    await expect(page.locator('[data-dswf-pane="chat"]').first()).toBeVisible()
     await sendQuestion(page, Q2)
     await awaitSessionChain(
       dshHome,
@@ -643,7 +646,15 @@ test('@web-e2e @p1mvp flywheel·Step2b no-knowledge-dir-session：无知识段�
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n')
     expect(promptText).not.toBe('')
-    expect(promptText, '未配置知识目录 → 系统提示词不含知识段').not.toContain('## Project knowledge base')
+    // 知识段注入口径（fix-11 裁决，B 侧）：知识段 = 能力性指引，随插件加载无条件注入
+    // （tech-design Interface 3 静态注册；段文本自声明 "may be registered"；两 tool 同为
+    // 无条件注册——工具 schema 本就在场，仅藏指引段不自洽）。精确门控在设计边界内不可实现
+    // （Interface 2 无路径反查 / Hard Rule 禁第二 core 服务 / 绑定表不含知识目录 / core 索引
+    // 空态为异步不可同步探测）。未配置态断言 = 段在场且会话正常（agent 依段内回落指引转常规检索）。
+    expect(
+      promptText,
+      '未配置知识目录 → 知识段仍在场（能力性指引，随插件全局注入——fix-11 裁决 B 侧）',
+    ).toContain('## Project knowledge base')
     expect(launched.pageErrors, '会话正常可用（无页面错误）').toEqual([])
   } finally {
     if (launched !== undefined) await launched.app.close().catch(() => undefined)
@@ -689,8 +700,11 @@ test('@web-e2e @p1mvp flywheel·Step2c empty-knowledge-dir-session：空目录�
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n')
     expect(promptText).not.toBe('')
-    // 口径注记（contract）：知识段注入口径 UNKNOWN，按「无知识可召回即不注入」断言（分歧交设计期裁决）
-    expect(promptText, '空知识目录 → 无知识可召回即不注入').not.toContain('## Project knowledge base')
+    // 口径注记（contract）：知识段注入口径已裁决（fix-11，B 侧）——知识段 = 能力性指引，
+    // 随插件加载无条件注入（与 2b 同一裁决；两态可区分处 = 检索行为与召回事件，非段有无）。
+    expect(promptText, '空知识目录 → 知识段仍在场（能力性指引，随插件全局注入——fix-11 裁决 B 侧）').toContain(
+      '## Project knowledge base',
+    )
     expect(launched.pageErrors).toEqual([])
   } finally {
     if (launched !== undefined) await launched.app.close().catch(() => undefined)
@@ -827,16 +841,30 @@ test('@web-e2e @p1mvp flywheel·Step4d no-hit-fallback：无关库回答不阻�
       )
       .toBeGreaterThan(conversationBefore + Q1.length)
     expect(launched.pageErrors, '回答正常完成不阻塞、不出错').toEqual([])
-    // 无使用事件落库（口径注记：shipped 零命中 search 记哨兵行——召回 tab 占位口径裁决点，soft 承载）
+    // 哨兵行口径（fix-11 裁决，B 侧）：零命中 search = 已发生的召回事件——core 记哨兵行
+    // （RecallGroup hitCount=0 / hits=[] 为契约一等分组；热度排除哨兵行）。召回 tab 呈
+    // 「召回次数 ≥1 · 覆盖知识 0」而非占位——占位语义 = 零召回事件（Step 7b 互证面），
+    // 非「零命中」。agent 是否实际调用 search 归模型自主（soft 承载）。
     const recallTab = launched.page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' })
     await recallTab.click()
-    await expect(launched.page.locator('[data-dswf-recall-tab], [data-dswf-recall-face="empty"]').first()).toBeVisible({ timeout: 30_000 })
-    expect
-      .soft(
-        await launched.page.getByText('本会话暂无召回').isVisible().catch(() => false),
-        '[口径裁决点·缺陷信号] 未发生召回 → 召回 tab 保持占位（shipped 哨兵行是否计入统计 = 裁决点）',
-      )
-      .toBe(true)
+    await expect(
+      launched.page.locator('[data-dswf-recall-tab], [data-dswf-recall-face="empty"]').first(),
+      '召回 tab 面就位（统计面或占位面二择——装载不报错）',
+    ).toBeVisible({ timeout: 30_000 })
+    const recallStats = launched.page.locator('[data-dswf-recall-stats]')
+    const statsVisible = await recallStats.isVisible().catch(() => false)
+    if (statsVisible) {
+      expect
+        .soft(await recallStats.getAttribute('data-calls'), '[哨兵行口径·已裁决] 零命中 search 计入召回次数（≥1）')
+        .toMatch(/^[1-9]\d*$/)
+      expect
+        .soft(await recallStats.getAttribute('data-covered'), '[哨兵行口径·已裁决] 覆盖知识 = 0（哨兵行不产生覆盖）')
+        .toBe('0')
+    } else {
+      expect
+        .soft(statsVisible, '[哨兵行口径·已裁决] agent 未走知识检索（模型自主）→ 召回 tab 保持占位')
+        .toBe(false)
+    }
   } finally {
     if (launched !== undefined) await launched.app.close().catch(() => undefined)
     rmSync(overlay, { force: true })

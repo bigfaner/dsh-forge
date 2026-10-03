@@ -8,7 +8,7 @@ hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作�
 
 | 文件 | 职责 |
 |---|---|
-| `WorkbenchPanel.tsx` | 装配面板（`main.conversation` 洞位占用者）：`sessionZonePhase` 相位机（Hard Rule hero 单一条件）+ `WorkbenchAssembly` 三区槽位装配（纯渲染）+ 效应面（桥发布 / 官方会话锚跟随 / 项目数三锚重拉 / 3.8：`projectAnchorOf` 项目锚推导 + 抽屉打开态 + 召回 tab 激活锚）+ UF-3 流程宿主挂载 |
+| `WorkbenchPanel.tsx` | 装配面板（`main.conversation` 洞位占用者）：`sessionZonePhase` 相位机（Hard Rule hero 单一条件）+ `WorkbenchAssembly` 三区槽位装配（纯渲染）+ 效应面（桥发布 / 官方会话锚跟随 / 项目数三锚重拉 / 3.8：`projectAnchorOf` 项目锚推导 + 抽屉打开态 + 召回 tab 激活锚 / fix-11：`TranscriptAnchor` 转录接线 + `transcriptOfChatSnapshot` wire 映射）+ UF-3 流程宿主挂载 |
 | `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「＋添加项目」CTA——官方 Button；零判据零数据源） |
 | `ChatSurface.tsx` | 对话 tab 官方会话面嵌入（S2 嵌入配方：`conversation.content` 工厂 variant=embedded × `conversation.session` owner view='chat'——upstream ui-subagent sidebar-chat 同型先例；kit 窄面 + 缺席降级占位） |
 | `workbench-bridge.ts` | 工作台桥发布面（`__DSH_FORGE_WORKBENCH__` 发布侧；读取侧 = views/sidebar/sidebar-actions） |
@@ -45,8 +45,10 @@ hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作�
 
 ## 残留（后续里程碑/任务）
 
-- ChatSnapshot wire 判别值 → TranscriptEntry 映射（轨迹 tab 数据）与 conversationPhase 完整
-  相位（settling）：随装配实跑锚定入 G1 pin 池（2.13），冒烟迁移断言（2.14）。
+- ~~ChatSnapshot wire 判别值 → TranscriptEntry 映射（轨迹 tab 数据）~~ 已随 fix-11 接线
+  （`TranscriptAnchor` 订阅 `useConversation` 标准钩子 → `transcriptOfChatSnapshot` 纯函数
+  映射（wire 判别 = ConversationNode `kind` 字段族）→ SessionPanel `transcript` 注入）；
+  conversationPhase 完整相位（settling）仍待装配实跑锚定入 G1 pin 池（2.13），冒烟迁移断言（2.14）。
 - dock 域页签（知识文档/审核台/文档）与按项目页签切换的实机驱动：后续里程碑登记表接入；
   机制面（visibleDockTabs 口径）已由 zones 单测 pin。
 - hero / 注册链的实机 e2e 证明受 **host 侧 forge:projects/* 通道实装** 前置（main.ts 未接

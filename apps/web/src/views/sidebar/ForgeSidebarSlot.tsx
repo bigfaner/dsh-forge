@@ -30,7 +30,7 @@ export interface ForgeSidebarSlotProps {
   readonly sessions: SnapshotSource<LedgerSessionsSnapshot>
   /** dsh workspace 归属快照源（ctx.workspaces.list） */
   readonly workspaces: SnapshotSource<LedgerWorkspacesSnapshot>
-  /** 打开 dsh 会话（ctx.sessions.open） */
+  /** 打开 dsh 会话（官方 uiWorkspace.openSession 导航面——fix-11 修正接线，插件 inject face 注入） */
   readonly openSession: (sessionId: string) => void
 }
 

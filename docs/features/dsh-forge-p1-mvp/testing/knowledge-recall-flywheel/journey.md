@@ -96,7 +96,7 @@ generated: "2026-10-03"
 
 **User Action**: 建立新会话并发起对话
 
-**Expected Result**: 会话正常可用（不报错）；系统提示词不含知识段（无知识库可召回——Story 4 AC1 的反向派生，无 PRD 原文，source: inferred）；agent 直接走常规检索原语（source: inferred）
+**Expected Result**: 会话正常可用（不报错）；系统提示词仍含知识段（fix-11 设计期裁决 B 侧：知识段 = 能力性指引随插件加载无条件注入——段文本自声明 "may be registered"、两 tool 同为无条件注册、精确门控在设计边界内不可实现；原文「不含知识段」为 Story 4 AC1 反向派生的 provisional 断言，随裁决撤销）；agent 依段内回落指引转常规检索原语（source: inferred + adjudicated）
 
 ### Step 2c: 知识目录已配置但为空的会话
 
@@ -104,7 +104,7 @@ generated: "2026-10-03"
 
 **User Action**: 建立新会话并发起对话
 
-**Expected Result**: 会话正常可用（不报错）；知识段注入口径 UNKNOWN——段组装依据「目录存在」还是「存在可用知识」PRD 未定义（AC1 Given 为已配置且有知识），本旅程按「无知识可召回即不注入」断言（source: inferred），分歧交设计期裁决
+**Expected Result**: 会话正常可用（不报错）；系统提示词仍含知识段（原注入口径 UNKNOWN 已随 fix-11 裁决收口为 B 侧无条件注入——空目录与未配置两态的区分承载于检索行为与召回事件，非段有无）
 
 ### Step 3b: 空问题发送被拦截（validation-error）
 
@@ -136,7 +136,7 @@ generated: "2026-10-03"
 
 **User Action**: 在对话 tab 发送 Q1（search 未获命中为该库态下的确定前置，非用户动作）
 
-**Expected Result**: agent 转常规检索原语（grep / glob 等）继续处理，回答正常完成不阻塞、不出错；无使用事件落库（未发生召回；召回 tab 保持占位态，与 Step 7b 互证）
+**Expected Result**: agent 转常规检索原语（grep / glob 等）继续处理，回答正常完成不阻塞、不出错；无知识使用事件落库（热度面排除哨兵行——fix-11 哨兵行口径裁决：零命中 search = 已发生的召回事件，至多记哨兵行入召回次数、不计覆盖与热度；召回 tab 若实走知识检索则呈零命中召回统计而非占位，占位语义 = 零召回事件，与 Step 7b 互证）
 
 ### Step 4e: read-abstract 摘要先行（正文不整段注入）
 

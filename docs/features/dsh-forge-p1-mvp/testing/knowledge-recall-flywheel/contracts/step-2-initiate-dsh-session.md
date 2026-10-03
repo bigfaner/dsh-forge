@@ -40,6 +40,12 @@ last_anchor_sync: "2026-10-03T04:03:45+08:00"
 ## Outcome "no-knowledge-dir-session"
 <!-- 溯源: journey Step 2b（项目未配置知识目录的会话；依场景隔离专属工作区独立启动） -->
 <!-- source: inferred（不注入为 Story 4 AC1 的反向派生，无 PRD 原文） -->
+<!-- adjudication: fix-11 裁决（B 侧，2026-10-03）——知识段注入口径 = 能力性指引随插件加载无条件注入。
+     依据：PRD Story 4 AC1 仅定义正向态；tech-design Interface 3 为静态注册（name/order/text 无门控）；
+     段文本自声明 "may be registered"（为无条件注入措辞）；两 tool 同为无条件注册（工具 schema
+     本就在场，仅藏指引段不自洽）；精确门控在设计边界内不可实现（Interface 2 无路径反查、Hard Rule
+     禁第二 core 服务、绑定表不含知识目录、core 索引空态为异步不可同步探测）。本 Outcome 的
+     「不含知识段」期望随之撤销，断言改为段在场 + 会话正常。 -->
 - Preconditions: "项目知识目录未配置（依 Setup 场景隔离，专属工作区独立启动）"
   fixture_spec:
     entities:
@@ -52,13 +58,13 @@ last_anchor_sync: "2026-10-03T04:03:45+08:00"
       - description: "专属工作区独立启动，不与基线（Q1/Q2 可命中）叠加"
         prerequisite_entity: "KnowledgeEntry"
 - Input: "建立新会话并发起对话"
-- Output: "会话正常可用（不报错）；系统提示词不含知识段（无知识库可召回）；agent 直接走常规检索原语"
-- State: "无知识段注入；无召回链发生"
-- Side-effect: "none（无知识段注入）"
+- Output: "会话正常可用（不报错）；系统提示词仍含知识段（fix-11 裁决 B 侧：知识段 = 能力性指引，随插件全局注入——段内回落指引承载「无知识库转常规检索」）；agent 走常规检索原语完成回答"
+- State: "知识段注入（全局能力面）；无命中召回链（零命中/未绑定回落常规检索）"
+- Side-effect: "none（未配置态零命中检索至多记哨兵行——见 step-4 裁决）"
 
 ## Outcome "empty-knowledge-dir-session"
 <!-- 溯源: journey Step 2c（知识目录已配置但为空的会话；与 2b 未配置态可区分） -->
-<!-- source: inferred（知识段注入口径 UNKNOWN——按「无知识可召回即不注入」断言，分歧交设计期裁决） -->
+<!-- source: inferred（知识段注入口径原 UNKNOWN——fix-11 设计期裁决收口为 B 侧：能力性指引无条件注入，见 2b adjudication 注） -->
 - Preconditions: "知识目录已配置且为空（无任何知识文件；依 Setup 场景隔离独立启动，与 2b 未配置态可区分）"
   fixture_spec:
     entities:
@@ -71,8 +77,8 @@ last_anchor_sync: "2026-10-03T04:03:45+08:00"
       - description: "专属工作区独立启动；空目录与未配置两态可区分"
         prerequisite_entity: "KnowledgeEntry"
 - Input: "建立新会话并发起对话"
-- Output: "会话正常可用（不报错）；按「无知识可召回即不注入」断言——系统提示词不含知识段（知识段注入口径 UNKNOWN，分歧交设计期裁决）"
-- State: "无知识段注入；无召回链发生"
+- Output: "会话正常可用（不报错）；系统提示词仍含知识段（fix-11 裁决 B 侧——空目录与未配置两态的区分承载于检索行为与召回事件，非段有无）"
+- State: "知识段注入（全局能力面）；无命中召回链"
 - Side-effect: "none"
 
 ## Journey Invariants

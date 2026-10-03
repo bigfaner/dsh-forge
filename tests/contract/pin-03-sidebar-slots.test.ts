@@ -122,7 +122,7 @@ describe('pin ③-6 我方镜像兼容（apps/web client-plugin 槽位路线 A�
     expect(SIDEBAR_SHADOW_PRIORITY).toBeLessThan(0)
   })
 
-  it('插件服务依赖 = slots + sessions + workspaces（官方 ui-workspace 同型先例）', () => {
-    expect([...FORGE_CLIENT_INJECT]).toEqual(['slots', 'sessions', 'workspaces'])
+  it('插件服务依赖 = slots + sessions + uiWorkspace + workspaces（fix-11：会话打开面 = uiWorkspace.openSession——Session Controller 无 open 面；官方 ui-workspace 同型先例）', () => {
+    expect([...FORGE_CLIENT_INJECT]).toEqual(['slots', 'sessions', 'uiWorkspace', 'workspaces'])
   })
 })

@@ -51,7 +51,9 @@ export function createShellViewState(): ShellViewState {
  *   show-knowledge    → center='knowledge'；右栏隐藏（SC8；偏好不改写——隐藏是视图联动非用户选择）
  *   toggle-right-dock → rightDock 取反并记为用户显式偏好（知识视图内手动开启 = 显式选择，回会话保留）
  *   select-project    → focus.projectId 更新（跨视图保留 = 页签跟随项目）；不切视图（选择 ≠ 导航）
- *   select-session    → focus.sessionId 更新并回 session 视图（会话锚定就会话视图）
+ *   select-session    → focus.sessionId 更新并回 session 视图（会话锚定就会话视图；右栏按
+ *                       偏好恢复——与 show-session 同径，fix-11：会话行切回是回会话视图的
+ *                       主路径，遗漏恢复则知识视图隐藏后被钉在收起态）
  *   clear-session     → focus.sessionId 置空（会话关闭；视图留 session，空态由容器渲染）
  */
 export function dispatchShellView(state: ShellViewState, event: ShellViewEvent): ShellViewState {
@@ -67,7 +69,12 @@ export function dispatchShellView(state: ShellViewState, event: ShellViewEvent):
     case 'select-project':
       return { ...state, focus: { ...state.focus, projectId: event.projectId } }
     case 'select-session':
-      return { ...state, center: 'session', focus: { ...state.focus, sessionId: event.sessionId } }
+      return {
+        ...state,
+        center: 'session',
+        rightDock: state.rightDockPreference ?? false,
+        focus: { ...state.focus, sessionId: event.sessionId },
+      }
     case 'clear-session':
       return { ...state, focus: { ...state.focus, sessionId: null } }
     default: {

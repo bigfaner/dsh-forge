@@ -31,7 +31,7 @@ export interface SidebarActions {
 
 /**
  * 绑定面板导航动作（纯函数，可测）。
- * @param openSession - dsh 会话打开（ctx.sessions.open 的窄面——插件 inject face 注入）
+ * @param openSession - dsh 会话打开（官方 uiWorkspace.openSession 的窄面——fix-11 修正接线，插件 inject face 注入）
  * @param bridge - 工作台桥（缺省读全局；显式注入 = 测试面）
  */
 export function sidebarActions(

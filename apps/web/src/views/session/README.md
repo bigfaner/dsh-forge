@@ -30,20 +30,21 @@
   （上游 ui-subagent sidebar-chat 同型先例）；草稿/滚动状态由官方面自持（ConversationStoreState.draft
   跨会话切换持久 + chatScroll 锚键——S2 §2.2）。面板零自绘会话 UI（Hard Rule）。
 - **轨迹 tab**：`transcript: readonly TranscriptEntry[]`——装配自官方 ChatSnapshot
-  （`ctx.uiConversation.binding(binding).target('chat')` 快照）逐节点映射：
+  （fix-11 接线：`useConversation` 标准钩子 → `views.get('chat')` → `legacy` 兼容切片，
+  workbench/`transcriptOfChatSnapshot` 逐节点映射）：
 
-  | 语义类（本模块） | 上游 ConversationNode（S2 §2.2） |
-  |---|---|
-  | `user-message` | UserMessage / SteeringMessage |
-  | `assistant-message` | AssistantMessage / PartialAssistant |
-  | `command` | Command |
-  | `tool-started` | StartedToolCall / PreparingToolCall |
-  | `tool-running` | RunningToolCall |
-  | `tool-result` | ToolResult |
-  | `turn-error` | TurnError / TurnMaxTokens |
-  | `system` | CompactionSummary / ContextMessage / ModelRetry / TodoItem / UnknownSurface |
+  | 语义类（本模块） | 上游 ConversationNode（S2 §2.2） | wire 判别值（实跑收口） |
+  |---|---|---|
+  | `user-message` | UserMessage / SteeringMessage | `kind: 'user'` / `'steering'` |
+  | `assistant-message` | AssistantMessage / PartialAssistant | `kind: 'assistant'` / `legacy.partial`（无 seq——`MAX_SAFE_INTEGER` 尾行，落定即让位真实 seq 节点） |
+  | `command` | Command | `kind: 'command'`（text = name+args） |
+  | `tool-started` | StartedToolCall / PreparingToolCall | （并集于 RunningToolCall——见下行，live 面不单列） |
+  | `tool-running` | RunningToolCall | `legacy.runningCalls[]`（`preparing`/`start` 两相位——在途无结果态单行呈现） |
+  | `tool-result` | ToolResult | `kind: 'tool-result'`（toolName = `call.name`，窗口截断回落 `callId`） |
+  | `turn-error` | TurnError / TurnMaxTokens | `kind: 'turn-error'` / `'turn-max-tokens'` |
+  | `system` | CompactionSummary / ContextMessage / ModelRetry / TodoItem / UnknownSurface | `kind: 'context'` / `'model-retry'` / `'compaction'` / `'unknown'`（未知判别跳过——fail-soft） |
 
-  wire 判别值 → 语义类的实跑映射归装配层锚定（S2 残留 §4-5：随 2.12 装配实跑入 G1 pin 池，2.13 收口）。
+  wire 判别值 → 语义类的实跑映射已归装配层锚定（fix-11 收口，随实跑入 G1 pin 池）。
 - **召回 tab**：`recall?: ReactNode` 注入位——3.8 装配产物 = `RecallTab`（`forge:knowledge/sessionRecall`
   单通道；统计头 = `recallStatsOf`，分组行 = `recallRowsOf` 按知识折叠——动词明细/最近时间/热度徽章
   原样呈现；`visible` 翻转重拉 = AC-4 即时累积；无会话/项目锚 = 静态空态不拉取；entryId null 行级
