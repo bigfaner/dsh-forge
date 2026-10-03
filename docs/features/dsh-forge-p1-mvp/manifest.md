@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-p1-mvp"
 created: "2026-10-02"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-p1-mvp
@@ -19,6 +19,8 @@ status: tasks
 | ER Diagram | design/er-diagram.md | 五表 ER：projects / knowledge_entries（缓存）/ knowledge_recall_logs（单表双消费面：tab + 热度）/ app_key_logs（关键日志）/ schema_meta |
 | SQL Schema | design/schema.sql | SQLite DDL（schema v1；better-sqlite3；WAL + FK + CHECK 约束 + 索引） |
 | Page Map | design/page-map.md | 单页三区视图态映射（无 URL 路由）：workbench/session ⇄ workbench/knowledge + 两段式注册模态 + hero 相位 |
+| UI 走查报告 R1 | reports/ui-walkthrough-round1.md | 第 1 轮实机走查复核：3 项视觉差异（标题栏 / 文件浏览器尺寸 / dock 样式）判定 + UF-1~7 符合性总表 + 截图对照（reports/shots/）；派生 fix-2 / fix-3 / fix-4 |
+| 验收报告 R2 | reports/acceptance-round2.md | 第 2 轮全面排查：静态门 + 914 单测 + 实机运行独立验证全绿；新发现 hash8 规格漂移（待裁决 A/B）与 e2e 环境限制说明；已知问题八项汇总表 |
 | Specs Consolidation | specs/ | 规格沉淀（[auto-specs] 2026-10-03）：biz-specs 15 条（14 CROSS 已集成 docs/business-rules/ 三文件）+ tech-specs 15 条（全 CROSS 已集成 docs/conventions/ 五文件）；review-choices + .integrated 标记 |
 
 ## Traceability
