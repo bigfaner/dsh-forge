@@ -27,7 +27,7 @@
 // 可重复性（AC5）：安装 → 断言 → 静默卸载全链脚本化；残留兜底 rmSync（卸载器收注册表/快捷方式，
 // 目录双保险）。e2e 单实例纪律：隔离 userData（Electron 单实例锁键于 userData 路径）+ 独立端口。
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
@@ -54,27 +54,8 @@ function locateInstaller(): string | undefined {
 const installerExe = locateInstaller()
 test.skip(installerExe === undefined, 'NSIS 安装包未构建——先执行 pnpm dist:win（4.1 管线产物，本套件对其消费）')
 
-/** 官方首启「预览版说明」叠层预确认（沿 smoke-skeleton/flywheel 同径：隔离 userData 内点「继续」写回不可依赖，只能预免） */
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（flywheel.spec 同源）
-
-function writeAckOverlay(): string {
-  const target = join(
-    SMOKE_ROOT,
-    `ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`,
-  )
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
+// 官方首启「预览版说明」预免 = 产品 boot overlay 内置等值确认（fix-12）——安装形态裸跑
+// （无 DSH_FORGE_PATCH_FILES）即 fresh 真实路径验证（fix-12 Implementation Notes 口径）。
 
 /** 运行期模态收起（API Key onboarding「稍后配置」本地收起；窗口期轮询沿 4.2 实证载体） */
 async function dismissOnboardingModals(page: Page): Promise<void> {
@@ -149,7 +130,6 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
   let app: ElectronApplication | undefined
   let userData: string | undefined
   let fixture: string | undefined
-  let ackOverlay: string | undefined
   const pageErrors: string[] = []
   try {
     mkdirSync(base, { recursive: true })
@@ -189,14 +169,12 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
     // ── ② 启动零错（安装后 exe 直启：app.isPackaged → resourcesPath 自掌舵，无 dev 链依赖）──
     userData = mkdtempSync(join(base, 'ud-'))
     fixture = makeProjectFixture(base)
-    ackOverlay = writeAckOverlay()
     const { _electron } = await import('@playwright/test')
     app = await _electron.launch({
       executablePath: join(installDir, 'dsh-forge.exe'),
       env: {
         ...process.env,
         DSH_FORGE_USER_DATA: userData, // Hard Rule：干净环境口径——全新 {app-data}，无既有依赖
-        DSH_FORGE_PATCH_FILES: ackOverlay, // 首启模态预免（4.2 载体同径）
         DSH_FORGE_PORT: String(19750 + (process.pid % 200)), // e2e 单实例纪律：独立端口
         TEMP: zTmp, // 运行期临时面同隔离（C: 余量防护——沿安装步同径）
         TMP: zTmp,
@@ -297,7 +275,6 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
     } catch {
       // 关闭竞态不掩盖用例结论（进程随目录兜底一并消隐）
     }
-    if (ackOverlay !== undefined) rmSync(ackOverlay, { force: true })
     if (fixture !== undefined) rmSync(fixture, { recursive: true, force: true })
     if (userData !== undefined) rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     const uninstaller = locateUninstaller(installDir)

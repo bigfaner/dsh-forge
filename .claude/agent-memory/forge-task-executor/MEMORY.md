@@ -17,3 +17,4 @@
 - [forge 重 blocked 任务残留 blockedReason](env-forge-reblocked-task-stale-reason.md) — completed+blockedReason 共存=正常态,勿手修 index.json
 - [fix-10 dock 官方基座形态](dsh-forge-p1-dock-official-base-fix10.md) — DockLayout 裁决/两横栏上限/dropZones horizontal 必选/useSyncExternalStore SSR 三参坑/官方 DOM 锚清单/选择锚同步
 - [p1mvp e2e TMP 环境红线](dsh-forge-p1mvp-e2e-tmp-env.md) — 重定向/unset TMP 均致 fixture 与 AppData/Local/Temp 硬编码导航错位整片超时；必须用继承的用户 Temp
+- [fix-12 welcome ack 定性与载体迁移](dsh-forge-p1-welcome-ack-fix12.md) — dev 形态宿主 dsh-app-boot 模块二象性=volatile 设置写全拒(含 Settings 面板)；预确认改产品 boot overlay 内置+pin 测试；10 套件叠层全撤

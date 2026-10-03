@@ -14,7 +14,7 @@
 // 留痕 skip：Step 2b offline-launch-self-sufficient——断网观察通道 UNKNOWN（contract
 // fact E2E_INFRA：无网络请求记录器设施，落地前不臆断通道）。
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
@@ -24,7 +24,6 @@ const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const INSTALLER_DIR = join(ROOT, 'release', 'installer')
 const ASSEMBLE_SCRIPT = join(ROOT, 'scripts', 'assemble-installer-resources.mjs')
 const SMOKE_ROOT = join(`${ROOT.split('\\')[0]}\\`, 'dsh-forge-smoke')
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
 /** NSIS 安装包定位（未构建即整套留痕 skip） */
@@ -93,21 +92,7 @@ test.afterAll(async () => {
   rmSync(join(installDir, '..'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
 })
 
-function writeAckOverlay(parent: string): string {
-  const target = join(parent, `ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
+// 官方首启「预览版说明」预免 = 产品 boot overlay 内置等值确认（fix-12）——安装形态裸跑。
 
 async function dismissOnboardingModals(page: Page): Promise<void> {
   const deadline = Date.now() + 15_000
@@ -125,7 +110,6 @@ async function dismissOnboardingModals(page: Page): Promise<void> {
 async function launchInstalled(
   exe: string,
   userData: string,
-  overlay: string,
   tmp: string,
   options?: { readonly dismiss?: boolean },
 ): Promise<{ app: ElectronApplication; page: Page; pageErrors: string[] }> {
@@ -136,7 +120,6 @@ async function launchInstalled(
     env: {
       ...process.env,
       DSH_FORGE_USER_DATA: userData,
-      DSH_FORGE_PATCH_FILES: overlay,
       DSH_FORGE_PORT: String(19910 + (process.pid % 200)),
       TEMP: tmp,
       TMP: tmp,
@@ -244,12 +227,11 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
   test.setTimeout(420_000)
   const userData = mkdtempSync(join(SMOKE_ROOT, 'p1mvp-ud-'))
   smokeUserData.dir = userData
-  const overlay = writeAckOverlay(SMOKE_ROOT)
   const pageErrors: string[] = []
   let app: ElectronApplication | undefined
   try {
     // ── Step 2 success：安装后 exe 直启——装载在等待窗口内完成、无报错弹窗、无白屏 ──
-    const launched = await launchInstalled(exe as string, userData, overlay, tmp as string, { dismiss: false })
+    const launched = await launchInstalled(exe as string, userData, tmp as string, { dismiss: false })
     app = launched.app
     pageErrors.push(...launched.pageErrors)
     const page = launched.page
@@ -279,7 +261,6 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
     await app?.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
   }
 })
 
@@ -292,12 +273,11 @@ test('@web-e2e @p1mvp installer-smoke·Step2d second-launch-consistent：冷重�
   test.skip(exe === undefined, 'NSIS 安装包未构建——留痕 skip（beforeAll 定位失败）')
   test.skip(smokeUserData.dir === undefined, '冒烟未执行（安装态缺失）——冷重启依赖首启终态')
   test.setTimeout(300_000)
-  const overlay = writeAckOverlay(SMOKE_ROOT)
   let app: ElectronApplication | undefined
   try {
     // 同一安装入口 + 同一 userData（已初始化）冷重启——单实例锁无竞争（零 UI boot：
     // 本测试位于任何收模态 boot 之前——毒化面防护，见文件头注）
-    const launched = await launchInstalled(exe as string, smokeUserData.dir as string, overlay, tmp as string, { dismiss: false })
+    const launched = await launchInstalled(exe as string, smokeUserData.dir as string, tmp as string, { dismiss: false })
     app = launched.app
     await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
     // 与首次启动同相位（零项目 hero 确定相位——fact HERO_PHASE；注册走查在后续测试）
@@ -310,7 +290,6 @@ test('@web-e2e @p1mvp installer-smoke·Step2d second-launch-consistent：冷重�
     expect(launched.pageErrors, '冷重启无首启异常回归（pageerror 面）').toEqual([])
   } finally {
     await app?.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
   }
 })
 
@@ -321,11 +300,10 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
   test.skip(smokeUserData.dir === undefined, '冒烟前半未执行（安装态缺失）')
   test.setTimeout(600_000)
   const userData = smokeUserData.dir as string
-  const overlay = writeAckOverlay(SMOKE_ROOT)
   const pageErrors: string[] = []
   let app: ElectronApplication | undefined
   try {
-    const launched = await launchInstalled(exe as string, userData, overlay, tmp as string)
+    const launched = await launchInstalled(exe as string, userData, tmp as string)
     app = launched.app
     pageErrors.push(...launched.pageErrors)
     const page = launched.page
@@ -391,7 +369,6 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
     await app?.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
   }
 })
 
@@ -408,7 +385,6 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
   const resourcesDir = join(installDir as string, 'resources')
   const resourcesBackup = `${resourcesDir}.bak-p1mvp`
   renameSync(resourcesDir, resourcesBackup)
-  const overlay = writeAckOverlay(SMOKE_ROOT)
   let app: ElectronApplication | undefined
   try {
     const { _electron } = await import('@playwright/test')
@@ -420,7 +396,6 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
         env: {
           ...process.env,
           DSH_FORGE_USER_DATA: mkdtempSync(join(SMOKE_ROOT, 'p1mvp-ud-')),
-          DSH_FORGE_PATCH_FILES: overlay,
           DSH_FORGE_PORT: String(19930 + (process.pid % 200)),
           TEMP: tmp,
           TMP: tmp,
@@ -447,7 +422,6 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
     expect(failDetected, '启动路径破坏 → 冒烟即判失败（首屏未在等待窗口内呈现/进程退出）').toBe(true)
   } finally {
     await app?.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
     // 机器复位：还原破坏预置（second-launch 等后续场景不受污染——contract 复位纪律）
     if (existsSync(resourcesBackup)) renameSync(resourcesBackup, resourcesDir)
   }

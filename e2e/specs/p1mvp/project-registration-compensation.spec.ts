@@ -31,7 +31,6 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const HOST_DIR = join(ROOT, 'apps', 'host')
 const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
 // ─── better-sqlite3 最小结构面（e2e 侧无 @types——结构化窄接口） ───
 interface MinimalStmt {
@@ -59,16 +58,13 @@ function makeWorkspaceFixture(name: string): string {
   return root
 }
 
-/** 预确认叠层：welcome 预确认 + llm-pi-ai provider 面（DeepSeek API-key 引导弹窗预免尝试段） */
-function writeAckOverlay(): string {
-  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
+/** provider 叠层：llm-pi-ai 面（DeepSeek API-key 引导弹窗预免尝试段；welcome 预免 = 产品 boot overlay 内置，fix-12） */
+function writeProviderOverlay(): string {
+  const target = join(tmpdir(), `dsh-forge-e2e-provider-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
   writeFileSync(
     target,
     [
-      '# e2e 预确认叠层：官方首启「预览版说明」预确认 + provider 面（弹窗预免）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
+      '# e2e provider 叠层：API-key onboarding 弹窗预免（首启告示预免 = 产品 overlay 内置，fix-12）',
       '- id: llm-pi-ai',
       '  config:',
       '    providers:',
@@ -108,7 +104,7 @@ async function ensureNoBlockingDialog(page: Page): Promise<void> {
 interface Launched {
   readonly app: ElectronApplication
   readonly page: Page
-  readonly ackOverlay: string
+  readonly providerOverlay: string
 }
 
 /** 同 userData 复启序号（端口错峰——前序 boot 的 dsh child 收尾竞态不占新 boot 端口） */
@@ -157,7 +153,7 @@ async function rmDirBestEffort(dir: string): Promise<void> {
 async function launch(userData: string, options?: { readonly dismiss?: boolean }): Promise<Launched> {
   const dismiss = options?.dismiss ?? true
   const { _electron } = await import('@playwright/test')
-  const ackOverlay = writeAckOverlay()
+  const providerOverlay = writeProviderOverlay()
   const port = 19830 + (process.pid % 150) + (bootSeq++ % 20)
   const app = await _electron.launch({
     executablePath: electronBinary,
@@ -166,7 +162,7 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
     env: {
       ...process.env,
       DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_PATCH_FILES: ackOverlay,
+      DSH_FORGE_PATCH_FILES: providerOverlay,
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(port),
     } as Record<string, string>,
@@ -212,7 +208,7 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000))
   }
-  return { app, page, ackOverlay }
+  return { app, page, providerOverlay }
 }
 
 function dirRow(page: Page, name: string): ReturnType<Page['locator']> {
@@ -387,7 +383,7 @@ test('@web-e2e @p1mvp compensation·冒烟：③写入失败 → ④补偿删除
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -441,7 +437,7 @@ test('@web-e2e @p1mvp compensation·Step1/2 attach-branch + create-idempotent：
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -494,7 +490,7 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -551,7 +547,7 @@ test('@web-e2e @p1mvp compensation·Step5c drift-repair-on-startup：失配按 p
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -585,7 +581,7 @@ test('@web-e2e @p1mvp compensation·Step5d no-drift-startup-silent：一致终�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)

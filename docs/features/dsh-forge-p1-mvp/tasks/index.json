@@ -709,7 +709,7 @@
       "title": "Fix(P0): 预览版说明模态无法关闭——官方 welcome ack volatile 写在产品宿主下静默丢弃（阻断所有新用户）",
       "priority": "P0",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-12.md",
       "record": "records/fix-12.md",
       "surface-type": "web",

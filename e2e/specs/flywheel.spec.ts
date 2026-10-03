@@ -32,8 +32,6 @@ const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron')
 /** dogfood 模型面（缺省低成本；env 覆写供记录与调参） */
 const DOGFOOD_PROVIDER = process.env.DSH_FORGE_DOGFOOD_PROVIDER ?? 'zai-coding-cn'
 const DOGFOOD_MODEL = process.env.DSH_FORGE_DOGFOOD_MODEL ?? 'glm-5.3-flash'
-/** 官方首启「预览版说明」告示确认版本（ui-settings-general.welcomeNoticeVersion 等值比对；0.2.0-rc.2 实测值） */
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 载体助手（沿 knowledge-integration.spec 同型）
@@ -136,7 +134,8 @@ function seedDshHome(dshHome: string, credentials: string): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // dogfood 叠层（DSH_FORGE_PATCH_FILES → boot run.ts 外部 patchFiles）：
 // 0.2.0-rc.2 设置面 = profile 插件行 config（$DSH_HOME/settings.yaml 为 legacy 文档、
-// 启动即改名 .imported 仅一次性搬迁）——模型与首启告示确认按官方机制走行 config。
+// 启动即改名 .imported 仅一次性搬迁）——模型按官方机制走行 config；首启告示预确认
+// 已由产品 boot overlay 内置承载（fix-12），叠层只管模型面。
 // 临时 profile 目录不可行（runtime resolution 以 realpath 侦测活动 profile 层，junction
 // 链判层外——40 插件 import 失败，4.2 实证），故经 boot 外部叠层注入、仓内 profile 不动。
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +146,7 @@ function writeDogfoodOverlay(): string {
   writeFileSync(
     target,
     [
-      '# 4.2 dogfood e2e 叠层：低成本模型 + 首启告示预确认（boot overlay 之后应用）',
+      '# 4.2 dogfood e2e 叠层：低成本模型（boot overlay 之后应用；首启告示预确认 = 产品 overlay 内置，fix-12）',
       '- id: llm-pi-ai',
       '  config:',
       '    providers:',
@@ -157,11 +156,6 @@ function writeDogfoodOverlay(): string {
       '  config:',
       `    provider: ${DOGFOOD_PROVIDER}`,
       `    model: ${DOGFOOD_MODEL}`,
-      // 官方首启「预览版说明」等值确认（0.2.0-rc.2 实测值）——隔离环境内确认写回不可依赖
-      // （settings 写路径 quirk，dogfood 记录在案），行 config 预确认免遮罩
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
       '',
     ].join('\n'),
     'utf8',

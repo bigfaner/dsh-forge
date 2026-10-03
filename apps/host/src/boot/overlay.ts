@@ -3,9 +3,20 @@
 // 绝对路径（e2e 隔离 userData 逐次变化、packaged 形态随安装机器变化）——静态
 // profile 模板（首启落地幂等不重写）无法承载；runProfile 的 patchFiles 叠层
 // （用户层之后应用，按 row id 整体替换 config）正是装配期覆盖缝。
+// fix-12：官方首启「预览版说明」等值预确认入同一缝——产品宿主形态下 welcome ack
+// 写路径被拒（settings/rejected：dsh-app-boot 模块二象性致 profile reload 失败，
+// 见 fix-12 记录），模态关不掉阻断 fresh 用户；产品非官方桌面分发面，预置官方当前
+// 版本常量即「已确认」，说明不再出现（版本随上游 pin 冻结——pin 单测机械核查）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+
+/**
+ * 官方首启「预览版说明」确认版本（ui-settings-models `WELCOME_NOTICE_VERSION`
+ * 精确等值比对，0.2.0-rc.2 实测值）。上游 bump 即失效——overlay pin 单测读取
+ * profile.dev vendored 副本内常量断言等值，升级窗口机械核查。
+ */
+export const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
 /** overlay 生成输入（两路径均绝对路径——main 侧 resolveHostPaths 产出） */
 export interface BootOverlayInput {
@@ -30,6 +41,9 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '- id: dsh-forge-knowledge',
     '  config:',
     `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
+    '- id: ui-settings-general',
+    '  config:',
+    `    welcomeNoticeVersion: ${yamlQuote(WELCOME_NOTICE_ACK_VERSION)}`,
     '',
   ].join('\n')
 }

@@ -26,7 +26,6 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const HOST_DIR = join(ROOT, 'apps', 'host')
 const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
 interface MinimalStmt {
   get(...args: unknown[]): unknown
@@ -77,15 +76,13 @@ function makeKnowledgeFixture(): string {
       // （无论是否收起）即写 dsh 侧客户态，毒化同 userData 下一 boot 的工作台挂载；
       // provider 可服务（ZAI_CODING_CN_API_KEY 环境在场）则弹窗不挂载。CI 无该 env 时
       // 复启链路测试将受弹窗毒化影响——转正条件见 SMOKE-LEDGER 口径。
-function writeAckOverlay(): string {
-  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
+function writeProviderOverlay(): string {
+  const target = join(tmpdir(), `dsh-forge-e2e-provider-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
   writeFileSync(
     target,
     [
-      '# e2e 预确认叠层：官方首启「预览版说明」预确认 + provider 面（弹窗预免）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
+      // 首启「预览版说明」预免 = 产品 boot overlay 内置（fix-12）；此处仅 provider 面（弹窗预免）
+      '# e2e provider 叠层：API-key onboarding 弹窗预免（复启链路防毒化）',
       '- id: llm-pi-ai',
       '  config:',
       '    providers:',
@@ -114,7 +111,7 @@ async function dismissOnboardingModals(page: Page): Promise<void> {
 interface Launched {
   readonly app: ElectronApplication
   readonly page: Page
-  readonly ackOverlay: string
+  readonly providerOverlay: string
 }
 
 
@@ -157,7 +154,7 @@ let bootSeq = 0
 async function launch(userData: string, options?: { readonly dismiss?: boolean }): Promise<Launched> {
   const dismiss = options?.dismiss ?? true
   const { _electron } = await import('@playwright/test')
-  const ackOverlay = writeAckOverlay()
+  const providerOverlay = writeProviderOverlay()
   const app = await _electron.launch({
     executablePath: electronBinary,
     args: ['.'],
@@ -165,7 +162,7 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
     env: {
       ...process.env,
       DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_PATCH_FILES: ackOverlay,
+      DSH_FORGE_PATCH_FILES: providerOverlay,
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19870 + (process.pid % 150) + (bootSeq++ % 20)),
     } as Record<string, string>,
@@ -195,7 +192,7 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
     undefined,
     { timeout: 30_000 },
   )
-  return { app, page, ackOverlay }
+  return { app, page, providerOverlay }
 }
 
 /** 工作台桥派发（视图切换缝——无会话行期的载体适配，沿 smoke-skeleton 台账口径） */
@@ -345,7 +342,7 @@ test('@web-e2e @p1mvp knowledge-browsing·冒烟：浏览→过滤→细分→�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -372,7 +369,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1b empty-library-guide：空目录
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -432,7 +429,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1c stale-cache-two-phase：首显�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -461,7 +458,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1d cold-cache-skeleton：冷缓存
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -511,7 +508,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step2b/2c 中层子树包含 + 组合�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -545,7 +542,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step3b blank-keyword-no-tighten：纯�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -624,7 +621,7 @@ test('@web-e2e @p1mvp knowledge-browsing·关键词交互回归（fix-5）：向
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
+      rmSync(launched.providerOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)

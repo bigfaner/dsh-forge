@@ -25,8 +25,6 @@ const HOST_DIR = join(ROOT, 'apps', 'host')
 
 const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
 
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（既有 specs 同源）
-
 /** 工作区候选夹具：{root}/<name>（可选 .knowledge 子目录） */
 function makeWorkspaceFixture(name: string, withKnowledge = false): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-'))
@@ -39,22 +37,7 @@ function makeWorkspaceFixture(name: string, withKnowledge = false): string {
   return root
 }
 
-/** 预确认叠层（首启「预览版说明」等值预确认——隔离 userData 内写回不可依赖，只能预免） */
-function writeAckOverlay(): string {
-  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
+// 官方首启「预览版说明」预免 = 产品 boot overlay 内置等值确认（fix-12）——裸启动即真实路径。
 
 /** 运行期模态收起（API Key onboarding「稍后配置」本地收起；窗口期轮询） */
 async function dismissOnboardingModals(page: Page): Promise<void> {
@@ -75,7 +58,6 @@ interface Launched {
   readonly app: ElectronApplication
   readonly page: Page
   readonly userData: string
-  readonly ackOverlay: string
   readonly pageErrors: string[]
 }
 
@@ -91,7 +73,6 @@ async function launchReady(existingUserData?: string, options?: { readonly dismi
   const dismiss = options?.dismiss ?? true
   const { _electron } = await import('@playwright/test')
   const userData = existingUserData ?? mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
-  const ackOverlay = writeAckOverlay()
   const app = await _electron.launch({
     executablePath: electronBinary,
     args: ['.'],
@@ -99,7 +80,6 @@ async function launchReady(existingUserData?: string, options?: { readonly dismi
     env: {
       ...process.env,
       DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_PATCH_FILES: ackOverlay,
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19810 + (process.pid % 150) + (bootSeq++ % 20)),
     } as Record<string, string>,
@@ -126,7 +106,7 @@ async function launchReady(existingUserData?: string, options?: { readonly dismi
   if (existingUserData === undefined && dismiss) {
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero', { timeout: 30_000 })
   }
-  return { app, page, userData, ackOverlay, pageErrors }
+  return { app, page, userData, pageErrors }
 }
 
 
@@ -243,7 +223,7 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('reg-demo')
   const targetDir = join(fixtureRoot, 'reg-demo')
-  const { app, page, userData, ackOverlay, pageErrors } = await launchReady()
+  const { app, page, userData, pageErrors } = await launchReady()
   try {
     // Step 1 success：hero CTA → 第一段文件浏览器（目录列表/面包屑/已注册标记呈现；未选中禁用）
     await page.locator('[data-dswf-cta="add-project"]').click()
@@ -301,7 +281,6 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -312,7 +291,7 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
 test('@web-e2e @p1mvp project-registration·Step1 cancel-clean-exit：浏览器段取消零残留', async () => {
   test.setTimeout(180_000)
   const fixtureRoot = makeWorkspaceFixture('cancel-demo')
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
@@ -328,7 +307,6 @@ test('@web-e2e @p1mvp project-registration·Step1 cancel-clean-exit：浏览器�
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -344,7 +322,7 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
   const fixtureRoot = makeWorkspaceFixture('attach-demo')
   const targetDir = join(fixtureRoot, 'attach-demo')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
-  let launched: { app: ElectronApplication; page: Page; ackOverlay: string } | undefined
+  let launched: { app: ElectronApplication; page: Page } | undefined
   try {
     // 单 boot：首次注册（RPC——新建分支）→ WAL 活删应用侧行（挂接态预置：registry 在场/
     // 应用库零行；两侧均在场的重复登记 = ③ ws_path 冲突失败，归 compensation Step3c 口径）
@@ -398,7 +376,6 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)
-      rmSync(launched.ackOverlay, { force: true })
     }
     await rmDirBestEffort(userData)
     await rmDirBestEffort(fixtureRoot)
@@ -413,7 +390,7 @@ test('@web-e2e @p1mvp project-registration·Step2 listing-failure-retryable：�
   const fixtureRoot = makeWorkspaceFixture('listfail-demo')
   const brokenDir = join(fixtureRoot, 'broken-dir')
   mkdirSync(brokenDir, { recursive: true })
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     await openFlowAtFixtureRoot(page, fixtureRoot)
     // 行在场后外部删除目标目录 → 双击进入 → 列举失败
@@ -435,7 +412,6 @@ test('@web-e2e @p1mvp project-registration·Step2 listing-failure-retryable：�
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -446,7 +422,7 @@ test('@web-e2e @p1mvp project-registration·Step2 listing-failure-retryable：�
 test('@web-e2e @p1mvp project-registration·Step3 cancel-return-clean-exit：表单段取消 + 往返状态保持', async () => {
   test.setTimeout(180_000)
   const fixtureRoot = makeWorkspaceFixture('formcancel-demo')
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     const targetDir = await selectWorkspaceAndNext(page, fixtureRoot, 'formcancel-demo')
     // 手改项目名（制造「已填表单状态」）
@@ -472,7 +448,6 @@ test('@web-e2e @p1mvp project-registration·Step3 cancel-return-clean-exit：表
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -487,7 +462,7 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
   // 浏览改选目标目录预置（浏览面板起点 = 当前知识库目录 .knowledge → 上一级选 .forge）
   mkdirSync(join(fixtureRoot, 'rederive-a', '.knowledge'), { recursive: true })
   mkdirSync(join(fixtureRoot, 'rederive-a', '.forge'), { recursive: true })
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     const dirA = await selectWorkspaceAndNext(page, fixtureRoot, 'rederive-a')
     // 经「浏览…」改选知识库目录（字段标记为已触碰）
@@ -522,7 +497,6 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -533,7 +507,7 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
 test('@web-e2e @p1mvp project-registration·Step3 illegal-path-blocked：非法路径表单态拦截', async () => {
   test.setTimeout(180_000)
   const fixtureRoot = makeWorkspaceFixture('illegal-demo')
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     await selectWorkspaceAndNext(page, fixtureRoot, 'illegal-demo')
     const confirm = page.locator('.dswf-rf-confirm', { hasText: '确认' })
@@ -562,7 +536,6 @@ test('@web-e2e @p1mvp project-registration·Step3 illegal-path-blocked：非法�
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -573,7 +546,7 @@ test('@web-e2e @p1mvp project-registration·Step3 illegal-path-blocked：非法�
 test('@web-e2e @p1mvp project-registration·Step3 external-forge-dir-derivation：仓外派生标识', async () => {
   test.setTimeout(180_000)
   const fixtureRoot = makeWorkspaceFixture('external-demo')
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     await selectWorkspaceAndNext(page, fixtureRoot, 'external-demo')
     // 默认态：工作区内 .forge → 仓内
@@ -586,7 +559,6 @@ test('@web-e2e @p1mvp project-registration·Step3 external-forge-dir-derivation�
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -597,7 +569,7 @@ test('@web-e2e @p1mvp project-registration·Step3 external-forge-dir-derivation�
 test('@web-e2e @p1mvp project-registration·Step4 double-confirm-reentry-blocked：确认连击无二次注册链', async () => {
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('dbl-demo')
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     await selectWorkspaceAndNext(page, fixtureRoot, 'dbl-demo')
     const confirm = page.locator('.dswf-rf-confirm', { hasText: '确认' })
@@ -614,7 +586,6 @@ test('@web-e2e @p1mvp project-registration·Step4 double-confirm-reentry-blocked
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })
@@ -626,7 +597,7 @@ test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项�
   test.setTimeout(300_000)
   const fixtureRoot = makeWorkspaceFixture('proj-a')
   mkdirSync(join(fixtureRoot, 'proj-b'), { recursive: true })
-  const { app, page, userData, ackOverlay } = await launchReady()
+  const { app, page, userData } = await launchReady()
   try {
     // Setup：已有至少一个项目（第一项目经向导注册——hero 起步）
     const dirA = await selectWorkspaceAndNext(page, fixtureRoot, 'proj-a')
@@ -662,7 +633,6 @@ test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项�
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
-    rmSync(ackOverlay, { force: true })
     await rmDirBestEffort(fixtureRoot)
   }
 })

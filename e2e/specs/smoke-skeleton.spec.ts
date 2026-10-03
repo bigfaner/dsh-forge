@@ -4,7 +4,7 @@
 // 断言文本/意图零删改（expect 描述附原行号），仅载体与选择器适配（适配理由逐条入台账）。
 // 吸收 2.12 workbench-sc1.spec（SC1 起步组行号映射保持——见台账「吸收记录」节）。
 // 隔离：独立 userData + 独立端口（e2e 单实例纪律，沿 host-boot/web-shell.spec）。
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,33 +47,12 @@ async function waitShellReady(page: Page): Promise<void> {
 /**
  * 官方首启引导遮罩处置（host 集成转正 4.2/fix-1 后 fresh userData 必现，未收起即拦截
  * 一切指针交互——locator 可解析但 click 恒超时，4.2 实证）：
- * 1. 「预览版说明」= 叠层预确认（`ui-settings-general.welcomeNoticeVersion` 等值预确认，
- *    沿 flywheel.spec dogfood 同径）——隔离 userData 内点「继续」的确认写回不可依赖
- *    （设置写路径 quirk，4.2 探针实证：点击成功模态不退），运行期收不掉，只能预免。
+ * 1. 「预览版说明」= 产品 boot overlay 预置等值确认（fix-12：apps/host/src/boot/overlay.ts
+ *    内置 `ui-settings-general.welcomeNoticeVersion`——e2e 不再自带预确认叠层；dev 形态
+ *    确认写路径被拒属宿主模块拓扑缺陷，fix-12 记录在案，预免即产品口径）。
  * 2. 「添加一个 API Key」onboarding（deepseek-official 凭据缺席触发）= 运行期点
  *    「稍后配置」本地收起（fallback 循环，窗口期轮询——模态挂载可晚于工作台可见数秒）。
  */
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（flywheel.spec 同源）
-
-/** 预确认叠层落地（返回路径——launchHost env DSH_FORGE_PATCH_FILES 消费；finally 删） */
-function writeAckOverlay(): string {
-  const target = join(
-    tmpdir(),
-    `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`,
-  )
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
 
 /** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归叠层预免） */
 async function dismissOnboardingModals(page: Page): Promise<void> {
@@ -139,16 +118,47 @@ async function enterDir(page: Page, name: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 组零（fix-12）：fresh 裸启动真实路径——env 不含 DSH_FORGE_PATCH_FILES（无任何 spec
+// 自带预确认叠层），「预览版说明」免遮罩由产品 boot overlay 预置等值确认承载
+// （apps/host/src/boot/overlay.ts）。此前遮罩预免全部由 spec 叠层承载——产品 overlay
+// 形态从未被 e2e 裸跑证过（= fix-12 检出的 e2e 盲区，本组消除）。
+// ─────────────────────────────────────────────────────────────────────────────
+test('骨架组·fresh 裸启动无「预览版说明」遮罩（fix-12 产品 overlay 预确认）', async () => {
+  test.setTimeout(180_000)
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-bare-'))
+  const app = await launchHost({
+    DSH_FORGE_DEV_PROFILE: 'dev',
+    DSH_FORGE_USER_DATA: userData,
+    DSH_FORGE_PORT: String(19590 + (process.pid % 200)),
+  })
+  try {
+    const page: Page = await app.firstWindow()
+    await waitShellReady(page)
+    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
+    // 20s 持续在场断言（无预确认实测挂载 ~+7s，对齐窗口期取上限；toHaveCount(0) 即时
+    // 通过不覆盖迟到挂载——循环轮询持有窗口）。「添加一个 API Key」onboarding 可现且
+    // 可收，不在本断言面（标题级判别）。
+    const deadline = Date.now() + 20_000
+    while (Date.now() < deadline) {
+      const dialogs = await page.locator('[role="dialog"]').allTextContents()
+      expect(dialogs.join('\n'), 'fix-12·fresh 裸启动不得弹「预览版说明」').not.toMatch(/预览版说明|Preview Notice/)
+      await page.waitForTimeout(500)
+    }
+  } finally {
+    await app.close()
+    rmSync(userData, { recursive: true, force: true })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 组一：三区 + 视图互换 + 页签跟随（+ L3 布局对照起步池 + 运行时元断言）
 // 原型行：L41–L46（三区）、L50–L66/L474（互换）、L689（收起回归）、L824（元断言）
 // ─────────────────────────────────────────────────────────────────────────────
 test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L689 + L3 起步池 + 元断言 L824）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-skel-'))
-  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19610 + (process.pid % 200)),
   })
@@ -329,7 +339,6 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })
-    rmSync(ackOverlay, { force: true })
   }
 })
 
@@ -341,10 +350,8 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-wiz-'))
   const fixture = makeWizardFixture()
-  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19630 + (process.pid % 200)),
   })
@@ -534,7 +541,6 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await app.close()
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
-    rmSync(ackOverlay, { force: true })
   }
 })
 
@@ -547,10 +553,8 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-hero-'))
   const fixture = makeWizardFixture()
-  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19650 + (process.pid % 200)),
   })
@@ -615,6 +619,5 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     await app.close()
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
-    rmSync(ackOverlay, { force: true })
   }
 })

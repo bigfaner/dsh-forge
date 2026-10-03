@@ -48,35 +48,13 @@ async function waitShellReady(page: Page): Promise<void> {
 /**
  * 官方首启引导遮罩处置（host 集成转正 4.2/fix-1 后 fresh userData 必现，未收起即拦截
  * 一切指针交互——locator 可解析但 click 恒超时，4.2 实证）：
- * 1. 「预览版说明」= 叠层预确认（`ui-settings-general.welcomeNoticeVersion` 等值预确认，
- *    沿 flywheel.spec dogfood 同径）——隔离 userData 内点「继续」的确认写回不可依赖
- *    （设置写路径 quirk，4.2 探针实证：点击成功模态不退），运行期收不掉，只能预免。
+ * 1. 「预览版说明」= 产品 boot overlay 预置等值确认（fix-12：apps/host/src/boot/overlay.ts
+ *    内置 `ui-settings-general.welcomeNoticeVersion`——e2e 不再自带预确认叠层）。
  * 2. 「添加一个 API Key」onboarding（deepseek-official 凭据缺席触发）= 运行期点
  *    「稍后配置」本地收起（fallback 循环，窗口期轮询——模态挂载可晚于工作台可见数秒）。
  */
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（flywheel.spec 同源）
 
-/** 预确认叠层落地（返回路径——launchHost env DSH_FORGE_PATCH_FILES 消费；finally 删） */
-function writeAckOverlay(): string {
-  const target = join(
-    tmpdir(),
-    `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`,
-  )
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
-
-/** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归叠层预免） */
+/** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归产品 overlay 预免） */
 async function dismissOnboardingModals(page: Page): Promise<void> {
   const deadline = Date.now() + 15_000
   for (let dismissed = 0; dismissed < 3; dismissed++) {
@@ -177,10 +155,8 @@ async function hostDataChannelsLive(page: Page): Promise<boolean> {
 test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-kni-'))
-  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19670 + (process.pid % 200)),
   })
@@ -231,7 +207,6 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })
-    rmSync(ackOverlay, { force: true })
   }
 })
 
@@ -244,10 +219,8 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-knix-'))
   const fixture = makeKnowledgeFixture()
-  const ackOverlay = writeAckOverlay()
   const app = await launchHost({
     DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_PATCH_FILES: ackOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19690 + (process.pid % 200)),
   })
@@ -306,6 +279,5 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await app.close()
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
-    rmSync(ackOverlay, { force: true })
   }
 })

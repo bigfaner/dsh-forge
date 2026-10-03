@@ -144,7 +144,7 @@
 
 | 缺口 | 影响行 | 转正条件 |
 |---|---|---|
-| ~~host 侧 `forge:projects/*` 通道未装配~~ **已转正（2026-10-02，4.2/fix-1）**：profile 产品行启用 + boot overlay + main.ts 接线 + child 形态双服务桥接（commit 90d5eb6） | hero 组（UF-2 AC）、L814、L820、L766 实机面；L474 产品会话行载体；3.8 组二（注册 → 浏览真数据/抽屉/AC-5 真通道面——`e2e/specs/knowledge-integration.spec.ts`） | 原条件（core 插件入 profile + main.ts 接线）已达成——组三与 knowledge-integration 组二实跑转正（4.2 验证 10/10）。转正随附两处 e2e 载体适配：① fresh userData 首启官方模态遮罩（预览版说明 = 叠层预确认，隔离环境点「继续」写回不可依赖；API Key onboarding = 「稍后配置」本地收起 fallback）；② 组二通道探测门修正——在场判定只认 "No handler" 拒绝（域层 fail-loud 裸错曾被误读为缺口致恒 skip） |
+| ~~host 侧 `forge:projects/*` 通道未装配~~ **已转正（2026-10-02，4.2/fix-1）**：profile 产品行启用 + boot overlay + main.ts 接线 + child 形态双服务桥接（commit 90d5eb6） | hero 组（UF-2 AC）、L814、L820、L766 实机面；L474 产品会话行载体；3.8 组二（注册 → 浏览真数据/抽屉/AC-5 真通道面——`e2e/specs/knowledge-integration.spec.ts`） | 原条件（core 插件入 profile + main.ts 接线）已达成——组三与 knowledge-integration 组二实跑转正（4.2 验证 10/10）。转正随附两处 e2e 载体适配：① fresh userData 首启官方模态遮罩（预览版说明 = 叠层预确认，隔离环境点「继续」写回不可依赖；API Key onboarding = 「稍后配置」本地收起 fallback）；② 组二通道探测门修正——在场判定只认 "No handler" 拒绝（域层 fail-loud 裸错曾被误读为缺口致恒 skip）。**①的载体已迭代（2026-10-03，fix-12）**：预览版说明预确认由 spec 叠层改产品 boot overlay 内置（`apps/host/src/boot/overlay.ts`——welcome 写路径在 dev 形态宿主被拒的定性收口，见 fix-12 记录）；全套件叠层已撤、smoke-skeleton 组零补裸启动真实路径用例（e2e 全预确认盲区消除） |
 | ~~3.8 召回 tab 三方一致的事件数据面无注入通道~~ **已转正（2026-10-02，4.2）**：`e2e/specs/flywheel.spec.ts` dogfood 6 步链承载（agent 真实多步检索链落库 → sessionRecall/heat 实机断言） | L478–L490 数据行；L497–L536（发送召回/热度联动） | dogfood 走查已落地（4.2，zai-coding-cn/glm-5.3-flash，连续 4 绿）；事件↔tab↔热度三方一致断言 = flywheel 步 4–6（场景⑥端到端）；UI 侧三方投影一致性另由 `apps/web/src/views/session/recall-model.test.ts` 单测 pin（3.8） |
 | 官方 `remote.mux` ws 重连 console 噪音 | L824 console 全口径 | host ws 面治理后恢复原型全口径（pageerror + console error） |
 

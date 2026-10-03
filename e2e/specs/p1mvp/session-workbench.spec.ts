@@ -30,7 +30,6 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const HOST_DIR = join(ROOT, 'apps', 'host')
 const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
 const DOGFOOD_PROVIDER = process.env.DSH_FORGE_DOGFOOD_PROVIDER ?? 'zai-coding-cn'
 const DOGFOOD_MODEL = process.env.DSH_FORGE_DOGFOOD_MODEL ?? 'glm-5.3-flash'
@@ -47,13 +46,13 @@ function seedDshHome(dshHome: string, credentials: string): void {
   writeFileSync(join(dshHome, '.credentials.yaml'), credentials, 'utf8')
 }
 
-/** dogfood 叠层（低成本模型 + 首启告示预确认——boot overlay 之后应用） */
+/** dogfood 叠层（低成本模型——boot overlay 之后应用；首启告示预确认 = 产品 overlay 内置，fix-12） */
 function writeDogfoodOverlay(): string {
   const target = join(tmpdir(), `dsh-forge-e2e-dogfood-${process.pid}.yml`)
   writeFileSync(
     target,
     [
-      '# e2e dogfood 叠层：低成本模型 + 首启告示预确认',
+      '# e2e dogfood 叠层：低成本模型（首启告示预确认 = 产品 overlay 内置，fix-12）',
       '- id: llm-pi-ai',
       '  config:',
       '    providers:',
@@ -63,25 +62,6 @@ function writeDogfoodOverlay(): string {
       '  config:',
       `    provider: ${DOGFOOD_PROVIDER}`,
       `    model: ${DOGFOOD_MODEL}`,
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
-
-function writeAckOverlay(): string {
-  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
       '',
     ].join('\n'),
     'utf8',
@@ -105,7 +85,8 @@ async function dismissOnboardingModals(page: Page): Promise<void> {
 
 interface LaunchOpts {
   readonly userData: string
-  readonly overlay: string
+  /** dogfood 模型叠层路径（缺席 = 裸启动——首启告示预确认由产品 boot overlay 承载，fix-12） */
+  readonly overlay?: string
   readonly dogfood?: boolean
 }
 
@@ -124,7 +105,7 @@ async function launchHost(opts: LaunchOpts): Promise<Launched> {
     env: {
       ...process.env,
       DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_PATCH_FILES: opts.overlay,
+      ...(opts.overlay === undefined ? {} : { DSH_FORGE_PATCH_FILES: opts.overlay }),
       DSH_FORGE_USER_DATA: opts.userData,
       DSH_FORGE_PORT: String(19850 + (process.pid % 200)),
     } as Record<string, string>,
@@ -474,8 +455,7 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
 test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail 图标列可往返', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
-  const overlay = writeAckOverlay()
-  const { app, page } = await launchHost({ userData, overlay })
+  const { app, page } = await launchHost({ userData })
   try {
     // 点官方折叠控件（dsh-client-ui-sidebar toggle.collapse 词条）
     const collapseBtn = page.locator('button[aria-label="收起侧边栏"], button[title="收起侧边栏"]').first()
@@ -492,7 +472,6 @@ test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail �
     await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '完整导航恢复').toBeVisible()
   } finally {
     await app.close()
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
 })
@@ -503,8 +482,7 @@ test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail �
 test('@web-e2e @p1mvp session-workbench·Step1c zero-project-rail-empty：零项目首用空态引导', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
-  const overlay = writeAckOverlay()
-  const { app, page } = await launchHost({ userData, overlay })
+  const { app, page } = await launchHost({ userData })
   try {
     // 零项目首用：中区 hero + CTA；左栏项目区空态（无项目行）
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero')
@@ -547,7 +525,6 @@ test('@web-e2e @p1mvp session-workbench·Step1c zero-project-rail-empty：零项
     await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '导航入口在场（空态不缺位）').toBeVisible()
   } finally {
     await app.close()
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
 })
@@ -559,8 +536,7 @@ test('@web-e2e @p1mvp session-workbench·Step2b/2c 空会话引导 + 空消息�
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('blank-demo')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
-  const overlay = writeAckOverlay()
-  const { app, page } = await launchHost({ userData, overlay })
+  const { app, page } = await launchHost({ userData })
   try {
     await registerProject(page, join(fixtureRoot, 'blank-demo'), 'blank-demo')
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
@@ -601,7 +577,6 @@ test('@web-e2e @p1mvp session-workbench·Step2b/2c 空会话引导 + 空消息�
     expect(focused, '焦点仍在输入框').toBe(true)
   } finally {
     await app.close()
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -616,8 +591,7 @@ test('@web-e2e @p1mvp session-workbench·Step4b/4c 项目乙暂无会话占位 +
   const fixtureRoot = makeWorkspaceFixture('proj-jia')
   mkdirSync(join(fixtureRoot, 'proj-yi'), { recursive: true })
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
-  const overlay = writeAckOverlay()
-  const { app, page } = await launchHost({ userData, overlay })
+  const { app, page } = await launchHost({ userData })
   try {
     const jia = await registerProject(page, join(fixtureRoot, 'proj-jia'), 'proj-jia')
     const yi = await registerProject(page, join(fixtureRoot, 'proj-yi'), 'proj-yi')
@@ -634,7 +608,6 @@ test('@web-e2e @p1mvp session-workbench·Step4b/4c 项目乙暂无会话占位 +
     await expect(page.locator(`[data-dswf-project="${jia.id}"]`).first()).toBeAttached()
   } finally {
     await app.close()
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -648,8 +621,7 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢�
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('dock-demo')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
-  const overlay = writeAckOverlay()
-  const { app, page } = await launchHost({ userData, overlay })
+  const { app, page } = await launchHost({ userData })
   try {
     await registerProject(page, join(fixtureRoot, 'dock-demo'), 'dock-demo')
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
@@ -678,7 +650,6 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢�
     await expect(sessionPanel).toBeVisible()
   } finally {
     await app.close()
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }

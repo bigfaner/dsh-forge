@@ -27,7 +27,6 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const HOST_DIR = join(ROOT, 'apps', 'host')
 const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 const DOGFOOD_PROVIDER = process.env.DSH_FORGE_DOGFOOD_PROVIDER ?? 'zai-coding-cn'
 const DOGFOOD_MODEL = process.env.DSH_FORGE_DOGFOOD_MODEL ?? 'glm-5.3-flash'
 
@@ -49,7 +48,7 @@ function writeDogfoodOverlay(): string {
   writeFileSync(
     target,
     [
-      '# e2e dogfood 叠层：低成本模型 + 首启告示预确认',
+      '# e2e dogfood 叠层：低成本模型（首启告示预确认 = 产品 boot overlay 内置，fix-12）',
       '- id: llm-pi-ai',
       '  config:',
       '    providers:',
@@ -59,25 +58,6 @@ function writeDogfoodOverlay(): string {
       '  config:',
       `    provider: ${DOGFOOD_PROVIDER}`,
       `    model: ${DOGFOOD_MODEL}`,
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  return target
-}
-
-function writeAckOverlay(): string {
-  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
-  writeFileSync(
-    target,
-    [
-      '# e2e 预确认叠层',
-      '- id: ui-settings-general',
-      '  config:',
-      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
       '',
     ].join('\n'),
     'utf8',
@@ -105,7 +85,7 @@ interface Launched {
   readonly pageErrors: string[]
 }
 
-async function launchHost(userData: string, overlay: string): Promise<Launched> {
+async function launchHost(userData: string, overlay?: string): Promise<Launched> {
   const { _electron } = await import('@playwright/test')
   const app = await _electron.launch({
     executablePath: electronBinary,
@@ -114,7 +94,7 @@ async function launchHost(userData: string, overlay: string): Promise<Launched> 
     env: {
       ...process.env,
       DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_PATCH_FILES: overlay,
+      ...(overlay === undefined ? {} : { DSH_FORGE_PATCH_FILES: overlay }),
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19890 + (process.pid % 200)),
     } as Record<string, string>,
@@ -722,10 +702,9 @@ test('@web-e2e @p1mvp flywheel·Step3b blank-question-blocked：空/纯空白提
   test.setTimeout(240_000)
   const fixtureRoot = makeFlywheelFixture()
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw-ud-'))
-  const overlay = writeAckOverlay()
   let launched: Launched | undefined
   try {
-    launched = await launchHost(userData, overlay)
+    launched = await launchHost(userData)
     await registerProject(launched.page, join(fixtureRoot, 'fw-demo'), 'fw-demo')
     await expect(launched.page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
     await launched.page.waitForTimeout(5_000)
@@ -766,7 +745,6 @@ test('@web-e2e @p1mvp flywheel·Step3b blank-question-blocked：空/纯空白提
     expect(heat, '零检索链与使用事件').toHaveLength(0)
   } finally {
     if (launched !== undefined) await launched.app.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -779,10 +757,9 @@ test('@web-e2e @p1mvp flywheel·Step7b no-recall-placeholder：零召回占位�
   test.setTimeout(240_000)
   const fixtureRoot = makeFlywheelFixture()
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw-ud-'))
-  const overlay = writeAckOverlay()
   let launched: Launched | undefined
   try {
-    launched = await launchHost(userData, overlay)
+    launched = await launchHost(userData)
     await registerProject(launched.page, join(fixtureRoot, 'fw-demo'), 'fw-demo')
     await expect(launched.page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
     await launched.page.waitForTimeout(5_000)
@@ -794,7 +771,6 @@ test('@web-e2e @p1mvp flywheel·Step7b no-recall-placeholder：零召回占位�
     await expect(launched.page.locator('[data-dswf-recall-row]'), '零分组行').toHaveCount(0)
   } finally {
     if (launched !== undefined) await launched.app.close().catch(() => undefined)
-    rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
