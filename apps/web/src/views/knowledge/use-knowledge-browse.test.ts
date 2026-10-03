@@ -8,7 +8,14 @@ import type { DomainNode, KnowledgeCard, Project } from '@dsh-forge/contracts'
 import { KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
 import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
-import { browseFaceState, EMPTY_FILTER, hasActiveFilter, type BrowseFilterEvent } from './browse-model.js'
+import {
+  browseFaceState,
+  browseFilterReducer,
+  domainRows,
+  EMPTY_FILTER,
+  hasActiveFilter,
+  type BrowseFilterEvent,
+} from './browse-model.js'
 import {
   applyBrowseLoad,
   browseActions,
@@ -353,6 +360,45 @@ describe('consumedBrowseState（消费态合成——fix-5：过滤态单一来�
 
   it('过滤态同引用 → 原装载态原样返回（未过滤常态零对象合成）', () => {
     expect(consumedBrowseState(loaded, EMPTY_FILTER)).toBe(loaded)
+  })
+})
+
+describe('激活翻转全量重拉 × selectedDomain 投影（fix-8①：walk4-J 视图往返回归）', () => {
+  const META = { projectName: 'demo', knowledgeDir: 'Z:/ws/demo/.knowledge' }
+
+  it('往返（hold → 激活重拉 bundle 重建 nodes）后消费态 filter.domain 保持 → 域树激活行投影不丢', () => {
+    // 首装全量 → 选域「前端」（reducer 实时态）→ 过滤重拉落点（kind:'cards'）
+    const filter = browseFilterReducer(EMPTY_FILTER, { type: 'select-domain', domain: '前端' })
+    const initial = applyBrowseLoad(initialBrowseState(), {
+      kind: 'bundle',
+      bundle: { cards: CARDS, nodes: NODES, total: 2, ...META },
+      cards: CARDS,
+    })
+    const filtered = applyBrowseLoad(initial, { kind: 'cards', cards: CARDS.slice(0, 1) })
+    expect(filtered.filter).toEqual(EMPTY_FILTER) // 装载态快照滞后（过滤派发不经装载转移）——walk4-J 症状载体
+
+    // 视图往返：隐藏期 hold（零转移）→ 激活翻转全量重拉（缓存先行不清场；bundle 重建 nodes 新引用 + 过滤补拉视图）
+    const pending = pendingBrowseState(filtered, false)
+    expect(pending.busy).toBe(true)
+    const REBUILT: readonly DomainNode[] = NODES.map((node) => ({ ...node }))
+    const reactivated = applyBrowseLoad(pending, {
+      kind: 'bundle',
+      bundle: { cards: CARDS, nodes: REBUILT, total: 2, ...META },
+      cards: CARDS.slice(0, 1),
+    })
+    // 装载态自身不带域（fix-5 前消费面直读它 = active=0 即 walk4-J 实测症状）
+    expect(reactivated.filter.domain).toBeUndefined()
+
+    // hook 输出态合成（fix-5）：实时过滤态盖写——DomainTree active 投影源
+    const consumed = consumedBrowseState(reactivated, filter)
+    expect(consumed.filter.domain, '往返后 filter.domain 保持（域树 active 消费点）').toBe('前端')
+    expect(consumed.nodes).toBe(REBUILT) // nodes 重建不稀释实时过滤态
+    expect(consumed.cards).toEqual(CARDS.slice(0, 1)) // 卡片 = 过滤补拉视图（与过滤条件一致）
+
+    // DomainTree 行激活判定（isActive 谓词同式）：重建行集内选中域行命中
+    const rows = domainRows(consumed.nodes, consumed.total)
+    const activeRow = rows.find((row) => (row.domainPath === '' ? undefined : row.domainPath) === consumed.filter.domain)
+    expect(activeRow?.domainPath, '重拉后 nodes 行集内选中域行可标激活（data-active 可在场）').toBe('前端')
   })
 })
 

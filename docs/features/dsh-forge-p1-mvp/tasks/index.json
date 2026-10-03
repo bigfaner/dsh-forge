@@ -771,7 +771,7 @@
       "title": "Fix: 两处小缺陷——① 知识域树激活标记在视图往返后丢失（数据保持、标记不同步）② dock 调宽手柄键盘步进未生效（待复核）",
       "priority": "P2",
       "estimatedTime": "1h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-8.md",
       "record": "records/fix-8.md",
       "surface-type": "web",
