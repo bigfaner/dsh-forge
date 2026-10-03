@@ -680,6 +680,18 @@
       "sourceTaskID": "4.2",
       "type": "coding.fix"
     },
+    "fix-10": {
+      "id": "fix-10",
+      "title": "Fix: dock 全面对齐 dsh——官方 ui-dockkit 基座替换自研轨道（DockSurface/Controller/FloatLayer）+ dsh-forge 内容叠加",
+      "priority": "P1",
+      "estimatedTime": "6h",
+      "status": "pending",
+      "file": "fix-10.md",
+      "record": "records/fix-10.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "high"
+    },
     "fix-2": {
       "id": "fix-2",
       "title": "Fix: 主窗口隐藏原生标题栏（titleBarStyle hidden + overlay，对齐 dsh 官方桌面形态）",
@@ -715,6 +727,66 @@
       "surface-type": "web",
       "type": "coding.fix",
       "complexity": "medium"
+    },
+    "fix-5": {
+      "id": "fix-5",
+      "title": "Fix: 知识浏览关键词交互缺陷——键入被弹回 + 卡片网格整体消失落「尚无知识」空库面（实测复现）",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "pending",
+      "file": "fix-5.md",
+      "record": "records/fix-5.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "high"
+    },
+    "fix-6": {
+      "id": "fix-6",
+      "title": "Fix: 侧栏项目区头部缺搜索钮（含过滤行）与视图选项（排列）钮——原型基准补齐 + PRD UF-1 Validation 落实",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "pending",
+      "file": "fix-6.md",
+      "record": "records/fix-6.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-7": {
+      "id": "fix-7",
+      "title": "Fix（fix-3 回炉）: 模态宽度仍未落卡片挂点——裁切未修且浏览器相位加剧至 300px（几何复测实锤）",
+      "priority": "P0",
+      "estimatedTime": "45min",
+      "status": "pending",
+      "file": "fix-7.md",
+      "record": "records/fix-7.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-8": {
+      "id": "fix-8",
+      "title": "Fix: 两处小缺陷——① 知识域树激活标记在视图往返后丢失（数据保持、标记不同步）② dock 调宽手柄键盘步进未生效（待复核）",
+      "priority": "P2",
+      "estimatedTime": "1h",
+      "status": "pending",
+      "file": "fix-8.md",
+      "record": "records/fix-8.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
+    "fix-9": {
+      "id": "fix-9",
+      "title": "Fix: 中区会话面板顶部 toolbar 缺失——对齐 dsh 布局（官方 conversation.session.header 槽位 + 原型 conv-header 标题行）",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "fix-9.md",
+      "record": "records/fix-9.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "high"
     },
     "gen-contracts": {
       "id": "T-test-gen-contracts",
@@ -781,7 +853,7 @@
       "dependencies": [
         "T-eval-contract"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "gen-test-scripts.md",
       "record": "records/gen-test-scripts.md",
       "surface-key": ".",

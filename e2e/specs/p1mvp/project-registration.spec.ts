@@ -1,0 +1,668 @@
+// @feature:dsh-forge-p1-mvp @web-e2e
+// gen-test-scripts 产物 —— Journey: project-registration（T-test-gen-scripts）。
+// 断言源 = docs/features/dsh-forge-p1-mvp/testing/project-registration/contracts/step-{1..5}-*.md
+// （eval-contract 993/1150 通过）。每条 test 对应一个 Contract Outcome（溯源注释标注），
+// 另含 1 条旅程冒烟（happy path 全步骤贯穿，skill 硬规则）。
+//
+// Fact Table 摘录（代码侦察，选择器/通道均源码核实）：
+//   - 两段模态：.dswf-ap[data-dswf-ap=browser|form|executing|success|failure]（AddProjectFlow.tsx）
+//   - 表单字段：[data-dswf-rf-ws|-name|-forge|-kn|-tasks]；校验问题 [data-dswf-rf-issue=<field>]
+//     （form-model.ts：绝对路径/非空校验）；仓内外 StateChip（RegisterForm.tsx:154）
+//   - 成功反馈文案：attachedToExisting ? 已挂接既有工作区。 : 已创建新工作区。（AddProjectFlow.tsx:107）
+//   - 「已注册」标记源 = forge:projects/list 的 ws_path 全集（browser-model.ts:90）
+//   - RPC：forge:projects/register → RegisterResult{attachedToExisting}；forge:projects/list → ProjectSummary[]
+//   - hero 相位：[data-dswf-workbench][data-dswf-phase=hero|session]；CTA [data-dswf-cta=add-project]
+// 隔离：独立 userData + 独立端口（e2e 单实例纪律，沿既有 specs）。
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+
+const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
+const HOST_DIR = join(ROOT, 'apps', 'host')
+
+const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
+
+const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1' // 0.2.0-rc.2 实测值（既有 specs 同源）
+
+/** 工作区候选夹具：{root}/<name>（可选 .knowledge 子目录） */
+function makeWorkspaceFixture(name: string, withKnowledge = false): string {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-'))
+  const dir = join(root, name)
+  mkdirSync(dir, { recursive: true })
+  if (withKnowledge) {
+    mkdirSync(join(dir, '.knowledge'), { recursive: true })
+    writeFileSync(join(dir, '.knowledge', 'deploy.md'), '---\ntitle: 部署规范\nsummary: 部署流程\nkeywords:\n  - 部署\n---\n\n# 部署规范\n', 'utf8')
+  }
+  return root
+}
+
+/** 预确认叠层（首启「预览版说明」等值预确认——隔离 userData 内写回不可依赖，只能预免） */
+function writeAckOverlay(): string {
+  const target = join(tmpdir(), `dsh-forge-e2e-ack-${process.pid}-${Math.random().toString(36).slice(2, 8)}.yml`)
+  writeFileSync(
+    target,
+    [
+      '# e2e 预确认叠层：官方首启「预览版说明」版本等值预确认（免遮罩拦截指针）',
+      '- id: ui-settings-general',
+      '  config:',
+      `    welcomeNoticeVersion: ${WELCOME_NOTICE_ACK_VERSION}`,
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+  return target
+}
+
+/** 运行期模态收起（API Key onboarding「稍后配置」本地收起；窗口期轮询） */
+async function dismissOnboardingModals(page: Page): Promise<void> {
+  // 窗口 30s：模态挂载可晚于工作台可见数十秒（kit 收敛）——15s 窗口实测漏收
+  const deadline = Date.now() + 30_000
+  for (let dismissed = 0; dismissed < 3; dismissed++) {
+    const dismissButton = page.locator('[role="dialog"] button', { hasText: /^稍后配置$/ }).first()
+    while (!(await dismissButton.isVisible().catch(() => false))) {
+      if (Date.now() > deadline) return
+      await page.waitForTimeout(500)
+    }
+    await dismissButton.click({ timeout: 10_000 })
+    await page.waitForTimeout(1_000)
+  }
+}
+
+interface Launched {
+  readonly app: ElectronApplication
+  readonly page: Page
+  readonly userData: string
+  readonly ackOverlay: string
+  readonly pageErrors: string[]
+}
+
+/**
+ * 启动薄宿主并走完就绪链 + 相位稳定（返回清理面）。
+ * dismiss=false 用于 RPC-only 前置段（模态在场不阻塞 evaluate；任何收起动作都会写
+ * dsh 侧客户态——同 userData 复启实测存在产品工作台挂载竞态，故收起仅置于链路末段，
+ * 见 compensation spec 头注）。UI 走查测试均为单 boot——launchReady(dismiss=true) 后无复启。
+ */
+let bootSeq = 0
+
+async function launchReady(existingUserData?: string, options?: { readonly dismiss?: boolean }): Promise<Launched> {
+  const dismiss = options?.dismiss ?? true
+  const { _electron } = await import('@playwright/test')
+  const userData = existingUserData ?? mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
+  const ackOverlay = writeAckOverlay()
+  const app = await _electron.launch({
+    executablePath: electronBinary,
+    args: ['.'],
+    cwd: HOST_DIR,
+    env: {
+      ...process.env,
+      DSH_FORGE_DEV_PROFILE: 'dev',
+      DSH_FORGE_PATCH_FILES: ackOverlay,
+      DSH_FORGE_USER_DATA: userData,
+      DSH_FORGE_PORT: String(19810 + (process.pid % 150) + (bootSeq++ % 20)),
+    } as Record<string, string>,
+  })
+  const page = await app.firstWindow()
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+  await page.waitForFunction(
+    () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
+    undefined,
+    { timeout: 60_000 },
+  )
+  await page.waitForFunction(
+    () => {
+      const g = globalThis as { __ModuleLoader__?: { mode: string }; __DSH_FORGE_CLIENT__?: unknown }
+      return g.__ModuleLoader__?.mode === 'live' && g.__DSH_FORGE_CLIENT__ !== undefined
+    },
+    undefined,
+    { timeout: 90_000 },
+  )
+  await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
+  if (dismiss) await dismissOnboardingModals(page)
+  // 相位稳定门（零项目 = hero；RPC 前置段由调用侧按其项目态另行断言相位）
+  if (existingUserData === undefined && dismiss) {
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero', { timeout: 30_000 })
+  }
+  return { app, page, userData, ackOverlay, pageErrors }
+}
+
+
+/** 关闭宿主并等待主进程退出 + dsh child 级联收尾（句柄/端口复用竞态防护——4.2 探针同源坑） */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  await app.close().catch(() => undefined)
+  if (proc.exitCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000)
+      proc.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
+}
+
+/** 目录删除重试（句柄释放竞态；终态兜底不掩盖用例结论——mkdtemp 唯一名不外溢） */
+async function rmDirBestEffort(dir: string): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+  }
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // 残留兜底（句柄长期占用）——不掩盖用例结论
+  }
+}
+
+/** 浏览器行定位（名称精确匹配——防「Local」误中「LocalLow」） */
+function dirRow(page: Page, name: string): ReturnType<Page['locator']> {
+  // 边界口径（探针 7 实测）：「已注册」标记与目录名零空白拼接（行文本 = "comp-a已注册"），
+  // 尾界放宽为 空白|行尾|非名字字符（防 'Local' 误中 'LocalLow' 的前缀碰撞保持不变）
+  return page.locator('.dswf-fb-item', { hasText: new RegExp(`(?:^|\\s)${name}(?=\\s|$|[^\\w.-])`) }).first()
+}
+
+/** 双击进入目录并等待列举就绪（面包屑出现目标段） */
+async function enterDir(page: Page, name: string): Promise<void> {
+  await dirRow(page, name).dblclick()
+  await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
+}
+
+/** 从 hero CTA 打开添加项目并导航到夹具根（home → AppData → Local → Temp → 夹具根） */
+async function openFlowAtFixtureRoot(page: Page, fixtureRoot: string): Promise<void> {
+  await page.locator('[data-dswf-cta="add-project"]').click()
+  await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+  for (const segment of ['AppData', 'Local', 'Temp']) {
+    await enterDir(page, segment)
+  }
+  await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+}
+
+/** canonical path 扁平化（form-model.flattenWorkspacePath 同口径） */
+function flattenPath(dir: string): string {
+  const normalized = dir.replaceAll('/', '\\').replace(/\\+$/, '')
+  return normalized.replace(/^([A-Za-z]):/, '$1').replaceAll('\\', '-')
+}
+
+/** renderer forge RPC 面（preload dshForge.invoke——信封 {ok,data} 由调用侧解包） */
+async function forgeInvoke<T>(page: Page, channel: string, payload?: unknown): Promise<T> {
+  const data = await page.evaluate(async ({ ch, args }) => {
+    const forge = (globalThis as { dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> } }).dshForge
+    if (forge === undefined) throw new Error('dshForge preload 面缺席')
+    const envelope = await forge.invoke(ch, args)
+    if (!envelope.ok) throw new Error(`forge RPC ${ch} 失败：${JSON.stringify(envelope)}`)
+    return envelope.data
+  }, { ch: channel, args: payload })
+  return data as T
+}
+
+interface ProjectSummaryLike {
+  readonly id: string
+  readonly name: string
+  readonly wsPath: string
+  readonly workspaceId: string
+}
+
+// ─── better-sqlite3 最小结构面（挂接场景 fixture：删应用侧行保 dsh 侧注册——预置通道） ───
+interface MinimalStmt {
+  get(...args: unknown[]): unknown
+  all(...args: unknown[]): unknown[]
+  run(...args: unknown[]): unknown
+}
+interface MinimalDb {
+  prepare(sql: string): MinimalStmt
+  pragma(source: string): unknown
+  close(): unknown
+}
+const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
+type SqliteCtor = new (path: string) => MinimalDb
+const openStateDb = (userData: string): MinimalDb =>
+  new (requireFromCore('better-sqlite3') as SqliteCtor)(join(userData, 'state.db'))
+
+/** 表单段走查到「确认」可点（选中目标目录 → 下一步 → 表单就位） */
+async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string): Promise<string> {
+  await openFlowAtFixtureRoot(page, fixtureRoot)
+  await dirRow(page, dirName).click()
+  await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+  await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+  return join(fixtureRoot, dirName)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 旅程冒烟：happy path 全步骤（Step 1→5 success 贯穿——skill 硬规则：每旅程恰一条冒烟）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 → 左栏挂载（Step 1-5 success）', async () => {
+  test.setTimeout(240_000)
+  const fixtureRoot = makeWorkspaceFixture('reg-demo')
+  const targetDir = join(fixtureRoot, 'reg-demo')
+  const { app, page, userData, ackOverlay, pageErrors } = await launchReady()
+  try {
+    // Step 1 success：hero CTA → 第一段文件浏览器（目录列表/面包屑/已注册标记呈现；未选中禁用）
+    await page.locator('[data-dswf-cta="add-project"]').click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    await expect(page.locator('.dswf-fb-list[role="listbox"]')).toBeVisible()
+    const confirmBtn = page.locator('.dswf-fb-confirm')
+    await expect(confirmBtn).toBeDisabled()
+    await expect(confirmBtn).toHaveText('下一步')
+
+    // Step 2 success：导航 + 单击选中 → 解禁 → 下一步 → 表单
+    for (const segment of ['AppData', 'Local', 'Temp']) {
+      await enterDir(page, segment)
+    }
+    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await dirRow(page, 'reg-demo').click()
+    await expect(confirmBtn).toBeEnabled()
+    await confirmBtn.click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+
+    // Step 3 success：表单默认值与只读派生行（Contract Output 全项）
+    const ws = page.locator('[data-dswf-rf-ws]')
+    const name = page.locator('[data-dswf-rf-name]')
+    const forge = page.locator('[data-dswf-rf-forge]')
+    const kn = page.locator('[data-dswf-rf-kn]')
+    const tasks = page.locator('[data-dswf-rf-tasks]')
+    await expect(ws).toHaveValue(targetDir)
+    expect(await ws.getAttribute('readonly'), '工作区目录只读回填').not.toBeNull()
+    await expect(name).toHaveValue('reg-demo')
+    await expect(forge).toHaveValue(`${targetDir}\\.forge`)
+    await expect(kn).toHaveValue(`${targetDir}\\.knowledge`)
+    expect(await kn.getAttribute('readonly'), '知识库目录可改').toBeNull()
+    await expect(tasks).toHaveValue(`~/.dsh-forge/${flattenPath(targetDir)}`)
+    expect(await tasks.getAttribute('readonly'), '任务清单与记录只读派生').not.toBeNull()
+    expect(await page.locator('.dswf-rf input[type="radio"]').count(), '仓内/仓外无 radio 字段').toBe(0)
+    await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
+    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 5（不含「默认召回域」）').toHaveCount(5)
+    await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
+
+    // Step 4 success：确认 → 不可交互中断执行态 → 四步链
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="executing"]')).toBeVisible()
+
+    // Step 5 success：成功反馈（新建说明）自动关闭 → 左栏挂载 → hero 永久隐退
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]'), '新建工作区说明').toContainText('已创建新工作区')
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
+    await expect(page.locator('[data-dswf-hero]')).toHaveCount(0)
+    await expect(page.locator('.dswf-sidebar-project', { hasText: 'reg-demo' }).first()).toBeVisible({ timeout: 30_000 })
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '注册落库：projects 单行（含 workspace 外键链）').toHaveLength(1)
+    expect(projects[0]!.wsPath).toBe(targetDir)
+    expect(projects[0]!.workspaceId, 'workspace 外键在场').toBeTruthy()
+    expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 1 Outcome "cancel-clean-exit"（journey Step 1b：文件浏览器段取消）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step1 cancel-clean-exit：浏览器段取消零残留', async () => {
+  test.setTimeout(180_000)
+  const fixtureRoot = makeWorkspaceFixture('cancel-demo')
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    await page.locator('[data-dswf-cta="add-project"]').click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    // 直接关闭对话框（Esc = 关闭意图）
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.dswf-ap')).toHaveCount(0)
+    // 干净退出回工作台 hero——hero 与 CTA 仍在位
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero')
+    await expect(page.locator('[data-dswf-cta="add-project"]')).toBeVisible()
+    // State：dsh 侧与应用侧均无残留（未调用 dsh create，projects 表零行）
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '取消 = 应用库零变更（projects 零行）').toHaveLength(0)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 2 Outcome "attach-existing-workspace"（journey Step 2b：幂等挂接既有）
+// 挂接分支可达前置（4.3 探针实证 + 服务面源码）：registry 在场 / 应用库零行——两侧均在场的
+// 重复登记走 ③ ws_path UNIQUE 冲突失败（ownership 保护，归 compensation Step3c 口径）。
+// 本测试以「删应用侧行保 dsh 侧注册」预置挂接态（fixture 通道，state.db 直注）。
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：已注册目录挂接既有', async () => {
+  test.setTimeout(420_000)
+  const fixtureRoot = makeWorkspaceFixture('attach-demo')
+  const targetDir = join(fixtureRoot, 'attach-demo')
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
+  let launched: { app: ElectronApplication; page: Page; ackOverlay: string } | undefined
+  try {
+    // 单 boot：首次注册（RPC——新建分支）→ WAL 活删应用侧行（挂接态预置：registry 在场/
+    // 应用库零行；两侧均在场的重复登记 = ③ ws_path 冲突失败，归 compensation Step3c 口径）
+    launched = await launchReady(userData, { dismiss: false })
+    const first = await forgeInvoke<{ projectId: string; workspaceId: string; attachedToExisting: boolean }>(launched.page, 'forge:projects/register', {
+      workspaceDir: targetDir,
+      name: 'attach-demo',
+      forgeDir: join(targetDir, '.forge'),
+      knowledgeDir: join(targetDir, '.knowledge'),
+    })
+    expect(first.attachedToExisting, '首次注册 = 新建分支').toBe(false)
+    {
+      const db = openStateDb(userData)
+      try {
+        db.pragma('busy_timeout = 5000')
+        db.prepare('DELETE FROM projects WHERE ws_path = ?').run(targetDir)
+      } finally {
+        db.close()
+      }
+    }
+    // 收模态（链路无后续 boot——毒化面不适用）
+    await dismissOnboardingModals(launched.page)
+
+    // 挂接走查（侧栏「＋」入口——WAL 外删不触发工作台重拉锚，相位保持 session；
+    // 挂接态前置以 RPC 口径断言：应用库零行）
+    const page = launched.page
+    const before = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(before.filter((p) => p.wsPath === targetDir), '挂接态前置：应用库零行（registry 保留）').toHaveLength(0)
+    await page.locator('[data-dswf-nav="add-project"]').first().click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    for (const segment of ['AppData', 'Local', 'Temp']) {
+      await enterDir(page, segment)
+    }
+    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    const row = dirRow(page, 'attach-demo')
+    // 注：「已注册」标记源 = 应用库 ws_path 全集（browser-model.ts:90）——挂接态（应用库
+    // 零行）标记缺席为设计语义；挂接判定在服务面 ① 预检（registry）
+    await row.click()
+    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    // Output：挂接既有分支——成功反馈含挂接说明并自动关闭模态
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toContainText('已挂接既有工作区')
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+    // State：应用库单行（新登记）挂接既有 workspaceId
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    const attached = projects.filter((p) => p.wsPath === targetDir)
+    expect(attached, '挂接登记恰一行').toHaveLength(1)
+    expect(attached[0]!.workspaceId, '登记挂接既有 workspaceId 外键（registry 注册数不变）').toBe(first.workspaceId)
+  } finally {
+    if (launched !== undefined) {
+      await closeApp(launched.app)
+      rmSync(launched.ackOverlay, { force: true })
+    }
+    await rmDirBestEffort(userData)
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 2 Outcome "listing-failure-retryable"（fact AP-16：列举失败态错误提示 + 重试）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step2 listing-failure-retryable：列举失败可重试且导航保持', async () => {
+  test.setTimeout(180_000)
+  const fixtureRoot = makeWorkspaceFixture('listfail-demo')
+  const brokenDir = join(fixtureRoot, 'broken-dir')
+  mkdirSync(brokenDir, { recursive: true })
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    await openFlowAtFixtureRoot(page, fixtureRoot)
+    // 行在场后外部删除目标目录 → 双击进入 → 列举失败
+    await expect(dirRow(page, 'broken-dir')).toBeVisible()
+    rmSync(brokenDir, { recursive: true, force: true })
+    await dirRow(page, 'broken-dir').dblclick()
+    // Output：错误提示呈现（可修正、可重试），导航状态不丢失
+    await expect(page.locator('[data-dswf-fb-error]')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-dswf-fb-error]')).toContainText('目录加载失败')
+    // State：流程停留第一段文件浏览器，无注册副作用
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    // 重试成功路径：恢复目录 → 重试 → 列表恢复呈现
+    mkdirSync(brokenDir, { recursive: true })
+    await page.locator('.dswf-fb-retry', { hasText: '重试' }).click()
+    await expect(page.locator('[data-dswf-fb-error]')).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('broken-dir', { timeout: 15_000 })
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '列举失败路径零注册副作用').toHaveLength(0)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3 Outcome "cancel-return-clean-exit"（journey Step 3b：表单段取消 + 往返保持）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step3 cancel-return-clean-exit：表单段取消 + 往返状态保持', async () => {
+  test.setTimeout(180_000)
+  const fixtureRoot = makeWorkspaceFixture('formcancel-demo')
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    const targetDir = await selectWorkspaceAndNext(page, fixtureRoot, 'formcancel-demo')
+    // 手改项目名（制造「已填表单状态」）
+    await page.locator('[data-dswf-rf-name]').fill('手改名')
+    // 返回上一步 → repick 相位（段一起始目录锚 + 表单保持挂载——flow-model FLOW_PHASES）；
+    // 再下一步（同目录）→ 表单状态保持
+    await page.getByRole('button', { name: '返回上一步' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="repick"]')).toBeVisible()
+    // repick 起始 = 段一起始目录锚（选定工作区自身）→ 上一级回夹具根再选同目录
+    await page.locator('.dswf-fb-up').click()
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await dirRow(page, 'formcancel-demo').click()
+    await page.locator('.dswf-fb-confirm').click() // repick 确认钮（选择此文件夹/下一步 两态文案）
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator('[data-dswf-rf-name]'), '浏览器⇄表单往返已填状态保持').toHaveValue('手改名')
+    await expect(page.locator('[data-dswf-rf-ws]')).toHaveValue(targetDir)
+    // 直接关闭对话框 → 干净退出（取消点在 dsh create 之前——零副作用）
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.dswf-ap')).toHaveCount(0)
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '表单段取消 = projects 零新增、无补偿动作').toHaveLength(0)
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero')
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3 Outcome "reselect-rederive-fields"（journey Step 3c：换选工作区字段联动）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换选重构未触碰字段、保留已触碰字段', async () => {
+  test.setTimeout(240_000)
+  const fixtureRoot = makeWorkspaceFixture('rederive-a')
+  mkdirSync(join(fixtureRoot, 'rederive-b'), { recursive: true })
+  // 浏览改选目标目录预置（浏览面板起点 = 当前知识库目录 .knowledge → 上一级选 .forge）
+  mkdirSync(join(fixtureRoot, 'rederive-a', '.knowledge'), { recursive: true })
+  mkdirSync(join(fixtureRoot, 'rederive-a', '.forge'), { recursive: true })
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    const dirA = await selectWorkspaceAndNext(page, fixtureRoot, 'rederive-a')
+    // 经「浏览…」改选知识库目录（字段标记为已触碰）
+    await page
+      .locator('.dswf-rf-row')
+      .filter({ has: page.locator('[data-dswf-rf-kn]') })
+      .getByRole('button', { name: '浏览…' })
+      .click()
+    await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="knowledgeDir"]')).toBeVisible()
+    await page.locator('.dswf-fb-up').click()
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('rederive-a', { timeout: 15_000 })
+    await dirRow(page, '.forge').click()
+    await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator('[data-dswf-rf-kn]'), '浏览选定知识库目录 = 已触碰').toHaveValue(`${dirA}\\.forge`)
+
+    // 重新选择 → 换选 rederive-b
+    await page.getByRole('button', { name: '重新选择' }).click()
+    await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="workspace"]')).toBeVisible()
+    await page.locator('.dswf-fb-up').click()
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await dirRow(page, 'rederive-b').click()
+    await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    const dirB = join(fixtureRoot, 'rederive-b')
+    // Output：未手改字段随新工作区重构；手改/浏览选定过的字段保留原值不重置
+    await expect(page.locator('[data-dswf-rf-ws]')).toHaveValue(dirB)
+    await expect(page.locator('[data-dswf-rf-name]'), '项目名重取').toHaveValue('rederive-b')
+    await expect(page.locator('[data-dswf-rf-forge]'), 'forge 目录默认值重算').toHaveValue(`${dirB}\\.forge`)
+    await expect(page.locator('[data-dswf-rf-tasks]'), '任务清单重新派生').toHaveValue(`~/.dsh-forge/${flattenPath(dirB)}`)
+    await expect(page.locator('[data-dswf-rf-kn]'), '浏览选定过的知识库目录保留原值').toHaveValue(`${dirA}\\.forge`)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3 Outcome "illegal-path-blocked"（journey Step 3d：非法路径拦截于表单态）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step3 illegal-path-blocked：非法路径表单态拦截', async () => {
+  test.setTimeout(180_000)
+  const fixtureRoot = makeWorkspaceFixture('illegal-demo')
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    await selectWorkspaceAndNext(page, fixtureRoot, 'illegal-demo')
+    const confirm = page.locator('.dswf-rf-confirm', { hasText: '确认' })
+    await expect(confirm).toBeEnabled()
+    // 清空必填项（forge 目录）→ 字段级提示 + 确认不可用
+    await page.locator('[data-dswf-rf-forge]').fill('')
+    await expect(page.locator('[data-dswf-rf-issue="forgeDir"]')).toContainText('不能为空')
+    await expect(confirm).toBeDisabled()
+    // 相对路径片段 → 需为绝对路径提示
+    await page.locator('[data-dswf-rf-forge]').fill('relative\\path')
+    await expect(page.locator('[data-dswf-rf-issue="forgeDir"]')).toContainText('需为绝对路径')
+    await expect(confirm).toBeDisabled()
+    // 知识库目录同口径
+    await page.locator('[data-dswf-rf-kn]').fill('rel-kn')
+    await expect(page.locator('[data-dswf-rf-issue="knowledgeDir"]')).toContainText('需为绝对路径')
+    // 修正回合法绝对路径 → 提示消解、确认解禁（可修正语义）
+    await page.locator('[data-dswf-rf-forge]').fill(join(fixtureRoot, 'illegal-demo', '.forge'))
+    await page.locator('[data-dswf-rf-kn]').fill(join(fixtureRoot, 'illegal-demo', '.knowledge'))
+    await expect(page.locator('[data-dswf-rf-issue]')).toHaveCount(0)
+    await expect(confirm).toBeEnabled()
+    // State：不进入注册执行——关闭后零变更
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.dswf-ap')).toHaveCount(0)
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '拦截于表单态 = dsh 侧与应用侧零变更').toHaveLength(0)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3 Outcome "external-forge-dir-derivation"（fact FACT_DEF_6：仓外推导边界取值）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step3 external-forge-dir-derivation：仓外派生标识', async () => {
+  test.setTimeout(180_000)
+  const fixtureRoot = makeWorkspaceFixture('external-demo')
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    await selectWorkspaceAndNext(page, fixtureRoot, 'external-demo')
+    // 默认态：工作区内 .forge → 仓内
+    await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
+    // 手动输入工作区外合法绝对路径（夹具根在工作区外）→ 仓外标识，注册不因此受阻
+    await page.locator('[data-dswf-rf-forge]').fill(join(fixtureRoot, 'outside-forge'))
+    await expect(page.locator('.dswf-rf-relation', { hasText: '仓外' }).first()).toBeVisible()
+    await expect(page.locator('[data-dswf-rf-issue="forgeDir"]'), '合法绝对路径 = 校验通过').toHaveCount(0)
+    await expect(page.locator('.dswf-rf-confirm', { hasText: '确认' })).toBeEnabled()
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 4 Outcome "double-confirm-reentry-blocked"（fact FLOW_PHASES：执行态单次进入护栏）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step4 double-confirm-reentry-blocked：确认连击无二次注册链', async () => {
+  test.setTimeout(240_000)
+  const fixtureRoot = makeWorkspaceFixture('dbl-demo')
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    await selectWorkspaceAndNext(page, fixtureRoot, 'dbl-demo')
+    const confirm = page.locator('.dswf-rf-confirm', { hasText: '确认' })
+    // 快速连击（第二次触发落在执行态开始之后）
+    await confirm.dblclick()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="executing"]')).toBeVisible()
+    // Output：无第二次注册链启动——单次进入护栏；进度呈现连续直至成功终态
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+    // State：无重复 dsh create / 无重复应用库写入
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    const wsProjects = projects.filter((p) => p.wsPath === join(fixtureRoot, 'dbl-demo'))
+    expect(wsProjects, '连击 = 恰一行项目记录（无重复写入）').toHaveLength(1)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 5 Outcome "second-project-via-tree"（journey Step 5b：项目态下经项目树「＋」再添加）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项目态「＋」注册第二项目并存', async () => {
+  test.setTimeout(300_000)
+  const fixtureRoot = makeWorkspaceFixture('proj-a')
+  mkdirSync(join(fixtureRoot, 'proj-b'), { recursive: true })
+  const { app, page, userData, ackOverlay } = await launchReady()
+  try {
+    // Setup：已有至少一个项目（第一项目经向导注册——hero 起步）
+    const dirA = await selectWorkspaceAndNext(page, fixtureRoot, 'proj-a')
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
+    void dirA
+
+    // 项目态下经项目树「＋」打开同一两段式流程（浏览器起始 = 主目录——导航至夹具根）
+    await page.locator('[data-dswf-nav="add-project"]').first().click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    for (const segment of ['AppData', 'Local', 'Temp']) {
+      await enterDir(page, segment)
+    }
+    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await dirRow(page, 'proj-b').click()
+    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator('[data-dswf-rf-name]')).toHaveValue('proj-b')
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+
+    // Output：左栏项目树新增该项目，多项目并存，hero 不再出现
+    await expect(page.locator('.dswf-sidebar-project', { hasText: 'proj-a' }).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.dswf-sidebar-project', { hasText: 'proj-b' }).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('[data-dswf-hero]')).toHaveCount(0)
+    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session')
+    const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(page, 'forge:projects/list')
+    expect(projects, '应用项目数 = 2（新旧并存各携外键）').toHaveLength(2)
+    expect(new Set(projects.map((p) => p.workspaceId)).size, '两行各携独立 workspace 外键').toBe(2)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    rmSync(ackOverlay, { force: true })
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
