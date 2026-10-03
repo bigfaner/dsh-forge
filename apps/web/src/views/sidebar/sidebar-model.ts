@@ -173,3 +173,29 @@ export function buildSidebarTree(input: {
     currentSessionId,
   }
 }
+
+/**
+ * 项目/会话过滤（UF-1 Validation：P1 最简 = 前缀/子串匹配，不区分大小写——原型
+ * renderProjects 同型语义）：项目名命中 → 项目在场，会话行仍按标题过滤（非命中行
+ * 滤除——项目名命中而会话全不命中时项目在场、会话为空，视图层呈现「无匹配会话」）；
+ * 任一会话标题命中 → 项目在场且仅留命中行；全不命中 → 项目离场。
+ * 纯视图投影（SC2 直读纪律不破——快照数据源不变）：空/纯空白查询 = 不过滤
+ * （原树原样引用返回）；不触碰选中态——currentSessionId 不入参，过滤隐藏当前
+ * 选中行不重置锚，清过滤即恢复可见；不改写输入树（节点复用——命中行为空差集
+ * 时才派生新节点）。
+ */
+export function sidebarFilterOf(
+  query: string,
+  tree: readonly SidebarProjectNode[],
+): readonly SidebarProjectNode[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return tree
+  const visible: SidebarProjectNode[] = []
+  for (const node of tree) {
+    const nameMatch = node.name.toLowerCase().includes(needle)
+    const sessions = node.sessions.filter((row) => row.title.toLowerCase().includes(needle))
+    if (!nameMatch && sessions.length === 0) continue
+    visible.push(sessions.length === node.sessions.length ? node : { ...node, sessions })
+  }
+  return visible
+}

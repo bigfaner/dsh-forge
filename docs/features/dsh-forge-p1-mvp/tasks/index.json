@@ -746,7 +746,7 @@
       "title": "Fix: 侧栏项目区头部缺搜索钮（含过滤行）与视图选项（排列）钮——原型基准补齐 + PRD UF-1 Validation 落实",
       "priority": "P1",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-6.md",
       "record": "records/fix-6.md",
       "surface-type": "web",

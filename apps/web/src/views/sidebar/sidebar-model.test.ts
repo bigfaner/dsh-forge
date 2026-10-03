@@ -7,9 +7,11 @@ import {
   relativeTimeLabel,
   sessionDotState,
   sessionStatus,
+  sidebarFilterOf,
   type LedgerSessionRow,
   type LedgerSessionsSnapshot,
   type LedgerWorkspacesSnapshot,
+  type SidebarProjectNode,
 } from './sidebar-model.js'
 
 const MIN = 60_000
@@ -124,5 +126,84 @@ describe('buildSidebarTree（项目树派生）', () => {
     })
     expect(out.loading).toBe(true)
     expect(out.currentSessionId).toBeNull()
+  })
+})
+
+describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原型 renderProjects 同型）', () => {
+  function row(sessionId: string, title: string): SidebarProjectNode['sessions'][number] {
+    return { sessionId, title, status: 'idle', updatedAt: 1 }
+  }
+
+  const tree: SidebarProjectNode[] = [
+    {
+      projectId: 'p1',
+      name: '支付网关',
+      archived: false,
+      sessions: [row('s1', '登录修复'), row('s2', '索引重建')],
+    },
+    {
+      projectId: 'p2',
+      name: '知识库',
+      archived: false,
+      sessions: [row('s3', '文档补全')],
+    },
+  ]
+
+  it('空/纯空白查询 = 不过滤（原树原样引用返回）', () => {
+    expect(sidebarFilterOf('', tree)).toBe(tree)
+    expect(sidebarFilterOf('   ', tree)).toBe(tree)
+  })
+
+  it('项目名前缀命中 → 项目在场，会话行仍按标题过滤（原型同型：非命中会话滤除）', () => {
+    const visible = sidebarFilterOf('支付', tree)
+    expect(visible.map((n) => n.projectId)).toEqual(['p1'])
+    expect(visible[0]!.sessions).toEqual([]) // 会话标题不含「支付」→ 滤除（视图层呈现「无匹配会话」）
+  })
+
+  it('会话标题子串命中 → 项目在场且仅留命中行', () => {
+    const visible = sidebarFilterOf('重建', tree)
+    expect(visible.map((n) => n.projectId)).toEqual(['p1'])
+    expect(visible[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+  })
+
+  it('项目名与会话全命中 → 节点原样引用（零改写零分配——纯投影）', () => {
+    const full: SidebarProjectNode[] = [
+      { projectId: 'p1', name: '修复集', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
+    ]
+    expect(sidebarFilterOf('修复', full)[0]).toBe(full[0])
+  })
+
+  it('大小写不敏感（原型 toLowerCase 同型）', () => {
+    const mixed: SidebarProjectNode[] = [
+      { projectId: 'p1', name: 'Gateway', archived: false, sessions: [row('s1', 'TLS handshake')] },
+    ]
+    expect(sidebarFilterOf('gate', mixed).map((n) => n.projectId)).toEqual(['p1'])
+    expect(sidebarFilterOf('HAND', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+  })
+
+  it('全不命中 → 空（视图层呈现行内空提示）', () => {
+    expect(sidebarFilterOf('不存在', tree)).toEqual([])
+  })
+
+  it('选中态不变（PRD UF-1 Validation）：过滤隐藏当前选中会话行不重置锚——currentSessionId 与过滤正交', () => {
+    const built = buildSidebarTree({
+      projects: [project('p1', 'w1', { name: '支付网关' })],
+      sessions: ledger(
+        [ledgerRow('s1', { displayTitle: '登录修复' }), ledgerRow('s2', { displayTitle: '索引重建' })],
+        { current: 's1' },
+      ),
+      workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
+    })
+    const visible = sidebarFilterOf('索引', built.tree)
+    expect(visible[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2']) // 选中行 s1 被滤除
+    expect(built.currentSessionId).toBe('s1') // 锚不重置——清过滤即恢复可见
+  })
+
+  it('零改写纪律：过滤是纯投影，不触碰输入树（Object.freeze 防突变——SC2 直读同型）', () => {
+    const frozen = Object.freeze(
+      tree.map((n) => ({ ...n, sessions: Object.freeze([...n.sessions]) })),
+    )
+    expect(() => sidebarFilterOf('支付', frozen)).not.toThrow()
+    expect(frozen[0]!.sessions).toHaveLength(2) // 原树原样
   })
 })
