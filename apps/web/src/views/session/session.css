@@ -1,9 +1,12 @@
-/* 会话面板样式（定位：业务——UF-4）——结构基准 = 原型 conv-root（顶部页签 + 三相位 body，
- * data-view 切显隐）；视觉一律官方令牌（令牌唯一：色/字/距零裸值，lint-tokens 机械执行）。
+/* 会话面板样式（定位：业务——UF-4）——结构基准 = 原型 conv-root（顶部 toolbar + 页签 +
+ * 三相位 body，data-view 切显隐）；视觉一律官方令牌（令牌唯一：色/字/距零裸值，lint-tokens
+ * 机械执行）。
  * 官方会话面（chatSurface 注入内容）自带样式（官方件复用——本文件零会话 UI 自绘）：
- * 消息气泡/输入框/滚动容器样式一概归官方 ui-chat/ui-conversation。 */
+ * 消息气泡/输入框/滚动容器样式一概归官方 ui-chat/ui-conversation。
+ * fix-9 顶部 toolbar = 官方 conversation.session.header titleRow 行语言镜像（行刻度官方
+ * 原值 dsw-raw 逐处注记——官方行语言无间距令牌面，形态对齐优先沿 2.7 先例）。 */
 
-/* 面板骨架：页签行 + body（三 pane 叠放，激活占位） */
+/* 面板骨架：toolbar 行 + 页签行 + body（三 pane 叠放，激活占位） */
 .dswf-session-panel {
   display: flex;
   flex-direction: column;
@@ -11,6 +14,94 @@
   min-width: 0;
   min-height: 0;
   background: var(--dsw-alias-bg-base);
+}
+
+/* ── 顶部 toolbar（fix-9：官方 conversation.session.header titleRow 行语言镜像）── */
+
+/* 行骨架：min-height 30 + 内衬 10-28-0-20 = 官方 ConversationRoot.module.css .header/.titleRow
+ * 刻度原值（官方行语言无间距令牌面——dsw-raw 逐处注记，形态对齐优先沿 2.7 先例） */
+.dswf-session-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 30px;
+  padding: 10px 28px 0 20px; /* dsw-raw 官方会话头内衬刻度（ConversationRoot.module.css .header） */
+}
+
+/* WCO 控制钮区避让（fix-4 先例同式，zones.css dock strip 同式）：右栏收起 = 中区直达窗口
+ * 右缘，右衬让出原生控制钮区（fix-2 实测右上 ~136×32）；右栏展开（340px 轨道 > 136px 控制钮
+ * 区）几何已隔离 = 不避让；非 WCO 环境 env 回退 100vw → 衬值归零。角位钮右缘 = 控制钮区左缘
+ * （corner margin-right 取 0——官方 -16px 侵入式角位会破坏避让算术，弃用并在此注记） */
+.dswf-session-toolbar[data-dswf-wco='avoid'] {
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw)); /* dsw-raw WCO 控制钮区避让（env 几何值，非令牌面） */
+}
+
+/* 标题簇（官方 titleCluster 座：flex:1 常渲染保 utilities/corner 右对齐；hero 相位内容让位置空） */
+.dswf-session-toolbar-cluster {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px; /* dsw-raw 官方 titleCluster 刻度 */
+  min-width: 0;
+}
+
+/* lineage（P1 最简：当前会话标题——官方 crumbs 行语言；feature/会话位置面包屑归 M2） */
+.dswf-session-lineage {
+  display: flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 官方 crumbs 刻度 */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 会话标题：官方 crumb current 刻度（max-width 220 截断 + 主色 500） */
+.dswf-session-title {
+  max-width: 220px; /* dsw-raw 官方 crumb 截断刻度 */
+  overflow: hidden;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* actions 槽位保留（P1 空位——官方 headerActions 座） */
+.dswf-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* dsw-raw 官方 headerActions 刻度 */
+}
+
+/* utilities 簇（官方 headerUtilities 座：margin-left 20 + gap 8；hero 相位整簇让位） */
+.dswf-session-utils {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px; /* dsw-raw 官方 headerUtilities 刻度 */
+  margin-left: 20px; /* dsw-raw 官方 headerUtilities 刻度 */
+}
+
+/* corner 座（官方 headerCorner 语义——常驻控制位，blank/hero 相位独存；margin-left 8 =
+ * 官方刻度，margin-right 0 见 WCO 避让注记） */
+.dswf-session-corner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: 8px; /* dsw-raw 官方 headerCorner 刻度 */
+}
+
+/* 图标工具钮方形刻度：官方 sidebar-browser tool（28×28/padding 0）+ ui-sidebar-right
+ * ExpandButton（width 28/padding 0）同族——官方 Button sm 本体高 28 保持 */
+.dswf-session-toolbar .dswf-session-utility,
+.dswf-session-toolbar .dswf-workbench-docktoggle {
+  width: 28px;
+  padding: 0; /* dsw-raw 官方图标工具钮方形刻度 */
+}
+
+/* 面板钮图标镜像：官方 ui-sidebar-right ExpandButton._icon 同式（PanelLeft scaleX(-1) =
+ * 右栏语义；展开/收起同 glyph——官方同钮同式） */
+.dswf-session-panelicon {
+  transform: scaleX(-1);
 }
 
 .dswf-session-tabs {

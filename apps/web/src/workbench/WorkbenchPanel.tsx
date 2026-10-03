@@ -12,7 +12,6 @@
 // 保持空轨；官方会话锚跟随：会话激活（官方新会话/品牌行）→ select-session 回会话视图
 // （UF-5「再次点新会话/会话行/品牌行 → 切回会话视图」的装配侧接缝）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import { useShellView } from '../shell/use-shell-view.js'
 import type { ShellViewState } from '../shell/view-state.js'
@@ -21,12 +20,22 @@ import { openAddProjectFlow } from '../flows/add-project/flow-open.js'
 import { RecallTab } from '../views/session/RecallTab.js'
 import { SessionPanel } from '../views/session/SessionPanel.js'
 import type { SessionTabId } from '../views/session/SessionPanel.js'
+import { SessionToolbar } from '../views/session/SessionToolbar.js'
 import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
 import { KnowledgeView } from '../views/knowledge/KnowledgeView.js'
 import { WorkbenchZones } from '../zones/WorkbenchZones.js'
 import { globalDockTab, type DockTabSet } from '../zones/dock.js'
-import { ChatSurface, ChatSurfaceAbsent, type ChatSurfaceKit, type KitFactorySlotRenderer, type KitSelectorHook } from './ChatSurface.js'
+import {
+  ChatSurface,
+  ChatSurfaceAbsent,
+  chatHeroOf,
+  type ChatSurfaceKit,
+  type KitFactorySlotRenderer,
+  type KitSelectorHook,
+  type SessionStateMirror,
+  type SessionsStateMirror,
+} from './ChatSurface.js'
 import { HeroEmpty } from './HeroEmpty.js'
 import { publishWorkbenchBridge } from './workbench-bridge.js'
 import './workbench.css'
@@ -125,6 +134,32 @@ export function chatKitOf(props: ForgeWorkbenchPanelProps): ChatSurfaceKit | und
   }
 }
 
+/**
+ * 会话 toolbar 官方账本绑定子件（fix-9——kit 观察钩子于本件内无条件调用）：标题直读官方
+ * sessions 账本（byId[sessionId].displayTitle——sidebar-model 会话头同源字段，SC2 零缓存
+ * 零副本：窄选择器投影，不落地行副本）；hero 相位 = chatHeroOf（与 ChatSurface 嵌入配方
+ * 同源推导——toolbar 让位与官方 hero 空会话引导同相位）。导出面 = 单测（SSR 直驱伪 kit）。
+ */
+export function SessionToolbarLive({
+  kit,
+  dockOpen,
+  onToggleDock,
+}: {
+  readonly kit: ChatSurfaceKit
+  readonly dockOpen: boolean
+  readonly onToggleDock: () => void
+}): ReactNode {
+  const openState = kit.useSession((s) => (s as SessionStateMirror | undefined)?.openState) as string | undefined
+  const row =
+    kit.sessionId === undefined
+      ? undefined
+      : (kit.useSessions((s) => (s as SessionsStateMirror | undefined)?.byId?.[kit.sessionId as string]) as
+          | { readonly blank?: boolean; readonly displayTitle?: string }
+          | undefined)
+  const hero = chatHeroOf({ sessionId: kit.sessionId, openState, blank: row?.blank })
+  return <SessionToolbar title={row?.displayTitle} hero={hero} dockOpen={dockOpen} onToggleDock={onToggleDock} />
+}
+
 export interface WorkbenchAssemblyProps {
   /** 壳视图态（zones 容器渲染依据） */
   readonly view: ShellViewState
@@ -132,6 +167,9 @@ export interface WorkbenchAssemblyProps {
   readonly phase: SessionZonePhase
   /** 对话 tab 内容（官方会话面嵌入 / 降级占位） */
   readonly chatSurface: ReactNode
+  /** 会话面板顶部 toolbar（fix-9：SessionToolbar 装配产物——账本绑定/降级两径经
+   * ForgeWorkbenchPanel 组装；session 相位恒在场） */
+  readonly sessionToolbar: ReactNode
   /** 知识视图槽内容（KnowledgeView 装配产物——UF-6 浏览面 + 抽屉，3.8） */
   readonly knowledge: ReactNode
   /** 召回 tab 内容（RecallTab 装配产物——sessionRecall 接线，3.8；缺省占位空态） */
@@ -148,14 +186,15 @@ export interface WorkbenchAssemblyProps {
 
 /**
  * 三区槽位装配（纯渲染——相位注入，SSR 可直测）：session 槽按相位三分（hero / 校平位 /
- * SessionPanel（recall 注入 + onTabChange 上抛）+ dock 角位常显开关——原型 conv-corner
- * 同位），knowledge 槽 = KnowledgeView 注入（常挂载——keep-alive 互换零卸载），rail 槽
- * 不注入（左栏 = 官方 sidebar 壳，路线 A）。
+ * SessionPanel（toolbar 注入 + recall 注入 + onTabChange 上抛）——fix-9 起面板钮随 toolbar
+ * 迁入 SessionPanel corner 座（原角位绝对定位孤钮形态退役）），knowledge 槽 = KnowledgeView
+ * 注入（常挂载——keep-alive 互换零卸载），rail 槽不注入（左栏 = 官方 sidebar 壳，路线 A）。
  */
 export function WorkbenchAssembly({
   view,
   phase,
   chatSurface,
+  sessionToolbar,
   knowledge,
   recall,
   onSessionTab,
@@ -170,15 +209,12 @@ export function WorkbenchAssembly({
       <div className="dswf-workbench-settling" data-dswf-settling="" aria-busy="true" />
     ) : (
       <div className="dswf-workbench-session" data-dswf-session-zone="">
-        <Button
-          variant="toolbar"
-          size="sm"
-          className="dswf-workbench-docktoggle"
-          aria-label={view.rightDock ? '收起右侧栏' : '展开右侧栏'}
-          title={view.rightDock ? '收起右侧栏' : '展开右侧栏'}
-          onClick={onToggleDock}
+        <SessionPanel
+          chatSurface={chatSurface}
+          toolbar={sessionToolbar}
+          recall={recall}
+          onTabChange={onSessionTab}
         />
-        <SessionPanel chatSurface={chatSurface} recall={recall} onTabChange={onSessionTab} />
       </div>
     )
   return (
@@ -259,12 +295,26 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
   // 对话 tab 官方会话面（kit 组装 = chatKitOf 纯函数——任一成员缺席 = 降级占位）
   const chatKit = chatKitOf(props)
 
+  // 会话面板顶部 toolbar（fix-9）：kit 在场 = 账本绑定径（标题直读 + hero 相位同源推导）；
+  // 缺席 = 降级径（无标题空位 + 面板钮实功能保持——非壳载体/单测面）。面板钮收展语义
+  // 不变（dispatch('toggle-right-dock') 同径——原角位钮迁移，e2e .dswf-workbench-docktoggle 锚保持）
+  const toggleDock = useCallback(() => {
+    dispatch({ type: 'toggle-right-dock' })
+  }, [dispatch])
+  const sessionToolbar =
+    chatKit !== undefined ? (
+      <SessionToolbarLive kit={chatKit} dockOpen={view.rightDock} onToggleDock={toggleDock} />
+    ) : (
+      <SessionToolbar dockOpen={view.rightDock} onToggleDock={toggleDock} />
+    )
+
   return (
     <div className="dswf-workbench" data-dswf-workbench="" data-dswf-phase={phase}>
       <WorkbenchAssembly
         view={view}
         phase={phase}
         chatSurface={chatKit !== undefined ? <ChatSurface kit={chatKit} /> : <ChatSurfaceAbsent />}
+        sessionToolbar={sessionToolbar}
         knowledge={
           <KnowledgeView
             projectId={projectId}
@@ -283,9 +333,7 @@ export function ForgeWorkbenchPanel(props: ForgeWorkbenchPanelProps): ReactNode 
         }
         onSessionTab={setActiveSessionTab}
         dockTabs={M0_DOCK_TABS}
-        onToggleDock={() => {
-          dispatch({ type: 'toggle-right-dock' })
-        }}
+        onToggleDock={toggleDock}
         onAddProject={() => {
           openAddProjectFlow()
         }}

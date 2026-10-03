@@ -783,7 +783,7 @@
       "title": "Fix: 中区会话面板顶部 toolbar 缺失——对齐 dsh 布局（官方 conversation.session.header 槽位 + 原型 conv-header 标题行）",
       "priority": "P1",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-9.md",
       "record": "records/fix-9.md",
       "surface-type": "web",

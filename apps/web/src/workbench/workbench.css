@@ -1,6 +1,8 @@
 /* 工作台装配样式（定位：装配）。
  * 容器刻度 = 官方 ConversationRoot root 同型（背景/列向/100% 高——占用同一洞位的等价几何）；
- * hero / 校平位 / dock 角钮 = 产品自绘（官方无对应件），令牌唯一 + 原型结构刻度（dsw-raw 注明）。 */
+ * hero / 校平位 = 产品自绘（官方无对应件），令牌唯一 + 原型结构刻度（dsw-raw 注明）。
+ * fix-9：会话面板顶部 toolbar（含面板钮）归 views/session/session.css（官方 session.header
+ * 行语言镜像）；本文件零 toolbar 样式。 */
 
 /* 装配根：占满 main.conversation 洞位（官方 ConversationRoot 同型几何） */
 .dswf-workbench {
@@ -17,21 +19,14 @@
   flex: 1;
 }
 
-/* 会话区包装：dock 角位常显开关（原型 conv-corner 同位——会话视图右上角） */
+/* 会话区包装：SessionPanel 占位（fix-9 起面板钮随 toolbar 迁入面板 corner 座——
+ * .dswf-workbench-docktoggle 角位绝对定位形态退役，锚类名随迁保持（e2e L59/L689）） */
 .dswf-workbench-session {
-  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
-}
-
-.dswf-workbench-docktoggle {
-  position: absolute;
-  top: 4px; /* dsw-raw 原型角位刻度 */
-  right: 8px; /* dsw-raw 原型角位刻度 */
-  z-index: 1;
 }
 
 /* UF-2 hero 相位：中区居中引导（价值一句话 + CTA；原型 hero 居中栈同构） */

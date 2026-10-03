@@ -1,4 +1,5 @@
-// 会话面板（定位：业务——UF-4 中区会话面板：顶部三页签 + 三 tab keep-alive 容器）。
+// 会话面板（定位：业务——UF-4 中区会话面板：顶部 toolbar（fix-9 官方 session.header 行语言
+// 官方件组合——SessionToolbar 经装配注入）+ 三页签 + 三 tab keep-alive 容器）。
 // Hard Rule 官方件复用优先：对话面 = 注入面（chatSurface——官方 ui-chat/ui-conversation 会话面
 // 经装配（2.12）产出，S2 嵌入配方 = conversation.content 工厂（含转录与输入）+ conversation.session
 // owner view='chat'；草稿/滚动位置状态由官方面自持，本面板零自绘会话 UI）；页签条 = 官方
@@ -28,6 +29,9 @@ export const SESSION_TABS: readonly { readonly id: SessionTabId; readonly label:
 export interface SessionPanelProps {
   /** 对话 tab 内容：官方会话面（转录 + 输入）经装配注入——2.12 按 S2 嵌入配方接线 */
   readonly chatSurface: ReactNode
+  /** 顶部 toolbar（fix-9 装配注入：官方 session.header 行语言官方件组合——标题/hero 相位/
+   * 面板钮经 SessionToolbar 组装；缺省 = 无 toolbar 行，非壳载体最简面） */
+  readonly toolbar?: ReactNode
   /** 转录条目切片（轨迹 tab 台账数据源；装配自官方 ChatSnapshot 映射，映射表见 README） */
   readonly transcript?: readonly TranscriptEntry[]
   /** 召回 tab 内容（缺省 = 占位空态「本会话暂无召回」；3.8 接线分组行列表） */
@@ -38,9 +42,10 @@ export interface SessionPanelProps {
   readonly onTabChange?: (tab: SessionTabId) => void
 }
 
-/** 会话面板（三 tab keep-alive 容器；状态保留 = 切换仅动 hidden，pane 常挂载不卸载） */
+/** 会话面板（顶部 toolbar 注入位 + 三 tab keep-alive 容器；状态保留 = 切换仅动 hidden，pane 常挂载不卸载） */
 export function SessionPanel({
   chatSurface,
+  toolbar,
   transcript = [],
   recall,
   defaultTab = 'chat',
@@ -61,6 +66,7 @@ export function SessionPanel({
   )
   return (
     <section className="dswf-session-panel" aria-label="会话面板">
+      {toolbar}
       <div className="dswf-session-tabs">
         <SegmentedTabs
           label="会话视图"

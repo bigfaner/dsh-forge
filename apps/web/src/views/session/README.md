@@ -1,13 +1,14 @@
 # views/session/
 
-定位：**业务** —— UF-4 会话面板三 tab 组装（对话注入面 / 轨迹最简台账 / 召回数据面）。填充：2.11 + 3.8（召回 tab 接线）。
+定位：**业务** —— UF-4 会话面板组装（顶部 toolbar + 三 tab：对话注入面 / 轨迹最简台账 / 召回数据面）。填充：2.11 + 3.8（召回 tab 接线）+ fix-9（顶部 toolbar——dsh 布局对齐）。
 边界：禁 import `../knowledge/`（依赖铁律③ 同级业务互禁——跨视图经 `zones/` 槽位与 `rpc/` 解耦；召回行跳转抽屉经装配态，`onOpenEntry` 回调由 workbench 注入）。
 
 ## 组成
 
 | 文件 | 职责 |
 |---|---|
-| `SessionPanel.tsx` | 面板组装：顶部三页签（官方 SegmentedTabs）+ 三 tab keep-alive 容器（切换仅 hidden 不卸载——AC-4 草稿/滚动保持机制）；`recall` 注入位（3.8 = 装配产物 RecallTab） |
+| `SessionPanel.tsx` | 面板组装：顶部 toolbar 注入位（fix-9）+ 三页签（官方 SegmentedTabs）+ 三 tab keep-alive 容器（切换仅 hidden 不卸载——AC-4 草稿/滚动保持机制）；`recall` 注入位（3.8 = 装配产物 RecallTab） |
+| `SessionToolbar.tsx` | 顶部 toolbar（fix-9）：官方 `conversation.session.header` titleRow 行语言官方件组合（Button toolbar/sm + 官方图标）——lineage 当前会话标题 / actions 空位保留 / utilities 编辑器打开占位钮 / corner 面板钮（原 dock 角位绝对定位钮迁入归位）；hero 相位标题簇与 utilities 让位、corner 独存（官方 blank 相位同语义）；WCO 避让标记随右栏收展 |
 | `RecallTab.tsx` | 召回 tab 数据面（3.8）：`useSessionRecall` 装载（sessionRecall 单通道；visible 翻转重拉 = AC-4 即时累积）+ `RecallTabBody` 纯渲染（统计头/分组行/失效标注/空态/错误条）+ `mapRecallError`/`fetchSessionRecall` 纯异步面 |
 | `recall-model.ts` | 纯派生层：`recallStatsOf`（统计头口径——次数 = 分组数/覆盖 = 身份键去重，与 core hitIdentity 同口径）+ `recallRowsOf`（按知识折叠行——动词明细/最近时间/事件计数/热度原样）+ `recallTimeLabel`（官方 relativeTime 桶化——同级互禁下的平行小件，与 cardTimeLabel 口径互指） |
 | `TrajectoryLedger.tsx` | 轨迹 tab 最简台账（时序列表 + 四类行组件：消息/工具/事件/错误） |
@@ -16,6 +17,14 @@
 
 ## 数据契约（props 进出，运行期绑定归装配 2.12）
 
+- **顶部 toolbar**（fix-9）：`toolbar: ReactNode` 注入位——装配产物 `SessionToolbar`（workbench/
+  `SessionToolbarLive` 官方账本绑定：标题 = `sessions.byId[id].displayTitle` 直读（SC2 零缓存，
+  sidebar-model 会话头同源字段）、hero 相位 = `chatHeroOf`（与 ChatSurface 嵌入配方同源推导）；
+  kit 缺席 = 降级径无标题空位 + 面板钮实功能保持）。装配路径裁决：embedded 配方不透出 header
+  槽位（upstream `ConversationContent` 仅渲染 body/composer——header 链归被产品影子替换的官方
+  `main.conversation` 占用者；且官方 `ConversationSessionHeader` 自带 tabs 行会与本面板三页签
+  叠加成平行页签行）→ 取「官方件组合在 SessionPanel 内组装」（fix-9 两路径裁决，注记见
+  `SessionToolbar.tsx` 头）。
 - **对话 tab**：`chatSurface: ReactNode` 注入位——官方会话面（转录+输入）经装配以 S2 嵌入配方产出：
   `conversation.content` 工厂（variant=embedded）+ `conversation.session` owner `view:'chat'`
   （上游 ui-subagent sidebar-chat 同型先例）；草稿/滚动状态由官方面自持（ConversationStoreState.draft

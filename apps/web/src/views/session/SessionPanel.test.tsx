@@ -60,6 +60,14 @@ describe('SessionPanel 三 tab 容器（UF-4）', () => {
     expect(markup).toContain('<b data-t="chat"></b>')
   })
 
+  it('fix-9 toolbar 注入位：toolbar 内容渲染于页签行之上（缺省 = 无 toolbar 行，非壳载体最简面）', () => {
+    const withToolbar = render({ toolbar: <i data-t="toolbar" /> })
+    expect(withToolbar).toContain('<i data-t="toolbar"></i>')
+    expect(withToolbar.indexOf('data-t="toolbar"')).toBeLessThan(withToolbar.indexOf('dswf-session-tabs'))
+    // 缺省面：无 toolbar 行——三页签形态与既有断言面零变化（Hard Rule 未点名元素保持不变）
+    expect(render()).not.toContain('data-t="toolbar"')
+  })
+
   it('AC-2/AC-3 轨迹台账：转录条目按 seq 时序全量成行（消息/工具/事件/错误四类行齐备）', () => {
     const markup = render()
     expect(markup).toContain('role="list"')

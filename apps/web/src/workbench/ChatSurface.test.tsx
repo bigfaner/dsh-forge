@@ -4,7 +4,16 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { ChatSurface, ChatSurfaceAbsent, type ChatSurfaceKit, type KitSelectorHook } from './ChatSurface.js'
+import { ChatSurface, ChatSurfaceAbsent, chatHeroOf, type ChatSurfaceKit, type KitSelectorHook } from './ChatSurface.js'
+
+describe('chatHeroOf 相位推导纯函数（fix-9 起 ChatSurface 与 SessionToolbarLive 共用面）', () => {
+  it('hero = 无选中会话，或 openState=open 且 blank；其余（loading/有内容）= 非 hero', () => {
+    expect(chatHeroOf({ sessionId: undefined, openState: undefined, blank: undefined })).toBe(true)
+    expect(chatHeroOf({ sessionId: 's-1', openState: 'open', blank: true })).toBe(true)
+    expect(chatHeroOf({ sessionId: 's-1', openState: 'open', blank: false })).toBe(false)
+    expect(chatHeroOf({ sessionId: 's-1', openState: 'loading', blank: true })).toBe(false)
+  })
+})
 
 /** 伪观察钩子（快照选择器契约：selector(state) → 投影值） */
 const hookOver = <T,>(state: T): KitSelectorHook => (selector) => selector(state as never)

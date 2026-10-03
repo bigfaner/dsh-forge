@@ -3,6 +3,7 @@
 // 会话锚跟随 / 项目数拉取）经纯发布函数与相位机语义覆盖，实机行为归 e2e（workbench-sc1.spec）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import { createShellViewState, dispatchShellView, type ShellViewState } from '../shell/view-state.js'
 import type { ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
@@ -12,13 +13,34 @@ import {
   ForgeWorkbenchPanel,
   nextLastReadyCount,
   projectAnchorOf,
+  SessionToolbarLive,
   sessionAnchorEvent,
   sessionZonePhase,
   WorkbenchAssembly,
   WorkspacesAnchor,
   type SessionZonePhase,
 } from './WorkbenchPanel.js'
+import type { ChatSurfaceKit, KitSelectorHook } from './ChatSurface.js'
 import { publishWorkbenchBridge, type DshForgeWorkbenchGlobal } from './workbench-bridge.js'
+
+/** 伪官方账本 kit（快照选择器契约：selector(state) → 投影值；byId 行携带 displayTitle——fix-9 标题直读面） */
+const liveKit = (over: {
+  readonly sessionId?: string | undefined
+  readonly openState?: string
+  readonly blank?: boolean
+  readonly displayTitle?: string
+}): ChatSurfaceKit => {
+  const sessionId = 'sessionId' in over ? over.sessionId : 's-1'
+  const sessionState = { openState: over.openState ?? 'open' }
+  const sessionsState = { byId: sessionId === undefined ? {} : { [sessionId]: { blank: over.blank ?? false, displayTitle: over.displayTitle ?? '会话标题' } } }
+  const hookOver = <T,>(state: T): KitSelectorHook => (selector) => selector(state as never)
+  return {
+    sessionId,
+    useSession: hookOver(sessionState),
+    useSessions: hookOver(sessionsState),
+    renderFactorySlot: () => null,
+  }
+}
 
 const view = (over: Partial<ShellViewState> = {}): ShellViewState => ({
   ...createShellViewState(),
@@ -52,6 +74,7 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
         view={view()}
         phase={phase}
         chatSurface={<b data-t="chat" />}
+        sessionToolbar={<i data-t="toolbar" />}
         knowledge={<b data-t="knowledge" />}
         dockTabs={dockTabs}
         onToggleDock={() => {}}
@@ -66,14 +89,14 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
     expect(markup).toContain('data-dswf-cta="add-project"')
     expect(markup).not.toContain('dswf-session-panel')
   })
-  it('session 相位：SessionPanel 入槽（三 tab + chatSurface 注入）+ dock 角位常显开关', () => {
+  it('session 相位：SessionPanel 入槽（toolbar + 三 tab + chatSurface 注入）', () => {
     const markup = render('session')
     expect(markup).toContain('dswf-session-panel')
+    expect(markup).toContain('data-t="toolbar"') // fix-9：toolbar 经装配注入（SessionPanel 顶部）
     expect(markup).toContain('data-t="chat"')
     expect(markup).toContain('对话')
     expect(markup).toContain('轨迹')
     expect(markup).toContain('知识召回')
-    expect(markup).toContain('aria-label="展开右侧栏"')
     expect(markup).not.toContain('data-dswf-hero')
   })
   it('session 相位：召回 tab 注入位落在召回 pane（3.8 装配产物）', () => {
@@ -91,9 +114,16 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
       expect(render(phase)).toContain('data-t="knowledge"')
     }
   })
-  it('dock 相位跟随视图态（收起角钮 ↔ 展开角钮文案）', () => {
-    const collapsed = render('session', { view: view({ rightDock: false }) })
-    const expanded = render('session', { view: view({ rightDock: true }) })
+  it('dock 相位跟随视图态（toolbar 面板钮文案：收起 ↔ 展开）——fix-9 面板钮随 toolbar 迁入', () => {
+    const toolbar = (dockOpen: boolean): ReactNode => (
+      <SessionToolbarLive
+        kit={liveKit({ sessionId: 's-1', openState: 'open', blank: false, displayTitle: '部署走查' })}
+        dockOpen={dockOpen}
+        onToggleDock={() => {}}
+      />
+    )
+    const collapsed = render('session', { view: view({ rightDock: false }), sessionToolbar: toolbar(false) })
+    const expanded = render('session', { view: view({ rightDock: true }), sessionToolbar: toolbar(true) })
     expect(collapsed).toContain('aria-label="展开右侧栏"')
     expect(expanded).toContain('aria-label="收起右侧栏"')
   })
@@ -200,6 +230,32 @@ describe('chatKitOf 官方会话面 kit 组装（缺席降级判据）', () => {
       renderFactorySlot: factory,
     })
     expect(full).toMatchObject({ sessionId: 's-1' })
+  })
+})
+
+describe('SessionToolbarLive 官方账本绑定（fix-9：标题直读 + hero 相位同源推导）', () => {
+  const renderLive = (kit: ChatSurfaceKit, dockOpen = false): string =>
+    renderToStaticMarkup(<SessionToolbarLive kit={kit} dockOpen={dockOpen} onToggleDock={() => {}} />)
+
+  it('标题 = 官方 sessions 账本 displayTitle 直读（SC2 零缓存——byId 行同源字段）', () => {
+    const markup = renderLive(liveKit({ sessionId: 's-1', displayTitle: '部署脚本走查' }))
+    expect(markup).toContain('data-dswf-session-title')
+    expect(markup).toContain('部署脚本走查')
+  })
+  it('无选中会话 = 标题空位（不猜标题）+ hero 相位让位（面板钮独存）', () => {
+    const markup = renderLive(liveKit({ sessionId: undefined }))
+    expect(markup).toContain('data-dswf-toolbar-hero')
+    expect(markup).not.toContain('data-dswf-session-title')
+    expect(markup).toContain('data-dswf-utility="panel-toggle"')
+  })
+  it('空白会话（openState=open + blank）→ hero 让位；有内容会话 → 完整 toolbar（与 ChatSurface 嵌入配方同相位）', () => {
+    const blank = renderLive(liveKit({ sessionId: 's-1', openState: 'open', blank: true, displayTitle: '新会话' }))
+    expect(blank).toContain('data-dswf-toolbar-hero')
+    expect(blank).not.toContain('data-dswf-session-title')
+    const active = renderLive(liveKit({ sessionId: 's-1', openState: 'open', blank: false, displayTitle: '进行中' }))
+    expect(active).not.toContain('data-dswf-toolbar-hero')
+    expect(active).toContain('data-dswf-session-title')
+    expect(active).toContain('进行中')
   })
 })
 

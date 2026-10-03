@@ -31,14 +31,27 @@ export interface ChatSurfaceKit {
   readonly renderFactorySlot: KitFactorySlotRenderer
 }
 
-/** 会话账本窄形状（上游 SessionListState.byId 消费切片——blank 查询用） */
-interface SessionsStateMirror {
-  readonly byId?: Readonly<Record<string, { readonly blank?: boolean }>>
+/** 会话账本窄形状（上游 SessionListState.byId 消费切片——blank/displayTitle 查询用） */
+export interface SessionsStateMirror {
+  readonly byId?: Readonly<Record<string, { readonly blank?: boolean; readonly displayTitle?: string }>>
 }
 
 /** 会话行窄形状（上游 Session 消费切片——openState 相位用） */
-interface SessionStateMirror {
+export interface SessionStateMirror {
   readonly openState?: string
+}
+
+/**
+ * 官方会话面相位推导（纯函数，fix-9 起 ChatSurface 与 SessionToolbarLive 共用）：
+ * hero = 无选中会话，或会话已打开且仍空白（官方 hero 相位承载空会话引导——UF-4 States 委托；
+ * 官方 ConversationMainPanel 消费切片的最简面）。
+ */
+export function chatHeroOf(input: {
+  readonly sessionId: string | undefined
+  readonly openState: string | undefined
+  readonly blank: boolean | undefined
+}): boolean {
+  return input.sessionId === undefined || (input.openState === 'open' && input.blank === true)
 }
 
 /** 工厂视图选择件（固定 chat 视图——upstream FixedChatConversationView 同型） */
@@ -70,7 +83,7 @@ export function ChatSurface({ kit }: { readonly kit: ChatSurfaceKit }): ReactNod
       : (kit.useSessions((s) => (s as SessionsStateMirror | undefined)?.byId?.[sessionId]?.blank) as
           | boolean
           | undefined)
-  const hero = sessionId === undefined || (session?.openState === 'open' && blank === true)
+  const hero = chatHeroOf({ sessionId, openState: session?.openState, blank })
   return kit.renderFactorySlot(
     'conversation.content',
     { variant: 'embedded', phase: hero ? 'hero' : 'active', hero },
