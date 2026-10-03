@@ -2,8 +2,11 @@
 // 反馈）属 2.10 组装，本件只产 RegisterProjectInput 回调，不接 RPC）。
 // 数据进（values/issues/派生行）回调出（edit/repick/browse/submit）的纯渲染面
 // RegisterFormView + 持表单状态（值 + touched 手改标记 + 浏览改选相位）的装配壳
-// RegisterForm。「浏览…」/「重新选择」改选 = 内嵌 2.8 DirectoryBrowser 复用
-// （startDir = 当前值 + confirmLabel =「选择此文件夹」参数化——BrowsePanel 槽位承载）。
+// RegisterForm。「浏览…」/「重新选择」改选：桥缺席 = 内嵌 2.8 DirectoryBrowser 复用
+// （startDir = 当前值 + confirmLabel =「选择此文件夹」参数化——BrowsePanel 槽位承载）；
+// fix-14 桥在场 = 三 target 同桥直选系统 OS 目录对话框（nativeBrowseAction——BrowsePanel
+// 回退面不变）。工作区行已注册提示 = pick 时浏览器「已注册」标记的表单相位口径迁移
+// （走查裁决：系统对话框无法行级标记 → 挂接语义在表单呈现；回退浏览器标记保留）。
 // 联动语义（换选工作区：未手改重构 / 手改·浏览选定保留）与派生（扁平化任务清单 / 仓内外）
 // 在 form-model 纯函数，浏览相位/落值转移在 form-actions（setState 注入面——单测覆盖）；
 // Hard Rules：仅采集与校验，零注册调用零补偿。
@@ -13,8 +16,9 @@ import { StateChip } from '../../components/index.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
-import type { DirSource } from './dir-source.js'
-import { formActions } from './form-actions.js'
+import { directoryPickerBridgeOf, type NativePickSource } from './dir-picker.js'
+import { rpcDirSource, type DirSource } from './dir-source.js'
+import { formActions, nativeBrowseAction } from './form-actions.js'
 import {
   DEFAULT_DSH_FORGE_HOME,
   deriveTaskStoreDir,
@@ -59,6 +63,12 @@ export interface RegisterFormViewProps {
   readonly taskStoreDir: string
   /** 仓内/仓外推导结果（true = 仓外；随 forge 目录即时更新） */
   readonly forgeDirExternal: boolean
+  /** 工作区目录已注册（fix-14 表单相位挂接提示——pick 时浏览器标记的口径迁移） */
+  readonly workspaceRegistered?: boolean
+  /** 原生改选在途（系统对话框打开中——三改选钮禁用防双开） */
+  readonly browseBusy?: boolean
+  /** 原生改选失败文案（错误面呈现；null = 无） */
+  readonly nativePickError?: string | null
   /** 直输改字段（值更新 + touched 置位） */
   readonly onEdit?: (field: EditableField, value: string) => void
   /** 「重新选择」重开浏览器换工作区（联动 = relinkWorkspace） */
@@ -84,6 +94,9 @@ export function RegisterFormView({
   issues,
   taskStoreDir,
   forgeDirExternal,
+  workspaceRegistered = false,
+  browseBusy = false,
+  nativePickError = null,
   onEdit,
   onRepick,
   onBrowse,
@@ -104,9 +117,14 @@ export function RegisterFormView({
   return (
     <div className="dswf-rf" data-dswf-rf="form">
       <div className="dswf-rf-row">
-        <label className="dswf-rf-label" htmlFor="dswf-rf-ws">
-          工作区目录（文件浏览器选定）
-        </label>
+        <div className="dswf-rf-labelrow">
+          <label className="dswf-rf-label" htmlFor="dswf-rf-ws">
+            工作区目录（文件浏览器选定）
+          </label>
+          {workspaceRegistered ? (
+            <StateChip status="已注册" className="dswf-rf-wsreg" />
+          ) : null}
+        </div>
         <div className="dswf-rf-line">
           <input
             id="dswf-rf-ws"
@@ -122,11 +140,17 @@ export function RegisterFormView({
             size="sm"
             className="dswf-rf-sidebtn"
             title="重开文件浏览器换选工作区（未手改字段随新工作区重构）"
+            disabled={browseBusy}
             onClick={onRepick}
           >
             重新选择
           </Button>
         </div>
+        {workspaceRegistered ? (
+          <p className="dswf-rf-hint" data-dswf-rf-registered>
+            该目录已注册——「确认」后挂接既有工作区（不重复登记）。
+          </p>
+        ) : null}
       </div>
 
       <div className="dswf-rf-row">
@@ -170,6 +194,7 @@ export function RegisterFormView({
             size="sm"
             className="dswf-rf-sidebtn"
             title="经文件浏览器选择目录"
+            disabled={browseBusy}
             onClick={onBrowse === undefined ? undefined : () => { onBrowse('forgeDir') }}
           >
             浏览…
@@ -197,6 +222,7 @@ export function RegisterFormView({
             size="sm"
             className="dswf-rf-sidebtn"
             title="经文件浏览器选择目录"
+            disabled={browseBusy}
             onClick={onBrowse === undefined ? undefined : () => { onBrowse('knowledgeDir') }}
           >
             浏览…
@@ -205,6 +231,12 @@ export function RegisterFormView({
         <p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.knowledge；可直接输入或浏览改选仓外目录</p>
         {knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : null}
       </div>
+
+      {nativePickError === null ? null : (
+        <p className="dswf-rf-issue" role="alert" data-dswf-rf-np-error>
+          目录选择失败：{nativePickError}
+        </p>
+      )}
 
       <div className="dswf-rf-row">
         <label className="dswf-rf-label" htmlFor="dswf-rf-tasks">
@@ -269,8 +301,11 @@ export interface RegisterFormProps {
   readonly selection: BrowserSelection
   /** 浏览改选数据源（缺省 = RPC 真身 forge:fs/listDir；注入 = 测试/桩面） */
   readonly source?: DirSource
-  /** 已注册路径集合（重新选择工作区时的行级标记；缺省 = 空集） */
+  /** 已注册路径集合（重新选择工作区时的行级标记 + 表单相位挂接提示；缺省 = 空集） */
   readonly registeredPaths?: ReadonlySet<string>
+  /** 原生选取源（fix-14：缺省 = globalThis.__DSH_DIRECTORY_PICKER__ 桥探测；注入 = 测试桩；
+   * null 注入 = 强制 BrowsePanel 回退面） */
+  readonly nativePicker?: NativePickSource | null
   /** 任务清单派生前缀（缺省 = 展示口径 ~/*.dsh-forge；2.10/配置面可注入真实 home） */
   readonly dshForgeHome?: string
   /** 「确认」采集载荷上抛（执行链 registerProject 归 2.10 接线——Hard Rules） */
@@ -279,21 +314,46 @@ export interface RegisterFormProps {
 
 /**
  * 注册表单本体（值 + touched + 浏览相位状态壳）。换选工作区两条路径同径联动：
- * 内「重新选择」（浏览面板确认）与外部 selection.path 变更（2.10 返回上一步重选）均走
- * relinkWorkspace——未手改字段随新工作区重构、手改或浏览选定过的保留（AC4）。
+ * 内「重新选择」（浏览面板/原生直选确认）与外部 selection.path 变更（2.10 返回上一步
+ * 重选）均走 relinkWorkspace——未手改字段随新工作区重构、手改或浏览选定过的保留（AC4）。
+ * fix-14：桥在场 = 三改选 target 直选系统 OS 目录对话框（nativeBrowseAction——BrowsePanel
+ * 不出场）；桥缺席 = BrowsePanel 内嵌浏览器回退面（形态零变化）。
  */
 export function RegisterForm({
   selection,
   source,
   registeredPaths = EMPTY_REGISTERED,
+  nativePicker,
   dshForgeHome = DEFAULT_DSH_FORGE_HOME,
   onSubmit,
 }: RegisterFormProps): ReactNode {
   const [form, setForm] = useState<FormState>(() => initialFormState(selection))
   const [browsing, setBrowsing] = useState<BrowseTarget | null>(null)
+  const [nativeBusy, setNativeBusy] = useState(false)
+  const [nativeError, setNativeError] = useState<string | null>(null)
 
   // 转移逻辑 = form-actions 注入 setState 面（联动/浏览相位语义见该模块单测）
   const actions = useMemo(() => formActions({ setForm, setBrowsing }), [])
+  const effectiveSource = useMemo<DirSource>(() => source ?? rpcDirSource(), [source])
+  // 原生选取源解析：注入桩 > 桥探测（undefined = 探测；null = 强制回退 BrowsePanel）
+  const effectiveNativePick = useMemo<NativePickSource | null>(() => {
+    if (nativePicker !== undefined) return nativePicker
+    const bridge = directoryPickerBridgeOf()
+    return bridge === undefined ? null : () => bridge.pick()
+  }, [nativePicker])
+  const nativeBrowse = useMemo(
+    () =>
+      effectiveNativePick === null
+        ? null
+        : nativeBrowseAction({
+            pick: effectiveNativePick,
+            dirSource: effectiveSource,
+            applyPick: actions.applyPick,
+            onBusy: setNativeBusy,
+            onError: setNativeError,
+          }),
+    [effectiveNativePick, effectiveSource, actions],
+  )
 
   // 外部换选（2.10 返回上一步重选工作区）：路径变更才落位（mount 同径 = no-op）
   useEffect(() => {
@@ -302,12 +362,30 @@ export function RegisterForm({
 
   const issues = validateFormValues(form.values)
 
+  if (nativeBrowse !== null) {
+    return (
+      <RegisterFormView
+        values={form.values}
+        issues={issues}
+        taskStoreDir={deriveTaskStoreDir(dshForgeHome, form.values.workspaceDir)}
+        forgeDirExternal={isForgeDirExternal(form.values.workspaceDir, form.values.forgeDir)}
+        workspaceRegistered={registeredPaths.has(form.values.workspaceDir)}
+        browseBusy={nativeBusy}
+        nativePickError={nativeError}
+        onEdit={actions.edit}
+        onRepick={() => { nativeBrowse('workspace') }}
+        onBrowse={(target) => { nativeBrowse(target) }}
+        onSubmit={issues.length > 0 ? undefined : () => { onSubmit?.(toRegisterInput(form.values)) }}
+      />
+    )
+  }
+
   if (browsing !== null) {
     const startDir = browsing === 'workspace' ? form.values.workspaceDir : form.values[browsing]
     return (
       <BrowsePanel target={browsing} onBack={actions.cancelBrowse}>
         <DirectoryBrowser
-          source={source}
+          source={effectiveSource}
           startDir={startDir}
           registeredPaths={browsing === 'workspace' ? registeredPaths : EMPTY_REGISTERED}
           confirmLabel="选择此文件夹"
@@ -324,6 +402,7 @@ export function RegisterForm({
       issues={issues}
       taskStoreDir={deriveTaskStoreDir(dshForgeHome, form.values.workspaceDir)}
       forgeDirExternal={isForgeDirExternal(form.values.workspaceDir, form.values.forgeDir)}
+      workspaceRegistered={registeredPaths.has(form.values.workspaceDir)}
       onEdit={actions.edit}
       onRepick={actions.repick}
       onBrowse={actions.browse}

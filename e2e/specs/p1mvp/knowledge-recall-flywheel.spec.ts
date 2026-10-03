@@ -97,6 +97,7 @@ async function launchHost(userData: string, overlay?: string): Promise<Launched>
       ...(overlay === undefined ? {} : { DSH_FORGE_PATCH_FILES: overlay }),
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19890 + (process.pid % 200)),
+      DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
     } as Record<string, string>,
   })
   const page = await app.firstWindow()

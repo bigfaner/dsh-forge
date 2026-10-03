@@ -365,6 +365,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     DSH_FORGE_PATCH_FILES: dogfoodOverlay,
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19710 + (process.pid % 200)),
+    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
   })
   const pageErrors: string[] = []
   try {

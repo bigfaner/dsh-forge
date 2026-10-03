@@ -354,6 +354,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     DSH_FORGE_DEV_PROFILE: 'dev',
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19630 + (process.pid % 200)),
+    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
   })
   const pageErrors: string[] = []
   try {
@@ -557,6 +558,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     DSH_FORGE_DEV_PROFILE: 'dev',
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19650 + (process.pid % 200)),
+    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
   })
   try {
     const page: Page = await app.firstWindow()

@@ -82,6 +82,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* ── 工作区已注册 chip（fix-14：pick 时浏览器行级标记的表单相位口径迁移——挂接提示） ── */
+.dswf-rf-wsreg {
+  flex: none;
+}
+
 /* 字段错误行（AC5 拦截呈现——不出表单） */
 .dswf-rf-issue {
   margin: 0;

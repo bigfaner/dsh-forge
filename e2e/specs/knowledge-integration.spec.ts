@@ -159,6 +159,7 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
     DSH_FORGE_DEV_PROFILE: 'dev',
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19670 + (process.pid % 200)),
+    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
   })
   const pageErrors: string[] = []
   try {
@@ -223,6 +224,7 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     DSH_FORGE_DEV_PROFILE: 'dev',
     DSH_FORGE_USER_DATA: userData,
     DSH_FORGE_PORT: String(19690 + (process.pid % 200)),
+    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
   })
   try {
     const page: Page = await app.firstWindow()

@@ -9,8 +9,11 @@ import type { ErrorCode, RegisterProjectInput, RegisterResult } from '@dsh-forge
 import { RpcClientError } from '../../rpc/index.js'
 import type { BrowserSelection } from './browser-model.js'
 
-/** 流程相位（两段浏览器 ⇄ 表单 + 三个流程终局相位；repick = 表单态返回上一步重选） */
-export type FlowPhase = 'browser' | 'form' | 'repick' | 'executing' | 'success' | 'failure'
+/**
+ * 流程相位（两段浏览器 ⇄ 表单 + 三个流程终局相位；repick = 表单态返回上一步重选；
+ * native-pick = fix-14 段一原生选取在途态——系统对话框打开中，防双击双开 + 迟到结果守卫基准）。
+ */
+export type FlowPhase = 'browser' | 'native-pick' | 'form' | 'repick' | 'executing' | 'success' | 'failure'
 
 /** 失败信息（typed error 归一——code null = 非 typed 错误；compensated = ④ 补偿已执行） */
 export interface FlowFailure {
@@ -20,7 +23,7 @@ export interface FlowFailure {
   readonly compensated: boolean
 }
 
-/** 流程状态（零隐藏态：相位 + 段一选定 + 确认载荷 + 执行结果/失败） */
+/** 流程状态（零隐藏态：相位 + 段一选定 + 确认载荷 + 执行结果/失败 + 原生选取错误） */
 export interface FlowState {
   readonly phase: FlowPhase
   /** 段一选定（form/repick 相位非空；repick 保持 = 段一起始目录锚 + 表单挂载判据） */
@@ -29,16 +32,38 @@ export interface FlowState {
   readonly input: RegisterProjectInput | null
   readonly result: RegisterResult | null
   readonly failure: FlowFailure | null
+  /** 原生选取错误（fix-14：pick/对账失败回落起源相位时的呈现文案；起步清零） */
+  readonly nativePickError: string | null
 }
 
 /** 初始态（流程打开 = 段一浏览器起步） */
 export function initialFlowState(): FlowState {
-  return { phase: 'browser', selection: null, input: null, result: null, failure: null }
+  return { phase: 'browser', selection: null, input: null, result: null, failure: null, nativePickError: null }
 }
 
-/** 段一确认 → 表单态（初始进入与返回上一步重选同径：selection 替换 → 联动判据） */
+/** 段一确认 → 表单态（初始进入/返回上一步重选/原生选取三径同归：selection 替换 → 联动判据） */
 export function selectDirectory(state: FlowState, selection: BrowserSelection): FlowState {
-  return { ...state, phase: 'form', selection }
+  return { ...state, phase: 'form', selection, nativePickError: null }
+}
+
+/**
+ * 段一原生选取起步（browser/repick → native-pick，fix-14）：在途态防双击双开系统对话框
+ * （双发第二击 null 拦截）；错误清零（每次尝试全新错误面）。桥在场相位由装配判定，
+ * 相位机不感知桥——单测直测转移。
+ */
+export function beginNativePick(state: FlowState): FlowState | null {
+  if (state.phase !== 'browser' && state.phase !== 'repick') return null
+  return { ...state, phase: 'native-pick', nativePickError: null }
+}
+
+/**
+ * 原生选取收场（native-pick → 起源相位）：取消/失败回落零副作用（selection 保持——
+ * repick 起源的表单挂载不丢）；返回相位推导 = selection 非空 ⇔ repick 起源（form 曾挂载）。
+ * error 非空 = pick/对账失败文案（呈现面）；非 native-pick 相位 null（迟到结果守卫的转移半边）。
+ */
+export function endNativePick(state: FlowState, error?: string): FlowState | null {
+  if (state.phase !== 'native-pick') return null
+  return { ...state, phase: state.selection !== null ? 'repick' : 'browser', nativePickError: error ?? null }
 }
 
 /** 返回上一步（form → repick：selection 保留——表单保持挂载 + 段一起始目录锚）；非 form no-op */
@@ -65,9 +90,10 @@ export function failExecute(state: FlowState, failure: FlowFailure): FlowState {
   return { ...state, phase: 'failure', failure }
 }
 
-/** 取消点判据：两段对话框任一（browser/form/repick，均在 dsh create 之前） */
+/** 取消点判据：两段对话框任一（browser/form/repick/native-pick，均在 dsh create 之前；
+ * native-pick 在途关闭 = 干净取消——在途结果由动作面迟到守卫丢弃） */
 export function isCancelPoint(phase: FlowPhase): boolean {
-  return phase === 'browser' || phase === 'form' || phase === 'repick'
+  return phase === 'browser' || phase === 'native-pick' || phase === 'form' || phase === 'repick'
 }
 
 /** 关闭意图（Esc/✕/遮罩统一入口的三分映射） */
@@ -86,8 +112,9 @@ export function closeIntentOf(state: FlowState): CloseIntent {
 /**
  * 模态卡片宽度口径映射（fix-7 回炉：挂点 = 官方 Modal className——落对话框卡片
  * （clsx(css.dialog, className)），fix-3 误挂 contentClassName 内容层致卡片 380 裁切）。
- * 浏览器相位 browser/repick → 加宽 680；表单与终局相位（executing/success/failure）
- * → 基宽 560——宽度刻度见 flow.css `.dswf-ap-dialog` / `.dswf-ap-dialog-wide`。
+ * 浏览器相位 browser/repick → 加宽 680；原生选取面板（native-pick，fix-14 按钮面）与
+ * 表单/终局相位（executing/success/failure）→ 基宽 560——宽度刻度见 flow.css
+ * `.dswf-ap-dialog` / `.dswf-ap-dialog-wide`。
  */
 export function modalClassName(phase: FlowPhase): string {
   return phase === 'browser' || phase === 'repick'

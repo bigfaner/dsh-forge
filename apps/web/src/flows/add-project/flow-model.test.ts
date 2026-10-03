@@ -1,11 +1,12 @@
-// flow-model 单测 —— UF-3 组装态机纯函数面（2.10 AC 全谱）：
-// AC1 取消点窗口（browser/form/repick = 可取消；其余相位不可）与零副作用转移、
+// flow-model 单测 —— UF-3 组装态机纯函数面（2.10 AC 全谱 + fix-14 段一原生选取在途态）：
+// AC1 取消点窗口（browser/form/repick/native-pick = 可取消；其余相位不可）与零副作用转移、
 // AC2 一次性执行守卫（beginExecute 仅 form 相位放行——双发 no-op 的机制半边）、
 // AC3 成功落位（result 携带）、AC4 失败落位 + typed error code → 文案映射
 // （补偿已执行/挂接保护/补偿失败三口径 + 未知错误兜底）、AC5 关闭意图三分
 // （cancel/dismiss/ignore——Esc/✕ 仅取消点窗口内有效的机制半边）、
 // fix-3/fix-7 模态卡片宽度口径拆分（modalClassName：浏览器相位加宽 680——表单/终局相位
-// 基宽 560；挂点 = 官方 Modal className 卡片（fix-7 回炉：不再挂内容层））。
+// 基宽 560；挂点 = 官方 Modal className 卡片（fix-7 回炉：不再挂内容层））、
+// fix-14 原生选取相位机（beginNativePick 在途防双开 + endNativePick 回落起源零副作用）。
 import { describe, expect, it } from 'vitest'
 import type { ErrorCode, RegisterResult } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc/index.js'
@@ -14,7 +15,9 @@ import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import {
   backToBrowser,
   beginExecute,
+  beginNativePick,
   closeIntentOf,
+  endNativePick,
   failExecute,
   finishExecute,
   initialFlowState,
@@ -82,6 +85,49 @@ describe('返回上一步（backToBrowser：form → repick，AC5）', () => {
   })
 })
 
+describe('段一原生选取（fix-14：beginNativePick / endNativePick 在途态）', () => {
+  it('起步：browser/repick → native-pick（在途态 = 防双击双开系统对话框的机制半边）', () => {
+    expect(beginNativePick(initialFlowState())?.phase).toBe('native-pick')
+    expect(beginNativePick(backToBrowser(atForm()))?.phase).toBe('native-pick')
+  })
+
+  it('起步守卫：native-pick 在途第二击 / form / 终局相位一律 null（不双开对话框）', () => {
+    const inFlight = beginNativePick(initialFlowState()) as FlowState
+    expect(beginNativePick(inFlight)).toBeNull() // 双击第二击
+    expect(beginNativePick(atForm())).toBeNull()
+    expect(beginNativePick(atExecuting())).toBeNull()
+    expect(beginNativePick(finishExecute(atExecuting(), RESULT))).toBeNull()
+  })
+
+  it('起步清零错误：上次失败文案不携带进新一次尝试', () => {
+    const failed = endNativePick(beginNativePick(initialFlowState()) as FlowState, 'boom') as FlowState
+    expect(failed.nativePickError).toBe('boom')
+    expect(beginNativePick(failed)?.nativePickError).toBeNull()
+  })
+
+  it('收场回落：browser 起源（selection 空）→ browser；repick 起源（selection 保持）→ repick（表单挂载不丢）', () => {
+    const fromBrowser = endNativePick(beginNativePick(initialFlowState()) as FlowState)
+    expect(fromBrowser?.phase).toBe('browser')
+    const fromRepick = endNativePick(beginNativePick(backToBrowser(atForm())) as FlowState)
+    expect(fromRepick?.phase).toBe('repick')
+    expect(fromRepick?.selection).toEqual(SELECTION) // 零副作用：选定保持
+  })
+
+  it('收场错误面：error 文案随回落携带（起源相位呈现）；非 native-pick 相位 null（迟到守卫转移半边）', () => {
+    const landed = endNativePick(beginNativePick(initialFlowState()) as FlowState, 'E:\\gone 不可达')
+    expect(landed?.phase).toBe('browser')
+    expect(landed?.nativePickError).toBe('E:\\gone 不可达')
+    expect(endNativePick(initialFlowState())).toBeNull()
+  })
+
+  it('选中收场：selectDirectory 从 native-pick 同径落 form（三径同归 + 错误清零）', () => {
+    const landed = selectDirectory(beginNativePick(backToBrowser(atForm())) as FlowState, REPICK)
+    expect(landed.phase).toBe('form')
+    expect(landed.selection).toEqual(REPICK)
+    expect(landed.nativePickError).toBeNull()
+  })
+})
+
 describe('确认执行（beginExecute：AC2 一次性守卫的机制半边）', () => {
   it('form 相位 → executing + 确认载荷入态（成功反馈展示名依据）', () => {
     const state = beginExecute(atForm(), INPUT)
@@ -114,8 +160,9 @@ describe('执行落位（finish/fail：AC3/AC4 状态面）', () => {
 })
 
 describe('取消点窗口（isCancelPoint / closeIntentOf：AC1 + AC5）', () => {
-  it('取消点 = 两段对话框任一（browser / form / repick，均在 dsh create 之前）', () => {
+  it('取消点 = 两段对话框任一（browser / form / repick / native-pick，均在 dsh create 之前）', () => {
     expect(isCancelPoint('browser')).toBe(true)
+    expect(isCancelPoint('native-pick')).toBe(true) // fix-14：对话框在途关闭 = 干净取消（在途结果由动作面守卫丢弃）
     expect(isCancelPoint('form')).toBe(true)
     expect(isCancelPoint('repick')).toBe(true)
     expect(isCancelPoint('executing')).toBe(false)
@@ -125,6 +172,7 @@ describe('取消点窗口（isCancelPoint / closeIntentOf：AC1 + AC5）', () =>
 
   it('关闭意图三分：取消点 → cancel；失败反馈 → dismiss（事后关闭≠取消）；执行中/成功 → ignore', () => {
     expect(closeIntentOf(initialFlowState())).toBe('cancel')
+    expect(closeIntentOf(beginNativePick(initialFlowState()) as FlowState)).toBe('cancel') // fix-14：对话框在途 = 取消点
     expect(closeIntentOf(atForm())).toBe('cancel')
     expect(closeIntentOf(backToBrowser(atForm()))).toBe('cancel')
     expect(closeIntentOf(atExecuting())).toBe('ignore')
@@ -141,6 +189,7 @@ describe('模态卡片宽度口径拆分（modalClassName：fix-3 浏览器相�
 
   it('表单与终局相位（form/executing/success/failure）→ 仅卡片基类（560 基宽不动——Hard Rule）', () => {
     expect(modalClassName('form')).toBe('dswf-ap-dialog')
+    expect(modalClassName('native-pick')).toBe('dswf-ap-dialog') // fix-14：按钮面基宽（浏览器加宽不适用）
     expect(modalClassName('executing')).toBe('dswf-ap-dialog')
     expect(modalClassName('success')).toBe('dswf-ap-dialog')
     expect(modalClassName('failure')).toBe('dswf-ap-dialog')

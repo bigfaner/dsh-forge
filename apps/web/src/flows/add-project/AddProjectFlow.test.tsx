@@ -1,8 +1,9 @@
 // AddProjectFlow 单测 —— UF-3 组装（2.10）：AddProjectFlowView 纯渲染面逐相位静态标记
 // （两段浏览器 ⇄ 表单 / 执行态不可交互 / 成功·失败反馈）+ 默认注册源 fail-soft +
-// 成功自动关闭时序注入面。renderToStaticMarkup 纯渲染面（同 2.8/2.9 测法）；态机转移
-// 语义在 flow-model/flow-actions 单测；模态壳（官方 Modal 门户）effect 面静态渲染不可达
-// ——发布缝时序见 flow-open 单测，壳 JSX 行余量同 2.9 记录口径。
+// 成功自动关闭时序注入面 + fix-14 段一原生选取（桥在场 → 按钮面/在途/错误回落；桥缺席 →
+// 回退内嵌浏览器零变化——官方 -browse 双面同型）。renderToStaticMarkup 纯渲染面（同 2.8/2.9
+// 测法）；态机转移语义在 flow-model/flow-actions 单测；模态壳（官方 Modal 门户）effect 面
+// 静态渲染不可达——发布缝时序见 flow-open 单测，壳 JSX 行余量同 2.9 记录口径。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { DirListing, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
@@ -18,6 +19,8 @@ import {
 import {
   backToBrowser,
   beginExecute,
+  beginNativePick,
+  endNativePick,
   failExecute,
   finishExecute,
   initialFlowState,
@@ -112,6 +115,65 @@ describe('返回上一步（repick）：表单保持挂载保已填状态（AC5�
     expect(markup).toContain('data-dswf-rf="form"')
     const wrapper = markup.match(/<div[^>]*data-dswf-ap-keepalive[^>]*>/)?.[0] ?? ''
     expect(wrapper).toContain('hidden')
+  })
+})
+
+describe('段一原生选取（fix-14：桥在场 → 按钮面替换浏览器；桥缺席零变化）', () => {
+  const AT_NATIVE_FROM_BROWSER = (): FlowState => stateAt((s) => beginNativePick(s) as FlowState)
+  const AT_NATIVE_FROM_REPICK = (): FlowState =>
+    stateAt((s) => beginNativePick(backToBrowser(selectDirectory(s, SELECTION))) as FlowState)
+  const AT_LANDED_ERROR = (): FlowState =>
+    stateAt((s) => endNativePick(beginNativePick(s) as FlowState, 'E:\\gone 不可达') as FlowState)
+
+  it('桥在场 browser 相位：原生面板（按钮 = 选择工作区目录）替换内嵌浏览器', () => {
+    const markup = view(initialFlowState(), { nativePickEnabled: true, onNativePick: () => {} })
+    expect(markup).toContain('data-dswf-np="panel"')
+    expect(markup).toContain('data-dswf-np-origin="browser"')
+    expect(markup).toContain('选择工作区目录')
+    expect(markup).toContain('系统') // 主路径说明（OS 原生交互提示）
+    expect(markup).not.toContain('data-dswf-fb="browser"') // 内嵌浏览器退场（主路径）
+    expect(markup).not.toContain('data-dswf-np-busy')
+  })
+
+  it('桥在场 repick 起源：origin=repick + 联动语义提示 + 表单保持隐藏挂载', () => {
+    const markup = view(AT_REPICK(), { nativePickEnabled: true, onNativePick: () => {} })
+    expect(markup).toContain('data-dswf-np-origin="repick"')
+    expect(markup).toContain('未手改的表单字段将随新工作区重构')
+    expect(markup).toContain('data-dswf-rf="form"') // 表单挂载保持（隐藏同位元素）
+    const wrapper = markup.match(/<div[^>]*data-dswf-ap-keepalive[^>]*>/)?.[0] ?? ''
+    expect(wrapper).toContain('hidden')
+  })
+
+  it('在途相位（native-pick）：busy 锚 + 按钮禁用（防双开对话框）+ 在途提示', () => {
+    const markup = view(AT_NATIVE_FROM_BROWSER(), { nativePickEnabled: true })
+    expect(markup).toContain('data-dswf-ap="native-pick"')
+    expect(markup).toContain('data-dswf-np-busy')
+    const pick = markup.match(/<button[^>]*dswf-np-pick[^>]*>/)?.[0] ?? ''
+    expect(pick).toContain('disabled')
+    expect(markup).toContain('对话框已打开')
+  })
+
+  it('repick 起源在途：表单隐藏挂载保持（对话框往返不丢已填状态）', () => {
+    const markup = view(AT_NATIVE_FROM_REPICK(), { nativePickEnabled: true })
+    expect(markup).toContain('data-dswf-ap="native-pick"')
+    expect(markup).toContain('data-dswf-rf="form"')
+    const wrapper = markup.match(/<div[^>]*data-dswf-ap-keepalive[^>]*>/)?.[0] ?? ''
+    expect(wrapper).toContain('hidden')
+  })
+
+  it('失败回落（endNativePick 带文案）：起源相位 + 错误行 role=alert 呈现', () => {
+    const markup = view(AT_LANDED_ERROR(), { nativePickEnabled: true })
+    expect(markup).toContain('data-dswf-ap="browser"') // 回落起源相位
+    expect(markup).toContain('data-dswf-np-error')
+    expect(markup).toContain('目录选择失败：E:\\gone 不可达')
+    expect(markup).not.toContain('data-dswf-np-busy') // 非在途（可再开对话框）
+  })
+
+  it('桥缺席：browser/repick/native-pick 相位均渲染内嵌浏览器（回退面零变化——官方 -browse 双面同型）', () => {
+    const fallback = view(initialFlowState())
+    expect(fallback).toContain('data-dswf-fb="browser"')
+    expect(fallback).not.toContain('data-dswf-np=')
+    expect(view(AT_REPICK())).toContain('data-dswf-fb="browser"')
   })
 })
 

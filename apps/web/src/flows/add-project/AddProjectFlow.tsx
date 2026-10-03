@@ -8,8 +8,11 @@
 //      内关闭 / 失败 dismiss / 执行中 ignore——AC2 不可中断）；「确认」→ flow-actions.confirm
 //      （form 相位一次性放行，registerProject 一次执行）；成功自动关闭 + onRegistered 通知
 //      （2.12 hero 消退锚）；打开缝 = flow-open（项目树「＋」/ hero CTA 两入口跨单元直达）。
-//   3. 数据源注入 —— register / dirSource / registeredPathsSource 缺省 = preload RPC 真身，
-//   注入 = 测试桩（DirSource 形制）。
+//   3. 数据源注入 —— register / dirSource / registeredPathsSource / nativePicker 缺省 =
+//   preload RPC 真身 / __DSH_DIRECTORY_PICKER__ 桥探测，注入 = 测试桩（DirSource 形制）。
+//   fix-14：桥在场（Electron 桌面 preload）→ 段一/重选渲染 NativePickPanel（系统 OS 目录
+//   对话框主路径——官方 native 优先哲学）；桥缺席（非 Electron 载体/单测/e2e 回退口径）→
+//   内嵌 DirectoryBrowser 回退面（官方 -browse 双面同型，形态零变化）。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
@@ -21,7 +24,8 @@ import type { ProjectSummary, RegisterProjectInput, RegisterResult } from '@dsh-
 import { createForgeRpcClient, preloadTransport } from '../../rpc/index.js'
 import { registeredPathsOf, type BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
-import type { DirSource } from './dir-source.js'
+import { directoryPickerBridgeOf, type NativePickSource } from './dir-picker.js'
+import { rpcDirSource, type DirSource } from './dir-source.js'
 import { flowActions, rpcRegisterSource, type RegisterSource } from './flow-actions.js'
 import {
   registerFailureCopy,
@@ -62,16 +66,23 @@ export function rpcRegisteredPathsSource(): RegisteredPathsSource {
 const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 const REPICK_HINT =
   '重新选择工作区目录；未手改的表单字段将随新工作区重构，手改或浏览选定过的保留。'
+const NATIVE_PICK_HINT =
+  '点击打开系统「选择文件夹」对话框——盘符、快速访问与网络位置均为操作系统原生交互。'
+const NATIVE_PICK_BUSY_HINT = '系统目录对话框已打开；取消或关闭对话框将返回此处（零副作用）。'
 
 /** AddProjectFlowView props（纯渲染面——静态标记可测） */
 export interface AddProjectFlowViewProps {
   /** 流程态（相位唯一源——flow-model 状态机） */
   readonly state: FlowState
-  /** 已注册路径集合（段一/重选行级标记——ownership 预检可视化） */
+  /** 已注册路径集合（段一/重选行级标记 + 表单相位挂接提示——ownership 预检可视化） */
   readonly registeredPaths: ReadonlySet<string>
   /** 目录数据源（透传浏览器；注入 = 测试桩） */
   readonly dirSource?: DirSource
-  /** 段一确认（初始进入 / 返回上一步重选同径） */
+  /** 原生选取启用（fix-14 桥在场——段一/重选渲染按钮面；缺省 = 回退内嵌浏览器） */
+  readonly nativePickEnabled?: boolean
+  /** 段一原生选取触发（系统 OS 目录对话框打开） */
+  readonly onNativePick?: () => void
+  /** 段一确认（初始进入 / 返回上一步重选同径——回退浏览器面） */
   readonly onPick?: (selection: BrowserSelection) => void
   /** 返回上一步（form → repick） */
   readonly onBack?: () => void
@@ -79,6 +90,49 @@ export interface AddProjectFlowViewProps {
   readonly onSubmit?: (input: RegisterProjectInput) => void
   /** 失败反馈关闭（dismiss——事后关闭非取消） */
   readonly onDismissFailure?: () => void
+}
+
+/** 段一原生选取面板（fix-14：桥在场主路径——系统 OS 目录对话框；桥缺席由装配回退 DirectoryBrowser） */
+function NativePickPanel({
+  origin,
+  busy,
+  error,
+  onPick,
+}: {
+  /** 起源相位（重选 = repick 起源——表单挂载保持 + 联动语义提示） */
+  readonly origin: 'browser' | 'repick'
+  /** 在途态（系统对话框打开中——按钮禁用防双开） */
+  readonly busy: boolean
+  /** pick/对账失败文案（回落起源相位后呈现） */
+  readonly error: string | null
+  readonly onPick?: () => void
+}): ReactNode {
+  return (
+    <div
+      className="dswf-ap-nativepick"
+      data-dswf-np="panel"
+      data-dswf-np-origin={origin}
+      data-dswf-np-busy={busy || undefined}
+    >
+      <p className="dswf-ap-note">{busy ? NATIVE_PICK_BUSY_HINT : NATIVE_PICK_HINT}</p>
+      {origin === 'repick' && !busy ? <p className="dswf-ap-note">{REPICK_HINT}</p> : null}
+      {error === null ? null : (
+        <p className="dswf-np-error" role="alert" data-dswf-np-error>
+          目录选择失败：{error}
+        </p>
+      )}
+      <Button
+        variant="primary"
+        size="md"
+        className="dswf-np-pick"
+        data-dswf-np-pick
+        disabled={busy}
+        onClick={busy ? undefined : onPick}
+      >
+        选择工作区目录
+      </Button>
+    </div>
+  )
 }
 
 /** 执行态面板（AC2：进度指示 + 不可交互中断——零交互路径） */
@@ -148,25 +202,39 @@ export function AddProjectFlowView({
   state,
   registeredPaths,
   dirSource,
+  nativePickEnabled = false,
+  onNativePick,
   onPick,
   onBack,
   onSubmit,
   onDismissFailure,
 }: AddProjectFlowViewProps): ReactNode {
   const { phase, selection } = state
-  const formMounted = (phase === 'form' || phase === 'repick') && selection !== null
+  // 表单挂载判据：form / repick / native-pick（repick 起源的在途选取）相位保持挂载
+  // （同位元素 hidden——浏览器⇄表单/对话框往返不丢已填状态）
+  const formMounted = (phase === 'form' || phase === 'repick' || phase === 'native-pick') && selection !== null
+  const browserLike = phase === 'browser' || phase === 'repick' || phase === 'native-pick'
 
   return (
     <div className="dswf-ap" data-dswf-ap={phase}>
-      {phase === 'browser' || phase === 'repick' ? (
-        <DirectoryBrowser
-          source={dirSource}
-          startDir={phase === 'repick' && selection !== null ? selection.path : undefined}
-          registeredPaths={registeredPaths}
-          confirmLabel={phase === 'repick' ? '选择此文件夹' : '下一步'}
-          hint={phase === 'repick' ? REPICK_HINT : undefined}
-          onConfirm={onPick}
-        />
+      {browserLike ? (
+        nativePickEnabled ? (
+          <NativePickPanel
+            origin={phase === 'repick' || (phase === 'native-pick' && selection !== null) ? 'repick' : 'browser'}
+            busy={phase === 'native-pick'}
+            error={state.nativePickError}
+            onPick={onNativePick}
+          />
+        ) : (
+          <DirectoryBrowser
+            source={dirSource}
+            startDir={phase === 'repick' && selection !== null ? selection.path : undefined}
+            registeredPaths={registeredPaths}
+            confirmLabel={phase === 'repick' ? '选择此文件夹' : '下一步'}
+            hint={phase === 'repick' ? REPICK_HINT : undefined}
+            onConfirm={onPick}
+          />
+        )
       ) : null}
       {formMounted ? (
         <>
@@ -199,10 +267,13 @@ export function AddProjectFlowView({
 export interface AddProjectFlowProps {
   /** 注册执行源（缺省 = RPC 真身 forge:projects/register；注入 = 测试桩） */
   readonly register?: RegisterSource
-  /** 目录数据源（透传浏览器与表单浏览改选；注入 = 测试桩） */
+  /** 目录数据源（透传浏览器与表单浏览改选 + 原生选取 canonical 对账；注入 = 测试桩） */
   readonly dirSource?: DirSource
   /** 已注册路径源（缺省 = RPC 真身 forge:projects/list；注入 = 测试桩） */
   readonly registeredPathsSource?: RegisteredPathsSource
+  /** 原生选取源（fix-14：缺省 = globalThis.__DSH_DIRECTORY_PICKER__ 桥探测；注入 = 测试桩；
+   * null 注入 = 强制回退内嵌浏览器——回退面测试口径） */
+  readonly nativePicker?: NativePickSource | null
   /** 成功反馈自动关闭时序（缺省 1600ms；注入 = 测试面） */
   readonly successAutoCloseMs?: number
   /** 注册成功通知（2.12 hero 消退锚——项目数驱动面的刷新提示） */
@@ -221,6 +292,7 @@ export function AddProjectFlow({
   register,
   dirSource,
   registeredPathsSource,
+  nativePicker,
   successAutoCloseMs = DEFAULT_SUCCESS_AUTOCLOSE_MS,
   onRegistered,
   onClose,
@@ -237,12 +309,23 @@ export function AddProjectFlow({
   onRegisteredRef.current = onRegistered
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+  // 已注册集合 ref 桥（原生选取 resolve 期读最新集——挂接预演标记判据）
+  const registeredPathsRef = useRef(registeredPaths)
+  registeredPathsRef.current = registeredPaths
 
   const effectiveRegister = useMemo<RegisterSource>(() => register ?? rpcRegisterSource(), [register])
   const effectiveRegisteredSource = useMemo<RegisteredPathsSource>(
     () => registeredPathsSource ?? rpcRegisteredPathsSource(),
     [registeredPathsSource],
   )
+  const effectiveDirSource = useMemo<DirSource>(() => dirSource ?? rpcDirSource(), [dirSource])
+  // 原生选取源解析：注入桩 > 桥探测（undefined = 探测；null = 强制回退）——mount 期一次，
+  // 桥在场性会话内不变（preload 装配期决定）
+  const effectiveNativePick = useMemo<NativePickSource | null>(() => {
+    if (nativePicker !== undefined) return nativePicker
+    const bridge = directoryPickerBridgeOf()
+    return bridge === undefined ? null : () => bridge.pick()
+  }, [nativePicker])
 
   const finish = useCallback(() => {
     setOpen(false)
@@ -256,8 +339,11 @@ export function AddProjectFlow({
         setState: setFlow,
         getState: () => flowRef.current,
         finish,
+        nativePick: effectiveNativePick ?? undefined,
+        dirSource: effectiveDirSource,
+        getRegisteredPaths: () => registeredPathsRef.current,
       }),
-    [effectiveRegister, finish],
+    [effectiveRegister, finish, effectiveNativePick, effectiveDirSource],
   )
 
   const openFlow = useCallback(() => {
@@ -295,7 +381,9 @@ export function AddProjectFlow({
       <AddProjectFlowView
         state={flow}
         registeredPaths={registeredPaths}
-        dirSource={dirSource}
+        dirSource={effectiveDirSource}
+        nativePickEnabled={effectiveNativePick !== null}
+        onNativePick={actions.nativePick}
         onPick={actions.pick}
         onBack={actions.back}
         onSubmit={actions.confirm}

@@ -3,6 +3,10 @@
 // 语义锚：直输改 = 值更新 + touched 置位（AC4 手改判据）；浏览改选落值同径（浏览选定 =
 // touched 置位 → 换选工作区时保留）；工作区改选（内「重新选择」/ 外部段一重选）统一走
 // relinkWorkspace 联动 diff；浏览取消零副作用（取消点在 dsh create 之前）。
+// fix-14：桥在场时「浏览…」/「重新选择」三 target 同桥复用（系统 OS 目录对话框直选，
+// BrowsePanel 回退面不变）——nativeBrowseAction 承载（同步在途守卫防双击双开对话框）。
+import type { DirSource } from './dir-source.js'
+import type { NativePickSource } from './dir-picker.js'
 import {
   editFieldValue,
   relinkWorkspace,
@@ -62,5 +66,48 @@ export function formActions(deps: FormActionsDeps): FormActions {
         prev.values.workspaceDir === workspaceDir ? prev : relinkWorkspace(prev, workspaceDir),
       )
     },
+  }
+}
+
+/** 原生浏览改选动作依赖（fix-14 桥在场相位——BrowsePanel 之外的系统对话框直选路径） */
+export interface NativeBrowseDeps {
+  /** 原生选取源（桥真身/测试桩——取消 null / 选中路径 / reject 错误面） */
+  readonly pick: NativePickSource
+  /** 目录数据源（canonical 对账——applyListing 同口径经 listDir 对账） */
+  readonly dirSource: DirSource
+  /** 落值面（BrowsePanel 确认同径：workspace → relink；目录 → 回填 + touched） */
+  readonly applyPick: (target: BrowseTarget, dirPath: string) => void
+  /** 在途相位回写（true = 对话框打开中——三改选钮禁用防双开；收场恒回 false） */
+  readonly onBusy?: (busy: boolean) => void
+  /** 错误面回写（pick/对账失败文案；每次起步清零，成功/取消不动旧值语义归零） */
+  readonly onError?: (message: string | null) => void
+}
+
+/**
+ * 原生浏览改选动作（「浏览…」/「重新选择」三 target 同桥复用）：取消零副作用（值不变）；
+ * 选中经 dirSource canonical 对账后落值（与 BrowsePanel 确认同径——applyPick 唯一落值口）；
+ * 失败回落表单 + 错误文案（不改值）。同步在途守卫 = 双击第二击 no-op（防双开系统对话框）。
+ */
+export function nativeBrowseAction(deps: NativeBrowseDeps): (target: BrowseTarget) => void {
+  let inFlight = false // 同步守卫（setState 异步批处理不可靠——双击竞态在 ref 语义前拦截）
+  return (target) => {
+    if (inFlight) return
+    inFlight = true
+    deps.onError?.(null)
+    deps.onBusy?.(true)
+    void (async () => {
+      try {
+        const picked = await deps.pick()
+        if (picked !== null) {
+          const listing = await deps.dirSource(picked) // canonical 对账（不可达 = 失败错误面）
+          deps.applyPick(target, listing.path)
+        }
+      } catch (error) {
+        deps.onError?.(error instanceof Error ? error.message : String(error))
+      } finally {
+        inFlight = false
+        deps.onBusy?.(false)
+      }
+    })()
   }
 }

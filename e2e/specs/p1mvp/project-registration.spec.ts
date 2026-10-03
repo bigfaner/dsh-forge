@@ -82,6 +82,7 @@ async function launchReady(existingUserData?: string, options?: { readonly dismi
       DSH_FORGE_DEV_PROFILE: 'dev',
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19810 + (process.pid % 150) + (bootSeq++ % 20)),
+      DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
     } as Record<string, string>,
   })
   const page = await app.firstWindow()

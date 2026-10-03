@@ -728,6 +728,30 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-14": {
+      "id": "fix-14",
+      "title": "Fix: 段一目录选取复用系统文件选择器——直用官方 __DSH_DIRECTORY_PICKER__ preload 桥契约（参考 dsh 原生优先哲学），内嵌浏览器降为回退面",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "completed",
+      "file": "fix-14.md",
+      "record": "records/fix-14.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-15": {
+      "id": "fix-15",
+      "title": "Fix: 品牌标识替换——「知识就是力量」新 mark（docs/brand 母版）+ 根修左上角品牌方块近黑问题（深底填充废弃，currentColor 令牌适配）",
+      "priority": "P1",
+      "estimatedTime": "1h",
+      "status": "pending",
+      "file": "fix-15.md",
+      "record": "records/fix-15.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
     "fix-2": {
       "id": "fix-2",
       "title": "Fix: 主窗口隐藏原生标题栏（titleBarStyle hidden + overlay，对齐 dsh 官方桌面形态）",

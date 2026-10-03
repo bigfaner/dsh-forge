@@ -4,11 +4,12 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, ipcMain, protocol, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, session } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
-  BOOT_CHANNEL, createForgeIpc, refreshKnowledgeBindings, registerBootChannel, registerFsChannels,
-  registerKnowledgeChannels, registerProjectsChannels, withKnowledgeBindingsRefresh,
+  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, refreshKnowledgeBindings, registerBootChannel,
+  registerDirectoryPickerChannel, registerFsChannels, registerKnowledgeChannels, registerProjectsChannels,
+  withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
@@ -74,12 +75,15 @@ void (async () => {
       registerKnowledgeChannels(forgeIpc, host.services.forgeKnowledge)
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
+    // fix-14：官方 __DSH_DIRECTORY_PICKER__ 桥 main 半边——openDirectory 单选（取消 = null）
+    registerDirectoryPickerChannel(ipcMain, () => dialog.showOpenDialog({ properties: ['openDirectory'] }))
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     wireWindowLifecycle(app)
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
       ipcMain.removeHandler(BOOT_CHANNEL)
+      ipcMain.removeHandler(DIRECTORY_PICKER_CHANNEL)
       hostRef = undefined
       void host.shutdown()
     })

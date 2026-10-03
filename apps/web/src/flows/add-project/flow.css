@@ -121,3 +121,25 @@
   flex: none;
   justify-content: flex-end;
 }
+
+/* ── 段一原生选取面板（fix-14：桥在场相位——系统 OS 目录对话框主路径按钮面；桥缺席
+ * 由装配回退 DirectoryBrowser（browser.css），本件只承载流程层按钮面） ── */
+.dswf-ap-nativepick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: var(--dsw-font-xs-13-line-height); /* 块级留白 = 行高刻度 */
+  padding: 4px 0 var(--dsw-font-xs-13-line-height); /* dsw-raw 上 4px 官方行刻度 */
+}
+
+.dswf-np-pick {
+  flex: none;
+}
+
+/* 原生选取失败错误行（pick/对账失败回落起源相位呈现——错误面口径） */
+.dswf-np-error {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-error);
+}

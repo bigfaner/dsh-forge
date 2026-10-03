@@ -1,7 +1,7 @@
 // RegisterForm 单测 —— UF-3 段二（AC1 回填/默认值/只读行 / AC2 派生任务清单行 / AC3 仓内外
 // chip 无 radio / AC5 非法路径表单态拦截 + 确认禁用 / AC6 无默认召回域 +「确认」文案 +
-// BrowsePanel 复用面 / 装配壳初始渲染）。renderToStaticMarkup 纯渲染面（同 2.8 测法）；
-// 派生/联动/校验语义面在 form-model.test。
+// BrowsePanel 复用面 / 装配壳初始渲染 + fix-14 工作区已注册挂接提示与原生改选在途/错误面）。
+// renderToStaticMarkup 纯渲染面（同 2.8 测法）；派生/联动/校验语义面在 form-model.test。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BrowserSelection } from './browser-model.js'
@@ -105,6 +105,45 @@ describe('AC6 无「默认召回域」+ 提交文案', () => {
     const markup = view()
     expect(markup).not.toContain('召回域')
     expect(markup).toContain('确认')
+  })
+})
+
+describe('工作区已注册挂接提示（fix-14：pick 时标记的表单相位口径迁移）', () => {
+  it('已注册 → 工作区行「已注册」chip + 挂接语义提示（走查裁决注记承载）', () => {
+    const markup = view({ workspaceRegistered: true })
+    expect(markup).toMatch(/dswf-rf-wsreg[^>]*>已注册</)
+    expect(markup).toContain('data-dswf-rf-registered')
+    expect(markup).toContain('挂接既有工作区')
+  })
+
+  it('未注册 → 无 chip 无提示（默认形态零变化）', () => {
+    const markup = view({ workspaceRegistered: false })
+    expect(markup).not.toContain('dswf-rf-wsreg')
+    expect(markup).not.toContain('data-dswf-rf-registered')
+  })
+
+  it('装配壳口径：registeredPaths 命中 workspaceDir → 提示呈现（canonical 对账路径直配）', () => {
+    const registered = new Set(['Z:\\project\\dsh'])
+    const hit = renderToStaticMarkup(<RegisterForm selection={SELECTION} registeredPaths={registered} />)
+    expect(hit).toContain('data-dswf-rf-registered')
+    const miss = renderToStaticMarkup(<RegisterForm selection={SELECTION} />)
+    expect(miss).not.toContain('data-dswf-rf-registered')
+  })
+})
+
+describe('原生改选在途/错误面（fix-14：三改选钮防双开 + 失败呈现）', () => {
+  it('browseBusy → 「重新选择」/两「浏览…」钮全禁用（系统对话框打开中）；「确认」不受在途影响', () => {
+    const markup = view({ browseBusy: true })
+    expect(markup.match(/disabled=""/g)?.length).toBe(3)
+    const confirm = markup.match(/<button[^>]*dswf-rf-confirm[^>]*>/)?.[0] ?? ''
+    expect(confirm).not.toContain('disabled') // 提交不受对话框在途影响
+  })
+
+  it('nativePickError → 错误行呈现（role=alert + 前缀文案）；null → 无错误行', () => {
+    const markup = view({ nativePickError: 'E:\\gone 不可达' })
+    expect(markup).toContain('data-dswf-rf-np-error')
+    expect(markup).toContain('目录选择失败：E:\\gone 不可达')
+    expect(view()).not.toContain('data-dswf-rf-np-error')
   })
 })
 

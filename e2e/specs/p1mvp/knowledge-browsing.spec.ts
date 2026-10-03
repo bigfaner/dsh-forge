@@ -165,6 +165,7 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
       DSH_FORGE_PATCH_FILES: providerOverlay,
       DSH_FORGE_USER_DATA: userData,
       DSH_FORGE_PORT: String(19870 + (process.pid % 150) + (bootSeq++ % 20)),
+      DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
     } as Record<string, string>,
   })
   const page = await app.firstWindow()
