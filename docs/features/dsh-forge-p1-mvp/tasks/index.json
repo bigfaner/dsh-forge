@@ -935,7 +935,7 @@
     },
     "fix-3": {
       "id": "fix-3",
-      "title": "Fix: 添加项目模态宽度缺陷——内容 560 > 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",
+      "title": "Fix: 添加项目模态宽度缺陷——内容 560 \u003e 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",
       "priority": "P1",
       "estimatedTime": "1h",
       "status": "completed",
@@ -1046,8 +1046,33 @@
       "title": "Fix: 品牌接入「鲸游书海」——侧栏标识替换（官方 FISH_LOGO_PATH 鲸，零几何拷贝）+ 对话面板书海背景铺底（CSS 锚 + 明暗双资产 + 可读性守护）",
       "priority": "P1",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "in_progress",
       "file": "fix-38.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-39": {
+      "id": "fix-39",
+      "title": "Fix: 注册链目录自愈——知识/forge 目录（及工作区目录）不存在时注册自动创建，消除 ERR_INVALID_KNOWLEDGE_DIR / ERR_WORKSPACE_CREATE 面的用户可避错误",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "fix-39.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-40": {
+      "id": "fix-40",
+      "title": "Fix: Windows 壳标题栏模式未激活——preload 缺 data-platform / data-windows-titlebar / --dsh-windows-titlebar-height 标记，会话头右上角图标钮沉入原生 WCO 覆盖条不可见",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "fix-40.md",
+      "record": "",
       "surface-type": "web",
       "type": "coding.fix",
       "complexity": "medium"
