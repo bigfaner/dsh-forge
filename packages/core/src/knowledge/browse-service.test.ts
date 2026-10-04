@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
-import { createKnowledgeIndexService } from './index-service.js'
+import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { aggregateDomainTree, createKnowledgeBrowseService, recallStats } from './browse-service.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
@@ -89,6 +89,21 @@ const entryIdByTitle = (db: Database.Database, projectId: string): Map<string, n
   )
 
 const titles = (cards: readonly { title: string }[]): string[] => cards.map((c) => c.title)
+
+/** rebuild 计数器缝（fix-31 零重建断言）：包真实 index-service，计数 rebuildIndex 实际调用 */
+function countingIndexService(db: Database.Database): { service: Pick<KnowledgeIndexService, 'rebuildIndex'>; calls(): number } {
+  const real = createKnowledgeIndexService({ db })
+  let n = 0
+  return {
+    service: {
+      async rebuildIndex(projectId: string) {
+        n += 1
+        return real.rebuildIndex(projectId)
+      },
+    },
+    calls: () => n,
+  }
+}
 
 // ── AC1：listEntries 过滤语义（UF-6）+ 域树聚合同口径 ──
 
@@ -383,6 +398,35 @@ describe('listEntries 静默重建联动', () => {
     expect(err).toBeInstanceOf(IndexStaleError)
     expect(err).toMatchObject({ code: 'ERR_INDEX_STALE', name: 'IndexStaleError' })
     expect(keyLogsOf(f.db)[0]).toMatchObject({ level: 'error', scope: 'index' })
+  })
+})
+
+// ── fix-31：存在性判定口径——域过滤零行 ≠ 索引缺失（防误判整库重建） ──
+
+describe('索引存在性判定口径（fix-31）', () => {
+  it('已有索引 + 不存在的域前缀 → 空卡片零重建：无 key log、entryId 不变', async () => {
+    const f = fixture({ rebuild: true })
+    const before = entryIdByTitle(f.db, f.projectId)
+    const counter = countingIndexService(f.db)
+    const cards = await createKnowledgeBrowseService({ db: f.db, indexService: counter.service })
+      .listEntries({ projectId: f.projectId, domainPrefix: '不存在的域' })
+    expect(cards).toEqual([]) // 域零行 = 合法空结果
+    expect(counter.calls()).toBe(0) // 项目级 COUNT>0 → 不触发整库重建
+    expect(keyLogsOf(f.db)).toHaveLength(0) // 无 warn 日志
+    expect(entryIdByTitle(f.db, f.projectId)).toEqual(before) // entryId 零变动
+  })
+
+  it('首建后二次调用零重建：空域 listEntries 首建一次，重复调用（含 browse 聚合）零重建/零记账', async () => {
+    const f = fixture() // 不预建索引（项目级零行 = 真缺失）
+    const counter = countingIndexService(f.db)
+    const svc = createKnowledgeBrowseService({ db: f.db, indexService: counter.service })
+    expect(await svc.listEntries({ projectId: f.projectId, domainPrefix: '不存在的域' })).toEqual([])
+    expect(counter.calls()).toBe(1) // 真缺失径保持：首建一次
+    expect(keyLogsOf(f.db)).toHaveLength(1) // 重建事件单条（warn, scope=index）
+    expect(await svc.listEntries({ projectId: f.projectId, domainPrefix: '不存在的域' })).toEqual([])
+    expect(await svc.browse({ projectId: f.projectId })).toHaveLength(4) // browse 聚合经同一底表口径
+    expect(counter.calls()).toBe(1) // COUNT>0 短路——二次调用零重建
+    expect(keyLogsOf(f.db)).toHaveLength(1) // 零新增 warn（不刷屏）
   })
 })
 

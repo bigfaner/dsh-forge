@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
-import { createKnowledgeIndexService } from './index-service.js'
+import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 
@@ -100,6 +100,21 @@ const entryIdByTitle = (db: Database.Database, projectId: string): Map<string, n
   )
 
 const titles = (hits: readonly { title: string }[]): string[] => hits.map((h) => h.title)
+
+/** rebuild 计数器缝（fix-31 零重建断言）：包真实 index-service，计数 rebuildIndex 实际调用 */
+function countingIndexService(db: Database.Database): { service: Pick<KnowledgeIndexService, 'rebuildIndex'>; calls(): number } {
+  const real = createKnowledgeIndexService({ db })
+  let n = 0
+  return {
+    service: {
+      async rebuildIndex(projectId: string) {
+        n += 1
+        return real.rebuildIndex(projectId)
+      },
+    },
+    calls: () => n,
+  }
+}
 
 // ── AC1：域前缀过滤（场景④） ──
 
@@ -360,6 +375,51 @@ describe('索引缺失静默重建联动（ERR_INDEX_STALE 语义）', () => {
     expect((err as IndexStaleError).cause).toBeInstanceOf(Error)
     expect(keyLogsOf(f.db)).toHaveLength(1)
     expect(keyLogsOf(f.db)[0]).toMatchObject({ level: 'error', scope: 'recall' })
+  })
+})
+
+// ── fix-31：存在性判定口径——域过滤零行 ≠ 索引缺失（防误判整库重建） ──
+
+describe('索引存在性判定口径（fix-31）', () => {
+  it('已有索引 + 不存在的域前缀 → 空结果零重建：无 warn、entryId 不变、哨兵行照写', async () => {
+    const f = fixture({ rebuild: true })
+    const before = entryIdByTitle(f.db, f.projectId)
+    const counter = countingIndexService(f.db)
+    const hits = await createKnowledgeRecallService({ db: f.db, indexService: counter.service })
+      .search({ projectId: f.projectId, domainPrefix: '不存在的域' })
+    expect(hits).toHaveLength(0) // 域零行 = 合法空结果
+    expect(counter.calls()).toBe(0) // 项目级 COUNT>0 → 不触发整库重建
+    expect(keyLogsOf(f.db)).toHaveLength(0) // 无 warn 日志
+    expect(entryIdByTitle(f.db, f.projectId)).toEqual(before) // entryId 零变动（不换发）
+    const rows = recallLogsOf(f.db, f.projectId)
+    expect(rows).toHaveLength(1) // 零命中哨兵行照写
+    expect(rows[0]).toMatchObject({ verb: 'search', entry_id: null, hit_count: 0 })
+  })
+
+  it('首建后二次调用零重建：空域查询首建一次，重复空域查询零重建/零记账', async () => {
+    const f = fixture() // 不预建索引（项目级零行 = 真缺失）
+    const counter = countingIndexService(f.db)
+    const svc = createKnowledgeRecallService({ db: f.db, indexService: counter.service })
+    const first = await svc.search({ projectId: f.projectId, domainPrefix: '不存在的域' })
+    expect(first).toHaveLength(0)
+    expect(counter.calls()).toBe(1) // 真缺失径保持：首建一次
+    expect(keyLogsOf(f.db)).toHaveLength(1) // 重建事件单条（warn）
+    const second = await svc.search({ projectId: f.projectId, domainPrefix: '不存在的域' })
+    expect(second).toHaveLength(0)
+    expect(counter.calls()).toBe(1) // COUNT>0 短路——二次调用零重建
+    expect(keyLogsOf(f.db)).toHaveLength(1) // 零新增 warn（不刷屏）
+  })
+
+  it('search → read_abstract 链不被无关域查询打断（entryId 稳定 + 热度链引用保持）', async () => {
+    const f = fixture({ rebuild: true })
+    const svc = createKnowledgeRecallService({ db: f.db })
+    const hits = await svc.search({ projectId: f.projectId, domainPrefix: '后端' })
+    const api = hits.find((h) => h.title === 'API 规范')!
+    await svc.search({ projectId: f.projectId, domainPrefix: '不存在的域' }) // 无关域零行查询
+    const abstract = await svc.readAbstract({ projectId: f.projectId, entryId: api.entryId })
+    expect(abstract.title).toBe('API 规范') // 上一次 search 返回的 entryId 仍有效
+    expect(await svc.heatByEntry(f.projectId).then((m) => m.get(api.entryId))).toBe(2) // search + read-abstract 各一次，entry_id 引用稳定
+    expect(keyLogsOf(f.db)).toHaveLength(0)
   })
 })
 

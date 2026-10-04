@@ -945,6 +945,18 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-31": {
+      "id": "fix-31",
+      "title": "Fix(P1): 知识「索引缺失」误判——域过滤零行即触发整库重建（entryId 全换 + recall 热度链清空 + 日志刷屏）：改项目级存在性判定",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "fix-31.md",
+      "record": "records/fix-31.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
     "fix-32": {
       "id": "fix-32",
       "title": "Fix(P1): 文档债批次——web-ui-composition 按 fix-25 现态重写 / tech-design 加 child 形态 errata / 三 README 缝名册同步 / page-map 标 stale（评审四路 P1 文档发现集中清偿）",

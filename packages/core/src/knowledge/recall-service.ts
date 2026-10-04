@@ -1,7 +1,8 @@
 // 知识域召回服务（3.2：search / readAbstract 检索面 + knowledge_recall_logs + 热度）。定位：业务。
 // 语义（tech-design §Interface 2 + 交互二 + ER KNOWLEDGE_RECALL_LOGS）：
 // · search = 索引缓存直读（SC2 零文件扫描——域前缀 SQL 段匹配 + 关键词/文本行内过滤 + 占位分排序）；
-//   索引零行（缺失）时静默重建联动（rebuildIndex），重建失败按因降级（见 rebuildMissingIndex）。
+//   项目级索引零行（缺失）时静默重建联动（rebuildIndex），重建失败按因降级（见 rebuildMissingIndex）；
+//   域过滤零行 ≠ 缺失——合法空结果直接返回，不触发重建（存在性口径 = 无过滤 COUNT，fix-31）。
 // · readAbstract = 纯缓存读（正文永不读文件——场景⑤），未命中 = ERR_ENTRY_NOT_FOUND
 //   （索引重建后 ID 漂移语义，Error Handling 表明文；故不联动重建——AUTOINCREMENT 重建后 id 不复用）。
 // · 两动词均于执行点写 recall_logs：一行 = 调用 × 命中条目、call_id 分组（uuid）、零命中写
@@ -170,6 +171,11 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
      FROM knowledge_entries WHERE project_id = ? AND id = ?`,
   )
+  // 索引存在性口径（fix-31）：项目级无过滤 COUNT——域过滤查询零行 ≠ 索引缺失（agent 探索
+  // 常态），误判即整库重建（entryId 全换 + clearRecallEntryRefs 清热度链 + 日志刷屏）。
+  const countEntries = db.prepare<unknown[], { c: number }>(
+    `SELECT COUNT(*) AS c FROM knowledge_entries WHERE project_id = ?`,
+  )
   const selectHeat = db.prepare<unknown[], { entry_id: number; heat: number }>(
     `SELECT entry_id, COUNT(*) AS heat FROM knowledge_recall_logs
      WHERE project_id = ? AND entry_id IS NOT NULL GROUP BY entry_id ORDER BY entry_id`,
@@ -214,7 +220,7 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
   }
 
   /**
-   * 索引缺失（零行）静默重建联动（ERR_INDEX_STALE 语义）：
+   * 索引缺失（项目级零行）静默重建联动（ERR_INDEX_STALE 语义）：
    * · 成功 → warn 记自动修复事件（单事件单条）后由调用方直读新索引（空目录合法 = 空结果）
    * · 失败 → 按因降级：目录不可达原样上抛 InvalidKnowledgeDirError（Hard Rule 2 六码面）；
    *   其余异常包装 IndexStaleError（索引仍缺失，检索中止）——均先落 app_key_logs(error)
@@ -266,9 +272,9 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
 
       // 索引缓存直读：域前缀 SQL 段匹配（= 前缀 或 前缀/… 子域；ESCAPE 防通配注入）
       const rows: EntryRow[] = selectRows(q)
-      if (rows.length === 0) {
-        await rebuildMissingIndex(q.projectId) // 零行 = 索引缺失 → 静默重建联动（检索本身零文件扫描）
-        rows.push(...selectRows(q)) // 空目录重建后仍零行 = 合法空结果
+      if (rows.length === 0 && countEntries.get(q.projectId)!.c === 0) {
+        await rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（检索本身零文件扫描）
+        rows.push(...selectRows(q)) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
       }
 
       const rankable: RankableRow[] = rows.map((r) => ({ ...r, entryId: r.id, keywords: JSON.parse(r.keywords) as string[] }))

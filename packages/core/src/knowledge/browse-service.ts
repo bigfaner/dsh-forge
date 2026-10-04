@@ -15,7 +15,8 @@
 //   （零命中调用计次）、覆盖 = 去重命中条目；分组行 = 条目快照展开（title_snap/domain_snap 抗
 //   索引重建）+ 动词明细 + 最近时间 + 热度徽章（entry_id 计数，重建清引用后按 frontmatter_id
 //   兜底分组——ER「热度兜底分组键」）。
-// · 索引零行（缺失）静默重建联动同 search（ERR_INDEX_STALE 语义）；浏览路径关键日志记
+// · 索引缺失（项目级无过滤 COUNT 零行）静默重建联动同 search——域过滤零行 = 合法空结果
+//   不触发重建（存在性口径同 3.2，fix-31；ERR_INDEX_STALE 语义）；浏览路径关键日志记
 //   scope='index'（ER 记名域③：索引自动修复/重建失败；成功召回轨迹不在此记）。
 // app_key_logs 写入为本域自备语句（forge/key-logs 同构 SQL，铁律③ 禁 import ../forge/——
 // 共享表经 db/ 句柄单写路径）。浏览查询面零写 recall_logs（召回动词归 3.2 检索面）。
@@ -182,6 +183,11 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status, rel_path, indexed_at
      FROM knowledge_entries WHERE project_id = ? AND id = ?`,
   )
+  // 索引存在性口径（fix-31，与 3.2 search 同口径）：项目级无过滤 COUNT——域过滤查询零行
+  // ≠ 索引缺失，误判即整库重建（entryId 全换 + 热度链引用清空 + 日志刷屏）。
+  const countEntries = db.prepare<unknown[], { c: number }>(
+    `SELECT COUNT(*) AS c FROM knowledge_entries WHERE project_id = ?`,
+  )
   const selectHeatByEntry = db.prepare<unknown[], { entry_id: number; heat: number }>(
     `SELECT entry_id, COUNT(*) AS heat FROM knowledge_recall_logs
      WHERE project_id = ? AND entry_id IS NOT NULL GROUP BY entry_id`,
@@ -209,7 +215,7 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
   }
 
   /**
-   * 索引缺失（零行）静默重建联动（ERR_INDEX_STALE 语义，同 search 面口径）：
+   * 索引缺失（项目级零行）静默重建联动（ERR_INDEX_STALE 语义，同 search 面口径）：
    * 成功 → warn 记自动修复（ER「自动修复」关键事件，scope=index）；失败 → 按因降级：
    * 目录不可达原样上抛 InvalidKnowledgeDirError；其余包装 IndexStaleError——均先落 error。
    */
@@ -252,9 +258,9 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     requireProject(q.projectId, 'listEntries')
 
     let rows = selectRows(q)
-    if (rows.length === 0) {
-      await rebuildMissingIndex(q.projectId) // 零行 = 索引缺失 → 静默重建联动（进面板按需重建）
-      rows = selectRows(q) // 空目录重建后仍零行 = 合法空结果
+    if (rows.length === 0 && countEntries.get(q.projectId)!.c === 0) {
+      await rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（进面板按需重建）
+      rows = selectRows(q) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
     }
 
     const keyword = q.keyword?.trim().toLowerCase() ?? ''
