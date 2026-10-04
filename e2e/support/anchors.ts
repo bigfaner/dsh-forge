@@ -8,6 +8,10 @@
 
 /** 官方会话转录滚动面（含流式正文） */
 export const CONVERSATION_CONTENT = '[data-conversation-content]'
+/** 官方会话滚动容器（ConversationContent scrollBody——fix-38 书海背景 CSS 锚宿主） */
+export const CONVERSATION_SCROLL = '[data-conversation-scroll]'
+/** 官方 composer 座（滚动容器内 sticky 座——fix-38 覆层 z 序对照面） */
+export const COMPOSER_SEAT = '[data-composer-seat]'
 /** 官方会话页签行（ConversationSessionHeader——会话作用域，blank 会话不渲染） */
 export const TABS_ROW = '[data-conversation-tabs]'
 /** 官方会话页签项（role=tab——对话/轨迹/知识召回三签 roster） */

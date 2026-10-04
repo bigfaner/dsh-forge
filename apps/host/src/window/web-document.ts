@@ -177,8 +177,9 @@ export interface HostRef {
 }
 
 /**
- * 组装壳 scheme 处理器：资产路径（/、/index.html、/assets/、/forge-client.js）服务 dist；
- * 其余全量转发 Host。失败归 e2e/控制台面（母本 reportFatal 的薄化——宿主日志承接）。
+ * 组装壳 scheme 处理器：资产路径（/、/index.html、/assets/、/forge-client.js、/brand/——
+ * vite public 物化位（fix-38 书海背景静态双资产））服务 dist；其余全量转发 Host。
+ * 失败归 e2e/控制台面（母本 reportFatal 的薄化——宿主日志承接）。
  */
 export function createShellProtocolHandler(options: {
   distRoot: string
@@ -192,6 +193,7 @@ export function createShellProtocolHandler(options: {
     const url = new URL(request.url)
     const isAsset = url.pathname === '/' || url.pathname === '/index.html'
       || url.pathname.startsWith('/assets/') || url.pathname === '/forge-client.js'
+      || url.pathname.startsWith('/brand/')
     if (isAsset) return serveShellDocument(request, options.distRoot)
     const host = options.host()
     if (host === undefined) return new Response(null, { status: 503 })

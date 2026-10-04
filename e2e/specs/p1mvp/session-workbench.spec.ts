@@ -133,6 +133,34 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     await expect(sessionRow.locator('.dswf-sidebar-session-time'), '行语言：相对时间在场').not.toBeEmpty()
     // 回答呈现于对话 tab
     await expect(page.locator(CONVERSATION_CONTENT).first()).toBeAttached()
+    // fix-38 ②：真实 active 相位——书海背景在场（资产随应用内主题口径：暗色 paper/浅色 ink；
+    // 官方缺省 preference=system 随 OS——按 body 标记现状断言，不假设浅色）
+    await expect
+      .poll(
+        async () =>
+          await page
+            .evaluate(() => {
+              const el = document.querySelector('[data-conversation-content]')
+              return el === null ? '' : window.getComputedStyle(el, '::before').backgroundImage
+            })
+            .catch(() => ''),
+        { timeout: 30_000, message: 'fix-38：active 相位书海背景在场（鲸游书海 v3）' },
+      )
+      .toContain('whale-sea-bg-')
+    const whaleSeaBg = await page
+      .evaluate(() => {
+        const el = document.querySelector('[data-conversation-content]')
+        const dark = document.body.hasAttribute('data-ds-dark-theme')
+        return {
+          dark,
+          bg: el === null ? '' : window.getComputedStyle(el, '::before').backgroundImage,
+        }
+      })
+      .catch(() => ({ dark: false, bg: '' }))
+    expect(
+      whaleSeaBg.bg,
+      '资产与应用内主题口径一致（暗色 paper / 浅色 ink）',
+    ).toContain(whaleSeaBg.dark ? 'whale-sea-bg-paper.svg' : 'whale-sea-bg-ink.svg')
 
     // ── Step 3 success：三签唯一性 + 官方轨迹视图 + 切回不重置 ──
     // 页签行恰三签（fix-29）：对话（官方 chat）/ 轨迹（官方 trajectory——产品复刻退役后

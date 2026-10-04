@@ -203,8 +203,9 @@
 }
 
 /* ── 品牌行件（sidebar.brand.mark / sidebar.brand.name 洞位内容；行本体归壳） ── */
-/* fix-15：mark 改「书 + 闪电」内联 SVG（docs/brand 母版）——废弃深色填充底/反色对
- * （浅色主题近黑方块根因）；单 currentColor 描形，外层色取 bluish 强调令牌随主题自适应 */
+/* fix-38：mark 改「鲸游书海」内联 SVG（docs/brand/whale-sea-mark.svg 母版——鲸剪影经
+ * 官方 FISH_LOGO_PATH 导出面消费）；沿 fix-15 禁用约定（废弃深色填充底/反色对——浅色
+ * 主题近黑方块根因）：单 currentColor 描形，外层色取 bluish 强调令牌随主题自适应 */
 .dswf-sidebar-brand-mark {
   flex: none;
   border-radius: var(--dsw-radius-sm);

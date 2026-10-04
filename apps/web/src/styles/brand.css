@@ -1,0 +1,46 @@
+/* 「鲸游书海」对话面板书海背景（fix-38 ②）——官方会话滚动容器 CSS 锚铺底（产品不注入
+ * 组件，走 CSS 锚：fix-25 后中区归官方 ConversationRoot）。
+ *
+ * 资产：apps/web/public/brand/ 双静态件（vite public → dist/brand/，经 dsh-forge://app/
+ * 根服务）——由生成器 tmp-ui-review/gen-whale-brand-v3.mjs --emit ink|paper 自设计母版
+ * docs/brand/whale-sea-conversation-bg.svg 确定性派生（种子 20261004，烘焙色零媒体查询）：
+ * ink（浅色主题墨）缺省 / paper（深色主题纸）由 body[data-ds-dark-theme] 覆盖——应用内
+ * 主题口径（官方 ui-theme 布尔标记，即时跟随），不经 prefers-color-scheme。
+ *
+ * 锚选型（runtime DOM 实证——任务「实证等价容器锚」条款）：官方滚动容器
+ * [data-conversation-scroll] 为 static 定位、其内消息行为非定位流内容（官方 chat 台账，
+ * 如用户气泡行零定位），定位态 z-index:0 覆层按 CSS 绘序必绘于正文之上；故覆层锚定其
+ * 官方定位祖先 [data-conversation-content]（几何上即滚动视口——滚动容器充满其区）+
+ * isolation:isolate 建栈上下文 + z-index:-1：置于全部内容（消息气泡/composer 座）之下、
+ * 面板底色之上——「正文/输入层在覆层之上」由官方层序原生承载，零官方类名耦合。
+ *
+ * 红线（docs/brand/README.md「鲸游书海」）：① 仅 active 相位（hero 空会话大标不进）；
+ * ② 召回（产品面板）/轨迹（官方视图）退场——仅会话滚动容器；③ 覆层不拦截指针
+ * （pointer-events:none）、不进无障碍树（伪元素）。可读性：母版自带顶部 55% 渐隐 +
+ * 元素不透明度 .03–.12，CSS 侧叠 opacity 总守护 ≤.85。 */
+[data-conversation-content] {
+  /* 覆层栈上下文界——z-index:-1 由此生效（官方 .body 本就 position:relative，零几何扰动） */
+  isolation: isolate;
+}
+
+[data-conversation-content][data-content-phase='active']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('/brand/whale-sea-bg-ink.svg') center / cover no-repeat;
+  opacity: 0.85; /* 可读性总守护 ≤.85（README 双口径约定） */
+}
+
+/* 深色主题（应用内）：纸色资产覆盖——跟随官方主题标记即时翻转 */
+body[data-ds-dark-theme] [data-conversation-content][data-content-phase='active']::before {
+  background-image: url('/brand/whale-sea-bg-paper.svg');
+}
+
+/* 红线②：召回（产品 [data-dswf-pane=recall]）/ 轨迹（官方 [data-trajectory-scroll]）
+ * 视图退场——书海背景仅伴随对话转录面 */
+[data-conversation-content]:has([data-dswf-pane='recall'])::before,
+[data-conversation-content]:has([data-trajectory-scroll])::before {
+  content: none;
+}

@@ -147,10 +147,18 @@ describe('scheme 注册与处理器路由', () => {
     expect(SHELL_ENTRY_URL).toBe('dsh-forge://app/')
   })
   it('资产路径服务 dist；其余转发；Host 未就绪 503', async () => {
-    const root = distOf({ 'index.html': '<html><head></head><body></body></html>', 'forge-client.js': '/*c*/' })
+    const root = distOf({
+      'index.html': '<html><head></head><body></body></html>',
+      'forge-client.js': '/*c*/',
+      'brand/whale-sea-bg-ink.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    })
     const handler = createShellProtocolHandler({ distRoot: root, host: () => undefined })
     expect((await handler(new Request(SHELL_ENTRY_URL))).status).toBe(200)
     expect((await handler(new Request('dsh-forge://app/forge-client.js'))).status).toBe(200)
+    // vite public 物化位（fix-38 书海背景静态资产）——/brand/* 服务 dist 且按扩展名出 SVG MIME
+    const brand = await handler(new Request('dsh-forge://app/brand/whale-sea-bg-ink.svg'))
+    expect(brand.status).toBe(200)
+    expect(brand.headers.get('content-type')).toContain('image/svg+xml')
     expect((await handler(new Request('dsh-forge://app/api/session/list'))).status).toBe(503)
     const forwarded = createShellProtocolHandler({
       distRoot: root,

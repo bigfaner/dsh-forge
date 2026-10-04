@@ -1,13 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" fill="none" aria-hidden="true">
-  <!-- dsh-forge 对话面板背景现行稿：鲸游书海 v3（fix-38 接入——2026-10-04 走查人采纳）
-       概念：海洋由无数本各式各样的书构成——四深度书带（133 本：立脊如礁/斜倚如波/书堆如屿/翻摊如浪花），
-       波脊随双正弦起伏；原生 dsh 鲸（FISH_LOGO_PATH ×14）破浪其间，携闪电喷泉与灵感气泡。
-       纪律：① 视觉权重压底部 ~28%，顶部 55% 渐隐遮罩内置——中部会话栏素净；
-             ② 母版（本件）= 明暗双态 prefers-color-scheme（文档/走查面）；应用内消费走
-                gen --emit ink|paper 静态双资产（烘焙色零媒体查询）+ brand.css 的
-                body[data-ds-dark-theme] 双口径（精确跟随应用内主题）；
-             ③ 元素不透明度 .03–.12，不伤正文可读性（CSS 侧另叠 opacity ≤.85 总守护）。
-       生成器：tmp-ui-review/gen-whale-brand-v3.mjs（种子 20261004 可复现/可调参）。 -->
+  <!-- dsh-forge 对话面板背景静态资产：鲸游书海 v3 paper（fix-38 ②——由设计母版
+       whale-sea-conversation-bg.svg 确定性派生：深色主题用纸 #e8eef8 烘焙）
+       纪律：烘焙色、零媒体查询（不经 prefers-color-scheme——应用内主题由
+       apps/web/src/styles/brand.css 的 body[data-ds-dark-theme] 双口径切换）；
+       消费面 = 官方会话滚动容器 CSS 锚铺底（README 红线：仅 active 相位会话滚动区）。
+       生成器：tmp-ui-review/gen-whale-brand-v3.mjs（种子 20261004）。 -->
   <defs>
     <linearGradient id="fadeMask" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0.00" stop-color="#fff" stop-opacity="0"/>
@@ -710,12 +707,5 @@
   </g>
     </g>
   </defs>
-  <style>
-    .light { display: block } .dark { display: none }
-    @media (prefers-color-scheme: dark) { .light { display: none } .dark { display: block } }
-  </style>
-  <g mask="url(#fade)">
-    <g class="light" color="#22314a"><use href="#scene"/></g>
-    <g class="dark" color="#e8eef8"><use href="#scene"/></g>
-  </g>
+  <g mask="url(#fade)" color="#e8eef8"><use href="#scene"/></g>
 </svg>

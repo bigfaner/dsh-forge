@@ -6,3 +6,7 @@
 - `global.css` —— 全局基底：仅消费官方令牌（`--dsw-font-family` / `--dsw-alias-bg-base` /
   `--dsw-alias-label-primary`）；令牌由官方 ui-theme client bundle 激活注入（boot 注入行装载），
   注入前取关键字回退，不取裸值。
+- `brand.css` —— 「鲸游书海」对话面板书海背景（fix-38 ②）：官方会话滚动区 CSS 锚铺底
+  （active 相位门 + 召回/轨迹 `:has` 退场 + hero 红线）；资产 = `apps/web/public/brand/`
+  静态双件（ink/paper——生成器派生），`body[data-ds-dark-theme]` 双口径跟随应用内主题
+  （不经 prefers-color-scheme）；母版/约定见 `docs/brand/README.md`「鲸游书海」节。

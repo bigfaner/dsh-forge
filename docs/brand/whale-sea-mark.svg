@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-  <!-- dsh-forge 品牌候选稿：鲸游书海 v2（draft——未采纳；现行标识见 dsh-forge-mark.svg）
+  <!-- dsh-forge 品牌现行标识：鲸游书海 v2（fix-38 接入——2026-10-04 走查人采纳；
+       前任 fix-15「书 + 闪电」见 dsh-forge-mark.svg 历史档）
        鲸 = 原生 dsh 官方 FISH_LOGO_PATH 几何零改动（仅缩放平移）——品牌血缘直承官方；
        书海（.88/.6 双页浪）= 产品的知识域；闪电喷泉 = 「知识就是力量」的激发态。
        纪律：单一 currentColor、无外部依赖，随官方令牌适配明暗。 -->
