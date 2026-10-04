@@ -8,11 +8,14 @@
 // 无往返依赖的 Outcome（1b/1c/2b/2c/4b/4c + 5/6 的可达子集）独立成无 dogfood 测试。
 //
 // Fact Table 摘录（源码核实）：
-//   - 三页签（fix-25 官方 roster）：[data-conversation-tabs] [role=tab]（对话=官方 chat 直用/
-//     轨迹/知识召回=产品登记项）；产品 panes [data-dswf-pane=trajectory|recall]；对话面/composer
-//     = 官方原生（[data-conversation-content]/[data-composer-input]）；会话面板本体 = 官方
+//   - 三页签（fix-25 官方 roster；fix-29 轨迹官方直用）：[data-conversation-tabs] [role=tab]
+//     （对话=官方 chat/轨迹=官方 trajectory 直用——产品零登记；知识召回=产品登记项）；
+//     产品 pane [data-dswf-pane=recall]；对话面/composer = 官方原生
+//     （[data-conversation-content]/[data-composer-input]）；会话面板本体 = 官方
 //     [data-slot=main.conversation]
-//   - 轨迹台账：[data-dswf-traj-row=message|tool|event|error]（TrajectoryLedger.tsx）
+//   - 轨迹视图（官方 ui-trajectory）：[data-trajectory-scroll] 滚动面 + 行
+//     tr[data-kind="system|user|context|compacted|message|tool|subtool"]（官方轨迹表——
+//     fix-29 退役产品 [data-dswf-traj-row=*] 台账）
 //   - 侧栏：[data-dswf-sidebar=wide|rail]；[data-dswf-project]/[data-dswf-session]；暂无会话 .dswf-sidebar-no-session；
 //     骨架 [data-dswf-skeleton]；空态 [data-dswf-empty]（ForgeWorkspacePanel.test 核实）
 //   - 官方壳：折叠钮 session.new/toggle.collapse 词条（dsh-client-ui-sidebar i18n：新会话/收起侧边栏/打开侧边栏）
@@ -354,7 +357,15 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     // 回答呈现于对话 tab
     await expect(page.locator('[data-conversation-content]').first()).toBeAttached()
 
-    // ── Step 3 success：轨迹 tab 最简台账 + 切回不重置 ──
+    // ── Step 3 success：三签唯一性 + 官方轨迹视图 + 切回不重置 ──
+    // 页签行恰三签（fix-29）：对话（官方 chat）/ 轨迹（官方 trajectory——产品复刻退役后
+    // 『轨迹』唯一）/ 知识召回（产品 dswf-recall）
+    const tabs = page.locator('[data-conversation-tabs] [role="tab"]')
+    await expect(tabs, '页签行恰三签（UF-4 终态）').toHaveCount(3)
+    await expect(
+      page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '轨迹' }),
+      '『轨迹』页签唯一（官方 trajectory 直用——fix-29）',
+    ).toHaveCount(1)
     // 等值断言前静置窗（fix-11）：官方会话面活体文案（「用时 N秒」运行计时/流式增量）使
     // textContent 持续漂移——账本级 tool/call 在场不保证回合已收尾（dogfood 工具失败重试期
     // 计时器长活）。静置判据 = 计时归一后 1s 两读等值；90s 未静置（真实长活体）降级为
@@ -374,12 +385,16 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     }
     const transcriptBefore = await readConversationText()
     await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '轨迹' }).click()
-    await expect(page.locator('[data-dswf-pane="trajectory"]').first()).toBeVisible()
+    // 官方轨迹表锚（fix-29）：滚动面在场（官方 ui-trajectory 视图区——数据管线官方自持）
+    await expect(page.locator('[data-trajectory-scroll"]').first(), '官方轨迹视图渲染（fix-29 直用）').toBeVisible({ timeout: 60_000 })
     await expect(
-      page.locator('[data-dswf-traj-row="tool"]').first(),
-      '台账含 ≥1 条工具调用（fixture 保证）',
+      page.locator('[data-trajectory-scroll"] tr[data-kind="tool"]').first(),
+      '官方轨迹表含 ≥1 条工具调用行（fixture 保证）',
     ).toBeVisible({ timeout: 60_000 })
-    await expect(page.locator('[data-dswf-traj-row="message"]').first(), '台账含本轮消息').toBeVisible()
+    await expect(
+      page.locator('[data-trajectory-scroll"] tr[data-kind="user"]', { hasText: fixtureMessage }).first(),
+      '官方轨迹表含本轮提问行（用户行文本）',
+    ).toBeVisible({ timeout: 60_000 })
     // 切回对话 tab 不重置——转录仍在原位（活体计时归一后等值；长活体降级 containment）
     await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '对话' }).click()
     await expect(page.locator('[data-conversation-content]').first()).toBeVisible()

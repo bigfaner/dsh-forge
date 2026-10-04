@@ -12,8 +12,9 @@
 //   - `main` keyed 'dswf-hero' / 'dswf-knowledge'（ui-layout 官方全局面板径——先例
 //     ui-plugin-manager/ui-schedule）：UF-2 零项目 hero 引导 + UF-5 知识视图；
 //   - `sidebar.panellist` 'dswf-knowledge'（官方 PanelRow 行语言——知识入口）；
-//   - `conversation.view` 'dswf-trajectory'/'dswf-recall'（官方页签 roster——ui-trajectory
-//     同型先例）：UF-4 轨迹台账 + 知识召回页签（对话 tab = 官方 'chat' 直用）；
+//   - `conversation.view` 'dswf-recall'（官方页签 roster——ui-trajectory 同型先例）：
+//     UF-4 知识召回页签（对话 = 官方 'chat' 直用；轨迹 = 官方 'trajectory' 直用——fix-29
+//     退役产品 'dswf-trajectory' 复刻，同名册双『轨迹』页签冲突随降位显形）；
 //   - `shell.overlay` 'dswf-host'（AppFrame root 五子槽之一——常驻壳宿主：UF-3 流程 +
 //     相位锚 + hero 面板驱动 + 知识模式右栏联动面）。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
@@ -50,9 +51,7 @@ export const CONVERSATION_VIEW_SLOT = 'conversation.view'
 export const SHELL_OVERLAY_SLOT = 'shell.overlay'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
-/** 产品页签登记 id（轨迹——UF-4 终裁形态 (a) 恒在场，官方 'trajectory' 受 developerTools 门控） */
-export const TRAJECTORY_VIEW_ID = 'dswf-trajectory'
-/** 产品页签登记 id（知识召回——UF-4 三页签之三） */
+/** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
 export const RECALL_VIEW_ID = 'dswf-recall'
 
 /**
@@ -144,7 +143,6 @@ export interface ForgeViewsGlobal {
     ForgeHeroPanel: unknown
     ForgeKnowledgePanel: unknown
     ForgeKnowledgeGlyph: unknown
-    ForgeTrajectoryView: unknown
     ForgeRecallView: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
@@ -187,7 +185,7 @@ export interface ForgeClientActiveMarker {
   readonly sidebar?: SlotRegistrationDiagnostics
   /** 官方 main 面板族（hero/knowledge 全局面板 + panellist 行） */
   readonly center?: SlotRegistrationDiagnostics
-  /** 官方 conversation.view 页签族（轨迹/知识召回） */
+  /** 官方 conversation.view 页签族（知识召回单登记——轨迹 = 官方 'trajectory' 直用，fix-29） */
   readonly views?: SlotRegistrationDiagnostics
   /** 常驻壳宿主（shell.overlay——流程宿主/相位锚/联动面载体） */
   readonly shell?: SlotRegistrationDiagnostics
@@ -314,18 +312,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           ),
         )
 
-        // 官方页签 roster（conversation.view——UF-4 轨迹/知识召回；对话 = 官方 'chat' 直用）
-        registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
-          clientCtx.slots.register(
-            {
-              name: CONVERSATION_VIEW_SLOT,
-              id: TRAJECTORY_VIEW_ID,
-              order: 10,
-              label: '轨迹',
-            },
-            views.ForgeTrajectoryView,
-          ),
-        )
+        // 官方页签 roster（conversation.view——UF-4 知识召回单登记；对话 = 官方 'chat' 直用、
+        // 轨迹 = 官方 'trajectory' 直用——fix-29 退役产品复刻，同 order 10 双『轨迹』冲突不再）
         registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
           clientCtx.slots.register(
             {

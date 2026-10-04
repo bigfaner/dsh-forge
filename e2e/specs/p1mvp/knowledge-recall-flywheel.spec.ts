@@ -468,12 +468,14 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     expect(answerText, '回答呈现于对话 tab（含命中知识域词）').toContain('部署')
 
     // ── Step 6：轨迹 tab 检索链时序（唯一直接 UI 证据）+ 切回不重置 ──
+    // fix-29：轨迹 tab = 官方 ui-trajectory 'trajectory' 直用——官方轨迹表锚
+    // （[data-trajectory-scroll] 滚动面 + tr[data-kind=tool] 工具行，行文本含工具名）
     await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '轨迹' }).click()
-    await expect(page.locator('[data-dswf-pane="trajectory"]').first()).toBeVisible()
+    await expect(page.locator('[data-trajectory-scroll"]').first(), '官方轨迹视图渲染（fix-29 直用）').toBeVisible({ timeout: 60_000 })
     await expect
-      .poll(async () => page.locator('[data-dswf-traj-row="tool"]').count(), { timeout: 60_000 })
+      .poll(async () => page.locator('[data-trajectory-scroll"] tr[data-kind="tool"]').count(), { timeout: 60_000 })
       .toBeGreaterThanOrEqual(2)
-    const toolRowTexts = await page.locator('[data-dswf-traj-row="tool"]').allTextContents()
+    const toolRowTexts = await page.locator('[data-trajectory-scroll"] tr[data-kind="tool"]').allTextContents()
     const searchRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_search') || t.includes('search'))
     const readRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_read_abstract') || t.includes('read-abstract'))
     expect(searchRowIdx, '台账含 search 工具行').toBeGreaterThanOrEqual(0)

@@ -926,7 +926,7 @@
       "title": "Fix: 会话页签行双『轨迹』——fix-25 产品 'dswf-trajectory' 与官方 ui-trajectory view（id='trajectory'，同 order 10）双占 conversation.view 名册：退役产品复刻、直用官方轨迹视图（UF-4 三签 = 官方 chat + 官方 trajectory + 产品 dswf-recall）",
       "priority": "P1",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-29.md",
       "record": "records/fix-29.md",
       "surface-type": "web",

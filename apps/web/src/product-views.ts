@@ -8,7 +8,8 @@
 // 在就绪门放行后才装载——发布恒先于消费（缺席 = 装配断裂，插件 apply fail-loud）。
 // fix-25 发布集（官方基座降位形态）：main.conversation 工作台面板退役——发布 =
 // sidebar 族（workspaces 替换 + 品牌行）+ main 面板族（hero/knowledge）+ 页签族
-// （轨迹/召回）+ 壳宿主（shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。
+// （召回单签——轨迹 = 官方 'trajectory' 直用，fix-29 退役产品复刻）+ 壳宿主
+// （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。
 import type { ComponentType } from 'react'
 import {
   ForgeBrandMark,
@@ -22,12 +23,7 @@ import { ForgeKnowledgeGlyph, type ForgeKnowledgeGlyphProps } from './views/side
 import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.js'
 import { ForgeHeroPanel } from './workbench/HeroPanel.js'
 import { ForgeKnowledgePanel, type ForgeKnowledgePanelProps } from './workbench/KnowledgePanel.js'
-import {
-  ForgeRecallView,
-  ForgeTrajectoryView,
-  type ForgeRecallViewProps,
-  type ForgeTrajectoryViewProps,
-} from './views/session/ConversationViews.js'
+import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
@@ -46,8 +42,6 @@ export interface ForgePublishedViews {
   readonly ForgeKnowledgePanel: ComponentType<ForgeKnowledgePanelProps>
   /** sidebar.panellist 'dswf-knowledge' 占用者（官方面板行字形） */
   readonly ForgeKnowledgeGlyph: ComponentType<ForgeKnowledgeGlyphProps>
-  /** conversation.view 'dswf-trajectory' 占用者（UF-4 轨迹台账页签） */
-  readonly ForgeTrajectoryView: ComponentType<ForgeTrajectoryViewProps>
   /** conversation.view 'dswf-recall' 占用者（UF-4 知识召回页签） */
   readonly ForgeRecallView: ComponentType<ForgeRecallViewProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
@@ -67,7 +61,6 @@ declare global {
   ForgeHeroPanel,
   ForgeKnowledgePanel,
   ForgeKnowledgeGlyph,
-  ForgeTrajectoryView,
   ForgeRecallView,
   createWorkbenchBridge,
 }

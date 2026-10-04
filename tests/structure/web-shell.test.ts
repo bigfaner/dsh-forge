@@ -163,31 +163,33 @@ describe('components 基础组件 pin（2.6）', () => {
   })
 })
 
-describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形态）', () => {
-  it('模块面就位：视图占用者族 + 台账行组件 + 转录投影 + 召回数据面 + 样式 + barrel', () => {
+describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形态 → fix-29 轨迹官方直用）', () => {
+  it('模块面就位：视图占用者族 + 召回数据面 + 样式 + barrel；fix-29 退役面缺席（台账/转录投影）', () => {
     for (const f of [
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/session/TrajectoryLedger.tsx',
       'apps/web/src/views/session/RecallTab.tsx',
       'apps/web/src/views/session/recall-model.ts',
-      'apps/web/src/views/session/transcript.ts',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'RecallTab', 'TrajectoryLedger', 'transcript']) {
+    for (const name of ['ConversationViews', 'RecallTab']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
+    // fix-29 退役 pin：产品轨迹台账/转录投影死代码缺席（轨迹 = 官方 ui-trajectory 直用）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/TrajectoryLedger.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/transcript.ts'))).toBe(false)
   })
 
-  it('官方 roster 占用 pin：轨迹/召回视图登记 id + pane 锚保持（对话 = 官方 chat 直用——产品零登记）', () => {
+  it('官方 roster 占用 pin：召回视图登记 id + pane 锚保持；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
     const views = read('apps/web/src/views/session/ConversationViews.tsx')
-    expect(views).toContain('data-dswf-pane="trajectory"')
     expect(views).toContain('data-dswf-pane="recall"')
+    expect(views).not.toContain('data-dswf-pane="trajectory"')
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
-    expect(plugin).toContain("export const TRAJECTORY_VIEW_ID = 'dswf-trajectory'")
+    expect(plugin).not.toContain('TRAJECTORY_VIEW_ID') // fix-29：产品轨迹登记 id 常量退役
+    expect(plugin).not.toContain("label: '轨迹'") // 官方 ui-trajectory 行保持——产品零复刻
     expect(plugin).toContain("export const RECALL_VIEW_ID = 'dswf-recall'")
   })
 
@@ -334,7 +336,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
       'ForgeSidebarSlot',
@@ -342,12 +344,13 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeHeroPanel',
       'ForgeKnowledgePanel',
       'ForgeKnowledgeGlyph',
-      'ForgeTrajectoryView',
       'ForgeRecallView',
       'createWorkbenchBridge',
     ]) {
       expect(views, `${name} 未发布`).toContain(name)
     }
+    // fix-29 退役 pin：产品轨迹视图不再发布（轨迹 = 官方 ui-trajectory 直用）
+    expect(views).not.toContain('ForgeTrajectoryView')
   })
 
   it('工作台桥键面一致：workbench-bridge（发布侧 + 读取侧同模块）键 __DSH_FORGE_WORKBENCH__；e2e bridgeDispatch 面保持', () => {

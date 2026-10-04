@@ -1,7 +1,8 @@
 /* 会话页签族样式（定位：业务——UF-4，fix-25 官方 roster 降位形态）。
  * 头部单元（标题行/页签行/收展钮）= 官方 ConversationRoot 原生渲染（官方头部链点亮后
  * 白拿——本文件零头部样式，fix-9/fix-13 的官方刻度复刻随 SessionPanel/SessionToolbar 退役）；
- * 产品面 = conversation.view 登记项（轨迹台账/召回）的视图区样式。
+ * 产品面 = conversation.view 登记项（召回——轨迹 = 官方 'trajectory' 直用，fix-29 台账
+ * 样式随产品复刻退役）的视图区样式。
  * 视觉一律官方令牌（令牌唯一：色/字/距零裸值，lint-tokens 机械执行）。 */
 
 /* 视图 pane：占满官方 viewArea（flex 列向填充——官方 .viewArea 同刻度；对话视图 = 官方
@@ -16,52 +17,6 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-}
-
-/* ── 轨迹台账（最简：时序列表行） ── */
-
-.dswf-traj-ledger {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--dsw-font-s-14-line-height);
-}
-
-.dswf-traj-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--dsw-font-s-14-line-height);
-  min-width: 0;
-}
-
-/* 行首标签（用户/助手/工具/系统/错误）：三级文本等宽收缩 */
-.dswf-traj-who {
-  flex: none;
-  font: var(--dsw-font-xs-strong-13);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-/* 行文本：正文刻度，主文本色；长文本截断（台账行 = 摘要面，不换行铺开） */
-.dswf-traj-text {
-  min-width: 0;
-  overflow: hidden;
-  font: var(--dsw-font-s-14);
-  color: var(--dsw-alias-label-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dswf-traj-row-error .dswf-traj-text {
-  color: var(--dsw-alias-label-error);
-}
-
-/* 工具相位徽章：右对齐收缩 */
-.dswf-traj-phase {
-  margin-left: auto;
-  flex: none;
 }
 
 /* ── 知识召回 tab（3.8：统计头 + 按知识分组行——动词明细/最近时间/热度徽章）── */
@@ -90,7 +45,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 分组行列表（可滚动台账面——行语言对齐轨迹台账同族） */
+/* 分组行列表（可滚动台账面） */
 .dswf-recall-list {
   display: flex;
   flex: 1;

@@ -21,7 +21,6 @@ import {
   SIDEBAR_PANELLIST_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
-  TRAJECTORY_VIEW_ID,
   forgeClientPlugin,
   moduleLoaderFacade,
   publishedViews,
@@ -110,7 +109,6 @@ function publishFakeViews() {
     ForgeHeroPanel: 'COMP:hero-panel',
     ForgeKnowledgePanel: 'COMP:knowledge-panel',
     ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
-    ForgeTrajectoryView: 'COMP:trajectory-view',
     ForgeRecallView: 'COMP:recall-view',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
@@ -176,7 +174,6 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       MAIN_SLOT,
       MAIN_SLOT,
       SIDEBAR_PANELLIST_SLOT,
-      CONVERSATION_VIEW_SLOT,
       CONVERSATION_VIEW_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
@@ -249,27 +246,26 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('页签 roster：轨迹/知识召回两登记（对话 = 官方 chat 直用——产品零登记）+ 召回注入面 = 跳转缝', () => {
+  it('页签 roster：知识召回单登记（fix-29：轨迹 = 官方 trajectory 直用——产品复刻退役零登记）+ 召回注入面 = 跳转缝', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const trajectory = registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && r.options.id === TRAJECTORY_VIEW_ID)
-    const recall = registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && r.options.id === RECALL_VIEW_ID)
-    expect(trajectory).toBeDefined()
-    expect(trajectory!.options.order).toBe(10)
-    expect(trajectory!.options.label).toBe('轨迹')
-    expect(trajectory!.component).toBe(views.ForgeTrajectoryView)
-    expect(recall).toBeDefined()
-    expect(recall!.options.order).toBe(20)
-    expect(recall!.options.label).toBe('知识召回')
-    expect(recall!.component).toBe(views.ForgeRecallView)
+    const viewRegisters = registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)
+    expect(viewRegisters, 'conversation.view 恰一登记（三签 = 官方 chat + 官方 trajectory + 产品召回）').toHaveLength(1)
+    const recall = viewRegisters[0]!
+    expect(recall.options.id).toBe(RECALL_VIEW_ID)
+    expect(recall.options.order).toBe(20)
+    expect(recall.options.label).toBe('知识召回')
+    expect(recall.component).toBe(views.ForgeRecallView)
+    // fix-29 退役 pin：产品 'dswf-trajectory' 复刻不再注册（官方 'trajectory' roster 行保持）
+    expect(registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && (r.options.id === 'dswf-trajectory' || r.options.id === 'trajectory'))).toBeUndefined()
     // 召回注入面：openKnowledgeEntry → 桥跳转（进知识面板 + 抽屉定位——selectPanel 官方面）
-    const face = recall!.options.inject!() as { openKnowledgeEntry: (id: number) => void }
+    const face = recall.options.inject!() as { openKnowledgeEntry: (id: number) => void }
     const { selectPanel } = fakeClientCtx()
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, CONVERSATION_VIEW_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
