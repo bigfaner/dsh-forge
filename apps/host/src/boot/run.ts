@@ -20,6 +20,7 @@ import {
   createBridgeProxy,
   KNOWLEDGE_SERVICE_METHODS,
   PROJECT_SERVICE_METHODS,
+  rebuildBridgeError,
   type BridgeFatalMessage,
   type BridgeReadyMessage,
   type BridgeRpcResultMessage,
@@ -69,7 +70,9 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
   })
   const ready = await waitForReady(child)
-  // RPC pending 表：rpc-result 按 id 结算；child 退出 → 全量拒绝（forge:* 面信封化降级）
+  // RPC pending 表：rpc-result 按 id 结算；child 退出 → 全量拒绝（forge:* 面信封化降级）。
+  // 失败结算 = 双形态错误解码重建（fix-28）：结构化 error → 带 code/data 的 Error——
+  // 代理面 reject 经 rpcEnvelope 判型走带内 RpcErr 信封（typed 保真）；string 旧形态不变。
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
   child.on('message', (message) => {
@@ -79,7 +82,7 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
     if (waiter === undefined) return
     pending.delete(m.id)
     if (m.ok) waiter.resolve(m.data)
-    else waiter.reject(new Error(m.error ?? `bridge rpc #${String(m.id)} 失败（无错误信息）`))
+    else waiter.reject(rebuildBridgeError(m.error ?? `bridge rpc #${String(m.id)} 失败（无错误信息）`))
   })
   child.once('close', () => {
     for (const waiter of pending.values()) waiter.reject(new Error('boot child 已退出——RPC 面不可用'))

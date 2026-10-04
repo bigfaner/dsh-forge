@@ -378,6 +378,10 @@ test('@web-e2e @p1mvp compensation·冒烟：③写入失败 → ④补偿删除
     await expect(failure, '失败反馈（UF-3 失败态）').toBeVisible({ timeout: 30_000 })
     await expect(failure).toContainText('注册失败')
     await expect(failure, '补偿结果说明在场（④=registry.delete 补偿已执行）').toContainText('补偿')
+    // fix-28 typed code 过桥保真：标题命中 ERR_PROJECT_WRITE(compensated) 分支文案——
+    // 桥灭失期标题恒落「注册失败（未预期错误）」默认分支（「注册失败」Tag 常驻，旧断言
+    // 不具判别力；补偿细节旧由 .dswf-ap-raw 原始 message 文本携带）
+    await expect(failure.locator('.dswf-ap-feedback-title')).toHaveText('应用库写入失败（补偿已执行）')
     // Step 3 Output 终态：该路径无注册（registry 探针）+ 应用侧无残留 + 目录与日志保留
     expect(registryContains(join(userData, 'dsh-home'), dirB), '④补偿后 registry 无 comp-b（孤儿 = 0）').toBe(false)
     await expect(launched.page.locator('.dswf-sidebar-project', { hasText: 'comp-b' })).toHaveCount(0)
@@ -468,8 +472,11 @@ test('@web-e2e @p1mvp compensation·Step1/2 attach-branch + create-idempotent：
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 3 Outcome "existing-workspace-protected"（journey Step 3c：ownership 保护）
-// 注：fix-27 起同路径既有注册的二次登记 = 幂等成功（自愈防御，不再炸 ws_path UNIQUE）——
-// 挂接分支 ③ 失败的可达注入 = workspace_id UNIQUE 占位行（他行占住既有工作区 id）。
+// 注：fix-27 起同路径既有注册的二次登记 = 幂等成功（attachExistingRow 按 ws_path 消费
+// 在场行——自愈防御，不再炸 ws_path UNIQUE），挂接分支 ③ 失败的可达注入 = workspace_id
+// UNIQUE 占位行（他行占住既有工作区 id）。**占位前须活删 own-a 应用侧行**（挂接可达
+// 前置 = 应用库零行，同 Step1/2 口径）：fix-28 走查实证 fix-27 版缺此删——seed 自撞
+// UNIQUE(workspace_id) 恒红（own-a 行已持同 id），且不删则重注册幂等成功永不达 ③。
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接分支失败不误删既有', async () => {
   test.setTimeout(420_000)
@@ -478,8 +485,9 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-comp-ud-'))
   let launched: Launched | undefined
   try {
-    // 单 boot：既有注册（RPC）→ WAL 活写 workspace_id 占位行（挂接分支上的 ③ 失败源——
-    // 路径随机错开：占位行不进左栏、不与 dirA 抢 ws_path）
+    // 单 boot：既有注册（RPC）→ WAL 活删 own-a 应用侧行（挂接可达前置——attachExistingRow
+    // 幂等面按 ws_path 消费在场行，不删则重注册幂等成功永不达 ③）→ WAL 活写 workspace_id
+    // 占位行（挂接分支上的 ③ 失败源——路径随机错开：占位行不进左栏、不与 dirA 抢 ws_path）
     launched = await launch(userData, { dismiss: false })
     const first = await forgeInvoke<RegisterResultLike>(launched.page, 'forge:projects/register', {
       workspaceDir: dirA,
@@ -488,6 +496,15 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
       knowledgeDir: `${dirA}\\.knowledge`,
     })
     expect(first.attachedToExisting).toBe(false)
+    {
+      const db = openStateDb(userData)
+      try {
+        db.pragma('busy_timeout = 5000')
+        db.prepare('DELETE FROM projects WHERE ws_path = ?').run(dirA)
+      } finally {
+        db.close()
+      }
+    }
     seedWorkspaceIdConflictRow(userData, first.workspaceId)
     const registryBefore = registrySnapshot(join(userData, 'dsh-home'))
     await dismissOnboardingModals(launched.page)
@@ -496,19 +513,22 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
     await registerViaUi(launched.page, fixtureRoot, 'own-a')
     const failure = launched.page.locator('.dswf-ap[data-dswf-ap="failure"]')
     await expect(failure, '挂接分支上的失败反馈在场').toBeVisible({ timeout: 30_000 })
+    // fix-28 typed code 过桥保真：挂接分支 ③ 失败 = ERR_PROJECT_WRITE 无补偿——标题命中
+    // 「挂接既有，未补偿」分支（非默认「未预期错误」分支）
+    await expect(failure.locator('.dswf-ap-feedback-title')).toHaveText('应用库写入失败（挂接既有，未补偿）')
     // Output：既有工作区不被删除——registry 探针断言既有注册仍在（幂等命中不误删）
     expect(
       registryContains(join(userData, 'dsh-home'), dirA),
       'ownership 保护：既有工作区注册保持（幂等命中不误删）',
     ).toBe(true)
     expect(existsSync(join(dirA, 'keep.txt')), '工作区目录与内容不受波及').toBe(true)
-    // State：挂接分支零补偿（registry 文本不变——delete 零调用）+ 应用侧仅既有单行
+    // State：挂接分支零补偿（registry 文本不变——delete 零调用）+ 应用侧本次登记未落库
     expect(registrySnapshot(join(userData, 'dsh-home')), '补偿 delete 零调用（registry 文本不变）').toBe(registryBefore)
     const projects = await forgeInvoke<readonly ProjectSummaryLike[]>(launched.page, 'forge:projects/list')
     expect(
       projects.filter((p) => p.wsPath === dirA),
-      '挂接分支失败 = 本次登记未落库（仅既有合法行）',
-    ).toHaveLength(1)
+      '挂接分支失败 = 本次登记未落库（own-a 行已为挂接前置活删）',
+    ).toHaveLength(0)
   } finally {
     if (launched !== undefined) {
       await closeApp(launched.app)

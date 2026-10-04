@@ -1,6 +1,8 @@
 // fix-1 boot 子进程桥协议 pin：消息形状守卫 / Map wire 编解码 / argv 选项解析 /
 // 子侧 RPC 派发（ok 与 fail 双态）/ 主侧代理转发与白名单——child 形态的纯逻辑面
 // 逐项锚定（进程编排在 run.ts，e2e 面 = flywheel.spec.ts）。
+// fix-28 错误过桥保真：typed error 结构化（code/message/data）/ 非 typed string 形态
+// 不变（fail-loud）/ 主侧双形态解码重建——信封面（rpcEnvelope 判型）衔接见 rpc-envelope.test.ts。
 import { describe, expect, it } from 'vitest'
 import {
   asReadyMessage,
@@ -12,8 +14,21 @@ import {
   KNOWLEDGE_SERVICE_METHODS,
   parseChildOptions,
   PROJECT_SERVICE_METHODS,
+  rebuildBridgeError,
+  serializeBridgeError,
   type BridgeRpcRequest,
 } from './bridge.js'
+
+/** typed error 结构替身（core ProjectWriteError 同型：readonly code + data + Error——fix-28 过桥保真锚） */
+class ProjectWriteLikeError extends Error {
+  readonly code = 'ERR_PROJECT_WRITE' as const
+  readonly data: Record<string, unknown>
+  constructor(data: Record<string, unknown>) {
+    super(`应用库 projects 行写入失败（registry.delete 补偿已执行，dsh 侧零孤儿）：${String(data.wsPath ?? '')}`)
+    this.name = 'ProjectWriteError'
+    this.data = data
+  }
+}
 
 describe('encodeWire / decodeWire（Map wire 信封）', () => {
   it('Map → entries 信封 → Map 往返（heatByEntry 形状：number 键）', () => {
@@ -124,12 +139,78 @@ describe('dispatchRpc（子侧派发——结果面永不 reject）', () => {
   it('服务方法异常 → ok=false + 错误信息（服务层 error code 透传）', async () => {
     const result = await dispatchRpc(services, request({ method: 'getProject', args: ['x'] }))
     expect(result.ok).toBe(false)
-    expect((result as { error?: string }).error).toBe('ERR_PROJECT_NOT_FOUND')
+    expect((result as { error?: unknown }).error).toBe('ERR_PROJECT_NOT_FOUND')
+  })
+
+  it('typed error（fix-28）→ ok=false + 结构化形态（code/message/data 过桥保真）', async () => {
+    const failure = new ProjectWriteLikeError({
+      wsPath: 'C:\\ws\\demo',
+      compensated: { workspaceId: 'ws-uuid-1', reason: '③ 应用库写入失败（registry.delete 补偿已执行）' },
+    })
+    const failing = { forgeProjects: { registerProject: () => { throw failure } } }
+    const result = await dispatchRpc(failing, request({ method: 'registerProject', args: [{}] }))
+    expect(result.ok).toBe(false)
+    expect((result as { error?: unknown }).error).toEqual({
+      code: 'ERR_PROJECT_WRITE',
+      message: failure.message,
+      data: {
+        wsPath: 'C:\\ws\\demo',
+        compensated: { workspaceId: 'ws-uuid-1', reason: '③ 应用库写入失败（registry.delete 补偿已执行）' },
+      },
+    })
+  })
+
+  it('伪造码 typed 形态（fix-28）→ 判型拒绝 → string 形态（fail-loud 语义不变）', async () => {
+    const fake = new Error('fake code') as Error & { code: string }
+    fake.code = 'ERR_MADE_UP'
+    expect(serializeBridgeError(fake)).toBe('fake code')
+    const plain = new Error('boom')
+    expect(serializeBridgeError(plain)).toBe('boom')
+    expect(serializeBridgeError('raw string')).toBe('raw string')
+    expect(serializeBridgeError({ not: 'error' })).toBe('[object Object]')
   })
 
   it('服务/方法不在场 → ok=false（白名单外不可达）', async () => {
     expect((await dispatchRpc(services, request({ service: 'forgeKnowledge' }))).ok).toBe(false)
     expect((await dispatchRpc(services, request({ method: 'nope' }))).ok).toBe(false)
+  })
+})
+
+describe('rebuildBridgeError（主侧双形态解码——fix-28 wire 兼容）', () => {
+  it('string 旧形态 → 普通 Error（现行为不变——无 code/data 属性）', () => {
+    const err = rebuildBridgeError('bridge: forgeProjects.nope 不在场')
+    expect(err).toBeInstanceOf(Error)
+    expect(err.message).toBe('bridge: forgeProjects.nope 不在场')
+    expect('code' in err).toBe(false)
+    expect('data' in err).toBe(false)
+  })
+
+  it('结构化形态 → Error 重建 code/data 属性（rpcEnvelope 判型素材齐备）', () => {
+    const err = rebuildBridgeError({
+      code: 'ERR_PROJECT_WRITE',
+      message: '应用库 projects 行写入失败（registry.delete 补偿已执行）',
+      data: { wsPath: 'C:\\ws\\demo', compensated: { workspaceId: 'ws-uuid-1' } },
+    }) as Error & { code?: unknown; data?: unknown }
+    expect(err.message).toBe('应用库 projects 行写入失败（registry.delete 补偿已执行）')
+    expect(err.code).toBe('ERR_PROJECT_WRITE')
+    expect(err.data).toEqual({ wsPath: 'C:\\ws\\demo', compensated: { workspaceId: 'ws-uuid-1' } })
+  })
+
+  it('结构化形态字段缺席 → 按在场属性重建；message 非法 → 字符串化降级（绝不抛）', () => {
+    const noCode = rebuildBridgeError({ message: 'x' }) as Error & { code?: unknown }
+    expect(noCode.message).toBe('x')
+    expect(noCode.code).toBeUndefined()
+    const malformed = rebuildBridgeError({ message: 42, code: 'ERR_PROJECT_WRITE' } as unknown as { message: string })
+    expect(malformed.message).toBe('[object Object]')
+    expect((malformed as Error & { code?: unknown }).code).toBe('ERR_PROJECT_WRITE')
+  })
+
+  it('往返保真：serializeBridgeError → rebuildBridgeError → code/message/data 等值', () => {
+    const failure = new ProjectWriteLikeError({ wsPath: 'C:\\ws\\rt', compensated: { workspaceId: 'ws-2' } })
+    const rebuilt = rebuildBridgeError(serializeBridgeError(failure)) as Error & { code?: unknown; data?: unknown }
+    expect(rebuilt.message).toBe(failure.message)
+    expect(rebuilt.code).toBe('ERR_PROJECT_WRITE')
+    expect(rebuilt.data).toEqual(failure.data)
   })
 })
 

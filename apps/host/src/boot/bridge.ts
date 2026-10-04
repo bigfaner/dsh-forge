@@ -10,7 +10,11 @@
 //   · 子进程 argv 选项解析（BootDshOptions JSON 单串）与外部叠层清单解析
 //   · 子侧 RPC 派发（白名单 service.method 动态调用 + 异常归一，永不 reject）
 //   · 主侧服务代理（方法白名单 → call 转发 + wire 解码）
+//   · 错误过桥保真（fix-28）：子侧 typed error 判型镜像 serializeRpcError → 结构化
+//     {code,message,data} 上桥；主侧双形态解码重建带 code/data 的 Error——经
+//     rpcEnvelope 判型后走带内 RpcErr 信封（child 形态下 UI 六码文案映射的通路半边）
 // 零 node:child_process 依赖——纯函数逐项单测锚定（bridge.test.ts）。
+import { ERROR_CODES } from '@dsh-forge/contracts'
 import type { BootDshOptions } from './run.js'
 
 /** 桥接服务名（产品双服务——runProfile ctx 面世，main 侧 forge:* 通道接线） */
@@ -46,13 +50,24 @@ export interface BridgeFatalMessage {
   readonly message: string
 }
 
-/** 子 → 主：RPC 结果（ok=false 时 error 承载服务失败信息） */
+/**
+ * 桥错误结构化形态（fix-28：typed error 过桥保真）。code ∈ contracts 六码（子侧判型
+ * 保证）；data = RpcErrorPayload.data 同源附载。string 旧形态 = 非 typed（fail-loud
+ * 语义——不捏造结构化）。
+ */
+export interface BridgeErrorPayload {
+  readonly code?: string
+  readonly message: string
+  readonly data?: unknown
+}
+
+/** 子 → 主：RPC 结果（ok=false 时 error 承载服务失败信息——双形态：string = 非 typed / 结构化 = typed） */
 export interface BridgeRpcResultMessage {
   readonly type: 'rpc-result'
   readonly id: number
   readonly ok: boolean
   readonly data?: unknown
-  readonly error?: string
+  readonly error?: string | BridgeErrorPayload
 }
 
 export type ChildToMainMessage = BridgeReadyMessage | BridgeFatalMessage | BridgeRpcResultMessage
@@ -162,9 +177,41 @@ export async function dispatchRpc(
     )
     return { type: 'rpc-result', id: request.id, ok: true, data: encodeWire(data) }
   } catch (cause) {
-    const error = cause instanceof Error ? cause.message : String(cause)
-    return { type: 'rpc-result', id: request.id, ok: false, error }
+    return { type: 'rpc-result', id: request.id, ok: false, error: serializeBridgeError(cause) }
   }
+}
+
+/**
+ * 子侧错误判型（fix-28——serializeRpcError 逻辑镜像）：Error 且 code ∈ contracts 六码 →
+ * 结构化 {code,message,data}（code/data 过桥保真）；其余（无 code / 伪造码 / 非 Error）→
+ * message string（现行为不变——非 typed fail-loud 语义）。判型自持本模块：host 禁 import
+ * core 错误类（结构同型即判型，同 rpc-envelope 口径），contracts ERROR_CODES 可 import。
+ */
+export function serializeBridgeError(cause: unknown): string | BridgeErrorPayload {
+  if (cause instanceof Error) {
+    const { code, data } = cause as Error & { code?: unknown; data?: unknown }
+    if (typeof code === 'string' && (ERROR_CODES as readonly string[]).includes(code)) {
+      return { code, message: cause.message, data }
+    }
+    return cause.message
+  }
+  return String(cause)
+}
+
+/**
+ * 主侧错误重建（fix-28 双形态解码——wire 兼容）：string（旧形态 / 非 typed）→ 普通 Error
+ * （现行为不变）；结构化 → Error + code/data 赋属性 → rpcEnvelope 判型通过 → 带内
+ * RpcErr 信封 → renderer 侧 RpcClientError instanceof 恢复命中（UI 六码文案映射通路）。
+ * 形状残缺（message 非 string 等——对端版本错配期）降级为字符串化 Error，绝不抛。
+ */
+export function rebuildBridgeError(error: string | BridgeErrorPayload): Error {
+  if (typeof error === 'string') return new Error(error)
+  const shape = error as { code?: unknown; message?: unknown; data?: unknown }
+  const message = typeof shape.message === 'string' ? shape.message : String(error)
+  const rebuilt = new Error(message) as Error & { code?: unknown; data?: unknown }
+  if (typeof shape.code === 'string') rebuilt.code = shape.code
+  if ('data' in shape) rebuilt.data = shape.data
+  return rebuilt
 }
 
 /**

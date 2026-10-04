@@ -1,6 +1,9 @@
 // 2.4 AC2 单元层——typed error 边界序列化保真（{ code, message, data }）。
 // core 错误类结构同型复刻（code/data 成员 + Error 基类；真类的端到端保真见 projects-rpc.test.ts 实层）。
+// fix-28 增 child 形态桥衔接面：rebuildBridgeError 重建的 Error 经本判型入带内 RpcErr 信封
+// （桥面双形态解码锚见 boot/bridge.test.ts）。
 import { describe, expect, it } from 'vitest'
+import { rebuildBridgeError } from '../boot/bridge.js'
 import { rpcEnvelope, serializeRpcError } from './rpc-envelope.js'
 
 /** typed error 结构替身（core WorkspaceCreateError 同型：readonly code + data + Error） */
@@ -91,5 +94,34 @@ describe('rpcEnvelope（IPC handler 包装）', () => {
       throw boom
     })
     await expect(handler(undefined, {})).rejects.toBe(boom)
+  })
+})
+
+describe('桥重建 Error 判型（fix-28：child 形态 typed error 过桥 → 信封带内保真）', () => {
+  it('rebuildBridgeError(结构化) → serializeRpcError 判型通过 → RpcErr 信封（code/message/data 保真）', async () => {
+    const wire = {
+      code: 'ERR_PROJECT_WRITE',
+      message: '应用库 projects 行写入失败（registry.delete 补偿已执行，dsh 侧零孤儿）：C:\\ws\\demo',
+      data: {
+        workspaceId: 'ws-uuid-1',
+        wsPath: 'C:\\ws\\demo',
+        compensated: { workspaceId: 'ws-uuid-1', reason: '③ 应用库写入失败（registry.delete 补偿已执行）' },
+      },
+    }
+    const handler = rpcEnvelope((): never => {
+      throw rebuildBridgeError(wire)
+    })
+    await expect(handler(undefined, {})).resolves.toEqual({
+      ok: false,
+      error: { code: 'ERR_PROJECT_WRITE', message: wire.message, data: wire.data },
+    })
+  })
+
+  it('rebuildBridgeError(string) → 无 code 判型失败 → fail-loud 原样上抛（语义不回退）', async () => {
+    const rebuilt = rebuildBridgeError('bridge: forgeProjects.registerProject 不在场（core/knowledge 插件行未装载？）')
+    const handler = rpcEnvelope((): never => {
+      throw rebuilt
+    })
+    await expect(handler(undefined, {})).rejects.toBe(rebuilt)
   })
 })

@@ -914,7 +914,7 @@
       "title": "Fix: typed error 跨 boot-child 桥灭失——dispatchRpc catch 只保 message（code/data 丢）→ 信封判型失败 fail-loud → Electron reject 包装 → UI 错误文案分支全灭（恒默认分支）",
       "priority": "P1",
       "estimatedTime": "2h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-28.md",
       "record": "records/fix-28.md",
       "surface-type": "web",
