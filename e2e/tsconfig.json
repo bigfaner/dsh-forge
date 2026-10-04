@@ -6,7 +6,15 @@
     "types": [],
     "noEmit": true,
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "lib": [
+      "ES2023",
+      "DOM"
+    ]
   },
-  "include": ["playwright.config.ts", "specs/**/*.ts"]
+  "include": [
+    "playwright.config.ts",
+    "specs/**/*.ts",
+    "support/**/*.ts"
+  ]
 }

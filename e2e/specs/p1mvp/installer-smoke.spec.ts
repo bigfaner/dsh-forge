@@ -5,8 +5,13 @@
 //
 // 载体：NSIS 静默安装一次（beforeAll，文件级共享——四 Outcome 互斥环境态按 contract
 // 「机器复位纪律」以测试序 + 破坏-恢复承载）→ 对安装产物跑 Playwright `_electron`。
-// 与既有 e2e/specs/installer-smoke.spec.ts（任务 4.3 产物）覆盖面重叠——本套件为
-// contract 溯源版（每 Outcome 独立断言 + second-launch / fail-fast / offline 边界）。
+//
+// 归并注记（fix-37 ④）：原 e2e/specs/installer-smoke.spec.ts（任务 4.3 产物——安装/启动/
+// 主界面三步 + 会话面板可用）覆盖面已并入本套件（双跑分钟级 NSIS 链终结——installer 链
+// 单跑）：①安装/--check 与 ②启动零错（manifest + profile 四文件 + 插件行内容 + state.db）
+// 归 beforeAll + 冒烟前半；③主界面三区 = 冒烟前半 Step 3 超集；④会话面板可用 = 冒烟后半
+// 超集（注册 + composer 芯片流 + 回显 + 空提交拦截）。fail-fast 差异面（Step2c 破坏启动
+// 路径）保留在本套件。SMOKE-LEDGER §6 G2 台账行随迁。
 //
 // 已知环境坑（4.1/4.3 实测，沿既有 spec 同径）：NSIS 载荷物化走 %TEMP%（盘余量不足 =
 // 静默 exit 2 零输出）→ TEMP/TMP 统一重定向数据盘短路径根；MAX_PATH 260 → 盘根短前缀。
@@ -14,11 +19,28 @@
 // 留痕 skip：Step 2b offline-launch-self-sufficient——断网观察通道 UNKNOWN（contract
 // fact E2E_INFRA：无网络请求记录器设施，落地前不臆断通道）。
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { zstdDecompressSync } from 'node:zlib'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+import { closeApp, launchElectron, launchHost } from '../../support/launch.js'
+import { decodeSessionFile, findFixtureSession, sessionLogById, type SessionEvent } from '../../support/session-files.js'
+import { forgeInvoke } from '../../support/rpc.js'
+import {
+  CTA_ADD_PROJECT,
+  COMPOSER_INPUT,
+  CONVERSATION_CONTENT,
+  CONVERSATION_HEADER,
+  HERO,
+  KNOWLEDGE_ENTRY,
+  MAIN_CONVERSATION,
+  NAV_SHELL,
+  PROJECT_ROW_ANY,
+  RIGHTBAR_COLLAPSED,
+  SIDEBAR_ANY,
+  WORKBENCH,
+  workbenchOfView,
+} from '../../support/anchors.js'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const INSTALLER_DIR = join(ROOT, 'release', 'installer')
@@ -94,137 +116,30 @@ test.afterAll(async () => {
 
 // 官方首启「预览版说明」预免 = 产品 boot overlay 内置等值确认（fix-12）——安装形态裸跑。
 
-async function dismissOnboardingModals(page: Page): Promise<void> {
-  const deadline = Date.now() + 15_000
-  for (let dismissed = 0; dismissed < 3; dismissed++) {
-    const dismissButton = page.locator('[role="dialog"] button', { hasText: /^稍后配置$/ }).first()
-    while (!(await dismissButton.isVisible().catch(() => false))) {
-      if (Date.now() > deadline) return
-      await page.waitForTimeout(500)
-    }
-    await dismissButton.click({ timeout: 10_000 })
-    await page.waitForTimeout(1_000)
-  }
-}
-
+/** 安装形态启动（安装后 exe 直启 + TEMP/TMP 隔离 + 120s 慢盘就绪窗——e2e/support
+ *  launchHost 的安装形态消费） */
 async function launchInstalled(
   exe: string,
   userData: string,
   tmp: string,
   options?: { readonly dismiss?: boolean },
-): Promise<{ app: ElectronApplication; page: Page; pageErrors: string[] }> {
-  const dismiss = options?.dismiss ?? true
-  const { _electron } = await import('@playwright/test')
-  const app = await _electron.launch({
+) {
+  return launchHost({
+    userData,
     executablePath: exe,
-    env: {
-      ...process.env,
-      DSH_FORGE_USER_DATA: userData,
-      DSH_FORGE_PORT: String(19910 + (process.pid % 200)),
-      TEMP: tmp,
-      TMP: tmp,
-    } as Record<string, string>,
+    devProfile: false,
+    dismiss: options?.dismiss ?? true, // 零 UI boot 传 false（毒化面防护）
+    env: { TEMP: tmp, TMP: tmp },
+    timeouts: { bootReady: 120_000, loaderLive: 120_000, workbenchVisible: 60_000 },
   })
-  const page = await app.firstWindow()
-  const pageErrors: string[] = []
-  page.on('pageerror', (error) => pageErrors.push(String(error)))
-  if (dismiss) await dismissOnboardingModals(page) // 零 UI boot 传 dismiss=false（毒化面防护）
-  await page.waitForFunction(
-    () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
-    undefined,
-    { timeout: 120_000 },
-  )
-  await page.waitForFunction(
-    () => {
-      const g = globalThis as { __ModuleLoader__?: { mode: string }; __DSH_FORGE_CLIENT__?: unknown }
-      return g.__ModuleLoader__?.mode === 'live' && g.__DSH_FORGE_CLIENT__ !== undefined
-    },
-    undefined,
-    { timeout: 120_000 },
-  )
-  return { app, page, pageErrors }
 }
 
-/** 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
- *  fix-34 止血复制，统一收编共享 helper 归 fix-37 e2e 支撑层） */
-async function closeApp(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
-  await app.close().catch(() => undefined)
-  if (proc.exitCode === null) {
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, 10_000)
-      proc.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-    })
-  }
-  await new Promise((resolve) => setTimeout(resolve, 2_000))
-}
-
-// ─── dsh 会话文件面（空提交零往返断言载体——flywheel.spec 解码器同源精简版） ───
-
-interface InstallerSessionEvent {
-  readonly type: string
-}
-
-function decodeSessionFile(path: string): readonly InstallerSessionEvent[] {
-  const buf = readFileSync(path)
-  const frames: number[] = []
-  for (let i = 0; i < buf.length - 4; i++) {
-    if (buf[i] === 0x28 && buf[i + 1] === 0xb5 && buf[i + 2] === 0x2f && buf[i + 3] === 0xfd) frames.push(i)
-  }
-  frames.push(buf.length)
-  const events: InstallerSessionEvent[] = []
-  for (let i = 0; i < frames.length - 1; i++) {
-    try {
-      const text = zstdDecompressSync(buf.subarray(frames[i]!, frames[i + 1]!)).toString('utf8')
-      for (const line of text.split('\n')) {
-        if (line === '') continue
-        try {
-          events.push(JSON.parse(line) as InstallerSessionEvent)
-        } catch {
-          // 非 JSON 行跳过
-        }
-      }
-    } catch {
-      // magic 误报帧跳过
-    }
-  }
-  return events
-}
-
-/** 夹具工作区会话事件集（无会话文件 = 空数组——两态皆零消息口径） */
-function fixtureSessionEvents(dshHome: string, segment: string): readonly InstallerSessionEvent[] {
-  const sessionsDir = join(dshHome, 'sessions')
-  if (!existsSync(sessionsDir)) return []
-  let best: { dir: string; mtime: number } | undefined
-  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
-    if (!wsDir.isDirectory() || !wsDir.name.includes(segment)) continue
-    for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
-      if (!sDir.isDirectory()) continue
-      const dir = join(sessionsDir, wsDir.name, sDir.name)
-      const log = readdirSync(dir).find((f) => /^session(?:\.v[1-9]\d*)?\.jsonl(?:\.zstd)?$/.test(f))
-      const mtime = log !== undefined ? statSync(join(dir, log)).mtimeMs : 0
-      if (best === undefined || mtime >= best.mtime) best = { dir, mtime }
-    }
-  }
-  if (best === undefined) return []
-  const log = readdirSync(best.dir)
-    .filter((f) => /^session(?:\.v[1-9]\d*)?\.jsonl(?:\.zstd)?$/.test(f))
-    .sort((a, b) => Number(/^session(?:\.v([1-9]\d*))?\.jsonl/.exec(b)?.[1] ?? 0) - Number(/^session(?:\.v([1-9]\d*))?\.jsonl/.exec(a)?.[1] ?? 0))[0]
-  return log !== undefined ? decodeSessionFile(join(best.dir, log)) : []
-}
-
-async function forgeInvoke<T>(page: Page, channel: string, payload?: unknown): Promise<T> {
-  const data = await page.evaluate(async ({ ch, args }) => {
-    const forge = (globalThis as { dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> } }).dshForge
-    if (forge === undefined) throw new Error('dshForge preload 面缺席')
-    const envelope = await forge.invoke(ch, args)
-    if (!envelope.ok) throw new Error(`forge RPC ${ch} 失败：${JSON.stringify(envelope)}`)
-    return envelope.data
-  }, { ch: channel, args: payload })
-  return data as T
+/** 夹具工作区会话事件集（无会话文件 = 空数组——两态皆零消息口径；e2e/support 解码族组装） */
+function fixtureSessionEvents(dshHome: string, segment: string): readonly SessionEvent[] {
+  const found = findFixtureSession(dshHome, segment)
+  if (found === undefined) return []
+  const log = sessionLogById(dshHome, found.sessionId)
+  return log !== undefined ? decodeSessionFile(log) : []
 }
 
 /** 首次安装冒烟的 userData（second-launch 复用——冷重启前置） */
@@ -243,37 +158,41 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
   test.setTimeout(420_000)
   const userData = mkdtempSync(join(SMOKE_ROOT, 'p1mvp-ud-'))
   smokeUserData.dir = userData
-  const pageErrors: string[] = []
-  let app: ElectronApplication | undefined
+  let app: Awaited<ReturnType<typeof launchInstalled>>['app'] | undefined
   try {
     // ── Step 2 success：安装后 exe 直启——装载在等待窗口内完成、无报错弹窗、无白屏 ──
     const launched = await launchInstalled(exe as string, userData, tmp as string, { dismiss: false })
     app = launched.app
-    pageErrors.push(...launched.pageErrors)
+    const pageErrors = launched.pageErrors
     const page = launched.page
-    // 白屏拦截面：boot manifest 注入（壳掌舵）+ 工作台可见
+    // 白屏拦截面：boot manifest 注入（壳掌舵）+ 工作台可见（launchHost 就绪链已含——
+    // manifest 断言为 AC3 载体独立面）
     const manifest = (await page.evaluate(() =>
       (window as unknown as { dshForge: { getBootManifest(): Promise<{ url: string; injections: unknown[] }> } })
         .dshForge.getBootManifest(),
     )) as { url: string; injections: unknown[] }
     expect(manifest.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
     expect(manifest.injections.length).toBeGreaterThan(0)
-    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
-    // 首启落地 profile（安装形态真实落地链回归）
+    await expect(page.locator(WORKBENCH).first()).toBeVisible({ timeout: 60_000 })
+    // 首启落地 profile（安装形态真实落地链回归——fix-37 ④ 归并面：4.3 套件的插件行内容
+    // 断言随迁：patch 含 @dsh-forge/core / @dsh-forge/knowledge 产品行）
     for (const f of PROFILE_FILES) {
       expect(existsSync(join(userData, 'profile', f)), `首启落地 profile/${f}`).toBe(true)
     }
+    const patch = readFileSync(join(userData, 'profile', 'cordis.patch.yml'), 'utf8')
+    expect(patch, 'profile patch 含 @dsh-forge/core 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/core'")
+    expect(patch, 'profile patch 含 @dsh-forge/knowledge 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/knowledge'")
     expect(existsSync(join(userData, 'state.db')), 'state.db 落盘（SQLite 句柄已开）').toBe(true)
 
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──
-    await expect(page.locator('#root nav[aria-label]').first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('[data-dswf-sidebar]').first(), '产品工作区面板').toBeVisible()
-    await expect(page.locator('button[aria-label="知识库"]').first(), '知识库入口').toBeVisible()
-    await expect(page.locator('[data-dswf-project]'), '零项目态：项目树空').toHaveCount(0)
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first(), '中区结构位').toBeAttached()
-    await expect(page.locator('[data-dswf-hero]').first(), 'hero 空态 + CTA（零项目确定相位）').toBeVisible()
-    await expect(page.locator('[data-dswf-cta="add-project"]')).toBeVisible()
-    await expect(page.locator('[data-rightbar-collapsed]').first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()
+    await expect(page.locator(NAV_SHELL).first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(SIDEBAR_ANY).first(), '产品工作区面板').toBeVisible()
+    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口').toBeVisible()
+    await expect(page.locator(PROJECT_ROW_ANY), '零项目态：项目树空').toHaveCount(0)
+    await expect(page.locator(workbenchOfView('session')).first(), '中区结构位').toBeAttached()
+    await expect(page.locator(HERO).first(), 'hero 空态 + CTA（零项目确定相位）').toBeVisible()
+    await expect(page.locator(CTA_ADD_PROJECT)).toBeVisible()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
     if (app !== undefined) await closeApp(app)
@@ -289,18 +208,18 @@ test('@web-e2e @p1mvp installer-smoke·Step2d second-launch-consistent：冷重�
   test.skip(exe === undefined, 'NSIS 安装包未构建——留痕 skip（beforeAll 定位失败）')
   test.skip(smokeUserData.dir === undefined, '冒烟未执行（安装态缺失）——冷重启依赖首启终态')
   test.setTimeout(300_000)
-  let app: ElectronApplication | undefined
+  let app: Awaited<ReturnType<typeof launchInstalled>>['app'] | undefined
   try {
     // 同一安装入口 + 同一 userData（已初始化）冷重启——单实例锁无竞争（零 UI boot：
     // 本测试位于任何收模态 boot 之前——毒化面防护，见文件头注）
     const launched = await launchInstalled(exe as string, smokeUserData.dir as string, tmp as string, { dismiss: false })
     app = launched.app
-    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
+    await expect(launched.page.locator(WORKBENCH).first()).toBeVisible({ timeout: 60_000 })
     // 与首次启动同相位（零项目 hero 确定相位——fact HERO_PHASE；注册走查在后续测试）
-    await expect(launched.page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'hero', { timeout: 30_000 })
+    await expect(launched.page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'hero', { timeout: 30_000 })
     // 用户数据目录持久（无一次性首启依赖）：profile 四文件 + state.db 复在场
     for (const f of PROFILE_FILES) {
-      expect(existsSync(join(smokeUserData.dir as string, 'profile', f)), `冷重启 profile/${f} 持久`).toBe(true)
+      expect(existsSync(join((smokeUserData.dir as string), 'profile', f)), `冷重启 profile/${f} 持久`).toBe(true)
     }
     expect(existsSync(join(smokeUserData.dir as string, 'state.db')), '冷重启 state.db 持久').toBe(true)
     expect(launched.pageErrors, '冷重启无首启异常回归（pageerror 面）').toEqual([])
@@ -316,16 +235,15 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
   test.skip(smokeUserData.dir === undefined, '冒烟前半未执行（安装态缺失）')
   test.setTimeout(600_000)
   const userData = smokeUserData.dir as string
-  const pageErrors: string[] = []
-  let app: ElectronApplication | undefined
+  let app: Awaited<ReturnType<typeof launchInstalled>>['app'] | undefined
   try {
     const launched = await launchInstalled(exe as string, userData, tmp as string)
     app = launched.app
-    pageErrors.push(...launched.pageErrors)
+    const pageErrors = launched.pageErrors
     const page = launched.page
     // ── Step 4 success：会话面板可用（输入区可聚焦、键入即回显——发送不走查） ──
     // 工作区夹具（userData 本体含 dsh-home——注册 dsh-home 父目录实体不进官方账本菜单，
-    // 实测坑；沿既有 installer-smoke.spec 同径：独立 fixture 目录）
+    // 实测坑；沿既有 installer-smoke 同径：独立 fixture 目录）
     const projDir = join(userData, '..', 'smoke-proj-fixture')
     mkdirSync(projDir, { recursive: true })
     const registered = await forgeInvoke<{ projectId: string; workspaceId: string }>(page, 'forge:projects/register', {
@@ -335,13 +253,11 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
       knowledgeDir: join(projDir, '.knowledge'),
     })
     expect(registered.projectId, '安装形态注册落库（IPC → core 双服务 → registry → SQLite 全链）').toBeTruthy()
-    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
-    await expect(page.locator('[data-slot="main.conversation"]').first(), '官方会话面渲染（fix-25）').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('[data-slot="conversation.header"]').first(), '官方头部链渲染点在场').toBeAttached()
+    await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
+    await expect(page.locator(MAIN_CONVERSATION).first(), '官方会话面渲染（fix-25）').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(CONVERSATION_HEADER).first(), '官方头部链渲染点在场').toBeAttached()
     // 新会话入口：composer 工作区芯片流（首装真实路径——rail 钮锚跟随回跳归单测 pin）
-    const composer = page
-      .locator('[data-composer-input]')
-      .last()
+    const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
     const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
     await expect(chip).toBeVisible({ timeout: 30_000 })
@@ -363,7 +279,7 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     }
     expect(listed, '注册工作区在列（安装形态 dsh create 实体——账本传播收敛）').toBe(true)
     await wsItem.click()
-    await expect(page.locator('[data-conversation-content]').first(), '会话面接管（新会话就绪）').toBeAttached({ timeout: 30_000 })
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '会话面接管（新会话就绪）').toBeAttached({ timeout: 30_000 })
     // 可用判据：输入区可聚焦、键入字符即回显
     await composer.click()
     await page.keyboard.insertText('回显探针')
@@ -401,24 +317,21 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
   const resourcesDir = join(installDir as string, 'resources')
   const resourcesBackup = `${resourcesDir}.bak-p1mvp`
   renameSync(resourcesDir, resourcesBackup)
-  let app: ElectronApplication | undefined
+  let app: Awaited<ReturnType<typeof launchElectron>> | undefined
   try {
-    const { _electron } = await import('@playwright/test')
     // 运行时树缺失（resources 改名）→ 启动异常：进程退出 / 白屏无首屏——失败可检出即冒烟失败口径
     let failDetected = false
     try {
-      app = await _electron.launch({
+      app = await launchElectron({
         executablePath: exe as string,
         env: {
-          ...process.env,
           DSH_FORGE_USER_DATA: mkdtempSync(join(SMOKE_ROOT, 'p1mvp-ud-')),
-          DSH_FORGE_PORT: String(19930 + (process.pid % 200)),
-          TEMP: tmp,
-          TMP: tmp,
-        } as Record<string, string>,
+          TEMP: tmp as string,
+          TMP: tmp as string,
+        },
       })
       const page = await Promise.race([
-        app.firstWindow(),
+        app.firstWindow() as Promise<Page>,
         new Promise<Page>((_, reject) => setTimeout(() => reject(new Error('no-window')), 60_000)),
       ]).catch(() => undefined)
       if (page === undefined) {
@@ -426,7 +339,7 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
       } else {
         // 窗口在场则首屏必不在等待窗口内呈现（工作台不可达 = 冒烟失败判定成立）
         const visible = await page
-          .locator('[data-dswf-workbench]')
+          .locator(WORKBENCH)
           .first()
           .isVisible({ timeout: 60_000 })
           .catch(() => false)

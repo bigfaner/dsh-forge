@@ -4,95 +4,23 @@
 // 数据面 = dogfood 链路（4.2，SMOKE-LEDGER §3 L497–L536 归属）——本套件承载结构/接线/
 // 空态面 + 条件留痕的数据面（§5 前置缺口：host forge:knowledge/*·forge:projects/* 通道
 // 未装配期，组二留痕 skip；UI 侧三方投影一致性由 recall-model 单测 pin）。
-// 隔离：独立 userData + 独立端口（e2e 单实例纪律，沿 smoke-skeleton.spec）。
+// 隔离：独立 userData + 端口分配器（e2e 单实例纪律，沿 smoke-skeleton.spec）；
+// 载体面（launch/dismiss/close/桥导航/导航族）经 e2e/support（fix-37 ①）。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-
-const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const HOST_DIR = join(ROOT, 'apps', 'host')
-
-const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-
-/** 启动薄宿主（dev profile + 独立 userData——单实例锁互不干扰） */
-async function launchHost(overrides: Record<string, string>): Promise<ElectronApplication> {
-  const { _electron } = await import('@playwright/test')
-  return _electron.launch({
-    executablePath: electronBinary,
-    args: ['.'],
-    cwd: HOST_DIR,
-    env: { ...process.env, ...overrides } as Record<string, string>,
-  })
-}
-
-/** 壳 boot 就绪链（沿 smoke-skeleton.spec 同径） */
-async function waitShellReady(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
-    undefined,
-    { timeout: 60_000 },
-  )
-  await page.waitForFunction(
-    () => {
-      const g = globalThis as { __ModuleLoader__?: { mode: string }; __DSH_FORGE_CLIENT__?: unknown }
-      return g.__ModuleLoader__?.mode === 'live' && g.__DSH_FORGE_CLIENT__ !== undefined
-    },
-    undefined,
-    { timeout: 90_000 },
-  )
-}
-
-/**
- * 官方首启引导遮罩处置（host 集成转正 4.2/fix-1 后 fresh userData 必现，未收起即拦截
- * 一切指针交互——locator 可解析但 click 恒超时，4.2 实证）：
- * 1. 「预览版说明」= 产品 boot overlay 预置等值确认（fix-12：apps/host/src/boot/overlay.ts
- *    内置 `ui-settings-general.welcomeNoticeVersion`——e2e 不再自带预确认叠层）。
- * 2. 「添加一个 API Key」onboarding（deepseek-official 凭据缺席触发）= 运行期点
- *    「稍后配置」本地收起（fallback 循环，窗口期轮询——模态挂载可晚于工作台可见数秒）。
- */
-
-/** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归产品 overlay 预免） */
-async function dismissOnboardingModals(page: Page): Promise<void> {
-  const deadline = Date.now() + 15_000
-  for (let dismissed = 0; dismissed < 3; dismissed++) {
-    const dismissButton = page
-      .locator('[role="dialog"] button', { hasText: /^稍后配置$/ })
-      .first()
-    while (!(await dismissButton.isVisible().catch(() => false))) {
-      if (Date.now() > deadline) return // 窗口期内无模态 = 无 API Key onboarding（凭据在场面）
-      await page.waitForTimeout(500)
-    }
-    await dismissButton.click({ timeout: 10_000 })
-    await page.waitForTimeout(1_000)
-  }
-}
-
-/** 相位稳定门（settling 收敛） */
-async function stablePhase(page: Page): Promise<'hero' | 'session'> {
-  await page.waitForFunction(
-    () => {
-      const p = document.querySelector('[data-dswf-workbench]')?.getAttribute('data-dswf-phase')
-      return p === 'hero' || p === 'session'
-    },
-    undefined,
-    { timeout: 30_000 },
-  )
-  return page.locator('[data-dswf-workbench]').first().getAttribute('data-dswf-phase') as Promise<'hero' | 'session'>
-}
-
-/**
- * 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null)
- * 回官方会话面板；无产品会话行期的载体适配，台账口径保持）
- */
-async function bridgeDispatch(page: Page, type: string): Promise<void> {
-  await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
-    if (eventType === 'show-session') bridge?.showSession()
-  }, type)
-}
+import { test, expect, type Page } from '@playwright/test'
+import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
+import { dirRow, enterDir } from '../support/navigation.js'
+import {
+  KNOWLEDGE_ENTRY,
+  KNOWLEDGE_VIEW,
+  MAIN_CONVERSATION,
+  RIGHTBAR_COLLAPSED,
+  TABS_ROW,
+  WORKBENCH,
+  workbenchOfView,
+} from '../support/anchors.js'
 
 /** 组二知识夹具：{root}/demo-proj/.knowledge/{前端,后端}/…（frontmatter 最小契约：summary+keywords） */
 function makeKnowledgeFixture(): string {
@@ -111,17 +39,6 @@ function makeKnowledgeFixture(): string {
     'utf8',
   )
   return root
-}
-
-/** 浏览器行定位（名称精确匹配——沿 smoke-skeleton.dirRow 口径） */
-function dirRow(page: Page, name: string): ReturnType<Page['locator']> {
-  return page.locator('.dswf-fb-item', { hasText: new RegExp(`(?:^|\\s)${name}(?:\\s|$)`) }).first()
-}
-
-/** 双击进入目录并等待列举就绪 */
-async function enterDir(page: Page, name: string): Promise<void> {
-  await dirRow(page, name).dblclick()
-  await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
 }
 
 /**
@@ -157,50 +74,39 @@ async function hostDataChannelsLive(page: Page): Promise<boolean> {
 test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-kni-'))
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19670 + (process.pid % 200)),
-    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
-  })
-  const pageErrors: string[] = []
+  const { app, page, pageErrors } = await launchHost({ userData })
   try {
-    const page: Page = await app.firstWindow()
-    page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await waitShellReady(page)
-    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
-    await dismissOnboardingModals(page)
     const phase = await stablePhase(page)
 
     // AC-1：知识视图 = UF-6 浏览面装配壳（M0 占位已替换）；无项目锚 = 引导空态（确定性：
     // 零注册 ⟺ 无锚——host 通道在期亦然），壳结构位在场
-    await page.locator('button[aria-label="知识库"]').first().click()
-    const knowledgeView = page.locator('[data-dswf-knowledge-view]').first()
+    await page.locator(KNOWLEDGE_ENTRY).first().click()
+    const knowledgeView = page.locator(KNOWLEDGE_VIEW).first()
     await expect(knowledgeView).toBeVisible()
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator(workbenchOfView('knowledge')).first()).toBeAttached()
     // 无项目锚 = 引导空态（锚属性 none——浏览面不出场不拉取不炸壳）
     await expect(knowledgeView).toHaveAttribute('data-dswf-kn-anchor', 'none')
-    await expect(page.locator('[data-dswf-knowledge-view]')).toContainText('尚未锚定项目')
+    await expect(page.locator(KNOWLEDGE_VIEW)).toContainText('尚未锚定项目')
     // UF-5 回归（不褪色）：知识模式右栏隐藏（fix-23 官方右栏 frame 锚——此处收起态进入）
-    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
 
     // UF-5 回归（不褪色）：切回会话视图 → 右栏恢复收起（知识视图让位结束）
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeHidden()
-    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    await expect(page.locator(workbenchOfView('session')).first()).toBeAttached()
+    await expect(page.locator(KNOWLEDGE_VIEW).first()).toBeHidden()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
 
     // 召回 tab 结构（fix-25 官方 roster）：本组无会话——官方页签行（conversation.session.header
     // 内）不渲染，召回视图不挂载（only:id 激活即挂载机制）；「无会话锚 = 静态空态」归
     // ConversationViews 单测 pin，真实会话召回链归 knowledge-recall-flywheel（dogfood）
     if (phase === 'session') {
-      await expect(page.locator('[data-conversation-tabs]')).toHaveCount(0)
+      await expect(page.locator(TABS_ROW)).toHaveCount(0)
       await expect(page.locator('[data-dswf-pane="recall"]')).toHaveCount(0)
     }
 
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
   }
 })
@@ -214,18 +120,8 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-knix-'))
   const fixture = makeKnowledgeFixture()
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19690 + (process.pid % 200)),
-    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
-  })
+  const { app, page } = await launchHost({ userData })
   try {
-    const page: Page = await app.firstWindow()
-    await waitShellReady(page)
-    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
-    await dismissOnboardingModals(page)
-    await stablePhase(page)
     // 前置门：host forge:projects/* + forge:knowledge/* 通道装配（core 插件入 profile +
     // main.ts 接线——独立 host 集成任务，SMOKE-LEDGER §5）。留痕跳过，不弱化断言。
     test.skip(
@@ -246,11 +142,11 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
-    await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
+    await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
 
     // ── AC-1：知识视图 = 浏览面真数据（项目锚 = 唯一项目兜底；索引直读 → 卡片网格） ──
-    await page.locator('button[aria-label="知识库"]').first().click()
-    const knowledgeView = page.locator('[data-dswf-knowledge-view]').first()
+    await page.locator(KNOWLEDGE_ENTRY).first().click()
+    const knowledgeView = page.locator(KNOWLEDGE_VIEW).first()
     await expect(knowledgeView).toBeVisible()
     // 锚非 none（唯一项目兜底——项目 id 运行期未知，断言取「非 none」语义）
     await expect
@@ -271,10 +167,10 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     // 「无召回会话 = 本会话暂无召回」空态归 ConversationViews 单测 pin；真实会话召回数据链
     // 归 knowledge-recall-flywheel（dogfood）——此处断官方会话面板恢复挂载
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
-    await expect(page.locator('[data-conversation-tabs]')).toHaveCount(0)
+    await expect(page.locator(MAIN_CONVERSATION).first()).toBeVisible()
+    await expect(page.locator(TABS_ROW)).toHaveCount(0)
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
   }

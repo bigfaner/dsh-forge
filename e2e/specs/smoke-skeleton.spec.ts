@@ -3,94 +3,33 @@
 // 运行时元断言）；本套件承载骨架组（三区 / 视图互换 / 页签跟随 / 向导两段走查 / hero），
 // 断言文本/意图零删改（expect 描述附原行号），仅载体与选择器适配（适配理由逐条入台账）。
 // 吸收 2.12 workbench-sc1.spec（SC1 起步组行号映射保持——见台账「吸收记录」节）。
-// 隔离：独立 userData + 独立端口（e2e 单实例纪律，沿 host-boot/web-shell.spec）。
+// 隔离：独立 userData + 端口分配器（e2e 单实例纪律，沿 host-boot/web-shell.spec）；
+// 载体面（launch/dismiss/close/桥导航/导航族）经 e2e/support（fix-37 ①——选择器随
+// anchors 常量面，值逐字等价）。
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-
-const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const HOST_DIR = join(ROOT, 'apps', 'host')
-
-const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-
-/** 启动薄宿主（dev profile + 独立 userData——单实例锁互不干扰） */
-async function launchHost(overrides: Record<string, string>): Promise<ElectronApplication> {
-  const { _electron } = await import('@playwright/test')
-  return _electron.launch({
-    executablePath: electronBinary,
-    args: ['.'],
-    cwd: HOST_DIR,
-    env: { ...process.env, ...overrides } as Record<string, string>,
-  })
-}
-
-/** 壳 boot 就绪链（沿 2.12/1.5 前置）：就绪门 → 模块系统 live → 产品插件激活 */
-async function waitShellReady(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
-    undefined,
-    { timeout: 60_000 },
-  )
-  await page.waitForFunction(
-    () => {
-      const g = globalThis as { __ModuleLoader__?: { mode: string }; __DSH_FORGE_CLIENT__?: unknown }
-      return g.__ModuleLoader__?.mode === 'live' && g.__DSH_FORGE_CLIENT__ !== undefined
-    },
-    undefined,
-    { timeout: 90_000 },
-  )
-}
-
-/**
- * 官方首启引导遮罩处置（host 集成转正 4.2/fix-1 后 fresh userData 必现，未收起即拦截
- * 一切指针交互——locator 可解析但 click 恒超时，4.2 实证）：
- * 1. 「预览版说明」= 产品 boot overlay 预置等值确认（fix-12：apps/host/src/boot/overlay.ts
- *    内置 `ui-settings-general.welcomeNoticeVersion`——e2e 不再自带预确认叠层；dev 形态
- *    确认写路径被拒属宿主模块拓扑缺陷，fix-12 记录在案，预免即产品口径）。
- * 2. 「添加一个 API Key」onboarding（deepseek-official 凭据缺席触发）= 运行期点
- *    「稍后配置」本地收起（fallback 循环，窗口期轮询——模态挂载可晚于工作台可见数秒）。
- */
-
-/** 运行期模态收起（fallback：API Key onboarding「稍后配置」本地收起；预览版说明归叠层预免） */
-async function dismissOnboardingModals(page: Page): Promise<void> {
-  const deadline = Date.now() + 15_000
-  for (let dismissed = 0; dismissed < 3; dismissed++) {
-    const dismissButton = page
-      .locator('[role="dialog"] button', { hasText: /^稍后配置$/ })
-      .first()
-    while (!(await dismissButton.isVisible().catch(() => false))) {
-      if (Date.now() > deadline) return // 窗口期内无模态 = 无 API Key onboarding（凭据在场面）
-      await page.waitForTimeout(500)
-    }
-    await dismissButton.click({ timeout: 10_000 })
-    await page.waitForTimeout(1_000)
-  }
-}
-
-/** 相位稳定门（settling 收敛——hero/session 二态后才走组内分支） */
-async function stablePhase(page: Page): Promise<'hero' | 'session'> {
-  await page.waitForFunction(
-    () => {
-      const p = document.querySelector('[data-dswf-workbench]')?.getAttribute('data-dswf-phase')
-      return p === 'hero' || p === 'session'
-    },
-    undefined,
-    { timeout: 30_000 },
-  )
-  return page.locator('[data-dswf-workbench]').first().getAttribute('data-dswf-phase') as Promise<'hero' | 'session'>
-}
-
-/** 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null) 回官方会话面板；
- * 无产品会话行期的载体适配，台账记录） */
-async function bridgeDispatch(page: Page, type: string): Promise<void> {
-  await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
-    if (eventType === 'show-session') bridge?.showSession()
-  }, type)
-}
+import { test, expect } from '@playwright/test'
+import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
+import { dirRow, enterDir } from '../support/navigation.js'
+import {
+  DOCKKIT_CONTENT,
+  DOCKKIT_STRIP_TAB,
+  DOCKKIT_SURFACE,
+  COLLAPSE_RIGHTBAR_BUTTON,
+  KNOWLEDGE_ENTRY,
+  MAIN_CONVERSATION,
+  CONVERSATION_CONTENT,
+  CONVERSATION_HEADER,
+  NAV_SHELL,
+  RIGHTBAR_COLLAPSED,
+  SIDEBAR_ANY,
+  SIDEBAR_RIGHT_EXPAND,
+  WORKBENCH,
+  addProjectPhase,
+  rfField,
+  workbenchOfView,
+} from '../support/anchors.js'
 
 /** 向导固定目录夹具：{root}/dsh-demo/.knowledge + {root}/legacy-app（名称对齐原型走查目录语义） */
 function makeWizardFixture(): string {
@@ -106,17 +45,6 @@ function flattenPath(dir: string): string {
   return normalized.replace(/^([A-Za-z]):/, '$1').replaceAll('\\', '-')
 }
 
-/** 浏览器行定位（名称精确匹配——防「Local」误中「LocalLow」） */
-function dirRow(page: Page, name: string): ReturnType<Page['locator']> {
-  return page.locator('.dswf-fb-item', { hasText: new RegExp(`(?:^|\\s)${name}(?:\\s|$)`) }).first()
-}
-
-/** 双击进入目录并等待列举就绪（面包屑出现目标段） */
-async function enterDir(page: Page, name: string): Promise<void> {
-  await dirRow(page, name).dblclick()
-  await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 组零（fix-12）：fresh 裸启动真实路径——env 不含 DSH_FORGE_PATCH_FILES（无任何 spec
 // 自带预确认叠层），「预览版说明」免遮罩由产品 boot overlay 预置等值确认承载
@@ -126,15 +54,8 @@ async function enterDir(page: Page, name: string): Promise<void> {
 test('骨架组·fresh 裸启动无「预览版说明」遮罩（fix-12 产品 overlay 预确认）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-bare-'))
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19590 + (process.pid % 200)),
-  })
+  const { app, page } = await launchHost({ userData, dismiss: false })
   try {
-    const page: Page = await app.firstWindow()
-    await waitShellReady(page)
-    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
     // 20s 持续在场断言（无预确认实测挂载 ~+7s，对齐窗口期取上限；toHaveCount(0) 即时
     // 通过不覆盖迟到挂载——循环轮询持有窗口）。「添加一个 API Key」onboarding 可现且
     // 可收，不在本断言面（标题级判别）。
@@ -145,7 +66,7 @@ test('骨架组·fresh 裸启动无「预览版说明」遮罩（fix-12 产品 o
       await page.waitForTimeout(500)
     }
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
   }
 })
@@ -157,19 +78,10 @@ test('骨架组·fresh 裸启动无「预览版说明」遮罩（fix-12 产品 o
 test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L689 + L3 起步池 + 元断言 L824）', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-skel-'))
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19610 + (process.pid % 200)),
-  })
-  const pageErrors: string[] = []
+  const { app, page, pageErrors } = await launchHost({ userData })
   try {
-    const page: Page = await app.firstWindow()
-    page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await waitShellReady(page)
-    const workbench = page.locator('[data-dswf-workbench]').first()
+    const workbench = page.locator(WORKBENCH).first()
     await expect(workbench).toBeVisible({ timeout: 60_000 })
-    await dismissOnboardingModals(page)
     // 工作台桥发布（左栏导航视图切换缝——2.12 起步组行，吸收保留）
     expect(
       await page.evaluate(() => typeof (globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__),
@@ -178,29 +90,29 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
 
     // ── 三区装配（smoke「三区布局(SC1)」组）──
     // L41 左栏渲染：官方 sidebar 壳在场（nav = 折叠/导航/快捷键白拿）+ 产品工作区面板
-    await expect(page.locator('#root nav[aria-label]').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('[data-dswf-sidebar]').first()).toBeVisible()
+    await expect(page.locator(NAV_SHELL).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(SIDEBAR_ANY).first()).toBeVisible()
     // L42 左栏构成（载体适配，台账 #2）：品牌/新会话 = 官方壳承继；知识库入口/项目树 = 产品面板
-    await expect(page.locator('button[aria-label="知识库"]').first()).toBeVisible()
+    await expect(page.locator(KNOWLEDGE_ENTRY).first()).toBeVisible()
     await expect(page.locator('.dswf-sidebar-sectionlabel', { hasText: '项目' }).first()).toBeVisible()
     // L44 默认中区 = 会话视图（M0 相位语义：hero = 首用替换呈现，否则会话视图；知识视图恒隐藏）
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator(workbenchOfView('session')).first()).toBeAttached()
     await expect(page.locator('.dswf-zone-knowledge')).toBeHidden()
     if (phase === 'session') {
       // L45 官方会话面 + 头部链渲染点（fix-25 官方基座：本组无会话——页签行归
       // session-workbench Step3 真实会话载体；嵌入配方退役——content 工厂官方直渲）
-      await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
-      await expect(page.locator('[data-slot="conversation.header"]').first()).toBeAttached()
-      await expect(page.locator('[data-conversation-content]').first()).toBeAttached()
+      await expect(page.locator(MAIN_CONVERSATION).first()).toBeVisible()
+      await expect(page.locator(CONVERSATION_HEADER).first()).toBeAttached()
+      await expect(page.locator(CONVERSATION_CONTENT).first()).toBeAttached()
     } else {
       // UF-2 hero 相位（实机走查归组三——本组只断言替换呈现语义；fix-25：hero = 产品
       // main 面板 'dswf-hero'——官方会话面板让位卸载）
       await expect(page.locator('[data-dswf-hero]').first()).toBeVisible()
-      await expect(page.locator('[data-slot="main.conversation"]')).toHaveCount(0)
+      await expect(page.locator(MAIN_CONVERSATION)).toHaveCount(0)
     }
     // L46 右栏默认收起（fix-23 锚迁移：官方 AppFrame frame 锚 data-rightbar-collapsed——
     // 自研轨道 data-dswf-dock 退役，右栏 = 官方 ui-sidebar-right 第三列）
-    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
 
     // ── L3 布局对照断言起步池（样式纪律第 6 条；台账「L3 起步池」节；fix-25：产品三区
     // 容器退役——中区 = 官方 AppFrame/ConversationRoot，结构位断言让位官方面）──
@@ -228,20 +140,20 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     // L50 点「知识库」→ 中区切换为知识视图（载体适配，台账 #L50：M0 占位锚 data-dswf-knowledge-m0
     // → M1 浏览面装配壳锚 data-dswf-knowledge-view——「知识视图在场」断言语义不变；
     // 无项目锚（host 通道前置缺口期）= 壳内引导空态，结构位不变）
-    await page.locator('button[aria-label="知识库"]').first().click()
+    await page.locator(KNOWLEDGE_ENTRY).first().click()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible()
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator(workbenchOfView('knowledge')).first()).toBeAttached()
     if (phase === 'session') {
       // fix-25：官方 keyed main 面板互换——非选中面板卸载（状态归官方 store 自持）
-      await expect(page.locator('[data-slot="main.conversation"]').first()).toBeHidden()
+      await expect(page.locator(MAIN_CONVERSATION).first()).toBeHidden()
     }
     // L8 打开不占用右栏（fix-23 锚迁移：知识模式右栏隐藏 = 官方 frame data-rightbar-collapsed
     // 在场——产品经官方 sidebarRight 窄面联动收起；台账 #8「不占用右栏」语义不变）
-    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
     // L9 知识模式无右栏入口（负向断言；fix-23：官方 corner ExpandButton 在隐藏的会话区头部内
     // ——可达面全集口径保持：可视线内无展开入口）
     const expandables = await page.evaluate(() =>
-      [...document.querySelectorAll('#root button')].filter((b) => {
+      [...document.querySelectorAll<HTMLButtonElement>('#root button')].filter((b) => {
         if (!/展开|打开右侧/.test(b.getAttribute('aria-label') ?? b.textContent ?? '')) return false
         const cs = getComputedStyle(b)
         return cs.visibility !== 'hidden' && b.getClientRects().length > 0 && b.offsetWidth > 0
@@ -250,59 +162,59 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     expect(expandables, 'L52 知识模式无右栏展开入口').toBe(0)
     // L66/L474 切回会话视图（载体适配，台账 #12/#99：M0 无产品会话行期 = 桥派发同径转移）
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator(workbenchOfView('session')).first()).toBeAttached()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeHidden()
     // （L8 后半：收起态往返知识模式 → 恢复收起——「不占用」的回归面）
-    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
 
     // L59 会话视图可展开右栏（fix-25：展开钮 = 官方 corner ExpandButton
     // [data-sidebar-right-expand]——官方头部链白拿面；fresh 裸启无会话面 = 官方原生语义
     // 无钮（右栏休眠态断言承载，台账 #10 载体适配），自研面板钮随 main.conversation 影子退役）
-    const expandButton = page.locator('[data-sidebar-right-expand]').first()
+    const expandButton = page.locator(SIDEBAR_RIGHT_EXPAND).first()
     if (phase === 'session') {
       await expect(expandButton, '面板钮在场（官方右栏收展入口）').toBeAttached()
       await expandButton.click()
     } else {
-      await expect(page.locator('[data-rightbar-collapsed]').first(), '官方右栏休眠（frame 收起标记）').toBeAttached()
+      await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '官方右栏休眠（frame 收起标记）').toBeAttached()
     }
     if (phase === 'session') {
-      await expect(page.locator('[data-rightbar-collapsed]'), '右栏展开 = frame 收起标记退场').toHaveCount(0)
+      await expect(page.locator(RIGHTBAR_COLLAPSED), '右栏展开 = frame 收起标记退场').toHaveCount(0)
       // 页签跟随底稿：展开右栏 = 官方 dockkit chips 页签条（官方 guide 种子页「开始」）+ 内容挂载
       // （fix-23 台账 #L59：官方 ui-sidebar-right 接管右栏——锚域迁移官方右栏列）
       await expect(
-        page.locator('[data-rightbar-col] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
+        page.locator(DOCKKIT_STRIP_TAB, { hasText: '开始' }),
       ).toBeVisible()
-      await expect(page.locator('[data-rightbar-col] [data-dockkit-content]').first()).toBeAttached()
+      await expect(page.locator(DOCKKIT_CONTENT).first()).toBeAttached()
 
       // ── fix-23 官方右栏回归（官方 ui-sidebar-right 面在场与形态）──
       // 官方 surface（横条形 dropZones）+ 官方 strip chrome 收展钮（aria「收起右侧边栏」）。
       await expect(
-        page.locator('[data-rightbar-col] [data-dockkit-surface]').first(),
+        page.locator(DOCKKIT_SURFACE).first(),
         'fix-23·官方右栏 dockkit surface 在场',
       ).toBeAttached()
       expect(
         await page
-          .locator('[data-rightbar-col] [data-dockkit-surface]')
+          .locator(DOCKKIT_SURFACE)
           .first()
           .getAttribute('data-dockkit-drop-zones'),
         'fix-23·横条形右栏（官方 DockLayout Sidebar 形态）',
       ).toBe('horizontal')
       await expect(
-        page.locator('[data-rightbar-col] button[aria-label="收起右侧边栏"]').first(),
+        page.locator(COLLAPSE_RIGHTBAR_BUTTON).first(),
         'fix-23·官方 strip chrome 收展钮在场（data-sidebar-right-toggle）',
       ).toBeAttached()
 
       // L11 整体切换：进入知识模式 → 已开右栏也隐藏（内容让位；官方窄面联动收起）
-      await page.locator('button[aria-label="知识库"]').first().click()
-      await expect(page.locator('[data-rightbar-collapsed]').first(), '知识模式右栏隐藏（联动收起）').toBeAttached()
+      await page.locator(KNOWLEDGE_ENTRY).first().click()
+      await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '知识模式右栏隐藏（联动收起）').toBeAttached()
       // L12 切回会话视图 → 右栏恢复展开（联动恢复——记忆锚）
       await bridgeDispatch(page, 'show-session')
-      await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
-      await expect(page.locator('[data-rightbar-collapsed]'), '切回恢复展开（rightbarViewPlan 记忆恢复）').toHaveCount(0)
+      await expect(page.locator(workbenchOfView('session')).first()).toBeAttached()
+      await expect(page.locator(RIGHTBAR_COLLAPSED), '切回恢复展开（rightbarViewPlan 记忆恢复）').toHaveCount(0)
 
       // L689 收起（面板钮同径——含 computed 回归样本）
-      await page.locator('[data-sidebar-right-expand]').first().click()
-      await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+      await page.locator(SIDEBAR_RIGHT_EXPAND).first().click()
+      await expect(page.locator(RIGHTBAR_COLLAPSED).first()).toBeAttached()
       const collapsedWidth = await page.evaluate(() =>
         getComputedStyle(document.querySelector('[data-rightbar-col]')!).width,
       )
@@ -313,7 +225,7 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     // 官方层行为，断言面 = 未捕获异常 pageerror；console 全口径随 host ws 面治理后回归）
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
   }
 })
@@ -326,26 +238,13 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-wiz-'))
   const fixture = makeWizardFixture()
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19630 + (process.pid % 200)),
-    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
-  })
-  const pageErrors: string[] = []
+  const { app, page, pageErrors } = await launchHost({ userData })
   try {
-    const page: Page = await app.firstWindow()
-    page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await waitShellReady(page)
-    await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 60_000 })
-    await dismissOnboardingModals(page)
-    await stablePhase(page)
-
     // 打开入口 = 左栏「＋」（原型 data-act=add-project 的 M0 载体；hero CTA 路径归组三）
     await page.locator('[data-dswf-nav="add-project"]').first().click()
     // L753 ① 先弹文件浏览器（选择工作区目录；载体适配，台账 #157：M0 = 单模态「添加项目」
     // 内嵌浏览器面，原型 = 独立「选择工作区目录」对话框标题）
-    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
     await expect(page.locator('.dswf-fb-list[role="listbox"]')).toBeVisible()
     // L754 ① 未选中时「选择此文件夹」禁用（M0 段一按钮文案 =「下一步」，台账 #158）
     const confirmBtn = page.locator('.dswf-fb-confirm')
@@ -391,7 +290,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await dirRow(page, 'dsh-demo').click()
     await expect(confirmBtn).toBeEnabled()
     await confirmBtn.click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('form'))).toBeVisible()
 
     // ── fix-7 几何防回归（L3 式 computed 断言）：段二卡片宽 + label 全可见 ──
     const formGeo = await page.evaluate(() => {
@@ -424,11 +323,11 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     ).toBe(formGeo.dialog!.right)
 
     // ── 段二表单（smoke ② 组）──
-    const ws = page.locator('[data-dswf-rf-ws]')
-    const name = page.locator('[data-dswf-rf-name]')
-    const forge = page.locator('[data-dswf-rf-forge]')
-    const kn = page.locator('[data-dswf-rf-kn]')
-    const tasks = page.locator('[data-dswf-rf-tasks]')
+    const ws = page.locator(rfField('ws'))
+    const name = page.locator(rfField('name'))
+    const forge = page.locator(rfField('forge'))
+    const kn = page.locator(rfField('kn'))
+    const tasks = page.locator(rfField('tasks'))
     const demoDir = join(fixture, 'dsh-demo')
     // L769 ② 工作区目录自动回填表单（只读）
     await expect(ws).toHaveValue(demoDir)
@@ -471,7 +370,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     // （返回表单保留已填），原型 = 叠层两对话框——「表单保持」语义以状态保留承载）──
     await page
       .locator('.dswf-rf-row')
-      .filter({ has: page.locator('[data-dswf-rf-kn]') })
+      .filter({ has: page.locator(rfField('kn')) })
       .getByRole('button', { name: '浏览…' })
       .click()
     await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="knowledgeDir"]')).toBeVisible()
@@ -482,7 +381,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await dirRow(page, '.knowledge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     // L798 ③ 浏览确认 → 回填知识库目录（浏览面板让位，表单仍在）
-    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     await expect(kn).toHaveValue(`${demoDir}\\.knowledge`)
 
     // ── ④ 重新选择与联动（smoke ④ 组）──
@@ -499,7 +398,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     })
     await dirRow(page, 'legacy-app').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     const legacyDir = join(fixture, 'legacy-app')
     // L807 ④ 换选工作区：回填 + 未手改字段重构（forge/项目名）
     await expect(ws).toHaveValue(legacyDir)
@@ -515,7 +414,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await expect(page.locator('.dswf-ap')).toHaveCount(0)
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
   }
@@ -530,18 +429,10 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-hero-'))
   const fixture = makeWizardFixture()
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19650 + (process.pid % 200)),
-    DSH_FORGE_DIRECTORY_PICKER: 'off', // fix-14：向导走查归回退面（OS 对话框不可 e2e——preload 桥降级开关）
-  })
+  const { app, page } = await launchHost({ userData })
   try {
-    const page: Page = await app.firstWindow()
-    await waitShellReady(page)
-    const workbench = page.locator('[data-dswf-workbench]').first()
+    const workbench = page.locator(WORKBENCH).first()
     await expect(workbench).toBeVisible({ timeout: 60_000 })
-    await dismissOnboardingModals(page)
     const phase = await stablePhase(page)
     // 前置门：hero 相位 ⟺ host forge:projects 通道可用（零项目 + 通道活 = hero；
     // 通道缺席 = fail-soft session——2.12 实证，台账「前置缺口」节）。留痕跳过，不弱化断言。
@@ -552,9 +443,9 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
 
     // ── UF-2 AC1/AC2：首次启动（无项目）→ 中区 hero；CTA → 打开添加项目流程 ──
     await expect(page.locator('[data-dswf-hero]').first()).toBeVisible()
-    await expect(page.locator('[data-slot="main.conversation"]')).toHaveCount(0)
+    await expect(page.locator(MAIN_CONVERSATION)).toHaveCount(0)
     await page.locator('[data-dswf-cta="add-project"]').click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
 
     // 走查至 legacy-app（home → … → 夹具根 → 选中）
     for (const segment of ['AppData', 'Local', 'Temp']) {
@@ -563,15 +454,15 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     await enterDir(page, fixture.split('\\').at(-1) as string)
     await dirRow(page, 'legacy-app').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     const legacyDir = join(fixture, 'legacy-app')
-    await expect(page.locator('[data-dswf-rf-ws]')).toHaveValue(legacyDir)
+    await expect(page.locator(rfField('ws'))).toHaveValue(legacyDir)
 
     // ── L814 ⑤ 确认入库（M0 载体，台账 #179：原型 db 直查 → RPC 注册结果 + 左栏项目行）──
     await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="executing"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('executing'))).toBeVisible()
     // L820 ⑤ 反馈（载体适配，台账 #180：原型 toast → M0 成功反馈面板 + 自动关闭）
-    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(addProjectPhase('success'))).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
     // UF-2 AC3：注册成功即 hero 消退不残留（项目数驱动相位翻转）
     await expect(workbench).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
@@ -583,7 +474,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
 
     // ── L766 ① 已注册目录带标记（注册后实机：重开向导 → 目录行「已注册」标记）──
     await page.locator('[data-dswf-nav="add-project"]').first().click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
@@ -594,7 +485,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     await page.keyboard.press('Escape')
     await expect(page.locator('.dswf-ap')).toHaveCount(0)
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
   }

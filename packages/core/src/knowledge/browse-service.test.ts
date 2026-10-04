@@ -74,6 +74,12 @@ describe('listEntries 过滤语义（AC1·UF-6）', () => {
     expect(titles(await createKnowledgeBrowseService({ db: f.db }).listEntries({ projectId: f.projectId, domainPrefix: '前端', keyword: 'css' }))).toEqual(['样式令牌'])
   })
 
+  it('组合过滤零命中：域前缀 × 全字段不含关键词 → 空结果（命中确定性 fixture 契约——kb e2e Step2b 服务端口径回迁，fix-37 ⑥）', async () => {
+    const f = fixture({ rebuild: true })
+    expect(await createKnowledgeBrowseService({ db: f.db }).listEntries({ projectId: f.projectId, domainPrefix: '前端', keyword: 'qz9' })).toEqual([])
+    expect(await createKnowledgeBrowseService({ db: f.db }).listEntries({ projectId: f.projectId, keyword: 'qz9' })).toEqual([]) // 全域口径同零
+  })
+
   it('域树聚合数据可得：aggregateDomainTree 节点集正确，且逐节点计数与域前缀过滤同口径（含子域）', async () => {
     const f = fixture({ rebuild: true })
     const svc = createKnowledgeBrowseService({ db: f.db })

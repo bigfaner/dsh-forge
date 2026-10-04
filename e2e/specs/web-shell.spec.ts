@@ -3,41 +3,28 @@
 //    （官方 ui-theme 令牌样式入页 + 官方 sidebar 组件可见）
 //  AC3 carrier 承载 dsh 面 RPC 往返（__DSH_TRANSPORT__ 就位 + 连接层 /api 通道一往返）
 //  掌舵链自证：产品 client 插件入图激活（__DSH_FORGE_CLIENT__ 标记 = Loader 激活证据）
-// 2.7 增面：槽位路线 A 实跑判定——产品面板占用官方 sidebar 壳 sidebar.workspaces 洞位
+//  2.7 增面：槽位路线 A 实跑判定——产品面板占用官方 sidebar 壳 sidebar.workspaces 洞位
 //  （壳仍在 = 折叠/导航/快捷键继承；洞内 = 产品面板 data-dswf-sidebar）。
 // 隔离：独立 userData（e2e 单实例纪律，沿 host-boot.spec）。
+// 载体面（launch/close/端口）经 e2e/support（fix-37 支撑层——端口走分配器，closeApp 全员强制）。
 import { mkdtempSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-
-const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const HOST_DIR = join(ROOT, 'apps', 'host')
-
-const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-
-async function launchHost(overrides: Record<string, string>): Promise<ElectronApplication> {
-  const { _electron } = await import('@playwright/test')
-  return _electron.launch({
-    executablePath: electronBinary,
-    args: ['.'],
-    cwd: HOST_DIR,
-    env: { ...process.env, ...overrides } as Record<string, string>,
-  })
-}
+import { test, expect } from '@playwright/test'
+import { closeApp, launchElectron } from '../support/launch.js'
+import { KNOWLEDGE_ENTRY, NAV_SHELL, SIDEBAR_ANY } from '../support/anchors.js'
 
 test('AC1–AC3 dev 形态：自有壳载入 + 官方 ui-* 渲染 + carrier RPC 往返 + 产品插件掌舵激活', async () => {
   test.setTimeout(180_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-shell-'))
-  const app = await launchHost({
-    DSH_FORGE_DEV_PROFILE: 'dev',
-    DSH_FORGE_USER_DATA: userData,
-    DSH_FORGE_PORT: String(19810 + (process.pid % 200)),
+  const app = await launchElectron({
+    env: {
+      DSH_FORGE_DEV_PROFILE: 'dev',
+      DSH_FORGE_USER_DATA: userData,
+    },
   })
   try {
-    const page: Page = await app.firstWindow()
+    const page = await app.firstWindow()
     // 自有壳（非官方 webserver 前端）：自定义 scheme 载入 + 就绪门预建
     await page.waitForFunction(() => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined, undefined, { timeout: 60_000 })
     // AC2 前置链：注入表生效（门放行）→ 模块系统 live → 官方组合 + 产品插件激活（掌舵链）
@@ -52,7 +39,7 @@ test('AC1–AC3 dev 形态：自有壳载入 + 官方 ui-* 渲染 + carrier RPC 
     expect(themeSheets).toBeGreaterThan(0)
 
     // AC2b 官方组件可见：ui-sidebar 面板导航（官方布局渲染进 #root）
-    await expect(page.locator('#root nav[aria-label]').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(NAV_SHELL).first()).toBeVisible({ timeout: 30_000 })
 
     // AC3 carrier 就位（G1 第 2 项：ownsHost + streamBaseUrl = 已认证 web 面 origin）
     const carrier = await page.evaluate(() =>
@@ -79,10 +66,10 @@ test('AC1–AC3 dev 形态：自有壳载入 + 官方 ui-* 渲染 + carrier RPC 
     // 且 workspaces 洞位被产品面板占用（data-dswf-sidebar 宽态/rail 态；
     // 官方 ui-workspace 浏览器被 priority -100 影子——单测面 pin，此处在场断言取 DOM 证据；
     // 知识库入口 = 官方 panellist 行（fix-25：产品 nav 行迁官方 PanelRow）
-    await expect(page.locator('#root [data-dswf-sidebar]').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('#root button[aria-label="知识库"]').first()).toBeVisible()
+    await expect(page.locator(`#root ${SIDEBAR_ANY}`).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(`#root ${KNOWLEDGE_ENTRY}`).first()).toBeVisible()
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
   }
 })

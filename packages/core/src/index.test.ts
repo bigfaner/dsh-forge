@@ -11,6 +11,7 @@ import { afterAll, expect, it } from 'vitest'
 import type { KnowledgeService } from '@dsh-forge/contracts'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import { StubRegistry } from './testutil/registry-stub.js'
+import { seedProjectRow } from './testutil/db-seeds.js'
 import corePlugin, { type CoreContextFace } from './index.js'
 import { openDatabase } from './db/index.js'
 import type Database from 'better-sqlite3'
@@ -75,15 +76,21 @@ it('装配后端到端冒烟：forgeKnowledge.listEntries 经静默重建返回�
 
   const { services, dispose } = startPlugin(home)
   try {
-    // 插件已建库——第二连接直插 projects 行（WAL 多连接可见）
+    // 插件已建库——第二连接直插 projects 行（WAL 多连接可见；seed 经 testutil/db-seeds 单源）
     const conn = openDatabase(join(home, 'state.db'))
     dbs.push(conn)
     const projectId = randomUUID()
     const now = new Date().toISOString()
-    conn.prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?, ?)`,
-    ).run(projectId, randomUUID(), 'C:\\smoke-ws', '冒烟项目', join(home, '.forge'), knowledgeDir, now, now)
+    seedProjectRow(conn, {
+      id: projectId,
+      workspaceId: randomUUID(),
+      wsPath: 'C:\\smoke-ws',
+      name: '冒烟项目',
+      forgeDir: join(home, '.forge'),
+      knowledgeDir,
+      createdAt: now,
+      updatedAt: now,
+    })
 
     const knowledge = services.get('forgeKnowledge') as KnowledgeService
     const cards = await knowledge.listEntries({ projectId }) // 零行索引 → 静默重建路径

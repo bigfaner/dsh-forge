@@ -11,10 +11,12 @@ import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './er
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
-// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 reconcile-queries 同源）。
+// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 reconcile-queries 同源）；
+// seedRow/失败触发器——fix-37 收编 db-seeds 单源（与 reconcile-queries/e2e 同源）。
 import { StubRegistry } from '../testutil/registry-stub.js'
 import { keyLogs, readRows } from '../testutil/project-rows.js'
 import { isParseableDateStyle } from '../testutil/date-assertions.js'
+import { installProjectInsertFailure, seedProjectRow } from '../testutil/db-seeds.js'
 
 // ── 测试环境（每用例独占临时库，2.1 口径） ──
 
@@ -51,21 +53,8 @@ function setup() {
   return { db, registry, rename, service }
 }
 
-/** 种入陈旧 projects 行（直接 SQL——fix-27 自愈/幂等与挂接保护的注入面） */
-function seedRow(db: Database.Database, o: { id: string; workspaceId: string; wsPath: string }) {
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(o.id, o.workspaceId, o.wsPath, o.id, `${o.wsPath}\\.forge`, `${o.wsPath}\\.knowledge`, '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')
-}
-
-/** fix-27 后 ③ 失败注入载体：INSERT 触发器恒 ABORT——同 ws_path 冲突行已被 ① 前自愈面
- *  消费（重注册幂等成功），补偿链测试的失败源改经触发器注入（补偿语义本身零变化） */
-function failProjectInserts(db: Database.Database): void {
-  db.exec(
-    `CREATE TRIGGER fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'simulated projects write failure'); END`,
-  )
-}
+/** 种入陈旧 projects 行 + ③ 失败注入载体：经 testutil/db-seeds 单源（fix-37——与
+ *  reconcile-queries/e2e 同源；触发器名 e2e_fail_projects_insert） */
 
 const input = (o: { workspaceDir?: string; forgeDir?: string } = {}) => ({
   workspaceDir: o.workspaceDir ?? join(WS, 'proj'),
@@ -144,7 +133,7 @@ describe('AC2 幂等命中（canonical 命中既有）→ 挂接不登记补偿'
   it('挂接后 ③ 写入失败 → 不删既有工作区（ownership 保护：delete 零调用、零记账）', async () => {
     const { db, registry, service } = setup()
     const existing = registry.seed(join(WS, 'proj'))
-    seedRow(db, { id: 'stale', workspaceId: existing.id, wsPath: 'C:\\other' }) // workspace_id UNIQUE 冲突 → ③ 失败
+    seedProjectRow(db, { id: 'stale', workspaceId: existing.id, wsPath: 'C:\\other' }) // workspace_id UNIQUE 冲突 → ③ 失败
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
     expect((err as ProjectWriteError).code).toBe('ERR_PROJECT_WRITE')
@@ -161,7 +150,7 @@ describe('fix-27 重注册自愈/幂等：悬空行自愈 / 健康行幂等（�
   it('悬空行（引用 registry 无实体——fix-18 home 翻转遗留）→ recreate 自愈 + 幂等成功返回既有行', async () => {
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
-    seedRow(db, { id: 'legacy', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用占位
+    seedProjectRow(db, { id: 'legacy', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用占位
     const result = await service.registerProject(input())
     expect(result).toMatchObject({ projectId: 'legacy', attachedToExisting: true }) // 既有项目幂等返回
     expect(result.workspaceId).not.toBe('ws-gone') // 引用已修（幂等重建新实体）
@@ -177,7 +166,7 @@ describe('fix-27 重注册自愈/幂等：悬空行自愈 / 健康行幂等（�
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
     const found = registry.seed(canonical) // path 在场、行引用却指向别的 id
-    seedRow(db, { id: 'legacy', workspaceId: 'ws-other', wsPath: canonical })
+    seedProjectRow(db, { id: 'legacy', workspaceId: 'ws-other', wsPath: canonical })
     const result = await service.registerProject(input())
     expect(result).toMatchObject({ projectId: 'legacy', workspaceId: found.id, attachedToExisting: true })
     expect(registry.createCalls).toEqual([]) // relink 路径零 create
@@ -192,7 +181,7 @@ describe('fix-27 重注册自愈/幂等：悬空行自愈 / 健康行幂等（�
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
     const existing = registry.seed(canonical)
-    seedRow(db, { id: 'healthy', workspaceId: existing.id, wsPath: canonical })
+    seedProjectRow(db, { id: 'healthy', workspaceId: existing.id, wsPath: canonical })
     const before = readRows(db)[0]
     const result = await service.registerProject(input())
     expect(result).toEqual({ projectId: 'healthy', workspaceId: existing.id, attachedToExisting: true })
@@ -211,7 +200,7 @@ describe('AC3 ③ 写入失败（模拟）→ ④ 补偿删除，dsh 零孤儿�
   it('新建路径 ③ 失败（INSERT 触发器 ABORT 注入）→ delete 补偿一次 + ProjectWriteError(compensated)', async () => {
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
-    failProjectInserts(db) // fix-27：ws_path 冲突行已被自愈面消费——③ 失败注入载体改触发器
+    installProjectInsertFailure(db) // fix-27：ws_path 冲突行已被自愈面消费——③ 失败注入载体改触发器
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
     const pwe = err as ProjectWriteError
@@ -242,7 +231,7 @@ describe('AC4 补偿幂等（重复 registry.delete 为 no-op）', () => {
 
   it('补偿删除返回 false（工作区已被清理）→ 仍视为补偿成功，不抛 ERR_COMPENSATION', async () => {
     const { db, registry, service } = setup()
-    failProjectInserts(db)
+    installProjectInsertFailure(db)
     registry.beforeDelete = (id) => registry.records.delete(id) // 并发清理在前 → 本次 delete 返回 false
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError) // 而非 CompensationError
@@ -258,7 +247,7 @@ describe('AC5 补偿失败 → app_key_logs 记账（scope=compensation）+ 抛 
   it('delete 抛错 → 单事件单条记账（结果入 data_json）+ CompensationError，孤儿留存不自动删', async () => {
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
-    failProjectInserts(db)
+    installProjectInsertFailure(db)
     registry.failDelete = new Error('dsh storage down')
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(CompensationError)
@@ -319,7 +308,7 @@ describe('fix-24 ② 注册时标题对齐：新建/挂接/自愈三径收口 + 
   it('重注册幂等（fix-27 自愈路径）→ rename 以既有行 name 对齐（input.name 对既有行不生效；存量项目重注册即愈）', async () => {
     const { db, rename, registry, service } = setup()
     const existing = registry.seed(join(WS, 'proj'))
-    seedRow(db, { id: 'legacy-row', workspaceId: existing.id, wsPath: existing.path }) // 存量行 name=id
+    seedProjectRow(db, { id: 'legacy-row', workspaceId: existing.id, wsPath: existing.path }) // 存量行 name=id
     const result = await service.registerProject(input({ workspaceDir: join(WS, 'proj') }))
     expect(result.projectId).toBe('legacy-row') // 幂等复用既有行
     expect(rename.calls).toEqual([{ workspaceId: existing.id, title: 'legacy-row' }]) // title 跟行不跟输入
@@ -345,7 +334,7 @@ describe('fix-24 ② 注册时标题对齐：新建/挂接/自愈三径收口 + 
 
   it('③ 写入失败（补偿路径）→ rename 零调用（补偿链 rename 零残留——排序免疫：rename 仅在 ③ 落定后执行）', async () => {
     const { db, rename, service } = setup()
-    failProjectInserts(db)
+    installProjectInsertFailure(db)
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
     expect(rename.calls).toEqual([]) // 失败径 rename 未发生——补偿链无需 rename 回滚
@@ -394,7 +383,7 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
     const { db, registry, service } = setup()
     const canonical = join(WS, 'learn') // 不存在路径——realpath fail-soft 回退原拼写（边界口径）
     const existing = registry.seed(canonical)
-    seedRow(db, { id: 'row-learn', workspaceId: existing.id, wsPath: canonical })
+    seedProjectRow(db, { id: 'row-learn', workspaceId: existing.id, wsPath: canonical })
     const result = await service.registerProject(input({ workspaceDir: `${flipCase(canonical)}\\` }))
     expect(result).toEqual({ projectId: 'row-learn', workspaceId: existing.id, attachedToExisting: true })
     expect(registry.createCalls).toEqual([])
@@ -407,7 +396,7 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
     const { db, registry, service } = setup()
     const canonical = join(WS, 'learn')
     const existing = registry.seed(canonical)
-    failProjectInserts(db) // ③ 恒失败（触发器）——修复前缺陷形态即在此径把既有工作区 delete
+    installProjectInsertFailure(db) // ③ 恒失败（触发器）——修复前缺陷形态即在此径把既有工作区 delete
     const err: unknown = await service
       .registerProject(input({ workspaceDir: `${canonical}\\sub\\..` })) // 归一键不可折叠 '..'（lexical 折叠对 symlink 父级不安全）——穿透面载体
       .catch((e) => e)
@@ -422,7 +411,7 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
     const { db, registry, rename, service } = setup()
     const canonical = join(WS, 'learn')
     const existing = registry.seed(canonical)
-    seedRow(db, { id: 'row-learn', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用行（撞键载体）
+    seedProjectRow(db, { id: 'row-learn', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用行（撞键载体）
     const result = await service.registerProject(input({ workspaceDir: `${canonical}\\sub\\..` }))
     expect(result).toEqual({ projectId: 'row-learn', workspaceId: existing.id, attachedToExisting: true })
     expect(rename.calls).toEqual([{ workspaceId: existing.id, title: 'row-learn' }]) // 确经 attachExistingRow 自愈径（title 跟行不跟输入）
@@ -499,7 +488,7 @@ describe('fix-33 ⑫ attachExistingRow 自愈失败降级记账（现场可追�
   it('自愈链失败（悬空引用 + create 不可用）→ warn/reconcile 单条记账后降级现行链（原静默零记账）', async () => {
     const { db, registry, service } = setup()
     const canonical = join(WS, 'learn')
-    seedRow(db, { id: 'row-x', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用 → 自愈径进 reconcileProjectRef
+    seedProjectRow(db, { id: 'row-x', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用 → 自愈径进 reconcileProjectRef
     registry.failCreate = new Error('dsh create down') // 找不回 → create 重建失败 → 自愈链抛
     const err: unknown = await service.registerProject(input({ workspaceDir: canonical })).catch((e) => e)
     // 降级现行链：① list 命中不了（无此路径）→ ② create 仍失败 → WorkspaceCreateError（错误面由现行链承接）
@@ -523,8 +512,8 @@ describe('fix-33 ⑬ 对账记账防护（记账抛错不截断本轮剩余行�
     const { db, registry, service } = setup()
     const ok = registry.seed(join(WS, 'repair-ok'))
     // 行序：失败行在前（id 序）——记账被吞后第二行必须仍被修复（原样上抛 = 本轮截断）
-    seedRow(db, { id: 'a-bad', workspaceId: 'ws-x', wsPath: join(WS, 'missing') })
-    seedRow(db, { id: 'b-ok', workspaceId: ok.id, wsPath: ok.path })
+    seedProjectRow(db, { id: 'a-bad', workspaceId: 'ws-x', wsPath: join(WS, 'missing') })
+    seedProjectRow(db, { id: 'b-ok', workspaceId: ok.id, wsPath: ok.path })
     registry.failCreate = new Error('dsh create down') // a-bad 修复链失败 → 逐项 catch 走记账
     db.exec('DROP TABLE app_key_logs') // 记账面本身损坏 → recordKeyLog 抛
 

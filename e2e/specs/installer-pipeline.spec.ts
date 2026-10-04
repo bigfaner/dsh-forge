@@ -7,46 +7,32 @@
 //    · better-sqlite3 自 staged 树在 Electron ABI 下加载（AC3 prebuilds 命中——state.db 落盘）
 //    · SC-NFR 离线自足（Hard Rule）：renderer 请求零远程（非回环 http/https）
 //  前置门：release/staging 存在且 --check 过（未物化即 skip——dist:stage/dists:win 后全量生效；
-//  安装后真机 4 步冒烟归 4.3，本文件是其挂点的可重复形态）。
+//  安装后真机 4 步冒烟归 4.3（已并入 p1mvp installer-smoke，fix-37 ④），本文件是其挂点的可重复形态）。
+// 载体面（launch/close/端口）经 e2e/support（fix-37 支撑层）。
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+import { ROOT, closeApp, launchElectron } from '../support/launch.js'
 
-const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const HOST_DIR = join(ROOT, 'apps', 'host')
 const STAGING = join(ROOT, 'release', 'staging')
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
 const stagingReady = existsSync(join(STAGING, 'staging-manifest.json'))
 test.skip(!stagingReady, 'release/staging 未物化——先执行 pnpm dist:stage（或 dist:win 全链）')
 
-// electron 二进制经 apps/host 依赖树解析（pnpm 隔离布局：根 node_modules 无 electron）
-const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
-
-async function launchHost(overrides: Record<string, string>): Promise<ElectronApplication> {
-  const { _electron } = await import('@playwright/test')
-  return _electron.launch({
-    executablePath: electronBinary,
-    args: ['.'],
-    cwd: HOST_DIR,
-    env: { ...process.env, ...overrides } as Record<string, string>,
-  })
-}
-
 test('打包形态（staged resources）boot：manifest + 双服务 + sqlite + 离线自足', async () => {
   test.setTimeout(150_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-installer-'))
   const remoteRequests: string[] = []
-  let app: ElectronApplication | undefined
+  let app: Awaited<ReturnType<typeof launchElectron>> | undefined
   try {
-    app = await launchHost({
-      DSH_FORGE_USER_DATA: userData,
-      DSH_FORGE_RESOURCES_DIR: STAGING,
-      DSH_FORGE_PORT: String(19500 + (process.pid % 400)),
+    app = await launchElectron({
+      env: {
+        DSH_FORGE_USER_DATA: userData,
+        DSH_FORGE_RESOURCES_DIR: STAGING,
+      },
     })
     const page: Page = await app.firstWindow()
     // SC-NFR（Hard Rule）：安装包资源自足——renderer 全程零远程请求（回环 webserver 除外）
@@ -82,7 +68,7 @@ test('打包形态（staged resources）boot：manifest + 双服务 + sqlite + �
 
     expect(remoteRequests, `远程请求泄漏：${remoteRequests.join(', ')}`).toEqual([])
   } finally {
-    await app?.close()
+    if (app !== undefined) await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
   }
 })
@@ -94,22 +80,24 @@ test('AC4 打包形态幂等：二次启动不重写 profile 模板（MATERIALIZ
   const mtimes = new Map<string, number>()
   try {
     for (let round = 1; round <= 2; round++) {
-      const app = await launchHost({
-        DSH_FORGE_USER_DATA: userData,
-        DSH_FORGE_RESOURCES_DIR: STAGING,
-        DSH_FORGE_MATERIALIZE_ONLY: '1',
+      const app = await launchElectron({
+        env: {
+          DSH_FORGE_USER_DATA: userData,
+          DSH_FORGE_RESOURCES_DIR: STAGING,
+          DSH_FORGE_MATERIALIZE_ONLY: '1',
+        },
       })
       try {
         await expect
           .poll(() => PROFILE_FILES.every((f) => existsSync(join(profileDir, f))), { timeout: 20_000 })
           .toBe(true)
       } finally {
-        await app.close()
+        await closeApp(app)
       }
       for (const f of PROFILE_FILES) {
         const mtime = statSync(join(profileDir, f)).mtimeMs
         if (round === 1) mtimes.set(f, mtime)
-        else expect(mtime, `round ${round} 重写 ${f}`).toBe(mtimes.get(f))
+        else expect(mtime, `round ${String(round)} 重写 ${f}`).toBe(mtimes.get(f))
       }
     }
   } finally {

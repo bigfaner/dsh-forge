@@ -11,14 +11,16 @@ import type Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
 // registry 桩（G1 pin 4 语义 + get 同步查表）——fix-34 收编 testutil 单份（注入面 superset）；
-// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 project-service 同源）。
+// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 project-service 同源）；
+// seedRow——fix-37 收编 db-seeds 单源（SEED_TS = 本处 T0 断言基准同值）。
 import { StubRegistry } from '../testutil/registry-stub.js'
 import { keyLogs, readRows } from '../testutil/project-rows.js'
+import { SEED_TS, seedProjectRow } from '../testutil/db-seeds.js'
 
 // ── 测试环境（每用例独占临时库，2.2 口径） ──
 
 const WS = 'C:\\dsh-forge-rc'
-const T0 = '2026-01-01T00:00:00.000Z' // 固定种入时间——updated_at 断言基准
+const T0 = SEED_TS // 固定种入时间——updated_at 断言基准
 
 let dir: string
 let seq = 0
@@ -50,26 +52,7 @@ function setup() {
 const logData = (db: Database.Database, i: number): Record<string, unknown> =>
   JSON.parse(keyLogs(db)[i]?.data_json ?? '{}') as Record<string, unknown>
 
-/** 种入 projects 行（直接 SQL——对账/查询面的输入面，与 registry 桩状态解耦编排） */
-function seedRow(
-  db: Database.Database,
-  o: { id: string; workspaceId: string; wsPath: string; name?: string; archived?: 0 | 1 },
-) {
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    o.id,
-    o.workspaceId,
-    o.wsPath,
-    o.name ?? o.id,
-    resolve(o.wsPath, '.forge'),
-    resolve(o.wsPath, '.knowledge'),
-    o.archived ?? 0,
-    T0,
-    T0,
-  )
-}
+/** 种入 projects 行：经 testutil/db-seeds 单源（fix-37——与 project-service/e2e 同源） */
 
 // ── AC1 ws_path 失配 → 按 path 找回，单向修引用 + 记账（结果入 data_json） ──
 
@@ -77,7 +60,7 @@ describe('AC1 ws_path 失配 → 按 ws_path 找回，单向修 workspace_id 引
   it('引用失联（registry 无此 id）→ list() 按 ws_path 命中既有 → 引用单向修正 + 单条 warn 记账（结果入 data_json）', async () => {
     const { db, registry, service } = setup()
     const ws = registry.seed(join(WS, 'a')) // dsh 侧既有（新实体）
-    seedRow(db, { id: 'p-1', workspaceId: 'ws-gone', wsPath: ws.path }) // 应用侧陈旧引用
+    seedProjectRow(db, { id: 'p-1', workspaceId: 'ws-gone', wsPath: ws.path }) // 应用侧陈旧引用
 
     const report = await service.reconcileAtStartup()
 
@@ -107,7 +90,7 @@ describe('AC1 ws_path 失配 → 按 ws_path 找回，单向修 workspace_id 引
     const { db, registry, service } = setup()
     const oldWs = registry.seed(join(WS, 'b-elsewhere'), '11111111-1111-4111-8111-111111111111') // 被引用实体已重指它径（uuid 形状——WorkspaceLike.id 模板字面量型）
     const newWs = registry.seed(join(WS, 'b'), '22222222-2222-4222-8222-222222222222') // ws_path 现属实体
-    seedRow(db, { id: 'p-2', workspaceId: '11111111-1111-4111-8111-111111111111', wsPath: newWs.path })
+    seedProjectRow(db, { id: 'p-2', workspaceId: '11111111-1111-4111-8111-111111111111', wsPath: newWs.path })
 
     const report = await service.reconcileAtStartup()
 
@@ -125,7 +108,7 @@ describe('AC1 ws_path 失配 → 按 ws_path 找回，单向修 workspace_id 引
   it('path 匹配 → 通过：零修复、零记账、零 create/delete 副作用', async () => {
     const { db, registry, service } = setup()
     const ws = registry.seed(join(WS, 'c'))
-    seedRow(db, { id: 'p-3', workspaceId: ws.id, wsPath: ws.path })
+    seedProjectRow(db, { id: 'p-3', workspaceId: ws.id, wsPath: ws.path })
 
     const report = await service.reconcileAtStartup()
 
@@ -142,7 +125,7 @@ describe('AC2 找不回 → create(ws_path) 幂等重建并修引用', () => {
   it('registry 无此路径 → create(ws_path) 一次 + 新 id 修引用 + action=recreated（成功重建不记账）', async () => {
     const { db, registry, service } = setup()
     const p = resolve(join(WS, 'd'))
-    seedRow(db, { id: 'p-4', workspaceId: 'ws-vanished', wsPath: p })
+    seedProjectRow(db, { id: 'p-4', workspaceId: 'ws-vanished', wsPath: p })
 
     const report = await service.reconcileAtStartup()
 
@@ -165,7 +148,7 @@ describe('AC3 孤儿发现（dsh 有、应用无）→ ReconcileReport 提示数
     const { db, registry, service } = setup()
     const ref = registry.seed(join(WS, 'e1'))
     const orphan = registry.seed(join(WS, 'e2'))
-    seedRow(db, { id: 'p-5', workspaceId: ref.id, wsPath: ref.path })
+    seedProjectRow(db, { id: 'p-5', workspaceId: ref.id, wsPath: ref.path })
 
     const report = await service.reconcileAtStartup()
 
@@ -182,7 +165,7 @@ describe('AC3 孤儿发现（dsh 有、应用无）→ ReconcileReport 提示数
   it('无孤儿 → 零记账（成功路径不记流水）', async () => {
     const { db, registry, service } = setup()
     const ws = registry.seed(join(WS, 'f'))
-    seedRow(db, { id: 'p-6', workspaceId: ws.id, wsPath: ws.path })
+    seedProjectRow(db, { id: 'p-6', workspaceId: ws.id, wsPath: ws.path })
     const report = await service.reconcileAtStartup()
     expect(report.orphans).toEqual([])
     expect(keyLogs(db)).toEqual([])
@@ -196,8 +179,8 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
     const { db, registry, service } = setup()
     const a = registry.seed(join(WS, 'qa'))
     const b = registry.seed(join(WS, 'qb'))
-    seedRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
-    seedRow(db, { id: 'pb', workspaceId: b.id, wsPath: b.path, name: 'beta', archived: 1 })
+    seedProjectRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
+    seedProjectRow(db, { id: 'pb', workspaceId: b.id, wsPath: b.path, name: 'beta', archived: 1 })
 
     const list = await service.listProjects()
 
@@ -215,7 +198,7 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
   it('getProject → 全字段 Project（INTEGER→boolean、ISO 时间原样）；未知 id → null', async () => {
     const { db, registry, service } = setup()
     const a = registry.seed(join(WS, 'qc'))
-    seedRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
+    seedProjectRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
 
     await expect(service.getProject('pa')).resolves.toEqual({
       id: 'pa',
@@ -235,7 +218,7 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
   it('updateProject patch name → 仅 name 与 updated_at 变（其余字段原样），返回体 = 更新后行', async () => {
     const { db, registry, service } = setup()
     const a = registry.seed(join(WS, 'qd'))
-    seedRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
+    seedProjectRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
 
     const updated = await service.updateProject('pa', { name: 'renamed' })
 
@@ -251,7 +234,7 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
   it('updateProject patch archived → 翻转并经 listProjects 可见（过滤口径数据源同源）', async () => {
     const { db, registry, service } = setup()
     const a = registry.seed(join(WS, 'qe'))
-    seedRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
+    seedProjectRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
 
     expect((await service.updateProject('pa', { archived: true })).archived).toBe(true)
     expect((await service.listProjects()).find((s) => s.id === 'pa')?.archived).toBe(true)
@@ -261,7 +244,7 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
   it('updateProject 空 patch → 零写（updated_at 原样），返回当前行', async () => {
     const { db, registry, service } = setup()
     const a = registry.seed(join(WS, 'qf'))
-    seedRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
+    seedProjectRow(db, { id: 'pa', workspaceId: a.id, wsPath: a.path, name: 'alpha' })
 
     const same = await service.updateProject('pa', {})
 
@@ -281,8 +264,8 @@ describe('AC5 对账全程永不抛断启动（关键异常降级 app_key_logs�
   it('重建路径 registry.create 抛错 → 单项降级跳过（error 记账、引用未动），其余项目照常对账', async () => {
     const { db, registry, service } = setup()
     const ok = registry.seed(join(WS, 'ga'))
-    seedRow(db, { id: 'p-bad', workspaceId: 'ws-x', wsPath: resolve(join(WS, 'gmissing')) }) // id 序在前的失联行
-    seedRow(db, { id: 'p-ok', workspaceId: ok.id, wsPath: ok.path })
+    seedProjectRow(db, { id: 'p-bad', workspaceId: 'ws-x', wsPath: resolve(join(WS, 'gmissing')) }) // id 序在前的失联行
+    seedProjectRow(db, { id: 'p-ok', workspaceId: ok.id, wsPath: ok.path })
     registry.failCreate = new Error('dsh create down')
 
     const report = await service.reconcileAtStartup() // 不 reject 即达成
@@ -297,7 +280,7 @@ describe('AC5 对账全程永不抛断启动（关键异常降级 app_key_logs�
 
   it('库不可用（整体读失败）→ 空报告返回，绝不抛（记账亦不可行则吞掉）', async () => {
     const { db, registry: _registry, service } = setup()
-    seedRow(db, { id: 'p-9', workspaceId: 'ws-9', wsPath: resolve(join(WS, 'h')) })
+    seedProjectRow(db, { id: 'p-9', workspaceId: 'ws-9', wsPath: resolve(join(WS, 'h')) })
     db.close()
 
     await expect(service.reconcileAtStartup()).resolves.toEqual({ repaired: [], orphans: [] })
@@ -305,7 +288,7 @@ describe('AC5 对账全程永不抛断启动（关键异常降级 app_key_logs�
 
   it('registry.list 抛错（找回与孤儿面均不可用）→ 逐层降级记账后空报告返回', async () => {
     const { db, registry, service } = setup()
-    seedRow(db, { id: 'p-10', workspaceId: 'ws-gone', wsPath: resolve(join(WS, 'i')) })
+    seedProjectRow(db, { id: 'p-10', workspaceId: 'ws-gone', wsPath: resolve(join(WS, 'i')) })
     registry.failList = new Error('list down')
 
     const report = await service.reconcileAtStartup()
