@@ -769,7 +769,7 @@
       "title": "Fix: 添加项目 ＋ 图标改官方「文件夹+加号」件（IconProjectAddOutlineRegular，对齐原生 dsh）——侧栏头部钮图标对齐 + 同排钮形态一致化评估",
       "priority": "P1",
       "estimatedTime": "30min",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-17.md",
       "record": "records/fix-17.md",
       "surface-type": "web",

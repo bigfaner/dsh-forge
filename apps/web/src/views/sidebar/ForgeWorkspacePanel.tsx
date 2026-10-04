@@ -3,7 +3,9 @@
 // ForgeSidebarSlot（洞位注册真身，plugin 经产品视图发布面引用）。
 // 形态纪律（Hard Rule 官方件复用）：项目节点 = 官方 DisclosureRow；状态点 = 官方 StateDot；
 // 悬停提示 = 官方 Tooltip；头部图标钮 = 官方 Button（ghost/sm——侧栏行语言透明底 + 仅 hover
-// 底，fix-13：toolbar 变体常驻底色误用退役）+ 官方图标件；过滤输入 =
+// 底，fix-13：toolbar 变体常驻底色误用退役）+ 官方图标件（fix-17：＋钮 = 官方
+// IconProjectAddOutlineRegular 文件夹+加号件——原生 dsh 同款，自绘纯加号与 26px 自绘钮刻度
+// 退役，同排三钮行语言一致）；过滤输入 =
 // 官方 Input；视图选项弹层 = 官方 Menu（fix-6 补齐——原型 sb-head 四件基准）；
 // 行语言（高 32/34、hover interactive-bg、radius md）对齐官方 sidebar 行形态
 // （ui-workspace Rows 同型刻度），本文件零平行发明。
@@ -16,7 +18,7 @@ import {
   DisclosureRow,
   IconDeliverDocRegular,
   IconFolderCloseRegular,
-  IconPlusOutlineRegular,
+  IconProjectAddOutlineRegular,
   IconSearchOutlineRegular,
   IconSlidersTwoOutlineRegular,
   Input,
@@ -336,16 +338,17 @@ export function SidebarProjectsZone({
           }
         />
         {onAddProject === undefined ? null : (
-          <button
-            type="button"
-            className="dswf-sidebar-add"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="dswf-sidebar-headbtn"
             data-dswf-nav="add-project"
             aria-label="添加项目"
             title="添加项目"
             onClick={onAddProject}
           >
-            <IconPlusOutlineRegular size={16} />
-          </button>
+            <IconProjectAddOutlineRegular size={16} />
+          </Button>
         )}
       </div>
       {searchOpen ? (

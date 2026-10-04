@@ -59,6 +59,9 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
     const withEntry = panel({ onAddProject: () => {} })
     expect(withEntry).toContain('data-dswf-nav="add-project"')
     expect(withEntry).toContain('aria-label="添加项目"')
+    // fix-17：＋钮图标 = 官方 IconProjectAddOutlineRegular（文件夹+加号——原生 dsh 同款；
+    // 官方件 artwork 路径前缀钉形，自绘纯加号退役）
+    expect(withEntry).toContain('M5.54492 2.06738')
   })
 
   it('「＋」入口缺席容忍（onAddProject 未注入 = 不呈现——纯展示件零缺省动作）', () => {

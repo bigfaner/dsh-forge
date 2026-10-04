@@ -5,15 +5,17 @@
 // 官方件复用：CTA = 官方 Button（primary）；价值一句话 = 总纲产品定位（以知识资产为核心的
 // 研发工作台）。data-dswf-hero / data-dswf-cta = e2e 与走查锚。
 import type { ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconProjectAddOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import './workbench.css'
 
 export interface HeroEmptyProps {
-  /** 「＋添加项目」CTA（打开 UF-3 两段流程——openAddProjectFlow 缝；缺席 = 无动作） */
+  /** 「添加项目」CTA（打开 UF-3 两段流程——openAddProjectFlow 缝；缺席 = 无动作） */
   readonly onAddProject?: () => void
 }
 
-/** hero 相位：价值一句话 + 「＋添加项目」CTA（中区居中——原型 hero 同构，视觉官方令牌） */
+/** hero 相位：价值一句话 + 「添加项目」CTA（中区居中——原型 hero 同构，视觉官方令牌；
+ * fix-17：文本前缀 ％＋ 改官方 icon 位 = IconProjectAddOutlineRegular——侧栏 ＋ 钮同款
+ * 官方件，口径对齐；锚 data-dswf-cta 不动） */
 export function HeroEmpty({ onAddProject }: HeroEmptyProps): ReactNode {
   return (
     <div className="dswf-hero" data-dswf-hero="">
@@ -26,10 +28,11 @@ export function HeroEmpty({ onAddProject }: HeroEmptyProps): ReactNode {
           variant="primary"
           size="md"
           className="dswf-hero-cta"
+          icon={<IconProjectAddOutlineRegular />}
           data-dswf-cta="add-project"
           onClick={onAddProject}
         >
-          ＋ 添加项目
+          添加项目
         </Button>
       </div>
     </div>

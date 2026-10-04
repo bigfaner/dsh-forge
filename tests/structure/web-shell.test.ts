@@ -314,7 +314,9 @@ describe('workbench 工作台装配 pin（2.12 + 3.8）', () => {
     expect(panel).toContain('input.lastReadyCount === 0')
     const hero = read('apps/web/src/workbench/HeroEmpty.tsx')
     expect(hero).not.toMatch(/projects|useForgeProjects|phase/)
-    expect(hero).toContain('＋ 添加项目')
+    expect(hero).toContain('添加项目')
+    // fix-17：CTA 图标位 = 官方 IconProjectAddOutlineRegular（文本前缀 ％＋ 退役）
+    expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
   it('装配占位注册 pin：product-views 发布 ForgeWorkbenchPanel；client-plugin 影子注册 main.conversation（与 sidebar 同键面）', () => {
