@@ -6,11 +6,11 @@
 // runProfile（direct 形态原路径原序，整体平移）→ ready 消息面世
 // {url, injections, 双服务在场位}；随后常驻应答 rpc（bridge.dispatchRpc）与
 // shutdown（ProcessShutdown.shutdown(0)——有界 5s 升级强退自带）。
+// boot 链模块实例经 boot-chain.ts 统一解析（fix-20：dev 形态与插件树同拷贝，
+// 消 bootstrapIncludes WeakMap 分裂——见该文件动机）。
 // 以下 type-only 引入仅为拉入 cordis Context 模块增强（ctx.connection / ctx.webServer 类型）
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import * as dshAppBoot from '@deepseek-ai/dsh-app-boot'
-import { runProfile } from '@deepseek-ai/dsh/profile-boot'
 import { dirname, join } from 'node:path'
 import {
   dispatchRpc,
@@ -20,6 +20,7 @@ import {
   type ChildToMainMessage,
   type MainToChildMessage,
 } from './bridge.js'
+import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -53,6 +54,7 @@ async function main(): Promise<void> {
     process.exitCode = 1
     return
   }
+  const { dshAppBoot, runProfile } = await loadBootChain(options.profileDir)
   const profile = dshAppBoot.loadProfileDirectory('dsh', options.profileDir, options.installAnchor)
   dshAppBoot.reportSkippedBundles('dsh', profile)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）

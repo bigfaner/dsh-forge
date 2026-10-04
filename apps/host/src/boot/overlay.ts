@@ -5,8 +5,9 @@
 // （用户层之后应用，按 row id 整体替换 config）正是装配期覆盖缝。
 // fix-12：官方首启「预览版说明」等值预确认入同一缝——产品宿主形态下 welcome ack
 // 写路径被拒（settings/rejected：dsh-app-boot 模块二象性致 profile reload 失败，
-// 见 fix-12 记录），模态关不掉阻断 fresh 用户；产品非官方桌面分发面，预置官方当前
-// 版本常量即「已确认」，说明不再出现（版本随上游 pin 冻结——pin 单测机械核查）。
+// 见 fix-12 记录；该二象性已由 fix-20 统一实例修复——boot-chain.ts，本行预确认
+// 仍保留为产品口径：非官方桌面分发面预置官方当前版本常量即「已确认」），模态
+// 关不掉阻断 fresh 用户；说明不再出现（版本随上游 pin 冻结——pin 单测机械核查）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'

@@ -788,6 +788,18 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-19": {
+      "id": "fix-19",
+      "title": "Fix(P0): 知识工具名含点号违反供应商工具名形——knowledge.search/read-abstract 改下划线形，全涟漪面同步 + 名形 pin",
+      "priority": "P0",
+      "estimatedTime": "1.5h",
+      "status": "pending",
+      "file": "fix-19.md",
+      "record": "records/fix-19.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-2": {
       "id": "fix-2",
       "title": "Fix: 主窗口隐藏原生标题栏（titleBarStyle hidden + overlay，对齐 dsh 官方桌面形态）",
@@ -799,6 +811,54 @@
       "surface-type": "web",
       "type": "coding.fix",
       "complexity": "medium"
+    },
+    "fix-20": {
+      "id": "fix-20",
+      "title": "Fix(P0): 添加第三方模型提供商报错「profile reload requires the root Include entry」——dsh-app-boot 双实例致 bootstrapIncludes WeakMap 分裂，统一实例解析",
+      "priority": "P0",
+      "estimatedTime": "3h",
+      "status": "completed",
+      "file": "fix-20.md",
+      "record": "records/fix-20.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "high"
+    },
+    "fix-21": {
+      "id": "fix-21",
+      "title": "Fix(P0): 侧栏「＋」点击后系统文件浏览器不出现——host 侧 showOpenDialog 无 parent 无前台激活（Windows z-order 偶发不可见），对齐官方 host-directory-picker 前台工程",
+      "priority": "P0",
+      "estimatedTime": "2h",
+      "status": "pending",
+      "file": "fix-21.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-22": {
+      "id": "fix-22",
+      "title": "Fix: 侧栏过滤输入框失焦不收起——补 blur 自动收起（用户预期规格，与 Esc 同径「收起即清空」），含头部钮 blur 竞态守卫",
+      "priority": "P1",
+      "estimatedTime": "1h",
+      "status": "pending",
+      "file": "fix-22.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
+    "fix-23": {
+      "id": "fix-23",
+      "title": "Fix: 对话界面右上角对齐原生 dsh——官方 header 链点亮（「打开方式」+「⋯」更多操作 + corner 收展钮）+ 右栏 dock 全面复用官方 ui-sidebar-right（自研 dock 骨架退役）",
+      "priority": "P1",
+      "estimatedTime": "6h",
+      "status": "pending",
+      "file": "fix-23.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "high"
     },
     "fix-3": {
       "id": "fix-3",
