@@ -33,3 +33,37 @@ apps/host/profile.dev/cordis.yml
 
 # Installer pipeline artifacts (4.1: staging/app/installer + probes)
 release/
+
+# Session probe / diagnostics workspace (runtime probes, screenshots, isolated
+# userData & SQLite sidecars — task files cite them as one-off evidence only)
+tmp-ui-review/
+
+# Agent working memory (force-ignore per owner directive — untracked 2026-10-04;
+# local files kept, repo no longer carries agent-session memory)
+.claude/agent-memory/
+
+# Logs (S1 spike run logs ARE committed as evidence — exception keeps convention)
+*.log
+!spikes/**/*.log
+
+# Env & key material hygiene (product handles credentials; dsh .env fallbacks)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# SQLite sidecar journals (isolated homes / test leftovers)
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Playwright newer artifact dirs
+blob-report/
+playwright/.cache/
+
+# OS / editor droppings
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
