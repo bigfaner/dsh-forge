@@ -1082,7 +1082,7 @@
       "title": "Fix: Windows 壳标题栏模式未激活——preload 缺 `\u003chtml data-platform\u003e` / `data-windows-titlebar` / `--dsh-windows-titlebar-height` 标记，会话头右上角图标钮（右栏展开钮等）沉入原生 WCO 覆盖条不可见",
       "priority": "P1",
       "estimatedTime": "3h",
-      "status": "in_progress",
+      "status": "completed",
       "file": "fix-40.md",
       "record": "records/fix-40.md",
       "surface-type": "web",

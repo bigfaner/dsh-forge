@@ -6,6 +6,7 @@ import { FORGE_CHANNEL_ALLOWLIST, type ForgeChannel } from '@dsh-forge/contracts
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import type { BootManifest } from '../boot/index.js'
+import { WINDOWS_TITLEBAR_HEIGHT } from '../window/titlebar.js'
 
 /** Electron ipcRenderer 的结构化消费面（preload.mts 传入真身；测试注入 fake） */
 export interface PreloadInvokeFace {
@@ -55,4 +56,47 @@ export function createDirectoryPickerBridge(invokeFace: PreloadInvokeFace): DshD
  */
 export function directoryPickerEnabled(env: { readonly DSH_FORGE_DIRECTORY_PICKER?: string } = process.env): boolean {
   return env.DSH_FORGE_DIRECTORY_PICKER !== 'off'
+}
+
+/**
+ * 壳标记目标（document.documentElement 结构子集——preload.mts 传真身，单测注入 fake）。
+ */
+export interface ShellMarkTarget {
+  readonly dataset: Record<string, string | undefined>
+  setAttribute(qualifiedName: string, value: string): void
+  readonly style: { setProperty(property: string, value: string): void }
+}
+
+/**
+ * Windows 壳标题栏标记（fix-40——官方 Electron preload 法定职责位，web 层只读不写）：
+ * Windows WCO 形态（产品唯一窗口形态，create.ts 恒 titleBarOverlay——win32 ⇒ WCO）标
+ * `data-windows-titlebar` 属性 + 内联 `--dsh-windows-titlebar-height`（dockkit 按
+ * documentElement.style 内联读取；值与 create.ts titleBarOverlay.height 单源 =
+ * window/titlebar.ts）。官方补偿面由此激活（全部只认 data-windows-titlebar，与
+ * data-platform 无关）：ui-layout frame padding-top/顶部拖拽条、ui-sidebar 折叠/新会话钮
+ * 32px 带区内垂直居中、settings 覆盖层顶距——会话头右上角图标钮让出原生钮带区
+ * （用户验收报障②根因修复）。非 win32 零标记（darwin 补偿走 [data-platform=darwin]
+ * 变体族，见下）。
+ *
+ * **data-platform 刻意不标（fix-40 实测裁决缝，翻转须有意识地随桥落地）**：
+ * 官方 dsh-client-shortcuts ShortcutsService 构造器在 runtime="desktop"（=
+ * dataset.platform 存在，任意值——detectEnvironment 判据）时硬性要求官方桌面 preload
+ * 能力面 `window.dshDesktop.keyboard`，缺席即 throw "Desktop keyboard bridge unavailable"
+ * → 25 个官方 client 插件激活级联失败（实测 A/B：标记 data-platform=win32 → boot 面全红；
+ * 不标 → 全绿）。dshDesktop 能力面（keyboard/shortcuts/analytics/chat/settings/…
+ * 七包消费）在树内无官方实现可采，属独立桥接任务。标 data-platform 之前必须先落
+ * dshDesktop 桥；连带 isDarwinDesktop（primitives）与 detectEnvironment 的 runtime 面
+ * 同缓。代价（已裁决可受）：快捷键解析面按 web 口径呈现（与现状一致，非回归）。
+ *
+ * preload 顶层即调（早于任何 React 渲染——官方注释容忍迟到至 DOMContentLoaded，
+ * 早起无害且消除闪烁窗）。
+ */
+export function markWindowsTitlebarShell(
+  documentElement: ShellMarkTarget,
+  platform: string = process.platform,
+): void {
+  if (platform === 'win32') {
+    documentElement.setAttribute('data-windows-titlebar', '')
+    documentElement.style.setProperty('--dsh-windows-titlebar-height', `${WINDOWS_TITLEBAR_HEIGHT}px`)
+  }
 }

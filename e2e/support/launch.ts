@@ -19,8 +19,11 @@ import { dismissOnboardingModals } from './modals.js'
 import { writeProviderOverlay } from './dogfood.js'
 import { WORKBENCH } from './anchors.js'
 
-/** 仓库根（e2e/support → 上两级） */
-export const ROOT = join(fileURLToPath(import.meta.url), '..', '..')
+/** 仓库根（e2e/support/launch.ts 文件面 → 上三级：文件段 + support + e2e。
+ *  fix-37 抽层时误减一级（join 是文本段运算，文件自身占一段）——ROOT 落在 e2e/ 使
+ *  HOST_DIR 指向不存在目录，launchElectron 的 spawn cwd 非法 → 全体 electron 走查
+ *  `spawn cmd.exe ENOENT` 即时失败（fix-40 勘察实证，回迁母本三段口径）。 */
+export const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 export const HOST_DIR = join(ROOT, 'apps', 'host')
 
 /** electron 二进制（apps/host 依赖闭包解析——pnpm 隔离布局根 node_modules 无 electron） */

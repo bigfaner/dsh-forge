@@ -2,6 +2,7 @@
 // BrowserWindow 注入 fake（create.ts 设计面——真实 Electron 形态面由 e2e host-boot/smoke-skeleton 承载）。
 import { describe, expect, it } from 'vitest'
 import { createMainWindow, type BrowserWindowLike } from './create.js'
+import { WINDOWS_TITLEBAR_HEIGHT } from './titlebar.js'
 
 class FakeBrowserWindow implements BrowserWindowLike {
   readonly webContents = { id: 1 }
@@ -68,6 +69,12 @@ describe('createMainWindow（建窗参数）', () => {
       symbolColor: '#0f1115', // = --dsw-static-neutral-bluish-1000
       height: 32,
     })
+  })
+  it('WCO 覆盖条高度单源（fix-40）：titleBarOverlay.height = WINDOWS_TITLEBAR_HEIGHT（preload 壳标记内联变量同源）', async () => {
+    const win = await createFake()
+    // 上行已字面 pin 32；本行钉住单源链——create.ts 与 preload-api.ts 共消费 window/titlebar.ts，
+    // 宿主-壳两源漂移（改一处漏一处）在此红
+    expect((win.options.titleBarOverlay as { height: number }).height).toBe(WINDOWS_TITLEBAR_HEIGHT)
   })
 })
 

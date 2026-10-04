@@ -1,5 +1,6 @@
 // 2.4 AC3 renderer 侧守门——preload 暴露面：allowlist 通道转发、未列通道拒绝（负样例）；
 // fix-14 __DSH_DIRECTORY_PICKER__ 桥成员 + e2e 回退面开关。
+// fix-40 Windows 壳标题栏标记（markWindowsTitlebarShell）——官方补偿面激活的 preload 半边。
 import { describe, expect, it, vi } from 'vitest'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
@@ -7,6 +8,8 @@ import {
   createDirectoryPickerBridge,
   createDshForgePreloadApi,
   directoryPickerEnabled,
+  markWindowsTitlebarShell,
+  type ShellMarkTarget,
   type PreloadInvokeFace,
 } from './preload-api.js'
 
@@ -69,5 +72,63 @@ describe('目录选取桥（window.__DSH_DIRECTORY_PICKER__——fix-14 官方�
     expect(directoryPickerEnabled({})).toBe(true)
     expect(directoryPickerEnabled({ DSH_FORGE_DIRECTORY_PICKER: 'on' })).toBe(true)
     expect(directoryPickerEnabled({ DSH_FORGE_DIRECTORY_PICKER: 'off' })).toBe(false)
+  })
+})
+
+describe('Windows 壳标题栏标记（fix-40——官方 Electron preload 法定职责位）', () => {
+  /** fake documentElement：标记面（dataset / 属性写入 / 内联样式变量）全记录 */
+  function fakeDocumentElement() {
+    const dataset: Record<string, string | undefined> = {}
+    const attrs = new Map<string, string>()
+    const props = new Map<string, string>()
+    const target: ShellMarkTarget = {
+      dataset,
+      setAttribute: (name, value) => attrs.set(name, value),
+      style: { setProperty: (name, value) => props.set(name, value) },
+    }
+    return { target, dataset, attrs, props }
+  }
+
+  it('win32：data-windows-titlebar 属性 + 内联高度变量 32px（官方补偿面激活——ui-layout/sidebar/dockkit/settings 消费）', () => {
+    const fake = fakeDocumentElement()
+    markWindowsTitlebarShell(fake.target, 'win32')
+    expect(fake.attrs.has('data-windows-titlebar'), 'WCO 形态标记在场').toBe(true)
+    // 32px 字面 pin——与 create.ts titleBarOverlay.height 单源（window/titlebar.ts），漂移即红
+    expect(fake.props.get('--dsh-windows-titlebar-height'), '内联高度变量（dockkit 按 documentElement.style 读取）').toBe('32px')
+  })
+
+  it('win32：data-platform 刻意不标（缺 dshDesktop 桥时 runtime=desktop 硬断 ShortcutsService——fix-40 实测裁决缝，翻转须随桥落地）', () => {
+    const fake = fakeDocumentElement()
+    markWindowsTitlebarShell(fake.target, 'win32')
+    expect(fake.dataset.platform, 'data-platform 缺席 = runtime 保持 web（detectEnvironment 判据）').toBeUndefined()
+  })
+
+  it('darwin：零标记（macOS 补偿走 [data-platform=darwin] 变体族——同受 dshDesktop 桥前置约束，与 win32 同缓）', () => {
+    const fake = fakeDocumentElement()
+    markWindowsTitlebarShell(fake.target, 'darwin')
+    expect(fake.dataset.platform).toBeUndefined()
+    expect(fake.attrs.size, '无属性面').toBe(0)
+    expect(fake.props.size, '无内联变量面').toBe(0)
+  })
+
+  it('linux：零标记（无 WCO 形态）', () => {
+    const fake = fakeDocumentElement()
+    markWindowsTitlebarShell(fake.target, 'linux')
+    expect(fake.dataset.platform).toBeUndefined()
+    expect(fake.attrs.size).toBe(0)
+    expect(fake.props.size).toBe(0)
+  })
+
+  it('缺省平台源：不传 platform 即 process.platform（preload.mts 顶层直调形态）', () => {
+    const fake = fakeDocumentElement()
+    markWindowsTitlebarShell(fake.target)
+    if (process.platform === 'win32') {
+      expect(fake.attrs.has('data-windows-titlebar')).toBe(true)
+      expect(fake.props.get('--dsh-windows-titlebar-height')).toBe('32px')
+    } else {
+      expect(fake.attrs.size).toBe(0)
+      expect(fake.props.size).toBe(0)
+    }
+    expect(fake.dataset.platform).toBeUndefined()
   })
 })
