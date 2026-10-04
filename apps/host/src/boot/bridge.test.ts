@@ -85,6 +85,22 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
       parseChildOptions(['electron.exe', 'child.js', JSON.stringify({ ...JSON.parse(valid), port: 0 })]),
     ).toBeUndefined() // 非法端口
   })
+
+  it('credentialsPath 可选透传（fix-26 凭据桥；空串/缺席视为不桥）', () => {
+    const bridged = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({ ...JSON.parse(valid), credentialsPath: 'C:/Users/u/.dsh/.credentials.yaml' }),
+    ])
+    expect(bridged?.credentialsPath).toBe('C:/Users/u/.dsh/.credentials.yaml')
+    const empty = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({ ...JSON.parse(valid), credentialsPath: '' }),
+    ])
+    expect(empty?.credentialsPath).toBeUndefined()
+    expect(parseChildOptions(['electron.exe', 'child.js', valid])?.credentialsPath).toBeUndefined()
+  })
 })
 
 describe('asReadyMessage（ready 守卫）', () => {

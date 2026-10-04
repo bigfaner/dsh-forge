@@ -890,7 +890,7 @@
       "title": "Fix: DSH_HOME 缺省改隔离（{userData}/dsh-home）+ credentials-local 官方 path 缝桥接真 home 凭据——数据两界（账本/会话/注册表/设置/skills），凭据共享不重配（fix-18 全共享副作用收口）",
       "priority": "P1",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-26.md",
       "record": "records/fix-26.md",
       "surface-type": "web",

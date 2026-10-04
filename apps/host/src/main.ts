@@ -19,7 +19,7 @@ import {
 } from './window/index.js'
 
 app.setName('dsh-forge') // userData = {app-data}/dsh-forge（profile 首启落地根）
-if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA) // e2e 隔离（fix-18：在场兼作 dshHome 隐式隔离门）
+if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA) // e2e 隔离（fix-26：在场兼作凭据桥关闭门——dshHome 已缺省隔离）
 if (app.isPackaged) process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
 registerShellScheme(protocol) // 特权 scheme 注册一次性，须先于 app ready
 
@@ -34,7 +34,7 @@ void (async () => {
   try {
     await app.whenReady()
     const paths = resolveHostPaths(process.env, app.getPath('userData'))
-    process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-18 翻案 S1 隔离 pin：缺省共享真 home ~/.dsh，USER_DATA 在场隐式隔离）
+    process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-26：缺省隔离 {userData}/dsh-home 数据两界，凭据经 overlay 桥真 home）
     if (paths.form === 'packaged') {
       const landed = ensureProfileMaterialized(paths.profileDir)
       console.log(`[host] profile(${paths.form}) dir=${paths.profileDir} created=${landed.created.length}`)
@@ -49,6 +49,7 @@ void (async () => {
       port,
       stateDb: paths.stateDb,
       bindingsFile: paths.bindingsFile,
+      credentialsPath: paths.credentialsPath, // fix-26：非 USER_DATA 隔离态桥真 home 凭据
       resourcesDir: paths.resourcesDir, // 4.1：打包形态 boot child 取 runtime/host-dist 入口
     })
     const cookie = await authenticateWebHost(host.manifest.url) // 认证 URL → authority cookie（转发/ws 用）

@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
+    credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
   })
   const { ctx, shutdown: processShutdown } = await runProfile({
     environment: dshAppBoot.loadLayeredEnv('dsh'),

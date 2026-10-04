@@ -38,6 +38,9 @@ export interface BootDshOptions {
   stateDb: string
   /** knowledge 绑定表文件绝对路径（bindingsFile——boot overlay 注入；4.2） */
   bindingsFile: string
+  /** 真 home 凭据文档桥路径（fix-26；boot overlay credentials 行 config.path 注入——
+   *  undefined = USER_DATA 隔离态（e2e/测试）不桥） */
+  credentialsPath?: string
   /** 安装包 resources 根（4.1 打包形态；boot child 取 runtime/host-dist 真实文件入口） */
   resourcesDir?: string
 }

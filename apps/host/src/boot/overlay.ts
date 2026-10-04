@@ -8,6 +8,9 @@
 // 见 fix-12 记录；该二象性已由 fix-20 统一实例修复——boot-chain.ts，本行预确认
 // 仍保留为产品口径：非官方桌面分发面预置官方当前版本常量即「已确认」），模态
 // 关不掉阻断 fresh 用户；说明不再出现（版本随上游 pin 冻结——pin 单测机械核查）。
+// fix-26：凭据桥入同一缝——dsh-base credentials 行注 config.path 指真 home
+// {homedir}/.dsh/.credentials.yaml（官方 resolveSpec 显式 path 优先缝），数据走隔离
+// dshHome 而凭据留真 home（单一真相源，原生 dsh 同步可见/可改；e2e 隔离态缺席不桥）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -19,12 +22,15 @@ import { dirname } from 'node:path'
  */
 export const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 
-/** overlay 生成输入（两路径均绝对路径——main 侧 resolveHostPaths 产出） */
+/** overlay 生成输入（路径均绝对路径——main 侧 resolveHostPaths 产出） */
 export interface BootOverlayInput {
   /** core 插件 dbFile（应用状态库） */
   readonly stateDb: string
   /** knowledge 插件 bindingsFile（会话 cwd → projectId 绑定表） */
   readonly bindingsFile: string
+  /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
+   *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
+  readonly credentialsPath?: string
 }
 
 /** YAML 值转义（双引号标量——路径含反斜杠/冒号，单引号与裸标量均不稳） */
@@ -42,6 +48,9 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '- id: dsh-forge-knowledge',
     '  config:',
     `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
+    ...(input.credentialsPath !== undefined
+      ? ['- id: credentials', '  config:', `    path: ${yamlQuote(input.credentialsPath)}`]
+      : []),
     '- id: ui-settings-general',
     '  config:',
     `    welcomeNoticeVersion: ${yamlQuote(WELCOME_NOTICE_ACK_VERSION)}`,

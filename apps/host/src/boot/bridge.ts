@@ -129,12 +129,15 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     if (typeof o[key] !== 'string' || (o[key] as string) === '') return undefined
   }
   if (typeof o.port !== 'number' || !Number.isInteger(o.port) || o.port <= 0) return undefined
+  const credentialsPath =
+    typeof o.credentialsPath === 'string' && o.credentialsPath !== '' ? o.credentialsPath : undefined
   return {
     profileDir: o.profileDir as string,
     installAnchor: o.installAnchor as string,
     port: o.port,
     stateDb: o.stateDb as string,
     bindingsFile: o.bindingsFile as string,
+    credentialsPath, // fix-26 凭据桥（可选——缺席/空串 = 不桥，与 env 开关空串缺省惯例一致）
   }
 }
 
