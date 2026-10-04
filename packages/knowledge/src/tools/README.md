@@ -1,6 +1,6 @@
 # tools/
 
-定位：**业务** —— `knowledge.search` / `knowledge.read-abstract` tool 定义与参数 schema（消费 `ctx.forgeKnowledge` 服务）。
+定位：**业务** —— `knowledge_search` / `knowledge_read_abstract` tool 定义与参数 schema（消费 `ctx.forgeKnowledge` 服务）。
 
 3.4 已填充：
 - `faces.ts` —— 结构化最小面（对 dsh tools/systemPrompt 服务与 tool 定义形状的锚定；插件零 dsh 运行时包依赖）

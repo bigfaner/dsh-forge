@@ -1,4 +1,4 @@
-// 3.4 单测 —— knowledge.search tool（AC1：参数/返回与 KnowledgeService.search 同构，
+// 3.4 单测 —— knowledge_search tool（AC1：参数/返回与 KnowledgeService.search 同构，
 // DTO 复用 contracts 不自定形状；AC4 前置：执行链 = 会话解析 → 服务调用，透传不记账）。
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeService, SearchHit, SearchQuery } from '@dsh-forge/contracts'
@@ -32,8 +32,8 @@ const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' }
 describe('AC1 参数 schema 与 SearchQuery 同构（去会话解析双键 projectId/sessionId）', () => {
   const tool = createSearchTool(deps(stubService().service))
 
-  it('tool 名 = knowledge.search；参数键集 = domain_prefix/keywords/text/limit（全可选）', () => {
-    expect(tool.name).toBe('knowledge.search')
+  it('tool 名 = knowledge_search；参数键集 = domain_prefix/keywords/text/limit（全可选）', () => {
+    expect(tool.name).toBe('knowledge_search')
     expect(Object.keys(tool.parameters.properties).sort()).toEqual(['domain_prefix', 'keywords', 'limit', 'text'])
     expect(tool.parameters.required).toBeUndefined()
   })

@@ -793,7 +793,7 @@
       "title": "Fix(P0): 知识工具名含点号违反供应商工具名形——knowledge.search/read-abstract 改下划线形，全涟漪面同步 + 名形 pin",
       "priority": "P0",
       "estimatedTime": "1.5h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-19.md",
       "record": "records/fix-19.md",
       "surface-type": "web",

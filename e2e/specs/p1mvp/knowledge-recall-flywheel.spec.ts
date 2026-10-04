@@ -445,15 +445,15 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       page,
       Q1,
       (evs) =>
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge.search') &&
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge.read-abstract'),
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_search') &&
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract'),
       120_000,
     )
     const toolCalls = events.filter((e) => e.type === 'tool/call').map((e) => ({ name: e.data?.name ?? '', seq: e.seq ?? 0 }))
-    const searchSeq = toolCalls.filter((c) => c.name === 'knowledge.search').map((c) => c.seq)
-    const readSeq = toolCalls.filter((c) => c.name === 'knowledge.read-abstract').map((c) => c.seq)
-    expect(searchSeq.length, '检索链：knowledge.search 在场').toBeGreaterThan(0)
-    expect(readSeq.length, '检索链：knowledge.read-abstract 在场（摘要先行——SC10）').toBeGreaterThan(0)
+    const searchSeq = toolCalls.filter((c) => c.name === 'knowledge_search').map((c) => c.seq)
+    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read_abstract').map((c) => c.seq)
+    expect(searchSeq.length, '检索链：knowledge_search 在场').toBeGreaterThan(0)
+    expect(readSeq.length, '检索链：knowledge_read_abstract 在场（摘要先行——SC10）').toBeGreaterThan(0)
     expect(Math.min(...readSeq), '链次序：read-abstract 晚于 search（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
     // Step 2 断言（能力面通道承载）：系统提示词含最简知识段（Story 4 AC1）
     const promptText = (events.find((e) => e.type === 'system/message')?.data?.message?.content ?? [])
@@ -474,8 +474,8 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       .poll(async () => page.locator('[data-dswf-traj-row="tool"]').count(), { timeout: 60_000 })
       .toBeGreaterThanOrEqual(2)
     const toolRowTexts = await page.locator('[data-dswf-traj-row="tool"]').allTextContents()
-    const searchRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge.search') || t.includes('search'))
-    const readRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge.read-abstract') || t.includes('read-abstract'))
+    const searchRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_search') || t.includes('search'))
+    const readRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_read_abstract') || t.includes('read-abstract'))
     expect(searchRowIdx, '台账含 search 工具行').toBeGreaterThanOrEqual(0)
     expect(readRowIdx, '台账含 read-abstract 工具行').toBeGreaterThanOrEqual(0)
     expect(searchRowIdx, '台账时序：search 先于 read-abstract').toBeLessThan(readRowIdx)
@@ -531,7 +531,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       'fw-demo',
       page,
       Q2,
-      (evs) => evs.filter((e) => e.type === 'tool/call' && e.data?.name === 'knowledge.read-abstract').length >= 2,
+      (evs) => evs.filter((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract').length >= 2,
       120_000,
     )
     await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()

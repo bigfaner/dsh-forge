@@ -110,11 +110,11 @@ describe('WorkbenchAssembly 三区槽位装配（相位注入纯渲染）', () =
   it('session 相位：转录切片注入轨迹 pane（fix-11——工具行按语义类成行）', () => {
     const markup = render('session', {
       transcript: transcriptOfChatSnapshot({
-        legacy: { nodes: [{ kind: 'tool-result', seq: 2, callId: 'c-1', call: { name: 'knowledge.search' } }] },
+        legacy: { nodes: [{ kind: 'tool-result', seq: 2, callId: 'c-1', call: { name: 'knowledge_search' } }] },
       }),
     })
     expect(markup).toContain('data-dswf-traj-row="tool"')
-    expect(markup).toContain('knowledge.search')
+    expect(markup).toContain('knowledge_search')
   })
   it('settling 相位：校平位（aria-busy），无 hero 无会话面板', () => {
     const markup = render('settling')
@@ -299,16 +299,16 @@ describe('transcriptOfChatSnapshot wire 判别映射（fix-11：装配层锚—�
     const entries = transcriptOfChatSnapshot(
       chat({
         nodes: [
-          { kind: 'tool-result', seq: 2, callId: 'c-1', call: { name: 'knowledge.search' } },
+          { kind: 'tool-result', seq: 2, callId: 'c-1', call: { name: 'knowledge_search' } },
           { kind: 'tool-result', seq: 3, callId: 'c-2', call: null },
         ],
-        runningCalls: [{ phase: 'start', name: 'knowledge.read-abstract', callId: 'c-3' }],
+        runningCalls: [{ phase: 'start', name: 'knowledge_read_abstract', callId: 'c-3' }],
       }),
     )
     expect(entries).toEqual([
-      { key: 'tool-result:2:c-1', seq: 2, turn: undefined, kind: 'tool-result', toolName: 'knowledge.search' },
+      { key: 'tool-result:2:c-1', seq: 2, turn: undefined, kind: 'tool-result', toolName: 'knowledge_search' },
       { key: 'tool-result:3:c-2', seq: 3, turn: undefined, kind: 'tool-result', toolName: 'c-2' },
-      { key: 'tool-running:c-3', seq: Number.MAX_SAFE_INTEGER - 1, kind: 'tool-running', toolName: 'knowledge.read-abstract' },
+      { key: 'tool-running:c-3', seq: Number.MAX_SAFE_INTEGER - 1, kind: 'tool-running', toolName: 'knowledge_read_abstract' },
     ])
   })
 
@@ -363,7 +363,7 @@ describe('transcriptOfChatSnapshot wire 判别映射（fix-11：装配层锚—�
       chat({
         nodes: [
           { kind: 'assistant', seq: 4, turn: 1, blocks: [] },
-          { kind: 'tool-result', seq: 3, callId: 'c-1', call: { name: 'knowledge.search' } },
+          { kind: 'tool-result', seq: 3, callId: 'c-1', call: { name: 'knowledge_search' } },
           { kind: 'user', seq: 1, content: [] },
         ],
       }),

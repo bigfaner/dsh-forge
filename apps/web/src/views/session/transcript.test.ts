@@ -37,9 +37,9 @@ describe('buildTrajectoryLedger 投影（AC-3 台账与转录一致）', () => {
       entry('k1', 1, 'user-message', { text: '提问' }),
       entry('k2', 2, 'command', { text: '/compact' }),
       entry('k3', 3, 'assistant-message', { text: '回答' }),
-      entry('k4', 4, 'tool-started', { toolName: 'knowledge.search' }),
-      entry('k5', 5, 'tool-running', { toolName: 'knowledge.search' }),
-      entry('k6', 6, 'tool-result', { toolName: 'knowledge.search' }),
+      entry('k4', 4, 'tool-started', { toolName: 'knowledge_search' }),
+      entry('k5', 5, 'tool-running', { toolName: 'knowledge_search' }),
+      entry('k6', 6, 'tool-result', { toolName: 'knowledge_search' }),
       entry('k7', 7, 'system', { text: '上下文已压缩' }),
       entry('k8', 8, 'turn-error', { text: '回合中止' }),
     ])
@@ -49,9 +49,9 @@ describe('buildTrajectoryLedger 投影（AC-3 台账与转录一致）', () => {
     expect(rows[0]).toMatchObject({ side: 'user', text: '提问' })
     expect(rows[1]).toMatchObject({ side: 'user', text: '/compact' })
     expect(rows[2]).toMatchObject({ side: 'assistant', text: '回答' })
-    expect(rows[3]).toMatchObject({ phase: 'started', toolName: 'knowledge.search' })
-    expect(rows[4]).toMatchObject({ phase: 'running', toolName: 'knowledge.search' })
-    expect(rows[5]).toMatchObject({ phase: 'result', toolName: 'knowledge.search' })
+    expect(rows[3]).toMatchObject({ phase: 'started', toolName: 'knowledge_search' })
+    expect(rows[4]).toMatchObject({ phase: 'running', toolName: 'knowledge_search' })
+    expect(rows[5]).toMatchObject({ phase: 'result', toolName: 'knowledge_search' })
     expect(rows[6]).toMatchObject({ text: '上下文已压缩' })
     expect(rows[7]).toMatchObject({ text: '回合中止' })
   })

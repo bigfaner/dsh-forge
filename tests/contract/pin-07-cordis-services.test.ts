@@ -179,7 +179,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
       ctx.reflect.provide('workspaceRegistry', registryStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [] })
-      expect(tools.registered.map((t) => t.name)).toEqual(['knowledge.search', 'knowledge.read-abstract'])
+      expect(tools.registered.map((t) => t.name)).toEqual(['knowledge_search', 'knowledge_read_abstract'])
       const assembly = await sys.assemble()
       expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')
     } finally {

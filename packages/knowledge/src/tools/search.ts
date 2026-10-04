@@ -1,4 +1,4 @@
-// knowledge.search tool 定义（定位：业务）。参数 schema 与 KnowledgeService.search
+// knowledge_search tool 定义（定位：业务）。参数 schema 与 KnowledgeService.search
 // 同构（Interface 3）：projectId/sessionId 由会话上下文解析（session.ts），agent 面
 // 仅见 domain_prefix（可选，省略 = 全域，agent 自主选域）/ keywords / text / limit；
 // 返回 = contracts SearchHit[]（摘要先行），不自定形状（DTO 复用，AC1）。
@@ -17,26 +17,26 @@ export interface SearchToolArgs {
 
 /** 参数防御性收窄（无 defineTool 包装——注册面不做 schema 前置校验，执行点自证） */
 export function parseSearchArgs(args: unknown): SearchToolArgs {
-  if (typeof args !== 'object' || args === null) throw new Error('knowledge.search: arguments must be an object')
+  if (typeof args !== 'object' || args === null) throw new Error('knowledge_search: arguments must be an object')
   const a = args as Record<string, unknown>
   const out: { domain_prefix?: string; keywords?: string[]; text?: string; limit?: number } = {}
   if (a.domain_prefix !== undefined) {
-    if (typeof a.domain_prefix !== 'string') throw new Error('knowledge.search: domain_prefix must be a string')
+    if (typeof a.domain_prefix !== 'string') throw new Error('knowledge_search: domain_prefix must be a string')
     out.domain_prefix = a.domain_prefix
   }
   if (a.keywords !== undefined) {
     if (!Array.isArray(a.keywords) || a.keywords.some((k) => typeof k !== 'string')) {
-      throw new Error('knowledge.search: keywords must be an array of strings')
+      throw new Error('knowledge_search: keywords must be an array of strings')
     }
     out.keywords = a.keywords as string[]
   }
   if (a.text !== undefined) {
-    if (typeof a.text !== 'string') throw new Error('knowledge.search: text must be a string')
+    if (typeof a.text !== 'string') throw new Error('knowledge_search: text must be a string')
     out.text = a.text
   }
   if (a.limit !== undefined) {
     if (typeof a.limit !== 'number' || !Number.isInteger(a.limit) || a.limit <= 0) {
-      throw new Error('knowledge.search: limit must be a positive integer')
+      throw new Error('knowledge_search: limit must be a positive integer')
     }
     out.limit = a.limit
   }
@@ -80,7 +80,7 @@ const SEARCH_OUTPUT_SCHEMA = {
 /** tool 定义工厂（deps 注入服务与解析器——纯函数体，无插件级状态） */
 export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefinition {
   return {
-    name: 'knowledge.search',
+    name: 'knowledge_search',
     description:
       'Search the registered project knowledge base (summary-first). Omit domain_prefix to search all domains; combine with keywords or free text to narrow. Matching is strict — keyword tags must match an entry keyword exactly (AND) and text is a substring match — so keep queries short: start with one high-signal keyword or a short text term, then refine. Returns matching entries with title, summary, domain path, and score.',
     parameters: {

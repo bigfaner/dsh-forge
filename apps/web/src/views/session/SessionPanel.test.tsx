@@ -11,8 +11,8 @@ import type { TranscriptEntry } from './transcript.js'
 /** 恢复链路样本（AC-2：打开既有会话——转录全量成行） */
 const transcript: readonly TranscriptEntry[] = [
   { key: 'u1', seq: 1, kind: 'user-message', text: '查一下部署脚本', turn: 1 },
-  { key: 't1', seq: 2, kind: 'tool-started', toolName: 'knowledge.search', turn: 1 },
-  { key: 't2', seq: 3, kind: 'tool-result', toolName: 'knowledge.search', turn: 1 },
+  { key: 't1', seq: 2, kind: 'tool-started', toolName: 'knowledge_search', turn: 1 },
+  { key: 't2', seq: 3, kind: 'tool-result', toolName: 'knowledge_search', turn: 1 },
   { key: 'a1', seq: 4, kind: 'assistant-message', text: '部署脚本在 scripts/deploy.mjs', turn: 1 },
   { key: 'e1', seq: 5, kind: 'system', text: '上下文已压缩', turn: 2 },
   { key: 'x1', seq: 6, kind: 'turn-error', text: '回合中止', turn: 2 },
@@ -100,7 +100,7 @@ describe('SessionPanel 三 tab 容器（UF-4）', () => {
     expect(markup).toContain('data-dswf-traj-row="event"')
     expect(markup).toContain('data-dswf-traj-row="error"')
     expect(markup).toContain('回合中止')
-    expect(markup).toContain('knowledge.search')
+    expect(markup).toContain('knowledge_search')
     expect(markup).toContain('查一下部署脚本')
     expect(markup).toContain('部署脚本在 scripts/deploy.mjs')
   })

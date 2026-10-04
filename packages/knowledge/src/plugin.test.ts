@@ -68,15 +68,15 @@ describe('AC1/AC2 装配：两 tool 注册 + forge:knowledge 段注册', () => {
   it('默认装配（无 config）：两 tool + 段（name/order 500/文本三部分在场）', () => {
     const rt = new TempRuntime()
     const dispose = knowledgePlugin(rt.ctx())
-    expect(rt.registeredTools.map((t) => t.name).sort()).toEqual(['knowledge.read-abstract', 'knowledge.search'])
+    expect(rt.registeredTools.map((t) => t.name).sort()).toEqual(['knowledge_read_abstract', 'knowledge_search'])
     expect(rt.sections).toHaveLength(1)
     const section = rt.sections[0]
     expect(section?.name).toBe(KNOWLEDGE_SECTION_NAME)
     expect(section?.name).toBe('forge:knowledge')
     expect(section?.order).toBe(500)
     expect(section?.text).toContain('Project knowledge base')
-    expect(section?.text).toContain('knowledge.search')
-    expect(section?.text).toContain('knowledge.read-abstract')
+    expect(section?.text).toContain('knowledge_search')
+    expect(section?.text).toContain('knowledge_read_abstract')
     dispose()
   })
 
@@ -98,7 +98,7 @@ describe('AC1/AC2 装配：两 tool 注册 + forge:knowledge 段注册', () => {
     } as unknown as KnowledgeService
     const ctx = { ...rt.ctx(), forgeKnowledge: service }
     const dispose = knowledgePlugin(ctx, { projects: [{ wsPath: 'C:\\ws\\bound', projectId: 'p-9' }] })
-    const search = rt.registeredTools.find((t) => t.name === 'knowledge.search')
+    const search = rt.registeredTools.find((t) => t.name === 'knowledge_search')
     // 绑定命中：解析出 p-9 注入服务 query（空命中为桩返回）
     const hits = await search?.execute({}, { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\bound' } } } })
     expect(hits).toEqual([])
@@ -107,6 +107,21 @@ describe('AC1/AC2 装配：两 tool 注册 + forge:knowledge 段注册', () => {
     await expect(
       search?.execute({}, { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\other' } } } }),
     ).rejects.toThrow(/not bound/)
+    dispose()
+  })
+})
+
+describe('名形 pin（fix-19）：注册 tool 名全集匹配供应商工具名形', () => {
+  it('全部注册 tool 名匹配 ^[a-zA-Z0-9_-]+$（OpenAI 兼容端点强校验名形——含官方件在场时亦然，防未来再犯）', () => {
+    const rt = new TempRuntime()
+    // 官方件占位先行注册（dsh ToolRuntime 同场注册面——全集迭代断言不区分来源）
+    rt.ctx().tools.register({ name: 'read_file' } as KnowledgeToolDefinition)
+    const dispose = knowledgePlugin(rt.ctx())
+    expect(rt.registeredTools.length, '官方占位 + 产品双 tool 同场').toBeGreaterThanOrEqual(3)
+    for (const tool of rt.registeredTools) {
+      // 点号等违例名形 = 严格校验端点（DeepSeek）逐请求 400、会话不可用——fix-19 回归锚
+      expect(tool.name, `tool 名形违规（端点 400 面）：${tool.name}`).toMatch(/^[a-zA-Z0-9_-]+$/)
+    }
     dispose()
   })
 })

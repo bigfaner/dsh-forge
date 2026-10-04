@@ -179,8 +179,8 @@ describe('pin ⑥-4 forge:knowledge 段形状（Interface 3 × 上游约定）',
       const assembly = await sys.assemble()
       const rendered = renderPrompt(assembly)
       expect(rendered).toContain('## Project knowledge base')
-      expect(rendered).toContain('knowledge.search')
-      expect(rendered).toContain('knowledge.read-abstract')
+      expect(rendered).toContain('knowledge_search')
+      expect(rendered).toContain('knowledge_read_abstract')
       // 段文本契约事实来自 contracts 常量（域层级上限）——机械入文
       expect(rendered).toContain('at most 3 levels')
     } finally {

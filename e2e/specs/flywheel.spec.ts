@@ -14,7 +14,7 @@
 // 真实轨迹可查面（SC10 e2e 断言的载体）：dsh 会话持久化文件 session.v3.jsonl.zstd
 // （{dshHome}/sessions/<sanitized-cwd>/session-<id>/）——多 zstd 帧逐帧解出 JSONL 事件：
 // system/message（模型实收系统提示词——AC1 内容断言）+ tool/call（工具调用轨迹——
-// knowledge.search / knowledge.read-abstract 多步链与次序断言）。
+// knowledge_search / knowledge_read_abstract 多步链与次序断言）。
 // 隔离：独立 userData + 独立端口（e2e 单实例纪律，沿 smoke-skeleton/knowledge-integration）。
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -460,15 +460,15 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
       dshHome,
       sessionId,
       (evs) =>
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge.search') &&
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge.read-abstract'),
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_search') &&
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract'),
       60_000,
     )
     const toolCalls = events.filter((e) => e.type === 'tool/call').map((e) => ({ name: e.data?.name ?? '', seq: e.seq ?? 0 }))
-    const searchSeq = toolCalls.filter((c) => c.name === 'knowledge.search').map((c) => c.seq)
-    const readSeq = toolCalls.filter((c) => c.name === 'knowledge.read-abstract').map((c) => c.seq)
-    expect(searchSeq.length, '轨迹可查：knowledge.search tool 调用在场').toBeGreaterThan(0)
-    expect(readSeq.length, '轨迹可查：knowledge.read-abstract tool 调用在场').toBeGreaterThan(0)
+    const searchSeq = toolCalls.filter((c) => c.name === 'knowledge_search').map((c) => c.seq)
+    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read_abstract').map((c) => c.seq)
+    expect(searchSeq.length, '轨迹可查：knowledge_search tool 调用在场').toBeGreaterThan(0)
+    expect(readSeq.length, '轨迹可查：knowledge_read_abstract tool 调用在场').toBeGreaterThan(0)
     expect(Math.min(...readSeq), '轨迹次序：read-abstract 在 search 之后（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
 
     // AC1 内容断言：模型实收系统提示词含 forge:knowledge 段（知识库存在声明 + 流程指引 + 工具说明）
@@ -478,8 +478,8 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     expect(promptText, '系统提示词在场（system/message 事件）').not.toBe('')
     expect(promptText).toContain('## Project knowledge base')
     expect(promptText, '知识段：agentic search 流程指引在场').toContain('Retrieval flow (agentic search)')
-    expect(promptText, '知识段：工具说明在场（search）').toContain('knowledge.search')
-    expect(promptText, '知识段：工具说明在场（read-abstract）').toContain('knowledge.read-abstract')
+    expect(promptText, '知识段：工具说明在场（search）').toContain('knowledge_search')
+    expect(promptText, '知识段：工具说明在场（read-abstract）').toContain('knowledge_read_abstract')
 
     // ── 步 5/6 召回 tab 条目（即时累积：tab 激活重拉——AC3 tab 面） ──
     await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()

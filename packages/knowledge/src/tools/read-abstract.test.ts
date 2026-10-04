@@ -1,4 +1,4 @@
-// 3.4 单测 —— knowledge.read-abstract tool（AC1：与 readAbstract 同构；
+// 3.4 单测 —— knowledge_read_abstract tool（AC1：与 readAbstract 同构；
 // 场景⑤口径：返回不含正文；AC4 前置：会话解析 → 服务调用透传）。
 import { describe, expect, it, vi } from 'vitest'
 import type { EntryAbstract, KnowledgeService, ReadAbstractQuery } from '@dsh-forge/contracts'
@@ -32,8 +32,8 @@ const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' }
 describe('AC1 参数 schema 与 ReadAbstractQuery 同构（仅 entry_id，必填）', () => {
   const tool = createReadAbstractTool(deps(stubService().service))
 
-  it('tool 名 = knowledge.read-abstract；参数 = entry_id（integer，required）', () => {
-    expect(tool.name).toBe('knowledge.read-abstract')
+  it('tool 名 = knowledge_read_abstract；参数 = entry_id（integer，required）', () => {
+    expect(tool.name).toBe('knowledge_read_abstract')
     expect(Object.keys(tool.parameters.properties)).toEqual(['entry_id'])
     expect(tool.parameters.properties.entry_id?.type).toBe('integer')
     expect(tool.parameters.required).toEqual(['entry_id'])

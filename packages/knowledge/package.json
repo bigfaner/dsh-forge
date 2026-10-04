@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "dsh 插件：knowledge.search / read-abstract tool + forge:knowledge 系统提示词知识段（运行期经 Cordis inject forgeKnowledge，仅类型依赖 core）。",
+  "description": "dsh 插件：knowledge_search / knowledge_read_abstract tool + forge:knowledge 系统提示词知识段（运行期经 Cordis inject forgeKnowledge，仅类型依赖 core）。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

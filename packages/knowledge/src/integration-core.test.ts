@@ -108,8 +108,8 @@ describe('AC4 tool 调用链穿透 core 服务并落 recall_logs（集成自证�
 
   it('search → hits（域前缀 + 关键词过滤，摘要先行）→ sessionRecall 读回 search 日志行', async () => {
     const { tools, forgeKnowledge, projectId, sessionId, exec } = await mount(CORPUS)
-    const search = tools.find((t) => t.name === 'knowledge.search')
-    if (search === undefined) throw new Error('knowledge.search 未注册')
+    const search = tools.find((t) => t.name === 'knowledge_search')
+    if (search === undefined) throw new Error('knowledge_search 未注册')
 
     const hits = (await search.execute({ domain_prefix: 'backend', keywords: ['api'] }, exec)) as SearchHit[]
     expect(hits.length).toBe(2)
@@ -127,8 +127,8 @@ describe('AC4 tool 调用链穿透 core 服务并落 recall_logs（集成自证�
 
   it('read-abstract → EntryAbstract（不含正文）→ 同会话追加 read-abstract 日志行', async () => {
     const { tools, forgeKnowledge, projectId, sessionId, exec } = await mount(CORPUS)
-    const search = tools.find((t) => t.name === 'knowledge.search')
-    const readAbstract = tools.find((t) => t.name === 'knowledge.read-abstract')
+    const search = tools.find((t) => t.name === 'knowledge_search')
+    const readAbstract = tools.find((t) => t.name === 'knowledge_read_abstract')
     if (search === undefined || readAbstract === undefined) throw new Error('双 tool 未注册')
 
     const hits = (await search.execute({}, exec)) as SearchHit[]
@@ -150,8 +150,8 @@ describe('AC4 tool 调用链穿透 core 服务并落 recall_logs（集成自证�
 
   it('绑定缺席（cwd ≠ 任何注册工作区）→ 可读失败，不落日志不炸链路', async () => {
     const { tools, forgeKnowledge, projectId } = await mount(CORPUS)
-    const search = tools.find((t) => t.name === 'knowledge.search')
-    if (search === undefined) throw new Error('knowledge.search 未注册')
+    const search = tools.find((t) => t.name === 'knowledge_search')
+    if (search === undefined) throw new Error('knowledge_search 未注册')
     await expect(
       search.execute({}, { agent: { session: { id: 'sess-x', header: { cwd: 'C:\\definitely\\not\\bound' } } } }),
     ).rejects.toThrow(/not bound/)
