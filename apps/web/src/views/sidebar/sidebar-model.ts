@@ -199,3 +199,28 @@ export function sidebarFilterOf(
   }
   return visible
 }
+
+/**
+ * 头部钮容器选择器（fix-22 blur 守卫契约）：SidebarProjectsZone 头部
+ * （label + 搜索钮 + 视图选项钮 + ＋）的 class 钉面——选择器与该 class 由单测互钉。
+ */
+export const SIDEBAR_SECTIONHEAD_SELECTOR = '.dswf-sidebar-sectionhead'
+
+/** blur relatedTarget 窄形状（Element.closest 切片——结构兼容 EventTarget，Node 单测可伪造） */
+export type FilterBlurTarget = { readonly closest?: unknown } | null
+
+/**
+ * 过滤行 blur 收起裁决（fix-22，走查人规格演进——超原型：原型本无 blur 收起）：
+ * 焦点移出输入即收起（与 Esc 同缝 onCollapse——收起即清空查询，原型 S.pj 语义保持）；
+ * 例外＝焦点移入头部钮容器（SIDEBAR_SECTIONHEAD_SELECTOR：搜索钮/视图选项钮/＋）——
+ * 头部交互保持搜索态不收起（竞态守卫口径 a：否则行展开时点头部钮，mousedown 先触发
+ * input blur → 收起+清空，随后 click 到达搜索钮 toggle 再翻转 searchOpen → 行意外重开）。
+ * 判据：null / 非 Element 目标 / closest 不命中容器（BODY/树行/其他区域）＝收起；
+ * closest 命中容器＝不收起。纯裁决（无 DOM 依赖——close 鸭型探测）。
+ */
+export function shouldCollapseFilterOnBlur(relatedTarget: FilterBlurTarget): boolean {
+  if (relatedTarget === null) return true
+  if (typeof relatedTarget.closest !== 'function') return true
+  const host = (relatedTarget.closest as (selector: string) => Element | null)(SIDEBAR_SECTIONHEAD_SELECTOR)
+  return host === null
+}

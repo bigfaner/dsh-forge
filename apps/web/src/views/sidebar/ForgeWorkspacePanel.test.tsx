@@ -14,7 +14,11 @@ import {
   SidebarFilterRow,
   SidebarProjectsZone,
 } from './ForgeWorkspacePanel.js'
-import type { SidebarProjectNode } from './sidebar-model.js'
+import {
+  SIDEBAR_SECTIONHEAD_SELECTOR,
+  shouldCollapseFilterOnBlur,
+  type SidebarProjectNode,
+} from './sidebar-model.js'
 
 const NOW = 1_700_000_000_000
 
@@ -180,6 +184,31 @@ describe('头部四件 + 过滤（fix-6：搜索钮/视图选项钮补齐——�
     expect(SIDEBAR_VIEW_MENU_ITEMS.some((entry) => 'label' in entry && entry.label === '按项目树')).toBe(true)
     expect(SIDEBAR_VIEW_MENU_SELECTED_ID).toBe('tree')
     expect(SIDEBAR_VIEW_MENU_ITEMS.some((entry) => 'text' in entry && entry.text.includes('后续里程碑'))).toBe(true)
+  })
+})
+
+describe('过滤行 blur 自动收起（fix-22：失焦收起规格 + 头部钮 blur 竞态守卫口径 a）', () => {
+  // 态机行为面照 fix-6/flow-model 形制：renderToStaticMarkup 不可发事件，blur 语义抽
+  // 纯裁决函数直测（SidebarFilterRow onBlur → 守卫命中才 onCollapse——与 Esc 同缝，
+  // 收起即清空查询由面板态机 onSearchToggle 既有语义承载）
+  it('移出即收起：null（点空白无焦点目标）/ 非 Element 目标 / closest 不命中头部容器（BODY/树行/其他区域）', () => {
+    expect(shouldCollapseFilterOnBlur(null)).toBe(true)
+    // 非 Element 目标（罕见——如 Document）：closest 缺席按移出处理
+    expect(shouldCollapseFilterOnBlur({})).toBe(true)
+    // BODY / 树行 / 其它区域元素：closest 探测头部容器不命中
+    expect(shouldCollapseFilterOnBlur({ closest: () => null })).toBe(true)
+  })
+
+  it('头部钮守卫：relatedTarget 在头部钮容器内（搜索钮/视图选项钮/＋）→ 不收起（头部交互保持搜索态）', () => {
+    // closest 命中 .dswf-sidebar-sectionhead（含钮自身的 closest 上溯）＝焦点移入头部
+    const sectionHeadHost = { closest: () => ({ className: 'dswf-sidebar-sectionhead' }) }
+    expect(shouldCollapseFilterOnBlur(sectionHeadHost)).toBe(false)
+  })
+
+  // renderToStaticMarkup 面：守卫选择器 ↔ 头部容器 class 互钉（改名即红——守卫契约面）
+  it('守卫选择器命中头部容器 class（SIDEBAR_SECTIONHEAD_SELECTOR ↔ sectionhead 元素钉面）', () => {
+    const markup = panel()
+    expect(markup).toContain(`class="${SIDEBAR_SECTIONHEAD_SELECTOR.slice(1)}"`)
   })
 })
 

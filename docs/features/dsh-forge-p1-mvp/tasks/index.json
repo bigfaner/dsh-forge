@@ -841,7 +841,7 @@
       "title": "Fix: 侧栏过滤输入框失焦不收起——补 blur 自动收起（用户预期规格：失焦后自动收起，与 Esc 同径「收起即清空」），含头部钮 blur 竞态守卫",
       "priority": "P1",
       "estimatedTime": "1h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-22.md",
       "record": "records/fix-22.md",
       "surface-type": "web",

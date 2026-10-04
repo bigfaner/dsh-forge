@@ -29,6 +29,7 @@ import { EmptyState } from '../../components/index.js'
 import {
   relativeTimeLabel,
   sessionDotState,
+  shouldCollapseFilterOnBlur,
   sidebarFilterOf,
   type SidebarProjectNode,
 } from './sidebar-model.js'
@@ -152,17 +153,19 @@ function SkeletonRows(): ReactNode {
 }
 
 /** 过滤行（fix-6：官方 Input 受控件——前导检索图标；占位/aria 文案对齐原型 sb-searchrow；
- * Esc 收起并清空 = 原型 S.pj 交互语义；autoFocus = 展开即聚焦，原型 toggle 后 focus 同型） */
+ * Esc 收起并清空 = 原型 S.pj 交互语义；autoFocus = 展开即聚焦，原型 toggle 后 focus 同型；
+ * fix-22：blur 移出自动收起（走查人规格演进——超原型），与 Esc 同缝 onCollapse） */
 export interface SidebarFilterRowProps {
   /** 过滤查询（受控——态机单一来源在面板层） */
   readonly query: string
   /** 查询变更（原样上抛——过滤即时生效经 sidebarFilterOf 纯函数） */
   readonly onQueryChange: (query: string) => void
-  /** 收起过滤行（Esc——收起即清空查询，原型语义） */
+  /** 收起过滤行（Esc / blur 移出——收起即清空查询，原型语义；blur 头部钮守卫归
+   * shouldCollapseFilterOnBlur 纯裁决） */
   readonly onCollapse: () => void
 }
 
-/** 过滤行本体（官方 Input——零自绘输入控件） */
+/** 过滤行本体（官方 Input——零自绘输入控件；onBlur 经官方 Input 透传到原生 input） */
 export function SidebarFilterRow({ query, onQueryChange, onCollapse }: SidebarFilterRowProps): ReactNode {
   return (
     <div className="dswf-sidebar-searchrow" data-dswf-searchrow="">
@@ -179,6 +182,10 @@ export function SidebarFilterRow({ query, onQueryChange, onCollapse }: SidebarFi
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') onCollapse()
+        }}
+        onBlur={(event) => {
+          // fix-22：移出即收起（头部钮容器内除外——竞态守卫口径 a，防双翻转重开）
+          if (shouldCollapseFilterOnBlur(event.relatedTarget)) onCollapse()
         }}
       />
     </div>
