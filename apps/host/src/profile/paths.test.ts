@@ -1,16 +1,17 @@
 // 1.4 双形态解析 pin（dev / packaged；Implementation Notes：自本任务区分，供 4.1 消费）。
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hostRoot, resolveHostPaths } from './paths.js'
 
 describe('resolveHostPaths 双形态', () => {
-  it('packaged 默认：profile = {userData}/profile，DSH_HOME 隔离到 {userData}/dsh-home', () => {
+  it('packaged 默认：profile = {userData}/profile，DSH_HOME 缺省共享真 home（fix-18 翻案 S1 隔离 pin）', () => {
     const paths = resolveHostPaths({}, 'C:/app-data/dsh-forge')
     expect(paths.form).toBe('packaged')
     expect(paths.profileDir.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/profile')
-    expect(paths.dshHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/dsh-home')
-    // 4.2 装配期路径：状态库 + knowledge 绑定表（boot overlay 注入 / host 维护）
+    expect(paths.dshHome).toBe(join(homedir(), '.dsh'))
+    // 4.2 装配期路径：状态库 + knowledge 绑定表（boot overlay 注入 / host 维护）——应用私有面不随 fix-18 变
     expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/state.db')
     expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/knowledge-bindings.json')
   })
@@ -71,5 +72,40 @@ describe('resolveHostPaths 打包资源根（DSH_FORGE_RESOURCES_DIR）', () => 
     const paths = resolveHostPaths({}, 'C:/ud')
     expect(paths.resourcesDir).toBeUndefined()
     expect(existsSync(paths.installAnchor)).toBe(true)
+  })
+})
+
+// fix-18：DSH_HOME 解析优先级三态（S1 隔离 pin 翻案——产品属主裁决：产品是同一用户 dsh
+// 环境的伴生窗口，缺省共享真 home 复用原生凭据/配置；e2e 隔离语义经 USER_DATA 隐式保留）
+describe('resolveHostPaths DSH_HOME 三态优先级（fix-18）', () => {
+  it('缺省（人用 dev/打包形态）→ 真用户 home {homedir}/.dsh', () => {
+    const dev = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/app-data/dsh-forge')
+    expect(dev.dshHome).toBe(join(homedir(), '.dsh'))
+    // 打包形态同口径：resources 根在场（app.isPackaged 注入）不改变缺省真 home
+    const packaged = resolveHostPaths({ DSH_FORGE_RESOURCES_DIR: 'X:/install/resources' }, 'C:/app-data/dsh-forge')
+    expect(packaged.form).toBe('packaged')
+    expect(packaged.dshHome).toBe(join(homedir(), '.dsh'))
+  })
+
+  it('DSH_FORGE_USER_DATA 在场 → 隐式隔离 {userData}/dsh-home（e2e 全套口径）+ 私有面不动', () => {
+    const paths = resolveHostPaths({ DSH_FORGE_USER_DATA: 'C:/e2e-ud' }, 'C:/e2e-ud')
+    expect(paths.dshHome.replaceAll('\\', '/')).toBe('C:/e2e-ud/dsh-home')
+    expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/e2e-ud/state.db')
+    expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/e2e-ud/knowledge-bindings.json')
+  })
+
+  it('DSH_FORGE_DSH_HOME 显式 > USER_DATA 隐式隔离（绝对路径直取；空串视为缺省）', () => {
+    const abs = resolveHostPaths(
+      { DSH_FORGE_DSH_HOME: 'X:/tmp/dsh-home', DSH_FORGE_USER_DATA: 'C:/e2e-ud' },
+      'C:/e2e-ud',
+    )
+    expect(abs.dshHome).toBe('X:/tmp/dsh-home')
+    const empty = resolveHostPaths({ DSH_FORGE_DSH_HOME: '', DSH_FORGE_USER_DATA: 'C:/e2e-ud' }, 'C:/e2e-ud')
+    expect(empty.dshHome.replaceAll('\\', '/')).toBe('C:/e2e-ud/dsh-home')
+  })
+
+  it('DSH_FORGE_DSH_HOME 相对路径锚 host 根（与 PROFILE_DIR/RESOURCES_DIR 同语义）', () => {
+    const rel = resolveHostPaths({ DSH_FORGE_DSH_HOME: 'tmp/dsh-home' }, 'C:/ud')
+    expect(rel.dshHome).toBe(join(hostRoot(), 'tmp/dsh-home'))
   })
 })

@@ -19,7 +19,7 @@ import {
 } from './window/index.js'
 
 app.setName('dsh-forge') // userData = {app-data}/dsh-forge（profile 首启落地根）
-if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA)
+if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA) // e2e 隔离（fix-18：在场兼作 dshHome 隐式隔离门）
 if (app.isPackaged) process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
 registerShellScheme(protocol) // 特权 scheme 注册一次性，须先于 app ready
 
@@ -34,7 +34,7 @@ void (async () => {
   try {
     await app.whenReady()
     const paths = resolveHostPaths(process.env, app.getPath('userData'))
-    process.env.DSH_HOME ??= paths.dshHome // S1 pin：DSH_HOME 须先于 boot 重定向隔离
+    process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-18 翻案 S1 隔离 pin：缺省共享真 home ~/.dsh，USER_DATA 在场隐式隔离）
     if (paths.form === 'packaged') {
       const landed = ensureProfileMaterialized(paths.profileDir)
       console.log(`[host] profile(${paths.form}) dir=${paths.profileDir} created=${landed.created.length}`)

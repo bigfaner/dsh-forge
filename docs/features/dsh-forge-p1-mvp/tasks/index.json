@@ -752,6 +752,18 @@
       "type": "coding.fix",
       "complexity": "low"
     },
+    "fix-18": {
+      "id": "fix-18",
+      "title": "Fix: DSH_HOME 默认共享用户真 home（~/.dsh）——API Key 等凭据/配置复用原生 dsh（S1 隔离 pin 按产品裁决翻案），e2e 隔离语义经 DSH_FORGE_USER_DATA 隐式保留",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "fix-18.md",
+      "record": "records/fix-18.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-2": {
       "id": "fix-2",
       "title": "Fix: 主窗口隐藏原生标题栏（titleBarStyle hidden + overlay，对齐 dsh 官方桌面形态）",
