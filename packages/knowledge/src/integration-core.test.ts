@@ -58,6 +58,7 @@ async function mount(corpus: Record<string, string>) {
   const provided = new Map<string, unknown>()
   const coreCtx: CoreContextFace = {
     workspaceRegistry: registryStub(),
+    workspaceController: { rename: async () => ({}) }, // fix-24 ② 桩（标题对齐面——本域不消费返回）
     reflect: { provide: (name: string, value: unknown) => void provided.set(name, value) },
   }
   disposers.push(corePlugin(coreCtx, { dbFile: join(root, 'state.db') }))

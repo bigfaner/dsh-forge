@@ -10,6 +10,9 @@ import { ProjectWriteError } from './errors.js'
 import type { WorkspaceLike } from './registry.js'
 import corePlugin, { type CoreContextFace } from '../service.js'
 
+/** rename 结构化桩（fix-24 ②：workspaceController 窄面——注册链标题对齐消费） */
+const stubRename = { rename: async () => ({}) }
+
 let dir: string
 afterAll(() => {
   if (dir) rmSync(dir, { recursive: true, force: true })
@@ -35,6 +38,7 @@ function stubCtx() {
   }
   const ctx: CoreContextFace = {
     workspaceRegistry: registry,
+    workspaceController: stubRename,
     reflect: {
       provide(name: string, value?: unknown) {
         provided.set(name, value)
@@ -46,10 +50,10 @@ function stubCtx() {
 }
 
 describe('service.ts 装配：ctx.forgeProjects 注册（Plugin.Function 形态）', () => {
-  it('默认导出函数插件：inject=workspaceRegistry，provide forgeProjects（Interface 1 全五法面——2.3 并齐）', () => {
+  it('默认导出函数插件：inject=workspaceRegistry+workspaceController（fix-24 ② 标题对齐面），provide forgeProjects（Interface 1 全五法面——2.3 并齐）', () => {
     const { ctx, provided } = stubCtx()
     const dispose = corePlugin(ctx, { dbFile: dbPath() })
-    expect(corePlugin.inject).toEqual(['workspaceRegistry'])
+    expect(corePlugin.inject).toEqual(['workspaceRegistry', 'workspaceController'])
     const svc = provided.get('forgeProjects') as Record<string, unknown> | undefined
     expect(svc).toBeDefined()
     for (const method of ['registerProject', 'listProjects', 'getProject', 'updateProject', 'reconcileAtStartup']) {

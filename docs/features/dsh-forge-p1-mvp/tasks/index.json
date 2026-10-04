@@ -866,11 +866,12 @@
       "title": "Fix: 新会话输入框上方控件工作区语义→项目语义——picker 影子列项目（名/选中/切换）+ 注册时 workspace 标题对齐项目名（官方 chip/所有 title 面免费显示项目名）+「添加」接产品注册流程",
       "priority": "P1",
       "estimatedTime": "5h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-24.md",
       "record": "records/fix-24.md",
       "surface-type": "web",
       "type": "coding.fix",
+      "blockedReason": "no implementation found: zero fix-24 deliverables on disk at HEAD 4cf192d — (1) no conversation.hero.workspace picker shadow in apps/web (plugin.ts has no hero workspace slot registration), (2) no workspaces.rename title alignment in packages/core project-service register chain, (3) no hero-control e2e spec or picker-mapping unit tests; no fix-24 commit on any branch (fix-26 only closed the shared-home pollution root cause). Original execution never implemented; needs real execution of ①+②+⑤.",
       "complexity": "medium"
     },
     "fix-25": {

@@ -1,4 +1,4 @@
-// dsh ctx.workspaceRegistry 消费面（定位：业务——补偿链的 dsh 官方依赖形状）。
+// dsh 官方面消费面（定位：业务——补偿链/标题对齐的 dsh 官方依赖形状）。
 // 语义锚定 G1 pin 第 4 项（上游 dsh-workspace 源码核实）：
 //   create 幂等（同 canonical path 返回既有实体且不改标题）/ list 同步投影 / delete 保目录保日志、
 //   未知 id 幂等 no-op（false）。core 不依赖 dsh 运行时包（profile 装配期注入 Cordis 服务），
@@ -20,4 +20,15 @@ export interface WorkspaceRegistryPort {
   create(path: string, title?: string): Promise<WorkspaceLike>
   /** 删除注册记录（保留目录与全部会话日志）；未知 id 幂等 no-op 返回 false */
   delete(id: string): Promise<boolean>
+}
+
+/**
+ * dsh `workspaceController` 服务窄面（api-workspace-controller 官方 `workspace/rename`
+ * 命令——fix-24 ② 注册时 workspace 标题对齐项目名的唯一官方动作面）。真实现（Typert
+ * RemoteService）语义：title trim 后非空（空串 gateway/bad-request）、跨工作区重名拒绝
+ * （workspace/name-conflict）、title 等值幂等跳过（不落写）。core 不消费其返回投影。
+ */
+export interface WorkspaceRenamePort {
+  /** 官方改名命令面（request = {workspaceId, title}；失败 = reject 原样上抛） */
+  rename(request: { readonly workspaceId: string; readonly title: string }): Promise<unknown>
 }

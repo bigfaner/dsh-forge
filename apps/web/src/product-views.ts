@@ -24,6 +24,10 @@ import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.
 import { ForgeHeroPanel } from './workbench/HeroPanel.js'
 import { ForgeKnowledgePanel, type ForgeKnowledgePanelProps } from './workbench/KnowledgePanel.js'
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
+import {
+  ForgeHeroWorkspacePicker,
+  type ForgeHeroWorkspacePickerProps,
+} from './views/session/HeroWorkspacePicker.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
@@ -44,6 +48,8 @@ export interface ForgePublishedViews {
   readonly ForgeKnowledgeGlyph: ComponentType<ForgeKnowledgeGlyphProps>
   /** conversation.view 'dswf-recall' 占用者（UF-4 知识召回页签） */
   readonly ForgeRecallView: ComponentType<ForgeRecallViewProps>
+  /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
+  readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
 }
@@ -62,5 +68,6 @@ declare global {
   ForgeKnowledgePanel,
   ForgeKnowledgeGlyph,
   ForgeRecallView,
+  ForgeHeroWorkspacePicker,
   createWorkbenchBridge,
 }

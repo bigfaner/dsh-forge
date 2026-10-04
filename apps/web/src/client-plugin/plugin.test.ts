@@ -12,6 +12,7 @@ import {
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   HERO_PANEL_KEY,
+  HERO_WORKSPACE_SLOT,
   KNOWLEDGE_PANEL_KEY,
   MAIN_SLOT,
   RECALL_VIEW_ID,
@@ -42,6 +43,8 @@ interface RegisterCall {
     order?: number
     label?: string
     inject?: () => object
+    /** fix-24 ①：影子行不声明 children（官方登记行供养子洞——重声明即 throw）的断言面 */
+    children?: unknown
   }
   component: unknown
 }
@@ -110,6 +113,7 @@ function publishFakeViews() {
     ForgeKnowledgePanel: 'COMP:knowledge-panel',
     ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
     ForgeRecallView: 'COMP:recall-view',
+    ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       const bridgeObj = {
@@ -175,6 +179,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       MAIN_SLOT,
       SIDEBAR_PANELLIST_SLOT,
       CONVERSATION_VIEW_SLOT,
+      HERO_WORKSPACE_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
@@ -265,7 +270,28 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT]) // fix-24 ① 后 views 族含 hero 影子
+    expect(marker?.views?.error).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + 零 inject（数据面组件自源 RPC）', () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const heroRegisters = registers.filter((r) => r.key === HERO_WORKSPACE_SLOT)
+    expect(heroRegisters, 'conversation.hero.workspace 恰一登记（single 槽影子——官方 WorkspacePicker 保持在场）').toHaveLength(1)
+    const hero = heroRegisters[0]!
+    expect(hero.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
+    expect(hero.options.priority).toBeLessThan(0) // lowest renders——影子官方占用者（priority 0）
+    expect(hero.component).toBe(views.ForgeHeroWorkspacePicker)
+    // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
+    expect(hero.options.children).toBeUndefined()
+    expect(hero.options.inject).toBeUndefined() // owner share + root 标准 useWorkspaces 即全部输入
+    expect(hero.options.id).toBeUndefined()
+    expect(hero.options.key).toBeUndefined()
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

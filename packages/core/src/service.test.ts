@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
 import type { KnowledgeService } from '@dsh-forge/contracts'
-import type { WorkspaceLike, WorkspaceRegistryPort } from './forge/registry.js'
+import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import corePlugin, { type CoreContextFace } from './service.js'
 import { openDatabase } from './db/index.js'
 import type Database from 'better-sqlite3'
@@ -32,11 +32,17 @@ function stubRegistry(): WorkspaceRegistryPort {
   }
 }
 
+/** rename 结构化桩（fix-24 ②——workspaceController 窄面形状兼容即可） */
+function stubRename(): WorkspaceRenamePort {
+  return { rename: async () => ({}) }
+}
+
 /** 起插件（provide 记账）→ 返回 { services, dispose } */
 function startPlugin(home: string): { services: Map<string, unknown>; dispose: () => void } {
   const services = new Map<string, unknown>()
   const ctx: CoreContextFace = {
     workspaceRegistry: stubRegistry(),
+    workspaceController: stubRename(),
     reflect: {
       provide(name: string, value?: unknown) {
         services.set(name, value)

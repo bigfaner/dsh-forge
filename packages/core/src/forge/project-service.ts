@@ -25,13 +25,15 @@ import type {
 import { withTransaction } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
-import type { WorkspaceLike, WorkspaceRegistryPort } from './registry.js'
+import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
 
 export interface ProjectServiceDeps {
   /** SQLite 句柄（db/ 唯一产出；一切 SQL prepared） */
   db: Database.Database
   /** dsh 官方面（ctx.workspaceRegistry；G1 pin 4 幂等/get 语义见 ./registry.ts） */
   registry: WorkspaceRegistryPort
+  /** dsh 官方面（ctx.workspaceController——workspace/rename 命令；fix-24 ② 标题对齐） */
+  rename: WorkspaceRenamePort
 }
 
 /** Interface 1 服务面（2.3 并齐 contracts ProjectService 全五法） */
@@ -142,6 +144,9 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     )
   }
 
+  // fix-24 ②：注册链末位 workspace 标题对齐项目名（新建与挂接既有两径同收口——见 alignWorkspaceTitle）
+  await alignWorkspaceTitle(deps, workspace.id, input.name)
+
   return { projectId, workspaceId: workspace.id, attachedToExisting }
 }
 
@@ -168,9 +173,40 @@ async function attachExistingRow(
     await reconcileProjectRef(deps, row, { repaired: [], orphans: [] }) // 健康即内部短路（零写零记账）
     const after = getRow(deps, row.id)
     if (after === undefined) return undefined // 不可达兜底（单写者无并发删除）——降级现行链
+    // fix-24 ②：重注册幂等路径同对齐（既有行 name——input.name 对既有行不生效，title 跟行不跟输入；
+    // fix-24 前落库的存量项目经任一次重注册即愈）。alignWorkspaceTitle 永不抛——本 try 语义零变化
+    await alignWorkspaceTitle(deps, after.workspace_id, after.name)
     return { projectId: after.id, workspaceId: after.workspace_id, attachedToExisting: true }
   } catch {
     return undefined // 自愈面失败（含库不可用）——降级现行链，错误语义由 ③ 面承接
+  }
+}
+
+/**
+ * fix-24 ② 注册时 workspace 标题对齐项目名（官方 workspace/rename 同径）：workspace
+ * 创建/挂接与 projects 行双落定后调用——官方 hero chip（ConversationContent label =
+ * workspace title）、dsh 账本 title、原生侧显示全部免费显示项目名（影子 chip 无缝可达，
+ * fix-25 官方 ConversationRoot 回归后收益面全局化）。
+ * 失败语义 = fail-soft 永不抛：对齐是展示面增益，不得拖垮注册主链——真实可达失败 =
+ * 跨工作区重名（workspace/name-conflict：两项目同名时后者 chip 退回目录名，无害残留）；
+ * 补偿链零 rename 回滚需要（排序免疫：rename 仅在 ③ 落定后执行，② 失败/③ 失败补偿
+ * 一切失败径 rename 尚未发生）。后续耦合：项目改名（updateProject name patch）须联动
+ * 同 rename——P1 注记不在本面。
+ */
+async function alignWorkspaceTitle(
+  deps: ProjectServiceDeps,
+  workspaceId: string,
+  projectName: string,
+): Promise<void> {
+  try {
+    await deps.rename.rename({ workspaceId, title: projectName })
+  } catch (cause) {
+    // app_key_logs scope CHECK 四值不含注册域——对齐降级走 child 控制台（stdio 继承回流宿主）
+    console.warn(
+      `workspace 标题对齐项目名失败（无害残留：chip/账本退回目录名，注册不受影响）——${projectName}（${workspaceId}）：${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    )
   }
 }
 

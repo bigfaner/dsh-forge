@@ -47,6 +47,12 @@ export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'
 export const SIDEBAR_PANELLIST_SLOT = 'sidebar.panellist'
 /** 洞名：官方会话视图 roster（ConversationSessionHeader 页签行 + 视图区 only:id 消费） */
 export const CONVERSATION_VIEW_SLOT = 'conversation.view'
+/**
+ * 洞名：官方新会话 hero 工作区选择/切换控件（ConversationContent heroWorkspaceRow 弹层——
+ * single/root；fix-24 ① 影子占用改列项目。chip 触发器归官方 owner 渲染，文案经 core
+ * 注册链 workspaces.rename 标题对齐项目名达成——非影子替换面）
+ */
+export const HERO_WORKSPACE_SLOT = 'conversation.hero.workspace'
 /** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
 export const SHELL_OVERLAY_SLOT = 'shell.overlay'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
@@ -144,6 +150,7 @@ export interface ForgeViewsGlobal {
     ForgeKnowledgePanel: unknown
     ForgeKnowledgeGlyph: unknown
     ForgeRecallView: unknown
+    ForgeHeroWorkspacePicker: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
@@ -185,7 +192,7 @@ export interface ForgeClientActiveMarker {
   readonly sidebar?: SlotRegistrationDiagnostics
   /** 官方 main 面板族（hero/knowledge 全局面板 + panellist 行） */
   readonly center?: SlotRegistrationDiagnostics
-  /** 官方 conversation.view 页签族（知识召回单登记——轨迹 = 官方 'trajectory' 直用，fix-29） */
+  /** 官方 conversation 族页签/控件（知识召回单登记 + hero 工作区控件影子——fix-24 ①） */
   readonly views?: SlotRegistrationDiagnostics
   /** 常驻壳宿主（shell.overlay——流程宿主/相位锚/联动面载体） */
   readonly shell?: SlotRegistrationDiagnostics
@@ -328,6 +335,18 @@ export function forgeClientPlugin(): ForgeClientPlugin {
               }),
             },
             views.ForgeRecallView,
+          ),
+        )
+
+        // hero 工作区控件影子（fix-24 ①——single 槽 -100 lowest renders 取官方 WorkspacePicker
+        // 弹层渲染位，改列 forge 项目；owner 契约（open/anchorRef/selectedId/onPick/onClose）零
+        // 变化。不声明 children：官方登记行恒在场供养 conversation.hero.workspace.directoryFlow
+        // 子洞（ui-slots register 对已声明子槽重声明即 throw——fix-23 runtime 实证；影子只取
+        // 渲染位不撤官方登记），fix-14/16 原生选取链不断）
+        registerSlotEntry(clientCtx, HERO_WORKSPACE_SLOT, viewsDiagnostics, () =>
+          clientCtx.slots.register(
+            { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+            views.ForgeHeroWorkspacePicker,
           ),
         )
 

@@ -30,14 +30,14 @@ export async function fetchProjectsPhase(makeClient: RpcClientFactory): Promise<
 }
 
 /**
- * 拉取 forge:projects/list（mount + refreshKey 变化 + 显式重试）。
+ * 拉取 forge:projects/list（mount + refreshKey 变化 + 显式重试 + 静默重拉）。
  * @param refreshKey - 刷新锚（workspace 归属快照对象——身份变化即重拉）
  * @param makeClient - RPC client 构造器
  */
 export function useForgeProjects(
   refreshKey: unknown,
   makeClient: RpcClientFactory = defaultClient,
-): readonly [ProjectsPhase, () => void] {
+): readonly [ProjectsPhase, () => void, () => void] {
   const [state, setState] = useState<ProjectsPhase>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)
   useEffect(() => {
@@ -53,7 +53,12 @@ export function useForgeProjects(
     setState({ phase: 'loading' })
     setNonce((n) => n + 1)
   }, [])
-  return [state, retry] as const
+  // 静默重拉（fix-24 ①）：nonce 递增但保留现行相位——弹层开合等高频面刷新不闪 loading
+  // 骨架（应用侧行删除/归档不触发 workspace 快照锚，open 边沿重拉兜住陈旧面）
+  const silentRefresh = useCallback(() => {
+    setNonce((n) => n + 1)
+  }, [])
+  return [state, retry, silentRefresh] as const
 }
 
 /** 缺省构造：preload 传输真身（缺席由 fetchProjectsPhase 收敛为 error 相位——非 Electron 载体不炸壳） */

@@ -10,7 +10,7 @@ import Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
-import type { WorkspaceLike, WorkspaceRegistryPort } from './registry.js'
+import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
 
 // ── registry 桩（G1 pin 4 语义的结构化复刻；不触盘——canonical 化用 path.resolve 替身） ──
 
@@ -87,12 +87,25 @@ interface ProjectRow {
   updated_at: string
 }
 
+// ── rename 桩（fix-24 ②：官方 workspace/rename 命令形状记录——调用形状 = 断言面） ──
+
+class StubRename implements WorkspaceRenamePort {
+  readonly calls: { workspaceId: string; title: string }[] = []
+  failRename?: Error
+  async rename(request: { readonly workspaceId: string; readonly title: string }): Promise<unknown> {
+    this.calls.push({ workspaceId: request.workspaceId, title: request.title })
+    if (this.failRename) throw this.failRename
+    return { workspace: {} }
+  }
+}
+
 function setup() {
   const db = openDatabase(dbPath())
   dbs.push(db)
   const registry = new StubRegistry()
-  const service = createProjectService({ db, registry } satisfies ProjectServiceDeps)
-  return { db, registry, service }
+  const rename = new StubRename()
+  const service = createProjectService({ db, registry, rename } satisfies ProjectServiceDeps)
+  return { db, registry, rename, service }
 }
 
 const readRows = (db: Database.Database): ProjectRow[] =>
@@ -336,8 +349,8 @@ describe('AC5 补偿失败 → app_key_logs 记账（scope=compensation）+ 抛 
 // ── AC6 registry.create 失败 → ERR_WORKSPACE_CREATE 中止 ──
 
 describe('AC6 registry.create 失败 → ERR_WORKSPACE_CREATE 中止，无补偿需要', () => {
-  it('create 抛错 → 中止：无 delete、无落库、无记账', async () => {
-    const { db, registry, service } = setup()
+  it('create 抛错 → 中止：无 delete、无落库、无记账、无 rename（fix-24 ② 排序免疫）', async () => {
+    const { db, registry, rename, service } = setup()
     registry.failCreate = new Error('ENOTDIR: not a directory')
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(WorkspaceCreateError)
@@ -346,5 +359,62 @@ describe('AC6 registry.create 失败 → ERR_WORKSPACE_CREATE 中止，无补偿
     expect(registry.deleteCalls).toEqual([]) // 无补偿需要
     expect(readRows(db)).toEqual([]) // 无落库
     expect(keyLogs(db)).toEqual([]) // 无记账
+    expect(rename.calls).toEqual([]) // fix-24 ②：② 失败径 rename 未发生（零残留）
+  })
+})
+
+// ── fix-24 ② 注册时 workspace 标题对齐项目名（官方 workspace/rename 调用形状） ──
+
+describe('fix-24 ② 注册时标题对齐：新建/挂接/自愈三径收口 + fail-soft + 补偿链零 rename 残留', () => {
+  it('新建路径全链成功 → rename({workspaceId, title=name}) 恰一调用（title 跟项目名不跟目录名）', async () => {
+    const { db, registry, rename, service } = setup()
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(false)
+    expect(registry.records.has(result.workspaceId)).toBe(true)
+    expect(rename.calls).toEqual([{ workspaceId: result.workspaceId, title: 'proj' }]) // 调用形状
+    expect(readRows(db)[0]?.name).toBe('proj') // 行 name 与 title 同源
+  })
+
+  it('挂接既有路径（① 预检命中 dsh 既有工作区）→ 同对齐（attachedToExisting=true 时 rename 仍发生）', async () => {
+    const { rename, registry, service } = setup()
+    registry.seed(join(WS, 'proj')) // dsh 侧既有（canonical path 命中）
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(true)
+    expect(rename.calls).toEqual([{ workspaceId: result.workspaceId, title: 'proj' }])
+  })
+
+  it('重注册幂等（fix-27 自愈路径）→ rename 以既有行 name 对齐（input.name 对既有行不生效；存量项目重注册即愈）', async () => {
+    const { db, rename, registry, service } = setup()
+    const existing = registry.seed(join(WS, 'proj'))
+    seedRow(db, { id: 'legacy-row', workspaceId: existing.id, wsPath: existing.path }) // 存量行 name=id
+    const result = await service.registerProject(input({ workspaceDir: join(WS, 'proj') }))
+    expect(result.projectId).toBe('legacy-row') // 幂等复用既有行
+    expect(rename.calls).toEqual([{ workspaceId: existing.id, title: 'legacy-row' }]) // title 跟行不跟输入
+  })
+
+  it('同项目重注册不炸（幂等可重入）：官方 rename 等值跳过由官方面承接——本链每次注册恰一调用', async () => {
+    const { rename, service } = setup()
+    const first = await service.registerProject(input())
+    const second = await service.registerProject(input()) // 重注册 → 自愈路径幂等成功
+    expect(second.projectId).toBe(first.projectId) // 幂等复用
+    expect(rename.calls).toHaveLength(2) // 每次注册各恰一；等值幂等（零写）归官方命令语义
+    expect(rename.calls[0]).toEqual(rename.calls[1])
+  })
+
+  it('rename 失败（name-conflict 模拟）→ fail-soft：注册仍成功、无重试、行不受影响', async () => {
+    const { db, rename, service } = setup()
+    rename.failRename = new Error("Workspace name 'proj' is already in use")
+    const result = await service.registerProject(input())
+    expect(result.projectId).toBeTypeOf('string') // 注册不受对齐失败拖垮
+    expect(rename.calls).toHaveLength(1) // 无重试
+    expect(readRows(db)).toHaveLength(1) // 行已落定
+  })
+
+  it('③ 写入失败（补偿路径）→ rename 零调用（补偿链 rename 零残留——排序免疫：rename 仅在 ③ 落定后执行）', async () => {
+    const { db, rename, service } = setup()
+    failProjectInserts(db)
+    const err: unknown = await service.registerProject(input()).catch((e) => e)
+    expect(err).toBeInstanceOf(ProjectWriteError)
+    expect(rename.calls).toEqual([]) // 失败径 rename 未发生——补偿链无需 rename 回滚
   })
 })

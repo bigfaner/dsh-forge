@@ -72,6 +72,11 @@ function registryStub() {
   }
 }
 
+/** workspaceController 最小桩（fix-24 ②：官方 workspace/rename 命令窄面——core 双注入之二） */
+function renameStub() {
+  return { rename: async () => ({}) }
+}
+
 /** 等待条件成立（fiber 级联卸载为异步 dispose——setImmediate 宏任务拍） */
 async function waitFor(pred: () => boolean | Promise<boolean>, ticks = 50): Promise<boolean> {
   for (let i = 0; i < ticks && !(await pred()); i++) await new Promise((r) => setImmediate(r))
@@ -132,15 +137,19 @@ describe('pin ⑦-2 官方面语义锚（cordis d.ts 随包分发面）', () => 
 })
 
 describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/knowledge 插件 + 临时 SQLite）', () => {
-  it('inject 门控：workspaceRegistry 缺席时 core 不加载；provide 后加载（Plugin.Base 语义实跑）', async () => {
+  it('inject 门控：双依赖（fix-24 ② 后 registry+controller）任一缺席 core 不加载；双 provide 后加载（Plugin.Base 语义实跑）', async () => {
     const { ctx } = await bootRuntime()
     try {
       const fiber = ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       await new Promise((r) => setImmediate(r))
       expect(ctx.get('forgeProjects'), '依赖缺席：不加载不注册').toBeUndefined()
       const disposeWs = ctx.reflect.provide('workspaceRegistry', registryStub())
+      // 单就绪门：workspaceController 仍缺席（fix-24 ② 双注入——全可用才加载）
+      expect(await waitFor(() => ctx.get('forgeProjects') !== undefined), '半依赖不加载').toBe(false)
+      const disposeRn = ctx.reflect.provide('workspaceController', renameStub())
       await fiber
       expect(ctx.get('forgeProjects'), '依赖就绪：加载并注册').toBeDefined()
+      disposeRn()
       disposeWs()
     } finally {
       await ctx.fiber.dispose() // core 卸载关库（单句柄生命周期）
@@ -151,6 +160,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     const { ctx } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       const projects = ctx.get('forgeProjects') as Record<string, unknown>
       for (const method of ['registerProject', 'listProjects', 'getProject', 'updateProject', 'reconcileAtStartup']) {
@@ -177,6 +187,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [] })
       expect(tools.registered.map((t) => t.name)).toEqual(['knowledge_search', 'knowledge_read_abstract'])
@@ -191,6 +202,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     const { ctx, sys, tools } = await bootRuntime()
     try {
       const disposeWs = ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [] })
       expect(ctx.get('forgeProjects')).toBeDefined()
