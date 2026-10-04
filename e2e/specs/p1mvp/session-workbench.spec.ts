@@ -414,10 +414,10 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
       .toContain(fixtureMessage)
 
     // ── Step 5 success：视图互换且右栏状态保留（官方右栏展开 + 草稿 + 知识模式隐藏 + 切回恢复） ──
-    // fix-23：右栏 = 官方 ui-sidebar-right 活体；面板钮（[data-sidebar-right-expand] 锚保持）
-    // 动作 = 官方 sidebarRight.toggleExpanded（官方 ExpandButton/strip chrome 同一动作径——
-    // 官方头部链三件（「打开方式」+「⋯」+官方 corner）在产品 main.conversation 影子下不可达，
-    // slot runtime per-entry renderSlot 授权实证见 fix-23 记录——转后续架构任务）
+    // fix-23：右栏 = 官方 ui-sidebar-right 活体；展开钮（[data-sidebar-right-expand]）
+    // 动作 = 官方 sidebarRight.toggleExpanded（官方 ExpandButton/strip chrome 同一动作径）。
+    // fix-25 官方基座降位后头部链三件（「打开方式」+「⋯」+官方 corner ExpandButton）随官方
+    // ConversationRoot 直渲白拿——本锚即官方 corner 本体（main.conversation 影子已退役）
     const expandButton = page.locator('[data-sidebar-right-expand]').first()
     await expect(expandButton, '面板钮在场（官方右栏收展入口）').toBeVisible({ timeout: 30_000 })
     await expandButton.click()

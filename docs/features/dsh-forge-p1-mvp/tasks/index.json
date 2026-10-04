@@ -853,7 +853,7 @@
       "title": "Fix: 对话界面右上角对齐原生 dsh——官方 header 链点亮（「打开方式」+「⋯」更多操作 + corner 收展钮）+ 右栏 dock 全面复用官方 ui-sidebar-right（自研 dock 骨架退役，官方右栏已在运行时活体待接）",
       "priority": "P1",
       "estimatedTime": "6h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-23.md",
       "record": "records/fix-23.md",
       "surface-type": "web",

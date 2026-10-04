@@ -101,3 +101,21 @@ mainSession: false
   ConversationRoot 渲染 main.conversation（产品工作台架构级重排——触及 UF-4/UF-5/hero/
   知识视图装配），超出本 fix 边界，转后续任务处置。
 
+## 复核收口（2026-10-04 re-dispatch——① 已由 fix-25 解除受阻，全验收复核通过）
+
+- **① 落地载体 = fix-25（8425433）**：main.conversation 影子退役，官方 ConversationRoot
+  直渲中区——官方头部链三件白拿（utilities「打开方式」= ui-open-in-app +「⋯」=
+  session-log-download；corner = ui-sidebar-right ExpandButton `[data-sidebar-right-expand]`）。
+- **活体复核（tmp-ui-review/fix23-verify.mjs，dogfood 真会话）**：header/session.header 座
+  在场（受阻期恒缺席的 `[data-slot=conversation.header]`=1）；「打开方式」拆分钮在场（菜单
+  文件资源管理器（默认）/VS Code/IntelliJ IDEA/PyCharm）；「⋯」菜单 = 下载 Session 日志/
+  反馈（AC 原文口径）；corner 收展往返 + guide「开始」649px + strip chrome 全通；三页签
+  （对话/轨迹/知识召回）与知识视图联动零变化；pageerror/slot 崩溃零。
+- **本 pass 增量**：zones/dock.ts + dock-kit.ts（+测试）死文件删除落 commit（fix-25 已删
+  其余自研面、结构 pin 断言 zones 目录缺席——本删除为 pin 成立的最后一块）；
+  session-workbench Step5 陈旧注释（「三件不可达」受阻期口径）更正为 fix-25 后事实。
+- **门**：tsc -b / oxlint / imports / tokens / selftest 全绿；targeted vitest（web+structure+
+  contract）56 文件 625 测试全绿。
+- **已知边界（承 fix-25 记录）**：developerTools 开启期官方 trajectory 页签与产品
+  dswf-trajectory 并陈（生产默认关闭不现）。
+
