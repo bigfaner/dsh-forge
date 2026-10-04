@@ -11,15 +11,15 @@
 //   的 Markdown 正文（数据侧保证不含 frontmatter）；authors/updated 取文件 frontmatter
 //   （缺省 mtime / null）。索引行未命中或源文件不可读 → ERR_ENTRY_NOT_FOUND（详情面无法供正文）。
 // · sessionRecall = 召回 tab 数据源，knowledge_recall_logs 单表直读（SC2 同源，禁投影表）：
-//   分组 = call_id 聚合（最近在前）；统计头口径 recallStats——次数 = COUNT(DISTINCT call_id)
-//   （零命中调用计次）、覆盖 = 去重命中条目；分组行 = 条目快照展开（title_snap/domain_snap 抗
-//   索引重建）+ 动词明细 + 最近时间 + 热度徽章（entry_id 计数，重建清引用后按 frontmatter_id
-//   兜底分组——ER「热度兜底分组键」）。
+//   分组 = call_id 聚合（最近在前，groupRecallRows 纯函数）；统计头口径 recallStats——次数 =
+//   COUNT(DISTINCT call_id)（零命中调用计次）、覆盖 = 去重命中条目；分组行 = 条目快照展开
+//   （title_snap/domain_snap 抗索引重建）+ 动词明细 + 最近时间 + 热度徽章（entry_id 计数，
+//   重建清引用后按 frontmatter_id 兜底分组——ER「热度兜底分组键」）。
 // · 索引缺失（项目级无过滤 COUNT 零行）静默重建联动同 search——域过滤零行 = 合法空结果
 //   不触发重建（存在性口径同 3.2，fix-31；ERR_INDEX_STALE 语义）；浏览路径关键日志记
 //   scope='index'（ER 记名域③：索引自动修复/重建失败；成功召回轨迹不在此记）。
-// app_key_logs 写入为本域自备语句（forge/key-logs 同构 SQL，铁律③ 禁 import ../forge/——
-// 共享表经 db/ 句柄单写路径）。浏览查询面零写 recall_logs（召回动词归 3.2 检索面）。
+// 域守卫/关键日志/域前缀读取/热度语句等同构面经 ./shared.ts 单源（铁律③ 禁 import ../forge/
+// ——共享表经 db/ 句柄单写路径）。浏览查询面零写 recall_logs（召回动词归 3.2 检索面）。
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
@@ -36,7 +36,16 @@ import type {
   SessionRecallQuery,
 } from '@dsh-forge/contracts'
 import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
-import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
+import { EntryNotFoundError } from './errors.js'
+import {
+  createKnowledgeSharedHelpers,
+  isNonEmptyString,
+  normalizeUpdated,
+  parseKeywords,
+  prepareHeatByEntry,
+  selectRowsByDomain,
+  type KnowledgeSharedHelpers,
+} from './shared.js'
 
 export interface KnowledgeBrowseServiceDeps {
   /** SQLite 句柄（db/ 唯一产出；一切 SQL prepared） */
@@ -95,6 +104,8 @@ function hitIdentity(hit: RecallGroupHit): string {
 /**
  * 召回统计头：次数 = 分组数（= COUNT(DISTINCT call_id)，零命中调用计次不计覆盖）；
  * 覆盖 = 去重命中条目（身份键去重——重建清引用后按 frontmatter_id 归并同一知识条目）。
+ * 导出面 = 测试对拍面（browse-service.test SQL 对拍）与 web recall-model recallStatsOf
+ * 的口径互指锚点——生产消费归 web 投影（本函数不进任何装配面）。
  */
 export function recallStats(groups: readonly RecallGroup[]): { calls: number; covered: number } {
   const covered = new Set<string>()
@@ -102,6 +113,74 @@ export function recallStats(groups: readonly RecallGroup[]): { calls: number; co
     for (const hit of group.hits) covered.add(hitIdentity(hit))
   }
   return { calls: groups.length, covered: covered.size }
+}
+
+// ── 纯函数：sessionRecall 行分组聚合（fix-35 自工厂抽离，照 aggregateDomainTree 先例） ──
+
+/** sessionRecall 原始行（单表直读形状） */
+export interface RecallRow {
+  call_id: string
+  verb: 'search' | 'read-abstract'
+  entry_id: number | null
+  frontmatter_id: string | null
+  title_snap: string | null
+  domain_snap: string | null
+  query_json: string | null
+  hit_count: number
+  duration_ms: number | null
+  created_at: string
+}
+
+/**
+ * call_id 分组聚合（纯函数）：同 call 各行共享调用级字段 → 单 RecallGroup；零命中哨兵行
+ * （entry_id/frontmatter_id/title_snap 全 NULL）不展开为命中；热度徽章 = 项目级事件计数
+ * （entry_id → frontmatter_id 兜底——ER「热度兜底分组键」）；输出最近调用在前。
+ */
+export function groupRecallRows(
+  rows: readonly RecallRow[],
+  heatByEntry: ReadonlyMap<number, number>,
+  heatByFrontmatterId: ReadonlyMap<string, number>,
+): RecallGroup[] {
+  const groups: RecallGroup[] = []
+  let current: RecallGroup | null = null
+  for (const row of rows) {
+    if (current === null || current.callId !== row.call_id) {
+      // 同 call 各行共享调用级字段；query_json 由本域写入面保证可解析（防御 null → null）
+      let query: RecallQuerySnapshot | null = null
+      if (row.query_json !== null) {
+        try {
+          query = JSON.parse(row.query_json) as RecallQuerySnapshot
+        } catch {
+          query = null
+        }
+      }
+      current = {
+        callId: row.call_id,
+        verb: row.verb,
+        query,
+        hitCount: row.hit_count,
+        durationMs: row.duration_ms,
+        createdAt: row.created_at, // 最近时间（同 call 各行一致 = 执行点时间）
+        hits: [],
+      }
+      groups.push(current)
+    }
+    // 零命中哨兵行（entry_id/frontmatter_id/title_snap 全 NULL）不展开为命中
+    if (row.entry_id === null && row.frontmatter_id === null && row.title_snap === null) continue
+    current.hits.push({
+      entryId: row.entry_id, // null = 条目已重建清除（行保留；UI 行级失效标注归 3.8）
+      frontmatterId: row.frontmatter_id,
+      title: row.title_snap, // 快照抗索引重建
+      domainPath: row.domain_snap,
+      heat: row.entry_id !== null
+        ? (heatByEntry.get(row.entry_id) ?? 0)
+        : row.frontmatter_id !== null
+          ? (heatByFrontmatterId.get(row.frontmatter_id) ?? 0) // 兜底分组键（ER）
+          : 0,
+    })
+  }
+  groups.reverse() // 最近调用在前（tab 时序：新事件置顶，即时累积可见）
+  return groups
 }
 
 // ── 行形状 ──
@@ -123,40 +202,6 @@ interface DetailEntryRow extends BrowseEntryRow {
   frontmatter_id: string | null
 }
 
-/** sessionRecall 原始行 */
-interface RecallRow {
-  call_id: string
-  verb: 'search' | 'read-abstract'
-  entry_id: number | null
-  frontmatter_id: string | null
-  title_snap: string | null
-  domain_snap: string | null
-  query_json: string | null
-  hit_count: number
-  duration_ms: number | null
-  created_at: string
-}
-
-/** LIKE 通配转义（% _ \）——域前缀 SQL 段匹配防通配符注入（Security Mitigations，与 3.2 同口径） */
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`)
-}
-
-/** 展示位 updated 归一：非空串直传 / Date 字面量 ISO 化（js-yaml 日期产物） / 其余取缺省 */
-function displayUpdated(value: unknown, fallbackMs: number): string {
-  if (typeof value === 'string' && value.trim() !== '') return value
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString()
-  return new Date(fallbackMs).toISOString()
-}
-
-/** 非空字符串（authors 缺省判定） */
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === 'string' && v.trim() !== ''
-}
-
-/** 关键日志级别（ER CHECK level IN ('warn','error')——scope 固定 'index' 由语句字面量保证） */
-type IndexLogLevel = 'warn' | 'error'
-
 /**
  * 浏览查询服务工厂。三法均为直读面（零写 recall_logs）；projectId 未命中 fail-loud 裸错
  * （非六码，同 3.1/3.2 先例）。
@@ -164,8 +209,13 @@ type IndexLogLevel = 'warn' | 'error'
 export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): KnowledgeBrowseService {
   const { db } = deps
   const indexService = deps.indexService ?? createKnowledgeIndexService({ db })
+  const shared: KnowledgeSharedHelpers = createKnowledgeSharedHelpers({
+    db,
+    indexService,
+    keyLogScope: 'index',
+    verb: 'listEntries',
+  })
 
-  const selectProject = db.prepare<unknown[], { id: string }>(`SELECT id FROM projects WHERE id = ?`)
   const selectKnowledgeDir = db.prepare<unknown[], { knowledge_dir: string }>(
     `SELECT knowledge_dir FROM projects WHERE id = ?`,
   )
@@ -188,10 +238,7 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
   const countEntries = db.prepare<unknown[], { c: number }>(
     `SELECT COUNT(*) AS c FROM knowledge_entries WHERE project_id = ?`,
   )
-  const selectHeatByEntry = db.prepare<unknown[], { entry_id: number; heat: number }>(
-    `SELECT entry_id, COUNT(*) AS heat FROM knowledge_recall_logs
-     WHERE project_id = ? AND entry_id IS NOT NULL GROUP BY entry_id`,
-  )
+  const selectHeatByEntry = prepareHeatByEntry(db)
   const selectHeatByFrontmatterId = db.prepare<unknown[], { frontmatter_id: string; heat: number }>(
     `SELECT frontmatter_id, COUNT(*) AS heat FROM knowledge_recall_logs
      WHERE project_id = ? AND frontmatter_id IS NOT NULL GROUP BY frontmatter_id`,
@@ -200,46 +247,6 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     `SELECT call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at
      FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
   )
-  const insertKeyLog = db.prepare(
-    `INSERT INTO app_key_logs (level, scope, message, data_json, created_at) VALUES (?, 'index', ?, ?, ?)`,
-  )
-
-  function recordIndexKeyLog(level: IndexLogLevel, message: string, data: Record<string, unknown>): void {
-    insertKeyLog.run(level, message, JSON.stringify(data), new Date().toISOString())
-  }
-
-  function requireProject(projectId: string, verb: string): void {
-    if (selectProject.get(projectId) === undefined) {
-      throw new Error(`项目不存在：${verb}(${projectId})——id 未命中 projects 行`)
-    }
-  }
-
-  /**
-   * 索引缺失（项目级零行）静默重建联动（ERR_INDEX_STALE 语义，同 search 面口径）：
-   * 成功 → warn 记自动修复（ER「自动修复」关键事件，scope=index）；失败 → 按因降级：
-   * 目录不可达原样上抛 InvalidKnowledgeDirError；其余包装 IndexStaleError——均先落 error。
-   */
-  async function rebuildMissingIndex(projectId: string): Promise<void> {
-    try {
-      const report = await indexService.rebuildIndex(projectId)
-      recordIndexKeyLog('warn', 'listEntries 索引缺失触发静默重建', { projectId, indexed: report.indexed, skipped: report.skipped })
-    } catch (cause) {
-      if (cause instanceof InvalidKnowledgeDirError) {
-        recordIndexKeyLog('error', 'listEntries 静默重建失败：知识目录不可达', { projectId, reason: cause.message })
-        throw cause
-      }
-      const reason = cause instanceof Error ? cause.message : String(cause)
-      recordIndexKeyLog('error', 'listEntries 静默重建失败（索引仍缺失）', { projectId, reason })
-      throw new IndexStaleError({ projectId, reason }, cause)
-    }
-  }
-
-  /** 域前缀可选的缓存行读取（undefined = 全域；空串 = 根域；尾 '/' 归一——与 search 同口径） */
-  function selectRows(q: ListEntriesQuery): BrowseEntryRow[] {
-    if (q.domainPrefix === undefined) return selectAll.all(q.projectId)
-    const prefix = q.domainPrefix.replace(/\/+$/, '')
-    return selectByDomain.all(q.projectId, prefix, `${escapeLike(prefix)}/%`)
-  }
 
   /** 卡片 updated 展示位：按需读文件 frontmatter（缺省 mtime）；不可读回退本次索引时间 */
   function readCardUpdated(knowledgeDir: string, row: BrowseEntryRow): string {
@@ -247,7 +254,7 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
       const absPath = join(knowledgeDir, ...row.rel_path.split('/'))
       const mtimeMs = statSync(absPath).mtimeMs
       const content = readFileSync(absPath, 'utf8')
-      return displayUpdated(matter(content).data.updated, mtimeMs)
+      return normalizeUpdated(matter(content).data.updated, mtimeMs)
     } catch {
       return row.indexed_at // 外部删除/不可读：卡片仍在（索引直读），展示位回退最后已知索引时间
     }
@@ -255,12 +262,12 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
 
   /** listEntries 本体（browse 聚合与通道面共用同一实现——底表口径不漂移） */
   const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
-    requireProject(q.projectId, 'listEntries')
+    shared.requireProject(q.projectId, 'listEntries')
 
-    let rows = selectRows(q)
+    let rows = selectRowsByDomain(selectAll, selectByDomain, q)
     if (rows.length === 0 && countEntries.get(q.projectId)!.c === 0) {
-      await rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（进面板按需重建）
-      rows = selectRows(q) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
+      await shared.rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（进面板按需重建）
+      rows = selectRowsByDomain(selectAll, selectByDomain, q) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
     }
 
     const keyword = q.keyword?.trim().toLowerCase() ?? ''
@@ -270,14 +277,14 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     return rows
       .filter((row) => {
         if (keyword === '') return true // 关键词细分 = keywords 维度（大小写不敏感子串）
-        const keywords = JSON.parse(row.keywords) as string[]
+        const keywords = parseKeywords(row.keywords)
         return keywords.some((k) => k.toLowerCase().includes(keyword))
       })
       .map((row) => ({
         entryId: row.id,
         title: row.title,
         summary: row.summary,
-        keywords: JSON.parse(row.keywords) as string[],
+        keywords: parseKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
         updated: readCardUpdated(knowledgeDir, row),
@@ -292,7 +299,7 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
     listEntries,
 
     async getEntryDetail(q): Promise<EntryDetail> {
-      requireProject(q.projectId, 'getEntryDetail')
+      shared.requireProject(q.projectId, 'getEntryDetail')
 
       const row = selectEntry.get(q.projectId, q.entryId)
       if (row === undefined) {
@@ -316,17 +323,17 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
         entryId: row.id,
         title: row.title, // 元数据 = 索引直读（同 readAbstract 口径）
         summary: row.summary,
-        keywords: JSON.parse(row.keywords) as string[],
+        keywords: parseKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
         authors: isNonEmptyString(parsed.data.authors) ? parsed.data.authors : null,
-        updated: displayUpdated(parsed.data.updated, mtimeMs), // 缺省取文件 mtime
+        updated: normalizeUpdated(parsed.data.updated, mtimeMs), // 缺省取文件 mtime
         body: parsed.body,
       }
     },
 
     async sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]> {
-      requireProject(q.projectId, 'sessionRecall')
+      shared.requireProject(q.projectId, 'sessionRecall')
 
       const rows = selectSessionRows.all(q.projectId, q.sessionId)
       if (rows.length === 0) return []
@@ -336,47 +343,7 @@ export function createKnowledgeBrowseService(deps: KnowledgeBrowseServiceDeps): 
       const heatByFrontmatterId = new Map(
         selectHeatByFrontmatterId.all(q.projectId).map((r) => [r.frontmatter_id, r.heat] as const),
       )
-
-      const groups: RecallGroup[] = []
-      let current: RecallGroup | null = null
-      for (const row of rows) {
-        if (current === null || current.callId !== row.call_id) {
-          // 同 call 各行共享调用级字段；query_json 由本域写入面保证可解析（防御 null → null）
-          let query: RecallQuerySnapshot | null = null
-          if (row.query_json !== null) {
-            try {
-              query = JSON.parse(row.query_json) as RecallQuerySnapshot
-            } catch {
-              query = null
-            }
-          }
-          current = {
-            callId: row.call_id,
-            verb: row.verb,
-            query,
-            hitCount: row.hit_count,
-            durationMs: row.duration_ms,
-            createdAt: row.created_at, // 最近时间（同 call 各行一致 = 执行点时间）
-            hits: [],
-          }
-          groups.push(current)
-        }
-        // 零命中哨兵行（entry_id/frontmatter_id/title_snap 全 NULL）不展开为命中
-        if (row.entry_id === null && row.frontmatter_id === null && row.title_snap === null) continue
-        current.hits.push({
-          entryId: row.entry_id, // null = 条目已重建清除（行保留；UI 行级失效标注归 3.8）
-          frontmatterId: row.frontmatter_id,
-          title: row.title_snap, // 快照抗索引重建
-          domainPath: row.domain_snap,
-          heat: row.entry_id !== null
-            ? (heatByEntry.get(row.entry_id) ?? 0)
-            : row.frontmatter_id !== null
-              ? (heatByFrontmatterId.get(row.frontmatter_id) ?? 0) // 兜底分组键（ER）
-              : 0,
-        })
-      }
-      groups.reverse() // 最近调用在前（tab 时序：新事件置顶，即时累积可见）
-      return groups
+      return groupRecallRows(rows, heatByEntry, heatByFrontmatterId)
     },
   }
 }

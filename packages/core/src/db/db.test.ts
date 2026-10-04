@@ -8,6 +8,7 @@ import Database from 'better-sqlite3'
 import { UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 import { openDatabase } from './open.js'
 import { withTransaction } from './transaction.js'
+import { isParseableDateStyle } from '../testutil/date-assertions.js'
 
 let dir: string
 let seq = 0
@@ -18,8 +19,6 @@ const dbPath = () =>
 afterAll(() => {
   if (dir) rmSync(dir, { recursive: true, force: true })
 })
-
-const ISO = (s: string) => !Number.isNaN(Date.parse(s))
 
 function insertProject(db: Database.Database, id: string, wsPath: string) {
   db.prepare(
@@ -183,7 +182,7 @@ describe('AC3 schema_meta 前向门', () => {
     ).all()
     expect(rows).toHaveLength(1)
     expect(rows[0]?.version).toBe(1)
-    expect(ISO(rows[0]?.applied_at ?? '')).toBe(true)
+    expect(isParseableDateStyle(rows[0]?.applied_at ?? '')).toBe(true)
     db.close()
 
     const db2 = openDatabase(path)

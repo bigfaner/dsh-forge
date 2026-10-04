@@ -1,4 +1,5 @@
-// @dsh-forge/core 插件定义（定位：装配）——注册 ctx.forgeProjects（2.2：registerProject
+// @dsh-forge/core 插件定义（定位：装配；入口文件 index.ts——fix-35 与 knowledge=index.ts
+// 对称化，contracts/path-key 同惯例）——注册 ctx.forgeProjects（2.2：registerProject
 // 四步补偿链）与 ctx.forgeKnowledge（3.3 收口：Interface 2 全七法——rebuildIndex/search/
 // readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall）。无逻辑：开句柄 →
 // 注册双服务 → 交出 disposer。

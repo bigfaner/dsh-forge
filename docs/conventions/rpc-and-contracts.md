@@ -31,4 +31,4 @@ domains: [rpc, ipc, contracts, channel, sqlite, service-injection]
 ### TECH-rpc-004: 服务 provide/inject 缝与 child 形态宿主
 
 **Requirement**: core 以 `ctx.reflect.provide('forgeProjects' / 'forgeKnowledge', …)` 注册双服务；knowledge 插件 `inject: ['forgeKnowledge', 'tools', 'systemPrompt']`——对 core 面依赖 = forgeKnowledge 唯一（其余为 dsh 官方面），三服务齐备才加载。宿主 boot 为 child 形态：`ELECTRON_RUN_AS_NODE=1 --expose-internals` 子进程跑 dsh 宿主（官方 Desktop 同款），main 侧经 `{url, injections}` manifest + 产品双服务 RPC 代理面消费（DshHostHandle 面不变，main.ts 零感知）；direct-in-main 形态下 agent 工具派发恒挂起（dogfood 实证），禁回退。
-**Source**: feature/dsh-forge-p1-mvp TECH-008（tech-design §Overview 两条关键缝 / packages/core/src/service.ts / apps/host/src/boot/README.md）
+**Source**: feature/dsh-forge-p1-mvp TECH-008（tech-design §Overview 两条关键缝 / packages/core/src/index.ts / apps/host/src/boot/README.md）

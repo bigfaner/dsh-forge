@@ -1,45 +1,24 @@
 // 任务 3.1 集成测试 —— rebuildIndex 整表事务重建（删旧插新）+ IndexReport 容错计数。
 // 环境口径：每用例独占临时 SQLite（openDatabase，schema v1 迁移即建表）+ 临时知识目录；
 // projects 行直插（本任务只消费 knowledge_dir，注册链路归 forge 域 2.2 已测）。
+// 夹具/写文件经 testutil/knowledge-corpus 单源（fix-35 收编，无语料——本域逐用例手写变体）。
 // AC 对照：AC1 全字段/缺省/UK；AC2 容错计数；AC3 幂等零漂移；AC4 digest 变更检测；
 // Hard Rule 2：索引缓存只落应用库（知识目录零写入自证）。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
-import { openDatabase } from '../db/index.js'
 import { createKnowledgeIndexService } from './index-service.js'
 import { InvalidKnowledgeDirError } from './errors.js'
+import { disposeKnowledgeCorpus, knowledgeFixture, writeMd } from '../testutil/knowledge-corpus.js'
 
 // ── 测试环境 ──
 
-const dirs: string[] = []
-const dbs: Database.Database[] = []
-const wsSeq = { n: 0 }
+afterAll(disposeKnowledgeCorpus)
 
-afterAll(() => {
-  for (const db of dbs) db.close()
-  for (const d of dirs) rmSync(d, { recursive: true, force: true })
-})
-
-/** 一套「库 + 知识目录 + projects 行」夹具（返回可写文件的 knowledgeDir 与 projectId） */
-function fixture(): { db: Database.Database; knowledgeDir: string; projectId: string } {
-  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-knidx-'))
-  dirs.push(home)
-  const db = openDatabase(join(home, 'state.db'))
-  dbs.push(db)
-  const knowledgeDir = join(home, 'knowledge')
-  mkdirSync(knowledgeDir)
-  const projectId = randomUUID()
-  const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?, ?)`,
-  ).run(projectId, randomUUID(), `C:\\ws-${++wsSeq.n}`, `p${wsSeq.n}`, join(home, '.forge'), knowledgeDir, now, now)
-  return { db, knowledgeDir, projectId }
-}
+/** 夹具（index 域口径：无语料——索引内容逐用例手写，断言聚焦解析/重建行为） */
+const fixture = () => knowledgeFixture({ prefix: 'dsh-forge-knidx-' })
 
 interface EntryRow {
   id: number
@@ -57,12 +36,6 @@ interface EntryRow {
 
 const rowsOf = (db: Database.Database, projectId: string): EntryRow[] =>
   db.prepare<unknown[], EntryRow>(`SELECT * FROM knowledge_entries WHERE project_id = ? ORDER BY rel_path`).all(projectId)
-
-function writeMd(knowledgeDir: string, relPath: string, frontmatter: string, body = '正文'): void {
-  const abs = join(knowledgeDir, ...relPath.split('/'))
-  mkdirSync(join(abs, '..'), { recursive: true })
-  writeFileSync(abs, `---\n${frontmatter}\n---\n${body}`, 'utf8')
-}
 
 const FULL_FM = [
   'title: 安全编码规范',

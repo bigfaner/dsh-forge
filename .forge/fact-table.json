@@ -156,7 +156,7 @@
     "kind": "precondition",
     "value": "Neither apps/host/src/main.ts, boot code, nor core plugin activation calls reconcileAtStartup; only forge:projects/reconcile channel + web client wrapper exist. Journey 4b/5c startup-reconciliation expectation requires a startup invocation seam (defect signal / design adjudication)",
     "confidence": "inferred",
-    "citations": ["packages/core/src/service.ts:33-43", "apps/host/src/main.ts:63-75", "apps/web/src/rpc/client.ts:96"],
+    "citations": ["packages/core/src/index.ts:33-45", "apps/host/src/main.ts:63-75", "apps/web/src/rpc/client.ts:96"],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {

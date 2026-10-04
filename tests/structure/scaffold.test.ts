@@ -176,7 +176,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'apps/web/index.html',
       'apps/web/vite.config.ts',
       'packages/contracts/src/index.ts',
-      'packages/core/src/service.ts',
+      'packages/core/src/index.ts',
       'packages/knowledge/src/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f))).toBe(true)

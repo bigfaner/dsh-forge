@@ -10,8 +10,10 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
-// registry 桩（G1 pin 4 语义 + get 同步查表）——fix-34 收编 testutil 单份（注入面 superset）
+// registry 桩（G1 pin 4 语义 + get 同步查表）——fix-34 收编 testutil 单份（注入面 superset）；
+// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 project-service 同源）。
 import { StubRegistry } from '../testutil/registry-stub.js'
+import { keyLogs, readRows } from '../testutil/project-rows.js'
 
 // ── 测试环境（每用例独占临时库，2.2 口径） ──
 
@@ -35,19 +37,6 @@ afterAll(() => {
   if (dir) rmSync(dir, { recursive: true, force: true })
 })
 
-interface ProjectRow {
-  id: string
-  workspace_id: string
-  ws_path: string
-  name: string
-  forge_dir: string
-  forge_dir_external: number
-  knowledge_dir: string
-  archived: number
-  created_at: string
-  updated_at: string
-}
-
 function setup() {
   const db = openDatabase(dbPath())
   dbs.push(db)
@@ -55,14 +44,6 @@ function setup() {
   const service = createProjectService({ db, registry } satisfies ProjectServiceDeps)
   return { db, registry, service }
 }
-
-const readRows = (db: Database.Database): ProjectRow[] =>
-  db.prepare<unknown[], ProjectRow>(`SELECT * FROM projects`).all()
-
-const keyLogs = (db: Database.Database): { level: string; scope: string; message: string; data_json: string | null }[] =>
-  db.prepare<unknown[], { level: string; scope: string; message: string; data_json: string | null }>(
-    `SELECT level, scope, message, data_json FROM app_key_logs ORDER BY id`,
-  ).all()
 
 const logData = (db: Database.Database, i: number): Record<string, unknown> =>
   JSON.parse(keyLogs(db)[i]?.data_json ?? '{}') as Record<string, unknown>

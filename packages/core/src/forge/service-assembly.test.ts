@@ -1,4 +1,4 @@
-// 任务 2.2 测试 —— service.ts 装配点：ctx.forgeProjects Cordis 服务注册。
+// 任务 2.2 测试 —— index.ts（插件装配入口，原 service.ts——fix-35 对称化）装配点：ctx.forgeProjects Cordis 服务注册。
 // Cordis Plugin.Function 形态断言：loader 取 default 导出（exports.default ?? exports，上游核实），
 // inject 依赖声明、reflect.provide 注册官方面（Service 基类同径）、返回值 = 句柄 disposer。
 import { randomUUID } from 'node:crypto'
@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { ProjectWriteError } from './errors.js'
 import type { WorkspaceLike } from './registry.js'
-import corePlugin, { type CoreContextFace } from '../service.js'
+import corePlugin, { type CoreContextFace } from '../index.js'
 
 /** rename 结构化桩（fix-24 ②：workspaceController 窄面——注册链标题对齐消费） */
 const stubRename = { rename: async () => ({}) }

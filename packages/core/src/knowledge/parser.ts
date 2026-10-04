@@ -2,6 +2,8 @@
 // 本解析器执行：必填口径 / 缺省规则 / 类型容错 / 域深校验 / digest）。定位：业务（3.1）。
 // 容错纪律：summary/keywords 缺失或类型不符、域超 3 层 → 条目不入索引（调用方报告计数），
 // 不硬拒（硬拒收归 M4 写入面）；可选字段错型一律走缺省（title 缺省单独生效——仅缺 title 仍可入）。
+// isNonEmptyString/normalizeUpdated 与浏览面（3.3）同源自 ./shared.ts（fix-35 收编）；
+// defaultTitleFromRelPath/digestOf 模块私有（外部消费零——经 parseKnowledgeFile 间接面）。
 import { createHash } from 'node:crypto'
 import matter from 'gray-matter'
 import {
@@ -9,6 +11,7 @@ import {
   FRONTMATTER_STATUS_DEFAULT,
   type KnowledgeFrontmatter,
 } from '@dsh-forge/contracts'
+import { isNonEmptyString, normalizeUpdated } from './shared.js'
 
 /** 拒收原因（IndexReport 只计数量；reason 供测试与日志诊断） */
 export type ParseRejectReason =
@@ -44,22 +47,10 @@ export interface ParseKnowledgeFileInput {
   mtime: Date
 }
 
-/** 非空字符串判定（空串/纯空白视同缺失——「摘要先行」的摘要不能是空白） */
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === 'string' && v.trim() !== ''
-}
-
 /** title 缺省 = 文件名去扩展名（如 `安全编码规范.md` → `安全编码规范`） */
-export function defaultTitleFromRelPath(relPath: string): string {
+function defaultTitleFromRelPath(relPath: string): string {
   const filename = relPath.split('/').pop() ?? relPath
   return filename.replace(/\.[^./]*$/, '')
-}
-
-/** updated 展示位归一：js-yaml 将未加引号的日期字面量解析为 Date——统一 ISO-8601 化（其余类型走 mtime 缺省） */
-function normalizeUpdated(v: unknown, mtime: Date): string {
-  if (isNonEmptyString(v)) return v
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString()
-  return mtime.toISOString()
 }
 
 /**
@@ -103,7 +94,7 @@ export function parseKnowledgeFile(input: ParseKnowledgeFileInput): ParseOutcome
     status: isNonEmptyString(data.status) ? data.status : FRONTMATTER_STATUS_DEFAULT,
     ...(isNonEmptyString(data.id) ? { id: data.id } : {}), // 存而不强求（M6 转正锚点）
     ...(isNonEmptyString(data.authors) ? { authors: data.authors } : {}), // 展示位（3.3 详情面消费）
-    updated: normalizeUpdated(data.updated, input.mtime), // 缺省取 mtime；日期字面量 ISO 化
+    updated: normalizeUpdated(data.updated, input.mtime.getTime()), // 缺省取 mtime；日期字面量 ISO 化
   }
 
   return {
@@ -112,7 +103,7 @@ export function parseKnowledgeFile(input: ParseKnowledgeFileInput): ParseOutcome
   }
 }
 
-/** 全文内容摘要（sha256 hex）——外部修改对账的变更检测信号 */
-export function digestOf(content: string): string {
+/** 全文内容摘要（sha256 hex）——外部修改对账的变更检测信号（模块私有，经 ParsedEntry.digest 消费） */
+function digestOf(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex')
 }

@@ -1,109 +1,39 @@
 // 任务 3.3 集成测试 —— 浏览查询面 listEntries / getEntryDetail / sessionRecall + 装配收口。
 // 环境口径：每用例独占临时 SQLite（openDatabase，schema v1 迁移即建表）+ 临时知识目录；
-// projects 行直插（注册链路归 forge 域 2.2 已测）。AC 对照：AC1 listEntries 过滤语义与
-// 域树聚合同口径 / AC2 getEntryDetail 正文按需 + 元数据正文分离 / AC3 sessionRecall 统计头
-// 口径（COUNT(DISTINCT call_id) / 去重覆盖——SQL 对拍）/ AC4 分组行快照展开 + 热度 /
-// AC5 ctx.forgeKnowledge 双服务面完整（service.test.ts）。附：重建清引用（ER entry_id
-// 「条目已重建清除（行保留）」——FK 修复）与 listEntries 静默重建联动（scope=index）。
+// projects 行直插（注册链路归 forge 域 2.2 已测）。夹具/语料（BROWSE_CORPUS 七条目）/
+// 行读取助手经 testutil/knowledge-corpus 单源（fix-35 收编）。
+// AC 对照：AC1 listEntries 过滤语义与域树聚合同口径 / AC2 getEntryDetail 正文按需 + 元数据
+// 正文分离 / AC3 sessionRecall 统计头口径（COUNT(DISTINCT call_id) / 去重覆盖——SQL 对拍）/
+// AC4 分组行快照展开 + 热度 / AC5 ctx.forgeKnowledge 双服务面完整（../index.test.ts）。
+// 附：重建清引用（ER entry_id「条目已重建清除（行保留）」——FK 修复）与 listEntries
+// 静默重建联动（scope=index）。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
-import { openDatabase } from '../db/index.js'
-import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
+import { createKnowledgeIndexService } from './index-service.js'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { aggregateDomainTree, createKnowledgeBrowseService, recallStats } from './browse-service.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
+import {
+  BROWSE_CORPUS,
+  countingIndexService,
+  disposeKnowledgeCorpus,
+  entryIdByTitle,
+  keyLogsOf,
+  knowledgeFixture,
+  recallLogsOf,
+  titles,
+} from '../testutil/knowledge-corpus.js'
 
 // ── 测试环境 ──
 
-const dirs: string[] = []
-const dbs: Database.Database[] = []
-const wsSeq = { n: 0 }
+afterAll(disposeKnowledgeCorpus)
 
-afterAll(() => {
-  for (const db of dbs) db.close()
-  for (const d of dirs) rmSync(d, { recursive: true, force: true })
-})
-
-/** 一套「库 + 知识目录 + projects 行 + 语料」夹具（rebuild = 是否先行重建索引） */
-function fixture(options: { rebuild?: boolean } = {}): { db: Database.Database; knowledgeDir: string; projectId: string } {
-  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-knbr-'))
-  dirs.push(home)
-  const db = openDatabase(join(home, 'state.db'))
-  dbs.push(db)
-  const knowledgeDir = join(home, 'knowledge')
-  mkdirSync(knowledgeDir)
-  const projectId = randomUUID()
-  const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?, ?)`,
-  ).run(projectId, randomUUID(), `C:\\ws-${++wsSeq.n}`, `p${wsSeq.n}`, join(home, '.forge'), knowledgeDir, now, now)
-  writeCorpus(knowledgeDir)
-  if (options.rebuild) {
-    void createKnowledgeIndexService({ db }).rebuildIndex(projectId)
-  }
-  return { db, knowledgeDir, projectId }
-}
-
-/** 语料：前端 2 / 后端 3 / 编程-java 1 / 根域 1（updated/authors 变体供展示位断言） */
-function writeCorpus(knowledgeDir: string): void {
-  writeMd(knowledgeDir, '前端/框架选型.md', [
-    'title: 框架选型', 'id: kb-fe-001', 'status: published',
-    'summary: 前端框架选型基线', 'keywords: [react, frontend]',
-    'updated: "2026-01-15T00:00:00.000Z"',
-  ].join('\n'))
-  writeMd(knowledgeDir, '前端/样式令牌.md', 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]')
-  writeMd(knowledgeDir, '后端/API规范.md', 'title: API 规范\nid: kb-be-001\nauthors: 平台组\nsummary: 接口设计规范\nkeywords: [api, backend]', '正文-接口细则')
-  writeMd(knowledgeDir, '后端/安全编码规范.md', 'summary: 服务端输入校验与输出编码基线\nkeywords: [security, backend]')
-  writeMd(knowledgeDir, '后端/网关.md', 'summary: API 网关路由规则\nkeywords: [api, backend]')
-  writeMd(knowledgeDir, '编程/java/并发手册.md', 'summary: Java 并发实践\nkeywords: [java, concurrency]\nupdated: 2026-02-01')
-  writeMd(knowledgeDir, '指南.md', 'summary: 新手指引\nkeywords: [guide]')
-}
-
-function writeMd(knowledgeDir: string, relPath: string, frontmatter: string, body = '正文'): void {
-  const abs = join(knowledgeDir, ...relPath.split('/'))
-  mkdirSync(join(abs, '..'), { recursive: true })
-  writeFileSync(abs, `---\n${frontmatter}\n---\n${body}`, 'utf8')
-}
-
-// ── 行读取助手 ──
-
-interface RecallLogRow { call_id: string; session_id: string; verb: string; entry_id: number | null; frontmatter_id: string | null; title_snap: string | null }
-
-const recallLogsOf = (db: Database.Database, projectId: string): RecallLogRow[] =>
-  db.prepare<unknown[], RecallLogRow>(`SELECT call_id, session_id, verb, entry_id, frontmatter_id, title_snap FROM knowledge_recall_logs WHERE project_id = ? ORDER BY id`).all(projectId)
-
-interface KeyLogRow { level: string; scope: string; message: string }
-
-const keyLogsOf = (db: Database.Database): KeyLogRow[] =>
-  db.prepare<unknown[], KeyLogRow>(`SELECT level, scope, message FROM app_key_logs ORDER BY id`).all()
-
-const entryIdByTitle = (db: Database.Database, projectId: string): Map<string, number> =>
-  new Map(
-    db.prepare<unknown[], { id: number; title: string }>(`SELECT id, title FROM knowledge_entries WHERE project_id = ?`).all(projectId)
-      .map((r) => [r.title, r.id] as const),
-  )
-
-const titles = (cards: readonly { title: string }[]): string[] => cards.map((c) => c.title)
-
-/** rebuild 计数器缝（fix-31 零重建断言）：包真实 index-service，计数 rebuildIndex 实际调用 */
-function countingIndexService(db: Database.Database): { service: Pick<KnowledgeIndexService, 'rebuildIndex'>; calls(): number } {
-  const real = createKnowledgeIndexService({ db })
-  let n = 0
-  return {
-    service: {
-      async rebuildIndex(projectId: string) {
-        n += 1
-        return real.rebuildIndex(projectId)
-      },
-    },
-    calls: () => n,
-  }
-}
+/** 夹具（browse 域口径：BROWSE_CORPUS 语料；rebuild = 是否先行重建索引） */
+const fixture = (options: { rebuild?: boolean } = {}) =>
+  knowledgeFixture({ prefix: 'dsh-forge-knbr-', corpus: BROWSE_CORPUS, ...options })
 
 // ── AC1：listEntries 过滤语义（UF-6）+ 域树聚合同口径 ──
 

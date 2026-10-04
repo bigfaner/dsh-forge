@@ -3,6 +3,7 @@
 // RPC 边界（2.4）序列化为 RpcErrorPayload { code, message, data }，
 // UI 按 code 映射状态；dsh 面异常经 cause 原样透传（dsh 域归 dsh）。
 import type { CompensatedInfo } from '@dsh-forge/contracts'
+import { errMessage } from '../util.js'
 
 /** forge 域错误附载（RpcErrorPayload.data 的形状：标识 + 失败原因 + 处置结果） */
 export interface ForgeErrorData {
@@ -52,10 +53,6 @@ export class CompensationError extends Error {
       cause: deleteCause,
     })
     this.name = 'CompensationError'
-    this.data = { ...data, writeError: errorMessage(writeCause), deleteError: errorMessage(deleteCause) }
+    this.data = { ...data, writeError: errMessage(writeCause), deleteError: errMessage(deleteCause) }
   }
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
 }

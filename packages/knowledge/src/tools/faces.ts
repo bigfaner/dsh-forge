@@ -1,5 +1,5 @@
 // 结构化最小面（定位：业务——插件对 dsh 宿主服务的消费形状锚定）。
-// 与 core/service.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
+// 与 core/index.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
 // （@deepseek-ai/dsh-tools / dsh-system-prompt / cordis），仅以结构化子面
 // 消费官方面——真实现（ToolRuntime / SystemPrompt / 真 Context）结构兼容，
 // 运行期由 profile 装配注入。对 core 的唯一依赖 = forgeKnowledge 服务接口

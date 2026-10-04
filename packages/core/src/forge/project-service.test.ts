@@ -10,8 +10,11 @@ import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
 import type { WorkspaceRenamePort } from './registry.js'
-// registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）
+// registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
+// readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 reconcile-queries 同源）。
 import { StubRegistry } from '../testutil/registry-stub.js'
+import { keyLogs, readRows } from '../testutil/project-rows.js'
+import { isParseableDateStyle } from '../testutil/date-assertions.js'
 
 // ── 测试环境（每用例独占临时库，2.1 口径） ──
 
@@ -26,19 +29,6 @@ afterAll(() => {
   for (const db of dbs) db.close()
   if (dir) rmSync(dir, { recursive: true, force: true })
 })
-
-interface ProjectRow {
-  id: string
-  workspace_id: string
-  ws_path: string
-  name: string
-  forge_dir: string
-  forge_dir_external: number
-  knowledge_dir: string
-  archived: number
-  created_at: string
-  updated_at: string
-}
 
 // ── rename 桩（fix-24 ②：官方 workspace/rename 命令形状记录——调用形状 = 断言面） ──
 
@@ -60,14 +50,6 @@ function setup() {
   const service = createProjectService({ db, registry, rename } satisfies ProjectServiceDeps)
   return { db, registry, rename, service }
 }
-
-const readRows = (db: Database.Database): ProjectRow[] =>
-  db.prepare<unknown[], ProjectRow>(`SELECT * FROM projects`).all()
-
-const keyLogs = (db: Database.Database): { level: string; scope: string; message: string; data_json: string | null }[] =>
-  db.prepare<unknown[], { level: string; scope: string; message: string; data_json: string | null }>(
-    `SELECT level, scope, message, data_json FROM app_key_logs ORDER BY id`,
-  ).all()
 
 /** 种入陈旧 projects 行（直接 SQL——fix-27 自愈/幂等与挂接保护的注入面） */
 function seedRow(db: Database.Database, o: { id: string; workspaceId: string; wsPath: string }) {
@@ -92,8 +74,6 @@ const input = (o: { workspaceDir?: string; forgeDir?: string } = {}) => ({
   knowledgeDir: join(WS, 'proj', '.knowledge'),
 })
 
-const ISO = (s: string) => !Number.isNaN(Date.parse(s))
-
 // ── AC1 新建路径全链成功 ──
 
 describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting=false', () => {
@@ -116,8 +96,8 @@ describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting
       knowledge_dir: join(WS, 'proj', '.knowledge'),
       archived: 0,
     })
-    expect(ISO(row.created_at)).toBe(true)
-    expect(ISO(row.updated_at)).toBe(true)
+    expect(isParseableDateStyle(row.created_at)).toBe(true)
+    expect(isParseableDateStyle(row.updated_at)).toBe(true)
   })
 
   it('非规范拼写传入 → 落库 ws_path 以 registry 返回的 canonical 为准（非用户拼写原样）', async () => {

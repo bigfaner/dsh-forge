@@ -1,120 +1,34 @@
 // 任务 3.2 集成测试 —— search / readAbstract 检索面 + knowledge_recall_logs 写入 + 热度聚合。
 // 环境口径：每用例独占临时 SQLite（openDatabase，schema v1 迁移即建表）+ 临时知识目录；
-// projects 行直插（注册链路归 forge 域 2.2 已测）。AC 对照：AC1 域前缀过滤（场景④）/
-// AC2 关键词细分 + SearchHit 摘要先行 / AC3 read-abstract 不含正文（场景⑤）+ 未命中六码 /
-// AC4 日志行口径（N 命中 N 行同 call_id / 零命中哨兵行）/ AC5 热度口径（场景⑥数据侧）/
-// AC6 索引缓存直读（SC2 零文件扫描）+ Description 补充（静默重建联动 / 降级 app_key_logs）。
+// projects 行直插（注册链路归 forge 域 2.2 已测）。夹具/语料（RECALL_CORPUS 六条目）/
+// 行读取助手经 testutil/knowledge-corpus 单源（fix-35 收编）。
+// AC 对照：AC1 域前缀过滤（场景④）/ AC2 关键词细分 + SearchHit 摘要先行 / AC3 read-abstract
+// 不含正文（场景⑤）+ 未命中六码 / AC4 日志行口径（N 命中 N 行同 call_id / 零命中哨兵行）/
+// AC5 热度口径（场景⑥数据侧）/ AC6 索引缓存直读（SC2 零文件扫描）+ Description 补充
+// （静默重建联动 / 降级 app_key_logs）。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { afterAll, describe, expect, it } from 'vitest'
-import type Database from 'better-sqlite3'
-import { openDatabase } from '../db/index.js'
-import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
+import {
+  RECALL_CORPUS,
+  countingIndexService,
+  disposeKnowledgeCorpus,
+  entryIdByTitle,
+  keyLogsOf,
+  knowledgeFixture,
+  recallLogsOf,
+  titles,
+} from '../testutil/knowledge-corpus.js'
 
 // ── 测试环境 ──
 
-const dirs: string[] = []
-const dbs: Database.Database[] = []
-const wsSeq = { n: 0 }
+afterAll(disposeKnowledgeCorpus)
 
-afterAll(() => {
-  for (const db of dbs) db.close()
-  for (const d of dirs) rmSync(d, { recursive: true, force: true })
-})
-
-/** 一套「库 + 知识目录 + projects 行」夹具（rebuild = 是否先行重建索引；默认否——静默重建联动需要零行索引） */
-function fixture(options: { rebuild?: boolean } = {}): { db: Database.Database; knowledgeDir: string; projectId: string } {
-  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-knrc-'))
-  dirs.push(home)
-  const db = openDatabase(join(home, 'state.db'))
-  dbs.push(db)
-  const knowledgeDir = join(home, 'knowledge')
-  mkdirSync(knowledgeDir)
-  const projectId = randomUUID()
-  const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?, ?)`,
-  ).run(projectId, randomUUID(), `C:\\ws-${++wsSeq.n}`, `p${wsSeq.n}`, join(home, '.forge'), knowledgeDir, now, now)
-  writeCorpus(knowledgeDir)
-  if (options.rebuild) {
-    // rebuildIndex 函数体全同步（better-sqlite3 无 await 路径）——同步落库后即返回
-    void createKnowledgeIndexService({ db }).rebuildIndex(projectId)
-  }
-  return { db, knowledgeDir, projectId }
-}
-
-/** 语料：前端 / 后端 / 编程-java 三域六条目（title/summary/keywords 差异供过滤与打分断言） */
-function writeCorpus(knowledgeDir: string): void {
-  writeMd(knowledgeDir, '前端/框架选型.md', [
-    'title: 框架选型', 'id: kb-fe-001', 'status: published',
-    'summary: 前端框架选型基线', 'keywords: [react, frontend]',
-  ].join('\n'))
-  writeMd(knowledgeDir, '前端/样式令牌.md', 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]')
-  writeMd(knowledgeDir, '后端/API规范.md', 'title: API 规范\nid: kb-be-001\nsummary: 接口设计规范\nkeywords: [api, backend]')
-  writeMd(knowledgeDir, '后端/安全编码规范.md', 'summary: 服务端输入校验与输出编码基线\nkeywords: [security, backend]')
-  writeMd(knowledgeDir, '后端/网关.md', 'summary: API 网关路由规则\nkeywords: [api, backend]')
-  writeMd(knowledgeDir, '编程/java/并发手册.md', 'summary: Java 并发实践\nkeywords: [java, concurrency]')
-}
-
-function writeMd(knowledgeDir: string, relPath: string, frontmatter: string, body = '正文'): void {
-  const abs = join(knowledgeDir, ...relPath.split('/'))
-  mkdirSync(join(abs, '..'), { recursive: true })
-  writeFileSync(abs, `---\n${frontmatter}\n---\n${body}`, 'utf8')
-}
-
-// ── 行读取助手 ──
-
-interface RecallLogRow {
-  id: number
-  project_id: string
-  call_id: string
-  session_id: string
-  verb: string
-  entry_id: number | null
-  frontmatter_id: string | null
-  title_snap: string | null
-  domain_snap: string | null
-  query_json: string | null
-  hit_count: number
-  duration_ms: number | null
-  created_at: string
-}
-
-const recallLogsOf = (db: Database.Database, projectId: string): RecallLogRow[] =>
-  db.prepare<unknown[], RecallLogRow>(`SELECT * FROM knowledge_recall_logs WHERE project_id = ? ORDER BY id`).all(projectId)
-
-interface KeyLogRow { level: string; scope: string; message: string; data_json: string | null }
-
-const keyLogsOf = (db: Database.Database): KeyLogRow[] =>
-  db.prepare<unknown[], KeyLogRow>(`SELECT level, scope, message, data_json FROM app_key_logs ORDER BY id`).all()
-
-const entryIdByTitle = (db: Database.Database, projectId: string): Map<string, number> =>
-  new Map(
-    db.prepare<unknown[], { id: number; title: string }>(`SELECT id, title FROM knowledge_entries WHERE project_id = ?`).all(projectId)
-      .map((r) => [r.title, r.id] as const),
-  )
-
-const titles = (hits: readonly { title: string }[]): string[] => hits.map((h) => h.title)
-
-/** rebuild 计数器缝（fix-31 零重建断言）：包真实 index-service，计数 rebuildIndex 实际调用 */
-function countingIndexService(db: Database.Database): { service: Pick<KnowledgeIndexService, 'rebuildIndex'>; calls(): number } {
-  const real = createKnowledgeIndexService({ db })
-  let n = 0
-  return {
-    service: {
-      async rebuildIndex(projectId: string) {
-        n += 1
-        return real.rebuildIndex(projectId)
-      },
-    },
-    calls: () => n,
-  }
-}
+/** 夹具（recall 域口径：RECALL_CORPUS 语料；rebuild = 是否先行重建索引，默认否——静默重建联动需要零行索引） */
+const fixture = (options: { rebuild?: boolean } = {}) =>
+  knowledgeFixture({ prefix: 'dsh-forge-knrc-', corpus: RECALL_CORPUS, ...options })
 
 // ── AC1：域前缀过滤（场景④） ──
 

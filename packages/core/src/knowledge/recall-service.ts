@@ -1,7 +1,7 @@
 // 知识域召回服务（3.2：search / readAbstract 检索面 + knowledge_recall_logs + 热度）。定位：业务。
 // 语义（tech-design §Interface 2 + 交互二 + ER KNOWLEDGE_RECALL_LOGS）：
 // · search = 索引缓存直读（SC2 零文件扫描——域前缀 SQL 段匹配 + 关键词/文本行内过滤 + 占位分排序）；
-//   项目级索引零行（缺失）时静默重建联动（rebuildIndex），重建失败按因降级（见 rebuildMissingIndex）；
+//   项目级索引零行（缺失）时静默重建联动（rebuildIndex），重建失败按因降级（见 shared.rebuildMissingIndex）；
 //   域过滤零行 ≠ 缺失——合法空结果直接返回，不触发重建（存在性口径 = 无过滤 COUNT，fix-31）。
 // · readAbstract = 纯缓存读（正文永不读文件——场景⑤），未命中 = ERR_ENTRY_NOT_FOUND
 //   （索引重建后 ID 漂移语义，Error Handling 表明文；故不联动重建——AUTOINCREMENT 重建后 id 不复用）。
@@ -10,8 +10,8 @@
 //   query_json/hit_count/duration_ms 调用级字段同 call 各行重复。append-only（Hard Rule：
 //   只经本域写入，不更新不删）。
 // · 检索异常降级 app_key_logs（scope=recall，只记关键：索引缺失触发重建（自动修复）/ 条目未命中 /
-//   重建失败——正常召回轨迹在 recall_logs，成功路径不记关键日志）。app_key_logs 写入为本域
-//   自备语句（forge/key-logs 同构 SQL，铁律③ 禁 import ../forge/——共享表经 db/ 句柄单写路径）。
+//   重建失败——正常召回轨迹在 recall_logs，成功路径不记关键日志）。app_key_logs 写入与域守卫、
+//   域前缀读取等同构面经 ./shared.ts 单源（铁律③ 禁 import ../forge/——共享表经 db/ 句柄单写路径）。
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type {
@@ -26,7 +26,14 @@ import type {
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../db/index.js'
 import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'
-import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
+import { EntryNotFoundError } from './errors.js'
+import {
+  createKnowledgeSharedHelpers,
+  parseKeywords,
+  prepareHeatByEntry,
+  selectRowsByDomain,
+  type KnowledgeSharedHelpers,
+} from './shared.js'
 
 export interface KnowledgeRecallServiceDeps {
   /** SQLite 句柄（db/ 唯一产出；一切 SQL prepared） */
@@ -45,7 +52,7 @@ const TITLE_WEIGHT = 2 // text 命中标题
 const SUMMARY_WEIGHT = 1 // text 命中摘要
 
 /** 打分输入（索引行的可打分子集；keywords 已解析） */
-export interface RankableEntry {
+interface RankableEntry {
   entryId: number
   title: string
   summary: string
@@ -53,19 +60,19 @@ export interface RankableEntry {
 }
 
 /** 打分产物（score = 占位置信度；同分按 entryId 升序保证确定性） */
-export interface RankedEntry<T extends RankableEntry> {
+interface RankedEntry<T extends RankableEntry> {
   entry: T
   score: number
 }
 
 /**
- * 行内过滤与占位打分（纯函数）：
+ * 行内过滤与占位打分（纯函数，模块私有——生产消费仅本服务，fix-35 降私有）：
  * · keywords = AND 细分（「细分」= 收窄口径——每个检索关键词都须命中条目 keywords；大小写不敏感）
  * · text = 标题/摘要大小写不敏感子串（两者皆不中则排除）
  * · score = KEYWORD_WEIGHT×命中关键词数 + TITLE_WEIGHT/SUMMARY_WEIGHT×text 命中位
  * · 排序 score 降序，同分 entryId 升序
  */
-export function rankEntries<T extends RankableEntry>(entries: readonly T[], input: { keywords?: string[]; text?: string }): RankedEntry<T>[] {
+function rankEntries<T extends RankableEntry>(entries: readonly T[], input: { keywords?: string[]; text?: string }): RankedEntry<T>[] {
   const queryKeywords = (input.keywords ?? [])
     .map((k) => k.trim().toLowerCase())
     .filter((k) => k !== '')
@@ -131,14 +138,6 @@ interface RecallLogWrite {
   durationMs: number
 }
 
-/** LIKE 通配转义（% _ \）——域前缀 SQL 段匹配防通配符注入（Security Mitigations：prepared + 输入规整） */
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`)
-}
-
-/** 关键日志级别（ER CHECK level IN ('warn','error')——scope 固定 'recall' 由语句字面量保证） */
-type RecallLogLevel = 'warn' | 'error'
-
 /** 调用参数快照（query_json 形状 = RecallQuerySnapshot；仅记在位的过滤维度） */
 function searchSnapshot(q: SearchQuery): RecallQuerySnapshot {
   const snap: RecallQuerySnapshot = {}
@@ -155,8 +154,13 @@ function searchSnapshot(q: SearchQuery): RecallQuerySnapshot {
 export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): KnowledgeRecallService {
   const { db } = deps
   const indexService = deps.indexService ?? createKnowledgeIndexService({ db })
+  const shared: KnowledgeSharedHelpers = createKnowledgeSharedHelpers({
+    db,
+    indexService,
+    keyLogScope: 'recall',
+    verb: 'search',
+  })
 
-  const selectProject = db.prepare<unknown[], { id: string }>(`SELECT id FROM projects WHERE id = ?`)
   const selectAll = db.prepare<unknown[], EntryRow>(
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
      FROM knowledge_entries WHERE project_id = ? ORDER BY id`,
@@ -176,24 +180,13 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
   const countEntries = db.prepare<unknown[], { c: number }>(
     `SELECT COUNT(*) AS c FROM knowledge_entries WHERE project_id = ?`,
   )
-  const selectHeat = db.prepare<unknown[], { entry_id: number; heat: number }>(
-    `SELECT entry_id, COUNT(*) AS heat FROM knowledge_recall_logs
-     WHERE project_id = ? AND entry_id IS NOT NULL GROUP BY entry_id ORDER BY entry_id`,
-  )
+  const selectHeatByEntry = prepareHeatByEntry(db)
   const insertRecallLog = db.prepare(
     `INSERT INTO knowledge_recall_logs (
        project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
        query_json, hit_count, duration_ms, created_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-  const insertKeyLog = db.prepare(
-    `INSERT INTO app_key_logs (level, scope, message, data_json, created_at) VALUES (?, 'recall', ?, ?, ?)`,
-  )
-
-  /** 关键日志（只记关键：重建触发/未命中/失败；成功召回轨迹在 recall_logs，不在此记） */
-  function recordRecallKeyLog(level: RecallLogLevel, message: string, data: Record<string, unknown>): void {
-    insertKeyLog.run(level, message, JSON.stringify(data), new Date().toISOString())
-  }
 
   /** 一次调用的事务原子写入：N 命中 N 行；零命中 = 单哨兵行（entry_id NULL / hit_count 0 / 快照 NULL） */
   function writeRecallLog(write: RecallLogWrite): void {
@@ -219,40 +212,6 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
     })
   }
 
-  /**
-   * 索引缺失（项目级零行）静默重建联动（ERR_INDEX_STALE 语义）：
-   * · 成功 → warn 记自动修复事件（单事件单条）后由调用方直读新索引（空目录合法 = 空结果）
-   * · 失败 → 按因降级：目录不可达原样上抛 InvalidKnowledgeDirError（Hard Rule 2 六码面）；
-   *   其余异常包装 IndexStaleError（索引仍缺失，检索中止）——均先落 app_key_logs(error)
-   */
-  async function rebuildMissingIndex(projectId: string): Promise<void> {
-    try {
-      const report = await indexService.rebuildIndex(projectId)
-      recordRecallKeyLog('warn', 'search 索引缺失触发静默重建', { projectId, indexed: report.indexed, skipped: report.skipped })
-    } catch (cause) {
-      if (cause instanceof InvalidKnowledgeDirError) {
-        recordRecallKeyLog('error', 'search 静默重建失败：知识目录不可达', { projectId, reason: cause.message })
-        throw cause
-      }
-      const reason = cause instanceof Error ? cause.message : String(cause)
-      recordRecallKeyLog('error', 'search 静默重建失败（索引仍缺失）', { projectId, reason })
-      throw new IndexStaleError({ projectId, reason }, cause)
-    }
-  }
-
-  function requireProject(projectId: string, verb: string): void {
-    if (selectProject.get(projectId) === undefined) {
-      throw new Error(`项目不存在：${verb}(${projectId})——id 未命中 projects 行`)
-    }
-  }
-
-  /** 域前缀可选的缓存行读取（undefined = 全域；空串 = 根域；尾 '/' 归一） */
-  function selectRows(q: SearchQuery): EntryRow[] {
-    if (q.domainPrefix === undefined) return selectAll.all(q.projectId)
-    const prefix = q.domainPrefix.replace(/\/+$/, '')
-    return selectByDomain.all(q.projectId, prefix, `${escapeLike(prefix)}/%`)
-  }
-
   /** 打分产物 → SearchHit（摘要先行六字段） */
   function rankedToHits(ranked: readonly RankedEntry<RankableRow>[]): SearchHit[] {
     return ranked.map(({ entry, score }) => ({
@@ -268,16 +227,16 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
   return {
     async search(q: SearchQuery): Promise<SearchHit[]> {
       const startMs = Date.now()
-      requireProject(q.projectId, 'search')
+      shared.requireProject(q.projectId, 'search')
 
       // 索引缓存直读：域前缀 SQL 段匹配（= 前缀 或 前缀/… 子域；ESCAPE 防通配注入）
-      const rows: EntryRow[] = selectRows(q)
+      const rows: EntryRow[] = selectRowsByDomain(selectAll, selectByDomain, q)
       if (rows.length === 0 && countEntries.get(q.projectId)!.c === 0) {
-        await rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（检索本身零文件扫描）
-        rows.push(...selectRows(q)) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
+        await shared.rebuildMissingIndex(q.projectId) // 项目级零行 = 索引缺失 → 静默重建联动（检索本身零文件扫描）
+        rows.push(...selectRowsByDomain(selectAll, selectByDomain, q)) // 域零行（索引在）= 合法空结果；空目录重建后仍零行亦合法
       }
 
-      const rankable: RankableRow[] = rows.map((r) => ({ ...r, entryId: r.id, keywords: JSON.parse(r.keywords) as string[] }))
+      const rankable: RankableRow[] = rows.map((r) => ({ ...r, entryId: r.id, keywords: parseKeywords(r.keywords) }))
       const ranked = rankEntries(rankable, q)
       const limited = q.limit !== undefined && q.limit > 0 ? ranked.slice(0, q.limit) : ranked
       const hits = rankedToHits(limited)
@@ -299,13 +258,13 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
 
     async readAbstract(q: ReadAbstractQuery): Promise<EntryAbstract> {
       const startMs = Date.now()
-      requireProject(q.projectId, 'readAbstract')
+      shared.requireProject(q.projectId, 'readAbstract')
 
       const row = selectEntry.get(q.projectId, q.entryId)
       if (row === undefined) {
         // 未命中 = ID 漂移语义（Error Handling 表 404 行）——warn 记关键异常后抛六码（不联动重建：
         // 零行索引时 entryId 必来自旧索引，AUTOINCREMENT 重建后 id 不复用，重建无济于命中）
-        recordRecallKeyLog('warn', 'read-abstract 条目未命中（索引重建后 ID 漂移或未入索引）', {
+        shared.writeKeyLog('warn', 'read-abstract 条目未命中（索引重建后 ID 漂移或未入索引）', {
           projectId: q.projectId, entryId: q.entryId,
         })
         throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
@@ -325,7 +284,7 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
         entryId: row.id,
         title: row.title,
         summary: row.summary, // 摘要先行——正文不读（场景⑤）
-        keywords: JSON.parse(row.keywords) as string[],
+        keywords: parseKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
       }
@@ -333,7 +292,7 @@ export function createKnowledgeRecallService(deps: KnowledgeRecallServiceDeps): 
 
     async heatByEntry(projectId: string): Promise<HeatByEntry> {
       // 热度口径 = 按条目 COUNT(*)（search 命中与 read-abstract 各计一次；哨兵行 entry_id NULL 不计）
-      return new Map(selectHeat.all(projectId).map((r) => [r.entry_id, r.heat]))
+      return new Map(selectHeatByEntry.all(projectId).map((r) => [r.entry_id, r.heat]))
     },
   }
 }

@@ -9,8 +9,6 @@ export {
   type KnowledgeErrorData,
 } from './errors.js'
 export {
-  defaultTitleFromRelPath,
-  digestOf,
   parseKnowledgeFile,
   type ParseKnowledgeFileInput,
   type ParseOutcome,
@@ -26,11 +24,8 @@ export {
 export { createKnowledgeIndexService, type KnowledgeIndexService, type KnowledgeIndexServiceDeps } from './index-service.js'
 export {
   createKnowledgeRecallService,
-  rankEntries,
   type KnowledgeRecallService,
   type KnowledgeRecallServiceDeps,
-  type RankableEntry,
-  type RankedEntry,
 } from './recall-service.js'
 export {
   aggregateDomainTree,

@@ -3,7 +3,7 @@
 // 权威：tech-design Appendix 契约面清单第 7 项 + Overview 关键缝（Cordis 服务模式——
 // workspaceRegistry/agentPresets 同型先例，进程内零 RPC）+ 上游公开面 `@deepseek-ai/cordis`
 // （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.0.4，独立版本线精确 pin——漂移即红）。
-// 我方镜像：packages/core/src/service.ts（双服务 provide）+ packages/knowledge/src/index.ts
+// 我方镜像：packages/core/src/index.ts（双服务 provide，fix-35 前为 service.ts）+ packages/knowledge/src/index.ts
 // （inject 消费）。同型先例 WorkspaceRegistry 的 Service 基类面已由 pin-04 锚定。
 // Hard Rule：只 pin 上游公开面（cordis 导出 + 服务生命周期契约）+ 我方双服务对官方面的
 // 符合性（真实 runtime 装配，非结构化桩模拟——与 2.2/3.4 产品单测的桩面互补）。
@@ -16,7 +16,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import corePlugin from '../../packages/core/src/service.js'
+import corePlugin from '../../packages/core/src/index.js'
 import knowledgePlugin from '../../packages/knowledge/src/index.js'
 import { importUpstream, norm, readTypes, upstreamPkg } from './pins.js'
 

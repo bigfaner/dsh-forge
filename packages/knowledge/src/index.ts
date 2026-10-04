@@ -1,5 +1,5 @@
 // @dsh-forge/knowledge 插件定义（定位：装配——3.4）。
-// 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/service.ts 同型）：
+// 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
 //   inject = ['forgeKnowledge', 'tools', 'systemPrompt'] —— 对 core 的唯一依赖 =
 //   forgeKnowledge 服务（Interface 2 类型，contracts 单一来源；运行期 inject 解析，
 //   零实现级 import，AC3）；tools / systemPrompt 为 dsh 官方面（非 core）。

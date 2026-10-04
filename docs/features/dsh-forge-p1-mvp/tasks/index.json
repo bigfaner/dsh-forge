@@ -981,6 +981,18 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-35": {
+      "id": "fix-35",
+      "title": "Fix(P2): 服务端整洁批——knowledge 域内五处同构拷贝抽 shared + registerProject/browse 工厂拆分 + 三份测试语料夹具收编 + 死导出清理 + 同概念异名统一",
+      "priority": "P2",
+      "estimatedTime": "5h",
+      "status": "completed",
+      "file": "fix-35.md",
+      "record": "records/fix-35.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-3": {
       "id": "fix-3",
       "title": "Fix: 添加项目模态宽度缺陷——内容 560 \u003e 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",

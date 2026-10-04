@@ -15,6 +15,8 @@
 //     dsh 按 canonical 返回既有实体时 id 已在快照中，attachedToExisting 恒真值）；
 //   · ③ 撞 UNIQUE(ws_path) 时重入一次 attachExistingRow（自愈径）而非直接进补偿。
 // 补偿链语义零变化：真新建失败 → registry.delete 补偿；挂接/既有实体绝不被补偿删除。
+// fix-35 拆分：主链降纯编排（writeProjectRow / compensateFailedWrite / isRefHealthy /
+// reconcileRowDegrade 单项处理器），errMessage 收编 ../util.js 单源。
 // 查询面 + 启动对账（2.3）：listProjects（archived 态随行=过滤口径）/ getProject / updateProject
 // （patch 仅 name/archived）/ reconcileAtStartup（失配找回、找不回幂等重建、孤儿只提示不删；
 // 全程异常降级 app_key_logs 永不抛断启动）。SQLite 写仅经 db/ 句柄（单写路径）；
@@ -34,7 +36,7 @@ import type {
   RegisterResult,
 } from '@dsh-forge/contracts'
 import { normalizeFsPath } from '@dsh-forge/path-key'
-import { withTransaction } from '../db/index.js'
+import { errMessage } from '../util.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
@@ -69,8 +71,8 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
   }
 }
 
-/** forge 目录是否位于工作区外（ER PROJECTS：仓外=1/true，由路径关系自动推导） */
-export function isForgeDirExternal(wsPath: string, forgeDir: string): boolean {
+/** forge 目录是否位于工作区外（ER PROJECTS：仓外=1/true，由路径关系自动推导——模块私有，落库行内消费） */
+function isForgeDirExternal(wsPath: string, forgeDir: string): boolean {
   const rel = relative(wsPath, forgeDir)
   return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)
 }
@@ -89,6 +91,83 @@ async function canonicalizeDir(p: string): Promise<string> {
   }
 }
 
+/** ③ 写 projects 行（ws_path 以 registry 返回的 canonical path 为准——非用户拼写原样；单语句原子） */
+function writeProjectRow(
+  db: Database.Database,
+  o: { projectId: string; workspace: WorkspaceLike; input: RegisterProjectInput; now: string },
+): void {
+  db.prepare(
+    `INSERT INTO projects (
+       id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+  ).run(
+    o.projectId,
+    o.workspace.id,
+    o.workspace.path,
+    o.input.name,
+    o.input.forgeDir,
+    isForgeDirExternal(o.workspace.path, o.input.forgeDir) ? 1 : 0,
+    o.input.knowledgeDir,
+    o.now,
+    o.now,
+  )
+}
+
+/**
+ * ③ 写入失败收口面（fix-35 自主链抽离，语义逐字保留）：fix-30 兜底① UNIQUE(ws_path)
+ * 自愈重入 → 挂接保护（非本次新建不补偿）→ ④ 补偿删除（失败记账 + ERR_COMPENSATION）。
+ */
+async function compensateFailedWrite(
+  deps: ProjectServiceDeps,
+  input: RegisterProjectInput,
+  o: { workspace: WorkspaceLike; createdNow: boolean; projectId: string; writeCause: unknown },
+): Promise<RegisterResult> {
+  const { db, registry } = deps
+  const { workspace, createdNow, projectId, writeCause } = o
+
+  // fix-30 兜底①：UNIQUE(ws_path) 撞既有行 = 变体径穿透预检的残余面（入口归一不可达回退
+  // 时，dsh canonical 仍可能命中既有实体/既有行）→ 按撞键的 ws_path（= workspace.path）
+  // 重入一次自愈；命中即幂等成功——绝不把既有实体按「本次新建」补偿删除。
+  if (isUniqueWsPathViolation(writeCause)) {
+    const selfHealed = await attachExistingRow(deps, { ...input, workspaceDir: workspace.path })
+    if (selfHealed !== undefined) return selfHealed
+  }
+  // ④ 补偿——仅「本次新建」（② 结构判据：id 快照差集）才登记；流程窗口内取消同径（见 §交互一）
+  if (!createdNow) {
+    throw new ProjectWriteError({ workspaceId: workspace.id, wsPath: workspace.path }, writeCause)
+  }
+  try {
+    // 幂等：未知 id 返回 false（工作区已被清理）亦视为补偿完成——dsh 侧零孤儿达成
+    await registry.delete(workspace.id)
+  } catch (deleteCause) {
+    // 补偿失败：app_key_logs 单事件单条记账（scope=compensation，处置结果并入 data_json）
+    // + 抛 typed ERR_COMPENSATION——孤儿交启动对账提示，不自动删（SC12）
+    recordKeyLog(db, {
+      level: 'error',
+      scope: 'compensation',
+      message: `registry.delete 补偿失败：工作区 ${workspace.path}（${workspace.id}）留存为孤儿——启动对账将提示，不自动删`,
+      data: {
+        workspaceId: workspace.id,
+        wsPath: workspace.path,
+        projectId,
+        writeError: errMessage(writeCause),
+        deleteError: errMessage(deleteCause),
+        disposition: '补偿失败——孤儿工作区交由启动对账提示（不自动删）',
+      },
+    })
+    throw new CompensationError({ workspaceId: workspace.id, wsPath: workspace.path, projectId }, writeCause, deleteCause)
+  }
+  throw new ProjectWriteError(
+    {
+      workspaceId: workspace.id,
+      wsPath: workspace.path,
+      compensated: { workspaceId: workspace.id, reason: '③ 应用库写入失败（registry.delete 补偿已执行）' },
+    },
+    writeCause,
+  )
+}
+
+/** 注册主链（纯编排：归一 → 自愈预检 → ① 预检 → ② create → ③ 写行 → 标题对齐） */
 async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectInput): Promise<RegisterResult> {
   const { db, registry } = deps
 
@@ -128,76 +207,20 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     }
     createdNow = !idsBeforeCreate.has(workspace.id)
   }
-  const attachedToExisting = !createdNow
 
-  // ③ 事务写 projects 行（ws_path 以 registry 返回的 canonical path 为准——非用户拼写原样）
+  // ③ 写 projects 行 → 失败径收口（兜底自愈 / 挂接保护 / ④ 补偿）
   const projectId = randomUUID()
   const now = new Date().toISOString()
   try {
-    withTransaction(db, () => {
-      db.prepare(
-        `INSERT INTO projects (
-           id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-      ).run(
-        projectId,
-        workspace.id,
-        workspace.path,
-        input.name,
-        canonicalInput.forgeDir,
-        isForgeDirExternal(workspace.path, canonicalInput.forgeDir) ? 1 : 0,
-        canonicalInput.knowledgeDir,
-        now,
-        now,
-      )
-    })
+    writeProjectRow(db, { projectId, workspace, input: canonicalInput, now })
   } catch (writeCause) {
-    // fix-30 兜底①：UNIQUE(ws_path) 撞既有行 = 变体径穿透预检的残余面（入口归一不可达回退
-    // 时，dsh canonical 仍可能命中既有实体/既有行）→ 按撞键的 ws_path（= workspace.path）
-    // 重入一次自愈；命中即幂等成功——绝不把既有实体按「本次新建」补偿删除。
-    if (isUniqueWsPathViolation(writeCause)) {
-      const selfHealed = await attachExistingRow(deps, { ...canonicalInput, workspaceDir: workspace.path })
-      if (selfHealed !== undefined) return selfHealed
-    }
-    // ④ 补偿——仅「本次新建」（② 结构判据：id 快照差集）才登记；流程窗口内取消同径（见 §交互一）
-    if (attachedToExisting) {
-      throw new ProjectWriteError({ workspaceId: workspace.id, wsPath: workspace.path }, writeCause)
-    }
-    try {
-      // 幂等：未知 id 返回 false（工作区已被清理）亦视为补偿完成——dsh 侧零孤儿达成
-      await registry.delete(workspace.id)
-    } catch (deleteCause) {
-      // 补偿失败：app_key_logs 单事件单条记账（scope=compensation，处置结果并入 data_json）
-      // + 抛 typed ERR_COMPENSATION——孤儿交启动对账提示，不自动删（SC12）
-      recordKeyLog(db, {
-        level: 'error',
-        scope: 'compensation',
-        message: `registry.delete 补偿失败：工作区 ${workspace.path}（${workspace.id}）留存为孤儿——启动对账将提示，不自动删`,
-        data: {
-          workspaceId: workspace.id,
-          wsPath: workspace.path,
-          projectId,
-          writeError: writeCause instanceof Error ? writeCause.message : String(writeCause),
-          deleteError: deleteCause instanceof Error ? deleteCause.message : String(deleteCause),
-          disposition: '补偿失败——孤儿工作区交由启动对账提示（不自动删）',
-        },
-      })
-      throw new CompensationError({ workspaceId: workspace.id, wsPath: workspace.path, projectId }, writeCause, deleteCause)
-    }
-    throw new ProjectWriteError(
-      {
-        workspaceId: workspace.id,
-        wsPath: workspace.path,
-        compensated: { workspaceId: workspace.id, reason: '③ 应用库写入失败（registry.delete 补偿已执行）' },
-      },
-      writeCause,
-    )
+    return compensateFailedWrite(deps, canonicalInput, { workspace, createdNow, projectId, writeCause })
   }
 
   // fix-24 ②：注册链末位 workspace 标题对齐项目名（新建与挂接既有两径同收口——见 alignWorkspaceTitle）
   await alignWorkspaceTitle(deps, workspace.id, input.name)
 
-  return { projectId, workspaceId: workspace.id, attachedToExisting }
+  return { projectId, workspaceId: workspace.id, attachedToExisting: !createdNow }
 }
 
 /**
@@ -216,8 +239,8 @@ function isUniqueWsPathViolation(cause: unknown): boolean {
 /**
  * fix-27 重注册自愈/幂等（registerProject ① 前防御）：按 ws_path 查既有行——行在场时
  * UNIQUE(ws_path) 令 INSERT 恒炸，重注册永不走新 INSERT：
- *   · 健康引用（registry.get 命中且 path 一致）→ 幂等成功返回既有项目（projectId 复用
- *     ——注册幂等语义；dsh 工作区健康而行已存在的正常重注册同径）；
+ *   · 健康引用（isRefHealthy：registry.get 命中且 path 一致）→ 幂等成功返回既有项目
+ *     （projectId 复用——注册幂等语义；dsh 工作区健康而行已存在的正常重注册同径）；
  *   · 悬空引用（fix-18 home 翻转类遗留：行 workspace_id 在现行 registry 无实体）→ 复用
  *     对账单项修复 reconcileProjectRef（relink/recreate + UPDATE 单向修引用）后幂等返回
  *     ——不新 INSERT、不登记补偿（挂接保护恒成立）。
@@ -237,7 +260,9 @@ async function attachExistingRow(
       .all()
       .find((r) => normalizeFsPath(r.ws_path) === key)
     if (row === undefined) return undefined
-    await reconcileProjectRef(deps, row, { repaired: [], orphans: [] }) // 健康即内部短路（零写零记账）
+    if (!isRefHealthy(deps.registry, row)) {
+      await reconcileProjectRef(deps, row, { repaired: [], orphans: [] }) // 悬空引用 → 单项修复
+    }
     const after = getRow(deps, row.id)
     if (after === undefined) return undefined // 不可达兜底（单写者无并发删除）——降级现行链
     // fix-24 ②：重注册幂等路径同对齐（既有行 name——input.name 对既有行不生效，title 跟行不跟输入；
@@ -270,9 +295,7 @@ async function alignWorkspaceTitle(
   } catch (cause) {
     // app_key_logs scope CHECK 四值不含注册域——对齐降级走 child 控制台（stdio 继承回流宿主）
     console.warn(
-      `workspace 标题对齐项目名失败（无害残留：chip/账本退回目录名，注册不受影响）——${projectName}（${workspaceId}）：${
-        cause instanceof Error ? cause.message : String(cause)
-      }`,
+      `workspace 标题对齐项目名失败（无害残留：chip/账本退回目录名，注册不受影响）——${projectName}（${workspaceId}）：${errMessage(cause)}`,
     )
   }
 }
@@ -331,7 +354,6 @@ function getProject(deps: ProjectServiceDeps, id: string): Project | null {
 }
 
 function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch): Project {
-  const { db } = deps
   const row = getRow(deps, id)
   if (row === undefined) {
     // 非六码 typed error（Error Handling 表无 project-not-found 行）：RPC 边界 fail-loud 原样上抛
@@ -349,14 +371,12 @@ function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch
     params.push(patch.archived ? 1 : 0)
   }
   if (sets.length > 0) {
-    const updatedAt = new Date().toISOString()
-    withTransaction(db, () => {
-      db.prepare(`UPDATE projects SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`).run(
-        ...params,
-        updatedAt,
-        id,
-      )
-    })
+    // 单语句 UPDATE 原子（fix-35 去单语句事务样板）
+    deps.db.prepare(`UPDATE projects SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`).run(
+      ...params,
+      new Date().toISOString(),
+      id,
+    )
   }
   const after = getRow(deps, id)
   if (after === undefined) throw new Error(`updateProject(${id})：更新后行消失（不可达——单写者无并发删除）`)
@@ -372,31 +392,20 @@ interface ProjectRefRow {
   ws_path: string
 }
 
+/** 引用健康判定（纯，§交互三逐项口径）：registry.get 命中且 path 一致（attachExistingRow 健康短路同源） */
+function isRefHealthy(registry: WorkspaceRegistryPort, row: ProjectRefRow): boolean {
+  const current = registry.get(row.workspace_id)
+  return current !== undefined && current.path === row.ws_path
+}
+
 async function reconcileAtStartup(deps: ProjectServiceDeps): Promise<ReconcileReport> {
   const report: ReconcileReport = { repaired: [], orphans: [] }
-  // 三层防御：单项降级（跳过该项目）→ 孤儿面/整体降级 → 记账本身失败亦吞掉——绝不抛断启动（AC5）
+  // 三层防御：单项降级（reconcileRowDegrade）→ 孤儿面/整体降级 → 记账本身失败亦吞掉——绝不抛断启动（AC5）
   try {
     const rows = deps.db
       .prepare<unknown[], ProjectRefRow>(`SELECT id, workspace_id, ws_path FROM projects ORDER BY created_at, id`)
       .all()
-    for (const row of rows) {
-      try {
-        await reconcileProjectRef(deps, row, report)
-      } catch (cause) {
-        recordKeyLog(deps.db, {
-          level: 'error',
-          scope: 'reconcile',
-          message: `对账单项失败：项目 ${row.id}（${row.ws_path}）——已跳过，不阻断启动`,
-          data: {
-            projectId: row.id,
-            workspaceId: row.workspace_id,
-            wsPath: row.ws_path,
-            error: errMessage(cause),
-            disposition: '单项降级跳过——引用未修，启动继续（下次启动重试对账）',
-          },
-        })
-      }
-    }
+    for (const row of rows) await reconcileRowDegrade(deps, row, report)
     detectOrphanWorkspaces(deps, report)
   } catch (cause) {
     try {
@@ -413,6 +422,30 @@ async function reconcileAtStartup(deps: ProjectServiceDeps): Promise<ReconcileRe
   return Promise.resolve(report)
 }
 
+/** 对账单项处理器（fix-35 自三层 try 抽离）：单项失败 → error 记账后跳过（引用未修，下次启动重试） */
+async function reconcileRowDegrade(
+  deps: ProjectServiceDeps,
+  row: ProjectRefRow,
+  report: ReconcileReport,
+): Promise<void> {
+  try {
+    await reconcileProjectRef(deps, row, report)
+  } catch (cause) {
+    recordKeyLog(deps.db, {
+      level: 'error',
+      scope: 'reconcile',
+      message: `对账单项失败：项目 ${row.id}（${row.ws_path}）——已跳过，不阻断启动`,
+      data: {
+        projectId: row.id,
+        workspaceId: row.workspace_id,
+        wsPath: row.ws_path,
+        error: errMessage(cause),
+        disposition: '单项降级跳过——引用未修，启动继续（下次启动重试对账）',
+      },
+    })
+  }
+}
+
 async function reconcileProjectRef(
   deps: ProjectServiceDeps,
   row: ProjectRefRow,
@@ -420,8 +453,7 @@ async function reconcileProjectRef(
 ): Promise<void> {
   const { db, registry } = deps
   // 校验：get(workspace_id) 的 path 与 ws_path 一致即通过（§交互三逐项路径）
-  const current = registry.get(row.workspace_id)
-  if (current !== undefined && current.path === row.ws_path) return
+  if (isRefHealthy(registry, row)) return
   // 失配：list() 按 ws_path 找回（对账钥匙 = ws_path，idx_projects_ws_path）
   const found = registry.list().find((ws) => ws.path === row.ws_path)
   let target: WorkspaceLike
@@ -434,14 +466,13 @@ async function reconcileProjectRef(
     target = await registry.create(row.ws_path)
     action = 'recreated'
   }
-  // 单向修引用：只改应用侧 workspace_id，绝不反向改 dsh 侧（Implementation Notes）
-  withTransaction(db, () => {
-    db.prepare(`UPDATE projects SET workspace_id = ?, updated_at = ? WHERE id = ?`).run(
-      target.id,
-      new Date().toISOString(),
-      row.id,
-    )
-  })
+  // 单向修引用：只改应用侧 workspace_id，绝不反向改 dsh 侧（Implementation Notes）；
+  // 单语句 UPDATE 原子（fix-35 去单语句事务样板）
+  db.prepare(`UPDATE projects SET workspace_id = ?, updated_at = ? WHERE id = ?`).run(
+    target.id,
+    new Date().toISOString(),
+    row.id,
+  )
   if (action === 'relinked') {
     // 记账口径（§交互三 + ER 记名域②）：失配找回 warn 单条、old→new 与处置结果入 data_json；
     // 幂等重建成功不记（成功路径一律不记）
@@ -479,8 +510,4 @@ function detectOrphanWorkspaces(deps: ProjectServiceDeps, report: ReconcileRepor
     message: `发现 ${report.orphans.length} 个孤儿工作区（dsh 有、应用无）——仅提示，不自动删`,
     data: { orphans: report.orphans, disposition: '仅提示不自动删——处置交用户（UI 启动对账提示）' },
   })
-}
-
-function errMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
 }
