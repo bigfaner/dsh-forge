@@ -14,7 +14,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { DomainNode, KnowledgeService, ProjectService } from '@dsh-forge/contracts'
+import type { BrowseKnowledgeService, ProjectService } from '@dsh-forge/contracts'
 import {
   asReadyMessage,
   createBridgeProxy,
@@ -48,10 +48,9 @@ export interface BootDshOptions {
 /** 产品双服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
 export interface DshHostServices {
   forgeProjects: ProjectService
-  /** Interface 2 七法 + browse 聚合第八法（3.5：forge:knowledge/browse 通道挂接） */
-  forgeKnowledge: KnowledgeService & {
-    browse(req: { projectId: string }): Promise<DomainNode[]>
-  }
+  /** Interface 2 七法 + browse 聚合第八法（3.5：forge:knowledge/browse 通道挂接；
+   * fix-33 起 = contracts BrowseKnowledgeService 命名类型——第八法四处手工同步收口） */
+  forgeKnowledge: BrowseKnowledgeService
 }
 
 export interface DshHostHandle {
@@ -121,12 +120,16 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
  * 只读真实文件（asar 不可读），且其 ESM import（@deepseek-ai/dsh-app-boot /
  * @deepseek-ai/dsh/profile-boot）沿目录上溯解析，须与运行时 node_modules 同容器相邻
  * （assemble-installer-resources.mjs 物化布局）。resourcesDir 给定但 host-dist 缺席
- * （半成型资源）→ 回退 dev 入口（失败面交 spawn 的 ENOENT 兜底显形）。
+ * （半成型资源）→ 直接 throw（fix-33 ④：回退 dev 入口的失败面交 spawn ENOENT 兜底——
+ * 打包形态下 dev 入口根本不在场且 asar 路径误导排障；早 throw 更早定位装配断裂）。
  */
 export function resolveChildEntry(moduleUrl: string, resourcesDir?: string): string {
   if (resourcesDir !== undefined) {
     const packaged = join(resourcesDir, 'runtime', 'host-dist', 'boot', 'child.js')
     if (existsSync(packaged)) return packaged
+    throw new Error(
+      `host-dist 缺席（半成型资源）：${packaged}——runtime 布局装配断裂（assemble-installer-resources.mjs / dist:stage）`,
+    )
   }
   return fileURLToPath(new URL('./child.js', moduleUrl))
 }

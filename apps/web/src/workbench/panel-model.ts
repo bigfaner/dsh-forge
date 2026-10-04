@@ -50,11 +50,13 @@ export function nextLastReadyCount(prev: number | null, projects: {
  * 快照缺席（useWorkspaces hook 不在场）= 单项目兜底同径（非壳载体降级）。
  * fix-25 注：知识面板（root 作用域——无会话锚可读）恒走兜底线；会话锚定径由召回/轨迹
  * 视图（session 作用域）消费，多项目知识锚定降级为已知边界（P1 单项目主路径不受损）。
+ * fix-33 ⑨：projects 行 workspaceId 收紧为必填（contracts Project/ProjectSummary 镜像
+ * ——原可选放宽无消费面，属漂移面）。
  */
 export function projectAnchorOf(input: {
   readonly sessionId: string | null
   readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
-  readonly projects: readonly { readonly id: string; readonly workspaceId?: string }[]
+  readonly projects: readonly { readonly id: string; readonly workspaceId: string }[]
 }): string | null {
   if (input.sessionId !== null && input.workspaces !== null) {
     const home = input.workspaces.items.find((ws) => ws.sessionIds.includes(input.sessionId as string))

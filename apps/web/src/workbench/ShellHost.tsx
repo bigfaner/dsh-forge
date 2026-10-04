@@ -78,6 +78,34 @@ export function WorkspacesAnchor({
 }
 
 /**
+ * panelInfo 快照 → activePanelId 窄读（纯函数）：官方 layout.panelInfo 快照形状漂移/
+ * 缺省 → null（官方会话面板缺省——centerViewOf 同口径）。
+ */
+export function readActivePanelId(hook: KitSelectorHook): string | null {
+  return hook((s) => (s as { activePanelId?: string | null } | undefined)?.activePanelId ?? null) as string | null
+}
+
+/**
+ * 官方面板信息锚子件（fix-33 ⑤ 钩子形制：原 ForgeShellHost 内联 `props.usePanelInfo?.(…)`
+ * 可选调用违反 hooks 规则——kit 在场性中途变化即漂移；抽子件无条件调用，WorkspacesAnchor
+ * 同形制）。读取 activePanelId 经效应上抛宿主状态（SSR 首帧保持 null 缺省；效应驱动更新
+ * 归 e2e）；导出面 = 单测。
+ */
+export function PanelInfoAnchor({
+  hook,
+  onChange,
+}: {
+  readonly hook: KitSelectorHook
+  readonly onChange: (activePanelId: string | null) => void
+}): ReactNode {
+  const activePanelId = readActivePanelId(hook)
+  useEffect(() => {
+    onChange(activePanelId)
+  }, [activePanelId, onChange])
+  return null
+}
+
+/**
  * hero 面板驱动效应推导（纯函数，fix-25——单测直测）：
  *   - 相位 hero 且当前在官方会话面板（activePanelId null）且未驱动过 → 进 hero 面板
  *     （boot 期零项目引导；一次性守卫——不与用户导航争用）；
@@ -114,10 +142,9 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
     failed: projectsState.phase === 'error',
   })
 
-  // 官方面板态镜像（activePanelId——root 作用域标准观察钩子；缺席 = 会话视图缺省）
-  const activePanelId = (
-    props.usePanelInfo?.((s) => (s as { activePanelId?: string | null } | undefined)?.activePanelId ?? null) ?? null
-  ) as string | null
+  // 官方面板态镜像（activePanelId——root 作用域标准观察钩子；fix-33 ⑤ 起经 PanelInfoAnchor
+  // 子件读取上抛（钩子形制合规），缺席 = 会话视图缺省（SSR 首帧 null））
+  const [activePanelId, setActivePanelId] = useState<string | null>(null)
   const view = centerViewOf(activePanelId)
 
   // hero 面板驱动（一次性守卫 + 边沿让位；面板选择窄面缺席 = 降级 no-op）
@@ -177,6 +204,11 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           身份变化 = 项目数重拉锚——不落地 dsh 账本行副本） */}
       {props.useWorkspaces !== undefined ? (
         <WorkspacesAnchor hook={props.useWorkspaces} onChange={handleWorkspacesSnap} />
+      ) : null}
+      {/* 官方面板信息锚（fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件
+          无条件调用——hooks 规则合规；activePanelId 上抛驱动视图镜像与 hero 让位） */}
+      {props.usePanelInfo !== undefined ? (
+        <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
       ) : null}
     </div>
   )

@@ -11,6 +11,7 @@ import {
   CONVERSATION_VIEW_SLOT,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
+  FORGE_LOCALE_NS,
   HERO_PANEL_KEY,
   HERO_WORKSPACE_SLOT,
   KNOWLEDGE_PANEL_KEY,
@@ -27,6 +28,7 @@ import {
   publishedViews,
   registerForgeClient,
   type ForgeClientCtx,
+  type ForgeLocaleService,
   type ForgeSlotsService,
 } from './plugin.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
@@ -41,7 +43,8 @@ interface RegisterCall {
     key?: string
     id?: string
     order?: number
-    label?: string
+    label?: string | (() => string)
+    locale?: string
     inject?: () => object
     /** fix-24 ①：影子行不声明 children（官方登记行供养子洞——重声明即 throw）的断言面 */
     children?: unknown
@@ -49,17 +52,46 @@ interface RegisterCall {
   component: unknown
 }
 
-/** 假 ctx：slots 收集 inject/register，六服务经 get 递达 */
+/** fake locale 服务（fix-33 ⑧）：register 收词典 + 撤销记账；bind = zh 词典直查（缺席回退 key） */
+function fakeLocale(): ForgeLocaleService & { disposed: boolean; registered: [string, Record<string, Record<string, string>>][] } {
+  const state = {
+    disposed: false,
+    registered: [] as [string, Record<string, Record<string, string>>][],
+  }
+  return {
+    get disposed() {
+      return state.disposed
+    },
+    get registered() {
+      return state.registered
+    },
+    register: (ns, dicts) => {
+      state.registered.push([ns, structuredClone(dicts) as Record<string, Record<string, string>>])
+      return () => {
+        state.disposed = true
+      }
+    },
+    bind: (ns) => (key) => {
+      const entry = state.registered.find(([n]) => n === ns)
+      return entry?.[1].zh?.[key] ?? key
+    },
+  }
+}
+
+/** 假 ctx：slots 收集 inject/register，七服务经 get 递达 */
 function fakeClientCtx(): {
   ctx: ForgeClientCtx
   registers: RegisterCall[]
   injectedKeys: string[]
+  injectDisposers: Map<string, () => void>
   open: ReturnType<typeof vi.fn>
   rightToggle: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
+  locale: ReturnType<typeof fakeLocale>
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
+  const injectDisposers = new Map<string, () => void>()
   const open = vi.fn()
   const rightToggle = vi.fn()
   const selectPanel = vi.fn()
@@ -67,7 +99,9 @@ function fakeClientCtx(): {
     inject: (key, callback) => {
       injectedKeys.push(key)
       const dispose = callback()
-      return dispose ?? (() => {})
+      const d = dispose ?? (() => {})
+      injectDisposers.set(key, d)
+      return d
     },
     register: (options, component) => {
       registers.push({ key: options.name, options, component })
@@ -88,6 +122,8 @@ function fakeClientCtx(): {
       subscribe: () => () => {},
     },
   }
+  // fix-33 ⑧：官方 locale 服务切片
+  const locale = fakeLocale()
   const ctx: ForgeClientCtx = {
     slots,
     get: (name) => {
@@ -96,10 +132,11 @@ function fakeClientCtx(): {
       if (name === 'workspaces') return workspaces
       if (name === 'sidebarRight') return sidebarRight
       if (name === 'layout') return layout
+      if (name === 'locale') return locale
       throw new Error(`unexpected service: ${name}`)
     },
   }
-  return { ctx, registers, injectedKeys, open, rightToggle, selectPanel }
+  return { ctx, registers, injectedKeys, injectDisposers, open, rightToggle, selectPanel, locale }
 }
 
 /** 假产品视图发布面（fix-25 发布集） */
@@ -140,7 +177,7 @@ function unpublishViews(): void {
 }
 
 describe('forgeClientPlugin 形状（cordis 插件面）', () => {
-  it('name = 注册键；inject = 六服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；fix-25 加 layout）；apply 幂等立激活标记', () => {
+  it('name = 注册键；inject = 七服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；fix-25 加 layout；fix-33 加 locale）；apply 幂等立激活标记', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string } }).__DSH_FORGE_CLIENT__
     delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     const views = publishFakeViews()
@@ -154,11 +191,18 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
       'workspaces',
       'sidebarRight',
       'layout',
+      'locale',
     ])
-    plugin.apply(fakeClientCtx().ctx)
+    const { ctx, locale } = fakeClientCtx()
+    plugin.apply(ctx)
     const active = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string; activatedAt: number } }).__DSH_FORGE_CLIENT__
     expect(active?.plugin).toBe(FORGE_CLIENT_PLUGIN_ID)
     expect(typeof active?.activatedAt).toBe('number')
+    // fix-33 ⑧：locale 词典登记（NS + zh/en 双语——官方 ui-trajectory 同径）
+    expect(locale.registered).toHaveLength(1)
+    expect(locale.registered[0]![0]).toBe(FORGE_LOCALE_NS)
+    expect(locale.registered[0]![1].zh).toMatchObject({ 'panel.knowledge': '知识库', 'view.recall': '知识召回' })
+    expect(locale.registered[0]![1].en).toMatchObject({ 'panel.knowledge': 'Knowledge', 'view.recall': 'Recall' })
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
@@ -238,14 +282,16 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('panellist 行：id = 知识面板 key（官方 PanelRow 行语言消费）+ label 知识库', () => {
+  it('panellist 行：id = 知识面板 key（官方 PanelRow 行语言消费）+ label = locale NS thunk（fix-33 ⑧——zh 值等值原字面量）', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const row = registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)
     expect(row).toBeDefined()
     expect(row!.options.id).toBe(KNOWLEDGE_PANEL_KEY)
-    expect(row!.options.label).toBe('知识库')
+    expect(row!.options.locale).toBe(FORGE_LOCALE_NS)
+    expect(typeof row!.options.label).toBe('function')
+    expect((row!.options.label as () => string)()).toBe('知识库')
     expect(row!.options.order).toBe(20)
     expect(row!.component).toBe(views.ForgeKnowledgeGlyph)
     unpublishViews()
@@ -260,7 +306,9 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     const recall = viewRegisters[0]!
     expect(recall.options.id).toBe(RECALL_VIEW_ID)
     expect(recall.options.order).toBe(20)
-    expect(recall.options.label).toBe('知识召回')
+    expect(recall.options.locale).toBe(FORGE_LOCALE_NS)
+    expect(typeof recall.options.label).toBe('function') // fix-33 ⑧ locale thunk
+    expect((recall.options.label as () => string)()).toBe('知识召回')
     expect(recall.component).toBe(views.ForgeRecallView)
     // fix-29 退役 pin：产品 'dswf-trajectory' 复刻不再注册（官方 'trajectory' roster 行保持）
     expect(registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && (r.options.id === 'dswf-trajectory' || r.options.id === 'trajectory'))).toBeUndefined()
@@ -331,6 +379,58 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     forgeClientPlugin().apply(ctx)
     expect(registers.find((r) => r.key === 'main.conversation')).toBeUndefined()
     unpublishViews()
+  })
+})
+
+describe('fix-33 ⑥ 缝族对称性（桥/词典/标记的发布与撤销）', () => {
+  it('apply 中途抛错（首个洞位 inject 失败）→ catch 补撤销：桥全局清空 + locale 词典撤销（死闭包不残留）', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const base = fakeClientCtx()
+    const { locale } = base
+    const origInject = base.ctx.slots.inject.bind(base.ctx.slots)
+    let first = true
+    const ctx: ForgeClientCtx = {
+      ...base.ctx, // slots 为 readonly——不改原对象，浅拷贝面置换 inject
+      slots: {
+        ...base.ctx.slots,
+        inject: (key: string, callback: () => (() => void) | undefined) => {
+          if (first) {
+            first = false
+            throw new Error('inject down')
+          }
+          return origInject(key, callback)
+        },
+      },
+    }
+    expect(() => forgeClientPlugin().apply(ctx)).not.toThrow() // 诊断面承接，不重抛
+    // 桥已创建（发布面工厂先行）→ catch 补撤销：全局回 undefined
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__).toBeUndefined()
+    expect(locale.disposed).toBe(true) // 词典同步撤销（残留会阻塞同 ns 重复登记）
+    // 诊断面仍记录失败因（e2e 排障锚不受影响）
+    const after = (globalThis as { __DSH_FORGE_CLIENT__?: { sidebar?: { error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(after?.sidebar?.error).toMatch(/inject down/)
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
+  })
+
+  it('overlay 洞 dispose：桥全局 + __DSH_FORGE_CLIENT__ 标记 + locale 词典三清（卸载不留残留）', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx, injectDisposers, locale } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__).toBeDefined()
+    expect((globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__).toBeDefined()
+    const disposeOverlay = injectDisposers.get(SHELL_OVERLAY_SLOT)
+    expect(disposeOverlay).toBeDefined()
+    disposeOverlay!()
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__).toBeUndefined()
+    expect((globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__).toBeUndefined() // fix-33 ⑥ 标记清理
+    expect(locale.disposed).toBe(true)
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 })
 

@@ -171,7 +171,7 @@ function setupReal(ws: string, opts: { failInsert?: boolean; failCreate?: Error;
       `CREATE TRIGGER fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'simulated projects write failure'); END`,
     )
   }
-  const service = createProjectService({ db, registry })
+  const service = createProjectService({ db, registry, rename: { rename: async () => ({}) } }) // fix-33 ⑩ rename 桩（fix-24 后必填——本面无 rename 断言）
   const input = { workspaceDir: ws, name: 'x', forgeDir: ws, knowledgeDir: ws }
   const handler = rpcEnvelope((payload: typeof input) => service.registerProject(payload))
   return { db, registry, service, input, handler }

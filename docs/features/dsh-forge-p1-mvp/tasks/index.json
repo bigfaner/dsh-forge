@@ -995,7 +995,7 @@
     },
     "fix-3": {
       "id": "fix-3",
-      "title": "Fix: 添加项目模态宽度缺陷——内容 560 \u003e 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",
+      "title": "Fix: 添加项目模态宽度缺陷——内容 560 > 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",
       "priority": "P1",
       "estimatedTime": "1h",
       "status": "completed",
@@ -1193,6 +1193,18 @@
       "surface-key": ".",
       "surface-type": "web",
       "type": "test.run"
+    },
+    "fix-33": {
+      "id": "fix-33",
+      "title": "Fix(P2): 架构评审加固批次——host 桥 send 防护/DSH_HOME 环境态告警/pin 韧性 + web 钩子形制/桥撤销对称/残械清理/label locale + core 测试类型门/rename 联动/记账防护/死字段 + 桥白名单类型锚",
+      "priority": "P2",
+      "estimatedTime": "5h",
+      "status": "completed",
+      "file": "fix-33.md",
+      "record": "records/fix-33.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
     }
   },
   "statusEnum": [

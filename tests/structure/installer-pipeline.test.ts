@@ -77,6 +77,8 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
   it('合成 anchor 清单：官方栈并集 ∪ @dsh-forge/* 真实版本，键排序稳定', () => {
     const install = { dependencies: { 'b-pkg': '1.0.0', 'a-pkg': '2.0.0' } }
     const anchor = buildRuntimeAnchorManifest(install, { '@dsh-forge/core': '0.1.0' }, '0.2.0') as {
+      name: string
+      version: string
       dependencies: Record<string, string>
     }
     expect(anchor.name).toBe('dsh-forge-runtime')

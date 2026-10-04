@@ -96,8 +96,8 @@ describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting
       knowledge_dir: join(WS, 'proj', '.knowledge'),
       archived: 0,
     })
-    expect(isParseableDateStyle(row.created_at)).toBe(true)
-    expect(isParseableDateStyle(row.updated_at)).toBe(true)
+    expect(isParseableDateStyle(row?.created_at ?? '')).toBe(true)
+    expect(isParseableDateStyle(row?.updated_at ?? '')).toBe(true)
   })
 
   it('非规范拼写传入 → 落库 ws_path 以 registry 返回的 canonical 为准（非用户拼写原样）', async () => {
@@ -460,5 +460,79 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
       rmSync(link, { recursive: true, force: true })
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+// ── fix-33 ⑪⑫⑬ 加固批次（rename 联动 / 自愈降级记账 / 对账记账防护） ──
+
+describe('fix-33 ⑪ updateProject name patch 联动 workspace 标题对齐', () => {
+  it('name patch 成功 → fire-and-forget rename({workspaceId, title=新名})——chip/账本跟项目名（fix-24 注记耦合收口）', async () => {
+    const { rename, service } = setup()
+    const reg = await service.registerProject(input())
+    await service.updateProject(reg.projectId, { name: 'renamed' })
+    expect(rename.calls).toEqual([
+      { workspaceId: reg.workspaceId, title: 'proj' }, // 注册链末位对齐
+      { workspaceId: reg.workspaceId, title: 'renamed' }, // fix-33 ⑪：改名联动
+    ])
+  })
+
+  it('archived-only patch → 零 rename（展示名未变不折腾）；空 patch 同径', async () => {
+    const { rename, service } = setup()
+    const reg = await service.registerProject(input())
+    await service.updateProject(reg.projectId, { archived: true })
+    await service.updateProject(reg.projectId, {})
+    expect(rename.calls).toEqual([{ workspaceId: reg.workspaceId, title: 'proj' }]) // 仅注册一次
+  })
+
+  it('rename 失败（name-conflict 模拟）→ fail-soft：更新仍成功返回、无重试', async () => {
+    const { db, rename, service } = setup()
+    const reg = await service.registerProject(input())
+    rename.failRename = new Error("Workspace name 'renamed' is already in use")
+    const updated = await service.updateProject(reg.projectId, { name: 'renamed' })
+    expect(updated.name).toBe('renamed') // 行已更新——对齐是展示面增益不拖垮更新面
+    expect(readRows(db)[0]?.name).toBe('renamed')
+    expect(rename.calls).toHaveLength(2) // 注册 1 + 改名联动 1，无重试
+  })
+})
+
+describe('fix-33 ⑫ attachExistingRow 自愈失败降级记账（现场可追溯）', () => {
+  it('自愈链失败（悬空引用 + create 不可用）→ warn/reconcile 单条记账后降级现行链（原静默零记账）', async () => {
+    const { db, registry, service } = setup()
+    const canonical = join(WS, 'learn')
+    seedRow(db, { id: 'row-x', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用 → 自愈径进 reconcileProjectRef
+    registry.failCreate = new Error('dsh create down') // 找不回 → create 重建失败 → 自愈链抛
+    const err: unknown = await service.registerProject(input({ workspaceDir: canonical })).catch((e) => e)
+    // 降级现行链：① list 命中不了（无此路径）→ ② create 仍失败 → WorkspaceCreateError（错误面由现行链承接）
+    expect(err).toBeInstanceOf(WorkspaceCreateError)
+    const logs = keyLogs(db)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({ level: 'warn', scope: 'reconcile' })
+    expect(logs[0]?.message).toContain('自愈面失败')
+    expect(logs[0]?.message).toContain(canonical)
+  })
+
+  it('无既有行（正常首注册）→ 零记账（自愈未参与不记流水）', async () => {
+    const { db, service } = setup()
+    await service.registerProject(input())
+    expect(keyLogs(db)).toEqual([])
+  })
+})
+
+describe('fix-33 ⑬ 对账记账防护（记账抛错不截断本轮剩余行）', () => {
+  it('逐项 catch 内 recordKeyLog 抛错（app_key_logs 损坏）→ 吞掉并继续对账剩余行', async () => {
+    const { db, registry, service } = setup()
+    const ok = registry.seed(join(WS, 'repair-ok'))
+    // 行序：失败行在前（id 序）——记账被吞后第二行必须仍被修复（原样上抛 = 本轮截断）
+    seedRow(db, { id: 'a-bad', workspaceId: 'ws-x', wsPath: join(WS, 'missing') })
+    seedRow(db, { id: 'b-ok', workspaceId: ok.id, wsPath: ok.path })
+    registry.failCreate = new Error('dsh create down') // a-bad 修复链失败 → 逐项 catch 走记账
+    db.exec('DROP TABLE app_key_logs') // 记账面本身损坏 → recordKeyLog 抛
+
+    const report = await service.reconcileAtStartup() // 不 reject 即达成（外层整体降级兜底）
+
+    expect(report.repaired).toEqual([]) // a-bad 失败不入清单（b-ok 健康短路零修复）
+    expect(readRows(db).find((r) => r.id === 'b-ok')?.workspace_id).toBe(ok.id) // 剩余行照常对账
+    // a-bad 引用未动（修复失败语义不变）
+    expect(readRows(db).find((r) => r.id === 'a-bad')?.workspace_id).toBe('ws-x')
   })
 })

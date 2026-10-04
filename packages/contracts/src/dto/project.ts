@@ -47,7 +47,11 @@ export interface RegisterProjectInput {
   knowledgeDir: string
 }
 
-/** 补偿已执行信息（RegisterResult.compensated 存在即「④ registry.delete 补偿已执行」——UI 失败反馈口径） */
+/**
+ * 补偿已执行信息（fix-33：RegisterResult 死字段 compensated 删除——成功径永不置位，
+ * 补偿语义实际载体 = ProjectWriteError.data.compensated（RpcErrorPayload.data 附载，
+ * UI 失败反馈口径））。保留本形状供 core 错误附载消费。
+ */
 export interface CompensatedInfo {
   /** 被补偿删除的本次新建工作区 */
   workspaceId: string
@@ -55,14 +59,12 @@ export interface CompensatedInfo {
   reason: string
 }
 
-/** registerProject 返回体 */
+/** registerProject 返回体（纯成功径；补偿信息不入返回体——失败径经 RpcErrorPayload.data.compensated） */
 export interface RegisterResult {
   projectId: string
   workspaceId: string
   /** true = ① 预检命中既有工作区（挂接，不登记补偿） */
   attachedToExisting: boolean
-  /** 补偿已执行（成功补偿才置；补偿失败另抛 ERR_COMPENSATION） */
-  compensated?: CompensatedInfo
 }
 
 /** updateProject patch 面（仅 name / archived） */

@@ -156,6 +156,17 @@ export interface RecallGroup {
   hits: RecallGroupHit[]
 }
 
+/**
+ * Interface 2 + 第八法聚合面（fix-33 命名类型收口）：KnowledgeService 七法 + browse
+ * 域树聚合（forge:knowledge/browse 通道 handler 本体——3.5）。原四处手工同步该交集
+ * （core knowledge-service 返回型 / host run.ts DshHostServices / host knowledge-rpc
+ * 注入面 / host bridge 白名单锚）收敛到本单一来源；browse 入/出与 dto/rpc.ts browse 行同构。
+ */
+export interface BrowseKnowledgeService extends KnowledgeService {
+  /** 域树聚合（Interface 2 之外；listEntries 兼作底表 → aggregateDomainTree） */
+  browse(q: { projectId: string }): Promise<DomainNode[]>
+}
+
 /** Interface 2：core · 知识域服务面（ctx.forgeKnowledge） */
 export interface KnowledgeService {
   /** 按需一次性重建（启动/进面板；事务内删旧插新，幂等） */

@@ -8,7 +8,7 @@
 | 文件 | 职责 |
 |---|---|
 | `ConversationViews.tsx` | 官方 roster 占用者族（fix-25/fix-29）：`ForgeRecallView`（'dswf-recall'——RecallTab + 项目锚推导 + 跳转缝）+ `KitSelectorHook` kit 窄面类型 |
-| `RecallTab.tsx` | 召回 tab 数据面（3.8）：`useSessionRecall` 装载（sessionRecall 单通道；visible 翻转重拉 = AC-4 即时累积）+ `RecallTabBody` 纯渲染（统计头/分组行/失效标注/空态/错误条）+ `mapRecallError`/`fetchSessionRecall` 纯异步面 |
+| `RecallTab.tsx` | 召回 tab 数据面（3.8）：`useSessionRecall` 装载（sessionRecall 单通道；fix-33 ⑦ 起 visible 维度删除——官方 only:id 激活即挂载承载 AC-4 即时累积）+ `RecallTabBody` 纯渲染（统计头/分组行/失效标注/空态/错误条）+ `mapRecallError`/`fetchSessionRecall` 纯异步面 |
 | `recall-model.ts` | 纯派生层：`recallStatsOf`（统计头口径——次数 = 分组数/覆盖 = 身份键去重，与 core hitIdentity 同口径）+ `recallRowsOf`（按知识折叠行——动词明细/最近时间/事件计数/热度原样）+ `recallTimeLabel`（官方 relativeTime 桶化——同级互禁下的平行小件，与 cardTimeLabel 口径互指） |
 | `session.css` | 视图 pane/召回行样式（全令牌；头部/页签行/对话面/轨迹表样式归官方件——零自绘） |
 

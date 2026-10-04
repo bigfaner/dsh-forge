@@ -2,8 +2,9 @@
 // 数据纪律（UF-4 Data Requirements + tech-design 交互二尾部）：
 //   - 唯一通道 = forge:knowledge/sessionRecall（RecallGroup[]——call_id 聚合，与事件表/
 //     卡片热度同源单表）；投影（统计头/分组行）经 recall-model 纯函数，UI 零再推导热度。
-//   - 即时累积（AC4）：tab 每次激活（visible 翻转）/ 会话·项目锚变更即重拉——发送新消息
-//     触发召回后再看 tab 即更新；pane 常挂载 keep-alive（隐藏期数据保持，激活期重拉刷新）。
+//   - 即时累积（AC4）：会话·项目锚变更即重拉；fix-33 ⑦ 起 keep-alive 残械（visible prop/
+//     hold 分支）删除——官方 conversation.view roster only:id 激活即挂载/切走即卸载，
+//     「每次选中重拉」由挂载机制本身承载（fix-25 形态），隐藏期保持分支生产不可达。
 //   - 无会话/无项目锚（session-maybe undefined / 项目未就绪）= 静态空态（不拉取）；
 //     就绪且零事件 = 「本会话暂无召回」（AC5）。
 //   - 失效行（AC3）：entryId = null（索引重建后 ID 漂移）行级标注「索引未命中」，
@@ -71,38 +72,35 @@ export function initialRecallState(): RecallLoadState {
 }
 
 /**
- * 装载判定（纯函数）：查询键齐备（projectId + sessionId）且 tab 可见 → 拉取；
- * 键缺席 → idle（静态空态不拉取）；键在而不可见 → 保持（keep-alive——数据不因隐藏清场，
- * 激活翻转时重拉刷新）。
+ * 装载判定（纯函数）：查询键齐备（projectId + sessionId）→ 拉取；键缺席 → idle（静态
+ * 空态不拉取）。fix-33 ⑦：hold 分支删除——官方 only:id 激活即挂载，不可见态不存在
+ * （原 keep-alive 形态残械，生产不可达）。
  */
 export function recallLoadPlan(input: {
   readonly projectId: string | null
   readonly sessionId: string | null
-  readonly visible: boolean
-}): 'fetch' | 'idle' | 'hold' {
+}): 'fetch' | 'idle' {
   if (input.projectId === null || input.sessionId === null) return 'idle'
-  return input.visible ? 'fetch' : 'hold'
+  return 'fetch'
 }
 
 /** 装载步进产物（runRecallLoad 输出——effect 仅落点，逻辑归纯/异步面） */
 export type RecallLoadOutcome =
   | { readonly kind: 'idle' }
-  | { readonly kind: 'hold' }
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly groups: readonly RecallGroup[] }
   | { readonly kind: 'error'; readonly error: RecallErrorInfo }
 
 /**
  * 装载任务（纯异步面，use-knowledge-browse LoadApply 同形制）：plan 判定 + fetch 归一——
- * fetch → loading 起步后拉取产物；idle → 复位；hold → 保持（不拉取）。永不 reject。
+ * fetch → loading 起步后拉取产物；idle → 复位。永不 reject。
  */
 export async function runRecallLoad(
-  input: { projectId: string | null; sessionId: string | null; visible: boolean },
+  input: { projectId: string | null; sessionId: string | null },
   makeClient: RecallClientFactory,
 ): Promise<readonly RecallLoadOutcome[]> {
   const plan = recallLoadPlan(input)
   if (plan === 'idle') return [{ kind: 'idle' }]
-  if (plan === 'hold') return [{ kind: 'hold' }]
   const out = await fetchSessionRecall(makeClient(), {
     projectId: input.projectId as string,
     sessionId: input.sessionId as string,
@@ -113,13 +111,11 @@ export async function runRecallLoad(
   ]
 }
 
-/** 落点应用（纯函数）：步进产物序列 → 下一状态（hold = prev 原样——隐藏期保持） */
-export function applyRecallOutcome(prev: RecallLoadState, outcome: RecallLoadOutcome): RecallLoadState {
+/** 落点应用（纯函数）：步进产物序列 → 下一状态 */
+export function applyRecallOutcome(_prev: RecallLoadState, outcome: RecallLoadOutcome): RecallLoadState {
   switch (outcome.kind) {
     case 'idle':
       return initialRecallState()
-    case 'hold':
-      return prev
     case 'loading':
       return { phase: 'loading', groups: [], error: undefined }
     case 'ready':
@@ -131,10 +127,11 @@ export function applyRecallOutcome(prev: RecallLoadState, outcome: RecallLoadOut
 
 /**
  * 召回数据装载 hook：装载逻辑 = runRecallLoad/applyRecallOutcome 纯函数面，effect 仅编排
- * （拉取 → 序号守卫落点——快速键变更不串台）。重试 = nonce 递增。
+ * （拉取 → 序号守卫落点——快速键变更不串台）。重试 = nonce 递增。锚变更即重拉
+ * （fix-33 ⑦：visible 维度删除——only:id 挂载机制承载激活语义）。
  */
 export function useSessionRecall(
-  input: { projectId: string | null; sessionId: string | null; visible: boolean },
+  input: { projectId: string | null; sessionId: string | null },
   makeClient: RecallClientFactory = defaultClient,
 ): readonly [RecallLoadState, { retry(): void }] {
   const [state, setState] = useState<RecallLoadState>(initialRecallState)
@@ -154,7 +151,7 @@ export function useSessionRecall(
     return () => {
       alive = false
     }
-  }, [input.projectId, input.sessionId, input.visible, nonce, makeClient])
+  }, [input.projectId, input.sessionId, nonce, makeClient])
 
   return [state, { retry: () => { setNonce((n) => n + 1) } }] as const
 }
@@ -304,8 +301,6 @@ export interface RecallTabProps {
   readonly projectId: string | null
   /** 当前 dsh 会话 id（tab 分组键；null = 无会话锚 → 静态空态） */
   readonly sessionId: string | null
-  /** tab 可见（激活）——true 翻转即重拉（AC4 即时累积） */
-  readonly visible: boolean
   /** 命中行点击 → 知识详情抽屉（装配注入——视图态切换 + 抽屉打开归装配，跨视图不直引） */
   readonly onOpenEntry?: (entryId: number) => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
@@ -314,9 +309,12 @@ export interface RecallTabProps {
   readonly now?: number
 }
 
-/** 召回 tab 装载壳（hook 装配 + 纯渲染；挂载 = 官方 conversation.view roster only:id 激活即挂载，fix-25） */
-export function RecallTab({ projectId, sessionId, visible, onOpenEntry, makeClient, now }: RecallTabProps): ReactNode {
-  const [state, { retry }] = useSessionRecall({ projectId, sessionId, visible }, makeClient)
+/**
+ * 召回 tab 装载壳（hook 装配 + 纯渲染；挂载 = 官方 conversation.view roster only:id
+ * 激活即挂载、切走即卸载——「每次选中重拉」由挂载机制承载，fix-25/fix-33 ⑦）。
+ */
+export function RecallTab({ projectId, sessionId, onOpenEntry, makeClient, now }: RecallTabProps): ReactNode {
+  const [state, { retry }] = useSessionRecall({ projectId, sessionId }, makeClient)
   return <RecallTabBody state={state} retry={retry} onOpenEntry={onOpenEntry} now={now} />
 }
 

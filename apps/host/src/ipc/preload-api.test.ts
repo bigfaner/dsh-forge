@@ -11,7 +11,8 @@ import {
 } from './preload-api.js'
 
 function fakeFace() {
-  return { invoke: vi.fn().mockResolvedValue({ ok: true, data: [] }) satisfies PreloadInvokeFace }
+  // fix-33 ⑩ 测试类型门：vi.fn 泛型锚 PreloadInvokeFace['invoke']（裸 Mock<Procedure> 不满足面型）
+  return { invoke: vi.fn<PreloadInvokeFace['invoke']>().mockResolvedValue({ ok: true, data: [] }) }
 }
 
 describe('preload 暴露面（window.dshForge）', () => {

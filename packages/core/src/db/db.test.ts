@@ -31,7 +31,7 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
   it('打开全新库：五表全部存在', () => {
     const db = openDatabase(dbPath())
     const tables = db
-      .prepare<{ name: string }[]>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+      .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
       .all()
       .map((r) => r.name)
     expect(tables).toEqual([

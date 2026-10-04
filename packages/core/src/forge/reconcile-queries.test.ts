@@ -41,7 +41,9 @@ function setup() {
   const db = openDatabase(dbPath())
   dbs.push(db)
   const registry = new StubRegistry()
-  const service = createProjectService({ db, registry } satisfies ProjectServiceDeps)
+  // fix-33 ⑩ rename 桩补齐（fix-24 后 ProjectServiceDeps 必填——本面不断言 rename 调用形状，
+  // 形状断言归 project-service.test；TS2741 由测试类型门拦截不再漏网）
+  const service = createProjectService({ db, registry, rename: { rename: async () => ({}) } } satisfies ProjectServiceDeps)
   return { db, registry, service }
 }
 
@@ -82,7 +84,7 @@ describe('AC1 ws_path 失配 → 按 ws_path 找回，单向修 workspace_id 引
     expect(report.repaired).toEqual([{ projectId: 'p-1', workspaceId: ws.id, action: 'relinked' }])
     expect(report.orphans).toEqual([])
     expect(readRows(db)[0]?.workspace_id).toBe(ws.id) // 引用已修
-    expect(readRows(db)[0]?.updated_at > T0).toBe(true) // 修引用即行更新
+    expect((readRows(db)[0]?.updated_at ?? '') > T0).toBe(true) // 修引用即行更新
     // 单向修引用：dsh 侧零改动（无 delete、实体原样）
     expect(registry.deleteCalls).toEqual([])
     expect(registry.records.get(ws.id)?.path).toBe(ws.path)
@@ -103,17 +105,17 @@ describe('AC1 ws_path 失配 → 按 ws_path 找回，单向修 workspace_id 引
 
   it('get 命中但 path 失配（dsh 实体重指它径）→ 找回修引用；旧工作区留存 dsh → 同轮孤儿反查只提示不删', async () => {
     const { db, registry, service } = setup()
-    const oldWs = registry.seed(join(WS, 'b-elsewhere'), 'ws-old') // 被引用实体已重指它径
-    const newWs = registry.seed(join(WS, 'b'), 'ws-new') // ws_path 现属实体
-    seedRow(db, { id: 'p-2', workspaceId: 'ws-old', wsPath: newWs.path })
+    const oldWs = registry.seed(join(WS, 'b-elsewhere'), '11111111-1111-4111-8111-111111111111') // 被引用实体已重指它径（uuid 形状——WorkspaceLike.id 模板字面量型）
+    const newWs = registry.seed(join(WS, 'b'), '22222222-2222-4222-8222-222222222222') // ws_path 现属实体
+    seedRow(db, { id: 'p-2', workspaceId: '11111111-1111-4111-8111-111111111111', wsPath: newWs.path })
 
     const report = await service.reconcileAtStartup()
 
-    expect(report.repaired).toEqual([{ projectId: 'p-2', workspaceId: 'ws-new', action: 'relinked' }])
-    expect(readRows(db)[0]?.workspace_id).toBe('ws-new')
-    expect(report.orphans).toEqual([{ workspaceId: 'ws-old', wsPath: oldWs.path }]) // 旧引用留存 → 只提示
+    expect(report.repaired).toEqual([{ projectId: 'p-2', workspaceId: '22222222-2222-4222-8222-222222222222', action: 'relinked' }])
+    expect(readRows(db)[0]?.workspace_id).toBe('22222222-2222-4222-8222-222222222222')
+    expect(report.orphans).toEqual([{ workspaceId: '11111111-1111-4111-8111-111111111111', wsPath: oldWs.path }]) // 旧引用留存 → 只提示
     expect(registry.deleteCalls).toEqual([]) // 绝不自动删
-    expect(registry.records.has('ws-old')).toBe(true)
+    expect(registry.records.has('11111111-1111-4111-8111-111111111111')).toBe(true)
     // 记账：失配找回 1 条 + 孤儿发现 1 条（各单事件单条）
     const logs = keyLogs(db)
     expect(logs).toHaveLength(2)

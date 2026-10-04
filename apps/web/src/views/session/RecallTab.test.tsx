@@ -115,18 +115,17 @@ describe('RecallTabBody 纯渲染（全相位）', () => {
   })
   it('RecallTab 装载壳（SSR 首帧 = idle 静态空态——效应面归 e2e）', () => {
     const markup = renderToStaticMarkup(
-      <RecallTab projectId={null} sessionId={null} visible={false} />,
+      <RecallTab projectId={null} sessionId={null} />,
     )
     expect(markup).toContain('data-dswf-recall-face="empty"')
   })
 })
 
-describe('recallLoadPlan 装载判定（AC-4 即时累积机制面）', () => {
-  it('查询键齐备且可见 = fetch；键缺席 = idle；键在而不可见 = hold（keep-alive 保持）', () => {
-    expect(recallLoadPlan({ projectId: 'p-1', sessionId: 's-1', visible: true })).toBe('fetch')
-    expect(recallLoadPlan({ projectId: null, sessionId: 's-1', visible: true })).toBe('idle')
-    expect(recallLoadPlan({ projectId: 'p-1', sessionId: null, visible: true })).toBe('idle')
-    expect(recallLoadPlan({ projectId: 'p-1', sessionId: 's-1', visible: false })).toBe('hold')
+describe('recallLoadPlan 装载判定（AC-4 即时累积机制面；fix-33 ⑦ hold 残械删除）', () => {
+  it('查询键齐备 = fetch；键缺席 = idle（only:id 激活即挂载——不可见态不存在）', () => {
+    expect(recallLoadPlan({ projectId: 'p-1', sessionId: 's-1' })).toBe('fetch')
+    expect(recallLoadPlan({ projectId: null, sessionId: 's-1' })).toBe('idle')
+    expect(recallLoadPlan({ projectId: 'p-1', sessionId: null })).toBe('idle')
   })
 })
 
@@ -142,7 +141,7 @@ describe('runRecallLoad / applyRecallOutcome 装载步进（effect 逻辑纯函�
     }) as unknown as ForgeRpcClient
 
   it('plan=fetch：loading 起步 → ready 落点（步进序列折叠 = 终态 ready）', async () => {
-    const steps = await runRecallLoad({ projectId: 'p-1', sessionId: 's-1', visible: true }, () => clientOf(groups))
+    const steps = await runRecallLoad({ projectId: 'p-1', sessionId: 's-1' }, () => clientOf(groups))
     expect(steps).toEqual([{ kind: 'loading' }, { kind: 'ready', groups }])
     let state = initialRecallState()
     for (const step of steps) state = applyRecallOutcome(state, step)
@@ -151,7 +150,7 @@ describe('runRecallLoad / applyRecallOutcome 装载步进（effect 逻辑纯函�
   })
   it('plan=fetch 拉取失败：error 落点（fail-soft，groups 清空）', async () => {
     const steps = await runRecallLoad(
-      { projectId: 'p-1', sessionId: 's-1', visible: true },
+      { projectId: 'p-1', sessionId: 's-1' },
       () => clientOf(new RpcClientError({ code: 'ERR_INDEX_STALE', message: 'x' })),
     )
     let state = initialRecallState()
@@ -159,13 +158,9 @@ describe('runRecallLoad / applyRecallOutcome 装载步进（effect 逻辑纯函�
     expect(state.phase).toBe('error')
     expect(state.error?.message).toBe('x')
   })
-  it('plan=idle → 复位空态；plan=hold → prev 原样保持（隐藏期不清场）', async () => {
-    const idle = await runRecallLoad({ projectId: null, sessionId: 's-1', visible: true }, () => clientOf(groups))
+  it('plan=idle → 复位空态', async () => {
+    const idle = await runRecallLoad({ projectId: null, sessionId: 's-1' }, () => clientOf(groups))
     expect(applyRecallOutcome({ phase: 'ready', groups, error: undefined }, idle[0]!)).toEqual(initialRecallState())
-    const hold = await runRecallLoad({ projectId: 'p-1', sessionId: 's-1', visible: false }, () => clientOf(groups))
-    expect(hold).toEqual([{ kind: 'hold' }])
-    const prev: RecallLoadState = { phase: 'ready', groups, error: undefined }
-    expect(applyRecallOutcome(prev, hold[0]!)).toBe(prev)
   })
 })
 

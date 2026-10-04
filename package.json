@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -b && pnpm -C apps/web build:vite",
     "dev": "node scripts/dev.mjs",
-    "lint": "pnpm lint:ox && pnpm lint:imports && pnpm lint:tokens && pnpm lint:selftest && pnpm lint:types",
+    "lint": "pnpm lint:ox && pnpm lint:imports && pnpm lint:tokens && pnpm lint:selftest && pnpm lint:types && pnpm lint:test-types",
     "lint:ox": "oxlint -c oxlint.config.ts .",
     "lint:imports": "node scripts/lint-imports.mjs",
     "lint:tokens": "node scripts/lint-tokens.mjs",
@@ -21,7 +21,8 @@
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "dist:stage": "node scripts/assemble-installer-resources.mjs",
     "dist:check": "node scripts/assemble-installer-resources.mjs --check",
-    "dist:win": "pnpm build && pnpm dist:stage && electron-builder --win --config electron-builder.config.mjs"
+    "dist:win": "pnpm build && pnpm dist:stage && electron-builder --win --config electron-builder.config.mjs",
+    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p tests/tsconfig.json"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -29,6 +30,8 @@
     "electron-builder": "26.17.0",
     "oxlint": "1.86.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "better-sqlite3": "13.0.3",
+    "@types/better-sqlite3": "9.6.0"
   }
 }

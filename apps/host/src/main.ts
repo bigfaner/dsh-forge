@@ -28,12 +28,12 @@ const watchdog = setTimeout(() => {
   app.exit(3)
 }, 180_000)
 watchdog.unref()
-
 void (async () => {
   if (!acquireSingleInstance(app)) return // 已有实例持锁：quit 已请求，静默退出
   try {
     await app.whenReady()
     const paths = resolveHostPaths(process.env, app.getPath('userData'))
+    if (process.env.DSH_HOME) console.warn(`[host] shell 继承 DSH_HOME=${process.env.DSH_HOME} 压过 fix-26 缺省隔离（paths.ts 第三层）——确认有意（调试/特殊布局）`)
     process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-26：缺省隔离 {userData}/dsh-home 数据两界，凭据经 overlay 桥真 home）
     if (paths.form === 'packaged') {
       const landed = ensureProfileMaterialized(paths.profileDir)

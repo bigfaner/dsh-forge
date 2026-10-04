@@ -159,7 +159,8 @@ describe('pin ④-5 集成（真实 registerProject × S4 语义桩 + 临时 SQL
     const db = openDatabase(join(dir, `state-${dbs.length}.db`))
     dbs.push(db)
     const registry = new S4SemanticsRegistry()
-    const service = createProjectService({ db, registry } satisfies ProjectServiceDeps)
+    // fix-33 ⑩：rename 桩补齐（fix-24 后 ProjectServiceDeps 必填——本面不断言 rename 形状）
+    const service = createProjectService({ db, registry, rename: { rename: async () => ({}) } } satisfies ProjectServiceDeps)
     return { db, registry, service }
   }
 

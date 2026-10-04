@@ -16,6 +16,7 @@ import {
   dispatchRpc,
   extraPatchFiles,
   parseChildOptions,
+  sendGuarded,
   type BridgeServiceName,
   type ChildToMainMessage,
   type MainToChildMessage,
@@ -28,8 +29,10 @@ interface ServiceGetFace {
   get(name: string): unknown
 }
 
+// fix-33 ① send 防护：IPC 序列化抛错（BigInt/循环引用）不落 unhandled rejection——
+// rpc-result 面回填保 id 降级 error-result（主侧 pending 可结算）。见 bridge.sendGuarded。
 const send = (message: ChildToMainMessage): void => {
-  process.send?.(message)
+  sendGuarded(message, (m) => process.send?.(m))
 }
 
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），

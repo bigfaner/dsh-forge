@@ -58,7 +58,7 @@ describe('projectAnchorOf 当前项目锚推导（3.8：知识视图/召回面�
   it('会话未归属任何 workspace / 快照缺席：唯一项目兜底（单人无歧义相位）', () => {
     expect(projectAnchorOf({ sessionId: 's-x', workspaces, projects })).toBeNull()
     expect(projectAnchorOf({ sessionId: 's-1', workspaces: null, projects })).toBeNull()
-    expect(projectAnchorOf({ sessionId: null, workspaces, projects: [{ id: 'only' }] })).toBe('only')
+    expect(projectAnchorOf({ sessionId: null, workspaces, projects: [{ id: 'only', workspaceId: 'ws-1' }] })).toBe('only')
   })
 
   it('多项目无会话锚/未匹配 = null（不猜首个——浏览与召回面按无锚降级）', () => {

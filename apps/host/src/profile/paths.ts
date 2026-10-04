@@ -93,8 +93,10 @@ function resolveFromHost(p: string): string {
   return isAbsolute(p) ? p : join(hostRoot(), p)
 }
 
-/** DSH_HOME 两层解析（fix-26 数据隔离缺省——收口 fix-18 全共享副作用：原生 dsh 工作区/
+/** DSH_HOME 三层解析（fix-26 数据隔离缺省——收口 fix-18 全共享副作用：原生 dsh 工作区/
  *  会话混入产品账本即 fix-24 选择器污染根源。优先级自上而下）：
+ *  0. shell 继承 DSH_HOME（main.ts `??=` 缺省注入的第三层——本函数不可见；在场即压过
+ *     下两层。fix-33 起检测告警（main.ts console.warn）；仅调试/特殊布局有意使用）
  *  1. DSH_FORGE_DSH_HOME 显式指定（测试/调试口，相对路径锚 host 根）
  *  2. 缺省 → {userData}/dsh-home（fix-18 USER_DATA 分支值升为缺省——e2e 形态值不变零改动；
  *     官方 dsh-home-paths 单根语义不混搭子目录，数据整体重定向；凭据共享经

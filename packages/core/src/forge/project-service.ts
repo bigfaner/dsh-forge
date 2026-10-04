@@ -269,8 +269,25 @@ async function attachExistingRow(
     // fix-24 前落库的存量项目经任一次重注册即愈）。alignWorkspaceTitle 永不抛——本 try 语义零变化
     await alignWorkspaceTitle(deps, after.workspace_id, after.name)
     return { projectId: after.id, workspaceId: after.workspace_id, attachedToExisting: true }
-  } catch {
-    return undefined // 自愈面失败（含库不可用）——降级现行链，错误语义由 ③ 面承接
+  } catch (cause) {
+    // fix-33 ⑫：自愈面失败先 best-effort 记账再降级（现场可追溯——原静默零记账，降级后
+    // 「曾自愈失败」事件不可复现；scope 四值无注册域，自愈径语义属引用修复 → reconcile）。
+    // 记账自身失败（库不可用）再吞——降级语义零变化，错误面仍由 ③ 承接。
+    try {
+      recordKeyLog(deps.db, {
+        level: 'warn',
+        scope: 'reconcile',
+        message: `重注册自愈面失败（已降级现行链）：${input.workspaceDir}——${errMessage(cause)}`,
+        data: {
+          wsPath: input.workspaceDir,
+          error: errMessage(cause),
+          disposition: '降级现行链——自愈放弃，错误面由 ③ 写入失败径承接',
+        },
+      })
+    } catch {
+      // 库不可用时记账亦不可行：吞掉（与对账整体降级面同口径）
+    }
+    return undefined
   }
 }
 
@@ -380,6 +397,10 @@ function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch
   }
   const after = getRow(deps, id)
   if (after === undefined) throw new Error(`updateProject(${id})：更新后行消失（不可达——单写者无并发删除）`)
+  // fix-33 ⑪ name patch 联动 workspace 标题对齐（fix-24 自认注记的后续耦合收口）：成功后
+  // fire-and-forget（alignWorkspaceTitle 永不抛——对齐是展示面增益，不拖垮更新面；archived-only
+  // patch 不触发；跨工作区重名等失败同注册径 fail-soft 无害残留）
+  if (patch.name !== undefined) void alignWorkspaceTitle(deps, after.workspace_id, after.name)
   return toProject(after)
 }
 
@@ -422,7 +443,9 @@ async function reconcileAtStartup(deps: ProjectServiceDeps): Promise<ReconcileRe
   return Promise.resolve(report)
 }
 
-/** 对账单项处理器（fix-35 自三层 try 抽离）：单项失败 → error 记账后跳过（引用未修，下次启动重试） */
+/** 对账单项处理器（fix-35 自三层 try 抽离）：单项失败 → error 记账后跳过（引用未修，下次启动重试）。
+ * fix-33 ⑬ 记账防护：catch 内 recordKeyLog 套 try——记账抛错（库锁/表损坏等）原样上抛会被
+ * 外层整体降级接住，但本轮剩余行不再对账（截断）；吞掉记账失败保住逐项循环。 */
 async function reconcileRowDegrade(
   deps: ProjectServiceDeps,
   row: ProjectRefRow,
@@ -431,18 +454,22 @@ async function reconcileRowDegrade(
   try {
     await reconcileProjectRef(deps, row, report)
   } catch (cause) {
-    recordKeyLog(deps.db, {
-      level: 'error',
-      scope: 'reconcile',
-      message: `对账单项失败：项目 ${row.id}（${row.ws_path}）——已跳过，不阻断启动`,
-      data: {
-        projectId: row.id,
-        workspaceId: row.workspace_id,
-        wsPath: row.ws_path,
-        error: errMessage(cause),
-        disposition: '单项降级跳过——引用未修，启动继续（下次启动重试对账）',
-      },
-    })
+    try {
+      recordKeyLog(deps.db, {
+        level: 'error',
+        scope: 'reconcile',
+        message: `对账单项失败：项目 ${row.id}（${row.ws_path}）——已跳过，不阻断启动`,
+        data: {
+          projectId: row.id,
+          workspaceId: row.workspace_id,
+          wsPath: row.ws_path,
+          error: errMessage(cause),
+          disposition: '单项降级跳过——引用未修，启动继续（下次启动重试对账）',
+        },
+      })
+    } catch {
+      // 记账亦失败——吞掉（对账优先于记账：剩余行继续，AC5 口径）
+    }
   }
 }
 

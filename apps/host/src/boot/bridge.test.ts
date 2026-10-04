@@ -3,7 +3,9 @@
 // 逐项锚定（进程编排在 run.ts，e2e 面 = flywheel.spec.ts）。
 // fix-28 错误过桥保真：typed error 结构化（code/message/data）/ 非 typed string 形态
 // 不变（fail-loud）/ 主侧双形态解码重建——信封面（rpcEnvelope 判型）衔接见 rpc-envelope.test.ts。
-import { describe, expect, it } from 'vitest'
+// fix-33：子侧 send 防护（sendGuarded 序列化失败保 id 降级）+ 白名单类型锚
+// （satisfies/覆盖完备性——服务面改名/漂移编译期显形）。
+import { assertType, describe, expect, it } from 'vitest'
 import {
   asReadyMessage,
   createBridgeProxy,
@@ -15,8 +17,12 @@ import {
   parseChildOptions,
   PROJECT_SERVICE_METHODS,
   rebuildBridgeError,
+  sendGuarded,
   serializeBridgeError,
   type BridgeRpcRequest,
+  type ChildToMainMessage,
+  type KnowledgeWhitelistCoverage,
+  type ProjectWhitelistCoverage,
 } from './bridge.js'
 
 /** typed error 结构替身（core ProjectWriteError 同型：readonly code + data + Error——fix-28 过桥保真锚） */
@@ -237,7 +243,7 @@ describe('createBridgeProxy（主侧代理）', () => {
       calls.push([s, m, a])
       return { __dshForgeMap__: [[2, 9]] } // 子侧 encodeWire 产物形状
     })
-    const heat = (await proxy.heatByEntry()) as Map<number, number>
+    const heat = (await proxy.heatByEntry!()) as Map<number, number>
     expect(calls).toEqual([['forgeKnowledge', 'heatByEntry', []]])
     expect(heat).toBeInstanceOf(Map)
     expect(heat.get(2)).toBe(9)
@@ -269,5 +275,58 @@ describe('extraPatchFiles（DSH_FORGE_PATCH_FILES 外部叠层清单）', () => 
     expect(extraPatchFiles({ DSH_FORGE_PATCH_FILES: ' C:/a.yml ; ;C:/b.yml ' })).toEqual(['C:/a.yml', 'C:/b.yml'])
     expect(extraPatchFiles({})).toEqual([])
     expect(extraPatchFiles({ DSH_FORGE_PATCH_FILES: '' })).toEqual([])
+  })
+})
+
+// ── fix-33 ① 子侧 send 防护（IPC 序列化失败不落 unhandled rejection） ──
+
+describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
+  it('rpc-result 载荷序列化失败（BigInt/循环引用）→ 回填保 id 降级 error-result（主侧 pending 可结算）', () => {
+    const sent: ChildToMainMessage[] = []
+    const failOnPayload = (message: ChildToMainMessage): void => {
+      if (message.type === 'rpc-result' && message.ok) {
+        throw new TypeError('Do not know how to serialize a BigInt')
+      }
+      sent.push(message)
+    }
+    expect(() =>
+      sendGuarded({ type: 'rpc-result', id: 7, ok: true, data: { heat: 1n } }, failOnPayload),
+    ).not.toThrow()
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ type: 'rpc-result', id: 7, ok: false }) // 保 id
+    expect((sent[0] as { error?: unknown }).error).toEqual(expect.stringContaining('序列化失败'))
+  })
+
+  it('ready/fatal 面序列化失败 → 静默降级丢弃（无 id 可保——boot 失败由主侧 waitForReady/close 兜底）', () => {
+    const sent: ChildToMainMessage[] = []
+    const failAll = (): void => {
+      throw new TypeError('circular structure')
+    }
+    expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: { forgeProjects: true, forgeKnowledge: true } }, failAll)).not.toThrow()
+    expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
+    expect(sent).toEqual([])
+  })
+
+  it('降级面自身再失败（通道已死）→ 静默不抛；正常发送零变化（直通）', () => {
+    const failAll = (): void => {
+      throw new Error('channel closed')
+    }
+    expect(() => sendGuarded({ type: 'rpc-result', id: 1, ok: true, data: 1 }, failAll)).not.toThrow()
+    const sent: ChildToMainMessage[] = []
+    sendGuarded({ type: 'rpc-result', id: 2, ok: true, data: 1 }, (m) => {
+      sent.push(m)
+    })
+    expect(sent).toEqual([{ type: 'rpc-result', id: 2, ok: true, data: 1 }])
+  })
+})
+
+// ── fix-33 ⑮ 白名单类型锚（编译期：satisfies + 覆盖完备性收敛 never） ──
+
+describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的编译期断言）', () => {
+  it('覆盖完备性类型收敛 never：服务面缺席方法在此显形（assertType 零运行期——类型漂移由 lint:test-types 拦截）', () => {
+    assertType<never>(undefined as ProjectWhitelistCoverage)
+    assertType<never>(undefined as KnowledgeWhitelistCoverage)
+    expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
+    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
   })
 })

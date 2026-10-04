@@ -31,8 +31,7 @@ describe('resolveChildEntry 双形态', () => {
     expect(entry).toBe(packaged)
   })
 
-  it('resourcesDir 给定但 host-dist 缺席（半成型资源）→ 回退 dev 入口（fail-loud 交 spawn）', () => {
-    const entry = resolveChildEntry(MODULE_URL, join(dir, 'nonexistent-resources'))
-    expect(entry.replaceAll('\\', '/')).toMatch(/apps\/host\/dist\/boot\/child\.js$/)
+  it('resourcesDir 给定但 host-dist 缺席（半成型资源）→ 直接 throw（fix-33 ④：不回退 dev 入口——打包形态 dev 入口不在场且 asar 路径误导，早 throw 早定位）', () => {
+    expect(() => resolveChildEntry(MODULE_URL, join(dir, 'nonexistent-resources'))).toThrow(/host-dist 缺席/)
   })
 })

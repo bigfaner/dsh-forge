@@ -14,7 +14,7 @@
 //     {code,message,data} 上桥；主侧双形态解码重建带 code/data 的 Error——经
 //     rpcEnvelope 判型后走带内 RpcErr 信封（child 形态下 UI 六码文案映射的通路半边）
 // 零 node:child_process 依赖——纯函数逐项单测锚定（bridge.test.ts）。
-import { ERROR_CODES } from '@dsh-forge/contracts'
+import { ERROR_CODES, type BrowseKnowledgeService, type ProjectService } from '@dsh-forge/contracts'
 import type { BootDshOptions } from './run.js'
 
 /** 桥接服务名（产品双服务——runProfile ctx 面世，main 侧 forge:* 通道接线） */
@@ -72,16 +72,29 @@ export interface BridgeRpcResultMessage {
 
 export type ChildToMainMessage = BridgeReadyMessage | BridgeFatalMessage | BridgeRpcResultMessage
 
-/** ProjectService 方法白名单（Interface 1 五法；主侧代理与子侧可达面共用锚） */
+/** 编译期断言助手：类型参数须收敛 never（否则报错并点名残余成员） */
+type AssertNever<T extends never> = T
+
+/**
+ * ProjectService 方法白名单（Interface 1 五法；主侧代理与子侧可达面共用锚）。
+ * fix-33 类型锚：satisfies 收敛到 contracts 服务面（改名/漂移编译期显形）；
+ * 覆盖完备性经 ProjectWhitelistCoverage 收敛 never（服务面新增方法未入白名单即报错）。
+ */
 export const PROJECT_SERVICE_METHODS = [
   'registerProject',
   'listProjects',
   'getProject',
   'updateProject',
   'reconcileAtStartup',
-] as const
+] as const satisfies readonly (keyof ProjectService)[]
 
-/** KnowledgeService + browse 方法白名单（Interface 2 七法 + 聚合第八法） */
+/** 白名单覆盖完备性（= never：缺席的 ProjectService 方法在此编译期点名） */
+export type ProjectWhitelistCoverage = AssertNever<Exclude<keyof ProjectService, (typeof PROJECT_SERVICE_METHODS)[number]>>
+
+/**
+ * KnowledgeService + browse 方法白名单（Interface 2 七法 + 聚合第八法）。
+ * fix-33 类型锚：锚到 contracts BrowseKnowledgeService（第八法命名类型单一来源）。
+ */
 export const KNOWLEDGE_SERVICE_METHODS = [
   'rebuildIndex',
   'search',
@@ -91,7 +104,10 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'heatByEntry',
   'sessionRecall',
   'browse',
-] as const
+] as const satisfies readonly (keyof BrowseKnowledgeService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */
+export type KnowledgeWhitelistCoverage = AssertNever<Exclude<keyof BrowseKnowledgeService, (typeof KNOWLEDGE_SERVICE_METHODS)[number]>>
 
 /** Map wire 信封键（产品 DTO 面无此键——碰撞面为零） */
 const MAP_ENVELOPE = '__dshForgeMap__'
@@ -245,4 +261,34 @@ export function extraPatchFiles(env: { DSH_FORGE_PATCH_FILES?: string }): readon
     .split(';')
     .map((p) => p.trim())
     .filter((p) => p !== '')
+}
+
+/**
+ * 子侧消息发送防护（fix-33 ①）：Node IPC 缺省 JSON 序列化对 BigInt/循环引用载荷同步抛错
+ * ——裸 process.send 会把该错误落成 unhandled rejection，主侧对应 pending 永不结算
+ * （renderer 无 RPC 超时 → 无限挂起）。本包装：
+ *   · rpc-result 面序列化失败 → 回填**保 id** 降级 error-result（纯字符串载荷可序列化——
+ *     主侧 pending 正常结算为失败，错误文案带原序列化失败因）；
+ *   · ready/fatal 面失败 → 降级丢弃（无 id 可保；boot 失败由主侧 waitForReady/close 兜底显形）；
+ *   · 降级面自身再失败（通道已死等）→ 静默（disconnect 关停兜底）。
+ * 本函数永不抛——child.ts 以之包裹全部 send 调用（含 .then(send) 链尾）。
+ */
+export function sendGuarded(message: ChildToMainMessage, send: (message: ChildToMainMessage) => void): void {
+  try {
+    send(message)
+  } catch (cause) {
+    if (message.type !== 'rpc-result') return
+    try {
+      send({
+        type: 'rpc-result',
+        id: message.id,
+        ok: false,
+        error: `bridge: rpc #${String(message.id)} 结果载荷 IPC 序列化失败（BigInt/循环引用？）——${String(
+          (cause as Error)?.message ?? cause,
+        )}`,
+      })
+    } catch {
+      // 降级面亦不可达（IPC 通道已死）——静默；子进程关停由 disconnect 面兜底
+    }
+  }
 }

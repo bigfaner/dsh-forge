@@ -61,10 +61,12 @@ export const SIDEBAR_SHADOW_PRIORITY = -100
 export const RECALL_VIEW_ID = 'dswf-recall'
 
 /**
- * 插件依赖的服务名（cordis inject——apply 等待六服务在场；与官方 ui-workspace 同型先例）。
+ * 插件依赖的服务名（cordis inject——apply 等待七服务在场；与官方 ui-workspace 同型先例）。
  * sidebarRight（fix-23）：官方 ui-sidebar-right 服务——知识模式右栏隐藏/恢复联动窄面。
  * layout（fix-25）：官方 ui-layout 服务——面板选择窄面（selectPanel：知识/hero 面板互换 +
  * 官方 openSession 同径 null 收口回会话）。
+ * locale（fix-33 ⑧）：官方 dsh-client-locale 服务——行 label 走 locale NS（官方
+ * ui-trajectory 同径先例：register(NS, {zh,en}) + bind(NS) + label thunk）。
  */
 export const FORGE_CLIENT_INJECT = [
   'slots',
@@ -73,20 +75,27 @@ export const FORGE_CLIENT_INJECT = [
   'workspaces',
   'sidebarRight',
   'layout',
+  'locale',
 ] as const
+
+/** 产品 locale 命名空间（官方 locale 服务词典登记键——LOCALE_IDS = zh/en） */
+export const FORGE_LOCALE_NS = 'dsh-forge'
 
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
 export interface ForgeSlotsService {
   /** 依赖洞位声明：声明在场（或入座）即装 cb；cb 返回即释放器（随 fiber 卸载级联） */
   inject(key: string, callback: () => (() => void) | undefined): () => void
-  /** 注册占用者（options.name = 洞名；key = keyed 槽键；id/order = list 槽行；priority = single 槽影子序） */
+  /** 注册占用者（options.name = 洞名；key = keyed 槽键；id/order = list 槽行；priority = single 槽影子序。
+   * label = 字符串或 thunk（fix-33 ⑧：thunk 随 active locale 逐读——官方 SlotLabel 形状）；
+   * locale = 行 label 所属命名空间（登记面声明，官方 roster 消费） */
   register(options: {
     name: string
     priority?: number
     key?: string
     id?: string
     order?: number
-    label?: string
+    label?: string | (() => string)
+    locale?: string
     inject?: () => object
   }, component: unknown): () => void
 }
@@ -139,6 +148,18 @@ export interface ForgeLayoutService {
   }
 }
 
+/**
+ * 官方 locale 服务窄面（dsh-client-locale LocaleFace 消费切片，fix-33 ⑧——结构同型镜像）。
+ * 官方 ui-trajectory 同径：register(NS, {zh,en}) 登记词典（返回撤销器）+ bind(NS) 取
+ * 翻译器（缺席词条回退 en → key 本身——零字典面不炸）。
+ */
+export interface ForgeLocaleService {
+  /** 登记命名空间词典（同 ns+locale 重复登记抛错——一次登记面）；返回撤销器 */
+  register(ns: string, dicts: Readonly<Record<string, Readonly<Record<string, string>>>>): () => void
+  /** 绑定命名空间翻译器（label thunk 消费——active locale 切换逐读生效） */
+  bind(ns: string): (key: string) => string
+}
+
 /** 产品视图发布面窄面（product-views.ts 结构同型镜像） */
 export interface ForgeViewsGlobal {
   __DSH_FORGE_VIEWS__?: {
@@ -167,7 +188,7 @@ export interface ForgeViewsGlobal {
 export interface ForgeClientCtx {
   readonly slots: ForgeSlotsService
   get(
-    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'layout',
+    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'layout' | 'locale',
   ): unknown
 }
 
@@ -243,6 +264,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
+      // fix-33 ⑥ 缝族对称性：apply 中途抛错时桥/词典的补撤销面（catch 消费）——发布于
+      // apply 期的资源不再只依赖 overlay 洞 dispose 撤销（apply 半途死闭包不残留）
+      let revokeBridgeAndLocale: (() => void) | undefined
       try {
         const views = publishedViews()
         const sessions = clientCtx.get('sessions') as ForgeSessionsService
@@ -250,9 +274,22 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
         const layout = clientCtx.get('layout') as ForgeLayoutService
+        const locale = clientCtx.get('locale') as ForgeLocaleService
 
-        // 工作台桥（fix-25：官方面板导航窄面 + 知识抽屉缝；随 shell.overlay 登记同期
-        // 发布/撤销——缺席期导航 fail-soft no-op）
+        // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
+        // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
+        const disposeLocale = locale.register(FORGE_LOCALE_NS, {
+          zh: { 'panel.knowledge': '知识库', 'view.recall': '知识召回' },
+          en: { 'panel.knowledge': 'Knowledge', 'view.recall': 'Recall' },
+        })
+        const t = locale.bind(FORGE_LOCALE_NS)
+
+        // 工作台桥（fix-25：官方面板导航窄面 + 知识抽屉缝）。
+        // publishWorkbenchBridge 双径原因（fix-33 ⑥ 注记）：发布在 apply 期（早于任何槽位
+        // 入座——knowledge 面板 inject face 与召回视图跳转在挂载时即消费桥，overlay 洞
+        // 物化次序不保证先于它们）；撤销随 shell.overlay 洞 dispose（本插件唯一的 fiber
+        // 卸载级联回收面）+ apply catch 补撤销（半成型失败不残留死闭包——桥持有官方
+        // layout 闭包，插件已废而桥面仍活会路由进废 ctx）。缺席期导航 fail-soft no-op。
         const bridge = views.createWorkbenchBridge({
           showKnowledge: (): void => {
             layout.selectPanel(KNOWLEDGE_PANEL_KEY)
@@ -261,6 +298,10 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             layout.selectPanel(null)
           },
         })
+        revokeBridgeAndLocale = (): void => {
+          ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = undefined
+          disposeLocale()
+        }
 
         // 工作区洞位替换（AC1）：注入面携带 dsh 面数据源与动作（面板侧 useSyncExternalStore 直读）
         registerSlotEntry(clientCtx, SIDEBAR_WORKSPACES_SLOT, sidebarDiagnostics, () =>
@@ -311,23 +352,32 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           ),
         )
 
-        // 官方面板行（sidebar.panellist——官方 PanelRow 行语言；id = main key 同源）
+        // 官方面板行（sidebar.panellist——官方 PanelRow 行语言；id = main key 同源；
+        // fix-33 ⑧ label 经 locale NS thunk——active locale 切换免重注册）
         registerSlotEntry(clientCtx, SIDEBAR_PANELLIST_SLOT, centerDiagnostics, () =>
           clientCtx.slots.register(
-            { name: SIDEBAR_PANELLIST_SLOT, id: KNOWLEDGE_PANEL_KEY, order: 20, label: '知识库' },
+            {
+              name: SIDEBAR_PANELLIST_SLOT,
+              id: KNOWLEDGE_PANEL_KEY,
+              order: 20,
+              locale: FORGE_LOCALE_NS,
+              label: (): string => t('panel.knowledge'),
+            },
             views.ForgeKnowledgeGlyph,
           ),
         )
 
         // 官方页签 roster（conversation.view——UF-4 知识召回单登记；对话 = 官方 'chat' 直用、
-        // 轨迹 = 官方 'trajectory' 直用——fix-29 退役产品复刻，同 order 10 双『轨迹』冲突不再）
+        // 轨迹 = 官方 'trajectory' 直用——fix-29 退役产品复刻，同 order 10 双『轨迹』冲突不再；
+        // label 经 locale NS thunk——fix-33 ⑧）
         registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
           clientCtx.slots.register(
             {
               name: CONVERSATION_VIEW_SLOT,
               id: RECALL_VIEW_ID,
               order: 20,
-              label: '知识召回',
+              locale: FORGE_LOCALE_NS,
+              label: (): string => t('view.recall'),
               inject: () => ({
                 openKnowledgeEntry: (entryId: number): void => {
                   bridge.openKnowledgeEntry(entryId)
@@ -352,7 +402,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面；selectPanel/rightbar 官方窄面经 inject 递达）。卸载期顺带
-        // 撤销桥发布（与宿主同生命周期——缺席期导航 fail-soft no-op）
+        // 撤销桥发布与 locale 词典 + 清 __DSH_FORGE_CLIENT__ 激活标记（fix-33 ⑥ 标记
+        // 卸载不清收口——本插件 fiber 卸载的唯一级联回收面；缺席期导航 fail-soft no-op）
         registerSlotEntry(clientCtx, SHELL_OVERLAY_SLOT, shellDiagnostics, () => {
           const dispose = clientCtx.slots.register(
             {
@@ -377,9 +428,14 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           return () => {
             dispose()
             ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = undefined
+            ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
+            disposeLocale()
           }
         })
       } catch (error) {
+        // fix-33 ⑥：apply 中途抛错——桥/词典已发布即补撤销（死闭包不残留：桥持有官方
+        // layout 闭包，插件已废而桥面仍活会路由进废 ctx；词典残留阻塞同 ns 重复登记）
+        revokeBridgeAndLocale?.()
         const message = error instanceof Error ? error.message : String(error)
         sidebarDiagnostics.error = message
         centerDiagnostics.error = message

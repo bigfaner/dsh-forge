@@ -31,8 +31,8 @@ export interface ForgeRecallViewProps {
 
 /**
  * 召回视图（conversation.view 'dswf-recall' 占用者）。数据面 = RecallTab 原样
- * （visible 恒 true——官方 only:id 挂载即激活，AC4 即时累积由挂载机制承载）。
- * data-dswf-pane="recall" 锚保持。
+ * （官方 only:id 挂载即激活/切走即卸载——AC4 即时累积由挂载机制承载，fix-33 ⑦ 起
+ * RecallTab 无 visible 维度）。data-dswf-pane="recall" 锚保持。
  */
 export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
   const [workspacesSnap, setWorkspacesSnap] = useState<LedgerWorkspacesSnapshot | null>(null)
@@ -50,7 +50,6 @@ export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
       <RecallTab
         projectId={projectId}
         sessionId={props.sessionId ?? null}
-        visible
         onOpenEntry={props.openKnowledgeEntry}
       />
       {props.useWorkspaces !== undefined ? (

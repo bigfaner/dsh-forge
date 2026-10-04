@@ -12,13 +12,27 @@ const MAIN = 'apps/host/src/main.ts'
 const source = readFileSync(join(ROOT, MAIN), 'utf8')
 const lines = source.split('\n')
 
+/**
+ * 模块说明符扫描（fix-33 ③ pin 韧性）：覆盖静态 import 的单/双引号与无插值模板串、
+ * 动态 import(…) 与 require(…)——原正则只匹配单引号 from 子句，双引号/模板串/动态
+ * import 可绕过 pin（越界依赖静默漏网）。
+ */
+function importSpecifiersOf(src: string): string[] {
+  const out: string[] = []
+  for (const m of src.matchAll(/\bfrom\s+(['"])([^'"]+)\1/g)) out.push(m[2]!)
+  for (const m of src.matchAll(/\bfrom\s+`([^`$]+)`/g)) out.push(m[1]!)
+  for (const m of src.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g)) out.push(m[2]!)
+  for (const m of src.matchAll(/\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g)) out.push(m[2]!)
+  return out
+}
+
 describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
   it('总行数 ≤ 110（~100 行纪律的上限容差）', () => {
     expect(lines.length).toBeLessThanOrEqual(110)
   })
 
   it('import 仅限：electron、node:url、四子模块 barrel（编排面无其他依赖）', () => {
-    const imports = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]!)
+    const imports = importSpecifiersOf(source)
     for (const specifier of imports) {
       expect(
         specifier === 'electron' ||
@@ -54,13 +68,12 @@ describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
     }
   })
 
-  it('host 子模块零业务漂移：不 import web/core/knowledge 源码（workspace 依赖仅为 profile 供给）', () => {
+  it('host 子模块零业务漂移：不 import web/core/knowledge 源码（workspace 依赖仅为 profile 供给；fix-33 ③ 扫描面含双引号/模板串/动态 import/require）', () => {
     const hostSrc = join(ROOT, 'apps/host/src')
     const files = walk(hostSrc)
     for (const f of files) {
       const src = readFileSync(f, 'utf8')
-      for (const m of src.matchAll(/from '([^']+)'/g)) {
-        const s = m[1]!
+      for (const s of importSpecifiersOf(src)) {
         expect(s.startsWith('@dsh-forge/core') || s.startsWith('@dsh-forge/knowledge'), `${rel(f)} 引入了产品插件：${s}`).toBe(false)
       }
     }

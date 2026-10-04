@@ -6,9 +6,8 @@
 // tool——双门分工，AC4）：注入面收窄为浏览四法 Pick + browse 聚合，类型级禁令。
 import {
   KNOWLEDGE_CHANNELS,
-  type DomainNode,
+  type BrowseKnowledgeService,
   type EntryDetailQuery,
-  type KnowledgeService,
   type ListEntriesQuery,
   type SessionRecallQuery,
 } from '@dsh-forge/contracts'
@@ -18,14 +17,13 @@ import { rpcEnvelope } from './rpc-envelope.js'
 /**
  * 注入服务面 = 浏览面四法 + browse 聚合法（browse = core 知识域挂接面，3.5；
  * 入/出与 dto/rpc.ts KnowledgeChannelRequests/Responses 的 browse 行同构）。
+ * fix-33 起 = contracts BrowseKnowledgeService 命名类型的 Pick（第八法手工同步收口）。
  * search / readAbstract / rebuildIndex 不入面——经 web RPC 不可达（双门分工）。
  */
 export type KnowledgeChannelService = Pick<
-  KnowledgeService,
-  'listEntries' | 'getEntryDetail' | 'heatByEntry' | 'sessionRecall'
-> & {
-  browse(req: { projectId: string }): Promise<DomainNode[]>
-}
+  BrowseKnowledgeService,
+  'listEntries' | 'getEntryDetail' | 'heatByEntry' | 'sessionRecall' | 'browse'
+>
 
 /** 五通道全集注册（负载映射 = dto/rpc.ts KnowledgeChannelRequests/Responses，键键对应） */
 export function registerKnowledgeChannels(ipc: ForgeIpc, service: KnowledgeChannelService): void {

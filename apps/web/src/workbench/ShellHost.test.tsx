@@ -1,9 +1,17 @@
 // ShellHost 单测 —— 常驻壳宿主（fix-25：shell.overlay 槽位件）。
 // SSR 首帧 = 装配结构 + 相位锚（效应面零执行归 e2e）；hero 面板驱动 = 纯函数直测
 // （一次性守卫 + 边沿让位）；workspace 归属锚 = SSR 钩子读取面（WorkbenchPanel 同形制迁入）。
+// fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件（hooks 规则合规）——
+// 钩子形制断言 = 子件直测（渲染期读取 + null 渲染），效应上抛面归 e2e。
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ForgeShellHost, WorkspacesAnchor, heroPanelDrive } from './ShellHost.js'
+import {
+  ForgeShellHost,
+  PanelInfoAnchor,
+  WorkspacesAnchor,
+  heroPanelDrive,
+  readActivePanelId,
+} from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
 
 describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场）', () => {
@@ -14,12 +22,39 @@ describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场
     expect(markup).toContain('data-dswf-view="session"')
   })
 
-  it('usePanelInfo 在场：视图镜像随 activePanelId（knowledge 面板 → knowledge 视图）', () => {
+  it('usePanelInfo 在场（fix-33 ⑤ 后）：SSR 首帧仍会话视图缺省——activePanelId 经锚子件效应上抛（e2e 面），但渲染不炸、锚挂载在场', () => {
     const selectorHook = (state: unknown) => (sel: (s: never) => unknown) => sel(state as never)
     const markup = renderToStaticMarkup(
       <ForgeShellHost usePanelInfo={selectorHook({ activePanelId: 'dswf-knowledge' })} />,
     )
-    expect(markup).toContain('data-dswf-view="knowledge"')
+    expect(markup).toContain('data-dswf-view="session"') // 首帧缺省（效应驱动更新归 e2e）
+    expect(markup).toContain('data-dswf-workbench') // 钩子在场不炸渲染（形制合规的本证）
+  })
+})
+
+describe('PanelInfoAnchor 官方面板信息锚子件（fix-33 ⑤ 钩子形制）', () => {
+  it('SSR 渲染期执行钩子读取（选择器直连）且渲染为 null（效应上抛归 e2e）', () => {
+    const seen: unknown[] = []
+    const markup = renderToStaticMarkup(
+      <PanelInfoAnchor
+        hook={(sel) => {
+          const value = sel({ activePanelId: 'dswf-knowledge' } as never)
+          seen.push(value)
+          return value
+        }}
+        onChange={() => {}}
+      />,
+    )
+    expect(markup).toBe('')
+    expect(seen).toEqual(['dswf-knowledge'])
+  })
+
+  it('readActivePanelId 纯函数：快照窄读 activePanelId；形状漂移/缺省 → null（会话面板缺省）', () => {
+    const hook = (state: unknown) => (sel: (s: never) => unknown) => sel(state as never)
+    expect(readActivePanelId(hook({ activePanelId: 'dswf-knowledge' }))).toBe('dswf-knowledge')
+    expect(readActivePanelId(hook({ activePanelId: null }))).toBeNull()
+    expect(readActivePanelId(hook(undefined))).toBeNull() // 非壳载体/形状漂移
+    expect(readActivePanelId(hook({}))).toBeNull()
   })
 })
 

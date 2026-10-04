@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 const readJson = (p: string) => JSON.parse(read(p)) as Record<string, unknown>
+const readScripts = () => readJson('package.json').scripts as Record<string, unknown> // 测试类型门收窄（fix-33 ⑩）
 const rel = (p: string) => relative(ROOT, resolve(ROOT, p)).split('\\').join('/')
 
 describe('AC1 workspace 工件与 references 拓扑', () => {
@@ -31,11 +32,12 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(readJson(join(dir, 'package.json')).name).toBe(name)
   })
 
-  it('contracts 零依赖（契约层零运行时依赖）', () => {
+  it('contracts 零运行时依赖（fix-33 ⑩ 后 devDependencies 仅允许 @types/node——测试面 node 内建类型）', () => {
     const pkg = readJson('packages/contracts/package.json')
-    for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
       expect(Object.keys((pkg[key] as Record<string, unknown>) ?? {})).toHaveLength(0)
     }
+    expect(Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every((k) => k === '@types/node')).toBe(true)
   })
 
   it('根 solution tsconfig references 六工件（tsc -b 全拓扑入口；fix-30 增 path-key）', () => {
@@ -48,7 +50,9 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
   it.each([
     ['packages/contracts', []],
     ['packages/core', ['packages/contracts', 'packages/path-key']],
-    ['packages/knowledge', ['packages/contracts', 'packages/core', 'packages/path-key']],
+    // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
+    // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
+    ['packages/knowledge', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge']],
     ['apps/web', ['packages/contracts']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
@@ -98,7 +102,7 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
     expect(imp).toContain('chokidar')
     expect(imp).toContain('watchFile')
     expect(imp).toMatch(/fs\\?\.(?:watch|watchFile)/)
-    expect(String(readJson('package.json').scripts.lint)).toContain('lint:imports')
+    expect(String(readScripts().lint)).toContain('lint:imports')
   })
 
   it('renderer 运行期边界就位（web 禁 import core/knowledge 包）', () => {
@@ -109,15 +113,15 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
 
   it('令牌 lint 脚本就位且入 G0（pnpm lint 串）', () => {
     expect(existsSync(join(ROOT, 'scripts/lint-tokens.mjs'))).toBe(true)
-    expect(readJson('package.json').scripts).toMatchObject({
+    expect(readScripts()).toMatchObject({
       'lint:tokens': 'node scripts/lint-tokens.mjs',
     })
-    expect(String(readJson('package.json').scripts.lint)).toContain('lint:tokens')
+    expect(String(readScripts().lint)).toContain('lint:tokens')
   })
 
   it('负样例自证脚本就位（种植 → 拦截断言 → 清理）且入 G0', () => {
     expect(existsSync(join(ROOT, 'scripts/lint-selftest.mjs'))).toBe(true)
-    expect(String(readJson('package.json').scripts.lint)).toContain('lint:selftest')
+    expect(String(readScripts().lint)).toContain('lint:selftest')
   })
 })
 

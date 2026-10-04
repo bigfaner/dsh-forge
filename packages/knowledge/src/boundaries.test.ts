@@ -1,7 +1,7 @@
 // 3.4 单测 —— AC3 机械自证：插件仅依赖 forgeKnowledge 服务类型，零实现级 import。
 // 构建图三面：package.json dependencies（发版运行期面）、src 非测试源（import 面）、
 // tsconfig references（tsc 拓扑——设计裁定为「仅类型依赖」边，由 tests/structure pin）。
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -32,13 +32,14 @@ describe('AC3 插件仅依赖 forgeKnowledge 服务类型（构建图机械自�
     }
   })
 
-  it('tsconfig references 保留 contracts+core 类型边（设计拓扑「仅类型依赖」，scaffold pin 同源）', () => {
+  it('tsconfig references = contracts+path-key（core 边已除——fix-33：build 面零 core import，残留引用无消费）', () => {
     const ts = JSON.parse(readFileSync(join(PKG_DIR, 'tsconfig.json'), 'utf8')) as {
       references?: { path: string }[]
     }
     const refs = (ts.references ?? []).map((r) => r.path)
     expect(refs).toContain('../contracts')
-    // core 边 = 类型拓扑（KnowledgeService 经 contracts 引入，core 实现不入 import 面）
-    expect(existsSync(join(PKG_DIR, 'tsconfig.json'))).toBe(true)
+    // fix-33：../core 引用删除——knowledge build 面零 core import（类型经 contracts 引入）；
+    // 测试面 core 源相对引入（integration-core）由 tsconfig.test.json 承载（不经 references）
+    expect(refs).not.toContain('../core')
   })
 })

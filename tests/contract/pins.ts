@@ -111,6 +111,7 @@ export function slotHole(rawTypes: string, holeName: string): string {
   const re = new RegExp(`^ {8}'${holeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}': \\{([\\s\\S]*?)^ {8}\\}`, 'm')
   const m = rawTypes.match(re)
   expect(m, `SlotMap 未声明洞位 ${holeName}`).toBeTruthy()
+  if (m === null) throw new Error(`SlotMap 未声明洞位 ${holeName}`) // 类型收窄（expect 不窄化——测试类型门）
   return norm(m[1] ?? '')
 }
 

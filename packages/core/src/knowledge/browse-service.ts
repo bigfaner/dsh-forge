@@ -25,10 +25,10 @@ import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
 import type {
+  BrowseKnowledgeService,
   DomainNode,
   EntryDetail,
   KnowledgeCard,
-  KnowledgeService,
   ListEntriesQuery,
   RecallGroup,
   RecallGroupHit,
@@ -59,14 +59,17 @@ export interface BrowseQuery {
   projectId: string
 }
 
-/** 3.5 browse 聚合面（通道 handler 本体）：listEntries 兼作底表 → aggregateDomainTree 域树 */
-export interface KnowledgeBrowseFace {
-  browse(q: BrowseQuery): Promise<DomainNode[]>
-}
+/**
+ * 3.5 browse 聚合面（通道 handler 本体）：listEntries 兼作底表 → aggregateDomainTree 域树。
+ * fix-33：browse 成员签名锚 contracts BrowseKnowledgeService（第八法单一来源）。
+ */
+export type KnowledgeBrowseFace = Pick<BrowseKnowledgeService, 'browse'>
 
 /** 3.3 服务面 + 3.5 browse 聚合：listEntries / getEntryDetail / sessionRecall / browse */
-export type KnowledgeBrowseService = Pick<KnowledgeService, 'listEntries' | 'getEntryDetail' | 'sessionRecall'> &
-  KnowledgeBrowseFace
+export type KnowledgeBrowseService = Pick<
+  BrowseKnowledgeService,
+  'listEntries' | 'getEntryDetail' | 'sessionRecall' | 'browse'
+>
 
 // ── 纯函数：域树聚合（forge:knowledge/browse 消费） ──
 

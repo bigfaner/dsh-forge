@@ -6,7 +6,8 @@
     "types": [],
     "noEmit": true,
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "allowJs": true
   },
   "include": ["**/*.ts"]
 }
