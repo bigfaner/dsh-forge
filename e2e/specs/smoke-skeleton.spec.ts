@@ -83,12 +83,12 @@ async function stablePhase(page: Page): Promise<'hero' | 'session'> {
   return page.locator('[data-dswf-workbench]').first().getAttribute('data-dswf-phase') as Promise<'hero' | 'session'>
 }
 
-/** 工作台桥派发（左栏导航同径转移面——原型 UI 点击在 M0 无产品会话行期的载体适配，台账记录） */
+/** 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null) 回官方会话面板；
+ * 无产品会话行期的载体适配，台账记录） */
 async function bridgeDispatch(page: Page, type: string): Promise<void> {
   await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { dispatch(e: { type: string }): void } })
-      .__DSH_FORGE_WORKBENCH__
-    bridge?.dispatch({ type: eventType })
+    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
+    if (eventType === 'show-session') bridge?.showSession()
   }, type)
 }
 
@@ -181,55 +181,45 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     await expect(page.locator('#root nav[aria-label]').first()).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-sidebar]').first()).toBeVisible()
     // L42 左栏构成（载体适配，台账 #2）：品牌/新会话 = 官方壳承继；知识库入口/项目树 = 产品面板
-    await expect(page.locator('[data-dswf-nav="knowledge"]').first()).toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first()).toBeVisible()
     await expect(page.locator('.dswf-sidebar-sectionlabel', { hasText: '项目' }).first()).toBeVisible()
     // L44 默认中区 = 会话视图（M0 相位语义：hero = 首用替换呈现，否则会话视图；知识视图恒隐藏）
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
     await expect(page.locator('.dswf-zone-knowledge')).toBeHidden()
     if (phase === 'session') {
-      // L45 tabs = 对话/轨迹/知识召回（session 相位分支——hero 相位期会话面板不出场）
-      await expect(page.locator('.dswf-session-panel').first()).toBeVisible()
-      await expect(page.locator('.dswf-session-panel [role="tab"]')).toHaveCount(3)
-      for (const label of ['对话', '轨迹', '知识召回']) {
-        await expect(page.locator('.dswf-session-panel [role="tab"]', { hasText: label })).toBeVisible()
-      }
-      // 官方会话面嵌入配方在场（conversation.content 工厂产物锚——2.12 起步组行，吸收保留）
+      // L45 官方会话面 + 头部链渲染点（fix-25 官方基座：本组无会话——页签行归
+      // session-workbench Step3 真实会话载体；嵌入配方退役——content 工厂官方直渲）
+      await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
+      await expect(page.locator('[data-slot="conversation.header"]').first()).toBeAttached()
       await expect(page.locator('[data-conversation-content]').first()).toBeAttached()
     } else {
-      // UF-2 hero 相位（实机走查归组三——本组只断言替换呈现语义）
+      // UF-2 hero 相位（实机走查归组三——本组只断言替换呈现语义；fix-25：hero = 产品
+      // main 面板 'dswf-hero'——官方会话面板让位卸载）
       await expect(page.locator('[data-dswf-hero]').first()).toBeVisible()
-      await expect(page.locator('.dswf-session-panel')).toHaveCount(0)
+      await expect(page.locator('[data-slot="main.conversation"]')).toHaveCount(0)
     }
-    // L46 右栏默认收起（轨道归零）
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
+    // L46 右栏默认收起（fix-23 锚迁移：官方 AppFrame frame 锚 data-rightbar-collapsed——
+    // 自研轨道 data-dswf-dock 退役，右栏 = 官方 ui-sidebar-right 第三列）
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
 
-    // ── L3 布局对照断言起步池（样式纪律第 6 条；台账「L3 起步池」节）──
+    // ── L3 布局对照断言起步池（样式纪律第 6 条；台账「L3 起步池」节；fix-25：产品三区
+    // 容器退役——中区 = 官方 AppFrame/ConversationRoot，结构位断言让位官方面）──
     const l3 = await page.evaluate(() => {
-      const dock = document.querySelector('.dswf-zones-dock')
-      const zones = document.querySelector('.dswf-zones')
-      const rail = document.querySelector('.dswf-zones-rail')
-      const main = document.querySelector('.dswf-zones-main')
+      const rightbarCol = document.querySelector('[data-rightbar-col]')
       const officialRow = document.querySelector('#root nav[aria-label] button')
-      const entry = document.querySelector('.dswf-sidebar-entry')
+      const entry = document.querySelector('.dswf-sidebar-session')
       const cs = (el: Element | null) => (el ? getComputedStyle(el) : null)
       return {
-        dockWidth: cs(dock)?.width,
-        dockVisibility: cs(dock)?.visibility,
-        zonesDisplay: cs(zones)?.display,
-        structure: [rail?.tagName, main?.tagName, dock?.tagName],
+        rightbarColWidth: cs(rightbarCol)?.width,
         officialRowRadius: cs(officialRow)?.borderRadius,
         entryRadius: cs(entry)?.borderRadius,
         entryHeight: entry?.getBoundingClientRect().height,
         entryFontSize: cs(entry)?.fontSize,
       }
     })
-    // 三区结构：flex 骨架 + rail(aside)/main(main)/dock(aside) 三结构位
-    expect(l3.zonesDisplay, 'L3·三区结构 flex 骨架').toBe('flex')
-    expect(l3.structure, 'L3·三区结构位 rail/main/dock').toEqual(['ASIDE', 'MAIN', 'ASIDE'])
-    // 轨道归零 computed 载体（L46 的 computed-style 样本）
-    expect(l3.dockWidth, 'L3·收起轨道宽度归零').toBe('0px')
-    expect(l3.dockVisibility, 'L3·零宽轨道不可见（不可聚焦）').toBe('hidden')
-    // 左栏行对照：产品行与官方行同 token 圆角（--dsw-radius-md 实解析比对）+ 官方 workspace 行刻度
+    // 轨道归零 computed 载体（L46 的 computed-style 样本——官方右栏列收起 0px）
+    expect(l3.rightbarColWidth, 'L3·收起官方右栏列宽度归零').toBe('0px')
+    // 左栏行对照：产品会话行与官方行同 token 圆角（--dsw-radius-md 实解析比对）+ 官方 workspace 行刻度
     expect(l3.entryRadius, 'L3·左栏行圆角 = 官方行同 token').toBe(l3.officialRowRadius)
     expect(l3.entryHeight, 'L3·左栏行高 = 官方 projectRow 刻度 h34').toBe(34)
     expect(l3.entryFontSize, 'L3·左栏行字号 = 官方 14px 刻度').toBe('14px')
@@ -238,19 +228,21 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     // L50 点「知识库」→ 中区切换为知识视图（载体适配，台账 #L50：M0 占位锚 data-dswf-knowledge-m0
     // → M1 浏览面装配壳锚 data-dswf-knowledge-view——「知识视图在场」断言语义不变；
     // 无项目锚（host 通道前置缺口期）= 壳内引导空态，结构位不变）
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible()
-    await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
     if (phase === 'session') {
-      await expect(page.locator('.dswf-session-panel').first()).toBeHidden()
+      // fix-25：官方 keyed main 面板互换——非选中面板卸载（状态归官方 store 自持）
+      await expect(page.locator('[data-slot="main.conversation"]').first()).toBeHidden()
     }
-    // L8 打开不占用右栏（dock 仍收起；载体适配，台账 #8：M0 将原型 is-collapsed 单类位
-    // 细分为 collapsed(会话视图收起)/hidden(知识模式强制)——「不占用右栏」= 轨道不可见）
-    await expect(page.locator('[data-dswf-dock="hidden"]').first()).toBeAttached()
-    // L9 知识模式无右栏入口（负向断言；载体适配，台账 #9：原型钉两个具体图标钮，M0 钉可达面全集）
+    // L8 打开不占用右栏（fix-23 锚迁移：知识模式右栏隐藏 = 官方 frame data-rightbar-collapsed
+    // 在场——产品经官方 sidebarRight 窄面联动收起；台账 #8「不占用右栏」语义不变）
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+    // L9 知识模式无右栏入口（负向断言；fix-23：官方 corner ExpandButton 在隐藏的会话区头部内
+    // ——可达面全集口径保持：可视线内无展开入口）
     const expandables = await page.evaluate(() =>
-      [...document.querySelectorAll('.dswf-zones-main button')].filter((b) => {
-        if (!/展开/.test(b.getAttribute('aria-label') ?? b.textContent ?? '')) return false
+      [...document.querySelectorAll('#root button')].filter((b) => {
+        if (!/展开|打开右侧/.test(b.getAttribute('aria-label') ?? b.textContent ?? '')) return false
         const cs = getComputedStyle(b)
         return cs.visibility !== 'hidden' && b.getClientRects().length > 0 && b.offsetWidth > 0
       }).length,
@@ -258,80 +250,64 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     expect(expandables, 'L52 知识模式无右栏展开入口').toBe(0)
     // L66/L474 切回会话视图（载体适配，台账 #12/#99：M0 无产品会话行期 = 桥派发同径转移）
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeHidden()
     // （L8 后半：收起态往返知识模式 → 恢复收起——「不占用」的回归面）
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
 
-    // L59 会话视图可展开右栏（session 相位 = 角位开关实钮；hero 相位无角位钮 = 桥派发，台账 #10）
+    // L59 会话视图可展开右栏（fix-25：展开钮 = 官方 corner ExpandButton
+    // [data-sidebar-right-expand]——官方头部链白拿面；fresh 裸启无会话面 = 官方原生语义
+    // 无钮（右栏休眠态断言承载，台账 #10 载体适配），自研面板钮随 main.conversation 影子退役）
+    const expandButton = page.locator('[data-sidebar-right-expand]').first()
     if (phase === 'session') {
-      await page.locator('.dswf-workbench-docktoggle').click()
+      await expect(expandButton, '面板钮在场（官方右栏收展入口）').toBeAttached()
+      await expandButton.click()
     } else {
-      await bridgeDispatch(page, 'toggle-right-dock')
+      await expect(page.locator('[data-rightbar-collapsed]').first(), '官方右栏休眠（frame 收起标记）').toBeAttached()
     }
-    await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-    // 页签跟随底稿：展开轨道 = 官方 chips 页签条（M0 全局「开始」单页签）+ 内容常挂载
-    // （fix-10 台账 #L59：自绘 SegmentedTabs strip 退役——锚迁移官方 DOM 契约 data-dockkit-strip）
-    await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
-    ).toBeVisible()
-    // （fix-10 台账 #L62：官方 kit 页签体无 role=tabpanel——「内容挂载」锚迁移官方 body 锚
-    // data-dockkit-content，keep-alive 语义不变（官方 keepMounted 保留策略））
-    await expect(page.locator('[data-dswf-dock] [data-dockkit-content]').first()).toBeAttached()
-
-    // ── fix-10 官方 dockkit 基座回归（新增 dock 基座行为冒烟：官方面在场与默认形态）──
-    // 官方 surface（横条形 dropZones = DockLayout/Sidebar 形态）+ 分栏钮（340px 窄轨由官方
-    // room 规则禁用为宽度不足——控件在场、禁用态官方语义）+ chrome 角位收展钮（官方置位）；
-    // 添加钮 = canAddTab 产品口径缺席（P1 无可添内容面）；全局「开始」页签不可关闭
-    // （canCloseTab 口径——关闭控件缺席，官方 quiet 单 chips 形态）。
-    await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-surface]').first(),
-      'fix-10·官方 dockkit surface 在场',
-    ).toBeAttached()
-    expect(
-      await page
-        .locator('[data-dswf-dock] [data-dockkit-surface]')
-        .first()
-        .getAttribute('data-dockkit-drop-zones'),
-      'fix-10·横条形右栏（DockLayout Sidebar 形态）',
-    ).toBe('horizontal')
-    await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-split-button]').first(),
-      'fix-10·官方分栏控件在场',
-    ).toBeAttached()
-    await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-strip-chrome] button[aria-label="收起 dock"]').first(),
-      'fix-10·chrome 角位 = 右栏收展钮（官方置位）',
-    ).toBeAttached()
-    expect(
-      await page.locator('[data-dswf-dock] [data-dockkit-add-tab]').count(),
-      'fix-10·添加钮 = 产品口径缺席',
-    ).toBe(0)
-    expect(
-      await page.locator('[data-dswf-dock] [data-dockkit-tab-close]').count(),
-      'fix-10·全局页签不可关闭（canCloseTab 口径）',
-    ).toBe(0)
-
-    // L11 整体切换：进入知识模式 → 已开右栏也隐藏（内容让位）
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
-    await expect(page.locator('[data-dswf-dock="hidden"]').first()).toBeAttached()
-    // （fix-10 台账 #L62：tabpanel 锚迁移官方 body 锚 data-dockkit-content——官方面与内容
-    // 在强制隐藏期仍挂载，keep-alive 语义不变）
-    await expect(page.locator('[data-dswf-dock] [data-dockkit-content]').first()).toBeAttached()
-    // L12 切回会话视图 → 右栏恢复展开（状态保留）
-    await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-
-    // L689 收起（轨道归零——含 computed 回归样本）
     if (phase === 'session') {
-      await page.locator('.dswf-workbench-docktoggle').click()
-    } else {
-      await bridgeDispatch(page, 'toggle-right-dock')
+      await expect(page.locator('[data-rightbar-collapsed]'), '右栏展开 = frame 收起标记退场').toHaveCount(0)
+      // 页签跟随底稿：展开右栏 = 官方 dockkit chips 页签条（官方 guide 种子页「开始」）+ 内容挂载
+      // （fix-23 台账 #L59：官方 ui-sidebar-right 接管右栏——锚域迁移官方右栏列）
+      await expect(
+        page.locator('[data-rightbar-col] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
+      ).toBeVisible()
+      await expect(page.locator('[data-rightbar-col] [data-dockkit-content]').first()).toBeAttached()
+
+      // ── fix-23 官方右栏回归（官方 ui-sidebar-right 面在场与形态）──
+      // 官方 surface（横条形 dropZones）+ 官方 strip chrome 收展钮（aria「收起右侧边栏」）。
+      await expect(
+        page.locator('[data-rightbar-col] [data-dockkit-surface]').first(),
+        'fix-23·官方右栏 dockkit surface 在场',
+      ).toBeAttached()
+      expect(
+        await page
+          .locator('[data-rightbar-col] [data-dockkit-surface]')
+          .first()
+          .getAttribute('data-dockkit-drop-zones'),
+        'fix-23·横条形右栏（官方 DockLayout Sidebar 形态）',
+      ).toBe('horizontal')
+      await expect(
+        page.locator('[data-rightbar-col] button[aria-label="收起右侧边栏"]').first(),
+        'fix-23·官方 strip chrome 收展钮在场（data-sidebar-right-toggle）',
+      ).toBeAttached()
+
+      // L11 整体切换：进入知识模式 → 已开右栏也隐藏（内容让位；官方窄面联动收起）
+      await page.locator('button[aria-label="知识库"]').first().click()
+      await expect(page.locator('[data-rightbar-collapsed]').first(), '知识模式右栏隐藏（联动收起）').toBeAttached()
+      // L12 切回会话视图 → 右栏恢复展开（联动恢复——记忆锚）
+      await bridgeDispatch(page, 'show-session')
+      await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+      await expect(page.locator('[data-rightbar-collapsed]'), '切回恢复展开（rightbarViewPlan 记忆恢复）').toHaveCount(0)
+
+      // L689 收起（面板钮同径——含 computed 回归样本）
+      await page.locator('[data-sidebar-right-expand]').first().click()
+      await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
+      const collapsedWidth = await page.evaluate(() =>
+        getComputedStyle(document.querySelector('[data-rightbar-col]')!).width,
+      )
+      expect(collapsedWidth, 'L3·收起回归官方右栏列宽度归零').toBe('0px')
     }
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
-    const collapsedWidth = await page.evaluate(() => getComputedStyle(document.querySelector('.dswf-zones-dock')!).width)
-    expect(collapsedWidth, 'L3·收起回归轨道宽度归零').toBe('0px')
 
     // L824 无页面 JS 错误（载体适配，台账 #181：console 噪音含官方 remote.mux ws 重连——
     // 官方层行为，断言面 = 未捕获异常 pageerror；console 全口径随 host ws 面治理后回归）
@@ -576,7 +552,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
 
     // ── UF-2 AC1/AC2：首次启动（无项目）→ 中区 hero；CTA → 打开添加项目流程 ──
     await expect(page.locator('[data-dswf-hero]').first()).toBeVisible()
-    await expect(page.locator('.dswf-session-panel')).toHaveCount(0)
+    await expect(page.locator('[data-slot="main.conversation"]')).toHaveCount(0)
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
 

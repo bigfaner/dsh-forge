@@ -40,7 +40,6 @@ describe('壳接入装配 pin（1.5）', () => {
       'apps/web/src/shell/boot.ts',
       'apps/web/src/shell/carrier.ts',
       'apps/web/src/shell/bridge.ts',
-      'apps/web/src/shell/view-state.ts',
       'apps/web/src/shell/index.ts',
       'apps/web/src/shell/dsh-globals.d.ts',
       'apps/web/src/styles/global.css',
@@ -64,47 +63,55 @@ describe('壳接入装配 pin（1.5）', () => {
   })
 })
 
-describe('zones 三区骨架 pin（2.5）', () => {
-  it('模块面就位：容器/槽位/dock 跟随/dock 基座映射/barrel/样式 + shell 视图态机对接 hook', () => {
+describe('fix-25 官方基座降位 pin（main.conversation 影子退役——官方 ConversationRoot 渲染中区）', () => {
+  it('模块面就位：装配族（壳宿主/hero/知识面板/面板模型/桥）+ 页签族 + 字形件；退役面缺席（zones/视图态机/会话面板/自研嵌入配方）', () => {
     for (const f of [
-      'apps/web/src/zones/WorkbenchZones.tsx',
-      'apps/web/src/zones/slots.ts',
-      'apps/web/src/zones/dock.ts',
-      'apps/web/src/zones/dock-kit.ts',
-      'apps/web/src/zones/zones.css',
-      'apps/web/src/zones/index.ts',
-      'apps/web/src/shell/use-shell-view.ts',
+      'apps/web/src/workbench/ShellHost.tsx',
+      'apps/web/src/workbench/HeroPanel.tsx',
+      'apps/web/src/workbench/KnowledgePanel.tsx',
+      'apps/web/src/workbench/panel-model.ts',
+      'apps/web/src/workbench/workbench-bridge.ts',
+      'apps/web/src/views/session/ConversationViews.tsx',
+      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
+      'apps/web/src/client-plugin/plugin.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
-    expect(read('apps/web/src/zones/index.ts')).toContain("export * from './WorkbenchZones.js'")
-    expect(read('apps/web/src/shell/index.ts')).toContain("export * from './use-shell-view.js'")
+    expect(read('apps/web/src/workbench/index.ts')).toContain("export * from './ShellHost.js'")
+    expect(read('apps/web/src/shell/index.ts')).not.toContain("export * from './use-shell-view")
+    for (const retired of [
+      'apps/web/src/zones',
+      'apps/web/src/shell/view-state.ts',
+      'apps/web/src/shell/use-shell-view.ts',
+      'apps/web/src/workbench/WorkbenchPanel.tsx',
+      'apps/web/src/workbench/ChatSurface.tsx',
+      'apps/web/src/views/session/SessionPanel.tsx',
+      'apps/web/src/views/session/SessionToolbar.tsx',
+    ]) {
+      expect(existsSync(join(ROOT, retired)), `${retired} 应已退役（fix-25）`).toBe(false)
+    }
   })
 
-  it('UF-7 默认收起 pin（view-state 初始态与恢复口径）+ dock 轨道归零样式', () => {
-    const viewState = read('apps/web/src/shell/view-state.ts')
-    expect(viewState).toContain('rightDock: false') // 初始收起（轨道归零；PRD UF-7 默认）
-    expect(viewState).toContain('rightDockPreference ?? false') // 无显式偏好恢复默认收起
-    const css = read('apps/web/src/zones/zones.css')
-    expect(css).toContain('width: 0') // 收起轨道归零（原型同型）
-    expect(css).toMatch(/data-dswf-dock=collapsed/)
-    expect(css).toMatch(/data-dswf-dock=hidden/)
+  it('main.conversation 影子登记缺席（官方头部链白拿的机制面）+ 官方缝登记在场（main roster/panellist/页签 roster/shell.overlay）', () => {
+    const plugin = read('apps/web/src/client-plugin/plugin.ts')
+    expect(plugin).not.toContain("name: MAIN_CONVERSATION_SLOT")
+    expect(plugin).not.toContain("'main.conversation'")
+    expect(plugin).toContain("key: HERO_PANEL_KEY")
+    expect(plugin).toContain("key: KNOWLEDGE_PANEL_KEY")
+    expect(plugin).toContain('name: SIDEBAR_PANELLIST_SLOT')
+    expect(plugin).toContain('name: CONVERSATION_VIEW_SLOT')
+    expect(plugin).toContain('name: SHELL_OVERLAY_SLOT')
+    // 面板 key 字面量同源（plugin 侧 ↔ 壳侧 panel-model——bundle 自含不经 import）
+    expect(plugin).toContain("export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'")
+    expect(plugin).toContain("export const HERO_PANEL_KEY = 'dswf-hero'")
+    const model = read('apps/web/src/workbench/panel-model.ts')
+    expect(model).toContain("export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'")
+    expect(model).toContain("export const HERO_PANEL_KEY = 'dswf-hero'")
   })
 
-  it('fix-10 官方 dockkit 基座 pin：右栏 = 官方面（DockController/DockLayout），自研轨道退役', () => {
-    const zones = read('apps/web/src/zones/WorkbenchZones.tsx')
-    expect(zones).toContain("from '@deepseek-ai/dsh-client-ui-dockkit'") // 依赖口径：官方静态装配线（S2；版本 pin 0.2.0-rc.2）
-    expect(zones).toContain('DockLayout') // 横条形右栏 = README 推荐 Sidebar 形态件
-    expect(zones).not.toContain('SegmentedTabs') // 自研页签条退役（官方 chips 承接）
-    expect(zones).not.toContain('dswf-zones-dock-resize') // 自研调宽手柄退役（fix-4 路线）
-    expect(existsSync(join(ROOT, 'apps/web/src/zones/dock-width.ts')), 'dock-width.ts 应已退役').toBe(false)
-    const dockKit = read('apps/web/src/zones/dock-kit.ts')
-    expect(dockKit).toContain('DOCK_LABELS_ZH') // 文案全中文化（DockLabels 契约产品供文案）
-    expect(dockKit).toContain('syncDockTabs') // 页签跟随项目 = 官方 intents 驱动路径
-    expect(dockKit).toContain('setExpanded') // rightDock ↔ 官方 expanded 映射（view-state 零改动）
-    const css = read('apps/web/src/zones/zones.css')
-    expect(css).toMatch(/data-dockkit-strip/) // WCO 避让经容器级官方锚（官方 strip 无自避让面）
-    expect(css).not.toContain('--dswf-dock-width') // 容器宽度态退役（官方 collapsed/expanded 呈现语义接管）
+  it('知识模式右栏联动 = 装配层官方 sidebarRight 窄面（panel-model.rightbarViewPlan——fix-25 随迁 ShellHost）', () => {
+    expect(read('apps/web/src/workbench/panel-model.ts')).toContain('rightbarViewPlan')
+    expect(read('apps/web/src/workbench/ShellHost.tsx')).toContain('rightbarViewPlan')
   })
 })
 
@@ -156,11 +163,13 @@ describe('components 基础组件 pin（2.6）', () => {
   })
 })
 
-describe('views/session 会话面板 pin（2.11）', () => {
-  it('模块面就位：面板组装 + 台账行组件 + 转录投影 + 样式 + barrel', () => {
+describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形态）', () => {
+  it('模块面就位：视图占用者族 + 台账行组件 + 转录投影 + 召回数据面 + 样式 + barrel', () => {
     for (const f of [
-      'apps/web/src/views/session/SessionPanel.tsx',
+      'apps/web/src/views/session/ConversationViews.tsx',
       'apps/web/src/views/session/TrajectoryLedger.tsx',
+      'apps/web/src/views/session/RecallTab.tsx',
+      'apps/web/src/views/session/recall-model.ts',
       'apps/web/src/views/session/transcript.ts',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
@@ -168,39 +177,43 @@ describe('views/session 会话面板 pin（2.11）', () => {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['SessionPanel', 'TrajectoryLedger', 'transcript']) {
+    for (const name of ['ConversationViews', 'RecallTab', 'TrajectoryLedger', 'transcript']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
   })
 
-  it('Hard Rule 官方件复用：对话面 = chatSurface 注入位（零自绘会话 UI）+ 页签条 = 官方 ConversationRoot 页签行语言（fix-13）', () => {
-    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
-    expect(panel).toContain('readonly chatSurface: ReactNode')
-    // fix-13 决策变更：SegmentedTabs 分段控件退役 → 官方 .tabs/.tab/.tabActive 行语言复刻
-    //（官方主题无公开页签件可 import——刻度实值 dsw-raw 注记，pin 新决策形态）
-    expect(panel).toContain('dswf-session-header')
-    expect(panel).toContain('dswf-session-tabs')
-    expect(panel).toContain('role="tab"')
-    // SegmentedTabs 分段控件于会话面板退役（import 面随形态退役——官方行语言复刻接管）
-    expect(panel).not.toMatch(/import\s*\{[^}]*SegmentedTabs/)
-    // 零自绘会话 UI：面板源不含消息气泡/输入框类自绘组件面（转录/输入/滚动全归官方注入面）
-    expect(panel).not.toMatch(/composer|textarea|messageInput/i)
+  it('官方 roster 占用 pin：轨迹/召回视图登记 id + pane 锚保持（对话 = 官方 chat 直用——产品零登记）', () => {
+    const views = read('apps/web/src/views/session/ConversationViews.tsx')
+    expect(views).toContain('data-dswf-pane="trajectory"')
+    expect(views).toContain('data-dswf-pane="recall"')
+    const plugin = read('apps/web/src/client-plugin/plugin.ts')
+    expect(plugin).toContain("export const TRAJECTORY_VIEW_ID = 'dswf-trajectory'")
+    expect(plugin).toContain("export const RECALL_VIEW_ID = 'dswf-recall'")
   })
 
-  it('AC-4 keep-alive 机制 pin：三 pane 常挂载（hidden 切显隐不卸载）+ hidden 守卫样式', () => {
-    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
-    for (const pane of ['chat', 'trajectory', 'recall']) {
-      expect(panel, `pane ${pane} 缺席`).toContain(`data-dswf-pane="${pane}"`)
-    }
-    expect(panel).toContain('hidden={activeTab !== ')
+  it('Hard Rule 官方件复用：头部单元/页签行 = 官方 ConversationRoot 原生（SessionPanel/SessionToolbar 复刻退役——源缺席即 pin）+ 视图 pane hidden 守卫样式', () => {
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionPanel.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionToolbar.tsx'))).toBe(false)
     const css = read('apps/web/src/views/session/session.css')
     expect(css).toContain('.dswf-session-pane[hidden]')
   })
 
-  it('AC-5 召回占位 pin：缺省 EmptyState 文案 + recall 注入接线位', () => {
-    const panel = read('apps/web/src/views/session/SessionPanel.tsx')
-    expect(panel).toContain('本会话暂无召回')
-    expect(panel).toContain('readonly recall?: ReactNode')
+  it('fix-23 官方右栏收展面 pin（fix-25 随迁）：联动 = ShellHost 官方 sidebarRight 窄面（面板钮锚随官方 corner 退役）', () => {
+    const host = read('apps/web/src/workbench/ShellHost.tsx')
+    expect(host).toContain('rightbar.toggleExpanded') // 官方收展动作面（原 dispatch('toggle-right-dock') 退役）
+    expect(host).toContain('rightbarViewPlan')
+    const plugin = read('apps/web/src/client-plugin/plugin.ts')
+    expect(plugin).toContain("'sidebarRight'") // 服务窄面注入（知识模式联动驱动面）
+    expect(plugin).not.toContain('dswf-workbench-docktoggle') // 自管面板钮退役（官方 corner ExpandButton 接管）
+  })
+
+  it('AC4 形态对齐官方 dockkit 抽屉形态：层级令牌 + 抬升面 + 滑入动画 + 右缘全高（不自发明平行模式）', () => {
+    const css = read('apps/web/src/views/knowledge/knowledge.css')
+    expect(css).toContain('.dswf-kn-drawer {')
+    expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)')
+    expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)')
+    expect(css).toMatch(/@keyframes dswf-kn-drawer-in/)
+    expect(css.match(/\.dswf-kn-drawer \{[\s\S]*?position: fixed;/)).not.toBeNull()
   })
 })
 
@@ -286,12 +299,14 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
   })
 })
 
-describe('workbench 工作台装配 pin（2.12 + 3.8）', () => {
-  it('模块面就位：装配面板 + hero 相位 + 官方会话面嵌入 + 桥发布 + 样式 + barrel（3.8：知识视图/召回 tab 经 views 注入，M0 占位件已退役）', () => {
+describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降位形态）', () => {
+  it('模块面就位：壳宿主 + main 面板族 + hero 纯渲染件 + 面板模型 + 桥 + 样式 + barrel', () => {
     for (const f of [
-      'apps/web/src/workbench/WorkbenchPanel.tsx',
+      'apps/web/src/workbench/ShellHost.tsx',
+      'apps/web/src/workbench/HeroPanel.tsx',
       'apps/web/src/workbench/HeroEmpty.tsx',
-      'apps/web/src/workbench/ChatSurface.tsx',
+      'apps/web/src/workbench/KnowledgePanel.tsx',
+      'apps/web/src/workbench/panel-model.ts',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/workbench/workbench.css',
       'apps/web/src/workbench/index.ts',
@@ -299,19 +314,19 @@ describe('workbench 工作台装配 pin（2.12 + 3.8）', () => {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/workbench/index.ts')
-    for (const name of ['ChatSurface', 'HeroEmpty', 'WorkbenchPanel', 'workbench-bridge']) {
+    for (const name of ['ShellHost', 'HeroPanel', 'HeroEmpty', 'KnowledgePanel', 'panel-model', 'workbench-bridge']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
-    // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经装配态）
+    // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经桥）
     expect(existsSync(join(ROOT, 'apps/web/src/views/knowledge/KnowledgeView.tsx')), 'KnowledgeView 缺席').toBe(true)
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx')), 'RecallTab 缺席').toBe(true)
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts')), 'recall-model 缺席').toBe(true)
   })
 
   it('Hard Rule hero 单一条件：呈现判据唯一落点 sessionZonePhase（正零才 hero），HeroEmpty 零判据零数据源', () => {
-    const panel = read('apps/web/src/workbench/WorkbenchPanel.tsx')
-    expect(panel).toContain('export function sessionZonePhase')
-    expect(panel).toContain('input.lastReadyCount === 0')
+    const model = read('apps/web/src/workbench/panel-model.ts')
+    expect(model).toContain('export function sessionZonePhase')
+    expect(model).toContain('input.lastReadyCount === 0')
     const hero = read('apps/web/src/workbench/HeroEmpty.tsx')
     expect(hero).not.toMatch(/projects|useForgeProjects|phase/)
     expect(hero).toContain('添加项目')
@@ -319,25 +334,23 @@ describe('workbench 工作台装配 pin（2.12 + 3.8）', () => {
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配占位注册 pin：product-views 发布 ForgeWorkbenchPanel；client-plugin 影子注册 main.conversation（与 sidebar 同键面）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集）', () => {
     const views = read('apps/web/src/product-views.ts')
-    expect(views).toContain('ForgeWorkbenchPanel')
-    expect(views).toContain("./workbench/index.js")
-    const plugin = read('apps/web/src/client-plugin/plugin.ts')
-    expect(plugin).toContain("export const MAIN_CONVERSATION_SLOT = 'main.conversation'")
-    expect(plugin).toContain('views.ForgeWorkbenchPanel')
+    for (const name of [
+      'ForgeSidebarSlot',
+      'ForgeShellHost',
+      'ForgeHeroPanel',
+      'ForgeKnowledgePanel',
+      'ForgeKnowledgeGlyph',
+      'ForgeTrajectoryView',
+      'ForgeRecallView',
+      'createWorkbenchBridge',
+    ]) {
+      expect(views, `${name} 未发布`).toContain(name)
+    }
   })
 
-  it('工作台桥键面一致：workbench-bridge（发布侧）与 sidebar-actions（读取侧）同键 __DSH_FORGE_WORKBENCH__', () => {
+  it('工作台桥键面一致：workbench-bridge（发布侧 + 读取侧同模块）键 __DSH_FORGE_WORKBENCH__；e2e bridgeDispatch 面保持', () => {
     expect(read('apps/web/src/workbench/workbench-bridge.ts')).toContain('__DSH_FORGE_WORKBENCH__')
-    expect(read('apps/web/src/views/sidebar/sidebar-actions.ts')).toContain('__DSH_FORGE_WORKBENCH__')
-  })
-
-  it('官方会话面嵌入配方 pin（S2 §2.1/§2.2，upstream ui-subagent 同型）：conversation.content 工厂 variant=embedded + conversation.session view=chat', () => {
-    const chat = read('apps/web/src/workbench/ChatSurface.tsx')
-    expect(chat).toContain("'conversation.content'")
-    expect(chat).toContain("variant: 'embedded'")
-    expect(chat).toContain("'conversation.session'")
-    expect(chat).toContain("view: 'chat'")
   })
 })

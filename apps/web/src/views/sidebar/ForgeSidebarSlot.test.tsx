@@ -43,12 +43,12 @@ function renderSlot(sessions: LedgerSessionsSnapshot): string {
 }
 
 describe('ForgeSidebarSlot（槽位接线层）', () => {
-  it('宽态骨架：知识库入口在场 + 项目 RPC 在途骨架（SSR 无 effect）', () => {
+  it('宽态骨架：项目 RPC 在途骨架（SSR 无 effect；fix-25 知识入口迁官方 panellist 行）', () => {
     Date.now = () => NOW
     try {
       const markup = renderSlot(ledger([]))
       expect(markup).toContain('data-dswf-sidebar="wide"')
-      expect(markup).toContain('data-dswf-nav="knowledge"')
+      expect(markup).not.toContain('data-dswf-nav="knowledge"')
       expect(markup).toContain('data-dswf-skeleton')
     } finally {
       Date.now = realDateNow

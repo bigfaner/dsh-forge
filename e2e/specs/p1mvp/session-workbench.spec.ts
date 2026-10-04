@@ -8,15 +8,20 @@
 // 无往返依赖的 Outcome（1b/1c/2b/2c/4b/4c + 5/6 的可达子集）独立成无 dogfood 测试。
 //
 // Fact Table 摘录（源码核实）：
-//   - 三页签：.dswf-session-panel [role=tab]（对话/轨迹/知识召回）；panes [data-dswf-pane=chat|trajectory|recall]
+//   - 三页签（fix-25 官方 roster）：[data-conversation-tabs] [role=tab]（对话=官方 chat 直用/
+//     轨迹/知识召回=产品登记项）；产品 panes [data-dswf-pane=trajectory|recall]；对话面/composer
+//     = 官方原生（[data-conversation-content]/[data-composer-input]）；会话面板本体 = 官方
+//     [data-slot=main.conversation]
 //   - 轨迹台账：[data-dswf-traj-row=message|tool|event|error]（TrajectoryLedger.tsx）
 //   - 侧栏：[data-dswf-sidebar=wide|rail]；[data-dswf-project]/[data-dswf-session]；暂无会话 .dswf-sidebar-no-session；
 //     骨架 [data-dswf-skeleton]；空态 [data-dswf-empty]（ForgeWorkspacePanel.test 核实）
 //   - 官方壳：折叠钮 session.new/toggle.collapse 词条（dsh-client-ui-sidebar i18n：新会话/收起侧边栏/打开侧边栏）
-//   - dock：[data-dswf-dock=collapsed|expanded|hidden]；strip 页签 [data-dswf-dock] [data-dockkit-strip]
-//     [role=tab]（fix-10 官方 dockkit 基座——自绘 strip 退役，官方 DOM 契约锚）；M0_DOCK_TABS =
-//     全局「开始」单页签（WorkbenchPanel.tsx:67）
-//   - composer：[data-dswf-pane=chat] textarea|contenteditable；工作区芯片 默认工作区|选择工作区 → [role=menu]
+//   - 右栏（fix-23 官方 ui-sidebar-right 接管）：frame [data-rightbar-collapsed]（收起/休眠在场、
+//     展开退场）；列 [data-rightbar-col]；面板钮 [data-sidebar-right-expand]（动作 = 官方
+//     sidebarRight.toggleExpanded——官方 ExpandButton/strip chrome 同一动作径）；strip chrome
+//     收展钮 [aria-label=收起右侧边栏]；strip 页签 [data-rightbar-col] [data-dockkit-strip]
+//     [role=tab]（官方 guide 种子页「开始」）
+//   - composer：[data-composer-input]（官方 contenteditable）；工作区芯片 默认工作区|选择工作区 → [role=menu]
 //   - 会话文件：{userData}/dsh-home/sessions/<sanitized-cwd>/session-<id>/session[.vN].jsonl[.zstd]
 //     （system/message + tool/call 事件——flywheel.spec 解码器同源）
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -178,7 +183,7 @@ async function registerProject(page: Page, dir: string, name: string): Promise<P
 /** composer 工作区芯片流（选定工作区 = 官方会话面新会话入口——installer-smoke/flywheel 同径） */
 async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promise<void> {
   const composer = page
-    .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+    .locator('[data-composer-input]')
     .last()
   await expect(composer, '官方会话面 composer 在场').toBeVisible({ timeout: 60_000 })
   const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
@@ -192,7 +197,7 @@ async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promis
     .first()
   await expect(item, `夹具工作区在列（${workspaceName}）`).toBeVisible({ timeout: 15_000 })
   await item.click()
-  await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+  await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
 }
 
 // ─── dsh 会话文件解码（flywheel.spec 同源） ───
@@ -276,12 +281,12 @@ function sessionLogById(dshHome: string, sessionId: string): string | undefined 
   return undefined
 }
 
-/** 工作台桥派发（视图切换缝——无产品会话行期的载体适配，沿 smoke-skeleton 台账口径） */
+/** 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null)
+ * 回官方会话面板；无产品会话行期的载体适配，台账口径保持） */
 async function bridgeDispatch(page: Page, type: string): Promise<void> {
   await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { dispatch(e: { type: string }): void } })
-      .__DSH_FORGE_WORKBENCH__
-    bridge?.dispatch({ type: eventType })
+    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
+    if (eventType === 'show-session') bridge?.showSession()
   }, type)
 }
 
@@ -313,16 +318,16 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     // ── Step 1 success：首屏三区 + 左栏构成 + 右栏默认收起 ──
     await expect(page.locator('#root nav[aria-label]').first(), '官方导航壳在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-sidebar="wide"]').first(), '产品工作区面板（宽栏）').toBeVisible()
-    await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '知识库入口').toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first(), '知识库入口').toBeVisible()
     await expect(page.locator('.dswf-sidebar-sectionlabel', { hasText: '项目' }).first(), '项目树区').toBeVisible()
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first(), '中区会话视图').toBeAttached()
-    await expect(page.locator('.dswf-session-panel').first(), '会话面板就位').toBeVisible()
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first(), '右栏默认收起（轨道归零）').toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first(), '中区会话视图').toBeAttached()
+    await expect(page.locator('[data-slot="main.conversation"]').first(), '官方会话面渲染（fix-25）').toBeVisible()
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()
 
     // ── Step 2 success：新会话 + 真实往返（fixture 消息保证 ≥1 工具调用） ──
     await selectWorkspaceViaChip(page, 'sw-demo')
     const composer = page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await composer.click()
     const fixtureMessage = '列出当前工作区根目录下的文件'
@@ -368,7 +373,7 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
       }
     }
     const transcriptBefore = await readConversationText()
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '轨迹' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '轨迹' }).click()
     await expect(page.locator('[data-dswf-pane="trajectory"]').first()).toBeVisible()
     await expect(
       page.locator('[data-dswf-traj-row="tool"]').first(),
@@ -376,8 +381,8 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     ).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('[data-dswf-traj-row="message"]').first(), '台账含本轮消息').toBeVisible()
     // 切回对话 tab 不重置——转录仍在原位（活体计时归一后等值；长活体降级 containment）
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '对话' }).click()
-    await expect(page.locator('[data-dswf-pane="chat"]').first()).toBeVisible()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '对话' }).click()
+    await expect(page.locator('[data-conversation-content]').first()).toBeVisible()
     const transcriptAfter = await readConversationText()
     if (normalizeLiveTicker(transcriptAfter) === normalizeLiveTicker(transcriptBefore)) {
       expect(normalizeLiveTicker(transcriptAfter), '切回不重置：往返转录仍在原位（计时归一等值）').toBe(
@@ -393,7 +398,7 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     await page.waitForTimeout(2_000)
     // 点回 Step 2 历史会话行 → 恢复（骨架瞬态 race 后转录完整呈现）
     await sessionRow.click()
-    await expect(page.locator('[data-dswf-pane="chat"]').first()).toBeVisible()
+    await expect(page.locator('[data-conversation-content]').first()).toBeVisible()
     // 恢复收敛轮询（fix-11）：会话切换 → 官方面历史分页装载为异步（骨架/空白瞬态后转录
     // 入位）——单发 textContent 在切换瞬间恒取空白态；按断言本意（恢复完成）轮询承载
     await expect
@@ -408,24 +413,30 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
       )
       .toContain(fixtureMessage)
 
-    // ── Step 5 success：视图互换且右栏状态保留（dock 展开 + 草稿 + 知识模式隐藏 + 切回恢复） ──
-    await page.locator('.dswf-workbench-docktoggle').click()
-    await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
+    // ── Step 5 success：视图互换且右栏状态保留（官方右栏展开 + 草稿 + 知识模式隐藏 + 切回恢复） ──
+    // fix-23：右栏 = 官方 ui-sidebar-right 活体；面板钮（[data-sidebar-right-expand] 锚保持）
+    // 动作 = 官方 sidebarRight.toggleExpanded（官方 ExpandButton/strip chrome 同一动作径——
+    // 官方头部链三件（「打开方式」+「⋯」+官方 corner）在产品 main.conversation 影子下不可达，
+    // slot runtime per-entry renderSlot 授权实证见 fix-23 记录——转后续架构任务）
+    const expandButton = page.locator('[data-sidebar-right-expand]').first()
+    await expect(expandButton, '面板钮在场（官方右栏收展入口）').toBeVisible({ timeout: 30_000 })
+    await expandButton.click()
+    await expect(page.locator('[data-rightbar-collapsed]'), '官方右栏展开（frame 收起标记退场）').toHaveCount(0)
     await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]').first(),
+      page.locator('[data-rightbar-col] [data-dockkit-strip] [role="tab"]').first(),
       '页签条在场',
     ).toBeVisible()
     // 预输入草稿「待发问题」不发送（值断言在切回后以 evaluate 双形态承载）
     await composer.click()
     await page.keyboard.insertText('待发问题')
-    // 进入知识视图：右栏隐藏（已展开也隐藏）
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
-    await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-dock="hidden"]').first(), '知识模式右栏隐藏').toBeAttached()
+    // 进入知识视图：右栏隐藏（已展开也隐藏——官方 sidebarRight 窄面联动收起）
+    await page.locator('button[aria-label="知识库"]').first().click()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '知识模式右栏隐藏').toBeAttached()
     // 点 Step 4 会话行切回：右栏按记忆恢复 + 草稿保留 + 转录完整
     await sessionRow.click()
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-dock="expanded"]').first(), '切回后右栏恢复原展开态').toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]'), '切回后右栏恢复原展开态（rightbarViewPlan 记忆恢复）').toHaveCount(0)
     const draftText = await composer.evaluate((el) => (el as HTMLTextAreaElement).value ?? el.textContent ?? '')
     expect(draftText, '保留探针①：草稿「待发问题」仍在输入框').toContain('待发问题')
     // 保留探针②（恢复收敛轮询——同 Step 4 同径）：Step 4 会话转录仍完整呈现
@@ -461,15 +472,16 @@ test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail �
     const collapseBtn = page.locator('button[aria-label="收起侧边栏"], button[title="收起侧边栏"]').first()
     await expect(collapseBtn, '官方折叠控件在场').toBeVisible({ timeout: 30_000 })
     await collapseBtn.click()
-    // Output：产品面板折叠为 rail（图标列保留知识库入口），导航内容不丢失
+    // Output：产品面板折叠为 rail（fix-25：知识入口 = 官方 panellist 行——常驻侧栏列，
+    // rail 态官方行自持图标），导航内容不丢失
     await expect(page.locator('[data-dswf-sidebar="rail"]').first()).toBeVisible({ timeout: 15_000 })
-    await expect(page.locator('[data-dswf-sidebar="rail"] [data-dswf-nav="knowledge"]').first(), 'rail 态图标保留（知识库入口）').toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first(), 'rail 态图标保留（官方 panellist 行）').toBeVisible()
     // 再展开恢复完整导航
     const expandBtn = page.locator('button[aria-label="打开侧边栏"], button[title="打开侧边栏"]').first()
     await expect(expandBtn, '展开控件在场（rail 态）').toBeVisible({ timeout: 15_000 })
     await expandBtn.click()
     await expect(page.locator('[data-dswf-sidebar="wide"]').first()).toBeVisible({ timeout: 15_000 })
-    await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '完整导航恢复').toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first(), '完整导航恢复').toBeVisible()
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -522,7 +534,7 @@ test('@web-e2e @p1mvp session-workbench·Step1c zero-project-rail-empty：零项
       throw error
     }
     await expect(page.locator('[data-dswf-project]'), 'rail 项目树零行（空态）').toHaveCount(0)
-    await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '导航入口在场（空态不缺位）').toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first(), '导航入口在场（空态不缺位）').toBeVisible()
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -545,7 +557,7 @@ test('@web-e2e @p1mvp session-workbench·Step2b/2c 空会话引导 + 空消息�
     // Step 2b：新建会话（工作区芯片流）→ 空会话引导态（composer 承载引导输入）
     await selectWorkspaceViaChip(page, 'blank-demo')
     const composer = page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await expect(composer, '空会话引导态：输入区在场可聚焦').toBeVisible()
     const conversation = page.locator('[data-conversation-content]').first()
@@ -614,10 +626,14 @@ test('@web-e2e @p1mvp session-workbench·Step4b/4c 项目乙暂无会话占位 +
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step 5/6 可达子集（无 dogfood）：知识模式右栏隐藏 + 切回恢复 + 面板不打断
-// （Step 5 的草稿/转录保留探针需真实会话——归冒烟；Step 6 项目级页签差异见文件尾留痕）
+// Step 5/6 可达子集（无 dogfood）：知识模式视图互换 + 官方右栏休眠形态
+// （Step 5 的草稿/转录保留探针需真实会话——归冒烟；Step 6 项目级页签差异见文件尾留痕。
+// fix-23：官方右栏 = 会话作用域（无会话无钮无面板——官方原生语义），本组无会话面 →
+// 右栏休眠形态断言（frame 收起标记 + 无展开钮）；展开/隐藏/恢复链归 Step 5 冒烟组。
+// fix-25：视图互换 = 官方 keyed main 面板（非选中面板卸载——DOM keep-alive 语义退役；
+// 会话状态（草稿/转录）归官方 store 自持，保留探针归 Step 5 冒烟组实证）
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢复 + 面板连续不打断', async () => {
+test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：官方右栏休眠形态 + 视图互换（官方面板径）', async () => {
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('dock-demo')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
@@ -626,28 +642,25 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢�
     await registerProject(page, join(fixtureRoot, 'dock-demo'), 'dock-demo')
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
     await page.waitForTimeout(3_000)
-    const sessionPanel = page.locator('.dswf-session-panel').first()
+    const conversation = page.locator('[data-slot="main.conversation"]').first()
 
-    // 展开右栏 → 页签条在场（M0 全局「开始」页签——shipped 全集）
-    await page.locator('.dswf-workbench-docktoggle').click()
-    await expect(page.locator('[data-dswf-dock="expanded"]').first()).toBeAttached()
-    await expect(
-      page.locator('[data-dswf-dock] [data-dockkit-strip] [role="tab"]', { hasText: '开始' }),
-      '全局页签常驻可见',
-    ).toBeVisible()
+    // 官方右栏休眠形态（fix-23 无会话面）：frame 收起标记在场 + 无展开钮（官方原生语义）
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '右栏收起（官方 frame 锚）').toBeAttached()
+    await expect(page.locator('[data-sidebar-right-expand]'), '无会话面 = 无展开钮（官方休眠）').toHaveCount(0)
 
-    // 知识模式：右栏隐藏（内容让位）+ 中区面板不被打断（挂载保持）
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
-    await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
-    await expect(page.locator('[data-dswf-dock="hidden"]').first(), '知识模式右栏隐藏（不变式：无「知识视图+右栏可见」）').toBeAttached()
-    await expect(sessionPanel, '面板不打断（常驻不卸载）').toBeAttached()
+    // 知识模式：中区视图互换（官方 keyed main——会话面板让位卸载，状态归官方 store 自持；
+    // 右栏本就休眠——不变式「无知识视图+右栏可见」成立）
+    await page.locator('button[aria-label="知识库"]').first().click()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '知识模式右栏隐藏（不变式：无「知识视图+右栏可见」）').toBeAttached()
+    await expect(conversation, '官方 keyed main 互换：会话面板让位卸载（fix-25 官方语义）').toHaveCount(0)
 
     // 切回会话视图（工作台桥 = 无会话行期的载体适配，smoke-skeleton 台账口径；
-    // 会话行切回路径由冒烟（dogfood）承载）：右栏按记忆恢复展开态、页签条仍可见
+    // 会话行切回路径由冒烟（dogfood）承载）：面板恢复挂载、右栏保持官方休眠
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached({ timeout: 15_000 })
-    await expect(page.locator('[data-dswf-dock="expanded"]').first(), '隐藏不覆写偏好——切回恢复展开').toBeAttached()
-    await expect(sessionPanel).toBeVisible()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached({ timeout: 15_000 })
+    await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '无记忆联动（休眠未动）').toBeAttached()
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -661,6 +674,9 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：右栏隐藏恢�
 test('@web-e2e @p1mvp session-workbench·Step6 项目级页签集跟随（留痕 skip）', async () => {
   test.skip(
     true,
-    'fact DOCK_TAB_MODEL：shipped 代码仅注册全局「开始」页签（M0_DOCK_TABS），甲/乙项目级页签的 fixture 预置通道未提供（journey Setup 声明的测试基建契约）——可见集推导语义由 zones/dock.test 单测 pin；留痕 skip，转正条件 = 项目级页签预置缝落地',
+    'fact DOCK_TAB_MODEL：fix-23 起右栏 = 官方 ui-sidebar-right（per-session 页签集 = 官方注册表口径，'
+      + '产品自研页签登记表（M0_DOCK_TABS/dock.ts）随自研轨道退役），甲/乙项目级页签差异的 fixture '
+      + '预置通道未提供（journey Setup 声明的测试基建契约）——留痕 skip，转正条件 = 项目级内容 '
+      + '经官方 sidebarRightTabs 注册缝落地（官方口径「adding a type is a registration, never an edit」）',
   )
 })

@@ -77,7 +77,6 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
     for (const scope of [
       // 铁律① 基础 ↛ 业务（web 基础子模块 / core db）
       'apps/web/src/shell/**',
-      'apps/web/src/zones/**',
       'apps/web/src/components/**',
       'apps/web/src/rpc/**',
       'apps/web/src/styles/**',
@@ -151,7 +150,6 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'apps/host/src/ipc',
     'apps/host/src/window',
     'apps/web/src/shell',
-    'apps/web/src/zones',
     'apps/web/src/components',
     'apps/web/src/rpc',
     'apps/web/src/styles',

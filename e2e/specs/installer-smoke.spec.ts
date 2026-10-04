@@ -209,9 +209,9 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
     await expect(page.locator('#root nav[aria-label]').first()).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-sidebar]').first()).toBeVisible()
     // 中区 = zones 容器（会话视图结构位；首启零项目 = hero 替换呈现，结构位不变）
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
-    // 右 dock 轨道默认收起
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+    // 右栏默认收起（fix-23 官方右栏 frame 锚——自研轨道退役）
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
 
     // ── ④ 会话面板可用：面板渲染 + 新建会话入口可操作 ──
     // 项目注册（RPC 直注——安装形态全链证明：IPC 通道 → core 双服务 → registry.create（隔离
@@ -229,12 +229,10 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', {
       timeout: 60_000,
     })
-    // 面板渲染：会话面板 + 三 tab（对话/轨迹/知识召回）
-    await expect(page.locator('.dswf-session-panel').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.dswf-session-panel [role="tab"]')).toHaveCount(3)
-    for (const label of ['对话', '轨迹', '知识召回']) {
-      await expect(page.locator('.dswf-session-panel [role="tab"]', { hasText: label })).toBeVisible()
-    }
+    // 面板渲染（fix-25 官方基座）：官方会话面渲染 + 官方头部链渲染点在场（sessionless 无
+    // 页签行——三页签 roster 断言归 session-workbench Step3 真实会话载体）
+    await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('[data-slot="conversation.header"]').first()).toBeAttached()
     // 收敛窗（安装形态慢盘实测）：注册后 kit/重挂收敛与账本快照链仍在落定——静置后再走
     // 交互断言，防把 boot 期收敛现象误判为产品缺陷（dev 形态无此窗口，probe 实证稳定）
     await page.waitForTimeout(5_000)
@@ -246,7 +244,7 @@ test('MVP 门第二步：安装包 4 步冒烟（安装 → 启动 → 主界面
     // （2.12）；e2e 载体适配沿台账 L474 口径——probe 实证无 client 工作区上下文时 startSession
     // 拒绝不导航，composer 芯片流 = 首装态真实新会话路径）
     const composer = page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await expect(composer, '官方会话面 composer 在场（新会话入口）').toBeVisible({ timeout: 30_000 })
     const workspaceChip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()

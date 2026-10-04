@@ -17,7 +17,7 @@ const MSG_BASE =
 const MSG_PEER_CORE =
   'dsh-forge 依赖铁律③同级业务互禁：core 内 forge ↔ knowledge 互禁 import（为未来知识域抽包保留边界）'
 const MSG_PEER_VIEWS =
-  'dsh-forge 依赖铁律③同级业务互禁：views/session ↔ views/knowledge 互禁 import——跨视图经 zones/ 槽位与 rpc/ 解耦'
+  'dsh-forge 依赖铁律③同级业务互禁：views/session ↔ views/knowledge 互禁 import——跨视图经工作台桥与 rpc/ 解耦'
 
 export default defineConfig({
   ignorePatterns: [
@@ -34,11 +34,10 @@ export default defineConfig({
   ],
   categories: { correctness: 'error' },
   overrides: [
-    // —— 铁律① 基础 ↛ 业务：web 基础子模块（shell/zones/components/rpc/styles）↛ views/flows ——
+    // —— 铁律① 基础 ↛ 业务：web 基础子模块（shell/components/rpc/styles）↛ views/flows ——
     {
       files: [
         'apps/web/src/shell/**',
-        'apps/web/src/zones/**',
         'apps/web/src/components/**',
         'apps/web/src/rpc/**',
         'apps/web/src/styles/**',

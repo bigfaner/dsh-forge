@@ -1,36 +1,48 @@
 # workbench/
 
-定位：**装配** —— 三区工作台组装（Page Composition「工作台（单页三区）」，2.12）：壳入口面板 +
-hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作台桥发布。无独立业务语义——域内容
-一律经 `zones/` 槽位与既有业务模块（views/flows）注入；依赖方向 = 装配 → 基础 + 业务单向。
+定位：**装配** —— 官方基座降位后的产品装配面（fix-25 架构重排）：常驻壳宿主 +
+官方 main 面板族（hero/知识）+ hero 纯渲染件 + 面板模型纯函数 + 工作台桥。
+无独立业务语义——域内容一律经既有业务模块（views/flows）注入；依赖方向 =
+装配 → 基础 + 业务单向。
+
+## 架构（fix-25：官方头部链点亮）
+
+**中区 = 官方 ConversationRoot 直渲**（`main.conversation` 产品影子退役）。根因（runtime
+源码三层实证 + fix-23 探针）：slot runtime 的 `renderSlot` 授权按「占用者注册行自声明的
+children」发放（renderer standardKit：`entry.children` 在场才注入），子槽声明全局唯一
+（ui-slots register 重声明即 throw）——产品影子行（-100 不声明 children）恒拿不到官方
+子座渲染权。官方 ConversationRoot 自带 children 声明 → 官方头部链
+（`conversation.header` → `conversation.session.header` → lineage/actions/
+**utilities「打开方式」+「⋯」**/**corner 官方 ExpandButton**）与官方页签行/内容面全部白拿。
+
+产品面降位官方缝（content 工厂域承载不可行——`registerFactory` 定义唯一不可影子）：
+
+- **知识视图（UF-5）** = 官方 `main` keyed 面板 roster（ui-layout「root-scoped main slot
+  selects the Conversation or a global panel」——先例 ui-plugin-manager/ui-schedule）：
+  `key='dswf-knowledge'` 占用者 KnowledgePanel；入口 = 官方 `sidebar.panellist` 行
+  （官方 PanelRow 行语言）+ 召回视图跳转（桥）；回会话 = 官方 `openSession`
+  （内部 `layout.selectPanel(null)`）或桥 `showSession`。keyed 面板非选中即卸载
+  （DOM keep-alive 语义退役——会话状态（草稿/转录）归官方 store 自持）。
+- **UF-2 hero（零项目首用引导）** = 产品全局 main 面板 `key='dswf-hero'`（HeroPanel）；
+  ShellHost 驱动选中/让位（boot 期零项目 → selectPanel；注册成功 → null——一次性守卫
+  防导航争用）。零 workspace 下官方 hero 为死端（空选择器+禁用输入），产品引导面板为
+  功能必需。
+- **产品页签（UF-4 轨迹/知识召回）** = 官方 `conversation.view` roster 登记项
+  （ui-trajectory 同型先例——`id`/`order`/`label`）；对话 tab = 官方 'chat' 直用。
+  官方 'trajectory' 登记项受 developerTools 设置门控（默认隐藏）——产品自登记
+  'dswf-trajectory' 保三页签恒在场；developerTools 开启期两项并陈 = 已知边界。
 
 ## 组成
 
 | 文件 | 职责 |
 |---|---|
-| `WorkbenchPanel.tsx` | 装配面板（`main.conversation` 洞位占用者）：`sessionZonePhase` 相位机（Hard Rule hero 单一条件）+ `WorkbenchAssembly` 三区槽位装配（纯渲染）+ 效应面（桥发布 / 官方会话锚跟随 / 项目数三锚重拉 / 3.8：`projectAnchorOf` 项目锚推导 + 抽屉打开态 + 召回 tab 激活锚 / fix-11：`TranscriptAnchor` 转录接线 + `transcriptOfChatSnapshot` wire 映射）+ UF-3 流程宿主挂载 |
-| `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「＋添加项目」CTA——官方 Button；零判据零数据源） |
-| `ChatSurface.tsx` | 对话 tab 官方会话面嵌入（S2 嵌入配方：`conversation.content` 工厂 variant=embedded × `conversation.session` owner view='chat'——upstream ui-subagent sidebar-chat 同型先例；kit 窄面 + 缺席降级占位） |
-| `workbench-bridge.ts` | 工作台桥发布面（`__DSH_FORGE_WORKBENCH__` 发布侧；读取侧 = views/sidebar/sidebar-actions） |
-| `workbench.css` | 装配样式（容器 = 官方 ConversationRoot 同型几何；hero/校平位/dock 角钮全令牌 + 原型刻度 dsw-raw 注记） |
-
-## 装配结构（对应 page-map「工作台·会话视图」Page Sections）
-
-- **左栏 rail** = 官方 ui-sidebar 壳（槽位路线 A，2.7：ForgeSidebarSlot 占 `sidebar.workspaces` +
-  品牌行内容洞位）——zones rail 槽不注入（空轨），折叠/导航/快捷键白拿。
-- **中区会话视图** = `SessionPanel`（2.11）入 `slots.session`，`chatSurface` = ChatSurface
-  （官方会话面嵌入——转录/输入/草稿/滚动位全官方面自持）；召回 tab（3.8）= `RecallTab`
-  注入（sessionRecall 单通道 + visible 激活重拉锚；命中行点击 → 抽屉打开 + show-knowledge）。
-- **hero 相位（UF-2）** = 项目数 **正零** 时中区替换呈现（Hard Rule：仅由项目数驱动，单一条件；
-  注册成功即永久让位——P1 无项目删除、archived 随行计数不回落）。CTA → `openAddProjectFlow()`。
-- **知识视图** = `KnowledgeView`（3.8）入 `slots.knowledge`（常挂载 keep-alive；UF-6 浏览面 +
-  详情抽屉——无项目锚 = 引导空态）；视图互换/右栏联动机制归 zones 容器（2.5）。
-- **当前项目锚（3.8）** = `projectAnchorOf`（会话锚 → workspace 归属 → 项目；无锚兜底唯一项目；
-  多项目无锚 = null）——知识视图与召回 tab 共用范围锚；抽屉打开态（`drawerEntryId`）为
-  知识卡片与召回行两入口共用的装配态（Hard Rule：跨视图跳转经装配态，不直引组件）。
-- **右栏 dock** = zones dock 轨道（UF-7 机制）+ M0 占位页签集（全局「开始」）；会话区右上角
-  常显收展开关（原型 conv-corner 同位）。
-- **模态层** = `AddProjectFlow` 宿主（mount 期发布 `__DSH_FORGE_ADD_PROJECT_FLOW__` 打开缝）。
+| `ShellHost.tsx` | 常驻壳宿主（`shell.overlay` 槽位件——AppFrame root 五子槽之一，不随面板互换卸载）：相位推导 + `data-dswf-workbench/phase/view` 锚（e2e/走查）+ UF-3 流程宿主 + hero 面板驱动（`heroPanelDrive` 纯函数）+ 知识模式右栏联动（`rightbarViewPlan` + effect——fix-23 语义随迁）+ `WorkspacesAnchor` 归属锚 |
+| `HeroPanel.tsx` | UF-2 零项目 hero 面板（`main` keyed 'dswf-hero' 占用者——HeroEmpty 挂载舞台） |
+| `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「添加项目」CTA——官方 Button；零判据零数据源） |
+| `KnowledgePanel.tsx` | UF-5 知识面板（`main` keyed 'dswf-knowledge' 占用者）：KnowledgeView 挂载 + 项目锚推导 + 桥抽屉缝消费（useSyncExternalStore） |
+| `panel-model.ts` | 纯函数面：`sessionZonePhase`（Hard Rule hero 单一条件）/ `nextLastReadyCount` / `projectAnchorOf` / `rightbarViewPlan` / `centerViewOf`（activePanelId → 视图镜像）+ 面板 key 常量（plugin.ts 字面量同源 pin） |
+| `workbench-bridge.ts` | 工作台桥（`__DSH_FORGE_WORKBENCH__`）：官方面板导航窄面（`createWorkbenchBridge`——nav 闭包绑定 `layout.selectPanel`）+ 知识抽屉目标缝（召回视图跳转 → 知识面板抽屉——两棵独立槽位树的唯一通道）|
+| `workbench.css` | 装配样式（壳宿主零交互舞台 + hero/知识面板舞台——官方 CenterColumn 内自排；中区容器零样式：官方 ConversationRoot 直渲） |
 
 ## 数据流
 
@@ -38,19 +50,17 @@ hero 相位（UF-2）+ 知识视图 M0 占位 + 官方会话面嵌入 + 工作�
   workspace 归属快照身份变化（外部注册 dsh create 后自愈，与左栏面板同锚口径）/ 注册成功回调
   （`AddProjectFlow.onRegistered`）。相位机：`settling`（未就绪在途——防闪现）→ `hero`（正零）/
   `session`（≥1 或未就绪失败 fail-soft——计数未知 ≠ 0）。
-- **工作台桥**：mount 发布 / unmount 撤销；左栏导航（知识库入口 / 会话行）经
-  sidebar-actions 读桥派发视图事件（缺席期 fail-soft no-op）。
-- **官方会话锚跟随**：`sessionId` 变更 → `select-session`（官方新会话/品牌行激活会话即回会话
-  视图——UF-5「再次点新会话/会话行/品牌行 → 切回会话视图」的装配侧接缝）。
+- **面板互换**：官方 `layout.selectPanel`（ui-layout LayoutController）；官方 `openSession`
+  内部 `selectPanel(null)` 回会话——「会话行切回」UF-5 主路径全官方收口（产品视图态机退役）。
+- **工作台桥**：插件 apply 期经发布面工厂创建（nav 绑定官方 selectPanel）+ 页内全局发布；
+  消费方 = 召回视图跳转（inject face）+ 知识面板抽屉（订阅）+ e2e 载体（`showSession`）。
+- **知识模式右栏联动**：ShellHost effect（`rightbarViewPlan`——进知识面板收起并记忆、回会话
+  按记忆恢复；UF-5/SC8 语义保持，收展态本体归官方 per-session store 自持）。
 
-## 残留（后续里程碑/任务）
+## 已知边界（P1）
 
-- ~~ChatSnapshot wire 判别值 → TranscriptEntry 映射（轨迹 tab 数据）~~ 已随 fix-11 接线
-  （`TranscriptAnchor` 订阅 `useConversation` 标准钩子 → `transcriptOfChatSnapshot` 纯函数
-  映射（wire 判别 = ConversationNode `kind` 字段族）→ SessionPanel `transcript` 注入）；
-  conversationPhase 完整相位（settling）仍待装配实跑锚定入 G1 pin 池（2.13），冒烟迁移断言（2.14）。
-- dock 域页签（知识文档/审核台/文档）与按项目页签切换的实机驱动：后续里程碑登记表接入；
-  机制面（visibleDockTabs 口径）已由 zones 单测 pin。
-- hero / 注册链的实机 e2e 证明受 **host 侧 forge:projects/* 通道实装** 前置（main.ts 未接
-  `registerProjectsChannels`；profile core 行 disabled——见执行记录）；落地后 workbench-sc1
-  spec 的 hero 组断言即可转正。
+- **多项目知识锚定降级**：知识面板 = root 作用域（无会话锚可读）→ `projectAnchorOf` 恒走
+  唯一项目兜底；会话锚定径由召回/轨迹视图（session 作用域）消费。多项目知识视图锚定归
+  后续里程碑（会话锚跨面板传递缝）。
+- **developerTools 开启期轨迹页签并陈**：官方 'trajectory'（门控显示）与产品
+  'dswf-trajectory' 同时在场——官方门控不改写，P1 接受。

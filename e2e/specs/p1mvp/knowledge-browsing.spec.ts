@@ -196,12 +196,14 @@ async function launch(userData: string, options?: { readonly dismiss?: boolean }
   return { app, page, providerOverlay }
 }
 
-/** 工作台桥派发（视图切换缝——无会话行期的载体适配，沿 smoke-skeleton 台账口径） */
+/**
+ * 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null)
+ * 回官方会话面板；无产品会话行期的载体适配，台账口径保持）
+ */
 async function bridgeDispatch(page: Page, type: string): Promise<void> {
   await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { dispatch(e: { type: string }): void } })
-      .__DSH_FORGE_WORKBENCH__
-    bridge?.dispatch({ type: eventType })
+    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
+    if (eventType === 'show-session') bridge?.showSession()
   }, type)
 }
 
@@ -238,9 +240,9 @@ async function registerKbProject(page: Page, fixtureRoot: string): Promise<strin
 /** 进入知识库浏览视图（网格终态收敛由调用侧断言——空态元素常驻 DOM 且 CSS 隐藏，
  *  卡片/空态联合选择器的 .first() 会钉死在隐藏空态上——探针实证） */
 async function openKnowledgeView(page: Page, projectId: string): Promise<readonly KnowledgeCardLike[]> {
-  await page.locator('[data-dswf-nav="knowledge"]').first().click()
+  await page.locator('button[aria-label="知识库"]').first().click()
   await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
+  await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
   return forgeInvoke<readonly KnowledgeCardLike[]>(page, 'forge:knowledge/listEntries', { projectId })
 }
 
@@ -299,8 +301,8 @@ test('@web-e2e @p1mvp knowledge-browsing·冒烟：浏览→过滤→细分→�
     // K1 徽章 = 3（与 Setup 使用事件计数一致——Story 3 AC3）
     const heatText = await cardByTitle(page, '部署规范').locator('.dswf-heat-badge').textContent()
     expect(heatText, '热度徽章 = 使用事件计数（3）').toContain('3')
-    // 右栏隐藏且状态保留（知识模式）
-    await expect(page.locator('[data-dswf-dock="hidden"]').first()).toBeAttached()
+    // 右栏隐藏且状态保留（知识模式；fix-23 官方右栏 frame 锚）
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
     // 域树：三层链可达（第 3 层节点可见——深度边界）
     for (const domain of ['前端', '前端/规范', '前端/规范/React', '后端']) {
       await expect(page.locator(`[data-dswf-domain="${domain}"]`), `域树节点在场：${domain}`).toBeVisible()
@@ -421,8 +423,8 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1c stale-cache-two-phase：首显�
     }
     // 视图再激活（active 翻转重拉面）：切出（桥 = 无会话行期载体）→ 再进知识视图
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached({ timeout: 15_000 })
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached({ timeout: 15_000 })
+    await page.locator('button[aria-label="知识库"]').first().click()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 15_000 })
     await expect(cardByTitle(page, 'API 网关规范'), '阶段②：新增条目出现（重建收敛）').toBeVisible({ timeout: 30_000 })
     await expect(cardByTitle(page, '构建规范'), '阶段②：被删条目消失').toHaveCount(0)
@@ -449,7 +451,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1d cold-cache-skeleton：冷缓存
     launched = await launch(userData)
     await registerKbProject(launched.page, fixtureRoot)
     // 首次进入（冷缓存——索引零行）：骨架或卡片先到（瞬态 race），收敛到卡片网格
-    await launched.page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await launched.page.locator('button[aria-label="知识库"]').first().click()
     await expect(launched.page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 30_000 })
     await expect(
       launched.page.locator('[data-dswf-skeleton], [data-dswf-kn-cards] .dswf-kn-card').first(),
@@ -590,7 +592,7 @@ test('@web-e2e @p1mvp knowledge-browsing·关键词交互回归（fix-5）：向
     await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 20_000 })
 
     // 知识视图（全量卡片就位）
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 30_000 })
     await expect(cardByTitle(page, '部署规范'), '向导注册后全量卡片在场').toBeVisible({ timeout: 30_000 })
 

@@ -76,10 +76,11 @@ test('AC1–AC3 dev 形态：自有壳载入 + 官方 ui-* 渲染 + carrier RPC 
     expect(Array.isArray(rpc.items)).toBe(true)
 
     // 2.7 槽位路线 A 实跑判定：官方 sidebar 壳在场（上方 nav 可见 = 壳与折叠/导航/快捷键继承）
-    // 且 workspaces 洞位被产品面板占用（data-dswf-sidebar 宽态/rail 态 + 知识库入口在场；
-    // 官方 ui-workspace 浏览器被 priority -100 影子——单测面 pin，此处在场断言取 DOM 证据）
+    // 且 workspaces 洞位被产品面板占用（data-dswf-sidebar 宽态/rail 态；
+    // 官方 ui-workspace 浏览器被 priority -100 影子——单测面 pin，此处在场断言取 DOM 证据；
+    // 知识库入口 = 官方 panellist 行（fix-25：产品 nav 行迁官方 PanelRow）
     await expect(page.locator('#root [data-dswf-sidebar]').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('#root [data-dswf-sidebar] [data-dswf-nav="knowledge"]').first()).toBeVisible()
+    await expect(page.locator('#root button[aria-label="知识库"]').first()).toBeVisible()
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })

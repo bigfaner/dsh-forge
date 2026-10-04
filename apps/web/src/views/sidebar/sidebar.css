@@ -14,41 +14,6 @@
   min-height: 0;
 }
 
-/* ── 知识库入口行（宽态；官方导航行形态） ── */
-.dswf-sidebar-entryrow {
-  display: flex;
-  flex: none;
-  padding: 4px 8px; /* dsw-raw 官方行语言刻度 */
-}
-
-.dswf-sidebar-entry {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px; /* dsw-raw 官方行语言 */
-  height: 34px;
-  box-sizing: border-box;
-  padding: 0 8px; /* dsw-raw 官方行语言 */
-  border: none;
-  border-radius: var(--dsw-radius-md);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  font: var(--dsw-font-s-14);
-  user-select: none;
-}
-
-.dswf-sidebar-entry:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.dswf-sidebar-entry-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ── 项目区（滚动主体） ── */
 .dswf-sidebar-projects {
   display: flex;
@@ -235,25 +200,6 @@
   align-items: center;
   gap: 2px; /* dsw-raw 官方 rail 刻度 */
   padding: 2px 0; /* dsw-raw 官方 rail 刻度 */
-}
-
-.dswf-sidebar-railbtn {
-  display: inline-flex;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-
-.dswf-sidebar-railbtn:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
 }
 
 /* ── 品牌行件（sidebar.brand.mark / sidebar.brand.name 洞位内容；行本体归壳） ── */

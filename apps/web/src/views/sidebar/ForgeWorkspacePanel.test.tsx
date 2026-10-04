@@ -1,6 +1,7 @@
-// ForgeWorkspacePanel 单测 —— UF-1 面板相位与行语言（AC3 知识库入口 / AC4 rail 图标 /
-// AC5 空态引导 + 会话行渲染）。renderToStaticMarkup 纯渲染面（同 2.6 组件测法）；
-// 交互接线（onOpenKnowledge/onSessionActivate → 动作绑定）在 sidebar-actions.test。
+// ForgeWorkspacePanel 单测 —— UF-1 面板相位与行语言（AC5 空态引导 + 会话行渲染）。
+// renderToStaticMarkup 纯渲染面（同 2.6 组件测法）；交互接线（onSessionActivate →
+// 动作绑定）在 sidebar-actions.test。fix-25：知识入口迁官方 sidebar.panellist 行——
+// 本面板知识入口断言随迁（宽态无入口行；rail 态空轨道）。
 // fix-6 增面：头部四件（搜索/视图选项补齐）+ SidebarProjectsZone 受控缝（过滤应用/
 // 行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
 import { describe, expect, it } from 'vitest'
@@ -50,9 +51,8 @@ function panel(overrides: Partial<Parameters<typeof ForgeWorkspacePanel>[0]> = {
 describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
   const markup = panel()
 
-  it('知识库入口行在场（AC3）', () => {
-    expect(markup).toContain('data-dswf-nav="knowledge"')
-    expect(markup).toContain('知识库')
+  it('知识入口行缺席（fix-25：迁官方 sidebar.panellist 行——本区域纯项目树）', () => {
+    expect(markup).not.toContain('data-dswf-nav="knowledge"')
   })
 
   it('项目区「＋」添加入口在场（UF-3 入口接线点——回调出，触发归槽位接线层）', () => {
@@ -115,14 +115,13 @@ describe('相位（UF-1 States）', () => {
   })
 })
 
-describe('收起态 rail（AC4：图标保留悬停提示）', () => {
-  it('rail 分支 = 知识库图标钮（aria-label 即悬停提示锚）', () => {
+describe('收起态 rail（AC4：轨道锚保持）', () => {
+  it('rail 分支 = 空轨道（fix-25：知识入口迁官方 panellist 行——官方 PanelRow rail 态自承载）', () => {
     const markup = panel({ wide: false })
     expect(markup).toContain('data-dswf-sidebar="rail"')
-    expect(markup).toContain('aria-label="知识库"')
     // rail 态不渲染宽态内容（项目区/入口行文案缺席）
     expect(markup).not.toContain('dswf-sidebar-projects')
-    expect(markup).not.toContain('dswf-sidebar-entry-label')
+    expect(markup).not.toContain('aria-label="知识库"')
   })
 })
 

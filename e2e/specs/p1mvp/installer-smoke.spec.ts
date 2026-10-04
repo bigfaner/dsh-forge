@@ -252,12 +252,12 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──
     await expect(page.locator('#root nav[aria-label]').first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-sidebar]').first(), '产品工作区面板').toBeVisible()
-    await expect(page.locator('[data-dswf-nav="knowledge"]').first(), '知识库入口').toBeVisible()
+    await expect(page.locator('button[aria-label="知识库"]').first(), '知识库入口').toBeVisible()
     await expect(page.locator('[data-dswf-project]'), '零项目态：项目树空').toHaveCount(0)
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first(), '中区结构位').toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first(), '中区结构位').toBeAttached()
     await expect(page.locator('[data-dswf-hero]').first(), 'hero 空态 + CTA（零项目确定相位）').toBeVisible()
     await expect(page.locator('[data-dswf-cta="add-project"]')).toBeVisible()
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first(), '右栏默认收起（轨道归零）').toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]').first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
     await app?.close().catch(() => undefined)
@@ -320,11 +320,11 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     })
     expect(registered.projectId, '安装形态注册落库（IPC → core 双服务 → registry → SQLite 全链）').toBeTruthy()
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
-    await expect(page.locator('.dswf-session-panel').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.dswf-session-panel [role="tab"]'), '会话面板三页签').toHaveCount(3)
+    await expect(page.locator('[data-slot="main.conversation"]').first(), '官方会话面渲染（fix-25）').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('[data-slot="conversation.header"]').first(), '官方头部链渲染点在场').toBeAttached()
     // 新会话入口：composer 工作区芯片流（首装真实路径——rail 钮锚跟随回跳归单测 pin）
     const composer = page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
     const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()

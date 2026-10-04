@@ -5,7 +5,8 @@
 //      client-plugin 经 ctx.slots.register 注入面携带，本组件 useSyncExternalStore 直读
 //      ——SC2 零缓存零副本：无本地快照持有，每次渲染读快照源）；
 //   3. 项目 RPC（useForgeProjects——forge:projects/list）。
-// 导航动作经 sidebar-actions 绑定（openSession = dsh 面；视图事件 = 工作台桥）。
+// 导航动作经 sidebar-actions 绑定（openSession = dsh 面；fix-25：知识入口迁官方
+// sidebar.panellist 行，产品桥视图事件退役——会话行打开即官方回会话面板）。
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
@@ -73,7 +74,6 @@ export function ForgeSidebarSlot({
       projectsPending={projectsState.phase !== 'ready'}
       hasProjects={projectsState.phase === 'ready' && projectsState.projects.length > 0}
       projectsError={projectsState.phase === 'error' ? projectsState.message : undefined}
-      onOpenKnowledge={actions.onOpenKnowledge}
       onAddProject={onAddProject}
       onSessionActivate={actions.onSessionActivate}
       onRetryProjects={retryProjects}

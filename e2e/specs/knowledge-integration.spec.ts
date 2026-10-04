@@ -83,12 +83,14 @@ async function stablePhase(page: Page): Promise<'hero' | 'session'> {
   return page.locator('[data-dswf-workbench]').first().getAttribute('data-dswf-phase') as Promise<'hero' | 'session'>
 }
 
-/** 工作台桥派发（左栏导航同径转移面——无产品会话行期的载体适配，台账 #12/#99） */
+/**
+ * 工作台桥导航（fix-25：官方面板径——showSession = layout.selectPanel(null)
+ * 回官方会话面板；无产品会话行期的载体适配，台账口径保持）
+ */
 async function bridgeDispatch(page: Page, type: string): Promise<void> {
   await page.evaluate((eventType) => {
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { dispatch(e: { type: string }): void } })
-      .__DSH_FORGE_WORKBENCH__
-    bridge?.dispatch({ type: eventType })
+    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { showSession(): void } }).__DSH_FORGE_WORKBENCH__
+    if (eventType === 'show-session') bridge?.showSession()
   }, type)
 }
 
@@ -172,36 +174,28 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
 
     // AC-1：知识视图 = UF-6 浏览面装配壳（M0 占位已替换）；无项目锚 = 引导空态（确定性：
     // 零注册 ⟺ 无锚——host 通道在期亦然），壳结构位在场
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     const knowledgeView = page.locator('[data-dswf-knowledge-view]').first()
     await expect(knowledgeView).toBeVisible()
-    await expect(page.locator('.dswf-zones[data-dswf-view="knowledge"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="knowledge"]').first()).toBeAttached()
     // 无项目锚 = 引导空态（锚属性 none——浏览面不出场不拉取不炸壳）
     await expect(knowledgeView).toHaveAttribute('data-dswf-kn-anchor', 'none')
     await expect(page.locator('[data-dswf-knowledge-view]')).toContainText('尚未锚定项目')
-    // UF-5 回归（不褪色）：知识模式右栏强制隐藏（已展开也隐藏——此处收起态进入）
-    await expect(page.locator('[data-dswf-dock="hidden"]').first()).toBeAttached()
+    // UF-5 回归（不褪色）：知识模式右栏隐藏（fix-23 官方右栏 frame 锚——此处收起态进入）
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
 
     // UF-5 回归（不褪色）：切回会话视图 → 右栏恢复收起（知识视图让位结束）
     await bridgeDispatch(page, 'show-session')
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
     await expect(page.locator('[data-dswf-knowledge-view]').first()).toBeHidden()
-    await expect(page.locator('[data-dswf-dock="collapsed"]').first()).toBeAttached()
+    await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()
 
-    // 召回 tab 接线（session 相位分支——hero 相位会话面板不出场）：tab 激活 → pane 呈现
-    // 3.8 数据面（无会话锚 = 静态空态；通道缺口期有锚 = fail-soft 错误条——两态均非占位破洞）
+    // 召回 tab 结构（fix-25 官方 roster）：本组无会话——官方页签行（conversation.session.header
+    // 内）不渲染，召回视图不挂载（only:id 激活即挂载机制）；「无会话锚 = 静态空态」归
+    // ConversationViews 单测 pin，真实会话召回链归 knowledge-recall-flywheel（dogfood）
     if (phase === 'session') {
-      await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
-      await expect(page.locator('[data-dswf-pane="recall"]')).toBeVisible()
-      const recallFace = page.locator(
-        '[data-dswf-pane="recall"] [data-dswf-recall-face], [data-dswf-pane="recall"] [data-dswf-recall-tab]',
-      )
-      await expect(recallFace.first()).toBeVisible()
-      // AC-5 面：无会话锚 → 「本会话暂无召回」空态（通道缺口期有锚 = 错误条，两态择一在场）
-      const faceKind = await recallFace.first().getAttribute('data-dswf-recall-face')
-      if (faceKind === 'empty') {
-        await expect(page.locator('[data-dswf-pane="recall"]')).toContainText('本会话暂无召回')
-      }
+      await expect(page.locator('[data-conversation-tabs]')).toHaveCount(0)
+      await expect(page.locator('[data-dswf-pane="recall"]')).toHaveCount(0)
     }
 
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
@@ -255,7 +249,7 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await expect(page.locator('[data-dswf-workbench]')).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
 
     // ── AC-1：知识视图 = 浏览面真数据（项目锚 = 唯一项目兜底；索引直读 → 卡片网格） ──
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     const knowledgeView = page.locator('[data-dswf-knowledge-view]').first()
     await expect(knowledgeView).toBeVisible()
     // 锚非 none（唯一项目兜底——项目 id 运行期未知，断言取「非 none」语义）
@@ -273,10 +267,12 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await page.keyboard.press('Escape')
     await expect(page.locator('[data-dswf-kn-drawer]')).toHaveCount(0)
 
-    // ── AC-5：召回 tab 无召回会话 =「本会话暂无召回」（真通道 + 零事件 = 确定性空态） ──
+    // ── AC-5（fix-25 载体迁移）：本组无会话——官方页签行不渲染（session.header 会话作用域），
+    // 「无召回会话 = 本会话暂无召回」空态归 ConversationViews 单测 pin；真实会话召回数据链
+    // 归 knowledge-recall-flywheel（dogfood）——此处断官方会话面板恢复挂载
     await bridgeDispatch(page, 'show-session')
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
-    await expect(page.locator('[data-dswf-pane="recall"]')).toContainText('本会话暂无召回', { timeout: 30_000 })
+    await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
+    await expect(page.locator('[data-conversation-tabs]')).toHaveCount(0)
   } finally {
     await app.close()
     rmSync(userData, { recursive: true, force: true })

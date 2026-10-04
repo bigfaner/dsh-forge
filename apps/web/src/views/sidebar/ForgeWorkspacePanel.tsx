@@ -16,7 +16,6 @@ import { useState, type ReactNode } from 'react'
 import {
   Button,
   DisclosureRow,
-  IconDeliverDocRegular,
   IconFolderCloseRegular,
   IconProjectAddOutlineRegular,
   IconSearchOutlineRegular,
@@ -24,7 +23,6 @@ import {
   Input,
   Menu,
   StateDot,
-  Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../../components/index.js'
@@ -56,8 +54,6 @@ export interface ForgeWorkspacePanelProps {
   readonly hasProjects: boolean
   /** 项目列表加载失败文案（在场 = 错误条相位） */
   readonly projectsError?: string
-  /** 知识库入口回调（视图切换 show-knowledge——AC3） */
-  readonly onOpenKnowledge?: () => void
   /** 「＋」添加项目入口（UF-3 流程打开缝——槽位层绑定 openAddProjectFlow；缺席 = 不呈现） */
   readonly onAddProject?: () => void
   /** 会话行回调（打开会话 + select-session——AC5） */
@@ -66,22 +62,6 @@ export interface ForgeWorkspacePanelProps {
   readonly onRetryProjects?: () => void
   /** 相对时间基准（注入——纯渲染可测） */
   readonly now: number
-}
-
-/** 知识库入口行（宽态：图标 + 文案；UF-1 导航项 3——P1 无待审核徽标） */
-function KnowledgeEntry({ onClick }: { onClick?: () => void }): ReactNode {
-  return (
-    <button
-      type="button"
-      className="dswf-sidebar-entry"
-      data-dswf-nav="knowledge"
-      aria-label="知识库"
-      onClick={onClick}
-    >
-      <IconDeliverDocRegular size={16} />
-      <span className="dswf-sidebar-entry-label">知识库</span>
-    </button>
-  )
 }
 
 /** 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型刻度） */
@@ -392,7 +372,8 @@ export function SidebarProjectsZone({
 
 /**
  * 产品工作区面板（sidebar.workspaces 占用者本体——过滤/视图菜单态机持有者）。
- * 宽态：知识库入口行 + 项目区（SidebarProjectsZone）；rail 态：知识库图标（悬停提示）。
+ * 宽态：项目区（SidebarProjectsZone）；rail 态：空轨道（知识入口 = 官方 panellist 行，
+ * fix-25 迁出——官方 PanelRow 行语言自承载宽/rail 双态）。
  * 过滤态机（fix-6）：searchOpen/query 纯视图态；收起即清空查询（原型 S.pj 语义——
  * 过滤掉当前选中项不重置锚，清过滤即恢复可见，PRD UF-1 Validation）。
  * useState 先于 rail 早退分支（hook 顺序稳定——wide 翻转不重挂）。
@@ -405,7 +386,6 @@ export function ForgeWorkspacePanel({
   projectsPending,
   hasProjects,
   projectsError,
-  onOpenKnowledge,
   onAddProject,
   onSessionActivate,
   onRetryProjects,
@@ -422,28 +402,11 @@ export function ForgeWorkspacePanel({
 
   // rail 态：图标列（壳已供折叠/展开/新会话图标——本面板只补知识库入口）
   if (!wide) {
-    return (
-      <div className="dswf-sidebar dswf-sidebar-rail" data-dswf-sidebar="rail">
-        <Tooltip label="知识库" side="right" delayMs={500}>
-          <button
-            type="button"
-            className="dswf-sidebar-railbtn"
-            data-dswf-nav="knowledge"
-            aria-label="知识库"
-            onClick={onOpenKnowledge}
-          >
-            <IconDeliverDocRegular size={18} />
-          </button>
-        </Tooltip>
-      </div>
-    )
+    return <div className="dswf-sidebar dswf-sidebar-rail" data-dswf-sidebar="rail" />
   }
 
   return (
     <div className="dswf-sidebar" data-dswf-sidebar="wide" aria-label="项目与会话">
-      <div className="dswf-sidebar-entryrow">
-        <KnowledgeEntry onClick={onOpenKnowledge} />
-      </div>
       <SidebarProjectsZone
         tree={tree}
         loading={loading}

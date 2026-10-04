@@ -28,20 +28,20 @@
 | 原断言（行号） | 原文 | e2e 载体（组一） | 适配记录 |
 |---|---|---|---|
 | L41 | 左栏渲染(纯菜单与导航) | `#root nav[aria-label]` 可见 + `[data-dswf-sidebar]` 可见 | 载体适配：M0 左栏 = 官方 sidebar 壳（路线 A）+ 产品工作区面板，非原型自绘纯菜单 |
-| L42 | 左栏 = 品牌/新会话/知识库入口/项目树/设置 | `[data-dswf-nav="knowledge"]` 可见 + `.dswf-sidebar-sectionlabel`「项目」可见 | 载体适配：品牌/新会话/设置 = 官方壳承继域（官方 nav 在场断言承载）；知识库入口/项目树 = 产品面板 |
-| L44 | 默认中区 = 会话视图(conv 可见 / knview 隐藏) | `.dswf-zones[data-dswf-view="session"]` + `.dswf-zone-knowledge` 隐藏；相位门 ∈ {hero, session} | M0 语义：hero = 首用替换呈现（UF-2），session = 会话视图；知识视图恒隐藏语义不变 |
-| L45 | tabs = 对话/轨迹/知识召回 | `.dswf-session-panel [role="tab"]` 计 3 + 三 label 可见 | session 相位分支执行（hero 相位期会话面板不出场——替换呈现语义） |
-| L46 | 右栏默认收起(轨道归零) | `[data-dswf-dock="collapsed"]` 在场 | 无适配 |
+| L42 | 左栏 = 品牌/新会话/知识库入口/项目树/设置 | `button[aria-label="知识库"]` 可见 + `.dswf-sidebar-sectionlabel`「项目」可见 | 载体适配：品牌/新会话/设置 = 官方壳承继域；知识库入口 = 官方 panellist 行（fix-25：产品 nav 行迁官方 PanelRow）；项目树 = 产品面板 |
+| L44 | 默认中区 = 会话视图(conv 可见 / knview 隐藏) | `[data-dswf-workbench][data-dswf-view="session"]` + `[data-dswf-knowledge-view]` 隐藏；相位门 ∈ {hero, session} | M0 语义：hero = 首用替换呈现（UF-2），session = 会话视图；知识视图恒隐藏语义不变；中区 = 官方 ConversationRoot（fix-25 影子退役），视图镜像锚 = 壳宿主 |
+| L45 | tabs = 对话/轨迹/知识召回 | `[data-conversation-tabs] [role="tab"]` 计 3 + 三 label 可见（真实会话载体归 session-workbench Step3/krf；无会话面 = 官方语义无页签行） | fix-25：官方 roster 形态——对话 = 官方 chat 直用，轨迹/知识召回 = 产品登记项（官方头部链点亮已白拿）；页签行会话作用域——无会话/空白会话不渲染（官方语义） |
+| L46 | 右栏默认收起(轨道归零) | `[data-rightbar-collapsed]` 在场 | fix-23 锚迁移：右栏 = 官方 AppFrame 第三列（ui-sidebar-right）——frame 收起标记承载「轨道归零」语义（自研 data-dswf-dock 退役） |
 
 ### 组一：视图互换（smoke SC5 段骨架行）
 
 | 原断言（行号） | 原文 | e2e 载体（组一） | 适配记录 |
 |---|---|---|---|
-| L50 | 点「知识库」→ 中区切换为知识视图 | 点 `[data-dswf-nav="knowledge"]` → `[data-dswf-knowledge-view]` 可见 + `data-dswf-view="knowledge"` | 载体适配（3.8）：M0 占位锚 `data-dswf-knowledge-m0` → M1 浏览面装配壳锚 `data-dswf-knowledge-view`（UF-6 主体 + 抽屉挂载，无项目锚 = 壳内引导空态）——「知识视图在场」断言语义不变 |
-| L51 | 打开不占用右栏(dock 仍收起) | 知识模式下 `[data-dswf-dock="hidden"]` + 切回后恢复 `collapsed` | 载体适配：M0 将原型 `is-collapsed` 单类位细分为 collapsed（会话视图收起）/hidden（知识模式强制）两相位——「右栏不被占用」语义（轨道不可见）不变 |
-| L52 | 右上角两个图标按钮已移除(知识模式无右栏入口) | `.dswf-zones-main` 内可见「展开」入口计数 = 0（负向） | 载体适配：原型钉两个具体图标钮；M0 钉可达面全集（角位钮/轨道钮均不在知识模式可达）——「知识模式无右栏入口」语义不变 |
-| L59 | 会话视图可展开右栏 | session 相位点角位钮 `.dswf-workbench-docktoggle` → expanded；hero 相位桥派发（无角位钮） | 载体适配：原型 `#rb-corner-expand` → M0 会话区角位开关（同位语义）；fix-10 锚迁移：展开态页签条 `.dswf-zones-dock-strip [role=tab]` → `[data-dswf-dock] [data-dockkit-strip] [role=tab]`（自绘 strip 退役，官方 chips 锚——「页签条在场」语义不变） |
-| L62 | 整体切换:进入知识模式 → 已开右栏也隐藏(内容让位) | `[data-dswf-dock="hidden"]` + 页签体仍挂载（`[data-dockkit-content]`） | 载体适配（fix-10）：官方 kit 页签体无 `role=tabpanel`（chip `role=tab`/条 `role=tablist` 保持）——「内容仍挂载」锚迁移官方 body 锚 `data-dockkit-content`，keep-alive 语义不变（官方 `keepMounted` 保留策略承接常挂载机制） |
+| L50 | 点「知识库」→ 中区切换为知识视图 | 点 `button[aria-label="知识库"]`（官方 panellist 行）→ `[data-dswf-knowledge-view]` 可见 + `[data-dswf-workbench][data-dswf-view="knowledge"]` | 载体适配（3.8）：M0 占位锚 `data-dswf-knowledge-m0` → M1 浏览面装配壳锚 `data-dswf-knowledge-view`（UF-6 主体 + 抽屉挂载，无项目锚 = 壳内引导空态）——「知识视图在场」断言语义不变 |
+| L51 | 打开不占用右栏(dock 仍收起) | 知识模式下 `[data-rightbar-collapsed]` 在场 + 切回后恢复收起 | 载体适配：M0 将原型 `is-collapsed` 单类位细分为两相位；fix-23 锚迁移：知识模式隐藏 = 产品经官方 sidebarRight 窄面联动收起官方右栏（rightbarViewPlan）——「右栏不被占用」语义（不可见）不变 |
+| L52 | 右上角两个图标按钮已移除(知识模式无右栏入口) | `#root` 内可见「展开/打开右侧」入口计数 = 0（负向；扫描域随中区官方化扩域） | 载体适配：原型钉两个具体图标钮；M0 钉可达面全集；fix-23：官方 corner ExpandButton 在隐藏的会话区头部内（可见性过滤命中负向断言）——「知识模式无右栏入口」语义不变 |
+| L59 | 会话视图可展开右栏 | session 相位点官方 corner ExpandButton `[data-sidebar-right-expand]` → `[data-rightbar-collapsed]` 退场 + 官方 guide 页签可见；hero/无会话相位 = 官方原生休眠（frame 收起标记，负向断言） | 载体适配：原型 `#rb-corner-expand` → fix-25：官方头部链点亮后官方 corner ExpandButton 直用（产品自管面板钮 `.dswf-workbench-docktoggle` 随 main.conversation 影子退役）；展开官方右栏活体（guide 种子页「开始」） |
+| L62 | 整体切换:进入知识模式 → 已开右栏也隐藏(内容让位) | `[data-rightbar-collapsed]` 在场（官方窄面联动收起） | 载体适配（fix-23）：官方右栏收起 = 官方 per-session store 自持（页签/内容保留归官方 store——恢复展开即回原页签态），「内容让位」语义不变；展开期内容挂载断言归 session-workbench Step 5（官方右栏列锚） |
 | L66 | 切回会话视图 → 右栏恢复展开(状态保留) | 桥派发 `show-session` → `data-dswf-view="session"` + dock expanded | 载体适配：原型点会话行；M0 无产品会话行期 = 工作台桥同径转移（转移表面同源 view-state 状态机） |
 | L474 | 点会话行 → 中区切回会话视图 | 同 L66 载体（`show-session` 同径转移） | 载体适配：产品会话行实机驱动随项目/会话链路（host 通道装配后）转正；机制面（`sessionAnchorEvent` 官方锚跟随）单测 pin（2.12） |
 
@@ -49,8 +49,8 @@
 
 | 原断言（行号） | 原文 | e2e 载体（组一） | 适配记录 |
 |---|---|---|---|
-| L689 | 收起(轨道归零,同图标) | 角位钮再点 → collapsed + computed width 0px | 无适配（computed 样本入 L3 池）；按项目页签集切换（L719–L726）随域页签登记归 M2（§3） |
-| —（原型行缺席） | fix-10 官方 dockkit 基座回归（新增 dock 基座行为冒烟面） | 官方 surface 在场（`data-dockkit-drop-zones="horizontal"` = DockLayout 横条形/Sidebar 形态）+ 官方分栏控件在场（340px 窄轨由官方 room 规则禁用）+ chrome 角位收展钮（官方置位 `data-dockkit-strip-chrome`）+ 添加钮缺席（canAddTab 产品口径）+ 全局页签不可关闭（canCloseTab 口径——关闭控件计数 0） | fix-10 新增（非 smoke 迁移行——AC「新增 dock 基座行为回归：P1 至少官方控件在场与默认形态断言」）；断言源 = fix-10 任务 AC + 官方 kit DOM 契约（`data-dockkit-*` 稳定锚） |
+| L689 | 收起(轨道归零,同图标) | 官方 strip chrome 收展钮（aria「收起右侧边栏」）→ `[data-rightbar-collapsed]` 在场 + 官方右栏列 computed width 0px | fix-23 锚迁移：收展控件 = 官方 data-sidebar-right-toggle（官方置位）；按项目页签集切换（L719–L726）转官方 sidebarRightTabs 注册缝归后续里程碑（§3） |
+| —（原型行缺席） | 官方右栏基座回归（fix-10 建立 / fix-23 转官方右栏活体） | 官方 surface 在场（`[data-rightbar-col] [data-dockkit-surface]` drop-zones=horizontal）+ 官方 strip chrome 收展钮在场；guide 种子页不可关闭/添加钮 = 官方注册表口径（产品政策面退役） | fix-23 重写：右栏 = 官方 ui-sidebar-right（官方 sidebar-right 内部即 dockkit 同基座真身——fix-10 直用装配让位）；控件政策（canAddTab/canCloseTab/labels）归官方自持，断言面 = 官方件在场 + 官方 DOM 契约（data-dockkit-*/data-sidebar-right-* 稳定锚） |
 
 ### 组二：向导两段走查（smoke「添加项目」段 ①–④ + ⑤ 条件）
 
@@ -96,8 +96,8 @@
 
 | 样本 | 断言 | 对照基准 |
 |---|---|---|
-| 三区结构 | `.dswf-zones` display=flex；结构位 = aside(rail)/main/main 内 aside(dock) | 原型三区结构基准 |
-| 轨道归零 | 收起态 computed width=0px + visibility=hidden | 原型「轨道归零」同型（L46/L689 computed 载体） |
+| 三区结构 | 产品三区容器退役（fix-25：中区 = 官方 AppFrame/ConversationRoot）；官方右栏列 `[data-rightbar-col]` 收起 0px 样本保持 | 原型三区结构基准；fix-25：结构位断言让位官方面（rail/main 产品容器退役）；左栏行刻度对照改产品会话行 |
+| 轨道归零 | 收起态官方右栏列 computed width=0px | 原型「轨道归零」同型（L46/L689 computed 载体）；fix-23：官方列收起 = 0 宽轨道（visibility 样本退役——官方「轨道非盒」形态，无可见性标记面） |
 | 左栏行（官方比对） | 产品知识库入口行圆角 = 官方 nav 行圆角（实解析值比对，同 `--dsw-radius-md`） | **官方组件 computed style 抽样比对**（live 官方面） |
 | 左栏行（刻度 pin） | 行高 34px（官方 ui-workspace projectRow 刻度）+ 字号 14px（官方刻度） | 官方行语言刻度（sidebar.css 形态纪律同源） |
 
@@ -126,12 +126,12 @@
 | L598–L605 | 开始页入口卡（知识库卡 → 中区/右栏让位/恢复） | M2（概览 + 域页签装配） | 互换语义已由骨架组 L50–L66 承载；入口卡面 = 开始页域内容 |
 | L610–L616 | 项目概览（概要 + 对账卡/失配/找回） | M2（概览/对账卡完整 UI） | 对账服务面已就位（2.3 reconcileAtStartup） |
 | L619–L672 | 任务三视图（列表/DAG/泳道/feature 绑定）+ 文档 tab | M2（任务域整体） | |
-| L676 | chips ≥ 2（概览/文档） | M2（域页签登记） | M0 底稿 = 单页签「开始」在场（组一页签跟随节已断言）；「≥2」随域页签落位回归 |
+| L676 | chips ≥ 2（概览/文档） | 后续里程碑（官方 sidebarRightTabs 注册缝） | fix-23：右栏页签 = 官方注册表口径（guide 种子页「开始」在场已断言）；「≥2」随产品自有页签经官方注册缝落位回归 |
 | L679 | 关闭激活 tab | M2 | M0 页签集 = 全局常驻，无关闭面 |
 | L682 | ＋ 重开开始页 | M2 | M0 页签常驻无需重开 |
 | L685 | 全屏覆盖中区 | M2 | M0 = 轨道收展最简集 |
 | L696–L716 | dock 知识文档页签（在 dock 打开/kndoc 面） | M1（浏览 + dock 登记） | |
-| L719–L726 | 切项目 → 页签集切换/恢复/＋常驻 | M2（域页签登记后实机驱动） | 机制面（`visibleDockTabs`/`resolveActiveDockTab`）M0 已 pin（2.5 zones 单测）；实机驱动需域页签 + 项目锚 |
+| L719–L726 | 切项目 → 页签集切换/恢复/＋常驻 | 后续里程碑（官方 sidebarRightTabs 注册缝实机驱动） | fix-23：右栏 per-session 页签集 = 官方注册表/官方 store 口径（自研登记表 visibleDockTabs/resolveActiveDockTab 随自研轨道退役）；项目级差异驱动需产品自有页签经官方注册缝落位 |
 | L733–L739 | 模拟 +90 天 → 置信衰减 | M5（单元级） | 载体 = 原型 sim 工具；产品语义归 M5 时间衰减 |
 | L742–L745 | 外部改动 → 对账横幅/重建索引 | M6（对账 UI） | 载体 = 原型 demo 工具 |
 | L748 | 暗色主题切换 | 官方域（不迁移） | 样式纪律第 5 条：主题随官方令牌自动联动，产品无自持开关（原型工具行记账） |

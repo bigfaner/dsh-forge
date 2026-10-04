@@ -3,6 +3,7 @@
 export * from './ForgeWorkspacePanel.js'
 export * from './ForgeSidebarSlot.js'
 export * from './ForgeBrand.js'
+export * from './KnowledgeGlyph.js'
 export * from './sidebar-model.js'
 export * from './sidebar-actions.js'
 export * from './use-forge-projects.js'

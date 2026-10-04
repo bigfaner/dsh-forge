@@ -1,23 +1,27 @@
 // 产品 client 插件本体（定位：装配——可测纯面；入口 index.ts 零导出保 classic script 形状）。
 // 2.7：槽位路线 A —— 替换官方 ui-sidebar 壳 sidebar.workspaces 洞位（tech-design
-// Integration）与品牌行内容洞位（sidebar.brand.mark/name）；壳级几何/收展（56px rail ↔
-// 展开宽）/新会话/快捷键全部白拿（AC1）。组件本体不进本 bundle（classic script 自含
-// 纪律 + React 单例）——经壳 bundle 发布面 __DSH_FORGE_VIEWS__ 递达（缺席 = 装配断裂
-// fail-loud）。
-// 2.12：工作台装配 —— main.conversation 洞位影子替换（三区工作台占用中区；官方会话面经
-// conversation.content 工厂嵌入配方回接，见 workbench/ChatSurface.tsx）。
-// 契约依据（上游 0.2.0-rc.2 源码核实，G1 契约面清单第 3 项——S2 残留 #1 清点入池）：
-//   - ui-sidebar slots.ts：'sidebar.workspaces' single/root，owner = SidebarSectionOwnerProps
-//     { wide, expandSidebar }；'sidebar.brand.mark' owner { size }；'sidebar.brand.name'
-//     owner { children?: never }（占位者自持内容）。
-//   - ui-slots SlotCore：single 槽 priority 升序最低者渲染（lowest renders）；同 priority
-//     再注册即抛——官方占用者（ui-workspace 浏览器 / 官方品牌行）缺省 priority 0，
-//     产品行取 -100 影子替换。
-//   - SlotRegistry.inject(key, cb)：洞位声明在场（或入座时）装 cb 效果，随本插件 fiber
-//     卸载级联回收——插件热卸载即还原官方占用者。
+// Integration）与品牌行内容洞位（sidebar.brand.mark/name）；壳级几何/收展/新会话/快捷键
+// 全部白拿（AC1）。组件本体不进本 bundle（classic script 自含纪律 + React 单例）——经壳
+// bundle 发布面 __DSH_FORGE_VIEWS__ 递达（缺席 = 装配断裂 fail-loud）。
+// fix-25 架构重排（官方头部链点亮）：main.conversation 影子退役——官方 ConversationRoot
+// 渲染中区，官方头部链（conversation.header → session.header → lineage/actions/
+// utilities「打开方式」+「⋯」/corner 官方 ExpandButton）与官方页签行/内容面全部白拿
+// （slot runtime 的 renderSlot 授权按占用者注册行自声明 children 发放、子槽声明全局
+// 唯一——产品影子恒拿不到官方子座渲染权，fix-23 探针实证；官方占用者自带声明即恒亮）。
+// 产品面降位官方缝（本插件的全部登记）：
+//   - `main` keyed 'dswf-hero' / 'dswf-knowledge'（ui-layout 官方全局面板径——先例
+//     ui-plugin-manager/ui-schedule）：UF-2 零项目 hero 引导 + UF-5 知识视图；
+//   - `sidebar.panellist` 'dswf-knowledge'（官方 PanelRow 行语言——知识入口）；
+//   - `conversation.view` 'dswf-trajectory'/'dswf-recall'（官方页签 roster——ui-trajectory
+//     同型先例）：UF-4 轨迹台账 + 知识召回页签（对话 tab = 官方 'chat' 直用）；
+//   - `shell.overlay` 'dswf-host'（AppFrame root 五子槽之一——常驻壳宿主：UF-3 流程 +
+//     相位锚 + hero 面板驱动 + 知识模式右栏联动面）。
+// 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
+// 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
+// keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
+// 洞位声明在场（或入座时）装 cb 效果，随本插件 fiber 卸载级联回收。
 // 运行期锚（e2e 实证，2.7）：插件长活依赖 profile 置停 client-hmr——其全图 sync 会以宿主
-// 最新图对账掉壳掌舵追加的本行（实测激活 ~145ms 后被 prune、槽位注册级联回收），
-// 见 apps/host profile cordis.patch.yml 的 client-hmr 行（S2 清单残留 #3 的处置）。
+// 最新图对账掉壳掌舵追加的本行，见 apps/host profile cordis.patch.yml 的 client-hmr 行。
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
@@ -29,24 +33,57 @@ export const SIDEBAR_WORKSPACES_SLOT = 'sidebar.workspaces'
 export const SIDEBAR_BRAND_MARK_SLOT = 'sidebar.brand.mark'
 export const SIDEBAR_BRAND_NAME_SLOT = 'sidebar.brand.name'
 /**
- * 洞名：官方 ui-conversation 的中区主面板会话壳（single/session-maybe；官方占用者
- * ConversationRoot 缺省 priority 0）。工作台装配（2.12）影子替换：三区工作台
- * （左 rail = 官方 sidebar 壳路线 A；中/右 = zones 容器）占用中区——官方会话面经
- * conversation.content 工厂嵌入配方回接（对话 tab），数据/动作走官方 kit + 自有 forge RPC。
+ * 洞名：ui-layout AppFrame root 五子槽——keyed main 面板 roster（官方全局面板径）。
+ * 产品占用：'dswf-hero'（零项目引导）/ 'dswf-knowledge'（知识视图）；key 字面量与
+ * workbench/panel-model.ts 的 HERO_PANEL_KEY/KNOWLEDGE_PANEL_KEY 同源（plugin.test pin）。
  */
-export const MAIN_CONVERSATION_SLOT = 'main.conversation'
+export const MAIN_SLOT = 'main'
+/** 产品 hero 面板 key（= main keyed 登记键；字面量同源 panel-model.HERO_PANEL_KEY） */
+export const HERO_PANEL_KEY = 'dswf-hero'
+/** 产品知识面板 key（= main keyed 登记键 = sidebar.panellist 行 id；同源 panel-model.KNOWLEDGE_PANEL_KEY） */
+export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'
+/** 洞名：官方 sidebar 全局面板行 roster（官方 PanelRow 行语言——知识入口载体） */
+export const SIDEBAR_PANELLIST_SLOT = 'sidebar.panellist'
+/** 洞名：官方会话视图 roster（ConversationSessionHeader 页签行 + 视图区 only:id 消费） */
+export const CONVERSATION_VIEW_SLOT = 'conversation.view'
+/** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
+export const SHELL_OVERLAY_SLOT = 'shell.overlay'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
+/** 产品页签登记 id（轨迹——UF-4 终裁形态 (a) 恒在场，官方 'trajectory' 受 developerTools 门控） */
+export const TRAJECTORY_VIEW_ID = 'dswf-trajectory'
+/** 产品页签登记 id（知识召回——UF-4 三页签之三） */
+export const RECALL_VIEW_ID = 'dswf-recall'
 
-/** 插件依赖的服务名（cordis inject——apply 等待四服务在场；与官方 ui-workspace 同型先例） */
-export const FORGE_CLIENT_INJECT = ['slots', 'sessions', 'uiWorkspace', 'workspaces'] as const
+/**
+ * 插件依赖的服务名（cordis inject——apply 等待六服务在场；与官方 ui-workspace 同型先例）。
+ * sidebarRight（fix-23）：官方 ui-sidebar-right 服务——知识模式右栏隐藏/恢复联动窄面。
+ * layout（fix-25）：官方 ui-layout 服务——面板选择窄面（selectPanel：知识/hero 面板互换 +
+ * 官方 openSession 同径 null 收口回会话）。
+ */
+export const FORGE_CLIENT_INJECT = [
+  'slots',
+  'sessions',
+  'uiWorkspace',
+  'workspaces',
+  'sidebarRight',
+  'layout',
+] as const
 
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
 export interface ForgeSlotsService {
   /** 依赖洞位声明：声明在场（或入座）即装 cb；cb 返回即释放器（随 fiber 卸载级联） */
   inject(key: string, callback: () => (() => void) | undefined): () => void
-  /** 注册占用者（options.name = 洞名；priority = single 槽影子序） */
-  register(options: { name: string; priority?: number; inject?: () => object }, component: unknown): () => void
+  /** 注册占用者（options.name = 洞名；key = keyed 槽键；id/order = list 槽行；priority = single 槽影子序） */
+  register(options: {
+    name: string
+    priority?: number
+    key?: string
+    id?: string
+    order?: number
+    label?: string
+    inject?: () => object
+  }, component: unknown): () => void
 }
 
 /** dsh 会话服务窄面（ISessions 消费切片：账本快照源——Session Controller client 无 open 面） */
@@ -57,11 +94,8 @@ export interface ForgeSessionsService {
 
 /**
  * dsh 工作区 UI 服务窄面（UiWorkspace 消费切片）。fix-11：会话行打开的正确官方面 =
- * uiWorkspace.openSession（「Select a Session and show its Conversation as one UI
- * navigation action」——内部 retain(mainView) + selection 一体，历史恢复经此驱动）；
- * Session Controller 的 sessions 服务无 open 方法（retain/using/create/…），旧接线
- * sessions.open 每次行点击即 TypeError——会话切换/恢复全链从未生效（sw Step4/5 首次
- * 实跑暴露）。
+ * uiWorkspace.openSession（内部 retain(mainView) + selection 一体 + layout.selectPanel(null)
+ * 回会话面板——历史恢复经此驱动）。
  */
 export interface ForgeUiWorkspaceService {
   /** 选择会话为当前并呈现其会话面（官方导航动作面） */
@@ -73,20 +107,63 @@ export interface ForgeWorkspacesService {
   readonly list: unknown
 }
 
+/**
+ * 官方右栏服务窄面（ui-sidebar-right ISidebarRight 消费切片，fix-23）。知识模式右栏
+ * 隐藏/恢复联动的官方动作面（收展态本体 = 官方 per-session store 自持——产品不落地副本）。
+ */
+export interface ForgeSidebarRightService {
+  /** 右栏当前展开态（collapsed 或无在场面 = false） */
+  isExpanded(): boolean
+  /** 收起 ↔ 展开并聚焦活动窗格（官方导航动作面；无在场面抛错——调用面守卫） */
+  toggleExpanded(): void
+}
+
+/** 官方面板信息快照（ui-layout layout.panelInfo 消费切片） */
+export interface ForgePanelInfo {
+  readonly activePanelId: string | null
+}
+
+/** 官方布局服务窄面（ui-layout LayoutController 消费切片，fix-25） */
+export interface ForgeLayoutService {
+  /** 选中全局 main 面板或回官方会话面板（null；未注册 id 抛错——调用面守卫） */
+  selectPanel(panelId: string | null): void
+  /** 中央面板选择快照源（activePanelId——知识模式联动/视图镜像源） */
+  readonly panelInfo: {
+    getSnapshot(): ForgePanelInfo
+    subscribe(listener: () => void): () => void
+  }
+}
+
 /** 产品视图发布面窄面（product-views.ts 结构同型镜像） */
 export interface ForgeViewsGlobal {
   __DSH_FORGE_VIEWS__?: {
     ForgeSidebarSlot: unknown
     ForgeBrandMark: unknown
     ForgeBrandName: unknown
-    ForgeWorkbenchPanel: unknown
+    ForgeShellHost: unknown
+    ForgeHeroPanel: unknown
+    ForgeKnowledgePanel: unknown
+    ForgeKnowledgeGlyph: unknown
+    ForgeTrajectoryView: unknown
+    ForgeRecallView: unknown
+    createWorkbenchBridge: (nav: {
+      showKnowledge(): void
+      showSession(): void
+    }) => {
+      openKnowledgeEntry(entryId: number): void
+      subscribe(listener: () => void): () => void
+      getSnapshot(): { drawerEntryId: number | null }
+      setDrawerEntry(entryId: number | null): void
+    }
   }
 }
 
 /** 插件 apply 的 ctx 窄面（cordis Context 消费切片——get 解析注入服务） */
 export interface ForgeClientCtx {
   readonly slots: ForgeSlotsService
-  get(name: 'sessions' | 'uiWorkspace' | 'workspaces'): unknown
+  get(
+    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'layout',
+  ): unknown
 }
 
 /** cordis 插件最小结构面（免引 cordis 运行时——bundle 零外部 import，保 classic script 形状） */
@@ -108,8 +185,12 @@ export interface ForgeClientActiveMarker {
   readonly activatedAt: number
   /** sidebar 族洞位（workspaces 替换 + 品牌行内容） */
   readonly sidebar?: SlotRegistrationDiagnostics
-  /** 中区主面板洞位（main.conversation 工作台装配，2.12） */
-  readonly mainPanel?: SlotRegistrationDiagnostics
+  /** 官方 main 面板族（hero/knowledge 全局面板 + panellist 行） */
+  readonly center?: SlotRegistrationDiagnostics
+  /** 官方 conversation.view 页签族（轨迹/知识召回） */
+  readonly views?: SlotRegistrationDiagnostics
+  /** 常驻壳宿主（shell.overlay——流程宿主/相位锚/联动面载体） */
+  readonly shell?: SlotRegistrationDiagnostics
 }
 
 /** 洞位注册一行（注入面经 make 产出；落座后回填诊断） */
@@ -144,12 +225,16 @@ export function forgeClientPlugin(): ForgeClientPlugin {
     inject: [...FORGE_CLIENT_INJECT],
     apply(ctx: unknown) {
       const sidebarDiagnostics: { registered?: string[]; error?: string } = {}
-      const mainPanelDiagnostics: { registered?: string[]; error?: string } = {}
+      const centerDiagnostics: { registered?: string[]; error?: string } = {}
+      const viewsDiagnostics: { registered?: string[]; error?: string } = {}
+      const shellDiagnostics: { registered?: string[]; error?: string } = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
         activatedAt: Date.now(),
         sidebar: sidebarDiagnostics,
-        mainPanel: mainPanelDiagnostics,
+        center: centerDiagnostics,
+        views: viewsDiagnostics,
+        shell: shellDiagnostics,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
@@ -158,6 +243,19 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const sessions = clientCtx.get('sessions') as ForgeSessionsService
         const uiWorkspace = clientCtx.get('uiWorkspace') as ForgeUiWorkspaceService
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
+        const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
+        const layout = clientCtx.get('layout') as ForgeLayoutService
+
+        // 工作台桥（fix-25：官方面板导航窄面 + 知识抽屉缝；随 shell.overlay 登记同期
+        // 发布/撤销——缺席期导航 fail-soft no-op）
+        const bridge = views.createWorkbenchBridge({
+          showKnowledge: (): void => {
+            layout.selectPanel(KNOWLEDGE_PANEL_KEY)
+          },
+          showSession: (): void => {
+            layout.selectPanel(null)
+          },
+        })
 
         // 工作区洞位替换（AC1）：注入面携带 dsh 面数据源与动作（面板侧 useSyncExternalStore 直读）
         registerSlotEntry(clientCtx, SIDEBAR_WORKSPACES_SLOT, sidebarDiagnostics, () =>
@@ -169,7 +267,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 sessions: sessions.list,
                 workspaces: workspaces.list,
                 openSession: (sessionId: string): void => {
-                  // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体）
+                  // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体，
+                  // 内部 selectPanel(null) 回会话面板 = UF-5 切回主路径）
                   uiWorkspace.openSession(sessionId)
                 },
               }),
@@ -192,18 +291,93 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           ),
         )
 
-        // 中区主面板洞位替换（2.12 工作台装配）：三区工作台占用中区——无插件注入面
-        // （官方 PropsRuntime kit 直达组件 props + 自有 forge RPC；official ConversationRoot
-        // 仍持有洞位声明——children 不重声明，避免与官方占用者声明冲突）
-        registerSlotEntry(clientCtx, MAIN_CONVERSATION_SLOT, mainPanelDiagnostics, () =>
+        // 官方 main 面板族（fix-25 降位载体）：hero（零项目引导——ShellHost 驱动选中/让位）+
+        // knowledge（UF-5 知识视图——桥注入抽屉缝；useWorkspaces 官方 root 钩子直达）
+        registerSlotEntry(clientCtx, MAIN_SLOT, centerDiagnostics, () =>
           clientCtx.slots.register(
-            { name: MAIN_CONVERSATION_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
-            views.ForgeWorkbenchPanel,
+            { name: MAIN_SLOT, key: HERO_PANEL_KEY },
+            views.ForgeHeroPanel,
           ),
         )
+        registerSlotEntry(clientCtx, MAIN_SLOT, centerDiagnostics, () =>
+          clientCtx.slots.register(
+            { name: MAIN_SLOT, key: KNOWLEDGE_PANEL_KEY, inject: () => ({ bridge }) },
+            views.ForgeKnowledgePanel,
+          ),
+        )
+
+        // 官方面板行（sidebar.panellist——官方 PanelRow 行语言；id = main key 同源）
+        registerSlotEntry(clientCtx, SIDEBAR_PANELLIST_SLOT, centerDiagnostics, () =>
+          clientCtx.slots.register(
+            { name: SIDEBAR_PANELLIST_SLOT, id: KNOWLEDGE_PANEL_KEY, order: 20, label: '知识库' },
+            views.ForgeKnowledgeGlyph,
+          ),
+        )
+
+        // 官方页签 roster（conversation.view——UF-4 轨迹/知识召回；对话 = 官方 'chat' 直用）
+        registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
+          clientCtx.slots.register(
+            {
+              name: CONVERSATION_VIEW_SLOT,
+              id: TRAJECTORY_VIEW_ID,
+              order: 10,
+              label: '轨迹',
+            },
+            views.ForgeTrajectoryView,
+          ),
+        )
+        registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
+          clientCtx.slots.register(
+            {
+              name: CONVERSATION_VIEW_SLOT,
+              id: RECALL_VIEW_ID,
+              order: 20,
+              label: '知识召回',
+              inject: () => ({
+                openKnowledgeEntry: (entryId: number): void => {
+                  bridge.openKnowledgeEntry(entryId)
+                },
+              }),
+            },
+            views.ForgeRecallView,
+          ),
+        )
+
+        // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
+        // 知识模式右栏联动面；selectPanel/rightbar 官方窄面经 inject 递达）。卸载期顺带
+        // 撤销桥发布（与宿主同生命周期——缺席期导航 fail-soft no-op）
+        registerSlotEntry(clientCtx, SHELL_OVERLAY_SLOT, shellDiagnostics, () => {
+          const dispose = clientCtx.slots.register(
+            {
+              name: SHELL_OVERLAY_SLOT,
+              id: 'dswf-host',
+              inject: () => ({
+                selectPanel: {
+                  selectPanel: (panelId: string | null): void => {
+                    layout.selectPanel(panelId)
+                  },
+                },
+                rightbar: {
+                  isExpanded: (): boolean => sidebarRight.isExpanded(),
+                  toggleExpanded: (): void => {
+                    sidebarRight.toggleExpanded()
+                  },
+                },
+              }),
+            },
+            views.ForgeShellHost,
+          )
+          return () => {
+            dispose()
+            ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = undefined
+          }
+        })
       } catch (error) {
-        sidebarDiagnostics.error = error instanceof Error ? error.message : String(error)
-        mainPanelDiagnostics.error = sidebarDiagnostics.error
+        const message = error instanceof Error ? error.message : String(error)
+        sidebarDiagnostics.error = message
+        centerDiagnostics.error = message
+        viewsDiagnostics.error = message
+        shellDiagnostics.error = message
       }
     },
   }

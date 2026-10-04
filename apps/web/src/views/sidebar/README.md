@@ -34,12 +34,12 @@
 标题 `displayTitle`、相对时间官方 `relativeTime` 桶化 + zh 文案；顶层行口径：无父行、
 空白会话仅显示被选中者；未注册为项目的 workspace 会话不入树（产品面 = 注册项目口径）。
 
-## 导航动作（AC3/AC5）
+## 导航动作（AC5）
 
-`sidebar-actions.ts`：知识库入口 → `show-knowledge`；会话行 → `openSession`（dsh 面）
-+ `select-session`（回会话视图 + 锚定，不重置右栏/浏览上下文——转移表语义见
-`shell/view-state.ts`）。工作台桥 `window.__DSH_FORGE_WORKBENCH__` 由 2.12 装配发布；
-缺席（2.12 前）= 会话照开、视图切换 no-op（fail-soft）。
+`sidebar-actions.ts`：会话行 → `openSession`（官方 uiWorkspace.openSession 单径——选择+
+呈现+`layout.selectPanel(null)` 回会话面板一体，UF-5「切回会话视图 + 锚定」官方收口）。
+fix-25：知识库入口迁官方 `sidebar.panellist` 行（PanelRow → `layout.selectPanel`，产品 nav
+行退役）；工作台桥消费面随视图态机退役（桥本体 = workbench/workbench-bridge）。
 
 ## 契约 pin（G1 契约面清单第 3 项——S2 残留 #1 本任务清点入池）
 

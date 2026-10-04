@@ -1,32 +1,23 @@
-/* 工作台装配样式（定位：装配）。
- * 容器刻度 = 官方 ConversationRoot root 同型（背景/列向/100% 高——占用同一洞位的等价几何）；
- * hero / 校平位 = 产品自绘（官方无对应件），令牌唯一 + 原型结构刻度（dsw-raw 注明）。
- * fix-9：会话面板顶部 toolbar（含面板钮）归 views/session/session.css（官方 session.header
- * 行语言镜像）；本文件零 toolbar 样式。 */
+/* 工作台装配样式（定位：装配——官方基座降位形态，fix-25）。
+ * 中区 = 官方 ConversationRoot（本文件零中区容器样式）；产品面 = main 面板族
+ * （hero/knowledge——官方 CenterColumn 内自排）+ 常驻壳宿主（shell.overlay 零交互舞台）。
+ * hero / 面板舞台 = 产品自绘（官方无对应件），令牌唯一 + 原型结构刻度（dsw-raw 注明）。 */
 
-/* 装配根：占满 main.conversation 洞位（官方 ConversationRoot 同型几何） */
-.dswf-workbench {
+/* 常驻壳宿主：全视口零交互舞台（shell.overlay 槽位锚——UF-3 官方 Modal 自 portal body，
+ * 本体仅承载相位/视图镜像锚与流程宿主挂点；pointer-events:none 不截官方 UI 命中） */
+.dswf-shell-host {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* UF-2 hero 面板舞台（官方 main 面板 'dswf-hero'——CenterColumn 全高居中） */
+.dswf-hero-panel {
   display: flex;
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  position: relative;
   background: var(--dsw-alias-bg-base);
-}
-
-/* 校平位（项目数未就绪——防会话面/hero 首启闪现跳变） */
-.dswf-workbench-settling {
-  flex: 1;
-}
-
-/* 会话区包装：SessionPanel 占位（fix-9 起面板钮随 toolbar 迁入面板 corner 座——
- * .dswf-workbench-docktoggle 角位绝对定位形态退役，锚类名随迁保持（e2e L59/L689）） */
-.dswf-workbench-session {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
 }
 
 /* UF-2 hero 相位：中区居中引导（价值一句话 + CTA；原型 hero 居中栈同构） */
@@ -58,11 +49,13 @@
   margin-top: 8px; /* dsw-raw 原型 hero 动作区间距刻度 */
 }
 
-/* 对话面降级占位（kit 缺席——装配断裂可见不炸壳） */
-.dswf-chat-absent {
+/* UF-5 知识面板舞台（官方 main 面板 'dswf-knowledge'——CenterColumn 全高；浏览面
+ * 自排——KnowledgeView .dswf-kn-view flex 填充同刻度） */
+.dswf-knowledge-panel {
   display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  color: var(--dsw-alias-label-tertiary);
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--dsw-alias-bg-base);
 }

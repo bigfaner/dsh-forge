@@ -398,7 +398,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     // 官方 composer 工作区芯片（「默认工作区」/「选择工作区」两态文案）→ role=menu 列既有
     // workspace（含注册链 registry.create 的夹具工作区——dsh 幂等口径同实体）→ 选 demo-proj
     const composer = page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await expect(composer, '官方会话面 composer 在场（官方 hero 相位承载空会话引导）').toBeVisible({ timeout: 60_000 })
     const workspaceChip = page
@@ -415,7 +415,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     await expect(fixtureWorkspaceItem, '夹具工作区在列（注册链 dsh create 实体——账本实时读）').toBeVisible({ timeout: 15_000 })
     await fixtureWorkspaceItem.click()
     // 工作台锚跟随：会话视图（UF-5 装配面）
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
 
     // 基线热度（步 6 增量断言锚——RPC 直读，不开浏览面保持事件源纯净：agent 召回为唯一事件源）
     const heatBefore = await invokeHeat(page, projectId)
@@ -428,7 +428,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     await page.keyboard.press('Enter')
     await page.waitForTimeout(8_000)
     // 发送诊断面（dogfood 记录辅助）：转录前 200 字符——消息上墙 = 发送链通
-    console.log('[flywheel] 发送后转录面：', await page.locator('[data-dswf-pane="chat"]').first().textContent({ timeout: 10_000 }))
+    console.log('[flywheel] 发送后转录面：', await page.locator('[data-conversation-content]').first().textContent({ timeout: 10_000 }))
     // 会话 id：隔离 DSH_HOME 内唯一会话文件（目录名 = 账本 id）——持久化为追加式落盘、
     // 首次落盘随回合推进（agent 工具链期间等待；左栏会话行 blank 期不显示、完成后入列，
     // 行断言移步召回完成后）
@@ -482,7 +482,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     expect(promptText, '知识段：工具说明在场（read-abstract）').toContain('knowledge_read_abstract')
 
     // ── 步 5/6 召回 tab 条目（即时累积：tab 激活重拉——AC3 tab 面） ──
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' }).click()
     const recallTab = page.locator('[data-dswf-pane="recall"] [data-dswf-recall-tab]')
     await expect(recallTab.first()).toBeVisible({ timeout: 30_000 })
     const statsCalls = Number(await page.locator('[data-dswf-recall-stats]').getAttribute('data-calls'))
@@ -493,7 +493,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     expect(rowVerbs.join(' '), '分组行动词明细含 search（verb 投影）').toContain('search')
 
     // ── 步 6/6 卡片热度 +1（浏览面 HeatBadge ↔ heatByEntry ↔ 事件计数三方一致） ──
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     await expect(page.locator('[data-dswf-entry]', { hasText: '部署规范' }).first()).toBeVisible({ timeout: 30_000 })
     const cardHeatText = await page
       .locator('[data-dswf-entry]', { hasText: '部署规范' })

@@ -223,7 +223,7 @@ async function registerViaUi(page: Page, fixtureRoot: string, dirName: string): 
 /** composer 工作区芯片流（选定工作区 = 官方新会话入口） */
 async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promise<void> {
   const composer = page
-    .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+    .locator('[data-composer-input]')
     .last()
   await expect(composer).toBeVisible({ timeout: 60_000 })
   const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
@@ -237,12 +237,12 @@ async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promis
     .first()
   await expect(item).toBeVisible({ timeout: 15_000 })
   await item.click()
-  await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
+  await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
 }
 
 async function sendQuestion(page: Page, question: string): Promise<void> {
   const composer = page
-    .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+    .locator('[data-composer-input]')
     .last()
   await composer.click()
   await page.keyboard.insertText(question)
@@ -468,7 +468,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     expect(answerText, '回答呈现于对话 tab（含命中知识域词）').toContain('部署')
 
     // ── Step 6：轨迹 tab 检索链时序（唯一直接 UI 证据）+ 切回不重置 ──
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '轨迹' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '轨迹' }).click()
     await expect(page.locator('[data-dswf-pane="trajectory"]').first()).toBeVisible()
     await expect
       .poll(async () => page.locator('[data-dswf-traj-row="tool"]').count(), { timeout: 60_000 })
@@ -480,12 +480,12 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     expect(readRowIdx, '台账含 read-abstract 工具行').toBeGreaterThanOrEqual(0)
     expect(searchRowIdx, '台账时序：search 先于 read-abstract').toBeLessThan(readRowIdx)
     // 切回对话 tab 不重置——回答仍在原位
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '对话' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '对话' }).click()
     const transcriptKept = (await page.locator('[data-conversation-content]').first().textContent({ timeout: 10_000 })) ?? ''
     expect(transcriptKept, '切回对话 tab 回答仍在原位').toContain('部署')
 
     // ── Step 7：召回 tab（统计 1/1 + K1 分组行——链口径；口径分歧 = 缺陷信号 soft 承载） ──
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' }).click()
     const groupsQ1 = await pollSessionRecall(
       page,
       { projectId, sessionId },
@@ -510,7 +510,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       .toContain('1')
 
     // ── Step 8：知识卡片热度闭环（K1 徽章 = 1 链口径；与召回 tab 同源同数字） ──
-    await page.locator('[data-dswf-nav="knowledge"]').first().click()
+    await page.locator('button[aria-label="知识库"]').first().click()
     const k1Card = page.locator('.dswf-kn-card', { hasText: '部署规范' }).first()
     await expect(k1Card, 'K1 卡片在场（Step 1 索引代理断言）').toBeVisible({ timeout: 30_000 })
     expect
@@ -521,9 +521,9 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     // 回会话视图（知识模式无会话面板——点会话行切回）。Step 7 遗留召回 tab 激活 = keep-alive
     // 常态（AC-4 切换不重置——面板态跨视图往返保留，fix-11 首次实跑暴露）；发送前回对话 tab。
     await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
-    await expect(page.locator('.dswf-zones[data-dswf-view="session"]').first()).toBeAttached()
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '对话' }).click()
-    await expect(page.locator('[data-dswf-pane="chat"]').first()).toBeVisible()
+    await expect(page.locator('[data-dswf-workbench][data-dswf-view="session"]').first()).toBeAttached()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '对话' }).click()
+    await expect(page.locator('[data-conversation-content]').first()).toBeVisible()
     await sendQuestion(page, Q2)
     await awaitSessionChain(
       dshHome,
@@ -534,7 +534,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       (evs) => evs.filter((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract').length >= 2,
       120_000,
     )
-    await page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
+    await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' }).click()
     const groupsQ2 = await pollSessionRecall(
       page,
       { projectId, sessionId },
@@ -714,7 +714,7 @@ test('@web-e2e @p1mvp flywheel·Step3b blank-question-blocked：空/纯空白提
     await expect(conversation, '空会话引导态在场').toBeAttached()
     // 空输入 + 纯空白提交意图（回车）——不发送
     const composer = launched.page
-      .locator('[data-dswf-pane="chat"] textarea, [data-dswf-pane="chat"] [contenteditable="true"]')
+      .locator('[data-composer-input]')
       .last()
     await composer.click()
     await launched.page.waitForTimeout(500)
@@ -766,7 +766,7 @@ test('@web-e2e @p1mvp flywheel·Step7b no-recall-placeholder：零召回占位�
     await launched.page.waitForTimeout(5_000)
     // 空会话（未发送任何消息）→ 知识召回 tab
     await selectWorkspaceViaChip(launched.page, 'fw-demo')
-    await launched.page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' }).click()
+    await launched.page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' }).click()
     await expect(launched.page.locator('[data-dswf-recall-tab], [data-dswf-recall-face="empty"]').first()).toBeVisible({ timeout: 30_000 })
     await expect(launched.page.getByText('本会话暂无召回'), '「本会话暂无召回」占位（不报错、无空列表）').toBeVisible({ timeout: 30_000 })
     await expect(launched.page.locator('[data-dswf-recall-row]'), '零分组行').toHaveCount(0)
@@ -822,7 +822,7 @@ test('@web-e2e @p1mvp flywheel·Step4d no-hit-fallback：无关库回答不阻�
     // （RecallGroup hitCount=0 / hits=[] 为契约一等分组；热度排除哨兵行）。召回 tab 呈
     // 「召回次数 ≥1 · 覆盖知识 0」而非占位——占位语义 = 零召回事件（Step 7b 互证面），
     // 非「零命中」。agent 是否实际调用 search 归模型自主（soft 承载）。
-    const recallTab = launched.page.locator('.dswf-session-panel [role="tab"]', { hasText: '知识召回' })
+    const recallTab = launched.page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' })
     await recallTab.click()
     await expect(
       launched.page.locator('[data-dswf-recall-tab], [data-dswf-recall-face="empty"]').first(),
