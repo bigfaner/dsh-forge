@@ -752,6 +752,30 @@
       "type": "coding.fix",
       "complexity": "low"
     },
+    "fix-16": {
+      "id": "fix-16",
+      "title": "Fix: 添加项目入口直达系统文件浏览器——桥在场时跳过模态按钮相位（＋/hero CTA/重新选择 → 直开 OS 对话框 → 表单相位），回退路径不变",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "completed",
+      "file": "fix-16.md",
+      "record": "records/fix-16.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-17": {
+      "id": "fix-17",
+      "title": "Fix: 添加项目 ＋ 图标改官方「文件夹+加号」件（IconProjectAddOutlineRegular，对齐原生 dsh）——侧栏头部钮图标对齐 + 同排钮形态一致化评估",
+      "priority": "P1",
+      "estimatedTime": "30min",
+      "status": "pending",
+      "file": "fix-17.md",
+      "record": "records/fix-17.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
     "fix-18": {
       "id": "fix-18",
       "title": "Fix: DSH_HOME 默认共享用户真 home（~/.dsh）——API Key 等凭据/配置复用原生 dsh（S1 隔离 pin 按产品裁决翻案），e2e 隔离语义经 DSH_FORGE_USER_DATA 隐式保留",

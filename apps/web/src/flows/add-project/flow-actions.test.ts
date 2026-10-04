@@ -1,8 +1,10 @@
-// flow-actions 单测 —— UF-3 组装动作面（2.10 AC1/AC2 + fix-14 段一原生选取的行为级自证）：
-// 取消点干净退出（Hard Rules：任何取消路径 register 调用数 = 0——逐相位走查）、
-// 确认执行一次性（双发第二击拦截）、执行中关闭意图 no-op、失败归一落位、
+// flow-actions 单测 —— UF-3 组装动作面（2.10 AC1/AC2 + fix-14 段一原生选取 + fix-16 入口
+// 直达的行为级自证）：取消点干净退出（Hard Rules：任何取消路径 register 调用数 = 0——
+// 逐相位走查）、确认执行一次性（双发第二击拦截）、执行中关闭意图 no-op、失败归一落位、
 // 原生选取（官方 __DSH_DIRECTORY_PICKER__ 桥主路径）：选中 canonical 对账落 form /
-// 取消回落起源零副作用 / 双击第二击拦截 / 迟到结果丢弃 / pick·对账失败错误面。
+// 取消回落起源零副作用 / 双击第二击拦截 / 迟到结果丢弃 / pick·对账失败错误面；
+// 打开直达（fix-16）：桥在场 open 直入 native-pick（模态不出场 reveal 零通知）+ 选中
+// reveal 开表单相位模态 + 取消干净退出 + 在途重入守卫 + 桥缺席现行形态零变化。
 // setState 同形内存替身直落转移语义（form-actions.test 同形制）；register = 计数桩。
 import { describe, expect, it } from 'vitest'
 import type { DirListing, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
@@ -55,17 +57,20 @@ function registerStub(): RegisterStub {
 function harness(
   stub: RegisterStub = registerStub(),
   initial: FlowState = initialFlowState(),
-  native?: Partial<Pick<FlowActionsDeps, 'nativePick' | 'dirSource' | 'getRegisteredPaths'>>,
+  native?: Partial<Pick<FlowActionsDeps, 'nativePick' | 'dirSource' | 'getRegisteredPaths' | 'reveal'>>,
 ): {
   readonly state: FlowState
   readonly actions: FlowActions
   readonly finished: number
+  /** 模态开面通知计数（fix-16 直达收场观测：选中/失败开模态、取消不开） */
+  readonly reveals: number
   readonly stub: RegisterStub
   /** 流程态直写（迟到守卫模拟：流程收场/重开复位） */
   readonly resetState: (next: FlowState) => void
 } {
   let state = initial
   let finished = 0
+  let reveals = 0
   const actions = flowActions({
     register: stub.source,
     setState: (updater) => {
@@ -74,6 +79,9 @@ function harness(
     getState: () => state,
     finish: () => {
       finished += 1
+    },
+    reveal: () => {
+      reveals += 1
     },
     ...native,
   })
@@ -84,6 +92,9 @@ function harness(
     actions,
     get finished() {
       return finished
+    },
+    get reveals() {
+      return reveals
     },
     stub,
     resetState: (next) => {
@@ -378,5 +389,111 @@ describe('段一原生选取（fix-14：官方桥主路径）', () => {
     const h = harness()
     h.actions.nativePick()
     expect(h.state.phase).toBe('browser')
+  })
+})
+
+describe('打开直达（fix-16：桥在场冷启直开系统 OS 目录对话框——模态不出场）', () => {
+  it('open 桥在场 → 直入 native-pick 在途（不经 browser 相位模态起步）+ pick 即时恰一次 + reveal 零通知（模态不出场）', () => {
+    const pick = pickStub()
+    let invoked = 0
+    const source = () => {
+      invoked += 1
+      return pick.source()
+    }
+    const h = harness(registerStub(), initialFlowState(), { nativePick: source, dirSource: dirSourceOf('X:') })
+    h.actions.open()
+    expect(invoked).toBe(1) // pick 即时触发（系统对话框直开）
+    expect(h.state.phase).toBe('native-pick') // 在途态（冷启直入，不经过 browser 模态相位）
+    expect(h.reveals).toBe(0) // 模态不出场
+  })
+
+  it('流程残态复位：success 终局残态 open → 复位后直入 native-pick（fresh browser 起源，上次流程不携带）', () => {
+    const pick = pickStub()
+    const stale: FlowState = {
+      phase: 'success',
+      selection: SELECTION,
+      input: INPUT,
+      result: RESULT,
+      failure: null,
+      nativePickError: null,
+    }
+    const h = harness(registerStub(), stale, { nativePick: pick.source, dirSource: dirSourceOf('X:') })
+    h.actions.open()
+    expect(h.state.phase).toBe('native-pick')
+    expect(h.state.selection).toBeNull() // 残态清零——取消将回落 browser 而非 repick
+    expect(h.state.result).toBeNull()
+  })
+
+  it('选中 → canonical 对账落 form + reveal 通知恰一次（模态开在表单相位）', async () => {
+    const pick = pickStub()
+    const dirSource = dirSourceOf('D:\\work\\ALPHA')
+    const h = harness(registerStub(), initialFlowState(), { nativePick: pick.source, dirSource })
+    h.actions.open()
+    pick.settle('D:\\work\\alpha')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(h.state.phase).toBe('form')
+    expect(h.state.selection).toEqual({ path: 'D:\\work\\ALPHA', registered: false }) // canonical 对账
+    expect(h.reveals).toBe(1) // 落点成功才开模态（表单相位）
+  })
+
+  it('取消（null）→ 回落 browser 零副作用 + reveal 零通知（干净退出零模态残留）+ register 零调用', async () => {
+    const pick = pickStub()
+    const h = harness(registerStub(), initialFlowState(), { nativePick: pick.source, dirSource: dirSourceOf('X:') })
+    h.actions.open()
+    pick.settle(null)
+    await Promise.resolve()
+    expect(h.state.phase).toBe('browser') // 取消点语义前移到 OS 对话框——回落零副作用
+    expect(h.state.selection).toBeNull()
+    expect(h.reveals).toBe(0) // 不开模态（零模态残留）
+    expect(h.stub.calls.length).toBe(0)
+  })
+
+  it('pick 失败（reject）→ 回落 browser 带错误面 + reveal 通知（模态开在 browser 相位呈现现行错误面）', async () => {
+    const pick = pickStub()
+    const h = harness(registerStub(), initialFlowState(), { nativePick: pick.source, dirSource: dirSourceOf('X:') })
+    h.actions.open()
+    pick.settle(new Error('桥握手失败'))
+    await Promise.resolve()
+    expect(h.state.phase).toBe('browser')
+    expect(h.state.nativePickError).toBe('桥握手失败')
+    expect(h.reveals).toBe(1) // 失败面开模态（NativePickPanel 错误 + 重试按钮）
+  })
+
+  it('对账失败（listDir 不可达）→ 同径错误面回落 + reveal 通知', async () => {
+    const pick = pickStub()
+    const dirSource: DirSource = async () => {
+      throw new Error('目录列举失败')
+    }
+    const h = harness(registerStub(), initialFlowState(), { nativePick: pick.source, dirSource })
+    h.actions.open()
+    pick.settle('E:\\gone')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(h.state.phase).toBe('browser')
+    expect(h.state.nativePickError).toBe('目录列举失败')
+    expect(h.reveals).toBe(1)
+  })
+
+  it('在途重入守卫：native-pick 在途期入口再点 open → pick 源仍恰一次（防双开系统对话框）', () => {
+    const pick = pickStub()
+    let invoked = 0
+    const source = () => {
+      invoked += 1
+      return pick.source()
+    }
+    const h = harness(registerStub(), initialFlowState(), { nativePick: source, dirSource: dirSourceOf('X:') })
+    h.actions.open()
+    h.actions.open() // 在途再点入口（防御面——OS 对话框应用级模态下自然被阻）
+    expect(invoked).toBe(1)
+    expect(h.state.phase).toBe('native-pick')
+  })
+
+  it('桥缺席 → open 即 reveal（现行形态零变化：模态 browser 相位内嵌浏览器起步）', () => {
+    const h = harness()
+    h.actions.open()
+    expect(h.reveals).toBe(1)
+    expect(h.state.phase).toBe('browser')
+    expect(h.state.selection).toBeNull()
   })
 })

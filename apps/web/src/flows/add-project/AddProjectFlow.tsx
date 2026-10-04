@@ -13,6 +13,9 @@
 //   fix-14：桥在场（Electron 桌面 preload）→ 段一/重选渲染 NativePickPanel（系统 OS 目录
 //   对话框主路径——官方 native 优先哲学）；桥缺席（非 Electron 载体/单测/e2e 回退口径）→
 //   内嵌 DirectoryBrowser 回退面（官方 -browse 双面同型，形态零变化）。
+//   fix-16：入口直达——桥在场冷启（项目树「＋」/ hero CTA 经 openAddProjectFlow 缝 →
+//   actions.open）直开系统 OS 目录对话框（模态不出场），选中收场 reveal 开表单相位模态、
+//   取消干净退出零模态残留；桥缺席现行打开形态零变化（reveal 即开、browser 相位起步）。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
@@ -331,6 +334,10 @@ export function AddProjectFlow({
     setOpen(false)
     onCloseRef.current?.()
   }, [])
+  // 模态开面（fix-16 冷启直达收场通知——选中/失败开模态、取消不开；幂等 setOpen(true)）
+  const reveal = useCallback(() => {
+    setOpen(true)
+  }, [])
 
   const actions = useMemo(
     () =>
@@ -339,18 +346,21 @@ export function AddProjectFlow({
         setState: setFlow,
         getState: () => flowRef.current,
         finish,
+        reveal,
         nativePick: effectiveNativePick ?? undefined,
         dirSource: effectiveDirSource,
         getRegisteredPaths: () => registeredPathsRef.current,
       }),
-    [effectiveRegister, finish, effectiveNativePick, effectiveDirSource],
+    [effectiveRegister, finish, reveal, effectiveNativePick, effectiveDirSource],
   )
 
+  // 打开缝路由（fix-16 直达编排收口动作面）：桥在场 actions.open() 直开系统 OS 目录对话框
+  // （模态不出场——复位+直入 native-pick 在途+收场 reveal 全在动作面）；桥缺席同径开模态
+  // browser 相位起步（现行形态零变化）。已注册集合预载与直达选取并行（fail-soft）。
   const openFlow = useCallback(() => {
-    setFlow(initialFlowState()) // 打开即复位段一（上次流程残态不携带）
-    setOpen(true)
+    actions.open()
     void loadRegisteredPaths(effectiveRegisteredSource).then(setRegisteredPaths) // fail-soft
-  }, [effectiveRegisteredSource])
+  }, [actions, effectiveRegisteredSource])
 
   // 打开缝发布（mount 发布 / unmount 撤销——flow-open 单测覆盖时序面）
   useEffect(() => {
