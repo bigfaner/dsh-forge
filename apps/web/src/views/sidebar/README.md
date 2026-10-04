@@ -11,7 +11,7 @@
        └─ ForgeSidebarSlot（接线层）
             ├─ useSyncExternalStore(sessions / workspaces)        ← dsh 账本实时读（零缓存零副本 SC2）
             ├─ useForgeProjects()                                 ← forge:projects/list（RPC）
-            ├─ sidebarActions(openSession, workbenchBridge())     ← 导航动作绑定
+            ├─ sidebarActions(openSession)                        ← 导航动作绑定（单参——fix-25 后桥参数退役）
             └─ ForgeWorkspacePanel（纯面板：宽态/rail 态/四相位）
 ```
 

@@ -5,6 +5,8 @@ related: design/tech-design.md
 
 # Page Map: dsh-forge P1（MVP）
 
+> **[stale · 历史设计基线]** 本文描述的三区工作台（左 rail 常驻/中区视图互换/右栏 dock）为 **fix-25 官方基座降位前**的设计期基线，仅作历史参考——现行装配（官方 ConversationRoot/AppFrame 面板 roster/九官方缝）见 `docs/architecture/web-ui-composition.md`（唯一权威，随 HEAD 维护）。本文「视图态 Route」所载状态机（view-state）已退役，中区互换 = 官方 `layout.selectPanel`。
+
 > Electron 单窗应用 + `dsh-client-web` 壳内核——**无 URL 路由**；下表 Route 列 = 工作台视图态标识（状态机切换，非导航跳转；状态保留纪律见 UF-5）。对应 prd-ui-functions.md 的 7 个 UI Function。
 
 ## Page Overview

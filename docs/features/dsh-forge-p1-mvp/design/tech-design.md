@@ -8,6 +8,15 @@ status: Draft
 
 > 输入：PRD（`prd/prd-spec.md` + user stories + ui-functions）｜宪法：总纲 + 架构基线｜预研：《技术预研笔记》S1–S4/S7。UX 基线 = 用户重构原型（`/ui-design` 经用户裁决跳过——原型即 UI 基线，本文 UI 实现细节以原型 + prd-ui-functions 为准）。
 
+## 勘误与形态演进（2026-10-04 加入；正文历史裁决不动，保可追溯）
+
+> 本文为设计期文档（2026-10-02 基准）。以下事项已被后续 fix 翻案或扩充，读者以本节 + 现态架构文档为准，勿按正文旧表述理解现码：
+
+1. **S1「直跑可行」裁决已翻案（fix-1，child 形态实证）**：Appendix 契约面清单第 8 项与组件图所载「direct-in-main 形态（runProfile 跑 Electron main）」boot 可跑，但 4.2 dogfood 插桩实证 **agent 工具派发恒挂起**（模型往返正常、任意工具 3min+ 不返回、ToolRuntime prepare/dispatch 全未进入、会话文件不落盘）。官方桌面素以 child 形态跑宿主——现形态 = `apps/host/src/boot/` 三件：`run.ts`（spawn `ELECTRON_RUN_AS_NODE=1 --expose-internals` 子进程编排）+ `child.ts`（loadProfileDirectory → overlay → runProfile → ready）+ `bridge.ts`（IPC 桥协议：ready/fatal/rpc-result、Map wire 编解码、typed error 过桥保真 fix-28）；另有 `boot-chain.ts`（fix-20：dev 形态 boot 链模块实例统一解析）。S1 spike 的 API 签名 pin（loadProfileDirectory/runProfile）仍然有效，仅「跑在哪个进程」的结论作废。
+2. **组件图为 direct-in-main 形态，无桥协议层**：Architecture §Component Diagram 画的是 dsh host 进程内插件跑在 Electron main 内。现态五层分层（Electron 宿主 → 壳内核 → 官方插件层 → 产品插件层 → 产品视图层）与九官方缝名册见 **`docs/architecture/web-ui-composition.md`**（唯一权威，随 HEAD 维护）。
+3. **Interface 4 通道清单不全**：Web RPC 面除 `forge:projects/*` 与 `forge:knowledge/*` 外，另有 **`forge:fs/listDir`**（任务 2.8 增——文件浏览器只读目录列举，renderer 不开 Node fs 通道；通道常量同归 contracts）。另注：产品 `forge:*` 通道走 preload 桥 `window.dshForge.invoke` → IPC → boot child（上条第 1 项形态），`__DSH_TRANSPORT__` carrier 仅承载官方 dsh 面（会话/工作区）——Interface 4 该句按此口径读。
+4. **core 的 dsh 服务依赖扩充（fix-24②）**：Layer Placement 与依赖方向段所述 core → workspaceRegistry 单依赖已扩为 **workspaceRegistry + workspaceController 双服务**（`inject: ['workspaceRegistry', 'workspaceController']`——workspaceController = 官方 `workspace/rename` 命令窄面，注册项目时把 workspace 标题对齐项目名）。
+
 ## Overview
 
 五工件 monorepo（pnpm + TS project references）承载单机 Electron 应用：**薄宿主**（~100 行 main，dsh 公开 npm 栈直跑）加载产品 profile，dsh 宿主进程内运行**单一数据内核插件 core**（双域模块：forge 域 = projects + 四步补偿链，知识域 = 索引缓存 + 召回能力面；对外双服务 `ctx.forgeProjects` / `ctx.forgeKnowledge`，单 SQLite 句柄）；前端为**自有 vite 入口 + `dsh-client-web` 壳内核**，boot manifest 由产品掌舵选入官方 ui-\* 与产品 client 插件；**knowledge 插件**（`@dsh-forge/knowledge`）以 dsh 插件形态向 agent 暴露召回 tool 与系统提示词知识段。M0 立骨架与项目/会话主链路，M1 装知识飞轮第一圈。

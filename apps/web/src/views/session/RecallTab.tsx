@@ -314,7 +314,7 @@ export interface RecallTabProps {
   readonly now?: number
 }
 
-/** 召回 tab 装载壳（hook 装配 + 纯渲染；keep-alive 常挂载归 SessionPanel pane 机制） */
+/** 召回 tab 装载壳（hook 装配 + 纯渲染；挂载 = 官方 conversation.view roster only:id 激活即挂载，fix-25） */
 export function RecallTab({ projectId, sessionId, visible, onOpenEntry, makeClient, now }: RecallTabProps): ReactNode {
   const [state, { retry }] = useSessionRecall({ projectId, sessionId, visible }, makeClient)
   return <RecallTabBody state={state} retry={retry} onOpenEntry={onOpenEntry} now={now} />

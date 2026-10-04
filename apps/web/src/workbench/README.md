@@ -27,10 +27,11 @@ children」发放（renderer standardKit：`entry.children` 在场才注入）�
   ShellHost 驱动选中/让位（boot 期零项目 → selectPanel；注册成功 → null——一次性守卫
   防导航争用）。零 workspace 下官方 hero 为死端（空选择器+禁用输入），产品引导面板为
   功能必需。
-- **产品页签（UF-4 轨迹/知识召回）** = 官方 `conversation.view` roster 登记项
-  （ui-trajectory 同型先例——`id`/`order`/`label`）；对话 tab = 官方 'chat' 直用。
-  官方 'trajectory' 登记项受 developerTools 设置门控（默认隐藏）——产品自登记
-  'dswf-trajectory' 保三页签恒在场；developerTools 开启期两项并陈 = 已知边界。
+- **产品页签（UF-4 知识召回）** = 官方 `conversation.view` roster 登记项
+  （ui-trajectory 同型先例——`id`/`order`/`label`）。三签终态（fix-29）：对话 = 官方
+  'chat' 直用 + 轨迹 = 官方 'trajectory' 直用（order 10，developerTools 门控/缺省开启）
+  + 知识召回 = 产品 'dswf-recall'（order 20）——每签唯一，产品登记仅召回一项
+  （'dswf-trajectory' 复刻已随 fix-29 退役——官方名册同 order 10 双『轨迹』冲突）。
 
 ## 组成
 
@@ -62,5 +63,5 @@ children」发放（renderer standardKit：`entry.children` 在场才注入）�
 - **多项目知识锚定降级**：知识面板 = root 作用域（无会话锚可读）→ `projectAnchorOf` 恒走
   唯一项目兜底；会话锚定径由召回/轨迹视图（session 作用域）消费。多项目知识视图锚定归
   后续里程碑（会话锚跨面板传递缝）。
-- **developerTools 开启期轨迹页签并陈**：官方 'trajectory'（门控显示）与产品
-  'dswf-trajectory' 同时在场——官方门控不改写，P1 接受。
+- ~~developerTools 开启期轨迹页签并陈~~：已随 fix-29 消解——'dswf-trajectory' 产品登记
+  退役，轨迹 = 官方 'trajectory' 直用（developerTools 门控/缺省开启），『轨迹』恒唯一。

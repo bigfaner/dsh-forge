@@ -1,9 +1,11 @@
-// 知识视图装配壳（定位：业务装配——UF-5 知识视图槽的 UF-6 浏览面挂载，3.8 自 M0 占位填入）。
+// 知识视图装配壳（定位：业务装配——UF-5 知识视图的 UF-6 浏览面挂载，3.8 自 M0 占位填入）。
 // 组合 = KnowledgeBrowse（3.6 浏览主体）+ EntryDrawer（3.7 详情抽屉）；抽屉打开态
-// （openEntryId）由装配（workbench 2.12）持有并注入——UF-4 召回 tab 分组行跳转复用同门
-// （Hard Rule：跨视图不直引，跳转经视图态/槽位机制——本件只认 entryId 进出）。
+// （openEntryId）由工作台桥持有、KnowledgePanel（官方 main keyed 'dswf-knowledge'
+// 占用者，fix-25）订阅注入——UF-4 召回 tab 分组行跳转复用同门（Hard Rule：跨视图
+// 不直引，跳转经工作台桥——本件只认 entryId 进出）。
 // 无项目锚（projectId null = 未注册/未就绪）= 引导空态（P1 浏览范围 = 项目级——
-// UF-6 工具栏「范围显示 P1 项目级」）；视图互换/右栏联动机制归 zones 容器（2.5）。
+// UF-6 工具栏「范围显示 P1 项目级」）；面板互换/右栏联动机制归官方面板径
+// （layout.selectPanel + ShellHost 右栏联动，fix-25）。
 import type { ReactNode } from 'react'
 import { EmptyState } from '../../components/index.js'
 import { EntryDrawer } from './EntryDrawer.js'
@@ -14,7 +16,7 @@ import './knowledge.css'
 export interface KnowledgeViewProps {
   /** 当前项目 id（浏览范围——P1 项目级；null = 无项目锚 → 引导空态不拉取） */
   readonly projectId: string | null
-  /** 视图激活态（缺省 true = 常挂载直载；装配注入 view.center === 'knowledge'——隐藏期 hold、激活翻转全量重拉刷新热度，AC3 即时累积） */
+  /** 视图激活态（缺省 true = 直载；fix-25 面板径下官方面板选中即挂载——生产面恒缺省，测试面注入翻转验证全量重拉刷热度，AC3 即时累积） */
   readonly active?: boolean
   /** 抽屉打开条目（null = 关闭；卡片点击与召回 tab 跳转两入口共用此态） */
   readonly openEntryId: number | null
@@ -27,7 +29,7 @@ export interface KnowledgeViewProps {
 }
 
 /**
- * 知识视图（浏览主体 + 详情抽屉装配；keep-alive 常挂载归 zones 容器）。
+ * 知识视图（浏览主体 + 详情抽屉装配；挂载位 = KnowledgePanel——官方 keyed 面板非选中即卸载）。
  * data-dswf-knowledge-view = 知识视图态在场断言锚（e2e/走查——接替 M0 占位锚）。
  */
 export function KnowledgeView({

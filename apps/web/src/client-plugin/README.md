@@ -6,15 +6,18 @@
   装载 → `window.__ModuleLoader__.load` 注册工厂 → Loader 激活（与官方 ui-\* 同门进入组合）。
 - 形状契约：产物零 import/export 语句（classic script）；vite 构建以形状 pin 断言（vite.config.ts）。
 - 激活标记：`__DSH_FORGE_CLIENT__`（e2e 自证面；先于槽位注册立标）。
-- **登记族（fix-25 官方缝全集）**：apply 经 `ctx.slots.inject` 注册——
+- **登记族（fix-25 官方缝全集 = 九登记，plugin.ts 唯一源）**：apply 经 `ctx.slots.inject` 注册——
   - `sidebar.workspaces`（2.7 槽位路线 A：产品面板替换官方 ui-workspace 浏览器，
     priority -100 影子：single 槽 lowest renders）+ `sidebar.brand.mark` / `sidebar.brand.name`
     （品牌行内容）；
   - `main` keyed `'dswf-hero'` / `'dswf-knowledge'`（官方全局面板 roster——ui-layout
     `selectPanel` 互换；先例 ui-plugin-manager/ui-schedule）；
   - `sidebar.panellist` `'dswf-knowledge'`（官方 PanelRow 行——知识入口）；
-  - `conversation.view` `'dswf-trajectory'` / `'dswf-recall'`（官方页签 roster——ui-trajectory
-    同型先例；对话 tab = 官方 'chat' 直用）；
+  - `conversation.view` `'dswf-recall'`（官方页签 roster——ui-trajectory 同型先例；
+    对话 = 官方 'chat' 直用、轨迹 = 官方 'trajectory' 直用——fix-29 退役产品
+    'dswf-trajectory' 复刻）；
+  - `conversation.hero.workspace` 影子（fix-24①——single 槽 -100：新会话输入框上方
+    工作区控件改列 forge 项目；不声明 children，官方登记行恒供养 directoryFlow 子洞）；
   - `shell.overlay` `'dswf-host'`（AppFrame root 五子槽——常驻壳宿主：UF-3 流程 + 相位/视图
     镜像锚 + hero 面板驱动 + 右栏联动面）。
   - `main.conversation` 影子登记**缺席**（fix-25：官方 ConversationRoot 直渲——renderSlot
