@@ -1,5 +1,6 @@
 // forge 域 projects 服务（tech-design §Interface 1 全五法 + §交互一/§交互三；定位：业务）。
-// registerProject 四步补偿链（2.2）：
+// registerProject 四步补偿链（2.2）——fix-27：① 前另有重注册自愈防御（既有行在场 →
+// 幂等成功/悬空引用自愈，绝不撞 UNIQUE(ws_path)；见 attachExistingRow）：
 // ① registry.list() 按 canonical path 预检（命中=挂接既有，attachedToExisting=true，不登记补偿）
 // ② registry.create(wsPath)（dsh 幂等）→ ③ 事务写 projects 行
 // ④ ③失败且属本次新建 → registry.delete(workspaceId) 补偿（保目录保日志，幂等）；
@@ -62,6 +63,11 @@ export function isForgeDirExternal(wsPath: string, forgeDir: string): boolean {
 
 async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectInput): Promise<RegisterResult> {
   const { db, registry } = deps
+
+  // fix-27 自愈防御（① 前）：重注册（既有行在场）→ 幂等成功 / 悬空引用自愈，绝不撞
+  // UNIQUE(ws_path)（详见 attachExistingRow 块注——预检只查 dsh 注册表，行在场时 INSERT 恒炸）
+  const reattached = await attachExistingRow(deps, input)
+  if (reattached !== undefined) return reattached
 
   // ① 预检：list() 按 canonical path 匹配（输入契约为 canonical 化后路径；命中=挂接，不登记补偿）
   const existing = registry.list().find((ws) => ws.path === input.workspaceDir)
@@ -137,6 +143,35 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
   }
 
   return { projectId, workspaceId: workspace.id, attachedToExisting }
+}
+
+/**
+ * fix-27 重注册自愈/幂等（registerProject ① 前防御）：按 ws_path 查既有行——行在场时
+ * UNIQUE(ws_path) 令 INSERT 恒炸，重注册永不走新 INSERT：
+ *   · 健康引用（registry.get 命中且 path 一致）→ 幂等成功返回既有项目（projectId 复用
+ *     ——注册幂等语义；dsh 工作区健康而行已存在的正常重注册同径）；
+ *   · 悬空引用（fix-18 home 翻转类遗留：行 workspace_id 在现行 registry 无实体）→ 复用
+ *     对账单项修复 reconcileProjectRef（relink/recreate + UPDATE 单向修引用）后幂等返回
+ *     ——不新 INSERT、不登记补偿（挂接保护恒成立）。
+ * 任何失败（读库/修复链异常）→ undefined 降级现行链：③ 写入失败面承接 typed error 映射，
+ * 补偿语义零变化（库不可用等场景与现行行为逐字一致）。
+ */
+async function attachExistingRow(
+  deps: ProjectServiceDeps,
+  input: RegisterProjectInput,
+): Promise<RegisterResult | undefined> {
+  try {
+    const row = deps.db
+      .prepare<unknown[], ProjectRefRow>(`SELECT id, workspace_id, ws_path FROM projects WHERE ws_path = ?`)
+      .get(input.workspaceDir)
+    if (row === undefined) return undefined
+    await reconcileProjectRef(deps, row, { repaired: [], orphans: [] }) // 健康即内部短路（零写零记账）
+    const after = getRow(deps, row.id)
+    if (after === undefined) return undefined // 不可达兜底（单写者无并发删除）——降级现行链
+    return { projectId: after.id, workspaceId: after.workspace_id, attachedToExisting: true }
+  } catch {
+    return undefined // 自愈面失败（含库不可用）——降级现行链，错误语义由 ③ 面承接
+  }
 }
 
 // ── 查询面（Interface 1：list/get/update——archived 过滤口径随行，patch 仅 name/archived） ──

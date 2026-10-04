@@ -181,11 +181,11 @@ describe('pin ④-5 集成（真实 registerProject × S4 语义桩 + 临时 SQL
 
   it('③ 写入失败 → ④ delete 补偿：dsh 侧零孤儿且目录保留（S4 语义下补偿成立）', async () => {
     const { db, registry, service } = setup()
-    // 与既有行制造唯一约束冲突 → ③ 失败（core 2.2 同款注入面）
-    db.prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
-       VALUES ('dup', 'ws-x', ?, 'p0', 'f', 'k', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
-    ).run(WS)
+    // fix-27 后注入载体改 INSERT ABORT 触发器（ws_path 冲突行已被自愈面消费——重注册
+    // 幂等成功；core 2.2 测试同款 failProjectInserts 注入面）
+    db.exec(
+      `CREATE TRIGGER fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'simulated projects write failure'); END`,
+    )
     await expect(
       service.registerProject({
         workspaceDir: WS,

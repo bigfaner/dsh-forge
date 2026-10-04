@@ -148,7 +148,7 @@ export function RegisterFormView({
         </div>
         {workspaceRegistered ? (
           <p className="dswf-rf-hint" data-dswf-rf-registered>
-            该目录已注册——「确认」后挂接既有工作区（不重复登记）。
+            该目录已注册——「确认」将幂等返回既有项目（挂接既有工作区，不重复登记）。
           </p>
         ) : null}
       </div>

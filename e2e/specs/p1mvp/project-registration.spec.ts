@@ -315,7 +315,7 @@ test('@web-e2e @p1mvp project-registration·Step1 cancel-clean-exit：浏览器�
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 2 Outcome "attach-existing-workspace"（journey Step 2b：幂等挂接既有）
 // 挂接分支可达前置（4.3 探针实证 + 服务面源码）：registry 在场 / 应用库零行——两侧均在场的
-// 重复登记走 ③ ws_path UNIQUE 冲突失败（ownership 保护，归 compensation Step3c 口径）。
+// 重复登记自 fix-27 起 = 幂等成功（自愈防御，归 compensation fix-27 专项口径）。
 // 本测试以「删应用侧行保 dsh 侧注册」预置挂接态（fixture 通道，state.db 直注）。
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：已注册目录挂接既有', async () => {
@@ -326,7 +326,7 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
   let launched: { app: ElectronApplication; page: Page } | undefined
   try {
     // 单 boot：首次注册（RPC——新建分支）→ WAL 活删应用侧行（挂接态预置：registry 在场/
-    // 应用库零行；两侧均在场的重复登记 = ③ ws_path 冲突失败，归 compensation Step3c 口径）
+    // 应用库零行；两侧均在场的重复登记自 fix-27 起 = 幂等成功，归 compensation fix-27 专项）
     launched = await launchReady(userData, { dismiss: false })
     const first = await forgeInvoke<{ projectId: string; workspaceId: string; attachedToExisting: boolean }>(launched.page, 'forge:projects/register', {
       workspaceDir: targetDir,

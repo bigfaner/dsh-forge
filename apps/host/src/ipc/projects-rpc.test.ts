@@ -19,7 +19,7 @@ import { createProjectService } from '../../../../packages/core/src/forge/projec
 import type { WorkspaceLike, WorkspaceRegistryPort } from '../../../../packages/core/src/forge/registry.js'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
-import { registerProjectsChannels } from './projects-rpc.js'
+import { registerProjectsChannels, runStartupReconcile } from './projects-rpc.js'
 
 // ── ipc 替身（ipcMain.handle 语义：注册表存储，invoke 直调 handler）──
 
@@ -187,16 +187,16 @@ describe('2.4 AC1 五通道端到端（替身层：typed 结果 + 负载映射�
 // ── AC2 实层：core 真身（2.2 registerProject）× 真实注册组合 ──
 
 /** 实层素材：每用例独占临时库 + registry 桩（重复注入同因失败互不染指——registry 状态会跨调用演化） */
-function setupReal(ws: string, opts: { staleRow?: boolean; failCreate?: Error; failDelete?: Error } = {}) {
+function setupReal(ws: string, opts: { failInsert?: boolean; failCreate?: Error; failDelete?: Error } = {}) {
   const db = openDatabase(dbPath())
   const registry = new StubRegistry()
   registry.failCreate = opts.failCreate
   registry.failDelete = opts.failDelete
-  if (opts.staleRow) {
-    db.prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
-       VALUES ('stale', 'stale-ws', ?, 'stale', ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-    ).run(ws, resolve(ws, '.forge'), resolve(ws, '.knowledge'))
+  if (opts.failInsert) {
+    // fix-27：同 ws_path 陈旧行已被服务面自愈消费——③ 失败注入载体改 INSERT ABORT 触发器
+    db.exec(
+      `CREATE TRIGGER fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'simulated projects write failure'); END`,
+    )
   }
   const service = createProjectService({ db, registry })
   const input = { workspaceDir: ws, name: 'x', forgeDir: ws, knowledgeDir: ws }
@@ -249,7 +249,7 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
 
   it('ERR_COMPENSATION：③写失败+补偿失败 → 真类入信封（记账后原样保真）', async () => {
     const ws = resolve('C:\\dsh-forge-rpc-compensate')
-    const direct = setupReal(ws, { staleRow: true, failDelete: new Error('delete exploded') })
+    const direct = setupReal(ws, { failInsert: true, failDelete: new Error('delete exploded') })
     let thrown: unknown
     try {
       await direct.service.registerProject(direct.input)
@@ -261,7 +261,7 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
     expect(direct.db.prepare('SELECT COUNT(*) AS n FROM app_key_logs').get()).toEqual({ n: 1 })
     direct.db.close()
     // 真实组合（新库重演）：CompensationError → 信封三元组保真
-    const replay = setupReal(ws, { staleRow: true, failDelete: new Error('delete exploded') })
+    const replay = setupReal(ws, { failInsert: true, failDelete: new Error('delete exploded') })
     const envelope = (await replay.handler(undefined, replay.input)) as {
       ok: boolean
       error: { code: string; message: string; data: Record<string, unknown> }
@@ -279,5 +279,30 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
     expect(typeof envelope.error.data.workspaceId).toBe('string')
     expect(typeof envelope.error.data.projectId).toBe('string')
     replay.db.close()
+  })
+})
+
+// ── fix-27 启动对账接线（fire-and-forget：报告入日志 + 异常吞掉不阻断启动）──
+
+describe('fix-27 runStartupReconcile（boot 面服务就绪后调一次）', () => {
+  it('成功 → repaired/orphans 摘要入日志；失败 → warn 吞掉（不抛、不 unhandled）', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const ok = fakeService()
+      expect(() => runStartupReconcile(ok)).not.toThrow() // fire-and-forget：同步面零抛
+      await new Promise((done) => setTimeout(done, 0))
+      expect(ok.reconcileAtStartup).toHaveBeenCalledOnce()
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('启动对账完成：repaired=1 orphans=0'))
+      const failing = fakeService()
+      failing.reconcileAtStartup = vi.fn().mockRejectedValue(new Error('bridge rpc down'))
+      expect(() => runStartupReconcile(failing)).not.toThrow()
+      await new Promise((done) => setTimeout(done, 0)) // 拒绝已被吞——无 unhandled rejection
+      expect(failing.reconcileAtStartup).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('bridge rpc down'))
+    } finally {
+      log.mockRestore()
+      warn.mockRestore()
+    }
   })
 })

@@ -114,6 +114,8 @@ describe('工作区已注册挂接提示（fix-14：pick 时标记的表单相�
     expect(markup).toMatch(/dswf-rf-wsreg[^>]*>已注册</)
     expect(markup).toContain('data-dswf-rf-registered')
     expect(markup).toContain('挂接既有工作区')
+    // fix-27：标记 = 幂等成功语义（非错误面）——确认不炸 UNIQUE，仅提示
+    expect(markup).toContain('幂等返回既有项目')
   })
 
   it('未注册 → 无 chip 无提示（默认形态零变化）', () => {

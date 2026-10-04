@@ -9,7 +9,7 @@ import { bootDshHost } from './boot/index.js'
 import {
   BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE,
   refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel, registerFsChannels,
-  registerKnowledgeChannels, registerProjectsChannels, withKnowledgeBindingsRefresh,
+  registerKnowledgeChannels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
@@ -70,6 +70,7 @@ void (async () => {
         withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile),
       )
       void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
+      runStartupReconcile(host.services.forgeProjects) // fix-27：启动对账（§交互三）——悬空引用启动即修
     } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')
     if (host.services.forgeKnowledge !== undefined) {
       registerKnowledgeChannels(forgeIpc, host.services.forgeKnowledge)

@@ -30,3 +30,22 @@ export function registerProjectsChannels(ipc: ForgeIpc, service: ProjectService)
   )
   ipc.register(PROJECTS_CHANNELS.reconcile, rpcEnvelope(() => service.reconcileAtStartup()))
 }
+
+/**
+ * fix-27 启动对账接线（tech-design §交互三「每次启动」落地）：boot 面 forgeProjects 服务
+ * 就绪后调一次 reconcileAtStartup——悬空引用启动即修（失配找回/幂等重建，既有实现）。
+ * fire-and-forget：报告入日志（repaired/orphans 摘要）；异常吞掉不阻断启动（服务内部已
+ * 三层降级，此处仅桥面兜底）。e2e 隔离态同径（main 唯一入口，无形态分支）。
+ */
+export function runStartupReconcile(service: ProjectService): void {
+  void service.reconcileAtStartup().then(
+    (report) =>
+      console.log(
+        `[host] 启动对账完成：repaired=${String(report.repaired.length)} orphans=${String(report.orphans.length)}`,
+      ),
+    (error) =>
+      console.warn(
+        `[host] 启动对账调用失败（已降级，不阻断启动）：${error instanceof Error ? error.message : String(error)}`,
+      ),
+  )
+}

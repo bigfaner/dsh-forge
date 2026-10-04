@@ -4,12 +4,13 @@
 // （eval-contract 1015/1150 通过）。每条 test 对应一个（或一组同链）Contract Outcome。
 //
 // 故障注入通道（fact FAULT_INJECTION_CONTRACT：e2e 无 setFault 注入缝——③ 应用库写入失败在
-// 单测经 ws_path UNIQUE 冲突行预置实现）：本套件以同口径落地——{userData}/state.db 预置
-// ws_path 冲突行（better-sqlite3 自 packages/core 依赖闭包解析，schema.ts DDL 核实：
-// idx_projects_ws_path UNIQUE + workspace_id UNIQUE）。
+// 单测经 INSERT ABORT 触发器实现）：fix-27 起 ws_path 冲突行已被服务面自愈消费（重注册 =
+// 幂等成功），本套件同口径切换注入载体——{userData}/state.db 预置 INSERT 触发器
+// （better-sqlite3 自 packages/core 依赖闭包解析，schema.ts DDL 核实：idx_projects_ws_path
+// UNIQUE + workspace_id UNIQUE——挂接分支 ownership 面经 workspace_id 占位行注入）。
 //
 // 留痕 skip（通道缺失 = 缺陷信号记账，contract fact-note 原文）：
-//   - Step 3b host-cancel-in-window：②③ 间窗口非确定性可命中 + 启动对账未接线（RECONCILE_NOT_AUTO_INVOKED）
+//   - Step 3b host-cancel-in-window：②③ 间窗口非确定性可命中（启动对账触发缝已由 fix-27 接线）
 //   - Step 4b compensation-failure-ledger：④ registry.delete 失败注入无缝（FAULT_INJECTION_CONTRACT）
 //   - Step 5 success（补偿重放 no-op）：测试开关通道缺失（delete-unknown-id 幂等语义单测 pin）
 //
@@ -263,23 +264,50 @@ async function registerViaUi(page: Page, fixtureRoot: string, dirName: string): 
   await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
 }
 
-/** 预置 ws_path 冲突行（③ 应用库写入失败的注入载体——单测同口径；WAL 活写兼容 app 在场） */
-function seedConflictRow(userData: string, wsPath: string): void {
+/** fix-27 后 ③ 应用库写入失败注入载体：INSERT 触发器恒 ABORT——ws_path 冲突行已被服务面
+ *  自愈消费（重注册 = 幂等成功），补偿链失败源改经触发器注入（单测 failProjectInserts 同
+ *  口径；WAL 活写兼容 app 在场） */
+function installInsertFailure(userData: string): void {
   const db = openStateDb(userData)
   try {
     db.pragma('busy_timeout = 5000')
+    db.exec(
+      `CREATE TRIGGER IF NOT EXISTS e2e_fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'e2e 注入：③ 应用库写入失败'); END`,
+    )
+  } finally {
+    db.close()
+  }
+}
+
+/** 注入复位（DROP TRIGGER——「上一次已完整补偿」的干净前置） */
+function removeInsertFailure(userData: string): void {
+  const db = openStateDb(userData)
+  try {
+    db.pragma('busy_timeout = 5000')
+    db.exec('DROP TRIGGER IF EXISTS e2e_fail_projects_insert')
+  } finally {
+    db.close()
+  }
+}
+
+/** 预置 workspace_id 占位行（挂接分支 ③ 失败注入载体——fix-27 后 ws_path 冲突面已自愈，
+ *  唯一残余冲突 = workspace_id UNIQUE：他行占住既有工作区 id；路径随机错开不进左栏） */
+function seedWorkspaceIdConflictRow(userData: string, workspaceId: string): void {
+  const db = openStateDb(userData)
+  try {
+    db.pragma('busy_timeout = 5000')
+    const other = `Z:\\dsh-forge-e2e-other-${Math.random().toString(36).slice(2, 10)}`
     db
       .prepare(
         `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, ?, 1, ?, ?)`,
+         VALUES (?, ?, ?, 'seed-own', ?, 0, ?, 0, ?, ?)`,
       )
       .run(
         `seed-${Math.random().toString(36).slice(2, 10)}`,
-        `seed-ws-${Math.random().toString(36).slice(2, 14)}`,
-        wsPath,
-        'seed-block',
-        `${wsPath}\\.forge`,
-        `${wsPath}\\.knowledge`,
+        workspaceId,
+        other,
+        `${other}\\.forge`,
+        `${other}\\.knowledge`,
         new Date().toISOString(),
         new Date().toISOString(),
       )
@@ -337,8 +365,9 @@ test('@web-e2e @p1mvp compensation·冒烟：③写入失败 → ④补偿删除
     expect(first.workspaceId, '②workspaceId 在场（uuid——应用库外键素材）').toBeTruthy()
     expect(registryContains(join(userData, 'dsh-home'), dirA), '②dsh create 落地：registry 含新工作区').toBe(true)
 
-    // 注入：WAL 活写预置 ws_path=dirB 冲突行（③ INSERT 必失败——单测同口径）
-    seedConflictRow(userData, dirB)
+    // 注入：WAL 活写预置 INSERT ABORT 触发器（③ INSERT 必失败——单测同口径；fix-27 后
+    // ws_path 冲突行已被自愈面消费，注入载体改触发器）
+    installInsertFailure(userData)
 
     // 收模态（boot 内唯一 dismiss——链路无后续 boot，毒化面不适用）
     await dismissOnboardingModals(launched.page)
@@ -357,16 +386,8 @@ test('@web-e2e @p1mvp compensation·冒烟：③写入失败 → ④补偿删除
     await launched.page.locator('.dswf-ap-dismiss', { hasText: '关闭' }).first().click()
     await expect(launched.page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
 
-    // 注入复位：WAL 活删 seed 行（「上一次已完整补偿」的干净前置——5b 前提）
-    {
-      const db = openStateDb(userData)
-      try {
-        db.pragma('busy_timeout = 5000')
-        db.prepare('DELETE FROM projects WHERE name = ?').run('seed-block')
-      } finally {
-        db.close()
-      }
-    }
+    // 注入复位：WAL 活删触发器（「上一次已完整补偿」的干净前置——5b 前提）
+    removeInsertFailure(userData)
 
     // Step 5b retry-registration-same-path：补偿后重注册同一路径成功
     await registerViaUi(launched.page, fixtureRoot, 'comp-b')
@@ -447,8 +468,8 @@ test('@web-e2e @p1mvp compensation·Step1/2 attach-branch + create-idempotent：
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 3 Outcome "existing-workspace-protected"（journey Step 3c：ownership 保护）
-// 注：同路径既有注册的二次登记天然触发 ③ ws_path UNIQUE 冲突（既有合法行在场）——
-// 挂接分支上的写入失败无需 seed 预置，自然可达。
+// 注：fix-27 起同路径既有注册的二次登记 = 幂等成功（自愈防御，不再炸 ws_path UNIQUE）——
+// 挂接分支 ③ 失败的可达注入 = workspace_id UNIQUE 占位行（他行占住既有工作区 id）。
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接分支失败不误删既有', async () => {
   test.setTimeout(420_000)
@@ -457,9 +478,8 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-comp-ud-'))
   let launched: Launched | undefined
   try {
-    // 单 boot：既有注册（RPC）→ WAL 活写冲突行（同路径 ws_path——挂接分支上的 ③ 失败源）
-    // 注：同路径既有注册的二次登记天然触发 ③ ws_path UNIQUE 冲突（既有合法行在场）——
-    // 无需额外 seed，此处活写仅显式化冲突源（archived 占位行不进左栏/外键口径）。
+    // 单 boot：既有注册（RPC）→ WAL 活写 workspace_id 占位行（挂接分支上的 ③ 失败源——
+    // 路径随机错开：占位行不进左栏、不与 dirA 抢 ws_path）
     launched = await launch(userData, { dismiss: false })
     const first = await forgeInvoke<RegisterResultLike>(launched.page, 'forge:projects/register', {
       workspaceDir: dirA,
@@ -468,10 +488,11 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
       knowledgeDir: `${dirA}\\.knowledge`,
     })
     expect(first.attachedToExisting).toBe(false)
+    seedWorkspaceIdConflictRow(userData, first.workspaceId)
     const registryBefore = registrySnapshot(join(userData, 'dsh-home'))
     await dismissOnboardingModals(launched.page)
 
-    // 行使：注册同一既有路径 → ①命中（挂接，无补偿登记）→ ③写入失败（ws_path 冲突）
+    // 行使：注册同一既有路径 → ①命中（挂接，无补偿登记）→ ③写入失败（workspace_id 冲突）
     await registerViaUi(launched.page, fixtureRoot, 'own-a')
     const failure = launched.page.locator('.dswf-ap[data-dswf-ap="failure"]')
     await expect(failure, '挂接分支上的失败反馈在场').toBeVisible({ timeout: 30_000 })
@@ -500,8 +521,9 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 5 Outcome "drift-repair-on-startup"（journey Step 5c：引用漂移修复）
-// 注记：fact RECONCILE_NOT_AUTO_INVOKED——启动期自动触发缝未接线（缺陷信号/设计裁决点）；
-// 本测试按 Input 完成重启后经已暴露通道 forge:projects/reconcile 显式行使对账语义。
+// 注记：fact RECONCILE_NOT_AUTO_INVOKED 已由 fix-27 解除（boot 链接线 main.ts——启动期
+// 自动触发）；本测试保留单 boot 口径（漂移后置注入 + 通道显式触发），boot 期自动修复
+// 由下方 fix-27 专项测试覆盖（双 boot：悬空引用夹具 → 启动即修）。
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp compensation·Step5c drift-repair-on-startup：失配按 path 找回（通道显式触发）', async () => {
   test.setTimeout(300_000)
@@ -533,9 +555,9 @@ test('@web-e2e @p1mvp compensation·Step5c drift-repair-on-startup：失配按 p
       }
     }
 
-    // Input「重启应用」注记：fact RECONCILE_NOT_AUTO_INVOKED——启动期自动触发缝未接线
-    // （缺陷信号/设计裁决点），重启不改变通道语义；且同 userData 复启存在挂载竞态
-    // （文件头注）——经已暴露通道 forge:projects/reconcile 显式行使对账语义。
+    // Input「重启应用」注记：fix-27 起启动对账已接线（boot 期自动触发）；本测试漂移为
+    // boot 后注入（自动对账已先行跑过）——经已暴露通道 forge:projects/reconcile 显式
+    // 行使对账语义（boot 期自动修复归下方 fix-27 专项测试）。
     const report = await forgeInvoke<{ repaired: readonly unknown[]; orphans: readonly unknown[] }>(
       launched.page,
       'forge:projects/reconcile',
@@ -590,12 +612,106 @@ test('@web-e2e @p1mvp compensation·Step5d no-drift-startup-silent：一致终�
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// fix-27 专项（任务验收 1/2/4）：boot 接线启动对账 + register 链自愈/幂等——
+// 悬空引用夹具（行指向不存在 workspaceId，走查人 Z:\learn 同型）→ 重启 boot 即修 →
+// 重复注册 = 幂等成功（不炸、不删工作区、返回既有项目）。
+// 双 boot 形态：两次 boot 均 dismiss:false（「不收模态 = 复启正常」探针口径——文件头注）。
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp compensation·fix-27 boot 自愈 + 重注册幂等：悬空引用启动即修 → 重复注册幂等成功', async () => {
+  test.setTimeout(600_000)
+  const fixtureRoot = makeWorkspaceFixture('fix27-a')
+  const dirA = join(fixtureRoot, 'fix27-a')
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-comp-ud-'))
+  let launched: Launched | undefined
+  try {
+    // boot 1（RPC-only，不收模态）：正常注册建立基线（registry 实体 + 应用侧行）
+    launched = await launch(userData, { dismiss: false })
+    const first = await forgeInvoke<RegisterResultLike>(launched.page, 'forge:projects/register', {
+      workspaceDir: dirA,
+      name: 'fix27-a',
+      forgeDir: `${dirA}\\.forge`,
+      knowledgeDir: `${dirA}\\.knowledge`,
+    })
+    const projects1 = await forgeInvoke<readonly ProjectSummaryLike[]>(launched.page, 'forge:projects/list')
+    const projectId = projects1.find((p) => p.wsPath === dirA)!.id
+    await closeApp(launched.app)
+    rmSync(launched.providerOverlay, { force: true })
+    launched = undefined
+
+    // 悬空引用夹具（app 关闭后直写——行指向不存在 workspaceId，fix-18 home 翻转遗留同型）
+    {
+      const db = openStateDb(userData)
+      try {
+        db.pragma('busy_timeout = 5000')
+        const res = db.prepare('UPDATE projects SET workspace_id = ? WHERE id = ?').run('bogus-workspace-id', projectId)
+        expect(res, '悬空夹具生效（UPDATE 命中）').toBeTruthy()
+      } finally {
+        db.close()
+      }
+    }
+
+    // boot 2：启动对账接线（fix-27 main.ts boot 面 fire-and-forget）→ 引用启动即修
+    launched = await launch(userData, { dismiss: false })
+    const deadline = Date.now() + 60_000
+    let repaired: { readonly workspaceId: string } | undefined
+    for (;;) {
+      const probe = await forgeInvoke<{ id: string; workspaceId: string } | null>(launched.page, 'forge:projects/get', { id: projectId })
+      if (probe !== null && probe.workspaceId === first.workspaceId) {
+        repaired = probe
+        break
+      }
+      if (Date.now() > deadline) throw new Error('boot 启动对账超时（60s）：悬空引用未修复')
+      await new Promise((done) => setTimeout(done, 2_000))
+    }
+    expect(repaired.workspaceId, '悬空引用 boot 即修（relinked——registry 按 ws_path 找回原实体）').toBe(first.workspaceId)
+    // 对账记账在场（relink = 关键一致性事件 → warn 单条，scope=reconcile）
+    {
+      const db = openStateDb(userData)
+      try {
+        db.pragma('busy_timeout = 5000')
+        const row = db
+          .prepare(`SELECT COUNT(*) AS n FROM app_key_logs WHERE scope = 'reconcile' AND level = 'warn'`)
+          .get() as { n: number }
+        expect(row.n, '对账修复记账在场（relinked warn）').toBeGreaterThanOrEqual(1)
+      } finally {
+        db.close()
+      }
+    }
+
+    // 重复注册 = 幂等成功（fix-27 自愈防御：健康行 → 既有项目返回，不炸 UNIQUE、不删工作区）
+    const again = await forgeInvoke<RegisterResultLike>(launched.page, 'forge:projects/register', {
+      workspaceDir: dirA,
+      name: 'fix27-a',
+      forgeDir: `${dirA}\\.forge`,
+      knowledgeDir: `${dirA}\\.knowledge`,
+    })
+    expect(again, '重注册幂等成功（返回既有项目）').toMatchObject({
+      projectId,
+      workspaceId: first.workspaceId,
+      attachedToExisting: true,
+    })
+    expect(again.compensated, '幂等成功零补偿').toBeUndefined()
+    // 终态：应用库恰一行 + registry 实体保持（不删）
+    const projects2 = await forgeInvoke<readonly ProjectSummaryLike[]>(launched.page, 'forge:projects/list')
+    expect(projects2.filter((p) => p.wsPath === dirA), '重注册不落第二行').toHaveLength(1)
+    expect(registryContains(join(userData, 'dsh-home'), dirA), '既有工作区注册保持（幂等不删）').toBe(true)
+  } finally {
+    if (launched !== undefined) {
+      await closeApp(launched.app)
+      rmSync(launched.providerOverlay, { force: true })
+    }
+    await rmDirBestEffort(userData)
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 留痕 skip：注入/触发通道缺失（缺陷信号记账——转正条件 = 缝落地）
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp compensation·Step3b host-cancel-in-window（留痕 skip）', async () => {
   test.skip(
     true,
-    '②③ 间流程窗口（毫秒级本地链）非确定性可命中，且宿主级中断后的补偿/对账触发缝未接线（fact RECONCILE_NOT_AUTO_INVOKED——缺陷信号）——留痕 skip，转正条件 = 注入缝 + 启动对账接线落地',
+    '②③ 间流程窗口（毫秒级本地链）非确定性可命中，且宿主级中断注入缝缺失（启动对账触发缝已由 fix-27 接线，取消窗口注入仍无通道）——留痕 skip，转正条件 = 注入缝落地',
   )
 })
 

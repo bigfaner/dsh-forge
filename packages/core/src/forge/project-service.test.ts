@@ -103,12 +103,20 @@ const keyLogs = (db: Database.Database): { level: string; scope: string; message
     `SELECT level, scope, message, data_json FROM app_key_logs ORDER BY id`,
   ).all()
 
-/** 种入陈旧 projects 行（直接 SQL，模拟 ③ 唯一冲突的失败注入面） */
+/** 种入陈旧 projects 行（直接 SQL——fix-27 自愈/幂等与挂接保护的注入面） */
 function seedRow(db: Database.Database, o: { id: string; workspaceId: string; wsPath: string }) {
   db.prepare(
     `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(o.id, o.workspaceId, o.wsPath, o.id, `${o.wsPath}\\.forge`, `${o.wsPath}\\.knowledge`, '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')
+}
+
+/** fix-27 后 ③ 失败注入载体：INSERT 触发器恒 ABORT——同 ws_path 冲突行已被 ① 前自愈面
+ *  消费（重注册幂等成功），补偿链测试的失败源改经触发器注入（补偿语义本身零变化） */
+function failProjectInserts(db: Database.Database): void {
+  db.exec(
+    `CREATE TRIGGER fail_projects_insert BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'simulated projects write failure'); END`,
+  )
 }
 
 const input = (o: { workspaceDir?: string; forgeDir?: string } = {}) => ({
@@ -201,13 +209,63 @@ describe('AC2 幂等命中（canonical 命中既有）→ 挂接不登记补偿'
   })
 })
 
+// ── fix-27 重注册自愈/幂等（① 前防御：既有行在场 → 不新 INSERT，绝不撞 UNIQUE(ws_path)） ──
+
+describe('fix-27 重注册自愈/幂等：悬空行自愈 / 健康行幂等（走查人 Z:\\learn 死锁场景）', () => {
+  it('悬空行（引用 registry 无实体——fix-18 home 翻转遗留）→ recreate 自愈 + 幂等成功返回既有行', async () => {
+    const { db, registry, service } = setup()
+    const canonical = resolve(join(WS, 'proj'))
+    seedRow(db, { id: 'legacy', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用占位
+    const result = await service.registerProject(input())
+    expect(result).toMatchObject({ projectId: 'legacy', attachedToExisting: true }) // 既有项目幂等返回
+    expect(result.workspaceId).not.toBe('ws-gone') // 引用已修（幂等重建新实体）
+    const rows = readRows(db)
+    expect(rows).toHaveLength(1) // 不新 INSERT——原行 UPDATE 单向修引用
+    expect(rows[0]).toMatchObject({ id: 'legacy', workspace_id: result.workspaceId, ws_path: canonical })
+    expect(registry.records.get(result.workspaceId)?.path).toBe(canonical) // 幂等重建落地
+    expect(registry.deleteCalls).toEqual([]) // 不登记补偿（挂接保护恒成立）
+    expect(keyLogs(db)).toEqual([]) // recreated 成功路径不记（§交互三口径）
+  })
+
+  it('悬空行但 registry 按 path 找回既有实体 → relink 自愈（零 create）+ 幂等成功 + warn 单条记账', async () => {
+    const { db, registry, service } = setup()
+    const canonical = resolve(join(WS, 'proj'))
+    const found = registry.seed(canonical) // path 在场、行引用却指向别的 id
+    seedRow(db, { id: 'legacy', workspaceId: 'ws-other', wsPath: canonical })
+    const result = await service.registerProject(input())
+    expect(result).toMatchObject({ projectId: 'legacy', workspaceId: found.id, attachedToExisting: true })
+    expect(registry.createCalls).toEqual([]) // relink 路径零 create
+    expect(readRows(db)[0]?.workspace_id).toBe(found.id)
+    // relink 自动修复 = 关键一致性事件 → warn 单条（§交互三记名域②口径复用）
+    const logs = keyLogs(db)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({ level: 'warn', scope: 'reconcile' })
+  })
+
+  it('健康行（registry 实体在场且 path 一致——正常重注册场景）→ 幂等成功零写零记账，不炸 UNIQUE', async () => {
+    const { db, registry, service } = setup()
+    const canonical = resolve(join(WS, 'proj'))
+    const existing = registry.seed(canonical)
+    seedRow(db, { id: 'healthy', workspaceId: existing.id, wsPath: canonical })
+    const before = readRows(db)[0]
+    const result = await service.registerProject(input())
+    expect(result).toEqual({ projectId: 'healthy', workspaceId: existing.id, attachedToExisting: true })
+    expect(registry.createCalls).toEqual([])
+    expect(registry.deleteCalls).toEqual([]) // 绝不删既有工作区
+    const after = readRows(db)
+    expect(after).toHaveLength(1)
+    expect(after[0]?.updated_at).toBe(before?.updated_at) // 健康短路：零写
+    expect(keyLogs(db)).toEqual([])
+  })
+})
+
 // ── AC3 ③ 写入失败 → ④ 补偿删除 ──
 
 describe('AC3 ③ 写入失败（模拟）→ ④ 补偿删除，dsh 零孤儿、目录日志保留', () => {
-  it('新建路径 ③ 失败（ws_path UNIQUE 冲突）→ delete 补偿一次 + ProjectWriteError(compensated)', async () => {
+  it('新建路径 ③ 失败（INSERT 触发器 ABORT 注入）→ delete 补偿一次 + ProjectWriteError(compensated)', async () => {
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
-    seedRow(db, { id: 'stale', workspaceId: 'ws-stale', wsPath: canonical }) // 陈旧引用占位 → ③ 失败
+    failProjectInserts(db) // fix-27：ws_path 冲突行已被自愈面消费——③ 失败注入载体改触发器
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
     const pwe = err as ProjectWriteError
@@ -221,8 +279,8 @@ describe('AC3 ③ 写入失败（模拟）→ ④ 补偿删除，dsh 零孤儿�
     expect(registry.list()).toEqual([])
     // 保目录保日志（G1 pin 4：delete 不触碰目录）——桩 dirs 模拟 dsh 侧目录留存
     expect(registry.dirs.has(canonical)).toBe(true)
-    // 应用库零新增行（仅陈旧占位行）+ 补偿成功不记关键日志（成功路径不记流水）
-    expect(readRows(db)).toHaveLength(1)
+    // 应用库零新增行（触发器拦截）+ 补偿成功不记关键日志（成功路径不记流水）
+    expect(readRows(db)).toHaveLength(0)
     expect(keyLogs(db)).toEqual([])
   })
 })
@@ -238,8 +296,7 @@ describe('AC4 补偿幂等（重复 registry.delete 为 no-op）', () => {
 
   it('补偿删除返回 false（工作区已被清理）→ 仍视为补偿成功，不抛 ERR_COMPENSATION', async () => {
     const { db, registry, service } = setup()
-    const canonical = resolve(join(WS, 'proj'))
-    seedRow(db, { id: 'stale', workspaceId: 'ws-stale', wsPath: canonical })
+    failProjectInserts(db)
     registry.beforeDelete = (id) => registry.records.delete(id) // 并发清理在前 → 本次 delete 返回 false
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError) // 而非 CompensationError
@@ -255,7 +312,7 @@ describe('AC5 补偿失败 → app_key_logs 记账（scope=compensation）+ 抛 
   it('delete 抛错 → 单事件单条记账（结果入 data_json）+ CompensationError，孤儿留存不自动删', async () => {
     const { db, registry, service } = setup()
     const canonical = resolve(join(WS, 'proj'))
-    seedRow(db, { id: 'stale', workspaceId: 'ws-stale', wsPath: canonical })
+    failProjectInserts(db)
     registry.failDelete = new Error('dsh storage down')
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(CompensationError)
@@ -272,7 +329,7 @@ describe('AC5 补偿失败 → app_key_logs 记账（scope=compensation）+ 抛 
     expect(String(data.disposition)).toContain('不自动删') // 处置结果并入同条
     // 孤儿留存（dsh 侧记录未删，交启动对账提示）
     expect(registry.records.size).toBe(1)
-    expect(readRows(db)).toHaveLength(1) // 仅陈旧占位行
+    expect(readRows(db)).toHaveLength(0) // 触发器拦截 → 应用库零行
   })
 })
 
