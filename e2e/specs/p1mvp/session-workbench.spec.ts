@@ -38,6 +38,7 @@ import { bridgeDispatch, closeApp, launchHost, type Launched } from '../../suppo
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, waitForFixtureSession } from '../../support/session-files.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../../support/dogfood.js'
+import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../support/cleanup.js'
 import {
   COMPOSER_INPUT,
@@ -54,6 +55,7 @@ import {
   KNOWLEDGE_ENTRY,
   PROJECT_ROW_ANY,
   WORKBENCH,
+  projectActionOf,
   projectRowOf,
   sessionRowOf,
   sidebarOf,
@@ -305,6 +307,89 @@ test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail �
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 1 Outcome "tree-row-toggle"（fix-41：项目行整行点击/键盘翻转——报障③）
+// DisclosureRow expandOnRowClick 官方开关（fix-42 落地收编 fix-41 A 面）行为钉：
+// 标题/图标点击翻转 + Enter/Space 键盘翻转 + aria-expanded 全程在场 + 行尾动作
+// stopPropagation 不翻转 + 收展态跨过滤开关保持（collapsedIds 语义）。
+// 会话入树夹具（零凭据径）：行尾新会话钮（官方 startSession 建 blank 会话）→
+// composer 发一条消息（用户事件落地 = 非 blank → sessionVisible 常显，现行口径
+// ——blank 行入树需选中态传播，fix-42 台账边界）。
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp session-workbench·Step1b-r tree-row-toggle：项目行整行点击/键盘翻转（fix-41）', async () => {
+  test.setTimeout(240_000)
+  const fixtureRoot = makeWorkspaceFixture('row-toggle')
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-ud-'))
+  const { app, page } = await launchHost({ userData })
+  try {
+    const project = await registerProject(page, join(fixtureRoot, 'row-toggle'), 'row-toggle')
+    const block = page.locator(projectRowOf(project.id))
+    const row = block.locator('.dswf-sidebar-project-row').first()
+    await expect(row, '项目行在场').toBeVisible({ timeout: 30_000 })
+    // 零会话项目行为不变：expandable=false → 无 aria-expanded/整行翻转面（暂无会话提示如常）
+    await expect(block.locator('.dswf-sidebar-no-session'), '零会话提示（账本收敛）').toBeVisible({ timeout: 30_000 })
+    await expect(row, '零会话行无 aria-expanded（expandable=false）').not.toHaveAttribute('aria-expanded')
+
+    // 夹具：新会话钮（startSession 建 blank）→ 发消息（用户事件 = 非 blank → 行入树）
+    await row.hover()
+    await block.locator(projectActionOf('new-session')).click()
+    await page.waitForTimeout(2_000)
+    const composer = page.locator(COMPOSER_INPUT).last()
+    await composer.click()
+    await page.keyboard.insertText('树行翻转夹具：列出当前目录文件')
+    await page.keyboard.press('Enter')
+    await expect(block.locator('[data-dswf-session]'), '会话行入树（非 blank 常显）').toBeVisible({ timeout: 60_000 })
+    // 零凭据形态：agent 失败可晚到挂载 API Key onboarding 模态（30s 收起窗外的晚到面）
+    // ——先点掉再走指针断言（pr-compensation 同径；凭据在场 = no-op）
+    await ensureNoBlockingDialog(page)
+    await expect(row, 'expandable 后 aria-expanded 在场（缺省展开）').toHaveAttribute('aria-expanded', 'true')
+
+    // AC1 标题点击（用户报障面：点项目标题无反应 → 今整行翻转）：翻转为收起 + 会话行离场
+    await block.locator('.dswf-sidebar-project-title').click()
+    await expect(row, '标题点击翻转：收起').toHaveAttribute('aria-expanded', 'false')
+    await expect(block.locator('[data-dswf-session]'), '收起 = 会话行卸载（open && children）').toHaveCount(0)
+
+    // AC1 图标（leading）点击：翻回展开 + 会话行恢复
+    await row.locator('.dswf-sidebar-project-folder').click()
+    await expect(row, '图标点击翻转：展开').toHaveAttribute('aria-expanded', 'true')
+    await expect(block.locator('[data-dswf-session]'), '展开 = 会话行恢复').toBeVisible()
+
+    // AC2 行尾动作与行翻转互不干扰：ellipsis 菜单钮（行尾动作槽 stopPropagation 面）
+    // 点击不翻转行；菜单开合与行翻转正交。断言面取菜单钮而非新会话钮——二次
+    // startSession 的 blank composer 在零凭据形态会异步挂 API Key onboarding 模态
+    // （全屏 mask 拦指针、挂载时点漂移数秒级），引入不稳定面，不取
+    await row.hover()
+    await block.locator(projectActionOf('menu')).click()
+    const menu = page.locator('[role="menu"]').first()
+    await expect(menu, '行尾 ellipsis 菜单开（portal）').toBeVisible({ timeout: 10_000 })
+    await expect(row, '行尾动作点击不翻转（stopPropagation 语义）').toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+    await expect(menu, 'Esc 收起菜单').toBeHidden({ timeout: 10_000 })
+    await expect(row, '菜单开合后行仍展开').toHaveAttribute('aria-expanded', 'true')
+
+    // AC1 键盘：Enter 收起 / Space 展开（rowExpands onKeyDown 官方面）
+    await row.focus()
+    await page.keyboard.press('Enter')
+    await expect(row, 'Enter 键盘翻转：收起').toHaveAttribute('aria-expanded', 'false')
+    await page.keyboard.press(' ')
+    await expect(row, 'Space 键盘翻转：展开').toHaveAttribute('aria-expanded', 'true')
+
+    // AC3 收展态跨过滤开关保持（collapsedIds 与过滤态机正交）：收起 → 开过滤行 → Esc 收 → 仍收起
+    await block.locator('.dswf-sidebar-project-title').click()
+    await expect(row).toHaveAttribute('aria-expanded', 'false')
+    await page.locator('[data-dswf-search-toggle]').first().click()
+    await expect(page.locator('[data-dswf-searchrow]'), '过滤行展开（段头内嵌槽）').toBeVisible({ timeout: 10_000 })
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-dswf-searchrow]'), 'Esc 收起过滤行（清查询）').toHaveCount(0)
+    await expect(row, '收展态跨过滤开关保持（collapsedIds 不受触碰）').toHaveAttribute('aria-expanded', 'false')
+    await expect(block.locator('[data-dswf-session]'), '会话行仍离场').toHaveCount(0)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    await rmDirBestEffort(fixtureRoot)
   }
 })
 
