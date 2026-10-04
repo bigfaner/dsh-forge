@@ -1,8 +1,11 @@
 /* 左栏工作区面板样式（定位：业务——UF-1，sidebar.workspaces 占用者）。
  * 纪律：令牌唯一（色/字/圆角零裸值一律 --dsw-*，lint-tokens 机械执行）；行形态对齐官方
- * ui-workspace Rows 刻度（sessionRow h32 / projectRow h34 / hover interactive-bg / radius md）。
- * dsw-raw 豁免理由（执行记录同步）：行内 2/4/6/8px 与 16/26px 缩进 = 官方 sidebar 行语言
- * 原值——官方主题无间距标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条
+ * ui-workspace Rows 刻度（sessionRow h32 / projectRow h34 / rail 图标钮 36 命中区 /
+ * hover interactive-bg / radius md）。
+ * dsw-raw 豁免理由（执行记录同步）：行内 2/4/6/7/8/10px、行刻度 20px、行高 34px、rail
+ * 36px 与 16/18px 图标尺寸、26px 缩进 = 官方 sidebar 行语言原值（ui-workspace
+ * Rows.module.css / WorkspaceBrowser.module.css 逐值对齐——fix-42 截图对照 AC 的结构等价
+ * 替代）——官方主题无间距标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条
  * 「形态对齐官方」优先，取官方原值；块级留白用行高令牌刻度。 */
 
 /* 面板根：占满壳的 workspaces 区域（几何/收展归壳） */
@@ -56,11 +59,13 @@
   flex: none;
 }
 
-/* ── 过滤行（fix-6：官方 Input 自持形态；行距对齐 section 头下沿刻度） ── */
+/* ── 过滤行（fix-6：官方 Input 自持形态；fix-42 迁段头内嵌槽——官方 searchSlot 形态：
+ * 展开即占满段头（label/头部动作让位），收起恢复四件。锚 data-dswf-searchrow 不变） ── */
 .dswf-sidebar-searchrow {
   display: flex;
-  flex: none;
-  padding: 0 0 4px 0; /* dsw-raw 官方 section 头下沿刻度 */
+  flex: 1;
+  min-width: 0;
+  padding: 0; /* dsw-raw 官方段头内嵌刻度（原独立行下距刻度随迁退役） */
 }
 
 .dswf-sidebar-search {
@@ -76,7 +81,10 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 项目块（官方 DisclosureRow 承载行本体——此处只补归档弱化与空项目占位） */
+/* 项目块（官方 DisclosureRow 承载行本体——fix-42 行语言对齐官方 projectRow 刻度：
+ * 高 34 / label-primary / hover interactive-bg / radius md；hover folder↔chevron 互换 =
+ * DisclosureRow previewChevron 官方缺省；行尾 hover 动作 = 行内尾部槽（官方 rowActions
+ * 同型——collapsedContent + keepContentWhenOpen，hover 语义与官方一致）） */
 .dswf-sidebar-project {
   display: flex;
   flex: none;
@@ -84,8 +92,95 @@
   min-width: 0;
 }
 
+/* 项目行 34px 刻度（官方 Rows .projectRow：box-sizing border-box / height 34 / 0 8px） */
+.dswf-sidebar-project .dswf-sidebar-project-row {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 8px; /* dsw-raw 官方行语言 */
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-sidebar-project .dswf-sidebar-project-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-sidebar-project .dswf-sidebar-project-row:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+/* 项目标题：官方 projectRow .title 刻度（14/20 + 占位伸缩 + 截断） */
+.dswf-sidebar-project .dswf-sidebar-project-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-s-14);
+}
+
+/* 标题区伸缩（官方 projectRow .projectText flex:1 刻度——DisclosureRow 文本面两枚
+ * class 钩承载：TextShimmer 根占满行余宽 + 内容面摊平，行尾动作才有右对齐锚点） */
+.dswf-sidebar-project .dswf-sidebar-project-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+.dswf-sidebar-project .dswf-sidebar-project-contentlayout {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 当前会话所在项目：folder 图标 active 色（官方 .folderActive 同型——只染 folder 槽，
+ * 预览 chevron 不染） */
+.dswf-sidebar-project[data-active] .dswf-sidebar-project-row .dswf-sidebar-project-folder {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* 行尾 hover 动作（官方 rowActions：行内尾部槽 + hover/菜单开呈现；gap 10 / 高 20 /
+ * margin-left auto 右对齐——actions 在行内，hover 语义与官方一致无振荡） */
+.dswf-sidebar-project-actions {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 10px; /* dsw-raw 官方行内刻度 */
+  height: 20px;
+  margin-left: auto;
+  padding-left: 8px; /* dsw-raw 官方行内刻度——与标题间距 */
+}
+
+.dswf-sidebar-project .dswf-sidebar-project-row:hover .dswf-sidebar-project-actions,
+.dswf-sidebar-project-actions[data-menu-open] {
+  display: inline-flex;
+}
+
 .dswf-sidebar-project[data-archived] .dswf-sidebar-project-title {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* 行尾动作钮（官方 Rows .iconButton 同型：16 图标 / 三级色 / hover 主色） */
+.dswf-sidebar-rowaction {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.dswf-sidebar-rowaction:hover {
+  color: var(--dsw-alias-label-primary);
 }
 
 /* 空项目占位行（UF-1 States：项目下「暂无会话」） */
@@ -101,6 +196,16 @@
   display: flex;
   flex: none;
   flex-direction: column;
+  min-width: 0;
+}
+
+/* ── 平铺视图（fix-42：官方 FlatList 同型——全会话行平铺，行距 2px 官方刻度；
+ * 行本体 = .dswf-sidebar-session 复用（树/平铺同语言）） ── */
+.dswf-sidebar-flatlist {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 官方 flatList 行距刻度 */
   min-width: 0;
 }
 
@@ -195,11 +300,46 @@
   cursor: pointer;
 }
 
-/* ── 收起态 rail（56px 图标列；几何与收展归壳，此处只排图标） ── */
+/* ── 收起态 rail（56px 图标列；几何与收展归壳，此处只排图标——fix-42 图标列非空：
+ * 搜索/＋/项目 folder 图标，官方 rail iconButton 刻度 36px 命中区 / radius md /
+ * label-primary / hover interactive-bg） ── */
 .dswf-sidebar-rail {
   align-items: center;
   gap: 2px; /* dsw-raw 官方 rail 刻度 */
   padding: 2px 0; /* dsw-raw 官方 rail 刻度 */
+}
+
+/* rail 图标钮（官方 .rail .iconButton 同型刻度——Button sm 28px 覆写为 36px 命中区） */
+.dswf-sidebar-rail .dswf-sidebar-railbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-sidebar-rail .dswf-sidebar-railbtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* rail 项目图标 active 色（当前会话所在项目——官方 folderActive 同型） */
+.dswf-sidebar-rail .dswf-sidebar-railbtn[data-active] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* rail 归档项目弱化（宽态 data-archived 同口径） */
+.dswf-sidebar-rail .dswf-sidebar-railbtn[data-archived] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 项目改名模态（fix-42——官方 rename 模态同型：错误行 state-error + alert 语义） ── */
+.dswf-sidebar-rename-input {
+  width: 100%;
+}
+
+.dswf-sidebar-rename-error {
+  margin-top: 8px; /* dsw-raw 官方 renameError 刻度 */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 /* ── 品牌行件（sidebar.brand.mark / sidebar.brand.name 洞位内容；行本体归壳） ── */

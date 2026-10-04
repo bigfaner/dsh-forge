@@ -1,7 +1,8 @@
 // ForgeSidebarSlot 单测 —— 槽位接线层（AC1/AC2）：快照源经 useSyncExternalStore 直读
 // （getServerSnapshot 第三参——SSR 面同源直读，零中间持有层）；owner share wide 透传。
 // 项目 RPC 在 SSR 不跑 effect → 恒骨架相位；就绪树派生 = sidebar-model.test、面板相位 =
-// ForgeWorkspacePanel.test 各自覆盖（行级断言不在此重复）。
+// ForgeWorkspacePanel.test 各自覆盖（行级断言不在此重复）。fix-42：rail 态图标列接线
+// （搜索钮在轨——项目图标随树派生，宽态行语言归面板测试）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ForgeSidebarSlot } from './ForgeSidebarSlot.js'
@@ -30,14 +31,15 @@ function ledger(rows: readonly LedgerSessionRow[], overrides: Partial<LedgerSess
 
 const workspacesSnap: LedgerWorkspacesSnapshot = { items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }
 
-function renderSlot(sessions: LedgerSessionsSnapshot): string {
+function renderSlot(sessions: LedgerSessionsSnapshot, wide: boolean): string {
   return renderToStaticMarkup(
     <ForgeSidebarSlot
-      wide
+      wide={wide}
       expandSidebar={() => {}}
       sessions={fakeSource(sessions)}
       workspaces={fakeSource(workspacesSnap)}
       openSession={() => {}}
+      startSession={() => {}}
     />,
   )
 }
@@ -46,7 +48,7 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
   it('宽态骨架：项目 RPC 在途骨架（SSR 无 effect；fix-25 知识入口迁官方 panellist 行）', () => {
     Date.now = () => NOW
     try {
-      const markup = renderSlot(ledger([]))
+      const markup = renderSlot(ledger([]), true)
       expect(markup).toContain('data-dswf-sidebar="wide"')
       expect(markup).not.toContain('data-dswf-nav="knowledge"')
       expect(markup).toContain('data-dswf-sidebar-skeleton')
@@ -58,7 +60,7 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
   it('项目区「＋」入口在场（UF-3 流程打开缝接线——槽位层绑定 openAddProjectFlow）', () => {
     Date.now = () => NOW
     try {
-      const markup = renderSlot(ledger([]))
+      const markup = renderSlot(ledger([]), true)
       expect(markup).toContain('data-dswf-nav="add-project"')
       expect(markup).toContain('aria-label="添加项目"')
     } finally {
@@ -66,16 +68,10 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
     }
   })
 
-  it('rail 态：owner share wide=false 透传（壳收展机制继承）', () => {
-    const markup = renderToStaticMarkup(
-      <ForgeSidebarSlot
-        wide={false}
-        expandSidebar={() => {}}
-        sessions={fakeSource(ledger([]))}
-        workspaces={fakeSource(workspacesSnap)}
-        openSession={() => {}}
-      />,
-    )
+  it('rail 态：owner share wide=false 透传 + 搜索钮在轨（fix-42 图标列非空——空轨道退役）', () => {
+    const markup = renderSlot(ledger([]), false)
     expect(markup).toContain('data-dswf-sidebar="rail"')
+    expect(markup).toContain('data-dswf-search-toggle') // 搜索钮在轨（官方 rail 搜索径）
+    expect(markup).toContain('data-dswf-nav="add-project"') // 「＋」在轨（官方 rail 同排）
   })
 })

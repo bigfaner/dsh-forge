@@ -11,8 +11,13 @@
        └─ ForgeSidebarSlot（接线层）
             ├─ useSyncExternalStore(sessions / workspaces)        ← dsh 账本实时读（零缓存零副本 SC2）
             ├─ useForgeProjects()                                 ← forge:projects/list（RPC）
-            ├─ sidebarActions(openSession)                        ← 导航动作绑定（单参——fix-25 后桥参数退役）
+            ├─ sidebarActions({openSession, startSession,         ← 导航/变更动作绑定（fix-42：deps 面——
+            │     updateProject, onProjectsMutated})                新会话官方面 + projects/update patch +
+            │                                                      变更后静默重拉）
             └─ ForgeWorkspacePanel（纯面板：宽态/rail 态/四相位）
+                 ├─ SidebarProjectsZone（宽态受控件：段头四件/过滤/视图/相位——fix-42 视图态 + 行动作用）
+                 ├─ SidebarRail（收起态受控件：搜索/＋/项目 folder 图标列——fix-42 空轨道退役）
+                 └─ 改名模态（官方 Modal——ellipsis 菜单改名动作的态机宿主）
 ```
 
 - 组件本体在**壳 bundle**；产品 client 插件（`src/client-plugin/`）槽位注册经发布面
@@ -34,12 +39,25 @@
 标题 `displayTitle`、相对时间官方 `relativeTime` 桶化 + zh 文案；顶层行口径：无父行、
 空白会话仅显示被选中者；未注册为项目的 workspace 会话不入树（产品面 = 注册项目口径）。
 
-## 导航动作（AC5）
+## 导航动作（AC5 + fix-42 行尾动作）
 
-`sidebar-actions.ts`：会话行 → `openSession`（官方 uiWorkspace.openSession 单径——选择+
-呈现+`layout.selectPanel(null)` 回会话面板一体，UF-5「切回会话视图 + 锚定」官方收口）。
+`sidebar-actions.ts`（deps 注入面）：会话行 → `openSession`（官方 uiWorkspace.openSession
+单径——选择+呈现+`layout.selectPanel(null)` 回会话面板一体，UF-5「切回会话视图 + 锚定」
+官方收口）；项目行尾「新会话」→ `startSession(workspaceId)`（官方新会话流——reuse-or-create
+blank + 呈现一体，插件 inject face 递达）；改名/归档切换 → `forge:projects/update` patch 面
+（name patch 的 workspace 标题对齐 = core 侧 fix-33 ⑪ 联动，web 侧零额外编排）+ 变更后
+静默重拉（应用侧行改写不触发 workspace 快照锚）。
 fix-25：知识库入口迁官方 `sidebar.panellist` 行（PanelRow → `layout.selectPanel`，产品 nav
 行退役）；工作台桥消费面随视图态机退役（桥本体 = workbench/workbench-bridge）。
+
+## 视图态（fix-42：官方 ViewOptionsMenu P1 裁剪）
+
+`sidebar-model.ts` 纯投影：`groupBy` 二值（tree = 项目树 / flat = 全会话平铺按 updatedAt
+降序）+ `archivedFilter` 三态（default 全显含归档弱化 / hide 不含归档 / only 仅归档——项目
+行 archived 口径，会话 archive 态未入账本镜像窄面不消费）；`sidebarViewOfPick` 菜单项 id →
+视图态投影。视图态 = 纯视图微观态（同 collapsedIds 口径，P1 不持久化——官方
+`dsh.workspace.view.v5` persist 形态归后续里程碑）。orderBy/手动换序/工作区树嵌套不做
+（菜单项不出现）。
 
 ## 契约 pin（G1 契约面清单第 3 项——S2 残留 #1 本任务清点入池）
 

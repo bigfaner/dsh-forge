@@ -7,7 +7,12 @@ import {
   relativeTimeLabel,
   sessionDotState,
   sessionStatus,
+  sidebarArchivedFilterOf,
   sidebarFilterOf,
+  sidebarFlatFilterOf,
+  sidebarFlatRowsOf,
+  sidebarSectionLabelOf,
+  sidebarViewOfPick,
   type LedgerSessionRow,
   type LedgerSessionsSnapshot,
   type LedgerWorkspacesSnapshot,
@@ -137,12 +142,14 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
   const tree: SidebarProjectNode[] = [
     {
       projectId: 'p1',
+      workspaceId: 'w1',
       name: '支付网关',
       archived: false,
       sessions: [row('s1', '登录修复'), row('s2', '索引重建')],
     },
     {
       projectId: 'p2',
+      workspaceId: 'w2',
       name: '知识库',
       archived: false,
       sessions: [row('s3', '文档补全')],
@@ -168,14 +175,14 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
 
   it('项目名与会话全命中 → 节点原样引用（零改写零分配——纯投影）', () => {
     const full: SidebarProjectNode[] = [
-      { projectId: 'p1', name: '修复集', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
+      { projectId: 'p1', workspaceId: 'w1', name: '修复集', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
     ]
     expect(sidebarFilterOf('修复', full)[0]).toBe(full[0])
   })
 
   it('大小写不敏感（原型 toLowerCase 同型）', () => {
     const mixed: SidebarProjectNode[] = [
-      { projectId: 'p1', name: 'Gateway', archived: false, sessions: [row('s1', 'TLS handshake')] },
+      { projectId: 'p1', workspaceId: 'w1', name: 'Gateway', archived: false, sessions: [row('s1', 'TLS handshake')] },
     ]
     expect(sidebarFilterOf('gate', mixed).map((n) => n.projectId)).toEqual(['p1'])
     expect(sidebarFilterOf('HAND', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
@@ -205,5 +212,144 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
     )
     expect(() => sidebarFilterOf('支付', frozen)).not.toThrow()
     expect(frozen[0]!.sessions).toHaveLength(2) // 原树原样
+  })
+})
+
+// ── fix-42：视图态（官方 ViewOptionsMenu P1 裁剪——groupBy 二值 + archivedFilter 三态） ──
+
+describe('sidebarViewOfPick（视图菜单项 id → 视图态投影）', () => {
+  const view = { groupBy: 'tree', archivedFilter: 'default' } as const
+
+  it('分组项：tree/flat → groupBy 翻转', () => {
+    expect(sidebarViewOfPick(view, 'flat')).toEqual({ groupBy: 'flat', archivedFilter: 'default' })
+    expect(sidebarViewOfPick({ ...view, groupBy: 'flat' }, 'tree')).toEqual({
+      groupBy: 'tree',
+      archivedFilter: 'default',
+    })
+  })
+
+  it('归档项：default/hide/only → archivedFilter 翻转', () => {
+    expect(sidebarViewOfPick(view, 'hide')).toEqual({ groupBy: 'tree', archivedFilter: 'hide' })
+    expect(sidebarViewOfPick(view, 'only')).toEqual({ groupBy: 'tree', archivedFilter: 'only' })
+  })
+
+  it('非选项 id（separator/label/未知）→ 原引用返回（态机层免触发判据）', () => {
+    expect(sidebarViewOfPick(view, 'view-group')).toBe(view)
+    expect(sidebarViewOfPick(view, 'view-archived-separator')).toBe(view)
+    expect(sidebarViewOfPick(view, 'anything')).toBe(view)
+  })
+
+  it('同值重选 → 原引用返回（免重渲染）', () => {
+    expect(sidebarViewOfPick(view, 'tree')).toBe(view)
+    expect(sidebarViewOfPick(view, 'default')).toBe(view)
+  })
+})
+
+describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
+  const tree: readonly SidebarProjectNode[] = [
+    { projectId: 'p1', workspaceId: 'w1', name: '活跃', archived: false, sessions: [] },
+    { projectId: 'p2', workspaceId: 'w2', name: '已归档', archived: true, sessions: [] },
+  ]
+
+  it('default = 原引用返回（现行行为——全显含归档弱化）', () => {
+    expect(sidebarArchivedFilterOf('default', tree)).toBe(tree)
+  })
+
+  it('hide = 滤除归档项目；only = 仅归档项目', () => {
+    expect(sidebarArchivedFilterOf('hide', tree).map((n) => n.projectId)).toEqual(['p1'])
+    expect(sidebarArchivedFilterOf('only', tree).map((n) => n.projectId)).toEqual(['p2'])
+  })
+
+  it('会话行随项目行同进退（P1 无会话级归档口径）', () => {
+    const withSessions: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '活跃',
+        archived: false,
+        sessions: [
+          { sessionId: 's1', title: '行', status: 'idle', updatedAt: 1 },
+        ],
+      },
+      {
+        projectId: 'p2',
+        workspaceId: 'w2',
+        name: '归档',
+        archived: true,
+        sessions: [
+          { sessionId: 's2', title: '行', status: 'idle', updatedAt: 2 },
+        ],
+      },
+    ]
+    expect(sidebarArchivedFilterOf('hide', withSessions)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+    expect(sidebarArchivedFilterOf('only', withSessions)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+  })
+})
+
+describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42）', () => {
+  const tree: readonly SidebarProjectNode[] = [
+    {
+      projectId: 'p1',
+      workspaceId: 'w1',
+      name: '支付网关',
+      archived: false,
+      sessions: [
+        { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: 100 },
+        { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: 300 },
+      ],
+    },
+    {
+      projectId: 'p2',
+      workspaceId: 'w2',
+      name: '文档站',
+      archived: false,
+      sessions: [
+        { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: 200 },
+      ],
+    },
+  ]
+
+  it('摊平跨项目 + updatedAt 降序（官方 FlatList updated 序同型）+ projectName 随行', () => {
+    const rows = sidebarFlatRowsOf(tree)
+    expect(rows.map((r) => r.sessionId)).toEqual(['s2', 's3', 's1'])
+    expect(rows[0]).toEqual({
+      projectId: 'p1',
+      projectName: '支付网关',
+      sessionId: 's2',
+      title: '索引重建',
+      status: 'running',
+      updatedAt: 300,
+    })
+  })
+
+  it('时序平手 → 稳定序（保留工作区序）', () => {
+    const tie: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '甲',
+        archived: false,
+        sessions: [
+          { sessionId: 'a1', title: '行一', status: 'idle', updatedAt: 5 },
+          { sessionId: 'a2', title: '行二', status: 'idle', updatedAt: 5 },
+        ],
+      },
+    ]
+    expect(sidebarFlatRowsOf(tie).map((r) => r.sessionId)).toEqual(['a1', 'a2'])
+  })
+
+  it('过滤：空查询原引用；标题/项目名命中；全不命中空集', () => {
+    const rows = sidebarFlatRowsOf(tree)
+    expect(sidebarFlatFilterOf('  ', rows)).toBe(rows)
+    expect(sidebarFlatFilterOf('索引', rows).map((r) => r.sessionId)).toEqual(['s2'])
+    expect(sidebarFlatFilterOf('文档站', rows).map((r) => r.sessionId)).toEqual(['s3']) // 项目名命中 → 全行在场
+    expect(sidebarFlatFilterOf('不存在', rows)).toEqual([])
+  })
+})
+
+describe('sidebarSectionLabelOf（段头标签——官方 groupBy 切换同型）', () => {
+  it('tree → 「项目」/ flat → 「会话」', () => {
+    expect(sidebarSectionLabelOf({ groupBy: 'tree', archivedFilter: 'default' })).toBe('项目')
+    expect(sidebarSectionLabelOf({ groupBy: 'flat', archivedFilter: 'default' })).toBe('会话')
   })
 })

@@ -85,6 +85,7 @@ function fakeClientCtx(): {
   injectedKeys: string[]
   injectDisposers: Map<string, () => void>
   open: ReturnType<typeof vi.fn>
+  start: ReturnType<typeof vi.fn>
   rightToggle: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
   locale: ReturnType<typeof fakeLocale>
@@ -93,6 +94,7 @@ function fakeClientCtx(): {
   const injectedKeys: string[] = []
   const injectDisposers = new Map<string, () => void>()
   const open = vi.fn()
+  const start = vi.fn()
   const rightToggle = vi.fn()
   const selectPanel = vi.fn()
   const slots: ForgeSlotsService = {
@@ -108,9 +110,10 @@ function fakeClientCtx(): {
       return () => {}
     },
   }
-  // fix-11：Session Controller 面仅账本快照源；打开动作 = uiWorkspace.openSession（官方导航面）
+  // fix-11：Session Controller 面仅账本快照源；打开动作 = uiWorkspace.openSession（官方导航面）；
+  // fix-42：新会话流 = uiWorkspace.startSession（官方行动作面）
   const sessions = { list: { tag: 'sessions-list' } }
-  const uiWorkspace = { openSession: open }
+  const uiWorkspace = { openSession: open, startSession: start }
   const workspaces = { list: { tag: 'workspaces-list' } }
   // fix-23：官方右栏收展窄面（ISidebarRight 切片）
   const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle }
@@ -136,7 +139,7 @@ function fakeClientCtx(): {
       throw new Error(`unexpected service: ${name}`)
     },
   }
-  return { ctx, registers, injectedKeys, injectDisposers, open, rightToggle, selectPanel, locale }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, selectPanel, locale }
 }
 
 /** 假产品视图发布面（fix-25 发布集） */
@@ -242,9 +245,9 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     unpublishViews()
   })
 
-  it('注入面 = dsh 账本/归属快照源 + openSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession——Session Controller 无 open 面）', () => {
+  it('注入面 = dsh 账本/归属快照源 + openSession + startSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession；fix-42 新会话经 uiWorkspace.startSession）', () => {
     publishFakeViews()
-    const { ctx, registers, open } = fakeClientCtx()
+    const { ctx, registers, open, start } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
     const face = workspaces.options.inject!()
@@ -252,9 +255,12 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       sessions: { tag: 'sessions-list' },
       workspaces: { tag: 'workspaces-list' },
       openSession: expect.any(Function),
+      startSession: expect.any(Function),
     })
     ;(face as { openSession: (id: string) => void }).openSession('s-1')
     expect(open).toHaveBeenCalledWith('s-1')
+    ;(face as { startSession: (id: string) => void }).startSession('w-1')
+    expect(start).toHaveBeenCalledWith('w-1')
     unpublishViews()
   })
 })

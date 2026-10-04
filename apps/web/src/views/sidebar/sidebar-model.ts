@@ -68,6 +68,8 @@ export interface SidebarSessionRow {
 /** 面板项目节点（项目 = forge projects 行；会话 = 该项目 workspace 名下账本行） */
 export interface SidebarProjectNode {
   readonly projectId: string
+  /** dsh workspace id（新会话钮 → 官方 startSession(workspaceId) 的寻址面，fix-42） */
+  readonly workspaceId: string
   readonly name: string
   readonly archived: boolean
   readonly sessions: readonly SidebarSessionRow[]
@@ -144,6 +146,7 @@ export function buildSidebarTree(input: {
     }
     tree.push({
       projectId: project.id,
+      workspaceId: project.workspaceId,
       name: project.name,
       archived: project.archived,
       sessions: rows,
@@ -205,4 +208,108 @@ export function shouldCollapseFilterOnBlur(relatedTarget: FilterBlurTarget): boo
   if (typeof relatedTarget.closest !== 'function') return true
   const host = (relatedTarget.closest as (selector: string) => Element | null)(SIDEBAR_SECTIONHEAD_SELECTOR)
   return host === null
+}
+
+// ── 视图态（fix-42：官方 ViewOptionsMenu P1 裁剪实装——母本 dsh.workspace.view.v5 的
+//    groupBy/archivedFilter 二面；orderBy/手动换序/工作区树嵌套不做（菜单项不出现）。） ──
+
+/** 排列二值（tree = 现行项目树 / flat = 全会话平铺按 updatedAt 降序） */
+export type SidebarGroupBy = 'tree' | 'flat'
+
+/**
+ * 归档过滤三态（项目行 archived 口径——会话 archive 态未入账本镜像窄面，P1 不消费）：
+ * default = 全显（归档行弱化，现行行为）/ hide = 不含归档 / only = 仅归档。
+ */
+export type SidebarArchivedFilter = 'default' | 'hide' | 'only'
+
+/** 侧栏视图态（纯视图微观态——同 collapsedIds 口径，不属 SC2 副本纪律；P1 不持久化） */
+export interface SidebarView {
+  readonly groupBy: SidebarGroupBy
+  readonly archivedFilter: SidebarArchivedFilter
+}
+
+/** 缺省视图（按项目树 + 含归档——现行行为，官方菜单切换才偏离） */
+export const SIDEBAR_VIEW_DEFAULT: SidebarView = { groupBy: 'tree', archivedFilter: 'default' }
+
+/**
+ * 视图菜单项 id → 视图态投影（纯函数，fix-42）。菜单项 id 与官方 ViewOptionsMenu 同名面
+ * 裁剪：'tree' | 'flat' → groupBy；'default' | 'hide' | 'only' → archivedFilter；
+ * 其它 id（separator/label 行）→ 原引用返回（态机层可据引用相等免触发）。
+ */
+export function sidebarViewOfPick(view: SidebarView, id: string): SidebarView {
+  if (id === 'tree' || id === 'flat') {
+    return view.groupBy === id ? view : { ...view, groupBy: id }
+  }
+  if (id === 'default' || id === 'hide' || id === 'only') {
+    return view.archivedFilter === id ? view : { ...view, archivedFilter: id }
+  }
+  return view
+}
+
+/**
+ * 归档过滤投影（纯函数——数据源不变，视图行差集）：default = 原树引用返回（零派生）；
+ * hide = 滤除归档项目；only = 仅归档项目。会话行随项目行同进退（P1 无会话级归档口径）。
+ */
+export function sidebarArchivedFilterOf(
+  filter: SidebarArchivedFilter,
+  tree: readonly SidebarProjectNode[],
+): readonly SidebarProjectNode[] {
+  if (filter === 'default') return tree
+  if (filter === 'hide') return tree.filter((node) => !node.archived)
+  return tree.filter((node) => node.archived)
+}
+
+/** 平铺视图行（flat 排列——跨项目全会话行；projectName 随行 = 过滤命中面 + 归属可辨） */
+export interface SidebarFlatRow {
+  readonly projectId: string
+  readonly projectName: string
+  readonly sessionId: string
+  readonly title: string
+  readonly status: SidebarSessionStatus
+  readonly updatedAt: number
+}
+
+/**
+ * 平铺投影（纯函数）：全会话行跨项目摊平，按 updatedAt 降序（官方 FlatList updated 序
+ * 同型；稳定排序保时序平手时的工作区序）。不落地副本——行字段自树节点当次派生。
+ */
+export function sidebarFlatRowsOf(tree: readonly SidebarProjectNode[]): readonly SidebarFlatRow[] {
+  const rows: SidebarFlatRow[] = []
+  for (const node of tree) {
+    for (const session of node.sessions) {
+      rows.push({
+        projectId: node.projectId,
+        projectName: node.name,
+        title: session.title,
+        sessionId: session.sessionId,
+        status: session.status,
+        updatedAt: session.updatedAt,
+      })
+    }
+  }
+  return rows.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/**
+ * 平铺行过滤（纯函数——sidebarFilterOf 的平铺同型）：空/纯空白查询 = 原引用返回；
+ * 会话标题或项目名命中 → 行在场，全不命中 → 空集（视图层行内空提示）。
+ */
+export function sidebarFlatFilterOf(
+  query: string,
+  rows: readonly SidebarFlatRow[],
+): readonly SidebarFlatRow[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return rows
+  return rows.filter(
+    (row) =>
+      row.title.toLowerCase().includes(needle) || row.projectName.toLowerCase().includes(needle),
+  )
+}
+
+/**
+ * 段头标签（官方 sectionLabel 同型：groupBy=flat → 「会话」，否则「工作区」——产品口径
+ * 项目树 → 「项目」）。
+ */
+export function sidebarSectionLabelOf(view: SidebarView): string {
+  return view.groupBy === 'flat' ? '会话' : '项目'
 }

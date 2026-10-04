@@ -1,9 +1,14 @@
 // ForgeWorkspacePanel 单测 —— UF-1 面板相位与行语言（AC5 空态引导 + 会话行渲染）。
 // renderToStaticMarkup 纯渲染面（同 2.6 组件测法）；交互接线（onSessionActivate →
 // 动作绑定）在 sidebar-actions.test。fix-25：知识入口迁官方 sidebar.panellist 行——
-// 本面板知识入口断言随迁（宽态无入口行；rail 态空轨道）。
+// 本面板知识入口断言随迁（宽态无入口行）。
 // fix-6 增面：头部四件（搜索/视图选项补齐）+ SidebarProjectsZone 受控缝（过滤应用/
 // 行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
+// fix-42 增面：rail 图标列（空轨道退役）+ 视图菜单实装（groupBy/archivedFilter）+
+// 项目行语言（expandOnRowClick 整行翻转 + 行尾 hover 动作）+ 段头内嵌搜索槽。
+// 官方 Menu/Modal 开弹层静态不可渲染（portal——node 无 DOM）：菜单项数据面
+// （SIDEBAR_VIEW_MENU_ITEMS / projectMenuItemsOf）与受控缝（SidebarProjectsZone/
+// SidebarRail 直接渲染）承载静态断言；开弹层行为归 e2e（fix-24 同裁）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { FISH_LOGO_PATH } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -11,14 +16,16 @@ import { ForgeBrandMark, ForgeBrandName } from './ForgeBrand.js'
 import {
   ForgeWorkspacePanel,
   SIDEBAR_VIEW_MENU_ITEMS,
-  SIDEBAR_VIEW_MENU_SELECTED_ID,
   SidebarFilterRow,
   SidebarProjectsZone,
+  SidebarRail,
+  projectMenuItemsOf,
 } from './ForgeWorkspacePanel.js'
 import {
   SIDEBAR_SECTIONHEAD_SELECTOR,
   shouldCollapseFilterOnBlur,
   type SidebarProjectNode,
+  type SidebarView,
 } from './sidebar-model.js'
 
 const NOW = 1_700_000_000_000
@@ -26,6 +33,7 @@ const NOW = 1_700_000_000_000
 function node(overrides: Partial<SidebarProjectNode> = {}): SidebarProjectNode {
   return {
     projectId: 'p1',
+    workspaceId: 'w1',
     name: '支付网关',
     archived: false,
     sessions: [
@@ -95,6 +103,56 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
   })
 })
 
+describe('项目行语言对齐原生（fix-42：整行翻转 + 行尾 hover 动作——官方 ownRow 同型）', () => {
+  const actions = {
+    onStartSession: (_workspaceId: string) => {},
+    onArchiveToggle: (_projectId: string, _archived: boolean) => {},
+  }
+
+  it('expandOnRowClick 官方开关生效：行 role=button + aria-expanded + data-expandable（fix-41 先行修复面收编）', () => {
+    const markup = panel(actions)
+    expect(markup).toContain('data-expandable')
+    expect(markup).toContain('aria-expanded')
+    // 整行翻转（row 本体 role=button——官方 treeitem onClick 同语义的官方开关面）
+    expect(markup).toContain('role="button"')
+  })
+
+  it('当前会话所在项目 active 标记（官方 folderActive 同型——folder 图标染色面）', () => {
+    expect(panel(actions)).toContain('data-active')
+    expect(panel({ ...actions, currentSessionId: null })).not.toContain('data-active')
+  })
+
+  it('行尾动作在场：新会话钮（workspaceId 寻址）+ ellipsis 菜单锚', () => {
+    const markup = panel(actions)
+    expect(markup).toContain('data-dswf-project-action="new-session"')
+    expect(markup).toContain('aria-label="在 支付网关 新建会话"')
+    expect(markup).toContain('data-dswf-project-action="menu"')
+    expect(markup).toContain('aria-label="项目操作 支付网关"')
+  })
+
+  it('动作回调缺席容忍：无新会话/变更回调 = 行尾动作区不呈现（纯展示件零缺省动作）', () => {
+    expect(panel()).not.toContain('data-dswf-project-action')
+  })
+
+  it('ellipsis 菜单项（数据面）：改名 + 归档切换（随归档态换文案）；删除不出现（fix-27 后续里程碑）', () => {
+    const itemIds = (entries: readonly { id?: string }[]): readonly (string | undefined)[] =>
+      entries.map((entry) => entry.id)
+    const active = projectMenuItemsOf({ archived: false }, true, true)
+    expect(itemIds(active)).toEqual(['rename', 'archive'])
+    const archived = projectMenuItemsOf({ archived: true }, true, true)
+    const archiveEntry = archived.find((entry) => entry.id === 'archive')
+    expect(archiveEntry).toMatchObject({ label: '取消归档' })
+    // 变更面缺席（回调未注入）= 对应项不出现；全缺席 = 空菜单（行尾动作区整体离场）
+    expect(itemIds(projectMenuItemsOf({ archived: false }, false, true))).toEqual(['archive'])
+    expect(itemIds(projectMenuItemsOf({ archived: false }, true, false))).toEqual(['rename'])
+    expect(projectMenuItemsOf({ archived: false }, false, false)).toEqual([])
+  })
+
+  it('改名模态缺省缺席（目标态归面板态机——开弹层行为归 e2e）', () => {
+    expect(panel(actions)).not.toContain('data-dswf-rename-input')
+  })
+})
+
 describe('相位（UF-1 States）', () => {
   it('空项目（ready 且空）→ 首用引导指向 hero（AC5）', () => {
     const markup = panel({ tree: [], hasProjects: false })
@@ -120,13 +178,62 @@ describe('相位（UF-1 States）', () => {
   })
 })
 
-describe('收起态 rail（AC4：轨道锚保持）', () => {
-  it('rail 分支 = 空轨道（fix-25：知识入口迁官方 panellist 行——官方 PanelRow rail 态自承载）', () => {
-    const markup = panel({ wide: false })
+describe('收起态 rail（AC1：图标列非空——fix-42 空轨道退役）', () => {
+  const actions = {
+    onAddProject: () => {},
+    onSessionActivate: (_sessionId: string) => {},
+  }
+
+  function rail(overrides: Partial<Parameters<typeof SidebarRail>[0]> = {}): string {
+    const props: Parameters<typeof SidebarRail>[0] = {
+      tree: [node(), node({ projectId: 'p2', workspaceId: 'w2', name: '文档站', sessions: [] })],
+      view: { groupBy: 'tree', archivedFilter: 'default' } satisfies SidebarView,
+      currentSessionId: 's1',
+      expandSidebar: () => {},
+      onSearchOpen: () => {},
+      ...actions,
+      ...overrides,
+    }
+    return renderToStaticMarkup(<SidebarRail {...props} />)
+  }
+
+  it('面板 rail 分支 = 图标列（非空轨道）：项目 folder 图标 + 搜索钮 + 「＋」在轨', () => {
+    const markup = panel({ wide: false, ...actions })
     expect(markup).toContain('data-dswf-sidebar="rail"')
-    // rail 态不渲染宽态内容（项目区/入口行文案缺席）
+    expect(markup).toContain('data-dswf-rail-project="p1"')
+    expect(markup).toContain('data-dswf-search-toggle')
+    expect(markup).toContain('data-dswf-nav="add-project"')
+    // rail 态不渲染宽态内容（项目区文案/会话行缺席——图标列恒项目口径）
     expect(markup).not.toContain('dswf-sidebar-projects')
-    expect(markup).not.toContain('aria-label="知识库"')
+    expect(markup).not.toContain('data-dswf-session=')
+  })
+
+  it('零会话项目图标在轨（点击 = 仅展开侧栏——首会话选择缺席面）', () => {
+    expect(rail()).toContain('data-dswf-rail-project="p2"')
+  })
+
+  it('当前会话所在项目 active 标记（官方 folderActive 同型）', () => {
+    const markup = rail()
+    expect(markup).toContain('data-dswf-rail-project="p1" data-active')
+    expect(markup).not.toContain('data-dswf-rail-project="p2" data-active')
+  })
+
+  it('归档过滤随视图态共享：hide = 归档项目图标离轨 / only = 仅归档图标', () => {
+    const tree = [
+      node(),
+      node({ projectId: 'p9', workspaceId: 'w9', name: '旧项目', archived: true, sessions: [] }),
+    ]
+    const hide = rail({ tree, view: { groupBy: 'tree', archivedFilter: 'hide' } })
+    expect(hide).not.toContain('data-dswf-rail-project="p9"')
+    const only = rail({ tree, view: { groupBy: 'tree', archivedFilter: 'only' } })
+    expect(only).toContain('data-dswf-rail-project="p9"')
+    expect(only).not.toContain('data-dswf-rail-project="p1"')
+  })
+
+  it('搜索钮/「＋」缺席容忍（回调缺席 = 钮不呈现）', () => {
+    const markup = rail({ onAddProject: undefined })
+    expect(markup).not.toContain('data-dswf-nav="add-project"')
+    expect(markup).toContain('data-dswf-search-toggle') // 搜索钮恒在（expandSidebar 壳回调必在）
   })
 })
 
@@ -158,10 +265,11 @@ describe('品牌行件（壳品牌行的内容洞位）', () => {
   })
 })
 
-describe('头部四件 + 过滤（fix-6：搜索钮/视图选项钮补齐——原型 sb-head 基准）', () => {
+describe('头部四件 + 过滤（fix-6 + fix-42 段头内嵌搜索槽——官方 searchSlot 形态）', () => {
   it('头部四件齐且顺序对齐原型：label + 搜索钮 → 视图选项钮 → ＋（既有 add-project 锚不动）', () => {
     const markup = panel({ onAddProject: () => {} })
     expect(markup).toContain('dswf-sidebar-sectionlabel')
+    expect(markup).toContain('>项目</div>') // 段头标签（tree 缺省）
     const searchBtn = markup.indexOf('data-dswf-search-toggle')
     const viewBtn = markup.indexOf('data-dswf-view-menu')
     const addBtn = markup.indexOf('data-dswf-nav="add-project"')
@@ -173,10 +281,12 @@ describe('头部四件 + 过滤（fix-6：搜索钮/视图选项钮补齐——�
     expect(markup).toContain('aria-label="视图选项"')
   })
 
-  it('过滤行缺省收起（默认渲染不含 searchrow / 空提示）', () => {
+  it('过滤行缺省收起（默认渲染不含 searchrow / 空提示）——收起态四件齐', () => {
     const markup = panel()
     expect(markup).not.toContain('data-dswf-searchrow')
     expect(markup).not.toContain('data-dswf-filterempty')
+    expect(markup).toContain('data-dswf-search-toggle')
+    expect(markup).toContain('dswf-sidebar-sectionlabel')
   })
 
   it('SidebarFilterRow：官方 Input 受控件（value 原样）+ 原型占位/aria 文案（Esc/收起接线归态机层）', () => {
@@ -189,10 +299,22 @@ describe('头部四件 + 过滤（fix-6：搜索钮/视图选项钮补齐——�
     expect(markup).toContain('aria-label="项目与会话过滤"')
   })
 
-  it('视图选项菜单（P1 占位）：「按项目树」当前项 + 后续里程碑说明，无实际排列逻辑', () => {
-    expect(SIDEBAR_VIEW_MENU_ITEMS.some((entry) => 'label' in entry && entry.label === '按项目树')).toBe(true)
-    expect(SIDEBAR_VIEW_MENU_SELECTED_ID).toBe('tree')
-    expect(SIDEBAR_VIEW_MENU_ITEMS.some((entry) => 'text' in entry && entry.text.includes('后续里程碑'))).toBe(true)
+  it('视图选项菜单（fix-42 实装）：分组二值 + 归档三态；orderBy/手动排序/树嵌套项不出现', () => {
+    const ids = SIDEBAR_VIEW_MENU_ITEMS.map((entry) => ('id' in entry ? entry.id : null))
+    expect(ids).toContain('tree')
+    expect(ids).toContain('flat')
+    expect(ids).toContain('default')
+    expect(ids).toContain('hide')
+    expect(ids).toContain('only')
+    // P1 裁剪：orderBy/手动换序/工作区树嵌套不做出现在菜单（不置灰——边界记任务文件）
+    expect(ids).not.toContain('manual')
+    expect(ids).not.toContain('updated')
+    expect(ids).not.toContain('workspace-tree')
+    const labels = SIDEBAR_VIEW_MENU_ITEMS.map((entry) => ('label' in entry ? String(entry.label) : null))
+    expect(labels).toContain('按项目树')
+    expect(labels).toContain('平铺')
+    expect(labels).toContain('不含归档')
+    expect(labels).toContain('仅归档')
   })
 })
 
@@ -221,7 +343,7 @@ describe('过滤行 blur 自动收起（fix-22：失焦收起规格 + 头部钮 
   })
 })
 
-describe('SidebarProjectsZone 受控缝（fix-6：过滤应用 + 相位正交）', () => {
+describe('SidebarProjectsZone 受控缝（fix-6 过滤 + fix-42 视图应用——相位正交）', () => {
   function zone(overrides: Partial<Parameters<typeof SidebarProjectsZone>[0]> = {}): string {
     const props: Parameters<typeof SidebarProjectsZone>[0] = {
       tree: [node()],
@@ -237,12 +359,14 @@ describe('SidebarProjectsZone 受控缝（fix-6：过滤应用 + 相位正交）
       onQueryChange: () => {},
       viewMenuOpen: false,
       onViewMenuOpenChange: () => {},
+      view: { groupBy: 'tree', archivedFilter: 'default' } satisfies SidebarView,
+      onViewPick: () => {},
       ...overrides,
     }
     return renderToStaticMarkup(<SidebarProjectsZone {...props} />)
   }
 
-  it('过滤行随 searchOpen 在场（受控展开态）', () => {
+  it('过滤行随 searchOpen 在场（受控展开态——fix-42 段头内嵌：searchrow 锚保持）', () => {
     expect(zone()).toContain('data-dswf-searchrow')
     expect(zone({ searchOpen: false })).not.toContain('data-dswf-searchrow')
   })
@@ -286,5 +410,86 @@ describe('SidebarProjectsZone 受控缝（fix-6：过滤应用 + 相位正交）
     const empty = zone({ tree: [], hasProjects: false, query: '索引' })
     expect(empty).toContain('data-dswf-empty')
     expect(empty).not.toContain('data-dswf-filterempty')
+  })
+})
+
+describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedFilter 三态）', () => {
+  const twoProjects: readonly SidebarProjectNode[] = [
+    node(),
+    node({
+      projectId: 'p2',
+      workspaceId: 'w2',
+      name: '文档站',
+      archived: true,
+      sessions: [
+        { sessionId: 's9', title: '归档行', status: 'idle', updatedAt: NOW - 60_000 },
+      ],
+    }),
+  ]
+
+  function zone(overrides: Partial<Parameters<typeof SidebarProjectsZone>[0]> = {}): string {
+    const props: Parameters<typeof SidebarProjectsZone>[0] = {
+      tree: twoProjects,
+      loading: false,
+      currentSessionId: 's1',
+      projectsPending: false,
+      hasProjects: true,
+      now: NOW,
+      searchOpen: false,
+      onSearchToggle: () => {},
+      query: '',
+      onQueryChange: () => {},
+      viewMenuOpen: false,
+      onViewMenuOpenChange: () => {},
+      view: { groupBy: 'tree', archivedFilter: 'default' } satisfies SidebarView,
+      onViewPick: () => {},
+      ...overrides,
+    }
+    return renderToStaticMarkup(<SidebarProjectsZone {...props} />)
+  }
+
+  it('tree 缺省：两项目块在场 + 段头标签「项目」', () => {
+    const markup = zone()
+    expect(markup).toContain('data-dswf-project="p1"')
+    expect(markup).toContain('data-dswf-project="p2"')
+    expect(markup).toContain('>项目</div>')
+    expect(markup).not.toContain('data-dswf-flatlist')
+  })
+
+  it('flat：段头标签「会话」（官方 groupBy 切换同型）+ 平铺行跨项目按 updatedAt 降序', () => {
+    const markup = zone({ view: { groupBy: 'flat', archivedFilter: 'default' } })
+    expect(markup).toContain('>会话</div>')
+    expect(markup).toContain('data-dswf-flatlist')
+    expect(markup).not.toContain('data-dswf-project=') // 无项目块（树壳退役）
+    const order = [
+      markup.indexOf('data-dswf-session="s4"'), // 刚刚（最新）
+      markup.indexOf('data-dswf-session="s1"'), // 5 分钟前
+      markup.indexOf('data-dswf-session="s2"'), // 3 小时前
+    ]
+    expect(order[0]).toBeLessThan(order[1]!)
+    expect(order[1]).toBeLessThan(order[2]!)
+  })
+
+  it('flat 过滤：标题/项目名命中；全不命中行内空提示', () => {
+    const hit = zone({ view: { groupBy: 'flat', archivedFilter: 'default' }, query: '文档站' })
+    expect(hit).toContain('data-dswf-session="s9"') // 项目名命中 → 全行在场
+    const miss = zone({ view: { groupBy: 'flat', archivedFilter: 'default' }, query: '不存在' })
+    expect(miss).toContain('data-dswf-filterempty')
+  })
+
+  it('archivedFilter=hide：归档项目块离场；only：仅归档在场（归档弱化标记随之）', () => {
+    const hide = zone({ view: { groupBy: 'tree', archivedFilter: 'hide' } })
+    expect(hide).toContain('data-dswf-project="p1"')
+    expect(hide).not.toContain('data-dswf-project="p2"')
+    const only = zone({ view: { groupBy: 'tree', archivedFilter: 'only' } })
+    expect(only).not.toContain('data-dswf-project="p1"')
+    expect(only).toContain('data-dswf-project="p2"')
+  })
+
+  it('视图菜单触发钮 + 选中面随视图态（selectedIds 官方双选面——闭态锚保持）', () => {
+    const markup = zone()
+    expect(markup).toContain('data-dswf-view-menu')
+    // 闭态 Menu 只渲染锚（portal 开弹层归 e2e——fix-24 同裁）
+    expect(markup).not.toContain('按项目树')
   })
 })

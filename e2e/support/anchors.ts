@@ -71,6 +71,16 @@ export const SIDEBAR_SKELETON = '[data-dswf-sidebar-skeleton]'
 export const projectRowOf = (projectId: string): string => `[data-dswf-project="${projectId}"]`
 /** 项目树行（任意） */
 export const PROJECT_ROW_ANY = '[data-dswf-project]'
+/** rail 态项目图标钮（值 = projectId——fix-42 图标列） */
+export const railProjectOf = (projectId: string): string => `[data-dswf-rail-project="${projectId}"]`
+/** rail 态项目图标钮（任意） */
+export const RAIL_PROJECT_ANY = '[data-dswf-rail-project]'
+/** 平铺视图列表容器（fix-42 groupBy=flat） */
+export const SIDEBAR_FLATLIST = '[data-dswf-flatlist]'
+/** 项目行尾动作钮（值 = new-session|menu——fix-42 行语言） */
+export const projectActionOf = (action: string): string => `[data-dswf-project-action="${action}"]`
+/** 项目改名模态输入（fix-42） */
+export const RENAME_INPUT = '[data-dswf-rename-input]'
 /** 会话行（值 = 账本 sessionId） */
 export const sessionRowOf = (sessionId: string): string => `[data-dswf-session="${sessionId}"]`
 /** 会话行（任意） */

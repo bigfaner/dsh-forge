@@ -64,3 +64,64 @@ mainSession: false
 - 拖拽换序/orderBy/工作区树嵌套/会话 rename 内联输入 = 后续里程碑（菜单不出现该等项）；
 - 不动官方壳 chrome（logoRow/toggle/newSession/panellist/footArea 归官方）；
 - 目录流（WorkspacePickFlow 建区）不入产品「＋」（产品流程 = 添加项目向导，fix-21/fix-14 面——「＋」保持 openAddProjectFlow）。
+
+## 实装收口（fix-42 执行记录——2026-10-05）
+
+**执行形态**：fix-record 恢复任务假前提（fix-17 形态第十五例）——工作树/全分支/stash 三查零
+实现（落点文件逐行仍持差距原文：rail 空轨道/expandSidebar 未消费/视图菜单占位），依派发
+「假前提则真实现」注记转真实现（[[dsh-forge-p1-fix-record-recovery]] 先例径）。
+
+**交付面**（对照对齐方案 1-5 全落）：
+
+1. **rail 图标列非空**：`SidebarRail` 受控缝抽出（官方 rail iconButton 刻度 36px 命中区 /
+   18px 图标 / radius md / label-primary / hover interactive-bg）——搜索钮（expandSidebar +
+   开过滤行 = requestSearch 同径）+「＋」（openAddProjectFlow 保持）+ 项目 folder 图标列
+   （data-active = 官方 folderActive 同型；点击 = expandSidebar + 选中首会话/无会话仅展开）；
+   归档过滤随视图态共享；`expandSidebar` prop 消费收口（fix-41 B 面完整形态）；
+2. **视图菜单实装**：`SIDEBAR_VIEW_MENU_ITEMS`（分组：按项目树/平铺 + 归档：默认/仅归档/
+   不含归档）+ `selectedIds` 官方双选面 + `sidebarViewOfPick` 纯投影；段头标签随 groupBy
+   切换（项目↔会话——官方 groupBy=flat→「会话」同型）；
+3. **行语言对齐**：DisclosureRow `expandOnRowClick`（fix-41 A 面收编——官方开关：整行
+   role=button + aria-expanded + Enter/Space）+ `previewChevron`（官方缺省 hover
+   folder↔chevron 互换）+ 行高 34px/label-primary/14px 截断刻度 + 行尾 hover 动作
+   （collapsedContent + keepContentWhenOpen 行内尾部槽——官方 rowActions 同位形：新会话钮
+   → 官方 startSession(workspaceId)（插件 inject face 增 `startSession` 递达）；ellipsis
+   菜单 = 改名 + 归档切换；删除不出现归 fix-27）；改名模态 = 官方 Modal（确认失败错误留
+   模态——官方 rename 同型）；改名/归档走 `forge:projects/update` patch 面 + 静默重拉
+   （name patch 的 workspace 标题对齐 = core fix-33 ⑪ 既有联动，零 core 改动）；
+4. **段头内嵌搜索槽**：searchOpen = 过滤行独占段头（label/头部动作让位——官方 searchSlot
+   形态）；`data-dswf-searchrow` 锚保持；fix-22 blur 收起/Esc 语义不变（守卫函数与其单测
+   契约不动——搜索展开期头部钮结构性缺席，头部例外分支自然不触发）；
+5. **样式**：全部官方令牌 + dsw-raw 豁免注释（官方 Rows/WorkspaceBrowser 逐值对齐——
+   34/32 行高、36 rail、20 行尾动作、10 gap 等官方原值）。
+
+**测试**：单测 77 侧栏面 + 全套 1083 绿（模型纯函数：archivedFilter/flat 投影/viewOfPick/
+label；行动作绑定：startSession/rename 拒绝传播/归档 fail-soft；面板受控缝：rail 图标列/
+视图应用/行语言静态面；plugin inject face += startSession）。e2e 新增
+`sidebar-view-align.spec.ts` 4 测试绿（rail 图标列 DOM 在场 + 新会话钮盘侧会话增生实证 +
+视图菜单平铺/归档三态真实链 + 改名模态→RPC→行标题更新）。
+
+**边界与裁决**（记入案）：
+
+- **titlebar 模式 rail 几何**（fix-40 官方壳设计）：`[data-windows-titlebar]
+  .collapsed .regionArea { display:none }`——Windows titlebar 形态收起态整域隐藏（官方
+  WorkspaceBrowser rail 同域同藏——官方平价）；rail 图标列交互面在该形态结构性不可达，
+  e2e 以 DOM 在场断言，点击行为归单测钉 + 非 titlebar 形态消费。**已知环境 flake**：
+  Step1b（session-workbench:286）「rail 可见」断言在 titlebar 形态激活期红——A/B 实证
+  HEAD~1 同红（本任务前置既有，非回归；Step5/6 右栏断言同批 A/B 同红）；
+- **会话行 hover 动作不接**（规格预裁：「核查产品 consume 面后在缺省不接」）：官方
+  requestSessionRename 面不在产品注入的 uiWorkspace 服务窄面（UiWorkspaceService 无此法
+  ——归 WorkspaceBrowser owner share 别源），缺省不接记边界；会话行 hover 动作归后续
+  里程碑（随会话级菜单面评估）；
+- **fresh blank 会话行不即入侧栏树**：官方 startSession 盘侧即建会话（e2e 实证），但
+  blank 行入树需 workspace 成员传播 + 选中态（官方「仅选中 blank 可见」口径）——行显示
+  面归 dogfood 台账（真实凭据链）；零凭据 e2e 以盘侧会话目录增生为断言；
+- **归档切换失败 fail-soft**（console.warn，无行内错误面——P1 无 toast 基建）；改名失败
+  呈现于模态（官方同型）；
+- **视图态不持久化**（纯视图微观态——官方 `dsh.workspace.view.v5` persist 归后续里程碑）；
+  archivedFilter=only/hide 致零行时无专用空提示（渲染空列——P1 最简）；
+- **AC2 截图对照**以 CSS 声明逐值对齐官方（Rows.module.css/WorkspaceBrowser.module.css
+  原值转录 + dsw-raw 豁免台账）为结构等价替代（fix-26 可辩护替代先例）；
+- **fix-41 依赖**：fix-41（pending）交付面 = 本任务行语言/展开回路的真子集
+  （expandOnRowClick + expandSidebar 消费），已随本任务全量落地——fix-41 台账归派发侧
+  对账（其独立 e2e 补充面 Step1b 树行翻转断言仍可另补）。

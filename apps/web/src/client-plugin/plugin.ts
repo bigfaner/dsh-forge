@@ -109,11 +109,14 @@ export interface ForgeSessionsService {
 /**
  * dsh 工作区 UI 服务窄面（UiWorkspace 消费切片）。fix-11：会话行打开的正确官方面 =
  * uiWorkspace.openSession（内部 retain(mainView) + selection 一体 + layout.selectPanel(null)
- * 回会话面板——历史恢复经此驱动）。
+ * 回会话面板——历史恢复经此驱动）。fix-42：项目行尾「新会话」钮 = uiWorkspace.startSession
+ * （reuse-or-create blank + 呈现一体——官方 WorkspaceBrowser 同径动作面）。
  */
 export interface ForgeUiWorkspaceService {
   /** 选择会话为当前并呈现其会话面（官方导航动作面） */
   openSession(target: string): void
+  /** 工作区新会话流（官方 UiWorkspaceService.startSession——复用/新建空白会话并打开） */
+  startSession(workspaceId?: string): void
 }
 
 /** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源） */
@@ -276,6 +279,11 @@ function registerSidebarSlots(
             // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体，
             // 内部 selectPanel(null) 回会话面板 = UF-5 切回主路径）
             services.uiWorkspace.openSession(sessionId)
+          },
+          startSession: (workspaceId: string): void => {
+            // 官方新会话流（fix-42：项目行尾「新会话」钮——uiWorkspace.startSession
+            // reuse-or-create blank + 呈现一体，官方 WorkspaceBrowser 行动作同径）
+            services.uiWorkspace.startSession(workspaceId)
           },
         }),
       },
