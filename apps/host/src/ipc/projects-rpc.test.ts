@@ -5,7 +5,7 @@
 // 注：实层经相对路径引 core 源码仅限测试文件（结构 pin 豁免 *.test.*；生产面 host 禁 import core）。
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { FORGE_CHANNELS, PROJECTS_CHANNELS, type ProjectService } from '@dsh-forge/contracts'
 // core 源码相对引入（测试面专用——见文件头注）
@@ -66,6 +66,11 @@ let dir: string
 let seq = 0
 const dbPath = () =>
   join((dir ??= mkdtempSync(join(tmpdir(), 'dsh-forge-rpc-'))), `state-${String(++seq).padStart(3, '0')}.db`)
+
+/** fix-39：注册链目录自愈（② 前 mkdir 三目录）落地后实层用例会真实建目录——ws 基座迁
+ *  临时根（原 C: 常量路径会污染用户盘）；forgeDir/knowledgeDir 同用 ws（setupReal 口径） */
+const wsPath = (name: string): string =>
+  join((dir ??= mkdtempSync(join(tmpdir(), 'dsh-forge-rpc-'))), name)
 
 afterAll(() => {
   // Windows 句柄释放延迟容错（断言失败路径可能跳过 close——重试兜底防 EPERM 掩盖真因）
@@ -179,7 +184,7 @@ function setupReal(ws: string, opts: { failInsert?: boolean; failCreate?: Error;
 
 describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => {
   it('register 成功 → RpcOk 携真实 RegisterResult（SQLite 落库 + registry 创建）', async () => {
-    const ws = resolve('C:\\dsh-forge-rpc-real')
+    const ws = wsPath('rpc-real')
     const { db, registry, input, handler } = setupReal(ws)
     const result = (await handler(undefined, input)) as {
       ok: boolean
@@ -193,7 +198,7 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
   })
 
   it('ERR_WORKSPACE_CREATE：registry.create 失败 → 真类入信封（code/message/data 保真）', async () => {
-    const ws = resolve('C:\\dsh-forge-rpc-create-fail')
+    const ws = wsPath('rpc-create-fail')
     const direct = setupReal(ws, { failCreate: new Error('dsh create exploded') })
     let thrown: unknown
     try {
@@ -203,6 +208,8 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
     }
     expect(thrown).toBeInstanceOf(WorkspaceCreateError)
     direct.db.close()
+    // fix-39 目录自愈会真实建 ws——重演前清场（保 canonicalize fail-soft 原拼写口径，断言基不变）
+    rmSync(ws, { recursive: true, force: true })
     // 真实组合（同因失败重演于新库——registry 状态零污染前提）
     const replay = setupReal(ws, { failCreate: new Error('dsh create exploded') })
     const envelope = (await replay.handler(undefined, replay.input)) as {
@@ -221,7 +228,7 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
   })
 
   it('ERR_COMPENSATION：③写失败+补偿失败 → 真类入信封（记账后原样保真）', async () => {
-    const ws = resolve('C:\\dsh-forge-rpc-compensate')
+    const ws = wsPath('rpc-compensate')
     const direct = setupReal(ws, { failInsert: true, failDelete: new Error('delete exploded') })
     let thrown: unknown
     try {
@@ -233,6 +240,8 @@ describe('2.4 AC2 实层：core 真身 typed error 过 RPC 边界保真', () => 
     // 关键异常降级 app_key_logs（单事件单条）——不抛断流程
     expect(direct.db.prepare('SELECT COUNT(*) AS n FROM app_key_logs').get()).toEqual({ n: 1 })
     direct.db.close()
+    // fix-39 目录自愈会真实建 ws——重演前清场（保 canonicalize fail-soft 原拼写口径）
+    rmSync(ws, { recursive: true, force: true })
     // 真实组合（新库重演）：CompensationError → 信封三元组保真
     const replay = setupReal(ws, { failInsert: true, failDelete: new Error('delete exploded') })
     const envelope = (await replay.handler(undefined, replay.input)) as {

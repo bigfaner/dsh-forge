@@ -7,7 +7,7 @@
 // AC5 热度口径（场景⑥数据侧）/ AC6 索引缓存直读（SC2 零文件扫描）+ Description 补充
 // （静默重建联动 / 降级 app_key_logs）。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
@@ -263,9 +263,10 @@ describe('索引缺失静默重建联动（ERR_INDEX_STALE 语义）', () => {
     expect(keyLogsOf(f.db)).toHaveLength(1) // 重建事件照记
   })
 
-  it('零行索引 + 目录不可达 → InvalidKnowledgeDirError（ERR_INVALID_KNOWLEDGE_DIR）+ 降级 app_key_logs(error, scope=recall)', async () => {
+  it('零行索引 + 目录非法（路径为普通文件）→ InvalidKnowledgeDirError（ERR_INVALID_KNOWLEDGE_DIR）+ 降级 app_key_logs(error, scope=recall)', async () => {
     const f = fixture()
     rmSync(f.knowledgeDir, { recursive: true, force: true })
+    writeFileSync(f.knowledgeDir, '占位文件', 'utf8') // fix-39 后缺失态已自愈——非法面载体改普通文件
     const err = await createKnowledgeRecallService({ db: f.db })
       .search({ projectId: f.projectId, domainPrefix: '前端' })
       .catch((e: unknown) => e)

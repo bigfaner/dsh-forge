@@ -8,7 +8,7 @@
 // 附：重建清引用（ER entry_id「条目已重建清除（行保留）」——FK 修复）与 listEntries
 // 静默重建联动（scope=index）。
 import { randomUUID } from 'node:crypto'
-import { readdirSync, rmSync, unlinkSync } from 'node:fs'
+import { readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
@@ -313,9 +313,10 @@ describe('listEntries 静默重建联动', () => {
     expect(logs[0]).toMatchObject({ level: 'warn', scope: 'index' })
   })
 
-  it('零行索引 + 目录不可达 → InvalidKnowledgeDirError + 降级 app_key_logs(error, scope=index)', async () => {
+  it('零行索引 + 目录非法（路径为普通文件）→ InvalidKnowledgeDirError + 降级 app_key_logs(error, scope=index)', async () => {
     const f = fixture()
     rmSync(f.knowledgeDir, { recursive: true, force: true })
+    writeFileSync(f.knowledgeDir, '占位文件', 'utf8') // fix-39 后缺失态已自愈——非法面载体改普通文件
     const err = await createKnowledgeBrowseService({ db: f.db })
       .listEntries({ projectId: f.projectId })
       .catch((e: unknown) => e)

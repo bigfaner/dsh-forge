@@ -17,11 +17,16 @@
 // 补偿链语义零变化：真新建失败 → registry.delete 补偿；挂接/既有实体绝不被补偿删除。
 // fix-35 拆分：主链降纯编排（writeProjectRow / compensateFailedWrite / isRefHealthy /
 // reconcileRowDegrade 单项处理器），errMessage 收编 ../util.js 单源。
+// fix-39 目录自愈：② 前插「目录确保」步（ensureRegistrationDirs）——新建径 workspaceDir/
+// forgeDir/knowledgeDir 三目录缺则递归建（幂等），消除「目录不存在」面用户可避错误
+// （ERR_WORKSPACE_CREATE 的「选定后被删」竞态 + 知识面迟到的 ERR_INVALID_KNOWLEDGE_DIR）；
+// 自愈径（attachExistingRow 命中）与挂接径（① 预检命中）零建目录——挂接语义零盘副作用不变。
 // 查询面 + 启动对账（2.3）：listProjects（archived 态随行=过滤口径）/ getProject / updateProject
 // （patch 仅 name/archived）/ reconcileAtStartup（失配找回、找不回幂等重建、孤儿只提示不删；
 // 全程异常降级 app_key_logs 永不抛断启动）。SQLite 写仅经 db/ 句柄（单写路径）；
 // registry 调用只依赖 dsh 官方 ctx.workspaceRegistry 面。
 import { randomUUID } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import type Database from 'better-sqlite3'
@@ -88,6 +93,33 @@ async function canonicalizeDir(p: string): Promise<string> {
     return await realpath(p)
   } catch {
     return p
+  }
+}
+
+/**
+ * fix-39 目录自愈（② 前置步，仅新建径调用）：三目录缺则递归 mkdir（幂等——在场 no-op）。
+ * · workspaceDir：官方 create 的 canonicalize 门要求目录已存在且为目录（G1 pin ④）——
+ *   「选定后被删」竞态在此自愈（原 ERR_WORKSPACE_CREATE 面中用户可避的部分）；
+ * · forgeDir/knowledgeDir：迟到爆炸面前置消解——原注册成功后知识面才报
+ *   ERR_INVALID_KNOWLEDGE_DIR（scan 前置门），现注册成功即两目录落盘。
+ * 建失败沿现行六码 typed 面上抛（裁决：不扩码——六码面稳定，扩码须 contracts/web/host
+ * 三处一体）：workspaceDir → WorkspaceCreateError（create 前置失败同面：注册中止、无补偿
+ * 需要——dsh 侧零副作用）；forge/knowledge → ProjectWriteError（注册输入无法落盘 = 写入
+ * 面前置失败）。时序：全部在 ② 之前完成——任何建失败时 dsh 侧零变更，补偿链零涉入。
+ * 创建后 canonicalizeDir 语义不变：归一在流程头部（目录未建 → fail-soft 回退原拼写），
+ * 新建目录的 canonical 化仍归 ② 官方面——ws_path 落库口径零变化。
+ */
+function ensureRegistrationDirs(input: RegisterProjectInput): void {
+  try {
+    mkdirSync(input.workspaceDir, { recursive: true })
+  } catch (cause) {
+    throw new WorkspaceCreateError(input.workspaceDir, cause)
+  }
+  try {
+    mkdirSync(input.forgeDir, { recursive: true })
+    mkdirSync(input.knowledgeDir, { recursive: true })
+  } catch (cause) {
+    throw new ProjectWriteError({ wsPath: input.workspaceDir }, cause)
   }
 }
 
@@ -167,7 +199,7 @@ async function compensateFailedWrite(
   )
 }
 
-/** 注册主链（纯编排：归一 → 自愈预检 → ① 预检 → ② create → ③ 写行 → 标题对齐） */
+/** 注册主链（纯编排：归一 → 自愈预检 → ① 预检 → 目录确保（fix-39，仅新建径）→ ② create → ③ 写行 → 标题对齐） */
 async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectInput): Promise<RegisterResult> {
   const { db, registry } = deps
 
@@ -196,6 +228,9 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     workspace = existing
     createdNow = false
   } else {
+    // fix-39 目录自愈前置步（仅新建径）：三目录缺则建（幂等）——必须在 ② 前（官方 create 的
+    // realpath 门要求目录在场）；挂接径（existing 命中）/自愈径不经此步——零盘副作用（Hard Rule）
+    ensureRegistrationDirs(canonicalInput)
     // ② registry.create（dsh 幂等：同 canonical path 返回既有实体）——失败即注册中止，无补偿需要。
     // create 收原始拼写（canonical 化属 dsh 官方面职责）；「本次新建」不看 ① 是否命中，看 id 差集
     // （免疫拼写变体：dsh 按 canonical 返回既有实体时其 id 已在快照中）

@@ -14,11 +14,12 @@
 //   - hero 相位：[data-dswf-workbench][data-dswf-phase=hero|session]；CTA [data-dswf-cta=add-project]
 // 隔离：独立 userData + 独立端口（e2e 单实例纪律——端口经 e2e/support 分配器，fix-37）。
 // 载体面（launch/dismiss/close/RPC/seed）经 e2e/support 支撑层（fix-37 ①）。
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
+import type { KnowledgeCard } from '../../../packages/contracts/src/dto/knowledge.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
@@ -497,6 +498,41 @@ test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项�
     const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
     expect(projects, '应用项目数 = 2（新旧并存各携外键）').toHaveLength(2)
     expect(new Set(projects.map((p) => p.workspaceId)).size, '两行各携独立 workspace 外键').toBe(2)
+  } finally {
+    await closeApp(app)
+    await rmDirBestEffort(userData)
+    await rmDirBestEffort(fixtureRoot)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fix-39 注册链目录自愈：无 .knowledge/.forge 的空工作区注册即用（用户验收 2026-10-05 报障①）
+// 修复前形态：注册成功但知识目录迟到爆炸（ERR_INVALID_KNOWLEDGE_DIR → 知识视图 empty-state）
+// ─────────────────────────────────────────────────────────────────────────────
+test('@web-e2e @p1mvp project-registration·fix39 no-knowledge-dir-register-ready：无 .knowledge 空目录注册即用', async () => {
+  test.setTimeout(240_000)
+  const fixtureRoot = makeWorkspaceFixture('fresh-demo') // withKnowledge=false → 无 .knowledge/.forge
+  const targetDir = join(fixtureRoot, 'fresh-demo')
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
+  const { app, page, pageErrors } = await launchHost({ userData, expectPhase: 'hero' })
+  try {
+    // 注册成功（目录自愈不在用户路径上报错）
+    await selectWorkspaceAndNext(page, fixtureRoot, 'fresh-demo')
+    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+    await expect(page.locator(addProjectPhase('success'))).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(AP_ANY)).toHaveCount(0, { timeout: 15_000 })
+
+    // State：.forge/.knowledge 已在盘上落位（fix-39 A——注册链 ② 前目录确保步）
+    expect(existsSync(join(targetDir, '.forge')), 'forge 目录注册即落盘').toBe(true)
+    expect(existsSync(join(targetDir, '.knowledge')), '知识目录注册即落盘').toBe(true)
+
+    // 注册即用：知识面即时可用（空索引不报错——无 ERR_INVALID_KNOWLEDGE_DIR）
+    const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
+    const projectId = projects.find((p) => p.wsPath === targetDir)?.id
+    expect(projectId, '注册行在场').toBeTruthy()
+    const cards = await forgeInvoke<readonly KnowledgeCard[]>(page, 'forge:knowledge/listEntries', { projectId })
+    expect(cards, '知识视图即扫即用（空目录 = 空结果，不报错）').toEqual([])
+    expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)

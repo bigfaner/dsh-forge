@@ -1058,7 +1058,7 @@
       "title": "Fix: 注册链目录自愈——知识/forge 目录（及工作区目录）不存在时注册自动创建，消除 ERR_INVALID_KNOWLEDGE_DIR / ERR_WORKSPACE_CREATE 面的用户可避错误",
       "priority": "P1",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-39.md",
       "record": "records/fix-39.md",
       "surface-type": "web",

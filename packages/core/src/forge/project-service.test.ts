@@ -1,7 +1,7 @@
 // 任务 2.2 测试 —— registerProject 四步补偿链（AC1–AC6）：vitest + 临时 SQLite + registry 桩。
 // 桩语义按 G1 pin 第 4 项（上游 dsh-workspace 源码核实）：create 幂等（同 canonical path 返回
 // 既有实体）、delete 保目录保日志且未知 id 幂等 no-op（false）、list 同步投影。
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -20,7 +20,10 @@ import { installProjectInsertFailure, seedProjectRow } from '../testutil/db-seed
 
 // ── 测试环境（每用例独占临时库，2.1 口径） ──
 
-const WS = 'C:\\dsh-forge-test-ws'
+// fix-39：注册链目录自愈（② 前 mkdir 三目录）落地后，新建径用例会真实建目录——WS 基座
+// 迁临时根（盘副作用入 tmpdir，afterAll 统一清理；原 C: 常量路径会污染用户盘）
+const WS_ROOT = mkdtempSync(join(tmpdir(), 'dsh-forge-reg-ws-'))
+const WS = join(WS_ROOT, 'ws')
 let dir: string
 let seq = 0
 const dbs: Database.Database[] = []
@@ -30,6 +33,7 @@ const dbPath = () =>
 afterAll(() => {
   for (const db of dbs) db.close()
   if (dir) rmSync(dir, { recursive: true, force: true })
+  rmSync(WS_ROOT, { recursive: true, force: true })
 })
 
 // ── rename 桩（fix-24 ②：官方 workspace/rename 命令形状记录——调用形状 = 断言面） ──
@@ -101,7 +105,8 @@ describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting
 
   it('forge 目录位于工作区外 → forge_dir_external=1（路径关系自动推导）', async () => {
     const { db, service } = setup()
-    await service.registerProject(input({ forgeDir: 'D:\\elsewhere\\forge' }))
+    // fix-39：注册链会真实建 forge 目录——仓外路径取临时根内工作区外位置（不触真实盘符）
+    await service.registerProject(input({ forgeDir: join(WS_ROOT, 'elsewhere-forge') }))
     expect(readRows(db)[0]?.forge_dir_external).toBe(1)
   })
 })
@@ -523,5 +528,122 @@ describe('fix-33 ⑬ 对账记账防护（记账抛错不截断本轮剩余行�
     expect(readRows(db).find((r) => r.id === 'b-ok')?.workspace_id).toBe(ok.id) // 剩余行照常对账
     // a-bad 引用未动（修复失败语义不变）
     expect(readRows(db).find((r) => r.id === 'a-bad')?.workspace_id).toBe('ws-x')
+  })
+})
+
+// ── fix-39 注册链目录自愈：新建径三目录缺则建；挂接/自愈径零盘副作用（Hard Rule） ──
+
+describe('fix-39 注册链目录自愈（② 前置步）', () => {
+  it('新建径：全新空工作区（无 .forge/.knowledge）注册 → 成功且两目录落盘（验收①）', async () => {
+    const { service } = setup()
+    const ws = join(WS_ROOT, 'fresh-ws') // 全新空目录——三目录均不存在
+    const result = await service.registerProject({
+      workspaceDir: ws,
+      name: 'fresh',
+      forgeDir: join(ws, '.forge'),
+      knowledgeDir: join(ws, '.knowledge'),
+    })
+    expect(result.attachedToExisting).toBe(false)
+    expect(existsSync(ws)).toBe(true)
+    expect(existsSync(join(ws, '.forge'))).toBe(true)
+    expect(existsSync(join(ws, '.knowledge'))).toBe(true)
+  })
+
+  it('直输多级缺失路径 → 注册成功，目录递归创建（验收②：D:\\a\\b\\c\\.knowledge 同构面）', async () => {
+    const { service } = setup()
+    const ws = join(WS_ROOT, 'deep-ws')
+    const knowledgeDir = join(WS_ROOT, 'deep-ws', 'a', 'b', 'c', '.knowledge') // 多级缺失
+    const result = await service.registerProject({
+      workspaceDir: ws,
+      name: 'deep',
+      forgeDir: join(ws, '.forge'),
+      knowledgeDir,
+    })
+    expect(result.attachedToExisting).toBe(false)
+    expect(existsSync(knowledgeDir)).toBe(true) // 递归建齐
+  })
+
+  it('workspaceDir 选定后被删再注册 → 注册成功（目录自愈）而非 ERR_WORKSPACE_CREATE（验收④）', async () => {
+    const { service } = setup()
+    const ws = join(WS_ROOT, 'racy-ws')
+    mkdirSync(ws) // 模拟浏览器/原生选取器选定时刻在场
+    rmSync(ws, { recursive: true, force: true }) // 选定后被删（竞态窗口）——修复前 ② realpath 门必炸
+    const result = await service.registerProject({
+      workspaceDir: ws,
+      name: 'racy',
+      forgeDir: join(ws, '.forge'),
+      knowledgeDir: join(ws, '.knowledge'),
+    })
+    expect(result.attachedToExisting).toBe(false)
+    expect(existsSync(ws)).toBe(true) // 自愈重建
+  })
+
+  it('挂接径（① 预检命中 dsh 既有）零建目录：.forge/.knowledge 缺失不落盘（Hard Rule）', async () => {
+    const { registry, service } = setup()
+    const ws = join(WS_ROOT, 'attach-ws')
+    registry.seed(ws) // dsh 侧既有 → ① 命中（挂接径）
+    const result = await service.registerProject({
+      workspaceDir: ws,
+      name: 'attach',
+      forgeDir: join(ws, '.forge'),
+      knowledgeDir: join(ws, '.knowledge'),
+    })
+    expect(result.attachedToExisting).toBe(true)
+    expect(existsSync(ws)).toBe(false) // 挂接径零 mkdir——工作区目录亦不建
+    expect(existsSync(join(ws, '.forge'))).toBe(false)
+    expect(existsSync(join(ws, '.knowledge'))).toBe(false)
+  })
+
+  it('自愈径（attachExistingRow 既有行幂等重注册）零建目录（Hard Rule：幂等语义不破）', async () => {
+    const { db, registry, service } = setup()
+    const ws = join(WS_ROOT, 'reattach-ws')
+    const existing = registry.seed(ws)
+    seedProjectRow(db, { id: 'row-39', workspaceId: existing.id, wsPath: ws }) // 既有行在场
+    const result = await service.registerProject({
+      workspaceDir: ws,
+      name: 'reattach',
+      forgeDir: join(ws, '.forge'),
+      knowledgeDir: join(ws, '.knowledge'),
+    })
+    expect(result).toMatchObject({ projectId: 'row-39', attachedToExisting: true })
+    expect(existsSync(ws)).toBe(false) // 自愈径零 mkdir
+    expect(existsSync(join(ws, '.knowledge'))).toBe(false)
+  })
+
+  it('workspaceDir 建失败（路径为普通文件）→ WorkspaceCreateError（现行六码面承接；② 未启动无补偿）', async () => {
+    const { db, registry, service } = setup()
+    const fileWs = join(WS_ROOT, 'ws-as-file')
+    writeFileSync(fileWs, '占位文件', 'utf8') // mkdir recursive 对在场文件抛 EEXIST
+    const err: unknown = await service
+      .registerProject({
+        workspaceDir: fileWs,
+        name: 'x',
+        forgeDir: join(WS_ROOT, 'f-forge'),
+        knowledgeDir: join(WS_ROOT, 'f-kn'),
+      })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(WorkspaceCreateError)
+    expect((err as WorkspaceCreateError).code).toBe('ERR_WORKSPACE_CREATE')
+    expect((err as WorkspaceCreateError).data.wsPath).toBe(fileWs)
+    expect(registry.createCalls).toEqual([]) // ② 前中止——dsh 侧零副作用
+    expect(readRows(db)).toEqual([])
+  })
+
+  it('knowledgeDir 建失败（父级为普通文件）→ ProjectWriteError 前置（建失败沿现行六码面，不扩码）', async () => {
+    const { db, registry, service } = setup()
+    const parentFile = join(WS_ROOT, 'kn-parent-file')
+    writeFileSync(parentFile, '占位文件', 'utf8')
+    const err: unknown = await service
+      .registerProject({
+        workspaceDir: join(WS_ROOT, 'kn-fail-ws'),
+        name: 'x',
+        forgeDir: join(WS_ROOT, 'kn-fail-ws', '.forge'),
+        knowledgeDir: join(parentFile, 'sub', '.knowledge'), // 父级为文件 → mkdir ENOTDIR
+      })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(ProjectWriteError)
+    expect((err as ProjectWriteError).code).toBe('ERR_PROJECT_WRITE')
+    expect(registry.createCalls).toEqual([]) // ② 前置失败——dsh 侧零副作用、零补偿需要
+    expect(readRows(db)).toEqual([])
   })
 })

@@ -41,7 +41,9 @@ export function deriveDomainPath(relPath: string): { domainPath: string; depth: 
 /**
  * 扫描知识目录：递归收集 .md 候选（大小写不敏感），dot 文件/目录与符号链接一律不收
  * （脏文件不进 IndexReport 分母；安全排除不计数）。结果按 relPath 排序（确定性插入序）。
- * 目录不可达/非目录 → InvalidKnowledgeDirError（ERR_INVALID_KNOWLEDGE_DIR）。
+ * 目录不可达/非目录 → InvalidKnowledgeDirError（ERR_INVALID_KNOWLEDGE_DIR）。fix-39 语义
+ * 收窄：缺失态自愈归调用方前置门（index-service rebuildIndex 扫描前 mkdir）——本码触达
+ * 用户仅剩「路径存在但非法/不可达」；本件保持只读零建目录（错误唯一权威）。
  */
 export function scanKnowledgeDir(knowledgeDir: string): ScannedKnowledgeFile[] {
   let isDir: boolean

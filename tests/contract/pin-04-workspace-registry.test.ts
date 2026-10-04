@@ -164,7 +164,9 @@ describe('pin ④-5 集成（真实 registerProject × S4 语义桩 + 临时 SQL
     return { db, registry, service }
   }
 
-  const WS = resolve('C:\\dsh-pin04-ws')
+  // fix-39：注册链目录自愈（② 前 mkdir 三目录）落地后，本集成组的 create 分支用例会真实
+  // 建目录——WS 迁本组临时根（原 C: 常量路径会污染用户盘；afterAll 随 dir 统一清理）
+  const WS = join(dir, 'ws')
 
   it('预检命中 → 挂接既有：不重复 create、不登记补偿（ownership 归调用方预检）', async () => {
     const { registry, service } = setup()

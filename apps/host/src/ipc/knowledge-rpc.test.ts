@@ -171,14 +171,17 @@ function writeMd(knowledgeDir: string, relPath: string, frontmatter: string, bod
 /**
  * 实层素材：每用例独占临时库 + 知识目录语料（前端 2 / 后端 1）+ projects 行直插
  * （注册链路归 forge 域 2.2 已测）。indexService 注入缝：failRebuild = 重建器替身恒炸
- * （ERR_INDEX_STALE 实层素材）；absentDir = 知识目录不可达（ERR_INVALID_KNOWLEDGE_DIR）。
+ * （ERR_INDEX_STALE 实层素材）；absentDir = 知识目录非法（ERR_INVALID_KNOWLEDGE_DIR——
+ * fix-39 后缺失态被 rebuildIndex 前置门自愈，非法面载体 = 路径为普通文件）。
  */
 function realFixture(opts: { absentDir?: boolean; failRebuild?: boolean } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-knrpc-'))
   dirs.push(home)
   const db = openDatabase(join(home, 'state.db'))
   const knowledgeDir = join(home, 'knowledge')
-  if (!opts.absentDir) {
+  if (opts.absentDir) {
+    writeFileSync(join(home, 'absent'), '占位文件', 'utf8') // 路径为普通文件 → scan 前置门现行六码面
+  } else {
     mkdirSync(knowledgeDir)
     writeMd(knowledgeDir, '前端/框架选型.md', 'title: 框架选型\nsummary: 前端框架选型基线\nkeywords: [react, frontend]')
     writeMd(knowledgeDir, '前端/样式令牌.md', 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]')
@@ -266,7 +269,7 @@ describe('3.5 AC2 实层：知识域三码 typed error 过 RPC 边界保真', ()
     f.db.close()
   })
 
-  it('ERR_INVALID_KNOWLEDGE_DIR：listEntries 目录不可达 → 真类入信封（静默重建失败按因透传）', async () => {
+  it('ERR_INVALID_KNOWLEDGE_DIR：listEntries 目录非法（路径为普通文件——fix-39 后缺失态自愈）→ 真类入信封（静默重建失败按因透传）', async () => {
     const f = realFixture({ absentDir: true })
     const envelope = (await f.call(KNOWLEDGE_CHANNELS.listEntries, { projectId: f.projectId })) as {
       ok: boolean

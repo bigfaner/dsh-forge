@@ -10,7 +10,7 @@ export interface KnowledgeErrorData {
   [key: string]: unknown
 }
 
-/** 知识目录不可达/非法（rebuildIndex 扫描前置门——目录缺失或非目录） */
+/** 知识目录存在但非法/不可达（fix-39 语义收窄：缺失态由 rebuildIndex 扫描前置门 mkdir 自愈，不再触码） */
 export class InvalidKnowledgeDirError extends Error {
   readonly code = 'ERR_INVALID_KNOWLEDGE_DIR' as const
   readonly data: KnowledgeErrorData

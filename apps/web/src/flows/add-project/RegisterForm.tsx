@@ -200,7 +200,7 @@ export function RegisterFormView({
         ) : undefined}
         input={<input id="dswf-rf-forge" className="dswf-rf-input" data-dswf-rf-forge type="text" value={values.forgeDir} onChange={editHandler?.('forgeDir')} />}
         side={browseBtn('forgeDir')}
-        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.forge；可直接输入或浏览改选（仓外需授权；应用侧只读引用）</p>}
+        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.forge；可直接输入或浏览改选（仓外需授权；应用侧只读引用）；目录不存在时将自动创建</p>}
         issue={forgeIssue ? <FieldIssue issue={forgeIssue} /> : undefined}
       />
       <FormRow
@@ -208,7 +208,7 @@ export function RegisterFormView({
         label="知识库目录"
         input={<input id="dswf-rf-kn" className="dswf-rf-input" data-dswf-rf-kn type="text" value={values.knowledgeDir} onChange={editHandler?.('knowledgeDir')} />}
         side={browseBtn('knowledgeDir')}
-        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.knowledge；可直接输入或浏览改选仓外目录</p>}
+        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.knowledge；可直接输入或浏览改选仓外目录；目录不存在时将自动创建</p>}
         issue={knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : undefined}
       />
       {nativePickError === null ? null : (

@@ -5,7 +5,7 @@
 // AC 对照：AC1 全字段/缺省/UK；AC2 容错计数；AC3 幂等零漂移；AC4 digest 变更检测；
 // Hard Rule 2：索引缓存只落应用库（知识目录零写入自证）。
 import { randomUUID } from 'node:crypto'
-import { readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
@@ -195,9 +195,18 @@ describe('rebuildIndex 失败口径', () => {
     await expect(createKnowledgeIndexService({ db: f.db }).rebuildIndex(randomUUID())).rejects.toThrowError(/项目不存在/)
   })
 
-  it('知识目录不可达 → InvalidKnowledgeDirError（ERR_INVALID_KNOWLEDGE_DIR）', async () => {
+  it('fix-39 存量行自愈：知识目录缺失 → mkdir 递归重建后继续（空报告不报错，验收③前半）', async () => {
     const f = fixture()
     rmSync(f.knowledgeDir, { recursive: true, force: true }) // 目录递归删除：内部逐文件 unlink，安全
+    const report = await createKnowledgeIndexService({ db: f.db }).rebuildIndex(f.projectId)
+    expect(report).toEqual({ indexed: 0, skipped: 0 }) // 空索引不报错——知识视图即扫即用
+    expect(existsSync(f.knowledgeDir), '目录已在盘重建（fix-39 前存量行免重注册即愈）').toBe(true)
+  })
+
+  it('知识目录为普通文件 → 仍 InvalidKnowledgeDirError（语义收窄验证：真非法不吞，验收③后半）', async () => {
+    const f = fixture()
+    rmSync(f.knowledgeDir, { recursive: true, force: true })
+    writeFileSync(f.knowledgeDir, '占位文件', 'utf8') // 同路径落普通文件——mkdir EEXIST 交还 scan 收口
     const err = await createKnowledgeIndexService({ db: f.db })
       .rebuildIndex(f.projectId)
       .catch((e: unknown) => e)
