@@ -3,7 +3,6 @@
 // 未知 id → undefined，node_modules @deepseek-ai/dsh-workspace 类型核实）。
 // 记账口径（§交互三 + ER APP_KEY_LOGS 记名域②）：ws_path 失配找回（warn，结果入 data_json）与
 // 孤儿发现（warn，全部孤儿并入同条）记账；幂等重建成功不记（成功路径一律不记）。
-import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -11,48 +10,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
-import type { WorkspaceLike, WorkspaceRegistryPort } from './registry.js'
-
-// ── registry 桩（G1 pin 4 语义复刻 + get 同步查表；不触盘——canonical 化用 path.resolve 替身） ──
-
-class StubRegistry implements WorkspaceRegistryPort {
-  readonly records = new Map<string, WorkspaceLike>()
-  readonly createCalls: string[] = []
-  readonly deleteCalls: string[] = []
-  failCreate?: Error
-  failList?: Error
-
-  seed(path: string, id = randomUUID()): WorkspaceLike {
-    const ws = { id, path: resolve(path) }
-    this.records.set(id, ws)
-    return ws
-  }
-
-  get(id: string): WorkspaceLike | undefined {
-    return this.records.get(id) // 未知 id → undefined（上游 get 语义）
-  }
-
-  list(): WorkspaceLike[] {
-    if (this.failList) throw this.failList
-    return [...this.records.values()]
-  }
-
-  async create(path: string): Promise<WorkspaceLike> {
-    this.createCalls.push(path)
-    if (this.failCreate) throw this.failCreate
-    const canonical = resolve(path)
-    const existing = this.list().find((ws) => ws.path === canonical)
-    if (existing) return existing // 幂等：同 canonical path 返回既有实体
-    const ws = { id: randomUUID(), path: canonical }
-    this.records.set(ws.id, ws)
-    return ws
-  }
-
-  async delete(id: string): Promise<boolean> {
-    this.deleteCalls.push(id)
-    return this.records.delete(id) // 未知 id → false（幂等 no-op）
-  }
-}
+// registry 桩（G1 pin 4 语义 + get 同步查表）——fix-34 收编 testutil 单份（注入面 superset）
+import { StubRegistry } from '../testutil/registry-stub.js'
 
 // ── 测试环境（每用例独占临时库，2.2 口径） ──
 

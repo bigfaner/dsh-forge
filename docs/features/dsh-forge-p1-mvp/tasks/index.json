@@ -969,6 +969,18 @@
       "type": "coding.fix",
       "complexity": "low"
     },
+    "fix-34": {
+      "id": "fix-34",
+      "title": "Fix(P1): clean code 紧要批——契约注释承诺漂移（ERROR_NAMES/FRONTMATTER_KEYS 声称被消费实则零引用）+ dswf-kn-retry 孤儿类名（用户可见）+ e2e closeApp 竞态全员设防 + 跨包 StubRegistry 桩五份收编",
+      "priority": "P1",
+      "estimatedTime": "4h",
+      "status": "completed",
+      "file": "fix-34.md",
+      "record": "records/fix-34.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-3": {
       "id": "fix-3",
       "title": "Fix: 添加项目模态宽度缺陷——内容 560 \u003e 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",

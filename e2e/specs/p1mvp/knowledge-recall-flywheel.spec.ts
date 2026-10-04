@@ -129,6 +129,23 @@ async function launchHost(userData: string, overlay?: string): Promise<Launched>
   return { app, page, pageErrors }
 }
 
+/** 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
+ *  fix-34 止血复制，统一收编共享 helper 归 fix-37 e2e 支撑层） */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  await app.close().catch(() => undefined)
+  if (proc.exitCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000)
+      proc.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
+}
+
 /** 飞轮基线夹具：K1（部署，常规正文）/ K2（构建，超长正文）/ 后端域对照——关键词零交集 */
 function makeFlywheelFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw-'))
@@ -572,9 +589,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     expect(knowledgeDirSnapshotAfter, '浏览/召回全程对知识目录零写入').toBe(knowledgeDirSnapshotBefore)
     expect(launched.pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    if (launched !== undefined) {
-      await launched.app.close().catch(() => undefined)
-    }
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -640,7 +655,7 @@ test('@web-e2e @p1mvp flywheel·Step2b no-knowledge-dir-session：无知识段�
     ).toContain('## Project knowledge base')
     expect(launched.pageErrors, '会话正常可用（无页面错误）').toEqual([])
   } finally {
-    if (launched !== undefined) await launched.app.close().catch(() => undefined)
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -690,7 +705,7 @@ test('@web-e2e @p1mvp flywheel·Step2c empty-knowledge-dir-session：空目录�
     )
     expect(launched.pageErrors).toEqual([])
   } finally {
-    if (launched !== undefined) await launched.app.close().catch(() => undefined)
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -747,7 +762,7 @@ test('@web-e2e @p1mvp flywheel·Step3b blank-question-blocked：空/纯空白提
     }, projectId)
     expect(heat, '零检索链与使用事件').toHaveLength(0)
   } finally {
-    if (launched !== undefined) await launched.app.close().catch(() => undefined)
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -773,7 +788,7 @@ test('@web-e2e @p1mvp flywheel·Step7b no-recall-placeholder：零召回占位�
     await expect(launched.page.getByText('本会话暂无召回'), '「本会话暂无召回」占位（不报错、无空列表）').toBeVisible({ timeout: 30_000 })
     await expect(launched.page.locator('[data-dswf-recall-row]'), '零分组行').toHaveCount(0)
   } finally {
-    if (launched !== undefined) await launched.app.close().catch(() => undefined)
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -845,7 +860,7 @@ test('@web-e2e @p1mvp flywheel·Step4d no-hit-fallback：无关库回答不阻�
         .toBe(false)
     }
   } finally {
-    if (launched !== undefined) await launched.app.close().catch(() => undefined)
+    if (launched !== undefined) await closeApp(launched.app)
     rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })

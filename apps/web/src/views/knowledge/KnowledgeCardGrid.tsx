@@ -120,7 +120,7 @@ function GridError({
     <div className="dswf-kn-error" data-dswf-kn-error="" role="alert">
       <span>知识加载失败{errorMessage === undefined ? '' : `：${errorMessage}`}</span>
       {onRetry === undefined ? null : (
-        <button type="button" className="dswf-kn-retry" onClick={onRetry}>
+        <button type="button" className="dswf-kn-textaction" data-dswf-kn-retry="" onClick={onRetry}>
           重试
         </button>
       )}

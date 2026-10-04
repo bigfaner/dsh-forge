@@ -3,7 +3,6 @@
 //   双层之二（实层）  ：core createProjectService 真身（2.2 registerProject + 临时 SQLite +
 //                      registry 桩，2.2 同型）→ 真实 typed error 过真实注册机制入信封保真。
 // 注：实层经相对路径引 core 源码仅限测试文件（结构 pin 豁免 *.test.*；生产面 host 禁 import core）。
-import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -16,7 +15,8 @@ import {
   WorkspaceCreateError,
 } from '../../../../packages/core/src/forge/errors.js'
 import { createProjectService } from '../../../../packages/core/src/forge/project-service.js'
-import type { WorkspaceLike, WorkspaceRegistryPort } from '../../../../packages/core/src/forge/registry.js'
+// registry 桩（failCreate/failDelete 失败注入 + resolve 规范化）——fix-34 收编 core testutil 单份
+import { StubRegistry } from '../../../../packages/core/src/testutil/registry-stub.js'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
 import { registerProjectsChannels, runStartupReconcile } from './projects-rpc.js'
@@ -60,34 +60,7 @@ function fakeService() {
   } satisfies ProjectService
 }
 
-// ── 实层：core 真身素材（2.2 同型 registry 桩 + 临时 SQLite）──
-
-class StubRegistry implements WorkspaceRegistryPort {
-  readonly records = new Map<string, WorkspaceLike>()
-  failCreate?: Error
-  failDelete?: Error
-  seed(path: string, id = randomUUID()): WorkspaceLike {
-    const ws = { id, path: resolve(path) }
-    this.records.set(id, ws)
-    return ws
-  }
-  list(): WorkspaceLike[] {
-    return [...this.records.values()]
-  }
-  async create(path: string): Promise<WorkspaceLike> {
-    if (this.failCreate) throw this.failCreate
-    const canonical = resolve(path)
-    const existing = this.list().find((ws) => ws.path === canonical)
-    if (existing) return existing
-    const ws = { id: randomUUID(), path: canonical }
-    this.records.set(ws.id, ws)
-    return ws
-  }
-  async delete(id: string): Promise<boolean> {
-    if (this.failDelete) throw this.failDelete
-    return this.records.delete(id)
-  }
-}
+// ── 实层：core 真身素材（2.2 同型 registry 桩 = testutil StubRegistry + 临时 SQLite）──
 
 let dir: string
 let seq = 0

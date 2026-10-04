@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
 import type { KnowledgeService } from '@dsh-forge/contracts'
-import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
+import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
+import { StubRegistry } from './testutil/registry-stub.js'
 import corePlugin, { type CoreContextFace } from './service.js'
 import { openDatabase } from './db/index.js'
 import type Database from 'better-sqlite3'
@@ -21,15 +22,9 @@ afterAll(() => {
   for (const d of dirs) rmSync(d, { recursive: true, force: true })
 })
 
-/** registry 结构化桩（本测试不经注册链路——形状兼容即可） */
+/** registry 桩（本测试不经注册链路——形状兼容即可；fix-34 收编 testutil 单份） */
 function stubRegistry(): WorkspaceRegistryPort {
-  const ws: WorkspaceLike = { id: randomUUID(), path: 'C:\\stub-ws' }
-  return {
-    list: () => [ws],
-    get: (id: string) => (id === ws.id ? ws : undefined),
-    create: async () => ws,
-    delete: async () => true,
-  }
+  return new StubRegistry()
 }
 
 /** rename 结构化桩（fix-24 ②——workspaceController 窄面形状兼容即可） */

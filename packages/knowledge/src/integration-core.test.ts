@@ -3,7 +3,6 @@
 // 相对引入，host 测试同型豁免——生产面 knowledge 禁 import core）+ 本插件；断言：
 // search → hits → 日志行（sessionRecall 服务面读回：search 命中行 + read-abstract 行，
 // sessionId 分组）；真实链路 e2e（dogfood 模型）归 4.2。
-import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -11,6 +10,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 // core 源码相对引入（测试面专用）；插件生产面仅依赖 forgeKnowledge 服务类型（AC3）
 import corePlugin from '../../core/src/service.js'
 import type { CoreContextFace } from '../../core/src/service.js'
+// workspaceRegistry 桩（create 幂等语义最小面）——fix-34 收编 core testutil 单份（superset）
+import { StubRegistry } from '../../core/src/testutil/registry-stub.js'
 import knowledgePlugin from './index.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition } from './tools/index.js'
 import type { EntryAbstract, KnowledgeService, ProjectService, SearchHit } from '@dsh-forge/contracts'
@@ -24,22 +25,6 @@ afterAll(() => {
   for (const d of disposers) d()
   for (const root of tempRoots) rmSync(root, { recursive: true, force: true })
 })
-
-/** dsh workspaceRegistry 桩（corePlugin inject 面——create 幂等语义最小实现） */
-function registryStub() {
-  const rows = new Map<string, { id: string; path: string }>()
-  return {
-    list: () => [...rows.values()],
-    get: (id: string) => rows.get(id),
-    create: async (path: string) => {
-      for (const w of rows.values()) if (w.path === path) return w
-      const w = { id: randomUUID(), path }
-      rows.set(w.id, w)
-      return w
-    },
-    delete: async (id: string) => rows.delete(id),
-  }
-}
 
 /** 临时 runtime 夹具：core 真身（双服务）+ 真实注册链落 projects 行 + 插件装配 */
 async function mount(corpus: Record<string, string>) {
@@ -57,7 +42,7 @@ async function mount(corpus: Record<string, string>) {
   // ① core 真身装配（真 SQLite 句柄 + reflect.provide 双服务）
   const provided = new Map<string, unknown>()
   const coreCtx: CoreContextFace = {
-    workspaceRegistry: registryStub(),
+    workspaceRegistry: new StubRegistry(),
     workspaceController: { rename: async () => ({}) }, // fix-24 ② 桩（标题对齐面——本域不消费返回）
     reflect: { provide: (name: string, value: unknown) => void provided.set(name, value) },
   }

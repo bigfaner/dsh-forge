@@ -1,7 +1,6 @@
 // 任务 2.2 测试 —— registerProject 四步补偿链（AC1–AC6）：vitest + 临时 SQLite + registry 桩。
 // 桩语义按 G1 pin 第 4 项（上游 dsh-workspace 源码核实）：create 幂等（同 canonical path 返回
 // 既有实体）、delete 保目录保日志且未知 id 幂等 no-op（false）、list 同步投影。
-import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -10,55 +9,9 @@ import Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
-import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
-
-// ── registry 桩（G1 pin 4 语义的结构化复刻；不触盘——canonical 化用 path.resolve 替身） ──
-
-class StubRegistry implements WorkspaceRegistryPort {
-  readonly records = new Map<string, WorkspaceLike>()
-  /** dsh 侧目录与日志（delete 语义=保目录保日志：本桩 delete 不触碰） */
-  readonly dirs = new Set<string>()
-  readonly createCalls: string[] = []
-  readonly deleteCalls: string[] = []
-  failCreate?: Error
-  failDelete?: Error
-  /** delete 执行前钩子（模拟「补偿删除时工作区已被并发清理」→ delete 返回 false） */
-  beforeDelete?: (id: string) => void
-
-  seed(path: string, id = randomUUID()): WorkspaceLike {
-    const ws = { id, path: resolve(path) }
-    this.records.set(id, ws)
-    this.dirs.add(ws.path)
-    return ws
-  }
-
-  get(id: string): WorkspaceLike | undefined {
-    return this.records.get(id) // 未知 id → undefined（上游 get 语义，2.3 对账消费）
-  }
-
-  list(): WorkspaceLike[] {
-    return [...this.records.values()]
-  }
-
-  async create(path: string): Promise<WorkspaceLike> {
-    this.createCalls.push(path)
-    if (this.failCreate) throw this.failCreate
-    const canonical = resolve(path)
-    const existing = this.list().find((ws) => ws.path === canonical)
-    if (existing) return existing // 幂等：同 canonical path 返回既有实体
-    const ws = { id: randomUUID(), path: canonical }
-    this.records.set(ws.id, ws)
-    this.dirs.add(canonical)
-    return ws
-  }
-
-  async delete(id: string): Promise<boolean> {
-    this.deleteCalls.push(id)
-    this.beforeDelete?.(id)
-    if (this.failDelete) throw this.failDelete
-    return this.records.delete(id) // 未知 id → false（幂等 no-op）；目录与日志保留
-  }
-}
+import type { WorkspaceRenamePort } from './registry.js'
+// registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）
+import { StubRegistry } from '../testutil/registry-stub.js'
 
 // ── 测试环境（每用例独占临时库，2.1 口径） ──
 

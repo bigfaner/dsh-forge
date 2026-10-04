@@ -216,7 +216,7 @@ function DrawerError({
     <div className="dswf-kn-drawer-face">
       <div className="dswf-kn-error" data-dswf-kn-error="" role="alert">
         <span>{`知识详情加载失败：${error.message}`}</span>
-        <button type="button" className="dswf-kn-retry" data-dswf-kn-drawer-retry="" onClick={retry}>
+        <button type="button" className="dswf-kn-textaction" data-dswf-kn-drawer-retry="" onClick={retry}>
           重试
         </button>
       </div>

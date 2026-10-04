@@ -145,6 +145,22 @@ async function launchInstalled(
   return { app, page, pageErrors }
 }
 
+/** 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
+ *  fix-34 止血复制，统一收编共享 helper 归 fix-37 e2e 支撑层） */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  await app.close().catch(() => undefined)
+  if (proc.exitCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000)
+      proc.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
+}
 
 // ─── dsh 会话文件面（空提交零往返断言载体——flywheel.spec 解码器同源精简版） ───
 
@@ -260,7 +276,7 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     await expect(page.locator('[data-rightbar-collapsed]').first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app?.close().catch(() => undefined)
+    if (app !== undefined) await closeApp(app)
   }
 })
 
@@ -289,7 +305,7 @@ test('@web-e2e @p1mvp installer-smoke·Step2d second-launch-consistent：冷重�
     expect(existsSync(join(smokeUserData.dir as string, 'state.db')), '冷重启 state.db 持久').toBe(true)
     expect(launched.pageErrors, '冷重启无首启异常回归（pageerror 面）').toEqual([])
   } finally {
-    await app?.close().catch(() => undefined)
+    if (app !== undefined) await closeApp(app)
   }
 })
 
@@ -368,7 +384,7 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     expect(nonSystem.filter((e) => e.type === 'tool/call'), '空提交零 agent 往返').toHaveLength(0)
     expect(pageErrors, '全程无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app?.close().catch(() => undefined)
+    if (app !== undefined) await closeApp(app)
   }
 })
 
@@ -421,7 +437,7 @@ test('@web-e2e @p1mvp installer-smoke·Step2c launch-failure-fail-fast：破坏�
     }
     expect(failDetected, '启动路径破坏 → 冒烟即判失败（首屏未在等待窗口内呈现/进程退出）').toBe(true)
   } finally {
-    await app?.close().catch(() => undefined)
+    if (app !== undefined) await closeApp(app)
     // 机器复位：还原破坏预置（second-launch 等后续场景不受污染——contract 复位纪律）
     if (existsSync(resourcesBackup)) renameSync(resourcesBackup, resourcesDir)
   }

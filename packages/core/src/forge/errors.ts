@@ -1,5 +1,6 @@
-// forge 域 typed errors（tech-design §Error Handling 表前三行——code 归 @dsh-forge/contracts
-// ERROR_CODES，类名 = ERROR_NAMES 映射）。RPC 边界（2.4）序列化为 RpcErrorPayload { code, message, data }，
+// forge 域 typed errors（tech-design §Error Handling 表前三行——code 字面量锚定 @dsh-forge/contracts
+// ERROR_CODES，类名/name 手写字面量——contracts 不持运行期名映射，fix-34 后表 Name 列为文档性对照）。
+// RPC 边界（2.4）序列化为 RpcErrorPayload { code, message, data }，
 // UI 按 code 映射状态；dsh 面异常经 cause 原样透传（dsh 域归 dsh）。
 import type { CompensatedInfo } from '@dsh-forge/contracts'
 

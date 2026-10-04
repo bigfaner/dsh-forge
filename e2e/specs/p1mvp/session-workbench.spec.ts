@@ -147,6 +147,23 @@ async function launchHost(opts: LaunchOpts): Promise<Launched> {
   return { app, page, pageErrors }
 }
 
+/** 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
+ *  fix-34 止血复制，统一收编共享 helper 归 fix-37 e2e 支撑层） */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  await app.close().catch(() => undefined)
+  if (proc.exitCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000)
+      proc.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
+}
+
 /** 工作区夹具：{root}/<name>（含哨兵文件——「列出文件」fixture 消息的确定性工具调用对象） */
 function makeWorkspaceFixture(name: string): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sw-'))
@@ -468,7 +485,7 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
       .toContain(fixtureMessage)
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(overlay, { force: true })
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
@@ -498,7 +515,7 @@ test('@web-e2e @p1mvp session-workbench·Step1b rail-collapse：收起为 rail �
     await expect(page.locator('[data-dswf-sidebar="wide"]').first()).toBeVisible({ timeout: 15_000 })
     await expect(page.locator('button[aria-label="知识库"]').first(), '完整导航恢复').toBeVisible()
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
 })
@@ -551,7 +568,7 @@ test('@web-e2e @p1mvp session-workbench·Step1c zero-project-rail-empty：零项
     await expect(page.locator('[data-dswf-project]'), 'rail 项目树零行（空态）').toHaveCount(0)
     await expect(page.locator('button[aria-label="知识库"]').first(), '导航入口在场（空态不缺位）').toBeVisible()
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
 })
@@ -603,7 +620,7 @@ test('@web-e2e @p1mvp session-workbench·Step2b/2c 空会话引导 + 空消息�
     })
     expect(focused, '焦点仍在输入框').toBe(true)
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -634,7 +651,7 @@ test('@web-e2e @p1mvp session-workbench·Step4b/4c 项目乙暂无会话占位 +
     // 甲乙并存（多项目树）
     await expect(page.locator(`[data-dswf-project="${jia.id}"]`).first()).toBeAttached()
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }
@@ -677,7 +694,7 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：官方右栏休�
     await expect(page.locator('[data-slot="main.conversation"]').first()).toBeVisible()
     await expect(page.locator('[data-rightbar-collapsed]').first(), '无记忆联动（休眠未动）').toBeAttached()
   } finally {
-    await app.close()
+    await closeApp(app)
     rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
   }

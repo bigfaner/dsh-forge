@@ -1,5 +1,6 @@
-// 知识域 typed errors（tech-design §Error Handling 表知识域行——code 归 @dsh-forge/contracts
-// ERROR_CODES，类名 = ERROR_NAMES 映射）。3.1 落地 InvalidKnowledgeDirError；3.2 落地
+// 知识域 typed errors（tech-design §Error Handling 表知识域行——code 字面量锚定 @dsh-forge/contracts
+// ERROR_CODES，类名/name 手写字面量——contracts 不持运行期名映射，fix-34 后表 Name 列为文档性对照）。
+// 3.1 落地 InvalidKnowledgeDirError；3.2 落地
 // EntryNotFoundError / IndexStaleError（检索面消费）。RPC 边界序列化为
 // RpcErrorPayload { code, message, data }，UI 按 code 映射状态。
 /** 知识域错误附载（RpcErrorPayload.data 的形状：标识 + 失败原因） */
