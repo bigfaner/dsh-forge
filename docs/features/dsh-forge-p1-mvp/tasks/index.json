@@ -1121,12 +1121,15 @@
       "title": "Fix: 项目树对齐原生残留差值——会话行缩进 26→8（原生 depth*12 顶层=0，状态点对齐 folder 槽）+ 组内行距 2px + 行 hover 底出血右缘 + 段头 36px 刻度/label 14/20 常规",
       "priority": "P1",
       "estimatedTime": "3h",
-      "status": "pending",
+      "status": "completed",
       "file": "fix-43.md",
-      "record": "",
+      "record": "records/fix-43.md",
       "surface-type": "web",
       "type": "coding.fix",
-      "complexity": "medium"
+      "complexity": "medium",
+      "dependencies": [
+        "fix-42"
+      ]
     },
     "fix-44": {
       "id": "fix-44",

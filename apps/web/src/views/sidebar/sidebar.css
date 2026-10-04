@@ -3,10 +3,13 @@
  * ui-workspace Rows 刻度（sessionRow h32 / projectRow h34 / rail 图标钮 36 命中区 /
  * hover interactive-bg / radius md）。
  * dsw-raw 豁免理由（执行记录同步）：行内 2/4/6/7/8/10px、行刻度 20px、行高 34px、rail
- * 36px 与 16/18px 图标尺寸、26px 缩进 = 官方 sidebar 行语言原值（ui-workspace
+ * 36px 与 16/18px 图标尺寸、会话行 8px 缩进 = 官方 sidebar 行语言原值（ui-workspace
  * Rows.module.css / WorkspaceBrowser.module.css 逐值对齐——fix-42 截图对照 AC 的结构等价
  * 替代）——官方主题无间距标尺令牌（行高刻度 20px 起，不适合行内件间距），样式纪律第 3 条
- * 「形态对齐官方」优先，取官方原值；块级留白用行高令牌刻度。 */
+ * 「形态对齐官方」优先，取官方原值；块级留白用行高令牌刻度。fix-43 视觉刻度收尾：会话行
+ * 缩进 26→8（母本 calc(8px + depth*12px)，产品树恒单层 depth=0 直取终值）、组内相邻行
+ * 2px 节奏（groupSection>*+* 同款）、行盒右缘出血至面板缘（listArea 负 margin 抵消链的
+ * 容器侧终值 = 容器 padding-right 0）、段头 36px 刻度族 + label 继承壳 14/20 常规体。 */
 
 /* 面板根：占满壳的 workspaces 区域（几何/收展归壳） */
 .dswf-sidebar {
@@ -24,22 +27,32 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 8px var(--dsw-font-xs-13-line-height); /* dsw-raw 上/右 4px 8px 官方行刻度；底 20px 行高刻度 */
+  /* 右 0 = 行盒出血至面板缘（官方链：壳 padding→regionArea -12px→浏览器根 padding-right→
+   * listArea margin-right:-inset 抵消——hover 药丸右缘贴滚动条区，fix-43 容器侧终值） */
+  padding: 4px 0 var(--dsw-font-xs-13-line-height) 8px; /* dsw-raw 上/左 4px 8px 官方行刻度；底 20px 行高刻度 */
 }
 
+/* 官方 sectionHeader 刻度族（fix-43）：height 36 / margin-bottom 4 / justify-content flex-end /
+ * padding-left 4；右缘 8px = 容器出血后段头自带缘距（官方由浏览器根 padding-right 供位——
+ * 产品单容器承载，头部动作位保持 fix-42 基线不贴缘） */
 .dswf-sidebar-sectionhead {
   display: flex;
   flex: none;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px; /* dsw-raw 官方行内刻度 */
-  padding: 2px 0 4px 0; /* dsw-raw 官方 section 头刻度 */
+  height: 36px;
+  margin-bottom: 4px; /* dsw-raw 官方 section 头刻度 */
+  padding: 0 8px 0 4px; /* dsw-raw 官方 sectionHeader padding-left 4 + 段头右缘距 */
 }
 
+/* 官方 sectionLabel：无字体覆盖——字号/字重继承壳 14px 常规体，仅 line-height 20
+ * （fix-43：--dsw-font-xs-strong-13 13 加粗退役该处） */
 .dswf-sidebar-sectionlabel {
   flex: 1;
   min-width: 0;
   padding: 0 8px; /* dsw-raw 官方 section 头刻度 */
-  font: var(--dsw-font-xs-strong-13);
+  line-height: var(--dsw-font-xs-13-line-height);
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -90,6 +103,12 @@
   flex: none;
   flex-direction: column;
   min-width: 0;
+}
+
+/* 组内相邻行 2px 节奏（官方 groupSection>*+*{margin-top:2px} 同款——fix-43 树态补齐；
+ * flatlist 已 gap:2px 不动）：项目块内 = 项目行 ↔ 空会话占位行 */
+.dswf-sidebar-project > * + * {
+  margin-top: 2px; /* dsw-raw 官方 groupSection 行距刻度 */
 }
 
 /* 项目行 34px 刻度（官方 Rows .projectRow：box-sizing border-box / height 34 / 0 8px） */
@@ -183,20 +202,28 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* 空项目占位行（UF-1 States：项目下「暂无会话」） */
+/* 空项目占位行（UF-1 States：项目下「暂无会话」；前导 = 8px 缩进 + 16px 状态点槽宽口径
+ * ——与项目行 folder 槽位对齐，fix-43 26→24） */
 .dswf-sidebar-no-session {
   flex: none;
-  padding: 2px 8px 6px 26px; /* dsw-raw 官方行内缩进刻度 */
+  padding: 2px 8px 6px 24px; /* dsw-raw 官方行内缩进刻度（8px+16px 槽宽口径） */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
 
 /* ── 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型） ── */
+/* 组内相邻行 2px 节奏（官方 groupSection>*+* 同款——fix-43）：项目行→首会话行（官方平铺
+ * 兄弟行距在产品经 DisclosureRow 内容缝以容器 margin 承载）+ 会话行间 */
 .dswf-sidebar-sessions {
   display: flex;
   flex: none;
   flex-direction: column;
   min-width: 0;
+  margin-top: 2px; /* dsw-raw 官方 groupSection 行距刻度 */
+}
+
+.dswf-sidebar-sessions > * + * {
+  margin-top: 2px; /* dsw-raw 官方 groupSection>*+* 行距刻度 */
 }
 
 /* ── 平铺视图（fix-42：官方 FlatList 同型——全会话行平铺，行距 2px 官方刻度；
@@ -217,7 +244,7 @@
   box-sizing: border-box;
   gap: 0; /* 官方 sessionRow：槽位间用 margin 不用 gap */
   padding: 0 8px; /* dsw-raw 官方行语言 */
-  padding-inline-start: 26px; /* dsw-raw 官方层级缩进刻度 */
+  padding-inline-start: 8px; /* dsw-raw 官方层级缩进刻度（母本 calc(8px + depth*12px)——产品树恒单层 depth=0 直取终值，fix-43 26→8；状态点 16px 槽正对项目行 folder 槽下方） */
   border: none;
   border-radius: var(--dsw-radius-md);
   background: transparent;
