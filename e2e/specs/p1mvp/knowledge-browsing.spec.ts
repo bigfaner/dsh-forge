@@ -7,7 +7,7 @@
 //   - 浏览主体：[data-dswf-knowledge-view]；工具栏 [data-dswf-kn-toolbar] +
 //     input.dswf-kn-search（aria 知识关键词搜索）；域树 [data-dswf-kn-tree][role=tree]
 //     行 [data-dswf-domain=<path>]；卡片 .dswf-kn-card[data-dswf-entry] + .dswf-heat-badge
-//   - 四态（browse-model.browseFaceState）：骨架 [data-dswf-skeleton] / 卡片 [data-dswf-kn-cards] /
+//   - 四态（browse-model.browseFaceState）：骨架 [data-dswf-kn-skeleton] / 卡片 [data-dswf-kn-cards] /
 //     过滤无结果（EmptyState + [data-dswf-clear-filters]）/ 空库引导（EmptyState 尚无知识）
 //   - 抽屉：[data-dswf-kn-drawer]（summary [data-dswf-kn-summary] / 元数据 [data-dswf-kn-meta-row]
 //     / 正文 [data-dswf-kn-body] / 关闭 .dswf-kn-drawer-close）
@@ -454,7 +454,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1d cold-cache-skeleton：冷缓存
     await launched.page.locator('button[aria-label="知识库"]').first().click()
     await expect(launched.page.locator('[data-dswf-knowledge-view]').first()).toBeVisible({ timeout: 30_000 })
     await expect(
-      launched.page.locator('[data-dswf-skeleton], [data-dswf-kn-cards] .dswf-kn-card').first(),
+      launched.page.locator('[data-dswf-kn-skeleton], [data-dswf-kn-cards] .dswf-kn-card').first(),
       '装载瞬态（骨架）或终态先到',
     ).toBeVisible({ timeout: 30_000 })
     await expect(cardByTitle(launched.page, '部署规范'), '索引建立完成后卡片网格就位').toBeVisible({ timeout: 30_000 })

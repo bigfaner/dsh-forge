@@ -103,8 +103,8 @@ describe('相位（UF-1 States）', () => {
   })
 
   it('项目 RPC 在途 / 账本 pending → 行级骨架（防空态闪现）', () => {
-    expect(panel({ projectsPending: true })).toContain('data-dswf-skeleton')
-    expect(panel({ loading: true })).toContain('data-dswf-skeleton')
+    expect(panel({ projectsPending: true })).toContain('data-dswf-sidebar-skeleton')
+    expect(panel({ loading: true })).toContain('data-dswf-sidebar-skeleton')
   })
 
   it('项目 RPC 失败 → 错误条 + 重试入口', () => {
@@ -269,8 +269,8 @@ describe('SidebarProjectsZone 受控缝（fix-6：过滤应用 + 相位正交）
   })
 
   it('骨架/错误/首用空态相位与过滤正交（相位优先，过滤行在场不干扰）', () => {
-    expect(zone({ loading: true, query: '索引' })).toContain('data-dswf-skeleton')
-    expect(zone({ projectsPending: true, query: '索引' })).toContain('data-dswf-skeleton')
+    expect(zone({ loading: true, query: '索引' })).toContain('data-dswf-sidebar-skeleton')
+    expect(zone({ projectsPending: true, query: '索引' })).toContain('data-dswf-sidebar-skeleton')
     const err = zone({ projectsError: 'No handler registered', query: '索引' })
     expect(err).toContain('data-dswf-error')
     expect(err).not.toContain('data-dswf-filterempty')

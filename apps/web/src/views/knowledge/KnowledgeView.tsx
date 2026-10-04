@@ -8,9 +8,9 @@
 // （layout.selectPanel + ShellHost 右栏联动，fix-25）。
 import type { ReactNode } from 'react'
 import { EmptyState } from '../../components/index.js'
+import type { RpcClientFactory } from '../../rpc/index.js'
 import { EntryDrawer } from './EntryDrawer.js'
 import { KnowledgeBrowse } from './KnowledgeBrowse.js'
-import type { RpcClientFactory } from './use-knowledge-browse.js'
 import './knowledge.css'
 
 export interface KnowledgeViewProps {

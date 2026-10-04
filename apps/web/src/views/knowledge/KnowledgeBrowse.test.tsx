@@ -86,7 +86,7 @@ describe('KnowledgeBrowseBody（纯渲染装配）', () => {
     )
     expect(markup).toContain('aria-busy="true"')
     expect(markup).toContain('data-dswf-entry="1"')
-    expect(markup).not.toContain('data-dswf-skeleton')
+    expect(markup).not.toContain('data-dswf-kn-skeleton')
   })
 
   it('装载中零数据 → 骨架态（无空库文案闪现）', () => {
@@ -97,7 +97,7 @@ describe('KnowledgeBrowseBody（纯渲染装配）', () => {
         now={NOW}
       />,
     )
-    expect(markup).toContain('data-dswf-skeleton')
+    expect(markup).toContain('data-dswf-kn-skeleton')
     expect(markup).not.toContain('尚无知识')
   })
 })
@@ -110,6 +110,6 @@ describe('KnowledgeBrowse（装载壳——首帧相位）', () => {
       }} />,
     )
     expect(markup).toContain('data-dswf-kn-browse')
-    expect(markup).toContain('data-dswf-skeleton')
+    expect(markup).toContain('data-dswf-kn-skeleton')
   })
 })

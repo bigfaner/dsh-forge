@@ -7,7 +7,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `browse-model.ts` | 纯派生层：过滤态机（`browseFilterReducer`）/ 查询透传（`entriesQueryOf`）/ 网格相位推导（`browseFaceState`）/ 域树行投影（`domainRows`）/ 卡片时间标签（`cardTimeLabel`） |
+| `browse-model.ts` | 纯派生层：过滤态机（`browseFilterReducer`）/ 查询透传（`entriesQueryOf`）/ 网格相位推导（`browseFaceState`）/ 域树行投影（`domainRows`）/ 卡片时间标签（`cardTimeLabel`——zh 切换委托 components/time-label 共享源） |
 | `KnowledgeView.tsx` | 知识视图装配壳（3.8 立制 / fix-25 迁官方面板）：`KnowledgeBrowse` + `EntryDrawer` 组合，挂载位 = KnowledgePanel（官方 `main` keyed 'dswf-knowledge' 占用者，workbench/）；`openEntryId` 进出（卡片点击与召回 tab 跳转两入口共用的抽屉打开态——态归工作台桥持有，面板经 useSyncExternalStore 订阅）；无项目锚 = 引导空态（`data-dswf-knowledge-view` = 视图在场锚） |
 | `use-knowledge-browse.ts` | 数据装载 hook：`forge:knowledge/browse + listEntries` ∥ `forge:projects/get`（项目名 + 知识目录位置）；过滤重拉 + 竞态守卫（seq）；typed error → `rpcUiState` 三态映射 |
 | `KnowledgeToolbar.tsx` | 工具栏：官方 Input（关键词受控件，Esc 清空）+ 官方 Pill（范围显示——P1 项目级） |
@@ -27,7 +27,7 @@
 
 ## e2e / 走查锚（3.8 装配 + 4.2 飞轮 e2e 消费）
 
-`data-dswf-kn-browse`（主体）· `data-dswf-kn-toolbar` · `data-dswf-kn-tree` / `data-dswf-domain="<path>"`（域行——场景④ 前端域选择）· `data-dswf-kn-cards` / `data-dswf-entry="<id>"`（卡片；热度一致性断言选择器 = `[data-dswf-entry] .dswf-heat-badge`）· `data-dswf-skeleton`（加载/重建骨架）· `data-dswf-clear-filters`（清除过滤入口）· `data-dswf-kn-error` / `data-dswf-kn-retry`（错误面）。
+`data-dswf-kn-browse`（主体）· `data-dswf-kn-toolbar` · `data-dswf-kn-tree` / `data-dswf-domain="<path>"`（域行——场景④ 前端域选择）· `data-dswf-kn-cards` / `data-dswf-entry="<id>"`（卡片；热度一致性断言选择器 = `[data-dswf-entry] .dswf-heat-badge`）· `data-dswf-kn-skeleton`（加载/重建骨架——fix-36 域前缀化，与 className 对齐）· `data-dswf-clear-filters`（清除过滤入口）· `data-dswf-kn-error` / `data-dswf-kn-retry`（错误面）。
 
 抽屉（3.7）：`data-dswf-kn-drawer`（滑入层——在场即打开态）· `data-dswf-kn-drawer-close`（✕ 关闭位）· `data-dswf-kn-summary`（摘要块）/ `data-dswf-kn-meta` + `data-dswf-kn-meta-row="<key>"`（两列元数据五行）/ `data-dswf-kn-body`（正文区——AC2 断言面：该区内不得出现 frontmatter 字段/摘要/关键词字面量）· `data-dswf-kn-drawer-skeleton`（详情拉取骨架）· `data-dswf-kn-drawer-retry`（错误面重试）。
 

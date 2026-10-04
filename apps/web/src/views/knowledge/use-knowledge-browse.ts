@@ -12,7 +12,7 @@
 // use-forge-projects 先例，归 3.8 装配 + e2e）。
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { DomainNode, KnowledgeCard } from '@dsh-forge/contracts'
-import { createForgeRpcClient, preloadTransport, type ForgeRpcClient } from '../../rpc/index.js'
+import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import {
@@ -23,9 +23,6 @@ import {
   type BrowseFilter,
   type BrowseFilterEvent,
 } from './browse-model.js'
-
-/** RPC client 构造器（缺省 = preload 真身；注入 = 测试面） */
-export type RpcClientFactory = () => ForgeRpcClient
 
 /** 装载相位（error 附载见 BrowseErrorInfo） */
 export type KnowledgeLoadPhase = 'loading' | 'ready' | 'error'
@@ -269,7 +266,7 @@ export function browseActions(
  */
 export function useKnowledgeBrowse(
   projectId: string,
-  makeClient: RpcClientFactory = defaultClient,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
   active = true,
 ): readonly [KnowledgeBrowseState, KnowledgeBrowseActions] {
   const [filter, dispatchFilter] = useReducer(browseFilterReducer, EMPTY_FILTER)
@@ -332,9 +329,4 @@ export function useKnowledgeBrowse(
   const actions = browseActions(dispatchFilter, retry)
   // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值
   return [consumedBrowseState(state, filter), actions] as const
-}
-
-/** 缺省构造：preload 传输真身（缺席由 mapBrowseError 收敛为错误条——非 Electron 载体不炸壳） */
-function defaultClient(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
 }

@@ -34,7 +34,7 @@ import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from
 export interface ForgePublishedViews {
   /** sidebar.workspaces 洞位占用者（接线层：快照直读 + 项目 RPC + 动作绑定） */
   readonly ForgeSidebarSlot: ComponentType<ForgeSidebarSlotProps>
-  /** sidebar.brand.mark 洞位内容（「知」字标） */
+  /** sidebar.brand.mark 洞位内容（「书 + 闪电」字标——fix-15 自「知」字方块改型） */
   readonly ForgeBrandMark: ComponentType<ForgeBrandMarkProps>
   /** sidebar.brand.name 洞位内容（dsh-forge 字标） */
   readonly ForgeBrandName: ComponentType<ForgeBrandNameProps>

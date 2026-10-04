@@ -10,8 +10,9 @@
 //     使用事件计数，与卡片热度徽章同源；三方一致断言 = 事件 ↔ tab 行 ↔ 卡片热度）。
 //   - 索引未命中（entryId = null，重建后 ID 漂移清引用）：行保留 + 行级失效标注，
 //     不阻塞列表、不可跳转（AC3 行级失效语义）。
-// 边界：禁 import ../knowledge/（依赖铁律③ 同级业务互禁——时间标签等平行小件本地实现）。
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+// 边界：禁 import ../knowledge/（依赖铁律③ 同级业务互禁——时间标签等共享小件落公共
+// 下层 components/time-label，fix-36 收敛后不再本地平行实现）。
+import { isoTimeLabelZh } from '../../components/index.js'
 import type { RecallGroup, RecallGroupHit, RecallVerb } from '@dsh-forge/contracts'
 
 /** 单个动词计数（行内动词明细 chip 数据） */
@@ -133,29 +134,9 @@ export function isRecallRowStale(row: RecallRow): boolean {
 
 /**
  * 最近时间标签（纯函数）：ISO-8601 → 官方 relativeTime 桶化中文标签
- * （与 views/knowledge cardTimeLabel 同语义——同级业务互禁下的平行小件，口径注释互指）。
- * 不可解析原文返回（core 写入面保证 ISO）。
+ * （zh 切换 = components/time-label 共享源，fix-36 收敛——与 views/knowledge
+ * cardTimeLabel 同语义同源）。不可解析原文返回（core 写入面保证 ISO）。
  */
 export function recallTimeLabel(iso: string, now: number): string {
-  const ts = Date.parse(iso)
-  if (Number.isNaN(ts)) return iso
-  const bucket = relativeTime(ts, now)
-  switch (bucket.unit) {
-    case 'now':
-      return '刚刚'
-    case 'minutes':
-      return `${bucket.n} 分钟前`
-    case 'hours':
-      return `${bucket.n} 小时前`
-    case 'days':
-      return `${bucket.n} 天前`
-    case 'months':
-      return `${bucket.n} 个月前`
-    case 'years':
-      return `${bucket.n} 年前`
-    default: {
-      const exhaustive: never = bucket.unit
-      throw new Error(`dsh-forge web: 未知相对时间桶：${String(exhaustive)}`)
-    }
-  }
+  return isoTimeLabelZh(iso, now)
 }

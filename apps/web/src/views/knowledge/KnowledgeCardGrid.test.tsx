@@ -59,9 +59,9 @@ describe('KnowledgeCardGrid 卡片态', () => {
 })
 
 describe('KnowledgeCardGrid 四态', () => {
-  it('AC4 骨架态：占位网格（data-dswf-skeleton），无卡片内容', () => {
+  it('AC4 骨架态：占位网格（data-dswf-kn-skeleton），无卡片内容', () => {
     const markup = renderToStaticMarkup(<KnowledgeCardGrid state="skeleton" cards={[]} now={NOW} />)
-    expect(markup).toContain('data-dswf-skeleton')
+    expect(markup).toContain('data-dswf-kn-skeleton')
     expect(markup).toContain('dswf-kn-skeleton-card')
     expect(markup).not.toContain('dswf-kn-card"')
   })

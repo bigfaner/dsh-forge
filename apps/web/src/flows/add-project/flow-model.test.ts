@@ -20,6 +20,7 @@ import {
   endNativePick,
   failExecute,
   finishExecute,
+  formMountedOf,
   initialFlowState,
   isCancelPoint,
   modalClassName,
@@ -178,6 +179,22 @@ describe('取消点窗口（isCancelPoint / closeIntentOf：AC1 + AC5）', () =>
     expect(closeIntentOf(atExecuting())).toBe('ignore')
     expect(closeIntentOf(finishExecute(atExecuting(), RESULT))).toBe('ignore')
     expect(closeIntentOf(failExecute(atExecuting(), { code: null, message: 'x', compensated: false }))).toBe('dismiss')
+  })
+})
+
+describe('表单挂载判据（formMountedOf：AC5 keep-alive 布尔推导的纯函数面，fix-36 抽出）', () => {
+  it('form / repick / native-pick（repick 起源在途）且选定在场 → 保持挂载（同位元素 hidden 往返保状态）', () => {
+    expect(formMountedOf('form', SELECTION)).toBe(true)
+    expect(formMountedOf('repick', SELECTION)).toBe(true)
+    expect(formMountedOf('native-pick', REPICK)).toBe(true)
+  })
+
+  it('选定缺席（browser 起源冷启直选在途 / 段一未确认）或终局相位 → 不挂载', () => {
+    expect(formMountedOf('native-pick', null)).toBe(false) // 段一起源：表单从未挂载
+    expect(formMountedOf('browser', null)).toBe(false)
+    expect(formMountedOf('executing', SELECTION)).toBe(false)
+    expect(formMountedOf('success', SELECTION)).toBe(false)
+    expect(formMountedOf('failure', SELECTION)).toBe(false)
   })
 })
 

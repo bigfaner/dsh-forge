@@ -5,7 +5,7 @@
 //   - 域过滤 = 目录路径前缀匹配（domainPrefix 原样透传 listEntries——前缀语义在 core 服务面
 //     执行，本模块零客户端过滤语义，不引入其它过滤维度）；
 //   - 关键词 = keywords 维度细分（同样服务端执行——工具栏输入原样传递）。
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+import { isoTimeLabelZh } from '../../components/index.js'
 import type { DomainNode, ListEntriesQuery } from '@dsh-forge/contracts'
 
 /** 浏览过滤态（域 = 目录路径前缀；关键词 = 工具栏输入原样） */
@@ -113,28 +113,9 @@ export function domainRows(nodes: readonly DomainNode[], total: number): readonl
 
 /**
  * 卡片时间标签（纯函数）：frontmatter.updated（缺省 mtime 的 ISO 串）→ 官方 relativeTime
- * 桶化中文文案（sidebar 行语言同口径）；非法字面量原样展示（fail-soft，不炸卡片）。
+ * 桶化中文文案（zh 切换 = components/time-label 共享源，fix-36 收敛——sidebar/recall 行语言
+ * 同口径）；非法字面量原样展示（fail-soft，不炸卡片）。
  */
 export function cardTimeLabel(updated: string, now: number): string {
-  const ts = Date.parse(updated)
-  if (Number.isNaN(ts)) return updated
-  const bucket = relativeTime(ts, now)
-  switch (bucket.unit) {
-    case 'now':
-      return '刚刚'
-    case 'minutes':
-      return `${bucket.n} 分钟前`
-    case 'hours':
-      return `${bucket.n} 小时前`
-    case 'days':
-      return `${bucket.n} 天前`
-    case 'months':
-      return `${bucket.n} 个月前`
-    case 'years':
-      return `${bucket.n} 年前`
-    default: {
-      const exhaustive: never = bucket.unit
-      throw new Error(`dsh-forge web: 未知相对时间桶：${String(exhaustive)}`)
-    }
-  }
+  return isoTimeLabelZh(updated, now)
 }

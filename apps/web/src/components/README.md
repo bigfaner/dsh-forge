@@ -15,3 +15,11 @@
 - `EmptyState.tsx` + `components.css` —— 统一空态简版（P1；M8 打磨）：标题 + 可选描述 +
   引导插槽（action ReactNode——CTA / 清除过滤入口由消费方注入）。官方无空态件，自绘限此一件
   且全令牌（间距刻度取官方排版行高令牌，不引入平行体系）。
+- `ErrorBar.tsx` —— 错误条共享件（fix-36 收敛）：`role=alert` 文案行 + 可选重试文本钮的
+  近同构四域（sidebar/浏览器/知识/召回）单一 JSX 来源；class/data 锚/文案全参数化注入
+  （令牌与刻度归各域 CSS——本件零样式持有）。
+- `SkeletonRows.tsx` —— 骨架行容器共享件（fix-36 收敛）：N 行占位 + `aria-hidden` 的
+  近同构四域单一 JSX 来源；行数/class/域前缀 data 锚注入（锚名与 className 同域对齐口径）。
+- `time-label.ts` —— 相对时间标签单一来源（fix-36 收敛）：官方 `relativeTime` 桶化 →
+  zh 文案的切换源（`timeLabelZh` 毫秒面 / `isoTimeLabelZh` ISO 面）；sidebar/knowledge/
+  recall 三域模型委托，文案口径唯一权威（P1 单语，多语归 M 系列主题化）。

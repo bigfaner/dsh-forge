@@ -17,7 +17,7 @@
 //     tr[data-kind="system|user|context|compacted|message|tool|subtool"]（官方轨迹表——
 //     fix-29 退役产品 [data-dswf-traj-row=*] 台账）
 //   - 侧栏：[data-dswf-sidebar=wide|rail]；[data-dswf-project]/[data-dswf-session]；暂无会话 .dswf-sidebar-no-session；
-//     骨架 [data-dswf-skeleton]；空态 [data-dswf-empty]（ForgeWorkspacePanel.test 核实）
+//     骨架 [data-dswf-sidebar-skeleton]；空态 [data-dswf-empty]（ForgeWorkspacePanel.test 核实）
 //   - 官方壳：折叠钮 session.new/toggle.collapse 词条（dsh-client-ui-sidebar i18n：新会话/收起侧边栏/打开侧边栏）
 //   - 右栏（fix-23 官方 ui-sidebar-right 接管）：frame [data-rightbar-collapsed]（收起/休眠在场、
 //     展开退场）；列 [data-rightbar-col]；面板钮 [data-sidebar-right-expand]（动作 = 官方

@@ -244,6 +244,136 @@ export function publishedViews(): NonNullable<ForgeViewsGlobal['__DSH_FORGE_VIEW
   return views
 }
 
+/** 发布面窄名（注册子函数的组件源入参类型） */
+type PublishedViews = ReturnType<typeof publishedViews>
+/** 工作台桥窄名（发布面工厂产物——center/views 两族的 inject 递达物） */
+type PublishedBridge = ReturnType<PublishedViews['createWorkbenchBridge']>
+
+/**
+ * sidebar 族登记（fix-36 自 apply 拆出——按域分注册子函数，apply 仅编排）：工作区洞位
+ * 替换（AC1——注入面携带 dsh 账本数据源与动作，面板侧 useSyncExternalStore 直读）+
+ * 品牌行两内容洞位（行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession）。
+ */
+function registerSidebarSlots(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  services: {
+    readonly sessions: ForgeSessionsService
+    readonly workspaces: ForgeWorkspacesService
+    readonly uiWorkspace: ForgeUiWorkspaceService
+  },
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, SIDEBAR_WORKSPACES_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SIDEBAR_WORKSPACES_SLOT,
+        priority: SIDEBAR_SHADOW_PRIORITY,
+        inject: () => ({
+          sessions: services.sessions.list,
+          workspaces: services.workspaces.list,
+          openSession: (sessionId: string): void => {
+            // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体，
+            // 内部 selectPanel(null) 回会话面板 = UF-5 切回主路径）
+            services.uiWorkspace.openSession(sessionId)
+          },
+        }),
+      },
+      views.ForgeSidebarSlot,
+    ),
+  )
+  registerSlotEntry(ctx, SIDEBAR_BRAND_MARK_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: SIDEBAR_BRAND_MARK_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+      views.ForgeBrandMark,
+    ),
+  )
+  registerSlotEntry(ctx, SIDEBAR_BRAND_NAME_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: SIDEBAR_BRAND_NAME_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+      views.ForgeBrandName,
+    ),
+  )
+}
+
+/**
+ * center 族登记（fix-36 自 apply 拆出）：官方 main 面板族（fix-25 降位载体）——hero（零
+ * 项目引导——ShellHost 驱动选中/让位）+ knowledge（UF-5 知识视图——桥注入抽屉缝）+
+ * sidebar.panellist 官方面板行（id = main key 同源；fix-33 ⑧ label 经 locale NS thunk）。
+ */
+function registerCenterPanels(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  bridge: PublishedBridge,
+  t: (key: string) => string,
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, MAIN_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: MAIN_SLOT, key: HERO_PANEL_KEY },
+      views.ForgeHeroPanel,
+    ),
+  )
+  registerSlotEntry(ctx, MAIN_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: MAIN_SLOT, key: KNOWLEDGE_PANEL_KEY, inject: () => ({ bridge }) },
+      views.ForgeKnowledgePanel,
+    ),
+  )
+  registerSlotEntry(ctx, SIDEBAR_PANELLIST_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SIDEBAR_PANELLIST_SLOT,
+        id: KNOWLEDGE_PANEL_KEY,
+        order: 20,
+        locale: FORGE_LOCALE_NS,
+        label: (): string => t('panel.knowledge'),
+      },
+      views.ForgeKnowledgeGlyph,
+    ),
+  )
+}
+
+/**
+ * views 族登记（fix-36 自 apply 拆出）：官方页签 roster（conversation.view——UF-4 知识
+ * 召回单登记；对话 = 官方 'chat' 直用、轨迹 = 官方 'trajectory' 直用——fix-29 退役产品
+ * 复刻，同 order 10 双『轨迹』冲突不再；label 经 locale NS thunk——fix-33 ⑧）+ hero
+ * 工作区控件影子（fix-24 ①——不声明 children：官方登记行恒在场供养
+ * conversation.hero.workspace.directoryFlow 子洞，ui-slots register 对已声明子槽重声明
+ * 即 throw——fix-23 runtime 实证；影子只取渲染位不撤官方登记，fix-14/16 原生选取链不断）。
+ */
+function registerConversationViews(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  bridge: PublishedBridge,
+  t: (key: string) => string,
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: CONVERSATION_VIEW_SLOT,
+        id: RECALL_VIEW_ID,
+        order: 20,
+        locale: FORGE_LOCALE_NS,
+        label: (): string => t('view.recall'),
+        inject: () => ({
+          openKnowledgeEntry: (entryId: number): void => {
+            bridge.openKnowledgeEntry(entryId)
+          },
+        }),
+      },
+      views.ForgeRecallView,
+    ),
+  )
+  registerSlotEntry(ctx, HERO_WORKSPACE_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+      views.ForgeHeroWorkspacePicker,
+    ),
+  )
+}
+
 /** 插件本体（client bundle factory 的返回值 = 模块 exports）。 */
 export function forgeClientPlugin(): ForgeClientPlugin {
   return {
@@ -303,102 +433,10 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeLocale()
         }
 
-        // 工作区洞位替换（AC1）：注入面携带 dsh 面数据源与动作（面板侧 useSyncExternalStore 直读）
-        registerSlotEntry(clientCtx, SIDEBAR_WORKSPACES_SLOT, sidebarDiagnostics, () =>
-          clientCtx.slots.register(
-            {
-              name: SIDEBAR_WORKSPACES_SLOT,
-              priority: SIDEBAR_SHADOW_PRIORITY,
-              inject: () => ({
-                sessions: sessions.list,
-                workspaces: workspaces.list,
-                openSession: (sessionId: string): void => {
-                  // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体，
-                  // 内部 selectPanel(null) 回会话面板 = UF-5 切回主路径）
-                  uiWorkspace.openSession(sessionId)
-                },
-              }),
-            },
-            views.ForgeSidebarSlot,
-          ),
-        )
-
-        // 品牌行内容洞位（行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession）
-        registerSlotEntry(clientCtx, SIDEBAR_BRAND_MARK_SLOT, sidebarDiagnostics, () =>
-          clientCtx.slots.register(
-            { name: SIDEBAR_BRAND_MARK_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
-            views.ForgeBrandMark,
-          ),
-        )
-        registerSlotEntry(clientCtx, SIDEBAR_BRAND_NAME_SLOT, sidebarDiagnostics, () =>
-          clientCtx.slots.register(
-            { name: SIDEBAR_BRAND_NAME_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
-            views.ForgeBrandName,
-          ),
-        )
-
-        // 官方 main 面板族（fix-25 降位载体）：hero（零项目引导——ShellHost 驱动选中/让位）+
-        // knowledge（UF-5 知识视图——桥注入抽屉缝；useWorkspaces 官方 root 钩子直达）
-        registerSlotEntry(clientCtx, MAIN_SLOT, centerDiagnostics, () =>
-          clientCtx.slots.register(
-            { name: MAIN_SLOT, key: HERO_PANEL_KEY },
-            views.ForgeHeroPanel,
-          ),
-        )
-        registerSlotEntry(clientCtx, MAIN_SLOT, centerDiagnostics, () =>
-          clientCtx.slots.register(
-            { name: MAIN_SLOT, key: KNOWLEDGE_PANEL_KEY, inject: () => ({ bridge }) },
-            views.ForgeKnowledgePanel,
-          ),
-        )
-
-        // 官方面板行（sidebar.panellist——官方 PanelRow 行语言；id = main key 同源；
-        // fix-33 ⑧ label 经 locale NS thunk——active locale 切换免重注册）
-        registerSlotEntry(clientCtx, SIDEBAR_PANELLIST_SLOT, centerDiagnostics, () =>
-          clientCtx.slots.register(
-            {
-              name: SIDEBAR_PANELLIST_SLOT,
-              id: KNOWLEDGE_PANEL_KEY,
-              order: 20,
-              locale: FORGE_LOCALE_NS,
-              label: (): string => t('panel.knowledge'),
-            },
-            views.ForgeKnowledgeGlyph,
-          ),
-        )
-
-        // 官方页签 roster（conversation.view——UF-4 知识召回单登记；对话 = 官方 'chat' 直用、
-        // 轨迹 = 官方 'trajectory' 直用——fix-29 退役产品复刻，同 order 10 双『轨迹』冲突不再；
-        // label 经 locale NS thunk——fix-33 ⑧）
-        registerSlotEntry(clientCtx, CONVERSATION_VIEW_SLOT, viewsDiagnostics, () =>
-          clientCtx.slots.register(
-            {
-              name: CONVERSATION_VIEW_SLOT,
-              id: RECALL_VIEW_ID,
-              order: 20,
-              locale: FORGE_LOCALE_NS,
-              label: (): string => t('view.recall'),
-              inject: () => ({
-                openKnowledgeEntry: (entryId: number): void => {
-                  bridge.openKnowledgeEntry(entryId)
-                },
-              }),
-            },
-            views.ForgeRecallView,
-          ),
-        )
-
-        // hero 工作区控件影子（fix-24 ①——single 槽 -100 lowest renders 取官方 WorkspacePicker
-        // 弹层渲染位，改列 forge 项目；owner 契约（open/anchorRef/selectedId/onPick/onClose）零
-        // 变化。不声明 children：官方登记行恒在场供养 conversation.hero.workspace.directoryFlow
-        // 子洞（ui-slots register 对已声明子槽重声明即 throw——fix-23 runtime 实证；影子只取
-        // 渲染位不撤官方登记），fix-14/16 原生选取链不断）
-        registerSlotEntry(clientCtx, HERO_WORKSPACE_SLOT, viewsDiagnostics, () =>
-          clientCtx.slots.register(
-            { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
-            views.ForgeHeroWorkspacePicker,
-          ),
-        )
+        // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 常驻壳宿主
+        registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
+        registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面；selectPanel/rightbar 官方窄面经 inject 递达）。卸载期顺带

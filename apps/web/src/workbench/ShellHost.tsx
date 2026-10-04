@@ -8,11 +8,10 @@
 //     ——官方 layout.selectPanel 径，驱动一次性守卫防导航争用）。
 // 官方缝：shell.overlay（ui-layout AppFrame root 五子槽之一，list/root——常驻不随 main
 // 面板互换卸载）；标准 props 面 = root 作用域观察钩子（useWorkspaces/usePanelInfo）。
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
-import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
+import { useAnchoredProjects } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
   centerViewOf,
@@ -49,32 +48,6 @@ export interface ForgeShellHostProps {
    * 缺席 = 联动降级 no-op——官方右栏自持收展态不受损）
    */
   readonly rightbar?: RightbarFace
-}
-
-/**
- * workspace 归属快照窄判定（纯函数）：dsh 归属快照最小形状（items 数组）——非壳载体/
- * 形状漂移期按 null 降级（不炸壳；SC2：只读快照身份与归属查询，不落地行内容副本）。
- */
-export function isWorkspacesSnapshot(value: unknown): value is LedgerWorkspacesSnapshot {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)
-}
-
-/**
- * workspace 归属锚子件（快照只读上抛——SC2 零缓存零副本：装配侧仅持快照对象身份供
- * 重拉锚，不落地行内容派生副本；导出面 = 单测）。
- */
-export function WorkspacesAnchor({
-  hook,
-  onChange,
-}: {
-  readonly hook: KitSelectorHook
-  readonly onChange: (snap: unknown) => void
-}): ReactNode {
-  const snap = hook((s) => s)
-  useEffect(() => {
-    onChange(snap)
-  }, [snap, onChange])
-  return null
 }
 
 /**
@@ -131,8 +104,10 @@ export function heroPanelDrive(
 export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   // hero 项目数源（三刷新锚）：mount 首拉 + workspace 归属快照身份变化（外部注册后 dsh
   // create 即触发——与左栏面板同锚口径）+ 注册成功回调（UI 流程即时重拉）。
-  const [workspacesSnap, setWorkspacesSnap] = useState<LedgerWorkspacesSnapshot | null>(null)
-  const [projectsState, retryProjects] = useForgeProjects(workspacesSnap)
+  // fix-36：快照锚 + 项目相位经 useAnchoredProjects 共享 hook（四装配面同型收敛）。
+  const { projects: projectsState, retry: retryProjects, anchor: workspacesAnchor } = useAnchoredProjects(
+    props.useWorkspaces,
+  )
   const [lastReadyCount, setLastReadyCount] = useState<number | null>(null)
   useEffect(() => {
     setLastReadyCount((prev) => nextLastReadyCount(prev, projectsState))
@@ -161,11 +136,6 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
       // fail-soft：面板 id 尚未注册完成（装载次序瞬态）——boot 驱动让位官方缺省面板
     }
   }, [phase, activePanelId, selectPanel])
-
-  // workspace 快照上抛窄化（形状漂移/非壳载体 → null 降级）
-  const handleWorkspacesSnap = useCallback((snap: unknown) => {
-    setWorkspacesSnap(isWorkspacesSnapshot(snap) ? snap : null)
-  }, [])
 
   // 知识模式右栏联动（fix-23 语义随迁，fix-25 改面板径）：官方 sidebarRight 窄面——进知识
   // 面板收起（记忆）、回会话恢复（计划 = rightbarViewPlan 纯函数，输入 = 知识面板激活态）；
@@ -200,11 +170,9 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           retryProjects()
         }}
       />
-      {/* workspace 归属锚（kit hook 在场才挂载——钩子于子件内无条件调用；快照上抛：
-          身份变化 = 项目数重拉锚——不落地 dsh 账本行副本） */}
-      {props.useWorkspaces !== undefined ? (
-        <WorkspacesAnchor hook={props.useWorkspaces} onChange={handleWorkspacesSnap} />
-      ) : null}
+      {/* workspace 归属锚（useAnchoredProjects 条件子件——kit hook 在场才挂载，钩子于
+          子件内无条件调用；快照上抛：身份变化 = 项目数重拉锚——不落地 dsh 账本行副本） */}
+      {workspacesAnchor}
       {/* 官方面板信息锚（fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件
           无条件调用——hooks 规则合规；activePanelId 上抛驱动视图镜像与 hero 让位） */}
       {props.usePanelInfo !== undefined ? (
@@ -215,4 +183,4 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
 }
 
 /** ProjectsPhase 再导出（ShellHost 消费面的类型同源——单测注入用） */
-export type { ProjectsPhase }
+export type { ProjectsPhase } from '../views/sidebar/use-forge-projects.js'

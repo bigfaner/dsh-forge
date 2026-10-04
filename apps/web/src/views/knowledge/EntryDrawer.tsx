@@ -10,11 +10,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, IconCloseFillRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EntryDetail } from '@dsh-forge/contracts'
-import { EmptyState, MarkdownDoc, StateChip } from '../../components/index.js'
-import { createForgeRpcClient, preloadTransport, type ForgeRpcClient } from '../../rpc/index.js'
+import { EmptyState, ErrorBar, MarkdownDoc, StateChip } from '../../components/index.js'
+import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { cardTimeLabel } from './browse-model.js'
 import { isEscapeKey } from './KnowledgeToolbar.js'
-import { mapBrowseError, type BrowseErrorInfo, type RpcClientFactory } from './use-knowledge-browse.js'
+import { mapBrowseError, type BrowseErrorInfo } from './use-knowledge-browse.js'
 import './knowledge.css'
 
 /** 详情相位（error 附载 BrowseErrorInfo——rpcUiState 三态映射同浏览面） */
@@ -96,7 +96,7 @@ export async function fetchEntryDetail(
 export function useEntryDetail(
   projectId: string,
   entryId: number | null,
-  makeClient: RpcClientFactory = defaultClient,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): readonly [EntryDrawerState, { retry(): void }] {
   const [state, setState] = useState<EntryDrawerState>(initialDrawerState)
   const [nonce, setNonce] = useState(0)
@@ -189,7 +189,7 @@ function DrawerSkeleton(): ReactNode {
   )
 }
 
-/** 错误面（rpcUiState 三态：empty-state → 不可用空态；error-bar/banner → 错误条） */
+/** 错误面（rpcUiState 三态：empty-state → 不可用空态；error-bar/banner → 共享 ErrorBar） */
 function DrawerError({
   error,
   retry,
@@ -214,12 +214,14 @@ function DrawerError({
   }
   return (
     <div className="dswf-kn-drawer-face">
-      <div className="dswf-kn-error" data-dswf-kn-error="" role="alert">
-        <span>{`知识详情加载失败：${error.message}`}</span>
-        <button type="button" className="dswf-kn-textaction" data-dswf-kn-drawer-retry="" onClick={retry}>
-          重试
-        </button>
-      </div>
+      <ErrorBar
+        className="dswf-kn-error"
+        message={`知识详情加载失败：${error.message}`}
+        retryClassName="dswf-kn-textaction"
+        anchor="data-dswf-kn-error"
+        retryAnchor="data-dswf-kn-drawer-retry"
+        onRetry={retry}
+      />
     </div>
   )
 }
@@ -313,9 +315,4 @@ export function EntryDrawer({ projectId, entryId, onClose, makeClient, now }: En
   const [state, { retry }] = useEntryDetail(projectId, entryId, makeClient)
   if (entryId === null) return null
   return <EntryDrawerBody state={state} onClose={onClose} retry={retry} now={now} />
-}
-
-/** 缺省构造：preload 传输真身（缺席由 mapBrowseError 收敛为错误条——非 Electron 载体不炸壳） */
-function defaultClient(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
 }

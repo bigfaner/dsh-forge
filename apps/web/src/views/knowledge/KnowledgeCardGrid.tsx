@@ -10,7 +10,7 @@ import type { ReactNode } from 'react'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
 import type { RpcUiStateKind } from '../../rpc/ui-state.js'
-import { EmptyState, HeatBadge, StateChip } from '../../components/index.js'
+import { EmptyState, ErrorBar, HeatBadge, SkeletonRows, StateChip } from '../../components/index.js'
 import { cardTimeLabel, type BrowseFaceState } from './browse-model.js'
 import './knowledge.css'
 
@@ -40,14 +40,15 @@ export interface KnowledgeCardGridProps {
   readonly onEntryOpen?: (entryId: number) => void
 }
 
-/** 网格骨架（UF-6 States「加载中」——索引重建期/首装） */
+/** 网格骨架（UF-6 States「加载中」——索引重建期/首装；共享件注入 kn 域锚） */
 function GridSkeleton(): ReactNode {
   return (
-    <div className="dswf-kn-skeleton" data-dswf-skeleton="" aria-hidden="true">
-      {Array.from({ length: SKELETON_CARDS }, (_, i) => (
-        <div key={i} className="dswf-kn-skeleton-card" />
-      ))}
-    </div>
+    <SkeletonRows
+      className="dswf-kn-skeleton"
+      rowClassName="dswf-kn-skeleton-card"
+      rows={SKELETON_CARDS}
+      anchor="data-dswf-kn-skeleton"
+    />
   )
 }
 
@@ -117,14 +118,14 @@ function GridError({
     )
   }
   return (
-    <div className="dswf-kn-error" data-dswf-kn-error="" role="alert">
-      <span>知识加载失败{errorMessage === undefined ? '' : `：${errorMessage}`}</span>
-      {onRetry === undefined ? null : (
-        <button type="button" className="dswf-kn-textaction" data-dswf-kn-retry="" onClick={onRetry}>
-          重试
-        </button>
-      )}
-    </div>
+    <ErrorBar
+      className="dswf-kn-error"
+      message={`知识加载失败${errorMessage === undefined ? '' : `：${errorMessage}`}`}
+      retryClassName="dswf-kn-textaction"
+      anchor="data-dswf-kn-error"
+      retryAnchor="data-dswf-kn-retry"
+      onRetry={onRetry}
+    />
   )
 }
 

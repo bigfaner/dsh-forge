@@ -96,6 +96,17 @@ export function isCancelPoint(phase: FlowPhase): boolean {
   return phase === 'browser' || phase === 'native-pick' || phase === 'form' || phase === 'repick'
 }
 
+/**
+ * 表单挂载判据（纯函数 + selection 类型守卫，fix-36 自 AddProjectFlowView 抽出）：form /
+ * repick / native-pick（repick 起源的在途选取）相位且段一选定在场 → RegisterForm 保持
+ * 挂载（同位元素 hidden——浏览器⇄表单/系统对话框往返不丢已填状态，AC5）。守卫返回
+ * 真 = 选定非空（JSX 分支内 selection 窄化为非空——原内联别名的窄化能力随抽出不灭）。
+ * 选定缺席的 native-pick = 段一起源冷启直选（表单从未挂载）——不挂。
+ */
+export function formMountedOf(phase: FlowPhase, selection: BrowserSelection | null): selection is BrowserSelection {
+  return (phase === 'form' || phase === 'repick' || phase === 'native-pick') && selection !== null
+}
+
 /** 关闭意图（Esc/✕/遮罩统一入口的三分映射） */
 export type CloseIntent = 'cancel' | 'dismiss' | 'ignore'
 

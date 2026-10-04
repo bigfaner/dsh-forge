@@ -9,10 +9,8 @@
 // 降级为 P1 已知边界，见 panel-model.projectAnchorOf 注记）。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from '../views/knowledge/KnowledgeView.js'
-import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
-import { useForgeProjects } from '../views/sidebar/use-forge-projects.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { WorkspacesAnchor, isWorkspacesSnapshot } from './ShellHost.js'
+import { useAnchoredProjects } from './anchored-projects.js'
 import { projectAnchorOf } from './panel-model.js'
 import type { WorkbenchBridge } from './workbench-bridge.js'
 import './workbench.css'
@@ -32,15 +30,14 @@ export interface ForgeKnowledgePanelProps {
  * 语义由官方面板机制承载）。
  */
 export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode {
-  // 项目锚推导输入：workspace 归属快照 + 项目台账（与 ShellHost/召回视图同锚口径）
-  const [workspacesSnap, setWorkspacesSnap] = useState<LedgerWorkspacesSnapshot | null>(null)
-  const [projectsState] = useForgeProjects(workspacesSnap)
-  const handleWorkspacesSnap = useCallback((snap: unknown) => {
-    setWorkspacesSnap(isWorkspacesSnapshot(snap) ? snap : null)
-  }, [])
+  // 项目锚推导输入：workspace 归属快照 + 项目台账（useAnchoredProjects 共享 hook——与
+  // ShellHost/召回视图/hero 弹层同锚口径，fix-36 收敛）
+  const { projects: projectsState, workspaces, anchor: workspacesAnchor } = useAnchoredProjects(
+    props.useWorkspaces,
+  )
   const projectId = projectAnchorOf({
     sessionId: null,
-    workspaces: workspacesSnap,
+    workspaces,
     projects: projectsState.phase === 'ready' ? projectsState.projects : [],
   })
 
@@ -80,9 +77,7 @@ export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode 
         openEntryId={drawerEntryId}
         onOpenEntryChange={setDrawerEntry}
       />
-      {props.useWorkspaces !== undefined ? (
-        <WorkspacesAnchor hook={props.useWorkspaces} onChange={handleWorkspacesSnap} />
-      ) : null}
+      {workspacesAnchor}
     </div>
   )
 }

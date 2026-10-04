@@ -6,6 +6,7 @@
 // 纯函数推导（本件零相位判据；error 相位内的三态分流归 KnowledgeCardGrid）。
 // 详情抽屉（3.7）经 onEntryOpen 注入，卡片行语言不变。
 import type { ReactNode } from 'react'
+import type { RpcClientFactory } from '../../rpc/index.js'
 import { browseFaceState, hasActiveFilter } from './browse-model.js'
 import { DomainTree } from './DomainTree.js'
 import { KnowledgeCardGrid } from './KnowledgeCardGrid.js'
@@ -14,7 +15,6 @@ import {
   useKnowledgeBrowse,
   type KnowledgeBrowseActions,
   type KnowledgeBrowseState,
-  type RpcClientFactory,
 } from './use-knowledge-browse.js'
 import './knowledge.css'
 

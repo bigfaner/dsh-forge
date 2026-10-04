@@ -16,7 +16,7 @@ import { StateChip } from '../../components/index.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
-import { directoryPickerBridgeOf, type NativePickSource } from './dir-picker.js'
+import { EMPTY_REGISTERED, resolveNativePickSource, type NativePickSource } from './dir-picker.js'
 import { rpcDirSource, type DirSource } from './dir-source.js'
 import { formActions, nativeBrowseAction } from './form-actions.js'
 import {
@@ -34,8 +34,6 @@ import {
   type FormValues,
 } from './form-model.js'
 import './form.css'
-
-const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 
 export type { BrowseTarget }
 
@@ -88,7 +86,57 @@ function FieldIssue({ issue }: { issue: FormIssue }): ReactNode {
   )
 }
 
-/** 注册表单纯渲染面（数据进/回调出；仓内外 chip = StateChip，无 radio 控件） */
+/**
+ * 表单行件（fix-36 抽出——RegisterFormView 五行同构骨架的单一来源，DOM 结构逐字节
+ * 保持）：labelRow 在场 = label 包 `.dswf-rf-labelrow`（chip 挂行尾）；side 在场 =
+ * input + 钮包 `.dswf-rf-line`；hint/issue 条件尾随。形态组合（与原五行一一对应）：
+ * 工作区 = labelRow+side+hint / 项目名 = 裸行+issue / forge = labelRow+side+hint+issue /
+ * 知识库 = 裸 label+side+hint+issue / 任务清单 = 裸行只读。
+ */
+export interface FormRowProps {
+  /** label 的 htmlFor（= input id） */
+  readonly id: string
+  /** 字段标签文案 */
+  readonly label: ReactNode
+  /** label 行容器（chip 挂 label 行尾的面——ws/forge 行） */
+  readonly labelRow?: boolean
+  /** label 行尾 chip（已注册/仓内外——条件构造归调用方） */
+  readonly chip?: ReactNode
+  /** 输入控件本体（调用方构造——id/data 锚/只读态等面自持） */
+  readonly input: ReactNode
+  /** 行内钮（重新选择/浏览…——在场即包 `.dswf-rf-line`） */
+  readonly side?: ReactNode
+  /** 行尾提示（默认值说明等） */
+  readonly hint?: ReactNode
+  /** 字段错误行（校验问题——条件构造归调用方） */
+  readonly issue?: ReactNode
+}
+
+/** 表单行骨架（结构件——零校验零联动语义） */
+export function FormRow({ id, label, labelRow, chip, input, side, hint, issue }: FormRowProps): ReactNode {
+  const labelEl = (
+    <label className="dswf-rf-label" htmlFor={id}>
+      {label}
+    </label>
+  )
+  return (
+    <div className="dswf-rf-row">
+      {labelRow ? <div className="dswf-rf-labelrow">{labelEl}{chip}</div> : labelEl}
+      {side === undefined ? (
+        input
+      ) : (
+        <div className="dswf-rf-line">
+          {input}
+          {side}
+        </div>
+      )}
+      {hint}
+      {issue}
+    </div>
+  )
+}
+
+/** 注册表单纯渲染面（数据进/回调出；仓内外 chip = StateChip，无 radio 控件；行骨架 = FormRow，fix-36 <100 行） */
 export function RegisterFormView({
   values,
   issues,
@@ -102,8 +150,7 @@ export function RegisterFormView({
   onBrowse,
   onSubmit,
 }: RegisterFormViewProps): ReactNode {
-  const issueOf = (field: FormField): FormIssue | undefined =>
-    issues.find((issue) => issue.field === field)
+  const issueOf = (field: FormField): FormIssue | undefined => issues.find((issue) => issue.field === field)
   const nameIssue = issueOf('name')
   const forgeIssue = issueOf('forgeDir')
   const knowledgeIssue = issueOf('knowledgeDir')
@@ -113,156 +160,70 @@ export function RegisterFormView({
       : (field: EditableField) => (event: { readonly target: { readonly value: string } }) => {
           onEdit(field, event.target.value)
         }
-
+  const browseBtn = (target: Exclude<BrowseTarget, 'workspace'>): ReactNode => (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="dswf-rf-sidebtn"
+      title="经文件浏览器选择目录"
+      disabled={browseBusy}
+      onClick={onBrowse === undefined ? undefined : () => { onBrowse(target) }}
+    >
+      浏览…
+    </Button>
+  )
   return (
     <div className="dswf-rf" data-dswf-rf="form">
-      <div className="dswf-rf-row">
-        <div className="dswf-rf-labelrow">
-          <label className="dswf-rf-label" htmlFor="dswf-rf-ws">
-            工作区目录（文件浏览器选定）
-          </label>
-          {workspaceRegistered ? (
-            <StateChip status="已注册" className="dswf-rf-wsreg" />
-          ) : null}
-        </div>
-        <div className="dswf-rf-line">
-          <input
-            id="dswf-rf-ws"
-            className="dswf-rf-input"
-            data-dswf-rf-ws
-            type="text"
-            value={values.workspaceDir}
-            readOnly
-            title={values.workspaceDir}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-rf-sidebtn"
-            title="重开文件浏览器换选工作区（未手改字段随新工作区重构）"
-            disabled={browseBusy}
-            onClick={onRepick}
-          >
-            重新选择
-          </Button>
-        </div>
-        {workspaceRegistered ? (
-          <p className="dswf-rf-hint" data-dswf-rf-registered>
-            该目录已注册——「确认」将幂等返回既有项目（挂接既有工作区，不重复登记）。
-          </p>
-        ) : null}
-      </div>
-
-      <div className="dswf-rf-row">
-        <label className="dswf-rf-label" htmlFor="dswf-rf-name">
-          项目名（自动取文件夹名，可改）
-        </label>
-        <input
-          id="dswf-rf-name"
-          className="dswf-rf-input"
-          data-dswf-rf-name
-          type="text"
-          value={values.name}
-          onChange={editHandler?.('name')}
-        />
-        {nameIssue ? <FieldIssue issue={nameIssue} /> : null}
-      </div>
-
-      <div className="dswf-rf-row">
-        <div className="dswf-rf-labelrow">
-          <label className="dswf-rf-label" htmlFor="dswf-rf-forge">
-            文档位置 · forge 目录
-          </label>
-          {values.forgeDir.trim() !== '' ? (
-            <StateChip
-              status={forgeDirExternal ? '仓外' : '仓内'}
-              className="dswf-rf-relation"
-            />
-          ) : null}
-        </div>
-        <div className="dswf-rf-line">
-          <input
-            id="dswf-rf-forge"
-            className="dswf-rf-input"
-            data-dswf-rf-forge
-            type="text"
-            value={values.forgeDir}
-            onChange={editHandler?.('forgeDir')}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-rf-sidebtn"
-            title="经文件浏览器选择目录"
-            disabled={browseBusy}
-            onClick={onBrowse === undefined ? undefined : () => { onBrowse('forgeDir') }}
-          >
-            浏览…
-          </Button>
-        </div>
-        <p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.forge；可直接输入或浏览改选（仓外需授权；应用侧只读引用）</p>
-        {forgeIssue ? <FieldIssue issue={forgeIssue} /> : null}
-      </div>
-
-      <div className="dswf-rf-row">
-        <label className="dswf-rf-label" htmlFor="dswf-rf-kn">
-          知识库目录
-        </label>
-        <div className="dswf-rf-line">
-          <input
-            id="dswf-rf-kn"
-            className="dswf-rf-input"
-            data-dswf-rf-kn
-            type="text"
-            value={values.knowledgeDir}
-            onChange={editHandler?.('knowledgeDir')}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-rf-sidebtn"
-            title="经文件浏览器选择目录"
-            disabled={browseBusy}
-            onClick={onBrowse === undefined ? undefined : () => { onBrowse('knowledgeDir') }}
-          >
-            浏览…
-          </Button>
-        </div>
-        <p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.knowledge；可直接输入或浏览改选仓外目录</p>
-        {knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : null}
-      </div>
-
+      <FormRow
+        id="dswf-rf-ws"
+        label="工作区目录（文件浏览器选定）"
+        labelRow
+        chip={workspaceRegistered ? <StateChip status="已注册" className="dswf-rf-wsreg" /> : undefined}
+        input={<input id="dswf-rf-ws" className="dswf-rf-input" data-dswf-rf-ws type="text" value={values.workspaceDir} readOnly title={values.workspaceDir} />}
+        side={<Button variant="ghost" size="sm" className="dswf-rf-sidebtn" title="重开文件浏览器换选工作区（未手改字段随新工作区重构）" disabled={browseBusy} onClick={onRepick}>重新选择</Button>}
+        hint={workspaceRegistered ? (
+          <p className="dswf-rf-hint" data-dswf-rf-registered>该目录已注册——「确认」将幂等返回既有项目（挂接既有工作区，不重复登记）。</p>
+        ) : undefined}
+      />
+      <FormRow
+        id="dswf-rf-name"
+        label="项目名（自动取文件夹名，可改）"
+        input={<input id="dswf-rf-name" className="dswf-rf-input" data-dswf-rf-name type="text" value={values.name} onChange={editHandler?.('name')} />}
+        issue={nameIssue ? <FieldIssue issue={nameIssue} /> : undefined}
+      />
+      <FormRow
+        id="dswf-rf-forge"
+        label="文档位置 · forge 目录"
+        labelRow
+        chip={values.forgeDir.trim() !== '' ? (
+          <StateChip status={forgeDirExternal ? '仓外' : '仓内'} className="dswf-rf-relation" />
+        ) : undefined}
+        input={<input id="dswf-rf-forge" className="dswf-rf-input" data-dswf-rf-forge type="text" value={values.forgeDir} onChange={editHandler?.('forgeDir')} />}
+        side={browseBtn('forgeDir')}
+        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.forge；可直接输入或浏览改选（仓外需授权；应用侧只读引用）</p>}
+        issue={forgeIssue ? <FieldIssue issue={forgeIssue} /> : undefined}
+      />
+      <FormRow
+        id="dswf-rf-kn"
+        label="知识库目录"
+        input={<input id="dswf-rf-kn" className="dswf-rf-input" data-dswf-rf-kn type="text" value={values.knowledgeDir} onChange={editHandler?.('knowledgeDir')} />}
+        side={browseBtn('knowledgeDir')}
+        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;\.knowledge；可直接输入或浏览改选仓外目录</p>}
+        issue={knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : undefined}
+      />
       {nativePickError === null ? null : (
         <p className="dswf-rf-issue" role="alert" data-dswf-rf-np-error>
           目录选择失败：{nativePickError}
         </p>
       )}
-
-      <div className="dswf-rf-row">
-        <label className="dswf-rf-label" htmlFor="dswf-rf-tasks">
-          任务清单与记录（自动派生 · 无需填写）
-        </label>
-        <input
-          id="dswf-rf-tasks"
-          className="dswf-rf-input dswf-rf-static"
-          data-dswf-rf-tasks
-          type="text"
-          value={taskStoreDir}
-          readOnly
-          tabIndex={-1}
-          title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化}，注册时自动派生"
-        />
-      </div>
-
+      <FormRow
+        id="dswf-rf-tasks"
+        label="任务清单与记录（自动派生 · 无需填写）"
+        input={<input id="dswf-rf-tasks" className="dswf-rf-input dswf-rf-static" data-dswf-rf-tasks type="text" value={taskStoreDir} readOnly tabIndex={-1} title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化}，注册时自动派生" />}
+      />
       <div className="dswf-rf-footer">
         <p className="dswf-rf-footnote">确认后进入注册执行（不可中断；失败自动补偿）</p>
-        <Button
-          variant="primary"
-          size="md"
-          className="dswf-rf-confirm"
-          disabled={issues.length > 0}
-          onClick={onSubmit}
-        >
+        <Button variant="primary" size="md" className="dswf-rf-confirm" disabled={issues.length > 0} onClick={onSubmit}>
           确认
         </Button>
       </div>
@@ -335,12 +296,11 @@ export function RegisterForm({
   // 转移逻辑 = form-actions 注入 setState 面（联动/浏览相位语义见该模块单测）
   const actions = useMemo(() => formActions({ setForm, setBrowsing }), [])
   const effectiveSource = useMemo<DirSource>(() => source ?? rpcDirSource(), [source])
-  // 原生选取源解析：注入桩 > 桥探测（undefined = 探测；null = 强制回退 BrowsePanel）
-  const effectiveNativePick = useMemo<NativePickSource | null>(() => {
-    if (nativePicker !== undefined) return nativePicker
-    const bridge = directoryPickerBridgeOf()
-    return bridge === undefined ? null : () => bridge.pick()
-  }, [nativePicker])
+  // 原生选取源解析（dir-picker 共享纯函数——AddProjectFlow 同判据，fix-36 收敛）
+  const effectiveNativePick = useMemo<NativePickSource | null>(
+    () => resolveNativePickSource(nativePicker),
+    [nativePicker],
+  )
   const nativeBrowse = useMemo(
     () =>
       effectiveNativePick === null

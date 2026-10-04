@@ -8,7 +8,7 @@
 // 状态点四态 = 官方 StateDot 语义（warning 用户注意 / done 完成 / ongoing 进行 / idle 静默）。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+import { timeLabelZh } from '../../components/index.js'
 
 /** 快照源窄形状（dsh ObservableSnapshot 结构同型；React useSyncExternalStore 直连） */
 export interface SnapshotSource<T> {
@@ -92,27 +92,9 @@ export function sessionDotState(status: SidebarSessionStatus): StateDotState {
   return 'idle'
 }
 
-/** 相对时间标签（桶化 = 官方 relativeTime；文案 zh——P1 单语，多语归 M 系列主题化） */
+/** 相对时间标签（桶化 = 官方 relativeTime；zh 文案切换 = components/time-label 共享源，fix-36 收敛） */
 export function relativeTimeLabel(updatedAt: number, now: number): string {
-  const bucket = relativeTime(updatedAt, now)
-  switch (bucket.unit) {
-    case 'now':
-      return '刚刚'
-    case 'minutes':
-      return `${bucket.n} 分钟前`
-    case 'hours':
-      return `${bucket.n} 小时前`
-    case 'days':
-      return `${bucket.n} 天前`
-    case 'months':
-      return `${bucket.n} 个月前`
-    case 'years':
-      return `${bucket.n} 年前`
-    default: {
-      const exhaustive: never = bucket.unit
-      throw new Error(`dsh-forge web: 未知相对时间桶：${String(exhaustive)}`)
-    }
-  }
+  return timeLabelZh(updatedAt, now)
 }
 
 /** 会话行可见判据：在账本 byId、顶层行（无父）、空白行仅显示被选中者（官方浏览器口径） */

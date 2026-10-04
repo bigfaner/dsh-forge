@@ -8,10 +8,10 @@
 // fix-16：入口直达编排收口动作面 open()——桥在场冷启（项目树「＋」/ hero CTA 经
 // openAddProjectFlow 缝）直入 native-pick 在途（模态不出场），收场 reveal 通知开模态。
 import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
-import { createForgeRpcClient, preloadTransport } from '../../rpc/index.js'
+import { preloadRpcClientFactory } from '../../rpc/index.js'
 import { selectionOf, type BrowserSelection } from './browser-model.js'
 import type { DirSource } from './dir-source.js'
-import type { NativePickSource } from './dir-picker.js'
+import { EMPTY_REGISTERED, type NativePickSource } from './dir-picker.js'
 import {
   backToBrowser,
   beginExecute,
@@ -34,14 +34,8 @@ export type RegisterSource = (input: RegisterProjectInput) => Promise<RegisterRe
  * preload 缺席（非 Electron 载体）由 confirm 的 Promise 归一收敛为失败相位，不炸壳。
  */
 export function rpcRegisterSource(): RegisterSource {
-  return (input) => {
-    const client = createForgeRpcClient(preloadTransport())
-    return client.projects.register(input)
-  }
+  return (input) => preloadRpcClientFactory().projects.register(input)
 }
-
-/** 已注册集合缺省（原生选取挂接预演判据的兜底空集——集合未注入时不标记） */
-const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 
 /** 动作依赖（React setState 同形注入——测试替身直落内存） */
 export interface FlowActionsDeps {

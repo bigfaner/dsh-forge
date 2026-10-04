@@ -80,7 +80,12 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
   return bridge
 }
 
-/** 撤销工作台桥发布（插件卸载期——undefined = 撤销；幂等） */
+/**
+ * 撤销/发布工作台桥（undefined = 撤销；幂等）。调用面口径（fix-36 标注）：生产撤销不走
+ * 本函数——plugin.ts（classic script 自含纪律，禁 import 本模块）在 overlay 洞 dispose 与
+ * apply catch 两径直写全局（fix-33 ⑥ 双径注记）；本函数的撤销消费面 = 测试隔离
+ * （workbench-bridge.test 逐例清全局）。
+ */
 export function publishWorkbenchBridge(bridge: WorkbenchBridge | undefined): void {
   ;(globalThis as DshForgeWorkbenchGlobal).__DSH_FORGE_WORKBENCH__ = bridge
 }

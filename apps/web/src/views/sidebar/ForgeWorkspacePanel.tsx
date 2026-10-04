@@ -25,7 +25,7 @@ import {
   StateDot,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState } from '../../components/index.js'
+import { EmptyState, ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
   relativeTimeLabel,
   sessionDotState,
@@ -41,7 +41,8 @@ const SKELETON_ROWS = 3
 export interface ForgeWorkspacePanelProps {
   /** 壳折叠态（sidebar.workspaces owner share：true = 宽面板，false = 56px rail 图标列） */
   readonly wide: boolean
-  /** rail 图标请求展开（壳回调；知识视图切换不需要宽面板——保留给需宽 UI 的入口） */
+  /** rail 图标请求展开（壳回调）。契约占位 · 当前未消费——rail 态本面板 = 空轨道（fix-25
+   *  知识入口迁官方 panellist 行后无宽 UI 入口需求），保留给后续需宽 UI 的 rail 入口 */
   readonly expandSidebar: () => void
   /** 项目树（buildSidebarTree 派生；含每项目会话行） */
   readonly tree: readonly SidebarProjectNode[]
@@ -141,14 +142,15 @@ function ProjectBlock({
   )
 }
 
-/** 行级骨架（账本 pending 相位——UF-1 States「会话加载中」） */
-function SkeletonRows(): ReactNode {
+/** 行级骨架（账本 pending 相位——UF-1 States「会话加载中」；共享件注入 sidebar 域锚） */
+function PanelSkeleton(): ReactNode {
   return (
-    <div className="dswf-sidebar-skeleton" data-dswf-skeleton aria-hidden="true">
-      {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-        <div key={i} className="dswf-sidebar-skeleton-row" />
-      ))}
-    </div>
+    <SkeletonRows
+      className="dswf-sidebar-skeleton"
+      rowClassName="dswf-sidebar-skeleton-row"
+      rows={SKELETON_ROWS}
+      anchor="data-dswf-sidebar-skeleton"
+    />
   )
 }
 
@@ -238,13 +240,81 @@ export interface SidebarProjectsZoneProps {
   readonly onViewMenuOpenChange: (open: boolean) => void
 }
 
+/** 相位主体推导输入（phaseBody 消费——SidebarProjectsZone 的相位判据 + 树快照） */
+export interface SidebarZonePhaseInput {
+  /** 项目列表加载失败文案（在场 = 错误条相位） */
+  readonly projectsError: string | undefined
+  /** 账本未就绪（行级骨架相位之一） */
+  readonly loading: boolean
+  /** 项目列表就绪（false = RPC 在途——骨架相位，防空态闪现） */
+  readonly projectsPending: boolean
+  /** 是否有项目（就绪且非空；空态判据 = 首用引导指向 hero UF-2） */
+  readonly hasProjects: boolean
+  /** 过滤激活（与相位正交——仅树相位消费） */
+  readonly filterActive: boolean
+  /** 过滤后可见树（sidebarFilterOf 产物） */
+  readonly visibleTree: readonly SidebarProjectNode[]
+  /** 当前会话 id（行高亮依据；null = 未选） */
+  readonly currentSessionId: string | null
+  /** 相对时间基准（注入——纯渲染可测） */
+  readonly now: number
+  /** 会话行回调 */
+  readonly onSessionActivate?: (sessionId: string) => void
+  /** 项目列表重试（错误条相位） */
+  readonly onRetryProjects?: () => void
+  /** 项目块展开判据（折叠集合读） */
+  readonly isExpanded: (projectId: string) => boolean
+  /** 项目块折叠切换 */
+  readonly onToggleProject: (projectId: string) => void
+}
+
+/**
+ * 相位主体（纯函数，fix-36 早返化——原四层嵌套三元）：项目错误条 > 骨架（账本 pending /
+ * 项目 RPC 在途——防空态闪现）> 首用空态（无项目 → 引导指向 hero UF-2）> 项目树（过滤
+ * 无结果 = 行内「无匹配项目/会话」提示）。过滤与相位正交：错误/骨架/首用空态不受查询影响。
+ */
+export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
+  if (input.projectsError !== undefined) {
+    return (
+      <ErrorBar
+        className="dswf-sidebar-error"
+        message="项目列表加载失败"
+        retryClassName="dswf-sidebar-retry"
+        anchor="data-dswf-error"
+        onRetry={input.onRetryProjects}
+      />
+    )
+  }
+  if (input.loading || input.projectsPending) return <PanelSkeleton />
+  if (!input.hasProjects) {
+    return (
+      <EmptyState
+        title="尚未注册项目"
+        description="在中间引导页点击「添加项目」，注册你的第一个项目"
+      />
+    )
+  }
+  if (input.filterActive && input.visibleTree.length === 0) {
+    return <div className="dswf-sidebar-filterempty" data-dswf-filterempty>无匹配项目/会话</div>
+  }
+  return input.visibleTree.map((node) => (
+    <ProjectBlock
+      key={node.projectId}
+      node={node}
+      expanded={input.isExpanded(node.projectId)}
+      onToggle={() => { input.onToggleProject(node.projectId) }}
+      currentSessionId={input.currentSessionId}
+      now={input.now}
+      onSessionActivate={input.onSessionActivate}
+      emptyNote={input.filterActive ? '无匹配会话' : '暂无会话'}
+    />
+  ))
+}
+
 /**
  * 项目区本体（受控展示件）：头部四件（label + 搜索钮 + 视图选项钮 + ＋）+ 过滤行 +
- * 相位主体。相位：项目错误条 > 骨架（账本 pending / 项目 RPC 在途——防空态闪现）>
- * 首用空态（无项目 → 引导指向 hero UF-2）> 项目树（过滤态下 = 过滤树 / 行内空提示）。
- * 过滤与相位正交：错误/骨架/首用空态不受查询影响；树相位下过滤无结果 = 行内
- * 「无匹配项目/会话」提示（UF-1 States 过滤无结果）。项目块展开态是本件内部纯视图
- * 微观态（缺省全展开——与过滤态互不触碰，清过滤即恢复可见）。
+ * 相位主体（phaseBody 纯函数）。项目块展开态是本件内部纯视图微观态（缺省全展开——
+ * 与过滤态互不触碰，清过滤即恢复可见）。
  */
 export function SidebarProjectsZone({
   tree,
@@ -341,38 +411,20 @@ export function SidebarProjectsZone({
       {searchOpen ? (
         <SidebarFilterRow query={query} onQueryChange={onQueryChange} onCollapse={onSearchToggle} />
       ) : null}
-      {projectsError !== undefined ? (
-        <div className="dswf-sidebar-error" data-dswf-error role="alert">
-          <span>项目列表加载失败</span>
-          {onRetryProjects !== undefined ? (
-            <button type="button" className="dswf-sidebar-retry" onClick={onRetryProjects}>
-              重试
-            </button>
-          ) : null}
-        </div>
-      ) : loading || projectsPending ? (
-        <SkeletonRows />
-      ) : !hasProjects ? (
-        <EmptyState
-          title="尚未注册项目"
-          description="在中间引导页点击「添加项目」，注册你的第一个项目"
-        />
-      ) : filterActive && visibleTree.length === 0 ? (
-        <div className="dswf-sidebar-filterempty" data-dswf-filterempty>无匹配项目/会话</div>
-      ) : (
-        visibleTree.map((node) => (
-          <ProjectBlock
-            key={node.projectId}
-            node={node}
-            expanded={isExpanded(node.projectId)}
-            onToggle={() => { toggleProject(node.projectId) }}
-            currentSessionId={currentSessionId}
-            now={now}
-            onSessionActivate={onSessionActivate}
-            emptyNote={filterActive ? '无匹配会话' : '暂无会话'}
-          />
-        ))
-      )}
+      {phaseBody({
+        projectsError,
+        loading,
+        projectsPending,
+        hasProjects,
+        filterActive,
+        visibleTree,
+        currentSessionId,
+        now,
+        onSessionActivate,
+        onRetryProjects,
+        isExpanded,
+        onToggleProject: toggleProject,
+      })}
     </div>
   )
 }

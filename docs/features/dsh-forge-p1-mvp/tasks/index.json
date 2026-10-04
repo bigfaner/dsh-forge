@@ -1005,6 +1005,18 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-36": {
+      "id": "fix-36",
+      "title": "Fix(P2): 客户端整洁批——defaultClient×4/时间标签×3/锚模式×4 三组收敛（~120 行复制）+ fix-25 后注释漂移 5 处 + 复杂度热点（相位链三元/RegisterForm 行件）+ data 锚域前缀",
+      "priority": "P2",
+      "estimatedTime": "5h",
+      "status": "completed",
+      "file": "fix-36.md",
+      "record": "records/fix-36.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-4": {
       "id": "fix-4",
       "title": "Fix: 右栏 dock 页签条整理（strip 内衬 / 收展钮归位 / 拖拽调宽手柄——官方行语言，机制语义零变化）",

@@ -2,7 +2,7 @@
 // （forge:fs/listDir），renderer 不开 Node fs 通道）。相位映射纯异步面（同 2.7
 // use-forge-projects 的 fetchProjectsPhase 形制：错误归一为 error 相位，永不 reject）。
 import type { DirListing } from '@dsh-forge/contracts'
-import { createForgeRpcClient, preloadTransport } from '../../rpc/index.js'
+import { preloadRpcClientFactory } from '../../rpc/index.js'
 
 /** 目录数据源（注入面：RPC 真身 rpcDirSource() / 测试内存替身） */
 export type DirSource = (dirPath?: string) => Promise<DirListing>
@@ -31,8 +31,5 @@ export async function fetchDirListing(source: DirSource, dirPath?: string): Prom
  * preload 缺席（非 Electron 载体）时由 fetchDirListing 收敛为错误相位，不炸壳。
  */
 export function rpcDirSource(): DirSource {
-  return (dirPath) => {
-    const client = createForgeRpcClient(preloadTransport())
-    return client.fs.listDir(dirPath)
-  }
+  return (dirPath) => preloadRpcClientFactory().fs.listDir(dirPath)
 }

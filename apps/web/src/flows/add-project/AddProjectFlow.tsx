@@ -24,14 +24,15 @@ import {
   TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProjectSummary, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
-import { createForgeRpcClient, preloadTransport } from '../../rpc/index.js'
+import { preloadRpcClientFactory } from '../../rpc/index.js'
 import { registeredPathsOf, type BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
-import { directoryPickerBridgeOf, type NativePickSource } from './dir-picker.js'
+import { EMPTY_REGISTERED, resolveNativePickSource, type NativePickSource } from './dir-picker.js'
 import { rpcDirSource, type DirSource } from './dir-source.js'
 import { flowActions, rpcRegisterSource, type RegisterSource } from './flow-actions.js'
 import {
   registerFailureCopy,
+  formMountedOf,
   initialFlowState,
   modalClassName,
   type FlowState,
@@ -60,13 +61,9 @@ export async function loadRegisteredPaths(source: RegisteredPathsSource): Promis
 
 /** 缺省已注册源真身：preload RPC 面（forge:projects/list）——构造延迟到调用点（fail-soft 由 loadRegisteredPaths 收敛） */
 export function rpcRegisteredPathsSource(): RegisteredPathsSource {
-  return () => {
-    const client = createForgeRpcClient(preloadTransport())
-    return client.projects.list()
-  }
+  return () => preloadRpcClientFactory().projects.list()
 }
 
-const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 const REPICK_HINT =
   '重新选择工作区目录；未手改的表单字段将随新工作区重构，手改或浏览选定过的保留。'
 const NATIVE_PICK_HINT =
@@ -213,9 +210,9 @@ export function AddProjectFlowView({
   onDismissFailure,
 }: AddProjectFlowViewProps): ReactNode {
   const { phase, selection } = state
-  // 表单挂载判据：form / repick / native-pick（repick 起源的在途选取）相位保持挂载
-  // （同位元素 hidden——浏览器⇄表单/对话框往返不丢已填状态）
-  const formMounted = (phase === 'form' || phase === 'repick' || phase === 'native-pick') && selection !== null
+  // 表单挂载判据（flow-model 纯函数——fix-36 抽出）：form / repick / native-pick（repick
+  // 起源的在途选取）相位且选定在场 → 保持挂载（同位元素 hidden——往返不丢已填状态）
+  const formMounted = formMountedOf(phase, selection)
   const browserLike = phase === 'browser' || phase === 'repick' || phase === 'native-pick'
 
   return (
@@ -322,13 +319,12 @@ export function AddProjectFlow({
     [registeredPathsSource],
   )
   const effectiveDirSource = useMemo<DirSource>(() => dirSource ?? rpcDirSource(), [dirSource])
-  // 原生选取源解析：注入桩 > 桥探测（undefined = 探测；null = 强制回退）——mount 期一次，
-  // 桥在场性会话内不变（preload 装配期决定）
-  const effectiveNativePick = useMemo<NativePickSource | null>(() => {
-    if (nativePicker !== undefined) return nativePicker
-    const bridge = directoryPickerBridgeOf()
-    return bridge === undefined ? null : () => bridge.pick()
-  }, [nativePicker])
+  // 原生选取源解析（dir-picker 共享纯函数——RegisterForm 同判据，fix-36 收敛）：mount 期
+  // 一次，桥在场性会话内不变（preload 装配期决定）
+  const effectiveNativePick = useMemo<NativePickSource | null>(
+    () => resolveNativePickSource(nativePicker),
+    [nativePicker],
+  )
 
   const finish = useCallback(() => {
     setOpen(false)

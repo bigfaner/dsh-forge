@@ -15,15 +15,12 @@
 // 同构（同级业务互禁下的本域副本，口径互指）。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { RecallGroup, SessionRecallQuery } from '@dsh-forge/contracts'
-import { EmptyState, HeatBadge } from '../../components/index.js'
-import { createForgeRpcClient, preloadTransport, type ForgeRpcClient } from '../../rpc/index.js'
+import { EmptyState, ErrorBar, HeatBadge, SkeletonRows } from '../../components/index.js'
+import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { isRecallRowStale, recallRowsOf, recallStatsOf, recallTimeLabel } from './recall-model.js'
 import './session.css'
-
-/** RPC client 构造器（缺省 = preload 真身；注入 = 测试面——与 sidebar/knowledge 同型本地别名） */
-export type RecallClientFactory = () => ForgeRpcClient
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
 export interface RecallErrorInfo {
@@ -97,7 +94,7 @@ export type RecallLoadOutcome =
  */
 export async function runRecallLoad(
   input: { projectId: string | null; sessionId: string | null },
-  makeClient: RecallClientFactory,
+  makeClient: RpcClientFactory,
 ): Promise<readonly RecallLoadOutcome[]> {
   const plan = recallLoadPlan(input)
   if (plan === 'idle') return [{ kind: 'idle' }]
@@ -132,7 +129,7 @@ export function applyRecallOutcome(_prev: RecallLoadState, outcome: RecallLoadOu
  */
 export function useSessionRecall(
   input: { projectId: string | null; sessionId: string | null },
-  makeClient: RecallClientFactory = defaultClient,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): readonly [RecallLoadState, { retry(): void }] {
   const [state, setState] = useState<RecallLoadState>(initialRecallState)
   const [nonce, setNonce] = useState(0)
@@ -202,7 +199,8 @@ function RecallRowView({
         data-stale={stale || undefined}
         aria-disabled={stale || undefined}
       >
-        <div className="dswf-recall-rowbtn">{inner}</div>
+        {/* 载体锚（值 = 形态）：静态 div 载体——不可点（失效行/降级行） */}
+        <div className="dswf-recall-rowbtn" data-dswf-recall-rowbtn="static">{inner}</div>
       </li>
     )
   }
@@ -211,6 +209,7 @@ function RecallRowView({
       <button
         type="button"
         className="dswf-recall-rowbtn"
+        data-dswf-recall-rowbtn="button"
         title="查看知识详情"
         onClick={() => {
           if (row.entryId !== null) onOpenEntry(row.entryId)
@@ -253,23 +252,26 @@ export function RecallTabBody({ state, retry, onOpenEntry, now }: RecallTabBodyP
   if (state.phase === 'loading') {
     return (
       <div className="dswf-recall-face" data-dswf-recall-face="loading">
-        <div className="dswf-recall-skeleton" data-dswf-recall-skeleton="" aria-hidden="true">
-          {Array.from({ length: RECALL_SKELETON_ROWS }, (_, i) => (
-            <div key={i} className="dswf-recall-skeleton-row" />
-          ))}
-        </div>
+        <SkeletonRows
+          className="dswf-recall-skeleton"
+          rowClassName="dswf-recall-skeleton-row"
+          rows={RECALL_SKELETON_ROWS}
+          anchor="data-dswf-recall-skeleton"
+        />
       </div>
     )
   }
   if (state.phase === 'error' && state.error !== undefined) {
     return (
       <div className="dswf-recall-face" data-dswf-recall-face="error">
-        <div className="dswf-recall-error" data-dswf-recall-error="" role="alert">
-          <span>{`召回记录加载失败：${state.error.message}`}</span>
-          <button type="button" className="dswf-recall-retry" data-dswf-recall-retry="" onClick={retry}>
-            重试
-          </button>
-        </div>
+        <ErrorBar
+          className="dswf-recall-error"
+          message={`召回记录加载失败：${state.error.message}`}
+          retryClassName="dswf-recall-retry"
+          anchor="data-dswf-recall-error"
+          retryAnchor="data-dswf-recall-retry"
+          onRetry={retry}
+        />
       </div>
     )
   }
@@ -304,7 +306,7 @@ export interface RecallTabProps {
   /** 命中行点击 → 知识详情抽屉（装配注入——视图态切换 + 抽屉打开归装配，跨视图不直引） */
   readonly onOpenEntry?: (entryId: number) => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
-  readonly makeClient?: RecallClientFactory
+  readonly makeClient?: RpcClientFactory
   /** 时间标签基准（缺省当次渲染时刻） */
   readonly now?: number
 }
@@ -316,9 +318,4 @@ export interface RecallTabProps {
 export function RecallTab({ projectId, sessionId, onOpenEntry, makeClient, now }: RecallTabProps): ReactNode {
   const [state, { retry }] = useSessionRecall({ projectId, sessionId }, makeClient)
   return <RecallTabBody state={state} retry={retry} onOpenEntry={onOpenEntry} now={now} />
-}
-
-/** 缺省构造：preload 传输真身（缺席由 mapRecallError 收敛为错误条——非 Electron 载体不炸壳） */
-function defaultClient(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
 }

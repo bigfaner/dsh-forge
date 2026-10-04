@@ -2,9 +2,9 @@
 // 动机：流程宿主（AddProjectFlow——模态覆盖中区）与入口（项目树「＋」sidebar 槽位件 /
 // hero CTA（UF-2，2.12 装配））分属两个求值单元（client 插件槽位 vs 壳 bundle 工作台装配），
 // 唯一通信缝 = 页内全局 __DSH_FORGE_ADD_PROJECT_FLOW__——与 __DSH_FORGE_VIEWS__ /
-// __DSH_FORGE_WORKBENCH__（sidebar-actions）同族。宿主 mount 期发布 / unmount 撤销；
-// 入口经 openAddProjectFlow() 触发——宿主缺席（2.12 装配未就位）= fail-soft warn
-// （同工作台桥口径），不炸调用方。
+// __DSH_FORGE_WORKBENCH__（workbench/workbench-bridge，fix-36 更正归属——曾误标
+// sidebar-actions）同族。宿主 mount 期发布 / unmount 撤销；入口经 openAddProjectFlow()
+// 触发——宿主缺席（2.12 装配未就位）= fail-soft warn（同工作台桥口径），不炸调用方。
 
 /** 流程宿主句柄（open = 打开流程并复位态机到段一） */
 export interface AddProjectFlowHandle {

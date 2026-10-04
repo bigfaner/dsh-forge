@@ -28,7 +28,7 @@ import {
   type UpdateProjectRequest,
 } from '@dsh-forge/contracts'
 import { RpcClientError } from './errors.js'
-import type { ForgeTransport } from './transport.js'
+import { preloadTransport, type ForgeTransport } from './transport.js'
 
 async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?: unknown): Promise<T> {
   const raw = await transport(channel, payload)
@@ -108,4 +108,19 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       sessionRecall: (q) => invokeRpc<RecallGroup[]>(transport, KNOWLEDGE_CHANNELS.sessionRecall, q),
     },
   }
+}
+
+/**
+ * RPC client 构造器（fix-36 单一来源：缺省 = preload 真身；注入 = 测试面——各装载 hook
+ * 同型口径，此前 sidebar/knowledge/session 三域各持逐字副本）。
+ */
+export type RpcClientFactory = () => ForgeRpcClient
+
+/**
+ * 缺省构造：preload 传输真身。缺席（非 Electron 载体/preload 未接）在构造期抛——由各
+ * 消费面错误归一收敛为错误相位/错误条，不炸壳（fetchProjectsPhase / mapBrowseError /
+ * mapRecallError / fetchDirListing 同口径）。
+ */
+export function preloadRpcClientFactory(): ForgeRpcClient {
+  return createForgeRpcClient(preloadTransport())
 }

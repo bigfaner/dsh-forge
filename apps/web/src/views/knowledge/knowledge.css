@@ -284,7 +284,7 @@
   border-left: 1px solid var(--dsw-alias-border-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   box-shadow: var(--dsw-elevation-prominent);
-  animation: dswf-kn-drawer-in 0.22s ease-out;
+  animation: dswf-kn-drawer-in 0.22s ease-out; /* dsw-raw 原型抽屉滑入时长（全库唯一裸时长点，fix-36 补注） */
 }
 
 /* 粘顶栏：标题行 + 行尾关闭位（AC3 ✕；Esc 接线归组件——内容区滚动不带走顶栏） */
@@ -449,7 +449,7 @@
   padding: var(--dsw-font-s-14-line-height);
 }
 
-/* ── 知识视图装配壳（3.8：浏览主体 + 详情抽屉挂载——zones 知识槽占满）── */
+/* ── 知识视图装配壳（3.8：浏览主体 + 详情抽屉挂载——官方 keyed 面板槽占满）── */
 .dswf-kn-view {
   position: relative;
   display: flex;

@@ -14,7 +14,7 @@ import {
   IconChevronUpOutlineRegular,
   IconFolderCloseRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { StateChip } from '../../components/index.js'
+import { ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
 import { browserActions } from './browser-actions.js'
 import {
   canConfirm,
@@ -24,10 +24,10 @@ import {
   type BrowserSelection,
   type BrowserState,
 } from './browser-model.js'
+import { EMPTY_REGISTERED } from './dir-picker.js'
 import { rpcDirSource, type DirSource, type ListingPhase } from './dir-source.js'
 import './browser.css'
 
-const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 const SKELETON_ROWS = 4
 
 /** 目录行（官方行语言：文件夹图标 + 名称 + 「已注册」标记；单击选中 / 双击进入 / 键盘同径） */
@@ -171,23 +171,24 @@ export function DirectoryBrowserView({
       </div>
 
       {phase.phase === 'error' ? (
-        <div className="dswf-fb-error" role="alert" data-dswf-fb-error>
-          <span className="dswf-fb-error-text">目录加载失败：{phase.message}</span>
-          {onRetry === undefined ? null : (
-            <button type="button" className="dswf-fb-retry" onClick={onRetry}>
-              重试
-            </button>
-          )}
-        </div>
+        <ErrorBar
+          className="dswf-fb-error"
+          message={`目录加载失败：${phase.message}`}
+          retryClassName="dswf-fb-retry"
+          anchor="data-dswf-fb-error"
+          textClassName="dswf-fb-error-text"
+          onRetry={onRetry}
+        />
       ) : null}
 
       <div className="dswf-fb-list" role="listbox" aria-label="目录列表">
         {phase.phase === 'loading' ? (
-          <div className="dswf-fb-skeleton" data-dswf-fb-skeleton aria-hidden="true">
-            {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-              <div key={i} className="dswf-fb-skeleton-row" />
-            ))}
-          </div>
+          <SkeletonRows
+            className="dswf-fb-skeleton"
+            rowClassName="dswf-fb-skeleton-row"
+            rows={SKELETON_ROWS}
+            anchor="data-dswf-fb-skeleton"
+          />
         ) : phase.phase === 'ready' && phase.listing.entries.length === 0 ? (
           <div className="dswf-fb-empty">空文件夹</div>
         ) : phase.phase === 'ready' ? (

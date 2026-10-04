@@ -46,8 +46,13 @@ process.on('message', (message: unknown) => {
 // 升级强退；未 boot：直接退出——不留孤儿 webserver 持端口）。
 let shutdownTree: (() => Promise<void>) | undefined
 process.on('disconnect', () => {
-  if (shutdownTree !== undefined) void shutdownTree()
-  else process.exit(0)
+  // fix-36：拒绝面补 catch——shutdown 链 reject 不落 unhandled rejection（仅记日志；
+  // 5s 强退升级若也已失效，孤儿回收归 OS 进程树清理，不再额外改退出码）
+  if (shutdownTree !== undefined) {
+    void shutdownTree().catch((error: unknown) => {
+      console.error('[boot-child] shutdown 关停失败', error)
+    })
+  } else process.exit(0)
 })
 
 async function main(): Promise<void> {

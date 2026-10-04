@@ -1,8 +1,8 @@
 // RecallTab 组件单测 —— UF-4 召回 tab 数据接线（3.8）。断言面 = 任务 AC：
 // AC-3（命中行可点跳转 + 索引未命中行级失效标注不阻塞列表）/ AC-5（无召回空态）/
 // 统计头锚点（AC-2 e2e 消费面）/ 错误条 fail-soft / mapRecallError 归一。
-// 渲染面用 react-dom/server（沿 SessionPanel/KnowledgeBrowse 模式）；hook 装载效应面
-// （visible 翻转重拉）归 e2e（条件留痕，SMOKE-LEDGER §5）。
+// 渲染面用 react-dom/server（沿 KnowledgeBrowse 模式——SessionPanel 复刻已随 fix-25
+// 退役，不再作先例引用）；hook 装载效应面（only:id 激活即挂载重拉）归 e2e。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { RecallGroup } from '@dsh-forge/contracts'
@@ -81,11 +81,12 @@ describe('RecallTabBody 纯渲染（全相位）', () => {
   })
   it('AC-3 命中行 = 按钮（可点跳转，data-entry-id）；索引未命中行 = 行级标注不可点且不阻塞列表', () => {
     const markup = renderBody(stateOf({ phase: 'ready', groups }), () => {})
-    // 命中行（entryId 7）：按钮载体 + entryId 锚
+    // 命中行（entryId 7）：按钮载体（载体锚值 = button）+ entryId 锚
     expect(markup).toContain('data-entry-id="7"')
-    expect(markup).toMatch(/<button[^>]*class="dswf-recall-rowbtn"/)
-    // 失效行：标注在场、非按钮载体、data-stale、aria-disabled；列表内行数保持 2（不阻塞）
+    expect(markup).toContain('data-dswf-recall-rowbtn="button"')
+    // 失效行：标注在场、静态载体（载体锚值 = static）、data-stale、aria-disabled；列表内行数保持 2（不阻塞）
     expect(markup).toContain('data-dswf-recall-stale')
+    expect(markup).toContain('data-dswf-recall-rowbtn="static"')
     expect(markup).toContain('索引未命中')
     expect(markup).toContain('data-stale="true"')
     expect(markup).toContain('aria-disabled="true"')
@@ -109,9 +110,10 @@ describe('RecallTabBody 纯渲染（全相位）', () => {
     expect(markup).toContain('（已删除的知识）')
     expect(markup).toContain('data-dswf-recall-stale')
   })
-  it('onOpenEntry 缺席 = 命中行不可点（无按钮——降级不误交互）', () => {
+  it('onOpenEntry 缺席 = 命中行不可点（无按钮载体——降级不误交互）', () => {
     const markup = renderBody(stateOf({ phase: 'ready', groups }))
-    expect(markup).not.toMatch(/<button[^>]*dswf-recall-rowbtn/)
+    expect(markup).not.toContain('data-dswf-recall-rowbtn="button"')
+    expect(markup).toContain('data-dswf-recall-rowbtn="static"')
   })
   it('RecallTab 装载壳（SSR 首帧 = idle 静态空态——效应面归 e2e）', () => {
     const markup = renderToStaticMarkup(

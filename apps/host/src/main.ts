@@ -26,8 +26,8 @@ registerShellScheme(protocol) // 特权 scheme 注册一次性，须先于 app r
 const watchdog = setTimeout(() => {
   console.error('[host] boot watchdog 超时（180s）')
   app.exit(3)
-}, 180_000)
-watchdog.unref()
+}, 180_000).unref()
+const PORT_FALLBACK = { base: 19400, span: 400 } as const // 兜底端口基址/展幅（DSH_FORGE_PORT 缺席/非法时 pid 摊开避碰撞）
 void (async () => {
   if (!acquireSingleInstance(app)) return // 已有实例持锁：quit 已请求，静默退出
   try {
@@ -42,7 +42,7 @@ void (async () => {
       if (process.env.DSH_FORGE_MATERIALIZE_ONLY === '1') return
     }
     const envPort = Number(process.env.DSH_FORGE_PORT ?? '')
-    const port = Number.isInteger(envPort) && envPort > 0 ? envPort : 19400 + (process.pid % 400)
+    const port = Number.isInteger(envPort) && envPort > 0 ? envPort : PORT_FALLBACK.base + (process.pid % PORT_FALLBACK.span)
     const host = await bootDshHost({
       profileDir: paths.profileDir,
       installAnchor: paths.installAnchor,

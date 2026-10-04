@@ -49,7 +49,7 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
       const markup = renderSlot(ledger([]))
       expect(markup).toContain('data-dswf-sidebar="wide"')
       expect(markup).not.toContain('data-dswf-nav="knowledge"')
-      expect(markup).toContain('data-dswf-skeleton')
+      expect(markup).toContain('data-dswf-sidebar-skeleton')
     } finally {
       Date.now = realDateNow
     }

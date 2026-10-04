@@ -37,7 +37,8 @@ children」发放（renderer standardKit：`entry.children` 在场才注入）�
 
 | 文件 | 职责 |
 |---|---|
-| `ShellHost.tsx` | 常驻壳宿主（`shell.overlay` 槽位件——AppFrame root 五子槽之一，不随面板互换卸载）：相位推导 + `data-dswf-workbench/phase/view` 锚（e2e/走查）+ UF-3 流程宿主 + hero 面板驱动（`heroPanelDrive` 纯函数）+ 知识模式右栏联动（`rightbarViewPlan` + effect——fix-23 语义随迁）+ `WorkspacesAnchor` 归属锚 |
+| `ShellHost.tsx` | 常驻壳宿主（`shell.overlay` 槽位件——AppFrame root 五子槽之一，不随面板互换卸载）：相位推导 + `data-dswf-workbench/phase/view` 锚（e2e/走查）+ UF-3 流程宿主 + hero 面板驱动（`heroPanelDrive` 纯函数）+ 知识模式右栏联动（`rightbarViewPlan` + effect——fix-23 语义随迁） |
+| `anchored-projects.tsx` | 项目锚定装载共享面（fix-36 收敛）：`WorkspacesAnchor` 归属锚子件 + `isWorkspacesSnapshot` 窄判定 + `useAnchoredProjects` 共享 hook（ShellHost/知识面板/召回视图/hero 弹层四装配面同型「快照 + 项目相位 + 条件锚」单一来源） |
 | `HeroPanel.tsx` | UF-2 零项目 hero 面板（`main` keyed 'dswf-hero' 占用者——HeroEmpty 挂载舞台） |
 | `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「添加项目」CTA——官方 Button；零判据零数据源） |
 | `KnowledgePanel.tsx` | UF-5 知识面板（`main` keyed 'dswf-knowledge' 占用者）：KnowledgeView 挂载 + 项目锚推导 + 桥抽屉缝消费（useSyncExternalStore） |

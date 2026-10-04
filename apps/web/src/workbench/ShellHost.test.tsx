@@ -5,13 +5,7 @@
 // 钩子形制断言 = 子件直测（渲染期读取 + null 渲染），效应上抛面归 e2e。
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import {
-  ForgeShellHost,
-  PanelInfoAnchor,
-  WorkspacesAnchor,
-  heroPanelDrive,
-  readActivePanelId,
-} from './ShellHost.js'
+import { ForgeShellHost, PanelInfoAnchor, heroPanelDrive, readActivePanelId } from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
 
 describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场）', () => {
@@ -77,20 +71,4 @@ describe('heroPanelDrive hero 面板驱动（纯函数：一次性守卫 + 边�
   })
 })
 
-describe('WorkspacesAnchor workspace 归属锚子件（SSR 渲染期钩子读取面）', () => {
-  it('SSR 渲染期执行钩子读取（快照选择器直连）且渲染为 null（效应回调归 e2e）', () => {
-    const seen: unknown[] = []
-    const markup = renderToStaticMarkup(
-      <WorkspacesAnchor
-        hook={(sel) => {
-          const value = sel({ items: [] } as never)
-          seen.push(value)
-          return value
-        }}
-        onChange={() => {}}
-      />,
-    )
-    expect(markup).toBe('')
-    expect(seen).toEqual([{ items: [] }])
-  })
-})
+// WorkspacesAnchor 归属锚子件测试随件迁至 anchored-projects.test.tsx（fix-36 收敛落点）

@@ -16,12 +16,10 @@
 // ui-slots single 槽 lowest-renders 语义），其 children 声明持续供养
 // conversation.hero.workspace.directoryFlow 子洞——本影子行不重声明 children（ui-slots
 // register 对已声明子槽重声明即 throw，fix-23 runtime 实证），产品添加径亦不经该子洞。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
-import { WorkspacesAnchor, isWorkspacesSnapshot } from '../../workbench/ShellHost.js'
-import type { LedgerWorkspacesSnapshot } from '../sidebar/sidebar-model.js'
-import { useForgeProjects } from '../sidebar/use-forge-projects.js'
+import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { heroPickerPlan, selectedProjectOf } from './hero-picker-model.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
@@ -60,12 +58,9 @@ export function ForgeHeroWorkspacePicker({
   onClose,
   useWorkspaces,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
-  // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏同锚口径）
-  const [workspacesSnap, setWorkspacesSnap] = useState<LedgerWorkspacesSnapshot | null>(null)
-  const [projectsState, , silentRefresh] = useForgeProjects(workspacesSnap)
-  const handleWorkspacesSnap = useCallback((snap: unknown) => {
-    setWorkspacesSnap(isWorkspacesSnapshot(snap) ? snap : null)
-  }, [])
+  // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
+  // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）
+  const { projects: projectsState, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
@@ -133,9 +128,7 @@ export function ForgeHeroWorkspacePicker({
         footer={plan.pinAdd ? [addEntry] : undefined}
         listClassName="dswf-hero-picker-list"
       />
-      {useWorkspaces !== undefined ? (
-        <WorkspacesAnchor hook={useWorkspaces} onChange={handleWorkspacesSnap} />
-      ) : null}
+      {workspacesAnchor}
     </>
   )
 }

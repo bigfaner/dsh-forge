@@ -8,12 +8,10 @@
 // 产品 'dswf-trajectory' 复刻退役——官方名册同 order 10 双『轨迹』页签冲突，且官方
 // trajectory 自带富数据管线（历史加载/折叠回合/图片子槽），转录映射（transcript.ts +
 // TranscriptAnchor + TrajectoryLedger）只为自绘台账而设、无其他消费面，一并退役）。
-import { useCallback, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { RecallTab } from './RecallTab.js'
+import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { projectAnchorOf } from '../../workbench/panel-model.js'
-import { WorkspacesAnchor, isWorkspacesSnapshot } from '../../workbench/ShellHost.js'
-import type { LedgerWorkspacesSnapshot } from '../sidebar/sidebar-model.js'
-import { useForgeProjects } from '../sidebar/use-forge-projects.js'
 import './session.css'
 
 /** 官方 kit 观察钩子窄面（上游 SnapshotSelectorHook 消费切片——结构同型镜像，禁 import 上游运行期包） */
@@ -35,14 +33,14 @@ export interface ForgeRecallViewProps {
  * RecallTab 无 visible 维度）。data-dswf-pane="recall" 锚保持。
  */
 export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
-  const [workspacesSnap, setWorkspacesSnap] = useState<LedgerWorkspacesSnapshot | null>(null)
-  const [projectsState] = useForgeProjects(workspacesSnap)
-  const handleWorkspacesSnap = useCallback((snap: unknown) => {
-    setWorkspacesSnap(isWorkspacesSnapshot(snap) ? snap : null)
-  }, [])
+  // 项目锚推导输入：workspace 归属快照 + 项目台账（useAnchoredProjects 共享 hook——与
+  // ShellHost/知识面板/hero 弹层同锚口径，fix-36 收敛）
+  const { projects: projectsState, workspaces, anchor: workspacesAnchor } = useAnchoredProjects(
+    props.useWorkspaces,
+  )
   const projectId = projectAnchorOf({
     sessionId: props.sessionId ?? null,
-    workspaces: workspacesSnap,
+    workspaces,
     projects: projectsState.phase === 'ready' ? projectsState.projects : [],
   })
   return (
@@ -52,9 +50,7 @@ export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
         sessionId={props.sessionId ?? null}
         onOpenEntry={props.openKnowledgeEntry}
       />
-      {props.useWorkspaces !== undefined ? (
-        <WorkspacesAnchor hook={props.useWorkspaces} onChange={handleWorkspacesSnap} />
-      ) : null}
+      {workspacesAnchor}
     </div>
   )
 }

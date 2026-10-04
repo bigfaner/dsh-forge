@@ -5,16 +5,13 @@
 // 后自动对齐，无需 2.10 额外接线；projects 为应用侧数据（SC2 零副本纪律只约 dsh 账本面）。
 import { useCallback, useEffect, useState } from 'react'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { createForgeRpcClient, preloadTransport, type ForgeRpcClient } from '../../rpc/index.js'
+import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 
 /** 项目列表相位 */
 export type ProjectsPhase =
   | { readonly phase: 'loading' }
   | { readonly phase: 'ready'; readonly projects: readonly ProjectSummary[] }
   | { readonly phase: 'error'; readonly message: string }
-
-/** RPC client 构造器（缺省 = preload 真身；注入 = 测试面） */
-export type RpcClientFactory = () => ForgeRpcClient
 
 /**
  * 单次拉取的相位映射（纯异步面——错误归一为 error 相位，永不 reject）。
@@ -36,7 +33,7 @@ export async function fetchProjectsPhase(makeClient: RpcClientFactory): Promise<
  */
 export function useForgeProjects(
   refreshKey: unknown,
-  makeClient: RpcClientFactory = defaultClient,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): readonly [ProjectsPhase, () => void, () => void] {
   const [state, setState] = useState<ProjectsPhase>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)
@@ -59,9 +56,4 @@ export function useForgeProjects(
     setNonce((n) => n + 1)
   }, [])
   return [state, retry, silentRefresh] as const
-}
-
-/** 缺省构造：preload 传输真身（缺席由 fetchProjectsPhase 收敛为 error 相位——非 Electron 载体不炸壳） */
-function defaultClient(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
 }

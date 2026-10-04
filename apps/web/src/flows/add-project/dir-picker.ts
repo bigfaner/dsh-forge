@@ -26,3 +26,20 @@ export function directoryPickerBridgeOf(globalLike: unknown = globalThis): DshDi
 
 /** 原生选取源（桥真身/测试桩同型——取消 null / 选中路径 / reject 错误） */
 export type NativePickSource = () => Promise<string | null>
+
+/** 已注册路径集合零态（共享常量，fix-36 收敛——DirectoryBrowser/RegisterForm/AddProjectFlow/
+ * flow-actions 四消费面同引用：缺省注入值 = 空集不标记） */
+export const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
+
+/**
+ * 原生选取源解析（纯函数，fix-36 收敛——RegisterForm/AddProjectFlow 两装配壳同判据）：
+ * 显式注入优先（undefined = 探测桥；null = 强制回退内嵌浏览器面——回退面测试口径）；
+ * 桥在场包一层 `() => bridge.pick()`（探测一次，非每调用探测）。
+ */
+export function resolveNativePickSource(
+  nativePicker: NativePickSource | null | undefined,
+): NativePickSource | null {
+  if (nativePicker !== undefined) return nativePicker
+  const bridge = directoryPickerBridgeOf()
+  return bridge === undefined ? null : () => bridge.pick()
+}
