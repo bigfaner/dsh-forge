@@ -4,12 +4,12 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, protocol, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, type OpenDialogOptions, type WebContents } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
-  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, refreshKnowledgeBindings, registerBootChannel,
-  registerDirectoryPickerChannel, registerFsChannels, registerKnowledgeChannels, registerProjectsChannels,
-  withKnowledgeBindingsRefresh,
+  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE,
+  refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel, registerFsChannels,
+  registerKnowledgeChannels, registerProjectsChannels, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
@@ -76,7 +76,17 @@ void (async () => {
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     // fix-14：官方 __DSH_DIRECTORY_PICKER__ 桥 main 半边——openDirectory 单选（取消 = null）
-    registerDirectoryPickerChannel(ipcMain, () => dialog.showOpenDialog({ properties: ['openDirectory'] }))
+    // fix-21：parent 窗口形参 + 官方标题——showOpenDialog(父窗, options) = 对父窗模态 +
+    // 前台置顶（Windows 失焦态点「＋」仍立即现于主窗之上）；parent 缺席（理论不可达）
+    // → 回退无 parent 形参（fail-soft，不比 fix-14 现状差）。
+    const pickDialogOptions: OpenDialogOptions = { properties: ['openDirectory'], title: DIRECTORY_PICKER_DIALOG_TITLE }
+    registerDirectoryPickerChannel(
+      ipcMain,
+      (parent) => (parent === null
+        ? dialog.showOpenDialog(pickDialogOptions)
+        : dialog.showOpenDialog(parent as BrowserWindow, pickDialogOptions)),
+      (sender) => BrowserWindow.fromWebContents(sender as WebContents),
+    )
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     wireWindowLifecycle(app)
