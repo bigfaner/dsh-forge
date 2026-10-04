@@ -1,0 +1,21 @@
+{
+  "name": "@dsh-forge/path-key",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "工作区路径比对归一键（win32 折大小写 + 反斜杠规整 + 去尾分隔符）——零逻辑纯函数、零依赖；core 注册链与 knowledge 绑定表解析的同源单一来源（fix-30 消口径分裂）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

@@ -10,6 +10,9 @@
 // 惰性读取（fail-soft：读失败按无该源处理），文件条目优先于静态表（装配方最新事实）。
 // 无 watch 无缓存直投——SC2 纪律域为 UI 状态副本，本缝是装配配置数据逐写逐读。
 import { readFileSync } from 'node:fs'
+// fix-30：比对归一口径收编 @dsh-forge/path-key 单一来源（core 注册链同源消费——
+// 同一变体拼写在 core 命中既有行 ⟺ 在此命中绑定行，消「同源数据两种归一口径」分裂）
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ToolExecFace } from './faces.js'
 
 /** 会话上下文（tool 执行点可解析的全部会话身份） */
@@ -31,12 +34,7 @@ export interface ProjectBinding {
 /** cwd → projectId 解析器 */
 export type ProjectIdResolver = (cwd: string) => string | undefined
 
-/** 路径归一（比对用）：反斜杠 → 正斜杠、去尾分隔符；win32 大小写不敏感 */
-function normalizePath(p: string): string {
-  const slashed = p.replace(/\\/g, '/').replace(/\/+$/, '')
-  const platform = (globalThis as { process?: { platform?: string } }).process?.platform
-  return platform === 'win32' ? slashed.toLowerCase() : slashed
-}
+/** 路径归一（比对用）：@dsh-forge/path-key 同源（fix-30 前本文件私有的 normalizePath 收编单一来源） */
 
 /**
  * 绑定表 → 解析器。语义：归一后整串相等（会话 cwd = 工作区根，非前缀匹配）；
@@ -48,11 +46,11 @@ export function createProjectResolver(
   bindingsFile?: string,
 ): ProjectIdResolver {
   const table = new Map<string, string>()
-  for (const b of bindings) table.set(normalizePath(b.wsPath), b.projectId)
+  for (const b of bindings) table.set(normalizeFsPath(b.wsPath), b.projectId)
   if (bindingsFile === undefined) {
-    return (cwd: string) => table.get(normalizePath(cwd))
+    return (cwd: string) => table.get(normalizeFsPath(cwd))
   }
-  return (cwd: string) => readBindingsFile(bindingsFile).get(normalizePath(cwd)) ?? table.get(normalizePath(cwd))
+  return (cwd: string) => readBindingsFile(bindingsFile).get(normalizeFsPath(cwd)) ?? table.get(normalizeFsPath(cwd))
 }
 
 /** 绑定表文件单次读取（fail-soft：任何失败返回空表——调用回落静态表） */
@@ -68,7 +66,7 @@ function readBindingsFile(file: string): Map<string, string> {
       if (typeof row !== 'object' || row === null) continue
       const { wsPath, projectId } = row as { wsPath?: unknown; projectId?: unknown }
       if (typeof wsPath === 'string' && typeof projectId === 'string') {
-        table.set(normalizePath(wsPath), projectId)
+        table.set(normalizeFsPath(wsPath), projectId)
       }
     }
     return table

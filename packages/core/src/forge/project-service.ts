@@ -1,15 +1,26 @@
 // forge 域 projects 服务（tech-design §Interface 1 全五法 + §交互一/§交互三；定位：业务）。
 // registerProject 四步补偿链（2.2）——fix-27：① 前另有重注册自愈防御（既有行在场 →
 // 幂等成功/悬空引用自愈，绝不撞 UNIQUE(ws_path)；见 attachExistingRow）：
-// ① registry.list() 按 canonical path 预检（命中=挂接既有，attachedToExisting=true，不登记补偿）
+// ① registry.list() 预检（命中=挂接既有，attachedToExisting=true，不登记补偿）
 // ② registry.create(wsPath)（dsh 幂等）→ ③ 事务写 projects 行
 // ④ ③失败且属本次新建 → registry.delete(workspaceId) 补偿（保目录保日志，幂等）；
 //    挂接既有时后任一步失败均不删既有工作区（ownership 保护）。
+// fix-30 路径归一：①/自愈查询原为 BINARY 精确匹配——拼写变体（盘符大小写/尾分隔符/
+// symlink/8.3 短名）可穿透预检致 dsh 返回既有实体而误判「本次新建」，③ 撞 UNIQUE(ws_path)
+// 后 ④ 把流程前就存在的健康工作区补偿删除（身份 churn）。收口三件：
+//   · 入口归一（canonicalizeDir）：注册输入可达则 realpath（磁盘真值拼写），fail-soft
+//     回退原拼写；比对口径 = normalizeFsPath（@dsh-forge/path-key 单一来源，knowledge
+//     绑定表同源消费——消口径分裂）；
+//   · 「本次新建」改结构判据：create 前后 registry.list() id 快照差集（免疫拼写变体——
+//     dsh 按 canonical 返回既有实体时 id 已在快照中，attachedToExisting 恒真值）；
+//   · ③ 撞 UNIQUE(ws_path) 时重入一次 attachExistingRow（自愈径）而非直接进补偿。
+// 补偿链语义零变化：真新建失败 → registry.delete 补偿；挂接/既有实体绝不被补偿删除。
 // 查询面 + 启动对账（2.3）：listProjects（archived 态随行=过滤口径）/ getProject / updateProject
 // （patch 仅 name/archived）/ reconcileAtStartup（失配找回、找不回幂等重建、孤儿只提示不删；
 // 全程异常降级 app_key_logs 永不抛断启动）。SQLite 写仅经 db/ 句柄（单写路径）；
 // registry 调用只依赖 dsh 官方 ctx.workspaceRegistry 面。
 import { randomUUID } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import type Database from 'better-sqlite3'
 import type {
@@ -22,6 +33,7 @@ import type {
   RegisterProjectInput,
   RegisterResult,
 } from '@dsh-forge/contracts'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import { withTransaction } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
@@ -63,29 +75,60 @@ export function isForgeDirExternal(wsPath: string, forgeDir: string): boolean {
   return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)
 }
 
+/**
+ * fix-30 入口归一：可达则 realpath（磁盘真值拼写——盘符大小写/8.3 短名/symlink 全展开，
+ * 与 dsh registry.create 的 canonical 化同基准），失败回退原拼写（fail-soft：网络盘等
+ * 不可达场景零变化）。归一只统一比对与输入基准，不产生落库形态——ws_path 落库恒以
+ * ② registry 返回的 canonical 为准。
+ */
+async function canonicalizeDir(p: string): Promise<string> {
+  try {
+    return await realpath(p)
+  } catch {
+    return p
+  }
+}
+
 async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectInput): Promise<RegisterResult> {
   const { db, registry } = deps
 
+  // fix-30 入口归一：注册输入（workspaceDir/forgeDir/knowledgeDir）可达则 realpath——拼写
+  // 变体在进 ① 预检/自愈查询前收敛到磁盘真值拼写；比对口径 = normalizeFsPath 同源键
+  const canonicalInput: RegisterProjectInput = {
+    ...input,
+    workspaceDir: await canonicalizeDir(input.workspaceDir),
+    forgeDir: await canonicalizeDir(input.forgeDir),
+    knowledgeDir: await canonicalizeDir(input.knowledgeDir),
+  }
+
   // fix-27 自愈防御（① 前）：重注册（既有行在场）→ 幂等成功 / 悬空引用自愈，绝不撞
   // UNIQUE(ws_path)（详见 attachExistingRow 块注——预检只查 dsh 注册表，行在场时 INSERT 恒炸）
-  const reattached = await attachExistingRow(deps, input)
+  const reattached = await attachExistingRow(deps, canonicalInput)
   if (reattached !== undefined) return reattached
 
-  // ① 预检：list() 按 canonical path 匹配（输入契约为 canonical 化后路径；命中=挂接，不登记补偿）
-  const existing = registry.list().find((ws) => ws.path === input.workspaceDir)
-  const attachedToExisting = existing !== undefined
+  // ① 预检：list() 按归一键匹配（fix-30：BINARY → normalizeFsPath——输入与 registry canonical
+  // 的盘符大小写/正反斜杠/尾分隔符差异不再击穿；命中=挂接，不登记补偿）
+  const inputKey = normalizeFsPath(canonicalInput.workspaceDir)
+  const existing = registry.list().find((ws) => normalizeFsPath(ws.path) === inputKey)
 
   let workspace: WorkspaceLike
+  let createdNow: boolean // fix-30 结构判据：② 返回实体是否本流程新建（create 前后 id 快照差集）
   if (existing) {
     workspace = existing
+    createdNow = false
   } else {
-    // ② registry.create（dsh 幂等：同 canonical path 返回既有实体）——失败即注册中止，无补偿需要
+    // ② registry.create（dsh 幂等：同 canonical path 返回既有实体）——失败即注册中止，无补偿需要。
+    // create 收原始拼写（canonical 化属 dsh 官方面职责）；「本次新建」不看 ① 是否命中，看 id 差集
+    // （免疫拼写变体：dsh 按 canonical 返回既有实体时其 id 已在快照中）
+    const idsBeforeCreate = new Set(registry.list().map((ws) => ws.id))
     try {
       workspace = await registry.create(input.workspaceDir)
     } catch (cause) {
       throw new WorkspaceCreateError(input.workspaceDir, cause)
     }
+    createdNow = !idsBeforeCreate.has(workspace.id)
   }
+  const attachedToExisting = !createdNow
 
   // ③ 事务写 projects 行（ws_path 以 registry 返回的 canonical path 为准——非用户拼写原样）
   const projectId = randomUUID()
@@ -101,15 +144,22 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
         workspace.id,
         workspace.path,
         input.name,
-        input.forgeDir,
-        isForgeDirExternal(workspace.path, input.forgeDir) ? 1 : 0,
-        input.knowledgeDir,
+        canonicalInput.forgeDir,
+        isForgeDirExternal(workspace.path, canonicalInput.forgeDir) ? 1 : 0,
+        canonicalInput.knowledgeDir,
         now,
         now,
       )
     })
   } catch (writeCause) {
-    // ④ 补偿——仅「本次新建」（①未命中，②由本流程创建）才登记；流程窗口内取消同径（见 §交互一）
+    // fix-30 兜底①：UNIQUE(ws_path) 撞既有行 = 变体径穿透预检的残余面（入口归一不可达回退
+    // 时，dsh canonical 仍可能命中既有实体/既有行）→ 按撞键的 ws_path（= workspace.path）
+    // 重入一次自愈；命中即幂等成功——绝不把既有实体按「本次新建」补偿删除。
+    if (isUniqueWsPathViolation(writeCause)) {
+      const selfHealed = await attachExistingRow(deps, { ...canonicalInput, workspaceDir: workspace.path })
+      if (selfHealed !== undefined) return selfHealed
+    }
+    // ④ 补偿——仅「本次新建」（② 结构判据：id 快照差集）才登记；流程窗口内取消同径（见 §交互一）
     if (attachedToExisting) {
       throw new ProjectWriteError({ workspaceId: workspace.id, wsPath: workspace.path }, writeCause)
     }
@@ -151,6 +201,19 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
 }
 
 /**
+ * fix-30 兜底①判据：③ INSERT 撞 UNIQUE(ws_path)（better-sqlite3 SqliteError——code
+ * SQLITE_CONSTRAINT_UNIQUE 且 message 指名 projects.ws_path 列）。workspace_id 列冲突
+ * （挂接径并发占位类）不属本判据——仍走 ④ 前的挂接保护分支。
+ */
+function isUniqueWsPathViolation(cause: unknown): boolean {
+  return (
+    cause instanceof Error &&
+    (cause as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+    cause.message.includes('projects.ws_path')
+  )
+}
+
+/**
  * fix-27 重注册自愈/幂等（registerProject ① 前防御）：按 ws_path 查既有行——行在场时
  * UNIQUE(ws_path) 令 INSERT 恒炸，重注册永不走新 INSERT：
  *   · 健康引用（registry.get 命中且 path 一致）→ 幂等成功返回既有项目（projectId 复用
@@ -158,6 +221,8 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
  *   · 悬空引用（fix-18 home 翻转类遗留：行 workspace_id 在现行 registry 无实体）→ 复用
  *     对账单项修复 reconcileProjectRef（relink/recreate + UPDATE 单向修引用）后幂等返回
  *     ——不新 INSERT、不登记补偿（挂接保护恒成立）。
+ * fix-30：行查找按归一键（normalizeFsPath 同源键）——BINARY 等值查询被拼写变体（盘符
+ * 大小写/正反斜杠/尾分隔符）击穿面收口；projects 表为行级小表，全量行 JS 侧键比对。
  * 任何失败（读库/修复链异常）→ undefined 降级现行链：③ 写入失败面承接 typed error 映射，
  * 补偿语义零变化（库不可用等场景与现行行为逐字一致）。
  */
@@ -166,9 +231,11 @@ async function attachExistingRow(
   input: RegisterProjectInput,
 ): Promise<RegisterResult | undefined> {
   try {
+    const key = normalizeFsPath(input.workspaceDir)
     const row = deps.db
-      .prepare<unknown[], ProjectRefRow>(`SELECT id, workspace_id, ws_path FROM projects WHERE ws_path = ?`)
-      .get(input.workspaceDir)
+      .prepare<unknown[], ProjectRefRow>(`SELECT id, workspace_id, ws_path FROM projects`)
+      .all()
+      .find((r) => normalizeFsPath(r.ws_path) === key)
     if (row === undefined) return undefined
     await reconcileProjectRef(deps, row, { repaired: [], orphans: [] }) // 健康即内部短路（零写零记账）
     const after = getRow(deps, row.id)

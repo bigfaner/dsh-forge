@@ -264,6 +264,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../path-key
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -280,10 +283,15 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../path-key
     devDependencies:
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
+
+  packages/path-key: {}
 
 packages:
 

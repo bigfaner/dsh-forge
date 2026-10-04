@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ToolExecFace } from './faces.js'
 import { createProjectResolver, sessionContextOf, unboundSessionError } from './session.js'
 
@@ -52,6 +53,17 @@ describe('createProjectResolver（cwd → projectId 绑定表）', () => {
     const resolver = createProjectResolver([{ wsPath: '/ws/Demo', projectId: 'p-1' }])
     const expected = process.platform === 'win32' ? 'p-1' : undefined
     expect(resolver('/ws/demo')).toBe(expected)
+  })
+
+  // fix-30 同源口径 pin：绑定表解析与 core 注册链共消费 @dsh-forge/path-key——
+  // 同一变体拼写（盘符大小写/正反斜杠/尾分隔符）core 命中既有行 ⟺ 此处命中绑定行
+  it('变体拼写矩阵与 core 归一同源（normalizeFsPath 键等价即命中）', () => {
+    const resolver = createProjectResolver([{ wsPath: 'Z:\\learn', projectId: 'p-learn' }])
+    for (const variant of ['z:\\learn\\', 'Z:/LEARN', 'z:\\Learn']) {
+      // 键等价断言（口径单一来源本体）+ 解析命中断言（消费面）双钉
+      expect(normalizeFsPath(variant)).toBe(normalizeFsPath('Z:\\learn'))
+      if (process.platform === 'win32') expect(resolver(variant)).toBe('p-learn')
+    }
   })
 })
 

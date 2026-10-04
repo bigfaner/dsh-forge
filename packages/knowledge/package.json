@@ -19,7 +19,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*"
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.19.0"

@@ -934,6 +934,18 @@
       "type": "coding.fix",
       "complexity": "low"
     },
+    "fix-30": {
+      "id": "fix-30",
+      "title": "Fix(P1): 注册链「本次新建」判定可被路径拼写变体击穿——BINARY 精确匹配不归一输入，变体径误删健康工作区注册（补偿链语义破坏）+ attachedToExisting 误报：core 边界统一路径归一",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "completed",
+      "file": "fix-30.md",
+      "record": "records/fix-30.md",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
     "fix-3": {
       "id": "fix-3",
       "title": "Fix: 添加项目模态宽度缺陷——内容 560 \u003e 官方卡片 380 致左半裁切（label 不可见）+ 浏览器列表增高",

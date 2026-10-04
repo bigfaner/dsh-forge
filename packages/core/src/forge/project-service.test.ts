@@ -2,7 +2,7 @@
 // 桩语义按 G1 pin 第 4 项（上游 dsh-workspace 源码核实）：create 幂等（同 canonical path 返回
 // 既有实体）、delete 保目录保日志且未知 id 幂等 no-op（false）、list 同步投影。
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -416,5 +416,116 @@ describe('fix-24 ② 注册时标题对齐：新建/挂接/自愈三径收口 + 
     const err: unknown = await service.registerProject(input()).catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
     expect(rename.calls).toEqual([]) // 失败径 rename 未发生——补偿链无需 rename 回滚
+  })
+})
+
+// ── fix-30 拼写变体归一：盘符大小写/尾分隔符/…回折/symlink 击穿面收口 ──
+// 缺陷形态（修复前）：BINARY 预检/自愈查询未命中变体 → dsh（按 canonical）返回既有实体
+// 而误判「本次新建」→ ③ 撞 UNIQUE(ws_path) 或 ④ 把流程前就存在的健康工作区补偿删除。
+
+/** 大小写翻转（非字母不变）——盘符/段大小写变体生成器 */
+const flipCase = (s: string): string =>
+  s
+    .split('')
+    .map((c) => (c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase()))
+    .join('')
+
+describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝不被补偿删除', () => {
+  it('已注册后以盘符大小写+尾分隔符变体再注册（真实目录）→ 幂等成功：项目/工作区 id 不变、零 create、零补偿删除', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fix30-case-'))
+    try {
+      const { db, registry, service } = setup()
+      const reg = { workspaceDir: root, name: 'learn', forgeDir: join(root, '.forge'), knowledgeDir: join(root, '.knowledge') }
+      const first = await service.registerProject(reg)
+      expect(first.attachedToExisting).toBe(false)
+      const variant = flipCase(root) + '\\'
+      const second = await service.registerProject({
+        ...reg,
+        workspaceDir: variant,
+        forgeDir: join(variant, '.forge'),
+        knowledgeDir: join(variant, '.knowledge'),
+      })
+      expect(second).toEqual({ projectId: first.projectId, workspaceId: first.workspaceId, attachedToExisting: true })
+      expect(registry.createCalls).toEqual([root]) // 变体径零 create——归一键在 ①/自愈面命中
+      expect(registry.deleteCalls).toEqual([]) // 绝无补偿删除
+      expect(registry.list()).toHaveLength(1) // dsh 侧零身份 churn（id 稳定）
+      expect(registry.list()[0]?.id).toBe(first.workspaceId)
+      expect(readRows(db)).toHaveLength(1) // 应用侧零身份 churn（不新 INSERT）
+      expect(keyLogs(db)).toEqual([]) // 健康短路零记账
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('大小写+尾分隔符变体（无盘面依赖）→ 自愈查询归一键命中：幂等成功、零补偿', async () => {
+    const { db, registry, service } = setup()
+    const canonical = join(WS, 'learn') // 不存在路径——realpath fail-soft 回退原拼写（边界口径）
+    const existing = registry.seed(canonical)
+    seedRow(db, { id: 'row-learn', workspaceId: existing.id, wsPath: canonical })
+    const result = await service.registerProject(input({ workspaceDir: `${flipCase(canonical)}\\` }))
+    expect(result).toEqual({ projectId: 'row-learn', workspaceId: existing.id, attachedToExisting: true })
+    expect(registry.createCalls).toEqual([])
+    expect(registry.deleteCalls).toEqual([])
+    expect(readRows(db)).toHaveLength(1) // 幂等：不新 INSERT（id 稳定）
+    expect(keyLogs(db)).toEqual([]) // 健康引用短路——零写零记账
+  })
+
+  it('结构判据：变体径穿透预检但 ② 返回既有实体 → attachedToExisting=true，③ 失败绝不补偿删除既有', async () => {
+    const { db, registry, service } = setup()
+    const canonical = join(WS, 'learn')
+    const existing = registry.seed(canonical)
+    failProjectInserts(db) // ③ 恒失败（触发器）——修复前缺陷形态即在此径把既有工作区 delete
+    const err: unknown = await service
+      .registerProject(input({ workspaceDir: `${canonical}\\sub\\..` })) // 归一键不可折叠 '..'（lexical 折叠对 symlink 父级不安全）——穿透面载体
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(ProjectWriteError)
+    expect((err as ProjectWriteError).data.compensated).toBeUndefined()
+    expect(registry.deleteCalls).toEqual([]) // id 快照差集判「本次新建」——既有实体绝不被补偿删除
+    expect(registry.records.has(existing.id)).toBe(true)
+    expect(readRows(db)).toHaveLength(0) // 触发器拦截零行
+  })
+
+  it('兜底①：变体径穿透预检且 ③ 撞 UNIQUE(ws_path) → 重入自愈幂等成功（无补偿删除、无错误上抛）', async () => {
+    const { db, registry, rename, service } = setup()
+    const canonical = join(WS, 'learn')
+    const existing = registry.seed(canonical)
+    seedRow(db, { id: 'row-learn', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用行（撞键载体）
+    const result = await service.registerProject(input({ workspaceDir: `${canonical}\\sub\\..` }))
+    expect(result).toEqual({ projectId: 'row-learn', workspaceId: existing.id, attachedToExisting: true })
+    expect(rename.calls).toEqual([{ workspaceId: existing.id, title: 'row-learn' }]) // 确经 attachExistingRow 自愈径（title 跟行不跟输入）
+    expect(registry.deleteCalls).toEqual([]) // 撞 UNIQUE 不进补偿——既有工作区存活
+    expect(registry.records.has(existing.id)).toBe(true)
+    expect(readRows(db)).toHaveLength(1) // 不新 INSERT——原行 UPDATE 单向修引用（relink）
+    expect(readRows(db)[0]?.workspace_id).toBe(existing.id)
+  })
+
+  it('symlink/junction 变体再注册（可行平台）→ realpath 展开收敛既有：幂等、零补偿删除', async (ctx) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fix30-sym-'))
+    const link = `${root}-link`
+    try {
+      symlinkSync(root, link, process.platform === 'win32' ? 'junction' : 'dir')
+    } catch {
+      rmSync(root, { recursive: true, force: true })
+      ctx.skip() // 平台/权限不可建 symlink——任务文件「可行平台」口径
+      return
+    }
+    try {
+      const { db, registry, service } = setup()
+      const reg = { workspaceDir: root, name: 'sym', forgeDir: join(root, '.forge'), knowledgeDir: join(root, '.knowledge') }
+      const first = await service.registerProject(reg)
+      const second = await service.registerProject({
+        ...reg,
+        workspaceDir: link,
+        forgeDir: join(link, '.forge'),
+        knowledgeDir: join(link, '.knowledge'),
+      })
+      expect(second).toEqual({ projectId: first.projectId, workspaceId: first.workspaceId, attachedToExisting: true })
+      expect(registry.deleteCalls).toEqual([])
+      expect(registry.list()).toHaveLength(1)
+      expect(readRows(db)).toHaveLength(1)
+    } finally {
+      rmSync(link, { recursive: true, force: true })
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

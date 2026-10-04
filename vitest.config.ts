@@ -14,6 +14,7 @@ export default defineConfig({
       // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。
       { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
+      { test: { name: 'path-key', include: ['packages/path-key/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },

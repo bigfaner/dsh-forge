@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*",
     "better-sqlite3": "13.0.3",
     "gray-matter": "4.0.3"
   }

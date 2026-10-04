@@ -11,7 +11,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 const readJson = (p: string) => JSON.parse(read(p)) as Record<string, unknown>
 const rel = (p: string) => relative(ROOT, resolve(ROOT, p)).split('\\').join('/')
 
-describe('AC1 五工件 workspace 与 references 拓扑', () => {
+describe('AC1 workspace 工件与 references 拓扑', () => {
   it('pnpm-workspace.yaml 收敛 apps/* 与 packages/*', () => {
     const yaml = read('pnpm-workspace.yaml')
     expect(yaml).toMatch(/^\s*-\s+apps\/\*\s*$/m)
@@ -24,6 +24,7 @@ describe('AC1 五工件 workspace 与 references 拓扑', () => {
     ['packages/contracts', '@dsh-forge/contracts'],
     ['packages/core', '@dsh-forge/core'],
     ['packages/knowledge', '@dsh-forge/knowledge'],
+    ['packages/path-key', '@dsh-forge/path-key'],
   ] as const
 
   it.each(artifacts)('%s 包名 %s 就位', (dir, name) => {
@@ -37,17 +38,17 @@ describe('AC1 五工件 workspace 与 references 拓扑', () => {
     }
   })
 
-  it('根 solution tsconfig references 五工件（tsc -b 全拓扑入口）', () => {
+  it('根 solution tsconfig references 六工件（tsc -b 全拓扑入口；fix-30 增 path-key）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
-      ['apps/host', 'apps/web', 'packages/contracts', 'packages/core', 'packages/knowledge'].sort(),
+      ['apps/host', 'apps/web', 'packages/contracts', 'packages/core', 'packages/knowledge', 'packages/path-key'].sort(),
     )
   })
 
   it.each([
     ['packages/contracts', []],
-    ['packages/core', ['packages/contracts']],
-    ['packages/knowledge', ['packages/contracts', 'packages/core']],
+    ['packages/core', ['packages/contracts', 'packages/path-key']],
+    ['packages/knowledge', ['packages/contracts', 'packages/core', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge']],
     ['apps/web', ['packages/contracts']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
