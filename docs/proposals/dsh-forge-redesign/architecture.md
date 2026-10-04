@@ -65,8 +65,8 @@ intent: "architecture-baseline"
 
 ## 3. 状态层边界细则（P1 设计的输入）
 
-- **表**：`features` / `tasks`（七态 CHECK）/ `task_edges`（blockers，写入时无环校验）/ `task_records`（append-only）/ `proposals` / `task_session_links`（应用侧挂接记录，会话账本本体归 dsh）；SQLite 部署于应用 profile，按 `workspace_id` 外键域。
-- **状态机** = 代码内一份具体常量（task 七态、proposal 四态、feature manifest 态）+ 动词函数（`taskAdd / taskClaim / taskSubmit / taskTransition / taskQuery…`）；校验（from 匹配、依赖终态、record/reason 必带）全在服务内。
+- **表**：`features` / `feature_documents`（feature 文档索引，manifest 库内化——2026-10-02 M2 修订）/ `feature_records`（feature 域审计，append-only——2026-10-02 M2 修订，原六表扩为八表）/ `tasks`（七态 CHECK）/ `task_edges`（blockers，写入时无环校验）/ `task_records`（append-only）/ `proposals` / `task_session_links`（应用侧挂接记录，会话账本本体归 dsh）；SQLite 每工作区独立库，部署于 `{dsh-forge-home}/{canonical-path 扁平化}-{hash8}/`（M2 裁决③ + hash8 消歧后缀，2026-10-02 M2 修订，原「中央 profile 按 workspace_id 外键域」作废）。
+- **状态机** = 代码内一份具体常量（task 七态、proposal 五态、feature 六态）+ 动词函数（`addTask / claimTask / submitTask / transitionTask / queryTask…`——2026-10-02 M2 修订：动词 API 命名规范 = 动词+名词；transitionTask = 人类逃生通道，UI 专属不进 agent tool 面）；校验（from 匹配、依赖终态、record/reason 必带）全在服务内。
 - **机制不变量**：键唯一（`<feature>/<localId>`）、blockers 无环、记录 append-only、每次写自动审计。
 - **对齐总纲**：SC2（无投影、状态直读）、SC7（tool 消费本 API 写入，产品只看不管）。
 
@@ -126,7 +126,7 @@ intent: "architecture-baseline"
 
 > 五位倾向互异的架构专家对抗审核后的落账：无方向性翻案，以下为记账与配套。
 
-- **单机单活跃分支**为状态层显式假设：分支切换后文档引用（`descPath` / `manifest_path`）允许悬空，UI 只读缺省渲染并标注——M2（forge 管线接管）设计断言；多机同步明确划出 v1 边界外。
+- **单机单活跃分支**为状态层显式假设：分支切换后文档引用（`feature_documents.rel_path` / `proposals.doc_path`——2026-10-02 M2 修订，原 descPath / manifest_path 已随 manifest 库内化废止）允许悬空，UI 只读缺省渲染并标注——M2（forge 管线接管）设计断言；多机同步明确划出 v1 边界外。
 - **知识资产备份/迁移**入 P4（M8）范围（总纲同步）：两库路径可配置（允许指向用户自选同步/备份位置）+ 状态库导出/导入。
 - **上游契约面清单**为 P1 设计产物：boot manifest 注入格式、slot 洞名、workspace registry API、`__DSH_TRANSPORT__` carrier、ui-\* props、**agent-preset-registry 行格式（含 persona 行模板）、tool-subagent 请求面（agentOptions / toolFilter——无超时与子代预设覆写，已核实负结论）、subagent 组合继承语义**——逐项 pin 版本 + 适配测试。机制核实记录见《技术预研笔记》（`tech-research.md`）。
 - **schema 版本表 + 迁移函数惯例**入状态层设计；断言「知识索引重建失败不阻塞旧版运行」。

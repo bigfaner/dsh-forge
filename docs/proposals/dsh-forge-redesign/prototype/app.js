@@ -1306,7 +1306,7 @@
       '<div class="ov-info-row"><span class="ov-info-k">代码区</span><span class="ov-info-v ellipsis">' + esc(p.canonicalPath) + '</span></div>' +
       '<div class="ov-info-row"><span class="ov-info-k">文档位置 · forge</span><span class="ov-info-v ellipsis">' + esc(p.forgeDir || p.canonicalPath + '\\.forge') + ' · ' + (p.docMode === 'repo' ? '仓内 · 只读引用' : '仓外 · 应用管理') + '</span></div>' +
       '<div class="ov-info-row"><span class="ov-info-k">知识目录</span><span class="ov-info-v ellipsis">' + esc(p.knowledgeDir) + '</span></div>' +
-      '<div class="ov-info-row"><span class="ov-info-k">任务清单与记录</span><span class="ov-info-v ellipsis" title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化},注册时自动派生">' + esc(deriveTaskStore(p.canonicalPath)) + '</span></div>' +
+      '<div class="ov-info-row"><span class="ov-info-k">任务清单与记录</span><span class="ov-info-v ellipsis" title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化}-{hash8 消歧后缀},注册时自动派生">' + esc(deriveTaskStore(p.canonicalPath)) + '</span></div>' +
       '<div class="ov-info-row"><span class="ov-info-k">状态</span><span class="ov-info-v plain">' + esc(activeFeat ? activeFeat.slug + ' · ' + activeFeat.done + '/' + activeFeat.total : '—') + ' · 运行中会话 ' + running + '</span></div>' +
       '</div>' + alignHtml +
       '<div class="ov-subtabs">' +
@@ -2118,9 +2118,10 @@
   /* 非工作区目录的构建规则:一律挂在工作区下,用户可在表单中改写 */
   function deriveForgeDir(ws) { return wsNorm(ws) + '\\.forge'; }
   function deriveKnDir(ws) { return wsNorm(ws) + '\\.knowledge'; }
-  /* 任务清单与记录:统一存 {dsh-forge-home}/{canonical-path}(扁平化:/ 与 \ 替换为 -,盘符冒号去除),自动派生,无需用户填写 */
+  /* 任务清单与记录:统一存 {dsh-forge-home}/{canonical-path}(扁平化:/ 与 \ 替换为 -,盘符冒号去除)+ 原路径 hash8 消歧后缀(正式实现 = sha-256 前 8 hex;本 mock 用 djb2 32bit 代演示,确定性等价),自动派生,无需用户填写 */
   var DSH_FORGE_HOME = 'C:\\Users\\panda\\.dsh-forge';
-  function deriveTaskStore(ws) { return DSH_FORGE_HOME + '\\' + wsNorm(ws).replace(/^([A-Za-z]):/, '$1').replace(/[\\/]/g, '-'); }
+  function hash8(s) { var h = 5381; for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; } var v = ''; for (var b = 0; b < 4; b++) { v += ((h >>> (b * 8)) & 0xff).toString(16).padStart(2, '0'); } return v; }
+  function deriveTaskStore(ws) { var w = wsNorm(ws); return DSH_FORGE_HOME + '\\' + w.replace(/^([A-Za-z]):/, '$1').replace(/[\\/]/g, '-') + '-' + hash8(w); }
   var FOLDER_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
 
   /* ① 文件浏览器(模拟盘 Z:):选目录的通用件 —— 添加项目首步选工作区;表单内「浏览…」选知识库 / forge 目录 */

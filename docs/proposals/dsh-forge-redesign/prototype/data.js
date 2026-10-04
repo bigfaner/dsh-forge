@@ -902,7 +902,7 @@
           forgeDir: opts.forgeDir || opts.canonicalPath + '\\.forge',          /* 文档位置 = forge 目录:按工作区构建 */
           knowledgeDir: opts.knowledgeDir || opts.canonicalPath + '\\.knowledge',
           defaultRecallDomain: opts.defaultRecallDomain || null, archived: false, expanded: true, isNew: true };
-        /* 任务清单与记录不入项目记录:统一存 {dsh-forge-home}/{canonical-path 扁平化(/ 与 \ 替换为 -)},运行时按 canonicalPath 派生 */
+        /* 任务清单与记录不入项目记录:统一存 {dsh-forge-home}/{canonical-path 扁平化(/ 与 \ 替换为 -)}-{hash8 消歧后缀},运行时按 canonicalPath 派生 */
         db.projects.push(p);   /* 后自家:外键 + 扩展字段,无会话列表字段 */
         notify();
         return { ok: true, project: p };

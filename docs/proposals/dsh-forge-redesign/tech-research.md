@@ -126,6 +126,22 @@ run-tasks skill（forge 预设会话内）
 
 已知取舍：约束块从系统提示降为初始 prompt——这是 dsh 两个负结论下的**唯一差异化通道**，约束标记（`<EXTREMELY-IMPORTANT>` 等）原样保留以补偿位置弱化；合成单点（约束块 + 策略模板同函数族）杜绝模板漂移；dispatch prompt 整体落入子代持久会话日志，审计原子性优于分散记录。老 6 步执行协议简化为 4 步（Validate 拉取步消失：Initialize 并入、Execute/Submit/Commit/Done）。MAIN_SESSION 路由原样保留（dispatcher 主会话分支）。
 
+**映射表补记（2026-10-02，M2 schema 对抗审计触发——三轮裁决欠账 + 审计新增偏离一次清账）**：
+
+| 老 forge 语义 | M2 处置 |
+|---|---|
+| `forge task transition`（agent 可用） | 拆分：submitTask result=blocked（agent 受阻路径）+ transitionTask（人类逃生通道，UI 直调不进 tool 面） |
+| 通配依赖 `1.x`（相位级） | **砍除**——相位上下文由 PHASE_SUMMARY 注入承接 |
+| `forge prompt get-by-task-id` / fix-record-missed 模板 | taskPrompt tool 取消（v3 既定）；fix-record 简报 = run-tasks 内置静态文本 |
+| claim 自动 resume（in_progress 任务）+ 简报重拉 | ⚠️ 待裁决（附录 C-C1：claimTask 幂等重入 / redispatchTask / 降级记偏离） |
+| `--block-source` add 时 auto-blocks source | ⚠️ 待裁决（C-C2：单事务同置源 blocked 或记偏离 + 崩溃窗口外环检测） |
+| auto-restore 触发「completed or skipped」 | ⚠️ 待裁决（C-C3：transitionTask 终态转移挂恢复钩子） |
+| submit 硬校验（测试证据/AC/summary 空/--force）与 RecordData 字段族 | ⚠️ 待裁决（C-C4/C5：gate 序列承载 + 记录瘦身记偏离） |
+| fix 链深度上限 3 | ⚠️ 待裁决（C-C6：addTask 链深校验） |
+| ValidTypes ↔ 模板名两套词汇 | ⚠️ 待裁决（词汇归一：implementation→coding-feature 等映射） |
+
+完整处置表 = dsh-forge-m2-pipeline/db-schema.md 附录 C（裁决后回填状态）；本表为欠账清底快照。
+
 ## 3. 待验证清单（P1 spike 项，需实跑）
 
 | # | 项 | 方法 | 判定 |

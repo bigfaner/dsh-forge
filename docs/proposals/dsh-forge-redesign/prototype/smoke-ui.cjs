@@ -768,7 +768,7 @@ async function setScope(page, label) {
   await page.waitForTimeout(250);
   T('② 工作区目录自动回填表单', (await page.locator('#ap-ws').inputValue()) === 'Z:\\project\\dsh\\dsh-demo');
   T('② 项目名自动取文件夹名', (await page.locator('#ap-name').inputValue()) === 'dsh-demo');
-  T('② 任务清单与记录自动派生且只读(分隔符扁平化为 -)', (await page.locator('#ap-tasks').inputValue()) === 'C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-dsh-demo' &&
+  T('② 任务清单与记录自动派生且只读(扁平化 + hash8 消歧后缀)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-dsh-demo-') && /-[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()) &&
     await page.locator('#ap-tasks').isDisabled() === false && (await page.locator('#ap-tasks').getAttribute('readonly')) !== null);
   T('② 任务清单与记录位于表单最下方(目录字段之后)', await page.evaluate(() => {
     const rows = [...document.querySelectorAll('.dialog-body .form-row')];
@@ -807,7 +807,7 @@ async function setScope(page, label) {
   T('④ 换选工作区:回填 + 未手改字段重构(forge/项目名)', (await page.locator('#ap-ws').inputValue()) === 'Z:\\project\\dsh\\legacy-app' &&
     (await page.locator('#ap-forge').inputValue()) === 'Z:\\project\\dsh\\legacy-app\\.forge' &&
     (await page.locator('#ap-name').inputValue()) === 'legacy-app');
-  T('④ 任务清单随工作区重新派生(扁平化)', (await page.locator('#ap-tasks').inputValue()) === 'C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-legacy-app');
+  T('④ 任务清单随工作区重新派生(扁平化 + hash8)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-legacy-app-') && /-[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()));
   T('④ 浏览选定的知识库目录保留(不随工作区重构)', (await page.locator('#ap-kn').inputValue()) === 'Z:\\project\\dsh\\dsh-demo\\.knowledge');
   await page.locator('.dialog [data-dlg-ok]').click();
   await page.waitForTimeout(300);
