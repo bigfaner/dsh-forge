@@ -1116,6 +1116,42 @@
       "type": "coding.fix",
       "complexity": "medium"
     },
+    "fix-43": {
+      "id": "fix-43",
+      "title": "Fix: 项目树对齐原生残留差值——会话行缩进 26→8（原生 depth*12 顶层=0，状态点对齐 folder 槽）+ 组内行距 2px + 行 hover 底出血右缘 + 段头 36px 刻度/label 14/20 常规",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "fix-43.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "medium"
+    },
+    "fix-44": {
+      "id": "fix-44",
+      "title": "Fix: 书海背景上移出输入框遮挡带——[data-conversation-content]::before 底边让出 composer 座（inset 底偏移，cover 重裁）",
+      "priority": "P1",
+      "estimatedTime": "2h",
+      "status": "pending",
+      "file": "fix-44.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.fix",
+      "complexity": "low"
+    },
+    "fix-45": {
+      "id": "fix-45",
+      "title": "Feat: dsh-forge 程序图标——鲸游书海 brand 标派生应用图标集（.ico 多尺寸 + png），接入 dev 窗口 icon 与 electron-builder win/nsis——退役 Electron 默认图标",
+      "priority": "P1",
+      "estimatedTime": "3h",
+      "status": "pending",
+      "file": "fix-45.md",
+      "record": "",
+      "surface-type": "web",
+      "type": "coding.feature",
+      "complexity": "medium"
+    },
     "fix-5": {
       "id": "fix-5",
       "title": "Fix: 知识浏览关键词交互缺陷——键入被弹回 + 卡片网格整体消失落「尚无知识」空库面（P1 功能缺陷，实测复现）",
