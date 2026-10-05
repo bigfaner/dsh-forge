@@ -1,58 +1,51 @@
-/* 「鲸游书海」对话面板书海背景（fix-38 ②）——官方会话滚动容器 CSS 锚铺底（产品不注入
- * 组件，走 CSS 锚：fix-25 后中区归官方 ConversationRoot）。
+/* 「鲸游书海」对话区统一插画背景（docs/brand/README.md「鲸游书海」hero 插画条目）。
  *
- * 资产：apps/web/public/brand/ 双静态件（vite public → dist/brand/，经 dsh-forge://app/
- * 根服务）——由生成器 tmp-ui-review/gen-whale-brand-v3.mjs --emit ink|paper 自设计母版
- * docs/brand/whale-sea-conversation-bg.svg 确定性派生（种子 20261004，烘焙色零媒体查询）：
- * ink（浅色主题墨）缺省 / paper（深色主题纸）由 body[data-ds-dark-theme] 覆盖——应用内
- * 主题口径（官方 ui-theme 布尔标记，即时跟随），不经 prefers-color-scheme。
+ * 裁决沿革：fix-38 曾以 v3 书海纹理（ink/paper 双资产）仅铺 active 会话滚动区，且
+ * 红线①②禁入官方 hero 与召回/轨迹视图；2026-10-06 用户裁决改统——「鲸游书海」
+ * 插画（whale-book-sea-bg.svg 母版）成为对话区**全相位全视图统一背景**（hero 空态 /
+ * active 会话 / 轨迹 / 知识召回），旧纹理消费退役为历史档（双资产与生成器存档不删）。
  *
  * 锚选型（runtime DOM 实证——任务「实证等价容器锚」条款）：官方滚动容器
- * [data-conversation-scroll] 为 static 定位、其内消息行为非定位流内容（官方 chat 台账，
- * 如用户气泡行零定位），定位态 z-index:0 覆层按 CSS 绘序必绘于正文之上；故覆层锚定其
- * 官方定位祖先 [data-conversation-content]（几何上即滚动视口——滚动容器充满其区）+
- * isolation:isolate 建栈上下文 + z-index:-1：置于全部内容（消息气泡/composer 座）之下、
- * 面板底色之上——「正文/输入层在覆层之上」由官方层序原生承载，零官方类名耦合。
+ * [data-conversation-scroll] 为 static 定位、其内消息行为非定位流内容（官方 chat 台账），
+ * 定位态 z-index:0 覆层按 CSS 绘序必绘于正文之上；故覆层锚定其官方定位祖先
+ * [data-conversation-content]（几何上即滚动视口）+ isolation:isolate 建栈上下文 +
+ * z-index:-1：置于全部内容（消息气泡/composer 座/页签视图）之上而下、面板底色之上
+ * ——「正文/输入层在覆层之上」由官方层序原生承载，零官方类名耦合。
  *
- * 红线（docs/brand/README.md「鲸游书海」）：① 仅 active 相位（hero 空会话大标不进）；
- * ② 召回（产品面板）/轨迹（官方视图）退场——仅会话滚动容器；③ 覆层不拦截指针
- * （pointer-events:none）、不进无障碍树（伪元素）。可读性：母版自带顶部 55% 渐隐 +
- * 元素不透明度 .03–.12，CSS 侧叠 opacity 总守护 ≤.85。 */
+ * 守护：覆层不拦截指针（pointer-events:none）、不进无障碍树（伪元素）；
+ * 顶部遮罩渐隐保证上部文本带恒净（hero 大标实测零遮挡）。 */
 [data-conversation-content] {
   /* 覆层栈上下文界——z-index:-1 由此生效（官方 .body 本就 position:relative，零几何扰动） */
   isolation: isolate;
-  /* fix-44：书海覆层底边让出 composer 座带——官方 composerSeat（absolute bottom:0）悬浮
-   * 盖在滚动容器底部之上，背景母版视觉焦点（底部破浪鲸+前景书海）恰落在此被盖带区。
-   * 值口径 = active 会话遮挡带：composer 卡顶 y 至 content 底边距离（卡座取
-   * [data-composer-input] 最近 form/card/composer 祖先——probe-geo.mjs 同口径）。dogfood
-   * 实测两态（2026-10-05，tmp-ui-review/fix44-probe.mjs + 冒烟留痕；双主题等值）：静息带
-   * 106px（卡 98+座边距 8）/工具往返中带 128px（工作态卡行增高 22）——agent 执行期是本
-   * 产品会话主态，锚工作带定值 134 = 128 + 6px 布局抖动余量（静息态 Art 底边高于卡顶
-   * ~28px，无遮挡残带）。hero 相位卡高 114 但居中且无覆层（红线①）。多行输入/更多工作
-   * 行增高时静态偏移的少量误差 P1 可受——动态跟随（JS 读 composer 高度写变量）记后续
-   * 里程碑裁决，不在此引入。 */
-  --dswf-sea-bottom-inset: 134px;
 }
 
-[data-conversation-content][data-content-phase='active']::before {
+/* 「鲸游书海」插画层（全相位全视图常驻）：沉底 78% 高 + 顶部遮罩渐隐 32%——
+ * 大标/消息流上部恒落透明区；底部书海由 composer 座/输入卡覆于其上（总纲原型
+ * 「输入卡浮于书海」同构）。资产 = public/brand/whale-hero-bg.svg（母版零改拷贝；
+ * UF-2 零项目首用面板 workbench.css .dswf-hero-bg 同源同资产）。 */
+[data-conversation-content]::after {
   content: '';
   position: absolute;
-  /* 底边让出 composer 座（cover 对剩余盒重裁——鲸/书海主体完整落于输入框上方可见带） */
-  inset: 0 0 var(--dswf-sea-bottom-inset, 134px) 0;
+  inset: auto 0 0 0;
   z-index: -1;
   pointer-events: none;
-  background: url('/brand/whale-sea-bg-ink.svg') center / cover no-repeat;
-  opacity: 0.85; /* 可读性总守护 ≤.85（README 双口径约定） */
+  background: url('/brand/whale-hero-bg.svg') center bottom / cover no-repeat;
+  height: 78%; /* dsw-raw 总纲原型 conv-hero 插画高刻度 */
+  opacity: 0.88;
+  /* 顶部渐隐:大标/消息上部零遮挡(mask 色仅 alpha 参与——token lint 裸色禁用口径) */
+  mask-image: linear-gradient(180deg, transparent 0%, black 32%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 32%);
 }
 
-/* 深色主题（应用内）：纸色资产覆盖——跟随官方主题标记即时翻转 */
-body[data-ds-dark-theme] [data-conversation-content][data-content-phase='active']::before {
-  background-image: url('/brand/whale-sea-bg-paper.svg');
+/* 深色主题（应用内口径）：插画提亮去饱和——workbench.css hero 同源验证值 */
+body[data-ds-dark-theme] [data-conversation-content]::after {
+  filter: brightness(1.35) saturate(0.85);
 }
 
-/* 红线②：召回（产品 [data-dswf-pane=recall]）/ 轨迹（官方 [data-trajectory-scroll]）
- * 视图退场——书海背景仅伴随对话转录面 */
-[data-conversation-content]:has([data-dswf-pane='recall'])::before,
-[data-conversation-content]:has([data-trajectory-scroll])::before {
-  content: none;
+/* 轨迹视图官方包层让位（runtime DOM 实证:轨迹滚动区自身透明,但其官方 split/root
+ * 祖先包层为不透明底——插画层 z-index:-1 绘于其下不可见）。结构锚 = 轨迹滚动区
+ * 祖先链（:has 向上全匹配,含两层白底包层;hash 类名不稳定故不落类名锚）,仅当
+ * [data-trajectory-scroll] 在场时命中——对话/召回视图零波及。 */
+[data-conversation-content] :has([data-trajectory-scroll]) {
+  background-color: transparent;
 }
