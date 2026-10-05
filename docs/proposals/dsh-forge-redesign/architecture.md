@@ -65,7 +65,7 @@ intent: "architecture-baseline"
 
 ## 3. 状态层边界细则（P1 设计的输入）
 
-- **表**：`features` / `feature_documents`（feature 文档索引，manifest 库内化——2026-10-02 M2 修订）/ `feature_records`（feature 域审计，append-only——2026-10-02 M2 修订，原六表扩为八表）/ `tasks`（七态 CHECK）/ `task_edges`（blockers，写入时无环校验）/ `task_records`（append-only）/ `proposals` / `task_session_links`（应用侧挂接记录，会话账本本体归 dsh）；SQLite 每工作区独立库，部署于 `{dsh-forge-home}/{canonical-path 扁平化}-{hash8}/`（M2 裁决③ + hash8 消歧后缀，2026-10-02 M2 修订，原「中央 profile 按 workspace_id 外键域」作废）。
+- **表**：`features` / `feature_documents`（feature 文档索引，manifest 库内化——2026-10-02 M2 修订）/ `feature_records`（feature 域审计，append-only——2026-10-02 M2 修订，原六表扩为八表）/ `tasks`（七态 CHECK）/ `task_edges`（blockers，写入时无环校验）/ `task_records`（append-only）/ `proposals` / `task_session_links`（应用侧挂接记录，会话账本本体归 dsh）；SQLite 每工作区独立库，部署于 `{dsh-forge-home}/{canonical-path 扁平化}@{hash8}/`（M2 裁决③ + hash8 消歧后缀，2026-10-02 M2 修订，原「中央 profile 按 workspace_id 外键域」作废）。
 - **状态机** = 代码内一份具体常量（task 七态、proposal 五态、feature 六态）+ 动词函数（`addTask / claimTask / submitTask / transitionTask / queryTask…`——2026-10-02 M2 修订：动词 API 命名规范 = 动词+名词；transitionTask = 人类逃生通道，UI 专属不进 agent tool 面）；校验（from 匹配、依赖终态、record/reason 必带）全在服务内。
 - **机制不变量**：键唯一（`<feature>/<localId>`）、blockers 无环、记录 append-only、每次写自动审计。
 - **对齐总纲**：SC2（无投影、状态直读）、SC7（tool 消费本 API 写入，产品只看不管）。

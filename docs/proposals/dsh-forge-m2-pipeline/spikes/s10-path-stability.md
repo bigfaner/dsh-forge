@@ -11,7 +11,7 @@ status: "done（结论闭合）"
 ## 方法
 
 - 双口径归一实测：**js realpath**（`node:fs/promises` realpath = core `canonicalizeDir` 现行为）与 **realpathSync.native**（GetFinalPathNameByHandle——真值拼写候选对照）。
-- 每形态算 `{flatten}-{hash8}`（§6-34 规则：sha-256 前 8 hex 小写，输入 = canonical 串本机原样），组内收敛判据。
+- 每形态算 `{flatten}@{hash8}`（§6-34 规则：sha-256 前 8 hex 小写，输入 = canonical 串本机原样），组内收敛判据。
 - 三组形态：A = tmp 夹具（原样 / 全大写 / 混合大小写 / junction / subst 盘符互为变体）；B = 本 worktree 真工作区（原样 / 全大写）；C = %TEMP% 夹具 8.3 短名段（`FIXTUR~1` vs 长名——Z: 卷未产短名，C: 卷实测）。
 
 ## 结果（2026-10-05，Windows / Node 24）

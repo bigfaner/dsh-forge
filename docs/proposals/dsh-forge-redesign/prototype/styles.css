@@ -64,9 +64,9 @@ ul, ol { list-style: none; }
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --t-fast: 0.1s; --t-mid: 0.2s; --t-slow: 0.3s;
 
-  --r-control: 14px;
-  --r-overlay: 24px;
-  --r-menu: 20px;
+  --r-control: 12px;
+  --r-overlay: 28px;
+  --r-menu: 16px;
   --r-card: 12px;
 
   --sidebar-w: 300px;
@@ -175,11 +175,12 @@ body[data-ds-dark-theme] .seg-btn.active { background: var(--dsw-alias-bg-layer-
 .chip.is-key { color: var(--dsw-alias-link); }
 
 /* 状态点 */
-.state-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
-.state-dot.ok { background: var(--dsw-alias-state-success-primary); }
-.state-dot.warn { background: var(--dsw-alias-state-warn-primary); }
-.state-dot.err { background: var(--dsw-alias-state-error-primary); }
-.state-dot.idle { background: var(--dsw-alias-label-tertiary); }
+.state-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.state-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-idle-primary); }
+.state-dot.ok::before { background: var(--dsw-alias-state-success-primary); }
+.state-dot.warn::before { background: var(--dsw-alias-state-warn-primary); }
+.state-dot.err::before { background: var(--dsw-alias-state-error-primary); }
+.state-dot.idle::before { background: var(--dsw-alias-state-idle-primary); }
 .state-dot.breathing { animation: breathe 1.6s var(--ease) infinite; }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 
@@ -231,9 +232,9 @@ body[data-ds-dark-theme] .badge-conf-mid { color: rgb(251, 191, 36); }
 .sb-brand { height: 56px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; cursor: pointer; }
 .sb-brand:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .app-brand-mark {
-  width: 24px; height: 24px; border-radius: 7px; flex: none;
-  background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-label-primary-foreground);
-  display: grid; place-items: center; font-size: 12px;
+  width: 24px; height: 24px; flex: none;
+  color: var(--dsw-alias-label-primary-bluish);
+  display: inline-flex; align-items: center; justify-content: center; user-select: none;
 }
 .sb-wordmark { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
 .sb-collapse { margin-left: auto; }
@@ -882,6 +883,11 @@ body[data-ds-dark-theme] .rb-chip.active .chip-x:hover { background: rgba(255,25
 .task-links { flex: none; display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--dsw-alias-link); cursor: pointer; }
 .task-toolbtn { display: none; flex: none; }
 .task-row:hover .task-toolbtn { display: inline-flex; }
+/* M2 同步:任务两行布局 */
+.task-item { margin-bottom: 1px; cursor: pointer; border-radius: var(--r-card); }
+.task-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.task-sub { font-size: 11px; line-height: 15px; color: var(--dsw-alias-label-tertiary); padding: 0 8px 3px 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-item .task-row { margin-bottom: 0; }
 .status-tag { display: inline-flex; align-items: center; gap: 4px; height: 19px; padding: 0 7px; border-radius: 10px; font-size: 11px; flex: none; }
 .st-completed { background: rgba(34,197,94,.12); color: rgb(21,128,61); }
 body[data-ds-dark-theme] .st-completed { color: rgb(74,222,128); }
@@ -939,6 +945,10 @@ body[data-ds-dark-theme] .swim-card { background: var(--dsw-alias-bg-layer-1); }
 .swim-card .sc-title { font-size: 12px; line-height: 17px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .swim-card .sc-foot { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
 .swim-empty { border: 1px dashed var(--dsw-alias-border-l2); border-radius: 10px; padding: 8px; text-align: center; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+/* M2 同步:0 计数列折叠 */
+.swim-col-empty { min-width: auto; flex: 0 0 auto; }
+.swim-col-empty .swim-col-head { flex-direction: column; gap: 2px; padding: 8px 6px; font-size: 10px; text-align: center; border-bottom: none; }
+.swim-col-empty .cnt { margin-left: 0; }
 
 /* 任务节点气泡(DAG/泳道/列表点击) */
 .task-pop-row { display: flex; gap: 8px; font-size: 12px; line-height: 18px; }

@@ -75,18 +75,18 @@
         { slug: 'plugin-scaffold', project: 'p2', status: 'tasks', label: '插件骨架', done: 3, total: 8 }
       ],
       tasks: {
-        'p2-kernel/1': { key: 'p2-kernel/1', project: 'p1', feature: 'p2-kernel', title: '契约先行:frontmatter schema 定稿', status: 'completed', sessions: ['s2'], deps: [] },
-        'p2-kernel/2': { key: 'p2-kernel/2', project: 'p1', feature: 'p2-kernel', title: '宿主召回能力面(四动词+域过滤)', status: 'in_progress', sessions: ['s2'], deps: ['p2-kernel/1'] },
-        'p2-kernel/3': { key: 'p2-kernel/3', project: 'p1', feature: 'p2-kernel', title: '置信度四信号(读取时计算)', status: 'in_progress', sessions: ['s1', 's1-1'], deps: ['p2-kernel/1'] },
-        'p2-kernel/4': { key: 'p2-kernel/4', project: 'p1', feature: 'p2-kernel', title: '审核工作台(待审+合并队列)', status: 'pending', sessions: [], deps: ['p2-kernel/2', 'p2-kernel/3'] },
-        'p2-kernel/5': { key: 'p2-kernel/5', project: 'p1', feature: 'p2-kernel', title: '晋升流与项目侧重定向', status: 'pending', sessions: [], deps: ['p2-kernel/4'] },
-        'p2-kernel/6': { key: 'p2-kernel/6', project: 'p1', feature: 'p2-kernel', title: 'DSM:稳定 ID 与移动=换域', status: 'blocked', sessions: [], deps: ['p2-kernel/2'] },
-        'p2-kernel/7': { key: 'p2-kernel/7', project: 'p1', feature: 'p2-kernel', title: '写入 tool 契约校验', status: 'pending', sessions: [], deps: ['p2-kernel/1'] },
-        'p2-kernel/8': { key: 'p2-kernel/8', project: 'p1', feature: 'p2-kernel', title: '系统提示词知识段', status: 'pending', sessions: [], deps: ['p2-kernel/2', 'p2-kernel/7'] },
-        'p2-kernel/9': { key: 'p2-kernel/9', project: 'p1', feature: 'p2-kernel', title: '召回链路 e2e 断言', status: 'pending', sessions: [], deps: ['p2-kernel/4', 'p2-kernel/5', 'p2-kernel/8'] },
-        'p1-shell/1': { key: 'p1-shell/1', project: 'p1', feature: 'p1-shell', title: '薄宿主 spike:runProfile 直跑', status: 'pending', sessions: [], deps: [] },
-        'p1-shell/2': { key: 'p1-shell/2', project: 'p1', feature: 'p1-shell', title: 'vite 入口 + 壳内核接入', status: 'pending', sessions: [], deps: ['p1-shell/1'] },
-        'p1-shell/3': { key: 'p1-shell/3', project: 'p1', feature: 'p1-shell', title: '原生三区工作台布局落地', status: 'in_progress', sessions: ['s3'], deps: ['p1-shell/2'] }
+        'p2-kernel/1': { key: 'p2-kernel/1', project: 'p1', feature: 'p2-kernel', title: '契约先行:frontmatter schema 定稿', status: 'completed', sessions: ['s2'], deps: [], type: 'coding.feature', priority: 'P0' },
+        'p2-kernel/2': { key: 'p2-kernel/2', project: 'p1', feature: 'p2-kernel', title: '宿主召回能力面(四动词+域过滤)', status: 'in_progress', sessions: ['s2'], deps: ['p2-kernel/1'], type: 'coding.feature', priority: 'P0' },
+        'p2-kernel/3': { key: 'p2-kernel/3', project: 'p1', feature: 'p2-kernel', title: '置信度四信号(读取时计算)', status: 'in_progress', sessions: ['s1', 's1-1'], deps: ['p2-kernel/1'], type: 'coding.feature', priority: 'P0' },
+        'p2-kernel/4': { key: 'p2-kernel/4', project: 'p1', feature: 'p2-kernel', title: '审核工作台(待审+合并队列)', status: 'pending', sessions: [], deps: ['p2-kernel/2', 'p2-kernel/3'], type: 'coding.feature', priority: 'P1' },
+        'p2-kernel/5': { key: 'p2-kernel/5', project: 'p1', feature: 'p2-kernel', title: '晋升流与项目侧重定向', status: 'pending', sessions: [], deps: ['p2-kernel/4'], type: 'coding.feature', priority: 'P1' },
+        'p2-kernel/6': { key: 'p2-kernel/6', project: 'p1', feature: 'p2-kernel', title: 'DSM:稳定 ID 与移动=换域', status: 'blocked', sessions: [], deps: ['p2-kernel/2'], type: 'coding.refactor', priority: 'P1' },
+        'p2-kernel/7': { key: 'p2-kernel/7', project: 'p1', feature: 'p2-kernel', title: '写入 tool 契约校验', status: 'pending', sessions: [], deps: ['p2-kernel/1'], type: 'coding.feature', priority: 'P1' },
+        'p2-kernel/8': { key: 'p2-kernel/8', project: 'p1', feature: 'p2-kernel', title: '系统提示词知识段', status: 'pending', sessions: [], deps: ['p2-kernel/2', 'p2-kernel/7'], type: 'doc', priority: 'P1' },
+        'p2-kernel/9': { key: 'p2-kernel/9', project: 'p1', feature: 'p2-kernel', title: '召回链路 e2e 断言', status: 'pending', sessions: [], deps: ['p2-kernel/4', 'p2-kernel/5', 'p2-kernel/8'], type: 'gate', priority: 'P0', breaking: true },
+        'p1-shell/1': { key: 'p1-shell/1', project: 'p1', feature: 'p1-shell', title: '薄宿主 spike:runProfile 直跑', status: 'pending', sessions: [], deps: [], type: 'coding.feature', priority: 'P0' },
+        'p1-shell/2': { key: 'p1-shell/2', project: 'p1', feature: 'p1-shell', title: 'vite 入口 + 壳内核接入', status: 'pending', sessions: [], deps: ['p1-shell/1'], type: 'coding.feature', priority: 'P0' },
+        'p1-shell/3': { key: 'p1-shell/3', project: 'p1', feature: 'p1-shell', title: '原生三区工作台布局落地', status: 'in_progress', sessions: ['s3'], deps: ['p1-shell/2'], type: 'coding.feature', priority: 'P0' }
       },
       proposals: [
         { slug: 'dsh-forge-redesign', project: 'p1', status: 'Accepted', files: ['proposal.md'] },

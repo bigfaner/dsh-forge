@@ -70,7 +70,7 @@
     knDrawer: null,             /* 知识详情抽屉(右侧;点卡片打开) */
     pj: { q: '', searching: false },
     dock: { open: false, tabs: [], active: null, fullscreen: false },
-    ov: { subtab: 'feature', taskFeat: null, taskView: 'list' },
+    ov: { subtab: 'feature', taskFeat: null, taskView: 'list', headOpen: false },
     rv: { qtab: 'pending' },
     trajCollapsed: false
   };
@@ -1276,39 +1276,28 @@
       '<span class="sc-title"><span aria-hidden="true">' + icon + '</span>' + title + '</span><span class="sc-desc">' + desc + '</span></div>';
   }
 
-  /* 项目概览 */
+  /* 项目概览(M2 同步:对账卡与 workspaceId 移除;ov-head 折叠;工作区替代代码区;中文状态标签) */
+  var FEAT_LABEL = { prd: '需求', design: '设计', tasks: '任务', 'in-progress': '进行中', completed: '已完成', archived: '已归档' }
+  var PROP_LABEL = { Draft: '草稿', 'under-review': '评审中', Accepted: '已接受', Rejected: '已拒绝', Superseded: '已替代' }
+  var ST_CN = { pending: '待办', in_progress: '执行中', completed: '已完成', blocked: '阻塞', suspended: '挂起', skipped: '跳过', rejected: '已拒绝' }
   function renderOverview() {
     var p = project();
     if (!p) return '';
     var feats = F.featuresOf(p.id);
     var running = F.sessionsOf(p.workspaceId).filter(function (s) { return s.status === 'running'; }).length;
     var activeFeat = feats.find(function (f) { return f.status !== 'completed' && f.slug.indexOf('legacy') < 0; }) || feats[0];
-    var align = F.ws.checkAlignment(p.id);
-    var alignHtml;
-    if (align.state === 'ok') {
-      alignHtml = '<div class="ov-align"><div class="ov-align-row"><span class="k">对账状态</span>' +
-        '<span class="v" style="font-family:var(--font-ui)"><span class="state-dot ok"></span> 已对齐 —— registry.get(' + esc(p.workspaceId) + ').path === 项目记录</span></div>' +
-        '<div class="ov-align-row"><span class="k">registry 路径</span><span class="v ellipsis">' + esc(F.ws.get(p.workspaceId).canonicalPath) + '</span></div>' +
-        (p.id === 'p1' ? '<div class="ov-align-row"><button class="btn btn-ghost btn-sm" data-act="ws-move">模拟目录整体移动</button>' +
-        '<span class="t-aux" style="font-size:11px">演示失配 → 按 canonical path 找回</span></div>' : '') + '</div>';
-    } else {
-      alignHtml = '<div class="ov-align" style="border-color:var(--dsw-alias-state-warn-primary)">' +
-        '<div class="ov-align-row"><span class="k">对账状态</span><span class="v" style="font-family:var(--font-ui)"><span class="state-dot warn"></span> 失配 —— 目录已移动</span></div>' +
-        '<div class="ov-align-row"><span class="k">应用记录</span><span class="v ellipsis">' + esc(p.canonicalPath) + '</span></div>' +
-        '<div class="ov-align-row"><span class="k">registry</span><span class="v ellipsis">' + esc(align.ws.canonicalPath) + '</span></div>' +
-        '<div class="ov-align-row"><button class="btn btn-primary btn-sm" data-act="ws-realign">按 canonical path 找回</button>' +
-        '<span class="t-aux" style="font-size:11px">找不到则 create() 幂等重建(显式动作,不自动迁移)</span></div></div>';
-    }
+    var doneAll = feats.reduce(function (sum, f) { return sum + (f.done || 0); }, 0);
+    var headOpen = S.ov.headOpen || false;
     var info =
-      '<div class="ov-head"><div class="ov-name">' + esc(p.name) + (p.archived ? ' <span class="badge badge-rejected">已归档</span>' : '') + '</div>' +
-      '<div class="ov-info">' +
-      '<div class="ov-info-row"><span class="ov-info-k">工作区</span><span class="ov-info-v ellipsis" title="workspaceId 外键 · 会话账本归 dsh">' + esc(p.workspaceId) + '</span></div>' +
-      '<div class="ov-info-row"><span class="ov-info-k">代码区</span><span class="ov-info-v ellipsis">' + esc(p.canonicalPath) + '</span></div>' +
-      '<div class="ov-info-row"><span class="ov-info-k">文档位置 · forge</span><span class="ov-info-v ellipsis">' + esc(p.forgeDir || p.canonicalPath + '\\.forge') + ' · ' + (p.docMode === 'repo' ? '仓内 · 只读引用' : '仓外 · 应用管理') + '</span></div>' +
+      '<div class="ov-head"><div class="ov-name">' + esc(p.name) + (p.archived ? ' <span class="badge badge-rejected">已归档</span>' : '') +
+      ' <span style="font-size:12px;font-weight:400;color:var(--dsw-alias-label-secondary)">' + esc(activeFeat ? activeFeat.slug : '—') + ' · <span class="state-dot ok breathing"></span>' + running + ' 会话 · ' + doneAll + ' 完成</span>' +
+      (headOpen ? '' : ' <button class="btn btn-ghost btn-sm" data-act="ov-head-toggle" title="展开位置详情">▾</button>') + '</div>' +
+      (headOpen ? '<div class="ov-info">' +
+      '<div class="ov-info-row"><span class="ov-info-k">工作区</span><span class="ov-info-v ellipsis">' + esc(p.canonicalPath) + '</span></div>' +
+      '<div class="ov-info-row"><span class="ov-info-k">文档位置</span><span class="ov-info-v ellipsis">' + esc(p.forgeDir || p.canonicalPath + '\\.forge') + ' · ' + (p.docMode === 'repo' ? '仓内 · 只读引用' : '仓外 · 应用管理') + '</span></div>' +
       '<div class="ov-info-row"><span class="ov-info-k">知识目录</span><span class="ov-info-v ellipsis">' + esc(p.knowledgeDir) + '</span></div>' +
-      '<div class="ov-info-row"><span class="ov-info-k">任务清单与记录</span><span class="ov-info-v ellipsis" title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化}-{hash8 消歧后缀},注册时自动派生">' + esc(deriveTaskStore(p.canonicalPath)) + '</span></div>' +
-      '<div class="ov-info-row"><span class="ov-info-k">状态</span><span class="ov-info-v plain">' + esc(activeFeat ? activeFeat.slug + ' · ' + activeFeat.done + '/' + activeFeat.total : '—') + ' · 运行中会话 ' + running + '</span></div>' +
-      '</div>' + alignHtml +
+      '<div class="ov-info-row"><span class="ov-info-k">任务清单</span><span class="ov-info-v ellipsis" title="统一存放于 {dsh-forge-home}/{扁平化}@{hash8},注册时自动派生">' + esc(deriveTaskStore(p.canonicalPath)) + '</span></div>' +
+      '</div><div style="text-align:right"><button class="btn btn-ghost btn-sm" data-act="ov-head-toggle">▴ 收起</button></div>' : '') + '</div>' +
       '<div class="ov-subtabs">' +
       ['proposals', 'feature', 'tasks'].map(function (k) {
         var lab = { proposals: '提案', feature: 'feature', tasks: '任务' }[k];
@@ -1317,10 +1306,11 @@
     if (S.ov.subtab === 'proposals') {
       info += F.proposalsOf(p.id).map(function (pr) {
         return '<div class="tree-row dir" data-act="tree-toggle">▾ <span class="ellipsis">' + esc(pr.slug) + '/</span>' +
-          '<span class="tree-status"><span class="chip">' + esc(pr.status) + '</span></span></div>' +
+          '<span class="tree-status"><span class="chip" title="' + esc(pr.status) + '">' + esc(PROP_LABEL[pr.status] || pr.status) + '</span></span></div>' +
           pr.files.map(function (f) {
             return '<div class="tree-row file" data-act="doc-open" data-path="proposals/' + pr.slug + '/' + f + '">' +
-              '<span aria-hidden="true">📄</span><span class="ellipsis">' + esc(f) + '</span><span class="tree-status t-aux">⟶开tab</span></div>';
+              '<span aria-hidden="true">📄</span><span class="ellipsis">' + esc(f) + '</span>' +
+              '<span class="chip">proposal</span><span class="tree-status t-aux">›</span></div>';
           }).join('');
       }).join('');
       info += '<p class="t-aux" style="margin-top:8px">docs/proposals/ · 仓内只读(应用零写入)</p>';
@@ -1328,13 +1318,14 @@
       info += feats.map(function (f) {
         var files = ['manifest.md', 'prd/prd-spec.md'];
         return '<div class="tree-row dir" data-act="tree-toggle">▾ <span class="ellipsis">' + esc(f.slug) + '/</span>' +
-          '<span class="tree-status"><span class="chip">' + esc(f.status) + ' ' + f.done + '/' + f.total + '</span></span></div>' +
+          '<span class="tree-status"><span class="chip" title="' + esc(f.status) + '">' + esc(FEAT_LABEL[f.status] || f.status) + ' ' + f.done + '/' + f.total + '</span></span></div>' +
           files.map(function (fl) {
             return '<div class="tree-row file" data-act="doc-open" data-path="features/' + f.slug + '/' + fl + '">' +
-              '<span aria-hidden="true">📄</span><span class="ellipsis">' + esc(fl) + '</span><span class="tree-status t-aux">⟶开tab</span></div>';
+              '<span aria-hidden="true">📄</span><span class="ellipsis">' + esc(fl) + '</span>' +
+              '<span class="chip">' + esc(fl.indexOf('manifest') >= 0 ? 'manifest' : 'prd') + '</span><span class="tree-status t-aux">›</span></div>';
           }).join('');
       }).join('');
-      info += '<p class="t-aux" style="margin-top:8px">docs/features/ · 仓内只读;状态/进度 = 应用数据库直读(SC2)</p>';
+      info += '<p class="t-aux" style="margin-top:8px">docs/features/ · 仓内只读;状态/进度 = 应用数据库直读(SC2);文档不含提案</p>';
     } else {
       info += renderTasksView(p);
     }
@@ -1361,7 +1352,7 @@
     var html = '<div class="ov-taskbar">' +
       '<button class="pill is-button task-feat-pill" data-act="ov-task-feat" aria-haspopup="menu" title="选择 feature(任务视图 feature 绑定)">' +
       '<span class="fp-name ellipsis">' + esc(feat.slug) + '</span>' +
-      '<span class="chip">' + esc(feat.status) + ' ' + done + '/' + ts.length + '</span><span aria-hidden="true">▾</span></button>' +
+      '<span class="chip" title="' + esc(feat.status) + '">' + esc(FEAT_LABEL[feat.status] || feat.status) + ' ' + done + '/' + ts.length + '</span><span aria-hidden="true">▾</span></button>' +
       '<span class="task-count-note">' + ts.length + ' 条 · 状态直读(应用数据库)</span>' +
       '<span class="spacer"></span>' +
       '<div class="seg task-viewseg">' +
@@ -1374,18 +1365,23 @@
     if (S.ov.taskView === 'dag') html += renderTaskDag(feat, ts);
     else if (S.ov.taskView === 'swim') html += renderTaskSwim(ts);
     else html += renderTaskList(ts);
-    html += '<p class="t-aux" style="margin-top:8px">任务视图 feature 绑定(无全局汇总);应用不发起编排(只看不管);⚡ 模拟 tool 提交:pending → in_progress → completed。</p>';
+    html += '<p class="t-aux" style="margin-top:8px">任务视图 feature 绑定(无全局汇总);应用不发起编排(只看不管);行点击或节点点击 = 任务详情;⚡ 模拟 tool 提交(claim→submit);中文状态标签(tooltip 英文)。</p>';
     return html;
   }
   function renderTaskList(ts) {
     var running = ts.filter(function (t) { return t.status === 'in_progress' || t.status === 'blocked'; });
     var row = function (t) {
-      return '<div class="task-row"><span class="task-id">' + esc(t.key) + '</span>' +
+      return '<div class="task-item">' +
+        '<div class="task-row">' +
+        '<span class="task-id">' + esc(t.key.split('/').pop()) + '</span>' +
         '<span class="task-title ellipsis" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-        ((t.deps || []).length ? '<span class="task-deps" title="前置:' + esc((t.deps || []).join(', ')) + '">←' + (t.deps || []).length + '</span>' : '') +
-        (t.sessions.length ? '<button class="task-links" data-act="task-session" data-s="' + esc(t.sessions[0]) + '" title="挂接会话(应用侧关联记录)">⟞ ' + t.sessions.length + '</button>' : '') +
-        '<button class="btn btn-ghost btn-sm task-toolbtn" data-act="task-tool" data-key="' + esc(t.key) + '" title="模拟 forge 插件 tool 半身提交(消费宿主能力面)">⚡ tool</button>' +
-        '<span class="status-tag ' + (TASK_ST[t.status] || 'st-pending') + '">' + esc(t.status) + '</span></div>';
+        '<span class="status-tag ' + (TASK_ST[t.status] || 'st-pending') + '" title="' + esc(t.status) + '">' + esc(ST_CN[t.status] || t.status) + '</span>' +
+        '<button class="btn btn-ghost btn-sm task-toolbtn" data-act="task-tool" data-key="' + esc(t.key) + '" title="模拟 forge 插件 tool 半身提交">⚡</button></div>' +
+        '<div class="task-sub">' +
+        (t.type || '') + (t.priority ? ' · ' + esc(t.priority) : '') +
+        ((t.deps || []).length ? ' · ←' + (t.deps || []).length + ' 前置' : '') +
+        (t.sessions.length ? ' · ⟞' + t.sessions.length + ' 挂接' : '') +
+        '</div></div>';
     };
     var html = '';
     if (running.length) html += '<div class="task-group-label" style="color:var(--dsw-alias-label-secondary)">执行中(' + running.length + ')</div>' + running.map(row).join('');
@@ -1426,13 +1422,16 @@
     var cw = PAD * 2 + maxPerLevel * (W + GX) - GX;
     var ch = PAD * 2 + cols.length * (H + GY) - GY;
     var edges = '';
+    var defs = '<defs><marker id="dag-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--dsw-alias-border-l3)"/></marker>' +
+      '<marker id="dag-arrow-done" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--dsw-alias-state-success-primary)"/></marker></defs>';
     ts.forEach(function (t) {
       (t.deps || []).forEach(function (d) {
         if (!byKey[d] || !pos[d]) return;
         var a = pos[d], b = pos[t.key];
         var x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y;
         var my = Math.max(14, (y2 - y1) / 2);
-        edges += '<path class="' + (byKey[d].status === 'completed' ? 'is-done' : '') + '" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + my) + ',' + x2 + ' ' + (y2 - my) + ',' + x2 + ' ' + y2 + '"/>';
+        var done = byKey[d].status === 'completed';
+        edges += '<path class="' + (done ? 'is-done' : '') + '" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + my) + ',' + x2 + ' ' + (y2 - my) + ',' + x2 + ' ' + y2 + '" marker-end="url(#' + (done ? 'dag-arrow-done' : 'dag-arrow') + ')"/>';
       });
     });
     var nodes = ts.map(function (t) {
@@ -1445,26 +1444,29 @@
         '<div class="dag-node-title">' + esc(t.title) + '</div></div>';
     }).join('');
     return '<div class="dag-wrap"><div class="dag-canvas" style="width:' + cw + 'px;height:' + ch + 'px">' +
-      '<svg class="dag-svg" viewBox="0 0 ' + cw + ' ' + ch + '" preserveAspectRatio="none" aria-hidden="true">' + edges + '</svg>' +
+      '<svg class="dag-svg" viewBox="0 0 ' + cw + ' ' + ch + '" preserveAspectRatio="none" aria-hidden="true">' + defs + edges + '</svg>' +
       nodes + '</div></div>' +
-      '<div class="dag-legend"><span>自上而下 · 前置在上</span><span><span class="state-dot ok breathing"></span> 执行中</span><span><span class="state-dot ok"></span> 已完成(边绿 = 上游完成)</span><span><span class="state-dot err"></span> 阻塞</span><span>节点点击 = 任务详情</span></div>';
+      '<div class="dag-legend"><span>前置在上 · 箭头指向后续任务</span><span><span class="state-dot ok breathing"></span> 执行中</span><span><span class="state-dot ok"></span> 已完成(边绿 = 前置完成)</span><span><span class="state-dot err"></span> 阻塞</span><span>节点点击 = 任务详情</span></div>';
   }
-  /* 泳道图:状态分组七态横向列(列头 = 状态点 + 名称 + 计数;空列占位) */
+  /* 泳道图:状态分组七态横向列(M2 同步:0 计数列折叠为窄头) */
   function renderTaskSwim(ts) {
     var STATUSES = ['pending', 'in_progress', 'completed', 'blocked', 'suspended', 'skipped', 'rejected'];
     var LABELS = { pending: '待办', in_progress: '执行中', completed: '已完成', blocked: '阻塞', suspended: '挂起', skipped: '跳过', rejected: '已拒绝' };
     return '<div class="swim-wrap">' + STATUSES.map(function (st) {
       var cards = ts.filter(function (t) { return t.status === st; });
       var dot = SWIM_DOTS[st] || 'idle';
-      var body = cards.length ? cards.map(function (t) {
+      if (!cards.length) {
+        return '<div class="swim-col swim-col-empty"><div class="swim-col-head" title="无此状态任务"><span class="state-dot ' + dot + '"></span><span>' + LABELS[st] + '</span><span class="cnt">0</span></div></div>';
+      }
+      var body = cards.map(function (t) {
         return '<div class="swim-card" data-act="task-pop" data-key="' + esc(t.key) + '" title="' + esc(t.title) + '">' +
-          '<div class="sc-key">' + esc(t.key) + '</div>' +
+          '<div class="sc-key">' + esc(t.key.split('/').pop()) + '</div>' +
           '<div class="sc-title">' + esc(t.title) + '</div>' +
           '<div class="sc-foot">' +
           ((t.deps || []).length ? '<span class="t-aux" style="font-size:10px" title="前置:' + esc((t.deps || []).join(', ')) + '">←' + (t.deps || []).length + '</span>' : '') +
           (t.sessions.length ? '<span class="task-links" style="font-size:10px" title="挂接会话">⟞' + t.sessions.length + '</span>' : '') +
           '</div></div>';
-      }).join('') : '<div class="swim-empty">无此状态任务</div>';
+      }).join('');
       return '<div class="swim-col"><div class="swim-col-head"><span class="state-dot ' + dot + '"></span><span>' + LABELS[st] + '</span>' +
         '<span class="cnt">' + cards.length + '</span></div>' + body + '</div>';
     }).join('') + '</div>';
@@ -1964,6 +1966,7 @@
     'start-card': function (d) { openTab(d.kind, d.ref || null, null, { fromStart: true }); },
     'open-review': function () { openTab('review', null, '审核工作台', { fromStart: true }); },
     'ov-subtab': function (d) { S.ov.subtab = d.st; renderAll(); },
+    'ov-head-toggle': function () { S.ov.headOpen = !S.ov.headOpen; renderAll(); },
     'tree-toggle': function () { toast('目录树展开/收起(原型示意)'); },
     'doc-open': function (d) { openTab('doc', d.path, '文档'); },
     'doc-reread': function () { toast('已重新读取(只读)—— 应用对仓内文档零写入'); },
@@ -1978,7 +1981,7 @@
         var n = F.tasks.ofFeature(f.slug).length;
         var done = F.tasks.ofFeature(f.slug).filter(function (t) { return t.status === 'completed'; }).length;
         return { id: f.slug, label: f.slug, icon: f.status === 'completed' ? '🗄 ' : '📁 ',
-          tail: S.ov.taskFeat === f.slug ? '✓ ' + f.status + ' ' + done + '/' + n : f.status + ' ' + done + '/' + n,
+          tail: (S.ov.taskFeat === f.slug ? '✓ ' : '') + (FEAT_LABEL[f.status] || f.status) + ' ' + done + '/' + n,
           onClick: function () { S.ov.taskFeat = f.slug; renderAll(); } };
       });
       openMenu(e.target.closest('button'), items, '选择 feature(任务视图绑定)');
@@ -2121,7 +2124,7 @@
   /* 任务清单与记录:统一存 {dsh-forge-home}/{canonical-path}(扁平化:/ 与 \ 替换为 -,盘符冒号去除)+ 原路径 hash8 消歧后缀(正式实现 = sha-256 前 8 hex;本 mock 用 djb2 32bit 代演示,确定性等价),自动派生,无需用户填写 */
   var DSH_FORGE_HOME = 'C:\\Users\\panda\\.dsh-forge';
   function hash8(s) { var h = 5381; for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; } var v = ''; for (var b = 0; b < 4; b++) { v += ((h >>> (b * 8)) & 0xff).toString(16).padStart(2, '0'); } return v; }
-  function deriveTaskStore(ws) { var w = wsNorm(ws); return DSH_FORGE_HOME + '\\' + w.replace(/^([A-Za-z]):/, '$1').replace(/[\\/]/g, '-') + '-' + hash8(w); }
+  function deriveTaskStore(ws) { var w = wsNorm(ws); return DSH_FORGE_HOME + '\\' + w.replace(/^([A-Za-z]):/, '$1').replace(/[\\/]/g, '-') + '@' + hash8(w); }
   var FOLDER_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
 
   /* ① 文件浏览器(模拟盘 Z:):选目录的通用件 —— 添加项目首步选工作区;表单内「浏览…」选知识库 / forge 目录 */
