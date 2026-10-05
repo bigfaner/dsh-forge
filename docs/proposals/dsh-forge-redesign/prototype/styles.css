@@ -720,11 +720,13 @@ body[data-ds-dark-theme] .hit-card { background: var(--dsw-alias-bg-layer-1); }
 .fb-ignored { color: var(--dsw-alias-state-error-primary); }
 .hit-full { margin-top: 8px; border-top: var(--hairline) solid var(--dsw-alias-border-l1); padding-top: 8px; font-size: 12px; line-height: 19px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; }
 
-/* hero 相位 */
-.conv-hero { position: absolute; left: 50%; transform: translateX(-50%); top: 16%; text-align: center; z-index: 2; }
+/* hero 相位(「鲸游书海」插画沉底:问候语靠顶 · 顶部遮罩渐隐 · 输入卡浮于书海) */
+.conv-hero { position: absolute; left: 50%; transform: translateX(-50%); top: 14%; text-align: center; z-index: 2; }
 .conv-root:not([data-phase="hero"]) .conv-hero { display: none; }
-.conv-hero-logo { font-size: 44px; line-height: 1; }
-.conv-hero-greet { font-size: 22px; font-weight: 600; margin-top: 10px; letter-spacing: .5px; }
+.conv-hero-greet { font-size: 22px; font-weight: 600; letter-spacing: .5px; }
+.conv-hero-bg { position: absolute; inset: auto 0 0 0; width: 100%; height: 80%; object-fit: cover; object-position: center bottom; opacity: .88; z-index: 1; pointer-events: none; mask-image: linear-gradient(180deg, transparent 0%, #000 26%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 26%); }
+.conv-root:not([data-phase="hero"]) .conv-hero-bg { display: none; }
+body[data-ds-dark-theme] .conv-hero-bg { filter: brightness(1.35) saturate(.85); }
 
 /* 输入卡 */
 .composer-seat { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; width: min(var(--conv-col-w), 100%); z-index: 3; }

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鲸游书海 · 背景插画预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 28px 64px; font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; background: #ececea; color: #1b1d21; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; font-size: 13px; opacity: .65; }
+  section { margin-bottom: 32px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+
+  .frame { border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
+  .frame img, .frame svg { display: block; width: 100%; height: auto; }
+
+  .canvas-light { background: linear-gradient(180deg, #fafbfc 0%, #f0f4f8 100%); }
+  .canvas-dark { background: linear-gradient(180deg, #17191d 0%, #1d2025 100%); }
+  .canvas-dark svg { filter: brightness(1.35) saturate(.85); }
+
+  /* Hero 空态:文本按钮靠顶 · 插画大面积沉底 · 鲸+喷泉+书全部完整可见 */
+  .hero-demo {
+    position: relative; min-height: 560px;
+    background: #f8f9fa; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .hero-demo .content {
+    position: relative; z-index: 2; text-align: center; padding-top: 16px; flex: none;
+  }
+  .hero-demo .content h3 { font-size: 20px; margin: 0 0 3px; letter-spacing: .3px; }
+  .hero-demo .content p { font-size: 13px; color: #61666b; margin: 0 0 12px; }
+  .hero-demo .content button {
+    padding: 8px 20px; border-radius: 10px; border: none; cursor: pointer;
+    background: #1b1d21; color: #fff; font-size: 14px; font-weight: 500;
+  }
+  .hero-demo .bg {
+    position: absolute; inset: auto 0 0 0; width: 100%; height: 85%;
+    object-fit: cover; object-position: center bottom; opacity: .88; z-index: 1;
+    mask-image: linear-gradient(180deg, transparent 0%, #000 26%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 26%);
+  }
+</style>
+</head>
+<body>
+
+<h1>鲸游书海 · 背景插画</h1>
+<p class="sub">官方 FISH_LOGO_PATH 鲸剪影 · 喷书散落回书海 · docs/brand/whale-book-sea-bg.svg(960×540)</p>
+
+<section>
+  <h2>① 亮主题画布</h2>
+  <div class="frame canvas-light">
+    <img src="docs/brand/whale-book-sea-bg.svg" alt="鲸游书海(亮)">
+  </div>
+</section>
+
+<section>
+  <h2>② 暗主题画布(自动提亮)</h2>
+  <div class="frame canvas-dark">
+    <img src="docs/brand/whale-book-sea-bg.svg" alt="鲸游书海(暗)">
+  </div>
+</section>
+
+<section>
+  <h2>③ Hero 空态面板(文本按钮在顶 · 插画沉底 · 零遮挡 · 无图标)</h2>
+  <div class="hero-demo">
+    <div class="content">
+      <h3>探索未至之境</h3>
+      <p>知识就是力量</p>
+      <button>＋ 添加项目</button>
+    </div>
+    <img class="bg" src="docs/brand/whale-book-sea-bg.svg" alt="">
+  </div>
+</section>
+
+</body>
+</html>

@@ -375,10 +375,13 @@ async function setScope(page, label) {
   await page.locator('#kn-drawer [data-act="kn-ask-new"]').click();
   await page.waitForTimeout(250);
   T('「新会话引用」→ hero 草稿相位', await page.evaluate(() => document.getElementById('conv-root').getAttribute('data-phase') === 'hero'));
+  T('hero 相位 =「鲸游书海」插画沉底(问候语上方零遮挡)', await page.locator('.conv-hero-bg').isVisible() &&
+    (await page.evaluate(() => { var t = document.querySelector('.conv-hero').getBoundingClientRect(), b = document.querySelector('.conv-hero-bg').getBoundingClientRect(); return t.bottom <= b.top + b.height * .26 + 2; })));
   T('新会话输入卡预填 @ 知识文档', (await page.locator('#composer-input').innerText()).includes('@单一归属'));
   await page.locator('#composer-input').fill('');
   await page.locator('.sess-row', { hasText: '置信度四信号实现口径' }).first().click();
   await page.waitForTimeout(150);
+  T('退出 hero 相位 → 插画隐藏', await page.locator('.conv-hero-bg').isHidden());
 
   console.log('== 召回日志(dsh-forge 内核于召回执行时记录 · 轨迹级事后分析)==');
   await openKb(page);
@@ -607,13 +610,11 @@ async function setScope(page, label) {
   await page.waitForTimeout(150);
   await page.locator('.rb-start-card', { hasText: '项目概览' }).click();
   await page.waitForTimeout(220);
-  T('概览:概要信息 + 对账卡', await page.locator('.ov-align').isVisible());
-  await page.locator('[data-act="ws-move"]').click();
-  await page.waitForTimeout(200);
-  T('模拟移动 → 失配提示', (await page.locator('.ov-align').innerText()).includes('失配'));
-  await page.locator('[data-act="ws-realign"]').click();
-  await page.waitForTimeout(200);
-  T('找回 → 已对齐', (await page.locator('.ov-align').innerText()).includes('已对齐'));
+  T('概览:概要信息(ov-head 状态摘要行)', (await page.locator('.ov-head').innerText()).includes('会话'));
+  T('路径默认折叠(对账卡已随 M2 同步移除)', (await page.locator('.ov-info').count()) === 0);
+  await page.locator('[data-act="ov-head-toggle"]').click();
+  await page.waitForTimeout(150);
+  T('▾ 展开位置详情(含「工作区」行)', (await page.locator('.ov-info').innerText()).includes('工作区'));
 
   console.log('== 任务三视图(feature 绑定 · 列表/DAG/泳道)==');
   await page.locator('.ov-subtab', { hasText: '任务' }).click();
@@ -621,13 +622,13 @@ async function setScope(page, label) {
   T('feature 选择 pill 可见(默认 p2-kernel)', (await page.locator('.task-feat-pill').innerText()).includes('p2-kernel'));
   const listRows = await page.locator('.task-row').count();
   T('列表视图:feature 任务 ≥ 8 行: ' + listRows, listRows >= 8);
-  const idsOk = await page.evaluate(() => [...document.querySelectorAll('.task-row .task-id')].every(el => el.textContent.indexOf('p2-kernel/') === 0));
-  T('列表全部属于当前 feature(无全局汇总)', idsOk);
+  const idsOk = await page.evaluate(() => { const ids = [...document.querySelectorAll('.task-row .task-id')].map(el => el.textContent); return ids.length >= 8 && ids.every(x => !x.includes('/')); });
+  T('列表 id = 短键(当前 feature 域,无全局汇总混入)', idsOk);
   const taskRow = page.locator('.task-row', { hasText: '审核工作台' }).first();
   await taskRow.hover();
   await taskRow.locator('[data-act="task-tool"]').click();
   await page.waitForTimeout(250);
-  T('⚡ tool 提交 → pending → in_progress', (await page.locator('.task-row', { hasText: '审核工作台' }).first().innerText()).includes('in_progress'));
+  T('⚡ tool 提交 → pending → in_progress(状态标签中文)', (await page.locator('.task-row', { hasText: '审核工作台' }).first().innerText()).includes('执行中'));
   await page.locator('[data-act="ov-task-view"][data-v="dag"]').click();
   await page.waitForTimeout(220);
   const nodeCount = await page.locator('.dag-node').count();
@@ -651,7 +652,7 @@ async function setScope(page, label) {
   await page.waitForTimeout(220);
   T('泳道:七态列(待办/执行中/已完成/阻塞/挂起/跳过/已拒绝)', (await page.locator('.swim-col').count()) === 7);
   T('泳道:执行中列有卡片', (await page.locator('.swim-col', { hasText: '执行中' }).locator('.swim-card').count()) >= 1);
-  T('泳道:空列占位(无此状态任务)', (await page.locator('.swim-empty').count()) >= 1);
+  T('泳道:空列占位(无此状态任务)', (await page.locator('.swim-col-empty').count()) >= 1);
   await page.locator('.swim-card').first().click();
   await page.waitForTimeout(150);
   T('泳道卡片点击 → 任务气泡', (await page.locator('.pop').innerText().catch(() => '')).includes('任务详情'));
@@ -664,7 +665,7 @@ async function setScope(page, label) {
   await page.waitForTimeout(200);
   T('feature → p1-shell:列表切换', (await page.locator('.task-feat-pill').innerText()).includes('p1-shell'));
   const shellRows = await page.locator('.task-row .task-id').allInnerTexts();
-  T('p1-shell 行全部属于 p1-shell(跨 feature 不混入): ' + shellRows.length, shellRows.length >= 1 && shellRows.every(x => x.indexOf('p1-shell/') === 0));
+  T('p1-shell 恰好 3 行(feature 绑定,跨 feature 不混入): ' + shellRows.length, shellRows.length === 3 && shellRows.every(x => !x.includes('/')));
   await page.locator('.ov-subtab', { hasText: '提案' }).click();
   await page.waitForTimeout(150);
   await page.locator('.tree-row.file', { hasText: 'proposal.md' }).first().click();
@@ -768,7 +769,7 @@ async function setScope(page, label) {
   await page.waitForTimeout(250);
   T('② 工作区目录自动回填表单', (await page.locator('#ap-ws').inputValue()) === 'Z:\\project\\dsh\\dsh-demo');
   T('② 项目名自动取文件夹名', (await page.locator('#ap-name').inputValue()) === 'dsh-demo');
-  T('② 任务清单与记录自动派生且只读(扁平化 + hash8 消歧后缀)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-dsh-demo-') && /-[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()) &&
+  T('② 任务清单与记录自动派生且只读(扁平化 @hash8 消歧后缀)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-dsh-demo@') && /@[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()) &&
     await page.locator('#ap-tasks').isDisabled() === false && (await page.locator('#ap-tasks').getAttribute('readonly')) !== null);
   T('② 任务清单与记录位于表单最下方(目录字段之后)', await page.evaluate(() => {
     const rows = [...document.querySelectorAll('.dialog-body .form-row')];
@@ -807,7 +808,7 @@ async function setScope(page, label) {
   T('④ 换选工作区:回填 + 未手改字段重构(forge/项目名)', (await page.locator('#ap-ws').inputValue()) === 'Z:\\project\\dsh\\legacy-app' &&
     (await page.locator('#ap-forge').inputValue()) === 'Z:\\project\\dsh\\legacy-app\\.forge' &&
     (await page.locator('#ap-name').inputValue()) === 'legacy-app');
-  T('④ 任务清单随工作区重新派生(扁平化 + hash8)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-legacy-app-') && /-[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()));
+  T('④ 任务清单随工作区重新派生(扁平化 @hash8)', (await page.locator('#ap-tasks').inputValue()).startsWith('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh-legacy-app@') && /@[0-9a-f]{8}$/.test(await page.locator('#ap-tasks').inputValue()));
   T('④ 浏览选定的知识库目录保留(不随工作区重构)', (await page.locator('#ap-kn').inputValue()) === 'Z:\\project\\dsh\\dsh-demo\\.knowledge');
   await page.locator('.dialog [data-dlg-ok]').click();
   await page.waitForTimeout(300);
