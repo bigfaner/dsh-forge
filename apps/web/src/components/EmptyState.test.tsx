@@ -21,8 +21,8 @@ describe('EmptyState 统一空态', () => {
     expect(markup).toContain('<button type="button">查看目录位置</button>')
   })
   it('描述与插槽均可选（缺席不渲染空节点）', () => {
-    const markup = renderToStaticMarkup(<EmptyState title="本会话暂无召回" />)
-    expect(markup).toContain('本会话暂无召回')
+    const markup = renderToStaticMarkup(<EmptyState title="本会话暂无召回记录" />)
+    expect(markup).toContain('本会话暂无召回记录')
     expect(markup).not.toContain('dswf-empty-description')
     expect(markup).not.toContain('dswf-empty-action')
   })

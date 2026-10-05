@@ -49,13 +49,13 @@ const renderBody = (state: RecallLoadState, onOpenEntry?: (id: number) => void):
   renderToStaticMarkup(<RecallTabBody state={state} retry={() => {}} onOpenEntry={onOpenEntry} now={NOW} />)
 
 describe('RecallTabBody 纯渲染（全相位）', () => {
-  it('AC-5 无召回：idle（无会话/项目锚）与 ready 零事件均 =「本会话暂无召回」空态', () => {
+  it('AC-5 无召回：idle（无会话/项目锚）与 ready 零事件均 =「本会话暂无召回记录」空态', () => {
     const idle = renderBody(stateOf({ phase: 'idle' }))
     expect(idle).toContain('data-dswf-recall-face="empty"')
-    expect(idle).toContain('本会话暂无召回')
+    expect(idle).toContain('本会话暂无召回记录')
     const readyEmpty = renderBody(stateOf({ phase: 'ready', groups: [] }))
     expect(readyEmpty).toContain('data-dswf-recall-face="empty"')
-    expect(readyEmpty).toContain('本会话暂无召回')
+    expect(readyEmpty).toContain('本会话暂无召回记录')
   })
   it('装载中 = 行级骨架（不炸壳）', () => {
     const markup = renderBody(stateOf({ phase: 'loading' }))

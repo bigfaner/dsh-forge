@@ -6,7 +6,7 @@
 //     hold 分支）删除——官方 conversation.view roster only:id 激活即挂载/切走即卸载，
 //     「每次选中重拉」由挂载机制本身承载（fix-25 形态），隐藏期保持分支生产不可达。
 //   - 无会话/无项目锚（session-maybe undefined / 项目未就绪）= 静态空态（不拉取）；
-//     就绪且零事件 = 「本会话暂无召回」（AC5）。
+//     就绪且零事件 = 「本会话暂无召回记录」（AC5）。
 //   - 失效行（AC3）：entryId = null（索引重建后 ID 漂移）行级标注「索引未命中」，
 //     不阻塞列表、不进跳转；命中行点击 → onOpenEntry(entryId)（装配接知识视图抽屉——
 //     Hard Rule：跳转经装配态经手，本模块禁 import ../knowledge/）。
@@ -237,7 +237,7 @@ export interface RecallTabBodyProps {
 
 /**
  * 召回 tab 纯渲染（状态注入——静态可测全相位）：统计头（召回次数/覆盖条数——recallStatsOf
- * 纯投影）+ 按知识分组行列表（动词明细/最近时间/热度徽章）；idle/零事件 = 「本会话暂无召回」
+ * 纯投影）+ 按知识分组行列表（动词明细/最近时间/热度徽章）；idle/零事件 = 「本会话暂无召回记录」
  * 空态；error = 错误条 + 重试（fail-soft 不炸壳）。
  */
 export function RecallTabBody({ state, retry, onOpenEntry, now }: RecallTabBodyProps): ReactNode {
@@ -245,7 +245,7 @@ export function RecallTabBody({ state, retry, onOpenEntry, now }: RecallTabBodyP
   if (state.phase === 'idle' || (state.phase === 'ready' && state.groups.length === 0)) {
     return (
       <div className="dswf-recall-face" data-dswf-recall-face="empty">
-        <EmptyState title="本会话暂无召回" />
+        <EmptyState title="本会话暂无召回记录" />
       </div>
     )
   }

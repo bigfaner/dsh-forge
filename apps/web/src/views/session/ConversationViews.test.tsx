@@ -10,6 +10,6 @@ describe('视图占用者 SSR 首帧（效应面零执行——结构锚在场�
   it('召回视图：pane 锚 + 无项目锚静态空态（useWorkspaces/RPC 缺席 = 降级；visible 恒 true 由挂载机制承载）', () => {
     const markup = renderToStaticMarkup(<ForgeRecallView sessionId="s-1" />)
     expect(markup).toContain('data-dswf-pane="recall"')
-    expect(markup).toContain('本会话暂无召回')
+    expect(markup).toContain('本会话暂无召回记录')
   })
 })

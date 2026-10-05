@@ -176,6 +176,14 @@ button.dswf-recall-rowbtn:hover {
   min-height: 0;
 }
 
+/* 召回空态上移让位插画（brand.css「鲸游书海」对话区统一背景——书本/鲸鱼沉于容器
+ * 中下部）：空态文案置于顶部遮罩透明带（渐隐至容器 ~47% 处全不透明），不遮挡
+ * 书本与鲸鱼。范围化覆盖共享 EmptyState 居中（知识库/会话列表空态不受波及）。 */
+.dswf-recall-face[data-dswf-recall-face='empty'] .dswf-empty {
+  justify-content: flex-start;
+  padding-top: clamp(48px, 14vh, 132px); /* dsw-raw 上带刻度——恒落遮罩透明带内 */
+}
+
 /* 错误条（fail-soft：通道/typed error 统一错误条 + 重试——browse 面同族形制） */
 .dswf-recall-error {
   display: flex;
