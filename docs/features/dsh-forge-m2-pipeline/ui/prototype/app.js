@@ -15,6 +15,9 @@
   var ST_DOT = { pending: 'idle', in_progress: 'ok live', completed: 'done', blocked: 'err', suspended: 'warn', skipped: 'skip', rejected: 'rej' }
   var ST_TAG = { completed: 'st-completed', in_progress: 'st-in_progress', pending: 'st-pending', blocked: 'st-blocked', suspended: 'st-pending', skipped: 'st-pending', rejected: 'st-blocked' }
   var TERM = function (st) { return st === 'completed' || st === 'skipped' }
+  /* 抽屉宽度(左缘拖拽调宽):min/def/max + 视口钳制——须在 seed() 前定义(seed 引用 def) */
+  var DRAWER_W = { min: 320, def: 420, max: 760 }
+  function drawerMaxW() { return Math.min(DRAWER_W.max, Math.round(window.innerWidth * 0.92)) }
   /* R5:feature 相位与提案五态中文标签 */
   var FEAT_LABEL = { prd: '需求', design: '设计', tasks: '任务', 'in-progress': '进行中', completed: '已完成', archived: '已归档' }
   var PROP_LABEL = { draft: '草稿', 'under-review': '评审中', accepted: '已接受', rejected: '已拒绝', superseded: '已替代' }
@@ -55,7 +58,7 @@
     return !!(S.dock.open && ov && S.dock.active === ov.id)
   }
 
-  var S, TR
+  var S, TR, TD_LAST = null
   function seed() {
     S = {
       panel: 'session', sessionId: 's1', viewTab: 'chat',
@@ -63,7 +66,7 @@
       /* dock = 官方 ui-dockkit(DockSurface):tabs 页签模型(官方 guide entry → openTab(kind, {replaceTab:true})) */
       dock: { open: false, tabs: [{ id: 'g1', kind: 'guide', title: '开始' }], active: 'g1', nextId: 2, remembered: null, fullscreen: false },
       ov: { subtab: 'proposals', feat: 'm2-pipeline', chips: {}, open: {}, view: 'list', q: '', qFocus: false, rowOpen: {}, headOpen: false, sort: 'status' },
-      drawer: null, taskDrawer: null, menu: null, suspect: false, dispatching: false
+      drawer: null, taskDrawer: null, taskDrawerW: DRAWER_W.def, sect: { content: true, tl: true }, menu: null, suspect: false, dispatching: false
     }
     D.projects.forEach(function (p) { p.archived = false })
     D.tasks.forEach(function (t) { t.status = t._st0 || t.status; if (!t._st0) t._st0 = t.status })
@@ -255,18 +258,21 @@
           '<div class="ov-info-row"><span class="ov-info-k">任务清单</span><span class="ov-info-v ellipsis" title="' + esc(D.taskStore(D.ws)) + '">' + esc(D.taskStore(D.ws)) + '</span></div>' +
           '</div><div style="text-align:right"><button class="btn btn-ghost btn-sm" data-act="ov-head-toggle">▴ 收起</button></div>'
         : '') + '</div>' +
-      /* P4/P5:sticky 区 = 子 tab + 搜索栏 */
+      /* P4/P5:sticky 区 = 子 tab + 搜索行(v8:搜索框限宽不占满 dock + 排序 pill 固定右端) */
       '<div class="ov-sticky">' +
       '<div class="ov-subtabs" role="tablist" aria-label="概览子视图">' + SUB.map(function (k) {
         return '<button class="ov-subtab' + (S.ov.subtab === k[0] ? ' active' : '') + '" role="tab" aria-selected="' + (S.ov.subtab === k[0]) + '" data-act="ov-subtab" data-st="' + k[0] + '">' + k[1] + '</button>'
       }).join('') + '</div>' +
+      '<div class="ov-searchbar">' +
       '<div class="ov-searchrow"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
       '<input id="ov-q" type="text" placeholder="搜索' + (S.ov.subtab === 'tasks' ? '标题/类型/状态(中英)' : S.ov.subtab === 'feature' ? 'feature/文档' : '提案/slug/状态') + '…" aria-label="概览搜索" value="' + esc(S.ov.q || '') + '">' +
       (S.ov.q ? '<button class="icon-btn" data-act="ov-q-clear" title="清除" aria-label="清除"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' : '') +
       '</div>' +
-      '<div class="ov-sortrow"><button class="pill is-button ov-sort-pill" data-act="ov-sort-toggle" title="切换排序方式">' +
+      '<span class="spacer"></span>' +
+      '<button class="pill is-button ov-sort-pill" data-act="ov-sort-toggle" title="切换排序方式">' +
       '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>' +
-      SORT_LABEL[S.ov.sort] + '</button></div>' +
+      SORT_LABEL[S.ov.sort] + '</button>' +
+      '</div>' +
       '<div class="ov-content" id="ov-content"></div>'
     $('#rb-body').innerHTML = info
     var el = $('#ov-content')
@@ -290,8 +296,8 @@
       '<div class="seg task-viewseg">' + [['list', '列表'], ['dag', 'DAG'], ['swim', '泳道']].map(function (v) {
         return '<button class="seg-btn' + (S.ov.view === v[0] ? ' active' : '') + '" data-act="ov-task-view" data-v="' + v[0] + '">' + v[1] + '</button>'
       }).join('') + '</div></div>'
-    if (!all.length) return html + '<div class="kb-empty">本 feature 暂无任务<span class="t-aux">任务由 run-tasks / add_task 产生</span></div>' + ovFoot()
-    if (!ts.length) return html + '<div class="kb-empty">无匹配「' + esc(S.ov.q) + '」的任务</div>' + ovFoot()
+    if (!all.length) return html + '<div class="kb-empty">本 feature 暂无任务<span class="t-aux">任务由 run-tasks / add_task 产生</span></div>'
+    if (!ts.length) return html + '<div class="kb-empty">无匹配「' + esc(S.ov.q) + '」的任务</div>'
     /* P5:七态 chips 三视图统一过滤 */
     var on = ST_ORDER.filter(function (st) { return S.ov.chips[st] })
     var vis = on.length ? ts.filter(function (t) { return on.indexOf(t.status) >= 0 }) : ts
@@ -301,20 +307,21 @@
       var zero = counts[st] === 0
       return '<button class="st-chip' + (S.ov.chips[st] ? ' is-on' : '') + (zero ? ' is-zero' : '') + '" data-act="st-chip" data-st="' + st + '"' + (zero ? ' disabled title="无此状态任务"' : '') + '><span class="state-dot ' + ST_DOT[st] + '"></span>' + ST_LABEL[st] + '<span class="cnt">' + counts[st] + '</span></button>'
     }).join('') + (on.length ? '<button class="st-chip" data-act="st-clear">✕ 清过滤</button>' : '') + '</div>'
-    if (!vis.length) return html + '<div class="kb-empty">当前过滤组合无任务</div>' + ovFoot()
+    if (!vis.length) return html + '<div class="kb-empty">当前过滤组合无任务</div>'
     /* 排序:按 S.ov.sort 分发(活跃优先 / 最新创建) */
     vis = sortList(vis, TASK_SORT)
-    if (S.ov.view === 'dag') return html + renderDag(vis) + ovFoot()
-    if (S.ov.view === 'swim') return html + renderSwim(vis) + ovFoot()
+    if (S.ov.view === 'dag') return html + renderDag(vis)
+    if (S.ov.view === 'swim') return html + renderSwim(vis)
     /* P1:列表视图——主行 ID+标题+状态,副行 11px 元数据 */
     var running = vis.filter(function (t) { return t.status === 'in_progress' || t.status === 'blocked' })
     if (running.length) html += '<div class="task-group-label">执行中(' + running.length + ')</div>' + running.map(row).join('')
     var rest = vis.filter(function (t) { return running.indexOf(t) < 0 })
     if (rest.length && running.length) html += '<div class="task-group-label">其余</div>'
     html += rest.map(row).join('')
-    return html + ovFoot()
+    return html
     function row(t) {
       var ls = linksOf(t.key)
+      var dur = actualDurationOf(t)
       var r = '<div class="task-item' + (S.taskDrawer === t.key ? ' is-open' : '') + '" data-act="task-toggle" data-key="' + esc(t.key) + '" tabindex="0" role="button">' +
         '<div class="task-row' + (S.taskDrawer === t.key ? ' is-open' : '') + '" data-key="' + esc(t.key) + '">' +
         '<span class="task-id" title="' + esc(t.key) + '">' + esc(t.key.split('/').pop()) + '</span>' +
@@ -323,6 +330,7 @@
         '<button class="icon-btn task-more" data-act="task-more" data-key="' + esc(t.key) + '" title="行操作">⋯</button></div>' +
         '<div class="task-sub">' +
         (t.type ? esc(t.type) : '') + (t.priority ? ' · ' + esc(t.priority) : '') +
+        (dur ? ' · 实际耗时 ' + esc(dur) : '') +
         (t.deps.length ? ' · ←' + t.deps.length + ' 前置' : '') +
         (ls.length ? ' · <span data-act="task-links" data-key="' + esc(t.key) + '" style="color:var(--dsw-alias-link);cursor:pointer">⟞' + ls.length + ' 挂接</span>' : '') +
         (t.fix ? ' · fix→' + esc((t.source || '').split('/').pop()) : '') +
@@ -377,10 +385,12 @@
     var nodes = ts.map(function (t) {
       var p = pos[t.key]
       var dot = ST_DOT[t.status] || 'idle'
+      var dur = actualDurationOf(t)
       return '<div class="dag-node' + (t.status === 'completed' ? ' is-completed' : '') + '" style="left:' + p.x + 'px;top:' + p.y + 'px;height:' + H + 'px;width:' + W + 'px" data-act="dag-node-click" data-key="' + esc(t.key) + '" title="' + esc(t.title) + '">' +
         '<div class="dag-node-top"><span class="state-dot ' + dot + '"></span><span class="dag-node-key">' + esc(t.key.split('/').pop()) + '</span>' +
         (t.fix ? '<span class="chip" style="font-size:9px">fix</span>' : '') + '</div>' +
-        '<div class="dag-node-title">' + esc(t.title.slice(0, 30)) + '</div></div>'
+        '<div class="dag-node-title">' + esc(t.title.slice(0, 30)) + '</div>' +
+        (dur ? '<div class="dag-node-time">⏱ ' + esc(dur) + '</div>' : '') + '</div>'
     }).join('')
     return '<div class="dag-wrap"><div class="dag-canvas" style="width:' + cw + 'px;height:' + ch + 'px">' +
       '<svg class="dag-svg" viewBox="0 0 ' + cw + ' ' + ch + '" preserveAspectRatio="none" aria-hidden="true">' + defs + edges + '</svg>' + nodes + '</div></div>' +
@@ -398,16 +408,17 @@
       }
       var body = cards.map(function (t) {
         var ls = linksOf(t.key)
+        var dur = actualDurationOf(t)
         return '<div class="swim-card" data-act="dag-node-click" data-key="' + esc(t.key) + '" title="' + esc(t.title) + '">' +
           '<div class="sc-key">' + esc(t.key.split('/').pop()) + (t.fix ? ' <span class="chip" style="font-size:9px">fix</span>' : '') + '</div>' +
           '<div class="sc-title">' + esc(t.title.slice(0, 26)) + '</div>' +
           '<div class="sc-foot">' + (t.type ? '<span class="t-aux" style="font-size:9.5px">' + esc(t.type) + '</span>' : '') +
+          (dur ? ' <span class="sc-time">⏱ ' + esc(dur) + '</span>' : '') +
           (ls.length ? ' <span class="task-links" style="font-size:9.5px">⟞' + ls.length + '</span>' : '') + '</div></div>'
       }).join('')
       return '<div class="swim-col"><div class="swim-col-head"><span class="state-dot ' + dot + '"></span><span>' + ST_LABEL[st] + '</span><span class="cnt">' + cards.length + '</span></div>' + body + '</div>'
     }).join('') + '</div>'
   }
-  function ovFoot() { return '<p class="ov-footnote">任务视图 feature 绑定(无全局汇总)· 应用不发起编排(只看不管);行点击展开执行时间线;转移状态 = 人类通道(from≠to + 原因必填);挂接会话见展开详情。</p>' }
   /* ── feature 子tab:feature 行(可展开元数据)+ 文档行(状态标签 + 操作按钮)——与提案子tab交互一致 ── */
   function ovFeature() {
     var q = (S.ov.q || '').trim().toLowerCase()
@@ -439,7 +450,7 @@
       }
       docs.forEach(function (d) { html += ovDocRow(d, q) })
     })
-    return html + '<p class="ov-footnote2">docs/features/ · 仓内只读;行点击展开元数据;文档不含提案(提案子tab专属)。</p>'
+    return html + '<p class="ov-footnote2">docs/features/ · 仓内只读</p>'
   }
 
   /* ── 提案子tab:提案行(可展开元数据)+ 文档行(状态标签 + 操作按钮)——与 feature 子tab交互一致 ── */
@@ -471,7 +482,7 @@
       html += ovDocRow({ kind: 'proposal', rel: p.doc_path, summary: p.summary, dangling: false }, q)
     })
     if (!list.length) html += '<div class="kb-empty">无匹配「' + esc(S.ov.q) + '」的提案</div>'
-    return html + '<p class="ov-footnote2">docs/proposals/ · 五态 · 仓内只读(SC8);行点击展开元数据。</p>'
+    return html + '<p class="ov-footnote2">docs/proposals/ · 仓内只读</p>'
   }
 
   /* ── 共用:父行(feature/提案——展开/收起元数据) ── */
@@ -726,10 +737,12 @@
     if (S.menu) html += '<div class="layer" data-act="layer-close"></div><div class="menu" style="left:' + S.menu.x + 'px;top:' + S.menu.y + 'px">' + S.menu.html + '</div>'
     if (S.dialog) html += '<div class="dialog-mask" data-act="layer-close"><div class="dialog">' + S.dialog.html + '</div></div>'
     host.innerHTML = html
-    /* 任务详情抽屉(S.taskDrawer) */
+    /* 任务详情抽屉(S.taskDrawer)——同任务重渲染不重放滑入动画(v14:仅切换任务时动画) */
     var tdRoot = $('#task-drawer-root')
     if (!tdRoot) { tdRoot = document.createElement('div'); tdRoot.id = 'task-drawer-root'; document.body.appendChild(tdRoot) }
-    tdRoot.innerHTML = S.taskDrawer ? taskDrawerHtml(S.taskDrawer) : ''
+    var tdAnim = !!S.taskDrawer && S.taskDrawer !== TD_LAST
+    TD_LAST = S.taskDrawer
+    tdRoot.innerHTML = S.taskDrawer ? taskDrawerHtml(S.taskDrawer, tdAnim) : ''
     /* 文档抽屉(S.drawer——保留用于悬空详情等;文档主路径已改为 dock tab) */
     var drawer = $('#doc-drawer-root')
     if (!drawer) { drawer = document.createElement('div'); drawer.id = 'doc-drawer-root'; document.body.appendChild(drawer) }
@@ -745,105 +758,327 @@
   function isEvalType(t) { var c = typeCategory(t); return c === 'eval' || c === 'validation' }
   function isGateType(t) { return t.type === 'gate' }
 
-  function taskDrawerHtml(key) {
+  /* ── 任务内容模板(v7):任务无文档——内容 = forge.db tasks 行结构化负载(vars_json 具体化),
+        按类型分模板渲染;未注册类型走通用键值回退。模板族 = TaskType 唯一词汇(21 类型)。 ── */
+  function tcKv(k, v) { return '<div class="tl-row"><span class="tl-verb">' + esc(k) + '</span><span class="tl-note">' + v + '</span></div>' }
+  function tcCode(s) { return '<span class="t-code" style="font-size:10.5px;color:var(--dsw-alias-link)">' + esc(s) + '</span>' }
+  function tcK(label) { return '<div class="tc-k">' + esc(label) + '</div>' }
+  function tcFiles(items) { return '<div class="tc-files">' + items.map(function (f) { return '<span class="tc-file" title="' + esc(f) + '">' + esc(f) + '</span>' }).join('') + '</div>' }
+  function tcPlain(items) { return '<div class="tc-plainlist">' + items.map(function (s) { return '<div class="tc-li">· ' + esc(s) + '</div>' }).join('') + '</div>' }
+  function tcSteps(items) { return '<div class="tc-steps">' + items.map(function (s, i) { return '<div class="tc-step"><span class="tc-num">' + (i + 1) + '</span><span class="tc-step-text">' + esc(s) + '</span></div>' }).join('') + '</div>' }
+  function tcChecklist(items, allDone) {
+    return '<div class="tc-acc">' + items.map(function (it) {
+      return '<div class="acc-item' + (allDone ? ' is-done' : '') + '"><span class="acc-box" aria-hidden="true">' + (allDone ? '✓' : '') + '</span><span class="acc-text">' + esc(it) + '</span></div>'
+    }).join('') + '</div>'
+  }
+  function tcRefs(refs) {
+    return '<div class="tc-refs">' + refs.map(function (r) {
+      var rel = refDocOf(r)
+      return '<span class="chip tc-ref' + (rel ? ' is-link' : '') + '"' +
+        (rel ? ' data-act="ref-doc" data-rel="' + esc(rel) + '" data-summary="' + esc(r) + '" title="' + esc(rel) + ' · 点击在 dock 打开"' : '') + '>' + esc(r) + '</span>'
+    }).join('') + '</div>'
+  }
+  /* 参考锚点 → 文档路径(refDocs 前缀匹配;无映射 = 置灰不可点) */
+  function refDocOf(label) {
+    var keys = Object.keys(D.refDocs || {})
+    for (var i = 0; i < keys.length; i++) if (label.indexOf(keys[i]) >= 0) return D.refDocs[keys[i]]
+    return null
+  }
+  var TASK_TEMPLATES = {
+    /* coding.*:参考文档 → 改动范围(预期↔实际)→ 验收标准(v17:备注移至覆盖率之下,由块组装尾部统一渲染) */
+    coding: function (t, c) {
+      var done = TERM(t.status)
+      return (c.refs ? tcK('参考文档') + tcRefs(c.refs) : '') +
+        (c.scope ? tcScopeDual(t, c.scope) : '') +
+        (c.acceptance ? tcK('验收标准') + tcChecklist(c.acceptance, done) : '')
+    },
+    /* coding.fix / doc.fix:症状 / 修复步骤 / 验证(链元数据在时间线「创建」事件) */
+    fix: function (t, c) {
+      return (c.symptom ? tcKv('症状', esc(c.symptom)) : '') +
+        (c.steps ? tcK('修复步骤') + tcSteps(c.steps) : '') +
+        (c.verify ? tcKv('验证', tcCode(c.verify)) : '')
+    },
+    /* doc:大纲 / 交付物 / 读者 */
+    doc: function (t, c) {
+      return (c.outline ? tcK('大纲') + tcSteps(c.outline) : '') +
+        (c.deliverable ? tcKv('交付物', tcCode(c.deliverable)) : '') +
+        (c.readers ? tcKv('读者', esc(c.readers)) : '')
+    },
+    /* gate:走查步骤 / 检查项(场景由块首「目标 · 预期」承载) */
+    gate: function (t, c) {
+      var gc = t.gate_checks
+      var allDone = !!(gc && gc.total && gc.passed === gc.total)
+      return (c.steps ? tcK('走查步骤') + tcSteps(c.steps) : '') +
+        (c.checks ? tcK('检查项') + tcChecklist(c.checks, allDone) : '')
+    },
+    /* test.*:命令 / 采集指标 / 基线 */
+    test: function (t, c) {
+      return (c.command ? tcKv('命令', tcCode(c.command)) : '') +
+        (c.metrics ? tcK('采集指标') + tcPlain(c.metrics) : '') +
+        (c.baseline ? tcKv('基线', esc(c.baseline)) : '')
+    },
+    /* eval.* / validation.*:评估对象 / 评分表 / 结论 */
+    eval: function (t, c) {
+      return (c.target ? tcKv('评估对象', tcCode(c.target)) : '') +
+        (c.rubric ? tcK('评分表') + c.rubric.map(function (r) {
+          var col = r.s >= 70 ? 'var(--dsw-alias-state-success-primary)' : r.s >= 40 ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-state-error-primary)'
+          return '<div class="tl-row"><span class="tl-verb">' + esc(r.k) + '</span><span class="tl-note"><span style="font-family:var(--font-code);color:' + col + '">' + r.s + '</span><span style="color:var(--dsw-alias-label-tertiary)">/100</span></span></div>'
+        }).join('') : '') +
+        (c.conclusion ? tcKv('结论', esc(c.conclusion)) : '')
+    },
+    /* 未注册类型回退:键值 + 列表 */
+    generic: function (t, c) {
+      return Object.keys(c).map(function (k) {
+        var v = c[k]
+        if (Array.isArray(v)) return tcK(k) + tcPlain(v.map(function (x) { return typeof x === 'object' ? JSON.stringify(x) : String(x) }))
+        return tcKv(k, esc(v))
+      }).join('')
+    }
+  }
+  function tplFamily(t) {
+    if (isFixType(t)) return 'fix'
+    if (isGateType(t)) return 'gate'
+    if (isTestType(t)) return 'test'
+    if (isEvalType(t)) return 'eval'
+    var c = typeCategory(t)
+    if (c === 'doc') return 'doc'
+    return TASK_TEMPLATES[c] ? c : 'generic'
+  }
+  function tplBodyHtml(t) {
+    var c = t.content
+    if (!c) return ''
+    return (TASK_TEMPLATES[tplFamily(t)] || TASK_TEMPLATES.generic)(t, c)
+  }
+  /* ── 单元测试覆盖率(编码类;v9):预期值 vs 实际值 + 阈值刻度线——放内容块尾(量化验收口径,紧随验收标准) ── */
+  function unitCoverageHtml(t) {
+    if (isFixType(t)) return ''
+    var exp = t.coverage_expected, act = t.coverage
+    if (exp === undefined && act === undefined) return ''
+    var hasAct = typeof act === 'number'
+    var pass = hasAct && act >= exp
+    var col = !hasAct ? 'var(--dsw-alias-state-idle-primary)' : pass ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-state-warn-primary)'
+    var tag = !hasAct ? '<span class="chip">未执行</span>'
+      : pass ? '<span class="chip" style="color:var(--dsw-alias-state-success-primary);border:1px solid var(--dsw-alias-state-success-primary)">✓ 达标</span>'
+        : '<span class="chip" style="color:var(--dsw-alias-state-warn-primary);border:1px solid var(--dsw-alias-state-warn-primary)">未达标</span>'
+    return '<div class="tc-k">单元测试覆盖率</div>' +
+      '<div class="cov-line">' +
+      '<div class="cov-bar"><div class="cov-fill" style="width:' + (hasAct ? act : 0) + '%;background:' + col + '"></div>' +
+      (exp !== undefined ? '<span class="cov-mark" style="left:' + exp + '%"></span>' : '') + '</div>' +
+      '<span class="cov-nums">' + (hasAct ? '<b style="color:' + col + '">' + act + '%</b> 实际' : '<b>—</b> 实际') + ' / ' + (exp !== undefined ? '≥' + exp + '%' : '—') + ' 预期</span>' + tag + '</div>'
+  }
+  /* ── 改动范围:预期 ↔ 实际(v10)。实际优先 = submit 记录的 commit hash → commits 存储(只读 git 查询);
+        其次 = 任务记录回退(无提交时按最近记录/状态给语) ── */
+  function commitsOf(t) {
+    var out = []
+    ;(D.records[t.key] || []).forEach(function (r) {
+      if (r.commit && D.commits[r.commit]) out.push({ hash: r.commit, c: D.commits[r.commit] })
+    })
+    return out
+  }
+  function actualFilesOf(t) {
+    var cs = commitsOf(t)
+    if (!cs.length) return null
+    var set = {}, files = []
+    cs.forEach(function (x) {
+      x.c.files.forEach(function (f) { if (!set[f]) { set[f] = 1; files.push(f) } })
+    })
+    return { files: files, srcs: cs.map(function (x) { return x.hash }), set: set }
+  }
+  function tcScopeDual(t, expected) {
+    var act = actualFilesOf(t)
+    var expSet = {}
+    expected.forEach(function (f) { expSet[f] = 1 })
+    var h = tcK('改动范围')
+    h += '<div class="tc-scope-g"><span class="tc-scope-k">预期(' + expected.length + ')</span>' + expected.map(function (f) {
+      var st = act ? (act.set[f] ? '<span class="chip chip-hit">✓</span>' : '<span class="chip">未涉及</span>') : ''
+      return '<div class="tc-file-row"><span class="tc-file" title="' + esc(f) + '">' + esc(f) + '</span>' + st + '</div>'
+    }).join('') + '</div>'
+    if (act) {
+      h += '<div class="tc-scope-g"><span class="tc-scope-k">实际(' + act.files.length + ')</span>' +
+        '<div class="tc-refs">' + act.srcs.map(function (s2) {
+          var c = D.commits[s2]
+          return '<span class="chip tl-commit" title="' + esc(c.summary + '\n' + c.files.join('\n')) + '">' + esc(s2) + '</span>'
+        }).join('') + '</div>' +
+        act.files.map(function (f) {
+          return '<div class="tc-file-row"><span class="tc-file" title="' + esc(f) + '">' + esc(f) + '</span>' + (expSet[f] ? '' : '<span class="chip chip-extra">计划外</span>') + '</div>'
+        }).join('') + '</div>'
+      var hit = 0, extra = 0
+      act.files.forEach(function (f) { if (expSet[f]) hit++; else extra++ })
+      var miss = expected.length - hit
+      h += '<div class="tc-scope-sum">预期 ' + expected.length + ' · 实际 ' + act.files.length + ' · 预期内 ' + hit +
+        (extra ? ' · 计划外 +' + extra : '') + (miss ? ' · 未涉及 ' + miss : '') + '</div>'
+    } else {
+      var rs = D.records[t.key] || []
+      var lastN = rs.length ? rs[rs.length - 1].note : ''
+      h += '<div class="tc-scope-g"><span class="tc-scope-k">实际</span>' +
+        '<div class="tc-li">暂无提交 · ' + esc(!rs.length && t.status === 'pending' ? '未开始' : ST_LABEL[t.status] + ' · ' + (lastN || '—')) + '</div></div>'
+    }
+    return h
+  }
+  /* ── 预期目标 ↔ 实际结果(内容与记录综合;v10) ── */
+  function actualResultHtml(t) {
+    var rs = D.records[t.key] || []
+    var last = null
+    for (var i = rs.length - 1; i >= 0; i--) {
+      var v = rs[i].verb
+      if (v === 'submit' || v === 'transition' || v === 'eval') { last = rs[i]; break }
+    }
+    if (t.score !== undefined) return '<span style="color:var(--dsw-alias-state-error-primary)">评估 ' + t.score + '/100 · 严重度 ' + esc(t.severity || '—') + (t.main_session ? ' · 🔑 主会话' : '') + '</span>'
+    if (last) {
+      if (last.verb === 'submit') return '<span style="color:var(--dsw-alias-state-success-primary)">✓ 已提交</span> · ' + esc(last.note) +
+        (last.commit && D.commits[last.commit] ? ' · <span class="t-code" style="color:var(--dsw-alias-link)">' + esc(last.commit) + '</span>' : '')
+      return esc(last.note)
+    }
+    if (t.status === 'blocked') return '<span style="color:var(--dsw-alias-state-error-primary)">⚠ ' + esc(t.blocked_reason || '阻塞中') + '</span>'
+    if (t.status === 'in_progress') return '执行中 · ' + esc(rs.length ? rs[rs.length - 1].note : '已领取')
+    if (t.status === 'pending') return '未开始'
+    return esc(ST_LABEL[t.status])
+  }
+  function goalResultRows(t) {
+    var c = t.content || {}
+    var goal = c.goal || c.scenario || t.title || ''
+    /* v16:标签在上、内容在下方(非左右两列)——「目标」「结果」对位呈现 */
+    return '<div class="gr-item"><div class="tc-k">目标</div><div class="gr-v">' + esc(goal) + '</div></div>' +
+      '<div class="gr-item"><div class="tc-k">结果</div><div class="gr-v">' + actualResultHtml(t) + '</div></div>'
+  }
+  /* ── 关联与过程 · 时间线(v10:现状条 + 事件流,混合单块) ── */
+  var TL_VERB = { add: ['创建', ''], claim: ['领取', 'v-claim'], submit: ['提交', 'v-submit'], 'auto-block': ['自动阻塞', 'v-block'], 'auto-restore': ['自动恢复', 'v-restore'], transition: ['人工转移', 'v-human'], eval: ['评估', 'v-claim'] }
+  function tlSessPills(ls, kind, label) {
+    return ls.filter(function (l) { return l.kind === kind }).map(function (l) {
+      var s = D.sessions.find(function (x) { return x.id === l.session })
+      return '<span class="tl-sess" data-act="sess-open" data-s="' + esc(l.session) + '" title="跳转会话">' + label + '⟞ ' + esc(s ? s.title : l.session) + '</span>'
+    }).join(' ')
+  }
+  function tlNowHtml(t, ls) {
+    var parts = []
+    if (t.status === 'blocked' && t.blocked_reason) parts.push('<span class="tl-now-item">⚠ ' + esc(t.blocked_reason) + '</span>')
+    if (t.deps && t.deps.length) parts.push('<span class="tl-now-item">前置 ' + t.deps.map(function (d) { var dt = task(d); return esc(d.split('/').pop()) + '(' + (dt ? ST_LABEL[dt.status] : '—') + ')' }).join(' · ') + '</span>')
+    if (ls.length) parts.push('<span class="tl-now-item">' + ls.map(function (l) {
+      var s = D.sessions.find(function (x) { return x.id === l.session })
+      return '<span class="tl-sess" data-act="sess-open" data-s="' + esc(l.session) + '">' + (l.kind === 'link' ? '派发' : '执行') + '⟞ ' + esc(s ? s.title : l.session) + '</span>'
+    }).join(' · ') + '</span>')
+    if (isTestType(t) && t.surface_key) parts.push('<span class="tl-now-item">Surface ' + esc(t.surface_key) + ' (' + esc(t.surface_type || '?') + ')</span>')
+    if (isGateType(t) && t.gate_checks) parts.push('<span class="tl-now-item">质量门 ' + t.gate_checks.passed + '/' + t.gate_checks.total + '</span>')
+    if (isEvalType(t) && t.score !== undefined) parts.push('<span class="tl-now-item">得分 ' + t.score + '/100 · 严重度 ' + esc(t.severity || '—') + (t.main_session ? ' · 🔑 主会话' : '') + '</span>')
+    if (!parts.length) return ''
+    return '<div class="tl-now"><span class="tl-now-k">现状</span>' + parts.join('') + '</div>'
+  }
+  function tlEventHtml(t, r, ls) {
+    var m = TL_VERB[r.verb] || [r.verb, '']
+    var d = ''
+    if (r.verb === 'add') {
+      if (t.deps && t.deps.length) d += '<div class="tl-ev-note">前置声明 ← ' + t.deps.map(function (k2) { return esc(k2.split('/').pop()) }).join(' · ') + '</div>'
+      if (isFixType(t) && t.source) {
+        var src = task(t.source)
+        d += '<div class="tl-ev-note">fix 链:来源 ' + (src ? esc(src.key) + '(' + ST_LABEL[src.status] + ')' : esc(t.source)) + (t.root_cause ? ' · 根因:' + esc(t.root_cause) : '') + '</div>' +
+          (t.source_files ? '<div class="tl-ev-note t-code" style="font-size:10px">' + esc(t.source_files) + '</div>' : '') +
+          (t.test_script ? '<div class="tl-ev-note t-code" style="font-size:10px">$ ' + esc(t.test_script) + '</div>' : '')
+      }
+    }
+    if (r.verb === 'claim') {
+      var lps = tlSessPills(ls, 'link', '派发')
+      if (lps) d += '<div class="tl-ev-note">' + lps + '</div>'
+    }
+    if (r.verb === 'submit') {
+      if (r.commit && D.commits[r.commit]) {
+        var cm = D.commits[r.commit]
+        d += '<div class="tl-ev-note"><span class="chip tl-commit" title="' + esc(cm.summary) + '">' + esc(r.commit) + '</span> ' + esc(cm.summary) +
+          ' <span class="t-aux" style="font-size:10px">(' + cm.files.length + ' 文件 → 实际范围)</span></div>'
+      }
+      var eps = tlSessPills(ls, 'exec', '执行')
+      if (eps) d += '<div class="tl-ev-note">' + eps + '</div>'
+    }
+    return '<div class="tl-ev ' + m[1] + '"><div class="tl-ev-head"><span class="tl-ev-verb">' + esc(m[0]) + '</span><span class="tl-ev-at">' + esc(r.at) + '</span></div>' +
+      (r.note ? '<div class="tl-ev-note">' + esc(r.note) + '</div>' : '') + d + '</div>'
+  }
+
+  /* ── 实际耗时(v17:completed 任务——首 claim → 末 submit 的记录时差推导) ── */
+  function parseAt(s) {
+    var m = /^(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s || '')
+    return m ? new Date(2026, +m[1] - 1, +m[2], +m[3], +m[4]) : null
+  }
+  function fmtDur(min) {
+    if (min < 60) return min + 'm'
+    var h = Math.floor(min / 60), m = min % 60
+    if (h < 24) return h + 'h' + (m ? m + 'm' : '')
+    return Math.floor(h / 24) + 'd' + (h % 24 ? (h % 24) + 'h' : '')
+  }
+  function actualDurationOf(t) {
+    if (t.status !== 'completed') return null
+    var rs = D.records[t.key] || []
+    var claimAt = null, submitAt = null
+    rs.forEach(function (r) {
+      var d = parseAt(r.at)
+      if (!d) return
+      if (r.verb === 'claim' && claimAt === null) claimAt = d
+      if (r.verb === 'submit') submitAt = d
+    })
+    if (!claimAt || !submitAt) return null
+    var min = Math.round((submitAt - claimAt) / 60000)
+    return min > 0 ? fmtDur(min) : null
+  }
+
+  /* ── 抽屉分块:头部点击收起/展开(就地更新——不重建抽屉 DOM,grid 0fr/1fr 高度过渡) ── */
+  function drawerSect(id, title, hintHtml, bodyHtml) {
+    var open = S.sect[id] !== false
+    return '<div class="ds-sect" data-act="sect-toggle" data-sect="' + id + '" tabindex="0" role="button" aria-expanded="' + open + '">' +
+      '<span class="ds-caret' + (open ? '' : ' is-closed') + '" aria-hidden="true">▾</span>' +
+      '<span class="ds-title">' + title + '</span>' + hintHtml + '</div>' +
+      '<div class="ds-body' + (open ? '' : ' is-collapsed') + '"><div class="ds-body-in">' + bodyHtml + '</div></div>'
+  }
+
+  function taskDrawerHtml(key, animate) {
     var t = task(key)
     if (!t) return ''
     var ls = linksOf(t.key)
     var cat = typeCategory(t)
-    var catLabel = TYPE_CATEGORY[cat] || cat
     var catColor = TYPE_CAT_COLOR[cat] || 'var(--dsw-alias-label-tertiary)'
     var h = ''
 
     /* ── 通用区(全部类型) ── */
-    h += '<aside class="task-drawer" role="dialog" aria-label="任务详情">'
+    var drawerW = Math.max(DRAWER_W.min, Math.min(drawerMaxW(), S.taskDrawerW || DRAWER_W.def))
+    h += '<aside class="task-drawer' + (animate ? '' : ' no-anim') + '" role="dialog" aria-label="任务详情" style="width:' + drawerW + 'px">'
+    /* 左缘拖拽手柄(宽 320–760;双击复位;←→ 键盘微调) */
+    h += '<div class="task-drawer-resize" data-act="drawer-resize" role="separator" aria-orientation="vertical" tabindex="0" aria-label="拖动调整抽屉宽度" title="拖动调宽 · 双击复位"></div>'
     h += '<div class="task-drawer-head">' +
-      '<button class="icon-btn" data-act="task-drawer-close" title="关闭(Esc)" aria-label="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       '<span class="state-dot ' + ST_DOT[t.status] + '"></span>' +
       '<span class="doc-title ellipsis" style="font-family:var(--font-code);font-size:13px">' + esc(t.key) + '</span>' +
-      '<span class="status-tag ' + ST_TAG[t.status] + '">' + esc(ST_LABEL[t.status]) + '</span></div>'
+      '<span class="status-tag ' + ST_TAG[t.status] + '">' + esc(ST_LABEL[t.status]) + '</span>' +
+      '<span class="spacer"></span>' +
+      '<button class="icon-btn" data-act="task-drawer-close" title="关闭(Esc)" aria-label="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>'
     h += '<div style="padding:4px 16px 8px;font-size:14px;font-weight:500">' + esc(t.title) + '</div>'
-    h += '<div style="padding:0 16px 12px;display:flex;gap:6px;flex-wrap:wrap">' +
-      '<span class="chip" style="color:' + catColor + ';border-color:' + catColor + '">' + esc(catLabel) + ' · ' + esc(t.type) + '</span>' +
-      (t.priority ? '<span class="chip">' + esc(t.priority) + '</span>' : '') +
-      (t.est ? '<span class="chip">预估 ' + esc(t.est) + '</span>' : '') +
-      (t.complexity ? '<span class="chip">' + esc(t.complexity) + '</span>' : '') +
-      (t.breaking ? '<span class="chip" style="color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)">breaking</span>' : '') +
+    /* v15:标签行 = chip 组件包裹,格式 {key} : {value}(类别只显示类型——不中英混搭) */
+    var CPX = { high: '高', medium: '中', low: '低' }
+    function kvChip(k, v, style) {
+      return '<span class="chip kv-chip"' + (style ? ' style="' + style + '"' : '') + '><span class="kv-k">' + esc(k) + '</span><span class="kv-sep"> : </span><span class="kv-v">' + v + '</span></span>'
+    }
+    var kv = [kvChip('类别', esc(t.type), 'color:' + catColor + ';border-color:' + catColor)]
+    if (t.priority) kv.push(kvChip('优先级', esc(t.priority)))
+    if (t.est) kv.push(kvChip('预估耗时', esc(t.est)))
+    var dur = actualDurationOf(t)
+    if (dur) kv.push(kvChip('实际耗时', esc(dur)))
+    if (t.complexity) kv.push(kvChip('复杂度', esc(CPX[t.complexity] || t.complexity)))
+    if (t.breaking) kv.push(kvChip('影响', '<span style="color:var(--dsw-alias-state-error-primary)">⚠ breaking</span>'))
+    h += '<div class="kv-strip">' + kv.join('') + '</div>'
+
+    /* ══ v10:两分块(均可收起/展开)——内容(预期 ↔ 实际,综合任务记录)→ 关联与过程(单一时间线) ══ */
+
+    /* ── 块一:任务内容(预期 ↔ 实际——目标/结果对行 + 类型模板 + 改动范围双列 + 覆盖率 + 备注) ── */
+    var tplBody = tplBodyHtml(t)
+    var covBody = unitCoverageHtml(t)
+    var noteBody = (t.content && t.content.note) ? tcK('备注') + '<div class="gr-v" style="color:var(--dsw-alias-state-warn-primary)">⚠ ' + esc(t.content.note) + '</div>' : ''
+    h += drawerSect('content', '任务内容', '', goalResultRows(t) + tplBody + covBody + noteBody)
+
+    /* ── 块二:时间线(现状条 + 事件流混合单块) ── */
+    var recs = D.records[t.key] || []
+    var tlBody = tlNowHtml(t, ls) + '<div class="tl-line">' +
+      (recs.map(function (r) { return tlEventHtml(t, r, ls) }).join('') || '<div class="tl-ev"><div class="tl-ev-note">(暂无记录)</div></div>') +
       '</div>'
-
-    /* ── 状态条件区:blocked 原因 ── */
-    if (t.status === 'blocked' && t.blocked_reason) {
-      h += section('阻塞原因', '<div class="tl-row"><span class="tl-note" style="color:var(--dsw-alias-state-error-primary)">⚠ ' + esc(t.blocked_reason) + '</span></div>')
-    }
-
-    /* ── 前置依赖(通用) ── */
-    if (t.deps.length) {
-      h += section('前置依赖', t.deps.map(function (d) {
-        var dt = task(d)
-        return '<div class="tl-row"><span class="tl-verb">' + esc(d.split('/').pop()) + '</span><span class="tl-note">' + (dt ? ST_LABEL[dt.status] : '—') + '</span></div>'
-      }).join(''))
-    }
-
-    /* ── 按类型条件区 ── */
-    /* fix 链(coding.fix / doc.fix) */
-    if (isFixType(t) && t.source) {
-      var src = task(t.source)
-      h += section('Fix 链', [
-        '<div class="tl-row"><span class="tl-verb">来源任务</span><span class="tl-note">' + (src ? esc(src.key.split('/').pop()) + ' · ' + ST_LABEL[src.status] : esc(t.source)) + '</span></div>',
-        t.root_cause ? '<div class="tl-row"><span class="tl-verb">根因</span><span class="tl-note">' + esc(t.root_cause) + '</span></div>' : '',
-        t.source_files ? '<div class="tl-row"><span class="tl-verb">源文件</span><span class="tl-note t-code" style="font-size:10.5px">' + esc(t.source_files) + '</span></div>' : '',
-        t.test_script ? '<div class="tl-row"><span class="tl-verb">测试脚本</span><span class="tl-note t-code" style="font-size:10.5px">' + esc(t.test_script) + '</span></div>' : ''
-      ].join(''))
-    }
-    /* 覆盖率(coding.* / code-quality.*) */
-    if (isTestableType(t) && t.coverage !== undefined) {
-      var covColor = t.coverage >= 80 ? 'var(--dsw-alias-state-success-primary)' : t.coverage >= 50 ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-state-error-primary)'
-      h += section('覆盖率', '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">' +
-        '<div style="flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover)"><div style="width:' + t.coverage + '%;height:100%;border-radius:3px;background:' + covColor + '"></div></div>' +
-        '<span style="font-family:var(--font-code);font-size:12px;color:' + covColor + '">' + t.coverage + '%</span></div>')
-    }
-    /* 测试面(test.*) */
-    if (isTestType(t)) {
-      h += section('测试面', [
-        t.surface_key ? '<div class="tl-row"><span class="tl-verb">Surface</span><span class="tl-note">' + esc(t.surface_key) + ' (' + esc(t.surface_type || '?') + ')</span></div>' : '',
-        '<div class="tl-row"><span class="tl-verb">测试类型</span><span class="tl-note">' + esc(t.type.includes('gen-journeys') ? 'Journey 生成' : t.type.includes('gen-contracts') ? 'Contract 生成' : t.type.includes('gen-scripts') ? '脚本生成' : '测试运行') + '</span></div>'
-      ].join(''))
-    }
-    /* 质量门(gate) */
-    if (isGateType(t) && t.gate_checks) {
-      var gc = t.gate_checks
-      var gcPct = gc.total ? Math.round(gc.passed / gc.total * 100) : 0
-      h += section('质量门检查', '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">' +
-        '<div style="flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover)"><div style="width:' + gcPct + '%;height:100%;border-radius:3px;background:var(--dsw-alias-state-success-primary)"></div></div>' +
-        '<span style="font-family:var(--font-code);font-size:12px">' + gc.passed + '/' + gc.total + '</span></div>')
-    }
-    /* 评估/验证(eval.* / validation.*) */
-    if (isEvalType(t)) {
-      var evalRows = []
-      if (t.main_session) evalRows.push('<div class="tl-row"><span class="tl-verb">执行方式</span><span class="tl-note">🔑 主会话(不分发 executor)</span></div>')
-      if (t.score !== undefined) evalRows.push('<div class="tl-row"><span class="tl-verb">得分</span><span class="tl-note" style="color:' + (t.score >= 70 ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-state-error-primary)') + '">' + t.score + '/100</span></div>')
-      if (t.severity) evalRows.push('<div class="tl-row"><span class="tl-verb">严重度</span><span class="tl-note">' + esc(t.severity) + '</span></div>')
-      if (evalRows.length) h += section('评估结果', evalRows.join(''))
-    }
-
-    /* ── 共用底部:执行时间线 + 挂接 + 操作 ── */
-    var tl = (D.records[t.key] || []).map(function (r) {
-      return '<div class="tl-row"><span class="tl-verb' + (r.verb === 'auto-restore' ? ' v-restore' : r.verb === 'auto-block' ? ' v-block' : '') + '">' + esc(r.verb) + '</span><span class="tl-at">' + esc(r.at) + '</span><span class="tl-note">' + esc(r.note) + '</span></div>'
-    }).join('') || '<div class="tl-row"><span class="tl-note">(暂无执行记录)</span></div>'
-    h += section('执行时间线', tl)
-
-    if (ls.length) {
-      h += section('挂接会话', ls.map(function (l) {
-        var s = D.sessions.find(function (x) { return x.id === l.session })
-        return '<div class="tl-row"><span class="tl-verb">' + (l.kind === 'link' ? '派发 ⟞' : '执行 ⟞') + '</span><span class="tl-note"><span data-act="sess-open" data-s="' + esc(l.session) + '" style="color:var(--dsw-alias-link);cursor:pointer">' + esc(s ? s.title : l.session) + '</span></span></div>'
-      }).join(''))
-    }
+    h += drawerSect('tl', '时间线', '<span class="ds-hint">' + recs.length + ' 条</span>', tlBody)
 
     h += '<div style="padding:12px 16px"><button class="btn btn-soft btn-sm" data-act="trans" data-key="' + esc(t.key) + '">转移状态…</button></div>'
     h += '</aside>'
     return h
-  }
-  function section(title, body) {
-    return '<div style="padding:0 16px;margin-bottom:8px"><div class="menu-label" style="padding:0 0 4px;font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary)">' + title + '</div>' + body + '</div>'
   }
 
   function drawerHtml(d) {
@@ -1113,7 +1348,27 @@
         dockOpenTab('doc', docTitle, { docRel: dRel, docDangling: dDangling, docKind: dKind, docSummary: dSummary })
         break
       }
+      case 'ref-doc': {
+        /* v16:参考文档 chip → dock 开新 tab(按 docRel 去重;只读渲染) */
+        var refRel = el.getAttribute('data-rel')
+        if (!refRel) { toast('该参考无对应文档'); break }
+        dockOpenTab('doc', refRel.split('/').pop(), { docRel: refRel, docSummary: el.getAttribute('data-summary') || '' })
+        break
+      }
       case 'task-drawer-close': S.taskDrawer = null; renderOverlays(); if (overviewActive()) renderOverview(); break
+      case 'sect-toggle': {
+        /* v14:就地更新(不重建抽屉——避免滑入动画重放/闪屏;高度经 grid 0fr/1fr 过渡) */
+        var sid = el.getAttribute('data-sect')
+        var wasOpen = S.sect[sid] !== false
+        S.sect[sid] = !wasOpen
+        var sectEl = el.closest('.ds-sect')
+        var caretEl = sectEl.querySelector('.ds-caret')
+        var bodyEl = sectEl.nextElementSibling
+        sectEl.setAttribute('aria-expanded', String(!wasOpen))
+        if (caretEl) caretEl.classList.toggle('is-closed', wasOpen)
+        if (bodyEl && bodyEl.classList.contains('ds-body')) bodyEl.classList.toggle('is-collapsed', wasOpen)
+        break
+      }
       case 'drawer-close': S.drawer = null; renderOverlays(); break
       case 'doc-editor': toast('已请求系统编辑器打开(应用零写入):' + esc(el.getAttribute('data-path'))); break
       case 'doc-reread': toast('已重新读取(只读)'); break
@@ -1190,6 +1445,13 @@
       else if (S.taskDrawer) { S.taskDrawer = null; renderOverlays(); if (overviewActive()) renderOverview() }
       else if (S.drawer) { S.drawer = null; renderOverlays() }
     }
+    /* 抽屉手柄键盘微调(可达性:← 加宽 / → 收窄,步长 32px) */
+    var rsh = e.target && e.target.closest ? e.target.closest('[data-act="drawer-resize"]') : null
+    if (rsh && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      S.taskDrawerW = Math.max(DRAWER_W.min, Math.min(drawerMaxW(), (S.taskDrawerW || DRAWER_W.def) + (e.key === 'ArrowLeft' ? 32 : -32)))
+      renderOverlays()
+    }
     if (e.key === 'Enter') {
       if (e.target.id === 'composer-input') { e.preventDefault(); doSend() }
       if (e.target.id === 'm2-why') { var b = $('[data-act="trans-apply"]'); if (b) b.click() }
@@ -1204,6 +1466,37 @@
     if (!item) return
     $$('.os-pick-item').forEach(function (x) { x.classList.remove('sel'); x.setAttribute('aria-selected', 'false') })
     item.classList.add('sel'); item.setAttribute('aria-selected', 'true')
+  })
+
+  /* ── 任务抽屉左缘拖拽调宽(pointer 捕获式拖动 + 双击复位) ── */
+  document.addEventListener('pointerdown', function (e) {
+    var h = e.target.closest ? e.target.closest('[data-act="drawer-resize"]') : null
+    if (!h || !S.taskDrawer) return
+    var aside = h.closest('.task-drawer')
+    if (!aside) return
+    var maxW = drawerMaxW()
+    document.body.classList.add('is-drawer-resizing')
+    h.classList.add('is-active')
+    function move(ev) {
+      S.taskDrawerW = Math.max(DRAWER_W.min, Math.min(maxW, window.innerWidth - ev.clientX))
+      aside.style.width = S.taskDrawerW + 'px'
+    }
+    function up() {
+      document.body.classList.remove('is-drawer-resizing')
+      h.classList.remove('is-active')
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', up)
+    }
+    document.addEventListener('pointermove', move)
+    document.addEventListener('pointerup', up)
+    e.preventDefault()
+  })
+  document.addEventListener('dblclick', function (e) {
+    var h = e.target.closest ? e.target.closest('[data-act="drawer-resize"]') : null
+    if (!h) return
+    S.taskDrawerW = DRAWER_W.def
+    renderOverlays()
+    toast('抽屉宽度已复位 ' + DRAWER_W.def + 'px(默认)')
   })
 
   renderAll()

@@ -1,9 +1,18 @@
-/* M2 UI 原型冒烟(v9 = R1-R7 全修 + 子tab 提案|feature|任务) */
+/* M2 UI 原型冒烟(v17 = v16 + completed 实际耗时(列表/DAG/泳道/抽屉,记录推导)) */
 const fs = require('node:fs')
 const path = require('node:path')
 const { chromium } = require(path.resolve(__dirname, '../../../../../node_modules/@playwright/test'))
 
-const EXE = 'C:/Users/panda/AppData/Local/ms-playwright/chromium-1217/chrome-win64/chrome.exe'
+const EXE_CANDIDATES = [
+  'C:/Users/panda/AppData/Local/ms-playwright/chromium-1217/chrome-win64/chrome.exe', /* 须 icudtl.dat 在场(安装完好) */
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',                            /* 系统浏览器后备 */
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
+]
+const EXE = (() => {
+  const pw = EXE_CANDIDATES[0]
+  if (fs.existsSync(pw) && fs.existsSync(pw.replace('chrome.exe', 'icudtl.dat'))) return pw
+  return EXE_CANDIDATES.slice(1).find(p => fs.existsSync(p)) || pw
+})()
 let pass = 0, fail = 0
 const ok = (cond, name) => { if (cond) { pass++; console.log('  ✓ ' + name) } else { fail++; console.log('  ✗ ' + name) } }
 const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator(`.task-id:text-is("${id}")`) })
@@ -52,6 +61,21 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   const firstPropActive = await page.locator('.ov-parent .ellipsis').first().textContent()
   ok(firstPropActive.includes('打磨') || firstPropActive.includes('polish'), '活跃优先:评审中的排最前(' + firstPropActive + ')')
 
+  console.log('— v11:搜索行布局(搜索框限宽 + 排序 pill 右固定) —')
+  {
+    const m = await page.evaluate(() => ({
+      s: document.querySelector('.ov-searchrow').offsetWidth,
+      c: document.querySelector('.ov-content').clientWidth,
+      sr: document.querySelector('.ov-searchrow').getBoundingClientRect().right,
+      pr: document.querySelector('.ov-sort-pill').getBoundingClientRect().right,
+      cr: document.querySelector('.ov-content').getBoundingClientRect().right
+    }))
+    ok(m.s <= 240, '搜索框限宽生效(实测 ' + m.s + 'px ≤ 240)')
+    ok(m.s <= m.c - 120, '搜索框不占满 dock 宽(内容区 ' + m.c + 'px)')
+    ok(Math.abs(m.pr - m.cr) < 2, '排序 pill 固定在搜索行右端(与内容区右缘对齐)')
+    ok(m.sr < m.pr - 20, '搜索框与排序 pill 同行且不重叠')
+  }
+
   console.log('— R5:提案/feature 状态中文 —')
   const propChips = await page.locator('.ov-parent .chip').allTextContents()
   ok(propChips.some(c => c.includes('已接受') || c.includes('评审中')), '提案状态中文(R5):' + propChips.join(','))
@@ -84,20 +108,194 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   ok(await page.locator('.task-item').count() === 11, '任务行 ×11')
   ok(await page.locator('.task-sub').count() === 11, '副行 ×11')
   ok(await page.locator('.status-tag', { hasText: '执行中' }).count() >= 1, '状态 tag 中文')
+  const sub22 = await page.locator('.task-item').filter({ has: page.locator('.task-id:text-is("2.2")') }).locator('.task-sub').textContent()
+  ok(sub22.includes('实际耗时 2h31m'), 'completed 行副行显示实际耗时(2.2 · 2h31m,记录推导)')
   await rowOf(page, 'fix-1').first().click()
   ok(await page.locator('.task-drawer').count() === 1, 'fix 任务点击 → 抽屉(模块化)')
-  ok(await page.locator('.task-drawer .menu-label', { hasText: 'Fix 链' }).count() === 1, 'fix 类型 → Fix 链区块(来源/根因/源文件)')
-  ok(await page.locator('.task-drawer .tl-note', { hasText: 'validator' }).count() >= 1, 'Fix 链含根因描述')
+  {
+    const p = await page.evaluate(() => {
+      const h = document.querySelector('.task-drawer-head').getBoundingClientRect()
+      const c = document.querySelector('[data-act="task-drawer-close"]').getBoundingClientRect()
+      return { gap: h.right - c.right, first: document.querySelector('.task-drawer-head').firstElementChild.className }
+    })
+    ok(p.gap >= 0 && p.gap < 24, '关闭按钮在抽屉头部右端(v11,距右缘 ' + Math.round(p.gap) + 'px)')
+    ok(!p.first.includes('icon-btn'), '头部首元素非关闭按钮(状态点在左)')
+  }
+  ok(await page.locator('.task-drawer .tl-ev', { hasText: 'fix 链' }).count() >= 1, 'fix → 时间线「创建」事件含 Fix 链(来源)')
+  ok(await page.locator('.task-drawer .tl-ev-note', { hasText: 'validator' }).count() >= 1, '创建事件含根因与源文件')
   await page.keyboard.press('Escape')
   await rowOf(page, '2.4').first().click()
-  ok(await page.locator('.task-drawer .menu-label', { hasText: '覆盖率' }).count() === 1, 'coding.feature → 覆盖率区块(进度条)')
+  ok(await page.locator('.task-drawer .tc-k', { hasText: '单元测试覆盖率' }).count() === 1, 'coding.feature → 单元测试覆盖率子区')
   await page.keyboard.press('Escape')
   await rowOf(page, '2.5').first().click()
-  ok(await page.locator('.task-drawer .menu-label', { hasText: '阻塞原因' }).count() === 1, 'blocked 任务 → 阻塞原因区块')
+  ok(await page.locator('.task-drawer .tl-now-item', { hasText: 'fix-1' }).count() >= 1, 'blocked → 时间线现状条含阻塞原因')
   await page.keyboard.press('Escape')
   await rowOf(page, '2.10').first().click()
-  ok(await page.locator('.task-drawer .menu-label', { hasText: '质量门' }).count() === 1, 'gate 类型 → 质量门检查区块')
-  ok(await page.locator('.task-drawer .tl-verb', { hasText: '2.5' }).count() >= 1, 'gate 前置依赖含 2.5')
+  ok(await page.locator('.task-drawer .tl-now-item', { hasText: '质量门' }).count() === 1, 'gate → 现状条含质量门进度')
+  ok(await page.locator('.task-drawer .tl-now-item', { hasText: '2.5' }).count() >= 1, 'gate → 现状条含前置依赖(2.5)')
+  await page.keyboard.press('Escape')
+
+  console.log('— v10:任务内容 = 类型模板渲染(结构化库数据,无任务文档) —')
+  await rowOf(page, '2.4').first().click()
+  ok(await page.locator('.task-drawer .ds-sect[data-sect="content"]').count() === 1, '任务内容块在场(紧跟通用区)')
+  ok((await page.locator('.task-drawer .kv-v').first().textContent()).includes('coding.feature'), '类别 kv 标签含类型(coding.feature)')
+  ok(await page.locator('.task-drawer .tc-file').count() >= 2, 'coding 模板:改动范围文件行(≥2)')
+  ok(await page.locator('.task-drawer .acc-item').count() >= 3, 'coding 模板:验收标准 checklist(≥3)')
+  ok(await page.locator('.task-drawer .acc-item.is-done').count() === 0, 'in_progress 任务 → 验收项未勾')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.1').first().click()
+  ok(await page.locator('.task-drawer .acc-item.is-done').count() >= 3, 'completed 任务 → 验收项全勾(coding 模板)')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.8').first().click()
+  ok(await page.locator('.task-drawer .tc-step').count() >= 3, 'doc 模板:大纲步骤(编号)')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.10').first().click()
+  ok(await page.locator('.task-drawer .tc-num').count() >= 4, 'gate 模板:走查步骤编号(≥4)')
+  ok(await page.locator('.task-drawer .acc-item').count() >= 2, 'gate 模板:检查项 checklist')
+  await page.keyboard.press('Escape')
+  /* demo-lib feature:test / eval 模板 */
+  await page.locator('[data-act="feat-menu"]').click()
+  await page.locator('[data-act="feat-pick"][data-f="demo-lib"]').click()
+  await rowOf(page, '1.2').first().click()
+  ok((await page.locator('.task-drawer .kv-v').first().textContent()).includes('test.run'), '类别 kv 标签含类型(test.run)')
+  ok(await page.locator('.task-drawer .tl-verb', { hasText: '命令' }).count() === 1, 'test 模板:命令行')
+  ok(await page.locator('.task-drawer .tc-li').count() >= 2, 'test 模板:采集指标列表')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '1.3').first().click()
+  ok(await page.locator('.task-drawer .tc-k', { hasText: '评分表' }).count() === 1, 'eval 模板:评分表')
+  ok(await page.locator('.task-drawer .tl-verb', { hasText: '断言可机械化' }).count() === 1, '评分表 rubric 行(键+分值)')
+  const resRow13 = await page.locator('.task-drawer .gr-item', { has: page.locator('.tc-k', { hasText: '结果' }) }).textContent()
+  ok(resRow13.includes('45/100'), 'eval 结果 · 实际 = 评估 45/100(综合任务记录)')
+  ok(await page.locator('.task-drawer .tl-ev', { hasText: '评估' }).count() === 1, '时间线含评估事件')
+  ok(await page.locator('.task-drawer .tl-ev', { hasText: '人工转移' }).count() === 1, '时间线含人工转移事件(带 reason)')
+  await page.keyboard.press('Escape')
+  await page.locator('[data-act="feat-menu"]').click()
+  await page.locator('[data-act="feat-pick"][data-f="m2-pipeline"]').click()
+
+  console.log('— v15:chip kv + 块标题视觉区分 + 目标/结果简化 + 路径完整 + 层次阶梯 —')
+  await rowOf(page, '2.4').first().click()
+  const sectNames = await page.locator('.task-drawer .ds-title').allTextContents()
+  ok(sectNames.join('|') === '任务内容|时间线', '两块命名:任务内容 / 时间线')
+  ok(await page.locator('.task-drawer .ds-body').count() === 2, '两块默认全展开')
+  ok(await page.locator('.task-drawer .tc-tpl').count() === 0, '模板徽标已移除(类型由通用区 kv 承载)')
+  ok(await page.locator('.task-drawer .tc-src').count() === 0, '数据源说明注记已移除(逻辑移入设计文档)')
+  /* v15:kv 标签 = chip 包裹,{key} : {value};类别只显类型(不中英混搭) */
+  const kvTxt = await page.locator('.task-drawer .kv-strip').textContent()
+  ok(await page.locator('.task-drawer .kv-chip').count() >= 4, '标签行 = chip 组件包裹(≥4 枚)')
+  ok(kvTxt.includes('类别 : coding.feature'), '类别 chip「类别 : coding.feature」(不中英混搭)')
+  ok(kvTxt.includes('优先级 : P0') && kvTxt.includes('预估耗时 : 4h') && kvTxt.includes('复杂度 : 高'), 'chip 格式 {key} : {value}')
+  ok(!kvTxt.includes('实际耗时'), '未完成任务不显示实际耗时(2.4 in_progress)')
+  /* v15:块标题视觉区分(底色条 + 主色加粗)+ 子标题层次 + 路径完整展示 */
+  const sectBg = await page.locator('.ds-sect[data-sect="content"]').evaluate(el => getComputedStyle(el).backgroundColor)
+  ok(sectBg !== 'rgba(0, 0, 0, 0)', '块标题底色条(明显视觉区分)')
+  ok(await page.locator('.ds-sect[data-sect="content"] .ds-title').evaluate(el => getComputedStyle(el).fontWeight) === '600', '块标题加粗(600)')
+  ok(await page.locator('.task-drawer .tc-k').first().evaluate(el => getComputedStyle(el).fontWeight) === '600', '子标题 tc-k 加粗 600(层次阶梯)')
+  ok(await page.locator('.task-drawer .tc-file').first().evaluate(el => getComputedStyle(el).whiteSpace) === 'normal', '文件路径完整展示(换行不截断)')
+  /* 折叠:就地更新 + 高度过渡(不重建抽屉 → 无闪屏) */
+  await page.locator('.task-drawer').evaluate(el => el.setAttribute('data-smoke-keep', '1'))
+  await page.locator('.ds-sect[data-sect="content"]').click()
+  ok(await page.locator('.ds-sect[data-sect="content"]').getAttribute('aria-expanded') === 'false', 'aria-expanded 同步(false)')
+  ok((await page.locator('.task-drawer .ds-body').first().getAttribute('class')).includes('is-collapsed'), '收起 = is-collapsed(grid 0fr)')
+  await page.waitForTimeout(340)
+  const hCollapsed = await page.locator('.task-drawer .ds-body').first().evaluate(el => el.getBoundingClientRect().height)
+  ok(hCollapsed < 4, '收起后高度 → 0(高度过渡,非 display 切换)')
+  await page.locator('.ds-sect[data-sect="content"]').click()
+  await page.waitForTimeout(340)
+  ok(await page.locator('.ds-sect[data-sect="content"]').getAttribute('aria-expanded') === 'true', 'aria-expanded 同步(true)')
+  const hOpen = await page.locator('.task-drawer .ds-body').first().evaluate(el => el.getBoundingClientRect().height)
+  ok(hOpen > 60, '展开后高度恢复(过渡完成)')
+  ok(await page.locator('.task-drawer').evaluate(el => el.getAttribute('data-smoke-keep') === '1'), '折叠/展开不重建抽屉 DOM(无闪屏,不重放滑入动画)')
+  /* coding 模板顺序:参考文档 → 改动范围 → 验收标准 → 覆盖率 */
+  const bodyTxt = await page.locator('.task-drawer .ds-body-in').first().textContent()
+  ok(bodyTxt.indexOf('参考文档') >= 0 && bodyTxt.indexOf('参考文档') < bodyTxt.indexOf('改动范围') && bodyTxt.indexOf('改动范围') < bodyTxt.indexOf('验收标准') && bodyTxt.indexOf('验收标准') < bodyTxt.indexOf('单元测试覆盖率') && bodyTxt.indexOf('单元测试覆盖率') < bodyTxt.indexOf('备注'), 'coding 顺序:参考文档 → 改动范围 → 验收标准 → 覆盖率 → 备注')
+  /* 目标/结果(v16:标签在上、内容在下方——非左右两列) */
+  ok(await page.locator('.task-drawer .gr-item .tc-k', { hasText: '目标' }).count() === 1, '目标 项')
+  const stacked = await page.locator('.task-drawer .gr-item').first().evaluate(el => {
+    const k = el.querySelector('.tc-k').getBoundingClientRect()
+    const v = el.querySelector('.gr-v').getBoundingClientRect()
+    return { below: v.top >= k.bottom - 1, sameCol: Math.abs(v.left - k.left) < 4 }
+  })
+  ok(stacked.below && stacked.sameCol, '目标/结果:内容在标签下方(非左右两列)')
+  const resRow4 = await page.locator('.task-drawer .gr-item', { has: page.locator('.tc-k', { hasText: '结果' }) }).textContent()
+  ok(resRow4.includes('执行中'), '结果 = 执行中(2.4,综合最近记录)')
+  /* v16:参考文档 chip → dock 开新 tab(抽屉保持) */
+  await page.locator('.task-drawer .tc-ref.is-link', { hasText: 'S8' }).first().click()
+  ok((await page.locator('.rb-chip.active').textContent()).includes('s8-session-ctx.md'), '参考文档点击 → dock 新 tab')
+  ok(await page.locator('.task-drawer').count() === 1, '抽屉保持打开(不因开 tab 关闭)')
+  ok(await page.locator('.doc-tab-body').count() >= 1, '参考文档 tab 内 Markdown 渲染')
+  await page.keyboard.press('Escape')
+  await page.locator('.rb-chip', { hasText: 's8-session-ctx.md' }).first().locator('.chip-x').click()
+  ok((await page.locator('.rb-chip.active').textContent()).includes('项目概览'), '关闭参考 tab → 回概览')
+  await rowOf(page, '2.4').first().click()
+  ok((await page.locator('.task-drawer .tc-scope-g').last().textContent()).includes('暂无提交'), '无 commit → 实际范围以任务记录为准')
+  /* 单元测试覆盖率:2.4 实际 61 / 预期 ≥80 → 未达标 */
+  ok(await page.locator('.task-drawer .cov-line').count() === 1, '单元测试覆盖率行在场')
+  const covTxt = await page.locator('.task-drawer .cov-line').textContent()
+  ok(covTxt.includes('61') && covTxt.includes('80'), '预期值 + 实际值同现(' + covTxt.trim() + ')')
+  ok(covTxt.includes('未达标'), '61 < 80 → 未达标标记')
+  ok(await page.locator('.task-drawer .cov-fill').evaluate(el => el.style.width) === '61%', '进度条填充 = 实际值(61%)')
+  ok(await page.locator('.task-drawer .cov-mark').evaluate(el => el.style.left) === '80%', '阈值刻度线 = 预期值(80%)')
+  await page.keyboard.press('Escape')
+  /* 2.2:改动范围双列 + 结果行 + 时间线混合 */
+  await rowOf(page, '2.2').first().click()
+  ok(await page.locator('.task-drawer .tc-k', { hasText: '改动范围' }).count() === 1, '改动范围双列(预期/实际分组)')
+  ok(await page.locator('.task-drawer .tc-scope-k', { hasText: '预期(3)' }).count() === 1, '预期组(3 文件)')
+  ok(await page.locator('.task-drawer .tc-scope-k', { hasText: '实际(3)' }).count() === 1, '实际组(3 文件 · commit 查找)')
+  ok(await page.locator('.task-drawer .chip-extra').count() === 1, '计划外徽标(index.ts)')
+  ok(await page.locator('.task-drawer .chip', { hasText: '未涉及' }).count() === 1, '未涉及徽标(state.spec.ts)')
+  ok(await page.locator('.task-drawer .tl-commit').count() >= 1, '实际范围来源 = commit 徽标(8c2f1e0a)')
+  ok((await page.locator('.task-drawer .kv-strip').textContent()).includes('实际耗时 : 2h31m'), 'completed 抽屉 chip「实际耗时 : 2h31m」(claim→submit 推导)')
+  const sumTxt = await page.locator('.task-drawer .tc-scope-sum').textContent()
+  ok(sumTxt.includes('预期 3 · 实际 3 · 预期内 2 · 计划外 +1 · 未涉及 1'), '差异摘要(' + sumTxt.trim() + ')')
+  const resRow22 = await page.locator('.task-drawer .gr-item', { has: page.locator('.tc-k', { hasText: '结果' }) }).textContent()
+  ok(resRow22.includes('已提交') && resRow22.includes('8c2f1e0a'), '结果 · 实际 = ✓ 已提交 + commit hash(综合任务记录)')
+  ok(await page.locator('.task-drawer .tl-ev').count() >= 3, '时间线事件 ≥3(创建/领取/提交)')
+  const ev0 = await page.locator('.task-drawer .tl-ev').first().textContent()
+  ok(ev0.includes('创建') && ev0.includes('2.1'), '创建事件含前置声明(← 2.1)')
+  ok(await page.locator('.task-drawer .tl-ev.v-submit', { hasText: '8c2f1e0a' }).count() === 1, '提交事件含 commit 摘要(→ 实际范围)')
+  ok(await page.locator('.task-drawer .tl-sess').count() >= 1, '领取/提交事件挂接会话 pill(可跳转)')
+  ok((await page.locator('.ds-sect[data-sect="tl"] .ds-hint').textContent()).includes('3'), '时间线头部计数(3 条)')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.1').first().click()
+  ok((await page.locator('.task-drawer .cov-line').textContent()).includes('达标'), '92 ≥ 90 → ✓ 达标')
+  const sum1 = await page.locator('.task-drawer .tc-scope-sum').textContent()
+  ok(sum1.includes('预期 3 · 实际 3 · 预期内 3') && !sum1.includes('计划外'), '范围全命中:零计划外零未涉及(' + sum1.trim() + ')')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.6').first().click()
+  ok((await page.locator('.task-drawer .cov-line').textContent()).includes('未执行'), 'pending 无实际值 → 未执行(预期仍在)')
+  await page.keyboard.press('Escape')
+
+  console.log('— v10:任务抽屉拖拽调宽 —')
+  await rowOf(page, '2.6').first().click()
+  const drawerLoc = page.locator('.task-drawer')
+  const wOf = () => drawerLoc.evaluate(el => el.offsetWidth)
+  const w0 = await wOf()
+  ok(Math.abs(w0 - 420) < 2, '默认宽 420px')
+  const hb = await page.locator('.task-drawer-resize').boundingBox()
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + 160)
+  await page.mouse.down()
+  await page.mouse.move(hb.x - 140, hb.y + 160, { steps: 6 })
+  await page.mouse.up()
+  const w1 = await wOf()
+  ok(w1 - w0 >= 100, '左拖手柄 → 变宽(' + w0 + '→' + w1 + ')')
+  const hb2 = await page.locator('.task-drawer-resize').boundingBox()
+  await page.mouse.move(hb2.x + 3, hb2.y + 160)
+  await page.mouse.down()
+  await page.mouse.move(hb2.x + 90, hb2.y + 160, { steps: 4 })
+  await page.mouse.up()
+  const w2 = await wOf()
+  ok(w2 <= w1 - 60, '右拖手柄 → 变窄(' + w1 + '→' + w2 + ')')
+  await page.locator('.task-drawer-resize').focus()
+  await page.keyboard.press('ArrowLeft')
+  const w3 = await wOf()
+  ok(w3 - w2 === 32, '键盘 ← 微调 +32(可达性)')
+  await page.keyboard.press('Escape')
+  await rowOf(page, '2.7').first().click()
+  const w4 = await wOf()
+  ok(w4 === w3, '宽度跨任务保持(会话级)')
+  await page.locator('.task-drawer-resize').dblclick()
+  const w5 = await wOf()
+  ok(Math.abs(w5 - 420) < 2, '双击手柄 → 复位 420')
   await page.keyboard.press('Escape')
   /* 搜索 */
   await page.fill('#ov-q', '执行中')
@@ -109,6 +307,7 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   console.log('— R5:DAG(箭头方向修复) + 泳道(空列折叠) + chips 三视图 —')
   await page.locator('.task-viewseg .seg-btn', { hasText: 'DAG' }).click()
   ok(await page.locator('.dag-svg marker').count() >= 1, 'DAG 箭头 marker')
+  ok(await page.locator('.dag-node-time').count() >= 3, 'DAG 完成节点显示实际耗时(⏱ ×3)')
   const legend = await page.locator('.dag-legend').textContent()
   ok(legend.includes('后续'), '图例「箭头指向后续任务」(R2 修复)')
   await page.locator('.dag-node').first().click()
@@ -116,6 +315,7 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   await page.keyboard.press('Escape')
   await page.locator('.task-viewseg .seg-btn', { hasText: '泳道' }).click()
   ok(await page.locator('.swim-col-empty').count() >= 1, '0 计数列折叠')
+  ok(await page.locator('.swim-card .sc-time').count() >= 3, '泳道完成卡片显示实际耗时(⏱ ×3)')
   await page.locator('.task-viewseg .seg-btn', { hasText: '列表' }).click()
 
   console.log('— R7:0 计数 chip 禁用 + 转移菜单全七态 —')
@@ -147,6 +347,20 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   await page.locator('[data-act="ov-row-more"]').first().click()
   ok(await page.locator('.menu-item').count() >= 2, 'ov-row-more 有真菜单(R3)')
   await page.keyboard.press('Escape')
+
+  console.log('— hero 空态:「鲸游书海」插画沉底 —')
+  await page.locator('[data-act="proto-collapse"]').click()   /* 展开原型工具,露出空库演示 */
+  await page.locator('[data-act="goto-hero"]').click()
+  await page.waitForTimeout(300)
+  ok(await page.locator('#hero-panel').isVisible(), '归档全部 → hero 面板可见')
+  ok(await page.locator('.hero-bg').isVisible(), 'hero 背景插画在场(鲸游书海)')
+  ok(await page.evaluate(() => {
+    const t = document.querySelector('.hero-inner').getBoundingClientRect()
+    const b = document.querySelector('.hero-bg').getBoundingClientRect()
+    return t.bottom <= b.top + b.height * .26 + 2   /* 文本底不越过遮罩渐隐区 → 零遮挡书本 */
+  }), '文本/按钮全部落在插画渐隐区内(零遮挡)')
+  await page.locator('[data-act="reset"]').click()
+  await page.waitForTimeout(300)
 
   console.log('— 回归 —')
   ok(errors.length === 0, '零页面 JS 错误' + (errors.length ? ':' + errors.join(' | ') : ''))
