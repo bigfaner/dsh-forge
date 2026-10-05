@@ -48,8 +48,10 @@ export function nextLastReadyCount(prev: number | null, projects: {
  * 该 workspace 名下的项目；未匹配/无会话锚 → 唯一项目兜底（单人工作台 P1 最常见的无歧义
  * 相位）；多项目无锚 = null（浏览/召回面按「无项目锚」降级，不猜首个）。
  * 快照缺席（useWorkspaces hook 不在场）= 单项目兜底同径（非壳载体降级）。
- * fix-25 注：知识面板（root 作用域——无会话锚可读）恒走兜底线；会话锚定径由召回/轨迹
- * 视图（session 作用域）消费，多项目知识锚定降级为已知边界（P1 单项目主路径不受损）。
+ * fix-25 注：知识面板原恒走兜底线（root 作用域「无会话锚可读」）；fix-bug 起知识面板
+ * 经 root 标准props useSessions 读主视图会话（官方 retainedBy.mainView 口径——
+ * DocumentTitle 同型先例）走会话锚定分支，多项目 + 活跃会话不再恒降级（多项目无会话
+ * = 保持 null 不猜首个，空态文案分流见 KnowledgeView.anchorlessCopy）。
  * fix-33 ⑨：projects 行 workspaceId 收紧为必填（contracts Project/ProjectSummary 镜像
  * ——原可选放宽无消费面，属漂移面）。
  */

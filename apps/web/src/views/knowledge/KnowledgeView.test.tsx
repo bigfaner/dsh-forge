@@ -16,6 +16,36 @@ describe('KnowledgeView 知识视图装配壳（UF-5 知识视图槽 → UF-6 �
     expect(markup).toContain('尚未锚定项目')
     expect(markup).not.toContain('data-dswf-kn-browse')
   })
+  it('bug: 多项目未锚定空态说实话（不谎称「尚未锚定项目」——告知跟随会话锚定路径）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeView
+        projectId={null}
+        unanchoredProjectCount={3}
+        openEntryId={null}
+        onOpenEntryChange={() => {}}
+      />,
+    )
+    expect(markup).toContain('data-dswf-knowledge-view')
+    expect(markup).toContain('data-dswf-kn-anchor="none"')
+    expect(markup).not.toContain('尚未锚定项目')
+    expect(markup).toContain('已注册 3 个项目')
+    expect(markup).toContain('会话')
+    expect(markup).not.toContain('data-dswf-kn-browse')
+  })
+  it('bug 回归：count 缺省/0/1 = 引导空态原文案（零项目引导不受多项目分流影响）', () => {
+    for (const count of [undefined, 0, 1]) {
+      const markup = renderToStaticMarkup(
+        <KnowledgeView
+          projectId={null}
+          unanchoredProjectCount={count}
+          openEntryId={null}
+          onOpenEntryChange={() => {}}
+        />,
+      )
+      expect(markup).toContain('尚未锚定项目')
+      expect(markup).not.toContain('已注册')
+    }
+  })
   it('项目锚在场 = 浏览主体挂载（工具栏 + 域树轨 + 网格首帧骨架）；anchor = 项目 id', () => {
     const markup = renderToStaticMarkup(
       <KnowledgeView projectId="p-1" openEntryId={null} onOpenEntryChange={() => {}} />,
