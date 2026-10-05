@@ -1,0 +1,215 @@
+<svg viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="鲸游书海:鲸鱼游在书海里,喷出书,又散落回书海">
+  <defs>
+    <path id="whale" d="M22.9168 1.43018C22.6713 1.31018 22.5658 1.53918 22.4223 1.65519C22.3733 1.69269 22.3318 1.74169 22.2903 1.78669C21.9317 2.1697 21.5127 2.42121 20.9657 2.39121C20.1657 2.34621 19.4827 2.59771 18.8787 3.20973C18.7502 2.45521 18.3236 2.0047 17.6746 1.71569C17.3351 1.56568 16.9916 1.41518 16.7536 1.08867C16.5876 0.856163 16.5421 0.597155 16.4591 0.341647C16.4061 0.187643 16.3536 0.0301382 16.1761 0.00363739C15.9836 -0.0263635 15.9081 0.135141 15.8326 0.270145C15.5306 0.822162 15.4136 1.43018 15.4251 2.0462C15.4516 3.43174 16.0366 4.53527 17.1991 5.3203C17.3311 5.4103 17.3651 5.5003 17.3236 5.63181C17.2441 5.90231 17.1501 6.16482 17.0671 6.43533C17.0141 6.60784 16.9351 6.64584 16.7501 6.57033C16.1121 6.30383 15.5611 5.90931 15.074 5.4328C14.2475 4.63328 13.5 3.75075 12.568 3.05973C12.349 2.89822 12.13 2.74822 11.9034 2.60522C10.9524 1.68169 12.028 0.923165 12.277 0.833162C12.5375 0.739159 12.3675 0.41615 11.5259 0.42015C10.6844 0.42365 9.91439 0.705658 8.93286 1.08117C8.78935 1.13767 8.63835 1.17867 8.48384 1.21267C7.59332 1.04367 6.66829 1.00617 5.70226 1.11517C3.88321 1.31768 2.43016 2.1777 1.36213 3.64575C0.0790928 5.4103 -0.222916 7.41536 0.146595 9.50642C0.535106 11.7105 1.66014 13.535 3.38869 14.9616C5.18125 16.4406 7.24581 17.1657 9.60138 17.0266C11.0319 16.9441 12.6245 16.7526 14.421 15.2321C14.874 15.4576 15.3496 15.5476 16.1381 15.6151C16.7456 15.6716 17.3306 15.5851 17.7836 15.4911C18.4931 15.3411 18.4441 14.6841 18.1876 14.5636C16.1081 13.595 16.5646 13.9891 16.1496 13.67C17.2061 12.42 18.8202 10.1979 19.3182 7.17235C19.3672 6.83834 19.4297 6.36783 19.4222 6.09732C19.4182 5.93231 19.4562 5.86831 19.6447 5.84931C20.1657 5.78931 20.6712 5.64681 21.1357 5.3913C22.4833 4.65528 23.0268 3.44624 23.1548 1.9972C23.1738 1.77569 23.1508 1.54668 22.9168 1.43018ZM11.1749 14.4736C9.15936 12.889 8.18184 12.3675 7.77832 12.39C7.40081 12.4125 7.46881 12.8445 7.55182 13.126C7.63882 13.404 7.75182 13.5955 7.91033 13.8396C8.01983 14.0011 8.09533 14.2411 7.80083 14.4216C7.15181 14.8231 6.02327 14.2866 5.97027 14.2601C4.65673 13.4865 3.5587 12.4655 2.78467 11.069C2.03715 9.72493 1.60314 8.28289 1.53164 6.74384C1.51264 6.37233 1.62214 6.24082 1.99215 6.17332C2.47916 6.08332 2.98118 6.06432 3.46769 6.13582C5.52476 6.43633 7.27581 7.35586 8.74385 8.8129C9.58188 9.64243 10.2159 10.634 10.8689 11.6025C11.5634 12.631 12.3105 13.611 13.262 14.4146C13.598 14.6961 13.866 14.9101 14.1225 15.0681C13.349 15.1546 12.058 15.1731 11.1749 14.4746L11.1749 14.4736ZM12.141 8.25988C12.141 8.09488 12.273 7.96338 12.439 7.96338C12.4765 7.96338 12.5105 7.97088 12.541 7.98188C12.5825 7.99688 12.6205 8.01938 12.6505 8.05338C12.7035 8.10588 12.7335 8.18088 12.7335 8.25988C12.7335 8.42489 12.6015 8.55639 12.4355 8.55639C12.2695 8.55639 12.141 8.42489 12.141 8.25988ZM15.1415 9.79893C14.949 9.87793 14.7565 9.94544 14.5715 9.95294C14.2845 9.96794 13.9715 9.85143 13.8015 9.70893C13.5375 9.48742 13.3485 9.36342 13.2695 8.97691C13.2355 8.8119 13.2545 8.55639 13.2845 8.40989C13.3525 8.09438 13.277 7.89187 13.0545 7.70787C12.8735 7.55786 12.6435 7.51636 12.39 7.51636C12.2955 7.51636 12.2095 7.47486 12.1445 7.44136C12.0395 7.38886 11.9519 7.25735 12.035 7.09585C12.0615 7.04335 12.19 6.91584 12.22 6.89334C12.5635 6.69784 12.9595 6.76184 13.326 6.90834C13.6655 7.04735 13.9225 7.30236 14.292 7.66287C14.6695 8.09838 14.7375 8.21838 14.9525 8.54539C15.1225 8.8009 15.2775 9.06341 15.3831 9.36392C15.4471 9.55142 15.3641 9.70493 15.1415 9.79893Z"/>
+
+    <path id="ob" d="M0 0 C3.5 -3, 7 -3, 10 -0.5 C13 -3, 16.5 -3, 20 0 L20 8 C16.5 5, 13 5, 10 7.5 C7 5, 3.5 5, 0 8 Z"/>
+    <g id="cb">
+      <rect x="-14" y="-5" width="28" height="10" rx="2.2"/>
+      <line x1="-7.5" y1="-5" x2="-7.5" y2="5" stroke="#ffffff" stroke-opacity=".5" stroke-width="1.4"/>
+      <line x1="6" y1="-3.8" x2="11" y2="-3.8" stroke="#ffffff" stroke-opacity=".28" stroke-width="1"/>
+      <line x1="6" y1="3.8" x2="11" y2="3.8" stroke="#ffffff" stroke-opacity=".28" stroke-width="1"/>
+    </g>
+    <path id="hb" d="M0 3 C 2.5 1.2, 6 .6, 9 1.4 C 10.5 -2, 13.5 -5, 17.5 -6.6 C 15.5 -3, 14.2 .5, 13.8 4.6 C 12 4, 9.8 4.6, 8 6 C 5.5 4.2, 2.5 4, 0 5.5 Z M0 3 C -3 1.8, -6.5 1.5, -10 2 L -10 8 C -6.5 7, -3 7.2, 0 8.5 Z"/>
+
+    <g id="fbo"><path d="M0 0 C3.5 -3, 7 -3, 10 -.5 C13 -3, 16.5 -3, 20 0 L20 8 C16.5 5, 13 5, 10 7.5 C7 5, 3.5 5, 0 8 Z"/><line x1="10" y1="-.5" x2="10" y2="7.5" stroke="#fff" stroke-opacity=".45" stroke-width="1.2"/></g>
+    <g id="fbc"><rect x="-7" y="-9" width="14" height="18" rx="2"/><line x1="-5" y1="0" x2="5" y2="0" stroke="#fff" stroke-opacity=".5" stroke-width="1.4"/></g>
+    <g id="fbh"><path d="M0 3 C 2.5 1, 6 .4, 9 1.2 C 10.5 -2.4, 13.5 -5.6, 18 -7 C 15.5 -3.2, 14.2 .4, 13.8 4.8 C 12 4, 9.8 4.6, 8 6.2 C 5.5 4.2, 2.5 4, 0 5.6 Z"/></g>
+
+    <linearGradient id="trail" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══ 底层书 ═══ -->
+  <g fill="#1e40af" opacity=".5">
+    <use href="#cb" transform="translate(82 508) scale(.45) rotate(3)"/>
+    <use href="#ob" transform="translate(158 520) scale(.38) rotate(-4)"/>
+    <use href="#hb" transform="translate(228 498) scale(.42) rotate(5)"/>
+    <use href="#ob" transform="translate(298 526) scale(.5) rotate(-2)"/>
+    <use href="#cb" transform="translate(368 506) scale(.35) rotate(4)"/>
+    <use href="#hb" transform="translate(432 530) scale(.44) rotate(-5)"/>
+    <use href="#ob" transform="translate(502 500) scale(.4) rotate(2)"/>
+    <use href="#cb" transform="translate(568 522) scale(.48) rotate(-3)"/>
+    <use href="#hb" transform="translate(638 496) scale(.36) rotate(6)"/>
+    <use href="#ob" transform="translate(708 528) scale(.42) rotate(-4)"/>
+    <use href="#cb" transform="translate(778 508) scale(.39) rotate(3)"/>
+    <use href="#hb" transform="translate(848 532) scale(.46) rotate(-2)"/>
+    <use href="#ob" transform="translate(912 502) scale(.37) rotate(5)"/>
+    <use href="#cb" transform="translate(120 534) scale(.34) rotate(-6)"/>
+    <use href="#ob" transform="translate(600 536) scale(.33) rotate(4)"/>
+    <use href="#hb" transform="translate(268 488) scale(.68) rotate(-7)"/>
+    <use href="#ob" transform="translate(762 534) scale(.62) rotate(8)"/>
+  </g>
+
+  <!-- ═══ 浪 D(最前 · 右高左低) ═══ -->
+  <path d="M0 505 C 60 482, 140 528, 220 496 C 300 468, 400 515, 480 485 C 550 458, 650 505, 720 475 C 790 448, 880 495, 940 465 C 955 458, 960 462, 960 458 L960 540 L0 540 Z" fill="#3b82f6" opacity=".38"/>
+
+  <!-- ═══ 深区书 ═══ -->
+  <g fill="#1d4ed8" opacity=".45">
+    <use href="#ob" transform="translate(58 468) scale(.6) rotate(-3)"/>
+    <use href="#cb" transform="translate(142 462) scale(.55) rotate(4)"/>
+    <use href="#hb" transform="translate(232 475) scale(.52) rotate(-5)"/>
+    <use href="#ob" transform="translate(318 462) scale(.62) rotate(2)"/>
+    <use href="#cb" transform="translate(412 472) scale(.5) rotate(-2)"/>
+    <use href="#hb" transform="translate(498 458) scale(.58) rotate(3)"/>
+    <use href="#ob" transform="translate(588 468) scale(.54) rotate(-4)"/>
+    <use href="#cb" transform="translate(678 462) scale(.48) rotate(5)"/>
+    <use href="#hb" transform="translate(768 474) scale(.56) rotate(-3)"/>
+    <use href="#ob" transform="translate(858 460) scale(.6) rotate(4)"/>
+    <use href="#cb" transform="translate(936 470) scale(.52) rotate(-5)"/>
+    <use href="#hb" transform="translate(178 484) scale(.46) rotate(6)"/>
+    <use href="#ob" transform="translate(548 486) scale(.44) rotate(-6)"/>
+    <use href="#cb" transform="translate(898 454) scale(.47) rotate(3)"/>
+    <use href="#ob" transform="translate(648 488) scale(.78) rotate(-4)"/>
+    <use href="#cb" transform="translate(38 494) scale(.72) rotate(2)"/>
+  </g>
+
+  <!-- ═══ 浪 C(右高左低) ═══ -->
+  <path d="M0 462 C 70 440, 150 485, 230 452 C 310 425, 400 470, 480 442 C 550 418, 640 462, 710 432 C 780 405, 870 452, 930 422 C 950 412, 958 418, 960 415 L960 540 L0 540 Z" fill="#60a5fa" opacity=".4"/>
+
+  <!-- ═══ 中区书 ═══ -->
+  <g fill="#2563eb" opacity=".42">
+    <use href="#hb" transform="translate(46 428) scale(.72) rotate(3)"/>
+    <use href="#ob" transform="translate(128 420) scale(.8) rotate(-2)"/>
+    <use href="#cb" transform="translate(216 432) scale(.68) rotate(4)"/>
+    <use href="#hb" transform="translate(308 416) scale(.75) rotate(-4)"/>
+    <use href="#ob" transform="translate(398 428) scale(.7) rotate(2)"/>
+    <use href="#cb" transform="translate(488 420) scale(.78) rotate(-3)"/>
+    <use href="#hb" transform="translate(578 432) scale(.66) rotate(5)"/>
+    <use href="#ob" transform="translate(668 418) scale(.74) rotate(-5)"/>
+    <use href="#cb" transform="translate(758 428) scale(.72) rotate(3)"/>
+    <use href="#hb" transform="translate(848 416) scale(.8) rotate(-2)"/>
+    <use href="#ob" transform="translate(934 430) scale(.68) rotate(4)"/>
+    <use href="#cb" transform="translate(88 444) scale(.64) rotate(-6)"/>
+    <use href="#hb" transform="translate(448 446) scale(.62) rotate(6)"/>
+    <use href="#ob" transform="translate(818 446) scale(.65) rotate(-3)"/>
+    <use href="#cb" transform="translate(338 448) scale(.9) rotate(-4)"/>
+    <use href="#hb" transform="translate(908 448) scale(.88) rotate(5)"/>
+  </g>
+
+  <!-- ═══ 浪 B(右高左低) ═══ -->
+  <path d="M0 428 C 60 405, 130 450, 200 420 C 270 395, 350 440, 420 412 C 480 388, 560 432, 630 402 C 690 378, 780 422, 850 392 C 900 375, 940 400, 960 385 L960 540 L0 540 Z" fill="#93c5fd" opacity=".42"/>
+
+  <!-- ═══ 浅区书 ═══ -->
+  <g fill="#3b82f6" opacity=".45">
+    <use href="#ob" transform="translate(52 398) scale(.95) rotate(2)"/>
+    <use href="#cb" transform="translate(148 392) scale(1.0) rotate(-3)"/>
+    <use href="#hb" transform="translate(244 402) scale(.88) rotate(4)"/>
+    <use href="#ob" transform="translate(338 388) scale(.92) rotate(-2)"/>
+    <use href="#hb" transform="translate(432 398) scale(.96) rotate(-4)"/>
+    <use href="#cb" transform="translate(528 390) scale(.9) rotate(3)"/>
+    <use href="#ob" transform="translate(622 378) scale(.85) rotate(5)"/>
+    <use href="#hb" transform="translate(718 370) scale(.94) rotate(-5)"/>
+    <use href="#cb" transform="translate(812 362) scale(.98) rotate(2)"/>
+    <use href="#ob" transform="translate(906 370) scale(.9) rotate(-3)"/>
+    <use href="#hb" transform="translate(96 414) scale(.82) rotate(-4)"/>
+    <use href="#cb" transform="translate(660 388) scale(.84) rotate(3)"/>
+    <use href="#ob" transform="translate(288 416) scale(.86) rotate(6)"/>
+    <use href="#cb" transform="translate(568 400) scale(.6) rotate(-6)"/>
+    <use href="#ob" transform="translate(860 384) scale(.62) rotate(4)"/>
+  </g>
+
+  <!-- ═══ 浪 A(背 · 右高左低 · 汹涌 · 浪推鲸前) ═══ -->
+  <path d="M0 372 C 40 350, 90 388, 140 366 C 190 344, 250 390, 300 358 C 350 330, 420 372, 480 342 C 530 318, 600 352, 660 322 C 720 294, 800 338, 870 306 C 910 288, 940 312, 960 298 L960 540 L0 540 Z" fill="#dbeafe" opacity=".48"/>
+
+  <!-- ═══ 水面书(右侧骑高浪 · 左侧平 · 避让鲸体) ═══ -->
+  <g fill="#4176e6" opacity=".5">
+    <use href="#cb" transform="translate(72 356) scale(1.25) rotate(-2)"/>
+    <use href="#ob" transform="translate(172 346) scale(1.35) rotate(3)"/>
+    <use href="#hb" transform="translate(272 362) scale(1.18) rotate(-5)"/>
+    <use href="#ob" transform="translate(368 342) scale(1.28) rotate(-3)"/>
+    <use href="#cb" transform="translate(462 348) scale(1.3) rotate(4)"/>
+    <use href="#ob" transform="translate(648 314) scale(1.32) rotate(-4)"/>
+    <use href="#cb" transform="translate(742 300) scale(1.22) rotate(3)"/>
+    <use href="#hb" transform="translate(838 308) scale(1.3) rotate(-2)"/>
+    <use href="#ob" transform="translate(930 296) scale(1.1) rotate(5)"/>
+    <use href="#cb" transform="translate(122 372) scale(1.05) rotate(-4)"/>
+    <use href="#hb" transform="translate(322 370) scale(1.12) rotate(4)"/>
+    <use href="#ob" transform="translate(428 352) scale(.7) rotate(-3)"/>
+    <use href="#cb" transform="translate(700 330) scale(.68) rotate(5)"/>
+  </g>
+
+  <!-- ═══ 鲸(微倾前游) ═══ -->
+  <ellipse cx="492" cy="358" rx="150" ry="9" fill="#bfdbfe" opacity=".5"/>
+  <g transform="rotate(-4 480 345)">
+    <use href="#whale" transform="translate(360 258) scale(10.5)" fill="#1e3a5f"/>
+  </g>
+  <path d="M0 372 C 40 350, 90 388, 140 366 C 190 344, 250 390, 300 358 C 350 330, 420 372, 480 342 C 530 318, 600 352, 660 322 C 720 294, 800 338, 870 306 C 910 288, 940 312, 960 298 L960 540 L0 540 Z" fill="#dbeafe" opacity=".28"/>
+
+  <!-- 船首水珠 -->
+  <g fill="#93c5fd" opacity=".55">
+    <circle cx="334" cy="322" r="2.2"/>
+    <circle cx="348" cy="310" r="1.8"/>
+    <circle cx="366" cy="300" r="1.5"/>
+  </g>
+
+  <!-- 尾流(鲸尾后方 V 形) -->
+  <path d="M600 350 C 620 340, 642 346, 662 358 C 644 362, 622 366, 606 362 Z" fill="#dbeafe" opacity=".5"/>
+  <path d="M614 368 C 634 360, 658 364, 678 376 C 658 380, 634 382, 618 378 Z" fill="#bfdbfe" opacity=".4"/>
+  <path d="M626 384 C 646 378, 670 381, 692 390 C 670 393, 648 395, 632 392 Z" fill="#dbeafe" opacity=".3"/>
+
+  <!-- ═══ 书喷泉(呼吸孔 ≈ 403,277 · 连续弧 · 越过鲸尾) ═══ -->
+  <!-- 左弧轨迹 -->
+  <path d="M399 276 C 392 246, 384 216, 372 190" fill="none" stroke="url(#trail)" stroke-width="2.5" stroke-dasharray="1 7" stroke-linecap="round"/>
+  <!-- 中弧轨迹 -->
+  <path d="M403 276 C 401 244, 400 212, 402 184" fill="none" stroke="url(#trail)" stroke-width="2.5" stroke-dasharray="1 7" stroke-linecap="round"/>
+  <!-- 右弧轨迹(越过鲸尾 · 连续到落点) -->
+  <path d="M405 274 C 420 228, 460 190, 520 198 C 560 202, 590 215, 618 248 C 640 278, 656 315, 668 344" fill="none" stroke="url(#trail)" stroke-width="2" stroke-dasharray="1 6" stroke-linecap="round"/>
+
+  <!-- 上升中(刚离孔) -->
+  <g fill="#4176e6">
+    <use href="#fbc" transform="translate(405 242) rotate(-13) scale(1.05)"/>
+    <use href="#fbo" transform="translate(392 236) rotate(9) scale(.9)"/>
+    <use href="#fbh" transform="translate(416 214) rotate(-7) scale(.95)"/>
+  </g>
+
+  <!-- 顶点悬浮 -->
+  <g fill="#2d5bd7">
+    <use href="#fbo" transform="translate(434 172) rotate(-4) scale(1.35)"/>
+    <use href="#fbh" transform="translate(396 162) rotate(14) scale(1.3)"/>
+    <use href="#fbc" transform="translate(368 186) rotate(-10) scale(1.2)"/>
+    <use href="#fbo" transform="translate(460 198) rotate(6) scale(1.15)"/>
+    <use href="#fbc" transform="translate(344 182) rotate(-14) scale(1.1)"/>
+  </g>
+
+  <!-- 右弧连续书(从顶点 → 越尾 → 下降 → 落水 · 每 ~35px 一册) -->
+  <g fill="#3b82f6">
+    <use href="#fbh" transform="translate(494 212) rotate(20) scale(1.15)"/>
+    <use href="#fbo" transform="translate(526 202) rotate(28) scale(1.1)"/>
+    <use href="#fbc" transform="translate(558 204) rotate(34) scale(1.05)"/>
+    <use href="#fbh" transform="translate(590 218) rotate(42) scale(1.0)"/>
+    <use href="#fbo" transform="translate(618 248) rotate(52) scale(.98)"/>
+    <use href="#fbc" transform="translate(640 282) rotate(62) scale(.92)"/>
+    <use href="#fbo" transform="translate(655 318) rotate(70) scale(.86)"/>
+  </g>
+
+  <!-- 左弧连续书(对称 · 逐步下降) -->
+  <g fill="#3b82f6">
+    <use href="#fbc" transform="translate(308 210) rotate(-42) scale(1.12)"/>
+    <use href="#fbh" transform="translate(276 252) rotate(-50) scale(1.0)"/>
+    <use href="#fbo" transform="translate(248 296) rotate(-62) scale(.88)"/>
+  </g>
+  <g fill="#60a5fa">
+    <use href="#fbh" transform="translate(224 326) rotate(-72) scale(.8)"/>
+  </g>
+
+  <!-- 落水涟漪 + 水花 -->
+  <g fill="none" stroke="#93c5fd" opacity=".65">
+    <ellipse cx="672" cy="350" rx="24" ry="5" stroke-width="1.6"/>
+    <ellipse cx="672" cy="350" rx="40" ry="8" stroke-width="1.1" opacity=".7"/>
+    <ellipse cx="212" cy="360" rx="20" ry="4.2" stroke-width="1.4"/>
+    <ellipse cx="212" cy="360" rx="34" ry="6.8" stroke-width="1" opacity=".7"/>
+  </g>
+  <g stroke="#bfdbfe" stroke-width="1.6" stroke-linecap="round" opacity=".8">
+    <path d="M668 343 L 663 332 M678 343 L 683 334"/>
+    <path d="M208 354 L 204 344 M217 354 L 221 345"/>
+  </g>
+
+  <!-- 呼吸孔水雾 -->
+  <g fill="#93c5fd" opacity=".7">
+    <circle cx="397" cy="270" r="2.2"/>
+    <circle cx="410" cy="268" r="1.8"/>
+    <circle cx="403" cy="262" r="1.5"/>
+  </g>
+</svg>

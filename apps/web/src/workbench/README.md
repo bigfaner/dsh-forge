@@ -40,11 +40,11 @@ children」发放（renderer standardKit：`entry.children` 在场才注入）�
 | `ShellHost.tsx` | 常驻壳宿主（`shell.overlay` 槽位件——AppFrame root 五子槽之一，不随面板互换卸载）：相位推导 + `data-dswf-workbench/phase/view` 锚（e2e/走查）+ UF-3 流程宿主 + hero 面板驱动（`heroPanelDrive` 纯函数）+ 知识模式右栏联动（`rightbarViewPlan` + effect——fix-23 语义随迁） |
 | `anchored-projects.tsx` | 项目锚定装载共享面（fix-36 收敛）：`WorkspacesAnchor` 归属锚子件 + `isWorkspacesSnapshot` 窄判定 + `useAnchoredProjects` 共享 hook（ShellHost/知识面板/召回视图/hero 弹层四装配面同型「快照 + 项目相位 + 条件锚」单一来源） |
 | `HeroPanel.tsx` | UF-2 零项目 hero 面板（`main` keyed 'dswf-hero' 占用者——HeroEmpty 挂载舞台） |
-| `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「添加项目」CTA——官方 Button；零判据零数据源） |
+| `HeroEmpty.tsx` | UF-2 首用 hero 空态（价值一句话 + 「添加项目」CTA——官方 Button；零判据零数据源）+「鲸游书海」插画沉底（装饰性 `<img>`——alt 空 + aria-hidden；品牌资产见 docs/brand/README.md） |
 | `KnowledgePanel.tsx` | UF-5 知识面板（`main` keyed 'dswf-knowledge' 占用者）：KnowledgeView 挂载 + 项目锚推导 + 桥抽屉缝消费（useSyncExternalStore） |
 | `panel-model.ts` | 纯函数面：`sessionZonePhase`（Hard Rule hero 单一条件）/ `nextLastReadyCount` / `projectAnchorOf` / `rightbarViewPlan` / `centerViewOf`（activePanelId → 视图镜像）+ 面板 key 常量（plugin.ts 字面量同源 pin） |
 | `workbench-bridge.ts` | 工作台桥（`__DSH_FORGE_WORKBENCH__`）：官方面板导航窄面（`createWorkbenchBridge`——nav 闭包绑定 `layout.selectPanel`）+ 知识抽屉目标缝（召回视图跳转 → 知识面板抽屉——两棵独立槽位树的唯一通道）|
-| `workbench.css` | 装配样式（壳宿主零交互舞台 + hero/知识面板舞台——官方 CenterColumn 内自排；中区容器零样式：官方 ConversationRoot 直渲） |
+| `workbench.css` | 装配样式（壳宿主零交互舞台 + hero/知识面板舞台——官方 CenterColumn 内自排；中区容器零样式：官方 ConversationRoot 直渲）+ hero 插画刻度（`.dswf-hero-bg` 沉底 85%/遮罩渐隐 26%——文本靠顶零遮挡原型构图；暗色 = `body[data-ds-dark-theme]` filter 口径） |
 
 ## 数据流
 

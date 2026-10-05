@@ -1,6 +1,7 @@
-// HeroEmpty 单测 —— UF-2 首用 hero 空态（价值一句话 + CTA）渲染面。
+// HeroEmpty 单测 —— UF-2 首用 hero 空态（价值一句话 + CTA + 「鲸游书海」插画）渲染面。
 // SSR 直渲（react-dom/server——渲染面；点击交互归 e2e）。断言锚 = data-dswf-hero /
-// data-dswf-cta（e2e/走查锚）与 CTA 官方 Button（Hard Rule 官方件复用）。
+// data-dswf-cta（e2e/走查锚）、CTA 官方 Button（Hard Rule 官方件复用）与插画装饰
+// 性口径（alt 空 + aria-hidden）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { HeroEmpty } from './HeroEmpty.js'
@@ -21,5 +22,12 @@ describe('HeroEmpty（UF-2 首用 hero 空态）', () => {
     const withCb = renderToStaticMarkup(<HeroEmpty onAddProject={() => {}} />)
     expect(withCb).toMatch(/<button[^>]*data-dswf-cta="add-project"/)
     expect(renderToStaticMarkup(<HeroEmpty />)).toMatch(/<button[^>]*data-dswf-cta="add-project"/)
+  })
+  it('「鲸游书海」插画沉底（装饰性——alt 空 + aria-hidden 不进无障碍树）', () => {
+    const markup = renderToStaticMarkup(<HeroEmpty />)
+    expect(markup).toContain('class="dswf-hero-bg"')
+    expect(markup).toContain('src="/brand/whale-hero-bg.svg"')
+    expect(markup).toContain('alt=""')
+    expect(markup).toContain('aria-hidden="true"')
   })
 })

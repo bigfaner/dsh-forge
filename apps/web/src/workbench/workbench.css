@@ -11,8 +11,11 @@
   pointer-events: none;
 }
 
-/* UF-2 hero 面板舞台（官方 main 面板 'dswf-hero'——CenterColumn 全高居中） */
+/* UF-2 hero 面板舞台（官方 main 面板 'dswf-hero'——CenterColumn 全高；插画沉底由
+ * overflow 裁切） */
 .dswf-hero-panel {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -20,15 +23,18 @@
   background: var(--dsw-alias-bg-base);
 }
 
-/* UF-2 hero 相位：中区居中引导（价值一句话 + CTA；原型 hero 居中栈同构） */
+/* UF-2 hero 相位：文本靠顶引导（价值一句话 + CTA）+「鲸游书海」插画沉底——原型
+ * hero 同构构图（标题/CTA 恒落插画渐隐区，零遮挡书本） */
 .dswf-hero {
+  position: relative;
+  isolation: isolate; /* 插画 z-index:-1 栈上下文界（brand.css 对话背景同口径） */
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* 文本靠顶（原型 hero 同构——插画沉底对偶） */
   gap: 12px; /* dsw-raw 原型 hero 栈距刻度 */
-  padding: 0 24px; /* dsw-raw 原型 hero 内距刻度 */
+  padding: clamp(40px, 12vh, 128px) 24px 0; /* dsw-raw 原型 hero 靠顶刻度 */
   text-align: center;
 }
 
@@ -47,6 +53,30 @@
 
 .dswf-hero-actions {
   margin-top: 8px; /* dsw-raw 原型 hero 动作区间距刻度 */
+}
+
+/* 「鲸游书海」hero 插画（docs/brand/whale-book-sea-bg.svg 母版 → public/brand/
+ * whale-hero-bg.svg）：沉底 85% 高 + 顶部遮罩渐隐 26%——文本块恒落透明区（原型几何
+ * 验证：文本底 → 不透明点间距 ~178px，喷泉书零遮挡）；pointer-events:none 不截
+ * CTA 命中；装饰性不进无障碍树（alt 空 + aria-hidden——HeroEmpty 件侧口径） */
+.dswf-hero-bg {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: -1;
+  width: 100%;
+  height: 85%; /* dsw-raw 原型 hero 插画高刻度 */
+  object-fit: cover;
+  object-position: center bottom;
+  opacity: 0.88;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent 0%, black 26%); /* black 仅 alpha 参与 */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 26%);
+}
+
+/* 深色主题（应用内口径 body[data-ds-dark-theme]——brand.css 同源）：插画提亮去饱和。
+ * 对话背景走 ink/paper 双资产烘焙，hero 静态一次性面板 filter 零成本同效（原型验证值） */
+body[data-ds-dark-theme] .dswf-hero-bg {
+  filter: brightness(1.35) saturate(0.85);
 }
 
 /* UF-5 知识面板舞台（官方 main 面板 'dswf-knowledge'——CenterColumn 全高；浏览面

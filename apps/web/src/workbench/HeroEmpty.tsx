@@ -4,6 +4,10 @@
 // archived 随行计数——计数不回落 0）。
 // 官方件复用：CTA = 官方 Button（primary）；价值一句话 = 总纲产品定位（以知识资产为核心的
 // 研发工作台）。data-dswf-hero / data-dswf-cta = e2e 与走查锚。
+// 「鲸游书海」hero 插画沉底（docs/brand/whale-book-sea-bg.svg 母版 → public/brand/
+// whale-hero-bg.svg 零改拷贝）：装饰性（alt 空 + aria-hidden 不进无障碍树、
+// pointer-events:none 不截 CTA 命中）；文本靠顶 + 顶部遮罩渐隐刻度见 workbench.css
+// .dswf-hero-bg（原型零遮挡验证构图）。
 import type { ReactNode } from 'react'
 import { Button, IconProjectAddOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import './workbench.css'
@@ -13,9 +17,9 @@ export interface HeroEmptyProps {
   readonly onAddProject?: () => void
 }
 
-/** hero 相位：价值一句话 + 「添加项目」CTA（中区居中——原型 hero 同构，视觉官方令牌；
- * fix-17：文本前缀 ％＋ 改官方 icon 位 = IconProjectAddOutlineRegular——侧栏 ＋ 钮同款
- * 官方件，口径对齐；锚 data-dswf-cta 不动） */
+/** hero 相位：价值一句话 + 「添加项目」CTA（文本靠顶 + 插画沉底——原型 hero 同构，
+ * 视觉官方令牌；fix-17：文本前缀 ％＋ 改官方 icon 位 = IconProjectAddOutlineRegular——
+ * 侧栏 ＋ 钮同款官方件，口径对齐；锚 data-dswf-cta 不动） */
 export function HeroEmpty({ onAddProject }: HeroEmptyProps): ReactNode {
   return (
     <div className="dswf-hero" data-dswf-hero="">
@@ -35,6 +39,7 @@ export function HeroEmpty({ onAddProject }: HeroEmptyProps): ReactNode {
           添加项目
         </Button>
       </div>
+      <img className="dswf-hero-bg" src="/brand/whale-hero-bg.svg" alt="" aria-hidden="true" />
     </div>
   )
 }
