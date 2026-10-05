@@ -4,7 +4,13 @@
 // （scopeLabel / isEscapeKey）直测 + 转发事件形状经 browseActions 单测（use-knowledge-browse）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { KnowledgeToolbar, isEscapeKey, isScopeSwitchable, scopeLabel } from './KnowledgeToolbar.js'
+import {
+  KnowledgeToolbar,
+  isEscapeKey,
+  isScopeSwitchable,
+  scopeLabel,
+  scopeMenuEntries,
+} from './KnowledgeToolbar.js'
 
 describe('KnowledgeToolbar 工具栏', () => {
   it('检索输入在场：官方 Input 受控件（value 原样）+ 检索语义 aria-label + 占位文案', () => {
@@ -68,11 +74,24 @@ describe('KnowledgeToolbar 工具栏', () => {
     expect(noRows).not.toContain('data-dswf-kn-scope-trigger')
   })
 
-  it('isScopeSwitchable：行集非空 + 回调在场 = true（单项目亦可开菜单——composer 同语义，菜单含添加入口）；任一缺席 = false', () => {
+  it('isScopeSwitchable：行集非空 + 回调在场 = true（单项目亦可开菜单——切换一致性）；任一缺席 = false', () => {
     expect(isScopeSwitchable([{ id: 'p-1', name: 'a' }], () => {})).toBe(true)
     expect(isScopeSwitchable(undefined, () => {})).toBe(false)
     expect(isScopeSwitchable([], () => {})).toBe(false)
     expect(isScopeSwitchable([{ id: 'p-1', name: 'a' }], undefined)).toBe(false)
+  })
+
+  it('bug: 切换菜单行集 = 项目行且仅项目行（无「添加项目…」入口——添加径归 hero 弹层/左栏「＋」既有入口）', () => {
+    const rows = [
+      { id: 'p-1', name: 'alpha' },
+      { id: 'p-2', name: 'beta' },
+    ]
+    const entries = scopeMenuEntries(rows)
+    expect(entries.map((entry) => entry.id)).toEqual(['p-1', 'p-2'])
+    expect(entries.map((entry) => entry.label)).toEqual(['alpha', 'beta'])
+    // 无添加行/保留字行——纯项目行集
+    expect(entries.some((entry) => String(entry.label).includes('添加项目'))).toBe(false)
+    expect(entries.some((entry) => entry.id.includes('dswf-'))).toBe(false)
   })
 
   it('清除钮条件呈现：空关键词缺席；非空在场（aria-label 清除搜索）', () => {

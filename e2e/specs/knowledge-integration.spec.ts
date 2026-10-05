@@ -197,7 +197,8 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await expect(page.locator('[role="menu"]').first()).toBeVisible()
     await expect(page.locator('[role="menuitem"]', { hasText: 'demo-proj' }).first()).toBeVisible()
     await expect(page.locator('[role="menuitem"]', { hasText: 'proj-b' }).first()).toBeVisible()
-    await expect(page.locator('[role="menuitem"]', { hasText: '添加项目' }).first()).toBeVisible()
+    // 切换菜单 = 纯项目行（无「添加项目…」入口——添加径归 hero 弹层/左栏「＋」）
+    await expect(page.locator('[role="menuitem"]', { hasText: '添加项目' })).toHaveCount(0)
     await page.locator('[role="menuitem"]', { hasText: 'proj-b' }).first().click()
     await expect
       .poll(async () => knowledgeView2.getAttribute('data-dswf-kn-anchor'), { timeout: 30_000 })

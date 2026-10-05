@@ -2,29 +2,22 @@
 // Hard Rule 官方件复用：输入 = 官方 Input（前导检索图标）、范围 = 官方 Pill、
 // 清除钮 = 官方 Button——本文件零自绘输入控件。Esc 清空 = 原型交互（kb-clear）。
 // fix-bug 范围切换：行集 + 拾取回调在场 = 范围 Pill 升格项目切换控件（对话面板
-// composer 上方项目选择控件同款语义——HeroWorkspacePicker 同型官方 Menu 复用：
-// 项目行（官方文件夹图标 + 选中态）+「添加项目…」footer（openAddProjectFlow
-// 同一入口）；单项目亦可开菜单——添加入口恒在。P1 项目级文案面不变（范围下钻
-// 域级菜单归后续里程碑，PRD UF-6 Notes）。
+// composer 上方项目选择控件同款官方 Menu 视觉：项目行 + 官方文件夹图标 + 选中态）。
+// 菜单 = 纯项目行集（无「添加项目…」入口——添加径归 hero 弹层/左栏「＋」既有入口，
+// 产品口径：知识面只做浏览范围切换）；单项目亦可开菜单（切换一致性）。
+// P1 项目级文案面不变（范围下钻域级菜单归后续里程碑，PRD UF-6 Notes）。
 import { useCallback, useState, type ReactNode } from 'react'
 import {
   Button,
   IconChevronDownOutlineRegular,
   IconCloseFillRegular,
   IconFolderCloseRegular,
-  IconPlusOutlineRegular,
   IconSearchOutlineRegular,
   Input,
   Menu,
   Pill,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import './knowledge.css'
-
-/** 切换菜单「添加项目…」行 id（菜单内保留字——项目行 id 恒为 forge 项目 uuid 无碰撞面；HeroWorkspacePicker 同义字面同保留） */
-const ADD_PROJECT = 'dswf-add-project'
-/** 添加行文案（产品口径——hero 弹层/左栏「＋」入口同义词面） */
-const ADD_LABEL = '添加项目…'
 
 /** 范围切换行集行（装配面自 forge:projects/list 收敛——archived 排除） */
 export interface ScopeProjectOption {
@@ -57,12 +50,23 @@ export function isEscapeKey(key: string): boolean {
   return key === 'Escape'
 }
 
-/** 范围切换判据（纯函数）：行集非空 + 回调在场（单项目亦可开——菜单含添加入口，composer 同语义） */
+/** 范围切换判据（纯函数）：行集非空 + 回调在场（单项目亦可开——切换一致性） */
 export function isScopeSwitchable(
   scopeProjects: readonly ScopeProjectOption[] | undefined,
   onScopePick: ((projectId: string) => void) | undefined,
 ): boolean {
   return scopeProjects !== undefined && scopeProjects.length > 0 && onScopePick !== undefined
+}
+
+/** 切换菜单行集（纯函数）：项目行且仅项目行（文件夹图标行——无添加/分隔行） */
+export function scopeMenuEntries(
+  scopeProjects: readonly ScopeProjectOption[],
+): readonly { readonly id: string; readonly label: string; readonly icon: ReactNode }[] {
+  return scopeProjects.map((project) => ({
+    id: project.id,
+    label: project.name,
+    icon: <IconFolderCloseRegular size={16} />,
+  }))
 }
 
 /** 知识浏览工具栏（范围 Pill/切换控件 + 检索输入 + 条件性清除钮） */
@@ -81,12 +85,7 @@ export function KnowledgeToolbar({
   }, [])
   const handleScopeSelect = useCallback(
     (id: string): void => {
-      // 添加行 = 注册流入口（先收菜单再开流——HeroPicker openAdd 同序）；项目行 = 拾取切换
       setScopeOpen(false)
-      if (id === ADD_PROJECT) {
-        openAddProjectFlow()
-        return
-      }
       onScopePick?.(id)
     },
     [onScopePick],
@@ -112,15 +111,10 @@ export function KnowledgeToolbar({
           <IconChevronDownOutlineRegular size={12} className="dswf-kn-scope-chevron" />
         </Pill>
       }
-      items={scopeProjects!.map((project) => ({
-        id: project.id,
-        label: project.name,
-        icon: <IconFolderCloseRegular size={16} />,
-      }))}
+      items={scopeMenuEntries(scopeProjects!)}
       selectedId={currentProjectId}
       onSelect={handleScopeSelect}
       onClose={closeScope}
-      footer={[{ id: ADD_PROJECT, label: ADD_LABEL, icon: <IconPlusOutlineRegular size={16} /> }]}
       listClassName="dswf-kn-scope-menu"
     />
   ) : (
