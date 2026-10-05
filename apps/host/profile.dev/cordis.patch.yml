@@ -37,4 +37,5 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: zai-coding-cn
-    model: glm-5.3-flash
+    model: glm-5.3
+    reasoningEffort: max
