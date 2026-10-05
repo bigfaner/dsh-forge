@@ -26,13 +26,13 @@ describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）
 
   it('extraResources 自 release/staging 显式 filter 嵌入（root 级 node_modules 剔除规避 + 内容边界自证）', () => {
     expect(config.extraResources).toEqual([
-      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'staging-manifest.json'] },
+      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
     ])
   })
 
   it('Electron 精确 44.0.0（S1 指纹门）+ NSIS 离线开关 + 无更新通道', () => {
     expect(config.electronVersion).toBe('44.0.0')
-    expect(config.win).toEqual({ target: ['nsis'] })
+    expect(config.win).toEqual({ target: ['nsis'], icon: 'build/icon.ico' })
     const nsis = config.nsis as Record<string, unknown>
     expect(nsis.differentialPackage).toBe(false)
     expect(nsis.oneClick).toBe(false)
@@ -41,6 +41,63 @@ describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）
     expect(config.appId).toBe('app.dshforge.desktop')
     expect(config.productName).toBe('dsh-forge')
     expect(config.artifactName).toContain('9.9.9')
+  })
+
+  it('应用图标三字段同源（fix-45）：win.icon + nsis.installerIcon/uninstallerIcon = build/icon.ico', () => {
+    expect(config.win).toMatchObject({ icon: 'build/icon.ico' })
+    const nsis = config.nsis as Record<string, unknown>
+    expect(nsis.installerIcon).toBe('build/icon.ico')
+    expect(nsis.uninstallerIcon).toBe('build/icon.ico')
+    // shortcutIconName 缺省随 productName（不显式声明——漂移即在此红）
+    expect(nsis.shortcutIconName).toBeUndefined()
+  })
+})
+
+describe('fix-45 入仓图标资产自证（build/ 一次生成物）', () => {
+  it('icon.svg：墨色烘焙 + 派生缩放在场（currentColor 位图语义不适用）', () => {
+    const svg = readFileSync(join(ROOT, 'build', 'icon.svg'), 'utf8')
+    expect(svg).toContain('#22314a')
+    expect(svg).not.toContain('currentColor')
+    expect(svg).toMatch(/<g transform="translate\([\d.]+ [\d.]+\) scale\([\d.]+\)">/)
+  })
+
+  it('icon.png：512×512 RGBA（BrowserWindow icon 消费位）', () => {
+    const png = readFileSync(join(ROOT, 'build', 'icon.png'))
+    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+    expect(png.readUInt32BE(16)).toBe(512)
+    expect(png.readUInt32BE(20)).toBe(512)
+    expect(png[25]).toBe(6) // colorType RGBA（透明底承载）
+  })
+
+  it('icon.ico：6 帧 PNG 封装（16/32/48/64/128/256——256 记 0 字节惯例）+ 容器布局自洽', () => {
+    const ico = readFileSync(join(ROOT, 'build', 'icon.ico'))
+    expect(ico.readUInt16LE(0)).toBe(0) // reserved
+    expect(ico.readUInt16LE(2)).toBe(1) // type: icon
+    const count = ico.readUInt16LE(4)
+    expect(count).toBe(6)
+    let offset = 6
+    const sizes: number[] = []
+    for (let i = 0; i < count; i += 1) {
+      const widthByte = ico[offset] ?? 0
+      const heightByte = ico[offset + 1] ?? 0
+      const width = widthByte === 0 ? 256 : widthByte
+      const height = heightByte === 0 ? 256 : heightByte
+      expect(width).toBe(height)
+      const bytes = ico.readUInt32LE(offset + 8)
+      const imageOffset = ico.readUInt32LE(offset + 12)
+      // 帧体 = PNG 签名 + IHDR 尺寸与目录条目一致
+      expect(ico.subarray(imageOffset, imageOffset + 8).toString('hex')).toBe('89504e470d0a1a0a')
+      expect(ico.readUInt32BE(imageOffset + 16)).toBe(width)
+      expect(ico.readUInt32BE(imageOffset + 20)).toBe(height)
+      expect(imageOffset + bytes).toBeLessThanOrEqual(ico.length)
+      sizes.push(width)
+      offset += 16
+    }
+    expect(sizes).toEqual([16, 32, 48, 64, 128, 256])
+    // 布局连续终止于文件尾（offset 自证无空洞/截断）
+    const lastOffset = ico.readUInt32LE(6 + 16 * (count - 1) + 12)
+    const lastBytes = ico.readUInt32LE(6 + 16 * (count - 1) + 8)
+    expect(lastOffset + lastBytes).toBe(ico.length)
   })
 })
 
@@ -95,7 +152,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(app.devDependencies).toBeUndefined()
   })
 
-  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品三插件 / sqlite prebuild / 壳 dist / 装载器 / 真实 main / child 入口', () => {
+  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品三插件 / sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
     const must = [
       'runtime/package.json',
       'runtime/host-dist/main.js',
@@ -108,6 +165,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
+      'icon.png',
       'app/main.js',
       'app/package.json',
     ]

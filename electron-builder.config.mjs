@@ -45,18 +45,25 @@ export function createElectronBuilderConfig(rootVersion = ROOT_VERSION) {
     files: ['main.js', 'package.json'],
     // 显式 filter（M1 同款）：electron-builder 拷贝 filter 硬编码剔除「拷贝源根级
     // node_modules」——运行时树须嵌 runtime/ 一层；filter 同时自证物化内容边界
+    // （icon.png = fix-45 窗口图标打包形态解析位 {resources}/icon.png）
     extraResources: [
-      { from: STAGING, to: '.', filter: ['runtime/**', 'web-dist/**', 'staging-manifest.json'] },
+      { from: STAGING, to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
     ],
     // release/app 为 deps-free 物化目录——electron 版本显式声明（无 devDep 可推导）
     electronVersion: '44.0.0', // S1 pin：node-addon-require-builtin 指纹门（43.0.0/44.0.0/45.0.0-alpha.6）
-    win: { target: ['nsis'] },
+    // 应用图标（fix-45）：鲸游书海 brand 标派生多尺寸 ico（build/ 一次生成入仓——生成器
+    // tmp-ui-review/gen-whale-brand-v3.mjs --emit icon，管线零在线栅格化）。win.icon 内嵌
+    // exe（任务栏/Alt-Tab/资源管理器）；shortcutIconName 缺省随 productName（dsh-forge）
+    win: { target: ['nsis'], icon: 'build/icon.ico' },
     nsis: {
       oneClick: false,
       perMachine: false,
       allowToChangeInstallationDirectory: true,
       // 离线安装（SC-NFR）：NSIS 自身不下载；差分包在无更新通道前保持禁用
       differentialPackage: false,
+      // 安装器/卸载器图标（fix-45）——与 win.icon 同源 build/icon.ico
+      installerIcon: 'build/icon.ico',
+      uninstallerIcon: 'build/icon.ico',
     },
     publish: null, // P1 无更新通道（插件升级 = 随应用发版更新资源目录）
   }

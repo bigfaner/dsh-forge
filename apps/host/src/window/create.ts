@@ -1,6 +1,7 @@
 // 主窗口创建（定位：基础——窗口生命周期；Security Mitigations：contextIsolation、
 // 无 remote content、nodeIntegration 关）。BrowserWindow 以注入方式进入（测试可换 fake）。
 import { WINDOWS_TITLEBAR_HEIGHT } from './titlebar.js'
+import { resolveWindowIconPath } from './icon.js'
 
 export interface BrowserWindowLike {
   /** ws 改写栏的主窗口归属判定面（1.5：installShellStreamRewrite 消费） */
@@ -30,6 +31,10 @@ export async function createMainWindow(
     height: 900,
     title: options.title,
     show: false,
+    // 窗口图标（fix-45）：鲸游书海 brand 标派生——dev = 仓库根 build/icon.png（hostRoot
+    // 上溯，解析单源 window/icon.ts）；打包形态 = {resources}/icon.png（assemble 物化）。
+    // Windows 任务栏由 exe 内嵌图标（electron-builder win.icon = build/icon.ico）优先。
+    icon: resolveWindowIconPath(process.env),
     // 窗口形态（fix-2，UI 走查 §2.1）：隐藏原生标题栏，窗口钮以 Windows Window Controls
     // Overlay 原生保留右上角（dsh 官方桌面形态基准；不自绘标题栏/窗口钮/拖拽条——后续里程碑面）
     titleBarStyle: 'hidden',

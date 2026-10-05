@@ -1148,9 +1148,12 @@
       "title": "Feat: dsh-forge 程序图标——鲸游书海 brand 标派生应用图标集（.ico 多尺寸 + png），接入 dev 窗口 icon 与 electron-builder win/nsis——退役 Electron 默认图标",
       "priority": "P1",
       "estimatedTime": "3h",
-      "status": "pending",
+      "dependencies": [
+        "fix-38"
+      ],
+      "status": "completed",
       "file": "fix-45.md",
-      "record": "",
+      "record": "records/fix-45.md",
       "surface-type": "web",
       "type": "coding.feature",
       "complexity": "medium"

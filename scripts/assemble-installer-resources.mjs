@@ -19,6 +19,7 @@
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
  *     web-dist/               apps/web/dist（壳静态资产）
+ *     icon.png                窗口图标（fix-45——BrowserWindow icon 打包形态解析位）
  *     staging-manifest.json   物化清单（节文件数/字节 + 关键文件自证 + sqlite prebuild 证据）
  *   release/app/              electron-builder 应用目录（asar: false）：main.js 装载器
  *                             （apps/host/installer/app-loader.mjs）+ deps-free package.json
@@ -53,6 +54,7 @@ const PRODUCT_PACKAGE_FILES = ['package.json', 'README.md', 'dist']
 export const REQUIRED_KEY_FILES = [
   'runtime/package.json',
   'web-dist/index.html',
+  'icon.png',
   'app/main.js',
   'app/package.json',
   'runtime/host-dist/main.js',
@@ -140,6 +142,7 @@ function assertPreconditions() {
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, 'better-sqlite3/prebuilds/win32-x64.node'), 'pnpm -C apps/host/profile.install install（prebuilds 随包分发，缺席即包损坏）'],
+    [join(ROOT, 'build', 'icon.png'), 'node tmp-ui-review/gen-whale-brand-v3.mjs --emit icon（fix-45 应用图标——窗口图标打包形态随包）'],
   ]
   for (const [path, remedy] of wants) if (!existsSync(path)) fail(`${path} 未就位 —— 先执行：${remedy}`)
 }
@@ -211,6 +214,12 @@ function stage() {
   // 4) 壳 dist
   sections.webDist = copyTree(join(ROOT, 'apps/web/dist'), join(STAGING, 'web-dist'))
 
+  // 4b) 窗口图标（fix-45）：build/icon.png 归位 resources 根——BrowserWindow icon 打包
+  //     形态解析位（resolveWindowIconPath {resources}/icon.png）。实测裁决注记：Windows
+  //     exe 内嵌图标（electron-builder win.icon）已覆盖任务栏/Alt-Tab，此物化服务窗口
+  //     标题栏与运行期 BrowserWindow icon 兜底——两口径同源 build/ 单源
+  sections.icon = copyTree(join(ROOT, 'build', 'icon.png'), join(STAGING, 'icon.png'))
+
   // 5) electron-builder 应用目录（asar: false；deps-free）：装载器 + 清单——真实 main
   //    在 runtime/host-dist（宿主 dist 运行期 import @dsh-forge/contracts，须与
   //    node_modules 同容器；见 apps/host/installer/app-loader.mjs 注记）
@@ -233,7 +242,8 @@ function stage() {
     fail(`staging 关键文件缺失（物化后自证失败）：${problems.join('; ')}`)
   }
   const totalFiles =
-    sections.runtimeNodeModules.files + sections.hostDist.files + sections.webDist.files + sections.appLoader.files
+    sections.runtimeNodeModules.files + sections.hostDist.files + sections.webDist.files
+    + sections.appLoader.files + sections.icon.files
   console.log(`STAGE_OK files=${totalFiles} manifest=release/staging/staging-manifest.json`)
 }
 

@@ -1,7 +1,9 @@
 // window/create 单测 —— 主窗口建窗语义 pin（窗口形态 fix-2 起：titleBarStyle/titleBarOverlay）。
 // BrowserWindow 注入 fake（create.ts 设计面——真实 Electron 形态面由 e2e host-boot/smoke-skeleton 承载）。
+import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createMainWindow, type BrowserWindowLike } from './create.js'
+import { resolveWindowIconPath } from './icon.js'
 import { WINDOWS_TITLEBAR_HEIGHT } from './titlebar.js'
 
 class FakeBrowserWindow implements BrowserWindowLike {
@@ -75,6 +77,21 @@ describe('createMainWindow（建窗参数）', () => {
     // 上行已字面 pin 32；本行钉住单源链——create.ts 与 preload-api.ts 共消费 window/titlebar.ts，
     // 宿主-壳两源漂移（改一处漏一处）在此红
     expect((win.options.titleBarOverlay as { height: number }).height).toBe(WINDOWS_TITLEBAR_HEIGHT)
+  })
+  it('窗口图标（fix-45）：icon 选项在场 = resolveWindowIconPath 单源值且文件存在（dev 缺省分支）', async () => {
+    // create.ts 内消费 process.env——显式清 DSH_FORGE_RESOURCES_DIR 钉 dev 缺省分支
+    const saved = process.env.DSH_FORGE_RESOURCES_DIR
+    delete process.env.DSH_FORGE_RESOURCES_DIR
+    try {
+      const win = await createFake()
+      const icon = win.options.icon as string
+      expect(icon).toBe(resolveWindowIconPath({}))
+      expect(icon.replace(/\\/g, '/')).toMatch(/build\/icon\.png$/)
+      // 资产在场门：build/icon.png 入仓缺席（生成器未跑/被误删）在此红
+      expect(existsSync(icon)).toBe(true)
+    } finally {
+      if (saved !== undefined) process.env.DSH_FORGE_RESOURCES_DIR = saved
+    }
   })
 })
 

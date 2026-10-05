@@ -44,6 +44,24 @@
     主题**（不经 prefers-color-scheme）；覆层 `pointer-events:none` + `opacity` ≤ .85 总守护
   - 红线：仅 active 相位会话滚动区——不进官方 hero（空会话大标）、召回/轨迹视图与
     composer/输入区；顶部 55% 渐隐遮罩已内置（消息流区域恒净）
+- 应用图标（fix-45，用户验收 2026-10-05 反馈④-3）：`build/icon.svg`（派生母本）+
+  `icon.png`（512）+ `icon.ico`（16/32/48/64/128/256 多尺寸 PNG 帧）——**位图一次生成
+  入仓，打包管线零在线栅格化**。派生口径（仅有的两个派生自由度）：
+  - **构图**：mark 三层原样整体缩放定位（不自创构图）——图标 ≠ 侧栏标直放大：24×24
+    构图大尺寸下太满，按 app icon 惯例内缩：内容长边 19.2/24（80% 网格）+ bbox 中心
+    对齐画布中心（四周安全边 ≥2/24，实测 getBBox 派生，不手工估算）；
+  - **定色**：侧栏标 currentColor 语义不适用位图——取品牌墨色单色 **#22314a** + 透明底
+    （P1 裁决：浅底可辨；深底 Windows 任务栏由系统合成——如暗色辨识不足再转 bluish
+    强调色并记本节）；
+  - 生成器：`tmp-ui-review/gen-whale-brand-v3.mjs --emit icon`（母版
+    whale-sea-mark.svg 单源；栅格化经 tmp-ui-review/icon-rasterizer——electron
+    Chromium offscreen 透明截帧 + 手写 ICO 封装，零新依赖；同机重跑 byte-identical）；
+  - 接线：dev/运行窗口 BrowserWindow `icon` = `build/icon.png`（解析单源
+    apps/host/src/window/icon.ts——打包形态 `{resources}/icon.png`，assemble 物化；
+    Windows 任务栏/Alt-Tab 由 exe 内嵌优先）；electron-builder `win.icon` +
+    `nsis.installerIcon`/`uninstallerIcon` = `build/icon.ico`（shortcutIconName 缺省随
+    productName）——**退役 Electron 默认图标**（dev 任务栏 + 安装器 + 安装后 exe 三面）；
+  - 不做面：macOS .icns / Linux / 多主题动态图标（P1 Windows NSIS 单平台）。
 - v1（自绘鲸剪影）已被 v2 替换——官方几何优先，自绘形态退役不存档
 
 ## 历史
@@ -52,3 +70,4 @@
 - 2026-10-03：本设计（fix-15）替换 —— 透明底 + currentColor
 - 2026-10-04：「鲸游书海」候选稿 v1（自绘鲸）→ v2（**官方 FISH_LOGO_PATH 鲸**）→ v3（背景概念收紧：**无数各式书本构成海洋本体**，133 本四深度带）——**同日走查人裁决采纳**
 - 2026-10-04：fix-38 接入 —— v2 图标（官方鲸 + 书页浪 + 闪电喷泉，经 FISH_LOGO_PATH 导出面零拷贝）+ v3 对话面板书海背景（静态双资产 + CSS 锚）升**现行**；fix-15「书 + 闪电」标退役为历史档（上节）
+- 2026-10-05：fix-45 应用图标 —— v2 标派生 `build/icon.{svg,png,ico}`（80% 网格内缩 + 墨色单色透明底），接入 dev 窗口 icon 与 electron-builder win/nsis——Electron 默认图标退役
