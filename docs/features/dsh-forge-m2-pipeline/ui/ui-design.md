@@ -2,272 +2,335 @@
 feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 + 任务/文档视图）"
 platform: "web"
 created: "2026-10-05"
-status: "draft"
+status: "draft（v6 = 经两轮 UI/UX 评审打磨 + 老 forge 类型调研；44 断言全绿）"
 ---
 
 # dsh-forge M2 — UI Design（Web）
 
-> 设计基线：**参考重构总纲原型（[`docs/proposals/dsh-forge-redesign/prototype/`](../../../../proposals/dsh-forge-redesign/prototype/)），核心不变，按 M2 范围细化**。设计语言（`--dsw-*` 令牌体系、行语言、状态点、chips、只读纪律、亮/暗双主题）与原型逐字一致；本设计只做四件事——①概览页签收窄为任务列表视图（DAG/泳道 = M3 预留；对账卡与漂移概念已按用户裁决移出）、②文档页签（SC4）以原型概览树 + dock 文档形态为母本细化、③会话头部挂接 pill 以原型 conv-actions 任务挂接 pill 为母本细化、④注册表单派生行沿用原型（含 hash8）并补疑似移动拒绝态。实现落位遵循产品现态（官方基座 + 产品内容叠加，fix-25 后）——落位机制（conversation.view roster / 官方右栏）归 tech-design。
+> **设计基线（v6）**：产品形态以现有代码现态为准（fix-25/29/38/40/42 后），概览 = 官方 ui-dockkit 右栏 tab。经两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）+ 老 forge 20 种任务类型源码调研（模块化详情抽屉）。冒烟 44 断言全绿。
 
 ## Design System
 
-> 令牌来源 = 原型 `styles.css`（上游 ui-theme design-platform.css 实值校正版）；**样式纪律：只引用 `--dsw-*` 语义令牌，禁止裸色值/裸字号**（总纲 §风格一致纪律；产品侧由令牌 lint 机械强制）。亮/暗双主题经 `body[data-ds-dark-theme]` 切换。
-
-### 核心令牌（亮主题 → 暗主题）
-
-| 令牌 | 亮 | 暗 | 用途 |
-|---|---|---|---|
-| `--dsw-alias-bg-base` | `rgb(255,255,255)` | `rgb(21,21,23)` | 页面底 |
-| `--dsw-alias-bg-layer-1/2/3` | 白 → 灰阶 | `rgb(35,35,36)`→`rgb(53,54,56)` | 层级面（dock 面板 / 行 hover / 弹层） |
-| `--dsw-specific-sidebar-fill` | `rgb(249,250,251)` | `rgb(27,27,28)` | 左栏/dock 轨底 |
-| `--dsw-alias-label-primary` | `rgb(15,17,21)` | `rgb(249,250,251)` | 主文本 |
-| `--dsw-alias-label-secondary` / `-tertiary` | `rgb(97,102,107)` / `rgb(129,133,140)` | 提亮 | 辅文本（`.t-aux` 12/18） |
-| `--dsw-alias-link` | `rgb(65,118,230)` | `rgb(103,158,254)` | 链接/可点下划 |
-| `--dsw-alias-interactive-bg-hover` / `-active` | `rgba(38,49,72,.06/.10)` | `rgba(255,255,255,.08/.14)` | 行/钮交互态 |
-| `--dsw-alias-border-l1..l4` | 黑系 4%–16% | 白系 6%–20% | 发丝线（`--hairline: .5px`） |
-| `--dsw-alias-state-error/success/warn-primary` | 红/绿/琥珀 | 提亮 | 状态点 / 错误条 |
-| `--dsw-alias-toast-bg` / `-label` | 深灰 / 近白 | — | Toast |
-
-排版：`--font-ui`（系统栈 + PingFang/YaHei）/ `--font-code`（等宽，task-id / 路径栏用 `.t-code`）；基准 14/22，辅文 12/18，标题 16/24（`.t-title`）。圆角：`--r-control:14px`（pill/输入）、`--r-menu:20px`（菜单/气泡）、`--r-card:12px`（卡片）、`--r-overlay:24px`（模态）。动效：`--ease` + `--t-fast/.1s`、`--t-mid/.2s`；`prefers-reduced-motion` 全禁。
-
-### 组件基元（沿用原型，不新造）
-
-| 基元 | 形态 | 用途 |
-|---|---|---|
-| `.pill` / `.pill.is-button` | r14 胶囊（可点态带 ▾） | feature 选择器、挂接 pill、运行态 |
-| `.chip` | 紧凑标签（状态/计数） | feature 相位、只读徽标、文档类型 |
-| `.state-dot`（ok/err/warn/idle，`breathing` 呼吸） | 6px 状态点 | 七态行/节点/会话行 |
-| `.status-tag.st-*` | 任务状态标签（st-completed/in_progress/pending/blocked） | 任务行/时间线 |
-| `.seg` / `.seg-btn` | 分段控件 | 视图切换（M2 仅「列表」） |
-| `.tree-row.dir/.file` | 树行（▾ 折叠 / 📄 文件） | 文档列表（原型提案/feature 子tab 母本） |
-| `.task-row` 族 | `task-id | title | ←N | ⟞N | 状态` 行 | 任务列表 |
-| `.doc-head/-pathbar/-body` | 文档页签三段 | SC4 详情态（原型 renderDoc 母本） |
-| `.crumb` / `.crumb-sep` | 面包屑段 | 会话位置（挂接 pill 邻位） |
-| `.btn`（primary/soft/ghost + btn-sm） | 按钮 | 对话框/动作 |
-| `.icon-btn` | 22px 图标钮 | 收展/关闭/在编辑器打开 |
-| Toast / `.kb-empty` / 骨架行 | 反馈与空态 | 全局 |
-
-焦点：`:focus-visible` 双线 outline（brand-primary）；键盘可达（Esc 关闭、Enter 确认、↑↓ 菜单移动）沿原型。
+> 令牌纪律：只引用 `--dsw-*` 语义令牌（上游 ui-theme 实值），禁裸色值/裸字号；亮/暗双主题。类型类别色彩：编码=蓝 / 文档=紫 / 测试=青 / 评估=红 / 验证=琥珀 / 质量门=绿。
 
 ## Navigation
 
-（继承 PRD `prd-ui-functions.md` Navigation Architecture——web 单页工作台；M2 新增右栏 dock 页签 ×2 + 会话头部元素 + 表单行升级，不新增路由。）
-
-- dock 页签条（`rb-strip`）：chips 可见集 = 当前项目页签 + 全局页签（原型 dock 跟随纪律）；「概览」「文档」为**项目跟随页签**（项目切换 → 页签集切换不打断面板）；＋ 常驻无死面板。
-- 页签内返回（文档详情 → 列表）= 视图态切换（Esc / ← / 返回钮），非关闭页签。
-
----
-
-## UF-1 概览页签 · 任务列表视图
-
-### Placement
-
-右栏 dock 页签「概览」（chip 常驻当前项目集）；内容占满 `rb-body`，纵向滚动。M2 收窄说明：~~对账卡 / 项目信息卡（workspaceId 等）~~ 移出（用户裁决 2026-10-05——漂移类概念不进用户视野）；DAG / 泳道 = M3（视图 seg 预留位不渲染）。
-
-### 组件结构
-
-```
-ov-tab
-├─ ov-taskbar
-│  ├─ feature pill（.pill.is-button）: ［<slug> ▾］＋ chip「<相位> <done>/<total>」
-│  ├─ task-count-note（.t-aux）: 「N 条 · 状态直读（任务库）」
-│  └─ 视图 seg：「列表」启用；DAG/泳道以**禁用占位**呈现（M3 接入同 seg——占位即预告，不可点）
-├─ ov-statuschips（七态过滤行，细化新增）
-│  └─ chip ×7：待办/执行中/已完成/阻塞/挂起/跳过/已拒绝（各带计数 + 前置状态点）
-│     语义：多选交集过滤；全灭 = 全部显示（不出现空列表死态）
-├─ task-list
-│  ├─ task-group-label「执行中(N)」——in_progress ∪ blocked 置顶分组（原型核心保留）
-│  └─ task-row（原型行语言，细化挂接双源）
-│     ├─ task-id（.t-code，<feature>/<localId>）
-│     ├─ task-title（ellipsis，title 全文）
-│     ├─ task-deps「←N」（前置计数；title = 前置键清单）
-│     ├─ task-links「⟞N」（挂接会话；title 分型列出：派发 s× / 执行 s×）
-│     ├─ status-tag（七态色映射沿原型 TASK_ST）
-│     └─ 行尾 ⋯（hover 显现）→ 菜单：展开时间线 / 转移状态 / 打开挂接会话
-│  └─ 行展开态 task-detail（行下方缩进块）
-│     ├─ task-timeline：审计记录按序（verb 图标 + from→to + 时间 + gate 结果摘要 + commit 短哈希）——auto-restore/auto-block 行专用色点
-│     ├─ 挂接会话列表（两类分型行：⟞ 派发 / ⟞ 执行，点击打开会话）
-│     └─ 「转移状态」按钮（人类通道入口）
-└─ ov-footnote（.t-aux）：feature 绑定（无全局汇总）· 状态直读 · 应用零编排（tool 写入即时可见）
-```
-
-### States
-
-| State | 呈现 | 触发 |
-|---|---|---|
-| 空态·feature 无任务 | `.kb-empty`：「任务由 run-tasks / addTask 产生——本 feature 暂无任务」 | 新 feature |
-| 空态·项目零 feature | 页签级 `.kb-empty`：「未发现 feature 目录（docs/features/）——注册或首次打开后自动扫描建行」 | 非结构化仓（S9① 零命中形态，一等空态） |
-| 空态·过滤无命中 | 「当前过滤组合无任务」+ 一键清过滤 | chips 组合过窄 |
-| 加载中 | 行级骨架（SkeletonRows） | 库查询/重取 |
-| 写入后刷新 | 受影响行/计数/相位 chip 即时更新（无整页闪动） | tool 写动词返回后单次重取（断言锚） |
-| 人工转移被拒 | 错误 Toast（from≠to / reason 缺席 / 终值非法） | 服务端校验失败 |
-
-### Interactions
-
-1. feature pill → 菜单（feature 列表：slug + 相位 chip + done/total；当前项勾选）→ 切换即重拉列表。
-2. 七态 chips 点选 toggle；计数实时（随写入重取刷新）。
-3. 行点击 = 展开/收起时间线（惰性拉取，展开不离开列表上下文）；⋯ 菜单动作同置。
-4. 「转移状态」→ 模态对话框：目标态选择（from≠to 约束——当前态禁用；终态提示）+ 原因输入（必填，textarea）+ 确认/取消（Esc）；确认后行即时更新，Toast 留痕「已转移 <key> → <状态>（reason 摘要）」。
-5. task-links / 挂接会话行点击 → 左栏定位并打开对应会话（原型 sess-open 同径）。
-6. 键盘：↑↓ 行移动 + Enter 展开；chips 可 Tab 达。
-
-### Data Binding
-
-| 元素 | 数据 | 来源（PRD Data Requirements） |
-|---|---|---|
-| feature pill / 菜单 | slug + 相位 + done/total | features（相位 = 推导机维护，只读） |
-| 七态 chips 计数 | 按态计数 | tasks 按 feature 聚合 |
-| task-row | key/title/type→图标省略/deps 计数/挂接计数/状态 | tasks + task_edges + 挂接双数据源（links ∪ records.session_id 分型） |
-| task-timeline | verb/from→to/时间/gate/commit | task_records 按 (key, id) 序 |
+- **左栏（官方 ui-sidebar 壳）**：品牌行（鲸 mark）→ PanelRow 仅「知识库」（M2 不加行）→ 工作区浏览区（fix-42 treeitem）。
+- **中区（官方 main 面板互换）**：会话（官方 ConversationRoot + conversation.view 三签——M2 不加签）⇄ 知识 ⇄ hero；概览不占中区。
+- **右栏 = 官方 ui-dockkit（DockSurface）**：
+  - **开始 tab = dsh 官方 GuideBody 逐形态**：罗盘 CompassGlyph 56px hero + 380px 入口卡 ×4（**项目概览[M2 排最前]** + 工作区文件[Ctrl+P] + 新建终端 + 浏览器[Ctrl+T]）；entry → `openTab(kind, {replaceTab:true})`。
+  - **「项目概览」tab = M2**：开始页入口卡开出或会话头挂接 pill 跳转。
+  - **文档 tab**：文档行点击开出（按 docRel 去重）；关闭后回概览或开始页。
+  - ＋（`dock.addTab`）→ 新开开始 tab；**dock chrome**：⛶ 全屏 + ▯ 收展（dsh 原生）。
 
 ---
 
-## UF-2 文档页签 · 只读浏览（SC4）
+## UF-1 「项目概览」dock tab
+
+### 结构
+
+```
+ov-panel(dock tab body ~460px)
+├── ov-head(默认折叠):项目名 + 一行状态摘要(feature · N 会话 · N 完成) + ▾ 展开路径详情
+├── ov-sticky:子 tab(提案|feature|任务) + 搜索栏(中英双语) + 排序 pill(⇅ 活跃优先/最新创建)
+├── [提案子tab] 提案父行(▸展开元数据:slug/摘要/作者/创建/裁决/谱系) + 文档行(📄 proposal.md [已接受] ›)
+├── [feature子tab] feature 父行(▸展开:摘要/来源提案/任务七态/文档统计/时间) + 文档行(不含提案)
+└── [任务子tab]
+   ├── ov-taskbar:feature pill + 计数 + 视图 seg(列表|DAG|泳道) + 排序 pill
+   ├── 七态过滤 chips(0 计数禁用+淡化)——三视图统一过滤
+   ├── [列表] task-item 两行布局:主行(ID+标题+中文状态tag+⋯) + 副行 11px(类型/优先级/前置/挂接/fix)
+   ├── [DAG] SVG 贝塞尔 + 箭头 marker(前置绿/普通边框色) + 节点(状态点+键+标题) → 点击开抽屉
+   └── [泳道] 七态横向列(0 计数列折叠) + 卡片 → 点击开抽屉
+```
+
+### 排序
+
+三子 tab 共用排序切换（`⇅ 活跃优先` / `⇅ 最新创建`）：
+- **活跃优先**（默认）：in_progress → blocked → pending → … → completed
+- **最新创建**：created_at 降序
+
+### 搜索
+
+三子 tab 共用搜索栏，同时匹配中英双语（任务标题/key/类型/状态中英；提案 slug/title/状态中英/摘要；feature slug/文档类型/路径/摘要）。搜索时仅更新内容区（IME 安全——中文组合态不被打断）。
+
+---
+
+## UF-2 文档浏览（SC4）· 概览提案/feature 子 tab + dock 新 tab
 
 ### Placement
 
-右栏 dock 页签「文档」（项目跟随，与「概览」并排）；两视图态：列表态（缺省）/ 详情态（页签内切换，返回不关页签）。
+概览 tab 的 feature/提案子 tab 点文档行 → **在 dock 开出独立 tab**（非抽屉；按 docRel 去重；多文档并存）。
 
-### 组件结构
+### 文档 tab 内容
 
-```
-doc-tab（列表态）
-├─ doc-tab-head：标题「文档」+ .t-aux「docs/features · docs/proposals · 只读」
-└─ doc-list（滚动；tree 行语言 = 原型概览提案/feature 子tab 母本）
-   ├─ 组·提案（dir 行 ▾ docs/proposals/<slug>/ + 五态 chip）
-   │  └─ file 行：📄 proposal.md（title = 摘要）→ 点击进详情态
-   └─ 组·feature ×N（dir 行 ▾ <slug>/ + 相位 chip）
-      └─ file 行：📄 <rel_path>（七类全收；title = 每文档摘要）→ 详情态
-      （悬空行：⚠ 前缀 + 淡化——引用在、文件缺；仍可点入悬空详情态）
+头部（文件名 + 只读徽标 + 悬空徽标）→ 路径栏（canonical 全路径 + 📁 在编辑器中打开 + ↻ 重读）→ 摘要块 → **Markdown 渲染**（标题/列表/引用/代码块）。**mermaid 代码块 → Diagram 占位卡**（⚡Diagram 头标 + mermaid 源码 + 「dsh 原生不支持——产品扩展点」注记）。
 
-doc-tab（详情态）
-├─ doc-head：← 返回 · 📄 <文件名> · 只读 chip（原型 renderDoc 母本）
-├─ doc-pathbar（.t-code）：canonical 全路径（ellipsis + title 全文）
-│  ├─ 「在编辑器中打开」icon-btn（📁 → 系统关联编辑器；应用零写入）
-│  └─ ↻ 重读（只读重拉）
-├─ doc-badges：类型 chip（proposal/prd-spec/tech-design/…）+（悬空 chip，若有）
-├─ doc-abs（如有）：一句话摘要（feature_documents.summary / proposals 承载）
-└─ doc-body：Markdown 只读渲染（frontmatter 不混入正文；代码块等宽）
-悬空详情态：doc-head + pathbar 保留 + 占位面「⚠ 引用悬空——文件不在当前分支或已移动」+ 返回钮（不崩溃、不写入、不删行）
-```
-
-### States
-
-| State | 呈现 | 触发 |
-|---|---|---|
-| 空态·零命中 | `.kb-empty`：「未发现结构化文档（docs/features · docs/proposals）」+ 目录约定一句话 | 非结构化仓（S9①；一等空态） |
-| 悬空态 | 列表行 ⚠ 淡化；详情态占位面（见上） | 分支切换 / 文件移动（SC-branch） |
-| 加载/渲染失败 | 骨架 / 错误条 + ↻ 重试 | 文件读取中/失败 |
-| 长文档 | doc-body 独立滚动；pathbar 常驻 | 正文 > 视口 |
-
-### Interactions
-
-1. 组折叠/展开（tree-toggle 原型行为；记忆展开态于页签会话内）。
-2. file 行点击 → 详情态；← / Esc / 返回钮 → 列表态（保持滚动位置与展开态）。
-3. 「在编辑器中打开」→ 系统关联打开（Toast 留痕路径；悬空态该钮禁用）。
-4. ↻ 重读 = 只读重新拉取（外部编辑后自取新文）。
-
-### Data Binding
-
-| 元素 | 数据 | 来源 |
-|---|---|---|
-| 列表组/行 | feature/proposal 行 + 文档索引（类型/相对路径/摘要） | feature_documents + proposals（发现面建行） |
-| 详情正文 | 文件内容（Markdown） | 工作区文件只读 |
-| 悬空标记 | 文件存在性判定 | 只读探测 |
+悬空文档 tab = 只读占位面（路径栏保留，不崩溃不写入不删行）。
 
 ---
 
 ## UF-3 会话头部挂接任务展示（SC6③ 挂接部分）
 
-### Placement
-
-中区会话面板头部 title-row 动作簇（`conv-actions`——原型母本位：crumbs 右侧、utilities 图标簇左侧；最终缝位 = tech-design §7-13 挂接部分必答，本设计给出母本位推荐）。hero 相位头部塌缩 → 不展示（无会话即无挂接）。
-
-### 组件结构
-
-```
-conv-actions
-├─ 挂接 pill（.pill.is-button）：⟞ <taskKey> · <状态词>（原型逐字母本；状态点随七态色）
-│  多挂接：≤2 并排；>2 = 首 1 枚 +「+N」溢出 pill（点开菜单列全）
-│  title / 菜单副行注明分型：「派发」（claim 会话）或「执行」（executor 子会话）
-└─（既有元素不动：运行态 pill 等）
-```
-
-### States
-
-| State | 呈现 | 触发 |
-|---|---|---|
-| 无挂接 | 不占位 | 会话未参与任务 |
-| 有挂接 | pill(s) 在场，状态实时（写入后单次重取） | claim / submit 发生 |
-| 任务已终态 | pill 状态词随库（completed/skipped/…），不自动消失（历史事实） | 任务完成/跳过 |
-
-### Interactions
-
-1. pill 点击 → 右栏切「概览」页签 + 选中 feature + 定位任务行（展开时间线）——原型 task-goto 同径。
-2. 溢出「+N」→ 菜单（⟞ key · 状态 · 分型）逐项跳转。
-3. 只读展示——头部不提供任何写入入口（只看不管）。
-
-### Data Binding
-
-| 元素 | 数据 | 来源 |
-|---|---|---|
-| 挂接 pill | taskKey + 当前状态 + 分型（派发=挂接表 / 执行=records.session_id 反查，并集） | 每工作区任务库（会话 id 双向查） |
+官方 session.header actions 位；双数据源分型（派发 ⟞=挂接表 / 执行 ⟞=records.session_id）；≤2 并排 + +N 溢出；pill 点击 → dock 开概览 tab + **任务详情抽屉打开**。
 
 ---
 
 ## UF-4 注册表单任务清单派生行（升级）
 
-### Placement
-
-添加项目 · 注册表单（P1 既有「任务清单与记录」行）——位置/只读语义不变，值升级 + 新增拒绝态。
-
-### 组件结构
-
-```
-表单行（原型母本逐字沿用）
-├─ label「任务清单与记录」
-└─ readonly input（.fb-static .t-code）：{dsh-forge-home}\{扁平化}-{hash8}
-   title = 「统一存放于 {dsh-forge-home}/{canonical-path 扁平化}-{hash8 消歧后缀}，注册时自动派生」
-疑似移动拒绝态（细化新增——确认注册后）
-├─ 表单错误条（warn 色，表单底部）：「检测到同主体旧目录：{孤儿目录路径}（疑似工作区被移动）」
-├─ 指引文案（.t-aux）：「请删除上述旧目录，或将工作区目录改回原名后重试——应用不自动迁移任务数据」
-└─ 确认钮维持禁用直至用户重选/环境变化复检通过（重选目录即复检）
-```
-
-### States
-
-| State | 呈现 | 触发 |
-|---|---|---|
-| 正常派生 | 只读行随选定目录即时更新（换选联动沿 P1 规则） | 选定/换选工作区 |
-| 疑似移动 | 错误条 + 指引（见上）；确认被拒 | 注册预检发现同扁平化主体异 hash8 目录 |
-| 复检通过 | 错误条消失，恢复正常确认 | 用户按指引处置后重选 |
-
-### Interactions
-
-1. 行只读（tabindex=-1）；换选工作区 → 派生串与预检状态随之重构。
-2. 确认（疑似移动时）→ 不发起点注册链，仅呈现拒绝反馈（零副作用）。
-
-### Data Binding
-
-| 元素 | 数据 | 来源 |
-|---|---|---|
-| 派生串 | `{home}\{flatten}-{hash8}` | 应用侧单源下发（SC2 一致断言锚） |
-| 疑似移动 | 同主体异 hash8 目录探测 | 注册预检 |
+OS 目录选择器一步 → 表单；派生行含 hash8（@ 连接符）；疑似移动拒绝留场。
 
 ---
 
-## 全局反馈与纪律
+## 任务详情抽屉（模块化——按类型条件区）
 
-- **Toast**：转移留痕 / 编辑器跳转留痕 / 写入刷新不留痕（静默即时）。
-- **零编排**：四 UF 均无「发起编排」入口；唯一写入口 = 人工转移对话框（人类通道）——其余状态变化全部来自 tool 侧写入的被动刷新。
-- **只读纪律可视化**：文档页签只读 chip + 路径栏（原型母本）；「在编辑器中打开」= 跳转，应用零写入。
-- **令牌纪律**：全部样式经 `--dsw-*`；亮/暗双主题同稿校验。
+**右侧滑入（420px）**，从任务行/DAG 节点/泳道卡片/挂接 pill/⋯ 菜单打开。
+
+### 通用区（全部类型）
+
+头部（状态点 + 任务键 + 中文状态标签）→ 标题 → 徽标行（**类别彩色 chip** + 优先级 + 预估 + 复杂度 + breaking）。
+
+### 状态条件区
+
+- `blocked` → **阻塞原因**（⚠ 红色文字）
+
+### 按类型条件区（老 forge 源码对齐——20 种类型）
+
+| 类型条件 | 区块 | 内容 |
+|---|---|---|
+| `coding.fix` / `doc.fix` | **Fix 链** | 来源任务（含状态）+ 根因 + 源文件路径 + 测试脚本 |
+| `coding.*` / `code-quality.*` | **覆盖率** | 进度条（≥80% 绿 / ≥50% 琥珀 / <50% 红）+ 百分比 |
+| `test.*` | **测试面** | Surface key/type + 测试类型名称（Journey 生成 / 脚本生成 / 测试运行） |
+| `gate` | **质量门检查** | 通过数/总数进度条 + breaking 徽标 |
+| `eval.*` / `validation.*` | **评估结果** | 🔑 主会话徽标（不分发 executor）+ 得分/100（色彩阈值）+ 严重度 |
+
+### 共用底部
+
+执行时间线（verb/时间/备注；auto-restore/auto-block 专用色）→ 挂接会话（派发/执行分型，点击可跳）→「转移状态…」按钮。
+
+---
+
+## 动态交互流程
+
+### 流程 1：开始页 → 概览 tab
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant D as dock(DockSurface)
+    participant O as 概览 tab
+
+    U->>D: 展开右栏(corner ExpandButton)
+    D->>D: renderGuide(罗盘 + 入口卡 ×4)
+    U->>D: 点击「项目概览」入口卡
+    D->>D: openTab("dswf-overview", {replaceTab:true})
+    Note over D: 开始 tab 被原位替换(非并存)
+    D->>O: renderOverview()
+    O->>O: ov-head(折叠) + sticky(子tab+搜索+排序) + 任务子tab(默认)
+    U->>D: ＋ 新标签页
+    D->>D: dockAddTab() → 新开开始 tab
+    Note over D: strip chips = [项目概览][开始]
+```
+
+**关键行为**：`replaceTab:true` = 入口卡点击后**原位替换**开始 tab（非并存）；＋ 可再开开始页。概览 tab 关闭后 dock 底板回开始页。
+
+### 流程 2：概览子 tab 切换 + 搜索 + 排序
+
+```mermaid
+flowchart TD
+    A[子 tab 切换] --> B[清空搜索 + 清空 chips + 清空展开态]
+    B --> C{目标子 tab}
+    C -->|提案| D[提案列表 + 文档行]
+    C -->|feature| E[feature 列表 + 文档行]
+    C -->|任务| F[任务三视图]
+    G[搜索输入] --> H{IME 组合态?}
+    H -->|是| I[仅更新 ov-content<br>不重建搜索行]
+    H -->|否| I
+    I --> J[按中英双语匹配过滤]
+    J --> K[清除按钮出现/消失]
+    L[排序 pill 点击] --> M{当前模式}
+    M -->|活跃优先| N[切换到最新创建<br>created_at 降序]
+    M -->|最新创建| O[切换到活跃优先<br>status 权重排序]
+```
+
+**搜索匹配域**：任务 = 标题/key/类型/状态（中英）；提案 = slug/标题/状态（中英）/摘要；feature = slug/标签/文档类型/路径/摘要。
+
+### 流程 3：任务三视图切换 + chips 过滤
+
+```mermaid
+flowchart LR
+    A[视图 seg] -->|列表| B[两行布局<br>主行 ID+标题+状态tag+⋯<br>副行 类型/优先级/前置/挂接/fix]
+    A -->|DAG| C[SVG 贝塞尔+箭头<br>节点 状态点+键+标题]
+    A -->|泳道| D[七态横向列<br>0计数列折叠]
+    E[chips 点击] --> F[toggle 该状态过滤]
+    F --> B
+    F --> C
+    F --> D
+```
+
+**三视图统一过滤**：chips 过滤在 `vis` 层面生效——切到 DAG/泳道同样只显示过滤后任务集。0 计数 chip `disabled`（不可点出空态）。
+
+### 流程 4：任务行点击 → 模块化抽屉
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant L as 任务列表
+    participant DR as 抽屉(420px 滑入)
+    participant D as 任务数据
+
+    U->>L: 点击任务行(主行/副行整卡)
+    L->>DR: S.taskDrawer = taskKey
+    D->>DR: taskDrawerHtml(key)
+    DR->>DR: 通用区(类别彩色chip+优先级+复杂度)
+    alt type = coding.fix / doc.fix
+        DR->>DR: Fix 链区块(来源+根因+源文件+测试脚本)
+    else type = coding.* / code-quality.*
+        DR->>DR: 覆盖率进度条(三色阈值)
+    else type = test.*
+        DR->>DR: 测试面(Surface key/type)
+    else type = gate
+        DR->>DR: 质量门检查(通过/总数)
+    else type = eval.* / validation.*
+        DR->>DR: 评估结果(🔑主会话+得分+严重度)
+    end
+    alt status = blocked
+        DR->>DR: 阻塞原因(⚠ 红色)
+    end
+    DR->>DR: 前置依赖+时间线+挂接+转移按钮
+    U->>DR: Esc / ✕ / 点击另一任务
+    DR->>DR: 关闭(或切换到新任务内容)
+```
+
+**打开途径**：任务行点击 / DAG 节点点击 / 泳道卡片点击 / 会话头挂接 pill / ⋯ 菜单「查看详情」。
+
+### 流程 5：文档浏览（dock 新 tab）
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant O as 概览子 tab
+    participant D as dock
+    participant T as 文档 tab
+
+    U->>O: 点击文档行(整行可点)
+    O->>D: dockOpenTab("doc", {docRel})
+    alt 同文档已开
+        D->>T: 激活已有 tab(去重)
+    else 新文档
+        D->>T: 开出新 tab
+    end
+    T->>T: 头部+路径栏+摘要+Markdown渲染
+    alt 含 mermaid 块
+        T->>T: Diagram 占位卡(源码+扩展点注记)
+    end
+    alt 悬空
+        T->>T: 只读占位面(路径栏保留)
+    end
+    U->>T: 📁 在编辑器中打开 / ↻ 重读
+    U->>D: chip × 关闭
+    D->>D: 回概览或开始页
+```
+
+### 流程 6：人工转移状态
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant DR as 抽屉/⋯ 菜单
+    participant DG as 转移对话框
+    participant DB as 任务库
+
+    U->>DR: 点击「转移状态…」
+    DR->>DG: openTransDialog(key)
+    DG->>DG: 当前状态 + 目标状态选择(from≠to) + 原因必填
+    U->>DG: 确认(原因留空)
+    DG->>DG: 拒绝「原因必填」(对话框留场)
+    U->>DG: 填写原因 + 确认
+    DG->>DB: transitionTask(key, to, reason)
+    DB->>DB: 留审计记录(verb=transition)
+    alt to ∈ {completed, skipped}
+        DB->>DB: 触发恢复钩子 autoRestore()
+    end
+    DG->>DR: 关闭对话框 + 刷新抽屉/列表
+```
+
+### 流程 7：会话头挂接 pill → 概览 + 抽屉
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant H as 会话头(session.header)
+    participant D as dock
+    participant O as 概览 tab
+    participant DR as 抽屉
+
+    U->>H: 点击挂接 pill(⟞ key · 状态)
+    H->>D: dockOpenTab("dswf-overview")
+    D->>O: 激活概览 + 切到任务子 tab + 选中 feature
+    O->>DR: S.taskDrawer = key
+    DR->>DR: 模块化抽屉打开
+```
+
+### 流程 8：ov-head 折叠 + 提案/feature 行展开
+
+```mermaid
+flowchart TD
+    A[ov-head 默认折叠] -->|▾| B[项目名 + 状态摘要一行]
+    A -->|▾ 点击| C[展开路径详情 4 行<br>工作区/文档位置/知识目录/任务清单@hash8]
+    C -->|▴| B
+    D[提案/feature 父行] -->|点击| E[展开元数据块<br>slug/摘要/作者/裁决/谱系<br>或 摘要/来源提案/任务七态/文档统计/时间]
+    E -->|再点击| D
+```
+
+**展开语义统一**：多开（可同时展开多个父行）；子 tab 切换时全部收起。
+
+### 流程 9：注册流程（OS 选择器一步 → 表单）
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant OS as OS 目录选择器
+    participant F as 注册表单
+    participant DB as 任务库
+
+    U->>OS: 选择工作区目录(系统对话框一步)
+    OS->>F: 回填路径 + 自动派生任务清单路径
+    F->>F: 项目名(自动) + forge 目录 + 知识目录(默认值)
+    U->>F: 确认
+    alt 疑似移动(同主体异 hash8)
+        F->>F: 拒绝 + 错误条 + 手工指引<br>(零副作用,不清理不认领)
+    else 正常
+        F->>DB: 注册 + 建库({flatten}@{hash8})
+        DB-->>F: 成功(与表单展示逐字一致)
+    end
+```
+
+### 流程 10：dock tab 生命周期
+
+```mermaid
+stateDiagram-v2
+    [*] --> 开始_tab: dock 默认
+    开始_tab --> 概览_tab: 入口卡点击(replaceTab)
+    开始_tab --> 文件_tab: 原生入口(replaceTab)
+    开始_tab --> 终端_tab: 原生入口(replaceTab)
+    开始_tab --> 浏览器_tab: 原生入口(replaceTab)
+    概览_tab --> 文档_tab: 文档行点击(新开)
+    文档_tab --> 文档_tab2: 另一文档(新开;同 docRel 去重)
+    [*] --> ＋: dock.addTab → 新开开始 tab
+    概览_tab --> 开始_tab: chip ×(唯一 tab 时回 guide)
+    文档_tab --> 概览_tab: chip ×(概览 tab 仍在)
+    知识面板 --> dock_收起: 联动(rightbarViewPlan)
+    dock_收起 --> dock_恢复: 回会话面板(记忆恢复)
+```
+
+---
 
 ## 原型（prototype/）
 
-本设计附 HTML 原型（`ui/prototype/`：index.html + styles.css + app.js + data.js，纯静态无依赖）——聚焦 M2 四 UF 的可交互走查：右栏 dock（概览/文档页签 + 即时刷新模拟）、会话头部挂接 pill、注册表单派生行（含疑似移动演示）；样式与令牌与总纲原型同源。
+静态原型（index.html / styles.css / app.js / data.js / smoke.cjs）。**冒烟 44 断言全绿**。种子数据含 7 种类型（coding.feature/coding.fix/coding.refactor/doc/gate/test.run/eval.contract）+ 各类型专属字段（coverage/root_cause/source_files/surface_key/main_session/score/gate_checks/blocked_reason）+ 两个 mermaid 图表示例。
 
 ## 评审注记
 
-- `auto.eval.uiDesign = true`（AUTO_RUN）但 **eval-ui 技能未安装于本机 harness skills 目录**——自动对抗评审无法执行，以本文件自检（PRD UF ↔ 设计逐条对齐 + 原型母本引用逐处标注）替代；偏差在此显式记账，不静默跳过。
-- 与 PRD 的差异：一处——视图 seg 以禁用占位呈现 DAG/泳道（PRD「DAG/泳道 = M3 不渲染」的**可发现性强化**形态：占位不可点、无功能面）；已按 Step 10 以原型为准回写本文件。挂接 pill 呈现为短键（title 含全键与分型说明）——「taskKey」的显示细化，非语义差异。
+- 两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）；老 forge 20 种任务类型源码调研（forge-cli/pkg/task/types.go Task struct + TaskTypeRegistry + prompt 模板差异）。
+- dsh 原生**不支持 mermaid**（全安装树零命中）——Diagram 占位卡 = 产品扩展点，tech-design 裁决渲染方案。
+- 与 PRD 的差异（Step 10 对账回写）：文档 = dock tab（非抽屉）；任务详情 = 抽屉（非内联展开）；排序可切换；DAG/泳道 M2 交付（非 M3）；搜索中英双语三子 tab 共用；开始页入口排序（项目概览最前）。

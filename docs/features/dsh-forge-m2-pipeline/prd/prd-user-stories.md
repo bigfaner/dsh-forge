@@ -89,17 +89,17 @@ feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 
 ## Story 5: 浏览 feature 与提案文档（含仓外项目）
 
 **As a** 单人开发者
-**I want to** 在文档页签只读浏览项目的 proposal / PRD / design 文档并可跳转编辑器打开
+**I want to** 在概览页签的提案/feature 子 tab 浏览项目文档，点开只读文档 chip 核对规格，并可跳转编辑器打开
 **So that** 不切出工作台即可核对规格与设计上下文
 
 **Acceptance Criteria:**
 
 - Given 仓内项目（按目录约定组织文档的注册工作区）
-- When 打开文档页签并点开一篇 design 文档
-- Then 正文只读渲染 + canonical 路径栏 + 只读徽标在场；「在编辑器中打开」跳转系统关联编辑器（e2e 仓内一条）
+- When 在概览 feature 子 tab 点开一篇 design 文档
+- Then 右侧只读抽屉呈现正文只读渲染 + canonical 路径栏 + 只读徽标；「在编辑器中打开」跳转系统关联编辑器（e2e 仓内一条）
 
 - Given 仓外项目（夹具按约定预置目录结构）
-- When 打开其文档页签
+- When 浏览其概览提案/feature 子 tab
 - Then 经真实发现链建行后同构呈现（e2e 仓外一条）；零命中的项目呈现空态（一等展示，非错误）
 
 - Given 文档引用悬空（模拟分支切换后文件不在当前分支）
@@ -140,7 +140,7 @@ feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 
 
 - Given 注册表单已选定工作区目录
 - When 查看任务清单只读行
-- Then 展示 `{dsh-forge-home}/{扁平化}-{hash8}`，且该串由应用侧单一来源下发（与实际建库位置逐字一致——SC2 单源断言）
+- Then 展示 `{dsh-forge-home}/{扁平化}@{hash8}`，且该串由应用侧单一来源下发（与实际建库位置逐字一致——SC2 单源断言）
 
 - Given 目标存储目录不存在，但发现同扁平化主体、异 hash8 的既有目录（疑似移动）
 - When 确认注册

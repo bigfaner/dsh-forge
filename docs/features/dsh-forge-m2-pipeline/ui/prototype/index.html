@@ -3,76 +3,153 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>dsh-forge M2 — UI 原型（概览·任务 / 文档·SC4 / 会话头挂接 / 表单派生行）</title>
+  <title>dsh-forge M2 — UI 原型 v3（以现有代码为准：官方基座现态 + M2 delta）</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div class="app-frame" id="app-frame">
 
-    <!-- 左栏（演示基底：项目 + 会话列表——切会话看头部挂接 pill 变化） -->
-    <aside class="app-sidebar" aria-label="项目与会话">
-      <div class="sb-brand" title="dsh-forge（M2 UI 原型）">
-        <span class="brand-mark" aria-hidden="true">鲸</span>
-        <span style="font-weight:600">dsh-forge</span>
-        <span class="chip" style="margin-left:auto">M2 原型</span>
+    <!-- ══ 左栏:官方 ui-sidebar 壳形态(品牌行 / 全局面板行 roster / 工作区浏览区) ══ -->
+    <aside class="sidebar" id="sidebar" aria-label="侧栏">
+      <div class="sb-brand" data-act="new-session" title="dsh-forge(点击 = 新会话)">
+        <!-- 「鲸游书海」mark(fix-38 采纳,docs/brand/whale-sea-mark.svg 母版三层内联;
+             鲸剪影 = 官方 FISH_LOGO_PATH 经导出面消费,几何零拷贝;单一 currentColor
+             随令牌适配明暗——fix-15 禁用约定:零深底方块) -->
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M11.9 15.2 C9.2 13.9 5.6 13.8 2.8 15.1 C2.5 15.2 2.3 15.5 2.3 15.8 V20.0 C2.3 20.6 2.9 21.0 3.4 20.8 C6.1 19.8 9.0 20.0 11.3 21.2 C11.6 21.4 11.9 21.1 11.9 20.7 Z" fill="currentColor" opacity=".88"/>
+            <path d="M12.1 15.2 C14.8 13.9 18.4 13.8 21.2 15.1 C21.5 15.2 21.7 15.5 21.7 15.8 V20.0 C21.7 20.6 21.1 21.0 20.6 20.8 C17.9 19.8 15.0 20.0 12.7 21.2 C12.4 21.4 12.1 21.1 12.1 20.7 Z" fill="currentColor" opacity=".6"/>
+            <path d="M22.9168 1.43018C22.6713 1.31018 22.5658 1.53918 22.4223 1.65519C22.3733 1.69269 22.3318 1.74169 22.2903 1.78669C21.9317 2.1697 21.5127 2.42121 20.9657 2.39121C20.1657 2.34621 19.4827 2.59771 18.8787 3.20973C18.7502 2.45521 18.3236 2.0047 17.6746 1.71569C17.3351 1.56568 16.9916 1.41518 16.7536 1.08867C16.5876 0.856163 16.5421 0.597155 16.4591 0.341647C16.4061 0.187643 16.3536 0.0301382 16.1761 0.00363739C15.9836 -0.0263635 15.9081 0.135141 15.8326 0.270145C15.5306 0.822162 15.4136 1.43018 15.4251 2.0462C15.4516 3.43174 16.0366 4.53527 17.1991 5.3203C17.3311 5.4103 17.3651 5.5003 17.3236 5.63181C17.2441 5.90231 17.1501 6.16482 17.0671 6.43533C17.0141 6.60784 16.9351 6.64584 16.7501 6.57033C16.1121 6.30383 15.5611 5.90931 15.074 5.4328C14.2475 4.63328 13.5 3.75075 12.568 3.05973C12.349 2.89822 12.13 2.74822 11.9034 2.60522C10.9524 1.68169 12.028 0.923165 12.277 0.833162C12.5375 0.739159 12.3675 0.41615 11.5259 0.42015C10.6844 0.42365 9.91439 0.705658 8.93286 1.08117C8.78935 1.13767 8.63835 1.17867 8.48384 1.21267C7.59332 1.04367 6.66829 1.00617 5.70226 1.11517C3.88321 1.31768 2.43016 2.1777 1.36213 3.64575C0.0790928 5.4103 -0.222916 7.41536 0.146595 9.50642C0.535106 11.7105 1.66014 13.535 3.38869 14.9616C5.18125 16.4406 7.24581 17.1657 9.60138 17.0266C11.0319 16.9441 12.6245 16.7526 14.421 15.2321C14.874 15.4576 15.3496 15.5476 16.1381 15.6151C16.7456 15.6716 17.3306 15.5851 17.7836 15.4911C18.4931 15.3411 18.4441 14.6841 18.1876 14.5636C16.1081 13.595 16.5646 13.9891 16.1496 13.67C17.2061 12.42 18.8202 10.1979 19.3182 7.17235C19.3672 6.83834 19.4297 6.36783 19.4222 6.09732C19.4182 5.93231 19.4562 5.86831 19.6447 5.84931C20.1657 5.78931 20.6712 5.64681 21.1357 5.3913C22.4833 4.65528 23.0268 3.44624 23.1548 1.9972C23.1738 1.77569 23.1508 1.54668 22.9168 1.43018ZM11.1749 14.4736C9.15936 12.889 8.18184 12.3675 7.77832 12.39C7.40081 12.4125 7.46881 12.8445 7.55182 13.126C7.63882 13.404 7.75182 13.5955 7.91033 13.8396C8.01983 14.0011 8.09533 14.2411 7.80083 14.4216C7.15181 14.8231 6.02327 14.2866 5.97027 14.2601C4.65673 13.4865 3.5587 12.4655 2.78467 11.069C2.03715 9.72493 1.60314 8.28289 1.53164 6.74384C1.51264 6.37233 1.62214 6.24082 1.99215 6.17332C2.47916 6.08332 2.98118 6.06432 3.46769 6.13582C5.52476 6.43633 7.27581 7.35586 8.74385 8.8129C9.58188 9.64243 10.2159 10.634 10.8689 11.6025C11.5634 12.631 12.3105 13.611 13.262 14.4146C13.598 14.6961 13.866 14.9101 14.1225 15.0681C13.349 15.1546 12.058 15.1731 11.1749 14.4746L11.1749 14.4736ZM12.141 8.25988C12.141 8.09488 12.273 7.96338 12.439 7.96338C12.4765 7.96338 12.5105 7.97088 12.541 7.98188C12.5825 7.99688 12.6205 8.01938 12.6505 8.05338C12.7035 8.10588 12.7335 8.18088 12.7335 8.25988C12.7335 8.42489 12.6015 8.55639 12.4355 8.55639C12.2695 8.55639 12.141 8.42489 12.141 8.25988ZM15.1415 9.79893C14.949 9.87793 14.7565 9.94544 14.5715 9.95294C14.2845 9.96794 13.9715 9.85143 13.8015 9.70893C13.5375 9.48742 13.3485 9.36342 13.2695 8.97691C13.2355 8.8119 13.2545 8.55639 13.2845 8.40989C13.3525 8.09438 13.277 7.89187 13.0545 7.70787C12.8735 7.55786 12.6435 7.51636 12.39 7.51636C12.2955 7.51636 12.2095 7.47486 12.1445 7.44136C12.0395 7.38886 11.9519 7.25735 12.035 7.09585C12.0615 7.04335 12.19 6.91584 12.22 6.89334C12.5635 6.69784 12.9595 6.76184 13.326 6.90834C13.6655 7.04735 13.9225 7.30236 14.292 7.66287C14.6695 8.09838 14.7375 8.21838 14.9525 8.54539C15.1225 8.8009 15.2775 9.06341 15.3831 9.36392C15.4471 9.55142 15.3641 9.70493 15.1415 9.79893Z" fill="currentColor" transform="translate(5.0 4.9) scale(0.62)"/>
+            <path d="M13.0 1.1 11.4 3.5 H12.4 L11.1 5.1 13.8 2.6 H12.8 Z" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="sb-brand-name">dsh-forge</span>
       </div>
-      <div class="sb-label">项目 · demo-proj</div>
-      <div class="sb-list" id="pj-list"></div>
-      <div class="sb-label" style="margin-top:auto">右栏 = M2 主秀场</div>
+
+      <!-- 官方 sidebar.panellist 全局面板行 roster(PanelRow 行语言):知识库(P1,M2 不加行) -->
+      <nav class="sb-panels" aria-label="全局面板">
+        <div class="panel-row" data-act="panel" data-p="knowledge" id="row-knowledge" role="button" tabindex="0">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+          <span>知识库</span>
+        </div>
+      </nav>
+
+      <!-- 工作区浏览区(sidebar.workspaces 洞 = 产品面板,fix-42 行语言) -->
+      <div class="sb-workspaces">
+        <div class="ws-head">
+          <span class="ws-label">项目</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" data-act="ws-search" aria-label="搜索项目与会话" title="搜索"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+          <button class="icon-btn" data-act="ws-view-menu" aria-label="视图选项" title="视图选项(按项目树/归档过滤)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></button>
+          <button class="icon-btn" data-act="add-project" aria-label="添加项目" title="添加项目(OS 目录选择器)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v5M9.5 12.5h5"/></svg></button>
+        </div>
+        <div class="ws-searchrow" id="ws-searchrow" hidden><input id="ws-q" type="text" placeholder="过滤项目名 / 会话标题…" aria-label="项目与会话过滤"></div>
+        <div class="ws-list" id="ws-list"></div>
+      </div>
+
+      <div class="sb-foot">
+        <button class="icon-btn" data-act="theme-toggle" aria-label="切换亮/暗主题" title="亮/暗">◐</button>
+        <span class="t-aux" style="margin-left:auto">官方壳 · 现态基座</span>
+      </div>
     </aside>
 
-    <!-- 中区：会话面板（头部 = UF-3 挂接 pill 演示位） -->
-    <main class="app-main">
-      <header class="conv-header">
-        <div class="conv-title-row">
-          <nav class="crumbs" id="conv-crumbs" aria-label="会话位置"></nav>
-          <div class="conv-actions" id="conv-actions"></div>
-          <button class="icon-btn" data-act="dock-toggle" aria-label="展开/收起右侧栏" title="展开/收起右侧栏">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
-          </button>
+    <!-- ══ 中区:官方 main 面板 roster(layout.selectPanel 互换:会话 / 知识 / hero;概览不占中 区 = dockkit tab) ══ -->
+    <main class="center" id="center" data-panel="session">
+
+      <!-- 会话面板(官方 ConversationRoot 形态:头部链 + conversation.view 页签 + 内容) -->
+      <section class="conv" id="conv-panel">
+        <header class="conv-header">
+          <div class="conv-title-row">
+            <span class="conv-title ellipsis" id="conv-title"></span>
+            <span class="spacer"></span>
+            <!-- M2 delta(SC6③):官方 session.header actions 位 = 挂接任务 pills(双数据源) -->
+            <span class="conv-actions" id="conv-actions"></span>
+            <!-- 官方 utilities:打开方式▾ + ⋯ + corner ExpandButton(右栏收展) -->
+            <button class="icon-btn" title="打开方式(在编辑器中打开)" aria-label="打开方式">📄<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.4" style="margin-left:2px"><path d="M5 9l5 5 5-5"/></svg></button>
+            <button class="icon-btn" title="更多操作" aria-label="更多操作">⋯</button>
+            <button class="icon-btn" data-act="rightbar-toggle" title="展开/收起右侧栏(corner)" aria-label="右侧栏" id="btn-rightbar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+          </div>
+          <!-- 官方 conversation.view 页签 roster:对话 | 轨迹 | 知识召回(M2 不加签) -->
+          <div class="conv-tabs seg-tabs" role="tablist" aria-label="会话视图">
+            <button class="seg-tab active" role="tab" aria-selected="true" data-act="view-tab" data-v="chat">对话</button>
+            <button class="seg-tab" role="tab" aria-selected="false" data-act="view-tab" data-v="traj">轨迹</button>
+            <button class="seg-tab" role="tab" aria-selected="false" data-act="view-tab" data-v="recall">知识召回</button>
+          </div>
+        </header>
+        <div class="conv-body" id="conv-body"></div>
+        <div class="composer" id="composer">
+          <div class="composer-top">
+            <button class="pill is-button" title="项目(会话归属工作区)">📁 demo-proj ▾</button>
+            <button class="pill is-button" title="模式">⚙ 标准模式 ▾</button>
+          </div>
+          <div class="composer-card">
+            <div class="composer-input" id="composer-input" contenteditable="plaintext-only" data-placeholder="发消息…(输入「跑任务」演示 M2 派发链)" aria-label="会话输入" aria-multiline="true"></div>
+            <div class="composer-row">
+              <button class="icon-btn composer-add" title="/ 命令 · @ 引用" aria-label="命令">＋</button>
+              <span class="spacer"></span>
+              <button class="pill is-button" title="模型">GLM-5.3-Flash</button>
+              <button class="composer-send" data-act="send" aria-label="发送(Enter)" title="发送(Enter)">
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8.3125.98C8.6677 1.053 8.979 1.204 9.2627 1.4323 9.4872 1.613 9.7303 1.858 9.9795 2.107L14.707 6.8347 13.293 8.2487 9 3.9558V15.0417H7V3.9558L2.707 8.2487 1.293 6.8347 6.0205 2.107C6.2697 1.858 6.5128 1.613 6.7373 1.4323 6.9766 1.2399 7.2845 1.044 7.6875.98 7.8973.947 8.1031.9552 8.3125.98Z" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="conv-tabs" role="tablist" aria-label="会话视图">
-          <button class="conv-tab active" role="tab" aria-selected="true">对话</button>
-          <button class="conv-tab" role="tab" aria-selected="false">轨迹</button>
-          <button class="conv-tab" role="tab" aria-selected="false">知识召回</button>
+      </section>
+
+      <!-- 知识面板(P1 交付形态示意:工具栏 + 域树 + 卡片网格 + 详情抽屉) -->
+      <section class="knpanel" id="kn-panel" hidden aria-label="知识库">
+        <header class="panel-head">
+          <span class="t-title">知识库</span>
+          <span class="t-aux">P1 交付面(现态示意 · 浏览/统计/召回日志)</span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" data-act="panel-back">← 回会话</button>
+        </header>
+        <div class="panel-note">中区一等公民视图(官方 main 面板 · selectPanel 互换)——域目录树 + 卡片网格 + 详情抽屉与热度徽章为 P1 现态;进入时 dock 联动收起(rightbarViewPlan)。</div>
+      </section>
+
+      <!-- hero 面板(零项目:官方 main dswf-hero) -->
+      <section class="heropanel" id="hero-panel" hidden aria-label="开始">
+        <div class="hero-inner">
+          <div class="hero-logo" aria-hidden="true">🐋</div>
+          <div class="t-title" style="font-size:19px">探索未至之境</div>
+          <span class="chip" style="margin-top:2px">预览版</span>
+          <button class="btn btn-primary" data-act="add-project" style="margin-top:18px">＋ 添加项目</button>
+          <p class="t-aux" style="margin-top:8px">OS 目录选择器(fix-14/16 现态)→ 注册表单 → 任务库随注册建于派生路径</p>
         </div>
-      </header>
-      <div class="conv-body">
-        <div class="conv-body-inner">
-          <div class="conv-hero-logo" aria-hidden="true">🐋</div>
-          <div class="t-title">中区为演示基底</div>
-          <p class="t-aux">M2 交互焦点 = 会话头部「挂接任务 pill」（上方）与右栏 dock 两枚页签<br>
-            切换左栏会话 → 头部挂接 pill 随之变化（派发 ⟞ / 执行 ⟞ 双数据源）</p>
-        </div>
-      </div>
+      </section>
     </main>
 
-    <!-- 右栏：dock 页签（概览 / 文档）—— M2 主秀场 -->
-    <div class="rightbar-wrap" id="rb-wrap">
-      <aside class="rightbar" aria-label="右侧栏 dock">
-        <div class="rb-strip" role="tablist" aria-label="dock 页签">
-          <div style="display:flex;gap:6px;min-width:0" id="rb-chips"></div>
-          <span class="spacer"></span>
-          <span class="t-aux" style="font-size:11px">项目跟随页签</span>
-        </div>
-        <div class="rb-body" id="rb-body"></div>
-      </aside>
-    </div>
+    <!-- ══ 右栏:官方 ui-dockkit(DockSurface)——tabs 页签条 + ＋ 新标签页;开始 tab = dsh 官方 GuideBody;M2 delta = 「项目概览」tab(总纲原型形态) ══ -->
+    <aside class="rightbar is-collapsed" id="rightbar" aria-label="右侧栏 dock">
+      <div class="rb-strip" role="tablist" aria-label="dock 页签">
+        <div class="rb-chips" id="rb-chips"></div>
+        <button class="rb-plus" data-act="dock-add" aria-label="新标签页" title="新标签页(dock.addTab → 开始页)">＋</button>
+        <span class="spacer"></span>
+        <!-- dsh 原生 dock chrome:全屏 ⛶ + 收展 ▯(fix-4 调宽手柄 + fix-23 面板钮) -->
+        <button class="icon-btn rb-chrome" data-act="dock-fullscreen" aria-label="全屏(覆盖会话列)" title="全屏(覆盖会话列)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <button class="icon-btn rb-chrome" data-act="rightbar-toggle" aria-label="收起右侧栏" title="收起右侧栏" id="rb-collapse">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+        </button>
+      </div>
+      <div class="rb-body" id="rb-body"></div>
+    </aside>
   </div>
 
-  <!-- 弹层根（菜单 / 模态） -->
+  <!-- 悬浮层根(菜单/模态/抽屉/Toast) -->
   <div id="layer-root"></div>
 
-  <!-- 原型工具（评审） -->
-  <div class="proto-tools">
-    <div class="proto-tools-head"><span>原型工具</span><span class="t-aux">M2 · 评审</span></div>
-    <div class="proto-tools-body">
-      <div class="proto-row"><span class="proto-label">主题</span><button class="btn btn-ghost btn-sm" data-act="theme-toggle">亮/暗</button></div>
-      <div class="proto-row"><span class="proto-label">⚡ 模拟 tool 写入</span><button class="btn btn-soft btn-sm" data-act="sim-write">claim / submit</button></div>
-      <div class="proto-row"><span class="proto-label">注册表单演示</span><button class="btn btn-soft btn-sm" data-act="form-open">打开</button></div>
-      <div class="proto-row"><span class="proto-label">疑似移动模拟</span><button class="btn btn-soft btn-sm" data-act="suspect-toggle">开/关</button></div>
-      <div class="proto-row"><span class="proto-label">数据</span><button class="btn btn-ghost btn-sm" data-act="reset">重置</button></div>
-      <p class="proto-note">⚡ 模拟 = 演示「tool 写入返回后单次重取即见新值」与 auto-restore 恢复钩子（产品无此钮——应用零编排）。表单「疑似移动」开启后确认将被拒绝并给出手工指引。</p>
+  <!-- 原型工具(评审;z 置于对话框上) -->
+  <div class="proto-tools" id="proto-tools">
+    <div class="proto-tools-head"><span>原型工具</span><span class="t-aux">M2 v3</span>
+      <button class="icon-btn" data-act="proto-collapse" aria-label="收起">▾</button>
+    </div>
+    <div class="proto-tools-body" id="proto-body">
+      <div class="proto-row"><span class="proto-label">疑似移动</span><button class="btn btn-ghost btn-sm" data-act="suspect-toggle">开/关(注册拒绝)</button></div>
+      <div class="proto-row"><span class="proto-label">空库演示</span><button class="btn btn-ghost btn-sm" data-act="goto-hero">归档全部 → hero</button></div>
+      <div class="proto-row"><span class="proto-label">重置</span><button class="btn btn-ghost btn-sm" data-act="reset">重置种子数据</button></div>
+      <p class="proto-note">v3 = 以现有代码为准(官方基座现态):main 面板互换 / PanelRow 行 / conversation.view 页签 / OS 选择器注册流;M2 delta = 概览面板 + 挂接 pill + 派生行。对话输入「跑任务」可走查派发链。</p>
     </div>
   </div>
 
