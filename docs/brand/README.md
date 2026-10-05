@@ -51,7 +51,8 @@
     （官方 hero 空态 / active 会话 / 轨迹 / 知识召回四态常驻：插画 78% 高沉底 · 顶部遮罩
     渐隐 32% · composer 座/输入卡浮于书海——总纲原型 conv-hero 同构;替代 v3 纹理的相位/
     视图限域,原红线①②随之废止——守护收敛为:覆层不拦截指针 + 不进无障碍树 + 顶部
-    渐隐带恒净）;② UF-2 零项目首用面板——`apps/web/public/brand/whale-hero-bg.svg`
+    渐隐带恒净 + 可读性分层透明（hero 空态完整插画 .88;其余相位/视图正文压画降透明
+    .4——暗鲸 @ .4 于浅底呈中灰,深色正文对比 ≈ 5.8:1,文本清晰度优先））;② UF-2 零项目首用面板——`apps/web/public/brand/whale-hero-bg.svg`
     （母版零改拷贝——vite public → dist → `dsh-forge://app/` 服务），承载 =
     `apps/web/src/workbench/workbench.css` `.dswf-hero-bg`（HeroEmpty 件内 `<img>`
     沉底:85% 高 + 顶部遮罩渐隐 26% + `pointer-events:none`;文本靠顶
