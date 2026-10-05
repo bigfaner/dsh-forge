@@ -163,6 +163,32 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
       whaleSeaBg.bg,
       '资产与应用内主题口径一致（暗色 paper / 浅色 ink）',
     ).toContain(whaleSeaBg.dark ? 'whale-sea-bg-paper.svg' : 'whale-sea-bg-ink.svg')
+    // fix-44：覆层底边让出 composer 座——几何断言（evaluate 双 rect 对照）：覆层
+    // （[data-conversation-content]::before）底边 y ≤ composer 卡顶 y（鲸/书海主体完整
+    // 可见于输入框上方）。覆层底边 = content 底边 − ::before 解析 bottom inset；卡座 =
+    // [data-composer-input] 最近 form/card/composer 祖先（probe-geo.mjs 测量口径同源
+    // ——active 遮挡带实测：静息 106px/工具往返中 128px，brand.css 锚工作带定值 134px
+    // 含余量，两态断言均成立）。
+    const seaGeo = await page
+      .evaluate(() => {
+        const content = document.querySelector('[data-conversation-content]')
+        const input = document.querySelector('[data-composer-input]')
+        if (content === null || input === null) return null
+        const bottomInset = Number.parseFloat(window.getComputedStyle(content, '::before').bottom)
+        const card = input.closest('form,[class*="card"],[class*="composer"]') ?? input
+        return {
+          overlayBottomY: content.getBoundingClientRect().bottom - bottomInset,
+          cardTopY: card.getBoundingClientRect().y,
+        }
+      })
+      .catch(() => null)
+    expect(seaGeo, 'fix-44 几何对照面在场（content 锚 + composer 卡）').not.toBeNull()
+    if (seaGeo !== null) {
+      expect(
+        seaGeo.overlayBottomY,
+        'fix-44：覆层底边 y ≤ composer 卡顶 y（背景母版不被输入框遮挡）',
+      ).toBeLessThanOrEqual(seaGeo.cardTopY)
+    }
 
     // ── Step 3 success：三签唯一性 + 官方轨迹视图 + 切回不重置 ──
     // 页签行恰三签（fix-29）：对话（官方 chat）/ 轨迹（官方 trajectory——产品复刻退役后

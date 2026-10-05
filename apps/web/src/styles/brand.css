@@ -21,12 +21,24 @@
 [data-conversation-content] {
   /* 覆层栈上下文界——z-index:-1 由此生效（官方 .body 本就 position:relative，零几何扰动） */
   isolation: isolate;
+  /* fix-44：书海覆层底边让出 composer 座带——官方 composerSeat（absolute bottom:0）悬浮
+   * 盖在滚动容器底部之上，背景母版视觉焦点（底部破浪鲸+前景书海）恰落在此被盖带区。
+   * 值口径 = active 会话遮挡带：composer 卡顶 y 至 content 底边距离（卡座取
+   * [data-composer-input] 最近 form/card/composer 祖先——probe-geo.mjs 同口径）。dogfood
+   * 实测两态（2026-10-05，tmp-ui-review/fix44-probe.mjs + 冒烟留痕；双主题等值）：静息带
+   * 106px（卡 98+座边距 8）/工具往返中带 128px（工作态卡行增高 22）——agent 执行期是本
+   * 产品会话主态，锚工作带定值 134 = 128 + 6px 布局抖动余量（静息态 Art 底边高于卡顶
+   * ~28px，无遮挡残带）。hero 相位卡高 114 但居中且无覆层（红线①）。多行输入/更多工作
+   * 行增高时静态偏移的少量误差 P1 可受——动态跟随（JS 读 composer 高度写变量）记后续
+   * 里程碑裁决，不在此引入。 */
+  --dswf-sea-bottom-inset: 134px;
 }
 
 [data-conversation-content][data-content-phase='active']::before {
   content: '';
   position: absolute;
-  inset: 0;
+  /* 底边让出 composer 座（cover 对剩余盒重裁——鲸/书海主体完整落于输入框上方可见带） */
+  inset: 0 0 var(--dswf-sea-bottom-inset, 134px) 0;
   z-index: -1;
   pointer-events: none;
   background: url('/brand/whale-sea-bg-ink.svg') center / cover no-repeat;
