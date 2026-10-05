@@ -12,6 +12,7 @@ import { EmptyState } from '../../components/index.js'
 import type { RpcClientFactory } from '../../rpc/index.js'
 import { EntryDrawer } from './EntryDrawer.js'
 import { KnowledgeBrowse } from './KnowledgeBrowse.js'
+import type { ScopeProjectOption } from './KnowledgeToolbar.js'
 import './knowledge.css'
 
 export interface KnowledgeViewProps {
@@ -19,6 +20,10 @@ export interface KnowledgeViewProps {
   readonly projectId: string | null
   /** 无锚期台账项目数（fix-bug 空态分流：≥2 = 多项目说实话文案；缺省/零/一 = 引导空态原文案） */
   readonly unanchoredProjectCount?: number
+  /** 可切换项目行集（fix-bug 范围切换控件——archived 排除；缺省 = 纯文本范围 Pill） */
+  readonly scopeProjects?: readonly ScopeProjectOption[]
+  /** 拾取项目（切换浏览锚——显式拾取优先，装配面持有） */
+  readonly onScopePick?: (projectId: string) => void
   /** 视图激活态（缺省 true = 直载；fix-25 面板径下官方面板选中即挂载——生产面恒缺省，测试面注入翻转验证全量重拉刷热度，AC3 即时累积） */
   readonly active?: boolean
   /** 抽屉打开条目（null = 关闭；卡片点击与召回 tab 跳转两入口共用此态） */
@@ -52,6 +57,8 @@ export function anchorlessCopy(projectCount: number | undefined): { title: strin
 export function KnowledgeView({
   projectId,
   unanchoredProjectCount,
+  scopeProjects,
+  onScopePick,
   active,
   openEntryId,
   onOpenEntryChange,
@@ -70,6 +77,8 @@ export function KnowledgeView({
     <div className="dswf-kn-view" data-dswf-knowledge-view="" data-dswf-kn-anchor={projectId}>
       <KnowledgeBrowse
         projectId={projectId}
+        scopeProjects={scopeProjects}
+        onScopePick={onScopePick}
         active={active}
         makeClient={makeClient}
         now={now}

@@ -10,7 +10,7 @@ import type { RpcClientFactory } from '../../rpc/index.js'
 import { browseFaceState, hasActiveFilter } from './browse-model.js'
 import { DomainTree } from './DomainTree.js'
 import { KnowledgeCardGrid } from './KnowledgeCardGrid.js'
-import { KnowledgeToolbar } from './KnowledgeToolbar.js'
+import { KnowledgeToolbar, type ScopeProjectOption } from './KnowledgeToolbar.js'
 import {
   useKnowledgeBrowse,
   type KnowledgeBrowseActions,
@@ -21,6 +21,10 @@ import './knowledge.css'
 export interface KnowledgeBrowseProps {
   /** 当前项目 id（浏览范围——P1 项目级） */
   readonly projectId: string
+  /** 可切换项目行集（范围切换控件——archived 排除；缺省 = 纯文本范围 Pill） */
+  readonly scopeProjects?: readonly ScopeProjectOption[]
+  /** 拾取项目（切换浏览锚——显式拾取优先） */
+  readonly onScopePick?: (projectId: string) => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 视图激活态（缺省 true；false = 隐藏期 hold，激活翻转全量重拉——AC3 即时累积，4.2 fix-1） */
@@ -36,6 +40,12 @@ export interface KnowledgeBrowseBodyProps {
   readonly state: KnowledgeBrowseState
   /** 浏览动作（过滤态机事件 + 重试） */
   readonly actions: KnowledgeBrowseActions
+  /** 当前项目 id（范围切换菜单选中行） */
+  readonly currentProjectId?: string
+  /** 可切换项目行集（范围切换控件；缺省 = 纯文本范围 Pill） */
+  readonly scopeProjects?: readonly ScopeProjectOption[]
+  /** 拾取项目（切换浏览锚） */
+  readonly onScopePick?: (projectId: string) => void
   /** 卡片时间标签基准（缺省当次渲染时刻） */
   readonly now?: number
   /** 卡片点击 → 详情抽屉打开（缺席 = 不可点开） */
@@ -49,6 +59,9 @@ export interface KnowledgeBrowseBodyProps {
 export function KnowledgeBrowseBody({
   state,
   actions,
+  currentProjectId,
+  scopeProjects,
+  onScopePick,
   now,
   onEntryOpen,
 }: KnowledgeBrowseBodyProps): ReactNode {
@@ -68,6 +81,9 @@ export function KnowledgeBrowseBody({
         keyword={state.filter.keyword}
         onKeywordChange={actions.setKeyword}
         projectName={state.projectName}
+        currentProjectId={currentProjectId}
+        scopeProjects={scopeProjects}
+        onScopePick={onScopePick}
       />
       <div className="dswf-kn-body">
         <aside className="dswf-kn-rail">
@@ -100,7 +116,25 @@ export function KnowledgeBrowseBody({
  * 浏览主体装载壳（hook 装配——数据 + 过滤态机单一来源；3.8 挂知识视图槽）。
  * 首装零数据期呈现骨架（索引直读即瞬时翻卡——AC5 首显不阻塞）。
  */
-export function KnowledgeBrowse({ projectId, makeClient, active, now, onEntryOpen }: KnowledgeBrowseProps): ReactNode {
+export function KnowledgeBrowse({
+  projectId,
+  scopeProjects,
+  onScopePick,
+  makeClient,
+  active,
+  now,
+  onEntryOpen,
+}: KnowledgeBrowseProps): ReactNode {
   const [state, actions] = useKnowledgeBrowse(projectId, makeClient, active)
-  return <KnowledgeBrowseBody state={state} actions={actions} now={now} onEntryOpen={onEntryOpen} />
+  return (
+    <KnowledgeBrowseBody
+      state={state}
+      actions={actions}
+      currentProjectId={projectId}
+      scopeProjects={scopeProjects}
+      onScopePick={onScopePick}
+      now={now}
+      onEntryOpen={onEntryOpen}
+    />
+  )
 }

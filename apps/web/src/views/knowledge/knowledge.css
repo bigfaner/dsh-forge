@@ -29,6 +29,17 @@
   flex: none;
 }
 
+/* 范围切换触发器（fix-bug：行集在场 = Pill 升格 composer 同款切换控件） */
+.dswf-kn-scope-label {
+  flex: none;
+}
+
+.dswf-kn-scope-chevron {
+  flex: none;
+  margin-left: 4px; /* dsw-raw 原型触发器标签/指示间距刻度 */
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .dswf-kn-searchrow {
   display: flex;
   flex: 1;

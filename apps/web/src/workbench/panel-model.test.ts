@@ -7,6 +7,7 @@ import {
   KNOWLEDGE_PANEL_KEY,
   centerViewOf,
   nextLastReadyCount,
+  pickedProjectAnchor,
   projectAnchorOf,
   rightbarViewPlan,
   sessionZonePhase,
@@ -68,6 +69,25 @@ describe('projectAnchorOf 当前项目锚推导（3.8：知识视图/召回面�
   it('会话归属 workspace 未注册为项目（裸 workspace 非产品对象）= 不命中该 workspace', () => {
     const bare = { items: [{ workspaceId: 'ws-9', sessionIds: ['s-9'] }] }
     expect(projectAnchorOf({ sessionId: 's-9', workspaces: bare, projects })).toBeNull()
+  })
+})
+
+describe('pickedProjectAnchor 显式拾取锚（fix-bug 知识范围项目切换控件）', () => {
+  const rows = [
+    { id: 'p-1', name: 'alpha' },
+    { id: 'p-2', name: 'beta' },
+  ]
+
+  it('拾取行在行集 → 拾取优先（粘性——会话/派生锚不覆盖显式拾取）', () => {
+    expect(pickedProjectAnchor('p-2', rows)).toBe('p-2')
+    expect(pickedProjectAnchor('p-1', rows)).toBe('p-1')
+  })
+
+  it('拾取行离场（删除/归档后行集收缩）/未拾取/空集 → null（回落派生锚）', () => {
+    expect(pickedProjectAnchor('p-x', rows)).toBeNull()
+    expect(pickedProjectAnchor(null, rows)).toBeNull()
+    expect(pickedProjectAnchor(undefined, rows)).toBeNull()
+    expect(pickedProjectAnchor('p-1', [])).toBeNull()
   })
 })
 

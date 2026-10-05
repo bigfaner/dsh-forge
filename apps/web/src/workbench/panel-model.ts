@@ -72,6 +72,19 @@ export function projectAnchorOf(input: {
 }
 
 /**
+ * 显式拾取锚推导（纯函数，fix-bug 知识范围项目切换控件）：拾取行仍在切换行集（archived
+ * 排除——与 hero 弹层同口径）→ 拾取优先（粘性：会话/派生锚不覆盖用户显式选择）；拾取
+ * 行离场（删除/归档）或未拾取 → null（回落 projectAnchorOf 派生锚）。
+ */
+export function pickedProjectAnchor(
+  pickedId: string | null | undefined,
+  scopeRows: readonly { readonly id: string }[],
+): string | null {
+  if (pickedId === null || pickedId === undefined) return null
+  return scopeRows.some((row) => row.id === pickedId) ? pickedId : null
+}
+
+/**
  * 知识模式右栏联动计划（纯函数，fix-23 建立 / fix-25 改面板径）：UF-5/SC8 官方右栏口径——
  * 进知识面板时已展开则收起并记忆（恢复锚）；离知识面板按记忆恢复（已展开 = 官方快捷键等
  * 他径已展开，仅清记忆不重复动作）。记忆 = 联动隐藏专用锚（非用户偏好——官方收展态由

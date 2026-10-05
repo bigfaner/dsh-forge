@@ -189,6 +189,20 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
       .poll(async () => knowledgeView2.getAttribute('data-dswf-kn-anchor'), { timeout: 30_000 })
       .not.toBe('none')
     await expect(page.locator('[data-dswf-kn-browse]').first()).toBeVisible({ timeout: 30_000 })
+
+    // ── fix-bug 范围切换控件（composer 同款）：范围 Pill 可点开项目菜单 → 拾取 proj-b
+    // → 浏览锚切换（显式拾取优先；修复前 Pill = 纯文本不可点）──
+    const anchorBefore = await knowledgeView2.getAttribute('data-dswf-kn-anchor')
+    await page.locator('[data-dswf-kn-scope-trigger]').first().click()
+    await expect(page.locator('[role="menu"]').first()).toBeVisible()
+    await expect(page.locator('[role="menuitem"]', { hasText: 'demo-proj' }).first()).toBeVisible()
+    await expect(page.locator('[role="menuitem"]', { hasText: 'proj-b' }).first()).toBeVisible()
+    await expect(page.locator('[role="menuitem"]', { hasText: '添加项目' }).first()).toBeVisible()
+    await page.locator('[role="menuitem"]', { hasText: 'proj-b' }).first().click()
+    await expect
+      .poll(async () => knowledgeView2.getAttribute('data-dswf-kn-anchor'), { timeout: 30_000 })
+      .not.toBe(anchorBefore)
+    await expect(page.locator('[data-dswf-kn-browse]').first()).toBeVisible({ timeout: 30_000 })
     rmSync(secondRoot, { recursive: true, force: true })
   } finally {
     await closeApp(app)

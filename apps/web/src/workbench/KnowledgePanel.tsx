@@ -9,11 +9,13 @@
 // retainedBy.mainView 口径，DocumentTitle 同型先例）→ projectAnchorOf 会话锚定分支
 // （会话归属 workspace 名下项目）；无保留会话 → 唯一项目兜底；多项目无会话 = null
 // （不猜首个保持）——空态文案由 unanchoredProjectCount 分流说实话（不再谎称未注册）。
+// fix-bug 范围切换：显式拾取（pickedProjectAnchor）粘性优先——工具栏项目切换控件
+//（composer 同款官方 Menu）拾取后不随会话/派生锚漂移；拾取行离场（删除/归档）回落派生。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from '../views/knowledge/KnowledgeView.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 import { useAnchoredProjects } from './anchored-projects.js'
-import { projectAnchorOf } from './panel-model.js'
+import { pickedProjectAnchor, projectAnchorOf } from './panel-model.js'
 import type { WorkbenchBridge } from './workbench-bridge.js'
 import './workbench.css'
 
@@ -72,16 +74,18 @@ export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode 
   const { projects: projectsState, workspaces, anchor: workspacesAnchor } = useAnchoredProjects(
     props.useWorkspaces,
   )
+  const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   // 主视图会话（fix-bug 多项目锚定）：锚子件效应上抛——首帧 null（SSR/非壳载体降级同径）
   const [mainSessionId, setMainSessionId] = useState<string | null>(null)
-  const projectId = projectAnchorOf({
-    sessionId: mainSessionId,
-    workspaces,
-    projects: projectsState.phase === 'ready' ? projectsState.projects : [],
-  })
+  const derivedProjectId = projectAnchorOf({ sessionId: mainSessionId, workspaces, projects })
+  // 范围切换行集（archived 排除——hero 弹层同口径）+ 显式拾取（粘性优先，fix-bug 切换控件）
+  const scopeProjects = projects
+    .filter((project) => !project.archived)
+    .map((project) => ({ id: project.id, name: project.name }))
+  const [pickedProjectId, setPickedProjectId] = useState<string | null>(null)
+  const projectId = pickedProjectAnchor(pickedProjectId, scopeProjects) ?? derivedProjectId
   // 无锚空态分流输入：多项目（≥2）= 说实话文案；缺省/零/一 = 引导空态原文案
-  const unanchoredProjectCount =
-    projectId === null && projectsState.phase === 'ready' ? projectsState.projects.length : undefined
+  const unanchoredProjectCount = projectId === null && projectsState.phase === 'ready' ? projects.length : undefined
 
   // 抽屉目标（桥订阅——召回视图跳转驱动；桥缺席 = 本地自持面）
   const bridge = props.bridge
@@ -117,6 +121,8 @@ export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode 
       <KnowledgeView
         projectId={projectId}
         unanchoredProjectCount={unanchoredProjectCount}
+        scopeProjects={scopeProjects}
+        onScopePick={setPickedProjectId}
         openEntryId={drawerEntryId}
         onOpenEntryChange={setDrawerEntry}
       />
