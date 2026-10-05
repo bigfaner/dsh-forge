@@ -36,14 +36,29 @@
   原生 dsh 鲸 ×14 破浪其间（鲸腹前有破浪锚书制造沉浸），携闪电喷泉与灵感气泡；
   视觉权重压底部 ~28%——中部会话栏素净；元素不透明度 .03–.12 不伤正文可读性；
   生成器 `tmp-ui-review/gen-whale-brand-v3.mjs`（种子 20261004，确定性可复现/可调参））
-  - 应用内消费（fix-38 落地形态）：`apps/web/public/brand/` 静态双资产（`whale-sea-bg-ink.svg`
-    浅色墨 / `whale-sea-bg-paper.svg` 深色纸——生成器 `--emit ink|paper` 自母版确定性派生，
-    烘焙色零媒体查询，vite public → dist → `dsh-forge://app/` 服务）
-  - 承载 CSS：`apps/web/src/styles/brand.css`——官方会话滚动区 CSS 锚铺底（fix-25 后中区归
-    官方 ConversationRoot，产品不注入组件），`body[data-ds-dark-theme]` 双口径**精确跟随应用内
-    主题**（不经 prefers-color-scheme）；覆层 `pointer-events:none` + `opacity` ≤ .85 总守护
-  - 红线：仅 active 相位会话滚动区——不进官方 hero（空会话大标）、召回/轨迹视图与
-    composer/输入区；顶部 55% 渐隐遮罩已内置（消息流区域恒净）
+  - **消费退役（2026-10-06 用户裁决改统，历史档）**：原 fix-38 落地形态（public/brand
+    ink/paper 双资产铺 active 会话滚动区 + 红线①②相位/视图限域）由「鲸游书海」插画
+    统一背景接任（见下条）——双资产与生成器存档不删，brand.css 消费面已移除
+  - （原承载口径存档：CSS 锚铺底 + `body[data-ds-dark-theme]` 双资产翻转 +
+    `pointer-events:none` + `opacity` ≤ .85 总守护 + 顶部 55% 渐隐内置）
+- hero 空态插画：[whale-book-sea-bg.svg](./whale-book-sea-bg.svg)（960×540——品牌叙事
+  完整直陈：鲸游书海、喷出书、又散落回书海；鲸 = 官方 `FISH_LOGO_PATH` 同源剪影 ×10.5
+  微倾 -4° 前游；书喷泉自呼吸孔（鲸头朝左）三弧连续越过鲸尾；浪四层右高左低 = 浪推鲸前；
+  书海五深度带自上而下递小 + 三形书（摊开/合上/半开）混排 + 离群破均；构图经原型多轮
+  零遮挡验证（文本块恒落顶部遮罩渐隐区内，喷泉书完整可见））
+  - 应用内消费（2026-10-06 用户裁决改统——**对话区全相位全视图统一背景**）：① 对话区
+    统一层——`apps/web/src/styles/brand.css` `[data-conversation-content]::after` CSS 锚
+    （官方 hero 空态 / active 会话 / 轨迹 / 知识召回四态常驻：插画 78% 高沉底 · 顶部遮罩
+    渐隐 32% · composer 座/输入卡浮于书海——总纲原型 conv-hero 同构;替代 v3 纹理的相位/
+    视图限域,原红线①②随之废止——守护收敛为:覆层不拦截指针 + 不进无障碍树 + 顶部
+    渐隐带恒净）;② UF-2 零项目首用面板——`apps/web/public/brand/whale-hero-bg.svg`
+    （母版零改拷贝——vite public → dist → `dsh-forge://app/` 服务），承载 =
+    `apps/web/src/workbench/workbench.css` `.dswf-hero-bg`（HeroEmpty 件内 `<img>`
+    沉底:85% 高 + 顶部遮罩渐隐 26% + `pointer-events:none`;文本靠顶
+    `clamp(40px, 12vh, 128px)` 对偶）;暗色 = 两个消费位同口径
+    `body[data-ds-dark-theme]` 单资产 CSS filter（`brightness(1.35) saturate(.85)`——
+    原型验证值；静态插画 filter 零成本，v3 时代的 ink/paper 双资产烘焙随纹理消费一并
+    退役存档）
 - 应用图标（fix-45，用户验收 2026-10-05 反馈④-3）：`build/icon.svg`（派生母本）+
   `icon.png`（512）+ `icon.ico`（16/32/48/64/128/256 多尺寸 PNG 帧）——**位图一次生成
   入仓，打包管线零在线栅格化**。派生口径（仅有的两个派生自由度）：
@@ -71,3 +86,5 @@
 - 2026-10-04：「鲸游书海」候选稿 v1（自绘鲸）→ v2（**官方 FISH_LOGO_PATH 鲸**）→ v3（背景概念收紧：**无数各式书本构成海洋本体**，133 本四深度带）——**同日走查人裁决采纳**
 - 2026-10-04：fix-38 接入 —— v2 图标（官方鲸 + 书页浪 + 闪电喷泉，经 FISH_LOGO_PATH 导出面零拷贝）+ v3 对话面板书海背景（静态双资产 + CSS 锚）升**现行**；fix-15「书 + 闪电」标退役为历史档（上节）
 - 2026-10-05：fix-45 应用图标 —— v2 标派生 `build/icon.{svg,png,ico}`（80% 网格内缩 + 墨色单色透明底），接入 dev 窗口 icon 与 electron-builder win/nsis——Electron 默认图标退役
+- 2026-10-06：hero 空态插画 `whale-book-sea-bg.svg`（鲸游书海完整叙事：喷书散落回书海）——原型多轮零遮挡构图验证后入产品 hero 面板（public/brand 零改拷贝 + workbench.css 承载 + 暗色 filter 口径）；M2/总纲两原型 hero 同步接入
+- 2026-10-06（同日二次裁决）：对话区背景**改统**——插画升对话区全相位全视图统一背景（官方 hero 空态 / active 会话 / 轨迹 / 知识召回，brand.css `[data-conversation-content]::after` 常驻层），v3 书海纹理消费退役为历史档（双资产 + 生成器存档），原红线①②（相位/视图限域）废止——守护收敛为指针不拦截 + 无障碍树不进 + 顶部渐隐带恒净
