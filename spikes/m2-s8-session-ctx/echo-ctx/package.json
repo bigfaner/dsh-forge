@@ -1,0 +1,8 @@
+{
+  "name": "@dsh-s8/echo-ctx",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "S8 spike plugin: registers s8_echo_ctx tool dumping its ToolRunContext identity (session id / cwd) to a JSONL file for main-session vs subagent comparison.",
+  "main": "index.js"
+}

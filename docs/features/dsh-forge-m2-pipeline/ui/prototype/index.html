@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dsh-forge M2 — UI 原型（概览·任务 / 文档·SC4 / 会话头挂接 / 表单派生行）</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- 左栏（演示基底：项目 + 会话列表——切会话看头部挂接 pill 变化） -->
+    <aside class="app-sidebar" aria-label="项目与会话">
+      <div class="sb-brand" title="dsh-forge（M2 UI 原型）">
+        <span class="brand-mark" aria-hidden="true">鲸</span>
+        <span style="font-weight:600">dsh-forge</span>
+        <span class="chip" style="margin-left:auto">M2 原型</span>
+      </div>
+      <div class="sb-label">项目 · demo-proj</div>
+      <div class="sb-list" id="pj-list"></div>
+      <div class="sb-label" style="margin-top:auto">右栏 = M2 主秀场</div>
+    </aside>
+
+    <!-- 中区：会话面板（头部 = UF-3 挂接 pill 演示位） -->
+    <main class="app-main">
+      <header class="conv-header">
+        <div class="conv-title-row">
+          <nav class="crumbs" id="conv-crumbs" aria-label="会话位置"></nav>
+          <div class="conv-actions" id="conv-actions"></div>
+          <button class="icon-btn" data-act="dock-toggle" aria-label="展开/收起右侧栏" title="展开/收起右侧栏">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+          </button>
+        </div>
+        <div class="conv-tabs" role="tablist" aria-label="会话视图">
+          <button class="conv-tab active" role="tab" aria-selected="true">对话</button>
+          <button class="conv-tab" role="tab" aria-selected="false">轨迹</button>
+          <button class="conv-tab" role="tab" aria-selected="false">知识召回</button>
+        </div>
+      </header>
+      <div class="conv-body">
+        <div class="conv-body-inner">
+          <div class="conv-hero-logo" aria-hidden="true">🐋</div>
+          <div class="t-title">中区为演示基底</div>
+          <p class="t-aux">M2 交互焦点 = 会话头部「挂接任务 pill」（上方）与右栏 dock 两枚页签<br>
+            切换左栏会话 → 头部挂接 pill 随之变化（派发 ⟞ / 执行 ⟞ 双数据源）</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 右栏：dock 页签（概览 / 文档）—— M2 主秀场 -->
+    <div class="rightbar-wrap" id="rb-wrap">
+      <aside class="rightbar" aria-label="右侧栏 dock">
+        <div class="rb-strip" role="tablist" aria-label="dock 页签">
+          <div style="display:flex;gap:6px;min-width:0" id="rb-chips"></div>
+          <span class="spacer"></span>
+          <span class="t-aux" style="font-size:11px">项目跟随页签</span>
+        </div>
+        <div class="rb-body" id="rb-body"></div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 弹层根（菜单 / 模态） -->
+  <div id="layer-root"></div>
+
+  <!-- 原型工具（评审） -->
+  <div class="proto-tools">
+    <div class="proto-tools-head"><span>原型工具</span><span class="t-aux">M2 · 评审</span></div>
+    <div class="proto-tools-body">
+      <div class="proto-row"><span class="proto-label">主题</span><button class="btn btn-ghost btn-sm" data-act="theme-toggle">亮/暗</button></div>
+      <div class="proto-row"><span class="proto-label">⚡ 模拟 tool 写入</span><button class="btn btn-soft btn-sm" data-act="sim-write">claim / submit</button></div>
+      <div class="proto-row"><span class="proto-label">注册表单演示</span><button class="btn btn-soft btn-sm" data-act="form-open">打开</button></div>
+      <div class="proto-row"><span class="proto-label">疑似移动模拟</span><button class="btn btn-soft btn-sm" data-act="suspect-toggle">开/关</button></div>
+      <div class="proto-row"><span class="proto-label">数据</span><button class="btn btn-ghost btn-sm" data-act="reset">重置</button></div>
+      <p class="proto-note">⚡ 模拟 = 演示「tool 写入返回后单次重取即见新值」与 auto-restore 恢复钩子（产品无此钮——应用零编排）。表单「疑似移动」开启后确认将被拒绝并给出手工指引。</p>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
