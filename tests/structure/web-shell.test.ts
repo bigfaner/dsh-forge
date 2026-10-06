@@ -359,6 +359,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
   it('模块面就位：壳宿主 + main 面板族 + hero 纯渲染件 + 面板模型 + 桥 + 样式 + barrel', () => {
     for (const f of [
       'apps/web/src/workbench/ShellHost.tsx',
+      'apps/web/src/workbench/dock-tabs.tsx',
       'apps/web/src/workbench/HeroPanel.tsx',
       'apps/web/src/workbench/HeroEmpty.tsx',
       'apps/web/src/workbench/KnowledgePanel.tsx',
@@ -370,7 +371,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/workbench/index.ts')
-    for (const name of ['ShellHost', 'HeroPanel', 'HeroEmpty', 'KnowledgePanel', 'panel-model', 'workbench-bridge']) {
+    for (const name of ['ShellHost', 'HeroPanel', 'HeroEmpty', 'KnowledgePanel', 'panel-model', 'workbench-bridge', 'dock-tabs']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经桥）
@@ -390,7 +391,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
       'ForgeSidebarSlot',
@@ -399,6 +400,8 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeKnowledgePanel',
       'ForgeKnowledgeGlyph',
       'ForgeRecallView',
+      'ForgeOverviewTab',
+      'ForgeDocsTab',
       'createWorkbenchBridge',
     ]) {
       expect(views, `${name} 未发布`).toContain(name)

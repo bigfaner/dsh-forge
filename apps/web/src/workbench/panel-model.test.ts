@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   HERO_PANEL_KEY,
   KNOWLEDGE_PANEL_KEY,
+  anchoredOverviewContext,
   centerViewOf,
   nextLastReadyCount,
   pickedProjectAnchor,
@@ -104,6 +105,44 @@ describe('rightbarViewPlan 知识模式右栏联动计划（fix-23 语义 / fix-
 
   it('离知识面板无记忆 → 不动（未占用过联动）', () => {
     expect(rightbarViewPlan(false, null, false)).toEqual({ action: 'none', remembered: null })
+  })
+})
+
+describe('anchoredOverviewContext 概览项目上下文（4.1 AC4：knowledge-anchor 裁决复用 + 会话计数）', () => {
+  const projects = [
+    { id: 'p-1', workspaceId: 'ws-1' },
+    { id: 'p-2', workspaceId: 'ws-2' },
+  ]
+  const workspaces = {
+    items: [
+      { workspaceId: 'ws-1', sessionIds: ['s-1', 's-3'] },
+      { workspaceId: 'ws-2', sessionIds: ['s-2'] },
+    ],
+  }
+
+  it('主视图会话优先（retainedBy.mainView 会话 → 归属 workspace 项目）+ 会话计数 = 该 workspace 账本数', () => {
+    expect(anchoredOverviewContext({ mainSessionId: 's-1', workspaces, projects })).toEqual({
+      projectId: 'p-1',
+      sessionCount: 2,
+    })
+  })
+
+  it('唯一项目兜底（无会话/快照缺席）——计数随归属 workspace；快照缺席 = 计数省略', () => {
+    expect(
+      anchoredOverviewContext({ mainSessionId: null, workspaces, projects: [{ id: 'only', workspaceId: 'ws-2' }] }),
+    ).toEqual({ projectId: 'only', sessionCount: 1 })
+    expect(anchoredOverviewContext({ mainSessionId: null, workspaces: null, projects: [{ id: 'only', workspaceId: 'ws-1' }] })).toEqual(
+      { projectId: 'only' },
+    )
+  })
+
+  it('多项目无会话锚 = 无锚（不猜首个——概览空态说实话）；锚项目行离场/归属 workspace 缺席 = 计数省略', () => {
+    expect(anchoredOverviewContext({ mainSessionId: null, workspaces, projects })).toEqual({ projectId: null })
+    expect(anchoredOverviewContext({ mainSessionId: 's-x', workspaces, projects })).toEqual({ projectId: null })
+    const staleProjects = [{ id: 'p-2', workspaceId: 'ws-gone' }]
+    expect(anchoredOverviewContext({ mainSessionId: 's-2', workspaces, projects: staleProjects })).toEqual({
+      projectId: 'p-2',
+    })
   })
 })
 

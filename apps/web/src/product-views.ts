@@ -9,7 +9,8 @@
 // fix-25 发布集（官方基座降位形态）：main.conversation 工作台面板退役——发布 =
 // sidebar 族（workspaces 替换 + 品牌行）+ main 面板族（hero/knowledge）+ 页签族
 // （召回单签——轨迹 = 官方 'trajectory' 直用，fix-29 退役产品复刻）+ 壳宿主
-// （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。
+// （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。4.1 扩右栏 dock tab 族：
+// ForgeOverviewTab/ForgeDocsTab（sidebar.right.pane.tab 两 keyed body——M2 UF-1/UF-2）。
 import type { ComponentType } from 'react'
 import {
   ForgeBrandMark,
@@ -23,6 +24,12 @@ import { ForgeKnowledgeGlyph, type ForgeKnowledgeGlyphProps } from './views/side
 import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.js'
 import { ForgeHeroPanel } from './workbench/HeroPanel.js'
 import { ForgeKnowledgePanel, type ForgeKnowledgePanelProps } from './workbench/KnowledgePanel.js'
+import {
+  ForgeDocsTab,
+  type ForgeDocsTabProps,
+  ForgeOverviewTab,
+  type ForgeOverviewTabProps,
+} from './workbench/dock-tabs.js'
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
 import {
   ForgeHeroWorkspacePicker,
@@ -48,6 +55,10 @@ export interface ForgePublishedViews {
   readonly ForgeKnowledgeGlyph: ComponentType<ForgeKnowledgeGlyphProps>
   /** conversation.view 'dswf-recall' 占用者（UF-4 知识召回页签） */
   readonly ForgeRecallView: ComponentType<ForgeRecallViewProps>
+  /** sidebar.right.pane.tab keyed 'dswf-overview' 占用者（M2 UF-1 概览 dock tab body——4.1） */
+  readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
+  /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
+  readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
@@ -68,6 +79,8 @@ declare global {
   ForgeKnowledgePanel,
   ForgeKnowledgeGlyph,
   ForgeRecallView,
+  ForgeOverviewTab,
+  ForgeDocsTab,
   ForgeHeroWorkspacePicker,
   createWorkbenchBridge,
 }

@@ -19,12 +19,19 @@
   - `conversation.hero.workspace` 影子（fix-24①——single 槽 -100：新会话输入框上方
     工作区控件改列 forge 项目；不声明 children，官方登记行恒供养 directoryFlow 子洞）；
   - `shell.overlay` `'dswf-host'`（AppFrame root 五子槽——常驻壳宿主：UF-3 流程 + 相位/视图
-    镜像锚 + hero 面板驱动 + 右栏联动面）。
+    镜像锚 + hero 面板驱动 + 右栏联动面 + 概览项目上下文锚定写回[4.1 经桥——inject 面携
+    bridge]）；
+  - `sidebar.right.pane.tab` keyed `'dswf-overview'` / `'dswf-doc'`（4.1 右栏 dock tab 两段
+    注册第二段：官方右栏 tab 体 keyed 槽——dispatch 键 = tab 类型定义 id；概览 body 注入面
+    = 桥 + 跳会话动作，文档 body 自足；useTabInfo 由 seat 声明 inject 恒递达占用者）。
   - `main.conversation` 影子登记**缺席**（fix-25：官方 ConversationRoot 直渲——renderSlot
     per-entry children 授权铁律下产品影子恒拿不到官方头部链子座渲染权，fix-23 探针实证）。
-- 依赖服务 `inject = ['slots', 'sessions', 'uiWorkspace', 'workspaces', 'sidebarRight', 'layout']`
-  （cordis 注入等待，ui-workspace 同型先例；fix-23：sidebarRight = 官方 ui-sidebar-right
-  服务切片；fix-25：layout = 官方 ui-layout 服务切片——面板选择窄面 + 桥 nav 绑定）。
+- 依赖服务 `inject = ['slots', 'sessions', 'uiWorkspace', 'workspaces', 'sidebarRight',
+  'sidebarRightTabs', 'layout', 'locale']`（cordis 注入等待，ui-workspace 同型先例；fix-23：
+  sidebarRight = 官方 ui-sidebar-right 服务切片；4.1：sidebarRightTabs = 官方右栏 tab 类型
+  注册表——两段注册第一段[registerDockTabs：dswf-overview 页型 + guide 入口卡 order 0 排
+  最前 / dswf-doc 资源型 multiple + address 去重]；fix-25：layout = 官方 ui-layout 服务
+  切片——面板选择窄面 + 桥 nav 绑定；fix-33 ⑧：locale = 行 label NS 面）。
 - 组件源纪律：注册组件**不进本 bundle**（自含 classic script + React 单例）——经壳 bundle
   发布面 `window.__DSH_FORGE_VIEWS__`（`src/product-views.ts`）递达；缺席即 fail-loud
   （装配断裂不静默）。注入面（dsh 账本/归属快照源 + openSession + 桥/官方面板窄面）随注册

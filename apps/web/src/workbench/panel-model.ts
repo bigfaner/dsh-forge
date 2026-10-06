@@ -72,6 +72,26 @@ export function projectAnchorOf(input: {
 }
 
 /**
+ * 概览项目上下文推导（纯函数，4.1）：projectAnchorOf 裁决复用（主视图会话优先
+ * retainedBy.mainView → 会话归属 workspace 名下项目；唯一项目兜底）+ 会话计数（锚定
+ * 项目归属 workspace 的账本 sessionIds 数——ov-head「N 会话」单源；快照/行缺席 =
+ * undefined → ov-head 省略段）。项目未就绪（loading/error）= 无锚（不猜首个）。
+ */
+export function anchoredOverviewContext(input: {
+  readonly mainSessionId: string | null
+  readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
+  readonly projects: readonly { readonly id: string; readonly workspaceId: string }[]
+}): { readonly projectId: string | null; readonly sessionCount?: number } {
+  const projectId = projectAnchorOf({ sessionId: input.mainSessionId, workspaces: input.workspaces, projects: input.projects })
+  if (projectId === null) return { projectId: null }
+  const project = input.projects.find((row) => row.id === projectId)
+  if (project === undefined || input.workspaces === null) return { projectId }
+  const home = input.workspaces.items.find((row) => row.workspaceId === project.workspaceId)
+  if (home === undefined) return { projectId }
+  return { projectId, sessionCount: home.sessionIds.length }
+}
+
+/**
  * 显式拾取锚推导（纯函数，fix-bug 知识范围项目切换控件）：拾取行仍在切换行集（archived
  * 排除——与 hero 弹层同口径）→ 拾取优先（粘性：会话/派生锚不覆盖用户显式选择）；拾取
  * 行离场（删除/归档）或未拾取 → null（回落 projectAnchorOf 派生锚）。

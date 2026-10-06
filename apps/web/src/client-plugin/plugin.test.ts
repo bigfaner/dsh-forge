@@ -9,6 +9,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CONVERSATION_VIEW_SLOT,
+  DOC_ADDRESS_PREFIX,
+  DOC_TAB_KIND,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   FORGE_LOCALE_NS,
@@ -16,11 +18,13 @@ import {
   HERO_WORKSPACE_SLOT,
   KNOWLEDGE_PANEL_KEY,
   MAIN_SLOT,
+  OVERVIEW_TAB_KIND,
   RECALL_VIEW_ID,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
   SIDEBAR_BRAND_NAME_SLOT,
   SIDEBAR_PANELLIST_SLOT,
+  SIDEBAR_RIGHT_PANE_TAB_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
   forgeClientPlugin,
@@ -29,9 +33,17 @@ import {
   registerForgeClient,
   type ForgeClientCtx,
   type ForgeLocaleService,
+  type ForgeSidebarRightTabsService,
   type ForgeSlotsService,
 } from './plugin.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
+import {
+  DSWF_DOC_ADDRESS_PREFIX as DOCK_DOC_PREFIX,
+  DSWF_DOC_TAB_KIND as DOCK_DOC_KIND,
+  DSWF_OVERVIEW_TAB_KIND as DOCK_OVERVIEW_KIND,
+  forgeDocAddress,
+  parseForgeDocAddress,
+} from '../workbench/dock-tabs.js'
 import type { ModuleLoaderFacade, ModuleLoaderRegistration } from '../shell/dsh-globals.js'
 
 /** 注册记录（fake slots 服务收集） */
@@ -78,7 +90,44 @@ function fakeLocale(): ForgeLocaleService & { disposed: boolean; registered: [st
   }
 }
 
-/** 假 ctx：slots 收集 inject/register，七服务经 get 递达 */
+/** tab 类型注册记录（fake sidebarRightTabs 收集面——两段注册第一段断言） */
+interface TabTypeCall {
+  id: string
+  kind: string
+  multiple?: boolean
+  patterns?: readonly string[]
+  canOpen?: (address: string) => boolean
+  title: (address: string) => string
+  guide?: readonly { id: string; order: number; title: () => string; description?: () => string }[]
+}
+
+/** fake tab 类型注册表（4.1）：register 收定义 + 撤销记账（幂等标志） */
+function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
+  calls: TabTypeCall[]
+  disposedIds: string[]
+} {
+  const calls: TabTypeCall[] = []
+  const disposedIds: string[] = []
+  return {
+    get calls() {
+      return calls
+    },
+    get disposedIds() {
+      return disposedIds
+    },
+    register: (definition) => {
+      calls.push(definition)
+      let disposed = false
+      return () => {
+        if (disposed) return
+        disposed = true
+        disposedIds.push(definition.id)
+      }
+    },
+  }
+}
+
+/** 假 ctx：slots 收集 inject/register，八服务经 get 递达 */
 function fakeClientCtx(): {
   ctx: ForgeClientCtx
   registers: RegisterCall[]
@@ -89,6 +138,7 @@ function fakeClientCtx(): {
   rightToggle: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
   locale: ReturnType<typeof fakeLocale>
+  tabTypes: ReturnType<typeof fakeSidebarRightTabs>
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -117,6 +167,8 @@ function fakeClientCtx(): {
   const workspaces = { list: { tag: 'workspaces-list' } }
   // fix-23：官方右栏收展窄面（ISidebarRight 切片）
   const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle }
+  // 4.1：官方右栏 tab 类型注册表（两段注册第一段）
+  const tabTypes = fakeSidebarRightTabs()
   // fix-25：官方面板选择窄面（LayoutController 切片）
   const layout = {
     selectPanel,
@@ -134,15 +186,16 @@ function fakeClientCtx(): {
       if (name === 'uiWorkspace') return uiWorkspace
       if (name === 'workspaces') return workspaces
       if (name === 'sidebarRight') return sidebarRight
+      if (name === 'sidebarRightTabs') return tabTypes
       if (name === 'layout') return layout
       if (name === 'locale') return locale
       throw new Error(`unexpected service: ${name}`)
     },
   }
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, selectPanel, locale }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, selectPanel, locale, tabTypes }
 }
 
-/** 假产品视图发布面（fix-25 发布集） */
+/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body） */
 function publishFakeViews() {
   const views = {
     ForgeSidebarSlot: 'COMP:sidebar-slot',
@@ -153,6 +206,8 @@ function publishFakeViews() {
     ForgeKnowledgePanel: 'COMP:knowledge-panel',
     ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
     ForgeRecallView: 'COMP:recall-view',
+    ForgeOverviewTab: 'COMP:overview-tab',
+    ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
@@ -163,8 +218,9 @@ function publishFakeViews() {
           nav.showKnowledge()
         },
         subscribe: () => () => {},
-        getSnapshot: () => ({ drawerEntryId: null }),
+        getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null } }),
         setDrawerEntry: () => {},
+        setOverviewContext: () => {},
       }
       ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = bridgeObj
       return bridgeObj
@@ -180,7 +236,7 @@ function unpublishViews(): void {
 }
 
 describe('forgeClientPlugin 形状（cordis 插件面）', () => {
-  it('name = 注册键；inject = 七服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；fix-25 加 layout；fix-33 加 locale）；apply 幂等立激活标记', () => {
+  it('name = 注册键；inject = 八服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；4.1 加 sidebarRightTabs；fix-25 加 layout；fix-33 加 locale）；apply 幂等立激活标记', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string } }).__DSH_FORGE_CLIENT__
     delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     const views = publishFakeViews()
@@ -193,6 +249,7 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
       'uiWorkspace',
       'workspaces',
       'sidebarRight',
+      'sidebarRightTabs',
       'layout',
       'locale',
     ])
@@ -219,6 +276,8 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const { ctx, registers, injectedKeys } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     expect(injectedKeys).toEqual([
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_WORKSPACES_SLOT,
       SIDEBAR_BRAND_MARK_SLOT,
       SIDEBAR_BRAND_NAME_SLOT,
@@ -280,8 +339,8 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(HERO_PANEL_KEY).toBe(SHELL_HERO_KEY)
     expect(KNOWLEDGE_PANEL_KEY).toBe(SHELL_KNOWLEDGE_KEY)
     // 知识面板注入面 = 工作台桥（抽屉缝）
-    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null } } }
-    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null })
+    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null } } } }
+    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null } })
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.center?.registered).toEqual([MAIN_SLOT, MAIN_SLOT, SIDEBAR_PANELLIST_SLOT])
     expect(marker?.center?.error).toBeUndefined()
@@ -350,7 +409,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展窄面；桥经发布面工厂创建并发布页内全局', () => {
+  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）窄面；桥经发布面工厂创建并发布页内全局', () => {
     const views = publishFakeViews()
     const { ctx, registers, selectPanel, rightToggle } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -361,8 +420,11 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     const face = host!.options.inject!() as {
       selectPanel: { selectPanel(id: string | null): void }
       rightbar: { isExpanded(): boolean; toggleExpanded(): void }
+      bridge: unknown
     }
-    expect(Object.keys(face).sort()).toEqual(['rightbar', 'selectPanel'])
+    expect(Object.keys(face).sort()).toEqual(['bridge', 'rightbar', 'selectPanel'])
+    // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
+    expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.selectPanel.selectPanel('dswf-knowledge')
     expect(selectPanel).toHaveBeenCalledWith('dswf-knowledge')
     expect(face.rightbar.isExpanded()).toBe(false)
@@ -385,6 +447,100 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     forgeClientPlugin().apply(ctx)
     expect(registers.find((r) => r.key === 'main.conversation')).toBeUndefined()
     unpublishViews()
+  })
+})
+
+describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
+  it('第一段 sidebarRightTabs.register 两类型：dswf-overview 页型 + guide 入口卡 order 0（官方 10/20/30 前——排最前）+ locale thunk 标题', () => {
+    publishFakeViews()
+    const { ctx, tabTypes, locale } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect(tabTypes.calls).toHaveLength(2)
+    const overview = tabTypes.calls.find((c) => c.id === OVERVIEW_TAB_KIND)!
+    expect(overview.kind).toBe(OVERVIEW_TAB_KIND)
+    expect(overview.patterns).toBeUndefined() // 页型（按 kind 开——无地址识别）
+    expect(overview.guide).toHaveLength(1)
+    const entry = overview.guide![0]!
+    expect(entry.id).toBe('overview')
+    expect(entry.order).toBe(0) // 官方 files/terminal/browser = 10/20/30 → 升序最前（AC2）
+    expect(entry.title()).toBe('项目概览') // zh 词典（fix-33 ⑧ 同径）
+    expect(entry.description?.()).toBe('feature · 任务 · 提案与文档——管线接管工作台')
+    expect(overview.title('sidebar://dswf-overview')).toBe('项目概览') // chip 标题逐读
+    expect(locale.registered[0]![1].en).toMatchObject({ 'tab.overview': 'Overview' })
+    unpublishViews()
+  })
+
+  it('第一段 dswf-doc 资源型：multiple + patterns 整地址 glob + canOpen 前缀防御 + 标题 = 末段文件名（与 dock-tabs 地址编解码同源）', () => {
+    publishFakeViews()
+    const { ctx, tabTypes } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const doc = tabTypes.calls.find((c) => c.id === DOC_TAB_KIND)!
+    expect(doc.kind).toBe(DOC_TAB_KIND)
+    expect(doc.multiple).toBe(true) // 异地址各自成 tab（AC3）
+    expect(doc.patterns).toEqual([`${DOC_ADDRESS_PREFIX}**`])
+    expect(doc.guide).toBeUndefined() // 文档行开出——不上开始页
+    expect(doc.canOpen?.(`${DOC_ADDRESS_PREFIX}p1/docs/features/x/proposal.md`)).toBe(true)
+    expect(doc.canOpen?.('sidebar://guide')).toBe(false) // 前缀外防御拒绝
+    expect(doc.title(`${DOC_ADDRESS_PREFIX}p1/docs/features/x/proposal.md`)).toBe('proposal.md')
+    unpublishViews()
+  })
+
+  it('第二段 sidebar.right.pane.tab keyed 两 body：dispatch 键 = 定义 id + 发布组件；概览注入面 = 桥 + 跳会话（uiWorkspace.openSession）', () => {
+    const views = publishFakeViews()
+    const { ctx, registers, open } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const bodies = registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT)
+    expect(bodies).toHaveLength(2)
+    const overview = bodies.find((r) => r.options.key === OVERVIEW_TAB_KIND)!
+    const doc = bodies.find((r) => r.options.key === DOC_TAB_KIND)!
+    expect(overview.component).toBe(views.ForgeOverviewTab)
+    expect(doc.component).toBe(views.ForgeDocsTab)
+    const face = overview.options.inject!() as {
+      bridge: unknown
+      onOpenSession: (sessionId: string) => void
+    }
+    expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
+    face.onOpenSession('s-9')
+    expect(open).toHaveBeenCalledWith('s-9')
+    expect(doc.options.inject).toBeUndefined() // 文档 body 自足（useTabInfo 由 seat 声明递达）
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.dock?.registered).toEqual([
+      OVERVIEW_TAB_KIND,
+      DOC_TAB_KIND,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+    ])
+    expect(marker?.dock?.error).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('字面量同源 pin（bundle 自含不经 import）：两 kind 与地址前缀 = workbench/dock-tabs 常量；标题末段与 dock-tabs 编码同源', () => {
+    expect(OVERVIEW_TAB_KIND).toBe(DOCK_OVERVIEW_KIND)
+    expect(DOC_TAB_KIND).toBe(DOCK_DOC_KIND)
+    expect(DOC_ADDRESS_PREFIX).toBe(DOCK_DOC_PREFIX)
+    publishFakeViews()
+    const { ctx, tabTypes } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const doc = tabTypes.calls.find((c) => c.id === DOC_TAB_KIND)!
+    expect(doc.title(forgeDocAddress('p1', 'docs/proposals/m2/proposal.md'))).toBe('proposal.md')
+    expect(parseForgeDocAddress(forgeDocAddress('p1', 'docs/a b/tech-design.md'))).toEqual({
+      projectId: 'p1',
+      docRel: 'docs/a b/tech-design.md',
+    })
+    unpublishViews()
+  })
+
+  it('类型注册撤销面：overlay 洞 dispose 即撤销两类型（fix-33 ⑥ 对称性——官方注册表 kind 不残留）', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx, injectDisposers, tabTypes } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect(tabTypes.disposedIds).toEqual([])
+    injectDisposers.get(SHELL_OVERLAY_SLOT)!()
+    expect([...tabTypes.disposedIds].sort()).toEqual([DOC_TAB_KIND, OVERVIEW_TAB_KIND])
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 })
 

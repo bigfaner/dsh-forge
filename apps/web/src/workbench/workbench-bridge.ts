@@ -5,6 +5,8 @@
 // fix-25 形态：中区互换 = 官方 layout.selectPanel（视图态机退役）——桥 = 官方面板的
 // 导航窄面 + 知识抽屉目标缝（召回视图跳转 → 知识面板抽屉打开——两棵独立槽位树的
 // 唯一通道）+ e2e 载体（bridgeDispatch 面历史兼容：showSession/showKnowledge 直达）。
+// 4.1 扩概览上下文缝：ShellHost（shell.overlay 常驻树）锚定的项目上下文写回 → 右栏
+// 概览 tab body（rightbar 会话树）读取——同桥双缝（两棵独立槽位树的既有唯一通道复用）。
 // 桥由插件 apply 期经发布面工厂创建（createWorkbenchBridge——nav 闭包绑定官方
 // layout.selectPanel）；缺席期（插件未激活）导航/跳转 fail-soft no-op。
 import { KNOWLEDGE_PANEL_KEY } from './panel-model.js'
@@ -17,22 +19,43 @@ export interface ForgeCenterNav {
   showSession(): void
 }
 
-/** 桥快照（知识抽屉目标——召回视图跳转与知识面板消费的唯一共享态） */
+/**
+ * 概览项目上下文（4.1 ShellHost 锚定写回 → 右栏概览 tab 消费）：projectId = knowledge-anchor
+ * 裁决（主视图会话优先 retainedBy.mainView，唯一项目兜底）；sessionCount = 锚定项目归属
+ * workspace 的账本会话数（ov-head「N 会话」单源——sessions/workspaces 快照派生）。
+ */
+export interface ForgeOverviewContext {
+  /** 锚定项目（null = 无锚——多项目无会话/项目未就绪） */
+  readonly projectId: string | null
+  /** 锚定项目 workspace 会话数（快照缺席 = undefined → ov-head 省略段） */
+  readonly sessionCount?: number
+}
+
+/** 桥快照（知识抽屉目标 + 概览项目上下文——跨槽树共享态的唯一载体） */
 export interface ForgeWorkbenchSnapshot {
   /** 知识详情抽屉打开条目（null = 关闭） */
   readonly drawerEntryId: number | null
+  /** 概览项目上下文（ShellHost 锚定写回——右栏概览 tab body 消费） */
+  readonly overview: ForgeOverviewContext
 }
 
-/** 工作台桥（导航 + 抽屉缝；快照源形状 = useSyncExternalStore 可直订） */
+/** 概览上下文缺省（ShellHost 锚定生效前/桥刚创建——无锚不猜首个） */
+export function initialOverviewContext(): ForgeOverviewContext {
+  return { projectId: null }
+}
+
+/** 工作台桥（导航 + 抽屉缝 + 概览上下文缝；快照源形状 = useSyncExternalStore 可直订） */
 export interface WorkbenchBridge extends ForgeCenterNav {
   /** 召回行跳转：打开知识面板 + 抽屉定位条目（UF-4→UF-5 跨树转移面） */
   openKnowledgeEntry(entryId: number): void
-  /** 快照订阅（知识面板消费——抽屉目标变更驱动） */
+  /** 快照订阅（知识面板/概览 tab 消费——抽屉目标与概览上下文变更驱动） */
   subscribe(listener: () => void): () => void
     /** 当前快照（身份稳定——未变更恒同引用） */
   getSnapshot(): ForgeWorkbenchSnapshot
   /** 抽屉态写回（知识面板卡片点击/✕ 关闭——装配单向回流） */
   setDrawerEntry(entryId: number | null): void
+  /** 概览项目上下文写回（4.1 ShellHost 锚定效应——右栏概览 tab 消费） */
+  setOverviewContext(context: ForgeOverviewContext): void
 }
 
 /** 桥的全局挂点（与 __DSH_FORGE_VIEWS__ 同族：装配 ↔ 插件两单元的页内缝） */
@@ -50,7 +73,7 @@ export function workbenchBridge(): WorkbenchBridge | undefined {
  * 快照源为最小 store（身份稳定；订阅同步通知）。发布与创建一体：桥的本体即页内全局。
  */
 export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
-  let snapshot: ForgeWorkbenchSnapshot = { drawerEntryId: null }
+  let snapshot: ForgeWorkbenchSnapshot = { drawerEntryId: null, overview: initialOverviewContext() }
   const listeners = new Set<() => void>()
   const notify = (): void => {
     for (const listener of listeners) listener()
@@ -59,7 +82,7 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
     showKnowledge: nav.showKnowledge,
     showSession: nav.showSession,
     openKnowledgeEntry: (entryId: number): void => {
-      snapshot = { drawerEntryId: entryId }
+      snapshot = { ...snapshot, drawerEntryId: entryId }
       nav.showKnowledge()
       notify()
     },
@@ -72,7 +95,17 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
     getSnapshot: (): ForgeWorkbenchSnapshot => snapshot,
     setDrawerEntry: (entryId: number | null): void => {
       if (snapshot.drawerEntryId === entryId) return
-      snapshot = { drawerEntryId: entryId }
+      snapshot = { ...snapshot, drawerEntryId: entryId }
+      notify()
+    },
+    setOverviewContext: (context: ForgeOverviewContext): void => {
+      if (
+        snapshot.overview.projectId === context.projectId &&
+        snapshot.overview.sessionCount === context.sessionCount
+      ) {
+        return
+      }
+      snapshot = { ...snapshot, overview: context }
       notify()
     },
   }

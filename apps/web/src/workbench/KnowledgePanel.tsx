@@ -14,10 +14,15 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from '../views/knowledge/KnowledgeView.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { useAnchoredProjects } from './anchored-projects.js'
+import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
 import { pickedProjectAnchor, projectAnchorOf } from './panel-model.js'
 import type { WorkbenchBridge } from './workbench-bridge.js'
 import './workbench.css'
+
+// 4.1 锚定复用迁移注记：readMainSessionId/MainSessionAnchor 本体已迁 anchored-projects.ts
+//（ShellHost 概览上下文锚定同源消费）；此处再导出保持既有消费面（KnowledgePanel.test）
+// 零漂移——装配域共享面单一来源。
+export { readMainSessionId, MainSessionAnchor } from './anchored-projects.js'
 
 /** main keyed 'dswf-knowledge' 占用者 kit 窄面（root 标准props + 插件 inject；可选 = 降级） */
 export interface ForgeKnowledgePanelProps {
@@ -27,39 +32,6 @@ export interface ForgeKnowledgePanelProps {
   readonly useSessions?: KitSelectorHook
   /** 工作台桥（插件 inject face 注入——抽屉目标缝；缺席 = 抽屉态本地自持降级） */
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'setDrawerEntry'>
-}
-
-/**
- * 主视图会话纯读（官方口径）：byId 中 retainedBy.mainView > 0 的会话行 id（官方
- * ui-layout DocumentTitle / ui-workspace 同型 find——主视图唯一保留会话）；形状漂移/
- * 缺省 → null（fail-soft——非壳载体降级为无会话锚）。选择器返回原语（store 稳定面）。
- */
-export function readMainSessionId(hook: KitSelectorHook): string | null {
-  return hook((s) => {
-    const byId = (s as { byId?: Record<string, { id?: string; retainedBy?: { mainView?: number } }> } | undefined)
-      ?.byId
-    if (byId === undefined || typeof byId !== 'object') return null
-    const current = Object.values(byId).find((row) => (row?.retainedBy?.mainView ?? 0) > 0)
-    return current?.id ?? null
-  }) as string | null
-}
-
-/**
- * 主视图会话锚子件（PanelInfoAnchor 同形制——fix-33 ⑤ 钩子形制：可选 kit hook 经子件
- * 无条件调用，效应上抛宿主状态；SSR 首帧保持 null 缺省，效应驱动更新归 e2e）。导出面 = 单测。
- */
-export function MainSessionAnchor({
-  hook,
-  onChange,
-}: {
-  readonly hook: KitSelectorHook
-  readonly onChange: (sessionId: string | null) => void
-}): ReactNode {
-  const sessionId = readMainSessionId(hook)
-  useEffect(() => {
-    onChange(sessionId)
-  }, [sessionId, onChange])
-  return null
 }
 
 /**

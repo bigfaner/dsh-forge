@@ -24,6 +24,21 @@ describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场
     expect(markup).toContain('data-dswf-view="session"') // 首帧缺省（效应驱动更新归 e2e）
     expect(markup).toContain('data-dswf-workbench') // 钩子在场不炸渲染（形制合规的本证）
   })
+
+  it('useSessions 在场（4.1 概览锚定输入）：主视图会话锚子件挂载不炸渲染——上下文经效应写桥（e2e 面）', () => {
+    const selectorHook = (state: unknown) => (sel: (s: never) => unknown) => sel(state as never)
+    const markup = renderToStaticMarkup(
+      <ForgeShellHost useSessions={selectorHook({ byId: { 's-1': { id: 's-1', retainedBy: { mainView: 1 } } } })} />,
+    )
+    expect(markup).toContain('data-dswf-workbench') // MainSessionAnchor 渲染 null——钩子形制不炸
+  })
+
+  it('bridge 在场（4.1 概览上下文写回缝）：渲染不炸（写回归效应——e2e 面）', () => {
+    const markup = renderToStaticMarkup(
+      <ForgeShellHost bridge={{ setOverviewContext: () => {} }} />,
+    )
+    expect(markup).toContain('data-dswf-workbench')
+  })
 })
 
 describe('PanelInfoAnchor 官方面板信息锚子件（fix-33 ⑤ 钩子形制）', () => {

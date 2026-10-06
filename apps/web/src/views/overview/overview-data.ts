@@ -12,7 +12,7 @@
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
 import type { FeatureCard, ProposalCard, TaskStats } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
+import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
@@ -183,10 +183,14 @@ export function overviewListPlan(input: OverviewListPlanInput): { readonly isFet
 }
 
 /**
- * 概览装载 hook（头路 mount/projectId/重试装载 + 列路 subtab/search/sort/重试装载）。
- * 判定/落点全经纯函数（applyOverviewHead / pendingOverviewList / applyOverviewList）——
- * effect 仅编排：键变 → 装载 → 序号守卫落点。搜索键入 = 列路缓存先行（旧行保持可见
- * + busy），不清场（IME 安全配套——内容区在途更新，非重建）。
+ * 概览装载 hook（头路 mount/projectId/重试装载 + 列路 subtab/search/sort/重试装载 +
+ * 写推送事件静默重取[4.1 接线]）。判定/落点全经纯函数（applyOverviewHead /
+ * pendingOverviewList / applyOverviewList）——effect 仅编排：键变 → 装载 → 序号守卫落点。
+ * 搜索键入 = 列路缓存先行（旧行保持可见 + busy），不清场（IME 安全配套——内容区在途
+ * 更新，非重建）。事件重取（交互二：写后单次重取见新值）= subscribeTasksChanged 同项目
+ * 事件 → 静默 nonce 递增（头路[stats/features]与列路活跃查询全量重取、内容不清场——
+ * 50ms 合并归 web/rpc 订阅层；tasks 子 tab 三视图装载[useTasksTabLoad]与抽屉[useTaskDetail]
+ * 各自订阅，同一口径）。
  * @param projectId - 当前项目（视图态注入——4.1 装配接线）
  * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
  */
@@ -199,13 +203,15 @@ export function useOverviewLoad(
   makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): OverviewLoadState {
   const [state, setState] = useState<OverviewLoadState>(initialOverviewLoadState)
+  const [eventNonce, setEventNonce] = useState(0)
   const headSeqRef = useRef(0)
   const listSeqRef = useRef(0)
   const lastListKeyRef = useRef('')
   const lastSubtabRef = useRef(subtab)
   const lastProjectRef = useRef(projectId)
+  const refreshNonce = nonce + eventNonce
 
-  // 头路：mount / projectId / 重试
+  // 头路：mount / projectId / 重试 / 事件重取
   useEffect(() => {
     const seq = ++headSeqRef.current
     const client = makeClient()
@@ -213,11 +219,11 @@ export function useOverviewLoad(
       if (seq !== headSeqRef.current) return
       setState((prev) => applyOverviewHead(prev, out))
     })
-  }, [projectId, nonce, makeClient])
+  }, [projectId, refreshNonce, makeClient])
 
-  // 列路：subtab / search / sort / projectId / 重试（键变装载；子 tab 或项目切换 = 清场骨架）
+  // 列路：subtab / search / sort / projectId / 重试 / 事件重取（键变装载；子 tab 或项目切换 = 清场骨架）
   useEffect(() => {
-    const listKey = `${projectId}#${subtab}#${search}#${sort}#${nonce}`
+    const listKey = `${projectId}#${subtab}#${search}#${sort}#${refreshNonce}`
     const plan = overviewListPlan({
       listKey,
       lastListKey: lastListKeyRef.current,
@@ -237,7 +243,16 @@ export function useOverviewLoad(
       if (seq !== listSeqRef.current) return
       setState((prev) => applyOverviewList(prev, out))
     })
-  }, [projectId, subtab, search, sort, nonce, makeClient])
+  }, [projectId, subtab, search, sort, refreshNonce, makeClient])
+
+  // 写推送事件（forge:events/tasks-changed）→ 同项目静默重取（50ms 合并归订阅层）
+  useEffect(
+    () =>
+      subscribeTasksChanged((payload) => {
+        if (payload.projectId === projectId) setEventNonce((n) => n + 1)
+      }),
+    [projectId],
+  )
 
   return state
 }

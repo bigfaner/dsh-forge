@@ -122,7 +122,16 @@ describe('pin ③-6 我方镜像兼容（apps/web client-plugin 槽位路线 A�
     expect(SIDEBAR_SHADOW_PRIORITY).toBeLessThan(0)
   })
 
-  it('插件服务依赖 = slots + sessions + uiWorkspace + workspaces + sidebarRight + layout + locale（fix-11：会话打开面 = uiWorkspace.openSession；fix-23：右栏联动 = sidebarRight 官方收展窄面；fix-25：面板互换 = layout 官方选择面；fix-33：行 label 走 locale NS）', () => {
-    expect([...FORGE_CLIENT_INJECT]).toEqual(['slots', 'sessions', 'uiWorkspace', 'workspaces', 'sidebarRight', 'layout', 'locale'])
+  it('插件服务依赖 = slots + sessions + uiWorkspace + workspaces + sidebarRight + sidebarRightTabs + layout + locale（fix-11：会话打开面 = uiWorkspace.openSession；fix-23：右栏联动 = sidebarRight 官方收展窄面；4.1：dock tab 类型注册 = sidebarRightTabs 官方注册表；fix-25：面板互换 = layout 官方选择面；fix-33：行 label 走 locale NS）', () => {
+    expect([...FORGE_CLIENT_INJECT]).toEqual([
+      'slots',
+      'sessions',
+      'uiWorkspace',
+      'workspaces',
+      'sidebarRight',
+      'sidebarRightTabs',
+      'layout',
+      'locale',
+    ])
   })
 })

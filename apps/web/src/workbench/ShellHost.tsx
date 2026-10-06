@@ -11,14 +11,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { useAnchoredProjects } from './anchored-projects.js'
+import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
+  anchoredOverviewContext,
   centerViewOf,
   nextLastReadyCount,
   rightbarViewPlan,
   sessionZonePhase,
 } from './panel-model.js'
+import type { ForgeOverviewContext, WorkbenchBridge } from './workbench-bridge.js'
 import './workbench.css'
 
 /** 官方面板选择窄面（插件 inject face 携带——layout.selectPanel 的结构同型镜像） */
@@ -39,6 +41,8 @@ export interface RightbarFace {
 export interface ForgeShellHostProps {
   /** workspace 归属观察钩子（hero 刷新锚——外部注册 dsh create 后快照身份变化即重拉项目数） */
   readonly useWorkspaces?: KitSelectorHook
+  /** 会话账本观察钩子（主视图会话读取——概览项目上下文锚定输入，4.1；root 标准 props 自动递达） */
+  readonly useSessions?: KitSelectorHook
   /** 官方面板信息观察钩子（activePanelId——视图镜像 + hero 驱动守卫源） */
   readonly usePanelInfo?: KitSelectorHook
   /** 官方面板选择窄面（插件 inject face 注入；缺席 = hero 驱动降级 no-op——非壳载体/单测面） */
@@ -48,6 +52,12 @@ export interface ForgeShellHostProps {
    * 缺席 = 联动降级 no-op——官方右栏自持收展态不受损）
    */
   readonly rightbar?: RightbarFace
+  /**
+   * 工作台桥（插件 inject face 注入，4.1）：概览项目上下文写回缝——ShellHost 锚定
+   *（knowledge-anchor 裁决复用）经桥递达右栏概览 tab body（两棵独立槽位树的既有通道）；
+   * 缺席 = 概览上下文不发布（右栏概览 tab 无锚空态降级）
+   */
+  readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext'>
 }
 
 /**
@@ -105,7 +115,7 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   // hero 项目数源（三刷新锚）：mount 首拉 + workspace 归属快照身份变化（外部注册后 dsh
   // create 即触发——与左栏面板同锚口径）+ 注册成功回调（UI 流程即时重拉）。
   // fix-36：快照锚 + 项目相位经 useAnchoredProjects 共享 hook（四装配面同型收敛）。
-  const { projects: projectsState, retry: retryProjects, anchor: workspacesAnchor } = useAnchoredProjects(
+  const { projects: projectsState, workspaces, retry: retryProjects, anchor: workspacesAnchor } = useAnchoredProjects(
     props.useWorkspaces,
   )
   const [lastReadyCount, setLastReadyCount] = useState<number | null>(null)
@@ -116,6 +126,20 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
     lastReadyCount,
     failed: projectsState.phase === 'error',
   })
+
+  // 概览项目上下文锚定（4.1 AC4，knowledge-anchor 裁决复用）：主视图会话锚子件上抛 →
+  // anchoredOverviewContext 纯推导（会话锚定优先/唯一项目兜底 + 会话计数）→ 桥写回
+  //（右栏概览 tab body 消费）。桥缺席 = 不发布（fail-soft）；效应驱动更新归 e2e。
+  const [mainSessionId, setMainSessionId] = useState<string | null>(null)
+  const overviewContext: ForgeOverviewContext = anchoredOverviewContext({
+    mainSessionId,
+    workspaces,
+    projects: projectsState.phase === 'ready' ? projectsState.projects : [],
+  })
+  const overviewBridge = props.bridge
+  useEffect(() => {
+    overviewBridge?.setOverviewContext(overviewContext)
+  }, [overviewContext, overviewBridge])
 
   // 官方面板态镜像（activePanelId——root 作用域标准观察钩子；fix-33 ⑤ 起经 PanelInfoAnchor
   // 子件读取上抛（钩子形制合规），缺席 = 会话视图缺省（SSR 首帧 null））
@@ -173,6 +197,11 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
       {/* workspace 归属锚（useAnchoredProjects 条件子件——kit hook 在场才挂载，钩子于
           子件内无条件调用；快照上抛：身份变化 = 项目数重拉锚——不落地 dsh 账本行副本） */}
       {workspacesAnchor}
+      {/* 主视图会话锚（4.1 概览上下文锚定输入——MainSessionAnchor 迁自知识面板同形制；
+          钩子于子件内无条件调用，retainedBy.mainView 会话上抛驱动桥写回） */}
+      {props.useSessions === undefined ? null : (
+        <MainSessionAnchor hook={props.useSessions} onChange={setMainSessionId} />
+      )}
       {/* 官方面板信息锚（fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件
           无条件调用——hooks 规则合规；activePanelId 上抛驱动视图镜像与 hero 让位） */}
       {props.usePanelInfo !== undefined ? (

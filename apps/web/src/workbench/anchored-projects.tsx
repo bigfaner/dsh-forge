@@ -34,6 +34,42 @@ export function WorkspacesAnchor({
   return null
 }
 
+/**
+ * 主视图会话纯读（官方口径）：byId 中 retainedBy.mainView > 0 的会话行 id（官方
+ * ui-layout DocumentTitle / ui-workspace 同型 find——主视图唯一保留会话）；形状漂移/
+ * 缺省 → null（fail-soft——非壳载体降级为无会话锚）。选择器返回原语（store 稳定面）。
+ * 4.1 自 KnowledgePanel 迁入（锚定复用——ShellHost 概览上下文锚定与知识面板同源；
+ * KnowledgePanel 再导出保持既有消费面零漂移）。
+ */
+export function readMainSessionId(hook: KitSelectorHook): string | null {
+  return hook((s) => {
+    const byId = (s as { byId?: Record<string, { id?: string; retainedBy?: { mainView?: number } }> } | undefined)
+      ?.byId
+    if (byId === undefined || typeof byId !== 'object') return null
+    const current = Object.values(byId).find((row) => (row?.retainedBy?.mainView ?? 0) > 0)
+    return current?.id ?? null
+  }) as string | null
+}
+
+/**
+ * 主视图会话锚子件（PanelInfoAnchor/WorkspacesAnchor 同形制——fix-33 ⑤ 钩子形制：
+ * 可选 kit hook 经子件无条件调用，效应上抛宿主状态；SSR 首帧保持 null 缺省，效应驱动
+ * 更新归 e2e）。导出面 = 单测（4.1 迁入，KnowledgePanel 再导出）。
+ */
+export function MainSessionAnchor({
+  hook,
+  onChange,
+}: {
+  readonly hook: KitSelectorHook
+  readonly onChange: (sessionId: string | null) => void
+}): ReactNode {
+  const sessionId = readMainSessionId(hook)
+  useEffect(() => {
+    onChange(sessionId)
+  }, [sessionId, onChange])
+  return null
+}
+
 /** useAnchoredProjects 输出（相位 + 快照 + 双刷新动作 + 条件锚子件） */
 export interface AnchoredProjects {
   /** 项目列表相位（useForgeProjects 直通——ready 相位消费方自行窄化） */

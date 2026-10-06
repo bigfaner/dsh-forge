@@ -4,10 +4,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkbenchBridge,
+  initialOverviewContext,
   publishWorkbenchBridge,
   workbenchBridge,
   type ForgeWorkbenchSnapshot,
 } from './workbench-bridge.js'
+
+/** 概览上下文缺省（快照 pin 的常量面——避免逐字面量漂移） */
+const INITIAL = initialOverviewContext()
 
 function navSpy() {
   return { showKnowledge: vi.fn(), showSession: vi.fn() }
@@ -35,8 +39,8 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     })
     bridge.openKnowledgeEntry(42)
     expect(nav.showKnowledge).toHaveBeenCalledTimes(1)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 42 })
-    expect(seen).toEqual([{ drawerEntryId: 42 }])
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 42, overview: INITIAL })
+    expect(seen).toEqual([{ drawerEntryId: 42, overview: INITIAL }])
     dispose()
     publishWorkbenchBridge(undefined)
   })
@@ -46,7 +50,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     const bridge = createWorkbenchBridge(nav)
     const first = bridge.getSnapshot()
     bridge.setDrawerEntry(7)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 7 })
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 7, overview: INITIAL })
     const second = bridge.getSnapshot()
     let notified = 0
     const dispose = bridge.subscribe(() => {
@@ -57,8 +61,28 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(bridge.getSnapshot()).toBe(second)
     expect(second).not.toBe(first)
     bridge.setDrawerEntry(null)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: null })
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: INITIAL })
     expect(notified).toBe(1)
+    dispose()
+    publishWorkbenchBridge(undefined)
+  })
+
+  it('setOverviewContext（4.1 概览上下文缝）：写回（等值 no-op 不通知；变更通知 + 抽屉面保持）', () => {
+    const nav = navSpy()
+    const bridge = createWorkbenchBridge(nav)
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: null }) // 缺省无锚
+    let notified = 0
+    const dispose = bridge.subscribe(() => {
+      notified += 1
+    })
+    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 3 })
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p1', sessionCount: 3 })
+    expect(bridge.getSnapshot().drawerEntryId).toBeNull() // 双缝独立——抽屉面不被概览写回扰动
+    expect(notified).toBe(1)
+    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 3 })
+    expect(notified).toBe(1) // 等值幂等不通知（ShellHost 每渲染效应写回不刷屏）
+    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 4 })
+    expect(notified).toBe(2)
     dispose()
     publishWorkbenchBridge(undefined)
   })

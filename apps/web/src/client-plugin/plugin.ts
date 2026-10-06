@@ -55,18 +55,32 @@ export const CONVERSATION_VIEW_SLOT = 'conversation.view'
 export const HERO_WORKSPACE_SLOT = 'conversation.hero.workspace'
 /** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
 export const SHELL_OVERLAY_SLOT = 'shell.overlay'
+/**
+ * 洞名：官方右栏 tab 体 keyed 槽（ui-sidebar-right seat——dispatch 键 = tab 类型定义
+ * id）。产品占用两键：'dswf-overview' / 'dswf-doc'（4.1 两段注册的第二段；第一段 =
+ * sidebarRightTabs 服务面类型定义——见 registerDockTabs）。
+ */
+export const SIDEBAR_RIGHT_PANE_TAB_SLOT = 'sidebar.right.pane.tab'
+/** 概览 tab 类型 kind = keyed body 键（= tab 定义 id；与 workbench/dock-tabs DSWF_OVERVIEW_TAB_KIND 字面量同源 pin） */
+export const OVERVIEW_TAB_KIND = 'dswf-overview'
+/** 文档 tab 类型 kind = keyed body 键（multiple + address 去重；与 dock-tabs DSWF_DOC_TAB_KIND 同源 pin） */
+export const DOC_TAB_KIND = 'dswf-doc'
+/** 文档 tab 资源地址前缀（dsh-resource:// 资源面——openResource 去重键 = 地址本身；与 dock-tabs DSWF_DOC_ADDRESS_PREFIX 同源 pin） */
+export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 /** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
 export const RECALL_VIEW_ID = 'dswf-recall'
 
 /**
- * 插件依赖的服务名（cordis inject——apply 等待七服务在场；与官方 ui-workspace 同型先例）。
+ * 插件依赖的服务名（cordis inject——apply 等待八服务在场；与官方 ui-workspace 同型先例）。
  * sidebarRight（fix-23）：官方 ui-sidebar-right 服务——知识模式右栏隐藏/恢复联动窄面。
  * layout（fix-25）：官方 ui-layout 服务——面板选择窄面（selectPanel：知识/hero 面板互换 +
  * 官方 openSession 同径 null 收口回会话）。
  * locale（fix-33 ⑧）：官方 dsh-client-locale 服务——行 label 走 locale NS（官方
  * ui-trajectory 同径先例：register(NS, {zh,en}) + bind(NS) + label thunk）。
+ * sidebarRightTabs（4.1）：官方右栏 tab 类型注册表（两段注册第一段——tech-design
+ * Integration #3；「adding a type is a registration, never an edit」官方口径）。
  */
 export const FORGE_CLIENT_INJECT = [
   'slots',
@@ -74,6 +88,7 @@ export const FORGE_CLIENT_INJECT = [
   'uiWorkspace',
   'workspaces',
   'sidebarRight',
+  'sidebarRightTabs',
   'layout',
   'locale',
 ] as const
@@ -135,6 +150,40 @@ export interface ForgeSidebarRightService {
   toggleExpanded(): void
 }
 
+/**
+ * 官方右栏 tab 类型注册表窄面（ui-sidebar-right SidebarRightTabRegistry 消费切片，4.1
+ * 两段注册第一段）。定义 = 纯静态面（地址识别/优先带/chip 标题/guide 入口卡）；keyed
+ * body = 第二段 `sidebar.right.pane.tab` 槽注册（dispatch 键 = 定义 id）。guide 入口拾取
+ * 的原位替换（replaceTab）由官方 GuideBody 承载（`tab.actions.openTab(kind,
+ * {replaceTab:true})`——上游实现核实，产品零代码）。
+ */
+export interface ForgeSidebarRightTabsService {
+  /** 注册一个 tab 类型（本插件生命周期内有效；id 冲突/同带 kind 冲突抛错） */
+  register(definition: {
+    /** 实现身份（跨全部注册唯一——keyed body 的 dispatch 键） */
+    readonly id: string
+    /** 类型判别（openTab/openResource 具名面） */
+    readonly kind: string
+    /** 每次开出独立内容（资源面：contentId=地址各自成 tab；缺省 = 每窗格一页） */
+    readonly multiple?: boolean
+    /** 资源地址 glob（含 ':' 匹配整地址）；缺省 = 按类型开的页型 */
+    readonly patterns?: readonly string[]
+    /** 优先带（缺省 extension——产品外类型最高带） */
+    readonly priority?: 'extension' | 'builtin' | 'fallback'
+    /** 地址否决（具名开时仍生效——本插件用于文档地址前缀防御） */
+    readonly canOpen?: (address: string) => boolean
+    /** tab chip 标题（开时捕获入布局记录；每次使用逐读——语言切换免重注册） */
+    readonly title: (address: string) => string
+    /** 开始页入口卡（order 升序；拾取 = 官方 GuideBody replaceTab 开出本类型） */
+    readonly guide?: readonly {
+      readonly id: string
+      readonly order: number
+      readonly title: () => string
+      readonly description?: () => string
+    }[]
+  }): () => void
+}
+
 /** 官方面板信息快照（ui-layout layout.panelInfo 消费切片） */
 export interface ForgePanelInfo {
   readonly activePanelId: string | null
@@ -174,6 +223,8 @@ export interface ForgeViewsGlobal {
     ForgeKnowledgePanel: unknown
     ForgeKnowledgeGlyph: unknown
     ForgeRecallView: unknown
+    ForgeOverviewTab: unknown
+    ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
@@ -181,8 +232,9 @@ export interface ForgeViewsGlobal {
     }) => {
       openKnowledgeEntry(entryId: number): void
       subscribe(listener: () => void): () => void
-      getSnapshot(): { drawerEntryId: number | null }
+      getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null } }
       setDrawerEntry(entryId: number | null): void
+      setOverviewContext(context: { projectId: string | null }): void
     }
   }
 }
@@ -191,7 +243,7 @@ export interface ForgeViewsGlobal {
 export interface ForgeClientCtx {
   readonly slots: ForgeSlotsService
   get(
-    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'layout' | 'locale',
+    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'sidebarRightTabs' | 'layout' | 'locale',
   ): unknown
 }
 
@@ -220,6 +272,8 @@ export interface ForgeClientActiveMarker {
   readonly views?: SlotRegistrationDiagnostics
   /** 常驻壳宿主（shell.overlay——流程宿主/相位锚/联动面载体） */
   readonly shell?: SlotRegistrationDiagnostics
+  /** 右栏 dock tab 族（4.1：两段注册——类型定义[概览/文档两 kind] + keyed body 两键） */
+  readonly dock?: SlotRegistrationDiagnostics
 }
 
 /** 洞位注册一行（注入面经 make 产出；落座后回填诊断） */
@@ -382,6 +436,86 @@ function registerConversationViews(
   )
 }
 
+/**
+ * 文档地址 → chip 标题（末段文件名——`dsh-resource://dswf-doc/<id>/<docRel>` 末段；
+ * 与 workbench/dock-tabs.tsx 地址编解码同源格式，plugin.test 字面量 pin 两侧一致）。
+ */
+function docTabTitle(address: string): string {
+  const lastSlash = address.lastIndexOf('/')
+  return lastSlash === -1 || lastSlash === address.length - 1 ? address : address.slice(lastSlash + 1)
+}
+
+/**
+ * dock tab 族登记（4.1 两段注册，tech-design Integration #3/#4——「adding a type is a
+ * registration, never an edit」官方口径）：
+ *   第一段 = sidebarRightTabs.register 两类型定义——
+ *     - `dswf-overview` 页型（无 patterns，按 kind 开）：guide 入口卡 order 0（官方
+ *       files/terminal/browser = 10/20/30 → 排最前）；拾取由官方 GuideBody
+ *       `tab.actions.openTab(kind, {replaceTab:true})` 原位替换开始 tab（上游实现核实，
+ *       产品零代码——AC2 replaceTab 载体）；
+ *     - `dswf-doc` 资源型：multiple（异地址各自成 tab）+ patterns 整地址 glob + canOpen
+ *       前缀防御；去重 = 地址本身（contentId——同地址 reveal 既有 tab，官方资源面缺省）；
+ *   第二段 = sidebar.right.pane.tab keyed 两 body（dispatch 键 = 定义 id；useTabInfo 由
+ *     seat 声明 inject 恒递达；概览 body 注入面 = 桥[锚定上下文] + 跳会话动作）。
+ * 类型定义撤销器随返回值上抛（归 apply catch 与 overlay 洞 dispose 两径——本插件
+ * 级联回收面同桥/词典，fix-33 ⑥ 对称性）。
+ */
+function registerDockTabs(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  bridge: PublishedBridge,
+  uiWorkspace: ForgeUiWorkspaceService,
+  t: (key: string) => string,
+  sidebarRightTabs: ForgeSidebarRightTabsService,
+  diagnostics: { registered?: string[] },
+): () => void {
+  const disposeOverviewType = sidebarRightTabs.register({
+    id: OVERVIEW_TAB_KIND,
+    kind: OVERVIEW_TAB_KIND,
+    title: () => t('tab.overview'),
+    guide: [
+      {
+        id: 'overview',
+        order: 0, // 官方入口卡 10/20/30——升序排最前（ui-design：项目概览[M2 排最前]）
+        title: () => t('tab.overview'),
+        description: () => t('guide.overview.desc'),
+      },
+    ],
+  })
+  const disposeDocType = sidebarRightTabs.register({
+    id: DOC_TAB_KIND,
+    kind: DOC_TAB_KIND,
+    multiple: true,
+    patterns: [`${DOC_ADDRESS_PREFIX}**`],
+    canOpen: (address: string): boolean => address.startsWith(DOC_ADDRESS_PREFIX),
+    title: docTabTitle,
+  })
+  diagnostics.registered = [...(diagnostics.registered ?? []), OVERVIEW_TAB_KIND, DOC_TAB_KIND]
+  registerSlotEntry(ctx, SIDEBAR_RIGHT_PANE_TAB_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SIDEBAR_RIGHT_PANE_TAB_SLOT,
+        key: OVERVIEW_TAB_KIND,
+        inject: () => ({
+          bridge,
+          onOpenSession: (sessionId: string): void => {
+            // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
+            uiWorkspace.openSession(sessionId)
+          },
+        }),
+      },
+      views.ForgeOverviewTab,
+    ),
+  )
+  registerSlotEntry(ctx, SIDEBAR_RIGHT_PANE_TAB_SLOT, diagnostics, () =>
+    ctx.slots.register({ name: SIDEBAR_RIGHT_PANE_TAB_SLOT, key: DOC_TAB_KIND }, views.ForgeDocsTab),
+  )
+  return () => {
+    disposeDocType()
+    disposeOverviewType()
+  }
+}
+
 /** 插件本体（client bundle factory 的返回值 = 模块 exports）。 */
 export function forgeClientPlugin(): ForgeClientPlugin {
   return {
@@ -392,6 +526,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       const centerDiagnostics: { registered?: string[]; error?: string } = {}
       const viewsDiagnostics: { registered?: string[]; error?: string } = {}
       const shellDiagnostics: { registered?: string[]; error?: string } = {}
+      const dockDiagnostics: { registered?: string[]; error?: string } = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
         activatedAt: Date.now(),
@@ -399,11 +534,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         center: centerDiagnostics,
         views: viewsDiagnostics,
         shell: shellDiagnostics,
+        dock: dockDiagnostics,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
-      // fix-33 ⑥ 缝族对称性：apply 中途抛错时桥/词典的补撤销面（catch 消费）——发布于
-      // apply 期的资源不再只依赖 overlay 洞 dispose 撤销（apply 半途死闭包不残留）
+      // fix-33 ⑥ 缝族对称性：apply 中途抛错时桥/词典/tab 类型的补撤销面（catch 消费）——
+      // 发布于 apply 期的资源不再只依赖 overlay 洞 dispose 撤销（apply 半途死闭包不残留）
       let revokeBridgeAndLocale: (() => void) | undefined
       try {
         const views = publishedViews()
@@ -411,14 +547,25 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const uiWorkspace = clientCtx.get('uiWorkspace') as ForgeUiWorkspaceService
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
+        const sidebarRightTabs = clientCtx.get('sidebarRightTabs') as ForgeSidebarRightTabsService
         const layout = clientCtx.get('layout') as ForgeLayoutService
         const locale = clientCtx.get('locale') as ForgeLocaleService
 
         // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
         // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
         const disposeLocale = locale.register(FORGE_LOCALE_NS, {
-          zh: { 'panel.knowledge': '知识库', 'view.recall': '知识召回' },
-          en: { 'panel.knowledge': 'Knowledge', 'view.recall': 'Recall' },
+          zh: {
+            'panel.knowledge': '知识库',
+            'view.recall': '知识召回',
+            'tab.overview': '项目概览',
+            'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
+          },
+          en: {
+            'panel.knowledge': 'Knowledge',
+            'view.recall': 'Recall',
+            'tab.overview': 'Overview',
+            'guide.overview.desc': 'Features, tasks, proposals and docs',
+          },
         })
         const t = locale.bind(FORGE_LOCALE_NS)
 
@@ -441,15 +588,34 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeLocale()
         }
 
+        // dock tab 族（4.1 两段注册：类型定义 + keyed body；撤销面归 apply catch 与
+        // overlay 洞 dispose 两径——基础撤销闭包已立在先，此处叠加 tab 类型面：半途失败
+        //（首个 pane.tab inject 即断）仍撤桥与词典，步步已注册资源均可撤）
+        const disposeDockTabs = registerDockTabs(
+          clientCtx,
+          views,
+          bridge,
+          uiWorkspace,
+          t,
+          sidebarRightTabs,
+          dockDiagnostics,
+        )
+        const revokeBase = revokeBridgeAndLocale
+        revokeBridgeAndLocale = (): void => {
+          revokeBase()
+          disposeDockTabs()
+        }
+
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 常驻壳宿主
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
-        // 知识模式右栏联动面；selectPanel/rightbar 官方窄面经 inject 递达）。卸载期顺带
-        // 撤销桥发布与 locale 词典 + 清 __DSH_FORGE_CLIENT__ 激活标记（fix-33 ⑥ 标记
-        // 卸载不清收口——本插件 fiber 卸载的唯一级联回收面；缺席期导航 fail-soft no-op）
+        // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥]；selectPanel/rightbar/
+        // bridge 官方窄面经 inject 递达）。卸载期顺带撤销桥发布、locale 词典与 dock tab
+        // 类型注册 + 清 __DSH_FORGE_CLIENT__ 激活标记（fix-33 ⑥ 标记卸载不清收口——本
+        // 插件 fiber 卸载的唯一级联回收面；缺席期导航 fail-soft no-op）
         registerSlotEntry(clientCtx, SHELL_OVERLAY_SLOT, shellDiagnostics, () => {
           const dispose = clientCtx.slots.register(
             {
@@ -467,6 +633,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                     sidebarRight.toggleExpanded()
                   },
                 },
+                // 概览上下文写回缝（4.1：ShellHost 锚定 → 桥 → 右栏概览 tab body）
+                bridge,
               }),
             },
             views.ForgeShellHost,
@@ -476,17 +644,20 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = undefined
             ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
             disposeLocale()
+            disposeDockTabs()
           }
         })
       } catch (error) {
-        // fix-33 ⑥：apply 中途抛错——桥/词典已发布即补撤销（死闭包不残留：桥持有官方
-        // layout 闭包，插件已废而桥面仍活会路由进废 ctx；词典残留阻塞同 ns 重复登记）
+        // fix-33 ⑥：apply 中途抛错——桥/词典/tab 类型已发布即补撤销（死闭包不残留：桥
+        // 持有官方 layout 闭包，插件已废而桥面仍活会路由进废 ctx；词典残留阻塞同 ns
+        // 重复登记；tab 类型残留占官方注册表 kind）
         revokeBridgeAndLocale?.()
         const message = error instanceof Error ? error.message : String(error)
         sidebarDiagnostics.error = message
         centerDiagnostics.error = message
         viewsDiagnostics.error = message
         shellDiagnostics.error = message
+        dockDiagnostics.error = message
       }
     },
   }
