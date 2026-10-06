@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "数据内核（唯一 SQLite 句柄）：forge 域（projects/补偿链/对账）+ 知识域（索引/召回/热度），对外双服务 ctx.forgeProjects / ctx.forgeKnowledge。",
+  "description": "数据内核（唯一 SQLite 句柄）：forge 域（projects/补偿链/对账 + M2 四域 tasks/features/proposals/docs）+ 知识域（索引/召回/热度），对外 ctx.forgeProjects / ctx.forgeKnowledge + M2 tasksHome 注入时增四域服务 ctx.forgeTasks/forgeFeatures/forgeProposals/forgeDocs。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
