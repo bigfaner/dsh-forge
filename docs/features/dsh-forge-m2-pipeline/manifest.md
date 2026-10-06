@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m2-pipeline"
 created: "2026-10-05"
-status: design
+status: tasks
 ---
 
 # Feature: dsh-forge-m2-pipeline
@@ -23,9 +23,15 @@ status: design
 
 ## Traceability
 
-| PRD Section | Design Section | UI Component | Tasks |
-|-------------|----------------|--------------|-------|
-| Goals · SC7 / SC-M2 | tech-design §Interfaces 1/6/8/9（tool 面 + 事件推送链 + dispatchPrompt 合成）+ §交互一 | UF-1 任务抽屉 / 概览三视图 | — |
-| Goals · SC4 | tech-design §Interface 4（forgeDocs）+ §交互三（发现面扫描契约） | UF-2 文档 dock tab | — |
-| Goals · SC6③ | tech-design §Interface 1（sessionLinks 双源）+ §Integration 2（header.actions 槽 + cwd 单库） | UF-1 任务抽屉 / UF-3 挂接 pill | — |
-| Goals · SC2 / SC-branch / SC-NFR / SC8 | tech-design §Interface 5（deriveTaskStoreDir 单源）+ §Testing（EQP/无 watch 审计/录制-回放）+ §Security | UF-1 概览 tab / UF-4 派生行 | — |
+> 29 业务任务（5 阶段：契约与数据基座 → core 四域服务 → 面层与前端组件 → 视图集成 → 测试主径与门）；阶段结构 = 依物分层（PRD 无阶段标记，phase-detection 守卫条款触发——无 phase-inventory.json）。全任务单面：surface-type `web`。
+
+| PRD Section | Design Section | UI Component | Placement | Tasks |
+|-------------|----------------|--------------|-----------|-------|
+| Goals · SC7 真闭环 / SC-M2 门 | tech-design §Interfaces 1/6/8/9（tool 面 + 事件推送链 + dispatchPrompt）+ §交互一 | UF-1 概览三视图 + 任务抽屉（ui-design §UF-1/§任务详情抽屉） | existing-page:右栏 dock tab | 1.1, 1.2, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 5.1, 5.2, 5.4 |
+| Goals · SC4 文档浏览 | tech-design §Interface 4（forgeDocs）+ §交互三（发现面扫描契约） | UF-2 文档 dock tab（ui-design §UF-2） | existing-page:右栏 dock tab | 1.3, 2.7, 3.9, 4.1, 5.2 |
+| Goals · SC6③ 挂接双侧 | tech-design §Interface 1（sessionLinks 双源）+ §Integration 2（header.actions 槽 + cwd 单库） | UF-3 会话头挂接 pill（ui-design §UF-3） | existing-page:conversation.session.header.actions | 2.6, 3.10, 4.2, 5.2 |
+| Goals · SC2 扩展任务域 | tech-design §Interface 5（deriveTaskStoreDir 单源）+ §Testing（EQP/无 watch/录制-回放） | UF-4 派生行 + 概览 tab（ui-design §UF-4） | existing-page:RegisterForm.tsx | 1.2, 1.4, 2.6, 3.11, 4.3, 5.3 |
+| Goals · SC-branch 悬空容错 | tech-design §Interface 4（悬空态）+ schema rel_path | UF-2 文档 tab 占位面 | existing-page:右栏 dock tab | 2.7, 3.9, 5.2 |
+| Goals · SC-NFR 回归 | tech-design §Security（路径守卫/单写路径/mitigations）+ §Testing G0/G1 | — | — | 1.1, 2.7, 3.1, 5.3 |
+| Goals · SC8 零迁移 | tech-design §交互三（frontmatter 单向阀门；无迁移代码路径）+ §Integration 1 | — | — | 1.3, 4.3, 5.3 |
+| Stories 1–7（浏览决策/派发/fix 链/重入/文档/挂接/派生行） | tech-design §PRD Coverage Map 全 15 行 | 见上各行 | 见上各行 | 已由上行覆盖（映射见各任务 User Stories 节） |
