@@ -163,13 +163,13 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
     dispose()
   })
 
-  it('接线期壳 fail-loud：未接线动词抛占位错误（不静默假成功——add/query 已 2.3 落地，锚 claimTask）', async () => {
+  it('接线期壳 fail-loud：未接线动词抛占位错误（不静默假成功——add/query 2.3、claim/submit 2.4 已落地，锚 listTasks）', async () => {
     const { ctx, provided } = stubCtx()
     const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
-      const tasks = provided.get('forgeTasks') as { claimTask: (i: unknown) => Promise<unknown> }
-      const err = await tasks.claimTask({}).catch((e: unknown) => e)
+      const tasks = provided.get('forgeTasks') as { listTasks: (q: unknown) => Promise<unknown> }
+      const err = await tasks.listTasks({}).catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Error)
       expect((err as Error).message).toContain('尚未接线')
       dispose()

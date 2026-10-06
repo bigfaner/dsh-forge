@@ -3,13 +3,15 @@
 // 2.3 扩池：ERR_TASK_NOT_FOUND / ERR_TASK_EXISTS / ERR_CYCLE_DETECTED /
 // ERR_CHAIN_DEPTH_EXCEEDED / ERR_FEATURE_NOT_FOUND——addTask/queryTask 拒绝面）；
 // 2.5 扩池：ERR_REASON_REQUIRED（transitionTask 空因）+ TaskNotFoundData.taskId 附载
-// （UI/RPC 面 id 直查路径）。
+// （UI/RPC 面 id 直查路径）；2.4 扩池：ERR_DEPENDENCIES_UNMET（claim 守卫前置未终态，
+// data 带未满足清单）+ ERR_SUMMARY_REQUIRED（success submit 空摘要）+ ReasonRequired
+// 扩 verb 'submitTask'（blocked submit 空因——同码同语义跨动词）。
 // code 字面量锚定 @dsh-forge/contracts ERROR_CODES，类名/name 手写字面量（contracts 不持
 // 运行期名映射——表 Name 列为文档性对照）；RPC 边界（3.1）序列化为 RpcErrorPayload
 // { code, message, data }，UI 按 code 映射状态。后续动词动词错误（DEPENDENCIES_* 等）
 // 随 2.4–2.5 同文件扩池。与 small-domains/errors.ts 的 FeatureNotFoundError 同 code 异类：
 // 四域互禁 import 彼此（Hard Rule），typed 类按域就近落位，跨 IPC 以 code 判别。
-import type { TaskRef, TaskStatus } from '@dsh-forge/contracts'
+import type { DependenciesUnmetData, TaskRef, TaskStatus } from '@dsh-forge/contracts'
 
 /** 校验面（Interface 10）：human = 七态 − 当前态（UI 菜单与服务端同源）；agent = claim/submit 转移矩阵 */
 export type TransitionFace = 'human' | 'agent'
@@ -174,9 +176,10 @@ export function isTaskNotFoundError(e: unknown): e is TaskNotFoundError {
 
 // ───────────────────────── 2.5 扩池：transitionTask 拒绝面 ─────────────────────────
 
-/** ERR_REASON_REQUIRED 附载（transitionTask 空因——与 small-domains/transitionFeature 同语义同 code 异类） */
+/** ERR_REASON_REQUIRED 附载（transitionTask 空因——与 small-domains/transitionFeature 同语义同 code 异类；
+ *  2.4 扩 verb 'submitTask'：blocked submit 空因同码拒绝） */
 export interface TasksReasonRequiredData {
-  readonly verb: 'transitionTask'
+  readonly verb: 'transitionTask' | 'submitTask'
 }
 
 /** 转移动词空因（400）：reason trim 后为空（转移缘由必带——审计行 reason 列的服务内校验面） */
@@ -187,6 +190,49 @@ export class ReasonRequiredError extends Error {
   constructor(data: TasksReasonRequiredData) {
     super(`${data.verb} 需要 reason（转移缘由必带——空因拒绝）`)
     this.name = 'ReasonRequiredError'
+    this.data = data
+  }
+}
+
+// ───────────────────────── 2.4 扩池：claimTask/submitTask 拒绝面 ─────────────────────────
+
+/**
+ * claim 守卫前置未终态（409）：依赖全 ∈ {completed, skipped} 才放行（db-schema §3.2 满足集
+ * ——rejected 不满足即依赖路径死锁信号）；data 带未满足清单（自然键 + 当前状态——dispatcher
+ * 重规划依据）。TaskPrerequisiteSummary 与 contracts UnmetDependency 同形，直接透传。
+ */
+export class DependenciesUnmetError extends Error {
+  readonly code = 'ERR_DEPENDENCIES_UNMET' as const
+  readonly data: DependenciesUnmetData
+
+  constructor(data: DependenciesUnmetData) {
+    super(
+      `前置依赖未满足：${data.unmet.map((u) => `${u.slug}/${u.localId} ${u.taskStatus}`).join('; ')}` +
+        `——满足集 {completed, skipped}`,
+    )
+    this.name = 'DependenciesUnmetError'
+    this.data = data
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isDependenciesUnmetError(e: unknown): e is DependenciesUnmetError {
+  return e instanceof DependenciesUnmetError
+}
+
+/** ERR_SUMMARY_REQUIRED 附载（success submit 空摘要——执行摘要必带，gate 之外的人审负载） */
+export interface TasksSummaryRequiredData {
+  readonly verb: 'submitTask'
+}
+
+/** success submit 空摘要（400）：summary trim 后为空（执行结果审计面——keyDecisions 等自由文本承载） */
+export class SummaryRequiredError extends Error {
+  readonly code = 'ERR_SUMMARY_REQUIRED' as const
+  readonly data: TasksSummaryRequiredData
+
+  constructor(data: TasksSummaryRequiredData) {
+    super(`${data.verb} result=success 需要 summary（执行摘要必带——空摘要拒绝）`)
+    this.name = 'SummaryRequiredError'
     this.data = data
   }
 }
