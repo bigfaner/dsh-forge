@@ -103,7 +103,7 @@
         "1.gate",
         "1.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.1-state-machine-phase-deriver.md",
       "record": "records/2.1-state-machine-phase-deriver.md",
       "surface-type": "web",
