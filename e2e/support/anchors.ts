@@ -142,3 +142,48 @@ export const rfBrowsing = (target: string): string =>
   `[data-dswf-rf="browsing"][data-dswf-rf-target="${target}"]`
 /** 文件浏览器列举失败态 */
 export const FB_ERROR = '[data-dswf-fb-error]'
+
+// ── M2 forge 管线（UF-1 概览 / UF-2 文档 / UF-3 挂接 pill / UF-4 派生行——5.2 台账） ──
+
+/** 概览 dock tab 面板（dswf-overview body 根） */
+export const OV_PANEL = '[data-dswf-ov-panel]'
+/** 概览子 tab（值 = proposals|features|tasks；aria-selected 激活态断言） */
+export const ovSubtabOf = (subtab: string): string => `[data-dswf-ov-subtab="${subtab}"]`
+/** 概览文档行（值 = rel_path——提案/feature 子 tab 共用行语言） */
+export const ovDocRowOf = (docRel: string): string => `[data-dswf-ov-doc="${docRel}"]`
+/** 概览父行（提案/feature 展开钮——值 = 行键） */
+export const OV_PARENT_ANY = '[data-dswf-ov-parent]'
+/** 任务子 tab 三视图切换（值 = list|swim|dag） */
+export const ttViewOf = (view: string): string => `[data-dswf-tt-view="${view}"]`
+/** 任务列表行（值 = taskId） */
+export const ttItemOf = (taskId: string): string => `[data-dswf-tt-item="${taskId}"]`
+/** 泳道列（值 = 七态之一） */
+export const ttColOf = (status: string): string => `[data-dswf-tt-col="${status}"]`
+/** 泳道卡片（值 = taskId） */
+export const ttCardOf = (taskId: string): string => `[data-dswf-tt-card="${taskId}"]`
+/** feature 绑定 pill（值 = featureSlug——任务子 tab taskbar） */
+export const ttFeatpillOf = (slug: string): string => `[data-dswf-tt-featpill="${slug}"]`
+/** 任务抽屉（右栏概览装配体内——role=dialog） */
+export const TD_DRAWER = '[data-dswf-td-drawer]'
+/** 文档 tab 面板（任意） */
+export const DOC_PANEL_ANY = '[data-dswf-doc-panel]'
+/** 文档 tab 面板（值锚 data-dswf-doc-key = `<projectId>#<docRel>`——去重键同源） */
+export const docPanelOf = (projectId: string, docRel: string): string =>
+  `[data-dswf-doc-key="${projectId}#${docRel}"]`
+/** 悬空文档占位面（SC-branch 容错锚） */
+export const DOC_DANGLING = '[data-dswf-doc-dangling]'
+/** mermaid 渲染成功面（SVG 在场——erDiagram 验收锚） */
+export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
+/** mermaid 渲染回退占位卡（非法源/渲染失败） */
+export const DOC_MERMAID_FALLBACK = '[data-dswf-doc-mermaid-fallback]'
+/** 会话头挂接 pill（任意） */
+export const STP_PILL_ANY = '[data-dswf-stp-pill]'
+/** 会话头挂接 pill 双源分型（值对 = taskId × source[link|record]——SC6③ 锚） */
+export const stpPillOf = (taskId: string, source: string): string =>
+  `[data-dswf-stp-pill="${taskId}"][data-dswf-stp-source="${source}"]`
+/** 注册表单派生行（值 = loading|ready|suspected-move|error——4.3 四态） */
+export const dsrOf = (state: string): string => `[data-dswf-dsr="${state}"]`
+/** 派生行 ready 路径逐字呈现面（SC2 单源断言读取位） */
+export const DSR_DIR = '[data-dswf-dsr-dir]'
+/** 派生行错误条（疑似移动手工指引/通用兜底共载体） */
+export const DSR_ERROR = '[data-dswf-dsr-error]'

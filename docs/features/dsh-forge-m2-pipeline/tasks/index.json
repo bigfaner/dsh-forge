@@ -569,7 +569,7 @@
         "5.1",
         "5.4"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.2-sc-functional-e2e.md",
       "record": "records/5.2-sc-functional-e2e.md",
       "surface-type": "web",
