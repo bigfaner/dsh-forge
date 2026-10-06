@@ -14,7 +14,7 @@
  *                             dsh-app-boot resolution BFS 以它为根遍历出全量 entries
  *       node_modules/         完整 hoisted 真实文件运行时树（源 = apps/host/profile.install，
  *                             autoInstallPeers: true 补全 peer-only 包）+ @dsh-forge/* 产品插件
- *                             真实拷贝（packages/{contracts,core,knowledge} 的 package.json+dist）
+ *                             真实拷贝（packages/{contracts,path-key,core,knowledge,plugin-forge} 的 package.json+dist）
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
@@ -47,13 +47,19 @@ const RUNTIME = join(STAGING, 'runtime')
 const APP_DIR = join(ROOT, 'release', 'app')
 const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 /**
- * 产品插件物化清单（3.4 增 plugin-forge）。每包必物化内容（源 = packages/<name>）：清单 +
- * 构建产物（不携带 src/测试）；plugin-forge 另携 skills/——customSkillDirs 物理挂载源
- * （boot overlay 注 skill-filesystem 行），缺席即技能面静默缺失，故必物化 fail-loud。
- * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
+ * 产品插件物化清单（3.4 增 plugin-forge；path-key = 产品包 @dsh-forge/* 运行时依赖闭包
+ * 成员——e791a46 起补列：漏列致打包形态 boot child ESM 解析 '@dsh-forge/path-key' 落空，
+ * 插件不装载、服务未 provide、main fail-soft 不注册 forge:* 通道，注册报
+ * "No handler registered for 'forge:projects/register'"）。每包必物化内容
+ * （源 = packages/<name>）：清单 + 构建产物（不携带 src/测试）；plugin-forge 另携
+ * skills/——customSkillDirs 物理挂载源（boot overlay 注 skill-filesystem 行），缺席即
+ * 技能面静默缺失，故必物化 fail-loud。README.md 全员可选（contracts 无 README——携带与否不影响运行）。
+ * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段——产品包新增
+ * @dsh-forge/* 运行时依赖须随包同步补列。
  */
 const PRODUCT_PACKAGES = {
   contracts: ['package.json', 'dist'],
+  'path-key': ['package.json', 'dist'],
   core: ['package.json', 'dist'],
   knowledge: ['package.json', 'dist'],
   'plugin-forge': ['package.json', 'dist', 'skills'],
@@ -74,6 +80,8 @@ export const REQUIRED_KEY_FILES = [
   'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
   'runtime/node_modules/@dsh-forge/contracts/package.json',
   'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
+  'runtime/node_modules/@dsh-forge/path-key/package.json',
+  'runtime/node_modules/@dsh-forge/path-key/dist/index.js',
   'runtime/node_modules/@dsh-forge/core/package.json',
   'runtime/node_modules/@dsh-forge/core/dist/index.js',
   'runtime/node_modules/@dsh-forge/knowledge/package.json',
@@ -149,6 +157,7 @@ function assertPreconditions() {
     [join(ROOT, 'apps/host/dist/boot/child.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/web/dist/index.html'), 'pnpm build（vite 壳 dist）'],
     [join(ROOT, 'packages/contracts/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
+    [join(ROOT, 'packages/path-key/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/core/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/knowledge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/plugin-forge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
