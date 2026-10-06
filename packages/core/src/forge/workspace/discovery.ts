@@ -143,7 +143,9 @@ function isLegalSlugDirName(name: string): boolean {
 // ───────────────────────── frontmatter 薄解析（自实现——铁律③ 禁 import knowledge） ─────────────────────────
 
 /** 吸收面关注的纯标量键（键名经 contracts frontmatter 契约对齐） */
-const FRONTMATTER_KEYS = ['title', 'status', 'summary', 'author'] as const
+// 单向吸收白名单（SC8——PRD「旧线 manifest 的 title/status + 文档索引，显式清单豁免」；
+// 5.3 审计锚运行期断言此封闭集：吸收面永不超出该字段清单，DB 为 SoT 单向阀门）。
+export const FRONTMATTER_KEYS = ['title', 'status', 'summary', 'author'] as const
 type ThinFrontmatter = Partial<Record<(typeof FRONTMATTER_KEYS)[number], string>>
 
 const FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---/

@@ -586,7 +586,7 @@
         "4.1",
         "5.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.3-sc2-perf-audit.md",
       "record": "records/5.3-sc2-perf-audit.md",
       "surface-type": "web",
