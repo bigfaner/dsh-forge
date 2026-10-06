@@ -1,7 +1,9 @@
 // forge/tasks 域 typed error（任务 2.1 起步：ERR_INVALID_TRANSITION——tech-design §Error Handling
 // 409 行三形统一拒绝面：from 不匹配 / 目标 ∉ transitionTargets / agent 面矩阵非法格；
 // 2.3 扩池：ERR_TASK_NOT_FOUND / ERR_TASK_EXISTS / ERR_CYCLE_DETECTED /
-// ERR_CHAIN_DEPTH_EXCEEDED / ERR_FEATURE_NOT_FOUND——addTask/queryTask 拒绝面）。
+// ERR_CHAIN_DEPTH_EXCEEDED / ERR_FEATURE_NOT_FOUND——addTask/queryTask 拒绝面）；
+// 2.5 扩池：ERR_REASON_REQUIRED（transitionTask 空因）+ TaskNotFoundData.taskId 附载
+// （UI/RPC 面 id 直查路径）。
 // code 字面量锚定 @dsh-forge/contracts ERROR_CODES，类名/name 手写字面量（contracts 不持
 // 运行期名映射——表 Name 列为文档性对照）；RPC 边界（3.1）序列化为 RpcErrorPayload
 // { code, message, data }，UI 按 code 映射状态。后续动词动词错误（DEPENDENCIES_* 等）
@@ -48,8 +50,10 @@ export function isInvalidTransitionError(e: unknown): e is InvalidTransitionErro
 /** ERR_TASK_NOT_FOUND 附载（TaskRef UNIQUE(slug, local_id) 查捞未命中——身份双轨的 agent 面解析） */
 export interface TaskNotFoundData {
   readonly projectId: string
-  /** 未命中的自然键（dependsOn 同 feature 解析时 slug = featureSlug） */
-  readonly taskRef: TaskRef
+  /** 未命中的自然键（dependsOn 同 feature 解析时 slug = featureSlug；taskId 直查路径缺省） */
+  readonly taskRef?: TaskRef
+  /** UI/RPC 面 taskId 直查未命中（2.5 transitionTask——身份双轨的 id 侧定位） */
+  readonly taskId?: string
   /**
    * 同 feature 前置/谱系解析的作用域（dependsOn localId 与 sourceTask 归属校验）——
    * 命中他 feature 同键任务亦按未命中拒（同 feature 边服务不变量——er-diagram 差异清单 #9）
@@ -57,14 +61,18 @@ export interface TaskNotFoundData {
   readonly featureSlug?: string
 }
 
-/** TaskRef(slug/local_id) 未命中（404）：queryTask 定位 / addTask dependsOn·sourceTask 解析 */
+/** TaskRef(slug/local_id) 未命中（404）：queryTask 定位 / addTask dependsOn·sourceTask 解析；taskId 未命中：transitionTask（2.5） */
 export class TaskNotFoundError extends Error {
   readonly code = 'ERR_TASK_NOT_FOUND' as const
   readonly data: TaskNotFoundData
 
   constructor(data: TaskNotFoundData) {
+    const where =
+      data.taskRef !== undefined
+        ? `${data.taskRef.slug}/${data.taskRef.localId}`
+        : `id ${data.taskId ?? '?'}`
     super(
-      `任务未命中：${data.taskRef.slug}/${data.taskRef.localId}（project ${data.projectId}` +
+      `任务未命中：${where}（project ${data.projectId}` +
         `${data.featureSlug === undefined ? '' : `，feature ${data.featureSlug} 作用域`}）`,
     )
     this.name = 'TaskNotFoundError'
@@ -162,4 +170,23 @@ export class TasksFeatureNotFoundError extends Error {
 /** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
 export function isTaskNotFoundError(e: unknown): e is TaskNotFoundError {
   return e instanceof TaskNotFoundError
+}
+
+// ───────────────────────── 2.5 扩池：transitionTask 拒绝面 ─────────────────────────
+
+/** ERR_REASON_REQUIRED 附载（transitionTask 空因——与 small-domains/transitionFeature 同语义同 code 异类） */
+export interface TasksReasonRequiredData {
+  readonly verb: 'transitionTask'
+}
+
+/** 转移动词空因（400）：reason trim 后为空（转移缘由必带——审计行 reason 列的服务内校验面） */
+export class ReasonRequiredError extends Error {
+  readonly code = 'ERR_REASON_REQUIRED' as const
+  readonly data: TasksReasonRequiredData
+
+  constructor(data: TasksReasonRequiredData) {
+    super(`${data.verb} 需要 reason（转移缘由必带——空因拒绝）`)
+    this.name = 'ReasonRequiredError'
+    this.data = data
+  }
 }

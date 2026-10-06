@@ -30,7 +30,7 @@ export interface TasksQueryDeps {
 }
 
 /** tasks 行存储形状（snake_case → TaskSnapshot 映射唯一落点；2.4/2.5 写动词同域复用） */
-interface TaskStorageRow {
+export interface TaskStorageRow {
   id: string
   slug: string
   local_id: string
@@ -70,7 +70,7 @@ interface TaskRecordStorageRow {
   created_at: string
 }
 
-const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, task_desc, priority, estimated_time,
+export const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, task_desc, priority, estimated_time,
   vars_json, source_task_id, blocked_reason, main_session, breaking, coverage, complexity,
   surface_key, surface_type, feature_id, created_at, updated_at`
 
@@ -130,6 +130,15 @@ export function resolveTaskRef(
     .get(taskRef.slug, taskRef.localId)
   if (row === undefined) {
     throw new TaskNotFoundError({ projectId, taskRef })
+  }
+  return row
+}
+
+/** 身份双轨解析（taskId → 行）：id 代理主键直查（UI/RPC 面——transitionTask 2.5），未命中 ERR_TASK_NOT_FOUND（data.taskId 附载） */
+export function resolveTaskById(db: Database.Database, projectId: string, taskId: string): TaskStorageRow {
+  const row = db.prepare<unknown[], TaskStorageRow>(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`).get(taskId)
+  if (row === undefined) {
+    throw new TaskNotFoundError({ projectId, taskId })
   }
   return row
 }

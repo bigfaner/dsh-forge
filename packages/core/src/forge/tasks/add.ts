@@ -164,8 +164,9 @@ function naturalKeysByIds(db: Database.Database, ids: readonly string[]): Map<st
   return keys
 }
 
-/** feature 相位聚合读取（推导机输入快照——事务内单源读；与 features 域同构，域内就近重述） */
-function readPhaseInput(db: Database.Database, featureId: string): {
+/** feature 相位聚合读取（推导机输入快照——事务内单源读；与 features 域同构，域内就近重述；
+ *  2.5 transitionTask 写前断言/写后重算同域复用） */
+export function readPhaseInput(db: Database.Database, featureId: string): {
   docKinds: DocKind[]
   taskStatuses: TaskStatus[]
 } {

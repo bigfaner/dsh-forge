@@ -29,6 +29,13 @@ export const AGENT_TRANSITION_MATRIX: Readonly<Record<TaskStatus, readonly TaskS
 }
 
 /**
+ * 前置满足集（db-schema §3.2/§6-4：prerequisite ∈ {completed, skipped} ⟺ 满足；
+ * rejected 不满足——依赖路径死锁信号）。消费侧：恢复钩子全满足判据（transitionTask
+ * C3 + submitTask 2.4 同族）/ validateFeatureTasks liveness（2.5）/ claim 守卫（2.4）。
+ */
+export const SATISFYING_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'skipped']
+
+/**
  * 目标态计算（Interface 10 签名逐字）：
  * - human = 七态 − 当前态（from≠to 任意通道——菜单全列机械排除自身；行序 = TASK_STATUSES 序）
  * - agent = 转移矩阵推导（claim/submit 拥有的边）

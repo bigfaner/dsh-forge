@@ -18,6 +18,8 @@ import { createFeaturesService } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
 import { createTasksService } from './forge/tasks/service.js'
+import { validateFeatureTasks } from './forge/tasks/validate.js'
+import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
@@ -68,29 +70,54 @@ const corePlugin: CorePlugin = Object.assign(
     ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
     // M2 四域装配（2.7 provide ×4）：tasksHome 缺席 = 四域整体降级缺席（P1 行为零变化）。
     // 共享单例：中央行路由 + ForgeWorkspaceStore（惰性多句柄；首建挂点 = 发现面只读扫描——
-    // 交互二「库文件缺席 → 新建 v1 + 发现面扫描」，P1 存量工作区升级 M2 首次触达补建）+
+    // 交互二「库文件缺席 → 新建 v1 + 发现面扫描」，P1 存量工作区升级 M2 首次触达补建；
+    // 2.5 送校接线：post-ingestion 挂点 → 对新入库 feature 逐个送校 validateFeatureTasks
+    // ——单 feature 子图（动词面恒单 feature），「增量集/批量」语义归本流程层闭包；发现违规
+    // warn 记账工作区 app_key_logs（scope=tasks）。挂点为同步回调（discovery fail-soft
+    // try/catch 包装），故直调 validate 同步核心而非 async 服务面——防逃逸 Promise 拒绝
+    // 绕过记账；taskStore 闭包迟绑定（首建只可能发生于装配完成后的首次触达））+
     // 事件发射器（四域写动词 emitTasksChanged 同通道）。相位推导机经注入进入 features 域
     // （2.1 单源纯函数——四域互禁 import 彼此，装配层注入消 import 边）。
     const tasksHome = config.tasksHome
     let taskStore: ForgeWorkspaceStore | undefined
     if (tasksHome !== undefined) {
       const routing = createProjectRouting(db)
-      taskStore = createWorkspaceStore({
-        resolveDir: (projectId: string) => deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)),
-        onFirstCreate: createDiscoveryFirstCreateHook({ resolveForgeDir: routing.forgeDir }),
-      })
       const events = createForgeTaskEvents()
-      ctx.reflect.provide('forgeTasks', createTasksService({ store: taskStore, events })) // 壳——2.2–2.6 接线
+      const store = createWorkspaceStore({
+        resolveDir: (projectId: string) => deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)),
+        onFirstCreate: createDiscoveryFirstCreateHook({
+          resolveForgeDir: routing.forgeDir,
+          onFeatureIngested: ({ projectId, featureSlug }) => {
+            const wsDb = store.ensureOpen(projectId) // 首建挂点内重入——句柄已入表（store.ts 先 set 后跑协作者）
+            const report = validateFeatureTasks({ store }, { projectId, featureSlug })
+            if (report.violations.length > 0) {
+              recordWorkspaceKeyLog(wsDb, {
+                level: 'warn',
+                scope: 'tasks',
+                data: {
+                  projectId,
+                  featureSlug,
+                  checked: report.checked,
+                  violations: report.violations.map((v) => ({ kind: v.kind, message: v.message, taskRef: v.taskRef })),
+                  disposition: '发现面送校发现违规——已记账（只读诊断，不阻断吸收）',
+                },
+              })
+            }
+          },
+        }),
+      })
+      taskStore = store
+      ctx.reflect.provide('forgeTasks', createTasksService({ store, events })) // 壳——2.4/2.6 继续接线
       ctx.reflect.provide(
         'forgeFeatures',
         createFeaturesService({
-          store: taskStore,
+          store,
           events,
           phase: { derivePhase: deriveFeaturePhase, assertPhaseInvariant },
         }),
       )
-      ctx.reflect.provide('forgeProposals', createProposalsService({ store: taskStore, events }))
-      ctx.reflect.provide('forgeDocs', createDocsService({ store: taskStore, resolveForgeDir: routing.forgeDir }))
+      ctx.reflect.provide('forgeProposals', createProposalsService({ store, events }))
+      ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
     }
     return () => {
       taskStore?.dispose() // 每工作区任务库句柄统一关闭（3.4 接插件 disposer 前的进程内收口）

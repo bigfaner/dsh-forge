@@ -13,6 +13,8 @@ import { ProjectWriteError } from './errors.js'
 import type { WorkspaceLike } from './registry.js'
 import { seedProjectRow } from '../testutil/db-seeds.js'
 import corePlugin, { type CoreContextFace } from '../index.js'
+import { deriveTaskStoreDir } from './workspace/derive-dir.js'
+import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './workspace/migrations.js'
 
 /** rename 结构化桩（fix-24 ②：workspaceController 窄面——注册链标题对齐消费） */
 const stubRename = { rename: async () => ({}) }
@@ -196,6 +198,68 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       const cards = await features.listFeatures({ projectId: 'p-e2e' })
       expect(cards).toHaveLength(1)
       expect(cards[0]).toMatchObject({ slug: 'discovered-feature', title: '发现面特性', docCount: 0 })
+    } finally {
+      dispose()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('2.5 送校接线：惰性首开 → post-ingestion 挂点对新入库 feature 逐个送校（发现违规 warn 记账工作区 app_key_logs）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-val-'))
+    const wsDir = join(root, 'ws')
+    // 违规形态：manifest 无 status（初值 'prd'）+ design 文档在场 → docPhaseMax='design' > 'prd'
+    // → 相位派生不变量违规（发现面送校的可断言面）；同目录再放一干净 feature（无文档无漂移）
+    const driftDir = join(wsDir, '.forge', 'docs', 'features', 'drift-feature')
+    mkdirSync(join(driftDir, 'design'), { recursive: true })
+    writeFileSync(join(driftDir, 'manifest.md'), '---\ntitle: 漂移特性\n---\n\n正文\n', 'utf-8')
+    writeFileSync(join(driftDir, 'design', 'tech-design.md'), '# 设计\n', 'utf-8')
+    const cleanDir = join(wsDir, '.forge', 'docs', 'features', 'clean-feature')
+    mkdirSync(cleanDir, { recursive: true })
+    writeFileSync(join(cleanDir, 'manifest.md'), '---\ntitle: 干净特性\n---\n\n正文\n', 'utf-8')
+    const central = openDatabase(join(root, 'state.db'))
+    seedProjectRow(central, { id: 'p-val', workspaceId: 'w-val', wsPath: wsDir, forgeDir: join(wsDir, '.forge') })
+    central.close()
+
+    const { ctx, provided } = stubCtx()
+    const dispose = corePlugin(ctx, { dbFile: join(root, 'state.db'), tasksHome: join(root, 'tasks-home') })
+    try {
+      // 首次触达 → 建库 + 发现面吸收 + 送校（挂点 fail-soft 闭包内同步执行）
+      const tasks = provided.get('forgeTasks') as {
+        validateFeatureTasks: (q: { projectId: string; featureSlug: string }) => Promise<{
+          violations: { kind: string }[]
+          checked: { featureSlug: string; tasks: number }
+        }>
+      }
+      const report = await tasks.validateFeatureTasks({ projectId: 'p-val', featureSlug: 'drift-feature' })
+      expect(report.checked).toEqual({ featureSlug: 'drift-feature', tasks: 0 })
+      expect(report.violations.map((v) => v.kind)).toEqual(['phase-invariant'])
+
+      // 送校 warn 记账（派生目录单源——第二连接直读工作区 app_key_logs，WAL 并发读安全）
+      const wsDb = openDatabase(join(deriveTaskStoreDir(join(root, 'tasks-home'), wsDir), 'forge.db'), {
+        migrations: WORKSPACE_MIGRATIONS,
+        schemaVersion: FORGE_DB_SCHEMA_VERSION,
+      })
+      try {
+        const logs = wsDb
+          .prepare<unknown[], { level: string; scope: string; data_json: string }>(
+            `SELECT level, scope, data_json FROM app_key_logs ORDER BY id`,
+          )
+          .all()
+        const sent = logs.filter((l) => l.data_json.includes('drift-feature'))
+        expect(sent).toHaveLength(1)
+        expect(sent[0]?.level).toBe('warn')
+        expect(sent[0]?.scope).toBe('tasks')
+        const data = JSON.parse(sent[0]?.data_json ?? '{}') as {
+          violations?: { kind: string }[]
+          disposition?: string
+        }
+        expect(data.violations?.map((v) => v.kind)).toEqual(['phase-invariant'])
+        expect(data.disposition).toContain('送校')
+        // 干净 feature 送校零违规——不记账
+        expect(logs.some((l) => l.data_json.includes('clean-feature'))).toBe(false)
+      } finally {
+        wsDb.close()
+      }
     } finally {
       dispose()
       rmSync(root, { recursive: true, force: true })
