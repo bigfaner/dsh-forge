@@ -152,7 +152,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(app.devDependencies).toBeUndefined()
   })
 
-  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品三插件 / sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
+  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品插件 / sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
     const must = [
       'runtime/package.json',
       'runtime/host-dist/main.js',
@@ -170,5 +170,41 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'app/package.json',
     ]
     for (const rel of must) expect(REQUIRED_KEY_FILES, `关键文件口径缺席 ${rel}`).toContain(rel)
+  })
+})
+
+describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化——打包形态 boot child ESM 解析链）', () => {
+  /** staging 口径内产品包集合（REQUIRED_KEY_FILES 路径提取——与 --check / PRODUCT_PACKAGES 同源漂移） */
+  const stagedPackages = new Set(
+    REQUIRED_KEY_FILES.flatMap((rel) => {
+      const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
+      return hit === null ? [] : [hit[1]]
+    }),
+  )
+
+  it('bug: 已 staging 产品包的 @dsh-forge/* 运行时依赖缺席 staging（boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {
+    // Root cause 实证（安装版 Electron 实测）：core dist import '@dsh-forge/path-key' 落空——
+    // runtime/node_modules 仅物化 PRODUCT_PACKAGES 硬编码三件，fix-30 新增的 path-key 漏列。
+    const missing: string[] = []
+    for (const name of [...stagedPackages].sort()) {
+      const manifest = readJson(`packages/${name}/package.json`) as { dependencies?: Record<string, string> }
+      for (const dep of Object.keys(manifest.dependencies ?? {})) {
+        if (dep.startsWith('@dsh-forge/') && !stagedPackages.has(dep.slice('@dsh-forge/'.length))) {
+          missing.push(`${name} → ${dep}`)
+        }
+      }
+    }
+    expect(missing, `staging 闭包缺口（PRODUCT_PACKAGES/REQUIRED_KEY_FILES 需补列）：${missing.join('; ')}`).toEqual([])
+  })
+
+  it('闭包成员物化口径完整：package.json + dist 双件随包（--check 断言可达）', () => {
+    for (const name of [...stagedPackages].sort()) {
+      expect(REQUIRED_KEY_FILES, `${name} package.json 口径缺席`).toContain(
+        `runtime/node_modules/@dsh-forge/${name}/package.json`,
+      )
+      expect(REQUIRED_KEY_FILES, `${name} dist 入口口径缺席`).toContain(
+        `runtime/node_modules/@dsh-forge/${name}/dist/index.js`,
+      )
+    }
   })
 })

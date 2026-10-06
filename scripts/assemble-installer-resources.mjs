@@ -14,7 +14,7 @@
  *                             dsh-app-boot resolution BFS 以它为根遍历出全量 entries
  *       node_modules/         完整 hoisted 真实文件运行时树（源 = apps/host/profile.install，
  *                             autoInstallPeers: true 补全 peer-only 包）+ @dsh-forge/* 产品插件
- *                             真实拷贝（packages/{contracts,core,knowledge} 的 package.json+dist）
+ *                             真实拷贝（packages/{contracts,path-key,core,knowledge} 的 package.json+dist）
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
@@ -46,7 +46,11 @@ const STAGING = join(ROOT, 'release', 'staging')
 const RUNTIME = join(STAGING, 'runtime')
 const APP_DIR = join(ROOT, 'release', 'app')
 const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
-const PRODUCT_PACKAGES = ['contracts', 'core', 'knowledge']
+// Root cause: 打包形态 boot child 加载 core/knowledge 插件时 ESM 解析 '@dsh-forge/path-key'
+// 落空（清单漏列该包）→ 双服务未 provide → main fail-soft 不注册 forge:* 通道 → 注册报
+// "No handler registered for 'forge:projects/register'"。清单须含产品包的 @dsh-forge/*
+// 运行时依赖闭包（守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段）。
+const PRODUCT_PACKAGES = ['contracts', 'path-key', 'core', 'knowledge']
 /** 产品插件物化内容（源 = packages/<name>）：清单 + 说明 + 构建产物（不携带 src/测试） */
 const PRODUCT_PACKAGE_FILES = ['package.json', 'README.md', 'dist']
 
@@ -64,6 +68,8 @@ export const REQUIRED_KEY_FILES = [
   'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
   'runtime/node_modules/@dsh-forge/contracts/package.json',
   'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
+  'runtime/node_modules/@dsh-forge/path-key/package.json',
+  'runtime/node_modules/@dsh-forge/path-key/dist/index.js',
   'runtime/node_modules/@dsh-forge/core/package.json',
   'runtime/node_modules/@dsh-forge/core/dist/index.js',
   'runtime/node_modules/@dsh-forge/knowledge/package.json',
@@ -136,6 +142,7 @@ function assertPreconditions() {
     [join(ROOT, 'apps/host/dist/boot/child.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/web/dist/index.html'), 'pnpm build（vite 壳 dist）'],
     [join(ROOT, 'packages/contracts/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
+    [join(ROOT, 'packages/path-key/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/core/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/knowledge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
