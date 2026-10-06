@@ -4,7 +4,7 @@
 // 可跑但 agent 工具派发恒挂起（4.2 dogfood 插桩实证），修复方向 = boot 切 child 形态。
 // 职责：argv 收 BootDshOptions JSON → loadProfileDirectory → boot overlay →
 // runProfile（direct 形态原路径原序，整体平移）→ ready 消息面世
-// {url, injections, 双服务在场位}；随后常驻应答 rpc（bridge.dispatchRpc）与
+// {url, injections, 六服务在场位（P1 双服务 + M2 四域）}；随后常驻应答 rpc（bridge.dispatchRpc）与
 // shutdown（ProcessShutdown.shutdown(0)——有界 5s 升级强退自带）。
 // boot 链模块实例经 boot-chain.ts 统一解析（fix-20：dev 形态与插件树同拷贝，
 // 消 bootstrapIncludes WeakMap 分裂——见该文件动机）。
@@ -84,6 +84,11 @@ async function main(): Promise<void> {
   const services: Partial<Record<BridgeServiceName, object>> = {
     forgeProjects: (servicesFace.get('forgeProjects') as object | undefined) ?? undefined,
     forgeKnowledge: (servicesFace.get('forgeKnowledge') as object | undefined) ?? undefined,
+    // M2 四域（Interface 1–4；tasksHome 缺席时 core 不 provide——在场位 false，main 侧降级）
+    forgeTasks: (servicesFace.get('forgeTasks') as object | undefined) ?? undefined,
+    forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
+    forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,
+    forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
   }
   send({
     type: 'ready',
@@ -92,6 +97,10 @@ async function main(): Promise<void> {
     services: {
       forgeProjects: services.forgeProjects !== undefined,
       forgeKnowledge: services.forgeKnowledge !== undefined,
+      forgeTasks: services.forgeTasks !== undefined,
+      forgeFeatures: services.forgeFeatures !== undefined,
+      forgeProposals: services.forgeProposals !== undefined,
+      forgeDocs: services.forgeDocs !== undefined,
     },
   })
   shutdownTree = () => processShutdown.shutdown(0)

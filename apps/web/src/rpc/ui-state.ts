@@ -19,9 +19,12 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_INDEX_STALE: 'empty-state',
   // 知识目录不可达——浏览面空态 + 提示（无内容可列）
   ERR_INVALID_KNOWLEDGE_DIR: 'empty-state',
-  // ── M2 15 新码（1.1 contracts 扩池承接）：通用错误条兜底层——按码精化归 3.1
-  //（疑似移动 → 错误条+指引留场 / 库不可用 → 工作区隔离态 / 读未命中 → 空态候选） ──
-  ERR_TASK_NOT_FOUND: 'error-bar',
+  // ── M2 15 新码（1.1 扩池承接；3.1 按码精化——tech-design Propagation Strategy）──
+  // 读未命中 → 空态（详情/列表面目标缺席 = 无内容可列，与知识域三码同口径）
+  ERR_TASK_NOT_FOUND: 'empty-state',
+  ERR_FEATURE_NOT_FOUND: 'empty-state',
+  ERR_PROPOSAL_NOT_FOUND: 'empty-state',
+  // 动词校验失败 → 错误条（表单/动作原地反馈，用户改参重试）
   ERR_INVALID_TRANSITION: 'error-bar',
   ERR_DEPENDENCIES_UNMET: 'error-bar',
   ERR_CYCLE_DETECTED: 'error-bar',
@@ -29,16 +32,20 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_REASON_REQUIRED: 'error-bar',
   ERR_SUMMARY_REQUIRED: 'error-bar',
   ERR_TASK_EXISTS: 'error-bar',
-  ERR_FEATURE_NOT_FOUND: 'error-bar',
   ERR_FEATURE_EXISTS: 'error-bar',
-  ERR_PROPOSAL_NOT_FOUND: 'error-bar',
   ERR_WORKSPACE_NOT_REGISTERED: 'error-bar',
-  ERR_WORKSPACE_DB_UNAVAILABLE: 'error-bar',
-  ERR_SUSPECTED_MOVE: 'error-bar',
   ERR_DOC_PATH_INVALID: 'error-bar',
+  // 疑似移动 → 错误条 + 手工指引留场（表单语境，data.guidance 喂点——注册表单单点重试）
+  ERR_SUSPECTED_MOVE: 'error-bar',
+  // 库不可用 → 工作区隔离态（概览域级横幅——单库腐化不瘫痪全局，其余工作区照常）
+  ERR_WORKSPACE_DB_UNAVAILABLE: 'banner',
 }
 
-/** UI 消费入口：catch RpcClientError → rpcUiState(error.code) → 选状态组件 */
+/**
+ * UI 消费入口：catch RpcClientError → rpcUiState(error.code) → 选状态组件。
+ * 未映射码 → 通用错误条兜底（永无裸 code 泄漏——Record 编译期穷举之外，运行期
+ * 版本错配面（主进程新版码 × 旧 renderer 映射表）亦收敛为 error-bar，不 undefined 外溢）。
+ */
 export function rpcUiState(code: ErrorCode): RpcUiStateKind {
-  return RPC_UI_STATE_BY_CODE[code]
+  return RPC_UI_STATE_BY_CODE[code] ?? 'error-bar'
 }

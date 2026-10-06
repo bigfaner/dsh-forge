@@ -14,13 +14,27 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { BrowseKnowledgeService, ProjectService } from '@dsh-forge/contracts'
+import type {
+  BrowseKnowledgeService,
+  ForgeDocsService,
+  ForgeFeaturesService,
+  ForgeProposalsService,
+  ForgeTasksService,
+  ProjectServiceM2,
+  TasksChangedEvent,
+} from '@dsh-forge/contracts'
 import {
+  asEventMessage,
   asReadyMessage,
   createBridgeProxy,
+  DOCS_SERVICE_METHODS,
+  FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
   PROJECT_SERVICE_METHODS,
+  PROJECTS_M2_SERVICE_METHODS,
+  PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
+  TASKS_SERVICE_METHODS,
   type BridgeFatalMessage,
   type BridgeReadyMessage,
   type BridgeRpcResultMessage,
@@ -45,18 +59,30 @@ export interface BootDshOptions {
   resourcesDir?: string
 }
 
-/** 产品双服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
+/** 产品六服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
 export interface DshHostServices {
-  forgeProjects: ProjectService
+  /** P1 五法 + M2 派生行第六法（Interface 5；tasksHome 缺席时子侧服务无扩法——代理调用失败面） */
+  forgeProjects: ProjectServiceM2
   /** Interface 2 七法 + browse 聚合第八法（3.5：forge:knowledge/browse 通道挂接；
    * fix-33 起 = contracts BrowseKnowledgeService 命名类型——第八法四处手工同步收口） */
   forgeKnowledge: BrowseKnowledgeService
+  // ── M2 四域（Interface 1–4；tasksHome 注入时 core provide，缺席 = M2 面降级 undefined） ──
+  forgeTasks: ForgeTasksService
+  forgeFeatures: ForgeFeaturesService
+  forgeProposals: ForgeProposalsService
+  forgeDocs: ForgeDocsService
 }
 
 export interface DshHostHandle {
   manifest: BootManifest
-  /** 产品双服务（缺席任一 = core 插件行未装载——main 侧 fail-soft 记日志不注册 forge:* 面） */
+  /** 产品六服务（缺席任一 = core 插件行未装载 / M2 面降级——main 侧 fail-soft 记日志不注册对应通道族） */
   services: Partial<DshHostServices>
+  /**
+   * 写推送事件订阅（交互二事件链中段：core emitTasksChanged → process.send(event) →
+   * 本分支 → 订阅方 → main webContents.send('forge:events/tasks-changed')）。返回退订器；
+   * 订阅方异常隔离（不阻断其余订阅与 RPC 面）。
+   */
+  onEvent: (listener: (payload: TasksChangedEvent) => void) => () => void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
 }
@@ -64,20 +90,49 @@ export interface DshHostHandle {
 /** boot child 优雅关停上限（子侧 ProcessShutdown 内部 5s 升级强退——上限略高于之为 kill 兜底位） */
 const SHUTDOWN_GRACE_MS = 6_000
 
-/** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals） */
-export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandle> {
-  const childEntry = resolveChildEntry(import.meta.url, options.resourcesDir)
-  const child = spawn(process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
-  })
-  const ready = await waitForReady(child)
-  // RPC pending 表：rpc-result 按 id 结算；child 退出 → 全量拒绝（forge:* 面信封化降级）。
-  // 失败结算 = 双形态错误解码重建（fix-28）：结构化 error → 带 code/data 的 Error——
-  // 代理面 reject 经 rpcEnvelope 判型走带内 RpcErr 信封（typed 保真）；string 旧形态不变。
+/**
+ * child 进程最小消费面（spawn 产物结构兼容——run.test.ts 以 EventEmitter 替身注入，
+ * 进程编排与桥通道解耦后事件分支可纯逻辑单测。send 返回 boolean | null：
+ * null = IPC 通道缺席，与 false 同按发送失败结算）。
+ */
+export interface BridgeChildFace {
+  on(event: 'message', listener: (message: unknown) => void): unknown
+  once(event: 'close', listener: () => void): unknown
+  send(message: unknown): boolean | null
+}
+
+/** 桥通道：RPC pending 结算 + 事件扇出（bootDshHost 装配素材；独立工厂以便替身测试） */
+export interface BridgeChannel {
+  /** 主 → 子 RPC 调用（rpc-result 按 id 结算；child 退出 → 全量拒绝） */
+  call(service: BridgeServiceName, method: string, args: readonly unknown[]): Promise<unknown>
+  /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者扇出） */
+  onEvent(listener: (payload: TasksChangedEvent) => void): () => void
+}
+
+/**
+ * 装配桥通道（消息分流：event → 事件监听扇出；rpc-result → pending 按 id 结算——失败
+ * 结算 = 双形态错误解码重建（fix-28）：结构化 error → 带 code/data 的 Error，代理面
+ * reject 经 rpcEnvelope 判型走带内 RpcErr 信封（typed 保真），string 旧形态不变；
+ * child close → pending 全量拒绝（forge:* 面信封化降级））。监听先于 ready 等待挂上
+ * ——事件与早到 rpc-result 零丢失窗。
+ */
+export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
+  const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
   child.on('message', (message) => {
+    // event 分支（3.1 交互二）：写推送事件 → onEvent 订阅方扇出（畸形信封静默忽略）
+    const event = asEventMessage(message)
+    if (event !== undefined) {
+      for (const listener of eventListeners) {
+        try {
+          listener(event.payload)
+        } catch {
+          // 订阅方异常隔离——其余订阅与 RPC 面照常
+        }
+      }
+      return
+    }
     const m = message as BridgeRpcResultMessage
     if (m?.type !== 'rpc-result') return
     const waiter = pending.get(m.id)
@@ -90,25 +145,62 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
     for (const waiter of pending.values()) waiter.reject(new Error('boot child 已退出——RPC 面不可用'))
     pending.clear()
   })
-  const call = (service: BridgeServiceName, method: string, args: readonly unknown[]): Promise<unknown> =>
-    new Promise((resolve, reject) => {
-      const id = nextId++
-      pending.set(id, { resolve, reject })
-      if (!sendToChild(child, { type: 'rpc', id, service, method, args })) {
-        pending.delete(id)
-        reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
+  return {
+    call: (service, method, args) =>
+      new Promise((resolve, reject) => {
+        const id = nextId++
+        pending.set(id, { resolve, reject })
+        if (!sendToChild(child, { type: 'rpc', id, service, method, args })) {
+          pending.delete(id)
+          reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
+        }
+      }),
+    onEvent: (listener) => {
+      eventListeners.add(listener)
+      return () => {
+        eventListeners.delete(listener)
       }
-    })
+    },
+  }
+}
+
+/** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals） */
+export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandle> {
+  const childEntry = resolveChildEntry(import.meta.url, options.resourcesDir)
+  const child = spawn(process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
+    stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
+  })
+  const channel = createBridgeChannel(child) // 消息监听先于 ready 挂上（事件零丢失窗）
+  const ready = await waitForReady(child)
+  const call = channel.call
   return {
     manifest: buildBootManifest(ready.url, ready.injections),
     services: {
       forgeProjects: ready.services.forgeProjects
-        ? createBridgeProxy<ProjectService>('forgeProjects', PROJECT_SERVICE_METHODS, call)
+        ? createBridgeProxy<ProjectServiceM2>(
+            'forgeProjects',
+            [...PROJECT_SERVICE_METHODS, ...PROJECTS_M2_SERVICE_METHODS],
+            call,
+          )
         : undefined,
       forgeKnowledge: ready.services.forgeKnowledge
         ? createBridgeProxy<DshHostServices['forgeKnowledge']>('forgeKnowledge', KNOWLEDGE_SERVICE_METHODS, call)
         : undefined,
+      forgeTasks: ready.services.forgeTasks
+        ? createBridgeProxy<DshHostServices['forgeTasks']>('forgeTasks', TASKS_SERVICE_METHODS, call)
+        : undefined,
+      forgeFeatures: ready.services.forgeFeatures
+        ? createBridgeProxy<DshHostServices['forgeFeatures']>('forgeFeatures', FEATURES_SERVICE_METHODS, call)
+        : undefined,
+      forgeProposals: ready.services.forgeProposals
+        ? createBridgeProxy<DshHostServices['forgeProposals']>('forgeProposals', PROPOSALS_SERVICE_METHODS, call)
+        : undefined,
+      forgeDocs: ready.services.forgeDocs
+        ? createBridgeProxy<DshHostServices['forgeDocs']>('forgeDocs', DOCS_SERVICE_METHODS, call)
+        : undefined,
     },
+    onEvent: channel.onEvent,
     shutdown: () => shutdownChild(child),
   }
 }
@@ -187,10 +279,10 @@ async function shutdownChild(child: ChildProcess): Promise<void> {
   })
 }
 
-/** 消息发送（通道已关不抛——返回 false 由调用方结算） */
-function sendToChild(child: ChildProcess, message: MainToChildMessage): boolean {
+/** 消息发送（通道已关/缺席不抛——false 由调用方结算；ChildProcess.send 的 null 同失败面） */
+function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildMessage): boolean {
   try {
-    return child.send(message)
+    return child.send(message) === true
   } catch {
     return false
   }

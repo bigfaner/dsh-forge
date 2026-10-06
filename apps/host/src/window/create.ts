@@ -5,7 +5,11 @@ import { resolveWindowIconPath } from './icon.js'
 
 export interface BrowserWindowLike {
   /** ws 改写栏的主窗口归属判定面（1.5：installShellStreamRewrite 消费） */
-  readonly webContents: { readonly id: number }
+  readonly webContents: {
+    readonly id: number
+    /** 主→渲染单向推送（3.1：forge:events/* 广播面——m2-wiring 消费；fake 窗口可缺席） */
+    send?(channel: string, ...args: unknown[]): unknown
+  }
   loadURL(url: string): Promise<void>
   on(event: string, listener: () => void): void
   show(): void

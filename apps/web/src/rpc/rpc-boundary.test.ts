@@ -15,8 +15,8 @@ const isAllowed = (specifier: string): boolean =>
   specifier === '@dsh-forge/contracts' || /^\.\/[\w-]+\.js$/.test(specifier)
 
 describe('AC4 rpc/ 构建图纪律（零服务端实现依赖）', () => {
-  it('rpc/ 模块面就位（client/errors/transport/ui-state/index 五面）', () => {
-    expect(Object.keys(sources).sort()).toEqual(['./client.ts', './errors.ts', './index.ts', './transport.ts', './ui-state.ts'])
+  it('rpc/ 模块面就位（client/errors/events/transport/ui-state/index 六面）', () => {
+    expect(Object.keys(sources).sort()).toEqual(['./client.ts', './errors.ts', './events.ts', './index.ts', './transport.ts', './ui-state.ts'])
   })
 
   it('import 仅限：@dsh-forge/contracts 与 rpc/ 内相对模块', () => {

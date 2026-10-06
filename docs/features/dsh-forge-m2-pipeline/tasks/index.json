@@ -252,7 +252,7 @@
         "2.gate",
         "2.x"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.1-bridge-event-rpc-channels.md",
       "record": "records/3.1-bridge-event-rpc-channels.md",
       "breaking": true,

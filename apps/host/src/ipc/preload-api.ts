@@ -1,8 +1,16 @@
 // preload 暴露面构造（定位：基础——electron 依赖隔离出 preload.mts，逻辑面可单测）。
-// 唯一暴露面两成员：getBootManifest()（1.4）+ invoke(channel, payload)（2.4 RPC 面）。
+// 唯一暴露面三成员：getBootManifest()（1.4）+ invoke(channel, payload)（2.4 RPC 面）+
+// onForgeTasksChanged(cb)（3.1 事件订阅面——主→渲染单向推送，Interface 7 forge:events/*）。
 // invoke 守 allowlist（FORGE_CHANNEL_ALLOWLIST 唯一源）——renderer 侧第一道拒绝，
 // main 侧 createForgeIpc 注册面为第二道（纵深防御，electron-ipc-security 约定：最小面）。
-import { FORGE_CHANNEL_ALLOWLIST, type ForgeChannel } from '@dsh-forge/contracts'
+// 事件订阅守 FORGE_EVENT_CHANNELS 值域（推送面不进 invoke allowlist——方向相异）。
+import {
+  FORGE_CHANNEL_ALLOWLIST,
+  FORGE_EVENT_CHANNELS,
+  type ForgeChannel,
+  type ForgeEventChannel,
+  type TasksChangedEvent,
+} from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import type { BootManifest } from '../boot/index.js'
@@ -13,8 +21,39 @@ export interface PreloadInvokeFace {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>
 }
 
-/** window.dshForge 暴露面（web/src/rpc transport.ts 结构同型镜像——运行期边界禁互引源码） */
-export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace) {
+/** Electron ipcRenderer 的事件消费面（on/removeListener——preload.mts 传真身；测试注入 fake） */
+export interface PreloadEventFace {
+  on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown
+  removeListener(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown
+}
+
+/**
+ * forge:events/* 订阅（allowlist 守卫——FORGE_EVENT_CHANNELS 值域唯一源，未列通道
+ * fail-loud 拒绝，与 invoke 面同形纪律）；载荷形状守卫（{ projectId } 只读——Hard Rule；
+ * 畸形载荷静默跳过，不猜测不转发）；返回退订器（removeListener）。
+ */
+export function subscribeForgeEvent(
+  events: PreloadEventFace,
+  channel: ForgeEventChannel,
+  listener: (payload: TasksChangedEvent) => void,
+): () => void {
+  if (!(Object.values(FORGE_EVENT_CHANNELS) as readonly string[]).includes(channel)) {
+    throw new Error(
+      `[preload] forge 事件通道不在 allowlist，拒绝订阅：${channel}（唯一源 = @dsh-forge/contracts FORGE_EVENT_CHANNELS）`,
+    )
+  }
+  const onMessage = (_event: unknown, payload: unknown): void => {
+    if (typeof payload !== 'object' || payload === null) return
+    const projectId = (payload as Record<string, unknown>).projectId
+    if (typeof projectId !== 'string') return
+    listener({ projectId })
+  }
+  events.on(channel, onMessage)
+  return () => events.removeListener(channel, onMessage)
+}
+
+/** window.dshForge 暴露面（web/src/rpc transport.ts/events.ts 结构同型镜像——运行期边界禁互引源码） */
+export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?: PreloadEventFace) {
   return {
     getBootManifest: (): Promise<BootManifest> =>
       invokeFace.invoke(BOOT_CHANNEL) as Promise<BootManifest>,
@@ -26,6 +65,17 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace) {
         )
       }
       return invokeFace.invoke(channel, payload)
+    },
+    /**
+     * forge:events/tasks-changed 订阅（3.1——Interface 7 推送面 preload 半边；
+     * cb 收只读 { projectId } 载荷；返回退订器）。事件面缺席（events 未注入——
+     * 非 Electron 载体/测试替身）调用即 fail-loud 拒绝，不静默假装订阅成功。
+     */
+    onForgeTasksChanged: (cb: (payload: TasksChangedEvent) => void): (() => void) => {
+      if (events === undefined) {
+        throw new Error('[preload] 事件订阅面缺席（ipcRenderer 事件面未接）——onForgeTasksChanged 不可用')
+      }
+      return subscribeForgeEvent(events, FORGE_EVENT_CHANNELS.tasksChanged, cb)
     },
   }
 }

@@ -6,23 +6,37 @@
 // fix-33：子侧 send 防护（sendGuarded 序列化失败保 id 降级）+ 白名单类型锚
 // （satisfies/覆盖完备性——服务面改名/漂移编译期显形）。
 import { assertType, describe, expect, it } from 'vitest'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import {
+  asEventMessage,
   asReadyMessage,
+  BRIDGE_SERVICE_NAMES,
   createBridgeProxy,
   decodeWire,
   dispatchRpc,
+  DOCS_SERVICE_METHODS,
   encodeWire,
   extraPatchFiles,
+  FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
   parseChildOptions,
   PROJECT_SERVICE_METHODS,
+  PROJECTS_M2_SERVICE_METHODS,
+  PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
   sendGuarded,
   serializeBridgeError,
+  TASKS_SERVICE_METHODS,
   type BridgeRpcRequest,
   type ChildToMainMessage,
+  type DocsWhitelistCoverage,
+  type FeaturesWhitelistCoverage,
   type KnowledgeWhitelistCoverage,
   type ProjectWhitelistCoverage,
+  type ProjectsM2WhitelistCoverage,
+  type ProposalsWhitelistCoverage,
+  type ServiceNamesCoverage,
+  type TasksWhitelistCoverage,
 } from './bridge.js'
 
 /** typed error 结构替身（core ProjectWriteError 同型：readonly code + data + Error——fix-28 过桥保真锚） */
@@ -110,25 +124,92 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
 })
 
 describe('asReadyMessage（ready 守卫）', () => {
-  it('形状齐备 → ready 消息（url/injections/双服务在场位）', () => {
+  it('形状齐备 → ready 消息（url/injections/六服务在场位——Interface 6 ready 位 ×4 扩池）', () => {
     const ready = asReadyMessage({
       type: 'ready',
       url: 'http://127.0.0.1:1/#t',
       injections: [{ url: 'x.js' }],
-      services: { forgeProjects: true, forgeKnowledge: false },
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: false,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: false,
+        forgeDocs: true,
+      },
     })
     expect(ready).toEqual({
       type: 'ready',
       url: 'http://127.0.0.1:1/#t',
       injections: [{ url: 'x.js' }],
-      services: { forgeProjects: true, forgeKnowledge: false },
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: false,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: false,
+        forgeDocs: true,
+      },
     })
   })
 
-  it('非 ready 消息（rpc-result 等）与形状残缺 → undefined', () => {
+  it('M2 四域在场位缺席任一 → undefined（六位齐备才可作 manifest 面）', () => {
+    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs'] as const) {
+      const services = {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+        [missing]: undefined,
+      }
+      expect(asReadyMessage({ type: 'ready', url: 'http://x', injections: [], services })).toBeUndefined()
+    }
+  })
+
+  it('非 ready 消息（rpc-result/event 等）与形状残缺 → undefined', () => {
     expect(asReadyMessage({ type: 'rpc-result', id: 1, ok: true, data: 1 })).toBeUndefined()
+    expect(asReadyMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 'p' } })).toBeUndefined()
     expect(asReadyMessage({ type: 'ready', injections: [], services: { forgeProjects: true } })).toBeUndefined()
     expect(asReadyMessage(null)).toBeUndefined()
+  })
+})
+
+// ── 3.1 桥事件信封（G1-09 pin：信封形状 + channel 常量） ──
+
+describe('asEventMessage（事件消息守卫——run.ts event 分支消费）', () => {
+  it('形状齐备 → 事件消息（channel = FORGE_EVENT_CHANNELS 常量值本尊；载荷只读 { projectId }）', () => {
+    const event = asEventMessage({
+      type: 'event',
+      channel: 'forge:events/tasks-changed',
+      payload: { projectId: 'p-1' },
+    })
+    expect(event).toEqual({
+      type: 'event',
+      channel: FORGE_EVENT_CHANNELS.tasksChanged,
+      payload: { projectId: 'p-1' },
+    })
+  })
+
+  it('非 event 消息 / channel 越allowlist / 载荷形状残缺 → undefined（静默忽略不转发）', () => {
+    expect(asEventMessage({ type: 'rpc-result', id: 1, ok: true })).toBeUndefined()
+    expect(asEventMessage({ type: 'event', channel: 'forge:events/evil', payload: { projectId: 'p' } })).toBeUndefined()
+    expect(asEventMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged })).toBeUndefined()
+    expect(asEventMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: null })).toBeUndefined()
+    expect(
+      asEventMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 42 } }),
+    ).toBeUndefined()
+    expect(
+      asEventMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { other: 'x' } }),
+    ).toBeUndefined()
+  })
+
+  it('载荷只读面：守卫重建新载荷对象（不透传原引用——channel/payload Hard Rule 只读口径）', () => {
+    const payload = { projectId: 'p-1' }
+    const event = asEventMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload })!
+    expect(event.payload).not.toBe(payload)
+    expect(event.payload).toEqual(payload)
   })
 })
 
@@ -249,7 +330,7 @@ describe('createBridgeProxy（主侧代理）', () => {
     expect(heat.get(2)).toBe(9)
   })
 
-  it('方法白名单常量 = contracts 服务面全集（代理可达面锚）', () => {
+  it('方法白名单常量 = contracts 服务面全集（代理可达面锚；M2 四域 + projects 扩族——G1-10）', () => {
     expect([...PROJECT_SERVICE_METHODS]).toEqual([
       'registerProject',
       'listProjects',
@@ -266,6 +347,36 @@ describe('createBridgeProxy（主侧代理）', () => {
       'heatByEntry',
       'sessionRecall',
       'browse',
+    ])
+    expect([...TASKS_SERVICE_METHODS]).toEqual([
+      'addTask',
+      'claimTask',
+      'submitTask',
+      'transitionTask',
+      'queryTask',
+      'validateFeatureTasks',
+      'listTasks',
+      'taskStats',
+      'taskGraph',
+      'taskDetail',
+      'sessionLinks',
+    ])
+    expect([...FEATURES_SERVICE_METHODS]).toEqual([
+      'registerFeature',
+      'transitionFeature',
+      'upsertFeatureDoc',
+      'listFeatures',
+    ])
+    expect([...PROPOSALS_SERVICE_METHODS]).toEqual(['createProposal', 'transitionProposal', 'listProposals'])
+    expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
+    expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
+    expect([...BRIDGE_SERVICE_NAMES]).toEqual([
+      'forgeProjects',
+      'forgeKnowledge',
+      'forgeTasks',
+      'forgeFeatures',
+      'forgeProposals',
+      'forgeDocs',
     ])
   })
 })
@@ -302,7 +413,15 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
     const failAll = (): void => {
       throw new TypeError('circular structure')
     }
-    expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: { forgeProjects: true, forgeKnowledge: true } }, failAll)).not.toThrow()
+    const sixBits = {
+      forgeProjects: true,
+      forgeKnowledge: true,
+      forgeTasks: true,
+      forgeFeatures: true,
+      forgeProposals: true,
+      forgeDocs: true,
+    }
+    expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
     expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
     expect(sent).toEqual([])
   })
@@ -326,7 +445,19 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
   it('覆盖完备性类型收敛 never：服务面缺席方法在此显形（assertType 零运行期——类型漂移由 lint:test-types 拦截）', () => {
     assertType<never>(undefined as ProjectWhitelistCoverage)
     assertType<never>(undefined as KnowledgeWhitelistCoverage)
+    assertType<never>(undefined as TasksWhitelistCoverage)
+    assertType<never>(undefined as FeaturesWhitelistCoverage)
+    assertType<never>(undefined as ProposalsWhitelistCoverage)
+    assertType<never>(undefined as DocsWhitelistCoverage)
+    assertType<never>(undefined as ProjectsM2WhitelistCoverage)
+    assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
+    expect(TASKS_SERVICE_METHODS).toHaveLength(11)
+    expect(FEATURES_SERVICE_METHODS).toHaveLength(4)
+    expect(PROPOSALS_SERVICE_METHODS).toHaveLength(3)
+    expect(DOCS_SERVICE_METHODS).toHaveLength(1)
+    expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(6)
   })
 })

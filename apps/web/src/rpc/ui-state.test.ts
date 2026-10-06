@@ -1,8 +1,9 @@
 // 2.4 AC5——错误码 → UI 状态映射：全码穷举 + 三态口径（空态/错误条/横幅）。
-// 1.1（M2）扩池：15 新码先行落通用错误条兜底层（tech-design Propagation Strategy
-// 「未映射码 → 通用错误条兜底」；按码精化归 3.1）。
+// 3.1（M2）按码精化（tech-design Propagation Strategy）：读未命中 → 空态 /
+// 疑似移动 → 错误条+指引留场 / 库不可用 → 工作区隔离态（横幅）；未映射码 → 通用
+// 错误条兜底（永无裸 code 泄漏——运行期版本错配面）。
 import { describe, expect, it } from 'vitest'
-import { ERROR_CODES } from '@dsh-forge/contracts'
+import { ERROR_CODES, type ErrorCode } from '@dsh-forge/contracts'
 import { RPC_UI_STATE_BY_CODE, rpcUiState, type RpcUiStateKind } from './ui-state.js'
 
 const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
@@ -12,8 +13,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_ENTRY_NOT_FOUND: 'empty-state',
   ERR_INDEX_STALE: 'empty-state',
   ERR_INVALID_KNOWLEDGE_DIR: 'empty-state',
-  // M2 15 新码（1.1 承接）：通用错误条兜底层——按码精化归 3.1
-  ERR_TASK_NOT_FOUND: 'error-bar',
+  // M2 15 新码（3.1 按码精化）
+  ERR_TASK_NOT_FOUND: 'empty-state',
   ERR_INVALID_TRANSITION: 'error-bar',
   ERR_DEPENDENCIES_UNMET: 'error-bar',
   ERR_CYCLE_DETECTED: 'error-bar',
@@ -21,11 +22,11 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_REASON_REQUIRED: 'error-bar',
   ERR_SUMMARY_REQUIRED: 'error-bar',
   ERR_TASK_EXISTS: 'error-bar',
-  ERR_FEATURE_NOT_FOUND: 'error-bar',
+  ERR_FEATURE_NOT_FOUND: 'empty-state',
   ERR_FEATURE_EXISTS: 'error-bar',
-  ERR_PROPOSAL_NOT_FOUND: 'error-bar',
+  ERR_PROPOSAL_NOT_FOUND: 'empty-state',
   ERR_WORKSPACE_NOT_REGISTERED: 'error-bar',
-  ERR_WORKSPACE_DB_UNAVAILABLE: 'error-bar',
+  ERR_WORKSPACE_DB_UNAVAILABLE: 'banner',
   ERR_SUSPECTED_MOVE: 'error-bar',
   ERR_DOC_PATH_INVALID: 'error-bar',
 }
@@ -45,5 +46,10 @@ describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => 
     for (const kind of Object.values(RPC_UI_STATE_BY_CODE)) {
       expect(['error-bar', 'banner', 'empty-state']).toContain(kind)
     }
+  })
+
+  it('未映射码 → 通用错误条兜底（运行期版本错配面：主进程新码 × 旧映射表——永无裸 code/undefined 泄漏）', () => {
+    expect(rpcUiState('ERR_FUTURE_CODE' as ErrorCode)).toBe('error-bar')
+    expect(rpcUiState('' as ErrorCode)).toBe('error-bar')
   })
 })

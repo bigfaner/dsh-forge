@@ -34,7 +34,7 @@ if (document.documentElement !== null) {
   })
 }
 
-contextBridge.exposeInMainWorld('dshForge', createDshForgePreloadApi(ipcRenderer))
+contextBridge.exposeInMainWorld('dshForge', createDshForgePreloadApi(ipcRenderer, ipcRenderer))
 if (directoryPickerEnabled()) {
   contextBridge.exposeInMainWorld('__DSH_DIRECTORY_PICKER__', createDirectoryPickerBridge(ipcRenderer))
 }

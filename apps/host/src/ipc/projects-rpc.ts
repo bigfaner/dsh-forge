@@ -5,8 +5,11 @@
 // boot 后接 ctx.forgeProjects，查询面 2.3 并齐后全五通道实跑）。
 import {
   PROJECTS_CHANNELS,
+  PROJECTS_M2_CHANNELS,
+  type DeriveTaskStoreDirRequest,
   type GetProjectRequest,
   type ProjectService,
+  type ProjectServiceM2,
   type RegisterProjectInput,
   type UpdateProjectRequest,
 } from '@dsh-forge/contracts'
@@ -29,6 +32,21 @@ export function registerProjectsChannels(ipc: ForgeIpc, service: ProjectService)
     rpcEnvelope((req: UpdateProjectRequest) => service.updateProject(req.id, req.patch)),
   )
   ipc.register(PROJECTS_CHANNELS.reconcile, rpcEnvelope(() => service.reconcileAtStartup()))
+}
+
+/**
+ * M2 扩族注册（3.1——Interface 5 派生行；独立函数不动上方 P1 五通道注册面：
+ * contracts PROJECTS_M2_CHANNELS「P1 host 注册面零波及」注记）。服务注入面收窄为
+ * deriveTaskStoreDir 单法 Pick（tasksHome 缺席的旧子进程 = 代理调用失败面，fail-loud）。
+ */
+export function registerProjectsM2Channels(
+  ipc: ForgeIpc,
+  service: Pick<ProjectServiceM2, 'deriveTaskStoreDir'>,
+): void {
+  ipc.register(
+    PROJECTS_M2_CHANNELS.deriveTaskStoreDir,
+    rpcEnvelope((req: DeriveTaskStoreDirRequest) => service.deriveTaskStoreDir(req)),
+  )
 }
 
 /**

@@ -1,7 +1,10 @@
 // 2.4 AC3 renderer 侧守门——preload 暴露面：allowlist 通道转发、未列通道拒绝（负样例）；
 // fix-14 __DSH_DIRECTORY_PICKER__ 桥成员 + e2e 回退面开关。
 // fix-40 Windows 壳标题栏标记（markWindowsTitlebarShell）——官方补偿面激活的 preload 半边。
+// 3.1 事件订阅面 onForgeTasksChanged（Interface 7 forge:events/*——allowlist 守卫 +
+// 载荷形状守卫 + 退订）。
 import { describe, expect, it, vi } from 'vitest'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import {
@@ -9,13 +12,37 @@ import {
   createDshForgePreloadApi,
   directoryPickerEnabled,
   markWindowsTitlebarShell,
+  subscribeForgeEvent,
   type ShellMarkTarget,
+  type PreloadEventFace,
   type PreloadInvokeFace,
 } from './preload-api.js'
 
 function fakeFace() {
   // fix-33 ⑩ 测试类型门：vi.fn 泛型锚 PreloadInvokeFace['invoke']（裸 Mock<Procedure> 不满足面型）
   return { invoke: vi.fn<PreloadInvokeFace['invoke']>().mockResolvedValue({ ok: true, data: [] }) }
+}
+
+/** ipcRenderer 事件面替身：on/removeListener 记录（listener 持有供测试触发/断言退订） */
+function fakeEventFace() {
+  const listeners = new Map<string, Array<(event: unknown, ...args: unknown[]) => void>>()
+  return {
+    on: vi.fn<PreloadEventFace['on']>((channel, listener) => {
+      const list = listeners.get(channel) ?? []
+      list.push(listener)
+      listeners.set(channel, list)
+    }),
+    removeListener: vi.fn<PreloadEventFace['removeListener']>((channel, listener) => {
+      const list = listeners.get(channel) ?? []
+      const index = list.indexOf(listener)
+      if (index >= 0) list.splice(index, 1)
+    }),
+    /** 测试发射面：以 ipcRenderer.on 语义（event, payload）触发指定通道监听 */
+    emit: (channel: string, payload: unknown): void => {
+      for (const listener of listeners.get(channel) ?? []) listener({}, payload)
+    },
+    listenerCount: (channel: string): number => (listeners.get(channel) ?? []).length,
+  }
 }
 
 describe('preload 暴露面（window.dshForge）', () => {
@@ -47,6 +74,58 @@ describe('preload 暴露面（window.dshForge）', () => {
     const api = createDshForgePreloadApi(face)
     expect(() => api.invoke('forge:projects/lists' as never)).toThrow(/allowlist/)
     expect(() => api.invoke('forge:knowledge/search' as never)).toThrow(/allowlist/) // agent 面动词不入 web RPC（双门分工）
+  })
+})
+
+// ── 3.1 事件订阅面（onForgeTasksChanged——Interface 7 forge:events/* 推送半边） ──
+
+describe('事件订阅面 onForgeTasksChanged（allowlist 守卫 + 载荷形状守卫 + 退订）', () => {
+  it('订阅 → ipcRenderer.on(forge:events/tasks-changed)；事件载荷 { projectId } 透传 cb', () => {
+    const face = fakeFace()
+    const events = fakeEventFace()
+    const api = createDshForgePreloadApi(face, events)
+    const received: string[] = []
+    api.onForgeTasksChanged((payload) => received.push(payload.projectId))
+    expect(events.on).toHaveBeenCalledWith(FORGE_EVENT_CHANNELS.tasksChanged, expect.any(Function))
+    events.emit(FORGE_EVENT_CHANNELS.tasksChanged, { projectId: 'p-1' })
+    expect(received).toEqual(['p-1'])
+  })
+
+  it('载荷形状残缺（非对象/缺 projectId/非 string）静默跳过——cb 零触发（只读载荷 { projectId } Hard Rule）', () => {
+    const face = fakeFace()
+    const events = fakeEventFace()
+    const api = createDshForgePreloadApi(face, events)
+    const received: string[] = []
+    api.onForgeTasksChanged((payload) => received.push(payload.projectId))
+    for (const malformed of [null, 42, 'p-1', {}, { projectId: 42 }, { other: 'x' }]) {
+      events.emit(FORGE_EVENT_CHANNELS.tasksChanged, malformed)
+    }
+    expect(received).toEqual([])
+  })
+
+  it('退订 → ipcRenderer.removeListener（再发零触达；重复退订幂等无害）', () => {
+    const face = fakeFace()
+    const events = fakeEventFace()
+    const api = createDshForgePreloadApi(face, events)
+    const received: string[] = []
+    const off = api.onForgeTasksChanged((payload) => received.push(payload.projectId))
+    expect(events.listenerCount(FORGE_EVENT_CHANNELS.tasksChanged)).toBe(1)
+    off()
+    expect(events.removeListener).toHaveBeenCalledWith(FORGE_EVENT_CHANNELS.tasksChanged, expect.any(Function))
+    expect(events.listenerCount(FORGE_EVENT_CHANNELS.tasksChanged)).toBe(0)
+    events.emit(FORGE_EVENT_CHANNELS.tasksChanged, { projectId: 'p-2' })
+    expect(received).toEqual([])
+  })
+
+  it('事件面缺席（events 未注入）→ 调用即 fail-loud 拒绝（不静默假装订阅成功）', () => {
+    const api = createDshForgePreloadApi(fakeFace())
+    expect(() => api.onForgeTasksChanged(() => {})).toThrow(/事件订阅面缺席/)
+  })
+
+  it('subscribeForgeEvent allowlist 守卫负样例：未列事件通道拒绝订阅（FORGE_EVENT_CHANNELS 唯一源）', () => {
+    const events = fakeEventFace()
+    expect(() => subscribeForgeEvent(events, 'forge:events/evil' as never, () => {})).toThrow(/allowlist/)
+    expect(events.on).not.toHaveBeenCalled()
   })
 })
 

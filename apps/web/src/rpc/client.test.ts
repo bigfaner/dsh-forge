@@ -2,11 +2,18 @@
 // 2.8 增 fs 面（forge:fs/listDir）：通道常量唯一源 + 缺省主目录请求负载形状。
 // 3.5 增 knowledge 面（forge:knowledge/* 五通道）：typed 结果、负载形状、双门分工（AC4）、
 // 知识域三码 typed error 反序列化（AC2 renderer 侧半边——与 host 实层信封互为往返自证）。
+// 3.1 增 M2 四族（forge:{tasks,features,proposals,docs}/*）+ projects 派生行扩族：
+// 通道常量本尊、负载形状、SC7 面分治（写动词恒不在 client 面）。
 import { describe, expect, it, vi } from 'vitest'
 import {
+  DOCS_CHANNELS,
+  FEATURES_CHANNELS,
   FS_CHANNELS,
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
+  PROJECTS_M2_CHANNELS,
+  PROPOSALS_CHANNELS,
+  TASKS_CHANNELS,
   type DirListing,
   type DomainNode,
   type EntryDetail,
@@ -213,6 +220,129 @@ describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面�
       expect(err.message).toBe(envelopes[j]!.message)
       expect(err.data).toEqual(envelopes[j]!.data)
     }
+  })
+})
+
+// ── 3.1 M2 四族 + projects 派生行扩族（Interface 7——薄 Controller：仅参数映射与路由） ──
+
+describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负载形状）', () => {
+  it('projects.deriveTaskStoreDir：{ workspaceDir } 负载 → DeriveTaskStoreDirResult', async () => {
+    const t = fakeTransport()
+    t.respondWith(() => ({ ok: true, data: { dir: 'C:/forge-workspaces/demo@a1b2c3d4' } }))
+    const client = createForgeRpcClient(t.transport)
+    await expect(client.projects.deriveTaskStoreDir('C:\\ws\\demo')).resolves.toEqual({
+      dir: 'C:/forge-workspaces/demo@a1b2c3d4',
+    })
+    expect(t.calls).toEqual([
+      { channel: PROJECTS_M2_CHANNELS.deriveTaskStoreDir, payload: { workspaceDir: 'C:\\ws\\demo' } },
+    ])
+  })
+
+  it('tasks 八法：通道名 = TASKS_CHANNELS 常量值本尊；负载原样；typed 返回', async () => {
+    const t = fakeTransport()
+    const snapshot = {
+      taskId: 't-1', slug: 'demo', localId: '2.1', featureId: 'f-1', title: 'x', taskType: 'coding-feature',
+      taskStatus: 'in_progress', mainSession: false, breaking: false, complexity: 'high',
+      createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
+    }
+    t.respondWith((channel) => {
+      if (channel === TASKS_CHANNELS.transition) return { ok: true, data: snapshot }
+      if (channel === TASKS_CHANNELS.query) return { ok: true, data: { task: snapshot } }
+      if (channel === TASKS_CHANNELS.validateFeatureTasks) return { ok: true, data: { violations: [], checked: { featureSlug: 'demo', tasks: 0 } } }
+      if (channel === TASKS_CHANNELS.list) return { ok: true, data: [] }
+      if (channel === TASKS_CHANNELS.stats) return { ok: true, data: { total: 0, byStatus: {} } }
+      if (channel === TASKS_CHANNELS.graph) return { ok: true, data: { tasks: [], edges: [] } }
+      if (channel === TASKS_CHANNELS.sessionLinks) return { ok: true, data: [] }
+      return { ok: true, data: { ...snapshot, records: [], waitingOnMe: [], sessions: [], actualFiles: [], allowedTransitions: [], prerequisites: [], refs: [], sessionCount: 0 } }
+    })
+    const client = createForgeRpcClient(t.transport)
+    const transitionInput = { projectId: 'p-1', taskId: 't-1', toStatus: 'blocked' as const, reason: '等待' }
+    await expect(client.tasks.transition(transitionInput)).resolves.toMatchObject({ taskId: 't-1' })
+    await expect(client.tasks.query({ projectId: 'p-1', taskRef: { slug: 'demo', localId: '2.1' } })).resolves.toMatchObject({ task: { taskId: 't-1' } })
+    await client.tasks.validateFeatureTasks({ projectId: 'p-1', featureSlug: 'demo' })
+    await client.tasks.list({ projectId: 'p-1', search: '桥' })
+    await client.tasks.stats({ projectId: 'p-1' })
+    await client.tasks.graph({ projectId: 'p-1', featureSlug: 'demo' })
+    await client.tasks.detail({ projectId: 'p-1', taskId: 't-1' })
+    await client.tasks.sessionLinks({ projectId: 'p-1', sessionId: 'sess-1' })
+    expect(t.calls.map((c) => c.channel)).toEqual(Object.values(TASKS_CHANNELS))
+    expect(t.calls[0]?.payload).toEqual(transitionInput)
+    expect(t.calls[1]?.payload).toEqual({ projectId: 'p-1', taskRef: { slug: 'demo', localId: '2.1' } })
+  })
+
+  it('features 四法 + proposals list + docs read/openExternal：通道常量本尊 + typed 返回', async () => {
+    const t = fakeTransport()
+    const featureRow = {
+      featureId: 'f-1', slug: 'demo', title: '演示', featureStatus: 'discovery',
+      createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
+    }
+    t.respondWith((channel) => {
+      if (channel === FEATURES_CHANNELS.register || channel === FEATURES_CHANNELS.transition) return { ok: true, data: featureRow }
+      if (channel === FEATURES_CHANNELS.upsertDoc) {
+        return { ok: true, data: { featureId: 'f-1', docKind: 'prd-spec', relPath: 'features/demo/prd-spec.md', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' } }
+      }
+      if (channel === FEATURES_CHANNELS.list) return { ok: true, data: [] }
+      if (channel === PROPOSALS_CHANNELS.list) {
+        return { ok: true, data: [{ proposalId: 'pr-1', slug: 'p', title: '提案', proposalStatus: 'open', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' }] }
+      }
+      if (channel === DOCS_CHANNELS.read) return { ok: true, data: { content: '# T', canonicalPath: 'C:/x.md', dangling: false } }
+      return { ok: true, data: undefined } // openExternal = void
+    })
+    const client = createForgeRpcClient(t.transport)
+    await expect(client.features.register({ projectId: 'p-1', slug: 'demo', title: '演示' })).resolves.toMatchObject({ featureId: 'f-1' })
+    await client.features.transition({ projectId: 'p-1', featureId: 'f-1', toStatus: 'archived', reason: '收纳' })
+    await client.features.upsertDoc({ projectId: 'p-1', featureSlug: 'demo', docKind: 'prd-spec', relPath: 'features/demo/prd-spec.md' })
+    await client.features.list({ projectId: 'p-1' })
+    await expect(client.proposals.list({ projectId: 'p-1' })).resolves.toHaveLength(1)
+    await expect(client.docs.read({ projectId: 'p-1', docRel: 'x.md' })).resolves.toMatchObject({ dangling: false })
+    await expect(client.docs.openExternal({ projectId: 'p-1', docRel: 'x.md' })).resolves.toBeUndefined()
+    expect(t.calls.map((c) => c.channel)).toEqual([
+      ...Object.values(FEATURES_CHANNELS),
+      PROPOSALS_CHANNELS.list,
+      DOCS_CHANNELS.read,
+      DOCS_CHANNELS.openExternal,
+    ])
+  })
+
+  it('SC7 面分治：写动词恒不在 client 面（add/claim/submit/createProposal/transitionProposal）', () => {
+    const client = createForgeRpcClient(fakeTransport().transport)
+    expect(Object.keys(client.tasks).sort()).toEqual([
+      'detail', 'graph', 'list', 'query', 'sessionLinks', 'stats', 'transition', 'validateFeatureTasks',
+    ])
+    expect('add' in client.tasks && 'claim' in client.tasks && 'submit' in client.tasks).toBe(false)
+    expect(Object.keys(client.proposals)).toEqual(['list'])
+    expect('createProposal' in client.proposals).toBe(false)
+    expect('transitionProposal' in client.proposals).toBe(false)
+  })
+
+  it('M2 码反序列化保真：ERR_SUSPECTED_MOVE（data 手工指引）/ ERR_WORKSPACE_DB_UNAVAILABLE → RpcClientError', async () => {
+    const t = fakeTransport()
+    t.respondWith(() => ({
+      ok: false,
+      error: {
+        code: 'ERR_SUSPECTED_MOVE',
+        message: '注册碰撞：同主体异 hash8',
+        data: { existingDir: 'C:/w/demo@11111111', derivedDir: 'C:/w/demo@22222222', guidance: '删孤儿目录或改回原名' },
+      },
+    }))
+    const client = createForgeRpcClient(t.transport)
+    const caught = await client.projects.deriveTaskStoreDir('C:\\ws\\demo').then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect(caught).toBeInstanceOf(RpcClientError)
+    expect((caught as RpcClientError).code).toBe('ERR_SUSPECTED_MOVE')
+    expect((caught as RpcClientError).data).toMatchObject({ guidance: expect.any(String) })
+    const t2 = fakeTransport()
+    t2.respondWith(() => ({
+      ok: false,
+      error: { code: 'ERR_WORKSPACE_DB_UNAVAILABLE', message: '工作区库开库失败（隔离态）', data: { projectId: 'p-1' } },
+    }))
+    const client2 = createForgeRpcClient(t2.transport)
+    await expect(client2.tasks.list({ projectId: 'p-1' })).rejects.toMatchObject({
+      name: 'RpcClientError',
+      code: 'ERR_WORKSPACE_DB_UNAVAILABLE',
+    })
   })
 })
 

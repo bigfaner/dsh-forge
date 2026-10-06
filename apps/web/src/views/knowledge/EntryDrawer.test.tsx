@@ -44,6 +44,7 @@ function recordingClient(
       get: mark('projects.get', () => Promise.resolve(null)),
       update: mark('projects.update', () => Promise.resolve({})),
       reconcile: mark('projects.reconcile', () => Promise.resolve({})),
+      deriveTaskStoreDir: mark('projects.deriveTaskStoreDir', () => Promise.resolve({})),
     },
     fs: { listDir: mark('fs.listDir', () => Promise.resolve({})) },
     knowledge: {
@@ -52,6 +53,27 @@ function recordingClient(
       entryDetail: mark('knowledge.entryDetail', (q) => entryDetailImpl(q as EntryDetailQuery)),
       heat: mark('knowledge.heat', () => Promise.resolve(new Map())),
       sessionRecall: mark('knowledge.sessionRecall', () => Promise.resolve([])),
+    },
+    tasks: {
+      transition: mark('tasks.transition', () => Promise.resolve({})),
+      query: mark('tasks.query', () => Promise.resolve({})),
+      validateFeatureTasks: mark('tasks.validateFeatureTasks', () => Promise.resolve({})),
+      list: mark('tasks.list', () => Promise.resolve([])),
+      stats: mark('tasks.stats', () => Promise.resolve({})),
+      graph: mark('tasks.graph', () => Promise.resolve({})),
+      detail: mark('tasks.detail', () => Promise.resolve({})),
+      sessionLinks: mark('tasks.sessionLinks', () => Promise.resolve([])),
+    },
+    features: {
+      register: mark('features.register', () => Promise.resolve({})),
+      transition: mark('features.transition', () => Promise.resolve({})),
+      upsertDoc: mark('features.upsertDoc', () => Promise.resolve({})),
+      list: mark('features.list', () => Promise.resolve([])),
+    },
+    proposals: { list: mark('proposals.list', () => Promise.resolve([])) },
+    docs: {
+      read: mark('docs.read', () => Promise.resolve({})),
+      openExternal: mark('docs.openExternal', () => Promise.resolve(undefined)),
     },
   } as ForgeRpcClient
   return { client, calls }

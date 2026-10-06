@@ -4,7 +4,7 @@
 // prepare/dispatch 全未进入、会话文件不落盘）——官方 Desktop 素以 child 形态跑宿主
 // （ELECTRON_RUN_AS_NODE=1 --expose-internals 子进程，S1 spike run3 验证 boot）。
 // 本模块承载：
-//   · IPC 消息形状（ready/fatal/rpc-result ↔ rpc/shutdown）与 ready 守卫
+//   · IPC 消息形状（ready/fatal/rpc-result/event ↔ rpc/shutdown）与 ready/事件守卫
 //   · wire 编解码（Map → entries 信封——Node IPC 缺省 JSON 序列化不保 Map；
 //     heatByEntry 为产品面唯一 Map 返回体）
 //   · 子进程 argv 选项解析（BootDshOptions JSON 单串）与外部叠层清单解析
@@ -14,11 +14,45 @@
 //     {code,message,data} 上桥；主侧双形态解码重建带 code/data 的 Error——经
 //     rpcEnvelope 判型后走带内 RpcErr 信封（child 形态下 UI 六码文案映射的通路半边）
 // 零 node:child_process 依赖——纯函数逐项单测锚定（bridge.test.ts）。
-import { ERROR_CODES, type BrowseKnowledgeService, type ProjectService } from '@dsh-forge/contracts'
+import {
+  ERROR_CODES,
+  FORGE_EVENT_CHANNELS,
+  type BrowseKnowledgeService,
+  type BridgeEventMessage,
+  type ForgeDocsService,
+  type ForgeFeaturesService,
+  type ForgeProposalsService,
+  type ForgeTasksService,
+  type ProjectService,
+  type ProjectServiceM2,
+  type TasksChangedEvent,
+} from '@dsh-forge/contracts'
 import type { BootDshOptions } from './run.js'
 
-/** 桥接服务名（产品双服务——runProfile ctx 面世，main 侧 forge:* 通道接线） */
-export type BridgeServiceName = 'forgeProjects' | 'forgeKnowledge'
+/**
+ * 桥接服务名（P1 双服务 + M2 四域——Interface 6 六名；runProfile ctx 面世，main 侧
+ * forge:* 通道接线。四域 = tasksHome 注入时 core provide（缺席 = M2 面降级，ready 位 false））
+ */
+export type BridgeServiceName =
+  | 'forgeProjects'
+  | 'forgeKnowledge'
+  | 'forgeTasks'
+  | 'forgeFeatures'
+  | 'forgeProposals'
+  | 'forgeDocs'
+
+/** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
+export const BRIDGE_SERVICE_NAMES = [
+  'forgeProjects',
+  'forgeKnowledge',
+  'forgeTasks',
+  'forgeFeatures',
+  'forgeProposals',
+  'forgeDocs',
+] as const satisfies readonly BridgeServiceName[]
+
+/** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
+export type ServiceNamesCoverage = AssertNever<Exclude<BridgeServiceName, (typeof BRIDGE_SERVICE_NAMES)[number]>>
 
 /** 主 → 子：RPC 调用（id 供 rpc-result 关联回） */
 export interface BridgeRpcRequest {
@@ -36,7 +70,7 @@ export interface BridgeShutdownRequest {
 
 export type MainToChildMessage = BridgeRpcRequest | BridgeShutdownRequest
 
-/** 子 → 主：boot 就绪（manifest 面 {url, injections} + 双服务在场位） */
+/** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池） */
 export interface BridgeReadyMessage {
   readonly type: 'ready'
   readonly url: string
@@ -70,7 +104,16 @@ export interface BridgeRpcResultMessage {
   readonly error?: string | BridgeErrorPayload
 }
 
-export type ChildToMainMessage = BridgeReadyMessage | BridgeFatalMessage | BridgeRpcResultMessage
+export type ChildToMainMessage =
+  | BridgeReadyMessage
+  | BridgeFatalMessage
+  | BridgeRpcResultMessage
+  | BridgeEventMessage
+
+// 桥事件信封唯一源 = contracts BridgeEventMessage（1.1 定稿；Interface 6——G1-09 pin）。
+// 子侧发射 = core workspace/events.ts 写动词闭包尾部 sendGuarded（direct 形态 IPC 缺席
+// 静默降级）；主侧消费 = run.ts event 分支 → DshHostHandle.onEvent → main webContents.send。
+export type { BridgeEventMessage, TasksChangedEvent }
 
 /** 编译期断言助手：类型参数须收敛 never（否则报错并点名残余成员） */
 type AssertNever<T extends never> = T
@@ -108,6 +151,65 @@ export const KNOWLEDGE_SERVICE_METHODS = [
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */
 export type KnowledgeWhitelistCoverage = AssertNever<Exclude<keyof BrowseKnowledgeService, (typeof KNOWLEDGE_SERVICE_METHODS)[number]>>
+
+/**
+ * M2 四域服务方法白名单（Interface 6 六白名单之四——G1-10 pin：satisfies 收敛到
+ * contracts 服务面 + 覆盖完备性 AssertNever）。锚全集而非 RPC 面（knowledge 八法先例：
+ * 双门分工的收窄发生在 ipc 注册面注入类型，桥白名单 = 代理可达面全集锚）——故
+ * addTask/claimTask/submitTask/createProposal/transitionProposal 在列（子进程内 tool 面
+ * 同服务；renderer 恒不可达：ipc 通道族不注册写动词，SC7 断言面）。
+ */
+export const TASKS_SERVICE_METHODS = [
+  'addTask',
+  'claimTask',
+  'submitTask',
+  'transitionTask',
+  'queryTask',
+  'validateFeatureTasks',
+  'listTasks',
+  'taskStats',
+  'taskGraph',
+  'taskDetail',
+  'sessionLinks',
+] as const satisfies readonly (keyof ForgeTasksService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名） */
+export type TasksWhitelistCoverage = AssertNever<Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number]>>
+
+export const FEATURES_SERVICE_METHODS = [
+  'registerFeature',
+  'transitionFeature',
+  'upsertFeatureDoc',
+  'listFeatures',
+] as const satisfies readonly (keyof ForgeFeaturesService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeFeaturesService 方法在此编译期点名） */
+export type FeaturesWhitelistCoverage = AssertNever<Exclude<keyof ForgeFeaturesService, (typeof FEATURES_SERVICE_METHODS)[number]>>
+
+export const PROPOSALS_SERVICE_METHODS = [
+  'createProposal',
+  'transitionProposal',
+  'listProposals',
+] as const satisfies readonly (keyof ForgeProposalsService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeProposalsService 方法在此编译期点名） */
+export type ProposalsWhitelistCoverage = AssertNever<Exclude<keyof ForgeProposalsService, (typeof PROPOSALS_SERVICE_METHODS)[number]>>
+
+export const DOCS_SERVICE_METHODS = ['read'] as const satisfies readonly (keyof ForgeDocsService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeDocsService 方法在此编译期点名） */
+export type DocsWhitelistCoverage = AssertNever<Exclude<keyof ForgeDocsService, (typeof DOCS_SERVICE_METHODS)[number]>>
+
+/**
+ * projects 域 M2 扩法白名单（Interface 5 派生行第六法——P1 五法常量零波及，独立锚；
+ * 代理可达面 = PROJECT_SERVICE_METHODS ∪ 本常量，覆盖完备性两常量合并判定）。
+ */
+export const PROJECTS_M2_SERVICE_METHODS = ['deriveTaskStoreDir'] as const satisfies readonly (keyof ProjectServiceM2)[]
+
+/** 扩法覆盖完备性（= never：ProjectServiceM2 相对 P1 五法 + 扩法的新增缺席在此点名） */
+export type ProjectsM2WhitelistCoverage = AssertNever<
+  Exclude<keyof ProjectServiceM2, (typeof PROJECT_SERVICE_METHODS)[number] | (typeof PROJECTS_M2_SERVICE_METHODS)[number]>
+>
 
 /** Map wire 信封键（产品 DTO 面无此键——碰撞面为零） */
 const MAP_ENVELOPE = '__dshForgeMap__'
@@ -158,8 +260,9 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
 }
 
 /**
- * ready 消息守卫（子 → 主消息的最小形状校验——url/injections/双服务在场位齐备
- * 才可作 manifest 面；其余消息（rpc-result 等）返回 undefined 由调用方分流）。
+ * ready 消息守卫（子 → 主消息的最小形状校验——url/injections/六服务在场位齐备
+ * 才可作 manifest 面；其余消息（rpc-result 等）返回 undefined 由调用方分流。
+ * 在场位逐名校验经 BRIDGE_SERVICE_NAMES 迭代（新增服务名 = 名单 + 此处自动覆盖））。
  */
 export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined {
   if (typeof message !== 'object' || message === null) return undefined
@@ -167,9 +270,32 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
   if (m.type !== 'ready' || typeof m.url !== 'string' || !Array.isArray(m.injections)) return undefined
   const services = m.services
   if (typeof services !== 'object' || services === null) return undefined
-  const { forgeProjects, forgeKnowledge } = services as Record<string, unknown>
-  if (typeof forgeProjects !== 'boolean' || typeof forgeKnowledge !== 'boolean') return undefined
-  return { type: 'ready', url: m.url, injections: m.injections, services: { forgeProjects, forgeKnowledge } }
+  const bits: Partial<Record<BridgeServiceName, boolean>> = {}
+  for (const name of BRIDGE_SERVICE_NAMES) {
+    const bit = (services as Record<string, unknown>)[name]
+    if (typeof bit !== 'boolean') return undefined
+    bits[name] = bit
+  }
+  return { type: 'ready', url: m.url, injections: m.injections, services: bits as Record<BridgeServiceName, boolean> }
+}
+
+/**
+ * 事件消息守卫（子 → 主单向推送分流——run.ts child.on('message') event 分支消费）。
+ * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷形状 { projectId }
+ * 只读校验（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
+ */
+export function asEventMessage(message: unknown): BridgeEventMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const m = message as Record<string, unknown>
+  if (m.type !== 'event') return undefined
+  if (typeof m.channel !== 'string' || !(Object.values(FORGE_EVENT_CHANNELS) as readonly string[]).includes(m.channel)) {
+    return undefined
+  }
+  const payload = m.payload
+  if (typeof payload !== 'object' || payload === null) return undefined
+  const projectId = (payload as Record<string, unknown>).projectId
+  if (typeof projectId !== 'string') return undefined
+  return { type: 'event', channel: m.channel as BridgeEventMessage['channel'], payload: { projectId } }
 }
 
 /**
@@ -269,7 +395,8 @@ export function extraPatchFiles(env: { DSH_FORGE_PATCH_FILES?: string }): readon
  * （renderer 无 RPC 超时 → 无限挂起）。本包装：
  *   · rpc-result 面序列化失败 → 回填**保 id** 降级 error-result（纯字符串载荷可序列化——
  *     主侧 pending 正常结算为失败，错误文案带原序列化失败因）；
- *   · ready/fatal 面失败 → 降级丢弃（无 id 可保；boot 失败由主侧 waitForReady/close 兜底显形）；
+ *   · ready/fatal/event 面失败 → 降级丢弃（无 id 可保；boot 失败由主侧 waitForReady/close
+ *     兜底显形；事件面 = 交互重取兜底——交互二「direct 形态 IPC 缺席静默降级」同口径）；
  *   · 降级面自身再失败（通道已死等）→ 静默（disconnect 关停兜底）。
  * 本函数永不抛——child.ts 以之包裹全部 send 调用（含 .then(send) 链尾）。
  */

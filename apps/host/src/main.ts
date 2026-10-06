@@ -4,12 +4,12 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, type OpenDialogOptions, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
   BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE,
   refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel, registerFsChannels,
-  registerKnowledgeChannels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
+  registerKnowledgeChannels, registerM2Channels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
@@ -62,6 +62,7 @@ void (async () => {
     installShellStreamRewrite(session.defaultSession.webRequest, () => hostRef, (id) => mainWindow?.webContents.id === id)
     const forgeIpc = createForgeIpc(ipcMain) // forge:* 域面（handler 本体 2.4/3.5 注册进此机制）
     registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
+    registerM2Channels(forgeIpc, host, () => mainWindow?.webContents, shell.openPath) // M2 四族+derive 注册（缺席 fail-soft 记 warn）+ 写推送事件广播（交互二）
     // 产品双服务接线（4.2——SMOKE-LEDGER §5 转正）：core 插件经 profile 装配 provide，
     // boot 面世后注册 forge:projects/* + forge:knowledge/* 两面；knowledge 绑定表随
     // boot 全量刷新 + 注册增量刷新（fail-soft——服务缺席记日志不注册，壳面不受损）
@@ -78,9 +79,8 @@ void (async () => {
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     // fix-14：官方 __DSH_DIRECTORY_PICKER__ 桥 main 半边——openDirectory 单选（取消 = null）
-    // fix-21：parent 窗口形参 + 官方标题——showOpenDialog(父窗, options) = 对父窗模态 +
-    // 前台置顶（Windows 失焦态点「＋」仍立即现于主窗之上）；parent 缺席（理论不可达）
-    // → 回退无 parent 形参（fail-soft，不比 fix-14 现状差）。
+    // fix-21：parent 窗口形参 + 官方标题——showOpenDialog(父窗, options) = 对父窗模态 + 前台置顶
+    //（Windows 失焦态点「＋」仍立即现于主窗之上）；parent 缺席（理论不可达）→ 回退无 parent（fail-soft）。
     const pickDialogOptions: OpenDialogOptions = { properties: ['openDirectory'], title: DIRECTORY_PICKER_DIALOG_TITLE }
     registerDirectoryPickerChannel(
       ipcMain,
