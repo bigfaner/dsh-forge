@@ -163,15 +163,29 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
     dispose()
   })
 
-  it('接线期壳 fail-loud：未接线动词抛占位错误（不静默假成功——add/query 2.3、claim/submit 2.4 已落地，锚 listTasks）', async () => {
+  it('2.6 读面接线：占位 fail-loud 面退役——listTasks/taskStats 直读返回（十一法全接线）', async () => {
     const { ctx, provided } = stubCtx()
     const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
+    // 中央行先行种入（routing.wsPath/resolveDir 消费面）
+    const central = dbPath()
+    const centralDb = openDatabase(central)
+    seedProjectRow(centralDb, {
+      id: 'p-read',
+      workspaceId: 'w-read',
+      wsPath: 'C:\\dsh-forge-read',
+      forgeDir: 'C:\\dsh-forge-read\\.forge',
+    })
+    centralDb.close()
     try {
-      const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
-      const tasks = provided.get('forgeTasks') as { listTasks: (q: unknown) => Promise<unknown> }
-      const err = await tasks.listTasks({}).catch((e: unknown) => e)
-      expect(err).toBeInstanceOf(Error)
-      expect((err as Error).message).toContain('尚未接线')
+      const dispose = corePlugin(ctx, { dbFile: central, tasksHome })
+      const tasks = provided.get('forgeTasks') as {
+        listTasks: (q: { projectId: string }) => Promise<unknown[]>
+        taskStats: (q: { projectId: string }) => Promise<{ total: number; byStatus: Record<string, number> }>
+      }
+      await expect(tasks.listTasks({ projectId: 'p-read' })).resolves.toEqual([]) // 直读空库
+      const stats = await tasks.taskStats({ projectId: 'p-read' })
+      expect(stats.total).toBe(0)
+      expect(Object.keys(stats.byStatus)).toHaveLength(7) // 七态 chips 数据源
       dispose()
     } finally {
       rmSync(tasksHome, { recursive: true, force: true })

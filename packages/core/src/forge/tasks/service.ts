@@ -1,22 +1,33 @@
-// forge 任务域服务装配壳（任务 2.7 provide ×4 装配点——Interface 1 十一法签名面先行，
-// 动词实现逐任务接线：add/query（2.3）/claim·submit（2.4 已接线）/transition·
-// validateFeatureTasks（2.5）/list·stats·graph·detail·sessionLinks（2.6））。壳的职责 =
-// 装配面稳定：桥六服务白名单与 ready 位（3.1）以本面为锚——服务名恒在场、方法面完整；
-// 接线前每法 fail-loud 抛占位错误（不静默假成功）。deps = store + events（装配单例句柄/
-// 事件共享），动词实现落位同域独立文件（add.ts/query.ts/claim.ts/submit.ts/transition.ts/
-// validate.ts）。validateFeatureTasks 以 async 包装同步核心（Interface 1 契约面；发现面挂点
-// 直调同步核心——防逃逸 Promise 拒绝绕过 fail-soft 记账，见 validate.ts 头注）。
+// forge 任务域服务装配壳（任务 2.7 provide ×4 装配点——Interface 1 十一法签名面；
+// 动词/读面实现逐任务接线：add/query（2.3）/claim·submit（2.4）/transition·
+// validateFeatureTasks（2.5）/list·stats·graph·detail·sessionLinks（2.6——全接线，占位
+// fail-loud 面退役）。壳的职责 = 装配面稳定：桥六服务白名单与 ready 位（3.1）以本面为锚
+// ——服务名恒在场、方法面完整。deps = store + events + resolveWsPath（装配单例句柄/事件
+// 共享/详情 git 查找工作区根），动词与读面实现落位同域独立文件（add.ts/query.ts/claim.ts/
+// submit.ts/transition.ts/validate.ts/list.ts/detail.ts/session-links.ts + git-lookup.ts——
+// git 唯一调用点单文件审计面）。validateFeatureTasks 以 async 包装同步核心（Interface 1
+// 契约面；发现面挂点直调同步核心——防逃逸 Promise 拒绝绕过 fail-soft 记账，见 validate.ts 头注）。
 import type {
   AddTaskInput,
   AddTaskResult,
   ClaimTaskInput,
   ClaimTaskResult,
   ForgeTasksService,
+  ListTasksQuery,
   QueryTaskInput,
   QueryTaskResult,
+  SessionLinksQuery,
+  SessionTaskLinkCard,
   SubmitTaskInput,
   SubmitTaskResult,
+  TaskCard,
+  TaskDetail,
+  TaskDetailQuery,
+  TaskGraph,
+  TaskGraphQuery,
   TaskSnapshot,
+  TaskStats,
+  TaskStatsQuery,
   TransitionTaskInput,
   ValidateFeatureTasksInput,
   ValidateReport,
@@ -25,7 +36,11 @@ import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { addTask } from './add.js'
 import { claimTask } from './claim.js'
+import { taskDetail } from './detail.js'
+import type { GitExecFile } from './git-lookup.js'
+import { listTasks, taskGraph, taskStats } from './list.js'
 import { queryTask } from './query.js'
+import { sessionLinks } from './session-links.js'
 import { submitTask } from './submit.js'
 import { transitionTask } from './transition.js'
 import { validateFeatureTasks } from './validate.js'
@@ -35,14 +50,13 @@ export interface TasksServiceDeps {
   readonly store: ForgeWorkspaceStore
   /** 写后事件发射器（装配单例——四域共享；写动词闭包尾部 emitTasksChanged） */
   readonly events: ForgeTaskEvents
+  /** projectId → 工作区仓库根（2.6 taskDetail actualFiles git 只读查找 cwd——装配层 routing.wsPath 注入） */
+  readonly resolveWsPath: (projectId: string) => string
+  /** git 只读执行注入（缺席 = 生产 execFile——git-lookup.ts defaultExecFile；测试桩受控注入） */
+  readonly gitExec?: GitExecFile
 }
 
-/** 接线期占位错误（fail-loud——动词落地前不静默假成功） */
-function notWired(method: string, landingTask: string): never {
-  throw new Error(`forgeTasks.${method} 尚未接线（${landingTask} 落地——装配壳仅保服务面完整）`)
-}
-
-/** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——add/claim/submit/query/transition/validate 已接线） */
+/** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */
 export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
   return {
     async addTask(input: AddTaskInput): Promise<AddTaskResult> {
@@ -63,20 +77,23 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     async validateFeatureTasks(input: ValidateFeatureTasksInput): Promise<ValidateReport> {
       return validateFeatureTasks(deps, input)
     },
-    async listTasks() {
-      notWired('listTasks', '2.6')
+    async listTasks(q: ListTasksQuery): Promise<TaskCard[]> {
+      return listTasks(deps, q)
     },
-    async taskStats() {
-      notWired('taskStats', '2.6')
+    async taskStats(q: TaskStatsQuery): Promise<TaskStats> {
+      return taskStats(deps, q)
     },
-    async taskGraph() {
-      notWired('taskGraph', '2.6')
+    async taskGraph(q: TaskGraphQuery): Promise<TaskGraph> {
+      return taskGraph(deps, q)
     },
-    async taskDetail() {
-      notWired('taskDetail', '2.6')
+    async taskDetail(q: TaskDetailQuery): Promise<TaskDetail> {
+      return taskDetail(
+        { store: deps.store, resolveWsPath: deps.resolveWsPath, git: { execFile: deps.gitExec } },
+        q,
+      )
     },
-    async sessionLinks() {
-      notWired('sessionLinks', '2.6')
+    async sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]> {
+      return sessionLinks(deps, q)
     },
   }
 }

@@ -101,8 +101,8 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
   }
 }
 
-/** task_records 行 → TaskRecordEntry（files/gate JSON 解码；缺省键省略） */
-function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
+/** task_records 行 → TaskRecordEntry（files/gate JSON 解码；缺省键省略）——2.6 detail 复用导出 */
+export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
   return {
     verb: row.verb,
     fromStatus: row.from_status ?? undefined,
@@ -171,46 +171,65 @@ export async function queryTask(deps: TasksQueryDeps, input: QueryTaskInput): Pr
   }
 
   if (include.records === true) {
-    result.records = db
-      .prepare<unknown[], TaskRecordStorageRow>(
-        `SELECT verb, from_status, to_status, reason, summary, files_json, gate_json,
-           commit_hash, dispatch_digest, actor, session_id, created_at
-         FROM task_records WHERE task_id = ? ORDER BY id`,
-      )
-      .all(row.id)
-      .map(toTaskRecordEntry)
+    result.records = readTaskRecords(db, row.id)
   }
 
   if (include.sessions === true) {
-    const base = db.prepare<unknown[], { session_id: string }>(
-      `SELECT session_id FROM task_session_links WHERE task_id = ? ORDER BY id`,
-    )
-    const cards: SessionTaskLinkCard[] = base.all(row.id).map((l) => ({
+    result.sessions = readTaskSessions(db, row)
+  }
+
+  return result
+}
+
+/**
+ * 记录时间线读（verb/from→to/reason/summary/gate/commit/digest——自增序）。
+ * 2.6 导出：queryTask include.records 与 taskDetail.records 同源单份（EQP 锚 ② =
+ * RECORDS_BY_TASK_SQL 命中 idx_records_task——list.test 断言）。
+ */
+export const RECORDS_BY_TASK_SQL = `SELECT verb, from_status, to_status, reason, summary, files_json, gate_json,
+  commit_hash, dispatch_digest, actor, session_id, created_at
+FROM task_records WHERE task_id = ? ORDER BY id`
+
+/** 记录时间线读（行 → TaskRecordEntry 映射含 JSON 解码） */
+export function readTaskRecords(db: Database.Database, taskId: string): TaskRecordEntry[] {
+  return db
+    .prepare<unknown[], TaskRecordStorageRow>(RECORDS_BY_TASK_SQL)
+    .all(taskId)
+    .map(toTaskRecordEntry)
+}
+
+/**
+ * 挂接会话双源分型读（单任务面）：links（派发会话——claim upsert-ignore 写）∪
+ * records.session_id（执行会话——submit/transition 记录），同会话双侧参与两卡并存。
+ * 2.6 导出：queryTask include.sessions 与 taskDetail.sessions 同源单份（§6-24④ 诚实审计）。
+ */
+export function readTaskSessions(db: Database.Database, row: TaskStorageRow): SessionTaskLinkCard[] {
+  const base = db.prepare<unknown[], { session_id: string }>(
+    `SELECT session_id FROM task_session_links WHERE task_id = ? ORDER BY id`,
+  )
+  const cards: SessionTaskLinkCard[] = base.all(row.id).map((l) => ({
+    taskId: row.id,
+    slug: row.slug,
+    localId: row.local_id,
+    title: row.title,
+    taskStatus: row.task_status,
+    sessionId: l.session_id,
+    source: 'link' as const,
+  }))
+  const recordSessions = db.prepare<unknown[], { session_id: string }>(
+    `SELECT session_id FROM task_records
+     WHERE task_id = ? AND session_id IS NOT NULL GROUP BY session_id ORDER BY MIN(id)`,
+  )
+  for (const r of recordSessions.all(row.id)) {
+    cards.push({
       taskId: row.id,
       slug: row.slug,
       localId: row.local_id,
       title: row.title,
       taskStatus: row.task_status,
-      sessionId: l.session_id,
-      source: 'link' as const,
-    }))
-    const recordSessions = db.prepare<unknown[], { session_id: string }>(
-      `SELECT session_id FROM task_records
-       WHERE task_id = ? AND session_id IS NOT NULL GROUP BY session_id ORDER BY MIN(id)`,
-    )
-    for (const r of recordSessions.all(row.id)) {
-      cards.push({
-        taskId: row.id,
-        slug: row.slug,
-        localId: row.local_id,
-        title: row.title,
-        taskStatus: row.task_status,
-        sessionId: r.session_id,
-        source: 'record' as const,
-      })
-    }
-    result.sessions = cards
+      sessionId: r.session_id,
+      source: 'record' as const,
+    })
   }
-
-  return result
+  return cards
 }

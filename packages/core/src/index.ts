@@ -107,7 +107,10 @@ const corePlugin: CorePlugin = Object.assign(
         }),
       })
       taskStore = store
-      ctx.reflect.provide('forgeTasks', createTasksService({ store, events })) // 壳——2.4/2.6 继续接线
+      ctx.reflect.provide(
+        'forgeTasks',
+        createTasksService({ store, events, resolveWsPath: routing.wsPath }), // 十一法全接线（2.6 读面收口）
+      )
       ctx.reflect.provide(
         'forgeFeatures',
         createFeaturesService({

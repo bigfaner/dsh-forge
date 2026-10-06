@@ -119,7 +119,8 @@ export function seedLink(db: Database.Database, taskId: string, sessionId: strin
   ).run(taskId, sessionId)
 }
 
-/** 种 record 行（append-only 审计——files/gate JSON 受控负载；verb 开放传参） */
+/** 种 record 行（append-only 审计——files/gate JSON 受控负载；verb 开放传参；2.6 增 createdAt
+ *  受控项——实际耗时（首 claim → 末 submit 时差）断言基准） */
 export function seedRecord(
   db: Database.Database,
   taskId: string,
@@ -134,12 +135,14 @@ export function seedRecord(
     digest?: string
     actor?: string
     sessionId?: string
+    createdAt?: string
   } = {},
 ): void {
+  const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, summary, files_json,
        gate_json, commit_hash, dispatch_digest, actor, session_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
   ).run(
     taskId,
     o.verb ?? 'add',
@@ -152,5 +155,7 @@ export function seedRecord(
     o.digest ?? null,
     o.actor ?? 'plugin-tool',
     o.sessionId ?? null,
+    ts,
+    ts,
   )
 }
