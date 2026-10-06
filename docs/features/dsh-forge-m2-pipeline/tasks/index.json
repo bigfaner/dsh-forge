@@ -285,7 +285,7 @@
         "2.gate",
         "1.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.11-derived-store-row.md",
       "record": "records/3.11-derived-store-row.md",
       "surface-type": "web",

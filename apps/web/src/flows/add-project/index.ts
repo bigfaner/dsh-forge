@@ -1,8 +1,10 @@
-// flows/add-project barrel（定位：业务——UF-3 两段式向导：2.8 浏览器 / 2.9 表单 / 2.10 组装）。
+// flows/add-project barrel（定位：业务——UF-3 两段式向导：2.8 浏览器 / 2.9 表单 / 2.10 组装；
+// 3.11 派生行 DerivedTaskStoreRow——UF-4 升级件，4.3 接线表单）。
 export * from './AddProjectFlow.js'
 export * from './DirectoryBrowser.js'
 export * from './browser-actions.js'
 export * from './browser-model.js'
+export * from './derived-store-row.js'
 export * from './dir-picker.js'
 export * from './dir-source.js'
 export * from './flow-actions.js'

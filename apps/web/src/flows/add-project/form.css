@@ -114,6 +114,71 @@
   flex: none;
 }
 
+/* ── 派生行（3.11 DerivedTaskStoreRow——UF-4 升级：RPC 单源全路径 + 三态；4.3 替换表单现派生行） ── */
+.dswf-dsr {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px; /* dsw-raw 官方行内刻度 */
+  min-width: 0;
+}
+
+.dswf-dsr-label {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 在途骨架（单行——行高对齐输入行刻度） */
+.dswf-dsr-skeleton {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.dswf-dsr-skeleton-row {
+  height: 30px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* 正常态路径值（AC1 全路径完整呈现：white-space normal + word-break break-all——
+ * 长路径换行逐字显示，不截断不省略；刻度对齐 dswf-rf-input 行语言 + 只读底面弱化） */
+.dswf-dsr-value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 4px 8px; /* dsw-raw 官方面包屑内衬刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* 疑似移动错误条（ErrorBar 域面——指引内嵌双路径，同换行纪律禁省略） */
+.dswf-dsr-error {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 6px; /* dsw-raw 官方行内刻度 */
+  padding: 4px 8px; /* dsw-raw 官方行内刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-error);
+}
+
+.dswf-dsr-error-text {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-all;
+}
+
 /* ── 浏览改选面板（表单相位 ⇄ 浏览相位；DirectoryBrowser 槽位） ── */
 .dswf-rf-browsepanel {
   display: flex;
