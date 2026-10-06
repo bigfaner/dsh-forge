@@ -1,0 +1,183 @@
+/* 文档 tab 样式（定位：业务——UF-2：头部[文件名 + 只读/悬空徽标] + 路径栏[canonical
+ * + 📁 编辑器 + ↻ 重读] + 摘要块 + 正文分段渲染[md 段 MarkdownDoc / mermaid 段
+ * MermaidDiagram 卡] + 悬空占位面 + 骨架/错误条）。
+ * 结构基准 = 原型 doc-tab（ui-design UF-2——路径栏底色条、图卡[头 + 画布]、回退卡
+ * [头 + 源码 + 注记]）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值）。
+ * dsw-raw 豁免（执行记录同步）：骨架行高 28px / 图源行高 = 原型结构刻度
+ * （overview.css 同款豁免先例——官方主题无间距标尺令牌）；块级留白取行高令牌刻度。 */
+
+/* ── 面板骨架：头部 + 路径栏 + 摘要 + 正文（面板独占滚动归 dock 容器） ── */
+.dswf-doc-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* ── 头部：文件名 + 徽标行 ── */
+.dswf-doc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-doc-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-doc-chip-dangling {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ── 路径栏：canonical 全路径 + 📁 / ↻ 图标钮 ── */
+.dswf-doc-pathbar {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: 0 var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-doc-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-doc-iconbtn {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-base-16);
+  line-height: var(--dsw-font-s-14-line-height);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-doc-iconbtn:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 摘要块 ── */
+.dswf-doc-summary {
+  margin: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height) 0;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── 正文：md 段 / mermaid 段纵排 ── */
+.dswf-doc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+  margin: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+}
+
+/* ── mermaid 图卡（头 + 画布；画布横向滚动容大图） ── */
+.dswf-doc-mermaid {
+  margin: 0;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  overflow: hidden;
+}
+
+.dswf-doc-mermaid-head {
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-doc-mermaid-canvas {
+  overflow-x: auto;
+  padding: var(--dsw-font-s-14-line-height);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-doc-mermaid-canvas svg {
+  display: block;
+  max-width: none;
+}
+
+/* ── 回退占位卡（源码 + 回退注记——渲染失败/非法源） ── */
+.dswf-doc-mermaid-src {
+  margin: 0;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  background: var(--dsw-alias-markdown-code-block, var(--dsw-alias-interactive-bg-hover));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 官方主题无等宽族令牌（代码块族面） */
+  font-size: var(--dsw-font-xs-13-font-size);
+  line-height: var(--dsw-font-xs-13-line-height); /* dsw-raw 原型图源行刻度 */
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-doc-mermaid-note {
+  margin: 0;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 悬空占位面（路径栏保留——面板级居中） ── */
+.dswf-doc-dangling {
+  min-height: 50%;
+}
+
+/* ── 骨架 / 错误条 ── */
+.dswf-doc-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-doc-skeleton-row {
+  height: 28px; /* dsw-raw 原型行高刻度（overview.css 同款豁免） */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.dswf-doc-error {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-error);
+}
+
+.dswf-doc-retry {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-link);
+  cursor: pointer;
+}

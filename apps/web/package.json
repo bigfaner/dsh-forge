@@ -9,7 +9,8 @@
     "watch": "vite build --watch --no-emptyOutDir"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*"
+    "@dsh-forge/contracts": "workspace:*",
+    "mermaid": "12.1.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",

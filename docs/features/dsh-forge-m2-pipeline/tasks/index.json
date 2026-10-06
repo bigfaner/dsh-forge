@@ -412,7 +412,7 @@
         "2.gate",
         "1.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.9-docs-tab-mermaid.md",
       "record": "records/3.9-docs-tab-mermaid.md",
       "surface-type": "web",

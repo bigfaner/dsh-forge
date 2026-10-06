@@ -263,6 +263,60 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
   })
 })
 
+describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全边界）', () => {
+  it('模块面就位：分段解析 + mermaid 渲染件 + tab 体 + 样式', () => {
+    for (const f of [
+      'apps/web/src/views/docs/doc-segments.ts',
+      'apps/web/src/views/docs/mermaid-diagram.tsx',
+      'apps/web/src/views/docs/index.tsx',
+      'apps/web/src/views/docs/docs.css',
+    ]) {
+      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
+    }
+  })
+
+  it('mermaid 产品依赖精确 pin（无 ^/~ 前缀）+ lockfile 在册', () => {
+    const pkg = read('apps/web/package.json')
+    expect(pkg).toMatch(/"mermaid":\s*"\d+\.\d+\.\d+"/)
+    expect(pkg).not.toMatch(/"mermaid":\s*"\^/)
+    expect(read('pnpm-lock.yaml')).toMatch(/mermaid@\d+\.\d+\.\d+:/)
+  })
+
+  it('Hard Rule 懒加载：mermaid 唯一动态 import 径（产品源零静态 import——仅 mermaid-diagram.tsx 一处 import()）', () => {
+    const offenders: string[] = []
+    let dynamicRefs = 0
+    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+      if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
+      const src = readFileSync(p, 'utf8')
+      if (/from\s+'mermaid'/.test(src)) offenders.push(p.replaceAll('\\', '/'))
+      if (/import\('mermaid'\)/.test(src)) dynamicRefs += 1
+    }
+    expect(offenders, `mermaid 静态 import（禁——懒加载唯一动态径）: ${offenders.join(', ')}`).toEqual([])
+    expect(dynamicRefs, '动态 import 恰一处（mermaid-diagram.tsx 装载径）').toBe(1)
+    const mermaid = read('apps/web/src/views/docs/mermaid-diagram.tsx')
+    expect(mermaid).toContain("import('mermaid')")
+  })
+
+  it('Hard Rule 安全边界：securityLevel=strict 字面量 + 禁 click 交互绑定 + 回退占位卡在场', () => {
+    const mermaid = read('apps/web/src/views/docs/mermaid-diagram.tsx')
+    expect(mermaid).toContain("securityLevel: 'strict'")
+    expect(mermaid, '禁放宽 securityLevel（loose/antiscript/xss 均禁）').not.toMatch(/securityLevel[^\n]*'(loose|antiscript|xss)'/)
+    expect(mermaid, '禁 click 回调交互绑定（strict 面——bindFunctions 恒不接）').not.toContain('bindFunctions')
+    expect(mermaid).toContain('dswf-doc-mermaid-fallback')
+    expect(mermaid).toContain('已回退为源码展示')
+  })
+
+  it('渲染纪律 + 数据面：正文 md 段唯一经 MarkdownDoc；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
+    const tab = read('apps/web/src/views/docs/index.tsx')
+    expect(tab).toContain('MarkdownDoc')
+    expect(tab, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
+    expect(tab).toContain('client.docs.read')
+    // openExternal 触发即忘：组件回调恒经 openDocExternal 包装（失败吞不炸 tab）
+    expect(tab).toContain('export async function openDocExternal')
+    expect(tab).toContain('void openDocExternal(makeClient()')
+  })
+})
+
 describe('views/knowledge 详情抽屉 pin（3.7）', () => {
   it('模块面就位：EntryDrawer（hook + 纯渲染体 + 元数据投影）+ barrel 出口', () => {
     for (const f of ['apps/web/src/views/knowledge/EntryDrawer.tsx']) {
