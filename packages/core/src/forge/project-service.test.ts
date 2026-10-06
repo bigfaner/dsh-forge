@@ -1,14 +1,16 @@
 // 任务 2.2 测试 —— registerProject 四步补偿链（AC1–AC6）：vitest + 临时 SQLite + registry 桩。
 // 桩语义按 G1 pin 第 4 项（上游 dsh-workspace 源码核实）：create 幂等（同 canonical path 返回
 // 既有实体）、delete 保目录保日志且未知 id 幂等 no-op（false）、list 同步投影。
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
-import { createProjectService, type ProjectServiceDeps } from './project-service.js'
+import { createProjectService, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
+import { deriveDirName } from './workspace/derive-dir.js'
+import { SuspectedMoveError } from './workspace/errors.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
 // readRows/keyLogs 行读取——fix-35 收编 testutil 单份（与 reconcile-queries 同源）；
@@ -645,5 +647,193 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
     expect((err as ProjectWriteError).code).toBe('ERR_PROJECT_WRITE')
     expect(registry.createCalls).toEqual([]) // ② 前置失败——dsh 侧零副作用、零补偿需要
     expect(readRows(db)).toEqual([])
+  })
+})
+
+// ── 1.4 M2 面：tasksHome + onRegistered 协作者注入（碰撞复检 + 动词——Interface 5） ──
+
+/** M2 测试库根（每用例独占——同主体目录布景载体） */
+const m2Homes: string[] = []
+afterAll(() => {
+  for (const h of m2Homes) rmSync(h, { recursive: true, force: true })
+})
+const m2TasksHome = (): string => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-m2-home-'))
+  m2Homes.push(home)
+  return home
+}
+
+/** setup 变体：deps 增 tasksHome + onRegistered 记录协作者（缺省记录；可注入失败协作者） */
+function setupM2(o: { onRegistered?: (project: RegisteredProject) => void } = {}) {
+  const db = openDatabase(dbPath())
+  dbs.push(db)
+  const registry = new StubRegistry()
+  const rename = new StubRename()
+  const tasksHome = m2TasksHome()
+  const onRegisteredCalls: RegisteredProject[] = []
+  const service = createProjectService({
+    db,
+    registry,
+    rename,
+    tasksHome,
+    onRegistered:
+      o.onRegistered ??
+      ((project) => {
+        onRegisteredCalls.push(project)
+      }),
+  } satisfies ProjectServiceDeps)
+  return { db, registry, rename, tasksHome, service, onRegisteredCalls }
+}
+
+describe('1.4 注册碰撞三态（tasksHome 注入 → ① 预检前复检；Hard Rule：中央行落库之前拒绝、拒绝注册零副作用）', () => {
+  it('正常新建：库根空 → 复检放行，注册成功（三态之 F 分支）', async () => {
+    const { db, service } = setupM2()
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(false)
+    expect(readRows(db)).toHaveLength(1)
+  })
+
+  it('疑似移动：同主体异 hash8 目录在场 → SuspectedMoveError；零副作用（无中央行/无 ② create/无目录确保/无 rename/无记账/协作者不触发）', async () => {
+    const { db, registry, rename, tasksHome, service, onRegisteredCalls } = setupM2()
+    const wsDir = join(WS, 'moved')
+    // 复检口径 = canonicalizeDir 后拼写（目录未建 → realpath fail-soft 回退原拼写——确定态）
+    mkdirSync(join(tasksHome, `${deriveDirName(wsDir).split('@')[0]}@deadbeef`))
+    const err: unknown = await service.registerProject(input({ workspaceDir: wsDir })).catch((e) => e)
+    expect(err).toBeInstanceOf(SuspectedMoveError)
+    const typed = err as SuspectedMoveError
+    expect(typed.code).toBe('ERR_SUSPECTED_MOVE')
+    expect(typed.data.existingDir).toBe(join(tasksHome, `${deriveDirName(wsDir).split('@')[0]}@deadbeef`))
+    expect(typed.data.derivedDir).toBe(join(tasksHome, deriveDirName(wsDir)))
+    expect(typed.data.guidance).toContain(typed.data.existingDir) // data 带手工指引（删孤儿目录或改回原名）
+    // 拒绝注册零副作用：② 未启动（dsh 零变更）、目录确保未启动（三目录均未落盘）、中央行未落库
+    expect(registry.createCalls).toEqual([])
+    expect(existsSync(wsDir)).toBe(false)
+    expect(existsSync(join(WS, 'moved', '.forge'))).toBe(false)
+    expect(existsSync(join(WS, 'moved', '.knowledge'))).toBe(false)
+    expect(readRows(db)).toEqual([])
+    expect(rename.calls).toEqual([])
+    expect(keyLogs(db)).toEqual([])
+    expect(onRegisteredCalls).toEqual([])
+  })
+
+  it('目标目录在场而中央行缺席（§6-33 兜底：hash 自身碰撞/中央库重置遗留孤儿）→ SuspectedMoveError（existingDir=derivedDir）', async () => {
+    const { db, registry, tasksHome, service } = setupM2()
+    const wsDir = join(WS, 'orphan-occupied')
+    mkdirSync(join(tasksHome, deriveDirName(wsDir))) // 恰为本次推导目录（hash 一致）
+    const err: unknown = await service.registerProject(input({ workspaceDir: wsDir })).catch((e) => e)
+    expect(err).toBeInstanceOf(SuspectedMoveError)
+    const typed = err as SuspectedMoveError
+    expect(typed.data.existingDir).toBe(typed.data.derivedDir)
+    expect(typed.data.derivedDir).toBe(join(tasksHome, deriveDirName(wsDir)))
+    expect(registry.createCalls).toEqual([]) // 零副作用同上
+    expect(readRows(db)).toEqual([])
+  })
+
+  it('幂等复用：已注册 + 目标目录在场（库已建形态）再注册 → attachExisting 幂等成功（E 分支：中央 ws_path 精确确认），零 SuspectedMove、协作者不再触发', async () => {
+    const { db, tasksHome, service, onRegisteredCalls } = setupM2()
+    const wsDir = join(WS, 'proj')
+    const first = await service.registerProject(input()) // 首注册：目录确保 → realpath 可达
+    expect(onRegisteredCalls).toHaveLength(1)
+    // 模拟 3.4 装配后 store 建库形态：目标目录落盘（hash 一致——realpath 真值拼写）
+    mkdirSync(join(tasksHome, deriveDirName(realpathSync(wsDir))), { recursive: true })
+    const second = await service.registerProject(input())
+    expect(second.attachedToExisting).toBe(true)
+    expect(second.projectId).toBe(first.projectId)
+    expect(readRows(db)).toHaveLength(1) // 无新行、无 UNIQUE 撞击
+    expect(onRegisteredCalls).toHaveLength(1) // 幂等径不触发协作者（AC3）
+  })
+
+  it('tasksHome 未注入（P1 装配面）→ 复检降级缺席：同主体异 hash8 在场仍注册成功（P1 五法行为零变化）', async () => {
+    const { db, service } = setup() // P1 deps：无 tasksHome
+    const tasksHome = m2TasksHome()
+    const wsDir = join(WS, 'p1-degrade')
+    mkdirSync(join(tasksHome, `${deriveDirName(wsDir).split('@')[0]}@deadbeef`))
+    const result = await service.registerProject(input({ workspaceDir: wsDir }))
+    expect(result.attachedToExisting).toBe(false)
+    expect(readRows(db)).toHaveLength(1)
+  })
+})
+
+describe('1.4 onRegistered 协作者（仅新建径触发 = 中央新行落定；fail-soft 永不抛断注册）', () => {
+  it('新建径全链成功 → 恰一调用：{projectId, workspaceId, wsPath=canonical 落库口径, forgeDir, name}', async () => {
+    const { service, onRegisteredCalls } = setupM2()
+    const result = await service.registerProject(input())
+    expect(onRegisteredCalls).toHaveLength(1)
+    expect(onRegisteredCalls[0]).toEqual({
+      projectId: result.projectId,
+      workspaceId: result.workspaceId,
+      wsPath: resolve(join(WS, 'proj')), // 与中央行 ws_path 同口径（registry canonical）
+      forgeDir: join(WS, 'proj', '.forge'),
+      name: 'proj',
+    })
+  })
+
+  it('① 预检命中既有 dsh 工作区（中央新行）→ 同触发（新建径 = 中央新行落定，非 ② create 独占）', async () => {
+    const { registry, service, onRegisteredCalls } = setupM2()
+    const existing = registry.seed(join(WS, 'proj'))
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(true)
+    expect(onRegisteredCalls).toHaveLength(1)
+    expect(onRegisteredCalls[0]?.workspaceId).toBe(existing.id)
+  })
+
+  it('attachExisting 幂等径（中央行在场）→ 不触发（库在场确认/缺席补建归 store 惰性首开——与存量首开同构）', async () => {
+    const { service, onRegisteredCalls } = setupM2()
+    await service.registerProject(input())
+    await service.registerProject(input()) // 重注册 → attachExistingRow 幂等返回
+    expect(onRegisteredCalls).toHaveLength(1)
+  })
+
+  it('协作者抛错（建库/扫描失败模拟）→ fail-soft：注册仍成功返回 + console.warn 单条降级（与开库失败同语义——记账隔离态归闭包自身）', async () => {
+    const boom = new Error('openDatabase 建库失败模拟')
+    const { db, service } = setupM2({
+      onRegistered: () => {
+        throw boom
+      },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await service.registerProject(input())
+      expect(result.attachedToExisting).toBe(false) // 注册整体不受阻（AC4）
+      expect(readRows(db)).toHaveLength(1)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]?.[0]).toContain('注册协作者失败')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
+describe('1.4 deriveTaskStoreDir 动词（Interface 5 表单预检位——纯读；与注册闭包同基准单源）', () => {
+  it('常规 → { dir } = {tasksHome}/{flatten}@{hash8}（G1-12 布局；与注册闭包推导同源）', async () => {
+    const { tasksHome, service } = setupM2()
+    const wsDir = join(WS, 'proj') // 未建 → canonicalizeDir fail-soft 回退原拼写（确定态）
+    const result = await service.deriveTaskStoreDir({ workspaceDir: wsDir })
+    expect(result.dir).toBe(join(tasksHome, deriveDirName(wsDir)))
+  })
+
+  it('疑似移动布局 → SuspectedMoveError（表单预检位提前拦截——data 带手工指引留场文案）', async () => {
+    const { tasksHome, service } = setupM2()
+    const wsDir = join(WS, 'preview-move')
+    mkdirSync(join(tasksHome, `${deriveDirName(wsDir).split('@')[0]}@feedface`))
+    const err: unknown = await service.deriveTaskStoreDir({ workspaceDir: wsDir }).catch((e) => e)
+    expect(err).toBeInstanceOf(SuspectedMoveError)
+    expect((err as SuspectedMoveError).data.existingDir).toBe(join(tasksHome, `${deriveDirName(wsDir).split('@')[0]}@feedface`))
+  })
+
+  it('拼写变体输入 → realpath 收敛后与规范拼写同 dir（S10：hash8 输入 = canonical 串本机原样——单源一致）', async () => {
+    const { service } = setupM2()
+    mkdirSync(join(WS, 'proj'), { recursive: true }) // 真实目录 → realpath 可达（.. 回折折叠）
+    const direct = await service.deriveTaskStoreDir({ workspaceDir: join(WS, 'proj') })
+    const folded = await service.deriveTaskStoreDir({ workspaceDir: join(WS, 'proj', '..', 'proj') + '\\' })
+    expect(folded.dir).toBe(direct.dir)
+  })
+
+  it('tasksHome 未注入（3.4 前装配面缺席）→ 配置缺口普通错误（非 typed 面——fail-loud 提示装配缝）', async () => {
+    const { service } = setup() // P1 deps：无 tasksHome
+    const err: unknown = await service.deriveTaskStoreDir({ workspaceDir: join(WS, 'proj') }).catch((e) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(SuspectedMoveError)
+    expect((err as Error).message).toContain('tasksHome')
   })
 })

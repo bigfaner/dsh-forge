@@ -15,6 +15,12 @@ import { createKnowledgeService } from './knowledge/knowledge-service.js'
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
   dbFile: string
+  /**
+   * M2 派生根 {dsh-forge-home}（1.4 缝——3.4 注入：env DSH_FORGE_TASKS_HOME > {userData}/
+   * forge-workspaces；每工作区任务库 {tasksHome}/{flatten}@{hash8}/forge.db 的根）。
+   * 缺席 = M2 面（注册碰撞复检 + deriveTaskStoreDir 动词）降级缺席，P1 行为零变化。
+   */
+  tasksHome?: string
 }
 
 /** Cordis Context 的结构化装配消费面（真 Context 结构兼容，经 profile 装配注入） */
@@ -38,7 +44,12 @@ const corePlugin: CorePlugin = Object.assign(
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
     ctx.reflect.provide(
       'forgeProjects',
-      createProjectService({ db, registry: ctx.workspaceRegistry, rename: ctx.workspaceController }),
+      createProjectService({
+        db,
+        registry: ctx.workspaceRegistry,
+        rename: ctx.workspaceController,
+        tasksHome: config.tasksHome, // 1.4 缝（可选）——3.4 装配 onRegistered 建库+扫描闭包
+      }),
     )
     ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
     return () => db.close() // fiber disposer：卸载即关库

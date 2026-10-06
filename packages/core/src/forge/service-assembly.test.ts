@@ -63,6 +63,23 @@ describe('service.ts 装配：ctx.forgeProjects 注册（Plugin.Function 形态�
     dispose()
   })
 
+  it('1.4 M2 扩族：config.tasksHome 注入 → deriveTaskStoreDir 第六动词在场可用（Interface 5——P1 五法不动）', async () => {
+    const { ctx, provided } = stubCtx()
+    const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
+    try {
+      const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
+      const svc = provided.get('forgeProjects') as {
+        deriveTaskStoreDir: (q: { workspaceDir: string }) => Promise<{ dir: string }>
+      }
+      expect(typeof svc.deriveTaskStoreDir).toBe('function')
+      const result = await svc.deriveTaskStoreDir({ workspaceDir: 'Z:\\project\\dsh' })
+      expect(result.dir).toBe(`${tasksHome}\\Z-project-dsh@9d2471be`) // 单源逐字（G1-12 布局 pin 同源）
+      dispose()
+    } finally {
+      rmSync(tasksHome, { recursive: true, force: true })
+    }
+  })
+
   it('返回值 = 句柄 disposer：调用后库已关，registerProject 失败（挂接路径 → 无补偿不删既有）', async () => {
     const { ctx, provided, registry } = stubCtx()
     registry.records.set('ws-existing', { id: 'ws-existing', path: 'C:\\proj' }) // 挂接路径

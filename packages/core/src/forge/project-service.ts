@@ -21,6 +21,10 @@
 // forgeDir/knowledgeDir 三目录缺则递归建（幂等），消除「目录不存在」面用户可避错误
 // （ERR_WORKSPACE_CREATE 的「选定后被删」竞态 + 知识面迟到的 ERR_INVALID_KNOWLEDGE_DIR）；
 // 自愈径（attachExistingRow 命中）与挂接径（① 预检命中）零建目录——挂接语义零盘副作用不变。
+// M2（1.4，Interface 5——P1 五法不动）：deps 可选注入 tasksHome（派生根）+ onRegistered
+// （新建径注册协作者——3.4 装配建库 v1 + 发现面扫描闭包）；注册闭包碰撞复检（ERR_SUSPECTED_MOVE
+// 于中央行落库之前，拒绝注册零副作用——分类器/派生单源在 ./workspace/derive-dir.ts）+
+// deriveTaskStoreDir 第六动词（表单预检位，纯读）。两注入缺席 = P1 行为零变化。
 // 查询面 + 启动对账（2.3）：listProjects（archived 态随行=过滤口径）/ getProject / updateProject
 // （patch 仅 name/archived）/ reconcileAtStartup（失配找回、找不回幂等重建、孤儿只提示不删；
 // 全程异常降级 app_key_logs 永不抛断启动）。SQLite 写仅经 db/ 句柄（单写路径）；
@@ -31,9 +35,11 @@ import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import type Database from 'better-sqlite3'
 import type {
+  DeriveTaskStoreDirRequest,
+  DeriveTaskStoreDirResult,
   Project,
   ProjectPatch,
-  ProjectService,
+  ProjectServiceM2,
   ProjectSummary,
   ReconcileRepair,
   ReconcileReport,
@@ -45,6 +51,23 @@ import { errMessage } from '../util.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
+import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir } from './workspace/derive-dir.js'
+import { SuspectedMoveError } from './workspace/errors.js'
+
+/**
+ * onRegistered 协作者入参（1.4 挂点；3.4 装配「store.ensureOpen 建库 v1 + 发现面只读扫描」
+ * 同构闭包消费——tech-design 交互三）。
+ */
+export interface RegisteredProject {
+  /** 中央 projects.id（工作区库 store 键 + 发现面扫描 projectId） */
+  readonly projectId: string
+  readonly workspaceId: string
+  /** 落库口径 ws_path（registry canonical——派生目录/发现面同基准） */
+  readonly wsPath: string
+  /** 发现面扫描根（docs/features 与 docs/proposals 所在地） */
+  readonly forgeDir: string
+  readonly name: string
+}
 
 export interface ProjectServiceDeps {
   /** SQLite 句柄（db/ 唯一产出；一切 SQL prepared） */
@@ -53,10 +76,23 @@ export interface ProjectServiceDeps {
   registry: WorkspaceRegistryPort
   /** dsh 官方面（ctx.workspaceController——workspace/rename 命令；fix-24 ② 标题对齐） */
   rename: WorkspaceRenamePort
+  /**
+   * M2 派生根 {dsh-forge-home}（Interface 5——3.4 经 core config 注入：env
+   * DSH_FORGE_TASKS_HOME > {userData}/forge-workspaces）。缺席 = M2 面（注册碰撞复检 +
+   * deriveTaskStoreDir 动词）降级缺席，P1 五法行为零变化。
+   */
+  tasksHome?: string
+  /**
+   * 注册协作者（1.4 挂点；可选注入——ProjectService 契约面零改动）：新建径（中央新行落定，
+   * 含 ① 挂接既有 dsh 工作区）注册成功后触发；attachExisting 幂等径（中央行在场）不触发——
+   * 库在场确认/缺席补建归 store 惰性首开（与存量首开同构）。失败 fail-soft 永不抛断注册
+   * （AC4：建库/扫描失败与开库失败同语义——记账隔离态归闭包自身）。
+   */
+  onRegistered?: (project: RegisteredProject) => void
 }
 
-/** Interface 1 服务面（2.3 并齐 contracts ProjectService 全五法） */
-export function createProjectService(deps: ProjectServiceDeps): ProjectService {
+/** Interface 5 服务面（P1 五法不动 + deriveTaskStoreDir 第六动词——ctx.forgeProjects M2 形状） */
+export function createProjectService(deps: ProjectServiceDeps): ProjectServiceM2 {
   return {
     async registerProject(input: RegisterProjectInput): Promise<RegisterResult> {
       return registerProject(deps, input)
@@ -73,6 +109,58 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectService {
     async reconcileAtStartup(): Promise<ReconcileReport> {
       return reconcileAtStartup(deps)
     },
+    async deriveTaskStoreDir(q: DeriveTaskStoreDirRequest): Promise<DeriveTaskStoreDirResult> {
+      return deriveTaskStoreDirVerb(deps, q)
+    },
+  }
+}
+
+/**
+ * M2 注册碰撞复检（1.4；Interface 5 注册闭包侧——表单预检位（deriveTaskStoreDir 动词）的
+ * 复检位）。三态机械面归 workspace/derive-dir.ts 分类器单源；本位收口两拒绝态：
+ *   · 同扁平化主体异 hash8 → ERR_SUSPECTED_MOVE（疑似移动拒绝——data 带手工指引）；
+ *   · 目标目录在场（hash 一致）而中央行缺席（调用不变量：attachExisting 已 miss）→
+ *     §6-33 兜底拒绝（hash 自身碰撞/中央库重置遗留孤儿库——同 typed 面，existingDir=derivedDir）。
+ * Hard Rule：于中央行落库之前抛出——调用位在 ① 预检/目录确保/② create 之前，拒绝注册零副作用。
+ */
+function assertNoRegistrationCollision(tasksHome: string, workspaceDir: string): void {
+  const collision = classifyRegistrationCollision(tasksHome, workspaceDir)
+  if (collision.state !== 'normal') throw new SuspectedMoveError(collision.data)
+}
+
+/**
+ * M2 表单预检动词（Interface 5）：`{tasksHome}/{flatten}@{hash8}` 单源纯读。与注册闭包同基准
+ * ——输入可达则 realpath（S10：hash8 输入 = canonical 串本机原样，拼写变体先收敛保单源一致）；
+ * 疑似移动布局提前拦截（ERR_SUSPECTED_MOVE——UI 错误条 + 手工指引留场）；正常/幂等复用候选
+ * 两态返回 dir（幂等的中央 ws_path 精确确认归注册闭包）。
+ */
+async function deriveTaskStoreDirVerb(
+  deps: ProjectServiceDeps,
+  q: DeriveTaskStoreDirRequest,
+): Promise<DeriveTaskStoreDirResult> {
+  if (deps.tasksHome === undefined) {
+    // 配置缺口非用户态错误——fail-loud 普通错误（3.4 前装配面缺席；不扩六码 typed 面）
+    throw new Error('deriveTaskStoreDir 不可用：tasksHome 未注入（core config tasksHome 字段——3.4 装配）')
+  }
+  const workspaceDir = await canonicalizeDir(q.workspaceDir)
+  const collision = classifyRegistrationCollision(deps.tasksHome, workspaceDir)
+  if (collision.state === 'suspected-move') throw new SuspectedMoveError(collision.data)
+  return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
+}
+
+/**
+ * M2 注册协作者执行（fail-soft：建库/扫描失败与开库失败同语义——记账隔离态归闭包自身
+ * （store throwIsolated/发现面逐项容错），不阻断注册整体；中央 app_key_logs scope CHECK
+ * 四值不含注册域 → child 控制台降级（alignWorkspaceTitle 同径，stdio 继承回流宿主））。
+ */
+function runRegistered(deps: ProjectServiceDeps, project: RegisteredProject): void {
+  if (deps.onRegistered === undefined) return
+  try {
+    deps.onRegistered(project)
+  } catch (cause) {
+    console.warn(
+      `注册协作者失败（fail-soft——注册已成功，任务库惰性首开兜底）：${project.wsPath}（${project.projectId}）：${errMessage(cause)}`,
+    )
   }
 }
 
@@ -217,6 +305,13 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
   const reattached = await attachExistingRow(deps, canonicalInput)
   if (reattached !== undefined) return reattached
 
+  // M2 注册碰撞复检（1.4；Interface 5 注册闭包侧）：新建径专属——上方 attachExisting 幂等返回
+  // = 三态之「幂等复用：中央 ws_path 精确确认」。同主体异 hash8 / 目标目录在场而中央行缺席 →
+  // ERR_SUSPECTED_MOVE（Hard Rule：于中央行落库之前抛出——本位在 ① 预检/目录确保/② create
+  // 之前，拒绝注册零副作用：dsh 侧/盘面/中央行零变更）。tasksHome 未注入（3.4 前）= 复检
+  // 降级缺席，P1 五法行为零变化。
+  if (deps.tasksHome !== undefined) assertNoRegistrationCollision(deps.tasksHome, canonicalInput.workspaceDir)
+
   // ① 预检：list() 按归一键匹配（fix-30：BINARY → normalizeFsPath——输入与 registry canonical
   // 的盘符大小写/正反斜杠/尾分隔符差异不再击穿；命中=挂接，不登记补偿）
   const inputKey = normalizeFsPath(canonicalInput.workspaceDir)
@@ -254,6 +349,17 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
 
   // fix-24 ②：注册链末位 workspace 标题对齐项目名（新建与挂接既有两径同收口——见 alignWorkspaceTitle）
   await alignWorkspaceTitle(deps, workspace.id, input.name)
+
+  // M2 协作者（1.4）：新建径（中央新行落定——含 ① 挂接既有 dsh 工作区）注册成功尾触发：
+  // 建库 v1 + 发现面只读扫描（3.4 装配同构闭包）；attachExisting 幂等径不经此（AC3）。
+  // fail-soft 永不抛断注册（AC4）——见 runRegistered。
+  runRegistered(deps, {
+    projectId,
+    workspaceId: workspace.id,
+    wsPath: workspace.path,
+    forgeDir: canonicalInput.forgeDir,
+    name: input.name,
+  })
 
   return { projectId, workspaceId: workspace.id, attachedToExisting: !createdNow }
 }
