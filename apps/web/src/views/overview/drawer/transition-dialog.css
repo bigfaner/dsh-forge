@@ -1,0 +1,122 @@
+/* 人工转移对话框样式（定位：业务——3.8 流程 6：目标态仅列 allowedTransitions + reason 必带 +
+ * 空因拒绝留场）。结构基准 = 原型 openTransDialog（styles.css .dialog-mask/.dialog/.form-row）；
+ * 视觉一律官方令牌（令牌唯一：色/字/距/圆角/阴影零裸值——lint-tokens 机械面）。
+ * dsw-raw 豁免（执行记录注记）：
+ *   - mask 层号 80 = 原型弹层层号（抽屉 dockkit 60 之上——对话框压抽屉）；
+ *   - 弹宽 min(500px, 94vw) / 弹高余量 calc(100vh - 60px) / 内衬 16px 20px = 原型弹体结构刻度
+ *     （布局尺寸以原型结构为准——styling TECH-styling-002）；
+ *   - textarea 最小高 64px = 原型原因域刻度。 */
+
+/* ── 遮罩：居中弹层（压抽屉——z 80 > 抽屉 60） ── */
+.dswf-td-tr-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80; /* dsw-raw 原型弹层层号 */
+  display: grid;
+  place-items: center;
+  background: var(--dsw-alias-bg-mask-drop);
+}
+
+/* ── 弹体 ── */
+.dswf-td-tr {
+  width: min(500px, 94vw); /* dsw-raw 原型弹宽刻度 */
+  max-height: calc(100vh - 60px); /* dsw-raw 原型弹高余量 */
+  box-sizing: border-box;
+  overflow: auto;
+  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-l-20-line-height); /* dsw-raw 原型 16/20 内衬 */
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+.dswf-td-tr-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-tr-title {
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-tr-key {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-tr-sub {
+  margin: var(--dsw-font-xs-13-line-height) 0 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 表单行（label 在上 + 控件在下） ── */
+.dswf-td-tr-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-radius-sm);
+  margin-top: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-tr-label {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-tr-static {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-radius-sm);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-tr-select,
+.dswf-td-tr-reason {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-tr-select:focus-visible,
+.dswf-td-tr-reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 0;
+}
+
+.dswf-td-tr-reason {
+  min-height: 64px; /* dsw-raw 原型原因域刻度 */
+  resize: vertical;
+}
+
+/* 终态提示（autoRestore——目标 ∈ {completed, skipped} 时在场） */
+.dswf-td-tr-hint {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 拒绝留场错误条（role=alert——空因/校验/rpc 失败同面） */
+.dswf-td-tr-err {
+  margin: var(--dsw-font-xs-13-line-height) 0 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── 动作行（取消 / 确认转移——右端对齐） ── */
+.dswf-td-tr-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin-top: var(--dsw-font-s-14-line-height);
+}
