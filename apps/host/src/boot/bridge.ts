@@ -70,12 +70,15 @@ export interface BridgeShutdownRequest {
 
 export type MainToChildMessage = BridgeRpcRequest | BridgeShutdownRequest
 
-/** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池） */
+/** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池；
+ *  tools = ToolRuntime 已注册 tool 名清单（3.4 冒烟观测面——plugin-forge tool 面可达性经 spawn
+ *  链路断言；可选字段：读取失败/旧 child 缺席 = undefined，不阻 ready 守卫） */
 export interface BridgeReadyMessage {
   readonly type: 'ready'
   readonly url: string
   readonly injections: readonly unknown[]
   readonly services: Readonly<Record<BridgeServiceName, boolean>>
+  readonly tools?: readonly string[]
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -249,6 +252,9 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   if (typeof o.port !== 'number' || !Number.isInteger(o.port) || o.port <= 0) return undefined
   const credentialsPath =
     typeof o.credentialsPath === 'string' && o.credentialsPath !== '' ? o.credentialsPath : undefined
+  // 3.4 M2 装配两缝（可选——缺席/空串 = 不注入：core M2 四域降级 / plugin-forge 技能面降级）
+  const tasksHome = typeof o.tasksHome === 'string' && o.tasksHome !== '' ? o.tasksHome : undefined
+  const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
   return {
     profileDir: o.profileDir as string,
     installAnchor: o.installAnchor as string,
@@ -256,6 +262,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     stateDb: o.stateDb as string,
     bindingsFile: o.bindingsFile as string,
     credentialsPath, // fix-26 凭据桥（可选——缺席/空串 = 不桥，与 env 开关空串缺省惯例一致）
+    tasksHome,
+    skillsDir,
   }
 }
 
@@ -276,7 +284,18 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     if (typeof bit !== 'boolean') return undefined
     bits[name] = bit
   }
-  return { type: 'ready', url: m.url, injections: m.injections, services: bits as Record<BridgeServiceName, boolean> }
+  // tools 清单（3.4 冒烟观测面）：可选字段——在场须为 string[]（畸形视为缺席降级，
+  // 不阻 ready 守卫：tools 面缺席 = 观测降级，boot 本身仍成立）
+  const tools = Array.isArray(m.tools) && m.tools.every((t) => typeof t === 'string')
+    ? (m.tools as string[])
+    : undefined
+  return {
+    type: 'ready',
+    url: m.url,
+    injections: m.injections,
+    services: bits as Record<BridgeServiceName, boolean>,
+    ...(tools !== undefined ? { tools } : {}),
+  }
 }
 
 /**

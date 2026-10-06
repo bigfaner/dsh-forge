@@ -11,6 +11,13 @@
 // fix-26：凭据桥入同一缝——dsh-base credentials 行注 config.path 指真 home
 // {homedir}/.dsh/.credentials.yaml（官方 resolveSpec 显式 path 优先缝），数据走隔离
 // dshHome 而凭据留真 home（单一真相源，原生 dsh 同步可见/可改；e2e 隔离态缺席不桥）。
+// M2 3.4 增三行：core 行增 tasksHome（M2 派生根注入——四域服务装配门）；plugin-forge
+// 行 bindingsFile（Interface 8 cwd 路由数据缝——与 knowledge 同一 {wsPath,projectId}
+// 表文件，生产端 = ipc/bindings.ts 刷新面单源）；skill-filesystem 行 customSkillDirs
+// （plugin-forge skills 物理挂载——静态模板无法承载形态化绝对路径：dev = workspace
+// 链接、packaged = runtime/node_modules 邻接，故与 dbFile/bindingsFile 同入装配期缝；
+// 官方 cordis 预设的 !!js 表达式形制在打包形态不可解析——baseUrl 只见 {userData}
+// profile 链，无 installAnchor BFS）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -28,6 +35,11 @@ export interface BootOverlayInput {
   readonly stateDb: string
   /** knowledge 插件 bindingsFile（会话 cwd → projectId 绑定表） */
   readonly bindingsFile: string
+  /** M2 派生根（3.4：core 行 config.tasksHome 注入——缺席 = M2 四域整体降级） */
+  readonly tasksHome?: string
+  /** plugin-forge skills 物理挂载目录（3.4：skill-filesystem 行 customSkillDirs 注入；
+   *  缺席 = 解析失败 fail-soft 不注入——技能面降级，tools 半身照常） */
+  readonly skillsDir?: string
   /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
    *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
   readonly credentialsPath?: string
@@ -45,9 +57,16 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '- id: dsh-forge-core',
     '  config:',
     `    dbFile: ${yamlQuote(input.stateDb)}`,
+    ...(input.tasksHome !== undefined ? [`    tasksHome: ${yamlQuote(input.tasksHome)}`] : []),
     '- id: dsh-forge-knowledge',
     '  config:',
     `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
+    '- id: dsh-forge-plugin-forge',
+    '  config:',
+    `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
+    ...(input.skillsDir !== undefined
+      ? ['- id: skill-filesystem', '  config:', '    customSkillDirs:', `      - ${yamlQuote(input.skillsDir)}`]
+      : []),
     ...(input.credentialsPath !== undefined
       ? ['- id: credentials', '  config:', `    path: ${yamlQuote(input.credentialsPath)}`]
       : []),

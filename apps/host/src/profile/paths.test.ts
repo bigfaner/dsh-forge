@@ -14,6 +14,8 @@ describe('resolveHostPaths 双形态', () => {
     // 4.2 装配期路径：状态库 + knowledge 绑定表（boot overlay 注入 / host 维护）——应用私有面不随 fix-26 变
     expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/state.db')
     expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/knowledge-bindings.json')
+    // 3.4 M2 派生根缺省：{userData}/forge-workspaces（tech-design Layer Placement host 行）
+    expect(paths.tasksHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/forge-workspaces')
   })
 
   it('dev 形态：DSH_FORGE_DEV_PROFILE 真值 → workspace 预组装 profile.dev 目录', () => {
@@ -41,6 +43,33 @@ describe('resolveHostPaths 双形态', () => {
   it('hostRoot 指向 apps/host 包根（src 与 dist 同深度锚定）', () => {
     expect(existsSync(join(hostRoot(), 'package.json'))).toBe(true)
     expect(hostRoot().replaceAll('\\', '/')).toMatch(/apps\/host$/)
+  })
+})
+
+// 3.4 M2 派生根（resolveTasksHome）：env DSH_FORGE_TASKS_HOME > {userData}/forge-workspaces
+//（tech-design Layer Placement host 行——注入 core 行 config.tasksHome，缺席 env 走缺省）
+describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
+  it('env 显式覆盖（绝对路径直取；相对路径锚 host 根；空串 = 缺省）', () => {
+    const abs = resolveHostPaths({ DSH_FORGE_TASKS_HOME: 'X:/ws/tasks-home' }, 'C:/ud')
+    expect(abs.tasksHome).toBe('X:/ws/tasks-home')
+    const rel = resolveHostPaths({ DSH_FORGE_TASKS_HOME: 'tmp/tasks' }, 'C:/ud')
+    expect(rel.tasksHome).toBe(join(hostRoot(), 'tmp/tasks'))
+    const empty = resolveHostPaths({ DSH_FORGE_TASKS_HOME: '' }, 'C:/ud')
+    expect(empty.tasksHome.replaceAll('\\', '/')).toBe('C:/ud/forge-workspaces')
+  })
+
+  it('plugin-forge skills 挂载目录：installAnchor 树上溯解析（node_modules/@dsh-forge/plugin-forge/skills——customSkillDirs 源）', () => {
+    const paths = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
+    expect(paths.skillsDir).toBeDefined()
+    expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
+    expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
+    expect(existsSync(join(paths.skillsDir!, 'run-tasks', 'SKILL.md'))).toBe(true)
+  })
+
+  it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {
+    // 独立根（无 node_modules 树）显式 anchor → 上溯至文件系统根不中
+    const isolated = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: 'X:\\nowhere\\anchor\\package.json' }, 'C:/ud')
+    expect(isolated.skillsDir).toBeUndefined()
   })
 })
 

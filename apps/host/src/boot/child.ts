@@ -29,6 +29,25 @@ interface ServiceGetFace {
   get(name: string): unknown
 }
 
+/** 官方 ToolRuntime 的结构化窄面（tools 服务——dsh-tools Service，super(ctx, "tools") 注册名） */
+interface ToolRuntimeFace {
+  schemas(scope?: unknown): readonly { readonly name?: unknown }[]
+}
+
+/** ToolRuntime 已注册 tool 名全集（全局视图；读取/形状异常 = undefined 观测降级不抛） */
+function toolNamesOf(face: ServiceGetFace): readonly string[] | undefined {
+  try {
+    const tools = face.get('tools') as ToolRuntimeFace | undefined
+    if (tools === undefined || typeof tools.schemas !== 'function') return undefined
+    return tools
+      .schemas()
+      .map((s) => (typeof s.name === 'string' ? s.name : ''))
+      .filter((name) => name !== '')
+  } catch {
+    return undefined
+  }
+}
+
 // fix-33 ① send 防护：IPC 序列化抛错（BigInt/循环引用）不落 unhandled rejection——
 // rpc-result 面回填保 id 降级 error-result（主侧 pending 可结算）。见 bridge.sendGuarded。
 const send = (message: ChildToMainMessage): void => {
@@ -69,6 +88,8 @@ async function main(): Promise<void> {
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
+    tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
+    skillsDir: options.skillsDir, // 3.4 plugin-forge skills 物理挂载（缺席 = 技能面降级）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
   })
   const { ctx, shutdown: processShutdown } = await runProfile({
@@ -90,6 +111,9 @@ async function main(): Promise<void> {
     forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
   }
+  // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
+  // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
+  const toolNames = toolNamesOf(servicesFace)
   send({
     type: 'ready',
     url,
@@ -102,6 +126,7 @@ async function main(): Promise<void> {
       forgeProposals: services.forgeProposals !== undefined,
       forgeDocs: services.forgeDocs !== undefined,
     },
+    ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })
   shutdownTree = () => processShutdown.shutdown(0)
   handleMessage = (message) => {

@@ -46,9 +46,19 @@ const STAGING = join(ROOT, 'release', 'staging')
 const RUNTIME = join(STAGING, 'runtime')
 const APP_DIR = join(ROOT, 'release', 'app')
 const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
-const PRODUCT_PACKAGES = ['contracts', 'core', 'knowledge']
-/** 产品插件物化内容（源 = packages/<name>）：清单 + 说明 + 构建产物（不携带 src/测试） */
-const PRODUCT_PACKAGE_FILES = ['package.json', 'README.md', 'dist']
+/**
+ * 产品插件物化清单（3.4 增 plugin-forge）。每包必物化内容（源 = packages/<name>）：清单 +
+ * 构建产物（不携带 src/测试）；plugin-forge 另携 skills/——customSkillDirs 物理挂载源
+ * （boot overlay 注 skill-filesystem 行），缺席即技能面静默缺失，故必物化 fail-loud。
+ * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
+ */
+const PRODUCT_PACKAGES = {
+  contracts: ['package.json', 'dist'],
+  core: ['package.json', 'dist'],
+  knowledge: ['package.json', 'dist'],
+  'plugin-forge': ['package.json', 'dist', 'skills'],
+}
+const PRODUCT_OPTIONAL_FILES = ['README.md']
 
 /** --check 断言的安装包关键文件（resources 相对路径；4.3 冒烟对安装后 resources 同口径复用） */
 export const REQUIRED_KEY_FILES = [
@@ -68,6 +78,9 @@ export const REQUIRED_KEY_FILES = [
   'runtime/node_modules/@dsh-forge/core/dist/index.js',
   'runtime/node_modules/@dsh-forge/knowledge/package.json',
   'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
+  'runtime/node_modules/@dsh-forge/plugin-forge/package.json',
+  'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
+  'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
   'runtime/node_modules/better-sqlite3/package.json',
   'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
 ]
@@ -138,6 +151,8 @@ function assertPreconditions() {
     [join(ROOT, 'packages/contracts/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/core/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/knowledge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
+    [join(ROOT, 'packages/plugin-forge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
+    [join(ROOT, 'packages/plugin-forge/skills/run-tasks/SKILL.md'), 'packages/plugin-forge/skills 技能面（3.4 customSkillDirs 挂载源——缺席即技能面静默缺失）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
@@ -177,7 +192,7 @@ function stage() {
   const rootVersion = readJson(join(ROOT, 'package.json'), 'root manifest').version ?? '0.0.0'
   const installManifest = readJson(join(ROOT, 'apps/host/profile.install/package.json'), 'profile.install manifest')
   const productVersions = {}
-  for (const name of PRODUCT_PACKAGES) {
+  for (const name of Object.keys(PRODUCT_PACKAGES)) {
     const manifest = readJson(join(ROOT, 'packages', name, 'package.json'), `packages/${name} manifest`)
     productVersions[`@dsh-forge/${name}`] = manifest.version ?? '0.0.0'
   }
@@ -187,18 +202,19 @@ function stage() {
   mkdirSync(join(RUNTIME, 'node_modules'), { recursive: true })
 
   // 1) 运行时树：profile.install hoisted 全量真实文件（@dsh-forge 不在其中安装——
-  //    见其 package.json description），叠加产品插件真实拷贝
+  //    见其 package.json description），叠加产品插件真实拷贝（每包必物化集 + 可选 README）
   const sections = {}
   copyTree(INSTALL_NM, join(RUNTIME, 'node_modules'))
   mkdirSync(join(RUNTIME, 'node_modules', '@dsh-forge'), { recursive: true })
-  for (const name of PRODUCT_PACKAGES) {
+  for (const [name, requiredFiles] of Object.entries(PRODUCT_PACKAGES)) {
     const dest = join(RUNTIME, 'node_modules', '@dsh-forge', name)
     mkdirSync(dest, { recursive: true })
-    for (const file of PRODUCT_PACKAGE_FILES) {
+    for (const file of [...requiredFiles, ...PRODUCT_OPTIONAL_FILES]) {
       const source = join(ROOT, 'packages', name, file)
-      // README.md 等文档件可选（contracts 无 README——携带与否不影响运行）
-      if (file !== 'package.json' && file !== 'dist' && !existsSync(source)) continue
-      if (!existsSync(source)) fail(`${source} 未就位 —— 先执行：pnpm build`)
+      if (!existsSync(source)) {
+        if (requiredFiles.includes(file)) fail(`${source} 未就位 —— 先执行：pnpm build`)
+        continue // 可选件（README.md 等）缺席静默跳过
+      }
       cpSync(source, join(dest, file), { recursive: true, dereference: true })
     }
   }

@@ -152,7 +152,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(app.devDependencies).toBeUndefined()
   })
 
-  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品三插件 / sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
+  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品四插件（含 plugin-forge skills 技能面）/ sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
     const must = [
       'runtime/package.json',
       'runtime/host-dist/main.js',
@@ -163,6 +163,8 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
       'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
+      'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',

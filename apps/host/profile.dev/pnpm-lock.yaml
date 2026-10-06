@@ -26,6 +26,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: link:../../../packages/knowledge
         version: link:../../../packages/knowledge
+      '@dsh-forge/plugin-forge':
+        specifier: link:../../../packages/plugin-forge
+        version: link:../../../packages/plugin-forge
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3

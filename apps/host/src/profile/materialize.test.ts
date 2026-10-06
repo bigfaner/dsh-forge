@@ -40,14 +40,14 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   })
 
-  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/core / @dsh-forge/knowledge 产品行（4.2 转正启用）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/{core,knowledge,plugin-forge} 产品行（3.4 增 plugin-forge）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
     // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
     expect(patch).toContain('- id: client-hmr')
     expect(patch).toContain('disabled: true')
-    // 产品两行启用（4.2——SMOKE-LEDGER §5 转正）：insert 块无 disabled；行 config 不在
-    // 用户层书写（dbFile / bindingsFile = boot overlay 装配期注入，见 boot/overlay.ts）
+    // 产品三行启用（4.2 转正 + 3.4 plugin-forge 入列）：insert 块无 disabled；行 config 不在
+    // 用户层书写（dbFile / tasksHome / bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
     expect(patch).toContain(
       [
         '- insert:',
@@ -55,6 +55,8 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
         "      name: '@dsh-forge/core'",
         '    - id: dsh-forge-knowledge',
         "      name: '@dsh-forge/knowledge'",
+        '    - id: dsh-forge-plugin-forge',
+        "      name: '@dsh-forge/plugin-forge'",
       ].join('\n'),
     )
     expect(patch).not.toContain('disabled: true\n    - id: dsh-forge-knowledge')
@@ -123,17 +125,19 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
+    expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
     // core 运行期原生依赖（prebuilds 随包分发；兜底供非 realpath 解析路径）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
-  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行启用——4.2 转正）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 三产品行启用——4.2 转正 + 3.4 plugin-forge）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
     expect(dev).toContain('- id: system-prompt')
     expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
-    expect(dev).not.toMatch(/dsh-forge-(core|knowledge)[\s\S]{0,80}disabled/)
+    expect(dev).toContain("name: '@dsh-forge/plugin-forge'")
+    expect(dev).not.toMatch(/dsh-forge-(core|knowledge|plugin-forge)[\s\S]{0,80}disabled/)
   })
   it('pnpm-workspace.yaml 全文一致', () => {
     const dev = readFileSync(join(devDir, 'pnpm-workspace.yaml'), 'utf8')

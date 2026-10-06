@@ -13,6 +13,7 @@
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/core": "workspace:*",
     "@dsh-forge/knowledge": "workspace:*",
+    "@dsh-forge/plugin-forge": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-group": "1.0.4",
     "@deepseek-ai/cordis-plugin-include": "1.0.9",

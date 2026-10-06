@@ -50,8 +50,13 @@ export interface BootDshOptions {
   port: number
   /** 应用状态库绝对路径（core 插件 dbFile——boot overlay 注入；4.2） */
   stateDb: string
-  /** knowledge 绑定表文件绝对路径（bindingsFile——boot overlay 注入；4.2） */
+  /** knowledge 绑定表文件绝对路径（bindingsFile——boot overlay 注入；4.2。M2 起同文件
+   *  亦注入 plugin-forge 行——Interface 8 cwd 路由数据缝单一绑定表） */
   bindingsFile: string
+  /** M2 派生根绝对路径（3.4：boot overlay 注 core 行 config.tasksHome；缺席 = M2 四域降级） */
+  tasksHome?: string
+  /** plugin-forge skills 物理挂载目录（3.4：boot overlay 注 skill-filesystem 行；缺席 = 不注入） */
+  skillsDir?: string
   /** 真 home 凭据文档桥路径（fix-26；boot overlay credentials 行 config.path 注入——
    *  undefined = USER_DATA 隔离态（e2e/测试）不桥） */
   credentialsPath?: string
@@ -77,6 +82,11 @@ export interface DshHostHandle {
   manifest: BootManifest
   /** 产品六服务（缺席任一 = core 插件行未装载 / M2 面降级——main 侧 fail-soft 记日志不注册对应通道族） */
   services: Partial<DshHostServices>
+  /**
+   * boot 就绪时子进程 ToolRuntime 已注册 tool 名全集（3.4 冒烟观测面——plugin-forge
+   * 六动词经 spawn 链路可达的机械判据；读取失败/旧 child = 空清单，装配断言由冒烟承载）。
+   */
+  toolNames: readonly string[]
   /**
    * 写推送事件订阅（交互二事件链中段：core emitTasksChanged → process.send(event) →
    * 本分支 → 订阅方 → main webContents.send('forge:events/tasks-changed')）。返回退订器；
@@ -164,10 +174,22 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
   }
 }
 
-/** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals） */
-export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandle> {
-  const childEntry = resolveChildEntry(import.meta.url, options.resourcesDir)
-  const child = spawn(process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
+/** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals）。
+ *  spawnOverrides 为 spawn 驱动面覆盖（不序列化入子进程 argv）：execPath = 派生可执行
+ *  （缺省 process.execPath——Electron main 下即 electron.exe；3.4 冒烟经 node/vitest 驱动
+ *  时注入 electron 二进制，spawn 链路同款）；childEntry = child 入口（缺省本模块同目录
+ *  dist 形态解析——vitest(src) 驱动时须显式指 dist 产物）。 */
+export interface BootSpawnOverrides {
+  readonly execPath?: string
+  readonly childEntry?: string
+}
+
+export async function bootDshHost(
+  options: BootDshOptions,
+  spawnOptions: BootSpawnOverrides = {},
+): Promise<DshHostHandle> {
+  const childEntry = spawnOptions.childEntry ?? resolveChildEntry(import.meta.url, options.resourcesDir)
+  const child = spawn(spawnOptions.execPath ?? process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
   })
@@ -176,6 +198,7 @@ export async function bootDshHost(options: BootDshOptions): Promise<DshHostHandl
   const call = channel.call
   return {
     manifest: buildBootManifest(ready.url, ready.injections),
+    toolNames: ready.tools ?? [],
     services: {
       forgeProjects: ready.services.forgeProjects
         ? createBridgeProxy<ProjectServiceM2>(

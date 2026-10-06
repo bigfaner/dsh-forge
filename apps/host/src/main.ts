@@ -49,6 +49,8 @@ void (async () => {
       port,
       stateDb: paths.stateDb,
       bindingsFile: paths.bindingsFile,
+      tasksHome: paths.tasksHome, // 3.4：M2 派生根注入（core 行 config——四域服务装配门）
+      skillsDir: paths.skillsDir, // 3.4：plugin-forge skills 物理挂载（skill-filesystem 行）
       credentialsPath: paths.credentialsPath, // fix-26：非 USER_DATA 隔离态桥真 home 凭据
       resourcesDir: paths.resourcesDir, // 4.1：打包形态 boot child 取 runtime/host-dist 入口
     })
@@ -63,9 +65,9 @@ void (async () => {
     const forgeIpc = createForgeIpc(ipcMain) // forge:* 域面（handler 本体 2.4/3.5 注册进此机制）
     registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
     registerM2Channels(forgeIpc, host, () => mainWindow?.webContents, shell.openPath) // M2 四族+derive 注册（缺席 fail-soft 记 warn）+ 写推送事件广播（交互二）
-    // 产品双服务接线（4.2——SMOKE-LEDGER §5 转正）：core 插件经 profile 装配 provide，
-    // boot 面世后注册 forge:projects/* + forge:knowledge/* 两面；knowledge 绑定表随
-    // boot 全量刷新 + 注册增量刷新（fail-soft——服务缺席记日志不注册，壳面不受损）
+    // 产品双服务接线（4.2 转正）：core 经 profile 装配 provide，boot 面世后注册
+    // forge:projects/* + forge:knowledge/*；绑定表（M2 起兼 plugin-forge cwd 路由缝）随 boot
+    // 全量刷新 + 注册增量刷新（fail-soft——缺席记日志不注册）
     if (host.services.forgeProjects !== undefined) {
       registerProjectsChannels(
         forgeIpc,
@@ -78,9 +80,7 @@ void (async () => {
       registerKnowledgeChannels(forgeIpc, host.services.forgeKnowledge)
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
-    // fix-14：官方 __DSH_DIRECTORY_PICKER__ 桥 main 半边——openDirectory 单选（取消 = null）
-    // fix-21：parent 窗口形参 + 官方标题——showOpenDialog(父窗, options) = 对父窗模态 + 前台置顶
-    //（Windows 失焦态点「＋」仍立即现于主窗之上）；parent 缺席（理论不可达）→ 回退无 parent（fail-soft）。
+    // fix-14/fix-21：官方目录选取桥 main 半边——openDirectory 单选 + parent 窗口模态/置顶（缺席 fail-soft 回退无 parent）。
     const pickDialogOptions: OpenDialogOptions = { properties: ['openDirectory'], title: DIRECTORY_PICKER_DIALOG_TITLE }
     registerDirectoryPickerChannel(
       ipcMain,

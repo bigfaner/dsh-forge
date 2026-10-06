@@ -140,6 +140,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: workspace:*
         version: link:../../packages/knowledge
+      '@dsh-forge/plugin-forge':
+        specifier: workspace:*
+        version: link:../../packages/plugin-forge
     devDependencies:
       electron:
         specifier: 44.0.0

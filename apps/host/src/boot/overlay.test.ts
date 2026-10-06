@@ -2,6 +2,8 @@
 // 用户层之后应用，按 row id 整体替换 config；YAML 双引号标量承载 Windows 路径）。
 // fix-12：welcome ack 预置行形状 + 上游版本常量 pin（升级窗口机械核查）。
 // fix-26：凭据桥行形状（credentialsPath 在场注入 / 缺席不桥）+ 官方缝 pin。
+// 3.4 M2 装配缝三面：core 行 tasksHome / plugin-forge 行 bindingsFile（与 knowledge
+// 同一绑定表文件）/ skill-filesystem 行 customSkillDirs（plugin-forge skills 物理挂载）。
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,6 +26,9 @@ describe('renderBootOverlay（纯函数形状）', () => {
         '- id: dsh-forge-knowledge',
         '  config:',
         '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"',
+        '- id: dsh-forge-plugin-forge',
+        '  config:',
+        '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"',
         '- id: ui-settings-general',
         '  config:',
         `    welcomeNoticeVersion: "${WELCOME_NOTICE_ACK_VERSION}"`,
@@ -36,6 +41,7 @@ describe('renderBootOverlay（纯函数形状）', () => {
     const text = renderBootOverlay({ stateDb: '/x/state.db', bindingsFile: '/x/b.json' })
     expect(text).toContain('- id: dsh-forge-core')
     expect(text).toContain('- id: dsh-forge-knowledge')
+    expect(text).toContain('- id: dsh-forge-plugin-forge')
     expect(text).not.toContain('- insert')
     expect(text).not.toContain('disabled')
   })
@@ -66,6 +72,40 @@ describe('renderBootOverlay（纯函数形状）', () => {
     const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
     expect(text).not.toContain('- id: credentials')
     expect(text).not.toContain('credentials.yaml')
+  })
+
+  it('M2 装配缝（3.4）：tasksHome 在场 → core 行 config 增字段（dbFile 重述——整行替换纪律）', () => {
+    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', tasksHome: 'C:\\ws\\tasks' })
+    expect(text).toContain(
+      ['- id: dsh-forge-core', '  config:', '    dbFile: "/x/s.db"', '    tasksHome: "C:\\\\ws\\\\tasks"'].join('\n'),
+    )
+  })
+
+  it('M2 装配缝（3.4）：tasksHome 缺席 → core 行仅 dbFile（M2 四域降级装配形态）', () => {
+    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    expect(text).not.toContain('tasksHome')
+  })
+
+  it('技能面挂载（3.4）：skillsDir 在场 → skill-filesystem 行 customSkillDirs 列表（官方行 id 定位）', () => {
+    const text = renderBootOverlay({
+      stateDb: '/x/s.db',
+      bindingsFile: '/x/b.json',
+      skillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills',
+    })
+    expect(text).toContain(
+      [
+        '- id: skill-filesystem',
+        '  config:',
+        '    customSkillDirs:',
+        '      - "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"',
+      ].join('\n'),
+    )
+  })
+
+  it('技能面挂载（3.4）：skillsDir 缺席 → 无 skill-filesystem 行（fail-soft 技能面降级）', () => {
+    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    expect(text).not.toContain('skill-filesystem')
+    expect(text).not.toContain('customSkillDirs')
   })
 })
 

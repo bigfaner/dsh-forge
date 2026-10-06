@@ -121,6 +121,26 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     expect(empty?.credentialsPath).toBeUndefined()
     expect(parseChildOptions(['electron.exe', 'child.js', valid])?.credentialsPath).toBeUndefined()
   })
+
+  it('M2 装配两缝可选透传（3.4：tasksHome / skillsDir；空串/缺席 = 不注入降级）', () => {
+    const m2 = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({ ...JSON.parse(valid), tasksHome: 'C:/ud/forge-workspaces', skillsDir: 'C:/pkg/skills' }),
+    ])
+    expect(m2?.tasksHome).toBe('C:/ud/forge-workspaces')
+    expect(m2?.skillsDir).toBe('C:/pkg/skills')
+    const legacy = parseChildOptions(['electron.exe', 'child.js', valid]) // 旧载荷（3.4 前主进程）零破坏
+    expect(legacy?.tasksHome).toBeUndefined()
+    expect(legacy?.skillsDir).toBeUndefined()
+    const empty = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({ ...JSON.parse(valid), tasksHome: '', skillsDir: '' }),
+    ])
+    expect(empty?.tasksHome).toBeUndefined()
+    expect(empty?.skillsDir).toBeUndefined()
+  })
 })
 
 describe('asReadyMessage（ready 守卫）', () => {
@@ -173,6 +193,26 @@ describe('asReadyMessage（ready 守卫）', () => {
     expect(asReadyMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 'p' } })).toBeUndefined()
     expect(asReadyMessage({ type: 'ready', injections: [], services: { forgeProjects: true } })).toBeUndefined()
     expect(asReadyMessage(null)).toBeUndefined()
+  })
+
+  it('tools 清单可选透传（3.4 冒烟观测面）：在场 = string[]；缺席/畸形 = 降级不阻 ready', () => {
+    const base = {
+      type: 'ready',
+      url: 'http://127.0.0.1:1/#t',
+      injections: [],
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+      },
+    } as const
+    expect(asReadyMessage({ ...base, tools: ['addTask', 'claimTask'] })?.tools).toEqual(['addTask', 'claimTask'])
+    expect(asReadyMessage(base)?.tools).toBeUndefined() // 缺席（旧 child）不阻 ready
+    expect(asReadyMessage({ ...base, tools: ['ok', 42] })?.tools).toBeUndefined() // 畸形降级
+    expect(asReadyMessage({ ...base, tools: 'addTask' })?.tools).toBeUndefined()
   })
 })
 
