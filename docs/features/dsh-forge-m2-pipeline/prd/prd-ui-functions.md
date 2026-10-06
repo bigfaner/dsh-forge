@@ -4,11 +4,11 @@ feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 
 
 # dsh-forge M2 — UI Functions
 
-> Requirements 层：定义 UI **要做什么**。基线 = 现有代码现态（官方基座：main 面板互换 / conversation.view 三签 / ui-dockkit 右栏 / OS 选择器注册流）+ 两轮 UI/UX 评审打磨 + 老 forge 20 种任务类型调研。M2 交付最小面：概览 = dock tab（提案|feature|任务 子tab + 搜索 + 排序 + DAG/泳道）；文档 = dock 新 tab（mermaid 占位）；任务详情 = 模块化抽屉。对账卡已按用户裁决移出。
+> Requirements 层：定义 UI **要做什么**。基线 = 现有代码现态（官方基座：main 面板互换 / conversation.view 三签 / ui-dockkit 右栏 / OS 选择器注册流）+ 两轮 UI/UX 评审打磨 + 老 forge 21 种任务模板调研。M2 交付最小面：概览 = dock tab（提案|feature|任务 子tab + 搜索 + 排序 + DAG/泳道）；文档 = dock 新 tab（mermaid 图渲染——erDiagram 验收锚，失败回退占位卡）；任务详情 = 模块化抽屉。对账卡已按用户裁决移出。
 
 ## UI Scope
 
-「项目概览」dock tab（ui-dockkit 按需开出；入口 = 开始页入口卡[排最前] / 挂接 pill）——子 tab **提案 | feature | 任务**（用户定向顺序），共用搜索栏（中英双语）+ 排序 pill（活跃优先/最新创建）+ chips 过滤三视图统一；文档行点击 → dock 开出**独立文档 tab**（非抽屉；mermaid 占位卡）；任务行/DAG 节点/泳道卡片点击 → **模块化任务详情抽屉**（按类型条件区）；会话头挂接 pill + 注册表单派生行。共 4 个 UI Function。
+「项目概览」dock tab（ui-dockkit 按需开出；入口 = 开始页入口卡[排最前] / 挂接 pill）——子 tab **提案 | feature | 任务**（用户定向顺序），共用搜索栏（中英双语）+ 排序 pill（活跃优先/最新创建）+ chips 过滤三视图统一；文档行点击 → dock 开出**独立文档 tab**（非抽屉；mermaid 图渲染——erDiagram 验收锚，失败回退占位卡）；任务行/DAG 节点/泳道卡片点击 → **模块化任务详情抽屉**（按类型条件区）；会话头挂接 pill + 注册表单派生行。共 4 个 UI Function。
 
 ## Navigation Architecture
 
@@ -68,7 +68,7 @@ feature pill 切换 + 七态 chips（0 计数禁用淡化）+ 三视图 seg：
 1. 概览子 tab 点击文档行（**整行可点**，行尾 › 箭头）→ `dockOpenTab("doc", {docRel})`。
 2. 同文档已开 → 激活已有 tab（去重，不新开）；新文档 → 开出新 tab（多文档并存）。
 3. tab 内容：头部 + 路径栏（canonical + 📁 编辑器 + ↻ 重读）+ Markdown 渲染。
-4. mermaid 代码块 → Diagram 占位卡（⚡ 头标 + 源码 + 「产品扩展点」注记）。
+4. mermaid 代码块 → **图渲染**（mermaid 库懒加载；erDiagram = 验收锚，全图型同库）——渲染失败/非法源 → 回退占位卡（源码 + 回退注记；2026-10-06 裁决）。
 5. 悬空文档 → 只读占位面（路径栏保留，不崩溃不写入不删行）。
 6. chip × 关闭 → 回概览或开始页。
 
@@ -86,7 +86,7 @@ feature pill 切换 + 七态 chips（0 计数禁用淡化）+ 三视图 seg：
 ### Interaction Flow
 
 1. hero CTA / 侧栏 ＋ → OS 目录选择器（系统对话框一步）→ 选定目录回填表单。
-2. 任务清单只读行 = `{flatten}@{hash8}`（应用侧单源下发）。
+2. 任务清单只读行 = `{dsh-forge-home}(= tasksHome)/{flatten}@{hash8}` **全路径**（应用侧单源下发——与实际建库位置逐字一致，SC2 断言锚）。
 3. 确认：正常 → 注册成功 + 建库；疑似移动（同主体异 hash8）→ **拒绝 + 错误条 + 手工指引**（留场；零副作用）。
 4. 重选目录 → 复检通过 → 恢复正常确认。
 
@@ -101,7 +101,7 @@ feature pill 切换 + 七态 chips（0 计数禁用淡化）+ 三视图 seg：
 3. **折叠**：块头部点击**就地更新**（grid 0fr/1fr 高度过渡 + caret 旋转;不重建抽屉、不重放滑入动画——仅切换任务时播放）;aria-expanded 同步;Enter/Space 可用;会话级保持。
 4. **调宽**：左缘手柄拖拽（320–760px 钳制）；双击复位 420；←→ 键盘微调 ±32；宽度会话级保持。
 5. **关闭**：Esc / ✕（头部右端）/ 点击另一任务（切换抽屉内容）。
-6. **转移**：抽屉内「转移状态…」→ 对话框（from≠to + reason 必带）→ 确认 → 留审计 + 若终态则触发 autoRestore。
+6. **转移**：抽屉内「转移状态…」→ 对话框（from≠to + reason 必带）→ 确认 → 留审计 + 若终态则触发 autoRestore。**目标态仅列允许集**（`allowedTransitions` = 状态机纯函数计算，所见即所得——服务端同源提前校验，用户点不到非法目标；tech-design Interface 10）。
 7. **界面说明最小化**：抽屉与概览不渲染解释性文字;数据源语义（forge.db 结构化负载/任务无文档）、实际范围「commit 优先/记录回退」策略、类型模板分发表锚定 ui-design.md。
 
 ### 任务内容区 · 类型模板（v7）
@@ -129,7 +129,7 @@ feature pill 切换 + 七态 chips（0 计数禁用淡化）+ 三视图 seg：
 | Page | Type | UF | Notes |
 |------|------|----|----|
 | dock「项目概览」tab | existing（M2 新增） | UF-1 | 提案\|feature\|任务 三子 tab + DAG/泳道 |
-| dock 文档 tab | existing（M2 新增） | UF-2 | 按 docRel 去重；mermaid 占位 |
+| dock 文档 tab | existing（M2 新增） | UF-2 | 按 docRel 去重；mermaid 图渲染（erDiagram 验收锚，失败回退占位卡） |
 | 任务详情抽屉 | existing | UF-1/UF-3 | 两分块（任务内容/时间线,顺滑折叠）+ chip kv 标签（含实际耗时[completed]）+ 改动范围双列（commit 优先）+ 单元测试覆盖率 + 拖拽调宽 |
 | 会话头 session.header actions | existing | UF-3 | 双源分型 pill |
 | OS 选择器 → 注册表单 | existing | UF-4 | hash8 + 疑似移动 |

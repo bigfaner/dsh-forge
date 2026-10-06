@@ -387,11 +387,33 @@ body.is-drawer-resizing * { user-select: none !important; }
 .doc-tab-body code { font-family: var(--font-code); font-size: 12px; background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
 .doc-tab-body blockquote { border-left: 3px solid var(--dsw-alias-border-l3); padding-left: 10px; color: var(--dsw-alias-label-secondary); margin: 6px 0; }
 .doc-tab-body pre { font-family: var(--font-code); font-size: 12px; background: var(--dsw-alias-interactive-bg-hover); border-radius: 8px; padding: 8px 10px; overflow: auto; margin: 6px 0; }
-/* mermaid 占位卡(dsh 原生不支持——产品扩展点) */
+/* mermaid 占位卡(v16 起降级为回退态:其他图型示意 / erDiagram 解析失败回退) */
 .mermaid-card { border: var(--hairline) solid var(--dsw-alias-border-l3); border-radius: var(--r-card); margin: 8px 0; overflow: hidden; }
 .mermaid-card .mc-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); border-bottom: var(--hairline) solid var(--dsw-alias-border-l2); }
 .mermaid-card .mc-code { font-family: var(--font-code); font-size: 11px; line-height: 16px; padding: 8px 10px; margin: 0; white-space: pre-wrap; color: var(--dsw-alias-label-tertiary); }
 .mermaid-card .mc-note { padding: 4px 10px 6px; font-size: 10px; color: var(--dsw-alias-label-tertiary); border-top: var(--hairline) solid var(--dsw-alias-border-l1); }
+
+/* v16:erDiagram 图渲染(原型 = 手绘 SVG 示意;产品形态 = mermaid 库懒加载) */
+.mermaid-diagram { border: var(--hairline) solid var(--dsw-alias-border-l3); border-radius: var(--r-card); margin: 8px 0; overflow: hidden; }
+.mermaid-diagram .md-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); border-bottom: var(--hairline) solid var(--dsw-alias-border-l2); }
+.mermaid-diagram .md-canvas { overflow-x: auto; padding: 10px; }
+.mermaid-diagram svg { display: block; max-width: none; }
+.mermaid-diagram svg .er-entity rect { fill: var(--dsw-alias-interactive-bg-hover); stroke: var(--dsw-alias-border-l3); stroke-width: 1; }
+.mermaid-diagram svg .er-name { font-family: var(--font-code); font-size: 10.5px; font-weight: 600; fill: var(--dsw-alias-label-primary); }
+.mermaid-diagram svg .er-field { font-family: var(--font-code); font-size: 9.5px; fill: var(--dsw-alias-label-secondary); }
+.mermaid-diagram svg .er-key { fill: var(--dsw-alias-label-primary); font-weight: 600; }
+.mermaid-diagram svg .er-rel path { fill: none; stroke: var(--dsw-alias-border-l3); stroke-width: 1.2; }
+.mermaid-diagram svg .er-dash path { stroke-dasharray: 4 3; }
+.mermaid-diagram svg .er-rel-label { font-family: var(--font-code); font-size: 9px; fill: var(--dsw-alias-label-tertiary); }
+.mermaid-diagram svg .er-card { font-family: var(--font-code); font-size: 9px; fill: var(--dsw-alias-label-tertiary); }
+
+/* v17:流程图渲染(原型 = 手绘 SVG:分层 + 贝塞尔边;产品形态 = mermaid 库) */
+.mermaid-diagram svg .fl-node rect, .mermaid-diagram svg .fl-node path { fill: var(--dsw-alias-interactive-bg-hover); stroke: var(--dsw-alias-border-l3); stroke-width: 1; }
+.mermaid-diagram svg .fl-label { font-size: 10.5px; fill: var(--dsw-alias-label-primary); text-anchor: middle; }
+.mermaid-diagram svg .fl-edge path { fill: none; stroke: var(--dsw-alias-border-l3); stroke-width: 1.2; }
+.mermaid-diagram svg .fl-edge.fl-dash path { stroke-dasharray: 4 3; }
+.mermaid-diagram svg .fl-edge-label { font-size: 9px; fill: var(--dsw-alias-label-tertiary); text-anchor: middle; }
+.mermaid-diagram svg .fl-arrow { fill: var(--dsw-alias-border-l3); }
 
 /* 右栏(官方 ui-dockkit · DockSurface 形态:chips 页签条 + body) */
 .rightbar { width: 460px; flex: none; background: var(--dsw-specific-sidebar-fill); border-left: var(--hairline) solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; min-height: 0; }

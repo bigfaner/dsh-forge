@@ -1,4 +1,4 @@
-/* M2 UI 原型冒烟(v17 = v16 + completed 实际耗时(列表/DAG/泳道/抽屉,记录推导)) */
+/* M2 UI 原型冒烟(v19 = v18 + 流程图渲染[graph/flowchart,分层+回边路由]) */
 const fs = require('node:fs')
 const path = require('node:path')
 const { chromium } = require(path.resolve(__dirname, '../../../../../node_modules/@playwright/test'))
@@ -91,8 +91,11 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   await doc.click()
   ok(await page.locator('.rb-chip.active').count() === 1, '文档点击 → dock 新 tab(P3:非抽屉)')
   ok(await page.locator('.doc-tab-body h1').count() >= 1, 'tab 内 Markdown 渲染(h1)')
-  ok(await page.locator('.mermaid-card').count() >= 1, 'mermaid 代码块 → 占位卡(Diagram 标注 + 源码 + 扩展点说明)')
-  ok(await page.locator('.mermaid-card .mc-note').count() >= 1, 'mermaid 占位含「产品扩展点」注记')
+  ok(await page.locator('.mermaid-diagram[data-flow] svg').count() >= 1, 'flowchart 代码块 → 图渲染(SVG 在场)')
+  ok(await page.locator('.mermaid-diagram[data-flow] .fl-node').count() >= 4, '流程图节点 ≥4(claim/executor/submit/fix)')
+  ok(await page.locator('.mermaid-diagram[data-flow] .fl-edge').count() >= 4, '流程图边 ≥4(含回边路由)')
+  const flLbls = await page.locator('.mermaid-diagram[data-flow] .fl-edge-label').allTextContents()
+  ok(flLbls.some(t => t.includes('dispatchPrompt')), '边标签渲染(dispatchPrompt 在场)')
   /* 同文档重开 = 激活已有 tab(去重) */
   const tabCount1 = await page.locator('.rb-chip').count()
   await page.locator('.rb-chip', { hasText: '项目概览' }).click()
@@ -102,6 +105,16 @@ const rowOf = (page, id) => page.locator('.task-row').filter({ has: page.locator
   /* 关闭文档 tab */
   await page.locator('.rb-chip', { hasText: 'prd-spec.md' }).first().locator('.chip-x').click()
   ok(await page.locator('.dsw-guide, .ov-parent').first().isVisible(), '关闭文档 tab → 回概览或开始页')
+
+  console.log('— v16:doc tab erDiagram 图渲染 —')
+  await page.locator('.ov-doc', { hasText: 'tech-design.md' }).first().click()
+  ok(await page.locator('.mermaid-diagram svg').count() >= 1, 'erDiagram 代码块 → 图渲染(SVG 在场)')
+  ok(await page.locator('.mermaid-diagram .er-entity').count() >= 7, 'erDiagram 实体盒 ≥7(七域表)')
+  ok(await page.locator('.mermaid-diagram .er-rel').count() >= 7, 'erDiagram 关系线 ≥7(含 TASKS 自引用)')
+  const erLbls = await page.locator('.mermaid-diagram .er-rel-label').allTextContents()
+  ok(erLbls.some(t => t.includes('feature_id')), '关系标签渲染(feature_id 在场)')
+  ok(await page.locator('.mermaid-card').count() >= 1, 'sequenceDiagram(原型未支持图型)→ 占位卡回退(源码 + 注记)')
+  await page.locator('.rb-chip', { hasText: 'tech-design.md' }).first().locator('.chip-x').click()
 
   console.log('— 任务子tab:两行布局 + 任务详情抽屉 —')
   await page.locator('.ov-subtab', { hasText: '任务' }).click()

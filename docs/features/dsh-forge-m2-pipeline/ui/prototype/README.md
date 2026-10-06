@@ -1,6 +1,6 @@
-# dsh-forge M2 · UI 原型（v15 · completed 实际耗时四处呈现）
+# dsh-forge M2 · UI 原型（v17 · 流程图渲染）
 
-**基线 = 产品现有代码现态**（fix-25/29/38/40/42 后）+ 两轮 UI/UX 评审（P1-P5 + R1-R7 全落地）+ 老 forge 20 种任务类型源码调研。v7-v14 见 ui-design 演进记;**v15 = completed 任务展示实际耗时（任务记录 claim→submit 推导;列表副行 / DAG 节点 / 泳道卡片 / 抽屉 chip 四处）**。
+**基线 = 产品现有代码现态**（fix-25/29/38/40/42 后）+ 两轮 UI/UX 评审（P1-P5 + R1-R7 全落地）+ 老 forge 20 种任务类型源码调研。v7-v16 见 ui-design 演进记;**v17 = 流程图（graph/flowchart）图渲染**（分层布局 + 回边路由 + 边标签;与 v16 erDiagram 同构——产品形态 = mermaid 库懒加载;sequenceDiagram 等其余图型占位示意,失败回退占位卡）**。
 
 ## 形态总览
 
@@ -14,7 +14,7 @@
 | 排序 | `⇅ 活跃优先`（默认）↔ `⇅ 最新创建`（三子 tab 共用；pill 固定在搜索行右端） |
 | 搜索 | 中英双语、三子 tab 共用、IME 安全（仅更新内容区不重建搜索行）；搜索框限宽 240px 不占满 dock |
 | 任务视图 | 列表（两行布局）+ **DAG**（SVG 贝塞尔+箭头）+ **泳道**（七态横向、0 计数列折叠） |
-| 文档 | 概览子 tab 点行 → **dock 新 tab**（非抽屉；按 docRel 去重）；mermaid → Diagram 占位卡 |
+| 文档 | 概览子 tab 点行 → **dock 新 tab**（非抽屉；按 docRel 去重）；erDiagram/流程图 → **图渲染**（SVG;其余图型占位示意，失败回退占位卡） |
 | 任务详情 | **右侧滑入抽屉（宽 320–760px 可拖拽；两分块「任务内容 / 时间线」底色条标题顺滑折叠；chip kv 标签；界面零说明——逻辑见 ui-design.md）** |
 | 挂接 | 会话头 pill（双数据源分型：派发⟞/执行⟞）→ 点击 → dock 概览 + 任务抽屉 |
 | 注册 | OS 选择器一步 → 表单 → hash8 派生行 + 疑似移动拒绝 |
@@ -40,4 +40,4 @@
 
 ## 运行
 
-双击 `index.html`。**冒烟 `node smoke.cjs` = 128 断言全绿**（playwright chromium 损坏时自动回落系统 Chrome/Edge）。harness 会话须绕 node shim。
+双击 `index.html`。**冒烟 `node smoke.cjs` = 135 断言全绿**（playwright chromium 损坏时自动回落系统 Chrome/Edge）。harness 会话须绕 node shim。

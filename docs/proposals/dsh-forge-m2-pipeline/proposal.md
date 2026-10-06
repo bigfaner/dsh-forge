@@ -41,17 +41,17 @@ intent: "new-feature"
 
 **② plugin-forge 插件入仓（过渡单包，M3 拆核心/规格）**
 
-- tool 半身：addTask / claimTask / submitTask / queryTask 等动词 tool（**transitionTask 不进 tool 面**——人类逃生通道 UI 专属），消费 `ctx.forgeProjects`（Cordis 服务注入，与 knowledge 插件同缝——P1 已 pin 验证）。
+- tool 半身：addTask / claimTask / submitTask / queryTask 等动词 tool（**transitionTask 不进 tool 面**——人类逃生通道 UI 专属），消费 `ctx.forgeTasks` + `ctx.forgeProposals`（Cordis 服务注入，与 knowledge 插件同缝——P1 已 pin 验证；2026-10-06 tech-design 定稿：按域四服务，取代本行早期 ctx.forgeProjects 表述）。
 - skills 半身迁移 + eval-\* 裁剪（去悬空引用，机械断言零残留）：**run-tasks**（subagent 阻塞派发循环，`run_in_background: false`）/ **fix 链**（`--source-task-id --block-source`、完成自动恢复，经 core blockers 边 + submit 钩子）/ **submit-task**（quality gate 序列内置：compile→fmt→lint→test）/ **git-commit 纪律** / **run-tests**。
 - 恢复唯一出口 = dispatcher 外环：record 缺失 → 重派（按当前状态重新合成简报）。
 - quick-tasks / consolidate-specs / 规格技能（write-prd / ui-design / tech-design / gen-\* / breakdown-tasks）= M3 随拆包与双预设。
 
 **③ web · 三区扩展**
 
-- **概览 dock 页签**：任务子 tab · 列表视图（feature 绑定选择器、无全局汇总、七态 chips、任务行含挂接会话；tool 写入即时刷新）。DAG / 泳道 = M3；~~对账卡完整 UI~~（2026-10-05 用户裁决移出：漂移类概念不进用户视野、防心智负担——见 Out of Scope 记账）。
+- **概览 dock 页签**：任务子 tab · 列表视图（feature 绑定选择器、无全局汇总、七态 chips、任务行含挂接会话；tool 写入即时刷新）。（~~DAG / 泳道 = M3~~——2026-10-06 勘误：三视图全量已定稿 M2，见 PRD In Scope ③ 与 ui-design v17）；~~对账卡完整 UI~~（2026-10-05 用户裁决移出：漂移类概念不进用户视野、防心智负担——见 Out of Scope 记账）。
 - **文档 dock 页签（SC4）**：proposal / PRD / tech-design / ui-design 只读浏览（`MarkdownDoc` body variant + canonical 路径栏 + 只读徽标 + 「在编辑器中打开」）；仓内 / 仓外两模式 e2e 各覆盖一条路径。
 - **SC6③ 挂接双侧可见**：会话头部展示挂接任务、任务行展示挂接会话，与 `task_session_links` 记录一致；写入机制（claim 时 tool 侧会话上下文解析）设计期定（执行上下文展示 §6-39 = M3，范围对齐后移）。
-- **单机单活跃分支断言**（架构基线 §6 锚定 M2）：分支切换后文档引用（feature_documents.rel_path / proposals.doc_path）悬空 → 只读缺省渲染并标注，不崩溃不写入。
+- **单机单活跃分支断言**（架构基线 §6 锚定 M2）：分支切换后文档引用（feature_documents.rel_path / proposals.rel_path——2026-10-06 列更名）悬空 → 只读缺省渲染并标注，不崩溃不写入。
 
 **④ 验收与质量**
 
@@ -88,7 +88,7 @@ intent: "new-feature"
 
 - **宪法级**：总纲（定位 / 边界 / 工件版图 / 路书）+ 架构基线（工件能力边界、依赖方向、单一写入路径、§3 状态层细则、§5 演进纪律、§6 单机单活跃分支）。
 - **执行前置**：P1 MVP 门通过（episode 4：安装包冒烟 + 飞轮 e2e）；SC6①② 绿。
-- **已验证缝（P1 G1 pin 池）**：Cordis 服务定义/注入模式（`forgeProjects` / `forgeKnowledge`）——plugin-forge tool 半身消费 `ctx.forgeProjects` 同缝，无新未验证依赖；subagent 阻塞调用面与负结论（无 per-spawn 系统提示注入 → dispatchPrompt 是 executor 唯一差异化通道）已在预研核实。
+- **已验证缝（P1 G1 pin 池）**：Cordis 服务定义/注入模式（`forgeProjects` / `forgeKnowledge`）——plugin-forge tool 半身消费 `ctx.forgeTasks` / `ctx.forgeProposals` 同缝（四域新服务同注入模式，无新未验证依赖）；subagent 阻塞调用面与负结论（无 per-spawn 系统提示注入 → dispatchPrompt 是 executor 唯一差异化通道）已在预研核实。
 - **语义迁移面**：老 forge（`Z:\project\ai\forge`）任务七态 / 21 类型模板 / 执行协议 / fix 链语义——映射表 = 预研 §2；**只迁移语义，不迁移数据**。
 - **dsh 唯一 agent 运行时**；forge 技能过渡期继续以现有形态运行不受影响（旧线冻结现状）。
 
@@ -138,14 +138,14 @@ intent: "new-feature"
 
 **① core · forge 域转正（每工作区 DB）**
 
-- 每工作区 DB 部署于 `{dsh-forge-home}/{canonical-path 扁平化}@{hash8}/`（hash8 消歧后缀，§6-34；core 多句柄管理；schema 版本表随库 + 幂等迁移；启动打开/建库）；中央 state.db 维持 projects / knowledge 域**完全不动**（~~例外：projects + repo_root_path 列，§6-37 worktree 同项目分组~~——2026-10-05 核对修订：范围对齐已将 §6-37 整族后移 M3，中央域例外随之消失；本行与 Proposed Solution / Out of Scope 后移表 / db-schema §0 同口径）。
+- 每工作区 DB 部署于 `{dsh-forge-home}/{canonical-path 扁平化}@{hash8}/`（hash8 消歧后缀，§6-34；core 多句柄管理；schema 版本表随库 + 幂等迁移；注册时建库 + 句柄惰性首开——2026-10-06 tech-design 裁决，取代「启动打开/建库」口径）；中央 state.db 维持 projects / knowledge 域**完全不动**（~~例外：projects + repo_root_path 列，§6-37 worktree 同项目分组~~——2026-10-05 核对修订：范围对齐已将 §6-37 整族后移 M3，中央域例外随之消失；本行与 Proposed Solution / Out of Scope 后移表 / db-schema §0 同口径）。
 - 七表一次到位：`features` / `feature_documents`（文档索引，manifest 库内化）/ `tasks`（七态 CHECK）/ `task_edges`（blockers 无环校验）/ `task_records`（append-only）/ `proposals`（五态承载）/ `task_session_links`；`feature_records` = M3 增表（范围对齐后移，append-only 新表软迁移——M2 期间 feature 域转移无审计，显式记账该缺口）。
 - 状态机常量 + 动词 API（addTask / claimTask / submitTask / transitionTask / queryTask… + proposal 最小动词）；转移校验、依赖终态守卫、record/reason 必带、每次写自动审计。
 - dispatchPrompt 合成内聚 claimTask（约束块单一 TS 源 + 动态信息块含 BLOCKERS 快照 + 类型策略模板函数族；独立 taskPrompt 取消）；每类型快照测试（fixture 任务 → prompt 断言）。
 
 **② plugin-forge 插件入仓（过渡单包）**
 
-- tool 半身全量动词（消费 `ctx.forgeProjects`，Cordis 同缝）；tool 写入 → 状态层 → UI 即时刷新（SC7 缝）。
+- tool 半身全量动词（消费 `ctx.forgeTasks` / `ctx.forgeProposals`——按域四服务定稿，Cordis 同缝）；tool 写入 → 状态层 → UI 即时刷新（SC7 缝）。
 - skills 半身迁移 + eval-\* 裁剪（零悬空引用机械断言）：run-tasks（subagent 阻塞派发循环）/ fix 链（block 边 + 完成自动恢复）/ submit-task（quality gate：compile→fmt→lint→test）/ git-commit 纪律 / run-tests。
 - 恢复出口 = dispatcher 外环（record 缺失重派，按当前状态重新合成）。
 
@@ -164,7 +164,7 @@ intent: "new-feature"
 
 ### Out of Scope
 
-- **M3（预设与自举）**：出厂双预设（远征/突击）+ S5/S6 spike、plugin-forge 拆包（管线核心 / 规格深化）、brainstorm 三模式共享、任务三视图补全 DAG/泳道、自举达成与走查；quick-tasks / consolidate-specs / 规格技能（write-prd / ui-design / tech-design / gen-\* / breakdown-tasks）。
+- **M3（预设与自举）**：出厂双预设（远征/突击）+ S5/S6 spike、plugin-forge 拆包（管线核心 / 规格深化）、brainstorm 三模式共享、（~~任务三视图补全 DAG/泳道~~——2026-10-06 勘误：三视图已全量定稿 M2）、自举达成与走查；quick-tasks / consolidate-specs / 规格技能（write-prd / ui-design / tech-design / gen-\* / breakdown-tasks）。
 - **M2 范围对齐顺延项（2026-10-02 裁决，见下节）**：worktree 项目域全族（§6-37/§7-16）、会话头部执行上下文展示（SC6④/§6-39）、task_records 执行上下文两列（§6-38）、`feature_records` 表（§6-35④）、注册疑似移动认领对话框（F10-①）。
 - **对账卡 UI（2026-10-05 用户裁决移出 M2）**：漂移 / 找回类概念不进用户视野（防心智负担——M2 只做核心功能）。**机制面不受影响**：启动对账（reconcileAtStartup）继续静默自愈（P1 已交付、fix-27 已接线），不一致仅留记账日志；未来若需可视化再显式立项（非顺延承诺）。
 - **proposals 管线完整消费**：proposals 表 M2 仅承载 + 最小动词，提案 UI 与流程消费 = M3 随预设。
@@ -190,7 +190,7 @@ intent: "new-feature"
 
 | 功能点 | 裁决锚 | 保留理由 |
 |---|---|---|
-| validateStore 只读校验动词 | C8 | SC2 直读断言 / SC-M2 断言 / 启动全库断言的统一入口——断言基建，非用户功能 |
+| validateFeatureTasks 只读校验动词（原 validateStore——2026-10-06 更名 + 单 feature 语义） | C8 | 逐 feature 校验断言基建（非用户功能）；新入库 feature 逐个送校 |
 | proposals 发现面扫描建行 | §6-36 | SC4 proposal 浏览锚点的数据来源（SC4 = 原计划 M2 验收） |
 | 相位推导机（触发器闭包 + 不变量断言） | §6-28/29 | 列表视图 feature 状态与 SC2 任务域扩展「直读」语义的写路径完整性 |
 
@@ -209,12 +209,12 @@ intent: "new-feature"
 | 仓库移动/挂载形态变化 → flatten+hash8 全变、旧 forge.db 成孤儿（与对账卡「按 path 找回」心智不对称）；同仓多 worktree 状态分裂 | M | H | M2 = 注册时发现疑似移动即拒绝 + 手工指引（认领对话框 = M3，范围对齐后移）；S10 spike 验证 canonical path 输入稳定性；多 worktree 分裂面 M2 不触及（单工作区管线，中央域零改动） |
 | in_progress 中断恢复链断裂（老 forge claim-resume / 简报重拉语义无家可归——外环重派 mitigation 本体缺失） | M | H | 恢复协议三选一设计期裁决（附录 C-C1：claimTask 幂等重入 / redispatchTask / 降级记偏离）；SC-M2 走查加「模拟子会话中断后恢复」 |
 | 相位推导机漏推 → 派生不变量断言红灯、G0–G2 阻断 | L | H | 触发器闭包已修（§6-29 审计修订：含 transitionTask / auto-restore）；事务内增量 + 启动全库双断言 |
-| block-source 崩溃窗口状态-边脱节（源停 in_progress 挂未满足边）；无界 fix 链 | M | M | 附录 C-C2（addTask 单事务同置源 blocked）/ C6（链深 ≤3）裁决后机械防线 |
+| block-source 崩溃窗口状态-边脱节（源停 in_progress 挂未满足边）；无界 fix 链 | M | M | 附录 C-C2（addTask 单事务同置源 blocked）/ C6（链深 ≤6——2026-10-06 勘误,原 ≤3 为老 forge 旧值）裁决后机械防线 |
 | executor 执行会话对 SC6③ 隐没；dsh 会话 id 在 tool 上下文可得性未验证 | M | M | S8 spike（PRD 前）；SC6③ 已改双数据源断言；回退 = submit 侧 session_id NULL + 显式记偏离 |
 
 ## Success Criteria（M2 验收 = 总纲 SC 池继承细化 + 新增）
 
-- [ ] **SC7**（完整真闭环）：addTask / claimTask / submitTask 写动词 + queryTask 只读由 plugin-forge tool 半身（消费 `ctx.forgeProjects`）对接每工作区状态层（tool 面期望集 = §7-5 裁决结果，闭口后冻结）；概览任务列表即时反映（e2e 一条——「即时」判据 = 写入返回后单次重取即见新值，刷新通道间隔上限见 §7-11）；应用自身不发起任何编排动作（代码审计断言：web/ 无编排逻辑）；**plugin-forge 不注册 transitionTask tool（代码审计——人类逃生通道不进 agent 面）**；动词 API 单测覆盖全路径（转移校验 from 匹配 / 依赖终态守卫 / record 必带 / append-only / blockers 无环拒绝（构造路径 = addTask 双 flag 组合，db-schema B.5-1）/ transitionTask from≠to + reason 必带）。
+- [ ] **SC7**（完整真闭环）：addTask / claimTask / submitTask 写动词 + queryTask 只读由 plugin-forge tool 半身（消费 `ctx.forgeTasks`——按域四服务定稿）对接每工作区状态层（tool 面期望集 = §7-5 裁决结果，闭口后冻结）；概览任务列表即时反映（e2e 一条——「即时」判据 = 写入返回后单次重取即见新值，刷新通道间隔上限见 §7-11）；应用自身不发起任何编排动作（代码审计断言：web/ 无编排逻辑）；**plugin-forge 不注册 transitionTask tool（代码审计——人类逃生通道不进 agent 面）**；动词 API 单测覆盖全路径（转移校验 from 匹配 / 依赖终态守卫 / record 必带 / append-only / blockers 无环拒绝（构造路径 = addTask 双 flag 组合，db-schema B.5-1）/ transitionTask from≠to + reason 必带）。
 - [ ] **SC-M2**（新增 · M2 门）：派发链端到端走查——run-tasks skill 会话内 claimTask（返回 dispatchPrompt = 约束块 + 动态信息块（含 BLOCKERS 快照）+ 类型策略块，断言三段构成）→ subagent 阻塞派发（初始 prompt = dispatchPrompt）→ executor submitTask（quality gate 编译/格式/lint/测试通过后落账）+ git 提交 → 任务列表即时刷新；含 fix 链一次（block 边写入 + 完成自动恢复断言）；真实模型 dogfood 一条链不间断演示。
 - [ ] **SC4**（完整）：文档页签两模式 e2e 各一条——仓内项目浏览 proposal/PRD/design 并跳转（在编辑器中打开）；仓外项目同构（只读 + canonical 路径栏 + 只读徽标）。
 - [ ] **SC6③**（P1 顺延清账）：任务↔会话挂接双侧可见——任务行 = 双数据源（`task_session_links` = 派发会话、`task_records.session_id` = 执行会话，两侧分别一致断言）；会话头部展示缝 = 设计期必答（§7-13 挂接部分；执行上下文内容 §6-39 = M3，范围对齐后移）。
@@ -232,7 +232,7 @@ consistency_check_result:
 ## Next Steps
 
 - 进入 `/write-prd`：以本提案 + 总纲（§演进路书 M2 行 / §forge 插件 / §数据模型）+ 架构基线（§3 / §5 / §6）+ 技术预研（§2 / §4）+ P1 tech-design（契约面清单与工程规范）为输入。
-- PRD 后走 `/tech-design`，设计期必答题：每工作区 DB 句柄生命周期与迁移编排；dispatchPrompt 模板族在 core forge 域内的模块落位；挂接写入机制（claim 时 tool 侧会话上下文解析）；文档发现面（forge 目录只读扫描契约）；任务列表视图形态对照原型 H 域断言迁移；**每工作区 DB 目录派生单源化**（2026-10-05 核对增补：flatten+hash8 计算落位 core——sha-256 须 node:crypto，path-key 保持浏览器安全零依赖不承载；注册表单只读行展示串改经 RPC 下发 core 派生值，取代 apps/web form-model 自算——现状 = 双源且展示串无 hash8 后缀，此为 SC2「与注册表单展示一致」断言的单源前提）；**任务域服务面形状**（2026-10-05 核对增补：任务/feature/proposal 动词挂现有 `ctx.forgeProjects`（现为绑定中央 state.db 单句柄的 5 法 ProjectService）扩展 vs 新服务名；cwd → 每工作区 forge.db 的多句柄路由（knowledge bindings 机制同构复用）；boot 桥 `BridgeServiceName` / ready 在场位 / 方法白名单三处联动）。**任务域 schema 已预设计定稿**（见 `db-schema.md`：八域表 + 一基建表全量 DDL、七态转移矩阵、动词×写矩阵、不变量机械防线、36 项已裁决），设计期余下开口 = §7-6 映射表（ValidTypes↔模板名）、§7-11 刷新判据、§7-12 多库迁移失败策略、§7-13 会话头部缝·挂接部分（tech-design 必答；§7-13 执行上下文部分与 §7-16 worktree 呈现随范围对齐移 M3）；**S8 / S9① / S10 = PRD 前 spike（已排程，§7-14；2026-10-05 三者完成并全数通过——结论回填 db-schema §7-14 与 `spikes/` 同目录三份文档：S8 子会话 ctx 可得且 id 可区分 / S9① 仓外发现率成立（约定与旧线同构）/ S10 hash8 全形态稳定）**。
+- PRD 后走 `/tech-design`，设计期必答题：每工作区 DB 句柄生命周期与迁移编排；dispatchPrompt 模板族在 core forge 域内的模块落位；挂接写入机制（claim 时 tool 侧会话上下文解析）；文档发现面（forge 目录只读扫描契约）；任务列表视图形态对照原型 H 域断言迁移；**每工作区 DB 目录派生单源化**（2026-10-05 核对增补：flatten+hash8 计算落位 core——sha-256 须 node:crypto，path-key 保持浏览器安全零依赖不承载；注册表单只读行展示串改经 RPC 下发 core 派生值，取代 apps/web form-model 自算——现状 = 双源且展示串无 hash8 后缀，此为 SC2「与注册表单展示一致」断言的单源前提）；**任务域服务面形状**（2026-10-05 核对增补：任务/feature/proposal 动词挂现有 `ctx.forgeProjects`（现为绑定中央 state.db 单句柄的 5 法 ProjectService）扩展 vs 新服务名；cwd → 每工作区 forge.db 的多句柄路由（knowledge bindings 机制同构复用）；boot 桥 `BridgeServiceName` / ready 在场位 / 方法白名单三处联动）。**任务域 schema 已预设计定稿**（见 `db-schema.md`：八域表 + 一基建表全量 DDL、七态转移矩阵、动词×写矩阵、不变量机械防线、39 项已裁决——2026-10-06 回写修正,原「36」为输入时点快照），设计期余下开口 = §7-6 映射表（ValidTypes↔模板名）、§7-11 刷新判据、§7-12 多库迁移失败策略、§7-13 会话头部缝·挂接部分（tech-design 必答；§7-13 执行上下文部分与 §7-16 worktree 呈现随范围对齐移 M3）；**S8 / S9① / S10 = PRD 前 spike（已排程，§7-14；2026-10-05 三者完成并全数通过——结论回填 db-schema §7-14 与 `spikes/` 同目录三份文档：S8 子会话 ctx 可得且 id 可区分 / S9① 仓外发现率成立（约定与旧线同构）/ S10 hash8 全形态稳定）**。**（2026-10-06 闭合：/tech-design 已定稿——六工件[+plugin-forge] / 按域四服务 forgeTasks·forgeFeatures·forgeProposals·forgeDocs[MVC，API 独立于前端] / 写推送事件刷新 / 惰性首开+失败隔离 / dispatchPrompt = 人格段+XML 三标签 / transitionTargets 所见即所得 / 录制-回放测试主径 / git 可选依赖；§7-6/11/12/13 + 两条核对增补必答[目录派生单源 / 服务面形状]全落定；schema 五项用户裁决修订已回写 db-schema 头部记注；PRD 三视图勘误在案。产出 = feature 目录 design/ 四工件 tech-design / er-diagram / schema / page-map + manifest 落账 + 决策与约定归档。）**
 - M2 首任务建议 = core forge 域 schema + 状态机动词单测（地基先行），随后插件 tool 半身对接（SC7 缝），UI 面最后装配。
 
 ## 版本历史
@@ -263,3 +263,4 @@ consistency_check_result:
 - 2026-10-02（**范围对齐：计划外功能点后移 M3**）：以 brainstorm 定稿 + 路表 M2 行为基线梳理——**后移**：worktree 项目域全族（§6-37/§7-16——中央 repo_root_path 例外随之移 M3，中央域恢复完全不动）、task_records 执行上下文两列（§6-38）、会话头部执行上下文展示（§6-39/SC6④）、feature_records 表（§6-35④，M2 = 七表落地）、疑似移动认领对话框（F10-①，M2 = 拒绝 + 手工指引）；**承重保留**：validateStore（断言基建）、proposals 发现扫描（SC4 数据源）、相位推导机（列表/直读写路径）。设计定稿不回退，db-schema 标注「M3 交付」，全部 = 前向软迁移形态；新增「范围对齐」节 + Out of Scope 顺延块，SC6③ 三处条文与 Key Risk/Next Steps 同步收窄。
 - 2026-10-05（**hash8 连接符修订**）：目录名 = `{flatten}@{hash8}`（原 `-` 连接 → `@` 连接——消歧后缀与 flatten 内连字符视觉分离，防歧义）；M2 proposal / db-schema / PRD / 原型 / 总纲同步。\n- 2026-10-05（**对账卡移出裁决**）：概览页签对账卡完整 UI 移出 M2——用户裁决：漂移 / 找回类概念不进用户视野（防心智负担），M2 聚焦核心功能；机制面（reconcileAtStartup 静默自愈 + 记账日志）保留不动，未来可视化再显式立项（非顺延承诺）。Proposed Solution ③ / Scope ③ / Out of Scope 三处同步；天然弹性项表述随之收缩（文档 tab 打磨仍为弹性项）。
 - 2026-10-05（**代码核对修订**，基线 = HEAD fix-40 + 工作树 fix-41/42 在途；核对结论 = 提案/db-schema 与代码的关键假设全部成立，缝/机制/pin/七态词汇逐项验证）：①Scope 节中央域条文对齐范围对齐裁决——「例外：projects + repo_root_path 列」残留改 strike 注记（原行漏改，与 Proposed Solution/Out of Scope/db-schema §0 矛盾）；②Evidence/Key Risks 回填：P1 MVP 门已过（4.2 dogfood 四连绿 + 4.3 冒烟两连绿），M2 执行前置已满足（风险行「episode 4 待执行」同步标消解）；③tech-design 必答增补两条：每工作区 DB 目录派生单源化（core 派生 + RPC 下发展示串，消 apps/web form-model 自算双源——现状展示串无 hash8）与任务域服务面形状（forgeProjects 扩展 vs 新服务 + cwd→forge.db 多句柄路由 + boot 桥三处联动）；④S8 spike 收窄（主会话侧 knowledge 插件 exec.agent.session.id 生产验证在案，实测面 = 子会话 exec ctx 一次 dump——db-schema §7-14 同步）+ db-schema §2.4 增「M2 落地 DDL 剥离 branch/worktree 两列」显式提示（八表定稿形态照抄陷阱）。
+- 2026-10-06（**tech-design 定稿回写**）：/tech-design 完成（schema 评审门三版定稿）。关键裁决：①服务面**按领域划分**四服务（forgeTasks/forgeFeatures/forgeProposals/forgeDocs，读写一体，MVC——视图聚合服务 forgeOverview 方案否决，跨域聚合归前端）；②视图刷新 = **写推送事件**（core 动词闭包 → process.send[child IPC] → main → webContents.send，桥协议产品自有零上游改动；即时判据 = 单次重取即见新值 + 事件 ≤500ms）；③多库 = **惰性首开 + 失败隔离**（§6-29 启动全库断言惰性化为开库时断言）；④schema 五项用户裁决修订（保留字清剿 / 全表 created_at+updated_at / feature_id 显式 FK 取代 slug 关联与 GENERATED 列 / proposals.doc_path→rel_path / task_records 增 files_json[修订 C5] + task_file 砍除）；⑤dispatchPrompt = 人格段（无标签）+ `<constraints>`/`<task-context>`/`<type-policy>` 三标签，系统提示段 `<forge-pipeline>` 单层对齐老 forge hook 文本（标签集封闭四枚）；⑥§7-6 映射定稿（TaskType = 20 值，fix-record-missed 降级静态文本）；⑦transitionTargets 纯函数（UI 所见即所得 + 服务端同源校验）；⑧UI 功能测试 = **录制-回放主径**（升级 P1「不预建」口径，入 conventions TECH-quality-004）；⑨git = 可选环境依赖（ENOENT 同回退记录语）。§7-6/11/12/13 全闭合（db-schema 各条记注同步）；决策入池 docs/decisions/{interface,architecture}.md。

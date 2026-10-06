@@ -2,12 +2,12 @@
 feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 + 任务/文档视图）"
 platform: "web"
 created: "2026-10-05"
-status: "draft（v15 = v14 + completed 任务实际耗时四处呈现（记录推导）；128 断言全绿）"
+status: "draft（v17 = v16 + 流程图渲染[graph/flowchart——分层 + 回边路由 + 边标签]；135 断言全绿）"
 ---
 
 # dsh-forge M2 — UI Design（Web）
 
-> **设计基线（v13）**：产品形态以现有代码现态为准（fix-25/29/38/40/42 后），概览 = 官方 ui-dockkit 右栏 tab。经两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）+ 老 forge 20 种任务类型源码调研。v7-v12 演进见各版记注。**v13：「预估」→「预估耗时」；参考文档 chip 点击 → dock 开新 tab（refDocs 锚点→路径映射,按 docRel 去重,无映射置灰）；目标/结果改上下展示（标签在上、内容在下,非左右两列）；内容子标题与键标签全加粗（tc-k/tl-verb 600）；「注记」更名「备注」（= 内容负载中的补充警示,如 2.4 的 fix-1 记账提醒）**。冒烟 123 断言全绿。
+> **设计基线（v13）**：产品形态以现有代码现态为准（fix-25/29/38/40/42 后），概览 = 官方 ui-dockkit 右栏 tab。经两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）+ 老 forge 21 种任务模板源码调研。v7-v12 演进见各版记注。**v13：「预估」→「预估耗时」；参考文档 chip 点击 → dock 开新 tab（refDocs 锚点→路径映射,按 docRel 去重,无映射置灰）；目标/结果改上下展示（标签在上、内容在下,非左右两列）；内容子标题与键标签全加粗（tc-k/tl-verb 600）；「注记」更名「备注」（= 内容负载中的补充警示,如 2.4 的 fix-1 记账提醒）**。冒烟 123 断言全绿。
 
 ## Design System
 
@@ -63,7 +63,7 @@ ov-panel(dock tab body ~460px)
 
 ### 文档 tab 内容
 
-头部（文件名 + 只读徽标 + 悬空徽标）→ 路径栏（canonical 全路径 + 📁 在编辑器中打开 + ↻ 重读）→ 摘要块 → **Markdown 渲染**（标题/列表/引用/代码块）。**mermaid 代码块 → Diagram 占位卡**（⚡Diagram 头标 + mermaid 源码 + 「dsh 原生不支持——产品扩展点」注记）。
+头部（文件名 + 只读徽标 + 悬空徽标）→ 路径栏（canonical 全路径 + 📁 在编辑器中打开 + ↻ 重读）→ 摘要块 → **Markdown 渲染**（标题/列表/引用/代码块）。**mermaid 代码块 → 图渲染**（v16 erDiagram + v17 流程图[graph/flowchart]——产品形态 = mermaid 库懒加载,全图型同库渲染;**erDiagram = 验收锚**;渲染失败/非法源 → **回退占位卡**：源码 + 回退注记）。
 
 悬空文档 tab = 只读占位面（路径栏保留，不崩溃不写入不删行）。
 
@@ -88,7 +88,7 @@ OS 目录选择器一步 → 表单；派生行含 hash8（@ 连接符）；疑�
 ### 整体结构
 
 ```
-├── 通用区:头部(状态点 + 任务键 + 中文状态标签,✕ 关闭右端) → 标题 → kv 标签行(类别/优先级/预估/复杂度/影响)
+├── 通用区:头部(状态点 + 任务键 + 中文状态标签,✕ 关闭右端) → 标题 → kv 标签行(类别/优先级/预估耗时/实际耗时[completed]/复杂度/影响)
 ├── 块一 任务内容:目标/结果对行 → 类型模板 → 单元测试覆盖率
 ├── 块二 时间线:现状条(当前关联) + 事件流(垂直时间线,关联信息织入事件)
 └── 底部:「转移状态…」按钮
@@ -254,7 +254,9 @@ sequenceDiagram
     end
     T->>T: 头部+路径栏+摘要+Markdown渲染
     alt 含 mermaid 块
-        T->>T: Diagram 占位卡(源码+扩展点注记)
+        T->>T: 图渲染(SVG;mermaid 库懒加载;erDiagram/流程图/其余图型同库)
+    else 渲染失败 / 非法源
+        T->>T: 占位卡(源码+回退注记)
     end
     alt 悬空
         T->>T: 只读占位面(路径栏保留)
@@ -286,6 +288,8 @@ sequenceDiagram
     end
     DG->>DR: 关闭对话框 + 刷新抽屉/列表
 ```
+
+**目标态允许集（2026-10-06 tech-design Interface 10 记注）**：`taskDetail` 返回 `allowedTransitions`（状态机纯函数，人类面 = 七态 − 当前态）——对话框仅渲染可选项（所见即所得，用户点不到非法目标），服务端转移前同源校验（同一纯函数，零漂移）。
 
 ### 流程 7：会话头挂接 pill → 概览 + 抽屉
 
@@ -360,11 +364,11 @@ stateDiagram-v2
 
 ## 原型（prototype/）
 
-静态原型（index.html / styles.css / app.js / data.js / smoke.cjs）。**冒烟 128 断言全绿**（浏览器候选链:playwright chromium[须 icudtl.dat 在场] → 系统 Chrome → Edge）。种子数据含 7 种类型 + 各类型专属字段 + **commits 存储** + **refDocs 映射与参考文档内容**（db-schema/架构基线/S8 spike/预研——锚点跳转演示）+ 全部 14 任务带结构化 content 负载与执行记录。
+静态原型（index.html / styles.css / app.js / data.js / smoke.cjs）。**冒烟 135 断言全绿**（浏览器候选链:playwright chromium[须 icudtl.dat 在场] → 系统 Chrome → Edge）。种子数据含 7 种类型 + 各类型专属字段 + **commits 存储** + **refDocs 映射与参考文档内容**（db-schema/架构基线/S8 spike/预研——锚点跳转演示）+ 全部 14 任务带结构化 content 负载与执行记录。
 
 ## 评审注记
 
-- 两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）；老 forge 20 种任务类型源码调研（forge-cli/pkg/task/types.go Task struct + TaskTypeRegistry + prompt 模板差异）。
+- 两轮 UI/UX 专家评审（P1-P5 + R1-R7 全部落地）；老 forge 21 种任务模板源码调研（forge-cli/pkg/task/types.go Task struct + TaskTypeRegistry + prompt 模板差异）。
 - **任务无文档（v7 立场）**：任务 SoT = 每工作区 forge.db 的 tasks 行——内容负载随类型而异（≈ vars_json 具体化，21 类型模板语义）；详情抽屉**只渲染结构化数据，不读任何任务 markdown**（与 P1 旧线任务文件的根本区别）。类型模板注册表在 UI 侧=渲染分发（dispatch by type family），未注册类型走通用键值回退。
-- dsh 原生**不支持 mermaid**（全安装树零命中）——Diagram 占位卡 = 产品扩展点，tech-design 裁决渲染方案。
+- dsh 原生**不支持 mermaid**（全安装树零命中）——**M2 裁决（2026-10-06 用户裁决）：产品侧集成 mermaid 包渲染**（懒加载 + securityLevel='strict';erDiagram = 验收锚,全图型同库;占位卡降级为失败回退态——tech-design 决策表锚）。
 - 与 PRD 的差异（Step 10 对账回写）：文档 = dock tab（非抽屉）；任务详情 = 抽屉（非内联展开）；排序可切换；DAG/泳道 M2 交付（非 M3）；搜索中英双语三子 tab 共用；开始页入口排序（项目概览最前）。

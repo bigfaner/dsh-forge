@@ -38,7 +38,7 @@ feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 
 
 - Given 库中有就绪任务（前置全部终态）
 - When 会话内发起 run-tasks
-- Then dispatcher 经 claimTask tool 领取（pending→in_progress，审计含派发会话 id + 挂接行）；返回的 dispatchPrompt 含三段构成：约束块 + 动态信息块（含 BLOCKERS 依赖快照）+ 类型策略块（断言）
+- Then dispatcher 经 claimTask tool 领取（pending→in_progress，审计含派发会话 id + 挂接行）；返回的 dispatchPrompt 构成：人格段（task-executor，无标签）+ 约束块 + 动态信息块（含 BLOCKERS 依赖快照）+ 类型策略块（断言）
 
 - Given executor（匿名 subagent，初始提示词 = dispatchPrompt）已完成执行且质量门（编译→格式→lint→测试）全过
 - When executor 调 submitTask
@@ -82,7 +82,7 @@ feature: "dsh-forge M2：forge 管线接管（状态层转正 + 插件执行链 
 
 - Given 任务 in_progress 但执行记录缺失（模拟子会话中断）
 - When dispatcher 外环再次 claimTask 同一任务
-- Then 无状态转移（仍 in_progress），返回按当前状态重新合成的 dispatchPrompt（摘要值更新）；e2e / dogfood 走查含此场景一次
+- Then 无状态转移（仍 in_progress），返回按当前状态重新合成的 dispatchPrompt（digest 新值）；e2e / dogfood 走查含此场景一次
 
 ---
 

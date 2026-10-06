@@ -27,3 +27,8 @@ domains: [quality-gate, lint, pin-test, e2e, coverage, dependency-pin]
 
 **Requirement**: e2e 断言零删改台账（断言只增不删不改，继承旧线纪律）；core（双域）单测覆盖率 80%；会话链路走真实 dogfood 冒烟（低成本模型，每门必跑），UI 断言走 smoke 迁移可控 seam。
 **Source**: feature/dsh-forge-p1-mvp TECH-015（tech-design §Overall Coverage Target / §Per-Layer Test Plan）
+
+### TECH-quality-004: UI 功能测试录制-回放主径
+
+**Requirement**: UI 功能测试以**录制-回放**为主径——dogfood 真实模型的动词调用序列（dispatchPrompt 全文 / submit 载荷 / fix 链事件流）录成 JSONL 夹具，e2e 按序列经 RPC/桥重放并断言 UI 全程呈现（零在场模型依赖）；真实模型仅 dogfood 门与录制源；flake 复现走同一夹具。升级 TECH-quality-003「录制回放不预建」口径（M2 起 UI 面预建）。
+**Source**: feature/dsh-forge-m2-pipeline tech-design §Testing Strategy（2026-10-06 用户裁决）

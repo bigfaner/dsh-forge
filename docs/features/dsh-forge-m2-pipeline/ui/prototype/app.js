@@ -78,7 +78,7 @@
         { who: 'sub', text: '〔executor 子会话 · s1-1〕按重合成简报继续执行 2.4 ……' }
       ],
       s2: [{ who: 'user', text: '对照 PRD 核对验收口径' }, { who: 'agent', text: '已核对:SC7/SC-M2 断言与 db-schema §4 单测锚点一致。' }],
-      's1-1': [{ who: 'sub', text: '〔executor 子会话 · s1-1〕正在执行 2.4:tool 半身对接(消费 ctx.forgeProjects 同缝)。' }]
+      's1-1': [{ who: 'sub', text: '〔executor 子会话 · s1-1〕正在执行 2.4:tool 半身对接(消费 ctx.forgeTasks 同缝)。' }]
     }
     D.links.length = 0
     ;[
@@ -479,7 +479,7 @@
           ['谱系', fs.length ? '→ ' + fs.map(function (f) { return f.slug + '(' + featLabel(f.status) + ')' }).join(', ') : '—(无 feature)']
         ])
       }
-      html += ovDocRow({ kind: 'proposal', rel: p.doc_path, summary: p.summary, dangling: false }, q)
+      html += ovDocRow({ kind: 'proposal', rel: p.rel_path, summary: p.summary, dangling: false }, q)
     })
     if (!list.length) html += '<div class="kb-empty">无匹配「' + esc(S.ov.q) + '」的提案</div>'
     return html + '<p class="ov-footnote2">docs/proposals/ · 仓内只读</p>'
@@ -536,7 +536,7 @@
     }
   }
 
-  /* ── 文档 tab:只读 Markdown 渲染 + mermaid 占位卡(dsh 原生不支持 mermaid——产品扩展点) ── */
+  /* ── 文档 tab:只读 Markdown 渲染 + mermaid 图渲染(erDiagram/流程图直渲;其他图型占位示意——产品形态 = mermaid 库懒加载全渲染) ── */
   function renderDocTab(tab) {
     var rel = tab.docRel
     var isDangling = !!tab.docDangling
@@ -560,13 +560,168 @@
       '<div class="doc-tab-body">' + mdWithDiagrams(content) + '</div>'
   }
 
-  /* Markdown 渲染 + mermaid 代码块占位卡 */
+  /* erDiagram 渲染(原型 = 手绘 SVG 示意:单列实体 + 右侧通道走线;产品形态 = mermaid 库懒加载渲染,此处仅锚交互契约) */
+  function erDiagramSvg(src) {
+    var lines = String(src).split('\n'), entities = [], rels = [], ent = null
+    var REL = /^\s*([A-Za-z_]\w*)\s+(\|\||o\||\}\||\}o)(--|\.\.)(\|\||\|o|\|\{|o\{)\s+([A-Za-z_]\w*)\s*:\s*"?([^"]*?)"?\s*$/
+    var CARD = { '||': '1', 'o|': '0..1', '|o': '0..1', '}|': '1..N', '|{': '1..N', '}o': '0..N', 'o{': '0..N' }
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i]
+      if (/^\s*(erDiagram\b|%%)/.test(l) || l.trim() === '') continue
+      if (ent) {
+        if (/^\s*\}\s*$/.test(l)) { entities.push(ent); ent = null; continue }
+        var fm = l.match(/^\s*(\S+)\s+([A-Za-z_]\w*)(?:\s+(PK|FK|UK))?(?:\s+"([^"]*)")?/)
+        if (fm) ent.fields.push({ type: fm[1], name: fm[2], key: fm[3] || '', note: fm[4] || '' })
+        continue
+      }
+      var m = l.match(REL)
+      if (m) { rels.push({ a: m[1], ca: CARD[m[2]] || '?', dash: m[3] === '..', cb: CARD[m[4]] || '?', b: m[5], label: m[6] }); continue }
+      var em = l.match(/^\s*([A-Za-z_]\w*)\s*\{/)
+      if (em) ent = { name: em[1], fields: [] }
+    }
+    if (ent) entities.push(ent)
+    if (!entities.length) return ''
+    var pos = {}, BOXW = 212, HEAD = 20, ROW = 13, PADB = 5, GAPY = 30, X0 = 10, y = 10
+    entities.forEach(function (e) { e.h = HEAD + e.fields.length * ROW + PADB; e.y = y; pos[e.name] = e; y += e.h + GAPY })
+    var W = X0 + BOXW + 22 + Math.max(rels.length, 1) * 24 + 26, H = y - GAPY + 10
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="erDiagram 示意">'
+    entities.forEach(function (e) {
+      s += '<g class="er-entity"><rect x="' + X0 + '" y="' + e.y + '" width="' + BOXW + '" height="' + e.h + '" rx="4"></rect>'
+      s += '<text class="er-name" x="' + (X0 + 8) + '" y="' + (e.y + 14) + '">' + esc(e.name) + '</text>'
+      if (e.fields.length) s += '<line x1="' + X0 + '" y1="' + (e.y + HEAD) + '" x2="' + (X0 + BOXW) + '" y2="' + (e.y + HEAD) + '"></line>'
+      e.fields.forEach(function (f, fi) {
+        var t = f.type + '  ' + f.name + (f.key ? ' ' + f.key : '')
+        s += '<text class="er-field' + (f.key ? ' er-key' : '') + '" x="' + (X0 + 8) + '" y="' + (e.y + HEAD + 11 + fi * ROW) + '">' + esc(t) + (f.note ? '<title>' + esc(f.note) + '</title>' : '') + '</text>'
+      })
+      s += '</g>'
+    })
+    rels.forEach(function (r, ri) {
+      var A = pos[r.a], B = pos[r.b]
+      if (!A || !B) return
+      var ay = A.y + A.h / 2, by = B.y + B.h / 2, ch = X0 + BOXW + 16 + ri * 24
+      s += '<g class="er-rel' + (r.dash ? ' er-dash' : '') + '"><path d="M' + (X0 + BOXW) + ',' + ay + ' H' + ch + ' V' + by + ' H' + (X0 + BOXW) + '"></path>'
+      s += '<text class="er-rel-label" x="' + (ch + 3) + '" y="' + ((ay + by) / 2 - 3) + '">' + esc(r.label || '') + '</text>'
+      s += '<text class="er-card" x="' + (X0 + BOXW + 4) + '" y="' + (ay - 4) + '">' + r.ca + '</text>'
+      s += '<text class="er-card" x="' + (X0 + BOXW + 4) + '" y="' + (by + 12) + '">' + r.cb + '</text></g>'
+    })
+    return s + '</svg>'
+  }
+
+  function erDiagramBlock(code) {
+    var svg = erDiagramSvg(code)
+    if (!svg) return '<div class="mermaid-card" data-mermaid="1"><div class="mc-head">Diagram</div><pre class="mc-code">' + esc(code) + '</pre><div class="mc-note">erDiagram 解析失败——回退源码占位(产品形态同路回退)</div></div>'
+    return '<div class="mermaid-diagram" data-er="1"><div class="md-head"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/><path d="M6 4.5h4M4.5 6v4M11.5 6v4"/></svg> erDiagram</div><div class="md-canvas">' + svg + '</div></div>'
+  }
+
+  /* 流程图渲染(原型 = 手绘 SVG 示意:DFS 回边检测 + 最长路径分层 + 贝塞尔边;产品形态 = mermaid 库懒加载) */
+  var flSeq = 0
+  function flowSvg(src) {
+    var lines = String(src).split('\n'), dir = 'TD', nodes = {}, order = [], edges = []
+    var EDGE = /^\s*([A-Za-z_]\w*)(\[[^\]]*\]|\([^)]*\)|\{[^}]*\})?\s*(-\.->|-\.-|-->|---|--)\s*(?:\|([^|]*)\|)?\s*([A-Za-z_]\w*)(\[[^\]]*\]|\([^)]*\)|\{[^}]*\})?\s*$/
+    var SOLO = /^\s*([A-Za-z_]\w*)(\[[^\]]*\]|\([^)]*\)|\{[^}]*\})?\s*$/
+    function shapeOf(id, suf) {
+      if (!suf) return { id: id, label: id, shape: 'rect' }
+      return { id: id, label: suf.slice(1, -1) || id, shape: suf.charAt(0) === '(' ? 'round' : suf.charAt(0) === '{' ? 'diamond' : 'rect' }
+    }
+    function reg(n) { if (!nodes[n.id]) { nodes[n.id] = n; order.push(n.id) } else if (n.label !== n.id) { nodes[n.id].label = n.label; nodes[n.id].shape = n.shape } }
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i], hd = l.match(/^\s*(?:graph|flowchart)\s+(TB|TD|BT|LR|RL)\b/)
+      if (hd) { dir = (hd[1] === 'LR' || hd[1] === 'RL') ? 'LR' : 'TD'; continue }
+      if (/^\s*(graph|flowchart|%%|classDef|class|style|subgraph|end)\b/.test(l) || l.trim() === '') continue
+      var m = l.match(EDGE)
+      if (m) {
+        reg(shapeOf(m[1], m[2])); reg(shapeOf(m[6], m[7]))
+        edges.push({ a: m[1], b: m[6], label: (m[4] || '').trim(), dash: m[3].indexOf('.') >= 0, arrow: m[3] !== '--' && m[3] !== '---' })
+        continue
+      }
+      var s = l.match(SOLO)
+      if (s && s[2]) reg(shapeOf(s[1], s[2]))
+    }
+    if (!order.length) return ''
+    /* 回边检测(DFS 灰→灰)→ 剔除后最长路径分层(环图不炸) */
+    var adj = {}, color = {}, back = {}
+    order.forEach(function (id) { adj[id] = [] })
+    edges.forEach(function (e, ix) { adj[e.a].push({ b: e.b, i: ix }) })
+    function dfs(u) {
+      color[u] = 1
+      adj[u].forEach(function (t) { if (color[t.b] === 1) back[t.i] = true; else if (!color[t.b]) dfs(t.b) })
+      color[u] = 2
+    }
+    order.forEach(function (id) { if (!color[id]) dfs(id) })
+    var layer = {}; order.forEach(function (id) { layer[id] = 0 })
+    for (var r = 0; r < order.length; r++) edges.forEach(function (e, ix) { if (!back[ix] && layer[e.b] < layer[e.a] + 1) layer[e.b] = layer[e.a] + 1 })
+    /* 布局:按层分行(TD)→ LR 转置 */
+    var rows = {}
+    order.forEach(function (id) { var n = nodes[id]; n.w = Math.max(56, String(n.label).length * 7 + 22); n.h = n.shape === 'diamond' ? 40 : 30; (rows[layer[id]] = rows[layer[id]] || []).push(n) })
+    var keys = Object.keys(rows).map(Number).sort(function (a, b) { return a - b })
+    var maxW = 0, y = 12, X0 = 12, GAP = 26, VGAP = 48
+    keys.forEach(function (k) { var rw = rows[k].reduce(function (s, n) { return s + n.w }, 0) + (rows[k].length - 1) * GAP; rows[k].rowW = rw; rows[k].rowH = rows[k].reduce(function (s, n) { return Math.max(s, n.h) }, 0); maxW = Math.max(maxW, rw) })
+    keys.forEach(function (k) {
+      var x = X0 + (maxW - rows[k].rowW) / 2
+      rows[k].forEach(function (n) { n.x = x; n.y = y + (rows[k].rowH - n.h) / 2; x += n.w + GAP })
+      y += rows[k].rowH + VGAP
+    })
+    if (dir === 'LR') order.forEach(function (id) { var n = nodes[id], t = n.x; n.x = n.y; n.y = t; t = n.w; n.w = n.h; n.h = t })
+    var TW = dir === 'LR' ? (y - VGAP + 12) : (X0 * 2 + maxW), TH = dir === 'LR' ? (X0 * 2 + maxW) : (y - VGAP + 12)
+    var arw = 'fl-arw-' + (++flSeq)
+    var s = '<svg viewBox="0 0 ' + TW + ' ' + TH + '" width="' + TW + '" height="' + TH + '" role="img" aria-label="flowchart 示意">' +
+      '<defs><marker id="' + arw + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="fl-arrow"></path></marker></defs>'
+    order.forEach(function (id) {
+      var n = nodes[id], cx = n.x + n.w / 2, cy = n.y + n.h / 2
+      s += '<g class="fl-node">'
+      if (n.shape === 'diamond') s += '<path d="M' + cx + ',' + n.y + ' L' + (n.x + n.w) + ',' + cy + ' L' + cx + ',' + (n.y + n.h) + ' L' + n.x + ',' + cy + ' Z"></path>'
+      else s += '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="' + (n.shape === 'round' ? 14 : 4) + '"></rect>'
+      s += '<text class="fl-label" x="' + cx + '" y="' + (cy + 3.5) + '">' + esc(n.label) + '</text></g>'
+    })
+    edges.forEach(function (e) {
+      var A = nodes[e.a], B = nodes[e.b]
+      if (!A || !B) return
+      var fwd = dir === 'TD' ? (B.y >= A.y + A.h) : (B.x >= A.x + A.w)
+      var d, lx, ly
+      if (fwd) {
+        if (dir === 'TD') {
+          var ax = A.x + A.w / 2, ay = A.y + A.h, bx = B.x + B.w / 2, by = B.y
+          d = 'M' + ax + ',' + ay + ' C' + ax + ',' + (ay + (by - ay) / 2) + ' ' + bx + ',' + (by - (by - ay) / 2) + ' ' + bx + ',' + by
+          lx = (ax + bx) / 2; ly = (ay + by) / 2 - 3
+        } else {
+          var ay2 = A.y + A.h / 2, ax2 = A.x + A.w, by2 = B.y + B.h / 2, bx2 = B.x
+          d = 'M' + ax2 + ',' + ay2 + ' C' + (ax2 + (bx2 - ax2) / 2) + ',' + ay2 + ' ' + (bx2 - (bx2 - ax2) / 2) + ',' + by2 + ' ' + bx2 + ',' + by2
+          lx = (ax2 + bx2) / 2; ly = (ay2 + by2) / 2 - 3
+        }
+      } else {
+        if (dir === 'TD') {
+          var sy = A.y + A.h / 2, sx = A.x + A.w, ty = B.y + B.h / 2, tx = B.x + B.w, off = Math.max(56, (sx - (B.x + B.w / 2)) + 60)
+          d = 'M' + sx + ',' + sy + ' C' + (sx + off) + ',' + sy + ' ' + (tx + off) + ',' + ty + ' ' + tx + ',' + ty
+          lx = (sx + tx) / 2 + off * 0.6; ly = (sy + ty) / 2
+        } else {
+          var sx2 = A.x + A.w / 2, sy2 = A.y + A.h, tx2 = B.x + B.w / 2, ty2 = B.y + B.h, off2 = Math.max(56, (sy2 - (B.y + B.h / 2)) + 60)
+          d = 'M' + sx2 + ',' + sy2 + ' C' + sx2 + ',' + (sy2 + off2) + ' ' + tx2 + ',' + (ty2 + off2) + ' ' + tx2 + ',' + ty2
+          lx = (sx2 + tx2) / 2; ly = (sy2 + ty2) / 2 + off2 * 0.6
+        }
+      }
+      s += '<g class="fl-edge' + (e.dash ? ' fl-dash' : '') + '"><path d="' + d + '"' + (e.arrow ? ' marker-end="url(#' + arw + ')"' : '') + '></path>'
+      if (e.label) s += '<text class="fl-edge-label" x="' + lx + '" y="' + ly + '">' + esc(e.label) + '</text>'
+      s += '</g>'
+    })
+    return s + '</svg>'
+  }
+
+  function flowBlock(code) {
+    var svg = flowSvg(code)
+    if (!svg) return '<div class="mermaid-card" data-mermaid="1"><div class="mc-head">Diagram</div><pre class="mc-code">' + esc(code) + '</pre><div class="mc-note">流程图解析失败——回退源码占位(产品形态同路回退)</div></div>'
+    return '<div class="mermaid-diagram" data-flow="1"><div class="md-head"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/><path d="M6 4.5h4M4.5 6v4M11.5 6v4"/></svg> Flowchart</div><div class="md-canvas">' + svg + '</div></div>'
+  }
+
+  /* Markdown 渲染 + mermaid 代码块(erDiagram/流程图 → 图渲染;其他图型 → 占位示意) */
   function mdWithDiagrams(src) {
     var lines = String(src).split('\n'), out = '', inCode = false, inMermaid = false, codeLang = '', codeBuf = [], para = []
     function fp() { if (para.length) { out += '<p>' + para.join(' ') + '</p>'; para = [] } }
     function flushCode() {
       if (inMermaid) {
-        out += '<div class="mermaid-card" data-mermaid="1"><div class="mc-head"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/><path d="M6 4.5h4M4.5 6v4M11.5 6v4"/></svg> Diagram</div><pre class="mc-code">' + esc(codeBuf.join('\n')) + '</pre><div class="mc-note">dsh 原生不支持 mermaid——产品扩展点(tech-design 裁决渲染方案)</div></div>'
+        var code = codeBuf.join('\n')
+        if (/^\s*erDiagram\b/.test(code)) out += erDiagramBlock(code)
+        else if (/^\s*(graph|flowchart)\b/.test(code)) out += flowBlock(code)
+        else out += '<div class="mermaid-card" data-mermaid="1"><div class="mc-head"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3h3v3H3zM10 3h3v3h-3zM3 10h3v3H3zM10 10h3v3h-3z"/><path d="M6 4.5h4M4.5 6v4M11.5 6v4"/></svg> Diagram</div><pre class="mc-code">' + esc(code) + '</pre><div class="mc-note">其他 mermaid 图型——产品形态经 mermaid 库懒加载渲染(原型示意 erDiagram/流程图)</div></div>'
       } else if (codeBuf.length) {
         out += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>'
       }
