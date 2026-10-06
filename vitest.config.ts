@@ -19,6 +19,9 @@ export default defineConfig({
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
       { test: { name: 'plugin-forge', include: ['packages/plugin-forge/src/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
+      // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
+      // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）
+      { test: { name: 'e2e-support', include: ['e2e/support/**/*.test.ts'] } },
       {
         test: {
           name: 'web',
