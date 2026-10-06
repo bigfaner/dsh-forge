@@ -233,6 +233,55 @@ describe('AC3 schema_meta 前向门', () => {
   })
 })
 
+describe('openDatabase 参数化迁移序列（M2 1.2：工作区库独立版本线经参数传入，Hard Rule——禁硬编码 import 中央序列）', () => {
+  /** 与中央五表完全相异的假想迁移序列（独立版本线形制对拍：版本表随 v1 + 单表 + 单索引——
+   *  序列契约 = 首迁移自带 schema_meta 建表，与中央 v1 形制一致） */
+  const altMigrations = [
+    {
+      version: 1,
+      statements: [
+        `CREATE TABLE schema_meta (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT    NOT NULL
+)`,
+        `CREATE TABLE alt_widgets (
+    id    TEXT PRIMARY KEY,
+    label TEXT NOT NULL
+)`,
+        `CREATE INDEX idx_alt_widgets_label ON alt_widgets(label)`,
+      ],
+    },
+  ] as const
+
+  it('传入自定义序列：空库按参数序列迁移到参数版本上限', () => {
+    const db = openDatabase(dbPath(), { migrations: altMigrations, schemaVersion: 1 })
+    const tables = db
+      .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+      .all()
+      .map((r) => r.name)
+    expect(tables).toEqual(['alt_widgets', 'schema_meta'])
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+    db.close()
+  })
+
+  it('参数序列的版本门独立于中央版本：库内 version 超出参数上限即拒绝', () => {
+    const path = dbPath()
+    const db = openDatabase(path, { migrations: altMigrations, schemaVersion: 1 })
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (2, '2099-01-01T00:00:00.000Z')`).run()
+    db.close()
+
+    // 同一库：中央默认（支持上限同为 1）与参数序列同拒；typed error 两端版本号可见
+    expect(() => openDatabase(path, { migrations: altMigrations, schemaVersion: 1 })).toThrowError(UnsupportedSchemaVersionError)
+    expect(() => openDatabase(path)).toThrowError(UnsupportedSchemaVersionError)
+  })
+
+  it('缺省参数 = 中央 state.db 序列（既有调用面零变化）', () => {
+    const db = openDatabase(dbPath())
+    expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()?.n).toBe(0)
+    db.close()
+  })
+})
+
 describe('事务助手 withTransaction', () => {
   it('成功路径整体提交', () => {
     const db = openDatabase(dbPath())

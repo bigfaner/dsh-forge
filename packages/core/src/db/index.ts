@@ -2,5 +2,5 @@
 // 边界：禁 import ../forge/、../knowledge/（依赖铁律①，oxlint no-restricted-imports）。
 export { MIGRATIONS, SCHEMA_VERSION, type Migration } from './schema.js'
 export { UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
-export { openDatabase } from './open.js'
+export { openDatabase, type OpenDatabaseOptions } from './open.js'
 export { withTransaction } from './transaction.js'
