@@ -6,7 +6,7 @@
 // 三签不动（Hard Rule）：本目录零左栏/中区/conversation.view 改动——纯右栏 tab 体。
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { FeatureCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { ErrorBar, SkeletonRows } from '../../components/index.js'
@@ -252,6 +252,8 @@ export interface OverviewTabProps {
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入） */
   readonly renderTasksTab?: (ctx: OverviewTasksContext) => ReactNode
+  /** 任务聚焦 nonce（4.2 pill 点击——变更即切任务子 tab；switchSubtab 语义 = 清搜索/清 chips/收展开） */
+  readonly focusTasksNonce?: number
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
 }
@@ -263,11 +265,23 @@ export function OverviewTab({
   sessionCount,
   onOpenDoc,
   renderTasksTab,
+  focusTasksNonce,
   now,
 }: OverviewTabProps): ReactNode {
-  const [filter, setFilter] = useState<OverviewFilterState>(initialOverviewFilter)
+  // 初始态（4.2）：挂载即带任务聚焦（pill 点击 → dock 首开概览 tab）= 任务子 tab 起步；
+  // 否则提案子 tab 缺省（用户定向顺序首位）
+  const [filter, setFilter] = useState<OverviewFilterState>(() =>
+    focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
+  )
   const [nonce, setNonce] = useState(0)
   const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient)
+
+  // 任务聚焦子 tab 切换（4.2 pill 点击链尾）：nonce 变更（已开概览后的后续点击）→
+  // switchSubtab('tasks')（清搜索/清 chips/收展开——子 tab 切换语义同源；同值原样返回零重渲）
+  useEffect(() => {
+    if (focusTasksNonce === undefined) return
+    setFilter((prev) => switchSubtab(prev, 'tasks'))
+  }, [focusTasksNonce])
 
   const handleSubtabChange = useCallback((subtab: OverviewSubtab): void => {
     setFilter((prev) => switchSubtab(prev, subtab))

@@ -10,9 +10,12 @@
 //     reveal 既有 tab、异地址新开——`multiple` 类型行为）。
 // 跨树缝：概览项目上下文经工作台桥（ShellHost 锚定写回 ← knowledge-anchor 裁决）；
 // 抽屉（3.7）/转移对话框（3.8）/三视图（3.6）在本装配体内全链接通。
+// 4.2 任务聚焦消费：桥 taskFocus（会话头挂接 pill 点击 → 插件 inject face 写回）→
+// OverviewDockBody nonce 对照应用（抽屉打开 + 任务子 tab 切换 + feature 选中——UF-3
+// 流程 7 全链路的右栏半段）。
 // 三签不动（Hard Rule）：零左栏/中区/conversation.view 改动；概览内容禁编排逻辑（纯视图
 // 组合多域读——编排归 core）。
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { EmptyState } from '../components/index.js'
 import type { RpcClientFactory } from '../rpc/index.js'
@@ -21,7 +24,12 @@ import { TasksTab } from '../views/overview/task-tab/task-tab.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog, type TransitionTaskView } from '../views/overview/drawer/transition-dialog.js'
 import { DocsTab } from '../views/docs/index.js'
-import { initialOverviewContext, type ForgeOverviewContext, type WorkbenchBridge } from './workbench-bridge.js'
+import {
+  initialOverviewContext,
+  type ForgeOverviewContext,
+  type ForgeTaskFocus,
+  type WorkbenchBridge,
+} from './workbench-bridge.js'
 
 /** 文档 tab 类型 kind（plugin.ts DOC_TAB_KIND 结构同型镜像——plugin.test 字面量同源 pin） */
 export const DSWF_DOC_TAB_KIND = 'dswf-doc'
@@ -104,6 +112,16 @@ export interface TransitionTarget {
   readonly allowedTransitions: readonly TaskStatus[]
 }
 
+/**
+ * 任务聚焦应用判定（纯函数，4.2 UF-3 流程 7）：桥聚焦 nonce 未曾应用 → 应用该聚焦；
+ * 已应用 nonce（或无聚焦）→ null（effect 仅落点——逻辑归纯面直测）。同载荷重复点击 =
+ * nonce 恒新 → 恒重应用（重复聚焦重开抽屉）。
+ */
+export function nextTaskFocusApply(appliedNonce: number, focus: ForgeTaskFocus | null): ForgeTaskFocus | null {
+  if (focus === null || focus.nonce === appliedNonce) return null
+  return focus
+}
+
 /** 概览 dock 装配体 props（纯渲染面——全部状态经 props 注入，静态全相位可测） */
 export interface OverviewDockAssemblyProps {
   /** 锚定项目（null = 无锚空态——不猜首个） */
@@ -122,15 +140,20 @@ export interface OverviewDockAssemblyProps {
   readonly transitionTarget: TransitionTarget | null
   readonly onOpenTransition: (taskId: string) => void
   readonly onCloseTransition: () => void
+  /** 待应用任务聚焦（4.2 pill 点击——feature 选中受控注入 + 任务子 tab 切换 nonce；null/undefined = 无） */
+  readonly taskFocus?: ForgeTaskFocus | null
+  /** feature 选中释放（4.2——用户 pill 菜单切换即释放聚焦覆盖，恢复本地切换） */
+  readonly onFeatureUserSwitch?: () => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
 
 /**
  * 概览 dock 装配体（纯渲染）：无锚空态 | OverviewTab（renderTasksTab 槽 = TasksTab 全
- * 接线[onOpenTask/onTransition/activeTaskId]）+ TaskDrawer（onOpenDoc/onOpenSession/
- * onTransition）+ TransitionDialog（allowedTransitions 唯一源直喂）。任务行/DAG 节点/
- * 泳道卡片/⋯ 菜单四途径经 TasksTab onOpenTask/onTransition 汇于本装配体。
+ * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦]）+ TaskDrawer（onOpenDoc/
+ * onOpenSession/onTransition）+ TransitionDialog（allowedTransitions 唯一源直喂）。
+ * 任务行/DAG 节点/泳道卡片/⋯ 菜单四途径经 TasksTab onOpenTask/onTransition 汇于本装配体；
+ * 会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换 nonce + 抽屉）。
  */
 export function OverviewDockAssembly({
   projectId,
@@ -143,6 +166,8 @@ export function OverviewDockAssembly({
   transitionTarget,
   onOpenTransition,
   onCloseTransition,
+  taskFocus,
+  onFeatureUserSwitch,
   makeClient,
 }: OverviewDockAssemblyProps): ReactNode {
   if (projectId === null) {
@@ -169,6 +194,8 @@ export function OverviewDockAssembly({
       onOpenTask={onOpenTask}
       onTransition={onOpenTransition}
       activeTaskId={drawerTaskId ?? undefined}
+      {...(taskFocus !== null && taskFocus !== undefined ? { featureSlug: taskFocus.featureSlug } : {})}
+      {...(onFeatureUserSwitch !== undefined ? { onFeatureUserSwitch } : {})}
       makeClient={makeClient}
     />
   )
@@ -179,6 +206,7 @@ export function OverviewDockAssembly({
         sessionCount={sessionCount}
         onOpenDoc={onOpenDoc}
         renderTasksTab={renderTasksTab}
+        focusTasksNonce={taskFocus?.nonce}
         makeClient={makeClient}
       />
       <TaskDrawer
@@ -206,10 +234,12 @@ export function OverviewDockAssembly({
   )
 }
 
-/** 概览 tab body（状态壳）：桥订阅读锚定上下文 + 抽屉/对话框受控态 + 对话框目标拉取。 */
+/** 概览 tab body（状态壳）：桥订阅读锚定上下文 + 任务聚焦应用 + 抽屉/对话框受控态 + 对话框目标拉取。 */
 export interface OverviewDockBodyProps {
   /** 锚定上下文（缺省无锚——桥缺席/单测面） */
   readonly overview: ForgeOverviewContext
+  /** 桥任务聚焦（4.2 pill 点击写回——nonce 对照应用；null = 无待聚焦） */
+  readonly taskFocus: ForgeTaskFocus | null
   /** 本 tab 动作面（TabInfoReader 递达；缺席 = 文档行非交互） */
   readonly tabActions?: DockTabActionsMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
@@ -220,12 +250,28 @@ export interface OverviewDockBodyProps {
 
 export function OverviewDockBody({
   overview,
+  taskFocus,
   tabActions,
   onOpenSession,
   makeClient,
 }: OverviewDockBodyProps): ReactNode {
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
   const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
+  // 任务聚焦应用（4.2 UF-3 流程 7）：桥聚焦 nonce 未曾应用 → 抽屉打开 + 聚焦注入
+  //（feature 选中 + 任务子 tab 切换经 assembly 递达）；用户 feature 菜单切换 = 释放
+  // 聚焦覆盖恢复本地切换（抽屉保持——抽屉任务域与 feature 选中正交）
+  const [appliedFocus, setAppliedFocus] = useState<ForgeTaskFocus | null>(null)
+  const appliedNonceRef = useRef(-1)
+  useEffect(() => {
+    const apply = nextTaskFocusApply(appliedNonceRef.current, taskFocus)
+    if (apply === null) return
+    appliedNonceRef.current = apply.nonce
+    setAppliedFocus(apply)
+    setDrawerTaskId(apply.taskId)
+  }, [taskFocus])
+  const handleFeatureUserSwitch = useCallback((): void => {
+    setAppliedFocus(null)
+  }, [])
   // 对话框目标拉取（3.7 useTaskDetail 复用：taskId 变更骨架重置 + 事件静默重取同口径；
   // 抽屉同任务并存 = 各自拉取一份只读详情，互不干扰）
   const [dialogLoad] = useTaskDetail(overview.projectId ?? '', transitionTaskId, makeClient)
@@ -260,6 +306,8 @@ export function OverviewDockBody({
       transitionTarget={transitionTarget}
       onOpenTransition={handleOpenTransition}
       onCloseTransition={handleCloseTransition}
+      taskFocus={appliedFocus}
+      onFeatureUserSwitch={handleFeatureUserSwitch}
       makeClient={makeClient}
     />
   )
@@ -292,7 +340,7 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
   )
 }
 
-/** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文——ShellHost 写回驱动） */
+/** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦——ShellHost/pill 点击写回驱动） */
 function OverviewTabWithBridge(
   props: ForgeOverviewTabProps & { readonly tabActions?: DockTabActionsMirror },
 ): ReactNode {
@@ -310,6 +358,7 @@ function OverviewTabWithBridge(
   return (
     <OverviewDockBody
       overview={overview}
+      taskFocus={snapshot?.taskFocus ?? null}
       tabActions={props.tabActions}
       onOpenSession={props.onOpenSession}
       makeClient={props.makeClient}

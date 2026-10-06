@@ -4,5 +4,6 @@
 // 数据进出全经 props（官方 conversation.view roster 标准面 + 插件 inject face：召回 RPC +
 // 跳转缝）。
 export * from './ConversationViews.js'
+export * from './ForgeSessionTaskPills.js'
 export * from './RecallTab.js'
 export * from './SessionTaskPills.js'

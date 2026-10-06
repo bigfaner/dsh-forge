@@ -7,6 +7,9 @@
 // 唯一通道）+ e2e 载体（bridgeDispatch 面历史兼容：showSession/showKnowledge 直达）。
 // 4.1 扩概览上下文缝：ShellHost（shell.overlay 常驻树）锚定的项目上下文写回 → 右栏
 // 概览 tab body（rightbar 会话树）读取——同桥双缝（两棵独立槽位树的既有唯一通道复用）。
+// 4.2 扩任务聚焦缝（UF-3 流程 7）：会话头挂接 pill 点击（插件 inject face 闭包，dock 开
+// 概览 tab 后）→ 聚焦目标发布 → 右栏概览 tab body 消费（抽屉打开 + 任务子 tab + feature
+// 选中）——会话头槽树与右栏槽树的既有唯一通道复用（同 knowledgeEntry 先例）。
 // 桥由插件 apply 期经发布面工厂创建（createWorkbenchBridge——nav 闭包绑定官方
 // layout.selectPanel）；缺席期（插件未激活）导航/跳转 fail-soft no-op。
 import { KNOWLEDGE_PANEL_KEY } from './panel-model.js'
@@ -31,12 +34,27 @@ export interface ForgeOverviewContext {
   readonly sessionCount?: number
 }
 
-/** 桥快照（知识抽屉目标 + 概览项目上下文——跨槽树共享态的唯一载体） */
+/**
+ * 任务聚焦目标（4.2 UF-3 流程 7——会话头挂接 pill 点击 → 概览 + 抽屉全链路的跨树载荷）。
+ * nonce 单调自增 = 重复聚焦判据（消费侧对照已应用 nonce——同载荷重复点击也重开抽屉）。
+ */
+export interface ForgeTaskFocus {
+  /** 抽屉目标任务（taskId 代理主键——前端引用锚） */
+  readonly taskId: string
+  /** 任务子 tab feature 选中（pill 导航载荷——slug ≡ feature slug） */
+  readonly featureSlug: string
+  /** 聚焦序号（每次 openTaskFocus 自增） */
+  readonly nonce: number
+}
+
+/** 桥快照（知识抽屉目标 + 概览项目上下文 + 任务聚焦——跨槽树共享态的唯一载体） */
 export interface ForgeWorkbenchSnapshot {
   /** 知识详情抽屉打开条目（null = 关闭） */
   readonly drawerEntryId: number | null
   /** 概览项目上下文（ShellHost 锚定写回——右栏概览 tab body 消费） */
   readonly overview: ForgeOverviewContext
+  /** 任务聚焦目标（4.2 pill 点击写——右栏概览 tab body 消费；null = 无待聚焦） */
+  readonly taskFocus: ForgeTaskFocus | null
 }
 
 /** 概览上下文缺省（ShellHost 锚定生效前/桥刚创建——无锚不猜首个） */
@@ -44,11 +62,11 @@ export function initialOverviewContext(): ForgeOverviewContext {
   return { projectId: null }
 }
 
-/** 工作台桥（导航 + 抽屉缝 + 概览上下文缝；快照源形状 = useSyncExternalStore 可直订） */
+/** 工作台桥（导航 + 抽屉缝 + 概览上下文缝 + 任务聚焦缝；快照源形状 = useSyncExternalStore 可直订） */
 export interface WorkbenchBridge extends ForgeCenterNav {
   /** 召回行跳转：打开知识面板 + 抽屉定位条目（UF-4→UF-5 跨树转移面） */
   openKnowledgeEntry(entryId: number): void
-  /** 快照订阅（知识面板/概览 tab 消费——抽屉目标与概览上下文变更驱动） */
+  /** 快照订阅（知识面板/概览 tab 消费——抽屉目标与概览上下文/任务聚焦变更驱动） */
   subscribe(listener: () => void): () => void
     /** 当前快照（身份稳定——未变更恒同引用） */
   getSnapshot(): ForgeWorkbenchSnapshot
@@ -56,6 +74,11 @@ export interface WorkbenchBridge extends ForgeCenterNav {
   setDrawerEntry(entryId: number | null): void
   /** 概览项目上下文写回（4.1 ShellHost 锚定效应——右栏概览 tab 消费） */
   setOverviewContext(context: ForgeOverviewContext): void
+  /**
+   * 任务聚焦写回（4.2 会话头 pill 点击——插件 inject face 闭包）：dock 开概览 tab 后发布
+   * 聚焦目标（抽屉打开 + 任务子 tab + feature 选中——消费侧 OverviewDockBody nonce 对照应用）。
+   */
+  openTaskFocus(payload: { readonly taskId: string; readonly featureSlug: string }): void
 }
 
 /** 桥的全局挂点（与 __DSH_FORGE_VIEWS__ 同族：装配 ↔ 插件两单元的页内缝） */
@@ -73,7 +96,12 @@ export function workbenchBridge(): WorkbenchBridge | undefined {
  * 快照源为最小 store（身份稳定；订阅同步通知）。发布与创建一体：桥的本体即页内全局。
  */
 export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
-  let snapshot: ForgeWorkbenchSnapshot = { drawerEntryId: null, overview: initialOverviewContext() }
+  let snapshot: ForgeWorkbenchSnapshot = {
+    drawerEntryId: null,
+    overview: initialOverviewContext(),
+    taskFocus: null,
+  }
+  let focusNonce = 0
   const listeners = new Set<() => void>()
   const notify = (): void => {
     for (const listener of listeners) listener()
@@ -106,6 +134,11 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
         return
       }
       snapshot = { ...snapshot, overview: context }
+      notify()
+    },
+    openTaskFocus: (payload: { readonly taskId: string; readonly featureSlug: string }): void => {
+      focusNonce += 1
+      snapshot = { ...snapshot, taskFocus: { ...payload, nonce: focusNonce } }
       notify()
     },
   }

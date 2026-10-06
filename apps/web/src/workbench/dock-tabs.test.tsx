@@ -14,6 +14,7 @@ import {
   TabInfoReader,
   dockDocOpener,
   forgeDocAddress,
+  nextTaskFocusApply,
   parseForgeDocAddress,
   type DockTabActionsMirror,
   type UseDockTabInfoMirror,
@@ -208,5 +209,68 @@ describe('桥概览上下文缝（与 workbench-bridge.test 互补——装配�
   it('initialOverviewContext = 无锚缺省（桥刚创建——概览 tab 首读不猜）', () => {
     const bridge = freshBridge()
     expect(bridge.getSnapshot().overview).toEqual(initialOverviewContext())
+  })
+})
+
+describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 → 概览 + 抽屉全链路）', () => {
+  it('nextTaskFocusApply 纯面：未应用 nonce → 应用；已应用/无聚焦 → null（重复点击 nonce 恒新恒应用）', () => {
+    const focus = { taskId: 't-1', featureSlug: 'feat-a', nonce: 3 }
+    expect(nextTaskFocusApply(-1, focus)).toBe(focus)
+    expect(nextTaskFocusApply(3, focus)).toBeNull() // 已应用同 nonce
+    expect(nextTaskFocusApply(3, { ...focus, nonce: 4 })).toEqual({ ...focus, nonce: 4 }) // 重复点击恒新
+    expect(nextTaskFocusApply(-1, null)).toBeNull()
+  })
+
+  it('装配体聚焦注入（静态面）：挂载即带聚焦 = 任务子 tab 激活（OverviewTab 初始态直取 tasks）+ 抽屉开（drawerTaskId 注入位）', () => {
+    // SSR 零 effect → head 缺席（features 空 → TasksTab feature 空态）——聚焦的两静态可观测面：
+    // ①初始子 tab = tasks（renderTasksTab 装载 = 空态在场面）②抽屉壳（taskId 经装配递达）
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly
+        {...{
+          onOpenTask: vi.fn(),
+          onCloseDrawer: vi.fn(),
+          onOpenTransition: vi.fn(),
+          onCloseTransition: vi.fn(),
+          makeClient: pendingClient,
+        }}
+        projectId="p1"
+        drawerTaskId="t-42"
+        transitionTarget={null}
+        taskFocus={{ taskId: 't-42', featureSlug: 'feat-focused', nonce: 1 }}
+      />,
+    )
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // ①聚焦 → 任务子 tab
+    expect(markup).toContain('暂无 feature') // renderTasksTab 装载在场面（featureSlug 受控注入归 TasksTab 面 pin）
+    expect(markup).toContain('data-dswf-td-drawer') // ②抽屉开（taskId 注入——drawerTaskId 受控面）
+  })
+
+  it('聚焦缺席 = 提案子 tab 缺省（初始态不受扰动——用户定向顺序首位）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly
+        {...{
+          onOpenTask: vi.fn(),
+          onCloseDrawer: vi.fn(),
+          onOpenTransition: vi.fn(),
+          onCloseTransition: vi.fn(),
+          makeClient: pendingClient,
+        }}
+        projectId="p1"
+        drawerTaskId={null}
+        transitionTarget={null}
+      />,
+    )
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="proposals"')
+  })
+
+  it('桥聚焦直驱（ForgeOverviewTab 面桥缝）：openTaskFocus 写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
+    const bridge = freshBridge()
+    bridge.setOverviewContext({ projectId: 'p-anchored' })
+    bridge.openTaskFocus({ taskId: 't-9', featureSlug: 'feat-9' })
+    expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-9', featureSlug: 'feat-9', nonce: 1 })
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p-anchored' }) // 三缝独立互不扰动
+    // 概览 body 挂载不炸（taskFocus 经桥订阅递达——消费 effect 归 5.2 e2e）
+    expect(() =>
+      renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />),
+    ).not.toThrow()
   })
 })

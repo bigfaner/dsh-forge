@@ -39,8 +39,8 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     })
     bridge.openKnowledgeEntry(42)
     expect(nav.showKnowledge).toHaveBeenCalledTimes(1)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 42, overview: INITIAL })
-    expect(seen).toEqual([{ drawerEntryId: 42, overview: INITIAL }])
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 42, overview: INITIAL, taskFocus: null })
+    expect(seen).toEqual([{ drawerEntryId: 42, overview: INITIAL, taskFocus: null }])
     dispose()
     publishWorkbenchBridge(undefined)
   })
@@ -50,7 +50,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     const bridge = createWorkbenchBridge(nav)
     const first = bridge.getSnapshot()
     bridge.setDrawerEntry(7)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 7, overview: INITIAL })
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 7, overview: INITIAL, taskFocus: null })
     const second = bridge.getSnapshot()
     let notified = 0
     const dispose = bridge.subscribe(() => {
@@ -61,7 +61,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(bridge.getSnapshot()).toBe(second)
     expect(second).not.toBe(first)
     bridge.setDrawerEntry(null)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: INITIAL })
+    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: INITIAL, taskFocus: null })
     expect(notified).toBe(1)
     dispose()
     publishWorkbenchBridge(undefined)
@@ -83,6 +83,32 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(notified).toBe(1) // 等值幂等不通知（ShellHost 每渲染效应写回不刷屏）
     bridge.setOverviewContext({ projectId: 'p1', sessionCount: 4 })
     expect(notified).toBe(2)
+    dispose()
+    publishWorkbenchBridge(undefined)
+  })
+
+  it('openTaskFocus 任务聚焦缝（4.2 UF-3 流程 7）：写快照 + 订阅通知；nonce 单调自增（同载荷重复点击也重聚焦）', () => {
+    const nav = navSpy()
+    const bridge = createWorkbenchBridge(nav)
+    expect(bridge.getSnapshot().taskFocus).toBeNull() // 缺省无聚焦
+    let notified = 0
+    const seen: ForgeWorkbenchSnapshot[] = []
+    const dispose = bridge.subscribe(() => {
+      notified += 1
+      seen.push(bridge.getSnapshot())
+    })
+    bridge.openTaskFocus({ taskId: 't-1', featureSlug: 'm2-pipeline' })
+    expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-1', featureSlug: 'm2-pipeline', nonce: 1 })
+    // 双缝独立：抽屉目标与概览上下文不被聚焦写回扰动
+    expect(bridge.getSnapshot().drawerEntryId).toBeNull()
+    expect(bridge.getSnapshot().overview).toEqual(INITIAL)
+    expect(notified).toBe(1)
+    // 同载荷重复点击 → nonce 自增恒通知（重复聚焦重开抽屉——consume 语义归消费侧 nonce 对照）
+    bridge.openTaskFocus({ taskId: 't-1', featureSlug: 'm2-pipeline' })
+    expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-1', featureSlug: 'm2-pipeline', nonce: 2 })
+    expect(notified).toBe(2)
+    expect(seen[1]!.taskFocus!.nonce).toBeGreaterThan(seen[0]!.taskFocus!.nonce)
+    // 快照身份稳定注记不适用本缝（nonce 恒新——身份恒变是语义本体）
     dispose()
     publishWorkbenchBridge(undefined)
   })

@@ -6,7 +6,8 @@
 // 增拉 taskGraph + 写推送事件静默重取）；行/节点/卡片点击 → onOpenTask 抽屉回调
 // （4.1 接线——TaskDrawer taskId 面）；⋯ 转移预设 → onTransition（3.8 对话框）。
 // feature 选中态：受控注入（UF-3 pill 导航载荷——4.2 注入 featureSlug）优先，
-// 否则活跃 feature 缺省 + pill 菜单本地切换。
+// 否则活跃 feature 缺省 + pill 菜单本地切换；用户菜单切换经 onFeatureUserSwitch 上抛
+//（装配侧释放聚焦覆盖——受控让位本地，4.2）。
 import { useCallback, useState, type ReactNode } from 'react'
 import {
   FEATURE_STATUS_LABELS,
@@ -287,6 +288,8 @@ export interface TasksTabProps {
   // ── 装配注入（4.1 接线） ──
   /** 受控 feature 选中（UF-3 pill 导航载荷——4.2 注入；否则活跃 feature 缺省 + 本地切换） */
   readonly featureSlug?: string
+  /** 用户 feature 菜单切换通知（4.2——装配侧释放聚焦覆盖，恢复本地切换优先） */
+  readonly onFeatureUserSwitch?: () => void
   /** 行/节点/卡片点击 → 抽屉回调 */
   readonly onOpenTask?: (taskId: string) => void
   /** ⋯ 转移预设 → 3.8 对话框 */
@@ -311,6 +314,7 @@ export function TasksTab({
   onToggleStatus,
   onClearStatuses,
   featureSlug: controlledFeature,
+  onFeatureUserSwitch,
   onOpenTask,
   onTransition,
   activeTaskId,
@@ -322,9 +326,13 @@ export function TasksTab({
   const resolved = resolveFeatureSlug(features, controlledFeature ?? localFeature)
   const [load, { retry }] = useTasksTabLoad(projectId, resolved, view, statusFilter, search, sort, makeClient)
 
-  const handleFeatureSelect = useCallback((slug: string): void => {
-    setLocalFeature(slug)
-  }, [])
+  const handleFeatureSelect = useCallback(
+    (slug: string): void => {
+      setLocalFeature(slug)
+      onFeatureUserSwitch?.() // 4.2：用户显式切换——装配侧释放聚焦覆盖（受控让位本地）
+    },
+    [onFeatureUserSwitch],
+  )
   const handleViewChange = useCallback((mode: TaskViewMode): void => {
     setView(mode)
   }, [])

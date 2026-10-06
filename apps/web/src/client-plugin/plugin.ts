@@ -15,6 +15,9 @@
 //   - `conversation.view` 'dswf-recall'（官方页签 roster——ui-trajectory 同型先例）：
 //     UF-4 知识召回页签（对话 = 官方 'chat' 直用；轨迹 = 官方 'trajectory' 直用——fix-29
 //     退役产品 'dswf-trajectory' 复刻，同名册双『轨迹』页签冲突随降位显形）；
+//   - `conversation.session.header.actions` 'dswf-task-pills'（官方会话头动作带 list 槽
+//     ——产品首位注册，4.2）：M2 UF-3 会话头挂接 pill（sessionLinks 单库解析 + 事件刷新
+//     在壳侧发布件自持；点击 → dock 开概览 + 桥任务聚焦）；
 //   - `shell.overlay` 'dswf-host'（AppFrame root 五子槽之一——常驻壳宿主：UF-3 流程 +
 //     相位锚 + hero 面板驱动 + 知识模式右栏联动面）。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
@@ -71,6 +74,16 @@ export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
 export const SIDEBAR_SHADOW_PRIORITY = -100
 /** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
 export const RECALL_VIEW_ID = 'dswf-recall'
+/**
+ * 洞名：官方会话头标题邻位动作带（ConversationSessionHeader headerActions——list 槽，
+ * scope session；占用者标准货币 = sessionId + useWorkspaces，job-list 同径先例）。
+ * 4.2 Integration #2：产品挂接 pill 槽（此前产品零登记）。
+ */
+export const SESSION_HEADER_ACTIONS_SLOT = 'conversation.session.header.actions'
+/** 挂接 pill 登记 id（list 槽行 id——(id, priority) 唯一） */
+export const SESSION_PILLS_ENTRY_ID = 'dswf-task-pills'
+/** 挂接 pill 登记序（list 槽 order 升序；官方带 -30/-20/-10/20 → -100 = 产品首位注册） */
+export const SESSION_PILLS_ORDER = -100
 
 /**
  * 插件依赖的服务名（cordis inject——apply 等待八服务在场；与官方 ui-workspace 同型先例）。
@@ -142,12 +155,18 @@ export interface ForgeWorkspacesService {
 /**
  * 官方右栏服务窄面（ui-sidebar-right ISidebarRight 消费切片，fix-23）。知识模式右栏
  * 隐藏/恢复联动的官方动作面（收展态本体 = 官方 per-session store 自持——产品不落地副本）。
+ * 4.2 增导航面 openTab（挂接 pill 点击 → dock 开概览 tab——openTab 自带 reveal 列）。
  */
 export interface ForgeSidebarRightService {
   /** 右栏当前展开态（collapsed 或无在场面 = false） */
   isExpanded(): boolean
   /** 收起 ↔ 展开并聚焦活动窗格（官方导航动作面；无在场面抛错——调用面守卫） */
   toggleExpanded(): void
+  /**
+   * 按类型开出页型 tab（官方导航面——展开列 + reveal 去重 + 记录导航；无在场面抛错，
+   * 调用面 fail-soft）。4.2 消费：openTab('dswf-overview')——UF-3 流程 7 dock 开概览。
+   */
+  openTab(kind: string): void
 }
 
 /**
@@ -226,15 +245,21 @@ export interface ForgeViewsGlobal {
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
+    ForgeSessionTaskPills: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
     }) => {
       openKnowledgeEntry(entryId: number): void
       subscribe(listener: () => void): () => void
-      getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null } }
+      getSnapshot(): {
+        drawerEntryId: number | null
+        overview: { projectId: string | null }
+        taskFocus: { taskId: string; featureSlug: string; nonce: number } | null
+      }
       setDrawerEntry(entryId: number | null): void
       setOverviewContext(context: { projectId: string | null }): void
+      openTaskFocus(payload: { taskId: string; featureSlug: string }): void
     }
   }
 }
@@ -268,7 +293,7 @@ export interface ForgeClientActiveMarker {
   readonly sidebar?: SlotRegistrationDiagnostics
   /** 官方 main 面板族（hero/knowledge 全局面板 + panellist 行） */
   readonly center?: SlotRegistrationDiagnostics
-  /** 官方 conversation 族页签/控件（知识召回单登记 + hero 工作区控件影子——fix-24 ①） */
+  /** 官方 conversation 族页签/控件（知识召回单登记 + hero 工作区控件影子——fix-24 ① + 会话头挂接 pill——4.2） */
   readonly views?: SlotRegistrationDiagnostics
   /** 常驻壳宿主（shell.overlay——流程宿主/相位锚/联动面载体） */
   readonly shell?: SlotRegistrationDiagnostics
@@ -432,6 +457,48 @@ function registerConversationViews(
     ctx.slots.register(
       { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
       views.ForgeHeroWorkspacePicker,
+    ),
+  )
+}
+
+/**
+ * 会话头挂接 pill 登记（4.2 Integration #2——M2 UF-3/SC6③）：官方
+ * `conversation.session.header.actions` list 槽新增产品首位注册（产品零登记现状下
+ * order -100 < 官方带 -30/-20/-10/20）。占用者 ForgeSessionTaskPills（壳 bundle 发布件
+ * ——单库解析/sessionLinks 数据/事件刷新自持，标准 props sessionId + useWorkspaces 由
+ * 槽 runtime 自动递达，job-list 同径）；inject face = 点击导航闭包（dock 开概览 tab +
+ * 桥任务聚焦——UF-3 流程 7 全链路左半段，右半段 = 右栏概览 tab body 消费）。
+ */
+function registerSessionHeaderPills(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  services: {
+    readonly sidebarRight: ForgeSidebarRightService
+    readonly bridge: PublishedBridge
+  },
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, SESSION_HEADER_ACTIONS_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SESSION_HEADER_ACTIONS_SLOT,
+        id: SESSION_PILLS_ENTRY_ID,
+        order: SESSION_PILLS_ORDER,
+        inject: () => ({
+          onOpenTask: (nav: { taskId: string; featureSlug: string }): void => {
+            // UF-3 流程 7：dock 开概览 tab（openTab 自带 reveal 列 + 去重——已开即激活）
+            // → 桥任务聚焦（抽屉打开 + 任务子 tab + feature 选中——右栏 body nonce 对照
+            // 应用）。官方动作面无在场面（会话卸载瞬态）fail-soft 不外溢。
+            try {
+              services.sidebarRight.openTab(OVERVIEW_TAB_KIND)
+            } catch {
+              // fail-soft：聚焦仍发布——tab 后续开出时挂载即消费（nonce 对照）
+            }
+            services.bridge.openTaskFocus(nav)
+          },
+        }),
+      },
+      views.ForgeSessionTaskPills,
     ),
   )
 }
@@ -606,10 +673,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeDockTabs()
         }
 
-        // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 常驻壳宿主
+        // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 会话头
+        // 挂接 pill（4.2 conversation 族）+ 常驻壳宿主
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
+        registerSessionHeaderPills(clientCtx, views, { sidebarRight, bridge }, viewsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥]；selectPanel/rightbar/

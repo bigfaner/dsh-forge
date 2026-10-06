@@ -20,6 +20,9 @@ import {
   MAIN_SLOT,
   OVERVIEW_TAB_KIND,
   RECALL_VIEW_ID,
+  SESSION_HEADER_ACTIONS_SLOT,
+  SESSION_PILLS_ENTRY_ID,
+  SESSION_PILLS_ORDER,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
   SIDEBAR_BRAND_NAME_SLOT,
@@ -136,6 +139,7 @@ function fakeClientCtx(): {
   open: ReturnType<typeof vi.fn>
   start: ReturnType<typeof vi.fn>
   rightToggle: ReturnType<typeof vi.fn>
+  openTab: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
   locale: ReturnType<typeof fakeLocale>
   tabTypes: ReturnType<typeof fakeSidebarRightTabs>
@@ -146,6 +150,7 @@ function fakeClientCtx(): {
   const open = vi.fn()
   const start = vi.fn()
   const rightToggle = vi.fn()
+  const openTab = vi.fn()
   const selectPanel = vi.fn()
   const slots: ForgeSlotsService = {
     inject: (key, callback) => {
@@ -165,8 +170,8 @@ function fakeClientCtx(): {
   const sessions = { list: { tag: 'sessions-list' } }
   const uiWorkspace = { openSession: open, startSession: start }
   const workspaces = { list: { tag: 'workspaces-list' } }
-  // fix-23：官方右栏收展窄面（ISidebarRight 切片）
-  const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle }
+  // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）
+  const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle, openTab }
   // 4.1：官方右栏 tab 类型注册表（两段注册第一段）
   const tabTypes = fakeSidebarRightTabs()
   // fix-25：官方面板选择窄面（LayoutController 切片）
@@ -192,10 +197,10 @@ function fakeClientCtx(): {
       throw new Error(`unexpected service: ${name}`)
     },
   }
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, selectPanel, locale, tabTypes }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes }
 }
 
-/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body） */
+/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body + 4.2 会话头 pill） */
 function publishFakeViews() {
   const views = {
     ForgeSidebarSlot: 'COMP:sidebar-slot',
@@ -209,8 +214,11 @@ function publishFakeViews() {
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
+    ForgeSessionTaskPills: 'COMP:session-task-pills',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
+      let focusNonce = 0
+      let taskFocus: { taskId: string; featureSlug: string; nonce: number } | null = null
       const bridgeObj = {
         showKnowledge: nav.showKnowledge,
         showSession: nav.showSession,
@@ -218,9 +226,13 @@ function publishFakeViews() {
           nav.showKnowledge()
         },
         subscribe: () => () => {},
-        getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null } }),
+        getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null }, taskFocus }),
         setDrawerEntry: () => {},
         setOverviewContext: () => {},
+        openTaskFocus: (payload: { taskId: string; featureSlug: string }) => {
+          focusNonce += 1
+          taskFocus = { ...payload, nonce: focusNonce }
+        },
       }
       ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = bridgeObj
       return bridgeObj
@@ -286,6 +298,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       SIDEBAR_PANELLIST_SLOT,
       CONVERSATION_VIEW_SLOT,
       HERO_WORKSPACE_SLOT,
+      SESSION_HEADER_ACTIONS_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
@@ -339,8 +352,8 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(HERO_PANEL_KEY).toBe(SHELL_HERO_KEY)
     expect(KNOWLEDGE_PANEL_KEY).toBe(SHELL_KNOWLEDGE_KEY)
     // 知识面板注入面 = 工作台桥（抽屉缝）
-    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null } } } }
-    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null } })
+    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null }; taskFocus: unknown } } }
+    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null }, taskFocus: null })
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.center?.registered).toEqual([MAIN_SLOT, MAIN_SLOT, SIDEBAR_PANELLIST_SLOT])
     expect(marker?.center?.error).toBeUndefined()
@@ -383,7 +396,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT]) // fix-24 ① 后 views 族含 hero 影子
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT]) // fix-24 ① 后 views 族含 hero 影子 + 4.2 会话头挂接 pill
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -404,7 +417,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -541,6 +554,77 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
+  })
+})
+
+describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：conversation.session.header.actions）', () => {
+  it('list 槽登记：产品首位注册（order -100 < 官方带 -30/-20/-10/20）+ 发布组件 + 无 label（组件自绘——非 roster 行）', () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const pills = registers.filter((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)
+    expect(pills, 'conversation.session.header.actions 恰一登记（产品零登记现状下新增）').toHaveLength(1)
+    expect(pills[0]!.options.id).toBe(SESSION_PILLS_ENTRY_ID)
+    expect(pills[0]!.options.id).toBe('dswf-task-pills')
+    expect(pills[0]!.options.order).toBe(SESSION_PILLS_ORDER)
+    expect(pills[0]!.options.order).toBeLessThan(-30) // 官方最小带 -30（subagent-catalog）→ 产品首位
+    expect(pills[0]!.options.order).toBe(SIDEBAR_SHADOW_PRIORITY) // 产品首位序惯例 = 影子优先级同值
+    expect(pills[0]!.component).toBe(views.ForgeSessionTaskPills)
+    expect(pills[0]!.options.label).toBeUndefined() // 动作带行 = 组件自绘（job-list 同径——非 roster）
+    expect(pills[0]!.options.priority).toBeUndefined() // list 槽无 priority 面
+    unpublishViews()
+  })
+
+  it('注入面 = 点击导航闭包（AC4 全链路左半段）：onOpenTask → sidebarRight.openTab(dswf-overview) + 桥 openTaskFocus 载荷原样；openTab 异常 fail-soft（聚焦仍发布）', () => {
+    publishFakeViews()
+    const { ctx, registers, openTab } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const pills = registers.find((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)!
+    const face = pills.options.inject!() as {
+      onOpenTask: (nav: { taskId: string; featureSlug: string }) => void
+    }
+    face.onOpenTask({ taskId: 't-42', featureSlug: 'dsh-forge-m2-pipeline' })
+    expect(openTab).toHaveBeenCalledWith(OVERVIEW_TAB_KIND) // dock 开概览 tab（openTab 自带 reveal 列）
+    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown } } })
+      .__DSH_FORGE_WORKBENCH__
+    expect(bridge!.getSnapshot().taskFocus).toEqual({
+      taskId: 't-42',
+      featureSlug: 'dsh-forge-m2-pipeline',
+      nonce: 1,
+    }) // 桥聚焦发布（抽屉 + 任务子 tab + feature 选中——右栏 body 消费）
+    // fail-soft：官方动作面无在场面（会话卸载瞬态）不外溢——聚焦仍发布
+    const throwing = fakeClientCtx()
+    const throwingCtx: ForgeClientCtx = {
+      ...throwing.ctx, // slots 为共享引用——登记落 throwing.registers
+      get: (name) => {
+        if (name === 'sidebarRight') {
+          return {
+            isExpanded: () => false,
+            toggleExpanded: () => {},
+            openTab: () => {
+              throw new Error('no surface')
+            },
+          }
+        }
+        return throwing.ctx.get(name)
+      },
+    }
+    forgeClientPlugin().apply(throwingCtx)
+    const pills2 = throwing.registers.find((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)!
+    const face2 = pills2.options.inject!() as { onOpenTask: (nav: { taskId: string; featureSlug: string }) => void }
+    expect(() => face2.onOpenTask({ taskId: 't-1', featureSlug: 'f' })).not.toThrow()
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().taskFocus).toMatchObject({ taskId: 't-1' })
+    unpublishViews()
+  })
+
+  it('诊断面：views 族登记数组含 pill 洞位（conversation 族——页签 + hero 影子 + 会话头带）', () => {
+    publishFakeViews()
+    const { ctx } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT])
+    expect(marker?.views?.error).toBeUndefined()
+    unpublishViews()
   })
 })
 
