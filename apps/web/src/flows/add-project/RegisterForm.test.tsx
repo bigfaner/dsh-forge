@@ -1,22 +1,35 @@
-// RegisterForm 单测 —— UF-3 段二（AC1 回填/默认值/只读行 / AC2 派生任务清单行 / AC3 仓内外
-// chip 无 radio / AC5 非法路径表单态拦截 + 确认禁用 / AC6 无默认召回域 +「确认」文案 +
-// BrowsePanel 复用面 / 装配壳初始渲染 + fix-14 工作区已注册挂接提示与原生改选在途/错误面）。
-// renderToStaticMarkup 纯渲染面（同 2.8 测法）；派生/联动/校验语义面在 form-model.test。
+// RegisterForm 单测 —— UF-3 段二（AC1 回填/默认值 / AC3 仓内外 chip 无 radio /
+// AC5 非法路径表单态拦截 + 确认禁用 / AC6 无默认召回域 +「确认」文案 / BrowsePanel
+// 复用面 / 装配壳初始渲染 + fix-14 工作区已注册挂接提示与原生改选在途/错误面 +
+// 4.3 派生行 RPC 化：DerivedTaskStoreRow 嵌入 + 相位驱动确认门（疑似移动拒绝零副作用，
+// 复检通过恢复——AC1/AC2/AC3/AC4；相位映射单测在 derive-source.test，行内三态呈现
+// 单测在 derived-store-row.test，本件 = 接线面）。
+// renderToStaticMarkup 纯渲染面（同 2.8 测法——effect 不跑：装配壳初始恒 loading 骨架）；
+// 派生/联动/校验语义面在 form-model.test。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { SuspectedMoveData } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
 import { initialFormState, type FormIssue, type FormValues } from './form-model.js'
 import { BrowsePanel, RegisterForm, RegisterFormView } from './RegisterForm.js'
 
 const SELECTION: BrowserSelection = { path: 'Z:\\project\\dsh', registered: false }
 const VALUES: FormValues = initialFormState(SELECTION).values
-const TASK_STORE = '~/.dsh-forge/Z-project-dsh'
+// RPC 下发形态（{tasksHome}/{flatten}@{hash8} 单源——AC4 SC2 断言锚口径）
+const DERIVED_DIR = 'Z:\\forge-workspaces\\Z-project-dsh@a1b2c3d4'
+const MOVE_DATA: SuspectedMoveData = {
+  existingDir: 'Z:\\forge-workspaces\\Z-project-dsh@e5f6a7b8',
+  derivedDir: DERIVED_DIR,
+  guidance:
+    '疑似移动：本次推导目录 Z:\\forge-workspaces\\Z-project-dsh@a1b2c3d4，但同扁平化主体异 hash8 目录 ' +
+    'Z:\\forge-workspaces\\Z-project-dsh@e5f6a7b8 已在场。请手工处置：删除孤儿目录，或将工作区改回原路径后重试。',
+}
 
 function view(overrides: Partial<Parameters<typeof RegisterFormView>[0]> = {}): string {
   const props: Parameters<typeof RegisterFormView>[0] = {
     values: VALUES,
     issues: [],
-    taskStoreDir: TASK_STORE,
+    taskStorePhase: { state: 'ready', dir: DERIVED_DIR },
     forgeDirExternal: false,
     onEdit: () => {},
     onRepick: () => {},
@@ -25,6 +38,10 @@ function view(overrides: Partial<Parameters<typeof RegisterFormView>[0]> = {}): 
     ...overrides,
   }
   return renderToStaticMarkup(<RegisterFormView {...props} />)
+}
+
+function confirmBtn(markup: string): string {
+  return markup.match(/<button[^>]*dswf-rf-confirm[^>]*>/)?.[0] ?? ''
 }
 
 describe('AC1 回填与默认值（View 静态结构）', () => {
@@ -48,18 +65,52 @@ describe('AC1 回填与默认值（View 静态结构）', () => {
     expect(markup.match(/浏览…/g)?.length).toBe(2)
   })
 
-  it('任务清单与记录：只读派生行（tabindex 移出焦点序 + readonly）', () => {
-    expect(markup).toContain('data-dswf-rf-tasks')
-    expect(markup).toContain(`value="${TASK_STORE}"`)
-    const tasksInput = markup.match(/<input[^>]*data-dswf-rf-tasks[^>]*>/)?.[0] ?? ''
-    expect(tasksInput).toContain('readonly=""')
-    expect(tasksInput).toContain('tabindex="-1"')
+  it('任务清单与记录：DerivedTaskStoreRow 嵌入（4.3 整行替换——RPC 下发值逐字呈现，非 input value）', () => {
+    expect(markup).toContain('data-dswf-dsr="ready"')
+    expect(markup).toContain('任务清单与记录（自动派生 · 无需填写）')
+    expect(markup).toContain(`>${DERIVED_DIR}</`)
+    // 旧派生行（input value 自算呈现）废除
+    expect(markup).not.toContain('data-dswf-rf-tasks')
   })
 })
 
-describe('AC2 派生行内容（扁平化结果呈现）', () => {
-  it('任务清单行 = {dsh-forge-home}/{canonical-path 扁平化}（Z:\\project\\dsh → Z-project-dsh）', () => {
-    expect(view()).toContain(TASK_STORE)
+describe('AC2/AC4 派生行 RPC 化（相位驱动——单源下发逐字呈现）', () => {
+  it('ready：RPC dir 逐字呈现（与实际建库位置逐字一致——SC2 断言锚：@ 连接符 + hash8 尾段）', () => {
+    const markup = view({ taskStorePhase: { state: 'ready', dir: DERIVED_DIR } })
+    expect(markup).toContain('data-dswf-dsr="ready"')
+    expect(markup).toContain(`>${DERIVED_DIR}</`)
+    expect(markup).toContain('Z-project-dsh@a1b2c3d4')
+  })
+
+  it('疑似移动：错误条 + 手工指引留场 + 「确认」禁用（拒绝零副作用——非可用确认面）', () => {
+    const markup = view({ taskStorePhase: { state: 'suspected-move', data: MOVE_DATA } })
+    expect(markup).toContain('data-dswf-dsr="suspected-move"')
+    expect(markup).toContain('data-dswf-dsr-error')
+    expect(markup).toContain(MOVE_DATA.guidance) // 指引留场（重选目录前不消退）
+    expect(confirmBtn(markup)).toContain('disabled')
+    expect(markup).not.toContain('data-dswf-dsr-dir') // 拒绝态不呈现路径值
+  })
+
+  it('AC3 复检通过恢复：疑似移动 → ready 相位切换即恢复「确认」可点（零 issues 面）', () => {
+    const rejected = view({ taskStorePhase: { state: 'suspected-move', data: MOVE_DATA } })
+    expect(confirmBtn(rejected)).toContain('disabled')
+    const recovered = view({ taskStorePhase: { state: 'ready', dir: DERIVED_DIR } })
+    expect(confirmBtn(recovered)).not.toContain('disabled')
+    expect(recovered).toContain('data-dswf-dsr="ready"')
+  })
+
+  it('loading（RPC 在途/换选复检中）：骨架占位——预检在途不阻断确认（注册闭包复检恒权威）', () => {
+    const markup = view({ taskStorePhase: { state: 'loading' } })
+    expect(markup).toContain('data-dswf-dsr="loading"')
+    expect(markup).toContain('data-dswf-dsr-skeleton')
+    expect(confirmBtn(markup)).not.toContain('disabled')
+  })
+
+  it('error 兜底（未映射失败）：通用错误条——非阻断位，确认不受阻', () => {
+    const markup = view({ taskStorePhase: { state: 'error', message: 'bridge 服务缺席' } })
+    expect(markup).toContain('data-dswf-dsr="error"')
+    expect(markup).toContain('任务清单路径获取失败：bridge 服务缺席')
+    expect(confirmBtn(markup)).not.toContain('disabled')
   })
 })
 
@@ -90,13 +141,13 @@ describe('AC5 非法路径拦截于表单态（错误行 + 确认禁用）', () 
     expect(markup).toContain('文档位置（forge 目录）需为绝对路径')
     expect(markup).toContain('data-dswf-rf-issue="knowledgeDir"')
     expect(markup).toContain('知识库目录不能为空')
-    expect(markup).toContain('disabled=""')
+    expect(confirmBtn(markup)).toContain('disabled')
   })
 
   it('合法值：零错误行，「确认」可点（不出表单即可达提交点）', () => {
     const markup = view()
-    expect(markup).not.toContain('role="alert"')
-    expect(markup).not.toContain('disabled')
+    expect(markup).not.toContain('data-dswf-rf-issue')
+    expect(confirmBtn(markup)).not.toContain('disabled')
   })
 })
 
@@ -137,8 +188,7 @@ describe('原生改选在途/错误面（fix-14：三改选钮防双开 + 失败
   it('browseBusy → 「重新选择」/两「浏览…」钮全禁用（系统对话框打开中）；「确认」不受在途影响', () => {
     const markup = view({ browseBusy: true })
     expect(markup.match(/disabled=""/g)?.length).toBe(3)
-    const confirm = markup.match(/<button[^>]*dswf-rf-confirm[^>]*>/)?.[0] ?? ''
-    expect(confirm).not.toContain('disabled') // 提交不受对话框在途影响
+    expect(confirmBtn(markup)).not.toContain('disabled') // 提交不受对话框在途影响
   })
 
   it('nativePickError → 错误行呈现（role=alert + 前缀文案）；null → 无错误行', () => {
@@ -174,22 +224,17 @@ describe('BrowsePanel（「浏览…」/「重新选择」改选复用面）', (
   })
 })
 
-describe('装配壳（RegisterForm：初始态 = 表单相位，默认值落位）', () => {
-  it('初始渲染：表单锚 + 回填/默认值/派生行 + 确认可点；不出浏览面板（浏览器未挂载 = 无 RPC）', () => {
+describe('装配壳（RegisterForm：初始态 = 表单相位，RPC 预检起步）', () => {
+  it('初始渲染：表单锚 + 回填/默认值 + 派生行 loading 骨架（renderToStaticMarkup 不跑 effect——RPC 在途起步）；不出浏览面板', () => {
     const markup = renderToStaticMarkup(<RegisterForm selection={SELECTION} />)
     expect(markup).toContain('data-dswf-rf="form"')
     expect(markup).toContain('value="dsh"')
-    expect(markup).toContain(`value="${TASK_STORE}"`)
+    expect(markup).toContain('data-dswf-dsr="loading"')
+    expect(markup).toContain('data-dswf-dsr-skeleton')
     expect(markup).toContain('确认')
-    expect(markup).not.toContain('disabled')
-    expect(markup).not.toContain('data-dswf-rf="browsing"')
+    // 前端自算废除（Hard Rule）：初始静态渲染零派生值零展示口径前缀
+    expect(markup).not.toContain('dsh-forge')
+    expect(markup).not.toContain('Z-project-dsh')
     expect(markup).not.toContain('data-dswf-fb="browser"')
-  })
-
-  it('dshForgeHome 覆盖：派生行前缀随注入值', () => {
-    const markup = renderToStaticMarkup(
-      <RegisterForm selection={SELECTION} dshForgeHome={'C:\\Users\\panda\\.dsh-forge'} />,
-    )
-    expect(markup).toContain('C:\\Users\\panda\\.dsh-forge\\Z-project-dsh')
   })
 })

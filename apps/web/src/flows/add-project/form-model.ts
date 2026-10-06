@@ -1,18 +1,14 @@
 // 注册表单纯模型（定位：业务——UF-3 段二派生/联动/校验纯函数面，渲染件消费）。
-// AC 映射：回填与默认值（AC1 initialFormState / derive* / folderNameOf）、任务清单扁平化派生
-// （AC2 flattenWorkspacePath——`/`、`\` → `-`、盘符冒号去除，原型 deriveTaskStore 同口径）、
-// 仓内外推导（AC3 isForgeDirExternal——forge 目录是否位于工作区内，段边界敏感 + 大小写不敏感，
+// AC 映射：回填与默认值（AC1 initialFormState / derive* / folderNameOf）、仓内外推导
+// （AC3 isForgeDirExternal——forge 目录是否位于工作区内，段边界敏感 + 大小写不敏感，
 // 修正原型裸前缀 slice 口径）、换选联动（AC4 relinkWorkspace——未手改随新工作区重构、
 // 手改或浏览选定过的保留，判据 = touched 标记）、非法路径表单态拦截（AC5 validateFormValues）。
 // 采集目标形状 = contracts RegisterProjectInput（toRegisterInput——提交执行链归 2.10）。
+// 4.3：任务清单派生（flattenWorkspacePath/deriveTaskStoreDir 前端自算）废除——Hard Rule
+// 派生行单源 = core deriveTaskStoreDir（RPC forge:projects/deriveTaskStoreDir 下发，
+// derive-source 装配；本模块零路径派生残留）。
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
-
-/**
- * 任务清单前缀缺省（展示口径 home 相对记法——真实 {dsh-forge-home} 由 2.10 组装/配置面
- * 注入覆盖；M1 仅展示不消费，任务域 M2）。
- */
-export const DEFAULT_DSH_FORGE_HOME = '~/.dsh-forge'
 
 /** 表单字段值（采集面 = RegisterProjectInput 四字段；workspaceDir 只读回填） */
 export interface FormValues {
@@ -70,25 +66,6 @@ export function deriveKnowledgeDir(workspaceDir: string): string {
 }
 
 /**
- * canonical path 扁平化（AC2）：`/`、`\` → `-`、盘符冒号去除（`Z:\project\dsh` →
- * `Z-project-dsh`；UNC 双前导 → 双 `-`；POSIX 前导 → 前导 `-`——原型 deriveTaskStore 同口径）。
- */
-export function flattenWorkspacePath(workspaceDir: string): string {
-  const deColonized = normalizeDirPath(workspaceDir).replace(/^([A-Za-z]):/, '$1')
-  return deColonized.replaceAll('\\', '-')
-}
-
-/**
- * 任务清单与记录派生（只读自动派生行）：`{dsh-forge-home}/{canonical-path 扁平化}`；
- * 连接符随 home 风格（反斜杠 home → `\`，其余 → `/`），home 尾分隔符剪除。
- */
-export function deriveTaskStoreDir(dshForgeHome: string, workspaceDir: string): string {
-  const home = dshForgeHome.replace(/[\\/]+$/, '')
-  const sep = dshForgeHome.includes('\\') ? '\\' : '/'
-  return `${home}${sep}${flattenWorkspacePath(workspaceDir)}`
-}
-
-/**
  * 仓内/仓外推导（AC3）：forge 目录是否位于工作区内（true = 仓外）。
  * 段边界敏感（`Z:\project\ds` 不是 `Z:\project\dsh\.forge` 的容器——修正原型裸前缀
  * slice 口径）+ 大小写不敏感（Windows）+ 尾分隔符不干扰；forge 目录 = 工作区根 → 仓内。
@@ -125,7 +102,8 @@ export function editFieldValue(state: FormState, field: EditableField, value: st
 
 /**
  * 换选工作区联动（AC4）：未手改字段随新工作区重构、手改或浏览选定过的字段保留；
- * touched 标记跨换选保持。任务清单与记录不在状态内（恒随当前工作区派生）。
+ * touched 标记跨换选保持。任务清单与记录不在状态内（4.3 起 = RPC 派生行，装配壳
+ * 按 workspaceDir 预检驱动——本模型零涉及）。
  */
 export function relinkWorkspace(state: FormState, workspaceDir: string): FormState {
   const { values, touched } = state

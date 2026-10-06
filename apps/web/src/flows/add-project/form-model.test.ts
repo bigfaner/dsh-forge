@@ -1,14 +1,12 @@
-// form-model 单测 —— UF-3 段二派生/联动/校验纯函数面（AC1 回填默认值 / AC2 扁平化边界自证 /
-// AC3 仓内外推导 / AC4 换选联动两分支 / AC5 表单态校验）。
+// form-model 单测 —— UF-3 段二派生/联动/校验纯函数面（AC1 回填默认值 / AC3 仓内外推导 /
+// AC4 换选联动两分支 / AC5 表单态校验）。4.3：任务清单派生自算路径废除（Hard Rule 单源
+// = core deriveTaskStoreDir RPC 下发——AC2 断言面迁 derive-source.test，本件零派生断言）。
 import { describe, expect, it } from 'vitest'
 import type { BrowserSelection } from './browser-model.js'
 import {
-  DEFAULT_DSH_FORGE_HOME,
   deriveForgeDir,
   deriveKnowledgeDir,
-  deriveTaskStoreDir,
   editFieldValue,
-  flattenWorkspacePath,
   folderNameOf,
   initialFormState,
   isAbsolutePath,
@@ -45,35 +43,6 @@ describe('AC1 回填与默认值（initialFormState / derive）', () => {
     expect(deriveKnowledgeDir('Z:\\')).toBe('Z:\\.knowledge')
     expect(deriveForgeDir('Z:/project/dsh')).toBe('Z:\\project\\dsh\\.forge')
     expect(deriveKnowledgeDir('Z:/project/dsh/')).toBe('Z:\\project\\dsh\\.knowledge')
-  })
-})
-
-describe('AC2 扁平化派生（flattenWorkspacePath 边界自证）', () => {
-  it('常规：两类分隔符 → 同一扁平化结果（`/`、`\\` → `-`，盘符冒号去除）', () => {
-    expect(flattenWorkspacePath('Z:\\project\\dsh')).toBe('Z-project-dsh')
-    expect(flattenWorkspacePath('Z:/project/dsh')).toBe('Z-project-dsh')
-  })
-
-  it('盘符：冒号去除；裸盘符与盘符根无残余分隔符', () => {
-    expect(flattenWorkspacePath('C:')).toBe('C')
-    expect(flattenWorkspacePath('C:\\')).toBe('C')
-    expect(flattenWorkspacePath('c:\\x\\y')).toBe('c-x-y') // 小写盘符同口径
-  })
-
-  it('尾分隔符不产出尾部 `-`；UNC 双前导分隔符 → 双 `-`；POSIX 前导 → 前导 `-`', () => {
-    expect(flattenWorkspacePath('Z:\\project\\')).toBe('Z-project')
-    expect(flattenWorkspacePath('\\\\server\\share\\data')).toBe('--server-share-data')
-    expect(flattenWorkspacePath('/home/user')).toBe('-home-user')
-  })
-
-  it('deriveTaskStoreDir：{dsh-forge-home} 前缀 + 连接符随 home 风格', () => {
-    expect(deriveTaskStoreDir('C:\\Users\\panda\\.dsh-forge', 'Z:\\project\\dsh')).toBe(
-      'C:\\Users\\panda\\.dsh-forge\\Z-project-dsh',
-    )
-    expect(deriveTaskStoreDir('~/.dsh-forge', 'Z:\\project\\dsh')).toBe(
-      '~/.dsh-forge/Z-project-dsh',
-    )
-    expect(deriveTaskStoreDir('C:\\home\\.dsh-forge\\', 'C:\\')).toBe('C:\\home\\.dsh-forge\\C')
   })
 })
 
@@ -204,11 +173,5 @@ describe('采集载荷（toRegisterInput → RegisterProjectInput 四字段）',
       forgeDir: 'Z:\\project\\dsh\\.forge',
       knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
     })
-  })
-})
-
-describe('缺省 dsh-forge-home（展示口径）', () => {
-  it('DEFAULT_DSH_FORGE_HOME 为 home 相对记法（2.10/配置面可覆盖真实值）', () => {
-    expect(DEFAULT_DSH_FORGE_HOME).toBe('~/.dsh-forge')
   })
 })

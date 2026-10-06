@@ -67,11 +67,6 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* 只读派生行（任务清单与记录）：底面弱化区隔可编辑字段 */
-.dswf-rf-static {
-  background: var(--dsw-alias-bg-layer-2);
-}
-
 .dswf-rf-sidebtn {
   flex: none;
 }
@@ -114,7 +109,8 @@
   flex: none;
 }
 
-/* ── 派生行（3.11 DerivedTaskStoreRow——UF-4 升级：RPC 单源全路径 + 三态；4.3 替换表单现派生行） ── */
+/* ── 派生行（3.11 DerivedTaskStoreRow——UF-4 升级：RPC 单源全路径 + 相位（loading/ready/
+ * suspected-move/error 兜底）；4.3 替换表单原派生行） ── */
 .dswf-dsr {
   display: flex;
   flex: none;

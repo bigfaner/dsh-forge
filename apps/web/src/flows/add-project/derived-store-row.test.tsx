@@ -4,7 +4,8 @@
 // AC-3（props 驱动——dir 值与错误载荷由外部注入，组件零自算[Hard Rules]）/
 // AC-4（mock 载荷三态渲染 + 路径逐字呈现）。
 // renderToStaticMarkup 纯渲染面（沿 RegisterForm.test / SessionTaskPills.test 模式）；
-// RPC 真接线（forge:projects/deriveTaskStoreDir）与 RegisterForm L219-223 行替换归 4.3。
+// RPC 真接线（forge:projects/deriveTaskStoreDir = derive-source + RegisterForm）归 4.3
+// （本件含 4.3 增态：error 兜底通用错误条）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DerivedTaskStoreRow, type DerivedTaskStorePhase } from './derived-store-row.js'
@@ -81,6 +82,24 @@ describe('AC-2 疑似移动错误态（ERR_SUSPECTED_MOVE → 错误条 + 手工
   it('错误态不呈现路径值（拒绝注册零副作用——非可用确认面）', () => {
     expect(markup).not.toContain('data-dswf-dsr-dir')
     expect(markup).not.toContain('data-dswf-dsr-skeleton')
+  })
+})
+
+describe('未映射失败兜底（4.3 接线增态：error → 通用错误条——永无裸 code 泄漏）', () => {
+  const markup = render({ state: 'error', message: 'bridge 服务缺席（forge:projects 通道未注册）' })
+
+  it('通用错误条形制（ErrorBar：role=alert + 域锚 + 前缀语）', () => {
+    expect(markup).toContain('data-dswf-dsr="error"')
+    expect(markup).toContain('role="alert"')
+    expect(markup).toContain('data-dswf-dsr-error')
+    expect(markup).toContain('任务清单路径获取失败：bridge 服务缺席（forge:projects 通道未注册）')
+  })
+
+  it('兜底态不呈现路径值/骨架/指引（相位互斥）；非阻断位——无重试钮', () => {
+    expect(markup).not.toContain('data-dswf-dsr-dir')
+    expect(markup).not.toContain('data-dswf-dsr-skeleton')
+    expect(markup).not.toContain(MOVE_GUIDANCE)
+    expect(markup).not.toContain('<button')
   })
 })
 

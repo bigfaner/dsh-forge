@@ -97,7 +97,8 @@ describe('段二（form）：步骤条 + 表单内嵌', () => {
   it('表单本体在场（确认提交点透传）且不隐藏', () => {
     expect(markup).toContain('data-dswf-rf="form"')
     expect(markup).toContain('确认')
-    expect(markup).not.toContain('hidden')
+    // keepalive 容器无 hidden 属性（aria-hidden 派生行骨架为装饰面——4.3 起在场）
+    expect(markup).not.toMatch(/<div class="dswf-ap-form"[^>]*\shidden/)
   })
 })
 

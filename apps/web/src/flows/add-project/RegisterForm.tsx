@@ -1,27 +1,31 @@
 // UF-3 段二·注册表单（定位：业务——表单采集与校验；提交执行链（确认 → registerProject →
-// 反馈）属 2.10 组装，本件只产 RegisterProjectInput 回调，不接 RPC）。
-// 数据进（values/issues/派生行）回调出（edit/repick/browse/submit）的纯渲染面
+// 反馈）属 2.10 组装，本件只产 RegisterProjectInput 回调，不接注册 RPC）。
+// 数据进（values/issues/派生行相位）回调出（edit/repick/browse/submit）的纯渲染面
 // RegisterFormView + 持表单状态（值 + touched 手改标记 + 浏览改选相位）的装配壳
 // RegisterForm。「浏览…」/「重新选择」改选：桥缺席 = 内嵌 2.8 DirectoryBrowser 复用
 // （startDir = 当前值 + confirmLabel =「选择此文件夹」参数化——BrowsePanel 槽位承载）；
 // fix-14 桥在场 = 三 target 同桥直选系统 OS 目录对话框（nativeBrowseAction——BrowsePanel
 // 回退面不变）。工作区行已注册提示 = pick 时浏览器「已注册」标记的表单相位口径迁移
 // （走查裁决：系统对话框无法行级标记 → 挂接语义在表单呈现；回退浏览器标记保留）。
-// 联动语义（换选工作区：未手改重构 / 手改·浏览选定保留）与派生（扁平化任务清单 / 仓内外）
-// 在 form-model 纯函数，浏览相位/落值转移在 form-actions（setState 注入面——单测覆盖）；
-// Hard Rules：仅采集与校验，零注册调用零补偿。
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+// 联动语义（换选工作区：未手改重构 / 手改·浏览选定保留）与仓内外推导在 form-model
+// 纯函数，浏览相位/落值转移在 form-actions（setState 注入面——单测覆盖）；
+// 4.3 Integration #1：任务清单派生行整行替换为 3.11 DerivedTaskStoreRow——值 =
+// forge:projects/deriveTaskStoreDir RPC 单源下发（derive-source；form-model 前端自算
+// 废除——Hard Rule 派生行单源 = core deriveTaskStoreDir，禁自算回退），目录选定即预检
+// （表单预检位纯读）；疑似移动（ERR_SUSPECTED_MOVE）→ 错误条 + 手工指引留场 + 确认
+// 禁用（拒绝零副作用），重选目录复检通过即恢复；Hard Rules：仅采集与校验，零注册调用零补偿。
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StateChip } from '../../components/index.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
+import { DerivedTaskStoreRow, type DerivedTaskStorePhase } from './derived-store-row.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
 import { EMPTY_REGISTERED, resolveNativePickSource, type NativePickSource } from './dir-picker.js'
 import { rpcDirSource, type DirSource } from './dir-source.js'
+import { fetchDerivePhase, rpcDeriveSource, type DeriveSource } from './derive-source.js'
 import { formActions, nativeBrowseAction } from './form-actions.js'
 import {
-  DEFAULT_DSH_FORGE_HOME,
-  deriveTaskStoreDir,
   initialFormState,
   isForgeDirExternal,
   toRegisterInput,
@@ -57,8 +61,8 @@ export interface RegisterFormViewProps {
   readonly values: FormValues
   /** 校验问题（随值即时重算——AC5 表单态拦截呈现） */
   readonly issues: readonly FormIssue[]
-  /** 任务清单与记录只读派生行（{dsh-forge-home}/{canonical-path 扁平化}） */
-  readonly taskStoreDir: string
+  /** 任务清单与记录只读派生行相位（4.3：RPC 单源下发——loading/ready/suspected-move/error） */
+  readonly taskStorePhase: DerivedTaskStorePhase
   /** 仓内/仓外推导结果（true = 仓外；随 forge 目录即时更新） */
   readonly forgeDirExternal: boolean
   /** 工作区目录已注册（fix-14 表单相位挂接提示——pick 时浏览器标记的口径迁移） */
@@ -87,11 +91,11 @@ function FieldIssue({ issue }: { issue: FormIssue }): ReactNode {
 }
 
 /**
- * 表单行件（fix-36 抽出——RegisterFormView 五行同构骨架的单一来源，DOM 结构逐字节
- * 保持）：labelRow 在场 = label 包 `.dswf-rf-labelrow`（chip 挂行尾）；side 在场 =
- * input + 钮包 `.dswf-rf-line`；hint/issue 条件尾随。形态组合（与原五行一一对应）：
- * 工作区 = labelRow+side+hint / 项目名 = 裸行+issue / forge = labelRow+side+hint+issue /
- * 知识库 = 裸 label+side+hint+issue / 任务清单 = 裸行只读。
+ * 表单行件（fix-36 抽出——RegisterFormView 行骨架的单一来源）：labelRow 在场 = label
+ * 包 `.dswf-rf-labelrow`（chip 挂行尾）；side 在场 = input + 钮包 `.dswf-rf-line`；
+ * hint/issue 条件尾随。形态组合：工作区 = labelRow+side+hint / 项目名 = 裸行+issue /
+ * forge = labelRow+side+hint+issue / 知识库 = 裸 label+side+hint+issue（任务清单行 =
+ * 3.11 DerivedTaskStoreRow 独立件，4.3 起不经 FormRow）。
  */
 export interface FormRowProps {
   /** label 的 htmlFor（= input id） */
@@ -140,7 +144,7 @@ export function FormRow({ id, label, labelRow, chip, input, side, hint, issue }:
 export function RegisterFormView({
   values,
   issues,
-  taskStoreDir,
+  taskStorePhase,
   forgeDirExternal,
   workspaceRegistered = false,
   browseBusy = false,
@@ -216,14 +220,17 @@ export function RegisterFormView({
           目录选择失败：{nativePickError}
         </p>
       )}
-      <FormRow
-        id="dswf-rf-tasks"
-        label="任务清单与记录（自动派生 · 无需填写）"
-        input={<input id="dswf-rf-tasks" className="dswf-rf-input dswf-rf-static" data-dswf-rf-tasks type="text" value={taskStoreDir} readOnly tabIndex={-1} title="统一存放于 {dsh-forge-home}/{canonical-path 扁平化}，注册时自动派生" />}
-      />
+      {/* 4.3 Integration #1：现派生行整行替换——RPC 单源下发（Hard Rule：前端禁自算回退） */}
+      <DerivedTaskStoreRow phase={taskStorePhase} />
       <div className="dswf-rf-footer">
         <p className="dswf-rf-footnote">确认后进入注册执行（不可中断；失败自动补偿）</p>
-        <Button variant="primary" size="md" className="dswf-rf-confirm" disabled={issues.length > 0} onClick={onSubmit}>
+        <Button
+          variant="primary"
+          size="md"
+          className="dswf-rf-confirm"
+          disabled={issues.length > 0 || taskStorePhase.state === 'suspected-move'}
+          onClick={onSubmit}
+        >
           确认
         </Button>
       </div>
@@ -267,31 +274,38 @@ export interface RegisterFormProps {
   /** 原生选取源（fix-14：缺省 = globalThis.__DSH_DIRECTORY_PICKER__ 桥探测；注入 = 测试桩；
    * null 注入 = 强制 BrowsePanel 回退面） */
   readonly nativePicker?: NativePickSource | null
-  /** 任务清单派生前缀（缺省 = 展示口径 ~/*.dsh-forge；2.10/配置面可注入真实 home） */
-  readonly dshForgeHome?: string
+  /** 派生数据源（4.3：缺省 = RPC 真身 forge:projects/deriveTaskStoreDir；注入 = 测试桩） */
+  readonly deriveSource?: DeriveSource
   /** 「确认」采集载荷上抛（执行链 registerProject 归 2.10 接线——Hard Rules） */
   readonly onSubmit?: (input: RegisterProjectInput) => void
 }
 
 /**
- * 注册表单本体（值 + touched + 浏览相位状态壳）。换选工作区两条路径同径联动：
- * 内「重新选择」（浏览面板/原生直选确认）与外部 selection.path 变更（2.10 返回上一步
- * 重选）均走 relinkWorkspace——未手改字段随新工作区重构、手改或浏览选定过的保留（AC4）。
- * fix-14：桥在场 = 三改选 target 直选系统 OS 目录对话框（nativeBrowseAction——BrowsePanel
- * 不出场）；桥缺席 = BrowsePanel 内嵌浏览器回退面（形态零变化）。
+ * 注册表单本体（值 + touched + 浏览相位 + 派生行相位状态壳）。换选工作区两条路径同径
+ * 联动：内「重新选择」（浏览面板/原生直选确认）与外部 selection.path 变更（2.10 返回
+ * 上一步重选）均走 relinkWorkspace——未手改字段随新工作区重构、手改或浏览选定过的
+ * 保留（AC4）。fix-14：桥在场 = 三改选 target 直选系统 OS 目录对话框
+ * （nativeBrowseAction——BrowsePanel 不出场）；桥缺席 = BrowsePanel 内嵌浏览器回退面
+ * （形态零变化）。4.3：派生行相位 = derive-source fetchDerivePhase（目录选定即预检，
+ * workspaceDir 驱动；换选复检通过即恢复 ready 确认态——序号守卫防快速换选串台）。
  */
 export function RegisterForm({
   selection,
   source,
   registeredPaths = EMPTY_REGISTERED,
   nativePicker,
-  dshForgeHome = DEFAULT_DSH_FORGE_HOME,
+  deriveSource,
   onSubmit,
 }: RegisterFormProps): ReactNode {
   const [form, setForm] = useState<FormState>(() => initialFormState(selection))
   const [browsing, setBrowsing] = useState<BrowseTarget | null>(null)
   const [nativeBusy, setNativeBusy] = useState(false)
   const [nativeError, setNativeError] = useState<string | null>(null)
+  const [taskStorePhase, setTaskStorePhase] = useState<DerivedTaskStorePhase>({ state: 'loading' })
+  const deriveSeqRef = useRef(0)
+  // 派生复检 nonce（AC3）：工作区改选（applyPick workspace）即递增——同路径重选（手工
+  // 处置孤儿目录后的指引重试径）也触发复检；值变更面由 workspaceDir 依赖覆盖。
+  const [deriveNonce, setDeriveNonce] = useState(0)
 
   // 转移逻辑 = form-actions 注入 setState 面（联动/浏览相位语义见该模块单测）
   const actions = useMemo(() => formActions({ setForm, setBrowsing }), [])
@@ -301,6 +315,11 @@ export function RegisterForm({
     () => resolveNativePickSource(nativePicker),
     [nativePicker],
   )
+  // 工作区落值包一层复检递增（BrowsePanel 确认/原生直选同径——applyPick 唯一落值口保持）
+  const applyPickWithRecheck = useCallback((target: BrowseTarget, dirPath: string) => {
+    if (target === 'workspace') setDeriveNonce((n) => n + 1)
+    actions.applyPick(target, dirPath)
+  }, [actions])
   const nativeBrowse = useMemo(
     () =>
       effectiveNativePick === null
@@ -308,17 +327,36 @@ export function RegisterForm({
         : nativeBrowseAction({
             pick: effectiveNativePick,
             dirSource: effectiveSource,
-            applyPick: actions.applyPick,
+            applyPick: applyPickWithRecheck,
             onBusy: setNativeBusy,
             onError: setNativeError,
           }),
-    [effectiveNativePick, effectiveSource, actions],
+    [effectiveNativePick, effectiveSource, applyPickWithRecheck],
   )
 
   // 外部换选（2.10 返回上一步重选工作区）：路径变更才落位（mount 同径 = no-op）
   useEffect(() => {
     actions.relinkExternal(selection.path)
   }, [actions, selection.path])
+
+  // 派生行预检（4.3 Integration #1）：目录选定即预检（表单预检位纯读）——workspaceDir
+  // 变更/工作区改选 nonce 驱动：在途骨架 → RPC 单源下发（ready / 疑似移动拒绝留场 /
+  // error 兜底）；重选目录复检通过即恢复 ready（AC3）。序号守卫（useSessionTaskPills
+  // 同形制）：快速换选时旧响应作废，防串台。预检在途/兜底错误不阻断确认——注册闭包
+  // 复检恒权威（Interface 5）。
+  const effectiveDeriveSource = useMemo<DeriveSource>(() => deriveSource ?? rpcDeriveSource(), [deriveSource])
+  useEffect(() => {
+    const seq = ++deriveSeqRef.current
+    let alive = true
+    setTaskStorePhase({ state: 'loading' })
+    void fetchDerivePhase(effectiveDeriveSource, form.values.workspaceDir).then((phase) => {
+      if (!alive || seq !== deriveSeqRef.current) return
+      setTaskStorePhase(phase)
+    })
+    return () => {
+      alive = false
+    }
+  }, [form.values.workspaceDir, deriveNonce, effectiveDeriveSource])
 
   const issues = validateFormValues(form.values)
 
@@ -327,7 +365,7 @@ export function RegisterForm({
       <RegisterFormView
         values={form.values}
         issues={issues}
-        taskStoreDir={deriveTaskStoreDir(dshForgeHome, form.values.workspaceDir)}
+        taskStorePhase={taskStorePhase}
         forgeDirExternal={isForgeDirExternal(form.values.workspaceDir, form.values.forgeDir)}
         workspaceRegistered={registeredPaths.has(form.values.workspaceDir)}
         browseBusy={nativeBusy}
@@ -350,7 +388,7 @@ export function RegisterForm({
           registeredPaths={browsing === 'workspace' ? registeredPaths : EMPTY_REGISTERED}
           confirmLabel="选择此文件夹"
           hint={BROWSE_HINTS[browsing]}
-          onConfirm={(picked) => { actions.applyPick(browsing, picked.path) }}
+          onConfirm={(picked) => { applyPickWithRecheck(browsing, picked.path) }}
         />
       </BrowsePanel>
     )
@@ -360,7 +398,7 @@ export function RegisterForm({
     <RegisterFormView
       values={form.values}
       issues={issues}
-      taskStoreDir={deriveTaskStoreDir(dshForgeHome, form.values.workspaceDir)}
+      taskStorePhase={taskStorePhase}
       forgeDirExternal={isForgeDirExternal(form.values.workspaceDir, form.values.forgeDir)}
       workspaceRegistered={registeredPaths.has(form.values.workspaceDir)}
       onEdit={actions.edit}
