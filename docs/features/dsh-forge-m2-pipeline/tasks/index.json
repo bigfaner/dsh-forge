@@ -10,7 +10,7 @@
       "title": "contracts 扩池：forge 四域 DTO / 通道常量五族 / 15 错误码 / 词汇标签 / 桥事件信封",
       "priority": "P0",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.1-contracts-forge-dtos.md",
       "record": "records/1.1-contracts-forge-dtos.md",
       "breaking": true,

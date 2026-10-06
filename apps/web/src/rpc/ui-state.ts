@@ -19,6 +19,23 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_INDEX_STALE: 'empty-state',
   // 知识目录不可达——浏览面空态 + 提示（无内容可列）
   ERR_INVALID_KNOWLEDGE_DIR: 'empty-state',
+  // ── M2 15 新码（1.1 contracts 扩池承接）：通用错误条兜底层——按码精化归 3.1
+  //（疑似移动 → 错误条+指引留场 / 库不可用 → 工作区隔离态 / 读未命中 → 空态候选） ──
+  ERR_TASK_NOT_FOUND: 'error-bar',
+  ERR_INVALID_TRANSITION: 'error-bar',
+  ERR_DEPENDENCIES_UNMET: 'error-bar',
+  ERR_CYCLE_DETECTED: 'error-bar',
+  ERR_CHAIN_DEPTH_EXCEEDED: 'error-bar',
+  ERR_REASON_REQUIRED: 'error-bar',
+  ERR_SUMMARY_REQUIRED: 'error-bar',
+  ERR_TASK_EXISTS: 'error-bar',
+  ERR_FEATURE_NOT_FOUND: 'error-bar',
+  ERR_FEATURE_EXISTS: 'error-bar',
+  ERR_PROPOSAL_NOT_FOUND: 'error-bar',
+  ERR_WORKSPACE_NOT_REGISTERED: 'error-bar',
+  ERR_WORKSPACE_DB_UNAVAILABLE: 'error-bar',
+  ERR_SUSPECTED_MOVE: 'error-bar',
+  ERR_DOC_PATH_INVALID: 'error-bar',
 }
 
 /** UI 消费入口：catch RpcClientError → rpcUiState(error.code) → 选状态组件 */
