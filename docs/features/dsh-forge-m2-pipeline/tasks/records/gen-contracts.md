@@ -1,44 +1,109 @@
 ---
-status: "blocked"
-started: "2026-10-07 03:10"
-completed: "N/A"
-time_spent: ""
+status: "completed"
+started: "2026-10-07 03:32"
+completed: "2026-10-07 03:49"
+time_spent: "~17m"
 ---
 
 # Task Record: T-test-gen-contracts Generate Test Contracts
 
 ## Summary
-Blocked at the Breakdown-mode eval-journey gate before any generation: task-session-linkage scored 846/1150, below the 850 target (eval.journey.target per .forge/config.yaml). Verified all 7 journeys have eval reports at testing/<journey>/eval/report.md (6/7 at or above target: 874-994, average 932). Task file Eval Gate ('abort if any Journey scored below target') and gen-contracts skill Prerequisites ('Blocker: do not proceed if any Journey scored below target') both mandate abort; SKIP_EVAL_GATE is unset (Mode: breakdown). No Contract files generated, no Fact Table written, no source files changed. Fix task spawned: revise task-session-linkage journey (Surface Fitness 64/150 < 90 threshold) and re-run eval-journey to >= 850, then re-dispatch this task.
+Generated 33 Contract files (81 Outcomes) for all 7 Journeys of dsh-forge-m2-pipeline via /gen-contracts: six-dimension declarations with per-Outcome fixture_spec, semantic descriptors, web anchors from page-map.md, journey-level invariants, and web surface-required Outcome derivation (validation-error carried on the two form-bearing steps: task-overview-review Step 5 / workspace-registration Step 3; explicit N/A adjudications with rule citation on form-less steps; session-expired N/A journey-wide per local single-user architecture). Code reconnaissance merged 39 M2 static facts into .forge/fact-table.json (45 existing P1 entries preserved; 84 total). Schema validation passed on all 33 files (mandatory dimensions, fixture_spec entities min_count >= 1, regex purity, outcome uniqueness, precondition exclusivity, journey invariants, anchor sync timestamps).
 
 ## Changes
 
 ### Files Created
-无
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-1-run-tasks-initiate.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-2-claim-ready-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-3-dispatch-executor.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-4-execute-quality-gate.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-5-submit-settlement.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-6-overview-confirm-status.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-1-select-workspace-dir.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-2-view-derived-store-row.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-3-confirm-registration.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-1-view-list-linkage-count.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-2-open-drawer-dual-source.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-3-view-dispatcher-session-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-4-navigate-from-linkage-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-5-view-executor-session-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-1-open-overview-tab.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-2-select-feature-binding.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-3-filter-by-status-chips.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-4-switch-three-views.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-5-manual-transition.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-6-open-task-detail-drawer.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-1-submit-blocked.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-2-create-fix-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-3-execute-fix-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-4-auto-restore-source.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-5-views-reflect-fix-chain.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-1-reclaim-interrupted-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-2-receive-resynthesized-brief.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-3-execute-and-settle.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-1-browse-doc-list.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-2-open-design-doc.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-3-view-mermaid-diagram.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-4-open-in-editor.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-5-browse-external-project-docs.md
 
 ### Files Modified
-无
+- .forge/fact-table.json
 
 ### Key Decisions
 无
 
 ## Cases Generated
-N/A
+81
 
 ## Cases Evaluated
-N/A
+81
 
 ## Scripts Created
-无
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-1-run-tasks-initiate.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-2-claim-ready-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-3-dispatch-executor.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-4-execute-quality-gate.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-5-submit-settlement.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/step-6-overview-confirm-status.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-1-select-workspace-dir.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-2-view-derived-store-row.md
+- docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/contracts/step-3-confirm-registration.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-1-view-list-linkage-count.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-2-open-drawer-dual-source.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-3-view-dispatcher-session-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-4-navigate-from-linkage-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/contracts/step-5-view-executor-session-pill.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-1-open-overview-tab.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-2-select-feature-binding.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-3-filter-by-status-chips.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-4-switch-three-views.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-5-manual-transition.md
+- docs/features/dsh-forge-m2-pipeline/testing/task-overview-review/contracts/step-6-open-task-detail-drawer.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-1-submit-blocked.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-2-create-fix-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-3-execute-fix-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-4-auto-restore-source.md
+- docs/features/dsh-forge-m2-pipeline/testing/fix-chain-auto-recovery/contracts/step-5-views-reflect-fix-chain.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-1-reclaim-interrupted-task.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-2-receive-resynthesized-brief.md
+- docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/step-3-execute-and-settle.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-1-browse-doc-list.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-2-open-design-doc.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-3-view-mermaid-diagram.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-4-open-in-editor.md
+- docs/features/dsh-forge-m2-pipeline/testing/document-browsing/contracts/step-5-browse-external-project-docs.md
 
 ## Test Results
-N/A
+33/33 Contract files passed schema validation (mandatory dimensions non-empty; fixture_spec present with >=1 entity and min_count >= 1; no regex syntax in dimension values; outcome names unique; preconditions mutually exclusive; Journey Invariants section >=1 entry in every file; anchor sync timestamps on anchor-filled files). Eval-journey gate verified before generation: 7/7 journeys have eval reports (testing/<journey>/eval/report.md) with scores 874-1023, all >= target 850 (task-session-linkage 1023 after fix-1 revision).
 
 ## Acceptance Criteria
-- [ ] At least 1 Contract file generated per Journey
-- [ ] Each Contract has six-dimension declarations with semantic descriptors (no regex)
-- [ ] Risk-driven Outcome density targets met per Journey risk level
-- [ ] Fact Table written to .forge/fact-table.json
-- [ ] All Contracts passed schema validation
+- [x] Eval-journey gate: reports exist for all Journeys and all scored >= 850 target (fix-1 revised task-session-linkage 846 -> 1023)
+- [x] At least 1 Contract file generated per Journey (7/7 journeys, 33 files)
+- [x] Each Contract has six-dimension declarations with semantic descriptors (no regex)
+- [x] Risk-driven Outcome density targets met per Journey risk level
+- [x] Fact Table written to .forge/fact-table.json (39 M2 facts merged, 84 total, runtime/P1 entries preserved)
+- [x] All Contracts passed schema validation
 
 ## Notes
-Gate evidence: testing/task-session-linkage/eval/report.md — 'Final Score: 846/1150 (target: 850)', 'Target NOT reached', dimension Surface Fitness 64/150 (threshold 90) FAIL: journey has no form/input/error path so neither web-mandatory derived outcome (validation-error/session-expired) nor reasoned N/A exists; single-pass mode (iterations=1) recorded score as-is. Report path drift: task file and skill expect testing/<journey>/.eval-report.md, actual eval-journey output is testing/<journey>/eval/report.md — existence check satisfied in substance for 7/7. Systemic observation from T-eval-journey record (not a blocker for this gate): 3 more journeys have Surface Fitness below the 90 dimension threshold (task-dispatch-pipeline 80, interrupted-dispatch-recovery 75, document-browsing 84) while still passing the 850 overall target; gen-contracts HARD-RULE derives surface-required Outcomes at contract stage regardless.
+Density checkpoints: High journeys in range (task-dispatch-pipeline 14 [13-20], workspace-registration-derived-path 13, task-overview-review 14, fix-chain-auto-recovery 13); Medium interrupted-dispatch-recovery 8 [8-12] with step-1 at 4 outcomes (per-step 2-3 exceeded by 1 due to two code-backed inferred boundaries: prerequisite-regression-rejects-reentry per claim.ts guard-appplies-to-reentry, foreign-session blind-claim skip per claim.ts dual-dispatcher rule); Low journeys above ceiling by journey authority (task-session-linkage 10 vs 4-7, document-browsing 9 vs 4-7) — journey-specified edge cases are authoritative input (fix-1 deliberately deepened linkage boundaries 3b/3c/3d/3e), preconditions remain mutually exclusive, and Low-rule forbids LLM-inferred additions (none made). Web surface-required derivation: validation-error materialized as outcome on both form-bearing steps (overview Step 5 reason-required-empty-reject; registration Step 3 validation-error-confirm-gated) and adjudicated N/A with reasoning elsewhere; session-expired N/A journey-wide (local single-user, no server session credentials) per the fix-1 validated adjudication pattern. Inferred boundary Outcomes annotated with source: inferred + reasoning citing fact-table entries (M2_* ids). Eval report path drift honored: task file names testing/<journey>/.eval-report.md while eval-journey writes testing/<journey>/eval/report.md — gate checked on substance.

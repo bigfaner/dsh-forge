@@ -1,0 +1,78 @@
+---
+journey: "task-session-linkage"
+step: 4
+step-action: "从挂接 pill 定位任务"
+generated: "2026-10-07"
+sources:
+  - docs/features/dsh-forge-m2-pipeline/testing/task-session-linkage/journey.md
+anchors:
+  web:
+    page: "会话头挂接 pill → 右栏「项目概览」tab（dswf-overview）任务子 tab + 任务详情抽屉"
+    route: "dswf-overview"
+    requires_auth: false
+    layout: "conversation.session.header.actions 槽 → sidebar.right.pane.tab"
+last_anchor_sync: "2026-10-07T12:00:00+08:00"
+---
+
+# Contract: task-session-linkage / Step 4: 从挂接 pill 定位任务
+
+<!-- gen-contracts: do not edit manually. Regenerate via /gen-contracts. -->
+
+<!-- web-surface-required adjudication（承旅程「Derived Outcomes 裁决」节）: validation-error N/A — 导航点击面，无表单。session-expired N/A — 本地单人工作台无服务端会话凭据。 -->
+
+## Outcome "success"
+- Preconditions: "dispatcher 主会话头部呈现挂接 pill（挂接表行在场）；该任务所属 feature 明确；概览当前可能停在另一 feature"
+  fixture_spec:
+    entities:
+      - entity_type: "Project"
+        min_count: 1
+      - entity_type: "Feature"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Project"
+      - entity_type: "Task"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Feature"
+      - entity_type: "TaskSessionLink"
+        min_count: 1
+        relationship_type: "belongs_to"
+        parent_entity: "Task"
+    state_requirements:
+      - description: "概览 tab 当前选中的 feature 可以异于目标任务所属 feature（验证切换）"
+        prerequisite_entity: "Feature"
+- Input: "点击会话头挂接 pill"
+- Output: "dock 开概览 tab + 切到任务子 tab + 选中该任务所属 feature（即使概览当前停在另一 feature 亦切至该任务的 feature）+ 任务抽屉打开"
+- State: "UI 导航态变更（概览 tab 开出、子 tab 切换、feature 绑定切换、抽屉打开）；库无变更"
+- Side-effect: "none（纯导航）"
+
+## Journey Invariants
+
+- 双侧展示与库记录一致：双数据源口径（挂接表行 = 派发会话；审计行 session_id = 执行会话），两类各自比对（SC6③）
+- 挂接双侧为只读浏览面（不写库、不造挂接；本旅程一切 claim/submit 均为前置状态而非用户动作）
+- 挂接展示随 session id 变化（无跨会话残留）
+- 挂接数据直读每工作区库（无第二来源）
+- 同一「任务 × 会话」挂接恒单一展示（库 UNIQUE 约束 + 读面直读映射——重领不产生重复 pill）
+
+## Fixture Specification
+
+This Contract requires the following pre-existing data state. See `rules/fixture-spec.md` for schema details.
+
+```yaml
+fixture_spec:
+  entities:
+    - entity_type: "Project"
+      min_count: 1
+    - entity_type: "Feature"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Project"
+    - entity_type: "Task"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Feature"
+    - entity_type: "TaskSessionLink"
+      min_count: 1
+      relationship_type: "belongs_to"
+      parent_entity: "Task"
+```

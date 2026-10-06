@@ -6,7 +6,10 @@
     "kind": "signature",
     "value": "forge:projects/register — request RegisterProjectInput { workspaceDir, name, forgeDir, knowledgeDir }; response RegisterResult { projectId, workspaceId, attachedToExisting, compensated? }",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/channels.ts:7-13", "packages/contracts/src/dto/project.ts:39-66"],
+    "citations": [
+      "packages/contracts/src/channels.ts:7-13",
+      "packages/contracts/src/dto/project.ts:39-66"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -16,7 +19,10 @@
     "kind": "signature",
     "value": "forge:projects/list — response ProjectSummary[] ordered by created_at, id; wsPath set feeds the「已注册」marker in directory browser",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/channels.ts:7-13", "packages/core/src/forge/project-service.ts:179-188"],
+    "citations": [
+      "packages/contracts/src/channels.ts:7-13",
+      "packages/core/src/forge/project-service.ts:179-188"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -26,7 +32,11 @@
     "kind": "signature",
     "value": "forge:projects/reconcile — response ReconcileReport { repaired: ReconcileRepair[] (action relinked|recreated), orphans: ReconcileOrphan[] }",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/channels.ts:7-13", "packages/core/src/forge/project-service.ts:237-238", "packages/contracts/src/dto/project.ts:98-101"],
+    "citations": [
+      "packages/contracts/src/channels.ts:7-13",
+      "packages/core/src/forge/project-service.ts:237-238",
+      "packages/contracts/src/dto/project.ts:98-101"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -36,7 +46,10 @@
     "kind": "signature",
     "value": "forge:fs/listDir — entries canonicalized via path.resolve on host side (对账基准)",
     "confidence": "inferred",
-    "citations": ["apps/host/src/ipc/fs-rpc.ts:17-34", "packages/contracts/src/channels.ts:8-31"],
+    "citations": [
+      "apps/host/src/ipc/fs-rpc.ts:17-34",
+      "packages/contracts/src/channels.ts:8-31"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -46,7 +59,10 @@
     "kind": "signature",
     "value": "forge:knowledge/browse (DomainNode[]), forge:knowledge/listEntries (KnowledgeCard[]), forge:knowledge/entryDetail (EntryDetail), forge:knowledge/heat (Map entryId→count), forge:knowledge/sessionRecall (RecallGroup[])",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/channels.ts:17-26", "packages/contracts/src/dto/rpc.ts:61-77"],
+    "citations": [
+      "packages/contracts/src/channels.ts:17-26",
+      "packages/contracts/src/dto/rpc.ts:61-77"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -56,7 +72,9 @@
     "kind": "output_format",
     "value": "RpcOk { ok: true, data } | RpcErr { ok: false, error: { code, message, data? } }",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/dto/rpc.ts:27-40"],
+    "citations": [
+      "packages/contracts/src/dto/rpc.ts:27-40"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -66,7 +84,10 @@
     "kind": "precondition",
     "value": "existing = registry.list().find(ws => ws.path === input.workspaceDir); hit ⇒ attachedToExisting=true, step ② skipped entirely (①→③ only), no compensation ever registered",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:67-68", "packages/core/src/forge/project-service.ts:104-110"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:67-68",
+      "packages/core/src/forge/project-service.ts:104-110"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -76,7 +97,10 @@
     "kind": "signature",
     "value": "workspace = await registry.create(input.workspaceDir); failure ⇒ WorkspaceCreateError (ERR_WORKSPACE_CREATE), abort, no compensation needed",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:74-79", "packages/core/src/forge/registry.ts:14-23"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:74-79",
+      "packages/core/src/forge/registry.ts:14-23"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -86,7 +110,10 @@
     "kind": "side_effect",
     "value": "withTransaction INSERT INTO projects (id=randomUUID(), workspace_id, ws_path=workspace.path, name, forge_dir, forge_dir_external, knowledge_dir, 0, …); ws_path UNIQUE",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:83-102", "docs/features/dsh-forge-p1-mvp/design/schema.sql:18-32"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:83-102",
+      "docs/features/dsh-forge-p1-mvp/design/schema.sql:18-32"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -96,7 +123,10 @@
     "kind": "side_effect",
     "value": "registry.delete(workspace.id) runs only when !attachedToExisting; attach-branch write failure throws ProjectWriteError with zero delete calls and zero key-logs",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:104-110", "packages/core/src/forge/project-service.test.ts:190"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:104-110",
+      "packages/core/src/forge/project-service.test.ts:190"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -106,7 +136,10 @@
     "kind": "error_code",
     "value": "ERR_PROJECT_WRITE, data.compensated = { workspaceId, reason: '③ 应用库写入失败（registry.delete 补偿已执行）' }",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:129-136", "packages/core/src/forge/errors.ts:27-42"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:129-136",
+      "packages/core/src/forge/errors.ts:27-42"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -116,7 +149,9 @@
     "kind": "error_code",
     "value": "ERR_WORKSPACE_CREATE | ERR_PROJECT_WRITE | ERR_COMPENSATION | ERR_ENTRY_NOT_FOUND | ERR_INDEX_STALE | ERR_INVALID_KNOWLEDGE_DIR",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/errors.ts:6-13"],
+    "citations": [
+      "packages/contracts/src/errors.ts:6-13"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -126,7 +161,9 @@
     "kind": "precondition",
     "value": "delete(id) → Promise<boolean>; unknown id ⇒ false, no error (repeat compensation = no-op); 目录与会话日志一律保留",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/registry.ts:14-23"],
+    "citations": [
+      "packages/core/src/forge/registry.ts:14-23"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -136,7 +173,10 @@
     "kind": "side_effect",
     "value": "level=error, scope=compensation, message「registry.delete 补偿失败：工作区 … 留存为孤儿——启动对账将提示，不自动删」, data { workspaceId, wsPath, projectId, writeError, deleteError, disposition }",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:112-126", "packages/core/src/forge/key-logs.ts:21-25"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:112-126",
+      "packages/core/src/forge/key-logs.ts:21-25"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -146,7 +186,9 @@
     "kind": "side_effect",
     "value": "registry.get(workspace_id); pass iff current.path === row.ws_path; miss ⇒ registry.list().find(ws => ws.path === row.ws_path) ⇒ relinked; not found ⇒ registry.create (idempotent recreate) ⇒ recreated; then UPDATE projects SET workspace_id — never mutates dsh side; orphan = registry entry without projects row, reported + warn log only, never auto-deleted",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.ts:284-344"],
+    "citations": [
+      "packages/core/src/forge/project-service.ts:284-344"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -156,7 +198,11 @@
     "kind": "precondition",
     "value": "Neither apps/host/src/main.ts, boot code, nor core plugin activation calls reconcileAtStartup; only forge:projects/reconcile channel + web client wrapper exist. Journey 4b/5c startup-reconciliation expectation requires a startup invocation seam (defect signal / design adjudication)",
     "confidence": "inferred",
-    "citations": ["packages/core/src/index.ts:33-45", "apps/host/src/main.ts:63-75", "apps/web/src/rpc/client.ts:96"],
+    "citations": [
+      "packages/core/src/index.ts:33-45",
+      "apps/host/src/main.ts:63-75",
+      "apps/web/src/rpc/client.ts:96"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -166,7 +212,10 @@
     "kind": "precondition",
     "value": "No setFault/injectFault/faultPoint in shipped code. Unit seams: StubRegistry constructor injection (failCreate/failDelete) + ws_path UNIQUE conflict row seeding; e2e lacks a fault facility. gen-test-scripts must realize ③/④ failure preconditions via these seams or a new harness",
     "confidence": "inferred",
-    "citations": ["packages/core/src/forge/project-service.test.ts:17-61", "packages/core/src/forge/project-service.test.ts:106-112"],
+    "citations": [
+      "packages/core/src/forge/project-service.test.ts:17-61",
+      "packages/core/src/forge/project-service.test.ts:106-112"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -176,7 +225,10 @@
     "kind": "output_format",
     "value": "flatten: normalize dir, drop drive colon, replace path separators with '-'（Z:\\project\\dsh → Z-project-dsh）; DEFAULT_DSH_FORGE_HOME = '~/.dsh-forge' (display-only in P1, real home injected at assembly)",
     "confidence": "inferred",
-    "citations": ["apps/web/src/flows/add-project/form-model.ts:76-89", "apps/web/src/flows/add-project/form-model.ts:15"],
+    "citations": [
+      "apps/web/src/flows/add-project/form-model.ts:76-89",
+      "apps/web/src/flows/add-project/form-model.ts:15"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -186,7 +238,10 @@
     "kind": "signature",
     "value": "name = folderNameOf(ws); forgeDir = <ws>\\.forge; knowledgeDir = <ws>\\.knowledge; relinkWorkspace: untouched fields re-derive on re-pick, touched (hand-edited/browse-picked) fields preserved; 仓内/仓外 = isForgeDirExternal(relative-position check)",
     "confidence": "inferred",
-    "citations": ["apps/web/src/flows/add-project/form-model.ts:57-141", "packages/core/src/forge/project-service.ts:58-61"],
+    "citations": [
+      "apps/web/src/flows/add-project/form-model.ts:57-141",
+      "packages/core/src/forge/project-service.ts:58-61"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -196,7 +251,10 @@
     "kind": "error_code",
     "value": "issues: 工作区目录不能为空 / 项目名不能为空 / 文档位置（forge 目录）不能为空 / 需为绝对路径 / 知识库目录不能为空 / 需为绝对路径; 确认 disabled while issues>0; issue rows role=alert per field",
     "confidence": "inferred",
-    "citations": ["apps/web/src/flows/add-project/form-model.ts:153-179", "apps/web/src/flows/add-project/RegisterForm.tsx:73-79"],
+    "citations": [
+      "apps/web/src/flows/add-project/form-model.ts:153-179",
+      "apps/web/src/flows/add-project/RegisterForm.tsx:73-79"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -206,7 +264,10 @@
     "kind": "signature",
     "value": "FlowPhase = browser | form | repick | executing | success | failure; closeIntentOf: cancel-points (browser/form/repick) → cancel (clean exit, zero register/compensation); failure → dismiss; executing/success → ignore (Esc/✕/mask unified); beginExecute one-shot guards double-confirm",
     "confidence": "inferred",
-    "citations": ["apps/web/src/flows/add-project/flow-model.ts:13-84", "apps/web/src/flows/add-project/flow-actions.ts:68-91"],
+    "citations": [
+      "apps/web/src/flows/add-project/flow-model.ts:13-84",
+      "apps/web/src/flows/add-project/flow-actions.ts:68-91"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -216,7 +277,10 @@
     "kind": "output_format",
     "value": "success: Tag「注册成功」+ attachedToExisting ?「已挂接既有工作区。」:「已创建新工作区。」, auto-close 1600ms; failure copy branches per ERR_WORKSPACE_CREATE / ERR_PROJECT_WRITE (compensated vs 挂接保护未补偿) / ERR_COMPENSATION / 未预期错误",
     "confidence": "inferred",
-    "citations": ["apps/web/src/flows/add-project/AddProjectFlow.tsx:40-112", "apps/web/src/flows/add-project/flow-model.ts:121-149"],
+    "citations": [
+      "apps/web/src/flows/add-project/AddProjectFlow.tsx:40-112",
+      "apps/web/src/flows/add-project/flow-model.ts:121-149"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -226,7 +290,10 @@
     "kind": "signature",
     "value": "ShellViewState { center: 'session'|'knowledge', rightDock, rightDockPreference, focus {projectId, sessionId} }; show-knowledge ⇒ center=knowledge + rightDock=false (preference kept); show-session ⇒ rightDock = preference ?? false; dockTrackMode: knowledge→hidden, rightDock→expanded|collapsed; both center panes stay mounted (keep-alive, zero unmount); root anchor data-dswf-view / data-dswf-phase",
     "confidence": "inferred",
-    "citations": ["apps/web/src/shell/view-state.ts:7-66", "apps/web/src/zones/WorkbenchZones.tsx:34-143"],
+    "citations": [
+      "apps/web/src/shell/view-state.ts:7-66",
+      "apps/web/src/zones/WorkbenchZones.tsx:34-143"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -236,7 +303,9 @@
     "kind": "signature",
     "value": "SessionTabId = chat | trajectory | recall; labels 对话/轨迹/知识召回; three panes always mounted hidden=, switching loses zero state; trajectory = TranscriptEntry time-series (user-message…tool-result, seq asc); recall default EmptyState「本会话暂无召回」",
     "confidence": "inferred",
-    "citations": ["apps/web/src/views/session/SessionPanel.tsx:19-103"],
+    "citations": [
+      "apps/web/src/views/session/SessionPanel.tsx:19-103"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -246,7 +315,11 @@
     "kind": "output_format",
     "value": "sessions.list ObservableSnapshot via useSyncExternalStore (零缓存零副本); row = StateDot + displayTitle + relative time (刚刚/X 分钟前…); status map pendingInteraction→attention > completed→done > running > running > idle; zero-session placeholder「暂无会话」; skeleton 3 rows when ledger pending; no-projects EmptyState「尚未注册项目」",
     "confidence": "inferred",
-    "citations": ["apps/web/src/views/sidebar/ForgeSidebarSlot.tsx:29-54", "apps/web/src/views/sidebar/ForgeWorkspacePanel.tsx:86-155", "apps/web/src/views/sidebar/sidebar-model.ts:80-116"],
+    "citations": [
+      "apps/web/src/views/sidebar/ForgeSidebarSlot.tsx:29-54",
+      "apps/web/src/views/sidebar/ForgeWorkspacePanel.tsx:86-155",
+      "apps/web/src/views/sidebar/sidebar-model.ts:80-116"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -256,7 +329,10 @@
     "kind": "signature",
     "value": "新会话 button and brand row share aria-label session.new.label and onClick startSession(); session row click = openSession + select-session dispatch; sessionId appear/change ⇒ select-session event ⇒ back to session view",
     "confidence": "inferred",
-    "citations": ["apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-sidebar/lib/client.js:336-361", "apps/web/src/workbench/WorkbenchPanel.tsx:73-79"],
+    "citations": [
+      "apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-sidebar/lib/client.js:336-361",
+      "apps/web/src/workbench/WorkbenchPanel.tsx:73-79"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -266,7 +342,10 @@
     "kind": "precondition",
     "value": "empty = draft.trim()==='' && no attachments; send button disabled when empty; click guard + input-machine submit() double guard — blank submit produces zero message/roundtrip; focus retention = mechanism side-effect (button disabled, input never blurs), not explicit restore code",
     "confidence": "inferred",
-    "citations": ["apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js:17246", "apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js:17402-17415"],
+    "citations": [
+      "apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js:17246",
+      "apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js:17402-17415"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -276,7 +355,10 @@
     "kind": "precondition",
     "value": "lastReadyCount===0 ⇒ hero (count includes archived — no fall-back to 0 after first registration = permanent retirement); settling transient marker for null count; hero copy h1「以知识资产为核心的研发工作台」CTA「＋ 添加项目」; DOM anchors data-dswf-workbench data-dswf-phase, data-dswf-cta=add-project",
     "confidence": "inferred",
-    "citations": ["apps/web/src/workbench/WorkbenchPanel.tsx:48-88", "apps/web/src/workbench/HeroEmpty.tsx:19-33"],
+    "citations": [
+      "apps/web/src/workbench/WorkbenchPanel.tsx:48-88",
+      "apps/web/src/workbench/HeroEmpty.tsx:19-33"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -286,7 +368,10 @@
     "kind": "signature",
     "value": "DockTabScope {type:global}|{type:project,projectId}; visibleDockTabs filters global || current project; project switch swaps set, switch back restores (derived, no snapshot); M0_DOCK_TABS = [global 'start 开始'] only — project-level tabs require a fixture/preseed seam (journey Setup marks channel as inferred test contract)",
     "confidence": "inferred",
-    "citations": ["apps/web/src/zones/dock.ts:7-68", "apps/web/src/workbench/WorkbenchPanel.tsx:67-285"],
+    "citations": [
+      "apps/web/src/zones/dock.ts:7-68",
+      "apps/web/src/workbench/WorkbenchPanel.tsx:67-285"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -296,7 +381,12 @@
     "kind": "signature",
     "value": "grid states: skeleton(8 cards)|cards|no-results|empty-library|error (priority error>cards>skeleton>filter?no-results:empty-library); toolbar Input placeholder「搜索关键词…」Esc 清除 + 清除搜索 button; domain tree role=tree rows data-dswf-domain, root row「全部域」clears filter; no-results EmptyState + action「清除过滤」(data-dswf-clear-filters); empty-library EmptyState「尚无知识」naming knowledge dir; drawer close Esc(capture)+✕, body MarkdownDoc variant=body with frontmatter stripped, detail channel forge:knowledge/entryDetail",
     "confidence": "inferred",
-    "citations": ["apps/web/src/views/knowledge/browse-model.ts:66-84", "apps/web/src/views/knowledge/KnowledgeCardGrid.tsx:43-172", "apps/web/src/views/knowledge/EntryDrawer.tsx:138-281", "apps/web/src/components/MarkdownDoc.tsx:20-60"],
+    "citations": [
+      "apps/web/src/views/knowledge/browse-model.ts:66-84",
+      "apps/web/src/views/knowledge/KnowledgeCardGrid.tsx:43-172",
+      "apps/web/src/views/knowledge/EntryDrawer.tsx:138-281",
+      "apps/web/src/components/MarkdownDoc.tsx:20-60"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -306,7 +396,11 @@
     "kind": "precondition",
     "value": "silent rebuild only when project has zero knowledge_entries rows, awaited inline inside search/listEntries; digest stored but never compared; web keeps old cards visible (busy) during refetch; explicit rebuildIndex(projectId) otherwise. Journey knowledge-browsing 1c phase ② (grid updates after external dir change) has no automatic trigger in shipped code",
     "confidence": "inferred",
-    "citations": ["packages/core/src/knowledge/recall-service.ts:269-271", "packages/core/src/knowledge/browse-service.ts:254-257", "apps/web/src/views/knowledge/use-knowledge-browse.ts:197-200"],
+    "citations": [
+      "packages/core/src/knowledge/recall-service.ts:269-271",
+      "packages/core/src/knowledge/browse-service.ts:254-257",
+      "apps/web/src/views/knowledge/use-knowledge-browse.ts:197-200"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -316,7 +410,11 @@
     "kind": "signature",
     "value": "SearchQuery { projectId, sessionId?, domainPrefix?, keywords?, text?, limit? }; domainPrefix omitted = all domains; prefix match = segment boundary (domain = ? OR LIKE 'prefix/%'); keywords exact case-insensitive AND against entry keywords; text substring vs title AND/OR summary — body never matched nor read; scoring 2×keywords + 2×title + 1×summary",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/dto/knowledge.ts:17-29", "packages/core/src/knowledge/recall-service.ts:67-88", "packages/core/src/knowledge/recall-service.ts:163-168"],
+    "citations": [
+      "packages/contracts/src/dto/knowledge.ts:17-29",
+      "packages/core/src/knowledge/recall-service.ts:67-88",
+      "packages/core/src/knowledge/recall-service.ts:163-168"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -326,7 +424,10 @@
     "kind": "signature",
     "value": "ReadAbstractQuery { projectId, sessionId?, entryId } → EntryAbstract { entryId, title, summary, keywords, status, domainPath } — 不含正文; cache-only read; miss ⇒ ERR_ENTRY_NOT_FOUND + warn key-log",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/dto/knowledge.ts:43-58", "packages/core/src/knowledge/recall-service.ts:294-326"],
+    "citations": [
+      "packages/contracts/src/dto/knowledge.ts:43-58",
+      "packages/core/src/knowledge/recall-service.ts:294-326"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -336,7 +437,10 @@
     "kind": "signature",
     "value": "knowledge.search (args domain_prefix?/keywords?/text?/limit?, snake_case; zero-hit render hints fallback to grep/glob) and knowledge.read-abstract (arg entry_id required); abstract-first — full body never returned",
     "confidence": "inferred",
-    "citations": ["packages/knowledge/src/tools/search.ts:11-84", "packages/knowledge/src/tools/read-abstract.ts:26-69"],
+    "citations": [
+      "packages/knowledge/src/tools/search.ts:11-84",
+      "packages/knowledge/src/tools/read-abstract.ts:26-69"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -346,7 +450,11 @@
     "kind": "side_effect",
     "value": "ctx.systemPrompt.section({ name: 'forge:knowledge', order: 500, text: renderKnowledgeSection(tools) }) — heading '## Project knowledge base', domain depth ≤3 note, 5-step agentic-search flow guidance; session binding via projects config binding table, cwd→projectId; unbound session throws",
     "confidence": "inferred",
-    "citations": ["packages/knowledge/src/prompt/index.ts:11-57", "packages/knowledge/src/index.ts:30-51", "packages/knowledge/src/tools/session.ts:46-96"],
+    "citations": [
+      "packages/knowledge/src/prompt/index.ts:11-57",
+      "packages/knowledge/src/index.ts:30-51",
+      "packages/knowledge/src/tools/session.ts:46-96"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -356,7 +464,10 @@
     "kind": "side_effect",
     "value": "knowledge_recall_logs: one row per call × hit entry (call_id uuid groups rows); zero-hit search writes sentinel row (entry_id NULL, hit_count 0); read-abstract writes exactly 1 row; browse/query face writes zero rows. A full chain (search 1 hit + read-abstract) = 2 call groups / 2 entry rows. Journey flywheel pins chain=1 口径 (召回次数/覆盖/热度 +1) — per-call counting would yield 2 (断言失败即缺陷信号, journey invariant)",
     "confidence": "inferred",
-    "citations": ["packages/core/src/knowledge/recall-service.ts:192-214", "docs/features/dsh-forge-p1-mvp/design/schema.sql:56-75"],
+    "citations": [
+      "packages/core/src/knowledge/recall-service.ts:192-214",
+      "docs/features/dsh-forge-p1-mvp/design/schema.sql:56-75"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -366,7 +477,10 @@
     "kind": "signature",
     "value": "SELECT entry_id, COUNT(*) FROM knowledge_recall_logs WHERE project_id=? AND entry_id IS NOT NULL GROUP BY entry_id; card.heat = map value ?? 0; recall tab hit heat falls back to frontmatter_id key after rebuild clears entry refs",
     "confidence": "inferred",
-    "citations": ["packages/core/src/knowledge/recall-service.ts:173-176", "packages/core/src/knowledge/browse-service.ts:278-370"],
+    "citations": [
+      "packages/core/src/knowledge/recall-service.ts:173-176",
+      "packages/core/src/knowledge/browse-service.ts:278-370"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -376,7 +490,10 @@
     "kind": "output_format",
     "value": "stats.calls = groups.length (COUNT DISTINCT call_id, zero-hit calls count); stats.covered = dedup by identity key entryId→frontmatterId→title; UI renders「召回次数 N」「覆盖知识 N」; groups most-recent-first; heat badges per hit",
     "confidence": "inferred",
-    "citations": ["packages/core/src/knowledge/browse-service.ts:87-104", "apps/web/src/views/session/RecallTab.tsx:287-291"],
+    "citations": [
+      "packages/core/src/knowledge/browse-service.ts:87-104",
+      "apps/web/src/views/session/RecallTab.tsx:287-291"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -386,7 +503,10 @@
     "kind": "precondition",
     "value": "required: summary, keywords (missing/invalid ⇒ entry skipped from index, counted in IndexReport.skipped); optional: title (default filename), status (default draft), id, authors, updated (default mtime); domain depth ≤3 (directory-derived, over-depth rejected reason domain-depth); keywords must be string[] (empty array legal)",
     "confidence": "inferred",
-    "citations": ["packages/contracts/src/frontmatter.ts:6-30", "packages/core/src/knowledge/parser.ts:53-106"],
+    "citations": [
+      "packages/contracts/src/frontmatter.ts:6-30",
+      "packages/core/src/knowledge/parser.ts:53-106"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -396,7 +516,10 @@
     "kind": "output_format",
     "value": "deriveDomainPath: dir segments of relPath joined '/'; aggregateDomainTree counts include sub-domain entries (与域前缀过滤同口径); DomainNode { domainPath, label, depth 1..3, entryCount }; only .md files (case-insensitive), dot files/dirs and symlinks excluded",
     "confidence": "inferred",
-    "citations": ["packages/core/src/knowledge/scan.ts:25-79", "packages/core/src/knowledge/browse-service.ts:68-83"],
+    "citations": [
+      "packages/core/src/knowledge/scan.ts:25-79",
+      "packages/core/src/knowledge/browse-service.ts:68-83"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -406,7 +529,10 @@
     "kind": "output_format",
     "value": "collapsed rail = 56px control bar; expanded clamp 264–420px (default 280); auto-collapse below 1024px viewport; collapse button aria-label toggle.open, shortcut sidebar.left.toggle; product renders rail icons only (data-dswf-sidebar=rail)",
     "confidence": "inferred",
-    "citations": ["apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js:13-39", "apps/web/src/views/sidebar/sidebar.css:219"],
+    "citations": [
+      "apps/host/profile.dev/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js:13-39",
+      "apps/web/src/views/sidebar/sidebar.css:219"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -416,7 +542,12 @@
     "kind": "signature",
     "value": "BrowserWindow 1440×900 hidden titleBarStyle, ready-to-show→show; loadURL dsh-forge://app/ (privileged scheme proxies to dev/host server); BOOT_CHANNEL 'dsh-forge:boot' → { url, injections }; preload window.dshForge { getBootManifest, invoke } with channel allowlist; requestSingleInstanceLock false ⇒ quit; env DSH_FORGE_USER_DATA / DSH_FORGE_PORT / DSH_FORGE_MATERIALIZE_ONLY; boot watchdog 180s exit(3)",
     "confidence": "inferred",
-    "citations": ["apps/host/src/window/create.ts:26-52", "apps/host/src/ipc/boot-channel.ts:8-15", "apps/host/src/window/lifecycle.ts:8-20", "apps/host/src/main.ts:20-44"],
+    "citations": [
+      "apps/host/src/window/create.ts:26-52",
+      "apps/host/src/ipc/boot-channel.ts:8-15",
+      "apps/host/src/window/lifecycle.ts:8-20",
+      "apps/host/src/main.ts:20-44"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -426,7 +557,10 @@
     "kind": "precondition",
     "value": "appId app.dshforge.desktop, productName dsh-forge; win target nsis (oneClick:false, perMachine:false, allowToChangeInstallationDirectory:true, differentialPackage:false, publish:null); shortcuts = NSIS defaults (desktop + start menu on; no explicit keys); asar:false, runtime tree + web-dist + staging-manifest shipped via extraResources — 安装期零网络; per-user install under %LOCALAPPDATA%\\Programs",
     "confidence": "inferred",
-    "citations": ["electron-builder.config.mjs:6-61", "tests/structure/installer-pipeline.test.ts:21-44"],
+    "citations": [
+      "electron-builder.config.mjs:6-61",
+      "tests/structure/installer-pipeline.test.ts:21-44"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -436,7 +570,12 @@
     "kind": "signature",
     "value": "Playwright _electron launch (cwd apps/host); user-data isolation via mkdtemp + DSH_FORGE_USER_DATA + unique port; readiness gate __DSH_BOOT_READY__ → __ModuleLoader__.mode==='live' && __DSH_FORGE_CLIENT__; RPC probe window.dshForge.invoke; UI probes data-dswf-phase / bridgeDispatch via __DSH_FORGE_WORKBENCH__; onboarding neutralizer via DSH_FORGE_PATCH_FILES; dsh session log probe session.v3.jsonl.zstd under {dshHome}/sessions; NO fault-injection facility in e2e yet",
     "confidence": "inferred",
-    "citations": ["e2e/playwright.config.ts:7-16", "e2e/specs/smoke-skeleton.spec.ts:20-45", "e2e/specs/knowledge-integration.spec.ts:57-168", "e2e/specs/flywheel.spec.ts:260-273"],
+    "citations": [
+      "e2e/playwright.config.ts:7-16",
+      "e2e/specs/smoke-skeleton.spec.ts:20-45",
+      "e2e/specs/knowledge-integration.spec.ts:57-168",
+      "e2e/specs/flywheel.spec.ts:260-273"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
   },
   {
@@ -446,7 +585,512 @@
     "kind": "output_format",
     "value": "state.db at {app-data}/dsh-forge/state.db, SCHEMA_VERSION 1; projects (id PK, workspace_id NOT NULL UNIQUE, ws_path UNIQUE idx, name, forge_dir, forge_dir_external CHECK 0/1, knowledge_dir, archived, timestamps); knowledge_entries (derived cache, UNIQUE(project_id, rel_path)); knowledge_recall_logs (append-only SoT); app_key_logs (level warn|error, scope compensation|reconcile|index|recall); schema_meta",
     "confidence": "inferred",
-    "citations": ["docs/features/dsh-forge-p1-mvp/design/schema.sql:4-90", "packages/core/src/db/schema.ts:12-88"],
+    "citations": [
+      "docs/features/dsh-forge-p1-mvp/design/schema.sql:4-90",
+      "packages/core/src/db/schema.ts:12-88"
+    ],
     "updated_at": "2026-10-03T04:03:45+08:00"
+  },
+  {
+    "fact_id": "M2_TOOL_FACE",
+    "source": "static",
+    "subject": "plugin-forge tool registration face (agent Controller)",
+    "kind": "signature",
+    "value": "Six tools registered: addTask/claimTask/submitTask/queryTask/createProposal/transitionProposal (tool = verb passthrough, params snake_case, task locating = slug + local_id). transitionTask/transitionFeature NOT registered (tool-exclusive absence — SC7 code-audit anchor); human face reaches transitionTask via RPC only.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/plugin-forge/src/tools/index.ts:2-55"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_AGENT_TRANSITION_MATRIX",
+    "source": "static",
+    "subject": "agent-face transition matrix (claim/submit/hook owned edges)",
+    "kind": "signature",
+    "value": "pending->[in_progress]; in_progress->[completed, blocked]; blocked->[in_progress, pending(auto-restore)]; suspended/completed/skipped/rejected have no agent edges. Idempotent re-entry (in_progress claim) performs no state transition and is not in the matrix; auto-block is a write-path-intrinsic effect not passing the transition gate.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/state-machine.ts:11-29"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_TRANSITION_TARGETS_HUMAN",
+    "source": "static",
+    "subject": "human-face transitionTargets pure function (single source for UI menu + server validation)",
+    "kind": "signature",
+    "value": "human = seven statuses minus current (from!=to any channel, menu mechanically excludes self, row order = TASK_STATUSES order); taskDetail.allowedTransitions (drawer dialog option set) and transitionTask server precheck share this one pure function — zero drift by construction.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/state-machine.ts:38-47"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SATISFYING_STATUSES",
+    "source": "static",
+    "subject": "prerequisite satisfying set (claim guard / restore hook / validate share one set)",
+    "kind": "precondition",
+    "value": "SATISFYING_TASK_STATUSES = [completed, skipped]; rejected does NOT satisfy (dependency-path deadlock signal). Same set drives claim guard, restore-hook all-satisfied judgment, and validateFeatureTasks liveness.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/state-machine.ts:31-36"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CLAIM_GUARDS",
+    "source": "static",
+    "subject": "claimTask dependency guard",
+    "kind": "precondition",
+    "value": "All prerequisites must be in {completed, skipped} before claim proceeds; unmet -> ERR_DEPENDENCIES_UNMET with data.unmet list (natural keys + current status). Guard applies to every claim path including idempotent re-entry (prereq regression refuses re-claim).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:128-138"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CLAIM_READY_SELECTION",
+    "source": "static",
+    "subject": "ready-task selection order (blind claim)",
+    "kind": "signature",
+    "value": "Selection scans pending pool ONLY: (1) branch continuation — ready pending direct successor of the most-recently satisfied task (completed/skipped, updated_at latest); (2) else global ready pending pool by priority (P0 > P1 > P2 > default) then created_at then id.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:80-115"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CLAIM_Z1_EXIT",
+    "source": "static",
+    "subject": "claimTask no-ready exit signal (Z1)",
+    "kind": "output_format",
+    "value": "No ready task -> { task: null, dispatchPrompt: '', digest: '', reclaimed: false }; pure read, zero writes, no event emitted (run-tasks loop wait / done criterion).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:58-61",
+      "packages/core/src/forge/tasks/claim.ts:185",
+      "packages/core/src/forge/tasks/claim.ts:272-273"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CLAIM_REENTRY",
+    "source": "static",
+    "subject": "claimTask idempotent re-entry domain",
+    "kind": "precondition",
+    "value": "in_progress re-claim = idempotent re-entry: no state transition, reclaimed=true, dispatchPrompt re-synthesized (digest new value). Blind claim (no taskRef) only re-enters an in_progress task already linked to THIS session (latest link preferred); another session's in_progress is never blind-claimed (dual-dispatcher no double dispatch).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:15-17",
+      "packages/core/src/forge/tasks/claim.ts:63-78",
+      "packages/core/src/forge/tasks/claim.ts:209-210"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CLAIM_RECORD_SHAPE",
+    "source": "static",
+    "subject": "claim audit record shape",
+    "kind": "side_effect",
+    "value": "claim record: verb='claim', actor='plugin-tool' (channel-inferred), session_id = dispatching session, dispatch_digest stored (full prompt never stored — sha-256 first 12 hex). Re-entry record has null from/to (no state effect).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:250-255"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_LINKS_WRITE_SOURCE",
+    "source": "static",
+    "subject": "task_session_links single write source",
+    "kind": "side_effect",
+    "value": "claim is the ONLY writer of task_session_links (INSERT OR IGNORE upsert-ignore); UNIQUE(task_id, session_id) makes same-task-same-session idempotent (no duplicate row on re-claim); cross-session retries accumulate naturally.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/claim.ts:257-261",
+      "docs/features/dsh-forge-m2-pipeline/design/schema.sql:151-161"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SUBMIT_INPUT_VALIDATION",
+    "source": "static",
+    "subject": "submitTask input-face validation",
+    "kind": "error_code",
+    "value": "result=blocked with empty reason -> ERR_REASON_REQUIRED; result=success with empty summary -> ERR_SUMMARY_REQUIRED. Input validation runs BEFORE transition validation; rejection leaves no partial audit rows (single transaction).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/submit.ts:42-48"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SUBMIT_FROM_GATE",
+    "source": "static",
+    "subject": "submitTask from-state gate",
+    "kind": "error_code",
+    "value": "Only in_progress is a legal submit from-state (success -> completed / blocked -> blocked); submitting from pending/blocked/terminal -> ERR_INVALID_TRANSITION (agent-face matrix precheck; store state not corrupted).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/submit.ts:50-52",
+      "packages/core/src/forge/tasks/state-machine.ts:49-62"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SUBMIT_RECORD_SHAPE",
+    "source": "static",
+    "subject": "submit audit record shape (structured payload)",
+    "kind": "side_effect",
+    "value": "submit record: verb='submit', actor='plugin-tool', session_id = executing session (distinguishable from claim's dispatching session — SC6 dual-source), files_json/gate_json/commit_hash structured columns, reason (blocked) or summary (success). Gate payload recorded as-is, not judged red by the service (gate discipline belongs to executor skill).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/submit.ts:71-90"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_RESTORE_HOOK",
+    "source": "static",
+    "subject": "auto-restore hook (single implementation shared by submitTask + transitionTask)",
+    "kind": "side_effect",
+    "value": "On ->completed/skipped: reverse-lookup waiters via idx_edges_prerequisite; waiter must be blocked AND ALL its prerequisites in satisfying set -> blocked->pending + auto-restore record (verb='auto-restore', actor='core'); edges are NOT deleted; non-blocked waiters untouched; partial satisfaction restores nothing.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/transition.ts:45-82",
+      "packages/core/src/forge/tasks/transition.ts:128-130",
+      "packages/core/src/forge/tasks/submit.ts:92-97"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_ADD_ATOMIC_TRIPLE",
+    "source": "static",
+    "subject": "addTask single-transaction composition",
+    "kind": "side_effect",
+    "value": "Single transaction all-or-nothing: tasks row (uuid id + localId allocation + slug==feature slug ownership check) + task_edges rows (dependsOn=manual / block-source=fix-chain) + task_records add row. block-source additionally: source set blocked + auto-block record (verb='auto-block', actor='core') + fix-chain edge INSERT OR IGNORE — all in the same transaction, no partial states.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/add.ts:203-208",
+      "packages/core/src/forge/tasks/add.ts:386-401"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_CYCLE_DETECTION",
+    "source": "static",
+    "subject": "incremental cycle detection on addTask",
+    "kind": "error_code",
+    "value": "New node without dependsOn is structurally acyclic (O(1)); dependsOn x block-source combination (the only cycle construction entry) runs DFS reachability over existing out-edges from each D toward S; hit -> ERR_CYCLE_DETECTED with the complete cycle path (slug/localId natural keys); zero partial writes.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/add.ts:297-317",
+      "packages/core/src/forge/tasks/add.ts:115-151"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_FIX_CHAIN_DEPTH",
+    "source": "static",
+    "subject": "fix chain depth limit",
+    "kind": "error_code",
+    "value": "FIX_CHAIN_DEPTH_LIMIT = 6; new task depth = source ancestry length + 1 counted along source_task_id; exceeding -> ERR_CHAIN_DEPTH_EXCEEDED with chain diagnosis (root-first natural keys), prompting manual intervention.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/add.ts:48-49",
+      "packages/core/src/forge/tasks/add.ts:280-295"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_ADD_TWO_LEVEL_DEDUP",
+    "source": "static",
+    "subject": "addTask two-level dedup",
+    "kind": "precondition",
+    "value": "Task-level: same source + same type + not terminal -> reuse existing row (reused=true, pure read, no new chain/no re-block); Edge-level: task_edges PK conflict on manual duplicate -> ERR_TASK_EXISTS, on fix-chain duplicate -> INSERT OR IGNORE idempotent success.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/add.ts:238-252",
+      "packages/core/src/forge/tasks/add.ts:366-385"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_LOCAL_ID_ALLOCATION",
+    "source": "static",
+    "subject": "localId mixed allocation",
+    "kind": "output_format",
+    "value": "Regular tasks: numeric sequence (max major.minor + 1, empty store starts 1.1); blockSource -> fix-N prefix; source-carrying non-blocking -> disc-N prefix (max existing prefix-N + 1). Scope = feature (UNIQUE(slug, local_id)).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/add.ts:77-113"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_DISPATCH_PROMPT_COMPOSITION",
+    "source": "static",
+    "subject": "dispatchPrompt composition order + digest",
+    "kind": "output_format",
+    "value": "Order: persona block ('You are a focused task executor.', no tag) -> <constraints> -> <task-context> (key-value rows incl. TASK_ID and BLOCKERS snapshot, PHASE_SUMMARY phase-machine injection) -> <type-policy>. XML tag set closed at four forge-pipeline tags. digest = sha-256(full text incl. persona and tags) first 12 hex lowercase; dynamic values snapshot at claim instant (re-synthesis on re-entry yields new digest).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/prompt/compose.ts:1-60",
+      "packages/core/src/forge/tasks/prompt/digest.ts:15-21"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_EVENT_PUSH_CHAIN",
+    "source": "static",
+    "subject": "write-push event chain (refresh mechanism)",
+    "kind": "side_effect",
+    "value": "Write-verb closure tail -> emitTasksChanged(projectId) -> process.send (silent degrade when direct-form IPC absent) -> run.ts event branch -> DshHostHandle.onEvent -> main webContents.send('forge:events/tasks-changed', {projectId}) -> renderer preload onForgeTasksChanged -> shared subscribe layer refetch of active queries. 'Immediate' criterion = single refetch after write return sees new value; event latency bound 500ms. Z1 exits and pure-read reuse hits emit nothing.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/workspace/events.ts:15-30",
+      "apps/host/src/ipc/m2-wiring.ts:7-8",
+      "apps/web/src/rpc/events.ts:3-29",
+      "docs/features/dsh-forge-m2-pipeline/design/tech-design.md:19"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_RPC_CHANNEL_FAMILIES",
+    "source": "static",
+    "subject": "M2 RPC channel families + tool-exclusive verbs",
+    "kind": "signature",
+    "value": "Five families: forge:tasks/{transition,query,validateFeatureTasks,list,stats,graph,detail,sessionLinks}; forge:features/{register,transition,upsertDoc,list}; forge:proposals/list; forge:docs/{read,openExternal}; forge:projects/deriveTaskStoreDir (PROJECTS_M2_CHANNELS). addTask/claimTask/submitTask/createProposal/transitionProposal are NOT on RPC (agent-tool exclusive — SC7 assertion face). Event channel forge:events/tasks-changed main->renderer one-way.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/contracts/src/channels.ts:49-111"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SESSION_LINKS_DUAL_SOURCE",
+    "source": "static",
+    "subject": "sessionLinks dual-source typed read",
+    "kind": "output_format",
+    "value": "Cards = link source (task_session_links rows, dispatch sessions) first, then record source (task_records.session_id grouped by task, executing sessions); each card carries taskId + taskStatus + source field ('link' | 'record'); same task same session participating on both sides yields TWO coexisting cards (no merged interpretation — honest audit).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/tasks/session-links.ts:33-52"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_PILLS_OVERFLOW",
+    "source": "static",
+    "subject": "session header linkage pill layout",
+    "kind": "output_format",
+    "value": "SESSION_PILLS_INLINE_MAX = 2: at most 2 pills inline; remainder presented via '+N' overflow trigger opening an official Menu portal (full list + per-item source typing label); overflow menu entry click performs the same navigation as an inline pill click (dock opens overview + task sub-tab + feature selection + task drawer).",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/session/SessionTaskPills.tsx:22-23",
+      "apps/web/src/views/session/SessionTaskPills.tsx:76-78",
+      "apps/web/src/views/session/SessionTaskPills.tsx:182-220"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_STATUS_CHIPS_ZERO_DISABLED",
+    "source": "static",
+    "subject": "seven-state status chips zero-count behavior",
+    "kind": "precondition",
+    "value": "Chip with count 0 is disabled (faded, is-zero class) and cannot trigger filtering; counts come from feature-domain tasks.stats single source; chip filtering applies uniformly across list/DAG/swimlane views.",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/overview/status-chips.tsx:33-56"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_TRANSITION_DIALOG_GATING",
+    "source": "static",
+    "subject": "transition dialog validation + option set",
+    "kind": "error_code",
+    "value": "Option set = allowedTransitions (human face —所见即所得); confirm validation: empty reason -> error 'reason-required', dialog stays open with selected target and text preserved ('原因必填——填写后重试'), no status write, no audit row; confirm disabled while field issues present. Terminal-target submit may trigger autoRestore (hint surfaced).",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/overview/drawer/transition-dialog.tsx:40-64"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_DOCS_PATH_GUARD",
+    "source": "static",
+    "subject": "readDoc path guard + dangling tolerance",
+    "kind": "precondition",
+    "value": "Path guard: candidate = resolve(canonical(forge_dir), docRel) must startsWith(canonical(forge_dir) + sep) — violations (absolute docRel, '..' escape, forge_dir itself) -> ERR_DOC_PATH_INVALID. Dangling (guard passes, file absent / not regular) -> dangling=true read-only return (content='', canonicalPath = stored rel_path verbatim) — no crash, no write, no row deletion.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/small-domains/docs.ts:58-76"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_MERMAID_RENDERING",
+    "source": "static",
+    "subject": "mermaid segmented rendering + fallback",
+    "kind": "output_format",
+    "value": "Doc tab splits markdown body vs mermaid blocks; MermaidDiagram lazy-loads the mermaid engine via the single dynamic import path (zero blocks = zero loading), initializes with securityLevel='strict' (sanitize, no click callbacks); render failure or invalid source -> plain-text fallback placeholder card (source + fallback note), exception does not escape, rest of document renders normally; erDiagram is the acceptance anchor.",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/docs/mermaid-diagram.tsx:21-34",
+      "apps/web/src/views/docs/doc-segments.ts"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_DERIVE_DIR_RULE",
+    "source": "static",
+    "subject": "task store dir derivation single source",
+    "kind": "signature",
+    "value": "dir = {tasksHome}/{flatten(canonical path)}@{hash8}; flatten replaces separators with '-' preserving case (Z:\\project\\dsh -> Z-project-dsh); hash8 = sha-256(path string as-is, no re-normalization) first 8 hex lowercase; tasksHome = env DSH_FORGE_TASKS_HOME > {userData}/forge-workspaces. Core derives, RPC delivers; web must not self-compute.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/core/src/forge/workspace/derive-dir.ts:31-38",
+      "docs/features/dsh-forge-m2-pipeline/design/schema.sql:4-5"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SUSPECTED_MOVE_TRISTATE",
+    "source": "static",
+    "subject": "registration collision tri-state",
+    "kind": "error_code",
+    "value": "(a) normal new (target absent, no same-flatten-subject sibling); (b) idempotent reuse (directory exists with consistent hash + central ws_path exact match — attach existing, no duplicate registration); (c) suspected move (target absent but same flatten-subject different-hash8 directory exists) -> ERR_SUSPECTED_MOVE with manual guidance in data (delete orphan dir or rename back), thrown BEFORE central row write (zero side effects: no cleanup, no adoption, no crash).",
+    "confidence": "inferred",
+    "citations": [
+      "packages/contracts/src/errors.ts:34",
+      "packages/contracts/src/errors.ts:67",
+      "docs/features/dsh-forge-m2-pipeline/design/tech-design.md:170-177"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_DERIVED_ROW_PHASE",
+    "source": "static",
+    "subject": "register-form derived store row phase machine",
+    "kind": "output_format",
+    "value": "DerivedTaskStorePhase = loading (in-flight / reselect re-check) | ready(dir) | suspected-move(data -> error bar + manual guidance stays in form) | error. Confirm button disabled when field issues present OR phase = suspected-move. Row value comes exclusively from forge:projects/deriveTaskStoreDir RPC (form-model self-computation abolished).",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/flows/add-project/derived-store-row.tsx:22-29",
+      "apps/web/src/flows/add-project/RegisterForm.tsx:223-235",
+      "apps/web/src/flows/add-project/RegisterForm.tsx:304-368"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_REGISTER_IDEMPOTENT_HINT",
+    "source": "static",
+    "subject": "already-registered directory form state",
+    "kind": "output_format",
+    "value": "When selected workspace path is in registeredPaths: workspace row shows StateChip '已注册' + hint '该目录已注册——「确认」将幂等返回既有项目（挂接既有工作区，不重复登记）'; confirm returns the existing project idempotently (attachedToExisting).",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/flows/add-project/RegisterForm.tsx:185-190",
+      "apps/web/src/flows/add-project/RegisterForm.tsx:272-273"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_E2E_ANCHOR_SET",
+    "source": "static",
+    "subject": "web e2e anchor attribute families (data-dswf-*)",
+    "kind": "output_format",
+    "value": "Anchor families: ov-* (overview tab/head/sticky/subtabs/search/sort/chips); tt-* (task sub-tab: featpill/stchips/view/list/dag/dagsvg/swim/card/sub/more); td-* (drawer: drawer/sess/trans/tr-dialog/tr-reason/tr-error/ev-verb/commit/cov/eval-empty); stp-* (session pills: pill/more/mrow/msrc/src/source); doc-* (doc tab: head/pathbar/body/dangling/retry/skeleton); rf-* (register form: ws/name/forge/kn/target/registered/np-error).",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/overview/",
+      "apps/web/src/views/session/SessionTaskPills.tsx",
+      "apps/web/src/views/docs/index.tsx",
+      "apps/web/src/flows/add-project/RegisterForm.tsx"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_THREE_VIEWS",
+    "source": "static",
+    "subject": "task three views",
+    "kind": "signature",
+    "value": "Task sub-tab view modes: 'list' (two-row card: main row ID+title+status tag; sub-row type/priority/prerequisites/linkage count), 'dag' (SVG bezier edges, completed edges green), 'swim' (seven-status horizontal swimlanes). Chips filtering and sort apply uniformly across all three; view state local to task tab.",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/overview/task-tab/task-tab.tsx:32-34",
+      "apps/web/src/views/overview/task-tab/task-tab.tsx:324",
+      "apps/web/src/views/overview/task-tab/list-view.tsx"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_SEARCH_SORT",
+    "source": "static",
+    "subject": "task search + sort semantics",
+    "kind": "signature",
+    "value": "Search = server-side core filter via tasks.list (statusFilter + search + sort params; bilingual matching over title/key/type/status label constants); IME safety = frontend updates only the content region (search row not rebuilt mid-composition); sub-tab switch clears search; sort pill toggles 'active' (in_progress->blocked->pending->...->completed) <-> 'created' (created_at desc), shared across three sub-tabs.",
+    "confidence": "inferred",
+    "citations": [
+      "apps/web/src/views/overview/task-tab/task-tab-model.ts:3-15",
+      "docs/features/dsh-forge-m2-pipeline/design/tech-design.md:119-121"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_DB_SEVEN_TABLES",
+    "source": "static",
+    "subject": "per-workspace forge.db schema",
+    "kind": "output_format",
+    "value": "Seven domain tables + two infra: features (six-status CHECK), feature_documents ((feature_id, doc_kind) PK, rel_path dangling-tolerant), tasks (id uuid PK + UNIQUE(slug, local_id) natural key + seven-status CHECK + source_task_id self-FK), task_edges ((task_id, prerequisite_id) PK, origin three values, edges never deleted), task_records (verb six values, append-only double triggers ABORT on update/delete, actor CHECK plugin-tool/ui/core, session_id, files_json/gate_json/commit_hash/dispatch_digest), proposals (five-status), task_session_links (UNIQUE(task_id, session_id)) + schema_meta / app_key_logs (scope CHECK tasks|workspace). FORGE_DB_SCHEMA_VERSION=1 independent line; lazy first-open + structural soundness check; open failure -> ERR_WORKSPACE_DB_UNAVAILABLE workspace isolation.",
+    "confidence": "inferred",
+    "citations": [
+      "docs/features/dsh-forge-m2-pipeline/design/schema.sql:17-161"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_OVERVIEW_TAB_REGISTRATION",
+    "source": "static",
+    "subject": "overview + doc dock tab registration seams",
+    "kind": "signature",
+    "value": "sidebarRightTabs.register('dswf-overview') (guide entry first, replaceTab singleton) + 'dswf-doc' (multiple, dedup by address/docRel, revealIfOpened); bodies keyed via sidebar.right.pane.tab with useTabInfo injection; session pills slot = conversation.session.header.actions (list slot). No new routes — dock slot registration architecture; layout persisted in localStorage dsh.sidebar-right.v1.<sessionId>.",
+    "confidence": "inferred",
+    "citations": [
+      "docs/features/dsh-forge-m2-pipeline/design/page-map.md:13-19",
+      "docs/features/dsh-forge-m2-pipeline/design/page-map.md:68-70"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_OPEN_EXTERNAL_GUARD",
+    "source": "static",
+    "subject": "open-in-editor execution + path-in-registry check",
+    "kind": "side_effect",
+    "value": "forge:docs/openExternal executes on the main side only; before launch the bridge validates the target path is in the workspace's projectHead path set (feature_documents U proposals rel_path canonical resolution superset) — out-of-set paths rejected; the jump itself writes no files (SC3 read-only discipline exemption).",
+    "confidence": "inferred",
+    "citations": [
+      "docs/features/dsh-forge-m2-pipeline/design/tech-design.md:199",
+      "docs/features/dsh-forge-m2-pipeline/design/tech-design.md:472"
+    ],
+    "updated_at": "2026-10-07T03:39:19+08:00"
+  },
+  {
+    "fact_id": "M2_RUN_TASKS_RECOVERY_BRIEF",
+    "source": "static",
+    "subject": "run-tasks skill missing-record recovery discipline",
+    "kind": "precondition",
+    "value": "Outer-loop Step 3 Verify (queryTask include_records) owns the interruption judgment: task still in_progress after executor return = missing record (executor never called submitTask) -> explicit re-claim with slug+local_id (reclaimed=true, fresh digest) -> dispatch a VERIFY-ONLY recovery brief (do not re-implement; verify files exist, then settle; verification failure -> result=blocked). Record present (settled status) -> loop proceeds normally, no recovery re-dispatch, no duplicate execution. Z1 null-claim exits: wait-and-reclaim (bounded: 3 consecutive nulls with nothing new -> finish) or finish.",
+    "confidence": "inferred",
+    "citations": [
+      "packages/plugin-forge/skills/run-tasks/SKILL.md:29-56",
+      "packages/plugin-forge/skills/run-tasks/SKILL.md:90-110"
+    ],
+    "updated_at": "2026-10-07T03:45:34+08:00"
   }
 ]
