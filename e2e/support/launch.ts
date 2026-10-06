@@ -129,8 +129,14 @@ export interface LaunchHostOptions {
   readonly executablePath?: string
   /** 追加 env（TEMP/TMP 重定向等） */
   readonly env?: Record<string, string>
-  /** 就绪链超时（安装形态慢盘 120s；缺省 60/90/60） */
-  readonly timeouts?: { readonly bootReady?: number; readonly loaderLive?: number; readonly workbenchVisible?: number }
+  /** 就绪链超时（安装形态慢盘 120s；缺省 60/90/60——firstWindow 缺省 playwright 30s：
+   *  bootDshHost（child spawn + profile 装配）先于首窗，内存受限/慢盘环境首窗可越 30s） */
+  readonly timeouts?: {
+    readonly firstWindow?: number
+    readonly bootReady?: number
+    readonly loaderLive?: number
+    readonly workbenchVisible?: number
+  }
 }
 
 export interface Launched {
@@ -172,7 +178,7 @@ export async function launchHost(opts: LaunchHostOptions): Promise<Launched> {
       ...env,
     },
   })
-  const page = await app.firstWindow()
+  const page = await app.firstWindow({ timeout: timeouts?.firstWindow })
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(String(error)))
   const consoleTail: string[] = []

@@ -65,7 +65,19 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '  config:',
     `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
     ...(input.skillsDir !== undefined
-      ? ['- id: skill-filesystem', '  config:', '    customSkillDirs:', `      - ${yamlQuote(input.skillsDir)}`]
+      ? [
+          // disabled:false 必须显式——官方 dsh-web-app 层禁用了主机面 skill-filesystem 行
+          // （presets own local discovery），patch 行未写字段沿用前层定义（5.4 dogfood 实证：
+          // 缺席时行保持禁用，customSkillDirs 全局层不注册，会话技能面恒缺席）。
+          // includeDefaultRoots:false = 纯部署级 provider（只贡献 customSkillDirs，项目/用户
+          // 根发现归 preset 层——与 web-app「presets own local discovery」架构注释一致）。
+          '- id: skill-filesystem',
+          '  disabled: false',
+          '  config:',
+          '    includeDefaultRoots: false',
+          '    customSkillDirs:',
+          `      - ${yamlQuote(input.skillsDir)}`,
+        ]
       : []),
     ...(input.credentialsPath !== undefined
       ? ['- id: credentials', '  config:', `    path: ${yamlQuote(input.credentialsPath)}`]

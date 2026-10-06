@@ -74,7 +74,12 @@ export const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, 
   vars_json, source_task_id, blocked_reason, main_session, breaking, coverage, complexity,
   surface_key, surface_type, feature_id, created_at, updated_at`
 
-/** tasks 行 → TaskSnapshot（INTEGER 0/1 → boolean；*_json → 解码形；NULL → 缺省键） */
+/**
+ * tasks 行 → TaskSnapshot（INTEGER 0/1 → boolean；*_json → 解码形；NULL → 键缺席）。
+ * 缺省可选字段必须「键缺席」而非「键在场值 undefined」——agent tool 输出面（dsh harness
+ * snapshotJsonValue）对显式 undefined 属性值判 not lossless JSON 拒绝整个工具结果
+ * （5.4 dogfood 实证：claimTask 三连拒）。RPC/JSON 序列化面两形态等价。
+ */
 export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
   return {
     taskId: row.id,
@@ -84,37 +89,40 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     title: row.title,
     taskType: row.task_type,
     taskStatus: row.task_status,
-    taskDesc: row.task_desc ?? undefined,
-    priority: (row.priority as TaskSnapshot['priority']) ?? undefined,
-    estimatedTime: row.estimated_time ?? undefined,
-    vars: row.vars_json === null ? undefined : (JSON.parse(row.vars_json) as Record<string, string>),
-    sourceTaskId: row.source_task_id ?? undefined,
-    blockedReason: row.blocked_reason ?? undefined,
+    ...(row.task_desc !== null ? { taskDesc: row.task_desc } : {}),
+    ...(row.priority !== null ? { priority: row.priority as TaskSnapshot['priority'] } : {}),
+    ...(row.estimated_time !== null ? { estimatedTime: row.estimated_time } : {}),
+    ...(row.vars_json !== null ? { vars: JSON.parse(row.vars_json) as Record<string, string> } : {}),
+    ...(row.source_task_id !== null ? { sourceTaskId: row.source_task_id } : {}),
+    ...(row.blocked_reason !== null ? { blockedReason: row.blocked_reason } : {}),
     mainSession: row.main_session === 1,
     breaking: row.breaking === 1,
-    coverage: row.coverage ?? undefined,
+    ...(row.coverage !== null ? { coverage: row.coverage } : {}),
     complexity: row.complexity as TaskSnapshot['complexity'],
-    surfaceKey: row.surface_key ?? undefined,
-    surfaceType: row.surface_type ?? undefined,
+    ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
+    ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
-/** task_records 行 → TaskRecordEntry（files/gate JSON 解码；缺省键省略）——2.6 detail 复用导出 */
+/**
+ * task_records 行 → TaskRecordEntry（files/gate JSON 解码；缺省键缺席——lossless 同
+ * toTaskSnapshot 口径）——2.6 detail 复用导出。
+ */
 export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
   return {
     verb: row.verb,
-    fromStatus: row.from_status ?? undefined,
-    toStatus: row.to_status ?? undefined,
-    reason: row.reason ?? undefined,
-    summary: row.summary ?? undefined,
-    files: row.files_json === null ? undefined : (JSON.parse(row.files_json) as string[]),
-    gate: row.gate_json === null ? undefined : (JSON.parse(row.gate_json) as TaskGateReport),
-    commitHash: row.commit_hash ?? undefined,
-    digest: row.dispatch_digest ?? undefined,
+    ...(row.from_status !== null ? { fromStatus: row.from_status } : {}),
+    ...(row.to_status !== null ? { toStatus: row.to_status } : {}),
+    ...(row.reason !== null ? { reason: row.reason } : {}),
+    ...(row.summary !== null ? { summary: row.summary } : {}),
+    ...(row.files_json !== null ? { files: JSON.parse(row.files_json) as string[] } : {}),
+    ...(row.gate_json !== null ? { gate: JSON.parse(row.gate_json) as TaskGateReport } : {}),
+    ...(row.commit_hash !== null ? { commitHash: row.commit_hash } : {}),
+    ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),
     actor: row.actor,
-    sessionId: row.session_id ?? undefined,
+    ...(row.session_id !== null ? { sessionId: row.session_id } : {}),
     createdAt: row.created_at,
   }
 }

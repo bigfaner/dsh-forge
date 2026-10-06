@@ -86,7 +86,7 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('tasksHome')
   })
 
-  it('技能面挂载（3.4）：skillsDir 在场 → skill-filesystem 行 customSkillDirs 列表（官方行 id 定位）', () => {
+  it('技能面挂载（3.4/5.4 修正）：skillsDir 在场 → 行显式再启用（disabled:false——官方 web-app 层禁用主机行，patch 缺字段沿用禁用）+ 纯部署级 provider（includeDefaultRoots:false）+ customSkillDirs 列表', () => {
     const text = renderBootOverlay({
       stateDb: '/x/s.db',
       bindingsFile: '/x/b.json',
@@ -95,7 +95,9 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).toContain(
       [
         '- id: skill-filesystem',
+        '  disabled: false',
         '  config:',
+        '    includeDefaultRoots: false',
         '    customSkillDirs:',
         '      - "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"',
       ].join('\n'),

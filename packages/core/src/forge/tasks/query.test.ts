@@ -168,3 +168,41 @@ describe('AC5 queryTask include 四节', () => {
     ])
   })
 })
+
+// 5.4 dogfood 实证缺陷：DTO 可选字段「缺省 = 键缺席」而非「键在场值 undefined」——
+// agent tool 输出面（dsh harness snapshotJsonValue）对显式 undefined 属性值判
+// 「value is not lossless JSON」拒绝整个工具结果（claimTask 三连拒、派发链断头）。
+// RPC/JSON 序列化面两形态等价（undefined 键自然丢弃），故历史单测（toEqual）未暴露。
+describe('AC-lossless：可选字段缺席形态（agent tool 输出无损 JSON）', () => {
+  /** 无损 JSON 语义自证：对象图零显式 undefined 属性值（dsh snapshotJsonValue 同口径） */
+  const assertLossless = (v: unknown, what: string): void => {
+    const undefKeys: string[] = []
+    const walk = (x: unknown, path: string): void => {
+      if (x === null || typeof x !== 'object') return
+      for (const [k, val] of Object.entries(x)) {
+        if (val === undefined) undefKeys.push(path + k)
+        else if (val !== null && typeof val === 'object') walk(val, `${path}${k}.`)
+      }
+    }
+    walk(v, '')
+    expect(undefKeys, `${what} 携显式 undefined 值的键`).toEqual([])
+  }
+
+  it('NULL 可选列任务行 → 快照零显式 undefined（claimTask/queryTask 返回体）', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
+    seedTask(h!.db, 'f1', '1.1') // task_desc/priority/estimated_time/vars/coverage/surface_* 全 NULL
+    const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' } })
+    assertLossless(r.task, 'task snapshot')
+  })
+
+  it('NULL 负载 record 行 → 时间线项零显式 undefined（queryTask include_records）', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
+    seedTask(h!.db, 'f1', '1.1')
+    seedRecord(h!.db, 't-f1-1.1', { verb: 'add' }) // from/to/reason/summary/files/gate/commit/digest/session 全 NULL
+    const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' }, include: { records: true } })
+    expect(r.records).toHaveLength(1)
+    assertLossless(r.records, 'record entries')
+  })
+})
