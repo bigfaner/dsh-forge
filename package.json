@@ -22,7 +22,7 @@
     "dist:stage": "node scripts/assemble-installer-resources.mjs",
     "dist:check": "node scripts/assemble-installer-resources.mjs --check",
     "dist:win": "pnpm build && pnpm dist:stage && electron-builder --win --config electron-builder.config.mjs",
-    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p tests/tsconfig.json"
+    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p packages/plugin-forge/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p tests/tsconfig.json"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

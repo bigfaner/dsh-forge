@@ -5,6 +5,7 @@
     { "path": "packages/path-key" },
     { "path": "packages/core" },
     { "path": "packages/knowledge" },
+    { "path": "packages/plugin-forge" },
     { "path": "apps/host" },
     { "path": "apps/web" }
   ]

@@ -17,6 +17,7 @@ export default defineConfig({
       { test: { name: 'path-key', include: ['packages/path-key/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
+      { test: { name: 'plugin-forge', include: ['packages/plugin-forge/src/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       {
         test: {
