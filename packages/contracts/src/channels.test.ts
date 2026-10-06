@@ -61,12 +61,13 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:features/* 四通道（register/transition/upsertDoc/list——UI 直调）', () => {
+  it('forge:features/* 五通道（register/transition/upsertDoc/list/listDocs——UI 直调；listDocs = fix-2 文档行列举读面）', () => {
     expect(FEATURES_CHANNELS).toEqual({
       register: 'forge:features/register',
       transition: 'forge:features/transition',
       upsertDoc: 'forge:features/upsertDoc',
       list: 'forge:features/list',
+      listDocs: 'forge:features/listDocs',
     })
   })
 
@@ -97,9 +98,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 七 invoke 族 27 通道全列、无重复（main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(27)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(27)
+  it('allowlist = 七 invoke 族 28 通道全列、无重复（main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(28)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(28)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),

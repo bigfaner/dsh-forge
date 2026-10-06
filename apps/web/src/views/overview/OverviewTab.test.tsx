@@ -50,7 +50,20 @@ const PROPOSALS: readonly ProposalCard[] = [
 ]
 
 const PROPOSALS_LIST: OverviewListData = { kind: 'proposals', proposals: PROPOSALS }
-const FEATURES_LIST: OverviewListData = { kind: 'features', features: HEAD.features, proposals: PROPOSALS }
+const FEATURES_LIST: OverviewListData = {
+  kind: 'features',
+  features: HEAD.features,
+  proposals: PROPOSALS,
+  docs: [
+    {
+      featureId: 'fid-1',
+      docKind: 'tech-design',
+      relPath: 'docs/features/m2-pipeline/design/tech-design.md',
+      createdAt: CREATED,
+      updatedAt: CREATED,
+    },
+  ],
+}
 
 const handlers = {
   onSubtabChange: () => {},
@@ -120,11 +133,13 @@ describe('OverviewFrame 子 tab 内容分派（AC4）', () => {
     expect(markup).toContain('data-dswf-ov-doc="docs/proposals/m2-pipeline/proposal.md"')
   })
 
-  it('features 子 tab：feature 父行 + 来源提案（list.proposals）接线', () => {
+  it('features 子 tab：feature 父行 + 来源提案（list.proposals）+ 文档行（list.docs——fix-2 接线）', () => {
     const filter = { ...initialOverviewFilter(), subtab: 'features' as const }
     const markup = frame({ filter, list: FEATURES_LIST })
     expect(markup).toContain('data-dswf-ov-features')
     expect(markup).toContain('m2-pipeline')
+    // fix-2 装配注入：帧透传 list.docs → FeaturesTab 文档行（data-dswf-ov-doc = relPath 锚）
+    expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/design/tech-design.md"')
   })
 
   it('搜索在场 + 空结果 = 无匹配空态（服务端过滤——空标题由帧侧注入）', () => {

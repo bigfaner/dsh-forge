@@ -184,6 +184,7 @@ export const FEATURES_SERVICE_METHODS = [
   'transitionFeature',
   'upsertFeatureDoc',
   'listFeatures',
+  'listFeatureDocs',
 ] as const satisfies readonly (keyof ForgeFeaturesService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeFeaturesService 方法在此编译期点名） */

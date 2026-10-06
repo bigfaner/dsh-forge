@@ -141,7 +141,7 @@ describe('FeaturesTab 文档行（AC4——不含提案文档）', () => {
     expect(markup).not.toContain('data-dswf-ov-doc="docs/proposals/')
   })
 
-  it('docs 缺席（3.5 帧形态——读面无列举源）= 零文档行，展开元数据呈现文档统计', () => {
+  it('docs 缺席（装载失败降级/旧列缓存形态）= 零文档行，展开元数据呈现文档统计', () => {
     const markup = renderToStaticMarkup(
       <FeaturesTab {...base} openRows={new Set(['feat:m2-pipeline'])} />,
     )

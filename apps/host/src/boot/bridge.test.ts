@@ -406,6 +406,7 @@ describe('createBridgeProxy（主侧代理）', () => {
       'transitionFeature',
       'upsertFeatureDoc',
       'listFeatures',
+      'listFeatureDocs',
     ])
     expect([...PROPOSALS_SERVICE_METHODS]).toEqual(['createProposal', 'transitionProposal', 'listProposals'])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
@@ -494,7 +495,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
     expect(TASKS_SERVICE_METHODS).toHaveLength(11)
-    expect(FEATURES_SERVICE_METHODS).toHaveLength(4)
+    expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(3)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)

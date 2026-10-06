@@ -1,8 +1,9 @@
-// 任务 2.7 测试 —— forgeFeatures 域四法（tech-design §Interface 2）：registerFeature
+// 任务 2.7 测试 —— forgeFeatures 域五法（tech-design §Interface 2）：registerFeature
 // （slug UNIQUE → ERR_FEATURE_EXISTS / 谱系 FK 预检 ERR_PROPOSAL_NOT_FOUND）、
 // transitionFeature（reason 必带 + from≠to 同源 ERR_INVALID_TRANSITION）、upsertFeatureDoc
 // （登记即推进——单事务内聚相位推进/单调只进/slug→id 解析/漂移防护回滚）、listFeatures
-// （七态分布/文档统计/谱系 + search/sort）+ 写动词 emitTasksChanged 接线。临时 SQLite 夹具。
+// （七态分布/文档统计/谱系 + search/sort）、listFeatureDocs（fix-2 列举读面——文档行数据源）
+// + 写动词 emitTasksChanged 接线。临时 SQLite 夹具。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { FeatureCard, TaskStatus } from '@dsh-forge/contracts'
@@ -314,6 +315,61 @@ describe('AC3 listFeatures：七态分布 / 文档统计 / 谱系 + search/sort'
       'old-done',
       'old-active',
     ])
+  })
+})
+
+describe('fix-2 listFeatureDocs：feature_documents 列举读面（文档行数据源）', () => {
+  it('全行返回（FeatureDocumentRow 全字段）+ 确定性序（feature_id × doc_kind）；空库 = []', async () => {
+    const s = svc()
+    seedFeature(h!.wsDb, { slug: 'feat-a' })
+    seedFeature(h!.wsDb, { slug: 'feat-b' })
+    await s.upsertFeatureDoc({
+      projectId: h!.projectId,
+      featureSlug: 'feat-b',
+      docKind: 'tech-design',
+      relPath: 'docs/features/feat-b/design/tech-design.md',
+      summary: '设计摘要',
+    })
+    await s.upsertFeatureDoc({
+      projectId: h!.projectId,
+      featureSlug: 'feat-b',
+      docKind: 'prd-spec',
+      relPath: 'docs/features/feat-b/prd/prd-spec.md',
+    })
+    const fidB = (h!.wsDb.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = 'feat-b'`).get() as { id: string }).id
+    const docs = await s.listFeatureDocs({ projectId: h!.projectId })
+    // 确定性序：feature_id × doc_kind 字典序（feat-a 无行 → feat-b 两行 prd-spec 在前）
+    expect(docs.map((d) => [d.featureId, d.docKind])).toEqual([
+      [fidB, 'prd-spec'],
+      [fidB, 'tech-design'],
+    ])
+    expect(docs[1]).toMatchObject({
+      featureId: fidB,
+      docKind: 'tech-design',
+      relPath: 'docs/features/feat-b/design/tech-design.md',
+      summary: '设计摘要',
+    })
+    expect(docs[0]?.summary).toBeUndefined()
+    // 纯读面：与 listFeatures docCount 同源对账（feat-a 无行、feat-b 2 行）
+    const cards = await s.listFeatures({ projectId: h!.projectId })
+    const byslug = new Map(cards.map((c) => [c.slug, c.docCount]))
+    expect(byslug.get('feat-a')).toBe(0)
+    expect(byslug.get('feat-b')).toBe(2)
+  })
+
+  it('纯读零事件（emitTasksChanged 不发射）', async () => {
+    const s = svc()
+    seedFeature(h!.wsDb, { slug: 'dang' })
+    await s.upsertFeatureDoc({
+      projectId: h!.projectId,
+      featureSlug: 'dang',
+      docKind: 'ui-functions',
+      relPath: 'docs/features/dang/ui/ui-functions.md',
+    })
+    h!.events.emitted.length = 0
+    const docs = await s.listFeatureDocs({ projectId: h!.projectId })
+    expect(docs).toHaveLength(1)
+    expect(h!.events.emitted).toEqual([])
   })
 })
 

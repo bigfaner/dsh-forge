@@ -68,12 +68,13 @@ describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () =>
     expect(methods).toHaveLength(11)
   })
 
-  it('ForgeFeaturesService 四法 / ForgeProposalsService 三法 / ForgeDocsService 一法', () => {
+  it('ForgeFeaturesService 五法 / ForgeProposalsService 三法 / ForgeDocsService 一法', () => {
     const featureMethods: readonly (keyof ForgeFeaturesService)[] = [
       'registerFeature',
       'transitionFeature',
       'upsertFeatureDoc',
       'listFeatures',
+      'listFeatureDocs',
     ]
     const proposalMethods: readonly (keyof ForgeProposalsService)[] = [
       'createProposal',
@@ -81,7 +82,7 @@ describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () =>
       'listProposals',
     ]
     const docsMethods: readonly (keyof ForgeDocsService)[] = ['read']
-    expect(featureMethods).toHaveLength(4)
+    expect(featureMethods).toHaveLength(5)
     expect(proposalMethods).toHaveLength(3)
     expect(docsMethods).toHaveLength(1)
   })

@@ -131,10 +131,10 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       ]) {
         expect(typeof tasks?.[method]).toBe('function')
       }
-      // Interface 2：feature 域四法
+      // Interface 2：feature 域五法（fix-2 增 listFeatureDocs 列举读面）
       const features = provided.get('forgeFeatures') as Record<string, unknown> | undefined
       expect(features).toBeDefined()
-      for (const method of ['registerFeature', 'transitionFeature', 'upsertFeatureDoc', 'listFeatures']) {
+      for (const method of ['registerFeature', 'transitionFeature', 'upsertFeatureDoc', 'listFeatures', 'listFeatureDocs']) {
         expect(typeof features?.[method]).toBe('function')
       }
       // Interface 3：提案域三法

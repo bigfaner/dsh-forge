@@ -270,7 +270,7 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
     expect(t.calls[1]?.payload).toEqual({ projectId: 'p-1', taskRef: { slug: 'demo', localId: '2.1' } })
   })
 
-  it('features 四法 + proposals list + docs read/openExternal：通道常量本尊 + typed 返回', async () => {
+  it('features 五法 + proposals list + docs read/openExternal：通道常量本尊 + typed 返回', async () => {
     const t = fakeTransport()
     const featureRow = {
       featureId: 'f-1', slug: 'demo', title: '演示', featureStatus: 'discovery',
@@ -282,6 +282,9 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
         return { ok: true, data: { featureId: 'f-1', docKind: 'prd-spec', relPath: 'features/demo/prd-spec.md', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' } }
       }
       if (channel === FEATURES_CHANNELS.list) return { ok: true, data: [] }
+      if (channel === FEATURES_CHANNELS.listDocs) {
+        return { ok: true, data: [{ featureId: 'f-1', docKind: 'tech-design', relPath: 'docs/features/demo/design/tech-design.md', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' }] }
+      }
       if (channel === PROPOSALS_CHANNELS.list) {
         return { ok: true, data: [{ proposalId: 'pr-1', slug: 'p', title: '提案', proposalStatus: 'open', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' }] }
       }
@@ -293,6 +296,7 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
     await client.features.transition({ projectId: 'p-1', featureId: 'f-1', toStatus: 'archived', reason: '收纳' })
     await client.features.upsertDoc({ projectId: 'p-1', featureSlug: 'demo', docKind: 'prd-spec', relPath: 'features/demo/prd-spec.md' })
     await client.features.list({ projectId: 'p-1' })
+    await expect(client.features.listDocs({ projectId: 'p-1' })).resolves.toHaveLength(1)
     await expect(client.proposals.list({ projectId: 'p-1' })).resolves.toHaveLength(1)
     await expect(client.docs.read({ projectId: 'p-1', docRel: 'x.md' })).resolves.toMatchObject({ dangling: false })
     await expect(client.docs.openExternal({ projectId: 'p-1', docRel: 'x.md' })).resolves.toBeUndefined()

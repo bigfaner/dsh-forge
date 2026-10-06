@@ -2,8 +2,8 @@
 // 文档统计/创建更新] + feature 文档行[名称 + docKind 标签紧贴 + › 行尾]——不含提案文档
 // （feature_documents 行级来源，提案文档只在提案子 tab 呈现））。多开并存（openRows 集合）。
 // 数据形状 = contracts FeatureCard（byStatus/docCount/proposalSlug 聚合水化）+
-// FeatureDocumentRow（契约类型——3.5 帧无列举源不喂行[Interface 2 读面无列举 API]，接口
-// 在场供后续装配；元数据「文档」行呈现 docCount 统计）。
+// FeatureDocumentRow（fix-2 接线：features.listDocs 列举读面装配注入——OverviewTab 列路
+// 三路并发之一；元数据「文档」行呈现 docCount 统计）。
 // 文档行点击整行上抛 onOpenDoc（dock 开 tab——4.1 接线）。
 import type { ReactNode } from 'react'
 import {
@@ -27,7 +27,7 @@ export interface FeatureTabProps {
   readonly features: readonly FeatureCard[]
   /** 无参提案列（来源提案标题/状态查找——不随搜索漂移） */
   readonly proposals: readonly ProposalCard[]
-  /** feature 文档行（契约类型；3.5 帧不喂——读面无列举源，接口在场供装配注入） */
+  /** feature 文档行（fix-2 接线：features.listDocs 列举读面——列路装载注入；featureId 归属过滤在本层） */
   readonly docs?: readonly FeatureDocumentRow[]
   /** 父行展开键集（受控——帧侧 openRows） */
   readonly openRows: ReadonlySet<string>

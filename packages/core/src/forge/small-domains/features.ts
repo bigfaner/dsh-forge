@@ -14,6 +14,8 @@
 //   COALESCE 保既有值）→ 相位重算（单调只进——经注入的 2.1 推导机单源纯函数）。
 // - listFeatures：七态分布/文档统计/谱系水化 + search（slug/title/状态中英标签）+ sort
 //   （active 活跃优先 | created 最新创建）。
+// - listFeatureDocs（fix-2）：feature_documents 全行列举读面——概览 feature 子 tab 文档行
+//   数据源；纯读零事件（写后事件只及写动词），行归属过滤归 UI（featureId 分组呈现）。
 //
 // 写动词闭包尾部 emitTasksChanged(projectId)（Interface 1 写后事件四域覆盖面裁决——
 // 事务提交后发射，同通道同载荷）。一切 SQL prepared statements（Hard Rule）。
@@ -315,6 +317,18 @@ export function createFeaturesService(deps: FeaturesServiceDeps): ForgeFeaturesS
         createdAt: (c) => c.createdAt,
         id: (c) => c.featureId,
       })
+    },
+
+    async listFeatureDocs(q: { projectId: string }): Promise<FeatureDocumentRow[]> {
+      const db = deps.store.ensureOpen(q.projectId)
+      // 全行列举（确定性序：feature_id × doc_kind——同 feature 行紧邻，呈现归属归 UI 过滤）
+      return db
+        .prepare<unknown[], FeatureDocStorageRow>(
+          `SELECT feature_id, doc_kind, rel_path, summary, created_at, updated_at FROM feature_documents
+           ORDER BY feature_id, doc_kind`,
+        )
+        .all()
+        .map(toFeatureDocumentRow)
     },
   }
 }

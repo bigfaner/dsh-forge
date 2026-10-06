@@ -59,12 +59,14 @@ export const TASKS_CHANNELS = {
 
 export type TasksChannel = (typeof TASKS_CHANNELS)[keyof typeof TASKS_CHANNELS]
 
-/** forge:features/*（register/transition/upsertDoc/list——UI 直调；M2 仅 core API + RPC，tool 封装 = M3） */
+/** forge:features/*（register/transition/upsertDoc/list/listDocs——UI 直调；M2 仅 core API + RPC，tool 封装 = M3）。
+ *  listDocs = feature_documents 列举读面（fix-2：概览 feature 子 tab 文档行数据源）。 */
 export const FEATURES_CHANNELS = {
   register: 'forge:features/register',
   transition: 'forge:features/transition',
   upsertDoc: 'forge:features/upsertDoc',
   list: 'forge:features/list',
+  listDocs: 'forge:features/listDocs',
 } as const
 
 export type FeaturesChannel = (typeof FEATURES_CHANNELS)[keyof typeof FEATURES_CHANNELS]
@@ -106,6 +108,7 @@ export const FORGE_CHANNELS = {
   featuresTransition: FEATURES_CHANNELS.transition,
   featuresUpsertDoc: FEATURES_CHANNELS.upsertDoc,
   featuresList: FEATURES_CHANNELS.list,
+  featuresListDocs: FEATURES_CHANNELS.listDocs,
   proposalsList: PROPOSALS_CHANNELS.list,
   docsRead: DOCS_CHANNELS.read,
   docsOpenExternal: DOCS_CHANNELS.openExternal,

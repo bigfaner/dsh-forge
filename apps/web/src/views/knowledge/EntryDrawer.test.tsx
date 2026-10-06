@@ -69,6 +69,7 @@ function recordingClient(
       transition: mark('features.transition', () => Promise.resolve({})),
       upsertDoc: mark('features.upsertDoc', () => Promise.resolve({})),
       list: mark('features.list', () => Promise.resolve([])),
+      listDocs: mark('features.listDocs', () => Promise.resolve([])),
     },
     proposals: { list: mark('proposals.list', () => Promise.resolve([])) },
     docs: {

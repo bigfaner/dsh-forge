@@ -6,12 +6,13 @@
 //     （任务清单 {flatten}@{hash8} 单源——fail-soft）∥ features.list（无参——ov-head 摘要
 //     活跃 feature 与提案子 tab 谱系查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
 //   - 列路（subtab/search/sort/重试）：proposals 子 tab = proposals.list(search,sort)；
-//     features 子 tab = features.list(search,sort) ∥ proposals.list（无参——来源提案查找源）；
+//     features 子 tab = features.list(search,sort) ∥ proposals.list（无参——来源提案查找源）
+//     ∥ features.listDocs（fix-2：feature_documents 列举——文档行数据源，无 search 面）；
 //     tasks 子 tab = 3.5 无列装载（chips 消费头路 stats；三视图装载归 3.6）
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { FeatureCard, ProposalCard, TaskStats } from '@dsh-forge/contracts'
+import type { FeatureCard, FeatureDocumentRow, ProposalCard, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
@@ -96,7 +97,7 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
   }
 }
 
-/** 子 tab 列数据（tagged——proposals 行 / features 行含来源提案查找源） */
+/** 子 tab 列数据（tagged——proposals 行 / features 行含来源提案查找源 + 文档行列举源） */
 export type OverviewListData =
   | { readonly kind: 'proposals'; readonly proposals: readonly ProposalCard[] }
   | {
@@ -104,6 +105,9 @@ export type OverviewListData =
       readonly features: readonly FeatureCard[]
       /** 无参提案列（来源提案标题/状态查找——不随搜索漂移） */
       readonly proposals: readonly ProposalCard[]
+      /** feature 文档行（fix-2：feature_documents 列举——FeaturesTab 文档行数据源，
+       *  featureId 归属过滤归呈现层） */
+      readonly docs: readonly FeatureDocumentRow[]
     }
 
 /**
@@ -120,11 +124,12 @@ export async function fetchOverviewList(
     if (q.subtab === 'proposals') {
       return { ok: true, data: { kind: 'proposals', proposals: await client.proposals.list({ projectId: q.projectId, search, sort: q.sort }) } }
     }
-    const [features, proposals] = await Promise.all([
+    const [features, proposals, docs] = await Promise.all([
       client.features.list({ projectId: q.projectId, search, sort: q.sort }),
       client.proposals.list({ projectId: q.projectId }),
+      client.features.listDocs({ projectId: q.projectId }),
     ])
-    return { ok: true, data: { kind: 'features', features, proposals } }
+    return { ok: true, data: { kind: 'features', features, proposals, docs } }
   } catch (error) {
     return { ok: false, error: mapOverviewError(error) }
   }

@@ -468,6 +468,12 @@ export interface ListFeaturesQuery {
   sort?: 'active' | 'created'
 }
 
+/** listFeatureDocs 查询（fix-2：feature_documents 列举读面——概览 feature 子 tab 文档行数据源；
+ *  行归属过滤归 UI（featureId 分组呈现），无 search 面） */
+export interface ListFeatureDocsQuery {
+  projectId: string
+}
+
 /** features 行应用层形状 */
 export interface FeatureRow {
   featureId: string
@@ -517,6 +523,8 @@ export interface ForgeFeaturesService {
   upsertFeatureDoc(input: UpsertFeatureDocInput): Promise<FeatureDocumentRow>
   /** 含七态分布/文档统计/谱系 */
   listFeatures(q: ListFeaturesQuery): Promise<FeatureCard[]>
+  /** feature_documents 列举读面（fix-2：文档行浏览源；纯读零事件） */
+  listFeatureDocs(q: ListFeatureDocsQuery): Promise<FeatureDocumentRow[]>
 }
 
 // ─────────────────────────── Interface 3：提案域（ctx.forgeProposals） ───────────────────────────
@@ -669,6 +677,7 @@ export interface FeaturesChannelRequests {
   transition: TransitionFeatureInput
   upsertDoc: UpsertFeatureDocInput
   list: ListFeaturesQuery
+  listDocs: ListFeatureDocsQuery
 }
 
 /** forge:features/* 响应负载（键 = FEATURES_CHANNELS 键） */
@@ -677,6 +686,7 @@ export interface FeaturesChannelResponses {
   transition: FeatureRow
   upsertDoc: FeatureDocumentRow
   list: FeatureCard[]
+  listDocs: FeatureDocumentRow[]
 }
 
 /** forge:proposals/* 请求负载（键 = PROPOSALS_CHANNELS 键；createProposal/transitionProposal 不在此面） */

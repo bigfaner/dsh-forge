@@ -253,6 +253,7 @@ describe('fetchTaskDetail（数据面——rpc tasks.detail 唯一通道）', ()
           transition: mark('features.transition', () => Promise.resolve({})),
           upsertDoc: mark('features.upsertDoc', () => Promise.resolve({})),
           list: mark('features.list', () => Promise.resolve([])),
+          listDocs: mark('features.listDocs', () => Promise.resolve([])),
         },
         proposals: { list: mark('proposals.list', () => Promise.resolve([])) },
         docs: {
@@ -302,7 +303,7 @@ describe('TaskDrawer（装载壳——静态首帧）', () => {
         detail: stub,
         sessionLinks: stub,
       },
-      features: { register: stub, transition: stub, upsertDoc: stub, list: stub },
+      features: { register: stub, transition: stub, upsertDoc: stub, list: stub, listDocs: stub },
       proposals: { list: stub },
       docs: { read: stub, openExternal: stub },
     } as unknown as ForgeRpcClient

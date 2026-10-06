@@ -193,6 +193,11 @@ test('@web-e2e @m2 文档浏览·悬空容错：占位面在场 + 不崩溃不�
     const projectId = project.id
     const docRel = 'docs/features/dang-feat/design/tech-design.md'
 
+    // 发现链建行先行（惰性首开单径——onRegistered 协作者缝在场未接线，建库归 ensureOpen
+    // 首次 forge 域触达：record 5.summary §5.2 裁决）：文件在场时触达列举读面，索引行落库
+    const beforeDelete = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
+    expect(beforeDelete.find((f) => f.slug === 'dang-feat')?.docCount, '删除前文档行已入索引（惰性首开触达）').toBe(1)
+
     // 分支切换模拟：文件移除（索引行在场、盘上缺席）
     rmSync(designPath)
 

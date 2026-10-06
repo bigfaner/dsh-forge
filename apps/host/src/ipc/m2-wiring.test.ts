@@ -43,7 +43,7 @@ function fakeHost(services: Partial<DshHostServices>) {
 const stub = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as unknown as never
 
 describe('3.1 registerM2Channels · 通道族注册', () => {
-  it('六服务齐备：五族全量注册（tasks 八 + features 四 + proposals 一 + docs 两 + derive 一 = 16 通道）', () => {
+  it('六服务齐备：五族全量注册（tasks 八 + features 五 + proposals 一 + docs 两 + derive 一 = 17 通道）', () => {
     const { ipcMain, handlers } = fakeIpcMain()
     registerM2Channels(
       createForgeIpc(ipcMain),
@@ -68,7 +68,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(16)
+    expect(handlers).toHaveLength(17)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {

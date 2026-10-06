@@ -13,7 +13,7 @@ function fakeIpcMain() {
 }
 
 describe('AC4 allowlist 注册机制', () => {
-  it('contracts 全部 invoke 通道（P1 十通道 + M2 五族十七通道 = 27）可注册且落 ipcMain.handle', () => {
+  it('contracts 全部 invoke 通道（P1 十通道 + M2 五族十八通道 = 28）可注册且落 ipcMain.handle', () => {
     const { ipcMain, handlers } = fakeIpcMain()
     const ipc = createForgeIpc(ipcMain)
     for (const channel of Object.values(FORGE_CHANNELS)) {

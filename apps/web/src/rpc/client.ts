@@ -28,6 +28,7 @@ import {
   type GetProjectRequest,
   type KnowledgeCard,
   type ListDirRequest,
+  type ListFeatureDocsQuery,
   type ListEntriesQuery,
   type ListFeaturesQuery,
   type ListProposalsQuery,
@@ -136,12 +137,14 @@ export interface ForgeTasksRpc {
   sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]>
 }
 
-/** forge:features/* 面方法集（Interface 7 四通道——UI 直调；键 = FEATURES_CHANNELS 键） */
+/** forge:features/* 面方法集（Interface 7 五通道——UI 直调；键 = FEATURES_CHANNELS 键） */
 export interface ForgeFeaturesRpc {
   register(input: RegisterFeatureInput): Promise<FeatureRow>
   transition(input: TransitionFeatureInput): Promise<FeatureRow>
   upsertDoc(input: UpsertFeatureDocInput): Promise<FeatureDocumentRow>
   list(q: ListFeaturesQuery): Promise<FeatureCard[]>
+  /** feature_documents 列举读面（fix-2：概览 feature 子 tab 文档行数据源） */
+  listDocs(q: ListFeatureDocsQuery): Promise<FeatureDocumentRow[]>
 }
 
 /** forge:proposals/* 面方法集（Interface 7 仅 list；createProposal/transitionProposal = tool 专属） */
@@ -213,6 +216,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       transition: (input) => invokeRpc<FeatureRow>(transport, FEATURES_CHANNELS.transition, input),
       upsertDoc: (input) => invokeRpc<FeatureDocumentRow>(transport, FEATURES_CHANNELS.upsertDoc, input),
       list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
+      listDocs: (q) => invokeRpc<FeatureDocumentRow[]>(transport, FEATURES_CHANNELS.listDocs, q),
     },
     proposals: {
       list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),

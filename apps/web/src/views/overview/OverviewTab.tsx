@@ -163,6 +163,7 @@ export function OverviewFrame({
         <FeaturesTab
           features={list.kind === 'features' ? list.features : []}
           proposals={list.kind === 'features' ? list.proposals : []}
+          docs={list.kind === 'features' ? list.docs : undefined}
           openRows={filter.openRows}
           onToggleRow={onToggleRow}
           onOpenDoc={openDoc}

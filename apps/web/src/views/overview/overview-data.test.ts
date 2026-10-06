@@ -3,7 +3,7 @@
 // 归一 + 派生行 fail-soft + typed error 三态映射 + 落点纯函数。
 // 口径沿 use-knowledge-browse 先例：effect 胶水不在 Node 测面；纯异步面全量单测。
 import { describe, expect, it } from 'vitest'
-import type { FeatureCard, Project, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
+import type { FeatureCard, FeatureDocumentRow, Project, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
 import {
   FEATURES_CHANNELS,
   PROJECTS_CHANNELS,
@@ -109,10 +109,22 @@ function headOkClient(overrides: { deriveTaskStoreDir?: () => unknown } = {}) {
       return overrides.deriveTaskStoreDir?.() ?? { dir: 'C:/forge-home/demo@a1b2c3d4' }
     }
     if (channel === FEATURES_CHANNELS.list) return [featureCard('m2-pipeline')]
+    if (channel === FEATURES_CHANNELS.listDocs) return [featureDocRow()]
     if (channel === TASKS_CHANNELS.stats) return STATS
     if (channel === PROPOSALS_CHANNELS.list) return [proposalCard('pr-1', 'prop-1')]
     throw new Error(`unexpected channel: ${channel}`)
   })
+}
+
+/** feature 文档行（fix-2 列举读面替身——fid-m2-pipeline 归属） */
+function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): FeatureDocumentRow {
+  return {
+    featureId: 'fid-m2-pipeline',
+    docKind,
+    relPath: `docs/features/m2-pipeline/${docKind === 'tech-design' ? 'design/tech-design.md' : 'prd/prd-spec.md'}`,
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  }
 }
 
 describe('loadOverviewHead（头路四路并发）', () => {
@@ -184,18 +196,21 @@ describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言�
     expect(call?.payload).toEqual({ projectId: 'p-1', search: undefined, sort: 'active' })
   })
 
-  it('features 子 tab：features.list 带 search/sort ∥ proposals.list 无参（来源提案查找源）', async () => {
+  it('features 子 tab：features.list 带 search/sort ∥ proposals.list 无参 ∥ features.listDocs（fix-2 文档行数据源）', async () => {
     const { client, calls } = headOkClient()
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'features', search: 'pipeline', sort: 'active' })
     expect(out?.ok).toBe(true)
     if (out?.ok && out.data.kind === 'features') {
       expect(out.data.features).toEqual([featureCard('m2-pipeline')])
       expect(out.data.proposals).toEqual([proposalCard('pr-1', 'prop-1')])
+      expect(out.data.docs).toEqual([featureDocRow()])
     }
     const featuresCall = calls.find((c) => c.channel === FEATURES_CHANNELS.list)
     expect(featuresCall?.payload).toEqual({ projectId: 'p-1', search: 'pipeline', sort: 'active' })
     const proposalsCall = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
     expect(proposalsCall?.payload).toEqual({ projectId: 'p-1' })
+    const docsCall = calls.find((c) => c.channel === FEATURES_CHANNELS.listDocs)
+    expect(docsCall?.payload).toEqual({ projectId: 'p-1' }) // 无 search 面（行归属过滤归 UI）
   })
 
   it('tasks 子 tab = null（3.5 无列装载——三视图归 3.6，chips 消费头路 stats）', async () => {
