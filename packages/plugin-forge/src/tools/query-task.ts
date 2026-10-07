@@ -1,17 +1,22 @@
-// queryTask tool 定义（定位：业务——Interface 8 六动词之一）。
-// 任务定位 = slug + local_id 两显式参（必填）；include 嵌套负载平铺为四布尔
-//（全缺省 = 仅任务快照——轻查；按需开节）。返回 = contracts QueryTaskResult
-// 透传（未命中 ERR_TASK_NOT_FOUND——core 侧拒绝面）。
-import type { QueryTaskInput, QueryTaskResult, TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
+// queryTask tool 定义（定位：业务——M3 终态六动词之一）。
+// 任务定位 = slug + local_id 两显式参（必填；slug = 容器 slug——feature 目录名 /
+// proposal slug，M3 容器化口径）；include 嵌套负载平铺为四布尔（全缺省 = 仅任务
+// 快照——轻查；按需开节）。返回 = contracts QueryTaskResult 透传（含 container
+// 容器水化——诊断消息数据源，render 键值行投影；未命中 ERR_TASK_NOT_FOUND 走
+// 失败面 formatErr）。
+// 返回面双友好（裁决⑨）：成功 formatOk；typed 服务错误 → 失败 DTO formatErr。
+import type { QueryTaskInput, QueryTaskResult, TaskContainerSummary, TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
 import { optionalBoolean, requireArgsObject, requiredString } from './args.js'
+import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
 
 const TOOL = 'queryTask'
 
 /** agent 面参数（include 平铺四布尔） */
 export interface QueryTaskToolArgs {
+  /** 容器 slug（feature 目录名 / proposal slug——任务自然键第一段） */
   readonly slug: string
   readonly local_id: string
   readonly include_prerequisites?: boolean
@@ -46,8 +51,8 @@ export function parseQueryTaskArgs(args: unknown): QueryTaskToolArgs {
   return out
 }
 
-/** QueryTaskResult 的注册面输出 schema（四节按 include 门控——宽松镜像） */
-const QUERY_TASK_OUTPUT_SCHEMA = {
+/** QueryTaskResult 的注册面输出 schema（四节按 include 门控——宽松镜像 + 失败支） */
+const QUERY_TASK_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -61,27 +66,48 @@ const QUERY_TASK_OUTPUT_SCHEMA = {
         taskType: { type: 'string' },
         taskStatus: { type: 'string' },
         blockedReason: { type: 'string' },
+        mode: { type: 'string' },
       },
       required: ['taskId', 'slug', 'localId', 'title', 'taskType', 'taskStatus'],
       description: 'Current task snapshot.',
+    },
+    container: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string' },
+        slug: { type: 'string' },
+        title: { type: 'string' },
+        summary: { type: 'string' },
+        mode: { type: 'string' },
+        phase: { type: 'string' },
+      },
+      required: ['kind', 'slug', 'title'],
+      description: 'Owning container hydration (feature or proposal).',
     },
     prerequisites: { type: 'array', items: { type: 'string' }, description: 'slug/localId of each prerequisite (when included).' },
     waitingOnMe: { type: 'array', items: { type: 'string' }, description: 'slug/localId of each successor waiting on this task (when included).' },
     records: { type: 'array', items: { type: 'string' }, description: 'Execution timeline entries (when included).' },
     sessions: { type: 'array', items: { type: 'string' }, description: 'Attached sessions, link/record typed (when included).' },
   },
-  required: ['task'],
-} as const
+  required: ['task', 'container'],
+})
 
-/** 快照行（claim render 同形——自然键呈现） */
-function snapshotSummary(t: TaskSnapshot): string[] {
-  const lines = [
-    `${t.slug}/${t.localId} [${t.taskStatus}] ${t.title}`,
+/** 快照键值行（type/priority/complexity + 模式快照 + blocked/desc） */
+function snapshotEntries(t: TaskSnapshot): string[] {
+  const entries = [
     `- type: ${t.taskType}${t.priority !== undefined ? `, priority ${t.priority}` : ''}, complexity ${t.complexity}`,
   ]
-  if (t.blockedReason !== undefined) lines.push(`- blocked: ${t.blockedReason}`)
-  if (t.taskDesc !== undefined) lines.push(`- desc: ${t.taskDesc}`)
-  return lines
+  if (t.mode !== undefined) entries.push(`- mode: ${t.mode} (creation-time snapshot)`)
+  if (t.blockedReason !== undefined) entries.push(`- blocked: ${t.blockedReason}`)
+  if (t.taskDesc !== undefined) entries.push(`- desc: ${t.taskDesc}`)
+  return entries
+}
+
+/** 容器水化键值行（kind/slug 判别 + 相位仅 feature 容器） */
+function containerLine(c: TaskContainerSummary): string {
+  const phase = c.phase !== undefined ? ` (phase ${c.phase})` : ''
+  const mode = c.mode !== undefined ? ` [${c.mode}]` : ''
+  return `- container: ${c.kind} ${c.slug}${phase}${mode} — ${c.title}`
 }
 
 /** record 时间线行 */
@@ -98,36 +124,38 @@ function recordLine(r: TaskRecordEntry): string {
   return `  - ${r.verb}${transition} (${r.actor}${r.sessionId !== undefined ? `, session ${r.sessionId}` : ''})${detail}`
 }
 
-/** QueryTaskResult → 模型可见文本（四节按在场投影） */
+/** QueryTaskResult → 模型可见文本（formatOk：✓ 首行 + 键值行；四节按在场投影） */
 function renderQueryResult(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
+  if (isForgeToolFailure(value)) return formatFailure(value)
   const v = value as QueryTaskResult
-  const lines = [...snapshotSummary(v.task)]
+  const t = v.task
+  const entries = [...snapshotEntries(t), containerLine(v.container)]
   if (v.prerequisites !== undefined) {
-    lines.push(
+    entries.push(
       v.prerequisites.length === 0
         ? 'prerequisites: (none)'
         : `prerequisites: ${v.prerequisites.map((p) => `${p.slug}/${p.localId} [${p.taskStatus}]`).join(', ')}`,
     )
   }
   if (v.waitingOnMe !== undefined) {
-    lines.push(
+    entries.push(
       v.waitingOnMe.length === 0
         ? 'waiting on me: (none)'
         : `waiting on me: ${v.waitingOnMe.map((p) => `${p.slug}/${p.localId} [${p.taskStatus}]`).join(', ')}`,
     )
   }
   if (v.records !== undefined) {
-    lines.push(`records (${v.records.length}):`)
-    lines.push(...v.records.map(recordLine))
+    entries.push(`records (${v.records.length}):`)
+    entries.push(...v.records.map(recordLine))
   }
   if (v.sessions !== undefined) {
-    lines.push(
+    entries.push(
       v.sessions.length === 0
         ? 'sessions: (none)'
         : `sessions: ${v.sessions.map((s) => `${s.sessionId} (${s.source})`).join(', ')}`,
     )
   }
-  return [{ type: 'text', text: lines.join('\n') }]
+  return formatOk(`${t.slug}/${t.localId} [${t.taskStatus}] ${t.title}`, entries)
 }
 
 /** tool 定义工厂 */
@@ -135,11 +163,11 @@ export function createQueryTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Query one task by its slug + local_id: current status, plus optional sections (prerequisites, tasks waiting on it, execution records, attached sessions). Use it to check readiness or diagnose blockers before claiming or submitting.',
+      'Query one task by its container slug + local_id: current status, owning container (feature or proposal, with phase and mode), plus optional sections (prerequisites, tasks waiting on it, execution records, attached sessions). Use it to check readiness or diagnose blockers before submitting or spawning fix tasks.',
     parameters: {
       type: 'object',
       properties: {
-        slug: { type: 'string', description: 'Feature slug of the task.' },
+        slug: { type: 'string', description: 'Container slug of the task (feature directory name or proposal slug).' },
         local_id: { type: 'string', description: 'Local id of the task.' },
         include_prerequisites: { type: 'boolean', description: 'Also return prerequisite tasks with their statuses.' },
         include_waiting_on_me: { type: 'boolean', description: 'Also return successor tasks waiting on this one.' },
@@ -149,28 +177,30 @@ export function createQueryTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
       required: ['slug', 'local_id'],
     },
     output: { schema: QUERY_TASK_OUTPUT_SCHEMA, render: renderQueryResult },
-    async execute(args: unknown, exec: ToolExecFace): Promise<QueryTaskResult> {
-      const parsed = parseQueryTaskArgs(args)
-      const session = sessionContextOf(exec)
-      const projectId = requireProjectId(deps.resolveProjectId, session)
-      const include =
-        parsed.include_prerequisites === true ||
-        parsed.include_waiting_on_me === true ||
-        parsed.include_records === true ||
-        parsed.include_sessions === true
-          ? {
-              ...(parsed.include_prerequisites === true ? { prerequisites: true } : {}),
-              ...(parsed.include_waiting_on_me === true ? { waitingOnMe: true } : {}),
-              ...(parsed.include_records === true ? { records: true } : {}),
-              ...(parsed.include_sessions === true ? { sessions: true } : {}),
-            }
-          : undefined
-      const input: QueryTaskInput = {
-        projectId,
-        taskRef: { slug: parsed.slug, localId: parsed.local_id },
-        ...(include !== undefined ? { include } : {}),
-      }
-      return deps.tasks.queryTask(input)
+    async execute(args: unknown, exec: ToolExecFace): Promise<QueryTaskResult | ForgeToolFailure> {
+      return callToolFace(async () => {
+        const parsed = parseQueryTaskArgs(args)
+        const session = sessionContextOf(exec)
+        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const include =
+          parsed.include_prerequisites === true ||
+          parsed.include_waiting_on_me === true ||
+          parsed.include_records === true ||
+          parsed.include_sessions === true
+            ? {
+                ...(parsed.include_prerequisites === true ? { prerequisites: true } : {}),
+                ...(parsed.include_waiting_on_me === true ? { waitingOnMe: true } : {}),
+                ...(parsed.include_records === true ? { records: true } : {}),
+                ...(parsed.include_sessions === true ? { sessions: true } : {}),
+              }
+            : undefined
+        const input: QueryTaskInput = {
+          projectId,
+          taskRef: { slug: parsed.slug, localId: parsed.local_id },
+          ...(include !== undefined ? { include } : {}),
+        }
+        return deps.tasks.queryTask(input)
+      })
     },
   }
 }

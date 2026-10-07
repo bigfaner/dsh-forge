@@ -1,11 +1,11 @@
-// 3.2 单测 —— submitTask tool：两显式参定位必填 + result 双径 + gate 平铺
-//（all-or-none / coverage 依赖门）+ sessionId 提取 + 映射与 render（restored 恢复钩子回报）。
+// 3.5 单测 —— submitTask tool：两显式参定位必填（slug = 容器 slug——M3 容器化口径）
+// + result 双径 + gate 平铺（all-or-none / coverage 依赖门）+ sessionId 提取 +
+// 映射与双友好返回面渲染（formatOk ✓ 含恢复钩子回报行 / typed 错误 → 失败 DTO）。
 import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, SubmitTaskInput } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createSubmitTaskTool, gateOf, parseSubmitTaskArgs } from './submit-task.js'
 import type { ForgeToolDeps } from './index.js'
-import { WorkspaceNotRegisteredError } from './session.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'child-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
@@ -77,7 +77,7 @@ describe('gateOf（平铺 → TaskGateReport）', () => {
 })
 
 describe('submitTask execute（路由 + 映射）', () => {
-  it('slug+local_id → taskRef；sessionId 提取（执行会话 = 子会话，与 claim 派发会话相异可判）；gate 映射', async () => {
+  it('slug+local_id → taskRef（slug = 容器 slug——feature/proposal 同规）；sessionId 提取；gate 映射', async () => {
     const { tool, captured } = toolWithCapture()
     await tool.execute(
       {
@@ -116,7 +116,7 @@ describe('submitTask execute（路由 + 映射）', () => {
     expect(captured[0]?.gate).toBeUndefined()
   })
 
-  it('空会话拒；cwd 未命中 → WorkspaceNotRegisteredError', async () => {
+  it('空会话拒（untyped 防御收窄——原样抛，不走失败 DTO）', async () => {
     const { tool, captured } = toolWithCapture()
     await expect(
       tool.execute(
@@ -124,24 +124,56 @@ describe('submitTask execute（路由 + 映射）', () => {
         { agent: { session: { id: '', header: { cwd: 'C:\\ws\\demo' } } } },
       ),
     ).rejects.toThrow(/no agent session/)
-    await expect(
-      tool.execute(
-        { slug: 'f', local_id: '1', result: 'success' },
-        { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } },
-      ),
-    ).rejects.toThrow(WorkspaceNotRegisteredError)
     expect(captured).toHaveLength(0)
+  })
+
+  it('cwd 未命中 → 失败 DTO（ERR_WORKSPACE_NOT_REGISTERED——formatErr 面）；服务零触达', async () => {
+    const { tool, captured } = toolWithCapture()
+    const out = await tool.execute(
+      { slug: 'f', local_id: '1', result: 'success' },
+      { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } },
+    )
+    expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED' })
+    expect(captured).toHaveLength(0)
+  })
+
+  it('AC 证据门 typed 错误 → 失败 DTO（违规清单 = AC 逐行）', async () => {
+    const tasks = {
+      submitTask: async () => {
+        const e = new Error('submitTask 缺测试证据：验收清单（逐条补证据后重新提交）：\n- AC1') as Error & {
+          code: string
+          data?: unknown
+        }
+        e.code = 'ERR_TEST_EVIDENCE_REQUIRED'
+        e.data = { acceptanceCriteria: ['AC1'] }
+        throw e
+      },
+    } as unknown as ForgeTasksService
+    const deps: ForgeToolDeps = {
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+    }
+    const tool = createSubmitTaskTool(deps)
+    const out = await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_TEST_EVIDENCE_REQUIRED' })
+    const text = tool.output.render({ slug: 'f1', local_id: '3.2' }, out)[0]?.text ?? ''
+    expect(text).toContain('✗ ERR_TEST_EVIDENCE_REQUIRED — submitTask 缺测试证据')
+    expect(text).toContain('missing evidence for AC: AC1')
   })
 })
 
-describe('submitTask render', () => {
-  it('restored 空 = 单行；非空 = 恢复钩子回报行', () => {
+describe('submitTask 返回面渲染（formatOk 快照）', () => {
+  it('首行 ✓ 自然键 + 状态；taskId 键值行；恢复钩子逐行回报', () => {
     const { tool } = toolWithCapture()
-    expect(tool.output.render({}, { taskId: 't', status: 'completed', restored: [] })[0]?.text).not.toContain(
-      'Auto-restored',
+    expect(tool.output.render({ slug: 'f1', local_id: '3.2' }, { taskId: 't-1', status: 'completed', restored: [] })[0]?.text).toBe(
+      '✓ Task f1/3.2 submitted — completed\n- taskId: t-1',
     )
     expect(
-      tool.output.render({}, { taskId: 't', status: 'completed', restored: [{ slug: 'f', localId: '2.4' }] })[0]?.text,
-    ).toContain('f/2.4')
+      tool.output.render(
+        { slug: 'f1', local_id: 'fix-1' },
+        { taskId: 't-2', status: 'completed', restored: [{ slug: 'f1', localId: '2.4' }] },
+      )[0]?.text,
+    ).toBe('✓ Task f1/fix-1 submitted — completed\n- taskId: t-2\n- restored: f1/2.4 (source unblocked)')
   })
 })

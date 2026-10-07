@@ -1,11 +1,12 @@
-// 3.2 单测 —— 插件装配（AC1 inject 面 / AC2 六 tool 注册 / AC3 G1-11 pin 六在场两缺席 /
-// AC5 段注册）：临时 Cordis runtime（结构化最小面假宿主，knowledge plugin.test 同型）
-// 装配双 core 服务桩 + 插件，验证 inject 声明、注册/disposer 全生命周期与
-// forge:pipeline 段（name/order/text）。
+// 3.5 单测 —— 插件装配（AC1 inject 面 / 注册面集合 pin（claimTask 退役·drift #1——
+// M3 终态六 tool 的 3.5 切片 = 五在场，dispatchTask 注册面收口归 3.4；新面 pin =
+// 5.1 #17/#18）/ 参数 schema pin（容器双参 + 旧参删除机械断言）/ AC5 段注册）：
+// 临时 Cordis runtime（结构化最小面假宿主，knowledge plugin.test 同型）装配双 core
+// 服务桩 + 插件，验证 inject 声明、注册/disposer 全生命周期与 forge:pipeline 段。
 import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
-import { FORGE_TOOL_NAMES } from './tools/index.js'
+import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
 import type { ForgePromptSection, ForgeToolDefinition } from './tools/index.js'
 
@@ -65,21 +66,27 @@ describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals 双�
   })
 })
 
-describe('AC2/AC3 注册面：六 tool（名 = 动词透传）+ 两缺席（SC7 代码审计 + G1-11 pin）', () => {
-  it('六 tool 注册且名 = Interface 8 列序全集（FORGE_TOOL_NAMES 单源）', () => {
+describe('注册面集合 pin（M3 终态六 tool 的 3.5 切片：五在场 / 缺席面改写）', () => {
+  it('五 tool 注册且名 = Interface 4 列序（FORGE_TOOL_NAMES 单源；dispatchTask 归 3.4 补位成六）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     expect(rt.registeredTools.map((t) => t.name)).toEqual([...FORGE_TOOL_NAMES])
+    expect([...FORGE_TOOL_NAMES]).toEqual(['addTask', 'submitTask', 'queryTask', 'createProposal', 'transitionProposal'])
     dispose()
   })
 
-  it('G1-11 pin：transitionTask / transitionFeature 不注册（人类通道专属——交互四面分治）', () => {
+  it('缺席面（M2 G1-11「两缺席」随之改写——drift #1）：transitionTask / transitionFeature / claimTask / setProposalMode 不注册', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     const names = rt.registeredTools.map((t) => t.name)
     expect(names).not.toContain('transitionTask')
     expect(names).not.toContain('transitionFeature')
-    // 面分治反向注记：提案域 transitionProposal 在册（Interface 8 六动词列明）
+    // claimTask tool 退役（3.5·drift #1）：并入 dispatchTask 复合动词（3.4 落地），
+    // core 服务 API 保留（dispatchTask/桥/回放消费）——tool 面不再注册
+    expect(names).not.toContain('claimTask')
+    // 模式改写唯一正门 = setProposalMode RPC（UI 专属）——agent tool 面无此动词（SC6）
+    expect(names).not.toContain('setProposalMode')
+    // 面分治反向注记：提案域 transitionProposal 在册（Interface 4 双面动词）
     expect(names).toContain('transitionProposal')
     dispose()
   })
@@ -87,7 +94,7 @@ describe('AC2/AC3 注册面：六 tool（名 = 动词透传）+ 两缺席（SC7 
   it('每 tool 形状齐备：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(5)
     for (const tool of rt.registeredTools) {
       expect(tool.description.length, `${tool.name} description`).toBeGreaterThan(20)
       expect(tool.parameters.type).toBe('object')
@@ -95,6 +102,36 @@ describe('AC2/AC3 注册面：六 tool（名 = 动词透传）+ 两缺席（SC7 
       expect(tool.output.schema).toBeDefined()
       expect(typeof tool.output.render).toBe('function')
       expect(typeof tool.execute).toBe('function')
+    }
+    dispose()
+  })
+
+  it('参数 schema pin：容器双参（addTask source_kind/source_slug 必填、feature_slug 旧参删除）+ mode/superseded_by 新参在场', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx())
+    const byName = new Map(rt.registeredTools.map((t) => [t.name, t]))
+    const addTask = byName.get('addTask')
+    // 容器化迁移（旧参删除——feature_slug 不在参数面）
+    expect(addTask?.parameters.properties).not.toHaveProperty('feature_slug')
+    expect(addTask?.parameters.properties).toHaveProperty('source_kind')
+    expect(addTask?.parameters.properties).toHaveProperty('source_slug')
+    expect(addTask?.parameters.required).toEqual(['source_kind', 'source_slug', 'title', 'type'])
+    // createProposal mode 透传 / transitionProposal superseded_by 透传
+    expect(byName.get('createProposal')?.parameters.properties).toHaveProperty('mode')
+    expect(byName.get('transitionProposal')?.parameters.properties).toHaveProperty('superseded_by')
+    // 任务定位两显式参口径
+    expect(byName.get('submitTask')?.parameters.required).toEqual(['slug', 'local_id', 'result'])
+    expect(byName.get('queryTask')?.parameters.required).toEqual(['slug', 'local_id'])
+    dispose()
+  })
+
+  it('输出面双支 pin（裁决⑨）：每 tool output.schema = oneOf [成功, 失败 DTO]（失败支四键 required）', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx())
+    for (const tool of rt.registeredTools) {
+      const schema = tool.output.schema as { oneOf?: { required?: readonly string[] }[] }
+      expect(Array.isArray(schema.oneOf), `${tool.name} 输出面应为成功/失败双支`).toBe(true)
+      expect(schema.oneOf?.[1]?.required).toEqual(['ok', 'code', 'message', 'violations'])
     }
     dispose()
   })
@@ -112,21 +149,35 @@ describe('AC2/AC3 注册面：六 tool（名 = 动词透传）+ 两缺席（SC7 
     const rt = new TempRuntime()
     let routed: string | undefined
     const tasks = {
-      claimTask: async (input: { projectId: string; sessionId: string }) => {
+      queryTask: async (input: { projectId: string }) => {
         routed = input.projectId
-        return { task: null, dispatchPrompt: '', digest: '', reclaimed: false }
+        return {
+          task: {
+            taskId: 't',
+            slug: 'f',
+            localId: '1',
+            source: { kind: 'feature', slug: 'f' },
+            title: 'T',
+            taskType: 'doc',
+            taskStatus: 'pending',
+            breaking: false,
+            complexity: 'low',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          container: { kind: 'feature', slug: 'f', title: 'F' },
+        }
       },
     } as unknown as ForgeTasksService
     const ctx = { ...rt.ctx(), forgeTasks: tasks }
     const dispose = forgePlugin(ctx, { projects: [{ wsPath: 'C:\\ws\\bound', projectId: 'p-9' }] })
-    const claim = rt.registeredTools.find((t) => t.name === 'claimTask')
+    const query = rt.registeredTools.find((t) => t.name === 'queryTask')
     const exec = { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\bound' } } } }
-    await claim?.execute({}, exec)
+    await query?.execute({ slug: 'f', local_id: '1' }, exec)
     expect(routed).toBe('p-9')
-    // 绑定缺席：同表下其它 cwd → typed 拒（ERR_WORKSPACE_NOT_REGISTERED）
-    await expect(
-      claim?.execute({}, { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\other' } } } }),
-    ).rejects.toThrow(/not bound to a registered project/)
+    // 绑定缺席：同表下其它 cwd → typed 拒转失败 DTO（ERR_WORKSPACE_NOT_REGISTERED——formatErr 面）
+    const out = await query?.execute({ slug: 'f', local_id: '1' }, { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\other' } } } })
+    expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED' })
     dispose()
   })
 })
@@ -144,10 +195,21 @@ describe('AC5 段注册（forge:pipeline / order 510）', () => {
     dispose()
   })
 
-  it('disposer 全注销（tool×6 + 段×1，各恰一次）', () => {
+  it('disposer 全注销（tool×5 + 段×1，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+    expect(rt.disposedCounts()).toEqual({ tools: 5, sections: 1 })
+  })
+})
+
+describe('createForgeTools 直装配（工厂面——注册器之外的单源消费）', () => {
+  it('deps 注入即得五 tool 定义组（键 = FORGE_TOOL_NAMES 列序）', () => {
+    const tools = createForgeTools({
+      tasks: {} as ForgeTasksService,
+      proposals: {} as ForgeProposalsService,
+      resolveProjectId: () => undefined,
+    })
+    expect(Object.keys(tools)).toEqual([...FORGE_TOOL_NAMES])
   })
 })

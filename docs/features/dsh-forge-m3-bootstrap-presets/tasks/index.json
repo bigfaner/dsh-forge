@@ -289,7 +289,7 @@
         "2.5",
         "2.6"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.5-plugin-tools-adaptation.md",
       "record": "records/3.5-plugin-tools-adaptation.md",
       "breaking": true,

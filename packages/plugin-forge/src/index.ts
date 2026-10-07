@@ -3,8 +3,10 @@
 //   inject = ['forgeTasks', 'forgeProposals', 'tools', 'systemPrompt'] —— 对 core 的
 //   依赖 = 两域服务（Interface 1/3 类型，contracts 单一来源；运行期 inject 解析，
 //   零实现级 import，Hard Rule）；tools / systemPrompt 为 dsh 官方面（非 core）。
-// 装配：六 tool 注册（tools.register——名 = 动词透传）+ forge:pipeline 段注册
-// （systemPrompt.section，order 510）；交出合并 disposer（fiber 卸载即全注销）。
+// 装配：tool 注册（tools.register——名 = 动词透传；M3 终态六 tool 的 3.5 切片 =
+//   五员，claimTask 已退役（drift #1），dispatchTask 注册面收口归 3.4）+
+//   forge:pipeline 段注册（systemPrompt.section，order 510）；交出合并 disposer
+//   （fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
@@ -36,7 +38,6 @@ const forgePlugin: ForgePlugin = Object.assign(
     })
     const disposers = [
       ctx.tools.register(tools.addTask),
-      ctx.tools.register(tools.claimTask),
       ctx.tools.register(tools.submitTask),
       ctx.tools.register(tools.queryTask),
       ctx.tools.register(tools.createProposal),

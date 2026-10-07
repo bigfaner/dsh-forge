@@ -1,6 +1,7 @@
 // 3.4 冒烟（AC5）：boot 后 tool 面经 spawn 链路可达——spawn ELECTRON_RUN_AS_NODE=1 +
 // stdio:['ipc'] 沿 P1 boot 链（fix-1 child 形态，官方 Desktop 同款）。单用例贯通四装配缝：
-//   · AC5 tool 面：ready.tools ⊇ FORGE_TOOL_NAMES（plugin-forge 六 tool 经 spawn 链路注册——
+//   · AC5 tool 面：ready.tools ⊇ FORGE_TOOL_NAMES（plugin-forge M3 终态 tool 面经 spawn
+//     链路注册——3.5 切片五 tool（claimTask 已退役·drift #1），dispatchTask 归 3.4 补位；
 //     inject forgeTasks/forgeProposals 解析 = tasksHome 注入链 + core 四域 provide 的联证）
 //   · AC3 tasksHome：env DSH_FORGE_TASKS_HOME 生效 + deriveTaskStoreDir 单源（{tasksHome}/
 //     {flatten}@{hash8}）+ listTasks 惰性开工作区库（forge.db 落 tasksHome）
@@ -83,7 +84,7 @@ it(
         { execPath: electronExe, childEntry }, // vitest(node/src) 驱动：electron 二进制 + dist child 入口（spawn 链路同款：ELECTRON_RUN_AS_NODE=1 + stdio ipc）
       )
 
-      // AC5：六 tool 经 spawn 链路注册（plugin-forge 加载 = inject 依赖链全通）
+      // AC5：tool 面经 spawn 链路注册（plugin-forge 加载 = inject 依赖链全通）
       for (const name of FORGE_TOOL_NAMES) {
         expect(host.toolNames, `tool 面：${name} 未注册（plugin-forge 行未装载/注入链断裂）`).toContain(name)
       }
