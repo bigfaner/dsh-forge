@@ -6,6 +6,7 @@
     { "path": "packages/core" },
     { "path": "packages/knowledge" },
     { "path": "packages/plugin-forge" },
+    { "path": "packages/plugin-forge-spec" },
     { "path": "apps/host" },
     { "path": "apps/web" }
   ]

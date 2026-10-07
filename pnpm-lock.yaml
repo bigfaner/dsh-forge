@@ -326,6 +326,19 @@ importers:
         specifier: 24.19.0
         version: 24.19.0
 
+  packages/plugin-forge-spec:
+    dependencies:
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../path-key
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+
 packages:
 
   '@agentclientprotocol/sdk@1.4.0':

@@ -1,0 +1,28 @@
+{
+  "name": "@dsh-forge/plugin-forge-spec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "dsh 插件：forge 规格深化 tool 半身（registerFeature/upsertFeatureDoc/validateFeatureTasks 三动词透传）+ forge:spec 系统提示段（规格技能经 tool 读写状态层；运行期经 Cordis inject forgeFeatures/forgeTasks，仅类型依赖 core 服务面）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

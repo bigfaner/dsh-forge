@@ -219,7 +219,7 @@
         "2.1",
         "2.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.1-plugin-forge-spec-package.md",
       "record": "records/3.1-plugin-forge-spec-package.md",
       "surface-type": "web",

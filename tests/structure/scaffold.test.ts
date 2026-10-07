@@ -28,6 +28,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/path-key', '@dsh-forge/path-key'],
     // M2 3.2：第六工件 plugin-forge（tool 半身 + forge:pipeline 系统提示段）
     ['packages/plugin-forge', '@dsh-forge/plugin-forge'],
+    // M3 3.1：第八工件 plugin-forge-spec（spec 三 tool + forge:spec 系统提示段——仅远征组合装配）
+    ['packages/plugin-forge-spec', '@dsh-forge/plugin-forge-spec'],
   ] as const
 
   it.each(artifacts)('%s 包名 %s 就位', (dir, name) => {
@@ -42,7 +44,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every((k) => k === '@types/node')).toBe(true)
   })
 
-  it('根 solution tsconfig references 七工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge）', () => {
+  it('根 solution tsconfig references 八工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -53,6 +55,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
+        'packages/plugin-forge-spec',
       ].sort(),
     )
   })
@@ -65,6 +68,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/knowledge', ['packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
     ['packages/plugin-forge', ['packages/contracts', 'packages/path-key']],
+    // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
+    ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge']],
     ['apps/web', ['packages/contracts']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
@@ -180,6 +185,8 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'packages/knowledge/src/prompt',
     'packages/plugin-forge/src/tools',
     'packages/plugin-forge/src/prompt',
+    'packages/plugin-forge-spec/src/tools',
+    'packages/plugin-forge-spec/src/prompt',
     'packages/contracts/src/dto',
   ] as const
 
@@ -197,6 +204,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'packages/core/src/index.ts',
       'packages/knowledge/src/index.ts',
       'packages/plugin-forge/src/index.ts',
+      'packages/plugin-forge-spec/src/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f))).toBe(true)
     }
