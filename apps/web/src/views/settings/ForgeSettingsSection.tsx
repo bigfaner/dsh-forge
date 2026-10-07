@@ -413,6 +413,12 @@ export function ForgeSettingsSectionBody({
 // ─────────────────────────── 装载壳（mount 装载 + 受控态 + rpc 保存） ───────────────────────────
 
 export interface ForgeSettingsSectionProps {
+  /**
+   * 官方 owner share（SettingsSectionOwnerProps 结构同型镜像——ui-settings contract/slots：
+   * 壳拥有对话框可见性，分区唯一递达动作）。组件零「离开设置」流 = 不消费；
+   * 在场保 slot 座位 props 契约完整（4.7 注入即整节）。
+   */
+  readonly close?: () => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }

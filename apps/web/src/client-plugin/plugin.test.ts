@@ -23,6 +23,9 @@ import {
   SESSION_HEADER_ACTIONS_SLOT,
   SESSION_PILLS_ENTRY_ID,
   SESSION_PILLS_ORDER,
+  SETTINGS_SECTION_SLOT,
+  FORGE_SETTINGS_SECTION_ID,
+  FORGE_SETTINGS_SECTION_ORDER,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
   SIDEBAR_BRAND_NAME_SLOT,
@@ -215,6 +218,7 @@ function publishFakeViews() {
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     ForgeSessionTaskPills: 'COMP:session-task-pills',
+    ForgeSettingsSection: 'COMP:settings-section',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
@@ -299,6 +303,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       CONVERSATION_VIEW_SLOT,
       HERO_WORKSPACE_SLOT,
       SESSION_HEADER_ACTIONS_SLOT,
+      SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
@@ -624,6 +629,75 @@ describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT])
     expect(marker?.views?.error).toBeUndefined()
+    unpublishViews()
+  })
+})
+
+/**
+ * 官方设置分区序 pin（上游 0.2.0-rc.2 dsh-client-ui-settings-{general,models,plugins}
+ * client.js 源码核实：SettingsRoot nav 行按 order 升序映射直出——DOM 序 = 排序结果；
+ * 上游升带漂移时本 pin 先红）。分区面 = list 槽 scope root（ui-settings contract/slots
+ * 的 settings.section——owner share close 由壳递达）。
+ */
+const OFFICIAL_SETTINGS_SECTION_ORDERS: Readonly<Record<string, number>> = {
+  general: 0,
+  models: 10,
+  plugins: 15,
+}
+
+describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.section list 槽）', () => {
+  it('list 槽登记：id dswf-forge-settings + order 5 + locale NS label thunk（zh 值 Forge设置）+ 发布组件；零 children/priority/inject——生命周期归官方设置对话框（Hard Rule 非 fork）', () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const sections = registers.filter((r) => r.key === SETTINGS_SECTION_SLOT)
+    expect(sections, 'settings.section 恰一登记（官方 general/models/plugins 行保持在场）').toHaveLength(1)
+    const forge = sections[0]!
+    expect(forge.options.id).toBe(FORGE_SETTINGS_SECTION_ID)
+    expect(forge.options.id).toBe('dswf-forge-settings')
+    expect(forge.options.order).toBe(FORGE_SETTINGS_SECTION_ORDER)
+    expect(forge.options.order).toBe(5)
+    expect(forge.options.locale).toBe(FORGE_LOCALE_NS)
+    expect(typeof forge.options.label).toBe('function') // fix-33 ⑧ locale thunk（官方分区 nav 行同径）
+    expect((forge.options.label as () => string)()).toBe('Forge设置')
+    expect(forge.component).toBe(views.ForgeSettingsSection)
+    // Hard Rule 非 fork 纪律：list 槽行语言最小面——无 children 声明（无子洞）、无 priority
+    // （single 槽语义）、无 inject（组件数据面自足 = preload RPC 单门，owner share close 由
+    // 官方壳递达）；打开/关闭/Esc 全部官方设置对话框自持
+    expect(forge.options.children).toBeUndefined()
+    expect(forge.options.priority).toBeUndefined()
+    expect(forge.options.inject).toBeUndefined()
+    expect(forge.options.key).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('位置断言（DOM 序）：官方分区序 pin 下 Forge设置 行在 通用设置(general) 之下、模型(models) 之上（nav 行升序直出）', () => {
+    publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const forge = registers.find((r) => r.key === SETTINGS_SECTION_SLOT)!
+    // 官方 SettingsRoot sections store 同式：entries → {id, order, label} → order 升序排序 →
+    // navList DOM 行序（ui-settings-general client.js sections.getSnapshot 镜像）
+    const rows = [
+      ...Object.entries(OFFICIAL_SETTINGS_SECTION_ORDERS).map(([id, order]) => ({ id, order })),
+      { id: forge.options.id!, order: forge.options.order! },
+    ].sort((a, b) => a.order - b.order)
+    const indexOf = (id: string): number => rows.findIndex((row) => row.id === id)
+    expect(rows.map((row) => row.id)).toEqual(['general', FORGE_SETTINGS_SECTION_ID, 'models', 'plugins'])
+    expect(indexOf('general'), '通用设置分区下方（AC1 DOM 序）').toBeLessThan(indexOf(FORGE_SETTINGS_SECTION_ID))
+    expect(indexOf(FORGE_SETTINGS_SECTION_ID), '通用设置正下方——模型之上（ui-design UF-2 Placement）').toBeLessThan(indexOf('models'))
+    unpublishViews()
+  })
+
+  it('诊断面 + locale 词典：settings 族登记数组含 settings.section 洞位；词典含 settings.forge zh/en 双语', () => {
+    publishFakeViews()
+    const { ctx, locale } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { settings?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.settings?.registered).toEqual([SETTINGS_SECTION_SLOT])
+    expect(marker?.settings?.error).toBeUndefined()
+    expect(locale.registered[0]![1].zh).toMatchObject({ 'settings.forge': 'Forge设置' })
+    expect(locale.registered[0]![1].en).toMatchObject({ 'settings.forge': 'Forge Settings' })
     unpublishViews()
   })
 })

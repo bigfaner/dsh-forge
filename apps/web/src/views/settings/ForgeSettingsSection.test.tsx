@@ -488,4 +488,16 @@ describe('装载壳 · ForgeSettingsSection（初始渲染 = 装载在途相位�
     expect(html).not.toContain('data-dswf-fs-unconfigured')
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })
+
+  it('4.7 slot 座位契约：官方 owner share（close）递达下渲染不受扰——分区整节可见（标题 + worker 小节 + 底注）', () => {
+    // 官方 SettingsSectionOwnerProps = { close }（ui-settings contract/slots——壳拥有
+    // 对话框可见性，分区唯一递达动作）；组件零「离开设置」流 = 不消费不炸。
+    const html = renderToStaticMarkup(
+      <ForgeSettingsSection close={() => {}} makeClient={() => clientWith()} />,
+    )
+    expect(html).toContain('data-dswf-fs-title')
+    expect(html).toContain('Forge设置')
+    expect(html).toContain('data-dswf-fs-part="worker"')
+    expect(html).toContain('data-dswf-fs-future-note')
+  })
 })

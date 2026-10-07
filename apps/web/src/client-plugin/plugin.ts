@@ -20,6 +20,9 @@
 //     在壳侧发布件自持；点击 → dock 开概览 + 桥任务聚焦）；
 //   - `shell.overlay` 'dswf-host'（AppFrame root 五子槽之一——常驻壳宿主：UF-3 流程 +
 //     相位锚 + hero 面板驱动 + 知识模式右栏联动面）。
+//   - `settings.section` 'dswf-forge-settings'（官方 ui-settings SettingsRoot 分区 roster
+//     ——list 槽：4.7 Integration #4，UF-2 Forge设置 分区[通用设置正下方 order 5]；分区
+//     本体 = 4.5 组件经壳 bundle 发布面递达，打开/关闭/Esc 生命周期恒归官方对话框）。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
 // 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
 // keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
@@ -95,6 +98,20 @@ export const SESSION_HEADER_ACTIONS_SLOT = 'conversation.session.header.actions'
 export const SESSION_PILLS_ENTRY_ID = 'dswf-task-pills'
 /** 挂接 pill 登记序（list 槽 order 升序；官方带 -30/-20/-10/20 → -100 = 产品首位注册） */
 export const SESSION_PILLS_ORDER = -100
+/**
+ * 洞名：官方设置对话框分区 roster（ui-settings SettingsRoot nav 列 + 内容列 only 消费
+ * ——list 槽 scope root；4.7 Integration #4）。分区本体自带容器/标题（4.5 组件注入即整节）
+ * ——注册零平台 fork（打开/关闭/Esc 生命周期恒归官方对话框）。
+ */
+export const SETTINGS_SECTION_SLOT = 'settings.section'
+/** Forge设置 分区登记 id（nav 行键 = 官方 only 过滤键——「通用设置」= 官方 'general'） */
+export const FORGE_SETTINGS_SECTION_ID = 'dswf-forge-settings'
+/**
+ * 分区登记序（list 槽 order 升序）：官方分区 general=0 / models=10 / plugins=15（上游
+ * ui-settings-{general,models,plugins} client.js 源码核实）→ 5 = 通用设置正下方、
+ * 模型之上（ui-design UF-2 Placement「通用设置分区下方」；DOM 序 = nav 行升序直出）。
+ */
+export const FORGE_SETTINGS_SECTION_ORDER = 5
 
 /**
  * 插件依赖的服务名（cordis inject——apply 等待八服务在场；与官方 ui-workspace 同型先例）。
@@ -257,6 +274,7 @@ export interface ForgeViewsGlobal {
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
     ForgeSessionTaskPills: unknown
+    ForgeSettingsSection: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
@@ -318,6 +336,8 @@ export interface ForgeClientActiveMarker {
   readonly shell?: SlotRegistrationDiagnostics
   /** 右栏 dock tab 族（4.1：两段注册——类型定义[概览/文档两 kind] + keyed body 两键） */
   readonly dock?: SlotRegistrationDiagnostics
+  /** 官方设置对话框分区族（4.7：settings.section——UF-2 Forge设置 分区） */
+  readonly settings?: SlotRegistrationDiagnostics
 }
 
 /** 洞位注册一行（注入面经 make 产出；落座后回填诊断） */
@@ -523,6 +543,35 @@ function registerSessionHeaderPills(
 }
 
 /**
+ * 设置分区登记（4.7 Integration #4——M3 UF-2）：官方 ui-settings `settings.section`
+ * list 槽新增产品分区行（官方 general=0/models=10/plugins=15 → order 5 = 通用设置正
+ * 下方）。占用者 ForgeSettingsSection（壳 bundle 发布件——分区容器/标题/worker 小节
+ * 自带，注入即整节；owner share close 由官方壳递达、组件零消费）。组件数据面自足
+ * （preload RPC client——forge:settings/get·set 单门读写 core forgeSettings），注册面
+ * 零 inject 零 children：打开/关闭/Esc 生命周期恒归官方设置对话框（Hard Rule 非 fork
+ * 纪律——仅 slot 注册，无平台对话框代码复制）；label 经 locale NS thunk（fix-33 ⑧）。
+ */
+function registerSettingsSection(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  t: (key: string) => string,
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, SETTINGS_SECTION_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SETTINGS_SECTION_SLOT,
+        id: FORGE_SETTINGS_SECTION_ID,
+        order: FORGE_SETTINGS_SECTION_ORDER,
+        locale: FORGE_LOCALE_NS,
+        label: (): string => t('settings.forge'),
+      },
+      views.ForgeSettingsSection,
+    ),
+  )
+}
+
+/**
  * 文档地址 → chip 标题（末段文件名——`dsh-resource://dswf-doc/<id>/<docRel>` 末段；
  * 与 workbench/dock-tabs.tsx 地址编解码同源格式，plugin.test 字面量 pin 两侧一致）。
  */
@@ -683,6 +732,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       const viewsDiagnostics: { registered?: string[]; error?: string } = {}
       const shellDiagnostics: { registered?: string[]; error?: string } = {}
       const dockDiagnostics: { registered?: string[]; error?: string } = {}
+      const settingsDiagnostics: { registered?: string[]; error?: string } = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
         activatedAt: Date.now(),
@@ -691,6 +741,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         views: viewsDiagnostics,
         shell: shellDiagnostics,
         dock: dockDiagnostics,
+        settings: settingsDiagnostics,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
@@ -715,12 +766,14 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'view.recall': '知识召回',
             'tab.overview': '项目概览',
             'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
+            'settings.forge': 'Forge设置',
           },
           en: {
             'panel.knowledge': 'Knowledge',
             'view.recall': 'Recall',
             'tab.overview': 'Overview',
             'guide.overview.desc': 'Features, tasks, proposals and docs',
+            'settings.forge': 'Forge Settings',
           },
         })
         const t = locale.bind(FORGE_LOCALE_NS)
@@ -764,11 +817,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 会话头
-        // 挂接 pill（4.2 conversation 族）+ 常驻壳宿主
+        // 挂接 pill（4.2 conversation 族）+ 设置分区（4.7 settings 族）+ 常驻壳宿主
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
         registerSessionHeaderPills(clientCtx, views, { sidebarRight, bridge }, viewsDiagnostics)
+        registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥]；selectPanel/rightbar/
@@ -817,6 +871,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         viewsDiagnostics.error = message
         shellDiagnostics.error = message
         dockDiagnostics.error = message
+        settingsDiagnostics.error = message
       }
     },
   }

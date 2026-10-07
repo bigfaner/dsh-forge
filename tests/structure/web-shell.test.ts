@@ -391,7 +391,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；4.2 会话头挂接 pill）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；4.2 会话头挂接 pill；4.7 设置分区）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
       'ForgeSidebarSlot',
@@ -403,6 +403,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeOverviewTab',
       'ForgeDocsTab',
       'ForgeSessionTaskPills',
+      'ForgeSettingsSection',
       'createWorkbenchBridge',
     ]) {
       expect(views, `${name} 未发布`).toContain(name)
