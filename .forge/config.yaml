@@ -1,4 +1,4 @@
-version: "1"
+version: '1'
 auto:
   test:
     quick: true
@@ -30,23 +30,23 @@ worktree:
 eval:
   proposal:
     target: 900
-    iterations: 3
+    iterations: 2
   prd:
     target: 900
-    iterations: 3
+    iterations: 1
   design:
     target: 900
-    iterations: 3
+    iterations: 2
   ui:
     target: 950
     iterations: 3
   journey:
     target: 850
-    iterations: 3
+    iterations: 1
   contract:
     target: 850
-    iterations: 3
+    iterations: 1
   consistency:
     target: 900
-    iterations: 3
+    iterations: 1
 surfaces: web

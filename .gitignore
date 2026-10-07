@@ -67,3 +67,6 @@ playwright/.cache/
 Thumbs.db
 Desktop.ini
 .idea/
+
+# forge justfile lifecycle pidfiles
+.forge/*.pid
