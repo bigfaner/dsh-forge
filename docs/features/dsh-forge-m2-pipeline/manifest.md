@@ -20,6 +20,7 @@ status: tasks
 | ER Diagram | design/er-diagram.md | 每工作区 forge.db 七域表 + schema_meta;与八表定稿 8 项差异清单（M3 后移 ×3 + 本设计修订 ×5:保留字清剿/全表 updated_at/feature_id id 关联/rel_path 统一/files_json） |
 | SQL Schema | design/schema.sql | M2 落地形态完整 DDL:七域表 + 索引 ×6 + append-only 双触发器 + CHECK 全集;FORGE_DB_SCHEMA_VERSION=1 独立版本线;中央 state.db 零改动 |
 | Page Map | design/page-map.md | 右栏两 tab（sidebarRightTabs 注册制）+ 任务抽屉 + 转移对话框 + 会话头 pill 槽 + 派生行——六面落点文件与数据源;无新路由 |
+| Specs | specs/biz-specs.md · specs/tech-specs.md | 规格 consolidation 预览与集成台账（2026-10-07 [auto-specs]：CROSS 27 项入项目级——business-rules 15[task-pipeline 新 11 + product-discipline 3 + workspace-consistency 1] + conventions 12[rpc-and-contracts 4 + task-domain 新 4 + doc-surface 新 2 + error-handling 1 + quality-gates 1]；P1 期规格漂移 9 项同步修订） |
 
 ## Traceability
 
