@@ -1,0 +1,120 @@
+/* M3 UF-2 Forge设置 分区（4.5）：分区标题（底色条 + 13px/600）+ worker 小节（12px/600
+ * 次色 + 分隔线——多小节可并列）+ 行式控件（标签左/控件右，对齐 dsh 通用设置形态）+
+ * 未配置 ⚠ + 保存反馈 + 分区底注。
+ * 令牌纪律（lint-tokens）：色/字/距零裸值——原型刻度（11.5px 行/11px 注/10.5px 底注）
+ * 归档最近官方字阶令牌（12/11）；行/分隔线语言镜像 proposal-tab.css 表单行族。 */
+
+/* ── 分区容器 + 分区标题（底色条） ── */
+.dswf-fs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-fs-title {
+  padding: var(--dsw-font-xxs-12-line-height) var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── worker 小节（多小节可并列：part 顶分隔线 + 相邻 part 间距） ── */
+.dswf-fs-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xxs-12-line-height);
+  padding-top: var(--dsw-font-xxs-12-line-height);
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-fs-part + .dswf-fs-part {
+  margin-top: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-fs-part-title {
+  margin: 0;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-fs-hint {
+  margin: 0;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 行式控件（标签左/控件右——通用设置行形态） ── */
+.dswf-fs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xxxs-11-line-height) 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-fs-label {
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-fs-select {
+  min-width: var(--dsw-font-l-20-line-height); /* 行控件占位下限 */
+  max-width: 60%;
+  padding: var(--dsw-font-xxxs-11-line-height) var(--dsw-font-xxs-12-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-fs-select:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 0;
+}
+
+.dswf-fs-select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── 动作行（保存——官方 Button 承载，仅落间距） ── */
+.dswf-fs-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+}
+
+/* ── 未配置 ⚠ 占位（warn 语义条） ── */
+.dswf-fs-unconfigured {
+  margin: 0;
+  padding: var(--dsw-font-xxs-12-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-state-warn-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ── 保存成功注记（下次派发生效） ── */
+.dswf-fs-saved-note {
+  margin: 0;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* ── 错误行（role=alert——装载/保存两形同面留场） ── */
+.dswf-fs-err {
+  margin: 0;
+  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── 分区底注（未来注记——非交互一行） ── */
+.dswf-fs-future-note {
+  margin: 0;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
