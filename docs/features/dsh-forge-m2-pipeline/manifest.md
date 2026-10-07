@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m2-pipeline"
 created: "2026-10-05"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-m2-pipeline
