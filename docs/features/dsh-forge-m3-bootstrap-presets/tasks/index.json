@@ -235,7 +235,7 @@
         "2.gate",
         "3.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.2-spec-skills-migration.md",
       "record": "records/3.2-spec-skills-migration.md",
       "type": "doc"

@@ -51,10 +51,10 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * @dsh-forge/* 运行时依赖闭包成员——e791a46 起补列：漏列致打包形态 boot child ESM 解析
  * '@dsh-forge/path-key' 落空，插件不装载、服务未 provide、main fail-soft 不注册 forge:* 通道，
  * 注册报 "No handler registered for 'forge:projects/register'"）。每包必物化内容
- * （源 = packages/<name>）：清单 + 构建产物（不携带 src/测试）；plugin-forge 另携
+ * （源 = packages/<name>）：清单 + 构建产物（不携带 src/测试）；两产品插件另携
  * skills/——customSkillDirs 物理挂载源（boot overlay 注 skill-filesystem 行），缺席即
- * 技能面静默缺失，故必物化 fail-loud；plugin-forge-spec 的 skills/ 随 3.2（规格技能迁移）
- * 落地后同步补列（当前物理缺席——预设 customSkillDirs[spec] fail-soft 降级）。
+ * 技能面静默缺失，故必物化 fail-loud（plugin-forge = 3.4；plugin-forge-spec = 3.2
+ * 规格技能迁移落地，3.8 曾注记「随 3.2 落地后补列」——本次兑现）。
  * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段——产品包新增
  * @dsh-forge/* 运行时依赖须随包同步补列。
@@ -65,7 +65,7 @@ const PRODUCT_PACKAGES = {
   core: ['package.json', 'dist'],
   knowledge: ['package.json', 'dist'],
   'plugin-forge': ['package.json', 'dist', 'skills'],
-  'plugin-forge-spec': ['package.json', 'dist'],
+  'plugin-forge-spec': ['package.json', 'dist', 'skills'],
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 
@@ -94,6 +94,7 @@ export const REQUIRED_KEY_FILES = [
   'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
   'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
   'runtime/node_modules/@dsh-forge/plugin-forge-spec/dist/index.js',
+  'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
   'runtime/node_modules/better-sqlite3/package.json',
   'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
 ]
@@ -168,6 +169,7 @@ function assertPreconditions() {
     [join(ROOT, 'packages/plugin-forge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'packages/plugin-forge/skills/run-tasks/SKILL.md'), 'packages/plugin-forge/skills 技能面（3.4 customSkillDirs 挂载源——缺席即技能面静默缺失）'],
     [join(ROOT, 'packages/plugin-forge-spec/dist/index.js'), 'pnpm build（tsc -b 全拓扑——M3 3.8 packaging 三处同步：缺席即打包形态 boot ESM 解析断裂，远征预设行装载失败）'],
+    [join(ROOT, 'packages/plugin-forge-spec/skills/write-prd/SKILL.md'), 'packages/plugin-forge-spec/skills 技能面（M3 3.2 规格技能迁移——customSkillDirs[spec] 挂载源，缺席即远征技能面静默缺失）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],

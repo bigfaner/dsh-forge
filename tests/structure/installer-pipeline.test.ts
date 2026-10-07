@@ -152,7 +152,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(app.devDependencies).toBeUndefined()
   })
 
-  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品插件（含 plugin-forge skills 技能面 + plugin-forge-spec 新包）/ sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
+  it('关键文件口径覆盖四载体：anchor 清单 / 官方 metapackage+双 bundle / 产品插件（双包 skills 技能面）/ sqlite prebuild / 壳 dist / 窗口图标 / 装载器 / 真实 main / child 入口', () => {
     const must = [
       'runtime/package.json',
       'runtime/host-dist/main.js',
@@ -169,6 +169,9 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/dist/index.js',
+      // M3 3.2 规格技能迁移落地：spec skills 入物化清单与关键文件口径（3.8 曾注记
+      // 「随 3.2 落地后补列」——缺席即远征组合技能面静默缺失）
+      'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -214,7 +217,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     }
   })
 
-  it('M3 3.8：plugin-forge-spec 入闭包（PRODUCT_PACKAGES 物化 + --check 口径双件全——skills/ 随 3.2 落地后补列）', () => {
+  it('M3 3.8+3.2：plugin-forge-spec 入闭包（PRODUCT_PACKAGES 物化 + --check 口径双件全 + skills 技能面（3.2 规格技能迁移落地补列））', () => {
     expect(stagedPackages.has('plugin-forge-spec'), 'plugin-forge-spec 缺席 staging 闭包（TECH-packaging-001：漏列即打包形态 boot ESM 解析断裂）').toBe(true)
+    expect(REQUIRED_KEY_FILES, 'plugin-forge-spec skills 技能面口径缺席（远征组合 customSkillDirs[spec] 挂载源）').toContain(
+      'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
+    )
   })
 })
