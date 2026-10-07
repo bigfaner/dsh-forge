@@ -1,144 +1,130 @@
 ---
 name: run-tasks
-description: Autonomous forge-pipeline dispatcher — loop claimTask, dispatch an executor subagent with the dispatch brief verbatim, verify via queryTask, continue. Carries the Z1 exit rule (task null means wait or finish), the fix-chain protocol (single entry), and the missing-record recovery brief.
+description: Forge dispatch loop — call dispatchTask once per round, read the returned settlement and pool snapshot, decide continue / wrap up / surface; carries the mode-mismatch guard line and the canonical fix-chain protocol.
 ---
 
 # Run Tasks (dispatcher)
 
-Auto-dispatch forge tasks: claim one ready task at a time, hand its dispatch brief
-verbatim to an executor subagent, verify the settlement, loop. All state changes go
-through the pipeline tools (`claimTask` / `queryTask` / `addTask` / `submitTask`) —
-never through files, the database, or parallel state.
+Drive the forge task pool: one `dispatchTask` call per round. The tool claims the next
+ready task, spawns a worker with the dispatch briefing, and returns the settlement with
+a live pool snapshot — the briefing itself never enters this session's context. State
+changes only through the pipeline verbs (`dispatchTask` / `queryTask` / `addTask` /
+`submitTask`), never through files, the database, or parallel state.
+
+Works identically in both modes: containers may be features (expedition chain) or
+proposals with directly attached tasks (blitz chain). Selection is DAG readiness over
+the pool — there is no way to pick a specific task, by design.
 
 ## Dispatcher Iron Laws
 
 <EXTREMELY-IMPORTANT>
-1. Only three actions per cycle: claim → dispatch (or execute in-session for
-   main-session tasks) → verify. Then continue the loop.
-2. NO code reading or writing by the dispatcher itself — except for main-session tasks,
-   whose brief the dispatching session executes directly.
-3. NO running tests directly — quality gates belong to executors and the submit-task
-   skill.
-4. 30-minute timeout per dispatched task.
-5. 3 consecutive failed cycles → STOP (failure counter below).
-6. Dispatch is a blocking call — no background execution, no result polling.
+1. One `dispatchTask` call per round; read the return; decide; repeat. Nothing else
+   drives the pool.
+2. NO code reading or writing by the dispatcher itself — workers execute; this session
+   orchestrates.
+3. NO running tests directly — quality gates belong to workers and the run-tests skill.
+4. Do not invent work: when no task is ready, follow the pool verdict below — never
+   fabricate tasks to keep the loop busy.
 </EXTREMELY-IMPORTANT>
 
-## Loop
+## Container Context (context_slug)
 
-### Step 1: Claim
+When invoked as `/run-tasks <container-slug>` (the dispatch entry sends exactly that),
+pass the slug as `context_slug` on every call. It attributes no-task events to that
+container's log (`logs/<slug>.jsonl`) — nothing more: claim selection stays pool-wide
+DAG readiness and is NOT filtered by the context. Omit it only when no container is
+identified.
 
-Call `claimTask`. No arguments = blind claim over the ready pool; `feature_slug` scopes
-the pool; a `slug` + `local_id` pair re-enters a known in-progress task explicitly.
+## Loop — the four dispatchTask exits
 
-Extract from the result: `task.slug` / `task.localId`, `dispatchPrompt`, `digest`,
-`reclaimed`.
+### 1. `spawned` · success
 
-**Z1 exit rule** — `task: null` means nothing is ready. Exactly two lawful responses,
-never a third (do not invent work):
+The worker settled the task: natural key, type, mode lineage, summary, commit hash if
+any, plus the pool snapshot. Note it and call `dispatchTask` again.
 
-| Situation | Action |
-|---|---|
-| Work still in flight can make tasks ready (a fix chain running in another session, prerequisites in progress) | Wait, then claim again — bounded: after 3 consecutive null claims with nothing new, finish |
-| Nothing indicates future readiness | Finish: end the loop and print the dispatch summary |
+### 2. `spawned` · blocked
 
-### Step 2: Dispatch
+The worker settled blocked with a reason; a follow-up fix task is listed when one was
+spawned (it is dispatchable — just continue the loop). If the settlement shows no
+follow-up and the failure warrants a fix chain, spawn it yourself per the fix-chain
+protocol below, then continue.
 
-Hand `dispatchPrompt` to an anonymous executor subagent **verbatim** — it is the payload,
-not a summary to rewrite. The executor runs the brief (quality gates, commit via the
-git-commit skill) and settles it itself via `submitTask`. Blocking call: wait for the
-return. Timeout per task: 30 minutes.
+### 3. `no-task` — read the pool verdict
 
-`MARKERS: main-session` tasks are the exception — execute the brief in the dispatching
-session itself (same settlement discipline: `submitTask`), do not spawn a subagent.
+The return carries the pool snapshot (`pending` / `in_progress` / `blocked` /
+`unmetPending`) and a verdict:
 
-### Step 3: Verify
+| Verdict | Meaning | Action |
+|---|---|---|
+| pool all settled — wrap up | Everything terminal | End the loop, print the dispatch summary |
+| work in flight or prerequisites unmet | Tasks may become ready later | Bounded patience: retry after a pause; if repeated rounds show no movement, wrap up and suggest re-dispatching later |
+| suspected deadlock (blocked with no pending path) | Blocked tasks, nothing can become ready | Surface to the user with the blocked keys — human or diagnostic attention needed; do not keep looping |
 
-After the executor returns, call `queryTask` (`slug` + `local_id`, with
-`include_records`) and read the current status:
+### 4. `halted` — session-sticky spawn guard
 
-| Status | Action |
-|---|---|
-| `completed` | Reset the failure counter, continue the loop |
-| `blocked` | Fix chain (below): if the executor did not already spawn the fix task, spawn it now; continue the loop |
-| `in_progress` (no submit record) | Missing-record recovery (below) |
+Three consecutive worker-spawn failures stick this session: every further `dispatchTask`
+returns `halted` immediately. The guard has no self-unlock — the reset is a **new
+dispatch session** (cold start clears the counter). Report the reason to the user and
+stop; recommend re-entering via the dispatch entry, which opens a fresh session in the
+container's mode. Do not attempt workarounds from this session.
 
-### Step 4: Continue
+### Spawn failure (`✗ ERR_SPAWN_FAILED`)
 
-Return to Step 1.
+The claimed task stays `in_progress`; re-calling `dispatchTask` re-enters it
+idempotently (the briefing is re-synthesized). Retry the same call; repeated failures
+trip the `halted` guard. If the environment itself is broken, surface it for manual
+transition instead of looping.
 
-## Fix-Chain Protocol (single entry — lives here, not in a separate skill)
+## Mode-Mismatch Guard (visibility, never a block)
 
-When a task settles blocked — or a dispatcher-side failure must be quarantined — spawn
-one fix task that carries the blocked task as its source and blocks it:
+Settlements carry the container's mode lineage (`expedition` / `blitz`). If a dispatched
+container's mode differs from this session's preset (e.g. an expedition session
+dispatching a blitz proposal's tasks), print one visible line in that round — for
+example:
 
-`addTask` with `feature_slug` = the feature, `title` = "Fix: <reason>", `type` per the
-table below, `source_slug` + `source_local_id` = the blocked task, `block_source: true`,
-plus a `task_desc` and helpful `vars` entries (`SOURCE_FILES`, `TEST_SCRIPT`,
-`TEST_RESULTS`).
+> Mode mismatch: container `<slug>` is `blitz`, this session runs the `expedition`
+> preset — proceeding without blocking. The platform locks the preset after the first
+> turn, so opening a session aligned with the container's mode is the user's call.
 
-- One transaction creates: the fix task (its local id is auto-prefixed `fix-N`), a
-  `fix-chain` edge, and the source task set to `blocked` with an `auto-block` record.
-- When the fix completes, the recovery hook restores the source automatically (all
-  prerequisites satisfied → `blocked` back to `pending`; edges are never deleted). The
-  `submitTask` result lists restored tasks — nothing further to do.
-- Chain depth is capped at 6. At the cap, surface to the user instead of spawning a
-  deeper fix.
-- Fix type by source task category: `coding` / `test` / `validation` / `gate` →
-  `coding-fix`; `doc` / `eval` → `doc`.
+Then continue normally. The mismatch affects which skill catalog a *new* session would
+inherit, not execution; never halt, skip, or reorder work because of it.
+
+## Fix-Chain Protocol (single entry — canonical text lives here)
+
+When a task settles blocked and no worker-spawned fix exists, quarantine it with one fix
+task that carries the blocked task as its source and blocks it:
+
+```
+addTask { source_kind: "<feature|proposal>", source_slug: "<container slug>",
+          title: "Fix: <reason>", type: "<coding-fix|doc>",
+          source_task_slug: "<blocked task slug>", source_task_local_id: "<blocked task local id>",
+          block_source: true, task_desc: "<cause>",
+          vars: ["SOURCE_FILES=<paths>", "TEST_SCRIPT=<test>", "TEST_RESULTS=<output>"] }
+```
+
+- Fix type by source category: `coding` / `test` / `validation` / `gate` → `coding-fix`;
+  `doc` / `eval` → `doc`.
+- Mechanical parts are tool-carried and need no supervision: the `fix-N` local id, the
+  same-transaction blocking of the source, automatic restoration when the fix completes
+  (the `submitTask` result lists restored tasks), and the depth cap (≤6 — deeper spawns
+  are rejected; at the cap surface to the user instead).
 - A source reference **without** `block_source: true` creates a `disc-N` discrepancy
   follow-up that does not block its source — reserve it for out-of-scope findings, not
-  for blocked work.
-
-## Missing-Record Recovery (built-in recovery brief)
-
-When verification shows the task still `in_progress` — the executor finished its run but
-never called `submitTask` — recover the record without re-doing the work:
-
-1. Re-claim explicitly with `slug` + `local_id` (idempotent re-entry: `reclaimed: true`,
-   brief re-synthesized with a fresh digest).
-2. Dispatch the executor once more with exactly this brief, followed by the
-   re-synthesized `dispatchPrompt` verbatim:
-
-> You are recovering a missing task record for `<slug>/<localId>`.
->
-> The previous execution completed its implementation work but did NOT call `submitTask`.
-> Recover the record without re-doing the implementation.
->
-> 1. DO NOT re-implement — this is a VERIFY-ONLY run. If verification fails, submit
->    `result=blocked` with the failure in the reason; do not attempt to fix code.
-> 2. Verify the implementation exists: the files the brief names are present and carry
->    the relevant changes. Missing or unchanged → `result=blocked`, reason "no
->    implementation found", stop.
-> 3. Run the quality gate sequence in strict order — stop at the first failure:
->    `just compile` → `just fmt` → `just lint` → `just unit-test`.
-> 4. All passed → settle via `submitTask result=success` with the summary, the four gate
->    results, the changed files, and the commit hash if one exists.
-
-3. If the recovery run again ends without a submit record, count it as a failed cycle —
-   do not loop recoveries.
-
-## Failure Tracking
-
-Keep `consecutive_failures` (starts at 0). Increment on: fix-task spawn, missing-record
-dispatch, executor timeout. Reset to 0 when a verify shows `completed`. At 3: stop and
-print the summary.
+  blocked work.
 
 ## Dispatch Summary
 
-When the loop ends (Z1 finish or 3 consecutive failures):
+When the loop ends (pool settled, bounded patience exhausted, deadlock surfaced, or
+halted), report:
 
 ```
 ## Dispatch Summary
 
-- Claimed: <N> — completed <N>, blocked <N>, failed <N>
-- Consecutive failures at stop: <N>
+- Rounds: <N> — completed <N>, blocked <N>
+- Pool at stop: <pending / in_progress / blocked / unmetPending from the last snapshot>
 
 <one line per non-completed task: `<slug>/<localId> — <status> — <short reason>`>
+<one line for surfaced deadlocks / halt reason / mismatch notes>
 ```
 
-If no `test-run` task was claimed during the loop and surface-level tests exist, suggest
-invoking the run-tests skill — do not run them from here.
-
-The dispatcher never edits files and never commits; those belong to executors and the
-git-commit skill.
+The dispatcher never edits files and never commits; those belong to workers.

@@ -1,15 +1,17 @@
 # skills/
 
-定位：**业务** —— plugin-forge 技能半身（markdown 产物，无代码）。四技能 = 老 forge 对应技能/命令文本平移 + M2 双轨身份（`slug` + `local_id` 自然键）与 tool 面对齐（工具名与 `src/tools/` FORGE_TOOL_NAMES 逐字一致；wire 参数 snake_case）。
+定位：**业务** —— plugin-forge 技能半身（markdown 产物，无代码）。五技能 = 双模式共用执行面（3.6 M3 终态；工具名与 `src/tools/` FORGE_TOOL_NAMES 六员逐字一致；wire 参数 snake_case——技能文本聚焦 LLM 判断面，机械校验一律在工具行为内，禁「请模型自觉」类纪律承载）：
 
-3.3 已填充（四技能 + fix 链协议内聚）：
-- `run-tasks/SKILL.md` —— 派发循环（claimTask → 派发 executor 子代理[简报原文] → queryTask 验证 → 续环）；Z1 出口判据（`task: null` → 循环等待[有界]或收工，禁造工作）；**fix 链协议单一入口内聚于此**（blocked → `addTask{source_slug, source_local_id, block_source: true}` → fix-N 前缀/fix-chain 边/源同事务置 blocked → fix 完成恢复钩子自动还原，边不删；链深 ≤6；disc-N 差异随访变体）；fix-record-missed 降级内置恢复简报（静态文本，不占 TaskType 词汇——20 值定稿）
-- `submit-task/SKILL.md` —— 结算协议：result=success/blocked 双径（summary/reason 必带）、质量门序列（compile/fmt/lint/unit-test + coverage）、files/commit_hash 采集、git 缺席走 blocked 承接（禁伪造）
-- `git-commit/SKILL.md` —— Conventional Commits 纪律 + 显式路径暂存铁律 + **C9 降级标注**（0.2.0-rc.2 无 tool-use hook 面，纪律纯文本承载，升级窗口重估机械拦截）
-- `run-tests/SKILL.md` —— 面级测试执行编排（surface 探测 → just 配方序列 dev/probe/逐 journey test/teardown）；禁结果伪造；任务形态下失败即 blocked（fix 链承接）
+- `run-tasks/SKILL.md` —— 派发循环（**dispatchTask 每轮单调用**——spawned/no-task/halted/spawn 失败四出口；简报零进派发会话上下文）；池快照三态判断（收工/等待/疑似死锁——工具附载判词，技能只做处置）；halt 处置 = 新会话复位（防线机械·无自解锁参数）；contextSlug 容器语境（事件归属专用——claim 恒全库 DAG 就绪盲选）+ 双模式指引（feature/proposal 容器同循环）；**错配守卫提示行**（Story 1 AC4：容器 mode 与会话预设错配 → 单行可见提示，不阻断）；fix 链协议单一入口内聚于此（fix-N 前缀/同事务置 blocked/恢复钩子/链深 ≤6 均工具机械承载）
+- `submit-task/SKILL.md` —— 结算协议（executor 专用面）：聚焦 LLM 判断面——summary 组织（结果先行 + 决策及因由）/测试证据引用（AC 逐项对应用例）/commit 规范两态（AGENTS.md 约定在场从其约定，缺席回退模型常识级 Conventional Commits；显式路径暂存）/git 缺席走 blocked 承接（禁伪造）；机械面（必带校验/四门 all-or-none/AC 证据门）全部工具化零复述
+- `run-tests/SKILL.md` —— 面级测试执行编排（surface 探测 → just 配方序列 dev/probe/逐 journey test/teardown）；**按需加载语义自述**（catalog 行常驻、内容仅 test-run 任务加载——SC2 断言语义）；禁结果伪造；任务形态下失败即 blocked（fix 链承接）
+- `quick-tasks/SKILL.md` —— 突击直达入口：一句话 → 提案（`createProposal mode=blitz`——溯源由创建技能写入）+ 任务清单（`addTask source_kind=proposal`）一次产出；突击语义显式（整数 ID/无 stage-gate/eval 豁免/无 feature 行）；执行期 gate 纪律不折扣
+- `brainstorm/SKILL.md` —— 远征结构化探索入口：挑战式对话（Need Gate/方案对照/意图推断/SC 一致性检查内联）→ `proposal.md` 经 tool 读写 + `createProposal mode=expedition` 溯源；accepted 成链分叉交由服务内聚，本技能止于注册提案
 
-## 物理挂载（3.4 接线）
+已移除：`git-commit/`（Out of Scope #12——M2 条目 M3 删除；复活触发 = 真实消费者出现。commit 纪律两态由 submit-task 承载）。
 
-本目录 = customSkillDirs 挂载根：profile `customSkillDirs` 行指向 `packages/plugin-forge/skills`（dsh-skill-filesystem 发现约定 = 根下**一层** `<name>/SKILL.md`；frontmatter 必填 `name`[kebab-case，与目录名一致] + `description`，可选 `user-invocable`——submit-task 置 false（executor 专用面））。dogfood（5.4）经此链路验证。
+## 物理挂载
 
-> 装配缝注记：core test-run 类型模板（2.2）中技能引用为 `Skill(skill="forge:run-tests")`（老 forge 前缀形制）；dsh 挂载后技能名 = `run-tests`（无前缀）。5.4 dogfood 首跑对齐此口径。
+本目录 = customSkillDirs 挂载根：profile `customSkillDirs` 行指向 `packages/plugin-forge/skills`（dsh-skill-filesystem 发现约定 = 根下**一层** `<name>/SKILL.md`；frontmatter 必填 `name`[kebab-case，与目录名一致] + `description`，可选 `user-invocable`——submit-task 置 false（executor 专用面））。
+
+> 前缀缝注记（drift #8 收口）：M2 3.3 的 `Skill(skill="forge:run-tests")` 前缀引用已在 2.4 消灭——core test-run 模板与技能文本自述名一致，均为挂载名 `run-tests`（无前缀）。技能目录不含 git-commit/git-checkout（SC2 断言对象）。
