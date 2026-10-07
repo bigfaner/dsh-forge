@@ -58,6 +58,21 @@ const forgePlugin: ForgePlugin = Object.assign(
 
 export default forgePlugin
 export { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
+// M3 3.3：产品自建事件总线 + 日志监听器（logs/{slug}.jsonl 唯一写者）——挂接缝；
+// emit 点随 3.4/3.5 工具路径接入（工具执行零日志代码）。
+export { assertForgeEventEnvelope, createForgeEventBus } from './events/bus.js'
+export type { ForgeEventBus, ForgeEventHandler } from './events/bus.js'
+export {
+  attachForgeLogListener,
+  createForgeLogListener,
+  forgeLogFileOf,
+  FORGE_LOG_POOL_SLUG,
+  FORGE_LOGS_DIR,
+  readForgeEventLog,
+  resolveLogSlug,
+  standardizeEvent,
+} from './events/log-listener.js'
+export type { ForgeLogListener, ForgeLogListenerOptions } from './events/log-listener.js'
 export { createForgeTools, createProjectResolver, FORGE_TOOL_NAMES } from './tools/index.js'
 export type {
   ForgeTools,

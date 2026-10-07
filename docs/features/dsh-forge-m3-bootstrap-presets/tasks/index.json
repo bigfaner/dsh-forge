@@ -249,7 +249,7 @@
         "2.gate",
         "1.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "3.3-event-bus-log-listener.md",
       "record": "records/3.3-event-bus-log-listener.md",
       "surface-type": "web",
