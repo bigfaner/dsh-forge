@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m3-bootstrap-presets"
 created: "2026-10-07"
-status: design
+status: tasks
 ---
 
 # Feature: dsh-forge-m3-bootstrap-presets
@@ -21,25 +21,26 @@ status: design
 | ER Diagram | design/er-diagram.md | 八域表终态（+feature_records；proposals+mode；tasks 源头双列+mode+ac_json）；不变量六条；v1 直改无迁移注记 |
 | SQL Schema | design/schema.sql | forge.db 终态 DDL（与 migrations.ts pin 同步；差异 5 项对 M2） |
 | Page Map | design/page-map.md | 概览三子 tab 升级（UF-1/3/4）+ Forge设置 分区（UF-2·settings.section slot）+ 评审/模式两对话框 + hero 座位开关首启预置 + openSessionWithPreset 组合子；无新路由 |
+| Tasks | tasks/ | **breakdown-tasks 落盘（2026-10-08）**：29 业务任务五阶段（①契约与数据面 2 → ②core 服务域 7 → ③插件两包与宿主 9 → ④web UI 7 → ⑤质量门与走查 4）+ 阶段门/summary/测试任务自动生成——index.json 47 项 `forge task validate` 全绿；phase-inventory.json 阶段溯源（design×4 + PRD-explicit×1）；breaking ×5（1.1 契约签名 / 1.2 schema 直改 / 2.4·2.5 容器化 / 3.5 tool 面收口——各带 Test Impact）；doc ×3（3.2/3.6 技能文本 / 5.4 记账合入） |
 | Proposal | ../../proposals/dsh-forge-m3-bootstrap-presets/proposal.md | 里程碑提案（全部裁决出处）：主轴 = 自举达成、双预设核心承载；拆包管线/规格轴；执行面知识分层；**成链分叉（远征成链 / 突击直接任务——UI 评审裁决）**；追溯矩阵→M3.75（#13）；Out of Scope #1–#13 全量顺延表 |
 | Spikes | ../../proposals/dsh-forge-m3-bootstrap-presets/spikes/ | S5/S6 实跑证据文档（dev 全绿 + 环境注记 + 方法论沉淀）；工件 `spikes/m3-s5-s6-presets/`（overlay 生成器 / m3_probe 探针 / playwright spec） |
 
 ## Traceability
 
-> PRD 阶段追溯（design/tasks 产出后扩展）。**design 追加（2026-10-08）**：SC↔设计落位全映射见 [design/tech-design.md §PRD Coverage Map](../design/tech-design.md)。
+> tasks 阶段五列追溯（2026-10-08 breakdown-tasks 落盘）。SC↔设计落位全映射见 [design/tech-design.md §PRD Coverage Map](../design/tech-design.md)；阶段结构见 [tasks/phase-inventory.json](./tasks/phase-inventory.json)。
 
-| PRD Section | Stories | UI | Notes |
-|-------------|---------|-----|-------|
-| SC1 双预设可用与平台语义 | Story 1 | hero 座位（平台 UI·开关开启）+ ui-design §hero 预设座位 | 断言基 UI 投影面（spike 口径）；自动对齐经「打开新会话」入口 + select RPC |
-| SC2 L1 物理边界（双层） | Story 5 / Story 6 | — | 预设层 = 技能枚举断言；worker 层 = toolFilter + 组合继承 + 按需加载 + Forge设置 LLM 一致（配置面三项） |
-| SC3 mode 溯源解耦 | Story 4 | UF-1 mode chip（ui-design §UF-1/流程 2） | 创建技能写入；人工变更快照不回溯 |
-| SC4 突击直达链 | Story 2 | — | quick-tasks → **直接任务阶段（无 feature 行）** → 派发 → 即时刷新 |
-| SC5 远征全链 | Story 3 | — | 全程 tool 读写；四域全景一致；成链 = 远征专属 |
-| SC6 提案五态流转与单步成链 | Story 4 / Story 2 | UF-1（ui-design §UF-1 + 流程 1） | 双面同门；**成链分叉**（远征成链 / 突击直接任务）；feature_records 表断言 |
-| SC7 规格域 gate 与提交定式 | Story 7 | — | AC 拒绝含清单；gate_json；AGENTS.md 两态 |
-| SC8 自举走查（SC-M3 门） | Story 8 | — | M3.5 走查；零 manifest.md；总纲 SC2/SC3/SC7 回归 |
-| SC9 记账合入 | Story 8 | — | 顺延表 #1–#13 + 总纲回写四条款 |
-| 打开新会话带上现状 | Story 4A | UF-1/UF-4 + ui-design §元数据布局 | 预填不发送；@path 第一行；feature 固定远征；诊断两路 + 派发指令 = 自动发送例外（v22 扩容）；派发执行中在场 = 跳转既有会话不重发 |
-| UF-2 Forge设置 | Story 5 | ui-design §UF-2 + 流程 4 | 多小节结构；worker 三项；agentOptions 携带优先 |
-| UF-3 诊断 + 派发 | Story 4A | ui-design §UF-3 + 流程 5/6 | 任务子 tab · 容器 pill 语境；toast（1s/5s）+ 发送给 agent；只读零副作用；**派发按钮（v22：未终态亮起/全终态置灰·跳转/新开+自动发送·无单任务执行入口）；视图下拉 + 派发/诊断固定右端** |
-| UF-4 feature 子 tab | Story 4A | ui-design §UF-4 | 阶段过滤；两列元数据（标识/模式/谱系/阶段）；分层文档（中文分组 + 真实路径）；打开新会话→远征 |
+| PRD Section | Design Section | UI Component | Placement | Tasks |
+|-------------|----------------|--------------|-----------|-------|
+| SC1 双预设可用与平台语义 | Interface 5 预设装配 + 图 1 boot 序 | hero 座位（平台 UI·开关开启） | existing-page:中区 hero（平台面） | 3.7, 3.9, 5.2 |
+| SC2 L1 物理边界（双层） | Layer Placement 拆包 + Interface 2 收窄矩阵 + 契约 pin #19/#20 | — | — | 3.1, 3.2, 3.4, 3.7, 5.1, 5.2（按需加载探针 = 3.9） |
+| SC3 mode 溯源解耦 | Interface 1 proposals/tasks mode + 图 7 快照不回溯 | UF-1 mode chip | existing-page:概览·提案子 tab | 2.2, 2.4, 4.2, 4.6, 5.2 |
+| SC4 突击直达链 | 图 6 成链分叉 + 图 12 + source 双列（Data Models） | UF-3 容器 pill 双轨 | existing-page:概览·任务子 tab | 1.2, 2.2, 2.4, 3.6（quick-tasks）, 4.4, 4.6, 5.2 |
+| SC5 远征全链 | Interface 1 forgeFeatures + Layer Placement 技能迁移 | UF-4 分层文档 | existing-page:概览·feature 子 tab | 2.1, 2.3, 3.1, 3.2, 4.3, 4.6, 5.2 |
+| SC6 提案五态流转与单步成链 | 图 6 + feature_records（Data Models）+ Interface 4 双面 | UF-1 五态 chips + 裁决/模式对话框 | existing-page:概览·提案子 tab | 2.1, 2.2, 2.3, 4.2, 4.6, 5.2 |
+| SC7 规格域 gate 与提交定式 | 图 8 submitTask 校验链 + Interface 6 错误码 | — | — | 2.6, 3.6, 5.2 |
+| SC8 自举走查（SC-M3 门） | Testing Strategy dogfood 行 | — | — | 5.3（5.2 回归前置） |
+| SC9 记账合入 | PRD Coverage Map SC9 行（执行期文档任务） | — | — | 5.4 |
+| Story 4A 打开新会话 + 诊断 + 派发 | Interface 5 + 图 9/10/13 + Integration #3/#5 | UF-1/UF-4 行头按钮 + UF-3 诊断/派发 | existing-page:概览三子 tab | 4.1, 4.2, 4.4, 4.6, 5.2 |
+| UF-2 Forge设置 | 图 11 设置单门 + Integration #4 | UF-2 Forge设置 分区 | existing-page:设置对话框（settings.section slot） | 2.7, 3.8, 4.5, 4.7 |
+| 契约与数据面地基 | Interfaces 全域 + Data Models 差异总表 | — | — | 1.1, 1.2 |
+| 阶段门（G-schema/G-core/G-plugin-host/G-web/SC-M3） | phase-inventory.json gates | — | — | 1.gate–5.gate（forge task index 自动生成） |
