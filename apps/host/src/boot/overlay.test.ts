@@ -4,12 +4,15 @@
 // fix-26：凭据桥行形状（credentialsPath 在场注入 / 缺席不桥）+ 官方缝 pin。
 // 3.4 M2 装配缝三面：core 行 tasksHome / plugin-forge 行 bindingsFile（与 knowledge
 // 同一绑定表文件）/ skill-filesystem 行 customSkillDirs（plugin-forge skills 物理挂载）。
+// M3 3.7 预设装配：registry default 覆写 + 远征/突击双预设行每启注行（物化分叉——
+// customSkillDirs 当形态绝对路径；!!js 全形态死刑零表达式残留；缺席 fail-soft 不注行）。
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { renderBootOverlay, WELCOME_NOTICE_ACK_VERSION, writeBootOverlay } from './overlay.js'
 import { hostRoot } from '../profile/paths.js'
+import { loadPresetPatches } from '../profile/presets.js'
 
 describe('renderBootOverlay（纯函数形状）', () => {
   it('两产品行 config 注入：dbFile / bindingsFile 双引号标量（反斜杠转义）', () => {
@@ -164,6 +167,85 @@ describe('凭据桥官方缝 pin（fix-26）', () => {
     expect(readFileSync(patch, 'utf8')).toContain(
       "- id: credentials\n      name: '@deepseek-ai/dsh-credentials-local'",
     )
+  })
+})
+
+describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
+  const base = { stateDb: '/x/s.db', bindingsFile: '/x/b.json' }
+  // 真实三底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
+  const patches = loadPresetPatches()!
+  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string } = {}) => ({
+    ...base,
+    presets: { ...patches, coreSkillsDir: '/c/skills', specSkillsDir: '/c/spec-skills', ...over },
+  })
+
+  it('双预设上场（AC6 形制）：registry default = 远征覆写 + 预设声明行（中文 name 直出·order 1/2）', () => {
+    const text = renderBootOverlay(withPresets())
+    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: expedition')
+    expect(text).toContain("    - id: preset-expedition\n      name: '@deepseek-ai/dsh-agent-preset'")
+    expect(text).toContain('        id: expedition\n        name: 远征模式')
+    expect(text).toContain('        order: 1')
+    expect(text).toContain("    - id: preset-blitz\n      name: '@deepseek-ai/dsh-agent-preset'")
+    expect(text).toContain('        id: blitz\n        name: 突击模式')
+    expect(text).toContain('        order: 2')
+    // 远征/突击顺序 = 声明序（registry 菜单 order 排序数据面）
+    expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
+  })
+
+  it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core]', () => {
+    const text = renderBootOverlay(
+      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge-spec\\skills' }),
+    )
+    const core = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"'
+    const spec = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge-spec\\\\skills"'
+    expect(text).toContain(core)
+    expect(text).toContain(spec)
+    // 突击段物理不含 spec 路径（Story 6：L1 物理隔离——按段切片断言）
+    const blitzSection = text.slice(text.indexOf('preset-blitz'))
+    expect(blitzSection).toContain(core)
+    expect(blitzSection).not.toContain(spec)
+    expect(text).not.toContain('{{plugin-forge') // 占位符零残留
+  })
+
+  it('!!js 全形态死刑（AC5）：物化输出零表达式残留——平台门行就地求值具体布尔', () => {
+    const text = renderBootOverlay(withPresets())
+    expect(text).not.toContain('!!js')
+    expect(text).not.toContain('createRequire')
+    const win32 = process.platform === 'win32'
+    expect(text).toContain(`disabled: ${String(win32)}`) // tool-bash（win32 禁）
+    expect(text).toContain(`disabled: ${String(!win32)}`) // tool-pwsh（非 win32 禁）
+  })
+
+  it('spec 目录缺席 fail-soft：远征 customSkillDirs 仅 [core]（spec 行剔除·无空列表残留）', () => {
+    const text = renderBootOverlay(withPresets({ specSkillsDir: undefined }))
+    expect(text).toContain('customSkillDirs:\n                - "/c/skills"')
+    expect(text).not.toContain('/c/spec-skills')
+    expect(text).not.toContain('{{plugin-forge')
+  })
+
+  it('双目录皆缺席：预设内 skill-filesystem 行回归上游裸形态（config 空块整除——schema 面零残留）', () => {
+    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined }))
+    expect(text).toContain(
+      "          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill",
+    )
+    expect(text).not.toContain('customSkillDirs')
+  })
+
+  it('presets 缺席 → 预设面整体不注行（fail-soft；既有输出零变化）', () => {
+    const text = renderBootOverlay(base)
+    expect(text).not.toContain('agent-preset-registry')
+    expect(text).not.toContain('preset-expedition')
+    expect(text).not.toContain('preset-blitz')
+    expect(text).not.toContain('远征模式')
+  })
+
+  it('底稿头注释不进 overlay + plan-mode section 逐字保真（空行/段落——行块本体零损耗）', () => {
+    const text = renderBootOverlay(withPresets())
+    expect(text).not.toMatch(/^# dsh-forge 预设底稿/m)
+    expect(text).toContain('                  section: |')
+    expect(text).toContain('                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds')
+    // section 内空行保真（段落分隔——物化只动占位符/平台门/注释行，plan-mode 六段结构零损耗）
+    expect(text).toMatch(/submit it through exit_plan_mode\.\n\n {20}Explore first\./)
   })
 })
 

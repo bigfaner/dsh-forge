@@ -8,6 +8,22 @@
 /** 上游 dsh 公开栈精确 pin（tech-design Dependencies：P1 期不开升级窗口） */
 export const DSH_STACK_VERSION = '0.2.0-rc.2'
 
+/**
+ * ui-settings 开关行首启预置（M3 3.7）：hero 预设座位显示开关（上游 ui-settings 单字段
+ * 命名空间行 config {enabled: volatile boolean}——developerTools 门控）。行所有权分叉的
+ * 用户侧径：首启替用户写成开 + materialize 增量补行（id 键控——老用户升级补写、已存在
+ * 不覆盖），此后归用户运行时（设置 UI 保存不被拒——spike S5-6 实证 overlay 占有行期间
+ * 保存被拒）。预设行走 boot overlay 每启覆盖（产品工件）——两径不混。
+ */
+export const UI_SETTINGS_PRESET_ROW: string = [
+  '# ── 首启预置（M3 3.7）：hero 预设座位显示开关（ui-settings developerTools 门控）。',
+  '#    首启替用户写成开；此后归用户运行时（本行一次性预置让位用户——已存在不覆盖，',
+  '#    设置 UI 保存不被拒；预设组合行走 boot overlay 每启注行，两径不混）。──',
+  '- id: ui-settings',
+  '  config:',
+  '    enabled: true',
+].join('\n')
+
 /** profile 目录引导文件名（cordis.yml 为 boot 拥有：runProfile 每启重写，此处仅首启兜底） */
 export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
   'package.json': JSON.stringify(
@@ -56,6 +72,9 @@ export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
     "      name: '@dsh-forge/knowledge'",
     '    - id: dsh-forge-plugin-forge',
     "      name: '@dsh-forge/plugin-forge'",
+    '',
+    // M3 3.7：ui-settings 开关行首启预置（行所有权用户侧径——见 UI_SETTINGS_PRESET_ROW）
+    `${UI_SETTINGS_PRESET_ROW}`,
     '',
   ].join('\n'),
   'pnpm-workspace.yaml': [

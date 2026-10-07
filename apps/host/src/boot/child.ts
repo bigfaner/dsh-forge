@@ -23,6 +23,7 @@ import {
 } from './bridge.js'
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
+import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -85,12 +86,24 @@ async function main(): Promise<void> {
   const profile = dshAppBoot.loadProfileDirectory('dsh', options.profileDir, options.installAnchor)
   dshAppBoot.reportSkippedBundles('dsh', profile)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
+  // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
+  // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
+  const presetPatches = loadPresetPatches()
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     skillsDir: options.skillsDir, // 3.4 plugin-forge skills 物理挂载（缺席 = 技能面降级）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
+    ...(presetPatches !== undefined
+      ? {
+          presets: {
+            ...presetPatches,
+            coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
+            specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
+          },
+        }
+      : {}),
   })
   const { ctx, shutdown: processShutdown } = await runProfile({
     environment: dshAppBoot.loadLayeredEnv('dsh'),

@@ -50,8 +50,13 @@ export interface HostPaths {
   tasksHome: string
   /** plugin-forge skills 物理挂载目录（3.4 customSkillDirs——boot overlay 注 skill-filesystem
    *  行；dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
-   *  邻接树。解析失败 = undefined 不注入（技能面缺席不抛断启动——fail-soft 装配缺口） */
+   *  邻接树。解析失败 = undefined 不注入（技能面缺席不抛断启动——fail-soft 装配缺口）。
+   *  M3 3.7 起兼作预设装配 customSkillDirs[core]（远征/突击同携核心技能） */
   skillsDir?: string
+  /** plugin-forge-spec skills 物理挂载目录（M3 3.7 预设装配 customSkillDirs[spec]——仅远征
+   *  携带；dev = workspace 链接、packaged = runtime/node_modules 邻接。解析失败 = undefined
+   *  不注入（spec 技能面降级 fail-soft；突击/blitz 本就物理不含） */
+  specSkillsDir?: string
   /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
   resourcesDir?: string
 }
@@ -99,7 +104,8 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     stateDb: join(userData, 'state.db'),
     bindingsFile: join(userData, 'knowledge-bindings.json'),
     tasksHome: resolveTasksHome(env, userData),
-    skillsDir: resolvePluginSkillsDir(installAnchor),
+    skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
+    specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
     resourcesDir,
   }
 }
@@ -113,15 +119,15 @@ function resolveTasksHome(env: PathEnv, userData: string): string {
   return join(userData, 'forge-workspaces')
 }
 
-/** plugin-forge skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：
- *  自 anchor 所在目录逐级上溯探 node_modules/@dsh-forge/plugin-forge/skills）。dev =
- *  apps/host 树 workspace 链接（junction 透传到 packages/plugin-forge/skills）；packaged =
- *  runtime/node_modules 邻接（anchor = {resources}/runtime/package.json，首探即中）。
- *  不走 require.resolve：产品包 ESM-only（exports 无 require 条件，CJS 解析恒拒）。
- *  解析失败返回 undefined（fail-soft：技能面缺席降级，不抛断启动——tools 半身照常，
- *  装配缺口由冒烟/结构 pin 显形）。 */
-function resolvePluginSkillsDir(installAnchor: string): string | undefined {
-  const rel = 'node_modules/@dsh-forge/plugin-forge/skills'
+/** 产品包 skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：自
+ *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/skills；3.4 plugin-forge 起，
+ *  M3 3.7 增 plugin-forge-spec 同法）。dev = apps/host 树 workspace 链接（junction 透传到
+ *  packages/<pkg>/skills）；packaged = runtime/node_modules 邻接（anchor =
+ *  {resources}/runtime/package.json，首探即中）。不走 require.resolve：产品包 ESM-only
+ *  （exports 无 require 条件，CJS 解析恒拒）。解析失败返回 undefined（fail-soft：技能面
+ *  缺席降级，不抛断启动——tools 半身照常，装配缺口由冒烟/结构 pin 显形）。 */
+function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${string}`): string | undefined {
+  const rel = `node_modules/${pkg}/skills`
   for (let dir = dirname(installAnchor); ; dir = dirname(dir)) {
     const candidate = join(dir, ...rel.split('/'))
     if (existsSync(candidate)) return candidate

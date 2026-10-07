@@ -41,13 +41,15 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
 }
 
 /**
- * 产品插件闭包（3.4 M2——运行时闭包增员）。@dsh-forge/plugin-forge 三供应面：
+ * 产品插件闭包（3.4 M2 起步；M3 3.7 增 plugin-forge-spec——预设装配远征组合 in-preset 行
+ * 的 loader 解析面）。两包三供应面：
  *   · dev 锚树：apps/host/package.json dependencies workspace 链接（本清单同门供应面
- *     ——paths.ts resolvePluginSkillsDir 亦自此解析 skills 目录）；
+ *     ——paths.ts resolvePackageSkillsDir 亦自此解析 skills 目录）；
  *   · dev profile 树：apps/host/profile.dev/package.json link 行（loader 行 import 锚）；
  *   · 打包形态：scripts/assemble-installer-resources.mjs PRODUCT_PACKAGES 自 packages/
- *     真实拷贝（package.json + dist + skills——技能面物理挂载源）入 runtime/node_modules。
+ *     真实拷贝（package.json + dist + skills——技能面物理挂载源）入 runtime/node_modules
+ *     （plugin-forge-spec 打包三处同步 = 3.8）。
  * 不入 RUNTIME_PACKAGES 映射：该池 = npm 精确 pin 闭包（profile.install 消费——
  * installer-pipeline pin 禁声明 @dsh-forge/*，无 npm 分发形态）。
  */
-export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = ['@dsh-forge/plugin-forge']
+export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = ['@dsh-forge/plugin-forge', '@dsh-forge/plugin-forge-spec']

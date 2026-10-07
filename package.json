@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -b && pnpm -C apps/web build:vite",
+    "build": "tsc -b && node scripts/copy-preset-assets.mjs && pnpm -C apps/web build:vite",
     "dev": "node scripts/dev.mjs",
     "lint": "pnpm lint:ox && pnpm lint:imports && pnpm lint:tokens && pnpm lint:selftest && pnpm lint:types && pnpm lint:test-types",
     "lint:ox": "oxlint -c oxlint.config.ts .",

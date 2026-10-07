@@ -43,3 +43,10 @@
     provider: zai-coding-cn
     model: glm-5.3
     reasoningEffort: max
+
+# ── 首启预置（M3 3.7）：hero 预设座位显示开关（ui-settings developerTools 门控）。
+#    首启替用户写成开；此后归用户运行时（本行一次性预置让位用户——已存在不覆盖，
+#    设置 UI 保存不被拒；预设组合行走 boot overlay 每启注行，两径不混）。──
+- id: ui-settings
+  config:
+    enabled: true

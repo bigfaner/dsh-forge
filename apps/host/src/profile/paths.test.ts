@@ -1,6 +1,6 @@
 // 1.4 双形态解析 pin（dev / packaged；Implementation Notes：自本任务区分，供 4.1 消费）。
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hostRoot, resolveHostPaths } from './paths.js'
@@ -70,6 +70,24 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     // 独立根（无 node_modules 树）显式 anchor → 上溯至文件系统根不中
     const isolated = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: 'X:\\nowhere\\anchor\\package.json' }, 'C:/ud')
     expect(isolated.skillsDir).toBeUndefined()
+  })
+
+  it('plugin-forge-spec skills 挂载目录（M3 3.7 预设装配 customSkillDirs[spec]）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-paths-spec-'))
+    try {
+      const anchor = join(root, 'anchor', 'package.json')
+      const specSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge-spec', 'skills')
+      const coreSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills')
+      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec 树缺席
+      const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(absent.skillsDir).toBe(coreSkills)
+      expect(absent.specSkillsDir).toBeUndefined() // spec 技能面降级（fail-soft 不抛断启动）
+      mkdirSync(specSkills, { recursive: true }) // spec 树落地（3.2 后形态）→ 解析同法
+      const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(present.specSkillsDir).toBe(specSkills)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

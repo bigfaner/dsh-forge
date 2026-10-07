@@ -1,0 +1,7 @@
+# dsh-forge 预设底稿：registry 覆写（M3 3.7）——agent-preset-registry 行 default = 远征。
+# 官方 dsh-web-app 层 insert 块声明 registry 行（default: standard）；本行按 row id 整体
+# 替换 config 覆写默认预设 = expedition（Story 1：新会话选模式开工——hero 座位缺省远征）。
+# 行所有权同 expedition/blitz 底稿：boot overlay 每启注行产品工件，不进 profile 用户层。
+- id: agent-preset-registry
+  config:
+    default: expedition

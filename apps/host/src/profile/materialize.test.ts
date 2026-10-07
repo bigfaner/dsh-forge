@@ -1,11 +1,12 @@
 // 1.4 AC2 pin：profile 模板首启落地 {profile-dir} + 幂等不重写 + 模板内容形状
 //（官方行 + @dsh-forge/core / @dsh-forge/knowledge 行）+ dev 形态文件同步。
+// M3 3.7 增：ui-settings 开关行首启预置（模板补行 + 增量补行 id 键控——此后归用户运行时）。
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ensureProfileMaterialized } from './materialize.js'
-import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES } from './template.js'
+import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, UI_SETTINGS_PRESET_ROW } from './template.js'
 
 let dir: string
 beforeAll(() => {
@@ -80,12 +81,15 @@ describe('AC2 幂等：重复启动不重写', () => {
     expect(statSync(join(dir, 'cordis.patch.yml')).mtimeMs).toBe(before)
   })
 
-  it('用户已改写的 cordis.patch.yml 原样保留（不回写模板）', () => {
+  it('用户已改写的 cordis.patch.yml 原样保留（不回写模板；3.7 起仅增量补 ui-settings 行）', () => {
     const custom = '# user-owned layer\n- id: system-prompt\n  config: {}\n'
     writeFileSync(join(dir, 'cordis.patch.yml'), custom, 'utf8')
     const again = ensureProfileMaterialized(dir)
     expect(again.created).toEqual([])
-    expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(custom)
+    // 3.7 增量补行（id 键控）：用户内容逐字保留 + ui-settings 开关行尾置补写（老用户升级径）
+    const after = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+    expect(after.startsWith(custom)).toBe(true)
+    expect(after).toContain('- id: ui-settings\n  config:\n    enabled: true')
   })
 })
 
@@ -108,6 +112,54 @@ describe('落地机制边界', () => {
   })
 })
 
+describe('M3 3.7 ui-settings 开关行首启预置（行所有权用户侧径）', () => {
+  it('模板补行：cordis.patch.yml 模板含开关行 enabled: true（首启替用户写成开）', () => {
+    expect(PROFILE_TEMPLATE_FILES['cordis.patch.yml']).toContain('- id: ui-settings\n  config:\n    enabled: true')
+    // 模板行与增量补行同源（template.ts 单源常量——两径字面一致）
+    expect(PROFILE_TEMPLATE_FILES['cordis.patch.yml']).toContain(UI_SETTINGS_PRESET_ROW)
+  })
+
+  it('增量补行（id 键控）：老用户 cordis.patch.yml 无行 → 补写一次（patched 记账）；二次稳态零动作', () => {
+    const oldDir = join(dir, 'old-user')
+    mkdirSync(oldDir, { recursive: true })
+    const legacy = '# legacy profile (pre-M3)\n- id: system-prompt\n  config: {}\n'
+    writeFileSync(join(oldDir, 'cordis.patch.yml'), legacy, 'utf8')
+    const first = ensureProfileMaterialized(oldDir)
+    expect(first.patched).toEqual(['cordis.patch.yml'])
+    const patchedText = readFileSync(join(oldDir, 'cordis.patch.yml'), 'utf8')
+    expect(patchedText.startsWith(legacy)).toBe(true)
+    expect(patchedText).toContain('- id: ui-settings\n  config:\n    enabled: true')
+    // 行在场 → 不再触碰（mtime 稳态）
+    const mtime = statSync(join(oldDir, 'cordis.patch.yml')).mtimeMs
+    const second = ensureProfileMaterialized(oldDir)
+    expect(second.patched).toEqual([])
+    expect(statSync(join(oldDir, 'cordis.patch.yml')).mtimeMs).toBe(mtime)
+  })
+
+  it('行在场不覆盖：用户已改值（enabled: false）原样保留——此后归用户运行时', () => {
+    const userDir = join(dir, 'user-owned')
+    mkdirSync(userDir, { recursive: true })
+    const userChoice = '- id: ui-settings\n  config:\n    enabled: false\n'
+    writeFileSync(join(userDir, 'cordis.patch.yml'), `# user layer\n${userChoice}`, 'utf8')
+    const result = ensureProfileMaterialized(userDir)
+    expect(result.patched).toEqual([])
+    expect(readFileSync(join(userDir, 'cordis.patch.yml'), 'utf8')).toBe(`# user layer\n${userChoice}`)
+  })
+
+  it('行锚精确：ui-settings-general 等前缀行不误判（insert 块内缩进行不匹配顶层行锚）', () => {
+    const tricky = join(dir, 'tricky')
+    mkdirSync(tricky, { recursive: true })
+    writeFileSync(
+      join(tricky, 'cordis.patch.yml'),
+      ['- id: ui-settings-general', '  config: {}', '- insert:', '    - id: ui-settings-account', "      name: '@deepseek-ai/dsh-client-ui-settings-account'", ''].join('\n'),
+      'utf8',
+    )
+    const result = ensureProfileMaterialized(tricky)
+    expect(result.patched).toEqual(['cordis.patch.yml']) // 前缀行/缩进行 ≠ ui-settings 行 → 补写
+    expect(readFileSync(join(tricky, 'cordis.patch.yml'), 'utf8')).toMatch(/^- id: ui-settings$/m)
+  })
+})
+
 describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）', () => {
   const devDir = join(import.meta.dirname, '..', '..', 'profile.dev')
   it('package.json：官方 bundle 行与模板逐键一致 + 产品插件 link 三件与原生依赖兜底（4.2 dev 直链）', () => {
@@ -126,6 +178,8 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
+    // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）
+    expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBe('link:../../../packages/plugin-forge-spec')
     // core 运行期原生依赖（prebuilds 随包分发；兜底供非 realpath 解析路径）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
@@ -138,6 +192,8 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
     expect(dev).toContain("name: '@dsh-forge/plugin-forge'")
     expect(dev).not.toMatch(/dsh-forge-(core|knowledge|plugin-forge)[\s\S]{0,80}disabled/)
+    // M3 3.7：ui-settings 开关行（dev = 已落地用户层等价物——语义同步模板补行）
+    expect(dev).toContain('- id: ui-settings\n  config:\n    enabled: true')
   })
   it('pnpm-workspace.yaml 全文一致', () => {
     const dev = readFileSync(join(devDir, 'pnpm-workspace.yaml'), 'utf8')

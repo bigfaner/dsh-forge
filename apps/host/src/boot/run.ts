@@ -55,8 +55,12 @@ export interface BootDshOptions {
   bindingsFile: string
   /** M2 派生根绝对路径（3.4：boot overlay 注 core 行 config.tasksHome；缺席 = M2 四域降级） */
   tasksHome?: string
-  /** plugin-forge skills 物理挂载目录（3.4：boot overlay 注 skill-filesystem 行；缺席 = 不注入） */
+  /** plugin-forge skills 物理挂载目录（3.4：boot overlay 注 skill-filesystem 行；缺席 = 不注入。
+   *  M3 3.7 起兼作预设装配 customSkillDirs[core]） */
   skillsDir?: string
+  /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
+   *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
+  specSkillsDir?: string
   /** 真 home 凭据文档桥路径（fix-26；boot overlay credentials 行 config.path 注入——
    *  undefined = USER_DATA 隔离态（e2e/测试）不桥） */
   credentialsPath?: string
