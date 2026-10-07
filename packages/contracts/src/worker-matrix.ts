@@ -57,8 +57,27 @@ export const WORKER_TOOL_MATRIX: Readonly<
   validation: { fs: true, shell: true, jobs: true, 'read-image': true, web: true, forge: true },
 }
 
-/** 全局拒绝集（一切 worker——安全面收窄，与任务类型无关）；`skill` 不拒 */
-export const WORKER_GLOBAL_DENY_TOOLS = ['ask-user', 'delegation', 'todo', 'present'] as const
+/**
+ * 全局拒绝集（一切 worker——安全面收窄，与任务类型无关）；`skill` 不拒。
+ * 语义族四门（Interface 2：ask-user / delegation / todo / present），名 = 上游 0.2.0-rc.2
+ * 组合实面实名（fix-1 / drift #10：driver `tools.restrict()` 对未知名 loud 校验，族代称
+ * 入表会拆一切 spawn——3.9 实跑证据 dispatch-round 附已知名表全文）：
+ * ask_user_question（ask-user）· delegation 族五员 = subagent_fork / list_agents /
+ * send_message / interrupt_agent / workflow（上游 delegation 组合实注册面）·
+ * todo_write（todo）· present（实名恰同）。
+ * 刻意不入：spawn provider 的 `subagent` 工具为惰性注册（provider 缺席即不在场——
+ * dsh-tool-subagent 延迟挂载 fail-soft），入表会在其缺席环境复现 unknown-name 拆 spawn。
+ */
+export const WORKER_GLOBAL_DENY_TOOLS = [
+  'ask_user_question',
+  'subagent_fork',
+  'list_agents',
+  'send_message',
+  'interrupt_agent',
+  'workflow',
+  'todo_write',
+  'present',
+] as const
 
 /** forge 工具族的面 = 恰两动词（claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言） */
 export const WORKER_FORGE_TOOLS = ['submitTask', 'addTask'] as const

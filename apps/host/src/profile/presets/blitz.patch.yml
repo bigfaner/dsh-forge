@@ -2,6 +2,8 @@
 # 形态 = 远征底稿同源镜像 − plugin-forge-spec 增量行 − spec 技能目录（L1 物理隔离：突击组合
 # 物理不含规格技能）+ 突击 persona + name 突击模式 + order 2。镜像保真与契约 pin 同远征
 # （presets.test.ts 机械 diff + config 全集断言）；平台门行由物化就地求值。
+# fix-1/drift #9：尾部 plugin-forge 增量行携带 bindingsFile 同 config（占位符物化——与全局行
+# 同值单源），预设会话行内实例自足 cwd 路由（config-less 行内实例遮蔽全局配置实例断链——3.9 实跑双证）。
 # 行所有权同远征：产品工件底稿，boot overlay 每启注行，不进 profile 用户层。
 - insert:
     - id: preset-blitz
@@ -155,3 +157,5 @@
             disabled: true
           - id: plugin-forge
             name: '@dsh-forge/plugin-forge'
+            config:
+              bindingsFile: "{{plugin-forge-bindings}}"

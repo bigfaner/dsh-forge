@@ -92,9 +92,24 @@ describe('AC2 收窄矩阵 ✓ 表：任务类型族 × 工具族逐格（Interf
 })
 
 describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动词）', () => {
-  it('全局拒绝 = ask-user/delegation/todo/present（一切 worker；skill 不拒）', () => {
-    expect(WORKER_GLOBAL_DENY_TOOLS).toEqual(['ask-user', 'delegation', 'todo', 'present'])
+  it('全局拒绝 = 四族实面实名八员（fix-1/drift #10 重映射；skill 不拒；惰性 subagent 刻意不入）', () => {
+    expect(WORKER_GLOBAL_DENY_TOOLS).toEqual([
+      'ask_user_question',
+      'subagent_fork',
+      'list_agents',
+      'send_message',
+      'interrupt_agent',
+      'workflow',
+      'todo_write',
+      'present',
+    ])
     expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('skill')
+    // 族代称已死：driver tools.restrict() 对未知名 loud 校验（3.9 实跑拆 spawn 的根因）
+    for (const alias of ['ask-user', 'delegation', 'todo']) {
+      expect((WORKER_GLOBAL_DENY_TOOLS as readonly string[]).includes(alias)).toBe(false)
+    }
+    // 惰性注册面不入表（provider 缺席环境 unknown-name 复发防线）
+    expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('subagent')
   })
 
   it('forge 面 = 恰 submitTask + addTask（claimTask/queryTask/dispatchTask 不入 worker 面）', () => {

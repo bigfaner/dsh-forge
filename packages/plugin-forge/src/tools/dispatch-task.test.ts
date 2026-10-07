@@ -229,7 +229,20 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
   it('当前确证名表：全局拒绝集 + forge 闭环（Hard Rule：矩阵只给 submitTask + addTask）', () => {
     for (const type of ['coding-fix', 'doc', 'gate', 'validation-ux'] as TaskType[]) {
       expect(deriveWorkerToolFilter(type).deny.sort()).toEqual(
-        ['ask-user', 'createProposal', 'delegation', 'dispatchTask', 'present', 'queryTask', 'todo', 'transitionProposal'],
+        [
+          'ask_user_question',
+          'createProposal',
+          'dispatchTask',
+          'interrupt_agent',
+          'list_agents',
+          'present',
+          'queryTask',
+          'send_message',
+          'subagent_fork',
+          'todo_write',
+          'transitionProposal',
+          'workflow',
+        ],
       )
     }
   })
@@ -514,7 +527,7 @@ describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions 
     expect(req.label).toBe('feat-x/2.5')
     expect(req.parent).toBe(h.exec.agent)
     expect(req.signal).toBeInstanceOf(AbortSignal)
-    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask-user', 'queryTask', 'dispatchTask']))
+    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'subagent_fork', 'queryTask', 'dispatchTask']))
   })
 
   it('forgeSettings 已配置：agentOptions 显式携带（effort 直映射）', async () => {
@@ -563,7 +576,7 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
     // 双记：事件 digest = claimTask 返回 digest（task_records.claim 行同值）
     expect(claimed.payload.dispatchDigest).toBe('digestabc123')
     expect(spawned.payload).toMatchObject({ workerSessionId: 'worker-1', model: 'inherit' })
-    expect(spawned.payload.toolFilter).toEqual(expect.arrayContaining(['ask-user', 'queryTask']))
+    expect(spawned.payload.toolFilter).toEqual(expect.arrayContaining(['ask_user_question', 'queryTask']))
     expect(done.payload).toMatchObject({ outcome: 'success', workerSessionId: 'worker-1' })
     expect(done.payload.durationMs).toBeGreaterThanOrEqual(0)
     for (const e of h.events) {

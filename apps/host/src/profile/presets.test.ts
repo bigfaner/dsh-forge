@@ -129,6 +129,13 @@ for (const preset of ['expedition', 'blitz'] as const) {
       else expect(text).not.toContain('@dsh-forge/plugin-forge-spec')
     })
 
+    it('增量行携带 bindingsFile 同 config（fix-1/drift #9：占位符物化——config-less 行内实例遮蔽全局配置实例断链的处置）', () => {
+      // 行内产品行逐行形：config.bindingsFile 占位符（renderBootOverlay 物化与全局行同值）
+      expect(text).toContain('            config:\n              bindingsFile: "{{plugin-forge-bindings}}"')
+      const tokenRows = text.split('\n').filter((l) => l.trim() === 'bindingsFile: "{{plugin-forge-bindings}}"')
+      expect(tokenRows).toHaveLength(isExpedition ? 2 : 1) // 远征 = plugin-forge + plugin-forge-spec；突击 = 恰 plugin-forge
+    })
+
     it('底稿零 dogfood 专用行（llm-pi-ai/agent-default-model 不入产品底稿——spike 叠层专属）', () => {
       expect(text).not.toContain('agent-default-model')
       expect(text).not.toContain('llm-pi-ai')

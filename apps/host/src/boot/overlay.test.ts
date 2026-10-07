@@ -208,7 +208,13 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const patches = loadPresetPatches()!
   const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string } = {}) => ({
     ...base,
-    presets: { ...patches, coreSkillsDir: '/c/skills', specSkillsDir: '/c/spec-skills', ...over },
+    presets: {
+      ...patches,
+      coreSkillsDir: '/c/skills',
+      specSkillsDir: '/c/spec-skills',
+      bindingsFile: base.bindingsFile, // fix-1：预设行内产品行 config 物化锚（同值单源）
+      ...over,
+    },
   })
 
   it('双预设上场（AC6 形制）：registry default = 远征覆写 + 预设声明行（中文 name 直出·order 1/2）', () => {
@@ -237,6 +243,23 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(blitzSection).toContain(core)
     expect(blitzSection).not.toContain(spec)
     expect(text).not.toContain('{{plugin-forge') // 占位符零残留
+  })
+
+  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = 全局行同值单源', () => {
+    const text = renderBootOverlay(withPresets())
+    const row = (name: string) =>
+      [
+        `          - id: ${name}`,
+        `            name: '@dsh-forge/${name}'`,
+        '            config:',
+        '              bindingsFile: "/x/b.json"',
+      ].join('\n')
+    expect(text).toContain(row('plugin-forge'))
+    expect(text).toContain(row('plugin-forge-spec'))
+    // 同值行计数：全局 knowledge + plugin-forge 两行 + 远征行内 plugin-forge/plugin-forge-spec
+    // 两行 + 突击行内 plugin-forge 一行 = 恰 5（预设会话行内实例自足 cwd 路由——遮蔽无害化）
+    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(5)
+    expect(text).not.toContain('{{plugin-forge-bindings}}')
   })
 
   it('!!js 全形态死刑（AC5）：物化输出零表达式残留——平台门行就地求值具体布尔', () => {

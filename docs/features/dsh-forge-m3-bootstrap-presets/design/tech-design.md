@@ -576,9 +576,17 @@ flowchart TD
 
 17. dispatchTask 在场 + claimTask/spawnWorker/transitionTask/transitionFeature/setProposalMode 缺席（tool 面代码审计）；18. 两包 tool 面分置（核心六 + spec 三）；19. 预设镜像行 ↔ 上游 standard.patch.yml 机械 diff + config 全集；20. 收窄矩阵常量 + 工具名映射表；21. 事件两层联合类型（ForgePluginEvent 判别联合完备性）；22. RPC 新通道 allowlist（settings / proposals.{transition,setMode,listDocs} / features.listDocs）。
 
-### drift 记账（对 M2 工件与 PRD，共八项）
+### drift 记账（对 M2 工件与 PRD，共八项 + 实施期补验两项）
 
 1. claimTask tool 退役 → dispatchTask（M2 e2e 涉及 spec 显式 drift + 台账；**M2 G1-11「六在场/两缺席」集合随之改写**——新面由 #17/#18 定义）；2. transitionProposal 上 RPC 双面（M2「tool 专属」纪律修订）；3. tasks schema v1 直改（migrations/schema pin 同步 + 存量开发库废弃）；4. plugin-forge boundaries pin 增 driver 白名单；5. PRD In Scope ② transitionFeature 枚举收窄（本设计偏离记账）；6. **PRD SC3/数据约束/流程五/UF-1.6「proposal↔feature 溯源同步」断言 → proposals 单侧 + feature 恒远征**（裁决⑥——PRD 四处已随本设计回写）；7. **PRD「feature_records = 软迁移新表」措辞 → v1 直改**（裁决③扩展覆盖——PRD In Scope ③/Data Requirements 已回写）；8. **M2 工件退役两处**：M2 3.3 `Skill(forge:run-tests)` 前缀引用缝消灭（PRD In Scope ①）+ M2 已落 git-commit 技能条目移除（Out of Scope #12——plugin-forge/skills/git-commit 删除）。
+
+**实施期补验 drift（任务 3.9，2026-10-08 发现——硬规则「禁改设计裁决」：记账不修，修复归 fix 任务；#9/#10 已由 fix-1 处置收口——见各条处置段）**
+
+9. **3.7 双行形态实施回归：预设行内 plugin-forge 增量行（config-less）在预设会话遮蔽全局配置实例 → forge 工具 cwd 路由整体失效**。实跑证据（`spikes/m3-s5-s6-presets/VERIFICATION-3.9.md` W 节）：远征/突击预设会话内全部 forge 动词抛 `ERR_WORKSPACE_NOT_REGISTERED`（bindingsFile 行在盘、标准模式对照组同径全绿——差异变量唯预设行内 plugin-forge 行）；影响面 = M3 派发链在两个产品预设下不可用（dispatcher 与 worker 继承同组合同断）。3.9 补验经标准模式会话完成四项确认（AC 免损）；双行形态本体（本设计 3.7 裁决）待 fix 任务裁决处置（行内行携带同 config / 去行内行 / 装载去重取配置实例三选一）。
+   **处置（fix-1，2026-10-08裁决：行内行携带同 config）**：expedition/blitz 底稿行内 plugin-forge[+spec] 增量行增 `config.bindingsFile` 占位符（`{{plugin-forge-bindings}}`），renderBootOverlay 物化与全局行同值（BootOverlayInput.bindingsFile 单源；PresetOverlayInput 增必填物化锚）。裁决依据：Interface 5 预设自含形态保留（去行内行 = 偏离本设计且 plugin-forge-spec 无全局行将整体失踪；装载去重 = 上游 loader 行为非产品缝）。plugin-forge-spec 同缝同修（行内行 = 其唯一实例）。契约 pin 随迁：presets.test.ts 增量行 config 形状断言（远征 2 行/突击 1 行）+ overlay.test.ts 同值行计数恰 5。W 用例复跑实证：默认远征会话 dispatchTask/queryTask 全链绿（claim→spawn→worker 结算），标准模式绕行径已拆除。
+
+10. **worker 全局 deny 名表与上游实面错位：`WORKER_GLOBAL_DENY_TOOLS`（'ask-user'/'delegation'/'todo'/'present'）三名在上游 0.2.0-rc.2 组合不存在（实名 `ask_user_question`/`todo_write`/delegation 族=`subagent_fork`+`list_agents` 等）→ driver `tools.restrict()` 未知名 loud 校验拆 spawn → 任意 taskType 派发恒 `ERR_SPAWN_FAILED`，3 连败 halted 粘住**（3.9 W 用例标准模式实跑证据；名表全文见 dispatch-round 证据）。OQ#2「实施期按当期上游工具面枚举核对入 pin」的全局集前置欠账——修复 = 名表按实面重映射（5.1 pin 面提前兑现），3.9 硬规则禁就地改 contracts pin，归 fix 任务。
+   **修复（fix-1，2026-10-08）**：`WORKER_GLOBAL_DENY_TOOLS` 重映射为实面实名八员 = `ask_user_question` / delegation 族五员（`subagent_fork`·`list_agents`·`send_message`·`interrupt_agent`·`workflow`）/ `todo_write` / `present`（四族语义不变，pin 与 dispatch-task 组装断言随迁）。**刻意不入**：spawn provider 的 `subagent` 工具为惰性注册（provider 缺席环境不在场——入表复现 unknown-name 拆 spawn）；其「已注册环境下 worker 可见 `subagent`」残余缝 = 已知限制，随 5.1 工具名映射 pin 全表收口裁决。W 用例复跑实证：deny 零泄漏（scoped 探针 = `ToolRuntime.schemas(exec.agent)` 受限视图——裸 `ctx.tools.schemas()` 无 scope 参数量的是全局注册表，3.9 一版探针的测量缝）。
 
 ### 老 forge `.forge/state.json`（当前 slug）的形态对应（2026-10-08 裁决：零方案）
 

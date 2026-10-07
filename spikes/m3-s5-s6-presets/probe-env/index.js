@@ -14,15 +14,19 @@ const dumpOf = (why, exec, toolsRuntime) => {
     headerCwd: session?.header?.cwd ?? null,
     topCwd: session?.cwd ?? null,
   }
-  // 工具名投影：优先 exec.tools（scoped），退回 boot 时捕获的 ToolRuntime
-  const runtime = exec?.tools ?? toolsRuntime
+  // 工具名投影：scoped 面 = ToolRuntime.schemas(exec.agent)——执行 agent 的受限视图
+  //（0.2.0-rc.2 的 ToolRunContext 无 exec.tools 字段——裸 ctx.tools.schemas() 无 scope
+  // 参数 = 全局注册表面，worker 收窄（tools.restrict deny）不可见；fix-1 复跑实证修正）
+  const agent = exec?.agent
+  const readSchemas = () => (agent !== undefined ? toolsRuntime.schemas(agent) : toolsRuntime.schemas?.())
   try {
-    const schemas = runtime?.schemas?.()
+    const schemas = readSchemas()
     if (schemas && typeof schemas.then === 'function') {
-      // async 形态在 execute 内 await 不了此处——记 pending，由 execute 侧二次尝试
+      // async 形态在 dumpOf 内 await 不了——记 pending，由 execute 侧二次尝试
       dump.toolNamesPending = true
     } else if (Array.isArray(schemas)) {
       dump.toolNames = schemas.map((s) => s?.name).filter((n) => typeof n === 'string').sort()
+      dump.toolNamesScope = agent !== undefined ? 'exec-agent' : 'global'
     } else {
       dump.toolNames = null
       dump.toolNamesShape = schemas === undefined ? 'no-schemas-api' : typeof schemas
@@ -59,6 +63,7 @@ const plugin = Object.assign(
               headerCwd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
               topCwd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
               toolNames: { oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }] },
+              toolNamesScope: { type: 'string' },
             },
             required: ['why', 'at', 'agentSessionId', 'headerCwd', 'topCwd', 'toolNames'],
           },
@@ -69,7 +74,7 @@ const plugin = Object.assign(
           const dump = dumpOf(why, exec, toolsRuntime)
           if (dump.toolNamesPending === true) {
             try {
-              const schemas = await (exec?.tools ?? toolsRuntime).schemas()
+              const schemas = await (exec?.agent !== undefined ? toolsRuntime.schemas(exec.agent) : toolsRuntime.schemas?.())
               dump.toolNames = Array.isArray(schemas)
                 ? schemas.map((s) => s?.name).filter((n) => typeof n === 'string').sort()
                 : null

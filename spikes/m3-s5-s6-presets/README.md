@@ -43,6 +43,24 @@ $env:M3_FORM = 'packaged-abs'
 - `...\env-<tag>\dumps.jsonl`——m3_probe dump（会话 id / 工具名全集）
 - 会话日志检索——`agent-preset/selected` 事件行（blank 锁机械面）
 
+## M3 3.9 复跑件（真实装配面——实施期首任务）
+
+一版工件（上节）的预设行已退役：3.7 起远征/突击双预设、registry default、ui-settings 开关全部归产品（`apps/host/src/profile/presets/` 三底稿 + `renderBootOverlay` 物化 + 首启预置）。3.9 复跑（`overlay-m3.mjs` + `m3-rerun.spec.ts`，env `M3R_FORM`）叠层只注 dogfood 模型行 + m3_probe 探针插件；四用例：
+
+- **P**（`m3-packaged`）：打包产物首启 → boot-overlay.yml 物化 resources 绝对路径 + registry default=远征 + ui-settings 首启预置 + hero 座位自现 + 目录转录（spec/core 技能名）。
+- **N**（`m3-packaged-js`）：负对照——外部叠层重述产品远征行、仅 customSkillDirs[core] 换 §5.6 `!!js` 表达式 → 预期行 broken（!!js 死刑判决确认）。
+- **D**（`m3-dev`）：dev 形态物化 repo 绝对路径（dev-abs）+ L1 物理边界（真实突击预设物理不含 spec 技能）。
+- **W**（`m3-dev`）：真实 `dispatchTask` 派发 doc + test-run 双夹具任务 → worker dump deny 收窄（dev-tf 落位=3.4 真实 deriveWorkerToolFilter）/ worker 会话文件解码（首条=dispatchPrompt 对账 digest、AGENTS.md 到达、run-tests 按需加载 test 有 doc 无）——SC2 按需加载断言通道（5.2 e2e 消费面）。
+
+前置：packaged 形态须先重建 `pnpm dist:win`（release 陈旧 = 伪装回归）；其余同一版（凭据/单实例）。证据根 `Z:\project\dsh\tmp-redesign\m3-3-9\<form>\`（evidence.json / shots / dumps.jsonl / report）。结论与证据归档见 `VERIFICATION-3.9.md`。
+
+```powershell
+# 复跑（一键一形态；dev 形态 D+W 两用例）
+$env:M3R_FORM = 'm3-dev'      # 或 'm3-packaged' / 'm3-packaged-js'
+& 'D:\developer\nodejs\node.exe' 'node_modules\.pnpm\playwright@1.63.0\node_modules\playwright\cli.js' test -c 'spikes\m3-s5-s6-presets\pw.config.ts' m3-rerun
+```
+
+
 ## 已知迭代点（跑挂时先看这里）
 
 1. **developerTools 存储预播种**：格式/位置由 boot#1 后扫描发现（spec 自举）——若候选文件为非 JSON 或 schema 不符，自动落 UI 兜底（设置 → 显示代码工作视图）；两者皆失败时看 `shots/devtools-ui-*.png` 人工定位锚点后迭代选择器。

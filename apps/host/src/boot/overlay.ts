@@ -25,6 +25,8 @@
 // 用户，两径不混）。customSkillDirs 物化分叉：占位符解析为当形态绝对路径（dev = repo /
 // packaged = resources 物化路径）；!!js 全形态死刑（spike S5-4 判决反转）——物化输出零
 // 表达式残留（平台门行就地求值具体布尔，路径 only 绝对路径）。
+// fix-1（drift #9）：预设行内 plugin-forge[+spec] 增量行携带 bindingsFile 占位符——物化与
+// 全局行同值（预设会话行内实例遮蔽全局配置实例的 cwd 路由断链处置：行内行携带同 config）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -58,13 +60,16 @@ export interface BootOverlayInput {
   readonly presets?: PresetOverlayInput
 }
 
-/** 预设装配输入（3.7）：三底稿全文 + customSkillDirs 双目录物化锚 */
+/** 预设装配输入（3.7）：三底稿全文 + customSkillDirs 双目录物化锚 + bindingsFile 物化锚（fix-1） */
 export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge skills 当形态绝对路径（customSkillDirs[core]；缺席 = 剔除该目录行） */
   readonly coreSkillsDir?: string
   /** plugin-forge-spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
    *  ——spec 技能面降级 fail-soft，突击/blitz 本就物理不含） */
   readonly specSkillsDir?: string
+  /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚——
+   *  与全局行同值单源；必填：BootOverlayInput.bindingsFile 本就必填，无缺席分支） */
+  readonly bindingsFile: string
 }
 
 /** 底稿占位符（customSkillDirs 项——物化替换为当形态绝对路径双引号标量） */
@@ -72,6 +77,13 @@ const PRESET_SKILL_DIR_TOKENS = {
   core: '{{plugin-forge-skills}}',
   spec: '{{plugin-forge-spec-skills}}',
 } as const
+
+/**
+ * 预设行内产品行 bindingsFile 占位行（fix-1/drift #9：config-less 行内实例在预设会话
+ * 遮蔽全局配置实例 → forge 动词 cwd 路由整体断链；行内行携带同 config 处置）。物化替换为
+ * 与全局 plugin-forge 行同值的绑定表路径双引号标量（renderBootOverlay input.bindingsFile 单源）。
+ */
+const PRESET_BINDINGS_LINE_TOKEN = 'bindingsFile: "{{plugin-forge-bindings}}"'
 
 /**
  * 平台门行就地求值表（上游 standard 镜像逐字转写的 `disabled: !!js` 行——物化时替换为
@@ -97,6 +109,10 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     }
     if (trimmed === specToken) {
       if (input.specSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.specSkillsDir)}`)
+      continue
+    }
+    if (trimmed === PRESET_BINDINGS_LINE_TOKEN) {
+      out.push(`${line.slice(0, line.length - trimmed.length)}bindingsFile: ${yamlQuote(input.bindingsFile)}`)
       continue
     }
     const gate = PLATFORM_GATE_ROWS.find((row) => row.match === trimmed)
