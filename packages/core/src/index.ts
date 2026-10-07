@@ -18,7 +18,7 @@ import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import { createSettingsService } from './forge/settings/service.js'
 import { createDocsService } from './forge/small-domains/docs.js'
-import { createFeaturesService } from './forge/small-domains/features.js'
+import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
 import { createTasksService } from './forge/tasks/service.js'
@@ -141,7 +141,12 @@ const corePlugin: CorePlugin = Object.assign(
       )
       ctx.reflect.provide(
         'forgeProposals',
-        createProposalsService({ store, events, resolveForgeDir: routing.forgeDir }), // 2.3 文档区扫描基准
+        createProposalsService({
+          store,
+          events,
+          resolveForgeDir: routing.forgeDir, // 2.3 文档区扫描基准
+          registerFeatureInTx, // 2.2 成链内聚同事务核心（装配注边——四域互禁 import 消解）
+        }),
       )
       ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
     }

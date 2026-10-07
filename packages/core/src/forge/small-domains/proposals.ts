@@ -1,13 +1,22 @@
 // forge 提案域服务（任务 2.7；tech-design §Interface 3 全三法——ctx.forgeProposals）。
 // 定位：业务。三小域合并单目录承载（布局自由度注记——服务面四分是契约，文件布局非契约）。
 //
-// 三法面（写动词 = tool 专属——Interface 7 面 RPC 仅供 list；本域不涉面分治，恒走 core 动词门）：
-// - createProposal：slug UNIQUE 预检（校验先于写——冲突抛普通 Error：15 错误码面无
+// 五法面（M3 2.2 写径三面落位后面分治：transitionProposal 双面（tool + RPC——UF-1 人工裁决
+// drift 修订）、setProposalMode = UI 专属 RPC（律三唯一正门——agent tool 面无模式改写动词）、
+// createProposal = tool 专属写、两读面（listProposals/listProposalDocs）恒 RPC）：
+// - createProposal：slug UNIQUE 预检（校验先于写——冲突抛普通 Error：错误码面无
 //   proposal-exists 专属码，typed 面不私扩；tool 侧可读可重试）；status 缺省 'draft'
-//   （schema DEFAULT 同值）；decided_at 恒 NULL 起步（裁决时刻由 transitionProposal 写）。
+//   （schema DEFAULT 同值）；decided_at 恒 NULL 起步（裁决时刻由 transitionProposal 写）；
+//   mode 透传（创建技能写入；缺省 NULL——扫描吸收旧行同形占位）。
 // - transitionProposal：from≠to 同源校验（ERR_INVALID_TRANSITION——assertDomainTransition
 //   单源）；裁决写 decided_at：→ accepted/rejected 时写（覆盖式——最新裁决时刻），
-//   打回（→ under-review/draft）/superseded 不改写。
+//   打回（→ under-review/draft）/superseded 不改写；superseded 必带 supersededBy
+//   （目标在场校验 → 写 superseded_by 谱系取代链——缺席 typed 拒 / 入参缺席普通 Error
+//   fail-loud）；成链分叉内聚（图 6·裁决⑤）：accepted ∧ mode='expedition' ∧ 无同
+//   proposal_id feature → 同事务 registerFeatureInTx（features 行 + feature_records(register)
+//   ·actor='core'）返回 chained——blitz/NULL 不成链、非 accepted 恒不成链、幂等不重复建链。
+// - setProposalMode：单事务只写 proposals.mode（tasks.mode 永不触碰 = 快照不回溯·律三；
+//   features 无 mode 列无需同步）+ reason 必填（ERR_REASON_REQUIRED——人工变更溯源审计面）。
 // - listProposals：search（slug/title/状态中英标签）+ sort（active 活跃优先 | created）；
 //   行增 mode（NULL 直出 = 键缺席——UI 缺省占位判据）+ taskCount（单查询 JOIN 按
 //   source_id 分组——容器 pill「有任务的提案」判据；2.3）。
@@ -15,15 +24,20 @@
 //   为事实源；UF-1 文档区「文档(N 篇)」与提案渠道 prefill「已生成文档」清单同源本法，
 //   web 侧零二次扫描；2.3）。
 //
+// 成链内聚经装配注入的 features 域 registerFeatureInTx（同事务调用非二次提交——四域互禁
+// import 彼此，装配层注边；2.1 导出面契约）。
 // 写动词闭包尾部 emitTasksChanged(projectId)（Interface 1 写后事件四域覆盖面裁决——
-// proposals 为 tool 写，无事件则提案子 tab 永不刷新；事务提交后发射）。
+// proposals 为写域，无事件则提案子 tab 永不刷新；事务提交后发射）。
 // 一切 SQL prepared statements（Hard Rule）。
 import { randomUUID } from 'node:crypto'
 import { readdirSync, readFileSync, type Dirent } from 'node:fs'
 import { join } from 'node:path'
+import type Database from 'better-sqlite3'
 import {
   PROPOSAL_STATUSES,
   type CreateProposalInput,
+  type FeatureRow,
+  type FeatureStatus,
   type ForgeProposalsService,
   type ListProposalDocsQuery,
   type Mode,
@@ -32,6 +46,7 @@ import {
   type ProposalRow,
   type ProposalStatus,
   type SetProposalModeInput,
+  type TaskActor,
   type TransitionProposalInput,
   type TransitionProposalResult,
 } from '@dsh-forge/contracts'
@@ -39,7 +54,7 @@ import { withTransaction } from '../../db/transaction.js'
 import { isLegalSlugDirName, parseThinFrontmatter } from '../workspace/discovery.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
-import { assertDomainTransition, ProposalNotFoundError } from './errors.js'
+import { assertDomainTransition, FeatureExistsError, ProposalNotFoundError, ReasonRequiredError } from './errors.js'
 import { matchesSearch, proposalSearchKeys, sortByActiveThenCreated } from './list-utils.js'
 
 export interface ProposalsServiceDeps {
@@ -49,6 +64,45 @@ export interface ProposalsServiceDeps {
   readonly events: ForgeTaskEvents
   /** projectId → forge_dir（中央 projects 行 forge_dir 列——装配层 routing 注入；文档区扫描基准） */
   readonly resolveForgeDir: (projectId: string) => string
+  /**
+   * 成链内聚同事务核心（features 域 registerFeatureInTx——2.1 导出面；四域互禁 import
+   * 彼此，装配层注入消 import 边）：features 行 + feature_records(register) 审计行，
+   * 只可在已开事务内调用（同事务调用非二次提交）。
+   */
+  readonly registerFeatureInTx: (
+    db: Database.Database,
+    input: { slug: string; title: string; summary?: string; proposalId?: string },
+    actor: TaskActor,
+  ) => ChainedFeatureStorageRow
+}
+
+/**
+ * 成链返回行形状（features 域存储行结构投影——四域互禁 import，经注入面结构兼容传递；
+ * registerFeatureInTx 返回值与本形状赋值兼容即单源，不复制实现）。
+ */
+export interface ChainedFeatureStorageRow {
+  id: string
+  slug: string
+  title: string
+  feature_status: FeatureStatus
+  summary: string | null
+  proposal_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** 成链 feature 行 → FeatureRow DTO（snake_case → DTO 映射——features.ts 同口径就近复刻） */
+function toChainedFeature(row: ChainedFeatureStorageRow): FeatureRow {
+  return {
+    featureId: row.id,
+    slug: row.slug,
+    title: row.title,
+    featureStatus: row.feature_status,
+    summary: row.summary ?? undefined,
+    proposalId: row.proposal_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 /** proposals 行存储形状（snake_case → DTO 映射唯一落点） */
@@ -89,8 +143,9 @@ function toProposalRow(row: ProposalStorageRow): ProposalRow {
 /** 裁决态（→ 此时写 decided_at；打回/superseded 不改写——schema.sql decided_at 行注） */
 const DECIDING_STATUSES: readonly ProposalStatus[] = ['accepted', 'rejected']
 
-/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals——M3 五法：三 M2 法容器化 +
- *  setProposalMode/listProposalDocs 两新面垫片，语义实现归 2.2/2.3） */
+/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals——M3 五法全语义：三 M2 法
+ *  （2.2 写径三面：mode 透传/supersededBy 谱系/成链分叉内聚）+ setProposalMode 新正门 +
+ *  listProposals/listProposalDocs 读面（2.3）） */
 export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposalsService {
   return {
     async createProposal(input: CreateProposalInput): Promise<ProposalRow> {
@@ -104,10 +159,11 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
         }
         const id = randomUUID()
         const now = new Date().toISOString()
+        // mode 透传（2.2）：创建技能写入溯源模式；缺省 NULL——扫描吸收旧行同形占位（成链门按 NULL 边界处理）
         db.prepare(
-          `INSERT INTO proposals (id, slug, title, proposal_status, rel_path, author, decided_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
-        ).run(id, input.slug, input.title, input.status ?? 'draft', input.relPath ?? null, now, now)
+          `INSERT INTO proposals (id, slug, title, proposal_status, rel_path, author, mode, decided_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+        ).run(id, input.slug, input.title, input.status ?? 'draft', input.relPath ?? null, input.mode ?? null, now, now)
         return db.prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`).get(id) as ProposalStorageRow
       })
       deps.events.emitTasksChanged(input.projectId)
@@ -116,7 +172,7 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
 
     async transitionProposal(input: TransitionProposalInput): Promise<TransitionProposalResult> {
       const db = deps.store.ensureOpen(input.projectId)
-      const row = withTransaction(db, () => {
+      const { row, chained } = withTransaction(db, () => {
         const current = db
           .prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`)
           .get(input.proposalId)
@@ -124,27 +180,88 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
           throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.proposalId })
         }
         assertDomainTransition('proposal', PROPOSAL_STATUSES, current.proposal_status, input.toStatus)
+        // 谱系取代链（2.2·UF-1 数据面）：superseded 必带 supersededBy——目标在场校验（缺席 →
+        // typed 404）后写 superseded_by；入参缺席 → 普通 Error fail-loud（错误码面无专属码——
+        // createProposal slug 冲突同口径，typed 面不私扩）。非 superseded 转移不改写既有谱系
+        //（打回保留取代事实——「superseded 转移写入」单向纪律）。
+        let supersededBy = current.superseded_by
+        if (input.toStatus === 'superseded') {
+          if (input.supersededBy === undefined) {
+            throw new Error(
+              `superseded 转移必带 supersededBy（目标提案 id——UF-1 取代链数据面）：proposal ${input.proposalId}（project ${input.projectId}）`,
+            )
+          }
+          const target = db.prepare<unknown[], { id: string }>(`SELECT id FROM proposals WHERE id = ?`).get(input.supersededBy)
+          if (target === undefined) {
+            throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.supersededBy })
+          }
+          supersededBy = input.supersededBy
+        }
         // 裁决写 decided_at：→ accepted/rejected 覆盖式写最新裁决时刻；其余转移不改写。
-        // M3 垫片（1.1）：supersededBy 谱系与成链分叉内聚随 1.2/2.2（schema mode/superseded_by
-        // 双列 + feature_records 到场）——本契约期面零行为变更（可选入参不消费）。
         const now = new Date().toISOString()
         const decidedAt = DECIDING_STATUSES.includes(input.toStatus) ? now : current.decided_at
-        db.prepare(`UPDATE proposals SET proposal_status = ?, decided_at = ?, updated_at = ? WHERE id = ?`).run(
+        db.prepare(`UPDATE proposals SET proposal_status = ?, superseded_by = ?, decided_at = ?, updated_at = ? WHERE id = ?`).run(
           input.toStatus,
+          supersededBy,
           decidedAt,
           now,
           input.proposalId,
         )
+        // 成链分叉内聚（图 6·裁决⑤·不变量 5 单事务原子）：toStatus='accepted' ∧ mode='expedition'
+        // ∧ 无同 proposal_id feature → 同事务 registerFeatureInTx（features 行（同名 slug/title
+        // 继承——proposals 无 summary 列，继承面天然缺席）+ feature_records(register)·actor='core'）。
+        // blitz/NULL 不成链（NULL 边界：先 setProposalMode 定模式，补链 = 显式 registerFeature）；
+        // 非 accepted 恒不成链；幂等——同 proposal_id 已有 feature 不重复建链（chained 缺席，
+        // 成链事实由谱系 JOIN 读面承载）。
+        let chained: ChainedFeatureStorageRow | undefined
+        if (input.toStatus === 'accepted' && current.mode === 'expedition') {
+          const linked = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE proposal_id = ?`).get(input.proposalId)
+          if (linked === undefined) {
+            // 同名 slug 冲突预检（UNIQUE(features.slug)——异谱系同 slug feature 在场 → typed 409
+            // 优于裸约束错；单事务整体回滚 = 无半成品链）
+            const slugTaken = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(current.slug)
+            if (slugTaken !== undefined) {
+              throw new FeatureExistsError({ projectId: input.projectId, slug: current.slug })
+            }
+            chained = deps.registerFeatureInTx(
+              db,
+              { slug: current.slug, title: current.title, proposalId: input.proposalId },
+              'core',
+            )
+          }
+        }
+        return {
+          row: db.prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`).get(input.proposalId) as ProposalStorageRow,
+          chained,
+        }
+      })
+      deps.events.emitTasksChanged(input.projectId)
+      // chained 键缺席 = 未成链（幂等跳过/blitz/NULL/非 accepted——UI 判据与 mode NULL 直出同口径）
+      return { ...toProposalRow(row), ...(chained !== undefined ? { chained: toChainedFeature(chained) } : {}) }
+    },
+
+    // 律三唯一正门（2.2·图 7）：单事务只写 proposals.mode——tasks.mode 永不触碰（快照不回溯：
+    // 既有任务留创建时事实；features 无 mode 列无需同步——恒远征语义由成链门保证）。
+    // UI 专属 RPC 面（agent tool 面无模式改写动词——SC6 契约断言对象）。
+    async setProposalMode(input: SetProposalModeInput): Promise<ProposalRow> {
+      const db = deps.store.ensureOpen(input.projectId)
+      const row = withTransaction(db, () => {
+        const current = db
+          .prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`)
+          .get(input.proposalId)
+        if (current === undefined) {
+          throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.proposalId })
+        }
+        // reason 必填（人工变更溯源——快照不回溯明示的审计面；与 transfer 动词空因同语义）
+        if (input.reason.trim() === '') {
+          throw new ReasonRequiredError({ verb: 'setProposalMode' })
+        }
+        const now = new Date().toISOString()
+        db.prepare(`UPDATE proposals SET mode = ?, updated_at = ? WHERE id = ?`).run(input.mode, now, input.proposalId)
         return db.prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`).get(input.proposalId) as ProposalStorageRow
       })
       deps.events.emitTasksChanged(input.projectId)
       return toProposalRow(row)
-    },
-
-    // M3 新面（1.1 契约对齐垫片）：proposals.mode 列随 1.2 schema v1 直改到场——语义实现归 2.2
-    // （setProposalMode 单事务只写 mode + 审计）。垫片期无调用方（RPC 接线 = 3.8，UI = 4.2）。
-    async setProposalMode(_input: SetProposalModeInput): Promise<ProposalRow> {
-      throw new Error('setProposalMode: M3 语义实现归 2.2（proposals.mode 列随 1.2 schema 到场）')
     },
 
     async listProposals(q: { projectId: string; search?: string; sort?: 'active' | 'created' }): Promise<ProposalCard[]> {

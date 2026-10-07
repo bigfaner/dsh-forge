@@ -4,14 +4,23 @@
 // 写动词 emitTasksChanged 接线。临时 SQLite 夹具。
 // 任务 2.3 增读面两法：listProposals（mode 直出 + taskCount 容器维度 JOIN 分组）+
 // listProposalDocs（docs/proposals/<slug>/ 只读扫描——目录夹具/越界容错/零状态）。
+// 任务 2.2 增写径三面：transitionProposal 成链分叉内聚（图 6 全分支表 + 幂等 + 原子回滚锚）+
+// superseded 必带 supersededBy 谱系取代链 + setProposalMode（图 7·律三快照不回溯）+
+// createProposal mode 透传。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { ProposalStatus } from '@dsh-forge/contracts'
+import { registerFeatureInTx } from './features.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'
 import { createProposalsService } from './proposals.js'
-import { ProposalNotFoundError, SmallDomainInvalidTransitionError } from './errors.js'
+import {
+  FeatureExistsError,
+  ProposalNotFoundError,
+  ReasonRequiredError,
+  SmallDomainInvalidTransitionError,
+} from './errors.js'
 
 let h: SmallDomainHarness | undefined
 afterEach(() => {
@@ -20,17 +29,26 @@ afterEach(() => {
   h = undefined
 })
 
+/** 生产装配同构注入（2.2 成链内聚——四域互禁 import，测试经装配同径传入；features.test.ts PHASE 先例） */
+const REGISTER_IN_TX = registerFeatureInTx
+
 function svc() {
   h ??= createHarness()
-  return createProposalsService({ store: h.store, events: h.events, resolveForgeDir: h.routing.forgeDir })
+  return createProposalsService({
+    store: h.store,
+    events: h.events,
+    resolveForgeDir: h.routing.forgeDir,
+    registerFeatureInTx: REGISTER_IN_TX,
+  })
 }
 
-/** 种 proposal 行（直写库——受控初值/创建时间；2.3 增 mode 受控初值） */
+/** 种 proposal 行（直写库——受控初值/创建时间；2.3 增 mode 受控初值；2.2 增 title 受控——成链继承断言） */
 function seedProposal(
   db: Database.Database,
   o: {
     id?: string
     slug?: string
+    title?: string
     status?: ProposalStatus
     decidedAt?: string | null
     createdAt?: string
@@ -41,7 +59,7 @@ function seedProposal(
   db.prepare(
     `INSERT INTO proposals (id, slug, title, proposal_status, rel_path, author, mode, decided_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
-  ).run(id, o.slug ?? `slug-${id}`, `提案 ${id}`, o.status ?? 'draft', o.mode ?? null, o.decidedAt ?? null, o.createdAt ?? '2026-01-01T00:00:00.000Z', o.createdAt ?? '2026-01-01T00:00:00.000Z')
+  ).run(id, o.slug ?? `slug-${id}`, o.title ?? `提案 ${id}`, o.status ?? 'draft', o.mode ?? null, o.decidedAt ?? null, o.createdAt ?? '2026-01-01T00:00:00.000Z', o.createdAt ?? '2026-01-01T00:00:00.000Z')
   return id
 }
 
@@ -54,15 +72,16 @@ function seedFeature(db: Database.Database, o: { id: string; slug: string; propo
   return o.id
 }
 
-/** 种容器任务行（2.3 taskCount 夹具——source 双列直写；slug ≡ 容器 slug 不变量） */
+/** 种容器任务行（2.3 taskCount 夹具——source 双列直写；slug ≡ 容器 slug 不变量；
+ *  2.2 增 mode 受控初值——快照不回溯断言夹具） */
 function seedContainerTask(
   db: Database.Database,
-  o: { containerId: string; kind: 'feature' | 'proposal'; slug: string; localId: string },
+  o: { containerId: string; kind: 'feature' | 'proposal'; slug: string; localId: string; mode?: string | null },
 ): string {
   db.prepare(
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'coding-feature', 'pending', ?, ?, NULL, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-  ).run(`t-${o.localId}`, o.slug, o.localId, `任务 ${o.localId}`, o.kind, o.containerId)
+     VALUES (?, ?, ?, ?, 'coding-feature', 'pending', ?, ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  ).run(`t-${o.localId}`, o.slug, o.localId, `任务 ${o.localId}`, o.kind, o.containerId, o.mode ?? null)
   return `t-${o.localId}`
 }
 
@@ -99,16 +118,22 @@ describe('AC3 transitionProposal：from≠to 同源 + 裁决写 decided_at', () 
     expect(row.decidedAt).toBeUndefined()
   })
 
-  it('裁决写：→ accepted 写 decided_at；→ superseded 不改写（裁决时刻保持）', async () => {
+  it('裁决写：→ accepted 写 decided_at；→ superseded 不改写（裁决时刻保持——2.2 起必带 supersededBy 谱系目标）', async () => {
     vi.useFakeTimers()
     const s = svc()
     const created = await s.createProposal({ projectId: h!.projectId, slug: 'p', title: 'x' })
+    const target = seedProposal(h!.wsDb, { slug: 'p-successor' }) // 取代链目标（在场）
     vi.setSystemTime(new Date('2026-10-06T08:00:00.000Z'))
     const accepted = await s.transitionProposal({ projectId: h!.projectId, proposalId: created.proposalId, toStatus: 'accepted' })
     expect(accepted.proposalStatus).toBe('accepted')
     expect(accepted.decidedAt).toBe('2026-10-06T08:00:00.000Z')
     vi.setSystemTime(new Date('2026-10-06T09:00:00.000Z'))
-    const superseded = await s.transitionProposal({ projectId: h!.projectId, proposalId: created.proposalId, toStatus: 'superseded' })
+    const superseded = await s.transitionProposal({
+      projectId: h!.projectId,
+      proposalId: created.proposalId,
+      toStatus: 'superseded',
+      supersededBy: target,
+    })
     expect(superseded.proposalStatus).toBe('superseded')
     expect(superseded.decidedAt).toBe('2026-10-06T08:00:00.000Z') // 不改写
   })
@@ -314,9 +339,267 @@ describe('2.3 listProposalDocs：docs/proposals/<slug>/ 只读扫描（零状态
         return h!.store.ensureOpen(pid)
       },
     }
-    const s = createProposalsService({ store: guardedStore, events: h.events, resolveForgeDir: h.routing.forgeDir })
+    const s = createProposalsService({
+      store: guardedStore,
+      events: h.events,
+      resolveForgeDir: h.routing.forgeDir,
+      registerFeatureInTx: REGISTER_IN_TX,
+    })
     seedDocDir(h.forgeDir, 'demo-slug')
     await expect(s.listProposalDocs({ projectId: h!.projectId, slug: 'demo-slug' })).resolves.toHaveLength(5)
     expect(ensureOpenCalls).toBe(0)
+  })
+})
+
+// ─────────────────────────── 2.2 写径三面（图 6 / 图 7） ───────────────────────────
+
+describe('2.2 成链分叉内聚（图 6·裁决⑤）：accepted·expedition 单事务原子成链', () => {
+  it('expedition × accepted：proposals 行 + features 行（同名 slug/title/proposal_id 谱系）+ feature_records(register) 三行原子；返回 chained', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'demo-chain', title: '演示成链提案', status: 'under-review', mode: 'expedition' })
+    const row = await s.transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'accepted' })
+    expect(row.proposalStatus).toBe('accepted')
+    expect(row.decidedAt).toBeTruthy() // 裁决时刻随成链同事务落
+    // chained = 同名 slug/title 继承 + proposal_id 谱系 + 新行缺省 'prd'
+    expect(row.chained).toMatchObject({
+      slug: 'demo-chain',
+      title: '演示成链提案',
+      featureStatus: 'prd',
+      proposalId: pa,
+    })
+    expect(row.chained!.featureId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(row.chained!.summary).toBeUndefined() // proposals 无 summary 列——继承面天然缺席
+    // 三行原子锚（不变量 5）：features 行 + feature_records(register·actor='core') 恰各一
+    const feature = h!.wsDb
+      .prepare(`SELECT id, slug, title, proposal_id FROM features WHERE proposal_id = ?`)
+      .get(pa) as { id: string; slug: string; title: string; proposal_id: string }
+    expect(feature).toMatchObject({ slug: 'demo-chain', title: '演示成链提案', proposal_id: pa })
+    expect(feature.id).toBe(row.chained!.featureId)
+    const records = h!.wsDb
+      .prepare(`SELECT verb, from_status, to_status, actor FROM feature_records WHERE feature_id = ?`)
+      .all(feature.id) as { verb: string; from_status: string | null; to_status: string | null; actor: string }[]
+    expect(records).toEqual([{ verb: 'register', from_status: null, to_status: 'prd', actor: 'core' }])
+  })
+
+  it('分叉边界：blitz × accepted → 不成链（直接任务阶段）；NULL × accepted → 不成链（先 setProposalMode，补链 = 显式 registerFeature）', async () => {
+    const s = svc()
+    const blitz = seedProposal(h!.wsDb, { slug: 'blitz-p', status: 'under-review', mode: 'blitz' })
+    const blitzed = await s.transitionProposal({ projectId: h!.projectId, proposalId: blitz, toStatus: 'accepted' })
+    expect(blitzed.proposalStatus).toBe('accepted')
+    expect('chained' in blitzed && blitzed.chained !== undefined).toBe(false) // 无链
+    const nul = seedProposal(h!.wsDb, { slug: 'null-p', status: 'under-review', mode: null }) // 扫描吸收旧行 = NULL 占位
+    const nulled = await s.transitionProposal({ projectId: h!.projectId, proposalId: nul, toStatus: 'accepted' })
+    expect(nulled.proposalStatus).toBe('accepted')
+    expect('chained' in nulled && nulled.chained !== undefined).toBe(false) // 无链——边界注记
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM features`).get()).toEqual({ n: 0 })
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_records`).get()).toEqual({ n: 0 })
+  })
+
+  it('图 6 全分支表：mode × 非 accepted 转移（superseded / rejected / 打回 under-review→draft）恒不成链', async () => {
+    const s = svc()
+    const target = seedProposal(h!.wsDb, { slug: 'branch-target' }) // superseded 行目标
+    const cases: ReadonlyArray<{ slug: string; mode: string | null; toStatus: ProposalStatus }> = [
+      { slug: 'b-exp-sup', mode: 'expedition', toStatus: 'superseded' },
+      { slug: 'b-exp-rej', mode: 'expedition', toStatus: 'rejected' },
+      { slug: 'b-exp-back', mode: 'expedition', toStatus: 'draft' }, // 打回
+      { slug: 'b-blz-sup', mode: 'blitz', toStatus: 'superseded' },
+      { slug: 'b-blz-back', mode: 'blitz', toStatus: 'draft' }, // 打回
+      { slug: 'b-nul-rej', mode: null, toStatus: 'rejected' },
+      { slug: 'b-nul-back', mode: null, toStatus: 'draft' }, // 打回
+    ]
+    for (const c of cases) {
+      const pid = seedProposal(h!.wsDb, { slug: c.slug, status: 'under-review', mode: c.mode })
+      const row = await s.transitionProposal({
+        projectId: h!.projectId,
+        proposalId: pid,
+        toStatus: c.toStatus,
+        ...(c.toStatus === 'superseded' ? { supersededBy: target } : {}),
+      })
+      expect(row.proposalStatus, c.slug).toBe(c.toStatus)
+      expect(row.chained, `${c.slug} 非 accepted 转移不成链`).toBeUndefined()
+    }
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM features`).get()).toEqual({ n: 0 })
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_records`).get()).toEqual({ n: 0 })
+  })
+
+  it('幂等：同 proposal_id 已有 feature 不重复建链（chained 缺席——成链事实由谱系 JOIN 读面承载）', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'idem', status: 'under-review', mode: 'expedition' })
+    seedFeature(h!.wsDb, { id: 'f-idem', slug: 'idem', proposalId: pa }) // 既有同谱系 feature（如打回后再裁决）
+    const row = await s.transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'accepted' })
+    expect(row.proposalStatus).toBe('accepted')
+    expect(row.chained).toBeUndefined() // 不重复建链
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM features`).get()).toEqual({ n: 1 })
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_records`).get()).toEqual({ n: 0 }) // 无第二次 register
+  })
+
+  it('异谱系同 slug feature 在场 → 成链预检 typed 409（ERR_FEATURE_EXISTS）+ 整体回滚（提案保持原态）', async () => {
+    const s = svc()
+    seedFeature(h!.wsDb, { id: 'f-clash', slug: 'clash', proposalId: null }) // 独立容器同 slug
+    const pa = seedProposal(h!.wsDb, { slug: 'clash', status: 'under-review', mode: 'expedition' })
+    const err = await s
+      .transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'accepted' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(FeatureExistsError)
+    expect((err as FeatureExistsError).code).toBe('ERR_FEATURE_EXISTS')
+    // 单事务全回滚：提案未被裁决 + 无新增 feature/审计行
+    const after = h!.wsDb
+      .prepare(`SELECT proposal_status FROM proposals WHERE id = ?`)
+      .get(pa) as { proposal_status: string }
+    expect(after.proposal_status).toBe('under-review')
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM features`).get()).toEqual({ n: 1 })
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_records`).get()).toEqual({ n: 0 })
+  })
+
+  it('原子回滚锚（不变量 5·全成全败）：成链事务中途失败 → proposals/features/feature_records 三面零残留', async () => {
+    h ??= createHarness()
+    const s = createProposalsService({
+      store: h.store,
+      events: h.events,
+      resolveForgeDir: h.routing.forgeDir,
+      registerFeatureInTx: () => {
+        throw new Error('boom: 成链中断（注入失败）')
+      },
+    })
+    const pa = seedProposal(h.wsDb, { slug: 'rollback', status: 'under-review', mode: 'expedition' })
+    await expect(s.transitionProposal({ projectId: h.projectId, proposalId: pa, toStatus: 'accepted' })).rejects.toThrow(
+      '成链中断',
+    )
+    const after = h.wsDb
+      .prepare(`SELECT proposal_status, decided_at FROM proposals WHERE id = ?`)
+      .get(pa) as { proposal_status: string; decided_at: string | null }
+    expect(after).toEqual({ proposal_status: 'under-review', decided_at: null }) // 裁决回滚
+    expect(h.wsDb.prepare(`SELECT COUNT(*) AS n FROM features`).get()).toEqual({ n: 0 })
+    expect(h.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_records`).get()).toEqual({ n: 0 })
+    expect(h.events.emitted).toEqual([]) // 失败面零事件
+  })
+})
+
+describe('2.2 superseded 谱系取代链：必带目标 + 在场校验 + 写 superseded_by', () => {
+  it('必带 supersededBy：缺席 → fail-loud 拒绝（typed 面无专属码——createProposal slug 冲突同口径）+ 库零变更', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'sup-plain', status: 'under-review' })
+    const err = await s
+      .transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'superseded' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(ProposalNotFoundError) // 普通 Error（非 typed 私扩）
+    expect((err as Error).message).toContain('supersededBy')
+    const after = h!.wsDb
+      .prepare(`SELECT proposal_status, superseded_by FROM proposals WHERE id = ?`)
+      .get(pa) as { proposal_status: string; superseded_by: string | null }
+    expect(after).toEqual({ proposal_status: 'under-review', superseded_by: null })
+  })
+
+  it('目标提案在场校验：supersededBy 未命中 → ERR_PROPOSAL_NOT_FOUND（typed）', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'sup-miss', status: 'under-review' })
+    const err = await s
+      .transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'superseded', supersededBy: 'missing-target' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProposalNotFoundError)
+    expect((err as ProposalNotFoundError).data.proposalId).toBe('missing-target') // 载荷 = 取代目标（非转移主体）
+    expect(
+      (h!.wsDb.prepare(`SELECT superseded_by FROM proposals WHERE id = ?`).get(pa) as { superseded_by: string | null })
+        .superseded_by,
+    ).toBeNull()
+  })
+
+  it('superseded 转移写 superseded_by（返回行透出）+ decided_at 不改写；非 superseded 转移不改写既有谱系（打回保留取代事实）', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'sup-write', status: 'under-review' })
+    const target = seedProposal(h!.wsDb, { slug: 'sup-write-target' })
+    const row = await s.transitionProposal({
+      projectId: h!.projectId,
+      proposalId: pa,
+      toStatus: 'superseded',
+      supersededBy: target,
+    })
+    expect(row.supersededBy).toBe(target) // 返回行透出（UF-1 谱系右列数据面）
+    expect(
+      (h!.wsDb.prepare(`SELECT superseded_by FROM proposals WHERE id = ?`).get(pa) as { superseded_by: string | null })
+        .superseded_by,
+    ).toBe(target)
+    // 打回（superseded → draft）不改写既有谱系——取代链事实保留，可再裁决走向
+    const back = await s.transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'draft' })
+    expect(back.supersededBy).toBe(target)
+  })
+})
+
+describe('2.2 setProposalMode（图 7·律三）：mode 唯一写径 + 快照不回溯', () => {
+  it('单事务只写 proposals.mode + reason 必填（空因 → ERR_REASON_REQUIRED）+ 返回行透出', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'mode-write', status: 'under-review', mode: null })
+    const row = await s.setProposalMode({ projectId: h!.projectId, proposalId: pa, mode: 'expedition', reason: '评审定为远征' })
+    expect(row.mode).toBe('expedition')
+    expect((h!.wsDb.prepare(`SELECT mode FROM proposals WHERE id = ?`).get(pa) as { mode: string | null }).mode).toBe(
+      'expedition',
+    )
+    const err = await s
+      .setProposalMode({ projectId: h!.projectId, proposalId: pa, mode: 'blitz', reason: '   ' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ReasonRequiredError)
+    expect((err as ReasonRequiredError).code).toBe('ERR_REASON_REQUIRED')
+    // 空因拒绝零变更
+    expect((h!.wsDb.prepare(`SELECT mode FROM proposals WHERE id = ?`).get(pa) as { mode: string | null }).mode).toBe(
+      'expedition',
+    )
+  })
+
+  it('快照不回溯（不变量 3）：setProposalMode 后 tasks.mode 快照不变——容器任务留创建时事实', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'mode-snap', status: 'under-review', mode: 'expedition' })
+    seedContainerTask(h!.wsDb, { containerId: pa, kind: 'proposal', slug: 'mode-snap', localId: '9.1', mode: 'expedition' })
+    await s.setProposalMode({ projectId: h!.projectId, proposalId: pa, mode: 'blitz', reason: '降级突击——快照不回溯明示' })
+    expect((h!.wsDb.prepare(`SELECT mode FROM proposals WHERE id = ?`).get(pa) as { mode: string | null }).mode).toBe('blitz')
+    const task = h!.wsDb
+      .prepare(`SELECT mode FROM tasks WHERE source_kind = 'proposal' AND source_id = ?`)
+      .get(pa) as { mode: string | null }
+    expect(task.mode).toBe('expedition') // tasks.mode 永不触碰
+  })
+
+  it('proposalId 未命中 → ERR_PROPOSAL_NOT_FOUND', async () => {
+    const s = svc()
+    const err = await s
+      .setProposalMode({ projectId: h!.projectId, proposalId: 'missing', mode: 'blitz', reason: 'x' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProposalNotFoundError)
+  })
+})
+
+describe('2.2 createProposal：mode 透传（创建技能写入；缺省 NULL 占位）', () => {
+  it('mode 可选透传落库：expedition/blitz 写入 / 缺省 = NULL（键缺席——扫描吸收旧行同形）', async () => {
+    const s = svc()
+    const exp = await s.createProposal({ projectId: h!.projectId, slug: 'cp-exp', title: '一', mode: 'expedition' })
+    expect(exp.mode).toBe('expedition')
+    const blz = await s.createProposal({ projectId: h!.projectId, slug: 'cp-blz', title: '二', mode: 'blitz' })
+    expect(blz.mode).toBe('blitz')
+    const none = await s.createProposal({ projectId: h!.projectId, slug: 'cp-none', title: '三' })
+    expect(none.mode).toBeUndefined()
+    expect(
+      (h!.wsDb.prepare(`SELECT mode FROM proposals WHERE slug = ?`).get('cp-none') as { mode: string | null }).mode,
+    ).toBeNull()
+  })
+})
+
+describe('2.2 新写动词事件接线：成链单发 / setProposalMode 写后单发 / 拒绝面零发射', () => {
+  it('transitionProposal 成链 = 恰一次 {projectId}（内聚 registerFeature 非二次提交——无第二次发射）', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'evt-chain', status: 'under-review', mode: 'expedition' })
+    await s.transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'accepted' })
+    expect(h!.events.emitted).toEqual([{ projectId: h!.projectId }])
+  })
+
+  it('setProposalMode 写后恰一次；reason 空因拒绝零发射', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'evt-mode', status: 'under-review' })
+    h!.events.emitted.length = 0
+    await s.setProposalMode({ projectId: h!.projectId, proposalId: pa, mode: 'blitz', reason: 'r' })
+    expect(h!.events.emitted).toEqual([{ projectId: h!.projectId }])
+    h!.events.emitted.length = 0
+    await s
+      .setProposalMode({ projectId: h!.projectId, proposalId: pa, mode: 'expedition', reason: '' })
+      .catch(() => undefined)
+    expect(h!.events.emitted).toEqual([])
   })
 })

@@ -87,7 +87,7 @@
         "1.gate",
         "2.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.2-proposals-write-chaining.md",
       "record": "records/2.2-proposals-write-chaining.md",
       "surface-type": "web",
