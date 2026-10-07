@@ -15,7 +15,7 @@ import {
   TASKS_CHANNELS,
 } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
-import { CONTAINER_KINDS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
+import { CONTAINER_KINDS, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
 import type {
   AddTaskInput,
   BridgeEventMessage,
@@ -358,5 +358,11 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 七�
     expectTypeOf<ToolErrorPayload['code']>().toEqualTypeOf<ErrorCode>()
     const proposalCreated: ProposalCreatedPayload = { proposalId: 'pr-1', mode: 'blitz' }
     expect(proposalCreated.mode).toBe('blitz')
+  })
+})
+
+describe('M3 2.1 feature_records 审计面常量（TS 单源无 DB CHECK——1.1 对齐）', () => {
+  it('FEATURE_RECORD_VERBS 三值 = register/transition/doc-upsert（三动词闭包伴随）', () => {
+    expect(FEATURE_RECORD_VERBS).toEqual(['register', 'transition', 'doc-upsert'])
   })
 })

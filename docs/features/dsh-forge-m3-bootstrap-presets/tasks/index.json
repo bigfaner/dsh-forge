@@ -71,7 +71,7 @@
         "1.gate",
         "1.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.1-features-audit-closure.md",
       "record": "records/2.1-features-audit-closure.md",
       "surface-type": "web",

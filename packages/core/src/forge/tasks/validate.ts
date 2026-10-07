@@ -7,8 +7,10 @@
 //
 // 五类检查（ViolationKind 封闭词汇——contracts G1 pin；违规含定位信息 taskRef）：
 // ① phase-invariant：推导不动点（feature_status ≡ derive(feature_documents, tasks)——
-//   archived 唯一豁免）**族**含两项服务不变量（AC 口径同列本类）：slug 列 ≡ feature slug、
-//   同 feature 边约束（写时增量断言的批量对照面——比 GENERATED 列更强，连 features 表漂移亦可抓）；
+//   archived 唯一豁免）**族**含四项检查（AC 口径同列本类）：slug 列 ≡ feature slug、
+//   同容器边约束（task_edges 两端 source_id 相等——M3 2.1 不变量 2 泛化，判据 = source_id
+//   相等非子图成员资格）、容器命中（source_id 必命中 source_kind 对应表——M3 2.1 不变量 1
+//   的批量对照面，多态引用无 DB FK）；写时增量断言的批量对照——连容器表漂移亦可抓；
 // ② cycle：边集无环复核（写时增量校验 §6-14 的批量对照——历史漂移环由此抓，完整路径首尾相接）；
 // ③ liveness：orphaned（blocked 无前置）/ stale（blocked 前置全满足——钩子漏恢复）/
 //   deadlock（未满足前置均非 pending/in_progress——无解锁路径；rejected 为死锁信号 §6-4）；
@@ -46,13 +48,15 @@ export interface ValidateDeps {
   readonly store: ForgeWorkspaceStore
 }
 
-/** 子图任务行（最小定位形状——校验面消费） */
+/** 子图任务行（最小定位形状——校验面消费；M3 2.1：source 双列入形状——容器命中判据） */
 interface SubTaskRow {
   readonly id: string
   readonly slug: string
   readonly local_id: string
   readonly task_status: TaskStatus
   readonly task_type: TaskType
+  readonly source_kind: 'feature' | 'proposal'
+  readonly source_id: string
 }
 
 /** 子图边行（等待方 ∈ 子图；prerequisite 可能越界——①c 判据面） */
@@ -61,12 +65,15 @@ interface SubEdgeRow {
   readonly prerequisite_id: string
 }
 
-/** 越界前置行水化（跨 feature 边命名与拓扑主段判据共用） */
+/** 越界前置行水化（跨容器边命名与拓扑主段判据共用；M3 2.1：source 双列入形状——
+ *  同容器边判据 + 容器命中检查面） */
 interface ForeignTaskRow {
   readonly id: string
   readonly slug: string
   readonly local_id: string
   readonly task_status: TaskStatus
+  readonly source_kind: 'feature' | 'proposal'
+  readonly source_id: string
 }
 
 /** liveness 解锁路径判据（老 forge validateLiveness 平移：pending/in_progress = 有望满足） */
@@ -100,7 +107,7 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
   // 子图行集（创建序确定性——违规清单稳定；M3 1.2 垫片：feature 容器 = source 双列特例）
   const tasks = db
     .prepare<unknown[], SubTaskRow>(
-      `SELECT id, slug, local_id, task_status, task_type FROM tasks
+      `SELECT id, slug, local_id, task_status, task_type, source_kind, source_id FROM tasks
        WHERE source_kind = 'feature' AND source_id = ? ORDER BY created_at, id`,
     )
     .all(feature.id)
@@ -126,7 +133,7 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
   const byId = new Map<string, SubTaskRow>(tasks.map((t) => [t.id, t]))
   const foreignById = new Map<string, ForeignTaskRow>()
   const foreignStmt = db.prepare<unknown[], ForeignTaskRow>(
-    `SELECT id, slug, local_id, task_status FROM tasks WHERE id = ?`,
+    `SELECT id, slug, local_id, task_status, source_kind, source_id FROM tasks WHERE id = ?`,
   )
   /** 前置行水化（子图内直取；越界行按需查捞并缓存——FK 保证在场） */
   const prereqRow = (id: string): ForeignTaskRow | undefined => {
@@ -177,8 +184,10 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     }
   }
 
-  // ①c 同 feature 边约束（DB CHECK 退役后的服务不变量面——er-diagram 差异清单 #9）；
-  //     越界边不入 ②⑤ 图遍历节点集（结构破损边不参与环/分层判定，单独回报）
+  // ①c 同容器边约束（M3 2.1 不变量 2 泛化：task_edges 两端 task 的 source_id 相等——判据
+  //     = source_id 相等，非子图成员资格；旧「同 feature 边」byId 判据退役）；同容器但行
+  //     非子图成员（source_kind 漂移——行本身由 ①d 回报）不入 ②⑤ 图遍历节点集（结构破损
+  //     行不参与环/分层判定，单独回报）
   const internalEdges: SubEdgeRow[] = []
   for (const e of edges) {
     if (byId.has(e.prerequisite_id)) {
@@ -187,13 +196,31 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     }
     const waiter = byId.get(e.task_id)
     const foreign = prereqRow(e.prerequisite_id)
+    if (foreign !== undefined && foreign.source_id === feature.id) continue // 同容器边合法
     violations.push({
       kind: 'phase-invariant',
       message:
-        `跨 feature 边（同 feature 边约束服务不变量）：${waiter !== undefined ? natural(waiter) : e.task_id} ← ` +
+        `跨容器边（同容器边服务不变量——task_edges 两端 source_id 须相等）：${waiter !== undefined ? natural(waiter) : e.task_id} ← ` +
         `${foreign !== undefined ? natural(foreign) : e.prerequisite_id}`,
       taskRef: waiter !== undefined ? ref(waiter) : undefined,
     })
+  }
+
+  // ①d 容器命中（M3 2.1 不变量 1 批量对照面：source_id 必命中 source_kind 对应表——
+  //     多态引用无 DB FK，写入时校验（addTask）的漂移对照在此抓；子图任务恒命中锚行，
+  //     越界前置行为主回报面；与 ①c 独立——kind 漂移行（同 source_id 异 kind）仅本项红）
+  const featureHit = db.prepare<unknown[], { hit: number }>(`SELECT 1 AS hit FROM features WHERE id = ?`)
+  const proposalHit = db.prepare<unknown[], { hit: number }>(`SELECT 1 AS hit FROM proposals WHERE id = ?`)
+  const containerHit = (row: { source_kind: string; source_id: string }): boolean =>
+    (row.source_kind === 'feature' ? featureHit.get(row.source_id) : proposalHit.get(row.source_id)) !== undefined
+  for (const t of [...tasks, ...foreignById.values()]) {
+    if (!containerHit(t)) {
+      violations.push({
+        kind: 'phase-invariant',
+        message: `容器未命中（source_id 必命中 source_kind 对应表——服务不变量）：${natural(t)} source_kind='${t.source_kind}' source_id='${t.source_id}'`,
+        taskRef: ref(t),
+      })
+    }
   }
 
   // ── ② 无环复核（三色 DFS——写时增量校验 §6-14 的批量对照；每回边一报，路径首尾相接） ──

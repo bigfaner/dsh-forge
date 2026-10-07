@@ -4,9 +4,11 @@
 // （登记即推进——单事务内聚相位推进/单调只进/slug→id 解析/漂移防护回滚）、listFeatures
 // （七态分布/文档统计/谱系 + search/sort）、listFeatureDocs（fix-2 列举读面——文档行数据源）
 // + 写动词 emitTasksChanged 接线。临时 SQLite 夹具。
+// M3 2.1 增补：三动词 feature_records 审计伴随（每动词一行 + 全成全败 + actor 通道推断）
+// + derive 闭包 source_kind 过滤（律四——proposal 容器任务不入相位域）。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
-import type { FeatureCard, TaskStatus } from '@dsh-forge/contracts'
+import { FEATURE_RECORD_VERBS, type FeatureCard, type TaskStatus } from '@dsh-forge/contracts'
 import { PhaseInvariantViolationError } from '../tasks/phase-deriver.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from '../tasks/phase-deriver.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'
@@ -54,6 +56,43 @@ function seedTask(db: Database.Database, featureId: string, slug: string, localI
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'coding.feature', ?, 'feature', ?, 'expedition', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
   ).run(`t-${Math.random().toString(36).slice(2, 8)}`, slug, localId, `任务 ${localId}`, status, featureId)
+}
+
+/** 种 proposal 行 + 突击容器任务（M3 2.1 律四夹具——derive 闭包 source_kind 过滤断言；
+ *  slug ≡ 容器 slug 不变量沿袭：task slug = proposal slug） */
+function seedProposalTask(
+  db: Database.Database,
+  o: { proposalId: string; proposalSlug: string; localId: string; status: TaskStatus },
+): string {
+  db.prepare(
+    `INSERT INTO proposals (id, slug, title, proposal_status, mode, created_at, updated_at)
+     VALUES (?, ?, ?, 'accepted', 'blitz', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  ).run(o.proposalId, o.proposalSlug, `提案 ${o.proposalSlug}`)
+  const tid = `t-${Math.random().toString(36).slice(2, 8)}`
+  db.prepare(
+    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'coding.feature', ?, 'proposal', ?, 'blitz', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  ).run(tid, o.proposalSlug, o.localId, `任务 ${o.localId}`, o.status, o.proposalId)
+  return tid
+}
+
+/** feature_records 审计行断言面（append-only——id 升序即动词史序） */
+interface AuditRow {
+  feature_id: string
+  verb: string
+  from_status: string | null
+  to_status: string | null
+  reason: string | null
+  actor: string
+  session_id: string | null
+}
+
+function auditRows(db: Database.Database): AuditRow[] {
+  return db
+    .prepare<unknown[], AuditRow>(
+      `SELECT feature_id, verb, from_status, to_status, reason, actor, session_id FROM feature_records ORDER BY id`,
+    )
+    .all()
 }
 
 describe('AC1 registerFeature：slug UNIQUE + 谱系 FK 预检', () => {
@@ -370,6 +409,71 @@ describe('fix-2 listFeatureDocs：feature_documents 列举读面（文档行数�
     const docs = await s.listFeatureDocs({ projectId: h!.projectId })
     expect(docs).toHaveLength(1)
     expect(h!.events.emitted).toEqual([])
+  })
+})
+
+describe('M3 2.1 三动词审计伴随（feature_records 同事务一行——不变量 6）', () => {
+  it('registerFeature → 一行 register：from NULL → prd、actor=plugin-tool（tool 面）、reason/session NULL', async () => {
+    const s = svc()
+    const row = await s.registerFeature({ projectId: h!.projectId, slug: 'audited', title: 'x' })
+    expect(auditRows(h!.wsDb)).toEqual([
+      { feature_id: row.featureId, verb: 'register', from_status: null, to_status: 'prd', reason: null, actor: 'plugin-tool', session_id: null },
+    ])
+    // 动词值 ∈ contracts 单源词汇（TS 单源无 DB CHECK——1.1 对齐）
+    expect(FEATURE_RECORD_VERBS).toEqual(['register', 'transition', 'doc-upsert'])
+  })
+
+  it('transitionFeature → 一行 transition：from→to + reason 必带、actor=ui（RPC 人类纠偏面）', async () => {
+    const s = svc()
+    const created = await s.registerFeature({ projectId: h!.projectId, slug: 'f', title: 'x' })
+    await s.transitionFeature({ projectId: h!.projectId, featureId: created.featureId, toStatus: 'design', reason: '设计定稿' })
+    expect(auditRows(h!.wsDb).slice(1)).toEqual([
+      { feature_id: created.featureId, verb: 'transition', from_status: 'prd', to_status: 'design', reason: '设计定稿', actor: 'ui', session_id: null },
+    ])
+  })
+
+  it('upsertFeatureDoc → 每调用一行 doc-upsert（相位推进载 from→to；无推进 from = to）；推导机重算不另记 transition 行（Hard Rule：记真实动词）', async () => {
+    const s = svc()
+    await s.registerFeature({ projectId: h!.projectId, slug: 'f', title: 'x' })
+    await s.upsertFeatureDoc({ projectId: h!.projectId, featureSlug: 'f', docKind: 'prd-spec', relPath: 'p.md' }) // prd 文档不推相位
+    await s.upsertFeatureDoc({ projectId: h!.projectId, featureSlug: 'f', docKind: 'tech-design', relPath: 'd.md' }) // 推进 prd → design
+    expect(auditRows(h!.wsDb).map((r) => [r.verb, r.from_status, r.to_status, r.actor, r.reason, r.session_id])).toEqual([
+      ['register', null, 'prd', 'plugin-tool', null, null],
+      ['doc-upsert', 'prd', 'prd', 'plugin-tool', null, null],
+      ['doc-upsert', 'prd', 'design', 'plugin-tool', null, null],
+    ])
+  })
+
+  it('全成全败：拒绝路径零审计行（UNIQUE 冲突 / 原地转移拒 / 漂移回滚——同事务伴随锚）', async () => {
+    const s = svc()
+    const created = await s.registerFeature({ projectId: h!.projectId, slug: 'dup', title: 'x' })
+    await s.registerFeature({ projectId: h!.projectId, slug: 'dup', title: 'y' }).catch(() => undefined)
+    await s
+      .transitionFeature({ projectId: h!.projectId, featureId: created.featureId, toStatus: 'prd', reason: '原地' })
+      .catch(() => undefined)
+    const drifted = seedFeature(h!.wsDb, { slug: 'drifted', status: 'completed' })
+    seedTask(h!.wsDb, drifted, 'drifted', '1.1', 'pending')
+    await s
+      .upsertFeatureDoc({ projectId: h!.projectId, featureSlug: 'drifted', docKind: 'prd-spec', relPath: 'x.md' })
+      .catch(() => undefined)
+    expect(auditRows(h!.wsDb)).toHaveLength(1) // 仅首 register——三拒绝面均未落审计行
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM feature_documents`).get()).toEqual({ n: 0 })
+  })
+})
+
+describe('M3 2.1 derive 闭包按 source_kind 过滤（律四：proposal 容器无相位域）', () => {
+  it('proposal 容器 in_progress 任务不入闭包：写前增量断言不误红 + 推进 = docPhaseMax 非 taskDerived', async () => {
+    const s = svc()
+    seedFeature(h!.wsDb, { slug: 'feat-x', status: 'prd' })
+    seedProposalTask(h!.wsDb, { proposalId: 'p-blitz', proposalSlug: 'blitz-prop', localId: '1.1', status: 'in_progress' })
+    // 若 proposal 任务漏入闭包：assertPhaseInvariant 输入含 in_progress → derive = 'in-progress' ≠ 'prd' → 整体回滚红
+    await s.upsertFeatureDoc({ projectId: h!.projectId, featureSlug: 'feat-x', docKind: 'tech-design', relPath: 'd.md' })
+    // 相位推进 = docPhaseMax('design')，非 taskDerived('in-progress')
+    expect(
+      h!.wsDb.prepare<unknown[], { feature_status: string }>(`SELECT feature_status FROM features WHERE slug = 'feat-x'`).get(),
+    ).toEqual({ feature_status: 'design' })
+    // 审计行照常伴随（闭包过滤不影响动词审计——seedFeature 直写不产审计行，仅动词一行）
+    expect(auditRows(h!.wsDb).map((r) => r.verb)).toEqual(['doc-upsert'])
   })
 })
 

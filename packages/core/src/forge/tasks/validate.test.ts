@@ -1,12 +1,16 @@
 // 任务 2.5 测试 —— validateFeatureTasks（单 feature 子图五类检查：tech-design §Interface 1
 // L114-118 + PRD §178 五类口径 + db-schema §6-8 liveness 三判据 + 老 forge validate.go
-// 对拍）。断言面：① 相位派生不变量族（推导不动点 + slug 列 ≡ feature slug + 同 feature 边
-// 服务不变量——AC 口径同列本类）/ ② 无环复核（完整路径首尾相接）/ ③ liveness（orphaned/
+// 对拍）。断言面：① 相位派生不变量族（推导不动点 + slug 列 ≡ feature slug + 同容器边
+// 服务不变量）/ ② 无环复核（完整路径首尾相接）/ ③ liveness（orphaned/
 // stale/deadlock）/ ④ 记录链（in_progress 必有 claim、completed 必有 submit）/ ⑤ 拓扑可分层
 // （phase order 新形态——数值 localId 主段 N≥2 须有更早阶段直接前置，fix-N/disc-N 豁免）；
 // 子图限定（他 feature 破损不报）+ ValidateReport 形状（checked 计数 + taskRef 定位）。
+// M3 2.1 增补：① 族扩两项——容器命中（source_id 必命中 source_kind 对应表·不变量 1）+
+// 同容器边（task_edges 两端 source_id 相等·不变量 2 泛化，判据 = source_id 相等非子图
+// 成员资格）——构造漂移样本可抓。
 import { describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
+import type { TaskStatus } from '@dsh-forge/contracts'
 import { createTasksHarness, seedEdge, seedFeature, seedRecord, seedTask } from './harness.js'
 import { TasksFeatureNotFoundError } from './errors.js'
 import { validateFeatureTasks } from './validate.js'
@@ -18,6 +22,26 @@ function insertMisSluggedTask(db: Database.Database, featureId: string): void {
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
      VALUES ('t-rogue', 'other-feature', '1.2', '越界行', 'coding-feature', 'pending', 'feature', ?, 'expedition', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
   ).run(featureId)
+}
+
+/** 种 proposal 行（突击容器合法容器行——容器命中判据的正例锚） */
+function insertProposal(db: Database.Database, o: { id: string; slug: string }): void {
+  db.prepare(
+    `INSERT INTO proposals (id, slug, title, proposal_status, mode, created_at, updated_at)
+     VALUES (?, ?, ?, 'accepted', 'blitz', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  ).run(o.id, o.slug, `提案 ${o.slug}`)
+}
+
+/** 直插突击容器任务（source_kind='proposal'——source_id 受控：合法提案 id / 悬空 id /
+ *  feature id 三形态；harness seedTask 恒 feature 容器，容器漂移样本须直写） */
+function insertProposalTask(
+  db: Database.Database,
+  o: { id: string; slug: string; localId: string; status?: TaskStatus; sourceId: string },
+): void {
+  db.prepare(
+    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'coding-feature', ?, 'proposal', ?, 'blitz', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  ).run(o.id, o.slug, o.localId, `任务 ${o.localId}`, o.status ?? 'pending', o.sourceId)
 }
 
 describe('validateFeatureTasks：单 feature 子图五类检查', () => {
@@ -198,6 +222,70 @@ describe('validateFeatureTasks：单 feature 子图五类检查', () => {
       expect(v.kind).toBe('topology')
       expect(v.taskRef).toEqual({ slug: 'topo', localId: '2.1' })
       expect(v.message).toContain('更早阶段')
+    } finally {
+      h.dispose()
+    }
+  })
+
+  it('M3 2.1 ① 扩展：容器命中漂移可抓（source_kind 对应表无行）+ 跨容器边同报', () => {
+    const h = createTasksHarness()
+    try {
+      seedFeature(h.db, { slug: 'feat', status: 'tasks' })
+      seedTask(h.db, 'feat', '2.1')
+      // 悬空突击容器前置：source_id 无 proposals 行（多态引用无 DB FK——漂移面）
+      insertProposalTask(h.db, { id: 't-blitz', slug: 'blitz-prop', localId: '1.1', sourceId: 'p-missing' })
+      seedEdge(h.db, 't-feat-2.1', 't-blitz')
+
+      const report = validateFeatureTasks({ store: h.store }, { projectId: h.projectId, featureSlug: 'feat' })
+      expect(report.violations).toHaveLength(2)
+      const miss = report.violations.find((v) => v.message.includes('容器未命中'))
+      expect(miss?.kind).toBe('phase-invariant')
+      expect(miss?.taskRef).toEqual({ slug: 'blitz-prop', localId: '1.1' })
+      expect(miss?.message).toContain("source_kind='proposal'")
+      expect(miss?.message).toContain("source_id='p-missing'")
+      const edge = report.violations.find((v) => v.message.includes('跨容器边'))
+      expect(edge?.kind).toBe('phase-invariant')
+      expect(edge?.taskRef).toEqual({ slug: 'feat', localId: '2.1' })
+      expect(edge?.message).toContain('blitz-prop/1.1')
+    } finally {
+      h.dispose()
+    }
+  })
+
+  it('M3 2.1 ① 扩展：合法突击容器前置（proposals 行在场）→ 仅跨容器边一报，容器命中过', () => {
+    const h = createTasksHarness()
+    try {
+      seedFeature(h.db, { slug: 'feat', status: 'tasks' })
+      seedTask(h.db, 'feat', '2.1')
+      insertProposal(h.db, { id: 'p-blitz', slug: 'blitz-prop' })
+      insertProposalTask(h.db, { id: 't-blitz', slug: 'blitz-prop', localId: '1.1', sourceId: 'p-blitz' })
+      seedEdge(h.db, 't-feat-2.1', 't-blitz')
+
+      const report = validateFeatureTasks({ store: h.store }, { projectId: h.projectId, featureSlug: 'feat' })
+      expect(report.violations).toHaveLength(1)
+      expect(report.violations[0]?.message).toContain('跨容器边')
+      expect(report.violations[0]?.message).not.toContain('容器未命中')
+    } finally {
+      h.dispose()
+    }
+  })
+
+  it('M3 2.1 ① 扩展：kind 漂移行（source_kind=proposal ∧ source_id=feature id）→ 边合法不报 + 行容器未命中一报', () => {
+    const h = createTasksHarness()
+    try {
+      const fid = seedFeature(h.db, { slug: 'feat', status: 'tasks' })
+      seedTask(h.db, 'feat', '2.1')
+      // 同 source_id（同容器边合法）但 kind 漂移——proposals 表无此 id → 容器未命中
+      insertProposalTask(h.db, { id: 't-drift', slug: 'feat', localId: '1.1', sourceId: fid })
+      seedEdge(h.db, 't-feat-2.1', 't-drift')
+
+      const report = validateFeatureTasks({ store: h.store }, { projectId: h.projectId, featureSlug: 'feat' })
+      expect(report.violations).toHaveLength(1)
+      const v = report.violations[0] as NonNullable<(typeof report.violations)[number]>
+      expect(v.kind).toBe('phase-invariant')
+      expect(v.message).toContain('容器未命中')
+      expect(v.message).not.toContain('跨容器边')
+      expect(v.taskRef).toEqual({ slug: 'feat', localId: '1.1' })
     } finally {
       h.dispose()
     }

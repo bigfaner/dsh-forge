@@ -69,7 +69,19 @@ export const TASK_RECORD_VERBS = [
 
 export type TaskRecordVerb = (typeof TASK_RECORD_VERBS)[number]
 
-/** task_records.actor 三值（actor 由通道语境服务端推断——tool = 'plugin-tool'，RPC = 'ui'；输入面不收） */
+/** feature_records.verb 三值（TS 单源无 CHECK——M3 2.1；append-only 审计行的动词面）。
+ *  三动词闭包伴随：register = registerFeature（含 2.2 成链内聚同事务调用）/
+ *  transition = transitionFeature / doc-upsert = upsertFeatureDoc。 */
+export const FEATURE_RECORD_VERBS = [
+  'register',
+  'transition',
+  'doc-upsert',
+] as const
+
+export type FeatureRecordVerb = (typeof FEATURE_RECORD_VERBS)[number]
+
+/** task_records.actor 三值（actor 由通道语境服务端推断——tool = 'plugin-tool'，RPC = 'ui'；输入面不收）。
+ *  feature_records.actor 同词汇（schema CHECK 同三值——共享本类型单源）。 */
 export type TaskActor = 'plugin-tool' | 'ui' | 'core'
 
 /** task_edges.origin 三值（manual 人工声明 / fix-chain 派生链 / autoconfig 自动配置） */

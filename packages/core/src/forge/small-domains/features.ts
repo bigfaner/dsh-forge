@@ -17,6 +17,14 @@
 // - listFeatureDocs（fix-2）：feature_documents 全行列举读面——概览 feature 子 tab 文档行
 //   数据源；纯读零事件（写后事件只及写动词），行归属过滤归 UI（featureId 分组呈现）。
 //
+// M3 2.1 审计伴随（不变量 6）：三写动词（register/transition/doc-upsert）每次写入同事务
+// 伴随 feature_records 行——Hard Rule：同事务伴随（非异步补写）；记真实动词不记推导机
+// 重算（upsertFeatureDoc 相位推进载于 doc-upsert 行 from/to，不另记 transition 行）。
+// actor 通道推断（TECH-rpc-008「输入面不收」——动词级规范 actor，服务面无通道信息）：
+// registerFeature/upsertFeatureDoc = plugin-forge-spec tool 写径 → 'plugin-tool'；
+// transitionFeature = RPC 人类纠偏面（收窄不进 tool 面——裁决②）→ 'ui'；成链内聚
+// （2.2 经 registerFeatureInTx）→ 'core'。
+//
 // 写动词闭包尾部 emitTasksChanged(projectId)（Interface 1 写后事件四域覆盖面裁决——
 // 事务提交后发射，同通道同载荷）。一切 SQL prepared statements（Hard Rule）。
 // 相位推导机经 deps 注入（2.1 单源纯函数——四域互禁 import 彼此，故不直 import
@@ -29,10 +37,12 @@ import {
   type DocKind,
   type FeatureCard,
   type FeatureDocumentRow,
+  type FeatureRecordVerb,
   type FeatureRow,
   type FeatureStatus,
   type ForgeFeaturesService,
   type RegisterFeatureInput,
+  type TaskActor,
   type TaskStatus,
   type TransitionFeatureInput,
   type UpsertFeatureDocInput,
@@ -135,6 +145,69 @@ function isUniqueSlugViolation(cause: unknown): boolean {
   )
 }
 
+/**
+ * feature_records 审计行伴随写入（M3 2.1 不变量 6）：三动词闭包 + 2.2 成链内聚共用——
+ * 调用点恒在 withTransaction 内（同事务全成全败，非异步补写）。verb = 真实动词
+ * （FEATURE_RECORD_VERBS 单源）；相位推进的 from/to 载于本行，不另记推导机 transition 行。
+ */
+function appendFeatureRecord(
+  db: Database.Database,
+  input: {
+    featureId: string
+    verb: FeatureRecordVerb
+    fromStatus: FeatureStatus | null
+    toStatus: FeatureStatus | null
+    reason?: string | null
+    actor: TaskActor
+    sessionId?: string | null
+    now: string
+  },
+): void {
+  db.prepare(
+    `INSERT INTO feature_records (feature_id, verb, from_status, to_status, reason, actor, session_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.featureId,
+    input.verb,
+    input.fromStatus,
+    input.toStatus,
+    input.reason ?? null,
+    input.actor,
+    input.sessionId ?? null,
+    input.now,
+    input.now,
+  )
+}
+
+/**
+ * registerFeature 同事务核心（M3 2.1 导出面）：features 行 + feature_records(register)
+ * 审计行——两用消费面：本服务 verb 闭包（actor='plugin-tool'）与 2.2 成链内聚（装配层
+ * 注入 proposals 域消费——同事务调用非二次提交，actor='core'；四域互禁 import，经装配
+ * 注入消 import 边）。proposalId 谱系预检在 verb 面（校验先于事务）；UNIQUE 违例原样
+ * 上抛（verb 面包装 FeatureExistsError）。只可在已开事务内调用（审计伴随 Hard Rule）。
+ */
+export function registerFeatureInTx(
+  db: Database.Database,
+  input: { slug: string; title: string; summary?: string; proposalId?: string },
+  actor: TaskActor,
+): FeatureStorageRow {
+  const featureId = randomUUID()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO features (id, slug, title, feature_status, summary, proposal_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'prd', ?, ?, ?, ?)`,
+  ).run(featureId, input.slug, input.title, input.summary ?? null, input.proposalId ?? null, now, now)
+  appendFeatureRecord(db, {
+    featureId,
+    verb: 'register',
+    fromStatus: null,
+    toStatus: 'prd', // 新行缺省初态（schema DEFAULT 同值）
+    actor,
+    now,
+  })
+  return db.prepare<unknown[], FeatureStorageRow>(`${SELECT_FEATURE} WHERE id = ?`).get(featureId) as FeatureStorageRow
+}
+
 /** feature 相位聚合读取（推导机输入快照——事务内单源读。M3 1.2 垫片：feature 容器 =
  *  source 双列特例——source_kind='feature' AND source_id）。 */
 function readPhaseInput(
@@ -166,19 +239,16 @@ export function createFeaturesService(deps: FeaturesServiceDeps): ForgeFeaturesS
           throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.proposalId })
         }
       }
-      const featureId = randomUUID()
-      const now = new Date().toISOString()
       let row: FeatureStorageRow
       try {
-        row = withTransaction(db, () => {
-          db.prepare(
-            `INSERT INTO features (id, slug, title, feature_status, summary, proposal_id, created_at, updated_at)
-             VALUES (?, ?, ?, 'prd', ?, ?, ?, ?)`,
-          ).run(featureId, input.slug, input.title, input.summary ?? null, input.proposalId ?? null, now, now)
-          return db
-            .prepare<unknown[], FeatureStorageRow>(`${SELECT_FEATURE} WHERE id = ?`)
-            .get(featureId) as FeatureStorageRow
-        })
+        // 审计伴随：register 行同事务落 feature_records（actor='plugin-tool'——tool 写径）
+        row = withTransaction(db, () =>
+          registerFeatureInTx(
+            db,
+            { slug: input.slug, title: input.title, summary: input.summary, proposalId: input.proposalId },
+            'plugin-tool',
+          ),
+        )
       } catch (cause) {
         if (isUniqueSlugViolation(cause)) {
           throw new FeatureExistsError({ projectId: input.projectId, slug: input.slug })
@@ -202,11 +272,22 @@ export function createFeaturesService(deps: FeaturesServiceDeps): ForgeFeaturesS
           throw new ReasonRequiredError({ verb: 'transitionFeature' })
         }
         assertDomainTransition('feature', FEATURE_STATUSES, current.feature_status, input.toStatus)
+        const now = new Date().toISOString()
         db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
           input.toStatus,
-          new Date().toISOString(),
+          now,
           input.featureId,
         )
+        // 审计伴随：transition 行（reason 必带；actor='ui'——RPC 人类纠偏面）
+        appendFeatureRecord(db, {
+          featureId: input.featureId,
+          verb: 'transition',
+          fromStatus: current.feature_status,
+          toStatus: input.toStatus,
+          reason: input.reason,
+          actor: 'ui',
+          now,
+        })
         return db
           .prepare<unknown[], FeatureStorageRow>(`${SELECT_FEATURE} WHERE id = ?`)
           .get(input.featureId) as FeatureStorageRow
@@ -260,6 +341,16 @@ export function createFeaturesService(deps: FeaturesServiceDeps): ForgeFeaturesS
             feature.id,
           )
         }
+        // 审计伴随：doc-upsert 行（from/to 载推导机推进——无推进 from = to；不另记
+        // transition 行——Hard Rule「记真实动词不记推导机重算」；actor='plugin-tool'）
+        appendFeatureRecord(db, {
+          featureId: feature.id,
+          verb: 'doc-upsert',
+          fromStatus: feature.feature_status,
+          toStatus: derived,
+          actor: 'plugin-tool',
+          now,
+        })
         return db
           .prepare<unknown[], FeatureDocStorageRow>(
             `SELECT feature_id, doc_kind, rel_path, summary, created_at, updated_at FROM feature_documents
