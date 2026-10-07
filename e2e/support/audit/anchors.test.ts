@@ -26,10 +26,12 @@ afterEach(() => {
 })
 
 describe('5.3 审计锚①：当前仓零残留（SC2/SC8/SC3/web 无编排/技能零悬空）', () => {
+  // 全仓同步扫描单跑 ~3s；全量套件并行负载下曾超 5s 默认限时（worker 竞争）——非回归红线，
+  // 提时到 30s（findings 断言本身不受影响——零残留语义不变）
   it('六锚全量跑批 → 零 findings', () => {
     const findings = runAllSourceAuditAnchors()
     expect(findings, findings.map((f) => `${f.anchor}: ${f.detail}`).join('\n')).toEqual([])
-  })
+  }, 30_000)
 
   it('吸收白名单常量封闭集（DOC_KIND_FILES 七类 + FRONTMATTER_KEYS 四键）', () => {
     expect(auditAbsorptionWhitelist()).toEqual([])

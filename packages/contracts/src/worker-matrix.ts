@@ -83,10 +83,40 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
 export const WORKER_FORGE_TOOLS = ['submitTask', 'addTask'] as const
 
 /**
- * 工具名 → 工具族映射表骨架（OQ#2：具体工具名 = 实施期按当期上游工具面枚举核对 + G1 pin，
- * 逐工具名 pin 随 5.1 兑现——本表只落当前确证的 forge 面；core/plugin/web 禁重复定义）。
+ * 工具名 → 工具族映射表（OQ#2 兑现·5.1：上游 0.2.0-rc.2 standard 预设组合实面枚举核对入表；
+ * 逐名机械核对记录随 G1 pin #20 归档——tests/contract/pin-12-worker-tool-names.test.ts，
+ * 上游组合演进 → pin 红 → 本表随迁。core/plugin/web 禁重复定义）。
+ * 核对源（@deepseek-ai/dsh-web-app presets/standard.patch.yml 组合行 × 包内工具名）：
+ *   fs   ← dsh-tool-fs（read/write/edit）+ dsh-tool-fs-search（glob/grep）
+ *   shell← dsh-tool-bash（bash）+ dsh-tool-pwsh（pwsh）——平台 disabled 行恒入表（win 域二名并存）
+ *   jobs ← dsh-tool-jobs（job_list/job_output/job_kill）
+ *   read-image ← dsh-tool-fs 的 read_image（独立族——矩阵单独收窄）
+ *   web ← dsh-tool-web（web_fetch/web_search）
+ *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/addTask）
+ * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ goal 三命令 / plan-mode exit_plan_mode /
+ * delegation 族与 ask-user/todo/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
+ * 注册面——provider 缺席即不在场，刻意不 deny 亦不入族）。
  */
 export const WORKER_TOOL_NAME_FAMILY: Readonly<Record<string, WorkerToolFamily>> = {
+  // forge 面（我方——WORKER_FORGE_TOOLS 单源子集）
   submitTask: 'forge',
   addTask: 'forge',
+  // fs 读写/搜索（上游 dsh-tool-fs / dsh-tool-fs-search）
+  read: 'fs',
+  write: 'fs',
+  edit: 'fs',
+  glob: 'fs',
+  grep: 'fs',
+  // shell（上游 dsh-tool-bash / dsh-tool-pwsh）
+  bash: 'shell',
+  pwsh: 'shell',
+  // jobs 长跑（上游 dsh-tool-jobs）
+  job_list: 'jobs',
+  job_output: 'jobs',
+  job_kill: 'jobs',
+  // read_image（上游 dsh-tool-fs——UI 断言截图面独立成族）
+  read_image: 'read-image',
+  // web（上游 dsh-tool-web）
+  web_fetch: 'web',
+  web_search: 'web',
 }

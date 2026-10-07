@@ -226,25 +226,37 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 })
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
-  it('当前确证名表：全局拒绝集 + forge 闭环（Hard Rule：矩阵只给 submitTask + addTask）', () => {
-    for (const type of ['coding-fix', 'doc', 'gate', 'validation-ux'] as TaskType[]) {
-      expect(deriveWorkerToolFilter(type).deny.sort()).toEqual(
-        [
-          'ask_user_question',
-          'createProposal',
-          'dispatchTask',
-          'interrupt_agent',
-          'list_agents',
-          'present',
-          'queryTask',
-          'send_message',
-          'subagent_fork',
-          'todo_write',
-          'transitionProposal',
-          'workflow',
-        ],
-      )
-    }
+  it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
+    // 全局八 + forge 闭环四（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
+    // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
+    const base = [
+      'ask_user_question',
+      'createProposal',
+      'dispatchTask',
+      'interrupt_agent',
+      'list_agents',
+      'present',
+      'queryTask',
+      'send_message',
+      'subagent_fork',
+      'todo_write',
+      'transitionProposal',
+      'workflow',
+    ]
+    // coding：web ✗（fs/shell/jobs/read-image ✓）
+    expect(deriveWorkerToolFilter('coding-fix').deny.sort()).toEqual(
+      [...base, 'web_fetch', 'web_search'].sort(),
+    )
+    // doc：jobs ✗ / read-image ✗ / web ✗
+    expect(deriveWorkerToolFilter('doc').deny.sort()).toEqual(
+      [...base, 'job_kill', 'job_list', 'job_output', 'read_image', 'web_fetch', 'web_search'].sort(),
+    )
+    // gate：read-image ✗ / web ✗（jobs ✓）
+    expect(deriveWorkerToolFilter('gate').deny.sort()).toEqual(
+      [...base, 'read_image', 'web_fetch', 'web_search'].sort(),
+    )
+    // validation：全族放行——仅全局拒绝 + forge 闭环
+    expect(deriveWorkerToolFilter('validation-ux').deny.sort()).toEqual([...base].sort())
   })
 
   it('注入名表证矩阵消费（5.1 扩名表零改动激活）：族拒绝才 deny、族放行不 deny', () => {

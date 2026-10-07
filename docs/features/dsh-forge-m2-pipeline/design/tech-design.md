@@ -74,7 +74,7 @@ import 边:四域互禁 import 彼此;均可 → `forge/workspace/`(共享句柄
 
 - **上游 dsh npm 零新增**;产品依赖新增 **mermaid**(精确 pin + lockfile——**懒加载**:仅文档 tab 含 mermaid 块时动态 import,零块零加载;`securityLevel='strict'` 默认 sanitize;erDiagram = 验收锚,全图型同库渲染,渲染失败/非法源回退占位卡——2026-10-06 用户裁决)。其余:better-sqlite3 13.0.3 复用(prebuilds 实证);sha-256 = `node:crypto`(core 侧;path-key 保持浏览器安全零依赖);SVG/DAG 自绘;`dsh-subagent-in-process-driver@0.2.0-rc.2` 已在 runtime-packages 闭包。
 - **git = 可选环境依赖**(用户裁决):`execFile('git')` ENOENT 与失败同路静默回退记录语;submit 质量门不含 git;executor 遇 git 缺席走 `submitTask result=blocked`(fix 链承接);不影响任何 SC 判据(断言路径均有记录回退形态)。
-- 新工件 `@dsh-forge/plugin-forge`(deps 仅 contracts + path-key,零 cordis 运行时依赖——knowledge 同型)。
+- 新工件 `@dsh-forge/plugin-forge`(deps 仅 contracts + path-key,零 cordis 运行时依赖——knowledge 同型;**M3 drift #4 修订(2026-10-08):boundaries pin 增 driver 白名单——deps + `@deepseek-ai/dsh-subagent-in-process-driver`(dispatchTask spawn 通道,dsh 运行时包非 core,单点 import 收口 spawn/in-process-driver.ts),对 core 仍零实现级 import**)。
 
 ### 提示词与技能资产(plugin-forge)
 
@@ -521,7 +521,7 @@ B.5 六锚(环构造双 flag / 满足集 rejected 不满足 / 两级去重 / 同
 
 ### 契约面 pin 扩池(G1,P1 八项之上)
 
-9. 桥事件信封(`BridgeEventMessage` 形状 + channel 常量);10. 四新服务白名单与 ready 位(AssertNever 完备);11. plugin-forge tool 注册面(六在场/两缺席);12. 每工作区 DB 布局(`{flatten}@{hash8}` + schema.sql ↔ MIGRATIONS 逐条);13. RPC 新通道族 allowlist(tasks/features/proposals/docs/events 五族);14. XML 标签集(四枚封闭);15. TaskType 20 值词汇 + 中英状态标签常量;16. sidebarRightTabs 两段注册 + conversation.session.header.actions 槽面。
+9. 桥事件信封(`BridgeEventMessage` 形状 + channel 常量);10. 四新服务白名单与 ready 位(AssertNever 完备);11. plugin-forge tool 注册面(六在场/两缺席;**M3 drift #1 改写(2026-10-08):claimTask tool 退役 → dispatchTask 在场,缺席面 = claimTask(spawnWorker)/transitionTask/transitionFeature/setProposalMode——新面由 M3 tech-design G1 pin #17/#18 定义,常驻 pin = tests/contract/pin-10-tool-faces.test.ts**);12. 每工作区 DB 布局(`{flatten}@{hash8}` + schema.sql ↔ MIGRATIONS 逐条);13. RPC 新通道族 allowlist(tasks/features/proposals/docs/events 五族);14. XML 标签集(四枚封闭);15. TaskType 20 值词汇 + 中英状态标签常量;16. sidebarRightTabs 两段注册 + conversation.session.header.actions 槽面。
 
 ### 与 db-schema 预设计的差异记账
 

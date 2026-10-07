@@ -120,10 +120,43 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
   })
 })
 
-describe('AC2 工具名映射表骨架（OQ#2——逐工具名 pin 随 5.1 按当期上游工具面核对兑现）', () => {
-  it('骨架仅含确证的 forge 面两动词（其余工具名 5.1 入 pin）', () => {
-    expect(Object.keys(WORKER_TOOL_NAME_FAMILY).sort()).toEqual(['addTask', 'submitTask'])
-    expect(WORKER_TOOL_NAME_FAMILY.submitTask).toBe('forge')
-    expect(WORKER_TOOL_NAME_FAMILY.addTask).toBe('forge')
+describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 standard 组合实面枚举核对）', () => {
+  it('全表 17 名 = forge 两动词 + 五上游族逐名（机械核对记录归 G1 pin #20）', () => {
+    expect(Object.keys(WORKER_TOOL_NAME_FAMILY).sort()).toEqual([
+      'addTask',
+      'bash',
+      'edit',
+      'glob',
+      'grep',
+      'job_kill',
+      'job_list',
+      'job_output',
+      'pwsh',
+      'read',
+      'read_image',
+      'submitTask',
+      'web_fetch',
+      'web_search',
+      'write',
+    ].sort())
+  })
+
+  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 二）', () => {
+    const byFamily = new Map<WorkerToolFamily, string[]>()
+    for (const [name, family] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
+      byFamily.set(family, [...(byFamily.get(family) ?? []), name].sort())
+    }
+    expect(byFamily.get('forge')).toEqual(['addTask', 'submitTask'])
+    expect(byFamily.get('fs')).toEqual(['edit', 'glob', 'grep', 'read', 'write'])
+    expect(byFamily.get('shell')).toEqual(['bash', 'pwsh'])
+    expect(byFamily.get('jobs')).toEqual(['job_kill', 'job_list', 'job_output'])
+    expect(byFamily.get('read-image')).toEqual(['read_image'])
+    expect(byFamily.get('web')).toEqual(['web_fetch', 'web_search'])
+  })
+
+  it('forge 面 ⊆ WORKER_FORGE_TOOLS（单源子集——映射表不引入 forge 新名）', () => {
+    for (const [name, family] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
+      if (family === 'forge') expect(WORKER_FORGE_TOOLS).toContain(name)
+    }
   })
 })

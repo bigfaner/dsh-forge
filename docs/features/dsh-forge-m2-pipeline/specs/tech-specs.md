@@ -129,7 +129,7 @@ status: draft
 
 ### TECH-014: G1 契约面 pin 扩池枚举（第 9-16 项）
 
-**Requirement**: 桥事件信封 / 四新服务白名单 AssertNever / tool 注册面六在场两缺席 / 每工作区 DB 布局 / RPC 通道族 allowlist 五族 / XML 标签集四枚封闭 / TaskType 20 值词汇 + 中英状态标签 / sidebarRightTabs 两段注册 + header.actions 槽面。
+**Requirement**: 桥事件信封 / 四新服务白名单 AssertNever / tool 注册面六在场两缺席 / 每工作区 DB 布局 / RPC 通道族 allowlist 五族 / XML 标签集四枚封闭 / TaskType 20 值词汇 + 中英状态标签 / sidebarRightTabs 两段注册 + header.actions 槽面。（M3 drift 台账同步，2026-10-08·任务 5.1：①drift #1——「tool 注册面六在场两缺席」集合已改写：核心包终态六 = addTask/submitTask/queryTask/createProposal/transitionProposal/dispatchTask（claimTask tool 退役并入 dispatchTask），缺席面 = claimTask(spawnWorker)/transitionTask/transitionFeature/setProposalMode，两包分置 + spec 三（registerFeature/upsertFeatureDoc/validateFeatureTasks），新面常驻 pin = M3 tests/contract/pin-10-tool-faces.test.ts（G1 #17/#18）；②drift #4——插件依赖边界 pin 增 driver 白名单：deps = contracts + path-key + `@deepseek-ai/dsh-subagent-in-process-driver`（dispatchTask spawn 单点 import），对 core 仍零实现级 import。）
 **Scope**: [LOCAL]
 **Source**: tech-design §契约面 pin 扩池（纪律已由 TECH-quality-002 承载，枚举留 feature）
 

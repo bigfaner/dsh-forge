@@ -98,8 +98,8 @@ const FORGE_DENY_IN_WORKER: readonly string[] = ['queryTask', 'createProposal', 
 /**
  * taskType → 收窄矩阵 → toolFilter（deny 面）。矩阵 = contracts WORKER_TOOL_MATRIX
  * （族 × 工具族 ✓ 表）：族内拒绝的工具族名下已知工具名入 deny + 全局拒绝集 + forge 闭环。
- * nameFamily 参数化（缺省 = 当前确证名表 WORKER_TOOL_NAME_FAMILY——上游工具名映射 5.1
- * pin 前仅 forge 面）；5.1 扩名表即激活上游族收窄，本函数零改动。
+ * nameFamily 参数化（缺省 = WORKER_TOOL_NAME_FAMILY——5.1 OQ#2 兑现后 = 上游 standard
+ * 组合实面全表 17 名，上游族收窄即激活；参数缝保留 = 名表核对 pin 独立可测）。
  */
 export function deriveWorkerToolFilter(
   taskType: TaskType,

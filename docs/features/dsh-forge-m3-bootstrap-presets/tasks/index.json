@@ -556,7 +556,7 @@
         "3.5",
         "3.7"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.1-g1-contract-pins.md",
       "record": "records/5.1-g1-contract-pins.md",
       "surface-type": "web",

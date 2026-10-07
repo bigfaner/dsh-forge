@@ -91,7 +91,7 @@ status: draft
 
 ### BIZ-009: 人类通道与 agent 通道面分治
 
-**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言）；addTask / claimTask / submitTask / createProposal / transitionProposal = agent tool 专属（恒不上 RPC）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。
+**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言）；addTask / claimTask / submitTask / createProposal / transitionProposal = agent tool 专属（恒不上 RPC）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。（M3 drift #1 台账同步，2026-10-08·任务 5.1：claimTask tool 已退役并入 dispatchTask 复合动词（core 服务 API 保留）；缺席面扩为 claimTask(spawnWorker)/transitionTask/transitionFeature/setProposalMode——setProposalMode = UI 专属 RPC 正门（agent 面无模式改写动词）；transitionProposal 改双面（RPC + tool）；恒不上 RPC 的写动词收窄为 addTask/submitTask/createProposal。新面常驻 pin = M3 tests/contract/pin-10-tool-faces.test.ts。）
 **Context**: 两个薄 Controller 汇于同一 core 动词门（单一写入路径的准确表述 = 面分治）；SC7 断言面。
 **Scope**: [CROSS]
 **Source**: prd-spec §In Scope ①② / tech-design §Interface 7-8·§交互四
