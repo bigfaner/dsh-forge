@@ -4,15 +4,19 @@
 // readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall）。M2（2.7）：tasksHome
 // 注入时增注册四域服务 ctx.forgeTasks/forgeFeatures/forgeProposals/forgeDocs（装配壳 +
 // 三小域实现；tasks 动词面 2.2–2.6 接线）——共享 ForgeWorkspaceStore 惰性多句柄 +
-// 事件发射器装配单例；首建挂点 = 发现面只读扫描（交互二/三）。无逻辑：开句柄 → 注册服务 →
+// 事件发射器装配单例；首建挂点 = 发现面只读扫描（交互二/三）。M3（2.7）：settingsFile
+// 注入时增注册第七服务 ctx.forgeSettings（get/set 单门——UI 与 dispatchTask 同门消费，
+// host 接线 = 3.8）。无逻辑：开句柄 → 注册服务 →
 // 交出 disposer。
 // 形态：Cordis Plugin.Function——loader 取 default 导出（exports.default ?? exports，上游核实）；
 // inject 依赖声明（仅 workspaceRegistry 可用时加载）；返回句柄 disposer（fiber 卸载时关库，
 // 单句柄生命周期）。core 不依赖 cordis 编译期包：ctx 以结构化最小面（CoreContextFace）消费，
 // 运行期由 profile 装配注入；reflect.provide 即服务注册官方面（dsh Service 基类同径）。
+import { dirname } from 'node:path'
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
+import { createSettingsService } from './forge/settings/service.js'
 import { createDocsService } from './forge/small-domains/docs.js'
 import { createFeaturesService } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
@@ -37,6 +41,13 @@ export interface CorePluginConfig {
    * forgeTasks/forgeFeatures/forgeProposals/forgeDocs 均不装配），P1 行为零变化。
    */
   tasksHome?: string
+  /**
+   * M3 设置存储 {userData}/forge-settings.json（2.7——路径经 boot overlay 注 core 行 config，
+   * bindingsFile 同型先例；host 注入面 = 3.8）。缺席 = forgeSettings 服务降级缺席
+   * （六服务形制不动——与 tasksHome 两缝各自独立降级）；在场时路径守卫基准 =
+   * dirname(dbFile)（state.db 与设置文件同居 userData——双注入缝交叉校验）。
+   */
+  settingsFile?: string
 }
 
 /** Cordis Context 的结构化装配消费面（真 Context 结构兼容，经 profile 装配注入） */
@@ -57,6 +68,12 @@ export interface CorePlugin {
 
 const corePlugin: CorePlugin = Object.assign(
   (ctx: CoreContextFace, config: CorePluginConfig): () => void => {
+    // M3 第七服务（2.7 provide ×1）：构造先于开库——路径守卫坏装配即拒（fail-loud），
+    // 不留中央库句柄。settingsFile 缺席 = forgeSettings 降级缺席（六服务形制不动）。
+    const settings =
+      config.settingsFile !== undefined
+        ? createSettingsService({ settingsFile: config.settingsFile, userDataDir: dirname(config.dbFile) })
+        : undefined
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
     ctx.reflect.provide(
       'forgeProjects',
@@ -68,6 +85,9 @@ const corePlugin: CorePlugin = Object.assign(
       }),
     )
     ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
+    if (settings !== undefined) {
+      ctx.reflect.provide('forgeSettings', settings) // Interface 1（M3）设置域两法——单门读写（3.8 host 接线）
+    }
     // M2 四域装配（2.7 provide ×4）：tasksHome 缺席 = 四域整体降级缺席（P1 行为零变化）。
     // 共享单例：中央行路由 + ForgeWorkspaceStore（惰性多句柄；首建挂点 = 发现面只读扫描——
     // 交互二「库文件缺席 → 新建 v1 + 发现面扫描」，P1 存量工作区升级 M2 首次触达补建；

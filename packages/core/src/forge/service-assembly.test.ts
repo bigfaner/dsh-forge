@@ -4,13 +4,14 @@
 // （exports.default ?? exports，上游核实），inject 依赖声明、reflect.provide 注册官方面
 // （Service 基类同径）、返回值 = 句柄 disposer。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { openDatabase } from '../db/index.js'
 import { ProjectWriteError } from './errors.js'
 import type { WorkspaceLike } from './registry.js'
+import { SettingsPathInvalidError } from './settings/errors.js'
 import { seedProjectRow } from '../testutil/db-seeds.js'
 import corePlugin, { type CoreContextFace } from '../index.js'
 import { deriveTaskStoreDir } from './workspace/derive-dir.js'
@@ -290,6 +291,72 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       await expect(docs.read({ projectId: 'p1', docRel: 'a.md' })).rejects.toThrow()
     } finally {
       rmSync(tasksHome, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）', () => {
+  it('settingsFile 注入（独立缝——无需 tasksHome）：第七服务在场（get/set 方法面），往返经装配面落盘（3.8 host 接线缝预留）', async () => {
+    const { ctx, provided } = stubCtx()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m3-'))
+    try {
+      const dispose = corePlugin(ctx, {
+        dbFile: join(root, 'state.db'),
+        settingsFile: join(root, 'forge-settings.json'),
+      })
+      const settings = provided.get('forgeSettings') as {
+        get(): Promise<unknown>
+        set(input: unknown): Promise<void>
+      }
+      expect(settings).toBeDefined()
+      expect(typeof settings.get).toBe('function')
+      expect(typeof settings.set).toBe('function')
+      // 独立于 tasksHome：M2 四域缺席时 settings 照常装配（七服务分域独立）
+      expect(provided.has('forgeTasks')).toBe(false)
+      // 装配面往返（settingsFile 注入缝端到端——boot overlay 注行后 3.8 消费生效）
+      const worker = { provider: 'deepseek', model: 'reasoner', reasoning: 'high' }
+      await settings.set({ worker })
+      await expect(settings.get()).resolves.toEqual({ worker })
+      expect(existsSync(join(root, 'forge-settings.json'))).toBe(true)
+      dispose()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('settingsFile 缺席：forgeSettings 降级缺席（六服务形制不动——settings 与 tasksHome 两缝各自独立降级）', () => {
+    const { ctx, provided } = stubCtx()
+    const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
+    try {
+      const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
+      expect(provided.has('forgeSettings')).toBe(false)
+      // 六服务仍齐（P1 双服务 + M2 四域）
+      expect([...provided.keys()].sort()).toEqual([
+        'forgeDocs',
+        'forgeFeatures',
+        'forgeKnowledge',
+        'forgeProjects',
+        'forgeProposals',
+        'forgeTasks',
+      ])
+      dispose()
+    } finally {
+      rmSync(tasksHome, { recursive: true, force: true })
+    }
+  })
+
+  it('路径守卫经装配面：settingsFile 指向 dbFile 域外 → 插件构造即拒（守卫基准 = dirname(dbFile)，双缝交叉校验）', () => {
+    const { ctx } = stubCtx()
+    const rootA = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m3a-'))
+    const rootB = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m3b-'))
+    try {
+      expect(() =>
+        corePlugin(ctx, { dbFile: join(rootA, 'state.db'), settingsFile: join(rootB, 'forge-settings.json') }),
+      ).toThrow(SettingsPathInvalidError)
+      expect(existsSync(join(rootB, 'forge-settings.json'))).toBe(false) // 拒绝零副作用
+    } finally {
+      rmSync(rootA, { recursive: true, force: true })
+      rmSync(rootB, { recursive: true, force: true })
     }
   })
 })
