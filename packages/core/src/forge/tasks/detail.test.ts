@@ -59,10 +59,10 @@ function seedFullTask(): string {
   seedFeature(d, { slug: 'f1', status: 'in-progress' })
   d.prepare(
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, priority,
-       estimated_time, vars_json, source_task_id, blocked_reason, main_session, breaking,
-       coverage, complexity, surface_key, surface_type, feature_id, created_at, updated_at)
+       estimated_time, vars_json, source_task_id, blocked_reason, breaking,
+       coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
      VALUES ('tid-1', 'f1', '2.1', '标题', 'coding-feature', 'in_progress', ?, 'P1', '4h',
-       ?, NULL, NULL, 1, 0, 0.9, 'low', 'web', 'web', 'f-f1',
+       ?, NULL, NULL, 0, 0.9, 'low', 'web', 'web', 'feature', 'f-f1', 'expedition',
        '2026-10-06T08:00:00.000Z', '2026-10-06T09:00:00.000Z')`,
   ).run(
     '描述锚点 docs/features/f1/design/tech-design.md 与未注册 docs/gone/x.md',
@@ -254,8 +254,8 @@ describe('AC3 refs 水化边界（vars·description 锚点提取）', () => {
 
     d.prepare(
       `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, vars_json,
-         feature_id, created_at, updated_at)
-       VALUES ('tid-2', 'f1', '1.2', 't', 'doc', 'pending', ?, ?, 'f-f1',
+         source_kind, source_id, mode, created_at, updated_at)
+       VALUES ('tid-2', 'f1', '1.2', 't', 'doc', 'pending', ?, ?, 'feature', 'f-f1', 'expedition',
          '2026-10-06T08:00:00.000Z', '2026-10-06T08:00:00.000Z')`,
     ).run(
       '见 a/b/c.md 与 a/b/c.md 重复',

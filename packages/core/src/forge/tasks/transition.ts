@@ -12,12 +12,12 @@
 // 记录 → 恢复钩子（→completed/skipped 同挂——C3 与 submitTask 钩子同族，2.4 复用本导出）→
 // 相位重算；闭包尾部（提交后）emitTasksChanged。一律 prepared statements。
 import type Database from 'better-sqlite3'
-import type { FeatureStatus, TaskRef, TaskSnapshot, TaskStatus, TransitionTaskInput } from '@dsh-forge/contracts'
+import type { TaskRef, TaskSnapshot, TaskStatus, TransitionTaskInput } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { ReasonRequiredError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
-import { resolveTaskById, toTaskSnapshot } from './query.js'
+import { resolvePhaseGuardFeature, resolveTaskById, toTaskSnapshot } from './query.js'
 import { assertTransitionAllowed, SATISFYING_TASK_STATUSES } from './state-machine.js'
 
 export type { TasksVerbDeps }
@@ -99,24 +99,19 @@ export async function transitionTask(deps: TasksVerbDeps, input: TransitionTaskI
     //    （taskDetail.allowedTransitions）同一纯函数，零漂移；to === current 同路拒绝
     assertTransitionAllowed(row.task_status, input.toStatus, 'human')
 
-    // ④ 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护）
-    const feature = db
-      .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
-        `SELECT id, slug, feature_status FROM features WHERE id = ?`,
-      )
-      .get(row.feature_id)
-    if (feature === undefined) {
-      // FK 保证不可达（tasks.feature_id REFERENCES features——开库 foreign_key_check 兜底）——
-      // 数据漂移防御面：fail-loud 整体回滚（与 addTask sourceAncestry 环防御同口径）
-      throw new Error(`feature 行缺席（FK 漂移）：${row.feature_id}`)
+    // ④ 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护；律四：proposal 容器
+    //    无相位域 → 守卫与重算整体跳过——resolvePhaseGuardFeature 单源判别，行缺席 fail-loud
+    //    数据漂移防御面与 addTask sourceAncestry 环防御同口径）
+    const feature = resolvePhaseGuardFeature(db, row)
+    if (feature !== undefined) {
+      const before = readPhaseInput(db, feature.id)
+      assertPhaseInvariant({
+        featureStatus: feature.feature_status,
+        docKinds: before.docKinds,
+        taskStatuses: before.taskStatuses,
+        featureSlug: feature.slug,
+      })
     }
-    const before = readPhaseInput(db, row.feature_id)
-    assertPhaseInvariant({
-      featureStatus: feature.feature_status,
-      docKinds: before.docKinds,
-      taskStatuses: before.taskStatuses,
-      featureSlug: feature.slug,
-    })
 
     // ⑤ 转移 + transition 记录（actor='ui'——通道推断；reason 审计列必带）
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(input.toStatus, now, row.id)
@@ -131,19 +126,22 @@ export async function transitionTask(deps: TasksVerbDeps, input: TransitionTaskI
     }
 
     // ⑦ 相位重算（§6-29 触发器清单含 transitionTask——人类 skip/reject 改变任务分布；
-    //    恢复钩子同事务同 feature——同 feature 边服务不变量下单一受影响 feature）
-    const after = readPhaseInput(db, row.feature_id)
-    const derived = deriveFeaturePhase({
-      current: feature.feature_status,
-      docKinds: after.docKinds,
-      taskStatuses: after.taskStatuses,
-    })
-    if (derived !== feature.feature_status) {
-      db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
-        derived,
-        now,
-        row.feature_id,
-      )
+    //    恢复钩子同事务同容器——同容器边服务不变量下单一受影响 feature；律四：proposal
+    //    容器无相位域跳过）
+    if (feature !== undefined) {
+      const after = readPhaseInput(db, feature.id)
+      const derived = deriveFeaturePhase({
+        current: feature.feature_status,
+        docKinds: after.docKinds,
+        taskStatuses: after.taskStatuses,
+      })
+      if (derived !== feature.feature_status) {
+        db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
+          derived,
+          now,
+          feature.id,
+        )
+      }
     }
 
     // ⑧ 快照（写后重读——taskStatus/updatedAt 新值）

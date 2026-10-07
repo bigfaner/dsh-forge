@@ -31,7 +31,9 @@ export interface TasksQueryDeps {
   readonly store: ForgeWorkspaceStore
 }
 
-/** tasks 行存储形状（snake_case → TaskSnapshot 映射唯一落点；2.4/2.5 写动词同域复用） */
+/** tasks 行存储形状（snake_case → TaskSnapshot 映射唯一落点；2.4/2.5 写动词同域复用）。
+ *  M3（1.2）：source_kind + source_id 通用源头双列取代 feature_id；+mode（创建时快照）
+ *  +ac_json（AC gate 数据面）；main_session 砍除（裁决⑦）。 */
 export interface TaskStorageRow {
   id: string
   slug: string
@@ -40,18 +42,20 @@ export interface TaskStorageRow {
   task_type: TaskType
   task_status: TaskStatus
   task_desc: string | null
+  ac_json: string | null
   priority: string | null
   estimated_time: string | null
   vars_json: string | null
   source_task_id: string | null
   blocked_reason: string | null
-  main_session: number
   breaking: number
   coverage: number | null
   complexity: string
   surface_key: string | null
   surface_type: string | null
-  feature_id: string
+  source_kind: 'feature' | 'proposal'
+  source_id: string
+  mode: string | null
   created_at: string
   updated_at: string
 }
@@ -72,9 +76,9 @@ interface TaskRecordStorageRow {
   created_at: string
 }
 
-export const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, task_desc, priority, estimated_time,
-  vars_json, source_task_id, blocked_reason, main_session, breaking, coverage, complexity,
-  surface_key, surface_type, feature_id, created_at, updated_at`
+export const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority, estimated_time,
+  vars_json, source_task_id, blocked_reason, breaking, coverage, complexity,
+  surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at`
 
 /**
  * tasks 行 → TaskSnapshot（INTEGER 0/1 → boolean；*_json → 解码形；NULL → 键缺席）。
@@ -87,8 +91,8 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     taskId: row.id,
     slug: row.slug,
     localId: row.local_id,
-    // M3 容器垫片：M2 schema = feature 单轨（slug ≡ feature.slug）；source 双列随 1.2 到场
-    source: { kind: 'feature', slug: row.slug },
+    // M3 容器双轨：source.kind 承载行 source_kind（slug ≡ 容器 slug 服务不变量——任务 slug 恒等值）
+    source: { kind: row.source_kind, slug: row.slug },
     title: row.title,
     taskType: row.task_type,
     taskStatus: row.task_status,
@@ -98,7 +102,8 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     ...(row.vars_json !== null ? { vars: JSON.parse(row.vars_json) as Record<string, string> } : {}),
     ...(row.source_task_id !== null ? { sourceTaskId: row.source_task_id } : {}),
     ...(row.blocked_reason !== null ? { blockedReason: row.blocked_reason } : {}),
-    // mode 快照 / acceptanceCriteria（ac_json）：列随 1.2 schema v1 直改到场——垫片期键缺席
+    ...(row.mode !== null ? { mode: row.mode as TaskSnapshot['mode'] } : {}),
+    ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as string[] } : {}),
     breaking: row.breaking === 1,
     ...(row.coverage !== null ? { coverage: row.coverage } : {}),
     complexity: row.complexity as TaskSnapshot['complexity'],
@@ -111,26 +116,65 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
 
 /**
  * 任务容器水化（M3 Interface 1：queryTask/taskDetail 增 container——诊断消息数据源）。
- * M2 schema 垫片：恒 feature 容器（title/summary/feature_status 就 feature 行水化，
- * mode = 恒远征硬编码——成链门语义）；proposal 容器随 1.2/2.x source 双列到场。
+ * source 双列 kind 判别：feature 容器 → features 行（phase = feature_status；mode 恒远征——
+ * 裁决⑥无 mode 列，成链门保证）；proposal 容器 → proposals 行（mode = proposals.mode·
+ * NULL 键缺席；无相位域——律四 proposal 容器 phase 键缺席）。source_id 必命中 kind 对应表
+ * （服务不变量——多态引用无 DB FK）→ 行缺席 = 数据漂移 fail-loud（claim/transition 同口径）。
  */
 export function hydrateTaskContainer(db: Database.Database, row: TaskStorageRow): TaskContainerSummary {
-  const feature = db
-    .prepare<unknown[], { slug: string; title: string; summary: string | null; feature_status: FeatureStatus }>(
-      `SELECT slug, title, summary, feature_status FROM features WHERE id = ?`,
+  if (row.source_kind === 'feature') {
+    const feature = db
+      .prepare<unknown[], { slug: string; title: string; summary: string | null; feature_status: FeatureStatus }>(
+        `SELECT slug, title, summary, feature_status FROM features WHERE id = ?`,
+      )
+      .get(row.source_id)
+    if (feature === undefined) {
+      throw new Error(`feature 行缺席（source 漂移）：${row.source_id}`) // fail-loud（claim/transition 同口径）
+    }
+    return {
+      kind: 'feature',
+      slug: feature.slug,
+      title: feature.title,
+      ...(feature.summary !== null ? { summary: feature.summary } : {}),
+      mode: 'expedition', // feature 容器恒远征（裁决⑥——无 mode 列，成链门保证）
+      phase: feature.feature_status,
+    }
+  }
+  const proposal = db
+    .prepare<unknown[], { slug: string; title: string; mode: string | null }>(
+      `SELECT slug, title, mode FROM proposals WHERE id = ?`,
     )
-    .get(row.feature_id)
-  if (feature === undefined) {
-    throw new Error(`feature 行缺席（FK 漂移）：${row.feature_id}`) // fail-loud（claim/transition 同口径）
+    .get(row.source_id)
+  if (proposal === undefined) {
+    throw new Error(`proposal 行缺席（source 漂移）：${row.source_id}`) // fail-loud（同口径）
   }
   return {
-    kind: 'feature',
-    slug: feature.slug,
-    title: feature.title,
-    ...(feature.summary !== null ? { summary: feature.summary } : {}),
-    mode: 'expedition', // feature 容器恒远征（裁决⑥——无 mode 列，成链门保证）
-    phase: feature.feature_status,
+    kind: 'proposal',
+    slug: proposal.slug,
+    title: proposal.title,
+    ...(proposal.mode !== null ? { mode: proposal.mode as TaskContainerSummary['mode'] } : {}),
   }
+}
+
+/**
+ * 相位守卫目标解析（律四：相位推导机仅 feature 容器参与——proposal 容器无相位域）。
+ * feature 容器 → 受影响 feature 行（fail-loud·claim/submit/transition 相位断言/重算共用）；
+ * proposal 容器 → undefined（守卫与重算整体跳过）。M2 语义等价垫片（1.2）：M2 行恒 feature。
+ */
+export function resolvePhaseGuardFeature(
+  db: Database.Database,
+  row: TaskStorageRow,
+): { id: string; slug: string; feature_status: FeatureStatus } | undefined {
+  if (row.source_kind !== 'feature') return undefined
+  const feature = db
+    .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
+      `SELECT id, slug, feature_status FROM features WHERE id = ?`,
+    )
+    .get(row.source_id)
+  if (feature === undefined) {
+    throw new Error(`feature 行缺席（source 漂移）：${row.source_id}`) // fail-loud（同口径）
+  }
+  return feature
 }
 
 /**

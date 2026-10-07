@@ -17,9 +17,10 @@
 //   localId 主段 N≥2 的任务须存在更早阶段的直接前置；fix-N/disc-N 非数值 localId 豁免，
 //   对拍 IsBusinessTask 面；M3 DAG 视图同层并行认领的分层前提诊断）。
 //
-// 子图口径：该 feature 全部 tasks（feature_id 归属）/ edges（等待方 ∈ 子图）/ records（任务
-// ∈ 子图）；links 无独立不变量（纯关联事实，唯一写源 claim 的 upsert-ignore 幂等行）——
-// 不全库复检（2026-10-06 用户裁决：大仓不扫，写时增量断言承重漂移防护）。
+// 子图口径：该 feature 全部 tasks（M3 1.2 垫片：source_kind='feature' AND source_id 归属）/
+// edges（等待方 ∈ 子图）/ records（任务 ∈ 子图）；links 无独立不变量（纯关联事实，唯一写源
+// claim 的 upsert-ignore 幂等行）——不全库复检（2026-10-06 用户裁决：大仓不扫，写时增量断言
+// 承重漂移防护）。
 //
 // 同步核心（非 async）：better-sqlite3 天然同步；发现面 post-ingestion 挂点为同步回调
 // （fail-soft try/catch 包装），异步 Promise 的逃逸拒绝会绕过记账——装配层（index.ts）直调
@@ -96,22 +97,25 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     throw new TasksFeatureNotFoundError({ projectId: input.projectId, featureSlug: input.featureSlug })
   }
 
-  // 子图行集（创建序确定性——违规清单稳定）
+  // 子图行集（创建序确定性——违规清单稳定；M3 1.2 垫片：feature 容器 = source 双列特例）
   const tasks = db
     .prepare<unknown[], SubTaskRow>(
-      `SELECT id, slug, local_id, task_status, task_type FROM tasks WHERE feature_id = ? ORDER BY created_at, id`,
+      `SELECT id, slug, local_id, task_status, task_type FROM tasks
+       WHERE source_kind = 'feature' AND source_id = ? ORDER BY created_at, id`,
     )
     .all(feature.id)
   const edges = db
     .prepare<unknown[], SubEdgeRow>(
       `SELECT e.task_id, e.prerequisite_id FROM task_edges e
-       JOIN tasks t ON t.id = e.task_id WHERE t.feature_id = ? ORDER BY e.task_id, e.prerequisite_id`,
+       JOIN tasks t ON t.id = e.task_id
+       WHERE t.source_kind = 'feature' AND t.source_id = ? ORDER BY e.task_id, e.prerequisite_id`,
     )
     .all(feature.id)
   const verbsByTask = new Map<string, Set<string>>()
   for (const r of db
     .prepare<unknown[], { task_id: string; verb: string }>(
-      `SELECT r.task_id, r.verb FROM task_records r JOIN tasks t ON t.id = r.task_id WHERE t.feature_id = ?`,
+      `SELECT r.task_id, r.verb FROM task_records r JOIN tasks t ON t.id = r.task_id
+       WHERE t.source_kind = 'feature' AND t.source_id = ?`,
     )
     .all(feature.id)) {
     const set = verbsByTask.get(r.task_id)

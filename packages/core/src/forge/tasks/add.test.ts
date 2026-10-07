@@ -29,7 +29,7 @@ const rows = (sql: string, ...args: unknown[]): unknown[] =>
   h!.db.prepare(sql).all(...args) as unknown[]
 
 describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属校验', () => {
-  it('常规新建全链：uuid + slug ≡ feature slug + pending + 字段映射 + add record + 相位 prd→tasks + 事件单发', async () => {
+  it('常规新建全链：uuid + slug ≡ 容器 slug + pending + 字段映射（source 双列 + mode 快照 + ac_json）+ add record + 相位 prd→tasks + 事件单发', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'f1' }) // prd、无文档无任务——推导机不动点
     const r = await add({
@@ -38,6 +38,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       title: '示例任务',
       type: 'coding-feature',
       taskDesc: '描述',
+      acceptanceCriteria: ['全部测试通过', 'lint 零告警'],
       priority: 'P0',
       estimatedTime: '2h',
       vars: { K: 'V' },
@@ -51,9 +52,9 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     expect(r.taskId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     const row = h!.db
       .prepare<unknown[], Record<string, unknown>>(
-        `SELECT slug, local_id, title, task_type, task_status, task_desc, priority, estimated_time,
-           vars_json, source_task_id, main_session, breaking, coverage, complexity, surface_key,
-           surface_type, feature_id FROM tasks WHERE id = ?`,
+        `SELECT slug, local_id, title, task_type, task_status, task_desc, ac_json, priority, estimated_time,
+           vars_json, source_task_id, breaking, coverage, complexity, surface_key,
+           surface_type, source_kind, source_id, mode FROM tasks WHERE id = ?`,
       )
       .get(r.taskId) as Record<string, unknown>
     expect(row).toMatchObject({
@@ -63,18 +64,25 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       task_type: 'coding-feature',
       task_status: 'pending',
       task_desc: '描述',
+      ac_json: '["全部测试通过","lint 零告警"]', // M3（1.2）：AC gate 数据面
       priority: 'P0',
       estimated_time: '2h',
       vars_json: '{"K":"V"}',
       source_task_id: null,
-      main_session: 0, // M3：输入面砍除（裁决⑦）——垫片恒 0，列随 1.2 schema 退役
       breaking: 1,
       coverage: 0.8,
       complexity: 'high',
       surface_key: 'web',
       surface_type: 'web',
     })
-    expect(row.feature_id).toBe('f-f1')
+    // M3（1.2）：source 双列（feature 容器特例）+ mode 创建时快照（恒远征·裁决⑥）；
+    // main_session 砍除（裁决⑦）——列不存在
+    expect(row.source_kind).toBe('feature')
+    expect(row.source_id).toBe('f-f1')
+    expect(row.mode).toBe('expedition')
+    expect(
+      h!.db.prepare(`SELECT COUNT(*) AS n FROM pragma_table_info('tasks') WHERE name = 'main_session'`).get(),
+    ).toEqual({ n: 0 })
     // add record（actor='plugin-tool'——add 为 tool 专属动词，通道即 actor；无 from/to）
     expect(rows(`SELECT verb, actor, from_status, to_status FROM task_records WHERE task_id = ?`, r.taskId)).toEqual([
       { verb: 'add', actor: 'plugin-tool', from_status: null, to_status: null },
@@ -129,6 +137,19 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     expect(err).toBeInstanceOf(TasksFeatureNotFoundError)
     expect((err as TasksFeatureNotFoundError).code).toBe('ERR_FEATURE_NOT_FOUND')
     expect((err as TasksFeatureNotFoundError).data).toEqual({ projectId: P(), featureSlug: 'ghost' })
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
+  })
+
+  it('写入校验锚（1.2 AC5）：proposal 容器写入动词面 = 2.4 扩展点 → fail-loud 拒绝 + 零行写入', async () => {
+    const add = svc()
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'p1' },
+      title: 't',
+      type: 'coding-feature',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain('proposal 容器写入动词面落地于 M3 2.4')
     expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
   })
 

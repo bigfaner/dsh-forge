@@ -1,7 +1,8 @@
 // 任务 1.2 测试 —— 工作区库 schema 蓝本对齐 pin（AC1 / G1-12：每工作区 DB 布局
 // schema.sql ↔ WORKSPACE_MIGRATIONS 逐条，防漂移）。
-// 权威蓝本：docs/features/dsh-forge-m2-pipeline/design/schema.sql
-// （七域表 + schema_meta + app_key_logs 基建表 + 索引 ×6 + append-only 双触发器）。
+// 权威蓝本：docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql（M3 终态——
+// v1 直改裁决③：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器；
+// FORGE_DB_SCHEMA_VERSION = 1 不变、无迁移路径、存量 dogfood 库废弃手工删除）。
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './migrations.js'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../../')
-const BLUEPRINT = 'docs/features/dsh-forge-m2-pipeline/design/schema.sql'
+const BLUEPRINT = 'docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql'
 
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
@@ -51,7 +52,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(actual).toEqual(expected)
   })
 
-  it('九表 + 六索引 + 双触发器全量承载（七域表 + schema_meta + app_key_logs 基建表）', () => {
+  it('十表 + 七索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs 基建表）', () => {
     const tables = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TABLE/i.test(norm(s))),
     )
@@ -61,9 +62,9 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     const triggers = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TRIGGER/i.test(norm(s))),
     )
-    expect(tables).toHaveLength(9)
-    expect(indexes).toHaveLength(6)
-    expect(triggers).toHaveLength(2)
+    expect(tables).toHaveLength(10)
+    expect(indexes).toHaveLength(7)
+    expect(triggers).toHaveLength(4)
   })
 
   it('迁移版本序列从 1 连续递增至 FORGE_DB_SCHEMA_VERSION（独立版本线，前向单向）', () => {

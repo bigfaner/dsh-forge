@@ -27,7 +27,6 @@ import type Database from 'better-sqlite3'
 import type {
   ClaimTaskInput,
   ClaimTaskResult,
-  FeatureStatus,
   TaskPriority,
   TaskPrerequisiteSummary,
 } from '@dsh-forge/contracts'
@@ -37,7 +36,14 @@ import { DependenciesUnmetError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
 import { dispatchDigest } from './prompt/digest.js'
-import { TASK_COLUMNS, resolveTaskById, resolveTaskRef, toTaskSnapshot, type TaskStorageRow } from './query.js'
+import {
+  TASK_COLUMNS,
+  resolvePhaseGuardFeature,
+  resolveTaskById,
+  resolveTaskRef,
+  toTaskSnapshot,
+  type TaskStorageRow,
+} from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
 
 export type { TasksVerbDeps }
@@ -154,11 +160,12 @@ function phaseOf(localId: string): number | null {
 function derivePhaseSummary(db: Database.Database, row: TaskStorageRow): string | undefined {
   const currentPhase = phaseOf(row.local_id)
   if (currentPhase === null || currentPhase <= 1) return undefined
+  if (row.source_kind !== 'feature') return undefined // 律四：proposal 容器无相位域
   const statuses = db
     .prepare<unknown[], { local_id: string; task_status: string }>(
-      `SELECT local_id, task_status FROM tasks WHERE feature_id = ?`,
+      `SELECT local_id, task_status FROM tasks WHERE source_kind = 'feature' AND source_id = ?`,
     )
-    .all(row.feature_id)
+    .all(row.source_id)
   let maxCompleted = 0
   for (const t of statuses) {
     if (t.task_status !== 'completed' || !BUSINESS_LOCAL_ID.test(t.local_id)) continue
@@ -180,11 +187,12 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     if (input.taskRef !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
-      // M3 容器垫片：容器限定盲选 = feature 容器按 slug 限定（M2 语义等价）；proposal 容器
-      // 双轨随 1.2/2.4 source 双列到场（M2 schema 下 slug 与成链 feature 同名不可分——fail-loud）
+      // M3 容器双轨（1.2 垫片）：容器限定盲选 = feature 容器按 slug 限定（M2 语义等价）；
+      // proposal 容器限定 = 2.4 写动词面到场前 fail-loud（M2 行恒 feature——slug 与成链
+      // feature 同名不可分）
       if (input.source !== undefined && input.source.kind !== 'feature') {
         throw new Error(
-          `claimTask: proposal 容器限定落地于 M3 1.2/2.4（当前 schema = M2 feature 单轨）：${input.source.slug}`,
+          `claimTask: proposal 容器限定落地于 M3 2.4（写入动词面扩展——当前动词恒 feature 单轨）：${input.source.slug}`,
         )
       }
       row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.source?.slug)
@@ -207,7 +215,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       coverage: row.coverage ?? undefined,
       phaseSummary: derivePhaseSummary(db, row),
       blockers: prereqs.length > 0 ? prereqs : undefined,
-      mainSession: row.main_session === 1,
+      // main_session 砍除（M3 裁决⑦）：标记行不再有 main-session 分支（1.2 schema 直改伴随）
       breaking: row.breaking === 1,
       sourceTask: sourceRef,
     })
@@ -219,38 +227,36 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // agent 面矩阵先验（pending/blocked → in_progress 合法；终态/挂起态拒绝）
       assertTransitionAllowed(row.task_status, 'in_progress', 'agent')
 
-      // 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护）
-      const feature = db
-        .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
-          `SELECT id, slug, feature_status FROM features WHERE id = ?`,
-        )
-        .get(row.feature_id)
-      if (feature === undefined) {
-        throw new Error(`feature 行缺席（FK 漂移）：${row.feature_id}`) // fail-loud（transitionTask 同口径）
+      // 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护；律四：proposal 容器
+      // 无相位域 → 守卫与重算整体跳过——resolvePhaseGuardFeature 单源判别）
+      const feature = resolvePhaseGuardFeature(db, row)
+      if (feature !== undefined) {
+        const before = readPhaseInput(db, feature.id)
+        assertPhaseInvariant({
+          featureStatus: feature.feature_status,
+          docKinds: before.docKinds,
+          taskStatuses: before.taskStatuses,
+          featureSlug: feature.slug,
+        })
       }
-      const before = readPhaseInput(db, row.feature_id)
-      assertPhaseInvariant({
-        featureStatus: feature.feature_status,
-        docKinds: before.docKinds,
-        taskStatuses: before.taskStatuses,
-        featureSlug: feature.slug,
-      })
 
       db.prepare(`UPDATE tasks SET task_status = 'in_progress', updated_at = ? WHERE id = ?`).run(now, row.id)
 
       // 相位重算（§6-29 触发器清单含 claimTask——pending 池入活跃集 → in-progress）
-      const after = readPhaseInput(db, row.feature_id)
-      const derived = deriveFeaturePhase({
-        current: feature.feature_status,
-        docKinds: after.docKinds,
-        taskStatuses: after.taskStatuses,
-      })
-      if (derived !== feature.feature_status) {
-        db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
-          derived,
-          now,
-          row.feature_id,
-        )
+      if (feature !== undefined) {
+        const after = readPhaseInput(db, feature.id)
+        const derived = deriveFeaturePhase({
+          current: feature.feature_status,
+          docKinds: after.docKinds,
+          taskStatuses: after.taskStatuses,
+        })
+        if (derived !== feature.feature_status) {
+          db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
+            derived,
+            now,
+            feature.id,
+          )
+        }
       }
     }
 

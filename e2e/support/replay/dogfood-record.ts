@@ -325,7 +325,8 @@ export interface DogfoodSeedTask {
   readonly taskDesc?: string
 }
 
-/** tasks 行直写（core harness seedTask 全字段扩展——slug ≡ feature slug 不变量沿袭） */
+/** tasks 行直写（core harness seedTask 全字段扩展——slug ≡ feature slug 不变量沿袭；
+ *  M3 1.2：source 双列 + mode 快照直写——与 addTask 写路径同形） */
 export function seedDogfoodTaskRow(
   db: Database.Database,
   featureSlug: string,
@@ -336,8 +337,8 @@ export function seedDogfoodTaskRow(
   const ts = new Date().toISOString()
   db.prepare(
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, priority,
-       feature_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, (SELECT id FROM features WHERE slug = ?), ?, ?)`,
+       source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, 'feature', (SELECT id FROM features WHERE slug = ?), 'expedition', ?, ?)`,
   ).run(
     id,
     featureSlug,

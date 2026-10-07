@@ -11,11 +11,12 @@ import { createTasksHarness, seedEdge, seedFeature, seedRecord, seedTask } from 
 import { TasksFeatureNotFoundError } from './errors.js'
 import { validateFeatureTasks } from './validate.js'
 
-/** 直插越界 slug 行（slug 列 ≢ feature slug 场景——harness 种行恒守不变量，破坏须直写） */
+/** 直插越界 slug 行（slug 列 ≢ feature slug 场景——harness 种行恒守不变量，破坏须直写；
+ *  M3 1.2：source 双列直写——slug 与 source 解析容器 slug 不一致即违规） */
 function insertMisSluggedTask(db: Database.Database, featureId: string): void {
   db.prepare(
-    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-     VALUES ('t-rogue', 'other-feature', '1.2', '越界行', 'coding-feature', 'pending', ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+     VALUES ('t-rogue', 'other-feature', '1.2', '越界行', 'coding-feature', 'pending', 'feature', ?, 'expedition', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
   ).run(featureId)
 }
 

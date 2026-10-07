@@ -10,11 +10,12 @@
 // tool 专属动词（Interface 7——add 不上 RPC），add 记录 actor 恒 'plugin-tool'；auto-block =
 // 写路径内聚的系统效果（不经转移校验面——state-machine 注记），actor 'core'。
 //
-// 顺序（事务内）：feature 解析 → sourceTask 解析（同 feature 归属）→ 任务级去重（纯读命中即
-// 返回 reused=true——老 forge「Dedup is a pure read」平移）→ dependsOn 解析（同 feature 前置）
-// → localId 分配（常规数值顺延 / fix-N·disc-N 语义前缀）→ 链深 ≤6 → 增量环校验（无 dependsOn
-// → O(1) 结构性无环；dependsOn × block-source 组合 → 自 D 沿既有出边可达性 DFS 找 S，§6-14）
-// → 相位漂移增量断言（先于写）→ 写入 → 相位重算（单调只进推导机单源）。
+// 顺序（事务内）：容器解析（resolveTaskContainer 写入校验锚——1.2 AC5）→ sourceTask 解析
+// （同容器归属）→ 任务级去重（纯读命中即返回 reused=true——老 forge「Dedup is a pure read」
+// 平移）→ dependsOn 解析（同容器前置）→ localId 分配（常规数值顺延 / fix-N·disc-N 语义前缀）
+// → 链深 ≤6 → 增量环校验（无 dependsOn → O(1) 结构性无环；dependsOn × block-source 组合 →
+// 自 D 沿既有出边可达性 DFS 找 S，§6-14）→ 相位漂移增量断言（先于写）→ 写入（M3：source 双列
+// + mode 快照 + ac_json）→ 相位重算（单调只进推导机单源）。
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type {
@@ -48,7 +49,8 @@ export interface TasksVerbDeps {
 /** fix 链深上限（C6 用户裁决：≤6，较老 forge Max nesting 3 放宽） */
 export const FIX_CHAIN_DEPTH_LIMIT = 6
 
-/** 任务行最小定位形状（解析/去重/链计数消费；全列读面归 query/读动词） */
+/** 任务行最小定位形状（解析/去重/链计数消费；全列读面归 query/读动词）。
+ *  M3（1.2）：feature_id → source_kind + source_id 通用源头双列。 */
 interface TaskKeyRow {
   id: string
   slug: string
@@ -56,7 +58,41 @@ interface TaskKeyRow {
   task_status: TaskStatus
   task_type: TaskType
   source_task_id: string | null
-  feature_id: string
+  source_kind: 'feature' | 'proposal'
+  source_id: string
+}
+
+/** 语义等价判据（M2 同容器校验 → M3 source 双列）：source_kind 判别后 source_id 相等 */
+function sameContainer(row: TaskKeyRow, kind: 'feature' | 'proposal', sourceId: string): boolean {
+  return row.source_kind === kind && row.source_id === sourceId
+}
+
+/**
+ * 容器解析与写入校验锚（1.2 AC5 / 不变量①：tasks.slug ≡ 容器 slug + source_id 必命中
+ * source_kind 对应表——多态引用无 DB FK，写入时校验承载）。返回 {kind, sourceId, slug, mode}：
+ * slug 即 tasks.slug 写入值（≡ 容器 slug）；mode = 创建时容器 mode 快照。
+ * M3 垫片（1.2）：feature 容器 = M2 语义等价特例（slug→features 行解析即「必命中」证明；
+ * mode 恒 'expedition'——裁决⑥）；proposal 容器写入动词面 = 2.4 扩展消费点（此处 fail-loud）。
+ */
+export function resolveTaskContainer(
+  db: Database.Database,
+  projectId: string,
+  source: { kind: 'feature' | 'proposal'; slug: string },
+): { kind: 'feature'; sourceId: string; slug: string; mode: 'expedition'; featureStatus: FeatureStatus } {
+  if (source.kind !== 'feature') {
+    throw new Error(
+      `addTask: proposal 容器写入动词面落地于 M3 2.4（schema source 双列已就位——容器解析扩展消费点）：${source.slug}`,
+    )
+  }
+  const feature = db
+    .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
+      `SELECT id, slug, feature_status FROM features WHERE slug = ?`,
+    )
+    .get(source.slug)
+  if (feature === undefined) {
+    throw new TasksFeatureNotFoundError({ projectId, featureSlug: source.slug })
+  }
+  return { kind: 'feature', sourceId: feature.id, slug: feature.slug, mode: 'expedition', featureStatus: feature.feature_status }
 }
 
 /** 自然键复合呈现（'slug/localId'——dispatchPrompt TASK_ID / 环路径节点同口径） */
@@ -165,7 +201,8 @@ function naturalKeysByIds(db: Database.Database, ids: readonly string[]): Map<st
 }
 
 /** feature 相位聚合读取（推导机输入快照——事务内单源读；与 features 域同构，域内就近重述；
- *  2.5 transitionTask 写前断言/写后重算同域复用） */
+ *  2.5 transitionTask 写前断言/写后重算同域复用）。M3（1.2）垫片：feature 容器 =
+ *  source 双列特例（source_kind='feature' AND source_id）。 */
 export function readPhaseInput(db: Database.Database, featureId: string): {
   docKinds: DocKind[]
   taskStatuses: TaskStatus[]
@@ -175,7 +212,9 @@ export function readPhaseInput(db: Database.Database, featureId: string): {
     .all(featureId)
     .map((r) => r.doc_kind)
   const taskStatuses = db
-    .prepare<unknown[], { task_status: TaskStatus }>(`SELECT task_status FROM tasks WHERE feature_id = ?`)
+    .prepare<unknown[], { task_status: TaskStatus }>(
+      `SELECT task_status FROM tasks WHERE source_kind = 'feature' AND source_id = ?`,
+    )
     .all(featureId)
     .map((r) => r.task_status)
   return { docKinds, taskStatuses }
@@ -184,7 +223,7 @@ export function readPhaseInput(db: Database.Database, featureId: string): {
 /** 源链计数（沿 source_task_id 上溯——链深 = source 边数；根先序返回；漂移环防御 fail-loud） */
 function sourceAncestry(db: Database.Database, sourceId: string): TaskKeyRow[] {
   const byId = db.prepare<unknown[], TaskKeyRow>(
-    `SELECT id, slug, local_id, task_status, task_type, source_task_id, feature_id FROM tasks WHERE id = ?`,
+    `SELECT id, slug, local_id, task_status, task_type, source_task_id, source_kind, source_id FROM tasks WHERE id = ?`,
   )
   const collected: TaskKeyRow[] = []
   const visited = new Set<string>([sourceId])
@@ -206,33 +245,22 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
   const now = new Date().toISOString()
 
   const result = withTransaction(db, (): AddTaskResult => {
-    // ① 容器解析（M3 契约垫片：feature 容器 = M2 语义等价特例——source.kind 判别后按 slug 归属
-    //    校验；proposal 容器 = M3 双轨，schema source 双列随 1.2 到场前 fail-loud 拒绝）
-    if (input.source.kind !== 'feature') {
-      throw new Error(
-        `addTask: proposal 容器任务落地于 M3 1.2/2.4（当前 schema = M2 feature 单轨）：${input.source.slug}`,
-      )
-    }
-    const feature = db
-      .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
-        `SELECT id, slug, feature_status FROM features WHERE slug = ?`,
-      )
-      .get(input.source.slug)
-    if (feature === undefined) {
-      throw new TasksFeatureNotFoundError({ projectId: input.projectId, featureSlug: input.source.slug })
-    }
+    // ① 容器解析 + 写入校验锚（1.2 AC5：tasks.slug ≡ 容器 slug + source_id 必命中 source_kind
+    //    对应表——resolveTaskContainer 单点承载；proposal 分支 = 2.4 扩展消费点）
+    const container = resolveTaskContainer(db, input.projectId, input.source)
+    const feature = { id: container.sourceId, slug: container.slug, feature_status: container.featureStatus }
 
-    // ② sourceTask 解析（UNIQUE(slug, local_id) 查捞 → taskId；命中他 feature 同键 = 同 feature
-    //    边服务不变量（er-diagram 差异清单 #9）不满足 → 按未命中拒）
+    // ② sourceTask 解析（UNIQUE(slug, local_id) 查捞 → taskId；命中他容器同键 = 同容器边
+    //    服务不变量（er-diagram 差异清单 #9·M3 source 双列同规）不满足 → 按未命中拒）
     let source: TaskKeyRow | undefined
     if (input.sourceTask !== undefined) {
       source = db
         .prepare<unknown[], TaskKeyRow>(
-          `SELECT id, slug, local_id, task_status, task_type, source_task_id, feature_id FROM tasks
+          `SELECT id, slug, local_id, task_status, task_type, source_task_id, source_kind, source_id FROM tasks
            WHERE slug = ? AND local_id = ?`,
         )
         .get(input.sourceTask.slug, input.sourceTask.localId)
-      if (source === undefined || source.feature_id !== feature.id) {
+      if (source === undefined || !sameContainer(source, container.kind, container.sourceId)) {
         throw new TaskNotFoundError({
           projectId: input.projectId,
           taskRef: input.sourceTask,
@@ -257,12 +285,12 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       }
     }
 
-    // ④ dependsOn 解析（同 feature 前置声明——slug 作用域查捞天然排除跨 feature 边）
+    // ④ dependsOn 解析（同容器前置声明——slug 作用域查捞天然排除跨容器边）
     const depends: TaskKeyRow[] = []
     for (const localId of input.dependsOn ?? []) {
       const dep = db
         .prepare<unknown[], TaskKeyRow>(
-          `SELECT id, slug, local_id, task_status, task_type, source_task_id, feature_id FROM tasks
+          `SELECT id, slug, local_id, task_status, task_type, source_task_id, source_kind, source_id FROM tasks
            WHERE slug = ? AND local_id = ?`,
         )
         .get(input.source.slug, localId)
@@ -331,16 +359,16 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       featureSlug: feature.slug,
     })
 
-    // ⑨ tasks 行（id uuid 生成 + slug ≡ feature.slug + 缺省 pending/medium/false 族）；
-    //    UNIQUE(slug, local_id) 冲突 → ERR_TASK_EXISTS（分配器顺延构造下为防御面——并发面缺席
-    //    单写者，映射承诺 AC 契约）
+    // ⑨ tasks 行（id uuid 生成 + slug ≡ 容器 slug + 缺省 pending/medium/false 族；M3 source
+    //    双列 + mode 创建时快照 + ac_json AC gate 数据面）；UNIQUE(slug, local_id) 冲突 →
+    //    ERR_TASK_EXISTS（分配器顺延构造下为防御面——并发面缺席单写者，映射承诺 AC 契约）
     const taskId = randomUUID()
     try {
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, priority,
-           estimated_time, vars_json, source_task_id, blocked_reason, main_session, breaking,
-           coverage, complexity, surface_key, surface_type, feature_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
+           estimated_time, vars_json, source_task_id, blocked_reason, breaking,
+           coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         taskId,
         feature.slug,
@@ -348,17 +376,19 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         input.title,
         input.type,
         input.taskDesc ?? null,
+        input.acceptanceCriteria === undefined ? null : JSON.stringify(input.acceptanceCriteria),
         input.priority ?? null,
         input.estimatedTime ?? null,
         input.vars === undefined ? null : JSON.stringify(input.vars),
         source?.id ?? null,
-        0, // main_session：M3 裁决⑦砍除——输入面已移除，列随 1.2 schema v1 直改退役（恒 0 垫片）
         input.breaking === true ? 1 : 0,
         input.coverage ?? null,
         input.complexity ?? 'medium',
         input.surfaceKey ?? null,
         input.surfaceType ?? null,
-        feature.id,
+        container.kind,
+        container.sourceId,
+        container.mode, // 创建时容器 mode 快照（feature 容器恒 'expedition'——裁决⑥；人工变更不回溯·律三）
         now,
         now,
       )

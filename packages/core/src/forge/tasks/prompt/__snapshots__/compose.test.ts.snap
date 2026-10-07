@@ -373,7 +373,7 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 COVERAGE: percentage 80%
 PRIORITY: P1
-MARKERS: fix-of m2-pipeline/2.4, main-session, breaking
+MARKERS: fix-of m2-pipeline/2.4, breaking
 </task-context>
 
 <type-policy>
@@ -1159,7 +1159,7 @@ CATEGORY: doc
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
-MARKERS: fix-of m2-pipeline/2.4, main-session, breaking
+MARKERS: fix-of m2-pipeline/2.4, breaking
 </task-context>
 
 <type-policy>
@@ -1519,7 +1519,7 @@ CATEGORY: gate
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
-MARKERS: fix-of m2-pipeline/2.4, main-session, breaking
+MARKERS: fix-of m2-pipeline/2.4, breaking
 </task-context>
 
 <type-policy>
@@ -1959,7 +1959,7 @@ CATEGORY: validation
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
-MARKERS: fix-of m2-pipeline/2.4, main-session, breaking
+MARKERS: fix-of m2-pipeline/2.4, breaking
 </task-context>
 
 <type-policy>

@@ -101,7 +101,7 @@ export function resolveCoverage(taskType: TaskType, coverage?: number): Coverage
 
 // ─────────────────────────── 合成输入（动态块九键的注入面） ───────────────────────────
 
-/** 合成入参（九键载荷——恒在场键：TASK_ID/TYPE/CATEGORY；其余条件键缺席省行） */
+/** 合成入参（动态块载荷——恒在场键：TASK_ID/TYPE/CATEGORY；其余条件键缺席省行） */
 export interface DispatchPromptInput {
   /** feature slug（slug 列 ≡ feature slug） */
   slug: string
@@ -117,7 +117,6 @@ export interface DispatchPromptInput {
   phaseSummary?: string
   /** BLOCKERS 快照（前置依赖现状——领取瞬间取数注入；空数组省行） */
   blockers?: readonly TaskPrerequisiteSummary[]
-  mainSession?: boolean
   breaking?: boolean
   /** fix 链源（标记行 fix-of 呈现；非 fix 任务缺省） */
   sourceTask?: TaskRef
@@ -130,11 +129,11 @@ function renderBlockers(blockers: readonly TaskPrerequisiteSummary[]): string {
   return blockers.map((b) => `${b.localId} ${b.taskStatus}`).join('; ')
 }
 
-/** 标记行值：fix-of <slug>/<localId>, main-session, breaking（在场者按序拼接） */
+/** 标记行值：fix-of <slug>/<localId>, breaking（在场者按序拼接。M3 裁决⑦：main_session
+ *  砍除——标记行不再有 main-session 分支） */
 function renderMarkers(input: DispatchPromptInput): string | undefined {
   const markers: string[] = []
   if (input.sourceTask) markers.push(`fix-of ${input.sourceTask.slug}/${input.sourceTask.localId}`)
-  if (input.mainSession) markers.push('main-session')
   if (input.breaking) markers.push('breaking')
   return markers.length > 0 ? markers.join(', ') : undefined
 }

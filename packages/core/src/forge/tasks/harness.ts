@@ -70,7 +70,8 @@ export function seedFeature(
   return id
 }
 
-/** 种 task 行（同域直写——受控初值：状态/类型/谱系；slug ≡ feature slug 不变量沿袭） */
+/** 种 task 行（同域直写——受控初值：状态/类型/谱系；slug ≡ feature slug 不变量沿袭。
+ *  M3 1.2：source 双列 + mode 快照——与 addTask 写路径同形（feature 容器恒 'expedition'）） */
 export function seedTask(
   db: Database.Database,
   featureSlug: string,
@@ -81,8 +82,8 @@ export function seedTask(
   const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_task_id,
-       feature_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT id FROM features WHERE slug = ?), ?, ?)`,
+       source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'feature', (SELECT id FROM features WHERE slug = ?), 'expedition', ?, ?)`,
   ).run(
     id,
     featureSlug,

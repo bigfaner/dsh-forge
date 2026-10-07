@@ -135,7 +135,8 @@ function isUniqueSlugViolation(cause: unknown): boolean {
   )
 }
 
-/** feature 相位聚合读取（推导机输入快照——事务内单源读） */
+/** feature 相位聚合读取（推导机输入快照——事务内单源读。M3 1.2 垫片：feature 容器 =
+ *  source 双列特例——source_kind='feature' AND source_id）。 */
 function readPhaseInput(
   db: Database.Database,
   featureId: string,
@@ -145,7 +146,9 @@ function readPhaseInput(
     .all(featureId)
     .map((r) => r.doc_kind)
   const taskStatuses = db
-    .prepare<unknown[], { task_status: TaskStatus }>(`SELECT task_status FROM tasks WHERE feature_id = ?`)
+    .prepare<unknown[], { task_status: TaskStatus }>(
+      `SELECT task_status FROM tasks WHERE source_kind = 'feature' AND source_id = ?`,
+    )
     .all(featureId)
     .map((r) => r.task_status)
   return { docKinds, taskStatuses }
@@ -272,10 +275,12 @@ export function createFeaturesService(deps: FeaturesServiceDeps): ForgeFeaturesS
       const db = deps.store.ensureOpen(q.projectId)
       const rows = db.prepare<unknown[], FeatureStorageRow>(`${SELECT_FEATURE}`).all()
       // 聚合水化（单遍分组）：任务七态分布 + 文档统计 + 谱系 slug
+      //（M3 1.2 垫片：feature 容器任务 = source 双列特例——直挂任务不计入 feature 分布）
       const statusCounts = new Map<string, Map<TaskStatus, number>>()
       for (const r of db
         .prepare<unknown[], { feature_id: string; task_status: TaskStatus; n: number }>(
-          `SELECT feature_id, task_status, COUNT(*) AS n FROM tasks GROUP BY feature_id, task_status`,
+          `SELECT source_id AS feature_id, task_status, COUNT(*) AS n FROM tasks
+           WHERE source_kind = 'feature' GROUP BY source_id, task_status`,
         )
         .all()) {
         let per = statusCounts.get(r.feature_id)

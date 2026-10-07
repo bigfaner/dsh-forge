@@ -15,12 +15,12 @@
 // 边界注记：gate 载荷原样落账不服务内判红（gate 执行归 executor 技能纪律——失败分诊 = blocked
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
 // 与 transitionTask 2.5 同裁决）；files/gate 缺省 = 列 NULL（files 回填归读面 git 查找）。
-import type { FeatureStatus, SubmitTaskInput, SubmitTaskResult } from '@dsh-forge/contracts'
+import type { SubmitTaskInput, SubmitTaskResult } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { ReasonRequiredError, SummaryRequiredError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
-import { resolveTaskRef } from './query.js'
+import { resolvePhaseGuardFeature, resolveTaskRef } from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
 import { runRestoreHook } from './transition.js'
 
@@ -51,22 +51,18 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     const toStatus = input.result === 'success' ? 'completed' : 'blocked'
     assertTransitionAllowed(row.task_status, toStatus, 'agent')
 
-    // ④ 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护）
-    const feature = db
-      .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
-        `SELECT id, slug, feature_status FROM features WHERE id = ?`,
-      )
-      .get(row.feature_id)
-    if (feature === undefined) {
-      throw new Error(`feature 行缺席（FK 漂移）：${row.feature_id}`) // fail-loud（transitionTask 同口径）
+    // ④ 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护；律四：proposal 容器
+    //    无相位域 → 守卫与重算整体跳过——resolvePhaseGuardFeature 单源判别）
+    const feature = resolvePhaseGuardFeature(db, row)
+    if (feature !== undefined) {
+      const before = readPhaseInput(db, feature.id)
+      assertPhaseInvariant({
+        featureStatus: feature.feature_status,
+        docKinds: before.docKinds,
+        taskStatuses: before.taskStatuses,
+        featureSlug: feature.slug,
+      })
     }
-    const before = readPhaseInput(db, row.feature_id)
-    assertPhaseInvariant({
-      featureStatus: feature.feature_status,
-      docKinds: before.docKinds,
-      taskStatuses: before.taskStatuses,
-      featureSlug: feature.slug,
-    })
 
     // ⑤ 转移 + submit 记录（结构化负载：files/gate/commit + reason|summary + 执行会话——
     //    与 claim 的派发会话相异可判，SC6③ 双源）
@@ -96,19 +92,22 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
         ? runRestoreHook(db, { satisfiedTaskId: row.id, now })
         : []
 
-    // ⑦ 相位重算（§6-29：success 全终态 → completed；blocked 活跃集保持 in-progress）
-    const after = readPhaseInput(db, row.feature_id)
-    const derived = deriveFeaturePhase({
-      current: feature.feature_status,
-      docKinds: after.docKinds,
-      taskStatuses: after.taskStatuses,
-    })
-    if (derived !== feature.feature_status) {
-      db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
-        derived,
-        now,
-        row.feature_id,
-      )
+    // ⑦ 相位重算（§6-29：success 全终态 → completed；blocked 活跃集保持 in-progress；
+    //    律四：proposal 容器无相位域跳过）
+    if (feature !== undefined) {
+      const after = readPhaseInput(db, feature.id)
+      const derived = deriveFeaturePhase({
+        current: feature.feature_status,
+        docKinds: after.docKinds,
+        taskStatuses: after.taskStatuses,
+      })
+      if (derived !== feature.feature_status) {
+        db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
+          derived,
+          now,
+          feature.id,
+        )
+      }
     }
 
     return { taskId: row.id, status: toStatus, restored }

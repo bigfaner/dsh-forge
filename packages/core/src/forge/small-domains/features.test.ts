@@ -48,11 +48,11 @@ function seedFeature(
   return id
 }
 
-/** 种 task 行（feature 谱系 + 状态受控） */
+/** 种 task 行（feature 谱系 + 状态受控。M3 1.2：source 双列 + mode 快照直写） */
 function seedTask(db: Database.Database, featureId: string, slug: string, localId: string, status: TaskStatus): void {
   db.prepare(
-    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'coding.feature', ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'coding.feature', ?, 'feature', ?, 'expedition', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
   ).run(`t-${Math.random().toString(36).slice(2, 8)}`, slug, localId, `任务 ${localId}`, status, featureId)
 }
 

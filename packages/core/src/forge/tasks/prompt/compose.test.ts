@@ -29,7 +29,6 @@ function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
       { slug: 'm2-pipeline', localId: '2.1', taskStatus: 'completed' },
       { slug: 'm2-pipeline', localId: '1.gate', taskStatus: 'skipped' },
     ],
-    mainSession: true,
     breaking: true,
     sourceTask: { slug: 'm2-pipeline', localId: '2.4' },
   }
@@ -206,8 +205,9 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
     expect(maintain).toContain('COVERAGE: maintain')
   })
 
-  it('标记行 = fix-of / main-session / breaking（在场者拼接）', () => {
-    expect(contextBody).toContain('MARKERS: fix-of m2-pipeline/2.4, main-session, breaking')
+  it('标记行 = fix-of / breaking（在场者拼接；M3 裁决⑦ main-session 砍除）', () => {
+    expect(contextBody).toContain('MARKERS: fix-of m2-pipeline/2.4, breaking')
+    expect(contextBody).not.toContain('main-session')
   })
 
   it('条件键缺席即省行（最小夹具仅恒在场键）', () => {

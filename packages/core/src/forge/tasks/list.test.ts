@@ -290,10 +290,10 @@ describe('AC6 EQP 三查询命中索引（EXPLAIN QUERY PLAN 断言——SC2 数
       .join(' | ')
   }
 
-  it('① feature 作用域任务扫描 → idx_tasks_feature_status', () => {
+  it('① feature 容器作用域任务扫描 → idx_tasks_source_status（M3 更名——source 双列垫片）', () => {
     seedSevenStatuses()
     const detail = plan(SQL_TASKS_BY_FEATURE, 'f-f1')
-    expect(detail).toContain('idx_tasks_feature_status')
+    expect(detail).toContain('idx_tasks_source_status')
     expect(detail).not.toContain('SCAN tasks')
   })
 
@@ -332,8 +332,8 @@ describe('AC6 @500 任务直读核心侧基准（SC2 数据面 ≤2s——直读
         const id = `t-big-${localId}`
         ids.push(id)
         d.prepare(
-          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-           VALUES (?, 'big', ?, ?, 'coding-feature', ?, 'f-big', ?, ?)`,
+          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+           VALUES (?, 'big', ?, ?, 'coding-feature', ?, 'feature', 'f-big', 'expedition', ?, ?)`,
         ).run(
           id,
           localId,

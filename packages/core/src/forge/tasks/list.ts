@@ -17,7 +17,7 @@
 //
 // 四域互禁 import 彼此（Hard Rule）——small-domains/list-utils 不外溢，search 匹配与排序
 // 域内单份同口径落位（行为 pin 于本域测试）。EQP 锚三枚（SC2 数据面——list.test 断言）：
-// SQL_TASKS_BY_FEATURE（→ idx_tasks_feature_status）/ RECORDS_BY_TASK_SQL（query.ts →
+// SQL_TASKS_BY_FEATURE（→ idx_tasks_source_status·M3 更名）/ RECORDS_BY_TASK_SQL（query.ts →
 // idx_records_task）/ LINKS_BY_SESSION_SQL（session-links.ts → idx_tsl_session）。
 import type Database from 'better-sqlite3'
 import {
@@ -45,8 +45,9 @@ export interface TasksListDeps {
   readonly store: ForgeWorkspaceStore
 }
 
-/** EQP 锚 ①：feature 作用域任务扫描（taskGraph.tasks 恒用；listTasks featureSlug 给定同基形） */
-export const SQL_TASKS_BY_FEATURE = `SELECT ${TASK_COLUMNS} FROM tasks WHERE feature_id = ?`
+/** EQP 锚 ①：feature 容器作用域任务扫描（taskGraph.tasks 恒用；listTasks source 给定同基形。
+ *  M3 1.2 垫片：feature 容器 = source 双列特例——命中 idx_tasks_source_status） */
+export const SQL_TASKS_BY_FEATURE = `SELECT ${TASK_COLUMNS} FROM tasks WHERE source_kind = 'feature' AND source_id = ?`
 
 /**
  * active 排序活跃度权重（PRD 流程二「in_progress → blocked → pending → … → completed」——
@@ -64,8 +65,8 @@ export const ACTIVE_STATUS_WEIGHT: Readonly<Record<TaskStatus, number>> = {
 }
 
 /** featureSlug → featureId 解析（未命中 = undefined → 读面空结果，零 404）。
- *  M3 容器垫片：feature 容器按 slug 解析（M2 语义等价）；proposal 容器 = M2 schema 下
- *  无直挂任务行 → 恒空结果（零 404 读面口径不变），source 双列随 1.2/2.5 泛化。 */
+ *  M3 1.2 垫片：feature 容器按 slug 解析（M2 语义等价）；proposal 容器读取面泛化归 2.5
+ *  （当前读面 = feature 单轨——proposal 容器 → 恒空结果，零 404 读面口径不变）。 */
 function resolveFeatureId(db: Database.Database, featureSlug: string): string | undefined {
   return db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(featureSlug)?.id
 }
@@ -83,8 +84,8 @@ function readTaskRows(db: Database.Database, q: ListTasksQuery): TaskStorageRow[
   if (q.source !== undefined) {
     const featureId = resolveContainerFeatureId(db, q.source)
     if (featureId === undefined) return []
-    clauses.push('feature_id = ?')
-    params.push(featureId)
+    clauses.push('source_kind = ?', 'source_id = ?')
+    params.push('feature', featureId)
   }
   if (q.statusFilter !== undefined && q.statusFilter.length > 0) {
     clauses.push(`task_status IN (${q.statusFilter.map(() => '?').join(', ')})`)
@@ -251,7 +252,8 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
     .prepare<unknown[], { task_status: TaskStatus; n: number }>(
       featureId === undefined
         ? `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks GROUP BY task_status`
-        : `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks WHERE feature_id = ? GROUP BY task_status`,
+        : `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks
+           WHERE source_kind = 'feature' AND source_id = ? GROUP BY task_status`,
     )
     .all(...(featureId === undefined ? [] : [featureId]))
   let total = 0
@@ -267,7 +269,7 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
 
 /** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */
 function countUnmetPending(db: Database.Database, featureId: string | undefined): number {
-  const scope = featureId === undefined ? '' : ' AND t.feature_id = ?'
+  const scope = featureId === undefined ? '' : ` AND t.source_kind = 'feature' AND t.source_id = ?`
   const args = featureId === undefined ? [] : [featureId]
   const row = db
     .prepare<unknown[], { n: number }>(
@@ -283,7 +285,7 @@ function countUnmetPending(db: Database.Database, featureId: string | undefined)
 }
 
 /** Interface 1 taskGraph：容器子图（TaskCard 全量水化 + 边三元组——DAG/泳道渲染源）。
- *  M3 容器垫片：feature 容器按 slug 解析；proposal 容器 → 空图（M2 无直挂行）。 */
+ *  M3 1.2 垫片：feature 容器按 slug 解析；proposal 容器 → 空图（读取面泛化归 2.5）。 */
 export async function taskGraph(deps: TasksListDeps, q: TaskGraphQuery): Promise<TaskGraph> {
   const db = deps.store.ensureOpen(q.projectId)
   if (q.source.kind !== 'feature') return { tasks: [], edges: [] }
@@ -295,7 +297,7 @@ export async function taskGraph(deps: TasksListDeps, q: TaskGraphQuery): Promise
     .prepare<unknown[], TaskGraphEdge>(
       `SELECT e.task_id AS taskId, e.prerequisite_id AS prerequisiteId, e.origin AS origin
        FROM task_edges e JOIN tasks t ON t.id = e.task_id
-       WHERE t.feature_id = ? ORDER BY e.task_id, e.prerequisite_id`,
+       WHERE t.source_kind = 'feature' AND t.source_id = ? ORDER BY e.task_id, e.prerequisite_id`,
     )
     .all(featureId)
   return { tasks, edges }

@@ -23,7 +23,7 @@ function freshPair(): { tasksHome: string; workspaceDir: string } {
 }
 
 describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）', () => {
-  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 九表 + schema v1 + busy_timeout', () => {
+  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 十表（M3 八域表）+ schema v1 + busy_timeout', () => {
     const { tasksHome, workspaceDir } = freshPair()
     const db = openForgeDb(tasksHome, workspaceDir)
     try {
@@ -37,6 +37,7 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
       expect(tables).toEqual([
         'app_key_logs',
         'feature_documents',
+        'feature_records',
         'features',
         'proposals',
         'schema_meta',

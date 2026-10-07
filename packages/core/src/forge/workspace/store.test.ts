@@ -46,13 +46,13 @@ function seedFeature(db: Database.Database, id = 'f1'): void {
 
 function seedTask(db: Database.Database, taskId = 't1'): void {
   db.prepare(
-    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', 'f1', ?, ?)`,
+    `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', 'feature', 'f1', 'expedition', ?, ?)`,
   ).run(taskId, 'demo-feature-f1', '1.1', '任务一', 'coding.feature', NOW, NOW)
 }
 
-describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发器 + FK/CHECK 负样例）', () => {
-  it('首开空目录：九表全部在场（七域表 + schema_meta + app_key_logs）', () => {
+describe('AC1 全 DDL 在临时库执行零错（十表 + 七索引 + 四触发器 + FK/CHECK 负样例）', () => {
+  it('首开空目录：十表全部在场（八域表 + schema_meta + app_key_logs）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const tables = db
@@ -64,6 +64,7 @@ describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发�
     expect(tables).toEqual([
       'app_key_logs',
       'feature_documents',
+      'feature_records',
       'features',
       'proposals',
       'schema_meta',
@@ -75,7 +76,7 @@ describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发�
     store.dispose()
   })
 
-  it('六索引全部创建（idx_* 前缀）', () => {
+  it('七索引全部创建（idx_* 前缀——M3：idx_tasks_source_status 取代 feature_status 形态）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const indexes = db
@@ -86,10 +87,11 @@ describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发�
       .map((r) => r.name)
     expect(indexes).toEqual([
       'idx_edges_prerequisite',
+      'idx_fr_feature',
       'idx_records_session',
       'idx_records_task',
-      'idx_tasks_feature_status',
       'idx_tasks_source',
+      'idx_tasks_source_status',
       'idx_tsl_session',
     ])
     store.dispose()
@@ -103,50 +105,67 @@ describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发�
     store.dispose()
   })
 
-  it('FK 全解析：引用不存在的 feature_id 被拒（FK 一律无 ON DELETE——负样例即 DML 校验证明）', () => {
+  it('FK 全解析：引用不存在的 feature 被拒（feature_records 谱系 FK——FK 一律无 ON DELETE 负样例即 DML 校验证明）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     expect(() =>
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, feature_id, created_at, updated_at)
-         VALUES ('t9', 's', '1', 't', 'coding.feature', 'missing-feature', ?, ?)`,
+        `INSERT INTO feature_records (feature_id, verb, actor, created_at, updated_at)
+         VALUES ('missing-feature', 'register', 'core', ?, ?)`,
       ).run(NOW, NOW),
     ).toThrowError(/FOREIGN KEY/)
     store.dispose()
   })
 
-  it('append-only 双触发器拒绝 UPDATE / DELETE（B.5 触发器 ABORT 锚）', () => {
+  it('append-only 四触发器拒绝 UPDATE / DELETE（feature_records + task_records 双表 ABORT 锚）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     seedFeature(db)
     seedTask(db)
     db.prepare(
+      `INSERT INTO feature_records (feature_id, verb, actor, created_at, updated_at) VALUES ('f1', 'register', 'core', ?, ?)`,
+    ).run(NOW, NOW)
+    expect(() =>
+      db.prepare(`UPDATE feature_records SET reason = 'x' WHERE feature_id = 'f1'`).run(),
+    ).toThrowError(/feature_records: append-only violation \(update\)/)
+    expect(() => db.prepare(`DELETE FROM feature_records WHERE feature_id = 'f1'`).run()).toThrowError(
+      /feature_records: append-only violation \(delete\)/,
+    )
+    db.prepare(
       `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at) VALUES ('t1', 'add', 'ui', ?, ?)`,
     ).run(NOW, NOW)
     expect(() =>
       db.prepare(`UPDATE task_records SET summary = 'x' WHERE task_id = 't1'`).run(),
-    ).toThrowError(/append-only violation \(update\)/)
+    ).toThrowError(/task_records: append-only violation \(update\)/)
     expect(() => db.prepare(`DELETE FROM task_records WHERE task_id = 't1'`).run()).toThrowError(
-      /append-only violation \(delete\)/,
+      /task_records: append-only violation \(delete\)/,
     )
     store.dispose()
   })
 
-  it('CHECK 全集负样例（七态任务态 / 六态 feature / 三值 origin / actor / priority）', () => {
+  it('CHECK 全集负样例（七态任务态 / source_kind / mode / 六态 feature / 三值 origin / actor / priority）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     seedFeature(db)
     const insertTask = db.prepare(
-      `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, priority, feature_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'f1', ?, ?)`,
+      `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, priority, source_kind, source_id, mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'f1', ?, ?, ?)`,
     )
-    expect(() => insertTask.run('a', 'demo-feature-f1', '1', 't', 'coding.feature', 'done', 'P0', NOW, NOW)).toThrowError(
+    expect(() => insertTask.run('a', 'demo-feature-f1', '1', 't', 'coding.feature', 'done', 'P0', 'feature', 'expedition', NOW, NOW)).toThrowError(
       /CHECK/,
     )
-    expect(() => insertTask.run('b', 'demo-feature-f1', '2', 't', 'coding.feature', 'pending', 'P9', NOW, NOW)).toThrowError(
+    expect(() => insertTask.run('b', 'demo-feature-f1', '2', 't', 'coding.feature', 'pending', 'P9', 'feature', 'expedition', NOW, NOW)).toThrowError(
       /CHECK/,
     )
-    expect(() => insertTask.run('c', 'demo-feature-f1', '3', 't', 'coding.feature', 'pending', 'P1', NOW, NOW)).not.toThrow()
+    expect(() => insertTask.run('c', 'demo-feature-f1', '3', 't', 'coding.feature', 'pending', 'P1', 'feature', 'expedition', NOW, NOW)).not.toThrow()
+    // M3 source_kind / mode CHECK（tasks.source_kind 双值；tasks.mode 双值或 NULL——快照列）
+    expect(() => insertTask.run('d', 'demo-feature-f1', '4', 't', 'coding.feature', 'pending', 'P1', 'sprint', null, NOW, NOW)).toThrowError(
+      /CHECK/,
+    )
+    expect(() => insertTask.run('e', 'demo-feature-f1', '5', 't', 'coding.feature', 'pending', 'P1', 'feature', 'raid', NOW, NOW)).toThrowError(
+      /CHECK/,
+    )
+    expect(() => insertTask.run('f', 'demo-feature-f1', '6', 't', 'coding.feature', 'pending', 'P1', 'feature', null, NOW, NOW)).not.toThrow()
 
     expect(() =>
       db
@@ -168,6 +187,12 @@ describe('AC1 全 DDL 在临时库执行零错（九表 + 六索引 + 双触发�
     expect(() =>
       db
         .prepare(`INSERT INTO task_records (task_id, verb, actor, created_at, updated_at) VALUES ('t1', 'add', ?, ?, ?)`)
+        .run('agent', NOW, NOW),
+    ).toThrowError(/CHECK/)
+
+    expect(() =>
+      db
+        .prepare(`INSERT INTO feature_records (feature_id, verb, actor, created_at, updated_at) VALUES ('f1', 'register', ?, ?, ?)`)
         .run('agent', NOW, NOW),
     ).toThrowError(/CHECK/)
     store.dispose()

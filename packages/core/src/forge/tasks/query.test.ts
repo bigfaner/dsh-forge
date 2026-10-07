@@ -27,11 +27,11 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
     seedTask(h!.db, 'f1', '1.0') // 真实谱系源（source_task_id FK 在场）
     h!.db
       .prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, priority,
-           estimated_time, vars_json, source_task_id, blocked_reason, main_session, breaking,
-           coverage, complexity, surface_key, surface_type, feature_id, created_at, updated_at)
-         VALUES ('tid-1', 'f1', '2.1', '标题', 'coding-feature', 'blocked', '描述', 'P1', '4h',
-           '{"A":"1"}', 't-f1-1.0', 'lint 失败', 1, 0, 0.9, 'low', 'web', 'web', 'f-f1',
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
+           estimated_time, vars_json, source_task_id, blocked_reason, breaking,
+           coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
+         VALUES ('tid-1', 'f1', '2.1', '标题', 'coding-feature', 'blocked', '描述', '["通过全部测试"]', 'P1', '4h',
+           '{"A":"1"}', 't-f1-1.0', 'lint 失败', 0, 0.9, 'low', 'web', 'web', 'feature', 'f-f1', 'expedition',
            '2026-10-06T08:00:00.000Z', '2026-10-06T09:00:00.000Z')`,
       )
       .run()
@@ -45,12 +45,13 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
       taskType: 'coding-feature',
       taskStatus: 'blocked',
       taskDesc: '描述',
+      acceptanceCriteria: ['通过全部测试'], // M3（1.2）：ac_json 解码形——AC gate 数据面
       priority: 'P1',
       estimatedTime: '4h',
       vars: { A: '1' },
       sourceTaskId: 't-f1-1.0',
       blockedReason: 'lint 失败',
-      // M3：main_session 砍除（快照面无此键）；mode/ac_json 列随 1.2 schema 到场——垫片期缺省
+      mode: 'expedition', // M3（1.2）：mode 创建时快照（feature 容器恒远征）；main_session 砍除无此键
       breaking: false,
       coverage: 0.9,
       complexity: 'low',

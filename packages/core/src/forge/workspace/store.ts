@@ -54,10 +54,12 @@ export interface ForgeWorkspaceStore {
 /** 库文件名（部署：{tasksHome}/{flatten}@{hash8}/forge.db——schema.sql 头注） */
 const FORGE_DB_FILENAME = 'forge.db'
 
-/** 结构健全性检查·表在场清单（九表 = 七域表 + schema_meta + app_key_logs 基建表；字母序） */
+/** 结构健全性检查·表在场清单（十表 = 八域表 + schema_meta + app_key_logs 基建表；字母序——
+ *  M3 v1 直改 + feature_records） */
 const EXPECTED_TABLES: readonly string[] = [
   'app_key_logs',
   'feature_documents',
+  'feature_records',
   'features',
   'proposals',
   'schema_meta',
@@ -91,7 +93,7 @@ function assertStructureSound(db: Database.Database): void {
     .map((r) => r.name)
   if (tables.length !== EXPECTED_TABLES.length || tables.some((t, i) => t !== EXPECTED_TABLES[i])) {
     throw new Error(
-      `工作区库结构健全性检查失败：表在场不符（期望九表 [${EXPECTED_TABLES.join(', ')}]，实际 [${tables.join(', ')}]）`,
+      `工作区库结构健全性检查失败：表在场不符（期望十表 [${EXPECTED_TABLES.join(', ')}]，实际 [${tables.join(', ')}]）`,
     )
   }
 }
