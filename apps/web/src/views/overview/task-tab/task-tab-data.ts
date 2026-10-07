@@ -104,7 +104,7 @@ export function tasksTabLoadKey(input: {
   readonly sort: OverviewSort
   readonly nonce: number
 }): string {
-  return `${input.projectId}#${input.featureSlug ?? ''}#${input.view}#${[...input.statusFilter].join(',')}|${input.sort}#${input.nonce}`
+  return `${input.projectId}#${input.featureSlug ?? ''}#${input.view}#${[...input.statusFilter].join(',')}|${input.search}|${input.sort}#${input.nonce}`
 }
 
 /** 在途态（纯函数）：清场（feature/项目切换）= 归零骨架；否则旧内容 + busy */

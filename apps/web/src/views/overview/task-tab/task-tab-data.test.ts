@@ -177,9 +177,10 @@ describe('装载态落点（纯函数——hook 消费形）', () => {
 
   it('tasksTabLoadKey：feature/视图/过滤/搜索/排序/nonce 全入键', () => {
     const base = { projectId: 'p-1', featureSlug: 'f', view: 'list' as const, statusFilter: [], search: '', sort: 'active' as const, nonce: 0 }
-    expect(tasksTabLoadKey(base)).toBe('p-1#f#list#|active#0')
-    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#f#list#completed,blocked|active#0')
+    expect(tasksTabLoadKey(base)).toBe('p-1#f#list#||active#0')
+    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#f#list#completed,blocked||active#0')
     expect(tasksTabLoadKey({ ...base, view: 'dag' })).not.toBe(tasksTabLoadKey(base))
+    expect(tasksTabLoadKey({ ...base, search: 'fix' })).not.toBe(tasksTabLoadKey(base))
     expect(tasksTabLoadKey({ ...base, nonce: 1 })).not.toBe(tasksTabLoadKey(base))
   })
 
