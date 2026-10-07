@@ -6,7 +6,7 @@
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
-import type { ForgeProposalsService, ForgeTasksService } from '@dsh-forge/contracts'
+import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 
 /** dsh 官方 ContentBlock 的文本块子面（output.render 产物） */
 export interface TextContentBlock {
@@ -51,9 +51,12 @@ export interface ToolAgentFace {
   readonly session: ToolSessionFace
 }
 
-/** tool 执行上下文（官方 ToolRunContext 子面——插件仅消费会话身份） */
+/** tool 执行上下文（官方 ToolRunContext 子面——会话身份 + 取消信号（3.4 dispatchTask
+ *  spawn 透传；官方执行身份面携带，缺席兜底新建）） */
 export interface ToolExecFace {
   readonly agent?: ToolAgentFace
+  /** 官方 exec.signal（协作取消——驱动器 spawn 请求必填位的透传源） */
+  readonly signal?: AbortSignal
 }
 
 /** 注册面 tool 定义（官方 ToolDefinition 消费字段子集：name/description/parameters/output/execute） */
@@ -96,6 +99,11 @@ export interface ForgeContextFace {
   forgeTasks: ForgeTasksService
   /** core 提案域服务（运行期 Cordis inject 解析——写动词 tool 专属面） */
   forgeProposals: ForgeProposalsService
+  /** core 项目域服务（3.4——deriveTaskStoreDir 单源消费：事件日志落位目录派生，插件不复制） */
+  forgeProjects: ProjectServiceM2
+  /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
+   *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
+  readonly reflect?: { get(name: string, strict?: boolean): unknown }
   /** dsh 官方 tool 注册面 */
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */

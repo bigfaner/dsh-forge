@@ -19,6 +19,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2",
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/path-key": "workspace:*"
   },

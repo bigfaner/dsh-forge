@@ -11,6 +11,7 @@ import type { ForgeToolDeps } from './index.js'
 import { optionalBoolean, requireArgsObject, requiredString } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
+import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
 const TOOL = 'queryTask'
 
@@ -178,9 +179,9 @@ export function createQueryTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
     },
     output: { schema: QUERY_TASK_OUTPUT_SCHEMA, render: renderQueryResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<QueryTaskResult | ForgeToolFailure> {
+      const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseQueryTaskArgs(args)
-        const session = sessionContextOf(exec)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const include =
           parsed.include_prerequisites === true ||
@@ -200,7 +201,7 @@ export function createQueryTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(include !== undefined ? { include } : {}),
         }
         return deps.tasks.queryTask(input)
-      })
+      }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))
     },
   }
 }

@@ -196,3 +196,26 @@ describe('addTask 返回面渲染（formatOk/formatErr 快照）', () => {
     expect(text).toBe('✗ ERR_CYCLE_DETECTED — 任务图成环\ncycle: f/2.2 → f/T → f/2.2')
   })
 })
+
+// ─────────────────────────── 3.4 tool-error 事件发射 ───────────────────────────
+
+describe('addTask 事件发射（typed 错误 → tool-error；verb=addTask）', () => {
+  it('typed 服务错误 → tool-error（归属 = source_slug 容器）+ 失败 DTO 照常', async () => {
+    const events: import('@dsh-forge/contracts').ForgePluginEvent[] = []
+    const tasks = {
+      addTask: async () => {
+        throw Object.assign(new Error('容器不在场'), { code: 'ERR_FEATURE_NOT_FOUND', data: {} })
+      },
+    } as unknown as ForgeTasksService
+    const tool = createAddTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+    })
+    const out = await tool.execute({ source_kind: 'feature', source_slug: 'f1', title: 'T', type: 'coding-feature' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_FEATURE_NOT_FOUND' })
+    expect(events.map((e) => e.type)).toEqual(['tool-error'])
+    expect(events[0]).toMatchObject({ slug: 'f1', payload: { verb: 'addTask', code: 'ERR_FEATURE_NOT_FOUND' } })
+  })
+})

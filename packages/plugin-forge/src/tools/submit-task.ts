@@ -8,6 +8,8 @@
 // 歧义报告，拒）；commit_hash 平移。
 // sessionId 由 exec ctx 提取（执行会话——与派发会话相异可判）。
 // 返回面双友好（裁决⑨）：成功 formatOk；typed 服务错误 → 失败 DTO formatErr。
+// 3.4 事件缝：结算成功 → task-submitted（worker 自身会话 id——串联读法执行会话位）；
+// typed 错误 → tool-error（emitToolError；deps.events 缺席 = 零事件降级）。
 import type { SubmitTaskInput, SubmitTaskResult, TaskGateReport, TaskRef } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
@@ -21,6 +23,7 @@ import {
   requiredString,
 } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
+import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 import { requireProjectId, requireSessionId, sessionContextOf } from './session.js'
 
 const TOOL = 'submitTask'
@@ -166,11 +169,12 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
     },
     output: { schema: SUBMIT_TASK_OUTPUT_SCHEMA, render: renderSubmitResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<SubmitTaskResult | ForgeToolFailure> {
+      const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseSubmitTaskArgs(args)
-        const session = sessionContextOf(exec)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const sessionId = requireSessionId(session)
+        await deps.events?.prepare(session) // 会话目录记忆（事件日志落位——worker 会话语境）
         const taskRef: TaskRef = { slug: parsed.slug, localId: parsed.local_id }
         const gate = gateOf(parsed)
         const input: SubmitTaskInput = {
@@ -184,8 +188,22 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(gate !== undefined ? { gate } : {}),
           ...(parsed.commit_hash !== undefined ? { commitHash: parsed.commit_hash } : {}),
         }
-        return deps.tasks.submitTask(input)
-      })
+        const result = await deps.tasks.submitTask(input)
+        // task-submitted 事件（worker 自身会话 id——串联读法「submit = 执行会话」；AC gate 已过）
+        deps.events?.emit({
+          ts: Date.now(),
+          sessionId,
+          slug: parsed.slug,
+          type: 'task-submitted',
+          payload: {
+            taskKey: `${parsed.slug}/${parsed.local_id}`,
+            outcome: parsed.result,
+            ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+            ...(parsed.commit_hash !== undefined ? { commitHash: parsed.commit_hash } : {}),
+          },
+        })
+        return result
+      }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))
     },
   }
 }

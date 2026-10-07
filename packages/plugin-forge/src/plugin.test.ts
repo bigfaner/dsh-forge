@@ -1,10 +1,11 @@
-// 3.5 单测 —— 插件装配（AC1 inject 面 / 注册面集合 pin（claimTask 退役·drift #1——
-// M3 终态六 tool 的 3.5 切片 = 五在场，dispatchTask 注册面收口归 3.4；新面 pin =
-// 5.1 #17/#18）/ 参数 schema pin（容器双参 + 旧参删除机械断言）/ AC5 段注册）：
-// 临时 Cordis runtime（结构化最小面假宿主，knowledge plugin.test 同型）装配双 core
-// 服务桩 + 插件，验证 inject 声明、注册/disposer 全生命周期与 forge:pipeline 段。
+// 3.4/3.5 单测 —— 插件装配（AC1 inject 面（3.4 增 forgeProjects——事件日志落位目录
+// 单源派生；forgeSettings 可选消费不走 inject）/ 注册面集合 pin（M3 终态六 tool——
+// dispatchTask 3.4 补位成六；新面 pin = 5.1 #17/#18）/ 参数 schema pin（容器双参 +
+// 旧参删除机械断言）/ AC5 段注册）：临时 Cordis runtime（结构化最小面假宿主，
+// knowledge plugin.test 同型）装配 core 服务桩 + 插件，验证 inject 声明、注册/disposer
+// 全生命周期与 forge:pipeline 段。
 import { describe, expect, it } from 'vitest'
-import type { ForgeProposalsService, ForgeTasksService } from '@dsh-forge/contracts'
+import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
@@ -20,6 +21,9 @@ class TempRuntime {
     return {
       forgeTasks: {} as ForgeTasksService, // 桩：装配面不触方法
       forgeProposals: {} as ForgeProposalsService,
+      forgeProjects: {
+        deriveTaskStoreDir: async () => ({ dir: 'D:/containers/demo@abcd1234' }),
+      } as Pick<ProjectServiceM2, 'deriveTaskStoreDir'> as ProjectServiceM2,
       tools: {
         register: (d: ForgeToolDefinition) => {
           this.registeredTools.push(d)
@@ -49,12 +53,12 @@ function injectSatisfied(plugin: { inject: readonly string[] }, ctx: object): bo
   return plugin.inject.every((name) => name in ctx && (ctx as Record<string, unknown>)[name] !== undefined)
 }
 
-describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals 双服务）', () => {
-  it("inject 声明 = ['forgeTasks', 'forgeProposals', 'tools', 'systemPrompt']——core 面两域服务，其余为 dsh 官方面", () => {
-    expect([...forgePlugin.inject].sort()).toEqual(['forgeProposals', 'forgeTasks', 'systemPrompt', 'tools'])
+describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals + forgeProjects 三服务）', () => {
+  it("inject 声明 = ['forgeTasks', 'forgeProposals', 'forgeProjects', 'tools', 'systemPrompt']——core 面三域服务（3.4 增 forgeProjects），其余为 dsh 官方面", () => {
+    expect([...forgePlugin.inject].sort()).toEqual(['forgeProjects', 'forgeProposals', 'forgeTasks', 'systemPrompt', 'tools'])
   })
 
-  it('缺任一声明服务即不加载（Cordis service-availability 语义）；四服务齐备才装配', () => {
+  it('缺任一声明服务即不加载（Cordis service-availability 语义）；五服务齐备才装配', () => {
     const rt = new TempRuntime()
     const full = rt.ctx()
     expect(injectSatisfied(forgePlugin, full)).toBe(true)
@@ -66,12 +70,19 @@ describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals 双�
   })
 })
 
-describe('注册面集合 pin（M3 终态六 tool 的 3.5 切片：五在场 / 缺席面改写）', () => {
-  it('五 tool 注册且名 = Interface 4 列序（FORGE_TOOL_NAMES 单源；dispatchTask 归 3.4 补位成六）', () => {
+describe('注册面集合 pin（M3 终态六 tool：3.4 切片六在场 / 缺席面改写）', () => {
+  it('六 tool 注册且名 = Interface 4 列序（FORGE_TOOL_NAMES 单源——dispatchTask 3.4 补位成六）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     expect(rt.registeredTools.map((t) => t.name)).toEqual([...FORGE_TOOL_NAMES])
-    expect([...FORGE_TOOL_NAMES]).toEqual(['addTask', 'submitTask', 'queryTask', 'createProposal', 'transitionProposal'])
+    expect([...FORGE_TOOL_NAMES]).toEqual([
+      'addTask',
+      'submitTask',
+      'queryTask',
+      'createProposal',
+      'transitionProposal',
+      'dispatchTask',
+    ])
     dispose()
   })
 
@@ -94,7 +105,7 @@ describe('注册面集合 pin（M3 终态六 tool 的 3.5 切片：五在场 / �
   it('每 tool 形状齐备：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.registeredTools).toHaveLength(5)
+    expect(rt.registeredTools).toHaveLength(6)
     for (const tool of rt.registeredTools) {
       expect(tool.description.length, `${tool.name} description`).toBeGreaterThan(20)
       expect(tool.parameters.type).toBe('object')
@@ -195,21 +206,51 @@ describe('AC5 段注册（forge:pipeline / order 510）', () => {
     dispose()
   })
 
-  it('disposer 全注销（tool×5 + 段×1，各恰一次）', () => {
+  it('disposer 全注销（tool×6 + 段×1，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 5, sections: 1 })
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
   })
 })
 
 describe('createForgeTools 直装配（工厂面——注册器之外的单源消费）', () => {
-  it('deps 注入即得五 tool 定义组（键 = FORGE_TOOL_NAMES 列序）', () => {
+  it('deps 注入即得六 tool 定义组（键 = FORGE_TOOL_NAMES 列序；spawn 必给）', () => {
     const tools = createForgeTools({
       tasks: {} as ForgeTasksService,
       proposals: {} as ForgeProposalsService,
       resolveProjectId: () => undefined,
+      spawn: async () => {
+        throw new Error('not reached')
+      },
     })
     expect(Object.keys(tools)).toEqual([...FORGE_TOOL_NAMES])
+  })
+})
+
+
+// ─────────────────────────── 3.4 forgeSettings 可选消费（reflect.get 防御读取） ───────────────────────────
+
+describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——reflect.get 降级读取）', () => {
+  it('reflect 在场返回 get 函数对象：插件照常装配（settings 面进入 deps）', () => {
+    const rt = new TempRuntime()
+    const ctx = {
+      ...rt.ctx(),
+      reflect: { get: (name: string) => (name === 'forgeSettings' ? { get: async () => ({}) } : undefined) },
+    }
+    const dispose = forgePlugin(ctx)
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+  })
+
+  it('reflect.get 抛异常 / 返回非函数面：降级缺席不阻载（六 tool 照常注册）', () => {
+    const rt1 = new TempRuntime()
+    const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
+    expect(rt1.registeredTools).toHaveLength(6)
+    d1()
+    const rt2 = new TempRuntime()
+    const d2 = forgePlugin({ ...rt2.ctx(), reflect: { get: () => 'not-a-service' } })
+    expect(rt2.registeredTools).toHaveLength(6)
+    d2()
   })
 })

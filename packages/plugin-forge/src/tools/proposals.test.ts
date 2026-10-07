@@ -185,3 +185,44 @@ describe('transitionProposal', () => {
     expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED' })
   })
 })
+
+
+// ─────────────────────────── 3.4 tool-error 事件发射 ───────────────────────────
+
+describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () => {
+  it('createProposal：typed 错误 → tool-error（归属 = 提案 slug）+ 失败 DTO 照常', async () => {
+    const events: import('@dsh-forge/contracts').ForgePluginEvent[] = []
+    const proposals = {
+      createProposal: async () => {
+        throw Object.assign(new Error('提案已存在'), { code: 'ERR_PROPOSAL_NOT_FOUND', data: {} })
+      },
+    } as unknown as ForgeProposalsService
+    const tool = createCreateProposalTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals,
+      resolveProjectId: () => 'p-1',
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+    })
+    const out = await tool.execute({ slug: 'idea', title: 'T' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_PROPOSAL_NOT_FOUND' })
+    expect(events[0]).toMatchObject({ slug: 'idea', payload: { verb: 'createProposal' } })
+  })
+
+  it('transitionProposal：typed 错误 → tool-error（无 slug 参——归属 _pool 兜底）', async () => {
+    const events: import('@dsh-forge/contracts').ForgePluginEvent[] = []
+    const proposals = {
+      transitionProposal: async () => {
+        throw Object.assign(new Error('非法转移'), { code: 'ERR_INVALID_TRANSITION', data: {} })
+      },
+    } as unknown as ForgeProposalsService
+    const tool = createTransitionProposalTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals,
+      resolveProjectId: () => 'p-1',
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+    })
+    const out = await tool.execute({ proposal_id: 'pr-9', to_status: 'accepted' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_INVALID_TRANSITION' })
+    expect(events[0]).toMatchObject({ slug: '_pool', payload: { verb: 'transitionProposal' } })
+  })
+})

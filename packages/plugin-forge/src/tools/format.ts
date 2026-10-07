@@ -83,15 +83,28 @@ export function forgeToolFailureOf(e: unknown): ForgeToolFailure {
 }
 
 /**
- * 执行体包装（五 tool 共用）：typed 服务错误 → 失败 DTO（tool 返回面 formatErr 分支）；
+ * 执行体包装（六 tool 共用）：typed 服务错误 → 失败 DTO（tool 返回面 formatErr 分支）；
  * 无 code 的意外错误原样重抛（fail-loud——装配 bug 不静默转写）。
+ * onTypedError（3.4 事件缝）：捕获 typed 错误后、返回失败 DTO 前回调一次——
+ * tool-error 事件发射（→ 总线）唯一挂点（emitToolError；回调自身异常不影响返回面）。
  */
-export async function callToolFace<T>(op: () => Promise<T>): Promise<T | ForgeToolFailure> {
+export async function callToolFace<T>(
+  op: () => Promise<T>,
+  onTypedError?: (failure: ForgeToolFailure) => void,
+): Promise<T | ForgeToolFailure> {
   try {
     return await op()
   } catch (e) {
     if (errorCodeOf(e) === undefined) throw e
-    return forgeToolFailureOf(e)
+    const failure = forgeToolFailureOf(e)
+    if (onTypedError !== undefined) {
+      try {
+        onTypedError(failure)
+      } catch {
+        // 事件发射异常不吞失败面（emit 面自身 fail-loud 由调用方守卫兜底）
+      }
+    }
+    return failure
   }
 }
 

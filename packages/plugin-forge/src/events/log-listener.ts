@@ -52,8 +52,11 @@ export function forgeLogFileOf(containerDir: string, slug: string): string {
 /** 监听器依赖（注入的 tasksHome 语境——workspace paths 同源） */
 export interface ForgeLogListenerOptions {
   /** 容器库目录解析：返回 {tasksHome}/{flatten}@{hash8}（事件 → 工作区映射归装配方
-   *  闭包承载——本模块零 core import，derive-dir 单源不动） */
-  resolveContainerDir(event: ForgePluginEvent): string
+   *  闭包承载——本模块零 core import，derive-dir 单源不动）。
+   *  3.4 接线增补：undefined = 该事件会话未解析到容器库目录（sink.prepare 未达/
+   *  解析失败）——本行静默丢弃（fail-soft），**绝不回落相对路径**（join('', ...) 会
+   *  以进程 CWD 为根写散落文件——曾致仓库根 logs/ 污染，机械防线） */
+  resolveContainerDir(event: ForgePluginEvent): string | undefined
 }
 
 /** 日志监听器（订阅面 handler 形状；attachForgeLogListener 挂总线） */
@@ -68,7 +71,9 @@ export function createForgeLogListener(options: ForgeLogListenerOptions): ForgeL
     handle(event: ForgePluginEvent): void {
       try {
         const line = standardizeEvent(event)
-        const file = forgeLogFileOf(options.resolveContainerDir(event), line.slug)
+        const containerDir = options.resolveContainerDir(event)
+        if (containerDir === undefined || containerDir === '') return // 未解析会话：丢行不落相对路径
+        const file = forgeLogFileOf(containerDir, line.slug)
         mkdirSync(dirname(file), { recursive: true })
         appendFileSync(file, `${JSON.stringify(line)}\n`, 'utf8')
       } catch {

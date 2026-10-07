@@ -1,6 +1,6 @@
 # tools/
 
-定位：**业务** —— M3 终态六动词 tool 定义与参数 schema（消费 `ctx.forgeTasks` / `ctx.forgeProposals` 服务；knowledge tools 同型）。3.5 切片 = 五 tool（`dispatchTask` 注册面收口归 3.4）；`claim-task.ts` 已退役删除（drift #1——并入 dispatchTask 复合动词，core 服务 API 保留）。
+定位：**业务** —— M3 终态六动词 tool 定义与参数 schema（消费 `ctx.forgeTasks` / `ctx.forgeProposals` 服务；knowledge tools 同型）。3.4 起六员齐装：五直通动词 + `dispatch-task.ts` 复合派发动词（claim→收窄组装→in-process spawn→结算+池快照+halted 防线；spawn 真绑定 = `../spawn/in-process-driver.ts`，事件发射 = `../events/sink.ts`）；`claim-task.ts` 已退役删除（drift #1——并入 dispatchTask 复合动词，core 服务 API 保留）。
 
 3.5 已收口：
 - `faces.ts`（../faces.ts）—— 结构化最小面（对 dsh tools/systemPrompt 服务与 tool 定义形状的锚定；插件零 dsh 运行时包依赖）

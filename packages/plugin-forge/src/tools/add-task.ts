@@ -41,6 +41,7 @@ import {
   type ForgeToolFailure,
 } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
+import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
 const TOOL = 'addTask'
 
@@ -244,9 +245,9 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
     },
     output: { schema: ADD_TASK_OUTPUT_SCHEMA, render: renderAddTaskResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<AddTaskResult | ForgeToolFailure> {
+      const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseAddTaskArgs(args)
-        const session = sessionContextOf(exec)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const input: AddTaskInput = {
           projectId,
@@ -270,7 +271,7 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.surface_type !== undefined ? { surfaceType: parsed.surface_type } : {}),
         }
         return deps.tasks.addTask(input)
-      })
+      }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))
     },
   }
 }

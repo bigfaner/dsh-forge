@@ -11,6 +11,7 @@ import type { ForgeToolDeps } from './index.js'
 import { optionalEnum, optionalString, requireArgsObject, requiredString } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
+import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
 const TOOL = 'createProposal'
 
@@ -102,9 +103,9 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
           : renderProposalRow(`Proposal ${(value as ProposalRow).slug} registered [${(value as ProposalRow).proposalStatus}]`, value as ProposalRow),
     },
     async execute(args: unknown, exec: ToolExecFace): Promise<ProposalRow | ForgeToolFailure> {
+      const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseCreateProposalArgs(args)
-        const session = sessionContextOf(exec)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const input: CreateProposalInput = {
           projectId,
@@ -115,7 +116,7 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
           ...(parsed.mode !== undefined ? { mode: parsed.mode } : {}),
         }
         return deps.proposals.createProposal(input)
-      })
+      }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))
     },
   }
 }

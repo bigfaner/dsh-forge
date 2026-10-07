@@ -28,6 +28,7 @@ import {
 } from './format.js'
 import { proposalRowEntries } from './create-proposal.js'
 import { requireProjectId, sessionContextOf } from './session.js'
+import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
 const TOOL = 'transitionProposal'
 
@@ -117,9 +118,9 @@ export function createTransitionProposalTool(deps: ForgeToolDeps): ForgeToolDefi
     },
     output: { schema: TRANSITION_PROPOSAL_OUTPUT_SCHEMA, render: (_a, value) => renderTransitionResult(value) },
     async execute(args: unknown, exec: ToolExecFace): Promise<TransitionProposalResult | ForgeToolFailure> {
+      const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseTransitionProposalArgs(args)
-        const session = sessionContextOf(exec)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const input: TransitionProposalInput = {
           projectId,
@@ -128,7 +129,7 @@ export function createTransitionProposalTool(deps: ForgeToolDeps): ForgeToolDefi
           ...(parsed.superseded_by !== undefined ? { supersededBy: parsed.superseded_by } : {}),
         }
         return deps.proposals.transitionProposal(input)
-      })
+      }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))
     },
   }
 }

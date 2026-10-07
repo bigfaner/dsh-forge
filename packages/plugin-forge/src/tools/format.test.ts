@@ -152,3 +152,47 @@ describe('isForgeToolFailure（render 分支判别）', () => {
     expect(isForgeToolFailure(null)).toBe(false)
   })
 })
+
+
+// ─────────────────────────── 3.4 callToolFace onTypedError 钩子 ───────────────────────────
+
+describe('callToolFace onTypedError（tool-error 发射唯一挂点）', () => {
+  it('typed 错误 → 回调一次（失败 DTO）→ 返回 DTO；无 code 错误不回调；回调异常不影响返回面', async () => {
+    const seen: string[] = []
+    const typed = Object.assign(new Error('m'), { code: 'ERR_TASK_NOT_FOUND' })
+    const out1 = await callToolFace(
+      async () => {
+        throw typed
+      },
+      (f) => seen.push(f.code),
+    )
+    expect(out1).toMatchObject({ ok: false, code: 'ERR_TASK_NOT_FOUND' })
+    expect(seen).toEqual(['ERR_TASK_NOT_FOUND'])
+    // 无 code：原样重抛（fail-loud），零回调
+    await expect(
+      callToolFace(
+        async () => {
+          throw new Error('plain')
+        },
+        (f) => seen.push(f.code),
+      ),
+    ).rejects.toThrow(/plain/)
+    // 回调自身异常：吞没——失败 DTO 照常返回
+    const out2 = await callToolFace(
+      async () => {
+        throw typed
+      },
+      () => {
+        throw new Error('emit broken')
+      },
+    )
+    expect(out2).toMatchObject({ ok: false, code: 'ERR_TASK_NOT_FOUND' })
+  })
+
+  it('成功路径零回调', async () => {
+    const seen: string[] = []
+    const out = await callToolFace(async () => 'ok', (f) => seen.push(f.code))
+    expect(out).toBe('ok')
+    expect(seen).toEqual([])
+  })
+})

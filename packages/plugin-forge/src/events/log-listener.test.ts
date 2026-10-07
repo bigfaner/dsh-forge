@@ -266,3 +266,18 @@ describe('readForgeEventLog（JSONL 读回——串联读法载面）', () => {
     expect(events[0]?.type).toBe('tool-error')
   })
 })
+
+
+// ─────────────────────────── 3.4 接线增补：未解析目录 = 丢行不落相对路径 ───────────────────────────
+
+describe('resolveContainerDir 未解析（undefined/空串）——fail-soft 丢行', () => {
+  it('undefined 与空串两形：零文件写出（绝不以进程 CWD 为根写相对路径）', () => {
+    for (const dir of [undefined, '']) {
+      const listener = createForgeLogListener({ resolveContainerDir: () => dir })
+      expect(() =>
+        listener.handle({ ts: Date.now(), sessionId: 's', slug: 'c', type: 'no-ready-task', payload: {} }),
+      ).not.toThrow()
+      expect(existsSync(join(process.cwd(), 'logs', 'c.jsonl'))).toBe(false)
+    }
+  })
+})

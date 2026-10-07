@@ -145,3 +145,25 @@ describe('queryTask 返回面渲染（formatOk：快照 + 容器 + 四节）', (
     expect(text).toContain('sessions: s1 (link)')
   })
 })
+
+// ─────────────────────────── 3.4 tool-error 事件发射 ───────────────────────────
+
+describe('queryTask 事件发射（typed 错误 → tool-error；verb=queryTask）', () => {
+  it('typed 服务错误 → tool-error（归属 = 任务容器 slug）+ 失败 DTO 照常', async () => {
+    const events: import('@dsh-forge/contracts').ForgePluginEvent[] = []
+    const tasks = {
+      queryTask: async () => {
+        throw Object.assign(new Error('任务未命中'), { code: 'ERR_TASK_NOT_FOUND', data: {} })
+      },
+    } as unknown as ForgeTasksService
+    const tool = createQueryTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+    })
+    const out = await tool.execute({ slug: 'f1', local_id: '9.9' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_TASK_NOT_FOUND' })
+    expect(events[0]).toMatchObject({ slug: 'f1', payload: { verb: 'queryTask', code: 'ERR_TASK_NOT_FOUND' } })
+  })
+})

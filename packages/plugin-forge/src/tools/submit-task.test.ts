@@ -177,3 +177,94 @@ describe('submitTask 返回面渲染（formatOk 快照）', () => {
     ).toBe('✓ Task f1/fix-1 submitted — completed\n- taskId: t-2\n- restored: f1/2.4 (source unblocked)')
   })
 })
+
+// ─────────────────────────── 3.4 事件发射（task-submitted / tool-error） ───────────────────────────
+
+describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
+  function eventsSink() {
+    const events: import('@dsh-forge/contracts').ForgePluginEvent[] = []
+    const eventsDeps = {
+      events: {
+        emit: (e: import('@dsh-forge/contracts').ForgePluginEvent) => events.push(e),
+        prepare: async () => {},
+        dirOf: () => undefined,
+      },
+    }
+    return { events, eventsDeps }
+  }
+
+  it('结算成功 → task-submitted（sessionId = 执行会话；payload taskKey/outcome/commitHash）', async () => {
+    const { events, eventsDeps } = eventsSink()
+    const captured: SubmitTaskInput[] = []
+    const tasks = {
+      submitTask: async (input: SubmitTaskInput) => {
+        captured.push(input)
+        return { taskId: 't-1', status: 'completed', restored: [] }
+      },
+    } as unknown as ForgeTasksService
+    const tool = createSubmitTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+      ...eventsDeps,
+    })
+    await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's', commit_hash: 'abc123' }, EXEC)
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      sessionId: 'child-1',
+      slug: 'f1',
+      type: 'task-submitted',
+      payload: { taskKey: 'f1/3.2', outcome: 'success', commitHash: 'abc123' },
+    })
+  })
+
+  it('blocked 结算 → task-submitted 带 reason', async () => {
+    const { events, eventsDeps } = eventsSink()
+    const tasks = {
+      submitTask: async () => ({ taskId: 't-1', status: 'blocked', restored: [] }),
+    } as unknown as ForgeTasksService
+    const tool = createSubmitTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+      ...eventsDeps,
+    })
+    await tool.execute({ slug: 'f1', local_id: '2.4', result: 'blocked', reason: 'missing key' }, EXEC)
+    expect(events[0]).toMatchObject({ type: 'task-submitted', payload: { outcome: 'blocked', reason: 'missing key' } })
+  })
+
+  it('typed 错误 → tool-error（verb=submitTask）+ 失败 DTO 照常', async () => {
+    const { events, eventsDeps } = eventsSink()
+    const tasks = {
+      submitTask: async () => {
+        throw Object.assign(new Error('submitTask 缺测试证据'), {
+          code: 'ERR_TEST_EVIDENCE_REQUIRED',
+          data: { acceptanceCriteria: ['AC1'] },
+        })
+      },
+    } as unknown as ForgeTasksService
+    const tool = createSubmitTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+      ...eventsDeps,
+    })
+    const out = await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_TEST_EVIDENCE_REQUIRED' })
+    expect(events.map((e) => e.type)).toEqual(['tool-error'])
+    expect(events[0]).toMatchObject({ slug: 'f1', payload: { verb: 'submitTask', code: 'ERR_TEST_EVIDENCE_REQUIRED' } })
+  })
+
+  it('deps.events 缺席 = 零事件降级（返回面不变）', async () => {
+    const tasks = {
+      submitTask: async () => ({ taskId: 't-1', status: 'completed', restored: [] }),
+    } as unknown as ForgeTasksService
+    const tool = createSubmitTaskTool({
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      resolveProjectId: () => 'p-1',
+    })
+    const out = await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)
+    expect(out).toMatchObject({ taskId: 't-1' })
+  })
+})
