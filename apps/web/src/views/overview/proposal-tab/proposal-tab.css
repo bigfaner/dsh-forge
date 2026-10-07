@@ -1,0 +1,202 @@
+/* M3 UF-1 提案子 tab 组件族（4.2）：五态 chips 行 + 评审流转/模式更改对话框体。
+ * 令牌纪律（lint-tokens）：色/字/距零裸值——间距取官方排版行高令牌刻度（components.css /
+ * overview.css 同法）；chips 形制镜像 M2 七态 chips（dswf-ov-stchip 同族）；
+ * 对话框体镜像 M2 转移对话框表单行语言（dswf-td-tr 同族——官方 Modal 承载 chrome）。
+ * dsw-raw 豁免（执行记录注记）：chips 行距 6px / chip 行高 24px / 点径 8px =
+ * M2 dswf-ov-stchip 同值原型刻度；reason 最小高 64px = M2 原因域同值刻度。 */
+
+/* ── 五态 chips 行（机制沿 M2 七态 chips） ── */
+.dswf-ov-pschips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px; /* dsw-raw 原型 chips 行距刻度（dswf-ov-stchips 同值） */
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+}
+
+.dswf-ov-pschip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  height: 24px; /* dsw-raw 原型 chip 行刻度（dswf-ov-stchip 同值） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-ov-pschip:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-pschip.is-on {
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dswf-ov-pschip.is-zero,
+.dswf-ov-pschip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dswf-ov-pschip-count {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-pschip-clear {
+  border-style: dashed;
+}
+
+/* 五态点色（官方 StateDot 无蓝/紫语义——--dsw-alias 令牌自绘；superseded 紫 =
+ * 官方调色板无紫令牌 → 中性三级最近语义映射，执行记录注记） */
+.dswf-ov-pschip-dot {
+  flex: none;
+  width: 8px; /* dsw-raw 原型点径刻度（StateDot size=8 同值） */
+  height: 8px; /* dsw-raw */
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.dswf-ov-pschip-dot[data-status='draft'] {
+  color: var(--dsw-alias-state-idle-primary);
+}
+
+.dswf-ov-pschip-dot[data-status='under-review'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.dswf-ov-pschip-dot[data-status='accepted'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-ov-pschip-dot[data-status='rejected'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-ov-pschip-dot[data-status='superseded'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 评审流转对话框体（官方 Modal children——表单行语言沿 M2 dswf-td-tr） ── */
+.dswf-ov-vd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-ov-vd-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-radius-sm);
+}
+
+.dswf-ov-vd-label {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-vd-static {
+  display: flex;
+  align-items: center;
+}
+
+.dswf-ov-vd-select,
+.dswf-ov-vd-reason {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ov-vd-select:focus-visible,
+.dswf-ov-vd-reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 0;
+}
+
+.dswf-ov-vd-reason {
+  min-height: 64px; /* dsw-raw M2 原因域同值刻度（dswf-td-tr-reason） */
+  resize: vertical;
+}
+
+/* accepted 分叉文案（远征成链 / 突击直挂 / 未标记边界——按 mode 三支） */
+.dswf-ov-vd-hint {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 拒绝留场错误条（role=alert——空因/校验/rpc 失败同面） */
+.dswf-ov-vd-err {
+  margin: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── 模式更改对话框体（官方 Modal children——同表单行语言） ── */
+.dswf-ov-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-ov-md-current {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-md-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-radius-sm);
+}
+
+.dswf-ov-md-label {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 快照不回溯一行明示（律三——底色条弱化呈现） */
+.dswf-ov-md-note {
+  margin: 0;
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-md-reason {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px; /* dsw-raw M2 原因域同值刻度 */
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  resize: vertical;
+}
+
+.dswf-ov-md-reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 0;
+}
+
+.dswf-ov-md-err {
+  margin: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-state-error-primary);
+}

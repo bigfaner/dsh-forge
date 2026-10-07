@@ -39,3 +39,51 @@
   align-items: center;
   justify-content: center;
 }
+
+/* ─────────────────────────── ModeChip（M3 4.2 UF-1） ───────────────────────────
+ * 模式溯源 chip：紧凑胶囊（ui-design「mode chip 形态」12px）；点色 = --dsw-alias 语义令牌
+ * （远征蓝 = business-primary / 突击琥珀 = warn-primary——M3 令牌映射表）。
+ * dsw-raw 豁免（执行记录注记）：胶囊 999px = 官方 Tag.module.css 同值刻度（官方无胶囊
+ * 令牌）；行高 20px = 原型 mode-chip 紧凑行刻度（dswf-ov-parent 28px 行内不撑行）。 */
+.dswf-mode-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-radius-sm);
+  height: 20px; /* dsw-raw 原型紧凑行刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid transparent;
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-mode-chip:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+/* 未标记缺省占位（扫描吸收旧行——不可点中性面） */
+.dswf-mode-chip.is-unset,
+.dswf-mode-chip:disabled {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.dswf-mode-chip-dot {
+  flex: none;
+  width: 7px; /* dsw-raw 原型 mode chip 点径刻度（七态 chips 8px 的紧凑变体） */
+  height: 7px; /* dsw-raw */
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.dswf-mode-chip-dot[data-mode='expedition'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.dswf-mode-chip-dot[data-mode='blitz'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
