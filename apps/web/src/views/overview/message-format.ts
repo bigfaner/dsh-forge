@@ -48,8 +48,9 @@ export const PHASE_PHRASES: Readonly<Record<FeatureStatus, string>> = {
   archived: '已归档',
 }
 
-/** 任务失败状态短语（PRD 示例②③用短形「阻塞」——与 chips 词汇「已阻塞」并存各自单源） */
-const FAILURE_STATUS_PHRASES: Readonly<Partial<Record<TaskStatus, string>>> = {
+/** 任务失败状态短语（PRD 示例②③用短形「阻塞」——与 chips 词汇「已阻塞」并存各自单源；
+ *  4.4 导出消费：DiagToast 任务失败档状态行与消息体同一词汇单源） */
+export const FAILURE_STATUS_PHRASES: Readonly<Partial<Record<TaskStatus, string>>> = {
   blocked: '阻塞',
   rejected: '已拒绝',
 }
@@ -121,15 +122,20 @@ export interface SubgraphDiagInput {
   readonly violations: readonly { readonly kind: ViolationKind; readonly message: string }[]
 }
 
-/** ISO-8601 → `MM-DD HH:mm`（字符串字面直取——展示层零时区换算，快照确定性） */
-function stampOf(iso: string): string {
+/** ISO-8601 → `MM-DD HH:mm`（字符串字面直取——展示层零时区换算，快照确定性；
+ *  4.4 导出消费：DiagToast 任务失败档记录行与消息体同一刻度单源） */
+export function diagStampOf(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso)
   if (m === null) return iso
   return `${m[2]}-${m[3]} ${m[4]}:${m[5]}`
 }
 
-/** 五类检查中文名（固定读序——PRD 示例④ ✓/✗ 行与请求行括注同源） */
-const CHECK_NAMES: ReadonlyArray<{ readonly kind: ViolationKind; readonly name: string }> = [
+/** 消息体内部消费（同形改名引用——零行为变化） */
+const stampOf = diagStampOf
+
+/** 五类检查中文名（固定读序——PRD 示例④ ✓/✗ 行与请求行括注同源；
+ *  4.4 导出消费：DiagToast 子图失败档五项逐行与消息体同一读序单源） */
+export const DIAG_CHECK_NAMES: ReadonlyArray<{ readonly kind: ViolationKind; readonly name: string }> = [
   { kind: 'phase-invariant', name: '派生不变量' },
   { kind: 'cycle', name: '依赖无环' },
   { kind: 'liveness', name: 'Liveness' },
@@ -163,7 +169,7 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
     lines.push('请求：请排查修复（任务时间线见概览 → 任务子 tab → 该任务详情）')
   } else {
     lines.push('诊断：validateFeatureTasks 失败')
-    for (const check of CHECK_NAMES) {
+    for (const check of DIAG_CHECK_NAMES) {
       const hits = input.violations.filter((v) => v.kind === check.kind)
       if (hits.length === 0) {
         lines.push(`✓ ${check.name}`)
@@ -171,7 +177,7 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
       }
       for (const violation of hits) lines.push(`✗ ${check.name} — ${violation.message}`)
     }
-    lines.push(`请求：请排查修复（五类检查 = ${CHECK_NAMES.map((c) => c.name).join(' / ')}）`)
+    lines.push(`请求：请排查修复（五类检查 = ${DIAG_CHECK_NAMES.map((c) => c.name).join(' / ')}）`)
   }
   return lines.join('\n')
 }

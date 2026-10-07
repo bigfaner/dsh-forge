@@ -454,3 +454,132 @@
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * M3 4.4 UF-3 组件族：视图下拉 + 派发按钮（v24 视觉）+ DiagToast。
+ * 令牌纪律同上（lint-tokens：色/字/距零裸值）。v24 深灰实底 = 原型 --dsw-fg-2 填充
+ * + 反色文字的官方令牌最近语义映射（label-secondary 填充 / bg-base 反色——执行记录注记）。
+ * ───────────────────────────────────────────────────────────── */
+
+/* ── 视图下拉（v22 ㉟：M2 三视图 seg 改下拉——pill 右侧·类模式下拉·收窄占位；
+ *    锚钮与 seg-btn 同款式族；✓ 当前项 = 官方 Menu selection='check'） ── */
+.dswf-tt-viewbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  height: 22px; /* dsw-raw 原型 seg 行刻度（dswf-tt-seg-btn 同值——同款式族） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-tt-viewbtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-tt-viewbtn-caret {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 派发按钮（v22 ㊱ + v24 ㊵：亮起 = 与其它按钮同款式[无主操作蓝·同 bg/边框/字重]；
+ *    置灰 = 深灰实底·非透明淡出 + 反色文字；固定右簇最右落位 = 4.6） ── */
+.dswf-tt-dispatch {
+  display: inline-flex;
+  align-items: center;
+  height: 22px; /* dsw-raw 原型 seg 行刻度（dswf-tt-seg-btn 同值——v24 同款式裁决） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-tt-dispatch.is-on {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-tt-dispatch.is-on:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-tt-dispatch.is-off {
+  border-color: var(--dsw-alias-label-secondary); /* v24 深灰实底：原型 --dsw-fg-2 填充的官方令牌最近语义映射 */
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base); /* 反色文字（v24：非透明度淡出） */
+  cursor: default;
+}
+
+/* ── DiagToast（v4 ⑦ + v5 ⑨：锚定触发按钮左侧·贴近出现——本件置于「诊断」钮
+ *    relative 包裹内（4.6 接线）；右缘贴按钮左缘 + 垂直对齐） ── */
+.dswf-tt-diagtoast {
+  position: absolute;
+  top: calc(-1 * var(--dsw-font-xs-13-line-height));
+  right: calc(100% + var(--dsw-font-xs-13-line-height));
+  z-index: 30; /* dsw-raw 原型浮层序刻度（工具栏/sticky 区之上） */
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 340px; /* dsw-raw 原型 toast 限宽刻度（窄 dock 保护） */
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  text-align: start;
+}
+
+.dswf-tt-diagtoast-title {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-tt-diagtoast.is-ok .dswf-tt-diagtoast-title {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-tt-diagtoast.is-fail .dswf-tt-diagtoast-title,
+.dswf-tt-diagtoast.is-error .dswf-tt-diagtoast-title {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-tt-diagtoast-sub {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-tt-diagtoast-line {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-tt-diagtoast-line.is-ok {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-tt-diagtoast-line.is-bad {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-tt-diagtoast-send {
+  align-self: flex-start;
+  height: 22px; /* dsw-raw 原型 seg 行刻度（动作钮同款式族） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-link);
+  cursor: pointer;
+}
+
+.dswf-tt-diagtoast-send:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
