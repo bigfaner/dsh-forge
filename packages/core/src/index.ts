@@ -139,7 +139,10 @@ const corePlugin: CorePlugin = Object.assign(
           phase: { derivePhase: deriveFeaturePhase, assertPhaseInvariant },
         }),
       )
-      ctx.reflect.provide('forgeProposals', createProposalsService({ store, events }))
+      ctx.reflect.provide(
+        'forgeProposals',
+        createProposalsService({ store, events, resolveForgeDir: routing.forgeDir }), // 2.3 文档区扫描基准
+      )
       ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
     }
     return () => {

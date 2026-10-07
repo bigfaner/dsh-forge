@@ -128,8 +128,9 @@ function readUtf8(absPath: string): { ok: true; text: string } | { ok: false; re
   }
 }
 
-/** slug 自然键卫生：禁隐藏前导点/首尾空白/尾点/路径分隔与保留字面/控制字符 */
-function isLegalSlugDirName(name: string): boolean {
+/** slug 自然键卫生：禁隐藏前导点/首尾空白/尾点/路径分隔与保留字面/控制字符。
+ *  （2.3 起导出共享——listProposalDocs 提案文档区读面同源复用：非法 slug = 空列表守卫） */
+export function isLegalSlugDirName(name: string): boolean {
   if (name === '' || name.startsWith('.')) return false
   if (name !== name.trim() || name.endsWith('.')) return false
   if (/[\\/:*?"<>|]/.test(name)) return false
@@ -146,7 +147,7 @@ function isLegalSlugDirName(name: string): boolean {
 // 单向吸收白名单（SC8——PRD「旧线 manifest 的 title/status + 文档索引，显式清单豁免」；
 // 5.3 审计锚运行期断言此封闭集：吸收面永不超出该字段清单，DB 为 SoT 单向阀门）。
 export const FRONTMATTER_KEYS = ['title', 'status', 'summary', 'author'] as const
-type ThinFrontmatter = Partial<Record<(typeof FRONTMATTER_KEYS)[number], string>>
+export type ThinFrontmatter = Partial<Record<(typeof FRONTMATTER_KEYS)[number], string>>
 
 const FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---/
 
@@ -164,8 +165,12 @@ function stripQuotes(value: string): string {
 /**
  * 薄解析：`---` 分隔块内纯标量键值行（manifest/proposal 实际形态）。无分隔块/未闭合 →
  * { ok: false }（畸形）；非键值行与面外键宽容忽略；空值视为缺省。
+ * （2.3 起导出共享——listProposalDocs 文档行 title/status 可选初值同源解析；
+ *  调用方对 ok:false 按容错口径处置：发现面 warn 跳过、读面可选字段缺席。）
  */
-function parseThinFrontmatter(text: string): { ok: true; data: ThinFrontmatter } | { ok: false; reason: string } {
+export function parseThinFrontmatter(
+  text: string,
+): { ok: true; data: ThinFrontmatter } | { ok: false; reason: string } {
   const matched = text.match(FRONTMATTER_RE)
   if (matched === null) return { ok: false, reason: 'frontmatter 畸形：无 --- 分隔块或未闭合' }
   const data: ThinFrontmatter = {}
