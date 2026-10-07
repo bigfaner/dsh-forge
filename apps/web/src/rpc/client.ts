@@ -5,8 +5,12 @@
 // 只增面不改建制；search/readAbstract 不在面，agent 面唯一门 = knowledge 插件 tool，双门分工）。
 // 2.8 增 fs 面（forge:fs/listDir——文件浏览器数据源；三处一体：contracts → 本文件 → host ipc）。
 // 3.1 增 M2 四族（forge:{tasks,features,proposals,docs}/* + projects 派生行扩族——Interface 7；
-// 薄 Controller：仅参数映射与路由，禁业务逻辑；写动词 add/claim/submit/createProposal/
-// transitionProposal 恒不在面 = agent tool 专属——SC7 断言面，三处一体的 web 侧落点）。
+// 薄 Controller：仅参数映射与路由，禁业务逻辑。
+// M3 4.1 扩池（Interface 4 三处一体的 web 侧落点；contracts/host 已先行）：forge:settings/{get,set}
+// 新族（Forge设置 读写——forgeSettings 服务单门）+ forge:proposals/{transition,setMode,listDocs}
+// （transitionProposal 从 tool 专属 → 双面——M2 纪律 drift 修订；setMode = 律三唯一正门·UI 专属；
+// listDocs = 提案文档区目录扫描读）；恒不在面的写动词收窄为 addTask/submitTask/createProposal
+// （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。
 import {
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
@@ -15,6 +19,7 @@ import {
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   type DeriveTaskStoreDirRequest,
   type DeriveTaskStoreDirResult,
@@ -25,18 +30,22 @@ import {
   type FeatureCard,
   type FeatureDocumentRow,
   type FeatureRow,
+  type ForgeSettings,
   type GetProjectRequest,
   type KnowledgeCard,
   type ListDirRequest,
   type ListFeatureDocsQuery,
   type ListEntriesQuery,
   type ListFeaturesQuery,
+  type ListProposalDocsQuery,
   type ListProposalsQuery,
   type ListTasksQuery,
   type Project,
   type ProjectPatch,
   type ProjectSummary,
   type ProposalCard,
+  type ProposalDocRow,
+  type ProposalRow,
   type QueryTaskInput,
   type QueryTaskResult,
   type ReadDocRequest,
@@ -49,6 +58,8 @@ import {
   type SessionLinksQuery,
   type SessionRecallQuery,
   type SessionTaskLinkCard,
+  type SetForgeSettingsInput,
+  type SetProposalModeInput,
   type TaskCard,
   type TaskDetail,
   type TaskDetailQuery,
@@ -58,6 +69,8 @@ import {
   type TaskStats,
   type TaskStatsQuery,
   type TransitionFeatureInput,
+  type TransitionProposalInput,
+  type TransitionProposalResult,
   type TransitionTaskInput,
   type UpdateProjectRequest,
   type UpsertFeatureDocInput,
@@ -147,9 +160,19 @@ export interface ForgeFeaturesRpc {
   listDocs(q: ListFeatureDocsQuery): Promise<FeatureDocumentRow[]>
 }
 
-/** forge:proposals/* 面方法集（Interface 7 仅 list；createProposal/transitionProposal = tool 专属） */
+/**
+ * forge:proposals/* 面方法集（M3 Interface 4 扩池四通道；createProposal 恒 tool 专属不上 RPC）。
+ * transition = 人工裁决（M3 双面 drift 修订——agent 面保留）；setMode = 律三唯一正门
+ * （agent tool 面无模式改写动词——SC6 断言面）；listDocs = 提案文档区只读扫描。
+ */
 export interface ForgeProposalsRpc {
   list(q: ListProposalsQuery): Promise<ProposalCard[]>
+  /** 裁决转移（toStatus=accepted ∧ 远征 → 成链分叉内聚——返回 chained 水化） */
+  transition(input: TransitionProposalInput): Promise<TransitionProposalResult>
+  /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰） */
+  setMode(input: SetProposalModeInput): Promise<ProposalRow>
+  /** 提案文档区读（docs/proposals/<slug>/ 全部 .md 目录扫描——零状态零写径） */
+  listDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
 }
 
 /** forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
@@ -157,6 +180,14 @@ export interface ForgeDocsRpc {
   read(q: ReadDocRequest): Promise<DocContent>
   /** 外部打开（📁 编辑器入口；触发即忘——失败经 RpcErr 信封抛 RpcClientError） */
   openExternal(q: ReadDocRequest): Promise<void>
+}
+
+/** forge:settings/* 面方法集（M3 Interface 4 扩池——Forge设置 分区读写；forgeSettings 服务单门） */
+export interface ForgeSettingsRpc {
+  /** 读（worker 未配置 = 键缺席——dispatchTask 回退父会话继承） */
+  get(): Promise<ForgeSettings>
+  /** 整体覆写 worker 段（保存脏态——改完即生效无重启；失败经 RpcErr 信封） */
+  set(input: SetForgeSettingsInput): Promise<void>
 }
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
@@ -168,6 +199,7 @@ export interface ForgeRpcClient {
   readonly features: ForgeFeaturesRpc
   readonly proposals: ForgeProposalsRpc
   readonly docs: ForgeDocsRpc
+  readonly settings: ForgeSettingsRpc
 }
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
@@ -220,10 +252,17 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
     },
     proposals: {
       list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),
+      transition: (input) => invokeRpc<TransitionProposalResult>(transport, PROPOSALS_CHANNELS.transition, input),
+      setMode: (input) => invokeRpc<ProposalRow>(transport, PROPOSALS_CHANNELS.setMode, input),
+      listDocs: (q) => invokeRpc<ProposalDocRow[]>(transport, PROPOSALS_CHANNELS.listDocs, q),
     },
     docs: {
       read: (q) => invokeRpc<DocContent>(transport, DOCS_CHANNELS.read, q),
       openExternal: (q) => invokeRpc<void>(transport, DOCS_CHANNELS.openExternal, q),
+    },
+    settings: {
+      get: () => invokeRpc<ForgeSettings>(transport, SETTINGS_CHANNELS.get),
+      set: (input) => invokeRpc<void>(transport, SETTINGS_CHANNELS.set, input),
     },
   }
 }

@@ -255,10 +255,19 @@ describe('fetchTaskDetail（数据面——rpc tasks.detail 唯一通道）', ()
           list: mark('features.list', () => Promise.resolve([])),
           listDocs: mark('features.listDocs', () => Promise.resolve([])),
         },
-        proposals: { list: mark('proposals.list', () => Promise.resolve([])) },
+        proposals: {
+          list: mark('proposals.list', () => Promise.resolve([])),
+          transition: mark('proposals.transition', () => Promise.resolve({})),
+          setMode: mark('proposals.setMode', () => Promise.resolve({})),
+          listDocs: mark('proposals.listDocs', () => Promise.resolve([])),
+        },
         docs: {
           read: mark('docs.read', () => Promise.resolve({})),
           openExternal: mark('docs.openExternal', () => Promise.resolve(undefined)),
+        },
+        settings: {
+          get: mark('settings.get', () => Promise.resolve({})),
+          set: mark('settings.set', () => Promise.resolve(undefined)),
         },
       } as ForgeRpcClient,
     }

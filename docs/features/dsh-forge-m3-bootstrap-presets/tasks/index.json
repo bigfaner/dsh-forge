@@ -407,7 +407,7 @@
         "3.gate",
         "1.1"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "4.1-web-foundation-composables.md",
       "record": "records/4.1-web-foundation-composables.md",
       "surface-type": "web",
