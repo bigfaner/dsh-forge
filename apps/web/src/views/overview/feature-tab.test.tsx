@@ -40,6 +40,7 @@ function proposalCard(slug: string, status: ProposalStatus = 'accepted'): Propos
     title: `提案 ${slug}`,
     proposalStatus: status,
     relPath: `docs/proposals/${slug}/proposal.md`,
+    taskCount: 0,
     createdAt: CREATED,
     updatedAt: CREATED,
   }

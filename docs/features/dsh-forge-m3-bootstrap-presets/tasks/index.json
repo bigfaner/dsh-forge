@@ -10,7 +10,7 @@
       "title": "contracts 契约面扩池：mode 词汇 / ContainerRef / worker 收窄矩阵 / 事件联合 / 通道常量 / 错误码 ×3 / forgeSettings 签名",
       "priority": "P0",
       "estimatedTime": "4h",
-      "status": "pending",
+      "status": "completed",
       "file": "1.1-contracts-constants-dtos.md",
       "record": "records/1.1-contracts-constants-dtos.md",
       "breaking": true,

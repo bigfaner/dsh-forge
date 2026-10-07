@@ -206,14 +206,20 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
   const now = new Date().toISOString()
 
   const result = withTransaction(db, (): AddTaskResult => {
-    // ① feature 解析（归属校验：featureSlug 必须命中 feature——新任务 slug 列 ≡ feature.slug）
+    // ① 容器解析（M3 契约垫片：feature 容器 = M2 语义等价特例——source.kind 判别后按 slug 归属
+    //    校验；proposal 容器 = M3 双轨，schema source 双列随 1.2 到场前 fail-loud 拒绝）
+    if (input.source.kind !== 'feature') {
+      throw new Error(
+        `addTask: proposal 容器任务落地于 M3 1.2/2.4（当前 schema = M2 feature 单轨）：${input.source.slug}`,
+      )
+    }
     const feature = db
       .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
         `SELECT id, slug, feature_status FROM features WHERE slug = ?`,
       )
-      .get(input.featureSlug)
+      .get(input.source.slug)
     if (feature === undefined) {
-      throw new TasksFeatureNotFoundError({ projectId: input.projectId, featureSlug: input.featureSlug })
+      throw new TasksFeatureNotFoundError({ projectId: input.projectId, featureSlug: input.source.slug })
     }
 
     // ② sourceTask 解析（UNIQUE(slug, local_id) 查捞 → taskId；命中他 feature 同键 = 同 feature
@@ -230,7 +236,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         throw new TaskNotFoundError({
           projectId: input.projectId,
           taskRef: input.sourceTask,
-          featureSlug: input.featureSlug,
+          featureSlug: input.source.slug,
         })
       }
     }
@@ -259,12 +265,12 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
           `SELECT id, slug, local_id, task_status, task_type, source_task_id, feature_id FROM tasks
            WHERE slug = ? AND local_id = ?`,
         )
-        .get(input.featureSlug, localId)
+        .get(input.source.slug, localId)
       if (dep === undefined) {
         throw new TaskNotFoundError({
           projectId: input.projectId,
-          taskRef: { slug: input.featureSlug, localId },
-          featureSlug: input.featureSlug,
+          taskRef: { slug: input.source.slug, localId },
+          featureSlug: input.source.slug,
         })
       }
       depends.push(dep)
@@ -346,7 +352,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         input.estimatedTime ?? null,
         input.vars === undefined ? null : JSON.stringify(input.vars),
         source?.id ?? null,
-        input.mainSession === true ? 1 : 0,
+        0, // main_session：M3 裁决⑦砍除——输入面已移除，列随 1.2 schema v1 直改退役（恒 0 垫片）
         input.breaking === true ? 1 : 0,
         input.coverage ?? null,
         input.complexity ?? 'medium',

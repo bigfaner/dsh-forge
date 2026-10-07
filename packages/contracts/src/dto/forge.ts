@@ -5,8 +5,13 @@
 // taskId = tasks.id（uuid 代理主键——FK/前端/RPC 引用锚，slug 改名零级联）；
 // TaskRef = { slug; localId }（agent 自然键，UNIQUE(slug, local_id) 查捞）——
 // TaskSnapshot/TaskCard/TaskDetail 恒含 { taskId, slug, localId }。
+// M3（1.1）：容器双轨容器化改写（featureSlug 族 → source: ContainerRef 族——Interface 1）+
+// mode 词汇 + tasks.mode 快照/ac_json 快照面 + main_session 砍除 + 提案域三新面
+// （setProposalMode/listProposalDocs/supersededBy 谱系）+ forgeSettings 服务签名 +
+// ForgePluginEvent 事件两层联合（Interface 3）。
 // 定位铁律：纯类型与纯常量，零逻辑零依赖。
 import type { ForgeEventChannel } from '../channels.js'
+import type { ErrorCode } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { ProjectService } from './project.js'
 
@@ -14,11 +19,37 @@ import type { ProjectService } from './project.js'
 
 /** 任务自然键（agent 面输入 = slug + localId 两显式参；dispatchPrompt TASK_ID 与界面展示 = 'slug/localId'） */
 export interface TaskRef {
-  /** feature slug（≡ 所属 feature 目录名；slug 列 ≡ feature slug——服务不变量 + validateFeatureTasks 断言） */
+  /** 容器 slug（M3：feature 或 proposal 目录名；slug 列 ≡ 容器 slug——服务不变量 + validateFeatureTasks 断言） */
   slug: string
-  /** feature 内局部键（混合分配 §6-35⑦：常规数值顺延 / fix-N·disc-N 动态前缀） */
+  /** 容器内局部键（混合分配 §6-35⑦：常规数值顺延 / fix-N·disc-N 动态前缀） */
   localId: string
 }
+
+/** M3 任务容器类型双值（tasks.source_kind CHECK 同词汇；容器 = feature 或 proposal） */
+export const CONTAINER_KINDS = ['feature', 'proposal'] as const
+
+export type ContainerKind = (typeof CONTAINER_KINDS)[number]
+
+/**
+ * 任务容器引用（M3 通用源头双列的 agent 面 DTO——Cross-Layer Data Map：
+ * ContainerRef{kind,slug}（agent 面）/ sourceId（RPC 面））。kind 判别 + slug 承载；
+ * 服务不变量：tasks.slug ≡ 解析出的容器 slug + source_id 必命中 kind 对应表
+ * （多态引用无 DB FK——写入校验承载）。
+ */
+export interface ContainerRef {
+  kind: ContainerKind
+  /** 容器 slug（feature 目录名 / proposal slug——任务 slug 恒等值） */
+  slug: string
+}
+
+/**
+ * M3 模式词汇双值（proposals.mode CHECK expedition|blitz|NULL 与 tasks.mode 快照列共用；
+ * 远征 = 全管线（提案→PRD→设计→任务分解）/ 突击 = 提案直挂任务直达）。
+ * feature 容器恒 'expedition'（无列——成链门保证，裁决⑥）；tasks.mode = 创建时快照不回溯。
+ */
+export const MODES = ['expedition', 'blitz'] as const
+
+export type Mode = (typeof MODES)[number]
 
 /** tasks.priority CHECK 三值 */
 export type TaskPriority = 'P0' | 'P1' | 'P2'
@@ -78,8 +109,8 @@ export interface TaskSnapshot {
   taskId: string
   slug: string
   localId: string
-  /** 所属 feature（uuid；slug 列 ≡ feature.slug 服务不变量） */
-  featureId: string
+  /** 所属容器（M3 通用源头双列的行形状承载——feature 恒在；proposal = 突击直挂） */
+  source: ContainerRef
   title: string
   taskType: TaskType
   taskStatus: TaskStatus
@@ -93,7 +124,10 @@ export interface TaskSnapshot {
   /** fix 链源（uuid 自引用，链深 ≤ 6；非 fix 任务缺省） */
   sourceTaskId?: string
   blockedReason?: string
-  mainSession: boolean
+  /** M3 创建时模式快照（容器 mode 的不可回溯快照；feature 容器恒 'expedition'；NULL = 键缺席） */
+  mode?: Mode
+  /** 验收清单（ac_json 解码形——submitTask AC 证据门判据；无 AC 任务键缺席） */
+  acceptanceCriteria?: string[]
   breaking: boolean
   /** 覆盖率阈值小数；缺省 = 全局默认（三级优先） */
   coverage?: number
@@ -179,9 +213,25 @@ export interface TaskDocRef {
   title?: string
 }
 
+/**
+ * 任务容器水化摘要（M3 Interface 1：queryTask/taskDetail 增 container 水化——诊断两路消息
+ * 数据源）。phase 仅 feature 容器（proposal 容器无相位域——derive 闭包按 source_kind 过滤）；
+ * feature 容器 mode 恒 'expedition'，proposal 容器 = proposals.mode（NULL = 键缺席缺省占位）。
+ */
+export interface TaskContainerSummary {
+  kind: ContainerKind
+  slug: string
+  title: string
+  summary?: string
+  mode?: Mode
+  /** feature 相位（FeatureStatus 快照；proposal 容器键缺席） */
+  phase?: FeatureStatus
+}
+
 /** 任务详情（抽屉载体；TaskCard 全量 + 深字段） */
 export interface TaskDetail extends TaskCard {
-  featureId: string
+  /** 容器水化（诊断消息数据源——Interface 1 taskDetail 增量） */
+  container: TaskContainerSummary
   taskDesc?: string
   vars?: Record<string, string>
   /** 验收与覆盖率负载（覆盖率进度条；NULL = 全局默认） */
@@ -190,7 +240,6 @@ export interface TaskDetail extends TaskCard {
   surfaceKey?: string
   surfaceType?: string
   blockedReason?: string
-  mainSession: boolean
   breaking: boolean
   /** ISO-8601 */
   createdAt: string
@@ -233,23 +282,29 @@ export interface ValidateReport {
   checked: { featureSlug: string; tasks: number }
 }
 
-/** addTask 入参（fix 链走 sourceTask + blockSource：单事务同置源 blocked + auto-block 行 + 链深 ≤ 6 + 增量环校验） */
+/** addTask 入参（fix 链走 sourceTask + blockSource：单事务同置源 blocked + auto-block 行 + 链深 ≤ 6 + 增量环校验）。
+ *  M3 容器化（Interface 1）：featureSlug → source: ContainerRef——容器必须在场（服务不变量·
+ *  多态引用无 DB FK，写入校验 source_id 必命中 kind 对应表）；tasks.mode = 容器 mode 创建时
+ *  快照（feature 容器恒 'expedition'；proposal 容器取 proposals.mode·可 NULL——键缺席）。
+ *  main_session 砍除（M3 裁决⑦：老 forge 形态约束残留·新形态零消费者）。 */
 export interface AddTaskInput {
   projectId: string
-  featureSlug: string
+  /** 任务容器（feature = 远征链分解 / proposal = 突击直挂） */
+  source: ContainerRef
   title: string
   type: TaskType
   taskDesc?: string
+  /** 验收清单（→ ac_json；submitTask AC 证据门判据——gate.test !== true 拒 ERR_TEST_EVIDENCE_REQUIRED） */
+  acceptanceCriteria?: string[]
   priority?: TaskPriority
   estimatedTime?: string
   vars?: Record<string, string>
-  /** 依赖的自然键 localId 清单（同 feature 前置声明） */
+  /** 依赖的自然键 localId 清单（同容器前置声明——同容器边约束：task_edges 两端 source_id 相等） */
   dependsOn?: string[]
   /** fix 链源（--block-source 隐含谱系） */
   sourceTask?: TaskRef
   /** true = 源任务同事务置 blocked + 边（fix-N 分配） */
   blockSource?: boolean
-  mainSession?: boolean
   breaking?: boolean
   coverage?: number
   complexity?: TaskComplexity
@@ -266,13 +321,13 @@ export interface AddTaskResult {
   reused: boolean
 }
 
-/** claimTask 入参 */
+/** claimTask 入参（M3 容器化：featureSlug? → source?: ContainerRef——容器限定盲选，缺省 = 全库） */
 export interface ClaimTaskInput {
   projectId: string
   /** 显式重入（in_progress 幂等重入 = reclaimed；无 taskRef 盲选不领 in_progress——双 dispatcher 不双派发） */
   taskRef?: TaskRef
-  /** 就绪选择限定 feature（缺省 = 全库） */
-  featureSlug?: string
+  /** 就绪选择限定容器（缺省 = 全库；dispatchPrompt 增容器语境行 SOURCE: feature|proposal slug） */
+  source?: ContainerRef
   /** 派发会话（S8：exec.agent.session.id 可得；links upsert-ignore） */
   sessionId: string
 }
@@ -335,9 +390,11 @@ export interface QueryTaskInput {
   }
 }
 
-/** queryTask 返回体（未命中 → ERR_TASK_NOT_FOUND；四节按 include 门控） */
+/** queryTask 返回体（未命中 → ERR_TASK_NOT_FOUND；四节按 include 门控；container 恒水化） */
 export interface QueryTaskResult {
   task: TaskSnapshot
+  /** 容器水化（诊断消息数据源——Interface 1 M3 增量） */
+  container: TaskContainerSummary
   prerequisites?: TaskPrerequisiteSummary[]
   waitingOnMe?: TaskPrerequisiteSummary[]
   records?: TaskRecordEntry[]
@@ -350,10 +407,11 @@ export interface ValidateFeatureTasksInput {
   featureSlug: string
 }
 
-/** listTasks 查询（search = 服务端 core 过滤——中英双语标签常量匹配；IME 安全 = 前端仅更新内容区） */
+/** listTasks 查询（search = 服务端 core 过滤——中英双语标签常量匹配；IME 安全 = 前端仅更新内容区；
+ *  M3 容器化：featureSlug? → source?: ContainerRef） */
 export interface ListTasksQuery {
   projectId: string
-  featureSlug?: string
+  source?: ContainerRef
   /** 七态过滤 chips（空/缺省 = 全部） */
   statusFilter?: TaskStatus[]
   search?: string
@@ -361,22 +419,25 @@ export interface ListTasksQuery {
   sort?: 'active' | 'created'
 }
 
-/** taskStats 查询 */
+/** taskStats 查询（M3 容器化） */
 export interface TaskStatsQuery {
   projectId: string
-  featureSlug?: string
+  source?: ContainerRef
 }
 
-/** taskStats 返回体（七态 chips 计数单源；0 计数禁用+淡化） */
+/** taskStats 返回体（七态 chips 计数单源；0 计数禁用+淡化）。
+ *  M3 增 unmetPending（pending ∧ 前置未全满足计数——单查询派生；dispatchTask 池快照数据源）。 */
 export interface TaskStats {
   total: number
   byStatus: Record<TaskStatus, number>
+  /** pending 且前置未全 ∈ {completed, skipped} 的任务数（池快照「等待」判据成分） */
+  unmetPending: number
 }
 
-/** taskGraph 查询 */
+/** taskGraph 查询（M3 容器化：容器子图） */
 export interface TaskGraphQuery {
   projectId: string
-  featureSlug: string
+  source: ContainerRef
 }
 
 /** taskGraph 边（等待方 → 前置方；边持久不删——满足 = 读时派生） */
@@ -529,7 +590,7 @@ export interface ForgeFeaturesService {
 
 // ─────────────────────────── Interface 3：提案域（ctx.forgeProposals） ───────────────────────────
 
-/** createProposal 入参（tool 专属——写动词不上 RPC） */
+/** createProposal 入参（tool 专属——写动词不上 RPC；M3 增 mode 由创建技能透传溯源） */
 export interface CreateProposalInput {
   projectId: string
   slug: string
@@ -537,13 +598,48 @@ export interface CreateProposalInput {
   /** proposal.md 相对 forge_dir（SC4 浏览锚点）；缺省 = 未挂文档 */
   relPath?: string
   status?: ProposalStatus
+  /** 模式溯源（远征/突击；缺省 = NULL 占位——成链门按 NULL 边界处理） */
+  mode?: Mode
 }
 
-/** transitionProposal 入参（tool 专属；裁决写 decided_at） */
+/** transitionProposal 入参（M3 双面：tool + RPC（UF-1 人工裁决）——M2「tool 专属」纪律 drift 修订；
+ *  裁决写 decided_at；toStatus='superseded' 必带 supersededBy） */
 export interface TransitionProposalInput {
   projectId: string
   proposalId: string
   toStatus: ProposalStatus
+  /** superseded 必带（目标提案 id 在场校验 → 写 proposals.superseded_by——UF-1 取代链数据面） */
+  supersededBy?: string
+}
+
+/** transitionProposal 返回体（行 + 成链水化——toStatus=accepted ∧ mode='expedition' ∧ 无同链
+ *  feature 时单事务内聚 registerFeature，返回 chained；mode='blitz'|NULL 不成链） */
+export type TransitionProposalResult = ProposalRow & { chained?: FeatureRow }
+
+/** setProposalMode 入参（M3 新·律三唯一正门·UI 专属 RPC——agent tool 面无模式改写动词（SC6 契约断言）） */
+export interface SetProposalModeInput {
+  projectId: string
+  proposalId: string
+  mode: Mode
+  /** 说明必填（人工变更溯源——快照不回溯明示的审计面） */
+  reason: string
+}
+
+/** listProposalDocs 查询（UF-1 提案文档区读——目录扫描·零状态零写径，文件系统为事实源） */
+export interface ListProposalDocsQuery {
+  projectId: string
+  slug: string
+}
+
+/** 提案文档行（只读扫描 docs/proposals/<slug>/ 全部 .md——发现面同族；
+ *  frontmatter 可选初值，fileName/relPath 恒有） */
+export interface ProposalDocRow {
+  fileName: string
+  /** 相对 forge_dir，正斜杠 */
+  relPath: string
+  /** frontmatter 可选初值（缺席 = 键缺省） */
+  title?: string
+  status?: string
 }
 
 /** listProposals 查询 */
@@ -553,7 +649,9 @@ export interface ListProposalsQuery {
   sort?: 'active' | 'created'
 }
 
-/** proposals 行应用层形状（身份与名称分离——slug 可改名，关联走 id） */
+/** proposals 行应用层形状（身份与名称分离——slug 可改名，关联走 id）。
+ *  M3 增 mode（CHECK expedition|blitz|NULL——扫描吸收旧行 = NULL 缺省占位）与
+ *  supersededBy（自引用 FK——取代链谱系）。 */
 export interface ProposalRow {
   proposalId: string
   slug: string
@@ -564,22 +662,39 @@ export interface ProposalRow {
   author?: string
   /** 裁决时刻（→ accepted/rejected 写；打回/superseded 不改写） */
   decidedAt?: string
+  /** 模式溯源（NULL = 键缺席缺省占位；人工变更走 setProposalMode 唯一正门） */
+  mode?: Mode
+  /** 取代链目标提案 id（superseded 转移写入；UF-1 谱系右列数据面） */
+  supersededBy?: string
   /** ISO-8601 */
   createdAt: string
   /** ISO-8601 */
   updatedAt: string
 }
 
-/** 提案列表卡（提案子 tab 父行 = 行全量；展开元数据 slug/摘要/作者/创建/裁决/谱系由行字段+文档读承载） */
-export type ProposalCard = ProposalRow
+/** 提案列表卡（提案子 tab 父行 = 行全量 + M3 taskCount（JOIN tasks 按 source_id 分组——
+ *  容器 pill「有任务的提案」判据 + 提案谱系联读）；展开元数据由行字段+文档读承载） */
+export type ProposalCard = ProposalRow & {
+  /** 容器下任务数（成链 feature 同 slug 任务并入同计——容器维度口径） */
+  taskCount: number
+}
 
-/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals） */
+/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals——M3 五法） */
 export interface ForgeProposalsService {
-  /** tool 写动词（RPC 面仅 list） */
+  /** tool 写动词（M3 起不上 RPC 的仍仅 createProposal/addTask/submitTask 族） */
   createProposal(input: CreateProposalInput): Promise<ProposalRow>
-  /** 裁决转移（→ accepted/rejected 写 decided_at） */
-  transitionProposal(input: TransitionProposalInput): Promise<ProposalRow>
+  /**
+   * 裁决转移（→ accepted/rejected 写 decided_at；M3 双面：tool + RPC）。
+   * 成链分叉内聚（单事务）：accepted ∧ mode='expedition' ∧ 无同链 feature →
+   * registerFeature（同名 slug/title/summary 继承/proposalId）+ feature_records(register)
+   * → 返回 chained；mode='blitz'|NULL → 不成链（NULL 边界：先 setProposalMode）。
+   */
+  transitionProposal(input: TransitionProposalInput): Promise<TransitionProposalResult>
+  /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰；UI 专属） */
+  setProposalMode(input: SetProposalModeInput): Promise<ProposalRow>
   listProposals(q: ListProposalsQuery): Promise<ProposalCard[]>
+  /** 提案文档区只读扫描（评审缺口#1 处置——零状态零写径） */
+  listProposalDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
 }
 
 // ─────────────────────────── Interface 4：工作区文档读域（ctx.forgeDocs） ───────────────────────────
@@ -606,6 +721,38 @@ export interface DocContent {
 /** Interface 4：core · forge 文档读域服务面（ctx.forgeDocs——纯读） */
 export interface ForgeDocsService {
   read(q: ReadDocRequest): Promise<DocContent>
+}
+
+// ─────────────────────────── Interface 1（M3）：设置域（ctx.forgeSettings，provide ×1） ───────────────────────────
+
+/** worker 推理档位三值（reasoning → agentOptions.effort 直映射——设置三段与上游请求字段一对一） */
+export const REASONING_LEVELS = ['low', 'medium', 'high'] as const
+
+export type ReasoningLevel = (typeof REASONING_LEVELS)[number]
+
+/** worker 默认 LLM 三项（dispatchTask 组装 agentOptions 的唯一配置源） */
+export interface WorkerSettings {
+  provider: string
+  model: string
+  reasoning: ReasoningLevel
+}
+
+/** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
+ *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
+export interface ForgeSettings {
+  worker?: WorkerSettings
+}
+
+/** forgeSettings.set 入参（整体覆写 worker 段——UI 设置分区保存脏态） */
+export interface SetForgeSettingsInput {
+  worker: WorkerSettings
+}
+
+/** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，
+ *  UI 设置分区（RPC）与 dispatchTask（服务注入）同门消费；改完即生效无重启） */
+export interface ForgeSettingsService {
+  get(): Promise<ForgeSettings>
+  set(input: SetForgeSettingsInput): Promise<void>
 }
 
 // ─────────────────────────── Interface 5：项目域扩展（ctx.forgeProjects，P1 五法不动） ───────────────────────────
@@ -644,6 +791,104 @@ export interface BridgeEventMessage {
   readonly channel: ForgeEventChannel
   readonly payload: TasksChangedEvent
 }
+
+// ─────────────────────────── Interface 3（M3）：事件两层抽象 + 业务日志（产品自建总线） ───────────────────────────
+
+/** task-claimed 载荷（claim 落定；dispatchDigest = task_records.claim 行双记指纹） */
+export interface TaskClaimedPayload {
+  /** 'slug/localId' 复合自然键（与 task_records 追溯键同口径） */
+  taskKey: string
+  taskType: TaskType
+  /** 容器模式快照（NULL = 键缺席） */
+  mode?: Mode
+  /** sha-256(dispatchPrompt) 前 12 hex（三层存放之指纹层） */
+  dispatchDigest: string
+}
+
+/** task-spawned 载荷（driver spawn 落定——workerSessionId = 对账锚） */
+export interface TaskSpawnedPayload {
+  taskKey: string
+  /** worker 子会话 id（追溯三键闭环：taskKey → digest → workerSessionId → 会话日志全文） */
+  workerSessionId: string
+  /** 收窄后的工具面（矩阵 × taskType + 全局拒绝集派生） */
+  toolFilter: readonly string[]
+  model: string
+}
+
+/** task-submitted 载荷（worker 结算——AC gate 后） */
+export interface TaskSubmittedPayload {
+  taskKey: string
+  outcome: 'success' | 'blocked'
+  /** blocked 必带 */
+  reason?: string
+  commitHash?: string
+}
+
+/** task-worker-done 载荷（dispatcher 视角收工） */
+export interface TaskWorkerDonePayload {
+  taskKey: string
+  workerSessionId: string
+  outcome: 'success' | 'blocked'
+  /** 执行时长毫秒 */
+  durationMs: number
+}
+
+/** no-ready-task 载荷（Z1 收工信号——无任务字段，只记会话与语境） */
+export interface NoReadyTaskPayload {
+  /** dispatchTask 入参容器语境（归属判定：事件带任务 → 任务容器 slug；无任务 → contextSlug） */
+  contextSlug?: string
+}
+
+/** tool-error 载荷（forge tool 面 typed error） */
+export interface ToolErrorPayload {
+  verb: string
+  code: ErrorCode
+  message: string
+}
+
+/** proposal-created 载荷（…verb 级按需扩——初集七事件之一） */
+export interface ProposalCreatedPayload {
+  proposalId: string
+  /** 创建时模式溯源（缺省 = 键缺席占位） */
+  mode?: Mode
+}
+
+/**
+ * 事件信封（一切事件共有——两层抽象的外层）：事件必从某会话发出，信封恒有 sessionId；
+ * slug = 归属容器 slug（任务容器 / contextSlug / '_pool' 兜底——监听器归属判定的单源）。
+ */
+export interface ForgePluginEventEnvelope {
+  /** epoch 毫秒 */
+  ts: number
+  sessionId: string
+  slug: string
+}
+
+/** 七事件判别联合内型（type 判别 + 载荷——exhaustive；verb 级按需扩零迁移） */
+export type ForgePluginEventVariant =
+  | { type: 'task-claimed'; payload: TaskClaimedPayload }
+  | { type: 'task-spawned'; payload: TaskSpawnedPayload }
+  | { type: 'task-submitted'; payload: TaskSubmittedPayload }
+  | { type: 'task-worker-done'; payload: TaskWorkerDonePayload }
+  | { type: 'no-ready-task'; payload: NoReadyTaskPayload }
+  | { type: 'tool-error'; payload: ToolErrorPayload }
+  | { type: 'proposal-created'; payload: ProposalCreatedPayload }
+
+/** ForgePluginEvent = 信封 × 事件内型（两层抽象；判别字段 = type——exhaustive switch 锚） */
+export type ForgePluginEvent = ForgePluginEventEnvelope & ForgePluginEventVariant
+
+/** 事件类型全集（七事件初集——监听器落盘 logs/{slug}.jsonl 的行 type 值域） */
+export const FORGE_PLUGIN_EVENT_TYPES = [
+  'task-claimed',
+  'task-spawned',
+  'task-submitted',
+  'task-worker-done',
+  'no-ready-task',
+  'tool-error',
+  'proposal-created',
+] as const
+
+export type ForgePluginEventType = (typeof FORGE_PLUGIN_EVENT_TYPES)[number]
 
 // ─────────────────────────── RPC 负载映射（键 = channels.ts 族常量键） ───────────────────────────
 
@@ -689,14 +934,33 @@ export interface FeaturesChannelResponses {
   listDocs: FeatureDocumentRow[]
 }
 
-/** forge:proposals/* 请求负载（键 = PROPOSALS_CHANNELS 键；createProposal/transitionProposal 不在此面） */
+/** forge:proposals/* 请求负载（键 = PROPOSALS_CHANNELS 键；M3：transition 双面上 RPC（drift 修订）+
+ *  setMode（UI 专属正门）+ listDocs（文档区读）；createProposal 恒 tool 专属不上 RPC） */
 export interface ProposalsChannelRequests {
   list: ListProposalsQuery
+  transition: TransitionProposalInput
+  setMode: SetProposalModeInput
+  listDocs: ListProposalDocsQuery
 }
 
 /** forge:proposals/* 响应负载（键 = PROPOSALS_CHANNELS 键） */
 export interface ProposalsChannelResponses {
   list: ProposalCard[]
+  transition: TransitionProposalResult
+  setMode: ProposalRow
+  listDocs: ProposalDocRow[]
+}
+
+/** forge:settings/* 请求负载（键 = SETTINGS_CHANNELS 键——get 无参） */
+export interface SettingsChannelRequests {
+  get: void
+  set: SetForgeSettingsInput
+}
+
+/** forge:settings/* 响应负载（键 = SETTINGS_CHANNELS 键——set 触发即忘，失败经 RpcErr 信封） */
+export interface SettingsChannelResponses {
+  get: ForgeSettings
+  set: void
 }
 
 /** forge:docs/* 请求负载（键 = DOCS_CHANNELS 键；openExternal 主侧执行——先经桥校验路径在册） */

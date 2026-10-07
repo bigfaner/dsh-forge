@@ -195,7 +195,7 @@ describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 
     seedFeature(h!.db, { slug: 'fb', status: 'tasks' })
     seedTask(h!.db, 'fb', '9.9')
     seedTask(h!.db, 'fa', '1.1')
-    const r = await claim({ projectId: P(), featureSlug: 'fa', sessionId: 's' })
+    const r = await claim({ projectId: P(), source: { kind: 'feature', slug: 'fa' }, sessionId: 's' })
     expect(r.task).toMatchObject({ slug: 'fa', localId: '1.1' })
   })
 

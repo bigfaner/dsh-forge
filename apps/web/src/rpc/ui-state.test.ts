@@ -29,6 +29,10 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_WORKSPACE_DB_UNAVAILABLE: 'banner',
   ERR_SUSPECTED_MOVE: 'error-bar',
   ERR_DOC_PATH_INVALID: 'error-bar',
+  // M3 3 新码（1.1 扩池承接；按码精化归 4.x）
+  ERR_TEST_EVIDENCE_REQUIRED: 'error-bar',
+  ERR_GATE_SUMMARY_REQUIRED: 'error-bar',
+  ERR_SPAWN_FAILED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

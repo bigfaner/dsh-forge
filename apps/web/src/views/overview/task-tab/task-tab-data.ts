@@ -52,9 +52,11 @@ function mapTasksTabError(error: unknown): TasksTabError {
  */
 export async function fetchTasksTabData(client: ForgeRpcClient, input: TasksTabFetchInput): Promise<TasksTabFetch> {
   const search = searchQueryOf(input.search)
+  // M3 容器化（4.x UF-3 前垫片）：feature 选中值 → feature 容器引用（M2 语义等价）
+  const source = { kind: 'feature' as const, slug: input.featureSlug }
   const listQuery = {
     projectId: input.projectId,
-    featureSlug: input.featureSlug,
+    source,
     ...(input.statusFilter.length > 0 ? { statusFilter: [...input.statusFilter] } : {}),
     ...(search !== undefined ? { search } : {}),
     sort: input.sort,
@@ -63,14 +65,14 @@ export async function fetchTasksTabData(client: ForgeRpcClient, input: TasksTabF
     if (input.view === 'dag') {
       const [cards, stats, graph] = await Promise.all([
         client.tasks.list(listQuery),
-        client.tasks.stats({ projectId: input.projectId, featureSlug: input.featureSlug }),
-        client.tasks.graph({ projectId: input.projectId, featureSlug: input.featureSlug }),
+        client.tasks.stats({ projectId: input.projectId, source }),
+        client.tasks.graph({ projectId: input.projectId, source }),
       ])
       return { ok: true, cards, stats, graph }
     }
     const [cards, stats] = await Promise.all([
       client.tasks.list(listQuery),
-      client.tasks.stats({ projectId: input.projectId, featureSlug: input.featureSlug }),
+      client.tasks.stats({ projectId: input.projectId, source }),
     ])
     return { ok: true, cards, stats }
   } catch (error) {

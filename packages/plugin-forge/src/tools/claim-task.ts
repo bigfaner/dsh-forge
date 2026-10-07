@@ -124,7 +124,10 @@ export function createClaimTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         ...(parsed.slug !== undefined && parsed.local_id !== undefined
           ? { taskRef: { slug: parsed.slug, localId: parsed.local_id } }
           : {}),
-        ...(parsed.feature_slug !== undefined ? { featureSlug: parsed.feature_slug } : {}),
+        // M3 容器化垫片（3.5 工具面适配前）：feature_slug 参数 → feature 容器引用（M2 语义等价）
+        ...(parsed.feature_slug !== undefined
+          ? { source: { kind: 'feature' as const, slug: parsed.feature_slug } }
+          : {}),
       }
       return deps.tasks.claimTask(input)
     },

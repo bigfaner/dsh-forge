@@ -5,6 +5,10 @@
 // M2 面分治（Interface 7/8）：写动词 addTask/claimTask/submitTask/createProposal/transitionProposal
 // = agent tool 专属，恒不上 RPC（SC7 断言面）；forge:events/* = 主→渲染单向推送，
 // 不进 invoke allowlist（preload 订阅面守卫以 FORGE_EVENT_CHANNELS 为唯一源）。
+// M3（1.1）drift 修订（Interface 4）：transitionProposal 从 tool 专属 → 双面（UF-1 人工裁决，
+// agent 面保留——评审发生在 agent 会话时技能代笔）+ setMode/listDocs 扩族 + forge:settings/* 新族；
+// 恒不上 RPC 的写动词收窄为 addTask/submitTask/createProposal（claimTask 退役并入 dispatchTask，
+// 仅存 core 服务 API）。
 
 /** forge:projects/*（ProjectService 面——P1 五法不动；host 注册面 = projects-rpc.ts 五通道） */
 export const PROJECTS_CHANNELS = {
@@ -71,12 +75,26 @@ export const FEATURES_CHANNELS = {
 
 export type FeaturesChannel = (typeof FEATURES_CHANNELS)[keyof typeof FEATURES_CHANNELS]
 
-/** forge:proposals/*（list = 唯一 RPC 面；createProposal/transitionProposal = tool 专属——写动词不上 RPC） */
+/** forge:proposals/*（M3 Interface 4 扩池：transition 双面上 RPC（UF-1 人工裁决——M2「tool 专属」
+ *  纪律 drift 修订）+ setMode（律三唯一正门·UI 专属——agent tool 面无模式改写动词）+
+ *  listDocs（UF-1 提案文档区读·目录扫描）；createProposal 恒 tool 专属不上 RPC） */
 export const PROPOSALS_CHANNELS = {
   list: 'forge:proposals/list',
+  transition: 'forge:proposals/transition',
+  setMode: 'forge:proposals/setMode',
+  listDocs: 'forge:proposals/listDocs',
 } as const
 
 export type ProposalsChannel = (typeof PROPOSALS_CHANNELS)[keyof typeof PROPOSALS_CHANNELS]
+
+/** forge:settings/*（M3 Interface 4 扩池：Forge设置 读写——forgeSettings 服务单门，UI 分区消费；
+ *  host 接线归 3.8，web client 归 4.1） */
+export const SETTINGS_CHANNELS = {
+  get: 'forge:settings/get',
+  set: 'forge:settings/set',
+} as const
+
+export type SettingsChannel = (typeof SETTINGS_CHANNELS)[keyof typeof SETTINGS_CHANNELS]
 
 /** forge:docs/*（read = 工作区文档读；openExternal = main 侧 shell.openPath，先经桥校验路径在册） */
 export const DOCS_CHANNELS = {
@@ -110,6 +128,11 @@ export const FORGE_CHANNELS = {
   featuresList: FEATURES_CHANNELS.list,
   featuresListDocs: FEATURES_CHANNELS.listDocs,
   proposalsList: PROPOSALS_CHANNELS.list,
+  proposalsTransition: PROPOSALS_CHANNELS.transition,
+  proposalsSetMode: PROPOSALS_CHANNELS.setMode,
+  proposalsListDocs: PROPOSALS_CHANNELS.listDocs,
+  settingsGet: SETTINGS_CHANNELS.get,
+  settingsSet: SETTINGS_CHANNELS.set,
   docsRead: DOCS_CHANNELS.read,
   docsOpenExternal: DOCS_CHANNELS.openExternal,
 } as const
@@ -122,6 +145,7 @@ export type ForgeChannel =
   | TasksChannel
   | FeaturesChannel
   | ProposalsChannel
+  | SettingsChannel
   | DocsChannel
 
 /** main 侧 IPC allowlist 唯一源（未知通道拒绝——electron-ipc-security 约定，继承自 1.4） */

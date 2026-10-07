@@ -82,10 +82,10 @@ describe('claimTask execute（路由 + 会话提取）', () => {
     expect(captured).toEqual([{ projectId: 'p-1', sessionId: 'sess-1' }])
   })
 
-  it('限域盲选：featureSlug 映射', async () => {
+  it('限域盲选：feature 容器映射（M3 垫片——feature_slug → source）', async () => {
     const { tool, captured } = toolWithCapture()
     await tool.execute({ feature_slug: 'f1' }, EXEC)
-    expect(captured[0]).toMatchObject({ projectId: 'p-1', featureSlug: 'f1' })
+    expect(captured[0]).toMatchObject({ projectId: 'p-1', source: { kind: 'feature', slug: 'f1' } })
   })
 
   it('显式重入：taskRef 两显式参 → TaskRef 映射', async () => {

@@ -50,6 +50,7 @@ const FEATURES: readonly FeatureCard[] = [
 const STATS: TaskStats = {
   total: 2,
   byStatus: { pending: 1, in_progress: 0, completed: 1, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+  unmetPending: 0,
 }
 
 const GRAPH: TaskGraph = { tasks: [cardFixture()], edges: [] }
@@ -172,7 +173,7 @@ describe('TasksTabBody · 三态面与空态', () => {
   })
 
   it('空态分派：feature 总数 0 / 搜索无匹配 / 过滤组合空', () => {
-    const zero: TaskStats = { total: 0, byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 } }
+    const zero: TaskStats = { total: 0, byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 }, unmetPending: 0 }
     expect(render({ load: load({ cards: [], stats: zero }) })).toContain('本 feature 暂无任务')
     expect(render({ search: '不存在', load: load({ cards: [] }) })).toContain('无匹配「不存在」的任务')
     expect(render({ activeStatuses: new Set<TaskStatus>(['blocked']), load: load({ cards: [] }) })).toContain('当前过滤组合无任务')

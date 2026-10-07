@@ -13,11 +13,10 @@ const snapshot: TaskSnapshot = {
   taskId: 't-1',
   slug: 'f1',
   localId: '3.2',
-  featureId: 'feat-1',
+  source: { kind: 'feature', slug: 'f1' },
   title: '示例',
   taskType: 'coding-feature',
   taskStatus: 'in_progress',
-  mainSession: false,
   breaking: false,
   complexity: 'medium',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -29,7 +28,7 @@ function toolWithCapture() {
   const tasks = {
     queryTask: async (input: QueryTaskInput) => {
       captured.push(input)
-      return { task: snapshot } satisfies QueryTaskResult
+      return { task: snapshot, container: { kind: 'feature', slug: 'f1', title: '特性 f1', mode: 'expedition', phase: 'tasks' } } satisfies QueryTaskResult
     },
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {

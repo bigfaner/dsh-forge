@@ -31,7 +31,7 @@ export function detailFixture(overrides: DetailFixtureOverrides = {}): TaskDetai
     taskId: 't-1',
     slug: 'm2-pipeline',
     localId: '2.4',
-    featureId: 'f-1',
+    container: { kind: 'feature', slug: 'm2-pipeline', title: 'M2 管线', mode: 'expedition', phase: 'in-progress' },
     title: 'plugin-forge tool 半身对接',
     taskType: 'coding-feature',
     taskStatus: 'completed',
@@ -50,7 +50,6 @@ export function detailFixture(overrides: DetailFixtureOverrides = {}): TaskDetai
     surfaceKey: undefined,
     surfaceType: undefined,
     blockedReason: undefined,
-    mainSession: false,
     breaking: false,
     createdAt: '2026-10-01T09:14:00.000Z',
     updatedAt: '2026-10-04T12:00:00.000Z',
@@ -150,18 +149,16 @@ describe('taskGoalOf / taskResultOf（AC4 目标·结果上下展示的数据面
     })
   })
 
-  it('结果——评估型（vars.score 自由文本承载）：得分/严重度/主会话标记', () => {
+  it('结果——评估型（vars.score 自由文本承载）：得分/严重度', () => {
     const detail = detailFixture({
       taskType: 'eval-contract',
       taskStatus: 'rejected',
-      mainSession: true,
       vars: { score: '45', severity: 'high' },
     })
     expect(taskResultOf(detail)).toEqual({
       kind: 'eval',
       score: '45',
       severity: 'high',
-      mainSession: true,
     })
   })
 

@@ -180,7 +180,14 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     if (input.taskRef !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
-      row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.featureSlug)
+      // M3 容器垫片：容器限定盲选 = feature 容器按 slug 限定（M2 语义等价）；proposal 容器
+      // 双轨随 1.2/2.4 source 双列到场（M2 schema 下 slug 与成链 feature 同名不可分——fail-loud）
+      if (input.source !== undefined && input.source.kind !== 'feature') {
+        throw new Error(
+          `claimTask: proposal 容器限定落地于 M3 1.2/2.4（当前 schema = M2 feature 单轨）：${input.source.slug}`,
+        )
+      }
+      row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.source?.slug)
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
 

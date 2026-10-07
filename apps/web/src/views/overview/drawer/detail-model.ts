@@ -73,7 +73,7 @@ export function isTerminalStatus(status: TaskDetail['taskStatus']): boolean {
 
 /** 结果推导（AC4——综合任务记录：最近 submit/transition 优先，状态兜底） */
 export type TaskResultView =
-  | { readonly kind: 'eval'; readonly score: string; readonly severity: string; readonly mainSession: boolean }
+  | { readonly kind: 'eval'; readonly score: string; readonly severity: string }
   | { readonly kind: 'submitted'; readonly summary: string; readonly commitHash?: string }
   | { readonly kind: 'note'; readonly text: string }
   | { readonly kind: 'blocked'; readonly reason: string }
@@ -81,16 +81,16 @@ export type TaskResultView =
   | { readonly kind: 'pending' }
   | { readonly kind: 'status'; readonly label: string }
 
-/** 评估得分（M2 自由文本承载——vars.score/vars.severity；缺席 = 无结构化得分） */
+/** 评估得分（M2 自由文本承载——vars.score/vars.severity；缺席 = 无结构化得分。
+ *  M3：main_session 砍除（裁决⑦）——🔑 主会话标记随契约面退役） */
 export function evalScoreOf(
   detail: TaskDetail,
-): { readonly score: string; readonly severity: string; readonly mainSession: boolean } | undefined {
+): { readonly score: string; readonly severity: string } | undefined {
   const score = varsText(detail.vars ?? {}, 'score')
   if (score === undefined) return undefined
   return {
     score,
     severity: varsText(detail.vars ?? {}, 'severity') ?? '—',
-    mainSession: detail.mainSession,
   }
 }
 

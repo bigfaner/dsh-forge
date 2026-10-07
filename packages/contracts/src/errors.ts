@@ -1,5 +1,6 @@
 // 错误码 typed 定义（P1 六码 tech-design §Error Handling「Error Types & Codes」表逐行对照；
-// M2 扩池 15 新码——1.1，行序 = M2 表行序）。能力面/服务层抛 typed error（code 字面量锚定
+// M2 扩池 15 新码——1.1，行序 = M2 表行序；M3 扩池 3 新码——Interface 6）。能力面/服务层抛
+// typed error（code 字面量锚定
 // 本 ERROR_CODES；类名/name 由 core 双域 errors.ts 手写字面量——本文件不持运行期名映射，
 // fix-34 删死常量 ERROR_NAMES 后注释如实），RPC 边界序列化为 RpcErrorPayload，UI 按 code
 // 映射状态（空态/错误条/横幅；未映射码 → 通用错误条兜底——永无裸 code 泄漏）。
@@ -33,6 +34,10 @@ export const ERROR_CODES = [
   'ERR_WORKSPACE_DB_UNAVAILABLE', // → WorkspaceDbUnavailableError：惰性开库/迁移失败——工作区隔离态（503）
   'ERR_SUSPECTED_MOVE', // → SuspectedMoveError：注册碰撞同主体异 hash8（409；data 带手工指引）
   'ERR_DOC_PATH_INVALID', // → DocPathInvalidError：readDoc 路径越界（400）
+  // ── M3（Interface 6：自举·模式预设） ──
+  'ERR_TEST_EVIDENCE_REQUIRED', // → TestEvidenceRequiredError：submitTask AC 证据缺席·gate.test !== true（400；data 带 AC 清单）
+  'ERR_GATE_SUMMARY_REQUIRED', // → GateSummaryRequiredError：type='gate' 任务缺数字摘要（400）
+  'ERR_SPAWN_FAILED', // → SpawnFailedError：driver spawn 异常——任务留 in_progress 幂等重入径（500）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -72,4 +77,11 @@ export interface SuspectedMoveData {
   derivedDir: string
   /** 手工处置指引文案（认领对话框 = M3） */
   guidance: string
+}
+
+/** ERR_TEST_EVIDENCE_REQUIRED data 载荷：AC 证据缺席的验收清单（M3 Interface 6——
+ *  submitTask gate.test !== true 时逐行带回，错误信息含 AC 清单） */
+export interface TestEvidenceRequiredData {
+  /** 判据 AC 清单（tasks.ac_json 解码形原样带回） */
+  acceptanceCriteria: readonly string[]
 }

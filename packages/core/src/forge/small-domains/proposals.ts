@@ -18,10 +18,14 @@ import {
   PROPOSAL_STATUSES,
   type CreateProposalInput,
   type ForgeProposalsService,
+  type ListProposalDocsQuery,
   type ProposalCard,
+  type ProposalDocRow,
   type ProposalRow,
   type ProposalStatus,
+  type SetProposalModeInput,
   type TransitionProposalInput,
+  type TransitionProposalResult,
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
@@ -68,7 +72,8 @@ function toProposalRow(row: ProposalStorageRow): ProposalRow {
 /** 裁决态（→ 此时写 decided_at；打回/superseded 不改写——schema.sql decided_at 行注） */
 const DECIDING_STATUSES: readonly ProposalStatus[] = ['accepted', 'rejected']
 
-/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals） */
+/** Interface 3：core · forge 提案域服务面（ctx.forgeProposals——M3 五法：三 M2 法容器化 +
+ *  setProposalMode/listProposalDocs 两新面垫片，语义实现归 2.2/2.3） */
 export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposalsService {
   return {
     async createProposal(input: CreateProposalInput): Promise<ProposalRow> {
@@ -92,7 +97,7 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
       return toProposalRow(row)
     },
 
-    async transitionProposal(input: TransitionProposalInput): Promise<ProposalRow> {
+    async transitionProposal(input: TransitionProposalInput): Promise<TransitionProposalResult> {
       const db = deps.store.ensureOpen(input.projectId)
       const row = withTransaction(db, () => {
         const current = db
@@ -102,7 +107,9 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
           throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.proposalId })
         }
         assertDomainTransition('proposal', PROPOSAL_STATUSES, current.proposal_status, input.toStatus)
-        // 裁决写 decided_at：→ accepted/rejected 覆盖式写最新裁决时刻；其余转移不改写
+        // 裁决写 decided_at：→ accepted/rejected 覆盖式写最新裁决时刻；其余转移不改写。
+        // M3 垫片（1.1）：supersededBy 谱系与成链分叉内聚随 1.2/2.2（schema mode/superseded_by
+        // 双列 + feature_records 到场）——本契约期面零行为变更（可选入参不消费）。
         const now = new Date().toISOString()
         const decidedAt = DECIDING_STATUSES.includes(input.toStatus) ? now : current.decided_at
         db.prepare(`UPDATE proposals SET proposal_status = ?, decided_at = ?, updated_at = ? WHERE id = ?`).run(
@@ -117,10 +124,26 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
       return toProposalRow(row)
     },
 
+    // M3 新面（1.1 契约对齐垫片）：proposals.mode 列随 1.2 schema v1 直改到场——语义实现归 2.2
+    // （setProposalMode 单事务只写 mode + 审计）。垫片期无调用方（RPC 接线 = 3.8，UI = 4.2）。
+    async setProposalMode(_input: SetProposalModeInput): Promise<ProposalRow> {
+      throw new Error('setProposalMode: M3 语义实现归 2.2（proposals.mode 列随 1.2 schema 到场）')
+    },
+
     async listProposals(q: { projectId: string; search?: string; sort?: 'active' | 'created' }): Promise<ProposalCard[]> {
       const db = deps.store.ensureOpen(q.projectId)
       const rows = db.prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL}`).all()
-      const cards = rows.map(toProposalRow)
+      // M3 taskCount（容器维度）：tasks.slug ≡ 容器 slug 服务不变量下按 slug 计数——成链
+      // feature 同名任务并入同计（M2 等价口径；source_id 分组随 1.2/2.3 泛化）
+      const counts = new Map(
+        db
+          .prepare<unknown[], { slug: string; n: number }>(
+            `SELECT slug, COUNT(*) AS n FROM tasks GROUP BY slug`,
+          )
+          .all()
+          .map((r) => [r.slug, r.n] as const),
+      )
+      const cards: ProposalCard[] = rows.map((row) => ({ ...toProposalRow(row), taskCount: counts.get(row.slug) ?? 0 }))
       const filtered = cards.filter((c) =>
         matchesSearch(q.search, proposalSearchKeys(c.slug, c.title, c.proposalStatus)),
       )
@@ -131,6 +154,11 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
         createdAt: (c) => c.createdAt,
         id: (c) => c.proposalId,
       })
+    },
+
+    // M3 新面（1.1 契约对齐垫片）：docs/proposals/<slug>/ 目录扫描读面归 2.3（UF-1 文档区）
+    async listProposalDocs(_q: ListProposalDocsQuery): Promise<ProposalDocRow[]> {
+      throw new Error('listProposalDocs: M3 语义实现归 2.3（提案文档区目录扫描）')
     },
   }
 }

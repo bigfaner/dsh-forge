@@ -186,7 +186,7 @@ describe('AC5 恢复钩子：反查 idx_edges_prerequisite + 前置全满足才 
     })
     // ② dispatcher 建 fix 任务（block-source：源置 blocked + fix-chain 边 + auto-block 记录）
     const fixTask = await add({
-      projectId: P(), featureSlug: 'fix', title: '修 1.1', type: 'coding-fix',
+      projectId: P(), source: { kind: 'feature', slug: 'fix' }, title: '修 1.1', type: 'coding-fix',
       sourceTask: { slug: 'fix', localId: '1.1' }, blockSource: true,
     })
     expect(fixTask).toMatchObject({ localId: 'fix-1', reused: false })

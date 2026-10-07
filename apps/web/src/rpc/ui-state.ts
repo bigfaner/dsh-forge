@@ -39,6 +39,12 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_SUSPECTED_MOVE: 'error-bar',
   // 库不可用 → 工作区隔离态（概览域级横幅——单库腐化不瘫痪全局，其余工作区照常）
   ERR_WORKSPACE_DB_UNAVAILABLE: 'banner',
+  // ── M3 3 新码（1.1 扩池承接；按码精化归 4.x）──
+  // 提交证据/摘要缺席 → 错误条（结算语境原地反馈；ERR_TEST_EVIDENCE_REQUIRED data 含 AC 清单）
+  ERR_TEST_EVIDENCE_REQUIRED: 'error-bar',
+  ERR_GATE_SUMMARY_REQUIRED: 'error-bar',
+  // spawn 失败 → 错误条（派发语境——任务留 in_progress 幂等重入，指引重试）
+  ERR_SPAWN_FAILED: 'error-bar',
 }
 
 /**

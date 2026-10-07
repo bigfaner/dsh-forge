@@ -17,6 +17,7 @@ function proposal(id: string, slug: string, status: ProposalStatus, decidedAt?: 
     proposalStatus: status,
     relPath: `docs/proposals/${slug}/proposal.md`,
     author: 'faner',
+    taskCount: 0,
     decidedAt,
     createdAt: CREATED,
     updatedAt: CREATED,

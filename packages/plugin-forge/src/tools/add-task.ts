@@ -54,7 +54,6 @@ export interface AddTaskToolArgs {
   readonly source_local_id?: string
   /** true = 源任务同事务置 blocked（fix 链协议——block_source 蕴含源对在场） */
   readonly block_source?: boolean
-  readonly main_session?: boolean
   readonly breaking?: boolean
   /** 覆盖率阈值小数（0–1） */
   readonly coverage?: number
@@ -96,7 +95,6 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
     source_slug?: string
     source_local_id?: string
     block_source?: boolean
-    main_session?: boolean
     breaking?: boolean
     coverage?: number
     complexity?: TaskComplexity
@@ -133,8 +131,6 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
     out.source_local_id = source.second
   }
   if (blockSource !== undefined) out.block_source = blockSource
-  const mainSession = optionalBoolean(a, 'main_session', TOOL)
-  if (mainSession !== undefined) out.main_session = mainSession
   const breaking = optionalBoolean(a, 'breaking', TOOL)
   if (breaking !== undefined) out.breaking = breaking
   const coverage = optionalFraction(a, 'coverage', TOOL)
@@ -201,7 +197,6 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           type: 'boolean',
           description: 'true = block the source task in the same transaction until this fix completes (fix chain).',
         },
-        main_session: { type: 'boolean', description: 'Reserved main-session flag (default false).' },
         breaking: { type: 'boolean', description: 'Breaking-change flag (default false).' },
         coverage: { type: 'number', description: 'Coverage threshold as a 0-1 fraction (omit for global default).' },
         complexity: { type: 'string', description: 'One of: low, medium, high.' },
@@ -217,7 +212,8 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
       const projectId = requireProjectId(deps.resolveProjectId, session)
       const input: AddTaskInput = {
         projectId,
-        featureSlug: parsed.feature_slug,
+        // M3 容器化垫片（3.5 工具面适配前）：feature_slug 参数 → feature 容器引用（M2 语义等价）
+        source: { kind: 'feature', slug: parsed.feature_slug },
         title: parsed.title,
         type: parsed.type,
         ...(parsed.task_desc !== undefined ? { taskDesc: parsed.task_desc } : {}),
@@ -229,7 +225,6 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ? { sourceTask: { slug: parsed.source_slug, localId: parsed.source_local_id } }
           : {}),
         ...(parsed.block_source !== undefined ? { blockSource: parsed.block_source } : {}),
-        ...(parsed.main_session !== undefined ? { mainSession: parsed.main_session } : {}),
         ...(parsed.breaking !== undefined ? { breaking: parsed.breaking } : {}),
         ...(parsed.coverage !== undefined ? { coverage: parsed.coverage } : {}),
         ...(parsed.complexity !== undefined ? { complexity: parsed.complexity } : {}),

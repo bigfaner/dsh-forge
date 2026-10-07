@@ -4,6 +4,8 @@
 // 1.1（M2）增补：Interface 7 五族——forge:tasks|features|proposals|docs/* +
 // forge:projects/deriveTaskStoreDir 扩族 + forge:events/tasks-changed 推送面；
 // 写动词 add/claim/submit/createProposal/transitionProposal 恒不上 RPC（SC7 断言面）。
+// 1.1（M3）增补：Interface 4 扩池——proposals 三新键（transition 双面/setMode/listDocs）+
+// forge:settings/{get,set} 新族；allowlist 28 → 33；transitionProposal 移出 RPC 拒绝集（drift 修订）。
 import { describe, expect, it } from 'vitest'
 import {
   DOCS_CHANNELS,
@@ -16,6 +18,7 @@ import {
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  SETTINGS_CHANNELS,
   TASKS_CHANNELS,
 } from './channels.js'
 
@@ -71,9 +74,19 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:proposals/* 仅 list（写动词 createProposal/transitionProposal = tool 专属）', () => {
+  it('forge:proposals/* 四通道（M3 Interface 4 扩池：list + transition 双面 drift 修订 + setMode UI 正门 + listDocs 文档区读）', () => {
     expect(PROPOSALS_CHANNELS).toEqual({
       list: 'forge:proposals/list',
+      transition: 'forge:proposals/transition',
+      setMode: 'forge:proposals/setMode',
+      listDocs: 'forge:proposals/listDocs',
+    })
+  })
+
+  it('forge:settings/* 两通道（M3 Interface 4 扩池：Forge设置 读写——forgeSettings 单门）', () => {
+    expect(SETTINGS_CHANNELS).toEqual({
+      get: 'forge:settings/get',
+      set: 'forge:settings/set',
     })
   })
 
@@ -98,9 +111,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 七 invoke 族 28 通道全列、无重复（main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(28)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(28)
+  it('allowlist = 八 invoke 族 33 通道全列、无重复（M3：+proposals 三键 +settings 两键；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(33)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(33)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),
@@ -110,6 +123,7 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
         ...Object.values(TASKS_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
         ...Object.values(PROPOSALS_CHANNELS),
+        ...Object.values(SETTINGS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
       ].sort(),
     )
@@ -132,7 +146,7 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
 })
 
 describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', () => {
-  it('写动词 add/claim/submit/createProposal/transitionProposal 不入任何 RPC 族（SC7 断言面）', () => {
+  it('写动词 addTask/claimTask/submitTask/createProposal 不入任何 RPC 族（M3 drift 修订：transitionProposal 双面上 RPC——Interface 4；claimTask 退役并入 dispatchTask 仅存 core API）', () => {
     const families = [
       PROJECTS_CHANNELS,
       PROJECTS_M2_CHANNELS,
@@ -141,6 +155,7 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       TASKS_CHANNELS,
       FEATURES_CHANNELS,
       PROPOSALS_CHANNELS,
+      SETTINGS_CHANNELS,
       DOCS_CHANNELS,
     ]
     const writeVerbs = [
@@ -148,7 +163,7 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       'claimTask',
       'submitTask',
       'createProposal',
-      'transitionProposal',
+      // transitionProposal 已上 RPC 双面（M3 Interface 4 drift 修订）——不再入拒绝集
     ]
     for (const family of families) {
       for (const key of Object.keys(family)) {

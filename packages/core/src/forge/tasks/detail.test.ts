@@ -117,12 +117,11 @@ describe('AC3 taskDetail：全量水化（TaskCard 全量 + 深字段）', () =>
     expect(detail.sessionCount).toBe(2) // s-dispatch（link + record 同会话去重）+ s-exec
     expect(detail.sourceTask).toBeUndefined()
     // 快照深字段
-    expect(detail.featureId).toBe('f-f1')
+    expect(detail.container).toEqual({ kind: 'feature', slug: 'f1', title: '特性 f1', mode: 'expedition', phase: 'in-progress' })
     expect(detail.taskDesc).toContain('tech-design.md')
     expect(detail.vars).toEqual({ SPEC: 'proposals/p1/proposal.md', NOTE: '非路径自由文本' })
     expect(detail.coverage).toBe(0.9)
     expect(detail.complexity).toBe('low')
-    expect(detail.mainSession).toBe(true)
     expect(detail.breaking).toBe(false)
     expect(detail.createdAt).toBe('2026-10-06T08:00:00.000Z')
     // records 时间线（自增序；verb/from→to/reason/digest/actor/session 织入）

@@ -34,7 +34,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     seedFeature(h!.db, { slug: 'f1' }) // prd、无文档无任务——推导机不动点
     const r = await add({
       projectId: P(),
-      featureSlug: 'f1',
+      source: { kind: 'feature', slug: 'f1' },
       title: '示例任务',
       type: 'coding-feature',
       taskDesc: '描述',
@@ -45,7 +45,6 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       complexity: 'high',
       surfaceKey: 'web',
       surfaceType: 'web',
-      mainSession: true,
       breaking: true,
     })
     expect(r).toMatchObject({ slug: 'f1', localId: '1.1', reused: false })
@@ -68,7 +67,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       estimated_time: '2h',
       vars_json: '{"K":"V"}',
       source_task_id: null,
-      main_session: 1,
+      main_session: 0, // M3：输入面砍除（裁决⑦）——垫片恒 0，列随 1.2 schema 退役
       breaking: 1,
       coverage: 0.8,
       complexity: 'high',
@@ -93,27 +92,27 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     seedTask(h!.db, 'num', '1.1')
     seedTask(h!.db, 'num', '1.2')
     seedTask(h!.db, 'num', '2.7')
-    expect((await add({ projectId: P(), featureSlug: 'num', title: 't', type: 'doc' })).localId).toBe('2.8')
+    expect((await add({ projectId: P(), source: { kind: 'feature', slug: 'num' }, title: 't', type: 'doc' })).localId).toBe('2.8')
     seedFeature(h!.db, { slug: 'fresh' })
-    expect((await add({ projectId: P(), featureSlug: 'fresh', title: 't', type: 'doc' })).localId).toBe('1.1')
+    expect((await add({ projectId: P(), source: { kind: 'feature', slug: 'fresh' }, title: 't', type: 'doc' })).localId).toBe('1.1')
     seedFeature(h!.db, { slug: 'mixed', status: 'tasks' })
     seedTask(h!.db, 'mixed', '1.gate')
     seedTask(h!.db, 'mixed', 'fix-1', { type: 'coding-fix' })
-    expect((await add({ projectId: P(), featureSlug: 'mixed', title: 't', type: 'doc' })).localId).toBe('1.1')
+    expect((await add({ projectId: P(), source: { kind: 'feature', slug: 'mixed' }, title: 't', type: 'doc' })).localId).toBe('1.1')
   })
 
   it('dependsOn → manual 边（origin=manual）；未命中 → ERR_TASK_NOT_FOUND（featureSlug 作用域）', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'dep', status: 'tasks' })
     seedTask(h!.db, 'dep', '1.1')
-    const r = await add({ projectId: P(), featureSlug: 'dep', title: 't', type: 'doc', dependsOn: ['1.1'] })
+    const r = await add({ projectId: P(), source: { kind: 'feature', slug: 'dep' }, title: 't', type: 'doc', dependsOn: ['1.1'] })
     expect(
       rows(
         `SELECT task_id, prerequisite_id, origin FROM task_edges WHERE task_id = ?`,
         r.taskId,
       ),
     ).toEqual([{ task_id: r.taskId, prerequisite_id: 't-dep-1.1', origin: 'manual' }])
-    const err = await add({ projectId: P(), featureSlug: 'dep', title: 't', type: 'doc', dependsOn: ['ghost'] }).catch(
+    const err = await add({ projectId: P(), source: { kind: 'feature', slug: 'dep' }, title: 't', type: 'doc', dependsOn: ['ghost'] }).catch(
       (e: unknown) => e,
     )
     expect(err).toBeInstanceOf(TaskNotFoundError)
@@ -126,7 +125,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
 
   it('featureSlug 未命中 → ERR_FEATURE_NOT_FOUND（tasks 域就近类）+ 零行写入', async () => {
     const add = svc()
-    const err = await add({ projectId: P(), featureSlug: 'ghost', title: 't', type: 'doc' }).catch((e: unknown) => e)
+    const err = await add({ projectId: P(), source: { kind: 'feature', slug: 'ghost' }, title: 't', type: 'doc' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(TasksFeatureNotFoundError)
     expect((err as TasksFeatureNotFoundError).code).toBe('ERR_FEATURE_NOT_FOUND')
     expect((err as TasksFeatureNotFoundError).data).toEqual({ projectId: P(), featureSlug: 'ghost' })
@@ -146,7 +145,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     }
     const err = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: '环',
       type: 'coding-fix',
       dependsOn: ['2.4'],
@@ -160,7 +159,7 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     // 漂移拒绝（写时增量断言先于写）：源任务保持 pending 零变更
     seedFeature(h!.db, { slug: 'drifted', status: 'completed' })
     seedTask(h!.db, 'drifted', '1.1', { status: 'pending' })
-    const driftErr = await add({ projectId: P(), featureSlug: 'drifted', title: 't', type: 'doc' }).catch(
+    const driftErr = await add({ projectId: P(), source: { kind: 'feature', slug: 'drifted' }, title: 't', type: 'doc' }).catch(
       (e: unknown) => e,
     )
     expect(driftErr).toBeInstanceOf(PhaseInvariantViolationError)
@@ -180,7 +179,7 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
     seedEdge(h!.db, 't-feat-x-2.4', s22) // 既有链：2.4 等待 2.2
     const err = await add({
       projectId: P(),
-      featureSlug: 'feat-x',
+      source: { kind: 'feature', slug: 'feat-x' },
       title: 'T',
       type: 'coding-fix',
       dependsOn: ['2.4'],
@@ -208,7 +207,7 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
     seedEdge(h!.db, 't-fx-2.3', 't-fx-2.2')
     const err = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'T',
       type: 'coding-fix',
       dependsOn: ['2.4'],
@@ -224,7 +223,7 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
     seedTask(h!.db, 'fx', '2.2')
     const err = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'T',
       type: 'coding-fix',
       dependsOn: ['2.2'],
@@ -242,7 +241,7 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
     seedEdge(h!.db, 't-fx-2.2', 't-fx-2.4') // 2.2 等待 2.4——fix 链常态零图遍历
     const r = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -259,7 +258,7 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
     seedEdge(h!.db, 't-fx-2.4', 't-fx-2.2')
     const r = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'follow',
       type: 'doc',
       dependsOn: ['2.4'],
@@ -277,7 +276,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
     const first = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix lint',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -286,7 +285,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     expect(h!.events.emitted).toHaveLength(1)
     const second = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix lint again',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -303,7 +302,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
     const first = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -313,7 +312,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     h!.db.prepare(`UPDATE tasks SET task_status = 'completed' WHERE id = ?`).run(first.taskId)
     const second = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix again',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -335,7 +334,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
     await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'fix',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -343,7 +342,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     })
     const other = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 'cleanup',
       type: 'coding-cleanup',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -357,7 +356,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     seedTask(h!.db, 'fx', '1.1')
     const err = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: 't',
       type: 'doc',
       dependsOn: ['1.1', '1.1'],
@@ -399,7 +398,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
     const r = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: '修复 lint',
       type: 'coding-fix',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -429,7 +428,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     for (let i = 1; i <= 6; i++) {
       const r = await add({
         projectId: P(),
-        featureSlug: 'chain',
+        source: { kind: 'feature', slug: 'chain' },
         title: `fix-${i}`,
         type: 'coding-fix',
         sourceTask: prev,
@@ -440,7 +439,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     }
     const err = await add({
       projectId: P(),
-      featureSlug: 'chain',
+      source: { kind: 'feature', slug: 'chain' },
       title: 'fix-7',
       type: 'coding-fix',
       sourceTask: prev,
@@ -460,7 +459,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
     const r = await add({
       projectId: P(),
-      featureSlug: 'fx',
+      source: { kind: 'feature', slug: 'fx' },
       title: '衍生发现',
       type: 'doc',
       sourceTask: { slug: 'fx', localId: '2.2' },
@@ -485,7 +484,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     seedTask(h!.db, 'f2', '1.1')
     const miss = await add({
       projectId: P(),
-      featureSlug: 'f1',
+      source: { kind: 'feature', slug: 'f1' },
       title: 't',
       type: 'coding-fix',
       sourceTask: { slug: 'f1', localId: '9.9' },
@@ -495,7 +494,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     expect((miss as TaskNotFoundError).data.taskRef).toEqual({ slug: 'f1', localId: '9.9' })
     const cross = await add({
       projectId: P(),
-      featureSlug: 'f1',
+      source: { kind: 'feature', slug: 'f1' },
       title: 't',
       type: 'coding-fix',
       sourceTask: { slug: 'f2', localId: '1.1' }, // 命中他 feature 同键——同 feature 边不变量拒绝
@@ -508,7 +507,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
   it('blockSource 无 sourceTask → fail-loud 契约违例（非 typed 域错误码面）', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'fx' })
-    const err = await add({ projectId: P(), featureSlug: 'fx', title: 't', type: 'coding-fix', blockSource: true }).catch(
+    const err = await add({ projectId: P(), source: { kind: 'feature', slug: 'fx' }, title: 't', type: 'coding-fix', blockSource: true }).catch(
       (e: unknown) => e,
     )
     expect(err).toBeInstanceOf(Error)

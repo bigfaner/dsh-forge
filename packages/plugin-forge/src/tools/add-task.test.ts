@@ -15,7 +15,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createAddTaskTool>; captur
   const tasks = {
     addTask: async (input: AddTaskInput) => {
       captured.push(input)
-      return { taskId: 't-1', slug: input.featureSlug, localId: '3.9', reused: false }
+      return { taskId: 't-1', slug: input.source.slug, localId: '3.9', reused: false }
     },
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
@@ -41,7 +41,6 @@ describe('parseAddTaskArgs（防御收窄）', () => {
       source_slug: 'f1',
       source_local_id: '2.4',
       block_source: true,
-      main_session: true,
       breaking: true,
       coverage: 0.8,
       complexity: 'high',
@@ -110,7 +109,7 @@ describe('addTask execute（路由 + 映射）', () => {
     expect(captured).toEqual([
       {
         projectId: 'p-1',
-        featureSlug: 'f1',
+        source: { kind: 'feature', slug: 'f1' },
         title: '修复X',
         type: 'coding-fix',
         taskDesc: 'd',

@@ -241,8 +241,8 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
   it('tasks 八法：通道名 = TASKS_CHANNELS 常量值本尊；负载原样；typed 返回', async () => {
     const t = fakeTransport()
     const snapshot = {
-      taskId: 't-1', slug: 'demo', localId: '2.1', featureId: 'f-1', title: 'x', taskType: 'coding-feature',
-      taskStatus: 'in_progress', mainSession: false, breaking: false, complexity: 'high',
+      taskId: 't-1', slug: 'demo', localId: '2.1', source: { kind: 'feature' as const, slug: 'demo' }, title: 'x', taskType: 'coding-feature',
+      taskStatus: 'in_progress', breaking: false, complexity: 'high',
       createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
     }
     t.respondWith((channel) => {
@@ -262,7 +262,7 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
     await client.tasks.validateFeatureTasks({ projectId: 'p-1', featureSlug: 'demo' })
     await client.tasks.list({ projectId: 'p-1', search: '桥' })
     await client.tasks.stats({ projectId: 'p-1' })
-    await client.tasks.graph({ projectId: 'p-1', featureSlug: 'demo' })
+    await client.tasks.graph({ projectId: 'p-1', source: { kind: 'feature', slug: 'demo' } })
     await client.tasks.detail({ projectId: 'p-1', taskId: 't-1' })
     await client.tasks.sessionLinks({ projectId: 'p-1', sessionId: 'sess-1' })
     expect(t.calls.map((c) => c.channel)).toEqual(Object.values(TASKS_CHANNELS))

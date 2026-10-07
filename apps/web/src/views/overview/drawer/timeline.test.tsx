@@ -57,7 +57,7 @@ describe('现状条（AC5 六型条件）', () => {
     expect(items.map((i) => i.kind)).toEqual(['blocked', 'prereqs', 'sessions', 'gate'])
   })
 
-  it('Surface 条件仅 test 族；得分+严重度条件仅 eval 族（vars.score 承载 + 主会话标记）', () => {
+  it('Surface 条件仅 test 族；得分+严重度条件仅 eval 族（vars.score 承载）', () => {
     const testDetail = detailFixture({
       taskType: 'test-run',
       surfaceKey: 'web',
@@ -67,12 +67,11 @@ describe('现状条（AC5 六型条件）', () => {
     expect(nowBarItems(testDetail).map((i) => i.kind)).toEqual(['surface'])
     const evalDetail = detailFixture({
       taskType: 'eval-contract',
-      mainSession: true,
       vars: { score: '45', severity: 'high' },
       prerequisites: [],
     })
     expect(nowBarItems(evalDetail).map((i) => i.kind)).toEqual(['score'])
-    expect(evalScoreOf(evalDetail)).toEqual({ score: '45', severity: 'high', mainSession: true })
+    expect(evalScoreOf(evalDetail)).toEqual({ score: '45', severity: 'high' })
   })
 
   it('无条件 → 现状条不渲染', () => {
@@ -176,7 +175,6 @@ describe('事件流（AC5 织入矩阵）', () => {
   it('记录序保持（append-only 自增序——旧 → 新）；评估型 submit 标签换评估', () => {
     const detail = detailFixture({
       taskType: 'eval-contract',
-      mainSession: true,
       records: [
         rec('add'),
         rec('submit', { summary: 'score 45/100 · 严重度 high' }),
@@ -188,7 +186,6 @@ describe('事件流（AC5 织入矩阵）', () => {
     expect(addAt).toBeGreaterThanOrEqual(0)
     expect(submitAt).toBeGreaterThan(addAt)
     expect(html).toContain('>评估</span>')
-    expect(html).toContain('🔑 主会话')
     expect(html).toContain('score 45/100 · 严重度 high')
   })
 

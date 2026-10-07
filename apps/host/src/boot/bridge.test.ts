@@ -408,7 +408,14 @@ describe('createBridgeProxy（主侧代理）', () => {
       'listFeatures',
       'listFeatureDocs',
     ])
-    expect([...PROPOSALS_SERVICE_METHODS]).toEqual(['createProposal', 'transitionProposal', 'listProposals'])
+    expect([...PROPOSALS_SERVICE_METHODS]).toEqual([
+      'createProposal',
+      'transitionProposal',
+      'listProposals',
+      // M3（1.1 契约对齐）：两新面透传名（core 垫片 fail-loud；语义实现归 2.2/2.3）
+      'setProposalMode',
+      'listProposalDocs',
+    ])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
     expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
     expect([...BRIDGE_SERVICE_NAMES]).toEqual([
@@ -496,7 +503,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
     expect(TASKS_SERVICE_METHODS).toHaveLength(11)
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
-    expect(PROPOSALS_SERVICE_METHODS).toHaveLength(3)
+    expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
     expect(BRIDGE_SERVICE_NAMES).toHaveLength(6)

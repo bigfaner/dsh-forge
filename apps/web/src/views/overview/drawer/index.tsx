@@ -122,7 +122,6 @@ function ResultView({ result }: { readonly result: ReturnType<typeof taskResultO
       return (
         <span className="dswf-td-gr-v">
           评估 {result.score}/100 · 严重度 {result.severity}
-          {result.mainSession ? ' · 🔑 主会话' : ''}
         </span>
       )
     case 'submitted':

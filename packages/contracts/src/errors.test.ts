@@ -8,6 +8,7 @@ import {
   type DependenciesUnmetData,
   ERROR_CODES,
   type SuspectedMoveData,
+  type TestEvidenceRequiredData,
   type UnmetDependency,
 } from './errors.js'
 
@@ -40,6 +41,13 @@ const M2_ERROR_TABLE = [
   ['ERR_DOC_PATH_INVALID', 'DocPathInvalidError'],
 ] as const
 
+// M3 Interface 6 表（3 新码；行序 = 表行序）
+const M3_ERROR_TABLE = [
+  ['ERR_TEST_EVIDENCE_REQUIRED', 'TestEvidenceRequiredError'],
+  ['ERR_GATE_SUMMARY_REQUIRED', 'GateSummaryRequiredError'],
+  ['ERR_SPAWN_FAILED', 'SpawnFailedError'],
+] as const
+
 describe('AC1 六错误码与 Error Handling 表一致（P1 面不动）', () => {
   it('ERROR_CODES 前六码齐备且行序与表一致', () => {
     expect([...ERROR_CODES].slice(0, 6)).toEqual(ERROR_TABLE.map(([code]) => code))
@@ -47,16 +55,35 @@ describe('AC1 六错误码与 Error Handling 表一致（P1 面不动）', () =>
 })
 
 describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
-  it('ERROR_CODES = 21 码：P1 六码前缀不动 + M2 十五码行序一致', () => {
-    expect([...ERROR_CODES]).toHaveLength(21)
-    expect([...ERROR_CODES].slice(6)).toEqual(M2_ERROR_TABLE.map(([code]) => code))
-    expect(new Set(ERROR_CODES).size).toBe(21)
+  it('M2 段十五码：P1 六码前缀不动 + 行序一致（M3 三码随 AC5 段续后）', () => {
+    expect([...ERROR_CODES].slice(6, 21)).toEqual(M2_ERROR_TABLE.map(([code]) => code))
+    expect([...ERROR_CODES].slice(0, 6)).toEqual(ERROR_TABLE.map(([code]) => code))
   })
 
   it('新码命名一律 ERR_ 前缀（与 P1 面同构）', () => {
     for (const code of ERROR_CODES.slice(6)) {
       expect(code.startsWith('ERR_')).toBe(true)
     }
+  })
+})
+
+describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
+  it('ERROR_CODES = 24 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致', () => {
+    expect([...ERROR_CODES]).toHaveLength(24)
+    expect([...ERROR_CODES].slice(21)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
+    expect(new Set(ERROR_CODES).size).toBe(24)
+  })
+
+  it('M3 新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
+    for (const code of ERROR_CODES.slice(21)) {
+      expect(code.startsWith('ERR_')).toBe(true)
+    }
+  })
+
+  it('ERR_TEST_EVIDENCE_REQUIRED data = AC 清单（submitTask 证据门判据原样带回）', () => {
+    const sample: TestEvidenceRequiredData = { acceptanceCriteria: ['[AC-1] 通道常量齐备', '[AC-2] allowlist 一致'] }
+    expect(sample.acceptanceCriteria).toHaveLength(2)
+    expectTypeOf<TestEvidenceRequiredData['acceptanceCriteria']>().toMatchTypeOf<readonly string[]>()
   })
 })
 

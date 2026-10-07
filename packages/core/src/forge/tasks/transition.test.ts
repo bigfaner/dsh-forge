@@ -281,10 +281,10 @@ describe('transitionTask 恢复钩子（C3——与 submitTask 钩子同族）',
     try {
       seedFeature(h.db, { slug: 'feat', status: 'tasks' })
       const deps = { store: h.store, events: h.events }
-      await addTask(deps, { projectId: h.projectId, featureSlug: 'feat', title: '源任务', type: 'coding-feature' })
+      await addTask(deps, { projectId: h.projectId, source: { kind: 'feature', slug: 'feat' }, title: '源任务', type: 'coding-feature' })
       const fix = await addTask(deps, {
         projectId: h.projectId,
-        featureSlug: 'feat',
+        source: { kind: 'feature', slug: 'feat' },
         title: '修复',
         type: 'coding-fix',
         sourceTask: { slug: 'feat', localId: '1.1' },

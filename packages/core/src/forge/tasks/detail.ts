@@ -18,7 +18,7 @@ import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary }
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { listCommitFiles, type GitExecFile } from './git-lookup.js'
 import { hydrateTaskCards } from './list.js'
-import { readTaskRecords, readTaskSessions, resolveTaskById, toTaskSnapshot } from './query.js'
+import { hydrateTaskContainer, readTaskRecords, readTaskSessions, resolveTaskById, toTaskSnapshot } from './query.js'
 import { transitionTargets } from './state-machine.js'
 
 /** 详情读装配依赖（service.ts 装配面结构传入） */
@@ -148,7 +148,7 @@ export async function taskDetail(deps: TasksDetailDeps, q: TaskDetailQuery): Pro
     .all(row.id)
   return {
     ...card,
-    featureId: snapshot.featureId,
+    container: hydrateTaskContainer(db, row),
     taskDesc: snapshot.taskDesc,
     vars: snapshot.vars,
     coverage: snapshot.coverage,
@@ -156,7 +156,6 @@ export async function taskDetail(deps: TasksDetailDeps, q: TaskDetailQuery): Pro
     surfaceKey: snapshot.surfaceKey,
     surfaceType: snapshot.surfaceType,
     blockedReason: snapshot.blockedReason,
-    mainSession: snapshot.mainSession,
     breaking: snapshot.breaking,
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,

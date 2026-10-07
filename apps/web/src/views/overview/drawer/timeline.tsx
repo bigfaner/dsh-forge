@@ -47,7 +47,7 @@ export type NowBarItem =
   | { readonly kind: 'sessions'; readonly items: readonly SessionTaskLinkCard[] }
   | { readonly kind: 'surface'; readonly key: string; readonly surfaceType: string }
   | { readonly kind: 'gate'; readonly passed: number; readonly total: number }
-  | { readonly kind: 'score'; readonly score: string; readonly severity: string; readonly mainSession: boolean }
+  | { readonly kind: 'score'; readonly score: string; readonly severity: string }
 
 /** 现状条条目投影（六型条件：blocked / 前置[键+状态] / 挂接 pill 分型 / Surface[test 族] /
  *  质量门 M/N[gate 族] / 得分+严重度[eval 族——vars.score 自由文本承载]） */
@@ -164,7 +164,6 @@ export function TimelineNow({
             return (
               <span className="dswf-td-now-item" key={index}>
                 得分 {item.score}/100 · 严重度 {item.severity}
-                {item.mainSession ? ' · 🔑 主会话' : ''}
               </span>
             )
         }
@@ -230,7 +229,6 @@ function eventWeaves(record: TaskRecordEntry, detail: TaskDetail, onOpenSession:
       const summary = gateSummary(
         record.gate ?? { compile: false, fmt: false, lint: false, test: false },
       )
-      const isEval = templateFamilyOf(detail.taskType) === 'eval'
       return (
         <>
           {record.gate !== undefined ? (
@@ -239,7 +237,6 @@ function eventWeaves(record: TaskRecordEntry, detail: TaskDetail, onOpenSession:
               {record.gate.coverage !== undefined ? ` · 覆盖率 ${Math.round(record.gate.coverage * 100)}%` : ''}
             </Note>
           ) : null}
-          {isEval && detail.mainSession ? <Note>🔑 主会话</Note> : null}
           {record.commitHash !== undefined ? (
             <Note>
               <span className="dswf-td-commit" data-dswf-td-commit={record.commitHash}>

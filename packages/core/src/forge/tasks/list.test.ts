@@ -96,11 +96,11 @@ describe('AC1 listTasks：statusFilter 七态 chips + featureSlug 作用域', ()
 
   it('featureSlug 限定单 feature 子图；未命中 feature → 空数组（读面零 404）', async () => {
     seedSevenStatuses()
-    const f1 = await listTasks({ store: h!.store }, { projectId: P(), featureSlug: 'f1' })
+    const f1 = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
     expect(f1).toHaveLength(7)
     expect(f1.every((c) => c.slug === 'f1')).toBe(true)
     await expect(
-      listTasks({ store: h!.store }, { projectId: P(), featureSlug: 'nope' }),
+      listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'nope' } }),
     ).resolves.toEqual([])
   })
 })
@@ -108,7 +108,7 @@ describe('AC1 listTasks：statusFilter 七态 chips + featureSlug 作用域', ()
 describe('AC1 listTasks：sort（active 活跃优先 | created 最新创建）', () => {
   it("active（默认）= 活跃度权重序 in_progress → blocked → pending → suspended → skipped → rejected → completed（PRD '…' 展开）", async () => {
     const id = seedSevenStatuses()
-    const cards = await listTasks({ store: h!.store }, { projectId: P(), featureSlug: 'f1' })
+    const cards = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
     expect(cards.map((c) => c.taskStatus)).toEqual([
       'in_progress',
       'blocked',
@@ -231,17 +231,18 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
       'skipped',
       'rejected',
     ])
-    const f1 = await taskStats({ store: h!.store }, { projectId: P(), featureSlug: 'f1' })
+    const f1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
     expect(f1.total).toBe(7)
     expect(f1.byStatus.pending).toBe(1)
   })
 
-  it('空库 → 全零七态', async () => {
+  it('空库 → 全零七态 + unmetPending 0（M3 池快照派生）', async () => {
     db() // 起夹具（空库）
     const stats = await taskStats({ store: h!.store }, { projectId: P() })
     expect(stats).toEqual({
       total: 0,
       byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+      unmetPending: 0,
     })
   })
 })
@@ -259,7 +260,7 @@ describe('AC2 taskGraph（tasks + edges{taskId, prerequisiteId, origin}——DAG
     seedEdge(d, c, a, 'fix-chain')
     seedEdge(d, b, c, 'autoconfig')
 
-    const graph = await taskGraph({ store: h!.store }, { projectId: P(), featureSlug: 'f1' })
+    const graph = await taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
     expect(graph.tasks.map((t) => t.localId)).toEqual(['fix-1', '1.2', '1.1']) // created 降序（渲染稳定序）
     expect(graph.tasks.every((t) => t.slug === 'f1' && Array.isArray(t.prerequisites))).toBe(true)
     expect(graph.edges).toEqual([
@@ -274,7 +275,7 @@ describe('AC2 taskGraph（tasks + edges{taskId, prerequisiteId, origin}——DAG
     seedFeature(d, { slug: 'f1' })
     seedTask(d, 'f1', '1.1')
     await expect(
-      taskGraph({ store: h!.store }, { projectId: P(), featureSlug: 'nope' }),
+      taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'nope' } }),
     ).resolves.toEqual({ tasks: [], edges: [] })
   })
 })
@@ -358,9 +359,9 @@ describe('AC6 @500 任务直读核心侧基准（SC2 数据面 ≤2s——直读
     })()
 
     const t0 = Date.now()
-    const cards = await listTasks({ store: h!.store }, { projectId: P(), featureSlug: 'big' })
+    const cards = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'big' } })
     const t1 = Date.now()
-    const graph = await taskGraph({ store: h!.store }, { projectId: P(), featureSlug: 'big' })
+    const graph = await taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'big' } })
     const t2 = Date.now()
     expect(cards).toHaveLength(500)
     expect(graph.tasks).toHaveLength(500)

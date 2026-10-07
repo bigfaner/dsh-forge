@@ -61,7 +61,9 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
       [
         ...Object.values(TASKS_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
-        ...Object.values(PROPOSALS_CHANNELS),
+        // M3（1.1）契约扩池后 proposals 族常量含 transition/setMode/listDocs 三新键——
+        // host 注册面仍仅 list（三新通道接线 + forge:settings/* 归 3.8）
+        PROPOSALS_CHANNELS.list,
         ...Object.values(DOCS_CHANNELS),
         PROJECTS_M2_CHANNELS.deriveTaskStoreDir,
       ]

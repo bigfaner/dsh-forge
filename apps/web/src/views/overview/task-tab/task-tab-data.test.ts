@@ -19,6 +19,7 @@ const CARDS: TaskCard[] = [cardFixture()]
 const STATS: TaskStats = {
   total: 1,
   byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+  unmetPending: 0,
 }
 const GRAPH: TaskGraph = { tasks: [...CARDS], edges: [] }
 
@@ -82,14 +83,14 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     expect(calls.map((c) => c.channel).sort()).toEqual(['tasks.list', 'tasks.stats'])
     expect(calls.find((c) => c.channel === 'tasks.list')?.payload).toEqual({
       projectId: 'p-1',
-      featureSlug: 'm2-pipeline',
+      source: { kind: 'feature', slug: 'm2-pipeline' },
       statusFilter: ['completed', 'blocked'],
       search: '评估',
       sort: 'created',
     })
     expect(calls.find((c) => c.channel === 'tasks.stats')?.payload).toEqual({
       projectId: 'p-1',
-      featureSlug: 'm2-pipeline',
+      source: { kind: 'feature', slug: 'm2-pipeline' },
     })
   })
 
@@ -105,12 +106,12 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     })
     expect(calls.find((c) => c.channel === 'tasks.list')?.payload).toEqual({
       projectId: 'p-1',
-      featureSlug: 'f',
+      source: { kind: 'feature', slug: 'f' },
       sort: 'active',
     })
   })
 
-  it('DAG 视图：增拉 tasks.graph({projectId, featureSlug})（AC5——taskGraph 按 featureSlug）', async () => {
+  it('DAG 视图：增拉 tasks.graph({projectId, source})（AC5——taskGraph 按容器拉取）', async () => {
     const { client, calls } = recordingClient({})
     const out = await fetchTasksTabData(client, {
       projectId: 'p-1',
@@ -125,7 +126,7 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     expect(calls.map((c) => c.channel).sort()).toEqual(['tasks.graph', 'tasks.list', 'tasks.stats'])
     expect(calls.find((c) => c.channel === 'tasks.graph')?.payload).toEqual({
       projectId: 'p-1',
-      featureSlug: 'm2-pipeline',
+      source: { kind: 'feature', slug: 'm2-pipeline' },
     })
   })
 

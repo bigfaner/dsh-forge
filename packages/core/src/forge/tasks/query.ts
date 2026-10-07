@@ -8,10 +8,12 @@
 // record = 执行会话挂接，同会话双侧参与则两卡并存——分型呈现不做合并解释，§6-24④ 诚实审计）。
 import type Database from 'better-sqlite3'
 import type {
+  FeatureStatus,
   QueryTaskInput,
   QueryTaskResult,
   SessionTaskLinkCard,
   TaskActor,
+  TaskContainerSummary,
   TaskGateReport,
   TaskPrerequisiteSummary,
   TaskRecordEntry,
@@ -85,7 +87,8 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     taskId: row.id,
     slug: row.slug,
     localId: row.local_id,
-    featureId: row.feature_id,
+    // M3 容器垫片：M2 schema = feature 单轨（slug ≡ feature.slug）；source 双列随 1.2 到场
+    source: { kind: 'feature', slug: row.slug },
     title: row.title,
     taskType: row.task_type,
     taskStatus: row.task_status,
@@ -95,7 +98,7 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     ...(row.vars_json !== null ? { vars: JSON.parse(row.vars_json) as Record<string, string> } : {}),
     ...(row.source_task_id !== null ? { sourceTaskId: row.source_task_id } : {}),
     ...(row.blocked_reason !== null ? { blockedReason: row.blocked_reason } : {}),
-    mainSession: row.main_session === 1,
+    // mode 快照 / acceptanceCriteria（ac_json）：列随 1.2 schema v1 直改到场——垫片期键缺席
     breaking: row.breaking === 1,
     ...(row.coverage !== null ? { coverage: row.coverage } : {}),
     complexity: row.complexity as TaskSnapshot['complexity'],
@@ -103,6 +106,30 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * 任务容器水化（M3 Interface 1：queryTask/taskDetail 增 container——诊断消息数据源）。
+ * M2 schema 垫片：恒 feature 容器（title/summary/feature_status 就 feature 行水化，
+ * mode = 恒远征硬编码——成链门语义）；proposal 容器随 1.2/2.x source 双列到场。
+ */
+export function hydrateTaskContainer(db: Database.Database, row: TaskStorageRow): TaskContainerSummary {
+  const feature = db
+    .prepare<unknown[], { slug: string; title: string; summary: string | null; feature_status: FeatureStatus }>(
+      `SELECT slug, title, summary, feature_status FROM features WHERE id = ?`,
+    )
+    .get(row.feature_id)
+  if (feature === undefined) {
+    throw new Error(`feature 行缺席（FK 漂移）：${row.feature_id}`) // fail-loud（claim/transition 同口径）
+  }
+  return {
+    kind: 'feature',
+    slug: feature.slug,
+    title: feature.title,
+    ...(feature.summary !== null ? { summary: feature.summary } : {}),
+    mode: 'expedition', // feature 容器恒远征（裁决⑥——无 mode 列，成链门保证）
+    phase: feature.feature_status,
   }
 }
 
@@ -151,11 +178,11 @@ export function resolveTaskById(db: Database.Database, projectId: string, taskId
   return row
 }
 
-/** Interface 1 queryTask：身份解析 + include 四节门控读 */
+/** Interface 1 queryTask：身份解析 + container 水化 + include 四节门控读 */
 export async function queryTask(deps: TasksQueryDeps, input: QueryTaskInput): Promise<QueryTaskResult> {
   const db = deps.store.ensureOpen(input.projectId)
   const row = resolveTaskRef(db, input.projectId, input.taskRef)
-  const result: QueryTaskResult = { task: toTaskSnapshot(row) }
+  const result: QueryTaskResult = { task: toTaskSnapshot(row), container: hydrateTaskContainer(db, row) }
   const include = input.include ?? {}
 
   if (include.prerequisites === true) {

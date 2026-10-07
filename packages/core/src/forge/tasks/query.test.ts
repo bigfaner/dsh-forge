@@ -40,7 +40,7 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
       taskId: 'tid-1',
       slug: 'f1',
       localId: '2.1',
-      featureId: 'f-f1',
+      source: { kind: 'feature', slug: 'f1' },
       title: '标题',
       taskType: 'coding-feature',
       taskStatus: 'blocked',
@@ -50,7 +50,7 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
       vars: { A: '1' },
       sourceTaskId: 't-f1-1.0',
       blockedReason: 'lint 失败',
-      mainSession: true,
+      // M3：main_session 砍除（快照面无此键）；mode/ac_json 列随 1.2 schema 到场——垫片期缺省
       breaking: false,
       coverage: 0.9,
       complexity: 'low',
@@ -69,13 +69,14 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
     expect((err as TaskNotFoundError).data).toEqual({ projectId: P(), taskRef: { slug: 'ghost', localId: '9.9' } })
   })
 
-  it('include 缺席 → 仅 task 节（四节门控——缺席不查询不呈现）', async () => {
+  it('include 缺席 → task + container 两节（四节门控——缺席不查询不呈现；container 恒水化）', async () => {
     const q = svc()
     seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
     seedTask(h!.db, 'f1', '1.1')
     seedRecord(h!.db, 't-f1-1.1', { verb: 'add' })
     const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' } })
-    expect(Object.keys(r)).toEqual(['task'])
+    expect(Object.keys(r)).toEqual(['task', 'container'])
+    expect(r.container).toEqual({ kind: 'feature', slug: 'f1', title: '特性 f1', mode: 'expedition', phase: 'tasks' })
   })
 })
 

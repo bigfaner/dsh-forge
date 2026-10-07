@@ -194,6 +194,10 @@ export const PROPOSALS_SERVICE_METHODS = [
   'createProposal',
   'transitionProposal',
   'listProposals',
+  // M3（1.1 契约对齐）：两新面透传名就位（core 垫片 fail-loud；语义实现归 2.2/2.3，
+  // RPC 通道接线 = 3.8，UI 消费 = 4.x——桥面白名单完备性恒编译期点名）
+  'setProposalMode',
+  'listProposalDocs',
 ] as const satisfies readonly (keyof ForgeProposalsService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeProposalsService 方法在此编译期点名） */

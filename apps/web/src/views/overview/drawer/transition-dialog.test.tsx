@@ -133,8 +133,8 @@ describe('AC3 · 提交载荷 + 终态提示', () => {
     const calls: string[] = []
     const payloads: unknown[] = []
     const snapshot: TaskSnapshot = {
-      taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', featureId: 'f-1', title: 't',
-      taskType: 'coding-feature', taskStatus: 'blocked', mainSession: false, breaking: false,
+      taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', source: { kind: 'feature', slug: 'm2-pipeline' }, title: 't',
+      taskType: 'coding-feature', taskStatus: 'blocked', breaking: false,
       complexity: 'high', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
     }
     const client = {
@@ -255,8 +255,8 @@ describe('确认动作 confirmTransitionDialog（AC2/AC3 主流程——补丁�
     }
   }
   const snapshot: TaskSnapshot = {
-    taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', featureId: 'f-1', title: 't',
-    taskType: 'coding-feature', taskStatus: 'blocked', mainSession: false, breaking: false,
+    taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', source: { kind: 'feature', slug: 'm2-pipeline' }, title: 't',
+    taskType: 'coding-feature', taskStatus: 'blocked', breaking: false,
     complexity: 'high', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
   }
 

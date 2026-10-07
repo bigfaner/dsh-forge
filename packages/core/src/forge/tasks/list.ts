@@ -24,6 +24,7 @@ import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_TYPE_LABELS,
+  type ContainerRef,
   type ListTasksQuery,
   type TaskCard,
   type TaskGraph,
@@ -62,17 +63,25 @@ export const ACTIVE_STATUS_WEIGHT: Readonly<Record<TaskStatus, number>> = {
   completed: 6,
 }
 
-/** featureSlug → featureId 解析（未命中 = undefined → 读面空结果，零 404） */
+/** featureSlug → featureId 解析（未命中 = undefined → 读面空结果，零 404）。
+ *  M3 容器垫片：feature 容器按 slug 解析（M2 语义等价）；proposal 容器 = M2 schema 下
+ *  无直挂任务行 → 恒空结果（零 404 读面口径不变），source 双列随 1.2/2.5 泛化。 */
 function resolveFeatureId(db: Database.Database, featureSlug: string): string | undefined {
   return db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(featureSlug)?.id
 }
 
-/** 行读取（featureSlug/statusFilter 动态 WHERE——一切占位参数化，prepared statements Hard Rule） */
+/** 容器引用 → feature 限定 id（proposal 容器 → undefined → 读面空结果；读面零 404 垫片） */
+function resolveContainerFeatureId(db: Database.Database, source: ContainerRef | undefined): string | undefined {
+  if (source === undefined) return undefined
+  return source.kind === 'feature' ? resolveFeatureId(db, source.slug) : undefined
+}
+
+/** 行读取（source/statusFilter 动态 WHERE——一切占位参数化，prepared statements Hard Rule） */
 function readTaskRows(db: Database.Database, q: ListTasksQuery): TaskStorageRow[] {
   const clauses: string[] = []
   const params: unknown[] = []
-  if (q.featureSlug !== undefined) {
-    const featureId = resolveFeatureId(db, q.featureSlug)
+  if (q.source !== undefined) {
+    const featureId = resolveContainerFeatureId(db, q.source)
     if (featureId === undefined) return []
     clauses.push('feature_id = ?')
     params.push(featureId)
@@ -229,14 +238,14 @@ export async function listTasks(deps: TasksListDeps, q: ListTasksQuery): Promise
   return hydrateTaskCards(db, sortTaskRows(matched, q.sort ?? 'active'))
 }
 
-/** Interface 1 taskStats：total + 七态分布（零计数态含 0 键——chips 禁用+淡化数据源） */
+/** Interface 1 taskStats：total + 七态分布 + unmetPending（零计数态含 0 键——chips 禁用+淡化数据源） */
 export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise<TaskStats> {
   const db = deps.store.ensureOpen(q.projectId)
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
   let featureId: string | undefined
-  if (q.featureSlug !== undefined) {
-    featureId = resolveFeatureId(db, q.featureSlug)
-    if (featureId === undefined) return { total: 0, byStatus }
+  if (q.source !== undefined) {
+    featureId = resolveContainerFeatureId(db, q.source)
+    if (featureId === undefined) return { total: 0, byStatus, unmetPending: 0 }
   }
   const rows = db
     .prepare<unknown[], { task_status: TaskStatus; n: number }>(
@@ -250,13 +259,35 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
     if (r.task_status in byStatus) byStatus[r.task_status] = r.n
     total += r.n
   }
-  return { total, byStatus }
+  // M3 池快照派生（Interface 1：pending ∧ 前置未全 ∈ {completed, skipped} 计数——单查询派生；
+  // dispatchTask 池快照数据源，与 byStatus 同 scope 口径）
+  const unmetPending = countUnmetPending(db, featureId)
+  return { total, byStatus, unmetPending }
 }
 
-/** Interface 1 taskGraph：feature 子图（TaskCard 全量水化 + 边三元组——DAG/泳道渲染源） */
+/** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */
+function countUnmetPending(db: Database.Database, featureId: string | undefined): number {
+  const scope = featureId === undefined ? '' : ' AND t.feature_id = ?'
+  const args = featureId === undefined ? [] : [featureId]
+  const row = db
+    .prepare<unknown[], { n: number }>(
+      `SELECT COUNT(*) AS n FROM tasks t
+       WHERE t.task_status = 'pending'${scope}
+         AND EXISTS (
+           SELECT 1 FROM task_edges e JOIN tasks p ON p.id = e.prerequisite_id
+           WHERE e.task_id = t.id AND p.task_status NOT IN ('completed', 'skipped')
+         )`,
+    )
+    .get(...args)
+  return row?.n ?? 0
+}
+
+/** Interface 1 taskGraph：容器子图（TaskCard 全量水化 + 边三元组——DAG/泳道渲染源）。
+ *  M3 容器垫片：feature 容器按 slug 解析；proposal 容器 → 空图（M2 无直挂行）。 */
 export async function taskGraph(deps: TasksListDeps, q: TaskGraphQuery): Promise<TaskGraph> {
   const db = deps.store.ensureOpen(q.projectId)
-  const featureId = resolveFeatureId(db, q.featureSlug)
+  if (q.source.kind !== 'feature') return { tasks: [], edges: [] }
+  const featureId = resolveFeatureId(db, q.source.slug)
   if (featureId === undefined) return { tasks: [], edges: [] }
   const rows = db.prepare<unknown[], TaskStorageRow>(SQL_TASKS_BY_FEATURE).all(featureId)
   const tasks = hydrateTaskCards(db, sortTaskRows(rows, 'created')) // created 降序——渲染稳定序
