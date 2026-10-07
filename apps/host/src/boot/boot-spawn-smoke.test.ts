@@ -79,6 +79,7 @@ it(
           stateDb: paths.stateDb,
           bindingsFile: paths.bindingsFile,
           tasksHome: paths.tasksHome,
+          settingsFile: paths.settingsFile, // M3 3.8：设置域存储注入（core 行 config——forgeSettings 装配门）
           skillsDir: paths.skillsDir,
         },
         { execPath: electronExe, childEntry }, // vitest(node/src) 驱动：electron 二进制 + dist child 入口（spawn 链路同款：ELECTRON_RUN_AS_NODE=1 + stdio ipc）
@@ -88,12 +89,21 @@ it(
       for (const name of FORGE_TOOL_NAMES) {
         expect(host.toolNames, `tool 面：${name} 未注册（plugin-forge 行未装载/注入链断裂）`).toContain(name)
       }
-      // M2 四域 + P1 双服务全在场（tasksHome 注入 → core provide 联证）
+      // M2 四域 + P1 双服务 + M3 设置域全在场（tasksHome/settingsFile 注入 → core provide 联证）
       for (const service of [
-        'forgeProjects', 'forgeKnowledge', 'forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs',
+        'forgeProjects', 'forgeKnowledge', 'forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings',
       ] as const) {
-        expect(host.services[service], `${service} 服务缺席（tasksHome/core 装配链断裂）`).toBeDefined()
+        expect(host.services[service], `${service} 服务缺席（装配链断裂）`).toBeDefined()
       }
+
+      // M3 3.8 AC6：settingsFile 注入往返——forgeSettings get/set 经桥可达（未配置 = {} →
+      // set 落盘 {userData}/forge-settings.json → get 实时读回——图 11 设置单门读写同源）
+      expect(await host.services.forgeSettings!.get()).toEqual({}) // 未配置态（worker 键缺席）
+      const worker = { provider: 'deepseek', model: 'demo-model', reasoning: 'high' as const }
+      await host.services.forgeSettings!.set({ worker })
+      expect(await host.services.forgeSettings!.get()).toEqual({ worker })
+      const persisted = JSON.parse(readFileSync(paths.settingsFile, 'utf8')) as { worker?: { model?: string } }
+      expect(persisted.worker?.model).toBe('demo-model') // 子进程 core 单写者落注入路径（boot overlay 注行联证）
 
       // AC2：绑定表生产端（注册增量刷新——main.ts withKnowledgeBindingsRefresh 同款包装）
       const projects = withKnowledgeBindingsRefresh(host.services.forgeProjects!, paths.bindingsFile)

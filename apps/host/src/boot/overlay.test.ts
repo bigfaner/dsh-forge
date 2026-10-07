@@ -89,6 +89,38 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('tasksHome')
   })
 
+  it('M3 设置缝（3.8）：settingsFile 在场 → core 行 config 增字段（{userData}/forge-settings.json 注行——恒与 dbFile 同目录，core 守卫基准 dirname(dbFile)）', () => {
+    const text = renderBootOverlay({
+      stateDb: '/x/state.db',
+      bindingsFile: '/x/b.json',
+      settingsFile: 'C:\\app-data\\dsh-forge\\forge-settings.json',
+    })
+    expect(text).toContain(
+      ['- id: dsh-forge-core', '  config:', '    dbFile: "/x/state.db"', '    settingsFile: "C:\\\\app-data\\\\dsh-forge\\\\forge-settings.json"'].join(
+        '\n',
+      ),
+    )
+  })
+
+  it('M3 设置缝（3.8）：settingsFile 与 tasksHome 并存 → core 行两字段齐备（双缝独立注行）', () => {
+    const text = renderBootOverlay({
+      stateDb: '/x/state.db',
+      bindingsFile: '/x/b.json',
+      tasksHome: '/x/forge-workspaces',
+      settingsFile: '/x/forge-settings.json',
+    })
+    expect(text).toContain(
+      ['- id: dsh-forge-core', '  config:', '    dbFile: "/x/state.db"', '    tasksHome: "/x/forge-workspaces"', '    settingsFile: "/x/forge-settings.json"'].join(
+        '\n',
+      ),
+    )
+  })
+
+  it('M3 设置缝（3.8）：settingsFile 缺席 → 无该字段（forgeSettings 服务降级缺席——六服务形制）', () => {
+    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    expect(text).not.toContain('settingsFile')
+  })
+
   it('技能面挂载（3.4/5.4 修正）：skillsDir 在场 → 行显式再启用（disabled:false——官方 web-app 层禁用主机行，patch 缺字段沿用禁用）+ 纯部署级 provider（includeDefaultRoots:false）+ customSkillDirs 列表', () => {
     const text = renderBootOverlay({
       stateDb: '/x/s.db',

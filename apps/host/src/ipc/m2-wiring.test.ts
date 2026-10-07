@@ -1,5 +1,6 @@
 // 3.1 M2 接线收口 pin：四族 + derive 扩族注册（服务缺席 fail-soft 记 warn 不注册）+
 // 写推送事件广播（onEvent → webContents.send('forge:events/tasks-changed')——载荷只读）。
+// M3 3.8 扩池：proposals 四通道（Interface 4 drift 修订）+ forge:settings/* 族注册。
 // main.ts 单行编排的装配逻辑全量锚定于此（~100 行纪律的配套测试面）。
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -8,6 +9,7 @@ import {
   FORGE_EVENT_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
@@ -43,7 +45,7 @@ function fakeHost(services: Partial<DshHostServices>) {
 const stub = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as unknown as never
 
 describe('3.1 registerM2Channels · 通道族注册', () => {
-  it('六服务齐备：五族全量注册（tasks 八 + features 五 + proposals 一 + docs 两 + derive 一 = 17 通道）', () => {
+  it('七服务齐备：六族全量注册（tasks 八 + features 五 + proposals 四 + docs 两 + derive 一 + settings 两 = 22 通道）', () => {
     const { ipcMain, handlers } = fakeIpcMain()
     registerM2Channels(
       createForgeIpc(ipcMain),
@@ -53,6 +55,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         forgeFeatures: stub,
         forgeProposals: stub,
         forgeDocs: stub,
+        forgeSettings: stub,
       }),
       () => undefined,
       vi.fn(async () => ''),
@@ -61,16 +64,17 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
       [
         ...Object.values(TASKS_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
-        // M3（1.1）契约扩池后 proposals 族常量含 transition/setMode/listDocs 三新键——
-        // host 注册面仍仅 list（三新通道接线 + forge:settings/* 归 3.8）
-        PROPOSALS_CHANNELS.list,
+        // M3 3.8 扩池：proposals 族四通道全量接线（transition 双面 drift 修订 +
+        // setMode UI 专属正门 + listDocs 扫描读——3.1 期 interim「仅 list」已拆除）
+        ...Object.values(PROPOSALS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
         PROJECTS_M2_CHANNELS.deriveTaskStoreDir,
+        ...Object.values(SETTINGS_CHANNELS),
       ]
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(17)
+    expect(handlers).toHaveLength(22)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {
@@ -87,12 +91,13 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
     ).not.toThrow()
     expect(handlers.has(PROJECTS_M2_CHANNELS.deriveTaskStoreDir)).toBe(true)
     expect(handlers.has(TASKS_CHANNELS.list)).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(4) // 四域缺席各一条（forgeProjects 在场不计）
+    expect(warn).toHaveBeenCalledTimes(5) // M2 四域 + M3 设置域缺席各一条（forgeProjects 在场不计）
     expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([
       expect.stringContaining('forgeTasks 服务缺席'),
       expect.stringContaining('forgeFeatures 服务缺席'),
       expect.stringContaining('forgeProposals 服务缺席'),
       expect.stringContaining('forgeDocs 服务缺席'),
+      expect.stringContaining('forgeSettings 服务缺席'),
     ])
   })
 })

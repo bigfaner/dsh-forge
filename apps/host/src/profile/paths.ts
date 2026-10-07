@@ -48,6 +48,9 @@ export interface HostPaths {
   /** M2 派生根（3.4：env DSH_FORGE_TASKS_HOME > {userData}/forge-workspaces；boot overlay
    *  注入 core 行 config.tasksHome——缺席注入 = 四域降级，本值恒在场） */
   tasksHome: string
+  /** 设置域存储文件（M3 3.8：boot overlay 注 core 行 config.settingsFile——恒与 state.db
+   *  同居 {userData}（core 路径守卫基准 = dirname(dbFile)，异目录即插件构造拒启）） */
+  settingsFile: string
   /** plugin-forge skills 物理挂载目录（3.4 customSkillDirs——boot overlay 注 skill-filesystem
    *  行；dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
    *  邻接树。解析失败 = undefined 不注入（技能面缺席不抛断启动——fail-soft 装配缺口）。
@@ -104,6 +107,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     stateDb: join(userData, 'state.db'),
     bindingsFile: join(userData, 'knowledge-bindings.json'),
     tasksHome: resolveTasksHome(env, userData),
+    settingsFile: join(userData, 'forge-settings.json'),
     skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
     resourcesDir,

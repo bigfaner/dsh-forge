@@ -93,6 +93,7 @@ async function main(): Promise<void> {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
+    settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     skillsDir: options.skillsDir, // 3.4 plugin-forge skills 物理挂载（缺席 = 技能面降级）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     ...(presetPatches !== undefined
@@ -123,6 +124,8 @@ async function main(): Promise<void> {
     forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
     forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
+    // M3 3.8 设置域（settingsFile 缺席时 core 不 provide——独立缝降级，六服务形制不动）
+    forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
@@ -138,6 +141,7 @@ async function main(): Promise<void> {
       forgeFeatures: services.forgeFeatures !== undefined,
       forgeProposals: services.forgeProposals !== undefined,
       forgeDocs: services.forgeDocs !== undefined,
+      forgeSettings: services.forgeSettings !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })

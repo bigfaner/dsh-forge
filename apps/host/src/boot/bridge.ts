@@ -22,6 +22,7 @@ import {
   type ForgeDocsService,
   type ForgeFeaturesService,
   type ForgeProposalsService,
+  type ForgeSettingsService,
   type ForgeTasksService,
   type ProjectService,
   type ProjectServiceM2,
@@ -30,8 +31,10 @@ import {
 import type { BootDshOptions } from './run.js'
 
 /**
- * 桥接服务名（P1 双服务 + M2 四域——Interface 6 六名；runProfile ctx 面世，main 侧
- * forge:* 通道接线。四域 = tasksHome 注入时 core provide（缺席 = M2 面降级，ready 位 false））
+ * 桥接服务名（P1 双服务 + M2 四域 + M3 设置域——Interface 6 六名 → 3.8 七名；runProfile
+ * ctx 面世，main 侧 forge:* 通道接线。四域 = tasksHome 注入时 core provide（缺席 = M2 面
+ * 降级，ready 位 false）；forgeSettings = settingsFile 注入时 provide（独立缝——缺席仅
+ * 设置域降级，六服务形制不动）
  */
 export type BridgeServiceName =
   | 'forgeProjects'
@@ -40,6 +43,7 @@ export type BridgeServiceName =
   | 'forgeFeatures'
   | 'forgeProposals'
   | 'forgeDocs'
+  | 'forgeSettings'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
@@ -49,6 +53,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeFeatures',
   'forgeProposals',
   'forgeDocs',
+  'forgeSettings',
 ] as const satisfies readonly BridgeServiceName[]
 
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
@@ -209,6 +214,15 @@ export const DOCS_SERVICE_METHODS = ['read'] as const satisfies readonly (keyof 
 export type DocsWhitelistCoverage = AssertNever<Exclude<keyof ForgeDocsService, (typeof DOCS_SERVICE_METHODS)[number]>>
 
 /**
+ * 设置域服务方法白名单（M3 3.8——Interface 1 设置域第七服务；get/set 单门读写，
+ * 存储 = boot overlay 注 core 行 config.settingsFile 指向的 {userData}/forge-settings.json）。
+ */
+export const SETTINGS_SERVICE_METHODS = ['get', 'set'] as const satisfies readonly (keyof ForgeSettingsService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeSettingsService 方法在此编译期点名） */
+export type SettingsWhitelistCoverage = AssertNever<Exclude<keyof ForgeSettingsService, (typeof SETTINGS_SERVICE_METHODS)[number]>>
+
+/**
  * projects 域 M2 扩法白名单（Interface 5 派生行第六法——P1 五法常量零波及，独立锚；
  * 代理可达面 = PROJECT_SERVICE_METHODS ∪ 本常量，覆盖完备性两常量合并判定）。
  */
@@ -260,6 +274,10 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   // 3.4 M2 装配两缝（可选——缺席/空串 = 不注入：core M2 四域降级 / plugin-forge 技能面降级）
   const tasksHome = typeof o.tasksHome === 'string' && o.tasksHome !== '' ? o.tasksHome : undefined
   const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
+  // M3 3.7：spec skills 物化锚（预设 customSkillDirs[spec]——远征组合携带；缺席 = spec 技能面降级）
+  const specSkillsDir = typeof o.specSkillsDir === 'string' && o.specSkillsDir !== '' ? o.specSkillsDir : undefined
+  // M3 3.8：设置域存储路径（boot overlay 注 core 行 config.settingsFile——缺席 = forgeSettings 服务降级）
+  const settingsFile = typeof o.settingsFile === 'string' && o.settingsFile !== '' ? o.settingsFile : undefined
   return {
     profileDir: o.profileDir as string,
     installAnchor: o.installAnchor as string,
@@ -269,6 +287,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     credentialsPath, // fix-26 凭据桥（可选——缺席/空串 = 不桥，与 env 开关空串缺省惯例一致）
     tasksHome,
     skillsDir,
+    specSkillsDir,
+    settingsFile,
   }
 }
 

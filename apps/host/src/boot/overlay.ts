@@ -18,6 +18,8 @@
 // 链接、packaged = runtime/node_modules 邻接，故与 dbFile/bindingsFile 同入装配期缝；
 // 官方 cordis 预设的 !!js 表达式形制在打包形态不可解析——baseUrl 只见 {userData}
 // profile 链，无 installAnchor BFS）。
+// M3 3.8：core 行增 settingsFile（设置域存储——{userData}/forge-settings.json，守卫基准
+// = dirname(dbFile) 同域；缺席 = forgeSettings 服务降级缺席，六服务形制不动）。
 // M3 3.7 预设装配：cordis/expedition/blitz 三底稿（apps/host/src/profile/presets/）每启
 // 注行（行所有权 = 产品工件——用户不可经 UI 改组合；ui-settings 开关行走首启预置让位
 // 用户，两径不混）。customSkillDirs 物化分叉：占位符解析为当形态绝对路径（dev = repo /
@@ -43,6 +45,9 @@ export interface BootOverlayInput {
   readonly bindingsFile: string
   /** M2 派生根（3.4：core 行 config.tasksHome 注入——缺席 = M2 四域整体降级） */
   readonly tasksHome?: string
+  /** 设置域存储文件（M3 3.8：core 行 config.settingsFile 注入——{userData}/forge-settings.json；
+   *  守卫基准 = dirname(dbFile) 同域，缺席 = forgeSettings 服务降级缺席（六服务形制）） */
+  readonly settingsFile?: string
   /** plugin-forge skills 物理挂载目录（3.4：skill-filesystem 行 customSkillDirs 注入；
    *  缺席 = 解析失败 fail-soft 不注入——技能面降级，tools 半身照常） */
   readonly skillsDir?: string
@@ -148,6 +153,7 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '  config:',
     `    dbFile: ${yamlQuote(input.stateDb)}`,
     ...(input.tasksHome !== undefined ? [`    tasksHome: ${yamlQuote(input.tasksHome)}`] : []),
+    ...(input.settingsFile !== undefined ? [`    settingsFile: ${yamlQuote(input.settingsFile)}`] : []),
     '- id: dsh-forge-knowledge',
     '  config:',
     `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,

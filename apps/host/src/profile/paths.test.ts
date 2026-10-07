@@ -16,6 +16,10 @@ describe('resolveHostPaths 双形态', () => {
     expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/knowledge-bindings.json')
     // 3.4 M2 派生根缺省：{userData}/forge-workspaces（tech-design Layer Placement host 行）
     expect(paths.tasksHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/forge-workspaces')
+    // M3 3.8 设置域存储：{userData}/forge-settings.json——恒与 state.db 同目录
+    //（core 路径守卫基准 = dirname(dbFile)，异目录即插件构造 fail-loud 拒启）
+    expect(paths.settingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/forge-settings.json')
+    expect(paths.settingsFile.replaceAll('\\', '/')).toBe(paths.stateDb.replaceAll('\\', '/').replace(/state\.db$/, 'forge-settings.json'))
   })
 
   it('dev 形态：DSH_FORGE_DEV_PROFILE 真值 → workspace 预组装 profile.dev 目录', () => {

@@ -98,8 +98,11 @@ describe('3.1 forge:tasks/* 负载映射端到端（替身层）', () => {
     expect(service.listTasks).toHaveBeenCalledWith({ projectId: 'p-1', search: '桥' })
     await call(TASKS_CHANNELS.stats, { projectId: 'p-1' })
     expect(service.taskStats).toHaveBeenCalledWith({ projectId: 'p-1' })
-    await call(TASKS_CHANNELS.graph, { projectId: 'p-1', featureSlug: 'demo-feature' })
-    expect(service.taskGraph).toHaveBeenCalledOnce()
+    // M3 容器化（1.1 契约 + 3.8 接线）：list/graph 通道负载 source: ContainerRef（proposal 渠道）
+    await call(TASKS_CHANNELS.list, { projectId: 'p-1', source: { kind: 'proposal', slug: 'demo-proposal' } })
+    expect(service.listTasks).toHaveBeenCalledWith({ projectId: 'p-1', source: { kind: 'proposal', slug: 'demo-proposal' } })
+    await call(TASKS_CHANNELS.graph, { projectId: 'p-1', source: { kind: 'feature', slug: 'demo-feature' } })
+    expect(service.taskGraph).toHaveBeenCalledWith({ projectId: 'p-1', source: { kind: 'feature', slug: 'demo-feature' } })
     await call(TASKS_CHANNELS.detail, { projectId: 'p-1', taskId: 't-1' })
     expect(service.taskDetail).toHaveBeenCalledWith({ projectId: 'p-1', taskId: 't-1' })
     await call(TASKS_CHANNELS.sessionLinks, { projectId: 'p-1', sessionId: 'sess-1' })

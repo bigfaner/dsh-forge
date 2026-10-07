@@ -19,6 +19,7 @@ import type {
   ForgeDocsService,
   ForgeFeaturesService,
   ForgeProposalsService,
+  ForgeSettingsService,
   ForgeTasksService,
   ProjectServiceM2,
   TasksChangedEvent,
@@ -34,6 +35,7 @@ import {
   PROJECTS_M2_SERVICE_METHODS,
   PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
+  SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
   type BridgeFatalMessage,
   type BridgeReadyMessage,
@@ -61,6 +63,9 @@ export interface BootDshOptions {
   /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
    *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
   specSkillsDir?: string
+  /** 设置域存储文件绝对路径（M3 3.8：boot overlay 注 core 行 config.settingsFile——
+   *  {userData}/forge-settings.json；缺席 = forgeSettings 服务降级缺席（六服务形制）） */
+  settingsFile?: string
   /** 真 home 凭据文档桥路径（fix-26；boot overlay credentials 行 config.path 注入——
    *  undefined = USER_DATA 隔离态（e2e/测试）不桥） */
   credentialsPath?: string
@@ -68,7 +73,7 @@ export interface BootDshOptions {
   resourcesDir?: string
 }
 
-/** 产品六服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
+/** 产品七服务（core 插件 provide；child 内经 RPC 桥面世供 main 接 forge:* 通道——类型 = contracts 单一来源） */
 export interface DshHostServices {
   /** P1 五法 + M2 派生行第六法（Interface 5；tasksHome 缺席时子侧服务无扩法——代理调用失败面） */
   forgeProjects: ProjectServiceM2
@@ -80,11 +85,13 @@ export interface DshHostServices {
   forgeFeatures: ForgeFeaturesService
   forgeProposals: ForgeProposalsService
   forgeDocs: ForgeDocsService
+  /** M3 3.8 设置域（Interface 1 M3；settingsFile 注入时 core provide，缺席 = 设置域降级 undefined） */
+  forgeSettings: ForgeSettingsService
 }
 
 export interface DshHostHandle {
   manifest: BootManifest
-  /** 产品六服务（缺席任一 = core 插件行未装载 / M2 面降级——main 侧 fail-soft 记日志不注册对应通道族） */
+  /** 产品七服务（缺席任一 = core 插件行未装载 / 对应装配缝降级——main 侧 fail-soft 记日志不注册对应通道族） */
   services: Partial<DshHostServices>
   /**
    * boot 就绪时子进程 ToolRuntime 已注册 tool 名全集（3.4 冒烟观测面——plugin-forge
@@ -225,6 +232,9 @@ export async function bootDshHost(
         : undefined,
       forgeDocs: ready.services.forgeDocs
         ? createBridgeProxy<DshHostServices['forgeDocs']>('forgeDocs', DOCS_SERVICE_METHODS, call)
+        : undefined,
+      forgeSettings: ready.services.forgeSettings
+        ? createBridgeProxy<DshHostServices['forgeSettings']>('forgeSettings', SETTINGS_SERVICE_METHODS, call)
         : undefined,
     },
     onEvent: channel.onEvent,

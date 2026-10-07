@@ -26,6 +26,7 @@ import {
   rebuildBridgeError,
   sendGuarded,
   serializeBridgeError,
+  SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
   type BridgeRpcRequest,
   type ChildToMainMessage,
@@ -36,6 +37,7 @@ import {
   type ProjectsM2WhitelistCoverage,
   type ProposalsWhitelistCoverage,
   type ServiceNamesCoverage,
+  type SettingsWhitelistCoverage,
   type TasksWhitelistCoverage,
 } from './bridge.js'
 
@@ -141,10 +143,34 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     expect(empty?.tasksHome).toBeUndefined()
     expect(empty?.skillsDir).toBeUndefined()
   })
+
+  it('M3 装配缝可选透传（3.7 specSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {
+    const m3 = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({
+        ...JSON.parse(valid),
+        specSkillsDir: 'C:/pkg/spec-skills',
+        settingsFile: 'C:/ud/forge-settings.json',
+      }),
+    ])
+    expect(m3?.specSkillsDir).toBe('C:/pkg/spec-skills')
+    expect(m3?.settingsFile).toBe('C:/ud/forge-settings.json')
+    const legacy = parseChildOptions(['electron.exe', 'child.js', valid]) // 旧载荷（M3 前主进程）零破坏
+    expect(legacy?.specSkillsDir).toBeUndefined()
+    expect(legacy?.settingsFile).toBeUndefined()
+    const empty = parseChildOptions([
+      'electron.exe',
+      'child.js',
+      JSON.stringify({ ...JSON.parse(valid), specSkillsDir: '', settingsFile: '' }),
+    ])
+    expect(empty?.specSkillsDir).toBeUndefined()
+    expect(empty?.settingsFile).toBeUndefined()
+  })
 })
 
 describe('asReadyMessage（ready 守卫）', () => {
-  it('形状齐备 → ready 消息（url/injections/六服务在场位——Interface 6 ready 位 ×4 扩池）', () => {
+  it('形状齐备 → ready 消息（url/injections/七服务在场位——Interface 6 六位 + M3 3.8 设置域第七位）', () => {
     const ready = asReadyMessage({
       type: 'ready',
       url: 'http://127.0.0.1:1/#t',
@@ -156,6 +182,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeFeatures: true,
         forgeProposals: false,
         forgeDocs: true,
+        forgeSettings: false,
       },
     })
     expect(ready).toEqual({
@@ -169,12 +196,13 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeFeatures: true,
         forgeProposals: false,
         forgeDocs: true,
+        forgeSettings: false,
       },
     })
   })
 
-  it('M2 四域在场位缺席任一 → undefined（六位齐备才可作 manifest 面）', () => {
-    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs'] as const) {
+  it('M2 四域 + M3 设置域在场位缺席任一 → undefined（七位齐备才可作 manifest 面）', () => {
+    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings'] as const) {
       const services = {
         forgeProjects: true,
         forgeKnowledge: true,
@@ -182,6 +210,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeFeatures: true,
         forgeProposals: true,
         forgeDocs: true,
+        forgeSettings: true,
         [missing]: undefined,
       }
       expect(asReadyMessage({ type: 'ready', url: 'http://x', injections: [], services })).toBeUndefined()
@@ -207,6 +236,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeFeatures: true,
         forgeProposals: true,
         forgeDocs: true,
+        forgeSettings: true,
       },
     } as const
     expect(asReadyMessage({ ...base, tools: ['addTask', 'claimTask'] })?.tools).toEqual(['addTask', 'claimTask'])
@@ -417,6 +447,7 @@ describe('createBridgeProxy（主侧代理）', () => {
       'listProposalDocs',
     ])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
+    expect([...SETTINGS_SERVICE_METHODS]).toEqual(['get', 'set'])
     expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
     expect([...BRIDGE_SERVICE_NAMES]).toEqual([
       'forgeProjects',
@@ -425,6 +456,7 @@ describe('createBridgeProxy（主侧代理）', () => {
       'forgeFeatures',
       'forgeProposals',
       'forgeDocs',
+      'forgeSettings',
     ])
   })
 })
@@ -468,6 +500,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
       forgeFeatures: true,
       forgeProposals: true,
       forgeDocs: true,
+      forgeSettings: true,
     }
     expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
     expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
@@ -497,6 +530,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as FeaturesWhitelistCoverage)
     assertType<never>(undefined as ProposalsWhitelistCoverage)
     assertType<never>(undefined as DocsWhitelistCoverage)
+    assertType<never>(undefined as SettingsWhitelistCoverage)
     assertType<never>(undefined as ProjectsM2WhitelistCoverage)
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
@@ -505,7 +539,8 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
+    expect(SETTINGS_SERVICE_METHODS).toHaveLength(2)
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
-    expect(BRIDGE_SERVICE_NAMES).toHaveLength(6)
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(7)
   })
 })

@@ -49,7 +49,7 @@ void (async () => {
       port,
       stateDb: paths.stateDb,
       bindingsFile: paths.bindingsFile,
-      tasksHome: paths.tasksHome, // 3.4：M2 派生根注入（core 行 config——四域服务装配门）
+      tasksHome: paths.tasksHome, settingsFile: paths.settingsFile, // core 行 config 双注：3.4 派生根（四域装配门）+ 3.8 设置域存储（forgeSettings 装配门）
       skillsDir: paths.skillsDir, specSkillsDir: paths.specSkillsDir, // skills 物理挂载（M3 3.7：core/spec 双目录——预设 customSkillDirs 物化锚）
       credentialsPath: paths.credentialsPath, // fix-26：非 USER_DATA 隔离态桥真 home 凭据
       resourcesDir: paths.resourcesDir, // 4.1：打包形态 boot child 取 runtime/host-dist 入口
