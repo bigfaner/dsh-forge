@@ -223,6 +223,47 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
   })
 })
 
+// ─────────────────── M3 2.4：SOURCE 容器语境行（任务带容器出厂） ───────────────────
+
+describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal <slug>）', () => {
+  it('feature 容器 → `SOURCE: feature <slug>`；行序紧随 TASK_ID、先于 FILE/TYPE', () => {
+    const prompt = composeDispatchPrompt({
+      ...fullInput({ taskType: 'coding-feature' }),
+      source: { kind: 'feature', slug: 'm2-pipeline' },
+    })
+    expect(prompt).toContain('SOURCE: feature m2-pipeline')
+    const at = (k: string): number => prompt.indexOf(k)
+    expect(at('SOURCE: feature m2-pipeline')).toBeGreaterThan(at('TASK_ID: m2-pipeline/2.2'))
+    expect(at('FILE:')).toBeGreaterThan(at('SOURCE: feature m2-pipeline'))
+    expect(at('TYPE:')).toBeGreaterThan(at('SOURCE: feature m2-pipeline'))
+  })
+
+  it('proposal 容器 → `SOURCE: proposal <slug>`', () => {
+    const prompt = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'coding-feature' }),
+      source: { kind: 'proposal', slug: 'blitz-idea' },
+    })
+    expect(prompt).toContain('SOURCE: proposal blitz-idea')
+    expect(prompt).not.toContain('SOURCE: feature')
+  })
+
+  it('条件键缺席即省行（M2 形态兼容——source 缺席无 SOURCE 行）', () => {
+    const prompt = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
+    expect(prompt).not.toContain('SOURCE:')
+  })
+
+  it('source 注入 → digest 新值（简报重合成判据同族）', () => {
+    const base = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' })))
+    const withSource = dispatchDigest(
+      composeDispatchPrompt({
+        ...minimalInput({ taskType: 'coding-feature' }),
+        source: { kind: 'feature', slug: 'm2-pipeline' },
+      }),
+    )
+    expect(withSource).not.toBe(base)
+  })
+})
+
 // ─────────────────── AC3：20 类型模板族 + ValidTypes ↔ TaskType 映射 ───────────────────
 
 describe('AC3 模板族 exhaustive 路由（TaskType 20 值 = 21 模板 − fix-record-missed）', () => {

@@ -10,6 +10,7 @@
 import {
   TASK_TYPES,
   XML_TAGS,
+  type ContainerRef,
   type TaskPriority,
   type TaskPrerequisiteSummary,
   type TaskRef,
@@ -107,6 +108,11 @@ export interface DispatchPromptInput {
   slug: string
   /** feature 内局部键（数值顺延 / fix-N·disc-N） */
   localId: string
+  /**
+   * 任务容器引用（M3 2.4：SOURCE 容器语境行——任务带容器出厂；claim 恒注入
+   * {kind: row.source_kind, slug: row.slug}；缺席省行 = M2 形态兼容）。
+   */
+  source?: ContainerRef
   taskType: TaskType
   /** 任务定义载体路径（M2 task_file 列砍除——由调用方按需注入；缺席省 FILE 行） */
   taskFile?: string
@@ -138,12 +144,14 @@ function renderMarkers(input: DispatchPromptInput): string | undefined {
   return markers.length > 0 ? markers.join(', ') : undefined
 }
 
-/** `<task-context>` 内文（九键行序 = AC2 序：TASK_ID/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记） */
+/** `<task-context>` 内文（九键行序 = AC2 序：TASK_ID/SOURCE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记——
+ *  SOURCE = M3 2.4 增键，紧随 TASK_ID） */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const lines: (string | undefined)[] = [
     `TASK_ID: ${input.slug}/${input.localId}`,
+    input.source !== undefined ? `SOURCE: ${input.source.kind} ${input.source.slug}` : undefined,
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,

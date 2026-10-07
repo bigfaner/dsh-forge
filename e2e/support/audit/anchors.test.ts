@@ -117,7 +117,7 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
     expect(findings.every((f) => !f.detail.includes('submitTaskTransition'))).toBe(true)
   })
 
-  it('悬空技能引用 → 拦截；挂载名与 M3 豁免名解析通过', () => {
+  it('悬空技能引用 → 拦截；挂载名（裸名形·2.4 前缀缝消灭）与 M3 豁免名解析通过', () => {
     const root = plantRepo()
     const write = (rel: string, content: string): void => {
       mkdirSync(join(root, rel, '..'), { recursive: true })
@@ -128,15 +128,16 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
     write(
       'packages/core/src/forge/tasks/prompt/templates/fake.ts',
       [
-        'export const a = \'Skill(skill="forge:run-tests")\'',
-        'export const b = \'Skill(skill="forge:eval")\'',
-        'export const c = \'Skill(skill="forge:execute-task")\'',
+        'export const a = \'Skill(skill="run-tests")\'', // 裸名 = dsh 挂载名（2.4 前缀缝消灭后形制）→ 挂载集命中
+        'export const b = \'Skill(skill="ghost-skill")\'', // 裸名悬空 → 拦截（executor 将调用不存在的技能）
+        'export const c = \'Skill(skill="forge:eval")\'', // forge: 前缀 + M3 豁免清单 → 通过
+        'export const d = \'Skill(skill="forge:execute-task")\'', // forge: 前缀悬空 → 拦截
       ].join('\n'),
     )
     const findings = auditSkillReferencesResolved(root)
-    expect(findings).toHaveLength(1)
-    expect(findings[0]!.detail).toContain('forge:execute-task')
-    expect(findings[0]!.detail).toContain('悬空')
+    expect(findings).toHaveLength(2)
+    expect(findings.some((f) => f.detail.includes('ghost-skill') && f.detail.includes('悬空'))).toBe(true)
+    expect(findings.some((f) => f.detail.includes('forge:execute-task') && f.detail.includes('悬空'))).toBe(true)
   })
 
   it('audit-allow 行豁免（使用须在执行记录说明理由）+ 注释剥离保行号', () => {

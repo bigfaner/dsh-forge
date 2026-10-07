@@ -9,7 +9,7 @@ export function testRun(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:run-tests")\` to execute tests
+- MUST invoke \`Skill(skill="run-tests")\` to execute tests
 - MUST NOT run any direct test runner command — the skill handles framework-specific execution
 - The skill handles surface resolution, server lifecycle, result parsing, and reporting
 - MUST confirm a defect is in production code before modifying production code — test script bugs may be fixed, but MUST NOT alter test assertions or logic to make tests pass
@@ -21,7 +21,7 @@ ${step1ReadSimple('what tests to run')}
 
 ### Step 2: Run E2E Tests
 
-${skillInvocation('Skill(skill="forge:run-tests")')}
+${skillInvocation('Skill(skill="run-tests")')}
 
 If tests fail, identify failing tests and root cause, apply minimal fix, then re-invoke the skill to confirm (max 3 attempts).
 

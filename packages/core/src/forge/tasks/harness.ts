@@ -70,29 +70,56 @@ export function seedFeature(
   return id
 }
 
-/** 种 task 行（同域直写——受控初值：状态/类型/谱系；slug ≡ feature slug 不变量沿袭。
- *  M3 1.2：source 双列 + mode 快照——与 addTask 写路径同形（feature 容器恒 'expedition'）） */
+/** 种 proposal 行（直写库——受控初值：mode 溯源可空；2.4 容器双轨夹具） */
+export function seedProposal(
+  db: Database.Database,
+  o: { slug: string; mode?: string | null },
+): string {
+  const id = `p-${o.slug}`
+  const ts = '2026-01-01T00:00:00.000Z'
+  db.prepare(
+    `INSERT INTO proposals (id, slug, title, proposal_status, mode, created_at, updated_at)
+     VALUES (?, ?, ?, 'accepted', ?, ?, ?)`,
+  ).run(id, o.slug, `提案 ${o.slug}`, o.mode ?? null, ts, ts)
+  return id
+}
+
+/** 种 task 行（同域直写——受控初值：状态/类型/谱系；slug ≡ 容器 slug 不变量沿袭。
+ *  M3 1.2：source 双列 + mode 快照——与 addTask 写路径同形（feature 容器恒 'expedition'）。
+ *  M3 2.4：kind='proposal' → source_id 解析自 proposals、mode 缺省 NULL（受控覆盖 o.mode）） */
 export function seedTask(
   db: Database.Database,
-  featureSlug: string,
+  containerSlug: string,
   localId: string,
-  o: { status?: TaskStatus; type?: TaskType; sourceTaskId?: string | null; createdAt?: string } = {},
+  o: {
+    status?: TaskStatus
+    type?: TaskType
+    sourceTaskId?: string | null
+    createdAt?: string
+    kind?: 'feature' | 'proposal'
+    mode?: string | null
+  } = {},
 ): string {
-  const id = `t-${featureSlug}-${localId}`
+  const id = `t-${containerSlug}-${localId}`
   const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
+  const kind = o.kind ?? 'feature'
+  const sourceTable = kind === 'feature' ? 'features' : 'proposals'
+  const mode = kind === 'feature' ? 'expedition' : (o.mode ?? null)
   db.prepare(
     `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_task_id,
        source_kind, source_id, mode, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'feature', (SELECT id FROM features WHERE slug = ?), 'expedition', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM ${sourceTable} WHERE slug = ?), ?, ?, ?)`,
   ).run(
     id,
-    featureSlug,
+    containerSlug,
     localId,
     `任务 ${localId}`,
     o.type ?? 'coding-feature',
     o.status ?? 'pending',
     o.sourceTaskId ?? null,
-    featureSlug,
+    kind,
+    containerSlug,
+    mode,
     ts,
     ts,
   )

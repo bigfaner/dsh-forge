@@ -6,7 +6,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { claimTask } from './claim.js'
 import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from './errors.js'
 import { dispatchDigest } from './prompt/digest.js'
-import { createTasksHarness, seedEdge, seedFeature, seedTask, type TasksHarness } from './harness.js'
+import {
+  createTasksHarness,
+  seedEdge,
+  seedFeature,
+  seedProposal,
+  seedTask,
+  type TasksHarness,
+} from './harness.js'
 
 let h: TasksHarness | undefined
 afterEach(() => {
@@ -404,5 +411,71 @@ describe('claim 拒绝面（agent 面矩阵先验）与重派', () => {
       (e: unknown) => e,
     )
     expect(err).toBeInstanceOf(TaskNotFoundError)
+  })
+})
+
+describe('AC（2.4）claimTask 容器双轨：容器限定盲选 + dispatchPrompt SOURCE 语境行', () => {
+  it('proposal 容器限定盲选：只扫该 proposal 就绪池（feature 任务不被领）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fa', status: 'tasks' })
+    seedTask(h!.db, 'fa', '9.9') // feature 侧就绪候选（更早创建）
+    seedProposal(h!.db, { slug: 'pa', mode: 'blitz' })
+    seedTask(h!.db, 'pa', '1.1', { kind: 'proposal', mode: 'blitz', createdAt: '2026-01-02T00:00:00.000Z' })
+    const r = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'pa' }, sessionId: 's' })
+    expect(r.task).toMatchObject({ slug: 'pa', localId: '1.1', taskStatus: 'in_progress' })
+    // feature 侧不被打扰
+    expect(rows(`SELECT task_status FROM tasks WHERE slug = 'fa'`)).toEqual([{ task_status: 'pending' }])
+  })
+
+  it('成链撞键（feature 与 proposal 同 slug X）：kind 判别限定——feature 限定领 feature 侧 / proposal 限定领 proposal 侧', async () => {
+    const claim = svc()
+    seedProposal(h!.db, { slug: 'X', mode: 'blitz' })
+    seedFeature(h!.db, { slug: 'X', status: 'tasks' })
+    seedTask(h!.db, 'X', '1.1', { createdAt: '2026-01-01T00:00:00.000Z' }) // feature 侧
+    seedTask(h!.db, 'X', '1.2', { kind: 'proposal', mode: 'blitz', createdAt: '2026-01-02T00:00:00.000Z' }) // proposal 侧
+    const byFeature = await claim({ projectId: P(), source: { kind: 'feature', slug: 'X' }, sessionId: 's1' })
+    expect(byFeature.task).toMatchObject({ source: { kind: 'feature', slug: 'X' }, localId: '1.1' })
+    const byProposal = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'X' }, sessionId: 's2' })
+    expect(byProposal.task).toMatchObject({ source: { kind: 'proposal', slug: 'X' }, localId: '1.2' })
+  })
+
+  it('容器限定缺席容器（proposal 无任务）→ Z1 出口（纯读零写入）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fa', status: 'tasks' })
+    seedTask(h!.db, 'fa', '1.1')
+    const r = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'ghost-p' }, sessionId: 's' })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('dispatchPrompt SOURCE 容器语境行（任务带容器出厂）：feature/proposal 两形 + 行序紧随 TASK_ID', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    const rf = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
+    expect(rf.dispatchPrompt).toContain('SOURCE: feature f')
+    expect(rf.dispatchPrompt.indexOf('SOURCE: feature f')).toBeGreaterThan(rf.dispatchPrompt.indexOf('TASK_ID: f/1.1'))
+    expect(rf.dispatchPrompt.indexOf('TYPE:')).toBeGreaterThan(rf.dispatchPrompt.indexOf('SOURCE: feature f'))
+
+    seedProposal(h!.db, { slug: 'pp', mode: 'blitz' })
+    seedTask(h!.db, 'pp', '1.1', { kind: 'proposal', mode: 'blitz' })
+    const rp = await claim({ projectId: P(), taskRef: { slug: 'pp', localId: '1.1' }, sessionId: 's' })
+    expect(rp.dispatchPrompt).toContain('SOURCE: proposal pp')
+    // 律四：proposal 容器无相位域——不注入 PHASE_SUMMARY
+    expect(rp.dispatchPrompt).not.toContain('PHASE_SUMMARY:')
+    // 幂等重入（proposal 任务）照常：reclaimed=true + SOURCE 行在场
+    const again = await claim({ projectId: P(), taskRef: { slug: 'pp', localId: '1.1' }, sessionId: 's' })
+    expect(again.reclaimed).toBe(true)
+    expect(again.dispatchPrompt).toContain('SOURCE: proposal pp')
+  })
+
+  it('proposal 容器 claim：相位域零参与（features 恒空）+ 相位守卫不触发', async () => {
+    const claim = svc()
+    seedProposal(h!.db, { slug: 'zp', mode: null })
+    seedTask(h!.db, 'zp', '1.1', { kind: 'proposal', mode: null })
+    const r = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'zp' }, sessionId: 's' })
+    expect(r.task?.taskStatus).toBe('in_progress')
+    expect(rows(`SELECT * FROM features`)).toEqual([])
+    expect(rows(`SELECT COUNT(*) AS n FROM task_session_links`)).toEqual([{ n: 1 }])
   })
 })

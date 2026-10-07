@@ -23,6 +23,7 @@ import type {
   AddTaskResult,
   DocKind,
   FeatureStatus,
+  Mode,
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
@@ -35,6 +36,7 @@ import {
   TaskExistsError,
   TaskNotFoundError,
   TasksFeatureNotFoundError,
+  TasksProposalNotFoundError,
 } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 
@@ -69,20 +71,30 @@ function sameContainer(row: TaskKeyRow, kind: 'feature' | 'proposal', sourceId: 
 
 /**
  * 容器解析与写入校验锚（1.2 AC5 / 不变量①：tasks.slug ≡ 容器 slug + source_id 必命中
- * source_kind 对应表——多态引用无 DB FK，写入时校验承载）。返回 {kind, sourceId, slug, mode}：
- * slug 即 tasks.slug 写入值（≡ 容器 slug）；mode = 创建时容器 mode 快照。
- * M3 垫片（1.2）：feature 容器 = M2 语义等价特例（slug→features 行解析即「必命中」证明；
- * mode 恒 'expedition'——裁决⑥）；proposal 容器写入动词面 = 2.4 扩展消费点（此处 fail-loud）。
+ * source_kind 对应表——多态引用无 DB FK，写入时校验承载）。返回判别联合：
+ * feature 容器（mode 恒 'expedition'——裁决⑥无 mode 列，成链门保证 + 相位守卫面 featureStatus）/
+ * proposal 容器（mode = proposals.mode 创建时快照·可 NULL——律三不回溯；无相位域——律四）。
+ * slug 即 tasks.slug 写入值（≡ 容器 slug）。2.4：proposal 分支落地（缺席 typed error）。
  */
+export type ResolvedTaskContainer =
+  | { kind: 'feature'; sourceId: string; slug: string; mode: 'expedition'; featureStatus: FeatureStatus }
+  | { kind: 'proposal'; sourceId: string; slug: string; mode: Mode | null }
+
 export function resolveTaskContainer(
   db: Database.Database,
   projectId: string,
   source: { kind: 'feature' | 'proposal'; slug: string },
-): { kind: 'feature'; sourceId: string; slug: string; mode: 'expedition'; featureStatus: FeatureStatus } {
-  if (source.kind !== 'feature') {
-    throw new Error(
-      `addTask: proposal 容器写入动词面落地于 M3 2.4（schema source 双列已就位——容器解析扩展消费点）：${source.slug}`,
-    )
+): ResolvedTaskContainer {
+  if (source.kind === 'proposal') {
+    const proposal = db
+      .prepare<unknown[], { id: string; slug: string; mode: Mode | null }>(
+        `SELECT id, slug, mode FROM proposals WHERE slug = ?`,
+      )
+      .get(source.slug)
+    if (proposal === undefined) {
+      throw new TasksProposalNotFoundError({ projectId, proposalSlug: source.slug })
+    }
+    return { kind: 'proposal', sourceId: proposal.id, slug: proposal.slug, mode: proposal.mode }
   }
   const feature = db
     .prepare<unknown[], { id: string; slug: string; feature_status: FeatureStatus }>(
@@ -245,10 +257,14 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
   const now = new Date().toISOString()
 
   const result = withTransaction(db, (): AddTaskResult => {
-    // ① 容器解析 + 写入校验锚（1.2 AC5：tasks.slug ≡ 容器 slug + source_id 必命中 source_kind
-    //    对应表——resolveTaskContainer 单点承载；proposal 分支 = 2.4 扩展消费点）
+    // ① 容器解析 + 写入校验锚（1.2 AC5 / 不变量①：tasks.slug ≡ 容器 slug + source_id 必命中
+    //    source_kind 对应表——resolveTaskContainer 单点承载；2.4：proposal 分支在场校验 +
+    //    mode 快照。相位守卫面仅 feature 容器（律四：proposal 容器无相位域）
     const container = resolveTaskContainer(db, input.projectId, input.source)
-    const feature = { id: container.sourceId, slug: container.slug, feature_status: container.featureStatus }
+    const feature =
+      container.kind === 'feature'
+        ? { id: container.sourceId, slug: container.slug, feature_status: container.featureStatus }
+        : undefined
 
     // ② sourceTask 解析（UNIQUE(slug, local_id) 查捞 → taskId；命中他容器同键 = 同容器边
     //    服务不变量（er-diagram 差异清单 #9·M3 source 双列同规）不满足 → 按未命中拒）
@@ -285,7 +301,9 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       }
     }
 
-    // ④ dependsOn 解析（同容器前置声明——slug 作用域查捞天然排除跨容器边）
+    // ④ dependsOn 解析（同容器前置声明——slug 作用域查捞 + sameContainer 判别：成链撞键
+    //    （feature 与 proposal 同 slug 共享自然键空间）下命中他容器同键 = 同容器边约束
+    //    （不变量②：task_edges 两端 source_id 相等）拒绝，按未命中口径）
     const depends: TaskKeyRow[] = []
     for (const localId of input.dependsOn ?? []) {
       const dep = db
@@ -294,7 +312,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
            WHERE slug = ? AND local_id = ?`,
         )
         .get(input.source.slug, localId)
-      if (dep === undefined) {
+      if (dep === undefined || !sameContainer(dep, container.kind, container.sourceId)) {
         throw new TaskNotFoundError({
           projectId: input.projectId,
           taskRef: { slug: input.source.slug, localId },
@@ -304,10 +322,11 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       depends.push(dep)
     }
 
-    // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延）
+    // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延；
+    //    计数作用域 = 容器 slug——UNIQUE(slug, local_id) 同 slug 键空间跨容器共享）
     const localId = allocateLocalId(
       db,
-      feature.slug,
+      container.slug,
       input.sourceTask !== undefined ? (input.blockSource === true ? 'fix' : 'disc') : 'numeric',
     )
 
@@ -320,7 +339,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         const chain = [...ancestry.map((t) => keys.get(t.id) ?? t.id), naturalKey(source.slug, source.local_id)]
         throw new ChainDepthExceededError({
           projectId: input.projectId,
-          featureSlug: feature.slug,
+          featureSlug: container.slug,
           chain,
           depth,
           limit: FIX_CHAIN_DEPTH_LIMIT,
@@ -339,7 +358,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         const hopPath = d.id === source.id ? [d.id] : findPathThroughOutEdges(db, d.id, source.id)
         if (hopPath !== null) {
           const keys = naturalKeysByIds(db, [source.id, ...hopPath])
-          const tKey = naturalKey(feature.slug, localId)
+          const tKey = naturalKey(container.slug, localId)
           const cycle = [
             keys.get(source.id) ?? source.id,
             tKey,
@@ -350,14 +369,17 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       }
     }
 
-    // ⑧ 相位漂移增量断言（写事务内先于写——受影响 feature 承重漂移防护）
-    const before = readPhaseInput(db, feature.id)
-    assertPhaseInvariant({
-      featureStatus: feature.feature_status,
-      docKinds: before.docKinds,
-      taskStatuses: before.taskStatuses,
-      featureSlug: feature.slug,
-    })
+    // ⑧ 相位漂移增量断言（写事务内先于写——受影响 feature 承重漂移防护；律四：proposal
+    //    容器无相位域 → 守卫与重算整体跳过）
+    if (feature !== undefined) {
+      const before = readPhaseInput(db, feature.id)
+      assertPhaseInvariant({
+        featureStatus: feature.feature_status,
+        docKinds: before.docKinds,
+        taskStatuses: before.taskStatuses,
+        featureSlug: feature.slug,
+      })
+    }
 
     // ⑨ tasks 行（id uuid 生成 + slug ≡ 容器 slug + 缺省 pending/medium/false 族；M3 source
     //    双列 + mode 创建时快照 + ac_json AC gate 数据面）；UNIQUE(slug, local_id) 冲突 →
@@ -371,7 +393,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
          VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         taskId,
-        feature.slug,
+        container.slug,
         localId,
         input.title,
         input.type,
@@ -394,7 +416,7 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       )
     } catch (cause) {
       if (isUniqueViolation(cause, 'tasks.slug')) {
-        throw new TaskExistsError({ projectId: input.projectId, slug: feature.slug, localId })
+        throw new TaskExistsError({ projectId: input.projectId, slug: container.slug, localId })
       }
       throw cause
     }
@@ -436,22 +458,25 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       ).run(source.id, source.task_status, now, now)
     }
 
-    // ⑬ 相位重算（单调只进——推导机单源；回退边合法：completed feature 追加任务 → tasks 快照诚实）
-    const after = readPhaseInput(db, feature.id)
-    const derived = deriveFeaturePhase({
-      current: feature.feature_status,
-      docKinds: after.docKinds,
-      taskStatuses: after.taskStatuses,
-    })
-    if (derived !== feature.feature_status) {
-      db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
-        derived,
-        now,
-        feature.id,
-      )
+    // ⑬ 相位重算（单调只进——推导机单源；回退边合法：completed feature 追加任务 → tasks 快照诚实；
+    //    律四：proposal 容器无相位域 → 跳过）
+    if (feature !== undefined) {
+      const after = readPhaseInput(db, feature.id)
+      const derived = deriveFeaturePhase({
+        current: feature.feature_status,
+        docKinds: after.docKinds,
+        taskStatuses: after.taskStatuses,
+      })
+      if (derived !== feature.feature_status) {
+        db.prepare(`UPDATE features SET feature_status = ?, updated_at = ? WHERE id = ?`).run(
+          derived,
+          now,
+          feature.id,
+        )
+      }
     }
 
-    return { taskId, slug: feature.slug, localId, reused: false }
+    return { taskId, slug: container.slug, localId, reused: false }
   })
 
   // 复用命中（纯读零变更）不发射；写路径事务提交后 emitTasksChanged（四域写后事件裁决）

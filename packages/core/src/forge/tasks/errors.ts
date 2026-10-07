@@ -2,6 +2,8 @@
 // 409 行三形统一拒绝面：from 不匹配 / 目标 ∉ transitionTargets / agent 面矩阵非法格；
 // 2.3 扩池：ERR_TASK_NOT_FOUND / ERR_TASK_EXISTS / ERR_CYCLE_DETECTED /
 // ERR_CHAIN_DEPTH_EXCEEDED / ERR_FEATURE_NOT_FOUND——addTask/queryTask 拒绝面）；
+// M3 2.4 扩池：ERR_PROPOSAL_NOT_FOUND（TasksProposalNotFoundError——容器双轨 proposal 容器
+// 在场校验，与 small-domains 同 code 异类就近落位）；
 // 2.5 扩池：ERR_REASON_REQUIRED（transitionTask 空因）+ TaskNotFoundData.taskId 附载
 // （UI/RPC 面 id 直查路径）；2.4 扩池：ERR_DEPENDENCIES_UNMET（claim 守卫前置未终态，
 // data 带未满足清单）+ ERR_SUMMARY_REQUIRED（success submit 空摘要）+ ReasonRequired
@@ -165,6 +167,24 @@ export class TasksFeatureNotFoundError extends Error {
   constructor(data: TasksFeatureNotFoundData) {
     super(`feature 未命中：${data.featureSlug}（project ${data.projectId}）——addTask 归属校验`)
     this.name = 'TasksFeatureNotFoundError'
+    this.data = data
+  }
+}
+
+/** ERR_PROPOSAL_NOT_FOUND 附载（tasks 域就近类——2.4 容器双轨；与 small-domains 同 code 异类） */
+export interface TasksProposalNotFoundData {
+  readonly projectId: string
+  readonly proposalSlug: string
+}
+
+/** proposal 容器解析未命中（404）：addTask 容器在场校验（source_id 必命中 source_kind 对应表——不变量①） */
+export class TasksProposalNotFoundError extends Error {
+  readonly code = 'ERR_PROPOSAL_NOT_FOUND' as const
+  readonly data: TasksProposalNotFoundData
+
+  constructor(data: TasksProposalNotFoundData) {
+    super(`proposal 未命中：${data.proposalSlug}（project ${data.projectId}）——addTask 容器在场校验`)
+    this.name = 'TasksProposalNotFoundError'
     this.data = data
   }
 }

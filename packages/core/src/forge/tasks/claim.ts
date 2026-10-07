@@ -27,6 +27,7 @@ import type Database from 'better-sqlite3'
 import type {
   ClaimTaskInput,
   ClaimTaskResult,
+  ContainerRef,
   TaskPriority,
   TaskPrerequisiteSummary,
 } from '@dsh-forge/contracts'
@@ -86,11 +87,12 @@ function latestInProgressBySession(db: Database.Database, sessionId: string): Ta
 /**
  * 就绪选择（§6-35⑧）：①分支延续——范围内最近满足任务（completed/skipped，updated_at 最新）
  * 的就绪 pending 直接后继；②无延续 → 全局就绪 pending 池按 priority → 创建序。
- * 仅扫 pending 池（Hard Rule）；scope = featureSlug 限定（slug 列 ≡ feature slug）。
+ * 仅扫 pending 池（Hard Rule）；scope = 容器限定（M3 2.4：source_kind + slug 双列判别——
+ * 成链撞键下 kind 可分；slug 列 ≡ 容器 slug 不变量）。缺席容器 → 就绪池恒空 → Z1 出口。
  */
-function selectReadyTask(db: Database.Database, featureSlug: string | undefined): TaskStorageRow | undefined {
-  const scope = featureSlug === undefined ? '' : ` AND t.slug = ?`
-  const scopeArgs = featureSlug === undefined ? [] : [featureSlug]
+function selectReadyTask(db: Database.Database, source: ContainerRef | undefined): TaskStorageRow | undefined {
+  const scope = source === undefined ? '' : ` AND t.source_kind = ? AND t.slug = ?`
+  const scopeArgs = source === undefined ? [] : [source.kind, source.slug]
 
   // ① 分支延续锚点：最近满足任务（同 scope——边为同 feature 约束，后继天然在 scope 内）
   const anchor = db
@@ -183,19 +185,12 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
   const result = withTransaction(db, (): ClaimTaskResult => {
     // ① 目标解析：显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
+    //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常）
     let row: TaskStorageRow | undefined
     if (input.taskRef !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
-      // M3 容器双轨（1.2 垫片）：容器限定盲选 = feature 容器按 slug 限定（M2 语义等价）；
-      // proposal 容器限定 = 2.4 写动词面到场前 fail-loud（M2 行恒 feature——slug 与成链
-      // feature 同名不可分）
-      if (input.source !== undefined && input.source.kind !== 'feature') {
-        throw new Error(
-          `claimTask: proposal 容器限定落地于 M3 2.4（写入动词面扩展——当前动词恒 feature 单轨）：${input.source.slug}`,
-        )
-      }
-      row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.source?.slug)
+      row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.source)
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
 
@@ -210,6 +205,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     const dispatchPrompt = composeDispatchPrompt({
       slug: row.slug,
       localId: row.local_id,
+      // M3 2.4：SOURCE 容器语境行（任务带容器出厂——Interface 1；slug ≡ 容器 slug 不变量
+      // 使行内 slug 直取任务行 slug）
+      source: { kind: row.source_kind, slug: row.slug },
       taskType: row.task_type,
       priority: (row.priority as TaskPriority | null) ?? undefined,
       coverage: row.coverage ?? undefined,

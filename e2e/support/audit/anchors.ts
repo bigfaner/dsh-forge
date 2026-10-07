@@ -9,7 +9,8 @@
 //   ③ SC3 发现面只读文件面（discovery.ts fs 读三件套封闭 + 零写调用 + 单向阀门标记在场
 //      + 吸收白名单常量封闭集——运行面树快照归 audit-anchors.spec.ts）；
 //   ④ web 无编排逻辑（写动词调用形/数据层 import/fs 写禁令——web 只经 RPC 薄 Controller）
-//      + 旧技能悬空引用零残留（forge:* 技能引用 ⊆ 挂载集 ∪ M3 显式豁免清单）。
+//      + 旧技能悬空引用零残留（双形制：裸名引用 ⊆ 挂载集；forge: 前缀引用 ⊆ 挂载集 ∪
+//      M3 显式豁免清单——2.4 drift #8 前缀缝消灭后裸名 = 正形态）。
 import { readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -252,13 +253,15 @@ const SKILL_REF_SCAN_DIRS = [
   'packages/plugin-forge/skills',
 ] as const
 
-/** Skill(skill="forge:<name>") 引用提取形（3.3 记录装配缝：引用为 forge: 前缀形制，挂载名 = 裸名） */
-const SKILL_REF_RE = /Skill\(\s*skill\s*=\s*"forge:([a-z0-9-]+)"/g
+/** Skill(skill="<name>") 引用提取形（双形制：裸名 = dsh 挂载名形制——2.4 前缀缝消灭后
+ *  的正形态（drift #8）；forge: 前缀 = M2 残留形制（M3 豁免清单承载——豁免技能迁移前先置）） */
+const SKILL_REF_RE = /Skill\(\s*skill\s*=\s*"((?:forge:)?)([a-z0-9-]+)"/g
 
 /**
- * 锚④b：旧技能悬空引用零残留——产品文本内一切 `Skill(skill="forge:X")` 引用必须
- * 解析到 plugin-forge 挂载技能目录（customSkillDirs 物理挂载面，裸名对齐）或
- * M3 显式豁免清单；两者皆不命中 = 悬空残留（executor 将调用不存在的技能）。
+ * 锚④b：旧技能悬空引用零残留——产品文本内一切 `Skill(skill="X")` 引用必须解析到
+ * plugin-forge 挂载技能目录（customSkillDirs 物理挂载面，裸名对齐）。双形制解析规则：
+ * 裸名引用（挂载名形制）→ 仅挂载集（物理在场才可用）；forge: 前缀引用 → 挂载集 ∪
+ * M3 显式豁免清单。皆不命中 = 悬空残留（executor 将调用不存在的技能）。
  */
 export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFinding[] {
   const anchor = 'skill-refs-resolved'
@@ -270,7 +273,7 @@ export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFin
       .map((e) => e.name),
   )
   const deferred = new Set(M3_DEFERRED_SKILL_REFS)
-  const refs: Array<{ name: string; file: string; line: number }> = []
+  const refs: Array<{ name: string; prefixed: boolean; file: string; line: number }> = []
   for (const dir of SKILL_REF_SCAN_DIRS) {
     const absDir = join(root, dir)
     if (!pathExists(absDir)) continue
@@ -280,7 +283,12 @@ export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFin
       const scanned = abs.endsWith('.md') ? src : src // 引用形态在模板字符串/SKILL.md 正文——原文扫描（.md 无注释；.ts 剥注释会误伤模板字符串内的引号闭合面）
       for (const [idx, line] of scanned.split('\n').entries()) {
         for (const m of line.matchAll(SKILL_REF_RE)) {
-          refs.push({ name: m[1]!, file: `${dir}/${relative(join(root, dir), abs).split('\\').join('/')}`, line: idx + 1 })
+          refs.push({
+            name: m[2]!,
+            prefixed: m[1] === 'forge:',
+            file: `${dir}/${relative(join(root, dir), abs).split('\\').join('/')}`,
+            line: idx + 1,
+          })
         }
       }
     }
@@ -289,10 +297,11 @@ export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFin
     findings.push({ anchor, detail: '产品文本零技能引用——扫描面异常（run-tests 等既有引用缺席即断言面失效）' })
   }
   for (const r of refs) {
-    if (!mounted.has(r.name) && !deferred.has(r.name)) {
+    const resolved = mounted.has(r.name) || (r.prefixed && deferred.has(r.name))
+    if (!resolved) {
       findings.push({
         anchor,
-        detail: `${r.file}:${r.line} 引用 forge:${r.name} 既不在挂载技能目录（${[...mounted].sort().join('/') || '空'}）也不在 M3 豁免清单——旧技能悬空引用残留`,
+        detail: `${r.file}:${r.line} 引用 ${r.prefixed ? `forge:${r.name}` : r.name} 不在挂载技能目录（${[...mounted].sort().join('/') || '空'}）${r.prefixed ? ' 也不在 M3 豁免清单' : '（裸名 = dsh 挂载名形制，须物理在场）'}——技能悬空引用残留`,
       })
     }
   }

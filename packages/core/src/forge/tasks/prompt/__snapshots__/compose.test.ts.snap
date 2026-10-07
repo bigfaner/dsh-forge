@@ -1885,7 +1885,7 @@ Objective: run e2e tests via the run-tests skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:run-tests")\` to execute tests
+- MUST invoke \`Skill(skill="run-tests")\` to execute tests
 - MUST NOT run any direct test runner command — the skill handles framework-specific execution
 - The skill handles surface resolution, server lifecycle, result parsing, and reporting
 - MUST confirm a defect is in production code before modifying production code — test script bugs may be fixed, but MUST NOT alter test assertions or logic to make tests pass
@@ -1906,7 +1906,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:run-tests")
+Skill(skill="run-tests")
 \`\`\`
 
 If tests fail, identify failing tests and root cause, apply minimal fix, then re-invoke the skill to confirm (max 3 attempts).

@@ -9,9 +9,17 @@ import {
   TaskExistsError,
   TaskNotFoundError,
   TasksFeatureNotFoundError,
+  TasksProposalNotFoundError,
 } from './errors.js'
 import { PhaseInvariantViolationError } from './phase-deriver.js'
-import { createTasksHarness, seedEdge, seedFeature, seedTask, type TasksHarness } from './harness.js'
+import {
+  createTasksHarness,
+  seedEdge,
+  seedFeature,
+  seedProposal,
+  seedTask,
+  type TasksHarness,
+} from './harness.js'
 
 let h: TasksHarness | undefined
 afterEach(() => {
@@ -140,17 +148,73 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
   })
 
-  it('写入校验锚（1.2 AC5）：proposal 容器写入动词面 = 2.4 扩展点 → fail-loud 拒绝 + 零行写入', async () => {
+  it('proposal 容器未命中 → ERR_PROPOSAL_NOT_FOUND（tasks 域就近类）+ 零行写入', async () => {
     const add = svc()
     const err = await add({
       projectId: P(),
-      source: { kind: 'proposal', slug: 'p1' },
+      source: { kind: 'proposal', slug: 'ghost-p' },
       title: 't',
       type: 'coding-feature',
     }).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(Error)
-    expect((err as Error).message).toContain('proposal 容器写入动词面落地于 M3 2.4')
+    expect(err).toBeInstanceOf(TasksProposalNotFoundError)
+    expect((err as TasksProposalNotFoundError).code).toBe('ERR_PROPOSAL_NOT_FOUND')
+    expect((err as TasksProposalNotFoundError).data).toEqual({ projectId: P(), proposalSlug: 'ghost-p' })
     expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
+  })
+
+  it('proposal 容器直挂全链（mode=blitz）：source 双列 + slug ≡ proposal slug + mode 快照 + add record + 相位域零参与（律四）+ 事件单发', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'blitz-p', mode: 'blitz' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'blitz-p' },
+      title: '突击任务',
+      type: 'coding-feature',
+      acceptanceCriteria: ['测试通过'],
+    })
+    expect(r).toMatchObject({ slug: 'blitz-p', localId: '1.1', reused: false })
+    const row = h!.db
+      .prepare<unknown[], Record<string, unknown>>(
+        `SELECT slug, source_kind, source_id, mode, ac_json, task_status FROM tasks WHERE id = ?`,
+      )
+      .get(r.taskId) as Record<string, unknown>
+    expect(row).toMatchObject({
+      slug: 'blitz-p',
+      source_kind: 'proposal',
+      source_id: 'p-blitz-p',
+      mode: 'blitz', // 创建时容器 mode 快照（Interface 1——proposal 容器取 proposals.mode）
+      ac_json: '["测试通过"]',
+      task_status: 'pending',
+    })
+    expect(rows(`SELECT verb, actor FROM task_records WHERE task_id = ?`, r.taskId)).toEqual([
+      { verb: 'add', actor: 'plugin-tool' },
+    ])
+    // 律四：proposal 容器无相位域——features 表零行零触碰
+    expect(rows(`SELECT * FROM features`)).toEqual([])
+    expect(h!.events.emitted).toEqual([{ projectId: P() }])
+  })
+
+  it('proposal 容器 mode 快照三态：expedition / NULL（落列断言——快照取创建时值不回溯）', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'exp-p', mode: 'expedition' })
+    const r1 = await add({ projectId: P(), source: { kind: 'proposal', slug: 'exp-p' }, title: 't', type: 'doc' })
+    seedProposal(h!.db, { slug: 'null-p', mode: null })
+    const r2 = await add({ projectId: P(), source: { kind: 'proposal', slug: 'null-p' }, title: 't', type: 'doc' })
+    const modeOf = (id: string): unknown =>
+      (h!.db.prepare<unknown[], { mode: unknown }>(`SELECT mode FROM tasks WHERE id = ?`).get(id) as { mode: unknown }).mode
+    expect(modeOf(r1.taskId)).toBe('expedition')
+    expect(modeOf(r2.taskId)).toBe(null)
+    // 创建后改 proposals.mode 不回溯快照（律三——服务面 setProposalMode 归 2.2，直写夹具等价模拟）
+    h!.db.prepare(`UPDATE proposals SET mode = 'blitz' WHERE slug = 'exp-p'`).run()
+    expect(modeOf(r1.taskId)).toBe('expedition')
+  })
+
+  it('proposal 容器 localId 数值顺延独立起算（UNIQUE(slug, local_id) 同 slug 键空间）', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'pp', mode: 'blitz' })
+    seedTask(h!.db, 'pp', '1.1', { kind: 'proposal', mode: 'blitz' })
+    const r = await add({ projectId: P(), source: { kind: 'proposal', slug: 'pp' }, title: 't', type: 'doc' })
+    expect(r.localId).toBe('1.2')
   })
 
   it('单事务全成全败：环拒绝/漂移拒绝 → tasks·edges·records·features 零残留', async () => {
@@ -534,5 +598,89 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     expect(err).toBeInstanceOf(Error)
     expect((err as Error).message).toContain('blockSource 需要 sourceTask')
     expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
+  })
+})
+
+describe('AC（2.4）同容器边约束：task_edges 两端 source_id 相等（不变量②）', () => {
+  it('成链撞键（feature 与 proposal 同 slug）：dependsOn 命中他容器同键 → ERR_TASK_NOT_FOUND（同容器边不变量）', async () => {
+    const add = svc()
+    // 成链形态：proposal X 与 feature X 同名共存——slug 键空间共享（UNIQUE(slug, local_id)），
+    // 自然键 1.1 落在 feature 侧 → proposal 容器 dependsOn 跨容器边拒绝
+    seedProposal(h!.db, { slug: 'X', mode: 'blitz' })
+    seedFeature(h!.db, { slug: 'X', status: 'tasks' })
+    seedTask(h!.db, 'X', '1.1') // feature 侧（source_id = f-X）
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'X' },
+      title: 't',
+      type: 'doc',
+      dependsOn: ['1.1'], // 同 slug 查捞命中 feature 侧任务——跨容器
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TaskNotFoundError)
+    expect((err as TaskNotFoundError).data.taskRef).toEqual({ slug: 'X', localId: '1.1' })
+    expect(rows(`SELECT COUNT(*) AS n FROM task_edges`)).toEqual([{ n: 0 }])
+  })
+
+  it('同容器 dependsOn 照常：proposal 容器内前置 → manual 边（两端 source_id 相等）', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'pp', mode: 'blitz' })
+    seedTask(h!.db, 'pp', '1.1', { kind: 'proposal', mode: 'blitz', status: 'completed' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'pp' },
+      title: 't',
+      type: 'doc',
+      dependsOn: ['1.1'],
+    })
+    expect(
+      rows(
+        `SELECT e.origin, t.source_kind, t.source_id FROM task_edges e
+         JOIN tasks t ON t.id = e.prerequisite_id WHERE e.task_id = ?`,
+        r.taskId,
+      ),
+    ).toEqual([{ origin: 'manual', source_kind: 'proposal', source_id: 'p-pp' }])
+  })
+
+  it('成链撞键：sourceTask 命中他容器同键 → ERR_TASK_NOT_FOUND（fix 链同容器归属校验）', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'Y', mode: 'blitz' })
+    seedFeature(h!.db, { slug: 'Y', status: 'tasks' })
+    seedTask(h!.db, 'Y', '2.1') // feature 侧
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'Y' },
+      title: 't',
+      type: 'coding-fix',
+      sourceTask: { slug: 'Y', localId: '2.1' }, // 命中 feature 侧——跨容器 fix 链拒绝
+      blockSource: true,
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TaskNotFoundError)
+    expect(rows(`SELECT COUNT(*) AS n FROM tasks`)).toEqual([{ n: 1 }]) // 既有行零新增
+  })
+
+  it('proposal 容器 blockSource 全家福：fix-N + 源置 blocked + auto-block record + fix-chain 边（相位域零参与）', async () => {
+    const add = svc()
+    seedProposal(h!.db, { slug: 'bp', mode: 'blitz' })
+    seedTask(h!.db, 'bp', '1.1', { kind: 'proposal', mode: 'blitz', status: 'in_progress' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'proposal', slug: 'bp' },
+      title: '修复',
+      type: 'coding-fix',
+      sourceTask: { slug: 'bp', localId: '1.1' },
+      blockSource: true,
+    })
+    expect(r.localId).toBe('fix-1')
+    expect(
+      h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = 't-bp-1.1'`).get(),
+    ).toEqual({ task_status: 'blocked' })
+    expect(
+      rows(`SELECT verb, actor, from_status, to_status FROM task_records WHERE task_id = 't-bp-1.1'`),
+    ).toEqual([{ verb: 'auto-block', actor: 'core', from_status: 'in_progress', to_status: 'blocked' }])
+    expect(
+      rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE origin = 'fix-chain'`),
+    ).toEqual([{ task_id: 't-bp-1.1', prerequisite_id: r.taskId, origin: 'fix-chain' }])
+    // 律四：proposal 容器无相位域——features 表恒空
+    expect(rows(`SELECT * FROM features`)).toEqual([])
   })
 })
