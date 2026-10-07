@@ -329,7 +329,8 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
     const { projectId, dir } = await setupWorld(page, wsDir, '链深上限演示', FEATURE)
     const driver = createBridgeDriver(app)
 
-    // 建链：T1（受阻）→ fix(T1)=T2（受阻）→ … 直至 6 层嵌套（沿 source_task_id 计数 = 6）
+    // 建链：T1（根）→ fix(T1)=T2 → … 直至根 + 6 层 fix（第 6 层 fix 链深 = 6——add.test
+    // 单测钉死边界：根 + 6 fix 合法，挂第 7 层 fix 才拒绝 ERR_CHAIN_DEPTH_EXCEEDED）
     let current = (await driver.call('forgeTasks', 'addTask', {
       projectId, featureSlug: FEATURE, title: '链深任务 T1（根）', type: 'doc',
     })) as AddResult
@@ -337,7 +338,7 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: '链深演示：层 1 受阻', sessionId: EXEC,
     })
-    for (let level = 2; level <= 6; level++) {
+    for (let level = 2; level <= 7; level++) {
       current = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, current, `fix 层 ${level}`))) as AddResult
       await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
       await driver.call('forgeTasks', 'submitTask', {
@@ -357,7 +358,7 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
       const chainRows = db.prepare<unknown[], { n: number }>(
         `SELECT COUNT(*) AS n FROM tasks WHERE source_task_id IS NOT NULL`,
       ).get()?.n ?? 0
-      expect(chainRows, 'fix 谱系行 = 5（≤6 守卫保持，第 7 层未建）').toBe(5)
+      expect(chainRows, 'fix 谱系行 = 6（≤6 守卫保持，第 7 层 fix 未建）').toBe(6)
     } finally {
       db.close()
     }
@@ -568,6 +569,9 @@ test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后�
       }
       edge(xId, fId, 'fix-chain')
       edge(xId, pId, 'manual')
+      // 相位对齐（写动词同口径）：blocked/in_progress 在场 → 推导相位 in-progress——
+      // register 缺省 prd + 活跃任务 = 相位不变量违例，首写动词整体回滚
+      db.prepare(`UPDATE features SET feature_status = 'in-progress' WHERE id = ?`).run(fid)
     })()
     db.close()
 

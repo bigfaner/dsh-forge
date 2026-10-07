@@ -142,8 +142,10 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
     expect(reentry.reclaimed, '重入领取 reclaimed = true（中断恢复零人工清理）').toBe(true)
     expect(reentry.task?.taskId, '重入返回同一任务').toBe(added.taskId)
     expect(reentry.task?.taskStatus, '幂等重入零状态转移（仍 in_progress）').toBe('in_progress')
-    expect(reentry.digest, '重派简报 digest 新值（与中断前相异可判）').not.toBe(first.digest)
-    expect(reentry.digest, '新 digest 仍为 12 hex').toMatch(/^[0-9a-f]{12}$/)
+    // digest = sha-256(简报全文) 前 12 hex（claim.test 钉死确定性合成）：同状态重入 → 同文同
+    // digest；digest 新值仅在库态变化时出现（PHASE_SUMMARY 消失形）——中断未改态故恒等
+    expect(reentry.digest, '同状态重入 digest 恒等（确定性重合成——claim.test 单测钉死）').toBe(first.digest)
+    expect(reentry.digest, 'digest 仍为 12 hex').toMatch(/^[0-9a-f]{12}$/)
     // 重合成简报：四段构成不变 + 动态块按当前状态取数
     expect(reentry.dispatchPrompt, '重派简报人格段不变').toContain('You are a focused task executor.')
     expect(reentry.dispatchPrompt, '重派简报约束块不变').toContain('<constraints>')
@@ -334,16 +336,22 @@ test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + diges
       projectId, featureSlug: FEATURE, title: '多次中断任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
 
-    const digests = new Set<string>()
-    for (let round = 0; round < 3; round++) {
+    // 首领领取（round 0 = 首次 claim——reclaimed=false）+ 两次中断重入（reclaimed=true）
+    const first = (await driver.call('forgeTasks', 'claimTask', {
+      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+    })) as ClaimTaskResult
+    expect(first.reclaimed, '首领领取 reclaimed = false').toBe(false)
+    const digests = new Set<string>([first.digest])
+    for (let round = 1; round <= 2; round++) {
       const claim = (await driver.call('forgeTasks', 'claimTask', {
         projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
       })) as ClaimTaskResult
-      expect(claim.reclaimed, `第 ${round + 1} 次中断后重入：reclaimed=true`).toBe(true)
+      expect(claim.reclaimed, `第 ${round} 次中断后重入：reclaimed=true`).toBe(true)
       expect(claim.task?.taskStatus, '状态恒 in_progress（零状态转移）').toBe('in_progress')
       digests.add(claim.digest)
     }
-    expect(digests.size, 'digest 逐次新值（重合成简报相异可判——含首领共 3 次）').toBe(3)
+    // digest = 确定性合成（claim.test 钉死）：零状态变化的逐次重入 → 同文同 digest（单值）
+    expect(digests.size, 'digest 同态恒定（确定性重合成——状态未变则相异不可判）').toBe(1)
 
     const db = openForgeDbAt(dir)
     try {
@@ -351,7 +359,10 @@ test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + diges
         `SELECT verb, from_status, to_status FROM task_records WHERE task_id = ? ORDER BY id`,
       ).all(added.taskId)
       expect(rows.filter((r) => r.verb === 'claim'), 'claim 行累积 3 行（append-only 审计链）').toHaveLength(3)
-      expect(rows.filter((r) => r.verb === 'claim').every((r) => r.from_status === null && r.to_status === null), '重入行 from/to 恒空（转移面零行）').toBe(true)
+      // 首领行承载 pending→in_progress 转移；重入行 from/to 恒空（转移面零行——claim.test 同形）
+      const claimRows = rows.filter((r) => r.verb === 'claim')
+      expect(claimRows[0], '首领行 from/to 承载转移').toMatchObject({ from_status: 'pending', to_status: 'in_progress' })
+      expect(claimRows.slice(1).every((r) => r.from_status === null && r.to_status === null), '重入行 from/to 恒空（转移面零行）').toBe(true)
     } finally {
       db.close()
     }

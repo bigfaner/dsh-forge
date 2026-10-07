@@ -49,7 +49,7 @@ import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { enterDir, dirRow } from '../../support/navigation.js'
-import { AP_ANY, CTA_ADD_PROJECT, DSR_DIR, DSR_ERROR, NAV_ADD_PROJECT, addProjectPhase, dsrOf, projectRowOf, rfIssue } from '../../support/anchors.js'
+import { AP_ANY, CTA_ADD_PROJECT, DSR_DIR, DSR_ERROR, NAV_ADD_PROJECT, addProjectPhase, dsrOf, projectRowOf, rfBrowsing, rfIssue } from '../../support/anchors.js'
 
 /** 表单段走查：入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位（sc-branch 同径） */
 async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string, viaHeroCta: boolean): Promise<void> {
@@ -140,14 +140,20 @@ test('@web-e2e @m2 注册派生·Step1b 重选目录：派生行更新（不残�
     const literalA = await derivedLiteral(page)
     expect(literalA, 'A 派生串在场（hash8(A)）').toContain(hash8OfPath(realpathSync(dirA)))
 
-    // 重开选择器（「重新选择」侧栏钮——relink 语义）→ 换选 B
+    // 重开选择器（「重新选择」侧栏钮）→ 换选 B。重开 = RegisterForm 内浏览相位
+    // （rfBrowsing(workspace)，流程相位恒 form——p1mvp project-registration 同径）；
+    // 浏览器 startDir = 当前选定目录 → 上一级回夹具根再选 B；确认钮 = 「选择此文件夹」
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
+    await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
+    await page.locator('.dswf-fb-up').click()
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'ws-b').click()
-    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+    await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
 
-    // 派生行随目录变化更新（换选复检：loading → ready(B)——瞬态由单测钉死，e2e 断终态）
+    // 派生行随目录变化更新（换选复检：loading → ready(B)——瞬态由单测钉死，e2e 断终态）。
+    // 重派生异步在途：ready 态可能仍是 A 旧值——先等 B hash8 落位（重试面）再取串
+    await expect(page.locator(DSR_DIR).first(), '派生行落位 B hash8（重派生在途竞态防线）').toContainText(hash8OfPath(realpathSync(dirB)), { timeout: 30_000 })
     const literalB = await derivedLiteral(page)
     expect(literalB, '派生行更新为 B 的串（不残留 A 旧值）').not.toBe(literalA)
     expect(literalB, 'B 派生串含 hash8(B)（扁平化主体与 hash8 相应变化）').toContain(hash8OfPath(realpathSync(dirB)))
@@ -176,10 +182,11 @@ test('@web-e2e @m2 注册派生·Step1c 取消选择：表单保持取消前状�
     await selectWorkspaceAndNext(page, fixtureRoot, 'ws-cx', true)
     const literalBefore = await derivedLiteral(page)
 
-    // 重开选择器后取消（降桥载体 = 浏览器面「返回上一步」——取消点在注册执行之前）
+    // 重开选择器后取消（浏览面板「返回表单」——取消点在注册执行之前，零副作用）。
+    // 重开 = RegisterForm 内浏览相位（rfBrowsing(workspace)，流程相位恒 form）
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    await page.locator('button', { hasText: '返回上一步' }).first().click()
+    await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
+    await page.locator('button', { hasText: '返回表单' }).first().click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
 
     // 表单保持取消前状态（无新路径回填、无错误提示；派生行原值）
@@ -188,9 +195,9 @@ test('@web-e2e @m2 注册派生·Step1c 取消选择：表单保持取消前状�
     expect(literalAfter, '派生行保持取消前串（零副作用）').toBe(literalBefore)
     await expect(page.locator(DSR_ERROR).first(), '无错误提示').toHaveCount(0)
 
-    // 可再次发起选择（重开无阻）
+    // 可再次发起选择（重开无阻——rfBrowsing(workspace) 再开）
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
+    await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
@@ -259,11 +266,14 @@ test('@web-e2e @m2 注册派生·Step3b 处置后重选复检通过：恢复正�
     await expect(page.locator(dsrOf('suspected-move'))).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.dswf-rf-confirm')).toBeDisabled()
 
-    // 处置：改选别的工作区目录（碰撞条件不再成立）→ 复检通过 → 恢复正常确认
+    // 处置：改选别的工作区目录（碰撞条件不再成立）→ 复检通过 → 恢复正常确认。
+    // 重开 = rfBrowsing(workspace)（RegisterForm 内浏览相位）→ 上一级回夹具根选 ws-clean
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
+    await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
+    await page.locator('.dswf-fb-up').click()
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'ws-clean').click()
-    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+    await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     const literal = await derivedLiteral(page)
     await expect(page.locator(DSR_ERROR).first(), '错误条消退（复检通过）').toHaveCount(0)
@@ -347,8 +357,9 @@ test('@web-e2e @m2 注册派生·Step3d 已注册幂等复用：StateChip + 挂�
       await enterDir(page, segment)
     }
     await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
-    await dirRow(page, 'ws-idem').dblclick()
-    await expect(dirRow(page, 'ws-idem'), '浏览器行「已注册」标记在场（pick 时口径）').toContainText('已注册')
+    // 单击选中（双击 = 进入目录——DirectoryBrowser 行语言）→ 选中行呈现「已注册」标记
+    await dirRow(page, 'ws-idem').click()
+    await expect(dirRow(page, 'ws-idem'), '浏览器行「已注册」标记在场（行级标记判据）').toContainText('已注册')
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     await expect(page.locator('.dswf-rf-wsreg').first(), '表单「已注册」StateChip 在场').toBeVisible({ timeout: 15_000 })

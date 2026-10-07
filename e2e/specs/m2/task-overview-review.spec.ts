@@ -104,6 +104,16 @@ function seedTasks(
           }
         }
       }
+      // 相位对齐（写动词同口径 deriveTaskPhase 两段式）：直插任务行后 feature_status 须
+      // ≡ 任务推导相位——register 缺省 prd + 有任务 = 相位不变量违例，首个写动词
+      // （transition）会触发 assertPhaseInvariant 整体回滚（对话框留场错误条）
+      const seeded = rows.map((r) => r.status)
+      const phase = seeded.some((s) => s === 'in_progress' || s === 'blocked' || s === 'suspended')
+        ? 'in-progress'
+        : seeded.some((s) => s === 'pending')
+          ? 'tasks'
+          : 'completed'
+      db.prepare(`UPDATE features SET feature_status = ? WHERE id = ?`).run(phase, fid)
     })()
   } finally {
     db.close()
@@ -177,8 +187,9 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await page.locator(ttViewOf('swim')).click()
     await expect(page.locator(ttColOf('pending')).locator('[data-dswf-tt-card]'), '泳道 pending 列零卡（过滤统一）').toHaveCount(0)
     await expect(page.locator(ttColOf('in_progress')).locator('[data-dswf-tt-card]').first(), '泳道 in_progress 列保留卡').toBeVisible({ timeout: 15_000 })
-    await page.locator('[data-dswf-ov-stchip-clear"]').click()
-    await expect(page.locator(ttItemOf(idOf(ids, 0))).first(), '清除过滤后全量恢复').toBeVisible({ timeout: 15_000 })
+    await page.locator('[data-dswf-ov-stchip-clear]').click()
+    // 当前仍在泳道视图——恢复判据用泳道锚（pending 列回卡）；列表锚在 Step4 切回后另行断言
+    await expect(page.locator(ttColOf('pending')).locator('[data-dswf-tt-card]').first(), '清除过滤后全量恢复（泳道 pending 列回卡）').toBeVisible({ timeout: 15_000 })
 
     // ── Step 4：三视图切换（列表 → DAG → 泳道 → 列表）──
     await page.locator(ttViewOf('dag')).click()
@@ -187,8 +198,8 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await expect(page.locator(ttColOf('completed')).first(), '泳道七态横向列在场').toBeVisible({ timeout: 15_000 })
     await page.locator(ttViewOf('list')).click()
     await expect(page.locator(ttItemOf(idOf(ids, 0))).first(), '切回列表视图').toBeVisible({ timeout: 15_000 })
-    // 副行承重（前置摘要——自然键 + 当前状态）
-    await expect(page.locator(`[data-dswf-tt-sub="${idOf(ids, 1)}"]`).first(), '副行呈现前置摘要（依赖边 → 1.3）').toContainText('1.3')
+    // 副行承重（前置计数形 ←N 前置——键+当前状态形归抽屉现状条，ui-design 分工）
+    await expect(page.locator(`[data-dswf-tt-sub="${idOf(ids, 1)}"]`).first(), '副行呈现前置计数（依赖边 → ←1 前置）').toContainText('←1 前置')
 
     // ── Step 6：详情抽屉（模块化分区 + 执行时间线）──
     await page.locator(ttItemOf(idOf(ids, 2))).first().click()
@@ -256,20 +267,22 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
   try {
     const project = await registerProject(page, wsDir, '绑定切换演示')
     const projectId = project.id
-    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'fa', title: '绑定甲' })
+    // 注册序 = 列表 created_at 降序的反面：后注册者最新、居列表头——activeFeatureSlug 缺省
+    // 绑定最新活跃 feature（overview-model 单测钉死），故甲须后注册才能成为初始绑定
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'fb', title: '绑定乙' })
+    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'fa', title: '绑定甲' })
     const dir = (await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })).dir
     const aIds = seedTasks(dir, 'fa', [{ localId: '1.1', title: '甲任务', status: 'pending' }])
     const bIds = seedTasks(dir, 'fb', [{ localId: '1.1', title: '乙任务', status: 'pending' }])
 
     await openTasksTab(page)
-    await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '初始绑定甲（首 feature）').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '初始绑定甲（最新活跃 feature 缺省绑定）').toBeVisible({ timeout: 30_000 })
 
-    // 点开绑定 pill → Menu → 选乙
+    // 点开绑定 pill → Menu → 选乙（菜单行 = slug + 完成比锚 [data-dswf-tt-mfeat]——标题不入菜单行）
     await page.locator(ttFeatpillOf('fa')).first().click()
     const menu = page.locator('[role="menu"]').first()
     await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]').filter({ hasText: '绑定乙' }).first().click()
+    await menu.locator('[data-dswf-tt-mfeat="fb"]').first().click()
     await expect(page.locator(ttFeatpillOf('fb')).first(), '绑定切换为乙（activeFeatureSlug）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ttItemOf(idOf(bIds, 0))).first(), '列表切换为乙的任务集').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '甲任务行退场（绑定过滤）').toHaveCount(0)
@@ -305,7 +318,7 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
     await openTasksTab(page)
     const searchrow = page.locator('[data-dswf-ov-searchrow]').first()
     await expect(searchrow, '搜索行在场').toBeVisible({ timeout: 15_000 })
-    const input = page.locator('.dswf-ov-search')
+    const input = page.locator('.dswf-ov-search input')
     await expect(input).toBeVisible()
 
     // 拉丁关键词：服务端过滤（标题匹配）——仅 fix 系
@@ -395,18 +408,23 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
     ])
 
     await openTasksTab(page)
-    const sortPill = page.locator('[data-dswf-ov-sort"]').first()
+    const sortPill = page.locator('[data-dswf-ov-sort]').first()
     await expect(sortPill, '排序 pill 在场').toBeVisible({ timeout: 15_000 })
 
     // 最新创建（created 降序）：最晚已结 → 居中阻塞 → 最早待办
     await sortPill.click()
     await expect(sortPill, '排序切换文案（最新创建）').toContainText('最新创建')
+    // 重排 = 异步重拉——evaluateAll 无自动等待，先等组内序落位再取序（快照竞态防线）。
+    // 列表呈现层 = 执行中(in_progress|blocked)前置组 + 其余组（task-tab-model 单测钉死）——
+    // created 降序在「其余」组内呈现：1.3 → 1.1；服务端纯降序由读面断言（refetchOnce）钉死
+    await expect(page.locator('[data-dswf-tt-item]').nth(1), '最新创建序就位（其余组首行 = 最晚已结）').toHaveAttribute('data-dswf-tt-item', idOf(ids, 2), { timeout: 15_000 })
     const createdOrder = await page.locator('[data-dswf-tt-item]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-dswf-tt-item')))
-    expect(createdOrder, '最新创建序（created_at 降序）').toEqual([idOf(ids, 2), idOf(ids, 1), idOf(ids, 0)])
+    expect(createdOrder, '最新创建序（呈现层分组：执行中[1.2] + 其余 created 降序[1.3, 1.1]）').toEqual([idOf(ids, 1), idOf(ids, 2), idOf(ids, 0)])
 
     // 活跃优先：in_progress → blocked → pending → … → completed（阻塞居前、已结殿后）
     await sortPill.click()
     await expect(sortPill, '排序切回文案（活跃优先）').toContainText('活跃优先')
+    await expect(page.locator('[data-dswf-tt-item]').nth(1), '活跃优先序就位（其余组首行 = 最早待办）').toHaveAttribute('data-dswf-tt-item', idOf(ids, 0), { timeout: 15_000 })
     const activeOrder = await page.locator('[data-dswf-tt-item]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-dswf-tt-item')))
     expect(activeOrder, '活跃优先序（blocked > pending > completed）').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
@@ -448,10 +466,10 @@ test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason �
     await expect(page.locator('[data-dswf-td-tr-from]').first()).toContainText('待处理')
 
     // 选目标态（suspended——非终态）+ 填原因 + 确认
-    await page.locator('[data-dswf-td-tr-to"]').selectOption('suspended')
+    await page.locator('[data-dswf-td-tr-to]').selectOption('suspended')
     const REASON = 'ovr Step5：人工挂起（演示原因）'
     await page.locator('[data-dswf-td-tr-reason]').fill(REASON)
-    await page.locator('[data-dswf-td-tr-confirm"]').first().click()
+    await page.locator('[data-dswf-td-tr-confirm]').first().click()
     await expect(page.locator('[data-dswf-td-tr-dialog]'), '确认后对话框收场').toHaveCount(0, { timeout: 15_000 })
 
     // 落库 + 审计（actor=ui + reason）+ 概览即时反映（单发重取即见）
@@ -496,13 +514,13 @@ test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 +
     await openTasksTab(page)
     await page.locator(ttItemOf(taskId)).first().click()
     await page.locator('[data-dswf-td-trans]').first().click()
-    await page.locator('[data-dswf-td-tr-to"]').selectOption('suspended')
+    await page.locator('[data-dswf-td-tr-to]').selectOption('suspended')
     // reason 留空确认 → 前端校验拒绝
-    await page.locator('[data-dswf-td-tr-confirm"]').first().click()
+    await page.locator('[data-dswf-td-tr-confirm]').first().click()
     const errBar = page.locator('[data-dswf-td-tr-error]').first()
     await expect(errBar, '错误条在场（role=alert）').toBeVisible({ timeout: 15_000 })
     await expect(errBar, '错误文案（原因必填——填写后重试）').toContainText('原因必填')
-    await expect(page.locator('[data-dswf-td-tr-dialog"]').first(), '对话框留场（可修正）').toBeVisible()
+    await expect(page.locator('[data-dswf-td-tr-dialog]').first(), '对话框留场（可修正）').toBeVisible()
     await expect(page.locator('[data-dswf-td-tr-to]').first(), '已选目标保留（可修正不丢输入）').toHaveValue('suspended')
 
     // 零写入：无转移审计行、状态不变
@@ -554,7 +572,7 @@ test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见�
     const options = await page.locator('[data-dswf-td-tr-to] option').evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).value))
     expect(options, '选项不含当前态（from ≠ to）').not.toContain('pending')
     expect(options.every((v) => detail.allowedTransitions.includes(v as TaskStatus)), '选项 ⊆ 服务端允许集（同源）').toBe(true)
-    await page.locator('[data-dswf-td-tr-cancel"]').first().click()
+    await page.locator('[data-dswf-td-tr-cancel]').first().click()
     await expect(page.locator('[data-dswf-td-tr-dialog]')).toHaveCount(0)
 
     // 服务端先验兜底：RPC 直打目标 = 当前态 → ERR_INVALID_TRANSITION
@@ -599,10 +617,10 @@ test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继
     await openTasksTab(page)
     await page.locator(ttItemOf(tId)).first().click()
     await page.locator('[data-dswf-td-trans]').first().click()
-    await page.locator('[data-dswf-td-tr-to"]').selectOption('completed')
+    await page.locator('[data-dswf-td-tr-to]').selectOption('completed')
     await expect(page.locator('[data-dswf-td-tr-terminal]').first(), '终态提示在场（可能触发 autoRestore）').toBeVisible({ timeout: 15_000 })
     await page.locator('[data-dswf-td-tr-reason]').fill('ovr Step5：源完成（触发后继恢复）')
-    await page.locator('[data-dswf-td-tr-confirm"]').first().click()
+    await page.locator('[data-dswf-td-tr-confirm]').first().click()
     await expect(page.locator('[data-dswf-td-tr-dialog]')).toHaveCount(0, { timeout: 15_000 })
 
     // T 落 completed；W 恢复 pending（人工终态转移同挂恢复钩子——C3 同族）

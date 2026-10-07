@@ -122,14 +122,18 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
       { taskId: added.taskId, slug: added.slug, localId: added.localId, title: '挂接双侧冒烟任务', taskStatus: 'completed', sessionId: EXEC_SESSION, source: 'record' },
     ])
     const realCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
-    expect(realCards.map((c) => c.source), '派发会话侧：link 分型单卡').toEqual(['link'])
-    expect(realCards[0]?.sessionId, 'link 卡 = 真实 dispatcher 会话（与执行会话相异可判）').toBe(sessionId)
+    // §6-24④ 诚实审计：claim 审计行也带本会话 id → 派发会话两卡并存（link + record——
+    // sc6-session-links.spec 已钉死；此处 record 卡源于 claim 审计行，非 submit 执行会话）
+    expect(realCards.map((c) => c.source).sort(), '派发会话侧：link + record 两卡并存（§6-24④）').toEqual(['link', 'record'])
+    expect(realCards.every((c) => c.sessionId === sessionId), '两卡均 = 真实 dispatcher 会话（与执行会话相异可判）').toBe(true)
 
     // ── Step 3：dispatcher 会话头 pill（派发类）──
     const linkPill = page.locator(stpPillOf(added.taskId, 'link')).first()
     await expect(linkPill, '派发类 pill 在场（挂接表源）').toBeVisible({ timeout: 30_000 })
     await expect(linkPill).toContainText('派发')
-    await expect(page.locator(stpPillOf(added.taskId, 'record')), '执行类 pill 不在 dispatcher 会话头（record 绑执行会话）').toHaveCount(0)
+    const dispatcherRecordPill = page.locator(stpPillOf(added.taskId, 'record')).first()
+    await expect(dispatcherRecordPill, 'claim 审计 record pill 同场（§6-24④ 两卡并存）').toBeVisible({ timeout: 30_000 })
+    await expect(dispatcherRecordPill).toContainText('执行')
 
     // ── Step 4：pill 导航（dock 开概览 + 任务子 tab + feature 选中 + 抽屉开）──
     await linkPill.click()
@@ -180,12 +184,15 @@ test('@web-e2e @m2 挂接双侧·Step3 派发类 pill：挂接表源分型（无
     const pill = page.locator(stpPillOf(added.taskId, 'link')).first()
     await expect(pill, 'pill 分型标识 = 派发（link 源）').toContainText('派发', { timeout: 30_000 })
     await expect(pill, 'pill 状态文本（结算后已完成）').toContainText('已完成')
-    await expect(page.locator(stpPillOf(added.taskId, 'record')), '无执行类残留（record 绑执行会话）').toHaveCount(0)
+    // claim 审计行也带本会话 id → record pill 同场（§6-24④ 两卡并存——sc6-session-links 钉死）；
+    // submit 的 record 绑 EXEC_SESSION，不出现在本会话头（两侧相异可判）
+    const recordPill = page.locator(stpPillOf(added.taskId, 'record')).first()
+    await expect(recordPill, 'claim 审计 record pill 同场（两卡并存）').toBeVisible({ timeout: 15_000 })
+    await expect(recordPill).toContainText('执行')
 
-    // 分型数据面：本会话 sessionLinks 仅 link 卡（与库中挂接行一致）
+    // 分型数据面：本会话 sessionLinks = link + claim record 两卡（§6-24④）
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
-    expect(cards, 'sessionLinks = link 单卡（读面直读映射）').toHaveLength(1)
-    expect(cards[0]?.source, '分型 = link').toBe('link')
+    expect(cards.map((c) => c.source).sort(), 'sessionLinks 两卡并存（读面直读映射）').toEqual(['link', 'record'])
   } finally {
     await closeApp(app)
     rmDirBestEffort(fixtureRoot)
@@ -218,10 +225,11 @@ test('@web-e2e @m2 挂接双侧·Step3b 溢出：≤2 并排 + +N 菜单全量 +
       tasks.push(added)
     }
 
-    // ≤2 并排 + 其余 +N 溢出（N = 余量任务数 = 1）
+    // ≤2 并排 + 其余 +N 溢出。§6-24④ 双源：3 任务 × （挂接表行 + claim 审计行）= 6 卡
+    // → 并排 2 + 溢出 4（N = 余量卡数）
     await expect(page.locator('[data-dswf-stp-pill]'), '并排 pill ≤2').toHaveCount(2, { timeout: 30_000 })
     const more = page.locator('[data-dswf-stp-more]').first()
-    await expect(more, '+N 溢出菜单触发在场（N = 1）').toHaveText('+1', { timeout: 15_000 })
+    await expect(more, '+N 溢出菜单触发在场（N = 余量双源卡数 4）').toHaveText('+4', { timeout: 15_000 })
 
     // 打开菜单：全部其余挂接任务可见（含分型标注）+ 第三任务在列
     await more.click()
@@ -257,17 +265,17 @@ test('@web-e2e @m2 挂接双侧·Step3c 恰 2：全量并排无溢出（off-by-o
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '恰二演示' })
     const driver = createBridgeDriver(app)
     const sessionId = await openRealSession(page, userData, projectId)
-    for (let i = 1; i <= 2; i++) {
-      const added = (await driver.call('forgeTasks', 'addTask', {
-        projectId, featureSlug: FEATURE, title: `恰二任务 ${i}`, type: 'doc',
-      })) as AddTaskResult
-      await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
-    }
+    // 恰 2 卡边界（off-by-one）：单任务 claim → 双源两卡（挂接表行 + claim 审计行——§6-24④）
+    // = 恰 2 并排全量、零溢出（原两任务夹具在双源语义下恒 4 卡，无法抵达本 Outcome 边界）
+    const added = (await driver.call('forgeTasks', 'addTask', {
+      projectId, featureSlug: FEATURE, title: '恰二任务 1', type: 'doc',
+    })) as AddTaskResult
+    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
 
     await expect(page.locator('[data-dswf-stp-pill]'), '恰 2 = 两 pill 并排全量展示').toHaveCount(2, { timeout: 30_000 })
     await expect(page.locator('[data-dswf-stp-more]'), '无 +N 溢出菜单（off-by-one 边界——恰 2 不触发）').toHaveCount(0)
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
-    expect(cards, '库行双挂接（读面两卡）').toHaveLength(2)
+    expect(cards, '库行双源两卡（读面）').toHaveLength(2)
   } finally {
     await closeApp(app)
     rmDirBestEffort(fixtureRoot)
@@ -297,8 +305,8 @@ test('@web-e2e @m2 挂接双侧·Step3d 重领去重：幂等重入单一 pill�
     })) as ClaimTaskResult
     expect(reentry.reclaimed, '二次 claim = 幂等重入').toBe(true)
 
-    await expect(page.locator(stpPillOf(added.taskId, 'link')).first(), '任务 T 仍呈单一 pill').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('[data-dswf-stp-pill]'), '无重复 pill（恒单一展示）').toHaveCount(1)
+    await expect(page.locator(stpPillOf(added.taskId, 'link')).first(), '任务 T 派发 pill 在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('[data-dswf-stp-pill]'), '恒两卡展示（link + record 各一——重领不增）').toHaveCount(2)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const db = openForgeDbAt(dir)
     try {
@@ -309,7 +317,7 @@ test('@web-e2e @m2 挂接双侧·Step3d 重领去重：幂等重入单一 pill�
       db.close()
     }
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
-    expect(cards, '读面单卡（重领不产生重复 pill 的数据面）').toHaveLength(1)
+    expect(cards, '读面恒两卡（重领幂等不产生重复）').toHaveLength(2)
   } finally {
     await closeApp(app)
     rmDirBestEffort(fixtureRoot)
@@ -342,10 +350,10 @@ test('@web-e2e @m2 挂接双侧·Step3e 活体挂接：claim 后 pill 即时出�
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: x.slug, localId: x.localId }, sessionId })
     // 数据面即时判据：写入返回后单发重取即见新值（事件订阅驱动的数据前提）
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
-    expect(cards.map((c) => c.taskId), '单发重取即见 X 挂接').toEqual([x.taskId])
+    expect(cards.map((c) => c.taskId), '单发重取即见 X 挂接（双源两卡同任务——§6-24④）').toEqual([x.taskId, x.taskId])
     // UI 面：pill 出现在当前头部（事件驱动渲染收敛）
     await expect(page.locator(stpPillOf(x.taskId, 'link')).first(), 'X pill 在当前头部出现（即时刷新）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator('[data-dswf-stp-pill]')).toHaveCount(1)
+    await expect(page.locator('[data-dswf-stp-pill]'), '头部恰两卡（link + record）').toHaveCount(2)
   } finally {
     await closeApp(app)
     rmDirBestEffort(fixtureRoot)
