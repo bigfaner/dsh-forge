@@ -8,12 +8,15 @@
 // （UI/RPC 面 id 直查路径）；2.4 扩池：ERR_DEPENDENCIES_UNMET（claim 守卫前置未终态，
 // data 带未满足清单）+ ERR_SUMMARY_REQUIRED（success submit 空摘要）+ ReasonRequired
 // 扩 verb 'submitTask'（blocked submit 空因——同码同语义跨动词）。
+// M3 2.6 扩池（Interface 6 · 图 8 双门）：ERR_TEST_EVIDENCE_REQUIRED（AC 任务 success
+// 结算缺测试证据·data 带清单原样带回）+ ERR_GATE_SUMMARY_REQUIRED（type='gate' 任务
+// 缺数字摘要）——双门仅挂 success 结算，blocked submit 不经（C4 失败分诊走 fix 链）。
 // code 字面量锚定 @dsh-forge/contracts ERROR_CODES，类名/name 手写字面量（contracts 不持
 // 运行期名映射——表 Name 列为文档性对照）；RPC 边界（3.1）序列化为 RpcErrorPayload
 // { code, message, data }，UI 按 code 映射状态。后续动词动词错误（DEPENDENCIES_* 等）
 // 随 2.4–2.5 同文件扩池。与 small-domains/errors.ts 的 FeatureNotFoundError 同 code 异类：
 // 四域互禁 import 彼此（Hard Rule），typed 类按域就近落位，跨 IPC 以 code 判别。
-import type { DependenciesUnmetData, TaskRef, TaskStatus } from '@dsh-forge/contracts'
+import type { DependenciesUnmetData, TaskRef, TaskStatus, TestEvidenceRequiredData } from '@dsh-forge/contracts'
 
 /** 校验面（Interface 10）：human = 七态 − 当前态（UI 菜单与服务端同源）；agent = claim/submit 转移矩阵 */
 export type TransitionFace = 'human' | 'agent'
@@ -255,4 +258,56 @@ export class SummaryRequiredError extends Error {
     this.name = 'SummaryRequiredError'
     this.data = data
   }
+}
+
+// ───────────────────────── M3 2.6 扩池：submitTask 双门（图 8） ─────────────────────────
+
+/** ERR_TEST_EVIDENCE_REQUIRED 附载（contracts TestEvidenceRequiredData 同形单源引用：
+ *  AC 清单原样带回——tasks.ac_json 解码形） */
+
+/** AC 任务 success 结算缺测试证据（400）：ac_json 非空 ∧ gate.test !== true。错误信息人话 +
+ *  逐行 AC 清单（SC7 机械判据·Hard Rule 禁裸错误码）；blocked submit 不经此门（C4）。 */
+export class TestEvidenceRequiredError extends Error {
+  readonly code = 'ERR_TEST_EVIDENCE_REQUIRED' as const
+  readonly data: TestEvidenceRequiredData
+
+  constructor(data: TestEvidenceRequiredData) {
+    super(
+      `submitTask 缺测试证据：带验收清单的任务 success 结算须 gate.test === true——` +
+        `验收清单（逐条补证据后重新提交）：\n${data.acceptanceCriteria.map((ac) => `- ${ac}`).join('\n')}`,
+    )
+    this.name = 'TestEvidenceRequiredError'
+    this.data = data
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isTestEvidenceRequiredError(e: unknown): e is TestEvidenceRequiredError {
+  return e instanceof TestEvidenceRequiredError
+}
+
+/** ERR_GATE_SUMMARY_REQUIRED 附载（type='gate' 任务 success 结算缺数字摘要——无结构化清单面） */
+export interface TasksGateSummaryRequiredData {
+  readonly verb: 'submitTask'
+}
+
+/** gate 任务缺数字摘要（400）：task_type='gate' ∧ gate 载荷缺席——{compile,fmt,lint,test[,coverage]}
+ *  摘要必带落 gate_json；blocked submit 不经此门（C4 失败分诊走 fix 链）。 */
+export class GateSummaryRequiredError extends Error {
+  readonly code = 'ERR_GATE_SUMMARY_REQUIRED' as const
+  readonly data: TasksGateSummaryRequiredData
+
+  constructor(data: TasksGateSummaryRequiredData) {
+    super(
+      `${data.verb} 需要 gate 数字摘要：type='gate' 任务结算必带 gate 载荷 ` +
+        `（{compile, fmt, lint, test[, coverage]}——gate_json 承载）`,
+    )
+    this.name = 'GateSummaryRequiredError'
+    this.data = data
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isGateSummaryRequiredError(e: unknown): e is GateSummaryRequiredError {
+  return e instanceof GateSummaryRequiredError
 }

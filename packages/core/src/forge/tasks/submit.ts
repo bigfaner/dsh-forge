@@ -6,11 +6,18 @@
 // submitTask = tool 专属动词（Interface 7——submit 不上 RPC），submit 记录 actor 恒 'plugin-tool'。
 //
 // 单事务全成全败（Hard Rule）：行解析 → 输入面校验（blocked reason 必带 / success summary 必带
-// ——先于转移校验，与 transitionTask 同序）→ agent 面矩阵先验（in_progress → completed|blocked
+// ——先于转移校验，与 transitionTask 同序）→ 双门（M3 2.6 图 8·SC7：gate 摘要门 → AC 证据门
+// ——均仅挂 success 结算）→ agent 面矩阵先验（in_progress → completed|blocked
 // 唯一入口；pending/blocked/终态提交即 ERR_INVALID_TRANSITION）→ 写前相位增量断言 → 转移
 // UPDATE → submit 记录（files/gate/commit 结构化负载）→ 恢复钩子（completed 挂——反查
 // idx_edges_prerequisite，前置**全**满足才 auto-restore，边不删）→ 相位重算；闭包尾部（提交后）
 // emitTasksChanged。一律 prepared statements（Hard Rule）。
+//
+// 双门边界（M3 2.6）：type='gate' ∧ gate 缺席 → ERR_GATE_SUMMARY_REQUIRED（数字摘要
+// {compile,fmt,lint,test[,coverage]} 必带落 gate_json）；ac_json 非空 ∧ gate.test !== true →
+// ERR_TEST_EVIDENCE_REQUIRED（data/错误信息逐行含 AC 清单——SC7 机械判据，Hard Rule 禁裸
+// 错误码）。blocked submit 不经双门（C4 失败分诊走 fix 链——Go 先例 validateRecordData 非
+// completed 早退；受阻提交可带失败 gate 载荷原样落账沿「不服务内判红」注记）。
 //
 // 边界注记：gate 载荷原样落账不服务内判红（gate 执行归 executor 技能纪律——失败分诊 = blocked
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
@@ -18,7 +25,7 @@
 import type { SubmitTaskInput, SubmitTaskResult } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
-import { ReasonRequiredError, SummaryRequiredError } from './errors.js'
+import { GateSummaryRequiredError, ReasonRequiredError, SummaryRequiredError, TestEvidenceRequiredError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { resolvePhaseGuardFeature, resolveTaskRef } from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
@@ -45,6 +52,22 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     }
     if (input.result === 'success' && (input.summary ?? '').trim() === '') {
       throw new SummaryRequiredError({ verb: 'submitTask' })
+    }
+
+    // ②b gate 摘要门（图 8 B 节——先于 AC 门/转移校验）：type='gate' ∧ gate 载荷缺席 → 拒
+    //    （数字摘要 {compile,fmt,lint,test[,coverage]} 必带落 gate_json）。仅挂 success 结算。
+    if (input.result === 'success' && row.task_type === 'gate' && input.gate === undefined) {
+      throw new GateSummaryRequiredError({ verb: 'submitTask' })
+    }
+
+    // ②c AC 证据门（图 8 C/D 节——SC7 机械判据）：ac_json 非空 ∧ gate.test !== true → 拒
+    //    （data/错误信息逐行含 AC 清单）；空清单 [] = 无 AC 任务直通不校验（与 NULL 同形）。
+    //    仅挂 success 结算——blocked submit 不经（C4）。
+    if (input.result === 'success') {
+      const acceptanceCriteria = row.ac_json !== null ? (JSON.parse(row.ac_json) as string[]) : []
+      if (acceptanceCriteria.length > 0 && input.gate?.test !== true) {
+        throw new TestEvidenceRequiredError({ acceptanceCriteria })
+      }
     }
 
     // ③ agent 面矩阵先验（in_progress 唯一合法 from——pending/blocked/终态提交即拒绝）

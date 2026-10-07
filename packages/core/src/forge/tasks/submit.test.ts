@@ -6,8 +6,21 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { addTask } from './add.js'
 import { claimTask } from './claim.js'
-import { InvalidTransitionError, ReasonRequiredError, SummaryRequiredError } from './errors.js'
-import { createTasksHarness, seedEdge, seedFeature, seedTask, type TasksHarness } from './harness.js'
+import {
+  GateSummaryRequiredError,
+  InvalidTransitionError,
+  ReasonRequiredError,
+  SummaryRequiredError,
+  TestEvidenceRequiredError,
+} from './errors.js'
+import {
+  createTasksHarness,
+  seedEdge,
+  seedFeature,
+  seedProposal,
+  seedTask,
+  type TasksHarness,
+} from './harness.js'
 import { submitTask } from './submit.js'
 
 let h: TasksHarness | undefined
@@ -262,5 +275,203 @@ describe('AC5 恢复钩子：反查 idx_edges_prerequisite + 前置全满足才 
     expect(r.restored).toEqual([])
     expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.1'`)).toEqual([{ task_status: 'blocked' }])
     expect(rows(`SELECT verb FROM task_records WHERE verb = 'auto-restore'`)).toEqual([])
+  })
+})
+
+// ───────── 2.6 双门（图 8 · SC7）：gate 摘要门 + AC 证据门 ─────────
+// 链序：gate 门 → AC 门 → 转移 → 恢复钩子 → 相位重算；双门仅挂 success 结算——
+// blocked submit 不经双门（C4 失败分诊走 fix 链；Go 先例 validateRecordData 非 completed 早退）。
+describe('2.6 双门（图 8）：gate 任务数字摘要门 + AC 测试证据门', () => {
+  /** 直写 ac_json 受控初值（真实写径 = addTask acceptanceCriteria——全链测试走真实动词链） */
+  const withAc = (localId: string, ac: readonly string[]): void => {
+    h!.db.prepare(`UPDATE tasks SET ac_json = ? WHERE local_id = ?`).run(JSON.stringify(ac), localId)
+  }
+
+  it('AC 证据门：ac_json 非空 ∧ gate 缺席 → ERR_TEST_EVIDENCE_REQUIRED——data + 错误信息逐行含 AC 清单（SC7 机械判据）+ 单事务零写入', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    const ac = ['[AC-1] 双门拒绝路径单测全绿', '[AC-2] 错误信息含 AC 清单']
+    withAc('1.1', ac)
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: '完成', sessionId: 's-exec',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TestEvidenceRequiredError)
+    const e = err as TestEvidenceRequiredError
+    expect(e.code).toBe('ERR_TEST_EVIDENCE_REQUIRED')
+    // data = AC 清单原样带回（contracts TestEvidenceRequiredData 同形）
+    expect(e.data).toEqual({ acceptanceCriteria: ac })
+    // SC7 机械判据：错误信息人话 + 逐行含清单（Hard Rule 禁裸错误码）
+    for (const line of ac) {
+      expect(e.message).toContain(line)
+    }
+    // 单事务全成全败：状态不动 + 零记录
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+  })
+
+  it('AC 证据门：gate.test === false（compile/fmt/lint 全 true）→ 同拒；补 gate.test === true（coverage 缺省合法）→ 放行', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    withAc('1.1', ['测试通过'])
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: '完成',
+      gate: { compile: true, fmt: true, lint: true, test: false },
+      sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TestEvidenceRequiredError)
+    const r = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: '完成',
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      sessionId: 's',
+    })
+    expect(r.status).toBe('completed')
+  })
+
+  it('无 AC 任务直通不校验：ac_json NULL 与空清单 [] 均放行（转移 + record 沿 M2）', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' }) // ac_json NULL
+    seedTask(h!.db, 'f', '1.2', { status: 'in_progress' })
+    withAc('1.2', []) // 空清单 = 无 AC 任务
+    for (const localId of ['1.1', '1.2']) {
+      const r = await submit({
+        projectId: P(), taskRef: { slug: 'f', localId }, result: 'success', summary: '无 AC 直通', sessionId: 's',
+      })
+      expect(r.status).toBe('completed')
+    }
+    expect(rows(`SELECT gate_json FROM task_records WHERE verb = 'submit'`)).toEqual([
+      { gate_json: null },
+      { gate_json: null },
+    ])
+  })
+
+  it('gate 摘要门：type=gate ∧ gate 缺席 → ERR_GATE_SUMMARY_REQUIRED——门序先于转移校验（pending 亦此拒）+ 零写入', async () => {
+    seedFeature(h!.db, { slug: 'g', status: 'in-progress' })
+    seedTask(h!.db, 'g', '2.gate', { status: 'in_progress', type: 'gate' })
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'g', localId: '2.gate' },
+      result: 'success', summary: '全绿', sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(GateSummaryRequiredError)
+    expect((err as GateSummaryRequiredError).code).toBe('ERR_GATE_SUMMARY_REQUIRED')
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.gate'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+    // 图 8 门序：gate 门先于转移校验——pending 态提交 = 本门拒绝而非 ERR_INVALID_TRANSITION
+    seedTask(h!.db, 'g', '3.gate', { type: 'gate' }) // pending（未 claim）
+    const errPending = await submit({
+      projectId: P(), taskRef: { slug: 'g', localId: '3.gate' },
+      result: 'success', summary: 'x', sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(errPending).toBeInstanceOf(GateSummaryRequiredError)
+    expect(errPending).not.toBeInstanceOf(InvalidTransitionError)
+  })
+
+  it('门序（图 8 B→C）：双缺 → gate 摘要门先拒；gate 带而 test !== true → AC 证据门后拒', async () => {
+    seedFeature(h!.db, { slug: 'g', status: 'in-progress' })
+    seedTask(h!.db, 'g', '2.gate', { status: 'in_progress', type: 'gate' })
+    withAc('2.gate', ['[AC-1] compile/fmt/lint/test 全绿'])
+    const both = await submit({
+      projectId: P(), taskRef: { slug: 'g', localId: '2.gate' },
+      result: 'success', summary: '全绿', sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(both).toBeInstanceOf(GateSummaryRequiredError)
+    const acOnly = await submit({
+      projectId: P(), taskRef: { slug: 'g', localId: '2.gate' },
+      result: 'success', summary: '全绿',
+      gate: { compile: true, fmt: true, lint: true, test: false },
+      sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(acOnly).toBeInstanceOf(TestEvidenceRequiredError)
+  })
+
+  it('gate 门通过：gate_json 承载 {compile,fmt,lint,test,coverage} 数字摘要落账 + 转移 completed', async () => {
+    seedFeature(h!.db, { slug: 'g', status: 'in-progress' })
+    seedTask(h!.db, 'g', '2.gate', { status: 'in_progress', type: 'gate' })
+    await submit({
+      projectId: P(), taskRef: { slug: 'g', localId: '2.gate' },
+      result: 'success', summary: 'Phase 全绿',
+      gate: { compile: true, fmt: true, lint: true, test: true, coverage: 0.82 },
+      commitHash: 'deadbee', sessionId: 's-exec',
+    })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.gate'`)).toEqual([{ task_status: 'completed' }])
+    expect(rows(`SELECT gate_json, commit_hash FROM task_records WHERE verb = 'submit'`)).toEqual([
+      { gate_json: '{"compile":true,"fmt":true,"lint":true,"test":true,"coverage":0.82}', commit_hash: 'deadbee' },
+    ])
+  })
+
+  it('blocked submit 不经双门（C4 失败分诊走 fix 链）：AC 任务 / gate 任务受阻均直通 blocked + reason 落账', async () => {
+    seedFeature(h!.db, { slug: 'b', status: 'in-progress' })
+    seedTask(h!.db, 'b', '1.1', { status: 'in_progress' })
+    withAc('1.1', ['测试通过'])
+    seedTask(h!.db, 'b', '2.gate', { status: 'in_progress', type: 'gate' })
+    const r1 = await submit({
+      projectId: P(), taskRef: { slug: 'b', localId: '1.1' },
+      result: 'blocked', reason: '测试基座崩坏——fix 链承接', sessionId: 's',
+    })
+    expect(r1.status).toBe('blocked')
+    const r2 = await submit({
+      projectId: P(), taskRef: { slug: 'b', localId: '2.gate' },
+      result: 'blocked', reason: '环境缺依赖', sessionId: 's',
+    })
+    expect(r2.status).toBe('blocked')
+    expect(rows(`SELECT to_status, reason FROM task_records WHERE verb = 'submit'`)).toEqual([
+      { to_status: 'blocked', reason: '测试基座崩坏——fix 链承接' },
+      { to_status: 'blocked', reason: '环境缺依赖' },
+    ])
+  })
+
+  it('AC 门与容器正交：proposal 容器（律四无相位域）任务同样拒——证据门是行级判据', async () => {
+    seedProposal(h!.db, { slug: 'blitz-p', mode: 'blitz' })
+    seedTask(h!.db, 'blitz-p', '1.1', { status: 'in_progress', kind: 'proposal', mode: 'blitz' })
+    withAc('1.1', ['[AC-1] 突击直挂任务测试证据'])
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'blitz-p', localId: '1.1' },
+      result: 'success', summary: '完成', sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TestEvidenceRequiredError)
+  })
+
+  it('图 8 全链（真实动词链）：addTask(AC) → claim → 无证据拒 → 补 gate.test → 转移+record → 恢复钩子 → 相位重算', async () => {
+    seedFeature(h!.db, { slug: 'fl', status: 'in-progress' })
+    // 后继 blocked（前置 = 本任务）——恢复钩子反查对象；先种保持相位不动点（blocked ∈ 活跃集
+    // → in-progress），addTask 后增 pending 亦活跃——存储快照恒 ≡ 推导值
+    seedTask(h!.db, 'fl', '2.1', { status: 'blocked' })
+    const t = await add({
+      projectId: P(), source: { kind: 'feature', slug: 'fl' }, title: '双门任务', type: 'coding-feature',
+      acceptanceCriteria: ['[AC-1] 单测双门拒绝路径', '[AC-2] gate_json 数字摘要落账'],
+    })
+    expect(t).toMatchObject({ slug: 'fl', reused: false })
+    seedEdge(h!.db, 't-fl-2.1', t.taskId)
+    await claim({ projectId: P(), taskRef: { slug: 'fl', localId: t.localId }, sessionId: 's-dispatch' })
+    // ① AC 门拒（错误信息/data 含清单）——状态原地 + 零 submit 记录
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'fl', localId: t.localId },
+      result: 'success', summary: '完成', sessionId: 's-exec',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(TestEvidenceRequiredError)
+    expect(rows(`SELECT task_status FROM tasks WHERE id = ?`, t.taskId)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records WHERE verb = 'submit'`)).toEqual([])
+    // ② 补证据结算：转移 + record（gate_json/commit_hash）+ 恢复钩子（后继 blocked 前置全满足 → auto-restore 边不删）
+    const r = await submit({
+      projectId: P(), taskRef: { slug: 'fl', localId: t.localId },
+      result: 'success', summary: '双门落地',
+      gate: { compile: true, fmt: true, lint: true, test: true, coverage: 0.9 },
+      commitHash: 'beefcafe', sessionId: 's-exec',
+    })
+    expect(r).toEqual({ taskId: t.taskId, status: 'completed', restored: [{ slug: 'fl', localId: '2.1' }] })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.1'`)).toEqual([{ task_status: 'pending' }])
+    expect(rows(`SELECT task_id, prerequisite_id FROM task_edges WHERE prerequisite_id = ?`, t.taskId)).toEqual([
+      { task_id: 't-fl-2.1', prerequisite_id: t.taskId },
+    ])
+    expect(rows(`SELECT gate_json, commit_hash FROM task_records WHERE task_id = ? AND verb = 'submit'`, t.taskId))
+      .toEqual([
+        { gate_json: '{"compile":true,"fmt":true,"lint":true,"test":true,"coverage":0.9}', commit_hash: 'beefcafe' },
+      ])
+    // ③ 相位重算（仅 feature 容器）：[本任务 completed, 2.1 pending] → tasks
+    expect(
+      h!.db.prepare<unknown[], { feature_status: string }>(`SELECT feature_status FROM features WHERE slug = 'fl'`).get(),
+    ).toEqual({ feature_status: 'tasks' })
   })
 })
