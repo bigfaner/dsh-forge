@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-forge M3 — UI 原型（提案子 tab / Forge设置 / 诊断 / hero 座位）</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-frame">
+  <!-- 左栏(官方 ui-sidebar 壳·M3 不加行) -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">🐋</span>dsh-forge</div>
+    <nav class="panel-rows">
+      <div class="panel-row active">知识库</div>
+    </nav>
+    <div class="ws-browse">
+      <div class="ws-head">工作区</div>
+      <div class="ws-item active">dsh-forge（本仓）</div>
+    </div>
+    <div class="sidebar-foot">
+      <button class="ghost-btn" data-act="theme">🌗 主题</button>
+      <button class="ghost-btn" data-act="open-settings">⚙ 设置</button>
+    </div>
+  </aside>
+
+  <!-- 中区(main 面板·hero 形态) -->
+  <main class="main-pane">
+    <div class="hero-zone" id="hero-zone">
+      <div class="hero-title">准备好开发 dsh-forge 自身了</div>
+      <div class="hero-sub">M3 · 模式预设已装配（远征 = 完整 SDD 管线 / 突击 = proposal 直达）</div>
+      <!-- hero 预设座位(平台 AgentPresetSeat 形态参考·非 M3 自建) -->
+      <div class="preset-seat" id="preset-seat">
+        <button class="seat-btn" data-act="seat-menu" aria-haspopup="listbox" aria-expanded="false">
+          <span class="seat-dot" id="seat-dot"></span><span id="seat-label">远征模式</span><span class="seat-caret">▾</span>
+        </button>
+        <div class="seat-menu" id="seat-menu" role="listbox" hidden>
+          <div class="seat-opt" role="option" data-mode="expedition"><span class="seat-dot mode-exp"></span>远征模式</div>
+          <div class="seat-opt" role="option" data-mode="blitz"><span class="seat-dot mode-blitz"></span>突击模式</div>
+        </div>
+        <div class="seat-lock-hint" id="seat-lock-hint" hidden>首回合后锁定（平台 blank 锁）</div>
+      </div>
+      <div class="hero-tools">
+        <button class="ghost-btn" data-act="simulate-first-turn">▶ 模拟首回合（blank 锁演示）</button>
+      </div>
+    </div>
+    <!-- 新会话模拟面（打开新会话：预填上下文到输入框·不自动发送；诊断发送给 agent / 任务子 tab 派发：自动发送；跳转既有派发会话：仅切换中区） -->
+    <div class="session-feed" id="session-feed" hidden>
+      <div class="sf-head" id="sf-head"><span class="state-dot ok live"></span> 新会话 · dsh-forge（工作区）</div>
+      <div class="sf-list" id="sf-list"></div>
+      <div class="sf-composer">
+        <textarea id="sf-input" rows="5" placeholder="上下文已预填——输入明确意图后发送"></textarea>
+        <button class="btn primary" data-act="sf-send">发送</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 右栏(官方 ui-dockkit·概览 tab·左缘可拖拽调宽) -->
+  <aside class="dock">
+    <div class="dock-resize" id="dock-resize" title="左右拖动调整宽度"></div>
+    <div class="dock-strip">
+      <span class="dock-chip active">项目概览</span>
+      <span class="dock-chip">＋</span>
+      <span class="dock-tools">⛶ ▯</span>
+    </div>
+    <div class="ov-panel">
+      <div class="ov-head">
+        <div class="ov-name">dsh-forge <button class="ov-caret" data-act="ov-head-toggle">▾</button></div>
+        <div class="ov-status-line">9 提案 · 3 feature · 会话 12</div>
+        <div class="ov-info" id="ov-info" hidden>
+          <div class="ov-info-row"><span class="ov-info-k">工作区</span><span>Z:\project\dsh\dsh-forge</span></div>
+          <div class="ov-info-row"><span class="ov-info-k">文档位置</span><span>docs/</span></div>
+          <div class="ov-info-row"><span class="ov-info-k">知识目录</span><span>.knowledge/</span></div>
+          <div class="ov-info-row"><span class="ov-info-k">任务清单</span><span>forge-workspaces\dsh@d41f2a90</span></div>
+        </div>
+      </div>
+      <div class="ov-sticky">
+        <div class="ov-subtabs">
+          <button class="ov-subtab active" data-subtab="proposal">提案</button>
+          <button class="ov-subtab" data-subtab="feature">feature</button>
+          <button class="ov-subtab" data-subtab="task">任务</button>
+        </div>
+        <div class="ov-searchrow">
+          <input class="ov-search" id="ov-search" type="text" placeholder="搜索（中英）…">
+          <button class="ov-sort-pill" data-act="sort-toggle">⇅ 活跃优先</button>
+        </div>
+      </div>
+      <div class="ov-content" id="ov-content"><!-- app.js 渲染 --></div>
+    </div>
+  </aside>
+</div>
+
+<!-- 裁决对话框(评审流转) -->
+<div class="dlg-overlay" id="dlg-review" hidden>
+  <div class="dlg" role="dialog" aria-label="评审流转">
+    <div class="dlg-title">评审流转<span class="dlg-sub" id="review-pro-name"></span></div>
+    <label class="fld"><span class="fld-k">目标状态</span><select id="review-target"></select></label>
+    <label class="fld"><span class="fld-k">原因（必填）</span><textarea id="review-reason" rows="3" placeholder="留空将拒绝提交"></textarea></label>
+    <div class="dlg-err" id="review-err" hidden>原因必填</div>
+    <div class="dlg-actions"><button class="btn" data-act="review-cancel">取消</button><button class="btn primary" data-act="review-confirm">确认</button></div>
+  </div>
+</div>
+
+<!-- 模式更改对话框(律三唯一正门) -->
+<div class="dlg-overlay" id="dlg-mode" hidden>
+  <div class="dlg" role="dialog" aria-label="更改模式">
+    <div class="dlg-title">更改模式<span class="dlg-sub" id="mode-pro-name"></span></div>
+    <div class="mode-seg" id="mode-seg">
+      <button class="mode-opt" data-mode="expedition"><span class="seat-dot mode-exp"></span>远征（完整 SDD）</button>
+      <button class="mode-opt" data-mode="blitz"><span class="seat-dot mode-blitz"></span>突击（直达执行）</button>
+    </div>
+    <label class="fld"><span class="fld-k">变更说明（必填）</span><textarea id="mode-reason" rows="3" placeholder="留空将拒绝提交"></textarea></label>
+    <div class="dlg-note">既有任务按创建时模式照旧执行（快照不回溯）；下一个经绑定入口创建的会话自动对齐新值。</div>
+    <div class="dlg-err" id="mode-err" hidden>变更说明必填</div>
+    <div class="dlg-actions"><button class="btn" data-act="mode-cancel">取消</button><button class="btn primary" data-act="mode-confirm">确认</button></div>
+  </div>
+</div>
+
+<!-- 设置对话框(通用设置 + Forge设置 分区) -->
+<div class="dlg-overlay" id="dlg-settings" hidden>
+  <div class="dlg dlg-wide" role="dialog" aria-label="设置">
+    <div class="dlg-title">设置</div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <div class="block-title">通用设置</div>
+        <div class="settings-row"><span>语言</span><span class="settings-val">简体中文</span></div>
+        <div class="settings-row"><span>主题</span><span class="settings-val">跟随系统</span></div>
+      </div>
+      <div class="settings-section forge-section">
+        <div class="block-title">Forge设置</div>
+        <div class="forge-part">
+          <div class="forge-part-title">worker</div>
+          <div class="settings-hint">默认 LLM（全部执行子代理统一档位）</div>
+          <div class="settings-row ctl"><span>Provider</span><select id="fs-provider"><option value="">（未选择）</option><option>dsh-openai</option><option>dsh-deepseek</option></select></div>
+          <div class="settings-row ctl"><span>Model</span><select id="fs-model"><option value="">（未选择）</option><option>glm-5.3-flash</option><option>glm-5.3</option></select></div>
+          <div class="settings-row ctl"><span>Reasoning</span>
+            <div class="seg3" id="fs-reasoning"><button data-v="low">低</button><button data-v="medium" class="active">中</button><button data-v="high">高</button></div>
+          </div>
+          <div class="settings-actions">
+            <button class="btn primary" id="fs-save" data-act="fs-save" disabled>保存</button>
+            <button class="ghost-btn" data-act="fs-simulate-fail">模拟保存失败</button>
+          </div>
+          <div class="fs-unconfigured" id="fs-unconfigured">⚠ 未配置——worker 派发将回退父会话继承（显式提示，不静默）</div>
+          <div class="dlg-err" id="fs-err" hidden>保存失败，请重试</div>
+        </div>
+        <div class="settings-future-note">按任务类型指派特定 LLM = 未来注记（不实现）</div>
+      </div>
+    </div>
+    <div class="dlg-actions"><button class="btn" data-act="settings-close">关闭</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

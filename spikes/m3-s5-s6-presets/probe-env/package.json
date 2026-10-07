@@ -1,0 +1,8 @@
+{
+  "name": "@dsh-m3/probe-env",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "M3 S5/S6 spike plugin: registers m3_probe tool dumping session identity + visible tool-face names to a JSONL file, for preset/worker provisioning verification.",
+  "main": "index.js"
+}
