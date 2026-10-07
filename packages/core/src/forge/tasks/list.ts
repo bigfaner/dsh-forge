@@ -2,6 +2,8 @@
 // 五法之列表族 + TaskCard 副行承重字段表逐项）。定位：业务（forge/tasks 子域）——只读
 // prepared statements，零事务零事件（读面直读 Hard Rule：即时判据 = 单次重取见新值——
 // 禁 watch/回流/快照同步，lint-imports 扫描器机械兜底）。
+// M3 2.5 读面泛化：source 容器作用域 feature/proposal 双轨同形（resolveContainerScope
+// 单源——成链撞键下 kind+source_id 判别）；taskStats 池快照派生 unmetPending 同 scope 口径。
 //
 // TaskCard 副行水化四件（Interface 1 承重字段表）：
 //   · actualDurationMs（仅 completed——core 水化「首 claim → 末 submit 时差」；记录缺时间/
@@ -16,8 +18,9 @@
 // 殿后）/ created = created_at 降序；组内同决（created 降序 + id 升序恒稳定决胜）。
 //
 // 四域互禁 import 彼此（Hard Rule）——small-domains/list-utils 不外溢，search 匹配与排序
-// 域内单份同口径落位（行为 pin 于本域测试）。EQP 锚三枚（SC2 数据面——list.test 断言）：
-// SQL_TASKS_BY_FEATURE（→ idx_tasks_source_status·M3 更名）/ RECORDS_BY_TASK_SQL（query.ts →
+// 域内单份同口径落位（行为 pin 于本域测试）。EQP 锚四枚（SC2 数据面——list.test 断言）：
+// SQL_TASKS_BY_CONTAINER（→ idx_tasks_source_status·M3 2.5 kind 参数化双轨泛化）/
+// SQL_STATS_BY_CONTAINER（chips 七态分布同索引）/ RECORDS_BY_TASK_SQL（query.ts →
 // idx_records_task）/ LINKS_BY_SESSION_SQL（session-links.ts → idx_tsl_session）。
 import type Database from 'better-sqlite3'
 import {
@@ -45,9 +48,15 @@ export interface TasksListDeps {
   readonly store: ForgeWorkspaceStore
 }
 
-/** EQP 锚 ①：feature 容器作用域任务扫描（taskGraph.tasks 恒用；listTasks source 给定同基形。
- *  M3 1.2 垫片：feature 容器 = source 双列特例——命中 idx_tasks_source_status） */
-export const SQL_TASKS_BY_FEATURE = `SELECT ${TASK_COLUMNS} FROM tasks WHERE source_kind = 'feature' AND source_id = ?`
+/** EQP 锚 ①：容器作用域任务扫描（taskGraph.tasks 恒用；listTasks source 给定同基形）。
+ *  M3 2.5 读面泛化：source_kind 参数化双轨（feature/proposal 同形——成链撞键下 kind 判别）；
+ *  命中 idx_tasks_source_status（source_id 前缀）。 */
+export const SQL_TASKS_BY_CONTAINER = `SELECT ${TASK_COLUMNS} FROM tasks WHERE source_kind = ? AND source_id = ?`
+
+/** EQP 锚 ①b：容器作用域七态分布（taskStats scoped——chips 数据面）。
+ *  (source_id, task_status) 索引前缀 + GROUP BY 覆盖——chips 查询同索引命中。 */
+export const SQL_STATS_BY_CONTAINER = `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks
+  WHERE source_kind = ? AND source_id = ? GROUP BY task_status`
 
 /**
  * active 排序活跃度权重（PRD 流程二「in_progress → blocked → pending → … → completed」——
@@ -64,17 +73,20 @@ export const ACTIVE_STATUS_WEIGHT: Readonly<Record<TaskStatus, number>> = {
   completed: 6,
 }
 
-/** featureSlug → featureId 解析（未命中 = undefined → 读面空结果，零 404）。
- *  M3 1.2 垫片：feature 容器按 slug 解析（M2 语义等价）；proposal 容器读取面泛化归 2.5
- *  （当前读面 = feature 单轨——proposal 容器 → 恒空结果，零 404 读面口径不变）。 */
-function resolveFeatureId(db: Database.Database, featureSlug: string): string | undefined {
-  return db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(featureSlug)?.id
+/** 容器作用域双列（M3 2.5 读面泛化产物——readTaskRows/taskStats/taskGraph 同源消费） */
+interface ContainerScope {
+  readonly kind: 'feature' | 'proposal'
+  readonly sourceId: string
 }
 
-/** 容器引用 → feature 限定 id（proposal 容器 → undefined → 读面空结果；读面零 404 垫片） */
-function resolveContainerFeatureId(db: Database.Database, source: ContainerRef | undefined): string | undefined {
-  if (source === undefined) return undefined
-  return source.kind === 'feature' ? resolveFeatureId(db, source.slug) : undefined
+/** 容器引用 → 作用域双列（按 kind 解析对应表 id；未命中 = undefined → 读面空结果，零 404）。
+ *  M3 2.5 读面泛化：feature/proposal 双轨同形——成链撞键（同 slug 的 feature 与 proposal
+ *  并存）下 kind + source_id 双列判别（claim 盲选 = kind+slug 直筛同判别口径；读面走
+ *  source_id 解析——EQP 索引前缀锚 idx_tasks_source_status）。 */
+function resolveContainerScope(db: Database.Database, source: ContainerRef): ContainerScope | undefined {
+  const table = source.kind === 'feature' ? 'features' : 'proposals'
+  const id = db.prepare<unknown[], { id: string }>(`SELECT id FROM ${table} WHERE slug = ?`).get(source.slug)?.id
+  return id === undefined ? undefined : { kind: source.kind, sourceId: id }
 }
 
 /** 行读取（source/statusFilter 动态 WHERE——一切占位参数化，prepared statements Hard Rule） */
@@ -82,10 +94,10 @@ function readTaskRows(db: Database.Database, q: ListTasksQuery): TaskStorageRow[
   const clauses: string[] = []
   const params: unknown[] = []
   if (q.source !== undefined) {
-    const featureId = resolveContainerFeatureId(db, q.source)
-    if (featureId === undefined) return []
+    const scope = resolveContainerScope(db, q.source)
+    if (scope === undefined) return []
     clauses.push('source_kind = ?', 'source_id = ?')
-    params.push('feature', featureId)
+    params.push(scope.kind, scope.sourceId)
   }
   if (q.statusFilter !== undefined && q.statusFilter.length > 0) {
     clauses.push(`task_status IN (${q.statusFilter.map(() => '?').join(', ')})`)
@@ -239,23 +251,22 @@ export async function listTasks(deps: TasksListDeps, q: ListTasksQuery): Promise
   return hydrateTaskCards(db, sortTaskRows(matched, q.sort ?? 'active'))
 }
 
-/** Interface 1 taskStats：total + 七态分布 + unmetPending（零计数态含 0 键——chips 禁用+淡化数据源） */
+/** Interface 1 taskStats：total + 七态分布 + unmetPending（零计数态含 0 键——chips 禁用+淡化数据源）。
+ *  M3 2.5 读面泛化：source 容器双轨（feature/proposal 同形）；未命中容器 → 全零（读面零 404）。 */
 export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise<TaskStats> {
   const db = deps.store.ensureOpen(q.projectId)
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
-  let featureId: string | undefined
-  if (q.source !== undefined) {
-    featureId = resolveContainerFeatureId(db, q.source)
-    if (featureId === undefined) return { total: 0, byStatus, unmetPending: 0 }
+  const scope = q.source === undefined ? undefined : resolveContainerScope(db, q.source)
+  if (q.source !== undefined && scope === undefined) {
+    return { total: 0, byStatus, unmetPending: 0 }
   }
   const rows = db
     .prepare<unknown[], { task_status: TaskStatus; n: number }>(
-      featureId === undefined
+      scope === undefined
         ? `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks GROUP BY task_status`
-        : `SELECT task_status AS task_status, COUNT(*) AS n FROM tasks
-           WHERE source_kind = 'feature' AND source_id = ? GROUP BY task_status`,
+        : SQL_STATS_BY_CONTAINER,
     )
-    .all(...(featureId === undefined ? [] : [featureId]))
+    .all(...(scope === undefined ? [] : [scope.kind, scope.sourceId]))
   let total = 0
   for (const r of rows) {
     if (r.task_status in byStatus) byStatus[r.task_status] = r.n
@@ -263,18 +274,18 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   }
   // M3 池快照派生（Interface 1：pending ∧ 前置未全 ∈ {completed, skipped} 计数——单查询派生；
   // dispatchTask 池快照数据源，与 byStatus 同 scope 口径）
-  const unmetPending = countUnmetPending(db, featureId)
+  const unmetPending = countUnmetPending(db, scope)
   return { total, byStatus, unmetPending }
 }
 
 /** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */
-function countUnmetPending(db: Database.Database, featureId: string | undefined): number {
-  const scope = featureId === undefined ? '' : ` AND t.source_kind = 'feature' AND t.source_id = ?`
-  const args = featureId === undefined ? [] : [featureId]
+function countUnmetPending(db: Database.Database, scope: ContainerScope | undefined): number {
+  const scopeSql = scope === undefined ? '' : ` AND t.source_kind = ? AND t.source_id = ?`
+  const args = scope === undefined ? [] : [scope.kind, scope.sourceId]
   const row = db
     .prepare<unknown[], { n: number }>(
       `SELECT COUNT(*) AS n FROM tasks t
-       WHERE t.task_status = 'pending'${scope}
+       WHERE t.task_status = 'pending'${scopeSql}
          AND EXISTS (
            SELECT 1 FROM task_edges e JOIN tasks p ON p.id = e.prerequisite_id
            WHERE e.task_id = t.id AND p.task_status NOT IN ('completed', 'skipped')
@@ -285,20 +296,19 @@ function countUnmetPending(db: Database.Database, featureId: string | undefined)
 }
 
 /** Interface 1 taskGraph：容器子图（TaskCard 全量水化 + 边三元组——DAG/泳道渲染源）。
- *  M3 1.2 垫片：feature 容器按 slug 解析；proposal 容器 → 空图（读取面泛化归 2.5）。 */
+ *  M3 2.5 读面泛化：source 容器双轨同形（feature/proposal——直挂提案子图）；未命中 → 空图。 */
 export async function taskGraph(deps: TasksListDeps, q: TaskGraphQuery): Promise<TaskGraph> {
   const db = deps.store.ensureOpen(q.projectId)
-  if (q.source.kind !== 'feature') return { tasks: [], edges: [] }
-  const featureId = resolveFeatureId(db, q.source.slug)
-  if (featureId === undefined) return { tasks: [], edges: [] }
-  const rows = db.prepare<unknown[], TaskStorageRow>(SQL_TASKS_BY_FEATURE).all(featureId)
+  const scope = resolveContainerScope(db, q.source)
+  if (scope === undefined) return { tasks: [], edges: [] }
+  const rows = db.prepare<unknown[], TaskStorageRow>(SQL_TASKS_BY_CONTAINER).all(scope.kind, scope.sourceId)
   const tasks = hydrateTaskCards(db, sortTaskRows(rows, 'created')) // created 降序——渲染稳定序
   const edges = db
     .prepare<unknown[], TaskGraphEdge>(
       `SELECT e.task_id AS taskId, e.prerequisite_id AS prerequisiteId, e.origin AS origin
        FROM task_edges e JOIN tasks t ON t.id = e.task_id
-       WHERE t.source_kind = 'feature' AND t.source_id = ? ORDER BY e.task_id, e.prerequisite_id`,
+       WHERE t.source_kind = ? AND t.source_id = ? ORDER BY e.task_id, e.prerequisite_id`,
     )
-    .all(featureId)
+    .all(scope.kind, scope.sourceId)
   return { tasks, edges }
 }

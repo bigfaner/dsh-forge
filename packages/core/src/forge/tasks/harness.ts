@@ -56,17 +56,17 @@ export function createTasksHarness(): TasksHarness {
   }
 }
 
-/** 种 feature 行（直写库——受控初值：漂移/相位场景） */
+/** 种 feature 行（直写库——受控初值：漂移/相位场景；2.5 增 summary 受控项——container 水化断言） */
 export function seedFeature(
   db: Database.Database,
-  o: { slug: string; status?: string; createdAt?: string },
+  o: { slug: string; status?: string; createdAt?: string; summary?: string | null },
 ): string {
   const id = `f-${o.slug}`
   const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO features (id, slug, title, feature_status, summary, proposal_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)`,
-  ).run(id, o.slug, `特性 ${o.slug}`, o.status ?? 'prd', ts, ts)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+  ).run(id, o.slug, `特性 ${o.slug}`, o.status ?? 'prd', o.summary ?? null, ts, ts)
   return id
 }
 

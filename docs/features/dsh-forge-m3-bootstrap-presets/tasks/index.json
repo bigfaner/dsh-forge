@@ -136,7 +136,7 @@
         "1.gate",
         "1.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "2.5-tasks-read-container.md",
       "record": "records/2.5-tasks-read-container.md",
       "breaking": true,

@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { queryTask } from './query.js'
 import { TaskNotFoundError } from './errors.js'
-import { createTasksHarness, seedEdge, seedFeature, seedLink, seedRecord, seedTask, type TasksHarness } from './harness.js'
+import { createTasksHarness, seedEdge, seedFeature, seedLink, seedProposal, seedRecord, seedTask, type TasksHarness } from './harness.js'
 
 let h: TasksHarness | undefined
 afterEach(() => {
@@ -78,6 +78,46 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
     const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' } })
     expect(Object.keys(r)).toEqual(['task', 'container'])
     expect(r.container).toEqual({ kind: 'feature', slug: 'f1', title: '特性 f1', mode: 'expedition', phase: 'tasks' })
+  })
+})
+
+describe('M3 2.5 container 水化字段（Interface 1：{kind,slug,title,summary?,mode,phase?}——诊断消息数据源）', () => {
+  it('feature 容器：summary 透传（在场 → 键在场；NULL → 键缺席）+ mode 恒远征 + phase = feature_status', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'tasks', summary: '一句话摘要' })
+    seedTask(h!.db, 'f1', '1.1')
+    seedFeature(h!.db, { slug: 'f2', status: 'prd' }) // summary NULL → 键缺席
+    seedTask(h!.db, 'f2', '1.1')
+    const withSummary = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' } })
+    expect(withSummary.container).toEqual({
+      kind: 'feature',
+      slug: 'f1',
+      title: '特性 f1',
+      summary: '一句话摘要',
+      mode: 'expedition',
+      phase: 'tasks',
+    })
+    const noSummary = await q({ projectId: P(), taskRef: { slug: 'f2', localId: '1.1' } })
+    expect(noSummary.container).toEqual({ kind: 'feature', slug: 'f2', title: '特性 f2', mode: 'expedition', phase: 'prd' })
+    expect('summary' in noSummary.container).toBe(false) // 缺省键缺席（lossless 同口径）
+  })
+
+  it('proposal 容器：mode = proposals.mode（在场 → 值）；无相位域 → phase 键缺席', async () => {
+    const q = svc()
+    seedProposal(h!.db, { slug: 'bp', mode: 'blitz' })
+    seedTask(h!.db, 'bp', '1.1', { kind: 'proposal' })
+    const r = await q({ projectId: P(), taskRef: { slug: 'bp', localId: '1.1' } })
+    expect(Object.keys(r.container)).toEqual(['kind', 'slug', 'title', 'mode']) // 键序即字段序（phase 缺席）
+    expect(r.container).toEqual({ kind: 'proposal', slug: 'bp', title: '提案 bp', mode: 'blitz' })
+  })
+
+  it('proposal 容器：mode NULL → mode 键缺席（扫描吸收旧提案缺省占位）', async () => {
+    const q = svc()
+    seedProposal(h!.db, { slug: 'np', mode: null })
+    seedTask(h!.db, 'np', '1.1', { kind: 'proposal' })
+    const r = await q({ projectId: P(), taskRef: { slug: 'np', localId: '1.1' } })
+    expect(r.container).toEqual({ kind: 'proposal', slug: 'np', title: '提案 np' })
+    expect('mode' in r.container).toBe(false)
   })
 })
 

@@ -14,6 +14,7 @@ import {
   seedEdge,
   seedFeature,
   seedLink,
+  seedProposal,
   seedRecord,
   seedTask,
   type TasksHarness,
@@ -264,5 +265,39 @@ describe('AC3 refs 水化边界（vars·description 锚点提取）', () => {
     const detail = await taskDetail(deps(), { projectId: h!.projectId, taskId: 'tid-2' })
     expect(detail.refs.map((r) => r.docRel)).toEqual(['a/b/c.md', 'docs/a.md'])
     expect(detail.refs.every((r) => r.resolved === false)).toBe(true) // 均未在册 → 置灰
+  })
+})
+
+describe('M3 2.5 taskDetail container 水化（任务失败诊断消息数据源——图 10「诊断两路」taskDetail 为主）', () => {
+  it('proposal 容器直挂任务：{kind,slug,title,mode}（proposals.mode 透传；无相位域 → phase 键缺席）', async () => {
+    h ??= createTasksHarness()
+    const d = h!.db
+    seedProposal(d, { slug: 'bp', mode: 'blitz' })
+    const taskId = seedTask(d, 'bp', '1.1', { kind: 'proposal', status: 'blocked' })
+    const detail = await taskDetail(deps(), { projectId: h!.projectId, taskId })
+    expect(detail.container).toEqual({ kind: 'proposal', slug: 'bp', title: '提案 bp', mode: 'blitz' })
+    expect('phase' in detail.container).toBe(false) // 律四：proposal 容器无相位域
+  })
+
+  it('proposal 容器 mode NULL → mode 键缺席（缺省占位）；feature 容器 summary 透传', async () => {
+    h ??= createTasksHarness()
+    const d = h!.db
+    seedProposal(d, { slug: 'np', mode: null })
+    const nullTask = seedTask(d, 'np', '1.1', { kind: 'proposal' })
+    const nullDetail = await taskDetail(deps(), { projectId: h!.projectId, taskId: nullTask })
+    expect(nullDetail.container).toEqual({ kind: 'proposal', slug: 'np', title: '提案 np' })
+    expect('mode' in nullDetail.container).toBe(false)
+
+    seedFeature(d, { slug: 'f1', status: 'in-progress', summary: '修复中' })
+    const featTask = seedTask(d, 'f1', '1.1')
+    const featDetail = await taskDetail(deps(), { projectId: h!.projectId, taskId: featTask })
+    expect(featDetail.container).toEqual({
+      kind: 'feature',
+      slug: 'f1',
+      title: '特性 f1',
+      summary: '修复中',
+      mode: 'expedition',
+      phase: 'in-progress',
+    })
   })
 })

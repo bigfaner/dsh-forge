@@ -1,18 +1,21 @@
 // 任务 2.6 测试 —— listTasks/taskStats/taskGraph（tech-design §Interface 1 读面五法列表族 +
 // TaskCard 副行承重字段表）：search 中英双语标签常量匹配 / sort(active|created) / 副行水化
 // 四件（实际耗时[completed 首 claim→末 submit]/前置摘要[自然键+状态]/挂接计数/fix 源标）+
-// EQP 三查询命中索引断言 + @500 任务直读核心侧基准（SC2 数据面 ≤2s）。
+// EQP 四查询命中索引断言 + @500 任务直读核心侧基准（SC2 数据面 ≤2s）。
 // 读面直读 Hard Rule（即时判据 = 单次重取见新值）单列断言。
+// M3 2.5 读面泛化：source 容器作用域 feature/proposal 双轨（成链撞键判别）+
+// taskStats.unmetPending（池快照派生——含 fix 链边形态）。
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { LINKS_BY_SESSION_SQL } from './session-links.js'
-import { listTasks, SQL_TASKS_BY_FEATURE, taskGraph, taskStats } from './list.js'
+import { listTasks, SQL_STATS_BY_CONTAINER, SQL_TASKS_BY_CONTAINER, taskGraph, taskStats } from './list.js'
 import { RECORDS_BY_TASK_SQL } from './query.js'
 import {
   createTasksHarness,
   seedEdge,
   seedFeature,
   seedLink,
+  seedProposal,
   seedRecord,
   seedTask,
   type TasksHarness,
@@ -82,7 +85,7 @@ describe('AC1 listTasks：search 服务端中英双语过滤（标签常量匹�
   })
 })
 
-describe('AC1 listTasks：statusFilter 七态 chips + featureSlug 作用域', () => {
+describe('AC1 listTasks：statusFilter 七态 chips + source 容器作用域（feature/proposal 双轨）', () => {
   it('statusFilter = [pending, blocked] → 仅命中两态；空数组 = 全部（chips 缺省语义）', async () => {
     seedSevenStatuses()
     const filtered = await listTasks({ store: h!.store }, {
@@ -94,7 +97,7 @@ describe('AC1 listTasks：statusFilter 七态 chips + featureSlug 作用域', ()
     expect(all).toHaveLength(8)
   })
 
-  it('featureSlug 限定单 feature 子图；未命中 feature → 空数组（读面零 404）', async () => {
+  it('feature 容器限定单 feature 子图；未命中 feature → 空数组（读面零 404）', async () => {
     seedSevenStatuses()
     const f1 = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
     expect(f1).toHaveLength(7)
@@ -102,6 +105,32 @@ describe('AC1 listTasks：statusFilter 七态 chips + featureSlug 作用域', ()
     await expect(
       listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'nope' } }),
     ).resolves.toEqual([])
+  })
+
+  it('M3 2.5 proposal 容器限定直挂任务子集；未命中 proposal → 空数组（读面零 404）', async () => {
+    const d = db()
+    seedSevenStatuses() // 跨容器噪声（feature 侧）
+    seedProposal(d, { slug: 'p1', mode: 'blitz' })
+    seedTask(d, 'p1', '1.1', { kind: 'proposal', status: 'pending', createdAt: TS(9) })
+    seedTask(d, 'p1', 'fix-1', { kind: 'proposal', status: 'blocked', createdAt: TS(10) })
+    const cards = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
+    expect(cards.map((c) => c.localId)).toEqual(['fix-1', '1.1']) // active 序：blocked → pending
+    expect(cards.every((c) => c.slug === 'p1')).toBe(true)
+    await expect(
+      listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'nope' } }),
+    ).resolves.toEqual([])
+  })
+
+  it('M3 2.5 成链撞键：同 slug feature 与 proposal 并存 → kind 双列判别（UNIQUE(slug, local_id) 键空间共享）', async () => {
+    const d = db()
+    seedFeature(d, { slug: 'dup' }) // 成链形态：proposal accepted·expedition → 同名 feature
+    seedProposal(d, { slug: 'dup', mode: 'expedition' })
+    seedTask(d, 'dup', '1.1', { kind: 'feature' }) // 成链后任务挂 feature
+    seedTask(d, 'dup', '2.1', { kind: 'proposal' }) // 成链前直挂任务留 proposal
+    const feats = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'dup' } })
+    expect(feats.map((c) => c.localId)).toEqual(['1.1'])
+    const props = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'dup' } })
+    expect(props.map((c) => c.localId)).toEqual(['2.1'])
   })
 })
 
@@ -245,6 +274,71 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
       unmetPending: 0,
     })
   })
+
+  it('M3 2.5 proposal 容器作用域（七态分布 + unmetPending 同 scope 口径）；未命中 → 全零（零 404）', async () => {
+    const d = db()
+    seedSevenStatuses() // 跨容器噪声（feature 侧——不计入 proposal scope）
+    seedProposal(d, { slug: 'p1', mode: 'blitz' })
+    seedTask(d, 'p1', '1.1', { kind: 'proposal', status: 'pending', createdAt: TS(9) })
+    const blocker = seedTask(d, 'p1', '1.2', { kind: 'proposal', status: 'blocked', createdAt: TS(10) })
+    seedTask(d, 'p1', '1.3', { kind: 'proposal', status: 'completed', createdAt: TS(11) })
+    seedEdge(d, 't-p1-1.1', blocker, 'manual')
+    const scoped = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
+    expect(scoped).toEqual({
+      total: 3,
+      byStatus: { pending: 1, in_progress: 0, completed: 1, blocked: 1, suspended: 0, skipped: 0, rejected: 0 },
+      unmetPending: 1, // 1.1 pending ∧ 前置 1.2 blocked 未满足
+    })
+    const missed = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'nope' } })
+    expect(missed).toEqual({
+      total: 0,
+      byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+      unmetPending: 0,
+    })
+  })
+})
+
+describe('AC1 taskStats.unmetPending（M3 2.5 池快照派生：pending ∧ 前置未全 ∈ {completed, skipped}——单查询计数）', () => {
+  /** unmetPending 判定矩阵夹具：f1 内六任务 + p1 内一任务（跨容器隔离断言基准） */
+  function seedUnmetMatrix(): void {
+    const d = db()
+    seedFeature(d, { slug: 'f1' })
+    const unmetManual = seedTask(d, 'f1', '1.1', { status: 'pending', createdAt: TS(1) }) // 前置 pending → 计
+    const pend = seedTask(d, 'f1', '1.2', { status: 'pending', createdAt: TS(2) })
+    const metCompleted = seedTask(d, 'f1', '2.1', { status: 'pending', createdAt: TS(3) }) // 前置 completed → 不计
+    const done = seedTask(d, 'f1', '2.2', { status: 'completed', createdAt: TS(4) })
+    const metSkipped = seedTask(d, 'f1', '2.3', { status: 'pending', createdAt: TS(5) }) // 前置 skipped → 不计
+    const skipped = seedTask(d, 'f1', '2.4', { status: 'skipped', createdAt: TS(6) })
+    const nonPending = seedTask(d, 'f1', '3.1', { status: 'in_progress', createdAt: TS(7) }) // 非 pending → 不计
+    const blockedPre = seedTask(d, 'f1', '3.2', { status: 'blocked', createdAt: TS(8) })
+    const fixWaiter = seedTask(d, 'f1', 'fix-1', { status: 'pending', createdAt: TS(9) }) // fix 链边形态 → 计
+    const fixRejected = seedTask(d, 'f1', '1.0', { status: 'rejected', createdAt: TS(10) })
+    seedEdge(d, unmetManual, pend, 'manual')
+    seedEdge(d, metCompleted, done, 'manual')
+    seedEdge(d, metSkipped, skipped, 'manual')
+    seedEdge(d, nonPending, blockedPre, 'manual')
+    seedEdge(d, fixWaiter, fixRejected, 'fix-chain')
+    seedProposal(d, { slug: 'p1', mode: 'blitz' })
+    const crossProp = seedTask(d, 'p1', '1.1', { kind: 'proposal', status: 'pending', createdAt: TS(11) })
+    const crossBlocker = seedTask(d, 'p1', '1.2', { kind: 'proposal', status: 'pending', createdAt: TS(12) })
+    seedEdge(d, crossProp, crossBlocker, 'manual')
+  }
+
+  it('全库计数：未满足前置的 pending（manual 边）+ fix 链边（fix-chain origin 同判定）+ proposal 直挂任务均计；满足/非 pending 不计', async () => {
+    seedUnmetMatrix()
+    const all = await taskStats({ store: h!.store }, { projectId: P() })
+    expect(all.unmetPending).toBe(3) // f1/1.1（manual）+ f1/fix-1（fix-chain·源 rejected）+ p1/1.1（proposal 容器）
+    expect(all.total).toBe(12)
+  })
+
+  it('容器作用域隔离：feature f1 → 本容器 unmet 计数；proposal p1 → 仅直挂任务计数', async () => {
+    seedUnmetMatrix()
+    const f1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
+    expect(f1.unmetPending).toBe(2) // 1.1 + fix-1（p1 侧不计入）
+    const p1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
+    expect(p1.unmetPending).toBe(1)
+    expect(p1.total).toBe(2)
+  })
 })
 
 describe('AC2 taskGraph（tasks + edges{taskId, prerequisiteId, origin}——DAG 数据）', () => {
@@ -278,9 +372,27 @@ describe('AC2 taskGraph（tasks + edges{taskId, prerequisiteId, origin}——DAG
       taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'nope' } }),
     ).resolves.toEqual({ tasks: [], edges: [] })
   })
+
+  it('M3 2.5 proposal 容器子图：直挂任务 + 边三元组（跨容器边不外溢）；未命中 → 空图（读面零 404）', async () => {
+    const d = db()
+    seedFeature(d, { slug: 'f1' }) // 跨容器噪声
+    seedProposal(d, { slug: 'p1', mode: 'blitz' })
+    const a = seedTask(d, 'p1', '1.1', { kind: 'proposal', status: 'completed', createdAt: TS(1) })
+    const b = seedTask(d, 'p1', 'fix-1', { kind: 'proposal', sourceTaskId: a, createdAt: TS(2) })
+    const outside = seedTask(d, 'f1', '2.1', { createdAt: TS(3) })
+    seedEdge(d, b, a, 'fix-chain')
+    seedEdge(d, outside, a, 'manual') // 跨容器边（f1 任务等待 p1 任务——同容器边约束外的直写噪声）
+    const graph = await taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
+    expect(graph.tasks.map((t) => t.localId)).toEqual(['fix-1', '1.1']) // created 降序
+    expect(graph.tasks.every((t) => t.slug === 'p1')).toBe(true)
+    expect(graph.edges).toEqual([{ taskId: b, prerequisiteId: a, origin: 'fix-chain' }]) // f1 侧边不外溢
+    await expect(
+      taskGraph({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'nope' } }),
+    ).resolves.toEqual({ tasks: [], edges: [] })
+  })
 })
 
-describe('AC6 EQP 三查询命中索引（EXPLAIN QUERY PLAN 断言——SC2 数据面）', () => {
+describe('AC4/AC6 EQP 四查询命中索引（EXPLAIN QUERY PLAN 断言——SC2 数据面）', () => {
   /** 计划详情拼接（多行 plan 合一断言面） */
   function plan(sql: string, ...params: unknown[]): string {
     return db()
@@ -290,9 +402,18 @@ describe('AC6 EQP 三查询命中索引（EXPLAIN QUERY PLAN 断言——SC2 数
       .join(' | ')
   }
 
-  it('① feature 容器作用域任务扫描 → idx_tasks_source_status（M3 更名——source 双列垫片）', () => {
+  it('① 容器作用域任务扫描（kind 参数化双绑定）→ idx_tasks_source_status（M3 2.5 读面泛化——索引更名后前缀命中）', () => {
     seedSevenStatuses()
-    const detail = plan(SQL_TASKS_BY_FEATURE, 'f-f1')
+    for (const kind of ['feature', 'proposal'] as const) {
+      const detail = plan(SQL_TASKS_BY_CONTAINER, kind, 'f-f1')
+      expect(detail).toContain('idx_tasks_source_status')
+      expect(detail).not.toContain('SCAN tasks')
+    }
+  })
+
+  it('①b 容器作用域 chips 七态分布（taskStats scoped）→ idx_tasks_source_status', () => {
+    seedSevenStatuses()
+    const detail = plan(SQL_STATS_BY_CONTAINER, 'feature', 'f-f1')
     expect(detail).toContain('idx_tasks_source_status')
     expect(detail).not.toContain('SCAN tasks')
   })
