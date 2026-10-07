@@ -55,7 +55,7 @@ M2 收官后任务域已转正（每工作区库 + 动词 API + 派发链 + 概�
 - [ ] ③ 规格域 gate：submitTask AC/测试证据校验 + gate 任务类型（gate_json 数字摘要）。
 - [ ] ④ 自举达成与走查：SC-M3 门（SC8 全断言）；自举纪律生效记账。
 - [ ] ④ 路书与总纲回写：M3 行收窄 + 顺延表 #1–#13 + 工件版图 brainstorm 修订 + M3.5 时序注记 + tech-research 偏离注记。
-- [ ] 实施期首任务：packaged 双形态 + dev-abs / dev-tf 补验（spike 残余——用户裁决转 M3 实施期；工件已备 `spikes/m3-s5-s6-presets/`）。
+- [x] 实施期首任务：packaged 双形态 + dev-abs / dev-tf 补验（spike 残余——用户裁决转 M3 实施期；工件已备 `spikes/m3-s5-s6-presets/`）。**已执行（3.9，2026-10-08）：P/N/D/W 四用例全绿——W 期双缺陷 drift #9/#10 记账转 fix-1（94f0f36）修复，复跑收绿（fix-1 验收轮 + 3.9 复职收口轮连续两绿）——结论见自检注记与 `spikes/m3-s5-s6-presets/VERIFICATION-3.9.md`。**
 
 ### Out of Scope
 
@@ -197,4 +197,4 @@ flowchart TD
 - [x] 无模糊措辞（量化或可断言表述）
 - [x] 可执行可验证（每项可映射 SC / e2e / 代码审计）
 
-> 自检注记：无 `docs/sitemap/sitemap.json`（沿 M2 注记——本仓未生成 sitemap；M3 全部 UI Function 为既有面升级[概览三子 tab / 设置对话框]，不依赖既有路由校验）。PRD 前 spike S5/S6 dev 形态全绿并内化：装配裁决（`!!js` 全形态死刑 → 宿主物化绝对路径）、hero 开关（ui-settings 行 + 行所有权规则）、镜像行 config 全集义务、worker toolFilter 落位（派发面携带）、标准会话可见 plugin-forge 技能（M2 残余反转）、worker 继承机械面。确认性残余（packaged 双形态 / dev-abs / dev-tf / worker relay 文本）已裁决转 M3 实施期首任务补验（用户 2026-10-07）。**UI 评审裁决（2026-10-07，v2–v18 十八轮、原型 132 断言全绿、用户批准）已全量回写本 PRD 与 ui-design.md**——核心产品语义：突击无 feature 阶段（只有提案与任务）、Forge设置三项、诊断 toast 化 + 发送给 agent、「打开新会话」预填上下文不自动发送、标识更名与 @path 目录引用、真实文档路径。已裁决项（拆包轴 / git-commit / consolidate-specs / 追溯矩阵→M3.75 / Forge设置保留 / worker 定名与供给 / dispatchPrompt 纯任务规格）不重开。
+> 自检注记：无 `docs/sitemap/sitemap.json`（沿 M2 注记——本仓未生成 sitemap；M3 全部 UI Function 为既有面升级[概览三子 tab / 设置对话框]，不依赖既有路由校验）。PRD 前 spike S5/S6 dev 形态全绿并内化：装配裁决（`!!js` 全形态死刑 → 宿主物化绝对路径）、hero 开关（ui-settings 行 + 行所有权规则）、镜像行 config 全集义务、worker toolFilter 落位（派发面携带）、标准会话可见 plugin-forge 技能（M2 残余反转）、worker 继承机械面。确认性残余（packaged 双形态 / dev-abs / dev-tf / worker relay 文本）已裁决转 M3 实施期首任务补验（用户 2026-10-07）。**补验结论（任务 3.9，2026-10-08——证据 `spikes/m3-s5-s6-presets/VERIFICATION-3.9.md`）：packaged boot 双预设装配全绿（resources 绝对路径物化/registry default=远征/ui-settings 首启预置/座位自现/真实模型目录转录 spec+core 技能可达）；packaged-js 负对照成立（!!js 行 broken——全形态死刑确认）；dev-abs 全绿（repo 绝对路径物化 + 真实突击预设 L1 物理边界）；dev-tf/relay/按需加载三项经真实 dispatchTask 面执行时发现两处产品缺陷阻断（drift #9 预设行内 plugin-forge 行遮蔽全局配置实例→预设会话 ERR_WORKSPACE_NOT_REGISTERED；drift #10 WORKER_GLOBAL_DENY_TOOLS 三名与上游实面错位→spawn 恒拆 halted——tech-design Appendix 记账），claim/事件/容器日志 digest 双记闭环已实证，SC2 按需加载断言通道已落地（W 用例=5.2 消费面）；两缺陷已由 fix-1（94f0f36，2026-10-08）修复处置，W 用例复跑全绿收口（fix-1 验收轮 01:35 + 3.9 复职收口轮 01:49 连续两绿——默认远征会话直派/deny 零泄漏 scoped 探针/dispatchPrompt digest 对账 equal×2/AGENTS.md 上下文注入到达/run-tests 按需加载正反例）。** **UI 评审裁决（2026-10-07，v2–v18 十八轮、原型 132 断言全绿、用户批准）已全量回写本 PRD 与 ui-design.md**——核心产品语义：突击无 feature 阶段（只有提案与任务）、Forge设置三项、诊断 toast 化 + 发送给 agent、「打开新会话」预填上下文不自动发送、标识更名与 @path 目录引用、真实文档路径。已裁决项（拆包轴 / git-commit / consolidate-specs / 追溯矩阵→M3.75 / Forge设置保留 / worker 定名与供给 / dispatchPrompt 纯任务规格）不重开。

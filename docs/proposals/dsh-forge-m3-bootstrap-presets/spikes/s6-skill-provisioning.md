@@ -1,7 +1,7 @@
 ---
 created: "2026-10-07"
 related: "../proposal.md#constraints--dependencies"
-status: "executed（dev 形态 S6-1–5 全绿 + S6-4 判决反转 2026-10-07；残余已裁决转 M3 实施期首任务补验——用户裁决 2026-10-07）"
+status: "executed（dev 形态 S6-1–5 全绿 + S6-4 判决反转 2026-10-07；残余经 3.9 复跑补验完毕 2026-10-08——S6-6 relay/S6-7 dev-tf（真实 dispatchTask 面）/S6-8 packaged ✅，见 spikes/m3-s5-s6-presets/VERIFICATION-3.9.md）"
 ---
 
 # S6 spike：技能供给实跑（customSkillDirs 多根 + rank + L1 + worker 组合继承 + toolFilter，dev + packaged 双形态）

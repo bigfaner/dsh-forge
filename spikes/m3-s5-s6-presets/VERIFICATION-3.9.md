@@ -9,7 +9,7 @@
 | AC-1 packaged boot 双预设装配 | m3-packaged | ✅ 全绿（2026-10-07 23:32） | seat-on-first-boot / boot-overlay / profile-ui-settings-row / menu-contains-blitz / expedition-catalog |
 | AC-1 残余名 packaged-js 负对照 | m3-packaged-js | ✅ 负对照成立（2026-10-07 23:43，5.2m） | packaged-js-catalog / packaged-js-menu / preset-menu-failure |
 | AC-2① dev-abs（物化绝对路径 + L1 边界） | m3-dev | ✅ 全绿（2026-10-08 00:00） | boot-overlay-dev / seat-dev / expedition-catalog / blitz-catalog / ws-rebind-skipped |
-| AC-2② dev-tf（收窄落位）+ AC-3 relay + AC-4 按需加载 | m3-dev（W 用例） | ✅ 全绿（2026-10-08 fix-1 复跑——默认远征会话直派；drift #9/#10 已修复） | dispatcher-default-preset / dispatch-round / worker-analysis / claim-digest-recon / digest-reconciliation |
+| AC-2② dev-tf（收窄落位）+ AC-3 relay + AC-4 按需加载 | m3-dev（W 用例） | ✅ 全绿（2026-10-08 fix-1 复跑 + 3.9 复职收口轮——默认远征会话直派；drift #9/#10 已修复） | dispatcher-default-preset / dispatch-round / worker-analysis / claim-digest-recon / digest-reconciliation |
 
 （本文件由 3.9 执行回填——各节「实证」均直引 evidence.json 步名与值；W 节由 fix-1 复跑收口回填，2026-10-08。）
 
@@ -36,7 +36,7 @@
 
 ## W·派发探针（AC-2②/AC-3/AC-4）——全绿（fix-1 复跑收口，2026-10-08）
 
-首轮实跑（2026-10-07 23:48 / 2026-10-08 00:27 起）+ 三枚诊断探针（.forge/tmp/probe-{bindings,resolver,4/5/6}）发现双产品缺陷 → fix-1 修复（drift #9/#10，处置与修复记档 tech-design Appendix 各条处置段）。修复后三轮复跑（2026-10-08 01:12 / 01:27 / 01:35，末轮全绿 = 验收轮）：
+首轮实跑（2026-10-07 23:48 / 2026-10-08 00:27 起）+ 三枚诊断探针（.forge/tmp/probe-{bindings,resolver,4/5/6}）发现双产品缺陷 → fix-1 修复（drift #9/#10，处置与修复记档 tech-design Appendix 各条处置段）。修复后三轮复跑（2026-10-08 01:12 / 01:27 / 01:35，末轮全绿 = 验收轮）+ **3.9 复职收口轮（2026-10-08 01:49，HEAD=94f0f36 定格——1 passed 2.5m；digest 对账 equal×2 同值复现 `c71da57f017b`/`3801157e973a`，证据追加同根 evidence.json）**：
 
 **修复面（fix-1）**：①`WORKER_GLOBAL_DENY_TOOLS` 重映射实面实名八员（ask_user_question / delegation 族五员 subagent_fork·list_agents·send_message·interrupt_agent·workflow / todo_write / present——spawn provider 惰性注册的 `subagent` 刻意不入）；②expedition/blitz 底稿行内 plugin-forge[+spec] 增量行携带 `bindingsFile` 同 config（`{{plugin-forge-bindings}}` 占位符，renderBootOverlay 物化与全局行同值）——预设会话行内实例自足 cwd 路由。
 

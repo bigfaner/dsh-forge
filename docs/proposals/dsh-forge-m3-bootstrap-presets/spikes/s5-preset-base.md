@@ -1,7 +1,7 @@
 ---
 created: "2026-10-07"
 related: "../proposal.md#constraints--dependencies"
-status: "executed（dev 形态全绿 2026-10-07；四未跑形态已裁决转 M3 实施期首任务补验——用户裁决 2026-10-07）"
+status: "executed（dev 形态全绿 2026-10-07；残余四形态经 3.9 复跑补验完毕 2026-10-08——packaged 双形态 ✅/dev-abs ✅，见 spikes/m3-s5-s6-presets/VERIFICATION-3.9.md）"
 ---
 
 # S5 spike：预设基座实跑（insert + registry default + select 接线 + hero 门控，dev + packaged 双形态）
