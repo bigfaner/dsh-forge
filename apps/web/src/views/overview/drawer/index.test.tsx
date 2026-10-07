@@ -13,7 +13,8 @@ import {
   initialDrawerCollapse,
   toggleDrawerSection,
 } from './collapse.js'
-import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail } from './index.js'
+import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, taskFailureInputOf } from './index.js'
+import { taskFailureDiagToast } from '../task-tab/DiagToast.js'
 
 const NOOP = (): void => {}
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
@@ -47,6 +48,8 @@ function bodyProps(overrides: Partial<Parameters<typeof TaskDrawerBody>[0]> = {}
     onResetWidth: NOOP,
     onStepWidth: NOOP,
     onDragWidth: NOOP,
+    diagResult: undefined,
+    onDiagDismiss: NOOP,
     now: NOW,
     ...overrides,
   }
@@ -341,5 +344,110 @@ describe('TaskDrawer（装载壳——静态首帧）', () => {
       expect(html).toContain('data-dswf-td-sect="content"')
       expect(html).toContain('data-dswf-td-sect="timeline"')
     }
+  })
+})
+
+// ─────────────────────────── 4.6 任务失败诊断（UF-3 v19–v21 · AC3 诊断第二路） ───────────────────────────
+
+describe('TaskDrawerBody · 诊断失败按钮（AC3——仅 blocked/rejected；无单任务执行入口）', () => {
+  it('blocked 任务 + 入口在场 → 「诊断失败」按钮呈现（foot 内、转移钮之左）', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(bodyProps({ detail: detailFixture({ taskStatus: 'blocked', blockedReason: 'fix-1 创建（block-source 单事务）' }), onDiagnoseFailure: NOOP })),
+    )
+    expect(html).toContain('data-dswf-td-diag="blocked"')
+    expect(html).toContain('诊断失败')
+    // 无单任务直接执行入口（v22 ㊳ Hard Rule）——任务行/详情零「执行」动作
+    expect(html).not.toContain('>执行<')
+    const diagAt = html.indexOf('data-dswf-td-diag=')
+    const transAt = html.indexOf('data-dswf-td-trans')
+    expect(transAt).toBeGreaterThan(diagAt)
+  })
+
+  it('rejected 任务同呈现（data 锚 = rejected）', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(bodyProps({ detail: detailFixture({ taskStatus: 'rejected' }), onDiagnoseFailure: NOOP })),
+    )
+    expect(html).toContain('data-dswf-td-diag="rejected"')
+  })
+
+  it('非失败任务（completed/pending/in_progress/suspended/skipped）不呈现', () => {
+    for (const status of ['completed', 'pending', 'in_progress', 'suspended', 'skipped'] as const) {
+      const html = renderToStaticMarkup(
+        TaskDrawerBody(bodyProps({ detail: detailFixture({ taskStatus: status }), onDiagnoseFailure: NOOP })),
+      )
+      expect(html).not.toContain('data-dswf-td-diag')
+    }
+  })
+
+  it('入口缺席（onStartSession 未接线）→ 按钮不呈现（SSR/非壳载体面）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ detail: detailFixture({ taskStatus: 'blocked' }) })))
+    expect(html).not.toContain('诊断失败')
+  })
+
+  it('diagResult 在场 → DiagToast 渲染于按钮包裹内（锚定按钮左侧）', () => {
+    const input = taskFailureInputOf(detailFixture({ taskStatus: 'blocked', blockedReason: '原因' }))
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(
+        bodyProps({
+          detail: detailFixture({ taskStatus: 'blocked', blockedReason: '原因' }),
+          onDiagnoseFailure: NOOP,
+          diagResult: taskFailureDiagToast(input),
+        }),
+      ),
+    )
+    expect(html).toContain('data-dswf-td-diagwrap')
+    expect(html).toContain('data-dswf-tt-diagtoast="fail"')
+    expect(html).toContain('发送给 agent')
+    const toastAt = html.indexOf('data-dswf-tt-diagtoast')
+    const btnAt = html.indexOf('data-dswf-td-diag=')
+    expect(btnAt).toBeGreaterThan(toastAt) // toast 在钮前（absolute 贴左）
+  })
+})
+
+describe('taskFailureInputOf（AC3 诊断第二路数据面——容器水化 + 原因优先级 + 记录 ≤3）', () => {
+  it('feature 容器：container 水化直映（kind/slug/title/summary/phase）+ blockedReason 优先', () => {
+    const detail = detailFixture({
+      taskStatus: 'blocked',
+      blockedReason: 'fix-1 创建（block-source 单事务）',
+      records: [
+        { verb: 'add', actor: 'plugin-tool', createdAt: '2026-10-01T09:14:00.000Z' },
+        { verb: 'auto-block', actor: 'ui', createdAt: '2026-10-02T12:00:00.000Z', reason: 'fix-1 创建（block-source 单事务）' },
+      ],
+    })
+    const input = taskFailureInputOf(detail)
+    expect(input.kind).toBe('task-failure')
+    expect(input.container).toEqual({ kind: 'feature', slug: 'm2-pipeline', title: 'M2 管线', summary: undefined, phase: 'in-progress' })
+    expect(input.taskKey).toBe('m2-pipeline/2.4')
+    expect(input.taskStatus).toBe('blocked')
+    expect(input.reason).toBe('fix-1 创建（block-source 单事务）')
+    expect(input.records).toHaveLength(2) // 记录 ≤3（本例 2 全保）
+    expect(input.records.map((record) => record.verb)).toEqual(['add', 'auto-block'])
+    expect(input.records[1]?.note).toBe('fix-1 创建（block-source 单事务）')
+  })
+
+  it('blockedReason 缺席 → 最近失败记录 note 兜底；记录 >3 截尾 3 条；note 缺席行无 note 键', () => {
+    const records: readonly TaskRecordEntry[] = [
+      { verb: 'add', actor: 'plugin-tool', createdAt: '2026-10-01T09:00:00.000Z' },
+      { verb: 'claim', actor: 'plugin-tool', createdAt: '2026-10-01T10:00:00.000Z' },
+      { verb: 'submit', actor: 'plugin-tool', createdAt: '2026-10-01T11:00:00.000Z', reason: 'result=blocked：用例集冲突' },
+      { verb: 'auto-block', actor: 'ui', createdAt: '2026-10-01T12:00:00.000Z', summary: 'fix-1 创建' },
+      { verb: 'transition', actor: 'ui', createdAt: '2026-10-01T13:00:00.000Z' },
+    ]
+    const input = taskFailureInputOf(detailFixture({ taskStatus: 'rejected', records: [...records] }))
+    expect(input.reason).toBe('fix-1 创建') // 末位带 note 的记录（最近）
+    expect(input.records.map((r) => r.verb)).toEqual(['submit', 'auto-block', 'transition']) // 尾 3
+    expect('note' in (input.records[0] as object)).toBe(true)
+    expect('note' in (input.records[2] as object)).toBe(false) // 无 reason/summary → note 键缺席
+  })
+
+  it('突击提案容器（kind=proposal·无 phase 行）+ 无因无记录 → reason 兜底 —', () => {
+    const detail = detailFixture({
+      taskStatus: 'rejected',
+      container: { kind: 'proposal', slug: 'legacy-eval-retire', title: '旧线 eval 退役' },
+    })
+    const input = taskFailureInputOf(detail)
+    expect(input.container.kind).toBe('proposal')
+    expect('phase' in input.container).toBe(false)
+    expect(input.reason).toBe('—')
   })
 })

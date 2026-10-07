@@ -7,20 +7,28 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { FeatureCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
+  OVERVIEW_WIDTH_DEFAULT,
   activeFeatureSlug,
+  clearPhaseFilter,
+  clearProposalStatusFilter,
   clearStatusFilter,
+  clampOverviewWidth,
   initialOverviewFilter,
   nextSort,
   overviewHeadSummary,
+  overviewWidthFromDrag,
+  proposalRowKey,
   searchQueryOf,
   statusFilterParam,
   switchSubtab,
   toggleHead,
   toggleOpenRow,
+  togglePhaseFilter,
+  toggleProposalStatusFilter,
   toggleStatusFilter,
   type OverviewFilterState,
   type OverviewSort,
@@ -29,10 +37,14 @@ import {
 import {
   overviewHeadRows,
   useOverviewLoad,
+  useProposalDocs,
   type OverviewErrorInfo,
   type OverviewHeadBundle,
   type OverviewListData,
 } from './overview-data.js'
+import type { SessionOpenRequest } from './message-format.js'
+import { proposalStatusCounts } from './proposal-tab/ProposalStatusChips.js'
+import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
@@ -54,6 +66,8 @@ export interface OverviewTasksContext {
   readonly stats: TaskStats | undefined
   /** 无参 feature 列（feature pill 数据源——不随搜索漂移） */
   readonly features: readonly FeatureCard[]
+  /** 无参提案列（4.6 容器 pill 双轨突击源——taskCount>0 判据；不随搜索漂移） */
+  readonly proposals: readonly ProposalCard[]
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
 }
@@ -72,24 +86,38 @@ export interface OverviewFrameProps {
   readonly filter: OverviewFilterState
   /** ov-head 摘要会话计数（4.1 装配注入——sessions/workspaces 账本快照；缺席省略段） */
   readonly sessionCount?: number
+  /** 面板宽度（4.6 UF-3 · Integration #6：默认 560px + 左缘拖拽——受控注入） */
+  readonly width: number
   readonly onSubtabChange: (subtab: OverviewSubtab) => void
   readonly onSearchChange: (search: string) => void
   readonly onSortToggle: () => void
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
+  /** 提案五态 chips toggle/清空（4.6 UF-1——受控归帧侧模型） */
+  readonly onToggleProposalStatus: (status: ProposalStatus) => void
+  readonly onClearProposalStatuses: () => void
+  /** feature 阶段 chips toggle/清空（4.6 UF-4——受控归帧侧模型） */
+  readonly onTogglePhase: (phase: FeatureStatus) => void
+  readonly onClearPhases: () => void
   readonly onToggleRow: (key: string) => void
   readonly onToggleHead: () => void
   /** 重试（头路 + 列路全量重装载） */
   readonly onRetry: () => void
+  /** 左缘拖拽调宽（指针即左缘——clientX/viewportWidth 由帧内取 window） */
+  readonly onDragWidth: (clientX: number, viewportWidth: number) => void
+  /** 双击左缘复位默认宽（560px） */
+  readonly onResetWidth: () => void
   /** 文档行点击（dock 开 tab——4.1 接线；缺席 = 无动作面） */
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入；缺省 = chips 过滤接口独占呈现） */
   readonly renderTasksTab?: (ctx: OverviewTasksContext) => ReactNode
+  /** 打开新会话通道（4.6：提案/feature 行头预填——装配注入 openSessionWithPreset；缺席 = 按钮不呈现） */
+  readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
 }
 
-/** 概览纯呈现帧（结构静态可测——ov-head + sticky + 内容区分派） */
+/** 概览纯呈现帧（结构静态可测——ov-head + sticky + 内容区分派 + 左缘拖拽调宽容器） */
 export function OverviewFrame({
   projectId,
   head,
@@ -99,16 +127,24 @@ export function OverviewFrame({
   error,
   filter,
   sessionCount,
+  width,
   onSubtabChange,
   onSearchChange,
   onSortToggle,
   onToggleStatus,
   onClearStatuses,
+  onToggleProposalStatus,
+  onClearProposalStatuses,
+  onTogglePhase,
+  onClearPhases,
   onToggleRow,
   onToggleHead,
   onRetry,
+  onDragWidth,
+  onResetWidth,
   onOpenDoc,
   renderTasksTab,
+  onStartSession,
   now,
 }: OverviewFrameProps): ReactNode {
   const openDoc = onOpenDoc ?? (() => {})
@@ -121,6 +157,7 @@ export function OverviewFrame({
     statusFilter: statusFilterParam(filter.activeStatuses),
     stats: head?.stats,
     features: head?.features ?? [],
+    proposals: head?.proposals ?? [],
     onToggleStatus,
     onClearStatuses,
   }
@@ -145,13 +182,17 @@ export function OverviewFrame({
     content = (
       <>
         {listErrorBar(error, onRetry)}
-        <ProposalsTab
-          proposals={list.proposals}
-          features={head?.features ?? []}
-          openRows={filter.openRows}
+        <ProposalsTabBodySlot
+          projectId={projectId}
+          head={head}
+          list={list}
+          filter={filter}
+          searchActive={searchActive}
           onToggleRow={onToggleRow}
+          onToggleProposalStatus={onToggleProposalStatus}
+          onClearProposalStatuses={onClearProposalStatuses}
           onOpenDoc={openDoc}
-          emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的提案` : undefined}
+          onStartSession={onStartSession}
           now={now}
         />
       </>
@@ -164,9 +205,14 @@ export function OverviewFrame({
           features={list.kind === 'features' ? list.features : []}
           proposals={list.kind === 'features' ? list.proposals : []}
           docs={list.kind === 'features' ? list.docs : undefined}
+          counts={head === undefined ? emptyPhaseCounts() : phaseCounts(head.features)}
+          activePhases={filter.activePhases}
+          onTogglePhase={onTogglePhase}
+          {...(onClearPhases !== undefined ? { onClearPhases } : {})}
           openRows={filter.openRows}
           onToggleRow={onToggleRow}
           onOpenDoc={openDoc}
+          {...(onStartSession !== undefined ? { onStartSession } : {})}
           emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 feature` : undefined}
           now={now}
         />
@@ -175,43 +221,125 @@ export function OverviewFrame({
   }
 
   return (
-    <div className="dswf-ov-panel" data-dswf-ov-panel="">
-      {error !== undefined && error.uiState === 'banner' ? (
-        <ErrorBar
-          className="dswf-ov-banner"
-          message={`工作区不可用：${error.message}`}
-          retryClassName="dswf-ov-retry"
-          onRetry={onRetry}
-          anchor="data-dswf-ov-banner"
-          retryAnchor="data-dswf-ov-retry"
-        />
-      ) : null}
-      {head === undefined ? null : (
-        <OverviewHead
-          projectName={head.projectName}
-          summary={overviewHeadSummary({
-            activeFeature: activeFeatureSlug(head.features),
-            sessionCount,
-            completedCount: head.stats.byStatus.completed ?? 0,
-          })}
-          rows={overviewHeadRows(head)}
-          open={filter.headOpen}
-          onToggle={onToggleHead}
-        />
-      )}
-      <StickyBar
-        subtab={filter.subtab}
-        onSubtabChange={onSubtabChange}
-        search={filter.search}
-        onSearchChange={onSearchChange}
-        sort={filter.sort}
-        onSortToggle={onSortToggle}
+    <div className="dswf-ov-wrap" data-dswf-ov-wrap="">
+      <div
+        className="dswf-ov-resize"
+        role="separator"
+        aria-orientation="vertical"
+        tabIndex={0}
+        aria-label="拖动调整概览宽度"
+        title="拖动调宽 · 双击复位"
+        data-dswf-ov-resize=""
+        onDoubleClick={() => {
+          onResetWidth()
+        }}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }}
+        onPointerMove={(event) => {
+          if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
+          onDragWidth(event.clientX, window.innerWidth)
+        }}
       />
-      <div className="dswf-ov-content" data-dswf-ov-content="" aria-busy={busy}>
-        {content}
+      <div className="dswf-ov-panel" data-dswf-ov-panel="" style={{ width: `${clampOverviewWidth(width)}px` }}>
+        {error !== undefined && error.uiState === 'banner' ? (
+          <ErrorBar
+            className="dswf-ov-banner"
+            message={`工作区不可用：${error.message}`}
+            retryClassName="dswf-ov-retry"
+            onRetry={onRetry}
+            anchor="data-dswf-ov-banner"
+            retryAnchor="data-dswf-ov-retry"
+          />
+        ) : null}
+        {head === undefined ? null : (
+          <OverviewHead
+            projectName={head.projectName}
+            summary={overviewHeadSummary({
+              activeFeature: activeFeatureSlug(head.features),
+              sessionCount,
+              completedCount: head.stats.byStatus.completed ?? 0,
+            })}
+            rows={overviewHeadRows(head)}
+            open={filter.headOpen}
+            onToggle={onToggleHead}
+          />
+        )}
+        <StickyBar
+          subtab={filter.subtab}
+          onSubtabChange={onSubtabChange}
+          search={filter.search}
+          onSearchChange={onSearchChange}
+          sort={filter.sort}
+          onSortToggle={onSortToggle}
+        />
+        <div className="dswf-ov-content" data-dswf-ov-content="" aria-busy={busy}>
+          {content}
+        </div>
       </div>
     </div>
   )
+}
+
+/**
+ * 提案子 tab 装载位（帧内拆件——docsMap 按需装载归帧壳 useProposalDocs，对话框开合归
+ * ProposalsTab 装载壳）：openRows → 展开 slug 投影（prop:{id} → slug）驱动文档重拉。
+ */
+function ProposalsTabBodySlot({
+  projectId,
+  head,
+  list,
+  filter,
+  searchActive,
+  onToggleRow,
+  onToggleProposalStatus,
+  onClearProposalStatuses,
+  onOpenDoc,
+  onStartSession,
+  now,
+}: {
+  readonly projectId: string
+  readonly head: OverviewHeadBundle | undefined
+  readonly list: Extract<OverviewListData, { kind: 'proposals' }>
+  readonly filter: OverviewFilterState
+  readonly searchActive: boolean
+  readonly onToggleRow: (key: string) => void
+  readonly onToggleProposalStatus: (status: ProposalStatus) => void
+  readonly onClearProposalStatuses: () => void
+  readonly onOpenDoc: (docRel: string) => void
+  readonly onStartSession?: (request: SessionOpenRequest) => void
+  readonly now?: number
+}): ReactNode {
+  const openSlugs = list.proposals.filter((p) => filter.openRows.has(proposalRowKey(p.proposalId))).map((p) => p.slug)
+  const docsMap = useProposalDocs(projectId, openSlugs)
+  return (
+    <ProposalsTab
+      projectId={projectId}
+      proposals={list.proposals}
+      counts={head === undefined ? emptyProposalCounts() : proposalStatusCounts(head.proposals)}
+      activeStatuses={filter.activeProposalStatuses}
+      onToggleStatus={onToggleProposalStatus}
+      onClearStatuses={onClearProposalStatuses}
+      features={head?.features ?? []}
+      openRows={filter.openRows}
+      onToggleRow={onToggleRow}
+      docsMap={docsMap}
+      onOpenDoc={onOpenDoc}
+      {...(onStartSession !== undefined ? { onStartSession } : {})}
+      emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的提案` : undefined}
+      {...(now !== undefined ? { now } : {})}
+    />
+  )
+}
+
+/** 空提案计数（head 缺席 = chips 全 0 全禁用——首装在途不可点出空态） */
+function emptyProposalCounts(): Record<ProposalStatus, number> {
+  return { draft: 0, 'under-review': 0, accepted: 0, rejected: 0, superseded: 0 }
+}
+
+/** 空阶段计数（同口径） */
+function emptyPhaseCounts(): Record<FeatureStatus, number> {
+  return { 'in-progress': 0, prd: 0, design: 0, tasks: 0, completed: 0, archived: 0 }
 }
 
 /** 列路错误条（非横幅错误且旧行在场——失败可重试，内容保持） */
@@ -255,6 +383,8 @@ export interface OverviewTabProps {
   readonly renderTasksTab?: (ctx: OverviewTasksContext) => ReactNode
   /** 任务聚焦 nonce（4.2 pill 点击——变更即切任务子 tab；switchSubtab 语义 = 清搜索/清 chips/收展开） */
   readonly focusTasksNonce?: number
+  /** 打开新会话通道（4.6：提案/feature 行头预填——装配注入 openSessionWithPreset；缺席 = 按钮不呈现） */
+  readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
 }
@@ -267,6 +397,7 @@ export function OverviewTab({
   onOpenDoc,
   renderTasksTab,
   focusTasksNonce,
+  onStartSession,
   now,
 }: OverviewTabProps): ReactNode {
   // 初始态（4.2）：挂载即带任务聚焦（pill 点击 → dock 首开概览 tab）= 任务子 tab 起步；
@@ -275,6 +406,8 @@ export function OverviewTab({
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
   const [nonce, setNonce] = useState(0)
+  // 面板宽度（4.6 UF-3 · Integration #6）：默认 560px；左缘拖拽钳制 400–920（中区保底 ≥580）
+  const [width, setWidth] = useState(OVERVIEW_WIDTH_DEFAULT)
   const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient)
 
   // 任务聚焦子 tab 切换（4.2 pill 点击链尾）：nonce 变更（已开概览后的后续点击）→
@@ -299,6 +432,18 @@ export function OverviewTab({
   const handleClearStatuses = useCallback((): void => {
     setFilter((prev) => clearStatusFilter(prev))
   }, [])
+  const handleToggleProposalStatus = useCallback((status: ProposalStatus): void => {
+    setFilter((prev) => toggleProposalStatusFilter(prev, status))
+  }, [])
+  const handleClearProposalStatuses = useCallback((): void => {
+    setFilter((prev) => clearProposalStatusFilter(prev))
+  }, [])
+  const handleTogglePhase = useCallback((phase: FeatureStatus): void => {
+    setFilter((prev) => togglePhaseFilter(prev, phase))
+  }, [])
+  const handleClearPhases = useCallback((): void => {
+    setFilter((prev) => clearPhaseFilter(prev))
+  }, [])
   const handleToggleRow = useCallback((key: string): void => {
     setFilter((prev) => toggleOpenRow(prev, key))
   }, [])
@@ -307,6 +452,12 @@ export function OverviewTab({
   }, [])
   const handleRetry = useCallback((): void => {
     setNonce((n) => n + 1)
+  }, [])
+  const handleDragWidth = useCallback((clientX: number, viewportWidth: number): void => {
+    setWidth(overviewWidthFromDrag(clientX, viewportWidth))
+  }, [])
+  const handleResetWidth = useCallback((): void => {
+    setWidth(OVERVIEW_WIDTH_DEFAULT)
   }, [])
 
   return (
@@ -319,16 +470,24 @@ export function OverviewTab({
       error={load.error}
       filter={filter}
       sessionCount={sessionCount}
+      width={width}
       onSubtabChange={handleSubtabChange}
       onSearchChange={handleSearchChange}
       onSortToggle={handleSortToggle}
       onToggleStatus={handleToggleStatus}
       onClearStatuses={handleClearStatuses}
+      onToggleProposalStatus={handleToggleProposalStatus}
+      onClearProposalStatuses={handleClearProposalStatuses}
+      onTogglePhase={handleTogglePhase}
+      onClearPhases={handleClearPhases}
       onToggleRow={handleToggleRow}
       onToggleHead={handleToggleHead}
       onRetry={handleRetry}
+      onDragWidth={handleDragWidth}
+      onResetWidth={handleResetWidth}
       onOpenDoc={onOpenDoc}
       renderTasksTab={renderTasksTab}
+      {...(onStartSession !== undefined ? { onStartSession } : {})}
       now={now}
     />
   )

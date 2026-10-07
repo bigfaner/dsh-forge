@@ -17,9 +17,11 @@ import {
   applyOverviewHead,
   applyOverviewList,
   fetchOverviewList,
+  fetchProposalDocs,
   initialOverviewLoadState,
   loadOverviewHead,
   mapOverviewError,
+  mergeProposalDocs,
   overviewHeadRows,
   overviewListPlan,
   pendingOverviewList,
@@ -128,8 +130,8 @@ function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): Fea
   }
 }
 
-describe('loadOverviewHead（头路四路并发）', () => {
-  it('get ∥ derive ∥ features.list(无参) ∥ stats 归一为 ov-head 信息束', async () => {
+describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列）', () => {
+  it('get ∥ derive ∥ features.list(无参) ∥ proposals.list(无参) ∥ stats 归一为 ov-head 信息束', async () => {
     const { client, calls } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out).toEqual({
@@ -141,12 +143,16 @@ describe('loadOverviewHead（头路四路并发）', () => {
         knowledgeDir: 'Z:/ws/demo/.knowledge',
         taskStoreDir: 'C:/forge-home/demo@a1b2c3d4',
         features: [featureCard('m2-pipeline')],
+        proposals: [proposalCard('pr-1', 'prop-1')],
         stats: STATS,
       },
     })
     // 头路 features.list 无搜索参（摘要/谱系查找源不随搜索漂移）
     const featuresCall = calls.find((c) => c.channel === FEATURES_CHANNELS.list)
     expect(featuresCall?.payload).toEqual({ projectId: 'p-1' })
+    // 4.6：proposals.list 无参（五态 chips 计数 + 容器 pill 双轨源——不随搜索漂移）
+    const proposalsCall = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
+    expect(proposalsCall?.payload).toEqual({ projectId: 'p-1' })
   })
 
   it('deriveTaskStoreDir 失败 = fail-soft（null → 任务清单行回退「—」，头部整体不受累）', async () => {
@@ -293,5 +299,51 @@ describe('mapOverviewError', () => {
     ).toBe('banner')
     expect(mapOverviewError(new Error('传输失败')).uiState).toBe('error-bar')
     expect(mapOverviewError('裸串').message).toBe('裸串')
+  })
+})
+
+// ─────────────────────────── 4.6 提案文档区读面（UF-1 · Integration #1） ───────────────────────────
+
+describe('fetchProposalDocs / mergeProposalDocs（proposals.listDocs 唯一通道 + fail-soft 合并）', () => {
+  it('ok：{projectId, slug} 入参 + 行集归一（frontmatter 可选初值）', async () => {
+    const { client, calls } = clientResponding((channel) => {
+      if (channel === PROPOSALS_CHANNELS.listDocs) {
+        return [
+          { fileName: 'proposal.md', relPath: 'docs/proposals/prop-1/proposal.md', title: '提案', status: '评审中' },
+          { fileName: 'spike.md', relPath: 'docs/proposals/prop-1/spike.md' },
+        ]
+      }
+      throw new Error(`unexpected channel: ${channel}`)
+    })
+    const out = await fetchProposalDocs(client, 'p-1', 'prop-1')
+    expect(out).toEqual({
+      ok: true,
+      slug: 'prop-1',
+      docs: [
+        { fileName: 'proposal.md', relPath: 'docs/proposals/prop-1/proposal.md', title: '提案', status: '评审中' },
+        { fileName: 'spike.md', relPath: 'docs/proposals/prop-1/spike.md' },
+      ],
+    })
+    expect(calls[0]?.payload).toEqual({ projectId: 'p-1', slug: 'prop-1' })
+  })
+
+  it('error：typed error 归一（fail-soft 单 slug 失败不炸批次）', async () => {
+    const client = createForgeRpcClient(async () => ({
+      ok: false,
+      error: { code: 'ERR_DOC_PATH_INVALID', message: '路径越界' },
+    }))
+    const out = await fetchProposalDocs(client, 'p-1', 'prop-1')
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.error.message).toBe('路径越界')
+  })
+
+  it('mergeProposalDocs：ok 覆盖键（重取即时见新值）；error 保持旧值', () => {
+    const prev = new Map([['a', [{ fileName: 'a.md', relPath: 'docs/proposals/a/a.md' }]]])
+    const mergedOk = mergeProposalDocs(prev, { ok: true, slug: 'b', docs: [{ fileName: 'b.md', relPath: 'docs/proposals/b/b.md' }] })
+    expect([...mergedOk.keys()].sort()).toEqual(['a', 'b'])
+    const rerun = mergeProposalDocs(prev, { ok: true, slug: 'a', docs: [] })
+    expect(rerun.get('a')).toEqual([])
+    const kept = mergeProposalDocs(prev, { ok: false, slug: 'a', error: { message: 'x', uiState: 'error-bar' } })
+    expect(kept.get('a')).toHaveLength(1)
   })
 })

@@ -667,9 +667,24 @@
 .dswf-td-foot {
   flex: none;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--dsw-font-xs-13-line-height);
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
   border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* ── 任务失败诊断（4.6 UF-3 v19–v21——仅 blocked/rejected；toast 锚定按钮左侧） ── */
+.dswf-td-diagwrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.dswf-td-diag {
+  border-color: var(--dsw-alias-state-error-primary); /* 失败面语义着色（诊断失败动作钮） */
+  color: var(--dsw-alias-state-error-primary);
 }
 
 /* ── 装载/错误面与骨架 ── */

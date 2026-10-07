@@ -12,7 +12,7 @@
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { FeatureCard, FeatureDocumentRow, ProposalCard, TaskStats } from '@dsh-forge/contracts'
+import type { FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
@@ -47,6 +47,9 @@ export interface OverviewHeadBundle {
   readonly taskStoreDir: string | null
   /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature + 提案子 tab 谱系查找源） */
   readonly features: readonly FeatureCard[]
+  /** 无搜索全量提案卡（4.6：提案五态 chips 计数 + 任务子 tab 容器 pill 双轨突击源 + feature
+   *  来源提案查找——不随搜索漂移） */
+  readonly proposals: readonly ProposalCard[]
   /** 七态计数（chips 计数与摘要完成数单源） */
   readonly stats: TaskStats
 }
@@ -70,12 +73,13 @@ async function fetchTaskStoreDir(client: ForgeRpcClient, workspaceDir: string): 
   }
 }
 
-/** 头路装载（纯异步面）：get ∥ derive ∥ features.list(无参) ∥ tasks.stats 四路并发 */
+/** 头路装载（纯异步面）：get ∥ derive ∥ features.list(无参) ∥ proposals.list(无参) ∥ tasks.stats 五路并发 */
 export async function loadOverviewHead(client: ForgeRpcClient, projectId: string): Promise<OverviewFetch<OverviewHeadBundle>> {
   try {
-    const [project, features, stats] = await Promise.all([
+    const [project, features, proposals, stats] = await Promise.all([
       client.projects.get(projectId),
       client.features.list({ projectId }),
+      client.proposals.list({ projectId }),
       client.tasks.stats({ projectId }),
     ])
     if (project === null) throw new Error('项目不存在或已移除')
@@ -89,6 +93,7 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
         knowledgeDir: project.knowledgeDir,
         taskStoreDir,
         features,
+        proposals,
         stats,
       },
     }
@@ -133,6 +138,77 @@ export async function fetchOverviewList(
   } catch (error) {
     return { ok: false, error: mapOverviewError(error) }
   }
+}
+
+// ─────────────────────────── 提案文档区读面（4.6 UF-1 · Integration #1） ───────────────────────────
+// 展开元数据文档区数据源 = proposals.listDocs 只读目录扫描（docs/proposals/<slug>/ 全部
+// .md——文件系统为事实源）。按需装载：仅展开行（openRows 对应 slug 集）逐 slug 并发拉取；
+// 单 slug 失败 fail-soft（键缺席 → 文档区按 0 篇呈现，不阻断其余行）。
+
+/** 提案文档拉取结果（ok/error 归一——永不 reject；slug 随行供合并定位） */
+export type ProposalDocsFetch =
+  | { readonly ok: true; readonly slug: string; readonly docs: readonly ProposalDocRow[] }
+  | { readonly ok: false; readonly slug: string; readonly error: OverviewErrorInfo }
+
+/** 提案文档拉取（纯异步面——proposals.listDocs 唯一通道） */
+export async function fetchProposalDocs(client: ForgeRpcClient, projectId: string, slug: string): Promise<ProposalDocsFetch> {
+  try {
+    const docs = await client.proposals.listDocs({ projectId, slug })
+    return { ok: true, slug, docs }
+  } catch (error) {
+    return { ok: false, slug, error: mapOverviewError(error) }
+  }
+}
+
+/** 文档行合并落点（纯函数）：ok = 覆盖键（重取即时见新值）；error = 保持旧值（fail-soft） */
+export function mergeProposalDocs(
+  prev: ReadonlyMap<string, readonly ProposalDocRow[]>,
+  out: ProposalDocsFetch,
+): ReadonlyMap<string, readonly ProposalDocRow[]> {
+  if (!out.ok) return prev
+  const next = new Map(prev)
+  next.set(out.slug, [...out.docs])
+  return next
+}
+
+/**
+ * 提案文档装载 hook（展开行按需）：slugs 键变（展开/收起）与写推送事件 → 逐 slug 并发
+ * 重拉（目录扫描幂等）；序号守卫防串台。返回 slug → 文档行映射（缺席 = 该行按 0 篇呈现）。
+ * @param projectId - 当前项目
+ * @param slugs - 展开行 slug 清单（提案子 tab openRows 投影）
+ * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ */
+export function useProposalDocs(
+  projectId: string,
+  slugs: readonly string[],
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
+): ReadonlyMap<string, readonly ProposalDocRow[]> {
+  const [docs, setDocs] = useState<ReadonlyMap<string, readonly ProposalDocRow[]>>(() => new Map())
+  const [eventNonce, setEventNonce] = useState(0)
+  const seqRef = useRef(0)
+  const slugsKey = [...slugs].sort().join('|')
+
+  useEffect(() => {
+    const slugsList = slugsKey === '' ? [] : slugsKey.split('|')
+    if (slugsList.length === 0) return
+    const seq = ++seqRef.current
+    void Promise.all(slugsList.map((slug) => fetchProposalDocs(makeClient(), projectId, slug))).then((outs) => {
+      if (seq !== seqRef.current) return
+      setDocs((prev) => outs.reduce((acc, out) => mergeProposalDocs(acc, out), prev))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- slugs 投影键化（slugsKey）驱动；projectId/makeClient 同 Effect 依赖
+  }, [projectId, slugsKey, eventNonce, makeClient])
+
+  // 写推送事件（forge:events/tasks-changed）→ 展开行重扫（文档经人/git 摆放后事件驱动刷新）
+  useEffect(
+    () =>
+      subscribeTasksChanged((payload) => {
+        if (payload.projectId === projectId) setEventNonce((n) => n + 1)
+      }),
+    [projectId],
+  )
+
+  return docs
 }
 
 /** 概览装载态（hook 输出——OverviewTab 消费形状） */

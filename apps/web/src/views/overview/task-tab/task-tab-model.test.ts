@@ -204,9 +204,9 @@ describe('tasksEmptyView（空态分派——总 0/搜索/过滤组合）', () =
     expect(tasksEmptyView({ ...base, cards: [cardFixture()] })).toBeUndefined()
   })
 
-  it('feature 总数 0 = 本 feature 暂无任务', () => {
+  it('feature 总数 0 = 本容器暂无任务', () => {
     const view = tasksEmptyView({ ...base, total: 0, cards: [] })
-    expect(view?.title).toBe('本 feature 暂无任务')
+    expect(view?.title).toBe('本容器暂无任务')
   })
 
   it('搜索在场空结果 = 无匹配', () => {

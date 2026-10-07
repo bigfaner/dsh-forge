@@ -14,6 +14,7 @@ import {
 } from '@dsh-forge/contracts'
 import { activeFeatureSlug } from '../overview-model.js'
 import { formatActualDuration } from '../drawer/detail-model.js'
+import { containerCountNoteSuffix, type TaskContainerOption } from './container-pill.js'
 
 /** 三视图 seg 词汇（列表|DAG|泳道——ui-design UF-1 ov-taskbar） */
 export const TASK_VIEWS = [
@@ -103,6 +104,38 @@ export function resolveFeatureSlug(features: readonly FeatureCard[], explicit: s
   return activeFeatureSlug(features)
 }
 
+/** 容器选中（受控注入/local 两态同形——taskFocus 聚焦 = feature 容器） */
+export interface TaskContainerSel {
+  readonly kind: 'feature' | 'proposal'
+  readonly slug: string
+}
+
+/** 容器选中键（`feature:slug` / `proposal:slug`——成链降级等同名双轨可辨） */
+export function containerKeyOf(sel: TaskContainerSel): string {
+  return `${sel.kind}:${sel.slug}`
+}
+
+/**
+ * 容器解析（4.6 双轨）：显式注入优先（taskFocus 聚焦 = feature 容器；用户本地切换 =
+ * 任意容器）——命中选项集才生效；否则活跃 feature 缺省（activeSlug = 帧侧头路
+ * activeFeatureSlug 投影——M2 语义沿袭）；零选项 = undefined（容器空态）。
+ */
+export function resolveContainer(
+  options: readonly TaskContainerOption[],
+  explicit: TaskContainerSel | undefined,
+  activeSlug: string | undefined,
+): TaskContainerOption | undefined {
+  if (explicit !== undefined) {
+    const hit = options.find((option) => option.kind === explicit.kind && option.slug === explicit.slug)
+    if (hit !== undefined) return hit
+  }
+  if (activeSlug !== undefined) {
+    const active = options.find((option) => option.kind === 'feature' && option.slug === activeSlug)
+    if (active !== undefined) return active
+  }
+  return options.find((option) => option.kind === 'feature')
+}
+
 /** feature 完成比 chip 文案（feature 卡 byStatus 聚合——menu 行源；pill 用任务域 stats 单源） */
 export function featureRatioLabel(feature: FeatureCard): string {
   const total = TASK_STATUSES.reduce((sum, status) => sum + (feature.byStatus[status] ?? 0), 0)
@@ -110,10 +143,36 @@ export function featureRatioLabel(feature: FeatureCard): string {
   return `${FEATURE_STATUS_LABELS[feature.featureStatus].zh} ${done}/${total}`
 }
 
-/** 空态视图（三分派：feature 总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
+/** 容器菜单行 chip 文案（feature = 状态完成比[featureRatioLabel 同形]；突击提案 = N 任务） */
+export function containerChipLabel(option: TaskContainerOption, features: readonly FeatureCard[]): string {
+  if (option.kind === 'proposal') return `${option.taskCount} 任务`
+  const card = features.find((f) => f.slug === option.slug)
+  return card === undefined ? `${option.taskCount} 任务` : featureRatioLabel(card)
+}
+
+/** 菜单行 id → 选项（未知 id = undefined 不派发） */
+export function containerMenuSelect(options: readonly TaskContainerOption[], id: string): TaskContainerOption | undefined {
+  return options.find((option) => containerKeyOf(option) === id)
+}
+
+/** 容器 pill chip 文案（feature = 状态 done/total——任务域 stats 单源；突击 = 突击提案·N 任务） */
+export function containerPillChip(option: TaskContainerOption, statsDoneOverTotal: string | undefined): string {
+  if (option.kind === 'feature') {
+    return statsDoneOverTotal ?? `${option.taskCount} 任务`
+  }
+  return `突击提案 · ${option.taskCount} 任务`
+}
+
+/** 容器计数注（feature = 帧侧计数注原值；突击 = 追加「无 feature 阶段」注——v20 ㉝） */
+export function containerCountNote(option: TaskContainerOption, base: string | undefined): string | undefined {
+  if (base === undefined) return undefined
+  return `${base}${containerCountNoteSuffix(option)}`
+}
+
+/** 空态视图（三分派：容器总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
 export interface TasksEmptyInput {
   readonly cards: readonly TaskCard[]
-  /** feature 域任务总数（stats.total——0 = 本 feature 无任务） */
+  /** 容器任务总数（stats.total——0 = 本容器无任务） */
   readonly total: number
   readonly searchActive: boolean
   readonly search: string
@@ -123,7 +182,7 @@ export interface TasksEmptyInput {
 export function tasksEmptyView(input: TasksEmptyInput): { readonly title: string; readonly description?: string } | undefined {
   if (input.cards.length > 0) return undefined
   if (input.total === 0) {
-    return { title: '本 feature 暂无任务', description: '任务由 run-tasks 派发 / add_task 产生' }
+    return { title: '本容器暂无任务', description: '任务由 run-tasks 派发 / add_task 产生' }
   }
   if (input.searchActive) {
     return { title: `无匹配「${input.search.trim()}」的任务` }

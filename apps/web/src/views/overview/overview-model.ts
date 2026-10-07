@@ -9,6 +9,8 @@
 import {
   TASK_STATUSES,
   type FeatureCard,
+  type FeatureStatus,
+  type ProposalStatus,
   type TaskStatus,
 } from '@dsh-forge/contracts'
 
@@ -36,8 +38,12 @@ export interface OverviewFilterState {
   /** 搜索关键词原文（受控输入值；服务端过滤参经 searchQueryOf 归一） */
   readonly search: string
   readonly sort: OverviewSort
-  /** 七态 chips 激活集（空 = 全部；statusFilterParam 转白名单参） */
+  /** 七态 chips 激活集（空 = 全部；statusFilterParam 转白名单参——任务子 tab） */
   readonly activeStatuses: ReadonlySet<TaskStatus>
+  /** 提案五态 chips 激活集（空 = 全部；多选并集客户端过滤——提案子 tab，4.6 UF-1） */
+  readonly activeProposalStatuses: ReadonlySet<ProposalStatus>
+  /** feature 阶段 chips 激活集（空 = 全部；多选并集客户端过滤——feature 子 tab，4.6 UF-4） */
+  readonly activePhases: ReadonlySet<FeatureStatus>
   /** 父行展开键集（prop:{id} / feat:{slug}——多开并存） */
   readonly openRows: ReadonlySet<string>
   /** ov-head 展开（默认 false——AC1 折叠） */
@@ -51,15 +57,25 @@ export function initialOverviewFilter(): OverviewFilterState {
     search: '',
     sort: 'active',
     activeStatuses: new Set<TaskStatus>(),
+    activeProposalStatuses: new Set<ProposalStatus>(),
+    activePhases: new Set<FeatureStatus>(),
     openRows: new Set<string>(),
     headOpen: false,
   }
 }
 
-/** 子 tab 切换（AC3）：清空搜索 + 清空 chips + 收起全部展开态；同值原样返回（零重渲） */
+/** 子 tab 切换（AC3）：清空搜索 + 清空三族 chips + 收起全部展开态；同值原样返回（零重渲） */
 export function switchSubtab(state: OverviewFilterState, subtab: OverviewSubtab): OverviewFilterState {
   if (state.subtab === subtab) return state
-  return { ...state, subtab, search: '', activeStatuses: new Set(), openRows: new Set() }
+  return {
+    ...state,
+    subtab,
+    search: '',
+    activeStatuses: new Set(),
+    activeProposalStatuses: new Set(),
+    activePhases: new Set(),
+    openRows: new Set(),
+  }
 }
 
 /** 排序 pill 切换：活跃优先 ↔ 最新创建 */
@@ -106,6 +122,62 @@ export function statusFilterParam(active: ReadonlySet<TaskStatus>): TaskStatus[]
 /** chips 过滤在场判据（清过滤入口显隐） */
 export function hasActiveStatusFilter(active: ReadonlySet<TaskStatus>): boolean {
   return active.size > 0
+}
+
+/** 提案五态 chips toggle（纯集合翻转——多选并集，4.6 UF-1） */
+export function toggleProposalStatusFilter(state: OverviewFilterState, status: ProposalStatus): OverviewFilterState {
+  const next = new Set(state.activeProposalStatuses)
+  if (next.has(status)) next.delete(status)
+  else next.add(status)
+  return { ...state, activeProposalStatuses: next }
+}
+
+/** 提案五态 chips 全清 */
+export function clearProposalStatusFilter(state: OverviewFilterState): OverviewFilterState {
+  return { ...state, activeProposalStatuses: new Set() }
+}
+
+/** feature 阶段 chips toggle（多选并集，4.6 UF-4） */
+export function togglePhaseFilter(state: OverviewFilterState, phase: FeatureStatus): OverviewFilterState {
+  const next = new Set(state.activePhases)
+  if (next.has(phase)) next.delete(phase)
+  else next.add(phase)
+  return { ...state, activePhases: next }
+}
+
+/** feature 阶段 chips 全清 */
+export function clearPhaseFilter(state: OverviewFilterState): OverviewFilterState {
+  return { ...state, activePhases: new Set() }
+}
+
+// ─────────────────────────── 概览 tab 宽度模型（4.6 UF-3 · Integration #6） ───────────────────────────
+// 默认 560px + 左缘拖拽调宽（钳制 400–920 且中区保底 ≥580——ui-design v5 ⑧ / v22 概览 tab
+// 宽度行注）。右缘贴 dock——宽度 = viewportWidth − clientX（拖拽指针即左缘，drawer 同法）。
+
+/** 概览 tab 默认宽度（工具栏控件一行展示：容器 pill + 视图下拉 + 诊断 + 派发） */
+export const OVERVIEW_WIDTH_DEFAULT = 560
+
+/** 宽度钳制下限（px） */
+export const OVERVIEW_WIDTH_MIN = 400
+
+/** 宽度钳制上限（px） */
+export const OVERVIEW_WIDTH_MAX = 920
+
+/** 中区保底宽（px——maxWidth = viewportWidth − 580） */
+export const OVERVIEW_CENTER_MIN = 580
+
+/** 宽度钳制（纯函数）：[400, min(920, viewport − 580)]；viewport 缺席 = 上限 920（非拖拽面） */
+export function clampOverviewWidth(width: number, viewportWidth?: number): number {
+  const max =
+    viewportWidth === undefined
+      ? OVERVIEW_WIDTH_MAX
+      : Math.max(OVERVIEW_WIDTH_MIN, Math.min(OVERVIEW_WIDTH_MAX, viewportWidth - OVERVIEW_CENTER_MIN))
+  return Math.min(Math.max(Math.round(width), OVERVIEW_WIDTH_MIN), max)
+}
+
+/** 左缘拖拽 → 宽度（指针即左缘：width = viewport − clientX，双钳制） */
+export function overviewWidthFromDrag(clientX: number, viewportWidth: number): number {
+  return clampOverviewWidth(viewportWidth - clientX, viewportWidth)
 }
 
 /** 父行展开键（提案行——prop:{proposalId}，原型 key 方案） */

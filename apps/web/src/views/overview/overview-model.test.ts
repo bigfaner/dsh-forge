@@ -3,7 +3,15 @@
 import { describe, expect, it } from 'vitest'
 import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/contracts'
 import {
+  OVERVIEW_CENTER_MIN,
+  OVERVIEW_WIDTH_DEFAULT,
+  OVERVIEW_WIDTH_MAX,
+  OVERVIEW_WIDTH_MIN,
   OVERVIEW_SORT_LABELS,
+  clampOverviewWidth,
+  clearPhaseFilter,
+  clearProposalStatusFilter,
+  overviewWidthFromDrag,
   OVERVIEW_SUBTABS,
   clearStatusFilter,
   featureRowKey,
@@ -18,6 +26,8 @@ import {
   statusFilterParam,
   switchSubtab,
   toggleHead,
+  togglePhaseFilter,
+  toggleProposalStatusFilter,
   toggleOpenRow,
   toggleStatusFilter,
   activeFeatureSlug,
@@ -166,5 +176,77 @@ describe('ov-head 摘要合成', () => {
     expect(activeFeatureSlug([card('done', 'completed'), card('live', 'prd')])).toBe('live')
     expect(activeFeatureSlug([card('a', 'completed'), card('b', 'archived')])).toBe('a')
     expect(activeFeatureSlug([])).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── 4.6 UF-1/UF-4 chips 族 + 宽度模型 ───────────────────────────
+
+describe('提案五态 / feature 阶段 chips（4.6——toggle 与清空语义）', () => {
+  it('toggleProposalStatusFilter：集合翻转（多选并集）', () => {
+    let state = initialOverviewFilter()
+    state = toggleProposalStatusFilter(state, 'under-review')
+    expect([...state.activeProposalStatuses]).toEqual(['under-review'])
+    state = toggleProposalStatusFilter(state, 'accepted')
+    expect([...state.activeProposalStatuses]).toEqual(['under-review', 'accepted'])
+    state = toggleProposalStatusFilter(state, 'under-review')
+    expect([...state.activeProposalStatuses]).toEqual(['accepted'])
+  })
+
+  it('clearProposalStatusFilter：全清（与 toggle 族互不影响他族态）', () => {
+    let state = initialOverviewFilter()
+    state = toggleProposalStatusFilter(state, 'draft')
+    state = toggleStatusFilter(state, 'blocked')
+    const cleared = clearProposalStatusFilter(state)
+    expect(cleared.activeProposalStatuses.size).toBe(0)
+    expect(cleared.activeStatuses.size).toBe(1) // 任务七态不受累
+  })
+
+  it('togglePhaseFilter / clearPhaseFilter：阶段族同语义', () => {
+    let state = initialOverviewFilter()
+    state = togglePhaseFilter(state, 'in-progress')
+    state = togglePhaseFilter(state, 'completed')
+    expect([...state.activePhases]).toEqual(['in-progress', 'completed'])
+    state = togglePhaseFilter(state, 'in-progress')
+    expect(clearPhaseFilter(state).activePhases.size).toBe(0)
+  })
+
+  it('子 tab 切换清空三族 chips（AC6 切换清空语义）', () => {
+    let state = initialOverviewFilter()
+    state = toggleStatusFilter(state, 'blocked')
+    state = toggleProposalStatusFilter(state, 'accepted')
+    state = togglePhaseFilter(state, 'completed')
+    state = { ...state, search: '关键词', openRows: new Set(['prop:p-1']) }
+    const next = switchSubtab(state, 'tasks')
+    expect(next.search).toBe('')
+    expect(next.activeStatuses.size).toBe(0)
+    expect(next.activeProposalStatuses.size).toBe(0)
+    expect(next.activePhases.size).toBe(0)
+    expect(next.openRows.size).toBe(0)
+  })
+})
+
+describe('概览 tab 宽度模型（4.6 UF-3 · Integration #6——AC4 钳制 400–920 + 中区保底 ≥580）', () => {
+  it('常量：默认 560 / 下限 400 / 上限 920 / 中区保底 580', () => {
+    expect(OVERVIEW_WIDTH_DEFAULT).toBe(560)
+    expect(OVERVIEW_WIDTH_MIN).toBe(400)
+    expect(OVERVIEW_WIDTH_MAX).toBe(920)
+    expect(OVERVIEW_CENTER_MIN).toBe(580)
+  })
+
+  it('clampOverviewWidth：区间内直通；越界钳制；viewport 缺席 = 上限 920', () => {
+    expect(clampOverviewWidth(560)).toBe(560)
+    expect(clampOverviewWidth(100)).toBe(400)
+    expect(clampOverviewWidth(2000)).toBe(920)
+    expect(clampOverviewWidth(560, 2000)).toBe(560)
+    expect(clampOverviewWidth(900, 1200)).toBe(620) // viewport 1200 → max = 1200-580 = 620（中区保底）
+    expect(clampOverviewWidth(300, 900)).toBe(400) // max(400, 900-580=320) = 400——下限优先于中区保底
+    expect(clampOverviewWidth(560.4)).toBe(560) // 取整
+  })
+
+  it('overviewWidthFromDrag：宽度 = viewport − clientX（指针即左缘）双钳制', () => {
+    expect(overviewWidthFromDrag(1440, 2000)).toBe(560)
+    expect(overviewWidthFromDrag(1900, 2000)).toBe(400) // 越下限 → 400
+    expect(overviewWidthFromDrag(400, 2000)).toBe(920) // 越上限 → 920
+    expect(overviewWidthFromDrag(500, 900)).toBe(400) // 小窗中区保底让位下限
   })
 })

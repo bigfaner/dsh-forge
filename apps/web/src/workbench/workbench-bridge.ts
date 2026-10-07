@@ -25,11 +25,15 @@ export interface ForgeCenterNav {
 /**
  * 概览项目上下文（4.1 ShellHost 锚定写回 → 右栏概览 tab 消费）：projectId = knowledge-anchor
  * 裁决（主视图会话优先 retainedBy.mainView，唯一项目兜底）；sessionCount = 锚定项目归属
- * workspace 的账本会话数（ov-head「N 会话」单源——sessions/workspaces 快照派生）。
+ * workspace 的账本会话数（ov-head「N 会话」单源——sessions/workspaces 快照派生）；
+ * workspaceId = 锚定项目归属工作区（4.6 打开新会话通道 openSessionWithPreset 入参——
+ * 官方 openWorkspace 连接工作区并开会话）。
  */
 export interface ForgeOverviewContext {
   /** 锚定项目（null = 无锚——多项目无会话/项目未就绪） */
   readonly projectId: string | null
+  /** 锚定项目归属工作区（4.6 打开新会话编排入参；无锚 = null） */
+  readonly workspaceId: string | null
   /** 锚定项目 workspace 会话数（快照缺席 = undefined → ov-head 省略段） */
   readonly sessionCount?: number
 }
@@ -59,7 +63,7 @@ export interface ForgeWorkbenchSnapshot {
 
 /** 概览上下文缺省（ShellHost 锚定生效前/桥刚创建——无锚不猜首个） */
 export function initialOverviewContext(): ForgeOverviewContext {
-  return { projectId: null }
+  return { projectId: null, workspaceId: null }
 }
 
 /** 工作台桥（导航 + 抽屉缝 + 概览上下文缝 + 任务聚焦缝；快照源形状 = useSyncExternalStore 可直订） */
@@ -129,6 +133,7 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
     setOverviewContext: (context: ForgeOverviewContext): void => {
       if (
         snapshot.overview.projectId === context.projectId &&
+        snapshot.overview.workspaceId === context.workspaceId &&
         snapshot.overview.sessionCount === context.sessionCount
       ) {
         return

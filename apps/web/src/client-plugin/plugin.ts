@@ -27,6 +27,17 @@
 // 运行期锚（e2e 实证，2.7）：插件长活依赖 profile 置停 client-hmr——其全图 sync 会以宿主
 // 最新图对账掉壳掌舵追加的本行，见 apps/host profile cordis.patch.yml 的 client-hmr 行。
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
+// 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
+import {
+  createOpenSessionOrchestrator,
+  openSessionPlatformFrom,
+  type ComposerInputFace,
+  type OpenSessionBinding,
+  type OpenSessionConversation,
+  type OpenSessionOrchestrator,
+  type OpenSessionServices,
+  type PresetSelectResult,
+} from './open-session.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -268,7 +279,15 @@ export interface ForgeViewsGlobal {
 export interface ForgeClientCtx {
   readonly slots: ForgeSlotsService
   get(
-    name: 'sessions' | 'uiWorkspace' | 'workspaces' | 'sidebarRight' | 'sidebarRightTabs' | 'layout' | 'locale',
+    name:
+      | 'sessions'
+      | 'uiWorkspace'
+      | 'workspaces'
+      | 'sidebarRight'
+      | 'sidebarRightTabs'
+      | 'layout'
+      | 'locale'
+      | 'conversation',
   ): unknown
 }
 
@@ -513,6 +532,72 @@ function docTabTitle(address: string): string {
 }
 
 /**
+ * 打开新会话编排器组装（4.6 Integration #5 消费面）：openSessionPlatformFrom 真实服务
+ * 适配——conversation / ctx.remote.agentPresets **调用期惰性解析**（不进 inject 数组：
+ * 服务名核实无误前不承激活风险；缺席 = 各阶段 fail-soft 降级——create/draft 阶段错误
+ * 上报，不炸壳）。uiWorkspace.openWorkspace 经结构探测（OQ#1 核实面：reuse-or-create
+ * blank + beforeOpen 回传 sessionId）。
+ */
+function buildOpenSessionOrchestrator(
+  clientCtx: ForgeClientCtx,
+  uiWorkspace: ForgeUiWorkspaceService,
+  sessions: ForgeSessionsService,
+): OpenSessionOrchestrator {
+  const asObject = (value: unknown): Record<string, unknown> | undefined =>
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  const conversationSvc = (): Record<string, unknown> | undefined => asObject(clientCtx.get('conversation'))
+  const agentPresetsSvc = (): Record<string, unknown> | undefined =>
+    asObject(asObject((clientCtx as unknown as { remote?: unknown }).remote)?.['agentPresets'])
+  const services: OpenSessionServices = {
+    uiWorkspace: {
+      openWorkspace: (workspaceId, beforeOpen) => {
+        const svc = uiWorkspace as unknown as {
+          openWorkspace?: (workspaceId: string, beforeOpen?: (sessionId: string) => void) => Promise<void>
+        }
+        if (svc.openWorkspace === undefined) {
+          return Promise.reject(new Error('uiWorkspace.openWorkspace 缺席（上游面漂移）'))
+        }
+        return svc.openWorkspace(workspaceId, beforeOpen)
+      },
+      openSession: (sessionId) => {
+        uiWorkspace.openSession(sessionId)
+      },
+    },
+    agentPresets: {
+      select: (sessionId, presetId) => {
+        const select = agentPresetsSvc()?.['select'] as
+          | ((sessionId: string, presetId: string) => Promise<unknown>)
+          | undefined
+        if (select === undefined) {
+          return Promise.resolve({ ok: false as const, error: { message: 'ctx.remote.agentPresets.select 缺席' } })
+        }
+        return select(sessionId, presetId) as Promise<PresetSelectResult>
+      },
+    },
+    sessions: {
+      binding: (sessionId) =>
+        (sessions as unknown as { binding?: (sessionId: string) => unknown }).binding?.(sessionId) as
+          | OpenSessionBinding
+          | undefined,
+    },
+    conversation: {
+      input: {
+        for: (actx: unknown): ComposerInputFace => {
+          const resolved = (conversationSvc()?.['input'] as { for?: (actx: unknown) => unknown } | undefined)?.[
+            'for'
+          ]?.(actx)
+          if (resolved === undefined || resolved === null) {
+            throw new Error('conversation.input.for 缺席（会话输入缝未就绪）')
+          }
+          return resolved as ComposerInputFace
+        },
+      },
+    } satisfies OpenSessionConversation,
+  }
+  return createOpenSessionOrchestrator(openSessionPlatformFrom(services))
+}
+
+/**
  * dock tab 族登记（4.1 两段注册，tech-design Integration #3/#4——「adding a type is a
  * registration, never an edit」官方口径）：
  *   第一段 = sidebarRightTabs.register 两类型定义——
@@ -532,6 +617,7 @@ function registerDockTabs(
   views: PublishedViews,
   bridge: PublishedBridge,
   uiWorkspace: ForgeUiWorkspaceService,
+  sessions: ForgeSessionsService,
   t: (key: string) => string,
   sidebarRightTabs: ForgeSidebarRightTabsService,
   diagnostics: { registered?: string[] },
@@ -569,6 +655,9 @@ function registerDockTabs(
             // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
             uiWorkspace.openSession(sessionId)
           },
+          // 4.6 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab
+          // 行头预填/诊断发送/派发指令/派发跳转四渠道共源）
+          openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
         }),
       },
       views.ForgeOverviewTab,
@@ -663,6 +752,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           views,
           bridge,
           uiWorkspace,
+          sessions,
           t,
           sidebarRightTabs,
           dockDiagnostics,

@@ -162,7 +162,7 @@ describe('OverviewDockAssembly 概览装配体全相位（AC5：抽屉/对话框
 describe('ForgeOverviewTab 概览 tab body（keyed 占用者）', () => {
   it('桥订阅读锚定上下文：ShellHost 写回 → 概览主体可见（真桥直驱）', () => {
     const bridge = freshBridge()
-    bridge.setOverviewContext({ projectId: 'p-anchored', sessionCount: 2 })
+    bridge.setOverviewContext({ projectId: 'p-anchored', workspaceId: 'w-1', sessionCount: 2 })
     const markup = renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />)
     expect(markup).toContain('data-dswf-ov-panel')
     expect(markup).not.toContain('data-dswf-ov-unanchored')
@@ -240,7 +240,7 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
       />,
     )
     expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // ①聚焦 → 任务子 tab
-    expect(markup).toContain('暂无 feature') // renderTasksTab 装载在场面（featureSlug 受控注入归 TasksTab 面 pin）
+    expect(markup).toContain('暂无任务容器') // renderTasksTab 装载在场面（容器空态——SSR 零 effect 头路缺席）
     expect(markup).toContain('data-dswf-td-drawer') // ②抽屉开（taskId 注入——drawerTaskId 受控面）
   })
 
@@ -264,10 +264,10 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
 
   it('桥聚焦直驱（ForgeOverviewTab 面桥缝）：openTaskFocus 写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
     const bridge = freshBridge()
-    bridge.setOverviewContext({ projectId: 'p-anchored' })
+    bridge.setOverviewContext({ projectId: 'p-anchored', workspaceId: 'w-1' })
     bridge.openTaskFocus({ taskId: 't-9', featureSlug: 'feat-9' })
     expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-9', featureSlug: 'feat-9', nonce: 1 })
-    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p-anchored' }) // 三缝独立互不扰动
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p-anchored', workspaceId: 'w-1' }) // 三缝独立互不扰动
     // 概览 body 挂载不炸（taskFocus 经桥订阅递达——消费 effect 归 5.2 e2e）
     expect(() =>
       renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />),

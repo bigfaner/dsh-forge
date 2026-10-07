@@ -81,14 +81,14 @@ export function anchoredOverviewContext(input: {
   readonly mainSessionId: string | null
   readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
   readonly projects: readonly { readonly id: string; readonly workspaceId: string }[]
-}): { readonly projectId: string | null; readonly sessionCount?: number } {
+}): { readonly projectId: string | null; readonly workspaceId: string | null; readonly sessionCount?: number } {
   const projectId = projectAnchorOf({ sessionId: input.mainSessionId, workspaces: input.workspaces, projects: input.projects })
-  if (projectId === null) return { projectId: null }
+  if (projectId === null) return { projectId: null, workspaceId: null }
   const project = input.projects.find((row) => row.id === projectId)
-  if (project === undefined || input.workspaces === null) return { projectId }
+  if (project === undefined || input.workspaces === null) return { projectId, workspaceId: project?.workspaceId ?? null }
   const home = input.workspaces.items.find((row) => row.workspaceId === project.workspaceId)
-  if (home === undefined) return { projectId }
-  return { projectId, sessionCount: home.sessionIds.length }
+  if (home === undefined) return { projectId, workspaceId: project.workspaceId }
+  return { projectId, workspaceId: project.workspaceId, sessionCount: home.sessionIds.length }
 }
 
 /**

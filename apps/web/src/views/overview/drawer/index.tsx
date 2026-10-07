@@ -17,6 +17,9 @@ import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { RpcClientError } from '../../../rpc/errors.js'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../../rpc/index.js'
 import { STATUS_DOT_STATE } from '../status-chips.js'
+import { formatDiagMessage, type SessionOpenRequest, type TaskFailureDiagInput } from '../message-format.js'
+import { DiagToast, taskFailureDiagToast, type DiagToastResult, type DiagToastSendPayload } from '../task-tab/DiagToast.js'
+import '../task-tab/task-tab.css'
 import {
   clampDrawerWidth,
   drawerSessionStore,
@@ -150,6 +153,38 @@ function ResultView({ result }: { readonly result: ReturnType<typeof taskResultO
   }
 }
 
+/**
+ * 任务失败诊断输入组装（4.6 UF-3 · v19–v21——AC3 诊断第二路数据面）：
+ * 容器水化（taskDetail.container——MessageContainer 结构映射）+ 失败原因（blockedReason
+ * 优先，回退最近失败记录）+ 最近记录 ≤3（verb/at/note——DiagRecordLine 映射）。
+ */
+export function taskFailureInputOf(detail: TaskDetail): TaskFailureDiagInput {
+  const recent = [...detail.records].slice(-3)
+  const records = recent.map((record) => ({
+    verb: record.verb,
+    at: record.createdAt,
+    ...(record.reason !== undefined || record.summary !== undefined
+      ? { note: record.reason ?? record.summary }
+      : {}),
+  }))
+  const lastNote = [...records].reverse().find((record) => record.note !== undefined)?.note
+  return {
+    kind: 'task-failure',
+    container: {
+      kind: detail.container.kind,
+      slug: detail.container.slug,
+      title: detail.container.title,
+      ...(detail.container.summary !== undefined ? { summary: detail.container.summary } : {}),
+      ...(detail.container.phase !== undefined ? { phase: detail.container.phase } : {}),
+    },
+    taskKey: `${detail.slug}/${detail.localId}`,
+    taskTitle: detail.title,
+    taskStatus: detail.taskStatus,
+    reason: detail.blockedReason ?? lastNote ?? '—',
+    records,
+  }
+}
+
 export interface TaskDrawerBodyProps {
   readonly detail: TaskDetail
   /** 抽屉宽（px——会话级保持值注入） */
@@ -166,6 +201,13 @@ export interface TaskDrawerBodyProps {
   readonly onOpenSession?: (sessionId: string) => void
   /** 「转移状态…」入口（3.8 对话框开——缺席 = 禁用） */
   readonly onTransition?: (taskId: string) => void
+  /** 「诊断失败」入口（4.6——仅 blocked/rejected 任务呈现；缺席 = 按钮不呈现） */
+  readonly onDiagnoseFailure?: (detail: TaskDetail) => void
+  /** 任务失败诊断 toast（锚定「诊断失败」钮左侧——受控整体替换） */
+  readonly diagResult: DiagToastResult | undefined
+  readonly onDiagDismiss: () => void
+  /** 「发送给 agent」（fail 档动作——缺席 = 无动作钮；本面恒任务失败档） */
+  readonly onDiagSend?: (payload: DiagToastSendPayload) => void
   /** 双击复位宽度 */
   readonly onResetWidth: () => void
   /** 键盘步进（← 加宽 +32 / → 收窄 -32——方向由本组件定向） */
@@ -187,6 +229,10 @@ export function TaskDrawerBody({
   onOpenDoc,
   onOpenSession,
   onTransition,
+  onDiagnoseFailure,
+  diagResult,
+  onDiagDismiss,
+  onDiagSend,
   onResetWidth,
   onStepWidth,
   onDragWidth,
@@ -309,6 +355,24 @@ export function TaskDrawerBody({
         </DrawerSection>
       </div>
       <div className="dswf-td-foot">
+        {/* 诊断失败（4.6 UF-3 v19–v21——仅 blocked/rejected 任务；无单任务执行动作[Hard Rule]） */}
+        {(detail.taskStatus === 'blocked' || detail.taskStatus === 'rejected') && onDiagnoseFailure !== undefined ? (
+          <span className="dswf-td-diagwrap" data-dswf-td-diagwrap="">
+            <DiagToast result={diagResult} onDismiss={onDiagDismiss} {...(onDiagSend !== undefined ? { onSend: onDiagSend } : {})} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="dswf-td-diag"
+              data-dswf-td-diag={detail.taskStatus}
+              title="诊断失败——失败摘要 toast + 可发送给 agent 排查修复"
+              onClick={() => {
+                onDiagnoseFailure(detail)
+              }}
+            >
+              诊断失败
+            </Button>
+          </span>
+        ) : null}
         <Button
           variant="outline"
           size="sm"
@@ -445,6 +509,8 @@ export interface TaskDrawerProps {
   readonly onOpenSession?: (sessionId: string) => void
   /** 「转移状态…」入口（3.8 对话框开） */
   readonly onTransition?: (taskId: string) => void
+  /** 打开新会话通道（4.6 任务失败诊断「发送给 agent」——装配注入；发往任务容器对应模式） */
+  readonly onStartSession?: (request: SessionOpenRequest) => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 相对时间基准（缺省当次渲染时刻） */
@@ -454,8 +520,11 @@ export interface TaskDrawerProps {
 /**
  * 抽屉装载壳（3.6 三视图行点击 / 4.1 dock 装配接线）：宽度/折叠 = 会话级保持
  * （drawerSessionStore——关开抽屉/切任务共享）；同任务重渲染 no-anim（滑入仅切任务播放）。
+ * 4.6 任务失败诊断：blocked/rejected「诊断失败」→ 失败摘要 toast（5s）+「发送给 agent」
+ * → formatDiagMessage 自动发送（发往任务容器对应模式：feature → 远征 / 突击提案 → 突击；
+ * 容器 mode 缺席[未标记提案直挂] = 不切换——registry 默认）。
  */
-export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, makeClient, now }: TaskDrawerProps): ReactNode {
+export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, makeClient, now }: TaskDrawerProps): ReactNode {
   useTaskDrawerEscape(taskId, onClose)
   const [session, setSession] = useState(() => drawerSessionStore.getState())
   useEffect(() => drawerSessionStore.subscribe(() => {
@@ -463,6 +532,8 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
   }), [])
   const [state, { retry }] = useTaskDetail(projectId, taskId, makeClient)
   const lastTaskRef = useRef<string | null>(null)
+  // 任务失败诊断 toast（受控 {result, mode}——mode = 触发时任务容器模式快照，发送路由此）
+  const [diag, setDiag] = useState<{ readonly result: DiagToastResult; readonly mode: 'expedition' | 'blitz' | undefined } | undefined>(undefined)
 
   const handleToggleSection = useCallback((key: DrawerSectionKey): void => {
     drawerSessionStore.toggleSection(key)
@@ -476,6 +547,24 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
   const handleDragWidth = useCallback((clientX: number, viewportWidth: number): void => {
     drawerSessionStore.setWidth(drawerWidthFromDrag(clientX, viewportWidth))
   }, [])
+  const handleDiagnoseFailure = useCallback((detail: TaskDetail): void => {
+    setDiag({ result: taskFailureDiagToast(taskFailureInputOf(detail)), mode: detail.container.mode })
+  }, [])
+  const handleDiagDismiss = useCallback((): void => {
+    setDiag(undefined)
+  }, [])
+  const handleDiagSend = useCallback(
+    (payload: DiagToastSendPayload): void => {
+      // 发往任务容器对应模式（v20 ㉝）——错误直达修复 = autosend；mode 缺席 = 不切换
+      //（本面恒任务失败档——payload 结构即 TaskFailureDiagInput）
+      onStartSession?.({
+        ...(diag?.mode !== undefined ? { mode: diag.mode } : {}),
+        prefill: formatDiagMessage(payload),
+        autosend: true,
+      })
+    },
+    [onStartSession, diag],
+  )
   const openDoc = onOpenDoc ?? ((): void => {})
 
   if (taskId === null) {
@@ -551,6 +640,10 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
       onOpenDoc={openDoc}
       onOpenSession={onOpenSession}
       onTransition={onTransition}
+      {...(onStartSession !== undefined ? { onDiagnoseFailure: handleDiagnoseFailure } : {})}
+      diagResult={diag?.result}
+      onDiagDismiss={handleDiagDismiss}
+      {...(onStartSession !== undefined ? { onDiagSend: handleDiagSend } : {})}
       onResetWidth={handleResetWidth}
       onStepWidth={handleStepWidth}
       onDragWidth={handleDragWidth}

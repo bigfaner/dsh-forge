@@ -7,11 +7,36 @@
  * （官方主题无间距标尺令牌——sidebar.css/knowledge.css 同款豁免先例）；块级留白取
  * 行高令牌刻度。 */
 
-/* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动） ── */
+/* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动） ──
+ * 4.6 UF-3 · Integration #6：概览 tab 默认 560px + 左缘拖拽调宽（wrap = 右贴 dock 的
+ * 定宽容器；resize = 左缘手柄——指针即左缘，宽度 = viewport − clientX 钳制 400–920） */
+.dswf-ov-wrap {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  justify-content: flex-end;
+}
+
+.dswf-ov-resize {
+  flex: none;
+  width: 4px; /* dsw-raw 原型拖拽手柄宽刻度（drawer 左缘手柄同款） */
+  margin-inline-end: calc(-1 * var(--dsw-font-xs-13-line-height)); /* dsw-raw 手柄叠面板左缘的负距刻度（drawer 左缘手柄同款布局） */
+  cursor: col-resize;
+  background: transparent;
+}
+
+.dswf-ov-resize:hover,
+.dswf-ov-resize:focus-visible {
+  background: var(--dsw-alias-interactive-bg-active); /* hover 主色提示（ui-design v5 ⑧） */
+  outline: none;
+}
+
 .dswf-ov-panel {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: none;
+  max-width: 100%; /* dock 窄列保护（pane < 面板宽时收缩不溢出） */
   min-width: 0;
   min-height: 0;
   background: var(--dsw-alias-bg-base);
@@ -228,15 +253,76 @@
   gap: var(--dsw-font-xs-13-line-height);
   height: 28px; /* dsw-raw 原型父行高刻度（官方 tree-row 同高） */
   padding: 0 var(--dsw-font-s-14-line-height);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  text-align: start;
   min-width: 0;
 }
 
 .dswf-ov-parent:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 展开命中面（4.6 多动作行：toggle / mode chip / 行头动作 / ⋯ 各自独立命中——零嵌套按钮） */
+.dswf-ov-parent-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: start;
+}
+
+/* 行头动作钮（打开新会话——v7 ㉎ 状态 chip 右侧；同款式族：无主操作蓝） */
+.dswf-ov-act {
+  flex: none;
+  height: 22px; /* dsw-raw 原型行内钮刻度（chips 24px 行内同族） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-ov-act:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* ⋯ 行操作钮（提案行——评审流转/更改模式/打开新会话菜单门户） */
+.dswf-ov-more {
+  flex: none;
+  height: 22px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-ov-more:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 菜单行（dswf-ov-menu 门户面行语言——task-tab mrow 同形） */
+.dswf-ov-mrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+/* 子 tab 页容器（chips 行 + 列表纵排——4.6 UF-1/UF-4 插入点锚） */
+.dswf-ov-proposalpage,
+.dswf-ov-featurepage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
 }
 
 .dswf-ov-caret {

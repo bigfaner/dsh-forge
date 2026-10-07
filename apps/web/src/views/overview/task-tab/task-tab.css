@@ -8,13 +8,63 @@
  * taskbar/seg/分组标签行高 24–28px 与 chips/父行刻度互齐（overview.css 同款豁免先例）；
  * 代码族等宽 = docs.css 同款豁免（官方主题无等宽族令牌）。 */
 
-/* ── ov-taskbar：feature pill + 计数注记 + spacer + 三视图 seg ── */
+/* ── ov-taskbar（v22 布局）：容器 pill（双轨）+ 计数注记 + 视图下拉 + spacer +
+ *    右簇 [诊断]+[派发] 固定最右端——同行不换行（ui-design ㉟） ── */
 .dswf-tt-taskbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* v22：工具栏控件恒一行（概览 560px 宽下不换行） */
   gap: var(--dsw-font-xs-13-line-height);
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  min-width: 0;
+}
+
+/* 容器模式点（4.6 双轨：feature 远征蓝 / 突击提案琥珀——ModeChip 点色同语义） */
+.dswf-tt-contdot {
+  flex: none;
+  width: 8px; /* dsw-raw 原型点径刻度（StateDot size=8 / pschip-dot 同径） */
+  height: 8px; /* dsw-raw */
+  border-radius: 50%; /* dsw-raw 原型圆点刻度（pschip-dot 同款豁免） */
+  background: var(--dsw-alias-business-primary);
+}
+
+.dswf-tt-contdot[data-mode='blitz'] {
+  background: var(--dsw-alias-warn-primary);
+}
+
+/* 右簇（诊断在左·派发居最右——固定最右端） */
+.dswf-tt-rightbar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin-left: auto;
+}
+
+/* 诊断锚定包裹（DiagToast 锚定触发钮左侧——right:100% 贴近出现） */
+.dswf-tt-diagwrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+/* 「诊断」按钮（仅 feature 容器呈现——validateFeatureTasks 恒单 feature 子图） */
+.dswf-tt-diagbtn {
+  display: inline-flex;
+  align-items: center;
+  height: 22px; /* dsw-raw 原型 seg 行刻度（viewbtn/dispatch 同款式族） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-tt-diagbtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .dswf-tt-featpill {

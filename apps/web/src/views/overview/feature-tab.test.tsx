@@ -1,21 +1,22 @@
-// FeaturesTab 单测 —— AC4 feature 子 tab：父行 ▸ 展开元数据（摘要/来源提案/任务七态/
-// 文档统计/创建更新）+ 文档行（名称 + docKind 标签紧贴 + › 行尾；feature 不含提案文档）
-// + 多开并存 + 点击回调。文档行 = 契约类型 props 注入面（Interface 2 读面无列举 API——
-// 3.5 帧不喂；接口在场供装配注入）。
+// feature 子 tab 升级单测 —— 4.6 UF-4（AC2/AC6）：阶段 chips 插入点（列表之上）+
+// 父行行头（远征 mode chip 只读 + 阶段 tag + 打开新会话→固定远征）+ 展开元数据
+// （MetaGrid 两列网格 + DocGroupList 分层文档）+ 预填请求组装（固定远征 + 真实路径
+// 清单 + 不自动发送）+ 阶段并集过滤与零命中空态。MetaGrid/DocGroupList 本体已归 4.3
+// 组件测试——本文件只断言接线位置。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { FeatureCard, FeatureDocumentRow, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
-import { FeaturesTab, featureSourceProposal, featureStatusSpread, featureTaskTotal } from './feature-tab.js'
+import type { FeatureCard, FeatureDocumentRow, FeatureStatus, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
+import { FeaturesTab, featurePrefillDocs, featurePrefillRequest, featureTaskTotal } from './feature-tab.js'
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
 const CREATED = '2026-10-01T08:00:00.000Z'
 
-function feature(slug: string, byStatus: Partial<Record<TaskStatus, number>> = {}): FeatureCard {
+function feature(slug: string, byStatus: Partial<Record<TaskStatus, number>> = {}, status: FeatureStatus = 'in-progress'): FeatureCard {
   return {
     featureId: `fid-${slug}`,
     slug,
     title: `特性 ${slug}`,
-    featureStatus: 'in-progress',
+    featureStatus: status,
     summary: '管线接管状态层',
     createdAt: CREATED,
     updatedAt: '2026-10-05T08:00:00.000Z',
@@ -28,7 +29,7 @@ function feature(slug: string, byStatus: Partial<Record<TaskStatus, number>> = {
       skipped: 0,
       rejected: 0,
     } as Record<TaskStatus, number>,
-    docCount: 4,
+    docCount: 2,
     proposalSlug: 'm2-pipeline',
   }
 }
@@ -51,127 +52,103 @@ const BRAND_FEATURE = feature('brand-refresh', { blocked: 1 })
 const FEATURES = [M2_FEATURE, BRAND_FEATURE]
 const PROPOSALS = [proposalCard('m2-pipeline')]
 
+const DOCS: readonly FeatureDocumentRow[] = [
+  { featureId: 'fid-m2-pipeline', docKind: 'prd-spec', relPath: 'docs/features/m2-pipeline/prd/prd-spec.md', createdAt: CREATED, updatedAt: CREATED },
+  { featureId: 'fid-m2-pipeline', docKind: 'tech-design', relPath: 'docs/features/m2-pipeline/design/tech-design.md', createdAt: CREATED, updatedAt: CREATED },
+]
+
+const COUNTS: Record<FeatureStatus, number> = { 'in-progress': 2, prd: 0, design: 0, tasks: 0, completed: 0, archived: 0 }
+
 const base = {
   features: FEATURES,
+  counts: COUNTS,
+  activePhases: new Set<FeatureStatus>(),
+  onTogglePhase: () => {},
+  onClearPhases: () => {},
   proposals: PROPOSALS,
+  docs: DOCS,
+  openRows: new Set<string>(),
   onToggleRow: () => {},
   onOpenDoc: () => {},
   now: NOW,
 }
 
-describe('FeaturesTab 父行（AC4）', () => {
-  it('父行呈现 slug + 状态标签（状态 + 完成/总数）；默认折叠', () => {
-    const markup = renderToStaticMarkup(<FeaturesTab {...base} openRows={new Set()} />)
-    expect(markup).toContain('data-dswf-ov-features')
-    expect(markup).toContain('m2-pipeline')
+describe('FeaturesTab · 阶段 chips 插入点与父行行头（AC2/AC6）', () => {
+  it('阶段 chips 行在列表之上（DOM 序）+ 六态计数 + 0 计数 disabled', () => {
+    const markup = renderToStaticMarkup(<FeaturesTab {...base} />)
+    const chipsAt = markup.indexOf('data-dswf-ov-phchips=""')
+    const listAt = markup.indexOf('data-dswf-ov-features=""')
+    expect(chipsAt).toBeGreaterThan(-1)
+    expect(listAt).toBeGreaterThan(chipsAt)
+    expect(markup).toContain('data-dswf-ov-phchip="in-progress"')
+    const at = markup.indexOf('data-dswf-ov-phchip="completed"')
+    expect(markup.slice(markup.lastIndexOf('<button', at), markup.indexOf('</button>', at))).toContain('disabled')
+  })
+
+  it('父行行头：toggle 命中面 + 远征 mode chip 只读 + 阶段 tag（done/total）+ 打开新会话', () => {
+    const markup = renderToStaticMarkup(<FeaturesTab {...base} onStartSession={() => {}} />)
+    expect(markup).toContain('data-dswf-ov-parent-toggle="feat:m2-pipeline"')
+    expect(markup).toContain('data-dswf-mode-chip="expedition"') // 固定远征只读（无 onOpenChangeMode → disabled 只读呈现）
     expect(markup).toContain('进行中 3/5')
-    expect(markup).not.toContain('dswf-ov-meta')
-    expect(markup).toContain('▸')
+    expect(markup).toContain('data-dswf-ov-opensession="m2-pipeline"')
+    expect(markup).toContain('打开新会话')
   })
 
-  it('展开元数据：摘要/来源提案/任务七态/文档统计/创建更新（多开并存）', () => {
+  it('打开新会话入口缺席 = 按钮不呈现（SSR/非壳载体面）', () => {
+    const markup = renderToStaticMarkup(<FeaturesTab {...base} />)
+    expect(markup).not.toContain('data-dswf-ov-opensession')
+  })
+
+  it('展开 = MetaGrid（两列网格：标识|阶段 / 模式|谱系）+ DocGroupList（分组标题 + 真实路径行）', () => {
+    const markup = renderToStaticMarkup(<FeaturesTab {...base} openRows={new Set(['feat:m2-pipeline'])} />)
+    expect(markup).toContain('data-dswf-ov-fmeta="m2-pipeline"')
+    expect(markup).toContain('dswf-ov-fmeta-grid')
+    expect(markup).toContain('成链自 m2-pipeline（已接受）') // MetaGrid 谱系（4.3）
+    expect(markup).toContain('data-dswf-ov-dgroups="m2-pipeline"') // DocGroupList（4.3）
+    expect(markup).toContain('文档（2 篇）')
+    expect(markup).toContain('需求文档（1）')
+    expect(markup).toContain('📄 prd/prd-spec.md') // 真实路径（v17 ㉙）
+    expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/design/tech-design.md"')
+  })
+
+  it('阶段并集过滤：激活 in-progress → 该阶段行；零命中 = 空态', () => {
     const markup = renderToStaticMarkup(
-      <FeaturesTab {...base} openRows={new Set(['feat:m2-pipeline', 'feat:brand-refresh'])} />,
+      <FeaturesTab {...base} features={[feature('done-x', {}, 'completed')]} counts={{ ...COUNTS, 'in-progress': 0, completed: 1 }} activePhases={new Set<FeatureStatus>(['in-progress'])} />,
     )
-    expect(markup).toContain('data-dswf-ov-meta="feat:m2-pipeline"')
-    expect(markup).toContain('data-dswf-ov-meta="feat:brand-refresh"')
-    expect(markup).toContain('管线接管状态层') // 摘要
-    expect(markup).toContain('来源提案')
-    expect(markup).toContain('提案 m2-pipeline（已接受）')
-    expect(markup).toContain('3/5 完成 · 待处理 2 · 已完成 3') // 任务七态分布（中文标签）
-    expect(markup).toContain('4 篇') // 文档统计
-    expect(markup).toContain('创建/更新')
+    expect(markup).toContain('无匹配当前阶段过滤的 feature')
+    expect(markup).toContain('✕ 清过滤')
   })
 
-  it('空列表 = 空态；搜索态空标题注入', () => {
-    const empty = renderToStaticMarkup(<FeaturesTab {...base} features={[]} openRows={new Set()} />)
-    expect(empty).toContain('暂无 feature')
-    const noMatch = renderToStaticMarkup(
-      <FeaturesTab {...base} features={[]} openRows={new Set()} emptyTitle="无匹配「管线」的 feature" />,
+  it('零 feature = 一等空态', () => {
+    const markup = renderToStaticMarkup(
+      <FeaturesTab {...base} features={[]} counts={{ 'in-progress': 0, prd: 0, design: 0, tasks: 0, completed: 0, archived: 0 }} />,
     )
-    expect(noMatch).toContain('无匹配「管线」的 feature')
+    expect(markup).toContain('暂无 feature')
   })
 })
 
-describe('FeaturesTab 文档行（AC4——不含提案文档）', () => {
-  const PRD_DOC: FeatureDocumentRow = {
-    featureId: 'fid-m2-pipeline',
-    docKind: 'prd-spec',
-    relPath: 'docs/features/m2-pipeline/prd-spec.md',
-    summary: 'PRD',
-    createdAt: CREATED,
-    updatedAt: CREATED,
-  }
-  const DESIGN_DOC: FeatureDocumentRow = {
-    featureId: 'fid-m2-pipeline',
-    docKind: 'tech-design',
-    relPath: 'docs/features/m2-pipeline/tech-design.md',
-    createdAt: CREATED,
-    updatedAt: CREATED,
-  }
-  const DOCS: readonly FeatureDocumentRow[] = [PRD_DOC, DESIGN_DOC]
-
-  it('docs 注入 = 文档行呈现（名称 + docKind 标签紧贴 + › 行尾 + relPath 数据锚）', () => {
-    const markup = renderToStaticMarkup(<FeaturesTab {...base} docs={DOCS} openRows={new Set()} />)
-    expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/prd-spec.md"')
-    expect(markup).toContain('prd-spec.md')
-    expect(markup).toContain('tech-design')
-    expect(markup).toContain('›')
+describe('预填请求组装（AC2——固定远征 + 不自动发送）', () => {
+  it('mode 恒 expedition + formatPrefill（@path features/ → 名称 → 摘要 → 阶段 → 文档真实路径清单）', () => {
+    const request = featurePrefillRequest(M2_FEATURE, DOCS)
+    expect(request.mode).toBe('expedition')
+    expect(request.autosend).toBeUndefined()
+    expect(request.prefill).toContain('@docs/features/m2-pipeline/')
+    expect(request.prefill).toContain('名称：特性 m2-pipeline')
+    expect(request.prefill).toContain('摘要：管线接管状态层')
+    expect(request.prefill).toContain('阶段：进行中')
+    expect(request.prefill).toContain('· prd/prd-spec.md')
+    expect(request.prefill.endsWith('我的意图：')).toBe(true)
   })
 
-  it('docs 按 featureId 归属分组（他 feature 文档不串行）', () => {
-    const foreign: FeatureDocumentRow = {
-      featureId: 'fid-brand-refresh',
-      docKind: 'prd-spec',
-      relPath: 'docs/features/brand-refresh/prd-spec.md',
-      createdAt: CREATED,
-      updatedAt: CREATED,
-    }
-    const markup = renderToStaticMarkup(<FeaturesTab {...base} docs={[PRD_DOC, foreign]} openRows={new Set()} />)
-    const m2 = markup.slice(markup.indexOf('data-dswf-ov-parent="feat:m2-pipeline"'), markup.indexOf('data-dswf-ov-parent="feat:brand-refresh"'))
-    expect(m2).toContain('docs/features/m2-pipeline/prd-spec.md')
-    expect(m2).not.toContain('docs/features/brand-refresh/prd-spec.md')
-    const brand = markup.slice(markup.indexOf('data-dswf-ov-parent="feat:brand-refresh"'))
-    expect(brand).toContain('docs/features/brand-refresh/prd-spec.md')
-  })
-
-  it('feature 不含提案文档：docs 集内提案文档（proposals 表来源）天然缺席——文档行仅 feature_documents', () => {
-    // feature_documents 行集内不存在 docs/proposals/*（发现面建行归属互斥）——
-    // 断言注入面渲染的文档行全部为 feature 文档路径前缀
-    const markup = renderToStaticMarkup(<FeaturesTab {...base} docs={DOCS} openRows={new Set()} />)
-    expect(markup).not.toContain('data-dswf-ov-doc="docs/proposals/')
-  })
-
-  it('docs 缺席（装载失败降级/旧列缓存形态）= 零文档行，展开元数据呈现文档统计', () => {
-    const markup = renderToStaticMarkup(
-      <FeaturesTab {...base} openRows={new Set(['feat:m2-pipeline'])} />,
-    )
-    expect(markup).not.toContain('data-dswf-ov-doc=')
-    expect(markup).toContain('文档')
-    expect(markup).toContain('4 篇')
-  })
-
-  it('仓内只读脚注在场（docs/features/）', () => {
-    const markup = renderToStaticMarkup(<FeaturesTab {...base} openRows={new Set()} />)
-    expect(markup).toContain('docs/features/ · 仓内只读')
+  it('featurePrefillDocs：featureId 归属过滤 + 前缀裁剪', () => {
+    const other: FeatureDocumentRow = { featureId: 'fid-other', docKind: 'prd-spec', relPath: 'docs/features/other/prd/x.md', createdAt: CREATED, updatedAt: CREATED }
+    const docs = featurePrefillDocs(M2_FEATURE, [...DOCS, other])
+    expect(docs.map((doc) => doc.path)).toEqual(['prd/prd-spec.md', 'design/tech-design.md'])
   })
 })
 
-describe('元数据纯函数', () => {
-  it('featureTaskTotal：七态求和', () => {
+describe('featureTaskTotal（M2 沿袭）', () => {
+  it('七态求和', () => {
     expect(featureTaskTotal(M2_FEATURE.byStatus)).toBe(5)
-    expect(featureTaskTotal(BRAND_FEATURE.byStatus)).toBe(1)
-  })
-
-  it('featureStatusSpread：非零态「中文标签 N」连接；全零 = 暂无任务', () => {
-    expect(featureStatusSpread(M2_FEATURE)).toBe('待处理 2 · 已完成 3')
-    expect(featureStatusSpread(BRAND_FEATURE)).toBe('已阻塞 1')
-    expect(featureStatusSpread(feature('empty'))).toBe('暂无任务')
-  })
-
-  it('featureSourceProposal：proposalSlug 反查（title + 状态）；无来源 = —', () => {
-    expect(featureSourceProposal(M2_FEATURE, PROPOSALS)).toBe('提案 m2-pipeline（已接受）')
-    expect(featureSourceProposal({ ...feature('orphan'), proposalSlug: undefined }, PROPOSALS)).toBe('—')
-    expect(featureSourceProposal({ ...feature('ghost'), proposalSlug: 'ghost' }, PROPOSALS)).toBe('ghost')
   })
 })

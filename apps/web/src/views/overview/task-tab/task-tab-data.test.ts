@@ -1,5 +1,5 @@
 // 任务子 tab 数据装载单测 —— AC4/AC5 查询参面（Hard Rule「搜索过滤服务端承载」：
-// listTasks search/statusFilter/sort 透传）+ AC5「taskGraph 按 featureSlug 拉取」（DAG
+// listTasks search/statusFilter/sort 透传）+ AC5「taskGraph 按 source 容器拉取」（DAG
 // 视图增拉 graph，边集源）+ channels 录制断言（fetch 纯异步面；hook effect 编排归 4.1
 // 装配 + 5.2 e2e——renderToStaticMarkup 不跑 effect，同 overview-data 口径）。
 import { describe, expect, it } from 'vitest'
@@ -68,7 +68,7 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     const { client, calls } = recordingClient({})
     const out = await fetchTasksTabData(client, {
       projectId: 'p-1',
-      featureSlug: 'm2-pipeline',
+      source: { kind: 'feature', slug: 'm2-pipeline' },
       statusFilter: ['completed', 'blocked'],
       search: '评估',
       sort: 'created',
@@ -98,7 +98,7 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     const { client, calls } = recordingClient({})
     await fetchTasksTabData(client, {
       projectId: 'p-1',
-      featureSlug: 'f',
+      source: { kind: 'feature', slug: 'f' },
       statusFilter: [],
       search: '',
       sort: 'active',
@@ -115,7 +115,7 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     const { client, calls } = recordingClient({})
     const out = await fetchTasksTabData(client, {
       projectId: 'p-1',
-      featureSlug: 'm2-pipeline',
+      source: { kind: 'feature', slug: 'm2-pipeline' },
       statusFilter: [],
       search: '',
       sort: 'active',
@@ -130,13 +130,34 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     })
   })
 
+  it('突击提案容器（AC5 双轨）：source = {kind:proposal, slug} 入三通道查询参', async () => {
+    const { client, calls } = recordingClient({})
+    await fetchTasksTabData(client, {
+      projectId: 'p-1',
+      source: { kind: 'proposal', slug: 'legacy-eval-retire' },
+      statusFilter: [],
+      search: '',
+      sort: 'active',
+      view: 'list',
+    })
+    expect(calls.find((c) => c.channel === 'tasks.list')?.payload).toEqual({
+      projectId: 'p-1',
+      source: { kind: 'proposal', slug: 'legacy-eval-retire' },
+      sort: 'active',
+    })
+    expect(calls.find((c) => c.channel === 'tasks.stats')?.payload).toEqual({
+      projectId: 'p-1',
+      source: { kind: 'proposal', slug: 'legacy-eval-retire' },
+    })
+  })
+
   it('任一通道 typed error → 归一错误（RpcClientError → rpcUiState 映射）', async () => {
     const { client } = recordingClient({
       list: () => Promise.reject(new RpcClientError({ code: 'ERR_WORKSPACE_DB_UNAVAILABLE', message: '库不可用' })),
     })
     const out = await fetchTasksTabData(client, {
       projectId: 'p-1',
-      featureSlug: 'f',
+      source: { kind: 'feature', slug: 'f' },
       statusFilter: [],
       search: '',
       sort: 'active',
@@ -153,7 +174,7 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     const { client } = recordingClient({ stats: () => Promise.reject(new Error('传输断开')) })
     const out = await fetchTasksTabData(client, {
       projectId: 'p-1',
-      featureSlug: 'f',
+      source: { kind: 'feature', slug: 'f' },
       statusFilter: [],
       search: '',
       sort: 'active',
@@ -176,16 +197,18 @@ describe('装载态落点（纯函数——hook 消费形）', () => {
     })
   })
 
-  it('tasksTabLoadKey：feature/视图/过滤/搜索/排序/nonce 全入键', () => {
-    const base = { projectId: 'p-1', featureSlug: 'f', view: 'list' as const, statusFilter: [], search: '', sort: 'active' as const, nonce: 0 }
-    expect(tasksTabLoadKey(base)).toBe('p-1#f#list#||active#0')
-    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#f#list#completed,blocked||active#0')
+  it('tasksTabLoadKey：容器/视图/过滤/搜索/排序/nonce 全入键（双轨 kind 可辨）', () => {
+    const base = { projectId: 'p-1', source: { kind: 'feature' as const, slug: 'f' }, view: 'list' as const, statusFilter: [], search: '', sort: 'active' as const, nonce: 0 }
+    expect(tasksTabLoadKey(base)).toBe('p-1#feature:f#list#||active#0')
+    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#feature:f#list#completed,blocked||active#0')
     expect(tasksTabLoadKey({ ...base, view: 'dag' })).not.toBe(tasksTabLoadKey(base))
     expect(tasksTabLoadKey({ ...base, search: 'fix' })).not.toBe(tasksTabLoadKey(base))
     expect(tasksTabLoadKey({ ...base, nonce: 1 })).not.toBe(tasksTabLoadKey(base))
+    // 同 slug 双轨（成链降级）键可辨——AC5 容器参数路由
+    expect(tasksTabLoadKey({ ...base, source: { kind: 'proposal', slug: 'f' } })).toBe('p-1#proposal:f#list#||active#0')
   })
 
-  it('pendingTasksTab：清场（feature 切换）= 归零骨架；否则旧内容 + busy', () => {
+  it('pendingTasksTab：清场（容器切换）= 归零骨架；否则旧内容 + busy', () => {
     const ready = applyTasksTabFetch(initialTasksTabLoadState(), {
       ok: true,
       cards: CARDS,

@@ -6,7 +6,7 @@
 // 序号守卫 + 缓存先行（搜索键入不清场——IME 安全配套）；feature/项目切换 = 清场骨架。
 // 事件刷新 = subscribeTasksChanged（drawer 同口径——projectId 匹配才重取）。
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { ContainerRef, TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import {
   preloadRpcClientFactory,
   subscribeTasksChanged,
@@ -16,7 +16,7 @@ import {
 import { RpcClientError } from '../../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { searchQueryOf, type OverviewSort } from '../overview-model.js'
-import type { TaskViewMode } from './task-tab-model.js'
+import { containerKeyOf, type TaskViewMode } from './task-tab-model.js'
 
 /** 错误附载（message 原样 + rpcUiState 三态——概览域同口径） */
 export interface TasksTabError {
@@ -32,7 +32,8 @@ export type TasksTabFetch =
 /** 装载查询输入（view 决定是否增拉 graph——DAG 视图专属） */
 export interface TasksTabFetchInput {
   readonly projectId: string
-  readonly featureSlug: string
+  /** 任务容器（4.6 双轨：feature 远征轨 / proposal 突击轨——AC5 rpc 容器参数路由） */
+  readonly source: ContainerRef
   readonly statusFilter: readonly TaskStatus[]
   readonly search: string
   readonly sort: OverviewSort
@@ -47,13 +48,13 @@ function mapTasksTabError(error: unknown): TasksTabError {
 }
 
 /**
- * 装载面（纯异步）：tasks.list（服务端过滤/排序）∥ tasks.stats（feature 域七态计数——
- * chips 计数单源）∥（DAG 视图）tasks.graph（featureSlug 全子图拓扑）。
+ * 装载面（纯异步）：tasks.list（服务端过滤/排序）∥ tasks.stats（容器域七态计数——
+ * chips 计数单源）∥（DAG 视图）tasks.graph（容器全子图拓扑）。source 容器参数路由
+ * （AC5）——feature/proposal 双轨同参（Interface 1 容器化改写）。
  */
 export async function fetchTasksTabData(client: ForgeRpcClient, input: TasksTabFetchInput): Promise<TasksTabFetch> {
   const search = searchQueryOf(input.search)
-  // M3 容器化（4.x UF-3 前垫片）：feature 选中值 → feature 容器引用（M2 语义等价）
-  const source = { kind: 'feature' as const, slug: input.featureSlug }
+  const source: ContainerRef = { kind: input.source.kind, slug: input.source.slug }
   const listQuery = {
     projectId: input.projectId,
     source,
@@ -96,17 +97,17 @@ export function initialTasksTabLoadState(): TasksTabLoadState {
   return { phase: 'loading', cards: undefined, graph: undefined, stats: undefined, busy: true, error: undefined }
 }
 
-/** 装载键（feature/视图/过滤/搜索/排序/nonce 全入键——statusFilter 序列化稳化数组恒等） */
+/** 装载键（容器/视图/过滤/搜索/排序/nonce 全入键——statusFilter 序列化稳化数组恒等） */
 export function tasksTabLoadKey(input: {
   readonly projectId: string
-  readonly featureSlug: string | undefined
+  readonly source: ContainerRef | undefined
   readonly view: TaskViewMode
   readonly statusFilter: readonly TaskStatus[]
   readonly search: string
   readonly sort: OverviewSort
   readonly nonce: number
 }): string {
-  return `${input.projectId}#${input.featureSlug ?? ''}#${input.view}#${[...input.statusFilter].join(',')}|${input.search}|${input.sort}#${input.nonce}`
+  return `${input.projectId}#${input.source === undefined ? '' : containerKeyOf(input.source)}#${input.view}#${[...input.statusFilter].join(',')}|${input.search}|${input.sort}#${input.nonce}`
 }
 
 /** 在途态（纯函数）：清场（feature/项目切换）= 归零骨架；否则旧内容 + busy */
@@ -126,10 +127,10 @@ export function applyTasksTabFetch(prev: TasksTabLoadState, out: TasksTabFetch):
 }
 
 /**
- * 任务子 tab 装载 hook：键变重拉（feature/视图/过滤/搜索/排序/重试/事件刷新）+
+ * 任务子 tab 装载 hook：键变重拉（容器/视图/过滤/搜索/排序/重试/事件刷新）+
  * 序号守卫 + 缓存先行；subscribeTasksChanged 同项目事件 → 静默重取（写后单次重取即见）。
  * @param projectId - 当前项目
- * @param featureSlug - 选中 feature（undefined = 无 feature 不装载）
+ * @param source - 选中容器（undefined = 无容器不装载）
  * @param view - 三视图模式（dag 增拉 graph）
  * @param statusFilter - chips 激活集白名单参（空 = 全部）
  * @param search - 搜索关键词原文（归一归 fetch 面）
@@ -139,7 +140,7 @@ export function applyTasksTabFetch(prev: TasksTabLoadState, out: TasksTabFetch):
  */
 export function useTasksTabLoad(
   projectId: string,
-  featureSlug: string | undefined,
+  source: ContainerRef | undefined,
   view: TaskViewMode,
   statusFilter: readonly TaskStatus[],
   search: string,
@@ -150,12 +151,12 @@ export function useTasksTabLoad(
   const [nonce, setNonce] = useState(0)
   const seqRef = useRef(0)
   const lastKeyRef = useRef('')
-  const lastScopeRef = useRef(`${projectId}#${featureSlug ?? ''}`)
+  const lastScopeRef = useRef(`${projectId}#${source === undefined ? '' : containerKeyOf(source)}`)
 
   useEffect(() => {
-    if (featureSlug === undefined) return
-    const key = tasksTabLoadKey({ projectId, featureSlug, view, statusFilter, search, sort, nonce })
-    const scope = `${projectId}#${featureSlug}`
+    if (source === undefined) return
+    const key = tasksTabLoadKey({ projectId, source, view, statusFilter, search, sort, nonce })
+    const scope = `${projectId}#${containerKeyOf(source)}`
     const mustClear = lastScopeRef.current !== scope
     const isFetch = lastKeyRef.current !== key
     lastKeyRef.current = key
@@ -163,19 +164,19 @@ export function useTasksTabLoad(
     if (!isFetch) return
     const seq = ++seqRef.current
     setState((prev) => pendingTasksTab(prev, mustClear))
-    void fetchTasksTabData(makeClient(), { projectId, featureSlug, statusFilter, search, sort, view }).then((out) => {
+    void fetchTasksTabData(makeClient(), { projectId, source, statusFilter, search, sort, view }).then((out) => {
       if (seq !== seqRef.current) return
       setState((prev) => applyTasksTabFetch(prev, out))
     })
-  }, [projectId, featureSlug, view, statusFilter, search, sort, nonce, makeClient])
+  }, [projectId, source, view, statusFilter, search, sort, nonce, makeClient])
 
   // 写推送事件（forge:events/tasks-changed）→ 同项目静默重取（50ms 合并归订阅层）
   useEffect(() => {
-    if (featureSlug === undefined) return () => {}
+    if (source === undefined) return () => {}
     return subscribeTasksChanged((payload) => {
       if (payload.projectId === projectId) setNonce((n) => n + 1)
     })
-  }, [projectId, featureSlug])
+  }, [projectId, source])
 
   const retry = useCallback(() => {
     setNonce((n) => n + 1)

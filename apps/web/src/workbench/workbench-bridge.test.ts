@@ -70,18 +70,18 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
   it('setOverviewContext（4.1 概览上下文缝）：写回（等值 no-op 不通知；变更通知 + 抽屉面保持）', () => {
     const nav = navSpy()
     const bridge = createWorkbenchBridge(nav)
-    expect(bridge.getSnapshot().overview).toEqual({ projectId: null }) // 缺省无锚
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: null, workspaceId: null }) // 缺省无锚
     let notified = 0
     const dispose = bridge.subscribe(() => {
       notified += 1
     })
-    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 3 })
-    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p1', sessionCount: 3 })
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1', sessionCount: 3 })
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p1', workspaceId: 'w-1', sessionCount: 3 })
     expect(bridge.getSnapshot().drawerEntryId).toBeNull() // 双缝独立——抽屉面不被概览写回扰动
     expect(notified).toBe(1)
-    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 3 })
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1', sessionCount: 3 })
     expect(notified).toBe(1) // 等值幂等不通知（ShellHost 每渲染效应写回不刷屏）
-    bridge.setOverviewContext({ projectId: 'p1', sessionCount: 4 })
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1', sessionCount: 4 })
     expect(notified).toBe(2)
     dispose()
     publishWorkbenchBridge(undefined)

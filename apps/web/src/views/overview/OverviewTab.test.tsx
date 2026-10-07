@@ -31,6 +31,18 @@ const HEAD: OverviewHeadBundle = {
       docCount: 4,
     },
   ],
+  proposals: [
+    {
+      proposalId: 'pr-1',
+      slug: 'm2-pipeline',
+      title: '提案 m2-pipeline',
+      proposalStatus: 'under-review',
+      relPath: 'docs/proposals/m2-pipeline/proposal.md',
+      taskCount: 0,
+      createdAt: CREATED,
+      updatedAt: CREATED,
+    },
+  ],
   stats: {
     total: 5,
     byStatus: { pending: 2, in_progress: 0, completed: 3, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
@@ -73,9 +85,15 @@ const handlers = {
   onSortToggle: () => {},
   onToggleStatus: () => {},
   onClearStatuses: () => {},
+  onToggleProposalStatus: () => {},
+  onClearProposalStatuses: () => {},
+  onTogglePhase: () => {},
+  onClearPhases: () => {},
   onToggleRow: () => {},
   onToggleHead: () => {},
   onRetry: () => {},
+  onDragWidth: () => {},
+  onResetWidth: () => {},
 }
 
 const frame = (over: {
@@ -85,6 +103,7 @@ const frame = (over: {
   phase?: 'loading' | 'ready' | 'error'
   error?: { message: string; uiState: 'error-bar' | 'banner' | 'empty-state' }
   sessionCount?: number
+  width?: number
   renderTasksTab?: (ctx: unknown) => ReactNode
 }) =>
   renderToStaticMarkup(
@@ -96,6 +115,7 @@ const frame = (over: {
       busy={false}
       error={over.error}
       filter={over.filter ?? initialOverviewFilter()}
+      width={over.width ?? 560}
       onOpenDoc={() => {}}
       now={NOW}
       {...handlers}
@@ -128,19 +148,28 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
   })
 })
 
-describe('OverviewFrame 子 tab 内容分派（AC4）', () => {
-  it('proposals 子 tab（默认）：提案父行 + 文档行 + 谱系源（head.features）接线', () => {
-    const markup = frame({ list: PROPOSALS_LIST })
+describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', () => {
+  it('proposals 子 tab（默认）：五态 chips（列表之上）+ 提案父行 + 展开元数据/文档区（useProposalDocs 按需装载位）', () => {
+    const filter = { ...initialOverviewFilter(), openRows: new Set(['prop:pr-1']) }
+    const markup = frame({ list: PROPOSALS_LIST, filter })
     expect(markup).toContain('data-dswf-ov-proposals')
-    expect(markup).toContain('data-dswf-ov-doc="docs/proposals/m2-pipeline/proposal.md"')
+    // 五态 chips 插入点（AC6）：ov-sticky 之下、列表之上
+    const stickyAt = markup.indexOf('data-dswf-ov-sticky=""')
+    const chipsAt = markup.indexOf('data-dswf-ov-pschips=""')
+    const listAt = markup.indexOf('data-dswf-ov-proposals=""')
+    expect(chipsAt).toBeGreaterThan(stickyAt)
+    expect(listAt).toBeGreaterThan(chipsAt)
+    expect(markup).toContain('data-dswf-ov-meta="prop:pr-1"') // 展开元数据（两列网格）
+    expect(markup).toContain('文档（0 篇）') // 文档区标题在场（docsMap 按需装载——effect 归 e2e）
   })
 
-  it('features 子 tab：feature 父行 + 来源提案（list.proposals）+ 文档行（list.docs——fix-2 接线）', () => {
-    const filter = { ...initialOverviewFilter(), subtab: 'features' as const }
+  it('features 子 tab：阶段 chips（列表之上）+ feature 父行 + 展开分层文档（list.docs 接线）', () => {
+    const filter = { ...initialOverviewFilter(), subtab: 'features' as const, openRows: new Set(['feat:m2-pipeline']) }
     const markup = frame({ filter, list: FEATURES_LIST })
     expect(markup).toContain('data-dswf-ov-features')
     expect(markup).toContain('m2-pipeline')
-    // fix-2 装配注入：帧透传 list.docs → FeaturesTab 文档行（data-dswf-ov-doc = relPath 锚）
+    expect(markup).toContain('data-dswf-ov-phchips=""') // 阶段 chips 行
+    // fix-2 装配注入：帧透传 list.docs → DocGroupList 文档行（data-dswf-ov-doc = relPath 锚）
     expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/design/tech-design.md"')
   })
 
@@ -161,6 +190,7 @@ describe('OverviewFrame 子 tab 内容分派（AC4）', () => {
         busy={true}
         error={undefined}
         filter={initialOverviewFilter()}
+        width={560}
         onOpenDoc={() => {}}
         now={NOW}
         {...handlers}
@@ -184,7 +214,7 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
     expect(suspendedChip).toContain('disabled')
   })
 
-  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features', () => {
+  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features/proposals（4.6 容器双轨源）', () => {
     const filter: OverviewFilterState = {
       ...initialOverviewFilter(),
       subtab: 'tasks',
@@ -201,18 +231,38 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
           statusFilter: readonly TaskStatus[]
           stats: { byStatus: Record<string, number> }
           features: readonly FeatureCard[]
+          proposals: readonly { slug: string }[]
           projectId: string
         }
         return (
           <div data-dswf-test-slot="">
-            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}`}
+            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}|${c.proposals[0]?.slug ?? ''}`}
           </div>
         )
       },
     })
     expect(markup).toContain('data-dswf-test-slot')
-    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline')
+    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline|m2-pipeline')
     expect(markup).not.toContain('data-dswf-ov-stchips') // 槽在场 = chips 由 3.6 组合（接口同源）
+  })
+})
+
+describe('OverviewFrame 宽度容器（4.6 UF-3 · Integration #6——AC4）', () => {
+  it('面板 = 左缘拖拽手柄（separator + 双击复位锚）+ 定宽面板（默认 560px）', () => {
+    const markup = frame({})
+    expect(markup).toContain('data-dswf-ov-wrap=""')
+    const resizeAt = markup.indexOf('data-dswf-ov-resize=""')
+    const panelAt = markup.indexOf('data-dswf-ov-panel=""')
+    expect(resizeAt).toBeGreaterThan(-1)
+    expect(panelAt).toBeGreaterThan(resizeAt) // 手柄在左缘（DOM 序先于面板）
+    expect(markup).toContain('width:560px')
+    expect(markup).toContain('role="separator"')
+    expect(markup).toContain('拖动调整概览宽度')
+  })
+
+  it('宽度注入经钳制（clampOverviewWidth——越界值收敛）', () => {
+    expect(frame({ width: 1200 })).toContain('width:920px')
+    expect(frame({ width: 100 })).toContain('width:400px')
   })
 })
 

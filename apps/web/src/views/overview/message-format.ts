@@ -58,6 +58,18 @@ export const FAILURE_STATUS_PHRASES: Readonly<Partial<Record<TaskStatus, string>
 /** 派发指令前缀（v23 最小消息 = 前缀 + 容器标识单行串接——4.4 派发按钮消费） */
 export const DISPATCH_COMMAND_PREFIX = '/run-tasks '
 
+/**
+ * 打开新会话请求（4.6 视图层中立形状——装配侧映射 openSessionWithPreset 输入）。
+ * mode 在场 = agentPreset.select 切换（提案渠道 = 提案 mode·无溯源不切换；feature 渠道 =
+ * 固定远征；诊断/派发 = 容器对应模式）；autosend = 例外成员（诊断两路 + 派发指令——
+ * 预填渠道恒缺省不发送）。模式双值与 open-session OpenSessionMode 同词汇。
+ */
+export interface SessionOpenRequest {
+  readonly mode?: 'expedition' | 'blitz'
+  readonly prefill: string
+  readonly autosend?: boolean
+}
+
 /** @path 第一行（容器目录锚——`@docs/features|proposals/<标识>/`） */
 function pathLine(container: MessageContainer): string {
   return `@docs/${container.kind === 'feature' ? 'features' : 'proposals'}/${container.slug}/`

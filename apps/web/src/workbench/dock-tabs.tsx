@@ -20,6 +20,8 @@ import type { TaskStatus } from '@dsh-forge/contracts'
 import { EmptyState } from '../components/index.js'
 import type { RpcClientFactory } from '../rpc/index.js'
 import { OverviewTab, type OverviewTasksContext } from '../views/overview/OverviewTab.js'
+import type { SessionOpenRequest } from '../views/overview/message-format.js'
+import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
 import { TasksTab } from '../views/overview/task-tab/task-tab.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog, type TransitionTaskView } from '../views/overview/drawer/transition-dialog.js'
@@ -132,6 +134,8 @@ export interface OverviewDockAssemblyProps {
   readonly onOpenDoc?: (docRel: string) => void
   /** 挂接会话 pill 跳会话（缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** 打开新会话通道（4.6：行头预填/诊断发送/派发指令——openSessionWithPreset 组合子闭包；缺席 = 入口不呈现） */
+  readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 抽屉开着的任务（null = 关） */
   readonly drawerTaskId: string | null
   readonly onOpenTask: (taskId: string) => void
@@ -150,8 +154,9 @@ export interface OverviewDockAssemblyProps {
 
 /**
  * 概览 dock 装配体（纯渲染）：无锚空态 | OverviewTab（renderTasksTab 槽 = TasksTab 全
- * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦]）+ TaskDrawer（onOpenDoc/
- * onOpenSession/onTransition）+ TransitionDialog（allowedTransitions 唯一源直喂）。
+ * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/proposals 双轨/会话通道]）+
+ * TaskDrawer（onOpenDoc/onOpenSession/onTransition/onStartSession 诊断发送）+
+ * TransitionDialog（allowedTransitions 唯一源直喂）。
  * 任务行/DAG 节点/泳道卡片/⋯ 菜单四途径经 TasksTab onOpenTask/onTransition 汇于本装配体；
  * 会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换 nonce + 抽屉）。
  */
@@ -160,6 +165,7 @@ export function OverviewDockAssembly({
   sessionCount,
   onOpenDoc,
   onOpenSession,
+  onStartSession,
   drawerTaskId,
   onOpenTask,
   onCloseDrawer,
@@ -189,6 +195,7 @@ export function OverviewDockAssembly({
       activeStatuses={ctx.activeStatuses}
       statusFilter={ctx.statusFilter}
       features={ctx.features}
+      proposals={ctx.proposals}
       onToggleStatus={ctx.onToggleStatus}
       onClearStatuses={ctx.onClearStatuses}
       onOpenTask={onOpenTask}
@@ -196,6 +203,8 @@ export function OverviewDockAssembly({
       activeTaskId={drawerTaskId ?? undefined}
       {...(taskFocus !== null && taskFocus !== undefined ? { featureSlug: taskFocus.featureSlug } : {})}
       {...(onFeatureUserSwitch !== undefined ? { onFeatureUserSwitch } : {})}
+      {...(onStartSession !== undefined ? { onStartSession } : {})}
+      {...(onOpenSession !== undefined ? { onOpenSession } : {})}
       makeClient={makeClient}
     />
   )
@@ -207,6 +216,7 @@ export function OverviewDockAssembly({
         onOpenDoc={onOpenDoc}
         renderTasksTab={renderTasksTab}
         focusTasksNonce={taskFocus?.nonce}
+        {...(onStartSession !== undefined ? { onStartSession } : {})}
         makeClient={makeClient}
       />
       <TaskDrawer
@@ -216,6 +226,7 @@ export function OverviewDockAssembly({
         onOpenDoc={onOpenDoc}
         onOpenSession={onOpenSession}
         onTransition={onOpenTransition}
+        {...(onStartSession !== undefined ? { onStartSession } : {})}
         makeClient={makeClient}
       />
       {transitionTarget !== null ? (
@@ -244,6 +255,8 @@ export interface OverviewDockBodyProps {
   readonly tabActions?: DockTabActionsMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** 打开新会话编排器（4.6 插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
+  readonly openSession?: OpenSessionOrchestrator
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -253,6 +266,7 @@ export function OverviewDockBody({
   taskFocus,
   tabActions,
   onOpenSession,
+  openSession,
   makeClient,
 }: OverviewDockBodyProps): ReactNode {
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
@@ -280,6 +294,21 @@ export function OverviewDockBody({
       ? { task: dialogLoad.detail, allowedTransitions: dialogLoad.detail.allowedTransitions }
       : null
 
+  // 打开新会话通道（4.6）：锚定 workspaceId + openSessionWithPreset 组合子（失败留场归
+  // 阶段化错误——编排器各阶段 fail-soft 不炸壳；预填不发送/诊断与派发 autosend 语义归请求）
+  const handleStartSession = useCallback(
+    (request: SessionOpenRequest): void => {
+      if (overview.workspaceId === null || openSession === undefined) return
+      void openSession.openSessionWithPreset({
+        workspaceId: overview.workspaceId,
+        ...(request.mode !== undefined ? { mode: request.mode } : {}),
+        prefill: request.prefill,
+        ...(request.autosend === true ? { autosend: true } : {}),
+      })
+    },
+    [overview.workspaceId, openSession],
+  )
+
   const handleOpenTask = useCallback((taskId: string): void => {
     setDrawerTaskId(taskId)
   }, [])
@@ -300,6 +329,7 @@ export function OverviewDockBody({
       sessionCount={overview.sessionCount}
       onOpenDoc={onOpenDoc}
       onOpenSession={onOpenSession}
+      {...(openSession !== undefined ? { onStartSession: handleStartSession } : {})}
       drawerTaskId={drawerTaskId}
       onOpenTask={handleOpenTask}
       onCloseDrawer={handleCloseDrawer}
@@ -326,6 +356,8 @@ export interface ForgeOverviewTabProps {
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot'>
   /** 挂接会话 pill 跳会话（插件 inject face；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** 打开新会话编排器（4.6 插件 inject face；缺席 = 行头/诊断/派发入口不呈现） */
+  readonly openSession?: OpenSessionOrchestrator
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -361,6 +393,7 @@ function OverviewTabWithBridge(
       taskFocus={snapshot?.taskFocus ?? null}
       tabActions={props.tabActions}
       onOpenSession={props.onOpenSession}
+      openSession={props.openSession}
       makeClient={props.makeClient}
     />
   )
