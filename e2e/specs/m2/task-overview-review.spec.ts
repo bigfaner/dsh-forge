@@ -42,6 +42,10 @@
 //   Step6 eval-type-conditional-section-empty-note …………………………「Step6 eval 族条件区空态注记（不伪造评估数据）」
 //
 // Assertion depth: 68/72 behavioral (94%)，其中 deep 26/68 (38%)——两阈均过。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,11 +54,12 @@ import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../.
 import type { TaskStatus } from '../../../packages/contracts/src/labels.js'
 import type { TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttColOf, ttItemOf, ttViewOf, ttFeatpillOf } from '../../support/anchors.js'
+import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
 /** UI 首屏预算（Step1 stress Outcome 机械判据——毫秒） */
@@ -87,8 +92,8 @@ function seedTasks(
         const id = `t-${feature}-${r.localId}`
         ids.push(id)
         db.prepare(
-          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'feature', ?, ?, ?)`,
         ).run(id, feature, r.localId, r.title, r.type ?? 'doc', r.status, fid, r.createdAt ?? '2026-10-06T00:00:00.000Z', r.createdAt ?? '2026-10-06T00:00:00.000Z')
         for (const verb of r.records ?? []) {
           if (verb === 'claim') {
@@ -169,11 +174,11 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     // ── Step 2：feature 绑定（单 feature 自动绑定——pill 在场）+ 数据直读 ──
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    await expect(page.locator(ttFeatpillOf(FEATURE)).first(), 'feature 绑定 pill 在场（自动绑定单 feature）').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), 'feature 绑定 pill 在场（自动绑定单 feature）').toBeVisible({ timeout: 30_000 })
     for (const id of ids) {
       await expect(page.locator(ttItemOf(id)).first(), `任务行在场（${id}）`).toBeVisible({ timeout: 30_000 })
     }
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards, '列表 = 该 feature 任务集（三行）').toHaveLength(3)
 
     // ── Step 3：七态 chips 过滤（in_progress 单选）——三视图统一 ──
@@ -184,7 +189,7 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await expect(page.locator(ttItemOf(idOf(ids, 0))).first(), 'pending 行被过滤').toHaveCount(0)
     await expect(page.locator(ttItemOf(idOf(ids, 2))).first(), 'completed 行被过滤').toHaveCount(0)
     // 过滤对 DAG/泳道统一生效
-    await page.locator(ttViewOf('swim')).click()
+    await switchTaskView(page, 'swim')
     await expect(page.locator(ttColOf('pending')).locator('[data-dswf-tt-card]'), '泳道 pending 列零卡（过滤统一）').toHaveCount(0)
     await expect(page.locator(ttColOf('in_progress')).locator('[data-dswf-tt-card]').first(), '泳道 in_progress 列保留卡').toBeVisible({ timeout: 15_000 })
     await page.locator('[data-dswf-ov-stchip-clear]').click()
@@ -192,11 +197,11 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await expect(page.locator(ttColOf('pending')).locator('[data-dswf-tt-card]').first(), '清除过滤后全量恢复（泳道 pending 列回卡）').toBeVisible({ timeout: 15_000 })
 
     // ── Step 4：三视图切换（列表 → DAG → 泳道 → 列表）──
-    await page.locator(ttViewOf('dag')).click()
+    await switchTaskView(page, 'dag')
     await expect(page.locator('[data-dswf-tt-dagsvg]').first(), 'DAG SVG 贝塞尔连线在场（完成边绿）').toBeVisible({ timeout: 30_000 })
-    await page.locator(ttViewOf('swim')).click()
+    await switchTaskView(page, 'swim')
     await expect(page.locator(ttColOf('completed')).first(), '泳道七态横向列在场').toBeVisible({ timeout: 15_000 })
-    await page.locator(ttViewOf('list')).click()
+    await switchTaskView(page, 'list')
     await expect(page.locator(ttItemOf(idOf(ids, 0))).first(), '切回列表视图').toBeVisible({ timeout: 15_000 })
     // 副行承重（前置计数形 ←N 前置——键+当前状态形归抽屉现状条，ui-design 分工）
     await expect(page.locator(`[data-dswf-tt-sub="${idOf(ids, 1)}"]`).first(), '副行呈现前置计数（依赖边 → ←1 前置）').toContainText('←1 前置')
@@ -246,7 +251,7 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
     const elapsed = Date.now() - t0
     expect(elapsed, `首屏呈现 ≤2s（实测 ${elapsed}ms @500 任务）`).toBeLessThanOrEqual(FIRST_SCREEN_BUDGET_MS)
     // 读面全量直读（EQP 索引面 = sc2-perf 已钉；此处补数据量行为断言）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards, '全量 500 行直读（无截断）').toHaveLength(500)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -278,17 +283,17 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
     await openTasksTab(page)
     await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '初始绑定甲（最新活跃 feature 缺省绑定）').toBeVisible({ timeout: 30_000 })
 
-    // 点开绑定 pill → Menu → 选乙（菜单行 = slug + 完成比锚 [data-dswf-tt-mfeat]——标题不入菜单行）
-    await page.locator(ttFeatpillOf('fa')).first().click()
+    // 点开绑定 pill → Menu → 选乙（菜单行 = 容器复合键锚 [data-dswf-tt-mcont]——4.6 v22 双轨）
+    await page.locator(ttContpillOf('feature', 'fa')).first().click()
     const menu = page.locator('[role="menu"]').first()
     await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator('[data-dswf-tt-mfeat="fb"]').first().click()
-    await expect(page.locator(ttFeatpillOf('fb')).first(), '绑定切换为乙（activeFeatureSlug）').toBeVisible({ timeout: 15_000 })
+    await menu.locator('[data-dswf-tt-mcont="feature:fb"]').first().click()
+    await expect(page.locator(ttContpillOf('feature', 'fb')).first(), '绑定切换为乙（activeFeatureSlug）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ttItemOf(idOf(bIds, 0))).first(), '列表切换为乙的任务集').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '甲任务行退场（绑定过滤）').toHaveCount(0)
 
     // 数据来源断言：读面单发 = 该 feature 任务集（服务端 core 过滤）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'fb' })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'fb' } })
     expect(cards.map((c) => c.taskId), '直读每工作区库（无第二来源）').toEqual(bIds)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -341,7 +346,7 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
     }
 
     // 服务端过滤断言（search 参数经 core——renderer 不自滤）
-    const filtered = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE, search: 'fix' })
+    const filtered = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, search: 'fix' })
     expect(filtered.map((c) => c.taskId).sort(), '服务端过滤 = fix 系两行').toEqual([idOf(ids, 0), idOf(ids, 2)].sort())
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -369,7 +374,7 @@ test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过�
     ])
 
     // 计数单源：taskStats（七态 chips 计数同源）
-    const stats = await refetchOnce<{ total: number; byStatus: Record<string, number> }>(page, TASKS_CHANNELS.stats, { projectId, featureSlug: FEATURE })
+    const stats = await refetchOnce<{ total: number; byStatus: Record<string, number> }>(page, TASKS_CHANNELS.stats, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(stats.total, 'stats 总数 = 2').toBe(2)
     expect(stats.byStatus.in_progress, 'in_progress 计数 0（禁用基准）').toBe(0)
 
@@ -429,9 +434,9 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
     expect(activeOrder, '活跃优先序（blocked > pending > completed）').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
     // 服务端排序断言（sort 参数——三子 tab 共用同源）
-    const byCreated = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE, sort: 'created' })
+    const byCreated = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, sort: 'created' })
     expect(byCreated.map((c) => c.taskId), '读面 created 降序').toEqual([idOf(ids, 2), idOf(ids, 1), idOf(ids, 0)])
-    const byActive = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE, sort: 'active' })
+    const byActive = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, sort: 'active' })
     expect(byActive.map((c) => c.taskId), '读面活跃优先').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])

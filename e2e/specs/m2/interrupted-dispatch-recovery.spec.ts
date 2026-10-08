@@ -26,6 +26,10 @@
 //   Step3 manual-disposal-claim-rejected ……………………………………「人工处置态：重入领取被矩阵拒绝（处置不被覆盖）」
 //
 // Assertion depth: 42/45 behavioral (93%)，其中 deep 19/42 (45%)——两阈均过。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -73,8 +77,8 @@ function seedInterruptedWorld(
     db.transaction(() => {
       const fid = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(feature)?.id ?? ''
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'doc', ?, ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'doc', ?, 'feature', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
       ).run(taskId, feature, o.localId, o.title ?? `中断任务 ${o.localId}`, o.status, fid)
       if (o.claimRecord === true) {
         db.prepare(
@@ -97,8 +101,8 @@ function seedInterruptedWorld(
       for (const edge of o.edges ?? []) {
         const prereqId = `t-${feature}-${edge.prerequisiteLocalId}`
         db.prepare(
-          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-           VALUES (?, ?, ?, '前置任务', 'doc', ?, ?, '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z')
+          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+           VALUES (?, ?, ?, '前置任务', 'doc', ?, 'feature', ?, '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z')
            ON CONFLICT(id) DO NOTHING`,
         ).run(prereqId, feature, edge.prerequisiteLocalId, edge.prerequisiteStatus, fid)
         db.prepare(
@@ -127,7 +131,7 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
 
     // ── 中断前：首次领取（claim 行 + 挂接落账）──
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '中断恢复冒烟任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '中断恢复冒烟任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const first = (await driver.call('forgeTasks', 'claimTask', {
       projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
@@ -333,7 +337,7 @@ test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + diges
     const { projectId, dir } = await setupWorld(page, wsDir, '多次中断演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '多次中断任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '多次中断任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
 
     // 首领领取（round 0 = 首次 claim——reclaimed=false）+ 两次中断重入（reclaimed=true）

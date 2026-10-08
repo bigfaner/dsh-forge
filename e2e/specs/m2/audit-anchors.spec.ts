@@ -8,6 +8,10 @@
 //      前后树快照逐字节对照：既有文件 size/mtime/内容哈希零变化、新文件仅限产品状态
 //      自有目录（.forge/.knowledge——P1 注册链递归建面）；旧仓任务文件零吸收为任务行
 //      （零迁移——发现面只按白名单建 features/feature_documents/proposals 行）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -113,7 +117,7 @@ test('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 + SC8 �
 
     const tasks = await forgeInvoke<readonly { localId: string }[]>(page, TASKS_CHANNELS.list, {
       projectId,
-      featureSlug: 'legacy-demo',
+      source: { kind: 'feature', slug: 'legacy-demo' },
     })
     expect(tasks, 'SC8 零迁移：旧仓任务文件零吸收为任务行（发现面白名单无 tasks 面）').toEqual([])
 

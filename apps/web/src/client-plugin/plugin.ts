@@ -586,6 +586,11 @@ function docTabTitle(address: string): string {
  * 服务名核实无误前不承激活风险；缺席 = 各阶段 fail-soft 降级——create/draft 阶段错误
  * 上报，不炸壳）。uiWorkspace.openWorkspace 经结构探测（OQ#1 核实面：reuse-or-create
  * blank + beforeOpen 回传 sessionId）。
+ *
+ * 5.2 e2e 实证勘误（2026-10-08，SC1 自动对齐首跑）：cordis 4.0.4 的 ctx 属性/get 面
+ * 对未 inject 服务**抛错**（`cannot get property "remote" without inject`——惰性属性
+ * 读取 ≠ 缺席降级）。惰性配方修正 = `ctx.reflect.get(name)`（官方面：绕过 inject 义务
+ * 的只读反射，缺席 = undefined——3.4 已裁决同配方）。conversation 同缝同修。
  */
 function buildOpenSessionOrchestrator(
   clientCtx: ForgeClientCtx,
@@ -594,9 +599,18 @@ function buildOpenSessionOrchestrator(
 ): OpenSessionOrchestrator {
   const asObject = (value: unknown): Record<string, unknown> | undefined =>
     typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
-  const conversationSvc = (): Record<string, unknown> | undefined => asObject(clientCtx.get('conversation'))
+  /** 惰性服务读取（reflect.get——未 inject 服务的官方面；缺席/异常 = undefined fail-soft） */
+  const reflectGet = (name: string): unknown => {
+    try {
+      const reflect = (clientCtx as { reflect?: { get(n: string): unknown } }).reflect
+      return reflect?.get(name)
+    } catch {
+      return undefined
+    }
+  }
+  const conversationSvc = (): Record<string, unknown> | undefined => asObject(reflectGet('conversation'))
   const agentPresetsSvc = (): Record<string, unknown> | undefined =>
-    asObject(asObject((clientCtx as unknown as { remote?: unknown }).remote)?.['agentPresets'])
+    asObject(reflectGet('remote.agentPresets')) ?? asObject(asObject(reflectGet('remote'))?.['agentPresets'])
   const services: OpenSessionServices = {
     uiWorkspace: {
       openWorkspace: (workspaceId, beforeOpen) => {

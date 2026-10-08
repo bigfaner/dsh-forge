@@ -1,6 +1,11 @@
 // @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.4 SC-M2 门：真实模型派发链 dogfood（含 fix 链 + 中断恢复）+ 录制夹具产出（AC1–AC5）。
 //
+// M3 drift 台账（5.2 落定——drift #1/#3 承接面，归 5.3 SC-M3 重录）：dispatcher 教学
+// prompt 仍指示 claimTask 派发循环（M3 3.5 tool 退役 → run-tasks 技能面 = dispatchTask）
+// + 录制夹具载荷持 M2 形态（featureSlug/无 mode）——两处随 5.3 dogfood 门以 M3 形态
+// 重录收口（tech-design drift #1/#3；本 spec 在 M3 期跑真实模型 = 既定红灯非回归）。
+//
 // dogfood 策略（tech-design Per-Layer dogfood 行 + Hard Rule：dogfood = 唯一真实模型依赖面）：
 // 低成本真实模型（zai-coding-cn / glm-5.3-flash——e2e/support/dogfood.ts 缺省），凭据经
 // dsh profile 域播种（缺席 = 留痕 skip，不伪造）。链路 = 产品宿主 dev profile（plugin-forge

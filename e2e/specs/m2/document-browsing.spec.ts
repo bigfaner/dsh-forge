@@ -33,6 +33,9 @@
 //   Step5 zero-hit-project-empty-state ……………………………………「零命中项目：提案/feature 子 tab 空态（一等展示）」
 //
 // Assertion depth: 46/49 behavioral (94%)，其中 deep 17/46 (37%)——两阈均过。
+// M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
+// 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
+
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -112,7 +115,7 @@ async function revealFeatureDocRow(page: Page, docRel: string): Promise<void> {
   const docRow = page.locator(ovDocRowOf(docRel)).first()
   if ((await docRow.isVisible().catch(() => false)) === false) {
     const slug = docRel.split('/')[2] ?? ''
-    await page.locator(OV_PARENT_ANY, { hasText: slug }).first().click()
+    await page.locator(OV_PARENT_ANY, { hasText: slug }).first().locator('[data-dswf-ov-parent-toggle]').click()
   }
   await expect(docRow, `feature 文档行在场（${docRel}）`).toBeVisible({ timeout: 30_000 })
 }

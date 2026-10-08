@@ -10,9 +10,12 @@
 //   · 派生行逐字一致（AC6，SC2 单源）：表单呈现路径（data-dswf-dsr-dir 逐字）≡ 产品面
 //     RPC deriveTaskStoreDir 返回 ≡ core deriveTaskStoreDir 单源计算 ≡ 实际建库位置
 //     （注册成功后 forge.db 恰在该路径）。
+// M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
+// 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
+
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
 import { PROPOSALS_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
@@ -83,11 +86,17 @@ test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不
   const proposalPath = join(wsDir, 'docs', 'proposals', 'gone', 'proposal.md')
   mkdirSync(join(wsDir, 'docs', 'proposals', 'gone'), { recursive: true })
   writeFileSync(proposalPath, '---\ntitle: "悬空容错演示"\nstatus: draft\n---\n\n# 悬空容错\n\n正文。\n', 'utf8')
+  // M3 数据源分治（2.3 提案文档区 = 活体 fs 扫描——删除后文档行缺席为设计行为）：
+  // 悬空占位面板的行稳定断言面迁至 feature 文档（feature_documents 库行——注册时建档）
+  const featureDocPath = join(wsDir, 'docs', 'features', 'branch-float', 'design', 'tech-design.md')
+  mkdirSync(dirname(featureDocPath), { recursive: true })
+  writeFileSync(featureDocPath, '# 悬空容错 feature 设计文档\n\n正文（删除后 feature_documents 行稳定）。\n', 'utf8')
+  const featureDocRel = 'docs/features/branch-float/design/tech-design.md'
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-branch-ud-'))
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
   const { app, page, pageErrors } = launched
   try {
-    // 注册（真实发现链建行——发现面只读扫描 docs/proposals）
+    // 注册（真实发现链建行——发现面只读扫描 docs/proposals + docs/features）
     const project = await registerProjectAt(page, {
       workspaceDir: wsDir,
       name: 'SC-branch 演示',
@@ -99,20 +108,32 @@ test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不
     const rowsBefore = await forgeInvoke<readonly { slug: string; relPath?: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
     expect(rowsBefore.find((p) => p.slug === 'gone')?.relPath, '发现面建行（注册时文件在场）').toBe(docRel)
 
-    // 分支切换模拟：文件移除（行此后稳定——悬空 ≠ 缺行）
+    // 分支切换模拟：文件移除（提案行此后稳定——悬空 ≠ 缺行；feature 文档同步删除）
     rmSync(proposalPath)
+    rmSync(featureDocPath)
 
-    // 悬空读：占位面在场（路径栏保留 + 只读缺省渲染）
+    // 提案面（M3 语义）：提案行稳定在场 + 文档区活体扫描归零（文件系统为事实源——设计行为）
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const docRow = page.locator(ovDocRowOf(docRel)).first()
-    if ((await docRow.isVisible().catch(() => false)) === false) {
-      await page.locator(OV_PARENT_ANY, { hasText: 'gone' }).first().click()
-    }
-    await expect(docRow, '悬空后文档行仍在列（行稳定——悬空不缺行）').toBeVisible({ timeout: 30_000 })
+    const proposalRow = page.locator(OV_PARENT_ANY, { hasText: '悬空容错演示' }).first()
+    await expect(proposalRow, '悬空后提案行仍在列（行稳定——悬空不缺行）').toBeVisible({ timeout: 30_000 })
+    await proposalRow.locator('[data-dswf-ov-parent-toggle]').click()
+    await expect(proposalRow.locator('xpath=following-sibling::div[@data-dswf-ov-meta]'), '展开元数据在场').toBeVisible({ timeout: 15_000 })
+    await expect(proposalRow.locator('xpath=following-sibling::div[@data-dswf-ov-meta]')).toContainText('文档（0 篇）')
+
+    // 悬空占位面板：feature 文档行（库行稳定）→ 点击 → dock 文档 tab 悬空分支
+    await page.locator(ovSubtabOf('features')).click()
+    await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    const featureRow = page.locator(OV_PARENT_ANY, { hasText: 'branch-float' }).first()
+    await expect(featureRow, 'feature 行在场（文件删除后行稳定）').toBeVisible({ timeout: 30_000 })
+    const featureToggle = featureRow.locator('[data-dswf-ov-parent-toggle]')
+    await featureToggle.click()
+    await expect(featureToggle).toHaveAttribute('aria-expanded', 'true', { timeout: 15_000 })
+    const docRow = page.locator(ovDocRowOf(featureDocRel)).first()
+    await expect(docRow, '悬空后 feature 文档行仍在列（库行稳定——悬空不缺行）').toBeVisible({ timeout: 30_000 })
     await docRow.click()
-    const panel = page.locator(docPanelOf(projectId, docRel)).first()
+    const panel = page.locator(docPanelOf(projectId, featureDocRel)).first()
     await expect(panel).toBeVisible({ timeout: 30_000 })
     // 悬空标记 = panel 级属性（data-dswf-doc-dangling 与 doc-key 同元素——docs/index 悬空分支；
     // 属性名断言面非选择器，锚台账 selector DOC_DANGLING 的元素即本 panel）
@@ -125,6 +146,7 @@ test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不
 
     // 不写入：文件不被重建（应用对悬空只读）
     expect(existsSync(proposalPath), '悬空文件不被重建（只读容错零写入）').toBe(false)
+    expect(existsSync(featureDocPath), 'feature 悬空文件不被重建').toBe(false)
 
     // 不删行：RPC 行 + forge.db 行双面（行此后稳定）
     const rowsAfter = await forgeInvoke<readonly { slug: string; relPath?: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
@@ -134,6 +156,8 @@ test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不
     try {
       const row = db.prepare<unknown[], { slug: string; rel_path: string }>(`SELECT slug, rel_path FROM proposals WHERE slug = 'gone'`).get()
       expect(row?.rel_path, '悬空读后 forge.db 行仍在（盘级不删行）').toBe(docRel)
+      const featureDocRow = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM feature_documents WHERE rel_path = ?`).get(featureDocRel)
+      expect(featureDocRow?.n, 'feature 文档库行不删（悬空面板行稳定源）').toBe(1)
     } finally {
       db.close()
     }

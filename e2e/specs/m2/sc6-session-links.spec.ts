@@ -8,6 +8,10 @@
 //     同任务同会话双侧参与 → 两卡并存（§6-24④ 诚实审计：不合并解释）；
 //   · 断言面：pill 分型锚（data-dswf-stp-source link|record）+ RPC 单发读（直读即见）+
 //     pill 点击导航全链路（dock 开概览 → 任务子 tab → feature 选中 → 抽屉开）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,7 +23,7 @@ import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../supp
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
-import { COMPOSER_INPUT, TD_DRAWER, OV_PANEL, ovSubtabOf, projectRowOf, stpPillOf, ttFeatpillOf } from '../../support/anchors.js'
+import { COMPOSER_INPUT, TD_DRAWER, OV_PANEL, ovSubtabOf, projectRowOf, stpPillOf, ttContpillOf } from '../../support/anchors.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 
 /** 夹具工作区名（芯片选择/会话目录定位共用——注册名 = 目录名） */
@@ -43,7 +47,7 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（分型呈现 + 
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
       projectId,
-      featureSlug: FEATURE,
+      source: { kind: 'feature', slug: FEATURE },
       title: 'SC6③ 挂接双侧任务',
       type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
@@ -103,7 +107,7 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（分型呈现 + 
     await linkPill.click()
     await expect(page.locator(OV_PANEL).first(), 'dock 开概览 tab').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovSubtabOf('tasks')), '任务子 tab 激活（聚焦切换）').toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    await expect(page.locator(ttFeatpillOf(FEATURE)).first(), 'feature 选中（导航载荷富化——slug ≡ feature 不变量）').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), 'feature 选中（导航载荷富化——slug ≡ feature 不变量）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).first(), '任务抽屉开（聚焦抽屉面）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).locator('.dswf-td-status')).toHaveText(/已完成/)
 

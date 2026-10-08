@@ -7,6 +7,7 @@ import {
   TASK_VIEWS,
   dagVisibleSet,
   listGroupsOf,
+  resolveContainer,
   resolveFeatureSlug,
   swimColumnsOf,
   taskCountNote,
@@ -194,6 +195,28 @@ describe('resolveFeatureSlug（AC5 feature pill 解析）', () => {
   it('空 feature 列 = undefined', () => {
     expect(resolveFeatureSlug([], 'x')).toBe('x')
     expect(resolveFeatureSlug([], undefined)).toBeUndefined()
+  })
+})
+
+describe('resolveContainer（容器选中解析——4.6 双轨 + 纯 blitz 回落）', () => {
+  const feature = { kind: 'feature', slug: 'feat-a', title: 'A', mode: 'expedition', taskCount: 3 } as const
+  const proposal = { kind: 'proposal', slug: 'blitz-p', title: 'P', mode: 'blitz', taskCount: 2 } as const
+
+  it('feature 优先：双轨在场缺省 = feature（活跃缺 → 首 feature）', () => {
+    expect(resolveContainer([feature, proposal], undefined, undefined)?.slug).toBe('feat-a')
+    expect(resolveContainer([feature, proposal], undefined, 'feat-a')?.slug).toBe('feat-a')
+  })
+
+  it('显式注入优先（任意容器——taskFocus 聚焦/用户本地切换）', () => {
+    expect(resolveContainer([feature, proposal], { kind: 'proposal', slug: 'blitz-p' }, 'feat-a')?.slug).toBe('blitz-p')
+  })
+
+  it('零 feature 选项 = 回落首项（纯 blitz 提案工作区不空转——5.2 e2e 实证处置）', () => {
+    expect(resolveContainer([proposal], undefined, undefined)?.slug).toBe('blitz-p')
+  })
+
+  it('零选项 = undefined（容器空态）', () => {
+    expect(resolveContainer([], undefined, undefined)).toBeUndefined()
   })
 })
 

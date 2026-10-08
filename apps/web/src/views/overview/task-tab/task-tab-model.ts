@@ -118,7 +118,9 @@ export function containerKeyOf(sel: TaskContainerSel): string {
 /**
  * 容器解析（4.6 双轨）：显式注入优先（taskFocus 聚焦 = feature 容器；用户本地切换 =
  * 任意容器）——命中选项集才生效；否则活跃 feature 缺省（activeSlug = 帧侧头路
- * activeFeatureSlug 投影——M2 语义沿袭）；零选项 = undefined（容器空态）。
+ * activeFeatureSlug 投影——M2 语义沿袭）；零 feature 选项时回落首项（突击直达链
+ * 5.2 e2e 实证：纯 blitz 提案工作区无 feature 行——任务子 tab 不可空转死局，容器
+ * 面向唯一可选项收敛）；零选项 = undefined（容器空态）。
  */
 export function resolveContainer(
   options: readonly TaskContainerOption[],
@@ -133,7 +135,7 @@ export function resolveContainer(
     const active = options.find((option) => option.kind === 'feature' && option.slug === activeSlug)
     if (active !== undefined) return active
   }
-  return options.find((option) => option.kind === 'feature')
+  return options.find((option) => option.kind === 'feature') ?? options[0]
 }
 
 /** feature 完成比 chip 文案（feature 卡 byStatus 聚合——menu 行源；pill 用任务域 stats 单源） */

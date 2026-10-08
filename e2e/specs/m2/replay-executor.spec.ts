@@ -12,6 +12,10 @@
 //      运行面自证）+ env 缺席启动 = 挂点零注册（发布构建零痕迹——缺席态审计）；
 //   ⑥ 备选通道（AC2）：forge.db 直插（派生目录取自产品面单源 RPC）→ 单次重取即见
 //      （直读保证——直插无事件亦可单发读见）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,8 +45,8 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     // ── ①③ 手工夹具回放：add×2（P0/P2 定序——就绪选择确定性）→ 单次重取即见 pending ──
     const driver = createBridgeDriver(app)
     const addFixture = createFixtureBuilder({ source: 'hand', note: '5.1 运行面自证·写段' })
-      .verb('forgeTasks', 'addTask', { projectId, featureSlug: 'demo-feature', title: '任务甲（回放）', type: 'coding-feature', priority: 'P0' })
-      .verb('forgeTasks', 'addTask', { projectId, featureSlug: 'demo-feature', title: '任务乙（回放）', type: 'test-run', priority: 'P2' })
+      .verb('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, title: '任务甲（回放）', type: 'coding-feature', priority: 'P0' })
+      .verb('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, title: '任务乙（回放）', type: 'test-run', priority: 'P2' })
       .build()
     const addOutcomes = await replayWrites(driver, addFixture)
     expect(addOutcomes.map((o) => o.verb)).toEqual(['addTask', 'addTask'])
@@ -50,14 +54,14 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     const addB = addOutcomes[1]!.result as { localId: string }
     expect(addA.reused).toBe(false)
     // 即时判据①：add 返回后单次重取即见两任务（pending——无轮询等待兜底）
-    let cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'demo-feature' })
+    let cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
     expect(cards.map((c) => [c.localId, c.taskStatus]).sort()).toEqual([
       [addA.localId, 'pending'],
       [addB.localId, 'pending'],
     ])
 
     // ── ② claim：就绪选择（P0 优先）→ dispatchPrompt 全文 + digest 12hex（observed 载荷面同构） ──
-    const claim = (await driver.call('forgeTasks', 'claimTask', { projectId, featureSlug: 'demo-feature', sessionId: 'e2e-replay-dispatch' })) as {
+    const claim = (await driver.call('forgeTasks', 'claimTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, sessionId: 'e2e-replay-dispatch' })) as {
       task: { taskId: string; slug: string; localId: string } | null
       dispatchPrompt: string
       digest: string
@@ -68,7 +72,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     expect(claim.dispatchPrompt.length).toBeGreaterThan(200) // 全文简报（人格段 + 三标签块）
     expect(claim.digest).toMatch(/^[0-9a-f]{12}$/)
     // 即时判据②：claim 返回后单次重取即见 in_progress
-    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'demo-feature' })
+    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
     expect(cards.find((c) => c.taskId === addA.taskId)?.taskStatus).toBe('in_progress')
 
     // ── ②③ submit success（夹具收尾段——taskRef 取 claim 结算自然键）→ 单次重取即见 completed ──
@@ -84,7 +88,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
       .build()
     const [submitOutcome] = await replayWrites(driver, tailFixture)
     expect((submitOutcome!.result as { status: string }).status).toBe('completed')
-    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'demo-feature' })
+    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
     expect(cards.find((c) => c.taskId === addA.taskId)?.taskStatus).toBe('completed')
     expect(cards.find((c) => c.localId === addB.localId)?.taskStatus).toBe('pending')
 

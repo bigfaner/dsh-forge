@@ -13,6 +13,10 @@
 //     传输面同 dispatchRpc 入口的封闭性）——与 G1-11 pin（tool 注册面六在场/两缺席）呼应；
 //   · UI 面：概览 dock 任务子 tab 先开（初始 pending 可见）→ 写 → 事件驱动刷新断言行
 //     状态标签（列表行/泳道列/抽屉头三面）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,10 +24,11 @@ import { test, expect } from '@playwright/test'
 import type { TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
 import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
-import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttCardOf, ttColOf, ttItemOf, ttViewOf } from '../../support/anchors.js'
+import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
 import { createBridgeDriver, refetchOnce, replayWrites, type ReplayEventRecord, type ReplayWriteDriver } from '../../support/replay/executor.js'
 import { createFixtureBuilder } from '../../support/replay/fixtures.js'
 
@@ -67,7 +72,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const addFixture = createFixtureBuilder({ source: 'hand', note: '5.2 SC7 写段' })
       .verb('forgeTasks', 'addTask', {
         projectId,
-        featureSlug: 'sc7-feat',
+        source: { kind: 'feature', slug: 'sc7-feat' },
         title: 'SC7 真闭环任务（列表/抽屉/泳道三面）',
         type: 'coding-feature',
         priority: 'P0',
@@ -76,7 +81,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const addOutcomes = await replayWrites(driver, addFixture)
     const added = (addOutcomes[0] as { result: { taskId: string; slug: string; localId: string; reused: boolean } }).result
     expect(added.reused).toBe(false)
-    const cards0 = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'sc7-feat' })
+    const cards0 = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
     expect(cards0.find((c) => c.taskId === added.taskId)?.taskStatus, 'add 后单次重取即见 pending').toBe('pending')
 
     // ── UI 预开：概览 dock → 任务子 tab → 列表行初始态可见（事件刷新断言的对照面）──
@@ -96,9 +101,9 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const t0 = Date.now()
     await replayWrites(driver, claimFixture)
     // 即时判据：claim 返回后单发读面（无等待兜底）——列表（列表视图源）/graph（泳道源）/detail（抽屉源）
-    const listAfterClaim = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: 'sc7-feat' })
+    const listAfterClaim = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
     expect(listAfterClaim.find((c) => c.taskId === added.taskId)?.taskStatus, '列表读面：claim 后单次重取即见 in_progress').toBe('in_progress')
-    const graphAfterClaim = await refetchOnce<{ tasks: TaskCard[] }>(page, TASKS_CHANNELS.graph, { projectId, featureSlug: 'sc7-feat' })
+    const graphAfterClaim = await refetchOnce<{ tasks: TaskCard[] }>(page, TASKS_CHANNELS.graph, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
     expect(graphAfterClaim.tasks.find((c) => c.taskId === added.taskId)?.taskStatus, '图读面（泳道数据源）：单次重取即见 in_progress').toBe('in_progress')
     const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
     expect(detailAfterClaim.taskStatus, '详情读面（抽屉数据源）：单次重取即见 in_progress').toBe('in_progress')
@@ -133,7 +138,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     await expect(row.locator('.dswf-tt-tag'), '列表行状态标签事件刷新为已完成').toHaveText(/已完成/, { timeout: 15_000 })
 
     // ── 泳道面：切 swim 视图 → completed 列含本任务卡（先于抽屉——抽屉覆盖任务栏遮挡指针）──
-    await page.locator(ttViewOf('swim')).click()
+    await switchTaskView(page, 'swim')
     await expect(page.locator(ttColOf('completed')).locator(ttCardOf(added.taskId)), '泳道 completed 列含任务卡').toBeVisible({ timeout: 15_000 })
 
     // ── 抽屉面：卡片点击 → 抽屉开 + 头部状态 = 已完成（detail 单源消费）──

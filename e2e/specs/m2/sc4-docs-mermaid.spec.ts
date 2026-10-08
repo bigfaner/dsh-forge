@@ -8,6 +8,9 @@
 //     段——erDiagram 验收锚 / 非法源）→ 真实发现链建行（S9① 口径）→ 只读渲染 +
 //     canonical 路径栏 + 回退占位卡；
 //   · 断言经 anchors 单源（docPanelOf/DOC_MERMAID_SVG/DOC_MERMAID_FALLBACK——Hard Rule）。
+// M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
+// 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
+
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,16 +52,22 @@ async function registerProjectAt(
 }
 
 /** 概览提案子 tab → 展开目标提案行 → 点击其文档行（dock 开文档 tab 的 UI 唯一径） */
-async function openProposalDoc(page: Page, docRel: string): Promise<void> {
+async function openProposalDoc(page: Page, docRel: string, rowTitle: string): Promise<void> {
   await openOverviewDock(page)
   await page.locator(ovSubtabOf('proposals')).click()
   await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
   const docRow = page.locator(ovDocRowOf(docRel)).first()
-  // 文档行在提案父行展开元数据内——未展开则先点父行（行键 = 提案 slug 前缀匹配）
+  // 文档行在提案父行展开元数据内——未展开则先点展开钮（M3 行主显 = 提案标题，slug 不再入行文本；
+  // dock 文档 tab 切换后概览 body 重挂载——点击可落于重渲染窗口，展开态确认 + 一轮补点）
   if ((await docRow.isVisible().catch(() => false)) === false) {
-    const slug = docRel.split('/')[2] ?? ''
-    const parent = page.locator(OV_PARENT_ANY, { hasText: slug }).first()
-    await parent.click()
+    const toggle = page.locator(OV_PARENT_ANY, { hasText: rowTitle }).first().locator('[data-dswf-ov-parent-toggle]')
+    await toggle.click()
+    try {
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 10_000 })
+    } catch {
+      await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 10_000 })
+    }
   }
   await expect(docRow, `提案文档行在场（${docRel}）`).toBeVisible({ timeout: 30_000 })
   await docRow.click()
@@ -87,7 +96,7 @@ test('@web-e2e @m2 5.2 SC4 仓内：本仓注册发现链 → 提案文档 dock 
 
     // dock 开文档 tab：提案子 tab → m2 行展开 → 文档行点击 → 独立文档 tab
     const docRel = 'docs/proposals/dsh-forge-m2-pipeline/proposal.md'
-    await openProposalDoc(page, docRel)
+    await openProposalDoc(page, docRel, 'dsh-forge-m2-pipeline')
     const panel = page.locator(docPanelOf(projectId, docRel)).first()
     await expect(panel, '文档 tab 开出（docRel 去重键 = 地址）').toBeVisible({ timeout: 30_000 })
     // canonical 路径栏：绝对路径呈现（canonical 解析含本机大小写/分隔形态——子串断言面）
@@ -174,7 +183,7 @@ test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 渲染 SVG 在场 + 非法源回�
 
     // ① erDiagram 渲染（验收锚）：文档 tab → SVG 在场（懒加载渲染收敛面）
     const erRel = 'docs/proposals/demo-er/proposal.md'
-    await openProposalDoc(page, erRel)
+    await openProposalDoc(page, erRel, 'erDiagram 渲染演示')
     const erPanel = page.locator(docPanelOf(projectId, erRel)).first()
     await expect(erPanel).toBeVisible({ timeout: 30_000 })
     await expect(erPanel.locator('[data-dswf-doc-body]')).toContainText('SC4-OUT-BODY')
@@ -183,7 +192,7 @@ test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 渲染 SVG 在场 + 非法源回�
 
     // ② 非法源回退：占位卡在场（源码呈现 + 回退注记——异常不外溢）
     const badRel = 'docs/proposals/demo-bad/proposal.md'
-    await openProposalDoc(page, badRel)
+    await openProposalDoc(page, badRel, '非法 mermaid 源回退演示')
     const badPanel = page.locator(docPanelOf(projectId, badRel)).first()
     await expect(badPanel).toBeVisible({ timeout: 30_000 })
     await expect(badPanel.locator(DOC_MERMAID_FALLBACK), '非法源 → 回退占位卡在场').toBeVisible({ timeout: 30_000 })
@@ -196,7 +205,7 @@ test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 渲染 SVG 在场 + 非法源回�
     await expect(docTabs, '两文档 tab 并存（strip 面——multiple + 异地址各自成 tab）').toHaveCount(2)
     await expect(page.locator(docPanelOf(projectId, badRel)), '激活文档 body 挂载').toBeAttached()
     // 同地址去重：再次打开 er 文档 → reveal 既有 tab（strip 数不变 + body 切回）
-    await openProposalDoc(page, erRel)
+    await openProposalDoc(page, erRel, 'erDiagram 渲染演示')
     await expect(page.locator(docPanelOf(projectId, erRel))).toBeVisible({ timeout: 30_000 })
     await expect(docTabs, '同地址 reveal（不新增 tab）').toHaveCount(2)
 

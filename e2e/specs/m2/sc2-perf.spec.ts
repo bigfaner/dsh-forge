@@ -7,6 +7,10 @@
 //     IPC 往返 = 概览首屏数据面的 e2e 口径；UI 走查归 5.2）；
 //   · EQP = 三条热查询 SQL 常量（core 导出单源）对实库跑计划断言——SEARCH 命中索引、
 //     禁全表 SCAN（PRD Performance：查询计划由断言锁死，防全表扫描回归）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +22,7 @@ import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedFeature, seedLink, seedRecord, seedTask } from '../../support/replay/db-insert.js'
-import { SQL_TASKS_BY_FEATURE } from '../../../packages/core/src/forge/tasks/list.js'
+import { SQL_TASKS_BY_CONTAINER } from '../../../packages/core/src/forge/tasks/list.js'
 import { RECORDS_BY_TASK_SQL } from '../../../packages/core/src/forge/tasks/query.js'
 import { LINKS_BY_SESSION_SQL } from '../../../packages/core/src/forge/tasks/session-links.js'
 
@@ -85,8 +89,8 @@ test('@web-e2e @m2 5.3 SC2：@500 任务列表/图/详情 ≤2s（e2e 计时）+
           .all(...params)
           .map((r) => r.detail)
           .join(' | ')
-      const planFeature = plan(SQL_TASKS_BY_FEATURE, 'f-big')
-      expect(planFeature, '① feature 作用域任务扫描 → idx_tasks_feature_status').toContain('idx_tasks_feature_status')
+      const planFeature = plan(SQL_TASKS_BY_CONTAINER, 'feature', 'f-big')
+      expect(planFeature, '① 容器作用域任务扫描 → idx_tasks_source_status（M3 更名）').toContain('idx_tasks_source_status')
       expect(planFeature).not.toContain('SCAN tasks')
       const planRecords = plan(RECORDS_BY_TASK_SQL, ids[0]!)
       expect(planRecords, '② 记录时间线 → idx_records_task').toContain('idx_records_task')
@@ -101,14 +105,14 @@ test('@web-e2e @m2 5.3 SC2：@500 任务列表/图/详情 ≤2s（e2e 计时）+
     // ── 三读面 e2e 计时（产品读面单发——写入后首读即见，直读无 watch/回流）──
     const list = await timedRefetch<readonly { localId: string; taskStatus: TaskStatus }[]>(page, TASKS_CHANNELS.list, {
       projectId,
-      featureSlug: 'big',
+      source: { kind: 'feature', slug: 'big' },
     })
     expect(list.value, '直插 500 行对产品读面全量可见（直读保证）').toHaveLength(TASK_COUNT)
     expect(list.ms, `任务列表 ≤2s（实测 ${list.ms}ms）`).toBeLessThan(PERF_BUDGET_MS)
 
     const graph = await timedRefetch<{ tasks: readonly unknown[]; edges: readonly unknown[] }>(page, TASKS_CHANNELS.graph, {
       projectId,
-      featureSlug: 'big',
+      source: { kind: 'feature', slug: 'big' },
     })
     expect(graph.value.tasks).toHaveLength(TASK_COUNT)
     expect(graph.value.edges).toHaveLength(TASK_COUNT - 1)

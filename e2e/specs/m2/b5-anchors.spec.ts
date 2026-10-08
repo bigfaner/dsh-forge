@@ -12,6 +12,10 @@
 //   ⑥ 边持久：fix 完成恢复后 fix-chain 边仍在场（满足 = 读时派生，边不删）。
 // dogfood 首录夹具（e2e/fixtures/m2/dogfood-dispatch-chain.jsonl）verb 载荷绑定录制期
 // projectId 不可跨库重放——本 spec 经同机构造 hand 夹具/直调（5.1「手工构造同格式可用」裁决）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,7 +57,7 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'b5-other', title: 'B.5 跨域' })
     const driver = createBridgeDriver(app)
     const add = (input: Record<string, unknown>): Promise<AddResult> =>
-      driver.call('forgeTasks', 'addTask', { projectId, featureSlug: 'b5', ...input }) as Promise<AddResult>
+      driver.call('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'b5' }, ...input }) as Promise<AddResult>
     const taskCount = (db: ReturnType<typeof openForgeDbAt>): number =>
       db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = 'b5'`).get()?.n ?? 0
 
@@ -76,7 +80,7 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
       // ══ ④ 同 feature 约束（B.5-4）：跨 feature 前置写入即拒（服务不变量——DB CHECK 退役裁决）══
       const countBeforeCross = taskCount(db)
       const crossRejection = await driver
-        .call('forgeTasks', 'addTask', { projectId, featureSlug: 'b5-other', title: '跨域任务', type: 'doc', dependsOn: ['1.1'] })
+        .call('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'b5-other' }, title: '跨域任务', type: 'doc', dependsOn: ['1.1'] })
         .then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
       expect(crossRejection, '跨 feature 边 → 同 feature 前置解析未命中拒（slug 作用域查捞）').toContain('任务未命中')
       expect(crossRejection).toContain('b5-other/1.1')

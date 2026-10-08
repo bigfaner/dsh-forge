@@ -33,6 +33,10 @@
 //   Step5 no-linkage-session-empty ………………………………………………………「Step5b 零挂接会话：无 pill 无占位（空输出）」
 //
 // Assertion depth: 54/57 behavioral (95%)，其中 deep 21/54 (39%)——两阈均过。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,7 +50,7 @@ import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { COMPOSER_INPUT, OV_PANEL, TD_DRAWER, ovSubtabOf, projectRowOf, stpPillOf, ttFeatpillOf, ttItemOf } from '../../support/anchors.js'
+import { COMPOSER_INPUT, OV_PANEL, TD_DRAWER, ovSubtabOf, projectRowOf, stpPillOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 
 /** 夹具工作区名（芯片选择 / 会话目录定位共用——注册名 = 目录名） */
 const WS_NAME = 'ws-tsl'
@@ -78,7 +82,7 @@ async function linkedTask(
   title: string,
 ): Promise<{ added: AddTaskResult; sessionId: string }> {
   const added = (await driver.call('forgeTasks', 'addTask', {
-    projectId, featureSlug: feature, title, type: 'doc',
+    projectId, source: { kind: 'feature', slug: feature }, title, type: 'doc',
   })) as AddTaskResult
   const sessionId = await openRealSession(page, userData, projectId)
   return { added, sessionId }
@@ -112,7 +116,7 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     })
 
     // ── Step 1：任务列表副行挂接计数（双源去重 = 2）──
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     const card = cards.find((c) => c.taskId === added.taskId)
     expect(card?.sessionCount, '副行承重数据：挂接计数 = 2（link + record 去重）').toBe(2)
 
@@ -139,7 +143,7 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     await linkPill.click()
     await expect(page.locator(OV_PANEL).first(), 'dock 开概览 tab').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovSubtabOf('tasks')), '任务子 tab 激活（聚焦切换）').toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    await expect(page.locator(ttFeatpillOf(FEATURE)).first(), 'feature 选中（导航载荷富化）').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), 'feature 选中（导航载荷富化）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).first(), '任务抽屉开（聚焦抽屉面）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).first()).toContainText('挂接双侧冒烟任务')
     // 抽屉挂接区：双源会话 pill 并存（真实 + 合成执行——不混示为同一会话）
@@ -219,7 +223,7 @@ test('@web-e2e @m2 挂接双侧·Step3b 溢出：≤2 并排 + +N 菜单全量 +
     const tasks: AddTaskResult[] = []
     for (let i = 1; i <= 3; i++) {
       const added = (await driver.call('forgeTasks', 'addTask', {
-        projectId, featureSlug: FEATURE, title: `溢出任务 ${i}`, type: 'doc',
+        projectId, source: { kind: 'feature', slug: FEATURE }, title: `溢出任务 ${i}`, type: 'doc',
       })) as AddTaskResult
       await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
       tasks.push(added)
@@ -268,7 +272,7 @@ test('@web-e2e @m2 挂接双侧·Step3c 恰 2：全量并排无溢出（off-by-o
     // 恰 2 卡边界（off-by-one）：单任务 claim → 双源两卡（挂接表行 + claim 审计行——§6-24④）
     // = 恰 2 并排全量、零溢出（原两任务夹具在双源语义下恒 4 卡，无法抵达本 Outcome 边界）
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '恰二任务 1', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '恰二任务 1', type: 'doc',
     })) as AddTaskResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
 
@@ -342,7 +346,7 @@ test('@web-e2e @m2 挂接双侧·Step3e 活体挂接：claim 后 pill 即时出�
     // 会话头部已渲染（订阅层活跃）+ 任务 X 尚未挂接
     const sessionId = await openRealSession(page, userData, projectId)
     const x = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '活体挂接任务 X', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '活体挂接任务 X', type: 'doc',
     })) as AddTaskResult
     await expect(page.locator('[data-dswf-stp-pill]'), 'claim 前无 X pill（会话头部零挂接）').toHaveCount(0)
 

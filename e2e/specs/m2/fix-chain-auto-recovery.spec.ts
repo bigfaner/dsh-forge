@@ -29,6 +29,10 @@
 //   Step4 partial-prerequisites-no-restore ……………………………………「部分前置未终态：不恢复；补齐后恢复（全满足判定）」
 //
 // Assertion depth: 58/61 behavioral (95%)，其中 deep 30/58 (52%)——两阈均过。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,11 +40,12 @@ import { test, expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { AddTaskResult, ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { OV_PANEL, ovSubtabOf, ttCardOf, ttColOf, ttItemOf, ttViewOf } from '../../support/anchors.js'
+import { OV_PANEL, ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
 const DISP = 'e2e-fxr-dispatch'
@@ -65,7 +70,7 @@ async function setupWorld(page: Page, wsDir: string, wsName: string, feature: st
 /** 挂 fix（blockSource 形态——type 缺省 coding-fix 由调用侧显式传） */
 function fixArgs(projectId: string, feature: string, source: AddResult, title: string): Record<string, unknown> {
   return {
-    projectId, featureSlug: feature, title, type: 'coding-fix',
+    projectId, source: { kind: 'feature', slug: feature }, title, type: 'coding-fix',
     sourceTask: { slug: feature, localId: source.localId }, blockSource: true,
   }
 }
@@ -84,7 +89,7 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
 
     // ── Step 1：源任务受阻结算（in_progress→blocked，reason 落审计）──
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '源任务 X（将受阻）', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源任务 X（将受阻）', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     const REASON = 'fxr 冒烟：测试面红灯受阻'
@@ -150,16 +155,16 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     const fixRow = page.locator(ttItemOf(fix.taskId)).first()
     await expect(fixRow, '列表：fix 任务行在场').toContainText('已完成')
     // DAG：源→fix 依赖边（SVG 贝塞尔连线承载面）
-    await page.locator(ttViewOf('dag')).click()
+    await switchTaskView(page, 'dag')
     await expect(page.locator(ttItemOf(src.taskId)).or(page.locator(`[data-dswf-tt-dag]`)).first(), 'DAG 视图挂载').toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-tt-dagsvg]').first(), 'DAG SVG 连线在场（依赖边呈现）').toBeVisible({ timeout: 30_000 })
     // 泳道：七态横向列（源在 pending 列、fix 在 completed 列）
-    await page.locator(ttViewOf('swim')).click()
+    await switchTaskView(page, 'swim')
     await expect(page.locator(ttColOf('pending')).first(), '泳道 pending 列在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttColOf('pending')).locator(ttCardOf(src.taskId)).first(), '泳道：源卡片在 pending 列（恢复后状态）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttColOf('completed')).locator(ttCardOf(fix.taskId)).first(), '泳道：fix 卡片在 completed 列').toBeVisible({ timeout: 30_000 })
     // 读面即时（写入返回后单次重取即见——Step 5 Output）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     const srcCard = cards.find((c) => c.taskId === src.taskId)
     const fixCard = cards.find((c) => c.taskId === fix.taskId)
     expect(srcCard?.taskStatus, '读面单发即见源 pending').toBe('pending')
@@ -187,7 +192,7 @@ test('@web-e2e @m2 fix链·Step1 受阻结算缺 reason：输入面拒绝（不�
     const { projectId, dir } = await setupWorld(page, wsDir, '缺因拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '缺因结算任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '缺因结算任务', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
 
@@ -234,8 +239,8 @@ test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵
     db.transaction(() => {
       const fid = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(FEATURE)?.id ?? ''
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-         VALUES (?, ?, '2.1', '人工挂起的源任务', 'doc', 'suspended', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+         VALUES (?, ?, '2.1', '人工挂起的源任务', 'doc', 'suspended', 'feature', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
       ).run(taskId, FEATURE, fid)
       db.prepare(
         `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, session_id, created_at, updated_at)
@@ -283,17 +288,17 @@ test('@web-e2e @m2 fix链·Step2 环构造双 flag：拒绝 + 完整环路径 + 
 
     // 既有等待链：S(1.1) ← D(1.2)（D dependsOn S）；T = dependsOn D × blockSource S → 环 S→T→D→S
     const s = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '源 S（环构造）', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源 S（环构造）', type: 'doc',
     })) as AddResult
     const d = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '等待方 D', type: 'doc', dependsOn: [s.localId],
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '等待方 D', type: 'doc', dependsOn: [s.localId],
     })) as AddResult
     const db = openForgeDbAt(dir)
     const countBefore = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n ?? 0
     db.close()
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '环构造 T', type: 'coding-fix',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '环构造 T', type: 'coding-fix',
       dependsOn: [d.localId], sourceTask: { slug: FEATURE, localId: s.localId }, blockSource: true,
     }))
     expect(rejection, '双 flag 组合 → ERR_CYCLE_DETECTED').toContain('检测到依赖环')
@@ -332,7 +337,7 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
     // 建链：T1（根）→ fix(T1)=T2 → … 直至根 + 6 层 fix（第 6 层 fix 链深 = 6——add.test
     // 单测钉死边界：根 + 6 fix 合法，挂第 7 层 fix 才拒绝 ERR_CHAIN_DEPTH_EXCEEDED）
     let current = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '链深任务 T1（根）', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '链深任务 T1（根）', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
@@ -384,7 +389,7 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
     const driver = createBridgeDriver(app)
 
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '去重演示源任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '去重演示源任务', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
@@ -440,7 +445,7 @@ test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单�
 
     // X 受阻 → fix F；F 自身执行受阻 → fix-of-fix FF（同三件套原子语义，localId 顺延）
     const x = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '源 X（fix-of-fix 演示）', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源 X（fix-of-fix 演示）', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: x.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
@@ -494,7 +499,7 @@ test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → �
     const driver = createBridgeDriver(app)
 
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '跳过恢复源任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '跳过恢复源任务', type: 'doc',
     })) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
@@ -554,8 +559,8 @@ test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后�
       const fid = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(FEATURE)?.id ?? ''
       const insert = (id: string, localId: string, title: string, status: string): void => {
         db.prepare(
-          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'doc', ?, ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
+          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'doc', ?, 'feature', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
         ).run(id, FEATURE, localId, title, status, fid)
       }
       insert(xId, '3.1', '源 X（双前置等待方）', 'blocked')

@@ -161,8 +161,15 @@ export const ttItemOf = (taskId: string): string => `[data-dswf-tt-item="${taskI
 export const ttColOf = (status: string): string => `[data-dswf-tt-col="${status}"]`
 /** 泳道卡片（值 = taskId） */
 export const ttCardOf = (taskId: string): string => `[data-dswf-tt-card="${taskId}"]`
-/** feature 绑定 pill（值 = featureSlug——任务子 tab taskbar） */
+/** feature 绑定 pill（值 = featureSlug——任务子 tab taskbar）
+ *  4.6 v22 退役：容器 pill 双轨化 → ttContpillOf（kind:slug 复合键）。 */
 export const ttFeatpillOf = (slug: string): string => `[data-dswf-tt-featpill="${slug}"]`
+/** 容器 pill（4.6 v22——值 = `<kind>:<slug>` 复合键：feature 远征点 ∪ 突击提案琥珀点） */
+export const ttContpillOf = (kind: 'feature' | 'proposal', slug: string): string =>
+  `[data-dswf-tt-contpill="${kind}:${slug}"]`
+/** 容器菜单行（4.6 v22——data-dswf-tt-mcont 值同容器复合键） */
+export const ttContmenuOf = (kind: 'feature' | 'proposal', slug: string): string =>
+  `[data-dswf-tt-mcont="${kind}:${slug}"]`
 /** 任务抽屉（右栏概览装配体内——role=dialog） */
 export const TD_DRAWER = '[data-dswf-td-drawer]'
 /** 文档 tab 面板（任意） */

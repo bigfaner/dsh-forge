@@ -38,6 +38,10 @@
 //   Step6 concurrent-browse-no-lock-contention …「Step6b 并发浏览无锁竞争：写入返回后单发即见」
 //
 // Assertion depth: 61/64 behavioral (95%)，其中 deep 27/61 (44%)——两阈均过（≥80%/≥30%）。
+// M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
+// source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
+// = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,7 +92,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
 
     // ── Step 1（意图入口）：夹具就位 = 就绪任务在场（前置全终态的 pending）──
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '派发链冒烟任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '派发链冒烟任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string; reused: boolean }
     expect(added.reused, 'addTask 新建（非复用）').toBe(false)
 
@@ -164,7 +168,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     await expect(row, '概览任务行在场（写入后浏览即见）').toBeVisible({ timeout: 30_000 })
     await expect(row, '任务行主行中文状态 tag = 已完成').toContainText(ZH_DONE)
     // 即时判据（读面）：写入返回后单次重取即见 completed——无 watch 无同步延迟
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '概览列表单发重取即见 completed').toBe('completed')
     await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（读路径活跃无阻塞）').toBeVisible()
 
@@ -229,10 +233,10 @@ test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足�
 
     // 前置 P（in_progress——满足集外）+ 等待方 W（dependsOn P，pending）
     const p = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '前置 P（保持未终态）', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '前置 P（保持未终态）', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const w = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '等待方 W', type: 'doc', dependsOn: [p.localId],
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '等待方 W', type: 'doc', dependsOn: [p.localId],
     })) as { taskId: string; slug: string; localId: string }
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: p.slug, localId: p.localId }, sessionId: DISP_SESSION })
 
@@ -285,8 +289,8 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
       const fid = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(FEATURE)?.id ?? ''
       foreignTaskId = `t-${FEATURE}-9.9`
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-         VALUES (?, ?, '9.9', '他会话进行中任务', 'doc', 'in_progress', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+         VALUES (?, ?, '9.9', '他会话进行中任务', 'doc', 'in_progress', 'feature', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
       ).run(foreignTaskId, FEATURE, fid)
       db.prepare(
         `INSERT INTO task_session_links (task_id, session_id, created_at, updated_at)
@@ -340,8 +344,8 @@ test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被�
     db.transaction(() => {
       const fid = db.prepare<unknown[], { id: string }>(`SELECT id FROM features WHERE slug = ?`).get(FEATURE)?.id ?? ''
       db.prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, feature_id, created_at, updated_at)
-         VALUES (?, ?, '3.1', '被人工挂起任务', 'doc', 'suspended', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
+         VALUES (?, ?, '3.1', '被人工挂起任务', 'doc', 'suspended', 'feature', ?, '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
       ).run(taskId, FEATURE, fid)
       db.prepare(
         `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, session_id, created_at, updated_at)
@@ -390,7 +394,7 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     const { projectId, dir } = await setupWorld(page, wsDir, '受阻结算演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '受阻结算任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '受阻结算任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
 
@@ -419,7 +423,7 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场').toBeVisible({ timeout: 30_000 })
     await expect(row, '行状态 tag = 已阻塞').toContainText(ZH_BLOCKED)
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '读面单发即见 blocked').toBe('blocked')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -442,7 +446,7 @@ test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝�
     const { projectId, dir } = await setupWorld(page, wsDir, '输入面校验演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '输入面校验任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '输入面校验任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
 
@@ -490,7 +494,7 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
     const { projectId } = await setupWorld(page, wsDir, '并发浏览演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, featureSlug: FEATURE, title: '并发浏览任务', type: 'doc',
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '并发浏览任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
 
     // 前置：概览页签打开且读路径活跃（用户正在浏览）
@@ -502,13 +506,13 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
 
     // 浏览进行中执行写动词（claim → submit）——WAL 读写并发，UI 不冻结不阻塞
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
-    const midCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const midCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(midCards.find((c) => c.taskId === added.taskId)?.taskStatus, 'claim 写入返回后单发重取即见 in_progress').toBe('in_progress')
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: '6b 并发浏览期结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
     })
-    const endCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, featureSlug: FEATURE })
+    const endCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(endCards.find((c) => c.taskId === added.taskId)?.taskStatus, 'submit 写入返回后单发重取即见 completed（不丢更新）').toBe('completed')
 
     // UI 读路径仍活跃（未冻结）：面板在场 + 行状态事件驱动收敛
