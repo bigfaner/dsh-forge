@@ -12,7 +12,7 @@ import { TASK_STATUSES, type ContainerKind, type FeatureCard, type Mode, type Pr
 export interface TaskContainerOption {
   /** 容器类型（feature = 远征轨 / proposal = 突击轨） */
   readonly kind: ContainerKind
-  /** 容器标识（feature 目录名 / proposal slug——RPC source 参与派发指令 contextSlug 同值） */
+  /** 容器标识（feature 目录名 / proposal slug——RPC source 与派发指令容器标识（→ dispatchTask source_slug）同值） */
   readonly slug: string
   readonly title: string
   /** 容器对应模式（feature 恒 'expedition'——成链门保证无列；突击提案 = 'blitz'） */

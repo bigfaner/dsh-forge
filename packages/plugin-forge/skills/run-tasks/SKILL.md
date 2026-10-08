@@ -16,7 +16,7 @@ proposals with directly attached tasks (blitz chain). Selection is DAG readiness
 `/run-tasks <slug>` binds the loop to that one container (below); inside a container
 there is still no way to pick a specific task, by design.
 
-## Container Binding (source_kind + source_slug; context_slug = event attribution)
+## Container Binding (source_kind + source_slug)
 
 When invoked as `/run-tasks <container-slug>` (the dispatch entry sends exactly that),
 the slug binds the whole loop to that single container:
@@ -29,8 +29,9 @@ the slug binds the whole loop to that single container:
    the loop. Scoped claim: only that container's ready tasks are selected, and session
    re-entry only resumes same-container in_progress tasks — a foreign-container task
    this session claimed pool-wide earlier is NOT resumed by a scoped loop.
-3. `context_slug` remains pure event attribution for no-task events (`logs/<slug>.jsonl`)
-   — pass the same slug there too.
+3. There is no separate attribution parameter: when no task is ready, the no-task event
+   attributes to `source_slug` automatically (`logs/<slug>.jsonl`); without the source
+   pair it falls back to `logs/_pool.jsonl`.
 
 Absent the source pair, dispatchTask claims pool-wide (programmatic/RPC callers, and
 loops genuinely not bound to a container). A scoped loop that gets `no-task` while the

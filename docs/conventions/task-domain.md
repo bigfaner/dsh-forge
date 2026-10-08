@@ -39,7 +39,7 @@ domains: [task, identity, transition-targets, dispatch-prompt, worker-matrix, sc
 
 ### TECH-task-005: dispatchTask 复合派发动词
 
-**Requirement**: dispatcher 每轮单调用 `dispatchTask(contextSlug?)`——插件代码内 claim（core API）→ 收窄组装 → in-process driver spawn（阻塞）→ 返回结算；dispatchPrompt 零进模型上下文（完整性 + token 双赢：模型不可转述改写）；返回三分支 spawned{success|blocked, 结算摘要} / no-task（池态区分收工/等待/疑似死锁）/ halted；池快照 {pending, inProgress, blocked, unmetPending}（taskStats 现读·无状态，unmetPending = pending ∧ 前置未全满足计数）附载每次返回；halted 机械防线 = 插件内会话作用域易失计数器，连续 spawn 失败 ×3 粘住（无重置参数、模型不可自行解锁、复位 = 新会话；成功即清零、冷启动重置）；spawn 失败处置 = 任务留 in_progress 走幂等重入径（不走 submit-blocked——执行受阻语义），返回 ERR_SPAWN_FAILED + 指引；claimTask tool 退役（core API 保留，由 dispatchTask/桥/回放消费）。
+**Requirement**: dispatcher 每轮单调用 `dispatchTask(source_kind+source_slug 对参，缺席 = 全库盲选——context_slug 入参已退役，无任务事件归属由 source_slug 兼任)`——插件代码内 claim（core API）→ 收窄组装 → in-process driver spawn（阻塞）→ 返回结算；dispatchPrompt 零进模型上下文（完整性 + token 双赢：模型不可转述改写）；返回三分支 spawned{success|blocked, 结算摘要} / no-task（池态区分收工/等待/疑似死锁）/ halted；池快照 {pending, inProgress, blocked, unmetPending}（taskStats 现读·无状态，unmetPending = pending ∧ 前置未全满足计数）附载每次返回；halted 机械防线 = 插件内会话作用域易失计数器，连续 spawn 失败 ×3 粘住（无重置参数、模型不可自行解锁、复位 = 新会话；成功即清零、冷启动重置）；spawn 失败处置 = 任务留 in_progress 走幂等重入径（不走 submit-blocked——执行受阻语义），返回 ERR_SPAWN_FAILED + 指引；claimTask tool 退役（core API 保留，由 dispatchTask/桥/回放消费）。
 **Source**: feature/dsh-forge-m3-bootstrap-presets TECH-001（tech-design §Interface 2·§关键技术决策 / packages/plugin-forge/src/tools/dispatch-task.ts）
 
 ### TECH-task-006: worker 供给收窄（矩阵 + 全局拒绝 + 默认 LLM）

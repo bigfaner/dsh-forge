@@ -5,7 +5,7 @@
 // @path 第一行 → 名称/所属 → 摘要 → [状态|阶段] → 主体（诊断项/失败记录）→ 请求；
 // **不含模式**（由会话预设承载——数据约束 5）；文档清单 = 相对容器目录真实路径 + 状态。
 // 派发指令例外（v23）= `/run-tasks <容器标识>` 单行模板串接（DISPATCH_COMMAND_PREFIX 常量
-// ——零纯函数，dispatchTask 唯一必要参数 contextSlug，不参与本格式族）。
+// ——零纯函数，容器标识经 run-tasks 技能映射为 dispatchTask source 对，不参与本格式族）。
 // 词汇口径注记：阶段/状态短语以 PRD 示例与 UF-4.1 chips 词汇为准（阶段「任务/已完成」——
 // contracts FEATURE_STATUS_LABELS 的 chips 词汇「任务分解」为 M2 概览行用法，两 vocabulary
 // 并存各自单源；提案状态 = PROPOSAL_STATUS_LABELS zh（示例①「评审中」同源）。

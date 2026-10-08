@@ -39,17 +39,16 @@ import { requireProjectId, requireSessionId, sessionContextOf } from './session.
 
 const TOOL = 'dispatchTask'
 
-// ─────────────────────────── 参数面（contextSlug = 事件归属语境；source 对 = 容器限定认领） ───────────────────────────
+// ─────────────────────────── 参数面（source 对 = 容器限定认领 + 无任务事件归属；无独立归属参数） ───────────────────────────
 
 /**
- * agent 面参数：context_slug 只承担无任务事件归属（缺省回落 _pool 兜底）；
- * source_kind+source_slug（M3 2.4 容器限定盲选接线——/run-tasks <slug> 绑定容器语义）
+ * agent 面参数：source_kind+source_slug（M3 2.4 容器限定盲选接线——/run-tasks <slug> 绑定容器语义）
  * 同进同退，在场时 claim 就绪选择限定该容器、会话重入仅回领同容器 in_progress；
  * 缺席 = 全库 DAG 就绪盲选（缺省行为，既有调用面零变化）。
+ * 无任务事件归属由 source 对兼任（context_slug 入参已退役）：source 在场 → no-ready-task
+ * 载荷 contextSlug = source_slug（事件落 logs/<source_slug>.jsonl）；缺席 → _pool 兜底。
  */
 export interface DispatchTaskToolArgs {
-  /** 容器语境 slug（no-ready-task 事件归属；缺省回落 _pool 兜底） */
-  readonly context_slug?: string
   /** 容器限定认领引用（source_kind+source_slug 成对解析产物） */
   readonly source?: ContainerRef
 }
@@ -57,19 +56,16 @@ export interface DispatchTaskToolArgs {
 /** 参数防御性收窄（source 对半对即拒——拼接歧义防护） */
 export function parseDispatchTaskArgs(args: unknown): DispatchTaskToolArgs {
   const a = requireArgsObject(args, TOOL)
-  const contextSlug = optionalString(a, 'context_slug', TOOL)
   const kind = optionalEnum(a, 'source_kind', CONTAINER_KINDS, TOOL)
   const slug = optionalString(a, 'source_slug', TOOL)
   if (kind === undefined && slug === undefined) {
-    return contextSlug === undefined ? {} : { context_slug: contextSlug }
+    // 退役参数 context_slug 落未知键零效应径（不再解析——事件归属由 source 对兼任）
+    return {}
   }
   if (kind === undefined || slug === undefined) {
     throw new Error(`${TOOL}: source_kind and source_slug must be given together (both or neither)`)
   }
-  return {
-    ...(contextSlug === undefined ? {} : { context_slug: contextSlug }),
-    source: { kind, slug },
-  }
+  return { source: { kind, slug } }
 }
 
 // ─────────────────────────── 池快照（裁决⑪：现状感知·无状态） ───────────────────────────
@@ -375,11 +371,6 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
     parameters: {
       type: 'object',
       properties: {
-        context_slug: {
-          type: 'string',
-          description:
-            'Container slug for event attribution when no task is ready (feature directory name or proposal slug).',
-        },
         source_kind: {
           type: 'string',
           description:
@@ -395,7 +386,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
     output: { schema: DISPATCH_TASK_OUTPUT_SCHEMA, render: renderDispatchResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<DispatchTaskResult | ForgeToolFailure> {
       const session = sessionContextOf(exec)
-      // tool-error 归属 slug 随流程推进（claim 前 = contextSlug 语境；claim 后 = 任务容器）
+      // tool-error 归属 slug 随流程推进（claim 前 = source 对容器语境；claim 后 = 任务容器）
       let attributionSlug: string | undefined
 
       /** 事件发射局部闭包（信封四件 + ts 单源；sink 缺席 = 零事件降级） */
@@ -431,7 +422,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           const parsed = parseDispatchTaskArgs(args)
           const projectId = requireProjectId(deps.resolveProjectId, session)
           const sessionId = requireSessionId(session)
-          attributionSlug = parsed.context_slug ?? '_pool'
+          attributionSlug = parsed.source?.slug ?? '_pool'
           await deps.events?.prepare(session)
 
           // halted 粘住（入口检查——粘住会话不再 claim：防再领任务弃置 in_progress）
@@ -448,12 +439,13 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           })
           const task = claimed.task
           if (task === null) {
-            // Z1 出口：no-ready-task 事件（contextSlug 归属）+ 池快照现读
+            // Z1 出口：no-ready-task 事件（source 对容器归属——载荷 contextSlug = source_slug；
+            // 缺席回落 _pool 兜底）+ 池快照现读
             const pool = poolOf(await deps.tasks.taskStats({ projectId }))
             emit(
               'no-ready-task',
               attributionSlug,
-              parsed.context_slug !== undefined ? { contextSlug: parsed.context_slug } : {},
+              parsed.source !== undefined ? { contextSlug: parsed.source.slug } : {},
             )
             return { kind: 'no-task', pool }
           }

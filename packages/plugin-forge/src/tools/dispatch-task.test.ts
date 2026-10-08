@@ -201,20 +201,18 @@ afterEach(() => {
 // ─────────────────────────── 参数与纯函数 ───────────────────────────
 
 describe('parseDispatchTaskArgs（防御收窄）', () => {
-  it('零参合法（contextSlug 事件归属可选）；snake_case 单参；类型收窄', () => {
+  it('零参合法；退役参数 context_slug 落未知键零效应；类型收窄', () => {
     expect(parseDispatchTaskArgs({})).toEqual({})
-    expect(parseDispatchTaskArgs({ context_slug: 'feat-x' })).toEqual({ context_slug: 'feat-x' })
-    expect(() => parseDispatchTaskArgs({ context_slug: 3 })).toThrow(/context_slug must be a string/)
+    // context_slug 已退役（无任务事件归属由 source 对兼任）——未知键零效应
+    expect(parseDispatchTaskArgs({ context_slug: 'feat-x' })).toEqual({})
     expect(() => parseDispatchTaskArgs(null)).toThrow(/must be an object/)
   })
 
-  it('source 对（容器限定认领）：成对解析为 ContainerRef；与 context_slug 可同场', () => {
+  it('source 对（容器限定认领）：成对解析为 ContainerRef', () => {
     expect(parseDispatchTaskArgs({ source_kind: 'proposal', source_slug: 'pa' })).toEqual({
       source: { kind: 'proposal', slug: 'pa' },
     })
-    expect(
-      parseDispatchTaskArgs({ context_slug: 'pa', source_kind: 'feature', source_slug: 'fa' }),
-    ).toEqual({ context_slug: 'pa', source: { kind: 'feature', slug: 'fa' } })
+    expect(() => parseDispatchTaskArgs({ source_kind: 'feature', source_slug: 3 })).toThrow(/source_slug must be a string/)
   })
 
   it('source 对半对即拒（both or neither）；kind 词表收窄', () => {
@@ -360,11 +358,11 @@ describe('execute 四分支（AC1）', () => {
     expect(text).toContain('- follow-up fix task: feat-x/fix-2 (dispatchable)')
   })
 
-  it('no-task：池快照 + no-ready-task 事件（contextSlug 归属）+ 渲染 · 行带三分判词', async () => {
+  it('no-task：池快照 + no-ready-task 事件（source 对容器归属——载荷 contextSlug = source_slug）+ 渲染 · 行带三分判词', async () => {
     const h = harness()
     h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
     h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2 }))
-    const out = (await h.tool.execute({ context_slug: 'feat-x' }, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
+    const out = (await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
     expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2 } })
     const text = h.tool.output.render({}, out)[0]?.text ?? ''
     expect(text).toContain('· no ready task (pool: pending 3 · in_progress 0 · blocked 1 · unmet-pending 2)')
@@ -373,7 +371,7 @@ describe('execute 四分支（AC1）', () => {
     expect(h.events[0]).toMatchObject({ slug: 'feat-x', payload: { contextSlug: 'feat-x' } })
   })
 
-  it('no-task 无 contextSlug：归属回落 _pool', async () => {
+  it('no-task 无 source 对：归属回落 _pool', async () => {
     const h = harness()
     h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
     h.setStats(statsOf())
@@ -585,7 +583,7 @@ describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions 
 describe('claim 入参透传（M3 2.4 容器限定接线）', () => {
   it('source 对在场：claimTask 收 source 引用（容器限定盲选激活）', async () => {
     const h = harness()
-    await h.tool.execute({ context_slug: 'pa', source_kind: 'proposal', source_slug: 'pa' }, h.exec)
+    await h.tool.execute({ source_kind: 'proposal', source_slug: 'pa' }, h.exec)
     expect(h.claimInputs).toEqual([
       { projectId: 'p-1', sessionId: expect.any(String), source: { kind: 'proposal', slug: 'pa' } },
     ])
@@ -593,11 +591,8 @@ describe('claim 入参透传（M3 2.4 容器限定接线）', () => {
 
   it('source 对缺席：claimTask 不含 source 键（全库盲选——缺省行为零变化）', async () => {
     const h = harness()
-    await h.tool.execute({ context_slug: 'feat-x' }, h.exec)
+    await h.tool.execute({}, h.exec)
     expect(h.claimInputs[0]).not.toHaveProperty('source')
-    const bare = harness()
-    await bare.tool.execute({}, bare.exec)
-    expect(bare.claimInputs[0]).not.toHaveProperty('source')
   })
 })
 

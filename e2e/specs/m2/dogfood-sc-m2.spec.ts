@@ -71,10 +71,11 @@ const HARNESS_SESSION = 'e2e-harness'
 /** 录制夹具落盘路径（5.2 回放消费面——仓内工件） */
 const FIXTURE_OUT = join(ROOT, 'e2e', 'fixtures', 'm2', 'dogfood-dispatch-chain.jsonl')
 
-// M3 派发指令（dispatchTask 循环——run-tasks 技能 3.6 形态；容器语境经 context_slug 携带）
+// M3 派发指令（dispatchTask 循环——run-tasks 技能 3.6 形态；容器绑定经 source 对携带，
+// 兼承无任务事件归属——context_slug 入参已退役）
 const DISPATCHER_PROMPT = [
   '请调用 run-tasks 技能（skill 工具，name 填 run-tasks），然后严格按该技能的派发循环执行到底：',
-  '每轮 = dispatchTask 单调用（context_slug 填 dogfood-demo）——工具自己领取任务、派发子代理执行并返回结算与池快照；按返回的池快照决定继续或收工。',
+  '每轮 = dispatchTask 单调用（source_kind 填 feature、source_slug 填 dogfood-demo——容器限定认领，无任务事件归属随 source_slug）——工具自己领取任务、派发子代理执行并返回结算与池快照；按返回的池快照决定继续或收工。',
   '按技能内协议处理：spawn 失败（✗ ERR_SPAWN_FAILED）时按返回指引原样重试同一调用（幂等重入——简报自动重合成）；受阻任务结算走 fix 链（addTask block_source 建单事务修复任务）；返回 no-task 且池态 = 收工时输出 Dispatch Summary 收工。',
   '派发会话自己不要改文件、不要跑测试——一切经子代理执行。',
 ].join('\n')

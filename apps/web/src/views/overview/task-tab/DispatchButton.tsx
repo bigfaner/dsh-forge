@@ -26,7 +26,7 @@ export const DISPATCH_PENDING_TITLE = '任务装载中——终态判定待就�
 export const DISPATCH_ACTIVE_TITLE =
   '派发——构造结构化指令发给 agent，按 DAG 依赖顺序依次领取并执行就绪任务（run-tasks）'
 
-/** 派发指令单行（v23：`/run-tasks <容器标识>`——dispatchTask 唯一必要参数 contextSlug） */
+/** 派发指令单行（v23：`/run-tasks <容器标识>`——容器标识经 run-tasks 技能映射为 dispatchTask source 对） */
 export function dispatchCommandOf(containerSlug: string): string {
   return `${DISPATCH_COMMAND_PREFIX}${containerSlug}`
 }
@@ -49,7 +49,7 @@ export interface DispatchRouteInput {
   readonly latestDispatchSession?: { readonly sessionId: string }
   /** 容器对应模式（feature → expedition / 突击提案 → blitz） */
   readonly containerMode: Mode
-  /** 容器标识（contextSlug——指令单行参数） */
+  /** 容器标识（指令单行参数——经技能映射为 dispatchTask source_slug） */
   readonly containerSlug: string
 }
 

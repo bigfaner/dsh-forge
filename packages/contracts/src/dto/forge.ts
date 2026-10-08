@@ -847,7 +847,7 @@ export interface TaskWorkerDonePayload {
 
 /** no-ready-task 载荷（Z1 收工信号——无任务字段，只记会话与语境） */
 export interface NoReadyTaskPayload {
-  /** dispatchTask 入参容器语境（归属判定：事件带任务 → 任务容器 slug；无任务 → contextSlug） */
+  /** 无任务事件归属语境（= 容器限定认领的 source_slug——context_slug 入参已退役；归属判定：事件带任务 → 任务容器 slug；无任务 → contextSlug） */
   contextSlug?: string
 }
 

@@ -654,7 +654,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     ).toBe(true)
     const submitted12 = lines.find((l) => l.type === 'task-submitted' && (l.payload.taskKey as string) === `${FEATURE}/1.2`)
     expect(submitted12?.sessionId, 'task-submitted 会话 = worker 自身（≠ dispatcher）').not.toMatch(/^session-/)
-    // no-task 分支证据：池清后收工事件（contextSlug 归属容器日志；缺省回落 _pool 兜底）
+    // no-task 分支证据：池清后收工事件（source 对在场 = source_slug 归属容器日志；缺席回落 _pool 兜底）
     const poolLines = readLogLines(join(dir, 'logs', '_pool.jsonl'))
     const noReady = [...lines, ...poolLines].filter((l) => l.type === 'no-ready-task')
     expect(noReady.length, 'no-ready-task 事件在场（dispatchTask no-task 分支——收工信号）').toBeGreaterThanOrEqual(1)
