@@ -214,8 +214,13 @@ function stage() {
     productVersions[`@dsh-forge/${name}`] = manifest.version ?? '0.0.0'
   }
 
-  rmSync(STAGING, { recursive: true, force: true })
-  rmSync(APP_DIR, { recursive: true, force: true })
+  // Windows 删除竞态（本机实证）：rmSync 递归删数万文件 staging 树偶发 ENOTEMPTY
+  // （瞬时句柄——Defender/索引器延迟释放；Z: 非 NTFS 本地盘时更频发）。Node 文档
+  // 明示 maxRetries/retryDelay 专治 Windows 上 ENOTEMPTY/EBUSY/EPERM，故两处
+  // 清场调用统一带重试，否则每次重打包都会在首行清场即崩。
+  const rmOptions = { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }
+  rmSync(STAGING, rmOptions)
+  rmSync(APP_DIR, rmOptions)
   mkdirSync(join(RUNTIME, 'node_modules'), { recursive: true })
 
   // 1) 运行时树：profile.install hoisted 全量真实文件（@dsh-forge 不在其中安装——
