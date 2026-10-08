@@ -11,7 +11,11 @@ autoInstallPeers: true
 allowBuilds:
   '@deepseek-ai/dsh-subprocess-local': true
   '@google/genai': true
-  better-sqlite3: true
+  # better-sqlite3 无需源码构建：npm tarball 已随包分发全平台 prebuilds/*
+  # （lib/win32-x64.js 直载 prebuilds/win32-x64.node，assemble 前置亦只断言该文件）。
+  # 置 true 反而触发 pnpm 自动 node-gyp rebuild——在无 node-gyp 的 pnpm 发行版
+  # （如 DSH Desktop 内置 pnpm）上必败，install 退出码 1 但物化已完整，误导排查。
+  better-sqlite3: false
   koffi: true
   node-pty: true
   protobufjs: true
