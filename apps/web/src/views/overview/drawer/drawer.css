@@ -665,6 +665,7 @@
 
 /* ── 底部：转移入口 ── */
 .dswf-td-foot {
+  position: relative; /* fix-3① toast 改锚：脚行整宽 = drawer 上下文 toast 的定位宿主 */
   flex: none;
   display: flex;
   align-items: center;
@@ -674,12 +675,25 @@
   border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
-/* ── 任务失败诊断（4.6 UF-3 v19–v21——仅 blocked/rejected；toast 锚定按钮左侧） ── */
+/* ── 任务失败诊断（4.6 UF-3 v19–v21——仅 blocked/rejected；toast 就近呈现 + 发送路由） ──
+ * fix-3① drawer 上下文 toast 改锚：工具栏形态（right:100% 左伸 + width:max-content，
+ * 失败档行集 ~340px）超出 clamp 最小宽 320px 抽屉的左缘，被 .dswf-td-drawer
+ * overflow:hidden 裁剪——发送钮落裁剪区不可点（e2e T3 run1/run2 实证）。改锚 =
+ * 右缘贴抽屉右内缘·脚行上方 + max-width 收敛行集换行（原型 toastRich 的
+ * maxWidth 收敛同形）；toast 仍随抽屉装载/卸载，v19「就近呈现·5s」语义保持。 */
 .dswf-td-diagwrap {
-  position: relative;
   display: inline-flex;
   align-items: center;
   flex: none;
+}
+
+.dswf-td-foot .dswf-tt-diagtoast {
+  top: auto;
+  right: var(--dsw-font-s-14-line-height); /* 右缘贴抽屉右内缘（= 脚行右内边距同刻度） */
+  bottom: calc(100% - var(--dsw-font-xs-13-line-height)); /* 底缘落动作钮顶一线（垂直贴近） */
+  width: auto;
+  /* 宽度收敛：抽屉内宽为上限（窄抽屉行集换行），全局 340 限宽刻度不放宽 */
+  max-width: min(340px, calc(100% - 2 * var(--dsw-font-s-14-line-height))); /* dsw-raw 原型 toast 限宽刻度（task-tab.css 同源） */
 }
 
 .dswf-td-diag {

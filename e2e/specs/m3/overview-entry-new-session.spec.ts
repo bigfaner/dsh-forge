@@ -29,13 +29,21 @@
 //     autosend（`任务：` / `失败记录：` / `请求：`）；
 //   - composer = [data-composer-input]（contenteditable）；转录 = [data-conversation-content]；
 //     会话头预设投影标签 = [class*="headerActions"] 文本（非 blank 在场）。
+//   - 会话语义（fix-3② 裁决，上游 0.2.0-rc.2 源码核实）：openWorkspace = reuse-or-create
+//     blank（同工作区 blank 会话被复用 + setDraft 整体替换——连续两次未发送的开会折叠为
+//     同一会话）；侧栏行可见判据 = 非 blank 常显 + 仅当前选中 blank 可见（官方浏览器口径
+//     sidebar-model sessionVisible）——blank 期的「两会话」与侧栏行锚不可观测（官方语义，
+//     非产品缺口；非 blank 行 = sc6「用户事件落地」同径常显）。
 //
 // Outcome → 测试映射：
 //   Step1 success（blitz 行头入口：突击起步 + 预填格式化 + 不自动发送）……………………「T1」
 //   Step1 multi-doc-prefill-boundary（多文档清单真实路径 + 无模式行 + 意图空位）…………「T1」
 //   Step1 expedition-proposal-align（远征提案对齐 + 同构预填）………………………………………「T1」
 //   Step1 no-mode-source-keeps-default（无溯源不切换 + chip 占位）………………………………「T1」
-//   Step1 draft-independence（会话间输入框独立——新开不覆盖既有草稿）……………………「T1」
+//   Step1 draft-independence（会话间输入面独立——新开不覆盖既有会话内容；fix-3② 诚实
+//   观测 = 首会话发送落地[非 blank]后开第二渠道：新会话真新建+输入框预填该渠道上下文，
+//   两会话行常驻可回访——blank 期 reuse-or-create 折叠为同会话，字面「未发送草稿保留」
+//   不可观测）……………………………………………………………………………………………「T1」
 //   Step2 success（补意图手动发送 = 预填全文入转录）/ empty-intent-send………………………「T1」
 //   Step3 success + context-drift-proof（feature 渠道恒远征——不随语境漂移）………………「T1」
 //   Step4 success（子图诊断失败 → 发送：远征 + 自动发送诊断体）………………………………「T2」
@@ -55,7 +63,7 @@
 //
 // Assertion depth: 44/48 behavioral（92%），其中 deep 18/44（41%）——两阈均过。
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
@@ -66,7 +74,9 @@ import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, SESSION_ROW_ANY, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { ensureNoBlockingDialog } from '../../support/modals.js'
+import { bestSessionLog } from '../../support/session-files.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
 const WS_NAME = 'ws-joes'
@@ -80,11 +90,31 @@ function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[])
   }
 }
 
+/**
+ * 夹具工作区全部会话 id（现行日志 mtime 升序 = 发送先后序——fix-3② Step1e 回访锚：
+ * 目录名 = 账本 sessionId，findFixtureSession 同口径扩展多会话枚举）。
+ */
+function fixtureSessionIds(dshHome: string, fixtureSegment: string): string[] {
+  const sessionsDir = join(dshHome, 'sessions')
+  if (!existsSync(sessionsDir)) return []
+  const found: { id: string; mtime: number }[] = []
+  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
+    for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
+      if (!sDir.isDirectory()) continue
+      const log = bestSessionLog(join(sessionsDir, wsDir.name, sDir.name))
+      found.push({ id: sDir.name, mtime: log !== undefined ? statSync(log).mtimeMs : 0 })
+    }
+  }
+  return found.sort((a, b) => a.mtime - b.mtime).map((entry) => entry.id)
+}
+
 test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突击/多文档/远征/无溯源）+ feature 恒远征 + 草稿独立 + 空意图发送', async () => {
   test.setTimeout(480_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes-'))
   const wsDir = join(fixtureRoot, WS_NAME)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes-ud-'))
+  const dshHome = join(userData, 'dsh-home')
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page, pageErrors } = launched
   try {
@@ -133,8 +163,20 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await page.waitForTimeout(2_000)
     await expect(draftA, '预填不自动发送（草稿留场）').toContainText('我的意图：')
 
+    // ── 首会话预填发送落地（fix-3② 裁决的诚实观测前置——空意图合法消息，Step2b 同径）──
+    // 官方 openWorkspace = reuse-or-create blank（上游 reuseOrCreateBlank：同工作区 blank
+    // 会话被复用 + setDraft 整体替换）——首会话草稿未发送（仍 blank）时第二渠道「打开新
+    // 会话」复用同一会话，合约 draft-independence 的「两会话 + 第一会话草稿原样保留」在
+    // blank 期不可实现（官方语义，非产品缺口）。首会话经用户发送落地（非 blank）后，
+    // 后续「打开新会话」方真新建——输入面独立 + 常驻可回访由此可诚实观测。
+    await draftA.click()
+    await page.keyboard.press('Enter')
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '首会话预填全文入转录（用户事件落地 = 非 blank）').toContainText('名称：Joe 多文档突击提案', { timeout: 60_000 })
+    await awaitNoLateModals(page)
+
     // ── Step3 + 3b：feature 行头 → 固定远征（当前语境 = 突击——不漂移）──
     await openOverviewDock(page)
+    await ensureNoBlockingDialog(page) // 晚到模态防拦截（首会话失败面漂移窗）
     await page.locator(ovSubtabOf('features')).click()
     await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const featOpen = page.locator('[data-dswf-ov-opensession="joe-feat"]').first()
@@ -153,20 +195,18 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await expect(draftB).toContainText('@docs/features/joe-feat/')
     await expect(draftB).toContainText('名称：Joe 恒远征 feature')
     await expect(draftB).toContainText('阶段：')
-
-    // ── Step1e：草稿独立（会话间输入框独立——新开不覆盖既有草稿）──
-    // 会话行住侧栏 ForgeWorkspacePanel 项目树——工作区已在开局选定（sc1 同径），会话
-    // 随「打开新会话」入树，侧栏常驻可回访
-    await expect(page.locator(SESSION_ROW_ANY).first(), '两会话常驻可回访（侧栏会话面）').toBeVisible({ timeout: 30_000 })
-    const sessionRows = page.locator(SESSION_ROW_ANY)
-    expect(await sessionRows.count(), '至少两会话在场（两次「打开新会话」）').toBeGreaterThanOrEqual(2)
-    await sessionRows.last().click()
-    const draftC = page.locator(COMPOSER_INPUT).last()
-    await expect(draftC, '切换后会话草稿恢复（独立在场——不被新开覆盖/清空）').toContainText('我的意图：', { timeout: 30_000 })
-    const draftCText = (await draftC.textContent()) ?? ''
-    expect(draftCText.includes('@docs/proposals/') || draftCText.includes('@docs/features/'), '恢复草稿 = 预填体原样（其一）').toBe(true)
+    // 第二会话预填发送落地（两会话均非 blank 常显——Step1e 回访断言面；空意图合法消息）
+    // 晚到模态防拦截：首会话零凭据模型失败的 API Key onboarding 可晚于 awaitNoLateModals
+    // 收敛窗挂载（数十秒漂移——M2 SC6③ 台账口径），发送点击前点掉
+    await ensureNoBlockingDialog(page)
+    await draftB.click()
+    await page.keyboard.press('Enter')
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '第二会话预填入转录（独立输入面——该渠道上下文）').toContainText('名称：Joe 恒远征 feature', { timeout: 60_000 })
+    await awaitNoLateModals(page)
 
     // ── Step1b：无溯源提案 → 不切换（保持远征）+ chip 缺省占位 ──
+    // （执行序注：Step1e 回访块移测试末段——会话行回访触发右栏布局晚沉降回休眠，
+    // 其后再开 dock 需 reveal 重拍（fix-3 实证）；先完成 dock 交互面再回访。）
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     const oldRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Joe 无溯源提案' }).first()
@@ -187,6 +227,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     // ── Step2b：空意图直接发送（自由文本输入——无字段校验拦截，消息照常发出）──
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer, '无溯源渠道预填在场').toContainText('名称：Joe 无溯源提案', { timeout: 30_000 })
+    await ensureNoBlockingDialog(page) // 晚到模态防拦截（前两会话失败面漂移窗）
     await composer.click()
     await page.keyboard.press('Enter')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '首条消息 = 预填上下文全文（草稿未被丢弃）').toContainText('名称：Joe 无溯源提案', { timeout: 60_000 })
@@ -194,6 +235,27 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await awaitNoLateModals(page)
     expect(await seatPresent(page, 1_000), '首回合后非 blank（座位退场）').toBe(false)
     await awaitPresetHeaderLabel(page, '远征模式')
+
+    // ── Step1e：两会话常驻可回访（fix-3② 裁决后诚实观测面——末段执行）──
+    // 侧栏行可见判据（官方浏览器口径，sidebar-model sessionVisible）：非 blank 常显、
+    // blank 仅当前选中者可见——回访断言取非 blank 行（sc6「用户事件落地」同径）。
+    // 行点回 → 转录恢复 = 中区会话面常驻（Page Composition）+ 既有会话内容不受新开影响。
+    const projBlock = page.locator(projectRowOf(projectId))
+    const [firstId, secondId] = fixtureSessionIds(dshHome, WS_NAME)
+    expect(firstId, '首会话目录在盘（发送落地开户）').toBeDefined()
+    expect(secondId, '第二会话目录在盘（两会话各自开户）').toBeDefined()
+    const rowFirst = projBlock.locator(sessionRowOf(firstId as string)).first()
+    const rowSecond = projBlock.locator(sessionRowOf(secondId as string)).first()
+    await expect(rowFirst, '首会话行常驻可回访（用户事件落地 = 非 blank 常显）').toBeVisible({ timeout: 60_000 })
+    await expect(rowSecond, '第二会话行常驻可回访（两会话均常驻）').toBeVisible({ timeout: 60_000 })
+    // 晚到模态防拦截（末会话发送的失败面同窗漂移——回访点击前点掉）
+    await ensureNoBlockingDialog(page)
+    await rowFirst.click()
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '回访首会话：转录恢复（中区会话面常驻——Page Composition）').toContainText('名称：Joe 多文档突击提案', { timeout: 30_000 })
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '首会话内容不受新开影响（会话间独立）').toContainText('我的意图：')
+    await ensureNoBlockingDialog(page) // 晚到模态防拦截（回访点击间隔窗）
+    await rowSecond.click()
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '回访第二会话：转录恢复（会话间独立——新开不覆盖既有会话内容）').toContainText('名称：Joe 恒远征 feature', { timeout: 30_000 })
 
     if (pageErrors.length > 0) console.log(`[joes-t1-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
@@ -355,10 +417,8 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     await expect(toast).toContainText('任务失败 · 受阻任务')
     await expect(toast).toContainText('状态：阻塞 — Joe 失败诊断演示（AC 证据缺口）')
     await expect(toast).toContainText('任务键：')
-    // 抽屉遮蔽处置：任务抽屉开时其面板拦截 toast 发送钮的指针事件——先关抽屉再点发送
-    // （toast 5s 档内完成；关闭不撤 toast）
-    await drawer.locator('[data-dswf-td-close]').click()
-    await expect(drawer).toBeHidden({ timeout: 10_000 })
+    // fix-3① 后直点（形态①）：toast 改锚脚行上方·右缘贴抽屉右内缘（max-width 收敛行集
+    // 换行）——发送钮在抽屉盒内可点，抽屉开时直点（toast 5s 档内）
     await toast.locator('[data-dswf-tt-diagtoast-send]').click()
     // 新会话：容器对应模式（突击提案 → 突击）+ 自动发送格式化失败诊断。
     // 转录渲染面：@docs/proposals/<slug>/ 首行解析为目录提及芯片（textContent = 裸 slug）

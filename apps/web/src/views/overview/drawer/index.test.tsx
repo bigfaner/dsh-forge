@@ -384,7 +384,7 @@ describe('TaskDrawerBody · 诊断失败按钮（AC3——仅 blocked/rejected�
     expect(html).not.toContain('诊断失败')
   })
 
-  it('diagResult 在场 → DiagToast 渲染于按钮包裹内（锚定按钮左侧）', () => {
+  it('diagResult 在场 → DiagToast 渲染于按钮包裹内（fix-3① 改锚：脚行上方·右缘贴抽屉右内缘——CSS 几何面，结构不变）', () => {
     const input = taskFailureInputOf(detailFixture({ taskStatus: 'blocked', blockedReason: '原因' }))
     const html = renderToStaticMarkup(
       TaskDrawerBody(

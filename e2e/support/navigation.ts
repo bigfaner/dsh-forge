@@ -39,16 +39,19 @@ export async function revealRightbar(page: Page): Promise<void> {
  *   · 官方开始页 guide 入口卡（首开径——产品 sidebarRightTabs.register guide entry
  *     order 0 最前；title = locale『项目概览』——locale 文案非 data-* 台账锚，留字面量）。
  * 已激活（body 在场）= 幂等直接返回。
+ * 两入口互斥呈现（tab 已开 = strip 在、guide 卡恒缺席）——reveal 后 strip 水化有时差，
+ * 短窗先等其一在场再择一（瞬时 isVisible 会误落 guide 分支 → tab 已开时入口卡 30s 空等
+ * ——fix-3 会话行回访后右栏收起再 reveal 的实证形态）。
  */
 export async function openOverviewDock(page: Page): Promise<void> {
   if ((await page.locator(OV_PANEL).first().isVisible().catch(() => false)) === true) return
   await revealRightbar(page)
   const stripTab = page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '项目概览' }).first()
+  const entry = page.locator(RIGHTBAR_COL).locator('button', { hasText: '项目概览' }).first()
+  await expect(stripTab.or(entry), '右栏 dock 概览入口在场（strip 页签 | guide 入口卡）').toBeVisible({ timeout: 10_000 })
   if ((await stripTab.isVisible().catch(() => false)) === true) {
     await stripTab.click()
   } else {
-    const entry = page.locator(RIGHTBAR_COL).locator('button', { hasText: '项目概览' }).first()
-    await expect(entry, '右栏 dock 概览入口卡在场（guide entry——产品 order 0 首卡）').toBeVisible({ timeout: 30_000 })
     await entry.click()
   }
   await expect(page.locator(OV_PANEL).first(), '概览 tab body 挂载（dswf-overview）').toBeVisible({ timeout: 30_000 })
