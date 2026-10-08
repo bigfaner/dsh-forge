@@ -2,6 +2,8 @@
 // 快照对齐源 = PRD prd-ui-functions.md「消息体示例」×5：①预填（提案渠道）/②任务失败（远征
 // 容器）/③任务失败（突击提案容器）/④feature 子图诊断/⑤派发指令单行——正文逐字转录，
 // 漂移即红（PRD = 权威快照源——eval 面与 4.4/4.6 组件消费同一输出）。
+// ①–④ 锚 = 标准布局显式 docsRoot '.forge/docs'（PRD 示例区注记同源——2026-10-09 锚点修正）；
+// docsRoot 缺席回退 `docs` 缺省锚的变体见 feature 渠道/bare 用例。
 import { describe, expect, it } from 'vitest'
 import {
   DISPATCH_COMMAND_PREFIX,
@@ -22,13 +24,13 @@ const proposalContainer: MessageContainer = {
 
 describe('formatPrefill（AC2——打开新会话现状预填）', () => {
   it('PRD 示例①逐字对齐（提案渠道：@path → 名称 → 摘要 → 状态 → 已生成文档清单 → 空行 → 我的意图空位）', () => {
-    const text = formatPrefill(proposalContainer, [
+    const text = formatPrefill({ ...proposalContainer, docsRoot: '.forge/docs' }, [
       { path: 'proposal.md', status: '评审中' },
       { path: 'review-notes.md', status: '草稿' },
     ])
     expect(text).toBe(
       [
-        '@docs/proposals/ui-polish-round/',
+        '@.forge/docs/proposals/ui-polish-round/',
         '名称：UI 打磨轮',
         '摘要：空态/加载态/错误态统一打磨',
         '状态：评审中',
@@ -48,7 +50,7 @@ describe('formatPrefill（AC2——打开新会话现状预填）', () => {
     expect(text).not.toContain('突击')
   })
 
-  it('feature 渠道（UF-4.5 同格式：@docs/features/ + 阶段行替代状态行；文档无状态 = 无括注）', () => {
+  it('feature 渠道（UF-4.5 同格式：docsRoot 缺席回退 @docs/ 缺省锚 + 阶段行替代状态行；文档无状态 = 无括注）', () => {
     const text = formatPrefill(
       {
         kind: 'feature',
@@ -103,6 +105,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
         title: 'M2 管线接管',
         summary: '状态层转正 + 插件执行链 + 任务/文档视图',
         phase: 'tasks',
+        docsRoot: '.forge/docs',
       },
       taskKey: 'dsh-forge-m2-pipeline/2.5',
       taskTitle: '概览 tab 三视图接线',
@@ -112,7 +115,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
     })
     expect(text).toBe(
       [
-        '@docs/features/dsh-forge-m2-pipeline/',
+        '@.forge/docs/features/dsh-forge-m2-pipeline/',
         '所属：M2 管线接管（feature）',
         '摘要：状态层转正 + 插件执行链 + 任务/文档视图',
         '阶段：任务',
@@ -133,6 +136,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
         slug: 'legacy-eval-retire',
         title: '旧线 eval 退役',
         summary: '完整 eval 体系不迁移',
+        docsRoot: '.forge/docs',
       },
       taskKey: 'legacy-eval-retire/1.2',
       taskTitle: '旧线 eval 退役走查（用例集冲突）',
@@ -144,7 +148,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
     })
     expect(text).toBe(
       [
-        '@docs/proposals/legacy-eval-retire/',
+        '@.forge/docs/proposals/legacy-eval-retire/',
         '所属：旧线 eval 退役（突击提案）',
         '摘要：完整 eval 体系不迁移',
         '任务：legacy-eval-retire/1.2 旧线 eval 退役走查（用例集冲突）',
@@ -165,6 +169,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
         title: 'P1 MVP',
         summary: '壳与桥接面 + 工作区注册 + dogfood 走查门',
         phase: 'completed',
+        docsRoot: '.forge/docs',
       },
       violations: [
         { kind: 'liveness', message: 'dsh-forge-p1-mvp/1.3 卡死子图（1.3 → 1.4 → 1.3），涉及 2 任务' },
@@ -172,7 +177,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
     })
     expect(text).toBe(
       [
-        '@docs/features/dsh-forge-p1-mvp/',
+        '@.forge/docs/features/dsh-forge-p1-mvp/',
         '所属：P1 MVP（feature）',
         '摘要：壳与桥接面 + 工作区注册 + dogfood 走查门',
         '阶段：已完成',

@@ -61,7 +61,7 @@ related: design/tech-design.md
 
 - **Target File**：apps/web client-plugin `openSessionWithPreset({ mode?, prefill, autosend? })` 组合子 + **跳转既有会话**（平台「按会话 id 打开」缝——实施期核实）
 - **行为序**：平台会话编排 API 创建 blank 会话 → mode 在场则 `agentPreset.select`（提案渠道 = 提案 mode·无溯源不切换；feature 渠道 = 固定远征；诊断发送 = 任务容器对应模式；**派发 = 容器对应模式，v22**）→ **composer 预填**（draft 缝·实施期核实）→ **autosend = 诊断两路 + 派发指令**（错误/派发直达例外——v22 扩容）；**派发跳转分支（v22）**：执行中任务在场 → 不新建，按其最新派发挂接会话 id 打开（task_session_links/claim 记录·taskDetail 水化）
-- **预填内容**（`formatPrefill` 纯函数）：`@docs/proposals|features/<标识>/` 第一行 → 名称/所属 → 摘要 → 状态/阶段 → 已生成文档真实路径清单 → **不含模式** → 末尾「我的意图：」空位（等待用户明确意图手动发送）
+- **预填内容**（`formatPrefill` 纯函数）：`@<docsRoot>/proposals|features/<标识>/` 第一行（docsRoot = docsRootOf(工作区, forge_dir) 数据推导——标准布局 `@.forge/docs/...`，仓外 forge 目录 = 绝对路径锚；2026-10-09 锚点修正）→ 名称/所属 → 摘要 → 状态/阶段 → 已生成文档真实路径清单 → **不含模式** → 末尾「我的意图：」空位（等待用户明确意图手动发送）
 
 ## Shared Components
 
