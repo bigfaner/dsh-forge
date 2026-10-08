@@ -1,8 +1,9 @@
 // 5.4 dogfood 录制器单测（vitest e2e-support 池——纯逻辑面；真实模型走查 = e2e spec）。
 // 覆盖：① buildDogfoodFixture 全链重建（verb/observed/event 三类行 + fix 链 restored +
-// 重入 digest 校验）；② 完整性 fail-loud（digest 缺席/全文指纹失配）；③ 会话文件
-// dispatchPrompt 全文抽取（tool/result render 标记行）；④ 种行器（受控初态——相位号
-// localId 直写，addTask 数值顺延不可达面）。
+// 重入 digest 校验——M3 形态：addTask source 容器双轨 + TaskSnapshot source/mode）；
+// ② 完整性 fail-loud（digest 缺席/全文指纹失配）；③ worker 会话首条 user/message
+// 全文抽取（M3 简报源——dispatchPrompt 零进 dispatcher 上下文，全文 = worker 会话日志）；
+// ④ 种行器（受控初态——相位号 localId 直写，addTask 数值顺延不可达面）。
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,7 +12,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { seedFeature } from '../../../packages/core/src/forge/tasks/harness.js'
 import {
   buildDogfoodFixture,
-  extractBriefTexts,
+  firstUserTextOf,
   seedDogfoodTaskRow,
   type DogfoodAuditRecord,
   type DogfoodEdgeRow,
@@ -52,6 +53,8 @@ function task(
     taskDesc: null,
     varsJson: null,
     sourceTaskId: null,
+    sourceKind: 'feature',
+    mode: 'expedition',
     createdAt: '2026-10-06T10:00:00.000Z',
     ...extra,
   }
@@ -162,21 +165,30 @@ describe('5.4 buildDogfoodFixture：审计重建三类行', () => {
       'claimTask:fix-1', 'submitTask:fix-1',
       'claimTask:2.1', 'submitTask:2.1',
     ])
-    // fix addTask 行：block_source 数据面（sourceRef + blockSource + vars + desc）
+    // fix addTask 行（M3 容器形态）：source ContainerRef + block_source 数据面（sourceRef + blockSource + vars + desc）
     const addArgs = verbs.find((v) => v.verb === 'addTask')!.args as Record<string, unknown>
     expect(addArgs).toMatchObject({
-      projectId: PROJECT, featureSlug: 'dogfood-demo', type: 'doc',
+      projectId: PROJECT, source: { kind: 'feature', slug: 'dogfood-demo' }, type: 'doc',
       sourceTask: { slug: 'dogfood-demo', localId: '2.1' }, blockSource: true,
       vars: { SOURCE_FILES: 'target.md' },
     })
-    // observed：首 claim 全文 + digest + reclaimed=false；重入 claim reclaimed=true
+    expect(addArgs.featureSlug, 'M2 旧载荷 featureSlug 已退役（drift #1——addTask source 容器双轨）').toBeUndefined()
+    // observed：首 claim 全文 + digest + reclaimed=false；重入 claim reclaimed=true；快照 M3 形态（source 容器 + mode 快照）
     const observed = fx.steps.filter(isObserved)
     const claimObs = observed.filter((o) => o.verb === 'claimTask')
     expect(claimObs).toHaveLength(7)
-    const first = claimObs[0]!.result as { dispatchPrompt: string; digest: string; reclaimed: boolean; task: { localId: string } }
+    const first = claimObs[0]!.result as {
+      dispatchPrompt: string
+      digest: string
+      reclaimed: boolean
+      task: { localId: string; source: { kind: string; slug: string }; mode?: string; featureId?: string }
+    }
     expect(first.dispatchPrompt).toBe(BRIEF_A1)
     expect(first.digest).toBe(digestOf(BRIEF_A1))
     expect(first.reclaimed).toBe(false)
+    expect(first.task.source, 'TaskSnapshot M3 形态：source 容器双轨').toEqual({ kind: 'feature', slug: 'dogfood-demo' })
+    expect(first.task.mode, 'mode 快照（tasks.mode 创建时快照）').toBe('expedition')
+    expect(first.task.featureId, 'M2 旧载荷 featureId 已退役（drift #1）').toBeUndefined()
     const reclaim = claimObs.find((o) => (o.result as { task?: { localId?: string } }).task?.localId === '3.1' && (o.result as { reclaimed: boolean }).reclaimed === true)
     expect(reclaim, '3.1 重入行 reclaimed=true 在场').toBeDefined()
     expect((reclaim!.result as { dispatchPrompt: string }).dispatchPrompt).toBe(BRIEF_C2)
@@ -257,31 +269,29 @@ describe('5.4 buildDogfoodFixture：审计重建三类行', () => {
   })
 })
 
-describe('5.4 extractBriefTexts：会话文件 tool/result 全文抽取', () => {
-  const MARKER = 'Dispatch brief — hand to the executor verbatim:\n'
-
-  function toolResult(texts: readonly string[], callId = 'call_1'): SessionEvent {
-    return {
-      type: 'tool/result',
-      seq: 2,
-      data: { message: { content: texts.map((t) => ({ type: 'text', text: t })) }, toolCallId: callId },
-    } as SessionEvent
+describe('5.3 firstUserTextOf：worker 会话首条 user/message 全文抽取（M3 简报源）', () => {
+  function userMessage(texts: readonly string[], seq: number): SessionEvent {
+    return { type: 'user/message', seq, data: { content: texts.map((t) => ({ type: 'text', text: t })) } } as SessionEvent
   }
 
-  it('render 标记行后取全文 → digest 键 Map；Z1 空结果/他工具忽略', () => {
+  it('首条 user/message 的 text 块拼接 = dispatchPrompt 全文；system/assistant/工具面忽略', () => {
     const events: SessionEvent[] = [
-      { type: 'system/message', seq: 1, data: { message: { content: [{ type: 'text', text: 'system prompt' }] } } },
-      { type: 'tool/call', seq: 2, data: { name: 'claimTask', arguments: '{}' } },
-      toolResult([`Task claimed: dogfood-demo/1.1 [in_progress] 任务 1.1 (type doc)\n${MARKER}${BRIEF_A1}`]),
-      toolResult(['No ready task in this workspace (nothing to claim) — wait for prerequisites to finish or finish the session.'], 'call_2'),
-      { type: 'tool/call', seq: 5, data: { name: 'queryTask', arguments: '{}' } },
-      toolResult(['Task queried: something'], 'call_3'),
-      toolResult([`Task claimed: dogfood-demo/3.1 [in_progress]\n(re-entry of an in-progress task — previous run did not submit; brief re-synthesized)\n${MARKER}${BRIEF_C2}`], 'call_4'),
+      { type: 'system/message', seq: 1, data: { message: { content: [{ type: 'text', text: 'system prompt（非简报源）' }] } } },
+      userMessage([BRIEF_A1], 2),
+      { type: 'assistant/message', seq: 3, data: { message: { content: [{ type: 'text', text: 'assistant 文本' }] } } },
+      { type: 'tool/call', seq: 4, data: { name: 'submitTask', arguments: '{}' } },
+      userMessage(['后续用户消息（工具结果转记面）'], 5),
     ]
-    const texts = extractBriefTexts(events)
-    expect(texts.get(digestOf(BRIEF_A1))).toBe(BRIEF_A1)
-    expect(texts.get(digestOf(BRIEF_C2))).toBe(BRIEF_C2)
-    expect(texts.size).toBe(2)
+    expect(firstUserTextOf(events)).toBe(BRIEF_A1)
+  })
+
+  it('多 text 块拼接；无 user/message 事件 → undefined（非 worker 形态会话）', () => {
+    const events: SessionEvent[] = [
+      { type: 'system/message', seq: 1, data: { message: { content: [{ type: 'text', text: 's' }] } } },
+      userMessage(['人格段 + 三标签块', '——', '续段'], 2),
+    ]
+    expect(firstUserTextOf(events)).toBe('人格段 + 三标签块\n——\n续段')
+    expect(firstUserTextOf([{ type: 'turn/end', seq: 1, data: { reason: 'x' } } as SessionEvent])).toBeUndefined()
   })
 })
 

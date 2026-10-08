@@ -590,7 +590,7 @@
         "4.gate",
         "5.2"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.3-sc-m3-dogfood-walkthrough.md",
       "record": "records/5.3-sc-m3-dogfood-walkthrough.md",
       "surface-type": "web",

@@ -1,10 +1,11 @@
 // @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.4 SC-M2 门：真实模型派发链 dogfood（含 fix 链 + 中断恢复）+ 录制夹具产出（AC1–AC5）。
 //
-// M3 drift 台账（5.2 落定——drift #1/#3 承接面，归 5.3 SC-M3 重录）：dispatcher 教学
-// prompt 仍指示 claimTask 派发循环（M3 3.5 tool 退役 → run-tasks 技能面 = dispatchTask）
-// + 录制夹具载荷持 M2 形态（featureSlug/无 mode）——两处随 5.3 dogfood 门以 M3 形态
-// 重录收口（tech-design drift #1/#3；本 spec 在 M3 期跑真实模型 = 既定红灯非回归）。
+// M3 drift 台账（5.3 收口——drift #1/#3 两处已重录）：dispatcher 教学 prompt = dispatchTask
+// 派发循环（run-tasks 技能 M3 形态——3.5 claimTask tool 退役；中断恢复经 dispatchTask 的
+// spawn 失败幂等重入径承载，模型按 tool 返回指引重试）+ 录制夹具载荷 = M3 形态（addTask
+// source 容器双轨 / TaskSnapshot source+mode / 简报全文源 = worker 会话首条 user/message
+// ——e2e/support/replay/dogfood-record.ts 5.3 重录；tech-design drift #1/#3 闭合）。
 //
 // dogfood 策略（tech-design Per-Layer dogfood 行 + Hard Rule：dogfood = 唯一真实模型依赖面）：
 // 低成本真实模型（zai-coding-cn / glm-5.3-flash——e2e/support/dogfood.ts 缺省），凭据经
@@ -15,17 +16,25 @@
 // 场景编排（相位号 localId 受控初态 = db-insert 直种——addTask 数值顺延不可达 2.1/3.1 面）：
 //   · 1.1 (P0) 成功径：notes.md 创建 + 四门（夹具 justfile 无害配方）+ git 提交 + submit success
 //     ——AC1「一条不间断端到端」（claim digest / 派发会话 ≠ 执行会话 / gate·files·commit）；
-//   · 2.1 (P1) fix 链：target.md 缺席 → submit blocked(reason 含修法指引) → addTask block_source
-//     单事务建链（fix-1 + fix-chain 边 + 源 auto-block 同事务记录相邻）→ fix 完成 → 恢复钩子
+//   · 2.1 (P1) fix 链（验证员角色——机械判据）：just verify-target 非零退出（target.md 缺席，
+//     justfile 内置配方）→ submit blocked(reason 含修法指引) → fix 任务经 run-tasks 技能 fix 链
+//     协议建立（dispatcher 承接或 worker 顺手建两径均可断言——addTask block_source 单事务：
+//     fix-1 + fix-chain 边 + 源 auto-block 同事务记录相邻）→ fix 完成 → 恢复钩子
 //     auto-restore（边不删——末态边仍在场）→ 2.1 二轮成功——AC2；
-//   · 3.1 (P1) 中断恢复：执行器按简报完成工作但【不 submitTask】（模拟会话中断/record 缺失）
-//     → 外环 queryTask 见 in_progress → 显式重入领取（reclaimed 记录 from/to 空）→ 恢复简报
-//     verify-only → submit success——AC3；重入 digest 新值驱动 = 3.2 (P2) 兄弟任务在 3.1 执行窗
-//     内由 harness 经测试钩子结算（相位推进 → PHASE_SUMMARY 行消失 → 简报重合成必异文）。
+//   · 3.1 (P1) 中断恢复（M3 形态·确定性注入）：harness 以【派发会话身份】预置领取 3.1
+//     （pending → in_progress + links 挂 dispatcher、零执行零结算 = missing-record 形态——
+//     替代「执行器完成但不结算」的模型依从面：flash 对多分支指令依从不稳（5.3 重录 run2/3
+//     实证——run3 恢复轮直接结算））→ dispatcher 下轮 dispatchTask 盲选必重入
+//     （latestInProgressBySession——C1 幂等重入，reclaimed 记录 from/to 空）→ 恢复 worker
+//     按简报全量执行并结算 success——AC3；重入 digest 新值驱动 = 3.2 (P2) 兄弟任务在两次
+//     claim 之间由 harness 经测试钩子结算（相位推进 → PHASE_SUMMARY 行消失 → 简报重合成
+//     必异文）。
 //
 // 录制（AC4）：三源合并 → e2e/support/replay/dogfood-record.ts（5.1 JSONL 夹具——verb 行回放
 // 执行面 / observed 行承载 claim dispatchPrompt 全文与 submit 结算+恢复清单 / event 行 = 主侧
-// tasks-changed 记账）落盘 e2e/fixtures/m2/dogfood-dispatch-chain.jsonl（5.2 回放消费）。
+// tasks-changed 记账；M3 形态：简报全文源 = worker 会话首条 user/message——closeApp 后落盘）
+// 落盘 e2e/fixtures/m2/dogfood-dispatch-chain.jsonl（历史工件——verb 载荷绑定录制期 projectId，
+// 回放消费面经同机构造 hand 夹具，b5-anchors 头注）。
 // 证据（AC5）：本 spec 头注环境备忘 + e2e/fixtures/m2/README.md 运行记录（真实 node 路径绕
 // harness node.cmd shim——shim 注入 ELECTRON_RUN_AS_NODE=1 致 electron 以 Node 模式启动，
 // playwright 报 bad option: --remote-debugging-port；S8 spike 实证）。
@@ -40,13 +49,13 @@ import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../supp
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../../support/dogfood.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../support/cleanup.js'
 import { COMPOSER_INPUT } from '../../support/anchors.js'
-import { decodeSessionFile, sessionLogById, waitForFixtureSession } from '../../support/session-files.js'
+import { waitForFixtureSession } from '../../support/session-files.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { loadFixture, writeFixture } from '../../support/replay/fixtures.js'
 import {
   buildDogfoodFixture,
-  extractBriefTexts,
+  extractWorkerBriefTexts,
   readDogfoodAudit,
   seedDogfoodTaskRow,
   type DogfoodAuditRecord,
@@ -62,10 +71,11 @@ const HARNESS_SESSION = 'e2e-harness'
 /** 录制夹具落盘路径（5.2 回放消费面——仓内工件） */
 const FIXTURE_OUT = join(ROOT, 'e2e', 'fixtures', 'm2', 'dogfood-dispatch-chain.jsonl')
 
+// M3 派发指令（dispatchTask 循环——run-tasks 技能 3.6 形态；容器语境经 context_slug 携带）
 const DISPATCHER_PROMPT = [
   '请调用 run-tasks 技能（skill 工具，name 填 run-tasks），然后严格按该技能的派发循环执行到底：',
-  '每轮 = claimTask 领取 → 把返回的 dispatchPrompt 全文原封不动交给一个匿名子代理（同步阻塞派发）执行 → queryTask 验证 → 续环。',
-  '按技能内协议处理：受阻任务走 fix 链（addTask block_source 建单事务修复任务）；执行器完成了工作但没调用 submitTask 的任务走 missing-record 恢复（显式重入领取后按恢复简报派发）；claimTask 返回 task=null 时输出 Dispatch Summary 收工。',
+  '每轮 = dispatchTask 单调用（context_slug 填 dogfood-demo）——工具自己领取任务、派发子代理执行并返回结算与池快照；按返回的池快照决定继续或收工。',
+  '按技能内协议处理：spawn 失败（✗ ERR_SPAWN_FAILED）时按返回指引原样重试同一调用（幂等重入——简报自动重合成）；受阻任务结算走 fix 链（addTask block_source 建单事务修复任务）；返回 no-task 且池态 = 收工时输出 Dispatch Summary 收工。',
   '派发会话自己不要改文件、不要跑测试——一切经子代理执行。',
 ].join('\n')
 
@@ -90,6 +100,10 @@ function makeDogfoodWorkspace(): string {
     'unit-test:',
     '    @echo unit-test-ok',
     'test: unit-test',
+    // 2.1 验证员任务的机械判据（target.md 缺席或缺 marker 行 → 非零退出——受阻径的
+    // 确定性触发面，替代模型对条件指令的依从）
+    'verify-target:',
+    `    @if (-not (Test-Path target.md) -or -not (Select-String -Path target.md -Pattern marker -Quiet)) { exit 1 }`,
     '',
   ].join('\n')
   writeFileSync(join(ws, 'justfile'), justfile, 'utf8')
@@ -103,11 +117,6 @@ function makeDogfoodWorkspace(): string {
   git(['add', '.'])
   git(['commit', '-m', 'chore: dogfood fixture base'])
   return wsRoot
-}
-
-/** 会话事件解码（文件未落盘 = 空流——落盘等待循环消费） */
-function decodeOrEmpty(path: string | undefined): ReturnType<typeof decodeSessionFile> {
-  return path === undefined ? [] : decodeSessionFile(path)
 }
 
 test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中断恢复）+ 录制夹具产出', async () => {
@@ -169,25 +178,25 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
           ].join('\n'),
         })
         seedDogfoodTaskRow(db, FEATURE, '2.1', {
-          title: '确保 target.md 存在且含一行 marker（缺席时受阻走 fix 链）',
+          title: '验证 target.md 在场且含一行 marker（缺席 = 受阻走 fix 链）',
           taskType: 'doc',
           priority: 'P1',
           taskDesc: [
-            '目标：target.md 在场且内容含一行 marker。',
-            '1) 若 target.md 不存在：不要创建它。直接 submitTask result=blocked，reason 填「target.md absent — fix: create target.md containing the single line: marker」，随后按 fix 链协议 addTask（type=doc、source=本任务、block_source=true）建修复任务。',
-            '2) 若 target.md 已存在：确保其中含一行 marker（无则追加），跑四门（just compile/fmt/lint/unit-test），git 提交，submitTask result=success（files=["target.md"]、四门布尔、commit_hash）。',
+            '【角色：验证员——只判定，绝不创建或修改 target.md】',
+            '步骤：1) 运行 just verify-target（justfile 已内置：target.md 缺失或缺 marker 行 → 非零退出）。',
+            '2) 非零退出：立即 submitTask result=blocked，reason 填「target.md absent — fix: create target.md containing the single line: marker」，然后立即结束——不要创建文件、不要建修复任务（派发会话按 fix 链协议承接）。',
+            '3) 零退出（验证通过）：跑四门（just compile/fmt/lint/unit-test），如工作区有未提交变更则 git 提交，submitTask result=success（files=["target.md"]、四门布尔、commit_hash 填提交哈希）。',
           ].join('\n'),
         })
         seedDogfoodTaskRow(db, FEATURE, '3.1', {
-          title: '中断恢复演练：创建 interrupt.md 但不结算',
+          title: '中断恢复演练：创建 interrupt.md 并结算（首轮经 harness 预置中断——领取后无结算）',
           taskType: 'doc',
           priority: 'P1',
           taskDesc: [
-            '这是中断恢复演练（模拟执行记录缺失）。',
-            '1) 在工作区根创建 interrupt.md，内容恰好一行：done',
+            '步骤：1) 在工作区根创建 interrupt.md，内容恰好一行：done',
             '2) 依次运行四门（just compile/fmt/lint/unit-test）确认通过',
-            '3) 用 git 提交该文件',
-            '4) 【关键】不要调用 submitTask——模拟执行器完成工作但未结算（会话中断）。在最终回复中报告“工作完成但未提交”后立即结束。',
+            '3) 用 git 提交该文件（Conventional Commits）',
+            '4) submitTask result=success：summary 简述、files=["interrupt.md"]、gate_compile/fmt/lint/test 四布尔全 true、commit_hash 填提交哈希',
           ].join('\n'),
         })
         seedDogfoodTaskRow(db, FEATURE, '3.2', {
@@ -214,7 +223,9 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     await composer.click()
     await page.keyboard.insertText(DISPATCHER_PROMPT)
     await page.keyboard.press('Enter')
-    const sessionId = await waitForFixtureSession(dshHome, WS_NAME, 120_000)
+    // 派发会话落盘开户确认（worker 会话 = 简报全文源，closeApp 后统一抽取）+ 会话 id 捕获
+    // （3.1 预置中断以【派发会话身份】领取——links 挂 dispatcher，下轮盲选必重入）
+    const dispatcherSessionId = await waitForFixtureSession(dshHome, WS_NAME, 120_000)
 
     // ── 中途结算 + 终态轮询（3.1 执行窗内 harness 结算 3.2 → 重入简报必异文） ──
     // 轮询面 = forge.db 直读（WAL 并发读——渲染进程零依赖：长会话渲染层可能崩溃，模型
@@ -245,8 +256,24 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
       if (proc.exitCode !== null) {
         throw new Error(`宿主进程提前退出：code=${String(proc.exitCode)} statuses=${JSON.stringify([...statuses.entries()])}`)
       }
-      if (!intervened && statuses.get('3.1') === 'in_progress' && statuses.get('3.2') === 'pending') {
+      if (
+        !intervened &&
+        statuses.get('3.1') === 'pending' &&
+        statuses.get('3.2') === 'pending' &&
+        [...statuses.values()].includes('in_progress') // 派发会话正忙于更早任务（无领取竞态窗口）
+      ) {
         const at = Date.now()
+        // ① 3.1 预置中断（missing-record 形态——确定性注入，替代「执行器完成但不结算」的
+        //    模型依从面）：以【派发会话身份】显式领取 → in_progress + links 挂 dispatcher、
+        //    零执行零结算。dispatcher 下轮 dispatchTask 盲选必重入（latestInProgressBySession
+        //    ——C1 幂等重入），恢复 worker 按简报全量执行并结算。
+        const interruptClaim = await driver.call('forgeTasks', 'claimTask', {
+          projectId,
+          taskRef: { slug: FEATURE, localId: '3.1' },
+          sessionId: dispatcherSessionId,
+        })
+        // ② 3.2 harness 结算（重入简报 digest 新值驱动：3.2 完成于两 claim 之间 →
+        //    PHASE_SUMMARY 行消失 → 简报重合成必异文）
         const claim = await driver.call('forgeTasks', 'claimTask', {
           projectId,
           taskRef: { slug: FEATURE, localId: '3.2' },
@@ -259,9 +286,9 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
           summary: 'harness 结算 3.2（3.1 重入简报 PHASE_SUMMARY 消失驱动——digest 新值）',
           sessionId: HARNESS_SESSION,
         })
-        harnessClaim.push({ at, result: claim }, { at, result: submit })
+        harnessClaim.push({ at, result: interruptClaim }, { at, result: claim }, { at, result: submit })
         intervened = true
-        console.log('[dogfood5.4] harness 中途结算 3.2 完成（3.1 执行窗内）')
+        console.log('[dogfood5.4] harness 预置 3.1 中断（派发会话身份领取·无结算）+ 中途结算 3.2 完成')
       }
       const unsettled = [...statuses.entries()].filter(([, s]) => s !== 'completed' && s !== 'skipped')
       if (unsettled.length === 0) break
@@ -273,15 +300,8 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     expect(intervened, 'harness 中途结算发生（3.2 在 3.1 执行窗内结算——digest 新值驱动）').toBe(true)
     console.log(`[dogfood5.4] 全任务终态收敛，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`)
 
-    // ── 会话落盘等待（派发简报全文抽取面——最后回合 flush） + 事件记账快照 ──
+    // ── 尾事件收敛等待 + 事件记账快照（worker 会话落盘 = closeApp 后——简报全文抽取前提） ──
     await sleep(8_000)
-    let sessionEvents = decodeOrEmpty(sessionLogById(dshHome, sessionId))
-    for (let i = 0; i < 6; i += 1) {
-      const claimCalls = sessionEvents.filter((e) => e.type === 'tool/call' && e.data?.name === 'claimTask').length
-      if (claimCalls >= 5) break
-      await sleep(10_000)
-      sessionEvents = decodeOrEmpty(sessionLogById(dshHome, sessionId))
-    }
     const bridgeEvents = await driver.events().catch((cause: unknown) => {
       console.error('[dogfood5.4] 事件记账快照失败（宿主连接态）：', String((cause as Error)?.message ?? cause))
       return [] as { at: number; channel: string; payload: { projectId: string } }[]
@@ -302,8 +322,8 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     })
     launched = undefined
 
-    // ── 三源合并 → 录制夹具落盘（AC4——5.1 JSONL 格式） ──
-    const briefTexts = extractBriefTexts(sessionEvents)
+    // ── 三源合并 → 录制夹具落盘（AC4——5.1 JSONL 格式；M3 简报源 = worker 会话首条 user/message） ──
+    const briefTexts = extractWorkerBriefTexts(dshHome)
     for (const call of harnessClaim) {
       const r = call.result as { digest?: string; dispatchPrompt?: string }
       if (typeof r?.digest === 'string' && typeof r?.dispatchPrompt === 'string') briefTexts.set(r.digest, r.dispatchPrompt)
@@ -323,7 +343,7 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
       briefTexts,
       harnessCalls: [],
       events: bridgeEvents,
-      meta: { note: `SC-M2 dogfood 首录 ${new Date(startedAt).toISOString()}——受控初态=相位号直种(db-insert)；3.2=harness 中途结算` },
+      meta: { note: `SC-M2 dogfood M3 重录 ${new Date(startedAt).toISOString()}（5.3 drift #1/#3 收口）——dispatchTask 循环 + worker 会话简报源；受控初态=相位号直种(db-insert)；3.2=harness 中途结算` },
     })
     writeFixture(FIXTURE_OUT, fixture)
     const reloaded = loadFixture(FIXTURE_OUT)

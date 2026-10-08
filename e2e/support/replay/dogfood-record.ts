@@ -1,28 +1,31 @@
 // 5.4 dogfood 录制器（tech-design §录制-回放——dogfood = 录制源；AC4 载体）。
+// 5.3 M3 形态重录（drift #1/#3 收口）：dispatcher 循环 = dispatchTask（claimTask tool 退役）
+// → 简报零进 dispatcher 上下文，全文源 = worker 会话日志首条 user/message（closeApp 后落盘）。
 // 三面：
 //   · 重建（buildDogfoodFixture）——dogfood 跑后三源合并 → 5.1 JSONL 夹具：
 //     ① forge.db 审计（task_records 追加序 = 动词序列真相——args 自记录行水化；
 //        core 效果行 auto-block/auto-restore 不入 verb 面，恢复清单入 submit observed）；
-//     ② dispatchPrompt 全文（digest → text：模型派发会话文件 tool/result render 文本抽取
-//        + harness 桥调用直录——全文不入库 §6-11，会话文件 = 模型侧唯一可查面）；
+//        M3 载荷形态：addTask source 容器双轨 + TaskSnapshot source/mode（featureId 退役）；
+//     ② dispatchPrompt 全文（digest → text：worker 会话文件首条 user/message 文本抽取
+//        + harness 桥调用直录——全文不入库 §6-11，worker 会话日志 = 唯一可查面）；
 //     ③ 主侧测试钩子事件记账（tasks-changed 推送 = 事件行）。
 //     完整性 fail-loud：每条 claim 记录的 digest 必须命中全文 Map 且 sha256 前 12 逐字一致
 //     （录制源完整性——回放 golden 断言的原料不可带伤落盘）。
-//   · 抽取（extractBriefTexts）——session tool/result 文本块中 claimTask render 标记行
-//     （"Dispatch brief — hand to the executor verbatim:"）之后即简报全文（render 原文投影，
-//     claim-task.ts renderClaimResult 单源）。
+//   · 抽取（extractWorkerBriefTexts / firstUserTextOf）——隔离 DSH_HOME 会话树逐文件
+//     解码，首条 user/message 的 text 块拼接 = dispatchPrompt 全文（上游 0.2.0-rc.2
+//     session 事件面：user/message 载荷 = data.content 文本块——dsh-session-query 同式）。
 //   · 种行（seedDogfoodTaskRow）——受控初态直写（db-insert 形制）：相位号 localId（2.1/3.1
 //     ——addTask 数值顺延不可达面）与 desc/priority 全字段（core harness seedTask 未载面）。
 import { createHash } from 'node:crypto'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { TaskPriority } from '../../../packages/contracts/src/dto/forge.js'
 import type { TaskType } from '../../../packages/contracts/src/labels.js'
 import type { SessionEvent } from '../session-files.js'
+import { bestSessionLog, decodeSessionFile } from '../session-files.js'
 import { createFixtureBuilder, type FixtureMeta } from './fixtures.js'
 import type { ReplayFixture, ReplayServiceName, ReplayWriteVerb } from './format.js'
-
-/** claimTask render 标记行（claim-task.ts renderClaimResult——标记行后 = 简报全文） */
-export const BRIEF_RENDER_MARKER = 'Dispatch brief — hand to the executor verbatim:\n'
 
 // ─── 审计读面（task_records / tasks / task_edges 水化——追加序真相） ───
 
@@ -46,7 +49,7 @@ export interface DogfoodAuditRecord {
   readonly createdAt: string
 }
 
-/** tasks 行（重建 addTask/claim args 的字段源） */
+/** tasks 行（重建 addTask/claim args 的字段源——M3 增 source_kind/mode 快照列） */
 export interface DogfoodTaskRow {
   readonly id: string
   readonly slug: string
@@ -57,6 +60,10 @@ export interface DogfoodTaskRow {
   readonly taskDesc: string | null
   readonly varsJson: string | null
   readonly sourceTaskId: string | null
+  /** 容器判别列（M3 1.2：feature | proposal——slug ≡ 容器 slug 不变量） */
+  readonly sourceKind: 'feature' | 'proposal'
+  /** 容器模式快照（NULL = 未标记提案直挂） */
+  readonly mode: string | null
   readonly createdAt: string
 }
 
@@ -76,7 +83,8 @@ export function readDogfoodAudit(db: Database.Database): {
   const tasks = db
     .prepare<unknown[], DogfoodTaskRow>(
       `SELECT id, slug, local_id AS localId, title, task_type AS taskType, priority, task_desc AS taskDesc,
-         vars_json AS varsJson, source_task_id AS sourceTaskId, created_at AS createdAt
+         vars_json AS varsJson, source_task_id AS sourceTaskId, source_kind AS sourceKind, mode,
+         created_at AS createdAt
        FROM tasks ORDER BY created_at, id`,
     )
     .all()
@@ -97,26 +105,46 @@ export function readDogfoodAudit(db: Database.Database): {
   return { tasks, edges, records }
 }
 
-// ─── 全文抽取（会话文件 tool/result——digest 键 Map） ───
+// ─── 全文抽取（worker 会话文件首条 user/message——digest 键 Map） ───
 
 /**
- * 会话事件流 → 简报全文 Map（digest → text）。扫全部 tool/result 文本块：含 render 标记行
- * 的块取标记行后全文，sha-256 前 12 hex 为键（与 claim record digest 同式——重建时按 digest
- * 命中）。Z1 空领取与他工具结果自然忽略（无标记行）。
+ * 会话事件流 → 首条 user/message 全文（M3 简报源）。dispatchPrompt 经 spawn 面直达 worker
+ * （零进 dispatcher 上下文——裁决①），worker 会话首条用户消息 = 简报逐字全文；text 块拼接
+ * （上游 user/message 载荷 = data.content，非 data.message.content）。无 user/message 事件
+ * （dispatcher/系统面会话）→ undefined。
  */
-export function extractBriefTexts(events: readonly SessionEvent[]): Map<string, string> {
-  const out = new Map<string, string>()
+export function firstUserTextOf(events: readonly SessionEvent[]): string | undefined {
   for (const event of events) {
-    if (event.type !== 'tool/result') continue
-    const blocks = event.data?.message?.content ?? []
+    if (event.type !== 'user/message') continue
+    const blocks = (event.data as { content?: readonly { readonly type?: string; readonly text?: string }[] } | undefined)?.content ?? []
+    const parts: string[] = []
     for (const block of blocks) {
-      const text = block.text
-      if (text === undefined) continue
-      const at = text.indexOf(BRIEF_RENDER_MARKER)
-      if (at === -1) continue
-      const brief = text.slice(at + BRIEF_RENDER_MARKER.length)
-      if (brief === '') continue
-      out.set(digestOfText(brief), brief)
+      if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
+    }
+    if (parts.length === 0) continue
+    return parts.join('\n')
+  }
+  return undefined
+}
+
+/**
+ * 隔离 DSH_HOME 会话树 → 简报全文 Map（digest → text）。逐会话现行日志解码，首条
+ * user/message 全文以 sha-256 前 12 hex 为键（与 claim record digest 同式——重建时按
+ * digest 命中）。dispatcher 会话首条用户消息 = 派发指令（digest 不命中 claim 面，自然
+ * 忽略）；worker 会话（in-process 子会话——closeApp 后落盘）承载全部简报全文。
+ */
+export function extractWorkerBriefTexts(dshHome: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const sessionsDir = join(dshHome, 'sessions')
+  if (!existsSync(sessionsDir)) return out
+  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!wsDir.isDirectory()) continue
+    for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
+      if (!sDir.isDirectory()) continue
+      const log = bestSessionLog(join(sessionsDir, wsDir.name, sDir.name))
+      if (log === undefined) continue
+      const brief = firstUserTextOf(decodeSessionFile(log))
+      if (brief !== undefined && brief !== '') out.set(digestOfText(brief), brief)
     }
   }
   return out
@@ -226,9 +254,12 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
             sessionId: record.sessionId ?? '',
           }).observed('forgeTasks', 'claimTask', {
             task: {
-              taskId: task.id, slug: task.slug, localId: task.localId, featureId: '', title: task.title,
+              taskId: task.id, slug: task.slug, localId: task.localId,
+              source: { kind: task.sourceKind, slug: task.slug }, // M3 容器双轨（featureId 退役）
+              title: task.title,
               taskType: task.taskType, taskStatus: 'in_progress', ...(task.taskDesc !== null ? { taskDesc: task.taskDesc } : {}),
               ...(task.priority !== null ? { priority: task.priority } : {}),
+              ...(task.mode !== null ? { mode: task.mode } : {}), // M3 mode 快照
             },
             dispatchPrompt: brief,
             digest: record.dispatchDigest,
@@ -286,7 +317,7 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         make: (b) => {
           b.verb('forgeTasks', 'addTask', {
             projectId: input.projectId,
-            featureSlug: task.slug,
+            source: { kind: task.sourceKind, slug: task.slug }, // M3 容器双轨（featureSlug 退役——drift #1）
             title: task.title,
             type: task.taskType,
             ...(task.taskDesc !== null ? { taskDesc: task.taskDesc } : {}),
