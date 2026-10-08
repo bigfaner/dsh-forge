@@ -107,8 +107,8 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 **Context**: worker 既能干活又不越权（不问用户、不派生子代）；受阻上报径完整。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-009（prd-spec §In Scope ①·§Flow Description 流程四 5 / prd-user-stories Story 5）
 
-### BIZ-task-015: 派发仅按 DAG 就绪序——无单任务直接执行入口
+### BIZ-task-015: 派发按 DAG 就绪序——容器绑定认领（source 限定），无单任务直接执行入口
 
-**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序）；UI 与 tool 面同语义——无指定单个任务直接执行的入口（用户裁决 2026-10-08）；派发指令只携带容器标识（「/run-tasks <容器标识>」单行最小消息——dispatchTask 唯一必要参数 = contextSlug）。
-**Context**: 消灭跳序执行旁路；派发入口两途（工具栏按钮/会话内 run-tasks）汇入同一 dispatcher 循环。
-**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）
+**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序）；**`/run-tasks <容器标识>` 绑定容器只派该容器**（dispatchTask 携带 source_kind+source_slug 成对参数——claim 限定该容器就绪池 + 会话重入仅同容器 in_progress；用户裁决 2026-10-08 同日改判，推翻同日早前「无指定单个任务直接执行的入口」与「唯一必要参数 = contextSlug」口径）；source 缺席 = 全库 DAG 就绪盲选缺省（程序/RPC 面兜底）；容器内仍无指定单个任务直接执行的入口（UI 与 tool 面同语义）。
+**Context**: 消灭跳序执行旁路（DAG 序不变）；容器绑定消灭跨容器误领（事件归属 contextSlug 语义不变）；派发入口两途（工具栏按钮/会话内 run-tasks）汇入同一 dispatcher 循环。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）；改判 = proposal/dispatch-container-scoped-claim（2026-10-08，core M3 2.4 容器限定盲选管道接线）

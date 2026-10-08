@@ -70,8 +70,15 @@ function noReadyExit(): ClaimTaskResult {
 /**
  * 盲选重入解析（C1）：本会话 links 已挂接的 in_progress 任务（最新挂接优先——恢复「本会话
  * 最近派发的活」）；缺席 → undefined（盲选不领他会话 in_progress——双 dispatcher 不双派发）。
+ * scope 感知（M3 2.4 接线）：source 在场 = 容器限定派发——仅回领同容器（source_kind + slug
+ * 匹配）挂接行；本会话在全池时代领过的他容器 in_progress 不被回领（跨容器活不被 scoped
+ * 派发劫持）。source 缺席 = 重入语义零变化（全库缺省）。
  */
-function latestInProgressBySession(db: Database.Database, sessionId: string): TaskStorageRow | undefined {
+function latestInProgressBySession(
+  db: Database.Database,
+  sessionId: string,
+  source: ContainerRef | undefined,
+): TaskStorageRow | undefined {
   const linked = db
     .prepare<unknown[], { task_id: string }>(
       `SELECT task_id FROM task_session_links WHERE session_id = ? ORDER BY id DESC`,
@@ -79,7 +86,11 @@ function latestInProgressBySession(db: Database.Database, sessionId: string): Ta
     .all(sessionId)
   for (const { task_id } of linked) {
     const row = taskById(db, task_id)
-    if (row?.task_status === 'in_progress') return row // 最新挂接优先（恢复本会话最近派发的活）
+    if (row?.task_status !== 'in_progress') continue // 最新挂接优先（恢复本会话最近派发的活）
+    if (source !== undefined && (row.source_kind !== source.kind || row.slug !== source.slug)) {
+      continue // scoped 派发：跳过他容器挂接行
+    }
+    return row
   }
   return undefined
 }
@@ -88,7 +99,8 @@ function latestInProgressBySession(db: Database.Database, sessionId: string): Ta
  * 就绪选择（§6-35⑧）：①分支延续——范围内最近满足任务（completed/skipped，updated_at 最新）
  * 的就绪 pending 直接后继；②无延续 → 全局就绪 pending 池按 priority → 创建序。
  * 仅扫 pending 池（Hard Rule）；scope = 容器限定（M3 2.4：source_kind + slug 双列判别——
- * 成链撞键下 kind 可分；slug 列 ≡ 容器 slug 不变量）。缺席容器 → 就绪池恒空 → Z1 出口。
+ * 成链撞键下 kind 可分；slug 列 ≡ 容器 slug 不变量）。scope 缺席 = 全库就绪池
+ * （contracts ClaimTaskInput 缺省语义）；命中容器无就绪任务 → Z1 出口。
  */
 function selectReadyTask(db: Database.Database, source: ContainerRef | undefined): TaskStorageRow | undefined {
   const scope = source === undefined ? '' : ` AND t.source_kind = ? AND t.slug = ?`
@@ -185,12 +197,13 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
   const result = withTransaction(db, (): ClaimTaskResult => {
     // ① 目标解析：显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
-    //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常）
+    //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常；
+    //    重入同承 scope——他容器挂接行跳过，scoped 派发不劫持全池时代的跨容器活）
     let row: TaskStorageRow | undefined
     if (input.taskRef !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
-      row = latestInProgressBySession(db, input.sessionId) ?? selectReadyTask(db, input.source)
+      row = latestInProgressBySession(db, input.sessionId, input.source) ?? selectReadyTask(db, input.source)
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
 

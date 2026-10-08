@@ -99,6 +99,7 @@ interface Harness {
   exec: ToolExecFace
   events: ForgePluginEvent[]
   calls: { claim: number; stats: number; query: number; list: number; submit: number; dispose: number }
+  claimInputs: unknown[]
   spawnRequests: SpawnWorkerRequest[]
   setClaim(result: ClaimTaskResult): void
   setQuery(result: QueryTaskResult): void
@@ -111,6 +112,7 @@ function harness(options: { settings?: { get(): Promise<unknown> } } = {}): Harn
   const exec = execOf()
   const { sink, events } = sinkStub()
   const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0, dispose: 0 }
+  const claimInputs: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
   let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
@@ -127,7 +129,8 @@ function harness(options: { settings?: { get(): Promise<unknown> } } = {}): Harn
     return okHandle()
   }
   const tasks = {
-    claimTask: async () => {
+    claimTask: async (input: unknown) => {
+      claimInputs.push(input)
       calls.claim += 1
       return claimResult
     },
@@ -171,6 +174,7 @@ function harness(options: { settings?: { get(): Promise<unknown> } } = {}): Harn
     exec,
     events,
     calls,
+    claimInputs,
     spawnRequests,
     setClaim: (r) => {
       claimResult = r
@@ -202,6 +206,23 @@ describe('parseDispatchTaskArgs（防御收窄）', () => {
     expect(parseDispatchTaskArgs({ context_slug: 'feat-x' })).toEqual({ context_slug: 'feat-x' })
     expect(() => parseDispatchTaskArgs({ context_slug: 3 })).toThrow(/context_slug must be a string/)
     expect(() => parseDispatchTaskArgs(null)).toThrow(/must be an object/)
+  })
+
+  it('source 对（容器限定认领）：成对解析为 ContainerRef；与 context_slug 可同场', () => {
+    expect(parseDispatchTaskArgs({ source_kind: 'proposal', source_slug: 'pa' })).toEqual({
+      source: { kind: 'proposal', slug: 'pa' },
+    })
+    expect(
+      parseDispatchTaskArgs({ context_slug: 'pa', source_kind: 'feature', source_slug: 'fa' }),
+    ).toEqual({ context_slug: 'pa', source: { kind: 'feature', slug: 'fa' } })
+  })
+
+  it('source 对半对即拒（both or neither）；kind 词表收窄', () => {
+    expect(() => parseDispatchTaskArgs({ source_kind: 'feature' })).toThrow(/source_kind and source_slug must be given together/)
+    expect(() => parseDispatchTaskArgs({ source_slug: 'fa' })).toThrow(/source_kind and source_slug must be given together/)
+    expect(() => parseDispatchTaskArgs({ source_kind: 'widget', source_slug: 'fa' })).toThrow(
+      /source_kind must be one of \[feature, proposal\]/,
+    )
   })
 })
 
@@ -558,6 +579,25 @@ describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions 
     const h = harness()
     await h.tool.execute({}, h.exec)
     expect(h.spawnRequests[0]?.agentOptions).toBeUndefined()
+  })
+})
+
+describe('claim 入参透传（M3 2.4 容器限定接线）', () => {
+  it('source 对在场：claimTask 收 source 引用（容器限定盲选激活）', async () => {
+    const h = harness()
+    await h.tool.execute({ context_slug: 'pa', source_kind: 'proposal', source_slug: 'pa' }, h.exec)
+    expect(h.claimInputs).toEqual([
+      { projectId: 'p-1', sessionId: expect.any(String), source: { kind: 'proposal', slug: 'pa' } },
+    ])
+  })
+
+  it('source 对缺席：claimTask 不含 source 键（全库盲选——缺省行为零变化）', async () => {
+    const h = harness()
+    await h.tool.execute({ context_slug: 'feat-x' }, h.exec)
+    expect(h.claimInputs[0]).not.toHaveProperty('source')
+    const bare = harness()
+    await bare.tool.execute({}, bare.exec)
+    expect(bare.claimInputs[0]).not.toHaveProperty('source')
   })
 })
 

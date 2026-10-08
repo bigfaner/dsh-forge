@@ -12,8 +12,30 @@ changes only through the pipeline verbs (`dispatchTask` / `queryTask` / `addTask
 `submitTask`), never through files, the database, or parallel state.
 
 Works identically in both modes: containers may be features (expedition chain) or
-proposals with directly attached tasks (blitz chain). Selection is DAG readiness over
-the pool — there is no way to pick a specific task, by design.
+proposals with directly attached tasks (blitz chain). Selection is DAG readiness —
+`/run-tasks <slug>` binds the loop to that one container (below); inside a container
+there is still no way to pick a specific task, by design.
+
+## Container Binding (source_kind + source_slug; context_slug = event attribution)
+
+When invoked as `/run-tasks <container-slug>` (the dispatch entry sends exactly that),
+the slug binds the whole loop to that single container:
+
+1. Resolve the container kind once, up front, and carry it on every call: `feature`
+   when the slug is a feature directory, `proposal` when it is a proposal slug (a
+   queryTask on any task of the container reports the container kind). If the kind
+   cannot be resolved, ask the user — never guess.
+2. Pass `source_kind` + `source_slug` (both or neither) on EVERY dispatchTask call of
+   the loop. Scoped claim: only that container's ready tasks are selected, and session
+   re-entry only resumes same-container in_progress tasks — a foreign-container task
+   this session claimed pool-wide earlier is NOT resumed by a scoped loop.
+3. `context_slug` remains pure event attribution for no-task events (`logs/<slug>.jsonl`)
+   — pass the same slug there too.
+
+Absent the source pair, dispatchTask claims pool-wide (programmatic/RPC callers, and
+loops genuinely not bound to a container). A scoped loop that gets `no-task` while the
+pool snapshot still shows foreign pending work is settling THAT container — report the
+container as settled, not the whole pool.
 
 ## Dispatcher Iron Laws
 
@@ -26,14 +48,6 @@ the pool — there is no way to pick a specific task, by design.
 4. Do not invent work: when no task is ready, follow the pool verdict below — never
    fabricate tasks to keep the loop busy.
 </EXTREMELY-IMPORTANT>
-
-## Container Context (context_slug)
-
-When invoked as `/run-tasks <container-slug>` (the dispatch entry sends exactly that),
-pass the slug as `context_slug` on every call. It attributes no-task events to that
-container's log (`logs/<slug>.jsonl`) — nothing more: claim selection stays pool-wide
-DAG readiness and is NOT filtered by the context. Omit it only when no container is
-identified.
 
 ## Loop — the four dispatchTask exits
 

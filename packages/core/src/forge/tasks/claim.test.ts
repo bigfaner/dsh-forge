@@ -504,4 +504,31 @@ describe('AC（2.4）claimTask 容器双轨：容器限定盲选 + dispatchPromp
     expect(rows(`SELECT * FROM features`)).toEqual([])
     expect(rows(`SELECT COUNT(*) AS n FROM task_session_links`)).toEqual([{ n: 1 }])
   })
+
+  it('容器限定盲选重入：本会话领过的他容器 in_progress 不被回领——领 scope 内就绪任务', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fa', status: 'tasks' })
+    seedTask(h!.db, 'fa', '1.1')
+    seedProposal(h!.db, { slug: 'pa', mode: 'blitz' })
+    seedTask(h!.db, 'pa', '2.2', { kind: 'proposal', mode: 'blitz' })
+    // 全池时代先领他容器任务（本会话挂接 in_progress）
+    await claim({ projectId: P(), taskRef: { slug: 'fa', localId: '1.1' }, sessionId: 's1' })
+    // scoped 盲选：不得回领 fa/1.1，应领 pa/2.2
+    const r = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'pa' }, sessionId: 's1' })
+    expect(r.task).toMatchObject({ slug: 'pa', localId: '2.2', taskStatus: 'in_progress' })
+    expect(r.reclaimed).toBe(false)
+    // fa/1.1 零打扰：仍 in_progress、无第二条 claim 记录
+    expect(rows(`SELECT task_status FROM tasks WHERE slug = 'fa'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = 't-fa-1.1'`)).toEqual([{ n: 1 }])
+  })
+
+  it('容器限定盲选重入：scope 内本会话 in_progress 照常回领（reclaimed=true）', async () => {
+    const claim = svc()
+    seedProposal(h!.db, { slug: 'pa', mode: 'blitz' })
+    seedTask(h!.db, 'pa', '1.1', { kind: 'proposal', mode: 'blitz' })
+    await claim({ projectId: P(), taskRef: { slug: 'pa', localId: '1.1' }, sessionId: 's1' })
+    const again = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'pa' }, sessionId: 's1' })
+    expect(again.task).toMatchObject({ slug: 'pa', localId: '1.1' })
+    expect(again.reclaimed).toBe(true)
+  })
 })

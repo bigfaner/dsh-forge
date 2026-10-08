@@ -11,6 +11,7 @@
 // （ERR_SPAWN_FAILED + 人话指引：带 taskRef 重入重试/人工转移——任务留 in_progress 走
 // 幂等重入径，不走 submit-blocked：执行受阻语义）。
 import type {
+  ContainerRef,
   ForgePluginEvent,
   ForgeSettings,
   Mode,
@@ -22,6 +23,7 @@ import type {
   WorkerToolFamily,
 } from '@dsh-forge/contracts'
 import {
+  CONTAINER_KINDS,
   WORKER_GLOBAL_DENY_TOOLS,
   WORKER_TASK_FAMILY_BY_TYPE,
   WORKER_TOOL_FAMILIES,
@@ -31,26 +33,43 @@ import {
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
-import { optionalString, requireArgsObject } from './args.js'
+import { optionalEnum, optionalString, requireArgsObject } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, requireSessionId, sessionContextOf } from './session.js'
 
 const TOOL = 'dispatchTask'
 
-// ─────────────────────────── 参数面（contextSlug = 事件归属语境——非 claim 限定） ───────────────────────────
+// ─────────────────────────── 参数面（contextSlug = 事件归属语境；source 对 = 容器限定认领） ───────────────────────────
 
-/** agent 面参数（唯一参 = 容器语境 slug；claim 就绪选择 = 全库盲选——Cross-Layer Data Map：
- *  contextSlug 只承担无任务事件归属，无容器限定语义） */
+/**
+ * agent 面参数：context_slug 只承担无任务事件归属（缺省回落 _pool 兜底）；
+ * source_kind+source_slug（M3 2.4 容器限定盲选接线——/run-tasks <slug> 绑定容器语义）
+ * 同进同退，在场时 claim 就绪选择限定该容器、会话重入仅回领同容器 in_progress；
+ * 缺席 = 全库 DAG 就绪盲选（缺省行为，既有调用面零变化）。
+ */
 export interface DispatchTaskToolArgs {
   /** 容器语境 slug（no-ready-task 事件归属；缺省回落 _pool 兜底） */
   readonly context_slug?: string
+  /** 容器限定认领引用（source_kind+source_slug 成对解析产物） */
+  readonly source?: ContainerRef
 }
 
-/** 参数防御性收窄 */
+/** 参数防御性收窄（source 对半对即拒——拼接歧义防护） */
 export function parseDispatchTaskArgs(args: unknown): DispatchTaskToolArgs {
   const a = requireArgsObject(args, TOOL)
   const contextSlug = optionalString(a, 'context_slug', TOOL)
-  return contextSlug === undefined ? {} : { context_slug: contextSlug }
+  const kind = optionalEnum(a, 'source_kind', CONTAINER_KINDS, TOOL)
+  const slug = optionalString(a, 'source_slug', TOOL)
+  if (kind === undefined && slug === undefined) {
+    return contextSlug === undefined ? {} : { context_slug: contextSlug }
+  }
+  if (kind === undefined || slug === undefined) {
+    throw new Error(`${TOOL}: source_kind and source_slug must be given together (both or neither)`)
+  }
+  return {
+    ...(contextSlug === undefined ? {} : { context_slug: contextSlug }),
+    source: { kind, slug },
+  }
 }
 
 // ─────────────────────────── 池快照（裁决⑪：现状感知·无状态） ───────────────────────────
@@ -352,7 +371,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
   return {
     name: TOOL,
     description:
-      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, spawns an in-process worker that executes the dispatch briefing and submits the outcome itself, then returns the settlement with a live pool snapshot. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. On spawn failure the task stays in_progress for idempotent re-entry; 3 consecutive failures halt this session (a new session resets the guard).',
+      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, spawns an in-process worker that executes the dispatch briefing and submits the outcome itself, then returns the settlement with a live pool snapshot. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. On spawn failure the task stays in_progress for idempotent re-entry; 3 consecutive failures halt this session (a new session resets the guard). Optional source_kind+source_slug pair (both or neither) scopes the claim to that single container: only its ready tasks are selected and session re-entry only resumes same-container in_progress tasks; absent = pool-wide readiness selection.',
     parameters: {
       type: 'object',
       properties: {
@@ -360,6 +379,16 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           type: 'string',
           description:
             'Container slug for event attribution when no task is ready (feature directory name or proposal slug).',
+        },
+        source_kind: {
+          type: 'string',
+          description:
+            "Container kind ('feature' | 'proposal') scoping the claim to one container — must be given together with source_slug; absent = pool-wide readiness selection.",
+        },
+        source_slug: {
+          type: 'string',
+          description:
+            'Container slug scoping the claim to one container (feature directory name or proposal slug) — must be given together with source_kind; absent = pool-wide readiness selection.',
         },
       },
     },
@@ -411,7 +440,12 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           }
 
           // 1. claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
-          const claimed = await deps.tasks.claimTask({ projectId, sessionId })
+          //    （source 对在场 = 容器限定盲选；缺席 = 全库——缺省行为零变化）
+          const claimed = await deps.tasks.claimTask({
+            projectId,
+            sessionId,
+            ...(parsed.source !== undefined ? { source: parsed.source } : {}),
+          })
           const task = claimed.task
           if (task === null) {
             // Z1 出口：no-ready-task 事件（contextSlug 归属）+ 池快照现读
