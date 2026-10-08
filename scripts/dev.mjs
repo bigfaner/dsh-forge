@@ -55,8 +55,21 @@ function start(name, cmd, env = {}) {
 start('vite', 'pnpm -C apps/web watch')
 start('tsc', 'pnpm exec tsc -b --watch')
 
-const HOST_MAIN = join(ROOT, 'apps/host/dist/main.js')
-const ELECTRON_PATH_TXT = join(ROOT, 'apps/host/node_modules/electron/path.txt')
+const HOST_DIR = join(ROOT, 'apps/host')
+const HOST_MAIN = join(HOST_DIR, 'dist/main.js')
+// 直连 electron 二进制而非 `pnpm -C apps/host exec electron .`：DSH 桌面端给 PATH 上的
+// node/pnpm 垫片注入 ELECTRON_RUN_AS_NODE=1（Electron 二进制当纯 Node 跑），该变量经
+// pnpm → electron shim → cli.js 一路继承，electron.exe 会以 Node 模式而非主进程模式启动
+// ——ESM main 的 `import { BrowserWindow } from 'electron'` 链接到未初始化的空模块，
+// 报 "does not provide an export named 'BrowserWindow'" 退出（实测复现/修复）。
+// 垫片的 @set 在子进程内部重新注入该变量，故必须绕开垫片链 + 显式 delete。
+const ELECTRON_EXE = join(
+  HOST_DIR,
+  'node_modules',
+  'electron',
+  'dist',
+  process.platform === 'win32' ? 'electron.exe' : 'electron',
+)
 setTimeout(() => {
   if (!existsSync(HOST_MAIN)) {
     console.warn(
@@ -64,14 +77,22 @@ setTimeout(() => {
     )
     return
   }
-  if (!existsSync(ELECTRON_PATH_TXT)) {
+  if (!existsSync(ELECTRON_EXE)) {
     // S1/memory 实测：pnpm 11 不执行 electron 安装脚本——二进制须手动补齐（1.4 前执行一次）
     console.warn(
       '[dev] electron 二进制未安装——先执行：ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node apps/host/node_modules/electron/install.js（spike S1 记录；当前仅 vite + tsc watch）。',
     )
     return
   }
-  start('electron', 'pnpm -C apps/host exec electron .', { DSH_FORGE_DEV_PROFILE: 'dev' })
+  const electronEnv = { ...process.env, DSH_FORGE_DEV_PROFILE: 'dev' }
+  delete electronEnv.ELECTRON_RUN_AS_NODE
+  const p = spawn(ELECTRON_EXE, [HOST_DIR], { stdio: 'inherit', cwd: ROOT, env: electronEnv })
+  procs.push(['electron', p])
+  p.on('exit', (code) => {
+    if (shuttingDown) return
+    if (code) console.error(`[dev] electron exited (${code})`)
+  })
+  console.log(`[dev] electron: ${ELECTRON_EXE} ${HOST_DIR}`)
 }, 2500)
 
 function bye() {
