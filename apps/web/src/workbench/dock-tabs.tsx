@@ -21,6 +21,7 @@ import { EmptyState } from '../components/index.js'
 import type { RpcClientFactory } from '../rpc/index.js'
 import { OverviewTab, type OverviewTasksContext } from '../views/overview/OverviewTab.js'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
+import { useProjectDocsRoot } from '../views/overview/overview-data.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
 import { TasksTab } from '../views/overview/task-tab/task-tab.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
@@ -148,6 +149,9 @@ export interface OverviewDockAssemblyProps {
   readonly taskFocus?: ForgeTaskFocus | null
   /** feature 选中释放（4.2——用户 pill 菜单切换即释放聚焦覆盖，恢复本地切换） */
   readonly onFeatureUserSwitch?: () => void
+  /** 任务失败诊断 @ 锚文档根（OverviewDockBody fail-soft 装载注入——useProjectDocsRoot
+   *  项目行推导；缺席 = TaskDrawer 回退 `docs` 缺省锚） */
+  readonly docsRoot?: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -174,6 +178,7 @@ export function OverviewDockAssembly({
   onCloseTransition,
   taskFocus,
   onFeatureUserSwitch,
+  docsRoot,
   makeClient,
 }: OverviewDockAssemblyProps): ReactNode {
   if (projectId === null) {
@@ -203,6 +208,7 @@ export function OverviewDockAssembly({
       activeTaskId={drawerTaskId ?? undefined}
       {...(taskFocus !== null && taskFocus !== undefined ? { featureSlug: taskFocus.featureSlug } : {})}
       {...(onFeatureUserSwitch !== undefined ? { onFeatureUserSwitch } : {})}
+      {...(ctx.docsRoot !== undefined ? { docsRoot: ctx.docsRoot } : {})}
       {...(onStartSession !== undefined ? { onStartSession } : {})}
       {...(onOpenSession !== undefined ? { onOpenSession } : {})}
       makeClient={makeClient}
@@ -227,6 +233,7 @@ export function OverviewDockAssembly({
         onOpenSession={onOpenSession}
         onTransition={onOpenTransition}
         {...(onStartSession !== undefined ? { onStartSession } : {})}
+        {...(docsRoot !== undefined ? { docsRoot } : {})}
         makeClient={makeClient}
       />
       {transitionTarget !== null ? (
@@ -294,6 +301,10 @@ export function OverviewDockBody({
       ? { task: dialogLoad.detail, allowedTransitions: dialogLoad.detail.allowedTransitions }
       : null
 
+  // 任务失败诊断 @ 锚文档根（fail-soft 装载：projects.get 项目行推导——抽屉在概览头路
+  // 之外渲染，独立装载；失败/缺席 = undefined 不阻断，TaskDrawer 回退 `docs` 缺省锚）
+  const docsRoot = useProjectDocsRoot(overview.projectId, makeClient)
+
   // 打开新会话通道（4.6）：锚定 workspaceId + openSessionWithPreset 组合子（失败留场归
   // 阶段化错误——编排器各阶段 fail-soft 不炸壳；预填不发送/诊断与派发 autosend 语义归请求）
   const handleStartSession = useCallback(
@@ -338,6 +349,7 @@ export function OverviewDockBody({
       onCloseTransition={handleCloseTransition}
       taskFocus={appliedFocus}
       onFeatureUserSwitch={handleFeatureUserSwitch}
+      {...(docsRoot !== undefined ? { docsRoot } : {})}
       makeClient={makeClient}
     />
   )

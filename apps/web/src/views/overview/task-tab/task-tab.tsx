@@ -74,6 +74,27 @@ function emptyTaskCounts(): Record<TaskStatus, number> {
   }
 }
 
+/**
+ * 子图诊断容器水化（handleDiagnose 消费——纯面单测锚）：feature 卡查找补全
+ * （title/summary/phase，卡缺席回退 resolved 标题）+ @ 锚文档根注入（docsRootOf
+ * 项目行推导；缺席 = 键缺席 → pathLine 回退 `docs` 缺省锚）。
+ */
+export function subgraphDiagContainer(
+  resolved: { readonly slug: string; readonly title: string },
+  features: readonly FeatureCard[],
+  docsRoot?: string,
+): MessageContainer {
+  const card = features.find((f) => f.slug === resolved.slug)
+  return {
+    kind: 'feature',
+    slug: resolved.slug,
+    title: card?.title ?? resolved.title,
+    ...(card?.summary !== undefined ? { summary: card.summary } : {}),
+    ...(card !== undefined ? { phase: card.featureStatus } : {}),
+    ...(docsRoot !== undefined ? { docsRoot } : {}),
+  }
+}
+
 /** 容器菜单行集（双轨：slug + 突击标记（突击提案）+ chip——feature 完成比 / 突击任务数） */
 export function containerMenuItems(
   options: readonly TaskContainerOption[],
@@ -424,6 +445,8 @@ export interface TasksTabProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 跳转既有会话（4.6 派发 jump 路由——uiWorkspace.openSession；缺席 = 跳转降级 no-op） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** @ 锚文档根（OverviewTasksContext 帧内 head 推导——docsRootOf；缺席 = `docs` 缺省锚） */
+  readonly docsRoot?: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -450,6 +473,7 @@ export function TasksTab({
   activeTaskId,
   onStartSession,
   onOpenSession,
+  docsRoot,
   makeClient = preloadRpcClientFactory,
 }: TasksTabProps): ReactNode {
   const options = useMemo(() => taskContainerOptions(features, proposals), [features, proposals])
@@ -487,19 +511,11 @@ export function TasksTab({
         setDiagResult(subgraphDiagOk())
         return
       }
-      const card = features.find((f) => f.slug === resolved.slug)
-      const diagContainer: MessageContainer = {
-        kind: 'feature',
-        slug: resolved.slug,
-        title: card?.title ?? resolved.title,
-        ...(card?.summary !== undefined ? { summary: card.summary } : {}),
-        ...(card !== undefined ? { phase: card.featureStatus } : {}),
-      }
-      setDiagResult(subgraphDiagFail(diagContainer, report.violations))
+      setDiagResult(subgraphDiagFail(subgraphDiagContainer(resolved, features, docsRoot), report.violations))
     } catch (error) {
       setDiagResult(diagServiceError(error instanceof Error ? error.message : String(error)))
     }
-  }, [resolved, features, projectId, makeClient])
+  }, [resolved, features, projectId, makeClient, docsRoot])
   const handleDiagDismiss = useCallback((): void => {
     setDiagResult(undefined)
   }, [])

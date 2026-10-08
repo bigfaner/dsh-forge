@@ -12,8 +12,9 @@
 // Fact Table 摘录（源码核实）：
 //   - 行头入口：[data-dswf-ov-opensession="<slug>"]（proposal-tab.tsx:273 /
 //     feature-tab.tsx:154）；提案 mode chip = [data-dswf-mode-chip]（unmarked = 缺省占位）；
-//   - 预填（message-format.ts formatPrefill）：`@docs/proposals|features/<slug>/` 第一行 →
-//     `名称：<title>` → [`摘要：`] → `状态：`（提案——PROPOSAL_STATUS_LABELS.zh）|
+//   - 预填（message-format.ts formatPrefill）：`@<docsRoot>/proposals|features/<slug>/` 第一行
+//     （docsRoot = docsRootOf(ws, forge_dir) 数据驱动——本夹具 <ws>\.forge → `.forge/docs`；
+//     缺席回退 `docs`）→ `名称：<title>` → [`摘要：`] → `状态：`（提案——PROPOSAL_STATUS_LABELS.zh）|
 //     `阶段：`（feature）→ `已生成文档：` + `· <path>（<status>?）` 逐行（提案文档 =
 //     listDocs fs 扫描相对容器目录裁剪前缀；feature 文档 = feature_documents 行）→ 空行 →
 //     `我的意图：`（末行空位）；**不含模式行**；
@@ -151,8 +152,8 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     expect(await seatPresent(page), '新会话座位在场（blank 期）').toBe(true)
     const draftA = page.locator(COMPOSER_INPUT).last()
     await expect(draftA, 'composer 预填在场（draft 缝）').toBeVisible({ timeout: 30_000 })
-    // 预填格式（multi-doc-prefill-boundary）：
-    await expect(draftA).toContainText('@docs/proposals/joe-blitz/')
+    // 预填格式（multi-doc-prefill-boundary）——@ 锚数据驱动（forge_dir 投影）：
+    await expect(draftA).toContainText('@.forge/docs/proposals/joe-blitz/')
     await expect(draftA).toContainText('名称：Joe 多文档突击提案')
     await expect(draftA).toContainText('状态：草稿')
     await expect(draftA).toContainText('已生成文档：')
@@ -192,7 +193,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     expect(seatText.includes('远征') || seatText.includes('expedition'), `feature 渠道恒远征（当前语境突击不漂移——label=${seatText}）`).toBe(true)
     const draftB = page.locator(COMPOSER_INPUT).last()
     await expect(draftB, 'feature 同构预填在场').toBeVisible({ timeout: 30_000 })
-    await expect(draftB).toContainText('@docs/features/joe-feat/')
+    await expect(draftB).toContainText('@.forge/docs/features/joe-feat/')
     await expect(draftB).toContainText('名称：Joe 恒远征 feature')
     await expect(draftB).toContainText('阶段：')
     // 第二会话预填发送落地（两会话均非 blank 常显——Step1e 回访断言面；空意图合法消息）
@@ -318,8 +319,9 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
     await expect(failToast).toContainText('joe-diag/1.3')
     await failToast.locator('[data-dswf-tt-diagtoast-send]').click()
     // 新会话：远征（feature 容器专属——无突击分支）+ 自动发送格式化失败诊断。
-    // 转录渲染面：@docs/features/joe-diag/ 首行被会话渲染器解析为目录提及芯片（textContent
-    // = 裸 slug），字面 @path 不在转录 DOM——容器锚以「所属：」归属行断言（pathLine 同源）
+    // 转录渲染面：@.forge/docs/features/joe-diag/ 首行（docsRootOf 数据驱动锚）同径被会话
+    // 渲染器解析为目录提及芯片（textContent = 裸 slug），字面 @path 不在转录 DOM——容器锚
+    // 以「所属：」归属行断言（pathLine 同源，断言不取锚字面故前缀变化不受影响）
     await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 容器归属行（提及芯片渲染面）').toContainText('所属：Joe 违规子图 feature（feature）', { timeout: 60_000 })
     await expect(page.locator(CONVERSATION_CONTENT).first(), '诊断行 + validateFeatureTasks 失败').toContainText('诊断：validateFeatureTasks 失败')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '请求行（请排查修复）').toContainText('请求：')
@@ -421,8 +423,9 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     // 换行）——发送钮在抽屉盒内可点，抽屉开时直点（toast 5s 档内）
     await toast.locator('[data-dswf-tt-diagtoast-send]').click()
     // 新会话：容器对应模式（突击提案 → 突击）+ 自动发送格式化失败诊断。
-    // 转录渲染面：@docs/proposals/<slug>/ 首行解析为目录提及芯片（textContent = 裸 slug）
-    // ——容器锚以「所属：」归属行断言（pathLine 同源）
+    // 转录渲染面：@.forge/docs/proposals/<slug>/ 首行（docsRootOf 数据驱动锚）解析为目录
+    // 提及芯片（textContent = 裸 slug）——容器锚以「所属：」归属行断言（pathLine 同源，
+    // 断言不取锚字面故前缀变化不受影响）
     await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 容器归属行（提及芯片渲染面）').toContainText('所属：Joe 失败诊断突击提案（突击提案）', { timeout: 60_000 })
     await expect(page.locator(CONVERSATION_CONTENT).first(), '任务键 + 失败记录逐行').toContainText('任务：')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '状态行（阻塞 + 原因）').toContainText('状态：')

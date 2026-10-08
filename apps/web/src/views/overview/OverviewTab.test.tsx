@@ -214,7 +214,7 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
     expect(suspendedChip).toContain('disabled')
   })
 
-  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features/proposals（4.6 容器双轨源）', () => {
+  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features/proposals（4.6 容器双轨源）+ docsRoot（head 项目行推导）', () => {
     const filter: OverviewFilterState = {
       ...initialOverviewFilter(),
       subtab: 'tasks',
@@ -233,17 +233,32 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
           features: readonly FeatureCard[]
           proposals: readonly { slug: string }[]
           projectId: string
+          docsRoot?: string
         }
         return (
           <div data-dswf-test-slot="">
-            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}|${c.proposals[0]?.slug ?? ''}`}
+            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}|${c.proposals[0]?.slug ?? ''}|${c.docsRoot ?? ''}`}
           </div>
         )
       },
     })
     expect(markup).toContain('data-dswf-test-slot')
-    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline|m2-pipeline')
+    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline|m2-pipeline|.forge/docs')
     expect(markup).not.toContain('data-dswf-ov-stchips') // 槽在场 = chips 由 3.6 组合（接口同源）
+  })
+
+  it('ctx.docsRoot 推导口径：HEAD 夹具 <ws>/.forge（正斜杠输入）→ `.forge/docs`；head 缺席 = 键缺席（回退缺省锚）', () => {
+    let seen: string | undefined = '__unset__'
+    frame({
+      head: undefined,
+      phase: 'loading',
+      filter: { ...initialOverviewFilter(), subtab: 'tasks' as const },
+      renderTasksTab: (ctx) => {
+        seen = (ctx as { docsRoot?: string }).docsRoot
+        return null
+      },
+    })
+    expect(seen).toBeUndefined()
   })
 })
 

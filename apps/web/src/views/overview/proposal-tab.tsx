@@ -75,8 +75,13 @@ export function proposalPrefillDocs(docs: readonly ProposalDocRow[], slug: strin
  * 打开新会话请求（提案渠道·UF-1.4）：mode = 提案溯源（无溯源不切换——registry 默认远征）；
  * prefill = formatPrefill 现状上下文（@path 首行 → 名称 → 摘要? → 状态 → 文档清单 →
  * 「我的意图：」空位）；**不自动发送**（预填渠道恒 autosend 缺省——v13 裁决）。
+ * docsRoot = @ 锚文档根（项目行推导注入；缺席 = `docs` 缺省锚）。
  */
-export function proposalPrefillRequest(proposal: ProposalCard, docs: readonly ProposalDocRow[]): SessionOpenRequest {
+export function proposalPrefillRequest(
+  proposal: ProposalCard,
+  docs: readonly ProposalDocRow[],
+  docsRoot?: string,
+): SessionOpenRequest {
   return {
     ...(proposal.mode !== undefined ? { mode: proposal.mode } : {}),
     prefill: formatPrefill(
@@ -85,6 +90,7 @@ export function proposalPrefillRequest(proposal: ProposalCard, docs: readonly Pr
         slug: proposal.slug,
         title: proposal.title,
         proposalStatus: proposal.proposalStatus,
+        ...(docsRoot !== undefined ? { docsRoot } : {}),
       },
       proposalPrefillDocs(docs, proposal.slug),
     ),
@@ -356,7 +362,7 @@ export function ProposalsTabBody({
             </div>
           )
         })}
-        <p className="dswf-ov-footnote">docs/proposals/ · 仓内只读</p>
+        <p className="dswf-ov-footnote">forge docs/proposals/ · 只读</p>
       </div>
     </div>
   )
@@ -384,6 +390,8 @@ export interface ProposalsTabProps {
   readonly onOpenDoc: (docRel: string) => void
   /** 打开新会话通道（装配注入——openSessionWithPreset；缺席 = 行头按钮不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
+  /** @ 锚文档根（帧侧 head 项目行推导——docsRootOf；缺席 = `docs` 缺省锚） */
+  readonly docsRoot?: string
   readonly emptyTitle?: string
   readonly now?: number
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
@@ -408,6 +416,7 @@ export function ProposalsTab({
   docsMap,
   onOpenDoc,
   onStartSession,
+  docsRoot,
   emptyTitle,
   now,
   makeClient = preloadRpcClientFactory,
@@ -418,9 +427,9 @@ export function ProposalsTab({
 
   const handleOpenSession = useCallback(
     (proposal: ProposalCard, docs: readonly ProposalDocRow[]): void => {
-      onStartSession?.(proposalPrefillRequest(proposal, docs))
+      onStartSession?.(proposalPrefillRequest(proposal, docs, docsRoot))
     },
-    [onStartSession],
+    [onStartSession, docsRoot],
   )
   const handleVerdict = useCallback((proposal: ProposalCard): void => {
     setVerdictTarget({ ...proposal, mode: proposal.mode })

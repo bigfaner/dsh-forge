@@ -15,6 +15,7 @@ import {
 } from './collapse.js'
 import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, taskFailureInputOf } from './index.js'
 import { taskFailureDiagToast } from '../task-tab/DiagToast.js'
+import { docsRootOf, formatDiagMessage } from '../message-format.js'
 
 const NOOP = (): void => {}
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
@@ -449,5 +450,16 @@ describe('taskFailureInputOf（AC3 诊断第二路数据面——容器水化 + 
     expect(input.container.kind).toBe('proposal')
     expect('phase' in input.container).toBe(false)
     expect(input.reason).toBe('—')
+  })
+
+  it('docsRoot 注入（第二参——项目行推导）：container.docsRoot 透传 → formatDiagMessage 首行 `@.forge/docs/...`；缺席 = 键缺席', () => {
+    const detail = detailFixture({ taskStatus: 'blocked', blockedReason: '原因' })
+    const docsRoot = docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')
+    const input = taskFailureInputOf(detail, docsRoot)
+    expect(input.container.docsRoot).toBe('.forge/docs')
+    expect(formatDiagMessage(input).split('\n')[0]).toBe('@.forge/docs/features/m2-pipeline/')
+    const bare = taskFailureInputOf(detail)
+    expect('docsRoot' in bare.container).toBe(false)
+    expect(formatDiagMessage(bare).split('\n')[0]).toBe('@docs/features/m2-pipeline/')
   })
 })

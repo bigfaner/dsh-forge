@@ -17,6 +17,7 @@ import {
   proposalMenuItems,
   proposalMenuSelect,
 } from './proposal-tab.js'
+import { docsRootOf } from './message-format.js'
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
 const CREATED = '2026-10-01T08:00:00.000Z'
@@ -197,6 +198,16 @@ describe('预填请求组装（AC1——提案 mode/无溯源不切换 + 不自�
     const request = proposalPrefillRequest(P_ACCEPTED, [])
     expect('mode' in request).toBe(false)
     expect(request.prefill).toContain('已生成文档：')
+  })
+
+  it('docsRoot 注入（第三参——项目行推导）：夹具 <ws>/.forge → 首行 `@.forge/docs/proposals/<slug>/`；缺席回退 @docs', () => {
+    const docsRoot = docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')
+    expect(docsRoot).toBe('.forge/docs')
+    const request = proposalPrefillRequest(P_REVIEW, DOCS, docsRoot)
+    expect(request.prefill.split('\n')[0]).toBe('@.forge/docs/proposals/m2-pipeline/')
+    expect(request.prefill).toContain('名称：提案 m2-pipeline') // 其余行不受锚前缀影响
+    const fallback = proposalPrefillRequest(P_REVIEW, DOCS)
+    expect(fallback.prefill.split('\n')[0]).toBe('@docs/proposals/m2-pipeline/')
   })
 
   it('docPathInProposal：前缀裁剪；非该前缀原样（悬空容忍）', () => {

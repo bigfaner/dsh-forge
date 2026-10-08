@@ -18,10 +18,16 @@ import { PROPOSAL_STATUS_LABELS, TASK_STATUS_LABELS } from '@dsh-forge/contracts
  * 均可结构映射入本形状（诊断 = 前者；预填 = 后者）。
  */
 export interface MessageContainer {
-  /** 容器类型（决定 @path 前缀 docs/features|proposals 与所属种类词） */
+  /** 容器类型（决定 @path 前缀 features|proposals 段与所属种类词） */
   readonly kind: 'feature' | 'proposal'
   /** 容器标识（目录名——@path 锚） */
   readonly slug: string
+  /**
+   * @path 锚文档根前缀（docsRootOf 推导——工作区相对段[如 `.forge/docs`]或仓外绝对
+   * 正斜杠路径；缺席 = `docs` 缺省锚）。消息内 @ 引用按会话工作区根解析，而文档事实
+   * 源在 forge_dir 之下——标准 <ws>\.forge 部署需 `.forge/docs` 前缀锚才不悬空。
+   */
+  readonly docsRoot?: string
   readonly title: string
   readonly summary?: string
   /** 提案状态（proposal 渠道预填「状态：」行——ProposalCard.proposalStatus 映射） */
@@ -70,9 +76,45 @@ export interface SessionOpenRequest {
   readonly autosend?: boolean
 }
 
-/** @path 第一行（容器目录锚——`@docs/features|proposals/<标识>/`） */
+/**
+ * 路径归一（flows/add-project form-model normalizeDirPath 同口径镜像——本模块零跨视图
+ * import）：`/` → `\` + 去尾分隔符（盘符根 `Z:\` → `Z:`——拼接/比较统一基准）。
+ */
+function normalizeFsPath(path: string): string {
+  return path.replaceAll('/', '\\').replace(/\\+$/, '')
+}
+
+/** 全反斜杠 → 正斜杠（@ 锚正斜杠口径——浏览器安全字符串运算，零 node:path） */
+function toForwardSlashes(path: string): string {
+  return path.replaceAll('\\', '/')
+}
+
+/** 大小写不敏感前缀判定（Windows 盘符/目录名大小写漂移容忍——长度取前缀原长切片） */
+function startsWithIgnoreCase(haystack: string, prefix: string): boolean {
+  return haystack.length >= prefix.length && haystack.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()
+}
+
+/**
+ * @ 锚文档根推导（纯函数——字符串运算零 node:path）：镜像 flows/add-project form-model
+ * normalizeDirPath / isForgeDirExternal 归一口径（`/` → `\`、去尾分隔、大小写不敏感、
+ * 段边界敏感）。三分支：仓内（forge = <ws>\…）→ forge 去工作区前缀段 + `/docs`
+ * （如 `.forge/docs`）；forge = 工作区根 → `docs`；仓外（注册可仓外）→ 全正斜杠
+ * 绝对路径 + `/docs`（@ 引用按工作区根解析需绝对锚）。
+ */
+export function docsRootOf(workspaceDir: string, forgeDir: string): string {
+  const ws = normalizeFsPath(workspaceDir)
+  const forge = normalizeFsPath(forgeDir)
+  if (ws === '' || forge === '') return `${toForwardSlashes(forge)}/docs`
+  if (forge.toLowerCase() === ws.toLowerCase()) return 'docs'
+  if (startsWithIgnoreCase(forge, `${ws}\\`)) {
+    return `${toForwardSlashes(forge.slice(ws.length + 1))}/docs`
+  }
+  return `${toForwardSlashes(forge)}/docs`
+}
+
+/** @path 第一行（容器目录锚——`@<docsRoot>/features|proposals/<标识>/`；docsRoot 缺席回退 `docs`） */
 function pathLine(container: MessageContainer): string {
-  return `@docs/${container.kind === 'feature' ? 'features' : 'proposals'}/${container.slug}/`
+  return `@${container.docsRoot ?? 'docs'}/${container.kind === 'feature' ? 'features' : 'proposals'}/${container.slug}/`
 }
 
 /**

@@ -157,8 +157,9 @@ function ResultView({ result }: { readonly result: ReturnType<typeof taskResultO
  * 任务失败诊断输入组装（4.6 UF-3 · v19–v21——AC3 诊断第二路数据面）：
  * 容器水化（taskDetail.container——MessageContainer 结构映射）+ 失败原因（blockedReason
  * 优先，回退最近失败记录）+ 最近记录 ≤3（verb/at/note——DiagRecordLine 映射）。
+ * docsRoot = @ 锚文档根（项目行推导注入；缺席 = 键缺席 → pathLine 回退 `docs` 缺省锚）。
  */
-export function taskFailureInputOf(detail: TaskDetail): TaskFailureDiagInput {
+export function taskFailureInputOf(detail: TaskDetail, docsRoot?: string): TaskFailureDiagInput {
   const recent = [...detail.records].slice(-3)
   const records = recent.map((record) => ({
     verb: record.verb,
@@ -176,6 +177,7 @@ export function taskFailureInputOf(detail: TaskDetail): TaskFailureDiagInput {
       title: detail.container.title,
       ...(detail.container.summary !== undefined ? { summary: detail.container.summary } : {}),
       ...(detail.container.phase !== undefined ? { phase: detail.container.phase } : {}),
+      ...(docsRoot !== undefined ? { docsRoot } : {}),
     },
     taskKey: `${detail.slug}/${detail.localId}`,
     taskTitle: detail.title,
@@ -511,6 +513,8 @@ export interface TaskDrawerProps {
   readonly onTransition?: (taskId: string) => void
   /** 打开新会话通道（4.6 任务失败诊断「发送给 agent」——装配注入；发往任务容器对应模式） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
+  /** @ 锚文档根（装配 fail-soft 装载注入——useProjectDocsRoot 项目行推导；缺席 = `docs` 缺省锚） */
+  readonly docsRoot?: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 相对时间基准（缺省当次渲染时刻） */
@@ -524,7 +528,7 @@ export interface TaskDrawerProps {
  * → formatDiagMessage 自动发送（发往任务容器对应模式：feature → 远征 / 突击提案 → 突击；
  * 容器 mode 缺席[未标记提案直挂] = 不切换——registry 默认）。
  */
-export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, makeClient, now }: TaskDrawerProps): ReactNode {
+export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, docsRoot, makeClient, now }: TaskDrawerProps): ReactNode {
   useTaskDrawerEscape(taskId, onClose)
   const [session, setSession] = useState(() => drawerSessionStore.getState())
   useEffect(() => drawerSessionStore.subscribe(() => {
@@ -548,8 +552,8 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
     drawerSessionStore.setWidth(drawerWidthFromDrag(clientX, viewportWidth))
   }, [])
   const handleDiagnoseFailure = useCallback((detail: TaskDetail): void => {
-    setDiag({ result: taskFailureDiagToast(taskFailureInputOf(detail)), mode: detail.container.mode })
-  }, [])
+    setDiag({ result: taskFailureDiagToast(taskFailureInputOf(detail, docsRoot)), mode: detail.container.mode })
+  }, [docsRoot])
   const handleDiagDismiss = useCallback((): void => {
     setDiag(undefined)
   }, [])

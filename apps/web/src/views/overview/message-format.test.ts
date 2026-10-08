@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DISPATCH_COMMAND_PREFIX,
+  docsRootOf,
   formatDiagMessage,
   formatPrefill,
   type MessageContainer,
@@ -208,6 +209,68 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
     })
     expect(failure).toContain('状态：已拒绝 — 证据不足')
     expect(failure).toContain('· submit 10-01 09:30')
+  })
+})
+
+describe('docsRootOf（@ 锚文档根推导——三分支 + 容差）', () => {
+  it('仓内（forge = <ws>\\.forge）→ 工作区相对段 + `/docs`（如 `.forge/docs`）', () => {
+    expect(docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')).toBe('.forge/docs')
+  })
+
+  it('forge = 工作区根 → `docs`（无段前缀）', () => {
+    expect(docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh')).toBe('docs')
+  })
+
+  it('仓外 → 全正斜杠绝对路径 + `/docs`（注册可仓外——@ 按工作区根解析需绝对锚）', () => {
+    expect(docsRootOf('Z:\\project\\dsh', 'D:\\forge-external')).toBe('D:/forge-external/docs')
+  })
+
+  it('容差：大小写不敏感（forge 段原样保留）+ 尾分隔符 + 正斜杠输入 + 深层仓内段', () => {
+    expect(docsRootOf('z:\\PROJECT\\dsh/', 'Z:\\project\\DSH\\.Forge\\')).toBe('.Forge/docs')
+    expect(docsRootOf('Z:/project/dsh', 'Z:/project/dsh/.forge')).toBe('.forge/docs')
+    expect(docsRootOf('Z:\\ws', 'Z:\\ws\\sub\\forge')).toBe('sub/forge/docs')
+  })
+
+  it('段边界敏感：`Z:\\project\\ds` 非 `Z:\\project\\dsh\\.forge` 容器（裸前缀不误判仓内）', () => {
+    expect(docsRootOf('Z:\\project\\ds', 'Z:\\project\\dsh\\.forge')).toBe('Z:/project/dsh/.forge/docs')
+  })
+})
+
+describe('@ 锚数据驱动（docsRoot 注入——缺席回退 docs 缺省锚）', () => {
+  it('formatPrefill 带 docsRoot（提案渠道）：首行 = `@<docsRoot>/proposals/<slug>/`，其余行不变', () => {
+    const text = formatPrefill(
+      { ...proposalContainer, docsRoot: '.forge/docs' },
+      [{ path: 'proposal.md', status: '评审中' }],
+    )
+    expect(text.split('\n')[0]).toBe('@.forge/docs/proposals/ui-polish-round/')
+    expect(text.split('\n')[1]).toBe('名称：UI 打磨轮')
+  })
+
+  it('formatPrefill 带 docsRoot（feature 渠道 + 仓外绝对锚变体）', () => {
+    const text = formatPrefill(
+      { kind: 'feature', slug: 'f1', title: '特性', phase: 'tasks', docsRoot: 'D:/forge-external/docs' },
+      [],
+    )
+    expect(text.split('\n')[0]).toBe('@D:/forge-external/docs/features/f1/')
+  })
+
+  it('formatDiagMessage 带 docsRoot：任务失败/子图两路首行同口径', () => {
+    const failure = formatDiagMessage({
+      kind: 'task-failure',
+      container: { kind: 'proposal', slug: 'p1', title: 'P', docsRoot: '.forge/docs' },
+      taskKey: 'p1/1.1',
+      taskTitle: '任务',
+      taskStatus: 'blocked',
+      reason: 'r',
+      records: [],
+    })
+    expect(failure.split('\n')[0]).toBe('@.forge/docs/proposals/p1/')
+    const subgraph = formatDiagMessage({
+      kind: 'subgraph',
+      container: { kind: 'feature', slug: 'f1', title: 'F', phase: 'prd', docsRoot: '.forge/docs' },
+      violations: [],
+    })
+    expect(subgraph.split('\n')[0]).toBe('@.forge/docs/features/f1/')
   })
 })
 

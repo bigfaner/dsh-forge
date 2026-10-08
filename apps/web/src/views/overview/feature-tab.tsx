@@ -46,6 +46,8 @@ export interface FeatureTabProps {
   readonly onOpenDoc: (docRel: string) => void
   /** 行头「打开新会话→固定远征」（缺席 = 按钮不呈现——SSR/非壳载体面） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
+  /** @ 锚文档根（帧侧 head 项目行推导——docsRootOf；缺席 = `docs` 缺省锚） */
+  readonly docsRoot?: string
   /** 空态标题（缺省「暂无 feature」；搜索在场由帧侧注入「无匹配…」） */
   readonly emptyTitle?: string
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
@@ -67,9 +69,14 @@ export function featurePrefillDocs(feature: FeatureCard, docs: readonly FeatureD
 /**
  * 打开新会话请求（feature 渠道·UF-4.5）：固定切远征（硬编码恒真——成链门保证）+
  * formatPrefill 现状上下文（@path 首行 → 名称 → 摘要? → 阶段 → 文档真实路径清单 →
- * 「我的意图：」空位）；不自动发送。
+ * 「我的意图：」空位）；不自动发送。docsRoot = @ 锚文档根（项目行推导注入；
+ * 缺席 = `docs` 缺省锚）。
  */
-export function featurePrefillRequest(feature: FeatureCard, docs: readonly FeatureDocumentRow[]): SessionOpenRequest {
+export function featurePrefillRequest(
+  feature: FeatureCard,
+  docs: readonly FeatureDocumentRow[],
+  docsRoot?: string,
+): SessionOpenRequest {
   return {
     mode: FEATURE_FIXED_MODE,
     prefill: formatPrefill(
@@ -79,6 +86,7 @@ export function featurePrefillRequest(feature: FeatureCard, docs: readonly Featu
         title: feature.title,
         ...(feature.summary !== undefined ? { summary: feature.summary } : {}),
         phase: feature.featureStatus,
+        ...(docsRoot !== undefined ? { docsRoot } : {}),
       },
       featurePrefillDocs(feature, docs),
     ),
@@ -98,6 +106,7 @@ export function FeaturesTab({
   onToggleRow,
   onOpenDoc,
   onStartSession,
+  docsRoot,
   emptyTitle,
 }: FeatureTabProps): ReactNode {
   const visible = filterFeaturesByPhases(features, activePhases)
@@ -154,7 +163,7 @@ export function FeaturesTab({
                     data-dswf-ov-opensession={feature.slug}
                     title="打开新会话（固定远征模式 + 现状上下文预填·不发送）"
                     onClick={() => {
-                      onStartSession(featurePrefillRequest(feature, featureDocs))
+                      onStartSession(featurePrefillRequest(feature, featureDocs, docsRoot))
                     }}
                   >
                     打开新会话

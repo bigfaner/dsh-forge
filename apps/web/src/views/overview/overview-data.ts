@@ -17,6 +17,7 @@ import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, ty
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
+import { docsRootOf } from './message-format.js'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
 export interface OverviewErrorInfo {
@@ -209,6 +210,40 @@ export function useProposalDocs(
   )
 
   return docs
+}
+
+/**
+ * 项目 @ 锚文档根装载 hook（fail-soft）：projects.get → docsRootOf(ws, forge)——
+ * 失败/项目缺席/无锚 = undefined 不阻断（消费方 pathLine 回退 `docs` 缺省锚）。
+ * 抽屉诊断通道独立于概览头路（TaskDrawer 在 OverviewTab 之外渲染——装配体自装载）。
+ * @param projectId - 当前项目（null = 无锚不拉取）
+ * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ */
+export function useProjectDocsRoot(
+  projectId: string | null,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
+): string | undefined {
+  const [docsRoot, setDocsRoot] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (projectId === null) {
+      setDocsRoot(undefined)
+      return
+    }
+    let alive = true
+    void (async () => {
+      try {
+        const project = await makeClient().projects.get(projectId)
+        if (!alive) return
+        setDocsRoot(project === null ? undefined : docsRootOf(project.wsPath, project.forgeDir))
+      } catch {
+        if (alive) setDocsRoot(undefined)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [projectId, makeClient])
+  return docsRoot
 }
 
 /** 概览装载态（hook 输出——OverviewTab 消费形状） */

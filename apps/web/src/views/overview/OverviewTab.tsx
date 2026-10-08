@@ -42,7 +42,7 @@ import {
   type OverviewHeadBundle,
   type OverviewListData,
 } from './overview-data.js'
-import type { SessionOpenRequest } from './message-format.js'
+import { docsRootOf, type SessionOpenRequest } from './message-format.js'
 import { proposalStatusCounts } from './proposal-tab/ProposalStatusChips.js'
 import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
@@ -68,6 +68,9 @@ export interface OverviewTasksContext {
   readonly features: readonly FeatureCard[]
   /** 无参提案列（4.6 容器 pill 双轨突击源——taskCount>0 判据；不随搜索漂移） */
   readonly proposals: readonly ProposalCard[]
+  /** @ 锚文档根（帧内以 head 项目行推导填充——docsRootOf(ws, forge)；head 缺席 = 键缺席，
+   *  消费方回退 `docs` 缺省锚——消息内 @ 引用按会话工作区根解析需真实文档根前缀） */
+  readonly docsRoot?: string
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
 }
@@ -149,6 +152,9 @@ export function OverviewFrame({
 }: OverviewFrameProps): ReactNode {
   const openDoc = onOpenDoc ?? (() => {})
   const searchActive = searchQueryOf(filter.search) !== undefined
+  // @ 锚文档根（数据驱动）：head 在场 = 项目行（workspaceDir/forgeDir）推导；缺席 = 不注入
+  //（四通道消费方回退 `docs` 缺省锚——首装在途不误锚）
+  const docsRoot = head === undefined ? undefined : docsRootOf(head.workspaceDir, head.forgeDir)
   const tasksCtx: OverviewTasksContext = {
     projectId,
     search: filter.search,
@@ -158,6 +164,7 @@ export function OverviewFrame({
     stats: head?.stats,
     features: head?.features ?? [],
     proposals: head?.proposals ?? [],
+    ...(docsRoot !== undefined ? { docsRoot } : {}),
     onToggleStatus,
     onClearStatuses,
   }
@@ -188,6 +195,7 @@ export function OverviewFrame({
           list={list}
           filter={filter}
           searchActive={searchActive}
+          docsRoot={docsRoot}
           onToggleRow={onToggleRow}
           onToggleProposalStatus={onToggleProposalStatus}
           onClearProposalStatuses={onClearProposalStatuses}
@@ -213,6 +221,7 @@ export function OverviewFrame({
           onToggleRow={onToggleRow}
           onOpenDoc={openDoc}
           {...(onStartSession !== undefined ? { onStartSession } : {})}
+          {...(docsRoot !== undefined ? { docsRoot } : {})}
           emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 feature` : undefined}
           now={now}
         />
@@ -291,6 +300,7 @@ function ProposalsTabBodySlot({
   list,
   filter,
   searchActive,
+  docsRoot,
   onToggleRow,
   onToggleProposalStatus,
   onClearProposalStatuses,
@@ -303,6 +313,8 @@ function ProposalsTabBodySlot({
   readonly list: Extract<OverviewListData, { kind: 'proposals' }>
   readonly filter: OverviewFilterState
   readonly searchActive: boolean
+  /** @ 锚文档根（帧内 head 推导；缺席 = ProposalsTab 回退 `docs` 缺省锚） */
+  readonly docsRoot?: string
   readonly onToggleRow: (key: string) => void
   readonly onToggleProposalStatus: (status: ProposalStatus) => void
   readonly onClearProposalStatuses: () => void
@@ -326,6 +338,7 @@ function ProposalsTabBodySlot({
       docsMap={docsMap}
       onOpenDoc={onOpenDoc}
       {...(onStartSession !== undefined ? { onStartSession } : {})}
+      {...(docsRoot !== undefined ? { docsRoot } : {})}
       emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的提案` : undefined}
       {...(now !== undefined ? { now } : {})}
     />

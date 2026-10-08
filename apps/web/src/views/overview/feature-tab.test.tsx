@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { FeatureCard, FeatureDocumentRow, FeatureStatus, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
 import { FeaturesTab, featurePrefillDocs, featurePrefillRequest, featureTaskTotal } from './feature-tab.js'
+import { docsRootOf } from './message-format.js'
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
 const CREATED = '2026-10-01T08:00:00.000Z'
@@ -144,6 +145,16 @@ describe('预填请求组装（AC2——固定远征 + 不自动发送）', () =
     const other: FeatureDocumentRow = { featureId: 'fid-other', docKind: 'prd-spec', relPath: 'docs/features/other/prd/x.md', createdAt: CREATED, updatedAt: CREATED }
     const docs = featurePrefillDocs(M2_FEATURE, [...DOCS, other])
     expect(docs.map((doc) => doc.path)).toEqual(['prd/prd-spec.md', 'design/tech-design.md'])
+  })
+
+  it('docsRoot 注入（第三参——项目行推导）：夹具 <ws>/.forge → 首行 `@.forge/docs/features/<slug>/`；缺席回退 @docs', () => {
+    const docsRoot = docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')
+    expect(docsRoot).toBe('.forge/docs')
+    const request = featurePrefillRequest(M2_FEATURE, DOCS, docsRoot)
+    expect(request.prefill.split('\n')[0]).toBe('@.forge/docs/features/m2-pipeline/')
+    expect(request.mode).toBe('expedition') // 固定远征不受锚前缀影响
+    const fallback = featurePrefillRequest(M2_FEATURE, DOCS)
+    expect(fallback.prefill.split('\n')[0]).toBe('@docs/features/m2-pipeline/')
   })
 })
 

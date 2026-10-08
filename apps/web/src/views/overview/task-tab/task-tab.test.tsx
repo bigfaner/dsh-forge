@@ -8,7 +8,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FeatureCard, ProposalCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
-import { TasksTabBody, containerMenuItems, runDispatchRoute } from './task-tab.js'
+import { TasksTabBody, containerMenuItems, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
+import { formatDiagMessage } from '../message-format.js'
+import { docsRootOf } from '../message-format.js'
 import type { TaskContainerOption } from './container-pill.js'
 import { containerMenuSelect, containerPillChip, containerCountNote, resolveContainer } from './task-tab-model.js'
 import { taskContainerOptions } from './container-pill.js'
@@ -341,6 +343,26 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
       },
     )
     expect(seen).toEqual(['new:expedition:/run-tasks m2-pipeline'])
+  })
+})
+
+describe('subgraphDiagContainer（子图诊断容器水化——@ 锚数据驱动）', () => {
+  it('docsRoot 在场（项目行推导 <ws>/.forge）→ container.docsRoot 透传 → formatDiagMessage 首行 `@.forge/docs/features/<slug>/`', () => {
+    const docsRoot = docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')
+    const container = subgraphDiagContainer(FEATURE_CONTAINER, FEATURES, docsRoot)
+    expect(container.docsRoot).toBe('.forge/docs')
+    expect(formatDiagMessage({ kind: 'subgraph', container, violations: [] }).split('\n')[0]).toBe(
+      '@.forge/docs/features/m2-pipeline/',
+    )
+  })
+
+  it('docsRoot 缺席 = 键缺席（回退 @docs 缺省锚）；feature 卡缺席回退 resolved 标题', () => {
+    const container = subgraphDiagContainer(FEATURE_CONTAINER, [], undefined)
+    expect('docsRoot' in container).toBe(false)
+    expect(container.title).toBe('M2 管线') // resolved.title 回退
+    expect(formatDiagMessage({ kind: 'subgraph', container, violations: [] }).split('\n')[0]).toBe(
+      '@docs/features/m2-pipeline/',
+    )
   })
 })
 
