@@ -159,7 +159,7 @@ intent: "new-feature"
 
 ### ⑨ 路书与总纲回写记账
 
-- 演进路书 M3 行收窄为聚焦版 + 全量顺延表（#1–#12）入路书。
+- 演进路书 M3 行收窄为聚焦版 + 全量顺延表（#1–#13）入路书。
 - 工件版图 brainstorm 条目修订；M3.5 时序耦合注记；tech-research 偏离注记。
 - 明细见「总纲回写记账」节。
 
@@ -280,7 +280,7 @@ M2 仅剩阶段 5（测试主径与门）；M3.5 Draft 在库；dsh `next` 线�
 6. **提案管线消费**：feature/文档域 tool 封装；**远征 accepted → registerFeature 单步成链；突击 accepted → 直接任务阶段（无 feature 行——UI 评审裁决）**；概览提案子 tab（五态 chips + 名称右侧 mode chip + 行头「打开新会话」+ 文档跳转 + 人工裁决按钮 + mode 人工更改入口）+ feature 子 tab 升级（阶段过滤 + 分层文档 + 打开新会话→远征）+ 任务子 tab 诊断（toast + 发送给 agent）；提案 mode 溯源元数据与**模式绑定三律**（新会话自动对齐 / 确立后不可切换 / 唯一变更通道 = 提案子 tab 人工操作 + 任务级快照不回溯）；validateFeatureTasks tool 封装 + 任务子 tab 诊断入口（worker 供给归 InScope-3，不在此双列；追溯矩阵已移出 → Out of Scope #13）。
 7. **feature_records 第八表**：软迁移新表 + append-only 双触发器审计；feature 域动词全审计覆盖。
 8. **自举达成与走查**：自举纪律生效（M4 起自身开发）；SC-M3 门 = M3.5 作为首个自举 feature 端到端走查（含总纲 SC2/SC3/SC7 回归复跑、manifest.md 零生成断言）。
-9. **路书与总纲回写记账**：M3 行收窄 + 全量顺延表（#1–#12）+ 工件版图 brainstorm 修订 + M3.5 时序耦合注记 + tech-research 偏离注记，随定稿合入总纲。
+9. **路书与总纲回写记账**：M3 行收窄 + 全量顺延表（#1–#13）+ 工件版图 brainstorm 修订 + M3.5 时序耦合注记 + tech-research 偏离注记，随定稿合入总纲。
 
 ### Out of Scope（二次顺延显式记账——「本 M3 没有做的」全清单）
 
@@ -302,7 +302,7 @@ M2 仅剩阶段 5（测试主径与门）；M3.5 Draft 在库；dsh `next` 线�
 
 ### 总纲回写记账（宪法级条款修订，随本提案定稿执行）
 
-1. **演进路书 M3 行收窄**：交付列改为本提案聚焦版九项；**全量顺延表（Out of Scope #1–#12）**与去向入路书记账。
+1. **演进路书 M3 行收窄**：交付列改为本提案聚焦版九项；**全量顺延表（Out of Scope #1–#13）**与去向入路书记账。
 2. **工件版图 brainstorm 条目修订**：「brainstorm 技能工件（结构化探索，三模式共享——标准模式经默认技能根零 patch 获得）」→「brainstorm 技能住 plugin-forge（双模式共享）；标准模式不引入，未来引用外部技能 grill-me（未来注记）」。
 3. **M3.5 时序耦合注记**：M3 自举走查对象 = M3.5；其评审接受时点即走查启动。
 4. **tech-research 偏离注记**：§5.5/§5.6 brainstorm 行归并（随条款 2）；§5.2 组合表 consolidate-specs 移出（#7）；§5.2/§5.3「远征 worker 背负规格技能清单」既定取舍部分推翻（方案⑥——catalog 行级接受、内容按需）。
@@ -348,7 +348,7 @@ M2 仅剩阶段 5（测试主径与门）；M3.5 Draft 在库；dsh `next` 线�
   - 概览三视图 / 文档 / 提案子 tab 全景一致；
   - 全程零 manifest.md 生成（文件系统断言）；
   - 总纲 SC2 / SC3 / SC7 回归断言绿。
-- [ ] **SC9 记账合入**：本提案 Out of Scope 顺延表（#1–#12 全量）与总纲回写四条款（M3 行收窄 + 全量顺延表 / brainstorm 条目修订 / M3.5 时序注记 / tech-research 偏离注记）合入总纲（文档断言）。
+- [ ] **SC9 记账合入**：本提案 Out of Scope 顺延表（#1–#13 全量）与总纲回写四条款（M3 行收窄 + 全量顺延表 / brainstorm 条目修订 / M3.5 时序注记 / tech-research 偏离注记）合入总纲（文档断言）。
 
 consistency_check_result:
   status: pass
