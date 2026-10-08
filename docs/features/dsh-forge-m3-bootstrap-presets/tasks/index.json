@@ -636,7 +636,7 @@
         "5.3",
         "5.4"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.summary.md",
       "record": "records/5.summary.md",
       "type": "doc.summary"
