@@ -1,29 +1,26 @@
 # Eval-journey Final Report — mode-selection-alignment
 
 ## Eval-journey Complete
-**Final Score**: 816/1150 (target: 850)
-**Iterations Used**: 1/1
+**Final Score**: 1020/1150 (target: 850)
+**Iterations Used**: 1/1 (single-pass re-run post fix-2; reviser not run)
 
 ### Score Progression
 | Iteration | Score | Delta |
 |-----------|-------|-------|
-| 1 | 816/1150 | — |
+| pre-fix run (superseded) | 816/1150 | — |
+| fix-2 re-run | 1020/1150 | +204 |
 
 ### Dimension Breakdown (final)
 | Dimension | Score | Min Threshold | Pass |
 |-----------|-------|---------------|------|
-| 1. Completeness | 133/200 | 120 | ✅ |
-| 2. Semantic Purity | 160/200 | 120 | ✅ |
-| 3. Precondition Exclusivity | 125/150 | 90 | ✅ |
-| 4. Fact Alignment | 95/150 | 90 | ✅ |
-| 5. Surface Fitness | 60/150 | 90 | ❌ |
-| 6. Internal Consistency | 118/150 | 90 | ✅ |
-| 7. Workflow Coverage | 125/150 | 90 | ✅ |
-| **Total** | **816/1150** | **975 (rubric) / 850 (config)** | ❌ |
+| 1. Completeness | 176/200 | 120 | ✅ |
+| 2. Semantic Purity | 162/200 | 120 | ✅ |
+| 3. Precondition Exclusivity | 140/150 | 90 | ✅ |
+| 4. Fact Alignment | 136/150 | 90 | ✅ |
+| 5. Surface Fitness | 126/150 | 90 | ✅ |
+| 6. Internal Consistency | 146/150 | 90 | ✅ |
+| 7. Workflow Coverage | 134/150 | 90 | ✅ |
+| **Total** | **1020/1150** | **975 (rubric) / 850 (config)** | ✅ |
 
 ### Outcome
-Target NOT reached — 1/1 iterations exhausted (single-pass mode, `eval.journey.iterations = 1`; reviser not run).
-
-Primary gap: **Surface Fitness 60/150 (below min 90)** — Web mandatory derived Outcomes (`validation-error` + `session-expired`) absent without an explicit non-applicability note. Secondary gaps: Fact Alignment (unlabeled inferences posing as facts; blank-lock UI form contradicts spike/PRD evidence), Completeness (Step 5 action not executable), Internal Consistency (Step 3 expected-result overreach; Step 5b undeclared third session), Workflow Coverage (invariant 4 untestable — no step toggles the hero switch via settings UI).
-
-Full attack list (8 items) in `eval/iteration-1.md`.
+**Target reached** (1020 ≥ 850; rubric condition 975 + all dimensions ≥ min also met). The previously failing **Surface Fitness (60 → 126)** is resolved: the Derived Outcomes adjudication section adjudicates validation-error (N/A for the discrete-enumeration surface with Step 3b explicitly mapped as the state-machine rejection analog — seat unload per SC1/S5 double-signal) and adapts session-expired locally via Step 2c/3c restart-continuity; the blank-lock UI form contradiction is dissolved by unifying on the SC1+S5 seat-unload wording with the out-of-scope Step 3 assertion returned to Step 3b; new Step 2c fills the blank-period restart blindspot, new Step 1c makes invariant 4 verifiable through the settings-UI toggle (row-ownership rule); inference claims carry source: inferred annotations; risk re-graded High with justification; Setup fixtures completed (existing locked session, mismatch fixtures, hero free session). This supersedes the 816/1150 failing report from the pre-fix run (fix-2). Remaining second-order deductions (async wait wording, residual mechanism parentheticals) are documented in iteration-1.md — none below threshold; safe to proceed to gen-contracts.

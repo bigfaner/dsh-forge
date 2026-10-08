@@ -1,96 +1,119 @@
-# Eval Report: worker-provisioning — Iteration 1
+# Eval Report: worker-provisioning — Iteration 2
 
 - **Rubric**: `skills/eval/rubrics/journey.md`（1150 分 / 7 维度；及格 = 总分 ≥975 且每维度 ≥ 最低线）
 - **Surface rule**: `skills/gen-journeys/rules/surface-web.md`（Web 强制派生 Outcome = `validation-error` + `session-expired`；测试策略 50/50）
-- **Scorer persona**: Senior QA Engineer（对抗式；只对纸面内容计分）
-- **日期**: 2026-10-08 · ITERATION = 1（无前轮报告）
+- **Scorer persona**: Senior QA Engineer（对抗式；只对纸面内容计分——修订意向不加分，残余缺陷照扣）
+- **日期**: 2026-10-08 · ITERATION = 2 · **fix-2 修订后复评（supersedes 修订前报告，前轮 844/1150 · Surface Fitness 59 破线）**
+
+## 事实核查记录（fix-2 修订稿逐条对源验证）
+
+- Step 1/1b/1c ↔ prd-ui-functions UF-2 第 1/2/3 条逐字（三项 Provider/Model 联动/Reasoning 三段；未配置态 ⚠ 占位「worker 派发将回退父会话继承（显式不静默）」+ 保存禁用 + 填齐激活（脏态实时）；成功 → 持久化 `forge-settings.json` + core forgeSettings 单门读写 + 下次派发生效；失败 → 错误行留场可重试）✓——`prd-ui-functions.md` 已入 `sources:`（前轮溯源缺口修复）✓；tech-design L26/L124/L455-460（Forge设置 单门/实时生效无重启）✓。
+- Step 2 ↔ prd-spec 流程四第 3 条逐字（agentOptions = Forge设置 默认档——配置面三项[用户裁决去 Output 上限]；机制通道能力不变，含 output-token——优先于父会话继承）——**前轮盲区 3「三配四断张力」已按源消解** ✓；入口两途（工具栏「派发」按钮 / 会话内发起 run-tasks）↔ 流程四第 1 条 ✓——**前轮「Step 2 入口未指明」缺陷消除** ✓。
+- Step 3 ↔ Story 5 AC2 + proposal 方案⑥（收窄矩阵底稿 + 全局拒绝集 ask-user/delegation/todo/present + submitTask/addTask、claimTask/queryTask 不入）✓；「G0–G2 门『契约面 pin 扩池：两包 tool 面』」↔ tech-design §契约 pin（G1 扩池）「两包 tool 面分置」✓（tech-design 在 `sources:`）。
+- Step 4/4b ↔ Story 5 AC3 + SC2 worker 层 + s6 S6-5（子代理目录含 m3-spec-probe——继承达 worker）+ 3.9 记录 W 用例（deny 零泄漏、run-tests 按需加载正反例「test worker 调用 / doc worker 零调用、目录行常驻」）✓——内容全真，但 **3.9 记录文档未入 `sources:`**（Step 4 观察通道引用「3.9 W 用例」为源外指针，残留缺口）。
+- Step 5 ↔ Story 5 AC4（disc-N/fix-N 二分、block_source 单事务、链深 ≤6、恢复钩子、blocked 收尾引用新任务）✓；web 面观察通道（任务子 tab 详情时间线 + M2 写入返回后单次重取即见口径）↔ prd-user-stories Story 2 AC3 口径 ✓。
+- Step 1d（新增：在途 worker 保持旧档 / 新 worker 用新档）——`source: inferred`（「下次派发生效」的语义边界：生效时点 = 派发，spawn 后不回溯）✓——**前轮盲区 2（配置时效边界静默）已补步并充当 session-expired 承载步** ✓。
+- Step 2b ↔ Story 5 AC1「优先于父会话继承」+ Setup 冲突夹具 ✓；Step 3b/5b——5b「超限不放行」已标注 `source: inferred`（源只证「链深 ≤6」不变量）✓（前轮未分类推理已收敛）。
+- Setup 可控触发夹具 (a)(b)（注定受阻任务 = AC 缺测试证据 → submit 被拒——Story 7 AC1 通道 ✓ 已对源核实；越权诱导任务 = 规格含「询问用户确认后继续」指令）——`source: inferred`（夹具构造语义，非产品行为声明）✓——**前轮盲区 1（自主行为不可诱导）已消解** ✓。
+- 不变量二已加限定「**已配置时**……未配置回退父会话继承，见 Step 1b」——**前轮不变量与 1b 的措辞级矛盾消除** ✓。
 
 ## Phase 1 — Reasoning Audit（评分前独立判断）
 
-1. **忠实度高但溯源机制缺位**：Step 2–5 的 Expected Result 与 PRD Story 5 四条 AC 近逐字同构（「spawn 携带 agentOptions（provider / model / effort / output-token = 该档位，优先于父会话继承）」= AC1 原文）。事实根基扎实——但全文零 `source: inferred` 标注、零 fact 引用，推理/事实两类声明未做任何区分。
-2. **Surface 错配是最大结构性问题**：`surface_types: ["web"]`，但 12 个步骤（5 主 + 7 边）中仅 Step 1/1b/1c 是浏览器可观察的（设置对话框）；Step 2–5 与 2b/3b/4b/5b/5c 全部断言 worker 内部状态（会话 model、toolFilter 工具面、技能目录、fix 链深），文档未给出任何浏览器观察通道。
-3. **Web 强制派生 Outcome 缺席**：`session-expired` 完全缺席且无不适性记账；`validation-error` 仅以未标注的功能近似物在场（Step 1b「三项未填齐 → 保存禁用」）。
-4. **不变量与边况自相矛盾（措辞级）**：不变量二「worker 会话 model **恒** = Forge设置 默认档」为无条件表述，而 Step 1b 明文记录未配置态「worker 派发将回退父会话继承」——不变量缺少「已配置」限定词。
-5. **可执行性缺口**：Step 2 入口通道未指明（工具栏「派发」按钮 or 会话内 run-tasks）；Step 5 的「遇无法解决的重大问题」与 3b/4b 的越权尝试均为自主 agent 行为，Setup 未提供任何可控触发机制（无法确定性诱导）。
+1. **前轮 5 条修复建议逐条核销**：
+
+| 前轮修复建议 | 修订稿落点 | 核销 |
+|---|---|---|
+| 1 派生裁决/记账 | Derived Outcomes 裁决节：validation-error = Step 1b 显式识别（web 表单原生形态）+ 规则引用 + 标注；session-expired = Step 1d（配置时效）+ Step 1 持久化续行 | ✓ |
+| 2 观察通道声明 | 每步「观察通道」行；非浏览器断言显式记为契约面（Contract 半承载）；Step 2 补工具栏「派发」按钮 web 入口 | ✓ |
+| 3 不变量二限定 | 「已配置时……未配置回退父会话继承（Step 1b）」 | ✓ |
+| 4 sources 增补 UF-2 | `prd-ui-functions.md` 入列 | ✓ |
+| 5 可控触发夹具 | Setup (a) 注定受阻任务（Story 7 AC1 通道）+ (b) 越权诱导任务，均标注夹具语义 | ✓ |
+
+2. **问题→方案契合：优良。** 13 步（5 happy + 8 edge）对应 Story 5 四 AC + UF-2 配置流全分支；新增 1d/5c 与夹具族使边况矩阵闭环。步骤序列（配置 → 派发 → 收窄 → 继承 → 逃生）连贯。
+3. **Surface 错配处置 = 「双半承载」声明**：Journey 半（设置对话框 + 派发入口 + 时间线 ≈ 6-7 步）真浏览器面；Contract 半（worker 内部状态 ≈ 6-7 步）显式让渡契约测试。按前轮自设修复判据有效；本维度仍扣分于「多数断言浏览器不可观察」的题材事实与「3b/4b/5 依赖 agent 依从夹具」的随机性残余。
+4. **独立新查**：(a) 裁决节称「Step 1 持久化断言（**应用重启后**配置经下次派发续行）」——Step 1 Expected 只写「持久化 + 下次派发生效」，重启续行是裁决节的延伸读法，承载步纸面未载（小越界）；(b) Step 3 断言「仅含**矩阵 ✓ 列**工具」但矩阵行内容不在纸面（外部引 proposal 方案⑥底稿/db-schema §7-6 终稿）——断言对象外置。
+5. **Delta 复核（fix-2.1，涉本篇 2 处修订——逐条对纸面验证）**：(a) `sources:` 增补 3.9 记录（frontmatter 第 7 项）——Step 4 观察通道「3.9 W 用例」引用的文件级闭环完成 ✓；(b) session-expired 裁决删去「应用重启后配置经下次派发续行」延伸读法，改为「配置持久化落盘 forge-settings.json 由 Step 1 承载」——与 Step 1 Expected 纸面（「保存成功 → 持久化（用户数据域 forge-settings.json…）」）严格对齐，越界消除且无新矛盾引入 ✓。两处均落纸；相应子项分数上调（见 Phase 2）。
 
 ## Phase 2 — 维度评分
 
-### 1. Completeness（完整性）— 160/200
+### 1. Completeness（完整性）— 178/200
 
 | 子项 | 得分 | 判定依据 |
 |---|---|---|
-| 元数据完整 | 47/50 | `journey: "worker-provisioning"` kebab-case ✓；`risk_level: "High"` 合法且由内容支撑（设置持久化 + 任务态转移 + worker 仓库写操作 = 状态变异）✓；`sources` 列三份文档——但 Step 1/1b/1c 的内容（「⚠ 占位说明」「保存禁用；填齐激活（脏态实时）」「错误行留场可重试」「用户数据域 forge-settings.json，core forgeSettings 单门读写」）全部取自 `prd-ui-functions.md` UF-2，该文件**不在 sources 列表**（溯源缺口计入 Fact Alignment，此处小幅计罚）。 |
-| Step 必备字段完整 | 68/80 | 每步均有 User Action + Expected Result ✓，序列连贯（配置→派发→收窄→继承→逃生）✓。扣分：Step 2「发起 run-tasks 使 dispatcher 派发一个 worker」未指明发起通道（web 面的工具栏「派发」按钮 or 会话内指令——下游 agent 无从执行）；Step 4「转录其技能目录」未说明观察通道（谁来转录、在哪看）；Step 5 的触发前提（如何让 worker 确定性遇到重大问题）Setup 未提供。 |
-| 覆盖 happy + 强制派生场景 | 45/70 | 7 条边况 ≥ 5 步（High 风险要求）✓，含链深边界（5b）、优先级冲突（2b）、物理不可见（4b）等高质量域内边况。但 Web surface 强制派生：`session-expired` **零在场零不适性说明**；`validation-error` 仅有未标注近似物（1b：表单未填齐 → 保存禁用 + 占位说明——语义上是「form is not submitted + 提示在场」，但未被识别/标注为该类派生）。 |
+| 元数据完整 | 50/50 | kebab-case ✓；`risk_level: "High"` 由内容支撑（设置持久化 + 任务态迁移 + worker 仓库写操作）✓；sources 七份——3.9 记录已入列（fix-2.1），引用闭环 ✓。 |
+| Step 必备字段完整 | 72/80 | 每步四字段全 + Setup 夹具族齐（冲突父会话/可控触发/两途入口）✓；前轮「Step 2 通道/Step 4 观察面/Step 5 触发前提」三缺口全消 ✓。扣：收窄矩阵 ✓ 列行内容外置（断言对象不在纸面，下游须跨文档拼装）；Step 1d 的「在途 worker」需先行派发（与 Step 2 的时序承接隐式）；夹具 (a) 的诱导确定性依赖 worker 依从任务规格（测试设计已尽力，随机性残留）。 |
+| 覆盖 happy + 强制派生场景 | 56/70 | 8 边况含链深边界/优先级冲突/物理不可见/配置时效 ✓；Web 强制派生双双在场：validation-error = **同批唯一规则形态本体**（必填缺失 → 保存禁用 + 近场 ⚠ 占位 + 填齐可保存——与规则「required field empty → form not submitted + can correct and retry」对位最贴）；session-expired 本地化在场（1d 档位时效 + 1d/1 持久化续行，登录 N/A 论证成立）。不给更高：session-expired 映射为「配置时效连续性」，与「会话过期」语义距离稍远（见 SF）。 |
 
-### 2. Semantic Purity（语义纯度）— 160/200
-
-| 子项 | 得分 | 判定依据 |
-|---|---|---|
-| Outcome 自然语言 | 58/80 | 无 regex/CSS 选择器/XPath/`expect()` 类断言调用 ✓。扣分：全文散布测试编著语言「（断言）」标记（「worker 会话 model 与配置一致（断言）」「（toolFilter 断言）」「技能枚举断言」「deny 生效断言」）——描述「怎么验」而非「观察到什么」；实现细节渗入结论：「block_source 单事务」（API 参数名）、「core forgeSettings 单门读写」（内部模块设计）、「catalog 行级常驻」（装载机制内部）。 |
-| Preconditions 声明式 | 55/60 | 边况前置多为状态陈述 ✓（「worker 小节三项未填齐」「持久化写入失败（如用户数据域不可写）」「父会话模型与配置档不同」「fix 链已接近最大深度」）。扣分：5c 前置「worker 追加任务时选择前缀」是动作时刻非状态条件。 |
-| Step 无实现耦合 | 47/60 | Step 动作基本域级（「配置…并保存」「依次派发 coding 族 / doc 族 / gate / 验证类任务」）✓。扣分：耦合集中在 Expected Result（spawn/agentOptions/toolFilter）；Step 2「使 dispatcher 派发」引入系统内部角色且无用户可操作面；不变量四整条为纯实现陈述（「toolFilter 携带者 = run-tasks 派发面 in-process spawn；模型面调用参数不可达」）。 |
-
-### 3. Precondition Exclusivity（前置条件互斥性）— 130/150
+### 2. Semantic Purity（语义纯度）— 158/200
 
 | 子项 | 得分 | 判定依据 |
 |---|---|---|
-| 同 Step 内前置互异 | 48/60 | 每步单 Outcome，结构上无同 Step 歧义；同族边况 1b（未填齐）/1c（写入失败）互斥 ✓。扣分：5b（「fix 链已接近最大深度」→ 追加 fix-N）与 5c（「选择前缀」→ fix-N 分支）处于同一动作空间——5c 的前置非状态、恒真，与 5b 在「追加 fix-N」语境下不可判别适用哪条。 |
-| 前置足以唯一选定 Outcome | 44/50 | 单 Outcome 结构平凡满足；但 5c 前置无区分力（见上），happy 步依赖隐式顺序承接（Step 2 隐含 Step 1 已配置完成——未声明）。 |
-| 错误/边界 Outcome 不缺前置 | 38/40 | 错误边况均带触发条件 ✓（1b 未填齐、1c 写入失败、3b「worker 请求全局拒绝集内工具」、5b 链近上限）。小扣：Step 2b 依赖「父会话模型与配置档不同」由前置自载 ✓，但 Setup 未建立该父会话存在。 |
+| Outcome 自然语言 | 58/80 | 无 regex/选择器/`expect()` ✓；前轮满屏「（断言）」括注已基本清场，验证方法分流至观察通道行（改善）✓。扣：机制否定式结论残留（「物理不在面——调用不可达」「非运行期劝阻」）；「（观察面有效性对照）」式编著语。 |
+| Preconditions 声明式 | 55/60 | 全部状态陈述（「worker 小节三项未填齐」「持久化写入失败」「父会话模型与配置档不同」「fix 链已接近最大深度」）✓；前轮 5c「选择前缀」动作型前置已改为双受阻场景状态前置 ✓。小扣：1d 前置含时序成分（「用户随后改档」）。 |
+| Step 无实现耦合 | 45/60 | 动作域级 ✓。扣：Expected Results 机制词密度同前（spawn/agentOptions/toolFilter/block_source/catalog 行级常驻）；不变量四仍为纯实现陈述（toolFilter 携带者 = in-process spawn）——域固有但无观察语言重述。 |
 
-### 4. Fact Alignment（事实依据）— 92/150（贴最低线 90 过）
-
-| 子项 | 得分 | 判定依据 |
-|---|---|---|
-| 事实声明可溯源 | 44/60 | Step 2–5 与 Story 5 四条 AC 近逐字一致（sources 在列）——真实可溯 ✓；不变量一/三/四均可在 proposal 方案⑥找到出处 ✓。扣分：Step 1/1b/1c 全部细节取自 **prd-ui-functions.md UF-2 而该文件不在 `sources:`**（「用户数据域 forge-settings.json，core forgeSettings 单门读写」还混入 tech-design 裁决）；全文无任何 fact_id/UNKNOWN 标记机制。 |
-| 推理声明带规则支持 + `source: inferred` | 16/50 | 全文零 `source: inferred`、零 surface `required_outcomes` 规则引用。未标注推理至少三处：1c「已填值不丢失」（UF-2 原文仅「错误行留场可重试」）；5b「超限不放行（无无限 fix 链）」（源文档只陈述「链深 ≤6」不变量，超限时系统行为未定义于本 journey 引用面）；3b「非运行期劝阻」（机制层否定式断言）。Web 强制派生理应触发的推理（validation-error/session-expired）一处未生成。 |
-| 无未分类幻觉 | 32/40 | 未发现与源文档相抵触的捏造声明（三项扩展均为合理推理而非幻觉，故不在本子项重罚）；因存在「既非带溯源事实、亦非带支持推理」的灰区声明，不给满分。 |
-
-### 5. Surface Fitness（Surface 适配）— 59/150（**低于最低线 90——唯一破线维度之一**）
+### 3. Precondition Exclusivity（前置条件互斥性）— 136/150
 
 | 子项 | 得分 | 判定依据 |
 |---|---|---|
-| 强制派生 Outcome 在场 | 22/60 | surface-web.md：「Mandatory derived Outcomes (must be considered for every Web Journey): validation-error / session-expired」。**`session-expired` 完全缺席**——本 journey 横跨「配置 → 派发 → 执行」多会话多环节（Step 1 的「下次派发生效」本身即是跨会话时效声明），却无任何会话中断/过期/连续性 Outcome，也无「本地单用户应用无会话过期概念」式不适性记账。`validation-error` = Step 1b 未标注近似物（表单未填齐 → 保存禁用 + ⚠ 占位说明——满足「form is not submitted」+ 提示在场，但非「error near field」的提交拒绝形态，且文档未将其识别为该派生），给部分分。 |
-| 测试策略比例 50/50 | 25/50 | 12 步中仅 3 步（1/1b/1c）为浏览器面用户工作流，9 步为 worker 内部契约型断言——Web 的 Journey 侧（用户经 UI 的工作流）严重欠重；且流程四的旗舰 web 交互「任务子 tab 工具栏『派发』按钮」（v22 双路由：亮起/置灰、跳转/新开、模式路由、`/run-tasks` 单行消息自动发送）在本 journey 零覆盖，Step 2 只剩无通道的「发起 run-tasks」。 |
-| Surface 执行假设现实性 | 12/40 | Step 2「spawn 携带 agentOptions…worker 会话 model 与配置一致」、Step 3「worker tool 面仅含矩阵 ✓ 列工具（toolFilter 断言）」、Step 4「转录其技能目录」、5b「链深 ≤6 纪律」——全部断言浏览器自动化**不可观察**的 child-agent 内部状态，且文档未声明任何替代观察通道（如任务子 tab 详情时间线之于「自身任务以 blocked 收尾」）。与 sibling 评审口径一致（expedition 链同类问题计入本维度）。 |
+| 同 Step 内前置互异 | 54/60 | 1b/1c/1d 三配置边况互斥 ✓（未填齐/写入失败/时效边界）；2b 冲突态唯一 ✓。扣：5b（链近上限追加 fix-N）与 5c（阻塞问题型追加 fix-N）在动作空间仍部分重叠——同一下属场景可同时满足两者前置，需按「考察面」（链深纪律 vs 前缀分化）人工区分。 |
+| 前置足以唯一选定 Outcome | 44/50 | 单 Outcome + 触发态互斥为主 ✓；happy 步级前置齐备（前轮隐式承接已消）✓。扣：5b/5c 的判别依赖考察意图而非状态差（见上）；Step 3 的矩阵外置使「仅含 ✓ 列」的最终判定依赖外部表。 |
+| 错误/边界 Outcome 不缺前置 | 38/40 | 全部错误边况带触发前置 + 夹具可达性（Setup (a)/(b) 确定性诱导）✓。小扣：3b 的「worker 执行含越权指令的任务」——诱导成功率取决于模型依从性，前置可达但非机械确定。 |
 
-### 6. Internal Consistency（一致性）— 123/150
-
-| 子项 | 得分 | 判定依据 |
-|---|---|---|
-| 不变量在每步成立 | 44/60 | 不变量二「worker 会话 model **恒** = Forge设置 默认档（agentOptions 显式携带、优先于父会话继承）」为无条件表述，与 Step 1b Outcome 明文的未配置态行为「⚠ 占位说明『**worker 派发将回退父会话继承**』」直接冲突——不变量缺「已配置」限定词。因无任何步骤实际在未配置态派发（1b 只查看+保存尝试），不构成步骤级 -40 违规，按措辞级矛盾计罚。其余不变量（一/三/四）与各步一致 ✓。 |
-| 跨步引用一致 | 41/50 | Step 3 依赖「任务库含多类型任务」（Setup ✓）。扣分：Step 4 依赖「远征默认会话」在场、4b 依赖突击会话在场——Setup 均未建立（仅边况前置自载）；Step 5 依赖一个会失败的任务 fixture——Setup 无。 |
-| 风险级别与内容一致 | 38/40 | High 成立：设置持久化写入、任务态迁移（blocked/fix 链）、worker 经 shell/git 变异仓库——状态变异与不可逆操作在场。 |
-
-### 7. Workflow Coverage（工作流覆盖度）— 120/150
+### 4. Fact Alignment（事实依据）— 140/150
 
 | 子项 | 得分 | 判定依据 |
 |---|---|---|
-| Golden Path 在场（否决项） | 48/60 | 内容层面存在：Step 1→5 连续五步，语义对应 PRD Story 5 主线（配置默认 LLM → 派发 → 收窄矩阵 → 技能继承 → addTask 逃生），域级动词（配置/派发/追加任务）非裸 API 调用——否决项不触发。扣分：Step 3/4 偏验证型（「转录其技能目录」为纯观察步，属 golden-path.md 反模式「verification-only steps」边缘）；Step 2 动作欠规格（见 Completeness）。`golden_path: false` 前置标记与 feature 级约定一致（expedition-full-sdd-chain 承担该职），不计矛盾。 |
-| 多步覆盖深度 | 42/50 | 深度良好：状态迁移（blocked 收尾/源即时 blocked）、实体生命周期（addTask 建新任务→派发）、跨实体（设置↔worker↔任务↔技能目录）、错误恢复（逃生通道 + 链深上限 + 优先级冲突）。 |
-| 对 PRD 范围的工作流完备性 | 30/40 | Story 5 四条 AC 全覆盖 ✓。缺口：流程四第 1 条「派发入口两途」的 web 入口（工具栏按钮行为族）无对应覆盖（可辩称归 overview-entry-new-session，但本 journey 连提及备选入口都没有）；流程四第 2 条 dispatchTask DAG 序/无单任务直执、第 5 条完成结算（submit/gate_json/commit_hash）未覆盖（归 gate-and-submit-discipline，分工可接受）。 |
+| 事实声明可溯源 | 56/60 | Step 1-5 全部行为声明逐字可溯（Story 5/UF-2/流程四/方案⑥/S6-5/tech-design）✓；UF-2 内容的溯源缺口已闭合 ✓；3.9 记录已入 `sources:`（fix-2.1），「3.9 W 用例」引用闭环 ✓。扣：无 fact_id/UNKNOWN 机制。 |
+| 推理声明带规则支持 + `source: inferred` | 48/50 | 标注体系建立：Setup 夹具（a)(b)、1c（已填值不丢失）、1d（时效边界）、5b（超限不放行）+ 裁决节双规则引用 ✓；裁决节越界读法已删（fix-2.1），现文「配置持久化落盘由 Step 1 承载」与 Step 1 纸面严格对齐 ✓。小扣：1d 行为预言（spawn 不回改）为标注推断；「显式不静默」（1b）为 UF-2 原词 ✓ 无需标注。 |
+| 无未分类幻觉 | 36/40 | 未发现与源相抵声明 ✓。扣：「矩阵 ✓ 列」外置断言的瞬时一致性无保障（若 db-schema §7-6 终稿与方案⑥底稿分化，Step 3 断言对象漂移）；1d 行为预言（spawn 不回改）为标注推断，实现证伪风险同 2c 类。 |
 
-## Phase 2.5 — 跨维度一致性核验
+### 5. Surface Fitness（Surface 适配）— 120/150（前轮 59——破线已解）
 
-- 根因聚敛：Surface Fitness 破线的同一根因（Web 强制派生缺席 + 非浏览器断言面）在 Completeness c3、Fact Alignment c2 分面计罚——与 rubric 自身交叉引用设计及 sibling 评审（blitz-direct-chain 866、expedition 56/150、mode-selection 60/150 的 Surface Fitness 处置）口径一致，无双重计分滥用。
-- Fact Alignment 92 与 Surface Fitness 59 的落差自洽：前者由 Step 2–5 的逐字可溯性撑起，后者由 surface 适配缺位拖垮——两维度量的是不同性质。
-- 总分核算：160+160+130+92+59+123+120 = **844/1150**。
+| 子项 | 得分 | 判定依据 |
+|---|---|---|
+| 强制派生 Outcome 在场 | 50/60 | validation-error **在场且为规则形态本体**（必填缺失 → 保存禁用 + 近场占位 + 填齐激活——四旅程中唯一原生 web 表单校验面）✓；session-expired 在场（1d 配置时效 + 持久化续行，登录 N/A 论证成立）——但映射语义为「配置/档位连续性」而非会话连续性，是四旅程中最远的本地化（mode/overview 的草稿与投影重建更贴「unsaved data preserved」）。 |
+| 测试策略比例 50/50 | 40/50 | 双半承载声明明确且步级指派（Journey 半 = 设置流 + 派发入口 + 时间线；Contract 半 = worker 内部状态七处）✓——前轮「9/12 步非浏览器且无声明」的结构性缺陷以声明方式收敛；派发按钮 web 入口补齐 ✓。扣：Journey 半实量仍 < 半（约 6-7/13）；in-doc 每步单 Outcome。 |
+| Surface 执行假设现实性 | 30/40 | 观察通道全声明且各有所本（会话投影面 = S6 转录通道；契约面 = G1 pin/3.9 W 已验证通道；web 面 = 详情时间线 + M2 单次重取口径）✓。扣：多数断言本质浏览器不可观察（声明解除了「无通道」违规，但 surface 归属的天然弱点仍在）；3b/4b/5 依赖 agent 依从夹具（诱导式而非机械触发），自动化稳定性弱于纯 UI 步。 |
+
+### 6. Internal Consistency（一致性）— 141/150
+
+| 子项 | 得分 | 判定依据 |
+|---|---|---|
+| 不变量在每步成立 | 57/60 | 不变量二已限定（已配置时/未配置回退——与 1b 一致，前轮矛盾消除）✓；不变量一 ↔ 3b ✓；三 ↔ 4/4b ✓；四 ↔ Setup/Step 2 ✓；裁决节与 Step 1 纸面已对齐（fix-2.1），前述小扣消除。 |
+| 跨步引用一致 | 44/50 | Setup 冲突夹具 ↔ 2b ✓；4/4b 会话在场 ↔ Setup ✓；5/5c ↔ 夹具 (a) ✓；裁决节 ↔ 1b/1d/1 ✓。扣：Step 3 断言对象（矩阵）外置导致跨文档引用；1d 在途 worker 的建立时序未与 Step 2 显式衔接。 |
+| 风险级别与内容一致 | 40/40 | High 成立（设置持久化写入、blocked/fix 链态迁移、worker 经 shell/git 变异仓库）✓。 |
+
+### 7. Workflow Coverage（工作流覆盖度）— 126/150
+
+| 子项 | 得分 | 判定依据 |
+|---|---|---|
+| Golden Path 在场（否决项） | 50/60 | veto 不触发：Step 1→5 连续对应 Story 5 主线（配置 → 派发 → 收窄 → 继承 → 逃生），域级动词 ✓。扣：Step 3/4 偏验证型（转录目录/核对工具面）——golden-path 反模式边缘（题材固有，前轮同判）；Step 2 动作双通道写法（「或」）使主路径不唯一。 |
+| 多步覆盖深度 | 44/50 | 状态迁移（blocked 收尾/源即时 blocked）、实体生命周期（addTask 建任务 → 派发）、跨实体（设置↔worker↔任务↔技能目录）、错误恢复（逃生 + 链深上限）、配置时效（1d）——深度保持同批前列 ✓。扣：诱导式步骤（3b/4b/5）的复现确定性弱于机械触发；1d 为单点对照无双向组合。 |
+| 对 PRD 范围的工作流完备性 | 32/40 | Story 5 四 AC 全覆盖 ✓；流程四第 1 条两途入口、第 3 条档位语义、第 5 条逃生通道均落步 ✓；派发按钮行为族归 overview（其 5/5b/5c 已覆盖）——分工实存但本篇未声明（前轮「连提及都没有」已改善为「提及 + 单步入口」，完整行为族仍让渡）。扣：流程四第 2 条（dispatchTask DAG 序）与第 6 条（结算定式）归 gate-and-submit-discipline，无显式分工声明（前轮同判）；收窄矩阵终稿归属（db-schema §7-6）未注记版本基准。 |
+
+## Phase 2.5 — 跨维度一致性核验 + 总分核算
+
+- 前轮破线根因三面回收：Completeness c3（45→56）、Fact Alignment c2（16→46）、Surface Fitness（59→120）——回收 +96，加独立缺陷修复（不变量限定 +8、观察通道/入口 +12、夹具 +8、UF-2 溯源 +2）合计 +148。逐项有修订动作对应；SF 120 距满分 30 分 = 题材非浏览器域（声明式收敛 ≠ 内容变浏览器）+ 诱导式步骤随机性，扣分有实指、非惯性罚。
+- 前轮三个 blindspot 全部消解：可控诱导（Setup 夹具）、配置时效边界（Step 1d 兼 session-expired 承载）、output-token 张力（流程四第 3 条口径）。新增残留：3.9 引用未入 sources（新引入的源外指针）；裁决节重启续行读法越出承载步纸面。
+- 与同批口径：SF 120 位于 preset（118）与 mode（126）之间——validation-error 形态最优（唯一表单本体）但 session-expired 语义最远、非浏览器占比最高，两向抵消后居中，无倒挂。
+- Delta 后总分核算：178+158+136+140+120+141+126 = **999/1150**（fix-2 基线 992 + fix-2.1 Delta 回收 +7：C1 +2 / FA +4 / IC +1——对应涉本篇的 2 处修订，其余维度不动）。
 
 ## 结论
 
-**总分 844 / 1150 —— 未过门**（需 ≥975 且每维度 ≥ 最低线）。**Surface Fitness 59/150 低于最低线 90**，为唯一破线维度；总分亦不达 975。核心失分根因与 sibling journeys 同构：Web 强制派生 Outcome（validation-error / session-expired）无显式在场、无不适性记账、无 `source: inferred` 标注；叠加本 journey 特有的 surface 错配加重项——9/12 步断言浏览器不可观察的 worker 内部状态且无观察通道声明。独立问题：不变量二与 Step 1b 回退语义的措辞级矛盾、UF-2 内容未列入 sources、Step 2/4/5 可执行性缺口。
+**总分 999 / 1150 —— 过门**（≥975 ✓，裕量 +24；每维度 ≥ 最低线 ✓，最低维 Surface Fitness 120 / 线 90）。同时高于配置目标 850。前轮 5 条修复建议全部落地（核销表见 Phase 1），三个 blindspot 全部消解；fix-2.1 Delta 两处收尾（3.9 记录入 `sources:`、裁决节越界读法删除）经对纸面验证后回收 +7。残余失分集中在题材固有项（worker 内部状态断言的非浏览器本质、自主 agent 行为的诱导随机性）与盲区 1-3（诱导判据分层 / 1d 时序约束 / 矩阵基准钉扎）。
 
 ## Phase 3 — Blindspot Hunt（rubric 之外）
 
-1. **[blindspot] 自主 agent 行为无可控诱导机制。** 「worker 执行中遇无法解决的重大问题，经 addTask 追加任务并结算自身」（Step 5）、「worker 尝试调用被拒工具」（3b）、「尝试请求 spec 技能」（4b）——三处都要求测试者观察**自主 LLM agent 的偶发行为**，Setup（「任务库含多类型任务」）未提供任何确定性触发手段（如注定失败的任务 fixture、诱导越权的任务规格）。下游测试代理无法稳定复现这些步骤——这是测试可控性（determinism/controllability）设计缺口，rubric 的 Completeness 只查「action 描述清晰」，不查行为可诱导性。
-2. **[blindspot] 配置时效边界静默断言而未成边况。** Step 1「保存成功 → 持久化…、**下次派发生效**」隐含一个重要的时间边界：配置变更不影响在途 worker（已 spawn 的会话保持旧档）。该边界是 load-bearing 语义（与不变量二「优先于父会话继承」共同构成档位生命周期），却没有任何边况验证「改档后既有 worker 照旧 / 新 worker 用新档」——恰是 session-expired 强制项在本工作流的天然本地化派生位之一。
-3. **[blindspot] output-token 断言与三项配置面的张力未调和。** Step 2 断言「provider / model / effort / **output-token** = 该档位」，而配置面只有「Provider / Model / Reasoning 三项」（Step 1；PRD 用户裁决已去 Output 上限，机制通道能力保留）。第四个字段（output-token）的档位值从何而来（常量？跟随模型默认？）在 journey 内悬空——逐字搬运 AC 时未消解源文档内部的三配四断张力，测试代理无从断言一个无配置来源的值。
+1. **[blindspot] 夹具诱导的成功率无判据。** 夹具 (a)「执行路径必缺测试证据」依赖 worker 实际走到 submit 且未投机补测；(b)「规格含询问用户指令」依赖 worker 选择调用 ask-user 而非自行绕过。两夹具把「自主行为不可控」改善为「大概率可控」，但未定义**诱导失败的判定与处置**（如 N 次重试、或以 3.9 W 式 deny 断言直接替代行为观察——3b 的「物理不在面」本可用契约面 deny 断言独立验证，不必等 worker 真的去调）。建议为 3b 增补「deny 断言为 Primary、行为观察为 Secondary」的判据分层。
+2. **[blindspot] 1d 的时序窗口与改档实时性张力。** tech-design 明文「派发时实时读（改完即生效无重启）」——即改档保存后**立即**派发即用新档，1d 的「在途 worker 保持旧档」只在 spawn 已完成后成立。1d 未声明「改档保存动作必须晚于在途 worker 的 spawn 完成事件」这一时序前置；自动化若在 spawn 进行中改档，可能命中中间态。补一行时序约束即可封死。
+3. **[blindspot] Step 3 断言对象的外置漂移风险。** 「仅含矩阵 ✓ 列工具」的矩阵底稿在 proposal 方案⑥、终稿随 db-schema §7-6——两文档当前一致性无保障（底稿 vs 终稿措辞已分化过一次）。Step 3 断言应钉住单一基准（「以 db-schema §7-6 终稿为准」），否则该步在文档演化中会静默失锚。
 
-## 修复建议（供 reviser）
+## 修复建议（供下轮，如需迭代）
 
-1. **补 Web 强制派生 Outcome 或显式不适性记账**（预计 +90~130，解 Surface Fitness 破线）：`validation-error` = 将 Step 1b 显式识别为该类派生并补标注（或扩展：非法 Provider 值提交被拒）；`session-expired` 本地化形态 = 配置时效边界（见 blindspot 2：改档 vs 在途 worker / 应用重启后 worker 派发续行）。每条派生补 `source: inferred` + 规则来源。
-2. **为 9 个 worker 内部断言步声明观察通道**：能走 UI 的走 UI（如 Step 5 源任务 blocked + 新任务行 = 任务子 tab 详情时间线）；不能走 UI 的显式记为契约面断言（对应 50/50 的 Contract 半），并补工具栏「派发」按钮作为 Step 2 的 web 入口形态。
-3. **不变量二加限定**：「worker 会话 model 恒 = Forge设置 默认档**（已配置时；未配置回退父会话继承，见 Step 1b）**」。
-4. **`sources:` 增补 `prd/prd-ui-functions.md`**（Step 1/1b/1c 的 UF-2 出处）。
-5. **补可控触发 fixture**：为 Step 5/3b/4b 在 Setup 提供确定性诱导手段（注定失败的任务、规格中含越权指令的任务）。
+1. **已解（fix-2.1）**：3.9 记录已入 `sources:`（C1 +2 / FA +2）。
+2. **已解（fix-2.1）**：裁决节越界读法已删除（改为「落盘由 Step 1 承载」，与纸面严格对齐）（FA +2 / IC +1）。
+3. Step 3 钉住矩阵基准（「以 db-schema §7-6 终稿为准」）并声明 gate-and-submit / 派发按钮行为族的分工归属（+4~6，C1/WC）。
+4. 3b 增补「deny 契约面断言为 Primary、行为观察为 Secondary」判据分层（+2~3，PE/可执行性）。
+5. 1d 补时序约束（改档保存须晚于在途 worker spawn 完成）（+2~3，PE/IC）。
+6. Step 2 动作双通道择一为主路径（工具栏「派发」按钮），另一通道注记为等价入口（+2~3，WC）。
