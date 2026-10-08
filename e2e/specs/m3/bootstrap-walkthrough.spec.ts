@@ -136,9 +136,11 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
     }
 
     // ── 规格文档（write-prd/ui-design/tech-design 产出的 RPC 双门承载）──
+    // 词表事实（contracts DOC_KINDS 七类封闭）：无 ui-design kind——ui-design.md 不入册；
+    // UI 段入册工件 = page-map（tech-design SKILL 登记，规范位 design/page-map.md）。
     const COMMIT = '2468ace13579bdf02468ace13579bdf02468ace1'
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'prd-spec', relPath: `docs/features/${PROP}/prd/prd-spec.md`, summary: 'Jbw 走查 PRD' })
-    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'ui-design', relPath: `docs/features/${PROP}/ui/ui-design.md`, summary: 'Jbw 走查 UI 设计' })
+    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'page-map', relPath: `docs/features/${PROP}/design/page-map.md`, summary: 'Jbw 走查页面图' })
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'tech-design', relPath: `docs/features/${PROP}/design/tech-design.md`, summary: 'Jbw 走查技术设计' })
 
     // ── Step2：派发开发链（回放主径）——任务 + 执行记录全入自身 forge.db ──
@@ -182,7 +184,7 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
       const docs = db2.prepare<unknown[], { doc_kind: string }>(
         `SELECT doc_kind FROM feature_documents WHERE feature_id = ? ORDER BY doc_kind`,
       ).all(featureId)
-      expect(docs.map((d) => d.doc_kind), '规格文档三行入 feature_documents').toEqual(['prd-spec', 'tech-design', 'ui-design'])
+      expect(docs.map((d) => d.doc_kind), '规格文档三行入 feature_documents（UI 段 = page-map，词表无 ui-design）').toEqual(['page-map', 'prd-spec', 'tech-design'])
     } finally {
       db2.close()
     }

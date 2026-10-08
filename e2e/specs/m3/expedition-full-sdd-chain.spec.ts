@@ -142,8 +142,11 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
     }
 
     // ── Step4/5：三类规格文档（write-prd / ui-design / tech-design 的 RPC 双门承载）──
+    // 词表事实（contracts DOC_KINDS 七类封闭）：无 ui-design kind——ui-design.md 为 on-disk
+    // 工件不入册（ui-design SKILL.md State-Layer Discipline）；UI 段入册工件 = page-map
+    // （tech-design SKILL 登记，规范位 design/page-map.md——core discovery 同映射）。
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'prd-spec', relPath: `docs/features/${PROP}/prd/prd-spec.md`, summary: 'Jefc PRD' })
-    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'ui-design', relPath: `docs/features/${PROP}/ui/ui-design.md`, summary: 'Jefc UI 设计' })
+    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'page-map', relPath: `docs/features/${PROP}/design/page-map.md`, summary: 'Jefc 页面图' })
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'tech-design', relPath: `docs/features/${PROP}/design/tech-design.md`, summary: 'Jefc 技术设计' })
 
     // ── Step6：breakdown-tasks 建任务（挂 feature = 提案链 + 依赖 DAG）──
@@ -189,7 +192,7 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
       const docs = db2.prepare<unknown[], { doc_kind: string }>(
         `SELECT doc_kind FROM feature_documents WHERE feature_id = ? ORDER BY doc_kind`,
       ).all(featureId)
-      expect(docs.map((d) => d.doc_kind), 'feature_documents 三类在场（分层多类）').toEqual(['prd-spec', 'tech-design', 'ui-design'])
+      expect(docs.map((d) => d.doc_kind), 'feature_documents 三类在场（分层多类——UI 段 = page-map，词表无 ui-design）').toEqual(['page-map', 'prd-spec', 'tech-design'])
     } finally {
       db2.close()
     }
@@ -205,7 +208,7 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
     await expect(featRow.locator('[data-dswf-mode-chip]'), 'feature 恒远征（只读投影）').toHaveAttribute('data-dswf-mode-chip', 'expedition')
     await featRow.locator('[data-dswf-ov-parent-toggle]').click()
     await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/prd/prd-spec.md`)).first(), 'PRD 分层文档行（真实路径）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/ui/ui-design.md`)).first(), 'UI 设计文档行').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/design/page-map.md`)).first(), 'UI 文档组页面图行（UI 段入册工件——词表无 ui-design）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/design/tech-design.md`)).first(), '技术设计文档行').toBeVisible({ timeout: 15_000 })
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '任务行甲 = 已完成').toContainText('已完成', { timeout: 30_000 })
@@ -273,8 +276,10 @@ test('@web-e2e @m3 远征全链·Step2b/2c：打回修订循环（空因拒绝 +
     } finally {
       db0.close()
     }
-    // 修订后再走接受（评审工作流完整可用）
+    // 修订后再走接受（评审工作流完整可用）——先等行面呈现新态（bridge 写后事件刷新落地）：
+    // vd-to 允许集 = mount 时状态快照，陈旧 draft 态下目标仅 under-review（accepted 不在列）
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: pA.proposalId, toStatus: 'under-review' })
+    await expect(rowA, '再送审 = 评审中（事件刷新落地后才开弹）').toContainText('评审中', { timeout: 30_000 })
     await uiVerdict(page, 'Jefc 打回循环提案', 'accepted', 'Jefc 修订完成可接受')
     await expect(rowA, '再接受 = 已接受').toContainText('已接受', { timeout: 30_000 })
 
@@ -345,8 +350,11 @@ test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：成链幂等 + 文档 upsert 
     expect(chained.chained, '成链返回 feature').toBeDefined()
     const featureId = chained.chained?.featureId ?? ''
 
-    // ── 成链幂等：同 proposal 已有 feature → 再 register 不重复建链 ──
-    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jefc 幂等与守卫演示' })
+    // ── 成链幂等：同 proposal 已有 feature → 再 register typed 拒（ERR_FEATURE_EXISTS——
+    // registerFeature slug UNIQUE 冲突 409 = features.ts 契约面；防重复建链由词表单源承载）──
+    const dup = await rejectMessage(forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jefc 幂等与守卫演示' }))
+    expect(dup, '重复 register typed 拒（code 面）').toContain('ERR_FEATURE_EXISTS')
+    expect(dup, '重复 register typed 拒（message 面）').toContain('feature 已存在')
     const db = openForgeDbAt(dir)
     try {
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features WHERE proposal_id = ?`).get(proposal.proposalId)?.n, '重复 register 不建第二链（幂等）').toBe(1)

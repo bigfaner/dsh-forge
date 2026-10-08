@@ -61,7 +61,7 @@ import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
-import { registerProject, forgeInvoke } from '../../support/rpc.js'
+import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
@@ -90,11 +90,17 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    // 工作区开局选定（hero 期芯片流——会话面常驻 + 侧栏 ForgeWorkspacePanel 项目树物化，
+    // Step1e 会话行断言依赖；sc1/mode-selection 同径）
+    await selectWorkspaceViaChip(page, WS_NAME)
     const driver = createBridgeDriver(app)
-    writeProposalDocs(wsDir, 'joe-blitz', ['proposal.md', 'research.md'])
+    // 顺序纪律：提案行先于文档落盘——任务库惰性首开（首个 forge 域调用）触发发现面吸收
+    // （docs/proposals/<slug>/proposal.md → INSERT OR IGNORE）；先写盘则吸收先行建档，
+    // 显式 createProposal 撞 slug UNIQUE（discovery.ts 单向阀门）。
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: 'joe-blitz', title: 'Joe 多文档突击提案', mode: 'blitz' })
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: 'joe-exp', title: 'Joe 远征对齐提案', mode: 'expedition' })
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: 'joe-old', title: 'Joe 无溯源提案' })
+    writeProposalDocs(wsDir, 'joe-blitz', ['proposal.md', 'research.md'])
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'joe-feat', title: 'Joe 恒远征 feature' })
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: 'joe-feat', docKind: 'prd-spec', relPath: 'docs/features/joe-feat/prd/prd-spec.md', summary: 'Joe feature PRD' })
 
@@ -102,6 +108,13 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    // 展开行先行：预填文档清单取自 docsMap（useProposalDocs 按需装载——展开行才拉
+    // listDocs；收起行打开会话 = 空清单）。真实用户审阅文档后开会的同径。
+    const blitzRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Joe 多文档突击提案' }).first()
+    await expect(blitzRow, '突击提案行在场').toBeVisible({ timeout: 30_000 })
+    await blitzRow.locator('[data-dswf-ov-parent-toggle]').click()
+    await expect(page.locator('[data-dswf-ov-doc="docs/proposals/joe-blitz/proposal.md"]').first(), '展开装载 proposal.md（docsMap 按需）').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-dswf-ov-doc="docs/proposals/joe-blitz/research.md"]').first(), '展开装载 research.md').toBeVisible({ timeout: 15_000 })
     const blitzOpen = page.locator('[data-dswf-ov-opensession="joe-blitz"]').first()
     await expect(blitzOpen, '突击提案行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
     await blitzOpen.click()
@@ -142,7 +155,9 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await expect(draftB).toContainText('阶段：')
 
     // ── Step1e：草稿独立（会话间输入框独立——新开不覆盖既有草稿）──
-    await expect(page.locator(SESSION_ROW_ANY).first(), '两会话常驻可回访（中区会话面）').toBeVisible({ timeout: 30_000 })
+    // 会话行住侧栏 ForgeWorkspacePanel 项目树——工作区已在开局选定（sc1 同径），会话
+    // 随「打开新会话」入树，侧栏常驻可回访
+    await expect(page.locator(SESSION_ROW_ANY).first(), '两会话常驻可回访（侧栏会话面）').toBeVisible({ timeout: 30_000 })
     const sessionRows = page.locator(SESSION_ROW_ANY)
     expect(await sessionRows.count(), '至少两会话在场（两次「打开新会话」）').toBeGreaterThanOrEqual(2)
     await sessionRows.last().click()
@@ -240,8 +255,10 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
     await expect(failToast, '✗ 行 = 依赖无环类命中（违规描述含任务键）').toContainText('✗ 依赖无环')
     await expect(failToast).toContainText('joe-diag/1.3')
     await failToast.locator('[data-dswf-tt-diagtoast-send]').click()
-    // 新会话：远征（feature 容器专属——无突击分支）+ 自动发送格式化失败诊断
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 容器目录锚打头').toContainText('@docs/features/joe-diag/', { timeout: 60_000 })
+    // 新会话：远征（feature 容器专属——无突击分支）+ 自动发送格式化失败诊断。
+    // 转录渲染面：@docs/features/joe-diag/ 首行被会话渲染器解析为目录提及芯片（textContent
+    // = 裸 slug），字面 @path 不在转录 DOM——容器锚以「所属：」归属行断言（pathLine 同源）
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 容器归属行（提及芯片渲染面）').toContainText('所属：Joe 违规子图 feature（feature）', { timeout: 60_000 })
     await expect(page.locator(CONVERSATION_CONTENT).first(), '诊断行 + validateFeatureTasks 失败').toContainText('诊断：validateFeatureTasks 失败')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '请求行（请排查修复）').toContainText('请求：')
     await awaitNoLateModals(page)
@@ -338,9 +355,15 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     await expect(toast).toContainText('任务失败 · 受阻任务')
     await expect(toast).toContainText('状态：阻塞 — Joe 失败诊断演示（AC 证据缺口）')
     await expect(toast).toContainText('任务键：')
+    // 抽屉遮蔽处置：任务抽屉开时其面板拦截 toast 发送钮的指针事件——先关抽屉再点发送
+    // （toast 5s 档内完成；关闭不撤 toast）
+    await drawer.locator('[data-dswf-td-close]').click()
+    await expect(drawer).toBeHidden({ timeout: 10_000 })
     await toast.locator('[data-dswf-tt-diagtoast-send]').click()
-    // 新会话：容器对应模式（突击提案 → 突击）+ 自动发送格式化失败诊断
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 指向 proposals（容器渠道）').toContainText(`@docs/proposals/${PROP}/`, { timeout: 60_000 })
+    // 新会话：容器对应模式（突击提案 → 突击）+ 自动发送格式化失败诊断。
+    // 转录渲染面：@docs/proposals/<slug>/ 首行解析为目录提及芯片（textContent = 裸 slug）
+    // ——容器锚以「所属：」归属行断言（pathLine 同源）
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '@path 容器归属行（提及芯片渲染面）').toContainText('所属：Joe 失败诊断突击提案（突击提案）', { timeout: 60_000 })
     await expect(page.locator(CONVERSATION_CONTENT).first(), '任务键 + 失败记录逐行').toContainText('任务：')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '状态行（阻塞 + 原因）').toContainText('状态：')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '修复请求行').toContainText('请求：')

@@ -24,7 +24,8 @@
 //   Step2 success（blank 期点选突击 → 组合即时切换）…………………………………………………「T1」
 //   Step2b idempotent-default-select（点选当前已选 = 投影稳定零漂移）……………………「T1」
 //   Step4 success（提案绑定入口自动对齐——座位标签突击）…………………………………………「T2」
-//   Step4b no-mode-source-keeps-default（无溯源不切换 + chip 缺省占位）……………………「T2」
+//   Step4b no-mode-source-keeps-default（无溯源不切换——select 不调用沿 registry 当前
+//     选择（净默认远征世界归 T1 Step1）+ chip 缺省占位）…………………………………………………「T2」
 //   Step5 success / 5b honest-accounting-mismatch（错配守卫可读面 + 零阻断 +
 //     下游读溯源字段不读会话预设）…………………………………………………………………………………「T3」
 //   Step1b hero-switch-off / Step1c settings-toggle-roundtrip………………………………诚实映射
@@ -112,7 +113,7 @@ test('@web-e2e @m3 模式选择·T1：座位在场默认远征 + 菜单双入口
   }
 })
 
-test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）+ 无溯源提案不切换（保持远征 + chip 占位）', async () => {
+test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）+ 无溯源提案不切换（沿 registry 当前选择不重绑 + chip 占位）', async () => {
   test.setTimeout(480_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa2-'))
   const wsDir = join(fixtureRoot, WS_NAME)
@@ -150,7 +151,10 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
     }
     expect(label.includes('突击') || label.includes('blitz'), `自动对齐 = 突击（label=${label}——无需逐会话手选）`).toBe(true)
 
-    // ── Step4b：无溯源提案（mode NULL）经绑定入口 → 不切换（保持默认远征）──
+    // ── Step4b：无溯源提案（mode NULL）经绑定入口 → 不切换——open-session.ts 机制：
+    // mode 缺席 = agentPreset.select 不调用，座位沿 registry 当前选择（Step4 已立 = 突击；
+    // 「registry 默认 = 远征」的净默认世界由 T1 Step1 承载）。不切换的可观测 = 座位横跨
+    // 本动作保持既有选择不变（若误按默认重绑远征，此处即红）──
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     const unmarkedRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 无溯源提案（扫描吸收形态）' }).first()
@@ -164,10 +168,10 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
     let label2 = ''
     while (Date.now() < deadline2) {
       label2 = await seatLabel(page)
-      if (label2.includes('远征') || label2.includes('expedition')) break
+      if (label2.includes('突击') || label2.includes('blitz')) break
       await page.waitForTimeout(1_000)
     }
-    expect(label2.includes('远征') || label2.includes('expedition'), `无溯源不切换（保持 registry 默认远征——label=${label2}）`).toBe(true)
+    expect(label2.includes('突击') || label2.includes('blitz'), `无溯源不切换（select 未调用——沿 registry 当前选择突击；label=${label2}）`).toBe(true)
     // 溯源不变（不伪装成任一模式——库面）
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const db = openForgeDbAt(dir)

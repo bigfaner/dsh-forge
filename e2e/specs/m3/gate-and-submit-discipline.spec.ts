@@ -48,7 +48,7 @@
 //
 // Assertion depth: 38/41 behavioral（93%），其中 deep 15/38（39%）——两阈均过。
 
-import { mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
@@ -69,7 +69,9 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
   test.setTimeout(420_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd-'))
   const wsDir = join(fixtureRoot, WS_NAME)
-  // Step1 前置：工作区已配置 AGENTS.md（含 commit 约定——配置态）
+  // Step1 前置：工作区已配置 AGENTS.md（含 commit 约定——配置态）。wsDir 预建
+  // （mkdtempSync 只建 fixtureRoot——registerProject 前的手工写盘无目录可落）
+  mkdirSync(wsDir, { recursive: true })
   writeFileSync(join(wsDir, 'AGENTS.md'), '# 提交约定\n\n- 提交信息遵循 Conventional Commits（type(scope): subject）\n', 'utf8')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd-ud-'))
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })

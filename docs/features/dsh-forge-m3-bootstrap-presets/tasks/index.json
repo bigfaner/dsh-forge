@@ -706,6 +706,18 @@
       "sourceTaskID": "T-test-gen-contracts",
       "type": "coding.fix"
     },
+    "fix-3": {
+      "id": "fix-3",
+      "title": "Fix: 任务抽屉诊断失败 toast「发送给 agent」被抽屉 overflow 裁剪不可点",
+      "priority": "P0",
+      "estimatedTime": "30min",
+      "status": "pending",
+      "file": "fix-3.md",
+      "record": "records/fix-3.md",
+      "breaking": true,
+      "sourceTaskID": "T-test-run",
+      "type": "coding.fix"
+    },
     "gen-contracts": {
       "id": "T-test-gen-contracts",
       "title": "Generate Test Contracts",
