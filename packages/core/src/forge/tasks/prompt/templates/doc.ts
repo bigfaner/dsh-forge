@@ -19,7 +19,7 @@ export function doc(_ctx: TypePolicyContext): string {
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID).
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk).
 
 Output: \`Step 1/4: Reading task definition... DONE\`
 

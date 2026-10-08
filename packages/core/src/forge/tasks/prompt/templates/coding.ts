@@ -349,7 +349,7 @@ export function codeQualitySimplify(_ctx: TypePolicyContext): string {
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand the code to clean up.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand the code to clean up.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 

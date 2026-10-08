@@ -113,6 +113,19 @@ export interface DispatchPromptInput {
    * {kind: row.source_kind, slug: row.slug}；缺席省行 = M2 形态兼容）。
    */
   source?: ContainerRef
+  /**
+   * 任务标题（5.3 任务规格内嵌：TITLE 键值行——worker 面无 queryTask（收窄矩阵 forge 族
+   * 恰 submitTask+addTask）且 M3 task_file 列砍除，dispatchPrompt = 任务定义唯一到达面；
+   * 缺席省行 = M2 形态兼容）。
+   */
+  title?: string
+  /**
+   * 任务描述（任务规格内嵌：DESCRIPTION 段——task_desc 原文逐字；db-only 任务
+   * （quick-tasks/addTask 建）无定义文件可读，本段 = worker 的规格正文）。
+   */
+  taskDesc?: string
+  /** 验收清单（任务规格内嵌：ACCEPTANCE_CRITERIA 段——ac_json 数组逐行；空数组省段） */
+  acceptanceCriteria?: readonly string[]
   taskType: TaskType
   /** 任务定义载体路径（M2 task_file 列砍除——由调用方按需注入；缺席省 FILE 行） */
   taskFile?: string
@@ -144,14 +157,16 @@ function renderMarkers(input: DispatchPromptInput): string | undefined {
   return markers.length > 0 ? markers.join(', ') : undefined
 }
 
-/** `<task-context>` 内文（九键行序 = AC2 序：TASK_ID/SOURCE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记——
- *  SOURCE = M3 2.4 增键，紧随 TASK_ID） */
+/** `<task-context>` 内文（九键行序 = AC2 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记——
+ *  SOURCE = M3 2.4 增键紧随 TASK_ID；TITLE = 5.3 任务规格内嵌增键；DESCRIPTION/ACCEPTANCE_CRITERIA
+ *  = 键值行后的任务体段落（多行值——worker 面无 queryTask 时的定义唯一到达面） */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const lines: (string | undefined)[] = [
     `TASK_ID: ${input.slug}/${input.localId}`,
     input.source !== undefined ? `SOURCE: ${input.source.kind} ${input.source.slug}` : undefined,
+    input.title !== undefined ? `TITLE: ${input.title}` : undefined,
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,
@@ -165,7 +180,12 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
   ]
-  return lines.filter((line): line is string => line !== undefined).join('\n')
+  let context = lines.filter((line): line is string => line !== undefined).join('\n')
+  if (input.taskDesc !== undefined) context += `\nDESCRIPTION:\n${input.taskDesc}`
+  if (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0) {
+    context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${ac}`).join('\n')}`
+  }
+  return context
 }
 
 // ─────────────────────────── 组成序合成（AC1） ───────────────────────────

@@ -199,7 +199,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     assertDependenciesMet(prereqs)
 
     // ③ dispatchPrompt 合成（领取瞬间取数——BLOCKERS 快照 + PHASE_SUMMARY 相位机注入 +
-    //    fix 源标记谱系水化；M2 task_file 列砍除——taskFile 缺席省行）
+    //    fix 源标记谱系水化 + 任务规格内嵌（5.3：TITLE/DESCRIPTION/ACCEPTANCE_CRITERIA
+    //    ——worker 收窄面禁 queryTask 且 M3 task_file 列砍除，本合成 = 任务定义唯一到达面）；
+    //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
     const sourceRef = sourceRow === undefined ? undefined : { slug: sourceRow.slug, localId: sourceRow.local_id }
     const dispatchPrompt = composeDispatchPrompt({
@@ -208,6 +210,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // M3 2.4：SOURCE 容器语境行（任务带容器出厂——Interface 1；slug ≡ 容器 slug 不变量
       // 使行内 slug 直取任务行 slug）
       source: { kind: row.source_kind, slug: row.slug },
+      title: row.title,
+      ...(row.task_desc !== null ? { taskDesc: row.task_desc } : {}),
+      ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as readonly string[] } : {}),
       taskType: row.task_type,
       priority: (row.priority as TaskPriority | null) ?? undefined,
       coverage: row.coverage ?? undefined,

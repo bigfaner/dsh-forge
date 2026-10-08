@@ -134,7 +134,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.${readNote !== undefined ? ` ${readNote}` : ''}
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.${readNote !== undefined ? ` ${readNote}` : ''}
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -145,7 +145,7 @@ Output: \`Step 1/${totalSteps}: Reading task definition... DONE\``
 export function step1ReadSimple(purpose: string): string {
   return `### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand ${purpose}.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand ${purpose}.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 

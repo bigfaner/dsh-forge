@@ -15,12 +15,15 @@ import {
 import { DISPATCH_DIGEST_LENGTH, dispatchDigest } from './digest.js'
 import { TYPE_POLICY_TEMPLATES } from './templates/index.js'
 
-/** 全载荷夹具（九键全在场——快照覆盖每键行形态） */
+/** 全载荷夹具（全键在场——快照覆盖每键行形态；5.3 任务规格内嵌三键入载荷） */
 function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
   return {
     slug: 'm2-pipeline',
     localId: '2.2',
     taskType: o.taskType,
+    title: '派发简报模板族（20 类型路由）',
+    taskDesc: '步骤：1) 核对模板路由表 2) 快照锚定全文',
+    acceptanceCriteria: ['快照与模板逐字一致', '块序恒定'],
     taskFile: 'docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md',
     priority: 'P1',
     coverage: 0.8,
@@ -178,9 +181,10 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
     expect(contextBody).toContain('CATEGORY: coding')
   })
 
-  it('九键行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS', () => {
+  it('九键行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS（TITLE = 5.3 增键，紧随 SOURCE/先于 FILE）', () => {
     const keys = [
       'TASK_ID:',
+      'TITLE:',
       'FILE:',
       'TYPE:',
       'CATEGORY:',
@@ -212,7 +216,7 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
 
   it('条件键缺席即省行（最小夹具仅恒在场键）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:']) {
+    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'DESCRIPTION:', 'ACCEPTANCE_CRITERIA:']) {
       expect(minimal).not.toContain(key)
     }
   })
@@ -261,6 +265,45 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
       }),
     )
     expect(withSource).not.toBe(base)
+  })
+})
+
+// ─────────────────── 5.3：任务规格内嵌（worker 面无 queryTask 的定义唯一到达面） ───────────────────
+
+describe('5.3 任务规格内嵌：TITLE 键值行 + DESCRIPTION/ACCEPTANCE_CRITERIA 段（tech-design 图 4「角色唯一来源·纯任务规格」兑付）', () => {
+  it('全载荷：TITLE 行 + DESCRIPTION 段（taskDesc 逐字）+ AC 清单段，落在 <task-context> 键值行之后', () => {
+    const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
+    const ctx = prompt.slice(prompt.indexOf(`<${XML_TAGS.taskContext}>`), prompt.indexOf(`</${XML_TAGS.taskContext}>`))
+    expect(ctx).toContain('TITLE: 派发简报模板族（20 类型路由）')
+    expect(ctx).toContain('DESCRIPTION:\n步骤：1) 核对模板路由表 2) 快照锚定全文')
+    expect(ctx).toContain('ACCEPTANCE_CRITERIA:\n- 快照与模板逐字一致\n- 块序恒定')
+    expect(ctx.indexOf('DESCRIPTION:')).toBeGreaterThan(ctx.indexOf('MARKERS:'))
+    expect(ctx.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(ctx.indexOf('DESCRIPTION:'))
+  })
+
+  it('任务体不越 <task-context> 边界（三标签块结构不动——type-policy 首段前闭合）', () => {
+    const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
+    expect(prompt.indexOf(`</${XML_TAGS.taskContext}>`)).toBeLessThan(prompt.indexOf(`<${XML_TAGS.typePolicy}>`))
+    expect(prompt.slice(prompt.indexOf(`</${XML_TAGS.taskContext}>`))).not.toContain('步骤：1) 核对模板路由表')
+  })
+
+  it('taskDesc 单独在场（无 AC）→ 仅 DESCRIPTION 段；空 AC 数组 → 省段', () => {
+    const descOnly = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'doc' }),
+      title: '仅有描述的任务',
+      taskDesc: '一行描述',
+      acceptanceCriteria: [],
+    })
+    expect(descOnly).toContain('DESCRIPTION:\n一行描述')
+    expect(descOnly).not.toContain('ACCEPTANCE_CRITERIA:')
+  })
+
+  it('任务规格注入 → digest 新值（简报重合成判据同族——规格变更 = 新简报）', () => {
+    const base = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'doc' })))
+    const withSpec = dispatchDigest(
+      composeDispatchPrompt({ ...minimalInput({ taskType: 'doc' }), title: 'T', taskDesc: 'D' }),
+    )
+    expect(withSpec).not.toBe(base)
   })
 })
 

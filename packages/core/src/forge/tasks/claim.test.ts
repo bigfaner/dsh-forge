@@ -157,6 +157,32 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's' })
     expect(r2.dispatchPrompt).not.toContain('BLOCKERS:')
   })
+
+  it('任务规格内嵌（5.3 dogfood 实证缺陷收口）：TITLE/DESCRIPTION/ACCEPTANCE_CRITERIA 入 <task-context>——worker 面无 queryTask 时的定义唯一来源', async () => {
+    // 缺陷背景（5.3 SC-M3 走查首跑实证）：task-context 无任务体 + worker 收窄面禁 queryTask
+    // + M3 task_file 列砍除 → worker 三路皆无定义可读 → 全员 blocked（missing-input）。
+    // 收口 = dispatchPrompt 内嵌任务规格（tech-design 图 4「角色唯一来源·纯任务规格」兑付）。
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '4.1')
+    h!.db.prepare(`UPDATE tasks SET title = ?, task_desc = ?, ac_json = ? WHERE id = 't-f-4.1'`).run(
+      '创建 notes.md 并提交',
+      '步骤：1) 在工作区根创建 notes.md，内容恰好一行：ok',
+      JSON.stringify(['notes.md 在场且内容逐字', '四门全绿']),
+    )
+    const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
+    expect(dispatchPrompt).toContain('TITLE: 创建 notes.md 并提交')
+    expect(dispatchPrompt).toContain('DESCRIPTION:\n步骤：1) 在工作区根创建 notes.md，内容恰好一行：ok')
+    expect(dispatchPrompt).toContain('ACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿')
+    // 任务体入 <task-context>（三标签块结构不动）——DESCRIPITION 段落于键值行之后
+    const ctx = dispatchPrompt.slice(dispatchPrompt.indexOf('<task-context>'), dispatchPrompt.indexOf('</task-context>'))
+    expect(ctx.indexOf('DESCRIPTION:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
+    // 无 desc/AC 任务 → 段落省略（M2 形态兼容）
+    seedTask(h!.db, 'f', '4.2')
+    const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.2' }, sessionId: 's' })
+    expect(r2.dispatchPrompt).not.toContain('DESCRIPTION:')
+    expect(r2.dispatchPrompt).not.toContain('ACCEPTANCE_CRITERIA:')
+  })
 })
 
 describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 创建序', () => {

@@ -48,7 +48,7 @@ Objective: run scoped code-quality cleanup via the clean-code skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand the code to clean up.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand the code to clean up.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -115,7 +115,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -247,7 +247,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -366,6 +366,7 @@ Scope discipline (no authority escalation):
 
 <task-context>
 TASK_ID: m2-pipeline/2.2
+TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: coding-feature
 CATEGORY: coding
@@ -374,6 +375,11 @@ PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 COVERAGE: percentage 80%
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+DESCRIPTION:
+步骤：1) 核对模板路由表 2) 快照锚定全文
+ACCEPTANCE_CRITERIA:
+- 快照与模板逐字一致
+- 块序恒定
 </task-context>
 
 <type-policy>
@@ -388,7 +394,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -523,7 +529,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload. Analyze error messages to understand: 1. Error type (compilation, test, lint, type) 2. Affected files/modules 3. Likely root cause.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded. Analyze error messages to understand: 1. Error type (compilation, test, lint, type) 2. Affected files/modules 3. Likely root cause.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -670,7 +676,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -913,7 +919,7 @@ Objective: create or modify documentation.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID).
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk).
 
 Output: \`Step 1/4: Reading task definition... DONE\`
 
@@ -1028,7 +1034,7 @@ Objective: consolidate specs in non-interactive mode. Do NOT wait for user confi
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what specs to consolidate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what specs to consolidate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1096,7 +1102,7 @@ Objective: detect spec drift in non-interactive mode. Do NOT wait for user confi
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what specs to check for drift.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what specs to check for drift.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1153,6 +1159,7 @@ Scope discipline (no authority escalation):
 
 <task-context>
 TASK_ID: m2-pipeline/2.2
+TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: doc-review
 CATEGORY: doc
@@ -1160,6 +1167,11 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+DESCRIPTION:
+步骤：1) 核对模板路由表 2) 快照锚定全文
+ACCEPTANCE_CRITERIA:
+- 快照与模板逐字一致
+- 块序恒定
 </task-context>
 
 <type-policy>
@@ -1302,7 +1314,7 @@ Objective: generate a phase summary.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what the summary should cover.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what the summary should cover.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1381,7 +1393,7 @@ Objective: evaluate Contract quality via the eval skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what to evaluate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what to evaluate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1455,7 +1467,7 @@ Objective: evaluate Journey quality via the eval skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what to evaluate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what to evaluate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1513,6 +1525,7 @@ Scope discipline (no authority escalation):
 
 <task-context>
 TASK_ID: m2-pipeline/2.2
+TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: gate
 CATEGORY: gate
@@ -1520,6 +1533,11 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+DESCRIPTION:
+步骤：1) 核对模板路由表 2) 快照锚定全文
+ACCEPTANCE_CRITERIA:
+- 快照与模板逐字一致
+- 块序恒定
 </task-context>
 
 <type-policy>
@@ -1534,7 +1552,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload. The gate task definition carries the acceptance criteria for this phase.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded. The gate task definition carries the acceptance criteria for this phase.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -1676,7 +1694,7 @@ Objective: generate test contracts via the gen-contracts skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what contracts to generate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what contracts to generate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1748,7 +1766,7 @@ Objective: generate test journeys via the gen-journeys skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what journeys to generate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what journeys to generate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1820,7 +1838,7 @@ Objective: generate executable test scripts via the gen-test-scripts skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what test scripts to generate.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what test scripts to generate.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1895,7 +1913,7 @@ Objective: run e2e tests via the run-tests skill.
 
 ### Step 1: Read Task Definition
 
-Read the task definition (FILE path from the task-context block when present; otherwise queryTask with TASK_ID) to understand what tests to run.
+Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand what tests to run.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
 
@@ -1953,6 +1971,7 @@ Scope discipline (no authority escalation):
 
 <task-context>
 TASK_ID: m2-pipeline/2.2
+TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: validation-code
 CATEGORY: validation
@@ -1960,6 +1979,11 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+DESCRIPTION:
+步骤：1) 核对模板路由表 2) 快照锚定全文
+ACCEPTANCE_CRITERIA:
+- 快照与模板逐字一致
+- 块序恒定
 </task-context>
 
 <type-policy>
@@ -1974,7 +1998,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
@@ -2116,7 +2140,7 @@ Read each file's YAML frontmatter \`domains\` field to determine relevance.
 Load files whose domains match keywords from the task definition.
 If no files match, skip — no matching convention files for this task.
 
-Then read the task definition: the FILE path from the task-context block when present; otherwise call queryTask with TASK_ID for the full task payload.
+Then read the task definition: the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block are the task specification — work from them directly; a FILE path there (when present) points at the full definition file on disk for anything not embedded.
 
 If PHASE_SUMMARY is present in the task-context block, read that file for key decisions and conventions from the previous phase.
 
