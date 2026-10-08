@@ -2,7 +2,7 @@
  * 次色 + 分隔线——多小节可并列）+ 行式控件（标签左/控件右，对齐 dsh 通用设置形态）+
  * 未配置 ⚠ + 保存反馈 + 分区底注。
  * 令牌纪律（lint-tokens）：色/字/距零裸值——原型刻度（11.5px 行/11px 注/10.5px 底注）
- * 归档最近官方字阶令牌（12/11）；行/分隔线语言镜像 proposal-tab.css 表单行族。 */
+ * 归档最近官方字阶令牌（12/11）；行间零分隔线——成组呈现，分隔线归小节级。 */
 
 /* ── 分区容器 + 分区标题（底色条） ── */
 .dswf-fs {
@@ -44,14 +44,13 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 行式控件（标签左/控件右——通用设置行形态） ── */
+/* ── 行式控件（标签左/控件右——通用设置行形态；行间零分隔线——成组呈现，分隔线归小节级） ── */
 .dswf-fs-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--dsw-font-s-14-line-height);
   padding: var(--dsw-font-xxxs-11-line-height) 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .dswf-fs-label {
