@@ -1,6 +1,6 @@
 ---
 title: "任务管线规则"
-domains: [task, state-machine, dispatch, audit, fix-chain, discovery]
+domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 ---
 
 # 任务管线规则
@@ -59,9 +59,9 @@ domains: [task, state-machine, dispatch, audit, fix-chain, discovery]
 
 ### BIZ-task-008: 人类通道与 agent 通道面分治
 
-**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言）；addTask / claimTask / submitTask / createProposal / transitionProposal = agent tool 专属（恒不上 RPC）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。
-**Context**: 两个薄 Controller 汇于同一 core 动词门（单一写入路径的准确表述 = 面分治）；SC7 断言面。
-**Source**: feature/dsh-forge-m2-pipeline BIZ-009（prd-spec §In Scope ①② / tech-design §Interface 7-8·§交互四）
+**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言；M3 起 transitionFeature 维持收窄不进 tool 面，setProposalMode 亦 = UI 专属正门且 agent tool 面无模式改写动词）；addTask / submitTask / createProposal / registerFeature / upsertFeatureDoc / validateFeatureTasks = agent tool 面（M3 拆两包分置：核心六 tool 含 dispatchTask；spec 三 tool）；transitionProposal = 双面（M3 修订：tool + RPC forge:proposals/transition——评审发生在 agent 会话时技能代笔）；claimTask tool 已退役并入 dispatchTask 复合动词（M3——core API 保留，由 dispatchTask/桥/回放消费；dispatchTask = dispatcher 专用，worker 面不含）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。
+**Context**: 两个薄 Controller 汇于同一 core 动词门（单一写入路径的准确表述 = 面分治）；SC7 断言面；M3 drift 修订（tech-design §Interface 4·drift 记账 1/2）。
+**Source**: feature/dsh-forge-m2-pipeline BIZ-009（prd-spec §In Scope ①② / tech-design §Interface 7-8·§交互四）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §Interface 4，drift 修订）
 
 ## 发现面与数据吸收
 
@@ -84,3 +84,31 @@ domains: [task, state-machine, dispatch, audit, fix-chain, discovery]
 **Rule**: 派发会话 = task_session_links（claim upsert-ignore 唯一写源，UNIQUE(task_id, session_id)）；执行会话 = task_records.session_id（submit 记）；两侧展示分别与库一致（双数据源分别断言）；会话 id 两形态混存，相异判勿前缀判型。
 **Context**: 执行痕迹可追溯——哪个任务在哪个会话里做过（S8 实证子会话 id 可得且与主会话相异可判）。
 **Source**: feature/dsh-forge-m2-pipeline BIZ-012（prd-spec §Goals SC6③·§Flow Description 流程四 / tech-design §Data Models）
+
+## 提交门与 feature 域审计（M3 起）
+
+### BIZ-task-012: submitTask AC/测试证据与 gate 摘要双门
+
+**Rule**: 带 AC 任务（ac_json 非空）submit 时 gate.test !== true → 拒绝（ERR_TEST_EVIDENCE_REQUIRED，错误信息逐行含 AC 清单）；type=gate 任务缺数字摘要 → 拒绝（ERR_GATE_SUMMARY_REQUIRED）；通过后转移 + record（gate_json/commit_hash）；提交定式 = submit 记录含 commit_hash 且提交信息符合 Conventional Commits（配置 AGENTS.md 时从其约定、缺省回退模型常识——两态分别断言）。
+**Context**: 自举开发的每一步都有质检环（db-schema §6-24/§6-31 兑付）。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-007（prd-spec §Goals SC7·§Flow Description 流程四 6 / tech-design §Interface 1·图 8）
+
+### BIZ-task-013: feature 域每动词审计伴随（feature_records）
+
+**Rule**: feature 域全部动词（registerFeature / transitionFeature / upsertFeatureDoc / 成链内聚）每次写入伴随 feature_records 审计行（verb = 事件名 TS 单源、actor 三值 CHECK = plugin-tool/ui/core、前后态）；append-only 双触发器机械防线（UPDATE/DELETE 直接 ABORT）——与 task_records 同构。
+**Context**: 「每次写自动审计」扩展到 feature 域（SC6 表断言对象）。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-008（prd-spec §In Scope ③·§Data Requirements DF005 / tech-design §Data Models）
+
+## worker 授权与派发纪律（M3 起）
+
+### BIZ-task-014: worker 授权收窄与逃生通道
+
+**Rule**: 一切 worker 全局拒绝交互/委派/待办/呈现四语义族（ask-user / delegation / todo / present——实名表见 conventions/task-domain.md TECH-task-006）；worker 的 forge 工具面 = submitTask + addTask 恰两动词（claimTask/queryTask/dispatchTask 不入 worker 面）；skill 不拒（组合继承目录按需加载）；worker 遇重大问题经 addTask 逃生通道——前缀按语义二分：disc-N（独立问题，不阻塞源任务）/ fix-N（走 fix 链协议：block_source 单事务、链深 ≤6、恢复钩子——M2 机制回归），自身任务以 blocked 收尾并引用新任务。
+**Context**: worker 既能干活又不越权（不问用户、不派生子代）；受阻上报径完整。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-009（prd-spec §In Scope ①·§Flow Description 流程四 5 / prd-user-stories Story 5）
+
+### BIZ-task-015: 派发仅按 DAG 就绪序——无单任务直接执行入口
+
+**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序）；UI 与 tool 面同语义——无指定单个任务直接执行的入口（用户裁决 2026-10-08）；派发指令只携带容器标识（「/run-tasks <容器标识>」单行最小消息——dispatchTask 唯一必要参数 = contextSlug）。
+**Context**: 消灭跳序执行旁路；派发入口两途（工具栏按钮/会话内 run-tasks）汇入同一 dispatcher 循环。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）

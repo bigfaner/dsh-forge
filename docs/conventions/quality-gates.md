@@ -11,8 +11,8 @@ domains: [quality-gate, lint, pin-test, e2e, coverage, dependency-pin, query-pla
 
 ### TECH-quality-001: G0–G2 门定义
 
-**Requirement**: G0 = 静态门（`pnpm lint`：oxlint 三铁律 + import 扫描器（RPC 边界 + SC2 watch 禁令）+ 令牌 lint + 规则自证 lint-selftest（负样例种植→拦截断言→清理）+ `tsc -b`）；G1 = 契约面 pin 回归（P1 八项：boot manifest 形状、slot 洞名、registry API 语义、`ctx.systemPrompt.section` 注册、`forgeKnowledge` 服务注入、官方 ui-* props、profile 目录形状 + M2 扩池 9–16：桥事件信封、四新服务白名单 AssertNever、plugin-forge tool 注册面六在场两缺席、每工作区 DB 布局（schema.sql ↔ MIGRATIONS 逐条）、RPC 通道族 allowlist 五族、XML 标签集四枚封闭、TaskType 20 值词汇 + 中英状态标签常量、sidebarRightTabs 两段注册 + conversation.session.header.actions 槽面）；G2 = e2e 池（Playwright `_electron`）；全绿为里程碑门。
-**Source**: feature/dsh-forge-p1-mvp TECH-013（tech-design §Testing Strategy / package.json scripts / oxlint.config.ts）+ feature/dsh-forge-m2-pipeline（tech-design §契约面 pin 扩池，drift 修订：G1 池 P1 八项 + M2 9–16）
+**Requirement**: G0 = 静态门（`pnpm lint`：oxlint 三铁律 + import 扫描器（RPC 边界 + SC2 watch 禁令）+ 令牌 lint + 规则自证 lint-selftest（负样例种植→拦截断言→清理）+ `tsc -b`）；G1 = 契约面 pin 回归（P1 八项：boot manifest 形状、slot 洞名、registry API 语义、`ctx.systemPrompt.section` 注册、`forgeKnowledge` 服务注入、官方 ui-* props、profile 目录形状 + M2 扩池 9–16：桥事件信封、四新服务白名单 AssertNever、plugin-forge tool 注册面六在场两缺席、每工作区 DB 布局（schema.sql ↔ MIGRATIONS 逐条）、RPC 通道族 allowlist 五族、XML 标签集四枚封闭、TaskType 20 值词汇 + 中英状态标签常量、sidebarRightTabs 两段注册 + conversation.session.header.actions 槽面 + M3 扩池 17–22：dispatchTask 在场 + claimTask/spawnWorker/transitionTask/transitionFeature/setProposalMode 缺席（tool 面代码审计）、两包 tool 面分置（核心六 + spec 三）、预设镜像行 ↔ 上游 standard.patch.yml 机械 diff + config 全集、收窄矩阵常量 + 工具名映射表、事件两层联合类型（ForgePluginEvent 判别联合完备性）、RPC 新通道 allowlist（settings / proposals.{transition,setMode,listDocs} / features.listDocs）——落位 `tests/contract/pin-10..14` 五文件）；G2 = e2e 池（Playwright `_electron`）；全绿为里程碑门。
+**Source**: feature/dsh-forge-p1-mvp TECH-013（tech-design §Testing Strategy / package.json scripts / oxlint.config.ts）+ feature/dsh-forge-m2-pipeline（tech-design §契约面 pin 扩池，drift 修订：G1 池 P1 八项 + M2 9–16）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §契约面 pin 扩池，drift 修订：G1 池 + M3 17–22）
 
 ## 依赖与契约 pin
 

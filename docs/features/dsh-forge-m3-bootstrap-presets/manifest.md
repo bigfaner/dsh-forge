@@ -24,6 +24,7 @@ status: tasks
 | Tasks | tasks/ | **breakdown-tasks 落盘（2026-10-08）**：29 业务任务五阶段（①契约与数据面 2 → ②core 服务域 7 → ③插件两包与宿主 9 → ④web UI 7 → ⑤质量门与走查 4）+ 阶段门/summary/测试任务自动生成——index.json 47 项 `forge task validate` 全绿；phase-inventory.json 阶段溯源（design×4 + PRD-explicit×1）；breaking ×5（1.1 契约签名 / 1.2 schema 直改 / 2.4·2.5 容器化 / 3.5 tool 面收口——各带 Test Impact）；doc ×3（3.2/3.6 技能文本 / 5.4 记账合入） |
 | Proposal | ../../proposals/dsh-forge-m3-bootstrap-presets/proposal.md | 里程碑提案（全部裁决出处）：主轴 = 自举达成、双预设核心承载；拆包管线/规格轴；执行面知识分层；**成链分叉（远征成链 / 突击直接任务——UI 评审裁决）**；追溯矩阵→M3.75（#13）；Out of Scope #1–#13 全量顺延表 |
 | Spikes | ../../proposals/dsh-forge-m3-bootstrap-presets/spikes/ | S5/S6 实跑证据文档（dev 全绿 + 环境注记 + 方法论沉淀）；工件 `spikes/m3-s5-s6-presets/`（overlay 生成器 / m3_probe 探针 / playwright spec） |
+| Specs | specs/ | **已集成（2026-10-08，[auto-specs] 非交互模式）**：biz-specs 11 条 + tech-specs 7 条入项目级知识库——新建 business-rules/mode-containers.md（BIZ-mode-001..006）与 conventions/{preset-assembly,event-logging}.md；追加 task-pipeline/product-discipline/task-domain/error-handling/rpc-and-contracts；12 项 M3 drift 修订（面分治枚举/通道八族/七服务/24 码/八工件/G1 池 17-22 等）；清单见 specs/.integrated |
 
 ## Traceability
 

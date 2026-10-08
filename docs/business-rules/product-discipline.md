@@ -1,6 +1,6 @@
 ---
 title: "产品纪律规则"
-domains: [direct-read, projection, read-only, offline, telemetry, migration, orchestration]
+domains: [direct-read, read-only, offline, telemetry, migration, orchestration, bootstrap]
 ---
 
 # 产品纪律规则
@@ -39,9 +39,9 @@ domains: [direct-read, projection, read-only, offline, telemetry, migration, orc
 
 ### BIZ-product-004: 无遥测、最小数据追踪
 
-**Rule**: 单机产品无遥测；数据追踪仅三类——使用事件（召回执行点）、补偿/对账记账日志（app_key_logs 关键一致性事件）与任务动词审计记录（每工作区库 task_records，每动词一行 append-only；claim 记派发会话、submit 记执行会话）；无种子数据。
-**Context**: 数据面最小化是单机产品边界的一部分；事件仅服务产品内功能（召回 tab / 热度 / 任务时间线）。M2 起任务域审计入列（drift 修订：两类 → 三类）。
-**Source**: feature/dsh-forge-p1-mvp BIZ-010（prd-spec §Data Requirements）+ feature/dsh-forge-m2-pipeline（prd-spec §Data Requirements）
+**Rule**: 单机产品无遥测；数据追踪仅四类——使用事件（召回执行点）、补偿/对账记账日志（app_key_logs 关键一致性事件）、任务/feature 动词审计记录（每工作区库 task_records + feature_records，每动词一行 append-only；claim 记派发会话、submit 记执行会话）与 agent 面业务事件日志（M3 起 `logs/{slug}.jsonl` 容器维度运营日志——tasksHome/userData 域，非代码仓；形态见 conventions/event-logging.md TECH-event-001）；无种子数据。
+**Context**: 数据面最小化是单机产品边界的一部分；事件仅服务产品内功能（召回 tab / 热度 / 任务时间线 / 容器全程串联）。M2 起任务域审计入列（drift 修订：两类 → 三类）；M3 起 feature 域审计与事件日志入列（drift 修订：三类 → 四类）。
+**Source**: feature/dsh-forge-p1-mvp BIZ-010（prd-spec §Data Requirements）+ feature/dsh-forge-m2-pipeline（prd-spec §Data Requirements）+ feature/dsh-forge-m3-bootstrap-presets（prd-spec §Data Requirements·§Security，drift 修订：三类 → 四类）
 
 ### BIZ-product-005: 模型凭证不经手
 
@@ -68,3 +68,11 @@ domains: [direct-read, projection, read-only, offline, telemetry, migration, orc
 **Rule**: 漂移 / 找回类概念不进用户视野（防心智负担）；启动对账机制保留静默自愈 + 记账日志；未来可视化须显式立项再入范围。
 **Context**: 2026-10-05 用户裁决（对账卡 UI 移出 M2 范围，提案同步记账）。
 **Source**: feature/dsh-forge-m2-pipeline BIZ-015（prd-spec §Out of Scope）
+
+## 自举纪律（M3 起）
+
+### BIZ-product-010: 自举纪律（M4 起自身开发）
+
+**Rule**: M4 起剩余功能一律用 dsh-forge 自身开发（SC-M3 门 = M3.5 作为首个自举 feature 端到端走查：评审接受 → 成链 → 远征会话派发开发 → 任务/执行记录 100% 入自身 forge.db → 全景可见）；全程零 manifest.md 生成——无会话时代的补偿物 = 第二事实源，消亡论证同族适用于显式「当前容器」状态文件（M3 裁决：不实现 state.json 等价物；跨会话记忆真需求出现时随 worktree 族伴生裁决）。
+**Context**: 总纲自举纪律从纸面变现实；飞轮第一批真实数据入库。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-011（prd-spec §What ④·§Goals SC8 / tech-design §老 forge state.json 形态对应）

@@ -1,0 +1,27 @@
+feature: "dsh-forge-m3-bootstrap-presets"
+integrated: "2026-10-08"
+mode: "non-interactive (auto-specs)"
+biz_count: 11
+tech_count: 7
+new_files:
+  - docs/business-rules/mode-containers.md (BIZ-mode-001..006)
+  - docs/conventions/preset-assembly.md (TECH-preset-001)
+  - docs/conventions/event-logging.md (TECH-event-001)
+appended:
+  - docs/business-rules/task-pipeline.md (BIZ-task-012..015)
+  - docs/business-rules/product-discipline.md (BIZ-product-010)
+  - docs/conventions/task-domain.md (TECH-task-005..007)
+  - docs/conventions/error-handling.md (TECH-error-004)
+  - docs/conventions/rpc-and-contracts.md (TECH-rpc-009)
+drift_fixed:
+  - TECH-task-001: slug ≡ feature slug → 容器 slug（M3 源头双列）
+  - TECH-task-003: dispatchPrompt 增 SOURCE 容器语境行
+  - BIZ-task-008: 面分治枚举修订（claimTask 退役/dispatchTask/双包/setProposalMode UI 专属）
+  - TECH-rpc-003: 通道族七 → 八（+forge:settings/* + proposals/features 扩族）
+  - TECH-rpc-004: 六服务 → 七（+forgeSettings）+ 两包 inject 面
+  - TECH-rpc-007: 写推送覆盖面 + setProposalMode
+  - TECH-error-001: 错误码 21 → 24
+  - TECH-monorepo-001/003/004: 七工件 → 八工件 + driver 白名单 + M3 落点
+  - TECH-quality-001: G1 pin 池 + M3 17–22（pin-10..14）
+  - BIZ-product-004: 数据追踪三类 → 四类（+feature_records + 事件日志）
+overlaps_resolved: []
