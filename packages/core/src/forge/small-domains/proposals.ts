@@ -91,15 +91,17 @@ export interface ChainedFeatureStorageRow {
   updated_at: string
 }
 
-/** 成链 feature 行 → FeatureRow DTO（snake_case → DTO 映射——features.ts 同口径就近复刻） */
+/** 成链 feature 行 → FeatureRow DTO（snake_case → DTO 映射——features.ts 同口径就近复刻）。
+ *  NULL 列条件展开 = 键缺席（tool 返回面 lossless JSON 合规——显式 undefined 属性会被
+ *  harness 输出快照边界整值拒绝，提案 tool-row-lossless-json-fix；房式 = tasks/query.ts） */
 function toChainedFeature(row: ChainedFeatureStorageRow): FeatureRow {
   return {
     featureId: row.id,
     slug: row.slug,
     title: row.title,
     featureStatus: row.feature_status,
-    summary: row.summary ?? undefined,
-    proposalId: row.proposal_id ?? undefined,
+    ...(row.summary !== null ? { summary: row.summary } : {}),
+    ...(row.proposal_id !== null ? { proposalId: row.proposal_id } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -122,19 +124,23 @@ interface ProposalStorageRow {
 
 const SELECT_PROPOSAL = `SELECT id, slug, title, proposal_status, rel_path, author, mode, superseded_by, decided_at, created_at, updated_at FROM proposals`
 
+/** proposals 行 → ProposalRow DTO（snake_case → DTO 映射唯一落点）。NULL 列条件展开 =
+ *  键缺席（tool 返回面 lossless JSON 合规——显式 undefined 属性被 harness 输出快照边界
+ *  整值拒绝[author 恒 NULL → createProposal 必炸]，提案 tool-row-lossless-json-fix；
+ *  可选键缺席式语义与 ProposalRow 可选字段契约一致） */
 function toProposalRow(row: ProposalStorageRow): ProposalRow {
   return {
     proposalId: row.id,
     slug: row.slug,
     title: row.title,
     proposalStatus: row.proposal_status,
-    relPath: row.rel_path ?? undefined,
-    author: row.author ?? undefined,
-    decidedAt: row.decided_at ?? undefined,
+    ...(row.rel_path !== null ? { relPath: row.rel_path } : {}),
+    ...(row.author !== null ? { author: row.author } : {}),
+    ...(row.decided_at !== null ? { decidedAt: row.decided_at } : {}),
     // M3 2.3 读面：mode NULL 直出 = 键缺席（UI 缺省占位判据——tech-design Interface 1）
-    mode: row.mode ?? undefined,
+    ...(row.mode !== null ? { mode: row.mode } : {}),
     // 谱系右列数据面（superseded 转移写入——语义写径归 2.2，读面先行直出）
-    supersededBy: row.superseded_by ?? undefined,
+    ...(row.superseded_by !== null ? { supersededBy: row.superseded_by } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

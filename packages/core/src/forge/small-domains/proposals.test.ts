@@ -603,3 +603,67 @@ describe('2.2 新写动词事件接线：成链单发 / setProposalMode 写后�
     expect(h!.events.emitted).toEqual([])
   })
 })
+
+// ─────────────────────────── tool-row-lossless-json-fix：tool 返回面 lossless 走查 ───────────────────────────
+// harness 输出快照边界（@deepseek-ai/dsh-util-values snapshotJsonValue）对显式 undefined
+// 属性整值拒绝（Reflect.ownKeys 收录该键、遍历遇 undefined 即拒）——createProposal 的
+// author 恒 NULL 曾使 tool 面 100% 报 INVALID_TOOL_OUTPUT（写已落库、返回面假错）。
+// 回归口径：镜像该规则的走查断言（自实现递归，零 DSH 运行时依赖）。
+
+/** 走查：值内不得有任何 own enumerable 显式 undefined 属性（返回路径 = 键缺席式可选字段） */
+function assertNoExplicitUndefined(value: unknown, path = '$'): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => assertNoExplicitUndefined(item, `${path}[${i}]`))
+    return
+  }
+  if (value === null || typeof value !== 'object') return
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') continue
+    const v = (value as Record<string, unknown>)[key]
+    if (v === undefined) throw new Error(`显式 undefined 属性：${path}.${key}（tool 返回面非 lossless JSON）`)
+    assertNoExplicitUndefined(v, `${path}.${key}`)
+  }
+}
+
+describe('tool-row-lossless-json-fix：行映射 NULL 列 = 键缺席（显式 undefined 整值拒绝）', () => {
+  it('createProposal（author 恒 NULL + 可选全缺席）：返回 DTO 走查零显式 undefined 键', async () => {
+    const s = svc()
+    const row = await s.createProposal({ projectId: h!.projectId, slug: 'lz-create', title: '走查' })
+    expect(() => assertNoExplicitUndefined(row)).not.toThrow()
+    // 语义不变：可选字段缺席 = undefined（键缺席式访问）
+    expect(row.author).toBeUndefined()
+    expect(row.decidedAt).toBeUndefined()
+  })
+
+  it('transitionProposal accepted（decidedAt 写入 / supersededBy 缺席）：返回 DTO 走查通过', async () => {
+    const s = svc()
+    const created = await s.createProposal({ projectId: h!.projectId, slug: 'lz-accept', title: '裁决', mode: 'blitz' })
+    const row = await s.transitionProposal({ projectId: h!.projectId, proposalId: created.proposalId, toStatus: 'accepted' })
+    expect(() => assertNoExplicitUndefined(row)).not.toThrow()
+    expect(row.decidedAt).toBeTruthy() // 裁决时刻写入
+    expect(row.supersededBy).toBeUndefined() // 非谱系转移键缺席
+  })
+
+  it('transitionProposal superseded（supersededBy 在场）：返回 DTO 走查通过', async () => {
+    const s = svc()
+    const target = await s.createProposal({ projectId: h!.projectId, slug: 'lz-target', title: '取代者' })
+    const victim = await s.createProposal({ projectId: h!.projectId, slug: 'lz-victim', title: '被取代' })
+    const row = await s.transitionProposal({
+      projectId: h!.projectId,
+      proposalId: victim.proposalId,
+      toStatus: 'superseded',
+      supersededBy: target.proposalId,
+    })
+    expect(() => assertNoExplicitUndefined(row)).not.toThrow()
+    expect(row.supersededBy).toBe(target.proposalId)
+  })
+
+  it('transitionProposal 成链分支（chained.summary NULL）：整返回含 chained 走查通过', async () => {
+    const s = svc()
+    const pa = seedProposal(h!.wsDb, { slug: 'lz-chain', status: 'under-review', mode: 'expedition' })
+    const row = await s.transitionProposal({ projectId: h!.projectId, proposalId: pa, toStatus: 'accepted' })
+    expect(row.chained).toBeDefined() // expedition 成链
+    expect(() => assertNoExplicitUndefined(row)).not.toThrow() // 含 chained（summary/proposalId 缺席路）
+    expect(row.chained?.summary).toBeUndefined()
+  })
+})
