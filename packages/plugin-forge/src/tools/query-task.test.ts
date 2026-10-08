@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, QueryTaskInput, QueryTaskResult, TaskSnapshot } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
-import { createQueryTaskTool, parseQueryTaskArgs } from './query-task.js'
+import { QUERY_TASK_OUTPUT_SCHEMA, createQueryTaskTool, parseQueryTaskArgs } from './query-task.js'
 import type { ForgeToolDeps } from './index.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
@@ -143,6 +143,59 @@ describe('queryTask 返回面渲染（formatOk：快照 + 容器 + 四节）', (
     expect(text).toContain('waiting on me: (none)')
     expect(text).toContain('claim pending→in_progress (plugin-tool, session s1) — digest abc123')
     expect(text).toContain('sessions: s1 (link)')
+  })
+})
+
+// ─────────────────────────── tool-row-lossless-json-fix：schema ↔ DTO 结构 pin ───────────────────────────
+// 四节 items 曾声明为 string 数组而实际返回对象数组（include=true 调用 100% 炸 oneOf 校验）
+// ——本 pin 以全量 DTO 样例逐属性名 ∈ schema items.properties 抓 string↔object 再漂移。
+
+describe('QUERY_TASK_OUTPUT_SCHEMA 四节 items = 对象 DTO 镜像（结构 pin）', () => {
+  /** 成功支（oneOf 第一支）四节 items schema */
+  const sections = (QUERY_TASK_OUTPUT_SCHEMA.oneOf[0] as { properties: Record<string, { items?: { properties?: Record<string, unknown> } }> }).properties
+
+  /** 全量 DTO 样例 → 逐属性名必须在对应节 items.properties 中 */
+  const pin = (section: 'prerequisites' | 'waitingOnMe' | 'records' | 'sessions', sample: Record<string, unknown>): void => {
+    const itemProps = sections[section]?.items?.properties
+    expect(itemProps, `${section} items 必须是对象 schema（properties 在场）`).toBeDefined()
+    for (const key of Object.keys(sample)) {
+      expect(Object.keys(itemProps!), `${section}.${key} 必须在 items.properties 中`).toContain(key)
+    }
+  }
+
+  it('prerequisites/waitingOnMe = TaskPrerequisiteSummary{slug,localId,taskStatus}', () => {
+    const sample = { slug: 'f1', localId: '2.4', taskStatus: 'completed' }
+    pin('prerequisites', sample)
+    pin('waitingOnMe', sample)
+  })
+
+  it('records = TaskRecordEntry 全字段（verb/fromStatus/toStatus/reason/summary/files/gate/commitHash/digest/actor/sessionId/createdAt）', () => {
+    pin('records', {
+      verb: 'submit',
+      fromStatus: 'in_progress',
+      toStatus: 'completed',
+      reason: 'r',
+      summary: 's',
+      files: ['a.ts'],
+      gate: { compile: true, fmt: true, lint: true, test: true, coverage: 0.9 },
+      commitHash: 'abc',
+      digest: 'd12',
+      actor: 'plugin-tool',
+      sessionId: 's1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    })
+  })
+
+  it('sessions = SessionTaskLinkCard 全字段（taskId/slug/localId/title/taskStatus/sessionId/source）', () => {
+    pin('sessions', {
+      taskId: 't-1',
+      slug: 'f1',
+      localId: '3.2',
+      title: '示例',
+      taskStatus: 'in_progress',
+      sessionId: 's1',
+      source: 'link',
+    })
   })
 })
 

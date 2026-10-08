@@ -52,8 +52,59 @@ export function parseQueryTaskArgs(args: unknown): QueryTaskToolArgs {
   return out
 }
 
-/** QueryTaskResult 的注册面输出 schema（四节按 include 门控——宽松镜像 + 失败支） */
-const QUERY_TASK_OUTPUT_SCHEMA = withFailureVariant({
+/** TaskPrerequisiteSummary 的 schema 面（prerequisites/waitingOnMe 两节共用——contracts 镜像） */
+const PREREQUISITE_SUMMARY_ITEM = {
+  type: 'object',
+  properties: {
+    slug: { type: 'string' },
+    localId: { type: 'string' },
+    taskStatus: { type: 'string' },
+  },
+  required: ['slug', 'localId', 'taskStatus'],
+} as const
+
+/** TaskRecordEntry 的 schema 面（records 节——contracts 镜像：可选字段键缺席式） */
+const RECORD_ENTRY_ITEM = {
+  type: 'object',
+  properties: {
+    verb: { type: 'string' },
+    fromStatus: { type: 'string' },
+    toStatus: { type: 'string' },
+    reason: { type: 'string' },
+    summary: { type: 'string' },
+    files: { type: 'array', items: { type: 'string' } },
+    gate: { type: 'object', description: 'TaskGateReport (four booleans + optional coverage).' },
+    commitHash: { type: 'string' },
+    digest: { type: 'string' },
+    actor: { type: 'string' },
+    sessionId: { type: 'string' },
+    createdAt: { type: 'string' },
+  },
+  required: ['verb', 'actor', 'createdAt'],
+} as const
+
+/** SessionTaskLinkCard 的 schema 面（sessions 节——contracts 镜像） */
+const SESSION_LINK_ITEM = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string' },
+    slug: { type: 'string' },
+    localId: { type: 'string' },
+    title: { type: 'string' },
+    taskStatus: { type: 'string' },
+    sessionId: { type: 'string' },
+    source: { type: 'string', description: 'link (dispatch session) or record (execution session).' },
+  },
+  required: ['taskId', 'slug', 'localId', 'title', 'taskStatus', 'sessionId', 'source'],
+} as const
+
+/**
+ * QueryTaskResult 的注册面输出 schema（四节按 include 门控——宽松镜像 + 失败支）。
+ * 四节 items = 对象 DTO 镜像（TaskPrerequisiteSummary/TaskRecordEntry/SessionTaskLinkCard
+ * ——提案 tool-row-lossless-json-fix：原 items:{type:'string'} 与实际对象数组不符，include
+ * 开启的调用 100% 炸 oneOf 校验；对象层不收紧 additionalProperties——宽容投影）。
+ */
+export const QUERY_TASK_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -85,10 +136,10 @@ const QUERY_TASK_OUTPUT_SCHEMA = withFailureVariant({
       required: ['kind', 'slug', 'title'],
       description: 'Owning container hydration (feature or proposal).',
     },
-    prerequisites: { type: 'array', items: { type: 'string' }, description: 'slug/localId of each prerequisite (when included).' },
-    waitingOnMe: { type: 'array', items: { type: 'string' }, description: 'slug/localId of each successor waiting on this task (when included).' },
-    records: { type: 'array', items: { type: 'string' }, description: 'Execution timeline entries (when included).' },
-    sessions: { type: 'array', items: { type: 'string' }, description: 'Attached sessions, link/record typed (when included).' },
+    prerequisites: { type: 'array', items: PREREQUISITE_SUMMARY_ITEM, description: 'Prerequisite task summaries (when included).' },
+    waitingOnMe: { type: 'array', items: PREREQUISITE_SUMMARY_ITEM, description: 'Successor task summaries waiting on this one (when included).' },
+    records: { type: 'array', items: RECORD_ENTRY_ITEM, description: 'Execution timeline entries (when included).' },
+    sessions: { type: 'array', items: SESSION_LINK_ITEM, description: 'Attached sessions, link/record typed (when included).' },
   },
   required: ['task', 'container'],
 })
