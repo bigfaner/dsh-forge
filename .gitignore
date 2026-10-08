@@ -70,3 +70,6 @@ Desktop.ini
 
 # forge justfile lifecycle pidfiles
 .forge/*.pid
+
+.cache/
+tmp/
