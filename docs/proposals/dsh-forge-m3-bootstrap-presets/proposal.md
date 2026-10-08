@@ -359,6 +359,8 @@ consistency_check_result:
 
 ## Next Steps
 
+> **收尾状态（2026-10-08，任务 5.3/5.4 记账）**：SC-M3 门走查已执行（任务 5.3，2026-10-08）——M3.5 自举走查 e2e（`e2e/specs/m3/dogfood-sc-m3.spec.ts`）：真实提案 UI 两步评审流转 → accepted → registerFeature 成链原子三行 → 远征会话 dispatchTask 派发开发自身（真实模型，4.8m 收敛）→ 任务/执行记录 100% 入自身 forge.db → 概览三视图 / 文档 / 提案子 tab 全景一致；**零 manifest.md 生成**（文件系统断言）+ 总纲 SC2 / SC3 / SC7 回归断言绿；508 测试全绿。证据 = [任务记录 5.3](../../features/dsh-forge-m3-bootstrap-presets/tasks/records/5.3-sc-m3-dogfood-walkthrough.md) + `e2e/fixtures/m3/README.md`（运行记录与环境备忘）。总纲回写四条款与本提案 Out of Scope 顺延表 #1–#13 已随任务 5.4 合入总纲（演进路书 M3 行收窄 + M3 顺延表）。
+
 - **S5/S6 spike 已执行（2026-10-07，dev 全绿）**：结论已回填本提案（方案①/⑥ + Constraints + Risks + SC1 口径）；两项 PRD 前裁决已落定（用户 2026-10-07）：残余四形态 → M3 实施期首任务补验；hero 门控形态 → (a) `ui-settings` 配置行。
 - **M2 收尾**（仅剩阶段 5 全绿）并行推进；随后走 `/write-prd`（输入 = 本提案[含 spike 结论] + tech-research §5 + db-schema M3 标注 + M2 实跑记录 + spikes/ 证据文档）。
 - **M3.5 评审接受时点 = 自举走查启动**：其 proposal status 翻 accepted 即走查第一步（时序耦合已双向记账）。

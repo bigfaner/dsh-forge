@@ -606,7 +606,7 @@
         "4.gate",
         "5.3"
       ],
-      "status": "pending",
+      "status": "completed",
       "file": "5.4-sc9-ledger-merge.md",
       "record": "records/5.4-sc9-ledger-merge.md",
       "type": "doc"
