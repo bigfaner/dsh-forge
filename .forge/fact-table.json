@@ -1092,5 +1092,500 @@
       "packages/plugin-forge/skills/run-tasks/SKILL.md:90-110"
     ],
     "updated_at": "2026-10-07T03:45:34+08:00"
+  },
+  {
+    "fact_id": "M3_PRESET_BASE_DRAFTS",
+    "source": "static",
+    "subject": "preset assembly base drafts and injection path",
+    "kind": "signature",
+    "value": "three drafts apps/host/src/profile/presets/{cordis,expedition,blitz}.patch.yml; preset rows injected via boot overlay every boot (renderBootOverlay materializes cordis/expedition/blitz in order) [apps/host/src/boot/overlay.ts:23,202-207]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_REGISTRY_DEFAULT",
+    "source": "static",
+    "subject": "agent preset registry default",
+    "kind": "signature",
+    "value": "agent-preset-registry row config default = expedition (hero seat collapsed label = registry default) [apps/host/src/profile/presets/cordis.patch.yml:4-6]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_EXPEDITION_IDENTITY",
+    "source": "static",
+    "subject": "expedition preset identity fields",
+    "kind": "signature",
+    "value": "id=expedition, name=远征模式, order=1, description 全流程规格驱动 [apps/host/src/profile/presets/expedition.patch.yml:18-21]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_BLITZ_IDENTITY",
+    "source": "static",
+    "subject": "blitz preset identity fields",
+    "kind": "signature",
+    "value": "id=blitz, name=突击模式, order=2 (menu lists expedition first) [apps/host/src/profile/presets/blitz.patch.yml:12-15]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_EXPEDITION_SKILL_DIRS",
+    "source": "static",
+    "subject": "expedition preset customSkillDirs",
+    "kind": "signature",
+    "value": "customSkillDirs = [{{plugin-forge-skills}}, {{plugin-forge-spec-skills}}] placeholders materialized as absolute paths at render [apps/host/src/profile/presets/expedition.patch.yml:50-53]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_BLITZ_SKILL_DIRS",
+    "source": "static",
+    "subject": "blitz preset customSkillDirs",
+    "kind": "signature",
+    "value": "customSkillDirs = [{{plugin-forge-skills}}] only — spec skill dirs physically absent from blitz composition [apps/host/src/profile/presets/blitz.patch.yml:42-46]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_JS_EXPRESSION_BAN",
+    "source": "static",
+    "subject": "materialized output expression policy",
+    "kind": "precondition",
+    "value": "!!js expressions in drafts are evaluated in place by renderBootOverlay; materialized output carries zero expression residue (concrete booleans / absolute paths only) [apps/host/src/profile/presets/expedition.patch.yml:10-11]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PRESET_MIRROR_CONFIG_COMPLETE",
+    "source": "static",
+    "subject": "mirror row config completeness obligation",
+    "kind": "precondition",
+    "value": "mirror rows must restate the full upstream config set — missing required key = row schema reject = whole preset broken and absent from preset menu (no silent degradation) [apps/host/src/profile/presets/expedition.patch.yml:9]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_HERO_SWITCH_FIRST_BOOT",
+    "source": "static",
+    "subject": "hero preset seat switch ownership lifecycle",
+    "kind": "precondition",
+    "value": "ui-settings row first-boot preset enabled=true one-time (id-keyed, existing row never overwritten); afterwards the row belongs to user runtime edits; hero seat visibility is gated by this switch [apps/host/profile.dev/cordis.patch.yml ui-settings block; tech-design 行所有权分叉]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PLUGIN_FORGE_SKILLS",
+    "source": "static",
+    "subject": "core package skill set",
+    "kind": "signature",
+    "value": "plugin-forge skills = brainstorm / quick-tasks / run-tasks / run-tests / submit-task (shared by both preset compositions) [packages/plugin-forge/skills/ directory listing]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PLUGIN_FORGE_SPEC_SKILLS",
+    "source": "static",
+    "subject": "spec package skill set",
+    "kind": "signature",
+    "value": "plugin-forge-spec skills = write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks / eval [packages/plugin-forge-spec/skills/ directory listing]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_CORE_SKILLS_NO_GIT",
+    "source": "static",
+    "subject": "core skill catalog git entries removal",
+    "kind": "precondition",
+    "value": "core skill catalog contains no git-commit / git-checkout entries (removed, not migrated; commit discipline carried by submit-task skill) [packages/plugin-forge/skills/README.md:11,17]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PLUGIN_FORGE_TOOLS",
+    "source": "static",
+    "subject": "plugin-forge registered tool set",
+    "kind": "signature",
+    "value": "six tools: addTask / submitTask / queryTask / createProposal / transitionProposal / dispatchTask [packages/plugin-forge/src/tools/ directory listing]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PLUGIN_FORGE_SPEC_TOOLS",
+    "source": "static",
+    "subject": "plugin-forge-spec registered tool set",
+    "kind": "signature",
+    "value": "three tools: registerFeature / upsertFeatureDoc / validateFeatureTasks [packages/plugin-forge-spec/src/tools/ directory listing]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_AC_GATE",
+    "source": "static",
+    "subject": "AC evidence gate on success submit",
+    "kind": "error_code",
+    "value": "ERR_TEST_EVIDENCE_REQUIRED: ac_json non-empty AND gate.test !== true on result=success → rejected; error message enumerates every AC line (self-checkable); blocked submit bypasses this door [packages/core/src/forge/tasks/errors.ts:270-282; submit.ts:66-70]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_GATE_DOOR",
+    "source": "static",
+    "subject": "gate task numeric summary door",
+    "kind": "error_code",
+    "value": "ERR_GATE_SUMMARY_REQUIRED: task_type=gate AND gate payload absent on result=success → rejected ({compile,fmt,lint,test[,coverage]} must land in gate_json); blocked submit bypasses [packages/core/src/forge/tasks/errors.ts:296-308; submit.ts:60-63]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_GATE_ALL_OR_NONE",
+    "source": "static",
+    "subject": "gate booleans all-or-none shape",
+    "kind": "precondition",
+    "value": "gate_compile/fmt/lint/test must be given together (all-or-none); gate_coverage requires all four present [packages/plugin-forge/src/tools/submit-task.ts:50-72]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_COMMIT_HASH",
+    "source": "static",
+    "subject": "commit hash on submit record",
+    "kind": "side_effect",
+    "value": "commit_hash passthrough lands on the task_records submit row (structured payload with files/gate) [packages/core/src/forge/tasks/submit.ts:104-118]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_ACTOR_PLUGIN_TOOL",
+    "source": "static",
+    "subject": "submit record actor constant",
+    "kind": "output_format",
+    "value": "submit is a tool-only verb; submit record actor is always 'plugin-tool' [packages/core/src/forge/tasks/submit.ts:5,108]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_FROM_IN_PROGRESS",
+    "source": "static",
+    "subject": "legal source status for agent submit",
+    "kind": "precondition",
+    "value": "agent-face transition matrix: in_progress is the only legal from for submit (to completed|blocked); pending/blocked/terminal submits are rejected ERR_INVALID_TRANSITION (from-match) [packages/core/src/forge/tasks/submit.ts:71-73]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_BLOCKED_REASON",
+    "source": "static",
+    "subject": "blocked submit reason requirement",
+    "kind": "error_code",
+    "value": "ERR_REASON_REQUIRED: result=blocked with empty reason rejected (reason is the audit single source; no blocked_reason column write) [packages/core/src/forge/tasks/submit.ts:57-59]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUBMIT_SUMMARY_REQUIRED",
+    "source": "static",
+    "subject": "success submit summary requirement",
+    "kind": "error_code",
+    "value": "ERR_SUMMARY_REQUIRED: result=success with empty summary rejected [packages/core/src/forge/tasks/errors.ts:252-261]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_FIX_CHAIN_MAX_DEPTH",
+    "source": "static",
+    "subject": "fix chain depth ceiling",
+    "kind": "precondition",
+    "value": "fix chain depth counted along source_task_id edges; new fix task depth = source chain length + 1; over limit (max 6) rejected [packages/core/src/forge/tasks/add.ts:51,333-343]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_ADDTASK_PREFIX_SEMANTICS",
+    "source": "static",
+    "subject": "localId allocation semantics",
+    "kind": "signature",
+    "value": "localId allocation: regular numeric sequence / fix-N (blockSource present) / disc-N (source attached but not blocking); prefix numbering = max(existing prefix-N) + 1 [packages/core/src/forge/tasks/add.ts:127-133,325-333]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_BLOCK_SOURCE_ATOMIC",
+    "source": "static",
+    "subject": "block_source single transaction",
+    "kind": "side_effect",
+    "value": "block_source add = one transaction: new fix task row + source auto-blocked + fix-chain edge (INSERT OR IGNORE) + audit record rows [packages/core/src/forge/tasks/add.ts:7,425-453]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_RESTORE_HOOK",
+    "source": "static",
+    "subject": "fix completion auto-restore hook",
+    "kind": "side_effect",
+    "value": "completed submit runs restore hook: blocked successors whose prerequisites are now all satisfied are auto-restored blocked→pending; edges preserved, restored keys returned [packages/core/src/forge/tasks/submit.ts:123-127; transition.ts runRestoreHook]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PROPOSAL_MODE_LINEAGE",
+    "source": "static",
+    "subject": "proposal mode lineage column",
+    "kind": "signature",
+    "value": "proposals.mode = expedition|blitz written at creation by the creating skill (transparent passthrough on createProposal tool); absent = NULL placeholder for scanned legacy rows [packages/plugin-forge/src/tools/create-proposal.ts:2-3,40-41; small-domains/proposals.ts:162]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PROPOSAL_FIVE_STATES",
+    "source": "static",
+    "subject": "proposal status vocabulary",
+    "kind": "signature",
+    "value": "PROPOSAL_STATUSES = draft / under-review / accepted / rejected / superseded [packages/contracts/src/labels.ts:109]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_PROPOSAL_TRANSITION_RULE",
+    "source": "static",
+    "subject": "proposal transition allowed set",
+    "kind": "precondition",
+    "value": "allowed targets = all five statuses except the current one (vocabulary mechanical exclusion; to=current or out-of-vocab rejected ERR_INVALID_TRANSITION) [packages/core/src/forge/small-domains/errors.ts:116-131]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_CHAIN_GATE_EXPEDITION",
+    "source": "static",
+    "subject": "feature chain gate on accept",
+    "kind": "side_effect",
+    "value": "transitionProposal to accepted AND mode='expedition' AND no existing feature for the proposal → registerFeature runs in the same transaction (feature row + proposal_id lineage + feature_records audit row; chained row returned); blitz/NULL never chain; re-accept idempotent (no duplicate chain) [packages/core/src/forge/small-domains/proposals.ts:15-17,210-215]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SUPERSEDED_TARGET_REQUIRED",
+    "source": "static",
+    "subject": "superseded transition lineage payload",
+    "kind": "precondition",
+    "value": "to_status=superseded must carry superseded_by (target proposal id validated in place, 404 if absent) and writes proposals.superseded_by; non-superseded transitions never rewrite existing lineage [packages/core/src/forge/small-domains/proposals.ts:183-196]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_DECIDED_AT_SEMANTICS",
+    "source": "static",
+    "subject": "verdict timestamp semantics",
+    "kind": "side_effect",
+    "value": "transitions to accepted/rejected write decided_at (overwrite = latest verdict moment); under-review/draft (打回) and superseded do not rewrite it [packages/core/src/forge/small-domains/proposals.ts:13-14,143]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_FEATURE_RECORDS_AUDIT",
+    "source": "static",
+    "subject": "feature domain audit trail",
+    "kind": "side_effect",
+    "value": "every feature-domain write is accompanied by a feature_records audit row in the same closure (verb = event name, actor = plugin-tool / ui / core; append-only) [packages/core/src/forge/small-domains/features.ts:149,184]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_UPSERT_DOC_IDEMPOTENT",
+    "source": "static",
+    "subject": "feature doc upsert idempotency",
+    "kind": "side_effect",
+    "value": "upsertFeatureDoc resolves slug→id and writes ON CONFLICT(feature_id, doc_kind) DO UPDATE — same doc updates the existing row, no duplicate rows [packages/core/src/forge/small-domains/features.ts:11,299,325]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_TASK_MODE_SNAPSHOT",
+    "source": "static",
+    "subject": "task mode snapshot at creation",
+    "kind": "precondition",
+    "value": "task mode snapshot taken from proposals.mode at creation (proposal containers; nullable); feature containers carry constant expedition; later mode changes never retroact existing tasks [packages/core/src/forge/tasks/add.ts:75-97]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_WORKER_TOOL_MATRIX",
+    "source": "static",
+    "subject": "worker tool narrowing matrix",
+    "kind": "signature",
+    "value": "family × tool-family ✓ table: fs and shell open to all four families; jobs gate+validation only; read-image coding+validation; web validation only; forge open to all [packages/contracts/src/worker-matrix.ts:51-58]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_WORKER_GLOBAL_DENY",
+    "source": "static",
+    "subject": "worker global deny set",
+    "kind": "signature",
+    "value": "global deny (all workers): ask_user_question / subagent_fork / list_agents / send_message / interrupt_agent / workflow / todo_write / present [packages/contracts/src/worker-matrix.ts:71-80]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_WORKER_FORGE_FACE",
+    "source": "static",
+    "subject": "worker forge tool face",
+    "kind": "signature",
+    "value": "worker forge face = submitTask + addTask exactly; queryTask / createProposal / transitionProposal / dispatchTask denied in worker face [packages/contracts/src/worker-matrix.ts:82-83; packages/plugin-forge/src/tools/dispatch-task.ts:96]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_AGENT_OPTIONS_SOURCE",
+    "source": "static",
+    "subject": "worker agentOptions source and priority",
+    "kind": "signature",
+    "value": "agentOptions derived from forgeSettings.worker (provider / model / reasoning→reasoningEffort); settings absent or worker unset = not carried → worker inherits parent session model; explicit config wins over parent inheritance at spawn time [packages/plugin-forge/src/tools/dispatch-task.ts:169-175,436-451]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SETTINGS_FILE",
+    "source": "static",
+    "subject": "forge settings persistence",
+    "kind": "signature",
+    "value": "{userData}/forge-settings.json, single writer = core forgeSettings service (settings/get + settings/set RPC and dispatchTask same door); file absent = {} unconfigured; get reads live each call (no cache, no restart); atomic write via tmp + rename [packages/core/src/forge/settings/service.ts:5-13,46-64]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SETTINGS_INPUT_VALIDATION",
+    "source": "static",
+    "subject": "settings set input validation",
+    "kind": "error_code",
+    "value": "provider and model must be non-blank strings; reasoning must be one of low|medium|high — otherwise InvalidSettingsInputError [packages/core/src/forge/settings/service.ts:66-80]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SPAWN_HALT_GUARD",
+    "source": "static",
+    "subject": "spawn failure halt guard",
+    "kind": "precondition",
+    "value": "3 consecutive worker spawn failures in one dispatch session → sticky halted (no self-unlock; new session resets); spawn-failed task stays in_progress for idempotent re-entry [packages/plugin-forge/src/tools/dispatch-task.ts:155-165,382-398]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_DISPATCH_POOL_SNAPSHOT",
+    "source": "static",
+    "subject": "dispatch pool snapshot and verdict",
+    "kind": "output_format",
+    "value": "pool snapshot {pending, inProgress, blocked, unmetPending} attached to spawned/no-task returns; verdicts: all settled = done / work in flight = wait / blocked with no pending path = deadlock-suspected [packages/plugin-forge/src/tools/dispatch-task.ts:59-85]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_FORGE_EVENT_TYPES",
+    "source": "static",
+    "subject": "plugin forge event types",
+    "kind": "output_format",
+    "value": "dispatch events: task-claimed (taskKey/type/mode/digest) / task-spawned (workerSessionId/toolFilter/model) / task-worker-done (outcome/durationMs) / no-ready-task (contextSlug attribution) into logs/{slug}.jsonl [packages/plugin-forge/src/tools/dispatch-task.ts:334-340]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_FORMAT_PREFILL",
+    "source": "static",
+    "subject": "new-session prefill message format",
+    "kind": "output_format",
+    "value": "prefill body order: @docs/proposals|features/<标识>/ first line → 名称： → 摘要： (omitted when absent) → 状态：|阶段： → 已生成文档： + per-doc 路径（状态） lines → blank → 我的意图： empty slot at end; never contains a mode line [apps/web/src/views/overview/message-format.ts:80-98]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_DISPATCH_COMMAND_TEMPLATE",
+    "source": "static",
+    "subject": "dispatch command message template",
+    "kind": "signature",
+    "value": "dispatch auto-send message = '/run-tasks ' + container slug, single line, minimal (contextSlug only; no summary/phase/pool snapshot/request lines) [apps/web/src/views/overview/message-format.ts:59]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_TERMINAL_TASK_SET",
+    "source": "static",
+    "subject": "terminal task status set",
+    "kind": "signature",
+    "value": "terminal = completed / skipped / rejected; non-terminal = pending / in_progress / blocked / suspended [apps/web/src/views/overview/task-tab/terminal-state.ts:11-13]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_DISPATCH_BUTTON_RULES",
+    "source": "static",
+    "subject": "dispatch button availability rules",
+    "kind": "precondition",
+    "value": "dispatch enabled iff container has non-terminal tasks (stats single source); all-terminal → disabled with tooltip; in_progress latest present → jump to its dispatch session (no new session, no resend, no mode switch) [apps/web/src/views/overview/task-tab/terminal-state.ts:38-50]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_OPEN_SESSION_SEQUENCE",
+    "source": "static",
+    "subject": "openSessionWithPreset orchestration order",
+    "kind": "signature",
+    "value": "create blank session → (mode present) agentPreset.select on blank session → composer setDraft(prefill) → (autosend) submit; select failure = staged error, no prefill [apps/web/src/client-plugin/open-session.ts:96-131]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_AUTOSEND_EXCEPTIONS",
+    "source": "static",
+    "subject": "autosend exception list",
+    "kind": "precondition",
+    "value": "autosend members = feature subgraph diagnosis + task failure diagnosis + dispatch command (closed list); open-new-session prefill never auto-sends (user intent required) [apps/web/src/client-plugin/open-session.ts:3-5]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_RPC_M3_CHANNELS",
+    "source": "static",
+    "subject": "M3 RPC channel families",
+    "kind": "signature",
+    "value": "forge:proposals/{list,transition,setMode,listDocs}; forge:features/{register,transition,upsertDoc,list,listDocs}; forge:tasks/{transition,query,validateFeatureTasks,list,stats,graph,detail,sessionLinks}; forge:settings/{get,set} [packages/contracts/src/channels.ts:53-97]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SETMODE_UI_ONLY",
+    "source": "static",
+    "subject": "mode change sole door",
+    "kind": "precondition",
+    "value": "setMode = UI-only RPC (sole mode change channel = proposal sub-tab manual action); agent tool face exposes no mode-rewrite verb; addTask/submitTask/createProposal never exposed on RPC [packages/contracts/src/channels.ts:5-11,78-86]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_VALIDATE_FIVE_CHECKS",
+    "source": "static",
+    "subject": "validateFeatureTasks five violation kinds",
+    "kind": "signature",
+    "value": "five structural checks over a feature subgraph, including cycle (three-color DFS, full path reported), orphaned (blocked with no prerequisites), stale (blocked whose prerequisites are all satisfied) [packages/core/src/forge/tasks/validate.ts:8-15,226-278]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_SESSION_LINKS_SOURCE",
+    "source": "static",
+    "subject": "task session links dual source",
+    "kind": "signature",
+    "value": "task_session_links rows = dispatch sessions (claim writes); task detail hydration merges links ∪ records as dual source for latest dispatch jump [packages/core/src/forge/tasks/session-links.ts:6,21]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "M3_BLITZ_TASK_SEMANTICS",
+    "source": "static",
+    "subject": "blitz task semantics from mode snapshot",
+    "kind": "precondition",
+    "value": "blitz-created tasks: plain integer local_id (regular numeric allocation), no stage-gate, eval gate exempt — semantics derive from the task mode snapshot, not from the executing session preset [packages/core/src/forge/tasks/add.ts:127-133; PRD Story 2/SC3]",
+    "confidence": "inferred",
+    "updated_at": "2026-10-08T05:51:25Z"
   }
 ]
