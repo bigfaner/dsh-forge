@@ -109,7 +109,7 @@ test('@web-e2e @m3 worker 供给·T1：addTask 逃生通道前缀二分（fix-N 
       ).get(fix1.taskId)
       expect(fixRow?.source_task_id, 'fix 任务谱系引用源任务').toBe(srcFix.taskId)
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = ? AND verb = 'auto-block'`).get(srcFix.taskId)?.n, 'auto-block 审计行伴随（reason 单源落账）').toBeGreaterThanOrEqual(1)
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges WHERE task_id = ? AND prerequisite_id = ? AND origin = 'fix-chain'`).get(fix1.taskId)?.n, 'fix-chain 边落库（恢复钩子锚）').toBeGreaterThanOrEqual(1)
+      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges WHERE task_id = ? AND prerequisite_id = ? AND origin = 'fix-chain'`).get(srcFix.taskId, fix1.taskId)?.n, 'fix-chain 边落库（恢复钩子锚——task_id=源（等待方）← prerequisite=fix，add.ts block-source 写径）').toBeGreaterThanOrEqual(1)
     } finally {
       db.close()
     }
