@@ -1,7 +1,7 @@
 ---
 feature: "dsh-forge-m3-bootstrap-presets"
 created: "2026-10-07"
-status: tasks
+status: completed
 ---
 
 # Feature: dsh-forge-m3-bootstrap-presets
