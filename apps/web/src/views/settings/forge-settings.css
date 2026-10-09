@@ -144,10 +144,3 @@
   font: var(--dsw-font-xxxs-strong-11);
   color: var(--dsw-alias-state-error-primary);
 }
-
-/* ── 分区底注（未来注记——非交互一行） ── */
-.dswf-fs-future-note {
-  margin: 0;
-  font: var(--dsw-font-xxxs-11);
-  color: var(--dsw-alias-label-tertiary);
-}

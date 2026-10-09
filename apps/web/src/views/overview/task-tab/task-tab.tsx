@@ -33,7 +33,6 @@ import {
   containerKeyOf,
   containerMenuSelect,
   containerPillChip,
-  containerCountNote,
   taskCountNote,
   tasksEmptyView,
   type TaskContainerSel,
@@ -263,10 +262,8 @@ export function TasksTabBody({
       ? undefined
       : `${featureCard === undefined ? '' : `${FEATURE_STATUS_LABELS[featureCard.featureStatus].zh} `}${stats.byStatus.completed ?? 0}/${stats.total}`,
   )
-  const countNote = containerCountNote(
-    container,
-    stats === undefined ? undefined : taskCountNote(searchActive, cards?.length ?? 0, stats.total),
-  )
+  // 计数注 = 帧侧 taskCountNote 原值（m3.1 D26：突击「无 feature 阶段」过程注废除——零过程注释文案）
+  const countNote = stats === undefined ? undefined : taskCountNote(searchActive, cards?.length ?? 0, stats.total)
 
   // 内容区分派：骨架（首装/清场）→ 错误（无旧内容）→ DAG graph 在途 → 空态 → 三视图
   let content: ReactNode

@@ -12,7 +12,7 @@ import { TasksTabBody, containerMenuItems, runDispatchRoute, subgraphDiagContain
 import { formatDiagMessage } from '../message-format.js'
 import { docsRootOf } from '../message-format.js'
 import type { TaskContainerOption } from './container-pill.js'
-import { containerMenuSelect, containerPillChip, containerCountNote, resolveContainer } from './task-tab-model.js'
+import { containerMenuSelect, containerPillChip, resolveContainer } from './task-tab-model.js'
 import { taskContainerOptions } from './container-pill.js'
 import type { TasksTabLoadState } from './task-tab-data.js'
 import type { DiagToastResult } from './DiagToast.js'
@@ -120,12 +120,14 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).toContain('data-dswf-tt-rightbar') // 右簇容器
   })
 
-  it('突击提案容器：琥珀点 + 「突击提案」chip + 「无 feature 阶段」计数注 + 无「诊断」按钮', () => {
+  it('突击提案容器：琥珀点 + 「突击提案」chip + 计数注原值 + 无「诊断」按钮 + 零过程注释（D26）', () => {
     const html = render({ container: BLITZ_CONTAINER })
     expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="blitz"')
     expect(html).toContain('突击提案 · 2 任务')
-    expect(html).toContain('2 条 · 突击提案容器（无 feature 阶段）')
+    expect(html).toContain('2 条')
+    // m3.1 D26：突击容器「无 feature 阶段」计数注零在场（字符串级断言）
+    expect(html).not.toContain('无 feature 阶段')
     expect(html).not.toContain('data-dswf-tt-diag') // validateFeatureTasks 为 feature 域校验
     expect(html).toContain('data-dswf-tt-dispatch=') // 派发按钮仍可用面
   })
@@ -244,13 +246,10 @@ describe('容器菜单与解析纯函数（AC5 双轨）', () => {
     expect(containerMenuSelect(OPTIONS, 'ghost')).toBeUndefined()
   })
 
-  it('containerPillChip / containerCountNote：feature stats 单源优先；突击附「无 feature 阶段」注', () => {
+  it('containerPillChip：feature stats 单源优先；突击 = 突击提案·N 任务（计数注后缀已废——D26）', () => {
     expect(containerPillChip(FEATURE_CONTAINER, '1/2')).toBe('1/2')
     expect(containerPillChip(FEATURE_CONTAINER, undefined)).toBe('2 任务')
     expect(containerPillChip(BLITZ_CONTAINER, '1/2')).toBe('突击提案 · 2 任务')
-    expect(containerCountNote(FEATURE_CONTAINER, '2 条')).toBe('2 条')
-    expect(containerCountNote(BLITZ_CONTAINER, '2 条')).toBe('2 条 · 突击提案容器（无 feature 阶段）')
-    expect(containerCountNote(BLITZ_CONTAINER, undefined)).toBeUndefined()
   })
 
   it('resolveContainer：显式命中优先；未命中回退活跃 feature；零选项 = undefined', () => {

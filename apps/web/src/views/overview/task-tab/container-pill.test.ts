@@ -1,13 +1,13 @@
 // 容器 pill 双轨数据模型单测 —— AC5：features ∪ 有任务提案（taskCount > 0 判据——2.3 单查询）
-// + 突击容器 mode='blitz'（琥珀点判据）+「突击提案」标记 +「无 feature 阶段」计数注 +
+// + 突击容器 mode='blitz'（琥珀点判据）+「突击提案」标记 +
 // 突击容器无「诊断」按钮（containerHasSubgraphDiag 仅 feature）。
 // 零任务提案不在列（AC6 断言）；非突击提案容器不入列（远征任务归成链 feature 承载——裁决⑪；
 // 无溯源提案无模式路由——openSessionWithPreset mode 参不可缺省成谎）。
+// m3.1 D26：「无 feature 阶段」计数注废除——零过程注释文案。
 import { describe, expect, it } from 'vitest'
 import type { FeatureCard, ProposalCard, ProposalStatus } from '@dsh-forge/contracts'
 import {
   BLITZ_CONTAINER_MARK,
-  containerCountNoteSuffix,
   containerHasSubgraphDiag,
   containerMenuMark,
   containerOfSlug,
@@ -99,7 +99,7 @@ describe('taskContainerOptions（AC5 双轨并集——前端组合两域读）'
   })
 })
 
-describe('标记与注记（AC5 呈现判据）', () => {
+describe('标记与诊断可见性（AC5 呈现判据）', () => {
   const options = taskContainerOptions(FEATURES, PROPOSALS)
   const featureOption = options[0]
   const blitzOption = options[2]
@@ -109,11 +109,6 @@ describe('标记与注记（AC5 呈现判据）', () => {
     expect(BLITZ_CONTAINER_MARK).toBe('突击提案')
     expect(containerMenuMark(featureOption)).toBe('')
     expect(containerMenuMark(blitzOption)).toBe('（突击提案）')
-  })
-
-  it('containerCountNoteSuffix：突击容器带「无 feature 阶段」计数注；feature 空', () => {
-    expect(containerCountNoteSuffix(featureOption)).toBe('')
-    expect(containerCountNoteSuffix(blitzOption)).toBe(' · 突击提案容器（无 feature 阶段）')
   })
 
   it('containerHasSubgraphDiag：仅 feature 容器有「诊断」按钮（突击容器无）', () => {

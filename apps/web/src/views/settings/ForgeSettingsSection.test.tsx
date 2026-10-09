@@ -10,7 +10,6 @@ import type { ForgeSettings, ReasoningLevel, WorkerSettings } from '@dsh-forge/c
 import { RpcClientError } from '../../rpc/errors.js'
 import type { ForgeRpcClient } from '../../rpc/index.js'
 import {
-  FUTURE_NOTE,
   ForgeSettingsSection,
   ForgeSettingsSectionBody,
   SAVED_EFFECT_NOTE,
@@ -76,18 +75,17 @@ function clientWith(
 
 // ─────────────────────────── AC1 分区结构 ───────────────────────────
 
-describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件 + 分区底注）', () => {
-  it('分区标题（底色条类位）+ worker 小节标题 + 说明一行 + 分区底注未来注记（非交互）', () => {
+describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件）', () => {
+  it('分区标题（底色条类位）+ worker 小节标题 + 说明一行 + 零过程注释文案（m3.1 D26——底注废除）', () => {
     const html = body()
     expect(html).toContain('data-dswf-fs-title')
     expect(html.match(/data-dswf-fs-title="?"?[^>]*>Forge设置</) ?? html.match(/Forge设置/)).toBeTruthy()
     expect(html).toContain('data-dswf-fs-part="worker"')
     expect(html).toContain('>worker</')
     expect(html).toContain('默认 LLM（全部执行子代理统一档位）')
-    // 分区底注 = 未来注记一行（<p> 非交互——非 button）
-    expect(html).toContain(FUTURE_NOTE)
-    expect(html).toContain('data-dswf-fs-future-note')
-    expect(html).not.toMatch(/<button[^>]*data-dswf-fs-future-note/)
+    // m3.1 D26：零过程注释文案——「未来注记」底注零在场（字符串级断言）
+    expect(html).not.toContain('未来注记')
+    expect(html).not.toContain('data-dswf-fs-future-note')
   })
 
   it('三项行式控件：标签左/控件右（dswf-fs-row 三行 + data 锚逐项在场）', () => {
@@ -647,7 +645,7 @@ describe('装载壳 · ForgeSettingsSection（初始渲染 = 装载在途相位�
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })
 
-  it('4.7 slot 座位契约：官方 owner share（close）递达下渲染不受扰——分区整节可见（标题 + worker 小节 + 底注）', () => {
+  it('4.7 slot 座位契约：官方 owner share（close）递达下渲染不受扰——分区整节可见（标题 + worker 小节）', () => {
     // 官方 SettingsSectionOwnerProps = { close }（ui-settings contract/slots——壳拥有
     // 对话框可见性，分区唯一递达动作）；组件零「离开设置」流 = 不消费不炸。
     const html = renderToStaticMarkup(
@@ -656,6 +654,5 @@ describe('装载壳 · ForgeSettingsSection（初始渲染 = 装载在途相位�
     expect(html).toContain('data-dswf-fs-title')
     expect(html).toContain('Forge设置')
     expect(html).toContain('data-dswf-fs-part="worker"')
-    expect(html).toContain('data-dswf-fs-future-note')
   })
 })

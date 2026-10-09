@@ -84,6 +84,9 @@ describe('FeaturesTab · 阶段 chips 插入点与父行行头（AC2/AC6）', ()
     expect(markup).toContain('data-dswf-ov-phchip="in-progress"')
     const at = markup.indexOf('data-dswf-ov-phchip="completed"')
     expect(markup.slice(markup.lastIndexOf('<button', at), markup.indexOf('</button>', at))).toContain('disabled')
+    // m3.1 D26：零过程注释文案——目录脚注（docs/features/ · 仓内只读）零在场（字符串级断言）
+    expect(markup).not.toContain('仓内只读')
+    expect(markup).not.toContain('dswf-ov-footnote')
   })
 
   it('父行行头：toggle 命中面 + 远征 mode chip 只读 + 阶段 tag（done/total）+ 打开新会话', () => {

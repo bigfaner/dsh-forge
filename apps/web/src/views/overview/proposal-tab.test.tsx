@@ -93,6 +93,9 @@ describe('ProposalsTabBody · 五态 chips 插入点与列表（AC1/AC6）', () 
     // 0 计数 disabled（rejected）
     const at = markup.indexOf('data-dswf-ov-pschip="rejected"')
     expect(markup.slice(markup.lastIndexOf('<button', at), markup.indexOf('</button>', at))).toContain('disabled')
+    // m3.1 D26：零过程注释文案——目录脚注（forge docs/proposals/ · 只读）零在场（字符串级断言）
+    expect(markup).not.toContain(' · 只读')
+    expect(markup).not.toContain('dswf-ov-footnote')
   })
 
   it('父行行头动作集：toggle 命中面 + mode chip（名称右侧）+ 状态 tag + 打开新会话 + ⋯', () => {

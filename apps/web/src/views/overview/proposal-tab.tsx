@@ -362,7 +362,6 @@ export function ProposalsTabBody({
             </div>
           )
         })}
-        <p className="dswf-ov-footnote">forge docs/proposals/ · 只读</p>
       </div>
     </div>
   )

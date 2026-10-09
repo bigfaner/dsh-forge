@@ -67,9 +67,6 @@ export const UNCONFIGURED_NOTICE = '⚠ 未配置——worker 派发将回退父
 export const SAVED_EFFECT_NOTE =
   '已保存 ✓——下次 run-tasks 派发经 agentOptions 携带生效（无需重启，优先于父会话继承）'
 
-/** 分区底注一行非交互（AC4：未来注记文案锚点——不实现） */
-export const FUTURE_NOTE = '按任务类型指派特定 LLM = 未来注记（不实现）'
-
 /** 供应商 → 模型候选（联动纯函数：空/未知供应商 = 空候选面；m3.1 D25 目录参数化——缺省静态回退面） */
 export function workerModelCandidates(
   provider: string | undefined,
@@ -395,7 +392,7 @@ export interface ForgeSettingsSectionBodyProps {
 /**
  * Forge设置 分区纯渲染体（AC1 结构：分区标题[底色条+13px/600] + worker 小节[12px/600 次色+
  * 分隔线——fs > fs-part 分层多小节可并列] + 行式控件[标签左/控件右]三项 + 保存动作行 +
- * 未配置 ⚠ + 错误行 + 分区底注未来注记[非交互]）。装载失败 = 错误行 + 重试（控件面不渲染）；
+ * 未配置 ⚠ + 错误行）。装载失败 = 错误行 + 重试（控件面不渲染）；
  * 装载在途/保存中 = 控件冻结（editing）。
  */
 export function ForgeSettingsSectionBody({
@@ -509,9 +506,6 @@ export function ForgeSettingsSectionBody({
           </>
         )}
       </section>
-      <p className="dswf-fs-future-note" data-dswf-fs-future-note="">
-        {FUTURE_NOTE}
-      </p>
     </div>
   )
 }

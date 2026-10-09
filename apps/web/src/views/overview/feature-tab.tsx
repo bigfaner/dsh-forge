@@ -179,7 +179,6 @@ export function FeaturesTab({
             </div>
           )
         })}
-        <p className="dswf-ov-footnote">docs/features/ · 仓内只读</p>
       </div>
     </div>
   )

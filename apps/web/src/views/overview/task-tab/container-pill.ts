@@ -4,7 +4,7 @@
 // （突击轨——琥珀点·2.3 单查询判据）；零任务提案不在列；非突击提案容器不入列——远征提案
 // 成链后任务归同标识 feature 容器承载（裁决⑥/⑪：feature 恒远征·突击无 feature 阶段），
 // 无溯源（mode NULL）提案无「容器对应模式」路由（openSessionWithPreset mode 参不可缺省成谎）。
-// 呈现判据：突击容器带「（突击提案）」菜单标记 +「无 feature 阶段」计数注 + 无「诊断」按钮
+// 呈现判据：突击容器带「（突击提案）」菜单标记 + 无「诊断」按钮
 //（validateFeatureTasks 为 feature 域校验——一次一 feature，M2 既定口径）。
 import { TASK_STATUSES, type ContainerKind, type FeatureCard, type Mode, type ProposalCard } from '@dsh-forge/contracts'
 
@@ -23,9 +23,6 @@ export interface TaskContainerOption {
 
 /** 突击容器菜单标记词（v20 ㉝——「突击提案」） */
 export const BLITZ_CONTAINER_MARK = '突击提案'
-
-/** 突击容器计数注后缀（v20 ㉝——「无 feature 阶段」明示：突击 accepted → 直接任务阶段） */
-export const BLITZ_CONTAINER_NOTE_SUFFIX = ' · 突击提案容器（无 feature 阶段）'
 
 function featureTotal(feature: FeatureCard): number {
   return TASK_STATUSES.reduce((sum, status) => sum + (feature.byStatus[status] ?? 0), 0)
@@ -64,11 +61,6 @@ export function containerOfSlug(
 /** 菜单行标记（突击容器带「（突击提案）」；feature 空串——当前项 ✓ 由 Menu selection 承载） */
 export function containerMenuMark(option: TaskContainerOption): string {
   return option.kind === 'feature' ? '' : `（${BLITZ_CONTAINER_MARK}）`
-}
-
-/** 计数注后缀（突击容器带「无 feature 阶段」注；feature 空串） */
-export function containerCountNoteSuffix(option: TaskContainerOption): string {
-  return option.kind === 'feature' ? '' : BLITZ_CONTAINER_NOTE_SUFFIX
 }
 
 /** 「诊断」按钮可见性（仅 feature 容器——validateFeatureTasks 恒单 feature 子图；突击容器无） */

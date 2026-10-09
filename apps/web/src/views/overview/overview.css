@@ -424,14 +424,6 @@
   font: var(--dsw-font-xs-strong-13);
 }
 
-/* 列表脚注（目录约定注记——原型 ov-footnote2） */
-.dswf-ov-footnote {
-  margin: var(--dsw-font-xs-13-line-height) 0 0;
-  padding: 0 var(--dsw-font-s-14-line-height);
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-tertiary);
-}
-
 /* ── 三态面（空态/骨架/错误条——ErrorBar/SkeletonRows/EmptyState 令牌与刻度注入） ── */
 .dswf-ov-empty {
   flex: 1;

@@ -14,7 +14,7 @@ import {
 } from '@dsh-forge/contracts'
 import { activeFeatureSlug } from '../overview-model.js'
 import { formatActualDuration } from '../drawer/detail-model.js'
-import { containerCountNoteSuffix, type TaskContainerOption } from './container-pill.js'
+import { type TaskContainerOption } from './container-pill.js'
 
 /** 三视图 seg 词汇（列表|DAG|泳道——ui-design UF-1 ov-taskbar） */
 export const TASK_VIEWS = [
@@ -163,12 +163,6 @@ export function containerPillChip(option: TaskContainerOption, statsDoneOverTota
     return statsDoneOverTotal ?? `${option.taskCount} 任务`
   }
   return `突击提案 · ${option.taskCount} 任务`
-}
-
-/** 容器计数注（feature = 帧侧计数注原值；突击 = 追加「无 feature 阶段」注——v20 ㉝） */
-export function containerCountNote(option: TaskContainerOption, base: string | undefined): string | undefined {
-  if (base === undefined) return undefined
-  return `${base}${containerCountNoteSuffix(option)}`
 }
 
 /** 空态视图（三分派：容器总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
