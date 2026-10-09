@@ -130,6 +130,9 @@ async function openRealSession(page: Page, userData: string, projectId: string):
  *  入口（首会话非 blank 后真新建）+ composer 落地 + 盘侧创建前后差集定位 id。 */
 async function openWorkerSession(page: Page, userData: string, before: readonly string[]): Promise<string> {
   await newBlankSession(page)
+  // 晚到模态处置：dispatcher 会话零凭据模型调用异步失败 → API Key onboarding 可在开户
+  // ensureNoBlockingDialog 之后才挂载（modals.ts 既有「晚到再点掉」径——点击面防拦截）
+  await ensureNoBlockingDialog(page)
   const composer = page.locator(COMPOSER_INPUT).last()
   await expect(composer, 'composer 在场（worker 会话开户）').toBeVisible({ timeout: 60_000 })
   await composer.click()
