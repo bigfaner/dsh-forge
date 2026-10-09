@@ -1,6 +1,6 @@
 # views/session/
 
-定位：**业务** —— UF-4 会话页签族（官方 `conversation.view` roster 占用者：召回数据面）。填充：2.11 + 3.8 + fix-25（官方 roster 降位——SessionPanel/SessionToolbar 复刻随 main.conversation 影子退役，头部单元/页签行/对话面 = 官方 ConversationRoot 原生直渲）+ fix-29（轨迹 tab = 官方 'trajectory' 直用——`TrajectoryLedger`/`transcript.ts` 产品复刻随 'dswf-trajectory' 注册退役）。
+定位：**业务** —— UF-4 会话页签族（官方 `conversation.view` roster 占用者：召回数据面）+ m3.1 D5/D6 派发任务悬浮面板（会话头挂接 pill 退役的继任面）。填充：2.11 + 3.8 + fix-25（官方 roster 降位——SessionPanel/SessionToolbar 复刻随 main.conversation 影子退役，头部单元/页签行/对话面 = 官方 ConversationRoot 原生直渲）+ fix-29（轨迹 tab = 官方 'trajectory' 直用——`TrajectoryLedger`/`transcript.ts` 产品复刻随 'dswf-trajectory' 注册退役）+ m3.1 D5/D6（`ForgeSessionTaskPills`/`SessionTaskPills` 会话头 pill 随 `conversation.session.header.actions` 槽位卸载退役——装载面 `useSessionTaskPills` 原样迁入 DispatchPanel）。
 边界：禁 import `../knowledge/`（依赖铁律③ 同级业务互禁——跨视图经工作台桥与 `rpc/` 解耦；召回行跳转抽屉经桥 `openKnowledgeEntry`，回调由插件 inject face 注入）。
 
 ## 组成
@@ -10,7 +10,9 @@
 | `ConversationViews.tsx` | 官方 roster 占用者族（fix-25/fix-29）：`ForgeRecallView`（'dswf-recall'——RecallTab + 项目锚推导 + 跳转缝）+ `KitSelectorHook` kit 窄面类型 |
 | `RecallTab.tsx` | 召回 tab 数据面（3.8）：`useSessionRecall` 装载（sessionRecall 单通道；fix-33 ⑦ 起 visible 维度删除——官方 only:id 激活即挂载承载 AC-4 即时累积）+ `RecallTabBody` 纯渲染（统计头/分组行/失效标注/空态/错误条）+ `mapRecallError`/`fetchSessionRecall` 纯异步面 |
 | `recall-model.ts` | 纯派生层：`recallStatsOf`（统计头口径——次数 = 分组数/覆盖 = 身份键去重，与 core hitIdentity 同口径）+ `recallRowsOf`（按知识折叠行——动词明细/最近时间/事件计数/热度原样）+ `recallTimeLabel`（官方 relativeTime 桶化——zh 切换委托 components/time-label 共享源，fix-36 收敛） |
-| `session.css` | 视图 pane/召回行样式（全令牌；头部/页签行/对话面/轨迹表样式归官方件——零自绘） |
+| `DispatchPanel.tsx` | 派发任务悬浮面板（m3.1 D5/D6，ShellHost 常驻树挂载——非本目录 roster 面）：`useSessionTaskPills` 装载（4.2 Integration #2 迁入面——sessionLinks 单通道 + subscribeTasksChanged 写推送重取）+ `dispatchPanelRows`（仅 link 源——裁决 #2）+ 几何纯函数（`dispatchPanelAnchor` 对话列内工具栏下锚定 / `dispatchPanelDragPosition` 视口钳制拖移）+ `workerSessionOf`/`fetchWorkerSession`（⟞ 执行会话解析——record 源 ∉ link 集）+ `DispatchPanelBody` 纯渲染（面板 ↔ ⟡N 角标双形态）+ 装载壳（DOM 锚定效应 + 拖移停自动锚定 + key=sessionId 重置本地态） |
+| `dispatch-panel.css` | 悬浮面板/角标样式（全令牌 + dsw-raw 原型结构刻度注记；fixed + pointer-events:auto + dockkit 浮层层级——TaskDrawer 弹窗先例） |
+| `session.css` | 视图 pane/召回行样式（全令牌；头部/页签行/对话面/轨迹表样式归官方件——零自绘；dswf-stp pill 样式随 D5 退役删除） |
 
 ## 官方 roster 契约（fix-25 降位形态）
 

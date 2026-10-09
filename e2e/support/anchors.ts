@@ -183,11 +183,26 @@ export const DOC_DANGLING = '[data-dswf-doc-dangling]'
 export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
 /** mermaid 渲染回退占位卡（非法源/渲染失败） */
 export const DOC_MERMAID_FALLBACK = '[data-dswf-doc-mermaid-fallback]'
-/** 会话头挂接 pill（任意） */
-export const STP_PILL_ANY = '[data-dswf-stp-pill]'
-/** 会话头挂接 pill 双源分型（值对 = taskId × source[link|record]——SC6③ 锚） */
-export const stpPillOf = (taskId: string, source: string): string =>
-  `[data-dswf-stp-pill="${taskId}"][data-dswf-stp-source="${source}"]`
+/** 会话头挂接槽（官方动作带——m3.1 D5：产品 pill 卸载断言面；零产品占用者） */
+export const SESSION_HEADER_ACTIONS = '[data-slot="conversation.session.header.actions"]'
+/** 派发任务悬浮面板（m3.1 D6——ShellHost 常驻树挂载，对话列内浮层；role=complementary） */
+export const DP_PANEL = '[data-dswf-dp]'
+/** 悬浮面板行（值 = taskId；行集仅 link 源） */
+export const dpRowOf = (taskId: string): string => `[data-dswf-dp-row="${taskId}"]`
+/** 悬浮面板行（任意） */
+export const DP_ROW_ANY = '[data-dswf-dp-row]'
+/** 悬浮面板折叠钮（▁ → ⟡N 角标） */
+export const DP_COLLAPSE = '[data-dswf-dp-collapse]'
+/** 悬浮面板 ⟡N 折叠角标（点击展开） */
+export const DP_BADGE = '[data-dswf-dp-badge]'
+/** 悬浮面板行尾 ⟞（打开 worker 执行子会话；值 = taskId） */
+export const dpSessionOf = (taskId: string): string => `[data-dswf-dp-session="${taskId}"]`
+/** 悬浮面板行尾 ⟞（任意） */
+export const DP_SESSION_ANY = '[data-dswf-dp-session]'
+/** 悬浮面板头（拖移手柄——拖后停自动锚定） */
+export const DP_HEAD = '[data-dswf-dp-head]'
+/** 悬浮面板拖移标记（在场 = 已停自动锚定） */
+export const DP_DRAGGED = '[data-dswf-dp][data-dswf-dp-dragged]'
 /** 注册表单派生行（值 = loading|ready|suspected-move|error——4.3 四态） */
 export const dsrOf = (state: string): string => `[data-dswf-dsr="${state}"]`
 /** 派生行 ready 路径逐字呈现面（SC2 单源断言读取位） */

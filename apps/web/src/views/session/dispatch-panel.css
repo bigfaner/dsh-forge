@@ -1,0 +1,165 @@
+/* 派发任务悬浮面板样式（定位：业务——m3.1 D6：对话列内 · 工具栏之下 · 随 dock 展开自动
+ * 左移）。结构基准 = 纠正版原型 .m31-dp/#m31-dp-badge（proposal.md 二区 D6）；
+ * 落位 = shell overlay（ShellHost 常驻树——fixed + pointer-events:auto + dockkit 浮层
+ * 层级，TaskDrawer 弹窗先例）；视觉一律官方令牌（令牌唯一：色/字/距/圆角/阴影——
+ * lint-tokens 机械执行）。
+ * dsw-raw 豁免（执行记录注记）：
+ *   - 宽 324 / 头高 34 / 列表滚动高 224 / 行 min-h 32 / 角标高 26 / 右缘 16 / 顶距 8 /
+ *     拖移边距 4 = 原型 #m31-dp 结构刻度（布局尺寸以原型结构为准——TECH-styling-002）；
+ *   - 行/头微距 3/6/7/8px = 原型行内距刻度（官方字阶令牌无对应微距档）；角标胶囊
+ *     999px = 官方 Tag 胶囊刻度同值（components.css 先例）。 */
+
+/* ── 面板壳：对话列内浮层（left/top 经 style 注入——锚定或拖移位）── */
+.dswf-dp {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 324px; /* dsw-raw 原型面板宽刻度 */
+  max-width: calc(100vw - 48px); /* dsw-raw 窄视口防越（两侧各 24 余量） */
+  overflow: hidden;
+  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（弹窗同径；DOM 序在弹窗后 = 弹窗压上层） */
+  pointer-events: auto; /* 壳宿主舞台零交互——面板本体恢复命中 */
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md); /* 原型 10px → 最近语义令牌（md = 12） */
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* 拖移包装层（零视觉——pointer 捕获拖移的挂接面） */
+.dswf-dp-dragwrap {
+  display: contents;
+}
+
+/* ── 头：拖移手柄（cursor move；折叠钮/按钮命中不劫持——组件面守卫）── */
+.dswf-dp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+  height: 34px; /* dsw-raw 原型头高刻度 */
+  padding: 0 6px 0 12px; /* dsw-raw 原型头内距刻度 */
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.dswf-dp-ic {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dp-title {
+  flex: 1;
+  min-width: 0;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-dp-count {
+  flex: none;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dp-btn {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 行列表（台账滚动面——全量行呈现，无截员）── */
+.dswf-dp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 原型行距刻度 */
+  max-height: 224px; /* dsw-raw 原型列表滚动高刻度 */
+  overflow-y: auto;
+  padding: var(--dsw-font-xxxs-11-line-height);
+}
+
+/* ── 行：状态点 + 键 + 标题 + 状态标签 + ⟞（原型 .m31-dp-row 同构）── */
+.dswf-dp-row {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+  min-height: 32px; /* dsw-raw 原型行高刻度 */
+  padding: 3px 6px 3px 8px; /* dsw-raw 原型行内距刻度 */
+  border-radius: var(--dsw-radius-sm); /* 原型 7px → 最近语义令牌（sm = 8） */
+}
+
+.dswf-dp-row[role='button'] {
+  cursor: pointer;
+}
+
+.dswf-dp-row[role='button']:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-dp-key {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dp-row .dswf-dp-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-dp-status {
+  flex: none;
+}
+
+/* ── 行尾 ⟞：打开 worker 执行子会话（官方 RightUp 图标——裁决 #15 官方件集）── */
+.dswf-dp-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px; /* dsw-raw 原型 ⟞ 钮高刻度 */
+  padding: 0 7px; /* dsw-raw 原型 ⟞ 钮内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-dp-open:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-link);
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.dswf-dp-open:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ── ⟡N 折叠角标（同锚定右上位——胶囊形态，原型 .m31-dp-badge）── */
+.dswf-dp-badge {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dsw-font-xxxs-11-line-height);
+  height: 26px; /* dsw-raw 原型角标高刻度 */
+  padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-link);
+  font: var(--dsw-font-xxs-strong-12);
+  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（面板同径） */
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dswf-dp-badge:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}

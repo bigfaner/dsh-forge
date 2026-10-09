@@ -163,24 +163,29 @@ describe('components 基础组件 pin（2.6）', () => {
   })
 })
 
-describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形态 → fix-29 轨迹官方直用）', () => {
-  it('模块面就位：视图占用者族 + 召回数据面 + 样式 + barrel；fix-29 退役面缺席（台账/转录投影）', () => {
+describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形态 → fix-29 轨迹官方直用 → m3.1 D5/D6 pill 退役）', () => {
+  it('模块面就位：视图占用者族 + 召回数据面 + 派发悬浮面板 + 样式 + barrel；fix-29/m3.1 退役面缺席', () => {
     for (const f of [
       'apps/web/src/views/session/ConversationViews.tsx',
       'apps/web/src/views/session/RecallTab.tsx',
       'apps/web/src/views/session/recall-model.ts',
+      'apps/web/src/views/session/DispatchPanel.tsx',
+      'apps/web/src/views/session/dispatch-panel.css',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'RecallTab']) {
+    for (const name of ['ConversationViews', 'RecallTab', 'DispatchPanel']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // fix-29 退役 pin：产品轨迹台账/转录投影死代码缺席（轨迹 = 官方 ui-trajectory 直用）
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/TrajectoryLedger.tsx'))).toBe(false)
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/transcript.ts'))).toBe(false)
+    // m3.1 D5 退役 pin：会话头挂接 pill 死代码缺席（槽位卸载——监视面 = DispatchPanel）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/ForgeSessionTaskPills.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionTaskPills.tsx'))).toBe(false)
   })
 
   it('官方 roster 占用 pin：召回视图登记 id + pane 锚保持；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
@@ -391,7 +396,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；4.2 会话头挂接 pill；4.7 设置分区）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；m3.1 D5 会话头 pill 发布退役；4.7 设置分区）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
       'ForgeSidebarSlot',
@@ -402,7 +407,6 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeRecallView',
       'ForgeOverviewTab',
       'ForgeDocsTab',
-      'ForgeSessionTaskPills',
       'ForgeSettingsSection',
       'createWorkbenchBridge',
     ]) {
@@ -410,6 +414,8 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     }
     // fix-29 退役 pin：产品轨迹视图不再发布（轨迹 = 官方 ui-trajectory 直用）
     expect(views).not.toContain('ForgeTrajectoryView')
+    // m3.1 D5 退役 pin：会话头挂接 pill 不再发布（槽位卸载——面板经 ShellHost 直挂）
+    expect(views).not.toContain('ForgeSessionTaskPills')
   })
 
   it('工作台桥键面一致：workbench-bridge（发布侧 + 读取侧同模块）键 __DSH_FORGE_WORKBENCH__；e2e bridgeDispatch 面保持', () => {

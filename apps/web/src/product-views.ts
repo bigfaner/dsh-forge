@@ -11,8 +11,8 @@
 // （召回单签——轨迹 = 官方 'trajectory' 直用，fix-29 退役产品复刻）+ 壳宿主
 // （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。4.1 扩右栏 dock tab 族：
 // ForgeOverviewTab/ForgeDocsTab（sidebar.right.pane.tab 两 keyed body——M2 UF-1/UF-2）。
-// 4.2 扩会话头挂接 pill：ForgeSessionTaskPills（conversation.session.header.actions
-// list 槽占用者——M2 UF-3/SC6③）。
+// m3.1 D5：会话头挂接 pill 发布退役（conversation.session.header.actions 槽位卸载——
+// 派发任务监视面 = DispatchPanel，经 ShellHost 常驻树直挂不经槽位发布）。
 // 4.7 扩设置分区：ForgeSettingsSection（官方 ui-settings settings.section list 槽占用者
 // ——M3 UF-2 Forge设置 分区；slot 注册归 client 插件，生命周期 = 官方设置对话框）。
 import type { ComponentType } from 'react'
@@ -39,10 +39,6 @@ import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
 } from './views/session/HeroWorkspacePicker.js'
-import {
-  ForgeSessionTaskPills,
-  type ForgeSessionTaskPillsProps,
-} from './views/session/ForgeSessionTaskPills.js'
 import {
   ForgeSettingsSection,
   type ForgeSettingsSectionProps,
@@ -73,8 +69,6 @@ export interface ForgePublishedViews {
   readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
-  /** conversation.session.header.actions 占用者（M2 UF-3 会话头挂接 pill——4.2 Integration #2） */
-  readonly ForgeSessionTaskPills: ComponentType<ForgeSessionTaskPillsProps>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
@@ -98,7 +92,6 @@ declare global {
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,
-  ForgeSessionTaskPills,
   ForgeSettingsSection,
   createWorkbenchBridge,
 }

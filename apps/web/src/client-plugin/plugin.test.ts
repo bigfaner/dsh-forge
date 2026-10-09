@@ -21,8 +21,6 @@ import {
   OVERVIEW_TAB_KIND,
   RECALL_VIEW_ID,
   SESSION_HEADER_ACTIONS_SLOT,
-  SESSION_PILLS_ENTRY_ID,
-  SESSION_PILLS_ORDER,
   SETTINGS_SECTION_SLOT,
   FORGE_SETTINGS_SECTION_ID,
   FORGE_SETTINGS_SECTION_ORDER,
@@ -33,6 +31,8 @@ import {
   SIDEBAR_RIGHT_PANE_TAB_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
+  sessionParentIdOf,
+  workerOpenTarget,
   forgeClientPlugin,
   moduleLoaderFacade,
   publishedViews,
@@ -146,6 +146,8 @@ function fakeClientCtx(): {
   selectPanel: ReturnType<typeof vi.fn>
   locale: ReturnType<typeof fakeLocale>
   tabTypes: ReturnType<typeof fakeSidebarRightTabs>
+  /** 账本 byId 注入面（m3.1 D6 worker ⟞ parentId 判读测试） */
+  sessionsById: Record<string, { parentId?: string }>
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -170,7 +172,14 @@ function fakeClientCtx(): {
   }
   // fix-11：Session Controller 面仅账本快照源；打开动作 = uiWorkspace.openSession（官方导航面）；
   // fix-42：新会话流 = uiWorkspace.startSession（官方行动作面）
-  const sessions = { list: { tag: 'sessions-list' } }
+  // m3.1 D6：账本快照可注入 byId（worker ⟞ 开面的 parentId 判读测试面——缺省空账本 = 平开径）
+  const sessionsById: Record<string, { parentId?: string }> = {}
+  const sessions = {
+    list: {
+      tag: 'sessions-list',
+      getSnapshot: () => ({ byId: sessionsById }),
+    },
+  }
   const uiWorkspace = { openSession: open, startSession: start }
   const workspaces = { list: { tag: 'workspaces-list' } }
   // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）
@@ -200,10 +209,10 @@ function fakeClientCtx(): {
       throw new Error(`unexpected service: ${name}`)
     },
   }
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById }
 }
 
-/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body + 4.2 会话头 pill） */
+/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body；m3.1 D5 会话头 pill 退役） */
 function publishFakeViews() {
   const views = {
     ForgeSidebarSlot: 'COMP:sidebar-slot',
@@ -217,7 +226,6 @@ function publishFakeViews() {
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
-    ForgeSessionTaskPills: 'COMP:session-task-pills',
     ForgeSettingsSection: 'COMP:settings-section',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
@@ -315,7 +323,6 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       SIDEBAR_PANELLIST_SLOT,
       CONVERSATION_VIEW_SLOT,
       HERO_WORKSPACE_SLOT,
-      SESSION_HEADER_ACTIONS_SLOT,
       SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
@@ -342,7 +349,8 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
     const face = workspaces.options.inject!()
     expect(face).toEqual({
-      sessions: { tag: 'sessions-list' },
+      // m3.1 D6：账本快源含 getSnapshot（worker ⟞ parentId 判读面——面板数据直读）
+      sessions: { tag: 'sessions-list', getSnapshot: expect.any(Function) },
       workspaces: { tag: 'workspaces-list' },
       openSession: expect.any(Function),
       startSession: expect.any(Function),
@@ -414,7 +422,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT]) // fix-24 ① 后 views 族含 hero 影子 + 4.2 会话头挂接 pill
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT]) // fix-24 ① 后 views 族含 hero 影子；m3.1 D5 会话头 pill 卸载
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -435,12 +443,12 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
 
-  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）；桥经发布面工厂创建并发布页内全局', () => {
+  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）+ 悬浮面板 ⟞ 开面（m3.1 D6）；桥经发布面工厂创建并发布页内全局', () => {
     const views = publishFakeViews()
     const { ctx, registers, selectPanel, rightToggle } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -455,9 +463,10 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       onOpenSession: (sessionId: string) => void
       openSession: { openSessionWithPreset(request: unknown): Promise<unknown> }
       openDocResource: (address: string) => void
+      openWorkerSession: (childSessionId: string) => void
     }
-    // m3.1 D21/D23：弹窗宿主三窄面在场（跳会话/新会话编排器/文档开出——ShellHost 消费）
-    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel'])
+    // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
+    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'openDocResource', 'openSession', 'openWorkerSession', 'rightbar', 'selectPanel'])
     expect(typeof face.onOpenSession).toBe('function')
     expect(typeof face.openSession.openSessionWithPreset).toBe('function')
     expect(typeof face.openDocResource).toBe('function')
@@ -582,75 +591,84 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
   })
 })
 
-describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：conversation.session.header.actions）', () => {
-  it('list 槽登记：产品首位注册（order -100 < 官方带 -30/-20/-10/20）+ 发布组件 + 无 label（组件自绘——非 roster 行）', () => {
-    const views = publishFakeViews()
+describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', () => {
+  it('D5 卸载断言：conversation.session.header.actions 零产品登记（pill 退役——官方动作带占用者不受扰）+ 发布面零 pill 组件', () => {
+    publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const pills = registers.filter((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)
-    expect(pills, 'conversation.session.header.actions 恰一登记（产品零登记现状下新增）').toHaveLength(1)
-    expect(pills[0]!.options.id).toBe(SESSION_PILLS_ENTRY_ID)
-    expect(pills[0]!.options.id).toBe('dswf-task-pills')
-    expect(pills[0]!.options.order).toBe(SESSION_PILLS_ORDER)
-    expect(pills[0]!.options.order).toBeLessThan(-30) // 官方最小带 -30（subagent-catalog）→ 产品首位
-    expect(pills[0]!.options.order).toBe(SIDEBAR_SHADOW_PRIORITY) // 产品首位序惯例 = 影子优先级同值
-    expect(pills[0]!.component).toBe(views.ForgeSessionTaskPills)
-    expect(pills[0]!.options.label).toBeUndefined() // 动作带行 = 组件自绘（job-list 同径——非 roster）
-    expect(pills[0]!.options.priority).toBeUndefined() // list 槽无 priority 面
+    expect(
+      registers.filter((r) => r.key === SESSION_HEADER_ACTIONS_SLOT),
+      '会话头动作带零产品登记（M2 4.2 首位注册退役——监视面迁对话列内悬浮面板）',
+    ).toHaveLength(0)
+    expect(
+      (globalThis as { __DSH_FORGE_VIEWS__?: Record<string, unknown> }).__DSH_FORGE_VIEWS__?.['ForgeSessionTaskPills'],
+      '发布面零 ForgeSessionTaskPills（随槽位卸载一并退役）',
+    ).toBeUndefined()
     unpublishViews()
   })
 
-  it('注入面 = 点击导航闭包（AC4 全链路左半段 + m3.1 D23 弹窗直开）：onOpenTask → sidebarRight.openTab(dswf-overview) + 桥 openTaskFocus 载荷原样 + 桥 openTaskDrawer（对话中就地开弹窗——不依赖概览 tab 消费）；openTab 异常 fail-soft（聚焦/弹窗仍发布）', () => {
+  it('D6 ⟞ 开面：openWorkerSession → 账本 parentId 在场 = 官方 SubagentAddress 形（openChild 同径）；缺席 = 平开会话 id', () => {
     publishFakeViews()
-    const { ctx, registers, openTab } = fakeClientCtx()
+    const { ctx, registers, sessionsById, open } = fakeClientCtx()
+    sessionsById['worker-child'] = { parentId: 'dispatch-parent' }
     forgeClientPlugin().apply(ctx)
-    const pills = registers.find((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)!
-    const face = pills.options.inject!() as {
-      onOpenTask: (nav: { taskId: string; featureSlug: string }) => void
-    }
-    face.onOpenTask({ taskId: 't-42', featureSlug: 'dsh-forge-m2-pipeline' })
-    expect(openTab).toHaveBeenCalledWith(OVERVIEW_TAB_KIND) // dock 开概览 tab（openTab 自带 reveal 列）
-    const bridge = (globalThis as {
-      __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown; drawerTaskId: string | null } }
-    }).__DSH_FORGE_WORKBENCH__
-    expect(bridge!.getSnapshot().taskFocus).toEqual({
-      taskId: 't-42',
-      featureSlug: 'dsh-forge-m2-pipeline',
-      nonce: 1,
-    }) // 桥聚焦发布（任务子 tab + feature 选中——右栏 body 消费）
-    expect(bridge!.getSnapshot().drawerTaskId).toBe('t-42') // m3.1 D21/D23：弹窗直开（ShellHost 常驻树消费——挂载独立于 dock）
-    // fail-soft：官方动作面无在场面（会话卸载瞬态）不外溢——聚焦仍发布
-    const throwing = fakeClientCtx()
-    const throwingCtx: ForgeClientCtx = {
-      ...throwing.ctx, // slots 为共享引用——登记落 throwing.registers
+    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
+    face.openWorkerSession('worker-child')
+    face.openWorkerSession('top-level')
+    expect(open).toHaveBeenNthCalledWith(1, { parentSessionId: 'dispatch-parent', childSessionId: 'worker-child', mode: 'unknown' })
+    expect(open).toHaveBeenNthCalledWith(2, 'top-level')
+    unpublishViews()
+  })
+
+  it('workerOpenTarget / 账本判读纯面：parentId 缺席/形状漂移 → 平开；官方面异常 fail-soft（不外溢）', () => {
+    expect(workerOpenTarget(undefined, 's-1')).toBe('s-1')
+    expect(workerOpenTarget('p-1', 's-1')).toEqual({ parentSessionId: 'p-1', childSessionId: 's-1', mode: 'unknown' })
+    // 账本判读（sessionParentIdOf）：非对象/无 getSnapshot/快照异常/parentId 非串 → undefined
+    expect(sessionParentIdOf(undefined, 's-1')).toBeUndefined()
+    expect(sessionParentIdOf({ tag: 'x' }, 's-1')).toBeUndefined()
+    expect(
+      sessionParentIdOf(
+        {
+          getSnapshot: () => {
+            throw new Error('shape drift')
+          },
+        },
+        's-1',
+      ),
+    ).toBeUndefined()
+    expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 42 } } }) }, 's-1')).toBeUndefined()
+    expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 'p-9' } } }) }, 's-1')).toBe('p-9')
+    // 官方面异常 fail-soft：openSession 抛错不外溢（会话卸载瞬态）
+    publishFakeViews()
+    const base = fakeClientCtx()
+    const ctx: ForgeClientCtx = {
+      ...base.ctx,
       get: (name) => {
-        if (name === 'sidebarRight') {
+        if (name === 'uiWorkspace') {
           return {
-            isExpanded: () => false,
-            toggleExpanded: () => {},
-            openTab: () => {
+            openSession: () => {
               throw new Error('no surface')
             },
+            startSession: () => {},
           }
         }
-        return throwing.ctx.get(name)
+        return base.ctx.get(name)
       },
     }
-    forgeClientPlugin().apply(throwingCtx)
-    const pills2 = throwing.registers.find((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)!
-    const face2 = pills2.options.inject!() as { onOpenTask: (nav: { taskId: string; featureSlug: string }) => void }
-    expect(() => face2.onOpenTask({ taskId: 't-1', featureSlug: 'f' })).not.toThrow()
-    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown; drawerTaskId: string | null } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().taskFocus).toMatchObject({ taskId: 't-1' })
-    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { drawerTaskId: string | null } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().drawerTaskId).toBe('t-1') // fail-soft 下弹窗仍直开（m3.1 D23）
+    forgeClientPlugin().apply(ctx)
+    const host = base.registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
+    expect(() => face.openWorkerSession('s-1')).not.toThrow()
     unpublishViews()
   })
 
-  it('诊断面：views 族登记数组含 pill 洞位（conversation 族——页签 + hero 影子 + 会话头带）', () => {
+  it('诊断面：views 族登记数组 = 页签 + hero 影子（会话头带洞位随 D5 卸载不再登记）', () => {
     publishFakeViews()
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, SESSION_HEADER_ACTIONS_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

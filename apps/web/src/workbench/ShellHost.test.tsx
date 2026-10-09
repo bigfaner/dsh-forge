@@ -71,6 +71,21 @@ describe('任务详情弹窗宿主（m3.1 D21/D23：桥 drawerTaskId 受控—�
   })
 })
 
+describe('派发任务悬浮面板宿主（m3.1 D5/D6：会话视图 + 双锚齐备挂载——装载/锚定归效应面）', () => {
+  it('SSR 首帧（效应零执行 → 行集空/锚定 null）= 面板零挂载（data-dswf-dp 不在场——零派发不占对话区）', () => {
+    const markup = renderToStaticMarkup(<ForgeShellHost />)
+    expect(markup).not.toContain('data-dswf-dp')
+    expect(markup).not.toContain('data-dswf-dp-badge')
+  })
+  it('⟞ 开面 props 在场不炸渲染（装载/几何/DOM 锚定归 e2e——useSessionTaskPills 数据链自持）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    const markup = renderToStaticMarkup(
+      createElement(ForgeShellHost, { bridge, onOpenWorkerSession: () => {} }),
+    )
+    expect(markup).toContain('data-dswf-workbench') // 装配面不炸（数据经 hook 效应装载）
+  })
+})
+
 describe('PanelInfoAnchor 官方面板信息锚子件（fix-33 ⑤ 钩子形制）', () => {
   it('SSR 渲染期执行钩子读取（选择器直连）且渲染为 null（效应上抛归 e2e）', () => {
     const seen: unknown[] = []

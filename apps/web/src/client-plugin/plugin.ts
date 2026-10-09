@@ -15,11 +15,10 @@
 //   - `conversation.view` 'dswf-recall'（官方页签 roster——ui-trajectory 同型先例）：
 //     UF-4 知识召回页签（对话 = 官方 'chat' 直用；轨迹 = 官方 'trajectory' 直用——fix-29
 //     退役产品 'dswf-trajectory' 复刻，同名册双『轨迹』页签冲突随降位显形）；
-//   - `conversation.session.header.actions` 'dswf-task-pills'（官方会话头动作带 list 槽
-//     ——产品首位注册，4.2）：M2 UF-3 会话头挂接 pill（sessionLinks 单库解析 + 事件刷新
-//     在壳侧发布件自持；点击 → dock 开概览 + 桥任务聚焦）；
 //   - `shell.overlay` 'dswf-host'（AppFrame root 五子槽之一——常驻壳宿主：UF-3 流程 +
-//     相位锚 + hero 面板驱动 + 知识模式右栏联动面）。
+//     相位锚 + hero 面板驱动 + 知识模式右栏联动面 + 派发任务悬浮面板宿主[m3.1 D5/D6：
+//     会话头挂接 pill 自 conversation.session.header.actions 槽位卸载退役——监视面迁
+//     对话列内浮层，经 ShellHost 常驻树直挂]）。
 //   - `settings.section` 'dswf-forge-settings'（官方 ui-settings SettingsRoot 分区 roster
 //     ——list 槽：4.7 Integration #4，UF-2 Forge设置 分区[通用设置正下方 order 5]；分区
 //     本体 = 4.5 组件经壳 bundle 发布面递达，打开/关闭/Esc 生命周期恒归官方对话框）。
@@ -90,14 +89,11 @@ export const SIDEBAR_SHADOW_PRIORITY = -100
 export const RECALL_VIEW_ID = 'dswf-recall'
 /**
  * 洞名：官方会话头标题邻位动作带（ConversationSessionHeader headerActions——list 槽，
- * scope session；占用者标准货币 = sessionId + useWorkspaces，job-list 同径先例）。
- * 4.2 Integration #2：产品挂接 pill 槽（此前产品零登记）。
+ * scope session）。m3.1 D5：产品挂接 pill 登记退役（会话头零挂件——官方动作带其它占用者
+ * 不动；派发任务监视面迁对话列内悬浮面板，经 ShellHost 常驻树挂载）。常量保留 = 卸载
+ * 断言锚（plugin.test D5 零登记 pin + e2e 会话头零产品 pill）。
  */
 export const SESSION_HEADER_ACTIONS_SLOT = 'conversation.session.header.actions'
-/** 挂接 pill 登记 id（list 槽行 id——(id, priority) 唯一） */
-export const SESSION_PILLS_ENTRY_ID = 'dswf-task-pills'
-/** 挂接 pill 登记序（list 槽 order 升序；官方带 -30/-20/-10/20 → -100 = 产品首位注册） */
-export const SESSION_PILLS_ORDER = -100
 /**
  * 洞名：官方设置对话框分区 roster（ui-settings SettingsRoot nav 列 + 内容列 only 消费
  * ——list 槽 scope root；4.7 Integration #4）。分区本体自带容器/标题（4.5 组件注入即整节）
@@ -167,12 +163,56 @@ export interface ForgeSessionsService {
  * uiWorkspace.openSession（内部 retain(mainView) + selection 一体 + layout.selectPanel(null)
  * 回会话面板——历史恢复经此驱动）。fix-42：项目行尾「新会话」钮 = uiWorkspace.startSession
  * （reuse-or-create blank + 呈现一体——官方 WorkspaceBrowser 同径动作面）。
+ * m3.1 D6：openSession 增地址形态入参（官方 SessionTarget——上游 ui-subagent openChild
+ * 同径：子会话经 {parentSessionId, childSessionId, mode} 打开，面包屑/只读 composer 等
+ * subagent 呈现随官方 selection.subagentAddress 到场）。
  */
 export interface ForgeUiWorkspaceService {
-  /** 选择会话为当前并呈现其会话面（官方导航动作面） */
-  openSession(target: string): void
+  /** 选择会话为当前并呈现其会话面（官方导航动作面；子会话 = SubagentAddress 形态） */
+  openSession(target: string | ForgeSubagentOpenAddress): void
   /** 工作区新会话流（官方 UiWorkspaceService.startSession——复用/新建空白会话并打开） */
   startSession(workspaceId?: string): void
+}
+
+/**
+ * 官方子会话打开地址（上游 SubagentAddress 消费切片——mode 'unknown' = 读取子历史时
+ * 解析；上游 dsh-subagent/control-types 契约）。m3.1 D6：悬浮面板 ⟞ 打开 worker 执行
+ * 子会话的载荷形态（官方 ui-subagent openChild 同径）。
+ */
+export interface ForgeSubagentOpenAddress {
+  readonly parentSessionId: string
+  readonly childSessionId: string
+  readonly mode: 'unknown'
+}
+
+/**
+ * 会话行父会话判读（纯函数——m3.1 D6 ⟞ 开面）：账本快照窄读 byId[sessionId].parentId
+ * （形状漂移/缺席/异常 = undefined 走平开）。子会话在场 = 地址形态打开（官方 openChild
+ * 同径），顶层会话 = 平开（e2e 合成执行会话等非子会话径）。
+ */
+export function sessionParentIdOf(list: unknown, sessionId: string): string | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  if (typeof snapshot !== 'object' || snapshot === null) return undefined
+  const row = (snapshot as { byId?: Record<string, { parentId?: unknown }> }).byId?.[sessionId]
+  return typeof row?.parentId === 'string' ? row.parentId : undefined
+}
+
+/** ⟞ 打开目标推导（纯函数）：父会话在场 = 地址形态；缺席 = 平开会话 id */
+export function workerOpenTarget(
+  parentId: string | undefined,
+  childSessionId: string,
+): string | ForgeSubagentOpenAddress {
+  return parentId === undefined
+    ? childSessionId
+    : { parentSessionId: parentId, childSessionId, mode: 'unknown' }
 }
 
 /** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源） */
@@ -280,7 +320,6 @@ export interface ForgeViewsGlobal {
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
-    ForgeSessionTaskPills: unknown
     ForgeSettingsSection: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
@@ -508,51 +547,6 @@ function registerConversationViews(
     ctx.slots.register(
       { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
       views.ForgeHeroWorkspacePicker,
-    ),
-  )
-}
-
-/**
- * 会话头挂接 pill 登记（4.2 Integration #2——M2 UF-3/SC6③）：官方
- * `conversation.session.header.actions` list 槽新增产品首位注册（产品零登记现状下
- * order -100 < 官方带 -30/-20/-10/20）。占用者 ForgeSessionTaskPills（壳 bundle 发布件
- * ——单库解析/sessionLinks 数据/事件刷新自持，标准 props sessionId + useWorkspaces 由
- * 槽 runtime 自动递达，job-list 同径）；inject face = 点击导航闭包（dock 开概览 tab +
- * 桥任务聚焦 + 任务弹窗直开[m3.1 D23——弹窗挂 ShellHost 不依赖概览 tab 选中]——UF-3
- * 流程 7 全链路左半段，右半段 = 右栏概览 tab body + ShellHost 消费）。
- */
-function registerSessionHeaderPills(
-  ctx: ForgeClientCtx,
-  views: PublishedViews,
-  services: {
-    readonly sidebarRight: ForgeSidebarRightService
-    readonly bridge: PublishedBridge
-  },
-  diagnostics: { registered?: string[] },
-): void {
-  registerSlotEntry(ctx, SESSION_HEADER_ACTIONS_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      {
-        name: SESSION_HEADER_ACTIONS_SLOT,
-        id: SESSION_PILLS_ENTRY_ID,
-        order: SESSION_PILLS_ORDER,
-        inject: () => ({
-          onOpenTask: (nav: { taskId: string; featureSlug: string }): void => {
-            // UF-3 流程 7：dock 开概览 tab（openTab 自带 reveal 列 + 去重——已开即激活）
-            // → 桥任务聚焦（任务子 tab + feature 选中——右栏 body nonce 对照应用）→ 任务
-            // 弹窗直开（m3.1 D21/D23：桥 drawerTaskId——ShellHost 常驻树挂载，对话中就
-            // 地打开）。官方动作面无在场面（会话卸载瞬态）fail-soft 不外溢。
-            try {
-              services.sidebarRight.openTab(OVERVIEW_TAB_KIND)
-            } catch {
-              // fail-soft：聚焦仍发布——tab 后续开出时挂载即消费（nonce 对照）
-            }
-            services.bridge.openTaskFocus(nav)
-            services.bridge.openTaskDrawer(nav.taskId)
-          },
-        }),
-      },
-      views.ForgeSessionTaskPills,
     ),
   )
 }
@@ -845,18 +839,19 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeDockTabs()
         }
 
-        // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 会话头
-        // 挂接 pill（4.2 conversation 族）+ 设置分区（4.7 settings 族）+ 常驻壳宿主
+        // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
+        // （4.7 settings 族）+ 常驻壳宿主。m3.1 D5：会话头挂接 pill 登记退役
+        // （conversation.session.header.actions 零产品登记——官方动作带不受扰）。
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
-        registerSessionHeaderPills(clientCtx, views, { sidebarRight, bridge }, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主
-        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock]；selectPanel/rightbar/
-        // bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
+        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 派发任务悬浮面板
+        // [m3.1 D6——行点击开弹窗经桥，⟞ 开 worker 子会话经 openWorkerSession]；
+        // selectPanel/rightbar/bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
         // 卸载期顺带撤销桥发布、locale 词典与 dock tab 类型注册 + 清 __DSH_FORGE_CLIENT__
         // 激活标记（fix-33 ⑥ 标记卸载不清收口——本插件 fiber 卸载的唯一级联回收面；
         // 缺席期导航 fail-soft no-op）
@@ -883,6 +878,17 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 弹窗挂接会话 pill 跳会话（官方导航动作面——dock 概览 tab 注入同径）
                 onOpenSession: (sessionId: string): void => {
                   uiWorkspace.openSession(sessionId)
+                },
+                // 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6）：账本 parentId 判读 →
+                // 子会话 = 官方 SubagentAddress 形态（openChild 同径——树零联动：worker
+                // 不进左栏两级树，父会话行保持）；顶层会话平开。官方面异常 fail-soft。
+                openWorkerSession: (childSessionId: string): void => {
+                  const target = workerOpenTarget(sessionParentIdOf(sessions.list, childSessionId), childSessionId)
+                  try {
+                    uiWorkspace.openSession(target)
+                  } catch {
+                    // fail-soft：无会话面（会话卸载瞬态）——⟞ 点击不外溢
+                  }
                 },
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
                 openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions),

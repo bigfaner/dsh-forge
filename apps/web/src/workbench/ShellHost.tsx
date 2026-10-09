@@ -9,11 +9,16 @@
 //   - 任务详情弹窗宿主（m3.1 D21/D23：挂载独立于 dock——桥 drawerTaskId 受控条件挂载，
 //     对话中不经概览 tab 直接打开；弹窗几何逐开本地态随条件挂载弃置 = 不记忆；转移
 //     对话框随弹窗同宿主——任意面板态可用）。
+//   - 派发任务悬浮面板宿主（m3.1 D5/D6：会话视图 + 主视图会话锚 + 单库锚三键齐备时
+//     挂载——仅本会话派发 link 源；行点击 = 桥 openTaskDrawer 就地开弹窗（零跳转/零
+//     dock 强开），行尾 ⟞ = openWorkerSession 开 worker 执行子会话（树零联动）；key =
+//     sessionId 切会话整体重置折叠/拖移本地态）。
 // 官方缝：shell.overlay（ui-layout AppFrame root 五子槽之一，list/root——常驻不随 main
 // 面板互换卸载）；标准 props 面 = root 作用域观察钩子（useWorkspaces/usePanelInfo）。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
+import { DispatchPanel } from '../views/session/DispatchPanel.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
 import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
@@ -63,12 +68,18 @@ export interface ForgeShellHostProps {
   readonly rightbar?: RightbarFace
   /**
    * 工作台桥（插件 inject face 注入，4.1）：概览项目上下文写回缝 + 任务弹窗受控态读面
-   * （m3.1 D21/D23——drawerTaskId 订阅 + closeTaskDrawer 上抛；ShellHost 锚定经桥递达
+   * （m3.1 D21/D23——drawerTaskId 订阅 + closeTaskDrawer 上抛；D6 悬浮面板行点击 =
+   * openTaskDrawer 就地开弹窗）；ShellHost 锚定经桥递达
    * 右栏概览 tab body——两棵独立槽位树的既有通道）；缺席 = 概览上下文不发布 + 弹窗不开
    */
-  readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext' | 'subscribe' | 'getSnapshot' | 'closeTaskDrawer'>
+  readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext' | 'subscribe' | 'getSnapshot' | 'closeTaskDrawer' | 'openTaskDrawer'>
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
+  /**
+   * 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6 插件 inject face——账本 parentId 判读
+   * 后官方 openSession[地址形态/平开]；缺席 = ⟞ 非交互呈现）。
+   */
+  readonly onOpenWorkerSession?: (childSessionId: string) => void
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**
@@ -298,6 +309,20 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           无条件调用——hooks 规则合规；activePanelId 上抛驱动视图镜像与 hero 让位） */}
       {props.usePanelInfo !== undefined ? (
         <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
+      ) : null}
+      {/* 派发任务悬浮面板（m3.1 D5/D6：会话视图 + 主视图会话锚 + 单库锚三键齐备时挂载——
+          仅本会话派发 link 源（useSessionTaskPills 既有装载 + 写推送刷新）；行点击 = 桥
+          openTaskDrawer 就地开弹窗（零会话跳转/零 dock 强开）；⟞ = openWorkerSession 开
+          worker 子会话（树零联动）；key = 主视图会话（切会话/worker 子会话开闭整体重置
+          折叠与拖移本地态） */}
+      {view === 'session' && mainSessionId !== null && overviewContext.projectId !== null ? (
+        <DispatchPanel
+          key={mainSessionId}
+          sessionId={mainSessionId}
+          projectId={overviewContext.projectId}
+          {...(bridge !== undefined ? { onOpenTask: bridge.openTaskDrawer } : {})}
+          {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
+        />
       ) : null}
       {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/
           概览选中；条件挂载承载「关闭后不记忆位置/尺寸」——几何随卸载弃置） */}
