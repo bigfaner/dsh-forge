@@ -1,6 +1,6 @@
 /* M3 UF-2 Forge设置 分区（4.5）：分区标题（底色条 + 13px/600）+ worker 小节（12px/600
- * 次色 + 分隔线——多小节可并列）+ 行式控件（标签左/控件右，对齐 dsh 通用设置形态）+
- * 未配置 ⚠ + 保存反馈 + 分区底注。
+ * 次色 + 分隔线——多小节可并列）+ 行式控件（标签左/控件右，对齐 dsh 通用设置形态；
+ * m3.1 D24 Provider/Model = 官方 Menu 下拉）+ 未配置 ⚠ + 保存反馈 + 分区底注。
  * 令牌纪律（lint-tokens）：色/字/距零裸值——原型刻度（11.5px 行/11px 注/10.5px 底注）
  * 归档最近官方字阶令牌（12/11）；行间零分隔线——成组呈现，分隔线归小节级。 */
 
@@ -58,25 +58,59 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.dswf-fs-select {
-  min-width: var(--dsw-font-l-20-line-height); /* 行控件占位下限 */
-  max-width: 60%;
-  padding: var(--dsw-font-xxxs-11-line-height) var(--dsw-font-xxs-12-line-height);
+/* ── 行式下拉（m3.1 D24：官方 Menu 件——触发钮 = 值 + 官方 ChevronDown，原型 m31-dd-btn
+ *    刻度 min-h 34/r8/13；卡面 = 官方 MenuSurface[radius-lg 16/pad 4/blur40 半透 +
+ *    elevation-prominent] 零自绘；行间零分隔线——成组呈现，分隔线归小节级） ── */
+.dswf-fs-dd {
+  flex: none;
+  min-width: 170px; /* dsw-raw 原型 m31-dd 下拉占位下限刻度 */
+}
+
+.dswf-fs-dd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px; /* dsw-raw 原型 m31-dd-btn 值/箭头内距刻度 */
+  width: 100%;
+  min-height: 34px; /* dsw-raw 原型触发钮高刻度（F 区 min-h 34） */
+  padding: 6px 8px 6px 10px; /* dsw-raw 原型触发钮内距刻度 */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-base);
-  font: var(--dsw-font-xxs-12);
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
+  cursor: pointer;
 }
 
-.dswf-fs-select:focus-visible {
+.dswf-fs-dd-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-fs-dd-btn:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
   outline-offset: 0;
 }
 
-.dswf-fs-select:disabled {
+.dswf-fs-dd-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.dswf-fs-dd-val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-fs-dd-val.is-empty {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-fs-dd-caret {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* ── 动作行（保存——官方 Button 承载，仅落间距） ── */

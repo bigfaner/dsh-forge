@@ -133,8 +133,9 @@ function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
   }
 }
 
-/** 假 ctx：slots 收集 inject/register，八服务经 get 递达 */
-function fakeClientCtx(): {
+/** 假 ctx：slots 收集 inject/register，八服务经 get 递达（reflect 可注入——m3.1 D25
+ *  loadModelCatalog 惰性反射面测试） */
+function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
   ctx: ForgeClientCtx
   registers: RegisterCall[]
   injectedKeys: string[]
@@ -208,7 +209,9 @@ function fakeClientCtx(): {
       if (name === 'locale') return locale
       throw new Error(`unexpected service: ${name}`)
     },
-  }
+    // m3.1 D25：reflect 面（ ForgeClientCtx 窄面外——插件真身经 cast 读取，同径注入）
+    ...(reflect !== undefined ? { reflect } : {}),
+  } as ForgeClientCtx
   return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById }
 }
 
@@ -687,7 +690,7 @@ const OFFICIAL_SETTINGS_SECTION_ORDERS: Readonly<Record<string, number>> = {
 }
 
 describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.section list 槽）', () => {
-  it('list 槽登记：id dswf-forge-settings + order 5 + locale NS label thunk（zh 值 Forge设置）+ 发布组件；零 children/priority/inject——生命周期归官方设置对话框（Hard Rule 非 fork）', () => {
+  it('list 槽登记：id dswf-forge-settings + order 5 + locale NS label thunk（zh 值 Forge设置）+ 发布组件；零 children/priority/key——生命周期归官方设置对话框（Hard Rule 非 fork）；inject = 模型目录装载器（m3.1 D25）', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -703,12 +706,62 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
     expect((forge.options.label as () => string)()).toBe('Forge设置')
     expect(forge.component).toBe(views.ForgeSettingsSection)
     // Hard Rule 非 fork 纪律：list 槽行语言最小面——无 children 声明（无子洞）、无 priority
-    // （single 槽语义）、无 inject（组件数据面自足 = preload RPC 单门，owner share close 由
-    // 官方壳递达）；打开/关闭/Esc 全部官方设置对话框自持
+    // （single 槽语义）、无 key；打开/关闭/Esc 全部官方设置对话框自持。
+    // m3.1 D25（blitz 1.2 结果性承接）：inject face = loadModelCatalog（remote.session
+    // .modelCatalog 惰性反射装载器——Provider/Model 选项值 =「设置>模型」目录）；
+    // settings get/set 数据面主体仍 preload RPC 单门自足
     expect(forge.options.children).toBeUndefined()
     expect(forge.options.priority).toBeUndefined()
-    expect(forge.options.inject).toBeUndefined()
     expect(forge.options.key).toBeUndefined()
+    const face = forge.options.inject?.() as { loadModelCatalog: () => Promise<unknown> }
+    expect(typeof face?.loadModelCatalog).toBe('function')
+    unpublishViews()
+  })
+
+  it('loadModelCatalog inject face：modelCatalog 信封 groups → [{provider, models}]；remote 嵌套双径；缺席/!ok/拒绝 = undefined（组件面静态目录回退）', async () => {
+    const envelopeOk = {
+      ok: true,
+      value: {
+        groups: [
+          { id: 'zai-coding-cn', models: [{ id: 'glm-5.3' }, { id: 'glm-5.3-flash' }] },
+          { id: 'dsh-openai', models: [{ id: 'glm-5.3' }] },
+        ],
+      },
+    }
+    const expected = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3', 'glm-5.3-flash'] },
+      { provider: 'dsh-openai', models: ['glm-5.3'] },
+    ]
+    const faceOf = (reflectGet: (name: string) => unknown): { loadModelCatalog: () => Promise<unknown> } => {
+      publishFakeViews()
+      const run = fakeClientCtx({ get: reflectGet })
+      forgeClientPlugin().apply(run.ctx)
+      const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)
+      if (forge === undefined) throw new Error('settings.section 登记缺席（发布面/装载面断裂）')
+      return forge.options.inject!() as { loadModelCatalog: () => Promise<unknown> }
+    }
+    // 成功：remote.session 直达 → groups 解包
+    await expect(
+      faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.resolve(envelopeOk) } : undefined)).loadModelCatalog(),
+    ).resolves.toEqual(expected)
+    // 成功：'remote' 嵌套 session 双径（反射配方同 buildOpenSessionOrchestrator agentPresets）
+    await expect(
+      faceOf((name) => (name === 'remote' ? { session: { modelCatalog: () => Promise.resolve(envelopeOk) } } : undefined)).loadModelCatalog(),
+    ).resolves.toEqual(expected)
+    // 服务缺席（reflect 全 undefined）→ undefined
+    await expect(faceOf(() => undefined).loadModelCatalog()).resolves.toBeUndefined()
+    // 信封 !ok（RemoteError 面）→ undefined
+    await expect(
+      faceOf((name) =>
+        name === 'remote.session'
+          ? { modelCatalog: () => Promise.resolve({ ok: false, error: { code: 'session/x', message: 'y' } }) }
+          : undefined,
+      ).loadModelCatalog(),
+    ).resolves.toBeUndefined()
+    // 调用拒绝 → undefined（静默回退，不炸设置分区装载）
+    await expect(
+      faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.reject(new Error('boom')) } : undefined)).loadModelCatalog(),
+    ).resolves.toBeUndefined()
     unpublishViews()
   })
 

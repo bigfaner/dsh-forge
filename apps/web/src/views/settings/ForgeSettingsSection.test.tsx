@@ -15,12 +15,16 @@ import {
   ForgeSettingsSectionBody,
   SAVED_EFFECT_NOTE,
   UNCONFIGURED_NOTICE,
+  UNSELECTED_PLACEHOLDER,
   WORKER_PROVIDER_CATALOG,
   applyForgeSettingsLoaded,
+  applyModelCatalogLoaded,
   applyProviderChange,
   canSaveWorkerDraft,
   editWorkerDraft,
   fetchForgeSettings,
+  fetchModelCatalogEntries,
+  fsMenuItems,
   initialForgeSettingsUiState,
   initialWorkerDraft,
   isWorkerDraftComplete,
@@ -32,6 +36,7 @@ import {
   workerModelCandidates,
   type ForgeSettingsPatch,
   type ForgeSettingsUiState,
+  type WorkerProviderEntry,
 } from './ForgeSettingsSection.js'
 
 const NOOP = (): void => {}
@@ -88,8 +93,8 @@ describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件 + �
   it('三项行式控件：标签左/控件右（dswf-fs-row 三行 + data 锚逐项在场）', () => {
     const html = body()
     expect(html.match(/class="dswf-fs-row"/g)?.length).toBe(3)
-    expect(html).toContain('data-dswf-fs-provider')
-    expect(html).toContain('data-dswf-fs-model')
+    expect(html).toContain('data-dswf-fs-dd="provider"')
+    expect(html).toContain('data-dswf-fs-dd="model"')
     expect(html).toContain('data-dswf-fs-reasoning')
     for (const label of ['Provider', 'Model', 'Reasoning']) {
       expect(html).toContain(`>${label}<`)
@@ -110,12 +115,17 @@ describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件 + �
 describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × 模型二维）', () => {
   it('Provider 选项 = 目录两供应商；Model 选项 = 当前供应商候选；Reasoning = 三段 seg（低|中|高）', () => {
     const html = body()
+    // m3.1 D24：选项面 = 官方 Menu items（fsMenuItems 纯函数——静态闭态卡不可达的选项锚）
+    const providerItems = fsMenuItems(providerSelectOptions(undefined).map((entry) => entry.provider))
     for (const entry of WORKER_PROVIDER_CATALOG) {
-      expect(html).toContain(`<option value="${entry.provider}"`)
+      expect(providerItems).toContainEqual({ id: entry.provider, label: entry.provider })
     }
     // glm-5.3 属 dsh-openai 候选；deepseek 候选不在 dsh-openai 选中态下面
-    expect(html).toContain('<option value="glm-5.3"')
-    expect(html).not.toContain('<option value="deepseek-chat"')
+    expect(fsMenuItems(modelSelectOptions('dsh-openai', ''))).toContainEqual({ id: 'glm-5.3', label: 'glm-5.3' })
+    expect(modelSelectOptions('dsh-openai', '')).not.toContain('deepseek-chat')
+    // 触发钮值回显：选中 provider 直出 + 异供应商候选零在场（DOM 面）
+    expect(html).toContain('>dsh-openai</span>')
+    expect(html).not.toContain('deepseek-chat')
     // 三段 seg：role=tablist + 三 tab（aria-selected 承载当前档）
     expect(html).toContain('role="tablist"')
     expect(html.match(/role="tab"/g)?.length).toBe(3)
@@ -165,8 +175,10 @@ describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × �
       draft: { provider: 'dsh-deepseek', model: 'deepseek-reasoner', reasoning: 'medium' },
       saved: undefined,
     })
-    expect(html).toContain('<option value="deepseek-reasoner"')
-    expect(html).not.toContain('<option value="glm-5.3"')
+    // m3.1 D24：值回显（触发钮直出）+ 候选面纯函数双锚——glm-5.3 候选不在 deepseek 选中态
+    expect(html).toContain('>deepseek-reasoner</span>')
+    expect(modelSelectOptions('dsh-deepseek', 'deepseek-reasoner')).toContain('deepseek-reasoner')
+    expect(modelSelectOptions('dsh-deepseek', '')).not.toContain('glm-5.3')
   })
 })
 
@@ -252,7 +264,7 @@ describe('AC3 · 未配置 ⚠ 占位 + 填齐激活 + 脏态实时', () => {
       }),
     )
     expect(html).not.toContain('data-dswf-fs-unconfigured')
-    expect(html).toMatch(/<select[^>]*data-dswf-fs-provider[^>]*disabled/)
+    expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="provider"[^>]*disabled/)
 
     const unconfigured: ForgeSettings = {}
     const ready = applyForgeSettingsLoaded(pending, unconfigured)
@@ -289,8 +301,8 @@ describe('AC4 · 保存反馈：保存中冻结 / 成功 ✓ 复位 + 下次派�
     })
     expect(html).toContain('保存中')
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
-    expect(html).toMatch(/<select[^>]*data-dswf-fs-provider[^>]*disabled/)
-    expect(html).toMatch(/<select[^>]*data-dswf-fs-model[^>]*disabled/)
+    expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="provider"[^>]*disabled/)
+    expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="model"[^>]*disabled/)
     expect(html).toMatch(/<button[^>]*role="tab"[^>]*disabled/) // seg 三段冻结
   })
 
@@ -313,8 +325,8 @@ describe('AC4 · 保存反馈：保存中冻结 / 成功 ✓ 复位 + 下次派�
     expect(html).toContain('data-dswf-fs-error="save"')
     expect(html).toContain('保存失败：写失败')
     expect(html).not.toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
-    // 表单内容保留：改动值直出
-    expect(html.match(/<option value="glm-5.3"[^>]*selected/)).toBeTruthy()
+    // 表单内容保留：改动值直出（触发钮回显——原生 select selected 锚迁移）
+    expect(html).toContain('>glm-5.3</span>')
   })
 })
 
@@ -356,7 +368,7 @@ describe('保存链（纯异步面：submitWorkerSettings / saveForgeSettings / 
     const patches: ForgeSettingsPatch[] = []
     let savedSeen: WorkerSettings | undefined
     await saveForgeSettings(
-      { load: 'ready', draft: { ...SAVED, reasoning: 'low' }, saved: SAVED, saving: false, savedFlash: false, error: undefined },
+      { load: 'ready', catalog: WORKER_PROVIDER_CATALOG, draft: { ...SAVED, reasoning: 'low' }, saved: SAVED, saving: false, savedFlash: false, error: undefined },
       {
         makeClient: () => clientWith(undefined, async () => {}),
         onPatch: (p) => { patches.push(p) },
@@ -378,7 +390,7 @@ describe('保存链（纯异步面：submitWorkerSettings / saveForgeSettings / 
   it('saveForgeSettings：失败 → 错误留场 + saving 复位 + onSaved 零调用；单飞/不完整守卫 = no-op', async () => {
     const patches: ForgeSettingsPatch[] = []
     await saveForgeSettings(
-      { load: 'ready', draft: { ...SAVED, reasoning: 'low' }, saved: SAVED, saving: false, savedFlash: false, error: undefined },
+      { load: 'ready', catalog: WORKER_PROVIDER_CATALOG, draft: { ...SAVED, reasoning: 'low' }, saved: SAVED, saving: false, savedFlash: false, error: undefined },
       {
         makeClient: () =>
           clientWith(undefined, async () => { throw new RpcClientError({ code: 'ERR_WORKSPACE_NOT_REGISTERED', message: 'x' }) }),
@@ -394,7 +406,7 @@ describe('保存链（纯异步面：submitWorkerSettings / saveForgeSettings / 
     // 单飞守卫：saving 中重复保存 = no-op
     const guardPatches: ForgeSettingsPatch[] = []
     await saveForgeSettings(
-      { load: 'ready', draft: { ...SAVED }, saved: undefined, saving: true, savedFlash: false, error: undefined },
+      { load: 'ready', catalog: WORKER_PROVIDER_CATALOG, draft: { ...SAVED }, saved: undefined, saving: true, savedFlash: false, error: undefined },
       {
         makeClient: () => { throw new Error('makeClient 不应被调用（单飞守卫）') },
         onPatch: (p) => { guardPatches.push(p) },
@@ -405,7 +417,7 @@ describe('保存链（纯异步面：submitWorkerSettings / saveForgeSettings / 
 
     // 不完整守卫：未配置未填齐 = no-op（按钮 disabled 的先验同门）
     await saveForgeSettings(
-      { load: 'ready', draft: { provider: '', model: '', reasoning: 'medium' }, saved: undefined, saving: false, savedFlash: false, error: undefined },
+      { load: 'ready', catalog: WORKER_PROVIDER_CATALOG, draft: { provider: '', model: '', reasoning: 'medium' }, saved: undefined, saving: false, savedFlash: false, error: undefined },
       {
         makeClient: () => { throw new Error('makeClient 不应被调用（不完整守卫）') },
         onPatch: (p) => { guardPatches.push(p) },
@@ -440,11 +452,11 @@ describe('AC5 · 五态相位渲染签名', () => {
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })
 
-  it('已配置：值直出（selected 落持久值）+ 无 ⚠ + 保存禁用（值直出不脏）', () => {
+  it('已配置：值直出（触发钮回显持久值）+ 无 ⚠ + 保存禁用（值直出不脏）', () => {
     const html = body()
     expect(html).not.toContain('data-dswf-fs-unconfigured')
-    expect(html.match(/<option value="dsh-openai" selected/)).toBeTruthy()
-    expect(html.match(/<option value="glm-5.3" selected/)).toBeTruthy()
+    expect(html).toContain('>dsh-openai</span>')
+    expect(html).toContain('>glm-5.3</span>')
     expect(html).toMatch(/id="dswf-fs-reasoning-high"[^>]*aria-selected="true"/)
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })
@@ -468,6 +480,152 @@ describe('AC5 · 五态相位渲染签名', () => {
   })
 })
 
+// ─────────────────── m3.1 D24 官方 Menu 下拉（原生 select 退役） ───────────────────
+
+describe('m3.1 D24 · 官方 Menu 下拉（原生 select 退役）', () => {
+  it('原生 <select> 零在场（全相位 DOM 断言——pending/ready/saving/error）', () => {
+    const pending = renderToStaticMarkup(
+      ForgeSettingsSectionBody({
+        load: 'pending',
+        draft: { provider: '', model: '', reasoning: 'medium' },
+        saved: undefined,
+        saving: false,
+        savedFlash: false,
+        error: undefined,
+        onEditProvider: NOOP,
+        onEditModel: NOOP,
+        onEditReasoning: NOOP,
+        onSave: NOOP,
+        onRetryLoad: NOOP,
+      }),
+    )
+    const saving = body({ draft: { ...SAVED, reasoning: 'low' }, saving: true })
+    const error = body({
+      load: 'error',
+      draft: { provider: '', model: '', reasoning: 'medium' },
+      saved: undefined,
+      error: { kind: 'load', message: 'IPC 缺席' },
+    })
+    for (const html of [pending, body(), saving, error]) {
+      expect(html).not.toContain('<select')
+    }
+  })
+
+  it('触发钮 = 值回显 + 官方 ChevronDown svg + aria-haspopup/expanded（原型 m31-dd-btn 刻度）', () => {
+    const html = body()
+    expect(html).toContain('class="dswf-fs-dd-btn"')
+    expect(html).toMatch(/<button[^>]*aria-haspopup="menu"/)
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"/)
+    expect(html.match(/<svg/g)?.length).toBeGreaterThanOrEqual(2) // 两触发钮官方 ChevronDown（Reasoning seg 无 svg）
+    expect(html).toContain('dswf-fs-dd-val')
+  })
+
+  it('闭态零弹层（portal 面静态不可达对照锚——开卡/项刻度/trailing Check/Esc 收 = 官方 Menu 件自带，e2e/走查面承载）', () => {
+    const html = body()
+    expect(html).not.toContain('role="menu"')
+    expect(html).not.toContain('dswf-fs-dd-list')
+  })
+
+  it('未选择态：两触发钮「（未选择）」占位回显（空值 tertiary 面 is-empty）', () => {
+    const html = body({ draft: { provider: '', model: '', reasoning: 'medium' }, saved: undefined })
+    expect(html.match(new RegExp(`>${UNSELECTED_PLACEHOLDER}<`, 'g'))?.length).toBe(2)
+    expect(html.match(/class="dswf-fs-dd-val is-empty"/g)?.length).toBe(2)
+  })
+
+  it('fsMenuItems：首项「（未选择）」+ 值直出行（官方 Menu items 面）', () => {
+    expect(fsMenuItems([])).toEqual([{ id: '', label: UNSELECTED_PLACEHOLDER }])
+    expect(fsMenuItems(['a', 'b'])).toEqual([
+      { id: '', label: UNSELECTED_PLACEHOLDER },
+      { id: 'a', label: 'a' },
+      { id: 'b', label: 'b' },
+    ])
+  })
+})
+
+// ─────────────────── m3.1 D25 选项源 =「设置>模型」目录 ───────────────────
+
+describe('m3.1 D25 · 选项源 =「设置>模型」目录（blitz 1.2 结果性承接——本任务补齐）', () => {
+  const CATALOG: readonly WorkerProviderEntry[] = [
+    { provider: 'zai-coding-cn', models: ['glm-5.3-flash', 'glm-5.3'] },
+    { provider: 'deepseek-account', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  ]
+
+  it('目录参数化：providerSelectOptions / modelSelectOptions / workerModelCandidates 消费传入目录（值 = 目录直出）', () => {
+    expect(providerSelectOptions(undefined, CATALOG)).toEqual(CATALOG)
+    expect(workerModelCandidates('zai-coding-cn', CATALOG)).toEqual(['glm-5.3-flash', 'glm-5.3'])
+    expect(modelSelectOptions('zai-coding-cn', '', CATALOG)).toEqual(['glm-5.3-flash', 'glm-5.3'])
+    expect(modelSelectOptions('zai-coding-cn', 'glm-5.3', CATALOG)).toEqual(['glm-5.3-flash', 'glm-5.3'])
+    expect(workerModelCandidates('dsh-openai', CATALOG)).toEqual([])
+  })
+
+  it('目录外存量值防失显（目录参数化下不变）：saved 目录外 provider 并入 + 目录外当前 model 并入', () => {
+    const legacy: WorkerSettings = { provider: 'dsh-openai', model: 'glm-5.3', reasoning: 'low' }
+    expect(providerSelectOptions(legacy, CATALOG).map((o) => o.provider)).toEqual([
+      'zai-coding-cn',
+      'deepseek-account',
+      'dsh-openai',
+    ])
+    expect(modelSelectOptions('dsh-openai', 'glm-5.3', CATALOG)).toEqual(['glm-5.3'])
+  })
+
+  it('applyProviderChange / editWorkerDraft 联动以现行目录为准（新目录不含当前 model → 清空待重选）', () => {
+    const draft = { provider: 'zai-coding-cn', model: 'glm-5.3', reasoning: 'high' as ReasoningLevel }
+    expect(applyProviderChange(draft, 'deepseek-account', CATALOG)).toEqual({
+      provider: 'deepseek-account',
+      model: '',
+      reasoning: 'high',
+    })
+    const state: ForgeSettingsUiState = {
+      ...initialForgeSettingsUiState(),
+      load: 'ready',
+      draft,
+      saved: undefined,
+      catalog: CATALOG,
+    }
+    expect(editWorkerDraft(state, { provider: 'deepseek-account' }).draft).toEqual({
+      provider: 'deepseek-account',
+      model: '',
+      reasoning: 'high',
+    })
+  })
+
+  it('applyModelCatalogLoaded：目录入位（undefined = 静态目录回退保留不动）；initial = 静态目录', () => {
+    const initial = initialForgeSettingsUiState()
+    expect(initial.catalog).toEqual(WORKER_PROVIDER_CATALOG)
+    expect(applyModelCatalogLoaded(initial, CATALOG).catalog).toEqual(CATALOG)
+    expect(applyModelCatalogLoaded(applyModelCatalogLoaded(initial, CATALOG), undefined).catalog).toEqual(CATALOG)
+  })
+
+  it('fetchModelCatalogEntries：装载器缺席 / 装载拒绝 = undefined（静默回退）；成功直出', async () => {
+    expect(await fetchModelCatalogEntries(undefined)).toBeUndefined()
+    expect(await fetchModelCatalogEntries(() => Promise.reject(new Error('boom')))).toBeUndefined()
+    expect(await fetchModelCatalogEntries(async () => CATALOG)).toEqual(CATALOG)
+  })
+
+  it('目录装载后 provider 选项与「设置>模型」目录一致（fsMenuItems 组合 = 目录供应商全集）', () => {
+    expect(fsMenuItems(providerSelectOptions(undefined, CATALOG).map((entry) => entry.provider))).toEqual([
+      { id: '', label: UNSELECTED_PLACEHOLDER },
+      { id: 'zai-coding-cn', label: 'zai-coding-cn' },
+      { id: 'deepseek-account', label: 'deepseek-account' },
+    ])
+  })
+
+  it('装载壳静态渲染零目录装载调用（effects 归交互面）；loadModelCatalog prop 缺省不炸', () => {
+    let catalogCalls = 0
+    const html = renderToStaticMarkup(
+      <ForgeSettingsSection
+        makeClient={() => clientWith()}
+        loadModelCatalog={() => {
+          catalogCalls += 1
+          return Promise.resolve(CATALOG)
+        }}
+      />,
+    )
+    expect(catalogCalls).toBe(0)
+    expect(html).toContain('data-dswf-fs-dd="provider"')
+  })
+})
+
 // ─────────────────── 装载壳（server 渲染相位——effects 不跑，装载在途确定性） ───────────────────
 
 describe('装载壳 · ForgeSettingsSection（初始渲染 = 装载在途相位）', () => {
@@ -484,7 +642,7 @@ describe('装载壳 · ForgeSettingsSection（初始渲染 = 装载在途相位�
     expect(clientCalls).toBe(0) // server 渲染不跑 effect——装载归 4.7 接线后的交互面/e2e
     expect(html).toContain('data-dswf-fs')
     expect(html).toContain('（未选择）')
-    expect(html).toMatch(/<select[^>]*data-dswf-fs-provider[^>]*disabled/)
+    expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="provider"[^>]*disabled/)
     expect(html).not.toContain('data-dswf-fs-unconfigured')
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })

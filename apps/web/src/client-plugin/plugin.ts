@@ -556,9 +556,11 @@ function registerConversationViews(
  * list 槽新增产品分区行（官方 general=0/models=10/plugins=15 → order 5 = 通用设置正
  * 下方）。占用者 ForgeSettingsSection（壳 bundle 发布件——分区容器/标题/worker 小节
  * 自带，注入即整节；owner share close 由官方壳递达、组件零消费）。组件数据面自足
- * （preload RPC client——forge:settings/get·set 单门读写 core forgeSettings），注册面
- * 零 inject 零 children：打开/关闭/Esc 生命周期恒归官方设置对话框（Hard Rule 非 fork
- * 纪律——仅 slot 注册，无平台对话框代码复制）；label 经 locale NS thunk（fix-33 ⑧）。
+ * （preload RPC client——forge:settings/get·set 单门读写 core forgeSettings）；
+ * m3.1 D25（blitz 1.2 结果性承接）：inject face 递达 loadModelCatalog（Provider/Model
+ * 选项值 =「设置>模型」目录）；label 经 locale NS thunk（fix-33 ⑧）。
+ * Hard Rule 非 fork 纪律不变：打开/关闭/Esc 生命周期恒归官方设置对话框（仅 slot 注册，
+ * 无平台对话框代码复制）。
  */
 function registerSettingsSection(
   ctx: ForgeClientCtx,
@@ -574,10 +576,86 @@ function registerSettingsSection(
         order: FORGE_SETTINGS_SECTION_ORDER,
         locale: FORGE_LOCALE_NS,
         label: (): string => t('settings.forge'),
+        inject: () => ({
+          // m3.1 D25：模型目录装载器（remote.session.modelCatalog 惰性反射——缺席/失败 =
+          // undefined，组件面静态目录回退）；settings get/set 仍 preload RPC 单门自足
+          loadModelCatalog: buildModelCatalogLoader(ctx),
+        }),
       },
       views.ForgeSettingsSection,
     ),
   )
+}
+
+/** 目录条目形状（组件面 WorkerProviderEntry 结构同型——bundle 自持纪律禁跨 chunk import） */
+interface ModelCatalogEntry {
+  readonly provider: string
+  readonly models: readonly string[]
+}
+
+/** unknown → 对象窄化（缺席/非对象 = undefined） */
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+
+/** 惰性服务读取（reflect.get——未 inject 服务的官方面；缺席/异常 = undefined fail-soft；
+ * 5.2 e2e 勘误配方同 buildOpenSessionOrchestrator） */
+function reflectServiceGet(ctx: ForgeClientCtx, name: string): unknown {
+  try {
+    const reflect = (ctx as { reflect?: { get(n: string): unknown } }).reflect
+    return reflect?.get(name)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * RemoteResult 信封解包（m3.1 D25）：`{ok:true, value:{groups:[{id, models:[{id}]}]}}`
+ * → `[{provider, models}]`（provider = 路由 id，官方模型选择器同源口径）；他形（!ok /
+ * 缺 groups）= undefined——组件面静态目录回退。
+ */
+function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[] | undefined {
+  const result = asRecord(envelope)
+  if (result === undefined || result['ok'] !== true) return undefined
+  const groups = asRecord(result['value'])?.['groups']
+  if (!Array.isArray(groups)) return undefined
+  const entries: ModelCatalogEntry[] = []
+  for (const group of groups) {
+    const record = asRecord(group)
+    const provider = typeof record?.['id'] === 'string' ? record['id'] : undefined
+    if (provider === undefined || provider === '') continue
+    const models = Array.isArray(record?.['models'])
+      ? record['models']
+          .map((model) => {
+            const id = asRecord(model)?.['id']
+            return typeof id === 'string' ? id : ''
+          })
+          .filter((id) => id !== '')
+      : []
+    entries.push({ provider, models })
+  }
+  return entries
+}
+
+/**
+ * 模型目录装载器（m3.1 D25 = blitz 1.2 结果性承接）：惰性 ctx.reflect.get('remote.session')
+ * （'remote' 嵌套双径）→ modelCatalog() 解信封 → [{provider, models}]。服务缺席 / 调用
+ * 拒绝 / 信封失败 = resolve(undefined)——组件面静默回退静态目录，不炸设置分区装载。
+ */
+function buildModelCatalogLoader(
+  ctx: ForgeClientCtx,
+): () => Promise<readonly ModelCatalogEntry[] | undefined> {
+  return () => {
+    const sessionSvc =
+      asRecord(reflectServiceGet(ctx, 'remote.session')) ??
+      asRecord(asRecord(reflectServiceGet(ctx, 'remote'))?.['session'])
+    const modelCatalog = sessionSvc?.['modelCatalog'] as (() => Promise<unknown>) | undefined
+    if (typeof modelCatalog !== 'function') return Promise.resolve(undefined)
+    try {
+      return Promise.resolve(modelCatalog.call(sessionSvc)).then(mapModelCatalogEnvelope, () => undefined)
+    } catch {
+      return Promise.resolve(undefined)
+    }
+  }
 }
 
 /**
