@@ -7,7 +7,7 @@ intent: "new-feature"
 
 # Proposal: dsh-forge M3.5 知识沉淀与保鲜（进气端 + 保鲜端）
 
-> 定位：独立里程碑 **M3.5**（插 M3 自举与 M4 抽取与审核之间；M4 编号与排期不动、范围聚焦收窄——契约校验拒收与提示词续写段前移本里程碑，见 InScope-8 ①；P1.1 插队先例）。**范围裁定（用户定向 2026-10-06）：本提案聚焦知识沉淀与增量维护；知识召回体验与增强拆分至独立召回提案**——见 Out of Scope。
+> 定位：独立里程碑 **M3.5**（插 M3 自举与 M4 抽取与审核之间；M4 编号与排期不动、范围聚焦收窄——契约校验拒收与提示词续写段前移本里程碑，见 InScope-8 ①；P1.1 插队先例）。**M3 已收官（2026-10-08，SC1–SC9 全绿）——本提案即自举纪律生效后的首个自举 feature**；M3 SC-M3 门走查已以本提案文档（逐字拷贝入隔离夹具）预演 accepted → 成链 → 派发全链 e2e（生产状态层本提案仍 Draft 在库，走查为夹具预演）。**范围裁定（用户定向 2026-10-06）：本提案聚焦知识沉淀与增量维护；知识召回体验与增强拆分至独立召回提案**——见 Out of Scope。
 > 宪法输入 = 总纲 [dsh-forge-redesign/proposal.md](../dsh-forge-redesign/proposal.md)（写入边界裁决「一切知识写入经宿主能力面」/ 抽取执行归 agent 会话 / §知识库工程机制 / §演进路书 P5 漂移锚点）。
 > 本提案将 P5「知识漂移检测与纠偏」锚点**部分兑付**（被动标记落地；agent 巡检比对与自动检测仍留锚点）。
 
@@ -23,7 +23,7 @@ intent: "new-feature"
 
 ### Urgency
 
-- M3 自举达成后，M4 起全部功能用 dsh-forge 自身开发——若知识库仍空，自举开发期的召回无货可用，飞轮燃料要等到 M4 会话抽取落地之后才产生，核心卖点的自我验证被推迟整整两个里程碑。
+- M3 已收官、自举纪律已生效（2026-10-08）——本提案即首个自举 feature，其 PRD/设计/任务链即将跑在自身管线上；若知识库仍空，自举开发期的召回无货可用，飞轮燃料要等到 M4 会话抽取落地之后才产生，核心卖点的自我验证被推迟整整两个里程碑。
 - 老项目批量导入会使库存**瞬间变大**（非渐进积累），产品自身快速演化使「上月提的约束这月就过时」立刻可观察——漂移不必等 P5 触发条件，本里程碑自己制造的条件就够。
 
 ## Proposed Solution
@@ -36,8 +36,9 @@ intent: "new-feature"
    - 域结构查询 API ×2：整棵域树 / 指定域直接子域（结果含域描述）——agent 写前结构对齐与召回选域的精确依据。
    - 域描述载体 = 域目录内 `_domain.md`（目录自带说明书，路径仍唯一身份，SoT 仍文件系统）。
 
-2. **知识沉淀模式**（dsh 模式预设，riding M3 模式机制）
+2. **知识沉淀模式**（dsh 模式预设，riding **M3 已交付**预设机制——出厂双预设同款安装路径，e2e 全绿）
    - 完全自定义系统提示词（提取方法论：源选择 / 分批策略 / 什么值得提 / frontmatter 写作契约 / 分域规则）+ 关联 skill 与工具集（`browse`/`search`/`read-abstract`/`write`）。
+   - 专业子 agent 经 **knowledge 插件派发 tool** 分派（in-process spawn 携带 toolFilter 收窄 + agentOptions 模型分级——M3 dispatchTask 同款已实证通道；用户裁决，见 InScope-2 / Assumptions）。
    - 三条纪律：**写前先 browse 已有域**（结构对齐、避免重复）；**域由 agent 生成、用户确认**；**分批执行守 token 纪律、可续跑**。
 
 3. **待确认状态视图**（浏览页签内，**不加页签**——信息架构零扩张）
@@ -49,8 +50,8 @@ intent: "new-feature"
    - 视觉语言统一：chip = 状态标记，域树节点（域级待确认）与知识卡片（条目级 status）同语言。
 
 4. **老项目提取 · 双入口**
-   - 知识视图工具栏「从项目提取」chip（配置源与范围：结构化文档 / 现状代码 / git 历史，可选可裁剪）。
-   - 新会话模式选择器「知识沉淀」；执行 = 沉淀模式会话。
+   - 知识视图工具栏「从项目提取」chip（配置源与范围：结构化文档 / 现状代码 / git 历史，可选可裁剪）；发起编排 riding M3「打开新会话」绑定入口先例（blank 会话 + `agentPreset.select` + 上下文预填——编程式建会话先例已在，残留差异仅首消息自动发送语义，定缝项 10）。
+   - 新会话模式选择器「知识沉淀」；执行 = 沉淀模式会话（hero chip 门控已由 M3 前置解——`ui-settings` 工厂开启行首启预置，第三出厂预设声明后自动获得座位）。
 
 5. **新项目逐步沉淀 · 双机制**
    - 显式：沉淀模式随时增量重跑（对新产生材料再跑一轮）。
@@ -82,7 +83,7 @@ intent: "new-feature"
 
 诚实说明：单看每一项都是业界常规（批量导入、审核队列、陈旧标记）。本方案的特点在于**复用产品既有三条裁决，形成「零新增编排机制」的形态**：
 
-- ① 抽取执行归 agent 会话 → 老项目提取不是产品侧 ETL 管线，而是一个可增量重跑的 dsh 模式（产品只出入口与存储面）。
+- ① 抽取执行归 agent 会话 → 老项目提取不是产品侧 ETL 管线，而是一个可增量重跑的 dsh 模式（产品只出入口、派发通道与存储面——派发 tool 仅承载 spawn 收窄与分级，M3 dispatchTask 同款通道件，非编排管线）。
 - ② 一切写入经宿主能力面 → 批量/日常/修订/归档共用一条写入通道与一个确认面。
 - ③ 目录即域（≤3 层）→ 域演进 = agent 生成目录 + 用户确认，无独立元数据体系。
 
@@ -111,10 +112,9 @@ intent: "new-feature"
 
 ### Constraints & Dependencies
 
-- **前置依赖 = M3 模式预设交付**：出厂双预设的 profile patch 安装机制 + registry 覆写；S5/S6 spike 底稿 =《技术预研笔记》§5.6；上游契约面（agent-preset 声明行格式 / persona 行 / blank 锁语义）已在 P1 契约面清单 pin，2026-10-06 上游 spot-check 在位。
-  - **降级路径**（M3 延期，评审二轮 F1 重写）：能力面照常交付——写入 tool、提示词段、域结构查询 API、待确认状态视图、漂移标记、技能迁移**均不依赖预设机制**（InScope-1/4/5/6/7/9/10 可用：日常顺手沉淀（InScope-6，经待确认状态视图[InScope-4]准入）与显式技能调用不受阻）；**仅模式组合与双入口（hero chip + 提取 chip）整体记账顺延**——提取 chip 以沉淀模式会话为载体（InScope-3），随模式一并顺延，不做降级会话形态。
+- **前置依赖 = M3 模式预设——已兑付（2026-10-08 收官，SC1–SC9 全绿）**：出厂双预设（远征默认/突击）profile patch 安装 + registry 覆写 + blank 锁 / 恢复投影 + hero chip 门控（`ui-settings` 工厂开启行）全部交付且 e2e 全绿；上游契约面（agent-preset 声明行格式 / persona 行 / blank 锁语义）经 M3 出厂交付实证（原 2026-10-06 spot-check 升级为交付事实）。原「M3 延期降级路径」（评审二轮 F1）**退役**——延期情景不存在；其结构价值留档：能力面（写入 tool / 提示词段 / 域结构查询 / 待确认状态视图 / 漂移标记 / 技能迁移）本就与预设机制解耦交付（InScope-1/4/5/6/7/9/10）。
 - 依赖 M1 既有：知识目录解析 / frontmatter 契约（`packages/contracts`）/ 索引 / 召回 tools / 系统提示词注入通道（`ctx.systemPrompt.section`）。
-- **上游面依赖三条（评审二轮 F10 补）**：① 提取 chip 会话编排依赖上游 session-controller/staging 面（本仓首次编程式建会话；降级影响 = 提取入口不可用，hero chip 手动选定仍可）；② `toolFilter`/`agentOptions` 需 provider 声明 capability（降级影响 = 子 agent退化纯 prompt 差异化，见 InScope-2 评审保留）；③ SC-3 子 agent轨迹断言依赖 dsh 会话 trace 面（M2 先例；降级影响 = 该断言改走会话文件审计通道）。
+- **上游面依赖三条（评审二轮 F10 补；M3 收官后全部落定）**：① 提取 chip 会话编排——M3「打开新会话」绑定入口已交付编程式建会话先例（blank 会话 + `agentPreset.select` + 上下文预填不自动发送），本提案残留差异仅首消息自动发送语义（定缝项 10）；② `toolFilter`/`agentOptions` capability 已实证（M3 dispatchTask in-process 派发消费 toolFilter deny + Forge设置 agentOptions 统一携带，两个 in-process provider 均声明能力）——但 **per-spawn 携带仅插件侧派发面可达**（模型面 per-call 不暴露，M3 源码结论），故子 agent 收窄经 knowledge 派发 tool 承载（用户裁决，InScope-2）；③ SC-3 子 agent 轨迹断言形态 = M3 走查已实证面（logs/{slug}.jsonl 事件链[派发事件含 toolFilter/model 载荷——task-spawned 同款] + worker ≠ 派发会话断言 + forge.db 审计）。
 - **不依赖** M5 置信度与 M6 结构维护 API（漂移信号只用 `updated` + 使用事件两源；`id` 仅写入时生成）。
 
 ## Alternatives & Industry Benchmarking
@@ -142,33 +142,34 @@ intent: "new-feature"
 全部 riding 既有机制：
 
 - 插件 tool 注册与 `systemPrompt.section`（M1 已验）；知识索引与契约常量（`packages/contracts/frontmatter.ts`）；宿主能力面写入 API（与 UI 同一后端）。
-- Agent 预设组合与 hero chip 选择 UI（上游内建，M3 出厂双预设同款安装路径）。
+- Agent 预设组合与 hero chip 选择 UI（上游内建；M3 出厂双预设**已交付实证**——本预设 = 出厂第三预设，同款安装路径零新机制）。
 - 写入 tool 与既有 `search`/`read-abstract` 同构（tool 壳形态；后端规模见 InScope-1 评审核实）。
+- 子 agent 派发通道照抄 M3 dispatchTask 已实证形态（in-process spawn + `composition.toolFilter` + agentOptions——`in-process-driver` 收窄/覆盖语义测试全绿在案）。
 - 无外部服务、无向量检索、无新协议。
 
 ### Resource & Timeline
 
-单人 **约 3–5 周（分桶合计 ~22–38 d）**（2026-10-06 双评审复估 + 二轮修正——原报 1.5–2.5 周漏记约三成工作量且低估写入面后端规模，按总纲「范围溢出 = 显式记账」纪律修正；宪法「单人 1–2 周/里程碑」基准被突破，显式记溢出）。分桶：
+单人 **约 3–5 周（分桶合计 ~23–39 d）**（2026-10-06 双评审复估 + 二轮修正——原报 1.5–2.5 周漏记约三成工作量且低估写入面后端规模，按总纲「范围溢出 = 显式记账」纪律修正；宪法「单人 1–2 周/里程碑」基准被突破，显式记溢出；M3 收官重梳净值 +1d——收窄 spike 移除、knowledge 派发 tool 增补）。分桶：
 
 | 桶 | 内容 | 粗估 |
 |---|---|---|
-| 写入地基 | core 写 API（校验/拒收/id/**写后索引联动**/**错误码族**/索引同步）+ 契约扩展 + 写入 tool + prompt 段改写 | 4–6 d |
-| 沉淀模式 | 预设 YAML + persona 方法论 + 派发模板 ×2 + toolFilter/模型分级（含 spike） | 2.5–4 d |
-| 双入口 | 提取 chip + 源/范围配置 + 首消息合成 + 会话编排（session-controller/staging 首次消费） | 2–3 d |
+| 写入地基 | core 写 API（校验/拒收/id/**写后索引联动**/**错误码族**/索引同步）+ 契约扩展 + 写入 tool + **knowledge 派发 tool（子 agent 收窄通道，M3 收官重梳增）** + prompt 段改写 | 5–7 d |
+| 沉淀模式 | 预设 YAML + persona 方法论 + 派发模板 ×2 + toolFilter/模型分级（收窄 spike 已被 M3 吸收——S5/S6 + dispatchTask 消费先例） | 2–3 d |
+| 双入口 | 提取 chip + 源/范围配置 + 首消息合成 + 会话编排（riding M3「打开新会话」绑定入口先例——「首次编程式建会话」成本已除名，残留 = 首消息自动发送语义） | 2–3 d |
 | 待确认状态视图 | 状态档 + 批量队列 + 域树 chip 裁决 + 徽标 + **服务端分页/过滤参数改造**（ListEntriesQuery 增 statusFilter/分页） | 3–5 d |
 | 三分文 + 顺手沉淀提示词 | 方法论 + 合并候选标记 + 提示词段补全 | 1.5–3 d |
 | 漂移标记 | 双信号 + 徽章 + 处置 + 热度对比窗聚合查询（recall_logs 时间窗） | 2–3 d |
-| 域结构查询 API + `_domain.md` + 缓存表 + `browse` 交付 + 域上下文条 | API×2 + 解析入缓存 + 描述编辑 + skills/ 目录新建与 bundled 根装配 + **上下文条 UI 本体**（评审二轮补） | 3–5 d |
+| 域结构查询 API + `_domain.md` + 缓存表 + `browse` 交付 + 域上下文条 | API×2 + 解析入缓存 + 描述编辑 + skills/ 目录新建与装配（M3 installAnchor 物化同法） + **上下文条 UI 本体**（评审二轮补） | 3–5 d |
 | 旧线技能迁移 | `/learn` + `/consolidate-specs` 提取段（方法论移植） | 2–3 d |
 | 记账回写 | 总纲 + business-rules + M3/M6 注记 | 0.5 d |
 | 测试面 | SC×9（deterministic fixture + e2e + smoke + 时间模拟 + 审计） | 2–4 d |
-| **合计** | | **~22–38 d** |
+| **合计** | | **~23–39 d** |
 
 裁剪杠杆**不启用**（用户裁决 2026-10-06：完整交付，按约 3–5 周全量推进；原杠杆留档备查——InScope-9 缓存表降级、批量操作瘦身、漂移标记延后并入 M4+）。
 
 ### Dependency Readiness
 
-M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程碑之前，时序天然满足）；dogfood 即真实回归场（本仓自提取）。
+M3 模式预设机制已交付（2026-10-08 收官）——唯一硬前置清偿，时序耦合落定（走查即本提案立项启动，总纲自举纪律注记在位）；dogfood 即真实回归场（本仓自提取）。
 
 ## Assumptions Challenged
 
@@ -185,37 +186,40 @@ M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程
 | `unconfirmed` 条目确认前不应落盘（虚节点方案，本提案上一稿设定） | 用户挑战（文件先行，创建落盘、召回忽略、拒绝即删） | Overturned: **文件先行 + status 过滤**——单一数据源（知识文件），无虚节点/双源合并/暂存态机器；与 SoT（文件 + 状态层）、外部修改对账、中断可续天然一致；域树 chip 改由目录内条目状态派生；拒绝语义（物理删除 vs `rejected` 墓碑防增量重跑重提）入定缝项 |
 | 拒绝后需 `rejected` 墓碑防增量重跑重提（上一稿定缝项） | Need Gate（用户裁决：意义不大，且保留增量重跑自由） | Overturned: **无墓碑，拒绝 = 物理删除经能力面**——重提场景由待确认准入面兜底（再拒成本一次点击），墓碑机制（枚举/生命周期/索引边界）复杂度大于问题本身，且会阻断「现在不要 ≠ 永远不要」的日后再提取 |
 | 提取能力应收在沉淀模式内（模式私有） | 用户定向（能力抽取为跨模式能力） | Refined: 写入 tool / 提示词段 / 沉淀技能 / 子 agent 派发模板一律归 `knowledge` 插件交付，凡含 knowledge 的组合皆可用；沉淀模式 = 薄 persona 组合的「主演场景」——与《架构基线》§4 沉淀判据同构，也使降级路径更优（M3 延期不伤能力交付） |
-| 提取由单会话一体完成 | 用户定向（专业子 agent 分工） | Refined: 主会话规划 + 知识搜集（按源）/ 知识撰写子 agent 接力——组合继承使子代零注入获得能力，派发模板为唯一差异化通道（上游负结论：无 per-spawn 系统提示注入）；搜集/撰写 toolFilter 分离 + 模型分级降低成本 |
+| 提取由单会话一体完成 | 用户定向（专业子 agent 分工） | Refined: 主会话规划 + 知识搜集（按源）/ 知识撰写子 agent 接力——组合继承使子代零注入获得能力，派发模板为唯一差异化通道（上游负结论：无 per-spawn 系统提示注入）；搜集/撰写 toolFilter 分离 + 模型分级降低成本（M3 收官重梳：收窄/分级通道 = knowledge 派发 tool 承载，角色差异化仍唯一经派发 prompt） |
 | 域 = 纯目录路径派生、无元数据（总纲「目录即域」既定形态） | 用户定向（域带简要描述，agent 精确理解与识别） | Refined: 目录即域不破——描述为域目录内 `_domain.md` 说明书文件（路径仍唯一身份，SoT 仍文件系统，不入条目索引）；补齐两个精度缺口：写前结构对齐（裸路径对域归属判断是歧义的）与召回选域依据 |
 | 旧线沉淀技能随 M3 核心包迁移（tech-research §5.2 组合表原列） | 用户挑战（技能职责归属——知识沉淀类归知识域；M3 提案 2026-10-07 已裁出不迁） | Refined: `/learn` + `/consolidate-specs` 提取段归 M3.5 knowledge 技能集（InScope-10）——`/learn` 先写后审与待确认准入同构、`/consolidate-specs` 提取段即文档源子流程；**漂移段不迁**（= 知识巡检族，与 v1 漂移裁决一致，P5 届时合并） |
 | 沉淀模式与知识库都随 forge 产品语境（隐含假设） | 用户定向（模式通用，不绑死 forge） | Refined: **切分裁定**——模式 = 通用 dsh 预设工件（组合零 forge 插件、方法论不含 SDD 概念、feature 文档仅为一种源形态）；**知识库 ↔ 项目绑定不变**（dsh-forge 产品形态，工具按注册项目解析）；未注册工作区回退解析**不采纳**（初稿误解曾提议，用户纠偏否决） |
 | 写作契约与时机指引整段进系统提示词（初稿设定，承接原 M4 续写项语义） | 用户定向（提示词只存核心通用规则，细节经扩展体系按需加载） | Refined: **提示词最小化**——tool/skill 经 dsh 扩展体系加载（自带描述、按需读取），提示词段只存存在声明 + 时机规则 + 技能指针；写作契约细节降载写入 tool 自描述与契约校验错误信息、方法论正文降载技能——token 纪律 + 单一事实源 + 按需加载（InScope-6 重写、BIZ-003 记账笔同步） |
 | 召回与沉淀同提案推进（本轮前状态） | 用户定向（本提案聚焦沉淀与增量维护，召回拆分新提案） | Refined: 查找技能（两步法 + rerank / 四步法演进）、召回侧提示词、M1 召回 UX、向量分层全量 → **独立召回提案**（Tier 1 FTS5 BM25 首发，探索文档随迁）；**共享地基留本提案**——域结构查询（写前对齐交付，召回提案消费）与 `unconfirmed` 召回过滤（准入语义的召回侧投影） |
+| 沉淀会话子 agent 可经模型面派发并 per-spawn toolFilter/agentOptions 收窄（InScope-2 原设定，评审保留随 M3 spike 验证） | 事实核查（M3 源码结论 + 交付实证） | Overturned: 模型面 subagent 工具 per-call 不暴露 toolFilter/agentOptions（仅行级 config）；per-spawn 唯一可达通道 = 插件侧 in-process 派发（M3 dispatchTask 已实证消费）。用户裁决（M3 收官重梳）：knowledge 插件交付派发 tool 承载收窄与模型分级——搜集类无 write 面从纪律升级为机制，SC-3 保持机制断言强度 |
+| M3 模式机制存在延期风险，需保留降级路径（Constraints 原设定） | 事实核查（M3 收官 2026-10-08） | Resolved: 前置已兑付、SC1–SC9 全绿；降级路径退役（结构价值留档——能力面与预设机制本就解耦交付） |
+| 沉淀组合需自带 knowledge 插件行（InScope-2 原设定） | 事实核查（host profile 全局产品行 + M3 预设装配遮蔽无害化实证） | Refined: knowledge 工具经 host 全局产品行供给一切会话（M2 起在位）；沉淀组合去除 knowledge 行 → 组合工件零 forge 插件行，模式通用性在组合层纯化（plugin-forge 全局行去向仍待裁——定缝项 18 更新后裁决） |
 
 ## Scope
 
 ### In Scope
 
 - **InScope-1 写入地基**
-  - 评审核实（2026-10-06）：M1 只有读面——**写入 API 后端 = 全新建**（core 写服务[create/revise/archive/move/confirm + 契约校验 + id 生成] + contracts DTO/错误码族 + host RPC 通道 + plugin tool + prompt 段改写）；「与 `search`/`read-abstract` 同构」仅指 tool 壳形态，**后端为本里程碑最大新建面**。
+  - 评审核实（2026-10-06）：M1 只有读面——**写入 API 后端 = 全新建**（core 写服务[create/revise/archive/move/confirm + 契约校验 + id 生成] + contracts DTO/错误码族 + host RPC 通道 + plugin tool + prompt 段改写 + **派发 tool（子 agent 收窄通道——M3 收官重梳增，照抄 dispatchTask in-process-driver 形态）**）；「与 `search`/`read-abstract` 同构」仅指 tool 壳形态，**后端为本里程碑最大新建面**。
   - 知识插件写入 tool：契约校验拒收（缺 `summary`/`keywords`、域层级 >3 层）；与宿主能力面同一后端 API。
   - 写入即生成 frontmatter `id`。
   - `status` 状态集常量新建（contracts 现无 status 枚举，仅 `STATUS_DEFAULT`——措辞修正；词汇表 `draft`/`unconfirmed`/`archived` 终裁入定缝）。
-  - **tool 返回即指引（用户定向 2026-10-06）**：本里程碑新建 tool（写入 / 域结构查询 / 确认处置）返回体附 **agent 友好且清晰的 hint**，指引下一步——拒收给缺什么与合规样例（拒收即教学）、未命中给替代路径（域树空态/相邻域提示）、边界情形给语义说明（`unconfirmed` 不可召回的原因）；查找 tools（`search`/`read-abstract`）的 hint 改进归召回提案；hint 文案与工具名/描述/参数说明同源——**单一事实源 = tools/ 定义对象**（M1 既例，M2 3.4 记录在案），变更随定义传播。
+  - **tool 返回即指引（用户定向 2026-10-06）**：本里程碑新建 tool（写入 / 域结构查询 / 确认处置 / 子 agent 派发）返回体附 **agent 友好且清晰的 hint**，指引下一步——拒收给缺什么与合规样例（拒收即教学）、未命中给替代路径（域树空态/相邻域提示）、边界情形给语义说明（`unconfirmed` 不可召回的原因）；查找 tools（`search`/`read-abstract`）的 hint 改进归召回提案；hint 文案与工具名/描述/参数说明同源——**单一事实源 = tools/ 定义对象**（M1 既例，M2 3.4 记录在案），变更随定义传播。
   - **写后索引联动**（评审补，关键缝）：现状仅项目级零行时静默重建（fix-31 口径）——无联动则确认面/域树 chip 看不到新落盘条目；批量导入 × 逐条全量重扫 = O(n²) 文件读；形态 = 增量 upsert 或批量完成后单次重建，`/tech-design` 首节裁决。
 
-- **InScope-2 知识沉淀模式**（出厂第三预设，riding dsh **Agent 预设机制**——源码核实《技术预研笔记》§1.2/§5，2026-10-06 上游 spot-check 锁/声明行/persona 均在位）
-  - 组合 = 镜像 `standard` 基础行 + `knowledge` 插件行 + persona 行（提取方法论作风，守「只谈作风、不谈工具禁令」铁律）+ `skill-filesystem` 行（`customSkillDirs` = knowledge 技能目录——**沉淀技能**[查找技能由召回提案增补]）；经 profile patch 安装（与 M3 出厂双预设同机制，S5/S6 spike 底稿在案）。
-  - **模式通用性——不绑死 forge（用户定向 2026-10-06）**：沉淀模式是通用 dsh 预设工件——组合**零 forge 插件**（不含 plugin-forge / plugin-forge-spec）；persona 与技能只谈知识沉淀方法论、不含 SDD/forge 管线概念；文档源 = 通用结构化文档（forge feature 文档 = 其中一种源形态，非前提）。**知识库与项目的绑定不变**——工具按 forge 注册项目解析 knowledge_dir 是知识库在 dsh-forge 的产品形态，本提案不改（未注册工作区的回退解析不做）。**运行时兑现（评审二轮硬条件）**：现状 plugin-forge 为 profile 级**全局行**（host profile template），仅组合 YAML 不含该行不等于运行时零 forge 工具——全局行去向（移入各预设组合[沉淀组合不含] vs 保留）入定缝项裁决（联动 M3 提案），SC-3 以**运行时工具面断言**守护（对齐 M3 SC-2 强度）。
-  - **能力抽取原则（用户定向）**：写入 tool、提示词段、沉淀技能、子 agent 派发模板一律随 `knowledge` 插件交付——凡组合含 knowledge 的模式（远征/突击及经 bundled 根的标准模式）皆可用；沉淀模式只是**主演场景**（persona 使提取成为默认行为），无私有能力。
+- **InScope-2 知识沉淀模式**（出厂第三预设，riding dsh **Agent 预设机制**——M3 出厂双预设已交付实证[2026-10-08 收官]，预设装配 / blank 锁 / hero 门控 / 恢复投影 e2e 全绿；原上游 spot-check 升级为交付事实）
+  - 组合 = 镜像 `standard` 基础行 + persona 行（提取方法论作风，守「只谈作风、不谈工具禁令」铁律）+ `skill-filesystem` 行（`customSkillDirs` = knowledge 技能目录，宿主物化绝对路径——M3 同款装配；**沉淀技能**[查找技能由召回提案增补]）；经 profile patch 安装（与 M3 出厂双预设同机制——**现役代码路径，非底稿**）。**knowledge 插件行不进组合**（M3 收官重梳）：knowledge 为 host profile 全局产品行（M2 起在位，M3 预设装配实证同值遮蔽无害化），组合工件保持零 forge 插件行。
+  - **模式通用性——不绑死 forge（用户定向 2026-10-06）**：沉淀模式是通用 dsh 预设工件——组合**零 forge 插件**（不含 plugin-forge / plugin-forge-spec）；persona 与技能只谈知识沉淀方法论、不含 SDD/forge 管线概念；文档源 = 通用结构化文档（forge feature 文档 = 其中一种源形态，非前提）。**知识库与项目的绑定不变**——工具按 forge 注册项目解析 knowledge_dir 是知识库在 dsh-forge 的产品形态，本提案不改（未注册工作区的回退解析不做）。**运行时兑现（评审二轮硬条件；M3 收官后事实更新）**：M3 交付形态 = plugin-forge 全局行保留 + 预设行内增量行（远征/突击行内已含——同值遮蔽无害化实证），仅组合 YAML 不含该行不等于运行时零 forge 工具；全局行去向裁决收敛（定缝项 18 更新）——plugin-forge 全局行退出 host 模板（远征/突击行内行已在，退出仅影响 standard 会话）vs 保留（SC-3 须降级），SC-3 以**运行时工具面断言**守护（对齐 M3 SC-2 强度），裁决须使其可满足。
+  - **能力抽取原则（用户定向）**：写入 tool、提示词段、沉淀技能、子 agent 派发模板与派发 tool 一律随 `knowledge` 插件交付——凡组合含 knowledge 的模式（远征/突击及经 bundled 根的标准模式）皆可用；沉淀模式只是**主演场景**（persona 使提取成为默认行为），无私有能力。
   - **专业子 agent 分工（用户定向）**：提取执行 = 主会话规划分批 + 分派专业子 agent——知识搜集（按源：结构化文档 / 代码考古 / git 历史）→ 知识撰写（三分文判断 + frontmatter 合规产出 `unconfirmed` 落盘）。
-  - 子 agent 角色规格 = 技能内置**派发模板**（组合继承使子代天然获得 knowledge tools 与提示词段——零注入；上游无 per-spawn 系统提示注入，派发 prompt 为唯一差异化通道，M2 dispatchPrompt 同款形态）+ `toolFilter` 收窄（搜集 = 只读面、撰写 = 带 `write`）+ `agentOptions` 模型覆写可选（搜集类可配低成本模型）。
-  - **评审保留（2026-10-06）**：`toolFilter`/`agentOptions` 在本仓零消费先例（上游能力未实证消费，需 provider 声明 capability）——随 M3 S5/S6 加收窄 spike 验证，失败则子 agent退化为派发模板纯 prompt 差异化（不影响主链）。
+  - 子 agent 角色规格 = 技能内置**派发模板** + **knowledge 插件派发 tool（M3 收官重梳·用户裁决）**：搜集/撰写子 agent 一律经派发 tool in-process spawn（M3 dispatchTask 同款已实证通道）——携带 `toolFilter` 收窄（搜集 = 只读面[deny 含 write 面]、撰写 = 带 `write`）+ `agentOptions` 模型覆写可选（搜集类可配低成本模型；M3 Forge设置 agentOptions 携带先例）；派发 prompt 仍为角色差异化唯一通道（上游无 per-spawn 系统提示注入）；组合继承使子代天然获得 knowledge tools 与提示词段。
+  - **评审保留（2026-10-06）→ 已落定（M3 收官）**：原「`toolFilter`/`agentOptions` 零消费先例、随 M3 S5/S6 spike 验证」不再成立——M3 源码结论（模型面 per-call 不暴露）+ dispatchTask 消费先例使裁决收敛为派发 tool 形态（上行）；纯 prompt 差异化降级分支留档为工程兜底（派发 tool 交付受阻时启用，SC-3 降为行为断言）。
 
 - **InScope-3 老项目批量提取 · 双入口**
-  - 「从项目提取」chip（源与范围配置，产品自绘）：发起时以配置合成沉淀模式会话首消息；**会话生命周期编排依赖上游 session-controller/staging 面，本仓首次编程式建会话，集成成本计入**（机制参照 M2 dispatchPrompt 合成先例）。
-  - 新会话模式选择器入口：**上游内建 hero chip，预设声明后自动出现，零自研 UI**；上游事实——hero chip 受 Developer tools 偏好门控，产品须处理默认值/引导，否则「机制在但用户看不见」。
-  - 执行 = 沉淀模式会话（分批、可续；blank-session 锁保证一会话一模式，恢复/分叉按投影重建同款组合）。
+  - 「从项目提取」chip（源与范围配置，产品自绘）：发起时以配置合成沉淀模式会话首消息；**会话编排 riding M3「打开新会话」绑定入口先例（blank 会话 + `agentPreset.select` + 上下文预填）——编程式建会话先例已在，集成成本较原估收窄**；残留差异 = 首消息自动发送 vs 预填不发送（M3 为预填），定缝项 10 裁决。
+  - 新会话模式选择器入口：**上游内建 hero chip，预设声明后自动出现，零自研 UI**；门控已由 M3 前置解（`ui-settings` 工厂开启行首启预置 + 老用户增量补行——「机制在但用户看不见」的坑已填）。
+  - 执行 = 沉淀模式会话（分批、可续；blank-session 锁保证一会话一模式，恢复/分叉按投影重建同款组合——M3 已实证语义）。
 
 - **InScope-4 待确认状态视图**（浏览页签内，不加页签）
   - `unconfirmed` 状态档 + 队列态批量操作（勾选/全选/分页/改域/编辑摘要/三分文标记）。
@@ -242,7 +246,7 @@ M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程
   - ② P5 锚点部分兑付注记。
   - ③ 左栏徽标位前移启用注记。
   - ④ 召回增强分层记账**移至召回提案**（Tier 1 FTS5 BM25 小里程碑 = 召回提案首发；Tier 2 四步管线 / Tier 3 锚点与探索文档随迁——见 Out of Scope）。
-  - ⑤ M3 Out of Scope #7 去向落地注记（知识沉淀类技能归 M3.5，见 InScope-10）。
+  - ⑤ M3 Out of Scope #7（= 总纲 M3 顺延表 #7，M3 已回写在位）去向落地注记（知识沉淀类技能归 M3.5，见 InScope-10）。
   - ⑥ **business-rules 回写两笔**：BIZ-knowledge-002（`status` 枚举增 `unconfirmed`；「硬拒收归后续写入面里程碑」即本里程碑——拒收落地；`unconfirmed` 入索引不入召回口径）与 BIZ-knowledge-003（知识段维持**最小化**——存在声明 + 时机规则 + 技能指针，写作契约细节降载 tool 自描述与技能正文[2026-10-06 用户定向]；召回 tools——`search`/`read-abstract`——按 status 过滤）。
   - ⑦ **总纲数据形态节 `_domain.md` 回写**（宪法级保留文件概念扩展——域目录说明书文件）。
   - ⑧ **M6 收编注记**：确认面「对齐移动」先于 M6 建立首条移动路径，M6 移动单一 API 收编该原语 + 目录移动时 `knowledge_domains` 兄弟表失效/重建语义 + 确认面编辑摘要/改域与 M6 元数据编辑对话框的 UX 统一。
@@ -298,11 +302,11 @@ M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程
 | 代码考古噪声污染知识库（源范围知情扩至代码+git） | M | H | 两级准入人工把关 + 契约校验拒收 + 分批小步可中途叫停；M5 置信衰减后续兜底 |
 | 大仓提取成本失控（token/耗时） | M | M | 源与范围可裁剪配置 + 分批 + 可续跑 + 摘要先行；空/浅 git 仓走降级路径 |
 | 沉淀模式提示词方法论不成熟、产出质量方差 | M | M | 方法论随技能交付可持续迭代；待确认准入面兜底；本仓 dogfood 自提取即真实回归 |
-| 多子 agent 提取链路复杂（规划/搜集/撰写接力） | M | M | 派发模板随技能交付可迭代；文件先行 + 按条目幂等使失败重派安全；搜集/撰写 toolFilter 分离限域；toolFilter 零消费先例随 M3 S5/S6 spike 验证（失败退化为纯 prompt 差异化） |
-| 写入面后端规模被低估挤占后段（评审 A 最危险假设①） | M | H | 已扩桶 4–6d + 写入面（含写后索引联动）列为 `/tech-design` 首节独立首发任务；Hard Rule 2 只读豁免面扩大配新守卫测试（本提案 SC-2 文件系统监控） |
+| 多子 agent 提取链路复杂（规划/搜集/撰写接力） | M | M | 派发模板随技能交付可迭代；文件先行 + 按条目幂等使失败重派安全；搜集/撰写 toolFilter 分离限域经 knowledge 派发 tool 机制承载（dispatchTask 先例照抄——M3 收官落定）；工程兜底 = 派发 tool 受阻时退纯 prompt 差异化（SC-3 降为行为断言） |
+| 写入面后端规模被低估挤占后段（评审 A 最危险假设①） | M | H | 已扩桶 5–7 d（M3 收官重梳再 +1d 派发 tool）+ 写入面（含写后索引联动）列为 `/tech-design` 首节独立首发任务；Hard Rule 2 只读豁免面扩大配新守卫测试（本提案 SC-2 文件系统监控） |
 | 写后索引可见性缺失致确认面看不到新条目（评审 A 最危险假设②） | M | H | 写后联动设计入 InScope-1（增量 upsert vs 批量后单次重建）；SC-1/3/4 断言天然覆盖此缝（e2e 与双轨） |
-| 全局插件行击穿模式通用性（plugin-forge 现为 profile 级全局行——组合 YAML 零 forge 仅纸面语义） | M | H | 定缝项 18 裁决全局行去向（推荐移入各预设组合，沉淀组合不含）；SC-3 已升为运行时工具面断言守护 |
-| M3 模式机制延期（唯一硬前置） | L | M | 降级不伤能力：写入 tool/提示词段/技能/派发模板/域结构查询随 `knowledge` 插件照常交付（InScope-1/5/6/7/9 可用），仅模式组合与 hero chip 入口记账顺延，双入口退化为单入口 |
+| 全局插件行击穿模式通用性（M3 交付形态 = 全局产品行保留 + 预设行内增量行——组合 YAML 零 forge 仅纸面语义） | M | H | 定缝项 18（M3 收官后更新）裁决全局行去向：推荐 plugin-forge 全局行退出 host 模板（远征/突击行内行已在，退出仅影响 standard 会话）；SC-3 已升为运行时工具面断言守护 |
+| ~~M3 模式机制延期（唯一硬前置）~~ **已消除——M3 收官 2026-10-08，SC1–SC9 全绿** | — | — | 降级路径退役（Constraints 更新）；能力面与预设机制解耦交付的结构价值留档 |
 | 与 M4 边界漂移（确认面 vs 审核台职责重叠） | M | M | 本提案显式记账职责切分（三选一最简标记）；M4 接管时待确认 → 待审核队列同构迁移 |
 | 待确认积压致流程被弃用 | M | M | 左栏徽标计数常显提醒 + 域级全选/批量勾选/分页；域确认一揽子裁决降低逐条负担 |
 
@@ -313,12 +317,12 @@ M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程
   - ① 全程知识目录写入仅经宿主能力面（写入 tool 与确认面同一 API 后端，文件系统级监控验证一次全流程）。
   - ② 契约校验拒收缺 `summary`、缺 `keywords`、**域层级 >3 层**各验一例（评审二轮 F5 补），拒收反馈可观察。
 - [ ] **SC-3 模式纪律**（会话轨迹 + 磁盘断言，含子 agent调用）：
-  - 验证形态（双轨）：机制断言用 deterministic fixture（预置会话轨迹/写入序列），提取链另跑真 agent smoke；子 agent轨迹可得性依赖 dsh 会话 trace 面（M2 先例，显式依赖）。
+  - 验证形态（双轨）：机制断言用 deterministic fixture（预置会话轨迹/写入序列），提取链另跑真 agent smoke；子 agent 轨迹断言形态 = M3 走查已实证面（logs/{slug}.jsonl 事件链[派发事件含 toolFilter/model 载荷——task-spawned 同款] + 子会话 ≠ 派发会话断言 + forge.db 审计）。
   - 沉淀模式提取链中每个执行写入的 agent（主会话或子 agent）首次 `write` 调用之前存在 `browse`/`search`/域结构查询调用。
-  - 子 agent经派发模板分派；`toolFilter` 收窄为**条件断言（评审二轮 F2）**——spike 通过 → 断言收窄生效（搜集类无 `write` 面）；spike 失败（InScope-2 评审保留的降级分支）→ 断言纯 prompt 差异化下搜集类不执行 `write`（行为面断言）。
+  - 子 agent 经 knowledge 派发 tool in-process 分派（M3 收官重梳·用户裁决）：**toolFilter 收窄为机制断言**——搜集类子 agent 的派发请求 deny 含写入面工具（派发事件载荷断言）；`agentOptions` 模型分级可选生效（配置态断言）。工程兜底留档：派发 tool 交付受阻退纯 prompt 差异化时，本条降为行为面断言（搜集类不执行 `write`）。
   - 提取产出的新建域目录为磁盘真实目录（含 `_domain.md` 描述），其内条目**全部 `status: unconfirmed`**（目录呈 「待确认」chip）。
   - 拒绝裁决后条目文件从磁盘移除、空目录清理（均经能力面）。
-  - **模式组合审计（运行时强度，评审二轮升级）**：沉淀模式会话的**运行时工具面不含 forge task 命令 tools**（对齐 M3 SC-2 的运行时断言强度；预设 YAML `plugins` 不含 plugin-forge* 为静态前置；全局插件行去向见定缝项）；persona 与技能清单不含 SDD/forge 管线概念。
+  - **模式组合审计（运行时强度，评审二轮升级）**：沉淀模式会话的**运行时工具面不含 forge task 命令 tools**（对齐 M3 SC-2 的运行时断言强度；预设 YAML 零 forge 插件行为静态前置——knowledge 行亦不进组合[host 全局产品行供给]；plugin-forge 全局行去向 = 定缝项 18 更新后裁决，裁决须使本断言可满足）；persona 与技能清单不含 SDD/forge 管线概念。
 - [ ] **SC-4 日常顺手沉淀**（e2e）：开发会话 agent 经写入 tool 产出条目 → 待确认状态视图单条确认入库，左栏知识库入口徽标计数随之变化（产出 +1、确认归零）；系统提示词知识段**最小化断言（沉淀侧）**：含存在声明 + 沉淀时机规则 + 技能指针，**不含**写作契约细则与提取方法论正文（降载于写入 tool 自描述与沉淀技能正文），**召回侧提示词内容维持 M1 现状不动**（拆分断言——其变更归召回提案）；**沉淀技能在场断言**：沉淀技能在 knowledge 技能目录（`customSkillDirs`）可显式调用。
 - [ ] **SC-5 增量更新三分文**（结果面断言——v1 无 n-gram 判据，「模型未识别」与「不构成重复」不可区分，故断言只落结果；fixture 三态显式构造：互补材料/同题过时条目/近似重复条目）：
   - 同题过时 → 在位修订（frontmatter `id` 不变 + `updated` 更新 + 正文变化）。
@@ -340,28 +344,28 @@ M3 模式预设机制为唯一硬前置（M2 进行中 → M3 排期在本里程
 
 consistency_check_result:
   status: pass
-  pairs_checked: 94
+  pairs_checked: 96
   conflicts_found: 0
-  note: 2026-10-06 评审二轮（逻辑审查 F1–F13 + 术语审查 18 项）全部修复后复检通过；本块为 brainstorm 协议必填字段
+  note: 2026-10-06 评审二轮（逻辑审查 F1–F13 + 术语审查 18 项）全部修复后复检通过；M3 收官（2026-10-08）重新梳理复检——事实回填 + 子 agent 通道裁决（knowledge 派发 tool）+ 组合行修正（knowledge 行不进组合）后 SC↔InScope 双向复核通过；本块为 brainstorm 协议必填字段
 
 ## Next Steps
 
 - 进入 `/write-prd`（里程碑提案口径，M2 先例：PRD → 设计 → 任务）。
   - 评审 A 条件①：写入面（含写后索引联动）作为 `/tech-design` 首节独立首发任务先行设计。
-  - 评审 A 条件②：M3 交付时点于 M3 立项时确认，逾期走降级路径裁剪模式相关 SC。
+  - 评审 A 条件②（M3 交付时点确认）：**已了结——M3 收官 2026-10-08、SC1–SC9 全绿，降级路径退役**。
 
 ### 设计期定缝项（20 项，`/tech-design` 逐项裁决）
 
 1. 状态词汇表终裁（`draft`/`unconfirmed`/`archived` 枚举集——`unconfirmed` 已定案 2026-10-06[用户裁决]，原 `pending` 弃用：与任务域等通用状态撞车、未言明所待何事，且 `unconfirmed` 与转移动作 confirm 字面咬合、与 M4 审核态[reviewed]不混用；`archived` 枚举在位——InScope-1 archive 服务与 SC-6 断言已用；余下终裁 = M4+ 审核态扩展与各态缺省行为）。
 2. 写后索引联动形态（增量 upsert vs 批量完成后单次重建）——`/tech-design` 首节。
-3. bundled 根装配（knowledge skills/ 目录标准模式可见性——DSH_BUNDLED_SKILL_DIR）。
+3. knowledge 技能目录装配（M3 已交付 installAnchor 树上溯物化机制——plugin-forge/plugin-forge-spec skills 同法照抄；待裁 = 全局 skill-filesystem 行 customSkillDirs 注入[全预设可见，能力抽取原则直推] vs 仅沉淀预设行内注入；原 DSH_BUNDLED_SKILL_DIR 提法由 M3 装配机制取代）。
 4. 旧线技能迁移形态（技能命名与触发词 / 与沉淀技能归并为一还是保持两技能 / 四类型学元数据形态——frontmatter `type` 字段 vs 类型一级域 vs 仅靠域自由组织）。
 5. `_domain.md` 细则（命名终裁 vs `_index.md` / **索引排除规则——须按文件名判定**：现状 scan 只排 dot 文件，`_domain.md` 会被扫为候选——缺契约字段落 skipped 计数污染空态提示、写全字段则误入条目索引（评审二轮实证） / 描述长度 ≤50 字的 enforce 机制——写入面校验拒收 vs 生成端提示截断，`/tech-design` 裁决；呈现位置已定案 = 域上下文条，见 InScope-9）。
 6. 域描述缓存表 schema（推荐兄弟表 `knowledge_domains`：domain_path 键 / description / parent_path / depth；vs `knowledge_entries` 特殊行混装——每条目一行的行归属不宜混域级数据）。
 7. 域结构查询的 agent 动词面形态（`browse` 扩展 vs 新动词）。
-8. 子 agent 分工清单与派发模板形态（搜集按源拆分粒度 / 撰写角色与主会话职责边界 / 各角色 `toolFilter` 集与模型分级策略）。
+8. 子 agent 分工清单与派发模板形态（搜集按源拆分粒度 / 撰写角色与主会话职责边界 / 各角色 `toolFilter` deny 集与模型分级策略——通道已裁 = knowledge 派发 tool[InScope-2，M3 收官重梳]；待裁 = 角色矩阵与 Forge设置 默认 LLM 的会话内覆写语义）。
 9. 方法论分层与**提示词最小集裁定（沉淀侧）**（原则已定·用户定向 2026-10-06：提示词只存核心通用规则，展开细节固化于技能；召回侧内容归召回提案——见 InScope-6/Out of Scope；待裁 = 沉淀时机规则措辞、技能指针形态；persona 依铁律只承载作风层）。
-10. 「从项目提取」发起会话的参数注入机制（配置 → 会话首消息合成 + session-controller/staging 编排，M2 dispatchPrompt 先例）。
+10. 「从项目提取」发起会话的参数注入机制（配置 → 会话首消息合成；编排 riding M3「打开新会话」绑定入口先例[blank 会话 + select + 预填]——待裁 = 首消息自动发送 vs 预填不发送 + 源/范围配置的合成格式，M2 dispatchPrompt 先例沿用）。
 11. 待复核双信号阈值与对比窗。
 12. 待确认域 chip 派生细节（**挂起条件已定**：含 `unconfirmed` 条目且无已确认条目才挂 chip——混合目录不挂，见 Solution #3；待裁仅计数呈现细节；另 DomainNode 契约需增维度——dto/knowledge.ts 现无 description/status 字段，评审二轮实证）。
 13. 对齐裁决的目标域选择与批量移动交互。
@@ -369,6 +373,6 @@ consistency_check_result:
 15. 徽标计数口径细节（**同位复用已定案**——Solution #3「总纲既定设计前移启用，M4 审核台复用同位」；待裁仅计数范围：仅 `unconfirmed` 还是含其他待处理态）。
 16. 提示词方法论内容与分批大小。
 17. 写入 tool 参数面（含修订与归档动词形态——单一 `write` 或 `write`+`revise`+`archive`）。
-18. **全局插件行去向（评审二轮硬条件，联动 M3 提案）**：plugin-forge 现为 profile 级全局行（host profile template 实证）——移入各预设组合（沉淀组合不含，运行时零 forge 达成）vs 保留全局行（接受 YAML 语义与运行时不一致）；SC-3 已按运行时断言强度书写，裁决须使其可满足。
+18. **全局插件行去向（评审二轮硬条件；M3 收官后事实更新）**：M3 交付形态 = 全局产品行（core/knowledge/plugin-forge）保留 + 预设行内增量行（远征 +plugin-forge-spec、突击 +plugin-forge——同值遮蔽无害化，overlay 测试实证）→ 裁决收敛为「plugin-forge 全局行退出 host 模板（远征/突击行内行已在，退出仅影响 standard 会话——standard 是否补行内行同裁）vs 保留全局行（SC-3 运行时断言不可满足，须降级为静态 YAML 断言）」；推荐退出（M3 行内增量行已把退出成本降到最低）；knowledge 全局行维持（一切会话的 knowledge 工具供给面——能力抽取原则的运行时载体，沉淀组合不自带 knowledge 行的依据）。SC-3 已按运行时断言强度书写，裁决须使其可满足。
 19. **`browse` 召回日志面语义**：`recall_logs.verb` CHECK 约束（现仅 `search`/`read-abstract`，SQLite CHECK 不可 ALTER）——v2 表重建（违「全 CREATE 无 ALTER」纪律）vs browse 不写召回日志（宪法 SC10「浏览域即产生 trace」差距记账 M7）；连同 contracts `RecallVerb` 类型扩展一并裁决。
 20. **UI 域树双派生路径收敛**：现状 UI 域树 = listEntries 内存聚合，域结构查询 = `knowledge_domains` 缓存直读——两路径的域集/计数/描述一致性（UI 通道是否切数据源）于 `/tech-design` 裁决。
