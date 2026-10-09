@@ -7,7 +7,8 @@
 //   · 双源构造 = 回放主径 claim（link upsert-ignore 唯一写源 + claim 记录 session_id）——
 //     同任务同会话双侧参与 → 两卡并存（§6-24④ 诚实审计：不合并解释）；
 //   · 断言面：pill 分型锚（data-dswf-stp-source link|record）+ RPC 单发读（直读即见）+
-//     pill 点击导航全链路（dock 开概览 → 任务子 tab → feature 选中 → 抽屉开）。
+//     pill 点击导航全链路（dock 开概览 → 任务子 tab → feature 选中 → 弹窗开[m3.1 D23：
+//     ShellHost 常驻树直开——挂载独立于 dock 概览 tab]）。
 // M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
@@ -103,13 +104,23 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（分型呈现 + 
     await expect(recordPill).toContainText('已完成', { timeout: 15_000 })
 
     // ── pill 导航全链路（UF-3 流程 7 左半段 → 右栏消费）：dock 开概览 + 任务子 tab +
-    //    feature 选中 + 抽屉开（taskFocus nonce 对照应用）──
+    //    feature 选中 + 弹窗开（taskFocus nonce 对照应用）──
     await linkPill.click()
     await expect(page.locator(OV_PANEL).first(), 'dock 开概览 tab').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovSubtabOf('tasks')), '任务子 tab 激活（聚焦切换）').toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), 'feature 选中（导航载荷富化——slug ≡ feature 不变量）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(TD_DRAWER).first(), '任务抽屉开（聚焦抽屉面）').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(TD_DRAWER).first(), '任务弹窗开（就地打开）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).locator('.dswf-td-status')).toHaveText(/已完成/)
+    // ── m3.1 D23：挂载独立于 dock（对话中不经概览 tab 挂载——弹窗直开于 ShellHost 常驻树；
+    //    旧抽屉形态随概览 tab body 挂载，挂载点变迁即新旧分水岭。台账 = drawer/README.md）──
+    await expect(
+      page.locator('[data-dswf-workbench]').locator(TD_DRAWER).first(),
+      '弹窗宿主 = ShellHost 常驻树（shell.overlay 槽——对话中就地打开）',
+    ).toBeVisible()
+    await expect(
+      page.locator(OV_PANEL).locator(TD_DRAWER),
+      '概览 tab body 内零弹窗节点（挂载独立于 dock 概览 tab）',
+    ).toHaveCount(0)
 
     // 零凭据形态的模型失败面不计入产品断言（pageerror 留痕诊断——不伪造凭据不遮蔽）
     if (pageErrors.length > 0) console.log(`[sc6-diagnostic] pageerror（零凭据模型失败面，非产品断言面）：${pageErrors.slice(-5).join(' | ')}`)

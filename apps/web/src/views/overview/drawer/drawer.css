@@ -1,53 +1,62 @@
-/* 任务详情抽屉样式（定位：业务——3.7：两分块 + 顺滑折叠[grid 0fr/1fr] + 左缘拖宽 +
- * 类型模板 + 覆盖率 + 时间线）。结构基准 = 原型 task-drawer（ui-design v17）；视觉一律
- * 官方令牌（令牌唯一：色/字/距/圆角零裸值——lint-tokens 机械面）。
+/* 任务详情弹窗样式（定位：业务——m3.1 D21：抽屉形态退役 → 可拖动弹窗；两分块 + 顺滑折叠
+ * [grid 0fr/1fr] + 左右缘拖宽 + 类型模板 + 覆盖率 + 时间线沿用）。结构基准 = 纠正版原型
+ * #m31-tm（proposal.md 六区 D21）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值
+ * ——lint-tokens 机械面）。
  * dsw-raw 豁免（执行记录注记）：
- *   - 宽度区间 320/420/760、步长 32、视口因子 0.92、拖示条 9px/64px = 原型结构刻度
- *     （布局尺寸以原型结构为准——styling TECH-styling-002）；
- *   - 过渡时长 .22s/.18s = 原型折叠/滑入时长刻度（knowledge.css 滑入同款豁免先例）；
+ *   - 宽度区间 320/440/760、步长 32、视口因子 0.92、缘手柄 9px/64px、起始位纵向 14% /
+ *     拖移边距 4px / 最大高 76vh = 原型结构刻度（布局尺寸以原型结构为准——styling
+ *     TECH-styling-002；圆角 10px → 最近语义令牌 radius-md 12 映射）；
+ *   - 过渡时长 .22s/.18s = 原型折叠时长刻度（knowledge.css 同款豁免先例；滑入动画已随
+ *     抽屉形态退役——D21 零在场）；
  *   - 类型六色：ui-design Design System 六色中 紫/青 无上游语义令牌（ui-theme 无此 hue），
  *     最近似映射（doc → label-primary-bluish、test → state-business-primary）——令牌唯一
  *     硬规则优先（SPEC CONTRADICTION 裁决：编码=link/评估=error/验证=warn/质量门=success 精确对齐）。 */
 
-/* ── 抽屉壳：右侧全高滑入（默认 420px——宽度经 style 注入；会话级保持） ── */
-@keyframes dswf-td-drawer-in {
-  from {
-    transform: translateX(24px); /* dsw-raw 原型滑入行程刻度 */
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
+/* ── 弹窗壳：可拖动浮窗（宽/左/上经 style 注入；逐开本地态——关闭即弃回默认起始位） ──
+ * 起始位缺省（style 未注入前）= CSS 居中兜底（水平居中 + 14vh）；壳宿主树
+ * pointer-events:none（ShellHost 舞台）——弹窗本体显式恢复 auto。 */
 .dswf-td-drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（回退 = 缺省 60） */
+  left: 50%; /* dsw-raw 原型起始位缺省（效应注入 inline left/top 前的居中兜底） */
+  top: 14vh; /* dsw-raw 原型起始位纵向刻度 */
+  transform: translateX(-50%);
+  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（回退 = 缺省 60；转移对话框压上层 80） */
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
   max-width: 92vw; /* dsw-raw 窄屏防越（0.92 因子——clampDrawerWidth 同口径） */
-  background: var(--dsw-alias-bg-layer-2);
-  border-left: 1px solid var(--dsw-alias-border-l2);
+  max-height: 76vh; /* dsw-raw 原型弹窗最大高刻度 */
+  pointer-events: auto; /* 壳宿主舞台零交互——弹窗本体恢复命中 */
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md); /* 原型 10px → 最近语义令牌（md = 12） */
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   box-shadow: var(--dsw-elevation-prominent);
-  animation: dswf-td-drawer-in 0.22s ease-out; /* dsw-raw 原型滑入时长（knowledge.css 同款） */
 }
 
-/* 同任务重渲染不重放滑入（v14——仅切换任务时动画；类由 animate 注入） */
-.dswf-td-drawer.no-anim {
-  animation: none;
+/* 拖移中形态（标题栏按住——投影加深一档） */
+.dswf-td-drawer.is-dragging {
+  box-shadow: var(--dsw-elevation-soft);
 }
 
-/* ── 左缘拖宽手柄（9px 命中区 + 中央拖示条；hover/active 亮 64px） ── */
+/* ── 标题栏：全窗拖移手柄（cursor move；按钮命中不劫持——组件面守卫） ── */
+.dswf-td-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 38px; /* dsw-raw 原型标题栏高刻度 */
+  padding-inline: var(--dsw-font-xs-13-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+/* ── 左右缘拖宽手柄（9px 命中区 + 中央拖示条；hover/active 亮 64px）——对侧锚定 ── */
 .dswf-td-resize {
   position: absolute;
-  left: -4px; /* dsw-raw 原型手柄外扩命中区 */
   top: 0;
   bottom: 0;
   width: 9px; /* dsw-raw 原型手柄宽刻度 */
@@ -56,10 +65,17 @@
   touch-action: none;
 }
 
+.dswf-td-resize[data-dswf-td-resize='left'] {
+  left: -4px; /* dsw-raw 原型手柄外扩命中区 */
+}
+
+.dswf-td-resize[data-dswf-td-resize='right'] {
+  right: -4px; /* dsw-raw 原型手柄外扩命中区 */
+}
+
 .dswf-td-resize::after {
   content: '';
   position: absolute;
-  left: 3px;
   top: 50%;
   transform: translateY(-50%);
   width: 3px; /* dsw-raw 原型拖示条宽 */
@@ -67,6 +83,14 @@
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-border-l4);
   transition: background 0.15s ease, height 0.15s ease; /* dsw-raw 原型快过渡刻度 */
+}
+
+.dswf-td-resize[data-dswf-td-resize='left']::after {
+  left: 3px;
+}
+
+.dswf-td-resize[data-dswf-td-resize='right']::after {
+  right: 3px;
 }
 
 .dswf-td-resize:hover::after,

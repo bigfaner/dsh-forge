@@ -13,6 +13,15 @@ import {
 /** 概览上下文缺省（快照 pin 的常量面——避免逐字面量漂移） */
 const INITIAL = initialOverviewContext()
 
+/** 全快照缺省（m3.1 D23 扩两缝：drawerTaskId/transitionFocus——快照 pin 的常量面） */
+const INITIAL_SNAPSHOT: ForgeWorkbenchSnapshot = {
+  drawerEntryId: null,
+  overview: INITIAL,
+  taskFocus: null,
+  drawerTaskId: null,
+  transitionFocus: null,
+}
+
 function navSpy() {
   return { showKnowledge: vi.fn(), showSession: vi.fn() }
 }
@@ -39,8 +48,8 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     })
     bridge.openKnowledgeEntry(42)
     expect(nav.showKnowledge).toHaveBeenCalledTimes(1)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 42, overview: INITIAL, taskFocus: null })
-    expect(seen).toEqual([{ drawerEntryId: 42, overview: INITIAL, taskFocus: null }])
+    expect(bridge.getSnapshot()).toEqual({ ...INITIAL_SNAPSHOT, drawerEntryId: 42 })
+    expect(seen).toEqual([{ ...INITIAL_SNAPSHOT, drawerEntryId: 42 }])
     dispose()
     publishWorkbenchBridge(undefined)
   })
@@ -50,7 +59,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     const bridge = createWorkbenchBridge(nav)
     const first = bridge.getSnapshot()
     bridge.setDrawerEntry(7)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: 7, overview: INITIAL, taskFocus: null })
+    expect(bridge.getSnapshot()).toEqual({ ...INITIAL_SNAPSHOT, drawerEntryId: 7 })
     const second = bridge.getSnapshot()
     let notified = 0
     const dispose = bridge.subscribe(() => {
@@ -61,7 +70,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(bridge.getSnapshot()).toBe(second)
     expect(second).not.toBe(first)
     bridge.setDrawerEntry(null)
-    expect(bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: INITIAL, taskFocus: null })
+    expect(bridge.getSnapshot()).toEqual(INITIAL_SNAPSHOT)
     expect(notified).toBe(1)
     dispose()
     publishWorkbenchBridge(undefined)
@@ -99,7 +108,7 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     })
     bridge.openTaskFocus({ taskId: 't-1', featureSlug: 'm2-pipeline' })
     expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-1', featureSlug: 'm2-pipeline', nonce: 1 })
-    // 双缝独立：抽屉目标与概览上下文不被聚焦写回扰动
+    // 多缝独立：知识抽屉目标与概览上下文不被聚焦写回扰动
     expect(bridge.getSnapshot().drawerEntryId).toBeNull()
     expect(bridge.getSnapshot().overview).toEqual(INITIAL)
     expect(notified).toBe(1)
@@ -109,6 +118,40 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(notified).toBe(2)
     expect(seen[1]!.taskFocus!.nonce).toBeGreaterThan(seen[0]!.taskFocus!.nonce)
     // 快照身份稳定注记不适用本缝（nonce 恒新——身份恒变是语义本体）
+    dispose()
+    publishWorkbenchBridge(undefined)
+  })
+
+  it('openTaskDrawer/closeTaskDrawer 任务弹窗缝（m3.1 D21/D23）：开/关写快照（幂等 no-op 不通知）；聚焦/转移缝独立', () => {
+    const nav = navSpy()
+    const bridge = createWorkbenchBridge(nav)
+    expect(bridge.getSnapshot().drawerTaskId).toBeNull() // 缺省关闭
+    let notified = 0
+    const dispose = bridge.subscribe(() => {
+      notified += 1
+    })
+    bridge.openTaskDrawer('t-7')
+    expect(bridge.getSnapshot().drawerTaskId).toBe('t-7')
+    expect(notified).toBe(1)
+    // 幂等：同任务重开（消费侧单例换内容语义）不通知
+    bridge.openTaskDrawer('t-7')
+    expect(notified).toBe(1)
+    // 切换任务（单例原位换内容）= 变更通知
+    bridge.openTaskDrawer('t-8')
+    expect(bridge.getSnapshot().drawerTaskId).toBe('t-8')
+    expect(notified).toBe(2)
+    // 关闭（幂等）
+    bridge.closeTaskDrawer()
+    expect(bridge.getSnapshot().drawerTaskId).toBeNull()
+    expect(notified).toBe(3)
+    bridge.closeTaskDrawer()
+    expect(notified).toBe(3)
+    // 缝独立：taskFocus/transitionFocus 不被弹窗写回扰动
+    bridge.openTaskFocus({ taskId: 't-7', featureSlug: 'f' })
+    bridge.openTaskTransition({ taskId: 't-7' })
+    expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-7', featureSlug: 'f', nonce: 1 })
+    expect(bridge.getSnapshot().transitionFocus).toEqual({ taskId: 't-7', featureSlug: '', nonce: 1 })
+    expect(bridge.getSnapshot().drawerTaskId).toBeNull()
     dispose()
     publishWorkbenchBridge(undefined)
   })

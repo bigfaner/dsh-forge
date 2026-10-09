@@ -1,12 +1,17 @@
-// ShellHost 单测 —— 常驻壳宿主（fix-25：shell.overlay 槽位件）。
+// ShellHost 单测 —— 常驻壳宿主（fix-25：shell.overlay 槽位件；m3.1 D21/D23 增任务详情
+// 弹窗宿主——挂载独立于 dock）。
 // SSR 首帧 = 装配结构 + 相位锚（效应面零执行归 e2e）；hero 面板驱动 = 纯函数直测
 // （一次性守卫 + 边沿让位）；workspace 归属锚 = SSR 钩子读取面（WorkbenchPanel 同形制迁入）。
 // fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件（hooks 规则合规）——
 // 钩子形制断言 = 子件直测（渲染期读取 + null 渲染），效应上抛面归 e2e。
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
 import { ForgeShellHost, PanelInfoAnchor, heroPanelDrive, readActivePanelId } from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
+import { createWorkbenchBridge, type ForgeCenterNav } from './workbench-bridge.js'
+
+const noopNav: ForgeCenterNav = { showKnowledge: () => {}, showSession: () => {} }
 
 describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场）', () => {
   it('无 kit/无 RPC（SSR 首帧）= 校平位相位 + 三锚齐备（workbench/phase/view——e2e 迁移锚）', () => {
@@ -33,11 +38,36 @@ describe('ForgeShellHost SSR 首帧（效应面零执行——装配结构在场
     expect(markup).toContain('data-dswf-workbench') // MainSessionAnchor 渲染 null——钩子形制不炸
   })
 
-  it('bridge 在场（4.1 概览上下文写回缝）：渲染不炸（写回归效应——e2e 面）', () => {
-    const markup = renderToStaticMarkup(
-      <ForgeShellHost bridge={{ setOverviewContext: () => {} }} />,
-    )
+  it('bridge 在场（4.1 概览上下文写回缝 + m3.1 弹窗受控读面）：渲染不炸（写回/订阅归效应——e2e 面）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    const markup = renderToStaticMarkup(<ForgeShellHost bridge={bridge} />)
     expect(markup).toContain('data-dswf-workbench')
+  })
+})
+
+describe('任务详情弹窗宿主（m3.1 D21/D23：桥 drawerTaskId 受控——挂载独立于 dock）', () => {
+  it('桥 drawerTaskId 在场（锚定写回后）= 弹窗壳挂载（data-dswf-td-drawer——装载在途骨架壳）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1' })
+    bridge.openTaskDrawer('t-1')
+    const markup = renderToStaticMarkup(createElement(ForgeShellHost, { bridge }))
+    expect(markup).toContain('data-dswf-td-drawer')
+    expect(markup).toContain('data-dswf-td-close')
+    expect(markup).toContain('data-dswf-td-head')
+  })
+
+  it('桥 drawerTaskId 缺席 = 弹窗零挂载（关闭即卸载——几何不记忆的挂载面）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1' })
+    const markup = renderToStaticMarkup(createElement(ForgeShellHost, { bridge }))
+    expect(markup).not.toContain('data-dswf-td-drawer')
+  })
+
+  it('无锚（projectId null）即便 drawerTaskId 在场 = 弹窗零挂载（受控面诚实降级——不猜项目）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    bridge.openTaskDrawer('t-1')
+    const markup = renderToStaticMarkup(createElement(ForgeShellHost, { bridge }))
+    expect(markup).not.toContain('data-dswf-td-drawer')
   })
 })
 

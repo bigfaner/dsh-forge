@@ -206,16 +206,69 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     // 副行承重（前置计数形 ←N 前置——键+当前状态形归抽屉现状条，ui-design 分工）
     await expect(page.locator(`[data-dswf-tt-sub="${idOf(ids, 1)}"]`).first(), '副行呈现前置计数（依赖边 → ←1 前置）').toContainText('←1 前置')
 
-    // ── Step 6：详情抽屉（模块化分区 + 执行时间线）──
+    // ── Step 6：详情弹窗（m3.1 D21：右缘滑入抽屉退役 → 可拖动弹窗——模块化分区 + 时间线 + 几何）──
     await page.locator(ttItemOf(idOf(ids, 2))).first().click()
-    await expect(page.locator(TD_DRAWER).first(), '右侧滑入抽屉在场').toBeVisible({ timeout: 15_000 })
+    const drawerEl = page.locator(TD_DRAWER).first()
+    await expect(drawerEl, '可拖动弹窗在场（D21——抽屉形态退役）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator('[data-dswf-td-sect="content"]').first(), '任务内容分区在场').toBeVisible()
     await expect(page.locator('[data-dswf-td-sect="timeline"]').first(), '执行时间线分区在场').toBeVisible()
     await expect(page.locator('[data-dswf-td-ev-verb="claim"]').first(), '时间线事件行：claim').toBeVisible()
     await expect(page.locator('[data-dswf-td-ev-verb="submit"]').first(), '时间线事件行：submit').toBeVisible()
-    await expect(page.locator(TD_DRAWER).first()).toContainText('走查·已结 three')
+    await expect(drawerEl).toContainText('走查·已结 three')
+    // m3.1 D21 弹窗几何读数（inline 宽/左/顶 = mount 效应落定后的逐开本地态——CSS 居中兜底已让位）
+    const drawerGeom = async (): Promise<{ width: number; left: number; top: number }> => {
+      const geom = await drawerEl.evaluate((el) => ({
+        width: Number.parseFloat((el as HTMLElement).style.width),
+        left: Number.parseFloat((el as HTMLElement).style.left),
+        top: Number.parseFloat((el as HTMLElement).style.top),
+      }))
+      expect(geom.left, '起始位已落定（inline left 注入）').not.toBeNaN()
+      return geom
+    }
+    const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }))
+    const defaultLeft = Math.max(8, Math.round((vp.w - 440) / 2))
+    const defaultTop = Math.max(8, Math.round(vp.h * 0.14))
+    const opened = await drawerGeom()
+    expect(opened.width, '默认宽 440（原型 M31_TM_W 刻度）').toBe(440)
+    expect(opened.left, '默认起始位 = 水平居中（原型 openTaskModal）').toBe(defaultLeft)
+    expect(opened.top, '默认起始位 = 视口高 14%').toBe(defaultTop)
+    // 标题栏全窗拖移（D21：指针位移 → 位钳制内平移）
+    const headBox = await drawerEl.locator('[data-dswf-td-head]').boundingBox()
+    expect(headBox, '标题栏在场（全窗拖移手柄）').not.toBeNull()
+    const hx = headBox!.x + headBox!.width / 2
+    const hy = headBox!.y + headBox!.height / 2
+    await page.mouse.move(hx, hy)
+    await page.mouse.down()
+    await page.mouse.move(hx + 60, hy + 30, { steps: 4 })
+    await page.mouse.up()
+    const moved = await drawerGeom()
+    expect(moved.width, '拖移不改宽').toBe(440)
+    expect(moved.left, '标题栏拖移 = 全窗平移（左 +60）').toBe(opened.left + 60)
+    expect(moved.top, '标题栏拖移 = 全窗平移（顶 +30）').toBe(opened.top + 30)
+    // 右缘拖宽（D21：对侧锚定——左缘不动；320–760 钳制沿袭）
+    const handleBox = await drawerEl.locator('[data-dswf-td-resize="right"]').boundingBox()
+    expect(handleBox, '右缘拖宽手柄在场').not.toBeNull()
+    const rx = handleBox!.x + handleBox!.width / 2
+    const ry = handleBox!.y + handleBox!.height / 2
+    await page.mouse.move(rx, ry)
+    await page.mouse.down()
+    await page.mouse.move(rx + 120, ry, { steps: 4 })
+    await page.mouse.up()
+    const resized = await drawerGeom()
+    expect(resized.width, '右缘拖宽 +120 → 560（限 320–760）').toBe(560)
+    expect(resized.left, '对侧锚定：右缘拖宽左缘不动').toBe(moved.left)
+    // ✕ 关闭 → 重开回默认起始位（裁决 #3：关闭不记忆位置/尺寸——几何随壳卸载弃置）
     await page.locator('[data-dswf-td-close]').first().click()
-    await expect(page.locator(TD_DRAWER).first()).toHaveCount(0)
+    await expect(page.locator(TD_DRAWER)).toHaveCount(0)
+    await page.locator(ttItemOf(idOf(ids, 2))).first().click()
+    await expect(drawerEl, '重开弹窗在场（单例原位）').toBeVisible({ timeout: 15_000 })
+    const reopened = await drawerGeom()
+    expect(reopened.width, '重开回默认宽 440（不记忆尺寸）').toBe(440)
+    expect(reopened.left, '重开回默认起始位·水平居中（不记忆位置）').toBe(defaultLeft)
+    expect(reopened.top, '重开回默认起始位·14vh（不记忆位置）').toBe(defaultTop)
+    // Esc 关闭（D21：Esc 与 ✕ 双通道）
+    await page.keyboard.press('Escape')
+    await expect(page.locator(TD_DRAWER)).toHaveCount(0)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

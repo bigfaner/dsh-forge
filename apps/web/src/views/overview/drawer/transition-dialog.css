@@ -7,7 +7,7 @@
  *     （布局尺寸以原型结构为准——styling TECH-styling-002）；
  *   - textarea 最小高 64px = 原型原因域刻度。 */
 
-/* ── 遮罩：居中弹层（压抽屉——z 80 > 抽屉 60） ── */
+/* ── 遮罩：居中弹层（压弹窗——z 80 > 弹窗 60） ── */
 .dswf-td-tr-mask {
   position: fixed;
   inset: 0;
@@ -15,6 +15,7 @@
   display: grid;
   place-items: center;
   background: var(--dsw-alias-bg-mask-drop);
+  pointer-events: auto; /* m3.1 D23：挂载随任务弹窗迁 shell.overlay 舞台（零交互）——遮罩恢复命中 */
 }
 
 /* ── 弹体 ── */

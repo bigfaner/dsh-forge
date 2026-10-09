@@ -1,14 +1,16 @@
-// 任务详情抽屉（定位：业务——UF-1/UF-3 交付面：两分块[任务内容/时间线] + 顺滑折叠 +
-// 左缘拖宽 + 类型模板 ×20 + 覆盖率 + 现状条/事件流）。组装分工沿 EntryDrawer 形制：
+// 任务详情弹窗（定位：业务——m3.1 D21/D23：抽屉形态退役 → 可拖动弹窗 + 挂载独立于
+// dock 概览 tab；两分块[任务内容/时间线] + 顺滑折叠 + 左右缘拖宽 320–760 + 标题栏全窗
+// 拖移 + 类型模板 ×20 + 覆盖率 + 现状条/事件流沿袭）。组装分工沿 EntryDrawer 形制：
 // TaskDrawerBody = 纯渲染体（renderToStaticMarkup 全相位可测）；TaskDrawer = 装载壳
-//（useTaskDetail 拉取 + Esc/拖宽接线 + 会话级宽度/折叠保持）。
+//（useTaskDetail 拉取 + Esc/拖移/拖宽接线 + 逐开几何本地态[关闭即弃——裁决 #3 不记忆]）。
 // Hard Rules：
 //   - 界面说明最小化——不渲染数据源解释文字（语义锚 ui-design.md）；
-//   - 折叠就地更新——块体常驻 DOM（grid 0fr/1fr 类切换，React 原地协调不重建抽屉）；
-//     滑入动画仅切换任务时播放（aside key = taskId——同任务重渲染 no-anim）。
-// 打开/关闭/切换由 props 受控（taskId: null = 关闭；3.6 三视图与 4.1 dock 装配接线）；
-// 「转移状态…」入口 → onTransition 回调（3.8 对话框）；参考文档 chip → onOpenDoc（dock 开
-// tab，抽屉保持）。
+//   - 折叠就地更新——块体常驻 DOM（grid 0fr/1fr 类切换，React 原地协调不重建弹窗）；
+//   - 几何（宽/左/上）= 装载壳逐开本地态——切换任务原位换内容（taskId props 变更组件
+//     不卸载），关闭即随壳卸载弃置（重开回默认起始位——挂载方条件渲染承载）。
+// 打开/关闭/切换由 props 受控（taskId: null = 关闭；三视图/桥装配接线）；
+// 「转移状态…」入口 → onTransition 回调（对话框随本壳挂载）；参考文档 chip → onOpenDoc
+//（dock 开 tab，弹窗保持）。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskDetail, type TaskDetailQuery } from '@dsh-forge/contracts'
 import { Button, IconCloseFillRegular, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -22,13 +24,16 @@ import { DiagToast, taskFailureDiagToast, type DiagToastResult, type DiagToastSe
 import '../task-tab/task-tab.css'
 import {
   clampDrawerWidth,
+  defaultDrawerPosition,
+  drawerPositionFromDrag,
   drawerSessionStore,
-  drawerWidthFromDrag,
+  drawerWidthFromEdgeDrag,
   DRAWER_WIDTH_DEFAULT,
   DRAWER_WIDTH_STEP,
-  initialDrawerCollapse,
   stepDrawerWidth,
   type DrawerCollapseState,
+  type DrawerModalPosition,
+  type DrawerResizeEdge,
   type DrawerSectionKey,
 } from './collapse.js'
 import { taskGoalOf, taskKvChips, taskKeyLabel, taskResultOf, varsText } from './detail-model.js'
@@ -187,21 +192,122 @@ export function taskFailureInputOf(detail: TaskDetail, docsRoot?: string): TaskF
   }
 }
 
+/** 拖移会话种类（标题栏全窗拖移 / 左缘拖宽 / 右缘拖宽——装载壳几何计算定向） */
+export type TaskDrawerDragKind = 'move' | 'resize-left' | 'resize-right'
+
+/** 弹窗壳 inline 几何样式（宽恒注入；位未定[null] = CSS 居中兜底让位） */
+export function taskDrawerShellStyle(width: number, position: DrawerModalPosition | null): {
+  readonly width: string
+  readonly left?: string
+  readonly top?: string
+  readonly transform?: string
+} {
+  return {
+    width: `${width}px`,
+    ...(position !== null ? { left: `${position.left}px`, top: `${position.top}px`, transform: 'none' } : {}),
+  }
+}
+
+/**
+ * 标题栏拖移事件接线（装载/错误/骨架三面共用——D21 全窗拖移）：主键按住拖移、
+ * 按钮（✕ 等）命中不劫持。
+ */
+export function taskDrawerHeadDragProps(
+  onDragStart: (kind: TaskDrawerDragKind, clientX: number, clientY: number) => void,
+  onDragMove: (clientX: number, clientY: number) => void,
+  onDragEnd: () => void,
+): {
+  readonly onPointerDown: (event: React.PointerEvent<HTMLElement>) => void
+  readonly onPointerMove: (event: React.PointerEvent<HTMLElement>) => void
+  readonly onPointerUp: () => void
+  readonly onPointerCancel: () => void
+} {
+  return {
+    onPointerDown: (event) => {
+      if ((event.target as HTMLElement).closest('button') !== null) return
+      event.currentTarget.setPointerCapture(event.pointerId)
+      onDragStart('move', event.clientX, event.clientY)
+    },
+    onPointerMove: (event) => {
+      if ((event.buttons & 1) === 0) return // 仅主键按住拖拽
+      onDragMove(event.clientX, event.clientY)
+    },
+    onPointerUp: onDragEnd,
+    onPointerCancel: onDragEnd,
+  }
+}
+
+/**
+ * 缘侧拖宽手柄（D21：左右各一——对侧锚定）：指针捕获拖宽 + 键盘 ←→ 步进（方向随缘侧
+ * 定向：指向弹窗外侧 = 加宽）+ 双击复位默认宽。
+ */
+function DrawerResizeHandle({
+  edge,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onStepWidth,
+  onResetWidth,
+}: {
+  readonly edge: DrawerResizeEdge
+  readonly onDragStart: (kind: TaskDrawerDragKind, clientX: number, clientY: number) => void
+  readonly onDragMove: (clientX: number, clientY: number) => void
+  readonly onDragEnd: () => void
+  readonly onStepWidth: (delta: number) => void
+  readonly onResetWidth: () => void
+}): ReactNode {
+  // 手柄键盘微调（可达性：指向弹窗外侧 = 加宽 ±32——左缘 ← 加宽 / 右缘 → 加宽）
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      onStepWidth(edge === 'left' ? DRAWER_WIDTH_STEP : -DRAWER_WIDTH_STEP)
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      onStepWidth(edge === 'right' ? DRAWER_WIDTH_STEP : -DRAWER_WIDTH_STEP)
+    }
+  }
+  return (
+    <div
+      className="dswf-td-resize"
+      role="separator"
+      aria-orientation="vertical"
+      tabIndex={0}
+      aria-label={edge === 'left' ? '拖动调整弹窗宽度（左缘）' : '拖动调整弹窗宽度（右缘）'}
+      title="拖动调宽 · 双击复位"
+      data-dswf-td-resize={edge}
+      onKeyDown={handleKeyDown}
+      onDoubleClick={() => {
+        onResetWidth()
+      }}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        onDragStart(edge === 'left' ? 'resize-left' : 'resize-right', event.clientX, event.clientY)
+      }}
+      onPointerMove={(event) => {
+        if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
+        onDragMove(event.clientX, event.clientY)
+      }}
+      onPointerUp={onDragEnd}
+      onPointerCancel={onDragEnd}
+    />
+  )
+}
+
 export interface TaskDrawerBodyProps {
   readonly detail: TaskDetail
-  /** 抽屉宽（px——会话级保持值注入） */
+  /** 弹窗宽（px——装载壳逐开本地态注入） */
   readonly width: number
+  /** 弹窗位置（px——装载壳逐开本地态注入；null = 起始位未定[CSS 居中兜底]） */
+  readonly position: DrawerModalPosition | null
   /** 折叠态（会话级保持值注入） */
   readonly collapsed: DrawerCollapseState
-  /** 滑入动画（仅切换任务时 true——同任务重渲染 false → no-anim） */
-  readonly animate: boolean
   readonly onClose: () => void
   readonly onToggleSection: (key: DrawerSectionKey) => void
-  /** 参考文档 chip 点击（dock 开 tab——抽屉保持） */
+  /** 参考文档 chip 点击（dock 开 tab——弹窗保持） */
   readonly onOpenDoc: (docRel: string) => void
-  /** 挂接会话 pill 点击（跳会话——4.1 接线；缺席 = 非交互呈现） */
+  /** 挂接会话 pill 点击（跳会话——装配接线；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
-  /** 「转移状态…」入口（3.8 对话框开——缺席 = 禁用） */
+  /** 「转移状态…」入口（对话框开——缺席 = 禁用） */
   readonly onTransition?: (taskId: string) => void
   /** 「诊断失败」入口（4.6——仅 blocked/rejected 任务呈现；缺席 = 按钮不呈现） */
   readonly onDiagnoseFailure?: (detail: TaskDetail) => void
@@ -212,20 +318,24 @@ export interface TaskDrawerBodyProps {
   readonly onDiagSend?: (payload: DiagToastSendPayload) => void
   /** 双击复位宽度 */
   readonly onResetWidth: () => void
-  /** 键盘步进（← 加宽 +32 / → 收窄 -32——方向由本组件定向） */
+  /** 键盘步进（方向由手柄缘侧定向——装载壳钳制内应用） */
   readonly onStepWidth: (delta: number) => void
-  /** 拖拽调宽（左缘手柄——指针即左缘） */
-  readonly onDragWidth: (clientX: number, viewportWidth: number) => void
+  /** 拖移会话开（标题栏拖移 / 缘侧拖宽——起点快照归装载壳） */
+  readonly onDragStart: (kind: TaskDrawerDragKind, clientX: number, clientY: number) => void
+  /** 拖移会话步进（指针位移 → 几何换算归装载壳） */
+  readonly onDragMove: (clientX: number, clientY: number) => void
+  /** 拖移会话收（指针释放） */
+  readonly onDragEnd: () => void
   /** 相对时间基准（缺省当次渲染时刻） */
   readonly now?: number
 }
 
-/** 任务详情抽屉纯渲染体（AC1 两分块 + AC4 块一组装 + AC6 调宽/关闭锚） */
+/** 任务详情弹窗纯渲染体（D21 弹窗壳 + 两分块 + 调宽/关闭锚） */
 export function TaskDrawerBody({
   detail,
   width,
+  position,
   collapsed,
-  animate,
   onClose,
   onToggleSection,
   onOpenDoc,
@@ -237,7 +347,9 @@ export function TaskDrawerBody({
   onDiagSend,
   onResetWidth,
   onStepWidth,
-  onDragWidth,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
   now,
 }: TaskDrawerBodyProps): ReactNode {
   const at = now ?? Date.now()
@@ -247,47 +359,32 @@ export function TaskDrawerBody({
   const showCoverage = templateFamilyOf(detail.taskType) === 'coding' && (coverage.actualPct !== undefined || coverage.expectedPct !== undefined)
   const note = varsText(detail.vars ?? {}, 'note')
 
-  // 手柄键盘微调（可达性：← 加宽 +32 / → 收窄 -32）
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault()
-      onStepWidth(DRAWER_WIDTH_STEP)
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault()
-      onStepWidth(-DRAWER_WIDTH_STEP)
-    }
-  }
-
   return (
     <aside
       key={detail.taskId}
-      className={`dswf-td-drawer ${categoryClass}${animate ? '' : ' no-anim'}`}
+      className={`dswf-td-drawer ${categoryClass}`}
       role="dialog"
       aria-label="任务详情"
-      style={{ width: `${width}px` }}
+      style={taskDrawerShellStyle(width, position)}
       data-dswf-td-drawer=""
     >
-      <div
-        className="dswf-td-resize"
-        role="separator"
-        aria-orientation="vertical"
-        tabIndex={0}
-        aria-label="拖动调整抽屉宽度"
-        title="拖动调宽 · 双击复位"
-        data-dswf-td-resize=""
-        onKeyDown={handleKeyDown}
-        onDoubleClick={() => {
-          onResetWidth()
-        }}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId)
-        }}
-        onPointerMove={(event) => {
-          if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
-          onDragWidth(event.clientX, window.innerWidth)
-        }}
+      <DrawerResizeHandle
+        edge="left"
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onStepWidth={onStepWidth}
+        onResetWidth={onResetWidth}
       />
-      <div className="dswf-td-head">
+      <DrawerResizeHandle
+        edge="right"
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onStepWidth={onStepWidth}
+        onResetWidth={onResetWidth}
+      />
+      <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(onDragStart, onDragMove, onDragEnd)}>
         <StateDot state={STATUS_DOT_STATE[detail.taskStatus]} size={8} />
         <span className="dswf-td-key" title={taskKeyLabel(detail.slug, detail.localId)}>
           {taskKeyLabel(detail.slug, detail.localId)}
@@ -301,7 +398,7 @@ export function TaskDrawerBody({
           size="sm"
           className="dswf-td-close"
           data-dswf-td-close=""
-          aria-label="关闭抽屉"
+          aria-label="关闭弹窗"
           title="关闭（Esc）"
           onClick={onClose}
         >
@@ -418,7 +515,7 @@ export async function fetchTaskDetail(client: ForgeRpcClient, projectId: string,
   }
 }
 
-/** 抽屉装载态（同任务静默重取 = detail 保持旧值——不重放滑入/不闪骨架） */
+/** 弹窗装载态（同任务静默重取 = detail 保持旧值——不闪骨架；m3.1 D21 滑入动画已随抽屉形态退役） */
 export interface TaskDrawerLoadState {
   readonly phase: 'loading' | 'ready' | 'error'
   readonly detail: TaskDetail | undefined
@@ -501,17 +598,17 @@ export function useTaskDrawerEscape(taskId: string | null, onClose: () => void):
 export interface TaskDrawerProps {
   /** 当前项目 id */
   readonly projectId: string
-  /** 打开任务（null = 关闭不渲染；切换 = 内容换装 + 滑入重播） */
+  /** 打开任务（null = 关闭不渲染；非空切换 = 原位换内容——D21 单例语义） */
   readonly taskId: string | null
   /** 关闭（Esc / ✕——上抛装配方） */
   readonly onClose: () => void
-  /** 参考文档 chip 点击（dock 开 tab——4.1 接线） */
+  /** 参考文档 chip 点击（dock 开 tab——装配接线） */
   readonly onOpenDoc?: (docRel: string) => void
-  /** 挂接会话 pill 点击（跳会话——4.1 接线） */
+  /** 挂接会话 pill 点击（跳会话——装配接线） */
   readonly onOpenSession?: (sessionId: string) => void
-  /** 「转移状态…」入口（3.8 对话框开） */
+  /** 「转移状态…」入口（对话框开） */
   readonly onTransition?: (taskId: string) => void
-  /** 打开新会话通道（4.6 任务失败诊断「发送给 agent」——装配注入；发往任务容器对应模式） */
+  /** 打开新会话通道（任务失败诊断「发送给 agent」——装配注入；发往任务容器对应模式） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** @ 锚文档根（装配 fail-soft 装载注入——useProjectDocsRoot 项目行推导；缺席 = `docs` 缺省锚） */
   readonly docsRoot?: string
@@ -521,10 +618,32 @@ export interface TaskDrawerProps {
   readonly now?: number
 }
 
+/** 逐开几何（宽 + 位——装载壳本地态；关闭随壳卸载弃置 = 不记忆[裁决 #3]） */
+export interface TaskDrawerGeometry {
+  readonly width: number
+  readonly position: DrawerModalPosition | null
+}
+
+/** 初始几何（默认宽 440 + 位未定——mount 效应按视口落默认起始位；null = CSS 居中兜底） */
+export function initialTaskDrawerGeometry(): TaskDrawerGeometry {
+  return { width: DRAWER_WIDTH_DEFAULT, position: null }
+}
+
+/** 拖移会话快照（起点指针 + 起点几何——装载壳 move/resize 计算输入） */
+export interface TaskDrawerDragSession {
+  readonly kind: TaskDrawerDragKind
+  readonly startClientX: number
+  readonly startClientY: number
+  readonly startWidth: number
+  readonly startLeft: number
+  readonly startTop: number
+}
+
 /**
- * 抽屉装载壳（3.6 三视图行点击 / 4.1 dock 装配接线）：宽度/折叠 = 会话级保持
- * （drawerSessionStore——关开抽屉/切任务共享）；同任务重渲染 no-anim（滑入仅切任务播放）。
- * 4.6 任务失败诊断：blocked/rejected「诊断失败」→ 失败摘要 toast（5s）+「发送给 agent」
+ * 弹窗装载壳（三视图行点击 / 桥装配接线）：几何（宽/位）= 逐开本地态（关闭随壳卸载
+ * 弃置——重开回默认起始位[裁决 #3 不记忆]；切换任务原位保持——taskId props 变更不卸载）；
+ * 折叠 = 会话级保持（drawerSessionStore——关开弹窗/切任务共享）。
+ * 任务失败诊断：blocked/rejected「诊断失败」→ 失败摘要 toast（5s）+「发送给 agent」
  * → formatDiagMessage 自动发送（发往任务容器对应模式：feature → 远征 / 突击提案 → 突击；
  * 容器 mode 缺席[未标记提案直挂] = 不切换——registry 默认）。
  */
@@ -535,7 +654,23 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
     setSession(drawerSessionStore.getState())
   }), [])
   const [state, { retry }] = useTaskDetail(projectId, taskId, makeClient)
-  const lastTaskRef = useRef<string | null>(null)
+  // 逐开几何：ref = 处理器同步读源，state = 渲染驱动（双轨同写）
+  const [geometry, setGeometryState] = useState<TaskDrawerGeometry>(initialTaskDrawerGeometry)
+  const geometryRef = useRef<TaskDrawerGeometry>(geometry)
+  const applyGeometry = useCallback((next: TaskDrawerGeometry): void => {
+    geometryRef.current = next
+    setGeometryState(next)
+  }, [])
+  const dragRef = useRef<TaskDrawerDragSession | null>(null)
+  // 默认起始位落定（mount 后按视口计算——水平居中 + 14vh；SSR 首帧 CSS 兜底）
+  useEffect(() => {
+    const current = geometryRef.current
+    if (current.position !== null) return
+    applyGeometry({
+      ...current,
+      position: defaultDrawerPosition(window.innerWidth, window.innerHeight, current.width),
+    })
+  }, [applyGeometry])
   // 任务失败诊断 toast（受控 {result, mode}——mode = 触发时任务容器模式快照，发送路由此）
   const [diag, setDiag] = useState<{ readonly result: DiagToastResult; readonly mode: 'expedition' | 'blitz' | undefined } | undefined>(undefined)
 
@@ -543,13 +678,62 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
     drawerSessionStore.toggleSection(key)
   }, [])
   const handleStepWidth = useCallback((delta: number): void => {
-    drawerSessionStore.setWidth(stepDrawerWidth(drawerSessionStore.getState().width, delta))
-  }, [])
+    const current = geometryRef.current
+    applyGeometry({ ...current, width: stepDrawerWidth(current.width, delta, window.innerWidth) })
+  }, [applyGeometry])
   const handleResetWidth = useCallback((): void => {
-    drawerSessionStore.setWidth(DRAWER_WIDTH_DEFAULT)
-  }, [])
-  const handleDragWidth = useCallback((clientX: number, viewportWidth: number): void => {
-    drawerSessionStore.setWidth(drawerWidthFromDrag(clientX, viewportWidth))
+    const current = geometryRef.current
+    applyGeometry({ ...current, width: DRAWER_WIDTH_DEFAULT })
+  }, [applyGeometry])
+  const handleDragStart = useCallback((kind: TaskDrawerDragKind, clientX: number, clientY: number): void => {
+    const current = geometryRef.current
+    // 起始位未定即拖移（mount 效应前）——同步落定后取起点
+    const startPosition =
+      current.position ?? defaultDrawerPosition(window.innerWidth, window.innerHeight, current.width)
+    if (current.position === null) {
+      applyGeometry({ ...current, position: startPosition })
+    }
+    dragRef.current = {
+      kind,
+      startClientX: clientX,
+      startClientY: clientY,
+      startWidth: current.width,
+      startLeft: startPosition.left,
+      startTop: startPosition.top,
+    }
+  }, [applyGeometry])
+  const handleDragMove = useCallback((clientX: number, clientY: number): void => {
+    const drag = dragRef.current
+    if (drag === null) return
+    if (drag.kind === 'move') {
+      applyGeometry({
+        width: drag.startWidth,
+        position: drawerPositionFromDrag(
+          { left: drag.startLeft, top: drag.startTop },
+          drag.startClientX,
+          drag.startClientY,
+          clientX,
+          clientY,
+          window.innerWidth,
+          window.innerHeight,
+          drag.startWidth,
+        ),
+      })
+      return
+    }
+    const edge: DrawerResizeEdge = drag.kind === 'resize-left' ? 'left' : 'right'
+    const width = drawerWidthFromEdgeDrag(edge, drag.startWidth, drag.startClientX, clientX, window.innerWidth)
+    applyGeometry({
+      width,
+      // 对侧锚定：左缘拖宽 = 右缘不动（左随宽补）；右缘拖宽 = 左缘不动
+      position: {
+        left: drag.kind === 'resize-left' ? drag.startLeft + (drag.startWidth - width) : drag.startLeft,
+        top: drag.startTop,
+      },
+    })
+  }, [applyGeometry])
+  const handleDragEnd = useCallback((): void => {
+    dragRef.current = null
   }, [])
   const handleDiagnoseFailure = useCallback((detail: TaskDetail): void => {
     setDiag({ result: taskFailureDiagToast(taskFailureInputOf(detail, docsRoot)), mode: detail.container.mode })
@@ -572,26 +756,25 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
   const openDoc = onOpenDoc ?? ((): void => {})
 
   if (taskId === null) {
-    lastTaskRef.current = null
     return null
   }
-  const animate = lastTaskRef.current !== taskId
-  lastTaskRef.current = taskId
 
   if (state.phase === 'error' && state.error !== undefined) {
     return (
       <aside
         key={taskId}
-        className={`dswf-td-drawer${animate ? '' : ' no-anim'}`}
+        className="dswf-td-drawer"
         role="dialog"
         aria-label="任务详情"
-        style={{ width: `${session.width}px` }}
+        style={taskDrawerShellStyle(geometry.width, geometry.position)}
         data-dswf-td-drawer=""
       >
-        <div className="dswf-td-head">
+        <DrawerResizeHandle edge="left" onDragStart={handleDragStart} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onStepWidth={handleStepWidth} onResetWidth={handleResetWidth} />
+        <DrawerResizeHandle edge="right" onDragStart={handleDragStart} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onStepWidth={handleStepWidth} onResetWidth={handleResetWidth} />
+        <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭抽屉" title="关闭（Esc）" onClick={onClose}>
+          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" title="关闭（Esc）" onClick={onClose}>
             <IconCloseFillRegular size={14} />
           </Button>
         </div>
@@ -616,16 +799,18 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
     return (
       <aside
         key={taskId}
-        className={`dswf-td-drawer${animate ? '' : ' no-anim'}`}
+        className="dswf-td-drawer"
         role="dialog"
         aria-label="任务详情"
-        style={{ width: `${session.width}px` }}
+        style={taskDrawerShellStyle(geometry.width, geometry.position)}
         data-dswf-td-drawer=""
       >
-        <div className="dswf-td-head">
+        <DrawerResizeHandle edge="left" onDragStart={handleDragStart} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onStepWidth={handleStepWidth} onResetWidth={handleResetWidth} />
+        <DrawerResizeHandle edge="right" onDragStart={handleDragStart} onDragMove={handleDragMove} onDragEnd={handleDragEnd} onStepWidth={handleStepWidth} onResetWidth={handleResetWidth} />
+        <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭抽屉" title="关闭（Esc）" onClick={onClose}>
+          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" title="关闭（Esc）" onClick={onClose}>
             <IconCloseFillRegular size={14} />
           </Button>
         </div>
@@ -636,9 +821,9 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
   return (
     <TaskDrawerBody
       detail={state.detail}
-      width={clampDrawerWidth(session.width)}
-      collapsed={session.collapsed ?? initialDrawerCollapse()}
-      animate={animate}
+      width={clampDrawerWidth(geometry.width)}
+      position={geometry.position}
+      collapsed={session.collapsed}
       onClose={onClose}
       onToggleSection={handleToggleSection}
       onOpenDoc={openDoc}
@@ -650,7 +835,9 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
       {...(onStartSession !== undefined ? { onDiagSend: handleDiagSend } : {})}
       onResetWidth={handleResetWidth}
       onStepWidth={handleStepWidth}
-      onDragWidth={handleDragWidth}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
       now={now}
     />
   )

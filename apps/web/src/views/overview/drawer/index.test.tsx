@@ -1,6 +1,7 @@
-// 任务详情抽屉单测 —— AC1 两分块结构 / AC2 折叠就地更新（aria + 类位）/ AC6 调宽与关闭锚 /
-// 装载壳（fetch 唯一通道 + 关闭不渲染 + 首帧骨架）。渲染面 = renderToStaticMarkup（仓库形制）；
-// 拖拽/键盘/Esc 的 DOM 事件链 = 4.1 装配 + 5.2 e2e 面（纯数学面已归 collapse.test）。
+// 任务详情弹窗单测 —— m3.1 D21 弹窗壳（标题栏拖移/左右缘拖宽锚 + 关闭锚）+ 两分块结构 /
+// 折叠就地更新（aria + 类位）/ 装载壳（fetch 唯一通道 + 关闭不渲染 + 首帧骨架）。
+// 渲染面 = renderToStaticMarkup（仓库形制）；拖拽/键盘/Esc 的 DOM 事件链 = 装配 + e2e 面
+// （纯数学面已归 collapse.test——缘侧对侧锚定 + 位置钳制）。
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -19,6 +20,8 @@ import { docsRootOf, formatDiagMessage } from '../message-format.js'
 
 const NOOP = (): void => {}
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
+/** 起始位样本（装载壳注入面——真实值归 mount 效应 defaultDrawerPosition） */
+const POSITION = { left: 740, top: 140 }
 
 /** 基准记录链（add → claim → submit——completed 任务全织入面） */
 const RECORDS: readonly TaskRecordEntry[] = [
@@ -41,14 +44,16 @@ function bodyProps(overrides: Partial<Parameters<typeof TaskDrawerBody>[0]> = {}
   return {
     detail: detailFixture({ records: [...RECORDS] }),
     width: DRAWER_WIDTH_DEFAULT,
+    position: POSITION,
     collapsed: initialDrawerCollapse(),
-    animate: true,
     onClose: NOOP,
     onToggleSection: NOOP,
     onOpenDoc: NOOP,
     onResetWidth: NOOP,
     onStepWidth: NOOP,
-    onDragWidth: NOOP,
+    onDragStart: NOOP,
+    onDragMove: NOOP,
+    onDragEnd: NOOP,
     diagResult: undefined,
     onDiagDismiss: NOOP,
     now: NOW,
@@ -145,12 +150,10 @@ describe('TaskDrawerBody · 两分块与折叠（AC1/AC2）', () => {
     expect(collapsed.slice(timelineClosed, timelineClosed + 80)).toContain('aria-expanded="false"')
   })
 
-  it('块头 = button（Enter/Space 原生可用）；滑入动画仅切换任务播放（同任务 no-anim，AC2/流程4）', () => {
+  it('块头 = button（Enter/Space 原生可用）；滑入动画类零在场（D21 抽屉形态退役——no-anim/animation 锚零残留）', () => {
     const html = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
     expect(html).toContain('<button type="button" class="dswf-td-sect"')
-    const same = renderToStaticMarkup(TaskDrawerBody(bodyProps({ animate: false })))
-    expect(same).toContain('no-anim')
-    expect(html).not.toContain('no-anim')
+    expect(html).not.toContain('no-anim') // 滑入动画机零在场（CSS 锚同步退役）
   })
 
   it('drawerBodySections：两块 id 与标题序（块一 → 块二）', () => {
@@ -179,14 +182,30 @@ describe('TaskDrawerBody · 目标/结果与备注（AC4 块首对行）', () =>
   })
 })
 
-describe('TaskDrawerBody · 调宽与关闭（AC6）', () => {
-  it('宽度经 style 注入（px）；左缘手柄 = separator（键盘可聚焦 + 双击复位/步进锚）', () => {
-    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ width: 560 })))
+describe('TaskDrawerBody · 弹窗壳（D21：标题栏拖移 + 左右缘拖宽 + 关闭）', () => {
+  it('宽度/位置经 style 注入（px——起始位 left/top 接管 CSS 兜底）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ width: 560, position: { left: 200, top: 96 } })))
     expect(html).toContain('width:560px')
-    expect(html).toContain('data-dswf-td-resize=""')
-    expect(html).toContain('role="separator"')
+    expect(html).toContain('left:200px')
+    expect(html).toContain('top:96px')
+  })
+
+  it('左右缘手柄各一 = separator（键盘可聚焦 + 双击复位/步进锚——值 = left|right）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
+    expect(html).toContain('data-dswf-td-resize="left"')
+    expect(html).toContain('data-dswf-td-resize="right"')
+    expect(html.match(/role="separator"/g)).toHaveLength(2)
     expect(html).toContain('aria-orientation="vertical"')
     expect(html).toContain('tabindex="0"')
+  })
+
+  it('标题栏拖移锚在场（data-dswf-td-head——全窗拖移手柄）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
+    expect(html).toContain('data-dswf-td-head=""')
+    const headAt = html.indexOf('data-dswf-td-head')
+    const closeAt = html.indexOf('data-dswf-td-close')
+    expect(headAt).toBeGreaterThan(-1)
+    expect(closeAt).toBeGreaterThan(headAt) // ✕ 在标题栏内（拖移手柄同一行）
   })
 
   it('底部「转移状态…」入口：props 回调在场可点；缺席禁用（3.8 对话框接线位）', () => {
@@ -322,17 +341,22 @@ describe('TaskDrawer（装载壳——静态首帧）', () => {
     } as unknown as ForgeRpcClient
   }
 
-  it('taskId = null（关闭）→ 不渲染任何抽屉节点', () => {
+  it('taskId = null（关闭）→ 不渲染任何弹窗节点', () => {
     expect(
       renderToStaticMarkup(createElement(TaskDrawer, { projectId: 'p-1', taskId: null, onClose: NOOP, makeClient: shellClient })),
     ).toBe('')
   })
 
-  it('打开首帧（effect 未跑）= 抽屉壳 + 装载骨架（详情拉取不阻塞滑入呈现）', () => {
+  it('打开首帧（effect 未跑）= 弹窗壳 + 装载骨架 + 起始位 CSS 兜底（inline left/top 零注入——默认位归 mount 效应）', () => {
     const html = renderToStaticMarkup(
       createElement(TaskDrawer, { projectId: 'p-1', taskId: 't-1', onClose: NOOP, makeClient: shellClient }),
     )
     expect(html).toContain('data-dswf-td-drawer=""')
+    expect(html).toContain('data-dswf-td-head') // 标题栏拖移锚（装载面同壳）
+    expect(html).toContain('data-dswf-td-resize="left"')
+    expect(html).toContain('data-dswf-td-resize="right"')
+    expect(html).toContain(`width:${DRAWER_WIDTH_DEFAULT}px`) // 默认宽 440（原型刻度）
+    expect(html).not.toContain('left:')
     expect(html).toContain('data-dswf-td-skeleton')
     expect(html).not.toContain('data-dswf-td-sect="content"')
   })

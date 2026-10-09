@@ -181,9 +181,11 @@ export interface ForgeWorkspacesService {
 }
 
 /**
- * 官方右栏服务窄面（ui-sidebar-right ISidebarRight 消费切片，fix-23）。知识模式右栏
+ * dsh 右栏服务窄面（ui-sidebar-right ISidebarRight 消费切片，fix-23）。知识模式右栏
  * 隐藏/恢复联动的官方动作面（收展态本体 = 官方 per-session store 自持——产品不落地副本）。
  * 4.2 增导航面 openTab（挂接 pill 点击 → dock 开概览 tab——openTab 自带 reveal 列）。
+ * m3.1 D21/D23 增 openResource（官方导航控制器资源面——ShellHost 弹窗参考 chip 开文档
+ * tab：服务面直达在屏会话右栏，官方 placeResource 列展开一体）。
  */
 export interface ForgeSidebarRightService {
   /** 右栏当前展开态（collapsed 或无在场面 = false） */
@@ -195,6 +197,11 @@ export interface ForgeSidebarRightService {
    * 调用面 fail-soft）。4.2 消费：openTab('dswf-overview')——UF-3 流程 7 dock 开概览。
    */
   openTab(kind: string): void
+  /**
+   * 按地址开出资源 tab（官方导航控制器——claim/place/reveal 一体；非 dsh-resource://
+   * 地址或无类型认领抛错，调用面 fail-soft）。m3.1 消费：ShellHost 弹窗参考 chip。
+   */
+  openResource(address: string, options?: { readonly kind?: string }): void
 }
 
 /**
@@ -285,10 +292,15 @@ export interface ForgeViewsGlobal {
         drawerEntryId: number | null
         overview: { projectId: string | null }
         taskFocus: { taskId: string; featureSlug: string; nonce: number } | null
+        drawerTaskId: string | null
+        transitionFocus: { taskId: string; featureSlug: string; nonce: number } | null
       }
       setDrawerEntry(entryId: number | null): void
       setOverviewContext(context: { projectId: string | null }): void
       openTaskFocus(payload: { taskId: string; featureSlug: string }): void
+      openTaskDrawer(taskId: string): void
+      closeTaskDrawer(): void
+      openTaskTransition(payload: { taskId: string }): void
     }
   }
 }
@@ -506,7 +518,8 @@ function registerConversationViews(
  * order -100 < 官方带 -30/-20/-10/20）。占用者 ForgeSessionTaskPills（壳 bundle 发布件
  * ——单库解析/sessionLinks 数据/事件刷新自持，标准 props sessionId + useWorkspaces 由
  * 槽 runtime 自动递达，job-list 同径）；inject face = 点击导航闭包（dock 开概览 tab +
- * 桥任务聚焦——UF-3 流程 7 全链路左半段，右半段 = 右栏概览 tab body 消费）。
+ * 桥任务聚焦 + 任务弹窗直开[m3.1 D23——弹窗挂 ShellHost 不依赖概览 tab 选中]——UF-3
+ * 流程 7 全链路左半段，右半段 = 右栏概览 tab body + ShellHost 消费）。
  */
 function registerSessionHeaderPills(
   ctx: ForgeClientCtx,
@@ -526,14 +539,16 @@ function registerSessionHeaderPills(
         inject: () => ({
           onOpenTask: (nav: { taskId: string; featureSlug: string }): void => {
             // UF-3 流程 7：dock 开概览 tab（openTab 自带 reveal 列 + 去重——已开即激活）
-            // → 桥任务聚焦（抽屉打开 + 任务子 tab + feature 选中——右栏 body nonce 对照
-            // 应用）。官方动作面无在场面（会话卸载瞬态）fail-soft 不外溢。
+            // → 桥任务聚焦（任务子 tab + feature 选中——右栏 body nonce 对照应用）→ 任务
+            // 弹窗直开（m3.1 D21/D23：桥 drawerTaskId——ShellHost 常驻树挂载，对话中就
+            // 地打开）。官方动作面无在场面（会话卸载瞬态）fail-soft 不外溢。
             try {
               services.sidebarRight.openTab(OVERVIEW_TAB_KIND)
             } catch {
               // fail-soft：聚焦仍发布——tab 后续开出时挂载即消费（nonce 对照）
             }
             services.bridge.openTaskFocus(nav)
+            services.bridge.openTaskDrawer(nav.taskId)
           },
         }),
       },
@@ -839,10 +854,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
-        // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥]；selectPanel/rightbar/
-        // bridge 官方窄面经 inject 递达）。卸载期顺带撤销桥发布、locale 词典与 dock tab
-        // 类型注册 + 清 __DSH_FORGE_CLIENT__ 激活标记（fix-33 ⑥ 标记卸载不清收口——本
-        // 插件 fiber 卸载的唯一级联回收面；缺席期导航 fail-soft no-op）
+        // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主
+        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock]；selectPanel/rightbar/
+        // bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
+        // 卸载期顺带撤销桥发布、locale 词典与 dock tab 类型注册 + 清 __DSH_FORGE_CLIENT__
+        // 激活标记（fix-33 ⑥ 标记卸载不清收口——本插件 fiber 卸载的唯一级联回收面；
+        // 缺席期导航 fail-soft no-op）
         registerSlotEntry(clientCtx, SHELL_OVERLAY_SLOT, shellDiagnostics, () => {
           const dispose = clientCtx.slots.register(
             {
@@ -861,7 +878,23 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                   },
                 },
                 // 概览上下文写回缝（4.1：ShellHost 锚定 → 桥 → 右栏概览 tab body）
+                // + 弹窗受控态读写面（m3.1 D21/D23）
                 bridge,
+                // 弹窗挂接会话 pill 跳会话（官方导航动作面——dock 概览 tab 注入同径）
+                onOpenSession: (sessionId: string): void => {
+                  uiWorkspace.openSession(sessionId)
+                },
+                // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
+                openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions),
+                // 文档开出动作（弹窗参考 chip → dock 开文档 tab——官方导航控制器资源面；
+                // 无在场面/地址不认领抛错 fail-soft 不外溢）
+                openDocResource: (address: string): void => {
+                  try {
+                    sidebarRight.openResource(address, { kind: DOC_TAB_KIND })
+                  } catch {
+                    // fail-soft：无在场面（会话卸载瞬态）——chip 点击不外溢
+                  }
+                },
               }),
             },
             views.ForgeShellHost,

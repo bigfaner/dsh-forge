@@ -51,7 +51,7 @@ export interface ForgeTaskFocus {
   readonly nonce: number
 }
 
-/** 桥快照（知识抽屉目标 + 概览项目上下文 + 任务聚焦——跨槽树共享态的唯一载体） */
+/** 桥快照（知识抽屉目标 + 概览项目上下文 + 任务聚焦 + 任务弹窗——跨槽树共享态的唯一载体） */
 export interface ForgeWorkbenchSnapshot {
   /** 知识详情抽屉打开条目（null = 关闭） */
   readonly drawerEntryId: number | null
@@ -59,6 +59,13 @@ export interface ForgeWorkbenchSnapshot {
   readonly overview: ForgeOverviewContext
   /** 任务聚焦目标（4.2 pill 点击写——右栏概览 tab body 消费；null = 无待聚焦） */
   readonly taskFocus: ForgeTaskFocus | null
+  /** 任务详情弹窗打开任务（m3.1 D21/D23：弹窗挂载独立于 dock——ShellHost 常驻树消费；null = 关闭） */
+  readonly drawerTaskId: string | null
+  /**
+   * 转移对话框聚焦目标（m3.1 D23：对话框随弹窗迁 ShellHost——任务 ⋯ 菜单跨树开窗通道；
+   * nonce 单调自增 = 重复开窗判据，消费侧对照已应用 nonce——同任务重复点击也重开）。
+   */
+  readonly transitionFocus: ForgeTaskFocus | null
 }
 
 /** 概览上下文缺省（ShellHost 锚定生效前/桥刚创建——无锚不猜首个） */
@@ -80,9 +87,21 @@ export interface WorkbenchBridge extends ForgeCenterNav {
   setOverviewContext(context: ForgeOverviewContext): void
   /**
    * 任务聚焦写回（4.2 会话头 pill 点击——插件 inject face 闭包）：dock 开概览 tab 后发布
-   * 聚焦目标（抽屉打开 + 任务子 tab + feature 选中——消费侧 OverviewDockBody nonce 对照应用）。
+   * 聚焦目标（任务子 tab + feature 选中——消费侧 OverviewDockBody nonce 对照应用）。
    */
   openTaskFocus(payload: { readonly taskId: string; readonly featureSlug: string }): void
+  /**
+   * 任务详情弹窗打开（m3.1 D21/D23：挂载独立于 dock——写方 = 三视图任务行 / 会话头 pill /
+   * 悬浮面板；消费方 = ShellHost 常驻树条件挂载。切换任务原位换内容，单例语义归快照单值）。
+   */
+  openTaskDrawer(taskId: string): void
+  /** 任务详情弹窗关闭（Esc/✕——ShellHost 装配上抛；幂等） */
+  closeTaskDrawer(): void
+  /**
+   * 转移对话框开（m3.1 D23：任务 ⋯ 菜单 → 对话框[随弹窗挂 ShellHost]——nonce 自增重开；
+   * featureSlug 载荷缺席面 = 转移通道不消费，置空占位）。
+   */
+  openTaskTransition(payload: { readonly taskId: string }): void
 }
 
 /** 桥的全局挂点（与 __DSH_FORGE_VIEWS__ 同族：装配 ↔ 插件两单元的页内缝） */
@@ -104,8 +123,11 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
     drawerEntryId: null,
     overview: initialOverviewContext(),
     taskFocus: null,
+    drawerTaskId: null,
+    transitionFocus: null,
   }
   let focusNonce = 0
+  let transitionNonce = 0
   const listeners = new Set<() => void>()
   const notify = (): void => {
     for (const listener of listeners) listener()
@@ -144,6 +166,21 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
     openTaskFocus: (payload: { readonly taskId: string; readonly featureSlug: string }): void => {
       focusNonce += 1
       snapshot = { ...snapshot, taskFocus: { ...payload, nonce: focusNonce } }
+      notify()
+    },
+    openTaskDrawer: (taskId: string): void => {
+      if (snapshot.drawerTaskId === taskId) return
+      snapshot = { ...snapshot, drawerTaskId: taskId }
+      notify()
+    },
+    closeTaskDrawer: (): void => {
+      if (snapshot.drawerTaskId === null) return
+      snapshot = { ...snapshot, drawerTaskId: null }
+      notify()
+    },
+    openTaskTransition: (payload: { readonly taskId: string }): void => {
+      transitionNonce += 1
+      snapshot = { ...snapshot, transitionFocus: { ...payload, featureSlug: '', nonce: transitionNonce } }
       notify()
     },
   }

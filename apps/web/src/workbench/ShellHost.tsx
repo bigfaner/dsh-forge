@@ -6,11 +6,20 @@
 //     + data-dswf-phase + data-dswf-view——官方 layout.activePanelId 的产品视图镜像）；
 //   - UF-2 hero 面板驱动（boot 期零项目 → 选中产品 hero 面板；注册成功 → 回官方会话面板
 //     ——官方 layout.selectPanel 径，驱动一次性守卫防导航争用）。
+//   - 任务详情弹窗宿主（m3.1 D21/D23：挂载独立于 dock——桥 drawerTaskId 受控条件挂载，
+//     对话中不经概览 tab 直接打开；弹窗几何逐开本地态随条件挂载弃置 = 不记忆；转移
+//     对话框随弹窗同宿主——任意面板态可用）。
 // 官方缝：shell.overlay（ui-layout AppFrame root 五子槽之一，list/root——常驻不随 main
 // 面板互换卸载）；标准 props 面 = root 作用域观察钩子（useWorkspaces/usePanelInfo）。
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
+import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
+import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
+import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
+import type { SessionOpenRequest } from '../views/overview/message-format.js'
+import { useProjectDocsRoot } from '../views/overview/overview-data.js'
+import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
 import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
@@ -53,11 +62,20 @@ export interface ForgeShellHostProps {
    */
   readonly rightbar?: RightbarFace
   /**
-   * 工作台桥（插件 inject face 注入，4.1）：概览项目上下文写回缝——ShellHost 锚定
-   *（knowledge-anchor 裁决复用）经桥递达右栏概览 tab body（两棵独立槽位树的既有通道）；
-   * 缺席 = 概览上下文不发布（右栏概览 tab 无锚空态降级）
+   * 工作台桥（插件 inject face 注入，4.1）：概览项目上下文写回缝 + 任务弹窗受控态读面
+   * （m3.1 D21/D23——drawerTaskId 订阅 + closeTaskDrawer 上抛；ShellHost 锚定经桥递达
+   * 右栏概览 tab body——两棵独立槽位树的既有通道）；缺席 = 概览上下文不发布 + 弹窗不开
    */
-  readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext'>
+  readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext' | 'subscribe' | 'getSnapshot' | 'closeTaskDrawer'>
+  /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession；缺席 = 非交互呈现） */
+  readonly onOpenSession?: (sessionId: string) => void
+  /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
+  readonly openSession?: OpenSessionOrchestrator
+  /**
+   * 文档开出动作（插件 inject face——官方 sidebarRight.openResource 服务面窄镜；缺席 =
+   * 弹窗参考 chip 非交互呈现）。消费面组地址 = forgeDocAddress(projectId, docRel)。
+   */
+  readonly openDocResource?: (address: string) => void
 }
 
 /**
@@ -140,7 +158,6 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   useEffect(() => {
     overviewBridge?.setOverviewContext(overviewContext)
   }, [overviewContext, overviewBridge])
-
   // 官方面板态镜像（activePanelId——root 作用域标准观察钩子；fix-33 ⑤ 起经 PanelInfoAnchor
   // 子件读取上抛（钩子形制合规），缺席 = 会话视图缺省（SSR 首帧 null））
   const [activePanelId, setActivePanelId] = useState<string | null>(null)
@@ -185,6 +202,81 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
     }
   }, [knowledgeActive, rightbar])
 
+  // 任务详情弹窗（m3.1 D21/D23：挂载独立于 dock——桥 drawerTaskId 受控条件挂载；
+  // 关闭即卸载 = 几何逐开本地态随壳弃置[裁决 #3 不记忆]，切换任务原位换内容）。
+  // 桥缺席 = 无受控面（SSR 首帧/非壳载体）——弹窗不开（订阅/快照守卫降级）。
+  const bridge = props.bridge
+  const subscribeSnapshot = useCallback(
+    (onChange: () => void): (() => void) => (bridge === undefined ? () => {} : bridge.subscribe(onChange)),
+    [bridge],
+  )
+  const readSnapshot = useCallback(
+    () => (bridge === undefined ? null : bridge.getSnapshot()),
+    [bridge],
+  )
+  const snapshot = useSyncExternalStore(subscribeSnapshot, readSnapshot, readSnapshot)
+  const drawerTaskId = snapshot?.drawerTaskId ?? null
+  const handleCloseDrawer = useCallback((): void => {
+    bridge?.closeTaskDrawer()
+  }, [bridge])
+  // 弹窗锚定项目：本地锚定优先（kit 钩子直读——效应写桥前即新），桥发布锚兜底（SSR/非壳
+  // 载体面：写方[pill/dock]开窗时的锚定快照——生产两面恒同值）
+  const anchorProjectId = overviewContext.projectId ?? snapshot?.overview.projectId ?? null
+
+  // 转移对话框（随弹窗同宿主——「转移状态…」入口在任意面板态可用；目标拉取复用
+  // useTaskDetail：taskId 变更骨架重置 + 事件静默重取同口径）。⋯ 菜单跨树开窗 =
+  // 桥 transitionFocus（nonce 对照应用——nextTaskFocusApply 同判据复用）。
+  const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
+  const appliedTransitionNonceRef = useRef(-1)
+  const transitionFocus = snapshot?.transitionFocus ?? null
+  useEffect(() => {
+    const apply = nextTaskFocusApply(appliedTransitionNonceRef.current, transitionFocus)
+    if (apply === null) return
+    appliedTransitionNonceRef.current = apply.nonce
+    setTransitionTaskId(apply.taskId)
+  }, [transitionFocus])
+  const [dialogLoad] = useTaskDetail(anchorProjectId ?? '', transitionTaskId)
+  const transitionTarget: TransitionTarget | null =
+    transitionTaskId !== null && dialogLoad.detail !== undefined
+      ? { task: dialogLoad.detail, allowedTransitions: dialogLoad.detail.allowedTransitions }
+      : null
+  const handleOpenTransition = useCallback((taskId: string): void => {
+    setTransitionTaskId(taskId)
+  }, [])
+  const handleCloseTransition = useCallback((): void => {
+    setTransitionTaskId(null)
+  }, [])
+
+  // 任务失败诊断 @ 锚文档根（fail-soft 装载：projects.get 项目行推导；失败/缺席 = undefined
+  // 不阻断，TaskDrawer 回退 `docs` 缺省锚）
+  const docsRoot = useProjectDocsRoot(anchorProjectId)
+
+  // 打开新会话通道（弹窗诊断「发送给 agent」）：锚定 workspaceId + openSessionWithPreset
+  // 组合子（失败留场归阶段化错误——编排器各阶段 fail-soft 不炸壳；autosend 语义归请求）
+  const handleStartSession = useCallback(
+    (request: SessionOpenRequest): void => {
+      if (overviewContext.workspaceId === null || props.openSession === undefined) return
+      void props.openSession.openSessionWithPreset({
+        workspaceId: overviewContext.workspaceId,
+        ...(request.mode !== undefined ? { mode: request.mode } : {}),
+        prefill: request.prefill,
+        ...(request.autosend === true ? { autosend: true } : {}),
+      })
+    },
+    [overviewContext.workspaceId, props.openSession],
+  )
+
+  // 文档开出（弹窗参考 chip → dock 开文档 tab——官方 sidebarRight.openResource 服务面；
+  // 项目锚/动作面缺席 = 非交互呈现；官方面异常不外溢）
+  const openDocResource = props.openDocResource
+  const projectId = anchorProjectId
+  const openDoc =
+    openDocResource !== undefined && projectId !== null
+      ? (docRel: string): void => {
+          openDocResource(forgeDocAddress(projectId, docRel))
+        }
+      : undefined
+
   return (
     <div className="dswf-shell-host" data-dswf-workbench="" data-dswf-phase={phase} data-dswf-view={view}>
       {/* UF-3 流程宿主（模态覆盖——官方 Modal 自 portal body；mount 期发布打开缝：
@@ -206,6 +298,33 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           无条件调用——hooks 规则合规；activePanelId 上抛驱动视图镜像与 hero 让位） */}
       {props.usePanelInfo !== undefined ? (
         <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
+      ) : null}
+      {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/
+          概览选中；条件挂载承载「关闭后不记忆位置/尺寸」——几何随卸载弃置） */}
+      {drawerTaskId !== null && projectId !== null ? (
+        <TaskDrawer
+          projectId={projectId}
+          taskId={drawerTaskId}
+          onClose={handleCloseDrawer}
+          {...(openDoc !== undefined ? { onOpenDoc: openDoc } : {})}
+          {...(props.onOpenSession !== undefined ? { onOpenSession: props.onOpenSession } : {})}
+          onTransition={handleOpenTransition}
+          {...(props.openSession !== undefined ? { onStartSession: handleStartSession } : {})}
+          {...(docsRoot !== undefined ? { docsRoot } : {})}
+        />
+      ) : null}
+      {/* 人工转移对话框（随弹窗同宿主——allowedTransitions 唯一源直喂；快照呈现归
+          事件订阅重取[transition 写 → emitTasksChanged]） */}
+      {transitionTarget !== null && projectId !== null ? (
+        <TransitionDialog
+          projectId={projectId}
+          task={transitionTarget.task}
+          allowedTransitions={transitionTarget.allowedTransitions}
+          onCancel={handleCloseTransition}
+          onDone={() => {
+            handleCloseTransition() // 快照呈现归事件订阅重取（transition 写 → emitTasksChanged）
+          }}
+        />
       ) : null}
     </div>
   )

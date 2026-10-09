@@ -21,11 +21,9 @@ import { EmptyState } from '../components/index.js'
 import type { RpcClientFactory } from '../rpc/index.js'
 import { OverviewTab, type OverviewTasksContext } from '../views/overview/OverviewTab.js'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
-import { useProjectDocsRoot } from '../views/overview/overview-data.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
 import { TasksTab } from '../views/overview/task-tab/task-tab.js'
-import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
-import { TransitionDialog, type TransitionTaskView } from '../views/overview/drawer/transition-dialog.js'
+import type { TransitionTaskView } from '../views/overview/drawer/transition-dialog.js'
 import { DocsTab } from '../views/docs/index.js'
 import {
   initialOverviewContext,
@@ -135,34 +133,28 @@ export interface OverviewDockAssemblyProps {
   readonly onOpenDoc?: (docRel: string) => void
   /** 挂接会话 pill 跳会话（缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
-  /** 打开新会话通道（4.6：行头预填/诊断发送/派发指令——openSessionWithPreset 组合子闭包；缺席 = 入口不呈现） */
+  /** 打开新会话通道（行头预填/诊断发送/派发指令——openSessionWithPreset 组合子闭包；缺席 = 入口不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
-  /** 抽屉开着的任务（null = 关） */
+  /** 弹窗开着的任务（null = 关——三视图行高亮源；弹窗本体挂载在 ShellHost[D23 挂载独立]） */
   readonly drawerTaskId: string | null
-  readonly onOpenTask: (taskId: string) => void
-  readonly onCloseDrawer: () => void
-  /** 转移对话框目标（null = 关；加载在途 = null——装载壳效应细节） */
-  readonly transitionTarget: TransitionTarget | null
-  readonly onOpenTransition: (taskId: string) => void
-  readonly onCloseTransition: () => void
+  /** 任务行/DAG 节点/泳道卡点击 → 弹窗（桥 openTaskDrawer 写面；缺席 = 非交互） */
+  readonly onOpenTask?: (taskId: string) => void
+  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面——对话框随弹窗挂 ShellHost[D23]；缺席 = 菜单无转移项） */
+  readonly onOpenTransition?: (taskId: string) => void
   /** 待应用任务聚焦（4.2 pill 点击——feature 选中受控注入 + 任务子 tab 切换 nonce；null/undefined = 无） */
   readonly taskFocus?: ForgeTaskFocus | null
   /** feature 选中释放（4.2——用户 pill 菜单切换即释放聚焦覆盖，恢复本地切换） */
   readonly onFeatureUserSwitch?: () => void
-  /** 任务失败诊断 @ 锚文档根（OverviewDockBody fail-soft 装载注入——useProjectDocsRoot
-   *  项目行推导；缺席 = TaskDrawer 回退 `docs` 缺省锚） */
-  readonly docsRoot?: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
 
 /**
  * 概览 dock 装配体（纯渲染）：无锚空态 | OverviewTab（renderTasksTab 槽 = TasksTab 全
- * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/proposals 双轨/会话通道]）+
- * TaskDrawer（onOpenDoc/onOpenSession/onTransition/onStartSession 诊断发送）+
- * TransitionDialog（allowedTransitions 唯一源直喂）。
- * 任务行/DAG 节点/泳道卡片/⋯ 菜单四途径经 TasksTab onOpenTask/onTransition 汇于本装配体；
- * 会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换 nonce + 抽屉）。
+ * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/proposals 双轨/会话通道]）。
+ * m3.1 D21/D23：任务详情弹窗与转移对话框退役于本装配体——迁 ShellHost 常驻树（挂载
+ * 独立于 dock，对话中直接打开）；任务行/DAG 节点/泳道卡片三途径经 onOpenTask 汇于
+ * 桥 openTaskDrawer；会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换）。
  */
 export function OverviewDockAssembly({
   projectId,
@@ -172,13 +164,9 @@ export function OverviewDockAssembly({
   onStartSession,
   drawerTaskId,
   onOpenTask,
-  onCloseDrawer,
-  transitionTarget,
   onOpenTransition,
-  onCloseTransition,
   taskFocus,
   onFeatureUserSwitch,
-  docsRoot,
   makeClient,
 }: OverviewDockAssemblyProps): ReactNode {
   if (projectId === null) {
@@ -203,9 +191,9 @@ export function OverviewDockAssembly({
       proposals={ctx.proposals}
       onToggleStatus={ctx.onToggleStatus}
       onClearStatuses={ctx.onClearStatuses}
-      onOpenTask={onOpenTask}
-      onTransition={onOpenTransition}
-      activeTaskId={drawerTaskId ?? undefined}
+      {...(onOpenTask !== undefined ? { onOpenTask } : {})}
+      {...(onOpenTransition !== undefined ? { onTransition: onOpenTransition } : {})}
+      {...(drawerTaskId !== null ? { activeTaskId: drawerTaskId } : {})}
       {...(taskFocus !== null && taskFocus !== undefined ? { featureSlug: taskFocus.featureSlug } : {})}
       {...(onFeatureUserSwitch !== undefined ? { onFeatureUserSwitch } : {})}
       {...(ctx.docsRoot !== undefined ? { docsRoot: ctx.docsRoot } : {})}
@@ -215,54 +203,35 @@ export function OverviewDockAssembly({
     />
   )
   return (
-    <>
-      <OverviewTab
-        projectId={projectId}
-        sessionCount={sessionCount}
-        onOpenDoc={onOpenDoc}
-        renderTasksTab={renderTasksTab}
-        focusTasksNonce={taskFocus?.nonce}
-        {...(onStartSession !== undefined ? { onStartSession } : {})}
-        makeClient={makeClient}
-      />
-      <TaskDrawer
-        projectId={projectId}
-        taskId={drawerTaskId}
-        onClose={onCloseDrawer}
-        onOpenDoc={onOpenDoc}
-        onOpenSession={onOpenSession}
-        onTransition={onOpenTransition}
-        {...(onStartSession !== undefined ? { onStartSession } : {})}
-        {...(docsRoot !== undefined ? { docsRoot } : {})}
-        makeClient={makeClient}
-      />
-      {transitionTarget !== null ? (
-        <TransitionDialog
-          projectId={projectId}
-          task={transitionTarget.task}
-          allowedTransitions={transitionTarget.allowedTransitions}
-          onCancel={onCloseTransition}
-          onDone={() => {
-            onCloseTransition() // 快照呈现归事件订阅重取（transition 写 → emitTasksChanged）
-          }}
-          makeClient={makeClient}
-        />
-      ) : null}
-    </>
+    <OverviewTab
+      projectId={projectId}
+      sessionCount={sessionCount}
+      onOpenDoc={onOpenDoc}
+      renderTasksTab={renderTasksTab}
+      focusTasksNonce={taskFocus?.nonce}
+      {...(onStartSession !== undefined ? { onStartSession } : {})}
+      makeClient={makeClient}
+    />
   )
 }
 
-/** 概览 tab body（状态壳）：桥订阅读锚定上下文 + 任务聚焦应用 + 抽屉/对话框受控态 + 对话框目标拉取。 */
+/** 概览 tab body（状态壳）：桥订阅读锚定上下文 + 任务聚焦应用 + 任务行 → 弹窗/对话框桥写面。 */
 export interface OverviewDockBodyProps {
   /** 锚定上下文（缺省无锚——桥缺席/单测面） */
   readonly overview: ForgeOverviewContext
   /** 桥任务聚焦（4.2 pill 点击写回——nonce 对照应用；null = 无待聚焦） */
   readonly taskFocus: ForgeTaskFocus | null
+  /** 弹窗开着的任务（桥快照读回——三视图行高亮源；null = 关） */
+  readonly drawerTaskId: string | null
+  /** 任务行 → 弹窗（桥 openTaskDrawer 写面；缺席 = 行点击非交互） */
+  readonly onOpenTask?: (taskId: string) => void
+  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面；缺席 = 菜单无转移项） */
+  readonly onOpenTransition?: (taskId: string) => void
   /** 本 tab 动作面（TabInfoReader 递达；缺席 = 文档行非交互） */
   readonly tabActions?: DockTabActionsMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
-  /** 打开新会话编排器（4.6 插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
+  /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
@@ -271,16 +240,17 @@ export interface OverviewDockBodyProps {
 export function OverviewDockBody({
   overview,
   taskFocus,
+  drawerTaskId,
+  onOpenTask,
+  onOpenTransition,
   tabActions,
   onOpenSession,
   openSession,
   makeClient,
 }: OverviewDockBodyProps): ReactNode {
-  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
-  const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
-  // 任务聚焦应用（4.2 UF-3 流程 7）：桥聚焦 nonce 未曾应用 → 抽屉打开 + 聚焦注入
-  //（feature 选中 + 任务子 tab 切换经 assembly 递达）；用户 feature 菜单切换 = 释放
-  // 聚焦覆盖恢复本地切换（抽屉保持——抽屉任务域与 feature 选中正交）
+  // 任务聚焦应用（4.2 UF-3 流程 7）：桥聚焦 nonce 未曾应用 → 聚焦注入（feature 选中 +
+  // 任务子 tab 切换经 assembly 递达——弹窗开面归桥 drawerTaskId[ShellHost 消费]）；
+  // 用户 feature 菜单切换 = 释放聚焦覆盖恢复本地切换
   const [appliedFocus, setAppliedFocus] = useState<ForgeTaskFocus | null>(null)
   const appliedNonceRef = useRef(-1)
   useEffect(() => {
@@ -288,24 +258,12 @@ export function OverviewDockBody({
     if (apply === null) return
     appliedNonceRef.current = apply.nonce
     setAppliedFocus(apply)
-    setDrawerTaskId(apply.taskId)
   }, [taskFocus])
   const handleFeatureUserSwitch = useCallback((): void => {
     setAppliedFocus(null)
   }, [])
-  // 对话框目标拉取（3.7 useTaskDetail 复用：taskId 变更骨架重置 + 事件静默重取同口径；
-  // 抽屉同任务并存 = 各自拉取一份只读详情，互不干扰）
-  const [dialogLoad] = useTaskDetail(overview.projectId ?? '', transitionTaskId, makeClient)
-  const transitionTarget: TransitionTarget | null =
-    transitionTaskId !== null && dialogLoad.detail !== undefined
-      ? { task: dialogLoad.detail, allowedTransitions: dialogLoad.detail.allowedTransitions }
-      : null
 
-  // 任务失败诊断 @ 锚文档根（fail-soft 装载：projects.get 项目行推导——抽屉在概览头路
-  // 之外渲染，独立装载；失败/缺席 = undefined 不阻断，TaskDrawer 回退 `docs` 缺省锚）
-  const docsRoot = useProjectDocsRoot(overview.projectId, makeClient)
-
-  // 打开新会话通道（4.6）：锚定 workspaceId + openSessionWithPreset 组合子（失败留场归
+  // 打开新会话通道：锚定 workspaceId + openSessionWithPreset 组合子（失败留场归
   // 阶段化错误——编排器各阶段 fail-soft 不炸壳；预填不发送/诊断与派发 autosend 语义归请求）
   const handleStartSession = useCallback(
     (request: SessionOpenRequest): void => {
@@ -320,18 +278,6 @@ export function OverviewDockBody({
     [overview.workspaceId, openSession],
   )
 
-  const handleOpenTask = useCallback((taskId: string): void => {
-    setDrawerTaskId(taskId)
-  }, [])
-  const handleCloseDrawer = useCallback((): void => {
-    setDrawerTaskId(null)
-  }, [])
-  const handleOpenTransition = useCallback((taskId: string): void => {
-    setTransitionTaskId(taskId)
-  }, [])
-  const handleCloseTransition = useCallback((): void => {
-    setTransitionTaskId(null)
-  }, [])
   const onOpenDoc = dockDocOpener(tabActions, overview.projectId)
 
   return (
@@ -342,14 +288,10 @@ export function OverviewDockBody({
       onOpenSession={onOpenSession}
       {...(openSession !== undefined ? { onStartSession: handleStartSession } : {})}
       drawerTaskId={drawerTaskId}
-      onOpenTask={handleOpenTask}
-      onCloseDrawer={handleCloseDrawer}
-      transitionTarget={transitionTarget}
-      onOpenTransition={handleOpenTransition}
-      onCloseTransition={handleCloseTransition}
+      {...(onOpenTask !== undefined ? { onOpenTask } : {})}
+      {...(onOpenTransition !== undefined ? { onOpenTransition } : {})}
       taskFocus={appliedFocus}
       onFeatureUserSwitch={handleFeatureUserSwitch}
-      {...(docsRoot !== undefined ? { docsRoot } : {})}
       makeClient={makeClient}
     />
   )
@@ -364,8 +306,8 @@ export function OverviewDockBody({
 export interface ForgeOverviewTabProps {
   /** 官方 tabInfo 钩子（seat inject `{hooks:{tabInfo}}` 递达——生产面恒在场） */
   readonly useTabInfo?: UseDockTabInfoMirror
-  /** 工作台桥（插件 inject face——锚定上下文订阅源；缺席 = 无锚空态） */
-  readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot'>
+  /** 工作台桥（插件 inject face——锚定上下文订阅源 + 弹窗/对话框写面；缺席 = 无锚空态） */
+  readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'openTaskDrawer' | 'openTaskTransition'>
   /** 挂接会话 pill 跳会话（插件 inject face；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
   /** 打开新会话编排器（4.6 插件 inject face；缺席 = 行头/诊断/派发入口不呈现） */
@@ -384,7 +326,8 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
   )
 }
 
-/** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦——ShellHost/pill 点击写回驱动） */
+/** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦 + 弹窗受控态
+ *  ——ShellHost/pill 点击写回驱动；任务行 → 弹窗/对话框经桥写面[D23 跨树通道]） */
 function OverviewTabWithBridge(
   props: ForgeOverviewTabProps & { readonly tabActions?: DockTabActionsMirror },
 ): ReactNode {
@@ -399,10 +342,26 @@ function OverviewTabWithBridge(
   )
   const snapshot = useSyncExternalStore(subscribe, readSnapshot, readSnapshot)
   const overview = snapshot?.overview ?? initialOverviewContext()
+  // 任务行 → 弹窗 / ⋯ 转移 → 对话框（桥写面——弹窗与对话框挂 ShellHost[D23 挂载独立]）
+  const openTask = useCallback(
+    (taskId: string): void => {
+      bridge?.openTaskDrawer(taskId)
+    },
+    [bridge],
+  )
+  const openTransition = useCallback(
+    (taskId: string): void => {
+      bridge?.openTaskTransition({ taskId })
+    },
+    [bridge],
+  )
   return (
     <OverviewDockBody
       overview={overview}
       taskFocus={snapshot?.taskFocus ?? null}
+      drawerTaskId={snapshot?.drawerTaskId ?? null}
+      onOpenTask={openTask}
+      onOpenTransition={openTransition}
       tabActions={props.tabActions}
       onOpenSession={props.onOpenSession}
       openSession={props.openSession}

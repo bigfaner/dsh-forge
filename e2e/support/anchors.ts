@@ -170,7 +170,7 @@ export const ttContpillOf = (kind: 'feature' | 'proposal', slug: string): string
 /** 容器菜单行（4.6 v22——data-dswf-tt-mcont 值同容器复合键） */
 export const ttContmenuOf = (kind: 'feature' | 'proposal', slug: string): string =>
   `[data-dswf-tt-mcont="${kind}:${slug}"]`
-/** 任务抽屉（右栏概览装配体内——role=dialog） */
+/** 任务详情弹窗（m3.1 D21/D23：可拖动弹窗——ShellHost 常驻树挂载，独立于 dock 概览 tab；role=dialog） */
 export const TD_DRAWER = '[data-dswf-td-drawer]'
 /** 文档 tab 面板（任意） */
 export const DOC_PANEL_ANY = '[data-dswf-doc-panel]'

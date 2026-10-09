@@ -223,6 +223,9 @@ function publishFakeViews() {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
       let taskFocus: { taskId: string; featureSlug: string; nonce: number } | null = null
+      // m3.1 D21/D23 弹窗/转移两缝（真身快照同型镜像）
+      let drawerTaskId: string | null = null
+      let transitionFocus: { taskId: string; featureSlug: string; nonce: number } | null = null
       const bridgeObj = {
         showKnowledge: nav.showKnowledge,
         showSession: nav.showSession,
@@ -230,12 +233,22 @@ function publishFakeViews() {
           nav.showKnowledge()
         },
         subscribe: () => () => {},
-        getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null }, taskFocus }),
+        getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null }, taskFocus, drawerTaskId, transitionFocus }),
         setDrawerEntry: () => {},
         setOverviewContext: () => {},
         openTaskFocus: (payload: { taskId: string; featureSlug: string }) => {
           focusNonce += 1
           taskFocus = { ...payload, nonce: focusNonce }
+        },
+        openTaskDrawer: (taskId: string) => {
+          drawerTaskId = taskId
+        },
+        closeTaskDrawer: () => {
+          drawerTaskId = null
+        },
+        openTaskTransition: (payload: { taskId: string }) => {
+          focusNonce += 1
+          transitionFocus = { ...payload, featureSlug: '', nonce: focusNonce }
         },
       }
       ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = bridgeObj
@@ -356,9 +369,9 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     // 字面量同源 pin（plugin 侧 ↔ 壳侧 panel-model——bundle 自含不经 import）
     expect(HERO_PANEL_KEY).toBe(SHELL_HERO_KEY)
     expect(KNOWLEDGE_PANEL_KEY).toBe(SHELL_KNOWLEDGE_KEY)
-    // 知识面板注入面 = 工作台桥（抽屉缝）
-    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null }; taskFocus: unknown } } }
-    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null }, taskFocus: null })
+    // 知识面板注入面 = 工作台桥（知识抽屉缝——m3.1 D21/D23 快照扩任务弹窗/转移两缝）
+    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null }; taskFocus: unknown; drawerTaskId: string | null; transitionFocus: unknown } } }
+    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null }, taskFocus: null, drawerTaskId: null, transitionFocus: null })
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.center?.registered).toEqual([MAIN_SLOT, MAIN_SLOT, SIDEBAR_PANELLIST_SLOT])
     expect(marker?.center?.error).toBeUndefined()
@@ -427,7 +440,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）窄面；桥经发布面工厂创建并发布页内全局', () => {
+  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）；桥经发布面工厂创建并发布页内全局', () => {
     const views = publishFakeViews()
     const { ctx, registers, selectPanel, rightToggle } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -439,8 +452,15 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       selectPanel: { selectPanel(id: string | null): void }
       rightbar: { isExpanded(): boolean; toggleExpanded(): void }
       bridge: unknown
+      onOpenSession: (sessionId: string) => void
+      openSession: { openSessionWithPreset(request: unknown): Promise<unknown> }
+      openDocResource: (address: string) => void
     }
-    expect(Object.keys(face).sort()).toEqual(['bridge', 'rightbar', 'selectPanel'])
+    // m3.1 D21/D23：弹窗宿主三窄面在场（跳会话/新会话编排器/文档开出——ShellHost 消费）
+    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel'])
+    expect(typeof face.onOpenSession).toBe('function')
+    expect(typeof face.openSession.openSessionWithPreset).toBe('function')
+    expect(typeof face.openDocResource).toBe('function')
     // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
     expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.selectPanel.selectPanel('dswf-knowledge')
@@ -580,7 +600,7 @@ describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：
     unpublishViews()
   })
 
-  it('注入面 = 点击导航闭包（AC4 全链路左半段）：onOpenTask → sidebarRight.openTab(dswf-overview) + 桥 openTaskFocus 载荷原样；openTab 异常 fail-soft（聚焦仍发布）', () => {
+  it('注入面 = 点击导航闭包（AC4 全链路左半段 + m3.1 D23 弹窗直开）：onOpenTask → sidebarRight.openTab(dswf-overview) + 桥 openTaskFocus 载荷原样 + 桥 openTaskDrawer（对话中就地开弹窗——不依赖概览 tab 消费）；openTab 异常 fail-soft（聚焦/弹窗仍发布）', () => {
     publishFakeViews()
     const { ctx, registers, openTab } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -590,13 +610,15 @@ describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：
     }
     face.onOpenTask({ taskId: 't-42', featureSlug: 'dsh-forge-m2-pipeline' })
     expect(openTab).toHaveBeenCalledWith(OVERVIEW_TAB_KIND) // dock 开概览 tab（openTab 自带 reveal 列）
-    const bridge = (globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown } } })
-      .__DSH_FORGE_WORKBENCH__
+    const bridge = (globalThis as {
+      __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown; drawerTaskId: string | null } }
+    }).__DSH_FORGE_WORKBENCH__
     expect(bridge!.getSnapshot().taskFocus).toEqual({
       taskId: 't-42',
       featureSlug: 'dsh-forge-m2-pipeline',
       nonce: 1,
-    }) // 桥聚焦发布（抽屉 + 任务子 tab + feature 选中——右栏 body 消费）
+    }) // 桥聚焦发布（任务子 tab + feature 选中——右栏 body 消费）
+    expect(bridge!.getSnapshot().drawerTaskId).toBe('t-42') // m3.1 D21/D23：弹窗直开（ShellHost 常驻树消费——挂载独立于 dock）
     // fail-soft：官方动作面无在场面（会话卸载瞬态）不外溢——聚焦仍发布
     const throwing = fakeClientCtx()
     const throwingCtx: ForgeClientCtx = {
@@ -618,7 +640,8 @@ describe('会话头挂接 pill 登记（4.2 AC1/AC4 + G1-16 槽面 pin 后半：
     const pills2 = throwing.registers.find((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)!
     const face2 = pills2.options.inject!() as { onOpenTask: (nav: { taskId: string; featureSlug: string }) => void }
     expect(() => face2.onOpenTask({ taskId: 't-1', featureSlug: 'f' })).not.toThrow()
-    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().taskFocus).toMatchObject({ taskId: 't-1' })
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { taskFocus: unknown; drawerTaskId: string | null } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().taskFocus).toMatchObject({ taskId: 't-1' })
+    expect((globalThis as { __DSH_FORGE_WORKBENCH__?: { getSnapshot(): { drawerTaskId: string | null } } }).__DSH_FORGE_WORKBENCH__!.getSnapshot().drawerTaskId).toBe('t-1') // fail-soft 下弹窗仍直开（m3.1 D23）
     unpublishViews()
   })
 

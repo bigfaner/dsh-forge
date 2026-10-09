@@ -1,10 +1,9 @@
 // dock-tabs 单测 —— 4.1 右栏两 dock tab 装配体：地址编解码（去重键）+ tabInfo 钩子形制
-//（TabInfoReader 子件）+ 概览装配体全相位 SSR（无锚空态/三视图接线/抽屉/转移对话框）+
-// 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/桥订阅驱动）归 e2e（5.2）——
-// renderToStaticMarkup 零 effect 同全仓口径。
+//（TabInfoReader 子件）+ 概览装配体全相位 SSR（无锚空态/三视图接线/弹窗退役记账[m3.1
+// D21/D23——本体迁 ShellHost]）+ 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/
+// 桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect 同全仓口径。
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { TaskStatus } from '@dsh-forge/contracts'
 import type { RpcClientFactory } from '../rpc/index.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX,
@@ -106,18 +105,16 @@ describe('TabInfoReader 钩子形制（fix-33 ⑤：可选 tabInfo 钩子经子�
   })
 })
 
-describe('OverviewDockAssembly 概览装配体全相位（AC5：抽屉/对话框/三视图接线）', () => {
+describe('OverviewDockAssembly 概览装配体全相位（D23 后：弹窗/对话框退役于本装配体——迁 ShellHost）', () => {
   const base = {
     onOpenTask: vi.fn(),
-    onCloseDrawer: vi.fn(),
     onOpenTransition: vi.fn(),
-    onCloseTransition: vi.fn(),
     makeClient: pendingClient,
   }
 
   it('无锚（projectId null）= 诚实空态（不猜首个——多项目无会话同文案）；不渲染概览主体', () => {
     const markup = renderToStaticMarkup(
-      <OverviewDockAssembly {...base} projectId={null} drawerTaskId={null} transitionTarget={null} />,
+      <OverviewDockAssembly {...base} projectId={null} drawerTaskId={null} />,
     )
     expect(markup).toContain('data-dswf-ov-unanchored')
     expect(markup).toContain('未锚定项目')
@@ -126,36 +123,20 @@ describe('OverviewDockAssembly 概览装配体全相位（AC5：抽屉/对话框
 
   it('有锚 = 概览主体（ov-panel + 三子 tab 帧在位）呈现——骨架相位（SSR 零 effect；renderTasksTab 槽随任务子 tab 激活装载）', () => {
     const markup = renderToStaticMarkup(
-      <OverviewDockAssembly {...base} projectId="p1" sessionCount={3} drawerTaskId={null} transitionTarget={null} />,
+      <OverviewDockAssembly {...base} projectId="p1" sessionCount={3} drawerTaskId={null} />,
     )
     expect(markup).toContain('data-dswf-ov-panel')
     expect(markup).toContain('data-dswf-ov-subtab="tasks"') // 任务子 tab 在位（三视图装载入口）
     expect(markup).not.toContain('data-dswf-ov-unanchored')
   })
 
-  it('抽屉开（drawerTaskId 在场）= 抽屉壳挂载（data-dswf-td-drawer——装载在途骨架壳）', () => {
+  it('弹窗开（drawerTaskId 在场）= 行高亮源注入 + 弹窗壳零挂载（m3.1 D23：本体迁 ShellHost——装配体仅递达 activeTaskId）', () => {
     const markup = renderToStaticMarkup(
-      <OverviewDockAssembly {...base} projectId="p1" drawerTaskId="t-1" transitionTarget={null} />,
+      <OverviewDockAssembly {...base} projectId="p1" drawerTaskId="t-1" />,
     )
-    expect(markup).toContain('data-dswf-td-drawer')
-    expect(markup).toContain('data-dswf-td-close')
-  })
-
-  it('转移对话框开（transitionTarget 在场）= 对话框挂载（allowedTransitions 唯一源直喂——选项集所见即所得）', () => {
-    const markup = renderToStaticMarkup(
-      <OverviewDockAssembly
-        {...base}
-        projectId="p1"
-        drawerTaskId={null}
-        transitionTarget={{
-          task: { taskId: 't-1', slug: 'feat', localId: '2.1', taskStatus: 'pending' },
-          allowedTransitions: ['in_progress' as TaskStatus, 'blocked' as TaskStatus],
-        }}
-      />,
-    )
-    expect(markup).toContain('data-dswf-td-tr-dialog')
-    expect(markup).toContain('data-dswf-td-tr-to')
-    expect(markup).not.toContain('data-dswf-td-drawer') // 对话框独立于抽屉（两入口同喂）
+    expect(markup).toContain('data-dswf-ov-panel')
+    expect(markup).not.toContain('data-dswf-td-drawer') // 弹窗退役于 dock 装配体（挂载独立断言归 ShellHost.test/e2e）
+    expect(markup).not.toContain('data-dswf-td-close')
   })
 })
 
@@ -221,27 +202,23 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
     expect(nextTaskFocusApply(-1, null)).toBeNull()
   })
 
-  it('装配体聚焦注入（静态面）：挂载即带聚焦 = 任务子 tab 激活（OverviewTab 初始态直取 tasks）+ 抽屉开（drawerTaskId 注入位）', () => {
-    // SSR 零 effect → head 缺席（features 空 → TasksTab feature 空态）——聚焦的两静态可观测面：
-    // ①初始子 tab = tasks（renderTasksTab 装载 = 空态在场面）②抽屉壳（taskId 经装配递达）
+  it('装配体聚焦注入（静态面）：挂载即带聚焦 = 任务子 tab 激活（OverviewTab 初始态直取 tasks）；弹窗开面归桥 drawerTaskId（ShellHost 消费）', () => {
+    // SSR 零 effect → head 缺席（features 空 → TasksTab feature 空态）——聚焦静态可观测面 =
+    // 初始子 tab = tasks（renderTasksTab 装载 = 空态在场面）；弹窗壳挂载断言迁 ShellHost.test
     const markup = renderToStaticMarkup(
       <OverviewDockAssembly
         {...{
           onOpenTask: vi.fn(),
-          onCloseDrawer: vi.fn(),
           onOpenTransition: vi.fn(),
-          onCloseTransition: vi.fn(),
           makeClient: pendingClient,
         }}
         projectId="p1"
         drawerTaskId="t-42"
-        transitionTarget={null}
         taskFocus={{ taskId: 't-42', featureSlug: 'feat-focused', nonce: 1 }}
       />,
     )
-    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // ①聚焦 → 任务子 tab
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // 聚焦 → 任务子 tab
     expect(markup).toContain('暂无任务容器') // renderTasksTab 装载在场面（容器空态——SSR 零 effect 头路缺席）
-    expect(markup).toContain('data-dswf-td-drawer') // ②抽屉开（taskId 注入——drawerTaskId 受控面）
   })
 
   it('聚焦缺席 = 提案子 tab 缺省（初始态不受扰动——用户定向顺序首位）', () => {
@@ -249,24 +226,25 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
       <OverviewDockAssembly
         {...{
           onOpenTask: vi.fn(),
-          onCloseDrawer: vi.fn(),
           onOpenTransition: vi.fn(),
-          onCloseTransition: vi.fn(),
           makeClient: pendingClient,
         }}
         projectId="p1"
         drawerTaskId={null}
-        transitionTarget={null}
       />,
     )
     expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="proposals"')
   })
 
-  it('桥聚焦直驱（ForgeOverviewTab 面桥缝）：openTaskFocus 写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
+  it('桥聚焦/弹窗/转移三缝直驱（ForgeOverviewTab 面桥缝）：写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
     const bridge = freshBridge()
     bridge.setOverviewContext({ projectId: 'p-anchored', workspaceId: 'w-1' })
     bridge.openTaskFocus({ taskId: 't-9', featureSlug: 'feat-9' })
+    bridge.openTaskDrawer('t-9')
+    bridge.openTaskTransition({ taskId: 't-9' })
     expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-9', featureSlug: 'feat-9', nonce: 1 })
+    expect(bridge.getSnapshot().drawerTaskId).toBe('t-9') // 弹窗受控态（ShellHost 消费面）
+    expect(bridge.getSnapshot().transitionFocus).toEqual({ taskId: 't-9', featureSlug: '', nonce: 1 }) // ⋯ 转移跨树通道
     expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p-anchored', workspaceId: 'w-1' }) // 三缝独立互不扰动
     // 概览 body 挂载不炸（taskFocus 经桥订阅递达——消费 effect 归 5.2 e2e）
     expect(() =>
