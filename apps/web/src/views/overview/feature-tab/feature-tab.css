@@ -88,16 +88,12 @@
   color: var(--dsw-alias-state-idle-primary);
 }
 
-/* ── 两列元数据网格（摘要独行 + 两列——4.6 装配入展开元数据块） ── */
+/* ── 两列元数据网格（摘要独行 + 两列——4.6 装配入展开元数据块；M3.1 D13 起随
+ * dswf-ov-meta 灰底卡内段呈现——本层零自带底/缩进（旧 bg-layer-2 盒 + 26px 缩进退役）） ── */
 .dswf-ov-fmeta {
   display: flex;
   flex-direction: column;
   gap: var(--dsw-font-xs-13-line-height);
-  margin-block: var(--dsw-font-xs-13-line-height);
-  margin-inline: 26px var(--dsw-font-s-14-line-height); /* dsw-raw 原型元数据左缩进刻度（dswf-ov-meta 同值——caret + 缩进对齐） */
-  padding: var(--dsw-font-xs-13-line-height);
-  background: var(--dsw-alias-bg-layer-2);
-  border-radius: var(--dsw-radius-sm);
 }
 
 .dswf-ov-fmeta-row {

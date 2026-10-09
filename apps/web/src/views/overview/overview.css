@@ -1,41 +1,27 @@
 /* 概览 tab 框架样式（定位：业务——UF-1：ov-head 折叠头 + sticky 区[子 tab + 搜索 + 排序]
- * + 提案/feature 子 tab 父行/元数据/文档行 + 七态 chips）。
- * 结构基准 = 原型 ov-panel（ui-design v17——搜索框限宽 240px、排序 pill 右固定、父行
- * tree-row 行语言、文档行行尾 ›）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值）。
+ * + 提案/feature 子 tab 卡片/元数据/文档行 + 七态 chips）。
+ * 结构基准 = M3.1 纠正版原型（proposal dsh-forge-m3.1-ui-alignment 五区 D12/D13/D20）：
+ * D12 内容弹性填满整 tab（旧定宽 560 右贴 + 左缘拖拽管线退役——dock 宽度归右栏官方拖柄）；
+ * D13 卡片语言 = 灰底内容区 + 父行边框圆角 8 浮卡 + bg-3 meta 块（interactive-bg-hover
+ * 最近语义映射——官方亮色层令牌全白，灰阶唯交互底族）+ 顶分隔线；视觉一律官方令牌
+ * （令牌唯一：色/字/距/圆角零裸值）。
  * dsw-raw 豁免（执行记录同步）：搜索框限宽 240px = ui-design v8 检索刻度（不占满 dock 宽）；
- * 子 tab 行高 28px / chip 行高 24px / 元数据缩进 26px / chips 行距 6px = 原型结构刻度
- * （官方主题无间距标尺令牌——sidebar.css/knowledge.css 同款豁免先例）；块级留白取
- * 行高令牌刻度。 */
+ * 子 tab 行高 28px / chip 行高 24px / 卡片圆角 8px / 卡片行距 6px / 卡头内距 8px 10px /
+ * meta 内距 8px 12px 12px 24px = M3.1 原型结构刻度（官方主题无间距标尺令牌——
+ * sidebar.css/knowledge.css 同款豁免先例）；块级留白取行高令牌刻度。 */
 
-/* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动） ──
- * 4.6 UF-3 · Integration #6：概览 tab 默认 560px + 左缘拖拽调宽（wrap = 右贴 dock 的
- * 定宽容器；resize = 左缘手柄——指针即左缘，宽度 = viewport − clientX 钳制 400–920） */
+/* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动；M3.1 D12 弹性填满整 tab） ── */
 .dswf-ov-wrap {
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
-  justify-content: flex-end;
-}
-
-.dswf-ov-resize {
-  flex: none;
-  width: 4px; /* dsw-raw 原型拖拽手柄宽刻度（drawer 左缘手柄同款） */
-  margin-inline-end: calc(-1 * var(--dsw-font-xs-13-line-height)); /* dsw-raw 手柄叠面板左缘的负距刻度（drawer 左缘手柄同款布局） */
-  cursor: col-resize;
-  background: transparent;
-}
-
-.dswf-ov-resize:hover,
-.dswf-ov-resize:focus-visible {
-  background: var(--dsw-alias-interactive-bg-active); /* hover 主色提示（ui-design v5 ⑧） */
-  outline: none;
 }
 
 .dswf-ov-panel {
   display: flex;
   flex-direction: column;
-  flex: none;
+  flex: 1; /* M3.1 D12：弹性填满整 tab（旧 flex:none 定宽 560 右贴形态退役） */
   max-width: 100%; /* dock 窄列保护（pane < 面板宽时收缩不溢出） */
   min-width: 0;
   min-height: 0;
@@ -74,6 +60,18 @@
   white-space: nowrap;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* M3.1 D20 同位翻转钮 caret：官方 ChevronDown（ghost Button 内）——展开态旋转 180°
+ * （↓↔↑ 几何翻转，替代退役的 ▾/▴ 字符形态）；文案 展开↔收起 两字等宽保三次几何同位 */
+.dswf-ov-head-caret {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.15s ease; /* dsw-raw 原型翻转过渡刻度 */
+}
+
+.dswf-ov-head-caret.is-open {
+  transform: rotate(180deg);
 }
 
 .dswf-ov-info {
@@ -178,13 +176,14 @@
   flex: none;
 }
 
-/* ── 内容区（独占滚动） ── */
+/* ── 内容区（独占滚动；M3.1 D13 灰底内容区——浮卡承载面） ── */
 .dswf-ov-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background: var(--dsw-alias-interactive-bg-hover); /* D13 灰底（bg-base 浮卡承载面——官方层令牌亮色全白，灰阶最近语义映射） */
 }
 
 /* ── 七态 chips（0 计数禁用淡化；激活态着色） ── */
@@ -235,24 +234,31 @@
   border-style: dashed;
 }
 
-/* ── 提案/feature 列表：父行（tree-row 行语言）+ 元数据块 + 文档行 ── */
+/* ── 提案/feature 列表：M3.1 D13 卡片语言（浮卡 + 卡头 + bg-3 meta 块 + 文档行） ── */
 .dswf-ov-list {
   display: flex;
   flex-direction: column;
   padding-block-end: var(--dsw-font-s-14-line-height);
 }
 
+/* 浮卡（原型 m31-card）：边框 + 圆角 8 + bg-base 承载面 + 卡间行距 6——替换 28px 平铺行容器 */
 .dswf-ov-item {
   display: flex;
   flex-direction: column;
+  margin-block-end: 6px; /* dsw-raw 原型卡片行距刻度（m31-card margin-bottom） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px; /* dsw-raw 原型卡片圆角刻度（D13 裁决值） */
+  background: var(--dsw-alias-bg-base);
+  overflow: hidden;
 }
 
+/* 卡头（原型 m31-card-head）：内距 8px 10px 的整行命中面——hover 交互底 */
 .dswf-ov-parent {
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  height: 28px; /* dsw-raw 原型父行高刻度（官方 tree-row 同高） */
-  padding: 0 var(--dsw-font-s-14-line-height);
+  min-height: 28px; /* dsw-raw 原型行高保底刻度（卡头内距下限同值） */
+  padding: 8px 10px; /* dsw-raw 原型卡头内距刻度 */
   min-width: 0;
 }
 
@@ -267,7 +273,7 @@
   gap: var(--dsw-font-xs-13-line-height);
   flex: 1;
   min-width: 0;
-  height: 100%;
+  min-height: 28px; /* dsw-raw 原型行高保底刻度（卡头命中面下限——旧定高形态的命中继承） */
   padding: 0;
   border: none;
   background: transparent;
@@ -346,16 +352,14 @@
   flex: none;
 }
 
-/* 元数据块（展开态——父行缩进对齐 + 键值行） */
+/* meta 块（展开态——原型 m31-meta）：顶分隔线 + bg-3 灰底 + 内距刻度（卡内第二段） */
 .dswf-ov-meta {
   display: flex;
   flex-direction: column;
   gap: var(--dsw-font-xs-13-line-height);
-  margin-block: var(--dsw-font-xs-13-line-height);
-  margin-inline: 26px var(--dsw-font-s-14-line-height); /* dsw-raw 原型元数据左缩进刻度（caret + 缩进对齐） */
-  padding: var(--dsw-font-xs-13-line-height);
-  background: var(--dsw-alias-bg-layer-2);
-  border-radius: var(--dsw-radius-sm);
+  padding: 8px 12px 12px 24px; /* dsw-raw 原型 meta 内距刻度（左 24 = caret + 缩进对齐） */
+  border-top: 1px solid var(--dsw-alias-border-l2); /* D13 顶分隔线 */
+  background: var(--dsw-alias-interactive-bg-hover); /* D13 bg-3 灰底（灰阶最近语义映射） */
 }
 
 .dswf-ov-meta-row {

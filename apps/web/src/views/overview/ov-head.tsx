@@ -1,9 +1,11 @@
-// 概览折叠头（定位：业务——UF-1 ov-head：默认折叠 = 项目名 + 一行状态摘要 + ▾；
-// 展开路径详情 4 行[工作区/文档位置/知识目录/任务清单@hash8] + ▴ 收起）。
-// 官方件复用：折叠钮 = 官方 Button（ghost/sm）；信息行自绘（官方无对应件）全令牌。
+// 概览折叠头（定位：业务——UF-1 ov-head：默认折叠 = 项目名 + 一行状态摘要；展开路径详情
+// 4 行[工作区/文档位置/知识目录/任务清单@hash8]）。M3.1 D20（原型十一轮）：展开/收起 =
+// 名称行内同一枚按钮同位翻转（官方 ChevronDown 旋转 + 展开↔收起文案 + aria-expanded）——
+// 行内 ghost ▾/▴ 字符钮与底部右对齐收起钮退役。官方件复用：折叠钮 = 官方 Button（ghost/sm）
+// + 官方 IconChevronDownOutlineRegular；信息行自绘（官方无对应件）全令牌。
 // 受控件（open/onToggle 上抛——展开态归 OverviewTab 本地态，AC3 切子 tab 不清头部）。
 import type { ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import './overview.css'
 
 /** ov-head 信息行（4 行数据形状——值与标签由装配面合成） */
@@ -25,7 +27,7 @@ export interface OverviewHeadProps {
   readonly onToggle: () => void
 }
 
-/** 概览折叠头（AC1：默认折叠一行；▾ 展开 4 行；▴ 收起） */
+/** 概览折叠头（M3.1 D20：同一枚按钮同位翻转——ChevronDown 旋转 + 展开↔收起文案） */
 export function OverviewHead({ projectName, summary, rows, open, onToggle }: OverviewHeadProps): ReactNode {
   return (
     <div className="dswf-ov-head" data-dswf-ov-head="">
@@ -44,7 +46,11 @@ export function OverviewHead({ projectName, summary, rows, open, onToggle }: Ove
           data-dswf-ov-head-toggle=""
           onClick={onToggle}
         >
-          {open ? '▴ 收起' : '▾'}
+          <IconChevronDownOutlineRegular
+            size={11}
+            className={open ? 'dswf-ov-head-caret is-open' : 'dswf-ov-head-caret'}
+          />
+          {open ? '收起' : '展开'}
         </Button>
       </div>
       {open ? (

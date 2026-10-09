@@ -92,8 +92,6 @@ const handlers = {
   onToggleRow: () => {},
   onToggleHead: () => {},
   onRetry: () => {},
-  onDragWidth: () => {},
-  onResetWidth: () => {},
 }
 
 const frame = (over: {
@@ -103,7 +101,6 @@ const frame = (over: {
   phase?: 'loading' | 'ready' | 'error'
   error?: { message: string; uiState: 'error-bar' | 'banner' | 'empty-state' }
   sessionCount?: number
-  width?: number
   renderTasksTab?: (ctx: unknown) => ReactNode
 }) =>
   renderToStaticMarkup(
@@ -115,7 +112,6 @@ const frame = (over: {
       busy={false}
       error={over.error}
       filter={over.filter ?? initialOverviewFilter()}
-      width={over.width ?? 560}
       onOpenDoc={() => {}}
       now={NOW}
       {...handlers}
@@ -190,7 +186,6 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
         busy={true}
         error={undefined}
         filter={initialOverviewFilter()}
-        width={560}
         onOpenDoc={() => {}}
         now={NOW}
         {...handlers}
@@ -262,22 +257,25 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
   })
 })
 
-describe('OverviewFrame 宽度容器（4.6 UF-3 · Integration #6——AC4）', () => {
-  it('面板 = 左缘拖拽手柄（separator + 双击复位锚）+ 定宽面板（默认 560px）', () => {
+describe('OverviewFrame 宽度填充（M3.1 D12——旧定宽管线显式否定断言）', () => {
+  it('面板 = 弹性填满整 tab：零左缘拖拽手柄、零定宽内联样式、零分离手柄语义', () => {
     const markup = frame({})
     expect(markup).toContain('data-dswf-ov-wrap=""')
-    const resizeAt = markup.indexOf('data-dswf-ov-resize=""')
+    expect(markup).toContain('data-dswf-ov-panel=""')
+    // 旧管线否定断言（退役显式化）：手柄锚 / separator 语义 / aria 标注 / 拖拽提示文案零在场
+    expect(markup).not.toContain('data-dswf-ov-resize')
+    expect(markup).not.toContain('role="separator"')
+    expect(markup).not.toContain('拖动调整概览宽度')
+    // 定宽右贴形态否定：面板零内联 width 样式（弹性填充由 .dswf-ov-panel flex:1 承载）
+    expect(markup).not.toContain('width:')
+    // wrap 仅承载面板本体（flex-end 右贴 + 手柄叠缘布局退役——wrap 首元素子 = panel 直系）
+    const wrapAt = markup.indexOf('data-dswf-ov-wrap=""')
     const panelAt = markup.indexOf('data-dswf-ov-panel=""')
-    expect(resizeAt).toBeGreaterThan(-1)
-    expect(panelAt).toBeGreaterThan(resizeAt) // 手柄在左缘（DOM 序先于面板）
-    expect(markup).toContain('width:560px')
-    expect(markup).toContain('role="separator"')
-    expect(markup).toContain('拖动调整概览宽度')
-  })
-
-  it('宽度注入经钳制（clampOverviewWidth——越界值收敛）', () => {
-    expect(frame({ width: 1200 })).toContain('width:920px')
-    expect(frame({ width: 100 })).toContain('width:400px')
+    expect(wrapAt).toBeGreaterThan(-1)
+    expect(panelAt).toBeGreaterThan(wrapAt)
+    const wrapTagEnd = markup.indexOf('>', wrapAt)
+    const firstChild = markup.slice(markup.indexOf('<div', wrapTagEnd), markup.indexOf('>', wrapTagEnd) + 200)
+    expect(firstChild.startsWith('<div class="dswf-ov-panel"')).toBe(true) // 手柄位空缺（panel 即首子）
   })
 })
 

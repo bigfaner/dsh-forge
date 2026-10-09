@@ -150,35 +150,10 @@ export function clearPhaseFilter(state: OverviewFilterState): OverviewFilterStat
   return { ...state, activePhases: new Set() }
 }
 
-// ─────────────────────────── 概览 tab 宽度模型（4.6 UF-3 · Integration #6） ───────────────────────────
-// 默认 560px + 左缘拖拽调宽（钳制 400–920 且中区保底 ≥580——ui-design v5 ⑧ / v22 概览 tab
-// 宽度行注）。右缘贴 dock——宽度 = viewportWidth − clientX（拖拽指针即左缘，drawer 同法）。
-
-/** 概览 tab 默认宽度（工具栏控件一行展示：容器 pill + 视图下拉 + 诊断 + 派发） */
-export const OVERVIEW_WIDTH_DEFAULT = 560
-
-/** 宽度钳制下限（px） */
-export const OVERVIEW_WIDTH_MIN = 400
-
-/** 宽度钳制上限（px） */
-export const OVERVIEW_WIDTH_MAX = 920
-
-/** 中区保底宽（px——maxWidth = viewportWidth − 580） */
-export const OVERVIEW_CENTER_MIN = 580
-
-/** 宽度钳制（纯函数）：[400, min(920, viewport − 580)]；viewport 缺席 = 上限 920（非拖拽面） */
-export function clampOverviewWidth(width: number, viewportWidth?: number): number {
-  const max =
-    viewportWidth === undefined
-      ? OVERVIEW_WIDTH_MAX
-      : Math.max(OVERVIEW_WIDTH_MIN, Math.min(OVERVIEW_WIDTH_MAX, viewportWidth - OVERVIEW_CENTER_MIN))
-  return Math.min(Math.max(Math.round(width), OVERVIEW_WIDTH_MIN), max)
-}
-
-/** 左缘拖拽 → 宽度（指针即左缘：width = viewport − clientX，双钳制） */
-export function overviewWidthFromDrag(clientX: number, viewportWidth: number): number {
-  return clampOverviewWidth(viewportWidth - clientX, viewportWidth)
-}
+// ─────────────────────────── 概览 tab 宽度模型（已退役） ───────────────────────────
+// M3.1 D12（用户裁决 #1）：概览内容弹性填满整个 tab——旧定宽管线（OVERVIEW_WIDTH_*
+// / clampOverviewWidth / overviewWidthFromDrag + 左缘拖拽手柄）整体退役；dock 宽度
+// 归右栏官方拖柄（用户调宽），本模型零宽度态。
 
 /** 父行展开键（提案行——prop:{proposalId}，原型 key 方案） */
 export function proposalRowKey(proposalId: string): string {

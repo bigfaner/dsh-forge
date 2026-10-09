@@ -3,15 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/contracts'
 import {
-  OVERVIEW_CENTER_MIN,
-  OVERVIEW_WIDTH_DEFAULT,
-  OVERVIEW_WIDTH_MAX,
-  OVERVIEW_WIDTH_MIN,
   OVERVIEW_SORT_LABELS,
-  clampOverviewWidth,
   clearPhaseFilter,
   clearProposalStatusFilter,
-  overviewWidthFromDrag,
   OVERVIEW_SUBTABS,
   clearStatusFilter,
   featureRowKey,
@@ -179,7 +173,7 @@ describe('ov-head 摘要合成', () => {
   })
 })
 
-// ─────────────────────────── 4.6 UF-1/UF-4 chips 族 + 宽度模型 ───────────────────────────
+// ─────────────────────────── 4.6 UF-1/UF-4 chips 族 ───────────────────────────
 
 describe('提案五态 / feature 阶段 chips（4.6——toggle 与清空语义）', () => {
   it('toggleProposalStatusFilter：集合翻转（多选并集）', () => {
@@ -225,28 +219,7 @@ describe('提案五态 / feature 阶段 chips（4.6——toggle 与清空语义�
   })
 })
 
-describe('概览 tab 宽度模型（4.6 UF-3 · Integration #6——AC4 钳制 400–920 + 中区保底 ≥580）', () => {
-  it('常量：默认 560 / 下限 400 / 上限 920 / 中区保底 580', () => {
-    expect(OVERVIEW_WIDTH_DEFAULT).toBe(560)
-    expect(OVERVIEW_WIDTH_MIN).toBe(400)
-    expect(OVERVIEW_WIDTH_MAX).toBe(920)
-    expect(OVERVIEW_CENTER_MIN).toBe(580)
-  })
-
-  it('clampOverviewWidth：区间内直通；越界钳制；viewport 缺席 = 上限 920', () => {
-    expect(clampOverviewWidth(560)).toBe(560)
-    expect(clampOverviewWidth(100)).toBe(400)
-    expect(clampOverviewWidth(2000)).toBe(920)
-    expect(clampOverviewWidth(560, 2000)).toBe(560)
-    expect(clampOverviewWidth(900, 1200)).toBe(620) // viewport 1200 → max = 1200-580 = 620（中区保底）
-    expect(clampOverviewWidth(300, 900)).toBe(400) // max(400, 900-580=320) = 400——下限优先于中区保底
-    expect(clampOverviewWidth(560.4)).toBe(560) // 取整
-  })
-
-  it('overviewWidthFromDrag：宽度 = viewport − clientX（指针即左缘）双钳制', () => {
-    expect(overviewWidthFromDrag(1440, 2000)).toBe(560)
-    expect(overviewWidthFromDrag(1900, 2000)).toBe(400) // 越下限 → 400
-    expect(overviewWidthFromDrag(400, 2000)).toBe(920) // 越上限 → 920
-    expect(overviewWidthFromDrag(500, 900)).toBe(400) // 小窗中区保底让位下限
-  })
-})
+// M3.1 D12：概览 tab 宽度模型（OVERVIEW_WIDTH_* / clampOverviewWidth /
+// overviewWidthFromDrag）随定宽管线整体退役——内容弹性填满整 tab（用户裁决 #1）。
+// 退役否定断言（零弱化台账）：模型面宽度符号零导出——本测试文件零引用即编译面守卫
+// （tsconfig 类型检查 + oxlint no-unused-vars 双机械通道）；帧面否定断言见 OverviewTab.test。

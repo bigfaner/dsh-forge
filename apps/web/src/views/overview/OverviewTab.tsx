@@ -11,16 +11,13 @@ import type { FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStat
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
-  OVERVIEW_WIDTH_DEFAULT,
   activeFeatureSlug,
   clearPhaseFilter,
   clearProposalStatusFilter,
   clearStatusFilter,
-  clampOverviewWidth,
   initialOverviewFilter,
   nextSort,
   overviewHeadSummary,
-  overviewWidthFromDrag,
   proposalRowKey,
   searchQueryOf,
   statusFilterParam,
@@ -89,8 +86,6 @@ export interface OverviewFrameProps {
   readonly filter: OverviewFilterState
   /** ov-head 摘要会话计数（4.1 装配注入——sessions/workspaces 账本快照；缺席省略段） */
   readonly sessionCount?: number
-  /** 面板宽度（4.6 UF-3 · Integration #6：默认 560px + 左缘拖拽——受控注入） */
-  readonly width: number
   readonly onSubtabChange: (subtab: OverviewSubtab) => void
   readonly onSearchChange: (search: string) => void
   readonly onSortToggle: () => void
@@ -106,10 +101,6 @@ export interface OverviewFrameProps {
   readonly onToggleHead: () => void
   /** 重试（头路 + 列路全量重装载） */
   readonly onRetry: () => void
-  /** 左缘拖拽调宽（指针即左缘——clientX/viewportWidth 由帧内取 window） */
-  readonly onDragWidth: (clientX: number, viewportWidth: number) => void
-  /** 双击左缘复位默认宽（560px） */
-  readonly onResetWidth: () => void
   /** 文档行点击（dock 开 tab——4.1 接线；缺席 = 无动作面） */
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入；缺省 = chips 过滤接口独占呈现） */
@@ -120,7 +111,7 @@ export interface OverviewFrameProps {
   readonly now?: number
 }
 
-/** 概览纯呈现帧（结构静态可测——ov-head + sticky + 内容区分派 + 左缘拖拽调宽容器） */
+/** 概览纯呈现帧（结构静态可测——ov-head + sticky + 内容区分派；M3.1 D12 面板弹性填满整 tab） */
 export function OverviewFrame({
   projectId,
   head,
@@ -130,7 +121,6 @@ export function OverviewFrame({
   error,
   filter,
   sessionCount,
-  width,
   onSubtabChange,
   onSearchChange,
   onSortToggle,
@@ -143,8 +133,6 @@ export function OverviewFrame({
   onToggleRow,
   onToggleHead,
   onRetry,
-  onDragWidth,
-  onResetWidth,
   onOpenDoc,
   renderTasksTab,
   onStartSession,
@@ -231,26 +219,7 @@ export function OverviewFrame({
 
   return (
     <div className="dswf-ov-wrap" data-dswf-ov-wrap="">
-      <div
-        className="dswf-ov-resize"
-        role="separator"
-        aria-orientation="vertical"
-        tabIndex={0}
-        aria-label="拖动调整概览宽度"
-        title="拖动调宽 · 双击复位"
-        data-dswf-ov-resize=""
-        onDoubleClick={() => {
-          onResetWidth()
-        }}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId)
-        }}
-        onPointerMove={(event) => {
-          if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
-          onDragWidth(event.clientX, window.innerWidth)
-        }}
-      />
-      <div className="dswf-ov-panel" data-dswf-ov-panel="" style={{ width: `${clampOverviewWidth(width)}px` }}>
+      <div className="dswf-ov-panel" data-dswf-ov-panel="">
         {error !== undefined && error.uiState === 'banner' ? (
           <ErrorBar
             className="dswf-ov-banner"
@@ -419,8 +388,6 @@ export function OverviewTab({
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
   const [nonce, setNonce] = useState(0)
-  // 面板宽度（4.6 UF-3 · Integration #6）：默认 560px；左缘拖拽钳制 400–920（中区保底 ≥580）
-  const [width, setWidth] = useState(OVERVIEW_WIDTH_DEFAULT)
   const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient)
 
   // 任务聚焦子 tab 切换（4.2 pill 点击链尾）：nonce 变更（已开概览后的后续点击）→
@@ -466,12 +433,6 @@ export function OverviewTab({
   const handleRetry = useCallback((): void => {
     setNonce((n) => n + 1)
   }, [])
-  const handleDragWidth = useCallback((clientX: number, viewportWidth: number): void => {
-    setWidth(overviewWidthFromDrag(clientX, viewportWidth))
-  }, [])
-  const handleResetWidth = useCallback((): void => {
-    setWidth(OVERVIEW_WIDTH_DEFAULT)
-  }, [])
 
   return (
     <OverviewFrame
@@ -483,7 +444,6 @@ export function OverviewTab({
       error={load.error}
       filter={filter}
       sessionCount={sessionCount}
-      width={width}
       onSubtabChange={handleSubtabChange}
       onSearchChange={handleSearchChange}
       onSortToggle={handleSortToggle}
@@ -496,8 +456,6 @@ export function OverviewTab({
       onToggleRow={handleToggleRow}
       onToggleHead={handleToggleHead}
       onRetry={handleRetry}
-      onDragWidth={handleDragWidth}
-      onResetWidth={handleResetWidth}
       onOpenDoc={onOpenDoc}
       renderTasksTab={renderTasksTab}
       {...(onStartSession !== undefined ? { onStartSession } : {})}
