@@ -1,12 +1,14 @@
 /* 概览 tab 框架样式（定位：业务——UF-1：ov-head 折叠头 + sticky 区[子 tab + 搜索 + 排序]
  * + 提案/feature 子 tab 卡片/元数据/文档行 + 七态 chips）。
- * 结构基准 = M3.1 纠正版原型（proposal dsh-forge-m3.1-ui-alignment 五区 D12/D13/D20）：
+ * 结构基准 = M3.1 纠正版原型（proposal dsh-forge-m3.1-ui-alignment 五区 D12/D13/D14/D15/D20）：
  * D12 内容弹性填满整 tab（旧定宽 560 右贴 + 左缘拖拽管线退役——dock 宽度归右栏官方拖柄）；
  * D13 卡片语言 = 灰底内容区 + 父行边框圆角 8 浮卡 + bg-3 meta 块（interactive-bg-hover
  * 最近语义映射——官方亮色层令牌全白，灰阶唯交互底族）+ 顶分隔线；视觉一律官方令牌
- * （令牌唯一：色/字/距/圆角零裸值）。
+ * （令牌唯一：色/字/距/圆角零裸值）；D14 状态 chips = 彩色胶囊（999px 官方 Tag 刻度 +
+ * 激活着色——七态单强调蓝 link）；D15 子 tab = 下划线高亮（active = 主色 link + 底边框）。
  * dsw-raw 豁免（执行记录同步）：搜索框限宽 240px = ui-design v8 检索刻度（不占满 dock 宽）；
- * 子 tab 行高 28px / chip 行高 24px / 卡片圆角 8px / 卡片行距 6px / 卡头内距 8px 10px /
+ * 子 tab 行距 22px / 子 tab 纵距 3px 8px / 子 tab 下划线 2px / chip 行高 24px / chip 胶囊
+ * 999px（官方 Tag 同值刻度）/ 卡片圆角 8px / 卡片行距 6px / 卡头内距 8px 10px /
  * meta 内距 8px 12px 12px 24px = M3.1 原型结构刻度（官方主题无间距标尺令牌——
  * sidebar.css/knowledge.css 同款豁免先例）；块级留白取行高令牌刻度。 */
 
@@ -119,31 +121,43 @@
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
+/* M3.1 D15：药丸按钮退役 → 下划线高亮（active = 主色 + 底边框，原型 ov-subtab）。
+ * 行基线 = 容器底边框承载下划线锚（原型 hairline 0.5px → 官方 1px 边框刻度）。 */
 .dswf-ov-subtabs {
   display: flex;
   align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 22px; /* dsw-raw 原型子 tab 行距刻度 */
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .dswf-ov-subtab {
-  height: 28px; /* dsw-raw 原型子 tab 行刻度（官方 SegmentedTabs 适用于主视图页签，子 tab 为文本钮形态） */
-  padding: 0 var(--dsw-font-xs-13-line-height);
+  position: relative; /* 下划线 ::after 定位锚 */
+  padding: 3px 0 8px; /* dsw-raw 原型子 tab 纵距刻度（纯文字钮零横距——下划线 = 标签宽） */
   border: none;
-  border-radius: var(--dsw-radius-sm);
   background: transparent;
   font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
 .dswf-ov-subtab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .dswf-ov-subtab.is-active {
-  background: var(--dsw-alias-interactive-bg-active);
   font: var(--dsw-font-xs-strong-13);
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-link);
+}
+
+.dswf-ov-subtab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px; /* 压行基线边框（原型 -0.5px 对 hairline——1px 边框同位对齐） */
+  height: 2px; /* dsw-raw 原型下划线粗刻度 */
+  background: var(--dsw-alias-link);
+  border-radius: 2px; /* dsw-raw 原型下划线端帽刻度 */
 }
 
 .dswf-ov-searchbar {
@@ -186,7 +200,9 @@
   background: var(--dsw-alias-interactive-bg-hover); /* D13 灰底（bg-base 浮卡承载面——官方层令牌亮色全白，灰阶最近语义映射） */
 }
 
-/* ── 七态 chips（0 计数禁用淡化；激活态着色） ── */
+/* ── 七态 chips（M3.1 D14 彩色胶囊：0 计数禁用淡化；激活 = 单强调蓝——状态差异由
+ *    StateDot 点承载，原型 m31-tchip.on；胶囊 999px = 官方 Tag 刻度同值 + bg-base
+ *    灰底承载面（D13 灰底内容区上的浮起胶囊）） ── */
 .dswf-ov-stchips {
   display: flex;
   flex-wrap: wrap;
@@ -202,8 +218,8 @@
   height: 24px; /* dsw-raw 原型 chip 行刻度 */
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-xs);
-  background: transparent;
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（矩形 radius-xs 退役——M3.1 D14） */
+  background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
@@ -214,9 +230,10 @@
 }
 
 .dswf-ov-stchip.is-on {
-  border-color: var(--dsw-alias-state-business-primary);
-  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-link);
+  color: var(--dsw-alias-link);
   background: var(--dsw-alias-interactive-bg-active);
+  font: var(--dsw-font-xs-strong-13);
 }
 
 .dswf-ov-stchip.is-zero,

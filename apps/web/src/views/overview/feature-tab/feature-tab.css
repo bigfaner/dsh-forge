@@ -1,11 +1,12 @@
 /* M3 UF-4 feature 子 tab 组件族（4.3）：阶段 chips 行 + 两列元数据网格 + 分层文档列表。
  * 令牌纪律（lint-tokens）：色/字/距零裸值——间距取官方排版行高令牌刻度（proposal-tab.css /
- * overview.css 同法）；chips 形制镜像 M2 七态 chips / 4.2 五态 chips 同族（dswf-ov-stchip /
- * dswf-ov-pschip）；元数据键值行语言镜像 overview.css dswf-ov-meta 族（键列 56px 对齐）。
- * dsw-raw 豁免（执行记录注记）：chips 行距 6px / chip 行高 24px / 点径 8px = M2 同值原型
- * 刻度；网格列间距 14px = 原型 meta-grid column-gap 同值刻度。 */
+ * overview.css 同法）；chips 形制 = M3.1 D14 彩色胶囊（官方 Tag 999px 刻度同值——
+ * components.css 胶囊先例；矩形 radius-xs 退役；与 4.2 五态 / 七态 chips 同胶囊语言）；
+ * 元数据键值行语言镜像 overview.css dswf-ov-meta 族（键列 56px 对齐）。
+ * dsw-raw 豁免（执行记录注记）：chips 行距 6px / chip 行高 24px / chip 胶囊 999px（官方
+ * Tag 同值）/ 点径 8px = 原型结构刻度；网格列间距 14px = 原型 meta-grid column-gap 同值刻度。 */
 
-/* ── 阶段 chips 行（机制沿 M2 七态 chips / 4.2 五态 chips） ── */
+/* ── 阶段 chips 行（M3.1 D14 彩色胶囊——原型 m31-st-ph-*；机制沿五态/七态 chips） ── */
 .dswf-ov-phchips {
   display: flex;
   flex-wrap: wrap;
@@ -21,8 +22,8 @@
   height: 24px; /* dsw-raw 原型 chip 行刻度（dswf-ov-pschip 同值） */
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-xs);
-  background: transparent;
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（矩形 radius-xs 退役——M3.1 D14） */
+  background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
@@ -32,10 +33,36 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* 激活着色（原型 m31-ph-*）：进行中/设计=蓝 link / 需求/已归档=中性 / 已完成=绿 success /
+ * 任务=紫无官方令牌 → 中性最近语义（M3 记账裁决——同 4.2 superseded 注记）。 */
 .dswf-ov-phchip.is-on {
-  border-color: var(--dsw-alias-state-business-primary);
-  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='in-progress'],
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='design'] {
+  border-color: var(--dsw-alias-link);
+  color: var(--dsw-alias-link);
   background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='prd'],
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='archived'] {
+  border-color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='tasks'] {
+  border-color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='completed'] {
+  border-color: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
 }
 
 .dswf-ov-phchip.is-zero,
