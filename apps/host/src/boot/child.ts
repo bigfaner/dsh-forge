@@ -88,13 +88,14 @@ async function main(): Promise<void> {
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
   // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
   // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
+  // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
+  // skill-filesystem 行（forge 技能/工具仅预设组合，标准模式零 forge 面）。
   const presetPatches = loadPresetPatches()
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
-    skillsDir: options.skillsDir, // 3.4 plugin-forge skills 物理挂载（缺席 = 技能面降级）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     ...(presetPatches !== undefined
       ? {

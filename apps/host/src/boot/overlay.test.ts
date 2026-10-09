@@ -2,8 +2,9 @@
 // 用户层之后应用，按 row id 整体替换 config；YAML 双引号标量承载 Windows 路径）。
 // fix-12：welcome ack 预置行形状 + 上游版本常量 pin（升级窗口机械核查）。
 // fix-26：凭据桥行形状（credentialsPath 在场注入 / 缺席不桥）+ 官方缝 pin。
-// 3.4 M2 装配缝三面：core 行 tasksHome / plugin-forge 行 bindingsFile（与 knowledge
-// 同一绑定表文件）/ skill-filesystem 行 customSkillDirs（plugin-forge skills 物理挂载）。
+// 3.4 M2 装配缝两面：core 行 tasksHome / knowledge 行 bindingsFile。产品裁决
+// （2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem 行
+// 废除——forge 工具/技能仅远征/突击预设组合携带（预设行内增量行 + customSkillDirs）。
 // M3 3.7 预设装配：registry default 覆写 + 远征/突击双预设行每启注行（物化分叉——
 // customSkillDirs 当形态绝对路径；!!js 全形态死刑零表达式残留；缺席 fail-soft 不注行）。
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -29,9 +30,6 @@ describe('renderBootOverlay（纯函数形状）', () => {
         '- id: dsh-forge-knowledge',
         '  config:',
         '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"',
-        '- id: dsh-forge-plugin-forge',
-        '  config:',
-        '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"',
         '- id: ui-settings-general',
         '  config:',
         `    welcomeNoticeVersion: "${WELCOME_NOTICE_ACK_VERSION}"`,
@@ -40,11 +38,14 @@ describe('renderBootOverlay（纯函数形状）', () => {
     )
   })
 
-  it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）', () => {
+  it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）；全局零 forge 面（产品裁决 2026-10-09：plugin-forge/skill-filesystem 全局行废除——标准模式不带 forge 工具/技能，仅预设组合携带）', () => {
     const text = renderBootOverlay({ stateDb: '/x/state.db', bindingsFile: '/x/b.json' })
     expect(text).toContain('- id: dsh-forge-core')
     expect(text).toContain('- id: dsh-forge-knowledge')
-    expect(text).toContain('- id: dsh-forge-plugin-forge')
+    expect(text).not.toContain('dsh-forge-plugin-forge')
+    expect(text).not.toContain('plugin-forge')
+    expect(text).not.toContain('skill-filesystem')
+    expect(text).not.toContain('customSkillDirs')
     expect(text).not.toContain('- insert')
     expect(text).not.toContain('disabled')
   })
@@ -121,28 +122,11 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('settingsFile')
   })
 
-  it('技能面挂载（3.4/5.4 修正）：skillsDir 在场 → 行显式再启用（disabled:false——官方 web-app 层禁用主机行，patch 缺字段沿用禁用）+ 纯部署级 provider（includeDefaultRoots:false）+ customSkillDirs 列表', () => {
-    const text = renderBootOverlay({
-      stateDb: '/x/s.db',
-      bindingsFile: '/x/b.json',
-      skillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills',
-    })
-    expect(text).toContain(
-      [
-        '- id: skill-filesystem',
-        '  disabled: false',
-        '  config:',
-        '    includeDefaultRoots: false',
-        '    customSkillDirs:',
-        '      - "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"',
-      ].join('\n'),
-    )
-  })
-
-  it('技能面挂载（3.4）：skillsDir 缺席 → 无 skill-filesystem 行（fail-soft 技能面降级）', () => {
+  it('全局技能面行废除（产品裁决 2026-10-09：标准模式零 forge 技能）：基础渲染零 skill-filesystem / customSkillDirs / includeDefaultRoots——技能挂载仅预设行内（预设物化分叉另 pin；3.4/5.4 全局行形态终结，BootOverlayInput.skillsDir 输入位随之移除）', () => {
     const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
     expect(text).not.toContain('skill-filesystem')
     expect(text).not.toContain('customSkillDirs')
+    expect(text).not.toContain('includeDefaultRoots')
   })
 })
 
@@ -245,7 +229,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).not.toContain('{{plugin-forge') // 占位符零残留
   })
 
-  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = 全局行同值单源', () => {
+  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = knowledge 全局行同值单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面）', () => {
     const text = renderBootOverlay(withPresets())
     const row = (name: string) =>
       [
@@ -256,9 +240,10 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       ].join('\n')
     expect(text).toContain(row('plugin-forge'))
     expect(text).toContain(row('plugin-forge-spec'))
-    // 同值行计数：全局 knowledge + plugin-forge 两行 + 远征行内 plugin-forge/plugin-forge-spec
-    // 两行 + 突击行内 plugin-forge 一行 = 恰 5（预设会话行内实例自足 cwd 路由——遮蔽无害化）
-    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(5)
+    // 同值行计数：knowledge 全局一行 + 远征行内 plugin-forge/plugin-forge-spec 两行 +
+    // 突击行内 plugin-forge 一行 = 恰 4（全局 plugin-forge 行废除——预设会话行内实例
+    // 自足 cwd 路由，标准组合零 forge 面）
+    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(4)
     expect(text).not.toContain('{{plugin-forge-bindings}}')
   })
 

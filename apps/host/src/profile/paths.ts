@@ -51,10 +51,10 @@ export interface HostPaths {
   /** 设置域存储文件（M3 3.8：boot overlay 注 core 行 config.settingsFile——恒与 state.db
    *  同居 {userData}（core 路径守卫基准 = dirname(dbFile)，异目录即插件构造拒启）） */
   settingsFile: string
-  /** plugin-forge skills 物理挂载目录（3.4 customSkillDirs——boot overlay 注 skill-filesystem
-   *  行；dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
-   *  邻接树。解析失败 = undefined 不注入（技能面缺席不抛断启动——fail-soft 装配缺口）。
-   *  M3 3.7 起兼作预设装配 customSkillDirs[core]（远征/突击同携核心技能） */
+  /** plugin-forge skills 物理挂载目录（M3 3.7 起仅作预设装配 customSkillDirs[core] 物化锚
+   *  ——产品裁决 2026-10-09：全局 skill-filesystem 行已废除，标准模式零 forge 技能；
+   *  dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
+   *  邻接树。解析失败 = undefined 不注入（预设技能目录剔除 fail-soft——不抛断启动） */
   skillsDir?: string
   /** plugin-forge-spec skills 物理挂载目录（M3 3.7 预设装配 customSkillDirs[spec]——仅远征
    *  携带；dev = workspace 链接、packaged = runtime/node_modules 邻接。解析失败 = undefined

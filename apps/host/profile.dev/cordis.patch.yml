@@ -19,18 +19,19 @@
 # ── 产品插件行（4.2 转正启用——SMOKE-LEDGER §5 转正条件落位）：
 #    core = 单 SQLite 句柄双服务（ctx.forgeProjects / ctx.forgeKnowledge；M2 起
 #    tasksHome 注入时增四域服务）；knowledge = 召回 tool 双件 + forge:knowledge 系统
-#    提示词段；plugin-forge = forge 管线 tool 半身六动词 + forge:pipeline 提示段（M2 3.4）。
+#    提示词段。plugin-forge 行已移出用户层（产品裁决 2026-10-09：标准模式零 forge 面
+#    ——用户层/overlay 全局行对一切组合生效（含 dsh 出厂标准预设）＝泄漏；forge 工具/
+#    技能仅远征/突击预设组合携带，预设底稿行内增量行自带 bindingsFile config，自足）。
 #    config 不在用户层书写（dbFile / tasksHome / bindingsFile 与 skills 物理挂载目录
 #    均属应用装配期路径——runProfile boot overlay 按 userData/形态逐启生成，见
 #    apps/host/src/boot/overlay.ts）。
-#    dev 形态链 workspace 构建产物（package.json link: 四件）。──
+#    dev 形态链 workspace 构建产物（package.json link: 四件——plugin-forge[-spec] 行
+#    保留链接：预设底稿行内增量行的 loader 解析锚）。──
 - insert:
     - id: dsh-forge-core
       name: '@dsh-forge/core'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
-    - id: dsh-forge-plugin-forge
-      name: '@dsh-forge/plugin-forge'
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:

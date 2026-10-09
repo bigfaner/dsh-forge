@@ -41,14 +41,14 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   })
 
-  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/{core,knowledge,plugin-forge} 产品行（3.4 增 plugin-forge）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/{core,knowledge} 产品行（产品裁决 2026-10-09：plugin-forge 移出用户层——标准模式零 forge 面，仅预设组合携带）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
     // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
     expect(patch).toContain('- id: client-hmr')
     expect(patch).toContain('disabled: true')
-    // 产品三行启用（4.2 转正 + 3.4 plugin-forge 入列）：insert 块无 disabled；行 config 不在
-    // 用户层书写（dbFile / tasksHome / bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
+    // 产品两行启用（4.2 转正）：insert 块无 disabled；行 config 不在用户层书写
+    // （dbFile / tasksHome / bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
     expect(patch).toContain(
       [
         '- insert:',
@@ -56,10 +56,10 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
         "      name: '@dsh-forge/core'",
         '    - id: dsh-forge-knowledge',
         "      name: '@dsh-forge/knowledge'",
-        '    - id: dsh-forge-plugin-forge',
-        "      name: '@dsh-forge/plugin-forge'",
       ].join('\n'),
     )
+    // plugin-forge 行已移出（全局用户层行对一切组合生效＝泄漏进标准会话；预设底稿行内自带）
+    expect(patch).not.toContain("name: '@dsh-forge/plugin-forge'")
     expect(patch).not.toContain('disabled: true\n    - id: dsh-forge-knowledge')
   })
 
@@ -184,14 +184,15 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
-  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 三产品行启用——4.2 转正 + 3.4 plugin-forge）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层，仅 core/knowledge）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
     expect(dev).toContain('- id: system-prompt')
     expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
-    expect(dev).toContain("name: '@dsh-forge/plugin-forge'")
-    expect(dev).not.toMatch(/dsh-forge-(core|knowledge|plugin-forge)[\s\S]{0,80}disabled/)
+    // plugin-forge 行移出（标准模式零 forge 面——forge 工具/技能仅预设组合携带）
+    expect(dev).not.toContain("name: '@dsh-forge/plugin-forge'")
+    expect(dev).not.toMatch(/dsh-forge-(core|knowledge)[\s\S]{0,80}disabled/)
     // M3 3.7：ui-settings 开关行（dev = 已落地用户层等价物——语义同步模板补行）
     expect(dev).toContain('- id: ui-settings\n  config:\n    enabled: true')
   })
