@@ -1,0 +1,232 @@
+/* dispatchTask 工具行样式（定位：业务——对话内 dispatchTask 调用行，tool.call.toolview
+ * keyed 占用者）。结构基准 = 上游 ui-tool 行语言（ToolRow.module.css · SkillRow.module.css
+ * 同型：24px 行高 · 16px 图标位 · 2px 点隔符 · ioCard 输入/输出双段展开卡 · 胶囊检视钮）；
+ * 视觉一律官方令牌（令牌唯一：色/字/距/圆角/阴影——lint-tokens 机械执行）；上游裸值
+ * 结构刻度以 dsw-raw 行尾注记豁免（与官方通用行逐像素对齐——行语言连续性优先）。 */
+
+/* ── 行壳：纵列（行 + 展开体）── */
+.dswf-dtr {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 折叠行：图标位 + 标题 + 点隔符 + 摘要（上游 24px 行高行语言）── */
+.dswf-dtr-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+  height: calc(24px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上游 ui-tool 行高刻度同值 */
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 0.1s; /* dsw-raw 上游行悬停过渡刻度 */
+  overflow: hidden;
+}
+
+.dswf-dtr-row:hover,
+.dswf-dtr-row[aria-expanded='true'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-dtr-row[data-expandable] {
+  cursor: pointer;
+}
+
+/* 图标位（静态业务图标 + 悬停/展开换 Chevron——SkillRow 同形制） */
+.dswf-dtr-leading {
+  display: inline-flex;
+  position: relative;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上游图标位刻度 */
+  height: calc(16px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上游图标位刻度 */
+  margin-right: 6px; /* dsw-raw 上游图标位右距刻度 */
+  color: inherit;
+}
+
+.dswf-dtr-leading svg {
+  width: calc(14px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上游内嵌图标刻度 */
+  height: calc(14px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上游内嵌图标刻度 */
+}
+
+.dswf-dtr-iconidle {
+  display: inline-flex;
+  transition: opacity 0.1s; /* dsw-raw 上游悬停图标淡出刻度 */
+  opacity: 1;
+}
+
+.dswf-dtr-chevron {
+  color: inherit;
+}
+
+.dswf-dtr-chevronhover {
+  position: absolute;
+  inset: 0;
+  margin: auto; /* dsw-raw 上游悬停箭头居中刻度 */
+  transition: opacity 0.1s; /* dsw-raw 上游悬停箭头淡入刻度 */
+  opacity: 0;
+}
+
+.dswf-dtr-row:hover .dswf-dtr-iconidle {
+  opacity: 0;
+}
+
+.dswf-dtr-row:hover .dswf-dtr-chevronhover {
+  opacity: 1;
+}
+
+/* 标题（locale 工具调用——官方通用行同词） */
+.dswf-dtr-title {
+  flex: none;
+  font-size: var(--dsw-font-xs-13);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上航行高刻度 */
+}
+
+/* 点隔符（2px 圆点——扫光装饰标记同上游） */
+.dswf-dtr-sep {
+  flex: none;
+  width: 2px; /* dsw-raw 上游点隔符刻度 */
+  height: 2px; /* dsw-raw 上游点隔符刻度 */
+  margin: 0 8px; /* dsw-raw 上游点隔符两侧距刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-label-caption);
+}
+
+/* 摘要段（末段 = 容器标识——本行接管点） */
+.dswf-dtr-summary {
+  flex: auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--dsw-font-xs-13);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上航行高刻度 */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-dtr-summary.is-error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-dtr-summary.is-stopped {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* 任务键后缀（结算领取任务 slug/localId——上游 summarySuffix 段位同型：摘要右侧独立段） */
+.dswf-dtr-suffix {
+  flex: none;
+  margin-left: 4px; /* dsw-raw 上游后缀段左距刻度 */
+  font-size: var(--dsw-font-xs-13);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px)); /* dsw-raw 上航行高刻度 */
+  color: var(--dsw-alias-label-caption);
+  white-space: nowrap;
+}
+
+/* ── 展开体：ioCard（输入/输出双段卡——上游通用行同型）+ 检视钮 ── */
+.dswf-dtr-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-dtr-io {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 4px 4px; /* dsw-raw 上游展开卡外距刻度 */
+  border: 0.5px solid var(--dsw-alias-border-l1); /* dsw-raw 上游半像素 hairline 边框刻度 */
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-markdown-code-block);
+  font: var(--dsw-font-markdown-code-block-small);
+}
+
+.dswf-dtr-iosection {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: baseline;
+  column-gap: 14px; /* dsw-raw 上游 ioCard 标签列距刻度 */
+  max-height: 150px; /* dsw-raw 上游 ioCard 段滚动高刻度 */
+  padding: 12px 16px; /* dsw-raw 上游 ioCard 段内距刻度 */
+  overflow-y: auto;
+}
+
+.dswf-dtr-iosection::-webkit-scrollbar-thumb {
+  border: 2px solid transparent; /* dsw-raw 上游滚动条 thumb 内衬刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background-clip: padding-box;
+}
+
+.dswf-dtr-iosection::-webkit-scrollbar-track {
+  margin: 6px 0; /* dsw-raw 上游滚动条轨道余量刻度 */
+}
+
+.dswf-dtr-iolabel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  color: var(--dsw-alias-label-caption);
+}
+
+.dswf-dtr-iodivider {
+  flex: none;
+  height: 0.5px; /* dsw-raw 上游 hairline 分隔刻度 */
+  background: var(--dsw-alias-border-l2);
+}
+
+.dswf-dtr-iotext {
+  min-width: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dswf-dtr-iotext[data-error] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 检视钮（悬停显形胶囊——上游 Inspect 同型） */
+.dswf-dtr-inspect {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--dsw-font-xxxs-11-line-height);
+  margin: 4px 0 2px 4px; /* dsw-raw 上游检视钮外距刻度 */
+  padding: 2px 8px; /* dsw-raw 上游检视钮内距刻度 */
+  border: 0.5px solid var(--dsw-alias-border-l3); /* dsw-raw 上游 hairline 边框刻度 */
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xxxs-11);
+  line-height: 16px; /* dsw-raw 上游检视钮行高刻度 */
+  cursor: pointer;
+  transition: opacity 0.1s; /* dsw-raw 上游检视钮显形过渡刻度 */
+  opacity: 0;
+}
+
+.dswf-dtr:hover .dswf-dtr-inspect,
+.dswf-dtr-inspect:focus-visible {
+  opacity: 1;
+}
+
+.dswf-dtr-inspect:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 无障碍隐藏文案（状态补语——仅色示意的运行/错误态） */
+.dswf-dtr-vh {
+  position: absolute;
+  width: 1px; /* dsw-raw 上游视觉隐藏刻度 */
+  height: 1px; /* dsw-raw 上游视觉隐藏刻度 */
+  overflow: hidden;
+  clip: rect(0 0 0 0); /* dsw-raw 上游视觉隐藏裁剪刻度 */
+  white-space: nowrap;
+}
+
+/* 减动效（上游同径：过渡全停） */
+@media (prefers-reduced-motion: reduce) {
+  .dswf-dtr-row,
+  .dswf-dtr-iconidle,
+  .dswf-dtr-chevronhover,
+  .dswf-dtr-inspect {
+    transition: none;
+  }
+}

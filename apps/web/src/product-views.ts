@@ -35,6 +35,7 @@ import {
   type ForgeOverviewTabProps,
 } from './workbench/dock-tabs.js'
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
+import { ForgeDispatchToolRow, type ForgeDispatchToolRowProps } from './views/session/DispatchToolRow.js'
 import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
@@ -63,6 +64,8 @@ export interface ForgePublishedViews {
   readonly ForgeKnowledgeGlyph: ComponentType<ForgeKnowledgeGlyphProps>
   /** conversation.view 'dswf-recall' 占用者（UF-4 知识召回页签） */
   readonly ForgeRecallView: ComponentType<ForgeRecallViewProps>
+  /** tool.call.toolview keyed 'dispatchTask' 占用者（对话工具行——摘要段 = 容器标识 source_slug） */
+  readonly ForgeDispatchToolRow: ComponentType<ForgeDispatchToolRowProps>
   /** sidebar.right.pane.tab keyed 'dswf-overview' 占用者（M2 UF-1 概览 dock tab body——4.1） */
   readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
   /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
@@ -89,6 +92,7 @@ declare global {
   ForgeKnowledgePanel,
   ForgeKnowledgeGlyph,
   ForgeRecallView,
+  ForgeDispatchToolRow,
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,

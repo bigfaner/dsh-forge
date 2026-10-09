@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CONVERSATION_VIEW_SLOT,
+  DISPATCH_TASK_TOOL_KEY,
   DOC_ADDRESS_PREFIX,
   DOC_TAB_KIND,
   FORGE_CLIENT_INJECT,
@@ -31,6 +32,7 @@ import {
   SIDEBAR_RIGHT_PANE_TAB_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
+  TOOL_CALL_TOOLVIEW_SLOT,
   sessionParentIdOf,
   workerOpenTarget,
   forgeClientPlugin,
@@ -226,6 +228,7 @@ function publishFakeViews() {
     ForgeKnowledgePanel: 'COMP:knowledge-panel',
     ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
     ForgeRecallView: 'COMP:recall-view',
+    ForgeDispatchToolRow: 'COMP:dispatch-tool-row',
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
@@ -303,6 +306,14 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
     expect(locale.registered[0]![0]).toBe(FORGE_LOCALE_NS)
     expect(locale.registered[0]![1].zh).toMatchObject({ 'panel.knowledge': '知识库', 'view.recall': '知识召回' })
     expect(locale.registered[0]![1].en).toMatchObject({ 'panel.knowledge': 'Knowledge', 'view.recall': 'Recall' })
+    // dispatchTask 工具行词典（toolview 行内 t 座——文案对齐官方通用行用词）
+    expect(locale.registered[0]![1].zh).toMatchObject({
+      'tool.dispatchTask.title': '工具调用',
+      'tool.dispatchTask.input': '输入',
+      'tool.dispatchTask.output': '输出',
+      'tool.dispatchTask.inspect': '查看',
+    })
+    expect(locale.registered[0]![1].en).toMatchObject({ 'tool.dispatchTask.title': 'Tool call' })
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
@@ -326,6 +337,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       SIDEBAR_PANELLIST_SLOT,
       CONVERSATION_VIEW_SLOT,
       HERO_WORKSPACE_SLOT,
+      TOOL_CALL_TOOLVIEW_SLOT,
       SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
@@ -425,7 +437,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT]) // fix-24 ① 后 views 族含 hero 影子；m3.1 D5 会话头 pill 卸载
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT]) // fix-24 ① 后 views 族含 hero 影子；m3.1 D5 会话头 pill 卸载
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -446,8 +458,30 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT])
     expect(marker?.views?.error).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('dispatchTask 对话工具行（2026-10-09 报障收口）：tool.call.toolview keyed 登记恰一——key = wire 工具名 + locale NS + 发布组件；keyed 最小面（零 label/id/order/priority/children/inject——行数据 = owner props 自足）', () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const toolviews = registers.filter((r) => r.key === TOOL_CALL_TOOLVIEW_SLOT)
+    expect(toolviews, 'tool.call.toolview 恰一登记（只接管 dispatchTask——其余工具名走官方通用行）').toHaveLength(1)
+    const row = toolviews[0]!
+    expect(row.options.name).toBe(TOOL_CALL_TOOLVIEW_SLOT)
+    expect(row.options.key).toBe(DISPATCH_TASK_TOOL_KEY)
+    expect(row.options.key).toBe('dispatchTask') // plugin-forge FORGE_TOOL_NAMES wire 名同源
+    expect(row.options.locale).toBe(FORGE_LOCALE_NS) // 行内 t 座绑定面
+    expect(row.component).toBe(views.ForgeDispatchToolRow)
+    // keyed 槽最小登记面：行语言字段全部缺席（list/single 槽语义字段不入 keyed 注册）
+    expect(row.options.label).toBeUndefined()
+    expect(row.options.id).toBeUndefined()
+    expect(row.options.order).toBeUndefined()
+    expect(row.options.priority).toBeUndefined()
+    expect(row.options.children).toBeUndefined()
+    expect(row.options.inject).toBeUndefined()
     unpublishViews()
   })
 
@@ -671,7 +705,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

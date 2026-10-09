@@ -22,6 +22,10 @@
 //   - `settings.section` 'dswf-forge-settings'（官方 ui-settings SettingsRoot 分区 roster
 //     ——list 槽：4.7 Integration #4，UF-2 Forge设置 分区[通用设置正下方 order 5]；分区
 //     本体 = 4.5 组件经壳 bundle 发布面递达，打开/关闭/Esc 生命周期恒归官方对话框）。
+//   - `tool.call.toolview` keyed 'dispatchTask'（官方 ui-tool 原子工具行 keyed 槽——业务
+//     工具视图正径[上游 README「注册业务工具视图」，ui-skill 同型先例]：对话工具行摘要段
+//     = source_slug 容器标识 + 结算后任务键后缀——2026-10-09 用户实机报障收口，官方通用
+//     行 fallback 恒显种类词 proposal/feature 不可分辨）。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
 // 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
 // keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
@@ -94,6 +98,16 @@ export const RECALL_VIEW_ID = 'dswf-recall'
  * 断言锚（plugin.test D5 零登记 pin + e2e 会话头零产品 pill）。
  */
 export const SESSION_HEADER_ACTIONS_SLOT = 'conversation.session.header.actions'
+/**
+ * 洞名：官方 ui-tool 原子工具行 keyed 槽（`tool.call.toolview`——按 wire 工具名分发；
+ * 未注册名走官方通用行 fallback）。产品占用一键：'dispatchTask'（2026-10-09 用户实机
+ * 报障收口——官方通用行参数摘要取「首个字符串值」= source_kind 种类词，对话行恒显
+ * `dispatchTask · proposal/feature` 不可分辨；业务视图接管后摘要段 = source_slug
+ * 容器标识——上游 README「注册业务工具视图」正径，ui-skill 同型先例）。
+ */
+export const TOOL_CALL_TOOLVIEW_SLOT = 'tool.call.toolview'
+/** dispatchTask 工具行 keyed 键（= plugin-forge wire 工具名——FORGE_TOOL_NAMES 单源字面量镜像） */
+export const DISPATCH_TASK_TOOL_KEY = 'dispatchTask'
 /**
  * 洞名：官方设置对话框分区 roster（ui-settings SettingsRoot nav 列 + 内容列 only 消费
  * ——list 槽 scope root；4.7 Integration #4）。分区本体自带容器/标题（4.5 组件注入即整节）
@@ -317,6 +331,7 @@ export interface ForgeViewsGlobal {
     ForgeKnowledgePanel: unknown
     ForgeKnowledgeGlyph: unknown
     ForgeRecallView: unknown
+    ForgeDispatchToolRow: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
@@ -517,7 +532,11 @@ function registerCenterPanels(
  * 复刻，同 order 10 双『轨迹』冲突不再；label 经 locale NS thunk——fix-33 ⑧）+ hero
  * 工作区控件影子（fix-24 ①——不声明 children：官方登记行恒在场供养
  * conversation.hero.workspace.directoryFlow 子洞，ui-slots register 对已声明子槽重声明
- * 即 throw——fix-23 runtime 实证；影子只取渲染位不撤官方登记，fix-14/16 原生选取链不断）。
+ * 即 throw——fix-23 runtime 实证；影子只取渲染位不撤官方登记，fix-14/16 原生选取链不断）
+ * + dispatchTask 对话工具行（tool.call.toolview keyed 'dispatchTask'——2026-10-09 用户
+ * 实机报障收口：官方通用行参数摘要取「首个字符串值」= source_kind 种类词，业务视图
+ * 接管后摘要段 = source_slug 容器标识 + 结算后任务键后缀；locale 行声明本插件 NS——
+ * 行内 t 座即 FORGE_LOCALE_NS）。
  */
 function registerConversationViews(
   ctx: ForgeClientCtx,
@@ -547,6 +566,15 @@ function registerConversationViews(
     ctx.slots.register(
       { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
       views.ForgeHeroWorkspacePicker,
+    ),
+  )
+  registerSlotEntry(ctx, TOOL_CALL_TOOLVIEW_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // keyed 最小面：key = wire 工具名（未注册名走官方通用行——本行只接管 dispatchTask）；
+      // locale = 行文案 NS（runtime 据此绑 t 座递达组件）；零 inject（行数据 = owner
+      // props 自足：三相块 + 展开钩子 + inspect 回调）
+      { name: TOOL_CALL_TOOLVIEW_SLOT, key: DISPATCH_TASK_TOOL_KEY, locale: FORGE_LOCALE_NS },
+      views.ForgeDispatchToolRow,
     ),
   )
 }
@@ -868,6 +896,14 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': '项目概览',
             'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
             'settings.forge': 'Forge设置',
+            // dispatchTask 对话工具行（toolview 行内 t 座——文案对齐官方通用行用词）
+            'tool.dispatchTask.title': '工具调用',
+            'tool.dispatchTask.preparing': '正在准备调用',
+            'tool.dispatchTask.running': '运行中',
+            'tool.dispatchTask.failed': '失败',
+            'tool.dispatchTask.input': '输入',
+            'tool.dispatchTask.output': '输出',
+            'tool.dispatchTask.inspect': '查看',
           },
           en: {
             'panel.knowledge': 'Knowledge',
@@ -875,6 +911,13 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': 'Overview',
             'guide.overview.desc': 'Features, tasks, proposals and docs',
             'settings.forge': 'Forge Settings',
+            'tool.dispatchTask.title': 'Tool call',
+            'tool.dispatchTask.preparing': 'Preparing call',
+            'tool.dispatchTask.running': 'Running',
+            'tool.dispatchTask.failed': 'Failed',
+            'tool.dispatchTask.input': 'Input',
+            'tool.dispatchTask.output': 'Output',
+            'tool.dispatchTask.inspect': 'Inspect',
           },
         })
         const t = locale.bind(FORGE_LOCALE_NS)
