@@ -66,3 +66,11 @@ fix-25：知识库入口迁官方 `sidebar.panellist` 行（PanelRow → `layout
 - `sidebar.brand.mark` owner `{ size }`；`sidebar.brand.name` owner `{ children?: never }`。
 - single 槽影子序：priority 升序最低者渲染（lowest renders）；官方占用者缺省 0，
   产品行 `-100`（`client-plugin/plugin.ts` `SIDEBAR_SHADOW_PRIORITY` 常量 pin）。
+
+## M3.1 左栏残差记账（D3——官方 Rows meta 偏离）
+
+项目行**仅名称一行**（`SidebarProjectNode.name`），canonical 路径（`wsPath`，ProjectSummary
+直投影）转**原生 `title` 悬停提示**（`ForgeWorkspacePanel.tsx` 项目块 `title` 属性）——
+显式偏离官方 ui-workspace Rows 的 meta 常驻次行（用户裁决 R16 / 差异清单 D3；官方
+`Tooltip` 件迁移归 D30 悬浮提示轮）。WCO 竖线/收起 rail 偏离（D1/D2）为壳层 CSS 面，
+载体 = `apps/web/src/styles/wco.css`（见其头注记账）。

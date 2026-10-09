@@ -71,6 +71,8 @@ export interface SidebarProjectNode {
   /** dsh workspace id（新会话钮 → 官方 startSession(workspaceId) 的寻址面，fix-42） */
   readonly workspaceId: string
   readonly name: string
+  /** canonical 路径（ProjectSummary.wsPath 直投影——M3.1 D3：仅名称行 + 路径转 title 悬停提示） */
+  readonly wsPath: string
   readonly archived: boolean
   readonly sessions: readonly SidebarSessionRow[]
 }
@@ -148,6 +150,7 @@ export function buildSidebarTree(input: {
       projectId: project.id,
       workspaceId: project.workspaceId,
       name: project.name,
+      wsPath: project.wsPath,
       archived: project.archived,
       sessions: rows,
     })

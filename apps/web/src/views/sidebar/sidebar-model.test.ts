@@ -91,6 +91,18 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.tree[0]!.sessions[0]!.title).toBe('会话s2')
   })
 
+  it('M3.1 D3：项目节点携带 wsPath（canonical 路径——ProjectSummary 直投影，行悬停提示数据面）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/canonical/p1' }), project('p2', 'w2', { wsPath: 'Z:/canonical/p2' })],
+      sessions: ledger([]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: [] },
+        { workspaceId: 'w2', sessionIds: [] },
+      ]),
+    })
+    expect(out.tree.map((n) => n.wsPath)).toEqual(['Z:/canonical/p1', 'Z:/canonical/p2'])
+  })
+
   it('账本缺行的成员跳过；workspace 缺席 = 空会话项目；未注册 workspace 的会话不入树', () => {
     const out = buildSidebarTree({
       projects: [project('p1', 'w1')],
@@ -144,6 +156,7 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
       projectId: 'p1',
       workspaceId: 'w1',
       name: '支付网关',
+      wsPath: 'Z:/w/p1',
       archived: false,
       sessions: [row('s1', '登录修复'), row('s2', '索引重建')],
     },
@@ -151,6 +164,7 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
       projectId: 'p2',
       workspaceId: 'w2',
       name: '知识库',
+      wsPath: 'Z:/w/p2',
       archived: false,
       sessions: [row('s3', '文档补全')],
     },
@@ -175,14 +189,14 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
 
   it('项目名与会话全命中 → 节点原样引用（零改写零分配——纯投影）', () => {
     const full: SidebarProjectNode[] = [
-      { projectId: 'p1', workspaceId: 'w1', name: '修复集', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
+      { projectId: 'p1', workspaceId: 'w1', name: '修复集', wsPath: 'Z:/w/p1', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
     ]
     expect(sidebarFilterOf('修复', full)[0]).toBe(full[0])
   })
 
   it('大小写不敏感（原型 toLowerCase 同型）', () => {
     const mixed: SidebarProjectNode[] = [
-      { projectId: 'p1', workspaceId: 'w1', name: 'Gateway', archived: false, sessions: [row('s1', 'TLS handshake')] },
+      { projectId: 'p1', workspaceId: 'w1', name: 'Gateway', wsPath: 'Z:/w/p1', archived: false, sessions: [row('s1', 'TLS handshake')] },
     ]
     expect(sidebarFilterOf('gate', mixed).map((n) => n.projectId)).toEqual(['p1'])
     expect(sidebarFilterOf('HAND', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
@@ -247,8 +261,8 @@ describe('sidebarViewOfPick（视图菜单项 id → 视图态投影）', () => 
 
 describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
   const tree: readonly SidebarProjectNode[] = [
-    { projectId: 'p1', workspaceId: 'w1', name: '活跃', archived: false, sessions: [] },
-    { projectId: 'p2', workspaceId: 'w2', name: '已归档', archived: true, sessions: [] },
+    { projectId: 'p1', workspaceId: 'w1', name: '活跃', wsPath: 'Z:/w/p1', archived: false, sessions: [] },
+    { projectId: 'p2', workspaceId: 'w2', name: '已归档', wsPath: 'Z:/w/p2', archived: true, sessions: [] },
   ]
 
   it('default = 原引用返回（现行行为——全显含归档弱化）', () => {
@@ -266,6 +280,7 @@ describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
         projectId: 'p1',
         workspaceId: 'w1',
         name: '活跃',
+        wsPath: 'Z:/w/p1',
         archived: false,
         sessions: [
           { sessionId: 's1', title: '行', status: 'idle', updatedAt: 1 },
@@ -275,6 +290,7 @@ describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
         projectId: 'p2',
         workspaceId: 'w2',
         name: '归档',
+        wsPath: 'Z:/w/p2',
         archived: true,
         sessions: [
           { sessionId: 's2', title: '行', status: 'idle', updatedAt: 2 },
@@ -292,6 +308,7 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       projectId: 'p1',
       workspaceId: 'w1',
       name: '支付网关',
+      wsPath: 'Z:/w/p1',
       archived: false,
       sessions: [
         { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: 100 },
@@ -302,6 +319,7 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       projectId: 'p2',
       workspaceId: 'w2',
       name: '文档站',
+      wsPath: 'Z:/w/p2',
       archived: false,
       sessions: [
         { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: 200 },
@@ -328,6 +346,7 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
         projectId: 'p1',
         workspaceId: 'w1',
         name: '甲',
+        wsPath: 'Z:/w/p1',
         archived: false,
         sessions: [
           { sessionId: 'a1', title: '行一', status: 'idle', updatedAt: 5 },

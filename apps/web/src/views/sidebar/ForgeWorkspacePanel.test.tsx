@@ -9,9 +9,12 @@
 // 官方 Menu/Modal 开弹层静态不可渲染（portal——node 无 DOM）：菜单项数据面
 // （SIDEBAR_VIEW_MENU_ITEMS / projectMenuItemsOf）与受控缝（SidebarProjectsZone/
 // SidebarRail 直接渲染）承载静态断言；开弹层行为归 e2e（fix-24 同裁）。
+// M3.1 D3 增面：项目行仅名称一行 + canonicalPath（wsPath）转 title 悬停提示——
+// 偏离官方 Rows meta 常驻次行（差异清单 D3/裁决 #20；记账注释在 ForgeWorkspacePanel.tsx）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { FISH_LOGO_PATH } from '@deepseek-ai/dsh-client-ui-primitives'
+import panelSource from './ForgeWorkspacePanel.tsx?raw'
 import { ForgeBrandMark, ForgeBrandName } from './ForgeBrand.js'
 import {
   ForgeWorkspacePanel,
@@ -35,6 +38,7 @@ function node(overrides: Partial<SidebarProjectNode> = {}): SidebarProjectNode {
     projectId: 'p1',
     workspaceId: 'w1',
     name: '支付网关',
+    wsPath: 'Z:/w/p1',
     archived: false,
     sessions: [
       { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000 },
@@ -100,6 +104,29 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
 
   it('归档项目弱化标记', () => {
     expect(panel({ tree: [node({ archived: true })] })).toContain('data-archived')
+  })
+})
+
+describe('D3 项目行仅名称 + 路径悬停（M3.1 左栏三残差——偏离官方 Rows meta 记账）', () => {
+  it('canonicalPath（wsPath）以原生 title 悬停提示在场（项目块 title 属性）', () => {
+    const markup = panel()
+    expect(markup).toContain('title="Z:/w/p1"')
+    // 多项目各携其径（title 随行块逐项）
+    const two = panel({ tree: [node(), node({ projectId: 'p2', workspaceId: 'w2', name: '文档站', wsPath: 'Z:/w/p2', sessions: [] })] })
+    expect(two).toContain('title="Z:/w/p2"')
+  })
+
+  it('零路径次行：wsPath 仅 title 属性一处，不作为文本内容渲染（官方 Rows meta 形态零在场）', () => {
+    const markup = panel()
+    expect(markup.match(/Z:\/w\/p1/g)).toHaveLength(1)
+    expect(markup).not.toContain('>Z:/w/p1<')
+    // 官方 meta 次行类名零在场（ui-workspace Rows .meta 同型面不自绘）
+    expect(markup).not.toContain('project-meta')
+    expect(markup).not.toContain('pj-meta')
+  })
+
+  it('记账注释在场（D3 偏离官方 Rows meta——源码审计面机械钉）', () => {
+    expect(panelSource).toContain('偏离官方 Rows meta')
   })
 })
 

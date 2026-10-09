@@ -194,6 +194,10 @@ function ProjectBlock({
       data-dswf-project={node.projectId}
       data-archived={node.archived || undefined}
       data-active={active || undefined}
+      // M3.1 D3 记账：项目行仅名称一行——canonicalPath（wsPath）转原生 title 悬停提示，
+      // 显式偏离官方 Rows meta 常驻次行（用户裁决 R16 / 差异清单 D3；官方 Tooltip 件
+      // 迁移归 D30 悬浮提示轮，本属性即其锚面）。
+      title={node.wsPath}
     >
       <DisclosureRow
         icon={
