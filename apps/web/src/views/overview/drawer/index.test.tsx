@@ -39,13 +39,15 @@ const RECORDS: readonly TaskRecordEntry[] = [
   },
 ]
 
-/** 基准 props（completed coding 任务——两块全展开） */
+/** 基准 props（completed coding 任务——完整形态[expanded] 两块全展开；D22 简要面独立组覆写） */
 function bodyProps(overrides: Partial<Parameters<typeof TaskDrawerBody>[0]> = {}) {
   return {
     detail: detailFixture({ records: [...RECORDS] }),
     width: DRAWER_WIDTH_DEFAULT,
     position: POSITION,
     collapsed: initialDrawerCollapse(),
+    expanded: true,
+    onToggleForm: NOOP,
     onClose: NOOP,
     onToggleSection: NOOP,
     onOpenDoc: NOOP,
@@ -103,6 +105,121 @@ describe('TaskDrawerBody · 通用区（AC1）', () => {
   it('类别 chip 着类别色（族类 class 在场——CSS 令牌映射位）', () => {
     const html = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
     expect(html).toContain('dswf-td-cat-coding')
+  })
+})
+
+describe('TaskDrawerBody · D22 简要形态（默认 440——键+tag+标题+概要；完整块零渲染）', () => {
+  it('概要四行在场：所属（代码体色）/ 类型（类型 · 优先级）/ 前置（键）/ 挂接会话（sessionIds）', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(
+        bodyProps({
+          expanded: false,
+          detail: detailFixture({
+            records: [...RECORDS],
+            sessions: [
+              { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'plugin-forge tool 半身对接', taskStatus: 'completed', sessionId: 's-dispatch', source: 'link' },
+              { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'plugin-forge tool 半身对接', taskStatus: 'completed', sessionId: 's-worker', source: 'record' },
+            ],
+          }),
+        }),
+      ),
+    )
+    expect(html).toContain('data-dswf-td-brief=""')
+    expect(html).toContain('所属')
+    expect(html).toContain('dswf-td-bv is-code') // 所属值代码体色（原型 t-code 同位）
+    expect(html).toContain('类型')
+    expect(html).toContain('coding-feature · P0')
+    expect(html).toContain('前置')
+    expect(html).toContain('m2-pipeline/2.3')
+    expect(html).toContain('挂接会话')
+    expect(html).toContain('s-dispatch、s-worker')
+  })
+
+  it('空值占位：无前置/无挂接 → —（不空行）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
+    const briefAt = html.indexOf('data-dswf-td-brief')
+    const brief = html.slice(briefAt)
+    expect(brief).toContain('前置')
+    expect(brief).toContain('—')
+    expect(brief).toContain('挂接会话')
+  })
+
+  it('完整块零渲染（简要 = 无分块/kv 标签行/目标/现状条/事件流——原型「简要形态不含完整块」）', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
+    expect(html).not.toContain('data-dswf-td-sect="content"')
+    expect(html).not.toContain('data-dswf-td-sect="timeline"')
+    expect(html).not.toContain('data-dswf-td-kv=""')
+    expect(html).not.toContain('data-dswf-td-goal=""')
+    expect(html).not.toContain('data-dswf-td-now=""')
+    expect(html).not.toContain('data-dswf-td-ev-verb')
+    expect(html).not.toContain('验收标准')
+  })
+
+  it('键+tag+标题+概要共存：头部（键/tag）→ 标题行 → 简要体（DOM 序）+ 脚行转移入口照常在场', () => {
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
+    const keyAt = html.indexOf('m2-pipeline/2.4')
+    const tagAt = html.indexOf('已完成')
+    const titleAt = html.indexOf('plugin-forge tool 半身对接')
+    const briefAt = html.indexOf('data-dswf-td-brief')
+    expect(keyAt).toBeGreaterThan(-1)
+    expect(tagAt).toBeGreaterThan(keyAt)
+    expect(titleAt).toBeGreaterThan(tagAt)
+    expect(briefAt).toBeGreaterThan(titleAt)
+    expect(html).toContain('data-dswf-td-trans=""') // 脚行动作区两形态共享
+  })
+
+  it('形态值锚：data-dswf-td-form = brief|full（装载壳展开态投影）', () => {
+    expect(renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))).toContain('data-dswf-td-form="brief"')
+    expect(renderToStaticMarkup(TaskDrawerBody(bodyProps()))).toContain('data-dswf-td-form="full"')
+  })
+})
+
+describe('TaskDrawerBody · D22 ⤢/⤡ 翻转钮（两形态共享头部）', () => {
+  it('翻转钮在场（标题栏内 ✕ 之左）+ aria-pressed 随形态翻转 + title 文案互换', () => {
+    const brief = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
+    expect(brief).toContain('data-dswf-td-expand=""')
+    expect(brief).toContain('aria-pressed="false"')
+    expect(brief).toContain('展开完整信息')
+    const expandAt = brief.indexOf('data-dswf-td-expand')
+    const closeAt = brief.indexOf('data-dswf-td-close')
+    expect(expandAt).toBeGreaterThan(-1)
+    expect(closeAt).toBeGreaterThan(expandAt)
+    const full = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
+    expect(full).toContain('aria-pressed="true"')
+    expect(full).toContain('收起为简要信息')
+  })
+
+  it('完整形态 = 1.2 全量内容平移：现状条 + kv 六项 + 目标/结果 + 类型模板段 + 覆盖率 + 备注 + 时间线', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(
+        bodyProps({
+          detail: detailFixture({
+            records: [...RECORDS],
+            vars: { note: 'fix-1 记账', scope: '["a.ts"]', acceptance: '["单测全绿"]' },
+          }),
+        }),
+      ),
+    )
+    expect(html).toContain('data-dswf-td-now=""') // 现状条
+    expect(html).toContain('data-dswf-td-kv=""') // kv 标签行（六项承重）
+    expect(html).toContain('实际耗时') // 六项之实际耗时（kv 承重项）
+    expect(html).toContain('data-dswf-td-goal=""') // 目标（八段）
+    expect(html).toContain('改动范围') // 范围（八段——vars.scope）
+    expect(html).toContain('验收标准') // 验收（八段——vars.acceptance）
+    expect(html).toContain('data-dswf-td-result=""') // 结果
+    expect(html).toContain('data-dswf-td-cov=""') // 覆盖率条（预期标记 + 达标判定）
+    expect(html).toContain('data-dswf-td-note=""') // 备注（八段置底）
+    expect(html).toContain('data-dswf-td-ev-verb="submit"') // verb 分色时间线
+  })
+
+  it('gate 检查项全量平移：gate 族模板检查项清单在场（完整形态；覆盖率条门控 = coding 族既有口径）', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(
+        bodyProps({ detail: detailFixture({ records: [...RECORDS], taskType: 'gate', vars: { checks: '["tsc 全绿"]' } }) }),
+      ),
+    )
+    expect(html).toContain('检查项')
+    expect(html).toContain('tsc 全绿')
   })
 })
 

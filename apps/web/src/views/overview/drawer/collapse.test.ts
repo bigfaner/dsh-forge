@@ -15,6 +15,7 @@ import {
   createDrawerSessionStore,
   defaultDrawerPosition,
   drawerPositionFromDrag,
+  drawerGeometryOnFormToggle,
   drawerSessionStore,
   drawerWidthCeiling,
   drawerWidthFromEdgeDrag,
@@ -96,6 +97,48 @@ describe('位置数学（D21：默认起始位 + 标题栏拖移钳制）', () =
     expect(drawerPositionFromDrag(start, 500, 300, 620, 350, 1920, 1000, 440)).toEqual({ left: 320, top: 150 })
     // 越界拖移 → 钳在边距
     expect(drawerPositionFromDrag(start, 500, 300, -400, -900, 1920, 1000, 440)).toEqual({ left: 4, top: 4 })
+  })
+})
+
+describe('双形态翻转几何（D22：⤢/⤡——原型 m31-tm-expand 宽度交换 + 水平再居中）', () => {
+  it('展开：宽 <700 → 720 + 水平再居中（top 保持）；宽 ≥700 → 几何不动（用户自宽尊重）', () => {
+    expect(drawerGeometryOnFormToggle(440, { left: 300, top: 140 }, true, 1920)).toEqual({
+      width: 720,
+      position: { left: Math.round((1920 - 720) / 2), top: 140 },
+    })
+    // 已 760（用户缘侧拖宽）→ 展开不动
+    expect(drawerGeometryOnFormToggle(760, { left: 40, top: 200 }, true, 1920)).toEqual({
+      width: 760,
+      position: { left: 40, top: 200 },
+    })
+    // 恰 700 = 带内不动（原型 < 700 严格判定）
+    expect(drawerGeometryOnFormToggle(700, { left: 60, top: 160 }, true, 1920)).toEqual({
+      width: 700,
+      position: { left: 60, top: 160 },
+    })
+  })
+
+  it('收起：宽 >500 → 440 + 水平再居中（top 保持）；宽 ≤500 → 几何不动', () => {
+    expect(drawerGeometryOnFormToggle(720, { left: 600, top: 140 }, false, 1920)).toEqual({
+      width: 440,
+      position: { left: Math.round((1920 - 440) / 2), top: 140 },
+    })
+    // 用户已收窄至 500 内 → 收起不动
+    expect(drawerGeometryOnFormToggle(480, { left: 90, top: 180 }, false, 1920)).toEqual({
+      width: 480,
+      position: { left: 90, top: 180 },
+    })
+  })
+
+  it('窄屏钳制：720 → min(760, round(视口 × 0.92))；再居中左缘 8px 兜底', () => {
+    const out = drawerGeometryOnFormToggle(440, { left: 30, top: 120 }, true, 700)
+    expect(out.width).toBe(Math.round(700 * 0.92))
+    expect(out.position).toEqual({ left: Math.max(8, Math.round((700 - Math.round(700 * 0.92)) / 2)), top: 120 })
+  })
+
+  it('位未定（null = mount 效应前）：仅换宽——CSS 居中兜底自适应（left 零注入保持）', () => {
+    expect(drawerGeometryOnFormToggle(440, null, true, 1920)).toEqual({ width: 720, position: null })
+    expect(drawerGeometryOnFormToggle(720, null, false, 1920)).toEqual({ width: 440, position: null })
   })
 })
 

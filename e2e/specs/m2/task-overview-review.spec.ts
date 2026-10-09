@@ -46,9 +46,9 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { TaskStatus } from '../../../packages/contracts/src/labels.js'
@@ -59,7 +59,7 @@ import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
+import { OV_PANEL, TD_DRAWER, docPanelOf, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
 /** UI 首屏预算（Step1 stress Outcome 机械判据——毫秒） */
@@ -77,11 +77,11 @@ async function setupWorld(page: Page, wsDir: string, wsName: string, feature: st
   return { projectId, dir }
 }
 
-/** 直插多态任务（受控 status/createdAt/类型——排序与过滤断言基准） */
+/** 直插多态任务（受控 status/createdAt/类型/描述/覆盖率——排序与过滤断言基准；desc = 参考文档锚点载体） */
 function seedTasks(
   dir: string,
   feature: string,
-  rows: readonly { readonly localId: string; readonly title: string; readonly status: TaskStatus; readonly type?: string; readonly createdAt?: string; readonly records?: readonly string[] }[],
+  rows: readonly { readonly localId: string; readonly title: string; readonly status: TaskStatus; readonly type?: string; readonly createdAt?: string; readonly records?: readonly string[]; readonly desc?: string; readonly coverage?: number }[],
 ): string[] {
   const db = openForgeDbAt(dir)
   const ids: string[] = []
@@ -92,9 +92,9 @@ function seedTasks(
         const id = `t-${feature}-${r.localId}`
         ids.push(id)
         db.prepare(
-          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'feature', ?, ?, ?)`,
-        ).run(id, feature, r.localId, r.title, r.type ?? 'doc', r.status, fid, r.createdAt ?? '2026-10-06T00:00:00.000Z', r.createdAt ?? '2026-10-06T00:00:00.000Z')
+          `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, task_desc, coverage, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'feature', ?, ?, ?, ?, ?)`,
+        ).run(id, feature, r.localId, r.title, r.type ?? 'doc', r.status, fid, r.desc ?? null, r.coverage ?? null, r.createdAt ?? '2026-10-06T00:00:00.000Z', r.createdAt ?? '2026-10-06T00:00:00.000Z')
         for (const verb of r.records ?? []) {
           if (verb === 'claim') {
             db.prepare(
@@ -105,7 +105,7 @@ function seedTasks(
             db.prepare(
               `INSERT INTO task_records (task_id, verb, from_status, to_status, summary, gate_json, actor, session_id, created_at, updated_at)
                VALUES (?, 'submit', 'in_progress', ?, '种子结算', ?, 'plugin-tool', 'e2e-ovr-seed', '2026-10-06T02:00:00.000Z', '2026-10-06T02:00:00.000Z')`,
-            ).run(id, r.status, '{"compile":true,"fmt":true,"lint":true,"test":true}')
+            ).run(id, r.status, '{"compile":true,"fmt":true,"lint":true,"test":true,"coverage":0.62}')
           }
         }
       }
@@ -151,19 +151,29 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     const FEATURE = 'ovr-feat'
     const WS_NAME = '概览走查演示'
     const { projectId, dir } = await setupWorld(page, wsDir, WS_NAME, FEATURE)
+    /** 参考文档 docRel（D22：完整形态参考 chip → dock 文档 tab 断言锚——1.3 desc 声明 + feature_documents 在册） */
+    const REF_DOC = 'docs/features/ovr-feat/prd/prd-spec.md'
 
     // 多态夹具（pending + in_progress + completed——chips/排序/抽屉断言基准）+ 依赖边（DAG/泳道）
+    // 1.3 = coding-feature + desc 参考文档锚点 + coverage 阈值（D22 完整形态：覆盖率条预期标记 + 参考链态）
     const ids = seedTasks(dir, FEATURE, [
       { localId: '1.1', title: '走查·待办 one', status: 'pending' },
       { localId: '1.2', title: '走查·进行 two', status: 'in_progress', records: ['claim'] },
-      { localId: '1.3', title: '走查·已结 three', status: 'completed', records: ['claim', 'submit'] },
+      { localId: '1.3', title: '走查·已结 three', status: 'completed', type: 'coding-feature', records: ['claim', 'submit'], desc: `实现依据 ${REF_DOC} 对齐`, coverage: 0.6 },
     ])
     const db0 = openForgeDbAt(dir)
     db0.prepare(
       `INSERT INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at)
        VALUES (?, ?, 'manual', '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z')`,
     ).run(idOf(ids, 1), idOf(ids, 2))
+    // 参考文档在册（refs 水化注册面——feature_documents 行）+ 盘上正文（DocsTab 只读渲染体）
+    db0.prepare(
+      `INSERT INTO feature_documents (feature_id, doc_kind, rel_path, summary, created_at, updated_at)
+       SELECT id, 'prd-spec', ?, '走查 PRD 摘要', '2026-10-06T00:00:00.000Z', '2026-10-06T00:00:00.000Z' FROM features WHERE slug = ?`,
+    ).run(REF_DOC, FEATURE)
     db0.close()
+    mkdirSync(dirname(join(wsDir, REF_DOC)), { recursive: true })
+    writeFileSync(join(wsDir, REF_DOC), '# 走查 PRD\n\nDOC-REF-BODY（D22 参考文档开出体）\n')
 
     // ── Step 1：dock 开概览（开始页 guide 入口卡）+ ov-head 项目名 ──
     await openOverviewDock(page)
@@ -206,15 +216,51 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     // 副行承重（前置计数形 ←N 前置——键+当前状态形归抽屉现状条，ui-design 分工）
     await expect(page.locator(`[data-dswf-tt-sub="${idOf(ids, 1)}"]`).first(), '副行呈现前置计数（依赖边 → ←1 前置）').toContainText('←1 前置')
 
-    // ── Step 6：详情弹窗（m3.1 D21：右缘滑入抽屉退役 → 可拖动弹窗——模块化分区 + 时间线 + 几何）──
+    // ── Step 6：详情弹窗（m3.1 D21 可拖动弹窗 + D22 双形态——模块化分区 + 时间线 + 几何）──
     await page.locator(ttItemOf(idOf(ids, 2))).first().click()
     const drawerEl = page.locator(TD_DRAWER).first()
     await expect(drawerEl, '可拖动弹窗在场（D21——抽屉形态退役）').toBeVisible({ timeout: 15_000 })
+    await expect(drawerEl).toContainText('走查·已结 three')
+    // m3.1 D22 简要形态（默认 440）：键+tag+标题+概要——完整块零渲染（原型「简要形态不含完整块」）
+    await expect(drawerEl).toHaveAttribute('data-dswf-td-form', 'brief')
+    await expect(drawerEl.locator('[data-dswf-td-expand]'), '⤢ 翻转钮在场（未展开态）').toHaveAttribute('aria-pressed', 'false')
+    await expect(drawerEl.locator('[data-dswf-td-brief]'), '概要体在场（简要形态）').toBeVisible()
+    await expect(drawerEl.locator('[data-dswf-td-brief]'), '概要行：所属/类型/前置/挂接会话').toContainText('所属')
+    await expect(drawerEl.locator('[data-dswf-td-brief]')).toContainText('类型')
+    await expect(drawerEl.locator('[data-dswf-td-sect="content"]'), '简要形态零完整块（任务内容分块不渲染）').toHaveCount(0)
+    // ⤢ 展开 → 完整 720：全量内容平移（分区/时间线/八段/覆盖率）
+    await drawerEl.locator('[data-dswf-td-expand]').click()
+    await expect(drawerEl, '完整形态（D22 720）').toHaveAttribute('data-dswf-td-form', 'full')
+    await expect(drawerEl.locator('[data-dswf-td-expand]'), '⤡ 翻转钮已翻（aria-pressed）').toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('[data-dswf-td-sect="content"]').first(), '任务内容分区在场').toBeVisible()
     await expect(page.locator('[data-dswf-td-sect="timeline"]').first(), '执行时间线分区在场').toBeVisible()
     await expect(page.locator('[data-dswf-td-ev-verb="claim"]').first(), '时间线事件行：claim').toBeVisible()
     await expect(page.locator('[data-dswf-td-ev-verb="submit"]').first(), '时间线事件行：submit').toBeVisible()
-    await expect(drawerEl).toContainText('走查·已结 three')
+    await expect(drawerEl.locator('[data-dswf-td-now]').first(), '现状条在场（完整形态全量平移）').toBeVisible()
+    await expect(drawerEl.locator('[data-dswf-td-cov]').first(), '覆盖率条在场（coding 族——预期标记+达标判定）').toBeVisible()
+    await expect(drawerEl.locator('[data-dswf-td-ref]').first(), '参考文档 chip 在场（resolved 链接态）').toBeVisible()
+    // 分块折叠往返（D22：完整形态分块折叠——aria-expanded 翻转）
+    const timelineHead = drawerEl.locator('[data-dswf-td-sect="timeline"]').first()
+    await expect(timelineHead).toHaveAttribute('aria-expanded', 'true')
+    await timelineHead.click()
+    await expect(timelineHead, '折叠往返：收起（aria-expanded=false）').toHaveAttribute('aria-expanded', 'false')
+    await timelineHead.click()
+    await expect(timelineHead, '折叠往返：再展开').toHaveAttribute('aria-expanded', 'true')
+    // 参考文档 chip → dock 开文档 tab（弹窗保持——onOpenDoc 语义）
+    await drawerEl.locator('[data-dswf-td-ref]').first().click()
+    await expect(
+      page.locator(docPanelOf(projectId, REF_DOC)).first(),
+      '参考文档点开 dock 文档 tab（docRel 去重键）',
+    ).toBeVisible({ timeout: 15_000 })
+    await expect(drawerEl, '弹窗保持（开 tab 不关弹窗）').toBeVisible()
+    // 回概览 tab（文档 tab 激活期概览 body 卸载——后续任务行重开径需概览在场 + 任务子 tab 重激活）
+    await openOverviewDock(page)
+    await expect(page.locator(OV_PANEL).first(), '概览 tab body 回挂载').toBeVisible({ timeout: 15_000 })
+    await page.locator(ovSubtabOf('tasks')).click()
+    await expect(page.locator(ttItemOf(idOf(ids, 2))).first(), '任务行回在场（任务子 tab 重激活）').toBeVisible({ timeout: 15_000 })
+    // ⤡ 收起回简要 440（宽度交换 + 水平再居中——原型 m31-tm-expand）
+    await drawerEl.locator('[data-dswf-td-expand]').click()
+    await expect(drawerEl, '收起回简要形态').toHaveAttribute('data-dswf-td-form', 'brief')
     // m3.1 D21 弹窗几何读数（inline 宽/左/顶 = mount 效应落定后的逐开本地态——CSS 居中兜底已让位）
     const drawerGeom = async (): Promise<{ width: number; left: number; top: number }> => {
       const geom = await drawerEl.evaluate((el) => ({
@@ -257,15 +303,18 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     const resized = await drawerGeom()
     expect(resized.width, '右缘拖宽 +120 → 560（限 320–760）').toBe(560)
     expect(resized.left, '对侧锚定：右缘拖宽左缘不动').toBe(moved.left)
-    // ✕ 关闭 → 重开回默认起始位（裁决 #3：关闭不记忆位置/尺寸——几何随壳卸载弃置）
+    // ✕ 关闭 → 重开回默认起始位 + 默认简要（裁决 #3/#11：关闭不记忆位置/尺寸/展开态——几何与形态随壳卸载弃置）
     await page.locator('[data-dswf-td-close]').first().click()
     await expect(page.locator(TD_DRAWER)).toHaveCount(0)
     await page.locator(ttItemOf(idOf(ids, 2))).first().click()
     await expect(drawerEl, '重开弹窗在场（单例原位）').toBeVisible({ timeout: 15_000 })
-    const reopened = await drawerGeom()
-    expect(reopened.width, '重开回默认宽 440（不记忆尺寸）').toBe(440)
-    expect(reopened.left, '重开回默认起始位·水平居中（不记忆位置）').toBe(defaultLeft)
-    expect(reopened.top, '重开回默认起始位·14vh（不记忆位置）').toBe(defaultTop)
+    // 重开几何 = toHaveCSS 自动重试形态（mount 效应落定 inline left 前的首帧可见竞态——
+    // paint 先于 effect，机械值断言等效应落定后同值收敛）
+    await expect(drawerEl, '重开回默认宽 440（不记忆尺寸）').toHaveCSS('width', '440px')
+    await expect(drawerEl, '重开回默认起始位·水平居中（不记忆位置）').toHaveCSS('left', `${defaultLeft}px`)
+    await expect(drawerEl, '重开回默认起始位·14vh（不记忆位置）').toHaveCSS('top', `${defaultTop}px`)
+    await expect(drawerEl, '重开回默认简要形态（D22 裁决 #11——不记忆展开态）').toHaveAttribute('data-dswf-td-form', 'brief')
+    await expect(drawerEl.locator('[data-dswf-td-expand]'), '重开 ⤢ 未展开态').toHaveAttribute('aria-pressed', 'false')
     // Esc 关闭（D21：Esc 与 ✕ 双通道）
     await page.keyboard.press('Escape')
     await expect(page.locator(TD_DRAWER)).toHaveCount(0)
@@ -729,6 +778,8 @@ test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造
     await openTasksTab(page)
     await page.locator(ttItemOf(taskId)).first().click()
     await expect(page.locator(TD_DRAWER).first()).toBeVisible({ timeout: 15_000 })
+    // m3.1 D22：类型模板在完整形态——⤢ 展开后评估条件区可见（简要 = 概要四行零模板）
+    await page.locator('[data-dswf-td-expand]').first().click()
     // 评估结果条件区呈空态注记（M2 无技能写入——在场但不伪造结构化数据）
     await expect(page.locator('[data-dswf-td-eval-empty]').first(), 'eval 空态注记在场').toBeVisible({ timeout: 15_000 })
     const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })

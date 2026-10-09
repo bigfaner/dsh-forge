@@ -1,19 +1,24 @@
 // 任务详情弹窗（定位：业务——m3.1 D21/D23：抽屉形态退役 → 可拖动弹窗 + 挂载独立于
-// dock 概览 tab；两分块[任务内容/时间线] + 顺滑折叠 + 左右缘拖宽 320–760 + 标题栏全窗
-// 拖移 + 类型模板 ×20 + 覆盖率 + 现状条/事件流沿袭）。组装分工沿 EntryDrawer 形制：
+// dock 概览 tab；D22 内容双形态：简要 440（默认——键+tag+标题+概要）↔ 完整 720
+//（现状条/两分块[任务内容/时间线]/kv 六项/类型模板 ×20/覆盖率——1.2 全量内容平移）
+// + 顺滑折叠 + 左右缘拖宽 320–760 + 标题栏全窗拖移）。组装分工沿 EntryDrawer 形制：
 // TaskDrawerBody = 纯渲染体（renderToStaticMarkup 全相位可测）；TaskDrawer = 装载壳
 //（useTaskDetail 拉取 + Esc/拖移/拖宽接线 + 逐开几何本地态[关闭即弃——裁决 #3 不记忆]）。
 // Hard Rules：
 //   - 界面说明最小化——不渲染数据源解释文字（语义锚 ui-design.md）；
 //   - 折叠就地更新——块体常驻 DOM（grid 0fr/1fr 类切换，React 原地协调不重建弹窗）；
 //   - 几何（宽/左/上）= 装载壳逐开本地态——切换任务原位换内容（taskId props 变更组件
-//     不卸载），关闭即随壳卸载弃置（重开回默认起始位——挂载方条件渲染承载）。
+//     不卸载），关闭即随壳卸载弃置（重开回默认起始位——挂载方条件渲染承载）；
+//   - D22 展开态 = 逐开本地态同几何生命周期——重开回默认简要（裁决 #11 不记忆展开态；
+//     切任务原位保持——原型 openTaskModal 仅首开重置）；⤢/⤡ 换宽走
+//     drawerGeometryOnFormToggle（<700 → 720 / >500 → 440，水平再居中）。
 // 打开/关闭/切换由 props 受控（taskId: null = 关闭；三视图/桥装配接线）；
 // 「转移状态…」入口 → onTransition 回调（对话框随本壳挂载）；参考文档 chip → onOpenDoc
-//（dock 开 tab，弹窗保持）。
+//（dock 开 tab，弹窗保持）；挂接会话 pill → onOpenSession + 关弹窗（原型 m31-tm-sess
+// 语义：跳对应对话面板——两动作一体）。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskDetail, type TaskDetailQuery } from '@dsh-forge/contracts'
-import { Button, IconCloseFillRegular, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, IconFullscreenOutlineMedium, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components/index.js'
 import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { RpcClientError } from '../../../rpc/errors.js'
@@ -25,6 +30,7 @@ import '../task-tab/task-tab.css'
 import {
   clampDrawerWidth,
   defaultDrawerPosition,
+  drawerGeometryOnFormToggle,
   drawerPositionFromDrag,
   drawerSessionStore,
   drawerWidthFromEdgeDrag,
@@ -58,6 +64,35 @@ export function drawerBodySections(): readonly { readonly id: DrawerSectionKey; 
     { id: 'content', title: '任务内容' },
     { id: 'timeline', title: '时间线' },
   ]
+}
+
+/** 简要形态概要行（D22：原型 brief rows 四行——所属/类型/前置/挂接会话） */
+export function drawerBriefRows(detail: TaskDetail): readonly { readonly key: string; readonly value: string; readonly code?: boolean }[] {
+  const prerequisites = detail.prerequisites.map((p) => taskKeyLabel(p.slug, p.localId))
+  const sessions = detail.sessions.map((session) => session.sessionId)
+  return [
+    { key: '所属', value: detail.slug, code: true },
+    {
+      key: '类型',
+      value: detail.priority !== undefined ? `${detail.taskType} · ${detail.priority}` : detail.taskType,
+    },
+    { key: '前置', value: prerequisites.length > 0 ? prerequisites.join('、') : '—' },
+    { key: '挂接会话', value: sessions.length > 0 ? sessions.join('、') : '—' },
+  ]
+}
+
+/** 简要形态体（D22 默认形态：概要四行——完整块零渲染） */
+function DrawerBriefBody({ detail }: { readonly detail: TaskDetail }): ReactNode {
+  return (
+    <div className="dswf-td-brief" data-dswf-td-brief="">
+      {drawerBriefRows(detail).map((row) => (
+        <div className="dswf-td-brow" key={row.key}>
+          <span className="dswf-td-bk">{row.key}</span>
+          <span className={row.code === true ? 'dswf-td-bv is-code' : 'dswf-td-bv'}>{row.value}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** kv chip 渲染（类别 chip 着族色 + 值代码体类；breaking = ⚠ 红档） */
@@ -301,11 +336,15 @@ export interface TaskDrawerBodyProps {
   readonly position: DrawerModalPosition | null
   /** 折叠态（会话级保持值注入） */
   readonly collapsed: DrawerCollapseState
+  /** 内容形态（D22：false = 简要 440[默认] / true = 完整 720——装载壳逐开本地态注入） */
+  readonly expanded: boolean
+  /** ⤢/⤡ 形态翻转（换宽 + 再居中归装载壳 drawerGeometryOnFormToggle） */
+  readonly onToggleForm: () => void
   readonly onClose: () => void
   readonly onToggleSection: (key: DrawerSectionKey) => void
   /** 参考文档 chip 点击（dock 开 tab——弹窗保持） */
   readonly onOpenDoc: (docRel: string) => void
-  /** 挂接会话 pill 点击（跳会话——装配接线；缺席 = 非交互呈现） */
+  /** 挂接会话 pill 点击（跳会话 + 关弹窗——原型 m31-tm-sess 两动作一体；装配接线；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
   /** 「转移状态…」入口（对话框开——缺席 = 禁用） */
   readonly onTransition?: (taskId: string) => void
@@ -330,12 +369,14 @@ export interface TaskDrawerBodyProps {
   readonly now?: number
 }
 
-/** 任务详情弹窗纯渲染体（D21 弹窗壳 + 两分块 + 调宽/关闭锚） */
+/** 任务详情弹窗纯渲染体（D21 弹窗壳 + D22 双形态 + 两分块 + 调宽/关闭锚） */
 export function TaskDrawerBody({
   detail,
   width,
   position,
   collapsed,
+  expanded,
+  onToggleForm,
   onClose,
   onToggleSection,
   onOpenDoc,
@@ -358,6 +399,14 @@ export function TaskDrawerBody({
   const coverage = coverageViewOf(detail)
   const showCoverage = templateFamilyOf(detail.taskType) === 'coding' && (coverage.actualPct !== undefined || coverage.expectedPct !== undefined)
   const note = varsText(detail.vars ?? {}, 'note')
+  // 挂接会话 pill 组合（原型 m31-tm-sess：跳对应对话面板 + 关弹窗——两动作一体）
+  const jumpToSession =
+    onOpenSession === undefined
+      ? undefined
+      : (sessionId: string): void => {
+          onOpenSession(sessionId)
+          onClose()
+        }
 
   return (
     <aside
@@ -367,6 +416,7 @@ export function TaskDrawerBody({
       aria-label="任务详情"
       style={taskDrawerShellStyle(width, position)}
       data-dswf-td-drawer=""
+      data-dswf-td-form={expanded ? 'full' : 'brief'}
     >
       <DrawerResizeHandle
         edge="left"
@@ -396,6 +446,17 @@ export function TaskDrawerBody({
         <Button
           variant="toolbar"
           size="sm"
+          className="dswf-td-expand"
+          data-dswf-td-expand=""
+          aria-pressed={expanded}
+          title={expanded ? '收起为简要信息' : '展开完整信息'}
+          onClick={onToggleForm}
+        >
+          <IconFullscreenOutlineMedium size={14} />
+        </Button>
+        <Button
+          variant="toolbar"
+          size="sm"
           className="dswf-td-close"
           data-dswf-td-close=""
           aria-label="关闭弹窗"
@@ -405,54 +466,62 @@ export function TaskDrawerBody({
           <IconCloseFillRegular size={14} />
         </Button>
       </div>
-      <div className="dswf-td-title">{detail.title}</div>
-      <div className="dswf-td-kvstrip" data-dswf-td-kv="">
-        {chips.map((chip, index) => (
-          <KvChip chip={chip} categoryClass={categoryClass} key={`${chip.kind}-${index}`} />
-        ))}
+      <div className="dswf-td-title" title={detail.title}>
+        {detail.title}
       </div>
-      <div className="dswf-td-scroll">
-        <DrawerSection id="content" title="任务内容" open={collapsed.content} onToggle={onToggleSection}>
-          <div className="dswf-td-gr">
-            <div className="dswf-td-gr-item">
-              <div className="dswf-td-tck" data-dswf-td-tck="">
-                目标
-              </div>
-              <div className="dswf-td-gr-v" data-dswf-td-goal="">
-                {taskGoalOf(detail)}
-              </div>
-            </div>
-            <div className="dswf-td-gr-item">
-              <div className="dswf-td-tck" data-dswf-td-tck="">
-                结果
-              </div>
-              <div data-dswf-td-result="">
-                <ResultView result={taskResultOf(detail)} />
-              </div>
-            </div>
+      {expanded ? (
+        <>
+          <div className="dswf-td-kvstrip" data-dswf-td-kv="">
+            {chips.map((chip, index) => (
+              <KvChip chip={chip} categoryClass={categoryClass} key={`${chip.kind}-${index}`} />
+            ))}
           </div>
-          <TypeTemplateBody detail={detail} onOpenDoc={onOpenDoc} />
-          {showCoverage ? <CoverageBar view={coverage} /> : null}
-          {note !== undefined ? (
-            <div className="dswf-td-note" data-dswf-td-note="">
-              <div className="dswf-td-tck" data-dswf-td-tck="">
-                备注
+          <div className="dswf-td-scroll">
+            <DrawerSection id="content" title="任务内容" open={collapsed.content} onToggle={onToggleSection}>
+              <div className="dswf-td-gr">
+                <div className="dswf-td-gr-item">
+                  <div className="dswf-td-tck" data-dswf-td-tck="">
+                    目标
+                  </div>
+                  <div className="dswf-td-gr-v" data-dswf-td-goal="">
+                    {taskGoalOf(detail)}
+                  </div>
+                </div>
+                <div className="dswf-td-gr-item">
+                  <div className="dswf-td-tck" data-dswf-td-tck="">
+                    结果
+                  </div>
+                  <div data-dswf-td-result="">
+                    <ResultView result={taskResultOf(detail)} />
+                  </div>
+                </div>
               </div>
-              <div className="dswf-td-gr-v is-warn">⚠ {note}</div>
-            </div>
-          ) : null}
-        </DrawerSection>
-        <DrawerSection
-          id="timeline"
-          title="时间线"
-          hint={`${detail.records.length} 条`}
-          open={collapsed.timeline}
-          onToggle={onToggleSection}
-        >
-          <TimelineNow detail={detail} onOpenSession={onOpenSession} />
-          <TimelineEvents detail={detail} onOpenSession={onOpenSession} now={at} />
-        </DrawerSection>
-      </div>
+              <TypeTemplateBody detail={detail} onOpenDoc={onOpenDoc} />
+              {showCoverage ? <CoverageBar view={coverage} /> : null}
+              {note !== undefined ? (
+                <div className="dswf-td-note" data-dswf-td-note="">
+                  <div className="dswf-td-tck" data-dswf-td-tck="">
+                    备注
+                  </div>
+                  <div className="dswf-td-gr-v is-warn">⚠ {note}</div>
+                </div>
+              ) : null}
+            </DrawerSection>
+            <DrawerSection
+              id="timeline"
+              title="时间线"
+              hint={`${detail.records.length} 条`}
+              open={collapsed.timeline}
+              onToggle={onToggleSection}
+            >
+              <TimelineNow detail={detail} onOpenSession={jumpToSession} />
+              <TimelineEvents detail={detail} onOpenSession={jumpToSession} now={at} />
+            </DrawerSection>
+          </div>
+        </>
+      ) : (
+        <DrawerBriefBody detail={detail} />
+      )}
       <div className="dswf-td-foot">
         {/* 诊断失败（4.6 UF-3 v19–v21——仅 blocked/rejected 任务；无单任务执行动作[Hard Rule]） */}
         {(detail.taskStatus === 'blocked' || detail.taskStatus === 'rejected') && onDiagnoseFailure !== undefined ? (
@@ -735,6 +804,18 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
   const handleDragEnd = useCallback((): void => {
     dragRef.current = null
   }, [])
+  // D22 双形态：展开态 = 逐开本地态（同几何生命周期——关闭随壳卸载弃置 = 重开回默认简要
+  // [裁决 #11 不记忆展开态]；切任务原位保持——原型 openTaskModal 仅首开重置）。
+  // 双轨同几何（ref 处理器读源 + state 渲染驱动）；⤢/⤡ 换宽走 drawerGeometryOnFormToggle。
+  const [expanded, setExpanded] = useState(false)
+  const expandedRef = useRef(false)
+  const handleToggleForm = useCallback((): void => {
+    const next = !expandedRef.current
+    expandedRef.current = next
+    setExpanded(next)
+    const current = geometryRef.current
+    applyGeometry(drawerGeometryOnFormToggle(current.width, current.position, next, window.innerWidth))
+  }, [applyGeometry])
   const handleDiagnoseFailure = useCallback((detail: TaskDetail): void => {
     setDiag({ result: taskFailureDiagToast(taskFailureInputOf(detail, docsRoot)), mode: detail.container.mode })
   }, [docsRoot])
@@ -824,6 +905,8 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
       width={clampDrawerWidth(geometry.width)}
       position={geometry.position}
       collapsed={session.collapsed}
+      expanded={expanded}
+      onToggleForm={handleToggleForm}
       onClose={onClose}
       onToggleSection={handleToggleSection}
       onOpenDoc={openDoc}

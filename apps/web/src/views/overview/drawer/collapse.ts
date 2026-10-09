@@ -15,6 +15,12 @@ export const DRAWER_WIDTH_MIN = 320
 export const DRAWER_WIDTH_MAX = 760
 /** 默认宽度（px）——双击复位值（原型 M31_TM_W = 440） */
 export const DRAWER_WIDTH_DEFAULT = 440
+/** 完整形态宽（px——D22 原型 m31-tm-expand 展开交换值 720） */
+export const DRAWER_WIDTH_FULL = 720
+/** 展开换宽带（px）——宽 <700 时展开换 720（原型严格小于判定） */
+export const DRAWER_FORM_EXPAND_BELOW = 700
+/** 收起换窄带（px）——宽 >500 时收起换 440（原型严格大于判定） */
+export const DRAWER_FORM_COLLAPSE_ABOVE = 500
 /** 键盘步进（px）——← 加宽 +32 / → 收窄 -32 */
 export const DRAWER_WIDTH_STEP = 32
 /** 窄屏视口因子（上限 = min(760, 视口×0.92)——弹窗不越窄屏） */
@@ -127,6 +133,28 @@ export function drawerPositionFromDrag(
     viewportHeight,
     width,
   )
+}
+
+/**
+ * 双形态翻转几何（D22：⤢/⤡——原型 `m31-tm-expand` 刻度）：目标形态定向宽度交换——
+ * 展开：宽 <700 → 720；收起：宽 >500 → 440（带内 = 用户自宽不动）；换宽时水平再居中
+ * （top 保持——原型仅重落 left）。位未定（null = mount 效应前）仅换宽——CSS 居中
+ * 兜底随新宽自适应。720 窄屏经 clampDrawerWidth 收 `min(760, 视口×0.92)`。
+ */
+export function drawerGeometryOnFormToggle(
+  width: number,
+  position: DrawerModalPosition | null,
+  targetExpanded: boolean,
+  viewportWidth: number,
+): { readonly width: number; readonly position: DrawerModalPosition | null } {
+  const inBand = targetExpanded ? width >= DRAWER_FORM_EXPAND_BELOW : width <= DRAWER_FORM_COLLAPSE_ABOVE
+  if (inBand) return { width, position }
+  const nextWidth = clampDrawerWidth(targetExpanded ? DRAWER_WIDTH_FULL : DRAWER_WIDTH_DEFAULT, viewportWidth)
+  if (position === null) return { width: nextWidth, position: null }
+  return {
+    width: nextWidth,
+    position: { left: Math.max(DRAWER_DEFAULT_MIN_OFFSET, Math.round((viewportWidth - nextWidth) / 2)), top: position.top },
+  }
 }
 
 /** 会话级弹窗态（分块折叠——关开弹窗/切任务保持；宽度/位置不记忆[裁决 #3]不入） */

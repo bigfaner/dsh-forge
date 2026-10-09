@@ -37,7 +37,7 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
@@ -47,15 +47,37 @@ import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
-import { findFixtureSession } from '../../support/session-files.js'
+import { bestSessionLog, findFixtureSession } from '../../support/session-files.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { COMPOSER_INPUT, OV_PANEL, TD_DRAWER, ovSubtabOf, projectRowOf, stpPillOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
+import { newBlankSession } from '../../support/m3.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_PANEL, TD_DRAWER, ovSubtabOf, projectRowOf, sessionRowOf, stpPillOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 
 /** 夹具工作区名（芯片选择 / 会话目录定位共用——注册名 = 目录名） */
 const WS_NAME = 'ws-tsl'
-/** 合成执行会话 id（与真实 dispatcher 会话相异可判——SC6③ 双源前提） */
+/** 合成执行会话 id（与真实 dispatcher 会话相异可判——SC6③ 双源前提；dp/ex 两测试沿用） */
 const EXEC_SESSION = 'e2e-tsl-executor-synth'
+/** dispatcher 会话夹具消息（D22 pill 跳转断言锚——对话面板转录判据） */
+const DISPATCH_MESSAGE = 'tsl 挂接双侧断言夹具消息（零凭据形态）'
+/** worker 会话夹具消息（D22 双源 pill 分别跳转——执行会话转录判据） */
+const WORKER_MESSAGE = 'tsl worker 执行会话夹具消息（零凭据形态）'
+
+/** 夹具工作区全部会话 id（盘侧目录扫描——mtime 升序；D22 双会话定位 = 创建前后差集） */
+function fixtureSessionIds(dshHome: string, fixtureSegment: string): string[] {
+  const sessionsDir = join(dshHome, 'sessions')
+  const found: { id: string; mtime: number }[] = []
+  if (existsSync(sessionsDir)) {
+    for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
+      if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
+      for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
+        if (!sDir.isDirectory()) continue
+        const log = bestSessionLog(join(sessionsDir, wsDir.name, sDir.name))
+        found.push({ id: sDir.name, mtime: log !== undefined ? statSync(log).mtimeMs : 0 })
+      }
+    }
+  }
+  return found.sort((a, b) => a.mtime - b.mtime).map((entry) => entry.id)
+}
 
 /** 零凭据会话开户（fix-42 台账径）：芯片流选定工作区 → composer 一条消息 → 账本定位会话 id */
 async function openRealSession(page: Page, userData: string, projectId: string): Promise<string> {
@@ -63,13 +85,34 @@ async function openRealSession(page: Page, userData: string, projectId: string):
   const composer = page.locator(COMPOSER_INPUT).last()
   await expect(composer, 'composer 在场（芯片流开户）').toBeVisible({ timeout: 60_000 })
   await composer.click()
-  await page.keyboard.insertText('tsl 挂接双侧断言夹具消息（零凭据形态）')
+  await page.keyboard.insertText(DISPATCH_MESSAGE)
   await page.keyboard.press('Enter')
   await expect(page.locator(projectRowOf(projectId)).locator('[data-dswf-session]'), '会话行入树（用户事件落地 = 非 blank）').toBeVisible({ timeout: 60_000 })
   await ensureNoBlockingDialog(page)
   const session = findFixtureSession(join(userData, 'dsh-home'), WS_NAME)
   expect(session, '会话目录在盘（账本 sessionId 可定位）').toBeDefined()
   return (session as { sessionId: string }).sessionId
+}
+
+/** 第二真实会话（m3.1 D22：worker 执行源——pill 跳转对面对话面板断言需真会话）：官方新会话
+ *  入口（首会话非 blank 后真新建）+ composer 落地 + 盘侧创建前后差集定位 id。 */
+async function openWorkerSession(page: Page, userData: string, before: readonly string[]): Promise<string> {
+  await newBlankSession(page)
+  const composer = page.locator(COMPOSER_INPUT).last()
+  await expect(composer, 'composer 在场（worker 会话开户）').toBeVisible({ timeout: 60_000 })
+  await composer.click()
+  await page.keyboard.insertText(WORKER_MESSAGE)
+  await page.keyboard.press('Enter')
+  await expect(page.locator(CONVERSATION_CONTENT).first(), 'worker 消息入转录（用户事件落地）').toContainText(WORKER_MESSAGE, { timeout: 60_000 })
+  await ensureNoBlockingDialog(page)
+  const dshHome = join(userData, 'dsh-home')
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    const fresh = fixtureSessionIds(dshHome, WS_NAME).find((id) => !before.includes(id))
+    if (fresh !== undefined) return fresh
+    if (Date.now() > deadline) throw new Error('worker 会话目录未出现（30s 超时——盘侧差集定位）')
+    await page.waitForTimeout(2_000)
+  }
 }
 
 /** 底座 + 一条已挂接任务（真实会话 claim）——返回任务与真实会话 id */
@@ -108,22 +151,27 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     expect(before, '挂接前 sessionLinks 空').toEqual([])
     await expect(page.locator('[data-dswf-stp-pill]'), '挂接前 pill 空态（零挂接不占会话头）').toHaveCount(0)
 
-    // ── 双源构造：claim（真实会话 → link 行）+ submit（合成执行会话 → record 行）──
+    // ── 双源构造（m3.1 D22 真双会话）：worker 真实会话 B（执行源——pill 跳转断言需真会话）
+    //    + claim 真实会话 A（link 派发源）+ submit 会话 B（record 执行源）──
+    const beforeWorker = fixtureSessionIds(join(userData, 'dsh-home'), WS_NAME)
+    const workerSession = await openWorkerSession(page, userData, beforeWorker)
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
-      summary: 'tsl 冒烟：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
+      summary: 'tsl 冒烟：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: workerSession,
     })
+    // 回 dispatcher 会话 A（Step3 会话头 pill 断言面——worker 开户后主视图切到了 B）
+    await page.locator(sessionRowOf(sessionId)).first().click()
 
     // ── Step 1：任务列表副行挂接计数（双源去重 = 2）──
     const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     const card = cards.find((c) => c.taskId === added.taskId)
     expect(card?.sessionCount, '副行承重数据：挂接计数 = 2（link + record 去重）').toBe(2)
 
-    // ── Step 2：详情抽屉挂接区分型（两类各自与来源库记录一致）──
-    const detailCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId: EXEC_SESSION })
+    // ── Step 2：详情弹窗挂接区分型（两类各自与来源库记录一致）──
+    const detailCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId: workerSession })
     expect(detailCards, '执行会话侧：record 分型单卡').toEqual([
-      { taskId: added.taskId, slug: added.slug, localId: added.localId, title: '挂接双侧冒烟任务', taskStatus: 'completed', sessionId: EXEC_SESSION, source: 'record' },
+      { taskId: added.taskId, slug: added.slug, localId: added.localId, title: '挂接双侧冒烟任务', taskStatus: 'completed', sessionId: workerSession, source: 'record' },
     ])
     const realCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
     // §6-24④ 诚实审计：claim 审计行也带本会话 id → 派发会话两卡并存（link + record——
@@ -139,20 +187,36 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     await expect(dispatcherRecordPill, 'claim 审计 record pill 同场（§6-24④ 两卡并存）').toBeVisible({ timeout: 30_000 })
     await expect(dispatcherRecordPill).toContainText('执行')
 
-    // ── Step 4：pill 导航（dock 开概览 + 任务子 tab + feature 选中 + 抽屉开）──
+    // ── Step 4：pill 导航（dock 开概览 + 任务子 tab + feature 选中 + 弹窗开）──
     await linkPill.click()
     await expect(page.locator(OV_PANEL).first(), 'dock 开概览 tab').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovSubtabOf('tasks')), '任务子 tab 激活（聚焦切换）').toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), 'feature 选中（导航载荷富化）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(TD_DRAWER).first(), '任务抽屉开（聚焦抽屉面）').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(TD_DRAWER).first(), '任务弹窗开（聚焦弹窗面）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(TD_DRAWER).first()).toContainText('挂接双侧冒烟任务')
-    // 抽屉挂接区：双源会话 pill 并存（真实 + 合成执行——不混示为同一会话）
-    await expect(page.locator(`[data-dswf-td-sess="${sessionId}"]`).first(), '抽屉挂接区：派发会话 pill').toBeVisible()
-    await expect(page.locator(`[data-dswf-td-sess="${EXEC_SESSION}"]`).first(), '抽屉挂接区：执行会话 pill（相异可判）').toBeVisible()
+    // m3.1 D22：弹窗默认简要形态——⤢ 展开后挂接 pill 可见（完整形态时间线双源 pill）
+    await page.locator(TD_DRAWER).first().locator('[data-dswf-td-expand]').click()
+    // 弹窗挂接区：双源会话 pill 并存（真实 dispatcher + 真实 worker——不混示为同一会话）
+    await expect(page.locator(`[data-dswf-td-sess="${sessionId}"]`).first(), '弹窗挂接区：派发会话 pill（dispatcher）').toBeVisible()
+    await expect(page.locator(`[data-dswf-td-sess="${workerSession}"]`).first(), '弹窗挂接区：执行会话 pill（worker——相异可判）').toBeVisible()
 
     // ── Step 5（数据面）：executor 侧 record 分型（上面已断言）+ 副行 UI 计数 ──
     await expect(page.locator(ttItemOf(added.taskId)).first(), '任务行在场（导航后列表）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(`[data-dswf-tt-sub="${added.taskId}"]`).first(), '副行呈现挂接计数（⟞2 挂接）').toContainText('2')
+
+    // ── Step 6（m3.1 D22）：双源会话 pill 分别跳对应对话面板（+ 弹窗关闭——原型 m31-tm-sess 两动作一体）──
+    // 当前主视图 = dispatcher 会话 A（Step4 前回切）→ 先点 worker pill（真导航可判）
+    await page.locator(`[data-dswf-td-sess="${workerSession}"]`).first().click()
+    await expect(page.locator(TD_DRAWER), 'pill 点击 = 弹窗关闭（跳会话两动作一体）').toHaveCount(0)
+    await expect(page.locator(CONVERSATION_CONTENT).first(), 'worker pill → 对话面板 = 执行会话 B（转录判据）').toContainText(WORKER_MESSAGE, { timeout: 30_000 })
+    // 重开（默认简要——D22 不记忆展开态）→ 展开 → 点 dispatcher pill → 对话面板 = 派发会话 A
+    await page.locator(ttItemOf(added.taskId)).first().click()
+    await expect(page.locator(TD_DRAWER).first(), '重开弹窗在场').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(TD_DRAWER).first(), '重开回默认简要形态（裁决 #11 不记忆展开态）').toHaveAttribute('data-dswf-td-form', 'brief')
+    await page.locator(TD_DRAWER).first().locator('[data-dswf-td-expand]').click()
+    await page.locator(`[data-dswf-td-sess="${sessionId}"]`).first().click()
+    await expect(page.locator(TD_DRAWER), 'dispatcher pill 点击 = 弹窗关闭').toHaveCount(0)
+    await expect(page.locator(CONVERSATION_CONTENT).first(), 'dispatcher pill → 对话面板 = 派发会话 A（转录判据）').toContainText(DISPATCH_MESSAGE, { timeout: 30_000 })
 
     // 零凭据形态的模型失败面不计入产品断言（pageerror 留痕诊断——不伪造凭据不遮蔽）
     if (pageErrors.length > 0) console.log(`[tsl-diagnostic] pageerror（零凭据模型失败面，非产品断言面）：${pageErrors.slice(-5).join(' | ')}`)

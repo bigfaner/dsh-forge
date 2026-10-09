@@ -210,6 +210,42 @@
   color: var(--dswf-td-hue, var(--dsw-alias-label-secondary));
 }
 
+/* ── 简要形态（D22：默认 440——概要四行；完整块[分块/kv/时间线]零渲染） ──
+ * 行语言 = 原型 #m31-tm 简要 rows（m31-tm-row/k/v：键列定宽 56 + 值折行） */
+.dswf-td-brief {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+}
+
+.dswf-td-brow {
+  display: flex;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: 2px 0; /* dsw-raw 原型行距刻度 */
+}
+
+.dswf-td-bk {
+  flex: none;
+  width: 56px; /* dsw-raw 原型键列定宽刻度 */
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-bv {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 所属行值 = 代码体色（原型 t-code 同位） */
+.dswf-td-bv.is-code {
+  color: var(--dsw-alias-link);
+}
+
 /* ── 内容滚动区（两分块独占滚动） ── */
 .dswf-td-scroll {
   flex: 1;
