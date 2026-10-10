@@ -34,6 +34,7 @@ import {
   SIDEBAR_WORKSPACES_SLOT,
   TOOL_CALL_TOOLVIEW_SLOT,
   sessionParentIdOf,
+  sessionRowInLedger,
   workerOpenTarget,
   forgeClientPlugin,
   moduleLoaderFacade,
@@ -151,6 +152,8 @@ function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
   tabTypes: ReturnType<typeof fakeSidebarRightTabs>
   /** 账本 byId 注入面（m3.1 D6 worker ⟞ parentId 判读测试） */
   sessionsById: Record<string, { parentId?: string }>
+  /** 账本 refresh 注入面（D6 修复面——缺行兜底重拉测试；缺省 undefined = 平开径） */
+  sessionsRefresh: { current: (() => Promise<unknown>) | undefined }
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -175,12 +178,17 @@ function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
   }
   // fix-11：Session Controller 面仅账本快照源；打开动作 = uiWorkspace.openSession（官方导航面）；
   // fix-42：新会话流 = uiWorkspace.startSession（官方行动作面）
-  // m3.1 D6：账本快照可注入 byId（worker ⟞ 开面的 parentId 判读测试面——缺省空账本 = 平开径）
+  // m3.1 D6：账本快照可注入 byId（worker ⟞ 开面的 parentId 判读测试面——缺省空账本 = 平开径）；
+  // D6 修复面：refresh 可注入（缺行兜底重拉测试——getter 动态读 current，缺省 undefined）
   const sessionsById: Record<string, { parentId?: string }> = {}
+  const sessionsRefresh: { current: (() => Promise<unknown>) | undefined } = { current: undefined }
   const sessions = {
     list: {
       tag: 'sessions-list',
       getSnapshot: () => ({ byId: sessionsById }),
+    },
+    get refresh(): (() => Promise<unknown>) | undefined {
+      return sessionsRefresh.current
     },
   }
   const uiWorkspace = { openSession: open, startSession: start }
@@ -214,7 +222,7 @@ function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
     // m3.1 D25：reflect 面（ ForgeClientCtx 窄面外——插件真身经 cast 读取，同径注入）
     ...(reflect !== undefined ? { reflect } : {}),
   } as ForgeClientCtx
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh }
 }
 
 /** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body；m3.1 D5 会话头 pill 退役） */
@@ -658,6 +666,82 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     unpublishViews()
   })
 
+  // ── D6 修复面：账本缺行（worker added 广播未达/丢失）的判读式打开统一径 ──
+  it('D6 修复面：账本缺行 + refresh 兜底 → 重判读到 parentId = 地址形态开（⟞ 与执行会话 pill 两面同径）', async () => {
+    publishFakeViews()
+    const { ctx, registers, open, sessionsRefresh } = fakeClientCtx()
+    const refreshCalls: number[] = []
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      return undefined
+    }
+    forgeClientPlugin().apply(ctx)
+    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as {
+      openWorkerSession: (childSessionId: string) => void
+      onOpenSession: (sessionId: string) => void
+    }
+    // byId 缺行（真实派发径常见态）：refresh 期注入 parentId → 重判读 = 地址形态
+    const ledger = (ctx.get('sessions') as { list: { getSnapshot: () => { byId: Record<string, { parentId?: string }> } } })
+    const injectRow = (id: string): void => {
+      ledger.list.getSnapshot().byId[id] = { parentId: 'dispatch-parent' }
+    }
+    // refresh 内同步注入（refreshList 完成即 summaries 已替换的时序模拟）
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      injectRow('worker-lost')
+      return undefined
+    }
+    face.openWorkerSession('worker-lost')
+    await vi.waitFor(() => {
+      expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-lost', mode: 'unknown' })
+    })
+    // 执行会话 pill（onOpenSession face）同径：缺行 worker 子会话 → refresh → 地址形态
+    open.mockClear()
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      injectRow('worker-pill')
+      return undefined
+    }
+    face.onOpenSession('worker-pill')
+    await vi.waitFor(() => {
+      expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-pill', mode: 'unknown' })
+    })
+    expect(refreshCalls.length, '缺行径每次点击恰好一次 refresh 兜底').toBeGreaterThanOrEqual(2)
+    unpublishViews()
+  })
+
+  it('D6 修复面：refresh 后仍缺行 / refresh 拒绝 → 平开兜底；行在场径零 refresh（顶层会话常态不加拍）', async () => {
+    publishFakeViews()
+    const { ctx, registers, sessionsById, open, sessionsRefresh } = fakeClientCtx()
+    const refreshCalls: number[] = []
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      throw new Error('rpc down')
+    }
+    forgeClientPlugin().apply(ctx)
+    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
+    // refresh 拒绝 → 平开（不炸——官方 retain 对缺行 id 的报错在 face 层不外溢）
+    face.openWorkerSession('never-known')
+    await vi.waitFor(() => {
+      expect(open).toHaveBeenCalledWith('never-known')
+    })
+    // 行在场（无论有无 parentId）→ 同步开 + 零 refresh
+    open.mockClear()
+    refreshCalls.length = 0
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      return undefined
+    }
+    sessionsById['top-known'] = {}
+    face.openWorkerSession('top-known')
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(open).toHaveBeenCalledWith('top-known')
+    expect(refreshCalls, '行在场径零 refresh（不加拍）').toHaveLength(0)
+    unpublishViews()
+  })
+
   it('workerOpenTarget / 账本判读纯面：parentId 缺席/形状漂移 → 平开；官方面异常 fail-soft（不外溢）', () => {
     expect(workerOpenTarget(undefined, 's-1')).toBe('s-1')
     expect(workerOpenTarget('p-1', 's-1')).toEqual({ parentSessionId: 'p-1', childSessionId: 's-1', mode: 'unknown' })
@@ -676,6 +760,21 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     ).toBeUndefined()
     expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 42 } } }) }, 's-1')).toBeUndefined()
     expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 'p-9' } } }) }, 's-1')).toBe('p-9')
+    // 账本行在场判定（sessionRowInLedger——D6 修复面）：形状漂移/异常 = false；行在场 = true
+    expect(sessionRowInLedger(undefined, 's-1')).toBe(false)
+    expect(sessionRowInLedger({ tag: 'x' }, 's-1')).toBe(false)
+    expect(
+      sessionRowInLedger(
+        {
+          getSnapshot: () => {
+            throw new Error('shape drift')
+          },
+        },
+        's-1',
+      ),
+    ).toBe(false)
+    expect(sessionRowInLedger({ getSnapshot: () => ({ byId: {} }) }, 's-1')).toBe(false)
+    expect(sessionRowInLedger({ getSnapshot: () => ({ byId: { 's-1': {} } }) }, 's-1')).toBe(true)
     // 官方面异常 fail-soft：openSession 抛错不外溢（会话卸载瞬态）
     publishFakeViews()
     const base = fakeClientCtx()

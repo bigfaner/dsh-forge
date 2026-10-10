@@ -170,6 +170,14 @@ export interface ForgeSlotsService {
 export interface ForgeSessionsService {
   /** 会话账本快照源（实时读——零缓存零副本的源本体） */
   readonly list: unknown
+  /**
+   * 全量重拉会话列表基线（官方 SessionsService.refresh——refreshList 同径）。D6 修复面：
+   * in-process worker 子会话的 added 广播未达客户端时账本缺行 → ⟞/执行会话 pill 判读不到
+   * parentId，平开子会话 id 又非官方支持径（resolveTarget 抛 unknown session）。此时主动
+   * refresh 一次（宿主 session.list 读盘上报持久子会话行——header parentSession 在场）后
+   * 重判读。缺席（上游面漂移）= 跳过，平开兜底。
+   */
+  readonly refresh?: () => Promise<unknown>
 }
 
 /**
@@ -227,6 +235,65 @@ export function workerOpenTarget(
   return parentId === undefined
     ? childSessionId
     : { parentSessionId: parentId, childSessionId, mode: 'unknown' }
+}
+
+/**
+ * 账本行在场判定（纯函数——D6 修复面）：byId[sessionId] 行是否存在。行在场 → parentId
+ * 判读一次即定（有无都定——顶层/子会话均不重拉）；行缺席（in-process worker 的 added
+ * 广播未达/丢失——真实派发径的常见态：worker 创建与 dispose 的广播均不保证到达，而宿主
+ * 重启后的全量 list 读盘恒含持久子会话行）→ 需 refresh 全量基线后重判读。形状漂移/异常
+ * = false（与 sessionParentIdOf 同防御口径）。
+ */
+export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
+  if (typeof list !== 'object' || list === null) return false
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return false
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return false
+  }
+  if (typeof snapshot !== 'object' || snapshot === null) return false
+  return (snapshot as { byId?: Record<string, unknown> }).byId?.[sessionId] !== undefined
+}
+/**
+ * 打开会话（判读式统一径——D6 修复面）：账本 parentId 判读 → 子会话 = 官方
+ * SubagentAddress 形态（openChild 同径——树零联动），顶层 = 平开。账本缺行（worker 的
+ * added 广播未达/丢失）→ refresh 全量基线后重判读一次（宿主 session.list 读盘上报持久
+ * 子会话行——header parentSession 在场）；refresh 缺席/失败/仍缺行 = 平开（顶层会话
+ * 常态径）。行在场路径零异步（同步判读同步开——高频顶层径不加拍）。官方面异常
+ * fail-soft 不外溢。悬浮面板 ⟞ 与任务详情执行会话 pill 两消费面共用。
+ */
+export function openSessionWithLedgerAddress(
+  services: {
+    readonly sessions: ForgeSessionsService
+    readonly uiWorkspace: ForgeUiWorkspaceService
+  },
+  sessionId: string,
+): void {
+  const openWith = (parentId: string | undefined): void => {
+    try {
+      services.uiWorkspace.openSession(workerOpenTarget(parentId, sessionId))
+    } catch {
+      // fail-soft：无会话面（会话卸载瞬态）——点击不外溢
+    }
+  }
+  const parentId = sessionParentIdOf(services.sessions.list, sessionId)
+  if (parentId !== undefined || sessionRowInLedger(services.sessions.list, sessionId)) {
+    openWith(parentId)
+    return
+  }
+  const refresh = services.sessions.refresh
+  if (typeof refresh !== 'function') {
+    openWith(undefined)
+    return
+  }
+  void Promise.resolve(refresh.call(services.sessions))
+    .catch(() => undefined)
+    .then(() => {
+      openWith(sessionParentIdOf(services.sessions.list, sessionId))
+    })
 }
 
 /** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源） */
@@ -1014,20 +1081,19 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 概览上下文写回缝（4.1：ShellHost 锚定 → 桥 → 右栏概览 tab body）
                 // + 弹窗受控态读写面（m3.1 D21/D23）
                 bridge,
-                // 弹窗挂接会话 pill 跳会话（官方导航动作面——dock 概览 tab 注入同径）
+                // 弹窗挂接会话 pill 跳会话（官方导航动作面——dock 概览 tab 注入同径）。
+                // D6 修复面：统一判读式打开——执行会话（worker 子会话）经账本 parentId →
+                // 官方 SubagentAddress 形态（平开子会话 id 非官方支持径）；账本缺行 =
+                // refresh 兜底后重判读（openSessionWithLedgerAddress 单源）。
                 onOpenSession: (sessionId: string): void => {
-                  uiWorkspace.openSession(sessionId)
+                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, sessionId)
                 },
                 // 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6）：账本 parentId 判读 →
                 // 子会话 = 官方 SubagentAddress 形态（openChild 同径——树零联动：worker
-                // 不进左栏两级树，父会话行保持）；顶层会话平开。官方面异常 fail-soft。
+                // 不进左栏两级树，父会话行保持）；顶层会话平开。账本缺行（worker added
+                // 广播未达/丢失）= refresh 兜底后重判读；官方面异常 fail-soft。
                 openWorkerSession: (childSessionId: string): void => {
-                  const target = workerOpenTarget(sessionParentIdOf(sessions.list, childSessionId), childSessionId)
-                  try {
-                    uiWorkspace.openSession(target)
-                  } catch {
-                    // fail-soft：无会话面（会话卸载瞬态）——⟞ 点击不外溢
-                  }
+                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId)
                 },
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
                 openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions),
