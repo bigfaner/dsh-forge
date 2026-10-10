@@ -1,5 +1,6 @@
 // Forge设置 分区组件单测 —— 4.5：分区多小节结构（分区标题 + worker 小节 + 行式控件）+
-// worker 三项（Provider/Model 联动/Reasoning 三段——Hard Rule：无 Output 上限回潮）+
+// worker 三项（Provider/Model 联动/Reasoning 四段含默认值——Hard Rule：无 Output 上限回潮）+
+// 档位兼容（目录能力面过滤 + 无法兼容回默认值不设置）+
 // 未配置 ⚠ 占位 + 脏态实时（input+change 双监听同门纯函数）+ 保存五态反馈
 // （保存中冻结 / 成功 ✓ 复位 + 下次派发生效注记 / 失败错误行留场可重试）。
 // 渲染面 = renderToStaticMarkup 纯 Body（设置对话框 slot 注入归 4.7——本件全相位静态可测）；
@@ -12,6 +13,7 @@ import type { ForgeRpcClient } from '../../rpc/index.js'
 import {
   ForgeSettingsSection,
   ForgeSettingsSectionBody,
+  REASONING_SEG_OPTIONS,
   SAVED_EFFECT_NOTE,
   UNCONFIGURED_NOTICE,
   UNSELECTED_PLACEHOLDER,
@@ -28,13 +30,17 @@ import {
   initialWorkerDraft,
   isWorkerDraftComplete,
   isWorkerDraftDirty,
+  modelReasoningEfforts,
   modelSelectOptions,
   providerSelectOptions,
+  reasoningSegOptions,
+  reconcileWorkerReasoning,
   saveForgeSettings,
   submitWorkerSettings,
   workerModelCandidates,
   type ForgeSettingsPatch,
   type ForgeSettingsUiState,
+  type WorkerDraft,
   type WorkerProviderEntry,
 } from './ForgeSettingsSection.js'
 
@@ -111,7 +117,7 @@ describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件）',
 // ─────────────────── AC2 worker 三项（Hard Rule：无 Output 上限） ───────────────────
 
 describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × 模型二维）', () => {
-  it('Provider 选项 = 目录两供应商；Model 选项 = 当前供应商候选；Reasoning = 三段 seg（低|中|高）', () => {
+  it('Provider 选项 = 目录两供应商；Model 选项 = 当前供应商候选；Reasoning = 四段 seg（默认|低|中|高）', () => {
     const html = body()
     // m3.1 D24：选项面 = 官方 Menu items（fsMenuItems 纯函数——静态闭态卡不可达的选项锚）
     const providerItems = fsMenuItems(providerSelectOptions(undefined).map((entry) => entry.provider))
@@ -124,12 +130,13 @@ describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × �
     // 触发钮值回显：选中 provider 直出 + 异供应商候选零在场（DOM 面）
     expect(html).toContain('>dsh-openai</span>')
     expect(html).not.toContain('deepseek-chat')
-    // 三段 seg：role=tablist + 三 tab（aria-selected 承载当前档）
+    // 四段 seg：role=tablist + 四 tab（aria-selected 承载当前档）——默认值档恒在场
     expect(html).toContain('role="tablist"')
-    expect(html.match(/role="tab"/g)?.length).toBe(3)
+    expect(html.match(/role="tab"/g)?.length).toBe(4)
+    expect(html).toContain('id="dswf-fs-reasoning-default"')
     expect(html).toContain('id="dswf-fs-reasoning-high"')
     expect(html).not.toContain('id="dswf-fs-reasoning-output"')
-    for (const label of ['低', '中', '高']) {
+    for (const label of ['默认', '低', '中', '高']) {
       expect(html).toContain(label)
     }
   })
@@ -157,6 +164,89 @@ describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × �
       reasoning: 'high',
     })
     expect(applyProviderChange(draft, 'dsh-openai')).toEqual(draft)
+  })
+
+  // ─────────────────── 档位兼容（目录能力面——不同 provider/model 支持集不同） ───────────────────
+
+  it('modelReasoningEfforts：目录能力面读取（缺席模型/未携带能力 = undefined 不判）', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash', 'glm-5.3'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+      { provider: 'dsh-deepseek', models: ['deepseek-chat'] },
+    ]
+    expect(modelReasoningEfforts('zai-coding-cn', 'glm-5.3-flash', catalog)).toEqual(['low', 'high', 'max'])
+    expect(modelReasoningEfforts('zai-coding-cn', 'glm-5.3', catalog)).toBeUndefined() // 未携带能力
+    expect(modelReasoningEfforts('dsh-deepseek', 'deepseek-chat', catalog)).toBeUndefined()
+    expect(modelReasoningEfforts('unknown', 'glm-5.3-flash', catalog)).toBeUndefined()
+    expect(modelReasoningEfforts('', '', catalog)).toBeUndefined()
+  })
+
+  it('reasoningSegOptions：目录已知 → 默认恒在场 + 受支持档位过滤；目录不可知 = 全四值', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    // glm-5.3-flash 无 medium：过滤后 = 默认|低|高（max 不在 seg 词汇内自然缺席）
+    expect(reasoningSegOptions('zai-coding-cn', 'glm-5.3-flash', catalog).map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'high',
+    ])
+    // 目录不可知（静态回退面/未携带能力）= 全四值不过滤
+    expect(reasoningSegOptions('dsh-openai', 'glm-5.3', WORKER_PROVIDER_CATALOG).map((o) => o.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+    ])
+    expect(REASONING_SEG_OPTIONS.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high'])
+  })
+
+  it('reconcileWorkerReasoning：目录已知且当前档位不支持 → 回默认值（无法兼容就不设置）；受支持/不可知 = 不动', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    const broken: WorkerDraft = { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' }
+    expect(reconcileWorkerReasoning(broken, catalog).reasoning).toBe('default')
+    expect(reconcileWorkerReasoning({ ...broken, reasoning: 'high' }, catalog).reasoning).toBe('high')
+    expect(reconcileWorkerReasoning({ ...broken, reasoning: 'default' }, catalog).reasoning).toBe('default')
+    // 目录不可知（静态回退面）= 不判不动
+    expect(reconcileWorkerReasoning(broken, WORKER_PROVIDER_CATALOG).reasoning).toBe('medium')
+  })
+
+  it('editWorkerDraft 档位兼容回退：切到不支持当前档位的模型 → 草稿自动回默认值', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    const state: ForgeSettingsUiState = {
+      ...initialForgeSettingsUiState(),
+      load: 'ready',
+      catalog,
+      draft: { provider: 'zai-coding-cn', model: 'other-model', reasoning: 'medium' },
+    }
+    const edited = editWorkerDraft(state, { model: 'glm-5.3-flash' })
+    expect(edited.draft).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' })
+  })
+
+  it('applyModelCatalogLoaded 档位兼容回退：目录后到（装载双异步径）→ saved 档位不支持时草稿回默认值待存', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    const saved: WorkerSettings = { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' }
+    let state: ForgeSettingsUiState = { ...initialForgeSettingsUiState(), catalog: WORKER_PROVIDER_CATALOG }
+    state = applyForgeSettingsLoaded(state, { worker: saved })
+    expect(state.draft.reasoning).toBe('medium') // 目录未到 = 不判
+    state = applyModelCatalogLoaded(state, catalog)
+    expect(state.draft.reasoning).toBe('default') // 目录到达 = 回默认值
+    expect(state.saved).toEqual(saved) // 已持久化值不动（保存动作基准）
+  })
+
+  it('applyForgeSettingsLoaded 档位兼容回退：目录先到 → saved 档位不支持时播种草稿即回默认值', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    const saved: WorkerSettings = { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' }
+    let state: ForgeSettingsUiState = { ...initialForgeSettingsUiState(), catalog }
+    state = applyForgeSettingsLoaded(state, { worker: saved })
+    expect(state.draft.reasoning).toBe('default')
   })
 
   it('目录外存量值防失显：providerSelectOptions / modelSelectOptions 并入持久域自由字符串', () => {
@@ -243,7 +333,7 @@ describe('AC3 · 未配置 ⚠ 占位 + 填齐激活 + 脏态实时', () => {
   it('装载链：initial → 未配置 pending（⚠ 未知不显）→ ready 后按 worker 在场/缺席播种', () => {
     const pending = initialForgeSettingsUiState()
     expect(pending.load).toBe('pending')
-    expect(pending.draft).toEqual({ provider: '', model: '', reasoning: 'medium' })
+    expect(pending.draft).toEqual({ provider: '', model: '', reasoning: 'default' })
     expect(pending.saved).toBeUndefined()
 
     const html = renderToStaticMarkup(
@@ -271,7 +361,7 @@ describe('AC3 · 未配置 ⚠ 占位 + 填齐激活 + 脏态实时', () => {
     const configured = applyForgeSettingsLoaded(pending, { worker: SAVED })
     expect(configured.saved).toEqual(SAVED)
     expect(configured.draft).toEqual(SAVED)
-    expect(initialWorkerDraft(undefined).reasoning).toBe('medium')
+    expect(initialWorkerDraft(undefined).reasoning).toBe('default')
   })
 
   it('装载失败：错误行留场 + 重试按钮 + 控件面不渲染', () => {

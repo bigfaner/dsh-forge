@@ -16,6 +16,7 @@ import {
 } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
 import { CONTAINER_KINDS, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
+import type { ReasoningEffortLevel } from './forge.js'
 import type {
   AddTaskInput,
   BridgeEventMessage,
@@ -225,12 +226,15 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expectTypeOf<ContainerRef['kind']>().toEqualTypeOf<'feature' | 'proposal'>()
   })
 
-  it('settings DTO：worker 三项（provider/model/reasoning——reasoning → agentOptions.effort 直映射注记）', () => {
-    expect(REASONING_LEVELS).toEqual(['low', 'medium', 'high'])
+  it('settings DTO：worker 三项（provider/model/reasoning——四档含默认值 default=不下发 effort）', () => {
+    expect(REASONING_LEVELS).toEqual(['default', 'low', 'medium', 'high'])
     const settings: ForgeSettings = { worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } }
     expect(settings.worker?.reasoning).toBe('high')
+    const defaulted: ForgeSettings = { worker: { provider: 'zai', model: 'glm-5.3-flash', reasoning: 'default' } }
+    expect(defaulted.worker?.reasoning).toBe('default')
     const empty: ForgeSettings = {}
     expect(empty.worker).toBeUndefined() // 未配置 = 键缺席 → 不携带 agentOptions 回退父会话继承
+    expectTypeOf<ReasoningEffortLevel>().toEqualTypeOf<'low' | 'medium' | 'high'>()
     expectTypeOf<ForgeSettingsService['get']>().toBeCallableWith()
     expectTypeOf<ReturnType<ForgeSettingsService['get']>>().toEqualTypeOf<Promise<ForgeSettings>>()
     expectTypeOf<ReturnType<ForgeSettingsService['set']>>().toEqualTypeOf<Promise<void>>()

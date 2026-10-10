@@ -619,6 +619,8 @@ function registerSettingsSection(
 interface ModelCatalogEntry {
   readonly provider: string
   readonly models: readonly string[]
+  /** 模型 → 支持的推理档位 id 集（models[].reasoning.efforts[].id——档位兼容过滤能力面） */
+  readonly modelEfforts?: Readonly<Record<string, readonly string[]>>
 }
 
 /** unknown → 对象窄化（缺席/非对象 = undefined） */
@@ -640,6 +642,8 @@ function reflectServiceGet(ctx: ForgeClientCtx, name: string): unknown {
  * RemoteResult 信封解包（m3.1 D25）：`{ok:true, value:{groups:[{id, models:[{id}]}]}}`
  * → `[{provider, models}]`（provider = 路由 id，官方模型选择器同源口径）；他形（!ok /
  * 缺 groups）= undefined——组件面静态目录回退。
+ * m3.1 逻辑修复：models[].reasoning.efforts[].id 透传为 modelEfforts（档位兼容过滤
+ * 能力面——信封未携带该模型能力 = 不记该键，组件面不过滤不判）。
  */
 function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[] | undefined {
   const result = asRecord(envelope)
@@ -651,15 +655,29 @@ function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[
     const record = asRecord(group)
     const provider = typeof record?.['id'] === 'string' ? record['id'] : undefined
     if (provider === undefined || provider === '') continue
-    const models = Array.isArray(record?.['models'])
-      ? record['models']
-          .map((model) => {
-            const id = asRecord(model)?.['id']
-            return typeof id === 'string' ? id : ''
+    const models: string[] = []
+    const modelEfforts: Record<string, readonly string[]> = {}
+    let hasEfforts = false
+    if (Array.isArray(record?.['models'])) {
+      for (const model of record['models']) {
+        const modelRecord = asRecord(model)
+        const id = modelRecord?.['id']
+        if (typeof id !== 'string' || id === '') continue
+        models.push(id)
+        const effortsRecord = asRecord(modelRecord?.['reasoning'])
+        if (Array.isArray(effortsRecord?.['efforts'])) {
+          const efforts = effortsRecord['efforts'].flatMap((effort) => {
+            const effortId = asRecord(effort)?.['id']
+            return typeof effortId === 'string' && effortId !== '' ? [effortId] : []
           })
-          .filter((id) => id !== '')
-      : []
-    entries.push({ provider, models })
+          if (efforts.length > 0) {
+            modelEfforts[id] = efforts
+            hasEfforts = true
+          }
+        }
+      }
+    }
+    entries.push(hasEfforts ? { provider, models, modelEfforts } : { provider, models })
   }
   return entries
 }

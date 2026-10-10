@@ -25,6 +25,7 @@ import {
   deriveWorkerToolFilter,
   parseDispatchTaskArgs,
   poolOf,
+  reconcileWorkerReasoning,
   workerAgentOptionsOf,
   type DispatchTaskResult,
   type SpawnWorkerHandle,
@@ -108,7 +109,12 @@ interface Harness {
   setSpawn(impl: (req: SpawnWorkerRequest) => Promise<SpawnWorkerHandle>): void
 }
 
-function harness(options: { settings?: { get(): Promise<unknown> } } = {}): Harness {
+function harness(
+  options: {
+    settings?: { get(): Promise<unknown> }
+    resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
+  } = {},
+): Harness {
   const exec = execOf()
   const { sink, events } = sinkStub()
   const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0, dispose: 0 }
@@ -167,6 +173,7 @@ function harness(options: { settings?: { get(): Promise<unknown> } } = {}): Harn
     resolveProjectId: (cwd) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     events: sink,
     ...(options.settings !== undefined ? { settings: options.settings as DispatchTaskToolDeps['settings'] } : {}),
+    ...(options.resolveModelReasoning !== undefined ? { resolveModelReasoning: options.resolveModelReasoning } : {}),
     spawn: (req) => spawnImpl(req),
   }
   return {
@@ -304,13 +311,43 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
   })
 })
 
-describe('workerAgentOptionsOf（forgeSettings → agentOptions 两态）', () => {
+describe('workerAgentOptionsOf + reconcileWorkerReasoning（forgeSettings → agentOptions）', () => {
   it('未配置/服务缺席 = undefined（不携带——回退父会话继承）；配置 = reasoning→effort 直映射', () => {
     expect(workerAgentOptionsOf(undefined)).toBeUndefined()
     expect(workerAgentOptionsOf({})).toBeUndefined()
     expect(
       workerAgentOptionsOf({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } }),
     ).toEqual({ provider: 'deepseek', model: 'reasoner', reasoningEffort: 'high' })
+  })
+
+  it("reasoning='default'（默认值档）：携带 provider/model 但不下发 effort", () => {
+    expect(workerAgentOptionsOf({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' } })).toEqual({
+      provider: 'zai-coding-cn',
+      model: 'glm-5.3-flash',
+    })
+  })
+
+  it('reconcile：目录已知且档位受支持 → 原样；不支持 → 剥离 effort（无法兼容就不设置）', async () => {
+    const kept = { provider: 'p', model: 'm', reasoningEffort: 'high' as const }
+    const dropped = { provider: 'p', model: 'm', reasoningEffort: 'medium' as const }
+    await expect(reconcileWorkerReasoning(kept, async () => ['low', 'high', 'max'])).resolves.toEqual(kept)
+    await expect(reconcileWorkerReasoning(dropped, async () => ['low', 'high', 'max'])).resolves.toEqual({
+      provider: 'p',
+      model: 'm',
+    })
+  })
+
+  it('reconcile：目录不可知（undefined/解析拒绝/解析器缺席）→ 原样携带不判', async () => {
+    const options = { provider: 'p', model: 'm', reasoningEffort: 'medium' as const }
+    await expect(reconcileWorkerReasoning(options, undefined)).resolves.toBe(options)
+    await expect(reconcileWorkerReasoning(options, async () => undefined)).resolves.toBe(options)
+    await expect(reconcileWorkerReasoning(options, async () => { throw new Error('resolve failed') })).resolves.toBe(options)
+  })
+
+  it('reconcile：effort 缺席（default 档/未配置）→ 恒原样（无需判）', async () => {
+    const options = { provider: 'p', model: 'm' }
+    await expect(reconcileWorkerReasoning(options, async () => [])).resolves.toBe(options)
+    await expect(reconcileWorkerReasoning(undefined, async () => [])).resolves.toBeUndefined()
   })
 })
 
@@ -565,6 +602,40 @@ describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions 
     const h = harness({ settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } }) } })
     await h.tool.execute({}, h.exec)
     expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'deepseek', model: 'reasoner', reasoningEffort: 'high' })
+  })
+
+  it("forgeSettings reasoning='default'：agentOptions 无 effort 键（不下发——provider 默认档）", async () => {
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' } }) },
+    })
+    await h.tool.execute({}, h.exec)
+    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash' })
+  })
+
+  it('档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 携带 provider/model（组装面）', async () => {
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' } }) },
+      resolveModelReasoning: async () => ['low', 'high', 'max'],
+    })
+    await h.tool.execute({}, h.exec)
+    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash' })
+  })
+
+  it('档位兼容收口：目录已知且受支持 → 原样携带（组装面）', async () => {
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'high' } }) },
+      resolveModelReasoning: async () => ['low', 'high', 'max'],
+    })
+    await h.tool.execute({}, h.exec)
+    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'high' })
+  })
+
+  it('档位兼容收口：目录不可知（解析器缺席）→ 原样携带（无法验证不判）', async () => {
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' } }) },
+    })
+    await h.tool.execute({}, h.exec)
+    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'medium' })
   })
 
   it('forgeSettings 未配置（worker 键缺席）：不携带 agentOptions（回退父会话继承）', async () => {

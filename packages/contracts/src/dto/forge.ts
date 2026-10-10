@@ -737,10 +737,16 @@ export interface ForgeDocsService {
 
 // ─────────────────────────── Interface 1（M3）：设置域（ctx.forgeSettings，provide ×1） ───────────────────────────
 
-/** worker 推理档位三值（reasoning → agentOptions.effort 直映射——设置三段与上游请求字段一对一） */
-export const REASONING_LEVELS = ['low', 'medium', 'high'] as const
+/** worker 推理档位四值（'default' = 默认值——不下发 effort，落 provider/模型自带默认档；
+ * 其余三值 → agentOptions.reasoningEffort 直映射——设置三段与上游请求字段一对一。
+ * 档位兼容 = 模型目录能力面（不同 provider/model 支持集不同）：设置侧按目录过滤可选值，
+ * 派发侧目录已知且不支持时回落默认值——「无法兼容就不设置」） */
+export const REASONING_LEVELS = ['default', 'low', 'medium', 'high'] as const
 
 export type ReasoningLevel = (typeof REASONING_LEVELS)[number]
+
+/** 可显式下发的推理档位（'default' 之外——workerAgentOptionsOf 输出面词汇） */
+export type ReasoningEffortLevel = Exclude<ReasoningLevel, 'default'>
 
 /** worker 默认 LLM 三项（dispatchTask 组装 agentOptions 的唯一配置源） */
 export interface WorkerSettings {

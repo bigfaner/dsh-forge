@@ -757,13 +757,23 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
       ok: true,
       value: {
         groups: [
-          { id: 'zai-coding-cn', models: [{ id: 'glm-5.3' }, { id: 'glm-5.3-flash' }] },
+          {
+            id: 'zai-coding-cn',
+            models: [
+              { id: 'glm-5.3', reasoning: { efforts: [{ id: 'low' }, { id: 'high' }, { id: 'max' }] } },
+              { id: 'glm-5.3-flash' },
+            ],
+          },
           { id: 'dsh-openai', models: [{ id: 'glm-5.3' }] },
         ],
       },
     }
     const expected = [
-      { provider: 'zai-coding-cn', models: ['glm-5.3', 'glm-5.3-flash'] },
+      {
+        provider: 'zai-coding-cn',
+        models: ['glm-5.3', 'glm-5.3-flash'],
+        modelEfforts: { 'glm-5.3': ['low', 'high', 'max'] },
+      },
       { provider: 'dsh-openai', models: ['glm-5.3'] },
     ]
     const faceOf = (reflectGet: (name: string) => unknown): { loadModelCatalog: () => Promise<unknown> } => {
@@ -774,7 +784,7 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
       if (forge === undefined) throw new Error('settings.section 登记缺席（发布面/装载面断裂）')
       return forge.options.inject!() as { loadModelCatalog: () => Promise<unknown> }
     }
-    // 成功：remote.session 直达 → groups 解包
+    // 成功：remote.session 直达 → groups 解包（reasoning.efforts[].id 透传 modelEfforts——档位兼容能力面）
     await expect(
       faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.resolve(envelopeOk) } : undefined)).loadModelCatalog(),
     ).resolves.toEqual(expected)
@@ -796,6 +806,39 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
     await expect(
       faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.reject(new Error('boom')) } : undefined)).loadModelCatalog(),
     ).resolves.toBeUndefined()
+    unpublishViews()
+  })
+
+  it('loadModelCatalog 档位兼容能力面：efforts 缺席/畸形/空集 = 不记该模型能力（组件面不过滤不判）', async () => {
+    const envelope = {
+      ok: true,
+      value: {
+        groups: [
+          {
+            id: 'p1',
+            models: [
+              { id: 'm-no-reasoning' },
+              { id: 'm-bad-efforts', reasoning: { efforts: 'not-array' } },
+              { id: 'm-empty-efforts', reasoning: { efforts: [] } },
+              { id: 'm-bad-ids', reasoning: { efforts: [{ id: 42 }, { name: 'x' }] } },
+              { id: 'm-ok', reasoning: { efforts: [{ id: 'high' }] } },
+            ],
+          },
+        ],
+      },
+    }
+    publishFakeViews()
+    const run = fakeClientCtx({ get: (name) => (name === 'remote.session' ? { modelCatalog: () => Promise.resolve(envelope) } : undefined) })
+    forgeClientPlugin().apply(run.ctx)
+    const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)!
+    const face = forge.options.inject!() as { loadModelCatalog: () => Promise<unknown> }
+    await expect(face.loadModelCatalog()).resolves.toEqual([
+      {
+        provider: 'p1',
+        models: ['m-no-reasoning', 'm-bad-efforts', 'm-empty-efforts', 'm-bad-ids', 'm-ok'],
+        modelEfforts: { 'm-ok': ['high'] },
+      },
+    ])
     unpublishViews()
   })
 

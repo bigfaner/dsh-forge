@@ -39,6 +39,12 @@ import './forge-settings.css'
 export interface WorkerProviderEntry {
   readonly provider: string
   readonly models: readonly string[]
+  /**
+   * 模型 → 支持的推理档位 id 集（m3.1 逻辑修复：目录能力面——不同 provider/model
+   * 支持集不同；缺席 = 目录未携带能力 = 不过滤不判）。装载自「设置>模型」目录
+   * remote.session.modelCatalog 的 models[].reasoning.efforts[].id。
+   */
+  readonly modelEfforts?: Readonly<Record<string, readonly string[]>>
 }
 
 export const WORKER_PROVIDER_CATALOG: readonly WorkerProviderEntry[] = [
@@ -49,9 +55,10 @@ export const WORKER_PROVIDER_CATALOG: readonly WorkerProviderEntry[] = [
 /** 下拉空值占位（m3.1 D24：fsMenuItems 首项与触发钮回显同源） */
 export const UNSELECTED_PLACEHOLDER = '（未选择）'
 
-/** Reasoning 三段 seg 选项（AC2：低|中|高——contracts REASONING_LEVELS 词汇；
- * reasoning → agentOptions.effort 直映射 = Interface 1 设置三段与上游请求字段一对一） */
+/** Reasoning 四段 seg 选项（'default' 默认值 = 不下发 effort——落 provider/模型默认档；
+ * 其余 = contracts REASONING_LEVELS 词汇；按模型目录能力过滤见 reasoningSegOptions） */
 export const REASONING_SEG_OPTIONS: readonly SegmentedControlOption<ReasoningLevel>[] = [
+  { value: 'default', label: '默认' },
   { value: 'low', label: '低' },
   { value: 'medium', label: '中' },
   { value: 'high', label: '高' },
@@ -98,18 +105,53 @@ export function modelSelectOptions(
   return candidates
 }
 
+/** 模型支持的推理档位集（目录能力面）：目录未携带该模型能力 = undefined（不判） */
+export function modelReasoningEfforts(
+  provider: string | undefined,
+  model: string,
+  catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
+): readonly string[] | undefined {
+  if (provider === undefined || provider === '' || model === '') return undefined
+  return catalog.find((entry) => entry.provider === provider)?.modelEfforts?.[model]
+}
+
+/**
+ * Reasoning seg 选项（目录能力兼容过滤）：目录已知该模型档位集 → 「默认」恒在场 +
+ * 受支持档位；目录不可知 = 全四值（无法验证不过滤）。恒含 'default'（兼容回退落点）。
+ */
+export function reasoningSegOptions(
+  provider: string | undefined,
+  model: string,
+  catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
+): readonly SegmentedControlOption<ReasoningLevel>[] {
+  const efforts = modelReasoningEfforts(provider, model, catalog)
+  if (efforts === undefined) return REASONING_SEG_OPTIONS
+  return REASONING_SEG_OPTIONS.filter((option) => option.value === 'default' || efforts.includes(option.value))
+}
+
+/** 档位兼容回退（「无法兼容就不设置」）：目录已知且当前档位不被支持 → 回 'default' */
+export function reconcileWorkerReasoning(
+  draft: WorkerDraft,
+  catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
+): WorkerDraft {
+  if (draft.reasoning === 'default') return draft
+  const efforts = modelReasoningEfforts(draft.provider, draft.model, catalog)
+  if (efforts === undefined || efforts.includes(draft.reasoning)) return draft
+  return { ...draft, reasoning: 'default' }
+}
+
 // ─────────────────────────── 纯模型（AC2/AC3 判定面） ───────────────────────────
 
-/** worker 三项表单草稿（reasoning seg 恒有三值之一——无空态） */
+/** worker 三项表单草稿（reasoning seg 恒有四值之一——无空态） */
 export interface WorkerDraft {
   readonly provider: string
   readonly model: string
   readonly reasoning: ReasoningLevel
 }
 
-/** 未配置起步草稿（provider/model 空 + reasoning 缺省中——prototype fs 缺省态同值） */
+/** 未配置起步草稿（provider/model 空 + reasoning 默认值起步——不下发 effort 最稳缺省） */
 export function initialWorkerDraft(saved: WorkerSettings | undefined): WorkerDraft {
-  if (saved === undefined) return { provider: '', model: '', reasoning: 'medium' }
+  if (saved === undefined) return { provider: '', model: '', reasoning: 'default' }
   return { provider: saved.provider, model: saved.model, reasoning: saved.reasoning }
 }
 
@@ -175,7 +217,8 @@ export function initialForgeSettingsUiState(): ForgeSettingsUiState {
   }
 }
 
-/** 装载成功：worker 在场/缺席播种草稿（值直出 / 空值起步） */
+/** 装载成功：worker 在场/缺席播种草稿（值直出 / 空值起步）+ 档位兼容回退
+ *  （目录已先行入位时即刻校验——saved 档位不被新目录支持 → 草稿回默认值待存） */
 export function applyForgeSettingsLoaded(
   state: ForgeSettingsUiState,
   settings: ForgeSettings,
@@ -184,7 +227,7 @@ export function applyForgeSettingsLoaded(
     ...state,
     load: 'ready',
     saved: settings.worker,
-    draft: initialWorkerDraft(settings.worker),
+    draft: reconcileWorkerReasoning(initialWorkerDraft(settings.worker), state.catalog),
     error: undefined,
   }
 }
@@ -197,18 +240,21 @@ export function applyForgeSettingsLoadError(
   return { ...state, load: 'error', error: { kind: 'load', message } }
 }
 
-/** 模型目录入位（m3.1 D25 装载动作）：undefined = 装载缺席/失败——静态目录回退面保留不动 */
+/** 模型目录入位（m3.1 D25 装载动作）：undefined = 装载缺席/失败——静态目录回退面保留不动；
+ *  入位后档位兼容回退（saved/草稿档位不被新目录支持 → 草稿回默认值——两条装载异步径
+ *  先后到达均收敛） */
 export function applyModelCatalogLoaded(
   state: ForgeSettingsUiState,
   catalog: readonly WorkerProviderEntry[] | undefined,
 ): ForgeSettingsUiState {
   if (catalog === undefined) return state
-  return { ...state, catalog }
+  return { ...state, catalog, draft: reconcileWorkerReasoning(state.draft, catalog) }
 }
 
 /**
  * 编辑动作（AC3 脏态实时——Menu onSelect 与 Reasoning seg 同喂本函数，受控值实时回流）：
  * provider 编辑先过联动（model 不在新候选集清空——m3.1 D25 以 state.catalog 现行目录为准），
+ * provider/model 变更后档位兼容回退（新模型不支持当前档位 → 'default' 不设置），
  * 编辑即清成功反馈与保存错（新待存值在场）。恒不触碰 load/saved（结构性不动装载面）。
  */
 export function editWorkerDraft(
@@ -219,6 +265,7 @@ export function editWorkerDraft(
   if (patch.provider !== undefined) draft = applyProviderChange(draft, patch.provider, state.catalog)
   if (patch.model !== undefined) draft = { ...draft, model: patch.model }
   if (patch.reasoning !== undefined) draft = { ...draft, reasoning: patch.reasoning }
+  draft = reconcileWorkerReasoning(draft, state.catalog)
   return { ...state, draft, savedFlash: false, error: undefined }
 }
 
@@ -468,9 +515,9 @@ export function ForgeSettingsSectionBody({
                 <SegmentedControl
                   id="dswf-fs-reasoning"
                   value={draft.reasoning}
-                  options={REASONING_SEG_OPTIONS}
+                  options={reasoningSegOptions(draft.provider, draft.model, catalog)}
                   onChange={onEditReasoning}
-                  label="Reasoning（低|中|高）"
+                  label="Reasoning（默认|低|中|高——按模型能力过滤）"
                   disabled={editing}
                 />
               </div>

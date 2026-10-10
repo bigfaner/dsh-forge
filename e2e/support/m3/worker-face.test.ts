@@ -58,6 +58,13 @@ describe('M3 5.2 SC2 worker model 与 Forge设置 一致（组装面——worker
     })
   })
 
+  it("已配置 reasoning='default'（默认值档）：携带 provider/model、不下发 effort", () => {
+    expect(workerAgentOptionsOf({ worker: { provider: 'zai', model: 'glm-5.3-flash', reasoning: 'default' } })).toEqual({
+      provider: 'zai',
+      model: 'glm-5.3-flash',
+    })
+  })
+
   it('未配置/服务缺席：undefined——不携带，回退父会话继承', () => {
     expect(workerAgentOptionsOf(undefined)).toBeUndefined()
     expect(workerAgentOptionsOf({})).toBeUndefined()

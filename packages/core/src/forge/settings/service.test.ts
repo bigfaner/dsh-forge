@@ -55,6 +55,14 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
     await svc.set({ worker: next })
     await expect(svc.get()).resolves.toEqual({ worker: next })
   })
+
+  it("往返：reasoning='default'（默认值档——不下发 effort）合法收存", async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    const defaulted = { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' } as const
+    await svc.set({ worker: defaulted })
+    await expect(svc.get()).resolves.toEqual({ worker: defaulted })
+  })
 })
 
 describe('2.7 forgeSettings：原子写 + 写校验', () => {
@@ -65,7 +73,7 @@ describe('2.7 forgeSettings：原子写 + 写校验', () => {
     expect(readdirSync(root!)).toEqual(['forge-settings.json'])
   })
 
-  it('写校验：reasoning ∉ 三档 / provider·model 空白 → InvalidSettingsInputError，既有文件不被触碰', async () => {
+  it('写校验：reasoning ∉ 四档（含默认值）/ provider·model 空白 → InvalidSettingsInputError，既有文件不被触碰', async () => {
     const { userDataDir, settingsFile } = harness()
     const svc = createSettingsService({ settingsFile, userDataDir })
     await svc.set({ worker })

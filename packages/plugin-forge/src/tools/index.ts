@@ -34,6 +34,12 @@ export interface ForgeToolDeps {
   events?: ForgeEventSink
   /** forgeSettings 服务面（3.4——可选：缺席/worker 未配置 = dispatchTask 不携带 agentOptions） */
   settings?: Pick<ForgeSettingsService, 'get'>
+  /**
+   * 模型推理档位目录解析（可选——llm 服务 resolveModelInfo 惰性反射装配）：
+   * (provider, model) → 该路由支持的 effort id 集；undefined = 目录不可知（不判）。
+   * dispatchTask 组装面消费——配置档位不被支持时剥离 effort（无法兼容就不设置）。
+   */
+  resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
 }
 
 /** tool 定义组（顺序 = Interface 4 列序；注册面与断言面共消费——终态六员） */
@@ -110,6 +116,7 @@ export {
   deriveWorkerToolFilter,
   parseDispatchTaskArgs,
   poolOf,
+  reconcileWorkerReasoning,
   workerAgentOptionsOf,
 } from './dispatch-task.js'
 export type {

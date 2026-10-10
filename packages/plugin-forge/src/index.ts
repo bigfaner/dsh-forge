@@ -60,12 +60,44 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       settingsService = undefined
     }
+    // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
+    // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，
+    // 杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩）；服务缺席/异常 = 不判。
+    let resolveModelReasoning:
+      | ((provider: string, model: string) => Promise<readonly string[] | undefined>)
+      | undefined
+    try {
+      const llm = ctx.reflect?.get('llm') as
+        | {
+            resolveModelInfo?: (
+              provider: string,
+              model: string,
+            ) => Promise<{ reasoning?: { efforts?: readonly { id?: unknown }[] } } | undefined>
+          }
+        | undefined
+      const resolveModelInfo = llm?.resolveModelInfo
+      if (typeof resolveModelInfo === 'function') {
+        resolveModelReasoning = async (provider, model) => {
+          try {
+            const info = await resolveModelInfo.call(llm, provider, model)
+            const efforts = info?.reasoning?.efforts
+            if (!Array.isArray(efforts)) return undefined // 非推理模型/无能力面 = 目录不可知（不判）
+            return efforts.flatMap((effort) => (typeof effort?.id === 'string' ? [effort.id] : []))
+          } catch {
+            return undefined // 不可解析（未知 provider/model 等）= 不判
+          }
+        }
+      }
+    } catch {
+      resolveModelReasoning = undefined
+    }
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
       resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
+      ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       spawn: createInProcessDriverSpawn(),
     })
     const disposers = [
@@ -125,6 +157,6 @@ export type {
 } from './tools/index.js'
 export { WorkspaceNotRegisteredError, isWorkspaceNotRegisteredError } from './tools/index.js'
 export type { ForgeContextFace as PluginContextFace, ForgeToolDefinition } from './tools/index.js'
-export { classifyPool, deriveWorkerToolFilter, poolOf, workerAgentOptionsOf } from './tools/index.js'
+export { classifyPool, deriveWorkerToolFilter, poolOf, reconcileWorkerReasoning, workerAgentOptionsOf } from './tools/index.js'
 export type { DispatchTaskResult, PoolSnapshot, PoolVerdict, SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './tools/index.js'
 export { createInProcessDriverSpawn } from './spawn/in-process-driver.js'

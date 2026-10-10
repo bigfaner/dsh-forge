@@ -15,6 +15,7 @@ import type {
   ForgePluginEvent,
   ForgeSettings,
   Mode,
+  ReasoningEffortLevel,
   TaskRecordEntry,
   TaskSnapshot,
   TaskStats,
@@ -142,11 +143,11 @@ export interface SpawnWorkerRequest {
   readonly signal: AbortSignal
   /** 收窄面（矩阵派生 deny——childCtx.tools.restrict 同义） */
   readonly toolFilter: { readonly deny: readonly string[] }
-  /** 默认 LLM（forgeSettings 已配置才携带；缺省 = 回退父会话继承） */
+  /** 默认 LLM（forgeSettings 已配置才携带；缺省 = 回退父会话继承；effort 缺席 = default 档/兼容剥离） */
   readonly agentOptions?: {
     readonly provider: string
     readonly model: string
-    readonly reasoningEffort: 'low' | 'medium' | 'high'
+    readonly reasoningEffort?: ReasoningEffortLevel
   }
   /** 子会话标签（任务键） */
   readonly label?: string
@@ -181,12 +182,38 @@ const SPAWN_FAILURES = new Map<string, number>()
 
 // ─────────────────────────── forgeSettings → agentOptions（图 4 节点 S→AO/NC） ───────────────────────────
 
-/** 设置 → agentOptions（未配置/服务缺席 = undefined——不携带，回退父会话继承；reasoning → effort 直映射） */
+/** 设置 → agentOptions（未配置/服务缺席 = undefined——不携带，回退父会话继承；
+ * reasoning='default' = 不下发 effort——落 provider/模型默认档；其余 → reasoningEffort 直映射） */
 export function workerAgentOptionsOf(
   settings: ForgeSettings | undefined,
-): { provider: string; model: string; reasoningEffort: 'low' | 'medium' | 'high' } | undefined {
+): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
   if (settings === undefined || settings.worker === undefined) return undefined
-  return { provider: settings.worker.provider, model: settings.worker.model, reasoningEffort: settings.worker.reasoning }
+  const { provider, model, reasoning } = settings.worker
+  if (reasoning === 'default') return { provider, model }
+  return { provider, model, reasoningEffort: reasoning }
+}
+
+/**
+ * 档位兼容收口（不同 provider/model 支持集不同——「无法兼容就不设置」）：
+ * 目录已知（efforts 非 undefined）且配置档位不在支持集 → 剥离 reasoningEffort（回落
+ * provider/模型默认档），杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩；
+ * 目录不可知（解析器缺席/模型不可解析）= 不判，原样携带。
+ */
+export async function reconcileWorkerReasoning(
+  options: { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined,
+  resolveModelReasoning: ((provider: string, model: string) => Promise<readonly string[] | undefined>) | undefined,
+): Promise<{ provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined> {
+  if (options === undefined || options.reasoningEffort === undefined) return options
+  if (resolveModelReasoning === undefined) return options
+  let efforts: readonly string[] | undefined
+  try {
+    efforts = await resolveModelReasoning(options.provider, options.model)
+  } catch {
+    return options // 解析失败 = 目录不可知——不判
+  }
+  if (efforts === undefined) return options
+  if (efforts.includes(options.reasoningEffort)) return options
+  return { provider: options.provider, model: options.model } // 不支持 → 不设置
 }
 
 // ─────────────────────────── 返回面（Interface 2 四分支） ───────────────────────────
@@ -459,10 +486,14 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           })
 
           // 2. 组装：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions
+          //    （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
           const toolFilter = deriveWorkerToolFilter(task.taskType)
           const settings: ForgeSettings | undefined =
             deps.settings !== undefined ? await deps.settings.get() : undefined
-          const agentOptions = workerAgentOptionsOf(settings)
+          const agentOptions = await reconcileWorkerReasoning(
+            workerAgentOptionsOf(settings),
+            deps.resolveModelReasoning,
+          )
 
           // 3. driver in-process spawn（阻塞）——start 拒绝 = 基建故障（防线计数）
           const spawnStartedAt = Date.now()
