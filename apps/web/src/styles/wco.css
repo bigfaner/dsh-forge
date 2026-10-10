@@ -13,7 +13,9 @@
  *   D2 WCO 收起 = 59px 竖排图标列常驻（展开/新会话/插件/知识库/搜索/设置全官方件
  *      图标——「rail 隐藏 + 标题栏双 28px 圆钮」语义退役）；
  *   D31 竖线自窗口顶点 y=0 连续贯穿至底（带内段 frame::after 补齐——D1 残差
- *      2026-10-10 实机报障「分隔线没有到达最高点」收尾）。
+ *      2026-10-10 实机报障「分隔线没有到达最高点」收尾）；
+ *   D32 分隔线 handle / 会话消息文字单色光标纯白不可辨 → 高对比色图光标（Windows/DWM
+ *      单色光标渲染缺陷的产品侧缓解——OS 级缺陷非样式回归，块尾专节注记）。
  *
  * 锚定纪律（brand.css 先例——hash 类名不稳定不落锚），全部经稳定结构面选取：
  *   - frame = [data-shell-overlay] 的父级（overlayLayer 为 frame 唯一直属渲染点）；
@@ -134,4 +136,47 @@ html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:has(> [data-slot='sidebar.workspaces']),
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:last-child {
   display: flex;
+}
+
+/* ── D32：分隔线 handle / 消息文字单色光标纯白不可辨（OS 缺陷产品侧缓解）──
+ * 根因 = OS 级缺陷非样式回归（差异清单 D32；2026-10-10 实机报障「光标纯白看不清」）：
+ * Windows/DWM 单色光标渲染缺陷（Chromium issue 1366924 族——Win11 24H2 / 显卡驱动族波及
+ * Edge/Chrome/Electron 全系）把 col-resize 与 text（IBeam）两类单色光标渲成纯白，浅底上
+ * 不可辨；箭头/手形彩色光标不受影响。产品 CSS cursor 全关键字、官方包零 url() 光标——
+ * 无样式回归面，本块纯缓解面。
+ * 缓解径 = 色图光标绕过单色渲染管线：两表面换自定义高对比 data-URI SVG 光标（24px 基准
+ * 双层描边造型——宽描边对比色打底 + 细描边形体色覆绘），声明带热点坐标（col-resize 双向
+ * 箭头中心 / IBeam 笔画位，均 12 12）+ 关键字降级链（无图环境回退 OS 语义）；亮/暗两套
+ * （亮 = 深形浅描边 / 暗 = 浅形深描边——body[data-ds-dark-theme] scope，brand.css 既有
+ * 消费先例）。
+ * 表面锚（稳定结构面，hash 类名零耦合——D1 同纪律）：
+ *   ① 分隔线 handle = frame 结构子 div[data-side]：官方 ui-layout DragHandle 直标稳定
+ *      属性（pin ⑮-6 机械面），官方 handle cursor:col-resize、8px 命中区（z11 覆层把手）；
+ *   ② 会话消息文字 = [data-conversation-content]：官方 chat 台账锚（brand.css 既有消费
+ *      先例）；cursor 可继承——容器级设置后按钮类自持 cursor:pointer 不受波及（VS Code
+ *      编辑器面先例，宽表面 IBeam 属可接受形态）。
+ * data-URI 内色值不可令牌化——随行 dsw-raw 记账（lint-tokens 口径；色对 #1f1f1f/#ffffff
+ * 互为描边、对齐 label-primary/bg-base 对比意图，升级窗口令牌色再对账）。
+ * 非 WCO 零波及：全部新规则锚定 html[data-windows-titlebar]（pin ⑮-6 既有断言面自动
+ * 覆盖）。产品自持同病面（drawer 拖宽缘 col-resize / dispatch-panel move）非本轮 AC
+ * ——光标资产中央化定义于本块，随报随收。 */
+
+/* ① 分隔线 handle（亮：深形浅描边——col-resize 双向箭头，热点 = 箭头中心 12 12） */
+html[data-windows-titlebar] div:has(> [data-shell-overlay]) > div[data-side] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%23ffffff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7.4%208.4%203%2012l4.4%203.6M16.6%208.4%2021%2012l-4.4%203.6M3.4%2012h17.2'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%231f1f1f'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7.4%208.4%203%2012l4.4%203.6M16.6%208.4%2021%2012l-4.4%203.6M3.4%2012h17.2'/%3E%3C/g%3E%3C/svg%3E") 12 12, col-resize; /* dsw-raw D32 色图光标——data-URI 内色值不可令牌化（OS 单色光标缺陷缓解） */
+}
+
+/* ① 分隔线 handle（暗：浅形深描边） */
+html[data-windows-titlebar] body[data-ds-dark-theme] div:has(> [data-shell-overlay]) > div[data-side] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%231f1f1f'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7.4%208.4%203%2012l4.4%203.6M16.6%208.4%2021%2012l-4.4%203.6M3.4%2012h17.2'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23ffffff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7.4%208.4%203%2012l4.4%203.6M16.6%208.4%2021%2012l-4.4%203.6M3.4%2012h17.2'/%3E%3C/g%3E%3C/svg%3E") 12 12, col-resize; /* dsw-raw D32 色图光标——data-URI 内色值不可令牌化（OS 单色光标缺陷缓解） */
+}
+
+/* ② 会话消息文字（亮：深形浅描边——IBeam，热点 = 笔画位 12 12） */
+html[data-windows-titlebar] [data-conversation-content] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%23ffffff'%20stroke-width='4'%20stroke-linecap='round'%3E%3Cpath%20d='M7.5%204.5h9M7.5%2019.5h9M12%204.5v15'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%231f1f1f'%20stroke-width='2'%20stroke-linecap='round'%3E%3Cpath%20d='M7.5%204.5h9M7.5%2019.5h9M12%204.5v15'/%3E%3C/g%3E%3C/svg%3E") 12 12, text; /* dsw-raw D32 色图光标——data-URI 内色值不可令牌化（OS 单色光标缺陷缓解） */
+}
+
+/* ② 会话消息文字（暗：浅形深描边） */
+html[data-windows-titlebar] body[data-ds-dark-theme] [data-conversation-content] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%231f1f1f'%20stroke-width='4'%20stroke-linecap='round'%3E%3Cpath%20d='M7.5%204.5h9M7.5%2019.5h9M12%204.5v15'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23ffffff'%20stroke-width='2'%20stroke-linecap='round'%3E%3Cpath%20d='M7.5%204.5h9M7.5%2019.5h9M12%204.5v15'/%3E%3C/g%3E%3C/svg%3E") 12 12, text; /* dsw-raw D32 色图光标——data-URI 内色值不可令牌化（OS 单色光标缺陷缓解） */
 }

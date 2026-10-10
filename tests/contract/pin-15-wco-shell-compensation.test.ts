@@ -10,7 +10,7 @@
 //     /regionArea 结构锚的来源）；
 //   - ui-plugin-manager / ui-settings-general：panellist 插件行与 sidebar.settings 设置行
 //     官方占用（D2 轨内 ≥4 官方图标的承载面）。
-// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31 验收的机械面）。
+// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31/D32 验收的机械面）。
 // hash 类名（pI_x6G_/hHd-Xa_）为构建期产物不逐字 pin——一律取 hash 无关的结构事实或
 // hash 容差正则；任一事实漂移（升级窗口）→ 本 pin 红 → wco.css 偏离块须显式对账。
 import { readFileSync } from 'node:fs'
@@ -105,7 +105,7 @@ describe('pin ⑮-5 官方行占用面（D2 轨内官方图标承载——插件
   })
 })
 
-describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2 规则面 + 记账注释的反向 pin）', () => {
+describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记账注释的反向 pin）', () => {
   const css = readFileSync(join(ROOT, 'apps/web/src/styles/wco.css'), 'utf8')
 
   /** 规则体提取（选择器含 needle 的声明块——压空白） */
@@ -161,6 +161,36 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2 规则面 + 记账注�
     expect(newSession).toContain('margin: 0 0 12px')
   })
 
+  it('D32 光标缓解两表面：handle col-resize 形 + 消息文字 IBeam 形（热点坐标 + 关键字降级链）', () => {
+    const handle = ruleOf('> div\\[data-side\\]')
+    expect(handle).toContain('cursor: url("data:image/svg+xml,')
+    expect(handle).toContain('12 12, col-resize')
+    const beam = ruleOf('html\\[data-windows-titlebar\\] \\[data-conversation-content\\]')
+    expect(beam).toContain('cursor: url("data:image/svg+xml,')
+    expect(beam).toContain('12 12, text')
+  })
+
+  it('D32 暗主题两套：浅形深描边（body[data-ds-dark-theme] scope——brand.css 先例）', () => {
+    const darkHandle = ruleOf(
+      'body\\[data-ds-dark-theme\\] div:has\\(> \\[data-shell-overlay\\]\\) > div\\[data-side\\]',
+    )
+    expect(darkHandle).toContain('cursor: url("data:image/svg+xml,')
+    expect(darkHandle).toContain('12 12, col-resize')
+    const darkBeam = ruleOf('body\\[data-ds-dark-theme\\] \\[data-conversation-content\\]')
+    expect(darkBeam).toContain('cursor: url("data:image/svg+xml,')
+    expect(darkBeam).toContain('12 12, text')
+  })
+
+  it('D32 记账：恰四条色图光标声明（两表面 × 亮/暗）——全带热点 + 降级链 + data-URI 色值行 dsw-raw 注记', () => {
+    const cursorLines = css.split('\n').filter((line) => line.includes('cursor: url('))
+    expect(cursorLines).toHaveLength(4)
+    for (const line of cursorLines) {
+      expect(line).toContain('dsw-raw')
+      expect(line).toContain('%23') // data-URI 内色值 URL 编码——无裸 # 十六进制（lint-tokens 裸色面零触发）
+      expect(line).toMatch(/ 12 12, (?:col-resize|text);/) // 热点坐标 + 关键字降级链（无图环境回退 OS 语义）
+    }
+  })
+
   it('非 WCO 零波及：全部规则锚定 html[data-windows-titlebar]（D2 收起态另锚 data-sidebar-collapsed）', () => {
     const rules = css.match(/^[^\s@][^{]*\{/gm) ?? []
     expect(rules.length).toBeGreaterThan(0)
@@ -177,6 +207,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2 规则面 + 记账注�
     expect(css).toContain('D1')
     expect(css).toContain('D2')
     expect(css).toContain('D31')
+    expect(css).toContain('D32')
     // 令牌 lint 口径（lint-tokens TOKEN_PROPS 面）：padding/margin/gap/radius 裸 px 行
     // 均须随行 dsw-raw 注记（59/18/10/6/36/12px 结构刻度族——width/height/z-index 非令牌面）
     const pxLines = css
