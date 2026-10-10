@@ -1,13 +1,14 @@
 // 3.3 单测 —— AC2/AC3/AC5 日志监听器（logs/{slug}.jsonl 唯一写者）：
 // 事件标准化（键序恒定）→ 归属三分支落盘（四例：任务容器/contextSlug/_pool/兜底）→
-// 落盘往返 + 串联读法（taskKey 过滤 → claim/spawn/submit/worker-done 会话链重组；
-// slug 过滤 = 容器全程）。Hard Rules 结构断言：行面只承载 digest（dispatchDigest），
+// 落盘往返 + 串联读法（taskKey 过滤 → claim/spawn/progress*/submit/worker-done 会话链重组；
+// slug 过滤 = 容器全程——async-dispatch SC-E：task-progress 全词表按序落档同一 jsonl）。
+// Hard Rules 结构断言：行面只承载 digest（dispatchDigest），
 // 无凭据字段、无 dispatchPrompt 全文；fail-soft（解析器/IO 异常不拖垮发射闭包）。
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { ForgePluginEvent } from '@dsh-forge/contracts'
+import type { ForgePluginEvent, TaskProgressPhase } from '@dsh-forge/contracts'
 import { createForgeEventBus } from './bus.js'
 import {
   attachForgeLogListener,
@@ -139,9 +140,16 @@ describe('createForgeLogListener / attachForgeLogListener（唯一写者 + 挂�
     expect(line).not.toContain('token')
   })
 
-  it('容器维度同文件（AC2）：同容器 claim/spawn/submit/worker-done 全程追加同一 logs/{slug}.jsonl', () => {
+  it('容器维度同文件（AC2 + async-dispatch SC-E）：同容器 claim/spawn/progress*/submit/worker-done 全程追加同一 logs/{slug}.jsonl——task-progress 全词表按序落档', () => {
     const { bus } = rig()
     const taskKey = 'feat-same/3.3'
+    const progress = (ts: number, phase: TaskProgressPhase): ForgePluginEvent => ({
+      ts,
+      sessionId: 'dispatcher-1',
+      slug: 'feat-same',
+      type: 'task-progress',
+      payload: { taskKey, phase, ts },
+    })
     bus.emit(claimed(taskKey, 'dispatcher-1'))
     bus.emit({
       ts: 11,
@@ -150,25 +158,50 @@ describe('createForgeLogListener / attachForgeLogListener（唯一写者 + 挂�
       type: 'task-spawned',
       payload: { taskKey, workerSessionId: 'worker-7', toolFilter: [], model: 'm' },
     })
+    // 后台径双写留档通道（async-dispatch §4.3）：job 启动期三里程碑
+    bus.emit(progress(12, 'claimed'))
+    bus.emit(progress(13, 'spawned'))
+    bus.emit(progress(14, 'running'))
     bus.emit({
-      ts: 12,
+      ts: 15,
       sessionId: 'worker-7',
       slug: 'feat-same',
       type: 'task-submitted',
       payload: { taskKey, outcome: 'success' },
     })
+    // 结算期两里程碑（settled:reading 由结算读前投影、done:* 由 JobOutcome 定型时投影）
+    bus.emit(progress(16, 'settled:reading'))
+    bus.emit(progress(17, 'done:success'))
     bus.emit({
-      ts: 13,
+      ts: 18,
       sessionId: 'dispatcher-1',
       slug: 'feat-same',
       type: 'task-worker-done',
       payload: { taskKey, workerSessionId: 'worker-7', outcome: 'success', durationMs: 42_000 },
     })
     const events = readForgeEventLog(forgeLogFileOf(container, 'feat-same'))
-    expect(events.map((e) => e.type)).toEqual(['task-claimed', 'task-spawned', 'task-submitted', 'task-worker-done'])
+    expect(events.map((e) => e.type)).toEqual([
+      'task-claimed',
+      'task-spawned',
+      'task-progress',
+      'task-progress',
+      'task-progress',
+      'task-submitted',
+      'task-progress',
+      'task-progress',
+      'task-worker-done',
+    ])
+    // SC-E 进度词表全程落档：phase 序 = claimed → spawned → running → settled:reading → done:success
+    expect(events.filter((e) => e.type === 'task-progress').map((e) => (e.payload as { phase: string }).phase)).toEqual([
+      'claimed',
+      'spawned',
+      'running',
+      'settled:reading',
+      'done:success',
+    ])
   })
 
-  it('落盘往返 + 串联读法（AC5）：taskKey 过滤 → 会话链重组；slug 过滤 = 容器全程（含 no-ready-task）', () => {
+  it('落盘往返 + 串联读法（AC5）：taskKey 过滤 → 会话链重组（含 task-progress）；slug 过滤 = 容器全程（含 no-ready-task）', () => {
     const { bus } = rig()
     const taskKey = 'feat-chain/4.2'
     bus.emit(claimed(taskKey, 'dispatcher-1'))
@@ -186,15 +219,30 @@ describe('createForgeLogListener / attachForgeLogListener（唯一写者 + 挂�
       type: 'task-submitted',
       payload: { taskKey, outcome: 'success', commitHash: 'abcd1234' },
     })
+    // 结算期进度留档（后台径双写——task-progress 进链但不打断会话链重组）
     bus.emit({
       ts: 23,
+      sessionId: 'dispatcher-1',
+      slug: 'feat-chain',
+      type: 'task-progress',
+      payload: { taskKey, phase: 'settled:reading', ts: 23 },
+    })
+    bus.emit({
+      ts: 24,
+      sessionId: 'dispatcher-1',
+      slug: 'feat-chain',
+      type: 'task-progress',
+      payload: { taskKey, phase: 'done:success', ts: 24 },
+    })
+    bus.emit({
+      ts: 25,
       sessionId: 'dispatcher-1',
       slug: 'feat-chain',
       type: 'task-worker-done',
       payload: { taskKey, workerSessionId: 'worker-9', outcome: 'success', durationMs: 3_600_000 },
     })
     bus.emit({
-      ts: 24,
+      ts: 26,
       sessionId: 'dispatcher-1',
       slug: 'feat-chain',
       type: 'no-ready-task',
@@ -202,17 +250,32 @@ describe('createForgeLogListener / attachForgeLogListener（唯一写者 + 挂�
     })
     // 落盘往返：读回 = 标准化事件（含归属判定产物 slug）
     const events = readForgeEventLog(forgeLogFileOf(container, 'feat-chain'))
-    expect(events).toHaveLength(5)
-    // 串联读法①：taskKey 过滤 → 四事件会话链（claim/spawn = dispatcher；submit = worker；worker-done = dispatcher）
+    expect(events).toHaveLength(7)
+    // 串联读法①：taskKey 过滤 → 六行任务链（claim/spawn/progress = dispatcher；submit = worker；
+    // settled:reading/done:* progress = dispatcher；worker-done = dispatcher）
     const chain = events.filter((e) => (e.payload as { taskKey?: string }).taskKey === taskKey)
-    expect(chain.map((e) => e.type)).toEqual(['task-claimed', 'task-spawned', 'task-submitted', 'task-worker-done'])
-    expect(chain.map((e) => e.sessionId)).toEqual(['dispatcher-1', 'dispatcher-1', 'worker-9', 'dispatcher-1'])
+    expect(chain.map((e) => e.type)).toEqual([
+      'task-claimed',
+      'task-spawned',
+      'task-submitted',
+      'task-progress',
+      'task-progress',
+      'task-worker-done',
+    ])
+    expect(chain.map((e) => e.sessionId)).toEqual([
+      'dispatcher-1',
+      'dispatcher-1',
+      'worker-9',
+      'dispatcher-1',
+      'dispatcher-1',
+      'dispatcher-1',
+    ])
     // 对账锚闭环：spawn 的 workerSessionId = submit 行的执行会话 id
     const spawned = chain[1]?.payload as { workerSessionId: string }
     expect(spawned.workerSessionId).toBe('worker-9')
     expect(chain[2]?.sessionId).toBe(spawned.workerSessionId)
     // 串联读法②：slug 过滤 = 容器全程（含无任务的收工信号 no-ready-task）
-    expect(events.filter((e) => e.slug === 'feat-chain')).toHaveLength(5)
+    expect(events.filter((e) => e.slug === 'feat-chain')).toHaveLength(7)
   })
 
   it('挂接缝退订（AC4 挂接缝）：detach 后 emit 不再落盘', () => {

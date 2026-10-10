@@ -16,7 +16,8 @@ import type {
   TaskType,
 } from '@dsh-forge/contracts'
 import { WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
-import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, ToolExecFace } from '../faces.js'
+import { adaptDispatchJobs } from '../faces.js'
+import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, DispatchJobsRegistryFace, ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { FORGE_TOOL_NAMES } from './index.js'
 import {
@@ -867,6 +868,88 @@ describe('后台径进度双写（§4.2①/§4.3——appendLog + task-progress 
     }
     // 前台零污染：本会话此前无 task-progress 之外的源——全事件序即证
     expect(h.events[0]!.type).toBe('task-claimed')
+  })
+})
+
+// ─────────────────────────── 后台径 ring 通道值域（负向 pin 生产者面——async-dispatch §6/F4） ───────────────────────────
+
+describe('后台径 ring 通道值域（负向 pin 生产者面——appendLog 单点硬编码经 adaptDispatchJobs 全链）', () => {
+  /** 原始环捕获注册表（上游注册表结构面——append(text, options) 原样记账，不经任何收窄） */
+  function ringCaptureRegistry(): {
+    registry: DispatchJobsRegistryFace
+    ring: { text: string; channel: string | undefined }[]
+    hooks: DispatchJobHooks[]
+  } {
+    const ring: { text: string; channel: string | undefined }[] = []
+    const hooks: DispatchJobHooks[] = []
+    let seq = 0
+    const registry: DispatchJobsRegistryFace = {
+      start(spec) {
+        seq += 1
+        hooks.push(
+          spec.run({
+            append: (text, options) => {
+              ring.push({ text, channel: options?.channel })
+            },
+          }),
+        )
+        return `forge-dispatch-${seq}`
+      },
+    }
+    return { registry, ring, hooks }
+  }
+
+  it('forge-dispatch job 环块 channel 值域 ⊆ {"log"}；模型消费面投影零进度字节（上游滤 log 行为钉死于 tests/contract/pin-16）', async () => {
+    const { registry, ring, hooks } = ringCaptureRegistry()
+    const h = harness({ jobs: adaptDispatchJobs(registry) })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.release({ stopReason: 'completed', output: 'done' })
+    await hooks[0]!.done
+
+    // 值域断言：五里程碑环块 channel 全 = 'log'——channel 值调用面不可达（DispatchJobRunHandle
+    // 唯一成员 appendLog），单点硬编码于 faces.ts adaptDispatchJobs，拼错通道结构性不可能
+    expect(ring).toHaveLength(5)
+    expect(new Set(ring.map((c) => c.channel))).toEqual(new Set(['log']))
+    // 里程碑行齐全（观察者面 = jobs 面板 live 流全程可见，不受 outputLimitBytes 截留）
+    const joined = ring.map((c) => c.text).join('\n')
+    expect(joined).toContain('claimed feat-x/2.5')
+    expect(joined).toContain('spawned worker worker-bg')
+    expect(joined).toContain('worker executing')
+    expect(joined).toContain('reading settlement')
+    expect(joined).toContain('settlement ready')
+    // 模型消费面投影（上游 renderModelDelta 同判别：channel !== 'log' 可见）= 零字节
+    const modelFace = ring.filter((c) => c.channel !== 'log').map((c) => c.text).join('')
+    expect(modelFace).toBe('')
+  })
+
+  it('blocked 结算同域：done:blocked 里程碑环块亦全 log（值域断言与结算解耦）', async () => {
+    const { registry, ring, hooks } = ringCaptureRegistry()
+    const h = harness({ jobs: adaptDispatchJobs(registry) })
+    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', digest: 'd42', reclaimed: false })
+    h.setQuery({
+      task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'missing API key', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' }],
+    })
+    const handle = controlledHandle('worker-bg')
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.release({ stopReason: 'completed', output: 'done' })
+    await hooks[0]!.done
+
+    expect(ring.length).toBeGreaterThanOrEqual(5)
+    expect(new Set(ring.map((c) => c.channel))).toEqual(new Set(['log']))
+    expect(ring.at(-1)?.text).toContain('settlement ready')
+    const modelFace = ring.filter((c) => c.channel !== 'log').map((c) => c.text).join('')
+    expect(modelFace).toBe('')
   })
 })
 
