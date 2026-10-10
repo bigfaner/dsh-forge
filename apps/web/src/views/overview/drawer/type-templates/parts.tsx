@@ -2,6 +2,7 @@
 // 子标题 tc-k（次色加粗）→ 组标签 scope-k（三级色加粗）→ 内容行；键标签一并加粗）。
 // 官方件复用优先：无对应官方原子时自绘吃令牌（样式归 ../drawer.css——类前缀 dswf-td-*）。
 import type { ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskDocRef } from '@dsh-forge/contracts'
 
 /** 子标题（目标/结果/参考文档/改动范围/验收标准/症状/命令…——12/600 次色阶梯的类位） */
@@ -92,18 +93,18 @@ export function RefChips({
         })
         .map((ref) =>
           ref.resolved ? (
-            <button
-              type="button"
-              className="dswf-td-ref is-link"
-              key={ref.docRel}
-              data-dswf-td-ref={ref.docRel}
-              title={ref.docRel}
-              onClick={() => {
-                onOpenDoc(ref.docRel) // 抽屉保持——开 tab 不关抽屉（调用方 dock 语义）
-              }}
-            >
-              {ref.docRel}
-            </button>
+            <Tooltip key={ref.docRel} label={ref.docRel} portal>
+              <button
+                type="button"
+                className="dswf-td-ref is-link"
+                data-dswf-td-ref={ref.docRel}
+                onClick={() => {
+                  onOpenDoc(ref.docRel) // 抽屉保持——开 tab 不关抽屉（调用方 dock 语义）
+                }}
+              >
+                {ref.docRel}
+              </button>
+            </Tooltip>
           ) : (
             <span className="dswf-td-ref is-muted" key={ref.docRel} data-dswf-td-ref-unresolved={ref.docRel}>
               {ref.docRel}

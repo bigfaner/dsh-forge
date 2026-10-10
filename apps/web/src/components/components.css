@@ -87,3 +87,13 @@
 .dswf-mode-chip-dot[data-mode='blitz'] {
   color: var(--dsw-alias-state-warn-primary);
 }
+
+/* D30 官方 Tooltip 锚定包裹（禁用态按钮吞指针事件——气泡锚 = 包裹 span 矩形；
+   禁用钮 pointer-events 让事后命中落包裹层，其 mouseenter 触发官方气泡） */
+.dswf-tipwrap {
+  display: inline-flex;
+}
+
+.dswf-tipwrap > :disabled {
+  pointer-events: none;
+}

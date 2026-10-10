@@ -4,6 +4,7 @@
 // 改动范围预期 = vars.scope 声明；实际 = detail.actualFiles（files_json → commit 查找回填，
 // git 失败回退记录语由 core 填入——单元素审计行直接呈现）。
 import type { ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskDetail } from '@dsh-forge/contracts'
 import { actualScopeOf, isTerminalStatus, scopeDiff, varsList } from '../detail-model.js'
 import { Checklist, RefChips, SubTitle } from './parts.js'
@@ -21,9 +22,10 @@ function ScopeDual({ detail, expected }: { readonly detail: TaskDetail; readonly
           <span className="dswf-td-scope-k">{`预期(${expected.length})`}</span>
           {expected.map((file) => (
             <div className="dswf-td-file-row" key={file}>
-              <span className="dswf-td-file" title={file}>
-                {file}
-              </span>
+              {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗滚动容器/层叠上下文） */}
+              <Tooltip label={file} portal>
+                <span className="dswf-td-file">{file}</span>
+              </Tooltip>
               {actual.kind === 'files' ? (
                 actual.files.includes(file) ? (
                   <span className="dswf-td-file-badge is-hit">✓ 已提交</span>
@@ -49,9 +51,9 @@ function ScopeDual({ detail, expected }: { readonly detail: TaskDetail; readonly
               ) : null}
               {actual.files.map((file) => (
                 <div className="dswf-td-file-row" key={file}>
-                  <span className="dswf-td-file" title={file}>
-                    {file}
-                  </span>
+                  <Tooltip label={file} portal>
+                    <span className="dswf-td-file">{file}</span>
+                  </Tooltip>
                   {expectedSet.has(file) ? null : <span className="dswf-td-file-badge is-extra">+ 计划外</span>}
                 </div>
               ))}

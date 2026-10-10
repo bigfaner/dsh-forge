@@ -83,7 +83,7 @@ describe('五态 chips 行（AC4 渲染面）', () => {
     expect(markup).toContain('>2</span>') // under-review 计数
   })
 
-  it('0 计数 chip disabled（不可点出空态）+ 淡化类 + 悬停说明', () => {
+  it('0 计数 chip disabled（不可点出空态）+ 淡化类 + 悬停说明（官方 Tooltip label——D30 原生 title 退役）', () => {
     const markup = renderToStaticMarkup(
       <ProposalStatusChips counts={COUNTS} active={NONE} onToggle={() => {}} />,
     )
@@ -94,7 +94,7 @@ describe('五态 chips 行（AC4 渲染面）', () => {
     }
     expect(chipOf('draft')).toContain('disabled')
     expect(chipOf('draft')).toContain('is-zero')
-    expect(chipOf('draft')).toContain('title="无此状态提案"')
+    expect(chipOf('draft')).not.toContain('title=') // D30：「无此状态提案」归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(chipOf('accepted')).not.toContain('disabled')
   })
 

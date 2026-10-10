@@ -5,12 +5,12 @@
 // asTaskViewMode 菜单 id 守卫 + VIEW_DROPDOWN_ITEMS 选项数据直测。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ViewDropdown, VIEW_DROPDOWN_ITEMS, VIEW_DROPDOWN_TITLE, asTaskViewMode } from './ViewDropdown.js'
+import { ViewDropdown, VIEW_DROPDOWN_ITEMS, asTaskViewMode } from './ViewDropdown.js'
 
 const NOOP = (): void => {}
 
 describe('ViewDropdown 锚钮（AC1——当前视图直出 + ▾）', () => {
-  it('当前视图直出（视图：列表/DAG/泳道三态）+ ▾ + aria-haspopup/收拢态 + 固定 tooltip + 视图锚', () => {
+  it('当前视图直出（视图：列表/DAG/泳道三态）+ ▾ + aria-haspopup/收拢态 + 固定 label（官方 Tooltip——D30 原生 title 退役）+ 视图锚', () => {
     const labels = { list: '列表', dag: 'DAG', swim: '泳道' } as const
     for (const view of ['list', 'dag', 'swim'] as const) {
       const markup = renderToStaticMarkup(
@@ -20,7 +20,7 @@ describe('ViewDropdown 锚钮（AC1——当前视图直出 + ▾）', () => {
       expect(markup).toContain('▾')
       expect(markup).toContain('aria-haspopup="menu"')
       expect(markup).toContain('aria-expanded="false"')
-      expect(markup).toContain(VIEW_DROPDOWN_TITLE)
+      expect(markup).not.toContain('title=') // D30：VIEW_DROPDOWN_TITLE 归官方 Tooltip label（结构 pin tests/structure/d30）
       expect(markup).toContain(`data-dswf-tt-viewbtn="${view}"`)
     }
   })

@@ -3,7 +3,7 @@
 // （同 ⋯ 菜单唯一正门不分叉）。渲染面 = renderToStaticMarkup（仓库形制）；点击接线归 4.6 装配 + e2e。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MODE_CHIP_LABELS, MODE_CHIP_UNMARKED_TITLE, ModeChip } from './ModeChip.js'
+import { MODE_CHIP_LABELS, ModeChip } from './ModeChip.js'
 
 describe('ModeChip 三态（AC1）', () => {
   it('远征：蓝点 + 「远征」标签（data-mode 承载点色语义）', () => {
@@ -20,23 +20,22 @@ describe('ModeChip 三态（AC1）', () => {
     expect(markup).toContain(`>${MODE_CHIP_LABELS.blitz}</span>`)
   })
 
-  it('未标记：中性不可点（disabled）+ 悬停「扫描吸收的旧提案无溯源」+ 无点', () => {
+  it('未标记：中性不可点（disabled）+ 悬停「扫描吸收的旧提案无溯源」（官方 Tooltip label——D30 原生 title 退役）+ 无点', () => {
     const markup = renderToStaticMarkup(<ModeChip mode={undefined} onOpenChangeMode={() => {}} />)
     expect(markup).toContain('data-dswf-mode-chip="unmarked"')
     expect(markup).toContain('disabled')
-    expect(markup).toContain(`title="${MODE_CHIP_UNMARKED_TITLE}"`)
+    expect(markup).not.toContain('title=') // D30：原生 title 退役——悬停文案归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(markup).toContain('未标记')
     expect(markup).not.toContain('data-mode=') // 无点（中性纯文案占位）
   })
 
-  it('有溯源可点 = 模式更改快捷入口（title 指明唯一正门；无回调 = 只读 disabled）', () => {
+  it('有溯源可点 = 模式更改快捷入口（label 指明唯一正门——官方 Tooltip；无回调 = 只读 disabled）', () => {
     const clickable = renderToStaticMarkup(<ModeChip mode="expedition" onOpenChangeMode={() => {}} />)
     expect(clickable).not.toContain('disabled')
-    expect(clickable).toContain('唯一正门')
+    expect(clickable).not.toContain('title=') // D30：label 归官方 Tooltip（MODE_CHIP_OPEN_TITLE/UNMARKED 单源分支——结构 pin）
 
     const readonly = renderToStaticMarkup(<ModeChip mode="expedition" />)
     expect(readonly).toContain('disabled') // 只读呈现（UF-4 feature 行恒远征消费面）
-    expect(readonly).not.toContain('唯一正门')
   })
 
   it('className 透传（布局类名附加）', () => {

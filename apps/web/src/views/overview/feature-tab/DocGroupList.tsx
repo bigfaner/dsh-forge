@@ -10,6 +10,7 @@
 // 组件半身（Build）：onOpenDoc 上抛 relPath 原始值（dock 开 tab——4.6 接线）。
 import type { ReactNode } from 'react'
 import type { DocKind } from '@dsh-forge/contracts'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DOC_GROUP_ORDER, DOC_KIND_GROUP_LABELS, type DocGroupName } from './doc-kind-labels.js'
 import './feature-tab.css'
 
@@ -93,25 +94,25 @@ export function DocGroupList({ featureSlug, docs, onOpenDoc }: DocGroupListProps
         <div key={group.group} className="dswf-ov-dgroup" data-dswf-ov-dgroup={group.group}>
           <div className="dswf-ov-dgroup-title">{`${group.group}（${group.docs.length}）`}</div>
           {group.docs.map((doc) => (
-            <button
-              type="button"
-              className="dswf-ov-drow"
-              key={`${doc.docKind}:${doc.relPath}`}
-              data-dswf-ov-doc={doc.relPath}
-              title={doc.relPath}
-              onClick={() => {
-                onOpenDoc(doc.relPath)
-              }}
-            >
-              <DocFileIcon />
-              <span className="dswf-ov-drow-path">{docPathInFeature(doc.relPath, featureSlug)}</span>
-              {doc.status === undefined ? null : (
-                <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>
-              )}
-              <span className="dswf-ov-drow-arrow" aria-hidden="true">
-                ›
-              </span>
-            </button>
+            <Tooltip key={`${doc.docKind}:${doc.relPath}`} label={doc.relPath} portal>
+              <button
+                type="button"
+                className="dswf-ov-drow"
+                data-dswf-ov-doc={doc.relPath}
+                onClick={() => {
+                  onOpenDoc(doc.relPath)
+                }}
+              >
+                <DocFileIcon />
+                <span className="dswf-ov-drow-path">{docPathInFeature(doc.relPath, featureSlug)}</span>
+                {doc.status === undefined ? null : (
+                  <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>
+                )}
+                <span className="dswf-ov-drow-arrow" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            </Tooltip>
           ))}
         </div>
       ))}

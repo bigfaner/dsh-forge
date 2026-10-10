@@ -11,7 +11,7 @@ import {
   type TaskCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { Button, Menu, Tag, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Menu, Tag, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { taskKeyLabel } from '../drawer/detail-model.js'
 import { listGroupsOf, taskStatusTagTone, taskSubRowParts } from './task-tab-model.js'
 import './task-tab.css'
@@ -98,12 +98,13 @@ function TaskItem({
         : {})}
     >
       <div className="dswf-tt-row">
-        <span className="dswf-tt-key" title={key}>
-          {card.localId}
-        </span>
-        <span className="dswf-tt-title" title={card.title}>
-          {card.title}
-        </span>
+        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸列表滚动容器） */}
+        <Tooltip label={key} portal>
+          <span className="dswf-tt-key">{card.localId}</span>
+        </Tooltip>
+        <Tooltip label={card.title} portal>
+          <span className="dswf-tt-title">{card.title}</span>
+        </Tooltip>
         <Tag tone={taskStatusTagTone(card.taskStatus)} className="dswf-tt-tag">
           {TASK_STATUS_LABELS[card.taskStatus].zh}
         </Tag>
@@ -133,29 +134,32 @@ function TaskItem({
               })
             }}
             anchor={
-              <Button
-                variant="toolbar"
-                size="sm"
-                className="dswf-tt-more"
-                data-dswf-tt-more={card.taskId}
-                title="行操作"
-                aria-label="行操作"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onMenuOpenChange(menuOpen ? null : card.taskId)
-                }}
-              >
-                ⋯
-              </Button>
+              <Tooltip label="行操作" portal>
+                <Button
+                  variant="toolbar"
+                  size="sm"
+                  className="dswf-tt-more"
+                  data-dswf-tt-more={card.taskId}
+                  aria-label="行操作"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onMenuOpenChange(menuOpen ? null : card.taskId)
+                  }}
+                >
+                  ⋯
+                </Button>
+              </Tooltip>
             }
           />
         ) : null}
       </div>
-      <div className="dswf-tt-sub" data-dswf-tt-sub={card.taskId} title={sub}>
-        {sub}
-      </div>
+      <Tooltip label={sub} portal>
+        <div className="dswf-tt-sub" data-dswf-tt-sub={card.taskId}>
+          {sub}
+        </div>
+      </Tooltip>
     </div>
   )
 }

@@ -7,7 +7,7 @@
 // （入口 = 抽屉「转移状态…」与 ⋯ 菜单回调；接线在 4.1）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskSnapshot, type TaskStatus, type TransitionTaskInput } from '@dsh-forge/contracts'
-import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { RpcClientError } from '../../../rpc/errors.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../../rpc/index.js'
@@ -210,9 +210,10 @@ export function TransitionDialogBody({
       <div className="dswf-td-tr" role="dialog" aria-modal="true" aria-label="转移状态" data-dswf-td-tr-dialog="">
         <div className="dswf-td-tr-head">
           <span className="dswf-td-tr-title">转移状态</span>
-          <span className="dswf-td-tr-key" title={taskKeyLabel(task.slug, task.localId)}>
-            {taskKeyLabel(task.slug, task.localId)}
-          </span>
+          {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸模态遮罩层叠上下文） */}
+          <Tooltip label={taskKeyLabel(task.slug, task.localId)} portal>
+            <span className="dswf-td-tr-key">{taskKeyLabel(task.slug, task.localId)}</span>
+          </Tooltip>
         </div>
         <p className="dswf-td-tr-sub">from ≠ to 任意 · 原因必填 · 留审计记录</p>
         <div className="dswf-td-tr-row">
@@ -271,9 +272,11 @@ export function TransitionDialogBody({
           </p>
         ) : null}
         <div className="dswf-td-tr-actions">
-          <Button variant="ghost" size="sm" className="dswf-td-tr-cancel" data-dswf-td-tr-cancel="" title="关闭（Esc）" onClick={onCancel}>
-            取消
-          </Button>
+          <Tooltip label="关闭（Esc）" portal>
+            <Button variant="ghost" size="sm" className="dswf-td-tr-cancel" data-dswf-td-tr-cancel="" onClick={onCancel}>
+              取消
+            </Button>
+          </Tooltip>
           <Button variant="primary" size="sm" className="dswf-td-tr-confirm" data-dswf-td-tr-confirm="" disabled={submitting} onClick={onConfirm}>
             确认转移
           </Button>

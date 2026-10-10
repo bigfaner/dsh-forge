@@ -12,6 +12,7 @@
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——本族组件零任务行/详情动作。
 import type { ReactNode } from 'react'
 import type { Mode, SessionTaskLinkCard, TaskStats } from '@dsh-forge/contracts'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DISPATCH_COMMAND_PREFIX } from '../message-format.js'
 import { hasNonTerminalTask } from './terminal-state.js'
 import './task-tab.css'
@@ -89,15 +90,22 @@ export function DispatchButton({ stats, onDispatch }: DispatchButtonProps): Reac
   const pending = stats === undefined
   const dispatchable = stats !== undefined && hasNonTerminalTask(stats)
   return (
-    <button
-      type="button"
-      className={dispatchable ? 'dswf-tt-dispatch is-on' : 'dswf-tt-dispatch is-off'}
-      data-dswf-tt-dispatch={dispatchable ? 'on' : 'off'}
-      disabled={!dispatchable}
-      title={dispatchable ? DISPATCH_ACTIVE_TITLE : pending ? DISPATCH_PENDING_TITLE : DISPATCH_DISABLED_TITLE}
-      onClick={dispatchable ? onDispatch : undefined}
+    // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
+    <Tooltip
+      label={dispatchable ? DISPATCH_ACTIVE_TITLE : pending ? DISPATCH_PENDING_TITLE : DISPATCH_DISABLED_TITLE}
+      portal
     >
-      派发
-    </button>
+      <span className="dswf-tipwrap">
+        <button
+          type="button"
+          className={dispatchable ? 'dswf-tt-dispatch is-on' : 'dswf-tt-dispatch is-off'}
+          data-dswf-tt-dispatch={dispatchable ? 'on' : 'off'}
+          disabled={!dispatchable}
+          onClick={dispatchable ? onDispatch : undefined}
+        >
+          派发
+        </button>
+      </span>
+    </Tooltip>
   )
 }

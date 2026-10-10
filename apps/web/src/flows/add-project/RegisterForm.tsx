@@ -15,7 +15,7 @@
 // （表单预检位纯读）；疑似移动（ERR_SUSPECTED_MOVE）→ 错误条 + 手工指引留场 + 确认
 // 禁用（拒绝零副作用），重选目录复检通过即恢复；Hard Rules：仅采集与校验，零注册调用零补偿。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StateChip } from '../../components/index.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
@@ -165,16 +165,20 @@ export function RegisterFormView({
           onEdit(field, event.target.value)
         }
   const browseBtn = (target: Exclude<BrowseTarget, 'workspace'>): ReactNode => (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="dswf-rf-sidebtn"
-      title="经文件浏览器选择目录"
-      disabled={browseBusy}
-      onClick={onBrowse === undefined ? undefined : () => { onBrowse(target) }}
-    >
-      浏览…
-    </Button>
+    // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
+    <Tooltip label="经文件浏览器选择目录" portal>
+      <span className="dswf-tipwrap">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="dswf-rf-sidebtn"
+          disabled={browseBusy}
+          onClick={onBrowse === undefined ? undefined : () => { onBrowse(target) }}
+        >
+          浏览…
+        </Button>
+      </span>
+    </Tooltip>
   )
   return (
     <div className="dswf-rf" data-dswf-rf="form">
@@ -183,8 +187,18 @@ export function RegisterFormView({
         label="工作区目录（文件浏览器选定）"
         labelRow
         chip={workspaceRegistered ? <StateChip status="已注册" className="dswf-rf-wsreg" /> : undefined}
-        input={<input id="dswf-rf-ws" className="dswf-rf-input" data-dswf-rf-ws type="text" value={values.workspaceDir} readOnly title={values.workspaceDir} />}
-        side={<Button variant="ghost" size="sm" className="dswf-rf-sidebtn" title="重开文件浏览器换选工作区（未手改字段随新工作区重构）" disabled={browseBusy} onClick={onRepick}>重新选择</Button>}
+        input={
+          <Tooltip label={values.workspaceDir} portal>
+            <input id="dswf-rf-ws" className="dswf-rf-input" data-dswf-rf-ws type="text" value={values.workspaceDir} readOnly />
+          </Tooltip>
+        }
+        side={
+          <Tooltip label="重开文件浏览器换选工作区（未手改字段随新工作区重构）" portal>
+            <span className="dswf-tipwrap">
+              <Button variant="ghost" size="sm" className="dswf-rf-sidebtn" disabled={browseBusy} onClick={onRepick}>重新选择</Button>
+            </span>
+          </Tooltip>
+        }
         hint={workspaceRegistered ? (
           <p className="dswf-rf-hint" data-dswf-rf-registered>该目录已注册——「确认」将幂等返回既有项目（挂接既有工作区，不重复登记）。</p>
         ) : undefined}

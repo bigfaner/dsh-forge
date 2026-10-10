@@ -81,9 +81,10 @@ describe('ListViewBody（AC1 两行布局）', () => {
     expect(html).toContain('dswf-tt-item is-open')
   })
 
-  it('全键 title（slug/localId 自然键呈现约定——身份双轨）', () => {
+  it('全键 = 官方 Tooltip label（slug/localId 自然键呈现约定——身份双轨；D30 原生 title 退役）', () => {
     const html = renderToStaticMarkup(<ListViewBody {...base} cards={[cardFixture()]} onOpenTask={NOOP} />)
-    expect(html).toContain('title="m2-pipeline/2.4')
+    expect(html).not.toContain('title=') // D30：全键 label 归官方 Tooltip（结构 pin tests/structure/d30）
+    expect(html).toContain('>2.4</span>') // localId 键 pill 内联
   })
 })
 

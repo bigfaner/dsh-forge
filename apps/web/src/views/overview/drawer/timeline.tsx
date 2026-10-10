@@ -4,6 +4,7 @@
 // submit 记录，标签换「评估」+ 🔑 主会话织入）。节点分色：提交绿/领取蓝/阻塞琥珀/恢复绿/
 // 人工转移蓝环（类位吃状态令牌——drawer.css）。
 import type { ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
 import { isoTimeLabelZh } from '../../../components/time-label.js'
 import { evalScoreOf, gateSummary, latestSubmitGateOf, taskKeyLabel, varsText } from './detail-model.js'
@@ -99,17 +100,19 @@ function SessionPill({
   const label = `${session.source === 'link' ? '派发' : '执行'}⟞ ${session.sessionId}`
   if (onOpenSession === undefined) return <span className="dswf-td-sess">{label}</span>
   return (
-    <button
-      type="button"
-      className="dswf-td-sess is-link"
-      data-dswf-td-sess={session.sessionId}
-      title="跳转会话"
-      onClick={() => {
-        onOpenSession(session.sessionId)
-      }}
-    >
-      {label}
-    </button>
+    // D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗滚动容器/层叠上下文）
+    <Tooltip label="跳转会话" portal>
+      <button
+        type="button"
+        className="dswf-td-sess is-link"
+        data-dswf-td-sess={session.sessionId}
+        onClick={() => {
+          onOpenSession(session.sessionId)
+        }}
+      >
+        {label}
+      </button>
+    </Tooltip>
   )
 }
 
@@ -327,9 +330,9 @@ export function TimelineEvents({
         >
           <div className="dswf-td-ev-head">
             <span className="dswf-td-ev-verb">{recordVerbLabel(record.verb, detail.taskType)}</span>
-            <span className="dswf-td-ev-at" title={record.createdAt}>
-              {isoTimeLabelZh(record.createdAt, now)}
-            </span>
+            <Tooltip label={record.createdAt} portal>
+              <span className="dswf-td-ev-at">{isoTimeLabelZh(record.createdAt, now)}</span>
+            </Tooltip>
           </div>
           {eventWeaves(record, detail, onOpenSession)}
         </div>

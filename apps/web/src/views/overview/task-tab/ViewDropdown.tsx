@@ -5,7 +5,7 @@
 // 锚钮 = 当前视图直出 + ▾）。开合受控（open/onOpenChange——4.6 工具栏接线持有，
 // feature pill Menu 同形制）。工具栏落位（pill 右侧 + 诊断/派发右簇）= 4.6。
 import type { ReactNode } from 'react'
-import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_VIEWS, type TaskViewMode } from './task-tab-model.js'
 import './task-tab.css'
 
@@ -52,22 +52,23 @@ export function ViewDropdown({ view, open, onViewChange, onOpenChange }: ViewDro
         if (next !== undefined) onViewChange(next)
       }}
       anchor={
-        <button
-          type="button"
-          className="dswf-tt-viewbtn"
-          data-dswf-tt-viewbtn={view}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          title={VIEW_DROPDOWN_TITLE}
-          onClick={() => {
-            onOpenChange(!open)
-          }}
-        >
-          {`视图：${current}`}
-          <span className="dswf-tt-viewbtn-caret" aria-hidden="true">
-            ▾
-          </span>
-        </button>
+        <Tooltip label={VIEW_DROPDOWN_TITLE} portal>
+          <button
+            type="button"
+            className="dswf-tt-viewbtn"
+            data-dswf-tt-viewbtn={view}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => {
+              onOpenChange(!open)
+            }}
+          >
+            {`视图：${current}`}
+            <span className="dswf-tt-viewbtn-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+        </Tooltip>
       }
     />
   )

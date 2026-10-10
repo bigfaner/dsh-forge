@@ -7,6 +7,7 @@
 // 纪律：components 零业务语义（tests/structure/web-shell pin：禁 RPC / contracts 引入）
 // ——模式双值与标签本地字面量声明（与 contracts MODES 同词汇，结构兼容直喂 proposals.mode）。
 import type { ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** 模式双值（contracts MODES 同词汇——基础层零 contracts 引入 pin 的本地声明面） */
 export type ModeChipMode = 'expedition' | 'blitz'
@@ -43,24 +44,31 @@ export function ModeChip({ mode, onOpenChangeMode, className }: ModeChipProps): 
     .filter(Boolean)
     .join(' ')
   return (
-    <button
-      type="button"
-      className={cls}
-      data-dswf-mode-chip={mode ?? 'unmarked'}
-      disabled={!clickable}
-      title={
+    // D30：原生 title 退役——悬停说明走官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
+    <Tooltip
+      label={
         unmarked
           ? MODE_CHIP_UNMARKED_TITLE
           : clickable
             ? MODE_CHIP_OPEN_TITLE
             : `模式溯源：${MODE_CHIP_LABELS[mode]}`
       }
-      onClick={clickable ? onOpenChangeMode : undefined}
+      portal
     >
-      {unmarked ? null : <span className="dswf-mode-chip-dot" data-mode={mode} aria-hidden="true" />}
-      <span className="dswf-mode-chip-label">
-        {unmarked ? MODE_CHIP_UNMARKED_LABEL : MODE_CHIP_LABELS[mode]}
+      <span className="dswf-tipwrap">
+        <button
+          type="button"
+          className={cls}
+          data-dswf-mode-chip={mode ?? 'unmarked'}
+          disabled={!clickable}
+          onClick={clickable ? onOpenChangeMode : undefined}
+        >
+          {unmarked ? null : <span className="dswf-mode-chip-dot" data-mode={mode} aria-hidden="true" />}
+          <span className="dswf-mode-chip-label">
+            {unmarked ? MODE_CHIP_UNMARKED_LABEL : MODE_CHIP_LABELS[mode]}
+          </span>
+        </button>
       </span>
-    </button>
+    </Tooltip>
   )
 }

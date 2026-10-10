@@ -43,7 +43,7 @@ describe('StatusChips（AC5 七态过滤 chips）', () => {
     expect(chipOf('suspended')).toContain('disabled')
     expect(chipOf('suspended')).toContain('is-zero')
     expect(chipOf('skipped')).toContain('disabled')
-    expect(markup).toContain('title="无此状态任务"')
+    expect(markup).not.toContain('title=') // D30：原生 title 退役——禁用态说明「无此状态任务」归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(chipOf('pending')).not.toContain('disabled')
   })
 

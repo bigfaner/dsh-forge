@@ -109,7 +109,7 @@ describe('返回上一步（repick）：表单保持挂载保已填状态（AC5�
     expect(markup).toContain('data-dswf-ap="repick"')
     expect(markup).toContain('data-dswf-fb="browser"')
     expect(markup).toContain('选择此文件夹')
-    expect(markup).toContain('title="Z:\\project\\dsh"') // startDir → nav.cwd 面包屑锚
+    expect(markup).not.toContain('title=') // D30：startDir → nav.cwd 面包屑锚改官方 Tooltip label（原生 title 退役——结构 pin tests/structure/d30）
   })
 
   it('表单锚仍在场（同位元素不重挂——状态保留机制）且隐藏包裹', () => {

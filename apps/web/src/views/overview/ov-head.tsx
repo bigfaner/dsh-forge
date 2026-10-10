@@ -5,7 +5,7 @@
 // + 官方 IconChevronDownOutlineRegular；信息行自绘（官方无对应件）全令牌。
 // 受控件（open/onToggle 上抛——展开态归 OverviewTab 本地态，AC3 切子 tab 不清头部）。
 import type { ReactNode } from 'react'
-import { Button, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import './overview.css'
 
 /** ov-head 信息行（4 行数据形状——值与标签由装配面合成） */
@@ -32,35 +32,37 @@ export function OverviewHead({ projectName, summary, rows, open, onToggle }: Ove
   return (
     <div className="dswf-ov-head" data-dswf-ov-head="">
       <div className="dswf-ov-head-line">
-        <span className="dswf-ov-name" title={projectName}>
-          {projectName}
-        </span>
+        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸概览滚动容器） */}
+        <Tooltip label={projectName} portal>
+          <span className="dswf-ov-name">{projectName}</span>
+        </Tooltip>
         <span className="dswf-ov-summary">{summary}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="dswf-ov-head-toggle"
-          aria-expanded={open}
-          aria-label={open ? '收起位置详情' : '展开位置详情'}
-          title={open ? '收起位置详情' : '展开位置详情'}
-          data-dswf-ov-head-toggle=""
-          onClick={onToggle}
-        >
-          <IconChevronDownOutlineRegular
-            size={11}
-            className={open ? 'dswf-ov-head-caret is-open' : 'dswf-ov-head-caret'}
-          />
-          {open ? '收起' : '展开'}
-        </Button>
+        <Tooltip label={open ? '收起位置详情' : '展开位置详情'} portal>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="dswf-ov-head-toggle"
+            aria-expanded={open}
+            aria-label={open ? '收起位置详情' : '展开位置详情'}
+            data-dswf-ov-head-toggle=""
+            onClick={onToggle}
+          >
+            <IconChevronDownOutlineRegular
+              size={11}
+              className={open ? 'dswf-ov-head-caret is-open' : 'dswf-ov-head-caret'}
+            />
+            {open ? '收起' : '展开'}
+          </Button>
+        </Tooltip>
       </div>
       {open ? (
         <div className="dswf-ov-info">
           {rows.map((row) => (
             <div className="dswf-ov-info-row" key={row.label}>
               <span className="dswf-ov-info-k">{row.label}</span>
-              <span className="dswf-ov-info-v" title={row.value}>
-                {row.value}
-              </span>
+              <Tooltip label={row.value} portal>
+                <span className="dswf-ov-info-v">{row.value}</span>
+              </Tooltip>
             </div>
           ))}
         </div>

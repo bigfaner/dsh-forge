@@ -24,6 +24,7 @@ import {
   IconSparkleRegular,
   StateDot,
   Tag,
+  Tooltip,
   type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -330,48 +331,53 @@ export function DispatchPanelRow({ row, onOpenTask, onOpenWorkerSession }: Dispa
           onOpenTask(row.taskId)
         }
   return (
-    <div
-      className="dswf-dp-row"
-      data-dswf-dp-row={row.taskId}
-      {...(open !== undefined ? { role: 'button', tabIndex: 0, onClick: open } : {})}
-      title={`查看任务：${key} · ${row.title}`}
-      onKeyDown={
-        open === undefined
-          ? undefined
-          : (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                open()
+    // D30：行/键悬停说明走官方 Tooltip（portal 逃逸拖移浮层的 transform/层叠上下文）
+    <Tooltip label={`查看任务：${key} · ${row.title}`} portal>
+      <div
+        className="dswf-dp-row"
+        data-dswf-dp-row={row.taskId}
+        {...(open !== undefined ? { role: 'button', tabIndex: 0, onClick: open } : {})}
+        onKeyDown={
+          open === undefined
+            ? undefined
+            : (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  open()
+                }
               }
-            }
-      }
-    >
-      <StateDot state={SESSION_PILL_STATUS_DOT[row.taskStatus]} size={8} />
-      <span className="dswf-dp-key">{key}</span>
-      <span className="dswf-dp-title" title={row.title}>
-        {row.title}
-      </span>
-      <Tag tone="neutral" className="dswf-dp-status">
-        {TASK_STATUS_LABELS[row.taskStatus].zh}
-      </Tag>
-      <button
-        type="button"
-        className="dswf-dp-open"
-        data-dswf-dp-session={row.taskId}
-        title="打开执行子会话（worker）"
-        aria-label={`打开执行子会话：${key}`}
-        {...(onOpenWorkerSession === undefined
-          ? { disabled: true }
-          : {
-              onClick: (event) => {
-                event.stopPropagation() // 行点击（弹窗）与 ⟞（子会话）互斥
-                onOpenWorkerSession(row.taskId)
-              },
-            })}
+        }
       >
-        <IconRightUpOutlineRegular size={11} />
-      </button>
-    </div>
+        <StateDot state={SESSION_PILL_STATUS_DOT[row.taskStatus]} size={8} />
+        <span className="dswf-dp-key">{key}</span>
+        <Tooltip label={row.title} portal>
+          <span className="dswf-dp-title">{row.title}</span>
+        </Tooltip>
+        <Tag tone="neutral" className="dswf-dp-status">
+          {TASK_STATUS_LABELS[row.taskStatus].zh}
+        </Tag>
+        <Tooltip label="打开执行子会话（worker）" portal>
+          <span className="dswf-tipwrap">
+            <button
+              type="button"
+              className="dswf-dp-open"
+              data-dswf-dp-session={row.taskId}
+              aria-label={`打开执行子会话：${key}`}
+              {...(onOpenWorkerSession === undefined
+                ? { disabled: true }
+                : {
+                    onClick: (event) => {
+                      event.stopPropagation() // 行点击（弹窗）与 ⟞（子会话）互斥
+                      onOpenWorkerSession(row.taskId)
+                    },
+                  })}
+            >
+              <IconRightUpOutlineRegular size={11} />
+            </button>
+          </span>
+        </Tooltip>
+      </div>
+    </Tooltip>
   )
 }
 
@@ -403,18 +409,19 @@ export function DispatchPanelBody({
 }: DispatchPanelBodyProps): ReactNode {
   if (collapsed) {
     return (
-      <button
-        type="button"
-        className="dswf-dp-badge"
-        data-dswf-dp-badge=""
-        style={{ left: geometry.left, top: geometry.top }}
-        title={`展开派发任务面板（${rows.length}）`}
-        aria-label="展开派发任务面板"
-        onClick={onExpand}
-      >
-        <IconSparkleRegular size={11} />
-        <span data-dswf-dp-badge-count="">{rows.length}</span>
-      </button>
+      <Tooltip label={`展开派发任务面板（${rows.length}）`} portal>
+        <button
+          type="button"
+          className="dswf-dp-badge"
+          data-dswf-dp-badge=""
+          style={{ left: geometry.left, top: geometry.top }}
+          aria-label="展开派发任务面板"
+          onClick={onExpand}
+        >
+          <IconSparkleRegular size={11} />
+          <span data-dswf-dp-badge-count="">{rows.length}</span>
+        </button>
+      </Tooltip>
     )
   }
   return (
@@ -432,17 +439,18 @@ export function DispatchPanelBody({
         <span className="dswf-dp-count" data-dswf-dp-count="">
           {rows.length}
         </span>
-        <Button
-          variant="toolbar"
-          size="sm"
-          className="dswf-dp-btn"
-          data-dswf-dp-collapse=""
-          aria-label="折叠派发任务面板"
-          title="折叠"
-          onClick={onCollapse}
-        >
-          <IconChevronUpOutlineRegular size={12} />
-        </Button>
+        <Tooltip label="折叠" portal>
+          <Button
+            variant="toolbar"
+            size="sm"
+            className="dswf-dp-btn"
+            data-dswf-dp-collapse=""
+            aria-label="折叠派发任务面板"
+            onClick={onCollapse}
+          >
+            <IconChevronUpOutlineRegular size={12} />
+          </Button>
+        </Tooltip>
       </div>
       <div className="dswf-dp-list" data-dswf-dp-list="">
         {rows.map((row) => (

@@ -16,6 +16,7 @@ import {
   Input,
   Menu,
   Pill,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import './knowledge.css'
 
@@ -97,19 +98,21 @@ export function KnowledgeToolbar({
     <Menu
       open={scopeOpen}
       anchor={
-        <Pill
-          className="dswf-kn-scope"
-          title="切换项目范围"
-          onClick={() => {
-            setScopeOpen(true)
-          }}
-          aria-haspopup="menu"
-          aria-expanded={scopeOpen}
-          data-dswf-kn-scope-trigger=""
-        >
-          <span className="dswf-kn-scope-label">{scopeLabel(projectName)}</span>
-          <IconChevronDownOutlineRegular size={12} className="dswf-kn-scope-chevron" />
-        </Pill>
+        // D30：原生 title 退役——官方 Tooltip
+        <Tooltip label="切换项目范围" portal>
+          <Pill
+            className="dswf-kn-scope"
+            onClick={() => {
+              setScopeOpen(true)
+            }}
+            aria-haspopup="menu"
+            aria-expanded={scopeOpen}
+            data-dswf-kn-scope-trigger=""
+          >
+            <span className="dswf-kn-scope-label">{scopeLabel(projectName)}</span>
+            <IconChevronDownOutlineRegular size={12} className="dswf-kn-scope-chevron" />
+          </Pill>
+        </Tooltip>
       }
       items={scopeMenuEntries(scopeProjects!)}
       selectedId={currentProjectId}
@@ -118,9 +121,9 @@ export function KnowledgeToolbar({
       listClassName="dswf-kn-scope-menu"
     />
   ) : (
-    <Pill className="dswf-kn-scope" title="范围（P1 = 项目级知识）">
-      {scopeLabel(projectName)}
-    </Pill>
+    <Tooltip label="范围（P1 = 项目级知识）" portal>
+      <Pill className="dswf-kn-scope">{scopeLabel(projectName)}</Pill>
+    </Tooltip>
   )
 
   return (
@@ -142,18 +145,19 @@ export function KnowledgeToolbar({
           }}
         />
         {keyword === '' ? null : (
-          <Button
-            variant="toolbar"
-            size="sm"
-            className="dswf-kn-searchclear"
-            aria-label="清除搜索"
-            title="清除（Esc）"
-            onClick={() => {
-              onKeywordChange('')
-            }}
-          >
-            <IconCloseFillRegular size={14} />
-          </Button>
+          <Tooltip label="清除（Esc）" portal>
+            <Button
+              variant="toolbar"
+              size="sm"
+              className="dswf-kn-searchclear"
+              aria-label="清除搜索"
+              onClick={() => {
+                onKeywordChange('')
+              }}
+            >
+              <IconCloseFillRegular size={14} />
+            </Button>
+          </Tooltip>
         )}
       </div>
     </div>

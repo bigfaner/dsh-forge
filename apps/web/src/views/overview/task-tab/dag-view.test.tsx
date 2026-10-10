@@ -94,8 +94,10 @@ describe('D29 节点名称完整展示（M3.1——190×72 + 两行 clamp + 悬�
     expect(html).toMatch(/data-dswf-tt-node="a"[^>]*width:190px;height:72px/)
   })
 
-  it('悬停 title 全名兜底（键 · 全名——超两行截断时的完整名出口）', () => {
+  it('悬停全名兜底 = 官方 Tooltip label（键 · 全名——超两行截断时的完整名出口；D30 原生 title 退役）', () => {
     const html = renderToStaticMarkup(<DagView cards={[node]} graph={graphOf([], [node])} onOpenTask={NOOP} />)
-    expect(html).toContain('title="m2-pipeline/2.3 · tool 半身对接"')
+    expect(html).not.toContain('title=') // D30：原生 title 退役——「键 · 全名」label 归官方 Tooltip（结构 pin tests/structure/d30）
+    expect(html).toContain('>2.3</span>') // 键内联（节点键行）
+    expect(html).toContain('tool 半身对接') // 全名内联（两行 clamp——DOM 文本完整）
   })
 })

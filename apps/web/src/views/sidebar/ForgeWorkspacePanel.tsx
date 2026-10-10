@@ -39,6 +39,7 @@ import {
   Menu,
   Modal,
   StateDot,
+  Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../components/index.js'
@@ -189,16 +190,15 @@ function ProjectBlock({
   const hasMenu = menuItems.length > 0
   const actionsAvailable = hasMenu || onStartSession !== undefined
   return (
-    <div
-      className="dswf-sidebar-project"
-      data-dswf-project={node.projectId}
-      data-archived={node.archived || undefined}
-      data-active={active || undefined}
-      // M3.1 D3 记账：项目行仅名称一行——canonicalPath（wsPath）转原生 title 悬停提示，
-      // 显式偏离官方 Rows meta 常驻次行（用户裁决 R16 / 差异清单 D3；官方 Tooltip 件
-      // 迁移归 D30 悬浮提示轮，本属性即其锚面）。
-      title={node.wsPath}
-    >
+    // M3.1 D3 + D30：项目行仅名称一行，canonicalPath（wsPath）转官方 Tooltip 悬停提示
+    // （显式偏离官方 Rows meta 常驻次行——用户裁决 R16；portal 逃逸侧栏滚动容器）
+    <Tooltip label={node.wsPath} portal>
+      <div
+        className="dswf-sidebar-project"
+        data-dswf-project={node.projectId}
+        data-archived={node.archived || undefined}
+        data-active={active || undefined}
+      >
       <DisclosureRow
         icon={
           <span className="dswf-sidebar-project-folder">
@@ -257,18 +257,19 @@ function ProjectBlock({
                 />
               ) : null}
               {onStartSession === undefined ? null : (
-                <button
-                  type="button"
-                  className="dswf-sidebar-rowaction"
-                  data-dswf-project-action="new-session"
-                  aria-label={`在 ${node.name} 新建会话`}
-                  title="新会话"
-                  onClick={() => {
-                    onStartSession(node.workspaceId)
-                  }}
-                >
-                  <IconNewChatOutlineRegular size={16} />
-                </button>
+                <Tooltip label="新会话" portal>
+                  <button
+                    type="button"
+                    className="dswf-sidebar-rowaction"
+                    data-dswf-project-action="new-session"
+                    aria-label={`在 ${node.name} 新建会话`}
+                    onClick={() => {
+                      onStartSession(node.workspaceId)
+                    }}
+                  >
+                    <IconNewChatOutlineRegular size={16} />
+                  </button>
+                </Tooltip>
               )}
             </span>
           ) : null
@@ -287,7 +288,8 @@ function ProjectBlock({
         </div>
       </DisclosureRow>
       {node.sessions.length === 0 ? <div className="dswf-sidebar-no-session">{emptyNote}</div> : null}
-    </div>
+      </div>
+    </Tooltip>
   )
 }
 
@@ -563,17 +565,18 @@ export function SidebarProjectsZone({
         ) : (
           <>
             <div className="dswf-sidebar-sectionlabel">{sidebarSectionLabelOf(view)}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="dswf-sidebar-headbtn"
-              data-dswf-search-toggle=""
-              aria-label="搜索项目与会话"
-              title="搜索（项目名 + 会话标题）"
-              onClick={onSearchToggle}
-            >
-              <IconSearchOutlineRegular size={14} />
-            </Button>
+            <Tooltip label="搜索（项目名 + 会话标题）" portal>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="dswf-sidebar-headbtn"
+                data-dswf-search-toggle=""
+                aria-label="搜索项目与会话"
+                onClick={onSearchToggle}
+              >
+                <IconSearchOutlineRegular size={14} />
+              </Button>
+            </Tooltip>
             <Menu
               className="dswf-sidebar-headmenu"
               open={viewMenuOpen}
@@ -590,35 +593,37 @@ export function SidebarProjectsZone({
               dense
               portal
               anchor={
+                <Tooltip label="视图选项（分组 / 归档过滤）" portal>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="dswf-sidebar-headbtn"
+                    data-dswf-view-menu=""
+                    aria-label="视图选项"
+                    aria-haspopup="menu"
+                    aria-expanded={viewMenuOpen}
+                    onClick={() => {
+                      onViewMenuOpenChange(true)
+                    }}
+                  >
+                    <IconSlidersTwoOutlineRegular size={14} />
+                  </Button>
+                </Tooltip>
+              }
+            />
+            {onAddProject === undefined ? null : (
+              <Tooltip label="添加项目" portal>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="dswf-sidebar-headbtn"
-                  data-dswf-view-menu=""
-                  aria-label="视图选项"
-                  aria-haspopup="menu"
-                  aria-expanded={viewMenuOpen}
-                  title="视图选项（分组 / 归档过滤）"
-                  onClick={() => {
-                    onViewMenuOpenChange(true)
-                  }}
+                  data-dswf-nav="add-project"
+                  aria-label="添加项目"
+                  onClick={onAddProject}
                 >
-                  <IconSlidersTwoOutlineRegular size={14} />
+                  <IconProjectAddOutlineRegular size={16} />
                 </Button>
-              }
-            />
-            {onAddProject === undefined ? null : (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="dswf-sidebar-headbtn"
-                data-dswf-nav="add-project"
-                aria-label="添加项目"
-                title="添加项目"
-                onClick={onAddProject}
-              >
-                <IconProjectAddOutlineRegular size={16} />
-              </Button>
+              </Tooltip>
             )}
           </>
         )}
@@ -682,51 +687,53 @@ export function SidebarRail({
   const railTree = sidebarArchivedFilterOf(view.archivedFilter, tree)
   return (
     <div className="dswf-sidebar dswf-sidebar-rail" data-dswf-sidebar="rail">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="dswf-sidebar-railbtn"
-        data-dswf-search-toggle=""
-        aria-label="搜索项目与会话"
-        title="搜索（项目名 + 会话标题）"
-        onClick={onSearchOpen}
-      >
-        <IconSearchOutlineRegular size={18} />
-      </Button>
-      {onAddProject === undefined ? null : (
+      <Tooltip label="搜索（项目名 + 会话标题）" portal>
         <Button
           variant="ghost"
           size="sm"
           className="dswf-sidebar-railbtn"
-          data-dswf-nav="add-project"
-          aria-label="添加项目"
-          title="添加项目"
-          onClick={onAddProject}
+          data-dswf-search-toggle=""
+          aria-label="搜索项目与会话"
+          onClick={onSearchOpen}
         >
-          <IconProjectAddOutlineRegular size={18} />
+          <IconSearchOutlineRegular size={18} />
         </Button>
+      </Tooltip>
+      {onAddProject === undefined ? null : (
+        <Tooltip label="添加项目" portal>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="dswf-sidebar-railbtn"
+            data-dswf-nav="add-project"
+            aria-label="添加项目"
+            onClick={onAddProject}
+          >
+            <IconProjectAddOutlineRegular size={18} />
+          </Button>
+        </Tooltip>
       )}
       {railTree.map((node) => (
-        <Button
-          key={node.projectId}
-          variant="ghost"
-          size="sm"
-          className="dswf-sidebar-railbtn"
-          data-dswf-rail-project={node.projectId}
-          data-active={
-            node.sessions.some((row) => row.sessionId === currentSessionId) || undefined
-          }
-          data-archived={node.archived || undefined}
-          aria-label={`打开项目 ${node.name}`}
-          title={node.name}
-          onClick={() => {
-            expandSidebar()
-            const first = node.sessions[0]
-            if (first !== undefined) onSessionActivate?.(first.sessionId)
-          }}
-        >
-          <IconFolderCloseRegular size={18} />
-        </Button>
+        <Tooltip key={node.projectId} label={node.name} portal>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="dswf-sidebar-railbtn"
+            data-dswf-rail-project={node.projectId}
+            data-active={
+              node.sessions.some((row) => row.sessionId === currentSessionId) || undefined
+            }
+            data-archived={node.archived || undefined}
+            aria-label={`打开项目 ${node.name}`}
+            onClick={() => {
+              expandSidebar()
+              const first = node.sessions[0]
+              if (first !== undefined) onSessionActivate?.(first.sessionId)
+            }}
+          >
+            <IconFolderCloseRegular size={18} />
+          </Button>
+        </Tooltip>
       ))}
     </div>
   )

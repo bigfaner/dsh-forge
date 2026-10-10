@@ -20,7 +20,7 @@ import {
   type SessionTaskLinkCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { Menu, Pill, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, Pill, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../../rpc/index.js'
 import { activeFeatureSlug, hasActiveStatusFilter, searchQueryOf, type OverviewSort } from '../overview-model.js'
@@ -345,21 +345,25 @@ export function TasksTabBody({
             if (option !== undefined) onContainerSelect(option)
           }}
           anchor={
-            <Pill
-              className="dswf-tt-featpill"
-              data-dswf-tt-contpill={containerKeyOf(container)}
-              title={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）${countNote === undefined ? '' : ` · ${countNote}`}`}
-              aria-haspopup="menu"
-              aria-expanded={containerMenuOpen}
-              onClick={() => {
-                onContainerMenuOpenChange(!containerMenuOpen)
-              }}
+            <Tooltip
+              label={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）${countNote === undefined ? '' : ` · ${countNote}`}`}
+              portal
             >
-              <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
-              <span className="dswf-tt-featname">{container.slug}</span>
-              <span className="dswf-tt-featchip">{pillChip}</span>
-              <span aria-hidden="true">▾</span>
-            </Pill>
+              <Pill
+                className="dswf-tt-featpill"
+                data-dswf-tt-contpill={containerKeyOf(container)}
+                aria-haspopup="menu"
+                aria-expanded={containerMenuOpen}
+                onClick={() => {
+                  onContainerMenuOpenChange(!containerMenuOpen)
+                }}
+              >
+                <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
+                <span className="dswf-tt-featname">{container.slug}</span>
+                <span className="dswf-tt-featchip">{pillChip}</span>
+                <span aria-hidden="true">▾</span>
+              </Pill>
+            </Tooltip>
           }
         />
         <ViewDropdown view={view} open={viewMenuOpen} onViewChange={onViewChange} onOpenChange={onViewMenuOpenChange} />
@@ -368,17 +372,18 @@ export function TasksTabBody({
           {containerHasSubgraphDiag(container) ? (
             <span className="dswf-tt-diagwrap" data-dswf-tt-diagwrap="">
               <DiagToast result={diagResult} onDismiss={onDiagDismiss} {...(onDiagSend !== undefined ? { onSend: onDiagSend } : {})} />
-              <button
-                type="button"
-                className="dswf-tt-diagbtn"
-                data-dswf-tt-diag=""
-                title="诊断——validateFeatureTasks 只读校验当前 feature 子图（五类检查）"
-                onClick={() => {
-                  onDiagnose()
-                }}
-              >
-                诊断
-              </button>
+              <Tooltip label="诊断——validateFeatureTasks 只读校验当前 feature 子图（五类检查）" portal>
+                <button
+                  type="button"
+                  className="dswf-tt-diagbtn"
+                  data-dswf-tt-diag=""
+                  onClick={() => {
+                    onDiagnose()
+                  }}
+                >
+                  诊断
+                </button>
+              </Tooltip>
             </span>
           ) : null}
           <span className="dswf-tt-diagwrap">

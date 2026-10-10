@@ -146,7 +146,7 @@ describe('分层文档列表（AC3 渲染面）', () => {
     const btn = markup.slice(markup.lastIndexOf('<button', at), markup.indexOf('</button>', at))
     expect(btn).toContain('type="button"')
     expect(btn).toContain('data-dswf-ov-doc="docs/features/dsh-forge-m3/design/tech-design.md"')
-    expect(btn).toContain('title="docs/features/dsh-forge-m3/design/tech-design.md"')
+    expect(btn).not.toContain('title=') // D30：relPath 悬停归官方 Tooltip label（原生 title 退役——结构 pin tests/structure/d30）
     expect(btn).toContain('›')
     expect(btn).toContain('design/tech-design.md') // 路径文本（数据面）随图标同行
   })

@@ -8,7 +8,7 @@
 // AC3 关闭回浏览上下文（过滤态保持）：本件不触碰浏览过滤态（旁挂层， onClose 上抛归装配方）；
 // Esc 捕获序 = 抽屉先于工具栏清空（原型同序：drawer → kb-clear），stopPropagation 防串关。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button, IconCloseFillRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EntryDetail } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, MarkdownDoc, StateChip } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
@@ -270,17 +270,19 @@ export function EntryDrawerBody({ state, onClose, retry, now }: EntryDrawerBodyP
     <aside className="dswf-kn-drawer" data-dswf-kn-drawer="" aria-label="知识详情抽屉">
       <div className="dswf-kn-drawer-top">
         <span className="dswf-kn-drawer-toptitle">知识详情</span>
-        <Button
-          variant="toolbar"
-          size="sm"
-          className="dswf-kn-drawer-close"
-          data-dswf-kn-drawer-close=""
-          aria-label="关闭抽屉"
-          title="关闭（Esc）"
-          onClick={onClose}
-        >
-          <IconCloseFillRegular size={14} />
-        </Button>
+        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸 dockkit 浮层层叠上下文） */}
+        <Tooltip label="关闭（Esc）" portal>
+          <Button
+            variant="toolbar"
+            size="sm"
+            className="dswf-kn-drawer-close"
+            data-dswf-kn-drawer-close=""
+            aria-label="关闭抽屉"
+            onClick={onClose}
+          >
+            <IconCloseFillRegular size={14} />
+          </Button>
+        </Tooltip>
       </div>
       {state.phase === 'loading' ? (
         <DrawerSkeleton />

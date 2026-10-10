@@ -5,7 +5,7 @@
 // （onOpenTask 在场 = 可点 role=button；缺席 = 静态）。
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskCard, type TaskGraph } from '@dsh-forge/contracts'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatActualDuration, taskKeyLabel } from '../drawer/detail-model.js'
 import { dagVisibleSet } from './task-tab-model.js'
@@ -102,32 +102,33 @@ export function DagView({ cards, graph, onOpenTask, activeTaskId }: DagViewProps
               .filter(Boolean)
               .join(' ')
             return (
-              <div
-                key={node.taskId}
-                className={cls}
-                data-dswf-tt-node={task.taskId}
-                style={{ left: `${node.x}px`, top: `${node.y}px`, width: `${DAG_NODE_W}px`, height: `${DAG_NODE_H}px` }}
-                title={`${taskKeyLabel(task.slug, task.localId)} · ${task.title}`}
-                {...(onOpenTask !== undefined
-                  ? { role: 'button', tabIndex: 0, onClick: () => onOpenTask(task.taskId), onKeyDown: handleKey(task) }
-                  : {})}
-              >
-                <div className="dswf-tt-node-top">
-                  <StateDot
-                    state={STATUS_DOT_STATE[task.taskStatus]}
-                    size={8}
-                    aria-label={TASK_STATUS_LABELS[task.taskStatus].zh}
-                  />
-                  <span className="dswf-tt-node-key">{task.localId}</span>
-                  {task.sourceTask !== undefined ? <span className="dswf-tt-fixchip">fix</span> : null}
-                </div>
-                <div className="dswf-tt-node-title">{task.title}</div>
-                {duration !== undefined ? (
-                  <div className="dswf-tt-node-time" data-dswf-tt-node-time={task.taskId}>
-                    ⏱ {duration}
+              // D30：原生 title 退役——官方 Tooltip 全名兜底（portal 逃逸 DAG wrap 滚动裁剪容器）
+              <Tooltip key={node.taskId} label={`${taskKeyLabel(task.slug, task.localId)} · ${task.title}`} portal>
+                <div
+                  className={cls}
+                  data-dswf-tt-node={task.taskId}
+                  style={{ left: `${node.x}px`, top: `${node.y}px`, width: `${DAG_NODE_W}px`, height: `${DAG_NODE_H}px` }}
+                  {...(onOpenTask !== undefined
+                    ? { role: 'button', tabIndex: 0, onClick: () => onOpenTask(task.taskId), onKeyDown: handleKey(task) }
+                    : {})}
+                >
+                  <div className="dswf-tt-node-top">
+                    <StateDot
+                      state={STATUS_DOT_STATE[task.taskStatus]}
+                      size={8}
+                      aria-label={TASK_STATUS_LABELS[task.taskStatus].zh}
+                    />
+                    <span className="dswf-tt-node-key">{task.localId}</span>
+                    {task.sourceTask !== undefined ? <span className="dswf-tt-fixchip">fix</span> : null}
                   </div>
-                ) : null}
-              </div>
+                  <div className="dswf-tt-node-title">{task.title}</div>
+                  {duration !== undefined ? (
+                    <div className="dswf-tt-node-time" data-dswf-tt-node-time={task.taskId}>
+                      ⏱ {duration}
+                    </div>
+                  ) : null}
+                </div>
+              </Tooltip>
             )
           })}
         </div>

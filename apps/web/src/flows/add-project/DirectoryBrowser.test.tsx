@@ -73,18 +73,18 @@ describe('已注册标记（AC2：ws_path 命中行级标记）', () => {
 })
 
 describe('选中与确认（AC3：单击选中唯一 / 未选中「下一步」禁用）', () => {
-  it('未选中：无 aria-selected=true 行；「下一步」禁用 + 提示锚', () => {
+  it('未选中：无 aria-selected=true 行；「下一步」禁用 + 提示锚（官方 Tooltip label——D30 原生 title 退役）', () => {
     const markup = view()
     expect(markup).not.toContain('aria-selected="true"')
     expect(markup).toContain('disabled=""')
-    expect(markup).toContain('先在列表中选中一个文件夹')
+    expect(markup).not.toContain('title=') // D30：「先在列表中选中一个文件夹」确认态说明归官方 Tooltip label（结构 pin tests/structure/d30）
   })
 
   it('选中：恰一行 aria-selected=true + data-selected（唯一）；「下一步」解禁', () => {
     const markup = view({ nav: selectEntry(initialBrowserState('Z:\\project'), 'Z:\\project\\dsh') })
     expect(markup.match(/aria-selected="true"/g)?.length).toBe(1)
     expect(markup).toContain('data-selected')
-    expect(markup).toContain('title="Z:\\project\\dsh"')
+    expect(markup).not.toContain('title=') // D30：crumb 路径（nav.cwd）悬停归官方 Tooltip label（原生 title 退役）
     expect(markup).not.toContain('disabled') // 选中后确认解禁（父目录在场，上一级亦可用）
   })
 })

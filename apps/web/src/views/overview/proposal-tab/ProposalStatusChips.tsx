@@ -11,7 +11,7 @@ import {
   type ProposalCard,
   type ProposalStatus,
 } from '@dsh-forge/contracts'
-import type { TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tooltip, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import './proposal-tab.css'
 
 /**
@@ -74,26 +74,33 @@ export function ProposalStatusChips({ counts, active, onToggle, onClear }: Propo
           .filter(Boolean)
           .join(' ')
         return (
-          <button
+          // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
+          <Tooltip
             key={status}
-            type="button"
-            className={cls}
-            data-dswf-ov-pschip={status}
-            aria-pressed={on}
-            disabled={disabled}
-            title={
+            label={
               disabled
                 ? '无此状态提案'
                 : `${PROPOSAL_STATUS_LABELS[status].zh}（${PROPOSAL_STATUS_LABELS[status].en}）`
             }
-            onClick={() => {
-              onToggle(status)
-            }}
+            portal
           >
-            <span className="dswf-ov-pschip-dot" data-status={status} aria-hidden="true" />
-            <span className="dswf-ov-pschip-label">{PROPOSAL_STATUS_LABELS[status].zh}</span>
-            <span className="dswf-ov-pschip-count">{count}</span>
-          </button>
+            <span className="dswf-tipwrap">
+              <button
+                type="button"
+                className={cls}
+                data-dswf-ov-pschip={status}
+                aria-pressed={on}
+                disabled={disabled}
+                onClick={() => {
+                  onToggle(status)
+                }}
+              >
+                <span className="dswf-ov-pschip-dot" data-status={status} aria-hidden="true" />
+                <span className="dswf-ov-pschip-label">{PROPOSAL_STATUS_LABELS[status].zh}</span>
+                <span className="dswf-ov-pschip-count">{count}</span>
+              </button>
+            </span>
+          </Tooltip>
         )
       })}
       {hasFilter && onClear !== undefined ? (

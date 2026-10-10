@@ -15,6 +15,7 @@
 // 同构（同级业务互禁下的本域副本，口径互指）。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { RecallGroup, SessionRecallQuery } from '@dsh-forge/contracts'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, HeatBadge, SkeletonRows } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
@@ -206,17 +207,19 @@ function RecallRowView({
   }
   return (
     <li className="dswf-recall-row" data-dswf-recall-row="" data-entry-id={row.entryId ?? undefined}>
-      <button
-        type="button"
-        className="dswf-recall-rowbtn"
-        data-dswf-recall-rowbtn="button"
-        title="查看知识详情"
-        onClick={() => {
-          if (row.entryId !== null) onOpenEntry(row.entryId)
-        }}
-      >
-        {inner}
-      </button>
+      {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸会话 tab 滚动容器） */}
+      <Tooltip label="查看知识详情" portal>
+        <button
+          type="button"
+          className="dswf-recall-rowbtn"
+          data-dswf-recall-rowbtn="button"
+          onClick={() => {
+            if (row.entryId !== null) onOpenEntry(row.entryId)
+          }}
+        >
+          {inner}
+        </button>
+      </Tooltip>
     </li>
   )
 }

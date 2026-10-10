@@ -175,18 +175,17 @@ describe('TaskDrawerBody · D22 简要形态（默认 440——键+tag+标题+�
 })
 
 describe('TaskDrawerBody · D22 ⤢/⤡ 翻转钮（两形态共享头部）', () => {
-  it('翻转钮在场（标题栏内 ✕ 之左）+ aria-pressed 随形态翻转 + title 文案互换', () => {
+  it('翻转钮在场（标题栏内 ✕ 之左）+ aria-pressed 随形态翻转 + label 文案互换（官方 Tooltip——D30 原生 title 退役）', () => {
     const brief = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
     expect(brief).toContain('data-dswf-td-expand=""')
     expect(brief).toContain('aria-pressed="false"')
-    expect(brief).toContain('展开完整信息')
+    expect(brief).not.toContain('title=') // D30：翻转/关闭说明归官方 Tooltip label（结构 pin tests/structure/d30）
     const expandAt = brief.indexOf('data-dswf-td-expand')
     const closeAt = brief.indexOf('data-dswf-td-close')
     expect(expandAt).toBeGreaterThan(-1)
     expect(closeAt).toBeGreaterThan(expandAt)
     const full = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
     expect(full).toContain('aria-pressed="true"')
-    expect(full).toContain('收起为简要信息')
   })
 
   it('完整形态 = 1.2 全量内容平移：现状条 + kv 六项 + 目标/结果 + 类型模板段 + 覆盖率 + 备注 + 时间线', () => {
@@ -539,7 +538,7 @@ describe('TaskDrawerBody · 诊断失败按钮（AC3——仅 blocked/rejected�
     )
     expect(html).toContain('data-dswf-td-diagwrap')
     expect(html).toContain('data-dswf-tt-diagtoast="fail"')
-    expect(html).toContain('发送给 agent')
+    expect(html).not.toContain('title=') // D30：诊断失败说明归官方 Tooltip label（结构 pin tests/structure/d30）
     const toastAt = html.indexOf('data-dswf-tt-diagtoast')
     const btnAt = html.indexOf('data-dswf-td-diag=')
     expect(btnAt).toBeGreaterThan(toastAt) // toast 在钮前（absolute 贴左）

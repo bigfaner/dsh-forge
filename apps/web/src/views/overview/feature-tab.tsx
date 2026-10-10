@@ -14,7 +14,7 @@ import {
   type ProposalCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../../components/index.js'
 import { ModeChip } from '../../components/index.js'
 import { featureRowKey } from './overview-model.js'
@@ -137,37 +137,39 @@ export function FeaturesTab({
           return (
             <div className="dswf-ov-item" key={feature.featureId}>
               <div className={open ? 'dswf-ov-parent is-open' : 'dswf-ov-parent'} data-dswf-ov-parent={key}>
-                <button
-                  type="button"
-                  className="dswf-ov-parent-toggle"
-                  aria-expanded={open}
-                  title={feature.title}
-                  data-dswf-ov-parent-toggle={key}
-                  onClick={() => {
-                    onToggleRow(key)
-                  }}
-                >
-                  <span className="dswf-ov-caret" aria-hidden="true">
-                    {open ? '▾' : '▸'}
-                  </span>
-                  <span className="dswf-ov-parent-title">{feature.slug}</span>
-                </button>
+                <Tooltip label={feature.title} portal>
+                  <button
+                    type="button"
+                    className="dswf-ov-parent-toggle"
+                    aria-expanded={open}
+                    data-dswf-ov-parent-toggle={key}
+                    onClick={() => {
+                      onToggleRow(key)
+                    }}
+                  >
+                    <span className="dswf-ov-caret" aria-hidden="true">
+                      {open ? '▾' : '▸'}
+                    </span>
+                    <span className="dswf-ov-parent-title">{feature.slug}</span>
+                  </button>
+                </Tooltip>
                 <ModeChip mode={FEATURE_FIXED_MODE} />
                 <Tag tone="neutral" className="dswf-ov-parent-chip" data-phase={feature.featureStatus}>
                   {`${PHASE_PHRASES[feature.featureStatus]} ${done}/${total}`}
                 </Tag>
                 {onStartSession !== undefined ? (
-                  <button
-                    type="button"
-                    className="dswf-ov-act"
-                    data-dswf-ov-opensession={feature.slug}
-                    title="打开新会话（固定远征模式 + 现状上下文预填·不发送）"
-                    onClick={() => {
-                      onStartSession(featurePrefillRequest(feature, featureDocs, docsRoot))
-                    }}
-                  >
-                    打开新会话
-                  </button>
+                  <Tooltip label="打开新会话（固定远征模式 + 现状上下文预填·不发送）" portal>
+                    <button
+                      type="button"
+                      className="dswf-ov-act"
+                      data-dswf-ov-opensession={feature.slug}
+                      onClick={() => {
+                        onStartSession(featurePrefillRequest(feature, featureDocs, docsRoot))
+                      }}
+                    >
+                      打开新会话
+                    </button>
+                  </Tooltip>
                 ) : null}
               </div>
               {open ? (

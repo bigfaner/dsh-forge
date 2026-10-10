@@ -125,7 +125,7 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="blitz"')
     expect(html).toContain('突击提案 · 2 任务')
-    expect(html).toContain('· 2 条') // 计数注随 pill title 悬停承载（m3.1 D18）
+    expect(html).not.toContain('title=') // D30：计数注「· 2 条」悬停承载改官方 Tooltip label（m3.1 D18 形态保持）
     expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注（m3.1 D18——注不再占工具栏正文）
     // m3.1 D26：突击容器「无 feature 阶段」计数注零在场（字符串级断言）
     expect(html).not.toContain('无 feature 阶段')
@@ -146,9 +146,9 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(render({ view: 'swim' })).toContain('视图：泳道')
   })
 
-  it('搜索在场计数 = 匹配/总数（收进 pill 悬停——正文零计数注，m3.1 D18）', () => {
+  it('搜索在场计数 = 匹配/总数（收进 pill 官方 Tooltip label——正文零计数注，m3.1 D18 + D30）', () => {
     const html = render({ search: '评估' })
-    expect(html).toContain('· 1/2')
+    expect(html).not.toContain('title=') // D30：计数注「· 1/2」归官方 Tooltip label
     expect(html).not.toContain('data-dswf-tt-count')
   })
 

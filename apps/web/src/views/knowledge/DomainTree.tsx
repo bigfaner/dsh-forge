@@ -4,6 +4,7 @@
 // P1 形态最简：常展开（≤3 层无收合——收合交互归后续里程碑）；「全部域」根行 = 无域过滤。
 import type { CSSProperties, ReactNode } from 'react'
 import type { DomainNode } from '@dsh-forge/contracts'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { domainRows } from './browse-model.js'
 import './knowledge.css'
 
@@ -27,27 +28,28 @@ export function DomainTree({ nodes, total, active, onSelect }: DomainTreeProps):
       {rows.map((row) => {
         const isActive = (row.domainPath === '' ? undefined : row.domainPath) === active
         return (
-          <button
-            key={row.domainPath === '' ? '__all__' : row.domainPath}
-            type="button"
-            className="dswf-kn-dom-row"
-            data-dswf-domain={row.domainPath}
-            data-active={isActive || undefined}
-            role="treeitem"
-            aria-selected={isActive}
-            style={{ '--dswf-depth': String(row.depth) } as CSSProperties}
-            title={row.domainPath === '' ? '全部域' : row.domainPath}
-            onClick={
-              onSelect === undefined
-                ? undefined
-                : () => {
-                    onSelect(row.domainPath === '' ? undefined : row.domainPath)
-                  }
-            }
-          >
-            <span className="dswf-kn-dom-label">{row.label}</span>
-            <span className="dswf-kn-dom-count">{row.entryCount}</span>
-          </button>
+          // D30：原生 title 退役——官方 Tooltip（portal 逃逸知识面板域轨滚动容器）
+          <Tooltip key={row.domainPath === '' ? '__all__' : row.domainPath} label={row.domainPath === '' ? '全部域' : row.domainPath} portal>
+            <button
+              type="button"
+              className="dswf-kn-dom-row"
+              data-dswf-domain={row.domainPath}
+              data-active={isActive || undefined}
+              role="treeitem"
+              aria-selected={isActive}
+              style={{ '--dswf-depth': String(row.depth) } as CSSProperties}
+              onClick={
+                onSelect === undefined
+                  ? undefined
+                  : () => {
+                      onSelect(row.domainPath === '' ? undefined : row.domainPath)
+                    }
+              }
+            >
+              <span className="dswf-kn-dom-label">{row.label}</span>
+              <span className="dswf-kn-dom-count">{row.entryCount}</span>
+            </button>
+          </Tooltip>
         )
       })}
     </div>

@@ -15,6 +15,7 @@ import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } f
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { EmptyState, ErrorBar, MarkdownDoc, SkeletonRows, StateChip } from '../../components/index.js'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { splitDocSegments } from './doc-segments.js'
 import { MermaidDiagram } from './mermaid-diagram.js'
 import './docs.css'
@@ -144,30 +145,29 @@ export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread
 
   const head = (
     <div className="dswf-doc-head" data-dswf-doc-head="">
-      <span className="dswf-doc-title" title={title}>
-        {title}
-      </span>
+      {/* D30：原生 title 退役——官方 Tooltip 深色气泡（portal 逃逸 dock 文档 tab 滚动容器） */}
+      <Tooltip label={title} portal>
+        <span className="dswf-doc-title">{title}</span>
+      </Tooltip>
       <StateChip status="只读" className="dswf-doc-chip" />
       {doc.dangling ? <StateChip status="悬空" className="dswf-doc-chip dswf-doc-chip-dangling" /> : null}
     </div>
   )
   const pathbar = (
     <div className="dswf-doc-pathbar" data-dswf-doc-pathbar="">
-      <span className="dswf-doc-path" title={doc.canonicalPath}>
-        {doc.canonicalPath}
-      </span>
-      <button
-        type="button"
-        className="dswf-doc-iconbtn"
-        aria-label="在编辑器中打开"
-        title="在编辑器中打开（系统关联 · 应用零写入）"
-        onClick={onOpenExternal}
-      >
-        📁
-      </button>
-      <button type="button" className="dswf-doc-iconbtn" aria-label="重新读取" title="重新读取（只读）" onClick={onReread}>
-        ↻
-      </button>
+      <Tooltip label={doc.canonicalPath} portal>
+        <span className="dswf-doc-path">{doc.canonicalPath}</span>
+      </Tooltip>
+      <Tooltip label="在编辑器中打开（系统关联 · 应用零写入）" portal>
+        <button type="button" className="dswf-doc-iconbtn" aria-label="在编辑器中打开" onClick={onOpenExternal}>
+          📁
+        </button>
+      </Tooltip>
+      <Tooltip label="重新读取（只读）" portal>
+        <button type="button" className="dswf-doc-iconbtn" aria-label="重新读取" onClick={onReread}>
+          ↻
+        </button>
+      </Tooltip>
     </div>
   )
 

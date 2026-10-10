@@ -6,9 +6,6 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { SessionTaskLinkCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import {
-  DISPATCH_ACTIVE_TITLE,
-  DISPATCH_DISABLED_TITLE,
-  DISPATCH_PENDING_TITLE,
   DispatchButton,
   dispatchCommandOf,
   dispatchRouteOf,
@@ -39,24 +36,24 @@ function link(taskId: string, sessionId: string, source: 'link' | 'record'): Ses
   }
 }
 
-describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉）', () => {
+describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；D30 悬停说明归官方 Tooltip label）', () => {
   it('未终态在场（pending/in_progress/blocked/suspended 任一）→ 亮起可点（同款式 is-on + 无 disabled）', () => {
     for (const status of ['pending', 'in_progress', 'blocked', 'suspended'] as const) {
       const markup = renderToStaticMarkup(<DispatchButton stats={statsOf({ [status]: 1 })} onDispatch={NOOP} />)
       expect(markup).toContain('data-dswf-tt-dispatch="on"')
       expect(markup).toContain('>派发</button>')
       expect(markup).not.toContain('disabled')
-      expect(markup).toContain(DISPATCH_ACTIVE_TITLE)
+      expect(markup).not.toContain('title=') // D30：label 归官方 Tooltip（三态 title 常量单源分支——结构 pin tests/structure/d30）
     }
   })
 
-  it('全终态（completed/skipped/rejected）→ 置灰不可点（深灰实底 is-off + spec tooltip）', () => {
+  it('全终态（completed/skipped/rejected）→ 置灰不可点（深灰实底 is-off + 官方 Tooltip label）', () => {
     const markup = renderToStaticMarkup(
       <DispatchButton stats={statsOf({ completed: 2, skipped: 1, rejected: 1 })} onDispatch={NOOP} />,
     )
     expect(markup).toContain('data-dswf-tt-dispatch="off"')
     expect(markup).toContain('disabled')
-    expect(markup).toContain(DISPATCH_DISABLED_TITLE)
+    expect(markup).not.toContain('title=') // D30：置灰说明「全部任务已处于终态…」归官方 Tooltip label
     expect(markup).toContain('is-off')
   })
 
@@ -67,11 +64,10 @@ describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉）
     expect(markup).toContain('data-dswf-tt-dispatch="on"')
   })
 
-  it('stats 缺席（装载在途）→ 置灰 + 装载中 tooltip（不以全终态口径误导）', () => {
+  it('stats 缺席（装载在途）→ 置灰 + 装载中 label（不以全终态口径误导——D30 官方 Tooltip）', () => {
     const markup = renderToStaticMarkup(<DispatchButton stats={undefined} onDispatch={NOOP} />)
     expect(markup).toContain('data-dswf-tt-dispatch="off"')
     expect(markup).toContain('disabled')
-    expect(markup).toContain(DISPATCH_PENDING_TITLE)
   })
 
   it('零任务容器 → 置灰（无可派发）', () => {

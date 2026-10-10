@@ -8,7 +8,7 @@ import {
   type TaskCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatActualDuration, taskKeyLabel } from '../drawer/detail-model.js'
 import { swimColumnsOf } from './task-tab-model.js'
@@ -41,25 +41,27 @@ function SwimCard({
     }
   }
   return (
-    <div
-      className={active ? 'dswf-tt-card is-open' : 'dswf-tt-card'}
-      data-dswf-tt-card={card.taskId}
-      title={`${taskKeyLabel(card.slug, card.localId)} · ${card.title}`}
-      {...(onOpenTask !== undefined
-        ? { role: 'button', tabIndex: 0, onClick: () => onOpenTask(card.taskId), onKeyDown: handleKey }
-        : {})}
-    >
-      <div className="dswf-tt-card-key">
-        {card.localId}
-        {card.sourceTask !== undefined ? <span className="dswf-tt-fixchip">fix</span> : null}
+    // D30：原生 title 退役——官方 Tooltip（portal 逃逸泳道横向滚动裁剪容器）
+    <Tooltip label={`${taskKeyLabel(card.slug, card.localId)} · ${card.title}`} portal>
+      <div
+        className={active ? 'dswf-tt-card is-open' : 'dswf-tt-card'}
+        data-dswf-tt-card={card.taskId}
+        {...(onOpenTask !== undefined
+          ? { role: 'button', tabIndex: 0, onClick: () => onOpenTask(card.taskId), onKeyDown: handleKey }
+          : {})}
+      >
+        <div className="dswf-tt-card-key">
+          {card.localId}
+          {card.sourceTask !== undefined ? <span className="dswf-tt-fixchip">fix</span> : null}
+        </div>
+        <div className="dswf-tt-card-title">{card.title}</div>
+        <div className="dswf-tt-card-foot">
+          <span className="dswf-tt-card-type">{card.taskType}</span>
+          {duration !== undefined ? <span className="dswf-tt-card-time">⏱ {duration}</span> : null}
+          {card.sessionCount > 0 ? <span className="dswf-tt-card-links">{`⟞${card.sessionCount}`}</span> : null}
+        </div>
       </div>
-      <div className="dswf-tt-card-title">{card.title}</div>
-      <div className="dswf-tt-card-foot">
-        <span className="dswf-tt-card-type">{card.taskType}</span>
-        {duration !== undefined ? <span className="dswf-tt-card-time">⏱ {duration}</span> : null}
-        {card.sessionCount > 0 ? <span className="dswf-tt-card-links">{`⟞${card.sessionCount}`}</span> : null}
-      </div>
-    </div>
+    </Tooltip>
   )
 }
 
@@ -76,14 +78,16 @@ export function SwimlaneView({ cards, onOpenTask, activeTaskId }: SwimlaneViewPr
             data-dswf-tt-col={column.status}
             key={column.status}
           >
-            <div
-              className="dswf-tt-col-head"
-              title={empty ? '无此状态任务' : `${TASK_STATUS_LABELS[column.status].zh}（${TASK_STATUS_LABELS[column.status].en}）`}
+            <Tooltip
+              label={empty ? '无此状态任务' : `${TASK_STATUS_LABELS[column.status].zh}（${TASK_STATUS_LABELS[column.status].en}）`}
+              portal
             >
-              <StateDot state={STATUS_DOT_STATE[column.status as TaskStatus]} size={8} />
-              <span>{TASK_STATUS_LABELS[column.status].zh}</span>
-              <span className="dswf-tt-col-count">{column.cards.length}</span>
-            </div>
+              <div className="dswf-tt-col-head">
+                <StateDot state={STATUS_DOT_STATE[column.status as TaskStatus]} size={8} />
+                <span>{TASK_STATUS_LABELS[column.status].zh}</span>
+                <span className="dswf-tt-col-count">{column.cards.length}</span>
+              </div>
+            </Tooltip>
             {empty
               ? null
               : column.cards.map((card) => (

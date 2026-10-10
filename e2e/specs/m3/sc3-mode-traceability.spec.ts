@@ -80,8 +80,9 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    // 行锚 = 展开钮 title 携带提案标题——按标题定位行
-    const rowByTitle = (title: string) => page.locator(`[data-dswf-ov-parent-toggle][title="${title}"]`).first().locator('xpath=..')
+    // 行锚 = 展开钮行标题文本（.dswf-ov-parent-title span 内联）——按标题定位行
+    // （D30：展开钮原生 title 退役 → 官方 Tooltip label，定位锚迁移至行标题文本）
+    const rowByTitle = (title: string) => page.locator('[data-dswf-ov-parent-toggle]', { hasText: title }).first().locator('xpath=..')
     const expRow = rowByTitle('SC3 远征提案')
     await expect(expRow.locator('[data-dswf-mode-chip]'), '远征行 mode chip 在场').toBeVisible({ timeout: 30_000 })
     await expect(expRow.locator('[data-dswf-mode-chip]')).toHaveAttribute('data-dswf-mode-chip', 'blitz', { timeout: 15_000 })
@@ -90,7 +91,10 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toHaveAttribute('data-dswf-mode-chip', 'unmarked')
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toContainText('未标记')
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toBeDisabled()
-    await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toHaveAttribute('title', '扫描吸收的旧提案无溯源')
+    // D30：未标记说明 = 官方 Tooltip 深色气泡（portal 逃逸至 body，role=tooltip）——悬停出泡断言
+    await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).not.toHaveAttribute('title', /.+/)
+    await unmarkedRow.locator('[data-dswf-mode-chip]').hover()
+    await expect(page.locator('body > span[role="tooltip"]'), '官方 Tooltip 气泡在场').toContainText('扫描吸收的旧提案无溯源')
 
     // ── ④ feature 恒远征：expedition 提案 accepted 成链 → feature 容器任务快照恒 expedition ──
     const chainProp = (await driver.call('forgeProposals', 'createProposal', {

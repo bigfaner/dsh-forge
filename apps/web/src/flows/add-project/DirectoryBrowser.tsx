@@ -13,6 +13,7 @@ import {
   Button,
   IconChevronUpOutlineRegular,
   IconFolderCloseRegular,
+  Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
 import { browserActions } from './browser-actions.js'
@@ -129,45 +130,51 @@ export function DirectoryBrowserView({
   return (
     <div className="dswf-fb" data-dswf-fb="browser">
       <div className="dswf-fb-bar">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="dswf-fb-up"
-          aria-label="上一级"
-          title="上一级"
-          disabled={parentPath === null}
-          onClick={onUp}
-        >
-          <IconChevronUpOutlineRegular size={16} />
-        </Button>
-        <nav className="dswf-fb-crumb" aria-label="目录位置" title={nav.cwd ?? undefined}>
-          {crumbs.map((segment, index) => {
-            const current = index === crumbs.length - 1
-            return (
-              <span className="dswf-fb-crumb-slot" key={segment.path}>
-                {index > 0 ? (
-                  <span className="dswf-fb-crumb-sep" aria-hidden="true">
-                    ›
-                  </span>
-                ) : null}
-                {current ? (
-                  <span className="dswf-fb-crumb-seg dswf-fb-crumb-current" aria-current="page">
-                    {segment.name}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="dswf-fb-crumb-seg"
-                    data-dswf-jump={segment.path}
-                    onClick={onJump === undefined ? undefined : () => { onJump(segment.path) }}
-                  >
-                    {segment.name}
-                  </button>
-                )}
-              </span>
-            )
-          })}
-        </nav>
+        {/* D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span） */}
+        <Tooltip label="上一级" portal>
+          <span className="dswf-tipwrap">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="dswf-fb-up"
+              aria-label="上一级"
+              disabled={parentPath === null}
+              onClick={onUp}
+            >
+              <IconChevronUpOutlineRegular size={16} />
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip label={nav.cwd ?? ''} disabled={nav.cwd === null} portal>
+          <nav className="dswf-fb-crumb" aria-label="目录位置">
+            {crumbs.map((segment, index) => {
+              const current = index === crumbs.length - 1
+              return (
+                <span className="dswf-fb-crumb-slot" key={segment.path}>
+                  {index > 0 ? (
+                    <span className="dswf-fb-crumb-sep" aria-hidden="true">
+                      ›
+                    </span>
+                  ) : null}
+                  {current ? (
+                    <span className="dswf-fb-crumb-seg dswf-fb-crumb-current" aria-current="page">
+                      {segment.name}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="dswf-fb-crumb-seg"
+                      data-dswf-jump={segment.path}
+                      onClick={onJump === undefined ? undefined : () => { onJump(segment.path) }}
+                    >
+                      {segment.name}
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+          </nav>
+        </Tooltip>
       </div>
 
       {phase.phase === 'error' ? (
@@ -208,16 +215,19 @@ export function DirectoryBrowserView({
 
       <div className="dswf-fb-footer">
         <p className="dswf-fb-hint">{hint}</p>
-        <Button
-          variant="primary"
-          size="md"
-          className="dswf-fb-confirm"
-          disabled={!confirmable}
-          title={nav.selected ?? '先在列表中选中一个文件夹'}
-          onClick={onConfirm === undefined ? undefined : confirm}
-        >
-          {confirmLabel}
-        </Button>
+        <Tooltip label={nav.selected ?? '先在列表中选中一个文件夹'} portal>
+          <span className="dswf-tipwrap">
+            <Button
+              variant="primary"
+              size="md"
+              className="dswf-fb-confirm"
+              disabled={!confirmable}
+              onClick={onConfirm === undefined ? undefined : confirm}
+            >
+              {confirmLabel}
+            </Button>
+          </span>
+        </Tooltip>
       </div>
     </div>
   )

@@ -294,12 +294,12 @@ describe('DispatchPanelBody 纯渲染（面板形态）', () => {
     onExpand: () => {},
   }
 
-  it('行集全量呈现：状态点 + 键（slug/localId）+ 标题 + 状态标签 + ⟞ 钮 + 计数', () => {
+  it('行集全量呈现：状态点 + 键（localId 内联；全键 slug/localId = 官方 Tooltip label——D30 原生 title 退役）+ 标题 + 状态标签 + ⟞ 钮 + 计数', () => {
     const markup = renderToStaticMarkup(<DispatchPanelBody {...base} onOpenTask={() => {}} onOpenWorkerSession={() => {}} />)
     expect(markup).toContain('data-dswf-dp=""')
     expect(markup).toContain('data-dswf-dp-row="t-a"')
     expect(markup).toContain('data-dswf-dp-row="t-b"')
-    expect(markup).toContain('dsh-forge-m2-pipeline/4.2')
+    expect(markup).not.toContain('title=') // D30：全键/标题悬停归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(markup).toContain('第二任务')
     expect(markup).toContain('data-dswf-dp-count=""')
     expect(markup).toContain('>2<')
@@ -336,7 +336,7 @@ describe('DispatchPanelBody 纯渲染（⟡N 折叠角标形态 + 往返）', ()
     expect(markup).toContain('data-dswf-dp-badge=""')
     expect(markup).toContain('data-dswf-dp-badge-count=""')
     expect(markup).toContain('>3<')
-    expect(markup).toContain('展开派发任务面板')
+    expect(markup).not.toContain('title=') // D30：展开语义归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(markup).not.toContain('data-dswf-dp-row')
     expect(markup).toContain('left:900px') // 角标恒锚定位（不随拖移位）
   })

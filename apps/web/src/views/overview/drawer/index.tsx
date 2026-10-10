@@ -18,7 +18,7 @@
 // 语义：跳对应对话面板——两动作一体）。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskDetail, type TaskDetailQuery } from '@dsh-forge/contracts'
-import { Button, IconCloseFillRegular, IconFullscreenOutlineMedium, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, IconFullscreenOutlineMedium, StateDot, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components/index.js'
 import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { RpcClientError } from '../../../rpc/errors.js'
@@ -302,29 +302,31 @@ function DrawerResizeHandle({
     }
   }
   return (
-    <div
-      className="dswf-td-resize"
-      role="separator"
-      aria-orientation="vertical"
-      tabIndex={0}
-      aria-label={edge === 'left' ? '拖动调整弹窗宽度（左缘）' : '拖动调整弹窗宽度（右缘）'}
-      title="拖动调宽 · 双击复位"
-      data-dswf-td-resize={edge}
-      onKeyDown={handleKeyDown}
-      onDoubleClick={() => {
-        onResetWidth()
-      }}
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId)
-        onDragStart(edge === 'left' ? 'resize-left' : 'resize-right', event.clientX, event.clientY)
-      }}
-      onPointerMove={(event) => {
-        if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
-        onDragMove(event.clientX, event.clientY)
-      }}
-      onPointerUp={onDragEnd}
-      onPointerCancel={onDragEnd}
-    />
+    // D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗 transform/层叠上下文）
+    <Tooltip label="拖动调宽 · 双击复位" portal>
+      <div
+        className="dswf-td-resize"
+        role="separator"
+        aria-orientation="vertical"
+        tabIndex={0}
+        aria-label={edge === 'left' ? '拖动调整弹窗宽度（左缘）' : '拖动调整弹窗宽度（右缘）'}
+        data-dswf-td-resize={edge}
+        onKeyDown={handleKeyDown}
+        onDoubleClick={() => {
+          onResetWidth()
+        }}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId)
+          onDragStart(edge === 'left' ? 'resize-left' : 'resize-right', event.clientX, event.clientY)
+        }}
+        onPointerMove={(event) => {
+          if ((event.buttons & 1) === 0) return // 仅主键按住拖拽（悬停移动不触发）
+          onDragMove(event.clientX, event.clientY)
+        }}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+      />
+    </Tooltip>
   )
 }
 
@@ -436,39 +438,42 @@ export function TaskDrawerBody({
       />
       <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(onDragStart, onDragMove, onDragEnd)}>
         <StateDot state={STATUS_DOT_STATE[detail.taskStatus]} size={8} />
-        <span className="dswf-td-key" title={taskKeyLabel(detail.slug, detail.localId)}>
-          {taskKeyLabel(detail.slug, detail.localId)}
-        </span>
+        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗 transform/层叠上下文） */}
+        <Tooltip label={taskKeyLabel(detail.slug, detail.localId)} portal>
+          <span className="dswf-td-key">{taskKeyLabel(detail.slug, detail.localId)}</span>
+        </Tooltip>
         <Tag tone="neutral" className="dswf-td-status">
           {TASK_STATUS_LABELS[detail.taskStatus].zh}
         </Tag>
         <span className="dswf-td-spacer" />
-        <Button
-          variant="toolbar"
-          size="sm"
-          className="dswf-td-expand"
-          data-dswf-td-expand=""
-          aria-pressed={expanded}
-          title={expanded ? '收起为简要信息' : '展开完整信息'}
-          onClick={onToggleForm}
-        >
-          <IconFullscreenOutlineMedium size={14} />
-        </Button>
-        <Button
-          variant="toolbar"
-          size="sm"
-          className="dswf-td-close"
-          data-dswf-td-close=""
-          aria-label="关闭弹窗"
-          title="关闭（Esc）"
-          onClick={onClose}
-        >
-          <IconCloseFillRegular size={14} />
-        </Button>
+        <Tooltip label={expanded ? '收起为简要信息' : '展开完整信息'} portal>
+          <Button
+            variant="toolbar"
+            size="sm"
+            className="dswf-td-expand"
+            data-dswf-td-expand=""
+            aria-pressed={expanded}
+            onClick={onToggleForm}
+          >
+            <IconFullscreenOutlineMedium size={14} />
+          </Button>
+        </Tooltip>
+        <Tooltip label="关闭（Esc）" portal>
+          <Button
+            variant="toolbar"
+            size="sm"
+            className="dswf-td-close"
+            data-dswf-td-close=""
+            aria-label="关闭弹窗"
+            onClick={onClose}
+          >
+            <IconCloseFillRegular size={14} />
+          </Button>
+        </Tooltip>
       </div>
-      <div className="dswf-td-title" title={detail.title}>
-        {detail.title}
-      </div>
+      <Tooltip label={detail.title} portal>
+        <div className="dswf-td-title">{detail.title}</div>
+      </Tooltip>
       {expanded ? (
         <>
           <div className="dswf-td-kvstrip" data-dswf-td-kv="">
@@ -527,18 +532,19 @@ export function TaskDrawerBody({
         {(detail.taskStatus === 'blocked' || detail.taskStatus === 'rejected') && onDiagnoseFailure !== undefined ? (
           <span className="dswf-td-diagwrap" data-dswf-td-diagwrap="">
             <DiagToast result={diagResult} onDismiss={onDiagDismiss} {...(onDiagSend !== undefined ? { onSend: onDiagSend } : {})} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="dswf-td-diag"
-              data-dswf-td-diag={detail.taskStatus}
-              title="诊断失败——失败摘要 toast + 可发送给 agent 排查修复"
-              onClick={() => {
-                onDiagnoseFailure(detail)
-              }}
-            >
-              诊断失败
-            </Button>
+            <Tooltip label="诊断失败——失败摘要 toast + 可发送给 agent 排查修复" portal>
+              <Button
+                variant="outline"
+                size="sm"
+                className="dswf-td-diag"
+                data-dswf-td-diag={detail.taskStatus}
+                onClick={() => {
+                  onDiagnoseFailure(detail)
+                }}
+              >
+                诊断失败
+              </Button>
+            </Tooltip>
           </span>
         ) : null}
         <Button
@@ -855,9 +861,11 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
         <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" title="关闭（Esc）" onClick={onClose}>
-            <IconCloseFillRegular size={14} />
-          </Button>
+          <Tooltip label="关闭（Esc）" portal>
+            <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+              <IconCloseFillRegular size={14} />
+            </Button>
+          </Tooltip>
         </div>
         <div className="dswf-td-face">
           {state.error.uiState === 'empty-state' ? (
@@ -891,9 +899,11 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
         <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" title="关闭（Esc）" onClick={onClose}>
-            <IconCloseFillRegular size={14} />
-          </Button>
+          <Tooltip label="关闭（Esc）" portal>
+            <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+              <IconCloseFillRegular size={14} />
+            </Button>
+          </Tooltip>
         </div>
         <SkeletonRows className="dswf-td-skeleton" rowClassName="dswf-td-skeleton-row" rows={8} anchor="data-dswf-td-skeleton" />
       </aside>

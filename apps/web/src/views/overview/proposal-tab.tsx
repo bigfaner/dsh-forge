@@ -18,7 +18,7 @@ import {
   type TransitionProposalResult,
   type ProposalRow,
 } from '@dsh-forge/contracts'
-import { Menu, Tag, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, Tag, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../../components/index.js'
 import { ModeChip } from '../../components/ModeChip.js'
 import { isoTimeLabelZh } from '../../components/time-label.js'
@@ -143,22 +143,22 @@ function ProposalDocList({
     <div className="dswf-ov-dgroups" data-dswf-ov-pdocs={slug}>
       <div className="dswf-ov-docs-head">{`文档（${docs.length} 篇）`}</div>
       {docs.map((doc) => (
-        <button
-          type="button"
-          className="dswf-ov-drow"
-          key={doc.relPath}
-          data-dswf-ov-doc={doc.relPath}
-          title={doc.relPath}
-          onClick={() => {
-            onOpenDoc(doc.relPath)
-          }}
-        >
-          <span className="dswf-ov-drow-path">{`📄 ${docPathInProposal(doc.relPath, slug)}`}</span>
-          {doc.status === undefined ? null : <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>}
-          <span className="dswf-ov-drow-arrow" aria-hidden="true">
-            ›
-          </span>
-        </button>
+        <Tooltip key={doc.relPath} label={doc.relPath} portal>
+          <button
+            type="button"
+            className="dswf-ov-drow"
+            data-dswf-ov-doc={doc.relPath}
+            onClick={() => {
+              onOpenDoc(doc.relPath)
+            }}
+          >
+            <span className="dswf-ov-drow-path">{`📄 ${docPathInProposal(doc.relPath, slug)}`}</span>
+            {doc.status === undefined ? null : <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>}
+            <span className="dswf-ov-drow-arrow" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        </Tooltip>
       ))}
     </div>
   )
@@ -248,21 +248,22 @@ export function ProposalsTabBody({
           return (
             <div className="dswf-ov-item" key={proposal.proposalId}>
               <div className={open ? 'dswf-ov-parent is-open' : 'dswf-ov-parent'} data-dswf-ov-parent={key}>
-                <button
-                  type="button"
-                  className="dswf-ov-parent-toggle"
-                  aria-expanded={open}
-                  title={proposal.title}
-                  data-dswf-ov-parent-toggle={key}
-                  onClick={() => {
-                    onToggleRow(key)
-                  }}
-                >
-                  <span className="dswf-ov-caret" aria-hidden="true">
-                    {open ? '▾' : '▸'}
-                  </span>
-                  <span className="dswf-ov-parent-title">{proposal.title || proposal.slug}</span>
-                </button>
+                <Tooltip label={proposal.title} portal>
+                  <button
+                    type="button"
+                    className="dswf-ov-parent-toggle"
+                    aria-expanded={open}
+                    data-dswf-ov-parent-toggle={key}
+                    onClick={() => {
+                      onToggleRow(key)
+                    }}
+                  >
+                    <span className="dswf-ov-caret" aria-hidden="true">
+                      {open ? '▾' : '▸'}
+                    </span>
+                    <span className="dswf-ov-parent-title">{proposal.title || proposal.slug}</span>
+                  </button>
+                </Tooltip>
                 <ModeChip
                   mode={proposal.mode}
                   {...(proposal.mode !== undefined && onModeChange !== undefined
@@ -273,17 +274,18 @@ export function ProposalsTabBody({
                   {PROPOSAL_STATUS_LABELS[proposal.proposalStatus].zh}
                 </Tag>
                 {onOpenSession !== undefined ? (
-                  <button
-                    type="button"
-                    className="dswf-ov-act"
-                    data-dswf-ov-opensession={proposal.slug}
-                    title="打开新会话（自动切提案模式 + 现状上下文预填·不发送）"
-                    onClick={() => {
-                      onOpenSession(proposal, docs)
-                    }}
-                  >
-                    打开新会话
-                  </button>
+                  <Tooltip label="打开新会话（自动切提案模式 + 现状上下文预填·不发送）" portal>
+                    <button
+                      type="button"
+                      className="dswf-ov-act"
+                      data-dswf-ov-opensession={proposal.slug}
+                      onClick={() => {
+                        onOpenSession(proposal, docs)
+                      }}
+                    >
+                      打开新会话
+                    </button>
+                  </Tooltip>
                 ) : null}
                 {hasMenu ? (
                   <Menu
@@ -302,20 +304,21 @@ export function ProposalsTabBody({
                       proposalMenuSelect(id, { onVerdict, onModeChange, onOpenSession: onOpenSession === undefined ? undefined : (p) => onOpenSession(p, docsMap.get(p.slug) ?? []), proposals })
                     }}
                     anchor={
-                      <button
-                        type="button"
-                        className="dswf-ov-more"
-                        data-dswf-ov-more={proposal.proposalId}
-                        aria-label="提案行操作"
-                        aria-haspopup="menu"
-                        aria-expanded={menuProposalId === proposal.proposalId}
-                        title="行操作"
-                        onClick={() => {
-                          onMenuOpenChange(menuProposalId === proposal.proposalId ? null : proposal.proposalId)
-                        }}
-                      >
-                        ⋯
-                      </button>
+                      <Tooltip label="行操作" portal>
+                        <button
+                          type="button"
+                          className="dswf-ov-more"
+                          data-dswf-ov-more={proposal.proposalId}
+                          aria-label="提案行操作"
+                          aria-haspopup="menu"
+                          aria-expanded={menuProposalId === proposal.proposalId}
+                          onClick={() => {
+                            onMenuOpenChange(menuProposalId === proposal.proposalId ? null : proposal.proposalId)
+                          }}
+                        >
+                          ⋯
+                        </button>
+                      </Tooltip>
                     }
                   />
                 ) : null}
@@ -332,9 +335,9 @@ export function ProposalsTabBody({
                   <div className="dswf-ov-fmeta-grid">
                     <div className="dswf-ov-fmeta-row">
                       <span className="dswf-ov-fmeta-k">标识</span>
-                      <span className="dswf-ov-fmeta-v" title={proposal.slug}>
-                        {proposal.slug}
-                      </span>
+                      <Tooltip label={proposal.slug} portal>
+                        <span className="dswf-ov-fmeta-v">{proposal.slug}</span>
+                      </Tooltip>
                     </div>
                     <div className="dswf-ov-fmeta-row">
                       <span className="dswf-ov-fmeta-k">作者</span>
@@ -352,9 +355,9 @@ export function ProposalsTabBody({
                     </div>
                     <div className="dswf-ov-fmeta-row">
                       <span className="dswf-ov-fmeta-k">创建</span>
-                      <span className="dswf-ov-fmeta-v" title={proposal.createdAt}>
-                        {isoTimeLabelZh(proposal.createdAt, at)}
-                      </span>
+                      <Tooltip label={proposal.createdAt} portal>
+                        <span className="dswf-ov-fmeta-v">{isoTimeLabelZh(proposal.createdAt, at)}</span>
+                      </Tooltip>
                     </div>
                     <div className="dswf-ov-fmeta-row">
                       <span className="dswf-ov-fmeta-k">裁决</span>

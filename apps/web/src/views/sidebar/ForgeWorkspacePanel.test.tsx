@@ -108,17 +108,17 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
 })
 
 describe('D3 项目行仅名称 + 路径悬停（M3.1 左栏三残差——偏离官方 Rows meta 记账）', () => {
-  it('canonicalPath（wsPath）以原生 title 悬停提示在场（项目块 title 属性）', () => {
+  it('canonicalPath（wsPath）悬停提示 = 官方 Tooltip label（D30：原生 title 退役，D3 锚面就地迁移）', () => {
     const markup = panel()
-    expect(markup).toContain('title="Z:/w/p1"')
-    // 多项目各携其径（title 随行块逐项）
+    expect(markup).not.toContain('title=') // 原生 title 退役（D30）——路径 label 归官方 Tooltip（结构 pin tests/structure/d30）
+    // 多项目行块仍逐项挂 Tooltip label（wsPath → label 源码面锚——tests/structure/d30 TOOLTIP_FILES）
     const two = panel({ tree: [node(), node({ projectId: 'p2', workspaceId: 'w2', name: '文档站', wsPath: 'Z:/w/p2', sessions: [] })] })
-    expect(two).toContain('title="Z:/w/p2"')
+    expect(two).not.toContain('title=')
   })
 
-  it('零路径次行：wsPath 仅 title 属性一处，不作为文本内容渲染（官方 Rows meta 形态零在场）', () => {
+  it('零路径次行：wsPath 静态零在场（仅官方 Tooltip label 悬停携带），不作为文本内容渲染（官方 Rows meta 形态零在场）', () => {
     const markup = panel()
-    expect(markup.match(/Z:\/w\/p1/g)).toHaveLength(1)
+    expect(markup.match(/Z:\/w\/p1/g) ?? []).toHaveLength(0)
     expect(markup).not.toContain('>Z:/w/p1<')
     // 官方 meta 次行类名零在场（ui-workspace Rows .meta 同型面不自绘）
     expect(markup).not.toContain('project-meta')
