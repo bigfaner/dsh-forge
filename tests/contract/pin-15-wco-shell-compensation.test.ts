@@ -65,6 +65,17 @@ describe('pin ⑮-2 ui-layout WCO 补偿面（D1 对冲目标 + frame 结构事�
     expect(fn).toContain('document.title')
     expect(norm(fn)).toMatch(/useEffect[\s\S]*return null/)
   })
+
+  it('D39 前提面：WCO frame 背景 = sidebar-fill + centerCol 显式 bg-base + rightbarCol 零独立背景规则（darwin-only bg-base——产品对冲动因）', () => {
+    expect(client).toMatch(
+      /\[data-windows-titlebar\][^{]*_frame\{[^}]*background:var\(--dsw-specific-sidebar-fill\)/,
+    )
+    expect(client).toMatch(
+      /\[data-windows-titlebar\][^{]*_centerCol\{[^}]*background:var\(--dsw-alias-bg-base\)/,
+    )
+    expect(client).toMatch(/\[data-platform=darwin\][^{]*_rightbarCol\{background:var\(--dsw-alias-bg-base\)\}/)
+    expect(client).not.toMatch(/\[data-windows-titlebar\][^{]*_rightbarCol\{/)
+  })
 })
 
 describe('pin ⑮-3 ui-sidebar WCO 收起形态（D2 对冲目标）', () => {
@@ -191,6 +202,11 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     }
   })
 
+  it('D39 dock 余缝同色：rightbarCol（frame 第三结构子）bg-base 对冲——上/下/右余缝与中区同色', () => {
+    const body = ruleOf('div:has\\(> \\[data-shell-overlay\\]\\) > div:nth-child\\(3\\)')
+    expect(body).toContain('background: var(--dsw-alias-bg-base)')
+  })
+
   it('非 WCO 零波及：全部规则锚定 html[data-windows-titlebar]（D2 收起态另锚 data-sidebar-collapsed）', () => {
     const rules = css.match(/^[^\s@][^{]*\{/gm) ?? []
     expect(rules.length).toBeGreaterThan(0)
@@ -208,6 +224,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(css).toContain('D2')
     expect(css).toContain('D31')
     expect(css).toContain('D32')
+    expect(css).toContain('D39')
     // 令牌 lint 口径（lint-tokens TOKEN_PROPS 面）：padding/margin/gap/radius 裸 px 行
     // 均须随行 dsw-raw 注记（59/18/10/6/36/12px 结构刻度族——width/height/z-index 非令牌面）
     const pxLines = css

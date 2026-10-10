@@ -15,11 +15,16 @@
  *   D31 竖线自窗口顶点 y=0 连续贯穿至底（带内段 frame::after 补齐——D1 残差
  *      2026-10-10 实机报障「分隔线没有到达最高点」收尾）；
  *   D32 分隔线 handle / 会话消息文字单色光标纯白不可辨 → 高对比色图光标（Windows/DWM
- *      单色光标渲染缺陷的产品侧缓解——OS 级缺陷非样式回归，块尾专节注记）。
+ *      单色光标渲染缺陷的产品侧缓解——OS 级缺陷非样式回归，块尾专节注记）；
+ *   D39 dock 余缝同色（2026-10-10 用户追加裁决「中间区域及 dockkit 上方跟下方保持一样的
+ *      颜色」——WCO frame 背景 = sidebar-fill 官方形态下 rightbarCol 无独立背景规则，
+ *      dock 上/下/右余缝透出 sidebar-fill 与中区 bg-base 成色差；产品 dock 列显式对冲
+ *      bg-base，块尾专节注记）。
  *
  * 锚定纪律（brand.css 先例——hash 类名不稳定不落锚），全部经稳定结构面选取：
  *   - frame = [data-shell-overlay] 的父级（overlayLayer 为 frame 唯一直属渲染点）；
- *   - sidebarCol / centerCol = frame 首子 / 次子（DocumentTitle 零 DOM——pin ⑮-2）；
+ *   - sidebarCol / centerCol / rightbarCol = frame 首子 / 次子 / 第三结构子（DocumentTitle
+ *     零 DOM——pin ⑮-2；handles 为绝对定位元素尾随 overlayLayer 之后不占前位）；
  *   - 收起态 = frame[data-sidebar-collapsed='true']（官方 AppFrame 直标）；
  *   - 侧栏根 = [data-slot='sidebar'] 直子（官方 SlotOutlet 洞锚 display:contents）；
  *   - 区位 = logoRow（首子 div）/ newSession（直属 button）/ panelList（直属 nav）/
@@ -180,4 +185,22 @@ html[data-windows-titlebar] [data-conversation-content] {
 /* ② 会话消息文字（暗：浅形深描边——钢笔形同上，热点 = 笔尖 5 19） */
 html[data-windows-titlebar] body[data-ds-dark-theme] [data-conversation-content] {
   cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%231f1f1f'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2019L9.7%2016.6L16%2010.2L13.8%208L7.4%2014.3Z'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23ffffff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2019L9.7%2016.6L16%2010.2L13.8%208L7.4%2014.3Z'/%3E%3C/g%3E%3C/svg%3E") 5 19, text; /* dsw-raw D32 色图光标——data-URI 内色值不可令牌化（OS 单色光标缺陷缓解） */
+}
+
+/* ── D39：dock 余缝同色（WCO rightbarCol bg-base 对冲）──
+ * 根因（0.2.0-rc.2 源码核验，pin ⑮-2 前提面）：WCO 官方形态 frame 背景 =
+ * var(--dsw-specific-sidebar-fill)（padding-top 标题栏带 + 整 frame 底），centerCol
+ * 显式 bg-base（左上 16px 圆角），rightbarCol（dock 列）无独立背景规则（官方仅
+ * [data-platform=darwin] 给 rightbarCol bg-base）→ dock 面板上/下/右余缝透出 frame
+ * 的 sidebar-fill，与中区 bg-base 成色差。
+ * 产品裁决（proposal dsh-forge-m3.1-ui-alignment 差异清单 D39；2026-10-10 用户追加裁决
+ * 「中间区域及 dockkit 上方跟下方保持一样的颜色」）＝ dock 列显式对冲
+ * var(--dsw-alias-bg-base)——余缝与中区同色。官方偏离记账（与 D1 竖线同族）：
+ * WCO frame bg = sidebar-fill 为官方形态，产品 dock 列例外对冲，升级窗口令牌再对账。
+ * 锚 = frame 第三结构子 div:nth-child(3)（DocumentTitle 零 DOM pin ⑮-2；handles 为
+ * 绝对定位元素尾随 overlayLayer 之后——结构序执行期核验；官方 rightbarCol 直标
+ * data-rightbar-col 随行旁证）。亮/暗随 bg-base 令牌双主题联动——零新机械。
+ * 非 WCO 零波及：锚定 html[data-windows-titlebar]（pin ⑮-6 既有断言面自动覆盖）。 */
+html[data-windows-titlebar] div:has(> [data-shell-overlay]) > div:nth-child(3) {
+  background: var(--dsw-alias-bg-base);
 }
