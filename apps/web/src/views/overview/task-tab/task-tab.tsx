@@ -262,7 +262,8 @@ export function TasksTabBody({
       ? undefined
       : `${featureCard === undefined ? '' : `${FEATURE_STATUS_LABELS[featureCard.featureStatus].zh} `}${stats.byStatus.completed ?? 0}/${stats.total}`,
   )
-  // 计数注 = 帧侧 taskCountNote 原值（m3.1 D26：突击「无 feature 阶段」过程注废除——零过程注释文案）
+  // 计数注 = 帧侧 taskCountNote 原值（m3.1 D18：收进容器 pill 悬停——正文零计数注；
+  // D26「无 feature 阶段」过程注废除沿袭）
   const countNote = stats === undefined ? undefined : taskCountNote(searchActive, cards?.length ?? 0, stats.total)
 
   // 内容区分派：骨架（首装/清场）→ 错误（无旧内容）→ DAG graph 在途 → 空态 → 三视图
@@ -347,7 +348,7 @@ export function TasksTabBody({
             <Pill
               className="dswf-tt-featpill"
               data-dswf-tt-contpill={containerKeyOf(container)}
-              title={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）`}
+              title={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）${countNote === undefined ? '' : ` · ${countNote}`}`}
               aria-haspopup="menu"
               aria-expanded={containerMenuOpen}
               onClick={() => {
@@ -361,11 +362,6 @@ export function TasksTabBody({
             </Pill>
           }
         />
-        {countNote !== undefined ? (
-          <span className="dswf-tt-count" data-dswf-tt-count="">
-            {countNote}
-          </span>
-        ) : null}
         <ViewDropdown view={view} open={viewMenuOpen} onViewChange={onViewChange} onOpenChange={onViewMenuOpenChange} />
         <span className="dswf-tt-spacer" />
         <div className="dswf-tt-rightbar" data-dswf-tt-rightbar="">

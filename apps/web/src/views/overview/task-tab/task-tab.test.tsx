@@ -120,12 +120,13 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).toContain('data-dswf-tt-rightbar') // 右簇容器
   })
 
-  it('突击提案容器：琥珀点 + 「突击提案」chip + 计数注原值 + 无「诊断」按钮 + 零过程注释（D26）', () => {
+  it('突击提案容器：琥珀点 + 「突击提案」chip + 计数注收进 pill 悬停（正文零计数注——m3.1 D18）+ 无「诊断」按钮 + 零过程注释（D26）', () => {
     const html = render({ container: BLITZ_CONTAINER })
     expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="blitz"')
     expect(html).toContain('突击提案 · 2 任务')
-    expect(html).toContain('2 条')
+    expect(html).toContain('· 2 条') // 计数注随 pill title 悬停承载（m3.1 D18）
+    expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注（m3.1 D18——注不再占工具栏正文）
     // m3.1 D26：突击容器「无 feature 阶段」计数注零在场（字符串级断言）
     expect(html).not.toContain('无 feature 阶段')
     expect(html).not.toContain('data-dswf-tt-diag') // validateFeatureTasks 为 feature 域校验
@@ -145,9 +146,10 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(render({ view: 'swim' })).toContain('视图：泳道')
   })
 
-  it('搜索在场计数 = 匹配/总数（服务端过滤面）', () => {
+  it('搜索在场计数 = 匹配/总数（收进 pill 悬停——正文零计数注，m3.1 D18）', () => {
     const html = render({ search: '评估' })
-    expect(html).toContain('1/2')
+    expect(html).toContain('· 1/2')
+    expect(html).not.toContain('data-dswf-tt-count')
   })
 
   it('无单任务执行入口（v22 ㊳ Hard Rule）：任务行/工具栏零「执行」动作', () => {
@@ -158,11 +160,13 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
 })
 
 describe('TasksTabBody · chips 统一过滤（AC4 沿袭）', () => {
-  it('七态 chips（StatusChips 复用）+ 计数 = 容器域 stats 单源', () => {
+  it('七态 chips（StatusChips 复用）次行独占（taskbar 行外——m3.1 D18）+ 计数 = 容器域 stats 单源', () => {
     const html = render()
     expect(html).toContain('data-dswf-ov-stchips=""')
     expect(html).toContain('data-dswf-ov-stchip="completed"')
     expect(html).toContain('data-dswf-ov-stchip="pending"')
+    // 次行独占：chips 非工具栏行内控件——taskbar 开标签在前、chips 在其后（DOM 序）
+    expect(html.indexOf('data-dswf-ov-stchips')).toBeGreaterThan(html.indexOf('data-dswf-tt-taskbar'))
   })
 
   it('stats 在途 = 全 0 计数（chips 全禁用——不可点出空态）', () => {

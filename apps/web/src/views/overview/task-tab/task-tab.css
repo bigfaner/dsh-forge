@@ -1,15 +1,18 @@
-/* 任务子 tab 三视图样式（定位：业务——3.6：ov-taskbar[feature pill + 计数 + 三视图 seg]
+/* 任务子 tab 三视图样式（定位：业务——3.6：ov-taskbar[feature pill + 三视图 seg]
  * + 列表两行卡 + DAG[SVG 边层 + HTML 节点层] + 泳道七态横向列）。
  * 结构基准 = 原型 ovTasks/renderDag/renderSwim（ui-design v17 流程 3——布局结构不变、
  * 视觉让官方：排版刻度全令牌取值[原型 10–11.5px 小字统一收敛官方 13px 档]，色全
  * --dsw-alias-* 语义令牌）。chips 复用 overview.css dswf-ov-stchip 族（StatusChips 同件）。
- * dsw-raw 豁免（执行记录同步）：节点/卡片几何与行列刻度 = 原型 renderDag 结构刻度
- * （170×64 节点 + 14/40 间距——布局常量归 dag-layout.ts 单源，CSS 仅消费定位锚）；
- * taskbar/seg/分组标签行高 24–28px 与 chips/父行刻度互齐（overview.css 同款豁免先例）；
- * 代码族等宽 = docs.css 同款豁免（官方主题无等宽族令牌）。 */
+ * M3.1 对齐（dsh-forge-m3.1-ui-alignment D18/D19）：计数注退役出工具栏正文（收进容器
+ * pill 悬停）；三视图卡片语言 = 纠正版原型（dag-wrap 边框 12 圆角浮卡 + 62vh + 画布居中、
+ * 节点/泳道卡 10 圆角 bg-base 浮卡 + hover 主色描边、泳道列定宽 178 + 列头胶囊交互底）。
+ * dsw-raw 豁免（执行记录同步）：节点/卡片几何与行列刻度 = 原型结构刻度（170×64 节点 +
+ * 14/40 间距——布局常量归 dag-layout.ts 单源，CSS 仅消费定位锚；D29 190×72 + 标题两行
+ * 归任务 1.14，本轮零改动）；taskbar/seg/分组标签行高 24–28px 与 chips/父行刻度互齐
+ * （overview.css 同款豁免先例）；代码族等宽 = docs.css 同款豁免（官方主题无等宽族令牌）。 */
 
-/* ── ov-taskbar（v22 布局）：容器 pill（双轨）+ 计数注记 + 视图下拉 + spacer +
- *    右簇 [诊断]+[派发] 固定最右端——同行不换行（ui-design ㉟） ── */
+/* ── ov-taskbar（v22 布局）：容器 pill（双轨·计数注收进悬停——D18 正文零计数注）+
+ *    视图下拉 + spacer + 右簇 [诊断]+[派发] 固定最右端——同行不换行（ui-design ㉟） ── */
 .dswf-tt-taskbar {
   display: flex;
   align-items: center;
@@ -90,12 +93,6 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.dswf-tt-count {
-  flex: none;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-tertiary);
-}
-
 .dswf-tt-spacer {
   flex: 1;
 }
@@ -154,7 +151,7 @@
   display: flex;
   flex-direction: column;
   margin-block-end: 1px; /* dsw-raw 原型行距刻度（紧凑列） */
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 12px; /* dsw-raw 原型 task-item r-card 圆角刻度（M3.1 D19 三视图卡片语言） */
   min-width: 0;
 }
 
@@ -216,14 +213,20 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── DAG 视图：SVG 边层 + HTML 节点层（几何常量归 dag-layout.ts——CSS 零重算） ── */
+/* ── DAG 视图：SVG 边层 + HTML 节点层（几何常量归 dag-layout.ts——CSS 零重算）。
+ *    M3.1 D19 卡片语言：wrap = 边框 12 圆角浮卡 + 62vh 视口帽 + 画布居中（原型 dag-wrap） ── */
 .dswf-tt-dagwrap {
   overflow: auto;
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  max-height: 62vh; /* dsw-raw 原型 dag-wrap 视口帽刻度（图例常驻可视——D19） */
+  margin: 0 var(--dsw-font-s-14-line-height);
+  padding: 6px; /* dsw-raw 原型 dag-wrap 内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px; /* dsw-raw 原型 r-card 圆角刻度（D19 卡片语言） */
 }
 
 .dswf-tt-dagcanvas {
   position: relative;
+  margin: 0 auto; /* 原型画布居中（窄容器下图形水平居中） */
 }
 
 .dswf-tt-dagsvg {
@@ -258,14 +261,18 @@
   flex-direction: column;
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
+  border-radius: 10px; /* dsw-raw 原型节点卡圆角刻度（M3.1 D19 卡片语言） */
+  background: var(--dsw-alias-bg-base); /* D19 卡片语言：亮 = bg-base 浮卡（D13 灰底承载面） */
   overflow: hidden;
 }
 
+body[data-ds-dark-theme] .dswf-tt-node {
+  background: var(--dsw-alias-bg-layer-1); /* 官方暗色层刻度（原型 body[data-ds-dark-theme] 同源） */
+}
+
 .dswf-tt-node:hover {
-  border-color: var(--dsw-alias-border-l3);
-  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: var(--dsw-alias-link); /* 原型节点 hover = 主色描边 */
+  box-shadow: var(--dsw-elevation-soft); /* 原型 hover 软影的官方 elevation 最近语义映射 */
 }
 
 .dswf-tt-node.is-completed {
@@ -331,21 +338,21 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 泳道视图：七态横向列（0 计数列折叠窄头） ── */
+/* ── 泳道视图：七态横向列（0 计数列折叠窄头）。
+ *    M3.1 D19 卡片语言：列定宽 178 + 列头胶囊交互底（原型 swim-col/swim-col-head） ── */
 .dswf-tt-swim {
   display: flex;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 10px; /* dsw-raw 原型泳道列距刻度 */
   overflow-x: auto;
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 6px; /* dsw-raw 原型列底距刻度 */
 }
 
 .dswf-tt-col {
   display: flex;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
-  flex: 1 1 0;
-  min-width: 120px; /* dsw-raw 原型列宽下限刻度（横向滚动保护） */
-  max-width: 200px; /* dsw-raw 原型列宽上限刻度 */
+  gap: 8px; /* dsw-raw 原型列内卡距刻度 */
+  flex: 0 0 178px; /* dsw-raw 原型泳道列定宽刻度（D19） */
+  min-width: 178px; /* dsw-raw 同上 */
 }
 
 .dswf-tt-col.is-empty {
@@ -354,11 +361,16 @@
 }
 
 .dswf-tt-col-head {
+  position: sticky; /* 原型列头 sticky（纵向滚动承载面常驻） */
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 5px; /* dsw-raw 原型列头内距刻度 */
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
-  border-bottom: 2px solid var(--dsw-alias-border-l2); /* dsw-raw 原型列头下缘强调刻度 */
+  gap: 6px; /* dsw-raw 原型列头内距刻度 */
+  height: 26px; /* dsw-raw 原型列头行高刻度 */
+  padding: 0 9px; /* dsw-raw 原型列头横距刻度 */
+  border-radius: 9px; /* dsw-raw 原型列头胶囊圆角刻度 */
+  background: var(--dsw-alias-interactive-bg-hover); /* 原型列头交互底（D13 灰阶同源映射） */
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-secondary);
 }
@@ -366,8 +378,9 @@
 .dswf-tt-col.is-empty .dswf-tt-col-head {
   flex-direction: column;
   gap: 2px; /* dsw-raw 原型折叠窄头堆叠刻度 */
+  height: auto;
+  padding: 8px 6px; /* dsw-raw 原型折叠窄头内距刻度 */
   text-align: center;
-  border-bottom: none;
 }
 
 .dswf-tt-col-count {
@@ -384,13 +397,17 @@
 .dswf-tt-card {
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
+  border-radius: 10px; /* dsw-raw 原型泳道卡圆角刻度（M3.1 D19 卡片语言） */
+  background: var(--dsw-alias-bg-base); /* D19 卡片语言：亮 = bg-base 浮卡（D13 灰底承载面） */
   min-width: 0;
 }
 
+body[data-ds-dark-theme] .dswf-tt-card {
+  background: var(--dsw-alias-bg-layer-1); /* 官方暗色层刻度（原型同源） */
+}
+
 .dswf-tt-card:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: var(--dsw-alias-link); /* 原型泳道卡 hover = 主色描边 */
 }
 
 .dswf-tt-card.is-open {
@@ -415,9 +432,11 @@
 
 .dswf-tt-card-title {
   margin-block: 2px; /* dsw-raw 原型卡标题上下距刻度 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 原型两行截断（sc-title line-clamp——D19 卡片语言） */
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
 }

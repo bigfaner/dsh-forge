@@ -191,6 +191,23 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards, '列表 = 该 feature 任务集（三行）').toHaveLength(3)
 
+    // ── Step 2.5（m3.1 D18）：taskbar 形态——视图下拉 = 容器 pill 同行右侧（y ±6 原型 C 区
+    //    断言同式）+ 七态 chips 次行独占 + 正文零计数注（收进 pill 悬停） ──
+    const pillBox = await page.locator(ttContpillOf('feature', FEATURE)).first().boundingBox()
+    const viewBox = await page.locator('[data-dswf-tt-viewbtn]').first().boundingBox()
+    expect(pillBox, '容器 pill 几何在场（D18）').not.toBeNull()
+    expect(viewBox, '视图下拉几何在场（D18）').not.toBeNull()
+    expect(Math.abs(viewBox!.y - pillBox!.y), '视图下拉 = pill 同行（y ±6——原型断言同式）').toBeLessThan(6)
+    expect(viewBox!.x, '视图下拉在 pill 右侧（x ≥ pill 右缘 − 2）').toBeGreaterThanOrEqual(pillBox!.x + pillBox!.width - 2)
+    await expect(page.locator('[data-dswf-tt-taskbar] [data-dswf-ov-stchips]'), 'chips 零 taskbar 行内（次行独占）').toHaveCount(0)
+    const taskbarBox = await page.locator('[data-dswf-tt-taskbar]').first().boundingBox()
+    const chipsBox = await page.locator('[data-dswf-ov-stchips]').first().boundingBox()
+    expect(taskbarBox, 'taskbar 几何在场（D18）').not.toBeNull()
+    expect(chipsBox, 'chips 行几何在场（D18）').not.toBeNull()
+    expect(chipsBox!.y, 'chips 次行（行顶 ≥ taskbar 底 − 2）').toBeGreaterThanOrEqual(taskbarBox!.y + taskbarBox!.height - 2)
+    await expect(page.locator('[data-dswf-tt-count]'), '正文零计数注（D18——注收进容器 pill 悬停）').toHaveCount(0)
+    await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), '计数注收进 pill 悬停（title 载注）').toHaveAttribute('title', /· 3 条/)
+
     // ── Step 3：七态 chips 过滤（in_progress 单选）——三视图统一 ──
     const chipInProgress = page.locator('[data-dswf-ov-stchip="in_progress"]')
     await expect(chipInProgress).toBeVisible({ timeout: 15_000 })
@@ -209,8 +226,18 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     // ── Step 4：三视图切换（列表 → DAG → 泳道 → 列表）──
     await switchTaskView(page, 'dag')
     await expect(page.locator('[data-dswf-tt-dagsvg]').first(), 'DAG SVG 贝塞尔连线在场（完成边绿）').toBeVisible({ timeout: 30_000 })
+    // m3.1 D23 三路之二：DAG 节点点击 → 任务详情弹窗（弹窗壳 D21——任务行径 = Step 6 既有锚）
+    await page.locator('[data-dswf-tt-node]').first().click()
+    await expect(page.locator(TD_DRAWER).first(), 'DAG 节点点击 → 弹窗在场（D23）').toBeVisible({ timeout: 15_000 })
+    await page.keyboard.press('Escape')
+    await expect(page.locator(TD_DRAWER), 'Esc 收弹窗（DAG 径零滞留）').toHaveCount(0)
     await switchTaskView(page, 'swim')
     await expect(page.locator(ttColOf('completed')).first(), '泳道七态横向列在场').toBeVisible({ timeout: 15_000 })
+    // m3.1 D23 三路之三：泳道卡点击 → 任务详情弹窗（DAG 径已断——零回归锚）
+    await page.locator('[data-dswf-tt-card]').first().click()
+    await expect(page.locator(TD_DRAWER).first(), '泳道卡点击 → 弹窗在场（D23）').toBeVisible({ timeout: 15_000 })
+    await page.keyboard.press('Escape')
+    await expect(page.locator(TD_DRAWER), 'Esc 收弹窗（泳道径零滞留）').toHaveCount(0)
     await switchTaskView(page, 'list')
     await expect(page.locator(ttItemOf(idOf(ids, 0))).first(), '切回列表视图').toBeVisible({ timeout: 15_000 })
     // 副行承重（前置计数形 ←N 前置——键+当前状态形归抽屉现状条，ui-design 分工）

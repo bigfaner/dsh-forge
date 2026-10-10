@@ -56,7 +56,7 @@ export function listGroupsOf(cards: readonly TaskCard[]): readonly TaskListGroup
   ]
 }
 
-/** 计数注记（原型 task-count-note：搜索在场 = 匹配/总数；否则 = N 条） */
+/** 计数注记（m3.1 D18：收进容器 pill 悬停——正文零计数注；搜索在场 = 匹配/总数，否则 = N 条） */
 export function taskCountNote(searchActive: boolean, matched: number, total: number): string {
   return searchActive ? `${matched}/${total}` : `${total} 条`
 }
