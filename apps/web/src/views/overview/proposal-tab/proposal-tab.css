@@ -12,7 +12,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px; /* dsw-raw 原型 chips 行距刻度（dswf-ov-stchips 同值） */
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  /* D36 ① 底距减半（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height)
+    calc(var(--dsw-font-xs-13-line-height) / 2);
 }
 
 .dswf-ov-pschip {

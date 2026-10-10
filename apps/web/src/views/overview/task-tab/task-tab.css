@@ -9,7 +9,9 @@
  * dsw-raw 豁免（执行记录同步）：节点/卡片几何与行列刻度 = 原型结构刻度（170×64 节点 +
  * 14/40 间距——布局常量归 dag-layout.ts 单源，CSS 仅消费定位锚；D29 190×72 + 标题两行
  * 归任务 1.14，本轮零改动）；taskbar/seg/分组标签行高 24–28px 与 chips/父行刻度互齐
- * （overview.css 同款豁免先例）；代码族等宽 = docs.css 同款豁免（官方主题无等宽族令牌）。 */
+ * （overview.css 同款豁免先例）；代码族等宽 = docs.css 同款豁免（官方主题无等宽族令牌）；
+ * D36 ①②④ 间距减半 = 用户裁决刻度（chips 行底距/页容器 gap/行顶底距 = 整行高令牌之半，
+ * 原值注释逐位保留对照）；D36 ③ 泳道空列头 = 非空列同形同高 26px（折叠窄头变体退役）。 */
 
 /* ── ov-taskbar（v22 布局）：容器 pill（双轨·计数注收进悬停——D18 正文零计数注）+
  *    视图下拉 + spacer + 右簇 [诊断]+[派发] 固定最右端——同行不换行（ui-design ㉟） ── */
@@ -20,6 +22,12 @@
   gap: var(--dsw-font-xs-13-line-height);
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
   min-width: 0;
+}
+
+/* D36 ④：七态 chips 行 → 视图顶距减半（taskbar 根容器域收 chips 行底距——
+ * 三视图齐收；dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+.dswf-tt .dswf-ov-stchips {
+  padding-block-end: calc(var(--dsw-font-xs-13-line-height) / 2);
 }
 
 /* 容器模式点（4.6 双轨：feature 远征蓝 / 突击提案琥珀——ModeChip 点色同语义） */
@@ -141,8 +149,10 @@
   flex-direction: column;
 }
 
+/* D36 ④：视图顶距减半——列表视图首元素（分组标签/首行）顶距减半
+ * （dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
 .dswf-tt-group-label {
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  padding: calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-s-14-line-height) 0;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
@@ -167,11 +177,13 @@
   cursor: pointer;
 }
 
+/* D36 ④②：行顶距减半（首行 = 视图顶距半程；行间 = 副行底距 + 本值——行距收紧）
+ * （dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
 .dswf-tt-row {
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  padding: calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-s-14-line-height) 0;
   min-width: 0;
 }
 
@@ -203,8 +215,10 @@
   flex: none;
 }
 
+/* D36 ②：副行底距减半——行/行间隔收紧（= 副行底距 + 次行顶距 + 1px 行距刻度；
+ * dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
 .dswf-tt-sub {
-  padding: 0 var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height)
+  padding: 0 var(--dsw-font-s-14-line-height) calc(var(--dsw-font-xs-13-line-height) / 2)
     calc(var(--dsw-font-s-14-line-height) + var(--dsw-font-s-14-line-height)); /* dsw-raw 原型副行缩进刻度（键列对齐） */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -339,13 +353,15 @@ body[data-ds-dark-theme] .dswf-tt-node {
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 泳道视图：七态横向列（0 计数列折叠窄头）。
+/* ── 泳道视图：七态横向列（0 计数列 = 等高窄列头——D36 ③ 折叠窄头变体退役：
+ *    空/非空列头同形同高 26px 横向头）。
  *    M3.1 D19 卡片语言：列定宽 178 + 列头胶囊交互底（原型 swim-col/swim-col-head） ── */
 .dswf-tt-swim {
   display: flex;
   gap: 10px; /* dsw-raw 原型泳道列距刻度 */
   overflow-x: auto;
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 6px; /* dsw-raw 原型列底距刻度 */
+  /* D36 ④：视图顶距减半（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+  padding: calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-s-14-line-height) 6px; /* dsw-raw 原型列底距刻度 */
 }
 
 .dswf-tt-col {
@@ -356,6 +372,7 @@ body[data-ds-dark-theme] .dswf-tt-node {
   min-width: 178px; /* dsw-raw 同上 */
 }
 
+/* 空列宽策略（D36 ③ 记账：auto 收窄保留——等高为准，列头形态与非空列同款） */
 .dswf-tt-col.is-empty {
   flex: 0 0 auto;
   min-width: auto;
@@ -368,7 +385,7 @@ body[data-ds-dark-theme] .dswf-tt-node {
   display: flex;
   align-items: center;
   gap: 6px; /* dsw-raw 原型列头内距刻度 */
-  height: 26px; /* dsw-raw 原型列头行高刻度 */
+  height: 26px; /* dsw-raw 原型列头行高刻度（空/非空列同形同高——D36 ③） */
   padding: 0 9px; /* dsw-raw 原型列头横距刻度 */
   border-radius: 9px; /* dsw-raw 原型列头胶囊圆角刻度 */
   background: var(--dsw-alias-interactive-bg-hover); /* 原型列头交互底（D13 灰阶同源映射） */
@@ -376,23 +393,11 @@ body[data-ds-dark-theme] .dswf-tt-node {
   color: var(--dsw-alias-label-secondary);
 }
 
-.dswf-tt-col.is-empty .dswf-tt-col-head {
-  flex-direction: column;
-  gap: 2px; /* dsw-raw 原型折叠窄头堆叠刻度 */
-  height: auto;
-  padding: 8px 6px; /* dsw-raw 原型折叠窄头内距刻度 */
-  text-align: center;
-}
-
 .dswf-tt-col-count {
   margin-left: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 等宽族豁免（同上） */
   font-size: var(--dsw-font-xs-13-font-size);
   color: var(--dsw-alias-label-tertiary);
-}
-
-.dswf-tt-col.is-empty .dswf-tt-col-count {
-  margin-left: 0;
 }
 
 .dswf-tt-card {

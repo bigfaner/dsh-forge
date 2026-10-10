@@ -11,6 +11,7 @@ import {
   resolveFeatureSlug,
   swimColumnsOf,
   taskCountNote,
+  taskHoverLabel,
   taskStatusTagTone,
   taskSubRowParts,
   tasksEmptyView,
@@ -89,6 +90,26 @@ describe('taskSubRowParts（AC1 副行承重：类型/优先级/实际耗时[com
   it('completed 但耗时缺/≤0 也不显（formatActualDuration 归一）', () => {
     expect(taskSubRowParts(cardFixture({ actualDurationMs: undefined }))).not.toContain('实际耗时')
     expect(taskSubRowParts(cardFixture({ actualDurationMs: 0 }))).not.toContain('实际耗时')
+  })
+})
+
+describe('taskHoverLabel（m3.1 D36 ⑥——悬停有意义化：face 全名兜底 + 非可见位增量注）', () => {
+  it('label = face 前缀 + 状态全称 zh（en）——零可见字面复读（label ≠ face）', () => {
+    const label = taskHoverLabel(cardFixture(), 'm2-pipeline/2.4')
+    expect(label.startsWith('m2-pipeline/2.4 · ')).toBe(true) // 截断位全名兜底语义保留
+    expect(label).toContain('状态 已完成（Completed）') // 状态全称 zh+en（tag 仅中文名——en 非可见位）
+    expect(label).not.toBe('m2-pipeline/2.4')
+  })
+
+  it('估时在场才带（TaskCard.estimatedTime——行面零承载的非可见位字段）', () => {
+    expect(taskHoverLabel(cardFixture(), 'face')).toContain('估时 4h')
+    expect(taskHoverLabel(cardFixture({ estimatedTime: undefined }), 'face')).not.toContain('估时')
+  })
+
+  it('零复读：优先级/实际耗时已由副行可见——不重入悬停注（缺席字段不硬凑）', () => {
+    const label = taskHoverLabel(cardFixture(), 'face') // 夹具含 P0 + actualDurationMs
+    expect(label).not.toContain('P0')
+    expect(label).not.toContain('实际耗时')
   })
 })
 

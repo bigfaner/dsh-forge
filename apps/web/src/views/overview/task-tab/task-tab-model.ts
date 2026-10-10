@@ -6,6 +6,7 @@
 import {
   FEATURE_STATUS_LABELS,
   TASK_STATUSES,
+  TASK_STATUS_LABELS,
   type FeatureCard,
   type TaskCard,
   type TaskGraph,
@@ -59,6 +60,20 @@ export function listGroupsOf(cards: readonly TaskCard[]): readonly TaskListGroup
 /** 计数注记（m3.1 D18：收进容器 pill 悬停——正文零计数注；搜索在场 = 匹配/总数，否则 = N 条） */
 export function taskCountNote(searchActive: boolean, matched: number, total: number): string {
   return searchActive ? `${matched}/${total}` : `${total} 条`
+}
+
+/**
+ * 任务悬停有意义化（m3.1 D36 ⑥——list 行 key/title/sub 与泳道卡 label 零「可见字面复读」）：
+ * label = face（行/卡面全名——截断位全名兜底语义保留）+ 非可见位增量注。
+ * 增量注字段清单（contracts TaskCard 执行期核对）：状态全称 zh（en）恒在场——行面 tag 仅
+ * 中文名；估时[estimatedTime 在场才带]——行面零承载（仅抽屉）。优先级/实际耗时/类型
+ * 已由副行（taskSubRowParts）可见——零复读不重入；其余缺席字段不硬凑。
+ */
+export function taskHoverLabel(card: TaskCard, face: string): string {
+  const labels = TASK_STATUS_LABELS[card.taskStatus]
+  const notes = [`状态 ${labels.zh}（${labels.en}）`]
+  if (card.estimatedTime !== undefined) notes.push(`估时 ${card.estimatedTime}`)
+  return `${face} · ${notes.join(' · ')}`
 }
 
 /** DAG 可见集（AC4 统一过滤）：节点 = graph.tasks ∩ list 结果（list 序 = 服务端排序序）；边 = 两端均可见 */

@@ -1,4 +1,5 @@
-// 泳道视图单测 —— AC3：七态横向列（0 计数列折叠为窄头——不可点仅状态+计数）+ 卡片
+// 泳道视图单测 —— AC3：七态横向列（0 计数列 = 等高窄列头——D36 ③ 折叠窄头变体退役，
+// 空/非空列头同形同高 26px 横向头；is-empty 类位保留 = 列宽 auto 收窄策略锚）+ 卡片
 // （key + 标题 + foot 含 ⏱实际耗时[completed]）+ 卡片点击 → 抽屉回调锚（双载体）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -25,7 +26,7 @@ describe('SwimlaneView（AC3 七态横向列）', () => {
     expect(html).toContain('已完成')
   })
 
-  it('0 计数列折叠为窄头（is-empty 类位 + 仅状态 + 0，无卡片区）', () => {
+  it('0 计数列 = 等高窄列头（D36 ③：is-empty 类位仅承载列宽 auto 收窄——列头形态归 CSS 同款 26px 横向头；无卡片区）', () => {
     const html = renderToStaticMarkup(<SwimlaneView cards={[pending, done]} onOpenTask={NOOP} />)
     expect(html).toContain('data-dswf-tt-col="suspended"')
     const suspendedAt = html.indexOf('data-dswf-tt-col="suspended"')

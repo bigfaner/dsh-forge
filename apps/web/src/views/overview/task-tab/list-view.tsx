@@ -13,7 +13,7 @@ import {
 } from '@dsh-forge/contracts'
 import { Button, Menu, Tag, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { taskKeyLabel } from '../drawer/detail-model.js'
-import { listGroupsOf, taskStatusTagTone, taskSubRowParts } from './task-tab-model.js'
+import { listGroupsOf, taskHoverLabel, taskStatusTagTone, taskSubRowParts } from './task-tab-model.js'
 import './task-tab.css'
 
 /** ⋯ 菜单行 id 派发（open:{taskId} → 抽屉 / trans:{taskId}:{toStatus} → 转移入口；
@@ -98,11 +98,12 @@ function TaskItem({
         : {})}
     >
       <div className="dswf-tt-row">
-        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸列表滚动容器） */}
-        <Tooltip label={key} portal>
+        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸列表滚动容器）；
+         * D36 ⑥：label = 全名兜底 + 非可见位增量注（taskHoverLabel——零可见字面复读） */}
+        <Tooltip label={taskHoverLabel(card, key)} portal>
           <span className="dswf-tt-key">{card.localId}</span>
         </Tooltip>
-        <Tooltip label={card.title} portal>
+        <Tooltip label={taskHoverLabel(card, card.title)} portal>
           <span className="dswf-tt-title">{card.title}</span>
         </Tooltip>
         <Tag tone={taskStatusTagTone(card.taskStatus)} className="dswf-tt-tag">
@@ -155,7 +156,8 @@ function TaskItem({
           />
         ) : null}
       </div>
-      <Tooltip label={sub} portal>
+      {/* D36 ⑥：副行 label = 副行全文（截断兜底）+ 非可见位增量注——零字面复读 */}
+      <Tooltip label={taskHoverLabel(card, sub)} portal>
         <div className="dswf-tt-sub" data-dswf-tt-sub={card.taskId}>
           {sub}
         </div>

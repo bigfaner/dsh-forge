@@ -16,6 +16,9 @@
 //   「键·全名兜底」/ list-view「全键」/ ForgeWorkspacePanel「wsPath 悬停」/ DirectoryBrowser
 //   「crumb 路径·确认态」/ AddProjectFlow「面包屑锚」/ e2e sc3「行锚 title 定位 + 未标记
 //   chip title 断言」——各原断言位均已就地迁移（title= 反断言 + 本文件 label 结构锚）。
+// D36 ⑤ 更替（任务 dsh-forge-m3.1-ui-alignment/1.23——断言更替非删除，walk 计数不减）：
+//   ViewDropdown 锚钮 Tooltip 随用户裁决退役 → 原 TOOLTIP_FILES 采纳锚位对位迁入
+//   TOOLTIP_RETIRED_FILES 零 Tooltip 退役锚（it.each 位 1:1 保留——29 walk 位恒数）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -124,7 +127,6 @@ const TOOLTIP_FILES = [
   'apps/web/src/views/overview/drawer/type-templates/coding.tsx',
   'apps/web/src/views/overview/drawer/type-templates/parts.tsx',
   'apps/web/src/views/overview/task-tab/DispatchButton.tsx',
-  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx',
   'apps/web/src/views/overview/task-tab/dag-view.tsx',
   'apps/web/src/views/overview/task-tab/list-view.tsx',
   'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
@@ -147,6 +149,11 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   DrawerSection: 2,
 }
 
+/** D36 ⑤ Tooltip 退役锚（原采纳锚位 1:1 对位迁移——零 Tooltip 在场；断言更替非删除） */
+const TOOLTIP_RETIRED_FILES = [
+  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx',
+] as const
+
 describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结构 pin）', () => {
   it('DOM 元素 title 属性全仓零在场（动态 title={…} 与静态 title="…" 双形态）', () => {
     expect(dom, `原生 title 残留位：\n${dom.map((a) => `  ${a.file}:${a.line} <${a.owner}>`).join('\n')}`).toEqual([])
@@ -161,6 +168,11 @@ describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结�
     expect(src, `${rel} 缺 Tooltip import`).toContain(`from '@deepseek-ai/dsh-client-ui-primitives'`)
     expect(src, `${rel} 缺 Tooltip 采纳`).toContain('Tooltip')
     expect(src, `${rel} 气泡未 portal 逃逸（滚动裁剪/transform/层叠容器统一 portal）`).toContain('portal')
+  })
+
+  it.each(TOOLTIP_RETIRED_FILES)('Tooltip 退役锚（D36 ⑤ 更替——控件自释零 Tooltip）：%s', (rel) => {
+    const src = readFileSync(join(ROOT, rel), 'utf8')
+    expect(src, `${rel} Tooltip 残留（退役位零在场——D36 ⑤）`).not.toContain('Tooltip')
   })
 
   it('禁用态锚定包裹 CSS 在场（.dswf-tipwrap——禁用按钮吞指针事件，锚 = 包裹 span）', () => {

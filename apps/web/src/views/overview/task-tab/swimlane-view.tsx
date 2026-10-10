@@ -1,4 +1,5 @@
-// 泳道视图（定位：业务——AC3：七态横向列[0 计数列折叠为窄头——不可点仅状态+计数] +
+// 泳道视图（定位：业务——AC3：七态横向列[0 计数列 = 等高窄列头——仅状态+计数；
+// D36 ③ 折叠窄头变体退役——列头同形同高 26px 横向头] +
 // 卡片[键 + 标题 + foot 含 ⏱实际耗时[completed]] + 卡片点击 → 抽屉回调）。
 // 列序 = contracts TASK_STATUSES 单源（swimColumnsOf 投影）；卡片双载体（onOpenTask
 // 在场 = 可点 role=button；缺席 = 静态）。
@@ -11,7 +12,7 @@ import {
 import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatActualDuration, taskKeyLabel } from '../drawer/detail-model.js'
-import { swimColumnsOf } from './task-tab-model.js'
+import { swimColumnsOf, taskHoverLabel } from './task-tab-model.js'
 import './task-tab.css'
 
 export interface SwimlaneViewProps {
@@ -41,8 +42,10 @@ function SwimCard({
     }
   }
   return (
-    // D30：原生 title 退役——官方 Tooltip（portal 逃逸泳道横向滚动裁剪容器）
-    <Tooltip label={`${taskKeyLabel(card.slug, card.localId)} · ${card.title}`} portal>
+    // D30：原生 title 退役——官方 Tooltip（portal 逃逸泳道横向滚动裁剪容器）；
+    // D36 ⑥：label = 键·标题全名兜底 + 非可见位增量注（零可见字面复读——DAG 同形位
+    // 保留原样 = 超长全名兜底记账豁免，不随本位联动）
+    <Tooltip label={taskHoverLabel(card, `${taskKeyLabel(card.slug, card.localId)} · ${card.title}`)} portal>
       <div
         className={active ? 'dswf-tt-card is-open' : 'dswf-tt-card'}
         data-dswf-tt-card={card.taskId}

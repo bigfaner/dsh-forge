@@ -5,12 +5,9 @@
 // 锚钮 = 当前视图直出 + ▾）。开合受控（open/onOpenChange——4.6 工具栏接线持有，
 // feature pill Menu 同形制）。工具栏落位（pill 右侧 + 诊断/派发右簇）= 4.6。
 import type { ReactNode } from 'react'
-import { Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_VIEWS, type TaskViewMode } from './task-tab-model.js'
 import './task-tab.css'
-
-/** 锚钮 tooltip（ui-design UF-3 概览 tab 宽度行注——M2 三视图语义不变·形态为下拉） */
-export const VIEW_DROPDOWN_TITLE = '切换任务视图（列表 / DAG / 泳道）——同 M2 三视图，控件形态为下拉'
 
 /** 三选项（TASK_VIEWS 单源——label 直出菜单行；导出 = 静态测试锚——Menu 开合面
  *  携 portal 材质层[官方 MenuSurface backing]，静态不渲沿 4.2 Modal 同裁） */
@@ -52,23 +49,23 @@ export function ViewDropdown({ view, open, onViewChange, onOpenChange }: ViewDro
         if (next !== undefined) onViewChange(next)
       }}
       anchor={
-        <Tooltip label={VIEW_DROPDOWN_TITLE} portal>
-          <button
-            type="button"
-            className="dswf-tt-viewbtn"
-            data-dswf-tt-viewbtn={view}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            onClick={() => {
-              onOpenChange(!open)
-            }}
-          >
-            {`视图：${current}`}
-            <span className="dswf-tt-viewbtn-caret" aria-hidden="true">
-              ▾
-            </span>
-          </button>
-        </Tooltip>
+        // D36 ⑤：视图切换钮悬浮提示退役（用户裁决「视图切换控件不要 tooltip」——控件自释
+        // 「视图：列表」直出；结构 pin tests/structure/d30 退役锚：零悬浮提示在场）
+        <button
+          type="button"
+          className="dswf-tt-viewbtn"
+          data-dswf-tt-viewbtn={view}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => {
+            onOpenChange(!open)
+          }}
+        >
+          {`视图：${current}`}
+          <span className="dswf-tt-viewbtn-caret" aria-hidden="true">
+            ▾
+          </span>
+        </button>
       }
     />
   )
