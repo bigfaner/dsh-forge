@@ -216,6 +216,10 @@ export function hydrateTaskCards(db: Database.Database, rows: readonly TaskStora
     }
   }
 
+  // 行映射 `?? undefined` 留任（RPC/prompt-input 面口径——提案 tool-row-lossless-json-fix
+  // 逐点处置）：TaskCard 消费方 = GUI RPC（forge:tasks/list——Electron 结构化克隆对
+  // undefined 宽容）与 dispatchTask 内部 fix 链反查（→ dispatch prompt 文本）；注册 tool
+  // 面无 listTasks（FORGE_TOOL_NAMES 六员不透传 TaskCard），显式 undefined 键在此无害。
   return rows.map((row) => ({
     taskId: row.id,
     slug: row.slug,

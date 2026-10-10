@@ -227,6 +227,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       ...(row.task_desc !== null ? { taskDesc: row.task_desc } : {}),
       ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as readonly string[] } : {}),
       taskType: row.task_type,
+      // prompt-input 面（合成 dispatch prompt 文本——非 tool JSON 返回）：`?? undefined`
+      // 留任无害（提案 tool-row-lossless-json-fix 处置口径）；tool 返回面由 dispatch-task.ts
+      // 返回映射处条件展开重映射，不透传本对象。
       priority: (row.priority as TaskPriority | null) ?? undefined,
       coverage: row.coverage ?? undefined,
       phaseSummary: derivePhaseSummary(db, row),

@@ -498,3 +498,42 @@ describe('AC6 features 写动词 emitTasksChanged 接线（事务提交后单发
     expect(h!.events.emitted).toEqual([])
   })
 })
+
+// ─────────────────────────── tool-row-lossless-json-fix：tool 返回面 lossless 走查 ───────────────────────────
+// registerFeature / upsertFeatureDoc 两 tool execute 透传本域 DTO（FeatureRow /
+// FeatureDocumentRow）——显式 undefined 属性会被 harness 输出快照边界整值拒绝
+// （proposal_id / summary 缺省 NULL → 裸注册/无摘要登记曾必炸）。回归口径镜像
+// proposals.test.ts 同名走查（自实现递归，零 DSH 运行时依赖）。
+
+/** 走查：值内不得有任何 own enumerable 显式 undefined 属性（返回路径 = 键缺席式可选字段） */
+function assertNoExplicitUndefined(value: unknown, path = '$'): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => assertNoExplicitUndefined(item, `${path}[${i}]`))
+    return
+  }
+  if (value === null || typeof value !== 'object') return
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') continue
+    const v = (value as Record<string, unknown>)[key]
+    if (v === undefined) throw new Error(`显式 undefined 属性：${path}.${key}（tool 返回面非 lossless JSON）`)
+    assertNoExplicitUndefined(v, `${path}.${key}`)
+  }
+}
+
+describe('tool-row-lossless-json-fix：registerFeature/upsertFeatureDoc 返回 DTO = 键缺席式（tool 面透传）', () => {
+  it('裸注册（summary/proposalId 双 NULL）：FeatureRow 走查零显式 undefined 键', async () => {
+    const s = svc()
+    const row = await s.registerFeature({ projectId: h!.projectId, slug: 'lz-bare', title: '走查' })
+    expect(() => assertNoExplicitUndefined(row)).not.toThrow()
+    expect(row.summary).toBeUndefined() // 键缺席式访问语义不变
+    expect(row.proposalId).toBeUndefined()
+  })
+
+  it('无摘要 doc 登记（summary NULL）：FeatureDocumentRow 走查零显式 undefined 键', async () => {
+    const s = svc()
+    await s.registerFeature({ projectId: h!.projectId, slug: 'lz-doc', title: '走查' })
+    const doc = await s.upsertFeatureDoc({ projectId: h!.projectId, featureSlug: 'lz-doc', docKind: 'prd-spec', relPath: 'docs/features/lz-doc/prd/prd-spec.md' })
+    expect(() => assertNoExplicitUndefined(doc)).not.toThrow()
+    expect(doc.summary).toBeUndefined()
+  })
+})

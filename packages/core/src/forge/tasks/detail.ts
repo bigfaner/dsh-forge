@@ -95,6 +95,9 @@ function resolveDocRefs(db: Database.Database, row: { task_desc: string | null; 
   return extractDocAnchors(row).map((docRel) => ({
     docRel,
     resolved: registry.has(docRel),
+    // RPC 面（taskDetail 唯一消费方 = GUI 详情 IPC——tasks-rpc.ts TASKS_CHANNELS.detail；
+    // queryTask tool 不走此径）：显式 undefined title 留任无害（结构化克隆宽容）——
+    // 提案 tool-row-lossless-json-fix 处置口径。
     title: registry.get(docRel), // 未命中方缺省（置灰面无标题）
   }))
 }

@@ -112,25 +112,33 @@ interface FeatureDocStorageRow {
 
 const SELECT_FEATURE = `SELECT id, slug, title, feature_status, summary, proposal_id, created_at, updated_at FROM features`
 
+/** feature 行 → FeatureRow DTO（snake_case → DTO 映射）。NULL 列条件展开 = 键缺席
+ *  （tool 返回面 lossless JSON 合规——registerFeature tool execute 透传本 DTO，显式
+ *  undefined 属性被 harness 输出快照边界整值拒绝[proposal_id 缺省 NULL → 裸注册必炸]，
+ *  提案 tool-row-lossless-json-fix；房式 = tasks/query.ts；transitionFeature/getFeature/
+ *  listFeatures 为 RPC 面，键缺席式 undefined 访问语义不变） */
 function toFeatureRow(row: FeatureStorageRow): FeatureRow {
   return {
     featureId: row.id,
     slug: row.slug,
     title: row.title,
     featureStatus: row.feature_status,
-    summary: row.summary ?? undefined,
-    proposalId: row.proposal_id ?? undefined,
+    ...(row.summary !== null ? { summary: row.summary } : {}),
+    ...(row.proposal_id !== null ? { proposalId: row.proposal_id } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
+/** feature_documents 行 → FeatureDocumentRow DTO。NULL summary 条件展开 = 键缺席
+ *  （upsertFeatureDoc tool execute 透传本行——summary 缺省 NULL → 显式 undefined 同病
+ *  同修，提案 tool-row-lossless-json-fix；listFeatureDocs RPC 面语义不变） */
 function toFeatureDocumentRow(row: FeatureDocStorageRow): FeatureDocumentRow {
   return {
     featureId: row.feature_id,
     docKind: row.doc_kind,
     relPath: row.rel_path,
-    summary: row.summary ?? undefined,
+    ...(row.summary !== null ? { summary: row.summary } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
