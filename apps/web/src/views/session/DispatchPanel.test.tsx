@@ -31,6 +31,7 @@ import {
   fetchSessionTaskPills,
   fetchWorkerSession,
   initialSessionPillsState,
+  parentSessionOf,
   runSessionPillsLoad,
   sessionPillItems,
   sessionPillsLoadPlan,
@@ -374,16 +375,39 @@ describe('workerSessionOf 执行会话解析（record 源 ∉ link 派发集）'
   })
 })
 
-describe('fetchWorkerSession 纯异步面（taskDetail 挂接面 → workerSessionOf；fail-soft）', () => {
-  it('tasks.detail 负载原样；挂接面解析 worker', async () => {
-    const detail = { sessions: [card({ source: 'record', sessionId: 'w-1' })] } as TaskDetail
+describe('parentSessionOf 库侧权威父解析（D6 修复面——进行中 worker 的显式地址径输入）', () => {
+  it('link 派发源首行 = 父（dispatchTask 自本会话 spawn 的 durable 父）', () => {
+    const sessions = [
+      card({ source: 'link', sessionId: 'dispatch-1' }),
+      card({ source: 'record', sessionId: 'dispatch-1' }),
+      card({ source: 'record', sessionId: 'worker-9' }),
+    ]
+    expect(parentSessionOf(sessions)).toBe('dispatch-1')
+  })
+  it('零 link 源 = undefined（调用面走账本判读径）', () => {
+    expect(parentSessionOf([card({ source: 'record', sessionId: 'w' })])).toBeUndefined()
+    expect(parentSessionOf([])).toBeUndefined()
+  })
+})
+
+describe('fetchWorkerSession 纯异步面（taskDetail 挂接面 → worker + 父；fail-soft）', () => {
+  it('tasks.detail 负载原样；挂接面解析 worker + 库侧父', async () => {
+    const detail = {
+      sessions: [card({ source: 'link', sessionId: 'd-1' }), card({ source: 'record', sessionId: 'w-1' })],
+    } as TaskDetail
     const { client, calls } = recordingClient({ detail: async () => detail })
-    await expect(fetchWorkerSession(client, { projectId: 'p-1', taskId: 't-1' })).resolves.toBe('w-1')
+    await expect(fetchWorkerSession(client, { projectId: 'p-1', taskId: 't-1' })).resolves.toEqual({
+      worker: 'w-1',
+      parent: 'd-1',
+    })
     expect(calls).toEqual([{ q: { projectId: 'p-1', taskId: 't-1' } }])
   })
-  it('错误归一 null（永不 reject——装饰面不炸）', async () => {
+  it('错误归一 {worker:null, parent:undefined}（永不 reject——装饰面不炸）', async () => {
     const { client } = recordingClient({ detail: () => Promise.reject(new RpcClientError({ code: 'ERR_TASK_NOT_FOUND', message: 'x' })) })
-    await expect(fetchWorkerSession(client, { projectId: 'p-1', taskId: 't-x' })).resolves.toBeNull()
+    await expect(fetchWorkerSession(client, { projectId: 'p-1', taskId: 't-x' })).resolves.toEqual({
+      worker: null,
+      parent: undefined,
+    })
   })
 })
 

@@ -73,13 +73,14 @@ export interface ForgeShellHostProps {
    * 右栏概览 tab body——两棵独立槽位树的既有通道）；缺席 = 概览上下文不发布 + 弹窗不开
    */
   readonly bridge?: Pick<WorkbenchBridge, 'setOverviewContext' | 'subscribe' | 'getSnapshot' | 'closeTaskDrawer' | 'openTaskDrawer'>
-  /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession；缺席 = 非交互呈现） */
-  readonly onOpenSession?: (sessionId: string) => void
+  /** 挂接会话 pill 跳会话（插件 inject face——判读式打开；可选父参 = worker 显式地址径；
+   * 缺席 = 非交互呈现） */
+  readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
   /**
-   * 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6 插件 inject face——账本 parentId 判读
-   * 后官方 openSession[地址形态/平开]；缺席 = ⟞ 非交互呈现）。
+   * 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6 插件 inject face——显式父（库侧 link
+   * 派发源）优先地址形态，账本判读兜底；缺席 = ⟞ 非交互呈现）。
    */
-  readonly onOpenWorkerSession?: (childSessionId: string) => void
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**

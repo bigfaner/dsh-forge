@@ -669,6 +669,29 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
   })
 
   // ── D6 修复面：账本缺行（worker added 广播未达/丢失）的判读式打开统一径 ──
+  it('D6 修复面：显式父（库侧权威）优先直接地址形态开——零 refresh 零判读（进行中 worker 账本缺行场景）', () => {
+    publishFakeViews()
+    const { ctx, registers, open, sessionsRefresh } = fakeClientCtx()
+    const refreshCalls: number[] = []
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      return undefined
+    }
+    forgeClientPlugin().apply(ctx)
+    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as {
+      onOpenWorkerSession: (childSessionId: string, parentSessionId?: string) => void
+      onOpenSession: (sessionId: string, parentSessionId?: string) => void
+    }
+    // 账本空（byId 零行）+ 显式父在场 = 直接地址形态（不 refresh 不判读——同步开）
+    face.onOpenWorkerSession('worker-live', 'dispatch-parent')
+    expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-live', mode: 'unknown' })
+    face.onOpenSession('worker-live-2', 'dispatch-parent')
+    expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-live-2', mode: 'unknown' })
+    expect(refreshCalls, '显式父径零 refresh（库侧权威直达）').toHaveLength(0)
+    unpublishViews()
+  })
+
   it('D6 修复面：账本缺行 + refresh 兜底 → 重判读到 parentId = 地址形态开（⟞ 与执行会话 pill 两面同径）', async () => {
     publishFakeViews()
     const { ctx, registers, open, sessionsRefresh } = fakeClientCtx()

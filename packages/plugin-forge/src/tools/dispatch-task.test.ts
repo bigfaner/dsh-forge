@@ -586,13 +586,13 @@ describe('halted 防线（连续失败 ×3 粘住/成功清零/冷启动重置�
 // ─────────────────────────── 组装序与事件（AC2/AC3/AC5） ───────────────────────────
 
 describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions / dispatchPrompt 全文透传）', () => {
-  it('spawn 请求携带：全文 prompt + 矩阵 deny + label = 任务键 + parent/signal', async () => {
+  it('spawn 请求携带：全文 prompt + 矩阵 deny + label = 任务键 · 任务名（子会话标题——用户裁决 2026-10-10）+ parent/signal', async () => {
     const h = harness()
     await h.tool.execute({}, h.exec)
     expect(h.spawnRequests).toHaveLength(1)
     const req = h.spawnRequests[0]!
     expect(req.prompt).toBe('PERSONA + <task-context>') // 全文直达 worker——零转述
-    expect(req.label).toBe('feat-x/2.5')
+    expect(req.label).toBe('feat-x/2.5 · Implement the thing')
     expect(req.parent).toBe(h.exec.agent)
     expect(req.signal).toBeInstanceOf(AbortSignal)
     expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'subagent_fork', 'queryTask', 'dispatchTask']))

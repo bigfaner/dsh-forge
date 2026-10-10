@@ -258,12 +258,14 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
   return (snapshot as { byId?: Record<string, unknown> }).byId?.[sessionId] !== undefined
 }
 /**
- * 打开会话（判读式统一径——D6 修复面）：账本 parentId 判读 → 子会话 = 官方
- * SubagentAddress 形态（openChild 同径——树零联动），顶层 = 平开。账本缺行（worker 的
- * added 广播未达/丢失）→ refresh 全量基线后重判读一次（宿主 session.list 读盘上报持久
- * 子会话行——header parentSession 在场）；refresh 缺席/失败/仍缺行 = 平开（顶层会话
- * 常态径）。行在场路径零异步（同步判读同步开——高频顶层径不加拍）。官方面异常
- * fail-soft 不外溢。悬浮面板 ⟞ 与任务详情执行会话 pill 两消费面共用。
+ * 打开会话（判读式统一径——D6 修复面）：显式父（库侧权威——任务挂接双源卡的 link 派发
+ * 会话 = worker 的 durable 父；进行中 worker 的账本行/盘上日志均未落的场景恒可得）优先
+ * 直接 SubagentAddress 形态打开；无显式父 → 账本 parentId 判读 → 子会话 = 官方地址形态
+ * （openChild 同径——树零联动），顶层 = 平开。账本缺行（worker 的 added 广播未达/丢失）→
+ * refresh 全量基线后重判读一次（宿主 session.list 读盘上报持久子会话行——header
+ * parentSession 在场）；refresh 缺席/失败/仍缺行 = 平开（顶层会话常态径）。行在场路径零
+ * 异步（同步判读同步开——高频顶层径不加拍）。官方面异常 fail-soft 不外溢。悬浮面板 ⟞ 与
+ * 任务详情执行会话 pill 两消费面共用。
  */
 export function openSessionWithLedgerAddress(
   services: {
@@ -271,6 +273,7 @@ export function openSessionWithLedgerAddress(
     readonly uiWorkspace: ForgeUiWorkspaceService
   },
   sessionId: string,
+  parentSessionId?: string,
 ): void {
   const openWith = (parentId: string | undefined): void => {
     try {
@@ -278,6 +281,10 @@ export function openSessionWithLedgerAddress(
     } catch {
       // fail-soft：无会话面（会话卸载瞬态）——点击不外溢
     }
+  }
+  if (parentSessionId !== undefined) {
+    openWith(parentSessionId)
+    return
   }
   const parentId = sessionParentIdOf(services.sessions.list, sessionId)
   if (parentId !== undefined || sessionRowInLedger(services.sessions.list, sessionId)) {
@@ -1085,8 +1092,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // D6 修复面：统一判读式打开——执行会话（worker 子会话）经账本 parentId →
                 // 官方 SubagentAddress 形态（平开子会话 id 非官方支持径）；账本缺行 =
                 // refresh 兜底后重判读（openSessionWithLedgerAddress 单源）。
-                onOpenSession: (sessionId: string): void => {
-                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, sessionId)
+                onOpenSession: (sessionId: string, parentSessionId?: string): void => {
+                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, sessionId, parentSessionId)
                 },
                 // 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6）：账本 parentId 判读 →
                 // 子会话 = 官方 SubagentAddress 形态（openChild 同径——树零联动：worker
@@ -1094,8 +1101,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 广播未达/丢失）= refresh 兜底后重判读；官方面异常 fail-soft。
                 // 键名 = onOpenWorkerSession（ShellHost props 契约——D6 原始实现的
                 // openWorkerSession 键名错配 = ⟞ 恒 disabled 的根因，2026-10-10 报障收口）。
-                onOpenWorkerSession: (childSessionId: string): void => {
-                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId)
+                onOpenWorkerSession: (childSessionId: string, parentSessionId?: string): void => {
+                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
                 },
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
                 openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions),

@@ -346,8 +346,9 @@ export interface TaskDrawerBodyProps {
   readonly onToggleSection: (key: DrawerSectionKey) => void
   /** 参考文档 chip 点击（dock 开 tab——弹窗保持） */
   readonly onOpenDoc: (docRel: string) => void
-  /** 挂接会话 pill 点击（跳会话 + 关弹窗——原型 m31-tm-sess 两动作一体；装配接线；缺席 = 非交互呈现） */
-  readonly onOpenSession?: (sessionId: string) => void
+  /** 挂接会话 pill 点击（跳会话 + 关弹窗——原型 m31-tm-sess 两动作一体；装配接线；缺席 = 非交互呈现。
+   * 可选父参 = worker 子会话的库侧权威父（link 派发源——显式地址径输入） */
+  readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
   /** 「转移状态…」入口（对话框开——缺席 = 禁用） */
   readonly onTransition?: (taskId: string) => void
   /** 「诊断失败」入口（4.6——仅 blocked/rejected 任务呈现；缺席 = 按钮不呈现） */
@@ -401,12 +402,20 @@ export function TaskDrawerBody({
   const coverage = coverageViewOf(detail)
   const showCoverage = templateFamilyOf(detail.taskType) === 'coding' && (coverage.actualPct !== undefined || coverage.expectedPct !== undefined)
   const note = varsText(detail.vars ?? {}, 'note')
-  // 挂接会话 pill 组合（原型 m31-tm-sess：跳对应对话面板 + 关弹窗——两动作一体）
+  // 挂接会话 pill 组合（原型 m31-tm-sess：跳对应对话面板 + 关弹窗——两动作一体）。
+  // worker 子会话（record 源 ∉ link 派发集）附库侧权威父（link 派发源）——显式地址径
+  // 输入（进行中 worker 账本缺行场景判读不到父的兜底；D6 修复面）
   const jumpToSession =
     onOpenSession === undefined
       ? undefined
       : (sessionId: string): void => {
-          onOpenSession(sessionId)
+          const links = new Set(
+            detail.sessions.filter((session) => session.source === 'link').map((session) => session.sessionId),
+          )
+          const isWorker = detail.sessions.some(
+            (session) => session.sessionId === sessionId && session.source === 'record' && !links.has(sessionId),
+          )
+          onOpenSession(sessionId, isWorker && links.size > 0 ? [...links][0] : undefined)
           onClose()
         }
 
@@ -679,8 +688,8 @@ export interface TaskDrawerProps {
   readonly onClose: () => void
   /** 参考文档 chip 点击（dock 开 tab——装配接线） */
   readonly onOpenDoc?: (docRel: string) => void
-  /** 挂接会话 pill 点击（跳会话——装配接线） */
-  readonly onOpenSession?: (sessionId: string) => void
+  /** 挂接会话 pill 点击（跳会话——装配接线；可选父参 = worker 子会话显式地址径） */
+  readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
   /** 「转移状态…」入口（对话框开） */
   readonly onTransition?: (taskId: string) => void
   /** 打开新会话通道（任务失败诊断「发送给 agent」——装配注入；发往任务容器对应模式） */

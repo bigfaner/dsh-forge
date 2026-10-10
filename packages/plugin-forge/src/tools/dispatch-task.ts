@@ -149,7 +149,7 @@ export interface SpawnWorkerRequest {
     readonly model: string
     readonly reasoningEffort?: ReasoningEffortLevel
   }
-  /** 子会话标签（任务键） */
+  /** 子会话标签（任务键 · 任务名——worker 子会话标题；用户裁决 2026-10-10：编号+名称） */
   readonly label?: string
 }
 
@@ -505,7 +505,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
               signal: exec.signal ?? new AbortController().signal,
               toolFilter,
               ...(agentOptions !== undefined ? { agentOptions } : {}),
-              label: taskKey,
+              label: `${taskKey} · ${task.title}`,
             })
           } catch (cause) {
             return spawnFailed(sessionId, task.slug, taskKey, cause)

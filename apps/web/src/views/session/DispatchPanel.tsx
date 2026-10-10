@@ -333,16 +333,33 @@ export function workerSessionOf(sessions: readonly SessionTaskLinkCard[]): strin
   return worker?.sessionId ?? null
 }
 
-/** worker 会话解析（纯异步面）：taskDetail 挂接面 → workerSessionOf；错误/缺席 fail-soft null */
+/**
+ * worker 的 durable 父会话解析（纯函数——D6 修复面）：link 派发源 = 派发会话 = worker 的
+ * 父（dispatchTask 自本会话 spawn——parent = 派发 agent）。库侧权威：进行中 worker 的
+ * 账本行/盘上日志均未落的场景也恒可得（打开链显式父优先径的输入）。无 link 源 =
+ * undefined（调用面走账本判读径）。
+ */
+export function parentSessionOf(sessions: readonly SessionTaskLinkCard[]): string | undefined {
+  return sessions.find((session) => session.source === 'link')?.sessionId
+}
+
+/** worker 会话解析结果（⟞ 打开链输入——worker id + 库侧权威父） */
+export interface WorkerSessionRef {
+  readonly worker: string | null
+  readonly parent: string | undefined
+}
+
+/** worker 会话解析（纯异步面）：taskDetail 挂接面 → workerSessionOf + parentSessionOf；
+ * 错误 fail-soft（worker=null/parent=undefined） */
 export async function fetchWorkerSession(
   client: ForgeRpcClient,
   q: { readonly projectId: string; readonly taskId: string },
-): Promise<string | null> {
+): Promise<WorkerSessionRef> {
   try {
     const detail = await client.tasks.detail(q)
-    return workerSessionOf(detail.sessions)
+    return { worker: workerSessionOf(detail.sessions), parent: parentSessionOf(detail.sessions) }
   } catch {
-    return null
+    return { worker: null, parent: undefined }
   }
 }
 
@@ -544,8 +561,9 @@ export interface DispatchPanelProps {
   readonly projectId: string
   /** 行点击 = 任务详情弹窗就地打开（桥 openTaskDrawer——零跳转/零 dock 强开；缺席 = 非交互） */
   readonly onOpenTask?: (taskId: string) => void
-  /** 行尾 ⟞ = 打开 worker 执行子会话（插件 inject face；缺席 = 非交互） */
-  readonly onOpenWorkerSession?: (childSessionId: string) => void
+  /** 行尾 ⟞ = 打开 worker 执行子会话（插件 inject face；缺席 = 非交互）——可选第二参 =
+   * 库侧权威父会话（link 派发源——进行中 worker 账本缺行场景的显式地址径输入） */
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -641,8 +659,8 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
     props.onOpenWorkerSession === undefined
       ? undefined
       : (taskId: string): void => {
-          void fetchWorkerSession(makeClient(), { projectId: props.projectId, taskId }).then((worker) => {
-            if (worker !== null) props.onOpenWorkerSession?.(worker)
+          void fetchWorkerSession(makeClient(), { projectId: props.projectId, taskId }).then(({ worker, parent }) => {
+            if (worker !== null) props.onOpenWorkerSession?.(worker, parent)
           })
         }
 
