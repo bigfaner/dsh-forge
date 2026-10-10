@@ -1,6 +1,6 @@
 // 提案子 tab 完整形态单测 —— 4.6 UF-1（AC1/AC6）：五态 chips 插入点（ov-sticky 之下、
-// 列表之上）+ 父行行头动作集（mode chip / 状态 tag / 打开新会话 / ⋯）+ 展开两列网格
-// （标识|作者 / 模式|谱系 / 创建|裁决）+ 文档区 listProposalDocs + 预填请求组装
+// 列表之上）+ 父行行头动作集（mode chip 三态 / 状态 tag / 打开新会话 / ⋯）+ 展开摘要独行
+// 与两列网格（标识|作者 / 模式|谱系 / 创建|裁决）+ 文档区 listProposalDocs + 预填请求组装
 // （提案 mode/无溯源不切换 + 不自动发送）+ 多选并集过滤与过滤零命中空态。
 // 对话框开合（点击链）归 e2e；对话框本体已归 4.2 组件测试。
 import { describe, expect, it } from 'vitest'
@@ -104,6 +104,7 @@ describe('ProposalsTabBody · 五态 chips 插入点与列表（AC1/AC6）', () 
     )
     expect(markup).toContain('data-dswf-ov-parent-toggle="prop:pr-1"')
     expect(markup).toContain('data-dswf-mode-chip="expedition"') // 有溯源可点快捷入口
+    expect(markup).toContain('data-dswf-mode-chip="blitz"') // M3.1 D16 三态：突击琥珀
     expect(markup).toContain('data-dswf-mode-chip="unmarked"') // 无溯源 = 未标记不可点
     expect(markup).toContain('data-dswf-ov-opensession="m2-pipeline"')
     expect(markup).toContain('打开新会话')
@@ -120,6 +121,16 @@ describe('ProposalsTabBody · 五态 chips 插入点与列表（AC1/AC6）', () 
       <ProposalsTabBody {...base} openRows={new Set(['prop:pr-1'])} />,
     )
     expect(markup).toContain('data-dswf-ov-meta="prop:pr-1"')
+    // M3.1 D16 摘要独行：全宽行（is-full）先于两列网格；提案行数据面零 summary 字段
+    // （Interface 3 权威——prefill 渠道同缺席）→ 原型 `pr.abstract || '—'` 的占位值
+    const metaAt = markup.indexOf('data-dswf-ov-meta="prop:pr-1"')
+    const fullAt = markup.indexOf('dswf-ov-fmeta-row is-full', metaAt)
+    const gridAt = markup.indexOf('dswf-ov-fmeta-grid', metaAt)
+    expect(fullAt).toBeGreaterThan(-1)
+    expect(gridAt).toBeGreaterThan(fullAt)
+    const summaryRow = markup.slice(fullAt, gridAt)
+    expect(summaryRow).toContain('摘要')
+    expect(summaryRow).toContain('—')
     expect(markup).toContain('dswf-ov-fmeta-grid')
     expect(markup).toContain('标识')
     expect(markup).toContain('m2-pipeline')

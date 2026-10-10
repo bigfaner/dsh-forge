@@ -1,6 +1,6 @@
 // 提案子 tab 完整形态（定位：业务——M3 4.6 UF-1：五态 chips 行[ov-sticky 之下、列表之上]
 // + 提案父行[标题 + 名称右侧 mode chip + 中文状态 tag + 行头「打开新会话」+ ⋯ 菜单] +
-// 展开元数据[两列网格 标识|作者 / 模式|谱系 / 创建|裁决 + 文档区 listProposalDocs]）。
+// 展开元数据[摘要独行 + 两列网格 标识|作者 / 模式|谱系 / 创建|裁决 + 文档区 listProposalDocs]）。
 // 组件半身（4.2/4.1）拼装：ProposalStatusChips（五态过滤）+ ModeChip（溯源三态；有溯源
 // 可点 = 模式更改对话框快捷入口——唯一正门不分叉）+ ProposalVerdictDialog / ProposalModeDialog
 // （⋯ 菜单挂线）+ formatPrefill（打开新会话预填——提案 mode/无溯源不切换、不自动发送）。
@@ -322,8 +322,13 @@ export function ProposalsTabBody({
               </div>
               {open ? (
                 <div className="dswf-ov-meta" data-dswf-ov-meta={key}>
-                  {/* 摘要行缺席：contracts ProposalRow 无 summary 字段（Interface 3 数据形状权威）——
-                      提案摘要在文档 tab（DocContent.summary）承载，行级不重复 */}
+                  {/* 摘要独行（M3.1 D16——原型 m31-meta-row full 先行、两列网格其后）：
+                      提案行数据面零 summary 字段（Interface 3 数据形状权威——prefill 渠道
+                      同缺席），值 = 原型 `pr.abstract || '—'` 的缺席占位——零数据面形态落地 */}
+                  <div className="dswf-ov-fmeta-row is-full">
+                    <span className="dswf-ov-fmeta-k">摘要</span>
+                    <span className="dswf-ov-fmeta-v">—</span>
+                  </div>
                   <div className="dswf-ov-fmeta-grid">
                     <div className="dswf-ov-fmeta-row">
                       <span className="dswf-ov-fmeta-k">标识</span>
