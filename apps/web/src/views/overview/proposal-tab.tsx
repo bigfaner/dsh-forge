@@ -323,21 +323,21 @@ export function ProposalsTabBody({
                       proposalMenuSelect(id, { onVerdict, onModeChange, onOpenSession: onOpenSession === undefined ? undefined : (p) => onOpenSession(p, docsMap.get(p.slug) ?? []), proposals })
                     }}
                     anchor={
-                      <Tooltip label="行操作" portal>
-                        <button
-                          type="button"
-                          className="dswf-ov-more"
-                          data-dswf-ov-more={proposal.proposalId}
-                          aria-label="提案行操作"
-                          aria-haspopup="menu"
-                          aria-expanded={menuProposalId === proposal.proposalId}
-                          onClick={() => {
-                            onMenuOpenChange(menuProposalId === proposal.proposalId ? null : proposal.proposalId)
-                          }}
-                        >
-                          ⋯
-                        </button>
-                      </Tooltip>
+                      // D37：⋯ 行操作钮控件自释零 Tooltip——通用行菜单惯例（aria-label/
+                      // haspopup 在场；「行操作」气泡随裁决退役）
+                      <button
+                        type="button"
+                        className="dswf-ov-more"
+                        data-dswf-ov-more={proposal.proposalId}
+                        aria-label="提案行操作"
+                        aria-haspopup="menu"
+                        aria-expanded={menuProposalId === proposal.proposalId}
+                        onClick={() => {
+                          onMenuOpenChange(menuProposalId === proposal.proposalId ? null : proposal.proposalId)
+                        }}
+                      >
+                        ⋯
+                      </button>
                     }
                   />
                 ) : null}

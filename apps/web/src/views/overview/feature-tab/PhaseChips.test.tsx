@@ -106,7 +106,7 @@ describe('阶段 chips 行（AC1 渲染面）', () => {
     expect(markup).toContain('>1</span>') // in-progress 计数
   })
 
-  it('0 计数 chip disabled（不可点出空态）+ 淡化类 + 悬停说明（官方 Tooltip label——D30 原生 title 退役）', () => {
+  it('0 计数 chip disabled（不可点出空态）+ 淡化类 + 零 Tooltip 退役锚（D37 控件自释——原 D30 官方 Tooltip 断言更替非删除）', () => {
     const markup = renderToStaticMarkup(
       <PhaseChips counts={COUNTS} active={NONE} onToggle={() => {}} />,
     )
@@ -117,7 +117,8 @@ describe('阶段 chips 行（AC1 渲染面）', () => {
     }
     expect(chipOf('design')).toContain('disabled')
     expect(chipOf('design')).toContain('is-zero')
-    expect(chipOf('design')).not.toContain('title=') // D30：「无此阶段 feature」归官方 Tooltip label（结构 pin tests/structure/d30）
+    expect(chipOf('design')).not.toContain('title=') // D30 原生 title 反断言保留
+    expect(markup).not.toContain('无此阶段 feature') // D37：状态筛选 chips 控件自释零 Tooltip——禁用态说明由 0 计数淡化自释（退役锚 tests/structure/d30 TOOLTIP_RETIRED_FILES）
     expect(chipOf('tasks')).not.toContain('disabled')
   })
 

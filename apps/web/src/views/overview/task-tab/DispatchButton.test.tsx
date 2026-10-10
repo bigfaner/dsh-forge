@@ -1,7 +1,8 @@
 // 派发按钮单测 —— AC3/AC4：nonTerminalOf 终态判定驱动的亮起/置灰（v24：亮起与其它按钮
-// 同款式·置灰 = 深灰实底 + tooltip）+ dispatchCommandOf 单行指令模板（4.1 前缀消费）+
-// latestDispatchSessionOf（link 源末位 = 最新派发挂接）+ dispatchRouteOf 双路由分支
-// （执行中在场+有挂接 → jump 不新建不重发；否则 new + 容器对应模式 + 指令单行）。
+// 同款式·置灰 = 深灰实底；D37 控件自释零 Tooltip——三态载注退役）+ dispatchCommandOf 单行
+// 指令模板（4.1 前缀消费）+ latestDispatchSessionOf（link 源末位 = 最新派发挂接）+
+// dispatchRouteOf 双路由分支（执行中在场+有挂接 → jump 不新建不重发；否则 new + 容器对应
+// 模式 + 指令单行）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { SessionTaskLinkCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
@@ -36,24 +37,26 @@ function link(taskId: string, sessionId: string, source: 'link' | 'record'): Ses
   }
 }
 
-describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；D30 悬停说明归官方 Tooltip label）', () => {
+describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；D37 控件自释零 Tooltip——三态载注退役）', () => {
   it('未终态在场（pending/in_progress/blocked/suspended 任一）→ 亮起可点（同款式 is-on + 无 disabled）', () => {
     for (const status of ['pending', 'in_progress', 'blocked', 'suspended'] as const) {
       const markup = renderToStaticMarkup(<DispatchButton stats={statsOf({ [status]: 1 })} onDispatch={NOOP} />)
       expect(markup).toContain('data-dswf-tt-dispatch="on"')
       expect(markup).toContain('>派发</button>')
       expect(markup).not.toContain('disabled')
-      expect(markup).not.toContain('title=') // D30：label 归官方 Tooltip（三态 title 常量单源分支——结构 pin tests/structure/d30）
+      expect(markup).not.toContain('title=') // D30 原生 title 反断言保留
+      expect(markup).not.toContain('role="tooltip"') // D37：控件自释零 Tooltip（退役锚 tests/structure/d30 TOOLTIP_RETIRED_FILES——亮起 DAG 顺序领取载注同退役）
     }
   })
 
-  it('全终态（completed/skipped/rejected）→ 置灰不可点（深灰实底 is-off + 官方 Tooltip label）', () => {
+  it('全终态（completed/skipped/rejected）→ 置灰不可点（深灰实底 is-off 自释——零 Tooltip）', () => {
     const markup = renderToStaticMarkup(
       <DispatchButton stats={statsOf({ completed: 2, skipped: 1, rejected: 1 })} onDispatch={NOOP} />,
     )
     expect(markup).toContain('data-dswf-tt-dispatch="off"')
     expect(markup).toContain('disabled')
-    expect(markup).not.toContain('title=') // D30：置灰说明「全部任务已处于终态…」归官方 Tooltip label
+    expect(markup).not.toContain('title=') // D30 原生 title 反断言保留
+    expect(markup).not.toContain('全部任务已处于终态') // D37：置灰说明由深灰实底自释——载注退役（更替非删除）
     expect(markup).toContain('is-off')
   })
 
@@ -64,10 +67,11 @@ describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；
     expect(markup).toContain('data-dswf-tt-dispatch="on"')
   })
 
-  it('stats 缺席（装载在途）→ 置灰 + 装载中 label（不以全终态口径误导——D30 官方 Tooltip）', () => {
+  it('stats 缺席（装载在途）→ 置灰（装载中载注退役——D37 控件自释零 Tooltip）', () => {
     const markup = renderToStaticMarkup(<DispatchButton stats={undefined} onDispatch={NOOP} />)
     expect(markup).toContain('data-dswf-tt-dispatch="off"')
     expect(markup).toContain('disabled')
+    expect(markup).not.toContain('任务装载中') // D37：装载中说明退役（置灰不可点自释——更替非删除）
   })
 
   it('零任务容器 → 置灰（无可派发）', () => {

@@ -135,23 +135,23 @@ function TaskItem({
               })
             }}
             anchor={
-              <Tooltip label="行操作" portal>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="dswf-tt-more"
-                  data-dswf-tt-more={card.taskId}
-                  aria-label="行操作"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onMenuOpenChange(menuOpen ? null : card.taskId)
-                  }}
-                >
-                  ⋯
-                </Button>
-              </Tooltip>
+              // D37：⋯ 行操作钮控件自释零 Tooltip——通用行菜单惯例（aria-label/haspopup 在场；
+              // 「行操作」气泡随裁决退役。截断兜底悬停 label 位 = D36 ⑥ 增量交付面保留）
+              <Button
+                variant="ghost"
+                size="sm"
+                className="dswf-tt-more"
+                data-dswf-tt-more={card.taskId}
+                aria-label="行操作"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onMenuOpenChange(menuOpen ? null : card.taskId)
+                }}
+              >
+                ⋯
+              </Button>
             }
           />
         ) : null}

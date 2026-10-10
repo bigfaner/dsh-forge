@@ -11,7 +11,7 @@ import {
   type ProposalCard,
   type ProposalStatus,
 } from '@dsh-forge/contracts'
-import { Tooltip, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
+import { type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import './proposal-tab.css'
 
 /**
@@ -74,33 +74,23 @@ export function ProposalStatusChips({ counts, active, onToggle, onClear }: Propo
           .filter(Boolean)
           .join(' ')
         return (
-          // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
-          <Tooltip
+          // D37：状态筛选 chips 控件自释零气泡——zh 标签已在 chip 面；禁用态说明
+          // 「无此状态提案」由 0 计数淡化自释（D30 机械化包裹残差退役——tipwrap 随之）
+          <button
             key={status}
-            label={
-              disabled
-                ? '无此状态提案'
-                : `${PROPOSAL_STATUS_LABELS[status].zh}（${PROPOSAL_STATUS_LABELS[status].en}）`
-            }
-            portal
+            type="button"
+            className={cls}
+            data-dswf-ov-pschip={status}
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => {
+              onToggle(status)
+            }}
           >
-            <span className="dswf-tipwrap">
-              <button
-                type="button"
-                className={cls}
-                data-dswf-ov-pschip={status}
-                aria-pressed={on}
-                disabled={disabled}
-                onClick={() => {
-                  onToggle(status)
-                }}
-              >
-                <span className="dswf-ov-pschip-dot" data-status={status} aria-hidden="true" />
-                <span className="dswf-ov-pschip-label">{PROPOSAL_STATUS_LABELS[status].zh}</span>
-                <span className="dswf-ov-pschip-count">{count}</span>
-              </button>
-            </span>
-          </Tooltip>
+            <span className="dswf-ov-pschip-dot" data-status={status} aria-hidden="true" />
+            <span className="dswf-ov-pschip-label">{PROPOSAL_STATUS_LABELS[status].zh}</span>
+            <span className="dswf-ov-pschip-count">{count}</span>
+          </button>
         )
       })}
       {hasFilter && onClear !== undefined ? (

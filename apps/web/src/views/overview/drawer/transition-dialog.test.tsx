@@ -339,6 +339,7 @@ describe('AC4 · 关闭：Esc / 取消', () => {
     expect(html).toContain('data-dswf-td-tr-cancel')
     expect(html).toContain('data-dswf-td-tr-confirm')
     expect(html).toContain('取消')
+    expect(html).not.toContain('关闭（Esc）') // D37：取消钮控件自释零 Tooltip——「取消」文案自明（载注退役，更替非删除）
     expect(html).toContain('确认转移')
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')

@@ -44,3 +44,4 @@
 | [D33-dp-anchor-tone.md](./D33-dp-anchor-tone.md) | D33 悬浮面板两残差收口走查记录（任务 1.18）——默认锚位真盒右上角 + 状态标签 taskStatusTagTone 单源；实机双主题截图当场归档（Electron 捕获）+ 真 rect 几何复核 |
 | [D39-dock-gutter.md](./D39-dock-gutter.md) | D39 dock 余缝同色走查记录（任务 1.26）——WCO rightbarCol bg-base 对冲；实机双主题截图当场归档（Electron 捕获）+ 运行时同色断言（dock == 中区 ≠ frame sidebar-fill） |
 | [D35-button-variant.md](./D35-button-variant.md) | D35 按钮风格对齐走查记录（任务 1.22）——深灰 toolbar 异类 9 处清零逐位台账 + 全量按钮排查双通道；实机双主题截图当场归档（Electron 捕获，六面 × 亮/暗）+ 实机计算样式测量（ghost 透明底 rgba(0,0,0,0) 双主题，#54555780 不在场） |
+| [D37-self-evident-tooltip.md](./D37-self-evident-tooltip.md) | D37 自释功能钮 tooltip 清零全量排查台账（任务 1.24）——概览 tab 141 位逐位判定（退役 14 位/保留 28 位/测试面 24 行更替/域外 2 位记账）+ 断言更替台账（d30 29 walk 位恒数 + TOOLTIP_REMAINING_COUNTS 余额冻结）+ 保留面/退役位双主题截图当场归档（Electron 捕获，13 面 × 亮/暗） |

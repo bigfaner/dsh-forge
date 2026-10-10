@@ -3,7 +3,8 @@
 // terminal-state.ts 与相位推导机口径同源）→ 亮起可点（**与其它按钮同款式**——无主操作蓝，
 // 同 bg/边框/字重·位置居右簇最右）；全终态/零任务 → 置灰（**深灰实底·非透明淡出**——
 // css is-off：label-secondary 填充 + bg-base 反色文字，v24 原型 --dsw-fg-2 的官方令牌
-// 最近语义映射）+ tooltip「全部任务已处于终态——无可派发任务」。
+// 最近语义映射）。D37：控件自释零气泡——三态载注（v22 ㊱ 置灰说明/装载中/亮起 DAG
+// 顺序领取语义）随 D30 机械化包裹退役——置灰形态自释 + 置灰不可点已闭环（零死代码）。
 // 双路由（图 13 / v22 ㊲）：执行中任务在场且有其最新派发挂接会话 → jump（openExistingSession
 // ——不新建不重发不切模式）；否则 new（openSessionWithPreset 容器对应模式 + autosend
 // 「/run-tasks <容器标识>」单行——v23 最小消息·4.1 DISPATCH_COMMAND_PREFIX 串接）。
@@ -12,20 +13,9 @@
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——本族组件零任务行/详情动作。
 import type { ReactNode } from 'react'
 import type { Mode, SessionTaskLinkCard, TaskStats } from '@dsh-forge/contracts'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DISPATCH_COMMAND_PREFIX } from '../message-format.js'
 import { hasNonTerminalTask } from './terminal-state.js'
 import './task-tab.css'
-
-/** 置灰 tooltip（ui-design v22 ㊱ spec 原文——全终态语义说明） */
-export const DISPATCH_DISABLED_TITLE = '全部任务已处于终态——无可派发任务'
-
-/** 装载在途 tooltip（stats 缺省 = 判定不可得——不以全终态口径误导） */
-export const DISPATCH_PENDING_TITLE = '任务装载中——终态判定待就绪'
-
-/** 亮起 tooltip（ui-design UF-3 概览 tab 宽度行注——DAG 顺序领取语义） */
-export const DISPATCH_ACTIVE_TITLE =
-  '派发——构造结构化指令发给 agent，按 DAG 依赖顺序依次领取并执行就绪任务（run-tasks）'
 
 /** 派发指令单行（v23：`/run-tasks <容器标识>`——容器标识经 run-tasks 技能映射为 dispatchTask source 对） */
 export function dispatchCommandOf(containerSlug: string): string {
@@ -83,29 +73,22 @@ export interface DispatchButtonProps {
 }
 
 /**
- * 派发按钮（AC3）：stats 单源终态判定 → 亮起（同款式 is-on）/ 置灰（深灰实底 is-off
- * + tooltip）；固定右簇最右的落位（taskbar-right）= 4.6。
+ * 派发按钮（AC3）：stats 单源终态判定 → 亮起（同款式 is-on）/ 置灰（深灰实底 is-off）；
+ * 固定右簇最右的落位（taskbar-right）= 4.6。
+ * D37：控件自释零气泡——「派发」label 自明；置灰态 = 深灰实底自释（D30 机械化
+ * 包裹的三态载注随裁决退役——全终态说明由 is-off 深灰实底自释，零死代码残留）。
  */
 export function DispatchButton({ stats, onDispatch }: DispatchButtonProps): ReactNode {
-  const pending = stats === undefined
   const dispatchable = stats !== undefined && hasNonTerminalTask(stats)
   return (
-    // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
-    <Tooltip
-      label={dispatchable ? DISPATCH_ACTIVE_TITLE : pending ? DISPATCH_PENDING_TITLE : DISPATCH_DISABLED_TITLE}
-      portal
+    <button
+      type="button"
+      className={dispatchable ? 'dswf-tt-dispatch is-on' : 'dswf-tt-dispatch is-off'}
+      data-dswf-tt-dispatch={dispatchable ? 'on' : 'off'}
+      disabled={!dispatchable}
+      onClick={dispatchable ? onDispatch : undefined}
     >
-      <span className="dswf-tipwrap">
-        <button
-          type="button"
-          className={dispatchable ? 'dswf-tt-dispatch is-on' : 'dswf-tt-dispatch is-off'}
-          data-dswf-tt-dispatch={dispatchable ? 'on' : 'off'}
-          disabled={!dispatchable}
-          onClick={dispatchable ? onDispatch : undefined}
-        >
-          派发
-        </button>
-      </span>
-    </Tooltip>
+      派发
+    </button>
   )
 }

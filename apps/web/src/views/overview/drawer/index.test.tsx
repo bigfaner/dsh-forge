@@ -175,11 +175,13 @@ describe('TaskDrawerBody · D22 简要形态（默认 440——键+tag+标题+�
 })
 
 describe('TaskDrawerBody · D22 ⤢/⤡ 翻转钮（两形态共享头部）', () => {
-  it('翻转钮在场（标题栏内 ✕ 之左）+ aria-pressed 随形态翻转 + label 文案互换（官方 Tooltip——D30 原生 title 退役）', () => {
+  it('翻转钮在场（标题栏内 ✕ 之左）+ aria-pressed 随形态翻转 + 零 Tooltip 退役锚（D37 控件自释——原 D30 官方 Tooltip 断言更替非删除）', () => {
     const brief = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
     expect(brief).toContain('data-dswf-td-expand=""')
     expect(brief).toContain('aria-pressed="false"')
-    expect(brief).not.toContain('title=') // D30：翻转/关闭说明归官方 Tooltip label（结构 pin tests/structure/d30）
+    expect(brief).not.toContain('title=') // D30 原生 title 反断言保留
+    expect(brief).not.toContain('收起为简要信息') // D37：⤢ 翻转钮控件自释零 Tooltip——两态由 aria-pressed 承载（更替非删除）
+    expect(brief).not.toContain('关闭（Esc）') // D37：✕ 关闭钮控件自释零 Tooltip——Esc 层序机制自释（更替非删除）
     const expandAt = brief.indexOf('data-dswf-td-expand')
     const closeAt = brief.indexOf('data-dswf-td-close')
     expect(expandAt).toBeGreaterThan(-1)

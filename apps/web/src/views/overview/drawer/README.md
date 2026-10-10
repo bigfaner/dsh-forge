@@ -81,6 +81,6 @@
 ### D22 形态语义记账
 
 - 展开态 = 装载壳逐开本地态（同几何生命周期）：关闭随壳卸载弃置 → **重开回默认简要**（裁决 #11 不记忆展开态）；切任务原位保持（原型 `openTaskModal` 仅首开重置）；
-- ⤢/⤡ 图标：官方 primitives 无 shrink 专用件——`IconFullscreenOutlineMedium` 单图标 + `aria-pressed` + title 互换（展开完整信息/收起为简要信息）承载两态（图标对缺口记账；裁决 #15 官方式件优先的最近似映射）；
+- ⤢/⤡ 图标：官方 primitives 无 shrink 专用件——`IconFullscreenOutlineMedium` 单图标 + `aria-pressed` 两态承载（图标对缺口记账；裁决 #15 官方式件优先的最近似映射；D37：翻转/关闭钮控件自释零 Tooltip——「展开完整信息/收起为简要信息」「关闭（Esc）」气泡随裁决退役）；
 - 挂接会话 pill：跳会话 + **关弹窗**两动作一体（原型 `m31-tm-sess` handler 同语义——`TaskDrawerBody` 组合 `onOpenSession` + `onClose`）；
 - 简要概要行取值：所属 = slug（代码体色）/ 类型 = taskType · priority / 前置 = 自然键列表（空 = —）/ 挂接会话 = sessionId 列表（空 = ——与 pill 标签同源，SessionTaskLinkCard 无标题字段）。

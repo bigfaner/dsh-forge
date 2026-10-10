@@ -4,8 +4,8 @@
 //      <标识>」单行自动发送（v23 最小消息——容器标识经 run-tasks 技能映射为 dispatchTask source 对）；
 //   ② 执行中在场跳转不重发：执行中任务有最新派发挂接 → jump（openSession 按会话 id
 //      ——不新建不重发不切模式；观测面 = 主会话面切换至挂接会话 + 转录零派发指令）；
-//   ③ 全终态置灰：stats 单源终态判定 → disabled + 深灰实底 + tooltip「全部任务已处于
-//      终态——无可派发任务」（data-dswf-tt-dispatch="off"）；
+//   ③ 全终态置灰：stats 单源终态判定 → disabled + 深灰实底自释（data-dswf-tt-dispatch=
+//      "off"）；D37 控件自释零 Tooltip——置灰说明气泡随裁决退役（悬停零气泡断言）；
 //   ④ 任务行详情无单任务执行入口（Hard Rule v22 ㊳——抽屉面零「执行」动作）。
 // 载体：写动词经测试钩子直调（回放主径）；会话夹具 = 零凭据 composer 消息（M2 SC6③ 同径）。
 import { mkdtempSync } from 'node:fs'
@@ -100,7 +100,12 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(dispatchOff, '全终态置灰（data-dswf-tt-dispatch=off）').toBeVisible({ timeout: 30_000 })
     await expect(dispatchOff).toBeDisabled()
-    await expect(dispatchOff).toHaveAttribute('title', '全部任务已处于终态——无可派发任务')
+    // D37 更替（原 D30 迁移补收 fix-7「悬停出泡载注」断言随裁决退役）：置灰 = 深灰实底
+    // 自释——控件自释零 Tooltip（title= 反断言保留 + 悬停零气泡；结构 pin =
+    // tests/structure/d30 TOOLTIP_RETIRED_FILES）
+    await expect(dispatchOff).not.toHaveAttribute('title', /.+/)
+    await dispatchOff.hover()
+    await expect(page.locator('body > span[role="tooltip"]'), '全终态置灰零气泡（D37 控件自释）').toHaveCount(0)
     await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（读路径活跃）').toBeVisible()
 
     if (pageErrors.length > 0) console.log(`[uf3-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)

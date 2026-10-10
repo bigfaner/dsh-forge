@@ -58,6 +58,7 @@ describe('StickyBar 搜索行（AC2 搜索 + 清除按钮 + IME 安全）', () =
     expect(empty).not.toContain('aria-label="清除搜索"')
     const filled = renderToStaticMarkup(<StickyBar {...base} subtab="proposals" search="网关" sort="active" />)
     expect(filled).toContain('aria-label="清除搜索"')
+    expect(filled).not.toContain('清除（Esc）') // D37：✕ 清除钮控件自释零 Tooltip——Esc 清词机制自释（载注退役，更替非删除）
   })
 
   it('IME 安全结构不变式：关键词变更不重建搜索行——input 前键树前缀逐字等价 + 唯一 input', () => {
@@ -77,10 +78,11 @@ describe('StickyBar 搜索行（AC2 搜索 + 清除按钮 + IME 安全）', () =
 })
 
 describe('StickyBar 排序 pill（AC2 ⇅ 活跃优先 ↔ 最新创建）', () => {
-  it('排序 pill 右固定呈现当前模式标签', () => {
+  it('排序 pill 右固定呈现当前模式标签 + 零 Tooltip 退役锚（D37 控件自释——原「切换排序方式」载注退役）', () => {
     const active = renderToStaticMarkup(<StickyBar {...base} subtab="proposals" search="" sort="active" />)
     expect(active).toContain('data-dswf-ov-sort')
     expect(active).toContain('⇅ 活跃优先')
+    expect(active).not.toContain('切换排序方式') // D37：⇅ 排序 pill 控件自释零 Tooltip——当前模式标签直出（更替非删除；退役锚 tests/structure/d30 TOOLTIP_RETIRED_FILES）
     const created = renderToStaticMarkup(<StickyBar {...base} subtab="proposals" search="" sort="created" />)
     expect(created).toContain('⇅ 最新创建')
   })

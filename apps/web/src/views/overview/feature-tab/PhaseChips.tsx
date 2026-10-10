@@ -10,7 +10,6 @@
 // 任务 = 原型紫无官方令牌 → 中性三级（同 4.2 superseded 注记）。
 import type { ReactNode } from 'react'
 import type { FeatureCard, FeatureStatus } from '@dsh-forge/contracts'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { PHASE_PHRASES } from '../message-format.js'
 import './feature-tab.css'
 
@@ -75,25 +74,23 @@ export function PhaseChips({ counts, active, onToggle, onClear }: PhaseChipsProp
           .filter(Boolean)
           .join(' ')
         return (
-          // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
-          <Tooltip key={phase} label={disabled ? '无此阶段 feature' : PHASE_PHRASES[phase]} portal>
-            <span className="dswf-tipwrap">
-              <button
-                type="button"
-                className={cls}
-                data-dswf-ov-phchip={phase}
-                aria-pressed={on}
-                disabled={disabled}
-                onClick={() => {
-                  onToggle(phase)
-                }}
-              >
-                <span className="dswf-ov-phchip-dot" data-phase={phase} aria-hidden="true" />
-                <span className="dswf-ov-phchip-label">{PHASE_PHRASES[phase]}</span>
-                <span className="dswf-ov-phchip-count">{count}</span>
-              </button>
-            </span>
-          </Tooltip>
+          // D37：状态筛选 chips 控件自释零气泡——阶段 zh 标签已在 chip 面；禁用态
+          // 说明「无此阶段 feature」由 0 计数淡化自释（D30 机械化包裹残差退役——tipwrap 随之）
+          <button
+            key={phase}
+            type="button"
+            className={cls}
+            data-dswf-ov-phchip={phase}
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => {
+              onToggle(phase)
+            }}
+          >
+            <span className="dswf-ov-phchip-dot" data-phase={phase} aria-hidden="true" />
+            <span className="dswf-ov-phchip-label">{PHASE_PHRASES[phase]}</span>
+            <span className="dswf-ov-phchip-count">{count}</span>
+          </button>
         )
       })}
       {hasFilter && onClear !== undefined ? (

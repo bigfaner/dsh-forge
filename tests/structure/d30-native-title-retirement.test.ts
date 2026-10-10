@@ -19,6 +19,14 @@
 // D36 ⑤ 更替（任务 dsh-forge-m3.1-ui-alignment/1.23——断言更替非删除，walk 计数不减）：
 //   ViewDropdown 锚钮 Tooltip 随用户裁决退役 → 原 TOOLTIP_FILES 采纳锚位对位迁入
 //   TOOLTIP_RETIRED_FILES 零 Tooltip 退役锚（it.each 位 1:1 保留——29 walk 位恒数）。
+// D37 更替（任务 dsh-forge-m3.1-ui-alignment/1.24——断言更替非删除，29 walk 位恒数）：
+//   用户裁决「展开、派发、状态筛选控件等功能直观按钮不要添加 tooltip，全面排查」——
+//   控件自释位（展开族/派发钮/状态筛选 chips 三族/✕ 关闭族/⋯ 行操作族/粘滞条清除·排序）
+//   Tooltip 整体退役 → 5 个零 Tooltip 整迁面（status-chips/ProposalStatusChips/PhaseChips/
+//   DispatchButton/sticky-bar）对位迁入 TOOLTIP_RETIRED_FILES；保留位与退役位同文件的
+//   5 个部分退役面（ov-head/proposal-tab/list-view/drawer/index/transition-dialog）以
+//   TOOLTIP_REMAINING_COUNTS 余额冻结 pin 承接（增量保留位对位冻结——新增 Tooltip 须显式扩记）。
+//   全量 141 位逐位判定台账 = walkthrough/D37-self-evident-tooltip.md。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -104,7 +112,8 @@ for (const a of all) {
   if (isComponent(a.owner)) byComponent.set(a.owner, (byComponent.get(a.owner) ?? 0) + 1)
 }
 
-/** D30 迁移面（真悬浮提示位——官方 Tooltip 逐文件采纳锚；全量 portal 逃逸） */
+/** D30 迁移面（真悬浮提示位——官方 Tooltip 逐文件采纳锚；全量 portal 逃逸）。
+ * D37 更替后余额：概览 tab 零 Tooltip 整迁面 5 件 + 部分退役面 5 件（余额冻结 pin）。 */
 const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
   'apps/web/src/flows/add-project/DirectoryBrowser.tsx',
@@ -115,18 +124,13 @@ const TOOLTIP_FILES = [
   'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
   'apps/web/src/views/overview/feature-tab.tsx',
   'apps/web/src/views/overview/feature-tab/DocGroupList.tsx',
-  'apps/web/src/views/overview/feature-tab/PhaseChips.tsx',
   'apps/web/src/views/overview/ov-head.tsx',
   'apps/web/src/views/overview/proposal-tab.tsx',
-  'apps/web/src/views/overview/proposal-tab/ProposalStatusChips.tsx',
-  'apps/web/src/views/overview/status-chips.tsx',
-  'apps/web/src/views/overview/sticky-bar.tsx',
   'apps/web/src/views/overview/drawer/index.tsx',
   'apps/web/src/views/overview/drawer/timeline.tsx',
   'apps/web/src/views/overview/drawer/transition-dialog.tsx',
   'apps/web/src/views/overview/drawer/type-templates/coding.tsx',
   'apps/web/src/views/overview/drawer/type-templates/parts.tsx',
-  'apps/web/src/views/overview/task-tab/DispatchButton.tsx',
   'apps/web/src/views/overview/task-tab/dag-view.tsx',
   'apps/web/src/views/overview/task-tab/list-view.tsx',
   'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
@@ -149,10 +153,30 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   DrawerSection: 2,
 }
 
-/** D36 ⑤ Tooltip 退役锚（原采纳锚位 1:1 对位迁移——零 Tooltip 在场；断言更替非删除） */
+/** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；29 walk 位恒数：
+ * TOOLTIP_FILES 23 + TOOLTIP_RETIRED_FILES 6） */
 const TOOLTIP_RETIRED_FILES = [
-  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx',
+  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
+  'apps/web/src/views/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
+  'apps/web/src/views/overview/proposal-tab/ProposalStatusChips.tsx', // D37：五态筛选 chips（同族）
+  'apps/web/src/views/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
+  'apps/web/src/views/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
+  'apps/web/src/views/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
 ] as const
+
+/**
+ * D37 部分退役面 Tooltip 余额冻结（保留位与退役位同文件——增量信息承载位对位冻结；
+ * EXEMPT_LEDGER 同口径：新增 Tooltip 须显式扩记。判定台账 = walkthrough/
+ * D37-self-evident-tooltip.md——保留面：截断兜底/副作用说明/诊断说明/容器 pill 计数注/
+ * 1.23 ⑥ 行卡增量悬停/边界位 ⟞ 跳转会话与拖宽柄）。
+ */
+const TOOLTIP_REMAINING_COUNTS: Readonly<Record<string, number>> = {
+  'apps/web/src/views/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
+  'apps/web/src/views/overview/proposal-tab.tsx': 5, // relPath + title + 打开新会话（副作用说明）+ slug + createdAt
+  'apps/web/src/views/overview/task-tab/list-view.tsx': 3, // key/title/sub（1.23 ⑥ 增量悬停交付面）
+  'apps/web/src/views/overview/drawer/index.tsx': 4, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明
+  'apps/web/src/views/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
+}
 
 describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结构 pin）', () => {
   it('DOM 元素 title 属性全仓零在场（动态 title={…} 与静态 title="…" 双形态）', () => {
@@ -170,9 +194,17 @@ describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结�
     expect(src, `${rel} 气泡未 portal 逃逸（滚动裁剪/transform/层叠容器统一 portal）`).toContain('portal')
   })
 
-  it.each(TOOLTIP_RETIRED_FILES)('Tooltip 退役锚（D36 ⑤ 更替——控件自释零 Tooltip）：%s', (rel) => {
+  it.each(TOOLTIP_RETIRED_FILES)('Tooltip 退役锚（D36 ⑤ / D37 更替——控件自释零 Tooltip）：%s', (rel) => {
     const src = readFileSync(join(ROOT, rel), 'utf8')
-    expect(src, `${rel} Tooltip 残留（退役位零在场——D36 ⑤）`).not.toContain('Tooltip')
+    expect(src, `${rel} Tooltip 残留（退役位零在场——D36 ⑤ / D37）`).not.toContain('Tooltip')
+  })
+
+  it('D37 部分退役面 Tooltip 余额冻结（增量保留位对位——新增 Tooltip 须显式扩记）', () => {
+    for (const [rel, count] of Object.entries(TOOLTIP_REMAINING_COUNTS)) {
+      const src = readFileSync(join(ROOT, rel), 'utf8')
+      const actual = src.match(/<Tooltip\b/g)?.length ?? 0
+      expect(actual, `${rel} Tooltip 余额漂移（D37 点名退役位应零在场——台账 walkthrough/D37-self-evident-tooltip.md）`).toBe(count)
+    }
   })
 
   it('禁用态锚定包裹 CSS 在场（.dswf-tipwrap——禁用按钮吞指针事件，锚 = 包裹 span）', () => {

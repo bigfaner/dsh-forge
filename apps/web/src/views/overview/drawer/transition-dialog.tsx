@@ -272,11 +272,10 @@ export function TransitionDialogBody({
           </p>
         ) : null}
         <div className="dswf-td-tr-actions">
-          <Tooltip label="关闭（Esc）" portal>
-            <Button variant="ghost" size="sm" className="dswf-td-tr-cancel" data-dswf-td-tr-cancel="" onClick={onCancel}>
-              取消
-            </Button>
-          </Tooltip>
+          {/* D37：取消钮控件自释零 Tooltip——「取消」文案自明（「关闭（Esc）」载注退役） */}
+          <Button variant="ghost" size="sm" className="dswf-td-tr-cancel" data-dswf-td-tr-cancel="" onClick={onCancel}>
+            取消
+          </Button>
           <Button variant="primary" size="sm" className="dswf-td-tr-confirm" data-dswf-td-tr-confirm="" disabled={submitting} onClick={onConfirm}>
             确认转移
           </Button>

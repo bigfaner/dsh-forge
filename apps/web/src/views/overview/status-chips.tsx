@@ -4,7 +4,7 @@
 // byStatus（0 计数禁用——不可点出空态）。受控件：active 集合与 toggle 上抛归帧侧模型。
 import type { ReactNode } from 'react'
 import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/contracts'
-import { StateDot, Tooltip, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { hasActiveStatusFilter, isChipDisabled } from './overview-model.js'
 import './overview.css'
 
@@ -47,29 +47,23 @@ export function StatusChips({ counts, active, onToggle, onClear }: StatusChipsPr
           .filter(Boolean)
           .join(' ')
         return (
-          // D30：原生 title 退役——官方 Tooltip（禁用态锚定 = dswf-tipwrap 包裹 span）
-          <Tooltip
+          // D37：状态筛选 chips 控件自释零气泡——zh 标签已在 chip 面；禁用态说明
+          // 「无此状态任务」由 0 计数淡化自释（D30 机械化包裹残差退役——tipwrap 随之）
+          <button
             key={status}
-            label={disabled ? '无此状态任务' : `${TASK_STATUS_LABELS[status].zh}（${TASK_STATUS_LABELS[status].en}）`}
-            portal
+            type="button"
+            className={cls}
+            data-dswf-ov-stchip={status}
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => {
+              onToggle(status)
+            }}
           >
-            <span className="dswf-tipwrap">
-              <button
-                type="button"
-                className={cls}
-                data-dswf-ov-stchip={status}
-                aria-pressed={on}
-                disabled={disabled}
-                onClick={() => {
-                  onToggle(status)
-                }}
-              >
-                <StateDot state={STATUS_DOT_STATE[status]} size={8} />
-                <span className="dswf-ov-stchip-label">{TASK_STATUS_LABELS[status].zh}</span>
-                <span className="dswf-ov-stchip-count">{count}</span>
-              </button>
-            </span>
-          </Tooltip>
+            <StateDot state={STATUS_DOT_STATE[status]} size={8} />
+            <span className="dswf-ov-stchip-label">{TASK_STATUS_LABELS[status].zh}</span>
+            <span className="dswf-ov-stchip-count">{count}</span>
+          </button>
         )
       })}
       {hasFilter && onClear !== undefined ? (

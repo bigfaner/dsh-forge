@@ -37,23 +37,23 @@ export function OverviewHead({ projectName, summary, rows, open, onToggle }: Ove
           <span className="dswf-ov-name">{projectName}</span>
         </Tooltip>
         <span className="dswf-ov-summary">{summary}</span>
-        <Tooltip label={open ? '收起位置详情' : '展开位置详情'} portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-ov-head-toggle"
-            aria-expanded={open}
-            aria-label={open ? '收起位置详情' : '展开位置详情'}
-            data-dswf-ov-head-toggle=""
-            onClick={onToggle}
-          >
-            <IconChevronDownOutlineRegular
-              size={11}
-              className={open ? 'dswf-ov-head-caret is-open' : 'dswf-ov-head-caret'}
-            />
-            {open ? '收起' : '展开'}
-          </Button>
-        </Tooltip>
+        {/* D37：控件自释零 Tooltip——钮面「展开↔收起」文案 + aria-expanded 已承载两态
+            （「展开/收起位置详情」气泡随 D37 退役；aria-label = 可达名保留非气泡位） */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="dswf-ov-head-toggle"
+          aria-expanded={open}
+          aria-label={open ? '收起位置详情' : '展开位置详情'}
+          data-dswf-ov-head-toggle=""
+          onClick={onToggle}
+        >
+          <IconChevronDownOutlineRegular
+            size={11}
+            className={open ? 'dswf-ov-head-caret is-open' : 'dswf-ov-head-caret'}
+          />
+          {open ? '收起' : '展开'}
+        </Button>
       </div>
       {open ? (
         <div className="dswf-ov-info">

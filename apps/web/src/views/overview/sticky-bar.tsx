@@ -5,7 +5,7 @@
 // （非空时的）清除钮，子 tab/排序/内容区变更不重建搜索行（结构不变式见 sticky-bar.test）。
 // 官方件复用：输入 = 官方 Input（前导检索图标）、清除/排序 = 官方 Button/Pill——零自绘输入控件。
 import type { ReactNode } from 'react'
-import { Button, IconCloseFillRegular, IconSearchOutlineRegular, Input, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, IconSearchOutlineRegular, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   OVERVIEW_SORT_LABELS,
   OVERVIEW_SUBTABS,
@@ -76,32 +76,30 @@ export function StickyBar({
             }}
           />
           {search === '' ? null : (
-            <Tooltip label="清除（Esc）" portal>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="dswf-ov-searchclear"
-                aria-label="清除搜索"
-                data-dswf-ov-searchclear=""
-                onClick={() => {
-                  onSearchChange('')
-                }}
-              >
-                <IconCloseFillRegular size={12} />
-              </Button>
-            </Tooltip>
+            // D37：✕ 清除钮控件自释零气泡——通用关闭惯例 + Esc 清词机制自释（载注退役）
+            <Button
+              variant="ghost"
+              size="sm"
+              className="dswf-ov-searchclear"
+              aria-label="清除搜索"
+              data-dswf-ov-searchclear=""
+              onClick={() => {
+                onSearchChange('')
+              }}
+            >
+              <IconCloseFillRegular size={12} />
+            </Button>
           )}
         </div>
         <span className="dswf-ov-spacer" />
-        <Tooltip label="切换排序方式" portal>
-          <Pill
-            className="dswf-ov-sort"
-            data-dswf-ov-sort=""
-            onClick={onSortToggle}
-          >
-            {`⇅ ${OVERVIEW_SORT_LABELS[sort]}`}
-          </Pill>
-        </Tooltip>
+        {/* D37：⇅ 排序 pill 控件自释零气泡——当前模式标签直出（「切换排序方式」载注退役） */}
+        <Pill
+          className="dswf-ov-sort"
+          data-dswf-ov-sort=""
+          onClick={onSortToggle}
+        >
+          {`⇅ ${OVERVIEW_SORT_LABELS[sort]}`}
+        </Pill>
       </div>
     </div>
   )

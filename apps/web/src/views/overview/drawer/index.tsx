@@ -455,30 +455,29 @@ export function TaskDrawerBody({
           {TASK_STATUS_LABELS[detail.taskStatus].zh}
         </Tag>
         <span className="dswf-td-spacer" />
-        <Tooltip label={expanded ? '收起为简要信息' : '展开完整信息'} portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-td-expand"
-            data-dswf-td-expand=""
-            aria-pressed={expanded}
-            onClick={onToggleForm}
-          >
-            <IconFullscreenOutlineMedium size={14} />
-          </Button>
-        </Tooltip>
-        <Tooltip label="关闭（Esc）" portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-td-close"
-            data-dswf-td-close=""
-            aria-label="关闭弹窗"
-            onClick={onClose}
-          >
-            <IconCloseFillRegular size={14} />
-          </Button>
-        </Tooltip>
+        {/* D37：⤢ 翻转钮控件自释零 Tooltip——aria-pressed + 图标翻转已承载两态
+            （「收起为简要信息/展开完整信息」气泡随裁决退役） */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="dswf-td-expand"
+          data-dswf-td-expand=""
+          aria-pressed={expanded}
+          onClick={onToggleForm}
+        >
+          <IconFullscreenOutlineMedium size={14} />
+        </Button>
+        {/* D37：✕ 关闭钮控件自释零 Tooltip——通用关闭惯例 + Esc 层序机制自释（载注退役） */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="dswf-td-close"
+          data-dswf-td-close=""
+          aria-label="关闭弹窗"
+          onClick={onClose}
+        >
+          <IconCloseFillRegular size={14} />
+        </Button>
       </div>
       <Tooltip label={detail.title} portal>
         <div className="dswf-td-title">{detail.title}</div>
@@ -870,11 +869,10 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
         <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Tooltip label="关闭（Esc）" portal>
-            <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
-              <IconCloseFillRegular size={14} />
-            </Button>
-          </Tooltip>
+          {/* D37：✕ 关闭钮控件自释零 Tooltip（错误态头部——通用关闭惯例自释） */}
+          <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+            <IconCloseFillRegular size={14} />
+          </Button>
         </div>
         <div className="dswf-td-face">
           {state.error.uiState === 'empty-state' ? (
@@ -908,11 +906,10 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
         <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(handleDragStart, handleDragMove, handleDragEnd)}>
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
-          <Tooltip label="关闭（Esc）" portal>
-            <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
-              <IconCloseFillRegular size={14} />
-            </Button>
-          </Tooltip>
+          {/* D37：✕ 关闭钮控件自释零 Tooltip（装载态头部——通用关闭惯例自释） */}
+          <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+            <IconCloseFillRegular size={14} />
+          </Button>
         </div>
         <SkeletonRows className="dswf-td-skeleton" rowClassName="dswf-td-skeleton-row" rows={8} anchor="data-dswf-td-skeleton" />
       </aside>
