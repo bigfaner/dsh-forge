@@ -74,3 +74,23 @@ fix-25：知识库入口迁官方 `sidebar.panellist` 行（PanelRow → `layout
 显式偏离官方 ui-workspace Rows 的 meta 常驻次行（用户裁决 R16 / 差异清单 D3；官方
 `Tooltip` 件迁移归 D30 悬浮提示轮）。WCO 竖线/收起 rail 偏离（D1/D2）为壳层 CSS 面，
 载体 = `apps/web/src/styles/wco.css`（见其头注记账）。
+
+## M3.1 D42 会话行 hover 动作组（官方 fading + iconButton 对照记账）
+
+会话行尾 hover 动作组（2026-10-10 用户裁决「悬浮会话显示相关按钮，对齐 dsh」）：
+官方 ui-sidebar fading 等价机制（容器 `opacity:0` 占位——非悬浮行几何零抖动；
+hover/focus-within 显 + `opacity .15s var(--ds-ease-in-out)` 官方动效令牌）+ 官方
+ui-sidebar iconButton 刻度（28 命中区 / radius-sm / label-secondary / hover
+interactive-bg-hover——`dsh-client-ui-sidebar lib/client.js` 源码同款）。时间标签让位
+（官方 `.sessionRow:hover .time{display:none}` 同判，透明度承载占位保留）。
+动作集逐位记账（官方 ui-workspace Rows trailing = ⋯ 菜单锚 + 扩展槽）：
+
+| 位 | 官方 | 产品 | 记账 |
+|---|---|---|---|
+| 行激活 | 行点击/Enter 打开会话 | `onSessionActivate` → 官方 `uiWorkspace.openSession` 单径 | 同缝复用（「打开会话」钮同径——任务 1.29「至少打开会话」下限） |
+| ⋯ 菜单锚 | 改名/置顶/归档/删除（session.menu.item 槽） | **缺席**——会话域零 update RPC（`forge:projects/update` 仅项目域 name/archived） | 不虚设（「变更面缺席 = 对应项不出现」P1 口径沿袭） |
+| 扩展槽 | `sidebar.workspaces.session.row.action` | 缺席——产品无扩展动作 | 官方位零产品占用 |
+
+行本体 = `div[role=button]`（官方 DisclosureRow 行同型——原生 button 不可嵌套动作钮；
+Enter/Space 激活 = 官方 toggleFromKeyboard 同语义；动作容器 stopPropagation 防双触发）。
+机械 pin：`ForgeWorkspacePanel.test.tsx` D42 组（markup + 源面 + sidebar.css 读文件 pin）。

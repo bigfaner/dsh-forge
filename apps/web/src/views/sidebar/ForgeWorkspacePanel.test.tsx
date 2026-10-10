@@ -554,3 +554,59 @@ describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedF
     expect(markup).not.toContain('按项目树')
   })
 })
+
+describe('D42 会话行 hover 动作组（官方 ui-sidebar fading 模式 + iconButton 刻度）', () => {
+  const actions = { onSessionActivate: (_sessionId: string) => {} }
+
+  it('行尾动作组在场：「打开会话」钮（主视图切换既有机制——onSessionActivate 行点击同缝）+ aria 可达名', () => {
+    const markup = panel(actions)
+    expect(markup).toContain('data-dswf-session-actions')
+    expect(markup).toContain('data-dswf-session-action="open"')
+    expect(markup).toContain('aria-label="打开会话 登录修复"')
+  })
+
+  it('动作回调缺席容忍：onSessionActivate 未注入 = 动作组不呈现（纯展示件零缺省动作——项目行尾同口径）', () => {
+    expect(panel()).not.toContain('data-dswf-session-action')
+    expect(panel()).not.toContain('data-dswf-session-actions')
+  })
+
+  it('⋯ 菜单缺席记账（官方 Rows trailing 菜单锚位）：会话改名/置顶/归档/删除零 RPC 支撑 → 不虚设、菜单整体缺席', () => {
+    const markup = panel(actions)
+    expect(markup).not.toContain('data-dswf-session-action="menu"')
+    // 官方 ⋯ 件锚位不在会话行尾（零支撑项——「变更面缺席 = 对应项不出现」P1 口径沿袭）
+    expect(markup).not.toContain('data-dswf-session-action="menu"')
+    // 记账台账源面在案（SessionRow 文档块——逐位：①打开钮 ②⋯菜单零支撑缺席 ③扩展槽缺席）
+    expect(panelSource).toContain('动作集逐位记账')
+  })
+
+  it('既有刻度零回归（D4 记账面）：行锚/标题/相对时间标签照旧在场，动作组不触碰行本体四件', () => {
+    const markup = panel(actions)
+    expect(markup).toContain('data-dswf-session="s1"')
+    expect(markup).toContain('登录修复')
+    expect(markup).toContain('5 分钟前')
+    expect(markup).toContain('data-selected')
+    expect(markup).toContain('data-state="warning"')
+  })
+
+  it('行本体 div[role=button]（官方 DisclosureRow 行同型——原生 button 不可嵌套动作钮）+ 非交互行零 role', () => {
+    const markup = panel(actions)
+    // 会话行本体 = role=button + tabindex（官方 DisclosureRow rowExpands 同语义）
+    expect(markup).toMatch(/role="button"[^>]*data-dswf-session="s1"/)
+    expect(markup).toMatch(/tabindex="0"[^>]*data-dswf-session="s1"/)
+    // 回调缺席 = 纯展示（零 role/tabindex 缺省动作）
+    const idle = panel()
+    expect(idle).not.toMatch(/role="button"[^>]*data-dswf-session="s1"/)
+    expect(idle).not.toMatch(/tabindex="0"[^>]*data-dswf-session="s1"/)
+  })
+
+  it('交互语义源面 pin：行 Enter/Space 激活（官方 toggleFromKeyboard 同语义）+ 动作容器 click/keydown stopPropagation（防冒泡双触发）', () => {
+    expect(panelSource).toContain("if (event.key === 'Enter' || event.key === ' ')")
+    // 动作容器防双触发（行激活语义保持——官方 rowActions onClick stopPropagation 同型）
+    const actionsBlock = panelSource.slice(panelSource.indexOf('dswf-sidebar-session-actions'))
+    expect(actionsBlock).toContain('event.stopPropagation()')
+  })
+
+  // D42 CSS 机械面（fading 机制 / 时间让位 / iconButton 刻度）= tests/structure/d42-
+  // session-row-actions.test.ts 读文件 pin（apps/web 测试面无 node:fs 类型面——d36/d38
+  // CSS pin 同落 tests/structure 先例）。
+})

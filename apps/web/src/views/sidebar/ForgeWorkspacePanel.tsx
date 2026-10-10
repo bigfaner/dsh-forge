@@ -16,6 +16,12 @@
 // （SIDEBAR_VIEW_DEFAULT.archivedFilter = 'hide'——三态菜单可切回）；②会话 24h 窗口
 // （sidebarSessionVisibility 纯切分 + 项目块内「更早（N）」可展开折叠组——本地微观态
 // 不持久化；搜索在场折叠让位；flat/rail 投影不消费）。
+// D42（2026-10-10 用户追加裁决——会话行悬浮动作钮对齐 dsh）：行尾 hover 动作组 =
+// 官方 ui-sidebar fading 等价机制（opacity:0 占位零抖动 + hover 显 + 官方 .15s 过渡）+
+// ui-sidebar iconButton 刻度（28/radius-sm/hover interactive-bg-hover）；动作集逐位记账
+// 见 SessionRow 文档块（①打开会话 = 既有 onSessionActivate 单缝；②⋯ 菜单零 RPC 支撑
+// 不虚设缺席；③扩展槽缺席）；时间标签让位（官方 :hover .time 同判，透明度承载）；
+// 纯 UI 轮数据面/RPC 零变化。
 // 收起/展开（56px rail ↔ ~240px）由官方壳几何持有——本面板按 owner share 的 wide 双态渲染；
 // rail 展开回路 = expandSidebar 壳回调消费（fix-41 B 面：图标/搜索钮点击先展开侧栏）。
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
@@ -105,7 +111,28 @@ export interface ForgeWorkspacePanelProps {
   readonly now: number
 }
 
-/** 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型刻度） */
+/**
+ * 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型刻度）。
+ * D42（2026-10-10 用户裁决：「鼠标悬浮到项目列表的某一个会话时，显示相关的按钮，对齐 dsh」）
+ * 行尾 hover 动作组：官方 ui-sidebar fading 等价机制（容器 opacity:0 占位——非悬浮行几何
+ * 零抖动；hover/focus-within 显 + opacity 0.15s var(--ds-ease-in-out) 官方过渡——
+ * dsh-client-ui-sidebar lib/client.js `.fading>*` 源码同款）+ 官方 ui-sidebar iconButton
+ * 刻度（28 命中区 / radius-sm / label-secondary / hover interactive-bg-hover——同源码
+ * `.iconButton` 逐值）。样式面 = sidebar.css D42 块（机械 pin 在 ForgeWorkspacePanel.test）。
+ * 动作集逐位记账（官方 ui-workspace Rows trailing 对照——sessionRow rowActions =
+ * ⋯ 菜单锚 + `sidebar.workspaces.session.row.action` 扩展槽）：
+ *  ① 「打开会话」钮 = 产品既有主视图切换机制（onSessionActivate → 官方 uiWorkspace
+ *     openSession 单径——与行点击同缝；任务 1.29「至少打开会话」下限承载）；
+ *  ② ⋯ 菜单锚位：官方菜单项 = 改名/置顶/归档/删除——产品 RPC 面零支撑
+ *     （forge:projects/update 仅项目域 patch name/archived；会话域无 update 通道）→
+ *     不虚设，菜单整体缺席（「变更面缺席 = 对应项不出现」P1 口径沿袭）；
+ *  ③ 官方扩展槽：产品无扩展动作 → 缺席。
+ * 时间标签共存布局（官方对照优先 = 让位）：官方 `.sessionRow:hover .time{display:none}`
+ * 同判——fading 等价改透明度让位（占位保留零抖动），非悬浮时间常驻。
+ * 行本体 = div[role=button]（官方 DisclosureRow 行同型——原生 button 不可嵌套动作钮）；
+ * Enter/Space 激活 = 官方 toggleFromKeyboard 同语义；动作容器 click/keydown
+ * stopPropagation（防冒泡双触发——官方 rowActions onClick stopPropagation 同型）。
+ */
 function SessionRow({
   row,
   selected,
@@ -117,20 +144,57 @@ function SessionRow({
   now: number
   onActivate?: (sessionId: string) => void
 }): ReactNode {
+  const interactive = onActivate !== undefined
   return (
-    <button
-      type="button"
+    <div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
       className="dswf-sidebar-session"
       data-dswf-session={row.sessionId}
       data-selected={selected || undefined}
       onClick={onActivate === undefined ? undefined : () => { onActivate(row.sessionId) }}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onActivate(row.sessionId)
+              }
+            }
+          : undefined
+      }
     >
       <span className="dswf-sidebar-session-dot">
         <StateDot state={sessionDotState(row.status)} size={10} />
       </span>
       <span className="dswf-sidebar-session-title">{row.title}</span>
       <span className="dswf-sidebar-session-time">{relativeTimeLabel(row.updatedAt, now)}</span>
-    </button>
+      {interactive ? (
+        // D42 行尾 hover 动作组（机制与记账见组件文档块；容器 stopPropagation 防双触发）
+        <span
+          className="dswf-sidebar-session-actions"
+          data-dswf-session-actions=""
+          onClick={(event) => {
+            event.stopPropagation()
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+          }}
+        >
+          <button
+            type="button"
+            className="dswf-sidebar-session-action"
+            data-dswf-session-action="open"
+            aria-label={`打开会话 ${row.title}`}
+            onClick={() => {
+              onActivate(row.sessionId)
+            }}
+          >
+            <IconChevronRightOutlineRegular size={16} />
+          </button>
+        </span>
+      ) : null}
+    </div>
   )
 }
 

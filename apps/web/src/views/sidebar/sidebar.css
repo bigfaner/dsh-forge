@@ -9,7 +9,13 @@
  * 「形态对齐官方」优先，取官方原值；块级留白用行高令牌刻度。fix-43 视觉刻度收尾：会话行
  * 缩进 26→8（母本 calc(8px + depth*12px)，产品树恒单层 depth=0 直取终值）、组内相邻行
  * 2px 节奏（groupSection>*+* 同款）、行盒右缘出血至面板缘（listArea 负 margin 抵消链的
- * 容器侧终值 = 容器 padding-right 0）、段头 36px 刻度族 + label 继承壳 14/20 常规体。 */
+ * 容器侧终值 = 容器 padding-right 0）、段头 36px 刻度族 + label 继承壳 14/20 常规体。
+ * D42 会话行 hover 动作组：官方 ui-sidebar fading 模式源码同款（.fading>* opacity:0 →
+ * hover 显 + opacity .15s var(--ds-ease-in-out) 官方动效令牌）+ ui-sidebar iconButton
+ * 刻度（28 命中区/radius-sm/label-secondary/hover interactive-bg-hover）；时间标签让位
+ * （官方 :hover .time 同判，透明度承载占位零抖动）；动作集记账归
+ * ForgeWorkspacePanel.tsx SessionRow 文档块（①打开会话钮 ②⋯菜单零 RPC 支撑缺席
+ * ③官方扩展槽缺席）。 */
 
 /* 面板根：占满壳的 workspaces 区域（几何/收展归壳） */
 .dswf-sidebar {
@@ -307,6 +313,12 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.dswf-sidebar-session:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
 /* 状态点槽位（官方 16px 前导槽） */
 .dswf-sidebar-session-dot {
   display: inline-flex;
@@ -331,6 +343,64 @@
   margin-left: auto;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
+  transition: opacity 0.15s var(--ds-ease-in-out); /* dsw-raw 官方 ui-sidebar fading 过渡刻度（--ds-* = 官方主题动效令牌） */
+}
+
+/* D42：时间标签让位（官方 `.sessionRow:hover .time{display:none}` 同判——fading 等价
+ * 改透明度承载：占位保留、行几何零抖动；非悬浮时间常驻） */
+.dswf-sidebar-session:hover .dswf-sidebar-session-time {
+  opacity: 0;
+}
+
+/* ── D42 行尾 hover 动作组（2026-10-10 用户裁决「悬浮会话显示相关按钮，对齐 dsh」——
+ * 官方 ui-sidebar fading 模式源码同款：`.fading>*{opacity:0;transition:opacity .15s
+ * var(--ds-ease-in-out)}`；容器 opacity:0 占位 = 非悬浮行几何恒定零抖动，hover/focus-within
+ * 显形；pointer-events none 防隐形钮截击触点；动作集与记账 =
+ * ForgeWorkspacePanel.tsx SessionRow 文档块） ── */
+.dswf-sidebar-session-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px; /* dsw-raw 官方 ui-sidebar controls 组内间距刻度 */
+  margin-left: 6px; /* dsw-raw 官方 sessionRow 行语言（title 右缘距同款） */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s var(--ds-ease-in-out); /* dsw-raw 官方 ui-sidebar fading 过渡刻度 */
+}
+
+.dswf-sidebar-session:hover .dswf-sidebar-session-actions,
+.dswf-sidebar-session-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 动作钮（官方 ui-sidebar .iconButton 刻度逐值同款——dsh-client-ui-sidebar lib/client.js
+ * 源码核验：28 命中区 / radius-sm / label-secondary / 透明底 / hover interactive-bg-hover） */
+.dswf-sidebar-session-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* dsw-raw 官方 ui-sidebar iconButton 刻度 */
+  height: 28px; /* dsw-raw 官方 ui-sidebar iconButton 刻度 */
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dswf-sidebar-session-action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 官方 fading 纪律：prefers-reduced-motion 收敛过渡（ui-sidebar `.fading>*` 同款） */
+@media (prefers-reduced-motion: reduce) {
+  .dswf-sidebar-session-time,
+  .dswf-sidebar-session-actions {
+    transition: none;
+  }
 }
 
 /* ── 行级骨架（账本 pending） ── */
