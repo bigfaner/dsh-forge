@@ -20,6 +20,9 @@
  *      颜色」——WCO frame 背景 = sidebar-fill 官方形态下 rightbarCol 无独立背景规则，
  *      dock 上/下/右余缝透出 sidebar-fill 与中区 bg-base 成色差；产品 dock 列显式对冲
  *      bg-base，块尾专节注记）。
+ *   D40 展开态收起钮 = logoRow 内 brand 图标右侧（2026-10-10 用户追加裁决「收起左侧栏
+ *      跟 brand 图标同一行，在 brand 图标的右侧」——展开态官方 WCO toggle position:fixed
+ *      标题栏钮退役，static 回流 logoRow + 官方 iconButton 家族 36px 刻度，D2 块后专节）。
  *
  * 锚定纪律（brand.css 先例——hash 类名不稳定不落锚），全部经稳定结构面选取：
  *   - frame = [data-shell-overlay] 的父级（overlayLayer 为 frame 唯一直属渲染点）；
@@ -107,7 +110,7 @@ html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'
 }
 
 /* toggle：标题栏 28px 圆钮退役 → 轨顶 36px 图标钮（官方非 WCO 收起态 iconButton 刻度；
- * 展开态不受本规则波及——官方标题栏 toggle 形态保持） */
+ * 原注记「展开态不受本规则波及——官方标题栏 toggle 形态保持」经 D40 裁决更替——见下节） */
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:first-child > button {
   position: static;
   top: auto;
@@ -141,6 +144,38 @@ html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:has(> [data-slot='sidebar.workspaces']),
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:last-child {
   display: flex;
+}
+
+/* ── D40：展开态收起钮 = logoRow 内 brand 图标右侧（D2 对冲扩展——标题栏圆钮退役收尾）──
+ * 裁决（proposal dsh-forge-m3.1-ui-alignment 差异清单 D40；2026-10-10 用户追加裁决
+ * 「收起左侧栏跟 brand 图标同一行，在 brand 图标的右侧」）：展开态官方 WCO toggle =
+ * position:fixed 标题栏钮（[data-windows-titlebar] .hHd-Xa_toggle——带内垂直居中/
+ * left:12/z-index:30，官方规则非收起态限定——展开/收起同吃，pin ⑮-3 D40 目标面），
+ * 与 logoRow 内 brand 图标（ForgeBrand，sidebar.brand.mark/name 槽位替换件）不同行
+ * ⇒ 对冲为 static 回流 logoRow。
+ * 形制 = 官方 iconButton 家族 36px 命中区 + radius-md（D2 收起态同款转换先例的 wco.css
+ * 既有口径；字面上游展开态 iconButton 基刻度 = 28px/radius-sm，产品取收起/展开同族
+ * 36px 刻度——显式偏离记账，升级窗口官方件刻度再对账）。
+ * 列序（DOM 序执行期核验，pin ⑮-6）：上游 logoRow children = [brand(wide), toggle]——
+ * toggle 结构序本就在 brand 之后（非 darwin 分支尾随渲染，children 末位），零 CSS
+ * order 调序；logoRow flex（brand flex:1 + 官方 8px 列缝）下 toggle 落行尾右缘 = 官方非 WCO
+ * 展开态原生布局语感（WCO logoRow 官方 40px 容 36px 钮居中，零溢出）。
+ * 锚 = button:last-child：展开态 logoRow 双直接子 button（brand 钮 = 首子、toggle =
+ * 末子——收起态 brand 不渲染故 D2 无需此限定），last-child 把 D40 波及面收窄到 toggle。
+ * 官方 -webkit-app-region:no-drag 不对冲（对冲只反定位/形制面——Windows 面 logoRow 非
+ * drag 区【全局 data-window-drag→drag 规则 darwin 限定】，声明惰性无害，D2 同径保留）。
+ * newSession 不在裁决范围（展开态官方即文档流内钮，无标题栏同病——走查随报随收）。
+ * 非 WCO 零波及：锚定 html[data-windows-titlebar]；收起态同钮由 D2 规则（同值声明族）
+ * 覆盖不变——59px 轨形态零回归。 */
+html[data-windows-titlebar] [data-slot='sidebar'] > div > div:first-child > button:last-child {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: 36px; /* dsw-raw 官方 iconButton 家族命中区刻度（D2 收起态同族） */
+  height: 36px; /* dsw-raw 同上 */
+  border-radius: var(--dsw-radius-md);
+  corner-shape: auto;
 }
 
 /* ── D32：分隔线 handle / 消息文字单色光标纯白不可辨（OS 缺陷产品侧缓解）──
