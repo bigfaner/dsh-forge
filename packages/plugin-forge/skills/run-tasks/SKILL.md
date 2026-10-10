@@ -1,15 +1,22 @@
 ---
 name: run-tasks
-description: Forge dispatch loop — call dispatchTask once per round, read the returned settlement and pool snapshot, decide continue / wrap up / surface; carries the mode-mismatch guard line and the canonical fix-chain protocol.
+description: Forge dispatch loop — background-dispatch until no-task, drain each in-flight job's settlement via job_output, then keep dispatching; carries the mode-mismatch guard line and the canonical fix-chain protocol.
 ---
 
 # Run Tasks (dispatcher)
 
-Drive the forge task pool: one `dispatchTask` call per round. The tool claims the next
-ready task, spawns a worker with the dispatch briefing, and returns the settlement with
-a live pool snapshot — the briefing itself never enters this session's context. State
-changes only through the pipeline verbs (`dispatchTask` / `queryTask` / `addTask` /
-`submitTask`), never through files, the database, or parallel state.
+Drive the forge task pool: one `dispatchTask` call per round, `run_in_background: true`.
+The tool claims the next ready task, spawns a worker with the dispatch briefing, and
+returns a dispatched receipt immediately (taskRef / workerSessionId / jobId / pool
+snapshot) — the settlement is not in the return, and the briefing never enters this
+session's context. Keep dispatching until `no-task`; a wait verdict (work still in
+flight) is the drain point — read each in-flight job's settlement with `job_output`,
+then keep dispatching whatever the settlements made ready. When a worker settles, a
+completion notification is pushed structurally — collect on the push or at the drain
+point; with the push as the first defense and the drain point as the second, a mid-round
+job read is never needed. State changes only through the pipeline verbs (`dispatchTask` /
+`queryTask` / `addTask` / `submitTask`), never through files, the database, or parallel
+state.
 
 Works identically in both modes: containers may be features (expedition chain) or
 proposals with directly attached tasks (blitz chain). Selection is DAG readiness —
@@ -41,8 +48,9 @@ container as settled, not the whole pool.
 ## Dispatcher Iron Laws
 
 <EXTREMELY-IMPORTANT>
-1. One `dispatchTask` call per round; read the return; decide; repeat. Nothing else
-   drives the pool.
+1. One `dispatchTask` call per round; dispatch until `no-task`, drain the in-flight
+   jobs via `job_output`, dispatch again. Decide on receipts, drained settlements, and
+   pool snapshots — never on mid-round job reads. Nothing else drives the pool.
 2. NO code reading or writing by the dispatcher itself — workers execute; this session
    orchestrates.
 3. NO running tests directly — quality gates belong to workers and the run-tests skill.
@@ -52,10 +60,14 @@ container as settled, not the whole pool.
 
 ## Loop — the four dispatchTask exits
 
-### 1. `spawned` · success
+### 1. `dispatched` · background receipt
 
-The worker settled the task: natural key, type, mode lineage, summary, commit hash if
-any, plus the pool snapshot. Note it and call `dispatchTask` again.
+The call returns at once — no settlement in it: the receipt line (`▸ dispatched
+<slug>/<localId> — job <id>`), the standing collect line (`collect the settlement when
+the worker settles: job_output <id>`), and the pool snapshot. Note the jobId and call
+`dispatchTask` again. The settlement itself (natural key, type, mode lineage, summary,
+commit hash if any) is delivered later — the completion notification tells you the
+worker settled, and the drained `job_output <id>` read carries the block.
 
 ### 2. `spawned` · blocked
 
@@ -77,18 +89,22 @@ The return carries the pool snapshot (`pending` / `in_progress` / `blocked` /
 
 ### 4. `halted` — session-sticky spawn guard
 
-Three consecutive worker-spawn failures stick this session: every further `dispatchTask`
-returns `halted` immediately. The guard has no self-unlock — the reset is a **new
-dispatch session** (cold start clears the counter). Report the reason to the user and
+Three consecutive worker-spawn failures stick this session: the next `dispatchTask` entry
+returns `halted` immediately. Failures settle inside the worker's job, so the guard counts
+them in settlement order — a drained success clears the streak, and job kills never count.
+The guard has no self-unlock — the reset is a **new dispatch session** (cold start
+clears the counter). Report the reason to the user and
 stop; recommend re-entering via the dispatch entry, which opens a fresh session in the
 container's mode. Do not attempt workarounds from this session.
 
 ### Spawn failure (`✗ ERR_SPAWN_FAILED`)
 
-The claimed task stays `in_progress`; re-calling `dispatchTask` re-enters it
-idempotently (the briefing is re-synthesized). Retry the same call; repeated failures
-trip the `halted` guard. If the environment itself is broken, surface it for manual
-transition instead of looping.
+A failed spawn — or a job that ends without a settlement — leaves the claimed task
+`in_progress`; re-calling `dispatchTask` re-enters it idempotently (the briefing is
+re-synthesized). A killed run (`job_kill`) is the same shape: task `in_progress`, and
+the kill itself never counts toward the guard. Retry the same call; repeated failures
+trip the `halted` guard at the next dispatch entry. If the environment itself is
+broken, surface it for manual transition instead of looping.
 
 ## Mode-Mismatch Guard (visibility, never a block)
 
@@ -130,12 +146,13 @@ addTask { source_kind: "<feature|proposal>", source_slug: "<container slug>",
 ## Dispatch Summary
 
 When the loop ends (pool settled, bounded patience exhausted, deadlock surfaced, or
-halted), report:
+halted), drain first — read the settlement of every job still in flight; a wrap-up with
+undrained jobs would report counts that do not exist yet. Then report:
 
 ```
 ## Dispatch Summary
 
-- Rounds: <N> — completed <N>, blocked <N>
+- Rounds: <N> — dispatched <N>; drained settlements: completed <N>, blocked <N>
 - Pool at stop: <pending / in_progress / blocked / unmetPending from the last snapshot>
 
 <one line per non-completed task: `<slug>/<localId> — <status> — <short reason>`>
