@@ -14,6 +14,7 @@
 // 缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）。
 import type { ForgeProposalsService, ForgeSettingsService, ForgeTasksService } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
+import type { DispatchJobsFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
 import { createCreateProposalTool } from './create-proposal.js'
@@ -40,6 +41,12 @@ export interface ForgeToolDeps {
    * dispatchTask 组装面消费——配置档位不被支持时剥离 effort（无法兼容就不设置）。
    */
   resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
+  /**
+   * dsh jobs 注册表收窄面（可选——async-dispatch §7：真实现经 ctx.reflect.get('jobs')
+   * 防御读取 + adaptDispatchJobs 收窄适配注入）。缺席 = dispatchTask 拒绝 run_in_background
+   * 调用并提示（events/settings 同型可选降级模式——后台派发降级关闭，前台路径零变化）。
+   */
+  jobs?: DispatchJobsFace
 }
 
 /** tool 定义组（顺序 = Interface 4 列序；注册面与断言面共消费——终态六员） */
@@ -88,6 +95,12 @@ export {
 } from './session.js'
 export type { ProjectBinding, ProjectIdResolver, ToolSessionContext, WorkspaceNotRegisteredData } from './session.js'
 export type {
+  DispatchJobHooks,
+  DispatchJobOutcome,
+  DispatchJobRunHandle,
+  DispatchJobSpec,
+  DispatchJobsFace,
+  DispatchJobsRegistryFace,
   ForgeContextFace,
   ForgePromptSection,
   ForgeToolDefinition,
@@ -101,6 +114,7 @@ export type {
   ToolSessionFace,
   ToolSessionHeaderFace,
 } from '../faces.js'
+export { adaptDispatchJobs } from '../faces.js'
 export { parseAddTaskArgs, varsEntriesToRecord } from './add-task.js'
 export type { AddTaskToolArgs } from './add-task.js'
 export { gateOf, parseSubmitTaskArgs } from './submit-task.js'

@@ -71,6 +71,13 @@ export interface ForgeToolDefinition {
     render(args: unknown, value: unknown): readonly TextContentBlock[]
   }
   execute(args: unknown, exec: ToolExecFace): Promise<unknown>
+  /**
+   * 纯同步并发分类器（官方 ToolDefinition.isConcurrencySafe 同名同语义可选位）：
+   * 仅返回 true 选择加入兄弟 tool 调用并行执行组；缺席/异常/非 true 返回 = 保守互斥
+   * （官方运行期默认）。元数据不进模型面；声明 true 的执行不得 mutate 父会话持有状态
+   * （上游 parallel-tool-call 契约）。
+   */
+  isConcurrencySafe?(args: unknown): boolean
 }
 
 /** dsh tools 服务子面（官方 ToolRuntime.register） */
@@ -91,6 +98,97 @@ export interface ForgePromptSection {
   /** 升序拼接；同 order 按名称码序（knowledge 500 → forge:pipeline 510） */
   readonly order: number
   readonly text: string
+}
+
+// ─────────────────────────── dsh jobs 注册表收窄面（async-dispatch §7——dispatch 后台形态注入面） ───────────────────────────
+
+/** job 终态（上游 JobOutcome 结构子面——三值 status + detail/result 原样透传） */
+export interface DispatchJobOutcome {
+  /** 结局：finished=completed / cancelled=killed / broke=failed */
+  readonly status: 'completed' | 'killed' | 'failed'
+  /** 终态原因（exit code / kill reason 合并——上游 registry 原样） */
+  readonly detail?: string
+  /** 产出值（结算后首次模型消费读交付一次——上游语义原样） */
+  readonly result?: string
+}
+
+/**
+ * spec.run 回调的收窄执行面（上游 JobHandle 的单通道投影）：appendLog 为唯一写入口——
+ * 适配层单点硬编码 channel:'log'（F4 通道矩阵：默认通道/stdout/stderr/未知名均喂模型，
+ * 唯 log 被模型消费读结构性滤除——观察者专属通道），channel 值调用面不可达，杜绝拼错
+ * 通道静默入模型；默认通道 append / updateProgress 结构性不可达（F5 泄露路径裁剪）。
+ */
+export interface DispatchJobRunHandle {
+  /** 追加一行生产者叙述（人面 = jobs 面板 live 流；模型消费读 renderModelDelta 滤除） */
+  appendLog(line: string): void
+}
+
+/** producer hooks（上游 JobHooks 结构子面——cancel 幂等 + done 终态承诺） */
+export interface DispatchJobHooks {
+  /** 请求终止（同步幂等；reason 透传进终态 detail） */
+  cancel(reason?: string): void
+  /** producer 资源释放后兑现；拒绝由上游运行时转 failed（零转写透传） */
+  readonly done: Promise<DispatchJobOutcome>
+}
+
+/** job 声明（上游 JobSpec 的 forge 消费子面） */
+export interface DispatchJobSpec {
+  /** producer kind（id 前缀 <kind>-N；上游开放字符串命名空间） */
+  readonly kind: string
+  /** 单行模型面标签 */
+  readonly label: string
+  /** 属主会话 id（owner Agent 销毁自动取消其 job；缺席 = 无主 job） */
+  readonly owner?: string
+  /** 预检后启动工作；同步返回 hooks（抛出 = 无注册残留——上游语义原样） */
+  run(handle: DispatchJobRunHandle): DispatchJobHooks
+}
+
+/** jobs 面收窄（上游 JobRegistry.start 的本地结构化投影——start 即回 { jobId }） */
+export interface DispatchJobsFace {
+  /** 注册并启动一个后台 job；返回注册表签发的 job id（<kind>-N） */
+  start(spec: DispatchJobSpec): { jobId: string }
+}
+
+/**
+ * 上游 jobs 注册表消费子面（dsh-jobs JobRegistry.start 的结构兼容形——仅声明适配所需
+ * 字段；真实现结构兼容，运行期经 ctx.reflect.get('jobs') 防御读取注入。零上游 import：
+ * boundaries pin 不动——jobs 面为本地结构化接口）。
+ */
+export interface DispatchJobsRegistryFace {
+  start(spec: {
+    readonly kind: string
+    readonly label: string
+    readonly owner?: string
+    /** 上游 JobHandle 全量面（适配收窄前可见——含默认通道 append/updateProgress） */
+    run(job: { append(text: string, options?: { readonly channel?: string }): void }): DispatchJobHooks
+  }): string
+}
+
+/** 适配层 channel 硬编码点（全仓唯一——F4 观察者专属通道） */
+const LOG_CHANNEL = 'log' as const
+
+/**
+ * 适配层：上游注册表结构面 → 收窄 DispatchJobsFace（channel:'log' 全仓单点硬编码）。
+ * spec.run 收到的句柄只有 appendLog——内部闭包把 line 转投 job.append(line,
+ * { channel: LOG_CHANNEL })；默认通道与 updateProgress 对消费方结构性不可达。
+ */
+export function adaptDispatchJobs(registry: DispatchJobsRegistryFace): DispatchJobsFace {
+  return {
+    start(spec) {
+      const jobId = registry.start({
+        kind: spec.kind,
+        label: spec.label,
+        ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
+        run: (job) =>
+          spec.run({
+            appendLog: (line) => {
+              job.append(line, { channel: LOG_CHANNEL })
+            },
+          }),
+      })
+      return { jobId }
+    },
+  }
 }
 
 /** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容） */

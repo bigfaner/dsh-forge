@@ -254,3 +254,64 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
     d2()
   })
 })
+
+// ─────────────────────────── jobs 注册表可选消费（async-dispatch §7 任务 1.2——reflect.get 防御读取） ───────────────────────────
+
+describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_background 降级守卫联动）', () => {
+  const BOUND_CONFIG = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
+  const EXEC = { agent: { session: { id: 's-jobs', header: { cwd: 'C:\\ws\\demo' } } } }
+
+  /** 装配桩：claim 记账 + no-task 结算（零 spawn 触达——守卫行为的最短观察径） */
+  function dispatchCtx(reflect?: { get(name: string): unknown }) {
+    const rt = new TempRuntime()
+    let claims = 0
+    const tasks = {
+      claimTask: async () => {
+        claims += 1
+        return { task: null, dispatchPrompt: '', digest: '', reclaimed: false }
+      },
+      taskStats: async () => ({
+        total: 0,
+        byStatus: { pending: 0, in_progress: 0, blocked: 0, completed: 0, skipped: 0, rejected: 0, suspended: 0 },
+        unmetPending: 0,
+      }),
+    } as unknown as ForgeTasksService
+    const ctx = { ...rt.ctx(), forgeTasks: tasks, ...(reflect !== undefined ? { reflect } : {}) }
+    const dispose = forgePlugin(ctx, BOUND_CONFIG)
+    const dispatch = rt.registeredTools.find((t) => t.name === 'dispatchTask')!
+    return { rt, dispose, dispatch, claimsOf: () => claims }
+  }
+
+  it('reflect jobs 在场：run_in_background 调用通过降级守卫进入 claim（deps.jobs 已注入；本切片前台直通）', async () => {
+    const h = dispatchCtx({ get: (name) => (name === 'jobs' ? { start: () => 'forge-dispatch-1' } : undefined) })
+    const out = (await h.dispatch.execute({ run_in_background: true }, EXEC)) as { kind: string }
+    expect(out.kind).toBe('no-task')
+    expect(h.claimsOf()).toBe(1)
+    h.dispose()
+  })
+
+  it('reflect jobs 缺席：run_in_background 调用被拒绝并提示（claim 零触达——拒绝在领任务前）', async () => {
+    const h = dispatchCtx()
+    const out = (await h.dispatch.execute({ run_in_background: true }, EXEC)) as {
+      ok: boolean
+      code: string
+      violations: string[]
+    }
+    expect(out.ok).toBe(false)
+    expect(out.code).toBe('ERR_SPAWN_FAILED')
+    expect(out.violations.some((v) => v.includes('without run_in_background'))).toBe(true)
+    expect(h.claimsOf()).toBe(0)
+    h.dispose()
+  })
+
+  it('reflect jobs 异常 / 非函数面：降级缺席不阻载（六 tool 照常注册）且后台调用被拒绝', async () => {
+    const rt1 = new TempRuntime()
+    const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } }, BOUND_CONFIG)
+    expect(rt1.registeredTools).toHaveLength(6)
+    d1()
+    const h2 = dispatchCtx({ get: (name) => (name === 'jobs' ? 'not-a-registry' : undefined) })
+    const out = (await h2.dispatch.execute({ run_in_background: true }, EXEC)) as { ok: boolean }
+    expect(out.ok).toBe(false)
+    h2.dispose()
+  })
+})

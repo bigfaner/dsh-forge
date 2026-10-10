@@ -34,7 +34,7 @@ import {
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
-import { optionalEnum, optionalString, requireArgsObject } from './args.js'
+import { optionalBoolean, optionalEnum, optionalString, requireArgsObject } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, requireSessionId, sessionContextOf } from './session.js'
 
@@ -52,6 +52,8 @@ const TOOL = 'dispatchTask'
 export interface DispatchTaskToolArgs {
   /** 容器限定认领引用（source_kind+source_slug 成对解析产物） */
   readonly source?: ContainerRef
+  /** 后台派发请求（缺省 false——前台阻塞至结算；true 且 jobs 面缺席 = 拒绝并提示） */
+  readonly run_in_background?: boolean
 }
 
 /** 参数防御性收窄（source 对半对即拒——拼接歧义防护） */
@@ -59,14 +61,18 @@ export function parseDispatchTaskArgs(args: unknown): DispatchTaskToolArgs {
   const a = requireArgsObject(args, TOOL)
   const kind = optionalEnum(a, 'source_kind', CONTAINER_KINDS, TOOL)
   const slug = optionalString(a, 'source_slug', TOOL)
+  const runInBackground = optionalBoolean(a, 'run_in_background', TOOL)
   if (kind === undefined && slug === undefined) {
     // 退役参数 context_slug 落未知键零效应径（不再解析——事件归属由 source 对兼任）
-    return {}
+    return runInBackground === undefined ? {} : { run_in_background: runInBackground }
   }
   if (kind === undefined || slug === undefined) {
     throw new Error(`${TOOL}: source_kind and source_slug must be given together (both or neither)`)
   }
-  return { source: { kind, slug } }
+  return {
+    source: { kind, slug },
+    ...(runInBackground !== undefined ? { run_in_background: runInBackground } : {}),
+  }
 }
 
 // ─────────────────────────── 池快照（裁决⑪：现状感知·无状态） ───────────────────────────
@@ -408,6 +414,11 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           description:
             'Container slug scoping the claim to one container (feature directory name or proposal slug) — must be given together with source_kind; absent = pool-wide readiness selection.',
         },
+        run_in_background: {
+          type: 'boolean',
+          description:
+            'Request background dispatch: the call returns a dispatched receipt immediately (taskRef/workerSessionId/jobId/pool) and the settlement is collected later via job_output. Requires the dsh jobs service — when absent the call is rejected with guidance. Default false (foreground: blocks until the worker settles and returns the settlement inline).',
+        },
       },
     },
     output: { schema: DISPATCH_TASK_OUTPUT_SCHEMA, render: renderDispatchResult },
@@ -455,6 +466,26 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           // halted 粘住（入口检查——粘住会话不再 claim：防再领任务弃置 in_progress）
           if ((SPAWN_FAILURES.get(sessionId) ?? 0) >= HALT_THRESHOLD) {
             return { kind: 'halted', reason: HALTED_REASON }
+          }
+
+          // run_in_background 降级守卫（async-dispatch §7——jobs 面可选，缺席 = 后台调用
+          // 拒绝并提示，events/settings 同型可选降级模式）：拒绝在 claim 前落面——零任务
+          // 被领置 in_progress；不入 spawnFailed 防线计数（装配降级非 spawn 失败，halt
+          // 粘住语义不适用）。code 沿用 ERR_SPAWN_FAILED（闭合 ERROR_CODES 联合内本动词
+          // 的「本次派发未发生」承载码），message/violations 承载精确原因与指引。
+          if (parsed.run_in_background === true && deps.jobs === undefined) {
+            const failure: ForgeToolFailure = {
+              ok: false,
+              code: 'ERR_SPAWN_FAILED',
+              message:
+                'run_in_background is unavailable: the dsh jobs service is not part of this host assembly (background dispatch degraded off)',
+              violations: [
+                'retry: call dispatchTask without run_in_background — foreground dispatch blocks until the worker settles and returns the settlement inline',
+                'or enable the jobs service in the host assembly to unlock background dispatch',
+              ],
+            }
+            emitToolError(deps.events, sessionId, attributionSlug, TOOL, failure)
+            return failure
           }
 
           // 1. claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成

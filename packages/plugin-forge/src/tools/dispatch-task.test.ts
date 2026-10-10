@@ -16,7 +16,7 @@ import type {
   TaskType,
 } from '@dsh-forge/contracts'
 import { WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
-import type { ToolExecFace } from '../faces.js'
+import type { DispatchJobsFace, ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { FORGE_TOOL_NAMES } from './index.js'
 import {
@@ -113,6 +113,7 @@ function harness(
   options: {
     settings?: { get(): Promise<unknown> }
     resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
+    jobs?: DispatchJobsFace
   } = {},
 ): Harness {
   const exec = execOf()
@@ -174,6 +175,7 @@ function harness(
     events: sink,
     ...(options.settings !== undefined ? { settings: options.settings as DispatchTaskToolDeps['settings'] } : {}),
     ...(options.resolveModelReasoning !== undefined ? { resolveModelReasoning: options.resolveModelReasoning } : {}),
+    ...(options.jobs !== undefined ? { jobs: options.jobs } : {}),
     spawn: (req) => spawnImpl(req),
   }
   return {
@@ -228,6 +230,13 @@ describe('parseDispatchTaskArgs（防御收窄）', () => {
     expect(() => parseDispatchTaskArgs({ source_kind: 'widget', source_slug: 'fa' })).toThrow(
       /source_kind must be one of \[feature, proposal\]/,
     )
+  })
+
+  it('run_in_background 解析：布尔透传（含 false 显式值）；缺省零键；非布尔拒', () => {
+    expect(parseDispatchTaskArgs({ run_in_background: true })).toEqual({ run_in_background: true })
+    expect(parseDispatchTaskArgs({ run_in_background: false })).toEqual({ run_in_background: false })
+    expect(parseDispatchTaskArgs({})).not.toHaveProperty('run_in_background')
+    expect(() => parseDispatchTaskArgs({ run_in_background: 'yes' })).toThrow(/run_in_background must be a boolean/)
   })
 })
 
@@ -483,6 +492,49 @@ describe('execute 四分支（AC1）', () => {
     })
     const out = (await h.tool.execute({}, h.exec)) as { code: string }
     expect(out.code).toBe('ERR_SPAWN_FAILED')
+  })
+})
+
+// ─────────────────────────── run_in_background 降级守卫（async-dispatch §7 任务 1.2） ───────────────────────────
+
+describe('run_in_background 降级守卫（jobs 面可选——缺席 = 拒绝并提示，events/settings 同型降级）', () => {
+  it('jobs 缺席：后台调用被拒绝并提示——失败 DTO（人话 + 指引）+ tool-error 事件；claim/spawn 零触达（拒绝在领任务前）', async () => {
+    const h = harness()
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as {
+      ok: boolean
+      code: string
+      message: string
+      violations: string[]
+    }
+    expect(out.ok).toBe(false)
+    expect(out.code).toBe('ERR_SPAWN_FAILED')
+    expect(out.message).toContain('run_in_background')
+    expect(out.message).toContain('jobs service')
+    expect(out.violations.some((v) => v.includes('without run_in_background'))).toBe(true)
+    expect(out.violations.some((v) => v.includes('jobs service'))).toBe(true)
+    expect(h.calls.claim).toBe(0)
+    expect(h.spawnRequests).toHaveLength(0)
+    expect(h.events.map((e) => e.type)).toEqual(['tool-error'])
+    // 渲染面（TECH-error-004）：✗ code + 人话 + 违规清单逐行
+    const text = h.tool.output.render({}, out)[0]?.text ?? ''
+    expect(text.startsWith('✗ ERR_SPAWN_FAILED — ')).toBe(true)
+    expect(text).toContain('without run_in_background')
+  })
+
+  it('拒绝不入 spawn 失败防线计数：三次后台拒绝后前台派发照常（非 halted——装配降级非 spawn 失败）', async () => {
+    const h = harness()
+    for (let i = 0; i < 3; i += 1) {
+      const rejected = (await h.tool.execute({ run_in_background: true }, h.exec)) as { ok: boolean }
+      expect(rejected.ok).toBe(false)
+    }
+    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
+    expect(out.kind).toBe('spawned')
+  })
+
+  it('jobs 面在场：后台调用不被拒绝（deps.jobs 注入即过守卫——本切片前台直通，dispatched 分支属后续切片）', async () => {
+    const h = harness({ jobs: { start: () => ({ jobId: 'forge-dispatch-1' }) } })
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
+    expect(out.kind).toBe('spawned')
   })
 })
 

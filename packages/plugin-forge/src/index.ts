@@ -18,6 +18,8 @@ import type { ForgeSettingsService } from '@dsh-forge/contracts'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
+import { adaptDispatchJobs } from './faces.js'
+import type { DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createForgeTools, createProjectResolver } from './tools/index.js'
@@ -91,6 +93,18 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       resolveModelReasoning = undefined
     }
+    // jobs 注册表可选消费（async-dispatch §7——同 forgeSettings/llm reflect.get 防御读取
+    // 双先例）：适配为 DispatchJobsFace 收窄面注入 dispatchTask（channel:'log' 全仓单点
+    // 硬编码于 adaptDispatchJobs——appendLog 唯一写入口，默认通道/updateProgress 结构性
+    // 不可达）。服务缺席/异常 = jobs 面不注入——run_in_background 调用被拒绝并提示
+    // （events/settings 同型可选降级模式），前台派发路径零变化。
+    let jobsFace: DispatchJobsFace | undefined
+    try {
+      const viaReflect = ctx.reflect?.get('jobs') as DispatchJobsRegistryFace | undefined
+      if (viaReflect !== undefined && typeof viaReflect.start === 'function') jobsFace = adaptDispatchJobs(viaReflect)
+    } catch {
+      jobsFace = undefined
+    }
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
@@ -98,6 +112,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       spawn: createInProcessDriverSpawn(),
     })
     const disposers = [
@@ -144,8 +159,14 @@ export {
 export type { ForgeLogListener, ForgeLogListenerOptions } from './events/log-listener.js'
 export { createForgeEventSink, emitToolError, slugOfToolArgs } from './events/sink.js'
 export type { ForgeEventSink, ForgeEventSinkDeps } from './events/sink.js'
-export { createForgeTools, createProjectResolver, FORGE_TOOL_NAMES } from './tools/index.js'
+export { createForgeTools, createProjectResolver, FORGE_TOOL_NAMES, adaptDispatchJobs } from './tools/index.js'
 export type {
+  DispatchJobHooks,
+  DispatchJobOutcome,
+  DispatchJobRunHandle,
+  DispatchJobSpec,
+  DispatchJobsFace,
+  DispatchJobsRegistryFace,
   ForgeTools,
   ForgeToolDeps,
   DispatchForgeToolDeps,
