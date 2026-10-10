@@ -17,12 +17,16 @@ import type { SessionTaskLinkCard, TaskDetail } from '@dsh-forge/contracts'
 import type { ForgeRpcClient } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import {
+  DP_WIDTH,
   DispatchPanel,
   DispatchPanelBody,
   applySessionPillsOutcome,
   dispatchAnchorRectsOf,
+  dispatchBadgePointerIsClick,
   dispatchPanelAnchor,
+  dispatchPanelBadgeGeometry,
   dispatchPanelDragPosition,
+  dispatchPanelExpandGeometry,
   dispatchPanelRows,
   fetchSessionTaskPills,
   fetchWorkerSession,
@@ -183,12 +187,100 @@ describe('dispatchPanelRows link 源过滤（D6 裁决 #2：仅本会话派发�
   })
 })
 
+// ─────────────────── 行序（D34 ③：领取时间倒序 + in_progress 置顶） ───────────────────
+
+describe('dispatchPanelRows 行序（D34 ③：in_progress 置顶；组内领取时间倒序——最早领取在最下方）', () => {
+  it('全七态覆盖：in_progress 置顶（组内 claimedAt 倒序）；其余六态同口径倒序', () => {
+    const rows = [
+      rowItem({ taskId: 't-pending', taskStatus: 'pending', claimedAt: '2026-01-01T00:00:01.000Z' }),
+      rowItem({ taskId: 't-ip-early', taskStatus: 'in_progress', claimedAt: '2026-01-01T00:00:02.000Z' }),
+      rowItem({ taskId: 't-completed', taskStatus: 'completed', claimedAt: '2026-01-01T00:00:03.000Z' }),
+      rowItem({ taskId: 't-blocked', taskStatus: 'blocked', claimedAt: '2026-01-01T00:00:04.000Z' }),
+      rowItem({ taskId: 't-suspended', taskStatus: 'suspended', claimedAt: '2026-01-01T00:00:05.000Z' }),
+      rowItem({ taskId: 't-skipped', taskStatus: 'skipped', claimedAt: '2026-01-01T00:00:06.000Z' }),
+      rowItem({ taskId: 't-rejected', taskStatus: 'rejected', claimedAt: '2026-01-01T00:00:07.000Z' }),
+      rowItem({ taskId: 't-ip-late', taskStatus: 'in_progress', claimedAt: '2026-01-01T00:00:08.000Z' }),
+    ]
+    expect(dispatchPanelRows(rows).map((row) => row.taskId)).toEqual([
+      't-ip-late', // in_progress 置顶（最新领取在上）
+      't-ip-early',
+      't-rejected', // 其余组 claimedAt 倒序（最早领取在最下方）
+      't-skipped',
+      't-suspended',
+      't-blocked',
+      't-completed',
+      't-pending',
+    ])
+  })
+  it('claimedAt 缺席（旧数据/record 源混入）→ 组内沉底回退自然键稳定序（不炸不跳）', () => {
+    const rows = [
+      rowItem({ taskId: 't-b', claimedAt: '2026-01-01T00:00:02.000Z' }),
+      rowItem({ taskId: 't-x', localId: '9.9' }), // 缺席
+      rowItem({ taskId: 't-a', localId: '1.1' }), // 缺席
+      rowItem({ taskId: 't-c', claimedAt: '2026-01-01T00:00:03.000Z' }),
+    ]
+    expect(dispatchPanelRows(rows).map((row) => row.taskId)).toEqual(['t-c', 't-b', 't-a', 't-x'])
+  })
+  it('写推送刷新状态翻转即重排（pending → in_progress 翻顶——subscribeTasksChanged 重取后同一纯函数生效）', () => {
+    const before = [
+      rowItem({ taskId: 't-run', taskStatus: 'pending', claimedAt: '2026-01-01T00:00:01.000Z' }),
+      rowItem({ taskId: 't-done', taskStatus: 'completed', claimedAt: '2026-01-01T00:00:09.000Z' }),
+    ]
+    expect(dispatchPanelRows(before).map((row) => row.taskId)).toEqual(['t-done', 't-run'])
+    const after = before.map((row) => (row.taskId === 't-run' ? { ...row, taskStatus: 'in_progress' as const } : row))
+    expect(dispatchPanelRows(after).map((row) => row.taskId)).toEqual(['t-run', 't-done'])
+  })
+})
+
+// ─────────────────── 加宽（D34 ①：面板宽新裁决刻度） ───────────────────
+
+describe('DP_WIDTH 面板加宽（D34 ①：324 → 400 刻度——锚定/拖移钳制单源自适应）', () => {
+  it('DP_WIDTH = 400（> 324 原刻度——dsw-raw D34 裁决记账；介于原型与任务详情简要档 440 之间）', () => {
+    expect(DP_WIDTH).toBe(400)
+    expect(DP_WIDTH).toBeGreaterThan(324)
+  })
+  it('拖移钳制 maxLeft 与锚定 left 随新宽（既有纯函数零改——DP_WIDTH 单源）', () => {
+    expect(
+      dispatchPanelDragPosition({ left: 0, top: 0 }, { x: 0, y: 0 }, { x: 9999, y: 0 }, { width: 1280, height: 800 }).left,
+    ).toBe(1280 - 4 - DP_WIDTH)
+    expect(dispatchPanelAnchor({ convRight: 1280, convTop: 40, tabsBottom: 88, viewportWidth: 1280 }).left).toBe(
+      1280 - 16 - DP_WIDTH,
+    )
+  })
+})
+
+// ─────────────────── ⟡N 角标可拖（D34 ②：纯面） ───────────────────
+
+describe('角标拖移纯面（D34 ②：折叠位 / 展开承接 / 位移判点击）', () => {
+  const anchor: DispatchPanelGeometry = { left: 900, top: 96 }
+  const draggedTo: DispatchPanelGeometry = { left: 300, top: 400 }
+  it('折叠角标几何：角标拖移位优先（拖后停自动锚定）；未拖过 = 默认锚定位', () => {
+    expect(dispatchPanelBadgeGeometry(draggedTo, anchor)).toEqual(draggedTo)
+    expect(dispatchPanelBadgeGeometry(null, anchor)).toEqual(anchor)
+  })
+  it('展开承接：角标拖过 → 面板承接角标拖移位（几何连续，dragged 停自动锚定）', () => {
+    expect(dispatchPanelExpandGeometry(draggedTo, null, anchor)).toEqual({ dragged: true, geometry: draggedTo })
+  })
+  it('展开承接优先级：角标位 > 面板既有拖移位（既有 persistence 不回跳）> 默认锚定位（角标/面板均未拖过）', () => {
+    const panelPos: DispatchPanelGeometry = { left: 120, top: 40 }
+    expect(dispatchPanelExpandGeometry(draggedTo, panelPos, anchor)).toEqual({ dragged: true, geometry: draggedTo })
+    expect(dispatchPanelExpandGeometry(null, panelPos, anchor)).toEqual({ dragged: true, geometry: panelPos })
+    expect(dispatchPanelExpandGeometry(null, null, anchor)).toEqual({ dragged: false, geometry: anchor })
+  })
+  it('位移判点击：按下→抬起位移 ≤ 3px 斜差 = 点击（展开语义保留）；超出 = 拖移（click 抑制）', () => {
+    expect(dispatchBadgePointerIsClick({ x: 10, y: 10 }, { x: 10, y: 10 })).toBe(true)
+    expect(dispatchBadgePointerIsClick({ x: 10, y: 10 }, { x: 12, y: 8 })).toBe(true)
+    expect(dispatchBadgePointerIsClick({ x: 10, y: 10 }, { x: 30, y: 10 })).toBe(false)
+    expect(dispatchBadgePointerIsClick({ x: 10, y: 10 }, { x: 10, y: -20 })).toBe(false)
+  })
+})
+
 // ─────────────────── 几何（AC：默认落位 + dock 左移 + 拖移钳制） ───────────────────
 
 describe('dispatchPanelAnchor 默认锚定（对话列内 · 工具栏之下右上角）', () => {
   it('页签行在场：top = 下沿 + 8；右缘 = 对话列右缘内收 16（left = 视口宽 - 间距 - 面宽）', () => {
     const geom = dispatchPanelAnchor({ convRight: 1000, convTop: 40, tabsBottom: 88, viewportWidth: 1280 })
-    expect(geom).toEqual({ left: 1280 - (1280 - 1000 + 16) - 324, top: 88 + 8 })
+    expect(geom).toEqual({ left: 1280 - (1280 - 1000 + 16) - DP_WIDTH, top: 88 + 8 })
   })
   it('dock 展开（convRight 左移）→ left 随之左移（自动让位 dockkit——不悬浮进右栏）', () => {
     const collapsed = dispatchPanelAnchor({ convRight: 1280, convTop: 40, tabsBottom: 88, viewportWidth: 1280 })
@@ -217,7 +309,7 @@ describe('dispatchPanelDragPosition 拖移几何（拖后停自动锚定——�
       top: 4,
     })
     expect(dispatchPanelDragPosition(start, { x: 100, y: 100 }, { x: 2000, y: 2000 }, { width: 1280, height: 800 })).toEqual({
-      left: 1280 - 4 - 324,
+      left: 1280 - 4 - DP_WIDTH,
       top: 800 - 4 - 34,
     })
   })
@@ -250,7 +342,7 @@ describe('dispatchAnchorRectsOf DOM 锚定读取（D33 残差①：真盒官方�
     const rects = dispatchAnchorRectsOf(realShapeDom)
     expect(rects).not.toBeNull()
     const geom = dispatchPanelAnchor(rects!)
-    expect(geom.left).toBe(1000 - 16 - 324) // 660 = 对话面右缘 1000 − 16 − 面宽（旧断锚形 convRight=0 此处恒 4）
+    expect(geom.left).toBe(1000 - 16 - DP_WIDTH) // 面宽单源（旧断锚形 convRight=0 此处恒 4）
     expect(geom.left).toBeGreaterThan(4)
     expect(geom.top).toBe(88 + 8)
   })
@@ -385,7 +477,7 @@ describe('DispatchPanelBody 纯渲染（⟡N 折叠角标形态 + 往返）', ()
     expect(markup).toContain('>3<')
     expect(markup).not.toContain('title=') // D30：展开语义归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(markup).not.toContain('data-dswf-dp-row')
-    expect(markup).toContain('left:900px') // 角标恒锚定位（不随拖移位）
+    expect(markup).toContain('left:900px') // 角标几何经壳注入（D34 ②：角标拖移位优先——本体仅按 geometry 渲染）
   })
 })
 

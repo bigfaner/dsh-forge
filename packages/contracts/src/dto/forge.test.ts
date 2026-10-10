@@ -205,6 +205,7 @@ describe('AC5 BridgeEventMessage 信封（Interface 6：channel/payload 只读�
       source: 'record',
     }
     expectTypeOf<SessionTaskLinkCard['source']>().toEqualTypeOf<'link' | 'record'>()
+    expectTypeOf<SessionTaskLinkCard['claimedAt']>().toEqualTypeOf<string | undefined>() // D34 ③ 加性可选读字段
     expect(card.source).toBe('record')
   })
 })

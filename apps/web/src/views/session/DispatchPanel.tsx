@@ -13,9 +13,11 @@
 // ——dock 展开时对话列收窄，ResizeObserver + 视口 resize 重算即自动左移；不悬浮进 dockkit。
 // 锚源退役面：官方 SlotOutlet 洞包裹层 display:contents（ANCHOR_STYLE，pin ⑮-4）→
 // 槽宿主 rect 恒零 → 面板钉视口左缘——main.conversation 槽宿主锚零盒断锚退役）。
-// 交互（裁决 #1/#12）：头可拖（拖后停自动锚定——data-dswf-dp-dragged）；▁ 折叠 ⟡N 角标
-// 可再展开；行点击 = 任务详情弹窗就地打开（桥 openTaskDrawer——零会话跳转/零 dock 强开）；
-// 行尾 ⟞ = 打开 worker 执行子会话（taskDetail 挂接面解析 record 源非派发会话 + 官方
+// 交互（裁决 #1/#12 + D34）：头可拖（拖后停自动锚定——data-dswf-dp-dragged）；▁ 折叠
+// ⟡N 角标可拖可再展开（D34 ②：角标 pointer 拖移 + 视口钳制同纪律，拖后停自动锚定；展开
+// 面板承接角标拖移位——几何连续；位移斜差判点击——拖移不牺牲展开语义）；行点击 = 任务
+// 详情弹窗就地打开（桥 openTaskDrawer——零会话跳转/零 dock 强开）；行尾 ⟞ = 打开 worker
+// 执行子会话（taskDetail 挂接面解析 record 源非派发会话 + 官方
 // uiWorkspace.openSession 地址形态——树零联动：worker 子会话不进左栏两级树）。
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type SessionLinksQuery, type SessionTaskLinkCard } from '@dsh-forge/contracts'
@@ -191,8 +193,9 @@ export const SESSION_PILL_STATUS_DOT: Readonly<Record<SessionTaskLinkCard['taskS
   rejected: 'error',
 }
 
-/** 面板宽（dsw-raw 原型 #m31-dp 结构刻度——布局尺寸以原型结构为准） */
-export const DP_WIDTH = 324
+/** 面板宽（dsw-raw D34 裁决刻度 400——原型 #m31-dp 324 加宽；介于原型与任务详情简要档
+ *  440 之间。锚定 left/拖移钳制 maxLeft 均吃本常量——新刻度单源自适应） */
+export const DP_WIDTH = 400
 /** 对话列右缘间距（dsw-raw 原型 right 16 刻度） */
 export const DP_RIGHT_GAP = 16
 /** 工具栏下间距（dsw-raw 原型 tabs 下 8 刻度） */
@@ -209,11 +212,31 @@ export interface DispatchPanelGeometry {
 }
 
 /**
- * 行集过滤（D6 裁决 #2）：仅 link 源（派发挂接表）；record 源（审计行——claim 审计同带
- * 派发会话 id）过滤不入行集。同会话 link 卡经 UNIQUE(task_id, session_id) 恒不重复。
+ * 行序比较（D34 ③ 纯函数）：in_progress 置顶；组内按领取时间倒序（ISO TEXT 字典序 ≡ 时序
+ * ——最新领取在上、最早领取在最下方）；claimedAt 缺席（旧数据/record 源混入）组内沉底并
+ * 回退自然键稳定序（slug/localId——与 SQL 基序同口径，不炸不跳；同键稳定排序保序）。
+ */
+function compareDispatchRows(a: SessionTaskPillItem, b: SessionTaskPillItem): number {
+  const active = (item: SessionTaskPillItem): number => (item.taskStatus === 'in_progress' ? 0 : 1)
+  if (active(a) !== active(b)) return active(a) - active(b)
+  if (a.claimedAt !== b.claimedAt) {
+    if (a.claimedAt === undefined) return 1 // 缺席 = 最旧沉底
+    if (b.claimedAt === undefined) return -1
+    return a.claimedAt < b.claimedAt ? 1 : -1 // 倒序
+  }
+  if (a.slug !== b.slug) return a.slug < b.slug ? -1 : 1
+  if (a.localId !== b.localId) return a.localId < b.localId ? -1 : 1
+  return 0
+}
+
+/**
+ * 行集过滤 + 行序（D6 裁决 #2 + D34 ③）：仅 link 源（派发挂接表；record 源过滤不入行集）；
+ * 排序 = compareDispatchRows（in_progress 置顶 + 领取时间倒序）。同会话 link 卡经
+ * UNIQUE(task_id, session_id) 恒不重复。写推送刷新（subscribeTasksChanged）重取后同一
+ * 纯函数重排——状态翻转即实时重排。
  */
 export function dispatchPanelRows(pills: readonly SessionTaskPillItem[]): readonly SessionTaskPillItem[] {
-  return pills.filter((item) => item.source === 'link')
+  return pills.filter((item) => item.source === 'link').sort(compareDispatchRows)
 }
 
 /** 锚定输入（对话真盒锚 + 官方页签行几何——DOM 读取面窄形状）
@@ -256,6 +279,45 @@ export function dispatchPanelDragPosition(
     left: clamp(start.left + (point.x - startPoint.x), DP_DRAG_MARGIN, maxLeft),
     top: clamp(start.top + (point.y - startPoint.y), DP_DRAG_MARGIN, maxTop),
   }
+}
+
+/** 角标点击斜差（D34 ②——按下→抬起位移 ≤ 3px 判点击保留展开语义，超出判拖移） */
+export const DP_BADGE_CLICK_SLOP = 3
+
+/** 角标 pointer 位移判点击（纯函数）：位移在斜差内 = 点击（展开）；超出 = 拖移（click 抑制） */
+export function dispatchBadgePointerIsClick(
+  start: { readonly x: number; readonly y: number },
+  point: { readonly x: number; readonly y: number },
+): boolean {
+  return (
+    Math.abs(point.x - start.x) <= DP_BADGE_CLICK_SLOP && Math.abs(point.y - start.y) <= DP_BADGE_CLICK_SLOP
+  )
+}
+
+/**
+ * 折叠角标几何（纯函数——D34 ②）：角标拖移位优先（拖后停自动锚定——钳制纪律同
+ * dispatchPanelDragPosition）；角标未被拖过 = 默认锚定位。
+ */
+export function dispatchPanelBadgeGeometry(
+  badgeDrag: DispatchPanelGeometry | null,
+  anchor: DispatchPanelGeometry,
+): DispatchPanelGeometry {
+  return badgeDrag ?? anchor
+}
+
+/**
+ * 展开承接（纯函数——D34 ②）：面板展开几何解析。优先级 = 角标拖移位（面板承接角标位
+ * ——几何连续不跳回锚定，承接即 dragged 停自动锚定）> 面板既有拖移位（既有 persistence
+ * 不回跳）> 默认锚定位（角标/面板均未拖过 = 展开回默认锚）。
+ */
+export function dispatchPanelExpandGeometry(
+  badgeDrag: DispatchPanelGeometry | null,
+  panelUserPos: DispatchPanelGeometry | null,
+  anchor: DispatchPanelGeometry,
+): { readonly dragged: boolean; readonly geometry: DispatchPanelGeometry } {
+  if (badgeDrag !== null) return { dragged: true, geometry: badgeDrag }
+  if (panelUserPos !== null) return { dragged: true, geometry: panelUserPos }
+  return { dragged: false, geometry: anchor }
 }
 
 /**
@@ -545,17 +607,20 @@ function useDispatchAnchor(active: boolean): DispatchPanelGeometry | null {
   return anchor
 }
 
-/** 拖移会话快照（起点指针 + 起点几何——装载壳 move 计算输入） */
+/** 拖移会话快照（起点指针 + 起点几何 + 拖移对象——装载壳 move 计算输入） */
 interface DispatchPanelDragSession {
   readonly x: number
   readonly y: number
   readonly start: DispatchPanelGeometry
+  /** 拖移对象：head = 面板头（面板位）/ badge = ⟡N 角标（角标位——D34 ②） */
+  readonly kind: 'head' | 'badge'
 }
 
 /**
- * 悬浮面板装载壳：useSessionTaskPills（sessionLinks + 写推送刷新）→ link 行集 →
- * 纯渲染体；几何 = 锚定（自动左移）或拖移位（拖后停自动锚定）；折叠/拖移 = 会话内
- * 本地态（装载点 key=sessionId——切会话整体重置）。
+ * 悬浮面板装载壳：useSessionTaskPills（sessionLinks + 写推送刷新）→ link 行集（D34 ③
+ * 行序：in_progress 置顶 + 领取时间倒序）→ 纯渲染体；几何 = 锚定（自动左移）或拖移位
+ * （面板头/⟡N 角标双拖移对象——拖后停自动锚定；展开承接角标拖移位，全未拖过回默认锚
+ * ——D34 ②）；折叠/拖移 = 会话内本地态（装载点 key=sessionId——切会话整体重置）。
  */
 export function DispatchPanel(props: DispatchPanelProps): ReactNode {
   const makeClient = props.makeClient ?? preloadRpcClientFactory
@@ -566,7 +631,9 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
   const [collapsed, setCollapsed] = useState(false)
   const [dragged, setDragged] = useState(false)
   const [dragPos, setDragPos] = useState<DispatchPanelGeometry | null>(null)
+  const [badgePos, setBadgePos] = useState<DispatchPanelGeometry | null>(null)
   const dragRef = useRef<DispatchPanelDragSession | null>(null)
+  const badgeMovedRef = useRef(false)
   if (!active || anchor === null) return null
   const geometry = dragged && dragPos !== null ? dragPos : anchor
 
@@ -579,30 +646,62 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
           })
         }
 
-  // 拖移头手柄（taskDrawerHeadDragProps 同形制——经包装层捕获面板面冒泡）：仅面板头可拖
-  //（行/⟞ 命中不劫持）；主键按住位移 → dragged 停自动锚定（裁决 #12）。
+  // 拖移手柄（taskDrawerHeadDragProps 同形制——经包装层捕获面板面冒泡）：面板头或 ⟡N 角标
+  // 可拖（D34 ② 同纪律）。折叠钮命中不劫持；行/⟞ 命中不劫持。角标捕获角标本体（click 归
+  // 角标——拖移不破坏展开语义）；头捕获包装层（行点击归行）。
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>): void => {
     const target = event.target as HTMLElement
+    const badgeHit = target.closest('[data-dswf-dp-badge]')
+    if (badgeHit !== null) {
+      ;(badgeHit as HTMLElement).setPointerCapture(event.pointerId)
+      badgeMovedRef.current = false
+      dragRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        start: dispatchPanelBadgeGeometry(badgePos, anchor),
+        kind: 'badge',
+      }
+      return
+    }
     if (target.closest('button') !== null) return // 折叠钮命中不劫持
     if (target.closest('[data-dswf-dp-head]') === null) return // 仅头可拖（行点击归行）
     event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { x: event.clientX, y: event.clientY, start: geometry }
+    dragRef.current = { x: event.clientX, y: event.clientY, start: geometry, kind: 'head' }
   }
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>): void => {
     const drag = dragRef.current
     if (drag === null || (event.buttons & 1) === 0) return // 仅主键按住拖拽
-    setDragged(true)
-    setDragPos(
-      dispatchPanelDragPosition(
-        drag.start,
-        drag,
-        { x: event.clientX, y: event.clientY },
-        { width: window.innerWidth, height: window.innerHeight },
-      ),
+    const point = { x: event.clientX, y: event.clientY }
+    const next = dispatchPanelDragPosition(
+      drag.start,
+      drag,
+      point,
+      { width: window.innerWidth, height: window.innerHeight },
     )
+    if (drag.kind === 'badge') {
+      if (!dispatchBadgePointerIsClick(drag, point)) {
+        badgeMovedRef.current = true // 超出斜差 = 拖移——click 抑制 + 角标位更新
+        setBadgePos(next)
+      }
+      return
+    }
+    setDragged(true)
+    setDragPos(next)
   }
   const handlePointerEnd = (): void => {
     dragRef.current = null
+  }
+  // 展开（角标 onClick——位移斜差判点击）：拖移收尾的 click 抑制；展开几何 = 角标拖移位
+  //（面板承接——几何连续）> 面板既有拖移位 > 默认锚定位（dispatchPanelExpandGeometry）。
+  const handleExpand = (): void => {
+    if (badgeMovedRef.current) {
+      badgeMovedRef.current = false
+      return
+    }
+    const expand = dispatchPanelExpandGeometry(badgePos, dragged && dragPos !== null ? dragPos : null, anchor)
+    setDragged(expand.dragged)
+    setDragPos(expand.dragged ? expand.geometry : null)
+    setCollapsed(false)
   }
 
   return (
@@ -615,11 +714,11 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
     >
       <DispatchPanelBody
         rows={rows}
-        geometry={collapsed ? anchor : geometry}
+        geometry={collapsed ? dispatchPanelBadgeGeometry(badgePos, anchor) : geometry}
         collapsed={collapsed}
         dragged={dragged}
         onCollapse={() => setCollapsed(true)}
-        onExpand={() => setCollapsed(false)}
+        onExpand={handleExpand}
         onOpenTask={props.onOpenTask}
         onOpenWorkerSession={handleWorkerOpen}
       />

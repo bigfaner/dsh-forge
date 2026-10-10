@@ -139,12 +139,19 @@ export function seedEdge(
   ).run(waiterId, prerequisiteId, origin)
 }
 
-/** 种挂接行（task_session_links——claim 唯一写源未落地（2.4），读面直写受控初态） */
-export function seedLink(db: Database.Database, taskId: string, sessionId: string): void {
+/** 种挂接行（task_session_links——claim 唯一写源未落地（2.4），读面直写受控初态。
+ *  D34 ③：createdAt 受控项（行序裁决的领取时间基准——seedRecord 同款受控先例） */
+export function seedLink(
+  db: Database.Database,
+  taskId: string,
+  sessionId: string,
+  o: { createdAt?: string } = {},
+): void {
+  const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO task_session_links (task_id, session_id, created_at, updated_at)
-     VALUES (?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-  ).run(taskId, sessionId)
+     VALUES (?, ?, ?, ?)`,
+  ).run(taskId, sessionId, ts, ts)
 }
 
 /** 种 record 行（append-only 审计——files/gate JSON 受控负载；verb 开放传参；2.6 增 createdAt

@@ -42,8 +42,26 @@ describe('AC5 sessionLinks：links ∪ records 双源分型（卡片含 taskId�
         taskStatus: 'completed',
         sessionId: 'dispatch-session',
         source: 'link',
+        claimedAt: '2026-01-01T00:00:00.000Z',
       },
     ])
+  })
+
+  it('link 卡携带 claimedAt（D34 ③ 读面加列——l.created_at 受控初值在场；claim 唯一写源同列）', async () => {
+    const { a } = setup()
+    seedLink(h!.db, a, 'dispatch-session', { createdAt: '2026-02-02T10:00:00.000Z' })
+    const cards = await sessionLinks({ store: h!.store }, { projectId: h!.projectId, sessionId: 'dispatch-session' })
+    expect(cards).toHaveLength(1)
+    expect(cards[0]!.claimedAt).toBe('2026-02-02T10:00:00.000Z')
+  })
+
+  it("record 源卡 claimedAt 缺省（读面加列仅 LINKS_BY_SESSION_SQL——record SQL/既有字段零变化）", async () => {
+    const { a } = setup()
+    seedRecord(h!.db, a, { verb: 'submit', sessionId: 'exec-session' })
+    const cards = await sessionLinks({ store: h!.store }, { projectId: h!.projectId, sessionId: 'exec-session' })
+    expect(cards).toHaveLength(1)
+    expect(cards[0]!.source).toBe('record')
+    expect(cards[0]!.claimedAt).toBeUndefined()
   })
 
   it("record 源（task_records.session_id）：执行会话挂接 → source='record'（多任务多记录去重）", async () => {

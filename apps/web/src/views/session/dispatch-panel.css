@@ -4,7 +4,8 @@
  * 层级，TaskDrawer 弹窗先例）；视觉一律官方令牌（令牌唯一：色/字/距/圆角/阴影——
  * lint-tokens 机械执行）。
  * dsw-raw 豁免（执行记录注记）：
- *   - 宽 324 / 头高 34 / 列表滚动高 224 / 行 min-h 32 / 角标高 26 / 右缘 16 / 顶距 8 /
+ *   - 宽 400（D34 裁决刻度——原型 #m31-dp 324 加宽，介于原型与任务详情简要档 440 之间）/
+ *     头高 34 / 列表滚动高 224 / 行 min-h 32 / 角标高 26 / 右缘 16 / 顶距 8 /
  *     拖移边距 4 = 原型 #m31-dp 结构刻度（布局尺寸以原型结构为准——TECH-styling-002）；
  *   - 行/头微距 3/6/7/8px = 原型行内距刻度（官方字阶令牌无对应微距档）；角标胶囊
  *     999px = 官方 Tag 胶囊刻度同值（components.css 先例）。 */
@@ -15,7 +16,7 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: 324px; /* dsw-raw 原型面板宽刻度 */
+  width: 400px; /* dsw-raw D34 裁决刻度（原型 #m31-dp 324 加宽——DispatchPanel.tsx DP_WIDTH 同值） */
   max-width: calc(100vw - 48px); /* dsw-raw 窄视口防越（两侧各 24 余量） */
   overflow: hidden;
   z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（弹窗同径；DOM 序在弹窗后 = 弹窗压上层） */

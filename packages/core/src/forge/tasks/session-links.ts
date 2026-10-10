@@ -15,9 +15,11 @@ export interface SessionLinksDeps {
   readonly store: ForgeWorkspaceStore
 }
 
-/** EQP 锚 ③：会话挂接查询（session_id 定位 → idx_tsl_session——list.test 断言） */
+/** EQP 锚 ③：会话挂接查询（session_id 定位 → idx_tsl_session——list.test 断言）。
+ *  D34 ③：加性读列 l.created_at AS claimedAt（领取时间——行序裁决数据面；写面/管线语义
+ *  零变化，record SQL 不加列 = record 源缺省） */
 export const LINKS_BY_SESSION_SQL = `SELECT t.id AS taskId, t.slug AS slug, t.local_id AS localId,
-  t.title AS title, t.task_status AS taskStatus
+  t.title AS title, t.task_status AS taskStatus, l.created_at AS claimedAt
 FROM task_session_links l JOIN tasks t ON t.id = l.task_id
 WHERE l.session_id = ? ORDER BY t.slug, t.local_id`
 

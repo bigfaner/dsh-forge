@@ -214,6 +214,8 @@ export interface SessionTaskLinkCard {
   sessionId: string
   /** link = task_session_links（派发会话，claim upsert-ignore 写）/ record = task_records.session_id（执行会话） */
   source: 'link' | 'record'
+  /** 领取时间（ISO——task_session_links.created_at，claim 唯一写源；D34 ③ 加性可选读字段——record 源/旧读面缺省） */
+  claimedAt?: string
 }
 
 /** 参考文档水化项（vars/taskDesc 声明锚点 → feature_documents ∪ proposals docRel 匹配；命中 = 链接态，未命中 = 置灰） */
