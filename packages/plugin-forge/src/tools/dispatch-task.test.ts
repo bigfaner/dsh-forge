@@ -16,7 +16,7 @@ import type {
   TaskType,
 } from '@dsh-forge/contracts'
 import { WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
-import type { DispatchJobsFace, ToolExecFace } from '../faces.js'
+import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { FORGE_TOOL_NAMES } from './index.js'
 import {
@@ -200,6 +200,56 @@ function harness(
     setSpawn: (impl2) => {
       spawnImpl = impl2
     },
+  }
+}
+
+/** jobs 面桩（后台径用例——spec/hooks/logLines 三面捕获；jobId 递增签发） */
+interface JobsStub {
+  jobs: DispatchJobsFace
+  specs: DispatchJobSpec[]
+  hooks: DispatchJobHooks[]
+  logLines: string[]
+}
+
+function jobsStub(): JobsStub {
+  const specs: DispatchJobSpec[] = []
+  const hooks: DispatchJobHooks[] = []
+  const logLines: string[] = []
+  let seq = 0
+  return {
+    specs,
+    hooks,
+    logLines,
+    jobs: {
+      start: (spec) => {
+        seq += 1
+        specs.push(spec)
+        hooks.push(spec.run({ appendLog: (line) => logLines.push(line) }))
+        return { jobId: `forge-dispatch-${seq}` }
+      },
+    },
+  }
+}
+
+/** 可控终态句柄桩（后台径——result 由测试手动 resolve/reject） */
+interface ControlledHandle extends SpawnWorkerHandle {
+  release(result: { stopReason: string; output: string }): void
+  reject(cause: unknown): void
+}
+
+function controlledHandle(workerSessionId = 'worker-bg'): ControlledHandle {
+  let settle!: (r: { stopReason: string; output: string }) => void
+  let fail!: (cause: unknown) => void
+  const result = new Promise<{ stopReason: string; output: string }>((resolve, reject) => {
+    settle = resolve
+    fail = reject
+  })
+  return {
+    workerSessionId,
+    result,
+    dispose: async () => {},
+    release: settle,
+    reject: fail,
   }
 }
 
@@ -531,10 +581,320 @@ describe('run_in_background 降级守卫（jobs 面可选——缺席 = 拒绝�
     expect(out.kind).toBe('spawned')
   })
 
-  it('jobs 面在场：后台调用不被拒绝（deps.jobs 注入即过守卫——本切片前台直通，dispatched 分支属后续切片）', async () => {
-    const h = harness({ jobs: { start: () => ({ jobId: 'forge-dispatch-1' }) } })
+  it('jobs 面在场：后台调用过守卫走 dispatched 分支（deps.jobs 注入即启用后台形态——1.2 直通已被 1.3 dispatched 分支接续）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
     const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
+    expect(out.kind).toBe('dispatched')
+  })
+})
+
+// ─────────────────────────── 后台形态（async-dispatch §4.1/4.2/4.4——任务 1.3） ───────────────────────────
+
+describe('dispatched 分支（AC1：立即返回四键回执——不 await worker 终态）', () => {
+  it('run_in_background=true：spawn 后立即回执 taskRef/workerSessionId/jobId/pool——pending result 零阻塞、结算读零触达', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
+    })
+    const sessionId = (h.exec.agent as { session: { id: string } }).session.id
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as {
+      kind: string
+      taskRef: { slug: string; localId: string }
+      title: string
+      type: string
+      workerSessionId: string
+      jobId: string
+      pool: { pending: number; inProgress: number; blocked: number; unmetPending: number }
+    }
+    expect(out).toEqual({
+      kind: 'dispatched',
+      taskRef: { slug: 'feat-x', localId: '2.5' },
+      title: 'Implement the thing',
+      type: 'coding-fix',
+      workerSessionId: 'worker-bg',
+      jobId: 'forge-dispatch-1',
+      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+    })
+    // 立即返回的结构证据：worker 未终态（pending）而结算读零调用
+    expect(h.calls.query).toBe(0)
+    // job spec：kind/label/owner（派发会话 id——F7 owner 销毁自动取消）+ 负向 pin：禁声明 output 拉取源
+    expect(js.specs).toHaveLength(1)
+    expect(js.specs[0]).toMatchObject({
+      kind: 'forge-dispatch',
+      label: 'feat-x/2.5 · Implement the thing',
+      owner: sessionId,
+    })
+    expect(js.specs[0]).not.toHaveProperty('output')
+  })
+
+  it('no-task 分支不建 job（§5——无任务零注册，no-task 回执原样）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
+    expect(out.kind).toBe('no-task')
+    expect(js.specs).toHaveLength(0)
+  })
+})
+
+describe('结算后置交付（AC2：JobOutcome.result = 前台 spawned 分支字段面原样投影）', () => {
+  it('success：status=completed + result JSON 与同夹具前台结果深等（kind: spawned 全字段）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    const receipt = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
+    expect(receipt.kind).toBe('dispatched')
+    // 同夹具前台对照（新会话——零防线串扰）
+    const fg = harness()
+    const fgOut = (await fg.tool.execute({}, fg.exec)) as object
+    handle.release({ stopReason: 'completed', output: 'done' })
+    const done = await js.hooks[0]!.done
+    expect(done.status).toBe('completed')
+    expect(JSON.parse(done.result ?? 'null')).toEqual({ kind: 'spawned', ...fgOut })
+  })
+
+  it('blocked：reason/followUp 原样投影 + done:blocked 里程碑', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', digest: 'd42', reclaimed: false })
+    h.setQuery({
+      task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'missing API key', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' }],
+    })
+    h.setCards([{ slug: 'feat-x', localId: 'fix-2', sourceTask: { slug: 'feat-x', localId: '2.4' } }])
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.release({ stopReason: 'completed', output: 'done' })
+    const done = await js.hooks[0]!.done
+    expect(done.status).toBe('completed')
+    expect(JSON.parse(done.result ?? 'null')).toMatchObject({
+      kind: 'spawned',
+      outcome: 'blocked',
+      reason: 'missing API key',
+      followUp: { slug: 'feat-x', localId: 'fix-2' },
+    })
+    const phases = h.events.filter((e) => e.type === 'task-progress').map((e) => (e.payload as { phase: string }).phase)
+    expect(phases).toContain('done:blocked')
+  })
+})
+
+describe('job 内防线（AC3：无结算 failed + kill taxonomy + 3 连败粘住）', () => {
+  it('无结算径：job=failed + 诊断进 detail + tool-error 留档（任务留 in_progress）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setQuery({
+      task: snapshot({ taskStatus: 'in_progress' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+    })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.release({ stopReason: 'refusal', output: '' })
+    const done = await js.hooks[0]!.done
+    expect(done.status).toBe('failed')
+    expect(done.detail).toContain('without a settlement (stopReason: refusal)')
+    expect(h.events.some((e) => e.type === 'tool-error')).toBe(true)
+  })
+
+  it('run.result 拒绝（非 kill 基建故障）：job=failed + 诊断进 detail', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.reject(new Error('infra fault'))
+    const done = await js.hooks[0]!.done
+    expect(done.status).toBe('failed')
+    expect(done.detail).toContain('infra fault')
+  })
+
+  it('kill=killed 不进防线计数：cancel→abort 后 done=killed（零 tool-error）；3 连 kill 后前台照常派发', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    for (let i = 0; i < 3; i += 1) {
+      const handle = controlledHandle(`worker-k${i}`)
+      h.setSpawn(async (req) => {
+        h.spawnRequests.push(req)
+        return handle
+      })
+      await h.tool.execute({ run_in_background: true }, h.exec)
+      js.hooks[js.hooks.length - 1]!.cancel('operator kill') // abort → 驱动器中止 worker
+      handle.reject(new Error('worker aborted by kill')) // 驱动器对 abort 的反应形态
+      const done = await js.hooks[js.hooks.length - 1]!.done
+      expect(done.status).toBe('killed')
+    }
+    expect(h.events.some((e) => e.type === 'tool-error')).toBe(false) // kill 非失败——零留档
+    // 3 连 kill 未入防线：前台派发照常（非 halted）
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return okHandle()
+    })
+    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
     expect(out.kind).toBe('spawned')
+  })
+
+  it('AggregateError 例外：即使 aborted 也归 failed（F6 taxonomy 细枝——进防线计数）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    js.hooks[0]!.cancel('kill')
+    handle.reject(new AggregateError([new Error('parallel failure')], 'aggregate'))
+    const done = await js.hooks[0]!.done
+    expect(done.status).toBe('failed')
+    expect(done.detail).toContain('aggregate')
+  })
+
+  it('3 连败 halt 粘住：job 内失败按结算序回灌 → 后续派发同步入口 halted（不再 claim）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    let latest!: ControlledHandle
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      latest = controlledHandle() // 每轮新句柄
+      return latest
+    })
+    for (let i = 0; i < 3; i += 1) {
+      void (await h.tool.execute({ run_in_background: true }, h.exec))
+      latest.reject(new Error('bg boom'))
+      const done = await js.hooks[i]!.done
+      expect(done.status).toBe('failed')
+    }
+    const claimsBefore = h.calls.claim
+    const out = (await h.tool.execute({}, h.exec)) as { kind: string; reason: string }
+    expect(out.kind).toBe('halted')
+    expect(out.reason).toContain('3 consecutive')
+    expect(h.calls.claim).toBe(claimsBefore)
+  })
+
+  it('成功结算清零 streak（结算序）：2 败 → 1 成 → 2 败 → 前台照常（未粘住）', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    let latest!: ControlledHandle
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      latest = controlledHandle()
+      return latest
+    })
+    const fail = async (): Promise<void> => {
+      void (await h.tool.execute({ run_in_background: true }, h.exec))
+      latest.reject(new Error('boom'))
+      await js.hooks[js.hooks.length - 1]!.done
+    }
+    const succeed = async (): Promise<void> => {
+      void (await h.tool.execute({ run_in_background: true }, h.exec))
+      latest.release({ stopReason: 'completed', output: 'done' })
+      await js.hooks[js.hooks.length - 1]!.done
+    }
+    await fail()
+    await fail()
+    await succeed() // 清零
+    await fail()
+    await fail()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return okHandle()
+    })
+    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
+    expect(out.kind).toBe('spawned')
+  })
+
+  it('jobs.start 同步段故障：句柄 dispose + ERR_SPAWN_FAILED DTO（job 未注册——无回执可交付）', async () => {
+    let disposed = 0
+    const h = harness({
+      jobs: {
+        start: () => {
+          throw new Error('registry down')
+        },
+      },
+    })
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return { workerSessionId: 'worker-x', result: new Promise(() => {}), dispose: async () => void (disposed += 1) }
+    })
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { ok: boolean; code: string; message: string }
+    expect(out.ok).toBe(false)
+    expect(out.code).toBe('ERR_SPAWN_FAILED')
+    expect(out.message).toContain('registry down')
+    expect(disposed).toBe(1) // worker 无 job 观测面——收尾取消剩余工作
+  })
+})
+
+describe('后台径进度双写（§4.2①/§4.3——appendLog + task-progress 同源双写，前台零发射）', () => {
+  it('里程碑序 claimed→spawned→running→settled:reading→done:success：log 行逐里程碑 + 事件载荷 taskKey/ts', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    const handle = controlledHandle()
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return handle
+    })
+    await h.tool.execute({ run_in_background: true }, h.exec)
+    handle.release({ stopReason: 'completed', output: 'done' })
+    await js.hooks[0]!.done
+    const progresses = h.events.filter((e) => e.type === 'task-progress') as unknown as Array<{
+      slug: string
+      payload: { taskKey: string; phase: string; ts: number }
+    }>
+    expect(progresses.map((e) => e.payload.phase)).toEqual(['claimed', 'spawned', 'running', 'settled:reading', 'done:success'])
+    expect(js.logLines).toHaveLength(progresses.length) // 同源双写：每里程碑一行 log
+    for (const e of progresses) {
+      expect(e.slug).toBe('feat-x')
+      expect(e.payload.taskKey).toBe('feat-x/2.5')
+      expect(typeof e.payload.ts).toBe('number')
+    }
+    // 前台零污染：本会话此前无 task-progress 之外的源——全事件序即证
+    expect(h.events[0]!.type).toBe('task-claimed')
+  })
+})
+
+describe('dispatched 渲染与 schema（AC5：五态 + oneOf 增支）', () => {
+  const receipt = {
+    kind: 'dispatched',
+    taskRef: { slug: 'feat-x', localId: '2.5' },
+    title: 'Implement the thing',
+    type: 'coding-fix',
+    workerSessionId: 'worker-1',
+    jobId: 'forge-dispatch-7',
+    pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+  } as const
+
+  it('渲染 ▸ 行 + job_output/job_kill 指引 + 池行', () => {
+    const text = h_render(receipt)
+    expect(text.startsWith('▸ dispatched feat-x/2.5 — job forge-dispatch-7')).toBe(true)
+    expect(text).toContain('job_output forge-dispatch-7')
+    expect(text).toContain('job_kill forge-dispatch-7')
+    expect(text).toContain('- pool: pending 1 · in_progress 0 · blocked 1 · unmet-pending 2')
+  })
+
+  it('output schema oneOf 四支：dispatched 支 required 含四键（jobId/workerSessionId/taskRef/pool）', () => {
+    const h = harness()
+    const schema = h.tool.output.schema as { oneOf: [ { oneOf: Array<{ required?: string[] }> }, object ] }
+    const branches = schema.oneOf[0]!.oneOf
+    expect(branches).toHaveLength(4)
+    expect(branches[1]!.required).toEqual(['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'])
   })
 })
 

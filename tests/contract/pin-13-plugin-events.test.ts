@@ -6,10 +6,10 @@
 //   2. 发射面代码审计——plugin-forge 源内一切事件 type 字面量（`type: '...'` 记号 +
 //      DispatchEventPayloads 接口键面）⊆ 联合全集（未入联合的新事件名即红）；
 //   3. 总线守卫面 = FORGE_PLUGIN_EVENT_TYPES.includes（bus.ts 单源消费——信封+类型双守卫）。
-// 发射点现状（3.4/3.5 落地）：dispatchTask 流五事件（claimed/spawned/worker-done/no-ready-task/
-// tool-error）+ submitTask task-submitted + 全 tool 面 tool-error（emitToolError）；
-// proposal-created / task-progress 载荷类型在联合而无发射点（快速通道创建径事件化与
-// task-progress 留档发射 = 后续按需——审计断言
+// 发射点现状（3.4/3.5/async-dispatch 任务 1.3 落地）：dispatchTask 流六事件（claimed/spawned/
+// progress/worker-done/no-ready-task/tool-error——task-progress 为后台径进度留档发射，
+// §4.3 数据同源双写）+ submitTask task-submitted + 全 tool 面 tool-error（emitToolError）；
+// proposal-created 载荷类型在联合而无发射点（快速通道创建径事件化 = 后续按需——审计断言
 // 为 ⊆ 非 =，不强迫发射面穷举）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -102,7 +102,7 @@ describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）',
     const block = /interface DispatchEventPayloads \{([\s\S]*?)\n\}/.exec(dispatch.text)
     expect(block, 'DispatchEventPayloads 接口在场').toBeTruthy()
     const keys = [...block![1]!.matchAll(/^ {2}'([a-z-]+)': /gm)].map((m) => m[1]!)
-    expect(keys.sort()).toEqual(['no-ready-task', 'task-claimed', 'task-spawned', 'task-worker-done'])
+    expect(keys.sort()).toEqual(['no-ready-task', 'task-claimed', 'task-progress', 'task-spawned', 'task-worker-done'])
     for (const key of keys) {
       expect(FORGE_PLUGIN_EVENT_TYPES, `dispatch 流事件 ${key} 不在联合`).toContain(key)
     }

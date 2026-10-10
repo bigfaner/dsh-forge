@@ -282,7 +282,7 @@ describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_backgrou
     return { rt, dispose, dispatch, claimsOf: () => claims }
   }
 
-  it('reflect jobs 在场：run_in_background 调用通过降级守卫进入 claim（deps.jobs 已注入；本切片前台直通）', async () => {
+  it('reflect jobs 在场：run_in_background 调用通过降级守卫进入 claim（deps.jobs 已注入；1.3 起 jobs 在场 = 后台形态启用——无就绪任务仍 no-task 零建 job）', async () => {
     const h = dispatchCtx({ get: (name) => (name === 'jobs' ? { start: () => 'forge-dispatch-1' } : undefined) })
     const out = (await h.dispatch.execute({ run_in_background: true }, EXEC)) as { kind: string }
     expect(out.kind).toBe('no-task')

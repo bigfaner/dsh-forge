@@ -6,16 +6,20 @@
 // 结算 → 事件发射（→ 3.3 总线，dispatch_digest 双记联动 task_records.claim 行）→
 // 返回结算 + 池快照（taskStats 现读·无状态——任意会话可接管）。
 // dispatchPrompt 零进模型上下文（裁决①）：全文只经 spawn 面送达 worker（模型不可转述）。
-// 四分支返回（formatOk/formatErr 四态渲染）：spawned（success/blocked）/ no-task（池态
+// 五态返回（formatOk/formatErr 五态渲染）：spawned（success/blocked）/ no-task（池态
 // 三分：收工/等待/疑似死锁可判）/ halted（连续 spawn 失败 ×3 粘住·本会话）/ spawn 失败
 // （ERR_SPAWN_FAILED + 人话指引：带 taskRef 重入重试/人工转移——任务留 in_progress 走
-// 幂等重入径，不走 submit-blocked：执行受阻语义）。
+// 幂等重入径，不走 submit-blocked：执行受阻语义）/ dispatched（后台派发回执——任务 1.3
+// async-dispatch §4.1/4.2/4.4：run_in_background=true 时同步段 claim→组装→spawn→jobs.start
+// 后毫秒级返回四键回执，结算经 job 内 done continuation 后置交付 job_output 终读；
+// 防线搬迁 = SPAWN_FAILURES 自 job 内按结算序回灌、halt 入口检查保持同步、kill 不进计数）。
 import type {
   ContainerRef,
   ForgePluginEvent,
   ForgeSettings,
   Mode,
   ReasoningEffortLevel,
+  TaskProgressPhase,
   TaskRecordEntry,
   TaskSnapshot,
   TaskStats,
@@ -32,7 +36,7 @@ import {
   WORKER_TOOL_NAME_FAMILY,
 } from '@dsh-forge/contracts'
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
-import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
+import type { DispatchJobOutcome, ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
 import { optionalBoolean, optionalEnum, optionalString, requireArgsObject } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
@@ -244,9 +248,19 @@ export interface DispatchSpawnedResult {
   readonly pool: PoolSnapshot
 }
 
-/** dispatchTask 返回面（四分支：三成功形态 + 失败 DTO——ERR_SPAWN_FAILED） */
+/** dispatchTask 返回面（五分支：四成功形态 + 失败 DTO——ERR_SPAWN_FAILED） */
 export type DispatchTaskResult =
   | DispatchSpawnedResult
+  | {
+      /** dispatched 分支（后台派发回执——async-dispatch §4.4：taskRef/workerSessionId/jobId/pool 四键） */
+      kind: 'dispatched'
+      taskRef: TaskRef
+      title: string
+      type: TaskType
+      workerSessionId: string
+      jobId: string
+      pool: PoolSnapshot
+    }
   | { kind: 'no-task'; pool: PoolSnapshot }
   | { kind: 'halted'; reason: string }
   | ForgeToolFailure
@@ -284,6 +298,81 @@ async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
   }
 }
 
+/** worker 终态结算判定（settleWorkerRun 产物——失败支合并 run 拒绝与无结算，kill 由调用方 taxonomy 判定） */
+type WorkerSettlement =
+  | { readonly case: 'settled'; readonly result: Omit<DispatchSpawnedResult, 'kind'>; readonly durationMs: number }
+  | { readonly case: 'failed'; readonly cause: unknown }
+
+/**
+ * worker 终态结算核（async-dispatch §4.2 ②③——前台 execute 第 4~5 步原样搬迁的共用体，
+ * 前台阻塞径与后台 done continuation 同源消费，保证「结算块 = spawned 分支原样投影」）：
+ * await handle.result（传递性含 worker submitTask + 落账——F10 无竞态）→ disposeQuietly →
+ * queryTask 只读结算读 → 三_case 判定（settled：spawned 分支字段面全量构建；failed：
+ * run 拒绝/无结算同归防线径）。
+ */
+async function settleWorkerRun(
+  deps: DispatchTaskToolDeps,
+  ctx: {
+    readonly projectId: string
+    readonly task: TaskSnapshot
+    /** claim 简报指纹（spawned 分支 digest 字段同源——task_records.claim 行双记同值） */
+    readonly digest: string
+    readonly handle: SpawnWorkerHandle
+    /** spawn 起点（durationMs 基准） */
+    readonly spawnStartedAt: number
+    /** worker 终态落定后、结算读前的回调（后台径 settled:reading 里程碑投影点；前台径缺席零发射） */
+    readonly onReading?: () => void
+  },
+): Promise<WorkerSettlement> {
+  let run: Awaited<SpawnWorkerHandle['result']>
+  try {
+    run = await ctx.handle.result
+  } catch (cause) {
+    await disposeQuietly(ctx.handle)
+    return { case: 'failed', cause }
+  }
+  const durationMs = Date.now() - ctx.spawnStartedAt
+  await disposeQuietly(ctx.handle)
+  ctx.onReading?.()
+
+  // 结算读：worker 自行 submitTask 落账（AC gate 在服务侧）；此处只读终态
+  const settled = await deps.tasks.queryTask({
+    projectId: ctx.projectId,
+    taskRef: { slug: ctx.task.slug, localId: ctx.task.localId },
+    include: { records: true },
+  })
+  const status = settled.task.taskStatus
+  if (status !== 'completed' && status !== 'blocked') {
+    // worker 未产出（完成但无结算——refusal/max-tokens/漏提交同径）：执行受阻语义，
+    // 任务留 in_progress 走幂等重入径（不走 submit-blocked）
+    return { case: 'failed', cause: new Error(`worker run ended without a settlement (stopReason: ${run.stopReason})`) }
+  }
+
+  const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
+  const submitRecord = lastSubmitRecordOf(settled.records)
+  const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
+  const pool = poolOf(await deps.tasks.taskStats({ projectId: ctx.projectId }))
+  return {
+    case: 'settled',
+    durationMs,
+    result: {
+      outcome,
+      taskRef: { slug: ctx.task.slug, localId: ctx.task.localId },
+      title: ctx.task.title,
+      type: ctx.task.taskType,
+      ...(ctx.task.mode !== undefined ? { mode: ctx.task.mode } : {}),
+      digest: ctx.digest,
+      ...(outcome === 'success' && submitRecord?.summary !== undefined ? { summary: submitRecord.summary } : {}),
+      ...(outcome === 'blocked'
+        ? { reason: settled.task.blockedReason ?? submitRecord?.reason ?? 'blocking reason not recorded' }
+        : {}),
+      ...(submitRecord?.commitHash !== undefined ? { commitHash: submitRecord.commitHash } : {}),
+      ...(followUp !== undefined ? { followUp } : {}),
+      pool,
+    },
+  }
+}
+
 // ─────────────────────────── 渲染（formatOk/formatErr 四态——Interface 2 场景渲染） ───────────────────────────
 
 /** 池行（无状态快照——dispatcher 继续/收工/fix 链观察判据） */
@@ -318,7 +407,7 @@ const TASK_REF_SCHEMA = {
   required: ['slug', 'localId'],
 } as const
 
-/** 注册面输出 schema（三成功分支 oneOf + 失败 DTO——registry 双态可校验） */
+/** 注册面输出 schema（四成功分支 oneOf + 失败 DTO——registry 双态可校验） */
 const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
   oneOf: [
     {
@@ -341,6 +430,21 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
       required: ['kind', 'outcome', 'taskRef', 'title', 'type', 'digest', 'pool'],
     },
     {
+      // dispatched 分支（async-dispatch §4.4 四键回执——§4.5 oneOf 增支）
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['dispatched'] },
+        taskRef: TASK_REF_SCHEMA,
+        title: { type: 'string' },
+        type: { type: 'string' },
+        workerSessionId: { type: 'string' },
+        jobId: { type: 'string' },
+        pool: POOL_SCHEMA,
+      },
+      required: ['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'],
+    },
+    {
       type: 'object',
       additionalProperties: false,
       properties: { kind: { type: 'string', enum: ['no-task'] }, pool: POOL_SCHEMA },
@@ -355,8 +459,9 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
   ],
 })
 
-/** 四态渲染（Interface 2 场景渲染）：spawned ✓/⚑ + 池行；no-task · + 池态三分判词；
- *  halted ✗ 粘住；spawn 失败 = 失败 DTO formatFailure（✗ ERR_SPAWN_FAILED + 指引行） */
+/** 五态渲染（Interface 2 场景渲染）：spawned ✓/⚑ + 池行；no-task · + 池态三分判词；
+ *  dispatched ▸ 派发回执 + job_output/job_kill 指引；halted ✗ 粘住；spawn 失败 = 失败
+ *  DTO formatFailure（✗ ERR_SPAWN_FAILED + 指引行） */
 function renderDispatchResult(_args: unknown, value: unknown): readonly TextContentBlock[] {
   if (isForgeToolFailure(value)) return formatFailure(value)
   const v = value as Exclude<DispatchTaskResult, ForgeToolFailure>
@@ -365,6 +470,20 @@ function renderDispatchResult(_args: unknown, value: unknown): readonly TextCont
   }
   if (v.kind === 'no-task') {
     return [{ type: 'text', text: `· no ready task (pool: ${poolLine(v.pool)}) — ${POOL_VERDICT_TEXT[classifyPool(v.pool)]}` }]
+  }
+  if (v.kind === 'dispatched') {
+    const key = `${v.taskRef.slug}/${v.taskRef.localId}`
+    return [
+      {
+        type: 'text',
+        text: [
+          `▸ dispatched ${key} — job ${v.jobId}`,
+          `- collect the settlement when the worker settles: job_output ${v.jobId}`,
+          `- abort the run: job_kill ${v.jobId}`,
+          `- pool: ${poolLine(v.pool)}`,
+        ].join('\n'),
+      },
+    ]
   }
   const key = `${v.taskRef.slug}/${v.taskRef.localId}`
   if (v.outcome === 'success') {
@@ -383,6 +502,7 @@ function renderDispatchResult(_args: unknown, value: unknown): readonly TextCont
 interface DispatchEventPayloads {
   'task-claimed': { taskKey: string; taskType: TaskType; mode?: Mode; dispatchDigest: string }
   'task-spawned': { taskKey: string; workerSessionId: string; toolFilter: readonly string[]; model: string }
+  'task-progress': { taskKey: string; phase: TaskProgressPhase; ts: number }
   'task-worker-done': { taskKey: string; workerSessionId: string; outcome: 'success' | 'blocked'; durationMs: number }
   'no-ready-task': { contextSlug?: string }
 }
@@ -400,7 +520,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
   return {
     name: TOOL,
     description:
-      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, spawns an in-process worker that executes the dispatch briefing and submits the outcome itself, then returns the settlement with a live pool snapshot. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. On spawn failure the task stays in_progress for idempotent re-entry; 3 consecutive failures halt this session (a new session resets the guard). Optional source_kind+source_slug pair (both or neither) scopes the claim to that single container: only its ready tasks are selected and session re-entry only resumes same-container in_progress tasks; absent = pool-wide readiness selection.',
+      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, and spawns an in-process worker that executes the dispatch briefing and submits the outcome itself. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. Default (foreground) the call blocks until the worker settles and returns the settlement with a live pool snapshot; with run_in_background it returns a dispatched receipt immediately (taskRef/workerSessionId/jobId/pool): collect the settlement later via job_output (the settlement block arrives once the worker settles) and abort the run via job_kill. Settlement semantics are identical in both modes: failures settle inside the background job, the spawn-failure guard counts them in settlement order, and 3 consecutive failures halt the session at the next dispatch entry (a new session resets the guard; job kills do not count); a failed spawn leaves the task in_progress for idempotent re-entry. Optional source_kind+source_slug pair (both or neither) scopes the claim to that single container: only its ready tasks are selected and session re-entry only resumes same-container in_progress tasks; absent = pool-wide readiness selection.',
     parameters: {
       type: 'object',
       properties: {
@@ -437,13 +557,21 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
         deps.events.emit({ ts: Date.now(), sessionId: session.sessionId, slug, type, payload } as ForgePluginEvent)
       }
 
-      /** spawn 失败防线：计数 +1 → ≥3 halted 粘住；否则 ERR_SPAWN_FAILED 失败 DTO（人话 + 指引） */
-      const spawnFailed = (sessionId: string, slug: string, taskKey: string, cause: unknown): DispatchTaskResult => {
+      /** 防线计数共享核（前台 spawnFailed / 后台 job 回灌共用——「连续」= 结算序 streak） */
+      const bumpSpawnFailures = (sessionId: string, taskKey: string, cause: unknown): { message: string; stuck: boolean } => {
         const count = (SPAWN_FAILURES.get(sessionId) ?? 0) + 1
         SPAWN_FAILURES.set(sessionId, count)
-        const message = `worker spawn failed for ${taskKey}: ${cause instanceof Error ? cause.message : String(cause)}`
+        return {
+          message: `worker spawn failed for ${taskKey}: ${cause instanceof Error ? cause.message : String(cause)}`,
+          stuck: count >= HALT_THRESHOLD,
+        }
+      }
+
+      /** spawn 失败防线：计数 +1 → ≥3 halted 粘住；否则 ERR_SPAWN_FAILED 失败 DTO（人话 + 指引） */
+      const spawnFailed = (sessionId: string, slug: string, taskKey: string, cause: unknown): DispatchTaskResult => {
+        const { message, stuck } = bumpSpawnFailures(sessionId, taskKey, cause)
         emitToolError(deps.events, sessionId, slug, TOOL, { ok: false, code: 'ERR_SPAWN_FAILED', message, violations: [] })
-        if (count >= HALT_THRESHOLD) return { kind: 'halted', reason: HALTED_REASON }
+        if (stuck) return { kind: 'halted', reason: HALTED_REASON }
         return {
           ok: false,
           code: 'ERR_SPAWN_FAILED',
@@ -527,13 +655,22 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           )
 
           // 3. driver in-process spawn（阻塞）——start 拒绝 = 基建故障（防线计数）
+          //    后台径：spawn 即绑定 job 专属 AbortController（§4.1 F6 适配——工具调用返回后
+          //    exec.signal 失效，job 存活期内必须自有信号；job_kill → cancel → abort → 驱动器
+          //    取消 worker 剩余回合工作；run() hooks 与本 controller 同闭包），前台径
+          //    exec.signal 原样零变化（SC-C 前台逐字节等价）
           const spawnStartedAt = Date.now()
+          const background =
+            parsed.run_in_background === true && deps.jobs !== undefined
+              ? { jobs: deps.jobs, controller: new AbortController() }
+              : undefined
           let handle: SpawnWorkerHandle
           try {
             handle = await deps.spawn({
               prompt: claimed.dispatchPrompt, // 全文直达 worker——零进本会话上下文
               parent: exec.agent,
-              signal: exec.signal ?? new AbortController().signal,
+              signal:
+                background !== undefined ? background.controller.signal : (exec.signal ?? new AbortController().signal),
               toolFilter,
               ...(agentOptions !== undefined ? { agentOptions } : {}),
               label: `${taskKey} · ${task.title}`,
@@ -548,63 +685,118 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
             model: agentOptions?.model ?? 'inherit', // 未配置 = 父会话继承（无显式值可记）
           })
 
-          // 4. worker 执行（阻塞至终态）；result 拒绝 = 基建故障（同防线）
-          let run: Awaited<SpawnWorkerHandle['result']>
-          try {
-            run = await handle.result
-          } catch (cause) {
-            await disposeQuietly(handle)
-            return spawnFailed(sessionId, task.slug, taskKey, cause)
+          // ── 后台径（async-dispatch §4.1/4.2/4.4——任务 1.3）：同步段到此为止，立即返回
+          // dispatched 四键回执；job 异步段 = done continuation（结算核 settleWorkerRun 原样
+          // 搬迁）——结算块经 JobOutcome.result 交付（job_output 终读，字段面 = spawned 分支
+          // 原样投影），无结算径 failed + 诊断进 detail，kill = killed 不进防线计数。
+          if (background !== undefined) {
+            const { jobs, controller } = background
+            const pool = poolOf(await deps.tasks.taskStats({ projectId }))
+            let jobId: string
+            try {
+              ;({ jobId } = jobs.start({
+                kind: 'forge-dispatch',
+                label: `${taskKey} · ${task.title}`,
+                owner: sessionId, // 派发会话 id——owner Agent 销毁自动取消其 job（F7 生命周期耦合）
+                run: (job) => {
+                  // 进度投影（§4.3——数据同源双写：appendLog 进 jobs 面板 live 流 +
+                  // task-progress 事件经总线落 logs/<slug>.jsonl；模型消费读结构性滤除 log 块）。
+                  // claimed/spawned 为 job 启动前已过里程碑（后台径进度窗口自 job 启动始）。
+                  const progress = (phase: TaskProgressPhase, line: string): void => {
+                    job.appendLog(line)
+                    emit('task-progress', task.slug, { taskKey, phase, ts: Date.now() })
+                  }
+                  progress('claimed', `claimed ${taskKey} (${task.taskType})`)
+                  progress('spawned', `spawned worker ${handle.workerSessionId}`)
+                  progress('running', 'worker executing — settlement deferred to job_output')
+                  return {
+                    // kill → abort → 驱动器取消 worker 剩余回合工作（§4.1——spawn 即绑定本 controller）
+                    cancel: (reason?: string) => {
+                      controller.abort(reason ?? `background dispatch ${taskKey} killed`)
+                    },
+                    done: (async (): Promise<DispatchJobOutcome> => {
+                      const settlement = await settleWorkerRun(deps, {
+                        projectId,
+                        task,
+                        digest: claimed.digest,
+                        handle,
+                        spawnStartedAt,
+                        onReading: () => progress('settled:reading', 'worker ended — reading settlement'),
+                      })
+                      if (settlement.case === 'settled') {
+                        SPAWN_FAILURES.delete(sessionId) // 成功结算即清零（结算序 streak）
+                        progress(
+                          settlement.result.outcome === 'success' ? 'done:success' : 'done:blocked',
+                          `settlement ready — collect via job_output (${taskKey})`,
+                        )
+                        emit('task-worker-done', task.slug, {
+                          taskKey,
+                          workerSessionId: handle.workerSessionId,
+                          outcome: settlement.result.outcome,
+                          durationMs: settlement.durationMs,
+                        })
+                        return {
+                          status: 'completed',
+                          result: JSON.stringify({ kind: 'spawned', ...settlement.result }),
+                        }
+                      }
+                      // kill taxonomy（F6——§4.2 ⑤）：abort 中止 → killed（不进 halt 计数；
+                      // AggregateError 即使 aborted 也归 failed）。kill 时结算读不发生——任务留
+                      // in_progress 走幂等重入径（§5 结算读可能不发生窗口）
+                      if (controller.signal.aborted && !(settlement.cause instanceof AggregateError)) {
+                        return { status: 'killed' }
+                      }
+                      // 失败回灌（§4.2 ④）：SPAWN_FAILURES 自 job 内计数（「连续」= 结算序
+                      // streak）+ tool-error 留档；≥3 粘住由下一次派发的同步入口检查兑现
+                      const { message, stuck } = bumpSpawnFailures(sessionId, taskKey, settlement.cause)
+                      emitToolError(deps.events, sessionId, task.slug, TOOL, {
+                        ok: false,
+                        code: 'ERR_SPAWN_FAILED',
+                        message,
+                        violations: [],
+                      })
+                      return { status: 'failed', detail: stuck ? `${message} — ${HALTED_REASON}` : message }
+                    })(),
+                  }
+                },
+              }))
+            } catch (cause) {
+              // jobs.start 同步段故障 = 基建故障（同防线）：句柄收尾（worker 无 job 观测面——
+              // 取消剩余工作）+ 计数 + DTO——job 未注册，无回执可交付（任务留 in_progress 幂等重入）
+              await disposeQuietly(handle)
+              return spawnFailed(sessionId, task.slug, taskKey, cause)
+            }
+            return {
+              kind: 'dispatched',
+              taskRef: { slug: task.slug, localId: task.localId },
+              title: task.title,
+              type: task.taskType,
+              workerSessionId: handle.workerSessionId,
+              jobId,
+              pool,
+            }
           }
-          const durationMs = Date.now() - spawnStartedAt
-          await disposeQuietly(handle)
 
-          // 结算读：worker 自行 submitTask 落账（AC gate 在服务侧）；此处只读终态
-          const settled = await deps.tasks.queryTask({
+          // 4~5. 前台径（SC-C 逐字节等价）：worker 执行（阻塞至终态）→ 结算核（同后台共用体）
+          const settlement = await settleWorkerRun(deps, {
             projectId,
-            taskRef: { slug: task.slug, localId: task.localId },
-            include: { records: true },
-          })
-          const status = settled.task.taskStatus
-          if (status !== 'completed' && status !== 'blocked') {
-            // worker 未产出（完成但无结算——refusal/max-tokens/漏提交同径）：执行受阻语义，
-            // 任务留 in_progress 走幂等重入径（不走 submit-blocked）
-            return spawnFailed(
-              sessionId,
-              task.slug,
-              taskKey,
-              new Error(`worker run ended without a settlement (stopReason: ${run.stopReason})`),
-            )
-          }
-
-          // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）
-          SPAWN_FAILURES.delete(sessionId)
-          const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
-          const submitRecord = lastSubmitRecordOf(settled.records)
-          const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, projectId, task) : undefined
-          const pool = poolOf(await deps.tasks.taskStats({ projectId }))
-          emit('task-worker-done', task.slug, {
-            taskKey,
-            workerSessionId: handle.workerSessionId,
-            outcome,
-            durationMs,
-          })
-          return {
-            kind: 'spawned',
-            outcome,
-            taskRef: { slug: task.slug, localId: task.localId },
-            title: task.title,
-            type: task.taskType,
-            ...(task.mode !== undefined ? { mode: task.mode } : {}),
+            task,
             digest: claimed.digest,
-            ...(outcome === 'success' && submitRecord?.summary !== undefined ? { summary: submitRecord.summary } : {}),
-            ...(outcome === 'blocked'
-              ? { reason: settled.task.blockedReason ?? submitRecord?.reason ?? 'blocking reason not recorded' }
-              : {}),
-            ...(submitRecord?.commitHash !== undefined ? { commitHash: submitRecord.commitHash } : {}),
-            ...(followUp !== undefined ? { followUp } : {}),
-            pool,
+            handle,
+            spawnStartedAt,
+          })
+          if (settlement.case === 'settled') {
+            // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）
+            SPAWN_FAILURES.delete(sessionId)
+            emit('task-worker-done', task.slug, {
+              taskKey,
+              workerSessionId: handle.workerSessionId,
+              outcome: settlement.result.outcome,
+              durationMs: settlement.durationMs,
+            })
+            return { kind: 'spawned', ...settlement.result }
           }
+          return spawnFailed(sessionId, task.slug, taskKey, settlement.cause)
         },
         (failure) =>
           emitToolError(deps.events, session.sessionId, attributionSlug ?? slugOfToolArgs(args), TOOL, failure),
