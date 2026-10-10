@@ -161,13 +161,13 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(newSession).toContain('margin: 0 0 12px')
   })
 
-  it('D32 光标缓解两表面：handle col-resize 形 + 消息文字 IBeam 形（热点坐标 + 关键字降级链）', () => {
+  it('D32 光标缓解两表面：handle col-resize 形 + 消息文字钢笔形（热点 = 笔尖 5 19 + 关键字降级链——裁决 #24 随形更替）', () => {
     const handle = ruleOf('> div\\[data-side\\]')
     expect(handle).toContain('cursor: url("data:image/svg+xml,')
     expect(handle).toContain('12 12, col-resize')
     const beam = ruleOf('html\\[data-windows-titlebar\\] \\[data-conversation-content\\]')
     expect(beam).toContain('cursor: url("data:image/svg+xml,')
-    expect(beam).toContain('12 12, text')
+    expect(beam).toContain('5 19, text')
   })
 
   it('D32 暗主题两套：浅形深描边（body[data-ds-dark-theme] scope——brand.css 先例）', () => {
@@ -178,7 +178,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(darkHandle).toContain('12 12, col-resize')
     const darkBeam = ruleOf('body\\[data-ds-dark-theme\\] \\[data-conversation-content\\]')
     expect(darkBeam).toContain('cursor: url("data:image/svg+xml,')
-    expect(darkBeam).toContain('12 12, text')
+    expect(darkBeam).toContain('5 19, text')
   })
 
   it('D32 记账：恰四条色图光标声明（两表面 × 亮/暗）——全带热点 + 降级链 + data-URI 色值行 dsw-raw 注记', () => {
@@ -187,7 +187,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     for (const line of cursorLines) {
       expect(line).toContain('dsw-raw')
       expect(line).toContain('%23') // data-URI 内色值 URL 编码——无裸 # 十六进制（lint-tokens 裸色面零触发）
-      expect(line).toMatch(/ 12 12, (?:col-resize|text);/) // 热点坐标 + 关键字降级链（无图环境回退 OS 语义）
+      expect(line).toMatch(/ (?:12 12, col-resize|5 19, text);/) // 热点坐标（handle = 箭头中心 / 钢笔 = 笔尖，裁决 #24）+ 关键字降级链（无图环境回退 OS 语义）
     }
   })
 
