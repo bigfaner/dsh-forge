@@ -4,9 +4,13 @@
  * components.css 胶囊先例；矩形 radius-xs 退役）；对话框体镜像 M2 转移对话框表单行语言
  * （dswf-td-tr 同族——官方 Modal 承载 chrome）。
  * dsw-raw 豁免（执行记录注记）：chips 行距 6px / chip 行高 24px / chip 胶囊 999px（官方
- * Tag 同值）/ 点径 8px = 原型结构刻度；reason 最小高 64px = M2 原因域同值刻度。 */
+ * Tag 同值）/ 点径 8px = 原型结构刻度；reason 最小高 64px = M2 原因域同值刻度；D44 状态
+ * chip 统一宽 78px / 横向 padding 2px / chip 内距 6px = 用户等长裁决刻度（原 auto 宽 +
+ * 整行高令牌对照——行注逐位记账）。 */
 
-/* ── 五态 chips 行（M3.1 D14 彩色胶囊——原型 m31-stchip） ── */
+/* ── 五态 chips 行（M3.1 D14 彩色胶囊——原型 m31-stchip；D44：三族状态 chip 固定统一宽
+ *    78px + 内容居中（原 auto 宽退役——dswf-ov-stchip / dswf-ov-phchip 同值互指；✕ 重置
+ *    钮非状态标签不参与等长，auto 宽在 -clear 保持）） ── */
 .dswf-ov-pschips {
   display: flex;
   flex-wrap: wrap;
@@ -20,9 +24,11 @@
 .dswf-ov-pschip {
   display: inline-flex;
   align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
+  justify-content: center; /* D44 固定宽内容居中——3 字 + 点 + 两位计数不截断（三族同值） */
+  gap: 6px; /* D44 chip 内点/字/计距收窄（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；与行 gap 6px 同刻度） */
+  width: 78px; /* D44 固定统一宽（dsw-raw 新裁决刻度——原 auto 宽内容自适应形态退役：3 字 39 + 点 8 + 两位计数 ~15 + 内距 12 ≈ 74 紧凑容纳，渲染总宽 84px 较原最长 ~116px 收紧；三族同值零漂移互指：dswf-ov-stchip / dswf-ov-phchip） */
   height: 24px; /* dsw-raw 原型 chip 行刻度（dswf-ov-stchip 同值） */
-  padding: 0 var(--dsw-font-xs-13-line-height);
+  padding: 0 2px; /* D44 横向收窄档（dsw-raw 新裁决刻度——原值整行高令牌 0 13px 对照：固定宽居中下仅溢出护栏；✕ 重置钮原形制在 -clear 保持） */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（矩形 radius-xs 退役——M3.1 D14） */
   background: var(--dsw-alias-bg-base);
@@ -85,6 +91,8 @@
 }
 
 .dswf-ov-pschip-clear {
+  width: auto; /* D44 「✕ 重置」非状态标签——不参与等长（auto 宽保持） */
+  padding: 0 var(--dsw-font-xs-13-line-height); /* D44 钮形制原值保持（base 等长收窄不联动——D38 形态零回归） */
   border-style: dashed;
   margin-inline-start: 8px; /* D38 钮前与行内 chip 拉开：行 gap 6px + 本 8px = 视距 14px（dsw-raw 新裁决刻度） */
 }
