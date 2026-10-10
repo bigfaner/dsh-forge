@@ -156,7 +156,8 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* ── 分层文档列表（中文分组标题 + 真实路径文档行——两级层次） ── */
+/* ── 分层文档列表（中文分组标题 + 真实路径文档行——两级层次。M3.1 D17 原型 B 区
+ * m31-doc-row 形态：文档行 file 图标 svg 化（emoji 退役）+ 零文档 is-empty 空态行） ── */
 .dswf-ov-dgroups {
   display: flex;
   flex-direction: column;
@@ -194,6 +195,28 @@
 
 .dswf-ov-drow:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 文档行线性图标（M3.1 D17——原型 ico('file',13)：currentColor 随行态着色） */
+.dswf-ov-drow-ic {
+  flex: none;
+  width: 13px; /* dsw-raw 原型 file 图标 13px 结构刻度 */
+  height: 13px; /* dsw-raw 同上 */
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 零文档空态行（原型 m31-doc-row is-empty：非命中面——零悬停底 + 三级弱字） */
+.dswf-ov-drow.is-empty {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.dswf-ov-drow.is-empty:hover {
+  background: transparent;
+}
+
+.dswf-ov-drow.is-empty .dswf-ov-drow-path {
+  color: inherit;
 }
 
 .dswf-ov-drow-path {

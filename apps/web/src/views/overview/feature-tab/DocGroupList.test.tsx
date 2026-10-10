@@ -1,6 +1,8 @@
 // 分层文档列表单测 —— 4.3 AC3：doc_kind → 中文组名映射常量（展示标签）+ 文档行
-// `📄 dir/name`（相对 feature 目录真实路径 = 数据——v18 裁决两层不混）+ [状态] 括注
-// （在场/缺席两态——FeatureDocumentRow 无状态字段，缺席 = 恒态）+ 整行可点回调锚
+// svg file 图标 + `dir/name`（相对 feature 目录真实路径 = 数据——v18 裁决两层不混；
+// M3.1 D17 原型 m31-doc-row 形态：📄 emoji 退役 → 24 网格线性 file 件——README 五区
+// 「emoji 全退役」）+ [状态] 括注（在场/缺席两态——FeatureDocumentRow 无状态字段，
+// 缺席 = 恒态）+ 零文档空态行（原型 is-empty 形态）+ 整行可点回调锚
 // （data-dswf-ov-doc = relPath 原始值——onOpenDoc 上抛同值；点击链归 4.6/e2e）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -106,15 +108,19 @@ describe('分层文档列表（AC3 渲染面）', () => {
     expect(noUi).toContain('文档（4 篇）')
   })
 
-  it('文档行 = 📄 真实路径（前缀裁剪）+ [状态] 括注缺席态（FeatureDocumentRow 无状态字段）', () => {
+  it('文档行 = 线性 svg file 图标 + 真实路径（前缀裁剪——M3.1 D17 原型 m31-doc-row 形态，📄 emoji 退役）+ [状态] 括注缺席态（FeatureDocumentRow 无状态字段）', () => {
     const markup = renderToStaticMarkup(
       <DocGroupList featureSlug="dsh-forge-m3" docs={ROWS} onOpenDoc={() => {}} />,
     )
-    expect(markup).toContain('📄 prd/prd-spec.md')
-    expect(markup).toContain('📄 prd/prd-ui-functions.md')
-    expect(markup).toContain('📄 design/tech-design.md')
-    expect(markup).toContain('📄 design/schema.sql') // 悬空路径直出
-    expect(markup).not.toContain('[', ) // 状态缺席 = 无括注段
+    expect(markup).not.toContain('📄') // emoji 全退役（原型 README 五区——线性 svg 全覆盖）
+    expect(markup.match(/<svg/g)?.length).toBe(ROWS.length) // 每文档行一枚 file 图标
+    expect(markup).toContain('viewBox="0 0 24 24"') // 原型无官方对应件 → 24 网格线性件
+    expect(markup).toContain('M14 3H7a2 2 0 0 0-2 2v14') // 原型 ico('file') 原路径（图标几何刻度）
+    expect(markup).toContain('prd/prd-spec.md')
+    expect(markup).toContain('prd/prd-ui-functions.md')
+    expect(markup).toContain('design/tech-design.md')
+    expect(markup).toContain('design/schema.sql') // 悬空路径直出
+    expect(markup).not.toContain('[') // 状态缺席 = 无括注段
   })
 
   it('状态在场态：[状态] 括注紧贴路径', () => {
@@ -135,13 +141,25 @@ describe('分层文档列表（AC3 渲染面）', () => {
     const markup = renderToStaticMarkup(
       <DocGroupList featureSlug="dsh-forge-m3" docs={ROWS} onOpenDoc={() => {}} />,
     )
-    const at = markup.indexOf('📄 design/tech-design.md')
+    const at = markup.indexOf('data-dswf-ov-doc="docs/features/dsh-forge-m3/design/tech-design.md"')
     expect(at).toBeGreaterThanOrEqual(0)
     const btn = markup.slice(markup.lastIndexOf('<button', at), markup.indexOf('</button>', at))
     expect(btn).toContain('type="button"')
     expect(btn).toContain('data-dswf-ov-doc="docs/features/dsh-forge-m3/design/tech-design.md"')
     expect(btn).toContain('title="docs/features/dsh-forge-m3/design/tech-design.md"')
     expect(btn).toContain('›')
+    expect(btn).toContain('design/tech-design.md') // 路径文本（数据面）随图标同行
+  })
+
+  it('零文档 = 「文档（0 篇）」+（暂无文档）空态行（原型 m31-doc-row is-empty——非命中面）', () => {
+    const markup = renderToStaticMarkup(
+      <DocGroupList featureSlug="dsh-forge-m3" docs={[]} onOpenDoc={() => {}} />,
+    )
+    expect(markup).toContain('文档（0 篇）')
+    expect(markup).toContain('（暂无文档）')
+    expect(markup).toContain('is-empty')
+    expect(markup).not.toContain('<button') // 空态行零交互命中面（非文档行）
+    expect(markup).not.toContain('data-dswf-ov-doc=') // 零文档行锚
   })
 
   it('中文分组 = 展示标签、真实路径 = 数据（v18 两层不混——组名不出现在任何路径文本中）', () => {

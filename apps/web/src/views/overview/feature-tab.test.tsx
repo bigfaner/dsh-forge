@@ -111,7 +111,8 @@ describe('FeaturesTab · 阶段 chips 插入点与父行行头（AC2/AC6）', ()
     expect(markup).toContain('data-dswf-ov-dgroups="m2-pipeline"') // DocGroupList（4.3）
     expect(markup).toContain('文档（2 篇）')
     expect(markup).toContain('需求文档（1）')
-    expect(markup).toContain('📄 prd/prd-spec.md') // 真实路径（v17 ㉙）
+    expect(markup).toContain('prd/prd-spec.md') // 真实路径（v17 ㉙；M3.1 D17 svg file 图标面）
+    expect(markup).toContain('<svg') // 文档行线性图标（M3.1 D17——emoji 退役）
     expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/design/tech-design.md"')
   })
 
