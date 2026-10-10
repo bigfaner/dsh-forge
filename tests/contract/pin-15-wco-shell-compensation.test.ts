@@ -10,7 +10,7 @@
 //     /regionArea 结构锚的来源）；
 //   - ui-plugin-manager / ui-settings-general：panellist 插件行与 sidebar.settings 设置行
 //     官方占用（D2 轨内 ≥4 官方图标的承载面）。
-// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2 验收的机械面）。
+// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31 验收的机械面）。
 // hash 类名（pI_x6G_/hHd-Xa_）为构建期产物不逐字 pin——一律取 hash 无关的结构事实或
 // hash 容差正则；任一事实漂移（升级窗口）→ 本 pin 红 → wco.css 偏离块须显式对账。
 import { readFileSync } from 'node:fs'
@@ -49,6 +49,11 @@ describe('pin ⑮-2 ui-layout WCO 补偿面（D1 对冲目标 + frame 结构事�
   it('frame 直标 data-sidebar-collapsed + overlayLayer [data-shell-overlay]（偏离块状态/结构锚）', () => {
     expect(client).toContain('"data-sidebar-collapsed": sidebarCollapsed || void 0')
     expect(client).toContain('"data-shell-overlay": true')
+  })
+
+  it('frame 带本体 = :before 拖拽条（app-region:drag）；:after 官方未占用（D31 带内段落点——升级窗口占用即红）', () => {
+    expect(client).toMatch(/\[data-windows-titlebar\][^{]*_frame:before\{[^}]*-webkit-app-region:drag/)
+    expect(client).not.toContain('_frame:after')
   })
 
   it('frame 首元素子恒为 sidebarCol：DocumentTitle 零 DOM（children 首位 + 仅 document.title 副作用）', () => {
@@ -121,6 +126,19 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2 规则面 + 记账注�
     expect(body).toContain('corner-shape: auto')
   })
 
+  it('D31 竖线带内段：frame::after 补齐标题栏带内 1px（上延至 y=0、与带下段同列同色）+ 收起态轨右缘变体', () => {
+    const band = ruleOf('div:has\\(> \\[data-shell-overlay\\]\\)::after')
+    expect(band).toContain("content: ''")
+    expect(band).toContain('position: absolute')
+    expect(band).toContain('top: 0')
+    expect(band).toContain('height: var(--dsh-windows-titlebar-height)')
+    expect(band).toContain('left: calc(var(--dsh-windows-sidebar-width) - 1px)')
+    expect(band).toContain('width: 1px')
+    expect(band).toContain('background: var(--dsw-alias-border-l3)')
+    expect(band).toContain('-webkit-app-region: drag')
+    expect(ruleOf("\\[data-sidebar-collapsed='true'\\]::after")).toContain('left: 58px')
+  })
+
   it('D2 覆层轨：收起态 sidebarCol 绝对定位 59px + 顶起于标题栏带；centerCol margin 让位', () => {
     const rail = ruleOf("\\[data-sidebar-collapsed='true'\\] > div:first-child")
     expect(rail).toContain('position: absolute')
@@ -158,6 +176,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2 规则面 + 记账注�
     expect(css).toContain('官方补偿面显式偏离记账')
     expect(css).toContain('D1')
     expect(css).toContain('D2')
+    expect(css).toContain('D31')
     // 令牌 lint 口径（lint-tokens TOKEN_PROPS 面）：padding/margin/gap/radius 裸 px 行
     // 均须随行 dsw-raw 注记（59/18/10/6/36/12px 结构刻度族——width/height/z-index 非令牌面）
     const pxLines = css
