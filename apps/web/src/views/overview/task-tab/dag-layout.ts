@@ -6,9 +6,9 @@
 // 漂移数据不炸（回边剔除后分层仍可结算）。
 import type { TaskCard, TaskGraphEdge } from '@dsh-forge/contracts'
 
-/** 节点尺寸/间距（原型 renderDag 结构刻度——布局几何非视觉令牌面） */
-export const DAG_NODE_W = 170
-export const DAG_NODE_H = 64
+/** 节点尺寸/间距（原型 renderTaskDag 结构刻度——布局几何非视觉令牌面；D29 刻度对齐 W190/H72） */
+export const DAG_NODE_W = 190
+export const DAG_NODE_H = 72
 export const DAG_GAP_X = 14
 export const DAG_GAP_Y = 40
 export const DAG_PAD = 8

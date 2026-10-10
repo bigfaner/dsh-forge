@@ -85,3 +85,17 @@ describe('DagView（AC2 SVG 自绘——零第三方库）', () => {
     expect(html).toContain('前置在上')
   })
 })
+
+describe('D29 节点名称完整展示（M3.1——190×72 + 两行 clamp + 悬停全名兜底）', () => {
+  const node = cardFixture({ taskId: 'a', localId: '2.3', taskStatus: 'completed' })
+
+  it('节点内联刻度随常量联动 = 190×72', () => {
+    const html = renderToStaticMarkup(<DagView cards={[node]} graph={graphOf([], [node])} onOpenTask={NOOP} />)
+    expect(html).toMatch(/data-dswf-tt-node="a"[^>]*width:190px;height:72px/)
+  })
+
+  it('悬停 title 全名兜底（键 · 全名——超两行截断时的完整名出口）', () => {
+    const html = renderToStaticMarkup(<DagView cards={[node]} graph={graphOf([], [node])} onOpenTask={NOOP} />)
+    expect(html).toContain('title="m2-pipeline/2.3 · tool 半身对接"')
+  })
+})

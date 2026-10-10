@@ -134,3 +134,18 @@ describe('layoutDag（几何 + 边路径）', () => {
     expect(layout.height).toBe(DAG_PAD * 2)
   })
 })
+
+describe('D29 原型节点刻度 pin（M3.1——纠正版原型 renderTaskDag W190/H72）', () => {
+  it('节点刻度字面 = 190×72（D29——历史 170×64 与原型不符已退役）', () => {
+    expect(DAG_NODE_W).toBe(190)
+    expect(DAG_NODE_H).toBe(72)
+  })
+
+  it('画布尺寸公式随刻度联动（字面值 pin）：单层三节点宽 614 / 单层高 88 / 两层高 200', () => {
+    const single = layoutDag([dagCard('a'), dagCard('b'), dagCard('c')], [])
+    expect(single.width).toBe(614) // 8*2 + 3*(190+14) − 14
+    expect(single.height).toBe(88) // 8*2 + 72
+    const two = layoutDag([dagCard('a'), dagCard('b')], [edge('a', 'b')])
+    expect(two.height).toBe(200) // 8*2 + 2*(72+40) − 40
+  })
+})
