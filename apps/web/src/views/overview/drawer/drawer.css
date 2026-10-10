@@ -6,6 +6,9 @@
  *   - 宽度区间 320/440/760、步长 32、视口因子 0.92、缘手柄 9px/64px、起始位纵向 14% /
  *     拖移边距 4px / 最大高 76vh = 原型结构刻度（布局尺寸以原型结构为准——styling
  *     TECH-styling-002；圆角 10px → 最近语义令牌 radius-md 12 映射）；
+ *   - 标题栏高 30px = D43 弹窗顶/底高度收紧新裁决刻度（2026-10-10 用户裁决「顶部和
+ *     底部的高度都小一些」——原 38px 原型标题栏高刻度注释保留对照）；上下内距收一档 =
+ *     整行高令牌之半（calc(/2)——D36 同款收档刻度，令牌派生非裸值）；
  *   - 过渡时长 .22s/.18s = 原型折叠时长刻度（knowledge.css 同款豁免先例；滑入动画已随
  *     抽屉形态退役——D21 零在场）；
  *   - 类型六色：ui-design Design System 六色中 紫/青 无上游语义令牌（ui-theme 无此 hue），
@@ -45,7 +48,7 @@
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  min-height: 38px; /* dsw-raw 原型标题栏高刻度 */
+  min-height: 30px; /* dsw-raw 新裁决刻度（D43 弹窗顶/底高度收紧——2026-10-10 用户裁决）——原值 38px（原型标题栏高刻度）对照 */
   padding-inline: var(--dsw-font-xs-13-line-height);
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-interactive-bg-hover);
@@ -105,7 +108,7 @@
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  padding: calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-s-14-line-height) 0; /* D43 顶距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；本规则位与 :44 拖移规则同落标题栏单元素——DOM 归属核对，头部区行距 gap 不动） */
 }
 
 .dswf-td-key {
@@ -135,7 +138,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) calc(var(--dsw-font-xs-13-line-height) / 2); /* D43 底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
 }
 
 /* kv chip：`{key} : {value}`（v15）——键 tertiary / 值 secondary 500 */
@@ -632,7 +635,7 @@
 
 .dswf-td-ev {
   position: relative;
-  padding: 0 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-l-20-line-height);
+  padding: 0 0 calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-l-20-line-height); /* D43 事件行底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
 }
 
 .dswf-td-ev::before {
@@ -731,7 +734,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) calc(var(--dsw-font-xs-13-line-height) / 2); /* D43 脚行底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；顶距原样 = diag toast 锚 bottom 耦合位不动） */
   border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
