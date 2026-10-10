@@ -7,16 +7,19 @@
 //   - 呈现面仅取 link 源（用户裁决 #2：悬浮面板 = 派发视角；执行源归 worker 会话与任务
 //     详情时间线——record 卡过滤不入行集）；
 //   - 单库解析归 ShellHost 装配（projectId 锚定 + 主视图会话——本组件零跨库假设）。
-// 落位（D6 开工内定）：shell overlay——ShellHost 常驻树挂载（pointer-events/层序沿
-// TaskDrawer 弹窗先例：fixed + pointer-events:auto + dockkit 浮层层级），几何 = 对话区
-// 容器锚（[data-slot="main.conversation"] 右缘 + 官方页签行 [data-conversation-tabs] 下沿
-// ——dock 展开时对话列收窄，ResizeObserver + 视口 resize 重算即自动左移；不悬浮进 dockkit）。
+// 落位（D6 开工内定 + D33 残差①收口）：shell overlay——ShellHost 常驻树挂载（pointer-events/
+// 层序沿 TaskDrawer 弹窗先例：fixed + pointer-events:auto + dockkit 浮层层级），几何 = 对话区
+// 真盒官方锚（[data-conversation-scroll] 滚动面右缘 + 官方页签行 [data-conversation-tabs] 下沿
+// ——dock 展开时对话列收窄，ResizeObserver + 视口 resize 重算即自动左移；不悬浮进 dockkit。
+// 锚源退役面：官方 SlotOutlet 洞包裹层 display:contents（ANCHOR_STYLE，pin ⑮-4）→
+// 槽宿主 rect 恒零 → 面板钉视口左缘——main.conversation 槽宿主锚零盒断锚退役）。
 // 交互（裁决 #1/#12）：头可拖（拖后停自动锚定——data-dswf-dp-dragged）；▁ 折叠 ⟡N 角标
 // 可再展开；行点击 = 任务详情弹窗就地打开（桥 openTaskDrawer——零会话跳转/零 dock 强开）；
 // 行尾 ⟞ = 打开 worker 执行子会话（taskDetail 挂接面解析 record 源非派发会话 + 官方
 // uiWorkspace.openSession 地址形态——树零联动：worker 子会话不进左栏两级树）。
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type SessionLinksQuery, type SessionTaskLinkCard } from '@dsh-forge/contracts'
+import { taskStatusTagTone } from '../overview/task-tab/task-tab-model.js'
 import {
   Button,
   IconChevronUpOutlineRegular,
@@ -213,7 +216,8 @@ export function dispatchPanelRows(pills: readonly SessionTaskPillItem[]): readon
   return pills.filter((item) => item.source === 'link')
 }
 
-/** 锚定输入（对话容器 + 官方页签行几何——DOM 读取面窄形状） */
+/** 锚定输入（对话真盒锚 + 官方页签行几何——DOM 读取面窄形状）
+ *  convRight/convTop 读数源 = [data-conversation-scroll]（真盒——dock 展开随列收窄实时联动） */
 export interface DispatchAnchorRects {
   /** 对话列右缘（viewport px——dock 展开即左移） */
   readonly convRight: number
@@ -286,12 +290,14 @@ export interface DispatchAnchorDom {
   readonly innerWidth: number
 }
 
-/** 对话区容器选择器（官方 main.conversation 槽宿主——e2e 同锚 MAIN_CONVERSATION） */
-export const DP_CONV_SELECTOR = '[data-slot="main.conversation"]'
+/** 对话区真盒锚（官方 chat 台账滚动面——brand.css/fix-38 既有官方锚，e2e 同锚 CONVERSATION_SCROLL）。
+ *  D33 残差①：槽宿主锚退役——官方 SlotOutlet 洞包裹层 display:contents（renderer
+ *  ANCHOR_STYLE，pin ⑮-4）→ 槽宿主 rect 恒零 → convRight=0 → 面板钉视口左缘。 */
+export const DP_CONV_SELECTOR = '[data-conversation-scroll]'
 /** 官方页签行选择器（ConversationSessionHeader tabs——blank 会话不渲染） */
 export const DP_TABS_SELECTOR = '[data-conversation-tabs]'
 
-/** 锚定几何读取（DOM → 窄形状；对话容器缺席 = null——面板不出场） */
+/** 锚定几何读取（DOM → 窄形状；真盒锚缺席[知识/hero 面板态] = null——面板不出场） */
 export function dispatchAnchorRectsOf(dom: DispatchAnchorDom): DispatchAnchorRects | null {
   const conv = dom.querySelector(DP_CONV_SELECTOR)
   if (conv === null) return null
@@ -353,7 +359,7 @@ export function DispatchPanelRow({ row, onOpenTask, onOpenWorkerSession }: Dispa
         <Tooltip label={row.title} portal>
           <span className="dswf-dp-title">{row.title}</span>
         </Tooltip>
-        <Tag tone="neutral" className="dswf-dp-status">
+        <Tag tone={taskStatusTagTone(row.taskStatus)} className="dswf-dp-status">
           {TASK_STATUS_LABELS[row.taskStatus].zh}
         </Tag>
         <Tooltip label="打开执行子会话（worker）" portal>
@@ -483,9 +489,9 @@ export interface DispatchPanelProps {
 }
 
 /**
- * 锚定效应（装载壳私有）：对话容器在场即算锚定几何；ResizeObserver（dock 展开 → 对话列
- * 收窄）+ 视口 resize 重算 = 自动左移；挂载竞态（对话容器晚于本树挂载）= rAF 有限重试
- * （纯事件驱动——SC2 无轮询守护：rAF 循环随容器到场即停）。容器缺席（知识/hero 面板态
+ * 锚定效应（装载壳私有）：真盒锚在场即算锚定几何；ResizeObserver（dock 展开 → 对话列
+ * 收窄）+ 视口 resize 重算 = 自动左移；挂载竞态（对话真盒锚晚于本树挂载）= rAF 有限重试
+ * （纯事件驱动——SC2 无轮询守护：rAF 循环随容器到场即停）。锚缺席（知识/hero 面板态
  * ——本组件同帧已卸载）= null 不出场。
  */
 function useDispatchAnchor(active: boolean): DispatchPanelGeometry | null {

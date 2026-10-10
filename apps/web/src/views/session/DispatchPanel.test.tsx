@@ -223,26 +223,45 @@ describe('dispatchPanelDragPosition 拖移几何（拖后停自动锚定——�
   })
 })
 
-describe('dispatchAnchorRectsOf DOM 锚定读取（对话区容器锚）', () => {
-  const rect = (right: number, top: number, bottom = right): { right: number; top: number; bottom: number } => ({ right, top, bottom })
-  it('对话容器 + 页签行在场 → 窄形状（bottom 供 top 锚）', () => {
-    const rects = dispatchAnchorRectsOf({
-      querySelector: (selector) =>
-        selector === '[data-slot="main.conversation"]'
-          ? { getBoundingClientRect: () => rect(1000, 40) }
-          : { getBoundingClientRect: () => rect(1000, 56, 88) },
-      innerWidth: 1280,
-    })
-    expect(rects).toEqual({ convRight: 1000, convTop: 40, tabsBottom: 88, viewportWidth: 1280 })
+describe('dispatchAnchorRectsOf DOM 锚定读取（D33 残差①：真盒官方锚——display:contents 槽宿主零盒断锚防回归）', () => {
+  // 真 DOM 同形 stub：官方 SlotOutlet 洞包裹层 [data-slot=main.conversation] 为
+  // display:contents（renderer ANCHOR_STYLE，pin ⑮-4）→ rect 恒零；真盒锚 =
+  // [data-conversation-scroll]（官方 chat 台账滚动面——brand.css/fix-38 既有锚，
+  // e2e 同锚 CONVERSATION_SCROLL），页签行 [data-conversation-tabs] 真盒在场。
+  const slotHostZeroBox = { getBoundingClientRect: (): { right: number; top: number; bottom: number } => ({ right: 0, top: 0, bottom: 0 }) }
+  const scrollBox = { getBoundingClientRect: (): { right: number; top: number; bottom: number } => ({ right: 1000, top: 56, bottom: 400 }) }
+  const tabsBox = { getBoundingClientRect: (): { right: number; top: number; bottom: number } => ({ right: 1000, top: 56, bottom: 88 }) }
+  const realShapeDom = {
+    querySelector: (selector: string) =>
+      selector === '[data-slot="main.conversation"]'
+        ? slotHostZeroBox // 零盒槽宿主在场（真 DOM 形——退役锚源若回归即被本 stub 捕获）
+        : selector === '[data-conversation-scroll]'
+          ? scrollBox
+          : selector === '[data-conversation-tabs]'
+            ? tabsBox
+            : null,
+    innerWidth: 1280,
+  }
+  it('零盒槽宿主在场（真 DOM 形）→ convRight 读真盒锚（非零）——旧断锚形（convRight=0）在此即红', () => {
+    const rects = dispatchAnchorRectsOf(realShapeDom)
+    expect(rects).toEqual({ convRight: 1000, convTop: 56, tabsBottom: 88, viewportWidth: 1280 })
   })
-  it('对话容器缺席（知识/hero 面板态）→ null（面板不出场）；页签行缺席 → tabsBottom null', () => {
+  it('端到端非视口左缘钉位：真盒 rect 喂锚定 → left = 右缘内收（>4 拖移钳制）+ top = 页签行下 + 8', () => {
+    const rects = dispatchAnchorRectsOf(realShapeDom)
+    expect(rects).not.toBeNull()
+    const geom = dispatchPanelAnchor(rects!)
+    expect(geom.left).toBe(1000 - 16 - 324) // 660 = 对话面右缘 1000 − 16 − 面宽（旧断锚形 convRight=0 此处恒 4）
+    expect(geom.left).toBeGreaterThan(4)
+    expect(geom.top).toBe(88 + 8)
+  })
+  it('真盒锚缺席（知识/hero 面板态）→ null（面板不出场）；页签行缺席（blank）→ top 回退锚顶 + 8', () => {
     expect(dispatchAnchorRectsOf({ querySelector: () => null, innerWidth: 1280 })).toBeNull()
     const rects = dispatchAnchorRectsOf({
-      querySelector: (selector) =>
-        selector === '[data-slot="main.conversation"]' ? { getBoundingClientRect: () => rect(1000, 40) } : null,
+      querySelector: (selector) => (selector === '[data-conversation-scroll]' ? scrollBox : null),
       innerWidth: 1280,
     })
-    expect(rects).toEqual({ convRight: 1000, convTop: 40, tabsBottom: null, viewportWidth: 1280 })
+    expect(rects).toEqual({ convRight: 1000, convTop: 56, tabsBottom: null, viewportWidth: 1280 })
+    expect(dispatchPanelAnchor(rects!).top).toBe(56 + 8)
   })
 })
 
@@ -324,6 +343,34 @@ describe('DispatchPanelBody 纯渲染（面板形态）', () => {
     const markup = renderToStaticMarkup(<DispatchPanelBody {...base} onOpenTask={undefined} onOpenWorkerSession={undefined} />)
     expect(markup).not.toContain('role="button"')
     expect(markup).toContain('disabled')
+  })
+})
+
+describe('行状态标签 tone = taskStatusTagTone 单源（D33 残差②——与任务子 tab 列表行同色）', () => {
+  const markupWithStatus = (taskStatus: SessionTaskLinkCard['taskStatus']): string =>
+    renderToStaticMarkup(
+      <DispatchPanelBody
+        rows={[rowItem({ taskStatus })]}
+        geometry={{ left: 900, top: 96 }}
+        collapsed={false}
+        dragged={false}
+        onCollapse={() => {}}
+        onExpand={() => {}}
+        onOpenTask={undefined}
+        onOpenWorkerSession={undefined}
+      />,
+    )
+  it('completed → success（官方 Tag data-tone）', () => {
+    expect(markupWithStatus('completed')).toContain('data-tone="success"')
+  })
+  it('blocked / rejected → danger', () => {
+    expect(markupWithStatus('blocked')).toContain('data-tone="danger"')
+    expect(markupWithStatus('rejected')).toContain('data-tone="danger"')
+  })
+  it('其余四态（pending/in_progress/suspended/skipped）→ neutral（全 neutral 同灰退役）', () => {
+    for (const status of ['pending', 'in_progress', 'suspended', 'skipped'] as const) {
+      expect(markupWithStatus(status), status).toContain('data-tone="neutral"')
+    }
   })
 })
 

@@ -6,6 +6,10 @@
 // m3.1 D5/D6 锚迁移台账（断言零弱化——会话头挂接 pill 退役 → 派发任务悬浮面板）：
 //   - 会话头 pill 断言族（stpPillOf/≤2 并排/+N 溢出菜单）随 D5 槽位卸载退役——继任面 =
 //     悬浮面板行集（data-dswf-dp-row，仅 link 源，全量行滚动呈现无截员）；
+//   - D33 残差①（1.18）：面板几何对照锚 MAIN_CONVERSATION → CONVERSATION_SCROLL（官方
+//     SlotOutlet 洞包裹层 display:contents 零盒不可量测，pin ⑮-4——产品锚源同步退役，
+//     DispatchPanel DP_CONV_SELECTOR 同值单点）；断言零弱化 = 右缘内收 16/顶 + 8/非左缘
+//     钉位/dock 右缘联动四组几何断言就位（旧块仅 ≥/≤ 弱界）；
 //   - pill 导航断言（dock 开概览 + 任务子 tab + feature 选中 + 弹窗）→ 行点击 = 弹窗
 //     就地打开 + 零会话跳转 + 零 dock 强开（裁决 #1；taskFocus 聚焦链随写方退役——
 //     bridge.openTaskFocus 消费面保留，见 workbench-bridge 台账）；
@@ -66,13 +70,13 @@ import {
   COLLAPSE_RIGHTBAR_BUTTON,
   COMPOSER_INPUT,
   CONVERSATION_CONTENT,
+  CONVERSATION_SCROLL,
   DP_BADGE,
   DP_COLLAPSE,
   DP_HEAD,
   DP_PANEL,
   DP_ROW_ANY,
   DP_SESSION_ANY,
-  MAIN_CONVERSATION,
   OV_PANEL,
   RIGHTBAR_COLLAPSED,
   SESSION_HEADER_ACTIONS,
@@ -560,23 +564,38 @@ test('@web-e2e @m2 挂接双侧·m3.1 D6 悬浮面板几何与交互：默认落
     const panel = page.locator(DP_PANEL).first()
     await expect(panel, '悬浮面板在场').toBeVisible({ timeout: 30_000 })
 
-    // ── 几何：对话列内、工具栏之下右上角（E 区断言组）──
+    // ── 几何：对话列内、工具栏之下右上角（E 区断言组；D33 残差①收口——锚源迁移台账：
+    //    对话面几何对照锚 MAIN_CONVERSATION → CONVERSATION_SCROLL 真盒（官方 SlotOutlet
+    //    洞包裹层 display:contents 零盒，pin ⑮-4——旧对照锚不可量测；零弱化 = 断言只增）──
     const tabsBox = await page.locator(TABS_ROW).first().boundingBox()
-    const convBox = await page.locator(MAIN_CONVERSATION).first().boundingBox()
+    const convBox = await page.locator(CONVERSATION_SCROLL).first().boundingBox()
     const dpBox0 = await panel.boundingBox()
     expect(dpBox0, '面板几何在场').not.toBeNull()
     expect(tabsBox, '页签行几何在场').not.toBeNull()
-    expect(convBox, '对话列几何在场').not.toBeNull()
-    expect(dpBox0!.y, `面板位于工具栏之下（top=${Math.round(dpBox0!.y)} ≥ tabs bottom=${Math.round(tabsBox!.y + tabsBox!.height)}）`).toBeGreaterThanOrEqual(tabsBox!.y + tabsBox!.height - 2)
-    expect(dpBox0!.x + dpBox0!.width, `面板在对话列内（右缘 ≤ 对话列右缘 + 2）`).toBeLessThanOrEqual(convBox!.x + convBox!.width + 2)
+    expect(convBox, '对话滚动面几何在场（真盒锚）').not.toBeNull()
+    expect(dpBox0!.x, `面板非视口左缘钉位（x=${Math.round(dpBox0!.x)} > 拖移钳制 4——display:contents 断锚防回归）`).toBeGreaterThan(4)
+    expect(
+      Math.abs(dpBox0!.x + dpBox0!.width - (convBox!.x + convBox!.width - 16)),
+      `面板右缘 = 对话面右缘内收 16（差 ≤2：${Math.round(dpBox0!.x + dpBox0!.width)} vs ${Math.round(convBox!.x + convBox!.width - 16)}）`,
+    ).toBeLessThanOrEqual(2)
+    expect(
+      Math.abs(dpBox0!.y - (tabsBox!.y + tabsBox!.height + 8)),
+      `面板顶 = 页签行下沿 + 8（${Math.round(dpBox0!.y)} vs ${Math.round(tabsBox!.y + tabsBox!.height + 8)}）`,
+    ).toBeLessThanOrEqual(2)
 
-    // ── dock 展开自动左移（对话列收窄 → 面板随之左移，不悬浮进 dockkit）──
+    // ── dock 展开自动左移（对话列收窄 → 面板随之左移，右缘随对话面右缘实时联动——真 rect 上生效）──
     await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '右栏基线收起').toBeAttached()
     await page.locator(SIDEBAR_RIGHT_EXPAND).first().click()
     await expect(page.locator(RIGHTBAR_COLLAPSED), '右栏展开（收起标记退场）').toHaveCount(0, { timeout: 15_000 })
     await page.waitForTimeout(600) // 锚定重算收敛（ResizeObserver → 态更新 → 绘制）
     const dpBox1 = await panel.boundingBox()
+    const convBox1 = await page.locator(CONVERSATION_SCROLL).first().boundingBox()
     expect(dpBox1, '展开后面板几何在场').not.toBeNull()
+    expect(convBox1, '展开后对话滚动面几何在场').not.toBeNull()
+    expect(
+      Math.abs(dpBox1!.x + dpBox1!.width - (convBox1!.x + convBox1!.width - 16)),
+      `展开后面板右缘仍贴对话面右缘内收 16（${Math.round(dpBox1!.x + dpBox1!.width)} vs ${Math.round(convBox1!.x + convBox1!.width - 16)}）`,
+    ).toBeLessThanOrEqual(2)
     expect(dpBox0!.x - dpBox1!.x, `dock 展开 → 面板自动左移（${Math.round(dpBox0!.x)} → ${Math.round(dpBox1!.x)}）`).toBeGreaterThan(20)
 
     // ── 头可拖（拖后停自动锚定——收起右栏面板不再回锚）──

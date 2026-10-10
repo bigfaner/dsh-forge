@@ -41,3 +41,4 @@
 |---|---|
 | [D28-dual-theme.md](./D28-dual-theme.md) | D28 双主题走查记录——弹窗/悬浮面板/下拉卡/插件行/新会话钮/rail 六面逐面（机制 + 令牌锚 + SC-8 实机动线） |
 | [D1-D28-evidence.md](./D1-D28-evidence.md) | D1–D28 逐行证据汇总（差异清单打勾表）——质量门 + 零弱化台账汇总 + D27 盘点 + e2e 池记录，SC-8 签字底稿 |
+| [D33-dp-anchor-tone.md](./D33-dp-anchor-tone.md) | D33 悬浮面板两残差收口走查记录（任务 1.18）——默认锚位真盒右上角 + 状态标签 taskStatusTagTone 单源；实机双主题截图当场归档（Electron 捕获）+ 真 rect 几何复核 |
