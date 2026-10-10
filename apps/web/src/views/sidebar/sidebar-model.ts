@@ -231,8 +231,8 @@ export interface SidebarView {
   readonly archivedFilter: SidebarArchivedFilter
 }
 
-/** 缺省视图（按项目树 + 含归档——现行行为，官方菜单切换才偏离） */
-export const SIDEBAR_VIEW_DEFAULT: SidebarView = { groupBy: 'tree', archivedFilter: 'default' }
+/** 缺省视图（D41-①：按项目树 + 归档默认隐藏——2026-10-10 用户裁决；三态菜单可切回 default/only） */
+export const SIDEBAR_VIEW_DEFAULT: SidebarView = { groupBy: 'tree', archivedFilter: 'hide' }
 
 /**
  * 视图菜单项 id → 视图态投影（纯函数，fix-42）。菜单项 id 与官方 ViewOptionsMenu 同名面
@@ -260,6 +260,47 @@ export function sidebarArchivedFilterOf(
   if (filter === 'default') return tree
   if (filter === 'hide') return tree.filter((node) => !node.archived)
   return tree.filter((node) => node.archived)
+}
+
+// ── 会话默认可见性（D41-②：24h 窗口——2026-10-10 用户裁决「默认展示最近 24 小时的
+//    会话，其它会话折叠起来」。窗口内默认可见、窗口外折叠进「更早（N）」可展开组；
+//    展开态 = 本地微观态不持久化（fix-42 P1 口径沿袭）；搜索在场折叠让位（命中行全展示）；
+//    flat（用户显式全量视图）/ rail（恒项目口径）投影不消费本切分。） ──
+
+/** 会话默认可见窗口（24h——D41-② 裁决口径；now 基准 = 渲染时钟，relativeTimeLabel 同源） */
+export const SIDEBAR_SESSION_WINDOW_MS = 24 * 3_600_000
+
+/** 24h 窗口切分（项目块内会话两组：recent = 窗口内默认可见行 / older = 窗口外折叠组行） */
+export interface SidebarSessionSplit {
+  readonly recent: readonly SidebarSessionRow[]
+  readonly older: readonly SidebarSessionRow[]
+}
+
+/**
+ * 会话 24h 窗口切分（纯函数，D41-②）：updatedAt ≥ now−24h = recent，其余 = older
+ * （「更早（N）」的 N = older 长度）。组内序 = 输入序（workspace 排列序不重排）；
+ * 全 recent 快径原引用返回（零派生——sidebarFilterOf 全命中同款）。
+ */
+export function sidebarSessionVisibility(
+  sessions: readonly SidebarSessionRow[],
+  now: number,
+): SidebarSessionSplit {
+  const boundary = now - SIDEBAR_SESSION_WINDOW_MS
+  let allRecent = true
+  for (const row of sessions) {
+    if (row.updatedAt < boundary) {
+      allRecent = false
+      break
+    }
+  }
+  if (allRecent) return { recent: sessions, older: [] }
+  const recent: SidebarSessionRow[] = []
+  const older: SidebarSessionRow[] = []
+  for (const row of sessions) {
+    if (row.updatedAt >= boundary) recent.push(row)
+    else older.push(row)
+  }
+  return { recent, older }
 }
 
 /** 平铺视图行（flat 排列——跨项目全会话行；projectName 随行 = 过滤命中面 + 归属可辨） */

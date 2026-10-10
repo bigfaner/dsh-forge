@@ -12,7 +12,8 @@
 //      成员传播 + 选中态（fresh blank 仅选中者可见——官方口径），零凭据 e2e 面以盘侧增生
 //      为断言（行显示面归 dogfood 台账，fix-42 任务文件记边界）；
 //   3. 视图菜单实装（AC2）：groupBy 平铺切换（段头标签 + 平铺容器）+ archivedFilter 三态
-//      （归档切换走真实 ellipsis 菜单动作——RPC + 静默重拉链一并覆盖）；
+//      （归档切换走真实 ellipsis 菜单动作——RPC + 静默重拉链一并覆盖；D41-① 后缺省 = hide，
+//      归档行落地即离场——弱化标记改经「仅归档」视图在场面断言）；
 //   4. 项目改名：ellipsis 改名 → 官方 Modal → RPC → 行标题更新。
 // 载体面（launch/close/RPC/清理）经 e2e/support（fix-37 ①）；每测试独立 boot（dismiss
 // 毒化纪律——单 boot 单测试）。
@@ -152,7 +153,9 @@ test('@web-e2e @p1mvp sidebar-view-align·视图菜单实装：平铺切换 + �
       .filter({ hasText: '归档项目' })
       .first()
       .click()
-    await expect(page.locator(`${projectRowOf(old.id)}[data-archived]`), '归档弱化标记（RPC 落地 + 静默重拉）').toBeVisible({
+    // D41-①（2026-10-10 用户裁决）：归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT.archivedFilter
+    // = hide）——RPC 落地 + 静默重拉后归档行直接离场；弱化标记改经「仅归档」视图断言（见下）
+    await expect(page.locator(projectRowOf(old.id)), 'D41-① 归档缺省隐藏（RPC 落地 + 静默重拉）').toHaveCount(0, {
       timeout: 15_000,
     })
 
@@ -170,6 +173,10 @@ test('@web-e2e @p1mvp sidebar-view-align·视图菜单实装：平铺切换 + �
     await expect(page.locator(projectRowOf(old.id)), '不含归档：归档项目离场').toHaveCount(0)
     await pickViewMenuItem(page, '仅归档')
     await expect(page.locator(projectRowOf(old.id)), '仅归档：归档项目在场').toBeVisible({ timeout: 10_000 })
+    await expect(
+      page.locator(`${projectRowOf(old.id)}[data-archived]`),
+      '归档弱化标记（仅归档视图在场面——D41-① 后弱化标记唯一可见口径）',
+    ).toBeVisible()
     await expect(page.locator(projectRowOf(active.id)), '仅归档：活跃项目离场').toHaveCount(0)
   } finally {
     await closeApp(app)

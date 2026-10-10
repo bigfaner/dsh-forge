@@ -6,6 +6,9 @@
 // 行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
 // fix-42 增面：rail 图标列（空轨道退役）+ 视图菜单实装（groupBy/archivedFilter）+
 // 项目行语言（expandOnRowClick 整行翻转 + 行尾 hover 动作）+ 段头内嵌搜索槽。
+// D41 增面（2026-10-10 用户裁决）：①归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT hide——
+// 弱化标记断言迁显式 default 受控缝）；②会话 24h 窗口（窗口外折叠进「更早（N）」本地
+// 微观态组——缺省收起静态可钉；搜索在场折叠让位；flat = 显式全量视图零回归）。
 // 官方 Menu/Modal 开弹层静态不可渲染（portal——node 无 DOM）：菜单项数据面
 // （SIDEBAR_VIEW_MENU_ITEMS / projectMenuItemsOf）与受控缝（SidebarProjectsZone/
 // SidebarRail 直接渲染）承载静态断言；开弹层行为归 e2e（fix-24 同裁）。
@@ -85,7 +88,7 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
     expect(panel({ onAddProject: undefined })).not.toContain('data-dswf-nav="add-project"')
   })
 
-  it('项目节点（官方 DisclosureRow 形态）+ 会话行四件：状态点/标题/相对时间/选中', () => {
+  it('项目节点（官方 DisclosureRow 形态）+ 会话行四件：状态点/标题/相对时间/选中（D41-②：窗口外行折叠）', () => {
     expect(markup).toContain('data-dswf-project="p1"')
     expect(markup).toContain('data-disclosure-row')
     expect(markup).toContain('data-dswf-session="s1"')
@@ -93,17 +96,25 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
     expect(markup).toContain('登录修复')
     expect(markup).toContain('5 分钟前')
     expect(markup).toContain('3 小时前')
-    expect(markup).toContain('2 天前')
     expect(markup).toContain('刚刚')
-    // 状态点官方语义：attention→warning / running→ongoing / done→done / idle→idle
+    // 状态点官方语义：attention→warning / running→ongoing / idle→idle
+    // （done = s3 在 24h 窗口外——归折叠组，done 点随搜索让位断言收口）
     expect(markup).toContain('data-state="warning"')
     expect(markup).toContain('data-state="ongoing"')
-    expect(markup).toContain('data-state="done"')
     expect(markup).toContain('data-state="idle"')
+    // D41-②：24h 窗口外（s3 = 2 天前）折叠进「更早（1）」——缺省收起，行不在场
+    expect(markup).toContain('更早（1）')
+    expect(markup).toContain('data-dswf-older')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('data-dswf-session="s3"')
   })
 
-  it('归档项目弱化标记', () => {
-    expect(panel({ tree: [node({ archived: true })] })).toContain('data-archived')
+  it('D41-①：归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT.archivedFilter = hide——三态菜单可切回）', () => {
+    const markup = panel({
+      tree: [node(), node({ projectId: 'p2', workspaceId: 'w2', name: '旧档', archived: true, sessions: [] })],
+    })
+    expect(markup).toContain('data-dswf-project="p1"')
+    expect(markup).not.toContain('data-dswf-project="p2"')
   })
 })
 
@@ -416,6 +427,22 @@ describe('SidebarProjectsZone 受控缝（fix-6 过滤 + fix-42 视图应用—�
     expect(markup).not.toContain('暂无会话')
   })
 
+  it('归档弱化标记（D41-① 后显式 default 视图：归档块在场带 data-archived——缺省 hide 时整块离场）', () => {
+    expect(zone({ tree: [node({ archived: true })] })).toContain('data-archived')
+  })
+
+  it('D41-② 搜索让位：query 在场时全量命中行展示（24h 折叠不遮蔽搜索——窗口外命中行在场）', () => {
+    const markup = zone({ query: '文档补全' })
+    expect(markup).toContain('data-dswf-session="s3"')
+    expect(markup).toContain('2 天前')
+    expect(markup).toContain('data-state="done"')
+    expect(markup).not.toContain('data-dswf-older')
+    // 无过滤对照：同一行缺省折叠（「更早（1）」在场、行缺席）
+    const idle = zone({})
+    expect(idle).toContain('更早（1）')
+    expect(idle).not.toContain('data-dswf-session="s3"')
+  })
+
   it('无过滤空项目 → 「暂无会话」占位文案不变（未点名元素保持不变）', () => {
     expect(zone({ tree: [node({ sessions: [] })] })).toContain('暂无会话')
   })
@@ -502,6 +529,13 @@ describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedF
     expect(hit).toContain('data-dswf-session="s9"') // 项目名命中 → 全行在场
     const miss = zone({ view: { groupBy: 'flat', archivedFilter: 'default' }, query: '不存在' })
     expect(miss).toContain('data-dswf-filterempty')
+  })
+
+  it('D41-② 零回归：flat = 显式全量视图（24h 窗口外行照常在场——折叠不消费）', () => {
+    const markup = zone({ view: { groupBy: 'flat', archivedFilter: 'default' } })
+    expect(markup).toContain('data-dswf-session="s3"') // 2 天前——树视图折叠、平铺全量
+    expect(markup).toContain('2 天前')
+    expect(markup).not.toContain('data-dswf-older')
   })
 
   it('archivedFilter=hide：归档项目块离场；only：仅归档在场（归档弱化标记随之）', () => {

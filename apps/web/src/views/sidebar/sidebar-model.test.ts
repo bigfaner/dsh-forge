@@ -7,16 +7,20 @@ import {
   relativeTimeLabel,
   sessionDotState,
   sessionStatus,
+  SIDEBAR_SESSION_WINDOW_MS,
+  SIDEBAR_VIEW_DEFAULT,
   sidebarArchivedFilterOf,
   sidebarFilterOf,
   sidebarFlatFilterOf,
   sidebarFlatRowsOf,
   sidebarSectionLabelOf,
+  sidebarSessionVisibility,
   sidebarViewOfPick,
   type LedgerSessionRow,
   type LedgerSessionsSnapshot,
   type LedgerWorkspacesSnapshot,
   type SidebarProjectNode,
+  type SidebarSessionRow,
 } from './sidebar-model.js'
 
 const MIN = 60_000
@@ -256,6 +260,61 @@ describe('sidebarViewOfPick（视图菜单项 id → 视图态投影）', () => 
   it('同值重选 → 原引用返回（免重渲染）', () => {
     expect(sidebarViewOfPick(view, 'tree')).toBe(view)
     expect(sidebarViewOfPick(view, 'default')).toBe(view)
+  })
+
+  it('D41-① 同迁：hide 态可切回 default/only（三态菜单语义保持）', () => {
+    const hidden = { groupBy: 'tree', archivedFilter: 'hide' } as const
+    expect(sidebarViewOfPick(hidden, 'default')).toEqual({ groupBy: 'tree', archivedFilter: 'default' })
+    expect(sidebarViewOfPick(hidden, 'only')).toEqual({ groupBy: 'tree', archivedFilter: 'only' })
+  })
+})
+
+describe('SIDEBAR_VIEW_DEFAULT（D41-①：归档项目默认隐藏）', () => {
+  it('缺省视图 = 按项目树 + 归档隐藏（archivedFilter = hide——三态菜单可切回 default/only）', () => {
+    expect(SIDEBAR_VIEW_DEFAULT).toEqual({ groupBy: 'tree', archivedFilter: 'hide' })
+  })
+})
+
+describe('sidebarSessionVisibility（D41-②：会话 24h 窗口切分——recent 默认可见 / older 折叠）', () => {
+  const NOW = 1_700_000_000_000
+  function row(sessionId: string, updatedAt: number): SidebarSessionRow {
+    return { sessionId, title: `会话${sessionId}`, status: 'idle', updatedAt }
+  }
+
+  it('窗口内（updatedAt ≥ now−24h）= recent，其余 = older（组内序 = 输入序不重排）', () => {
+    const sessions = [row('a', NOW - 25 * HOUR), row('b', NOW - MIN), row('c', NOW - 2 * DAY), row('d', NOW)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent.map((r) => r.sessionId)).toEqual(['b', 'd'])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['a', 'c'])
+  })
+
+  it('24h 边界值：updatedAt = now−24h 恰在窗口内（≥ 语义——可见）；差 1ms 出窗', () => {
+    const edge = sidebarSessionVisibility([row('edge', NOW - SIDEBAR_SESSION_WINDOW_MS)], NOW)
+    expect(edge.recent.map((r) => r.sessionId)).toEqual(['edge'])
+    expect(edge.older).toEqual([])
+    const out = sidebarSessionVisibility([row('out', NOW - SIDEBAR_SESSION_WINDOW_MS - 1)], NOW)
+    expect(out.recent).toEqual([])
+    expect(out.older.map((r) => r.sessionId)).toEqual(['out'])
+  })
+
+  it('空窗（无会话）→ 两组皆空', () => {
+    expect(sidebarSessionVisibility([], NOW)).toEqual({ recent: [], older: [] })
+  })
+
+  it('全旧（全部窗口外）→ recent 空、older 全量原序（「更早（N）」N = older 长度）', () => {
+    const sessions = [row('a', NOW - 2 * DAY), row('b', NOW - 3 * DAY)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent).toEqual([])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['a', 'b'])
+  })
+
+  it('纯投影：全 recent 原引用返回（零派生）；输入冻结不突变（SC2 直读同型）', () => {
+    const sessions = [row('a', NOW), row('b', NOW - MIN)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent).toBe(sessions)
+    expect(split.older).toEqual([])
+    const frozen = Object.freeze(sessions.map((r) => ({ ...r })))
+    expect(() => sidebarSessionVisibility(frozen, NOW)).not.toThrow()
   })
 })
 

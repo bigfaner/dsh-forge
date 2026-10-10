@@ -12,6 +12,10 @@
 // Rows 刻度，本文件零平行发明。fix-42：段头内嵌搜索槽（官方 searchSlot 形态——展开即占位、
 // label/头部动作让位）+ 视图菜单实装（groupBy 二值 + archivedFilter 三态——orderBy/树嵌套
 // 不做出现在菜单）+ rail 态项目 folder 图标列（收起态可用性）。
+// D41（2026-10-10 用户裁决——默认可见性两规则）：①归档项目缺省隐藏
+// （SIDEBAR_VIEW_DEFAULT.archivedFilter = 'hide'——三态菜单可切回）；②会话 24h 窗口
+// （sidebarSessionVisibility 纯切分 + 项目块内「更早（N）」可展开折叠组——本地微观态
+// 不持久化；搜索在场折叠让位；flat/rail 投影不消费）。
 // 收起/展开（56px rail ↔ ~240px）由官方壳几何持有——本面板按 owner share 的 wide 双态渲染；
 // rail 展开回路 = expandSidebar 壳回调消费（fix-41 B 面：图标/搜索钮点击先展开侧栏）。
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
@@ -24,6 +28,8 @@ import {
   IconArchiveCheckOutlineRegular,
   IconArchiveOffOutlineRegular,
   IconArchiveOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
   IconEditOutlineRegular,
   IconEllipsisOutlineRegular,
   IconFlatListOutlineRegular,
@@ -53,10 +59,12 @@ import {
   sidebarFlatFilterOf,
   sidebarFlatRowsOf,
   sidebarSectionLabelOf,
+  sidebarSessionVisibility,
   sidebarViewOfPick,
   type SidebarFlatRow,
   type SidebarProjectNode,
   type SidebarSessionRow,
+  type SidebarSessionSplit,
   type SidebarView,
 } from './sidebar-model.js'
 import './sidebar.css'
@@ -156,13 +164,17 @@ export function projectMenuItemsOf(
 
 /** 一个项目块：官方 DisclosureRow 节点（expandOnRowClick 整行翻转 + hover 图标互换）+
  * 会话行列表 + 行尾 hover 动作（新会话钮 / ellipsis 菜单——官方 rowActions 同型；
- * 空会话行内占位——文案随过滤态切换：无过滤「暂无会话」/ 过滤中「无匹配会话」） */
+ * 空会话行内占位——文案随过滤态切换：无过滤「暂无会话」/ 过滤中「无匹配会话」）。
+ * D41-②：会话行按 24h 窗口切分（sidebarSessionVisibility）——窗口内默认可见，窗口外
+ * 折叠进「更早（N）」可展开组（展开态 = 本地微观态不持久化，fix-42 P1 口径沿袭——
+ * 切面板回默认折叠）；搜索在场折叠让位（命中行全展示，折叠组不渲染）。 */
 function ProjectBlock({
   node,
   expanded,
   onToggle,
   currentSessionId,
   now,
+  searchActive,
   onSessionActivate,
   onStartSession,
   onArchiveToggle,
@@ -174,6 +186,8 @@ function ProjectBlock({
   onToggle: () => void
   currentSessionId: string | null
   now: number
+  /** 搜索在场（D41-②：query 非空 = 折叠让位——命中行全展示） */
+  searchActive: boolean
   onSessionActivate?: (sessionId: string) => void
   onStartSession?: (workspaceId: string) => void
   onArchiveToggle?: (projectId: string, archived: boolean) => void
@@ -181,6 +195,12 @@ function ProjectBlock({
   readonly emptyNote: string
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
+  // 「更早（N）」展开态（本地微观态——不持久化；随块挂载缺省收起）
+  const [olderOpen, setOlderOpen] = useState(false)
+  // D41-② 会话 24h 窗口切分（搜索在场折叠让位——全量行即窗口内语义）
+  const split: SidebarSessionSplit = searchActive
+    ? { recent: node.sessions, older: [] }
+    : sidebarSessionVisibility(node.sessions, now)
   const active = node.sessions.some((row) => row.sessionId === currentSessionId)
   const menuItems = projectMenuItemsOf(
     node,
@@ -276,7 +296,7 @@ function ProjectBlock({
         }
       >
         <div className="dswf-sidebar-sessions" role="list">
-          {node.sessions.map((row) => (
+          {split.recent.map((row) => (
             <SessionRow
               key={row.sessionId}
               row={row}
@@ -285,6 +305,48 @@ function ProjectBlock({
               onActivate={onSessionActivate}
             />
           ))}
+          {split.older.length === 0 ? null : (
+            <>
+              {/* D41-②：「更早（N）」折叠组开关（官方 chevron 件 + 三级行语言——
+                aria-expanded = 官方 DisclosureRow 开关同语义；本地微观态不持久化） */}
+              <button
+                type="button"
+                className="dswf-sidebar-older"
+                data-dswf-older=""
+                aria-expanded={olderOpen}
+                aria-label={
+                  olderOpen
+                    ? `收起更早的 ${split.older.length} 个会话`
+                    : `展开更早的 ${split.older.length} 个会话`
+                }
+                onClick={() => {
+                  setOlderOpen((prev) => !prev)
+                }}
+              >
+                <span className="dswf-sidebar-older-chevron">
+                  {olderOpen ? (
+                    <IconChevronDownOutlineRegular size={12} />
+                  ) : (
+                    <IconChevronRightOutlineRegular size={12} />
+                  )}
+                </span>
+                <span className="dswf-sidebar-older-label">
+                  {olderOpen ? '收起更早' : `更早（${split.older.length}）`}
+                </span>
+              </button>
+              {olderOpen
+                ? split.older.map((row) => (
+                    <SessionRow
+                      key={row.sessionId}
+                      row={row}
+                      selected={row.sessionId === currentSessionId}
+                      now={now}
+                      onActivate={onSessionActivate}
+                    />
+                  ))
+                : null}
+            </>
+          )}
         </div>
       </DisclosureRow>
       {node.sessions.length === 0 ? <div className="dswf-sidebar-no-session">{emptyNote}</div> : null}
@@ -500,6 +562,7 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
       onToggle={() => { input.onToggleProject(node.projectId) }}
       currentSessionId={input.currentSessionId}
       now={input.now}
+      searchActive={input.filterActive}
       onSessionActivate={input.onSessionActivate}
       onStartSession={input.onStartSession}
       onArchiveToggle={input.onArchiveToggle}
@@ -752,7 +815,7 @@ interface ProjectRenameState {
  * 过滤态机（fix-6）：searchOpen/query 纯视图态；收起即清空查询（原型 S.pj 语义——
  * 过滤掉当前选中项不重置锚，清过滤即恢复可见，PRD UF-1 Validation）。
  * 视图态机（fix-42）：view 纯视图态（groupBy/archivedFilter——P1 不持久化，缺省 =
- * SIDEBAR_VIEW_DEFAULT 现行行为）；改名态机：目标/草稿/进行中/错误四件（官方 rename
+ * SIDEBAR_VIEW_DEFAULT——D41-① 归档默认隐藏）；改名态机：目标/草稿/进行中/错误四件（官方 rename
  * 模态同型——确认失败错误留在模态内，成功关模态）。
  * useState 先于 rail 早退分支（hook 顺序稳定——wide 翻转不重挂）。
  */
