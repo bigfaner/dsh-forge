@@ -835,6 +835,27 @@ export interface TaskSpawnedPayload {
   model: string
 }
 
+/** task-progress phase 词表（Phase 1 closed set——dispatchTask 自知里程碑 claimed → spawned → running → settled:reading → done:success | done:blocked，零新依赖） */
+export type TaskProgressPhase =
+  | 'claimed'
+  | 'spawned'
+  | 'running'
+  | 'settled:reading'
+  | 'done:success'
+  | 'done:blocked'
+
+/**
+ * task-progress 载荷（两通道分工的留档通道：log 通道管实时看[内存态、无容器语义]，本事件经
+ * 总线落 logs/<slug>.jsonl 耐久留档——信封带 slug 按容器归档；ts 双写使行载荷自含可读）。
+ */
+export interface TaskProgressPayload {
+  /** 'slug/localId' 复合自然键（与 task-claimed 同口径） */
+  taskKey: string
+  phase: TaskProgressPhase
+  /** epoch 毫秒（信封 ts 同值双写——jsonl 行脱离信封自含） */
+  ts: number
+}
+
 /** task-submitted 载荷（worker 结算——AC gate 后） */
 export interface TaskSubmittedPayload {
   taskKey: string
@@ -884,10 +905,11 @@ export interface ForgePluginEventEnvelope {
   slug: string
 }
 
-/** 七事件判别联合内型（type 判别 + 载荷——exhaustive；verb 级按需扩零迁移） */
+/** 八事件判别联合内型（type 判别 + 载荷——exhaustive；verb 级按需扩零迁移） */
 export type ForgePluginEventVariant =
   | { type: 'task-claimed'; payload: TaskClaimedPayload }
   | { type: 'task-spawned'; payload: TaskSpawnedPayload }
+  | { type: 'task-progress'; payload: TaskProgressPayload }
   | { type: 'task-submitted'; payload: TaskSubmittedPayload }
   | { type: 'task-worker-done'; payload: TaskWorkerDonePayload }
   | { type: 'no-ready-task'; payload: NoReadyTaskPayload }
@@ -897,10 +919,11 @@ export type ForgePluginEventVariant =
 /** ForgePluginEvent = 信封 × 事件内型（两层抽象；判别字段 = type——exhaustive switch 锚） */
 export type ForgePluginEvent = ForgePluginEventEnvelope & ForgePluginEventVariant
 
-/** 事件类型全集（七事件初集——监听器落盘 logs/{slug}.jsonl 的行 type 值域） */
+/** 事件类型全集（八事件初集——监听器落盘 logs/{slug}.jsonl 的行 type 值域） */
 export const FORGE_PLUGIN_EVENT_TYPES = [
   'task-claimed',
   'task-spawned',
+  'task-progress',
   'task-submitted',
   'task-worker-done',
   'no-ready-task',

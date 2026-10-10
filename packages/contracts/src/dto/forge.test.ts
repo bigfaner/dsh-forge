@@ -56,6 +56,8 @@ import type {
   TaskContainerSummary,
   TaskDetail,
   TaskGraphQuery,
+  TaskProgressPayload,
+  TaskProgressPhase,
   TaskSpawnedPayload,
   TaskStats,
   TaskStatsQuery,
@@ -303,11 +305,12 @@ describe('AC6 forgeTasks/forgeProposals 服务签名容器化改写（Interface 
   })
 })
 
-describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 七事件判别 + exhaustiveness）', () => {
-  it('事件类型全集 = 七事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
+describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八事件判别 + exhaustiveness）', () => {
+  it('事件类型全集 = 八事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
     expect(FORGE_PLUGIN_EVENT_TYPES).toEqual([
       'task-claimed',
       'task-spawned',
+      'task-progress',
       'task-submitted',
       'task-worker-done',
       'no-ready-task',
@@ -330,10 +333,11 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 七�
     expect(event.type).toBe('no-ready-task')
   })
 
-  it('type 判别 exhaustiveness：七 type 穷举 switch 无 default 即编译期封闭（Record 键 = 全集）', () => {
+  it('type 判别 exhaustiveness：八 type 穷举 switch 无 default 即编译期封闭（Record 键 = 全集）', () => {
     const typeByEvent: Record<ForgePluginEvent['type'], ForgePluginEventType> = {
       'task-claimed': 'task-claimed',
       'task-spawned': 'task-spawned',
+      'task-progress': 'task-progress',
       'task-submitted': 'task-submitted',
       'task-worker-done': 'task-worker-done',
       'no-ready-task': 'no-ready-task',
@@ -343,7 +347,7 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 七�
     expect(Object.keys(typeByEvent).sort()).toEqual([...FORGE_PLUGIN_EVENT_TYPES].sort())
   })
 
-  it('载荷形状锚：task-claimed(digest) / task-spawned(workerSessionId+toolFilter) / submitted(outcome) / worker-done(durationMs) / tool-error(code: ErrorCode)', () => {
+  it('载荷形状锚：task-claimed(digest) / task-spawned(workerSessionId+toolFilter) / task-progress(phase closed set) / submitted(outcome) / worker-done(durationMs) / tool-error(code: ErrorCode)', () => {
     const claimed: TaskClaimedPayload = { taskKey: 'm3/1.1', taskType: 'coding-feature', dispatchDigest: 'abc123def456' }
     expect(claimed.dispatchDigest).toHaveLength(12)
     const spawned: TaskSpawnedPayload = {
@@ -353,6 +357,10 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 七�
       model: 'deepseek-reasoner',
     }
     expect(spawned.toolFilter).toContain('submitTask')
+    const progress: TaskProgressPayload = { taskKey: 'm3/1.1', phase: 'running', ts: 1_760_222_400_000 }
+    expect(progress.phase).toBe('running')
+    expectTypeOf<TaskProgressPayload['phase']>().toEqualTypeOf<TaskProgressPhase>()
+    expectTypeOf<TaskProgressPayload['ts']>().toEqualTypeOf<number>()
     const submitted: TaskSubmittedPayload = { taskKey: 'm3/1.1', outcome: 'blocked', reason: '门红' }
     expect(submitted.outcome).toBe('blocked')
     expectTypeOf<TaskSubmittedPayload['outcome']>().toEqualTypeOf<'success' | 'blocked'>()

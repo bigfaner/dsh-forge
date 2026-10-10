@@ -1,6 +1,6 @@
 // G1 pin ㉑（M3 pin 池扩池 #21，任务 5.1）：ForgePluginEvent 判别联合完备性（exhaustiveness）。
 // 权威：tech-design Appendix「契约面 pin 扩池」第 21 项（事件两层联合类型——判别联合完备性）
-// + §Interface 3（两层抽象：信封 × 七事件内型）。
+// + §Interface 3（两层抽象：信封 × 八事件内型）。
 // 审计面（机械断言，非行为测试）：
 //   1. 联合 type 判别集 ↔ FORGE_PLUGIN_EVENT_TYPES 常量全等（编译期 Record 键封闭 + 运行期枚举）；
 //   2. 发射面代码审计——plugin-forge 源内一切事件 type 字面量（`type: '...'` 记号 +
@@ -8,7 +8,8 @@
 //   3. 总线守卫面 = FORGE_PLUGIN_EVENT_TYPES.includes（bus.ts 单源消费——信封+类型双守卫）。
 // 发射点现状（3.4/3.5 落地）：dispatchTask 流五事件（claimed/spawned/worker-done/no-ready-task/
 // tool-error）+ submitTask task-submitted + 全 tool 面 tool-error（emitToolError）；
-// proposal-created 载荷类型在联合而无发射点（快速通道创建径事件化 = 后续按需——审计断言
+// proposal-created / task-progress 载荷类型在联合而无发射点（快速通道创建径事件化与
+// task-progress 留档发射 = 后续按需——审计断言
 // 为 ⊆ 非 =，不强迫发射面穷举）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -43,10 +44,11 @@ function sourceTexts(dir: string): Array<{ file: string; text: string }> {
 const isEventNameShape = (token: string): boolean => /^(task|no|tool|proposal)-[a-z-]+$/.test(token)
 
 describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', () => {
-  it('事件类型全集 = 七事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
+  it('事件类型全集 = 八事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
     expect([...FORGE_PLUGIN_EVENT_TYPES]).toEqual([
       'task-claimed',
       'task-spawned',
+      'task-progress',
       'task-submitted',
       'task-worker-done',
       'no-ready-task',
@@ -59,6 +61,7 @@ describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', (
     const exhaustive: Record<ForgePluginEvent['type'], ForgePluginEventType> = {
       'task-claimed': 'task-claimed',
       'task-spawned': 'task-spawned',
+      'task-progress': 'task-progress',
       'task-submitted': 'task-submitted',
       'task-worker-done': 'task-worker-done',
       'no-ready-task': 'no-ready-task',
@@ -80,7 +83,7 @@ describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', (
 describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）', () => {
   const sources = sourceTexts(PLUGIN_SRC)
 
-  it('type 记号事件名字面量（kebab 事件形状）⊆ 联合七事件', () => {
+  it('type 记号事件名字面量（kebab 事件形状）⊆ 联合八事件', () => {
     const literals = new Set<string>()
     for (const { text } of sources) {
       for (const m of text.matchAll(/type: '([a-z][a-z-]+)'/g)) {
@@ -94,7 +97,7 @@ describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）',
     }
   })
 
-  it('dispatchTask 流事件键面（DispatchEventPayloads 接口键）⊆ 联合七事件', () => {
+  it('dispatchTask 流事件键面（DispatchEventPayloads 接口键）⊆ 联合八事件', () => {
     const dispatch = sources.find((s) => s.file === 'tools/dispatch-task.ts')!
     const block = /interface DispatchEventPayloads \{([\s\S]*?)\n\}/.exec(dispatch.text)
     expect(block, 'DispatchEventPayloads 接口在场').toBeTruthy()
