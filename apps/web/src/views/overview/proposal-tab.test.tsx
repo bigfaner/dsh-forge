@@ -13,6 +13,7 @@ import {
   proposalLineage,
   proposalPrefillDocs,
   proposalPrefillRequest,
+  proposalSessionRequest,
   proposalVerdict,
   proposalMenuItems,
   proposalMenuSelect,
@@ -233,6 +234,52 @@ describe('预填请求组装（AC1——提案 mode/无溯源不切换 + 不自�
     const docs = proposalPrefillDocs(DOCS, 'm2-pipeline')
     expect(docs[0]).toEqual({ path: 'proposal.md', status: '评审中' })
     expect(docs[1]).toEqual({ path: 'spike-notes.md' })
+  })
+})
+
+describe('proposalSessionRequest · 点击时实时扫描（收起行 ≠ 空清单）', () => {
+  const FRESH: readonly ProposalDocRow[] = [
+    { fileName: 'fresh-spike.md', relPath: 'docs/proposals/m2-pipeline/fresh-spike.md' },
+  ]
+
+  it('扫描成功：文档清单 = 点击时新鲜扫描值（docsMap 旧缓存让位）+ 查询参正确', async () => {
+    const queries: { projectId: string; slug: string }[] = []
+    const client = {
+      proposals: {
+        listDocs: async (q: { projectId: string; slug: string }) => {
+          queries.push(q)
+          return FRESH
+        },
+      },
+    }
+    const request = await proposalSessionRequest(() => client as never, 'p-1', P_REVIEW, DOCS)
+    expect(queries).toEqual([{ projectId: 'p-1', slug: 'm2-pipeline' }])
+    expect(request.mode).toBe('expedition') // mode/不自动发送语义沿 proposalPrefillRequest
+    expect(request.autosend).toBeUndefined()
+    expect(request.prefill).toContain('· fresh-spike.md')
+    expect(request.prefill).not.toContain('spike-notes.md') // 新鲜值胜出
+  })
+
+  it('收起行（缓存空）打开会话：扫描成功 = 清单在场（本次修复主径）', async () => {
+    const client = { proposals: { listDocs: async () => DOCS } }
+    const request = await proposalSessionRequest(() => client as never, 'p-1', P_REVIEW, [])
+    expect(request.prefill).toContain('· proposal.md（评审中）')
+    expect(request.prefill).toContain('· spike-notes.md')
+  })
+
+  it('扫描失败：fail-soft 回退缓存；无缓存 = 空清单（仅此退化路径）', async () => {
+    const client = {
+      proposals: {
+        listDocs: async () => {
+          throw new Error('rpc down')
+        },
+      },
+    }
+    const fallback = await proposalSessionRequest(() => client as never, 'p-1', P_REVIEW, DOCS)
+    expect(fallback.prefill).toContain('· spike-notes.md') // 展开行缓存保留
+    const noCache = await proposalSessionRequest(() => client as never, 'p-1', P_REVIEW, [])
+    expect(noCache.prefill).toContain('已生成文档：')
+    expect(noCache.prefill).not.toContain('· ') // 无缓存 = 空清单
   })
 })
 

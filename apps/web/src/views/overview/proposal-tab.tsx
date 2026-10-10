@@ -3,7 +3,8 @@
 // 展开元数据[摘要独行 + 两列网格 标识|作者 / 模式|谱系 / 创建|裁决 + 文档区 listProposalDocs]）。
 // 组件半身（4.2/4.1）拼装：ProposalStatusChips（五态过滤）+ ModeChip（溯源三态；有溯源
 // 可点 = 模式更改对话框快捷入口——唯一正门不分叉）+ ProposalVerdictDialog / ProposalModeDialog
-// （⋯ 菜单挂线）+ formatPrefill（打开新会话预填——提案 mode/无溯源不切换、不自动发送）。
+// （⋯ 菜单挂线）+ formatPrefill（打开新会话预填——提案 mode/无溯源不切换、不自动发送；
+// 文档清单 = proposalSessionRequest 点击时 listDocs 实时扫描——不依赖展开行 docsMap 装载）。
 // 结构纪律：父行 = 多动作行（展开 toggle / mode chip / 打开新会话 / ⋯ 各自独立命中面——
 // 零嵌套按钮）；文档区 = proposals.listDocs 只读扫描（提案文档不固定——proposal.md 之外
 // 可挂任意 .md；docsMap 按需装载归 overview-data useProposalDocs）。
@@ -25,6 +26,7 @@ import { isoTimeLabelZh } from '../../components/time-label.js'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { proposalRowKey } from './overview-model.js'
 import { formatPrefill, type PrefillDocLine, type SessionOpenRequest } from './message-format.js'
+import { fetchProposalDocs } from './overview-data.js'
 import {
   ProposalStatusChips,
   PROPOSAL_STATUS_TAG_TONE,
@@ -95,6 +97,23 @@ export function proposalPrefillRequest(
       proposalPrefillDocs(docs, proposal.slug),
     ),
   }
+}
+
+/**
+ * 打开新会话请求组装（点击时实时扫描）：proposals.listDocs 直扫 docs/proposals/<slug>/
+ * ——文档清单不依赖展开行 docsMap 装载（收起行打开会话 ≠ 空清单）；扫描失败 fail-soft
+ * 回退 cachedDocs（展开行装载缓存——无缓存 = 空清单仅此退化路径）。行头按钮与 ⋯ 菜单
+ * 两入口同径（装载壳 handleOpenSession 单点接线）。
+ */
+export async function proposalSessionRequest(
+  makeClient: RpcClientFactory,
+  projectId: string,
+  proposal: ProposalCard,
+  cachedDocs: readonly ProposalDocRow[],
+  docsRoot?: string,
+): Promise<SessionOpenRequest> {
+  const out = await fetchProposalDocs(makeClient(), projectId, proposal.slug)
+  return proposalPrefillRequest(proposal, out.ok ? out.docs : cachedDocs, docsRoot)
 }
 
 /** ⋯ 菜单行 id 派发（verdict/mode/open 三前缀——未知 = 无派发） */
@@ -408,7 +427,7 @@ export interface ProposalsTabProps {
 /**
  * 提案子 tab 装载壳：⋯ 菜单开合 + 两对话框受控（开弹行为；成功关闭——快照呈现归
  * 写推送事件订阅重取[TECH-rpc-007]，本层零显式刷新）+ 打开新会话组装
- * （proposalPrefillRequest——提案 mode/无溯源不切换 + 预填不发送）。
+ * （proposalSessionRequest 点击时实时扫描文档——提案 mode/无溯源不切换 + 预填不发送）。
  */
 export function ProposalsTab({
   projectId,
@@ -434,9 +453,13 @@ export function ProposalsTab({
 
   const handleOpenSession = useCallback(
     (proposal: ProposalCard, docs: readonly ProposalDocRow[]): void => {
-      onStartSession?.(proposalPrefillRequest(proposal, docs, docsRoot))
+      // 点击时实时扫描（proposalSessionRequest——listDocs 直扫目录，不依赖展开行装载）；
+      // 扫描失败 fail-soft 回退 docs 传入值（展开行 docsMap 缓存；收起行 = 空清单仅此退化）。
+      void proposalSessionRequest(makeClient, projectId, proposal, docs, docsRoot).then((request) => {
+        onStartSession?.(request)
+      })
     },
-    [onStartSession, docsRoot],
+    [onStartSession, docsRoot, makeClient, projectId],
   )
   const handleVerdict = useCallback((proposal: ProposalCard): void => {
     setVerdictTarget({ ...proposal, mode: proposal.mode })
