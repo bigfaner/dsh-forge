@@ -273,7 +273,7 @@ export function EntryDrawerBody({ state, onClose, retry, now }: EntryDrawerBodyP
         {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸 dockkit 浮层层叠上下文） */}
         <Tooltip label="关闭（Esc）" portal>
           <Button
-            variant="toolbar"
+            variant="ghost"
             size="sm"
             className="dswf-kn-drawer-close"
             data-dswf-kn-drawer-close=""

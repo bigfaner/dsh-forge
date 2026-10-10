@@ -448,7 +448,7 @@ export function TaskDrawerBody({
         <span className="dswf-td-spacer" />
         <Tooltip label={expanded ? '收起为简要信息' : '展开完整信息'} portal>
           <Button
-            variant="toolbar"
+            variant="ghost"
             size="sm"
             className="dswf-td-expand"
             data-dswf-td-expand=""
@@ -460,7 +460,7 @@ export function TaskDrawerBody({
         </Tooltip>
         <Tooltip label="关闭（Esc）" portal>
           <Button
-            variant="toolbar"
+            variant="ghost"
             size="sm"
             className="dswf-td-close"
             data-dswf-td-close=""
@@ -862,7 +862,7 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
           <Tooltip label="关闭（Esc）" portal>
-            <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+            <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
               <IconCloseFillRegular size={14} />
             </Button>
           </Tooltip>
@@ -900,7 +900,7 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
           <span className="dswf-td-title">任务详情</span>
           <span className="dswf-td-spacer" />
           <Tooltip label="关闭（Esc）" portal>
-            <Button variant="toolbar" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
+            <Button variant="ghost" size="sm" className="dswf-td-close" data-dswf-td-close="" aria-label="关闭弹窗" onClick={onClose}>
               <IconCloseFillRegular size={14} />
             </Button>
           </Tooltip>

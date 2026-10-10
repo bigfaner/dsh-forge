@@ -147,7 +147,7 @@ export function KnowledgeToolbar({
         {keyword === '' ? null : (
           <Tooltip label="清除（Esc）" portal>
             <Button
-              variant="toolbar"
+              variant="ghost"
               size="sm"
               className="dswf-kn-searchclear"
               aria-label="清除搜索"

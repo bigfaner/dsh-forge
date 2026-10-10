@@ -136,7 +136,7 @@ function TaskItem({
             anchor={
               <Tooltip label="行操作" portal>
                 <Button
-                  variant="toolbar"
+                  variant="ghost"
                   size="sm"
                   className="dswf-tt-more"
                   data-dswf-tt-more={card.taskId}

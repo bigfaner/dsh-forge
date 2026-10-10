@@ -423,3 +423,38 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(read('apps/web/src/workbench/workbench-bridge.ts')).toContain('__DSH_FORGE_WORKBENCH__')
   })
 })
+
+describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官方全量 0 用，图标钮 = ghost 官方语言）', () => {
+  const tagOf = (file: string, marker: string): string => {
+    const src = read(file)
+    const tag = src.match(new RegExp(`<Button[^>]*${marker}[^>]*>`))
+    expect(tag, `${file} 缺 ${marker} 钮`).not.toBeNull()
+    return tag![0]
+  }
+
+  it('机械清零：产品源 Button variant="toolbar" 零在场（官方 dsh 全包 0 用——深灰常驻底片 #54555780 异类）', () => {
+    const offenders: string[] = []
+    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+      if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
+      if (readFileSync(p, 'utf8').includes('variant="toolbar"')) offenders.push(p.replaceAll('\\', '/'))
+    }
+    expect(offenders, `toolbar 变体残留（对齐官方图标钮 ghost 形）: ${offenders.join(', ')}`).toEqual([])
+  })
+
+  it('九位对齐 pin：折叠/关闭/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样）', () => {
+    const ghostSites: readonly (readonly [file: string, marker: string, note: string])[] = [
+      ['apps/web/src/views/session/DispatchPanel.tsx', 'data-dswf-dp-collapse', '悬浮面板折叠钮（用户点名面）'],
+      ['apps/web/src/views/knowledge/EntryDrawer.tsx', 'data-dswf-kn-drawer-close', '知识抽屉关闭'],
+      ['apps/web/src/views/knowledge/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
+      ['apps/web/src/views/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],
+      ['apps/web/src/views/overview/drawer/index.tsx', 'data-dswf-td-expand', '任务详情展开'],
+      ['apps/web/src/views/overview/drawer/index.tsx', 'data-dswf-td-close', '任务详情弹窗关闭（三态共锚）'],
+      ['apps/web/src/views/overview/task-tab/list-view.tsx', 'data-dswf-tt-more', '列表行 ⋯ 行操作'],
+    ]
+    for (const [file, marker, note] of ghostSites) {
+      const tag = tagOf(file, marker)
+      expect(tag, `${note}（${marker}）须为官方 ghost 图标钮形`).toContain('variant="ghost"')
+      expect(tag, `${note}（${marker}）不得残留 toolbar 形`).not.toContain('variant="toolbar"')
+    }
+  })
+})

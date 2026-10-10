@@ -509,7 +509,7 @@ export function DispatchPanelBody({
         </span>
         <Tooltip label="折叠" portal>
           <Button
-            variant="toolbar"
+            variant="ghost"
             size="sm"
             className="dswf-dp-btn"
             data-dswf-dp-collapse=""

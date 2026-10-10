@@ -78,7 +78,7 @@ export function StickyBar({
           {search === '' ? null : (
             <Tooltip label="清除（Esc）" portal>
               <Button
-                variant="toolbar"
+                variant="ghost"
                 size="sm"
                 className="dswf-ov-searchclear"
                 aria-label="清除搜索"
