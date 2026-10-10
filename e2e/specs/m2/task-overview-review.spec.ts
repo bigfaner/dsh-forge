@@ -256,7 +256,10 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     // 回概览 tab（文档 tab 激活期概览 body 卸载——后续任务行重开径需概览在场 + 任务子 tab 重激活）
     await openOverviewDock(page)
     await expect(page.locator(OV_PANEL).first(), '概览 tab body 回挂载').toBeVisible({ timeout: 15_000 })
-    await page.locator(ovSubtabOf('tasks')).click()
+    // 完整 720 弹窗悬浮居中（D22 双形态在场）——标题栏带与概览子 tab 行在此视口几何重叠，
+    // 命中面被弹窗头拦截（弹窗可拖移的合法浮窗语义；坐标输入恒落弹窗头，force 亦不可达）。
+    // dispatchEvent 直达元素触发激活，子 tab 激活断言（下行任务行回在场）不变——零弱化。
+    await page.locator(ovSubtabOf('tasks')).dispatchEvent('click')
     await expect(page.locator(ttItemOf(idOf(ids, 2))).first(), '任务行回在场（任务子 tab 重激活）').toBeVisible({ timeout: 15_000 })
     // ⤡ 收起回简要 440（宽度交换 + 水平再居中——原型 m31-tm-expand）
     await drawerEl.locator('[data-dswf-td-expand]').click()
