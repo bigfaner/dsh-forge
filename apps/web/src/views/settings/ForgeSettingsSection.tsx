@@ -9,6 +9,9 @@
 // Check + Esc/点外收——全部官方件自带；触发钮 = 值 + 官方 ChevronDown，原型 m31-dd 刻度）。
 // m3.1 D25：选项值 =「设置>模型」目录（remote.session.modelCatalog——插件 inject face
 // loadModelCatalog 递达；缺席/失败 = 静态目录回退面 WORKER_PROVIDER_CATALOG）。
+// 逻辑修复轮（用户裁决）：Reasoning 由 seg 改官方 Menu 下拉（同 D24 形制）——选项 = 默认/
+// 低/中/高（value→中文标签映射，「默认」= 默认值档恒在场），按模型目录能力过滤
+// （models[].reasoning.efforts）；当前档位不被支持自动回默认值（无法兼容就不设置）。
 // 组装分工沿 M2/M3 对话框形制：Body = 纯渲染体（renderToStaticMarkup 全相位可测）；
 // ForgeSettingsSection = 装载壳（mount 装载 + 受控态 + rpc 保存）。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -16,9 +19,7 @@ import {
   Button,
   IconChevronDownOutlineRegular,
   Menu,
-  SegmentedControl,
   type MenuEntry,
-  type SegmentedControlOption,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   type ForgeSettings,
@@ -55,9 +56,15 @@ export const WORKER_PROVIDER_CATALOG: readonly WorkerProviderEntry[] = [
 /** 下拉空值占位（m3.1 D24：fsMenuItems 首项与触发钮回显同源） */
 export const UNSELECTED_PLACEHOLDER = '（未选择）'
 
-/** Reasoning 四段 seg 选项（'default' 默认值 = 不下发 effort——落 provider/模型默认档；
- * 其余 = contracts REASONING_LEVELS 词汇；按模型目录能力过滤见 reasoningSegOptions） */
-export const REASONING_SEG_OPTIONS: readonly SegmentedControlOption<ReasoningLevel>[] = [
+/** 推理档位选项（value = contracts REASONING_LEVELS 词汇；label = 中文展示） */
+export interface ReasoningOption {
+  readonly value: ReasoningLevel
+  readonly label: string
+}
+
+/** Reasoning 下拉四值（'default' 默认值 = 不下发 effort——落 provider/模型默认档，恒在场；
+ * 其余 = contracts REASONING_LEVELS 词汇；按模型目录能力过滤见 reasoningLevelOptions） */
+export const REASONING_LEVEL_OPTIONS: readonly ReasoningOption[] = [
   { value: 'default', label: '默认' },
   { value: 'low', label: '低' },
   { value: 'medium', label: '中' },
@@ -116,17 +123,36 @@ export function modelReasoningEfforts(
 }
 
 /**
- * Reasoning seg 选项（目录能力兼容过滤）：目录已知该模型档位集 → 「默认」恒在场 +
+ * Reasoning 下拉选项（目录能力兼容过滤）：目录已知该模型档位集 → 「默认」恒在场 +
  * 受支持档位；目录不可知 = 全四值（无法验证不过滤）。恒含 'default'（兼容回退落点）。
  */
-export function reasoningSegOptions(
+export function reasoningLevelOptions(
   provider: string | undefined,
   model: string,
   catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
-): readonly SegmentedControlOption<ReasoningLevel>[] {
+): readonly ReasoningOption[] {
   const efforts = modelReasoningEfforts(provider, model, catalog)
-  if (efforts === undefined) return REASONING_SEG_OPTIONS
-  return REASONING_SEG_OPTIONS.filter((option) => option.value === 'default' || efforts.includes(option.value))
+  if (efforts === undefined) return REASONING_LEVEL_OPTIONS
+  return REASONING_LEVEL_OPTIONS.filter((option) => option.value === 'default' || efforts.includes(option.value))
+}
+
+/** Reasoning 下拉 Menu items（value→label 映射直出——无「未选择」占位：档位恒有值） */
+export function reasoningMenuItems(
+  provider: string | undefined,
+  model: string,
+  catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
+): readonly MenuEntry[] {
+  return reasoningLevelOptions(provider, model, catalog).map((option) => ({ id: option.value, label: option.label }))
+}
+
+/** Reasoning 触发钮回显（value→中文标签；目录外/畸形值防御性直出原值） */
+export function reasoningLabelOf(
+  value: ReasoningLevel,
+  provider: string | undefined,
+  model: string,
+  catalog: readonly WorkerProviderEntry[] = WORKER_PROVIDER_CATALOG,
+): string {
+  return reasoningLevelOptions(provider, model, catalog).find((option) => option.value === value)?.label ?? value
 }
 
 /** 档位兼容回退（「无法兼容就不设置」）：目录已知且当前档位不被支持 → 回 'default' */
@@ -354,18 +380,22 @@ export function fsMenuItems(values: readonly string[]): readonly MenuEntry[] {
   return [{ id: '', label: UNSELECTED_PLACEHOLDER }, ...values.map((value) => ({ id: value, label: value }))]
 }
 
-/** 下拉行位（Body 两行判别——data-dswf-fs-dd 值） */
-export type FsDropdownAnchor = 'provider' | 'model'
+/** 下拉行位（Body 行判别——data-dswf-fs-dd 值） */
+export type FsDropdownAnchor = 'provider' | 'model' | 'reasoning'
 
 export interface FsDropdownProps {
   /** 触发钮 id（label htmlFor 关联） */
   readonly triggerId: string
-  /** 行位锚（data-dswf-fs-dd——provider/model） */
+  /** 行位锚（data-dswf-fs-dd——provider/model/reasoning） */
   readonly anchor: FsDropdownAnchor
   /** 当前值（'' = 未选择——触发钮回显占位 + 选中项 trailing Check） */
   readonly value: string
-  /** 选项值集（官方 Menu items 经 fsMenuItems 组装） */
-  readonly values: readonly string[]
+  /** 选项值集（官方 Menu items 经 fsMenuItems 组装；items 在场时可缺席） */
+  readonly values?: readonly string[]
+  /** 显式 Menu items（在场优先生效——值→标签映射面如 Reasoning；缺席 = fsMenuItems(values)） */
+  readonly items?: readonly MenuEntry[]
+  /** 触发钮回显文本（在场优先生效——值→中文标签映射；缺席 = 值直出） */
+  readonly display?: string
   readonly disabled: boolean
   /** 选中（Menu onSelect——'' = 清空待选） */
   readonly onSelect: (value: string) => void
@@ -375,11 +405,13 @@ export interface FsDropdownProps {
  * 行式下拉（m3.1 D24：官方 Menu 件——MenuSurface 半透卡[radius-lg 16/pad 4/blur40 半透 +
  * elevation-prominent] + 项[min-h 34/r8/13px + trailing 官方 Check] + Esc/点外收全部官方件
  * 自带；触发钮 = 值 + 官方 ChevronDown[原型 m31-dd-btn 刻度：min-h 34/r8/13]）。
+ * items/display 两缝 = 值→标签映射面（Reasoning 下拉：中文标签 + 无「未选择」占位）。
  * portal = 设置对话框 options 列 overflow 滚动裁剪逃逸（官方 Menu portal 口径，dswf-hero-
  * picker-list 同先例）；开合 = 本叶本地态（Body 纯渲染体不持有——闭态静态可测对照锚）。
  */
-export function FsDropdown({ triggerId, anchor, value, values, disabled, onSelect }: FsDropdownProps): ReactNode {
+export function FsDropdown({ triggerId, anchor, value, values, items, display, disabled, onSelect }: FsDropdownProps): ReactNode {
   const [open, setOpen] = useState(false)
+  const shown = display ?? (value === '' ? UNSELECTED_PLACEHOLDER : value)
   return (
     <Menu
       className="dswf-fs-dd"
@@ -387,7 +419,7 @@ export function FsDropdown({ triggerId, anchor, value, values, disabled, onSelec
       open={open}
       portal
       side="bottom"
-      items={fsMenuItems(values)}
+      items={items ?? fsMenuItems(values ?? [])}
       selectedId={value}
       selection="check"
       onClose={() => {
@@ -410,9 +442,7 @@ export function FsDropdown({ triggerId, anchor, value, values, disabled, onSelec
             setOpen(!open)
           }}
         >
-          <span className={value === '' ? 'dswf-fs-dd-val is-empty' : 'dswf-fs-dd-val'}>
-            {value === '' ? UNSELECTED_PLACEHOLDER : value}
-          </span>
+          <span className={value === '' ? 'dswf-fs-dd-val is-empty' : 'dswf-fs-dd-val'}>{shown}</span>
           <IconChevronDownOutlineRegular size={14} className="dswf-fs-dd-caret" />
         </button>
       }
@@ -510,17 +540,20 @@ export function ForgeSettingsSectionBody({
               />
             </div>
             <div className="dswf-fs-row">
-              <span className="dswf-fs-label">Reasoning</span>
-              <div className="dswf-fs-seg" data-dswf-fs-reasoning="">
-                <SegmentedControl
-                  id="dswf-fs-reasoning"
-                  value={draft.reasoning}
-                  options={reasoningSegOptions(draft.provider, draft.model, catalog)}
-                  onChange={onEditReasoning}
-                  label="Reasoning（默认|低|中|高——按模型能力过滤）"
-                  disabled={editing}
-                />
-              </div>
+              <label className="dswf-fs-label" htmlFor="dswf-fs-reasoning">
+                Reasoning
+              </label>
+              <FsDropdown
+                triggerId="dswf-fs-reasoning"
+                anchor="reasoning"
+                value={draft.reasoning}
+                items={reasoningMenuItems(draft.provider, draft.model, catalog)}
+                display={reasoningLabelOf(draft.reasoning, draft.provider, draft.model, catalog)}
+                disabled={editing}
+                onSelect={(id) => {
+                  onEditReasoning(id as ReasoningLevel)
+                }}
+              />
             </div>
             <div className="dswf-fs-actions">
               <Button

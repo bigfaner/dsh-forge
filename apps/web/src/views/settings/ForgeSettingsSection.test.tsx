@@ -1,7 +1,7 @@
 // Forge设置 分区组件单测 —— 4.5：分区多小节结构（分区标题 + worker 小节 + 行式控件）+
-// worker 三项（Provider/Model 联动/Reasoning 四段含默认值——Hard Rule：无 Output 上限回潮）+
-// 档位兼容（目录能力面过滤 + 无法兼容回默认值不设置）+
-// 未配置 ⚠ 占位 + 脏态实时（input+change 双监听同门纯函数）+ 保存五态反馈
+// worker 三项（Provider/Model 联动/Reasoning 官方 Menu 下拉——默认|低|中|高中文标签、
+// 默认值档恒在场；Hard Rule：无 Output 上限回潮）+ 档位兼容（目录能力面过滤 +
+// 无法兼容回默认值不设置）+ 未配置 ⚠ 占位 + 脏态实时（双监听同门纯函数）+ 保存五态反馈
 // （保存中冻结 / 成功 ✓ 复位 + 下次派发生效注记 / 失败错误行留场可重试）。
 // 渲染面 = renderToStaticMarkup 纯 Body（设置对话框 slot 注入归 4.7——本件全相位静态可测）；
 // 保存链 = saveForgeSettings 纯异步面（补丁增量合并——表单内容结构性不被清空）。
@@ -13,7 +13,7 @@ import type { ForgeRpcClient } from '../../rpc/index.js'
 import {
   ForgeSettingsSection,
   ForgeSettingsSectionBody,
-  REASONING_SEG_OPTIONS,
+  REASONING_LEVEL_OPTIONS,
   SAVED_EFFECT_NOTE,
   UNCONFIGURED_NOTICE,
   UNSELECTED_PLACEHOLDER,
@@ -33,7 +33,9 @@ import {
   modelReasoningEfforts,
   modelSelectOptions,
   providerSelectOptions,
-  reasoningSegOptions,
+  reasoningLabelOf,
+  reasoningLevelOptions,
+  reasoningMenuItems,
   reconcileWorkerReasoning,
   saveForgeSettings,
   submitWorkerSettings,
@@ -99,7 +101,7 @@ describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件）',
     expect(html.match(/class="dswf-fs-row"/g)?.length).toBe(3)
     expect(html).toContain('data-dswf-fs-dd="provider"')
     expect(html).toContain('data-dswf-fs-dd="model"')
-    expect(html).toContain('data-dswf-fs-reasoning')
+    expect(html).toContain('data-dswf-fs-dd="reasoning"')
     for (const label of ['Provider', 'Model', 'Reasoning']) {
       expect(html).toContain(`>${label}<`)
     }
@@ -117,7 +119,7 @@ describe('AC1 · 分区结构（分区标题 + worker 小节 + 行式控件）',
 // ─────────────────── AC2 worker 三项（Hard Rule：无 Output 上限） ───────────────────
 
 describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × 模型二维）', () => {
-  it('Provider 选项 = 目录两供应商；Model 选项 = 当前供应商候选；Reasoning = 四段 seg（默认|低|中|高）', () => {
+  it('Provider 选项 = 目录两供应商；Model 选项 = 当前供应商候选；Reasoning = 官方 Menu 下拉（默认|低|中|高——默认值恒在场）', () => {
     const html = body()
     // m3.1 D24：选项面 = 官方 Menu items（fsMenuItems 纯函数——静态闭态卡不可达的选项锚）
     const providerItems = fsMenuItems(providerSelectOptions(undefined).map((entry) => entry.provider))
@@ -130,15 +132,19 @@ describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × �
     // 触发钮值回显：选中 provider 直出 + 异供应商候选零在场（DOM 面）
     expect(html).toContain('>dsh-openai</span>')
     expect(html).not.toContain('deepseek-chat')
-    // 四段 seg：role=tablist + 四 tab（aria-selected 承载当前档）——默认值档恒在场
-    expect(html).toContain('role="tablist"')
-    expect(html.match(/role="tab"/g)?.length).toBe(4)
-    expect(html).toContain('id="dswf-fs-reasoning-default"')
-    expect(html).toContain('id="dswf-fs-reasoning-high"')
-    expect(html).not.toContain('id="dswf-fs-reasoning-output"')
-    for (const label of ['默认', '低', '中', '高']) {
-      expect(html).toContain(label)
-    }
+    // Reasoning 下拉（用户裁决：seg 退役）：行位锚 + 触发钮中文标签回显 + seg 零残留
+    expect(html).toContain('data-dswf-fs-dd="reasoning"')
+    expect(html).toContain('id="dswf-fs-reasoning"')
+    expect(html).toContain('>高</span>') // SAVED.reasoning='high' → 触发钮回显中文标签
+    expect(html).not.toContain('role="tablist"')
+    expect(html).not.toContain('dswf-fs-seg')
+    // 选项面（纯函数锚）：value→label 映射 + 「默认」首项恒在场
+    expect(reasoningMenuItems('dsh-openai', 'glm-5.3', WORKER_PROVIDER_CATALOG)).toEqual([
+      { id: 'default', label: '默认' },
+      { id: 'low', label: '低' },
+      { id: 'medium', label: '中' },
+      { id: 'high', label: '高' },
+    ])
   })
 
   it('Hard Rule：配置面恒三项——无 Output 上限项回潮', () => {
@@ -180,24 +186,39 @@ describe('AC2 · worker 三项 + Provider→Model 联动候选（供应商 × �
     expect(modelReasoningEfforts('', '', catalog)).toBeUndefined()
   })
 
-  it('reasoningSegOptions：目录已知 → 默认恒在场 + 受支持档位过滤；目录不可知 = 全四值', () => {
+  it('reasoningLevelOptions：目录已知 → 默认恒在场 + 受支持档位过滤；目录不可知 = 全四值', () => {
     const catalog: readonly WorkerProviderEntry[] = [
       { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
     ]
-    // glm-5.3-flash 无 medium：过滤后 = 默认|低|高（max 不在 seg 词汇内自然缺席）
-    expect(reasoningSegOptions('zai-coding-cn', 'glm-5.3-flash', catalog).map((o) => o.value)).toEqual([
+    // glm-5.3-flash 无 medium：过滤后 = 默认|低|高（max 不在下拉词汇内自然缺席）
+    expect(reasoningLevelOptions('zai-coding-cn', 'glm-5.3-flash', catalog).map((o) => o.value)).toEqual([
       'default',
       'low',
       'high',
     ])
     // 目录不可知（静态回退面/未携带能力）= 全四值不过滤
-    expect(reasoningSegOptions('dsh-openai', 'glm-5.3', WORKER_PROVIDER_CATALOG).map((o) => o.value)).toEqual([
+    expect(reasoningLevelOptions('dsh-openai', 'glm-5.3', WORKER_PROVIDER_CATALOG).map((o) => o.value)).toEqual([
       'default',
       'low',
       'medium',
       'high',
     ])
-    expect(REASONING_SEG_OPTIONS.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high'])
+    expect(REASONING_LEVEL_OPTIONS.map((o) => o.value)).toEqual(['default', 'low', 'medium', 'high'])
+  })
+
+  it('reasoningMenuItems / reasoningLabelOf：value→中文标签映射（下拉选项面 + 触发钮回显）', () => {
+    const catalog: readonly WorkerProviderEntry[] = [
+      { provider: 'zai-coding-cn', models: ['glm-5.3-flash'], modelEfforts: { 'glm-5.3-flash': ['low', 'high', 'max'] } },
+    ]
+    expect(reasoningMenuItems('zai-coding-cn', 'glm-5.3-flash', catalog)).toEqual([
+      { id: 'default', label: '默认' },
+      { id: 'low', label: '低' },
+      { id: 'high', label: '高' },
+    ])
+    expect(reasoningLabelOf('default', 'zai-coding-cn', 'glm-5.3-flash', catalog)).toBe('默认')
+    expect(reasoningLabelOf('high', 'zai-coding-cn', 'glm-5.3-flash', catalog)).toBe('高')
+    // 被过滤档位的标签查询 = 目录外值防御性直出（正常流经 reconcile 不达）
+    expect(reasoningLabelOf('medium', 'zai-coding-cn', 'glm-5.3-flash', catalog)).toBe('medium')
   })
 
   it('reconcileWorkerReasoning：目录已知且当前档位不支持 → 回默认值（无法兼容就不设置）；受支持/不可知 = 不动', () => {
@@ -391,7 +412,7 @@ describe('AC4 · 保存反馈：保存中冻结 / 成功 ✓ 复位 + 下次派�
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
     expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="provider"[^>]*disabled/)
     expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="model"[^>]*disabled/)
-    expect(html).toMatch(/<button[^>]*role="tab"[^>]*disabled/) // seg 三段冻结
+    expect(html).toMatch(/<button[^>]*data-dswf-fs-dd="reasoning"[^>]*disabled/) // 下拉三行齐冻结
   })
 
   it('保存成功：按钮 ✓ 复位（值直出不脏再禁用）+ 下次派发生效注记行', () => {
@@ -545,7 +566,7 @@ describe('AC5 · 五态相位渲染签名', () => {
     expect(html).not.toContain('data-dswf-fs-unconfigured')
     expect(html).toContain('>dsh-openai</span>')
     expect(html).toContain('>glm-5.3</span>')
-    expect(html).toMatch(/id="dswf-fs-reasoning-high"[^>]*aria-selected="true"/)
+    expect(html).toContain('>高</span>') // reasoning=high → 触发钮回显中文标签
     expect(html).toMatch(/<button[^>]*data-dswf-fs-save[^>]*disabled/)
   })
 
