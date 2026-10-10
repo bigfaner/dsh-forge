@@ -508,11 +508,13 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       onOpenSession: (sessionId: string) => void
       openSession: { openSessionWithPreset(request: unknown): Promise<unknown> }
       openDocResource: (address: string) => void
-      openWorkerSession: (childSessionId: string) => void
+      onOpenWorkerSession: (childSessionId: string) => void
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
-    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'openDocResource', 'openSession', 'openWorkerSession', 'rightbar', 'selectPanel'])
+    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'onOpenWorkerSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel'])
     expect(typeof face.onOpenSession).toBe('function')
+    // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
+    expect(typeof face.onOpenWorkerSession).toBe('function')
     expect(typeof face.openSession.openSessionWithPreset).toBe('function')
     expect(typeof face.openDocResource).toBe('function')
     // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
@@ -652,15 +654,15 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     unpublishViews()
   })
 
-  it('D6 ⟞ 开面：openWorkerSession → 账本 parentId 在场 = 官方 SubagentAddress 形（openChild 同径）；缺席 = 平开会话 id', () => {
+  it('D6 ⟞ 开面：onOpenWorkerSession → 账本 parentId 在场 = 官方 SubagentAddress 形（openChild 同径）；缺席 = 平开会话 id', () => {
     publishFakeViews()
     const { ctx, registers, sessionsById, open } = fakeClientCtx()
     sessionsById['worker-child'] = { parentId: 'dispatch-parent' }
     forgeClientPlugin().apply(ctx)
     const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
-    face.openWorkerSession('worker-child')
-    face.openWorkerSession('top-level')
+    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
+    face.onOpenWorkerSession('worker-child')
+    face.onOpenWorkerSession('top-level')
     expect(open).toHaveBeenNthCalledWith(1, { parentSessionId: 'dispatch-parent', childSessionId: 'worker-child', mode: 'unknown' })
     expect(open).toHaveBeenNthCalledWith(2, 'top-level')
     unpublishViews()
@@ -678,7 +680,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     forgeClientPlugin().apply(ctx)
     const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
     const face = host.options.inject!() as {
-      openWorkerSession: (childSessionId: string) => void
+      onOpenWorkerSession: (childSessionId: string) => void
       onOpenSession: (sessionId: string) => void
     }
     // byId 缺行（真实派发径常见态）：refresh 期注入 parentId → 重判读 = 地址形态
@@ -692,7 +694,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
       injectRow('worker-lost')
       return undefined
     }
-    face.openWorkerSession('worker-lost')
+    face.onOpenWorkerSession('worker-lost')
     await vi.waitFor(() => {
       expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-lost', mode: 'unknown' })
     })
@@ -721,9 +723,9 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     }
     forgeClientPlugin().apply(ctx)
     const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
+    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
     // refresh 拒绝 → 平开（不炸——官方 retain 对缺行 id 的报错在 face 层不外溢）
-    face.openWorkerSession('never-known')
+    face.onOpenWorkerSession('never-known')
     await vi.waitFor(() => {
       expect(open).toHaveBeenCalledWith('never-known')
     })
@@ -735,7 +737,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
       return undefined
     }
     sessionsById['top-known'] = {}
-    face.openWorkerSession('top-known')
+    face.onOpenWorkerSession('top-known')
     expect(open).toHaveBeenCalledTimes(1)
     expect(open).toHaveBeenCalledWith('top-known')
     expect(refreshCalls, '行在场径零 refresh（不加拍）').toHaveLength(0)
@@ -794,8 +796,8 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     }
     forgeClientPlugin().apply(ctx)
     const host = base.registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { openWorkerSession: (childSessionId: string) => void }
-    expect(() => face.openWorkerSession('s-1')).not.toThrow()
+    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
+    expect(() => face.onOpenWorkerSession('s-1')).not.toThrow()
     unpublishViews()
   })
 

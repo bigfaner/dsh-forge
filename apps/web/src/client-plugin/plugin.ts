@@ -1092,7 +1092,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 子会话 = 官方 SubagentAddress 形态（openChild 同径——树零联动：worker
                 // 不进左栏两级树，父会话行保持）；顶层会话平开。账本缺行（worker added
                 // 广播未达/丢失）= refresh 兜底后重判读；官方面异常 fail-soft。
-                openWorkerSession: (childSessionId: string): void => {
+                // 键名 = onOpenWorkerSession（ShellHost props 契约——D6 原始实现的
+                // openWorkerSession 键名错配 = ⟞ 恒 disabled 的根因，2026-10-10 报障收口）。
+                onOpenWorkerSession: (childSessionId: string): void => {
                   openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId)
                 },
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
