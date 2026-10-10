@@ -80,6 +80,7 @@
 
 .dswf-ov-phchip-clear {
   border-style: dashed;
+  margin-inline-start: 8px; /* D38 钮前与行内 chip 拉开：行 gap 6px + 本 8px = 视距 14px（dsw-raw 新裁决刻度） */
 }
 
 /* 阶段点色（ui-design M3 令牌映射表未列阶段——原型 PHASE_TAG 最近语义映射：

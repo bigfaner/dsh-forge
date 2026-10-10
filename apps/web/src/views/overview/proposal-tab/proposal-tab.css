@@ -86,6 +86,7 @@
 
 .dswf-ov-pschip-clear {
   border-style: dashed;
+  margin-inline-start: 8px; /* D38 钮前与行内 chip 拉开：行 gap 6px + 本 8px = 视距 14px（dsw-raw 新裁决刻度） */
 }
 
 /* 五态点色（官方 StateDot 无蓝/紫语义——--dsw-alias 令牌自绘；superseded 紫 =

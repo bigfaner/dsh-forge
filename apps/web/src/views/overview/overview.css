@@ -249,6 +249,7 @@
 
 .dswf-ov-stchip-clear {
   border-style: dashed;
+  margin-inline-start: 8px; /* D38 钮前与行内 chip 拉开：行 gap 6px + 本 8px = 视距 14px（dsw-raw 新裁决刻度） */
 }
 
 /* ── 提案/feature 列表：M3.1 D13 卡片语言（浮卡 + 卡头 + bg-3 meta 块 + 文档行） ── */

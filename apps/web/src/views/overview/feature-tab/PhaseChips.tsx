@@ -100,7 +100,7 @@ export function PhaseChips({ counts, active, onToggle, onClear }: PhaseChipsProp
           data-dswf-ov-phchip-clear=""
           onClick={onClear}
         >
-          ✕ 清过滤
+          ✕ 重置
         </button>
       ) : null}
     </div>

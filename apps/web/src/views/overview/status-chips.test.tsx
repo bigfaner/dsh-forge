@@ -59,7 +59,8 @@ describe('StatusChips（AC5 七态过滤 chips）', () => {
     expect(blockedChip).toContain('is-on')
     expect(blockedChip).toContain('已阻塞')
     expect(markup).toContain('data-dswf-ov-stchip-clear')
-    expect(markup).toContain('✕ 清过滤')
+    expect(markup).toContain('✕ 重置') // D38 清过滤钮改词：裸词「重置」+ ✕ 前缀保留
+    expect(markup).not.toContain('清过滤') // D38 UI 字符串层旧词渲染面清零
   })
 
   it('零激活：全部 aria-pressed=false + 清过滤入口缺席', () => {

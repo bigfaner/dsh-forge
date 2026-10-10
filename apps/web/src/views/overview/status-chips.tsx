@@ -73,7 +73,7 @@ export function StatusChips({ counts, active, onToggle, onClear }: StatusChipsPr
           data-dswf-ov-stchip-clear=""
           onClick={onClear}
         >
-          ✕ 清过滤
+          ✕ 重置
         </button>
       ) : null}
     </div>

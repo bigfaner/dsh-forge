@@ -109,7 +109,8 @@ describe('五态 chips 行（AC4 渲染面）', () => {
     expect(chip).toContain('aria-pressed="true"')
     expect(chip).toContain('is-on')
     expect(markup).toContain('data-dswf-ov-pschip-clear')
-    expect(markup).toContain('✕ 清过滤')
+    expect(markup).toContain('✕ 重置') // D38 清过滤钮改词：裸词「重置」+ ✕ 前缀保留
+    expect(markup).not.toContain('清过滤') // D38 UI 字符串层旧词渲染面清零
 
     const idle = renderToStaticMarkup(<ProposalStatusChips counts={COUNTS} active={NONE} onToggle={() => {}} />)
     expect(idle).not.toContain('aria-pressed="true"')

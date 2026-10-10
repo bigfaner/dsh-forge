@@ -100,7 +100,7 @@ export function ProposalStatusChips({ counts, active, onToggle, onClear }: Propo
           data-dswf-ov-pschip-clear=""
           onClick={onClear}
         >
-          ✕ 清过滤
+          ✕ 重置
         </button>
       ) : null}
     </div>

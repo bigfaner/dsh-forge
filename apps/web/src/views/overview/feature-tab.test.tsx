@@ -121,7 +121,7 @@ describe('FeaturesTab · 阶段 chips 插入点与父行行头（AC2/AC6）', ()
       <FeaturesTab {...base} features={[feature('done-x', {}, 'completed')]} counts={{ ...COUNTS, 'in-progress': 0, completed: 1 }} activePhases={new Set<FeatureStatus>(['in-progress'])} />,
     )
     expect(markup).toContain('无匹配当前阶段过滤的 feature')
-    expect(markup).toContain('✕ 清过滤')
+    expect(markup).toContain('✕ 重置') // D38 清过滤钮改词：裸词「重置」+ ✕ 前缀保留
   })
 
   it('零 feature = 一等空态', () => {

@@ -157,7 +157,7 @@ describe('ProposalsTabBody · 五态 chips 插入点与列表（AC1/AC6）', () 
     expect(markup).toContain('提案 legacy-import')
     expect(markup).not.toContain('提案 m2-pipeline')
     expect(markup).not.toContain('提案 legacy-eval-retire')
-    expect(markup).toContain('✕ 清过滤')
+    expect(markup).toContain('✕ 重置') // D38 清过滤钮改词：裸词「重置」+ ✕ 前缀保留
   })
 
   it('过滤零命中（rejected 激活但 0 计数不可点——构造空并集）= 空态呈现', () => {
