@@ -4,8 +4,10 @@
 // 职责：①正文与元数据分离（剥离开头 frontmatter 块——UF-6「正文区不含 frontmatter 字段」；
 // frontmatter 是通用 Markdown 约定，非业务语义）②供默认 labels（引用稳定——官方要求逐 locale
 // 修订记忆化，新身份会废弃流式渲染缓存）③variant 透传（body = 详情抽屉正文 / compact = M4
-// 嵌入预览预留，官方 MarkdownText 原生双形态，不发明平行模式）。布局归消费方（className 透传）。
-import { MarkdownText, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+// 嵌入预览预留，官方 MarkdownText 原生双形态，不发明平行模式）④pathImages 可选透传（官方
+// MarkdownText 原生本地图片词表面——官方预览径 md body 供；缺省 undefined = 零变化）。
+// 布局归消费方（className 透传）。
+import { MarkdownText, type MarkdownLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
 
 /** 包装形态（官方 MarkdownText 原生 variant 面，不扩形态） */
@@ -44,10 +46,16 @@ export interface MarkdownDocProps {
   readonly variant?: MarkdownDocVariant
   /** 布局类名（透传包装节点；间距与排版刻度归消费方/官方令牌） */
   readonly className?: string
+  /**
+   * 本地图片词表（官方 MarkdownText 原生 pathImages 面——类型 re-export 自
+   * dsh-client-ui-primitives）：所有方把未能过远程 URL 白名单的本地目的地映射到可展示
+   * URL。缺省 undefined = 现行为零变化（既有用例不动）。
+   */
+  readonly pathImages?: MarkdownPathImages
 }
 
 /** Markdown 渲染唯一包装入口（产品内一切 Markdown 经本件，禁直用 MarkdownText）。 */
-export function MarkdownDoc({ text, variant = 'body', className }: MarkdownDocProps): ReactNode {
+export function MarkdownDoc({ text, variant = 'body', className, pathImages }: MarkdownDocProps): ReactNode {
   const cls = className === undefined ? 'dswf-markdown' : `dswf-markdown ${className}`
   return (
     <div className={cls} data-dswf-markdown={variant}>
@@ -55,6 +63,7 @@ export function MarkdownDoc({ text, variant = 'body', className }: MarkdownDocPr
         text={stripMarkdownFrontmatter(text)}
         labels={DEFAULT_MARKDOWN_LABELS}
         variant={variant}
+        {...(pathImages !== undefined ? { pathImages } : {})}
       />
     </div>
   )

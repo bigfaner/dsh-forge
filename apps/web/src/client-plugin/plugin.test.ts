@@ -12,6 +12,7 @@ import {
   DISPATCH_TASK_TOOL_KEY,
   DOC_ADDRESS_PREFIX,
   DOC_TAB_KIND,
+  DOCUMENT_PREVIEW_BODY_SLOT,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   FORGE_LOCALE_NS,
@@ -19,6 +20,8 @@ import {
   HERO_WORKSPACE_SLOT,
   KNOWLEDGE_PANEL_KEY,
   MAIN_SLOT,
+  MD_MERMAID_PREVIEW_ABSENT,
+  MD_MERMAID_PREVIEW_ID,
   OVERVIEW_TAB_KIND,
   RECALL_VIEW_ID,
   SESSION_HEADER_ACTIONS_SLOT,
@@ -239,6 +242,7 @@ function publishFakeViews() {
     ForgeDispatchToolRow: 'COMP:dispatch-tool-row',
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
+    ForgeMdPreviewBody: 'COMP:md-preview-body',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     ForgeSettingsSection: 'COMP:settings-section',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
@@ -604,7 +608,8 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
     ])
-    expect(marker?.dock?.error).toBeUndefined()
+    // documentPreviews 反射缺席（本假体未供注册表）= dock 诊断记 absent——注册跳过不炸
+    expect(marker?.dock?.error).toBe(MD_MERMAID_PREVIEW_ABSENT)
     unpublishViews()
   })
 
@@ -632,6 +637,91 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     expect(tabTypes.disposedIds).toEqual([])
     injectDisposers.get(SHELL_OVERLAY_SLOT)!()
     expect([...tabTypes.disposedIds].sort()).toEqual([DOC_TAB_KIND, OVERVIEW_TAB_KIND])
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
+  })
+})
+
+describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => {
+  /** 假 documentPreviews 注册表（reflect 递达——register 调用捕获 + 撤销器记账） */
+  function fakeDocumentPreviews(): {
+    readonly registry: { register: ReturnType<typeof vi.fn> }
+    readonly calls: { id: string; extensions: readonly string[]; priority?: string; loading?: string; wrap?: boolean; title?: () => string }[]
+    readonly disposedIds: string[]
+  } {
+    const calls: { id: string; extensions: readonly string[]; priority?: string; loading?: string; wrap?: boolean; title?: () => string }[] = []
+    const disposedIds: string[] = []
+    return {
+      registry: {
+        register: vi.fn((definition: { id: string; extensions: readonly string[]; title: () => string }) => {
+          calls.push(definition)
+          return () => {
+            disposedIds.push(definition.id)
+          }
+        }),
+      },
+      calls,
+      disposedIds,
+    }
+  }
+
+  it('documentPreviews 在场：extension 带定义（md/markdown + text-pages + wrap 消费）+ keyed body 槽位（key = 实现 id，body 自足）', () => {
+    const views = publishFakeViews()
+    const previews = fakeDocumentPreviews()
+    const { ctx, registers } = fakeClientCtx({
+      get: (name: string) => (name === 'documentPreviews' ? previews.registry : undefined),
+    })
+    forgeClientPlugin().apply(ctx)
+    expect(previews.registry.register).toHaveBeenCalledTimes(1)
+    const definition = previews.calls[0]!
+    expect(definition.id).toBe(MD_MERMAID_PREVIEW_ID)
+    expect(definition.extensions).toEqual(['md', 'markdown'])
+    expect(definition.priority).toBe('extension') // 外部实现带——自动选择恒胜官方 builtin Markdown
+    expect(definition.loading).toBe('text-pages')
+    expect(definition.wrap).toBe(true)
+    expect(definition.title?.()).toBe('Markdown（mermaid）')
+    const body = registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)
+    expect(body).toBeDefined()
+    expect(body!.options.key).toBe(MD_MERMAID_PREVIEW_ID)
+    expect(body!.component).toBe(views.ForgeMdPreviewBody)
+    expect(body!.options.inject).toBeUndefined() // body 自足（tabInfo/useResource 由槽声明/标准面递达）
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.dock?.registered).toEqual([
+      OVERVIEW_TAB_KIND,
+      DOC_TAB_KIND,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      MD_MERMAID_PREVIEW_ID,
+      DOCUMENT_PREVIEW_BODY_SLOT,
+    ])
+    expect(marker?.dock?.error).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('reflect 缺席：降级不炸且不注册（零 documentPreviews 调用 + 零文档槽位）+ dock 诊断记 absent', () => {
+    publishFakeViews()
+    const previews = fakeDocumentPreviews()
+    const { ctx, registers } = fakeClientCtx()
+    expect(() => forgeClientPlugin().apply(ctx)).not.toThrow()
+    expect(previews.registry.register).not.toHaveBeenCalled()
+    expect(registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)).toBeUndefined()
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.dock?.error).toBe(MD_MERMAID_PREVIEW_ABSENT)
+    unpublishViews()
+  })
+
+  it('撤销级联：overlay 洞 dispose 即撤销 documentPreviews 定义（官方注册表不残留死定义）', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const previews = fakeDocumentPreviews()
+    const { ctx, injectDisposers } = fakeClientCtx({
+      get: (name: string) => (name === 'documentPreviews' ? previews.registry : undefined),
+    })
+    forgeClientPlugin().apply(ctx)
+    expect(previews.disposedIds).toEqual([])
+    injectDisposers.get(SHELL_OVERLAY_SLOT)!()
+    expect(previews.disposedIds).toEqual([MD_MERMAID_PREVIEW_ID])
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
@@ -764,6 +854,49 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     expect(open).toHaveBeenCalledTimes(1)
     expect(open).toHaveBeenCalledWith('top-known')
     expect(refreshCalls, '行在场径零 refresh（不加拍）').toHaveLength(0)
+    unpublishViews()
+  })
+
+  it('D6 显式父让位账本（fix-7）：行在场 = 账本自身父域权威——合成挂接父域 ≠ 官方亲子 → 平开（subagent/unauthorized 拒历史加载收口）', () => {
+    publishFakeViews()
+    const { ctx, registers, sessionsById, open, sessionsRefresh } = fakeClientCtx()
+    const refreshCalls: number[] = []
+    sessionsRefresh.current = async () => {
+      refreshCalls.push(1)
+      return undefined
+    }
+    forgeClientPlugin().apply(ctx)
+    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
+    const face = host.options.inject!() as {
+      onOpenWorkerSession: (childSessionId: string, parentSessionId?: string) => void
+      onOpenSession: (sessionId: string, parentSessionId?: string) => void
+    }
+    // 行在场 + 无父域（tsl 合成挂接 fixture：真实顶层会话 × link 表父域）→ 平开（转录照载）
+    sessionsById['synth-exec'] = {}
+    face.onOpenWorkerSession('synth-exec', 'link-parent')
+    expect(open, '行在场父域缺席 = 顶层平开（不强制 SubagentAddress）').toHaveBeenCalledWith('synth-exec')
+    // 行在场 + 父域在场 → 账本父域权威（官方 SubagentAddress 校验以宿主账本为准）
+    sessionsById['ledger-child'] = { parentId: 'ledger-parent' }
+    face.onOpenWorkerSession('ledger-child', 'link-parent')
+    expect(open, '⟞ 面：账本父域胜出（link 显式父非官方亲子）').toHaveBeenCalledWith({
+      parentSessionId: 'ledger-parent',
+      childSessionId: 'ledger-child',
+      mode: 'unknown',
+    })
+    face.onOpenSession('ledger-child', 'ledger-parent')
+    expect(open, '执行会话 pill 面同径（openSessionWithLedgerAddress 单源）').toHaveBeenCalledWith({
+      parentSessionId: 'ledger-parent',
+      childSessionId: 'ledger-child',
+      mode: 'unknown',
+    })
+    // 缺行径回退照旧：显式父直达（98189bf 进行中 worker 场景保持）
+    face.onOpenWorkerSession('worker-live', 'dispatch-parent')
+    expect(open, '账本缺行 = 显式父直达（零 refresh）').toHaveBeenCalledWith({
+      parentSessionId: 'dispatch-parent',
+      childSessionId: 'worker-live',
+      mode: 'unknown',
+    })
+    expect(refreshCalls, '三径全零 refresh（行在场同步判读 + 缺行显式父直达）').toHaveLength(0)
     unpublishViews()
   })
 

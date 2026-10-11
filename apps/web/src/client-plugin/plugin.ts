@@ -26,6 +26,10 @@
 //     工具视图正径[上游 README「注册业务工具视图」，ui-skill 同型先例]：对话工具行摘要段
 //     = source_slug 容器标识 + 结算后任务键后缀——2026-10-09 用户实机报障收口，官方通用
 //     行 fallback 恒显种类词 proposal/feature 不可分辨）。
+//   - `documentPreviews.register` + `sidebar.right.tab.document` keyed 'dswf-md-mermaid'
+//     （官方 ui-sidebar-documentpreview 扩展缝——md 预览 mermaid 扩展渲染器，extension 带
+//     恒胜 builtin Markdown，官方内建留在下拉可切回；注册表经 ctx.reflect 惰性取用，缺席
+//     = 记账跳过不炸）。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
 // 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
 // keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
@@ -87,6 +91,18 @@ export const OVERVIEW_TAB_KIND = 'dswf-overview'
 export const DOC_TAB_KIND = 'dswf-doc'
 /** 文档 tab 资源地址前缀（dsh-resource:// 资源面——openResource 去重键 = 地址本身；与 dock-tabs DSWF_DOC_ADDRESS_PREFIX 同源 pin） */
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
+/**
+ * 洞名：官方文档预览 body keyed 槽（ui-sidebar-documentpreview contract——documentpreview
+ * 插件自带类型/注册表/槽声明，本插件只叠加定义元数据 + keyed body；key = 实现 id）。
+ */
+export const DOCUMENT_PREVIEW_BODY_SLOT = 'sidebar.right.tab.document'
+/**
+ * md mermaid 预览实现 id（= documentPreviews 定义 id = keyed body 键）：extension 带恒胜
+ * 官方 builtin Markdown（自动选择序），官方内建留在下拉可切回（选择态官方自持）。
+ */
+export const MD_MERMAID_PREVIEW_ID = 'dswf-md-mermaid'
+/** documentPreviews 缺席诊断注记（dock 诊断 error 面——缺席 = 记账跳过不炸，官方 documentpreview 未装配的合法形态） */
+export const MD_MERMAID_PREVIEW_ABSENT = 'documentPreviews 缺席（官方 documentpreview 未装配）——md mermaid 预览跳过注册'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 /** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
@@ -259,13 +275,16 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
 }
 /**
  * 打开会话（判读式统一径——D6 修复面）：显式父（库侧权威——任务挂接双源卡的 link 派发
- * 会话 = worker 的 durable 父；进行中 worker 的账本行/盘上日志均未落的场景恒可得）优先
- * 直接 SubagentAddress 形态打开；无显式父 → 账本 parentId 判读 → 子会话 = 官方地址形态
- * （openChild 同径——树零联动），顶层 = 平开。账本缺行（worker 的 added 广播未达/丢失）→
- * refresh 全量基线后重判读一次（宿主 session.list 读盘上报持久子会话行——header
- * parentSession 在场）；refresh 缺席/失败/仍缺行 = 平开（顶层会话常态径）。行在场路径零
- * 异步（同步判读同步开——高频顶层径不加拍）。官方面异常 fail-soft 不外溢。悬浮面板 ⟞ 与
- * 任务详情执行会话 pill 两消费面共用。
+ * 会话 = worker 的 durable 父）仅在账本缺行时直接 SubagentAddress 形态打开（进行中
+ * worker 的账本行/盘上日志均未落的场景恒可得——98189bf 径）；账本行在场 = 宿主持久化
+ * 父子关系为权威，按行自身 parentId 判读（合成挂接/非官方父子域的显式父不再强制
+ * SubagentAddress——官方校验拒亲子关系即 subagent/unauthorized 历史加载失败横幅，
+ * m2 tsl :173/:538 fixture 实证）。无显式父 → 账本 parentId 判读 → 子会话 = 官方地址
+ * 形态（openChild 同径——树零联动），顶层 = 平开。账本缺行（worker 的 added 广播未达/
+ * 丢失）→ refresh 全量基线后重判读一次（宿主 session.list 读盘上报持久子会话行——
+ * header parentSession 在场）；refresh 缺席/失败/仍缺行 = 平开（顶层会话常态径）。
+ * 行在场路径零异步（同步判读同步开——高频顶层径不加拍）。官方面异常 fail-soft 不外溢。
+ * 悬浮面板 ⟞ 与任务详情执行会话 pill 两消费面共用。
  */
 export function openSessionWithLedgerAddress(
   services: {
@@ -282,7 +301,7 @@ export function openSessionWithLedgerAddress(
       // fail-soft：无会话面（会话卸载瞬态）——点击不外溢
     }
   }
-  if (parentSessionId !== undefined) {
+  if (parentSessionId !== undefined && !sessionRowInLedger(services.sessions.list, sessionId)) {
     openWith(parentSessionId)
     return
   }
@@ -371,6 +390,28 @@ export interface ForgePanelInfo {
   readonly activePanelId: string | null
 }
 
+/**
+ * 官方文档预览注册表窄面（ui-sidebar-documentpreview DocumentPreviewRegistry 消费切片——
+ * 结构同型镜像，bundle 零外部 import）。register 落定义元数据并返回幂等撤销器；同名活实现
+ * 重复注册 / binaryExtensions 越界官方抛错（本插件单次注册不触）。
+ */
+export interface ForgeDocumentPreviewsService {
+  register(definition: {
+    /** 实现身份（跨全部注册唯一——keyed 文档 body 槽的 dispatch 键） */
+    readonly id: string
+    /** 认领后缀（无前导点——'md'/'markdown'） */
+    readonly extensions: readonly string[]
+    /** 优先带（extension = 外部实现带，自动选择恒胜官方 builtin） */
+    readonly priority?: 'builtin' | 'extension'
+    /** 实现 label（工具栏渲染时逐读——下拉切换面文案） */
+    readonly title: () => string
+    /** 内容递达模式（text-pages = 官方共享分页文本读） */
+    readonly loading: 'text-pages' | 'bytes-complete' | 'renderer'
+    /** 是否消费文档换行偏好（true = 工具栏出换行切换，偏好起步开） */
+    readonly wrap?: boolean
+  }): () => void
+}
+
 /** 官方布局服务窄面（ui-layout LayoutController 消费切片，fix-25） */
 export interface ForgeLayoutService {
   /** 选中全局 main 面板或回官方会话面板（null；未注册 id 抛错——调用面守卫） */
@@ -408,6 +449,7 @@ export interface ForgeViewsGlobal {
     ForgeDispatchToolRow: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
+    ForgeMdPreviewBody: unknown
     ForgeHeroWorkspacePicker: unknown
     ForgeSettingsSection: unknown
     createWorkbenchBridge: (nav: {
@@ -942,6 +984,46 @@ function registerDockTabs(
   }
 }
 
+/**
+ * md mermaid 预览注册（官方文档预览器扩展缝——apply 期两段：定义元数据 + keyed body）：
+ * `ctx.reflect.get('documentPreviews')` 惰性取用（注册表由官方 documentpreview 插件
+ * `ctx.reflect.provide` 供给——不进 inject 数组，m3.1 D25 反射先例同径）→ 在场 =
+ * `documentPreviews.register`（extension 带——自动选择恒胜官方 builtin Markdown；官方内建
+ * 留在下拉可切回，选择态官方自持）+ `sidebar.right.tab.document` keyed body（key = 实现
+ * id，useTabInfo/useResource 由槽声明/标准面递达）；缺席 = 跳过注册 + dock 诊断记 absent
+ * （不炸不阻塞其余注册）。返回定义撤销器（并入 dock 撤销级联——官方注册表不残留死定义）。
+ */
+function registerMdMermaidPreview(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  diagnostics: { registered?: string[]; error?: string },
+): (() => void) | undefined {
+  const previews = asRecord(reflectServiceGet(ctx, 'documentPreviews')) as unknown as
+    | ForgeDocumentPreviewsService
+    | undefined
+  const register = previews?.register
+  if (previews === undefined || typeof register !== 'function') {
+    diagnostics.error = MD_MERMAID_PREVIEW_ABSENT
+    return undefined
+  }
+  const disposeDefinition = register.call(previews, {
+    id: MD_MERMAID_PREVIEW_ID,
+    extensions: ['md', 'markdown'],
+    priority: 'extension',
+    title: (): string => 'Markdown（mermaid）',
+    loading: 'text-pages',
+    wrap: true,
+  })
+  diagnostics.registered = [...(diagnostics.registered ?? []), MD_MERMAID_PREVIEW_ID]
+  registerSlotEntry(ctx, DOCUMENT_PREVIEW_BODY_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: DOCUMENT_PREVIEW_BODY_SLOT, key: MD_MERMAID_PREVIEW_ID },
+      views.ForgeMdPreviewBody,
+    ),
+  )
+  return disposeDefinition
+}
+
 /** 插件本体（client bundle factory 的返回值 = 模块 exports）。 */
 export function forgeClientPlugin(): ForgeClientPlugin {
   return {
@@ -1046,10 +1128,15 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           sidebarRightTabs,
           dockDiagnostics,
         )
+        // md mermaid 预览（官方 documentpreview 扩展缝——apply 期定义 + keyed body；注册表
+        // 缺席 = dock 诊断记 absent 跳过，不炸不阻塞其余注册）。撤销并入本级联：与 dock 族
+        // 同径（apply catch + overlay 洞 dispose 两面回收——官方注册表不残留死定义）
+        const disposeMdPreview = registerMdMermaidPreview(clientCtx, views, dockDiagnostics)
         const revokeBase = revokeBridgeAndLocale
         revokeBridgeAndLocale = (): void => {
           revokeBase()
           disposeDockTabs()
+          disposeMdPreview?.()
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -1125,6 +1212,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
             disposeLocale()
             disposeDockTabs()
+            disposeMdPreview?.()
           }
         })
       } catch (error) {

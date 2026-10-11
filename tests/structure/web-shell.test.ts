@@ -146,7 +146,7 @@ describe('components 基础组件 pin（2.6）', () => {
     }
     expect(offenders, `裸渲染器直用（须改经 MarkdownDoc 包装）: ${offenders.join(', ')}`).toEqual([])
     expect(read('apps/web/src/components/MarkdownDoc.tsx')).toContain(
-      "import { MarkdownText, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'",
+      "import { MarkdownText, type MarkdownLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'",
     )
   })
 
@@ -269,11 +269,12 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
 })
 
 describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全边界）', () => {
-  it('模块面就位：分段解析 + mermaid 渲染件 + tab 体 + 样式', () => {
+  it('模块面就位：分段解析 + mermaid 渲染件 + tab 体 + 官方预览径 md mermaid 扩展渲染器 + 样式', () => {
     for (const f of [
       'apps/web/src/views/docs/doc-segments.ts',
       'apps/web/src/views/docs/mermaid-diagram.tsx',
       'apps/web/src/views/docs/index.tsx',
+      'apps/web/src/views/docs/md-preview-body.tsx',
       'apps/web/src/views/docs/docs.css',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
@@ -319,6 +320,26 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     // openExternal 触发即忘：组件回调恒经 openDocExternal 包装（失败吞不炸 tab）
     expect(tab).toContain('export async function openDocExternal')
     expect(tab).toContain('void openDocExternal(makeClient()')
+  })
+
+  it('官方预览径 md mermaid 扩展渲染器（md-preview-body）：md 段唯一经 MarkdownDoc + mermaid 段唯一经 MermaidDiagram + 官方 documentpreview 包零 import', () => {
+    const body = read('apps/web/src/views/docs/md-preview-body.tsx')
+    expect(body).toContain('MarkdownDoc')
+    expect(body, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
+    expect(body).toContain('MermaidDiagram')
+    expect(body, "禁静态 import mermaid（唯一动态径 = mermaid-diagram.tsx）").not.toContain("from 'mermaid'")
+    expect(body, '官方 documentpreview 包禁 import（本地结构窄类型——结构同型镜像）').not.toContain(
+      '@deepseek-ai/dsh-client-ui-sidebar-documentpreview',
+    )
+    // 发布 + 注册面：product-views 发布件 + plugin documentPreviews 反射缝注册字面量
+    expect(read('apps/web/src/product-views.ts')).toContain('ForgeMdPreviewBody')
+    const plugin = read('apps/web/src/client-plugin/plugin.ts')
+    expect(plugin).toContain("'sidebar.right.tab.document'")
+    expect(plugin).toContain("id: MD_MERMAID_PREVIEW_ID")
+    expect(plugin).toContain("extensions: ['md', 'markdown']")
+    expect(plugin).toContain("priority: 'extension'")
+    expect(plugin).toContain("loading: 'text-pages'")
+    expect(plugin).toContain('wrap: true')
   })
 })
 

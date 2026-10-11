@@ -68,4 +68,14 @@ describe('MarkdownDoc 组件（唯一包装入口）', () => {
       'dswf-drawer-body',
     )
   })
+  it('pathImages 透传官方 MarkdownText（本地图片词表面——官方预览径 md body 供；相对目的地经词表改写）', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownDoc
+        text="![徽标](logo.png)"
+        pathImages={{ resolve: (value) => (value === 'logo.png' ? 'https://rewritten.example/logo.png' : undefined) }}
+      />,
+    )
+    expect(markup).toContain('徽标')
+    expect(markup, '词表 resolve 结果透传（渲染器重发前复检协议）').toContain('https://rewritten.example/logo.png')
+  })
 })

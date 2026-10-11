@@ -92,6 +92,14 @@
   margin: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
 }
 
+/* ── 官方预览径 md body（md-preview-body 复用正文族）：wrap 偏好关 = 代码/预排版面
+ * 不折行（横向滚动承接——官方文档工具栏换行切换的消费面） ── */
+.dswf-mdp-nowrap pre,
+.dswf-mdp-nowrap code {
+  white-space: pre;
+  overflow-x: auto;
+}
+
 /* ── mermaid 图卡（头 + 画布；画布横向滚动容大图） ── */
 .dswf-doc-mermaid {
   margin: 0;

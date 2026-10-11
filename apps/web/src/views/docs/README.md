@@ -10,6 +10,7 @@
 | `doc-segments.ts` | 分段解析纯函数（`splitDocSegments`：md 段/mermaid 段交替——info 首词 = `mermaid` 入图段；非 mermaid fence 整体归 md[嵌套 ```mermaid 文本不误分]；未闭合 fence 视为正文不吞正文；md 段首尾空白行裁去 + 纯空白段丢弃；`hasMermaidSegment` = 懒加载触发判据） |
 | `mermaid-diagram.tsx` | mermaid 渲染件：`loadMermaidEngine`（**懒加载唯一动态 import 径**——模块级 promise 缓存 + 单次 `initialize({ startOnLoad: false, securityLevel: 'strict' })`；产品源零静态 import = 结构 pin）+ `renderMermaidDiagram`（渲染管线纯异步面——loader 注入；render 抛错/import 失败/svg 形状非法三路归一 `{ ok: false }`，异常不外溢）+ `MermaidDiagram`（effect 编排：rendering → rendered/fallback；SVG 经 strict 面 sanitize 后注入）+ `MermaidFallbackCard`（回退占位卡：源码 + 回退注记） |
 | `index.tsx` | `DocsTab`（状态 + 装载胶水：`docs.read` 单发 + ↻ 重读 nonce + seq 竞态守卫 + `openDocExternal` 触发即忘）+ `DocsFrame`（纯呈现帧：头部[标题 + 只读/悬空徽标] + 路径栏[canonical + 📁 编辑器 + ↻ 重读] + 摘要块 + `DocBody` 分段渲染；悬空 = 只读占位面[路径栏保留，不崩溃不写入不删行]）+ 装载落点纯函数（`pendingDocView`/`applyDocFetch`——切换清场/重读保旧内容）+ `fetchDocContent`/`mapDocsError`/`docTitle` |
+| `md-preview-body.tsx` | 官方预览径 md mermaid 扩展渲染器 body（`sidebar.right.tab.document` keyed 'dswf-md-mermaid' 占用者）：owner props（`content`/`wrap` 等）+ `useTabInfo`/`useResource` 窄面 → `splitDocSegments` 分段复用渲染（md 段 `MarkdownDoc` + mermaid 段 `MermaidDiagram`）；`mdPreviewImageUrl`/`mdPreviewPathImages` 图片解析纯函数（官方 path-images 口径镜像——认证 `/api/file` 改写、HTTP(S) 保持原 URL、escape 解码一次）；非 text 相位渲染 null、wrap 偏好容器 class 切换、不认领 scrollport（注册面归 client-plugin） |
 | `docs.css` | 文档 tab 样式（面板骨架/头部/路径栏/摘要/图卡[头 + 画布横向滚动]/回退卡[源码 + 注记]/悬空面/骨架/错误条——全 `--dsw-*` 令牌；等宽族豁免注记在内） |
 
 ## 安全边界（tech-design Dependencies + Mitigations ⑦，Hard Rule）
