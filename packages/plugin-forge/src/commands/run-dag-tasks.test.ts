@@ -709,23 +709,38 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     }
   })
 
-  it('registry 已命中（已进入）：激活面零触达', async () => {
+  it('1.21 活根定向：registry 陈旧把手（steer 抛 undefined.send）+ 激活返回真活根 → steer 落在激活活根，success 回执', async () => {
+    const live = steerRecorder()
+    const stale = steerRecorder()
+    stale.fn = () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'send')")
+    }
+    const stub = driverStub()
+    const d = depsOf({
+      cards,
+      driver: stub.driver,
+      resolveAgent: (id) => (id === SESSION ? { steer: stale.fn } : undefined), // 陈旧把手（内件未初始化）
+      enterAgent: async () => ({ steer: live.fn }), // sessionController 激活活根
+    })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(live.steered).toHaveLength(1) // 提交目标 = 激活活根（registry 陈旧把手未被使用）
+    expect(stale.steered).toHaveLength(0)
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('激活面缺席 + registry 命中：registry 把手照用（向后兼容——1.18 装配形态）', async () => {
     const reg = steerRecorder()
     const stub = driverStub()
-    let activations = 0
     const d = depsOf({
       cards,
       driver: stub.driver,
       resolveAgent: (id) => (id === SESSION ? { steer: reg.fn } : undefined),
-      enterAgent: async () => {
-        activations += 1
-        return undefined
-      },
     })
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(activations).toBe(0)
     expect(reg.steered).toHaveLength(1)
+    expect(stub.loops.has(SESSION)).toBe(true)
   })
 
   it('激活面缺席（1.18 装配形态）：语义原样——registryMissed error 回执指引激活，循环不启动', async () => {

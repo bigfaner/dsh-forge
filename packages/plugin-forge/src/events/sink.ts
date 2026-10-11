@@ -28,6 +28,12 @@ export interface ForgeEventSink {
   emit(event: ForgePluginEvent): void
   /** 记忆会话 → 容器库目录（幂等；cwd 缺席/解析失败 = 不记忆） */
   prepare(session: ToolSessionContext): Promise<void>
+  /**
+   * 直记会话 → 容器库目录（宿主派发循环径——循环不经 tool 执行点，prepare 的 cwd 缝
+   * 不可达；装配面在循环启动时点以 projectId 反解容器库目录直记，logs/<slug>.jsonl
+   * 里程碑不断流。幂等——已记忆会话不覆写，tool 径 prepare 语义优先。）
+   */
+  remember(sessionId: string, dir: string): void
   /** 监听器消费面：sessionId → 容器库目录（未知 = undefined——fail-soft 丢行） */
   dirOf(sessionId: string): string | undefined
 }
@@ -50,6 +56,10 @@ export function createForgeEventSink(deps: ForgeEventSinkDeps): ForgeEventSink {
     },
     dirOf(sessionId): string | undefined {
       return dirs.get(sessionId)
+    },
+    remember(sessionId, dir): void {
+      if (sessionId === '' || dir === '' || dirs.has(sessionId)) return
+      dirs.set(sessionId, dir)
     },
   }
 }

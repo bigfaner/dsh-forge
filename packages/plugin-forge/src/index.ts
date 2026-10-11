@@ -137,26 +137,27 @@ const forgePlugin: ForgePlugin = Object.assign(
       agentsRegistry = undefined
     }
     // sessionController 面可选消费（1.19——未进入会话激活：host SessionController.resolveAgent
-    // = 上游 prompt 径同款「resolve or resume」进入机制，reflect.get 防御读取第六先例）：
-    // 缺席/异常/非函数面 = 激活面不注入——handler 落入 1.18 回执指引语义（fail-soft 同源）。
-    let sessionActivation: SessionActivationFace | undefined
-    try {
-      const viaReflect = ctx.reflect?.get('sessionController') as SessionActivationFace | undefined
-      if (viaReflect !== undefined && typeof viaReflect.resolveAgent === 'function') sessionActivation = viaReflect
-    } catch {
-      sessionActivation = undefined
+    // = 上游 prompt 径同款「resolve or resume」进入机制）。1.21 调用期惰性解析（真机定罪：
+    // apply 时点 reflect.get('sessionController') 未命中——服务晚于插件装配实例化，先取先得
+    // 的闭包捕获把激活面恒置空 = 1.19 修复从未在运行时生效；web 侧 agentPresets 同款
+    // 「调用期惰性解析」先例）：激活闭包在指令调用时点 reflect.get——缺席/异常/非函数面 =
+    // undefined（handler warn 留痕 + 回执指引，fail-soft 同源不外抛）。
+    const enterAgent = async (ownerSessionId: string): Promise<unknown> => {
+      let activation: SessionActivationFace | undefined
+      try {
+        const viaReflect = ctx.reflect?.get('sessionController') as SessionActivationFace | undefined
+        if (viaReflect !== undefined && typeof viaReflect.resolveAgent === 'function') activation = viaReflect
+      } catch {
+        activation = undefined
+      }
+      if (activation === undefined) return undefined
+      try {
+        const result = await activation.resolveAgent(ownerSessionId)
+        return 'agent' in result ? (result as { readonly agent: unknown }).agent : undefined
+      } catch {
+        return undefined // 激活面故障 = 未进入（handler warn 留痕 + 回执指引，不外抛）
+      }
     }
-    const enterAgent =
-      sessionActivation !== undefined
-        ? async (ownerSessionId: string): Promise<unknown> => {
-            try {
-              const result = await sessionActivation.resolveAgent(ownerSessionId)
-              return 'agent' in result ? (result as { readonly agent: unknown }).agent : undefined
-            } catch {
-              return undefined // 激活面故障 = 未进入（handler warn 留痕 + 回执指引，不外抛）
-            }
-          }
-        : undefined
     // userQuestions 面可选消费（S2——无参枚举问询 + 第三层裁决投递，同防御读取先例）：
     // 缺席 = 问询降级（枚举路径指引带参直通；裁决静默终局——问询非循环正确性依赖）。
     let askFace: EscalationAskFace | undefined
@@ -190,7 +191,11 @@ const forgePlugin: ForgePlugin = Object.assign(
         resolveContainerDir: (projectId) => (projectId !== undefined ? projectDirs.resolve(projectId) : undefined),
       }),
     })
-    const loopDriver = createLoopDriver({
+    // 宿主循环日志落位记忆（fix-4）：循环不经 tool 执行点，sink.prepare 的 cwd 缝不可达
+    // ——启动包装在循环启动时点以 projectId 反解容器库目录直记 sink，logs/<slug>.jsonl
+    // 里程碑（task-claimed/tool-error 族）不再整流丢弃。解析未命中 = 不记忆（sink fail-soft
+    // 丢行原语义不变）。stop/activeOf 直通原驱动器——落位记忆只属启动径。
+    const loopDriverBase = createLoopDriver({
       tasks: ctx.forgeTasks,
       spawn,
       narrator,
@@ -213,6 +218,26 @@ const forgePlugin: ForgePlugin = Object.assign(
           }
         : {}),
     })
+    const loopDriver: typeof loopDriverBase = {
+      ...loopDriverBase,
+      start: async (input) => {
+        // resolve 首调仅触发懒解析（记忆化桥接——同步读数恒 undefined）；有界轮询等解析
+        // 收敛（≤2s——装配期 warm 未覆盖的运行期注册项目），未命中 = 不记忆（fail-soft 丢行）
+        if (input.projectId !== undefined) {
+          const deadline = Date.now() + 2_000
+          for (;;) {
+            const dir = projectDirs.resolve(input.projectId)
+            if (dir !== undefined) {
+              sink.remember(input.ownerSessionId, dir)
+              break
+            }
+            if (Date.now() >= deadline) break
+            await new Promise((r) => setTimeout(r, 50))
+          }
+        }
+        return loopDriverBase.start(input)
+      },
+    }
     const resolveProjectId = createProjectResolver(config.projects ?? [], config.bindingsFile)
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,

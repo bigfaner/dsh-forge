@@ -352,12 +352,14 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
  */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
   // 1.19 修复序（深层根因：owner 会话 agent 未进入运行时 → steer 内件 undefined.send）：
-  // 先进入再提交再启动——registry 未命中且激活面在场时，经 host sessionController.resolveAgent
-  // 进入/恢复会话 agent（上游 prompt 同径），进入成功后才提交指令单行、才 driver.start。
-  await ensureAgentEntered(deps, ctx.sessionId)
-  // 先落实会话（转录承载 + 非 blank 化）——1.18 起 steer 目标恒先经 agentsRegistry 解析活根
-  // （ctx.parent 仅 registry 未命中时的 fallback，向后兼容）
-  const commit = commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source)
+  // 先进入再提交再启动。1.21 活根定向（真机残留定罪：agentsRegistry 对未进入会话也可能持
+  // 陈旧把手——steer 面在场但内件未初始化，`undefined.send` 抛错；「registry 已命中 = 已
+  // 进入」的短路判据把激活步整个跳过）：激活恒先行，sessionController.resolveAgent 返回的
+  // 活根**优先作为提交目标**——registry/fallback 把手仅在激活面缺席或激活失败时兜底。
+  const activated = await enterLiveRoot(deps, ctx.sessionId)
+  // 先落实会话（转录承载 + 非 blank 化）——提交目标优先激活活根（1.21），registry 解析
+  // 活根为次选（1.18），ctx.parent 仅双缺时的 fallback（向后兼容）
+  const commit = commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source, activated)
   if (!commit.committed) {
     return commitFailedReceipt(source, commit) // 1.20：会话未创建成功 → 循环不启动
   }
@@ -394,26 +396,25 @@ function commitFailedReceipt(source: ContainerRef, commit: CommitOutcome): Forge
 }
 
 /**
- * 未进入态激活（1.19——「先进入再提交」前置步）：agentsRegistry.get 未命中 = owner 会话
- * agent 未进入运行时（un-entered——上游生命周期：创建 → 进入后 inbox/driver 内件才存在，
- * runtime-types 'agent/created' "newly registered agent with its live session"）。激活面
- * （host sessionController.resolveAgent——上游 prompt 径同款进入机制）在场即进入：成功返回
- * 活根；失败/缺席/抛错 = fail-soft false（不外抛、console.warn 留痕），调用方落入 1.18
- * registryMissed 回执路（指引激活，不静默）。resolveAgent 缺席（旧装配形态）= 不激活——
- * 向后兼容语义原样（ctx.parent fallback 承接）。
+ * 未进入态激活（1.19「先进入再提交」前置步；1.21 起返回活根本体供提交定向）：
+ * agentsRegistry.get 命中不再视为「已进入」（真机定罪：registry 可持陈旧把手——steer 面
+ * 在场而运行时内件 undefined，投递即 `undefined.send` 抛错；「registry 已命中 = 已进入」
+ * 的短路判据会把激活步整个跳过）。激活面（host sessionController.resolveAgent——上游
+ * prompt 径同款进入机制）在场即恒激活：成功返回活根（提交目标首选）；失败/抛错 = fail-soft
+ * undefined（不外抛、console.warn 留痕），调用方落入 registry/fallback 兜底与 1.18
+ * registryMissed 回执路（指引激活，不静默）。激活面缺席（旧装配形态）= undefined——
+ * 向后兼容语义原样（registry/ctx.parent fallback 承接）。
  */
-async function ensureAgentEntered(deps: RunDagTasksDeps, sessionId: string): Promise<boolean> {
-  if (deps.resolveAgent === undefined) return false
-  if (deps.resolveAgent(sessionId) !== undefined) return true // 已进入（活根在场）
-  if (deps.enterAgent === undefined) return false
+async function enterLiveRoot(deps: RunDagTasksDeps, sessionId: string): Promise<unknown> {
+  if (deps.enterAgent === undefined) return undefined
   try {
     const entered = await deps.enterAgent(sessionId)
-    if (entered !== undefined) return true
+    if (entered !== undefined) return entered
     console.warn(`forge dispatch line activation failed (${sessionId}): sessionController 返回非活根（error 路或会话不存在）`)
-    return false
+    return undefined
   } catch (cause) {
     console.warn(`forge dispatch line activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
-    return false
+    return undefined
   }
 }
 
@@ -431,11 +432,10 @@ async function ensureAgentEntered(deps: RunDagTasksDeps, sessionId: string): Pro
  *
  * 1.18 steer 目标活根化（真机定罪：两容器同症状 `undefined.send`）：1.14 直用 ctx.parent
  * （command invocation agent 把手）——对从未开启过回合的会话，该把手的运行时内件未初始化，
- * steer 内部 undefined.send 抛错。对照实证：notice/escalation 均经 agentsRegistry.get
- * (sessionId) 解析活根且收件正常——本函数同款：resolveAgent 命中 = 活根（splice 实证可
- * 收件）；未命中 = 会话运行时确实不存在 → fallback ctx.parent（向后兼容——registry 注入
- * 缺席的旧装配形态）；fallback 亦无 steer 面 = registryMissed 败态（调用方 error 回执
- * 指引激活）。
+ * steer 内部 undefined.send 抛错。1.21 活根定向收口（真机残留定罪：registry 命中 ≠ 已进入
+ * ——陈旧把手 steer 抛错同症状）：激活活根（enterLiveRoot 产物）为提交目标首选；registry
+ * 解析活根为次选（notice/escalation 同径）；fallback ctx.parent 仅双缺时兜底（向后兼容）；
+ * 三者俱无 steer 面 = registryMissed 败态（调用方 error 回执指引激活）。
  */
 interface CommitOutcome {
   committed: boolean
@@ -449,10 +449,11 @@ function commitDispatchLine(
   sessionId: string,
   fallback: unknown,
   source: ContainerRef,
+  activated?: unknown,
 ): CommitOutcome {
   const registryAgent = resolveAgent?.(sessionId)
   const viaRegistry = registryAgent !== undefined
-  const target = viaRegistry ? registryAgent : fallback
+  const target = activated !== undefined ? activated : viaRegistry ? registryAgent : fallback
   const steer = (target as { steer?: (message: unknown) => void } | undefined)?.steer
   if (typeof steer !== 'function') {
     const reason = viaRegistry ? 'registry 活根 steer 面缺席' : 'steer 面缺席'
@@ -460,7 +461,11 @@ function commitDispatchLine(
     return { committed: false, registryMissed: !viaRegistry && resolveAgent !== undefined, reason }
   }
   try {
-    steer(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
+    // 1.21 绑定调用收口（真机定罪：steer 栈帧 dsh-agent-loop `this.send` 读 undefined——
+    // 「先取方法再裸调」把类方法从接收者上剥离，ReactLoopAgent.steer 内 `this` = undefined
+    // 即抛 `undefined.send`；历史可用纯因旧目标 = ctx.parent 闭包把手不依赖绑定）。调用面
+    // 恒以接收者为其绑定 this——`target.steer(message)`。
+    ;(target as { steer: (message: unknown) => void }).steer(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
     return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)

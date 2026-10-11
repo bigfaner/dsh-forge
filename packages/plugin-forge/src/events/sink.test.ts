@@ -80,6 +80,18 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
     expect(empty.dirOf('s-5')).toBeUndefined()
   })
 
+  it('remember 直记（宿主循环径——不经 tool prepare 的 cwd 缝）：dirOf 即刻可得；幂等不覆写；空参不记忆', () => {
+    const bus = createForgeEventBus()
+    const sink = createForgeEventSink({ bus, resolveDir: async () => 'D:\\never' })
+    sink.remember('s-loop', 'D:\\loop-container')
+    expect(sink.dirOf('s-loop')).toBe('D:\\loop-container')
+    sink.remember('s-loop', 'D:\\other') // 幂等——已记忆不覆写
+    expect(sink.dirOf('s-loop')).toBe('D:\\loop-container')
+    sink.remember('', 'D:\\x') // 空串守卫
+    sink.remember('s-empty', '') // 空目录守卫
+    expect(sink.dirOf('s-empty')).toBeUndefined()
+  })
+
   it('监听器集成：prepare 后 emit → 记忆目录 logs/{slug}.jsonl 落盘；未记忆会话 = fail-soft 丢行', async () => {
     const bus = createForgeEventBus()
     const dir = tmpContainerDir()

@@ -119,11 +119,13 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '任务行甲在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttItemOf(t2.taskId)).first(), '任务行乙在场').toBeVisible({ timeout: 15_000 })
-    // ④ 记录域：task_records 审计链（add 两行——库级）
+    // ④ 记录域：task_records 审计链（add 两行打头——库级；fix-4 起派发链真实收敛，循环
+    // claim/submit 行随活循环追加——链头两 add 行 = addTask 审计义务不变，全量恒等断言
+    // 随「循环从不启动」的残破链退役）
     const db2 = openForgeDbAt(dir)
     try {
       const verbs = db2.prepare<unknown[], { verb: string }>(`SELECT verb FROM task_records ORDER BY id`).all().map((r) => r.verb)
-      expect(verbs, '记录域审计链（两 add 行）').toEqual(['add', 'add'])
+      expect(verbs.slice(0, 2), '记录域审计链头 = 两 add 行').toEqual(['add', 'add'])
       const docs = db2.prepare<unknown[], { doc_kind: string }>(`SELECT doc_kind FROM feature_documents WHERE feature_id = ? ORDER BY doc_kind`).all(featureId)
       expect(docs.map((d) => d.doc_kind), 'feature_documents 两行').toEqual(['prd-spec', 'tech-design'])
     } finally {
@@ -133,7 +135,12 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
     // 指令单行（v23）：转录不含多行模板（@path/名称/摘要族不参与派发指令）
     const transcript = await page.locator(CONVERSATION_CONTENT).first().textContent({ timeout: 10_000 })
     expect((transcript ?? '').includes('我的意图：'), '派发指令 = 单行最小消息（非 prefill 格式族）').toBe(false)
-    expect(page.locator(COMPOSER_INPUT).last(), 'composer 在场（新会话就绪）').toBeVisible()
+    // fix-4 起派发链真实收敛：零凭据 worker 反复异常退出（4 次）会挂出派发裁决问询卡
+    // （占据主区——composer 随之让位，产品正确行为面）。走「跳过」收掉问询再断言 composer
+    // 就绪（零凭据失败面不计入产品断言——与下方 pageerror 同纪律）。
+    const skip = page.getByRole('button', { name: '跳过' }).first()
+    await skip.click({ timeout: 15_000 }).catch(() => {}) // 无问询形态 = 直接就绪
+    await expect(page.locator(COMPOSER_INPUT).last(), 'composer 在场（新会话就绪）').toBeVisible({ timeout: 30_000 })
 
     // 零凭据模型失败面不计入产品断言（指令已落地 = 派发入口交付面）
     if (pageErrors.length > 0) console.log(`[sc5-diagnostic] pageerror：${pageErrors.slice(-3).join(' | ')}`)
