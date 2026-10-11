@@ -2,11 +2,25 @@
 // AC6 实际耗时格式；数据形状 = contracts TaskDetail——2.6 core taskDetail 水化口径）。
 // 载荷语义锚 ui-design v15（实际耗时仅 completed、core 水化 actualDurationMs——UI 只格式化）/
 // v10（改动范围：预期声明 ↔ 实际 commit 查找，无提交回退记录语）/ v13（目标/结果上下展示）。
-import { TASK_STATUS_LABELS, type TaskDetail, type TaskGateReport, type TaskPriority, type TaskRecordEntry } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS, type TaskDetail, type TaskGateReport, type TaskPrerequisiteSummary, type TaskPriority, type TaskRecordEntry } from '@dsh-forge/contracts'
 
 /** 任务自然键呈现（界面展示 = slug/localId——身份解析约定） */
 export function taskKeyLabel(slug: string, localId: string): string {
   return `${slug}/${localId}`
+}
+
+/** 任务名称呈现（S3 名称位口径：{编号} {title}——无 slug 前缀；slug 消歧保留于所属行/@path 行） */
+export function taskNameLabel(localId: string, title: string): string {
+  return `${localId} ${title}`
+}
+
+/** 前置引用全名（S3 编号化：前置位只显编号，悬停 Tooltip 补全名；解析器缺席/未命中 = fail-soft 回退编号） */
+export function prereqFullName(
+  taskTitleOf: ((slug: string, localId: string) => string | undefined) | undefined,
+  prerequisite: Pick<TaskPrerequisiteSummary, 'slug' | 'localId'>,
+): string {
+  const title = taskTitleOf?.(prerequisite.slug, prerequisite.localId)
+  return title === undefined ? prerequisite.localId : taskNameLabel(prerequisite.localId, title)
 }
 
 /** 实际耗时格式：Xm / XhYm / XdXh（缺省或 ≤0 → undefined = 不显示；仅 completed 由 chips 投影保证） */

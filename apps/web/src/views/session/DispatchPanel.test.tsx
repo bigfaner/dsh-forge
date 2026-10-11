@@ -429,11 +429,12 @@ describe('DispatchPanelBody 纯渲染（面板形态）', () => {
     onExpand: () => {},
   }
 
-  it('行集全量呈现：状态点 + 键（localId 内联；全键 slug/localId = 官方 Tooltip label——D30 原生 title 退役）+ 标题 + 状态标签 + ⟞ 钮 + 计数', () => {
+  it('行集全量呈现：状态点 + 键（S3 编号化：键位只显 localId——标题列自承载，去 slug 键）+ 标题 + 状态标签 + ⟞ 钮 + 计数', () => {
     const markup = renderToStaticMarkup(<DispatchPanelBody {...base} onOpenTask={() => {}} onOpenWorkerSession={() => {}} />)
     expect(markup).toContain('data-dswf-dp=""')
     expect(markup).toContain('data-dswf-dp-row="t-a"')
     expect(markup).toContain('data-dswf-dp-row="t-b"')
+    expect(markup).toContain('dswf-dp-key">2.1<') // 键位 = localId（无 slug 前缀）
     expect(markup).not.toContain('title=') // D30：全键/标题悬停归官方 Tooltip label（结构 pin tests/structure/d30）
     expect(markup).toContain('第二任务')
     expect(markup).toContain('data-dswf-dp-count=""')

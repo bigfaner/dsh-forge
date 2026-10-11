@@ -42,7 +42,7 @@ import {
   type DrawerResizeEdge,
   type DrawerSectionKey,
 } from './collapse.js'
-import { sessionJumpHandler, sessionTitleOfOrId, taskGoalOf, taskKvChips, taskKeyLabel, taskResultOf, varsText } from './detail-model.js'
+import { prereqFullName, sessionJumpHandler, sessionTitleOfOrId, taskGoalOf, taskKvChips, taskNameLabel, taskResultOf, varsText } from './detail-model.js'
 import { CoverageBar, coverageViewOf } from './coverage-bar.js'
 import { TimelineEvents, TimelineNow } from './timeline.js'
 import { templateFamilyOf, typeCategoryClassOf, TypeTemplateBody } from './type-templates/index.js'
@@ -71,7 +71,7 @@ export function drawerBriefRows(
   detail: TaskDetail,
   sessionTitleOf?: (sessionId: string) => string | undefined,
 ): readonly { readonly key: string; readonly value: string; readonly code?: boolean }[] {
-  const prerequisites = detail.prerequisites.map((p) => taskKeyLabel(p.slug, p.localId))
+  const prerequisites = detail.prerequisites.map((p) => p.localId)
   const sessions = detail.sessions.map((session) => sessionTitleOfOrId(sessionTitleOf, session.sessionId))
   return [
     { key: '所属', value: detail.slug, code: true },
@@ -93,17 +93,31 @@ function DrawerBriefBody({
   detail,
   onOpenSession,
   sessionTitleOf,
+  taskTitleOf,
 }: {
   readonly detail: TaskDetail
   readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 编号化悬停补全名；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
 }): ReactNode {
   return (
     <div className="dswf-td-brief" data-dswf-td-brief="">
       {drawerBriefRows(detail, sessionTitleOf).map((row) => (
         <div className="dswf-td-brow" key={row.key}>
           <span className="dswf-td-bk">{row.key}</span>
-          {row.key === '挂接会话' && detail.sessions.length > 0 && onOpenSession !== undefined ? (
+          {row.key === '前置' && detail.prerequisites.length > 0 ? (
+            // S3 前置引用编号化：只显编号，悬停 Tooltip 补 {编号} {title} 全名
+            <span className="dswf-td-bv">
+              {detail.prerequisites.map((p) => (
+                <Tooltip key={`${p.slug}/${p.localId}`} label={prereqFullName(taskTitleOf, p)} portal>
+                  <span className="dswf-td-prereq" data-dswf-td-prereq={p.localId}>
+                    {p.localId}
+                  </span>
+                </Tooltip>
+              ))}
+            </span>
+          ) : row.key === '挂接会话' && detail.sessions.length > 0 && onOpenSession !== undefined ? (
             <span className="dswf-td-bv dswf-td-bv-sess">
               {detail.sessions.map((session) => (
                 <Tooltip key={session.sessionId} label={sessionTitleOfOrId(sessionTitleOf, session.sessionId)} portal>
@@ -407,6 +421,8 @@ export interface TaskDrawerBodyProps {
   /** 会话名解析器（task-ui-info-density-blitz S1 通道递达——账本快照 displayTitle 窄读；
    * 缺席/未命中 = undefined 回退 sessionId。消费 = 简要行/时间线 pill 名称展示） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名——注入面同 sessionTitleOf 先例；缺席 fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
 }
 
 export { sessionJumpHandler, sessionTitleOfOrId } from './detail-model.js'
@@ -435,6 +451,7 @@ export function TaskDrawerBody({
   onDragEnd,
   now,
   sessionTitleOf,
+  taskTitleOf,
 }: TaskDrawerBodyProps): ReactNode {
   const at = now ?? Date.now()
   const categoryClass = `dswf-td-cat-${typeCategoryClassOf(detail.taskType)}`
@@ -481,8 +498,9 @@ export function TaskDrawerBody({
       <div className="dswf-td-head" data-dswf-td-head="" {...taskDrawerHeadDragProps(onDragStart, onDragMove, onDragEnd)}>
         <StateDot state={STATUS_DOT_STATE[detail.taskStatus]} size={8} />
         {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗 transform/层叠上下文） */}
-        <Tooltip label={taskKeyLabel(detail.slug, detail.localId)} portal>
-          <span className="dswf-td-key">{taskKeyLabel(detail.slug, detail.localId)}</span>
+        {/* S3：弹窗头 = 编号 chip（标题行承载 title；悬停 Tooltip 补 {编号} {title} 全名） */}
+        <Tooltip label={taskNameLabel(detail.localId, detail.title)} portal>
+          <span className="dswf-td-key">{detail.localId}</span>
         </Tooltip>
         <Tag tone="neutral" className="dswf-td-status">
           {TASK_STATUS_LABELS[detail.taskStatus].zh}
@@ -560,13 +578,13 @@ export function TaskDrawerBody({
               open={collapsed.timeline}
               onToggle={onToggleSection}
             >
-              <TimelineNow detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} />
-              <TimelineEvents detail={detail} onOpenSession={jumpToSession} now={at} sessionTitleOf={sessionTitleOf} />
+              <TimelineNow detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} taskTitleOf={taskTitleOf} />
+              <TimelineEvents detail={detail} onOpenSession={jumpToSession} now={at} sessionTitleOf={sessionTitleOf} taskTitleOf={taskTitleOf} />
             </DrawerSection>
           </div>
         </>
       ) : (
-        <DrawerBriefBody detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} />
+        <DrawerBriefBody detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} taskTitleOf={taskTitleOf} />
       )}
       <div className="dswf-td-foot">
         {/* 诊断失败（4.6 UF-3 v19–v21——仅 blocked/rejected 任务；无单任务执行动作[Hard Rule]） */}
@@ -732,6 +750,8 @@ export interface TaskDrawerProps {
    * 快照 displayTitle 窄读；缺席/未命中 = undefined 回退 sessionId。消费 = 简要行/时间线
    * pill 名称展示（S1/SC1）） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名——注入面同 sessionTitleOf 先例；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 相对时间基准（缺省当次渲染时刻） */
@@ -767,7 +787,7 @@ export interface TaskDrawerDragSession {
  * → formatDiagMessage 自动发送（发往任务容器对应模式：feature → 远征 / 突击提案 → 突击；
  * 容器 mode 缺席[未标记提案直挂] = 不切换——registry 默认）。
  */
-export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, docsRoot, sessionTitleOf, makeClient, now }: TaskDrawerProps): ReactNode {
+export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, docsRoot, sessionTitleOf, taskTitleOf, makeClient, now }: TaskDrawerProps): ReactNode {
   useTaskDrawerEscape(taskId, onClose)
   const [session, setSession] = useState(() => drawerSessionStore.getState())
   useEffect(() => drawerSessionStore.subscribe(() => {
@@ -976,6 +996,7 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
       onDragEnd={handleDragEnd}
       now={now}
       {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
+      {...(taskTitleOf !== undefined ? { taskTitleOf } : {})}
     />
   )
 }

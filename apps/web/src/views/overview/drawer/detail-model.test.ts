@@ -8,10 +8,12 @@ import {
   gateSummary,
   isTerminalStatus,
   latestSubmitGateOf,
+  prereqFullName,
   scopeDiff,
   taskGoalOf,
   taskKeyLabel,
   taskKvChips,
+  taskNameLabel,
   taskResultOf,
   varsList,
   varsText,
@@ -74,6 +76,19 @@ describe('taskKeyLabel / formatActualDuration（AC1 通用区）', () => {
   it('任务键呈现 = slug/localId（自然键）', () => {
     expect(taskKeyLabel('m2-pipeline', '2.4')).toBe('m2-pipeline/2.4')
     expect(taskKeyLabel('m2-pipeline', 'fix-1')).toBe('m2-pipeline/fix-1')
+  })
+
+  it('taskNameLabel（S3 名称位）：{编号} {title}——无 slug 前缀', () => {
+    expect(taskNameLabel('2.4', 'plugin-forge tool 半身对接')).toBe('2.4 plugin-forge tool 半身对接')
+  })
+
+  it('prereqFullName（S3 前置编号化全名）：解析器命中 = {编号} {title}；缺席/未命中 = fail-soft 回退编号', () => {
+    const p = { slug: 'm2-pipeline', localId: '2.3' }
+    expect(prereqFullName((slug, localId) => (slug === 'm2-pipeline' && localId === '2.3' ? '前置任务' : undefined), p)).toBe(
+      '2.3 前置任务',
+    )
+    expect(prereqFullName(undefined, p)).toBe('2.3')
+    expect(prereqFullName(() => undefined, p)).toBe('2.3')
   })
 
   it('实际耗时格式：Xm / XhYm / XdXh；缺省或 ≤0 → undefined（不显示）', () => {

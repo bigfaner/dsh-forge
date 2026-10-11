@@ -69,7 +69,7 @@ describe('TaskDrawerBody · 通用区（AC1）', () => {
     const html = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
     expect(html).toContain('data-dswf-td-drawer=""')
     expect(html).toContain('data-dswf-td-close') // ✕ 在头部行尾（spacer 之后）
-    expect(html).toContain('m2-pipeline/2.4')
+    expect(html).toContain('dswf-td-key">2.4<') // S3：弹窗头 = 编号 chip（去 slug 前缀）
     expect(html).toContain('已完成')
     expect(html).toContain('plugin-forge tool 半身对接')
     expect(html).toContain('data-dswf-td-kv=""')
@@ -131,7 +131,7 @@ describe('TaskDrawerBody · D22 简要形态（默认 440——键+tag+标题+�
     expect(html).toContain('类型')
     expect(html).toContain('coding-feature · P0')
     expect(html).toContain('前置')
-    expect(html).toContain('m2-pipeline/2.3')
+    expect(html).toContain('data-dswf-td-prereq="2.3"') // S3：前置只显编号
     expect(html).toContain('挂接会话')
     expect(html).toContain('s-dispatch、s-worker')
   })
@@ -158,7 +158,7 @@ describe('TaskDrawerBody · D22 简要形态（默认 440——键+tag+标题+�
 
   it('键+tag+标题+概要共存：头部（键/tag）→ 标题行 → 简要体（DOM 序）+ 脚行转移入口照常在场', () => {
     const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
-    const keyAt = html.indexOf('m2-pipeline/2.4')
+    const keyAt = html.indexOf('dswf-td-key">2.4<')
     const tagAt = html.indexOf('已完成')
     const titleAt = html.indexOf('plugin-forge tool 半身对接')
     const briefAt = html.indexOf('data-dswf-td-brief')

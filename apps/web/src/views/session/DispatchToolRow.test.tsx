@@ -91,14 +91,14 @@ describe('dispatchRowSummary（行摘要拼装）', () => {
 
 // ─────────────────── 任务键后缀（用户裁决：结算后显示） ───────────────────
 
-describe('dispatchTaskKeyOf（结算文本首行 → 领取任务键）', () => {
-  it('三首行形态解析（formatOk/formatErr 模板——契约测试 pin 面）', () => {
+describe('dispatchTaskKeyOf（结算文本首行 → 领取任务编号——S3 去 slug 前缀）', () => {
+  it('三首行形态解析（formatOk/formatErr 模板——契约测试 pin 面）→ localId', () => {
     expect(dispatchTaskKeyOf('✓ dsh-forge-m2-pipeline/4.2 completed — coding-feature · 已接线')).toBe(
-      'dsh-forge-m2-pipeline/4.2',
+      '4.2',
     )
-    expect(dispatchTaskKeyOf('⚑ m2-pipeline/5.1 blocked — eval 用例集冲突\n- pool: pending 0')).toBe('m2-pipeline/5.1')
+    expect(dispatchTaskKeyOf('⚑ m2-pipeline/5.1 blocked — eval 用例集冲突\n- pool: pending 0')).toBe('5.1')
     expect(dispatchTaskKeyOf('✗ ERR_SPAWN_FAILED — worker spawn failed for m2-pipeline/4.2: driver 缺席')).toBe(
-      'm2-pipeline/4.2',
+      '4.2',
     )
   })
   it('no-task/halted（未领取）与 null → undefined；follow-up 行（非首行）不误取', () => {
@@ -107,7 +107,7 @@ describe('dispatchTaskKeyOf（结算文本首行 → 领取任务键）', () => 
     expect(dispatchTaskKeyOf(null)).toBeUndefined()
     expect(
       dispatchTaskKeyOf('⚑ m2-pipeline/5.1 blocked — 原因\n- follow-up fix task: m2-pipeline/fix-1 (dispatchable)'),
-    ).toBe('m2-pipeline/5.1')
+    ).toBe('5.1')
   })
   it('首行令牌非键形状（无双段斜杠）→ undefined（防御：模板漂移不猜）', () => {
     expect(dispatchTaskKeyOf('✓ something-odd completed — type')).toBeUndefined()
@@ -139,7 +139,7 @@ describe('dispatchToolRowModel（三相投影）', () => {
     }
     const m = dispatchToolRowModel('dispatchTask', block)
     expect(m.state).toBe('ok')
-    expect(m.taskKey).toBe('m2-pipeline/4.2')
+    expect(m.taskKey).toBe('4.2')
     expect(m.output).toContain('✓ m2-pipeline/4.2 completed')
     expect(m.errorSummary).toBeNull()
   })
@@ -153,7 +153,7 @@ describe('dispatchToolRowModel（三相投影）', () => {
     const m = dispatchToolRowModel('dispatchTask', block)
     expect(m.state).toBe('error')
     expect(m.errorSummary).toBe('✗ ERR_SPAWN_FAILED — worker spawn failed for m2-pipeline/4.2: boom')
-    expect(m.taskKey).toBe('m2-pipeline/4.2')
+    expect(m.taskKey).toBe('4.2')
   })
   it('result interrupted（error.code）→ stopped（上游状态口径）', () => {
     const block: DispatchToolBlock = {
@@ -175,7 +175,7 @@ describe('dispatchToolRowModel（三相投影）', () => {
     const m = dispatchToolRowModel('dispatchTask', block)
     expect(m.summary).toBe('dispatchTask')
     expect(m.body).toBeNull()
-    expect(m.taskKey).toBe('m2-pipeline/4.2') // 结算文本仍在（任务键可得）
+    expect(m.taskKey).toBe('4.2') // 结算文本仍在（任务编号可得）
   })
 })
 
@@ -227,7 +227,7 @@ describe('ForgeDispatchToolRow 渲染', () => {
       />,
     )
     expect(okHtml).toContain('data-dswf-dtr-taskkey')
-    expect(okHtml).toContain('m2-pipeline/4.2')
+    expect(okHtml).toMatch(/data-dswf-dtr-taskkey=""><span[^>]*>4\.2<\/span>/) // S3：后缀只显 localId（无 slug 前缀）
     expect(okHtml).toContain('data-state="ok"')
     const errHtml = renderToStaticMarkup(
       <ForgeDispatchToolRow

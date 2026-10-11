@@ -216,7 +216,8 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
   }
   if (input.kind === 'task-failure') {
     const phrase = FAILURE_STATUS_PHRASES[input.taskStatus] ?? TASK_STATUS_LABELS[input.taskStatus].zh
-    lines.push(`任务：${input.taskKey} ${input.taskTitle}`)
+    // S3 任务行名称位：`任务：{编号} {title}`（去 slug——slug 消歧保留于 @path/所属行）
+    lines.push(`任务：${input.taskKey.split('/').pop() ?? input.taskKey} ${input.taskTitle}`)
     lines.push(`状态：${phrase} — ${input.reason}`)
     lines.push('失败记录：')
     for (const record of input.records) {

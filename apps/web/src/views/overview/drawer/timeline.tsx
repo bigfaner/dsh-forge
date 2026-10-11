@@ -3,11 +3,11 @@
 // Notes）；评估事件 = eval 族 submit 记录的呈现路由（verb 词汇封闭六值——M2 评估结果落
 // submit 记录，标签换「评估」+ 🔑 主会话织入）。节点分色：提交绿/领取蓝/阻塞琥珀/恢复绿/
 // 人工转移蓝环（类位吃状态令牌——drawer.css）。
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
 import { isoTimeLabelZh } from '../../../components/time-label.js'
-import { evalScoreOf, gateSummary, latestSubmitGateOf, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
+import { evalScoreOf, gateSummary, latestSubmitGateOf, prereqFullName, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
 import { templateFamilyOf } from './type-templates/index.js'
 
 export { evalScoreOf } from './detail-model.js' // 现状条「得分+严重度」条件同源投影（消费面重导出）
@@ -44,7 +44,7 @@ export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string 
 /** 现状条条目（六型条件投影——渲染序 = 投影序） */
 export type NowBarItem =
   | { readonly kind: 'blocked'; readonly reason: string }
-  | { readonly kind: 'prereqs'; readonly items: readonly { readonly key: string; readonly statusZh: string }[] }
+  | { readonly kind: 'prereqs'; readonly items: readonly { readonly key: string; readonly slug: string; readonly statusZh: string }[] }
   | { readonly kind: 'sessions'; readonly items: readonly SessionTaskLinkCard[] }
   | { readonly kind: 'surface'; readonly key: string; readonly surfaceType: string }
   | { readonly kind: 'gate'; readonly passed: number; readonly total: number }
@@ -61,7 +61,8 @@ export function nowBarItems(detail: TaskDetail): readonly NowBarItem[] {
     items.push({
       kind: 'prereqs',
       items: detail.prerequisites.map((p) => ({
-        key: taskKeyLabel(p.slug, p.localId),
+        key: p.localId,
+        slug: p.slug,
         statusZh: TASK_STATUS_LABELS[p.taskStatus].zh,
       })),
     })
@@ -124,10 +125,13 @@ export function TimelineNow({
   detail,
   onOpenSession,
   sessionTitleOf,
+  taskTitleOf,
 }: {
   readonly detail: TaskDetail
   readonly onOpenSession?: (sessionId: string) => void
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
 }): ReactNode {
   const items = nowBarItems(detail)
   if (items.length === 0) return null
@@ -145,7 +149,15 @@ export function TimelineNow({
           case 'prereqs':
             return (
               <span className="dswf-td-now-item" key={index}>
-                前置 {item.items.map((p) => `${p.key}（${p.statusZh}）`).join(' · ')}
+                {/* S3 前置编号化：只显编号（状态括注），悬停 Tooltip 补 {编号} {title} 全名 */}
+                前置{' '}
+                {item.items.map((p) => (
+                  <Tooltip key={`${p.slug}/${p.key}`} label={prereqFullName(taskTitleOf, { slug: p.slug, localId: p.key })} portal>
+                    <span className="dswf-td-prereq" data-dswf-td-prereq={p.key}>
+                      {`${p.key}（${p.statusZh}）`}
+                    </span>
+                  </Tooltip>
+                ))}
               </span>
             )
           case 'sessions':
@@ -192,18 +204,36 @@ function eventWeaves(
   detail: TaskDetail,
   onOpenSession: ((sessionId: string) => void) | undefined,
   sessionTitleOf?: (sessionId: string) => string | undefined,
+  taskTitleOf?: (slug: string, localId: string) => string | undefined,
 ): ReactNode {
   const vars = detail.vars ?? {}
   switch (record.verb) {
     case 'add': {
-      const prereqs = detail.prerequisites.map((p) => taskKeyLabel(p.slug, p.localId))
+      // S3 前置编号化：只显编号，悬停 Tooltip 补 {编号} {title} 全名
+      const prereqs = detail.prerequisites.map((p) => (
+        <Tooltip key={`${p.slug}/${p.localId}`} label={prereqFullName(taskTitleOf, p)} portal>
+          <span className="dswf-td-prereq" data-dswf-td-prereq={p.localId}>
+            {p.localId}
+          </span>
+        </Tooltip>
+      ))
       const fixSource = detail.sourceTask !== undefined ? taskKeyLabel(detail.sourceTask.slug, detail.sourceTask.localId) : undefined
       const rootCause = varsText(vars, 'rootCause')
       const sourceFiles = varsText(vars, 'sourceFiles')
       const testScript = varsText(vars, 'testScript')
       return (
         <>
-          {prereqs.length > 0 ? <Note>{`前置声明 ← ${prereqs.join(' · ')}`}</Note> : null}
+          {prereqs.length > 0 ? (
+            <Note>
+              前置声明 ←{' '}
+              {prereqs.map((el, i) => (
+                <Fragment key={i}>
+                  {i > 0 ? ' · ' : ''}
+                  {el}
+                </Fragment>
+              ))}
+            </Note>
+          ) : null}
           {fixSource !== undefined || rootCause !== undefined ? (
             <Note>
               {`fix 链${fixSource !== undefined ? `：来源 ${fixSource}` : ''}${rootCause !== undefined ? ` · 根因：${rootCause}` : ''}`}
@@ -319,11 +349,14 @@ export function TimelineEvents({
   onOpenSession,
   now,
   sessionTitleOf,
+  taskTitleOf,
 }: {
   readonly detail: TaskDetail
   readonly onOpenSession?: (sessionId: string) => void
   readonly now: number
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
 }): ReactNode {
   if (detail.records.length === 0) {
     return (
@@ -348,7 +381,7 @@ export function TimelineEvents({
               <span className="dswf-td-ev-at">{isoTimeLabelZh(record.createdAt, now)}</span>
             </Tooltip>
           </div>
-          {eventWeaves(record, detail, onOpenSession, sessionTitleOf)}
+          {eventWeaves(record, detail, onOpenSession, sessionTitleOf, taskTitleOf)}
         </div>
       ))}
     </div>

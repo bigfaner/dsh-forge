@@ -81,7 +81,8 @@ function taskKeyTokenOf(token: string | undefined): string | undefined {
 }
 
 /**
- * 结算文本 → 领取任务键（用户裁决 2026-10-09：结算后行内显示任务编号）。
+ * 结算文本 → 领取任务编号（S3 编号化：后缀只显 localId，去 slug 前缀——结算文本无 title
+ * 载荷且输出体改造在提案 Out of Scope，title 位缺席）。
  * 三首行形态（formatOk/formatErr 模板——契约测试 pin，稳定可解析）：
  *   `✓ <key> completed — …` / `⚑ <key> blocked — …` / `✗ ERR_SPAWN_FAILED — worker
  *   spawn failed for <key>: …`；no-task/halted 本就无领取 → undefined。
@@ -90,10 +91,9 @@ export function dispatchTaskKeyOf(output: string | null): string | undefined {
   if (output === null) return undefined
   const head = firstLine(output)
   const settled = /^[✓⚑]\s+(\S+)\s+(?:completed|blocked)\b/.exec(head)
-  if (settled !== null) return taskKeyTokenOf(settled[1])
-  const spawnFailed = /worker spawn failed for ([^\s:]+):/.exec(head)
-  if (spawnFailed !== null) return taskKeyTokenOf(spawnFailed[1])
-  return undefined
+  const spawnFailed = settled === null ? /worker spawn failed for ([^\s:]+):/.exec(head) : null
+  const token = taskKeyTokenOf(settled !== null ? settled[1] : spawnFailed !== null ? spawnFailed[1] : undefined)
+  return token === undefined ? undefined : token.split('/')[1]
 }
 
 /** 结算结果文本（content 块拼接；空且带 error 对象时回退 `name: code`——SkillRow 同径） */
@@ -123,7 +123,7 @@ export interface DispatchToolRowModel {
   readonly state: 'preparing' | 'running' | 'ok' | 'error' | 'stopped'
   /** 折叠行摘要段（`dispatchTask` | `dispatchTask · {slug}`） */
   readonly summary: string
-  /** 结算领取任务键（`slug/localId`——结算文本首行解析；在途/未领取 = null） */
+  /** 结算领取任务编号（localId——结算文本首行解析去 slug；在途/未领取 = null） */
   readonly taskKey: string | null
   /** 展开卡输入段（pretty 参数；缺席 = null） */
   readonly body: string | null
