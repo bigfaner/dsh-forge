@@ -104,23 +104,41 @@ async function resolveSourceBySlug(tasks: ForgeTasksService, projectId: string, 
 // ─────────────────────────── 问询（与 ask_user_question 同渲染面） ───────────────────────────
 
 /**
- * 单选问询（userQuestions.ask）。回执取 answers 中本问询 id 的首个选中 label；
- * 关闭面板/取消（ASK_ABORTED）/服务故障 = undefined——调用方按「未选择」收口（fail-soft，
- * 指令面零外抛）。signal 透传官方取消语义（invocation.signal 随载）。
+ * 单选问询（userQuestions.ask）。收束三路：选中 label / 用户取消（关闭面板、ASK_ABORTED、
+ * 空应答）/ 问询通道故障（NO_PROVIDER、异常、非活根 assertLiveRoot 拒绝）——故障与取消
+ * 分值回传，调用方分别收口（1.12 三路收敛文案拆分）。signal 透传官方取消语义。
  *
  * agent 活根定向（1.12 定罪修复，2026-10-11）：无 agent 的 ask 走无主 waterfall，
  * 客户端应答器 scopeOf(owner) 取不到会话即拒接 → NO_PROVIDER「面板从不弹出」。
  * 上游契约：携带 agent 时须为注册表精确活根（CALLER_NOT_LIVE/DELEGATED_CALLER 抛错）——
- * 指令 invocation.agent 即当前会话运行时根，天然满足；异常仍走 fail-soft 收口。
+ * 指令 invocation.agent 即当前会话运行时根，天然满足；非活根异常归故障路明确回执，不静默。
  */
+/**
+ * 问询收束（1.12 三路收敛文案拆分）：用户取消（ASK_ABORTED/关闭面板/空应答）与问询通道
+ * 故障（NO_PROVIDER/异常/非活根）分值——故障回执附「带 slug 直通」指引，取消回执归静默不做。
+ * 非活根（CALLER_NOT_LIVE/DELEGATED_CALLER——assertLiveRoot 抛）落在故障路：回执带原因码，
+ * 不静默、不降级无 agent 重问（无 agent 问询 = 同一 NO_PROVIDER 静默缺陷，降级无意义）。
+ */
+type AskOutcome =
+  | { readonly kind: 'selected'; readonly label: string }
+  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'failed'; readonly reason: string }
+
+/** 用户取消判别（上游 ASK_ABORTED 错误码 / AbortError 名；子串匹配——结构化最小面无类型缝） */
+function isAskAborted(cause: unknown): boolean {
+  const text = cause instanceof Error ? `${cause.name} ${cause.message}` : String(cause)
+  return /ASK_ABORTED|AbortError/i.test(text)
+}
+
 async function askOption(
   ask: EscalationAskFace,
   question: { readonly id: string; readonly header: string; readonly question: string; readonly detail?: string; readonly options: readonly EscalationAskOption[] },
   signal?: AbortSignal,
   agent?: unknown,
-): Promise<string | undefined> {
+): Promise<AskOutcome> {
+  let answer: unknown
   try {
-    const answer = await ask.ask({
+    answer = await ask.ask({
       questions: [
         {
           id: question.id,
@@ -133,14 +151,16 @@ async function askOption(
       ...(agent !== undefined ? { agent } : {}),
       ...(signal !== undefined ? { signal } : {}),
     })
-    const item = (answer as { answers?: readonly { id?: unknown; selected?: unknown }[] } | undefined)?.answers?.find(
-      (entry) => entry?.id === question.id,
-    )
-    const selected = Array.isArray(item?.selected) ? item.selected.filter((s): s is string => typeof s === 'string') : []
-    return selected[0]
-  } catch {
-    return undefined
+  } catch (cause) {
+    if (isAskAborted(cause)) return { kind: 'cancelled' }
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    return { kind: 'failed', reason: reason === '' ? '问询通道异常' : reason }
   }
+  const item = (answer as { answers?: readonly { id?: unknown; selected?: unknown }[] } | undefined)?.answers?.find(
+    (entry) => entry?.id === question.id,
+  )
+  const selected = Array.isArray(item?.selected) ? item.selected.filter((s): s is string => typeof s === 'string') : []
+  return selected.length > 0 ? { kind: 'selected', label: selected[0] as string } : { kind: 'cancelled' }
 }
 
 // ─────────────────────────── handler ───────────────────────────
@@ -200,7 +220,7 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
   if (deps.ask === undefined) {
     return { kind: 'success', text: '当前没有可用的问询通道——请带任务源 slug 执行 /run-dag-tasks <source-slug>' }
   }
-  const picked = await askOption(
+  const outcome = await askOption(
     deps.ask,
     {
       id: SOURCE_QUESTION_ID,
@@ -212,11 +232,17 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
     ctx.signal,
     ctx.parent, // ask 活根定向（无 agent 无应答器接受——NO_PROVIDER 面板不弹）
   )
-  const selected = candidates.find((candidate) => candidate.label === picked)
-  if (picked === undefined || selected === undefined) {
-    return { kind: 'success', text: '未选择任务源，未启动派发循环' }
+  if (outcome.kind === 'selected') {
+    const selected = candidates.find((candidate) => candidate.label === outcome.label)
+    if (selected !== undefined) {
+      return startSource(deps, ctx, selected.source)
+    }
   }
-  return startSource(deps, ctx, selected.source)
+  if (outcome.kind === 'failed') {
+    // 问询通道故障（NO_PROVIDER/异常/非活根）≠ 用户取消——error 回执 + slug 直通指引，不静默
+    return { kind: 'error', text: `任务源问询通道故障（${outcome.reason}）——可带任务源 slug 直通：/run-dag-tasks <source-slug>` }
+  }
+  return { kind: 'success', text: '未选择任务源，未启动派发循环——可带 slug 直通：/run-dag-tasks <source-slug>' }
 }
 
 /** 跑动中再触发：查看/停止/替换问询（停止/替换恒经本会话作用域——decisions #20） */
@@ -224,7 +250,7 @@ async function handleRunning(deps: RunDagTasksDeps, ctx: InvokeContext, running:
   if (deps.ask === undefined) {
     return runningView(running) // 问询面缺席 = 降级为查看文本（fail-soft 同源）
   }
-  const picked = await askOption(
+  const outcome = await askOption(
     deps.ask,
     {
       id: RUNNING_QUESTION_ID,
@@ -243,11 +269,20 @@ async function handleRunning(deps: RunDagTasksDeps, ctx: InvokeContext, running:
     ctx.signal,
     ctx.parent, // ask 活根定向（无 agent 无应答器接受——NO_PROVIDER 面板不弹）
   )
-  if (picked === '查看') return runningView(running)
-  if (picked === '停止') return stopOwn(deps, ctx)
-  if (picked === '替换') {
-    await deps.driver.stop({ ownerSessionId: ctx.sessionId }) // 本会话作用域；他会话循环原样（隔离）
-    return slug !== '' ? startWithSlug(deps, ctx, slug) : pickAndStart(deps, ctx)
+  if (outcome.kind === 'selected') {
+    if (outcome.label === '查看') return runningView(running)
+    if (outcome.label === '停止') return stopOwn(deps, ctx)
+    if (outcome.label === '替换') {
+      await deps.driver.stop({ ownerSessionId: ctx.sessionId }) // 本会话作用域；他会话循环原样（隔离）
+      return slug !== '' ? startWithSlug(deps, ctx, slug) : pickAndStart(deps, ctx)
+    }
+  }
+  if (outcome.kind === 'failed') {
+    // 问询通道故障 ≠ 用户取消——error 回执不静默（循环保持原状），附替代指引
+    return {
+      kind: 'error',
+      text: `派发问询通道故障（${outcome.reason}）——停止可执行 /stop-dag-tasks，或带任务源 slug 直通：/run-dag-tasks <source-slug>`,
+    }
   }
   return { kind: 'success', text: '未选择操作，派发循环保持不变' }
 }

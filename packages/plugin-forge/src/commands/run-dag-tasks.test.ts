@@ -245,13 +245,37 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     expect((out as { text?: string }).text).toContain('未选择任务源')
   })
 
-  it('问询故障（服务拒绝）：fail-soft 未启动不抛', async () => {
+  it('用户取消（ASK_ABORTED）：success「未选择任务源」含 slug 直通指引，不启动', async () => {
     const ask = askStub(undefined, new Error('ASK_ABORTED'))
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
     const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
     expect(stub.startInputs).toHaveLength(0)
     expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).toContain('未选择任务源')
+    expect((out as { text?: string }).text).toContain('/run-dag-tasks <source-slug>')
+  })
+
+  it('问询通道故障（NO_PROVIDER/异常）：error 回执带原因与 slug 指引，不启动不静默', async () => {
+    const ask = askStub(undefined, new Error('no user-questions answerer accepted the request'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    expect(stub.startInputs).toHaveLength(0)
+    expect(out.kind).toBe('error')
+    expect((out as { text: string }).text).toContain('问询通道故障')
+    expect((out as { text: string }).text).toContain('no user-questions answerer accepted the request')
+    expect((out as { text: string }).text).toContain('/run-dag-tasks <source-slug>')
+  })
+
+  it('非活根（assertLiveRoot 拒绝 CALLER_NOT_LIVE）：归故障路 error 回执，原因码不静默', async () => {
+    const ask = askStub(undefined, new Error('CALLER_NOT_LIVE: ask caller is not the live root'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    expect(stub.startInputs).toHaveLength(0)
+    expect(out.kind).toBe('error')
+    expect((out as { text: string }).text).toContain('CALLER_NOT_LIVE')
   })
 
   it('问询面缺席（装配降级）：指引带参直通文本，不抛', async () => {
@@ -387,6 +411,18 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
     expect((out as { text: string }).text).toContain('未选择操作')
     expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('问询通道故障（1.12 同径拆分）：error 回执带原因与替代指引，循环保持不动', async () => {
+    const ask = askStub(undefined, new Error('no user-questions answerer accepted the request'))
+    const stub = driverStub({ activeRecord: ACTIVE })
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    expect(out.kind).toBe('error')
+    expect((out as { text: string }).text).toContain('问询通道故障')
+    expect((out as { text: string }).text).toContain('/stop-dag-tasks')
+    expect(stub.loops.has(SESSION)).toBe(true) // 循环原样保持
+    expect(stub.stopInputs).toHaveLength(0)
   })
 })
 
