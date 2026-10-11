@@ -9,6 +9,9 @@
 // D41 增面（2026-10-10 用户裁决）：①归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT hide——
 // 弱化标记断言迁显式 default 受控缝）；②会话 24h 窗口（窗口外折叠进「更早（N）」本地
 // 微观态组——缺省收起静态可钉；搜索在场折叠让位；flat = 显式全量视图零回归）。
+// D45 增面（2026-10-10 用户再追加裁决——三钮对齐 dsh）：行尾 hover 三钮（⋯ 菜单/
+// 归档会话/置顶会话——DOM 序断言）+ 「打开会话」钮退役 + 置顶静止图钉标记 + 归档行
+// 互斥/槽空白 + sessionMenuItemsOf 菜单项数据面（官方四项序）+ 模态源面 pin。
 // 官方 Menu/Modal 开弹层静态不可渲染（portal——node 无 DOM）：菜单项数据面
 // （SIDEBAR_VIEW_MENU_ITEMS / projectMenuItemsOf）与受控缝（SidebarProjectsZone/
 // SidebarRail 直接渲染）承载静态断言；开弹层行为归 e2e（fix-24 同裁）。
@@ -26,6 +29,7 @@ import {
   SidebarProjectsZone,
   SidebarRail,
   projectMenuItemsOf,
+  sessionMenuItemsOf,
 } from './ForgeWorkspacePanel.js'
 import {
   SIDEBAR_SECTIONHEAD_SELECTOR,
@@ -44,10 +48,10 @@ function node(overrides: Partial<SidebarProjectNode> = {}): SidebarProjectNode {
     wsPath: 'Z:/w/p1',
     archived: false,
     sessions: [
-      { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000 },
-      { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: NOW - 3 * 3_600_000 },
-      { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000 },
-      { sessionId: 's4', title: '静默会话', status: 'idle', updatedAt: NOW - 30_000 },
+      { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: false },
+      { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: NOW - 3 * 3_600_000, pinned: false, archived: false },
+      { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000, pinned: false, archived: false },
+      { sessionId: 's4', title: '静默会话', status: 'idle', updatedAt: NOW - 30_000, pinned: false, archived: false },
     ],
     ...overrides,
   }
@@ -476,7 +480,7 @@ describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedF
       name: '文档站',
       archived: true,
       sessions: [
-        { sessionId: 's9', title: '归档行', status: 'idle', updatedAt: NOW - 60_000 },
+        { sessionId: 's9', title: '归档行', status: 'idle', updatedAt: NOW - 60_000, pinned: false, archived: false },
       ],
     }),
   ]
@@ -555,28 +559,153 @@ describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedF
   })
 })
 
-describe('D42 会话行 hover 动作组（官方 ui-sidebar fading 模式 + iconButton 刻度）', () => {
-  const actions = { onSessionActivate: (_sessionId: string) => {} }
+describe('D42/D45 会话行 hover 动作组（官方 fading 模式 + 三钮 ⋯/归档/置顶 对齐 dsh）', () => {
+  // D45 会话行动作面齐备态（官方 uiWorkspace/sessions 窄面注入——面板 props 面）
+  const sessionFaces = {
+    onSessionPinToggle: (_sessionId: string, _pinned: boolean) => {},
+    onSessionArchive: (_sessionId: string, _options?: { readonly stopActivity?: boolean }) =>
+      Promise.resolve(),
+    onSessionUnarchive: (_sessionId: string) => {},
+    onSessionRename: (_sessionId: string, _title: string) => Promise.resolve(),
+    onSessionFork: (_sessionId: string) => {},
+  }
+  const actions = { onSessionActivate: (_sessionId: string) => {}, ...sessionFaces }
 
-  it('行尾动作组在场：「打开会话」钮（主视图切换既有机制——onSessionActivate 行点击同缝）+ aria 可达名', () => {
+  it('行尾三钮在场（D45：⋯ 菜单 / 归档会话 / 置顶会话）+ aria 可达名', () => {
     const markup = panel(actions)
     expect(markup).toContain('data-dswf-session-actions')
-    expect(markup).toContain('data-dswf-session-action="open"')
-    expect(markup).toContain('aria-label="打开会话 登录修复"')
+    expect(markup).toContain('data-dswf-session-action="menu"')
+    expect(markup).toContain('aria-label="会话操作 登录修复"')
+    expect(markup).toContain('data-dswf-session-action="archive"')
+    expect(markup).toContain('aria-label="归档会话 登录修复"')
+    expect(markup).toContain('data-dswf-session-action="pin"')
+    expect(markup).toContain('aria-label="置顶会话 登录修复"')
   })
 
-  it('动作回调缺席容忍：onSessionActivate 未注入 = 动作组不呈现（纯展示件零缺省动作——项目行尾同口径）', () => {
-    expect(panel()).not.toContain('data-dswf-session-action')
-    expect(panel()).not.toContain('data-dswf-session-actions')
-  })
-
-  it('⋯ 菜单缺席记账（官方 Rows trailing 菜单锚位）：会话改名/置顶/归档/删除零 RPC 支撑 → 不虚设、菜单整体缺席', () => {
+  it('三钮 DOM 序 = ⋯ → 归档 → 置顶（官方 session row.action 位序：archive[100] 在前、pin[200] 最右）', () => {
     const markup = panel(actions)
-    expect(markup).not.toContain('data-dswf-session-action="menu"')
-    // 官方 ⋯ 件锚位不在会话行尾（零支撑项——「变更面缺席 = 对应项不出现」P1 口径沿袭）
-    expect(markup).not.toContain('data-dswf-session-action="menu"')
-    // 记账台账源面在案（SessionRow 文档块——逐位：①打开钮 ②⋯菜单零支撑缺席 ③扩展槽缺席）
-    expect(panelSource).toContain('动作集逐位记账')
+    const menu = markup.indexOf('data-dswf-session-action="menu"')
+    const archive = markup.indexOf('data-dswf-session-action="archive"')
+    const pin = markup.indexOf('data-dswf-session-action="pin"')
+    expect(menu).toBeGreaterThanOrEqual(0)
+    expect(archive).toBeGreaterThan(menu)
+    expect(pin).toBeGreaterThan(archive)
+  })
+
+  it('「打开会话」钮退役（D45——行点击 = 打开既有单缝，行尾三钮对齐 dsh）', () => {
+    const markup = panel(actions)
+    expect(markup).not.toContain('data-dswf-session-action="open"')
+    expect(markup).not.toContain('aria-label="打开会话')
+  })
+
+  it('置顶行：置顶钮转取消置顶形 + 行尾静止图钉标记（官方 rest-state pin marker 同位）', () => {
+    const markup = panel({
+      ...actions,
+      tree: [node({ sessions: [{ sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: true, archived: false }] })],
+    })
+    expect(markup).toContain('aria-label="取消置顶 登录修复"')
+    expect(markup).toContain('data-dswf-session-pinmark')
+    expect(markup).toContain('data-pinned')
+    // 静止标记在动作组之后（DOM 序——hover 显三钮时 CSS 让位选择器可及）
+    expect(markup.indexOf('data-dswf-session-pinmark')).toBeGreaterThan(
+      markup.indexOf('data-dswf-session-actions'),
+    )
+  })
+
+  it('归档行：归档钮转取消归档形 + 置顶钮缺席（官方 Pin/Archive 互斥）+ 状态点槽空白', () => {
+    // 归档行仅在场于 default/only 视图（缺省 hide = D41-①/D45 会话域滤除）——受控缝直渲染
+    const markup = renderToStaticMarkup(
+      <SidebarProjectsZone
+        tree={[node({
+          sessions: [
+            { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: true },
+          ],
+        })]}
+        loading={false}
+        currentSessionId={null}
+        projectsPending={false}
+        hasProjects
+        now={NOW}
+        searchOpen={false}
+        onSearchToggle={() => {}}
+        query=""
+        onQueryChange={() => {}}
+        viewMenuOpen={false}
+        onViewMenuOpenChange={() => {}}
+        view={{ groupBy: 'tree', archivedFilter: 'default' } satisfies SidebarView}
+        onViewPick={() => {}}
+        onSessionActivate={() => {}}
+        onSessionPinToggle={sessionFaces.onSessionPinToggle}
+        onSessionArchiveRequest={() => {}}
+        onSessionUnarchive={sessionFaces.onSessionUnarchive}
+        onRequestSessionRename={() => {}}
+        onSessionFork={sessionFaces.onSessionFork}
+      />,
+    )
+    expect(markup).toContain('aria-label="取消归档 登录修复"')
+    expect(markup).toContain('data-archived')
+    expect(markup).not.toContain('data-dswf-session-action="pin"')
+    expect(markup).not.toContain('aria-label="置顶会话')
+    // 官方 archived row keeps the cell blank 同判——行无状态点
+    expect(markup).not.toContain('data-state=')
+  })
+
+  it('动作回调逐位缺席容忍：会话行动作面全缺席 = 三钮不呈现（纯展示件零缺省动作）', () => {
+    const onlyActivate = panel({ onSessionActivate: () => {} })
+    expect(onlyActivate).not.toContain('data-dswf-session-action')
+    expect(onlyActivate).not.toContain('data-dswf-session-actions')
+    // 全缺席（含 onSessionActivate）= 行纯展示（既有 D42 口径）
+    expect(panel()).not.toContain('data-dswf-session-action')
+  })
+
+  it('sessionMenuItemsOf（⋯ 菜单项数据面——官方 session menu 四项序：置顶[100]/重命名[200]/分叉[300]/归档[400]）', () => {
+    // MenuEntry 联合面（separator/label 行无 label）——会话菜单恒动作项，label 收窄读
+    const pairs = (items: readonly ReturnType<typeof sessionMenuItemsOf>[number][]): (string | undefined)[][] =>
+      items.map((item) => [item.id, 'label' in item ? (item.label as string) : undefined])
+    const full = sessionMenuItemsOf(
+      { pinned: false, archived: false },
+      { pin: true, rename: true, fork: true, archive: true, unarchive: true },
+    )
+    expect(full.map((item) => item.id)).toEqual(['pin', 'rename', 'fork', 'archive'])
+    expect(pairs(full)).toEqual([
+      ['pin', '置顶会话'],
+      ['rename', '重命名'],
+      ['fork', '分叉会话'],
+      ['archive', '归档会话'],
+    ])
+    // 置顶行 → 取消置顶；归档行 → 取消归档 + 置顶项缺席（官方互斥判读）
+    const pinned = sessionMenuItemsOf(
+      { pinned: true, archived: false },
+      { pin: true, rename: true, fork: true, archive: true, unarchive: true },
+    )
+    expect(pairs(pinned)).toEqual([
+      ['pin', '取消置顶'],
+      ['rename', '重命名'],
+      ['fork', '分叉会话'],
+      ['archive', '归档会话'],
+    ])
+    const archived = sessionMenuItemsOf(
+      { pinned: false, archived: true },
+      { pin: true, rename: true, fork: true, archive: true, unarchive: true },
+    )
+    expect(pairs(archived)).toEqual([
+      ['rename', '重命名'],
+      ['fork', '分叉会话'],
+      ['archive', '取消归档'],
+    ])
+  })
+
+  it('sessionMenuItemsOf 变更面缺席 = 对应项不出现（P1 无置灰形态——逐位记账）', () => {
+    const none = sessionMenuItemsOf(
+      { pinned: false, archived: false },
+      { pin: false, rename: false, fork: false, archive: false, unarchive: false },
+    )
+    expect(none).toEqual([])
+    const partial = sessionMenuItemsOf(
+      { pinned: false, archived: false },
+      { pin: true, rename: false, fork: false, archive: true, unarchive: false },
+    )
+    expect(partial.map((item) => item.id)).toEqual(['pin', 'archive'])
   })
 
   it('既有刻度零回归（D4 记账面）：行锚/标题/相对时间标签照旧在场，动作组不触碰行本体四件', () => {
@@ -599,14 +728,26 @@ describe('D42 会话行 hover 动作组（官方 ui-sidebar fading 模式 + icon
     expect(idle).not.toMatch(/tabindex="0"[^>]*data-dswf-session="s1"/)
   })
 
-  it('交互语义源面 pin：行 Enter/Space 激活（官方 toggleFromKeyboard 同语义）+ 动作容器 click/keydown stopPropagation（防冒泡双触发）', () => {
+  it('交互语义源面 pin：行 Enter/Space 激活（官方 toggleFromKeyboard 同语义）+ 归档行不打开（官方 archived not openable）+ 动作容器 click/keydown stopPropagation（防冒泡双触发）', () => {
     expect(panelSource).toContain("if (event.key === 'Enter' || event.key === ' ')")
+    // 归档行点击/键盘不打开（官方 archived not openable——P1 静默）
+    expect(panelSource).toContain('// 归档行不打开（官方 archived not openable——P1 静默）')
     // 动作容器防双触发（行激活语义保持——官方 rowActions onClick stopPropagation 同型）
     const actionsBlock = panelSource.slice(panelSource.indexOf('dswf-sidebar-session-actions'))
     expect(actionsBlock).toContain('event.stopPropagation()')
   })
 
-  // D42 CSS 机械面（fading 机制 / 时间让位 / iconButton 刻度）= tests/structure/d42-
-  // session-row-actions.test.ts 读文件 pin（apps/web 测试面无 node:fs 类型面——d36/d38
-  // CSS pin 同落 tests/structure 先例）。
+  it('D45 模态源面 pin：会话改名模态（官方 SessionRenameDialog 同型）+ 停止并归档确认（官方 SessionArchiveConfirmDialog 同型）', () => {
+    // 官方 zh 词典文案锚（重命名会话/会话名称/停止并归档）
+    expect(panelSource).toContain('title="重命名会话"')
+    expect(panelSource).toContain('aria-label="会话名称"')
+    expect(panelSource).toContain('title="停止并归档会话"')
+    expect(panelSource).toContain('仍有运行中的工作')
+    // 运行中拒绝判读 = sessionArchiveActiveRefusal（sidebar-actions——官方 activeSessionRefusal 同判）
+    expect(panelSource).toContain('sessionArchiveActiveRefusal(cause)')
+  })
+
+  // D42 CSS 机械面（fading 机制 / 时间让位 / iconButton 刻度）+ D45（静止图钉标记 /
+  // 归档行弱化）= tests/structure/d42-session-row-actions.test.ts 读文件 pin
+  // （apps/web 测试面无 node:fs 类型面——d36/d38 CSS pin 同落 tests/structure 先例）。
 })

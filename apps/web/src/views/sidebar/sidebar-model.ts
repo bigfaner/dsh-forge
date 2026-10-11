@@ -49,20 +49,34 @@ export interface LedgerWorkspaceRow {
   readonly sessionIds: readonly string[]
 }
 
-/** dsh workspace 归属快照窄形状（上游 WorkspaceSnapshot 消费切片） */
+/**
+ * dsh workspace 归属快照窄形状（上游 WorkspaceSnapshot 消费切片）。D45 增镜像两集合
+ * （上游快照恒在场——选项性 = 测试替身/面漂移缺席容忍，缺席 = 无置顶/归档标记）：
+ * archivedSessionIds = registry 级归档集（宿主序）；pinnedSessionIds = registry 级置顶
+ * 集（最近置顶在前——上游官方口径）。
+ */
 export interface LedgerWorkspacesSnapshot {
   readonly items: readonly LedgerWorkspaceRow[]
+  /** 归档会话 id 集（registry 级——上游 archivedSessionIds 镜像；缺席 = 空集语义） */
+  readonly archivedSessionIds?: readonly string[]
+  /** 置顶会话 id 集（最近置顶在前——上游 pinnedSessionIds 镜像；缺席 = 空集语义） */
+  readonly pinnedSessionIds?: readonly string[]
 }
 
 /** 会话行状态（UF-1 行语言·状态点；官方 StateDot 四态的语义名） */
 export type SidebarSessionStatus = 'attention' | 'done' | 'running' | 'idle'
 
-/** 面板会话行（视图行——当次快照派生，不落地） */
+/** 面板会话行（视图行——当次快照派生，不落地）。D45：pinned/archived = registry 级
+ * 集合成员位（置顶行领先 + 静止位图钉标记；归档行随归档过滤三态进退）。 */
 export interface SidebarSessionRow {
   readonly sessionId: string
   readonly title: string
   readonly status: SidebarSessionStatus
   readonly updatedAt: number
+  /** 置顶成员位（D45——置顶行项目块内领先 + 24h 折叠让位） */
+  readonly pinned: boolean
+  /** 归档成员位（D45——默认隐藏；在场时行语言弱化 + 归档钮转取消归档） */
+  readonly archived: boolean
 }
 
 /** 面板项目节点（项目 = forge projects 行；会话 = 该项目 workspace 名下账本行） */
@@ -118,7 +132,11 @@ export interface SidebarTree {
 
 /**
  * 派生左栏树（纯函数，零快照持有）：项目序 = forge:projects/list 返回序；
- * 每项目会话 = 其 workspaceId 的 sessionIds 顺序（workspace 自有排列序）∩ 账本 byId。
+ * 每项目会话 = 其 workspaceId 的 sessionIds 顺序（workspace 自有排列序）∩ 账本 byId，
+ * D45：置顶行（registry 级 pinned 集）领先置前（置顶集序 = 最近置顶在前，官方
+ * 「pin leads its accounts' saved orders」语义的确定性本地重排——宿主 pin 落位与本地
+ * 重排恒一致，双保险零冲突），其余行保持 workspace 排列序；行随附 pinned/archived
+ * 成员位（归档过滤/行语言消费）。
  * 未注册为项目的 workspace 的会话不入树（产品面 = 注册项目口径；dsh 侧裸 workspace 非产品对象）。
  */
 export function buildSidebarTree(input: {
@@ -131,6 +149,9 @@ export function buildSidebarTree(input: {
   for (const workspace of input.workspaces.items) {
     rowsByWorkspace.set(workspace.workspaceId, workspace.sessionIds)
   }
+  const pinnedOrder = new Map<string, number>()
+  input.workspaces.pinnedSessionIds?.forEach((id, index) => pinnedOrder.set(id, index))
+  const archivedIds = new Set(input.workspaces.archivedSessionIds ?? [])
   const tree: SidebarProjectNode[] = []
   for (const project of input.projects) {
     const memberIds = rowsByWorkspace.get(project.workspaceId) ?? []
@@ -144,6 +165,18 @@ export function buildSidebarTree(input: {
         title: row.displayTitle,
         status: sessionStatus(row),
         updatedAt: row.updatedAt,
+        pinned: pinnedOrder.has(sessionId),
+        archived: archivedIds.has(sessionId),
+      })
+    }
+    // D45 置顶领先（稳定排序——置顶行间 = 置顶集序，非置顶行间 = workspace 排列序保持）
+    if (pinnedOrder.size > 0) {
+      rows.sort((a, b) => {
+        const pa = pinnedOrder.get(a.sessionId)
+        const pb = pinnedOrder.get(b.sessionId)
+        if (pa === undefined) return pb === undefined ? 0 : 1
+        if (pb === undefined) return -1
+        return pa - pb
       })
     }
     tree.push({
@@ -220,8 +253,9 @@ export function shouldCollapseFilterOnBlur(relatedTarget: FilterBlurTarget): boo
 export type SidebarGroupBy = 'tree' | 'flat'
 
 /**
- * 归档过滤三态（项目行 archived 口径——会话 archive 态未入账本镜像窄面，P1 不消费）：
- * default = 全显（归档行弱化，现行行为）/ hide = 不含归档 / only = 仅归档。
+ * 归档过滤三态（D45 扩面：项目域 + 会话域双口径——会话归档集已入账本镜像窄面）：
+ * default = 全显（归档行弱化，现行行为）/ hide = 不含归档（项目与归档会话行俱滤除——
+ * D41-① 缺省）/ only = 仅归档（仅归档项目 + 项目内仅归档会话行）。
  */
 export type SidebarArchivedFilter = 'default' | 'hide' | 'only'
 
@@ -251,21 +285,31 @@ export function sidebarViewOfPick(view: SidebarView, id: string): SidebarView {
 
 /**
  * 归档过滤投影（纯函数——数据源不变，视图行差集）：default = 原树引用返回（零派生）；
- * hide = 滤除归档项目；only = 仅归档项目。会话行随项目行同进退（P1 无会话级归档口径）。
+ * hide = 滤除归档项目 + 各项目内滤除归档会话行（D45 扩面）；only = 仅归档项目 + 项目内
+ * 仅归档会话行。全保留快径原引用返回（零派生——sidebarFilterOf 全命中同款）。
  */
 export function sidebarArchivedFilterOf(
   filter: SidebarArchivedFilter,
   tree: readonly SidebarProjectNode[],
 ): readonly SidebarProjectNode[] {
   if (filter === 'default') return tree
-  if (filter === 'hide') return tree.filter((node) => !node.archived)
-  return tree.filter((node) => node.archived)
+  const wantArchived = filter === 'only'
+  const visible: SidebarProjectNode[] = []
+  for (const node of tree) {
+    if (node.archived !== wantArchived) continue
+    const sessions = node.sessions.filter((row) => row.archived === wantArchived)
+    if (sessions.length === node.sessions.length) visible.push(node)
+    else visible.push({ ...node, sessions })
+  }
+  return visible
 }
 
 // ── 会话默认可见性（D41-②：24h 窗口——2026-10-10 用户裁决「默认展示最近 24 小时的
 //    会话，其它会话折叠起来」。窗口内默认可见、窗口外折叠进「更早（N）」可展开组；
 //    展开态 = 本地微观态不持久化（fix-42 P1 口径沿袭）；搜索在场折叠让位（命中行全展示）；
-//    flat（用户显式全量视图）/ rail（恒项目口径）投影不消费本切分。） ──
+//    flat（用户显式全量视图）/ rail（恒项目口径）投影不消费本切分。
+//    D45 补充：置顶行永不折叠（置顶 = 用户显式「保持可见」语义——窗口外照常 recent，
+//    官方 pinned leads 语义一致）。） ──
 
 /** 会话默认可见窗口（24h——D41-② 裁决口径；now 基准 = 渲染时钟，relativeTimeLabel 同源） */
 export const SIDEBAR_SESSION_WINDOW_MS = 24 * 3_600_000
@@ -277,18 +321,20 @@ export interface SidebarSessionSplit {
 }
 
 /**
- * 会话 24h 窗口切分（纯函数，D41-②）：updatedAt ≥ now−24h = recent，其余 = older
- * （「更早（N）」的 N = older 长度）。组内序 = 输入序（workspace 排列序不重排）；
- * 全 recent 快径原引用返回（零派生——sidebarFilterOf 全命中同款）。
+ * 会话 24h 窗口切分（纯函数，D41-② + D45）：updatedAt ≥ now−24h = recent，其余 =
+ * older（「更早（N）」的 N = older 长度）；置顶行（pinned）恒 recent（D45——置顶 =
+ * 保持可见语义，窗口外不折叠）。组内序 = 输入序（置顶领先序不重排）；全 recent 快径
+ * 原引用返回（零派生——sidebarFilterOf 全命中同款）。
  */
 export function sidebarSessionVisibility(
   sessions: readonly SidebarSessionRow[],
   now: number,
 ): SidebarSessionSplit {
   const boundary = now - SIDEBAR_SESSION_WINDOW_MS
+  const inWindow = (row: SidebarSessionRow): boolean => row.pinned || row.updatedAt >= boundary
   let allRecent = true
   for (const row of sessions) {
-    if (row.updatedAt < boundary) {
+    if (!inWindow(row)) {
       allRecent = false
       break
     }
@@ -297,13 +343,14 @@ export function sidebarSessionVisibility(
   const recent: SidebarSessionRow[] = []
   const older: SidebarSessionRow[] = []
   for (const row of sessions) {
-    if (row.updatedAt >= boundary) recent.push(row)
+    if (inWindow(row)) recent.push(row)
     else older.push(row)
   }
   return { recent, older }
 }
 
-/** 平铺视图行（flat 排列——跨项目全会话行；projectName 随行 = 过滤命中面 + 归属可辨） */
+/** 平铺视图行（flat 排列——跨项目全会话行；projectName 随行 = 过滤命中面 + 归属可辨；
+ * D45：pinned/archived 随行——平铺行与会话行同语言（行尾三钮/归档弱化消费）） */
 export interface SidebarFlatRow {
   readonly projectId: string
   readonly projectName: string
@@ -311,14 +358,21 @@ export interface SidebarFlatRow {
   readonly title: string
   readonly status: SidebarSessionStatus
   readonly updatedAt: number
+  /** 置顶成员位（D45——平铺行行尾动作组消费） */
+  readonly pinned: boolean
+  /** 归档成员位（D45——平铺行行尾动作组消费） */
+  readonly archived: boolean
 }
 
 /**
  * 平铺投影（纯函数）：全会话行跨项目摊平，按 updatedAt 降序（官方 FlatList updated 序
- * 同型；稳定排序保时序平手时的工作区序）。不落地副本——行字段自树节点当次派生。
+ * 同型；稳定排序保时序平手时的工作区序）；置顶行领先（D45——跨项目置前；置顶行间序 =
+ * 树迭代序[项目序 × 工作区序]——registry 置顶时序不进树，P1 逼近面）。不落地副本——
+ * 行字段自树节点当次派生。
  */
 export function sidebarFlatRowsOf(tree: readonly SidebarProjectNode[]): readonly SidebarFlatRow[] {
   const rows: SidebarFlatRow[] = []
+  const pinnedOrder = new Map<string, number>()
   for (const node of tree) {
     for (const session of node.sessions) {
       rows.push({
@@ -328,10 +382,21 @@ export function sidebarFlatRowsOf(tree: readonly SidebarProjectNode[]): readonly
         sessionId: session.sessionId,
         status: session.status,
         updatedAt: session.updatedAt,
+        pinned: session.pinned,
+        archived: session.archived,
       })
+      if (session.pinned && !pinnedOrder.has(session.sessionId)) {
+        pinnedOrder.set(session.sessionId, pinnedOrder.size)
+      }
     }
   }
-  return rows.sort((a, b) => b.updatedAt - a.updatedAt)
+  return rows.sort((a, b) => {
+    const pa = pinnedOrder.get(a.sessionId)
+    const pb = pinnedOrder.get(b.sessionId)
+    if (pa === undefined) return pb === undefined ? b.updatedAt - a.updatedAt : 1
+    if (pb === undefined) return -1
+    return pa - pb
+  })
 }
 
 /**

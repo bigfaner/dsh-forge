@@ -2,15 +2,16 @@
 // 组合缝（三面进、面板出）：
 //   1. 壳 owner share（wide / expandSidebar——上游 SidebarSectionOwnerProps 契约）；
 //   2. 插件 inject face（dsh 账本快照源 + workspace 归属快照源 + openSession +
-//      startSession（fix-42 新会话钮官方面）——client-plugin 经 ctx.slots.register 注入面
-//      携带，本组件 useSyncExternalStore 直读——SC2 零缓存零副本：无本地快照持有，每次
-//      渲染读快照源）；
+//      startSession（fix-42 新会话钮官方面）+ D45 会话行动作面（置顶/取消置顶/归档/
+//      取消归档/分叉/改名——sessionActionFaceOf 逐位组装）——client-plugin 经
+//      ctx.slots.register 注入面携带，本组件 useSyncExternalStore 直读——SC2 零缓存
+//      零副本：无本地快照持有，每次渲染读快照源）；
 //   3. 项目 RPC（useForgeProjects——forge:projects/list；变更动作经 update patch 面 +
 //      静默重拉，fix-42）。
-// 导航/变更动作经 sidebarActions 绑定（openSession/startSession = dsh 面；改名/归档切换 =
-// forge:projects/update RPC 面——name patch 的 workspace 标题对齐归 core 侧 fix-33 ⑪；
-// fix-25：知识入口迁官方 sidebar.panellist 行，产品桥视图事件退役——会话行打开即官方回
-// 会话面板）。
+// 导航/变更动作经 sidebarActions 绑定（openSession/startSession/会话行动作 = dsh 面；
+// 改名/归档切换 = forge:projects/update RPC 面——name patch 的 workspace 标题对齐归
+// core 侧 fix-33 ⑪；fix-25：知识入口迁官方 sidebar.panellist 行，产品桥视图事件退役
+// ——会话行打开即官方回会话面板）。
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
@@ -40,6 +41,27 @@ export interface ForgeSidebarSlotProps {
   readonly openSession: (sessionId: string) => void
   /** 项目行尾「新会话」钮（官方 uiWorkspace.startSession(workspaceId) 新会话流——fix-42，插件 inject face 注入） */
   readonly startSession: (workspaceId: string) => void
+  /**
+   * 置顶会话（官方 uiWorkspace.pinSession——D45；缺席 = 置顶钮/菜单项不呈现）。
+   * 绑定面 = sidebarActions onSessionPinToggle（pinned 位分派 pin/unpin 官方面）。
+   */
+  readonly pinSession?: (sessionId: string) => Promise<void>
+  /** 取消置顶（官方 uiWorkspace.unpinSession——D45；缺席 = 对应面不呈现） */
+  readonly unpinSession?: (sessionId: string) => Promise<void>
+  /**
+   * 归档会话（官方 uiWorkspace.archiveSession——D45；缺席 = 归档钮/菜单项不呈现）。
+   * 运行中会话拒绝上抛 → 面板「停止并归档」确认模态（options.stopPropagation 语义归面板）。
+   */
+  readonly archiveSession?: (
+    sessionId: string,
+    options?: { readonly stopActivity?: boolean },
+  ) => Promise<void>
+  /** 取消归档（官方 uiWorkspace.unarchiveSession——D45；缺席 = 归档行对应面不呈现） */
+  readonly unarchiveSession?: (sessionId: string) => Promise<void>
+  /** 分叉会话（官方 uiWorkspace.forkSession——D45；缺席 = 分叉菜单项不呈现） */
+  readonly forkSession?: (sessionId: string) => Promise<unknown>
+  /** 会话改名（sessions.using → binding.session.rename——D45；缺席 = 改名菜单项不呈现） */
+  readonly renameSession?: (sessionId: string, title: string) => Promise<void>
 }
 
 /**
@@ -57,6 +79,12 @@ export function ForgeSidebarSlot({
   workspaces,
   openSession,
   startSession,
+  pinSession,
+  unpinSession,
+  archiveSession,
+  unarchiveSession,
+  forkSession,
+  renameSession,
 }: ForgeSidebarSlotProps): ReactNode {
   const subscribeSessions = useCallback((onChange: () => void) => sessions.subscribe(onChange), [sessions])
   const readSessions = useCallback(() => sessions.getSnapshot(), [sessions])
@@ -70,6 +98,13 @@ export function ForgeSidebarSlot({
     startSession,
     updateProject: (id, patch) => preloadRpcClientFactory().projects.update(id, patch),
     onProjectsMutated: silentRefreshProjects,
+    // D45 会话行动作官方面（…菜单/归档/置顶——plugin inject face 注入；逐位缺席 = 对应项不呈现）
+    pinSession,
+    unpinSession,
+    archiveSession,
+    unarchiveSession,
+    forkSession,
+    renameSession,
   })
   // 「＋」入口 → 添加项目流程打开缝（跨单元直达流程宿主；缺席 fail-soft warn——2.12 装配前 no-op）
   const onAddProject = useCallback(() => {
@@ -96,6 +131,11 @@ export function ForgeSidebarSlot({
       onStartSession={actions.onStartSession}
       onRenameProject={actions.onRenameProject}
       onArchiveToggle={actions.onArchiveToggle}
+      onSessionPinToggle={actions.onSessionPinToggle}
+      onSessionArchive={actions.onSessionArchive}
+      onSessionUnarchive={actions.onSessionUnarchive}
+      onSessionRename={actions.onSessionRename}
+      onSessionFork={actions.onSessionFork}
       now={Date.now()}
     />
   )

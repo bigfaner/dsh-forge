@@ -44,8 +44,11 @@ function ledger(rows: readonly LedgerSessionRow[], overrides: Partial<LedgerSess
   }
 }
 
-function workspaces(items: readonly { workspaceId: string; sessionIds: string[] }[]): LedgerWorkspacesSnapshot {
-  return { items }
+function workspaces(
+  items: readonly { workspaceId: string; sessionIds: string[] }[],
+  overrides: Partial<LedgerWorkspacesSnapshot> = {},
+): LedgerWorkspacesSnapshot {
+  return { items, ...overrides }
 }
 
 describe('sessionStatus / sessionDotState（状态点四态）', () => {
@@ -148,11 +151,42 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.loading).toBe(true)
     expect(out.currentSessionId).toBeNull()
   })
+
+  it('D45：置顶/归档成员位随行（registry 级集合镜像）+ 置顶行项目块内领先（最近置顶在前）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([ledgerRow('s1'), ledgerRow('s2'), ledgerRow('s3'), ledgerRow('s4')]),
+      workspaces: workspaces(
+        [{ workspaceId: 'w1', sessionIds: ['s1', 's2', 's3', 's4'] }],
+        // 置顶集 = 最近置顶在前（s3 后置顶 → 领先 s2）；归档集含 s4
+        { pinnedSessionIds: ['s3', 's2'], archivedSessionIds: ['s4'] },
+      ),
+    })
+    const rows = out.tree[0]!.sessions
+    // 置顶领先（置顶集序）；非置顶行保持 workspace 排列序
+    expect(rows.map((r) => r.sessionId)).toEqual(['s3', 's2', 's1', 's4'])
+    expect(rows.map((r) => [r.sessionId, r.pinned, r.archived])).toEqual([
+      ['s3', true, false],
+      ['s2', true, false],
+      ['s1', false, false],
+      ['s4', false, true],
+    ])
+  })
+
+  it('D45：置顶/归档集缺席 = 无标记无重排（面漂移/测试替身缺席容忍——快径原序）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([ledgerRow('s1'), ledgerRow('s2')]),
+      workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
+    })
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 's2'])
+    expect(out.tree[0]!.sessions.every((r) => !r.pinned && !r.archived)).toBe(true)
+  })
 })
 
 describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原型 renderProjects 同型）', () => {
   function row(sessionId: string, title: string): SidebarProjectNode['sessions'][number] {
-    return { sessionId, title, status: 'idle', updatedAt: 1 }
+    return { sessionId, title, status: 'idle', updatedAt: 1, pinned: false, archived: false }
   }
 
   const tree: SidebarProjectNode[] = [
@@ -277,8 +311,8 @@ describe('SIDEBAR_VIEW_DEFAULT（D41-①：归档项目默认隐藏）', () => {
 
 describe('sidebarSessionVisibility（D41-②：会话 24h 窗口切分——recent 默认可见 / older 折叠）', () => {
   const NOW = 1_700_000_000_000
-  function row(sessionId: string, updatedAt: number): SidebarSessionRow {
-    return { sessionId, title: `会话${sessionId}`, status: 'idle', updatedAt }
+  function row(sessionId: string, updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
+    return { sessionId, title: `会话${sessionId}`, status: 'idle', updatedAt, pinned: false, archived: false, ...overrides }
   }
 
   it('窗口内（updatedAt ≥ now−24h）= recent，其余 = older（组内序 = 输入序不重排）', () => {
@@ -316,9 +350,19 @@ describe('sidebarSessionVisibility（D41-②：会话 24h 窗口切分——rece
     const frozen = Object.freeze(sessions.map((r) => ({ ...r })))
     expect(() => sidebarSessionVisibility(frozen, NOW)).not.toThrow()
   })
+
+  it('D45：置顶行永不折叠（窗口外照常 recent——置顶 = 保持可见语义）', () => {
+    const sessions = [row('a', NOW - 2 * DAY), row('p', NOW - 3 * DAY, { pinned: true }), row('b', NOW - 2 * DAY)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent.map((r) => r.sessionId)).toEqual(['p'])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['a', 'b'])
+  })
 })
 
-describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
+describe('sidebarArchivedFilterOf（归档过滤投影——D45 扩面：项目域 + 会话域双口径）', () => {
+  function srow(sessionId: string, archived = false): SidebarSessionRow {
+    return { sessionId, title: `行${sessionId}`, status: 'idle', updatedAt: 1, pinned: false, archived }
+  }
   const tree: readonly SidebarProjectNode[] = [
     { projectId: 'p1', workspaceId: 'w1', name: '活跃', wsPath: 'Z:/w/p1', archived: false, sessions: [] },
     { projectId: 'p2', workspaceId: 'w2', name: '已归档', wsPath: 'Z:/w/p2', archived: true, sessions: [] },
@@ -333,7 +377,27 @@ describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
     expect(sidebarArchivedFilterOf('only', tree).map((n) => n.projectId)).toEqual(['p2'])
   })
 
-  it('会话行随项目行同进退（P1 无会话级归档口径）', () => {
+  it('D45 会话域：hide = 项目内归档会话行滤除（活跃项目混合行差集派生）', () => {
+    const mixed: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '活跃',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [srow('s1'), srow('s2', true), srow('s3')],
+      },
+    ]
+    expect(sidebarArchivedFilterOf('hide', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 's3'])
+    // 全保留 = 节点原样引用（零派生——纯投影快径）
+    expect(sidebarArchivedFilterOf('hide', mixed)[0]).not.toBe(mixed[0])
+    const clean: readonly SidebarProjectNode[] = [
+      { ...mixed[0]!, sessions: [srow('s1'), srow('s3')] },
+    ]
+    expect(sidebarArchivedFilterOf('hide', clean)[0]).toBe(clean[0])
+  })
+
+  it('D45 会话域：only = 项目内仅归档会话行（归档项目 + 归档行同口径）', () => {
     const withSessions: readonly SidebarProjectNode[] = [
       {
         projectId: 'p1',
@@ -341,9 +405,7 @@ describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
         name: '活跃',
         wsPath: 'Z:/w/p1',
         archived: false,
-        sessions: [
-          { sessionId: 's1', title: '行', status: 'idle', updatedAt: 1 },
-        ],
+        sessions: [srow('s1'), srow('s2', true)],
       },
       {
         projectId: 'p2',
@@ -351,17 +413,23 @@ describe('sidebarArchivedFilterOf（归档过滤投影）', () => {
         name: '归档',
         wsPath: 'Z:/w/p2',
         archived: true,
-        sessions: [
-          { sessionId: 's2', title: '行', status: 'idle', updatedAt: 2 },
-        ],
+        sessions: [srow('s3'), srow('s4', true)],
       },
     ]
-    expect(sidebarArchivedFilterOf('hide', withSessions)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
-    expect(sidebarArchivedFilterOf('only', withSessions)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+    const only = sidebarArchivedFilterOf('only', withSessions)
+    expect(only.map((n) => n.projectId)).toEqual(['p2'])
+    expect(only[0]!.sessions.map((r) => r.sessionId)).toEqual(['s4'])
+    // hide：活跃项目滤归档行 + 归档项目整块离场
+    const hide = sidebarArchivedFilterOf('hide', withSessions)
+    expect(hide.map((n) => n.projectId)).toEqual(['p1'])
+    expect(hide[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
   })
 })
 
 describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42）', () => {
+  function frow(sessionId: string, title: string, status: SidebarSessionRow['status'], updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
+    return { sessionId, title, status, updatedAt, pinned: false, archived: false, ...overrides }
+  }
   const tree: readonly SidebarProjectNode[] = [
     {
       projectId: 'p1',
@@ -370,8 +438,8 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       wsPath: 'Z:/w/p1',
       archived: false,
       sessions: [
-        { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: 100 },
-        { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: 300 },
+        frow('s1', '登录修复', 'attention', 100),
+        frow('s2', '索引重建', 'running', 300),
       ],
     },
     {
@@ -381,7 +449,7 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       wsPath: 'Z:/w/p2',
       archived: false,
       sessions: [
-        { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: 200 },
+        frow('s3', '文档补全', 'done', 200),
       ],
     },
   ]
@@ -396,6 +464,8 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       title: '索引重建',
       status: 'running',
       updatedAt: 300,
+      pinned: false,
+      archived: false,
     })
   })
 
@@ -408,12 +478,42 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
         wsPath: 'Z:/w/p1',
         archived: false,
         sessions: [
-          { sessionId: 'a1', title: '行一', status: 'idle', updatedAt: 5 },
-          { sessionId: 'a2', title: '行二', status: 'idle', updatedAt: 5 },
+          frow('a1', '行一', 'idle', 5),
+          frow('a2', '行二', 'idle', 5),
         ],
       },
     ]
     expect(sidebarFlatRowsOf(tie).map((r) => r.sessionId)).toEqual(['a1', 'a2'])
+  })
+
+  it('D45：置顶行跨项目领先（置顶集序 = 最近置顶在前；非置顶行保持 updated 降序）', () => {
+    const pinnedTree: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '支付网关',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [
+          frow('s1', '登录修复', 'attention', 100),
+          frow('s2', '索引重建', 'running', 300, { pinned: true }),
+        ],
+      },
+      {
+        projectId: 'p2',
+        workspaceId: 'w2',
+        name: '文档站',
+        wsPath: 'Z:/w/p2',
+        archived: false,
+        sessions: [
+          frow('s3', '文档补全', 'done', 200, { pinned: true }),
+          frow('s4', '新页', 'idle', 400),
+        ],
+      },
+    ]
+    // 置顶两行领先（置顶行间 = 树迭代序——registry 置顶时序不进树，P1 逼近面）；
+    // 非置顶行 updated 降序（s4 > s1）
+    expect(sidebarFlatRowsOf(pinnedTree).map((r) => r.sessionId)).toEqual(['s2', 's3', 's4', 's1'])
   })
 
   it('过滤：空查询原引用；标题/项目名命中；全不命中空集', () => {

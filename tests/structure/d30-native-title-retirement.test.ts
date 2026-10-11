@@ -145,8 +145,9 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // 空态标题（文案标题非 tooltip）×15：feature-tab/proposal-tab/task-tab×2/KnowledgeView/
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel
   EmptyState: 15,
-  // 对话框标题（Modal 头部标题文本）×4：ForgeWorkspacePanel/AddProjectFlow/ModeDialog/VerdictDialog
-  Modal: 4,
+  // 对话框标题（Modal 头部标题文本）×6：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog
+  Modal: 6,
   // 官方 Rows 行标题文本 prop ×1（ForgeWorkspacePanel 项目行名称）
   DisclosureRow: 1,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）

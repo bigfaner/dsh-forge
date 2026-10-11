@@ -140,8 +140,19 @@ function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
 }
 
 /** 假 ctx：slots 收集 inject/register，八服务经 get 递达（reflect 可注入——m3.1 D25
- *  loadModelCatalog 惰性反射面测试） */
-function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
+ *  loadModelCatalog 惰性反射面测试）。D45 sessionFaces：uiWorkspace 会话行动作面 +
+ * sessions.using 可注入（缺省缺席 = 注入面键缺席——面板对应项不呈现的测试面）。 */
+function fakeClientCtx(
+  reflect?: { readonly get: (name: string) => unknown },
+  sessionFaces?: {
+    readonly uiWorkspaceExtra?: Record<string, unknown>
+    readonly sessionsUsing?: (
+      sessionId: string,
+      options: { readonly source: string },
+      operation: (reference: unknown) => unknown,
+    ) => Promise<unknown>
+  },
+): {
   ctx: ForgeClientCtx
   registers: RegisterCall[]
   injectedKeys: string[]
@@ -193,8 +204,10 @@ function fakeClientCtx(reflect?: { readonly get: (name: string) => unknown }): {
     get refresh(): (() => Promise<unknown>) | undefined {
       return sessionsRefresh.current
     },
+    // D45：using 可注入（会话改名正径测试面——缺省缺席 = renameSession 键缺席）
+    ...(sessionFaces?.sessionsUsing !== undefined ? { using: sessionFaces.sessionsUsing } : {}),
   }
-  const uiWorkspace = { openSession: open, startSession: start }
+  const uiWorkspace = { openSession: open, startSession: start, ...sessionFaces?.uiWorkspaceExtra }
   const workspaces = { list: { tag: 'workspaces-list' } }
   // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）
   const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle, openTab }
@@ -389,6 +402,88 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     expect(open).toHaveBeenCalledWith('s-1')
     ;(face as { startSession: (id: string) => void }).startSession('w-1')
     expect(start).toHaveBeenCalledWith('w-1')
+    unpublishViews()
+  })
+
+  it('D45 会话行动作面：官方面在场 = 注入面携带（⋯菜单/归档/置顶三钮数据源）——sessionActionFaceOf 逐位组装', async () => {
+    publishFakeViews()
+    const archive = vi.fn().mockResolvedValue(undefined)
+    const unarchive = vi.fn().mockResolvedValue(undefined)
+    const pin = vi.fn().mockResolvedValue(undefined)
+    const unpin = vi.fn().mockResolvedValue(undefined)
+    const fork = vi.fn().mockResolvedValue('child-1')
+    const using = vi.fn().mockImplementation(
+      (
+        _sessionId: string,
+        _options: { readonly source: string },
+        operation: (reference: unknown) => unknown,
+      ) =>
+        Promise.resolve(
+          operation({ binding: { session: { rename: (title: string) => Promise.resolve({ ok: true, value: { title } }) } } }),
+        ),
+    )
+    const { ctx, registers } = fakeClientCtx(undefined, {
+      uiWorkspaceExtra: { archiveSession: archive, unarchiveSession: unarchive, pinSession: pin, unpinSession: unpin, forkSession: fork },
+      sessionsUsing: using,
+    })
+    forgeClientPlugin().apply(ctx)
+    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
+    const face = workspaces.options.inject!() as {
+      archiveSession: (id: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
+      unarchiveSession: (id: string) => Promise<void>
+      pinSession: (id: string) => Promise<void>
+      unpinSession: (id: string) => Promise<void>
+      forkSession: (id: string) => Promise<unknown>
+      renameSession: (id: string, title: string) => Promise<void>
+    }
+    expect(typeof face.archiveSession).toBe('function')
+    expect(typeof face.unarchiveSession).toBe('function')
+    expect(typeof face.pinSession).toBe('function')
+    expect(typeof face.unpinSession).toBe('function')
+    expect(typeof face.forkSession).toBe('function')
+    expect(typeof face.renameSession).toBe('function')
+    // 直通官方面（options 透传——停止并归档确认流）
+    void face.archiveSession('s-1', { stopActivity: true })
+    expect(archive).toHaveBeenCalledWith('s-1', { stopActivity: true })
+    void face.forkSession('s-1')
+    expect(fork).toHaveBeenCalledWith('s-1')
+    // 改名正径：sessions.using(source='workspaceOperation') → binding.session.rename
+    // （RemoteResult 信封——!ok 抛 error.message，官方 renameSession 适配同判）
+    await expect(face.renameSession('s-1', '新标题')).resolves.toBeUndefined()
+    expect(using).toHaveBeenCalledWith(
+      's-1',
+      { source: 'workspaceOperation' },
+      expect.any(Function),
+    )
+    unpublishViews()
+  })
+
+  it('D45 官方面缺席 = 注入面键缺席（面板对应动作钮/菜单项不呈现——P1 口径）+ 改名拒绝上抛（RemoteResult !ok → error.message）', async () => {
+    publishFakeViews()
+    const usingReject = vi.fn().mockImplementation(
+      (
+        _sessionId: string,
+        _options: { readonly source: string },
+        operation: (reference: unknown) => unknown,
+      ) =>
+        Promise.resolve(
+          operation({ binding: { session: { rename: (_title: string) => Promise.resolve({ ok: false, error: { message: '标题冲突' } }) } } }),
+        ),
+    )
+    const { ctx, registers } = fakeClientCtx(undefined, { sessionsUsing: usingReject })
+    forgeClientPlugin().apply(ctx)
+    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
+    const face = workspaces.options.inject!() as Record<string, unknown> & {
+      renameSession: (id: string, title: string) => Promise<void>
+    }
+    // uiWorkspace 会话行动作面缺席 = 对应键缺席（改名面在场——sessions.using 在场）
+    expect(face['archiveSession']).toBeUndefined()
+    expect(face['unarchiveSession']).toBeUndefined()
+    expect(face['pinSession']).toBeUndefined()
+    expect(face['unpinSession']).toBeUndefined()
+    expect(face['forkSession']).toBeUndefined()
+    // 改名拒绝 = error.message 上抛（面板改名模态呈现）
+    await expect(face.renameSession('s-1', 'x')).rejects.toThrow('标题冲突')
     unpublishViews()
   })
 })

@@ -194,6 +194,16 @@ export interface ForgeSessionsService {
    * 重判读。缺席（上游面漂移）= 跳过，平开兜底。
    */
   readonly refresh?: () => Promise<unknown>
+  /**
+   * 借用会话作用域引用（官方 ISessions.using 消费切片——D45 会话改名正径：官方
+   * RenameSession 适配同面 `using(sessionId, {source:'workspaceOperation'}, ref =>
+   * ref.binding.session.rename(title))`）。缺席（上游面漂移）= 改名菜单项不呈现。
+   */
+  readonly using?: (
+    target: string,
+    options: { readonly source: string },
+    operation: (reference: unknown) => unknown,
+  ) => Promise<unknown>
 }
 
 /**
@@ -210,6 +220,27 @@ export interface ForgeUiWorkspaceService {
   openSession(target: string | ForgeSubagentOpenAddress): void
   /** 工作区新会话流（官方 UiWorkspaceService.startSession——复用/新建空白会话并打开） */
   startSession(workspaceId?: string): void
+  /**
+   * 归档会话（官方 UiWorkspaceService.archiveSession——D45 会话行动作钮正径）。运行中
+   * 会话被宿主拒（WorkspaceArchiveError `workspace/session-active`）→ 拒绝原样上抛
+   * （面板停止并归档确认流消费）；`stopActivity` = 先停运行工作再归档。
+   * 缺席（上游面漂移）= 归档钮/菜单项不呈现。
+   */
+  readonly archiveSession?: (
+    sessionId: string,
+    options?: { readonly stopActivity?: boolean },
+  ) => Promise<void>
+  /** 取消归档（官方 UiWorkspaceService.unarchiveSession——D45）。缺席 = 对应面不呈现。 */
+  readonly unarchiveSession?: (sessionId: string) => Promise<void>
+  /** 置顶会话（官方 UiWorkspaceService.pinSession——D45）。缺席 = 置顶钮/菜单项不呈现。 */
+  readonly pinSession?: (sessionId: string) => Promise<void>
+  /** 取消置顶（官方 UiWorkspaceService.unpinSession——D45）。缺席 = 对应面不呈现。 */
+  readonly unpinSession?: (sessionId: string) => Promise<void>
+  /**
+   * 分叉会话（官方 UiWorkspaceService.forkSession——D45；子会话经宿主列表到达源行旁）。
+   * 缺席 = 分叉菜单项不呈现。
+   */
+  readonly forkSession?: (sessionId: string) => Promise<unknown>
 }
 
 /**
@@ -322,9 +353,96 @@ export function openSessionWithLedgerAddress(
     })
 }
 
-/** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源） */
+/** dsh workspace 服务窄面（IWorkspaces 消费切片：归属快照源——快照自带 registry 级
+ * archivedSessionIds/pinnedSessionIds 两集合，sidebar-model 窄镜像消费；动作面经
+ * uiWorkspace 服务走（官方同径——含置顶排序/通知/归档选中清面编排）） */
 export interface ForgeWorkspacesService {
   readonly list: unknown
+}
+
+/**
+ * 会话改名官方面组装（D45——官方 RenameSession 适配同径）：`sessions.using` 借用
+ * 会话作用域引用 → `binding.session.rename(title)`（RemoteResult 信封——!ok 抛
+ * `error.message`，官方 renameSession 同判；成功 = 归一化标题已落宿主）。sessions.using
+ * 缺席（上游面漂移）= 返回 undefined → 面板改名菜单项不呈现（P1：变更面缺席 = 对应项
+ * 不出现）。binding.session.rename 缺席（会话未就绪/面漂移）= 调用期拒绝 → 改名模态
+ * 呈现错误（官方对话框错误面同型）。
+ */
+export function makeSessionRenameFace(
+  sessions: ForgeSessionsService,
+): ((sessionId: string, title: string) => Promise<void>) | undefined {
+  if (typeof sessions.using !== 'function') return undefined
+  return async (sessionId: string, title: string): Promise<void> => {
+    const result = (await sessions
+      .using!(sessionId, { source: 'workspaceOperation' }, (reference: unknown) =>
+        sessionRenameViaBinding(reference, title),
+      )
+      .catch((cause: unknown) => {
+        throw cause instanceof Error ? cause : new Error(String(cause))
+      })) as { ok: boolean; error?: { message?: string } }
+    if (result === null || typeof result !== 'object' || result.ok !== true) {
+      const message =
+        (typeof result === 'object' && result !== null && result.error?.message) || '会话改名被拒绝'
+      throw new Error(message)
+    }
+  }
+}
+
+/** 借用引用 → session.rename 调用（纯适配——形状漂移 = 拒绝，不静默捏造结果） */
+function sessionRenameViaBinding(reference: unknown, title: string): Promise<unknown> {
+  const session = (
+    reference as { binding?: { session?: { rename?: (title: string) => Promise<unknown> } } } | null
+  )?.binding?.session
+  if (session === undefined || typeof session.rename !== 'function') {
+    return Promise.reject(new Error('session.rename 缺席（上游面漂移）'))
+  }
+  return session.rename(title)
+}
+
+/**
+ * 会话行动作注入面（D45——sidebar.workspaces 洞位 inject face 的会话行动作段）：逐位
+ * 探测官方面在场性，缺席（上游面漂移）= 键缺席 → 面板对应动作钮/菜单项不呈现。归档
+ * 拒绝（运行中会话 workspace/session-active）原样上抛给面板（停止并归档确认流消费）。
+ */
+export function sessionActionFaceOf(services: {
+  readonly uiWorkspace: ForgeUiWorkspaceService
+  readonly sessions: ForgeSessionsService
+}): {
+  archiveSession?: (sessionId: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
+  unarchiveSession?: (sessionId: string) => Promise<void>
+  pinSession?: (sessionId: string) => Promise<void>
+  unpinSession?: (sessionId: string) => Promise<void>
+  forkSession?: (sessionId: string) => Promise<unknown>
+  renameSession?: (sessionId: string, title: string) => Promise<void>
+} {
+  const face: {
+    archiveSession?: (sessionId: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
+    unarchiveSession?: (sessionId: string) => Promise<void>
+    pinSession?: (sessionId: string) => Promise<void>
+    unpinSession?: (sessionId: string) => Promise<void>
+    forkSession?: (sessionId: string) => Promise<unknown>
+    renameSession?: (sessionId: string, title: string) => Promise<void>
+  } = {}
+  const { uiWorkspace } = services
+  if (typeof uiWorkspace.archiveSession === 'function') {
+    face.archiveSession = (sessionId, options) =>
+      uiWorkspace.archiveSession!(sessionId, options)
+  }
+  if (typeof uiWorkspace.unarchiveSession === 'function') {
+    face.unarchiveSession = (sessionId) => uiWorkspace.unarchiveSession!(sessionId)
+  }
+  if (typeof uiWorkspace.pinSession === 'function') {
+    face.pinSession = (sessionId) => uiWorkspace.pinSession!(sessionId)
+  }
+  if (typeof uiWorkspace.unpinSession === 'function') {
+    face.unpinSession = (sessionId) => uiWorkspace.unpinSession!(sessionId)
+  }
+  if (typeof uiWorkspace.forkSession === 'function') {
+    face.forkSession = (sessionId) => uiWorkspace.forkSession!(sessionId)
+  }
+  const renameSession = makeSessionRenameFace(services.sessions)
+  if (renameSession !== undefined) face.renameSession = renameSession
+  return face
 }
 
 /**
@@ -556,6 +674,8 @@ type PublishedBridge = ReturnType<PublishedViews['createWorkbenchBridge']>
  * sidebar 族登记（fix-36 自 apply 拆出——按域分注册子函数，apply 仅编排）：工作区洞位
  * 替换（AC1——注入面携带 dsh 账本数据源与动作，面板侧 useSyncExternalStore 直读）+
  * 品牌行两内容洞位（行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession）。
+ * D45 会话行动作面（…菜单/归档/置顶）= sessionActionFaceOf 逐位探测组装（官方面缺席 =
+ * 键缺席 → 面板对应项不呈现——P1 口径沿袭）。
  */
 function registerSidebarSlots(
   ctx: ForgeClientCtx,
@@ -585,6 +705,8 @@ function registerSidebarSlots(
             // reuse-or-create blank + 呈现一体，官方 WorkspaceBrowser 行动作同径）
             services.uiWorkspace.startSession(workspaceId)
           },
+          // D45 会话行动作面（…菜单/归档/置顶钮——官方面缺席 = 键缺席 → 面板对应项不呈现）
+          ...sessionActionFaceOf(services),
         }),
       },
       views.ForgeSidebarSlot,

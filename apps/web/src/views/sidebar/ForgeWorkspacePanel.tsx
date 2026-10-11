@@ -17,11 +17,18 @@
 // （sidebarSessionVisibility 纯切分 + 项目块内「更早（N）」可展开折叠组——本地微观态
 // 不持久化；搜索在场折叠让位；flat/rail 投影不消费）。
 // D42（2026-10-10 用户追加裁决——会话行悬浮动作钮对齐 dsh）：行尾 hover 动作组 =
-// 官方 ui-sidebar fading 等价机制（opacity:0 占位零抖动 + hover 显 + 官方 .15s 过渡）+
-// ui-sidebar iconButton 刻度（28/radius-sm/hover interactive-bg-hover）；动作集逐位记账
-// 见 SessionRow 文档块（①打开会话 = 既有 onSessionActivate 单缝；②⋯ 菜单零 RPC 支撑
-// 不虚设缺席；③扩展槽缺席）；时间标签让位（官方 :hover .time 同判，透明度承载）；
-// 纯 UI 轮数据面/RPC 零变化。
+// 官方 ui-sidebar fading 等价机制（opacity:0 + hover 显 + 官方 .15s 过渡）+
+// ui-sidebar iconButton 刻度（28/radius-sm/hover interactive-bg-hover）；时间标签让位
+// （官方 :hover .time 同判，透明度承载）。
+// D45（2026-10-10 用户再追加裁决——三钮对齐 dsh）：悬浮行尾三钮依次 = ⋯ 菜单 / 归档会话 /
+// 置顶会话（官方 archive[100]/pin[200] 位序）；⋯ 菜单含其它更多功能项（置顶/重命名/分叉/
+// 归档——官方 session menu 四项序）；置顶行静止图钉标记 + 项目块内领先 + 24h 折叠让位；
+// 归档随三态过滤进退 + 运行中归档拒绝 → 「停止并归档」确认模态；会话改名模态（官方
+// RenameSession 同型）。动作面 = 官方 uiWorkspace/sessions 窄面（plugin inject face
+// 注入——缺席 = 对应项不呈现，P1 口径沿袭）。
+// D45-②（同日再追加裁决——浮现机制）：「按钮浮现在会话上方，不挤占会话的行空间」——
+// 动作组绝对定位浮现 overlay（零布局占位）+ 背板 = 行悬浮合成色（surface + tint 双层，
+// 遮文字穿透且与行面无缝；几何/背板机制归 sidebar.css D42/D45-② 块）。
 // 收起/展开（56px rail ↔ ~240px）由官方壳几何持有——本面板按 owner share 的 wide 双态渲染；
 // rail 展开回路 = expandSidebar 壳回调消费（fix-41 B 面：图标/搜索钮点击先展开侧栏）。
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
@@ -34,6 +41,7 @@ import {
   IconArchiveCheckOutlineRegular,
   IconArchiveOffOutlineRegular,
   IconArchiveOutlineRegular,
+  IconBranchOutlineRegular,
   IconChevronDownOutlineRegular,
   IconChevronRightOutlineRegular,
   IconEditOutlineRegular,
@@ -42,6 +50,8 @@ import {
   IconFolderCloseRegular,
   IconFolderOpenRegular,
   IconNewChatOutlineRegular,
+  IconPinFillRegular,
+  IconPinOutlineRegular,
   IconProjectAddOutlineRegular,
   IconQueueOutlineRegular,
   IconSearchOutlineRegular,
@@ -73,6 +83,7 @@ import {
   type SidebarSessionSplit,
   type SidebarView,
 } from './sidebar-model.js'
+import { sessionArchiveActiveRefusal } from './sidebar-actions.js'
 import './sidebar.css'
 
 /** 会话加载骨架行数（行级骨架相位——账本 pending） */
@@ -107,28 +118,118 @@ export interface ForgeWorkspacePanelProps {
   readonly onRenameProject?: (projectId: string, name: string) => Promise<void>
   /** 归档切换（forge:projects/update archived patch——ellipsis 菜单直发；缺席 = 菜单项不呈现） */
   readonly onArchiveToggle?: (projectId: string, archived: boolean) => void
+  /** 置顶/取消置顶（官方 uiWorkspace.pinSession/unpinSession——D45；缺席 = 钮/菜单项不呈现） */
+  readonly onSessionPinToggle?: (sessionId: string, pinned: boolean) => void
+  /**
+   * 归档会话（官方 uiWorkspace.archiveSession——D45；缺席 = 归档钮/菜单项不呈现）。
+   * 运行中会话被宿主拒 → 拒绝上抛（面板「停止并归档」确认模态消费）。
+   */
+  readonly onSessionArchive?: (
+    sessionId: string,
+    options?: { readonly stopActivity?: boolean },
+  ) => Promise<void>
+  /** 取消归档（官方 uiWorkspace.unarchiveSession——D45；缺席 = 归档行对应面不呈现） */
+  readonly onSessionUnarchive?: (sessionId: string) => void
+  /** 会话改名（sessions.using → binding.session.rename——D45；缺席 = 改名菜单项不呈现） */
+  readonly onSessionRename?: (sessionId: string, title: string) => Promise<void>
+  /** 分叉会话（官方 uiWorkspace.forkSession——D45；缺席 = 分叉菜单项不呈现） */
+  readonly onSessionFork?: (sessionId: string) => void
   /** 相对时间基准（注入——纯渲染可测） */
   readonly now: number
+}
+
+/** 会话行归档请求载荷（面板确认流消费——标题随行供「停止并归档」模态命名） */
+export interface SessionArchiveRequestRow {
+  readonly sessionId: string
+  readonly title: string
+}
+
+/**
+ * 会话行「⋯」菜单项（D45——官方 ui-workspace session menu items 同型裁剪：置顶[100] +
+ * 重命名[200] + 分叉[300] + 归档[400]，官方序）。纯数据面（MenuEntry）——静态可测；
+ * 变更面缺席（available 对应位 false）= 对应项不出现（P1 无置灰形态）；归档行恒无置顶项
+ * （官方 Pin/Archive 互斥判读同款）。
+ */
+export function sessionMenuItemsOf(
+  row: Pick<SidebarSessionRow, 'pinned' | 'archived'>,
+  available: {
+    readonly pin: boolean
+    readonly rename: boolean
+    readonly fork: boolean
+    readonly archive: boolean
+    readonly unarchive: boolean
+  },
+): readonly MenuEntry[] {
+  const items: MenuEntry[] = []
+  if (available.pin && !row.archived) {
+    items.push({
+      id: 'pin',
+      label: row.pinned ? '取消置顶' : '置顶会话',
+      icon: row.pinned ? <IconPinFillRegular size={16} /> : <IconPinOutlineRegular size={16} />,
+    })
+  }
+  if (available.rename) {
+    items.push({ id: 'rename', label: '重命名', icon: <IconEditOutlineRegular size={16} /> })
+  }
+  if (available.fork) {
+    items.push({ id: 'fork', label: '分叉会话', icon: <IconBranchOutlineRegular size={16} /> })
+  }
+  if (row.archived ? available.unarchive : available.archive) {
+    items.push({
+      id: 'archive',
+      label: row.archived ? '取消归档' : '归档会话',
+      icon: row.archived ? (
+        <IconUnarchiveOutlineRegular size={16} />
+      ) : (
+        <IconArchiveOutlineRegular size={16} />
+      ),
+    })
+  }
+  return items
+}
+
+/** 会话行动作回调组（D45——逐位缺席 = 对应钮/菜单项不呈现，纯展示件零缺省动作） */
+interface SessionRowActions {
+  /** 置顶切换（hover 置顶钮 + 菜单项；归档行缺席——官方互斥） */
+  readonly onPinToggle?: (sessionId: string, pinned: boolean) => void
+  /** 归档会话（非归档行——面板确认流持有：运行中拒绝 → 停止并归档模态） */
+  readonly onArchive?: (row: SessionArchiveRequestRow) => void
+  /** 取消归档（归档行） */
+  readonly onUnarchive?: (sessionId: string) => void
+  /** 分叉会话（菜单项直发） */
+  readonly onFork?: (sessionId: string) => void
+  /** 重命名请求（菜单项 → 面板改名模态） */
+  readonly onRequestRename?: (sessionId: string, currentTitle: string) => void
 }
 
 /**
  * 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型刻度）。
  * D42（2026-10-10 用户裁决：「鼠标悬浮到项目列表的某一个会话时，显示相关的按钮，对齐 dsh」）
- * 行尾 hover 动作组：官方 ui-sidebar fading 等价机制（容器 opacity:0 占位——非悬浮行几何
- * 零抖动；hover/focus-within 显 + opacity 0.15s var(--ds-ease-in-out) 官方过渡——
- * dsh-client-ui-sidebar lib/client.js `.fading>*` 源码同款）+ 官方 ui-sidebar iconButton
- * 刻度（28 命中区 / radius-sm / label-secondary / hover interactive-bg-hover——同源码
- * `.iconButton` 逐值）。样式面 = sidebar.css D42 块（机械 pin 在 ForgeWorkspacePanel.test）。
- * 动作集逐位记账（官方 ui-workspace Rows trailing 对照——sessionRow rowActions =
- * ⋯ 菜单锚 + `sidebar.workspaces.session.row.action` 扩展槽）：
- *  ① 「打开会话」钮 = 产品既有主视图切换机制（onSessionActivate → 官方 uiWorkspace
- *     openSession 单径——与行点击同缝；任务 1.29「至少打开会话」下限承载）；
- *  ② ⋯ 菜单锚位：官方菜单项 = 改名/置顶/归档/删除——产品 RPC 面零支撑
- *     （forge:projects/update 仅项目域 patch name/archived；会话域无 update 通道）→
- *     不虚设，菜单整体缺席（「变更面缺席 = 对应项不出现」P1 口径沿袭）；
- *  ③ 官方扩展槽：产品无扩展动作 → 缺席。
+ * 行尾 hover 动作组：显隐 = 官方 ui-sidebar fading 等价机制（opacity:0 + hover/focus-within
+ * 显 + opacity 0.15s var(--ds-ease-in-out) 官方过渡——dsh-client-ui-sidebar lib/client.js
+ * `.fading>*` 源码同款；pointer-events 隐形守卫）+ 官方 ui-sidebar iconButton 刻度
+ * （28 命中区 / radius-sm / label-secondary / hover interactive-bg-hover）。样式面 =
+ * sidebar.css D42 块（机械 pin 在 tests/structure）。
+ * D45-②（2026-10-10 用户再追加裁决：「按钮浮现在会话上方，不挤占会话的行空间」）：
+ * 动作组绝对定位浮现 overlay（sidebar.css position:absolute——脱离行布局流零占位：
+ * 标题可用宽度恒定，非悬浮/悬浮态行内空间不因动作组变化；官方 rowActions display:none
+ * 起手的零占位语义同源）；背板 = 行悬浮合成色（--dsw-specific-sidebar-fill 表面 +
+ * interactive-bg-hover tint 双层叠加——遮蔽标题/时间文字穿透且与行面无缝）。
+ * D45（2026-10-10 用户追加裁决——三钮对齐 dsh）：悬浮行尾三钮依次 = ⋯ 菜单 / 归档会话 /
+ * 置顶会话（官方 session row.action 位序：archive[100] 在前、pin[200] 最右——置顶钮落
+ * 静止位图钉标记位）；「打开会话」钮退役（行点击 = 打开既有单缝）。动作集逐位记账
+ * （官方 ui-workspace session-actions 对照）：
+ *  ① ⋯ 菜单 = sessionMenuItemsOf（置顶/重命名/分叉/归档——官方四项序；面缺席 = 项缺席）；
+ *  ② 归档钮：归档行转「取消归档」形（IconUnarchive + 取消归档名）；运行中会话归档被宿主
+ *     拒 → 面板「停止并归档」确认模态（官方 SessionArchiveConfirmDialog 同型裁剪）；
+ *  ③ 置顶钮：置顶形 = IconPinFill/取消置顶；归档行缺席（官方 Pin/Archive 互斥）；
+ *  ④ 置顶静止标记：置顶行行尾常显 IconPinFill 小标（官方 rest-state pin marker 同位——
+ *     hover 三钮显形时让位）。
+ * 归档行语言（官方同判）：前导状态点槽空白（live 状态不占格）+ 行弱化（CSS data-archived）；
+ * 行点击不打开（官方 archived not openable——P1 无通知面，静默不外溢）。
  * 时间标签共存布局（官方对照优先 = 让位）：官方 `.sessionRow:hover .time{display:none}`
- * 同判——fading 等价改透明度让位（占位保留零抖动），非悬浮时间常驻。
+ * 同判——fading 等价改透明度让位（占位保留零抖动），非悬浮时间常驻（overlay 背板遮蔽
+ * 承接悬浮态）。
  * 行本体 = div[role=button]（官方 DisclosureRow 行同型——原生 button 不可嵌套动作钮）；
  * Enter/Space 激活 = 官方 toggleFromKeyboard 同语义；动作容器 click/keydown
  * stopPropagation（防冒泡双触发——官方 rowActions onClick stopPropagation 同型）。
@@ -138,13 +239,29 @@ function SessionRow({
   selected,
   now,
   onActivate,
+  actions,
 }: {
-  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'status' | 'updatedAt'>
+  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'status' | 'updatedAt' | 'pinned' | 'archived'>
   selected: boolean
   now: number
   onActivate?: (sessionId: string) => void
+  actions?: SessionRowActions
 }): ReactNode {
+  const [menuOpen, setMenuOpen] = useState(false)
   const interactive = onActivate !== undefined
+  // D45 动作可用性逐位（回调缺席 = 钮/项缺席——P1 纯展示件零缺省动作）
+  const pinAvailable = actions?.onPinToggle !== undefined && !row.archived
+  const archiveAvailable =
+    actions !== undefined && (row.archived ? actions.onUnarchive !== undefined : actions.onArchive !== undefined)
+  const menuItems = sessionMenuItemsOf(row, {
+    pin: pinAvailable,
+    rename: actions?.onRequestRename !== undefined,
+    fork: actions?.onFork !== undefined,
+    archive: actions?.onArchive !== undefined,
+    unarchive: actions?.onUnarchive !== undefined,
+  })
+  const hasMenu = menuItems.length > 0
+  const hasActions = pinAvailable || archiveAvailable || hasMenu
   return (
     <div
       role={interactive ? 'button' : undefined}
@@ -152,12 +269,23 @@ function SessionRow({
       className="dswf-sidebar-session"
       data-dswf-session={row.sessionId}
       data-selected={selected || undefined}
-      onClick={onActivate === undefined ? undefined : () => { onActivate(row.sessionId) }}
+      data-pinned={row.pinned || undefined}
+      data-archived={row.archived || undefined}
+      onClick={
+        onActivate === undefined
+          ? undefined
+          : () => {
+              // 归档行不打开（官方 archived not openable——P1 静默）
+              if (row.archived) return
+              onActivate(row.sessionId)
+            }
+      }
       onKeyDown={
         interactive
           ? (event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
+                if (row.archived) return
                 onActivate(row.sessionId)
               }
             }
@@ -165,12 +293,13 @@ function SessionRow({
       }
     >
       <span className="dswf-sidebar-session-dot">
-        <StateDot state={sessionDotState(row.status)} size={10} />
+        {/* 归档行前导槽空白（官方 archived row keeps the cell blank 同判） */}
+        {row.archived ? null : <StateDot state={sessionDotState(row.status)} size={10} />}
       </span>
       <span className="dswf-sidebar-session-title">{row.title}</span>
       <span className="dswf-sidebar-session-time">{relativeTimeLabel(row.updatedAt, now)}</span>
-      {interactive ? (
-        // D42 行尾 hover 动作组（机制与记账见组件文档块；容器 stopPropagation 防双触发）
+      {hasActions ? (
+        // D42/D45 行尾 hover 动作组（机制与记账见组件文档块；容器 stopPropagation 防双触发）
         <span
           className="dswf-sidebar-session-actions"
           data-dswf-session-actions=""
@@ -181,17 +310,76 @@ function SessionRow({
             event.stopPropagation()
           }}
         >
-          <button
-            type="button"
-            className="dswf-sidebar-session-action"
-            data-dswf-session-action="open"
-            aria-label={`打开会话 ${row.title}`}
-            onClick={() => {
-              onActivate(row.sessionId)
-            }}
-          >
-            <IconChevronRightOutlineRegular size={16} />
-          </button>
+          {hasMenu ? (
+            <Menu
+              open={menuOpen}
+              onClose={() => {
+                setMenuOpen(false)
+              }}
+              items={menuItems}
+              onSelect={(id) => {
+                setMenuOpen(false)
+                if (id === 'pin') actions?.onPinToggle?.(row.sessionId, !row.pinned)
+                else if (id === 'rename') actions?.onRequestRename?.(row.sessionId, row.title)
+                else if (id === 'fork') actions?.onFork?.(row.sessionId)
+                else if (id === 'archive') {
+                  if (row.archived) actions?.onUnarchive?.(row.sessionId)
+                  else actions?.onArchive?.({ sessionId: row.sessionId, title: row.title })
+                }
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={
+                <button
+                  type="button"
+                  className="dswf-sidebar-session-action"
+                  data-dswf-session-action="menu"
+                  aria-label={`会话操作 ${row.title}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => {
+                    setMenuOpen(true)
+                  }}
+                >
+                  <IconEllipsisOutlineRegular size={16} />
+                </button>
+              }
+            />
+          ) : null}
+          {archiveAvailable ? (
+            <button
+              type="button"
+              className="dswf-sidebar-session-action"
+              data-dswf-session-action="archive"
+              aria-label={row.archived ? `取消归档 ${row.title}` : `归档会话 ${row.title}`}
+              onClick={() => {
+                if (row.archived) actions?.onUnarchive?.(row.sessionId)
+                else actions?.onArchive?.({ sessionId: row.sessionId, title: row.title })
+              }}
+            >
+              {row.archived ? <IconUnarchiveOutlineRegular size={16} /> : <IconArchiveOutlineRegular size={16} />}
+            </button>
+          ) : null}
+          {pinAvailable ? (
+            <button
+              type="button"
+              className="dswf-sidebar-session-action"
+              data-dswf-session-action="pin"
+              aria-label={row.pinned ? `取消置顶 ${row.title}` : `置顶会话 ${row.title}`}
+              onClick={() => {
+                actions?.onPinToggle?.(row.sessionId, !row.pinned)
+              }}
+            >
+              {row.pinned ? <IconPinFillRegular size={16} /> : <IconPinOutlineRegular size={16} />}
+            </button>
+          ) : null}
+        </span>
+      ) : null}
+      {/* D45 置顶静止标记（官方 rest-state pin marker 同位：行尾常显小图钉——非悬浮
+          即可辨置顶态；hover/聚焦三钮显形时 CSS 让位，DOM 序在动作组之后 = 让位选择器可及） */}
+      {row.pinned ? (
+        <span className="dswf-sidebar-session-pinmark" data-dswf-session-pinmark="">
+          <IconPinFillRegular size={12} />
         </span>
       ) : null}
     </div>
@@ -243,6 +431,7 @@ function ProjectBlock({
   onStartSession,
   onArchiveToggle,
   onRequestRename,
+  sessionActions,
   emptyNote,
 }: {
   node: SidebarProjectNode
@@ -256,6 +445,8 @@ function ProjectBlock({
   onStartSession?: (workspaceId: string) => void
   onArchiveToggle?: (projectId: string, archived: boolean) => void
   onRequestRename?: (projectId: string, currentName: string) => void
+  /** D45 会话行动作组（逐位缺席 = 对应钮/菜单项不呈现） */
+  sessionActions?: SessionRowActions
   readonly emptyNote: string
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -367,6 +558,7 @@ function ProjectBlock({
               selected={row.sessionId === currentSessionId}
               now={now}
               onActivate={onSessionActivate}
+              actions={sessionActions}
             />
           ))}
           {split.older.length === 0 ? null : (
@@ -406,6 +598,7 @@ function ProjectBlock({
                       selected={row.sessionId === currentSessionId}
                       now={now}
                       onActivate={onSessionActivate}
+                      actions={sessionActions}
                     />
                   ))
                 : null}
@@ -533,6 +726,16 @@ export interface SidebarProjectsZoneProps {
   readonly onRequestRename?: (projectId: string, currentName: string) => void
   /** 归档切换（ellipsis 菜单直发；缺席 = 菜单项不呈现） */
   readonly onArchiveToggle?: (projectId: string, archived: boolean) => void
+  /** D45 会话行置顶切换（hover 置顶钮 + 菜单项；缺席 = 对应项不呈现） */
+  readonly onSessionPinToggle?: (sessionId: string, pinned: boolean) => void
+  /** D45 归档会话请求（运行中拒绝 → 面板「停止并归档」确认模态；缺席 = 归档钮不呈现） */
+  readonly onSessionArchiveRequest?: (row: SessionArchiveRequestRow) => void
+  /** D45 取消归档（归档行归档钮转取消归档形；缺席 = 对应面不呈现） */
+  readonly onSessionUnarchive?: (sessionId: string) => void
+  /** D45 会话改名请求（菜单项 → 面板改名模态；缺席 = 菜单项不呈现） */
+  readonly onRequestSessionRename?: (sessionId: string, currentTitle: string) => void
+  /** D45 分叉会话（菜单项直发；缺席 = 菜单项不呈现） */
+  readonly onSessionFork?: (sessionId: string) => void
 }
 
 /** 相位主体推导输入（phaseBody 消费——SidebarProjectsZone 的相位判据 + 树/平铺快照） */
@@ -571,6 +774,8 @@ export interface SidebarZonePhaseInput {
   readonly onRequestRename?: (projectId: string, currentName: string) => void
   /** 归档切换 */
   readonly onArchiveToggle?: (projectId: string, archived: boolean) => void
+  /** D45 会话行动作组（逐位缺席 = 对应钮/菜单项不呈现） */
+  readonly sessionActions?: SessionRowActions
 }
 
 /**
@@ -613,6 +818,7 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
             selected={row.sessionId === input.currentSessionId}
             now={input.now}
             onActivate={input.onSessionActivate}
+            actions={input.sessionActions}
           />
         ))}
       </div>
@@ -631,6 +837,7 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
       onStartSession={input.onStartSession}
       onArchiveToggle={input.onArchiveToggle}
       onRequestRename={input.onRequestRename}
+      sessionActions={input.sessionActions}
       emptyNote={input.filterActive ? '无匹配会话' : '暂无会话'}
     />
   ))
@@ -663,6 +870,11 @@ export function SidebarProjectsZone({
   onStartSession,
   onRequestRename,
   onArchiveToggle,
+  onSessionPinToggle,
+  onSessionArchiveRequest,
+  onSessionUnarchive,
+  onRequestSessionRename,
+  onSessionFork,
 }: SidebarProjectsZoneProps): ReactNode {
   // 展开态（折叠集合——缺省全展开，P1 最简；展开态是纯视图态，不属 SC2 副本纪律）
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -773,6 +985,21 @@ export function SidebarProjectsZone({
         onStartSession,
         onRequestRename,
         onArchiveToggle,
+        // D45 会话行动作组（逐位缺席 = 对应钮/菜单项不呈现）
+        sessionActions:
+          onSessionPinToggle === undefined &&
+          onSessionArchiveRequest === undefined &&
+          onSessionUnarchive === undefined &&
+          onRequestSessionRename === undefined &&
+          onSessionFork === undefined
+            ? undefined
+            : {
+                onPinToggle: onSessionPinToggle,
+                onArchive: onSessionArchiveRequest,
+                onUnarchive: onSessionUnarchive,
+                onRequestRename: onRequestSessionRename,
+                onFork: onSessionFork,
+              },
       })}
     </div>
   )
@@ -873,6 +1100,19 @@ interface ProjectRenameState {
   draft: string
 }
 
+/** 会话改名模态态（D45——官方 SessionRenameTarget 同型：目标 + 草稿随行） */
+interface SessionRenameState {
+  readonly sessionId: string
+  readonly currentTitle: string
+  draft: string
+}
+
+/** 「停止并归档」确认模态态（D45——官方 SessionArchiveConfirmRequest 同型裁剪：目标行命名） */
+interface SessionArchiveConfirmState {
+  readonly sessionId: string
+  readonly title: string
+}
+
 /**
  * 产品工作区面板（sidebar.workspaces 占用者本体——过滤/视图菜单/改名态机持有者）。
  * 宽态：项目区（SidebarProjectsZone）；rail 态：图标列（SidebarRail——fix-42 空轨道退役）。
@@ -898,6 +1138,11 @@ export function ForgeWorkspacePanel({
   onStartSession,
   onRenameProject,
   onArchiveToggle,
+  onSessionPinToggle,
+  onSessionArchive,
+  onSessionUnarchive,
+  onSessionRename,
+  onSessionFork,
   now,
 }: ForgeWorkspacePanelProps): ReactNode {
   const [searchOpen, setSearchOpen] = useState(false)
@@ -907,6 +1152,14 @@ export function ForgeWorkspacePanel({
   const [renameTarget, setRenameTarget] = useState<ProjectRenameState | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [renameError, setRenameError] = useState<string | null>(null)
+  // D45 会话改名模态态机（官方 SessionRenameDialog 同型——确认失败错误留在模态内，成功关模态）
+  const [sessionRename, setSessionRename] = useState<SessionRenameState | null>(null)
+  const [sessionRenaming, setSessionRenaming] = useState(false)
+  const [sessionRenameError, setSessionRenameError] = useState<string | null>(null)
+  // D45「停止并归档」确认模态态机（官方 SessionArchiveConfirmDialog 同型裁剪——
+  // 归档运行中会话被宿主拒[workspace/session-active]时开出）
+  const [archiveConfirm, setArchiveConfirm] = useState<SessionArchiveConfirmState | null>(null)
+  const [stopArchiving, setStopArchiving] = useState(false)
   // 搜索钮展开/收起（Esc 同走此缝——收起即清空；展开从空查询开始）
   const onSearchToggle = (): void => {
     setSearchOpen((prev) => !prev)
@@ -951,6 +1204,70 @@ export function ForgeWorkspacePanel({
     }
   }
 
+  // D45 会话改名流（菜单项 → 模态开——草稿种子 = 行现标题；空名确认阻断，官方同判）
+  const requestSessionRename = (sessionId: string, currentTitle: string): void => {
+    setSessionRename({ sessionId, currentTitle, draft: currentTitle })
+    setSessionRenameError(null)
+  }
+  const closeSessionRename = (): void => {
+    if (sessionRenaming) return
+    setSessionRename(null)
+    setSessionRenameError(null)
+  }
+  const confirmSessionRename = async (): Promise<void> => {
+    if (sessionRenaming || sessionRename === null || onSessionRename === undefined) return
+    const trimmed = sessionRename.draft.trim()
+    if (trimmed === '') {
+      setSessionRenameError('会话名称不能为空')
+      return
+    }
+    setSessionRenaming(true)
+    try {
+      await onSessionRename(sessionRename.sessionId, trimmed)
+      setSessionRename(null)
+      setSessionRenameError(null)
+    } catch (cause) {
+      setSessionRenameError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSessionRenaming(false)
+    }
+  }
+
+  // D45 归档请求流：直发官方归档面——运行中会话被宿主拒（workspace/session-active）
+  // →「停止并归档」确认模态；其余失败 fail-soft 控制台告警（P1 无行内错误面）
+  const requestSessionArchive = (row: SessionArchiveRequestRow): void => {
+    if (onSessionArchive === undefined) return
+    onSessionArchive(row.sessionId).catch((cause: unknown) => {
+      if (sessionArchiveActiveRefusal(cause)) {
+        setArchiveConfirm({ sessionId: row.sessionId, title: row.title })
+        return
+      }
+      console.warn(
+        `归档会话失败（P1 fail-soft：行数据未变，可重试）——session ${row.sessionId}：${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+    })
+  }
+  const closeArchiveConfirm = (): void => {
+    if (stopArchiving) return
+    setArchiveConfirm(null)
+  }
+  const confirmStopAndArchive = async (): Promise<void> => {
+    if (stopArchiving || archiveConfirm === null || onSessionArchive === undefined) return
+    setStopArchiving(true)
+    try {
+      await onSessionArchive(archiveConfirm.sessionId, { stopActivity: true })
+      setArchiveConfirm(null)
+    } catch (cause) {
+      // 二次失败（宿主拒绝/载体断）= fail-soft：关模态 + 控制台告警（P1 无行内错误面）
+      console.warn(
+        `停止并归档失败（P1 fail-soft）——session ${archiveConfirm.sessionId}：${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+      setArchiveConfirm(null)
+    } finally {
+      setStopArchiving(false)
+    }
+  }
+
   // rail 态：图标列（fix-42 空轨道退役——搜索/＋/项目图标；知识入口 = 官方 panellist 行）
   if (!wide) {
     return (
@@ -990,6 +1307,11 @@ export function ForgeWorkspacePanel({
         onStartSession={onStartSession}
         onRequestRename={onRenameProject === undefined ? undefined : requestRename}
         onArchiveToggle={onArchiveToggle}
+        onSessionPinToggle={onSessionPinToggle}
+        onSessionArchiveRequest={onSessionArchive === undefined ? undefined : requestSessionArchive}
+        onSessionUnarchive={onSessionUnarchive}
+        onRequestSessionRename={onSessionRename === undefined ? undefined : requestSessionRename}
+        onSessionFork={onSessionFork}
       />
       {renameTarget === null ? null : (
         <Modal
@@ -1038,6 +1360,87 @@ export function ForgeWorkspacePanel({
               {renameError}
             </div>
           )}
+        </Modal>
+      )}
+      {sessionRename === null ? null : (
+        // D45 会话改名模态（官方 SessionRenameDialog/RenameForm 同型——空名阻断 +
+        // 确认失败错误留模态 + Enter 提交；文案对齐官方 zh 词典）
+        <Modal
+          open
+          onClose={closeSessionRename}
+          closeLabel="关闭"
+          title="重命名会话"
+          footer={
+            <>
+              <Button variant="outline" disabled={sessionRenaming} onClick={closeSessionRename}>
+                取消
+              </Button>
+              <Button
+                variant="primary"
+                disabled={sessionRenaming || sessionRename.draft.trim() === ''}
+                onClick={() => {
+                  void confirmSessionRename()
+                }}
+              >
+                重命名
+              </Button>
+            </>
+          }
+        >
+          <Input
+            className="dswf-sidebar-rename-input"
+            data-dswf-session-rename-input=""
+            type="text"
+            aria-label="会话名称"
+            autoFocus
+            value={sessionRename.draft}
+            disabled={sessionRenaming}
+            onChange={(event) => {
+              setSessionRename({ ...sessionRename, draft: event.target.value })
+              setSessionRenameError(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void confirmSessionRename()
+              }
+            }}
+          />
+          {sessionRenameError === null ? null : (
+            <div className="dswf-sidebar-rename-error" role="alert">
+              {sessionRenameError}
+            </div>
+          )}
+        </Modal>
+      )}
+      {archiveConfirm === null ? null : (
+        // D45「停止并归档」确认模态（官方 SessionArchiveConfirmDialog 同型裁剪——
+        // 宿主拒绝因 = 会话仍有运行中工作；确认 = stopActivity 归档，取消 = 保持运行）
+        <Modal
+          open
+          onClose={closeArchiveConfirm}
+          closeLabel="关闭"
+          title="停止并归档会话"
+          footer={
+            <>
+              <Button variant="outline" disabled={stopArchiving} onClick={closeArchiveConfirm}>
+                取消
+              </Button>
+              <Button
+                variant="primary"
+                disabled={stopArchiving}
+                onClick={() => {
+                  void confirmStopAndArchive()
+                }}
+              >
+                停止并归档
+              </Button>
+            </>
+          }
+        >
+          <div className="dswf-sidebar-archive-confirm" data-dswf-archive-confirm="">
+            「{archiveConfirm.title}」仍有运行中的工作。归档前先停止这些工作吗？
+          </div>
         </Modal>
       )}
     </div>

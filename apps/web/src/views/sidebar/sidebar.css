@@ -13,9 +13,10 @@
  * D42 会话行 hover 动作组：官方 ui-sidebar fading 模式源码同款（.fading>* opacity:0 →
  * hover 显 + opacity .15s var(--ds-ease-in-out) 官方动效令牌）+ ui-sidebar iconButton
  * 刻度（28 命中区/radius-sm/label-secondary/hover interactive-bg-hover）；时间标签让位
- * （官方 :hover .time 同判，透明度承载占位零抖动）；动作集记账归
- * ForgeWorkspacePanel.tsx SessionRow 文档块（①打开会话钮 ②⋯菜单零 RPC 支撑缺席
- * ③官方扩展槽缺席）。 */
+ * （官方 :hover .time 同判，透明度承载占位零抖动）。D45：动作集 = ⋯ 菜单/归档/置顶
+ * 三钮（记账归 ForgeWorkspacePanel.tsx SessionRow 文档块）；D45-②：动作组绝对定位
+ * 浮现 overlay（零布局占位——不挤占行空间）+ 背板 = 行悬浮合成色（surface + tint
+ * 双层，遮文字穿透且与行面无缝）。 */
 
 /* 面板根：占满壳的 workspaces 区域（几何/收展归壳） */
 .dswf-sidebar {
@@ -303,6 +304,7 @@
   font: var(--dsw-font-s-14);
   text-align: start;
   user-select: none;
+  position: relative; /* D45-② 行尾动作组浮现锚（绝对定位 overlay 的包含块） */
 }
 
 .dswf-sidebar-session:hover {
@@ -352,17 +354,61 @@
   opacity: 0;
 }
 
-/* ── D42 行尾 hover 动作组（2026-10-10 用户裁决「悬浮会话显示相关按钮，对齐 dsh」——
- * 官方 ui-sidebar fading 模式源码同款：`.fading>*{opacity:0;transition:opacity .15s
- * var(--ds-ease-in-out)}`；容器 opacity:0 占位 = 非悬浮行几何恒定零抖动，hover/focus-within
- * 显形；pointer-events none 防隐形钮截击触点；动作集与记账 =
- * ForgeWorkspacePanel.tsx SessionRow 文档块） ── */
-.dswf-sidebar-session-actions {
+/* ── D45 置顶静止标记（官方 rest-state pin marker 同位：置顶行行尾常显小图钉——
+ * 非悬浮即可辨置顶态；hover 三钮显形时让位[官方 marker 位 = 置顶钮位]；tertiary 色
+ * = 官方行尾元信息同档弱化） ── */
+.dswf-sidebar-session-pinmark {
   display: inline-flex;
   flex: none;
   align-items: center;
+  justify-content: center;
+  width: 16px; /* dsw-raw 官方行尾元槽刻度（与时间标签同档） */
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-sidebar-session:hover .dswf-sidebar-session-pinmark {
+  display: none; /* hover 让位：三钮显形（官方 marker↔button 同位互换） */
+}
+
+.dswf-sidebar-session-actions:focus-within ~ .dswf-sidebar-session-pinmark {
+  display: none; /* 键盘聚焦同判（显形钮与标记不并存） */
+}
+
+/* D45 归档行弱化（官方 archived row 同判：前导状态点槽空白[渲染层] + 标题/时间降档） */
+.dswf-sidebar-session[data-archived] .dswf-sidebar-session-title {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── D42 + D45-② 行尾 hover 动作组（2026-10-10 用户裁决「悬浮会话显示相关按钮，对齐
+ * dsh」+ 再追加「按钮浮现在会话上方，不挤占会话的行空间」）——
+ * 显隐机制 = 官方 ui-sidebar fading 源码同款：`.fading>*{opacity:0;transition:opacity
+ * .15s var(--ds-ease-in-out)}`，hover/focus-within 显形 + pointer-events 隐形守卫
+ * （隐形钮不截击触点）；
+ * 几何机制（D45-②）= 绝对定位浮现 overlay：脱离行布局流——**零布局占位**（非悬浮与
+ * 悬浮态行内空间恒定，标题可用宽度不受动作组挤压；官方 rowActions display:none 起手
+ * 的零占位语义同源，D42「opacity 占位」退役为 overlay 承载）；
+ * 背板合成 = 官方行悬浮观感逐像素复刻：surface（--dsw-specific-sidebar-fill——官方
+ * ui-sidebar root/WCO frame 底漆，行下方真实表面）+ 行悬浮 tint（interactive-bg-hover）
+ * 双层叠加 = 行悬浮合成色——overlay 遮蔽标题/时间文字穿透，且与行面无缝（无「补丁
+ * 块」观感）；键盘聚焦经 :has 同步行底 tint（合成恒一致）。动作集与记账 =
+ * ForgeWorkspacePanel.tsx SessionRow 文档块[D45：⋯ 菜单 / 归档 / 置顶 三钮]） ── */
+.dswf-sidebar-session-actions {
+  display: inline-flex;
+  align-items: center;
   gap: 8px; /* dsw-raw 官方 ui-sidebar controls 组内间距刻度 */
-  margin-left: 6px; /* dsw-raw 官方 sessionRow 行语言（title 右缘距同款） */
+  position: absolute; /* D45-② 浮现 overlay——脱离布局流零占位 */
+  top: 2px; /* dsw-raw 行内含刻度（行 32 − 钮 28 = 2×2——chip 全含于行圆角内） */
+  bottom: 2px;
+  right: 4px; /* dsw-raw 行尾内缩刻度（与 title 左缘 4px 对称节奏） */
+  padding: 0;
+  border-radius: var(--dsw-radius-sm);
+  background:
+    linear-gradient(
+      var(--dsw-alias-interactive-bg-hover),
+      var(--dsw-alias-interactive-bg-hover)
+    ),
+    var(--dsw-specific-sidebar-fill); /* 背板 = 行悬浮合成色（tint over surface——遮文字穿透 + 与行面无缝） */
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s var(--ds-ease-in-out); /* dsw-raw 官方 ui-sidebar fading 过渡刻度 */
@@ -372,6 +418,12 @@
 .dswf-sidebar-session-actions:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* D45-② 键盘聚焦行底同步（:has = wco.css 同款选择器面）：钮条聚焦显形时行面同悬浮
+ * tint——overlay 背板合成色与行面恒一致（行本体自身聚焦不触发——focus-visible 圈足额） */
+.dswf-sidebar-session:has(.dswf-sidebar-session-actions:focus-within) {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* 动作钮（官方 ui-sidebar .iconButton 刻度逐值同款——dsh-client-ui-sidebar lib/client.js
