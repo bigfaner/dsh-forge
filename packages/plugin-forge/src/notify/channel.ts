@@ -10,8 +10,8 @@
 
 /** 主会话叙述通道（装配方把上游 agent.inject/agent.followup 适配到本双方法面） */
 export interface NarrationChannel {
-  /** 常规事件注入（notice 形态——零模型回合；对话流 context 行可见） */
-  notice(sessionId: string, text: string): Promise<void>
+  /** 常规事件注入（notice 形态——零模型回合；headline = 预构建场景单行摘要，缺席 = 折叠位回退整段截断） */
+  notice(sessionId: string, text: string, headline?: string): Promise<void>
   /** 终局事件注入（完整消息——主会话新回合并唤醒） */
   followup(sessionId: string, text: string): Promise<void>
 }
@@ -19,10 +19,10 @@ export interface NarrationChannel {
 /** fail-soft 包装：注入任何故障（同步抛出/拒绝）静默降级；空 sessionId 直接跳过 */
 export function failSoftNarrationChannel(inner: NarrationChannel): NarrationChannel {
   return {
-    async notice(sessionId: string, text: string): Promise<void> {
+    async notice(sessionId: string, text: string, headline?: string): Promise<void> {
       if (sessionId === '') return
       try {
-        await inner.notice(sessionId, text)
+        await inner.notice(sessionId, text, headline)
       } catch {
         // 静默降级（SC7——叙述缺席不拖垮循环；仅看板+问询仍可达）
       }

@@ -126,6 +126,22 @@ describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回�
     expect((spy.injected[0] as { content: { text: string }[] }).content[0]?.text).toBe(long)
   })
 
+  it('传入预构建摘要（headline）：summary=headline 原样（缺省回退整段截断——兼容不破坏）', async () => {
+    const spy = agentSpy()
+    const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
+    const longBody = '长'.repeat(300)
+    const headline = '[forge·领取] 2.8 诊断弹窗装配（Apps web）· 待执行 3 · 执行中 1'
+    await channel.notice('s-1', longBody, headline)
+    expect((spy.injected[0] as { source: { summary?: string } }).source.summary).toBe(headline)
+    // 全文仍完整进 content——headline 只替换折叠摘要位
+    expect((spy.injected[0] as { content: { text: string }[] }).content[0]?.text).toBe(longBody)
+    // headline 超界同样保底钳制（≤120 + 省略号）
+    await channel.notice('s-1', 'x', '标'.repeat(200))
+    const clamped = (spy.injected[1] as { source: { summary?: string } }).source.summary ?? ''
+    expect(clamped.length).toBeLessThanOrEqual(120)
+    expect(clamped.endsWith('…')).toBe(true)
+  })
+
   it('followup → 活根 followup：完整消息（source kind user——主会话新回合并唤醒）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })

@@ -4,9 +4,9 @@
 // 「下一步动作:」封闭两值末行（AC2）、机制词黑名单零出现（AC5）、通道分流（#28——
 // ①-⑫ notice / ⑬-⑰ followup）、落盘降级面（详情行随 incidentPath 缺席而省略）。
 import { describe, expect, it } from 'vitest'
-import { validateNarrative } from './skeleton.js'
-import { SCENARIOS, renderNarrative } from './templates.js'
-import type { ScenarioId } from './templates.js'
+import { findMechanismWords, validateNarrative } from './skeleton.js'
+import { HEADLINE_MAX_CHARS, SCENARIOS, renderHeadline, renderNarrative } from './templates.js'
+import type { NarrativePayloadMap, ScenarioId } from './templates.js'
 
 interface SampleCase {
   readonly no: string
@@ -345,5 +345,62 @@ describe('S4 · 阻塞族详情行随落盘降级', () => {
     expect(text).toContain('logs/m2-pipeline/4.2/001-blocked/')
     expect(text).not.toContain(fullReason)
     expect(text).not.toContain('重试 2 次均失败')
+  })
+})
+
+// ─────────────────────────── 1.15 · 场景专用单行摘要（notice 折叠位——替代整段截断） ───────────────────────────
+
+/** 摘要样例表（载荷与全文样例同源——断言事实短语 + 界界 + 零机制词） */
+const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId; readonly payload: NarrativePayloadMap[ScenarioId]; readonly mustContain: readonly string[] }[] = [
+  { no: '①', id: 'startup-from-scratch', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', pending: 6 }, mustContain: ['[forge·启动] m2-pipeline（feature）', '从头执行', '待执行 6'] },
+  { no: '②', id: 'startup-resume-stopped', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', taskKey: '2.6' }, mustContain: ['[forge·启动]', '接续执行未完成 2.6'] },
+  { no: '③', id: 'startup-resume-inflight', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', taskKey: '2.7' }, mustContain: ['[forge·启动]', '在飞任务 2.7'] },
+  { no: '④', id: 'claim', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配（Apps web）', remaining: { pending: 3, inProgress: 1, blocked: 0 } }, mustContain: ['[forge·领取] 2.8 诊断弹窗装配（Apps web）', '待执行 3', '执行中 1'] },
+  { no: '⑤', id: 'claim-interrupted', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.5 会话装配（恢复自中断 — 进程重启前未完成）', remaining: { pending: 2, interrupted: 1, blocked: 0 } }, mustContain: ['[forge·领取]', '恢复自中断', '待执行 2', '中断 1'] },
+  { no: '⑥', id: 'completed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配', summary: '实现弹窗组件与抽屉接线，测试 12 通过' }, mustContain: ['[forge·完成] 2.8 诊断弹窗装配 — 完成', '测试 12 通过'] },
+  { no: '⑦', id: 'blocked-with-fix', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.1 概览水化', reasonSummary: '测试挂起，选中态未同步（原因摘要）', incidentPath: 'logs/m2-pipeline/3.1/001-blocked/', fixId: 'fix-2' }, mustContain: ['[forge·阻塞] 3.1 概览水化 — 阻塞', '已创建修复任务 fix-2', '继续执行'] },
+  { no: '⑧', id: 'blocked-auto-fixed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.2 装配桩', reasonSummary: 'pnpm 安装失败（原因摘要）', fixId: 'fix-3', fixNote: '修构建脚本依赖版本' }, mustContain: ['[forge·自动处理]', '已创建修复任务 fix-3', '修构建脚本依赖版本'] },
+  { no: '⑨', id: 'blocked-wait-external', payload: { sourceSlug: 'm2-pipeline', taskLabel: '4.1 API 接线', reasonSummary: '等待接口重构先落地', externalSlug: 'feature-b' }, mustContain: ['[forge·自动处理]', '等待 feature-b 先完成'] },
+  { no: '⑩', id: 'blocked-ask-user', payload: { sourceSlug: 'm2-pipeline', taskLabel: '4.2 导出功能', reasonSummary: '验收标准冲突' }, mustContain: ['[forge·自动处理]', '已发起问询'] },
+  { no: '⑪', id: 'spawn-failed-retry', payload: { sourceSlug: 'm2-pipeline', attempt: 2, errorSummary: '子会话创建被拒', delaySeconds: 30, maxAttempts: 3 }, mustContain: ['[forge·自动重试]', '第 2 次', '30 秒后重试'] },
+  { no: '⑫', id: 'worker-aborted-retry', payload: { sourceSlug: 'm2-pipeline', taskKey: '2.9', attempt: 1, maxAttempts: 3 }, mustContain: ['[forge·自动重试]', '任务 2.9 异常退出', '第 1/3 次'] },
+  { no: '⑬', id: 'spawn-failed-halted', payload: { sourceSlug: 'm2-pipeline', attempts: 3, instruction: '环境排查后重新开始' }, mustContain: ['[forge·自动重试]', '连续失败 3 次 — 已停止', '已发起问询'] },
+  { no: '⑭', id: 'blocked-pool', payload: { sourceSlug: 'm2-pipeline', blockedItems: [{ taskKey: '3.1', note: 'a' }, { taskKey: '4.1', note: 'b' }] }, mustContain: ['[forge·受阻]', '阻塞 2 项（3.1、4.1）'] },
+  { no: '⑮', id: 'finished-timeout', payload: { sourceSlug: 'm2-pipeline', reason: '等待超时', completed: 4, blocked: 2, pending: 1, instruction: '稍后重试' }, mustContain: ['[forge·结束] m2-pipeline — 结束（等待超时）', '完成 4', '阻塞 2', '待处理 1'] },
+  { no: '⑯', id: 'finished-all', payload: { sourceSlug: 'm2-pipeline', completed: 8, blocked: 0, instruction: '若想派发其它任务，执行 /run-dag-tasks' }, mustContain: ['[forge·结束] m2-pipeline — 全部任务已完成', '完成 8'] },
+  { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9', instruction: '继续执行' }, mustContain: ['[forge·停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
+]
+
+describe('1.15 · 十七场景专用单行摘要（折叠位丰富——替代整段前 120 字符截断）', () => {
+  for (const sample of HEADLINE_SAMPLES) {
+    it(`${sample.no} ${String(sample.id)} 摘要：单行·≤120·含事实短语·零机制词`, () => {
+      const headline = renderHeadline(sample.id, sample.payload)
+      expect(headline).not.toContain('\n')
+      expect(headline.startsWith('[forge·')).toBe(true)
+      expect(headline.length).toBeLessThanOrEqual(HEADLINE_MAX_CHARS)
+      for (const fact of sample.mustContain) expect(headline).toContain(fact)
+      expect(findMechanismWords(headline)).toEqual([])
+      // 与整段截断不同源：单行摘要不含骨架 key: val 冒号行
+      expect(headline).not.toMatch(/: /)
+    })
+  }
+
+  it('超界保底：整行越界省略号截断（恰 ≤120）', () => {
+    // blocked-pool 阻塞清单片段不钳制——30 项键名必然挤爆整行预算，触发整行截断保底
+    const headline = renderHeadline('blocked-pool', {
+      sourceSlug: 'm2-pipeline',
+      blockedItems: Array.from({ length: 30 }, (_, i) => ({ taskKey: `9.${i}`, note: 'n' })),
+    })
+    expect(headline.length).toBeLessThanOrEqual(HEADLINE_MAX_CHARS)
+    expect(headline.endsWith('…')).toBe(true)
+  })
+
+  it('阻塞为零时剩余片段省略阻塞计数（claim）', () => {
+    const headline = renderHeadline('claim', {
+      sourceSlug: 's',
+      taskLabel: '1.1 t',
+      remaining: { pending: 2, inProgress: 1, blocked: 0 },
+    })
+    expect(headline).not.toContain('阻塞')
   })
 })

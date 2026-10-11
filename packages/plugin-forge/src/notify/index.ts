@@ -26,6 +26,8 @@ export {
   completed,
   finishedAll,
   finishedTimeout,
+  HEADLINE_MAX_CHARS,
+  renderHeadline,
   renderNarrative,
   SCENARIOS,
   spawnFailedHalted,

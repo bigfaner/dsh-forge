@@ -22,12 +22,12 @@ afterEach(() => {
   }
 })
 
-function recordingChannel(): NarrationChannel & { calls: { method: string; sessionId: string; text: string }[] } {
-  const calls: { method: string; sessionId: string; text: string }[] = []
+function recordingChannel(): NarrationChannel & { calls: { method: string; sessionId: string; text: string; headline?: string }[] } {
+  const calls: { method: string; sessionId: string; text: string; headline?: string }[] = []
   return {
     calls,
-    notice: vi.fn(async (sessionId: string, text: string) => {
-      calls.push({ method: 'notice', sessionId, text })
+    notice: vi.fn(async (sessionId: string, text: string, headline?: string) => {
+      calls.push({ method: 'notice', sessionId, text, ...(headline !== undefined ? { headline } : {}) })
     }),
     followup: vi.fn(async (sessionId: string, text: string) => {
       calls.push({ method: 'followup', sessionId, text })
@@ -114,6 +114,17 @@ describe('S4 · 阻塞族发射机械防线（AC4——reason 全文只落盘）
     expect(text).toContain('pnpm 安装失败')
     expect(text).not.toContain('依赖树冲突明细第二行')
     expect(text).not.toContain(REASON)
+    // 1.15 折叠摘要接线：blocked 径把场景单行摘要传给通道（headline 位——非整段截断）
+    expect(channel.calls[0]?.headline).toBe('[forge·自动处理] 3.2 装配桩 — 阻塞 · 已创建修复任务 fix-3 · 修构建脚本依赖版本')
+  })
+
+  it('notice 直发径：headline 可选透传至通道（缺席 = 不带 headline——回退截断由 faces 兜底）', async () => {
+    const channel = recordingChannel()
+    const narrator = createNarrator({ channel })
+    await narrator.notice('s-1', '全文', '[forge·领取] 2.8 — 待执行 3')
+    await narrator.notice('s-2', '全文')
+    expect(channel.calls[0]?.headline).toBe('[forge·领取] 2.8 — 待执行 3')
+    expect(channel.calls[1]).not.toHaveProperty('headline')
   })
 
   it('落盘失败 = 详情行省略，叙述照发（fail-soft 全链）', async () => {

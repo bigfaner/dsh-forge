@@ -10,6 +10,7 @@ import {
   nextActionLine,
   NEXT_ACTION_NONE,
   nextActionPromptUser,
+  sanitizeValue,
   typeLine,
 } from './skeleton.js'
 
@@ -373,6 +374,84 @@ export function stoppedByCommand(p: StoppedByCommandPayload): string {
     line('状态', `完成 ${p.completed} · 执行中任务 ${p.inFlightTaskKey} 已标记为中断`),
     nextActionLine(nextActionPromptUser(p.instruction)),
   ].join('\n')
+}
+
+// ─────────────────────────── 场景单行摘要（notice 折叠位专用——替代整段截断） ───────────────────────────
+
+/** 折叠摘要单行界（faces 折叠位同值 120——超界省略号截断保底） */
+export const HEADLINE_MAX_CHARS = 120
+
+/** 摘要片段钳制（单片段超界省略号——防一个长值挤占整行预算） */
+function clampPart(part: string, max: number): string {
+  return part.length <= max ? part : `${part.slice(0, max - 1)}…`
+}
+
+/** 单行摘要拼装（`[forge·X]` 前缀 + ` · ` 分隔事实片段；动态片段经 sanitizeValue 净化冒号） */
+function headlineOf(badge: string, parts: readonly string[]): string {
+  return `[forge·${badge}] ${parts.map((part) => sanitizeValue(part)).join(' · ')}`
+}
+
+/** 剩余计数片段（claim 族——阻塞为零时省略） */
+function remainingParts(pending: number, midKey: '执行中' | '中断', mid: number, blocked: number): string[] {
+  const parts = [`待执行 ${pending}`, `${midKey} ${mid}`]
+  if (blocked > 0) parts.push(`阻塞 ${blocked}`)
+  return parts
+}
+
+/** 每场景专用单行摘要表（复用骨架同源载荷事实——类型 + 任务键/事实短语 + 关键计数） */
+const HEADLINERS: { readonly [S in ScenarioId]: (payload: NarrativePayloadMap[S]) => string } = {
+  'startup-from-scratch': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, '从头执行', `待执行 ${p.pending}`]),
+  'startup-resume-stopped': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, `接续执行未完成 ${p.taskKey}`]),
+  'startup-resume-inflight': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, `在飞任务 ${p.taskKey}`]),
+  claim: (p) =>
+    headlineOf('领取', [clampPart(p.taskLabel, 60), ...remainingParts(p.remaining.pending, '执行中', p.remaining.inProgress, p.remaining.blocked)]),
+  'claim-interrupted': (p) =>
+    headlineOf('领取', [
+      clampPart(p.taskLabel, 60),
+      '恢复自中断',
+      ...remainingParts(p.remaining.pending, '中断', p.remaining.interrupted, p.remaining.blocked),
+    ]),
+  completed: (p) => headlineOf('完成', [`${clampPart(p.taskLabel, 60)} — 完成`, clampPart(p.summary, 40)]),
+  'blocked-with-fix': (p) =>
+    headlineOf('阻塞', [
+      `${clampPart(p.taskLabel, 40)} — 阻塞`,
+      clampPart(p.reasonSummary, 30),
+      `已创建修复任务 ${p.fixId}`,
+      '继续执行',
+    ]),
+  'blocked-auto-fixed': (p) =>
+    headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, `已创建修复任务 ${p.fixId}`, clampPart(p.fixNote, 20)]),
+  'blocked-wait-external': (p) =>
+    headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, `等待 ${p.externalSlug} 先完成`]),
+  'blocked-ask-user': (p) => headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, '已发起问询']),
+  'spawn-failed-retry': (p) =>
+    headlineOf('自动重试', [`启动子代理失败（第 ${p.attempt} 次）`, clampPart(p.errorSummary, 30), `${p.delaySeconds} 秒后重试`]),
+  'worker-aborted-retry': (p) =>
+    headlineOf('自动重试', [`任务 ${p.taskKey} 异常退出`, `自动重新执行（第 ${p.attempt}/${p.maxAttempts} 次）`]),
+  'spawn-failed-halted': (p) =>
+    headlineOf('自动重试', [`${p.sourceSlug} 启动子代理连续失败 ${p.attempts} 次 — 已停止`, '已发起问询']),
+  'blocked-pool': (p) =>
+    headlineOf('受阻', [
+      `${p.sourceSlug} 无可执行任务`,
+      `阻塞 ${p.blockedItems.length} 项（${p.blockedItems.map((item) => item.taskKey).join('、')}）`,
+    ]),
+  'finished-timeout': (p) =>
+    headlineOf('结束', [
+      `${p.sourceSlug} — 结束（${p.reason}）`,
+      `完成 ${p.completed}`,
+      `阻塞 ${p.blocked}`,
+      `待处理 ${p.pending}`,
+    ]),
+  'finished-all': (p) => headlineOf('结束', [`${p.sourceSlug} — 全部任务已完成`, `完成 ${p.completed}`]),
+  'stopped-by-command': (p) =>
+    headlineOf('停止', [`${p.sourceSlug} — 已按你的指令停止`, `完成 ${p.completed}`, `执行中任务 ${p.inFlightTaskKey} 已标记为中断`]),
+}
+
+/** 场景分发单行摘要（与 renderNarrative 同参口径；超界省略号截断保底——折叠位永不越界） */
+export function renderHeadline<S extends ScenarioId>(scenario: S, payload: NarrativePayloadMap[S]): string {
+  const builder: (payload: NarrativePayloadMap[S]) => string = HEADLINERS[scenario]
+  const raw = builder(payload)
+  return raw.length <= HEADLINE_MAX_CHARS ? raw : `${raw.slice(0, HEADLINE_MAX_CHARS - 1)}…`
 }
 
 // ─────────────────────────── 场景分发（循环驱动器单入口） ───────────────────────────

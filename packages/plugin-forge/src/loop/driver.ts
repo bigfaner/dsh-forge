@@ -36,7 +36,7 @@ import type {
   SpawnWorker,
 } from '../dispatch-core/index.js'
 import { clearExclusiveLoopSource, setExclusiveLoopSource } from '../dispatch-core/index.js'
-import { renderNarrative, summarizeReason } from '../notify/index.js'
+import { renderHeadline, renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef } from './registry.js'
@@ -473,9 +473,11 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
   const kind = record.source.kind
   const first = stale[0]
   if (first !== undefined) {
+    const payload = { sourceSlug: slug, sourceKind: kind, taskKey: first.localId }
     await deps.narrator.notice(
       record.ownerSessionId,
-      renderNarrative('startup-resume-stopped', { sourceSlug: slug, sourceKind: kind, taskKey: first.localId }),
+      renderNarrative('startup-resume-stopped', payload),
+      renderHeadline('startup-resume-stopped', payload),
     )
     return
   }
@@ -483,16 +485,20 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
     const cards = await deps.tasks.listTasks({ projectId: scope.projectId, source, statusFilter: ['in_progress'] })
     const inFlightCard = cards[0]
     if (inFlightCard !== undefined) {
+      const payload = { sourceSlug: slug, sourceKind: kind, taskKey: inFlightCard.localId }
       await deps.narrator.notice(
         record.ownerSessionId,
-        renderNarrative('startup-resume-inflight', { sourceSlug: slug, sourceKind: kind, taskKey: inFlightCard.localId }),
+        renderNarrative('startup-resume-inflight', payload),
+        renderHeadline('startup-resume-inflight', payload),
       )
       return
     }
   }
+  const scratchPayload = { sourceSlug: slug, sourceKind: kind, pending: stats.byStatus.pending }
   await deps.narrator.notice(
     record.ownerSessionId,
-    renderNarrative('startup-from-scratch', { sourceSlug: slug, sourceKind: kind, pending: stats.byStatus.pending }),
+    renderNarrative('startup-from-scratch', scratchPayload),
+    renderHeadline('startup-from-scratch', scratchPayload),
   )
 }
 
@@ -567,23 +573,19 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 剩余行 = claim 后池读——本任务已入执行中口径，与样例逐字一致）
   const stats = await statsFailSoft(loop)
   if (adoptRef !== undefined) {
-    await deps.narrator.notice(
-      owner,
-      renderNarrative('claim-interrupted', {
-        sourceSlug: slug,
-        taskLabel: `${taskLabelOf(task)}（恢复自中断 — 重新执行）`,
-        remaining: { pending: stats.byStatus.pending, interrupted: stats.byStatus.interrupted, blocked: stats.byStatus.blocked },
-      }),
-    )
+    const payload = {
+      sourceSlug: slug,
+      taskLabel: `${taskLabelOf(task)}（恢复自中断 — 重新执行）`,
+      remaining: { pending: stats.byStatus.pending, interrupted: stats.byStatus.interrupted, blocked: stats.byStatus.blocked },
+    }
+    await deps.narrator.notice(owner, renderNarrative('claim-interrupted', payload), renderHeadline('claim-interrupted', payload))
   } else {
-    await deps.narrator.notice(
-      owner,
-      renderNarrative('claim', {
-        sourceSlug: slug,
-        taskLabel: taskLabelOf(task),
-        remaining: { pending: stats.byStatus.pending, inProgress: stats.byStatus.in_progress, blocked: stats.byStatus.blocked },
-      }),
-    )
+    const payload = {
+      sourceSlug: slug,
+      taskLabel: taskLabelOf(task),
+      remaining: { pending: stats.byStatus.pending, inProgress: stats.byStatus.in_progress, blocked: stats.byStatus.blocked },
+    }
+    await deps.narrator.notice(owner, renderNarrative('claim', payload), renderHeadline('claim', payload))
   }
   // 通知 await 窗口的停止竞态收口（同上——stop 已接管则让渡）
   if (await bailIfAborted(loop, claim)) return 'terminal'
@@ -599,15 +601,17 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     loop.spawnFailures += 1
     const attempt = loop.spawnFailures
     const delayMs = backoffDelayMs(loop.delays.backoffBaseMs, attempt)
+    const retryPayload = {
+      sourceSlug: slug,
+      attempt,
+      errorSummary: summarizeReason(failure.message),
+      delaySeconds: Math.round(delayMs / 1000),
+      maxAttempts: HALT_THRESHOLD,
+    }
     await deps.narrator.notice(
       owner,
-      renderNarrative('spawn-failed-retry', {
-        sourceSlug: slug,
-        attempt,
-        errorSummary: summarizeReason(failure.message),
-        delaySeconds: Math.round(delayMs / 1000),
-        maxAttempts: HALT_THRESHOLD,
-      }),
+      renderNarrative('spawn-failed-retry', retryPayload),
+      renderHeadline('spawn-failed-retry', retryPayload),
     )
     if (signal.aborted) return 'terminal'
     return (await sleepOrAbort(signal, delayMs)) ? 'continue' : 'terminal'
@@ -645,9 +649,11 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       })
       return 'terminal'
     }
+    const abortedPayload = { sourceSlug: slug, taskKey: task.localId, attempt, maxAttempts: LOOP_WORKER_ABORT_MAX_RETRIES }
     await loop.deps.narrator.notice(
       owner,
-      renderNarrative('worker-aborted-retry', { sourceSlug: slug, taskKey: task.localId, attempt, maxAttempts: LOOP_WORKER_ABORT_MAX_RETRIES }),
+      renderNarrative('worker-aborted-retry', abortedPayload),
+      renderHeadline('worker-aborted-retry', abortedPayload),
     )
     return 'continue'
   }
@@ -666,10 +672,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const label = `${settlement.taskRef.localId} ${settlement.title}`
   if (settlement.outcome === 'success') {
     loop.dispositions.delete(taskKey) // S1c 处置簿清账（任务成功——同任务处置计数归零）
-    await deps.narrator.notice(
-      owner,
-      renderNarrative('completed', { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }),
-    )
+    const donePayload = { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }
+    await deps.narrator.notice(owner, renderNarrative('completed', donePayload), renderHeadline('completed', donePayload))
     return 'continue' // 续领下一轮
   }
 

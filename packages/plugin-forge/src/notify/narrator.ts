@@ -8,7 +8,7 @@ import type { NarrationChannel } from './channel.js'
 import { createIncidentStore } from './incident-log.js'
 import type { IncidentInput, IncidentStore } from './incident-log.js'
 import { summarizeReason } from './skeleton.js'
-import { renderNarrative } from './templates.js'
+import { renderHeadline, renderNarrative } from './templates.js'
 import type { NarrativePayloadMap } from './templates.js'
 
 /** 阻塞族四场景（blocked 发射径的 id 域——样例 ⑦-⑩；泛型约束即编译期封闭） */
@@ -37,8 +37,9 @@ export interface NarratorDeps {
 
 /** 叙述面（循环驱动器消费的单出口） */
 export interface Narrator {
-  /** 常规进行事件（样例 ①-⑫）——notice 通道（inject·零模型回合）；fail-soft */
-  notice(sessionId: string, text: string): Promise<void>
+  /** 常规进行事件（样例 ①-⑫）——notice 通道（inject·零模型回合）；fail-soft。
+   * headline = 预构建场景单行摘要（renderHeadline 产物——折叠位不再整段截断；缺席 = 回退截断） */
+  notice(sessionId: string, text: string, headline?: string): Promise<void>
   /** 终局事件（样例 ⑬-⑰，每循环 1–2 条）——followup 通道（完整消息）；fail-soft */
   followup(sessionId: string, text: string): Promise<void>
   /** 阻塞族发射（样例 ⑦-⑩）：reason 全文落盘 → 摘要 + 子文件夹路径进 notice 叙述 */
@@ -57,8 +58,8 @@ export function createNarrator(deps: NarratorDeps): Narrator {
   const safe = failSoftNarrationChannel(deps.channel)
   const incidents: IncidentStore = deps.incidents ?? createIncidentStore({ resolveContainerDir: () => undefined })
   return {
-    notice(sessionId: string, text: string): Promise<void> {
-      return safe.notice(sessionId, text)
+    notice(sessionId: string, text: string, headline?: string): Promise<void> {
+      return safe.notice(sessionId, text, headline)
     },
     followup(sessionId: string, text: string): Promise<void> {
       return safe.followup(sessionId, text)
@@ -84,7 +85,8 @@ export function createNarrator(deps: NarratorDeps): Narrator {
         reasonSummary,
         ...(incidentPath !== undefined ? { incidentPath } : {}),
       } as NarrativePayloadMap[S]
-      await safe.notice(sessionId, renderNarrative(scenario, payload))
+      // 折叠摘要 = 场景专用单行摘要（S4 增强——同源载荷事实，替代整段截断）
+      await safe.notice(sessionId, renderNarrative(scenario, payload), renderHeadline(scenario, payload))
     },
     recordIncident(input: IncidentInput): string | undefined {
       return incidents.record(input)
