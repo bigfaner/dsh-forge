@@ -89,38 +89,35 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* ── 正文：md 段 / mermaid 段纵排（官方块级流）。滚动所有权自持（面板骨架头注——dock
- * 宿主不滚，同宿主 overview 先例同构）+ 官方 MarkdownBody 容器 css$7 同形（1.4 对齐
- * 官方——与预览径 .dswf-mdp-body 同刻度；产品 margin 22/20 + flex gap 自创刻度退役）── */
-.dswf-doc-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  font-family: var(--dsw-font, inherit);
-  white-space: normal;
-  padding: 10px 12px; /* dsw-raw 官方同刻度（css$7 inset——主题无间距标尺令牌） */
-}
-
-/* mermaid 图卡节奏：容器块级化后段间距归块级 margin——官方块级 16px 刻度（与 .dswf-mdp-body 同刻度） */
-.dswf-doc-body .dswf-doc-mermaid {
-  margin: 16px 0; /* dsw-raw 官方块级刻度（css$7 语境段间距——主题无间距标尺令牌） */
-}
-
-/* ── 官方预览径 md body（md-preview-body 专用）：官方 MarkdownBody 容器 css$7 同形纯块级
- * 镜像——min-width:0 + font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap
- * 渗透（1.3 根因收口：软换行变硬换行/关偏好横向爆宽皆源于此）。不复用 dswf-doc-body
- * （dock tab 语境正文容器——1.4 起同为官方同形块级；唯滚动所有权不同：dock tab 正文
- * 自持滚动，预览径滚动归官方共享 body[本件不认领 scrollport]）── */
-.dswf-mdp-body {
+/* ── 共享文档 body 官方同形容器（1.5 单源）：三入口容器同一刻度组——官方预览径
+ * .dswf-mdp-body / dock 文档 tab .dswf-doc-body / 知识抽屉正文 .dswf-kn-md-body。
+ * 官方 MarkdownBody 容器 css$7 同形纯块级镜像：min-width:0 + font-family 重置 +
+ * white-space:normal（阻断宿主 pre/pre-wrap 渗透——1.3 根因收口）+ inset 10px 12px；
+ * 图卡块级 16px 节奏同组单源。滚动所有权刻意不入组、各自声明：预览径滚动归官方共享 body
+ * （不认领 scrollport）、抽屉滚动归抽屉内容区（drawer overflow-y:auto 既有面）、dock tab
+ * 自持滚动（下方专条规则）── */
+.dswf-mdp-body,
+.dswf-doc-body,
+.dswf-kn-md-body {
   min-width: 0;
   font-family: var(--dsw-font, inherit);
   white-space: normal;
   padding: 10px 12px; /* dsw-raw 官方同刻度（css$7 inset——主题无间距标尺令牌） */
 }
 
-/* 预览径 mermaid 图卡节奏：容器纯块级后段间距不再由 flex gap 承接——官方块级 16px 段间距同刻度 */
-.dswf-mdp-body .dswf-doc-mermaid {
+/* mermaid 图卡节奏：容器块级化后段间距归块级 margin——官方块级 16px 刻度（三入口同组单源） */
+.dswf-mdp-body .dswf-doc-mermaid,
+.dswf-doc-body .dswf-doc-mermaid,
+.dswf-kn-md-body .dswf-doc-mermaid {
   margin: 16px 0; /* dsw-raw 官方块级刻度（css$7 语境段间距——主题无间距标尺令牌） */
+}
+
+/* dock tab 语境正文容器：滚动所有权自持（dock 宿主不滚——同宿主 overview 先例同构；
+ * 1.4 滚动收口面原样保持） */
+.dswf-doc-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ── mermaid 图卡（头 + 画布；画布横向滚动容大图） ── */

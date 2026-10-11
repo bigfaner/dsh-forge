@@ -4,21 +4,21 @@
 // docRel props；多文档并存 = 每文档一个 tab 实例，互不共享态。
 // 内容结构（ui-design UF-2 / 原型 doc-tab）：头部（文件名 + 只读徽标 + 悬空徽标）→
 // 路径栏（canonical 全路径 + 📁 在编辑器中打开 + ↻ 重读）→ 摘要块 → 正文分段渲染
-// （md 段经 MarkdownDoc、mermaid 段经 MermaidDiagram 懒加载——零 mermaid 段零挂载）。
+// （经共享件 MdSegmentsBody 单源——md 段 MarkdownDoc、mermaid 段 MermaidDiagram 懒加载，
+// 零 mermaid 段零挂载；1.5 三入口一致）。
 // 悬空（dangling=true，Interface 4 悬空容忍）= 只读占位面：路径栏保留、不崩溃、
 // 不写入、不删行；↻ 重读照常（切回含文件分支后恢复）。
 // 边界：禁 import ../session/ ../knowledge/ ../overview/（依赖铁律③ 同级业务互禁）；
-// Markdown 渲染唯一经 MarkdownDoc；openExternal 触发即忘（失败吞——不炸 tab）。
+// 正文渲染唯一经共享件 MdSegmentsBody（内层 md 段仍唯一经 MarkdownDoc——结构 pin）；
+// openExternal 触发即忘（失败吞——不炸 tab）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocContent } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
-import { EmptyState, ErrorBar, MarkdownDoc, SkeletonRows, StateChip } from '../../components/index.js'
+import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import { splitDocSegments } from './doc-segments.js'
-import { MD_PREVIEW_MARKDOWN_LABELS } from './md-preview-body.js'
-import { MermaidDiagram } from './mermaid-diagram.js'
+import { MdSegmentsBody } from './md-segments-body.js'
 import './docs.css'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -104,20 +104,13 @@ export interface DocsFrameProps {
   readonly onOpenExternal: () => void
 }
 
-/** 正文分段渲染（md 段 MarkdownDoc / mermaid 段 MermaidDiagram——零 mermaid 段零挂载）。
- * labels = MD_PREVIEW_MARKDOWN_LABELS（1.3 冻结常量复用——code.toolbarLabels 递达 =
- * 代码块升级官方 CodeToolbar：语言名/块级 wrap/复制；1.4 dock tab 与预览径同面） */
+/** 正文分段渲染——共享件 MdSegmentsBody 单源委托（1.5：分段 + labels + 图卡节奏唯一实现，
+ * 与官方预览径/知识抽屉同面）。本件只持 dock tab 语境容器（滚动所有权自持——docs.css
+ * 专条规则；官方同形刻度组共享）与 e2e 锚。 */
 export function DocBody({ content }: { readonly content: string }): ReactNode {
-  const segments = splitDocSegments(content)
   return (
     <div className="dswf-doc-body" data-dswf-doc-body="">
-      {segments.map((segment, i) =>
-        segment.kind === 'md' ? (
-          <MarkdownDoc key={i} text={segment.text} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
-        ) : (
-          <MermaidDiagram key={i} source={segment.source} />
-        ),
-      )}
+      <MdSegmentsBody content={content} />
     </div>
   )
 }

@@ -158,6 +158,44 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
     expect(html).not.toContain('keywords:')
     expect(html).not.toContain('title:')
   })
+
+  it('1.5 正文升级：```mermaid 段出图挂载锚（MermaidDiagram 占位——回退语义同源归 MermaidDiagram）+ 相邻 md 段照常', () => {
+    const mermaidDetail: EntryDetail = {
+      ...DETAIL,
+      body: ['# 架构', '', '```mermaid', 'erDiagram', '    PROPOSALS ||--o{ FEATURES : "proposal_id"', '```', '', '收尾段落。'].join('\n'),
+    }
+    const html = renderToStaticMarkup(
+      <EntryDrawerBody state={{ phase: 'ready', detail: mermaidDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+    )
+    expect(html).toContain('dswf-kn-md-body') // 共享容器（官方同形刻度组）
+    expect(html).toContain('data-dswf-doc-mermaid-pending') // mermaid 段挂载（effect 渲染相位前占位）
+    expect(html).toContain('data-dswf-markdown="body"') // md 段照常（variant=body）
+    const headAt = html.indexOf('架构')
+    const mermaidAt = html.indexOf('data-dswf-doc-mermaid')
+    const tailAt = html.indexOf('收尾段落。')
+    expect(headAt).toBeGreaterThan(-1)
+    expect(mermaidAt).toBeGreaterThan(headAt)
+    expect(tailAt).toBeGreaterThan(mermaidAt)
+  })
+
+  it('1.5 正文升级：代码块 CodeToolbar（labels 递达——块级 wrap/复制，与文档 tab/预览径同面）', () => {
+    const codeDetail: EntryDetail = { ...DETAIL, body: '# 正文\n\n```ts\nconst a = 1\n```' }
+    const html = renderToStaticMarkup(
+      <EntryDrawerBody state={{ phase: 'ready', detail: codeDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+    )
+    expect(html).toContain('data-code-block-banner') // CodeToolbar 横幅锚（toolbarLabels 递达）
+    expect(html).toContain('aria-label="换行"') // 块级 wrap 钮
+    expect(html).toContain('aria-label="复制"') // 复制钮
+  })
+
+  it('1.5 非法 mermaid 源透传：分段照切、渲染件照挂（回退语义归 MermaidDiagram——异常不外溢，尾段照常）', () => {
+    const badDetail: EntryDetail = { ...DETAIL, body: '# 图\n\n```mermaid\nnot a valid diagram @@@\n```\n\n尾段。' }
+    const html = renderToStaticMarkup(
+      <EntryDrawerBody state={{ phase: 'ready', detail: badDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+    )
+    expect(html).toContain('data-dswf-doc-mermaid-pending')
+    expect(html).toContain('尾段。')
+  })
 })
 
 describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {

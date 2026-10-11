@@ -269,12 +269,13 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
 })
 
 describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全边界）', () => {
-  it('模块面就位：分段解析 + mermaid 渲染件 + tab 体 + 官方预览径 md mermaid 扩展渲染器 + 样式', () => {
+  it('模块面就位：分段解析 + mermaid 渲染件 + tab 体 + 官方预览径 md mermaid 扩展渲染器 + 共享文档 body 件 + 样式', () => {
     for (const f of [
       'apps/web/src/views/docs/doc-segments.ts',
       'apps/web/src/views/docs/mermaid-diagram.tsx',
       'apps/web/src/views/docs/index.tsx',
       'apps/web/src/views/docs/md-preview-body.tsx',
+      'apps/web/src/views/docs/md-segments-body.tsx',
       'apps/web/src/views/docs/docs.css',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
@@ -312,9 +313,9 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(mermaid).toContain('已回退为源码展示')
   })
 
-  it('渲染纪律 + 数据面：正文 md 段唯一经 MarkdownDoc；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
+  it('渲染纪律 + 数据面：DocBody 正文渲染委托共享件（1.5 单源——md 段唯一经 MarkdownDoc 归共享件断言）；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
     const tab = read('apps/web/src/views/docs/index.tsx')
-    expect(tab).toContain('MarkdownDoc')
+    expect(tab, '正文分段渲染唯一经共享件 MdSegmentsBody（1.5 三入口一致）').toContain('MdSegmentsBody')
     expect(tab, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
     expect(tab).toContain('client.docs.read')
     // openExternal 触发即忘：组件回调恒经 openDocExternal 包装（失败吞不炸 tab）
@@ -322,42 +323,43 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(tab).toContain('void openDocExternal(makeClient()')
   })
 
-  it('1.4 dock tab 滚动收口 + 官方同形：dswf-doc-body 自持滚动（flex:1 + min-height:0 + overflow-y:auto）+ css$7 同刻度 + CodeToolbar labels 递达', () => {
+  it('1.4 dock tab 滚动收口 + 官方同形（1.5 单源化）：三入口容器同一 CSS 刻度组 + dock tab 自持滚动 + CodeToolbar labels 递达归共享件', () => {
     const css = read('apps/web/src/views/docs/docs.css')
+    const group = css.match(/\.dswf-mdp-body,\s*\.dswf-doc-body,\s*\.dswf-kn-md-body \{[^}]*\}/)?.[0] ?? ''
+    expect(group, '三入口官方同形容器单源（css$7 同刻度组——预览径/dock tab/知识抽屉零各自为政）').not.toBe('')
+    expect(group, '官方同形 white-space:normal（pre/pre-wrap 渗透收口）').toContain('white-space: normal')
+    expect(group).toContain('font-family: var(--dsw-font, inherit)')
+    expect(group, '官方 css$7 inset 同刻度').toContain('padding: 10px 12px')
     const bodyRule = css.match(/\.dswf-doc-body \{[^}]*\}/)?.[0] ?? ''
     expect(bodyRule, '滚动所有权自持（dock 宿主不滚——同宿主 overview 先例同构）').toContain('overflow-y: auto')
     expect(bodyRule).toContain('flex: 1')
     expect(bodyRule).toContain('min-height: 0')
-    expect(bodyRule, '官方同形 white-space:normal（pre/pre-wrap 渗透收口）').toContain('white-space: normal')
-    expect(bodyRule).toContain('font-family: var(--dsw-font, inherit)')
-    expect(bodyRule, '官方 css$7 inset 同刻度').toContain('padding: 10px 12px')
     expect(bodyRule, '产品自创 margin 22/20 + flex gap 刻度退役').not.toMatch(/\b(margin|gap):/)
-    expect(css, 'mermaid 图卡节奏 = 官方块级 16px（与 .dswf-mdp-body 同刻度）').toMatch(
-      /\.dswf-doc-body \.dswf-doc-mermaid \{[^}]*margin: 16px 0/,
+    expect(css, 'mermaid 图卡节奏 = 官方块级 16px（三入口同组单源）').toMatch(
+      /\.dswf-mdp-body \.dswf-doc-mermaid,\s*\.dswf-doc-body \.dswf-doc-mermaid,\s*\.dswf-kn-md-body \.dswf-doc-mermaid \{[^}]*margin: 16px 0/,
     )
-    const tab = read('apps/web/src/views/docs/index.tsx')
-    expect(tab, 'DocBody CodeToolbar labels 递达（1.3 冻结常量 MD_PREVIEW_MARKDOWN_LABELS 复用）').toContain(
+    const shared = read('apps/web/src/views/docs/md-segments-body.tsx')
+    expect(shared, 'DocBody CodeToolbar labels 递达（1.3 冻结常量 MD_PREVIEW_MARKDOWN_LABELS——共享件单源递达）').toContain(
       'labels={MD_PREVIEW_MARKDOWN_LABELS}',
     )
   })
 
-  it('官方预览径 md mermaid 扩展渲染器（md-preview-body）：md 段唯一经 MarkdownDoc + mermaid 段唯一经 MermaidDiagram + 官方 documentpreview 包零 import', () => {
+  it('官方预览径 md mermaid 扩展渲染器（md-preview-body）：内层委托共享件（1.5）+ 官方同形容器 + 官方 documentpreview 包零 import', () => {
     const body = read('apps/web/src/views/docs/md-preview-body.tsx')
-    expect(body).toContain('MarkdownDoc')
+    expect(body, '内层渲染委托共享件（1.5 三入口一致——分段/labels/图卡节奏归 MdSegmentsBody 单源）').toContain('MdSegmentsBody')
     expect(body, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
-    expect(body).toContain('MermaidDiagram')
     expect(body, "禁静态 import mermaid（唯一动态径 = mermaid-diagram.tsx）").not.toContain("from 'mermaid'")
     expect(body, '官方 documentpreview 包禁 import（本地结构窄类型——结构同型镜像）').not.toContain(
       '@deepseek-ai/dsh-client-ui-sidebar-documentpreview',
     )
-    // 1.3 容器收口：预览径专用官方同形纯块级容器（不复用 dock tab 语境 dswf-doc-body + nowrap 族退役）
+    // 1.3 容器收口：预览径专用官方同形纯块级容器（不复用 dock tab 语境容器 + nowrap 族退役）
     expect(body).toContain('"dswf-mdp-body"')
     expect(body, 'dock tab 语境容器类退役（滚动所有权不同）').not.toContain('dswf-doc-body')
     expect(body, 'nowrap 族退役（white-space 渗透根因归容器 white-space:normal 收口）').not.toContain('dswf-mdp-nowrap')
     const docsCss = read('apps/web/src/views/docs/docs.css')
     expect(docsCss).toContain('.dswf-mdp-body')
     expect(docsCss).toContain('white-space: normal')
-    expect(docsCss, 'dock tab 正文族原规则不动（dswf-doc-body 继续服务 dock tab）').toContain('.dswf-doc-body')
+    expect(docsCss, 'dock tab 正文族规则不动（dswf-doc-body 继续服务 dock tab）').toContain('.dswf-doc-body')
     // 发布 + 注册面：product-views 发布件 + plugin documentPreviews 反射缝注册字面量
     expect(read('apps/web/src/product-views.ts')).toContain('ForgeMdPreviewBody')
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
@@ -379,11 +381,14 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     expect(barrel, 'EntryDrawer 未出 barrel').toContain("export * from './EntryDrawer.js'")
   })
 
-  it('Hard Rule 渲染纪律 + 按需读取：正文唯一经 MarkdownDoc（variant=body）；数据唯一通道 = entryDetail（不预载全库）', () => {
+  it('Hard Rule 渲染纪律 + 按需读取：正文唯一经共享件 MdSegmentsBody（1.5 三入口一致——md 段仍唯一经 MarkdownDoc/variant=body，归共享件断言）；数据唯一通道 = entryDetail（不预载全库）', () => {
     const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
-    expect(drawer).toContain('MarkdownDoc')
+    expect(drawer, '抽屉正文渲染委托共享件（1.5 升级：mermaid 分段 + CodeToolbar + 官方刻度）').toContain('MdSegmentsBody')
+    expect(drawer, "跨目录单源先例（DispatchPanel→overview 同型——oxlint 铁律仅 session↔knowledge 互禁）").toContain(
+      "from '../docs/md-segments-body.js'",
+    )
     expect(drawer, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
-    expect(drawer).toContain('variant="body"')
+    expect(drawer, '直连 MarkdownDoc import 退役（md 渲染归共享件单源）').not.toMatch(/import\s*\{[^}]*\bMarkdownDoc\b/)
     expect(drawer).toContain('client.knowledge.entryDetail')
     expect(drawer, '抽屉不预载全库（browse/listEntries/heat 均非详情通道）').not.toMatch(
       /\.knowledge\.(browse|listEntries|heat|sessionRecall)/,
@@ -405,6 +410,41 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = dockkit .float 同配方
     expect(css).toMatch(/@keyframes dswf-kn-drawer-in/) // 滑入
     expect(css.match(/\.dswf-kn-drawer \{[\s\S]*?position: fixed;/)).not.toBeNull() // 右缘全高滑入层
+  })
+})
+
+describe('md 文档 body 跨入口一致 pin（1.5——共享件单源，proposal md-preview-mermaid）', () => {
+  it('共享件落地：分段 + 官方渲染纪律（md 段唯一经 MarkdownDoc variant=body + MD_PREVIEW_MARKDOWN_LABELS / mermaid 段唯一经 MermaidDiagram）', () => {
+    const shared = read('apps/web/src/views/docs/md-segments-body.tsx')
+    expect(shared).toContain('splitDocSegments')
+    expect(shared, 'md 段官方渲染器唯一径').toContain('MarkdownDoc')
+    expect(shared).toContain('variant="body"')
+    expect(shared, 'mermaid 段唯一经 MermaidDiagram（懒加载/strict/回退全既有）').toContain('MermaidDiagram')
+    expect(shared, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
+    expect(shared, '禁静态 import mermaid（唯一动态径 = mermaid-diagram.tsx）').not.toContain("from 'mermaid'")
+  })
+
+  it('三入口全委托：官方预览径（md-preview-body）/ dock 文档 tab（DocBody）/ 知识抽屉（EntryDrawer 正文区）零各自为政的 md body 实现', () => {
+    expect(read('apps/web/src/views/docs/index.tsx')).toContain('MdSegmentsBody')
+    expect(read('apps/web/src/views/docs/md-preview-body.tsx')).toContain('MdSegmentsBody')
+    expect(read('apps/web/src/views/knowledge/EntryDrawer.tsx')).toContain('MdSegmentsBody')
+  })
+
+  it('文档 body 渲染唯一经共享件：产品源 MarkdownDoc import 面 = 共享件唯一一处（三入口外零直接用法——包装定义/barrel re-export/测试豁免）', () => {
+    const offenders: string[] = []
+    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+      if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
+      const rel = p.replaceAll('\\', '/')
+      if (rel.endsWith('views/docs/md-segments-body.tsx')) continue
+      if (/import\s*\{[^}]*\bMarkdownDoc\b[^}]*\}\s*from/.test(readFileSync(p, 'utf8'))) offenders.push(rel)
+    }
+    expect(offenders, `共享件外 MarkdownDoc 直 import（文档正文渲染须改经 MdSegmentsBody）: ${offenders.join(', ')}`).toEqual([])
+  })
+
+  it('views 跨目录 import 合规：EntryDrawer（views/knowledge）引 views/docs 共享件——沿 DispatchPanel→overview 单源先例（铁律面零放宽：oxlint 仅 session↔knowledge 互禁）', () => {
+    expect(read('apps/web/src/views/knowledge/EntryDrawer.tsx')).toMatch(
+      /import\s*\{[^}]*\bMdSegmentsBody\b[^}]*\}\s*from\s*'\.\.\/docs\/md-segments-body\.js'/,
+    )
   })
 })
 

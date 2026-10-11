@@ -10,7 +10,8 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { MD_PREVIEW_MARKDOWN_LABELS, MdPreviewBody, mdPreviewImageUrl, mdPreviewPathImages } from './md-preview-body.js'
+import { MD_PREVIEW_MARKDOWN_LABELS } from './md-segments-body.js'
+import { MdPreviewBody, mdPreviewImageUrl, mdPreviewPathImages } from './md-preview-body.js'
 
 const WEB_BASE = 'http://127.0.0.1:19536/'
 const DOC_PATH = 'Z:/ws/demo/docs/features/m2/design/tech-design.md'

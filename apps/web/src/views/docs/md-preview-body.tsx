@@ -3,14 +3,16 @@
 // （documentPreviews.register extension 带 + sidebar.right.tab.document keyed body，注册归
 // client-plugin/plugin.ts）叠加第二实现——extension 带恒胜 builtin，官方内建留在
 // 下拉可切回（选择态官方自持，产品不自管）。
-// 渲染核心复用文档 tab 分段管线：md 段经 MarkdownDoc（官方渲染器唯一径）、mermaid 段经
-// MermaidDiagram（懒加载/strict/失败回退全既有——本件零 mermaid 引擎引用，Hard Rule：
-// 禁静态 import mermaid，动态 import 唯一径 = mermaid-diagram.tsx）。分页 = 官方 owner 递达
-// 的累计前缀（loading: 'text-pages'），props 变化自然重渲；未闭合 fence 归正文（分段器既有
-// 已测语义），页补齐后自动成图。不认领 scrollport（共享 body 保持滚动所有者，同内建）。
+// 渲染核心委托共享文档 body 件（1.5 单源——MdSegmentsBody：分段管线 + md 段经 MarkdownDoc
+// [官方渲染器唯一径] + mermaid 段经 MermaidDiagram[懒加载/strict/失败回退全既有——本件零
+// mermaid 引擎引用，Hard Rule：禁静态 import，动态装载唯一径 = mermaid-diagram.tsx]）。
+// 本件保持适配层身份：官方 content 契约判别（非 text 相位渲染 null）/ wrap 偏好零消费 /
+// scrollport 零认领（滚动归官方共享 body，同内建）/ pathImages 图片词表（官方口径镜像）/
+// streaming=!eof 透传。分页 = 官方 owner 递达的累计前缀（loading: 'text-pages'），props
+// 变化自然重渲；未闭合 fence 归正文（分段器既有已测语义），页补齐后自动成图。
 // 容器 = 专用 .dswf-mdp-body（官方 MarkdownBody 容器 css$7 同形纯块级镜像——min-width:0 +
-// font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap 渗透[滚动/折行根因]，
-// 1.3 根因收口；不复用 dock tab 语境正文族类（docs.css flex/gap 容器，滚动所有权不同）。
+// font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap 渗透[滚动/折行根因，
+// 1.3 根因收口；容器刻度 1.5 起与 dock tab/知识抽屉同组单源于 docs.css，滚动所有权不入组]）。
 // labels/streaming 对齐官方 MarkdownBody（client.js L1557-1581/L1588）：code.toolbarLabels
 // 递达 = 代码块升级官方 CodeToolbar（语言名 + 块级 wrap + 复制——wrap:false 注册后块级
 // wrap 需求的唯一承接面）+ streaming=!eof 增量渲染。
@@ -21,24 +23,11 @@
 // 分层：路径解析/词表工厂 = 可测纯函数面（Node 池）；组件 = 纯呈现（可选钩子经子件无条件
 // 调用——fix-33 ⑤ 形制）；effect 胶水（mermaid 懒加载渲染相位）不属本件不属单测面。
 import { useMemo, type ReactNode } from 'react'
-import type { MarkdownLabels, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
-import { DEFAULT_MARKDOWN_LABELS, MarkdownDoc } from '../../components/index.js'
-import { splitDocSegments } from './doc-segments.js'
-import { MermaidDiagram } from './mermaid-diagram.js'
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MdSegmentsBody } from './md-segments-body.js'
 import './docs.css'
 
-/**
- * 预览径 labels（模块级冻结常量——引用稳定纪律同 DEFAULT_MARKDOWN_LABELS，新身份会废弃
- * 流式渲染缓存）：官方 MarkdownBody 同形（client.js L1557-1581——code.toolbarLabels 递达 =
- * 代码块 CodeToolbar；文案 = 产品中文面，复制/脚注沿 DEFAULT_MARKDOWN_LABELS 单源展开）。
- */
-export const MD_PREVIEW_MARKDOWN_LABELS: MarkdownLabels = Object.freeze({
-  code: Object.freeze({
-    ...DEFAULT_MARKDOWN_LABELS.code,
-    toolbarLabels: Object.freeze({ codeLabel: '代码', wrapLabel: '换行', unwrapLabel: '不换行' }),
-  }),
-  footnotes: DEFAULT_MARKDOWN_LABELS.footnotes,
-}) as MarkdownLabels
+/** 预览径 labels 常量已上移共享件单源（md-segments-body.tsx MD_PREVIEW_MARKDOWN_LABELS——1.5 三入口同一冻结身份）。 */
 
 /** 官方文档内容判别（documentpreview contract 消费切片——本件只渲染 text 相位，他相位 null） */
 export type MdPreviewContent =
@@ -188,8 +177,9 @@ function MdPreviewInfoReader({
 /**
  * 正文视图（纯呈现）：非 text 相位渲染 null；图片词表随 absolutePath 记忆化（官方
  * MarkdownBody 同径——baseURI Node/SSR 缺席 = ''，词表 inert）；容器 = 官方同形纯块级
- * dswf-mdp-body（white-space:normal 根因收口——不再随 wrap 偏好切换）；labels/streaming
- * 对齐官方 MarkdownBody（CodeToolbar + !eof 增量渲染）。
+ * dswf-mdp-body（white-space:normal 根因收口——不再随 wrap 偏好切换）；内层委托共享件
+ * （labels/streaming 经 MD_PREVIEW_MARKDOWN_LABELS 与 !eof 单源递达——CodeToolbar +
+ * 增量渲染）。
  */
 function MdPreviewBodyView({
   content,
@@ -201,23 +191,9 @@ function MdPreviewBodyView({
     [baseURI, absolutePath],
   )
   if (content.kind !== 'text') return null
-  const segments = splitDocSegments(content.text)
   return (
     <div className="dswf-mdp-body" data-dswf-md-preview-body="">
-      {segments.map((segment, i) =>
-        segment.kind === 'md' ? (
-          <MarkdownDoc
-            key={i}
-            text={segment.text}
-            variant="body"
-            pathImages={pathImages}
-            labels={MD_PREVIEW_MARKDOWN_LABELS}
-            streaming={!content.eof}
-          />
-        ) : (
-          <MermaidDiagram key={i} source={segment.source} />
-        ),
-      )}
+      <MdSegmentsBody content={content.text} pathImages={pathImages} streaming={!content.eof} />
     </div>
   )
 }
