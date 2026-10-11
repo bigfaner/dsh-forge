@@ -50,6 +50,25 @@ export function sessionPillItems(cards: readonly SessionTaskLinkCard[]): readonl
   return cards.map((card) => ({ ...card, featureSlug: card.slug }))
 }
 
+/**
+ * 行集 → 唯一 slug 判定（纯函数——S4 面板标题承载容器上下文）。全部非缺席 slug 归一
+ * （唯一）→ 该 slug；多 slug / slug 缺席（空串/空白）→ undefined（回退通用标题）。
+ */
+export function dispatchPanelUniqueSlug(rows: readonly SessionTaskPillItem[]): string | undefined {
+  const slugs = new Set<string>()
+  for (const row of rows) {
+    const slug = row.featureSlug
+    if (typeof slug === 'string' && slug.trim() !== '') slugs.add(slug)
+  }
+  return slugs.size === 1 ? [...slugs][0] : undefined
+}
+
+/** 面板标题（S4）：行集唯一 slug → 「派发 {slug} 的任务」；多 slug / slug 缺席 → 回退「派发任务」 */
+export function dispatchPanelTitle(rows: readonly SessionTaskPillItem[]): string {
+  const slug = dispatchPanelUniqueSlug(rows)
+  return slug === undefined ? '派发任务' : `派发 ${slug} 的任务`
+}
+
 /** 单会话挂接行项（SessionTaskLinkCard + 导航富化——装载层富化零额外 RPC） */
 export interface SessionTaskPillItem extends SessionTaskLinkCard {
   /** 所属 feature slug（slug ≡ feature slug 不变量映射） */
@@ -522,7 +541,7 @@ export function DispatchPanelBody({
     >
       <div className="dswf-dp-head" data-dswf-dp-head="">
         <IconSparkleRegular size={11} className="dswf-dp-ic" />
-        <span className="dswf-dp-title">派发任务</span>
+        <span className="dswf-dp-title">{dispatchPanelTitle(rows)}</span>
         <span className="dswf-dp-count" data-dswf-dp-count="">
           {rows.length}
         </span>

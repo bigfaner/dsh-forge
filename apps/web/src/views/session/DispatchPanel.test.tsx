@@ -28,6 +28,8 @@ import {
   dispatchPanelDragPosition,
   dispatchPanelExpandGeometry,
   dispatchPanelRows,
+  dispatchPanelTitle,
+  dispatchPanelUniqueSlug,
   fetchSessionTaskPills,
   fetchWorkerSession,
   initialSessionPillsState,
@@ -488,6 +490,51 @@ describe('行状态标签 tone = taskStatusTagTone 单源（D33 残差②——�
     for (const status of ['pending', 'in_progress', 'suspended', 'skipped'] as const) {
       expect(markupWithStatus(status), status).toContain('data-tone="neutral"')
     }
+  })
+})
+
+// ─────────────────── S4 面板标题（唯一 slug 展开——多 slug/缺席回退） ───────────────────
+
+describe('dispatchPanelUniqueSlug / dispatchPanelTitle（S4 纯函数三分支）', () => {
+  it('唯一 slug → 该 slug + 标题「派发 {slug} 的任务」', () => {
+    const rows = [rowItem({ slug: 'feat-a' }), rowItem({ slug: 'feat-a', taskId: 't-b' })]
+    expect(dispatchPanelUniqueSlug(rows)).toBe('feat-a')
+    expect(dispatchPanelTitle(rows)).toBe('派发 feat-a 的任务')
+  })
+  it('多 slug → undefined + 回退「派发任务」', () => {
+    const rows = [rowItem({ slug: 'feat-a' }), rowItem({ slug: 'feat-b', taskId: 't-b' })]
+    expect(dispatchPanelUniqueSlug(rows)).toBeUndefined()
+    expect(dispatchPanelTitle(rows)).toBe('派发任务')
+  })
+  it('slug 缺席（空串/空白）→ undefined + 回退「派发任务」；与多 slug 混合同回退', () => {
+    const absent = [rowItem({ slug: '' }), rowItem({ slug: '  ', taskId: 't-b' })]
+    expect(dispatchPanelUniqueSlug(absent)).toBeUndefined()
+    expect(dispatchPanelTitle(absent)).toBe('派发任务')
+    const mixed = [rowItem({ slug: '' }), rowItem({ slug: 'feat-a', taskId: 't-b' })]
+    expect(dispatchPanelUniqueSlug(mixed)).toBe('feat-a') // 缺席行不污染唯一性
+  })
+  it('空行集 → undefined + 回退「派发任务」', () => {
+    expect(dispatchPanelUniqueSlug([])).toBeUndefined()
+    expect(dispatchPanelTitle([])).toBe('派发任务')
+  })
+  it('组件标题两形态：唯一 slug 展开进面板头；多 slug 回退', () => {
+    const body = (rows: SessionTaskPillItem[]): string =>
+      renderToStaticMarkup(
+        <DispatchPanelBody
+          rows={rows}
+          geometry={{ left: 900, top: 96 }}
+          collapsed={false}
+          dragged={false}
+          onCollapse={() => {}}
+          onExpand={() => {}}
+          onOpenTask={undefined}
+          onOpenWorkerSession={undefined}
+        />,
+      )
+    expect(body([rowItem({ slug: 'feat-a' })])).toContain('dswf-dp-title">派发 feat-a 的任务<')
+    expect(body([rowItem({ slug: 'feat-a' }), rowItem({ slug: 'feat-b', taskId: 't-b' })])).toContain(
+      'dswf-dp-title">派发任务<',
+    )
   })
 })
 
