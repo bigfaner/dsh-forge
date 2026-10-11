@@ -7,18 +7,18 @@
 // （zai-coding-cn / glm-5.3-flash，env 可覆写）；凭据缺席 = 留痕 skip。观察窗 = 提问后 120s 内
 // 轨迹出现检索链，窗内无链同一 fixture 问题重发 ≤2 次（journey Setup 稳定性契约）。
 //
-// 口径注记（fact RECALL_TAB_STATS / HEAT_AGGREGATION / RECALL_LOG_RECORDED）：
-// 旅程链口径（一次命中的检索链记 1 次 → 统计 1/1、徽章 +1）与 shipped 逐工具调用口径
-// （search + read-abstract 两组 → 统计 2、热度 +2）分歧为**故意缺陷信号设计**（Journey
-// Invariant 原文：实现若按工具调用逐条计则热度 +2 ≠ 断言 +1，断言失败即缺陷信号）。
-// 本套件按 Contract 断言链口径，以 expect.soft 承载（失败即缺陷信号、不遮蔽同链后续断言）。
+// 口径裁决收口（fix-2，2026-10-10）：召回/热度口径按权威 spec BIZ-knowledge-001
+// （docs/business-rules/knowledge-flywheel.md——热度 = knowledge_recall_logs 按条目 COUNT，
+// search 命中与 read-abstract 各计一次）**统一为 shipped 逐调用口径**。原 Journey 链口径
+// （一次检索链记 1 → 统计 1/1、热度 +1）为缺陷信号设计，与 spec 相悖——断言按 shipped
+// 口径修订：期望值**从 sessionRecall RPC 实测数据派生**（次数 = 分组数、热度 = 分组行
+// 命中按条目计数），断言 UI ↔ 单表数据一致（三方一致同径，flywheel.spec 同源），不硬编码
+// 链形状（agent 多步链的组数可变）。
 //
-// 与 e2e/specs/flywheel.spec 的分工（fix-37 ④ 裁决——头注明确分工，不归并：两套件对同一
-// 召回计数面**故意断言相反口径**，归并即销毁缺陷信号设计）：
-//   - flywheel.spec（4.2 产物）= shipped 逐调用口径实证（统计头 = 事件组数、热度 = 行计数
-//     ——三方一致断言全绿基线）；
-//   - 本套件 = 旅程链口径断言（[链口径·缺陷信号] soft 红 = 预期态，转正 = core 链口径
-//     裁决（M5+），勿为设计红派 fix）。
+// 与 e2e/specs/flywheel.spec 的分工（fix-37 ④，口径收口后注记修订）：两套件同断言 shipped
+// 逐调用口径（原「故意断言相反口径」设计随 fix-2 裁决退役）；本套件 = p1mvp journey dogfood
+// 全链（注册→会话→检索链→轨迹→召回 tab→热度→即时累积），flywheel.spec = 4.2 六步链三方
+// 一致实证——覆盖面互补，仍不归并。
 // dogfood 播种/叠层/解码器随 e2e/support 收编单源（fix-37）。
 //
 // 留痕 skip：Step 4b/4c（search 域前缀直测）——fact 双门分工：search/readAbstract 为
@@ -161,7 +161,7 @@ async function pollSessionRecall(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 旅程冒烟（dogfood·Golden Path）：注册 → 会话 → Q1 召回链 → 回答 → 轨迹 →
-// 召回 tab（1/1 链口径）→ 卡片热度（+1 链口径）→ Q2 即时累积（2/2）→ 跳转/失效标注
+// 召回 tab（逐调用计组）→ 卡片热度（按条目计数）→ Q2 即时累积 → 跳转/失效标注
 // ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→轨迹→召回 tab→热度闭环→8b 累积（dogfood）', async () => {
   test.setTimeout(900_000)
@@ -251,7 +251,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     const transcriptKept = (await page.locator('[data-conversation-content]').first().textContent({ timeout: 10_000 })) ?? ''
     expect(transcriptKept, '切回对话 tab 回答仍在原位').toContain('部署')
 
-    // ── Step 7：召回 tab（统计 1/1 + K1 分组行——链口径；口径分歧 = 缺陷信号 soft 承载） ──
+    // ── Step 7：召回 tab（统计头 + K1 分组行——shipped 逐调用口径，期望值从 RPC 实测派生） ──
     await page.locator(TAB_ITEM, { hasText: '知识召回' }).click()
     const groupsQ1 = await pollSessionRecall(
       page,
@@ -261,28 +261,36 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     )
     const stats = page.locator('[data-dswf-recall-stats]')
     await expect(stats).toBeVisible({ timeout: 30_000 })
-    // 链口径断言（fact-note 缺陷信号设计：shipped 逐调用组口径 = 2——soft 承载不遮蔽后续）
+    // shipped 口径（BIZ-knowledge-001）：次数 = 分组数（search + read-abstract 各一组）、
+    // 覆盖 = 去重命中条目——期望值从 sessionRecall 实测派生（agent 链组数可变，不硬编码）
+    const callsQ1 = groupsQ1.length
+    const coveredQ1 = new Set(groupsQ1.flatMap((g) => g.hits.map((h) => h.title))).size
+    expect(callsQ1, '检索链逐调用计组（search + read-abstract ≥ 2 组）').toBeGreaterThanOrEqual(2)
     expect
-      .soft(await stats.getAttribute('data-calls'), '[链口径·缺陷信号] 召回次数 = 1（一次命中的检索链记 1 条）')
-      .toBe('1')
+      .soft(await stats.getAttribute('data-calls'), '召回次数 = sessionRecall 分组数（tab ↔ 单表一致）')
+      .toBe(String(callsQ1))
     expect
-      .soft(await stats.getAttribute('data-covered'), '[链口径·缺陷信号] 覆盖条数 = 1')
-      .toBe('1')
+      .soft(await stats.getAttribute('data-covered'), '覆盖条数 = 去重命中条目（tab ↔ 单表一致）')
+      .toBe(String(coveredQ1))
     const k1Row = page.locator('[data-dswf-recall-row]', { hasText: '部署规范' }).first()
     await expect(k1Row, 'K1 分组行在场（title 快照）').toBeVisible({ timeout: 30_000 })
     const rowVerbs = await k1Row.locator('[data-dswf-recall-verb]').allTextContents()
     expect(rowVerbs.join(' '), '分组行动词明细含 search（verb 投影）').toContain('search')
+    // 热度 = knowledge_recall_logs 按条目 COUNT（search 命中与 read-abstract 各计一行）——
+    // 期望值 = 分组命中按条目计数（与 heatByEntry 同一单表同源）
+    const k1HeatQ1 = groupsQ1.flatMap((g) => g.hits).filter((h) => h.title === '部署规范').length
+    expect(k1HeatQ1, 'K1 热度按条目计数（逐调用各计一次）').toBeGreaterThanOrEqual(2)
     expect
-      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), '[链口径·缺陷信号] 行热度徽章 = 1（基线 0 + 本链 1）')
-      .toContain('1')
+      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), '行热度徽章 = 按条目计数（tab ↔ heat 一致）')
+      .toContain(String(k1HeatQ1))
 
-    // ── Step 8：知识卡片热度闭环（K1 徽章 = 1 链口径；与召回 tab 同源同数字） ──
+    // ── Step 8：知识卡片热度闭环（K1 徽章 = 同一单表计数；与召回 tab 同源同数字） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()
     const k1Card = page.locator('.dswf-kn-card', { hasText: '部署规范' }).first()
     await expect(k1Card, 'K1 卡片在场（Step 1 索引代理断言）').toBeVisible({ timeout: 30_000 })
     expect
-      .soft(await k1Card.locator('.dswf-heat-badge').textContent(), '[链口径·缺陷信号] K1 卡片热度徽章 = 1')
-      .toContain('1')
+      .soft(await k1Card.locator('.dswf-heat-badge').textContent(), 'K1 卡片热度徽章 = 按条目计数（卡片 ↔ heat 一致）')
+      .toContain(String(k1HeatQ1))
 
     // ── Step 8b：Q2 触发 K2 新召回 → 即时累积（2/2 与 1/1 分离；K1 保持 1） ──
     // 回会话视图（知识模式无会话面板——点会话行切回）。Step 7 遗留召回 tab 激活 = keep-alive
@@ -308,21 +316,27 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       (gs) => gs.some((g) => g.hits.some((h) => h.title === '构建规范')),
       120_000,
     )
-    // 次数与覆盖分离（聚合语义可区分于回显）——链口径 soft
+    // 次数与覆盖分离（聚合语义可区分于回显）——shipped 口径，期望值从实测分组派生
+    const callsTotal = groupsQ2.length
+    const coveredTotal = new Set(groupsQ2.flatMap((g) => g.hits.map((h) => h.title))).size
     expect
-      .soft(await page.locator('[data-dswf-recall-stats]').getAttribute('data-calls'), '[链口径·缺陷信号] 累积召回次数 = 2')
-      .toBe('2')
+      .soft(await page.locator('[data-dswf-recall-stats]').getAttribute('data-calls'), '累积召回次数 = 分组数（tab ↔ 单表一致）')
+      .toBe(String(callsTotal))
     expect
-      .soft(await page.locator('[data-dswf-recall-stats]').getAttribute('data-covered'), '[链口径·缺陷信号] 累积覆盖条数 = 2')
-      .toBe('2')
+      .soft(await page.locator('[data-dswf-recall-stats]').getAttribute('data-covered'), '累积覆盖条数 = 去重命中条目（tab ↔ 单表一致）')
+      .toBe(String(coveredTotal))
     const k2Row = page.locator('[data-dswf-recall-row]', { hasText: '构建规范' }).first()
     await expect(k2Row, 'K2 分组行出现（即时累积）').toBeVisible({ timeout: 30_000 })
+    const k2Heat = groupsQ2.flatMap((g) => g.hits).filter((h) => h.title === '构建规范').length
+    const k1HeatTotal = groupsQ2.flatMap((g) => g.hits).filter((h) => h.title === '部署规范').length
+    expect(k2Heat, 'K2 热度按条目计数（逐调用各计一次）').toBeGreaterThanOrEqual(2)
+    expect(k1HeatTotal, 'K1 热度即时累积（Q2 链不触 K1——计数保持）').toBe(k1HeatQ1)
     expect
-      .soft(await k2Row.locator('.dswf-heat-badge').textContent(), '[链口径·缺陷信号] K2 徽章 = 1（基线 0 + 1）')
-      .toContain('1')
+      .soft(await k2Row.locator('.dswf-heat-badge').textContent(), 'K2 徽章 = 按条目计数（tab ↔ heat 一致）')
+      .toContain(String(k2Heat))
     expect
-      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), '[链口径·缺陷信号] K1 徽章保持 1')
-      .toContain('1')
+      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), 'K1 徽章保持（tab ↔ heat 一致）')
+      .toContain(String(k1HeatTotal))
     void groupsQ1
     void groupsQ2
 

@@ -287,6 +287,21 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     await wsItem.click()
     await expect(page.locator(CONVERSATION_CONTENT).first(), '会话面接管（新会话就绪）').toBeAttached({ timeout: 30_000 })
     // 可用判据：输入区可聚焦、键入字符即回显
+    // fix-2 定性收口（win-unpacked 同 runtime 树真机探针复现）：composer = shell Lexical
+    // contenteditable（editable = live && !locked && !machineBusy），键入零回显非产品缺陷
+    // ——原失败为会话 input binding 未收敛即键入的偶发竞态（探针证据：contentEditable=true
+    // 即时在场、insertText 即时回显、零 pageerror）。键入前等可编辑态收敛（30s 门），断言
+    // 语义不变（回显仍实键入实测）。
+    await page
+      .waitForFunction(
+        () => {
+          const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
+          return els.length > 0 && [...els].every((el) => el.isContentEditable)
+        },
+        undefined,
+        { timeout: 30_000 },
+      )
+      .catch(() => undefined) // 收敛失败不预失败——下方回显断言承载真实判据
     await composer.click()
     await page.keyboard.insertText('回显探针')
     const echoed = await composer.evaluate((el) => (el as HTMLTextAreaElement).value ?? el.textContent ?? '')
