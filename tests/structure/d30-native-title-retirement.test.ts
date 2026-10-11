@@ -27,6 +27,12 @@
 //   5 个部分退役面（ov-head/proposal-tab/list-view/drawer/index/transition-dialog）以
 //   TOOLTIP_REMAINING_COUNTS 余额冻结 pin 承接（增量保留位对位冻结——新增 Tooltip 须显式扩记）。
 //   全量 141 位逐位判定台账 = walkthrough/D37-self-evident-tooltip.md。
+// 1.7 更替（任务 md-preview-mermaid/1.7——断言更替非删除）：
+//   用户裁决 2026-10-11「悬浮到提案/feature 的文档上时显示摘要，如无摘要则不展示，
+//   不要展示文档路径」——①提案文档行 relPath Tooltip 退役（proposal-tab.tsx 部分退役面
+//   余额 5→4 对位冻结承接口径不变）；②DocGroupList relPath 回退退役 → summary 非空才
+//   挂载（TOOLTIP_FILES 采纳锚位保持——条件挂载仍 import + portal 在场；结构守卫 pin =
+//   web-shell.test 1.6 悬浮 pin 位更替）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -173,7 +179,7 @@ const TOOLTIP_RETIRED_FILES = [
  */
 const TOOLTIP_REMAINING_COUNTS: Readonly<Record<string, number>> = {
   'apps/web/src/views/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
-  'apps/web/src/views/overview/proposal-tab.tsx': 5, // relPath + title + 打开新会话（副作用说明）+ slug + createdAt
+  'apps/web/src/views/overview/proposal-tab.tsx': 4, // title + 打开新会话（副作用说明）+ slug + createdAt（1.7 裁决：提案文档行 relPath 悬浮退役——无摘要不出路径）
   'apps/web/src/views/overview/task-tab/list-view.tsx': 3, // key/title/sub（1.23 ⑥ 增量悬停交付面）
   'apps/web/src/views/overview/drawer/index.tsx': 4, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明
   'apps/web/src/views/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）

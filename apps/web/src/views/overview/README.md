@@ -30,7 +30,7 @@
 | `sticky-bar.tsx` | sticky 区（AC2）：三子 tab（role=tablist）+ 搜索行（官方 Input 限宽 240px + 条件清除钮 + Esc 清空）+ 排序 pill 右固定（⇅ 活跃优先 ↔ 最新创建）；IME 安全 = 搜索行稳定子树 |
 | `status-chips.tsx` | 七态 chips（AC5）：contracts TASK_STATUSES 行序 + 中文标签 + 计数 + StateDot 语义映射；0 计数 disabled——过滤接口三视图统一（3.6 消费同组件同状态） |
 | `proposal-tab.tsx` | 提案子 tab（AC4）：父行 ▸ 展开（slug/作者/创建/裁决/谱系——谱系 = feature.proposalSlug 反查）+ proposal.md 文档行（名称 + 状态标签紧贴 + › 行尾） |
-| `feature-tab.tsx` | feature 子 tab（AC4）：父行 ▸ 展开（摘要/来源提案/任务七态分布/文档统计/创建更新）+ 文档行（`FeatureDocumentRow[]` 契约类型 props——不含提案文档；1.6：行悬浮 = summary 官方 Tooltip 自然多行——缺省 relPath 回退，`DocGroupList.docRowTipLabel` 单源） |
+| `feature-tab.tsx` | feature 子 tab（AC4）：父行 ▸ 展开（摘要/来源提案/任务七态分布/文档统计/创建更新）+ 文档行（`FeatureDocumentRow[]` 契约类型 props——不含提案文档；1.7：行悬浮 = summary 官方 Tooltip 自然多行——summary 非空才挂浮层，缺省/空串零浮层不出路径，2026-10-11 裁决·1.6 relPath 回退退役） |
 | `OverviewTab.tsx` | 帧装配：`OverviewFrame`（纯呈现——结构静态可测）+ `OverviewTab`（filter 本地态单一来源 + `useOverviewLoad` 胶水 + `renderTasksTab` 槽 = 3.6 三视图装载位） |
 
 ## 关键口径

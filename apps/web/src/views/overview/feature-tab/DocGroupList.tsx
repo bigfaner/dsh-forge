@@ -6,10 +6,10 @@
 // Hard Rule（v18 裁决）：中文分组 = 展示标签（doc-kind-labels 常量）、真实路径 = 数据
 // （FeatureDocumentRow.relPath）——两层不混。
 // 文档数据 = forge:features/listDocs（4.1 通道）——FeatureDocumentRow 结构兼容直喂
-// （无状态字段 → [状态] 恒缺席态；status 可选入参 = 在场态消费面；1.6：summary 透传
-// → 行悬浮官方 Tooltip 摘要——缺省 relPath 回退）。
+// （无状态字段 → [状态] 恒缺席态；status 可选入参 = 在场态消费面；1.7 裁决：summary
+// 透传 → 行悬浮官方 Tooltip 摘要——summary 非空才挂浮层，缺省/空串零浮层不出路径）。
 // 组件半身（Build）：onOpenDoc 上抛 relPath 原始值（dock 开 tab——4.6 接线）。
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import type { DocKind } from '@dsh-forge/contracts'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DOC_GROUP_ORDER, DOC_KIND_GROUP_LABELS, type DocGroupName } from './doc-kind-labels.js'
@@ -45,17 +45,9 @@ export interface DocGroupDoc {
   readonly relPath: string
   /** 状态括注（缺席 = 无 [状态] 段——FeatureDocumentRow 无状态字段恒缺席） */
   readonly status?: string
-  /** 一句话摘要（缺席 = 无摘要浮层——悬浮 label 回退 relPath） */
+  /** 一句话摘要（非空 = 官方 Tooltip portal 浮层自然多行；缺省/空串 = 零浮层——
+   *  2026-10-11 裁决：悬浮只出摘要，无摘要不展示、不出路径） */
   readonly summary?: string
-}
-
-/**
- * 文档行悬浮标签（1.6 B 面——官方 Tooltip label）：summary 在场 = 摘要（官方 Tooltip
- * portal 气泡 white-space:pre-line 自然多行不折叠）；缺省/空串 = relPath 回退（现状
- * 悬浮，行渲染零变化）。
- */
-export function docRowTipLabel(doc: DocGroupDoc): string {
-  return doc.summary !== undefined && doc.summary !== '' ? doc.summary : doc.relPath
 }
 
 /**
@@ -106,8 +98,9 @@ export function DocGroupList({ featureSlug, docs, onOpenDoc }: DocGroupListProps
       {groups.map((group) => (
         <div key={group.group} className="dswf-ov-dgroup" data-dswf-ov-dgroup={group.group}>
           <div className="dswf-ov-dgroup-title">{`${group.group}（${group.docs.length}）`}</div>
-          {group.docs.map((doc) => (
-            <Tooltip key={`${doc.docKind}:${doc.relPath}`} label={docRowTipLabel(doc)} portal>
+          {group.docs.map((doc) => {
+            const key = `${doc.docKind}:${doc.relPath}`
+            const row = (
               <button
                 type="button"
                 className="dswf-ov-drow"
@@ -125,8 +118,18 @@ export function DocGroupList({ featureSlug, docs, onOpenDoc }: DocGroupListProps
                   ›
                 </span>
               </button>
-            </Tooltip>
-          ))}
+            )
+            // 悬浮浮层（2026-10-11 裁决——无摘要不展示、不出路径）：summary 非空 = 官方
+            // Tooltip portal 气泡（white-space:pre-line 自然多行不折叠）；缺省/空串 =
+            // 零 Tooltip 挂载（裸行零浮层——1.6 relPath 回退已退役）。
+            return doc.summary !== undefined && doc.summary !== '' ? (
+              <Tooltip key={key} label={doc.summary} portal>
+                {row}
+              </Tooltip>
+            ) : (
+              <Fragment key={key}>{row}</Fragment>
+            )
+          })}
         </div>
       ))}
     </div>

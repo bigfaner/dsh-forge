@@ -390,7 +390,11 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(css, '官方图标钮刻度组（28×28 命中区 + svg 15×15 官方同刻度 dsw-raw 镜像）').toContain('.dswf-doc-iconbtn svg')
     expect(css, '悬空 warn chip 规则保留（单行内可见性）').toContain('.dswf-doc-chip-dangling')
     const dgl = read('apps/web/src/views/overview/feature-tab/DocGroupList.tsx')
-    expect(dgl, '概览文档行悬浮 summary（官方 Tooltip label——缺省 relPath 回退）').toContain('docRowTipLabel')
+    expect(dgl, '概览文档行悬浮 summary（1.7 裁决——summary 非空才挂 Tooltip 官方 label；缺省/空串零浮层）').toContain(
+      "doc.summary !== undefined && doc.summary !== ''",
+    )
+    expect(dgl, 'docRowTipLabel 退役（relPath 回退违背 2026-10-11 裁决——不出路径）').not.toContain('docRowTipLabel')
+    expect(dgl, 'relPath 不作悬浮 label（裁决：不要展示文档路径）').not.toContain('label={doc.relPath}')
     expect(dgl, 'DocGroupDoc 携 summary 透传（FeatureDocumentRow DTO 已有——零契约改动）').toContain('summary?: string')
   })
 })

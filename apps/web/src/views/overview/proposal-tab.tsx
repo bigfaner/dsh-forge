@@ -148,7 +148,10 @@ export function proposalMenuItems(proposal: ProposalCard, opts: { readonly modeE
   return items
 }
 
-/** 提案文档区（v18 ㉚「文档（N 篇）」——提案文档不固定；行 = 📄 相对路径 [状态] › 整行可点） */
+/** 提案文档区（v18 ㉚「文档（N 篇）」——提案文档不固定；行 = 📄 相对路径 [状态] › 整行可点）。
+ *  悬浮浮层（2026-10-11 裁决——无摘要不展示、不出路径）：ProposalDocRow 无 summary 字段
+ *  （forge.ts 勘证）= 行零 Tooltip 挂载恒态（1.6 relPath 回退退役）；DTO 携 summary 即显
+ *  机制 = feature 行同款（DocGroupList——summary 非空才挂官方 Tooltip portal）。 */
 function ProposalDocList({
   docs,
   slug,
@@ -162,22 +165,21 @@ function ProposalDocList({
     <div className="dswf-ov-dgroups" data-dswf-ov-pdocs={slug}>
       <div className="dswf-ov-docs-head">{`文档（${docs.length} 篇）`}</div>
       {docs.map((doc) => (
-        <Tooltip key={doc.relPath} label={doc.relPath} portal>
-          <button
-            type="button"
-            className="dswf-ov-drow"
-            data-dswf-ov-doc={doc.relPath}
-            onClick={() => {
-              onOpenDoc(doc.relPath)
-            }}
-          >
-            <span className="dswf-ov-drow-path">{`📄 ${docPathInProposal(doc.relPath, slug)}`}</span>
-            {doc.status === undefined ? null : <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>}
-            <span className="dswf-ov-drow-arrow" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        </Tooltip>
+        <button
+          key={doc.relPath}
+          type="button"
+          className="dswf-ov-drow"
+          data-dswf-ov-doc={doc.relPath}
+          onClick={() => {
+            onOpenDoc(doc.relPath)
+          }}
+        >
+          <span className="dswf-ov-drow-path">{`📄 ${docPathInProposal(doc.relPath, slug)}`}</span>
+          {doc.status === undefined ? null : <span className="dswf-ov-drow-state">{`[${doc.status}]`}</span>}
+          <span className="dswf-ov-drow-arrow" aria-hidden="true">
+            ›
+          </span>
+        </button>
       ))}
     </div>
   )

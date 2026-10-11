@@ -4,12 +4,14 @@
 // 「emoji 全退役」）+ [状态] 括注（在场/缺席两态——FeatureDocumentRow 无状态字段，
 // 缺席 = 恒态）+ 零文档空态行（原型 is-empty 形态）+ 整行可点回调锚
 // （data-dswf-ov-doc = relPath 原始值——onOpenDoc 上抛同值；点击链归 4.6/e2e）。
-// 1.6 B 面：文档行悬浮 summary（官方 Tooltip label——自然多行；缺省/空串 = relPath
-// 回退，行渲染零变化；FeatureDocumentRow.summary 结构兼容透传——零契约改动）。
+// 1.7 裁决更替：文档行悬浮 summary（官方 Tooltip label——自然多行）——summary 非空才挂
+// 浮层，缺省/空串 = 零 Tooltip 挂载（无浮层、不出路径——2026-10-11 裁决，1.6 relPath
+// 回退退役；FeatureDocumentRow.summary 结构兼容透传——零契约改动）。挂载面结构 pin =
+// 读文件法（apps/web 测试面无 node:fs 类型面——web-shell.test 1.6 pin 位更替承接）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DOC_KINDS, type FeatureDocumentRow } from '@dsh-forge/contracts'
-import { DocGroupList, docPathInFeature, docRowTipLabel, groupFeatureDocs } from './DocGroupList.js'
+import { DocGroupList, docPathInFeature, groupFeatureDocs, type DocGroupDoc } from './DocGroupList.js'
 import { DOC_GROUP_ORDER, DOC_KIND_GROUP_LABELS } from './doc-kind-labels.js'
 
 const CREATED = '2026-10-01T08:00:00.000Z'
@@ -173,12 +175,38 @@ describe('分层文档列表（AC3 渲染面）', () => {
   })
 })
 
-describe('文档行悬浮标签（1.6 B 面——summary 官方 Tooltip 数据面）', () => {
-  it('summary 在场 = 摘要 label（自然多行浮层）；缺省/空串 = relPath 回退（行渲染零变化）', () => {
-    const relPath = 'docs/features/dsh-forge-m3/prd/prd-spec.md'
-    expect(docRowTipLabel({ docKind: 'prd-spec', relPath, summary: '一句话摘要' })).toBe('一句话摘要')
-    expect(docRowTipLabel({ docKind: 'prd-spec', relPath })).toBe(relPath)
-    expect(docRowTipLabel({ docKind: 'prd-spec', relPath, summary: '' })).toBe(relPath)
+describe('文档行悬浮浮层（1.7 裁决更替——summary 非空才挂 Tooltip；无摘要不出路径）', () => {
+  // 断言面注记：apps/web 测试面无 DOM 环境（renderToStaticMarkup 纯静态渲染——官方
+  // Tooltip 关闭态零标记输出，气泡/handler 不入静态标记），挂载面结构断言归读文件法
+  // （web-shell.test 1.6 pin 位更替承接——summary 非空守卫 + docRowTipLabel 退役）；
+  // 此处锚两态行渲染恒定（浮层缺席不改变行标记）。
+  const relPath = 'docs/features/dsh-forge-m3/prd/prd-spec.md'
+
+  it('无摘要两态（缺省/空串）= 裸行在场 + 静态标记零浮层（不出摘要不出路径）', () => {
+    const missingSummary: readonly (readonly DocGroupDoc[])[] = [
+      [{ docKind: 'prd-spec', relPath }], // 缺省
+      [{ docKind: 'prd-spec', relPath, summary: '' }], // 空串
+    ]
+    for (const docs of missingSummary) {
+      const markup = renderToStaticMarkup(
+        <DocGroupList featureSlug="dsh-forge-m3" docs={docs} onOpenDoc={() => {}} />,
+      )
+      expect(markup).toContain('data-dswf-ov-doc=') // 行在场（裸行零浮层）
+      expect(markup).not.toContain('role="tooltip"') // 零浮层标记（关闭态官方零输出）
+      expect(markup).not.toContain('一句话摘要') // 无摘要零泄露
+    }
+  })
+
+  it('summary 在场态：行渲染零变化（静态标记无气泡——浮层交互面归官方 Tooltip 运行时）', () => {
+    const markup = renderToStaticMarkup(
+      <DocGroupList
+        featureSlug="dsh-forge-m3"
+        docs={[{ docKind: 'prd-spec', relPath, summary: '一句话摘要' }]}
+        onOpenDoc={() => {}}
+      />,
+    )
+    expect(markup).toContain('data-dswf-ov-doc=') // 行在场
+    expect(markup).not.toContain('role="tooltip"') // 静态渲染气泡不入标记（portal 运行时承载）
   })
 
   it('FeatureDocumentRow.summary 结构兼容透传（DTO 已有字段直携——行映射零改动零契约变更）', () => {
@@ -190,6 +218,9 @@ describe('文档行悬浮标签（1.6 B 面——summary 官方 Tooltip 数据�
       createdAt: CREATED,
       updatedAt: CREATED,
     }
-    expect(docRowTipLabel(withSummary)).toBe('每工作区库 + 概览/文档 tab')
+    const markup = renderToStaticMarkup(
+      <DocGroupList featureSlug="dsh-forge-m3" docs={[withSummary]} onOpenDoc={() => {}} />,
+    )
+    expect(markup).toContain('data-dswf-ov-doc=') // summary 直喂行在场（挂载面 = 源面守卫 pin）
   })
 })
