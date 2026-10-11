@@ -56,6 +56,39 @@ export function taskKvChips(detail: TaskDetail): readonly TaskKvChip[] {
   return chips
 }
 
+/**
+ * 会话名回退契约（task-ui-info-density-blitz S1/SC1——fail-soft）：解析器命中 = 标题；
+ * 账本未命中（解析器返回 undefined）或解析器缺席（注入面漂移）= 回退显示 sessionId。
+ * 纯函数（简要行/时间线 pill 共同消费）。
+ */
+export function sessionTitleOfOrId(
+  sessionTitleOf: ((sessionId: string) => string | undefined) | undefined,
+  sessionId: string,
+): string {
+  return sessionTitleOf?.(sessionId) ?? sessionId
+}
+
+/**
+ * 挂接会话 pill 跳转语义（task-ui-info-density-blitz S2/SC2——原型 m31-tm-sess 两动作
+ * 一体）：跳对应会话 + 关弹窗。worker 子会话（record 源 ∉ link 派发集）附库侧权威父
+ * （link 派发源——显式地址径输入；D6 修复面判读不变）。简要形态与时间线 pill 共用。
+ */
+export function sessionJumpHandler(
+  detail: TaskDetail,
+  onOpenSession: (sessionId: string, parentSessionId?: string) => void,
+  onClose: () => void,
+  sessionId: string,
+): void {
+  const links = new Set(
+    detail.sessions.filter((session) => session.source === 'link').map((session) => session.sessionId),
+  )
+  const isWorker = detail.sessions.some(
+    (session) => session.sessionId === sessionId && session.source === 'record' && !links.has(sessionId),
+  )
+  onOpenSession(sessionId, isWorker && links.size > 0 ? [...links][0] : undefined)
+  onClose()
+}
+
 /** 目标取值序：vars.goal → vars.scenario → taskDesc → title（原型 content.goal|scenario 兜底链） */
 export function taskGoalOf(detail: TaskDetail): string {
   return (

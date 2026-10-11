@@ -244,6 +244,17 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* 挂接会话 pill 行（S2：可点 pill——R4 弹性换行，440 宽多会话不挤压） */
+.dswf-td-bv-sess {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height); /* 令牌间距刻度（沿 .dswf-td-brow 同源） */
+}
+
+.dswf-td-bv-sess .dswf-td-sess {
+  overflow-wrap: anywhere;
+}
+
 /* 所属行值 = 代码体色（原型 t-code 同位） */
 .dswf-td-bv.is-code {
   color: var(--dsw-alias-link);

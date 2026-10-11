@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
 import { isoTimeLabelZh } from '../../../components/time-label.js'
-import { evalScoreOf, gateSummary, latestSubmitGateOf, taskKeyLabel, varsText } from './detail-model.js'
+import { evalScoreOf, gateSummary, latestSubmitGateOf, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
 import { templateFamilyOf } from './type-templates/index.js'
 
 export { evalScoreOf } from './detail-model.js' // 现状条「得分+严重度」条件同源投影（消费面重导出）
@@ -89,15 +89,18 @@ export function nowBarItems(detail: TaskDetail): readonly NowBarItem[] {
   return items
 }
 
-/** 会话 pill（双源分型：link = 派发⟞ / record = 执行⟞；可点跳会话——回调缺席 = 非交互呈现） */
+/** 会话 pill（双源分型：link = 派发⟞ / record = 执行⟞；标签 = 会话名回退 id——S1/SC1；
+ *  可点跳会话——回调缺席 = 非交互呈现） */
 function SessionPill({
   session,
   onOpenSession,
+  sessionTitleOf,
 }: {
   readonly session: SessionTaskLinkCard
   readonly onOpenSession: ((sessionId: string) => void) | undefined
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
 }): ReactNode {
-  const label = `${session.source === 'link' ? '派发' : '执行'}⟞ ${session.sessionId}`
+  const label = `${session.source === 'link' ? '派发' : '执行'}⟞ ${sessionTitleOfOrId(sessionTitleOf, session.sessionId)}`
   if (onOpenSession === undefined) return <span className="dswf-td-sess">{label}</span>
   return (
     // D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗滚动容器/层叠上下文）
@@ -120,9 +123,11 @@ function SessionPill({
 export function TimelineNow({
   detail,
   onOpenSession,
+  sessionTitleOf,
 }: {
   readonly detail: TaskDetail
   readonly onOpenSession?: (sessionId: string) => void
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
 }): ReactNode {
   const items = nowBarItems(detail)
   if (items.length === 0) return null
@@ -147,7 +152,7 @@ export function TimelineNow({
             return (
               <span className="dswf-td-now-item" key={index}>
                 {item.items.map((session) => (
-                  <SessionPill key={session.sessionId} session={session} onOpenSession={onOpenSession} />
+                  <SessionPill key={session.sessionId} session={session} onOpenSession={onOpenSession} sessionTitleOf={sessionTitleOf} />
                 ))}
               </span>
             )
@@ -182,7 +187,12 @@ function Note({ children }: { readonly children: ReactNode }): ReactNode {
 
 /** 事件织入（创建：前置声明 + fix 链；领取：digest + 派发⟞；提交：gate + commit 徽标/
  *  摘要/文件数 + 执行⟞；转移：from→to+reason；自动阻塞/恢复：语义行） */
-function eventWeaves(record: TaskRecordEntry, detail: TaskDetail, onOpenSession: ((sessionId: string) => void) | undefined): ReactNode {
+function eventWeaves(
+  record: TaskRecordEntry,
+  detail: TaskDetail,
+  onOpenSession: ((sessionId: string) => void) | undefined,
+  sessionTitleOf?: (sessionId: string) => string | undefined,
+): ReactNode {
   const vars = detail.vars ?? {}
   switch (record.verb) {
     case 'add': {
@@ -222,6 +232,7 @@ function eventWeaves(record: TaskRecordEntry, detail: TaskDetail, onOpenSession:
                   source: 'link',
                 }}
                 onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
               />
             </Note>
           ) : null}
@@ -264,6 +275,7 @@ function eventWeaves(record: TaskRecordEntry, detail: TaskDetail, onOpenSession:
                   source: 'record',
                 }}
                 onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
               />
             </Note>
           ) : null}
@@ -306,10 +318,12 @@ export function TimelineEvents({
   detail,
   onOpenSession,
   now,
+  sessionTitleOf,
 }: {
   readonly detail: TaskDetail
   readonly onOpenSession?: (sessionId: string) => void
   readonly now: number
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
 }): ReactNode {
   if (detail.records.length === 0) {
     return (
@@ -334,7 +348,7 @@ export function TimelineEvents({
               <span className="dswf-td-ev-at">{isoTimeLabelZh(record.createdAt, now)}</span>
             </Tooltip>
           </div>
-          {eventWeaves(record, detail, onOpenSession)}
+          {eventWeaves(record, detail, onOpenSession, sessionTitleOf)}
         </div>
       ))}
     </div>

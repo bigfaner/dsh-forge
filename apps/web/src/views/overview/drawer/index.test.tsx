@@ -15,6 +15,7 @@ import {
   toggleDrawerSection,
 } from './collapse.js'
 import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, sessionTitleOfOrId, taskFailureInputOf } from './index.js'
+import { sessionJumpHandler } from './detail-model.js'
 import { taskFailureDiagToast } from '../task-tab/DiagToast.js'
 import { docsRootOf, formatDiagMessage } from '../message-format.js'
 
@@ -616,5 +617,73 @@ describe('sessionTitleOfOrId 会话名回退契约（task-ui-info-density-blitz 
 
   it('解析器缺席（注入面漂移）= 回退显示 sessionId（fail-soft 不炸）', () => {
     expect(sessionTitleOfOrId(undefined, 's-1')).toBe('s-1')
+  })
+})
+
+describe('简要形态挂接会话：名称展示 + pill 化跳会话（task-ui-info-density-blitz S1/S2 · SC1/SC2——1.2）', () => {
+  const BRIEF_SESSIONS = [
+    { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'plugin-forge tool 半身对接', taskStatus: 'completed' as const, sessionId: 's-dispatch', source: 'link' as const },
+    { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'plugin-forge tool 半身对接', taskStatus: 'completed' as const, sessionId: 's-worker', source: 'record' as const },
+  ]
+  const RESOLVER = (sessionId: string): string | undefined =>
+    sessionId === 's-dispatch' ? '登录修复' : undefined
+
+  function briefHtml(overrides: Partial<Parameters<typeof TaskDrawerBody>[0]> = {}): string {
+    return renderToStaticMarkup(
+      TaskDrawerBody(
+        bodyProps({
+          expanded: false,
+          detail: detailFixture({ records: [...RECORDS], sessions: BRIEF_SESSIONS }),
+          ...overrides,
+        }),
+      ),
+    )
+  }
+
+  it('SC1 命中态：简要「挂接会话」行显示会话名称（解析器命中 displayTitle，非裸 id）', () => {
+    const html = briefHtml({ onOpenSession: NOOP, sessionTitleOf: RESOLVER })
+    expect(html).toContain('挂接会话')
+    expect(html).toContain('派发⟞ 登录修复')
+    expect(html).not.toContain('⟞ s-dispatch')
+  })
+
+  it('SC1 缺席态：未命中/解析器缺席 → 行值回退显示 sessionId（fail-soft）', () => {
+    const miss = briefHtml({ sessionTitleOf: RESOLVER })
+    expect(miss).toContain('登录修复、s-worker') // 命中名称 + 未命中回退 id（行值面）
+    const noResolver = briefHtml()
+    expect(noResolver).toContain('s-dispatch、s-worker') // 解析器缺席 = 纯 id（现役形制）
+  })
+
+  it('SC2 pill 化：onOpenSession 在场 = 挂接会话行 pill 按钮（data-dswf-td-sess 锚，R4 弹性换行容器）；缺席 = 非交互文本（简要区内零按钮）', () => {
+    const clickable = briefHtml({ onOpenSession: NOOP, sessionTitleOf: RESOLVER })
+    expect(clickable).toContain('data-dswf-td-sess="s-dispatch"')
+    expect(clickable).toContain('data-dswf-td-sess="s-worker"')
+    expect(clickable).toContain('dswf-td-bv-sess')
+    const passive = briefHtml({ sessionTitleOf: RESOLVER })
+    const brief = passive.slice(passive.indexOf('data-dswf-td-brief'), passive.indexOf('dswf-td-foot'))
+    expect(brief).not.toContain('<button')
+    expect(brief).not.toContain('data-dswf-td-sess')
+  })
+
+  it('SC2 跳转语义（sessionJumpHandler——两动作一体）：跳对应会话后关弹窗；worker 子会话附库侧权威父（link 派发源）；普通 link 无父参', () => {
+    const detail = detailFixture({ records: [...RECORDS], sessions: BRIEF_SESSIONS })
+    const opened: { sessionId: string; parentSessionId?: string }[] = []
+    let closes = 0
+    sessionJumpHandler(detail, (sessionId, parentSessionId) => {
+      opened.push({ sessionId, ...(parentSessionId !== undefined ? { parentSessionId } : {}) })
+    }, () => {
+      closes += 1
+    }, 's-worker')
+    // worker 执行会话：附 link 派发源为权威父 + 关弹窗（先开后台）
+    expect(opened).toEqual([{ sessionId: 's-worker', parentSessionId: 's-dispatch' }])
+    expect(closes).toBe(1)
+    sessionJumpHandler(detail, (sessionId) => {
+      opened.push({ sessionId })
+    }, () => {
+      closes += 1
+    }, 's-dispatch')
+    // link 派发会话：无父参 + 关弹窗
+    expect(opened[1]).toEqual({ sessionId: 's-dispatch' })
+    expect(closes).toBe(2)
   })
 })

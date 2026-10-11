@@ -194,3 +194,30 @@ describe('事件流（AC5 织入矩阵）', () => {
     expect(html).toContain('暂无记录')
   })
 })
+
+describe('会话 pill 名称展示（task-ui-info-density-blitz S1/SC1——task-ui-info-density-blitz/1.2）', () => {
+  const SESSIONS = [
+    { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'T', taskStatus: 'completed' as const, sessionId: 's1', source: 'link' as const },
+    { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'T', taskStatus: 'completed' as const, sessionId: 's1-1', source: 'record' as const },
+  ]
+  const RESOLVER = (sessionId: string): string | undefined => (sessionId === 's1' ? '登录修复' : undefined)
+
+  it('解析器命中 = 现状条 pill 显示会话名称；未命中 = 回退 id', () => {
+    const html = renderToStaticMarkup(TimelineNow({ detail: detailFixture({ sessions: SESSIONS }), onOpenSession: OPEN_SESSION, sessionTitleOf: RESOLVER }))
+    expect(html).toContain('派发⟞ 登录修复')
+    expect(html).not.toContain('派发⟞ s1<')
+    expect(html).toContain('执行⟞ s1-1') // 未命中回退 id
+  })
+
+  it('事件织入 pill 同名称契约（claim/submit 记录源——命中名称/缺席回退 id）+ 解析器缺席 = 纯 id（现役形制）', () => {
+    const detail = detailFixture({
+      records: [rec('claim', { sessionId: 's1' }), rec('submit', { sessionId: 's1-1' })],
+    })
+    const hit = renderToStaticMarkup(TimelineEvents({ detail, now: NOW, sessionTitleOf: RESOLVER }))
+    expect(hit).toContain('派发⟞ 登录修复')
+    expect(hit).toContain('执行⟞ s1-1')
+    const noResolver = renderToStaticMarkup(TimelineEvents({ detail, now: NOW }))
+    expect(noResolver).toContain('派发⟞ s1')
+    expect(noResolver).toContain('执行⟞ s1-1')
+  })
+})

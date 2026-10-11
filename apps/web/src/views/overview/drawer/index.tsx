@@ -42,7 +42,7 @@ import {
   type DrawerResizeEdge,
   type DrawerSectionKey,
 } from './collapse.js'
-import { taskGoalOf, taskKvChips, taskKeyLabel, taskResultOf, varsText } from './detail-model.js'
+import { sessionJumpHandler, sessionTitleOfOrId, taskGoalOf, taskKvChips, taskKeyLabel, taskResultOf, varsText } from './detail-model.js'
 import { CoverageBar, coverageViewOf } from './coverage-bar.js'
 import { TimelineEvents, TimelineNow } from './timeline.js'
 import { templateFamilyOf, typeCategoryClassOf, TypeTemplateBody } from './type-templates/index.js'
@@ -66,10 +66,13 @@ export function drawerBodySections(): readonly { readonly id: DrawerSectionKey; 
   ]
 }
 
-/** 简要形态概要行（D22：原型 brief rows 四行——所属/类型/前置/挂接会话） */
-export function drawerBriefRows(detail: TaskDetail): readonly { readonly key: string; readonly value: string; readonly code?: boolean }[] {
+/** 简要形态概要行（D22：原型 brief rows 四行——所属/类型/前置/挂接会话；会话值 = 名称回退 id） */
+export function drawerBriefRows(
+  detail: TaskDetail,
+  sessionTitleOf?: (sessionId: string) => string | undefined,
+): readonly { readonly key: string; readonly value: string; readonly code?: boolean }[] {
   const prerequisites = detail.prerequisites.map((p) => taskKeyLabel(p.slug, p.localId))
-  const sessions = detail.sessions.map((session) => session.sessionId)
+  const sessions = detail.sessions.map((session) => sessionTitleOfOrId(sessionTitleOf, session.sessionId))
   return [
     { key: '所属', value: detail.slug, code: true },
     {
@@ -81,14 +84,45 @@ export function drawerBriefRows(detail: TaskDetail): readonly { readonly key: st
   ]
 }
 
-/** 简要形态体（D22 默认形态：概要四行——完整块零渲染） */
-function DrawerBriefBody({ detail }: { readonly detail: TaskDetail }): ReactNode {
+/**
+ * 简要形态体（D22 默认形态：概要四行——完整块零渲染）。挂接会话行 pill 化（S2/SC2：
+ * 可点跳会话 + 关弹窗——jumpToSession 同完整形态语义；onOpenSession 缺席 = 非交互
+ * 呈现），pill 标签 = 会话名回退 id（S1/SC1）；pill 弹性换行（R4——440 宽多会话不挤压）。
+ */
+function DrawerBriefBody({
+  detail,
+  onOpenSession,
+  sessionTitleOf,
+}: {
+  readonly detail: TaskDetail
+  readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+}): ReactNode {
   return (
     <div className="dswf-td-brief" data-dswf-td-brief="">
-      {drawerBriefRows(detail).map((row) => (
+      {drawerBriefRows(detail, sessionTitleOf).map((row) => (
         <div className="dswf-td-brow" key={row.key}>
           <span className="dswf-td-bk">{row.key}</span>
-          <span className={row.code === true ? 'dswf-td-bv is-code' : 'dswf-td-bv'}>{row.value}</span>
+          {row.key === '挂接会话' && detail.sessions.length > 0 && onOpenSession !== undefined ? (
+            <span className="dswf-td-bv dswf-td-bv-sess">
+              {detail.sessions.map((session) => (
+                <Tooltip key={session.sessionId} label={sessionTitleOfOrId(sessionTitleOf, session.sessionId)} portal>
+                  <button
+                    type="button"
+                    className="dswf-td-sess is-link"
+                    data-dswf-td-sess={session.sessionId}
+                    onClick={() => {
+                      onOpenSession(session.sessionId)
+                    }}
+                  >
+                    {`${session.source === 'link' ? '派发' : '执行'}⟞ ${sessionTitleOfOrId(sessionTitleOf, session.sessionId)}`}
+                  </button>
+                </Tooltip>
+              ))}
+            </span>
+          ) : (
+            <span className={row.code === true ? 'dswf-td-bv is-code' : 'dswf-td-bv'}>{row.value}</span>
+          )}
         </div>
       ))}
     </div>
@@ -371,21 +405,11 @@ export interface TaskDrawerBodyProps {
   /** 相对时间基准（缺省当次渲染时刻） */
   readonly now?: number
   /** 会话名解析器（task-ui-info-density-blitz S1 通道递达——账本快照 displayTitle 窄读；
-   * 缺席/未命中 = undefined 回退 sessionId。消费归后续任务，本面仅承接通道） */
+   * 缺席/未命中 = undefined 回退 sessionId。消费 = 简要行/时间线 pill 名称展示） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
 }
 
-/**
- * 会话名回退契约（task-ui-info-density-blitz S1/SC6——fail-soft）：解析器命中 = 标题；
- * 账本未命中（解析器返回 undefined）或解析器缺席（注入面漂移）= 回退显示 sessionId。
- * 纯函数（调用方呈现面消费——消费渲染归后续任务）。
- */
-export function sessionTitleOfOrId(
-  sessionTitleOf: ((sessionId: string) => string | undefined) | undefined,
-  sessionId: string,
-): string {
-  return sessionTitleOf?.(sessionId) ?? sessionId
-}
+export { sessionJumpHandler, sessionTitleOfOrId } from './detail-model.js'
 
 /** 任务详情弹窗纯渲染体（D21 弹窗壳 + D22 双形态 + 两分块 + 调宽/关闭锚） */
 export function TaskDrawerBody({
@@ -410,6 +434,7 @@ export function TaskDrawerBody({
   onDragMove,
   onDragEnd,
   now,
+  sessionTitleOf,
 }: TaskDrawerBodyProps): ReactNode {
   const at = now ?? Date.now()
   const categoryClass = `dswf-td-cat-${typeCategoryClassOf(detail.taskType)}`
@@ -417,21 +442,14 @@ export function TaskDrawerBody({
   const coverage = coverageViewOf(detail)
   const showCoverage = templateFamilyOf(detail.taskType) === 'coding' && (coverage.actualPct !== undefined || coverage.expectedPct !== undefined)
   const note = varsText(detail.vars ?? {}, 'note')
-  // 挂接会话 pill 组合（原型 m31-tm-sess：跳对应对话面板 + 关弹窗——两动作一体）。
-  // worker 子会话（record 源 ∉ link 派发集）附库侧权威父（link 派发源）——显式地址径
-  // 输入（进行中 worker 账本缺行场景判读不到父的兜底；D6 修复面）
+  // 挂接会话 pill 跳转（原型 m31-tm-sess：跳对应对话面板 + 关弹窗——两动作一体；S2 简要
+  // 形态同语义复用）。worker 子会话（record 源 ∉ link 派发集）附库侧权威父（link 派发源）
+  // ——显式地址径输入（进行中 worker 账本缺行场景判读不到父的兜底；D6 修复面，判读不变）
   const jumpToSession =
     onOpenSession === undefined
       ? undefined
       : (sessionId: string): void => {
-          const links = new Set(
-            detail.sessions.filter((session) => session.source === 'link').map((session) => session.sessionId),
-          )
-          const isWorker = detail.sessions.some(
-            (session) => session.sessionId === sessionId && session.source === 'record' && !links.has(sessionId),
-          )
-          onOpenSession(sessionId, isWorker && links.size > 0 ? [...links][0] : undefined)
-          onClose()
+          sessionJumpHandler(detail, onOpenSession, onClose, sessionId)
         }
 
   return (
@@ -542,13 +560,13 @@ export function TaskDrawerBody({
               open={collapsed.timeline}
               onToggle={onToggleSection}
             >
-              <TimelineNow detail={detail} onOpenSession={jumpToSession} />
-              <TimelineEvents detail={detail} onOpenSession={jumpToSession} now={at} />
+              <TimelineNow detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} />
+              <TimelineEvents detail={detail} onOpenSession={jumpToSession} now={at} sessionTitleOf={sessionTitleOf} />
             </DrawerSection>
           </div>
         </>
       ) : (
-        <DrawerBriefBody detail={detail} />
+        <DrawerBriefBody detail={detail} onOpenSession={jumpToSession} sessionTitleOf={sessionTitleOf} />
       )}
       <div className="dswf-td-foot">
         {/* 诊断失败（4.6 UF-3 v19–v21——仅 blocked/rejected 任务；无单任务执行动作[Hard Rule]） */}
@@ -711,8 +729,8 @@ export interface TaskDrawerProps {
   /** @ 锚文档根（装配 fail-soft 装载注入——useProjectDocsRoot 项目行推导；缺席 = `docs` 缺省锚） */
   readonly docsRoot?: string
   /** 会话名解析器（task-ui-info-density-blitz S1 插件 inject face 经 ShellHost 递达——账本
-   * 快照 displayTitle 窄读；缺席/未命中 = undefined 回退 sessionId。消费归后续任务——本任务
-   * 只做通道与回退契约面） */
+   * 快照 displayTitle 窄读；缺席/未命中 = undefined 回退 sessionId。消费 = 简要行/时间线
+   * pill 名称展示（S1/SC1）） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
