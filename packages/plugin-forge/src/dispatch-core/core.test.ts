@@ -80,6 +80,7 @@ interface Harness {
   events: ForgePluginEvent[]
   calls: { claim: number; stats: number; query: number; list: number; submit: number }
   claimInputs: unknown[]
+  statsInputs: unknown[]
   spawnRequests: SpawnWorkerRequest[]
   setClaim(result: ClaimTaskResult): void
   setQuery(result: QueryTaskResult): void
@@ -98,6 +99,7 @@ function harness(
   const { sink, events } = sinkStub()
   const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0 }
   const claimInputs: unknown[] = []
+  const statsInputs: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
   let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
@@ -119,7 +121,8 @@ function harness(
       calls.claim += 1
       return claimResult
     },
-    taskStats: async () => {
+    taskStats: async (input: unknown) => {
+      statsInputs.push(input)
       calls.stats += 1
       return statsResult
     },
@@ -159,6 +162,7 @@ function harness(
     events,
     calls,
     claimInputs,
+    statsInputs,
     spawnRequests,
     setClaim: (r) => {
       claimResult = r
@@ -393,5 +397,57 @@ describe('dispatchCore 后台径（dispatched 回执 + job 内回灌进 guardKey
     expect(f1).toMatchObject({ ok: false, code: 'ERR_SPAWN_FAILED' })
     const f2 = await dispatchCore(h.deps, exec, loopArgs(key))
     expect(f2).toEqual({ kind: 'halted', reason: expect.stringContaining('3 consecutive') })
+  })
+})
+
+// ─────────────────────────── scoped 池快照口径 + 重入标识（run-tasks-host-command/1.10） ───────────────────────────
+
+describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(source) + claimed.reclaimed → reEntered）', () => {
+  it('scoped 调用：taskStats 查询携带 source（四计数 = 容器口径）——no-task 读与结算 spawned 读同口径', async () => {
+    // no-task 读
+    const h = harness()
+    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'proposal', slug: 'pa' } }))
+    expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'proposal', slug: 'pa' } }])
+    // 结算 spawned 读（settle 结算核）
+    const h2 = harness()
+    await dispatchCore(h2.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
+    expect(h2.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
+  })
+
+  it('后台 dispatched 读同口径：runInBackground=true 的池快照读亦携带 source', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
+    })
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' }, runInBackground: true }))
+    expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
+  })
+
+  it('非 scoped 调用：taskStats 查询不含 source 键（全池口径零变化）', async () => {
+    const h = harness()
+    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    await dispatchCore(h.deps, execOf().exec, loopArgs())
+    expect(h.statsInputs).toHaveLength(1)
+    expect(h.statsInputs[0]).not.toHaveProperty('source')
+  })
+
+  it('重入标识：claim reclaimed=true → dispatched 回执携带 reEntered=true；新领取零 reEntered 键', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算——回执即证
+    })
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd2', reclaimed: true })
+    const reentered = await dispatchCore(h.deps, execOf().exec, loopArgs({ runInBackground: true }))
+    expect(reentered).toMatchObject({ kind: 'dispatched', reEntered: true })
+    // 新领取（reclaimed=false）：回执零重入键
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd3', reclaimed: false })
+    const fresh = await dispatchCore(h.deps, execOf().exec, loopArgs({ runInBackground: true }))
+    expect(fresh).toMatchObject({ kind: 'dispatched', jobId: 'forge-dispatch-2' })
+    expect(fresh).not.toHaveProperty('reEntered')
   })
 })

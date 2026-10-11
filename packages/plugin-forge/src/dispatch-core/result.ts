@@ -47,6 +47,9 @@ export type DispatchTaskResult =
       workerSessionId: string
       jobId: string
       pool: PoolSnapshot
+      /** 幂等重入标识（claim 返回 reclaimed——同任务已有派发在先；渲染面据此附「等待结算再续派」
+       *  指引，防 scoped 循环对在飞任务重复 spawn；新领取零此键） */
+      readonly reEntered?: boolean
     }
   | { kind: 'no-task'; pool: PoolSnapshot }
   | { kind: 'halted'; reason: string }

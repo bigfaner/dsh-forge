@@ -102,6 +102,7 @@ interface Harness {
   events: ForgePluginEvent[]
   calls: { claim: number; stats: number; query: number; list: number; submit: number; dispose: number }
   claimInputs: unknown[]
+  statsInputs: unknown[]
   spawnRequests: SpawnWorkerRequest[]
   setClaim(result: ClaimTaskResult): void
   setQuery(result: QueryTaskResult): void
@@ -121,6 +122,7 @@ function harness(
   const { sink, events } = sinkStub()
   const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0, dispose: 0 }
   const claimInputs: unknown[] = []
+  const statsInputs: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
   let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
@@ -142,7 +144,8 @@ function harness(
       calls.claim += 1
       return claimResult
     },
-    taskStats: async () => {
+    taskStats: async (input: unknown) => {
+      statsInputs.push(input)
       calls.stats += 1
       return statsResult
     },
@@ -185,6 +188,7 @@ function harness(
     events,
     calls,
     claimInputs,
+    statsInputs,
     spawnRequests,
     setClaim: (r) => {
       claimResult = r
@@ -1234,5 +1238,75 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
     })
     const out = (await tool.execute({}, h.exec)) as { kind: string }
     expect(out.kind).toBe('spawned')
+  })
+})
+
+// ─────────────────────────── scoped 池快照 + 重入回执（run-tasks-host-command/1.10） ───────────────────────────
+
+describe('scoped 池快照 + 重入回执（1.10：快照口径分流 + 重入标识渲染 + schema 可选 reEntered）', () => {
+  it('scoped 调用：taskStats 查询携带 source（容器口径快照——no-task 收据全池数字不再出现的数据源）', async () => {
+    const h = harness()
+    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)
+    expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
+    const text = h.tool.output.render({}, { kind: 'no-task', pool: { pending: 9, inProgress: 1, blocked: 0, unmetPending: 2 } })[0]?.text ?? ''
+    expect(text).toContain('pool: pending 9 · in_progress 1 · blocked 0 · unmet-pending 2') // 容器数字即收据数字
+  })
+
+  it('非 scoped 调用：taskStats 查询不含 source 键（全池口径零变化）', async () => {
+    const h = harness()
+    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    await h.tool.execute({}, h.exec)
+    expect(h.statsInputs).toHaveLength(1)
+    expect(h.statsInputs[0]).not.toHaveProperty('source')
+  })
+
+  it('重入回执：claim reclaimed=true → dispatched 回执 reEntered=true + 渲染 re-entered 标识与等待指引', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    h.setSpawn(async (req) => {
+      h.spawnRequests.push(req)
+      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
+    })
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd2', reclaimed: true })
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string; reEntered?: boolean }
+    expect(out.kind).toBe('dispatched')
+    expect(out.reEntered).toBe(true)
+    const text = h.tool.output.render({}, out)[0]?.text ?? ''
+    expect(text.startsWith('▸ re-entered dispatched feat-x/2.5 — job forge-dispatch-1')).toBe(true)
+    expect(text).toContain('already in flight')
+    expect(text).toContain('do NOT dispatchTask')
+    expect(text).toContain('wait for')
+    expect(text).toContain('job_output forge-dispatch-1') // 既有指引行保留
+    expect(text).toContain('- pool: pending 1 · in_progress 0 · blocked 1 · unmet-pending 2')
+  })
+
+  it('新领取回执零重入键（toEqual 全形不变）+ 渲染 ▸ 原样', async () => {
+    const js = jobsStub()
+    const h = harness({ jobs: js.jobs })
+    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as object
+    expect(out).toEqual({
+      kind: 'dispatched',
+      taskRef: { slug: 'feat-x', localId: '2.5' },
+      title: 'Implement the thing',
+      type: 'coding-fix',
+      workerSessionId: 'worker-1',
+      jobId: 'forge-dispatch-1',
+      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+    })
+    const text = h.tool.output.render({}, out)[0]?.text ?? ''
+    expect(text.startsWith('▸ dispatched feat-x/2.5 — job forge-dispatch-1')).toBe(true)
+    expect(text).not.toContain('re-entered')
+  })
+
+  it('output schema：dispatched 支 properties 增 reEntered（可选——required 面不变）', () => {
+    const h = harness()
+    const schema = h.tool.output.schema as {
+      oneOf: [ { oneOf: Array<{ properties?: Record<string, unknown>; required?: string[] }> }, object ]
+    }
+    const dispatched = schema.oneOf[0]!.oneOf[1]!
+    expect(dispatched.properties).toHaveProperty('reEntered')
+    expect(dispatched.required).not.toContain('reEntered')
+    expect(dispatched.required).toEqual(['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'])
   })
 })

@@ -98,7 +98,8 @@ describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）',
   })
 
   it('dispatchTask 流事件键面（DispatchEventPayloads 接口键）⊆ 联合八事件', () => {
-    const dispatch = sources.find((s) => s.file === 'tools/dispatch-task.ts')!
+    // 1.1 壳分层后接口随主链迁居核心面（audit 面同步改指——键集与判据零变化）
+    const dispatch = sources.find((s) => s.file === 'dispatch-core/core.ts')!
     const block = /interface DispatchEventPayloads \{([\s\S]*?)\n\}/.exec(dispatch.text)
     expect(block, 'DispatchEventPayloads 接口在场').toBeTruthy()
     const keys = [...block![1]!.matchAll(/^ {2}'([a-z-]+)': /gm)].map((m) => m[1]!)

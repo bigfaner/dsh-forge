@@ -126,7 +126,8 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
       required: ['kind', 'outcome', 'taskRef', 'title', 'type', 'digest', 'pool'],
     },
     {
-      // dispatched 分支（async-dispatch §4.4 四键回执——§4.5 oneOf 增支）
+      // dispatched 分支（async-dispatch §4.4 四键回执——§4.5 oneOf 增支；reEntered = 幂等重入
+      // 标识（1.10——可选键，新领取零此键），渲染面据此附「等待结算再续派」指引）
       type: 'object',
       additionalProperties: false,
       properties: {
@@ -137,6 +138,7 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
         workerSessionId: { type: 'string' },
         jobId: { type: 'string' },
         pool: POOL_SCHEMA,
+        reEntered: { type: 'boolean' },
       },
       required: ['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'],
     },
@@ -156,8 +158,9 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
 })
 
 /** 五态渲染（Interface 2 场景渲染）：spawned ✓/⚑ + 池行；no-task · + 池态三分判词；
- *  dispatched ▸ 派发回执 + job_output/job_kill 指引；halted ✗ 粘住；spawn 失败 = 失败
- *  DTO formatFailure（✗ ERR_SPAWN_FAILED + 指引行） */
+ *  dispatched ▸ 派发回执 + job_output/job_kill 指引（重入回执 ▸ re-entered 标识 + 「等待
+ *  结算再续派」指引——1.10 防 scoped 循环对在飞任务重复 spawn）；halted ✗ 粘住；spawn
+ *  失败 = 失败 DTO formatFailure（✗ ERR_SPAWN_FAILED + 指引行） */
 function renderDispatchResult(_args: unknown, value: unknown): readonly TextContentBlock[] {
   if (isForgeToolFailure(value)) return formatFailure(value)
   const v = value as Exclude<DispatchTaskResult, ForgeToolFailure>
@@ -169,17 +172,22 @@ function renderDispatchResult(_args: unknown, value: unknown): readonly TextCont
   }
   if (v.kind === 'dispatched') {
     const key = `${v.taskRef.slug}/${v.taskRef.localId}`
-    return [
-      {
-        type: 'text',
-        text: [
-          `▸ dispatched ${key} — job ${v.jobId}`,
-          `- collect the settlement when the worker settles: job_output ${v.jobId}`,
-          `- abort the run: job_kill ${v.jobId}`,
-          `- pool: ${poolLine(v.pool)}`,
-        ].join('\n'),
-      },
+    const lines = [
+      v.reEntered === true
+        ? `▸ re-entered dispatched ${key} — job ${v.jobId}`
+        : `▸ dispatched ${key} — job ${v.jobId}`,
     ]
+    if (v.reEntered === true) {
+      lines.push(
+        '- re-entry: a dispatch for this task was already in flight — wait for that job\'s settlement before dispatching again (do NOT dispatchTask while a worker for this task is live); the settlement notice is the next-dispatch signal',
+      )
+    }
+    lines.push(
+      `- collect the settlement when the worker settles: job_output ${v.jobId}`,
+      `- abort the run: job_kill ${v.jobId}`,
+      `- pool: ${poolLine(v.pool)}`,
+    )
+    return [{ type: 'text', text: lines.join('\n') }]
   }
   const key = `${v.taskRef.slug}/${v.taskRef.localId}`
   if (v.outcome === 'success') {
@@ -207,7 +215,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
   return {
     name: TOOL,
     description:
-      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, and spawns an in-process worker that executes the dispatch briefing and submits the outcome itself. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. Default (foreground) the call blocks until the worker settles and returns the settlement with a live pool snapshot; with run_in_background it returns a dispatched receipt immediately (taskRef/workerSessionId/jobId/pool): collect the settlement later via job_output (the settlement block arrives once the worker settles) and abort the run via job_kill. Settlement semantics are identical in both modes: failures settle inside the background job, the spawn-failure guard counts them in settlement order, and 3 consecutive failures halt the session at the next dispatch entry (a new session resets the guard; job kills do not count); a failed spawn leaves the task in_progress for idempotent re-entry. Optional source_kind+source_slug pair (both or neither) scopes the claim to that single container: only its ready tasks are selected and session re-entry only resumes same-container in_progress tasks; absent = pool-wide readiness selection.',
+      'Dispatch the next ready task: claims it (ready selection, idempotent re-entry), assembles the worker tool filter from the task type, and spawns an in-process worker that executes the dispatch briefing and submits the outcome itself. Call repeatedly in a dispatch loop until no-task; the pool snapshot tells wrap-up / waiting / suspected-deadlock. Default (foreground) the call blocks until the worker settles and returns the settlement with a live pool snapshot; with run_in_background it returns a dispatched receipt immediately (taskRef/workerSessionId/jobId/pool): collect the settlement later via job_output (the settlement block arrives once the worker settles) and abort the run via job_kill. Settlement semantics are identical in both modes: failures settle inside the background job, the spawn-failure guard counts them in settlement order, and 3 consecutive failures halt the session at the next dispatch entry (a new session resets the guard; job kills do not count); a failed spawn leaves the task in_progress for idempotent re-entry. Optional source_kind+source_slug pair (both or neither) scopes the claim to that single container: only its ready tasks are selected, session re-entry only resumes same-container in_progress tasks, and the pool snapshot four counts cover just that container (its no-task verdict judges that container); absent = pool-wide readiness selection and pool-wide snapshot. A dispatched receipt marked re-entered means a prior dispatch for that task is unresolved — wait for its settlement instead of dispatching again.',
     parameters: {
       type: 'object',
       properties: {

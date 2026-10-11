@@ -3,7 +3,7 @@
 // await handle.result（传递性含 worker submitTask + 落账——F10 无竞态）→ disposeQuietly →
 // queryTask 只读结算读 → 三_case 判定（settled：spawned 分支字段面全量构建；failed：
 // run 拒绝/无结算同归防线径，kill 由调用方 taxonomy 判定）。
-import type { ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
+import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'
@@ -60,6 +60,10 @@ export async function settleWorkerRun(
     readonly task: TaskSnapshot
     /** claim 简报指纹（spawned 分支 digest 字段同源——task_records.claim 行双记同值） */
     readonly digest: string
+    /** 池快照口径（1.10：scoped 派发 = 该容器 source——结算 spawned 分支快照四计数同口径；
+     *  缺席 = 全池，非 scoped 调用零变化。注意与 ctx.task.source 相异：非 scoped 调用
+     *  不得借任务容器收窄——全池口径保持） */
+    readonly poolSource?: ContainerRef
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -94,7 +98,12 @@ export async function settleWorkerRun(
   const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
   const submitRecord = lastSubmitRecordOf(settled.records)
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
-  const pool: PoolSnapshot = poolOf(await deps.tasks.taskStats({ projectId: ctx.projectId }))
+  const pool: PoolSnapshot = poolOf(
+    await deps.tasks.taskStats({
+      projectId: ctx.projectId,
+      ...(ctx.poolSource !== undefined ? { source: ctx.poolSource } : {}),
+    }),
+  )
   return {
     case: 'settled',
     durationMs,

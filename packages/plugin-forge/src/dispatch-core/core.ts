@@ -27,7 +27,7 @@ import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
-import { poolOf } from './pool.js'
+import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchCoreFailure, DispatchTaskResult } from './result.js'
 import { disposeQuietly, settleWorkerRun } from './settle.js'
 import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
@@ -99,6 +99,8 @@ interface DispatchEventPayloads {
  * 幂等重入 + dispatchPrompt 合成）→ 组装（矩阵 toolFilter + settings agentOptions）→
  * spawn（start 拒绝 = 防线计数）→ 事件发射（claimed/spawned/progress/worker-done）→
  * 结算（前台阻塞 / 后台 job done continuation）→ 返回五态结果。
+ * 1.10 增补：池快照口径分流（scoped 调用 = source 容器四计数，非 scoped = 全池）+
+ * dispatched 回执幂等重入标识（claim reclaimed → reEntered——防 scoped 循环重复 spawn）。
  */
 export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExec, args: DispatchCoreArgs): Promise<DispatchTaskResult> {
   const { identity, guardKey, projectId } = args
@@ -108,6 +110,16 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
   // 共享槽写入，工具壳失败回调（emitToolError）消费
   const attributionSlug = args.source?.slug ?? '_pool'
   exec.attribution.slug = attributionSlug
+
+  /** 池快照现读（口径分流——run-tasks-host-command/1.10：scoped 调用 = source 容器四计数，
+   *  no-task 判词与快照消费同口径；非 scoped = 全池，缺省行为零变化） */
+  const poolRead = async (): Promise<PoolSnapshot> =>
+    poolOf(
+      await deps.tasks.taskStats({
+        projectId,
+        ...(args.source !== undefined ? { source: args.source } : {}),
+      }),
+    )
 
   /** 事件发射局部闭包（信封四件 + ts 单源；sink 缺席 = 零事件降级） */
   const emit = <K extends keyof DispatchEventPayloads>(
@@ -172,8 +184,8 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
   const task = claimed.task
   if (task === null) {
     // Z1 出口：no-ready-task 事件（source 对任务源归属——载荷 contextSlug = source_slug；
-    // 缺席回落 _pool 兜底）+ 池快照现读
-    const pool = poolOf(await deps.tasks.taskStats({ projectId }))
+    // 缺席回落 _pool 兜底）+ 池快照现读（scoped = 容器口径）
+    const pool = await poolRead()
     emit(
       'no-ready-task',
       attributionSlug,
@@ -237,7 +249,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
   // 原样投影），无结算径 failed + 诊断进 detail，kill = killed 不进防线计数。
   if (background !== undefined) {
     const { jobs, controller } = background
-    const pool = poolOf(await deps.tasks.taskStats({ projectId }))
+    const pool = await poolRead()
     let jobId: string
     try {
       ;({ jobId } = jobs.start({
@@ -267,6 +279,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
                 digest: claimed.digest,
                 handle,
                 spawnStartedAt,
+                ...(args.source !== undefined ? { poolSource: args.source } : {}),
                 onReading: () => progress('settled:reading', 'worker ended — reading settlement'),
               })
               if (settlement.case === 'settled') {
@@ -319,6 +332,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
       type: task.taskType,
       workerSessionId: handle.workerSessionId,
       jobId,
+      ...(claimed.reclaimed ? { reEntered: true } : {}), // 幂等重入标识（1.10——渲染面附等待指引防重复 spawn）
       pool,
     }
   }
@@ -330,6 +344,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
     digest: claimed.digest,
     handle,
     spawnStartedAt,
+    ...(args.source !== undefined ? { poolSource: args.source } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

@@ -41,9 +41,12 @@ the slug binds the whole loop to that single container:
    pair it falls back to `logs/_pool.jsonl`.
 
 Absent the source pair, dispatchTask claims pool-wide (programmatic/RPC callers, and
-loops genuinely not bound to a container). A scoped loop that gets `no-task` while the
-pool snapshot still shows foreign pending work is settling THAT container — report the
-container as settled, not the whole pool.
+loops genuinely not bound to a container) and its pool snapshot stays pool-wide. With
+the source pair carried, the snapshot four counts cover only that container — the
+verdicts above judge THAT container, and foreign work never appears in the numbers. A
+scoped loop that gets `no-task` with an all-settled container snapshot is done with
+the container even when pending work exists elsewhere in the pool; report the container
+as settled, not the whole pool.
 
 ## Dispatcher Iron Laws
 
@@ -51,10 +54,14 @@ container as settled, not the whole pool.
 1. One `dispatchTask` call per round; dispatch until `no-task`, drain the in-flight
    jobs via `job_output`, dispatch again. Decide on receipts, drained settlements, and
    pool snapshots — never on mid-round job reads. Nothing else drives the pool.
-2. NO code reading or writing by the dispatcher itself — workers execute; this session
+2. One worker per task: a receipt marked `re-entered` means a dispatch for that task is
+   already unresolved for this session — NEVER call `dispatchTask` again for it; wait
+   for that job's settlement (the completion notification, or `job_output` at the drain
+   point) and only then continue the loop.
+3. NO code reading or writing by the dispatcher itself — workers execute; this session
    orchestrates.
-3. NO running tests directly — quality gates belong to workers and the run-tests skill.
-4. Do not invent work: when no task is ready, follow the pool verdict below — never
+4. NO running tests directly — quality gates belong to workers and the run-tests skill.
+5. Do not invent work: when no task is ready, follow the pool verdict below — never
    fabricate tasks to keep the loop busy.
 </EXTREMELY-IMPORTANT>
 
@@ -69,6 +76,16 @@ the worker settles: job_output <id>`), and the pool snapshot. Note the jobId and
 commit hash if any) is delivered later — the completion notification tells you the
 worker settled, and the drained `job_output <id>` read carries the block.
 
+A receipt headed `▸ re-entered dispatched <slug>/<localId> — job <id>` is the
+duplicate-spawn tripwire: the claimed task was already `in_progress` for this session,
+so an earlier dispatch was still unresolved when this round fired — parallel workers on
+one task are exactly the failure shape this warns about. Per Iron Law 2, do NOT call
+`dispatchTask` again for that task — wait for the in-flight job's settlement
+(completion notification / `job_output`) and resume dispatching from there; the
+receipt's own guidance lines say the same. A well-paced loop never sees this receipt:
+it appears only when a round dispatched while the previous round's job for the same
+task was still live.
+
 ### 2. `spawned` · blocked
 
 The worker settled blocked with a reason; a follow-up fix task is listed when one was
@@ -76,10 +93,17 @@ spawned (it is dispatchable — just continue the loop). If the settlement shows
 follow-up and the failure warrants a fix chain, spawn it yourself per the fix-chain
 protocol below, then continue.
 
+One blocked shape is NOT fix-chain material: a reason that waits on another
+container's task ("same files, not landed yet"). A fix task cannot make someone
+else's work land — surface the blocked key plus the external container key to the
+user for a merge-or-sequence decision, and settle this container as waiting on the
+external one when nothing else is ready.
+
 ### 3. `no-task` — read the pool verdict
 
 The return carries the pool snapshot (`pending` / `in_progress` / `blocked` /
-`unmetPending`) and a verdict:
+`unmetPending`) — scoped to the bound container when the source pair is carried
+(pool-wide only for unscoped calls) — and a verdict judged on that same scope:
 
 | Verdict | Meaning | Action |
 |---|---|---|
