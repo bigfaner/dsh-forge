@@ -8,7 +8,10 @@
  * 预览径容器 inset 10px 12px / 图卡段间距 16px 0 = 官方 MarkdownBody 容器 css$7
  * 同刻度镜像（1.3 对齐官方——官方主题无间距标尺令牌，取值唯一来源 = css$7）。 */
 
-/* ── 面板骨架：头部 + 路径栏 + 摘要 + 正文（面板独占滚动归 dock 容器） ── */
+/* ── 面板骨架：头部 + 路径栏 + 摘要 + 正文。滚动所有权 = 正文自持——dock 宿主不滚
+ * （dockkit 内容容器零 overflow 滚动规则：lib/index.js 全量核查唯一注记 = strip 刻意
+ * 裁剪防滚动容器 L2236；data-dockkit-content L3087 仅 id 属性），同宿主先例 = overview
+ * tab 自持滚动（overview.css .dswf-ov-content：flex:1 + min-height:0 + overflow-y:auto）。── */
 .dswf-doc-panel {
   display: flex;
   flex-direction: column;
@@ -86,18 +89,28 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* ── 正文：md 段 / mermaid 段纵排 ── */
+/* ── 正文：md 段 / mermaid 段纵排（官方块级流）。滚动所有权自持（面板骨架头注——dock
+ * 宿主不滚，同宿主 overview 先例同构）+ 官方 MarkdownBody 容器 css$7 同形（1.4 对齐
+ * 官方——与预览径 .dswf-mdp-body 同刻度；产品 margin 22/20 + flex gap 自创刻度退役）── */
 .dswf-doc-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dsw-font-s-14-line-height);
-  margin: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-family: var(--dsw-font, inherit);
+  white-space: normal;
+  padding: 10px 12px; /* dsw-raw 官方同刻度（css$7 inset——主题无间距标尺令牌） */
+}
+
+/* mermaid 图卡节奏：容器块级化后段间距归块级 margin——官方块级 16px 刻度（与 .dswf-mdp-body 同刻度） */
+.dswf-doc-body .dswf-doc-mermaid {
+  margin: 16px 0; /* dsw-raw 官方块级刻度（css$7 语境段间距——主题无间距标尺令牌） */
 }
 
 /* ── 官方预览径 md body（md-preview-body 专用）：官方 MarkdownBody 容器 css$7 同形纯块级
  * 镜像——min-width:0 + font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap
  * 渗透（1.3 根因收口：软换行变硬换行/关偏好横向爆宽皆源于此）。不复用 dswf-doc-body
- * （dock tab 语境 flex/gap/margin 容器，滚动所有权不同：dock 由宿主滚）── */
+ * （dock tab 语境正文容器——1.4 起同为官方同形块级；唯滚动所有权不同：dock tab 正文
+ * 自持滚动，预览径滚动归官方共享 body[本件不认领 scrollport]）── */
 .dswf-mdp-body {
   min-width: 0;
   font-family: var(--dsw-font, inherit);

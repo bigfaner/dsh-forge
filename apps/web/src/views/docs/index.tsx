@@ -17,6 +17,7 @@ import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { EmptyState, ErrorBar, MarkdownDoc, SkeletonRows, StateChip } from '../../components/index.js'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { splitDocSegments } from './doc-segments.js'
+import { MD_PREVIEW_MARKDOWN_LABELS } from './md-preview-body.js'
 import { MermaidDiagram } from './mermaid-diagram.js'
 import './docs.css'
 
@@ -103,14 +104,16 @@ export interface DocsFrameProps {
   readonly onOpenExternal: () => void
 }
 
-/** 正文分段渲染（md 段 MarkdownDoc / mermaid 段 MermaidDiagram——零 mermaid 段零挂载） */
+/** 正文分段渲染（md 段 MarkdownDoc / mermaid 段 MermaidDiagram——零 mermaid 段零挂载）。
+ * labels = MD_PREVIEW_MARKDOWN_LABELS（1.3 冻结常量复用——code.toolbarLabels 递达 =
+ * 代码块升级官方 CodeToolbar：语言名/块级 wrap/复制；1.4 dock tab 与预览径同面） */
 export function DocBody({ content }: { readonly content: string }): ReactNode {
   const segments = splitDocSegments(content)
   return (
     <div className="dswf-doc-body" data-dswf-doc-body="">
       {segments.map((segment, i) =>
         segment.kind === 'md' ? (
-          <MarkdownDoc key={i} text={segment.text} variant="body" />
+          <MarkdownDoc key={i} text={segment.text} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
         ) : (
           <MermaidDiagram key={i} source={segment.source} />
         ),

@@ -226,6 +226,13 @@ describe('DocBody（分段渲染）', () => {
     expect(mermaidAt).toBeGreaterThan(mdAt)
     expect(tailAt).toBeGreaterThan(mermaidAt)
   })
+
+  it('1.4 CodeToolbar labels 递达：代码块升级官方 CodeToolbar（块级 wrap/复制/语言名——1.3 冻结常量复用）', () => {
+    const markup = render(<DocBody content={'# 正文\n\n```\nconst a = 1\n```'} />)
+    expect(markup, '块级 wrap 钮在场（toolbarLabels 递达 = CodeToolbar 臂）').toContain('aria-label="换行"')
+    expect(markup).toContain('aria-label="复制"')
+    expect(markup, '未知语言回退 codeLabel 文案（官方语言名槽位）').toContain('代码')
+  })
 })
 
 describe('DocsTab（状态 + 装载胶水——静态首装面）', () => {

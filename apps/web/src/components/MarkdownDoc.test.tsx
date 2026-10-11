@@ -68,7 +68,7 @@ describe('MarkdownDoc 组件（唯一包装入口）', () => {
       <MarkdownDoc text={'```ts\nconst a = 1\n```'} />,
     )
     expect(markup).toContain('data-code-block-banner') // 旧式代码横幅（默认 labels 无 toolbarLabels）
-    expect(markup, '块级 wrap 钮不出（toolbarLabels 缺席 = 既有消费面 EntryDrawer/docs tab 零变化）').not.toContain(
+    expect(markup, '块级 wrap 钮不出（toolbarLabels 缺席 = 既有消费面 EntryDrawer 零变化；docs tab 1.4 起传 MD_PREVIEW_MARKDOWN_LABELS）').not.toContain(
       'aria-label="换行"',
     )
   })

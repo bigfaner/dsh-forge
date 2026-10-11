@@ -322,6 +322,25 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(tab).toContain('void openDocExternal(makeClient()')
   })
 
+  it('1.4 dock tab 滚动收口 + 官方同形：dswf-doc-body 自持滚动（flex:1 + min-height:0 + overflow-y:auto）+ css$7 同刻度 + CodeToolbar labels 递达', () => {
+    const css = read('apps/web/src/views/docs/docs.css')
+    const bodyRule = css.match(/\.dswf-doc-body \{[^}]*\}/)?.[0] ?? ''
+    expect(bodyRule, '滚动所有权自持（dock 宿主不滚——同宿主 overview 先例同构）').toContain('overflow-y: auto')
+    expect(bodyRule).toContain('flex: 1')
+    expect(bodyRule).toContain('min-height: 0')
+    expect(bodyRule, '官方同形 white-space:normal（pre/pre-wrap 渗透收口）').toContain('white-space: normal')
+    expect(bodyRule).toContain('font-family: var(--dsw-font, inherit)')
+    expect(bodyRule, '官方 css$7 inset 同刻度').toContain('padding: 10px 12px')
+    expect(bodyRule, '产品自创 margin 22/20 + flex gap 刻度退役').not.toMatch(/\b(margin|gap):/)
+    expect(css, 'mermaid 图卡节奏 = 官方块级 16px（与 .dswf-mdp-body 同刻度）').toMatch(
+      /\.dswf-doc-body \.dswf-doc-mermaid \{[^}]*margin: 16px 0/,
+    )
+    const tab = read('apps/web/src/views/docs/index.tsx')
+    expect(tab, 'DocBody CodeToolbar labels 递达（1.3 冻结常量 MD_PREVIEW_MARKDOWN_LABELS 复用）').toContain(
+      'labels={MD_PREVIEW_MARKDOWN_LABELS}',
+    )
+  })
+
   it('官方预览径 md mermaid 扩展渲染器（md-preview-body）：md 段唯一经 MarkdownDoc + mermaid 段唯一经 MermaidDiagram + 官方 documentpreview 包零 import', () => {
     const body = read('apps/web/src/views/docs/md-preview-body.tsx')
     expect(body).toContain('MarkdownDoc')
