@@ -23,6 +23,14 @@ Blitz semantics — all three are hard, and they are recorded at creation:
   work needs surface-level verification.
 - **No feature row, ever.** When the user accepts this proposal it goes straight to the
   task stage — never call `registerFeature` from here.
+- **No cross-container waits, ever.** A task's `task_desc` / `acceptance_criteria` must
+  never say "wait for another container's task to land" — containers are independent,
+  and the pipeline cannot see, guard, or restore such a wait (it degrades into a
+  worker-level block and a human decision). When later work genuinely needs an earlier
+  deliverable that lives in another container (same files, layered output), stop before
+  creating tasks and put the choice to the user: merge into one container, or sequence
+  the dispatches (register the dependent container only after the earlier one settles).
+  Never create a waiting task.
 </HARD-GATE>
 
 ## Step 1: Read the Request
@@ -88,4 +96,5 @@ directly dispatchable via run-tasks; there is no feature stage in between.
 - [ ] Integer ids only; zero `doc-summary` / `gate` / eval / gen tasks
 - [ ] Every task ≤6 AC; every AC objectively checkable
 - [ ] Dependencies form a DAG (cycles are rejected server-side)
+- [ ] Zero cross-container references in any task_desc / AC (merge or sequence instead)
 - [ ] No feature row created or implied

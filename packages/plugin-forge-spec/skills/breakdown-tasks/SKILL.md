@@ -46,6 +46,13 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
   evidence gate judges against this list — every item must be checkable).
 - `depends_on` = natural-key localIds of same-container prerequisites (same-feature edges
   only; cycles are rejected server-side).
+- No cross-container waits in prose: `task_desc` / `acceptance_criteria` must never say
+  "wait for another container's task to land" — the pipeline cannot see, guard, or
+  restore such a wait (it degrades into a worker-level block and a human decision). If
+  later work needs an earlier deliverable from another container (same files, layered
+  output), stop and put the choice to the user: merge into one container, or sequence
+  the dispatches (register the dependent container only after the earlier one settles).
+  Never create a waiting task.
 - `breaking: true` when modifying shared interfaces/models/contracts (additive interface
   changes count).
 - `vars` carry structured context (`SOURCE_FILES`, `TEST_SCRIPT`, ...) as KEY=VALUE
@@ -98,7 +105,9 @@ Priority: P0 core mechanism or blocks others; P1 maps to a PRD AC or core flow; 
    already invoke the skills.
 7. **Sizing audit** — re-check every task: multi-verb titles split; AC crossing unrelated
    domains split; operational ceiling respected; **≤6 acceptance criteria per task**
-   (more = scope too large, split further).
+   (more = scope too large, split further); zero cross-container references in any
+   `task_desc` / AC (a needed external ordering means merge or sequence, not a waiting
+   task).
 8. **Validate the container** — `validateFeatureTasks { feature_slug: "<slug>" }`: every
    reported violation names the offending task key; fix (via task state transitions the
    tool surface allows — never direct writes) until the subgraph is healthy.
