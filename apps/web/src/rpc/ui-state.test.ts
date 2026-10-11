@@ -33,6 +33,10 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_TEST_EVIDENCE_REQUIRED: 'error-bar',
   ERR_GATE_SUMMARY_REQUIRED: 'error-bar',
   ERR_SPAWN_FAILED: 'error-bar',
+  // worker-lean-execution S3（结构化提交机械门）
+  ERR_AC_NOT_MET: 'error-bar',
+  ERR_AC_CRITERIA_MISMATCH: 'error-bar',
+  ERR_FILES_UNION_MISMATCH: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

@@ -15,6 +15,7 @@
 //     summary），未命中 = 置灰（resolved=false——文档移除/改名后的诚实呈现）。
 import type Database from 'better-sqlite3'
 import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary } from '@dsh-forge/contracts'
+import { taskFilesUnion } from '@dsh-forge/contracts'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { listCommitFiles, type GitExecFile } from './git-lookup.js'
 import { hydrateTaskCards } from './list.js'
@@ -122,6 +123,18 @@ async function resolveActualFiles(
         files = undefined // 畸形负载 → 本记录降级 commit 面（下行不中断）
       }
       if (Array.isArray(files) && files.every((f) => typeof f === 'string')) return files as string[]
+      // files_json v2 {created, modified} 对象形 → 平铺并集（S3/R12 两形制归一——读面单源 taskFilesUnion）
+      if (typeof files === 'object' && files !== null) {
+        const p = files as { created?: unknown; modified?: unknown }
+        const isStrArr = (v: unknown): v is string[] =>
+          Array.isArray(v) && v.every((f) => typeof f === 'string')
+        if (isStrArr(p.created) || isStrArr(p.modified)) {
+          return taskFilesUnion({
+            created: isStrArr(p.created) ? p.created : undefined,
+            modified: isStrArr(p.modified) ? p.modified : undefined,
+          })
+        }
+      }
     }
     if ((s.commit_hash ?? '').trim() !== '') {
       return listCommitFiles(deps.git ?? {}, {

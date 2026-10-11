@@ -236,6 +236,25 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
     }
   }
 
+  /** files_json 两形制归一（S3）：旧扁平 string[] / 新 {created, modified} → 平铺并集（created 序优先） */
+  const normalizeRecordFiles = (parsed: unknown): readonly string[] | undefined => {
+    if (parsed === undefined) return undefined
+    if (Array.isArray(parsed) && parsed.every((f) => typeof f === 'string')) return parsed as readonly string[]
+    if (typeof parsed === 'object' && parsed !== null) {
+      const p = parsed as { created?: unknown; modified?: unknown }
+      const isStrArr = (v: unknown): v is readonly string[] =>
+        Array.isArray(v) && v.every((f) => typeof f === 'string')
+      if (isStrArr(p.created) || isStrArr(p.modified)) {
+        const union: string[] = []
+        for (const f of [...(p.created ?? []), ...(p.modified ?? [])] as readonly string[]) {
+          if (!union.includes(f)) union.push(f)
+        }
+        return union
+      }
+    }
+    throw new Error(`[dogfood-record] files_json 形制不可识别：${JSON.stringify(parsed).slice(0, 60)}`)
+  }
+
   /** 审计行 → verb+observed 行对（core 效果行 auto-block/auto-restore/transition 不入 verb 面） */
   const contributions: Contribution[] = []
   for (const record of input.records) {
@@ -272,7 +291,9 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         throw new Error(`[dogfood-record] submit 记录 toStatus 异常：${record.slug}/${record.localId} → ${String(record.toStatus)}`)
       }
       const result = record.toStatus === 'completed' ? 'success' : 'blocked'
-      const files = parseJson<readonly string[]>(record.filesJson, 'files_json', record.taskId)
+      // files_json 两形制归一（S3）：旧扁平 string[] / 新 {created, modified} 对象形 → 平铺并集
+      const filesRaw = parseJson<unknown>(record.filesJson, 'files_json', record.taskId)
+      const files = normalizeRecordFiles(filesRaw)
       const gate = parseJson<Record<string, unknown>>(record.gateJson, 'gate_json', record.taskId)
       // 恢复清单：同事务紧随的 auto-restore 行（core 效果——恢复钩子在 submit 事务内落账）
       const restored = input.records

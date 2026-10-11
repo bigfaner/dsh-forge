@@ -12,16 +12,19 @@ import type {
   QueryTaskInput,
   QueryTaskResult,
   SessionTaskLinkCard,
+  TaskAcResult,
   TaskActor,
   TaskContainerSummary,
   TaskGateReport,
   TaskPrerequisiteSummary,
   TaskRecordEntry,
+  TaskRecordFields,
   TaskRecordVerb,
   TaskSnapshot,
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
+import { taskFilesUnion } from '@dsh-forge/contracts'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TaskNotFoundError } from './errors.js'
 
@@ -60,7 +63,7 @@ export interface TaskStorageRow {
   updated_at: string
 }
 
-/** task_records 行存储形状（append-only 审计行 → TaskRecordEntry） */
+/** task_records 行存储形状（append-only 审计行 → TaskRecordEntry；S3 +ac_json/record_fields_json） */
 interface TaskRecordStorageRow {
   verb: TaskRecordVerb
   from_status: TaskStatus | null
@@ -68,6 +71,8 @@ interface TaskRecordStorageRow {
   reason: string | null
   summary: string | null
   files_json: string | null
+  ac_json: string | null
+  record_fields_json: string | null
   gate_json: string | null
   commit_hash: string | null
   dispatch_digest: string | null
@@ -178,17 +183,63 @@ export function resolvePhaseGuardFeature(
 }
 
 /**
- * task_records 行 → TaskRecordEntry（files/gate JSON 解码；缺省键缺席——lossless 同
- * toTaskSnapshot 口径）——2.6 detail 复用导出。
+ * files_json 两形制归一解码（S3/R12——历史行旧扁平 string[] / 新行 {created, modified}）：
+ * 对象形 → filesCreated/filesModified + files = 平铺并集（taskFilesUnion 单源）；数组形 → files。
+ * 畸形负载 → {}（键全缺席——降级不炸读面，detail actualFiles 另行降级 commit 面）。
+ */
+export function decodeRecordFiles(raw: string): {
+  files?: string[]
+  filesCreated?: string[]
+  filesModified?: string[]
+} {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw) as unknown
+  } catch {
+    return {}
+  }
+  if (Array.isArray(parsed) && parsed.every((f) => typeof f === 'string')) {
+    return { files: parsed as string[] }
+  }
+  if (typeof parsed === 'object' && parsed !== null) {
+    const p = parsed as { created?: unknown; modified?: unknown }
+    const isStrArr = (v: unknown): v is string[] =>
+      Array.isArray(v) && v.every((f) => typeof f === 'string')
+    const created = isStrArr(p.created) ? p.created : undefined
+    const modified = isStrArr(p.modified) ? p.modified : undefined
+    if (created === undefined && modified === undefined) return {}
+    return {
+      files: taskFilesUnion({ created, modified }),
+      ...(created !== undefined ? { filesCreated: created } : {}),
+      ...(modified !== undefined ? { filesModified: modified } : {}),
+    }
+  }
+  return {}
+}
+
+/**
+ * task_records 行 → TaskRecordEntry（files 两形制归一/ac/record_fields JSON 解码；缺省键缺席
+ * ——lossless 同 toTaskSnapshot 口径）——2.6 detail 复用导出。
  */
 export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
+  const files = row.files_json !== null ? decodeRecordFiles(row.files_json) : {}
+  const recordFields =
+    row.record_fields_json !== null ? (JSON.parse(row.record_fields_json) as TaskRecordFields) : undefined
   return {
     verb: row.verb,
     ...(row.from_status !== null ? { fromStatus: row.from_status } : {}),
     ...(row.to_status !== null ? { toStatus: row.to_status } : {}),
     ...(row.reason !== null ? { reason: row.reason } : {}),
     ...(row.summary !== null ? { summary: row.summary } : {}),
-    ...(row.files_json !== null ? { files: JSON.parse(row.files_json) as string[] } : {}),
+    ...(files.files !== undefined ? { files: files.files } : {}),
+    ...(files.filesCreated !== undefined ? { filesCreated: files.filesCreated } : {}),
+    ...(files.filesModified !== undefined ? { filesModified: files.filesModified } : {}),
+    ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as TaskAcResult[] } : {}),
+    ...(recordFields?.keyDecisions !== undefined ? { keyDecisions: recordFields.keyDecisions } : {}),
+    ...(recordFields?.testsPassed !== undefined ? { testsPassed: recordFields.testsPassed } : {}),
+    ...(recordFields?.testsFailed !== undefined ? { testsFailed: recordFields.testsFailed } : {}),
+    ...(recordFields?.coverage !== undefined ? { coverage: recordFields.coverage } : {}),
+    ...(recordFields?.notes !== undefined ? { notes: recordFields.notes } : {}),
     ...(row.gate_json !== null ? { gate: JSON.parse(row.gate_json) as TaskGateReport } : {}),
     ...(row.commit_hash !== null ? { commitHash: row.commit_hash } : {}),
     ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),
@@ -265,8 +316,8 @@ export async function queryTask(deps: TasksQueryDeps, input: QueryTaskInput): Pr
  * 2.6 导出：queryTask include.records 与 taskDetail.records 同源单份（EQP 锚 ② =
  * RECORDS_BY_TASK_SQL 命中 idx_records_task——list.test 断言）。
  */
-export const RECORDS_BY_TASK_SQL = `SELECT verb, from_status, to_status, reason, summary, files_json, gate_json,
-  commit_hash, dispatch_digest, actor, session_id, created_at
+export const RECORDS_BY_TASK_SQL = `SELECT verb, from_status, to_status, reason, summary, files_json, ac_json,
+  record_fields_json, gate_json, commit_hash, dispatch_digest, actor, session_id, created_at
 FROM task_records WHERE task_id = ? ORDER BY id`
 
 /** 记录时间线读（行 → TaskRecordEntry 映射含 JSON 解码） */

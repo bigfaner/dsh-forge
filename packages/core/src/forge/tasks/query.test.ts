@@ -211,6 +211,99 @@ describe('AC5 queryTask include 四节', () => {
   })
 })
 
+// S3 结构化提交读面（worker-lean-execution）：files_json 两形制归一（旧扁平 / 新 {created,modified}）
+// + ac_json/record_fields_json 解码 + summary 双端可读（面板 = queryTask include.records；
+// 档案 = taskDetail.records——同源单份）。
+describe('S3 读面归一：files 两形制 + ac/record_fields 解码 + summary 双端可读', () => {
+  it('新形制 submit 记录：files_json {created,modified} → filesCreated/filesModified + files 平铺并集（created 序优先去重）+ ac/record_fields 键位解码', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'in-progress' })
+    seedTask(h!.db, 'f1', '2.1', { status: 'completed' })
+    seedRecord(h!.db, 't-f1-2.1', {
+      verb: 'submit',
+      from: 'in_progress',
+      to: 'completed',
+      summary: 'S3 结构化一句话结果',
+      filesJson: '{"created":["src/new.ts"],"modified":["src/a.ts","src/b.ts"]}',
+      acJson: '[{"criterion":"[AC-1] x","met":true,"evidence":"用例绿"},{"criterion":"[AC-2] y","met":true}]',
+      recordFieldsJson: '{"keyDecisions":["决策一"],"testsPassed":9,"testsFailed":0,"coverage":0.88,"notes":"n"}',
+      actor: 'plugin-tool',
+      sessionId: 's-exec',
+    })
+    const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '2.1' }, include: { records: true } })
+    expect(r.records).toEqual([
+      {
+        verb: 'submit',
+        fromStatus: 'in_progress',
+        toStatus: 'completed',
+        summary: 'S3 结构化一句话结果',
+        files: ['src/new.ts', 'src/a.ts', 'src/b.ts'], // 平铺并集（面板文件数零波及）
+        filesCreated: ['src/new.ts'],
+        filesModified: ['src/a.ts', 'src/b.ts'],
+        acceptanceCriteria: [
+          { criterion: '[AC-1] x', met: true, evidence: '用例绿' },
+          { criterion: '[AC-2] y', met: true },
+        ],
+        keyDecisions: ['决策一'],
+        testsPassed: 9,
+        testsFailed: 0,
+        coverage: 0.88,
+        notes: 'n',
+        actor: 'plugin-tool',
+        sessionId: 's-exec',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ])
+  })
+
+  it('旧扁平形制历史行：files_json string[] → 仅 files（filesCreated/filesModified/ac/record_fields 键缺席——R13 纯文本降级兼容）', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'in-progress' })
+    seedTask(h!.db, 'f1', '2.1', { status: 'completed' })
+    seedRecord(h!.db, 't-f1-2.1', {
+      verb: 'submit',
+      from: 'in_progress',
+      to: 'completed',
+      summary: '旧格式自由文本',
+      filesJson: '["src/a.ts"]',
+      actor: 'plugin-tool',
+      sessionId: 's-exec',
+    })
+    const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '2.1' }, include: { records: true } })
+    expect(r.records).toEqual([
+      {
+        verb: 'submit',
+        fromStatus: 'in_progress',
+        toStatus: 'completed',
+        summary: '旧格式自由文本',
+        files: ['src/a.ts'],
+        actor: 'plugin-tool',
+        sessionId: 's-exec',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ])
+  })
+
+  it('summary 双端可读：面板（queryTask include.records）与档案（taskDetail.records）同源单份', async () => {
+    const q = svc()
+    seedFeature(h!.db, { slug: 'f1', status: 'in-progress' })
+    seedTask(h!.db, 'f1', '2.1', { status: 'completed' })
+    seedRecord(h!.db, 't-f1-2.1', {
+      verb: 'submit',
+      from: 'in_progress',
+      to: 'completed',
+      summary: '面板与档案共读的一句话结果',
+      actor: 'plugin-tool',
+      sessionId: 's-exec',
+    })
+    const panel = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '2.1' }, include: { records: true } })
+    expect(panel.records?.[0]?.summary).toBe('面板与档案共读的一句话结果')
+    const { taskDetail } = await import('./detail.js')
+    const detail = await taskDetail({ store: h!.store, resolveWsPath: () => h!.projectId }, { projectId: P(), taskId: 't-f1-2.1' })
+    expect(detail.records[0]?.summary).toBe('面板与档案共读的一句话结果')
+  })
+})
+
 // 5.4 dogfood 实证缺陷：DTO 可选字段「缺省 = 键缺席」而非「键在场值 undefined」——
 // agent tool 输出面（dsh harness snapshotJsonValue）对显式 undefined 属性值判
 // 「value is not lossless JSON」拒绝整个工具结果（claimTask 三连拒、派发链断头）。

@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { addTask } from './add.js'
 import { claimTask } from './claim.js'
 import {
+  AcCriteriaMismatchError,
+  AcNotMetError,
+  FilesUnionMismatchError,
   GateSummaryRequiredError,
   InvalidTransitionError,
   ReasonRequiredError,
@@ -473,5 +476,153 @@ describe('2.6 双门（图 8）：gate 任务数字摘要门 + AC 测试证据�
     expect(
       h!.db.prepare<unknown[], { feature_status: string }>(`SELECT feature_status FROM features WHERE slug = 'fl'`).get(),
     ).toEqual({ feature_status: 'tasks' })
+  })
+})
+
+// ───────── S3 结构化提交（worker-lean-execution·老 forge record.json 形制回归） ─────────
+// 门序：AC 交叉校验 → AC 逐项闭环（met=false 拒）→ 既有 gate.test 证据门；均仅挂 success。
+// 入库：task_records.ac_json + record_fields_json + files_json v2 {created, modified}。
+describe('S3 结构化提交：AC 交叉校验 + 逐项闭环 + files 分组 + record_fields_json 入库', () => {
+  const withAc = (localId: string, ac: readonly string[]): void => {
+    h!.db.prepare(`UPDATE tasks SET ac_json = ? WHERE local_id = ?`).run(JSON.stringify(ac), localId)
+  }
+
+  it('结构化全载荷结算：ac_json/record_fields_json 落账 + files_json v2 {created,modified} 对象形', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    withAc('1.1', ['[AC-1] 结构化落账', '[AC-2] 读面归一'])
+    const r = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: 'S3 数据侧落地',
+      filesCreated: ['packages/core/src/forge/tasks/s3.ts'],
+      filesModified: ['packages/core/src/forge/tasks/submit.ts', 'packages/core/src/forge/tasks/submit.test.ts'],
+      acceptanceCriteria: [
+        { criterion: '[AC-1] 结构化落账', met: true, evidence: 'submit.test S3 全载荷用例绿' },
+        { criterion: '[AC-2] 读面归一', met: true, evidence: 'query.test 两形制夹具绿' },
+      ],
+      keyDecisions: ['files_json 对象形直写、读面归一', 'AC 门仅挂 success'],
+      testsPassed: 12,
+      testsFailed: 0,
+      coverage: 0.91,
+      notes: 'UI 面归姊妹提案',
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      sessionId: 's-exec',
+    })
+    expect(r.status).toBe('completed')
+    const rec = rows(`SELECT summary, files_json, ac_json, record_fields_json, gate_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      summary: string; files_json: string; ac_json: string; record_fields_json: string; gate_json: string
+    }
+    expect(rec.summary).toBe('S3 数据侧落地')
+    expect(JSON.parse(rec.files_json)).toEqual({
+      created: ['packages/core/src/forge/tasks/s3.ts'],
+      modified: ['packages/core/src/forge/tasks/submit.ts', 'packages/core/src/forge/tasks/submit.test.ts'],
+    })
+    expect(JSON.parse(rec.ac_json)).toEqual([
+      { criterion: '[AC-1] 结构化落账', met: true, evidence: 'submit.test S3 全载荷用例绿' },
+      { criterion: '[AC-2] 读面归一', met: true, evidence: 'query.test 两形制夹具绿' },
+    ])
+    expect(JSON.parse(rec.record_fields_json)).toEqual({
+      keyDecisions: ['files_json 对象形直写、读面归一', 'AC 门仅挂 success'],
+      testsPassed: 12,
+      testsFailed: 0,
+      coverage: 0.91,
+      notes: 'UI 面归姊妹提案',
+    })
+  })
+
+  it('AC 交叉校验：条数不符 / 顺序漂移 / 原文不同 → ERR_AC_CRITERIA_MISMATCH + 零写入', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    seedTask(h!.db, 'f', '1.2', { status: 'in_progress' })
+    seedTask(h!.db, 'f', '1.3', { status: 'in_progress' })
+    withAc('1.1', ['[AC-1] a', '[AC-2] b'])
+    withAc('1.2', ['[AC-1] a', '[AC-2] b'])
+    withAc('1.3', ['[AC-1] a', '[AC-2] b'])
+    const base = { projectId: P(), result: 'success' as const, summary: 'x', sessionId: 's' }
+    const count = await submit({ ...base, taskRef: { slug: 'f', localId: '1.1' }, acceptanceCriteria: [{ criterion: '[AC-1] a', met: true }] }).catch((e: unknown) => e)
+    expect(count).toBeInstanceOf(AcCriteriaMismatchError)
+    expect((count as AcCriteriaMismatchError).data).toEqual({
+      expected: ['[AC-1] a', '[AC-2] b'],
+      actual: ['[AC-1] a'],
+    })
+    const order = await submit({ ...base, taskRef: { slug: 'f', localId: '1.2' }, acceptanceCriteria: [{ criterion: '[AC-2] b', met: true }, { criterion: '[AC-1] a', met: true }] }).catch((e: unknown) => e)
+    expect(order).toBeInstanceOf(AcCriteriaMismatchError)
+    const text = await submit({ ...base, taskRef: { slug: 'f', localId: '1.3' }, acceptanceCriteria: [{ criterion: '[AC-1] a', met: true }, { criterion: '[AC-2] 漂移', met: true }] }).catch((e: unknown) => e)
+    expect(text).toBeInstanceOf(AcCriteriaMismatchError)
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id LIKE '1._'`)).toEqual([
+      { task_status: 'in_progress' }, { task_status: 'in_progress' }, { task_status: 'in_progress' },
+    ])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([]) // 单事务全成全败——零写入
+  })
+
+  it('AC 逐项闭环门：success ∧ 任一 met=false → ERR_AC_NOT_MET（data 带未达清单）+ 零写入', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    withAc('1.1', ['[AC-1] 达成项', '[AC-2] 未达项'])
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: 'x',
+      acceptanceCriteria: [
+        { criterion: '[AC-1] 达成项', met: true, evidence: '用例绿' },
+        { criterion: '[AC-2] 未达项', met: false, evidence: '单测红：3 failed' },
+      ],
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(AcNotMetError)
+    expect((err as AcNotMetError).code).toBe('ERR_AC_NOT_MET')
+    expect((err as AcNotMetError).data).toEqual({ unmet: [{ criterion: '[AC-2] 未达项', evidence: '单测红：3 failed' }] })
+    expect((err as AcNotMetError).message).toContain('[AC-2] 未达项')
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+  })
+
+  it('files 一致性：files ≠ created ∪ modified（缺项/顺序差异视为集不等）→ ERR_FILES_UNION_MISMATCH + 零写入', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    const err = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: 'x',
+      files: ['a.ts'],
+      filesCreated: ['a.ts'],
+      filesModified: ['b.ts'],
+      sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(FilesUnionMismatchError)
+    expect((err as FilesUnionMismatchError).code).toBe('ERR_FILES_UNION_MISMATCH')
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+  })
+
+  it('blocked submit 不经 S3 门（C4）：met=false / criterion 漂移 / files 失配均直通 blocked', async () => {
+    seedFeature(h!.db, { slug: 'b', status: 'in-progress' })
+    seedTask(h!.db, 'b', '1.1', { status: 'in_progress' })
+    withAc('1.1', ['[AC-1] 定义判据'])
+    const r = await submit({
+      projectId: P(), taskRef: { slug: 'b', localId: '1.1' },
+      result: 'blocked', reason: '受阻——fix 链承接',
+      acceptanceCriteria: [{ criterion: '漂移判据', met: false }],
+      filesCreated: ['x.ts'],
+      filesModified: ['y.ts'],
+      keyDecisions: ['先 blocked'],
+      testsFailed: 3,
+      sessionId: 's',
+    })
+    expect(r.status).toBe('blocked')
+    const rec = rows(`SELECT ac_json, files_json, record_fields_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      ac_json: string; files_json: string; record_fields_json: string
+    }
+    // blocked 结构化载荷原样落账（沿「不服务内判红」注记——R13 兼容面）
+    expect(JSON.parse(rec.ac_json)).toEqual([{ criterion: '漂移判据', met: false }])
+    expect(JSON.parse(rec.files_json)).toEqual({ created: ['x.ts'], modified: ['y.ts'] })
+    expect(JSON.parse(rec.record_fields_json)).toEqual({ keyDecisions: ['先 blocked'], testsFailed: 3 })
+  })
+
+  it('record_fields_json 缺省 = 列 NULL（无结构化字段不落空对象）', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    await submit({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, result: 'success', summary: '最小', sessionId: 's' })
+    expect(rows(`SELECT ac_json, record_fields_json FROM task_records WHERE verb = 'submit'`)).toEqual([
+      { ac_json: null, record_fields_json: null },
+    ])
   })
 })

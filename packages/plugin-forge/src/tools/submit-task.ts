@@ -28,7 +28,7 @@ import { requireProjectId, requireSessionId, sessionContextOf } from './session.
 
 const TOOL = 'submitTask'
 
-/** agent 面参数（gate 平铺四布尔 + coverage） */
+/** agent 面参数（gate 平铺四布尔 + coverage；S3 结构化记录面：AC 平行数组 + files 分组 + record fields） */
 export interface SubmitTaskToolArgs {
   /** 容器 slug（feature 目录名 / proposal slug——任务自然键第一段） */
   readonly slug: string
@@ -36,8 +36,24 @@ export interface SubmitTaskToolArgs {
   readonly result: 'success' | 'blocked'
   readonly reason?: string
   readonly summary?: string
-  /** 正斜杠路径清单 */
+  /** 正斜杠路径清单（与 files_created/files_modified 并存时须 = 并集——core ERR_FILES_UNION_MISMATCH） */
   readonly files?: readonly string[]
+  /** 新建文件分组（→ files_json v2 {created, modified}） */
+  readonly files_created?: readonly string[]
+  /** 修改文件分组（→ files_json v2 {created, modified}） */
+  readonly files_modified?: readonly string[]
+  /** AC 逐项核验结果（ac_criteria/ac_met/ac_evidence 三平行数组——同位成项；criterion 与任务定义侧逐项对应——交叉校验不符/met=false 即拒） */
+  readonly ac_criteria?: readonly string[]
+  readonly ac_met?: readonly boolean[]
+  /** 一行简要证明（用例/命令 + 结果；长输出落盘只带路径）——与 ac_criteria 同长或整体缺席 */
+  readonly ac_evidence?: readonly string[]
+  /** 关键决策（≤3 条） */
+  readonly key_decisions?: readonly string[]
+  readonly tests_passed?: number
+  readonly tests_failed?: number
+  /** 记录侧覆盖率小数（与 gate_coverage 互补） */
+  readonly coverage?: number
+  readonly notes?: string
   readonly gate_compile?: boolean
   readonly gate_fmt?: boolean
   readonly gate_lint?: boolean
@@ -81,6 +97,16 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
     reason?: string
     summary?: string
     files?: string[]
+    files_created?: string[]
+    files_modified?: string[]
+    ac_criteria?: string[]
+    ac_met?: boolean[]
+    ac_evidence?: string[]
+    key_decisions?: string[]
+    tests_passed?: number
+    tests_failed?: number
+    coverage?: number
+    notes?: string
     gate_compile?: boolean
     gate_fmt?: boolean
     gate_lint?: boolean
@@ -98,12 +124,57 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   if (summary !== undefined) out.summary = summary
   const files = optionalStringArray(a, 'files', TOOL)
   if (files !== undefined) out.files = files
+  const filesCreated = optionalStringArray(a, 'files_created', TOOL)
+  if (filesCreated !== undefined) out.files_created = filesCreated
+  const filesModified = optionalStringArray(a, 'files_modified', TOOL)
+  if (filesModified !== undefined) out.files_modified = filesModified
+  const acCriteria = optionalStringArray(a, 'ac_criteria', TOOL)
+  const acMetRaw = a['ac_met']
+  let acMet: boolean[] | undefined
+  if (acMetRaw !== undefined) {
+    if (!Array.isArray(acMetRaw) || acMetRaw.some((v) => typeof v !== 'boolean')) {
+      throw new Error(`${TOOL}: ac_met must be an array of booleans`)
+    }
+    acMet = acMetRaw as boolean[]
+  }
+  const acEvidence = optionalStringArray(a, 'ac_evidence', TOOL)
+  if (acCriteria !== undefined || acMet !== undefined) {
+    if (acCriteria === undefined || acMet === undefined) {
+      throw new Error(`${TOOL}: ac_criteria and ac_met must be given together (both or neither)`)
+    }
+    if (acCriteria.length !== acMet.length) {
+      throw new Error(`${TOOL}: ac_criteria and ac_met must have the same length (paired per criterion)`)
+    }
+    if (acEvidence !== undefined && acEvidence.length !== acCriteria.length) {
+      throw new Error(`${TOOL}: ac_evidence must match ac_criteria length (paired per criterion)`)
+    }
+    out.ac_criteria = acCriteria
+    out.ac_met = acMet
+    if (acEvidence !== undefined) out.ac_evidence = acEvidence
+  } else if (acEvidence !== undefined) {
+    throw new Error(`${TOOL}: ac_evidence requires ac_criteria and ac_met`)
+  }
+  const keyDecisions = optionalStringArray(a, 'key_decisions', TOOL)
+  if (keyDecisions !== undefined) out.key_decisions = keyDecisions
+  for (const key of ['tests_passed', 'tests_failed'] as const) {
+    const v = a[key]
+    if (v !== undefined) {
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
+        throw new Error(`${TOOL}: ${key} must be a non-negative integer`)
+      }
+      out[key] = v
+    }
+  }
+  const coverage = optionalFraction(a, 'coverage', TOOL)
+  if (coverage !== undefined) out.coverage = coverage
+  const notes = optionalString(a, 'notes', TOOL)
+  if (notes !== undefined) out.notes = notes
   for (const key of ['gate_compile', 'gate_fmt', 'gate_lint', 'gate_test'] as const) {
     const v = optionalBoolean(a, key, TOOL)
     if (v !== undefined) out[key] = v
   }
-  const coverage = optionalFraction(a, 'gate_coverage', TOOL)
-  if (coverage !== undefined) out.gate_coverage = coverage
+  const gateCoverage = optionalFraction(a, 'gate_coverage', TOOL)
+  if (gateCoverage !== undefined) out.gate_coverage = gateCoverage
   const commitHash = optionalString(a, 'commit_hash', TOOL)
   if (commitHash !== undefined) out.commit_hash = commitHash
   gateOf(out) // 组合形状先证（all-or-none / coverage 依赖）
@@ -144,7 +215,7 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate); result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source.',
+      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source.',
     parameters: {
       type: 'object',
       properties: {
@@ -152,12 +223,46 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         local_id: { type: 'string', description: 'Local id of the task being submitted.' },
         result: { type: 'string', description: "'success' or 'blocked'." },
         reason: { type: 'string', description: 'Why the task is blocked (required for result=blocked).' },
-        summary: { type: 'string', description: 'Execution summary, key decisions (required for result=success).' },
+        summary: { type: 'string', description: 'One-line result sentence (required for result=success).' },
         files: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Actually changed files, forward-slash paths.',
+          description: 'Actually changed files (flat union), forward-slash paths; when files_created/files_modified are given this must equal their union.',
         },
+        files_created: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Files created by this task (grouped; stored as files_json {created, modified}).',
+        },
+        files_modified: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Files modified by this task (grouped; stored as files_json {created, modified}).',
+        },
+        ac_criteria: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Acceptance criteria under verification — criterion texts, identical to the task definition entries, same count and order (cross-check rejects otherwise). Give together with ac_met.',
+        },
+        ac_met: {
+          type: 'array',
+          items: { type: 'boolean' },
+          description: 'Per-criterion verification result, paired with ac_criteria by index; any false on result=success rejects.',
+        },
+        ac_evidence: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'One-line proof per criterion (test/command + result; long output goes to disk, pass only the path), paired with ac_criteria by index.',
+        },
+        key_decisions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Key decisions (up to 3), split out of the summary.',
+        },
+        tests_passed: { type: 'number', description: 'Number of tests passed.' },
+        tests_failed: { type: 'number', description: 'Number of tests failed.' },
+        coverage: { type: 'number', description: 'Record-side coverage fraction 0-1 (complements gate_coverage).' },
+        notes: { type: 'string', description: 'Free-form notes.' },
         gate_compile: { type: 'boolean', description: 'Quality gate: compile passed (give all four together).' },
         gate_fmt: { type: 'boolean', description: 'Quality gate: formatting passed.' },
         gate_lint: { type: 'boolean', description: 'Quality gate: lint passed.' },
@@ -185,6 +290,22 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
           ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
           ...(parsed.files !== undefined ? { files: [...parsed.files] } : {}),
+          ...(parsed.files_created !== undefined ? { filesCreated: [...parsed.files_created] } : {}),
+          ...(parsed.files_modified !== undefined ? { filesModified: [...parsed.files_modified] } : {}),
+          ...(parsed.ac_criteria !== undefined && parsed.ac_met !== undefined
+            ? {
+                acceptanceCriteria: parsed.ac_criteria.map((criterion, i) => ({
+                  criterion,
+                  met: parsed.ac_met?.[i] === true,
+                  ...(parsed.ac_evidence?.[i] !== undefined ? { evidence: parsed.ac_evidence[i] } : {}),
+                })),
+              }
+            : {}),
+          ...(parsed.key_decisions !== undefined ? { keyDecisions: [...parsed.key_decisions] } : {}),
+          ...(parsed.tests_passed !== undefined ? { testsPassed: parsed.tests_passed } : {}),
+          ...(parsed.tests_failed !== undefined ? { testsFailed: parsed.tests_failed } : {}),
+          ...(parsed.coverage !== undefined ? { coverage: parsed.coverage } : {}),
+          ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
           ...(gate !== undefined ? { gate } : {}),
           ...(parsed.commit_hash !== undefined ? { commitHash: parsed.commit_hash } : {}),
         }

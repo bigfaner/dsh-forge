@@ -16,7 +16,15 @@
 // { code, message, data }，UI 按 code 映射状态。后续动词动词错误（DEPENDENCIES_* 等）
 // 随 2.4–2.5 同文件扩池。与 small-domains/errors.ts 的 FeatureNotFoundError 同 code 异类：
 // 四域互禁 import 彼此（Hard Rule），typed 类按域就近落位，跨 IPC 以 code 判别。
-import type { DependenciesUnmetData, TaskRef, TaskStatus, TestEvidenceRequiredData } from '@dsh-forge/contracts'
+import type {
+  AcCriteriaMismatchData,
+  AcNotMetData,
+  DependenciesUnmetData,
+  FilesUnionMismatchData,
+  TaskRef,
+  TaskStatus,
+  TestEvidenceRequiredData,
+} from '@dsh-forge/contracts'
 
 /** 校验面（Interface 10）：human = 七态 − 当前态（UI 菜单与服务端同源）；agent = claim/submit 转移矩阵 */
 export type TransitionFace = 'human' | 'agent'
@@ -310,4 +318,52 @@ export class GateSummaryRequiredError extends Error {
 /** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
 export function isGateSummaryRequiredError(e: unknown): e is GateSummaryRequiredError {
   return e instanceof GateSummaryRequiredError
+}
+
+// ───────────────── worker-lean-execution S3：结构化提交机械门（仅挂 success 结算） ─────────────────
+
+/** ERR_AC_NOT_MET（400）：success ∧ acceptanceCriteria 任一 met=false——逐项闭环校验（未逐项核验不放过）。 */
+export class AcNotMetError extends Error {
+  readonly code = 'ERR_AC_NOT_MET' as const
+  readonly data: AcNotMetData
+
+  constructor(data: AcNotMetData) {
+    super(
+      `submitTask AC 逐项核验未通过：${data.unmet.length} 项 met=false——逐项补齐证据后重新提交：\n` +
+        data.unmet.map((u) => `- ${u.criterion}${u.evidence !== undefined ? `（证据：${u.evidence}）` : ''}`).join('\n'),
+    )
+    this.name = 'AcNotMetError'
+    this.data = data
+  }
+}
+
+/** ERR_AC_CRITERIA_MISMATCH（400）：提交面 criterion 与 tasks.ac_json 定义侧镜像失配（条数/顺序/原文）。 */
+export class AcCriteriaMismatchError extends Error {
+  readonly code = 'ERR_AC_CRITERIA_MISMATCH' as const
+  readonly data: AcCriteriaMismatchData
+
+  constructor(data: AcCriteriaMismatchData) {
+    super(
+      `submitTask AC 交叉校验失败：acceptanceCriteria[].criterion 须与任务定义侧逐项对应（条数与顺序一致、判据原文相同）——\n` +
+        `定义侧：\n${data.expected.map((c) => `- ${c}`).join('\n')}\n` +
+        `提交侧：\n${data.actual.map((c) => `- ${c}`).join('\n')}`,
+    )
+    this.name = 'AcCriteriaMismatchError'
+    this.data = data
+  }
+}
+
+/** ERR_FILES_UNION_MISMATCH（400）：files 与 {created, modified} 并存且 files ≠ created ∪ modified。 */
+export class FilesUnionMismatchError extends Error {
+  readonly code = 'ERR_FILES_UNION_MISMATCH' as const
+  readonly data: FilesUnionMismatchData
+
+  constructor(data: FilesUnionMismatchData) {
+    super(
+      `submitTask files 不一致：顶层 files 必须等于 created ∪ modified（消解双存储歧义）——` +
+        `files=${JSON.stringify(data.files)} created=${JSON.stringify(data.created)} modified=${JSON.stringify(data.modified)}`,
+    )
+    this.name = 'FilesUnionMismatchError'
+    this.data = data
+  }
 }

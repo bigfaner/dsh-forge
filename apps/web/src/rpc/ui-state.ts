@@ -45,6 +45,11 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_GATE_SUMMARY_REQUIRED: 'error-bar',
   // spawn 失败 → 错误条（派发语境——任务留 in_progress 幂等重入，指引重试）
   ERR_SPAWN_FAILED: 'error-bar',
+  // ── worker-lean-execution S3（结构化提交机械门）──
+  // AC 逐项未达 / 交叉校验失配 / files 分组失配 → 错误条（结算语境原地反馈，改参重试）
+  ERR_AC_NOT_MET: 'error-bar',
+  ERR_AC_CRITERIA_MISMATCH: 'error-bar',
+  ERR_FILES_UNION_MISMATCH: 'error-bar',
 }
 
 /**

@@ -56,6 +56,42 @@ describe('parseSubmitTaskArgs（防御收窄）', () => {
     expect(parsed.commit_hash).toBe('abc123')
     expect(() => parseSubmitTaskArgs({ ...base, files: ['', 'a.ts'] })).toThrow(/non-empty strings/)
   })
+
+  it('S3 结构化面：files 分组 / AC 平行数组 / record fields 收窄与缺省键缺席', () => {
+    const parsed = parseSubmitTaskArgs({
+      ...base,
+      files_created: ['new.ts'],
+      files_modified: ['a.ts'],
+      files: ['new.ts', 'a.ts'],
+      ac_criteria: ['[AC-1] x', '[AC-2] y'],
+      ac_met: [true, false],
+      ac_evidence: ['用例绿', '命令绿'],
+      key_decisions: ['决策一'],
+      tests_passed: 9,
+      tests_failed: 0,
+      coverage: 0.88,
+      notes: 'n',
+    })
+    expect(parsed.files_created).toEqual(['new.ts'])
+    expect(parsed.files_modified).toEqual(['a.ts'])
+    expect(parsed.ac_criteria).toEqual(['[AC-1] x', '[AC-2] y'])
+    expect(parsed.ac_met).toEqual([true, false])
+    expect(parsed.ac_evidence).toEqual(['用例绿', '命令绿'])
+    expect(parsed.key_decisions).toEqual(['决策一'])
+    expect(parsed.tests_passed).toBe(9)
+    expect(parsed.tests_failed).toBe(0)
+    expect(parsed.coverage).toBe(0.88)
+    expect(parsed.notes).toBe('n')
+    // 形状拒绝面：平行数组成对纪律（半对/错位拒）
+    expect(() => parseSubmitTaskArgs({ ...base, ac_criteria: ['x'] })).toThrow(/given together/)
+    expect(() => parseSubmitTaskArgs({ ...base, ac_met: [true] })).toThrow(/given together/)
+    expect(() => parseSubmitTaskArgs({ ...base, ac_evidence: ['e'] })).toThrow(/requires ac_criteria/)
+    expect(() => parseSubmitTaskArgs({ ...base, ac_criteria: ['x', 'y'], ac_met: [true] })).toThrow(/same length/)
+    expect(() => parseSubmitTaskArgs({ ...base, ac_criteria: ['x'], ac_met: [true], ac_evidence: ['a', 'b'] })).toThrow(/match ac_criteria length/)
+    expect(() => parseSubmitTaskArgs({ ...base, ac_criteria: ['x'], ac_met: ['yes'] })).toThrow(/array of booleans/)
+    expect(() => parseSubmitTaskArgs({ ...base, tests_passed: -1 })).toThrow(/non-negative integer/)
+    expect(() => parseSubmitTaskArgs({ ...base, coverage: 2 })).toThrow(/between 0 and 1/)
+  })
 })
 
 describe('gateOf（平铺 → TaskGateReport）', () => {

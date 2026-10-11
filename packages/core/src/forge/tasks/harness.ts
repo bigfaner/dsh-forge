@@ -167,6 +167,8 @@ export function seedRecord(
     reason?: string
     summary?: string
     filesJson?: string
+    acJson?: string
+    recordFieldsJson?: string
     gateJson?: string
     digest?: string
     loopSourced?: boolean
@@ -178,8 +180,8 @@ export function seedRecord(
   const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, summary, files_json,
-       gate_json, commit_hash, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+       ac_json, record_fields_json, gate_json, commit_hash, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
   ).run(
     taskId,
     o.verb ?? 'add',
@@ -188,6 +190,8 @@ export function seedRecord(
     o.reason ?? null,
     o.summary ?? null,
     o.filesJson ?? null,
+    o.acJson ?? null,
+    o.recordFieldsJson ?? null,
     o.gateJson ?? null,
     o.digest ?? null,
     o.loopSourced === true ? 1 : 0,

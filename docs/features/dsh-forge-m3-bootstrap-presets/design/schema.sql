@@ -147,7 +147,12 @@ CREATE TABLE task_records (
     to_status       TEXT,
     reason          TEXT,                          -- transition 与 blocked submit 必带(服务内校验)
     summary         TEXT,                          -- 执行摘要(keyDecisions 等自由文本)
-    files_json      TEXT,                          -- 实际改动文件清单(JSON 路径数组)
+    files_json      TEXT,                          -- 实际改动文件清单(S3 worker-lean-execution 形制升级:
+                                                    --   新行 JSON {created,modified};历史行旧扁平路径数组——读面两形制归一)
+    ac_json         TEXT,                          -- AC 逐项核验结果(S3:JSON [{criterion,met,evidence?}]——
+                                                    --   与 tasks.ac_json 定义侧镜像成对;submit 交叉校验)
+    record_fields_json TEXT,                       -- 结构化记录字段(S3:JSON {keyDecisions,testsPassed,
+                                                    --   testsFailed,coverage,notes}——从 summary 拆出的结构化面)
     gate_json       TEXT,                          -- {compile,fmt,lint,test[,coverage]}——gate 任务数字摘要承载体
     commit_hash     TEXT,
     dispatch_digest TEXT,                          -- claim 简报指纹 sha-256 前 12 hex(全文 = worker 会话日志)

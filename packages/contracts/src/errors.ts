@@ -38,6 +38,10 @@ export const ERROR_CODES = [
   'ERR_TEST_EVIDENCE_REQUIRED', // → TestEvidenceRequiredError：submitTask AC 证据缺席·gate.test !== true（400；data 带 AC 清单）
   'ERR_GATE_SUMMARY_REQUIRED', // → GateSummaryRequiredError：type='gate' 任务缺数字摘要（400）
   'ERR_SPAWN_FAILED', // → SpawnFailedError：driver spawn 异常——任务留 in_progress 幂等重入径（500）
+  // ── worker-lean-execution S3（结构化提交机械门） ──
+  'ERR_AC_NOT_MET', // → AcNotMetError：success ∧ acceptanceCriteria 任一 met=false（400；data 带未达清单）
+  'ERR_AC_CRITERIA_MISMATCH', // → AcCriteriaMismatchError：AC 交叉校验——提交面 criterion 与 tasks.ac_json 定义侧条数/顺序/原文不符（400）
+  'ERR_FILES_UNION_MISMATCH', // → FilesUnionMismatchError：files 与 {created, modified} 并存且 files ≠ created ∪ modified（400）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -84,4 +88,27 @@ export interface SuspectedMoveData {
 export interface TestEvidenceRequiredData {
   /** 判据 AC 清单（tasks.ac_json 解码形原样带回） */
   acceptanceCriteria: readonly string[]
+}
+
+// ── worker-lean-execution S3：结构化提交机械门 data 载荷 ──
+
+/** ERR_AC_NOT_MET data 载荷：逐项未达清单（criterion + evidence 原样带回） */
+export interface AcNotMetData {
+  /** met=false 的核验项（同序投影） */
+  unmet: readonly { criterion: string; evidence?: string }[]
+}
+
+/** ERR_AC_CRITERIA_MISMATCH data 载荷：定义侧 vs 提交侧 criterion 镜像失配 */
+export interface AcCriteriaMismatchData {
+  /** tasks.ac_json 定义侧清单（同序） */
+  expected: readonly string[]
+  /** 提交面 acceptanceCriteria[].criterion 清单（同序） */
+  actual: readonly string[]
+}
+
+/** ERR_FILES_UNION_MISMATCH data 载荷：files ≠ created ∪ modified 失配三方原样带回 */
+export interface FilesUnionMismatchData {
+  files: readonly string[]
+  created: readonly string[]
+  modified: readonly string[]
 }

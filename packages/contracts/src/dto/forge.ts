@@ -122,6 +122,51 @@ export interface TaskGateReport {
   coverage?: number
 }
 
+/**
+ * AC 逐项核验结果（worker-lean-execution S3——task_records.ac_json 解码形，与 tasks.ac_json
+ * 定义侧 string[] 镜像成对；criterion 与定义侧逐项对应——submit 交叉校验保镜像审计）。
+ */
+export interface TaskAcResult {
+  /** 判据原文（= 定义侧 tasks.ac_json 同序同文项） */
+  criterion: string
+  /** 逐项核验结果（success ∧ 任一 false → 拒） */
+  met: boolean
+  /** 一行简要证明（用例/命令 + 结果；长输出落盘只带路径） */
+  evidence?: string
+}
+
+/**
+ * 提交记录结构化字段（worker-lean-execution S3——task_records.record_fields_json 解码形；
+ * keyDecisions/testsPassed/testsFailed/coverage/notes——从 summary 自由文本拆出的结构化面）。
+ */
+export interface TaskRecordFields {
+  /** 关键决策（≤3 条独立数组） */
+  keyDecisions?: string[]
+  testsPassed?: number
+  testsFailed?: number
+  /** 覆盖率小数（0–1；与 gate.coverage 互补——口径同） */
+  coverage?: number
+  notes?: string
+}
+
+/**
+ * files_json v2 形制（worker-lean-execution S3——{created, modified} 分组消解双存储冗余；
+ * 历史行旧扁平 string[] 读面归一——toTaskRecordEntry/actualFiles 双形制解码）。
+ */
+export interface TaskFilesPayload {
+  created?: string[]
+  modified?: string[]
+}
+
+/** files 分组归一（读面单源：{created, modified} → 平铺并集，created 序优先） */
+export function taskFilesUnion(payload: TaskFilesPayload): string[] {
+  const union: string[] = []
+  for (const f of [...(payload.created ?? []), ...(payload.modified ?? [])]) {
+    if (!union.includes(f)) union.push(f)
+  }
+  return union
+}
+
 /** tasks 行应用层形状（claim/transition 返回体；身份双轨恒含 taskId + slug + localId） */
 export interface TaskSnapshot {
   /** uuid 代理主键（FK/前端/RPC 引用锚，恒稳定） */
@@ -205,8 +250,21 @@ export interface TaskRecordEntry {
   reason?: string
   /** 执行摘要（keyDecisions 等自由文本） */
   summary?: string
-  /** 实际改动文件清单（files_json 解码形；正斜杠路径） */
+  /** 实际改动文件清单（files_json 解码形·平铺并集——历史扁平行与新 {created,modified} 行两形制归一；正斜杠路径） */
   files?: string[]
+  /** 新建文件分组（files_json v2 解码形——历史扁平行键缺席） */
+  filesCreated?: string[]
+  /** 修改文件分组（files_json v2 解码形——历史扁平行键缺席） */
+  filesModified?: string[]
+  /** AC 逐项核验结果（task_records.ac_json 解码形——与 tasks.ac_json 定义侧镜像成对；旧行键缺席） */
+  acceptanceCriteria?: TaskAcResult[]
+  /** 关键决策（record_fields_json 解码形——旧行键缺席；以下同族） */
+  keyDecisions?: string[]
+  testsPassed?: number
+  testsFailed?: number
+  /** 记录侧覆盖率小数（与 gate.coverage 互补） */
+  coverage?: number
+  notes?: string
   gate?: TaskGateReport
   commitHash?: string
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
@@ -401,17 +459,30 @@ export interface ClaimTaskResult {
   reclaimed: boolean
 }
 
-/** submitTask 入参 */
+/** submitTask 入参（S3 结构化提交——老 forge record.json 形制回归） */
 export interface SubmitTaskInput {
   projectId: string
   taskRef: TaskRef
   result: 'success' | 'blocked'
   /** blocked 必带（ERR_REASON_REQUIRED） */
   reason?: string
-  /** success 必带（ERR_SUMMARY_REQUIRED） */
+  /** success 必带（ERR_SUMMARY_REQUIRED）——一句话结果 */
   summary?: string
-  /** 实际改动文件清单（正斜杠路径；缺省由 commit 只读查找回填） */
+  /** 实际改动文件清单（正斜杠路径；缺省由 commit 只读查找回填；与分组并存时校验 files = created ∪ modified） */
   files?: string[]
+  /** 新建文件分组（→ files_json v2 {created, modified}） */
+  filesCreated?: string[]
+  /** 修改文件分组（→ files_json v2 {created, modified}） */
+  filesModified?: string[]
+  /** AC 逐项核验结果（→ task_records.ac_json；criterion 与 tasks.ac_json 定义侧同序同文——交叉校验不符即拒；success ∧ 任一 met=false → 拒） */
+  acceptanceCriteria?: TaskAcResult[]
+  /** 结构化记录字段（→ record_fields_json） */
+  keyDecisions?: string[]
+  testsPassed?: number
+  testsFailed?: number
+  /** 记录侧覆盖率小数（与 gate.coverage 互补） */
+  coverage?: number
+  notes?: string
   gate?: TaskGateReport
   commitHash?: string
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */

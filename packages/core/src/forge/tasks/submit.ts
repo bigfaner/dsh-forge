@@ -18,14 +18,26 @@
 // ERR_TEST_EVIDENCE_REQUIRED（data/错误信息逐行含 AC 清单——SC7 机械判据，Hard Rule 禁裸
 // 错误码）。blocked submit 不经双门（C4 失败分诊走 fix 链——Go 先例 validateRecordData 非
 // completed 早退；受阻提交可带失败 gate 载荷原样落账沿「不服务内判红」注记）。
+// S3（worker-lean-execution·结构化提交）扩池：AC 交叉校验（criterion 镜像）→ AC 逐项闭环
+// （met=false 拒）→ 既有 gate.test 证据门；files 分组一致性（files = created ∪ modified）；
+// 入库 ac_json/record_fields_json/files_json v2 {created, modified}（均仅 success 挂门，blocked 不经）。
 //
 // 边界注记：gate 载荷原样落账不服务内判红（gate 执行归 executor 技能纪律——失败分诊 = blocked
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
 // 与 transitionTask 2.5 同裁决）；files/gate 缺省 = 列 NULL（files 回填归读面 git 查找）。
 import type { SubmitTaskInput, SubmitTaskResult } from '@dsh-forge/contracts'
+import { taskFilesUnion } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
-import { GateSummaryRequiredError, ReasonRequiredError, SummaryRequiredError, TestEvidenceRequiredError } from './errors.js'
+import {
+  AcCriteriaMismatchError,
+  AcNotMetError,
+  FilesUnionMismatchError,
+  GateSummaryRequiredError,
+  ReasonRequiredError,
+  SummaryRequiredError,
+  TestEvidenceRequiredError,
+} from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { resolvePhaseGuardFeature, resolveTaskRef } from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
@@ -65,8 +77,49 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     //    仅挂 success 结算——blocked submit 不经（C4）。
     if (input.result === 'success') {
       const acceptanceCriteria = row.ac_json !== null ? (JSON.parse(row.ac_json) as string[]) : []
+
+      // ②d AC 交叉校验（S3 结构化提交——定义/结果镜像审计）：提交面 acceptanceCriteria[].criterion
+      //    与定义侧 tasks.ac_json 逐项对应（条数与顺序一致、判据原文相同）——不符即拒。
+      //    提交面缺席 = 未带结构化 AC（沿既有 gate.test 证据门路径，R13 兼容回落）。
+      if (input.acceptanceCriteria !== undefined) {
+        const actual = input.acceptanceCriteria.map((ac) => ac.criterion)
+        const mismatched =
+          actual.length !== acceptanceCriteria.length ||
+          actual.some((criterion, i) => criterion !== acceptanceCriteria[i])
+        if (mismatched) {
+          throw new AcCriteriaMismatchError({ expected: acceptanceCriteria, actual })
+        }
+      }
+
+      // ②e AC 逐项闭环门（S3）：success ∧ 任一 met=false → 拒（未逐项核验不放过）；blocked 不经（C4）。
+      if (input.acceptanceCriteria !== undefined) {
+        const unmet = input.acceptanceCriteria
+          .filter((ac) => ac.met !== true)
+          .map((ac) => (ac.evidence !== undefined ? { criterion: ac.criterion, evidence: ac.evidence } : { criterion: ac.criterion }))
+        if (unmet.length > 0) {
+          throw new AcNotMetError({ unmet })
+        }
+      }
+
+      // 既有 AC 证据门（图 8 C/D 节——SC7 机械判据）：ac_json 非空 ∧ gate.test !== true → 拒
+      //    （data/错误信息逐行含 AC 清单）；空清单 [] = 无 AC 任务直通不校验（与 NULL 同形）。
       if (acceptanceCriteria.length > 0 && input.gate?.test !== true) {
         throw new TestEvidenceRequiredError({ acceptanceCriteria })
+      }
+    }
+
+    // ②f files 一致性校验（S3——消解双存储歧义）：顶层 files 与 {created, modified} 分组并存时
+    //    files 必须等于并集（有序集相等）；仅在分组在场时校验（纯扁平行沿旧径）。
+    if (input.filesCreated !== undefined || input.filesModified !== undefined) {
+      const created = input.filesCreated ?? []
+      const modified = input.filesModified ?? []
+      if (input.files !== undefined) {
+        const union = taskFilesUnion({ created, modified })
+        const same =
+          union.length === input.files.length && union.every((f, i) => f === input.files?.[i])
+        if (!same) {
+          throw new FilesUnionMismatchError({ files: input.files, created, modified })
+        }
       }
     }
 
@@ -87,20 +140,40 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       })
     }
 
-    // ⑤ 转移 + submit 记录（结构化负载：files/gate/commit + reason|summary + 执行会话——
-    //    与 claim 的派发会话相异可判，SC6③ 双源）
+    // ⑤ 转移 + submit 记录（结构化负载：files 分组/ac/record_fields/gate/commit + reason|summary
+    //    + 执行会话——与 claim 的派发会话相异可判，SC6③ 双源）。files_json v2 = {created, modified}
+    //    （分组在场即对象形；纯扁平行沿旧 string[] 形——读面两形制归一）。
+    const filesPayload =
+      input.filesCreated !== undefined || input.filesModified !== undefined
+        ? JSON.stringify({
+            created: input.filesCreated ?? [],
+            modified: input.filesModified ?? [],
+          })
+        : input.files === undefined
+          ? null
+          : JSON.stringify(input.files)
+    const recordFields = {
+      ...(input.keyDecisions !== undefined ? { keyDecisions: input.keyDecisions } : {}),
+      ...(input.testsPassed !== undefined ? { testsPassed: input.testsPassed } : {}),
+      ...(input.testsFailed !== undefined ? { testsFailed: input.testsFailed } : {}),
+      ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+    }
+    const hasRecordFields = Object.keys(recordFields).length > 0
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(toStatus, now, row.id)
     db.prepare(
       `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, summary, files_json,
-         gate_json, commit_hash, actor, session_id, created_at, updated_at)
-       VALUES (?, 'submit', ?, ?, ?, ?, ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
+         ac_json, record_fields_json, gate_json, commit_hash, actor, session_id, created_at, updated_at)
+       VALUES (?, 'submit', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
     ).run(
       row.id,
       row.task_status,
       toStatus,
       input.result === 'blocked' ? (input.reason as string) : null,
       input.result === 'success' ? (input.summary as string) : null,
-      input.files === undefined ? null : JSON.stringify(input.files),
+      filesPayload,
+      input.acceptanceCriteria === undefined ? null : JSON.stringify(input.acceptanceCriteria),
+      hasRecordFields ? JSON.stringify(recordFields) : null,
       input.gate === undefined ? null : JSON.stringify(input.gate),
       input.commitHash ?? null,
       input.sessionId,

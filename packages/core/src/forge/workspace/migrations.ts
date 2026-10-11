@@ -11,6 +11,11 @@
 // idx_tasks_feature_status → idx_tasks_source_status；迁移机制 = v1 直改（无迁移·存量开发库废弃）。
 // S3（run-tasks-host-command）v1 直改两处：tasks ck_tasks_status 八态（+interrupted）；
 // task_records +loop_sourced（循环来源标记——claim 写入/reconcileInterrupted 消费，R1 读面零感知）。
+// S3（worker-lean-execution·结构化提交）v1 追加式直改：task_records +ac_json（AC 逐项核验结果
+// ——与 tasks.ac_json 定义侧镜像成对）+record_fields_json（keyDecisions/testsPassed/testsFailed/
+// coverage/notes 结构化字段）；files_json 形制升级 {created, modified}（列不变形制变——历史行旧
+// 扁平形制读面归一）。只加列不 ALTER 破坏 append-only 四触发器（R12）；v1 直改沿仓规——存量
+// 开发库废弃重扫（头注既定纪律）。
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
@@ -128,6 +133,8 @@ BEGIN SELECT RAISE(ABORT, 'feature_records: append-only violation (delete)'); EN
     reason          TEXT,
     summary         TEXT,
     files_json      TEXT,
+    ac_json         TEXT,
+    record_fields_json TEXT,
     gate_json       TEXT,
     commit_hash     TEXT,
     dispatch_digest TEXT,
