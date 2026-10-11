@@ -23,6 +23,9 @@
  *   D40 展开态收起钮 = logoRow 内 brand 图标右侧（2026-10-10 用户追加裁决「收起左侧栏
  *      跟 brand 图标同一行，在 brand 图标的右侧」——展开态官方 WCO toggle position:fixed
  *      标题栏钮退役，static 回流 logoRow + 官方 iconButton 家族 36px 刻度，D2 块后专节）。
+ *   D41 标题带中区段白漆（2026-10-11 用户报障「中间区最上方横条浅灰，预期除背景图外
+ *      统一白色」——D39 同族延伸：WCO frame::before 官方全宽 sidebar-fill 漆，侧栏右缘
+ *      以右（中列 + 右栏列带段）对冲 bg-base，侧栏上方保持官方族色，块尾专节）。
  *
  * 锚定纪律（brand.css 先例——hash 类名不稳定不落锚），全部经稳定结构面选取：
  *   - frame = [data-shell-overlay] 的父级（overlayLayer 为 frame 唯一直属渲染点）；
@@ -75,8 +78,11 @@ html[data-windows-titlebar] div:has(> [data-shell-overlay])::after {
 
 /* D31 收起态变体：覆层轨右缘竖线同上延（官方收起 cols.sidebar=0 ⇒ 上式 var 不可用；
  * left 58 = 轨宽 59 − 1px——与收起轨 border-right（D1 规则收起态仍绘）同一像素列衔接，
- * 「对齐轨右缘」＝线段右缘止于 59px 轨缘线，与带下段零阶梯） */
-html[data-windows-titlebar] [data-sidebar-collapsed='true']::after {
+ * 「对齐轨右缘」＝线段右缘止于 59px 轨缘线，与带下段零阶梯）。
+ * 选择器 = 属性限定 frame 锚（D41 落地时随修：弱式 `[data-sidebar-collapsed='true']::after`
+ * (0,2,2) 被展开态 frame 结构锚 (0,2,3) 盖死——收起态 left 实取 calc(0px − 1px) 线脱窗，
+ * 2026-10-11 特异性对账修复；特异性 (0,3,3) 恒压展开态）。 */
+html[data-windows-titlebar] div[data-sidebar-collapsed='true']:has(> [data-shell-overlay])::after {
   left: 58px; /* dsw-raw 轨右缘 1px 列（59 轨宽刻度 − 1px 竖线） */
 }
 
@@ -238,4 +244,44 @@ html[data-windows-titlebar] body[data-ds-dark-theme] [data-conversation-content]
  * 非 WCO 零波及：锚定 html[data-windows-titlebar]（pin ⑮-6 既有断言面自动覆盖）。 */
 html[data-windows-titlebar] div:has(> [data-shell-overlay]) > div:nth-child(3) {
   background: var(--dsw-alias-bg-base);
+}
+
+/* ── D41：标题带中区段白漆（WCO frame::before 官方 sidebar-fill 全宽漆对冲）──
+ * 根因（0.2.0-rc.2 源码核验，pin ⑮-2 既有事实面）：WCO 官方形态 frame::before = 顶部
+ * 32px 全宽拖拽条，背景 var(--dsw-specific-sidebar-fill)（浅灰——令牌语义「Sidebar
+ * column and title-row background」，标题带官方归属侧栏族色）；中列 centerCol 显式
+ * bg-base 自带区下沿起绘 ⇒ 中区顶部压一条浅灰横带，与下方白色成色差（侧栏上方同色
+ * 零接缝，色差仅中列/右栏带段显形——2026-10-11 用户报障面）。
+ * 产品裁决（2026-10-11 用户裁决「预期中间区除了背景图之外统一白色」＝ D39「中间区域
+ * 及 dockkit 上方跟下方保持一样的颜色」同族延伸）＝ 带区侧栏右缘以右（中列 + 右栏列
+ * 全段）显式白漆对冲 bg-base，仅侧栏上方保持官方族色。
+ * 落点 = frame::before 背景重漆（零几何/拖拽面声明——官方 -webkit-app-region:drag
+ * 自持，仅换漆）：
+ *   - 硬截止横向渐变，截止点 = --dsh-windows-sidebar-width（官方帧内联变量——D31 既有
+ *     消费，随拖宽实时联动）；截止列与 D31 带内竖线（[w-1,w] 像素列）右缘重合，色缝
+ *     被竖线压住零阶梯；
+ *   - 收起态变体：官方 cols.sidebar=0（轨缩零——var 不可用，D31 同病），截止点取 59px
+ *     （D2 覆层轨外缘——轨上方保持侧栏族色，与 D31 收起态 left:58px 同列衔接）。
+ * 亮/暗随 sidebar-fill/bg-base 双令牌联动（零新机械）；右上原生窗口钮带（create.ts
+ * titleBarOverlay color 白）与白漆段同色融合。非 WCO 零波及：锚定
+ * html[data-windows-titlebar]（pin ⑮-6 既有断言面自动覆盖）。 */
+html[data-windows-titlebar] div:has(> [data-shell-overlay])::before {
+  background: linear-gradient(90deg,
+      var(--dsw-specific-sidebar-fill) 0,
+      var(--dsw-specific-sidebar-fill) var(--dsh-windows-sidebar-width),
+      var(--dsw-alias-bg-base) var(--dsh-windows-sidebar-width),
+      var(--dsw-alias-bg-base) 100%);
+}
+
+/* D41 收起态变体：截止点 = 59px 轨外缘（官方 cols.sidebar=0——var 不可用；
+ * dsw-raw D2 覆层轨总宽刻度，裁决值 59）。
+ * 选择器 = 属性限定 frame 锚（div[data-sidebar-collapsed]:has —特异性 (0,3,3) 压过
+ * 展开态 frame 结构锚 (0,2,3)）——弱式 `[data-sidebar-collapsed='true']::before`
+ * (0,2,2) 会被展开态规则盖死（收起全白带），D31 同病随修（见下节）。 */
+html[data-windows-titlebar] div[data-sidebar-collapsed='true']:has(> [data-shell-overlay])::before {
+  background: linear-gradient(90deg,
+      var(--dsw-specific-sidebar-fill) 0,
+      var(--dsw-specific-sidebar-fill) 59px, /* dsw-raw D2 覆层轨总宽刻度（裁决值 59） */
+      var(--dsw-alias-bg-base) 59px, /* dsw-raw 同上 */
+      var(--dsw-alias-bg-base) 100%);
 }

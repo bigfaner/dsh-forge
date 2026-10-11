@@ -11,7 +11,7 @@
 //     /regionArea 结构锚的来源）；
 //   - ui-plugin-manager / ui-settings-general：panellist 插件行与 sidebar.settings 设置行
 //     官方占用（D2 轨内 ≥4 官方图标的承载面）。
-// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31/D32/D39/D40
+// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31/D32/D39/D40/D41
 // 验收的机械面）。
 // hash 类名（pI_x6G_/hHd-Xa_）为构建期产物不逐字 pin——一律取 hash 无关的结构事实或
 // hash 容差正则；任一事实漂移（升级窗口）→ 本 pin 红 → wco.css 偏离块须显式对账。
@@ -157,7 +157,11 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(band).toContain('width: 1px')
     expect(band).toContain('background: var(--dsw-alias-border-l3)')
     expect(band).toContain('-webkit-app-region: drag')
-    expect(ruleOf("\\[data-sidebar-collapsed='true'\\]::after")).toContain('left: 58px')
+    // 收起态变体 = 属性限定 frame 锚（(0,3,3) 恒压展开态结构锚 (0,2,3)——2026-10-11
+    // D41 落地时特异性对账修复：弱式选择器被展开态盖死、线脱窗至 -1px）
+    expect(ruleOf("div\\[data-sidebar-collapsed='true'\\]:has\\(> \\[data-shell-overlay\\]\\)::after")).toContain(
+      'left: 58px',
+    )
   })
 
   it('D2 覆层轨：收起态 sidebarCol 绝对定位 59px + 顶起于标题栏带；centerCol margin 让位', () => {
@@ -253,6 +257,21 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(body).toContain('background: var(--dsw-alias-bg-base)')
   })
 
+  it('D41 标题带中区段白漆：frame::before 硬截止渐变（侧栏右缘以右 bg-base，截止点随拖宽联动）+ 收起态 59px 轨外缘变体', () => {
+    const band = ruleOf('div:has\\(> \\[data-shell-overlay\\]\\)::before')
+    expect(band).toContain('background: linear-gradient(90deg,')
+    // 双令牌硬截止：侧栏段 sidebar-fill、中区/右栏段 bg-base——亮/暗随令牌联动
+    expect(band).toContain('var(--dsw-specific-sidebar-fill) var(--dsh-windows-sidebar-width)')
+    expect(band).toContain('var(--dsw-alias-bg-base) var(--dsh-windows-sidebar-width)')
+    expect(band).toContain('var(--dsw-alias-bg-base) 100%')
+    expect(band).not.toContain('-webkit-app-region') // 拖拽面官方自持——本规则仅换漆（drag 行为零波及）
+    // 收起态变体 = 属性限定 frame 锚（(0,3,3) 恒压展开态 (0,2,3)——弱式选择器会被盖死）
+    const collapsed = ruleOf("div\\[data-sidebar-collapsed='true'\\]:has\\(> \\[data-shell-overlay\\]\\)::before")
+    expect(collapsed).toContain('var(--dsw-specific-sidebar-fill) 59px') /* dsw-raw 刻度断言（D2 轨宽） */
+    expect(collapsed).toContain('var(--dsw-alias-bg-base) 59px')
+    expect(collapsed).not.toContain('var(--dsh-windows-sidebar-width)') // 收起 cols.sidebar=0——var 不可用
+  })
+
   it('非 WCO 零波及：全部规则锚定 html[data-windows-titlebar]（D2 收起态另锚 data-sidebar-collapsed）', () => {
     const rules = css.match(/^[^\s@][^{]*\{/gm) ?? []
     expect(rules.length).toBeGreaterThan(0)
@@ -260,7 +279,9 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
       expect(selector).toContain('[data-windows-titlebar]')
     }
     const collapsed = css.match(/html\[data-windows-titlebar\] \[data-sidebar-collapsed='true'\][^{]*\{/g) ?? []
-    // 覆层轨/让位/根 padding/logoRow/toggle/newSession/三区 un-hide（末组三选择器共体）
+    // 覆层轨/让位/根 padding/logoRow/toggle/newSession/三区 un-hide（末组三选择器共体）；
+    // D31/D41 收起态变体走属性限定 frame 锚（div[data-sidebar-collapsed]——特异性对账，
+    // 不落本弱式选择器族）
     expect(collapsed.length).toBeGreaterThanOrEqual(7)
   })
 
@@ -272,6 +293,7 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(css).toContain('D32')
     expect(css).toContain('D39')
     expect(css).toContain('D40')
+    expect(css).toContain('D41')
     // 令牌 lint 口径（lint-tokens TOKEN_PROPS 面）：padding/margin/gap/radius 裸 px 行
     // 均须随行 dsw-raw 注记（59/18/10/6/36/12px 结构刻度族——width/height/z-index 非令牌面）
     const pxLines = css
