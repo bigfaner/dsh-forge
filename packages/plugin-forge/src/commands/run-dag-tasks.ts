@@ -42,6 +42,10 @@ export interface RunDagTasksDeps {
   readonly resolveProjectId: ProjectIdResolver
   /** userQuestions.ask 最小面（可选——缺席 = 无参枚举/跑动中问询降级为指引文本，R3 fail-soft 同源） */
   readonly ask?: EscalationAskFace
+  /** 会话 id → agentsRegistry 活根解析（可选——1.18 指令单行 steer 目标解析；缺席 = 退回
+   * ctx.parent fallback，向后兼容。与 escalation/narration 同款装配形态：registry 命中 =
+   * 活根，splice 实证可收件） */
+  readonly resolveAgent?: (ownerSessionId: string) => unknown
 }
 
 // ─────────────────────────── 单查询枚举（「尚有非终态任务的任务源」） ───────────────────────────
@@ -246,7 +250,9 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
   return { kind: 'success', text: '未选择任务源，未启动派发循环——可带 slug 直通：/run-dag-tasks <source-slug>' }
 }
 
-/** 跑动中再触发：查看/停止/替换问询（停止/替换恒经本会话作用域——decisions #20） */
+/** 跑动中再触发：查看/停止/替换问询（停止/替换恒经本会话作用域——decisions #20）
+ *  1.18 核验：本径零 commitDispatchLine/steer 触达——仅 driver.activeOf/stop + ask 面投递；
+ *  ask 的 agent 活根解析归上游 escalation/answerer（resolveAgent 同源），无 undefined.send 同类面。 */
 async function handleRunning(deps: RunDagTasksDeps, ctx: InvokeContext, running: LoopRecord, slug: string): Promise<ForgeCommandResult> {
   if (deps.ask === undefined) {
     return runningView(running) // 问询面缺席 = 降级为查看文本（fail-soft 同源）
@@ -320,7 +326,9 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
  * 静默失败 = 用户「没有任何反应」）。
  */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
-  const commit = commitDispatchLine(ctx.parent, source) // 先落实会话（转录承载 + 非 blank 化）
+  // 先落实会话（转录承载 + 非 blank 化）——1.18 起 steer 目标恒先经 agentsRegistry 解析活根
+  // （ctx.parent 仅 registry 未命中时的 fallback，向后兼容）
+  const commit = commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source)
   const result = await deps.driver.start({
     source,
     ownerSessionId: ctx.sessionId,
@@ -332,7 +340,16 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
   }
   const base = `任务源 ${source.slug} 的派发循环已启动`
-  return commit.committed ? { kind: 'success', text: base } : { kind: 'success', text: `${base}——注意：指令单行提交失败（${commit.reason}），会话可能仍处空相位，启动叙述或不可见` }
+  if (commit.committed) return { kind: 'success', text: base }
+  // registry 未命中（会话运行时确实不存在/agent 缺席）→ 明确 error 回执指引激活，不静默
+  // 不 wedge、不回滚已启动的循环（1.14 语义保持——循环照常，仅单行提交面可见失败）
+  if (commit.registryMissed) {
+    return {
+      kind: 'error',
+      text: `${base}，但指令单行提交失败（${commit.reason}）——会话运行时未就绪。请先在会话中发送任意消息激活会话，或经任务面板派发按钮新建会话后重试；已启动的循环不受影响`,
+    }
+  }
+  return { kind: 'success', text: `${base}——注意：指令单行提交失败（${commit.reason}），会话可能仍处空相位，启动叙述或不可见` }
 }
 
 /**
@@ -343,19 +360,46 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
  * 三旅程断言面）。agent.steer 收件 = idle 驱动开 turn（上游契约），转录承载与转录面切
  * 换同径兑现。
  *
- * fail-soft 纪律（R3 防御读取同源 + 1.14 可见性修订）：steer 面缺席/非函数/投递抛错 =
- * 不回滚启动、不外抛，但不再零痕迹——返回失败态（调用方产出可见回执）并保留 console.warn
- * 告警日志（SC7「注入失败循环照常结束」同源）。
+ * fail-soft 纪律（R3 防御读取同源 + 1.14 可见性修订 + 1.18 活根定罪修复）：steer 面
+ * 缺席/非函数/投递抛错 = 不回滚启动、不外抛，但不再零痕迹——返回失败态（调用方产出可见
+ * 回执）并保留 console.warn 告警日志（SC7「注入失败循环照常结束」同源）。
+ *
+ * 1.18 steer 目标活根化（真机定罪：两容器同症状 `undefined.send`）：1.14 直用 ctx.parent
+ * （command invocation agent 把手）——对从未开启过回合的会话，该把手的运行时内件未初始化，
+ * steer 内部 undefined.send 抛错。对照实证：notice/escalation 均经 agentsRegistry.get
+ * (sessionId) 解析活根且收件正常——本函数同款：resolveAgent 命中 = 活根（splice 实证可
+ * 收件）；未命中 = 会话运行时确实不存在 → fallback ctx.parent（向后兼容——registry 注入
+ * 缺席的旧装配形态）；fallback 亦无 steer 面 = registryMissed 败态（调用方 error 回执
+ * 指引激活）。
  */
-function commitDispatchLine(agent: unknown, source: ContainerRef): { committed: boolean; reason?: string } {
-  const steer = (agent as { steer?: (message: unknown) => void } | undefined)?.steer
-  if (typeof steer !== 'function') return { committed: false, reason: 'steer 面缺席' }
+interface CommitOutcome {
+  committed: boolean
+  /** resolveAgent 在场但未解析到活根（fallback 亦未能提交时 = 会话运行时未就绪信号） */
+  registryMissed: boolean
+  reason?: string
+}
+
+function commitDispatchLine(
+  resolveAgent: ((ownerSessionId: string) => unknown) | undefined,
+  sessionId: string,
+  fallback: unknown,
+  source: ContainerRef,
+): CommitOutcome {
+  const registryAgent = resolveAgent?.(sessionId)
+  const viaRegistry = registryAgent !== undefined
+  const target = viaRegistry ? registryAgent : fallback
+  const steer = (target as { steer?: (message: unknown) => void } | undefined)?.steer
+  if (typeof steer !== 'function') {
+    const reason = viaRegistry ? 'registry 活根 steer 面缺席' : 'steer 面缺席'
+    console.warn(`forge dispatch line commit failed (${source.slug}): ${reason}`)
+    return { committed: false, registryMissed: !viaRegistry && resolveAgent !== undefined, reason }
+  }
   try {
     steer(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
-    return { committed: true }
+    return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)
     console.warn(`forge dispatch line commit failed (${source.slug}): ${reason}`)
-    return { committed: false, reason }
+    return { committed: false, registryMissed: !viaRegistry && resolveAgent !== undefined, reason }
   }
 }

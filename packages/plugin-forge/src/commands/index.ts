@@ -17,12 +17,14 @@ export type { StopDagTasksDeps } from './stop-dag-tasks.js'
 /** 注册名集（序 = 注册序——plugin.test pin 锚；S5 GUI DISPATCH_COMMAND_PREFIX 同名锚） */
 export const FORGE_COMMAND_NAMES = [RUN_DAG_TASKS_NAME, STOP_DAG_TASKS_NAME] as const
 
-/** 指令定义工厂依赖（driver 单例 + core 读面 + 工作区解析 + 问询面可缺席） */
+/** 指令定义工厂依赖（driver 单例 + core 读面 + 工作区解析 + 问询面可缺席 + 活根解析可缺席） */
 export interface ForgeCommandsDeps {
   readonly driver: LoopDriver
   readonly tasks: ForgeTasksService
   readonly resolveProjectId: ProjectIdResolver
   readonly ask?: EscalationAskFace
+  /** agentsRegistry 活根解析（1.18——指令单行 steer 目标；缺席 = ctx.parent fallback） */
+  readonly resolveAgent?: (ownerSessionId: string) => unknown
 }
 
 /** 指令定义组（S2 两枚——描述 = 发现 UI 用户可读文案） */

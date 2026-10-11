@@ -228,6 +228,9 @@ const forgePlugin: ForgePlugin = Object.assign(
           tasks: ctx.forgeTasks,
           resolveProjectId,
           ...(askFace !== undefined ? { ask: askFace } : {}),
+          // 1.18 活根解析随载（同 escalation 装配形态）——指令单行 steer 目标经 agentsRegistry
+          // 解析活根，registry 未命中才退回 ctx.parent fallback（真机 undefined.send 定罪修复）
+          ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
         })
         const registered = [commands.register(forgeCommands.runDagTasks), commands.register(forgeCommands.stopDagTasks)]
         disposeCommands = () => {

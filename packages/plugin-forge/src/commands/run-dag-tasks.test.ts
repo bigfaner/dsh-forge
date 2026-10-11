@@ -150,13 +150,14 @@ function answerLabel(label: string) {
   }
 }
 
-/** 依赖组（缺省 = 已注册工作区 + 空池 + 无问询） */
+/** 依赖组（缺省 = 已注册工作区 + 空池 + 无问询 + 无活根解析） */
 function depsOf(options: {
   cards?: TaskCard[]
   driver?: LoopDriver
   ask?: ReturnType<typeof askStub>['face']
   cwd?: string
   listThrows?: Error
+  resolveAgent?: (ownerSessionId: string) => unknown
 }) {
   const driver = options.driver ?? driverStub().driver
   const tasks = tasksStub(options.cards ?? [], options.listThrows !== undefined ? (() => { throw options.listThrows }) as never : undefined)
@@ -166,6 +167,7 @@ function depsOf(options: {
       tasks: tasks.tasks,
       resolveProjectId: (c: string) => (c === CWD ? PROJECT : undefined),
       ...(options.ask !== undefined ? { ask: options.ask } : {}),
+      ...(options.resolveAgent !== undefined ? { resolveAgent: options.resolveAgent } : {}),
     }),
     driver,
     listInputs: tasks.listInputs,
@@ -548,6 +550,63 @@ describe('派发指令单行提交（fix-1 + 1.14——producer 补位兼会话�
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+// ─────────────────────────── 1.18 steer 目标活根化 ───────────────────────────
+
+describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.send 定罪修复）', () => {
+  const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
+
+  it('registry 命中：steer 落在 registry 活根（非 ctx.parent——invocation 把手零触达）', async () => {
+    const reg = steerRecorder()
+    const parent = steerRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, resolveAgent: (id) => (id === SESSION ? { steer: reg.fn } : undefined) })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).toContain('已启动')
+    expect(reg.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }]) // 活根收件
+    expect(parent.steered).toEqual([]) // ctx.parent 不再是 steer 目标
+  })
+
+  it('registry 未命中 + fallback steer 在：fallback 提交成功（向后兼容），success 回执', async () => {
+    const parent = steerRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => undefined })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).not.toContain('提交失败')
+    expect(parent.steered).toHaveLength(1)
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('registry 未命中 + fallback steer 缺席：error 回执带激活指引，循环不回滚不 wedge', async () => {
+    const stub = driverStub()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => undefined })
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+      expect(out.kind).toBe('error')
+      const text = (out as { text: string }).text
+      expect(text).toContain('已启动') // 循环已启动（不回滚——1.14 语义保持）
+      expect(text).toContain('提交失败')
+      expect(text).toContain('发送任意消息激活会话')
+      expect(text).toContain('任务面板派发按钮')
+      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('resolveAgent 缺席（旧装配形态）：恒走 ctx.parent fallback（向后兼容两态之命中态）', async () => {
+    const parent = steerRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(parent.steered).toHaveLength(1)
   })
 })
 
