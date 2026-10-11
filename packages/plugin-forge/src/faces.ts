@@ -270,6 +270,17 @@ export interface AgentLookupFace {
   get(id: string): unknown
 }
 
+/**
+ * dsh sessionController 收窄面（1.19——host SessionController.resolveAgent：未进入会话的
+ * 激活/进入面）。上游契约：解析或 resume 一条普通会话到其活 Agent（并发 resume 去重）——
+ * 即宿主 prompt 径的进入机制（"Admit one prompt after explicitly resuming its Session"）。
+ * 结果 = { agent } | { error }（ApiSessionAgentResult 鸭子最小面：agent 键在场 = 活根；
+ * error 键 = 稳定会话域失败——session/not-found 等）。
+ */
+export interface SessionActivationFace {
+  resolveAgent(id: string): Promise<{ readonly agent?: unknown } | { readonly error?: unknown }>
+}
+
 /** forge notice 生产者名（ContextProducerView.label 裸 kind 兜底渲染——decisions #28 producer 归因） */
 export const FORGE_NOTICE_SOURCE_KIND = 'forge-dispatch'
 

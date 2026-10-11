@@ -46,6 +46,10 @@ export interface RunDagTasksDeps {
    * ctx.parent fallback，向后兼容。与 escalation/narration 同款装配形态：registry 命中 =
    * 活根，splice 实证可收件） */
   readonly resolveAgent?: (ownerSessionId: string) => unknown
+  /** 未进入会话激活面（1.19——host sessionController.resolveAgent 活根进入；可选——缺席 =
+   * 激活不可达，保持 1.18 回执指引语义）。返回活根 agent（registry 可 get 命中）或
+   * undefined（激活失败/面故障——调用方落入既有 registryMissed 回执路）。 */
+  readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>
 }
 
 // ─────────────────────────── 单查询枚举（「尚有非终态任务的任务源」） ───────────────────────────
@@ -326,6 +330,10 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
  * 静默失败 = 用户「没有任何反应」）。
  */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
+  // 1.19 修复序（深层根因：owner 会话 agent 未进入运行时 → steer 内件 undefined.send）：
+  // 先进入再提交再启动——registry 未命中且激活面在场时，经 host sessionController.resolveAgent
+  // 进入/恢复会话 agent（上游 prompt 同径），进入成功后才提交指令单行、才 driver.start。
+  await ensureAgentEntered(deps, ctx.sessionId)
   // 先落实会话（转录承载 + 非 blank 化）——1.18 起 steer 目标恒先经 agentsRegistry 解析活根
   // （ctx.parent 仅 registry 未命中时的 fallback，向后兼容）
   const commit = commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source)
@@ -350,6 +358,30 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     }
   }
   return { kind: 'success', text: `${base}——注意：指令单行提交失败（${commit.reason}），会话可能仍处空相位，启动叙述或不可见` }
+}
+
+/**
+ * 未进入态激活（1.19——「先进入再提交」前置步）：agentsRegistry.get 未命中 = owner 会话
+ * agent 未进入运行时（un-entered——上游生命周期：创建 → 进入后 inbox/driver 内件才存在，
+ * runtime-types 'agent/created' "newly registered agent with its live session"）。激活面
+ * （host sessionController.resolveAgent——上游 prompt 径同款进入机制）在场即进入：成功返回
+ * 活根；失败/缺席/抛错 = fail-soft false（不外抛、console.warn 留痕），调用方落入 1.18
+ * registryMissed 回执路（指引激活，不静默）。resolveAgent 缺席（旧装配形态）= 不激活——
+ * 向后兼容语义原样（ctx.parent fallback 承接）。
+ */
+async function ensureAgentEntered(deps: RunDagTasksDeps, sessionId: string): Promise<boolean> {
+  if (deps.resolveAgent === undefined) return false
+  if (deps.resolveAgent(sessionId) !== undefined) return true // 已进入（活根在场）
+  if (deps.enterAgent === undefined) return false
+  try {
+    const entered = await deps.enterAgent(sessionId)
+    if (entered !== undefined) return true
+    console.warn(`forge dispatch line activation failed (${sessionId}): sessionController 返回非活根（error 路或会话不存在）`)
+    return false
+  } catch (cause) {
+    console.warn(`forge dispatch line activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
+    return false
+  }
 }
 
 /**

@@ -23,7 +23,7 @@ import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
-import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, SessionActivationFace } from './faces.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend } from './progress/index.js'
@@ -133,6 +133,27 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       agentsRegistry = undefined
     }
+    // sessionController 面可选消费（1.19——未进入会话激活：host SessionController.resolveAgent
+    // = 上游 prompt 径同款「resolve or resume」进入机制，reflect.get 防御读取第六先例）：
+    // 缺席/异常/非函数面 = 激活面不注入——handler 落入 1.18 回执指引语义（fail-soft 同源）。
+    let sessionActivation: SessionActivationFace | undefined
+    try {
+      const viaReflect = ctx.reflect?.get('sessionController') as SessionActivationFace | undefined
+      if (viaReflect !== undefined && typeof viaReflect.resolveAgent === 'function') sessionActivation = viaReflect
+    } catch {
+      sessionActivation = undefined
+    }
+    const enterAgent =
+      sessionActivation !== undefined
+        ? async (ownerSessionId: string): Promise<unknown> => {
+            try {
+              const result = await sessionActivation.resolveAgent(ownerSessionId)
+              return 'agent' in result ? (result as { readonly agent: unknown }).agent : undefined
+            } catch {
+              return undefined // 激活面故障 = 未进入（handler warn 留痕 + 回执指引，不外抛）
+            }
+          }
+        : undefined
     // userQuestions 面可选消费（S2——无参枚举问询 + 第三层裁决投递，同防御读取先例）：
     // 缺席 = 问询降级（枚举路径指引带参直通；裁决静默终局——问询非循环正确性依赖）。
     let askFace: EscalationAskFace | undefined
@@ -231,6 +252,8 @@ const forgePlugin: ForgePlugin = Object.assign(
           // 1.18 活根解析随载（同 escalation 装配形态）——指令单行 steer 目标经 agentsRegistry
           // 解析活根，registry 未命中才退回 ctx.parent fallback（真机 undefined.send 定罪修复）
           ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
+          // 1.19 未进入会话激活随载（先进入再提交再启动——undefined.send 深层根因修复）
+          ...(enterAgent !== undefined ? { enterAgent } : {}),
         })
         const registered = [commands.register(forgeCommands.runDagTasks), commands.register(forgeCommands.stopDagTasks)]
         disposeCommands = () => {
@@ -425,6 +448,7 @@ export type {
   ForgeCommandResult,
   ProjectContainerDirs,
   ProjectDirServiceFace,
+  SessionActivationFace,
 } from './faces.js'
 // 1.17 循环进度事件族（'forge/progress'——declare-module 合并 + append 适配面）。
 export { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './progress/index.js'

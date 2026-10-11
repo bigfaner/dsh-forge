@@ -158,6 +158,7 @@ function depsOf(options: {
   cwd?: string
   listThrows?: Error
   resolveAgent?: (ownerSessionId: string) => unknown
+  enterAgent?: (ownerSessionId: string) => Promise<unknown>
 }) {
   const driver = options.driver ?? driverStub().driver
   const tasks = tasksStub(options.cards ?? [], options.listThrows !== undefined ? (() => { throw options.listThrows }) as never : undefined)
@@ -168,6 +169,7 @@ function depsOf(options: {
       resolveProjectId: (c: string) => (c === CWD ? PROJECT : undefined),
       ...(options.ask !== undefined ? { ask: options.ask } : {}),
       ...(options.resolveAgent !== undefined ? { resolveAgent: options.resolveAgent } : {}),
+      ...(options.enterAgent !== undefined ? { enterAgent: options.enterAgent } : {}),
     }),
     driver,
     listInputs: tasks.listInputs,
@@ -607,6 +609,120 @@ describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.se
     const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect(parent.steered).toHaveLength(1)
+  })
+})
+
+// ─────────────────────────── 1.19 未进入态先进入再提交（sessionController 激活面） ───────────────────────────
+
+describe('1.19 未进入态处理：先进入（sessionController.resolveAgent）再提交再启动', () => {
+  const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
+
+  it('registry 未命中 + 激活成功：进入先于提交，steer 落在进入后的活根，success 回执零告警', async () => {
+    const rec = steerRecorder()
+    const order: string[] = []
+    let live: unknown // 激活后才「进入」——registry 活根在此之后才可解析
+    const stub = driverStub()
+    const d = depsOf({
+      cards,
+      driver: stub.driver,
+      resolveAgent: () => live,
+      enterAgent: async () => {
+        order.push('enter')
+        live = { steer: (m: unknown) => {
+          order.push('steer')
+          rec.fn(m)
+        } }
+        return live
+      },
+    })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).toContain('已启动')
+    expect((out as { text?: string }).text).not.toContain('提交失败')
+    expect(order).toEqual(['enter', 'steer']) // 先进入再提交（undefined.send 根因面不再触达）
+    expect(rec.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('registry 未命中 + 激活失败（error 路 undefined）：error 回执激活指引，循环不回滚', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const stub = driverStub()
+      let activations = 0
+      const d = depsOf({
+        cards,
+        driver: stub.driver,
+        resolveAgent: () => undefined,
+        enterAgent: async () => {
+          activations += 1
+          return undefined
+        },
+      })
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+      expect(activations).toBe(1)
+      expect(out.kind).toBe('error')
+      const text = (out as { text: string }).text
+      expect(text).toContain('已启动')
+      expect(text).toContain('提交失败')
+      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('激活面抛错：fail-soft（warn 留痕不外抛），落入 registryMissed 回执路', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const stub = driverStub()
+      const d = depsOf({
+        cards,
+        driver: stub.driver,
+        resolveAgent: () => undefined,
+        enterAgent: async () => {
+          throw new Error('persistence locked')
+        },
+      })
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+      expect(out.kind).toBe('error')
+      expect((out as { text: string }).text).toContain('提交失败')
+      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('persistence locked'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('registry 已命中（已进入）：激活面零触达', async () => {
+    const reg = steerRecorder()
+    const stub = driverStub()
+    let activations = 0
+    const d = depsOf({
+      cards,
+      driver: stub.driver,
+      resolveAgent: (id) => (id === SESSION ? { steer: reg.fn } : undefined),
+      enterAgent: async () => {
+        activations += 1
+        return undefined
+      },
+    })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(activations).toBe(0)
+    expect(reg.steered).toHaveLength(1)
+  })
+
+  it('激活面缺席（1.18 装配形态）：语义原样——registryMissed error 回执指引激活', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const stub = driverStub()
+      const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => undefined })
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+      expect(out.kind).toBe('error')
+      expect((out as { text: string }).text).toContain('发送任意消息激活会话')
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
