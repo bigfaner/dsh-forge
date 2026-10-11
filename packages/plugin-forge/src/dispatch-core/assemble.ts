@@ -39,6 +39,25 @@ export function deriveWorkerToolFilter(
   return { deny: [...deny] }
 }
 
+/**
+ * 处置代理面禁入的 forge 动词（与 worker 同名单——S1c 第二层）。
+ */
+const TRIAGE_FORGE_DENY: readonly string[] = [...FORGE_DENY_IN_WORKER]
+
+/**
+ * 处置代理 toolFilter（S1c 第二层——「收窄工具面」的全收窄形）：一次性处置代理只做决策
+ * 不执行——已知工具名全数 deny（决策权与执行权分离，越权动作结构性不可达；输出契约 =
+ * 终态 output 文本内的 JSON 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 17 名
+ * （fs/shell/jobs/read-image/web/forge 六族）+ forge 动词四员 + 全局拒绝集——全部已知名
+ * （driver tools.restrict loud 校验安全，与 worker 同理）。
+ */
+export function deriveTriageToolFilter(): { deny: string[] } {
+  const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)
+  for (const name of Object.keys(WORKER_TOOL_NAME_FAMILY)) deny.add(name)
+  for (const name of TRIAGE_FORGE_DENY) deny.add(name)
+  return { deny: [...deny] }
+}
+
 /** 设置 → agentOptions（未配置/服务缺席 = undefined——不携带，回退父会话继承；
  * reasoning='default' = 不下发 effort——落 provider/模型默认档；其余 → reasoningEffort 直映射） */
 export function workerAgentOptionsOf(

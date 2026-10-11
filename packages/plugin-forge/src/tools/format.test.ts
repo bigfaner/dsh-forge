@@ -76,6 +76,19 @@ describe('forgeToolFailureOf（违规清单逐码派生）', () => {
     ])
   })
 
+  it('ERR_SPAWN_FAILED → data.guidance 行原样投影（S1c 循环独占拒绝径——常规 spawn 失败无 data 不受影响）', () => {
+    const f = forgeToolFailureOf(
+      typedError('ERR_SPAWN_FAILED', 'dispatch rejected: task source f is owned by an active dispatch loop', {
+        slug: 'f',
+        sourceKind: 'feature',
+        loopId: 'loop-1',
+        guidance: ['do not become a second dispatcher', 'stop the loop first'],
+      }),
+    )
+    expect(f.violations).toEqual(['do not become a second dispatcher', 'stop the loop first'])
+    expect(forgeToolFailureOf(typedError('ERR_SPAWN_FAILED', 'worker spawn failed')).violations).toEqual([])
+  })
+
   it('无结构化载荷 → violations 空数组（键恒在场）', () => {
     const f = forgeToolFailureOf(typedError('ERR_PROPOSAL_NOT_FOUND', '未命中'))
     expect(f).toEqual({ ok: false, code: 'ERR_PROPOSAL_NOT_FOUND', message: '未命中', violations: [] })

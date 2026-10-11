@@ -37,6 +37,11 @@ import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
+import {
+  exclusiveScopedRejection,
+  externalExclusivityGuard,
+  hasExclusiveLoopSources,
+} from './exclusivity.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchCoreFailure, DispatchTaskResult } from './result.js'
 import { disposeQuietly, settleWorkerRun } from './settle.js'
@@ -239,6 +244,17 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
   initAttribution(exec, args.source)
   const { emit, poolRead } = chainClosuresOf(deps, exec, scope)
 
+  // S1c 循环独占守卫（外部消费者专用——循环自身 loopSourced claim 豁免，decisions #18 身份
+  // 参数化的豁免键）：① 显式 source 径 = claim 前即拒（源本身独占，与池态无关——不触池不领
+  // 任务）；② 盲选径 = 守卫回调随 claimTask 进核（目标解析命中活循环任务源行即抛，单事务
+  // 回滚零状态残留）。抛错跨面传导：本面零捕获 → 工具壳 callToolFace 按 code 转失败 DTO。
+  const external = args.identity.loopSourced !== true
+  if (external && args.source !== undefined) {
+    const rejection = exclusiveScopedRejection(args.source)
+    if (rejection !== undefined) throw rejection
+  }
+  const exclusivityGuard = external && hasExclusiveLoopSources() ? externalExclusivityGuard() : undefined
+
   // halted 粘住（入口检查——粘住键不再 claim：防再领任务弃置 in_progress）
   if (spawnFailureStuck(args.guardKey)) {
     return { kind: 'halted', reason: HALTED_REASON }
@@ -247,13 +263,15 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
   // claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
   // （source 对在场 = 任务源限定盲选；缺席 = 全库——缺省行为零变化。
   //   S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取（忽略
-  //   links——工具壳两参数均不携带，schema 与外部语义零变化）。）
+  //   links——工具壳两参数均不携带，schema 与外部语义零变化）。S1c：exclusivityGuard →
+  //   循环独占守卫（仅外部 claim 携带——盲选径拒绝面）。）
   const claimed = await deps.tasks.claimTask({
     projectId: scope.projectId,
     sessionId: scope.sessionId,
     ...(args.source !== undefined ? { source: args.source } : {}),
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
+    ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })
   const task = claimed.task
   if (task === null) {

@@ -9,7 +9,6 @@ export type {
   ClaimStageResult,
   ClaimedDispatch,
   DispatchChainScope,
-  DispatchCoreArgs,
   DispatchCoreDeps,
   DispatchCoreExec,
   HaltedOutcome,
@@ -17,8 +16,21 @@ export type {
   SettleStageResult,
   SpawnStageResult,
 } from './core.js'
-export { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
+export { deriveTriageToolFilter, deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
 export { bumpSpawnFailures, clearSpawnFailures, spawnFailureStuck, HALT_THRESHOLD, HALTED_REASON } from './guard.js'
+// S1c 循环独占守卫（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选两径；登记表
+// 模块级易失，驱动器 start/终态维护，claim 面消费）
+export {
+  clearExclusiveLoopSource,
+  exclusiveLoopSourceOf,
+  exclusiveScopedRejection,
+  externalExclusivityGuard,
+  hasExclusiveLoopSources,
+  LOOP_EXCLUSIVE_GUIDANCE,
+  LoopSourceExclusiveError,
+  resetExclusiveLoopSources,
+  setExclusiveLoopSource,
+} from './exclusivity.js'
 export { classifyPool, poolOf } from './pool.js'
 export type { PoolSnapshot, PoolVerdict } from './pool.js'
 export type { DispatchCoreFailure, DispatchSpawnedResult, DispatchTaskResult } from './result.js'

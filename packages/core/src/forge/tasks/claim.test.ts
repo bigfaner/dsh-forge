@@ -627,3 +627,68 @@ describe('S3 claim 记录循环来源标记（loop_sourced——TASK_RECORD_LOOP
     expect(rows(`SELECT loop_sourced FROM task_records WHERE task_id = 't-f-1.1'`)).toEqual([{ loop_sourced: 0 }])
   })
 })
+
+describe('S1c claimTask 循环独占守卫（exclusivityGuard——目标解析命中即判，拒绝径事务回滚）', () => {
+  it('盲选命中独占源行 → 守卫抛错即整体拒绝：零写入（状态/claim 记录/links/事件全零残留）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    const err = await claim({
+      projectId: P(),
+      sessionId: 's-external',
+      exclusivityGuard: (target) => {
+        if (target.slug === 'f') throw new Error(`source ${target.slug} is exclusive`)
+      },
+    }).catch((e: unknown) => e)
+    expect((err as Error).message).toContain('source f is exclusive')
+    // 单事务回滚——零状态残留（守卫位于一切写入之前的机械证据）
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'pending' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+    expect(rows(`SELECT * FROM task_session_links`)).toEqual([])
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('守卫收到目标行投影（sourceKind/slug/localId/taskStatus——判定材料完整）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1', { status: 'pending' })
+    const seen: unknown[] = []
+    await claim({
+      projectId: P(),
+      sessionId: 's-external',
+      exclusivityGuard: (target) => {
+        seen.push(target)
+      },
+    })
+    expect(seen).toEqual([{ sourceKind: 'feature', slug: 'f', localId: '1.1', taskStatus: 'pending' }])
+  })
+
+  it('Z1 出口（无可领取目标）→ 守卫不触达（纯读零变更径先于守卫）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    let called = 0
+    const r = await claim({
+      projectId: P(),
+      sessionId: 's-external',
+      exclusivityGuard: () => {
+        called += 1
+      },
+    })
+    expect(r.task).toBeNull()
+    expect(called).toBe(0)
+  })
+
+  it('放行径（守卫正常返回）→ claim 照常落全链（状态转移 + claim 记录 + links）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    const r = await claim({
+      projectId: P(),
+      sessionId: 's-external',
+      exclusivityGuard: () => {}, // 守卫放行（无抛错）——claim 照常
+    })
+    expect(r.task?.taskStatus).toBe('in_progress')
+    expect(rows(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = 't-f-1.1' AND verb = 'claim'`)).toEqual([{ n: 1 }])
+    expect(rows(`SELECT session_id FROM task_session_links`)).toEqual([{ session_id: 's-external' }])
+  })
+})

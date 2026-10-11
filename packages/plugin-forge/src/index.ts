@@ -231,19 +231,27 @@ export type {
   IncidentStoreDeps,
 } from './notify/index.js'
 // S1b（run-tasks-host-command）宿主派发循环驱动器——runRound 状态机（v1 严格串行）+ 运行时
-// 登记表 + 生命周期入口（start/stop，S2 指令层消费）+ 处置钩子接口（S1c 桩位）。
+// 登记表 + 生命周期入口（start/stop，S2 指令层消费）+ 处置钩子接口（S1c 实装注入）。
 export {
+  backoffDelayMs,
   LOOP_BACKOFF_BASE_MS,
   LOOP_INSTRUCTION_ALL_DONE,
   LOOP_PATIENCE_MAX_WAIT_ROUNDS,
   LOOP_PATIENCE_PAUSE_MS,
   LOOP_STOP_TRANSITION_REASON,
+  LOOP_TRIAGE_MAX_ATTEMPTS,
   LOOP_WORKER_ABORT_MAX_RETRIES,
   createLoopDriver,
   createLoopRegistry,
+  createUserQuestionsEscalation,
   loopInstructionOf,
+  renderEscalationAsk,
 } from './loop/index.js'
 export type {
+  EscalationAskFace,
+  EscalationAskMaterial,
+  EscalationAskOption,
+  EscalationAskQuestion,
   LoopDriver,
   LoopDriverDeps,
   LoopEscalation,
@@ -259,4 +267,21 @@ export type {
   LoopTriageDecision,
   LoopTriageHook,
   LoopTriageInput,
+  UserQuestionsEscalationDeps,
 } from './loop/index.js'
+// S1c（run-tasks-host-command）第二层处置代理——一次性 subagent（与 worker 同款 in-process
+// 形态：类型化提示词 + 全收窄工具面 + 结构化三动作决策输出，宿主忠实执行）。
+export { composeTriagePrompt, createTriageHook, extractDecisionJson, parseTriageDecision, TriageDecisionInvalidError } from './triage/index.js'
+export type { TriageHookDeps, TriagePromptInput } from './triage/index.js'
+// S1c 循环独占守卫（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选两径，claim 面消费）
+export {
+  clearExclusiveLoopSource,
+  exclusiveLoopSourceOf,
+  exclusiveScopedRejection,
+  externalExclusivityGuard,
+  hasExclusiveLoopSources,
+  LOOP_EXCLUSIVE_GUIDANCE,
+  LoopSourceExclusiveError,
+  resetExclusiveLoopSources,
+  setExclusiveLoopSource,
+} from './dispatch-core/index.js'

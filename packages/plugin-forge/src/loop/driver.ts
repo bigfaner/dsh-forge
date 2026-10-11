@@ -23,7 +23,9 @@
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
 import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
-import { claimForDispatch, classifyPool, HALT_THRESHOLD, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
+import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
+// S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
+import { claimForDispatch, classifyPool, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
 import type {
   ClaimedDispatch,
   DispatchChainScope,
@@ -33,6 +35,7 @@ import type {
   PoolSnapshot,
   SpawnWorker,
 } from '../dispatch-core/index.js'
+import { clearExclusiveLoopSource, setExclusiveLoopSource } from '../dispatch-core/index.js'
 import { renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
 import { createLoopRegistry } from './registry.js'
@@ -43,6 +46,14 @@ import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSource
 /** spawn 失败退避基长（毫秒——第 N 次失败后退避 base×N 再幂等重入；间隔递增，decisions #11） */
 export const LOOP_BACKOFF_BASE_MS = 10_000
 
+/**
+ * 退避间隔（纯函数——S1c 单测锚「间隔递增可测」）：第 N 次失败后退避 base×N
+ * （1×base → 2×base → 3×base——序列递增，不立即重试，decisions #11）。
+ */
+export function backoffDelayMs(baseMs: number, attempt: number): number {
+  return baseMs * attempt
+}
+
 /** no-task 等待判词的轮间停顿（毫秒——bounded patience 的 patience） */
 export const LOOP_PATIENCE_PAUSE_MS = 30_000
 
@@ -51,6 +62,12 @@ export const LOOP_PATIENCE_MAX_WAIT_ROUNDS = 3
 
 /** worker 异常终止的 bounded 重入上限（⑫「第 N/3 次」；超限 → 第三层裁决钩子，decisions #16） */
 export const LOOP_WORKER_ABORT_MAX_RETRIES = 3
+
+/**
+ * 同任务处置计数封顶（S1c 第二层——处置代理对同一任务的运行次数上限，成功失败均计数）。
+ * 到顶强制升级第三层（R2：模型失误爆炸半径 = 有界处置轮次——不再给模型下一次机会）。
+ */
+export const LOOP_TRIAGE_MAX_ATTEMPTS = 3
 
 /** 停止/启动竞态收口的 in-flight 真化 reason（S3 transitionTask 面审计列） */
 export const LOOP_STOP_TRANSITION_REASON = '派发循环停止'
@@ -102,16 +119,71 @@ export interface LoopTriageHook {
   run(input: LoopTriageInput): Promise<LoopTriageDecision>
 }
 
-/** 第三层裁决升级事件（问询不经主会话——userQuestions 面 = S2/S1c 接线；缺省缺席 = 静默终局） */
+/**
+ * 第三层裁决升级事件（问询不经主会话——userQuestions 面，S1c 实装 = escalation.ts）。
+ * 载荷纪律（AC）：reason 原文与处置历史全文在载荷内（叙述面仅摘要）；ownerSessionId =
+ * 主会话 id（userQuestions agent 解析与问询归属锚）。处置历史行 = 处置阶梯的逐次记录
+ * （「第 N 次处置——动作/失败」），由驱动器 per-task 簿记。
+ */
 export type LoopEscalation =
   | {
       readonly kind: 'deadlock'
+      readonly ownerSessionId: string
       readonly source: LoopSourceRef
       /** 阻塞清单（taskKey + 任务名注记——⑭ 叙述同源） */
       readonly blockedItems: readonly { readonly taskKey: string; readonly note: string }[]
     }
-  | { readonly kind: 'blocked-ask-user'; readonly source: LoopSourceRef; readonly task: TaskSnapshot; readonly reason: string }
-  | { readonly kind: 'worker-abort-over-limit'; readonly source: LoopSourceRef; readonly taskKey: string; readonly attempts: number }
+    | {
+        readonly kind: 'blocked-ask-user'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly task: TaskSnapshot
+        /** blocked 原因全文（叙述面摘要的全文落点——问询 detail） */
+        readonly reason: string
+        /** 处置历史（处置阶梯逐次记录——含本次决策行） */
+        readonly history: readonly string[]
+      }
+    | {
+        readonly kind: 'worker-abort-over-limit'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly taskKey: string
+        readonly attempts: number
+      }
+    | {
+        readonly kind: 'disposition-over-limit'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly task: TaskSnapshot
+        /** blocked 原因全文（问询 detail——裁决全文档） */
+        readonly reason: string
+        /** 处置计数（LOOP_TRIAGE_MAX_ATTEMPTS 到顶） */
+        readonly attempts: number
+        /** 处置历史（逐次记录——无效/越权输出行在其中） */
+        readonly history: readonly string[]
+      }
+    | {
+        readonly kind: 'fix-chain-over-limit'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly task: TaskSnapshot
+        /** blocked 原因全文（问询 detail——裁决全文档） */
+        readonly reason: string
+        /** 到顶深度（addTask ERR_CHAIN_DEPTH_EXCEEDED data 派生——缺席 = 数据不可得） */
+        readonly depth?: number
+        readonly limit?: number
+        /** 处置历史（含本次「修复任务创建被拒」行） */
+        readonly history: readonly string[]
+      }
+    | {
+        readonly kind: 'halted'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        /** spawn 连败次数（HALT_THRESHOLD） */
+        readonly attempts: number
+        /** halted 原因全文（HALTED_REASON——问询 detail） */
+        readonly reason: string
+      }
 
 export interface LoopEscalationHook {
   escalate(escalation: LoopEscalation): Promise<void>
@@ -186,6 +258,31 @@ interface ActiveLoop {
   workerAborts: number
   /** no-task 等待判词连击（bounded patience——claim 成功即复位） */
   waitRounds: number
+  /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
+  readonly dispositions: Map<string, DispositionBook>
+}
+
+/** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
+interface DispositionBook {
+  attempts: number
+  history: string[]
+}
+
+/** 处置簿取账（get-or-create——per-task 生命周期 = 循环实例存活期，结算成功清账） */
+function dispositionBookOf(loop: ActiveLoop, taskKey: string): DispositionBook {
+  let book = loop.dispositions.get(taskKey)
+  if (book === undefined) {
+    book = { attempts: 0, history: [] }
+    loop.dispositions.set(taskKey, book)
+  }
+  return book
+}
+
+/** 处置决策的历史行注记（问询处置历史用——用户视角动词） */
+function triageDecisionNote(decision: LoopTriageDecision): string {
+  if (decision.action === 'add-fix') return `决定创建修复任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
+  if (decision.action === 'wait-external') return `决定等待 ${decision.externalSlug} 先完成`
+  return '决定请求人工裁决'
 }
 
 /** 每轮判定返回（continue = 续派下一轮；terminal = 终局收口出循环） */
@@ -266,18 +363,24 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         spawnFailures: 0,
         workerAborts: 0,
         waitRounds: 0,
+        dispositions: new Map<string, DispositionBook>(),
       }
       registry.register(record) // ⑦ 登记表注册（活循环 → 任务源/主会话/in-flight/worker 子会话）
+      // S1c 循环独占守卫：登记即独占（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选
+      // 两径由 claim 面消费独占表；终态/停止注销见 runLoop finally 与 stop 面）
+      setExclusiveLoopSource(source, id)
       live.set(id, loop)
       try {
         await announceStartup(loop) // 启动模板叙述（①从头/②接续未完成/③接续在飞）
       } catch (cause) {
+        clearExclusiveLoopSource(source, id)
         live.delete(id)
         registry.remove(id)
         throw cause
       }
       if (loop.controller.signal.aborted) {
         // 启动与停止竞态（announce 期间被叫停）——循环不启动，登记即注销
+        clearExclusiveLoopSource(source, id)
         live.delete(id)
         registry.remove(id)
         return { ok: true, loopId: id }
@@ -313,6 +416,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         }),
       )
       registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）
+      clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（归属校验——幂等）
       live.delete(record.id)
       return { ok: true, stopped: true, hadInFlight }
     },
@@ -378,6 +482,7 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
     )
   } finally {
     loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
+    clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
     loop.live.delete(record.id)
   }
 }
@@ -462,10 +567,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     record.inFlight = undefined // spawn 未成——任务留 in_progress 走幂等重入径（不走 submit-blocked）
     if ('kind' in spawned.failure) return haltLoop(loop) // HaltedOutcome——唯一 kind 承载成员（guard 粘住）
     const failure = spawned.failure // ERR_SPAWN_FAILED DTO（防线计数已按 guardKey 落面）
-    // 第一层机械守卫：退避后幂等重入（不立即重试——间隔递增；×3 halted 由 guard 兑现，decisions #11）
+    // 第一层机械守卫：退避后幂等重入（不立即重试——间隔递增 base×N；×3 halted 由 guard 兑现，decisions #11）
     loop.spawnFailures += 1
     const attempt = loop.spawnFailures
-    const delayMs = loop.delays.backoffBaseMs * attempt
+    const delayMs = backoffDelayMs(loop.delays.backoffBaseMs, attempt)
     await deps.narrator.notice(
       owner,
       renderNarrative('spawn-failed-retry', {
@@ -503,7 +608,13 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     const attempt = loop.workerAborts
     loop.deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
     if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
-      await loop.deps.escalation?.escalate({ kind: 'worker-abort-over-limit', source: record.source, taskKey, attempts: attempt })
+      await loop.deps.escalation?.escalate({
+        kind: 'worker-abort-over-limit',
+        ownerSessionId: owner,
+        source: record.source,
+        taskKey,
+        attempts: attempt,
+      })
       return 'terminal'
     }
     await loop.deps.narrator.notice(
@@ -526,6 +637,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const settlement: DispatchSpawnedResult = settled
   const label = `${settlement.taskRef.localId} ${settlement.title}`
   if (settlement.outcome === 'success') {
+    loop.dispositions.delete(taskKey) // S1c 处置簿清账（任务成功——同任务处置计数归零）
     await deps.narrator.notice(
       owner,
       renderNarrative('completed', { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }),
@@ -540,19 +652,52 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue'
   }
 
-  // blocked 无 follow-up（修复路径缺位）→ 第二层处置钩子（S1b 桩位——阶梯实现 = 任务 S1c；
-  // 钩子缺席 = 仅落盘事件子文件夹、循环续领，池态判词机械接管后续叙述）
+  // blocked 无 follow-up（修复路径缺位）→ 第二层处置代理（S1c 实装；钩子缺席 = 装配降级：
+  // 仅落盘事件子文件夹、循环续领，池态判词机械接管后续叙述）
   if (deps.triage === undefined) {
     deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     return 'continue'
   }
-  const decision = await deps.triage.run({
-    projectId: scope.projectId,
-    source: record.source,
-    task,
-    reason: settlement.reason ?? '',
-    settlement,
-  })
+
+  // 处置阶梯（decisions #16/#22 + R2）：同任务处置计数封顶强制升级；无效/越权输出计处置
+  // 失败入重试上限（有界重试轮次——模型失误爆炸半径 = LOOP_TRIAGE_MAX_ATTEMPTS）。
+  const reason = settlement.reason ?? ''
+  const book = dispositionBookOf(loop, taskKey)
+  let decision: LoopTriageDecision | undefined
+  while (decision === undefined && book.attempts < LOOP_TRIAGE_MAX_ATTEMPTS) {
+    book.attempts += 1
+    try {
+      decision = await deps.triage.run({
+        projectId: scope.projectId,
+        source: record.source,
+        task,
+        reason,
+        settlement,
+      })
+      book.history.push(`第${book.attempts}次处置——${triageDecisionNote(decision)}`)
+    } catch (cause) {
+      // 处置失败（无效/越权结构化输出、代理基建故障）——入重试上限，立即同结算重试
+      book.history.push(`第${book.attempts}次处置——分析未得出结论`)
+      console.warn(
+        `forge loop triage failed (${taskKey} attempt ${book.attempts}/${LOOP_TRIAGE_MAX_ATTEMPTS}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+    }
+  }
+  if (decision === undefined) {
+    // 处置重试超限（同任务计数封顶）→ 第三层（⑩ 叙述 + 问询附 reason 全文与处置历史）——终局
+    await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+    await deps.escalation?.escalate({
+      kind: 'disposition-over-limit',
+      ownerSessionId: owner,
+      source: record.source,
+      task,
+      reason,
+      attempts: book.attempts,
+      history: [...book.history],
+    })
+    return 'terminal'
+  }
+
   if (decision.action === 'add-fix') {
     try {
       const added = await deps.tasks.addTask({
@@ -571,6 +716,23 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         meta,
       )
     } catch (cause) {
+      if ((cause as { code?: unknown }).code === 'ERR_CHAIN_DEPTH_EXCEEDED') {
+        // fix 链深 ≤6 到顶（C6/addTask 权威校验）→ 第三层升级（⑩ 叙述 + 问询）——终局
+        const depthData = (cause as { data?: { depth?: number; limit?: number } }).data
+        book.history.push(`第${book.attempts}次处置——修复任务创建被拒（修复链已达上限）`)
+        await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        await deps.escalation?.escalate({
+          kind: 'fix-chain-over-limit',
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          ...(depthData?.depth !== undefined ? { depth: depthData.depth } : {}),
+          ...(depthData?.limit !== undefined ? { limit: depthData.limit } : {}),
+          history: [...book.history],
+        })
+        return 'terminal'
+      }
       // add-fix 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
@@ -582,8 +744,16 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
   // ask-user → 第三层（⑩ 叙述已告知问询另行发起；裁决不经主会话，decisions #16）——终局
+  // （处置历史已由阶梯循环记录本决策行——不重复追加）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
-  await deps.escalation?.escalate({ kind: 'blocked-ask-user', source: record.source, task, reason: settlement.reason ?? '' })
+  await deps.escalation?.escalate({
+    kind: 'blocked-ask-user',
+    ownerSessionId: owner,
+    source: record.source,
+    task,
+    reason,
+    history: [...book.history],
+  })
   return 'terminal'
 }
 
@@ -616,7 +786,12 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       loop.record.ownerSessionId,
       renderNarrative('blocked-pool', { sourceSlug: loop.record.source.slug, blockedItems }),
     )
-    await loop.deps.escalation?.escalate({ kind: 'deadlock', source: loop.record.source, blockedItems })
+    await loop.deps.escalation?.escalate({
+      kind: 'deadlock',
+      ownerSessionId: loop.record.ownerSessionId,
+      source: loop.record.source,
+      blockedItems,
+    })
     return 'terminal'
   }
   // wait：在飞未结 / 前置未满足 → bounded patience（轮间停顿后重试；连续 wait 封顶收口建议重派）
@@ -640,17 +815,27 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
   return done ? 'continue' : 'terminal'
 }
 
-/** spawn 连败粘住的循环终态（⑬ 终局叙述 + 终态出循环——同实例不自动复活：登记表即删，
- *  复活 = 新实例新 guard 计数，decisions #18） */
+/** spawn 连败粘住的循环终态（⑬ 终局叙述 + 第三层问询——AC「×3 仍败循环 halted 并触发
+ *  第三层问询」；同实例不自动复活：登记表即删，复活 = 新实例新 guard 计数，decisions #18） */
 async function haltLoop(loop: ActiveLoop): Promise<RoundOutcome> {
-  await loop.deps.narrator.followup(
-    loop.record.ownerSessionId,
+  const { deps, record } = loop
+  // ⑬ 终局叙述先行（问询另行发起——与 ⑩ 同序：叙述在前、问询随后）
+  await deps.narrator.followup(
+    record.ownerSessionId,
     renderNarrative('spawn-failed-halted', {
-      sourceSlug: loop.record.source.slug,
+      sourceSlug: record.source.slug,
       attempts: HALT_THRESHOLD,
-      instruction: loopInstructionOf('halted', loop.record.source.slug),
+      instruction: loopInstructionOf('halted', record.source.slug),
     }),
   )
+  // 第三层问询（reason 原文 = HALTED_REASON——不经主会话叙述，escalation.ts 投递 userQuestions）
+  await deps.escalation?.escalate({
+    kind: 'halted',
+    ownerSessionId: record.ownerSessionId,
+    source: record.source,
+    attempts: HALT_THRESHOLD,
+    reason: HALTED_REASON,
+  })
   return 'terminal'
 }
 

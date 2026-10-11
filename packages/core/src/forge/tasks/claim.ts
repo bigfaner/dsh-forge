@@ -214,6 +214,16 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
 
+    // ①½ 循环独占守卫（S1c——可选，外部 claim 传入；宿主循环自身的 loopSourced claim 不
+    //    携带）：目标解析命中即判，位于一切写入之前。拒绝径 = 守卫抛错 → 单事务整体回滚
+    //    （转移/claim 记录/links 零状态残留）；守卫的分类与指引归提供方（plugin 独占面）。
+    input.exclusivityGuard?.({
+      sourceKind: row.source_kind,
+      slug: row.slug,
+      localId: row.local_id,
+      taskStatus: row.task_status,
+    })
+
     // ② 守卫（一切路径——含重入：前置回归即拒）
     const prereqs = readPrerequisiteSnapshot(db, row.id)
     assertDependenciesMet(prereqs)

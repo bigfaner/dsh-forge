@@ -5,7 +5,7 @@
 // 退避 ×3 halted 粘性、worker 异常终止 bounded 重入超限升级、停止（in-flight 真化
 // interrupted + ⑰ 收口）、v1 单活守卫。spawn/tasks/narrator 通道全桩（真 narrator 渲染 +
 // 录制通道；incident 仓缺目录 = 零 I/O）。
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
   ClaimTaskInput,
@@ -22,9 +22,11 @@ import type {
 } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageInput } from './driver.js'
+import { backoffDelayMs, LOOP_TRIAGE_MAX_ATTEMPTS } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { NarrationChannel, Narrator } from '../notify/index.js'
 import type { ForgeEventSink } from '../events/sink.js'
+import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../dispatch-core/index.js'
 import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../dispatch-core/index.js'
 
 // ─────────────────────────── 夹具 ───────────────────────────
@@ -32,6 +34,10 @@ import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../disp
 const OWNER = 'owner-session-1'
 const PROJECT = 'p-1'
 const SOURCE = { kind: 'feature', slug: 'feat-x' } as const
+
+afterEach(() => {
+  resetExclusiveLoopSources() // S1c 独占登记表 = 模块级状态——跨用例复位
+})
 
 function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
@@ -520,7 +526,14 @@ describe('blocked 结算分支（图 C）', () => {
     await untilSettled(built.driver)
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
     expect(built.escalations).toEqual([
-      { kind: 'blocked-ask-user', source: SOURCE, task: expect.objectContaining({ localId: '2.5' }), reason: 'tests hang on flaky selector' },
+      {
+        kind: 'blocked-ask-user',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        history: ['第1次处置——决定请求人工裁决'],
+      },
     ])
     expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
   })
@@ -545,7 +558,9 @@ describe('blocked 结算分支（图 C）', () => {
     // → 池态判词机械接管 = ⑭ 受阻终局 + 第三层裁决钩子
     expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('没有可执行的任务，且有任务阻塞中'))).toBe(true)
-    expect(built.escalations).toEqual([{ kind: 'deadlock', source: SOURCE, blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }] }])
+    expect(built.escalations).toEqual([
+      { kind: 'deadlock', ownerSessionId: OWNER, source: SOURCE, blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }] },
+    ])
   })
 })
 
@@ -606,7 +621,7 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     expect(retries[0]?.text).toContain('自动重新执行（第 1/3 次）')
     expect(retries[2]?.text).toContain('自动重新执行（第 3/3 次）')
     expect(built.escalations).toEqual([
-      { kind: 'worker-abort-over-limit', source: SOURCE, taskKey: 'feat-x/2.5', attempts: 4 },
+      { kind: 'worker-abort-over-limit', ownerSessionId: OWNER, source: SOURCE, taskKey: 'feat-x/2.5', attempts: 4 },
     ])
     // 执行受阻 ≠ spawn 机制故障：零 guard 计数、零 tool-error 留档（循环自有 bounded 阶梯）
     expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
@@ -628,7 +643,12 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     expect(blocked?.text).toContain('没有可执行的任务，且有任务阻塞中')
     expect(blocked?.text).toContain('3.1（Task 3.1）· 4.1（Task 4.1）')
     expect(built.escalations).toEqual([
-      { kind: 'deadlock', source: SOURCE, blockedItems: [{ taskKey: '3.1', note: 'Task 3.1' }, { taskKey: '4.1', note: 'Task 4.1' }] },
+      {
+        kind: 'deadlock',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        blockedItems: [{ taskKey: '3.1', note: 'Task 3.1' }, { taskKey: '4.1', note: 'Task 4.1' }],
+      },
     ])
     expect(built.h.claimInputs).toHaveLength(1)
   })
@@ -732,5 +752,234 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     // 真化归 stop 面（stop 读数晚于 in-flight 登记——接管方）；循环径让渡
     expect(h.transitions).toEqual([{ projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止' }])
     expect(h.claimInputs).toHaveLength(1) // 零续领
+  })
+})
+
+// ─────────────────────────── S1c · 三层阶梯（第二层处置代理阶梯 + 第三层问询） ───────────────────────────
+
+describe('S1c 退避序列与循环独占（第一层锚 + SC5 守卫）', () => {
+  it('退避间隔递增序列（decisions #11——不立即重试，base×N）', () => {
+    expect([1, 2, 3].map((n) => backoffDelayMs(10_000, n))).toEqual([10_000, 20_000, 30_000])
+  })
+
+  it('循环独占登记：start 即独占（源对在读）→ 终态/停止注销（幂等）', async () => {
+    const built = build({ claim: [claimed(), NO_TASK], stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })] })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started.ok).toBe(true)
+    const loopId = started.ok ? started.loopId : ''
+    expect(exclusiveLoopSourceOf(SOURCE)).toEqual({ loopId })
+    await untilSettled(built.driver)
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined() // 终态 finally 注销
+  })
+
+  it('停止注销独占登记（stop 面——归属校验同径）', async () => {
+    const built = build({ claim: [claimed()] })
+    built.spawn.setBehavior(parkedSpawn)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeDefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+})
+
+describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务计数封顶 + 链深到顶）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  it('处置重试超限：无效输出 ×3 → 第三层 disposition-over-limit（附 reason 全文与处置历史）→ 终局', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: () => Promise.reject(new Error('invalid decision shape')),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 同结算内三次重试（处置上限 LOOP_TRIAGE_MAX_ATTEMPTS）——超限即升级
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.escalations).toEqual([
+      {
+        kind: 'disposition-over-limit',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+        history: [
+          '第1次处置——分析未得出结论',
+          '第2次处置——分析未得出结论',
+          '第3次处置——分析未得出结论',
+        ],
+      },
+    ])
+    // ⑩ 叙述（问询已另行发起）
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+  })
+
+  it('处置失败后重试成功：前两次无效、第三次 add-fix → 宿主执行，零升级', async () => {
+    let calls = 0
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: () => {
+        calls += 1
+        if (calls <= 2) return Promise.reject(new Error('越权动作——dispatch'))
+        return Promise.resolve({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(calls).toBe(3)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.escalations).toEqual([])
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2'))).toBe(true)
+  })
+
+  it('同任务处置计数封顶跨结算：三次处置后，同任务第四次 blocked 不再处置直接升级', async () => {
+    let calls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), claimed('2.5'), claimed('2.5')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: () => {
+        calls += 1
+        return Promise.resolve({ action: 'add-fix', note: `第${calls}次修复` })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 三次结算各处置一次（add-fix 续领后同任务再次 blocked）；第四次触簿即封顶——不再调模型
+    expect(calls).toBe(LOOP_TRIAGE_MAX_ATTEMPTS)
+    expect(built.h.claimInputs).toHaveLength(4)
+    expect(built.escalations).toEqual([
+      {
+        kind: 'disposition-over-limit',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+        history: [
+          '第1次处置——决定创建修复任务（第1次修复）',
+          '第2次处置——决定创建修复任务（第2次修复）',
+          '第3次处置——决定创建修复任务（第3次修复）',
+        ],
+      },
+    ])
+  })
+
+  it('fix 链深 ≤6 到顶：addTask ERR_CHAIN_DEPTH_EXCEEDED → 第三层 fix-chain-over-limit（附深度/上限/历史）→ 终局', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: () => Promise.resolve({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }),
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async () => {
+      throw Object.assign(new Error('fix 链深超限'), { code: 'ERR_CHAIN_DEPTH_EXCEEDED', data: { depth: 7, limit: 6 } })
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.escalations).toEqual([
+      {
+        kind: 'fix-chain-over-limit',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        depth: 7,
+        limit: 6,
+        history: ['第1次处置——决定创建修复任务（修选择器等待）', '第1次处置——修复任务创建被拒（修复链已达上限）'],
+      },
+    ])
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+  })
+
+  it('第三层问询载荷含 reason 原文与处置历史；主会话叙述仅摘要（断言不含全文）', async () => {
+    const fullReason = '第一行构建环境缺失\n第二行机密细节 SHADOW-SECRET-VALUE'
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      // 结算 reason 源 = blocked submit 记录——fixture 直载全文（两行，摘要截断断言用）
+      query: [
+        {
+          task: snapshot({ taskStatus: 'blocked' }),
+          container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+          records: [
+            { verb: 'submit', toStatus: 'blocked', reason: fullReason, actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+          ],
+        },
+      ],
+      triage: (input) => {
+        expect(input.reason).toBe(fullReason) // 处置代理输入 = reason 全文
+        return Promise.resolve({ action: 'ask-user' })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 问询载荷 = reason 原文（含第二行）
+    expect(built.escalations).toEqual([
+      {
+        kind: 'blocked-ask-user',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: fullReason,
+        history: ['第1次处置——决定请求人工裁决'],
+      },
+    ])
+    // 主会话叙述 = 摘要（首行截断）——全文零出现（decisions #24 分级呈现）
+    const notice = built.calls.find((c) => c.text.includes('无法自动处理——已向你发起问询'))
+    expect(notice?.text).toContain('第一行构建环境缺失')
+    expect(notice?.text).not.toContain('SHADOW-SECRET-VALUE')
+  })
+})
+
+describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', () => {
+  it('spawn 连败 ×3 halted：⑬ 终局 + 第三层问询（reason 原文 = HALTED_REASON）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+      ],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('subagent factory rejected')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.escalations).toEqual([
+      { kind: 'halted', ownerSessionId: OWNER, source: SOURCE, attempts: 3, reason: HALTED_REASON },
+    ])
+    const halted = built.calls.find((c) => c.method === 'followup')
+    expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
   })
 })

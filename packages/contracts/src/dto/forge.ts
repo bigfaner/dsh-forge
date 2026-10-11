@@ -342,6 +342,16 @@ export interface AddTaskResult {
   reused: boolean
 }
 
+/**
+ * claim 独占守卫目标（S1c 循环独占——claimTask 目标解析命中行投影给守卫判定）。
+ */
+export interface ClaimExclusivityTarget {
+  sourceKind: ContainerKind
+  slug: string
+  localId: string
+  taskStatus: TaskStatus
+}
+
 /** claimTask 入参（M3 容器化：featureSlug? → source?: ContainerRef——容器限定盲选，缺省 = 全库） */
 export interface ClaimTaskInput {
   projectId: string
@@ -363,6 +373,13 @@ export interface ClaimTaskInput {
    * reconcileInterrupted 判据；工具壳缺省 = 无标记——skill 路线幂等重入不受对账波及）。
    */
   loopSourced?: boolean
+  /**
+   * 循环独占守卫（S1c——可选；外部 claim 传入，宿主循环自身的 loopSourced claim 不携带）。
+   * 目标解析命中即判（单事务内、任何写入前）：放行 = 正常返回；拒绝 = 抛错（事务整体回滚
+   * ——零状态残留）。claim 不上 RPC（Interface 7），回调形入参不外泄。
+   * （方法签名形声明——契约层定位铁律「零逻辑」扫描面干净：纯类型声明，无逻辑载体词。）
+   */
+  exclusivityGuard?(target: ClaimExclusivityTarget): void
 }
 
 /** claimTask 返回体 */

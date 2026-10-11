@@ -64,6 +64,12 @@ function violationLinesOf(code: ErrorCode, data: unknown): readonly string[] {
       if (typeof d.guidance === 'string') lines.push(`guidance: ${d.guidance}`)
       return lines
     }
+    case 'ERR_SPAWN_FAILED': {
+      // S1c 循环独占拒绝径（「本次派发未发生」承载码的 data 派生——guidance 行原样投影；
+      // 常规 spawn 失败 DTO 不经本函数，不受影响）
+      const guidance = Array.isArray(d.guidance) ? (d.guidance as unknown[]) : []
+      return guidance.map((g) => String(g))
+    }
     default:
       return []
   }
