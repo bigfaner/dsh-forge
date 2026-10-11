@@ -201,7 +201,8 @@ export const DIAG_CHECK_NAMES: ReadonlyArray<{ readonly kind: ViolationKind; rea
  * 诊断消息体（PRD 示例②③④逐字对齐；错误直达修复无需用户意图——autosend 例外成员）：
  * `@path` 第一行 → `所属：标题（feature|突击提案）` → [`摘要：`] → [`阶段：`（feature）] →
  * 主体（任务失败 = `任务：`/`状态：短语 — 原因`/`失败记录：` 逐行；子图 = `诊断：` + 五类
- * ✓/✗ 逐行）→ `请求：请排查修复（…）`。
+ * ✓/✗ 逐行）→ `请求：请排查修复——不要开启 subagent，直接在主会话中执行（…）`
+ *（诊断 = 主会话直查直修的执行语境——不开子代理派发，用户裁决 2026-10-10）。
  * @param input 任务失败（feature/突击提案容器两态）| feature 子图诊断
  */
 export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInput): string {
@@ -220,7 +221,7 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
     for (const record of input.records) {
       lines.push(record.note === undefined ? `· ${record.verb} ${stampOf(record.at)}` : `· ${record.verb} ${stampOf(record.at)} ${record.note}`)
     }
-    lines.push('请求：请排查修复（任务时间线见概览 → 任务子 tab → 该任务详情）')
+    lines.push('请求：请排查修复——不要开启 subagent，直接在主会话中执行（任务时间线见概览 → 任务子 tab → 该任务详情）')
   } else {
     lines.push('诊断：validateFeatureTasks 失败')
     for (const check of DIAG_CHECK_NAMES) {
@@ -231,7 +232,9 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
       }
       for (const violation of hits) lines.push(`✗ ${check.name} — ${violation.message}`)
     }
-    lines.push(`请求：请排查修复（五类检查 = ${DIAG_CHECK_NAMES.map((c) => c.name).join(' / ')}）`)
+    lines.push(
+      `请求：请排查修复——不要开启 subagent，直接在主会话中执行（五类检查 = ${DIAG_CHECK_NAMES.map((c) => c.name).join(' / ')}）`,
+    )
   }
   return lines.join('\n')
 }
