@@ -11,7 +11,8 @@
 // sessionRow 高 32、hover interactive-bg、radius md、行尾 hover 动作）对齐官方 ui-workspace
 // Rows 刻度，本文件零平行发明。fix-42：段头内嵌搜索槽（官方 searchSlot 形态——展开即占位、
 // label/头部动作让位）+ 视图菜单实装（groupBy 二值 + archivedFilter 三态——orderBy/树嵌套
-// 不做出现在菜单）+ rail 态项目 folder 图标列（收起态可用性）。
+// 不做出现在菜单）+ rail 态项目 folder 图标列（收起态可用性；2026-10-11 用户裁决退役——见
+// SidebarRail 头注）。
 // D41（2026-10-10 用户裁决——默认可见性两规则）：①归档项目缺省隐藏
 // （SIDEBAR_VIEW_DEFAULT.archivedFilter = 'hide'——三态菜单可切回）；②会话 24h 窗口
 // （sidebarSessionVisibility 纯切分 + 项目块内「更早（N）」可展开折叠组——本地微观态
@@ -30,10 +31,10 @@
 // 动作组绝对定位浮现 overlay（零布局占位）+ 背板 = 行悬浮合成色（surface + tint 双层，
 // 遮文字穿透且与行面无缝；几何/背板机制归 sidebar.css D42/D45-② 块）。
 // 收起/展开（56px rail ↔ ~240px）由官方壳几何持有——本面板按 owner share 的 wide 双态渲染；
-// rail 展开回路 = expandSidebar 壳回调消费（fix-41 B 面：图标/搜索钮点击先展开侧栏）。
+// rail 展开回路 = expandSidebar 壳回调消费（fix-41 B 面：搜索钮点击先展开侧栏）。
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
 // 态机持有者；SidebarProjectsZone = 受控展示件（过滤/视图应用/相位正交的静态可测面）；
-// SidebarRail = 收起态受控展示件（图标列——fix-42 抽出同型受控缝）。
+// SidebarRail = 收起态受控展示件（搜索/＋ 图标列——fix-42 抽出同型受控缝）。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
@@ -1073,40 +1074,25 @@ export function SidebarProjectsZone({
   )
 }
 
-/** rail 态受控展示缝（fix-42——收起态图标列：搜索钮 + 「＋」+ 项目 folder 图标列；
+/** rail 态受控展示缝（fix-42——收起态图标列：搜索钮 + 「＋」；
  * 官方 rail 刻度 36px 命中区 / 18px 图标） */
 export interface SidebarRailProps {
-  /** 项目树（归档过滤随视图态共享——图标列与宽态同口径） */
-  readonly tree: readonly SidebarProjectNode[]
-  /** 视图态（archivedFilter 消费；groupBy 对 rail 无意义——图标列恒项目口径） */
-  readonly view: SidebarView
-  /** 当前会话 id（含当前会话的项目图标 active 色——官方 folderActive 同型） */
-  readonly currentSessionId: string | null
-  /** rail 图标请求展开（壳回调——点击语义 = 先展开侧栏） */
-  readonly expandSidebar: () => void
   /** 搜索钮（展开侧栏 + 打开过滤行——官方 requestSearch 同径） */
   readonly onSearchOpen: () => void
   /** 「＋」添加项目入口（缺席 = 不呈现） */
   readonly onAddProject?: () => void
-  /** 会话行回调（项目图标点击 = 展开侧栏 + 选中该项目首会话） */
-  readonly onSessionActivate?: (sessionId: string) => void
 }
 
 /**
- * rail 态本体（fix-42：空轨道退役——收起态可用性）：项目 folder 图标点击 = expandSidebar +
- * 选中该项目首会话（无会话 = 仅展开侧栏）；搜索钮 = expandSidebar + 开过滤行；
+ * rail 态本体（fix-42：空轨道退役——收起态可用性）：搜索钮 = expandSidebar + 开过滤行；
  * 「＋」保持 openAddProjectFlow（边界裁决：目录流不入产品「＋」）。
+ * 项目 folder 图标列退役（2026-10-11 用户裁决「收起来的左侧栏多了一个 dsh-forge 图标按钮，
+ * 功能跟第一个图标一样，移除」）：轨内项目图标点击 = expandSidebar + 选中项目首会话——
+ * 收起态可见效果与轨首展开钮重复（单活跃项目时首会话即当前会话，纯重复）；项目导航
+ * 归宽态项目区，收起态保留搜索/＋ 两枚功能钮。宽态行语言（含 active/archived 标记与
+ * 归档过滤）不受本裁决波及。
  */
-export function SidebarRail({
-  tree,
-  view,
-  currentSessionId,
-  expandSidebar,
-  onSearchOpen,
-  onAddProject,
-  onSessionActivate,
-}: SidebarRailProps): ReactNode {
-  const railTree = sidebarArchivedFilterOf(view.archivedFilter, tree)
+export function SidebarRail({ onSearchOpen, onAddProject }: SidebarRailProps): ReactNode {
   return (
     <div className="dswf-sidebar dswf-sidebar-rail" data-dswf-sidebar="rail">
       <Tooltip label="搜索（项目名 + 会话标题）" portal>
@@ -1135,28 +1121,6 @@ export function SidebarRail({
           </Button>
         </Tooltip>
       )}
-      {railTree.map((node) => (
-        <Tooltip key={node.projectId} label={node.name} portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-sidebar-railbtn"
-            data-dswf-rail-project={node.projectId}
-            data-active={
-              node.sessions.some((row) => row.sessionId === currentSessionId) || undefined
-            }
-            data-archived={node.archived || undefined}
-            aria-label={`打开项目 ${node.name}`}
-            onClick={() => {
-              expandSidebar()
-              const first = node.sessions[0]
-              if (first !== undefined) onSessionActivate?.(first.sessionId)
-            }}
-          >
-            <IconFolderCloseRegular size={18} />
-          </Button>
-        </Tooltip>
-      ))}
     </div>
   )
 }
@@ -1183,7 +1147,8 @@ interface SessionArchiveConfirmState {
 
 /**
  * 产品工作区面板（sidebar.workspaces 占用者本体——过滤/视图菜单/改名态机持有者）。
- * 宽态：项目区（SidebarProjectsZone）；rail 态：图标列（SidebarRail——fix-42 空轨道退役）。
+ * 宽态：项目区（SidebarProjectsZone）；rail 态：图标列（SidebarRail——fix-42 空轨道退役，
+ * 项目 folder 图标列 2026-10-11 用户裁决退役——收起态仅搜索/＋）。
  * 过滤态机（fix-6）：searchOpen/query 纯视图态；收起即清空查询（原型 S.pj 语义——
  * 过滤掉当前选中项不重置锚，清过滤即恢复可见，PRD UF-1 Validation）。
  * 视图态机（fix-42）：view 纯视图态（groupBy/archivedFilter——P1 不持久化，缺省 =
@@ -1336,18 +1301,11 @@ export function ForgeWorkspacePanel({
     }
   }
 
-  // rail 态：图标列（fix-42 空轨道退役——搜索/＋/项目图标；知识入口 = 官方 panellist 行）
+  // rail 态：图标列（fix-42 空轨道退役——搜索/＋；项目 folder 图标列 2026-10-11 用户裁决退役；
+  // 知识入口 = 官方 panellist 行）
   if (!wide) {
     return (
-      <SidebarRail
-        tree={tree}
-        view={view}
-        currentSessionId={currentSessionId}
-        expandSidebar={expandSidebar}
-        onSearchOpen={openSearch}
-        onAddProject={onAddProject}
-        onSessionActivate={onSessionActivate}
-      />
+      <SidebarRail onSearchOpen={openSearch} onAddProject={onAddProject} />
     )
   }
 

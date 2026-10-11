@@ -3,10 +3,11 @@
 // 单测已钉：视图投影纯函数（sidebar-model.test）、行语言静态面（ForgeWorkspacePanel.test）、
 // 菜单项数据面（SIDEBAR_VIEW_MENU_ITEMS/projectMenuItemsOf）。本 spec 承载开弹层/壳回调
 // 面（官方 Menu/Modal portal 静态不可渲染——fix-24 同裁）：
-//   1. rail 图标列非空（AC1）：收起态项目 folder 图标/搜索钮/「＋」随轨在场（DOM 在场
+//   1. rail 图标列（fix-42 空轨道退役）：收起态搜索钮/「＋」随轨在场（DOM 在场
 //      断言——Windows titlebar 模式收起态 .regionArea 整域 display:none 系 fix-40 官方
 //      壳设计，官方 WorkspaceBrowser rail 同域同藏；点击展开行为归单测钉 + 非 titlebar
-//      形态消费）；
+//      形态消费）；项目 folder 图标列 2026-10-11 用户裁决退役（「收起的左侧栏多了一个
+//      dsh-forge 图标按钮，功能跟第一个图标一样，移除」——负向断言钉零回归）；
 //   2. 新会话钮（AC2 行尾动作）：官方 startSession(workspaceId) 链路——盘侧 session 目录
 //      增生实证（installer-smoke fixtureSessionEvents 同径）。blank 行入侧栏树需 workspace
 //      成员传播 + 选中态（fresh blank 仅选中者可见——官方口径），零凭据 e2e 面以盘侧增生
@@ -26,13 +27,13 @@ import { registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import {
   NAV_ADD_PROJECT,
+  RAIL_PROJECT_ANY,
   RENAME_INPUT,
   SIDEBAR_COLLAPSE_BUTTON,
   SIDEBAR_EXPAND_BUTTON,
   SIDEBAR_FLATLIST,
   projectActionOf,
   projectRowOf,
-  railProjectOf,
   sidebarOf,
 } from '../../support/anchors.js'
 
@@ -72,7 +73,7 @@ async function pickViewMenuItem(page: Page, text: string): Promise<void> {
   await expect(menu, '选择后菜单收').toBeHidden({ timeout: 10_000 })
 }
 
-test('@web-e2e @p1mvp sidebar-view-align·rail 图标列非空：空轨道退役（图标列随项目在场）', async () => {
+test('@web-e2e @p1mvp sidebar-view-align·rail 图标列：搜索/＋在轨（项目 folder 图标列退役）', async () => {
   test.setTimeout(240_000)
   const root = makeWorkspaceFixture('甲')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-ud-'))
@@ -81,7 +82,9 @@ test('@web-e2e @p1mvp sidebar-view-align·rail 图标列非空：空轨道退役
     const project = await registerProject(page, join(root, '甲'), '甲项目')
     await expect(page.locator(projectRowOf(project.id)), '宽态项目行在场').toBeVisible({ timeout: 30_000 })
 
-    // 收起 → rail：空轨道退役（项目 folder 图标 + 搜索钮 + 「＋」在轨）。
+    // 收起 → rail：搜索钮 + 「＋」在轨；项目 folder 图标列退役（2026-10-11 用户裁决
+    // 「收起的左侧栏多了一个 dsh-forge 图标按钮，功能跟第一个图标一样，移除」——
+    // 图标点击 = 展开侧栏 + 选中项目首会话，收起态可见效果与轨首展开钮重复）。
     // 几何边界（fix-40 官方壳设计）：Windows titlebar 模式收起态 .regionArea 整域
     // display:none（官方 WorkspaceBrowser rail 同域同藏——官方平价）——e2e 台（win
     // titlebar 形态）以 DOM 在场（toBeAttached）为断言面；图标点击/搜索径展开 = 壳
@@ -89,10 +92,10 @@ test('@web-e2e @p1mvp sidebar-view-align·rail 图标列非空：空轨道退役
     await page.locator(SIDEBAR_COLLAPSE_BUTTON).first().click()
     const rail = page.locator(sidebarOf('rail'))
     await expect(rail, 'rail 分支在场（wide=false 透传）').toBeAttached({ timeout: 15_000 })
-    await expect(page.locator(railProjectOf(project.id)), 'rail 项目图标在场（AC1 图标列非空）').toBeAttached()
+    await expect(page.locator(RAIL_PROJECT_ANY), 'rail 项目 folder 图标退役（2026-10-11 用户裁决）').toHaveCount(0)
     await expect(page.locator(`${sidebarOf('rail')} [data-dswf-search-toggle]`), 'rail 搜索钮在轨').toBeAttached()
     await expect(page.locator(`${sidebarOf('rail')} ${NAV_ADD_PROJECT}`), 'rail「＋」在轨').toBeAttached()
-    // rail 态不渲染宽态内容（图标列恒项目口径——零会话行/项目块）
+    // rail 态不渲染宽态内容（零会话行/项目块）
     await expect(page.locator(`${sidebarOf('rail')} [data-dswf-session]`)).toHaveCount(0)
     await expect(page.locator(`${sidebarOf('rail')} [data-dswf-project]`)).toHaveCount(0)
 

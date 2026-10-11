@@ -16,7 +16,8 @@
             │                                                      变更后静默重拉）
             └─ ForgeWorkspacePanel（纯面板：宽态/rail 态/四相位）
                  ├─ SidebarProjectsZone（宽态受控件：段头四件/过滤/视图/相位——fix-42 视图态 + 行动作用）
-                 ├─ SidebarRail（收起态受控件：搜索/＋/项目 folder 图标列——fix-42 空轨道退役）
+                 ├─ SidebarRail（收起态受控件：搜索/＋——fix-42 空轨道退役；项目 folder 图标列 2026-10-11
+                  │   用户裁决退役：图标点击 = 展开侧栏 + 选中项目首会话，收起态可见效果与轨首展开钮重复）
                  └─ 改名模态（官方 Modal——ellipsis 菜单改名动作的态机宿主）
 ```
 

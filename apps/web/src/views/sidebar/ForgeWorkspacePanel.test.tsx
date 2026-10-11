@@ -4,7 +4,8 @@
 // 本面板知识入口断言随迁（宽态无入口行）。
 // fix-6 增面：头部四件（搜索/视图选项补齐）+ SidebarProjectsZone 受控缝（过滤应用/
 // 行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
-// fix-42 增面：rail 图标列（空轨道退役）+ 视图菜单实装（groupBy/archivedFilter）+
+// fix-42 增面：rail 图标列（空轨道退役——项目 folder 图标列 2026-10-11 用户裁决退役，
+// 收起态仅搜索/＋）+ 视图菜单实装（groupBy/archivedFilter）+
 // 项目行语言（expandOnRowClick 整行翻转 + 行尾 hover 动作）+ 段头内嵌搜索槽。
 // D41 增面（2026-10-10 用户裁决）：①归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT hide——
 // 弱化标记断言迁显式 default 受控缝）；②会话 24h 窗口（窗口外折叠进「更早（N）」本地
@@ -220,7 +221,7 @@ describe('相位（UF-1 States）', () => {
   })
 })
 
-describe('收起态 rail（AC1：图标列非空——fix-42 空轨道退役）', () => {
+describe('收起态 rail（fix-42 空轨道退役：搜索/＋ 在轨——项目 folder 图标列 2026-10-11 用户裁决退役）', () => {
   const actions = {
     onAddProject: () => {},
     onSessionActivate: (_sessionId: string) => {},
@@ -228,48 +229,26 @@ describe('收起态 rail（AC1：图标列非空——fix-42 空轨道退役）'
 
   function rail(overrides: Partial<Parameters<typeof SidebarRail>[0]> = {}): string {
     const props: Parameters<typeof SidebarRail>[0] = {
-      tree: [node(), node({ projectId: 'p2', workspaceId: 'w2', name: '文档站', sessions: [] })],
-      view: { groupBy: 'tree', archivedFilter: 'default' } satisfies SidebarView,
-      currentSessionId: 's1',
-      expandSidebar: () => {},
       onSearchOpen: () => {},
-      ...actions,
+      onAddProject: actions.onAddProject,
       ...overrides,
     }
     return renderToStaticMarkup(<SidebarRail {...props} />)
   }
 
-  it('面板 rail 分支 = 图标列（非空轨道）：项目 folder 图标 + 搜索钮 + 「＋」在轨', () => {
+  it('面板 rail 分支 = 搜索钮 + 「＋」在轨（宽态内容缺席）', () => {
     const markup = panel({ wide: false, ...actions })
     expect(markup).toContain('data-dswf-sidebar="rail"')
-    expect(markup).toContain('data-dswf-rail-project="p1"')
     expect(markup).toContain('data-dswf-search-toggle')
     expect(markup).toContain('data-dswf-nav="add-project"')
-    // rail 态不渲染宽态内容（项目区文案/会话行缺席——图标列恒项目口径）
+    // rail 态不渲染宽态内容（项目区文案/会话行缺席）
     expect(markup).not.toContain('dswf-sidebar-projects')
     expect(markup).not.toContain('data-dswf-session=')
   })
 
-  it('零会话项目图标在轨（点击 = 仅展开侧栏——首会话选择缺席面）', () => {
-    expect(rail()).toContain('data-dswf-rail-project="p2"')
-  })
-
-  it('当前会话所在项目 active 标记（官方 folderActive 同型）', () => {
-    const markup = rail()
-    expect(markup).toContain('data-dswf-rail-project="p1" data-active')
-    expect(markup).not.toContain('data-dswf-rail-project="p2" data-active')
-  })
-
-  it('归档过滤随视图态共享：hide = 归档项目图标离轨 / only = 仅归档图标', () => {
-    const tree = [
-      node(),
-      node({ projectId: 'p9', workspaceId: 'w9', name: '旧项目', archived: true, sessions: [] }),
-    ]
-    const hide = rail({ tree, view: { groupBy: 'tree', archivedFilter: 'hide' } })
-    expect(hide).not.toContain('data-dswf-rail-project="p9"')
-    const only = rail({ tree, view: { groupBy: 'tree', archivedFilter: 'only' } })
-    expect(only).toContain('data-dswf-rail-project="p9"')
-    expect(only).not.toContain('data-dswf-rail-project="p1"')
+  it('项目 folder 图标列退役（2026-10-11 用户裁决：图标点击与轨首展开钮功能重复——零 data-dswf-rail-project）', () => {
+    expect(rail()).not.toContain('data-dswf-rail-project')
+    expect(panel({ wide: false, ...actions })).not.toContain('data-dswf-rail-project')
   })
 
   it('搜索钮/「＋」缺席容忍（回调缺席 = 钮不呈现）', () => {
@@ -780,6 +759,7 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
     expect(markup).toContain('data-dswf-session-loop-edge="running"')
     // 语义层：aria-label = 任务源 slug + 状态词（D30 零原生 title 纪律延续）
     expect(markup).toContain('aria-label="任务源 feat-x · 状态 派发循环中"')
+    expect(markup).not.toContain('title=')
     // 1.8 文字徽标退役（chip 类零残留——class 全等判；loopedge 左缘件是另一前缀不在此列）
     expect(markup).not.toContain('class="dswf-sidebar-session-loop"')
     // 标记挂在派发会话行内（锚序——loop 锚在行 data-dswf-session 之后）

@@ -2,7 +2,7 @@
 // （getServerSnapshot 第三参——SSR 面同源直读，零中间持有层）；owner share wide 透传。
 // 项目 RPC 在 SSR 不跑 effect → 恒骨架相位；就绪树派生 = sidebar-model.test、面板相位 =
 // ForgeWorkspacePanel.test 各自覆盖（行级断言不在此重复）。fix-42：rail 态图标列接线
-// （搜索钮在轨——项目图标随树派生，宽态行语言归面板测试）。
+// （搜索钮在轨——项目 folder 图标列 2026-10-11 用户裁决退役，宽态行语言归面板测试）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ForgeSidebarSlot } from './ForgeSidebarSlot.js'
@@ -68,7 +68,7 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
     }
   })
 
-  it('rail 态：owner share wide=false 透传 + 搜索钮在轨（fix-42 图标列非空——空轨道退役）', () => {
+  it('rail 态：owner share wide=false 透传 + 搜索钮在轨（fix-42 图标列非空——空轨道退役；项目 folder 图标列 2026-10-11 用户裁决退役）', () => {
     const markup = renderSlot(ledger([]), false)
     expect(markup).toContain('data-dswf-sidebar="rail"')
     expect(markup).toContain('data-dswf-search-toggle') // 搜索钮在轨（官方 rail 搜索径）

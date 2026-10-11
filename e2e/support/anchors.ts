@@ -91,9 +91,7 @@ export const SIDEBAR_SKELETON = '[data-dswf-sidebar-skeleton]'
 export const projectRowOf = (projectId: string): string => `[data-dswf-project="${projectId}"]`
 /** 项目树行（任意） */
 export const PROJECT_ROW_ANY = '[data-dswf-project]'
-/** rail 态项目图标钮（值 = projectId——fix-42 图标列） */
-export const railProjectOf = (projectId: string): string => `[data-dswf-rail-project="${projectId}"]`
-/** rail 态项目图标钮（任意） */
+/** rail 态项目图标钮（任意——2026-10-11 用户裁决退役：负向断言面，恒零命中） */
 export const RAIL_PROJECT_ANY = '[data-dswf-rail-project]'
 /** 平铺视图列表容器（fix-42 groupBy=flat） */
 export const SIDEBAR_FLATLIST = '[data-dswf-flatlist]'
