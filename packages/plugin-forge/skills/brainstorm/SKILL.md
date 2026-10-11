@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: Expedition structured exploration — turn a vague idea into a user-approved proposal.md through challenge-driven dialogue, then register it into the proposal domain with mode=expedition lineage.
+description: Expedition structured exploration — turn a vague idea into a user-approved proposal.md through challenge-driven dialogue, then register it into the proposal domain; the expedition mode lineage is inherited from the session preset automatically.
 ---
 
 # Brainstorm
@@ -95,17 +95,18 @@ user and resolve it before proceeding; record the check result in the proposal.
 
 Do not auto-commit; present the proposal and wait for explicit user approval.
 
-### Step 7: Register with Expedition Lineage
+### Step 7: Register the Proposal
 
 Register the approved proposal into the state layer — the row, not the file tree, is
 the pipeline's truth:
 
 ```
 createProposal { slug: "<slug>", title: "<title>",
-                 rel_path: "proposals/<slug>/proposal.md", mode: "expedition" }
+                 rel_path: "proposals/<slug>/proposal.md" }
 ```
 
-`mode: "expedition"` is written here, at creation — that lineage is what makes the
+Do not pass `mode` — createProposal fills it automatically from the session's agent
+preset (this expedition session → `expedition`). That lineage is what makes the
 accepted proposal chain into a feature container (same slug, one atomic transaction)
 instead of going straight to tasks. Draft status is the default; verdicts happen only
 when the user decides.

@@ -39,7 +39,7 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
     bus.on((e) => seen.push(e))
     const dir = tmpContainerDir()
     const sink = createForgeEventSink({ bus, resolveDir: async () => dir })
-    await sink.prepare({ sessionId: 's-1', cwd: 'C:\\ws\\demo' })
+    await sink.prepare({ sessionId: 's-1', cwd: 'C:\\ws\\demo', agentPreset: undefined })
     expect(sink.dirOf('s-1')).toBe(dir)
     sink.emit(noTaskEvent('s-1'))
     expect(seen.map((e) => e.type)).toEqual(['no-ready-task'])
@@ -55,8 +55,8 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
         return 'D:\\container'
       },
     })
-    await sink.prepare({ sessionId: 's-2', cwd: 'C:\\ws\\a' })
-    await sink.prepare({ sessionId: 's-2', cwd: 'C:\\ws\\a' })
+    await sink.prepare({ sessionId: 's-2', cwd: 'C:\\ws\\a', agentPreset: undefined })
+    await sink.prepare({ sessionId: 's-2', cwd: 'C:\\ws\\a', agentPreset: undefined })
     expect(resolveCalls).toBe(1)
     const failing = createForgeEventSink({
       bus,
@@ -64,19 +64,19 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
         throw new Error('derive unavailable')
       },
     })
-    await expect(failing.prepare({ sessionId: 's-3', cwd: 'C:\\ws\\b' })).resolves.toBeUndefined()
+    await expect(failing.prepare({ sessionId: 's-3', cwd: 'C:\\ws\\b', agentPreset: undefined })).resolves.toBeUndefined()
     expect(failing.dirOf('s-3')).toBeUndefined()
   })
 
   it('cwd 缺席 / 空串 sessionId / 空结果 = 不记忆；未知会话 dirOf = undefined', async () => {
     const bus = createForgeEventBus()
     const sink = createForgeEventSink({ bus, resolveDir: async () => 'D:\\c' })
-    await sink.prepare({ sessionId: '', cwd: 'C:\\ws\\a' })
-    await sink.prepare({ sessionId: 's-4', cwd: undefined })
+    await sink.prepare({ sessionId: '', cwd: 'C:\\ws\\a', agentPreset: undefined })
+    await sink.prepare({ sessionId: 's-4', cwd: undefined, agentPreset: undefined })
     expect(sink.dirOf('s-4')).toBeUndefined()
     expect(sink.dirOf('unknown')).toBeUndefined()
     const empty = createForgeEventSink({ bus, resolveDir: async () => '' })
-    await empty.prepare({ sessionId: 's-5', cwd: 'C:\\ws\\a' })
+    await empty.prepare({ sessionId: 's-5', cwd: 'C:\\ws\\a', agentPreset: undefined })
     expect(empty.dirOf('s-5')).toBeUndefined()
   })
 
@@ -85,7 +85,7 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
     const dir = tmpContainerDir()
     const sink = createForgeEventSink({ bus, resolveDir: async () => dir })
     attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) })
-    await sink.prepare({ sessionId: 's-6', cwd: 'C:\\ws\\demo' })
+    await sink.prepare({ sessionId: 's-6', cwd: 'C:\\ws\\demo', agentPreset: undefined })
     sink.emit({ ts: Date.now(), sessionId: 's-6', slug: 'feat-x', type: 'task-claimed', payload: { taskKey: 'feat-x/1.1', taskType: 'doc', dispatchDigest: 'd1' } })
     const lines = readForgeEventLog(forgeLogFileOf(dir, 'feat-x'))
     expect(lines).toHaveLength(1)
