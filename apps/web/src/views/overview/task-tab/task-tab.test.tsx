@@ -157,6 +157,13 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).not.toContain('>执行<')
     expect(html).not.toContain('data-dswf-tt-exec')
   })
+
+  it('S5 列表行 ⟞ 门控仅列表视图（task-ui-info-density-blitz）：workerSessionTaskId 在场 = 列表行呈现；泳道/DAG 视图不动', () => {
+    const list = render({ view: 'list', workerSessionTaskId: 't-1', onOpenWorkerSession: NOOP })
+    expect(list).toContain('data-dswf-tt-worker="t-1"')
+    const swim = render({ view: 'swim', workerSessionTaskId: 't-1', onOpenWorkerSession: NOOP })
+    expect(swim).not.toContain('data-dswf-tt-worker')
+  })
 })
 
 describe('TasksTabBody · chips 统一过滤（AC4 沿袭）', () => {

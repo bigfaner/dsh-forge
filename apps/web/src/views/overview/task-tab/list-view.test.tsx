@@ -88,6 +88,48 @@ describe('ListViewBody（AC1 两行布局）', () => {
   })
 })
 
+describe('S5 列表行 worker 会话按钮（⟞——task-ui-info-density-blitz SC5 两态）', () => {
+  it('在场态：workerSessionTaskId 命中行 + onOpenWorkerSession 在场 = ⟞ 钮呈现（锚 + aria）', () => {
+    const html = renderToStaticMarkup(
+      <ListViewBody
+        {...base}
+        cards={[cardFixture()]}
+        onOpenTask={NOOP}
+        workerSessionTaskId="t-1"
+        onOpenWorkerSession={NOOP}
+      />,
+    )
+    expect(html).toContain('data-dswf-tt-worker="t-1"')
+    expect(html).toContain('aria-label="打开执行子会话：m2-pipeline/2.4"')
+  })
+
+  it('缺席态：无执行会话（workerSessionTaskId 不命中）行内不呈现 ⟞（不渲染灰钮）', () => {
+    const html = renderToStaticMarkup(
+      <ListViewBody
+        {...base}
+        cards={[cardFixture()]}
+        onOpenTask={NOOP}
+        onOpenWorkerSession={NOOP}
+      />,
+    )
+    expect(html).not.toContain('data-dswf-tt-worker')
+  })
+
+  it('仅命中行呈现：双行集内其余行零 ⟞（打开回调缺席同样不呈现）', () => {
+    const html = renderToStaticMarkup(
+      <ListViewBody
+        {...base}
+        cards={[cardFixture({ taskId: 'a', localId: '1' }), cardFixture({ taskId: 'b', localId: '2' })]}
+        onOpenTask={NOOP}
+        workerSessionTaskId="b"
+        onOpenWorkerSession={NOOP}
+      />,
+    )
+    expect(html).toContain('data-dswf-tt-worker="b"')
+    expect(html).not.toContain('data-dswf-tt-worker="a"')
+  })
+})
+
 describe('rowMenuItems（⋯ 行动作菜单行集）', () => {
   it('查看详情 + 转移预设（七态 − 当前态，from≠to 机械排除）；onTransition 缺席 = 仅查看详情', () => {
     const card = cardFixture({ taskStatus: 'in_progress' })

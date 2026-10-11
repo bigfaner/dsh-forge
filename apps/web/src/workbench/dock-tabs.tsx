@@ -135,6 +135,8 @@ export interface OverviewDockAssemblyProps {
   readonly onOpenSession?: (sessionId: string) => void
   /** 打开新会话通道（行头预填/诊断发送/派发指令——openSessionWithPreset 组合子闭包；缺席 = 入口不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
+  /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 弹窗开着的任务（null = 关——三视图行高亮源；弹窗本体挂载在 ShellHost[D23 挂载独立]） */
   readonly drawerTaskId: string | null
   /** 任务行/DAG 节点/泳道卡点击 → 弹窗（桥 openTaskDrawer 写面；缺席 = 非交互） */
@@ -162,6 +164,7 @@ export function OverviewDockAssembly({
   onOpenDoc,
   onOpenSession,
   onStartSession,
+  onOpenWorkerSession,
   drawerTaskId,
   onOpenTask,
   onOpenTransition,
@@ -199,6 +202,7 @@ export function OverviewDockAssembly({
       {...(ctx.docsRoot !== undefined ? { docsRoot: ctx.docsRoot } : {})}
       {...(onStartSession !== undefined ? { onStartSession } : {})}
       {...(onOpenSession !== undefined ? { onOpenSession } : {})}
+      {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession } : {})}
       makeClient={makeClient}
     />
   )
@@ -231,6 +235,8 @@ export interface OverviewDockBodyProps {
   readonly tabActions?: DockTabActionsMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
@@ -245,6 +251,7 @@ export function OverviewDockBody({
   onOpenTransition,
   tabActions,
   onOpenSession,
+  onOpenWorkerSession,
   openSession,
   makeClient,
 }: OverviewDockBodyProps): ReactNode {
@@ -286,6 +293,7 @@ export function OverviewDockBody({
       sessionCount={overview.sessionCount}
       onOpenDoc={onOpenDoc}
       onOpenSession={onOpenSession}
+      {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession } : {})}
       {...(openSession !== undefined ? { onStartSession: handleStartSession } : {})}
       drawerTaskId={drawerTaskId}
       {...(onOpenTask !== undefined ? { onOpenTask } : {})}
@@ -310,6 +318,8 @@ export interface ForgeOverviewTabProps {
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'openTaskDrawer' | 'openTaskTransition'>
   /** 挂接会话 pill 跳会话（插件 inject face；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（4.6 插件 inject face；缺席 = 行头/诊断/派发入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
@@ -364,6 +374,7 @@ function OverviewTabWithBridge(
       onOpenTransition={openTransition}
       tabActions={props.tabActions}
       onOpenSession={props.onOpenSession}
+      onOpenWorkerSession={props.onOpenWorkerSession}
       openSession={props.openSession}
       makeClient={props.makeClient}
     />

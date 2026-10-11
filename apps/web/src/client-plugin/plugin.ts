@@ -1165,6 +1165,12 @@ function registerDockTabs(
             // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
             uiWorkspace.openSession(sessionId)
           },
+          // S5 列表行 ⟞（task-ui-info-density-blitz）：worker 执行子会话打开径——显式父
+          // （库侧 link 派发源）地址形态同径单源（openSessionWithLedgerAddress——ShellHost
+          // ⟞ 面同径；账本缺行 refresh 兜底后重判读，官方面异常 fail-soft）
+          onOpenWorkerSession: (childSessionId: string, parentSessionId?: string): void => {
+            openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
+          },
           // 4.6 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab
           // 行头预填/诊断发送/派发指令/派发跳转四渠道共源）
           openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),

@@ -11,7 +11,14 @@ import {
   type TaskCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { Button, Menu, Tag, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  IconRightUpOutlineRegular,
+  Menu,
+  Tag,
+  Tooltip,
+  type MenuEntry,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { taskKeyLabel } from '../drawer/detail-model.js'
 import { listGroupsOf, taskHoverLabel, taskStatusTagTone, taskSubRowParts } from './task-tab-model.js'
 import './task-tab.css'
@@ -72,6 +79,8 @@ function TaskItem({
   onTransition,
   menuOpen,
   onMenuOpenChange,
+  hasWorkerSession,
+  onOpenWorkerSession,
 }: {
   readonly card: TaskCard
   readonly active: boolean
@@ -79,6 +88,10 @@ function TaskItem({
   readonly onTransition: ((taskId: string) => void) | undefined
   readonly menuOpen: boolean
   readonly onMenuOpenChange: (taskId: string | null) => void
+  /** 执行会话在场（S5——无执行会话不呈现 ⟞；装载壳探测注入） */
+  readonly hasWorkerSession: boolean
+  /** ⟞ 打开 worker 执行子会话（缺席 = 非交互呈现） */
+  readonly onOpenWorkerSession: ((taskId: string) => void) | undefined
 }): ReactNode {
   const key = taskKeyLabel(card.slug, card.localId)
   const hasMenu = onOpenTask !== undefined || onTransition !== undefined
@@ -109,6 +122,26 @@ function TaskItem({
         <Tag tone={taskStatusTagTone(card.taskStatus)} className="dswf-tt-tag">
           {TASK_STATUS_LABELS[card.taskStatus].zh}
         </Tag>
+        {/* S5（task-ui-info-density-blitz）：⟞ = 打开 worker 执行子会话——仅执行会话在场行
+         *  呈现（无执行会话不渲染灰钮）；点击互斥行点击（stopPropagation），打开链 =
+         *  fetchWorkerSession 判读（装载壳——DispatchPanel 同款按需拉取无预取） */}
+        {hasWorkerSession && onOpenWorkerSession !== undefined ? (
+          <Tooltip label={`打开执行子会话（worker）：${key}`} portal>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="dswf-tt-worker"
+              data-dswf-tt-worker={card.taskId}
+              aria-label={`打开执行子会话：${key}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenWorkerSession(card.taskId)
+              }}
+            >
+              <IconRightUpOutlineRegular size={11} />
+            </Button>
+          </Tooltip>
+        ) : null}
         {hasMenu ? (
           <Menu
             open={menuOpen}
@@ -178,6 +211,10 @@ export interface ListViewBodyProps {
   /** ⋯ 菜单开合（受控——装载壳持有） */
   readonly menuTaskId: string | null
   readonly onMenuOpenChange: (taskId: string | null) => void
+  /** 执行会话在场任务（S5——探测命中 = 仅该行呈现 ⟞；缺席 = 全行不呈现） */
+  readonly workerSessionTaskId?: string
+  /** ⟞ 打开 worker 执行子会话（缺席 = 非交互呈现） */
+  readonly onOpenWorkerSession?: (taskId: string) => void
 }
 
 /** 列表视图纯渲染体（分组标签 + 两行卡列表——静态全相位可测） */
@@ -188,6 +225,8 @@ export function ListViewBody({
   onTransition,
   menuTaskId,
   onMenuOpenChange,
+  workerSessionTaskId,
+  onOpenWorkerSession,
 }: ListViewBodyProps): ReactNode {
   const groups = listGroupsOf(cards)
   return (
@@ -204,6 +243,8 @@ export function ListViewBody({
               onTransition={onTransition}
               menuOpen={menuTaskId === card.taskId}
               onMenuOpenChange={onMenuOpenChange}
+              hasWorkerSession={workerSessionTaskId === card.taskId}
+              onOpenWorkerSession={onOpenWorkerSession}
             />
           ))}
         </div>
@@ -217,10 +258,21 @@ export interface ListViewProps {
   readonly activeTaskId?: string
   readonly onOpenTask?: (taskId: string) => void
   readonly onTransition?: (taskId: string) => void
+  /** 执行会话在场任务（S5 装载壳探测注入——缺席 = 全行不呈现 ⟞） */
+  readonly workerSessionTaskId?: string
+  /** ⟞ 打开 worker 执行子会话（缺席 = 非交互呈现） */
+  readonly onOpenWorkerSession?: (taskId: string) => void
 }
 
 /** 列表视图装载壳（唯一本地态 = ⋯ 菜单开合任务——单菜单互斥，cards 变更自然失效） */
-export function ListView({ cards, activeTaskId, onOpenTask, onTransition }: ListViewProps): ReactNode {
+export function ListView({
+  cards,
+  activeTaskId,
+  onOpenTask,
+  onTransition,
+  workerSessionTaskId,
+  onOpenWorkerSession,
+}: ListViewProps): ReactNode {
   const [menuTaskId, setMenuTaskId] = useState<string | null>(null)
   return (
     <ListViewBody
@@ -230,6 +282,8 @@ export function ListView({ cards, activeTaskId, onOpenTask, onTransition }: List
       onTransition={onTransition}
       menuTaskId={menuTaskId}
       onMenuOpenChange={setMenuTaskId}
+      {...(workerSessionTaskId !== undefined ? { workerSessionTaskId } : {})}
+      {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession } : {})}
     />
   )
 }

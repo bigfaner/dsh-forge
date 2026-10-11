@@ -11,7 +11,7 @@
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——行/详情零「执行」动作。
 // 容器选中：受控注入（4.2 taskFocus featureSlug）优先，否则本地切换；数据装载归
 // useTasksTabLoad（source 容器参数路由——AC5）。
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   FEATURE_STATUS_LABELS,
   type FeatureCard,
@@ -26,6 +26,7 @@ import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } f
 import { activeFeatureSlug, hasActiveStatusFilter, searchQueryOf, type OverviewSort } from '../overview-model.js'
 import { formatDiagMessage, type MessageContainer, type SessionOpenRequest } from '../message-format.js'
 import { StatusChips } from '../status-chips.js'
+import { fetchWorkerSession } from '../../session/DispatchPanel.js'
 import { useTasksTabLoad, type TasksTabLoadState } from './task-tab-data.js'
 import {
   featureRatioLabel,
@@ -207,6 +208,10 @@ export interface TasksTabBodyProps {
   readonly onOpenTask?: (taskId: string) => void
   /** ⋯ 转移预设 → 3.8 对话框（缺席 = 菜单仅查看详情） */
   readonly onTransition?: (taskId: string) => void
+  /** 执行会话在场任务（S5——探测命中 = 仅该列表行呈现 ⟞；缺席 = 全行不呈现） */
+  readonly workerSessionTaskId?: string
+  /** ⟞ 打开 worker 执行子会话（S5 列表行——缺席 = 非交互呈现） */
+  readonly onOpenWorkerSession?: (taskId: string) => void
   /** 抽屉开着的任务（三视图高亮） */
   readonly activeTaskId?: string
 }
@@ -238,6 +243,8 @@ export function TasksTabBody({
   onDispatch,
   onOpenTask,
   onTransition,
+  workerSessionTaskId,
+  onOpenWorkerSession,
   activeTaskId,
 }: TasksTabBodyProps): ReactNode {
   const searchActive = searchQueryOf(search) !== undefined
@@ -321,6 +328,8 @@ export function TasksTabBody({
           onOpenTask={onOpenTask}
           activeTaskId={activeTaskId}
           {...(onTransition !== undefined ? { onTransition } : {})}
+          {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession } : {})}
+          {...(workerSessionTaskId !== undefined ? { workerSessionTaskId } : {})}
         />
       )
     }
@@ -449,6 +458,8 @@ export interface TasksTabProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 跳转既有会话（4.6 派发 jump 路由——uiWorkspace.openSession；缺席 = 跳转降级 no-op） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** ⟞ 打开 worker 执行子会话（S5 列表行——可选第二参 = 库侧权威父会话显式地址径；缺席 = 按钮不呈现） */
+  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** @ 锚文档根（OverviewTasksContext 帧内 head 推导——docsRootOf；缺席 = `docs` 缺省锚） */
   readonly docsRoot?: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
@@ -477,6 +488,7 @@ export function TasksTab({
   activeTaskId,
   onStartSession,
   onOpenSession,
+  onOpenWorkerSession,
   docsRoot,
   makeClient = preloadRpcClientFactory,
 }: TasksTabProps): ReactNode {
@@ -555,6 +567,45 @@ export function TasksTab({
     setDispatchNotice(undefined)
   }, [])
 
+  // S5 列表行 ⟞（task-ui-info-density-blitz）：在场探测 = 执行中任务（runningTaskOf 单源）
+  // 单次 fetchWorkerSession 探测（有界 1 RPC——DispatchButton/runDispatchRoute 同款先例；
+  // 纯派发 worker=null → 不呈现）。打开链 = fetchWorkerSession 判读（命中探测缓存免二次
+  // RPC；未命中任务现拉——DispatchPanel.tsx:660-667 同款按需拉取无预取）。
+  const [workerSessionTaskId, setWorkerSessionTaskId] = useState<string | null>(null)
+  const workerRef = useRef<{ readonly taskId: string; readonly worker: string; readonly parent?: string } | null>(null)
+  const cards = load.cards
+  const runningTaskId = view === 'list' && cards !== undefined ? (runningTaskOf(cards)?.taskId ?? null) : null
+  useEffect(() => {
+    if (onOpenWorkerSession === undefined || runningTaskId === null) {
+      workerRef.current = null
+      setWorkerSessionTaskId(null)
+      return
+    }
+    let alive = true
+    void fetchWorkerSession(makeClient(), { projectId, taskId: runningTaskId }).then(({ worker, parent }) => {
+      if (!alive) return
+      workerRef.current = worker !== null ? { taskId: runningTaskId, worker, parent } : null
+      setWorkerSessionTaskId(worker !== null ? runningTaskId : null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [projectId, runningTaskId, onOpenWorkerSession, makeClient])
+  const handleOpenWorkerSession = useCallback(
+    (taskId: string): void => {
+      if (onOpenWorkerSession === undefined) return
+      const cached = workerRef.current
+      if (cached !== null && cached.taskId === taskId) {
+        onOpenWorkerSession(cached.worker, cached.parent)
+        return
+      }
+      void fetchWorkerSession(makeClient(), { projectId, taskId }).then(({ worker, parent }) => {
+        if (worker !== null) onOpenWorkerSession(worker, parent)
+      })
+    },
+    [onOpenWorkerSession, projectId, makeClient],
+  )
+
   return (
     <TasksTabBody
       search={search}
@@ -586,6 +637,8 @@ export function TasksTab({
       }}
       {...(onOpenTask !== undefined ? { onOpenTask } : {})}
       {...(onTransition !== undefined ? { onTransition } : {})}
+      {...(onOpenWorkerSession !== undefined && workerSessionTaskId !== null ? { workerSessionTaskId } : {})}
+      {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession: handleOpenWorkerSession } : {})}
       {...(activeTaskId !== undefined ? { activeTaskId } : {})}
     />
   )
