@@ -7,6 +7,7 @@
 // 壳页无独立 serve 面（母本同裁决：bare vite 无 __DSH_BOOT__ 不可用——dev 走 build --watch）。
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
+import { assertClientBundleClassicScript } from './src/build/client-bundle-shape.js'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
 const STANDALONE_ERROR = 'apps/web 不是独立应用：bare vite serve 无 __DSH_BOOT__ 注入。'
@@ -32,13 +33,7 @@ function pinClientBundleShape(): Plugin {
     generateBundle(_options, bundle) {
       const chunk = Object.values(bundle).find((file) => file.type === 'chunk' && file.name === 'client-plugin')
       if (chunk === undefined) throw new Error('vite: forge-client 入口产物缺席（rollup input client-plugin 未产出）')
-      const code = chunk.code
-      if (/(?<![.\w$])import\s*[("'\s]|(?<![.\w$])export\s*[{*(\w]/.test(code)) {
-        throw new Error('vite: forge-client 产物含 import/export 语句——classic script 形状破坏（模块系统以 <script> 装载）')
-      }
-      if (!code.includes('__ModuleLoader__')) {
-        throw new Error('vite: forge-client 产物未见 __ModuleLoader__ 注册面')
-      }
+      assertClientBundleClassicScript(chunk.code)
     },
   }
 }

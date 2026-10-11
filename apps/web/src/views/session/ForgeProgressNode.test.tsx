@@ -2,7 +2,7 @@
 // 折叠单行摘要 + 详情两态标记 + 他形零残留。
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { ForgeProgressNodeData } from '../../client-plugin/progress-node.js'
+import type { ForgeProgressNodeData } from './forge-progress-data.js'
 import { ForgeProgressDetail, ForgeProgressNode, forgeProgressCountsLabel, forgeProgressSummary } from './ForgeProgressNode.js'
 
 const DATA: ForgeProgressNodeData = {

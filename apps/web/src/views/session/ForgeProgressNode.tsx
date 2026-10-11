@@ -5,7 +5,7 @@
 // ——文案全用户视角动词/状态词）；纯呈现面零 RPC 零状态落盘（展开态组件本地微观态）。
 import { useState } from 'react'
 import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
-import { isForgeProgressNodeData, type ForgeProgressNodeData } from '../../client-plugin/progress-node.js'
+import { isForgeProgressNodeData, type ForgeProgressNodeData } from './forge-progress-data.js'
 import './forge-progress-node.css'
 
 /** 官方节点座 props 消费切片（workflow-run WorkflowRunPanel 同型——node.data 为整值） */

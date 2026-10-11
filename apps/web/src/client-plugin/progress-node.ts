@@ -5,7 +5,9 @@
 // body，dispatch 键 = buildViewNode.kind）。每枚事件独立成节点（id = 事件 seq——零折叠，
 // seq 时序天然交错）；折叠 = 单行摘要 / 展开 = 事件详情（DisclosureRow 同族——组件本体
 // 经壳 bundle 发布面 __DSH_FORGE_VIEWS__ 递达，注册归 client 插件）。
-// 数据纪律：形状防御（isForgeProgressData 同语义镜像——他形不猜不抛）。
+// 数据面：buildViewNode 数据透传 unknown（消费侧窄读守卫 = 壳树
+// views/session/forge-progress-data.ts——2026-10-11 报障收口：守卫归唯一 runtime 消费者
+// 壳树，client 树零引用，双入口零运行时共享）。
 
 /** 会话事件类型键（plugin-forge FORGE_PROGRESS_EVENT_TYPE 字面量镜像——bundle 零跨包 import） */
 export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
@@ -26,39 +28,11 @@ export interface ForgeUiConversationService {
   }
 }
 
-/** 节点数据（buildViewNode.data——客户端可见整值，纯 JSON） */
-export interface ForgeProgressNodeData {
-  readonly sourceSlug: string
-  readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop'
-  readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
-  readonly taskKey?: string
-  readonly counts?: { readonly pending: number; readonly running: number; readonly done: number }
-  readonly at: number
-  /** 事件 seq（节点时序锚——流内交错位） */
-  readonly seq: number
-}
-
 /** 会话事件消费切片（官方 SessionEvent 结构镜像：type/data/seq） */
 export interface ForgeProgressEventLike {
   readonly type: string
   readonly seq: number
   readonly data?: unknown
-}
-
-/** 数据守卫（plugin-forge isForgeProgressData 同语义镜像） */
-export function isForgeProgressNodeData(value: unknown): value is ForgeProgressNodeData {
-  if (typeof value !== 'object' || value === null) return false
-  const raw = value as Record<string, unknown>
-  return (
-    typeof raw['sourceSlug'] === 'string' &&
-    raw['sourceSlug'] !== '' &&
-    (raw['verb'] === 'claim' || raw['verb'] === 'claim-resume' || raw['verb'] === 'settle' || raw['verb'] === 'stop') &&
-    (raw['status'] === 'running' || raw['status'] === 'completed' || raw['status'] === 'blocked' || raw['status'] === 'interrupted') &&
-    (raw['taskKey'] === undefined || typeof raw['taskKey'] === 'string') &&
-    typeof raw['at'] === 'number' &&
-    Number.isFinite(raw['at']) &&
-    typeof raw['seq'] === 'number'
-  )
 }
 
 /**

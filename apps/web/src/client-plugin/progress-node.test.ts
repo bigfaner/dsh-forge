@@ -1,11 +1,11 @@
 // 1.17 · 'forge/progress' Chat 节点定义单测：match 判别（他事件零匹配）/ start-update /
 // buildViewNode 形状 / 重放保真（fold 为日志纯函数——事件重放/会话 fork 保留渲染）。
+// 数据守卫面随模块迁壳树（views/session/forge-progress-data.test.ts——2026-10-11 报障收口）。
 import { describe, expect, it } from 'vitest'
 import {
   FORGE_PROGRESS_EVENT_TYPE,
   FORGE_PROGRESS_NODE_KIND,
   forgeProgressDefinition,
-  isForgeProgressNodeData,
   type ForgeProgressEventLike,
 } from './progress-node.js'
 
@@ -68,11 +68,5 @@ describe('forgeProgressDefinition（uiConversation.events.register 消费形状�
         return forgeProgressDefinition.buildViewNode({ key: `k-${event.seq}`, id: `forge-progress-${event.seq}`, state })
       })
     expect(fold()).toEqual(fold())
-  })
-  it('形状守卫：合法数据 true；他形/漂移 false', () => {
-    expect(isForgeProgressNodeData({ ...DATA, seq: 7 })).toBe(true)
-    expect(isForgeProgressNodeData(DATA)).toBe(false) // 缺 seq（节点数据必带时序锚）
-    expect(isForgeProgressNodeData({ ...DATA, seq: 7, status: 'paused' })).toBe(false)
-    expect(isForgeProgressNodeData(null)).toBe(false)
   })
 })

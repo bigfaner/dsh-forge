@@ -29,6 +29,44 @@ describe('壳接入装配 pin（1.5）', () => {
     expect(vite).toContain('rejectStandaloneServe')
   })
 
+  it('bug: 双入口零运行时共享——壳树（client-plugin 外）与 client 树互禁 runtime import（type-only 豁免），防 rollup 公共 chunk 拆分破坏 forge-client classic script 形状', () => {
+    // 2026-10-11 web boot 报障根因：views/session/ForgeProgressNode.tsx（壳入口树）runtime
+    // import client-plugin/progress-node.js → rollup 拆共享 chunk → forge-client.js 以
+    // import{…}from"./assets/…" 开头 = classic script SyntaxError → 模块系统
+    // 「loaded without registering "@dsh-forge/web-client"」→ boot 审计 1 entry did not
+    // activate。纪律：跨入口值需求 = 字面量/纯函数镜像（main.ts id 同款先例），禁 import 共享。
+    const SRC = join(ROOT, 'apps/web/src')
+    const offenders: string[] = []
+    const statementsOf = (src: string): string[] =>
+      [...src.matchAll(/(?:^|\n)\s*(?:import|export)\s+[^;\n]+?from\s+['"]([^'"]+)['"]/g)].map((m) => m[0].trim())
+    const dynamicRefs = (src: string): string[] =>
+      [...src.matchAll(/(?:import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g)].map((m) => m[0])
+    /** 语句类型擦除判据：`import type`/`export type` 前缀，或花括号内全 `type X` 具名 */
+    const isTypeErased = (stmt: string): boolean =>
+      /^\s*(?:import|export)\s+type\b/.test(stmt) ||
+      (/^\s*(?:import|export)\s*\{/.test(stmt)
+        && stmt
+          .slice(stmt.indexOf('{') + 1, stmt.indexOf('}'))
+          .split(',')
+          .every((spec) => /^\s*type\s+\w+/.test(spec))
+      )
+    for (const p of walk(SRC)) {
+      if (!/\.(ts|tsx)$/.test(p) || /\.test\.(ts|tsx)$/.test(p)) continue
+      const rel = p.replaceAll('\\', '/')
+      const inClientTree = /src\/client-plugin\//.test(rel)
+      const src = readFileSync(p, 'utf8')
+      for (const stmt of [...statementsOf(src), ...dynamicRefs(src)]) {
+        const spec = (stmt.match(/['"]([^'"]+)['"]/) ?? [])[1] ?? ''
+        if (!spec.startsWith('.')) continue // 包名/裸引入不跨入口（两树各自打包依赖）
+        const crosses = inClientTree
+          ? spec.startsWith('..') // client 树引出（../shell/… 等）
+          : /(?:^|\/)client-plugin\//.test(spec) // 壳树引入 client 树
+        if (crosses && !isTypeErased(stmt)) offenders.push(`${rel}: ${stmt.replaceAll(/\s+/g, ' ')}`)
+      }
+    }
+    expect(offenders, `跨入口 runtime import（rollup 将拆公共 chunk——forge-client classic script 形状破坏）:\n${offenders.join('\n')}`).toEqual([])
+  })
+
   it('index.html 引 main.ts（母本同名入口）且 #root 挂载点在场', () => {
     const html = read('apps/web/index.html')
     expect(html).toContain('/src/main.ts')
