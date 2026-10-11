@@ -812,6 +812,14 @@ describe('1.4 deriveTaskStoreDir 动词（Interface 5 表单预检位——纯�
     expect(result.dir).toBe(join(tasksHome, deriveDirName(wsDir)))
   })
 
+  it('推导目录已存在且与推导结果逐字相同（present 态）→ 幂等复用候选放行返回 dir（fix：不再误抛 ERR_SUSPECTED_MOVE——中央确认归注册闭包）', async () => {
+    const { tasksHome, service } = setupM2()
+    const wsDir = join(WS, 'proj')
+    mkdirSync(join(tasksHome, deriveDirName(wsDir)), { recursive: true }) // 恰为本次推导目录（hash 一致）
+    const result = await service.deriveTaskStoreDir({ workspaceDir: wsDir })
+    expect(result.dir).toBe(join(tasksHome, deriveDirName(wsDir)))
+  })
+
   it('疑似移动布局 → SuspectedMoveError（表单预检位提前拦截——data 带手工指引留场文案）', async () => {
     const { tasksHome, service } = setupM2()
     const wsDir = join(WS, 'preview-move')

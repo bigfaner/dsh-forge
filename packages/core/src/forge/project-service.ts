@@ -166,11 +166,16 @@ async function deriveTaskStoreDirVerb(
   }
   const workspaceDir = await canonicalizeDir(q.workspaceDir)
   const collision = classifyRegistrationCollision(deps.tasksHome, workspaceDir)
-  if (collision.state === 'suspected-move' && !isSuspectedMoveBlocked(deps, deps.tasksHome, collision)) {
+  // fix：present（推导目录在场且 hash 一致——推导==既有逐字同）= 幂等复用候选 → 放行返回 dir。
+  // 中央 ws_path 精确确认归注册闭包（§6-33）——预检纯读位不再误抛 ERR_SUSPECTED_MOVE
+  // （注册协作者建库后 / 复用库在场时派生行预检恒绿）。
+  if (collision.state === 'normal' || collision.state === 'present') {
     return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
   }
-  if (collision.state !== 'normal') throw new SuspectedMoveError(collision.data)
-  return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
+  if (!isSuspectedMoveBlocked(deps, deps.tasksHome, collision)) {
+    return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
+  }
+  throw new SuspectedMoveError(collision.data)
 }
 
 /**
