@@ -202,7 +202,7 @@ describe('AC5 相位侧词汇 exhaustive 对齐（相位机面 ↔ contracts 词
     expect([...Object.keys(FEATURE_STATUS_ORDER).sort()]).toEqual([...FEATURE_STATUSES].sort())
   })
 
-  it('任务终态/活跃判定集：均 ⊆ 七态、互斥、并与 pending 恰为全集（两段式判据完备）', () => {
+  it('任务终态/活跃判定集：均 ⊆ 八态、互斥、并与 pending 恰为全集（两段式判据完备；S3 interrupted ∈ 活跃集）', () => {
     const terminal: readonly TaskStatus[] = [...TERMINAL_TASK_STATUSES]
     const active: readonly TaskStatus[] = [...ACTIVE_TASK_STATUSES]
     for (const s of [...terminal, ...active]) expect(TASK_STATUSES).toContain(s)

@@ -27,6 +27,7 @@ function feature(slug: string, byStatus: Partial<Record<TaskStatus, number>> = {
       completed: byStatus.completed ?? 0,
       blocked: byStatus.blocked ?? 0,
       suspended: 0,
+      interrupted: 0,
       skipped: 0,
       rejected: 0,
     } as Record<TaskStatus, number>,

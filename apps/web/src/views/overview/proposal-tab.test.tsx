@@ -47,7 +47,7 @@ function feature(slug: string, proposalSlug?: string): FeatureCard {
     featureStatus: 'in-progress',
     createdAt: CREATED,
     updatedAt: CREATED,
-    byStatus: { pending: 1, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 } as Record<TaskStatus, number>,
+    byStatus: { pending: 1, in_progress: 0, completed: 0, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 } as Record<TaskStatus, number>,
     docCount: 2,
     proposalSlug,
   }

@@ -61,16 +61,18 @@ export const SQL_STATS_BY_CONTAINER = `SELECT task_status AS task_status, COUNT(
 /**
  * active 排序活跃度权重（PRD 流程二「in_progress → blocked → pending → … → completed」——
  * '…' 展开 = suspended → skipped → rejected：活跃态尽前（处理中/受阻/待办/挂起），弃置态
- * 居中，completed 殿后（最不活跃））。
+ * 居中，completed 殿后（最不活跃））。S3 插入 interrupted（中断待恢复——恢复优先，居 blocked
+ * 与 pending 之间；既有相对序不变）。
  */
 export const ACTIVE_STATUS_WEIGHT: Readonly<Record<TaskStatus, number>> = {
   in_progress: 0,
   blocked: 1,
-  pending: 2,
-  suspended: 3,
-  skipped: 4,
-  rejected: 5,
-  completed: 6,
+  interrupted: 2,
+  pending: 3,
+  suspended: 4,
+  skipped: 5,
+  rejected: 6,
+  completed: 7,
 }
 
 /** 容器作用域双列（M3 2.5 读面泛化产物——readTaskRows/taskStats/taskGraph 同源消费） */
@@ -134,14 +136,22 @@ function matchesTaskSearch(search: string | undefined, card: Parameters<typeof t
   return taskSearchKeys(card).some((h) => h.toLowerCase().includes(needle))
 }
 
-/** 行排序（active 活跃度权重 | created 创建降序；组内 created 降序 + id 升序决胜——恒稳定） */
-function sortTaskRows(rows: readonly TaskStorageRow[], sort: 'active' | 'created'): TaskStorageRow[] {
+/** 行排序（active 活跃度权重 | created 创建降序 | interrupted 中断序（S3——updated_at 升序，
+ *  interrupted 行 updated_at = 对账真化时刻；组内 id 升序恒稳定决胜） */
+function sortTaskRows(rows: readonly TaskStorageRow[], sort: 'active' | 'created' | 'interrupted'): TaskStorageRow[] {
   const byCreatedDesc = (a: TaskStorageRow, b: TaskStorageRow): number => {
     if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   }
   const copy = [...rows]
   if (sort === 'created') return copy.sort(byCreatedDesc)
+  if (sort === 'interrupted') {
+    // 中断序（S3 恢复数据面）：updated_at 升序 = 最早中断优先（循环逐个领取恢复的取数序）
+    return copy.sort((a, b) => {
+      if (a.updated_at !== b.updated_at) return a.updated_at < b.updated_at ? -1 : 1
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    })
+  }
   return copy.sort((a, b) => {
     const wa = ACTIVE_STATUS_WEIGHT[a.task_status]
     const wb = ACTIVE_STATUS_WEIGHT[b.task_status]

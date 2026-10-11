@@ -12,10 +12,13 @@
 // links upsert-ignore（claim = 唯一写源）→ 相位重算；闭包尾部（提交后）emitTasksChanged。
 // 一律 prepared statements（Hard Rule）。
 //
-// 并发与重入域（tech-design Interface 1 裁决）：就绪选择仅扫 pending 池（Hard Rule）；
-// in_progress 幂等重入仅限显式 taskRef 或 links 已含本会话——无 taskRef 的盲选不领
-// in_progress（双 dispatcher 并发不双派发）；无就绪任务 → { task: null, … } Z1 出口信号
+// 并发与重入域（tech-design Interface 1 裁决）：就绪选择仅扫 pending 池（Hard Rule——S3 恢复
+// 径不经本函数：adopt 定向领取按 TaskRef 直查，就绪选择代码零改动）；in_progress 幂等重入
+// 仅限显式 taskRef、adopt 或 links 已含本会话——无 taskRef/adopt 的盲选不领 in_progress
+// （双 dispatcher 并发不双派发）；无就绪任务 → { task: null, … } Z1 出口信号
 // （run-tasks 循环等待/收工判据——纯读零写入，不发射事件）。
+// S3（run-tasks-host-command）：adopt 定向领取（忽略 links——接管 in_progress/interrupted，
+// interrupted → in_progress 经矩阵新边）+ loopSourced 循环来源标记（claim 记录持久痕迹）。
 //
 // 就绪选择（§6-35⑧ 用户裁决「沿一条分支执行，遇阻塞换支」）：分支延续优先（最近满足任务
 // 的就绪直接后继——执行上下文局部性）→ priority（P0 > P1 > P2 > 缺省）→ 创建序。
@@ -196,11 +199,15 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
   const now = new Date().toISOString()
 
   const result = withTransaction(db, (): ClaimTaskResult => {
-    // ① 目标解析：显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
+    // ① 目标解析：adopt 定向领取（S3——循环恢复径：按 TaskRef 直查接管既有 in_progress/
+    //    interrupted，忽略 session links——重启后主会话新 id 天然无 links，直查即接管）；
+    //    显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
     //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常；
     //    重入同承 scope——他容器挂接行跳过，scoped 派发不劫持全池时代的跨容器活）
     let row: TaskStorageRow | undefined
-    if (input.taskRef !== undefined) {
+    if (input.adopt !== undefined) {
+      row = resolveTaskRef(db, input.projectId, input.adopt)
+    } else if (input.taskRef !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
       row = latestInProgressBySession(db, input.sessionId, input.source) ?? selectReadyTask(db, input.source)
@@ -279,12 +286,23 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       }
     }
 
-    // ⑤ claim 记录（digest 落库——全文不入库 §6-11；重入 from/to 空——无状态效应，同 add 形制）
+    // ⑤ claim 记录（digest 落库——全文不入库 §6-11；重入 from/to 空——无状态效应，同 add 形制；
+    //    S3 loop_sourced = 循环来源标记持久痕迹（TASK_RECORD_LOOP_SOURCED 单点定义——
+    //    仅 reconcileInterrupted 消费，其余读面零感知）
     db.prepare(
-      `INSERT INTO task_records (task_id, verb, from_status, to_status, dispatch_digest, actor, session_id,
+      `INSERT INTO task_records (task_id, verb, from_status, to_status, dispatch_digest, loop_sourced, actor, session_id,
          created_at, updated_at)
-       VALUES (?, 'claim', ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
-    ).run(row.id, reclaimed ? null : row.task_status, reclaimed ? null : 'in_progress', digest, input.sessionId, now, now)
+       VALUES (?, 'claim', ?, ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
+    ).run(
+      row.id,
+      reclaimed ? null : row.task_status,
+      reclaimed ? null : 'in_progress',
+      digest,
+      input.loopSourced === true ? 1 : 0,
+      input.sessionId,
+      now,
+      now,
+    )
 
     // ⑥ links upsert-ignore（claim = 唯一写源；同任务同会话幂等，跨会话重试自然累积）
     db.prepare(

@@ -82,8 +82,9 @@ BEGIN SELECT RAISE(ABORT, 'feature_records: append-only violation (update)'); EN
 CREATE TRIGGER trg_feature_records_no_delete BEFORE DELETE ON feature_records
 BEGIN SELECT RAISE(ABORT, 'feature_records: append-only violation (delete)'); END;
 
--- [域表 4] TASKS —— 任务实体 + 七态 + 容器双轨(M3 直改:source 双列取代 feature_id;
---           mode 创建时快照;ac_json = AC gate 数据面;main_session 砍除——老 forge 形态约束残留)
+-- [域表 4] TASKS —— 任务实体 + 八态 + 容器双轨(M3 直改:source 双列取代 feature_id;
+--           mode 创建时快照;ac_json = AC gate 数据面;main_session 砍除——老 forge 形态约束残留;
+--           S3 run-tasks-host-command 直改:+interrupted 第八态——进程重启对账真化的非终态)
 CREATE TABLE tasks (
     id              TEXT PRIMARY KEY,              -- uuid(应用生成)——records/edges/links FK 与前端引用锚
     slug            TEXT NOT NULL,                 -- agent 自然键 ① ≡ 容器 slug(feature|proposal·服务不变量)
@@ -93,7 +94,7 @@ CREATE TABLE tasks (
     task_status     TEXT NOT NULL DEFAULT 'pending'
                     CONSTRAINT ck_tasks_status CHECK (task_status IN
                       ('pending', 'in_progress', 'completed', 'blocked',
-                       'suspended', 'skipped', 'rejected')),
+                       'suspended', 'interrupted', 'skipped', 'rejected')),
     task_desc       TEXT,                          -- 内容负载(Hard Rules/参照列表等自由文本,C11)
     ac_json         TEXT,                          -- 验收标准清单(JSON string[];NULL = 无 AC 任务不校验)
     priority        TEXT CONSTRAINT ck_tasks_priority CHECK (priority IN ('P0', 'P1', 'P2')),
@@ -150,6 +151,9 @@ CREATE TABLE task_records (
     gate_json       TEXT,                          -- {compile,fmt,lint,test[,coverage]}——gate 任务数字摘要承载体
     commit_hash     TEXT,
     dispatch_digest TEXT,                          -- claim 简报指纹 sha-256 前 12 hex(全文 = worker 会话日志)
+    loop_sourced    INTEGER NOT NULL DEFAULT 0     -- 循环来源标记(S3:宿主循环领取 = 1;reconcileInterrupted
+                                                    --   对账判据;仅对账消费——TaskRecordEntry 读面不投影)
+    CONSTRAINT ck_records_loop_sourced CHECK (loop_sourced IN (0, 1)),
     actor           TEXT NOT NULL
                     CONSTRAINT ck_records_actor CHECK (actor IN ('plugin-tool', 'ui', 'core')),
     session_id      TEXT,                          -- claim = 派发会话 / submit = 执行会话(两形态混存·相异判)

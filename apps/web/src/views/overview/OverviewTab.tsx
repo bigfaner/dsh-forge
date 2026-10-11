@@ -347,6 +347,7 @@ function emptyCounts(): Record<TaskStatus, number> {
     completed: 0,
     blocked: 0,
     suspended: 0,
+    interrupted: 0,
     skipped: 0,
     rejected: 0,
   }

@@ -41,8 +41,10 @@ export const FEATURE_STATUS_ORDER: Readonly<Record<FeatureStatus, number>> = {
 /** 任务终态集（§6-29：全部 ∈ 终态 → completed；rejected 不满足前置但计入相位终态——§3.2） */
 export const TERMINAL_TASK_STATUSES = ['completed', 'skipped', 'rejected'] as const satisfies readonly TaskStatus[]
 
-/** 活跃判定集（§6-29 两段式第一段：存在其一 → in-progress——执行中/受阻/挂起均为活跃相位） */
-export const ACTIVE_TASK_STATUSES = ['in_progress', 'blocked', 'suspended'] as const satisfies readonly TaskStatus[]
+/** 活跃判定集（§6-29 两段式第一段：存在其一 → in-progress——执行中/受阻/挂起/中断均为活跃相位；
+ *  S3 +interrupted——对账真化不降相位（in_progress → interrupted 推导不动点成立，
+ *  assertPhaseInvariant 全体写动词同判据） */
+export const ACTIVE_TASK_STATUSES = ['in_progress', 'blocked', 'suspended', 'interrupted'] as const satisfies readonly TaskStatus[]
 
 /** 推导机输入（调用方写事务内读出的行集快照——本模块零 IO） */
 export interface PhaseDeriverInput {
@@ -68,7 +70,7 @@ export function docPhaseMax(docKinds: readonly DocKind[]): DocPhase | null {
 }
 
 /** taskDerived 两段式（§6-29）：无任务 → null（combine 交还 docPhaseMax 分支）。
- *  第一段：存在 in_progress/blocked/suspended → in-progress；第二段：否则存在非终态
+ *  第一段：存在 in_progress/blocked/suspended/interrupted → in-progress；第二段：否则存在非终态
  *  （即 pending）→ tasks（终态+pending 混合）；全终态 → completed。 */
 export function deriveTaskPhase(taskStatuses: readonly TaskStatus[]): TaskDerivedPhase | null {
   if (taskStatuses.length === 0) return null

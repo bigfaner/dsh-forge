@@ -182,13 +182,15 @@ export function useSessionTaskPills(
 
 // ─────────────────── 纯模型（行集 / 几何 / worker 解析） ───────────────────
 
-/** 七态 → 官方 StateDot 语义（overview STATUS_DOT_STATE 同口径——铁律③ 本域副本，口径互指） */
+/** 状态 → 官方 StateDot 语义（overview STATUS_DOT_STATE 同口径——铁律③ 本域副本，口径互指；
+ *  S3 +interrupted = warning——与 suspended 同族，暂停等待恢复） */
 export const SESSION_PILL_STATUS_DOT: Readonly<Record<SessionTaskLinkCard['taskStatus'], StateDotState>> = {
   pending: 'idle',
   in_progress: 'ongoing',
   completed: 'done',
   blocked: 'error',
   suspended: 'warning',
+  interrupted: 'warning',
   skipped: 'idle',
   rejected: 'error',
 }

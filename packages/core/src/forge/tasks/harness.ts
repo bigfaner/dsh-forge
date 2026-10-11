@@ -155,7 +155,8 @@ export function seedLink(
 }
 
 /** 种 record 行（append-only 审计——files/gate JSON 受控负载；verb 开放传参；2.6 增 createdAt
- *  受控项——实际耗时（首 claim → 末 submit 时差）断言基准） */
+ *  受控项——实际耗时（首 claim → 末 submit 时差）断言基准；S3 增 loopSourced 受控项——
+ *  循环来源标记（reconcileInterrupted 判据）种入面） */
 export function seedRecord(
   db: Database.Database,
   taskId: string,
@@ -168,6 +169,7 @@ export function seedRecord(
     filesJson?: string
     gateJson?: string
     digest?: string
+    loopSourced?: boolean
     actor?: string
     sessionId?: string
     createdAt?: string
@@ -176,8 +178,8 @@ export function seedRecord(
   const ts = o.createdAt ?? '2026-01-01T00:00:00.000Z'
   db.prepare(
     `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, summary, files_json,
-       gate_json, commit_hash, dispatch_digest, actor, session_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+       gate_json, commit_hash, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
   ).run(
     taskId,
     o.verb ?? 'add',
@@ -188,6 +190,7 @@ export function seedRecord(
     o.filesJson ?? null,
     o.gateJson ?? null,
     o.digest ?? null,
+    o.loopSourced === true ? 1 : 0,
     o.actor ?? 'plugin-tool',
     o.sessionId ?? null,
     ts,

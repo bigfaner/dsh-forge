@@ -22,7 +22,7 @@ import { adaptDispatchJobs } from './faces.js'
 import type { DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
-import { createForgeTools, createProjectResolver } from './tools/index.js'
+import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 
@@ -32,6 +32,12 @@ export interface ForgePluginConfig {
   projects?: readonly ProjectBinding[]
   /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表） */
   bindingsFile?: string
+}
+
+/** 启动对账降级告警（fail-soft 单行——console.warn；降级 = 遗留 in_progress 原样，下次重启重试） */
+function warnReconcileDegraded(projectId: string, cause: unknown): void {
+  const message = cause instanceof Error ? cause.message : String(cause)
+  console.warn(`forge 启动对账降级（fail-soft，下次重启重试）：${projectId}——${message}`)
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -115,6 +121,22 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       spawn: createInProcessDriverSpawn(),
     })
+    // S3 启动对账（run-tasks-host-command 图 D）：进程重启 → 插件装配 → reconcileInterrupted
+    // 逐绑定项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
+    // 之③在装配时点恒真——循环登记表进程内不持久化，重启即空（活循环启动只会晚于装配），
+    // registryEmpty=true 为装配期结构事实。fire-and-forget：失败不阻载装配（对账降级 = 遗留
+    // in_progress 原样——skill 幂等重入语义不受伤，下次进程重启重试）。
+    for (const projectId of bindingProjectIds(config.projects ?? [], config.bindingsFile)) {
+      try {
+        void ctx.forgeTasks
+          .reconcileInterrupted({ projectId, registryEmpty: true })
+          .catch((cause: unknown) => {
+            warnReconcileDegraded(projectId, cause)
+          })
+      } catch (cause) {
+        warnReconcileDegraded(projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
+      }
+    }
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),

@@ -4,9 +4,9 @@
 //
 // 可拆卸壳设计（decisions #10/#18）：identity {sessionId, loopSourced} 与 guardKey 参数化——
 // 工具壳填 exec 会话 id（guardKey = sessionId，行为与分层前逐字节等价）；循环驱动器（后续
-// 任务）填主会话真实 id + loopSourced=true（claim 记录循环来源标记的 S3 接缝——本任务仅
-// 参数化点落位，claim 入参形状零变化）+ LoopInstanceId。adopt 定向领取同属 S3 接缝，
-// 随 core 服务扩展一并扩入 DispatchCoreArgs。
+// 任务）填主会话真实 id + loopSourced=true（claim 记录循环来源标记——S3 已落地：标记列
+// loop_sourced 随 claim 写入）+ LoopInstanceId。adopt 定向领取同属 S3 落地面（忽略 links，
+// 循环逐个恢复 earliest interrupted 的径）。
 //
 // 依赖方向硬约束：工具壳 → 核心面单向；核心面零 import 工具壳（tools/**）——文件边界即
 // 未来 run-tasks skill 退役时的下线边界（工具面整体移除而核心面/循环/核心单测零波及）。
@@ -20,6 +20,7 @@ import type {
   ForgeTasksService,
   Mode,
   TaskProgressPhase,
+  TaskRef,
   TaskType,
 } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
@@ -40,8 +41,8 @@ import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
  * + LoopInstanceId——后续任务接线）。
  */
 export interface DispatchCoreArgs {
-  /** 身份（两消费者均传真实会话 id；loopSourced = 循环来源标记——记 claim records 的 S3
-   *  接缝，本任务仅参数化点落位：claim 入参形状零变化） */
+  /** 身份（两消费者均传真实会话 id；loopSourced = 循环来源标记——claim 记录 loop_sourced 持久
+   *  痕迹的 S3 落地面：工具壳不携带（缺省无标记），循环驱动器恒 true） */
   readonly identity: { readonly sessionId: string; readonly loopSourced: boolean }
   /** guard 键（工具壳 = 会话 id；循环 = LoopInstanceId——decisions #18 参数槽） */
   readonly guardKey: string
@@ -49,6 +50,9 @@ export interface DispatchCoreArgs {
   readonly projectId: string
   /** 任务源限定认领（source 对 = 容器限定盲选 + 无任务事件归属；缺席 = 全库就绪盲选） */
   readonly source?: ContainerRef
+  /** adopt 定向领取（S3——循环恢复径：接管既有 in_progress/interrupted，忽略 session links；
+   *  工具壳不携带——dispatchTask schema 零变化，循环驱动器传 listTasks 中断序首项） */
+  readonly adopt?: TaskRef
   /** 后台派发（工具壳 run_in_background 参数直映射——jobs 包装结算后置；循环不携带） */
   readonly runInBackground?: boolean
 }
@@ -174,12 +178,14 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
 
   // 1. claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
   //    （source 对在场 = 任务源限定盲选；缺席 = 全库——缺省行为零变化。
-  //    identity.loopSourced = 循环来源标记 S3 接缝：标记字段随 core 服务扩展落面，
-  //    本任务 claim 入参形状零变化。）
+  //    S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取（忽略
+  //    links——工具壳两参数均不携带，schema 与外部语义零变化）。）
   const claimed = await deps.tasks.claimTask({
     projectId,
     sessionId,
     ...(args.source !== undefined ? { source: args.source } : {}),
+    ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
+    ...(identity.loopSourced ? { loopSourced: true } : {}),
   })
   const task = claimed.task
   if (task === null) {

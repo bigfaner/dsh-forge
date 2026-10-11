@@ -12,18 +12,22 @@ describe('SwimlaneView（AC3 七态横向列）', () => {
   const pending = cardFixture({ taskId: 'a', localId: '2.1', taskStatus: 'pending', actualDurationMs: undefined, sessionCount: 1 })
   const done = cardFixture({ taskId: 'b', localId: '2.4', taskStatus: 'completed' })
 
-  it('七列按 TASK_STATUSES 行序；列头 = 状态点 + 中文标签 + 计数', () => {
+  it('八列按 TASK_STATUSES 行序；列头 = 状态点 + 中文标签 + 计数（S3 interrupted 列「已中断」）', () => {
     const html = renderToStaticMarkup(<SwimlaneView cards={[pending, done]} onOpenTask={NOOP} />)
     expect(html).toContain('data-dswf-tt-swim=""')
     expect(html).toContain('data-dswf-tt-col="pending"')
+    expect(html).toContain('data-dswf-tt-col="interrupted"') // S3 新态列（表驱动）
     expect(html).toContain('data-dswf-tt-col="rejected"')
     const pendingAt = html.indexOf('data-dswf-tt-col="pending"')
     const doneAt = html.indexOf('data-dswf-tt-col="completed"')
     const blockedAt = html.indexOf('data-dswf-tt-col="blocked"')
+    const interruptedAt = html.indexOf('data-dswf-tt-col="interrupted"')
     expect(pendingAt).toBeLessThan(doneAt)
     expect(doneAt).toBeLessThan(blockedAt)
+    expect(blockedAt).toBeLessThan(interruptedAt) // 行序：…suspended → interrupted…
     expect(html).toContain('待处理')
     expect(html).toContain('已完成')
+    expect(html).toContain('已中断')
   })
 
   it('0 计数列 = 等高窄列头（D36 ③：is-empty 类位仅承载列宽 auto 收窄——列头形态归 CSS 同款 26px 横向头；无卡片区）', () => {

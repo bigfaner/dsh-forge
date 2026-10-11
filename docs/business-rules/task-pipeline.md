@@ -9,11 +9,11 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 
 ## 状态机与转移
 
-### BIZ-task-001: 状态机七态封闭与转移纪律
+### BIZ-task-001: 状态机八态封闭与转移纪律
 
-**Rule**: tasks 任务状态七值封闭（CHECK 约束）；agent 面 = 转移矩阵推导（claim/submit 拥有的边）；人类通道 transitionTask from≠to 任意 + reason 必带（空因拒绝留场）；转移校验先于写、单事务全成全败。
+**Rule**: tasks 任务状态八值封闭（CHECK 约束；S3 起七值 + interrupted——进程重启对账真化的非终态）；agent 面 = 转移矩阵推导（claim/submit/reconcile 拥有的边——含 in_progress→interrupted 与 interrupted→in_progress）；人类通道 transitionTask from≠to 任意 + reason 必带（空因拒绝留场）；转移校验先于写、单事务全成全败。
 **Context**: agent 机器校验面与人类逃生通道分治（SC7 单测锚：from 匹配 / transitionTask from≠to + reason 必带）。
-**Source**: feature/dsh-forge-m2-pipeline BIZ-001（prd-spec §In Scope ① / tech-design §Interface 1·10）
+**Source**: feature/dsh-forge-m2-pipeline BIZ-001（prd-spec §In Scope ① / tech-design §Interface 1·10）；S3 增补（proposal run-tasks-host-command SC3/R6——reconcileInterrupted 启动对账）
 
 ### BIZ-task-002: 依赖终态守卫
 

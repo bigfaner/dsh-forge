@@ -16,6 +16,8 @@ import type {
   ListTasksQuery,
   QueryTaskInput,
   QueryTaskResult,
+  ReconcileInterruptedInput,
+  ReconcileInterruptedResult,
   SessionLinksQuery,
   SessionTaskLinkCard,
   SubmitTaskInput,
@@ -40,6 +42,7 @@ import { taskDetail } from './detail.js'
 import type { GitExecFile } from './git-lookup.js'
 import { listTasks, taskGraph, taskStats } from './list.js'
 import { queryTask } from './query.js'
+import { reconcileInterrupted } from './reconcile.js'
 import { sessionLinks } from './session-links.js'
 import { submitTask } from './submit.js'
 import { transitionTask } from './transition.js'
@@ -67,6 +70,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult> {
       return submitTask(deps, input)
+    },
+    async reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult> {
+      return reconcileInterrupted(deps, input)
     },
     async transitionTask(input: TransitionTaskInput): Promise<TaskSnapshot> {
       return transitionTask(deps, input)

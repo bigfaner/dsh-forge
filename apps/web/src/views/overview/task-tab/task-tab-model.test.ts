@@ -45,7 +45,7 @@ const FEATURES: readonly FeatureCard[] = [
     featureStatus: 'completed',
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
-    byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+    byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
     docCount: 1,
   },
   {
@@ -55,7 +55,7 @@ const FEATURES: readonly FeatureCard[] = [
     featureStatus: 'in-progress',
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
-    byStatus: { pending: 2, in_progress: 1, completed: 3, blocked: 1, suspended: 0, skipped: 0, rejected: 0 },
+    byStatus: { pending: 2, in_progress: 1, completed: 3, blocked: 1, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
     docCount: 4,
   },
 ]
@@ -175,8 +175,8 @@ describe('dagVisibleSet（AC4 chips 过滤三视图统一——DAG vis 集）', 
   })
 })
 
-describe('swimColumnsOf（AC3 七态横向列投影）', () => {
-  it('七态行序（contracts TASK_STATUSES）；0 计数列 = 空卡列（折叠归组件）', () => {
+describe('swimColumnsOf（AC3 八态横向列投影）', () => {
+  it('八态行序（contracts TASK_STATUSES——S3 +interrupted）；0 计数列 = 空卡列（折叠归组件）', () => {
     const columns = swimColumnsOf([
       cardFixture({ taskId: 'a', taskStatus: 'pending' }),
       cardFixture({ taskId: 'b', taskStatus: 'completed' }),
@@ -188,6 +188,7 @@ describe('swimColumnsOf（AC3 七态横向列投影）', () => {
       'completed',
       'blocked',
       'suspended',
+      'interrupted',
       'skipped',
       'rejected',
     ])
@@ -198,12 +199,13 @@ describe('swimColumnsOf（AC3 七态横向列投影）', () => {
 })
 
 describe('taskStatusTagTone（状态 tag 官方 tone 映射）', () => {
-  it('completed=success / blocked·rejected=danger / 其余=neutral', () => {
+  it('completed=success / blocked·rejected=danger / 其余=neutral（含 S3 interrupted——暂停态非错误）', () => {
     expect(taskStatusTagTone('completed')).toBe('success')
     expect(taskStatusTagTone('blocked')).toBe('danger')
     expect(taskStatusTagTone('rejected')).toBe('danger')
     expect(taskStatusTagTone('pending')).toBe('neutral')
     expect(taskStatusTagTone('in_progress')).toBe('neutral')
+    expect(taskStatusTagTone('interrupted')).toBe('neutral')
   })
 })
 

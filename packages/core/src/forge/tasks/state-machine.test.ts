@@ -1,8 +1,10 @@
-// 任务 2.1 测试 —— 状态机 transitionTargets 两 face（AC1：Interface 10——human = 七态 − 当前；
+// 任务 2.1 测试 —— 状态机 transitionTargets 两 face（AC1：Interface 10——human = 八态 − 当前；
 // agent = §3.1 转移矩阵）+ SC7 锚（AC2：from 不匹配 / 目标 ∉ transitionTargets / agent 面矩阵
 // 非法格 → ERR_INVALID_TRANSITION 形状）+ 词汇 exhaustive 对齐（AC5：Record<TaskStatus,…>
 // 编译期穷尽的运行期对照面）。权威来源：tech-design §Interface 1/10 + Per-Layer Test Plan
 // 「SC7 六类：…transition from≠to+transitionTargets」+ db-schema §3.1 矩阵。
+// S3（run-tasks-host-command）：矩阵 +in_progress→interrupted（对账/循环主动终态真化）
+// 与 interrupted→in_progress（adopt 定向恢复领取）两新边；词汇七态 → 八态。
 import {
   FEATURE_STATUSES,
   FEATURE_STATUS_LABELS,
@@ -16,16 +18,16 @@ import { describe, expect, it } from 'vitest'
 import { InvalidTransitionError, isInvalidTransitionError } from './errors.js'
 import { AGENT_TRANSITION_MATRIX, assertTransitionAllowed, transitionTargets } from './state-machine.js'
 
-// ── AC1 human 面：七态 − 当前（from≠to 任意通道；行序 = TASK_STATUSES 序——菜单序稳定） ──
+// ── AC1 human 面：八态 − 当前（from≠to 任意通道；行序 = TASK_STATUSES 序——菜单序稳定） ──
 
 describe('AC1 transitionTargets · human 面（所见即所得数据面）', () => {
   for (const current of TASK_STATUSES) {
-    it(`human('${current}') = 七态 − 自身（行序 = TASK_STATUSES 序）`, () => {
+    it(`human('${current}') = 八态 − 自身（行序 = TASK_STATUSES 序）`, () => {
       expect(transitionTargets(current, 'human')).toEqual(TASK_STATUSES.filter((s) => s !== current))
     })
   }
 
-  it('七态全覆盖后目标集恰为其余六态（from≠to 机械排除自身，无遗漏无自环）', () => {
+  it('八态全覆盖后目标集恰为其余七态（from≠to 机械排除自身，无遗漏无自环）', () => {
     for (const current of TASK_STATUSES) {
       const targets = transitionTargets(current, 'human')
       expect(targets).not.toContain(current)
@@ -44,12 +46,13 @@ describe('AC1 transitionTargets · human 面（所见即所得数据面）', () 
 // ── AC1 agent 面：§3.1 转移矩阵逐格 pin（claim/submit 拥有的边——SC7 单测对象） ──
 
 describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
-  it('矩阵全表逐格 pin（行序 = §3.1 列序：in_progress | completed | blocked | pending）', () => {
+  it('矩阵全表逐格 pin（行序 = §3.1 列序：in_progress | completed | blocked | interrupted | pending）', () => {
     expect({ ...AGENT_TRANSITION_MATRIX }).toEqual({
       pending: ['in_progress'], // claimTask
-      in_progress: ['completed', 'blocked'], // 仅经 submitTask（gate ✓ / result=blocked）
+      in_progress: ['completed', 'blocked', 'interrupted'], // 仅经 submitTask（gate ✓ / result=blocked）+ S3 reconcileInterrupted
       blocked: ['in_progress', 'pending'], // claimTask 重派 / auto-restore（submit 钩子）
       suspended: [], // agent 面不可达
+      interrupted: ['in_progress'], // S3 claimTask adopt（循环定向恢复领取）
       completed: [],
       skipped: [],
       rejected: [],
@@ -59,7 +62,12 @@ describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
     }
   })
 
-  it('矩阵目标 ⊆ 七态词汇且无自环（from≠to）', () => {
+  it('S3 新边双径：in_progress→interrupted（对账真化）与 interrupted→in_progress（adopt 恢复）放行', () => {
+    expect(() => assertTransitionAllowed('in_progress', 'interrupted', 'agent')).not.toThrow()
+    expect(() => assertTransitionAllowed('interrupted', 'in_progress', 'agent')).not.toThrow()
+  })
+
+  it('矩阵目标 ⊆ 八态词汇且无自环（from≠to）', () => {
     for (const current of TASK_STATUSES) {
       for (const to of AGENT_TRANSITION_MATRIX[current]) {
         expect(TASK_STATUSES).toContain(to)
@@ -106,7 +114,7 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
     expect(() => assertTransitionAllowed('suspended', 'suspended', 'human')).toThrowError(/ERR_INVALID_TRANSITION|suspended/)
   })
 
-  it('agent 面矩阵非法格逐格拒绝（in_progress→pending / blocked→completed[TC-063] / 终态全部出边 / blocked→skipped）', () => {
+  it('agent 面矩阵非法格逐格拒绝（in_progress→pending / blocked→completed[TC-063] / 终态全部出边 / blocked→skipped / interrupted 越权出边 / pending→interrupted）', () => {
     const illegal: ReadonlyArray<readonly [TaskStatus, TaskStatus]> = [
       ['in_progress', 'pending'],
       ['in_progress', 'suspended'],
@@ -114,6 +122,10 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
       ['blocked', 'skipped'],
       ['pending', 'blocked'],
       ['pending', 'pending'],
+      ['pending', 'interrupted'], // S3：pending 无需真化——claim 直达 in_progress
+      ['interrupted', 'completed'], // S3：interrupted 先恢复（adopt）后经 submit 结算
+      ['interrupted', 'pending'],
+      ['interrupted', 'blocked'],
       ['suspended', 'in_progress'],
       ['suspended', 'pending'],
       ['completed', 'in_progress'],
@@ -142,21 +154,21 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
   })
 })
 
-// ── AC5 七态/六态/五态与 contracts 标签常量 exhaustive 对齐（编译期穷尽 Record 的运行期对照） ──
+// ── AC5 八态/六态/五态与 contracts 标签常量 exhaustive 对齐（编译期穷尽 Record 的运行期对照） ──
 
 describe('AC5 词汇 exhaustive 对齐（状态机面 ↔ contracts 词汇与标签常量）', () => {
   it('agent 矩阵键集 ≡ TASK_STATUSES（Record<TaskStatus,…> 编译期穷尽的运行期证物）', () => {
     expect([...Object.keys(AGENT_TRANSITION_MATRIX).sort()]).toEqual([...TASK_STATUSES].sort())
   })
 
-  it('两 face 目标恒 ⊆ 七态词汇', () => {
+  it('两 face 目标恒 ⊆ 八态词汇', () => {
     for (const current of TASK_STATUSES) {
       for (const to of transitionTargets(current, 'human')) expect(TASK_STATUSES).toContain(to)
       for (const to of transitionTargets(current, 'agent')) expect(TASK_STATUSES).toContain(to)
     }
   })
 
-  it('三域标签常量键集 ≡ 词汇全集（七态/六态/五态——跨包 exhaustive 对照）', () => {
+  it('三域标签常量键集 ≡ 词汇全集（八态/六态/五态——跨包 exhaustive 对照）', () => {
     expect([...Object.keys(TASK_STATUS_LABELS).sort()]).toEqual([...TASK_STATUSES].sort())
     expect([...Object.keys(FEATURE_STATUS_LABELS).sort()]).toEqual([...FEATURE_STATUSES].sort())
     expect([...Object.keys(PROPOSAL_STATUS_LABELS).sort()]).toEqual([...PROPOSAL_STATUSES].sort())

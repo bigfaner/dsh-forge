@@ -118,13 +118,14 @@ describe('chips 过滤接口（AC5——三视图统一，3.6 消费）', () => 
     expect(isChipDisabled(3)).toBe(false)
   })
 
-  it('七态词汇序 = contracts TASK_STATUSES（chips 渲染行序单源）', () => {
+  it('八态词汇序 = contracts TASK_STATUSES（chips 渲染行序单源——S3 +interrupted）', () => {
     expect([...ALL_STATUS]).toEqual([
       'pending',
       'in_progress',
       'completed',
       'blocked',
       'suspended',
+      'interrupted',
       'skipped',
       'rejected',
     ])

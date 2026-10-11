@@ -18,7 +18,7 @@ import { cardFixture } from './task-tab-model.test.js'
 const CARDS: TaskCard[] = [cardFixture()]
 const STATS: TaskStats = {
   total: 1,
-  byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+  byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
   unmetPending: 0,
 }
 const GRAPH: TaskGraph = { tasks: [...CARDS], edges: [] }

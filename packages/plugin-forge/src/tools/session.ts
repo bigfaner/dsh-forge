@@ -44,6 +44,26 @@ export interface WorkspaceNotRegisteredData {
 }
 
 /**
+ * 绑定全集 → 去重 projectId 清单（静态表在前、bindingsFile 条目随后——S3 启动对账的
+ * 装配期枚举面：进程重启 → 插件装配 → 逐绑定项目 reconcileInterrupted（图 D）。
+ * fail-soft：bindingsFile 读取失败按空表降级（与解析器同口径）。
+ */
+export function bindingProjectIds(bindings: readonly ProjectBinding[], bindingsFile?: string): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const push = (projectId: string): void => {
+    if (!seen.has(projectId)) {
+      seen.add(projectId)
+      ids.push(projectId)
+    }
+  }
+  for (const b of bindings) push(b.projectId)
+  if (bindingsFile !== undefined) {
+    for (const projectId of readBindingsFile(bindingsFile).values()) push(projectId)
+  }
+  return ids
+}
+/**
  * tool 面 cwd 无匹配项目（tech-design §Error Handling 表 400 行）。
  * code 字面量锚定 @dsh-forge/contracts ERROR_CODES；类定义落位插件侧
  * （contracts 不持运行期名映射；插件禁 import core——core 侧无同名类，跨面以 code 判别）。

@@ -10,7 +10,9 @@ import {
   createTasksHarness,
   seedEdge,
   seedFeature,
+  seedLink,
   seedProposal,
+  seedRecord,
   seedTask,
   type TasksHarness,
 } from './harness.js'
@@ -530,5 +532,98 @@ describe('AC（2.4）claimTask 容器双轨：容器限定盲选 + dispatchPromp
     const again = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'pa' }, sessionId: 's1' })
     expect(again.task).toMatchObject({ slug: 'pa', localId: '1.1' })
     expect(again.reclaimed).toBe(true)
+  })
+})
+
+// ── S3（run-tasks-host-command）：adopt 定向领取 + 循环来源标记（AC1/AC4——忽略 links、
+//    interrupted → in_progress 恢复边、claim 记录 loop_sourced 持久痕迹） ──
+
+describe('S3 claimTask adopt 定向领取（忽略 session links）', () => {
+  it('links 异会话在场 → adopt 精确领目标（接管他会话 in_progress，reclaimed=true）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'in_progress' }) // adopt 目标（他会话持有）
+    seedTask(h!.db, 'f', '2.2', { status: 'in_progress' }) // links 干扰项（本会话挂接）
+    seedLink(h!.db, 't-f-2.2', 's-loop')
+    const r = await claim({
+      projectId: P(),
+      adopt: { slug: 'f', localId: '2.1' },
+      sessionId: 's-loop',
+    })
+    // adopt 忽略 links：不回领本会话挂接的 2.2，直取 2.1（接管——reclaimed 幂等重入形）
+    expect(r.task).toMatchObject({ slug: 'f', localId: '2.1', taskStatus: 'in_progress' })
+    expect(r.reclaimed).toBe(true)
+    // links 双行：原挂接 + adopt 会话 upsert（主会话真实 id 挂接——GUI jump 零适配）
+    expect(rows(`SELECT task_id, session_id FROM task_session_links ORDER BY task_id`)).toEqual([
+      { task_id: 't-f-2.1', session_id: 's-loop' },
+      { task_id: 't-f-2.2', session_id: 's-loop' },
+    ])
+  })
+
+  it('interrupted 任务 adopt → in_progress（矩阵新边——循环定向恢复领取；from=interrupted 记录）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'interrupted' })
+    const r = await claim({
+      projectId: P(),
+      adopt: { slug: 'f', localId: '2.1' },
+      sessionId: 's-owner',
+      loopSourced: true,
+    })
+    expect(r.task?.taskStatus).toBe('in_progress')
+    expect(r.reclaimed).toBe(false) // 状态转移（非重入）
+    expect(rows(`SELECT from_status, to_status FROM task_records WHERE task_id = 't-f-2.1'`)).toEqual([
+      { from_status: 'interrupted', to_status: 'in_progress' },
+    ])
+  })
+
+  it('adopt 目标未命中 → ERR_TASK_NOT_FOUND；守卫照常（依赖未满足即拒——一切 claim 路径）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    const err = await claim({ projectId: P(), adopt: { slug: 'f', localId: '9.9' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(TaskNotFoundError)
+
+    seedTask(h!.db, 'f', '1.1') // pending 前置
+    seedTask(h!.db, 'f', '1.2')
+    seedEdge(h!.db, 't-f-1.2', 't-f-1.1')
+    const unmet = await claim({ projectId: P(), adopt: { slug: 'f', localId: '1.2' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect(unmet).toBeInstanceOf(DependenciesUnmetError)
+  })
+
+  it('恢复闭环（AC4——对账 → adopt 径重派）：interrupted 经 adopt+loopSourced 领取后新 claim 记录仍带标记', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'interrupted' })
+    seedRecord(h!.db, 't-f-2.1', { verb: 'claim', loopSourced: true })
+    seedRecord(h!.db, 't-f-2.1', { verb: 'transition', from: 'in_progress', to: 'interrupted', actor: 'core' })
+    await claim({ projectId: P(), adopt: { slug: 'f', localId: '2.1' }, sessionId: 's-owner', loopSourced: true })
+    // 重启再对账判据可续：最新 claim 行 loop_sourced=1（再中断仍可真化）
+    expect(
+      rows(
+        `SELECT loop_sourced FROM task_records WHERE task_id = 't-f-2.1' AND verb = 'claim' ORDER BY id DESC LIMIT 1`,
+      ),
+    ).toEqual([{ loop_sourced: 1 }])
+  })
+})
+
+describe('S3 claim 记录循环来源标记（loop_sourced——TASK_RECORD_LOOP_SOURCED 单点定义）', () => {
+  it('loopSourced=true → claim 行 loop_sourced=1（盲选径同承载——循环常规领取留痕）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    await claim({ projectId: P(), sessionId: 's-owner', loopSourced: true })
+    expect(rows(`SELECT loop_sourced FROM task_records WHERE task_id = 't-f-1.1'`)).toEqual([{ loop_sourced: 1 }])
+  })
+
+  it('loopSourced 缺省（工具壳/skill 路线）→ loop_sourced=0（对账谓词不命中——幂等重入不受波及）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    await claim({ projectId: P(), sessionId: 's-skill' })
+    expect(rows(`SELECT loop_sourced FROM task_records WHERE task_id = 't-f-1.1'`)).toEqual([{ loop_sourced: 0 }])
   })
 })

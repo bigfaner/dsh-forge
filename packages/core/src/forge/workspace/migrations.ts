@@ -9,6 +9,8 @@
 // M3 对 M2 schema 的差异（5 项）：+feature_records（八域表）；proposals +mode +superseded_by；
 // tasks 源头双列化（source_kind+source_id 取代 feature_id）+mode+ac_json、main_session 砍除；
 // idx_tasks_feature_status → idx_tasks_source_status；迁移机制 = v1 直改（无迁移·存量开发库废弃）。
+// S3（run-tasks-host-command）v1 直改两处：tasks ck_tasks_status 八态（+interrupted）；
+// task_records +loop_sourced（循环来源标记——claim 写入/reconcileInterrupted 消费，R1 读面零感知）。
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
@@ -81,7 +83,7 @@ BEGIN SELECT RAISE(ABORT, 'feature_records: append-only violation (delete)'); EN
     task_status     TEXT NOT NULL DEFAULT 'pending'
                     CONSTRAINT ck_tasks_status CHECK (task_status IN
                       ('pending', 'in_progress', 'completed', 'blocked',
-                       'suspended', 'skipped', 'rejected')),
+                       'suspended', 'interrupted', 'skipped', 'rejected')),
     task_desc       TEXT,
     ac_json         TEXT,
     priority        TEXT CONSTRAINT ck_tasks_priority CHECK (priority IN ('P0', 'P1', 'P2')),
@@ -129,6 +131,8 @@ BEGIN SELECT RAISE(ABORT, 'feature_records: append-only violation (delete)'); EN
     gate_json       TEXT,
     commit_hash     TEXT,
     dispatch_digest TEXT,
+    loop_sourced    INTEGER NOT NULL DEFAULT 0
+                    CONSTRAINT ck_records_loop_sourced CHECK (loop_sourced IN (0, 1)),
     actor           TEXT NOT NULL
                     CONSTRAINT ck_records_actor CHECK (actor IN ('plugin-tool', 'ui', 'core')),
     session_id      TEXT,

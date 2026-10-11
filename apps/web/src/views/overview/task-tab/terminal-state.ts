@@ -9,10 +9,17 @@ import type { TaskCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 /** 终态集（相位推导机口径同源镜像：completed/skipped/rejected——rejected 不满足前置但计入终态） */
 export const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'skipped', 'rejected']
 
-/** 未终态集（ui-design v22 ㊱ 明文四值：pending/in_progress/blocked/suspended） */
-export const NON_TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['pending', 'in_progress', 'blocked', 'suspended']
+/** 未终态集（ui-design v22 ㊱ 明文四值 pending/in_progress/blocked/suspended + S3 增补
+ *  interrupted——run-tasks-host-command 状态真化：中断待恢复 = 可派发/可循环恢复的非终态） */
+export const NON_TERMINAL_TASK_STATUSES: readonly TaskStatus[] = [
+  'pending',
+  'in_progress',
+  'blocked',
+  'suspended',
+  'interrupted',
+]
 
-/** 终态判定（单状态——七态穷尽两分） */
+/** 终态判定（单状态——八态穷尽两分） */
 export function isTerminalTaskStatus(status: TaskStatus): boolean {
   return (TERMINAL_TASK_STATUSES as readonly TaskStatus[]).includes(status)
 }
@@ -26,7 +33,7 @@ export function nonTerminalOf(cards: readonly TaskCard[]): readonly TaskCard[] {
   return cards.filter((card) => !isTerminalTaskStatus(card.taskStatus))
 }
 
-/** 未终态计数（stats 单源——四未终态之和；与终态互补 total） */
+/** 未终态计数（stats 单源——五未终态之和；与终态互补 total） */
 export function nonTerminalCountOf(stats: TaskStats): number {
   return NON_TERMINAL_TASK_STATUSES.reduce((sum, status) => sum + (stats.byStatus[status] ?? 0), 0)
 }

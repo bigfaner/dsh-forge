@@ -18,8 +18,8 @@ domains: [task, identity, transition-targets, dispatch-prompt, worker-matrix, sc
 
 ### TECH-task-002: transitionTargets 纯函数所见即所得
 
-**Requirement**: transitionTargets(current, face) 单一纯函数双面——human = 七态 − 当前态（from≠to 任意，菜单全列机械排除自身）；agent = 转移矩阵推导；taskDetail.allowedTransitions（human 面）驱动转移对话框选项集，transitionTask 服务端先验 toStatus ∈ transitionTargets(current, 'human')——UI 菜单与服务端同一纯函数，零漂移。
-**Source**: feature/dsh-forge-m2-pipeline TECH-006（tech-design §Interface 10·§关键技术决策 / packages/core/src/forge/tasks/state-machine.ts）
+**Requirement**: transitionTargets(current, face) 单一纯函数双面——human = 八态 − 当前态（from≠to 任意，菜单全列机械排除自身；S3 起 TaskStatus 八值 = 七值 + interrupted）；agent = 转移矩阵推导；taskDetail.allowedTransitions（human 面）驱动转移对话框选项集，transitionTask 服务端先验 toStatus ∈ transitionTargets(current, 'human')——UI 菜单与服务端同一纯函数，零漂移。
+**Source**: feature/dsh-forge-m2-pipeline TECH-006（tech-design §Interface 10·§关键技术决策 / packages/core/src/forge/tasks/state-machine.ts）；S3 增补（proposal run-tasks-host-command——矩阵 +in_progress→interrupted / interrupted→in_progress 两边）
 
 ## 派发简报
 

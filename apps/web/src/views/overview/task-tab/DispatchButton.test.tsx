@@ -16,10 +16,16 @@ import {
 const NOOP = (): void => {}
 
 function statsOf(byStatus: Partial<Record<TaskStatus, number>>): TaskStats {
-  const full = { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 } as Record<
-    TaskStatus,
-    number
-  >
+  const full = {
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    blocked: 0,
+    suspended: 0,
+    interrupted: 0,
+    skipped: 0,
+    rejected: 0,
+  } as Record<TaskStatus, number>
   for (const status of Object.keys(full) as TaskStatus[]) full[status] = byStatus[status] ?? 0
   const total = (Object.values(full) as number[]).reduce((a, b) => a + b, 0)
   return { total, byStatus: full, unmetPending: 0 }
@@ -38,8 +44,8 @@ function link(taskId: string, sessionId: string, source: 'link' | 'record'): Ses
 }
 
 describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；D37 控件自释零 Tooltip——三态载注退役）', () => {
-  it('未终态在场（pending/in_progress/blocked/suspended 任一）→ 亮起可点（同款式 is-on + 无 disabled）', () => {
-    for (const status of ['pending', 'in_progress', 'blocked', 'suspended'] as const) {
+  it('未终态在场（pending/in_progress/blocked/suspended/interrupted 任一）→ 亮起可点（同款式 is-on + 无 disabled；S3 interrupted = 恢复径可派发）', () => {
+    for (const status of ['pending', 'in_progress', 'blocked', 'suspended', 'interrupted'] as const) {
       const markup = renderToStaticMarkup(<DispatchButton stats={statsOf({ [status]: 1 })} onDispatch={NOOP} />)
       expect(markup).toContain('data-dswf-tt-dispatch="on"')
       expect(markup).toContain('>派发</button>')

@@ -81,6 +81,7 @@ const STATS = {
     completed: 3,
     blocked: 1,
     suspended: 0,
+    interrupted: 0,
     skipped: 1,
     rejected: 1,
   } as Record<TaskStatus, number>,

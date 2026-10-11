@@ -10,19 +10,22 @@ export type { TransitionFace }
 
 /**
  * agent 面转移矩阵（db-schema §3.1——SC7 单测对象，只含动词与钩子拥有的边）。
- * Record<TaskStatus, …> = 编译期穷尽（七态加值即编译红——AC5）：
+ * Record<TaskStatus, …> = 编译期穷尽（加值即编译红——AC5）：
  * - pending → in_progress（claimTask）
- * - in_progress → completed（仅经 submitTask，gate ✓）/ blocked（submitTask result=blocked）
+ * - in_progress → completed（仅经 submitTask，gate ✓）/ blocked（submitTask result=blocked）/
+ *   interrupted（S3 reconcileInterrupted——启动对账/循环主动终态的状态真化）
  * - blocked → in_progress（claimTask 重派）/ pending（auto-restore——submit 钩子）
+ * - interrupted → in_progress（S3 claimTask adopt——循环定向恢复领取）
  * - suspended / completed / skipped / rejected：无出边（agent 面不可达）
  * 注：in_progress 幂等重入（C1）无状态转移，不出现在矩阵；auto-block（addTask --block-source
  * 单事务置源 blocked）是写路径内聚效果，同样不经转移校验面。
  */
 export const AGENT_TRANSITION_MATRIX: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
   pending: ['in_progress'],
-  in_progress: ['completed', 'blocked'],
+  in_progress: ['completed', 'blocked', 'interrupted'],
   blocked: ['in_progress', 'pending'],
   suspended: [],
+  interrupted: ['in_progress'],
   completed: [],
   skipped: [],
   rejected: [],
@@ -37,8 +40,8 @@ export const SATISFYING_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'sk
 
 /**
  * 目标态计算（Interface 10 签名逐字）：
- * - human = 七态 − 当前态（from≠to 任意通道——菜单全列机械排除自身；行序 = TASK_STATUSES 序）
- * - agent = 转移矩阵推导（claim/submit 拥有的边）
+ * - human = 八态 − 当前态（from≠to 任意通道——菜单全列机械排除自身；行序 = TASK_STATUSES 序）
+ * - agent = 转移矩阵推导（claim/submit/reconcile 拥有的边）
  * 返回全新数组（纯函数——调用方改写不污染矩阵与后续计算）。
  */
 export function transitionTargets(current: TaskStatus, face: TransitionFace): TaskStatus[] {

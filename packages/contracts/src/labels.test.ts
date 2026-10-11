@@ -1,7 +1,8 @@
 // 1.1 AC4 —— TaskType 20 值词汇 + 三域状态中英标签常量 pin（tech-design §Interface 9 §7-6 映射定稿
 // + schema.sql 三态 CHECK + Cross-Layer Data Map「标签 contracts 常量（搜索中英共用）」）。
 // 权威来源：tech-design §Interface 9 映射表（21 模板 − fix-record-missed = 20 值）与
-// design/schema.sql（tasks 七态 / features 六态 / proposals 五态 CHECK 行序）。
+// design/schema.sql（tasks 八态 / features 六态 / proposals 五态 CHECK 行序）。
+// S3（run-tasks-host-command）：TaskStatus 七态 → 八态（+interrupted——proposal.md S3/SC3/R6）。
 import { describe, expect, it } from 'vitest'
 import {
   FEATURE_STATUSES,
@@ -55,16 +56,21 @@ describe('AC4 TaskType 20 值词汇（§7-6 映射定稿）', () => {
 })
 
 describe('AC4 三域状态词汇（schema.sql CHECK 行序）', () => {
-  it('TASK_STATUSES 七态（tasks ck_tasks_status 行序）', () => {
+  it('TASK_STATUSES 八态（tasks ck_tasks_status 行序；S3 +interrupted 非终态）', () => {
     expect([...TASK_STATUSES]).toEqual([
       'pending',
       'in_progress',
       'completed',
       'blocked',
       'suspended',
+      'interrupted',
       'skipped',
       'rejected',
     ])
+  })
+
+  it('TASK_STATUS_LABELS.interrupted（S3——zh 已中断 / en Interrupted；非终态双语搜索面）', () => {
+    expect(TASK_STATUS_LABELS.interrupted).toEqual({ zh: '已中断', en: 'Interrupted' })
   })
 
   it('FEATURE_STATUSES 六态（features ck_features_status 行序）', () => {

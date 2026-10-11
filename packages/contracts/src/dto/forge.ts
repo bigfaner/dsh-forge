@@ -69,6 +69,13 @@ export const TASK_RECORD_VERBS = [
 
 export type TaskRecordVerb = (typeof TASK_RECORD_VERBS)[number]
 
+/**
+ * task_records 循环来源标记列名（S3·R1——claim 记录持久痕迹的单点定义）：
+ * claimTask 写入（ClaimTaskInput.loopSourced = true → 1）/ reconcileInterrupted 消费
+ * （三重判据之②）；其余读面零感知——TaskRecordEntry 不投影本列。
+ */
+export const TASK_RECORD_LOOP_SOURCED = 'loop_sourced'
+
 /** feature_records.verb 三值（TS 单源无 CHECK——M3 2.1；append-only 审计行的动词面）。
  *  三动词闭包伴随：register = registerFeature（含 2.2 成链内聚同事务调用）/
  *  transition = transitionFeature / doc-upsert = upsertFeatureDoc。 */
@@ -340,10 +347,22 @@ export interface ClaimTaskInput {
   projectId: string
   /** 显式重入（in_progress 幂等重入 = reclaimed；无 taskRef 盲选不领 in_progress——双 dispatcher 不双派发） */
   taskRef?: TaskRef
+  /**
+   * adopt 定向领取（S3——循环恢复径：接管任务源内既有 in_progress/interrupted 任务，
+   * 忽略 session links——重启后主会话新 id 天然无 links，按 TaskRef 直查即接管语义；
+   * 与 taskRef 互斥，在场时优先）。
+   */
+  adopt?: TaskRef
   /** 就绪选择限定容器（缺省 = 全库；dispatchPrompt 增容器语境行 SOURCE: feature|proposal slug） */
   source?: ContainerRef
-  /** 派发会话（S8：exec.agent.session.id 可得；links upsert-ignore） */
+  /** 派发会话（S8：exec.agent.session.id 可得；links upsert-ignore——宿主循环传主会话真实 id，GUI jump 零适配） */
   sessionId: string
+  /**
+   * 循环来源标记（S3——宿主循环领取 = true：claim 记录落持久痕迹
+   * task_records.loop_sourced（TASK_RECORD_LOOP_SOURCED 单点定义），进程重启
+   * reconcileInterrupted 判据；工具壳缺省 = 无标记——skill 路线幂等重入不受对账波及）。
+   */
+  loopSourced?: boolean
 }
 
 /** claimTask 返回体 */
@@ -381,6 +400,21 @@ export interface SubmitTaskResult {
   status: TaskStatus
   /** 恢复钩子反查自动恢复的前置（前置全满足才 auto-restore；边不删） */
   restored: TaskRef[]
+}
+
+/**
+ * reconcileInterrupted 入参（S3——启动对账动词，implementation-blueprint §2/图 D）。
+ * registryEmpty = 进程内循环登记表空判据（三重判据之③）：插件装配时点恒真（重启即空——
+ * 图 D）；活循环在场 = false（在飞任务可能被活循环持有——不对账，零写入）。
+ */
+export interface ReconcileInterruptedInput {
+  projectId: string
+  registryEmpty: boolean
+}
+
+/** reconcileInterrupted 返回体（reconciled = 被真化 interrupted 的任务自然键——中断序 ascending） */
+export interface ReconcileInterruptedResult {
+  reconciled: TaskRef[]
 }
 
 /** transitionTask 入参（人类通道——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */
@@ -426,11 +460,15 @@ export interface ValidateFeatureTasksInput {
 export interface ListTasksQuery {
   projectId: string
   source?: ContainerRef
-  /** 七态过滤 chips（空/缺省 = 全部） */
+  /** 状态过滤 chips（空/缺省 = 全部） */
   statusFilter?: TaskStatus[]
   search?: string
-  /** active = 活跃优先 / created = 最新创建 */
-  sort?: 'active' | 'created'
+  /**
+   * active = 活跃优先 / created = 最新创建 / interrupted = 中断序（S3——updated_at 升序，
+   * interrupted 行的 updated_at = 对账真化时刻；与 statusFilter:['interrupted'] 配对 =
+   * 循环逐个恢复的「最早中断优先」数据面）
+   */
+  sort?: 'active' | 'created' | 'interrupted'
 }
 
 /** taskStats 查询（M3 容器化） */
@@ -487,6 +525,12 @@ export interface ForgeTasksService {
   claimTask(input: ClaimTaskInput): Promise<ClaimTaskResult>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
+  /**
+   * 启动对账（S3 新动词——三重收敛判据：in_progress ∧ 最新 claim 记录带循环来源标记
+   * ∧ 登记表空 → interrupted + transition 记录（reason=进程重启，actor='core'）；
+   * skill 路线（记录无标记）不命中——幂等重入语义不变）。
+   */
+  reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult>
   /** 人类纠偏面（提前校验 + 与 submitTask 同族恢复钩子） */
   transitionTask(input: TransitionTaskInput): Promise<TaskSnapshot>
   /** agent 查询面（四节按 include 门控） */

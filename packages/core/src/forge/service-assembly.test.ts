@@ -186,7 +186,7 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       await expect(tasks.listTasks({ projectId: 'p-read' })).resolves.toEqual([]) // 直读空库
       const stats = await tasks.taskStats({ projectId: 'p-read' })
       expect(stats.total).toBe(0)
-      expect(Object.keys(stats.byStatus)).toHaveLength(7) // 七态 chips 数据源
+      expect(Object.keys(stats.byStatus)).toHaveLength(8) // 八态 chips 数据源（S3 +interrupted）
       dispose()
     } finally {
       rmSync(tasksHome, { recursive: true, force: true })

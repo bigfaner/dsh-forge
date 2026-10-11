@@ -1,8 +1,10 @@
 // M2 词汇与中英标签常量（tech-design §Interface 9 §7-6 映射定稿 + design/schema.sql 三态 CHECK
 // + Cross-Layer Data Map「标签 contracts 常量（搜索中英共用）」）。
-// TaskType 20 值（= 21 模板 − fix-record-missed）/ TaskStatus 七态 / FeatureStatus 六态 /
+// TaskType 20 值（= 21 模板 − fix-record-missed）/ TaskStatus 八态 / FeatureStatus 六态 /
 // ProposalStatus 五态——exhaustive 词汇 + 中英标签（服务端 search 双语标签匹配共用；
 // UI 状态 tag 中文呈现）。定位铁律：纯常量与类型，零逻辑零依赖（P1 沿袭）。
+// S3（run-tasks-host-command）：TaskStatus 七态 → 八态——+interrupted（进程重启真化的
+// 非终态，run-tasks-host-command proposal.md S3/SC3/R6；schema v1 直改先例）。
 
 /** 中英标签形状（双语搜索匹配面——en 兼搜索词，zh 兼展示与中文搜索） */
 export interface BilingualLabel {
@@ -66,13 +68,16 @@ export const TASK_TYPE_LABELS: Readonly<Record<TaskType, BilingualLabel>> = {
   'eval-journey': { zh: '旅程评估', en: 'Journey Eval' },
 }
 
-/** TaskStatus 七态（schema.sql ck_tasks_status 行序；相位/状态机与七态 chips 共用） */
+/** TaskStatus 八态（schema.sql ck_tasks_status 行序；相位/状态机与 chips 共用）。
+ *  interrupted = 中断（S3——进程重启对账真化的非终态：in_progress ∧ 循环来源标记 ∧ 登记表空；
+ *  恢复 = 循环定向领取 adopt → in_progress。非终态：不计满足集、不入终态集） */
 export const TASK_STATUSES = [
   'pending',
   'in_progress',
   'completed',
   'blocked',
   'suspended',
+  'interrupted',
   'skipped',
   'rejected',
 ] as const
@@ -86,6 +91,7 @@ export const TASK_STATUS_LABELS: Readonly<Record<TaskStatus, BilingualLabel>> = 
   completed: { zh: '已完成', en: 'Completed' },
   blocked: { zh: '已阻塞', en: 'Blocked' },
   suspended: { zh: '已挂起', en: 'Suspended' },
+  interrupted: { zh: '已中断', en: 'Interrupted' },
   skipped: { zh: '已跳过', en: 'Skipped' },
   rejected: { zh: '已拒绝', en: 'Rejected' },
 }

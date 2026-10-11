@@ -49,6 +49,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     skipped: 0,
     rejected: 0,
     suspended: 0,
+    interrupted: 0,
     ...over,
   }
   return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
@@ -251,9 +252,14 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     const parent = { agentTag: 'parent-session' }
     const out = await dispatchCore(h.deps, { ...exec, parent }, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
     // claim：身份 = identity.sessionId（主会话真实 id——非合成身份）；source 对透传；
-    // loopSourced 不改 claim 入参形状（S3 接缝——标记字段随 core 服务扩展落面）
+    // S3 落地：loopSourced=true → claimTask 携带标记位（claim 记录 loop_sourced 持久痕迹）
     expect(h.claimInputs).toEqual([
-      { projectId: 'p-1', sessionId: 'loop-owner-1', source: { kind: 'feature', slug: 'feat-x' } },
+      {
+        projectId: 'p-1',
+        sessionId: 'loop-owner-1',
+        source: { kind: 'feature', slug: 'feat-x' },
+        loopSourced: true,
+      },
     ])
     // spawn 组装：全文 prompt + label（任务键 · 任务名）+ 收窄 deny + parent 透传
     expect(h.spawnRequests).toHaveLength(1)
@@ -307,6 +313,49 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     expect(h.events).toHaveLength(1)
     expect(h.events[0]).toMatchObject({ type: 'no-ready-task', sessionId: 'loop-owner-1', slug: 'pa', payload: { contextSlug: 'pa' } })
     expect(attribution.slug).toBe('pa')
+  })
+})
+
+// ─────────────────────────── S3：adopt 定向领取 + 循环来源标记（恢复径接线） ───────────────────────────
+
+describe('dispatchCore S3 接线（adopt + loopSourced → claimTask）', () => {
+  it('adopt 在场：claimTask 携带 adopt 引用 + loopSourced（循环恢复径——定向领 earliest interrupted）', async () => {
+    const h = harness()
+    const { exec } = execOf()
+    await dispatchCore(
+      h.deps,
+      exec,
+      loopArgs({ adopt: { slug: 'feat-x', localId: '2.5' } }),
+    )
+    expect(h.claimInputs).toEqual([
+      {
+        projectId: 'p-1',
+        sessionId: 'loop-owner-1',
+        adopt: { slug: 'feat-x', localId: '2.5' },
+        loopSourced: true,
+      },
+    ])
+  })
+
+  it('工具壳形态（loopSourced=false、无 adopt）：claimTask 零新键（dispatchTask schema 与外部语义零变化）', async () => {
+    const h = harness()
+    const { exec, attribution } = execOf()
+    await dispatchCore(h.deps, exec, {
+      identity: { sessionId: 's-shell', loopSourced: false },
+      guardKey: 's-shell',
+      projectId: 'p-1',
+    })
+    expect(h.claimInputs).toEqual([{ projectId: 'p-1', sessionId: 's-shell' }])
+    expect(attribution.slug).toBe('feat-x') // claim 后归属槽 = 任务容器（默认桩领取 feat-x/2.5）
+  })
+
+  it('loopSourced=true 无 adopt（循环常规领取）：仅标记位落面——就绪盲选语义零变化', async () => {
+    const h = harness()
+    const { exec } = execOf()
+    await dispatchCore(h.deps, exec, loopArgs())
+    expect(h.claimInputs).toEqual([
+      { projectId: 'p-1', sessionId: 'loop-owner-1', loopSourced: true },
+    ])
   })
 })
 

@@ -86,6 +86,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
 }
 
 export {
+  bindingProjectIds,
   createProjectResolver,
   isWorkspaceNotRegisteredError,
   requireProjectId,

@@ -255,8 +255,50 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
   })
 })
 
-// ─────────────────────────── jobs 注册表可选消费（async-dispatch §7 任务 1.2——reflect.get 防御读取） ───────────────────────────
+// ─────────────────────────── S3 启动对账（run-tasks-host-command 图 D——装配期逐绑定项目 fail-soft） ───────────────────────────
 
+describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true 装配期结构事实）', () => {
+  /** 装配桩：reconcileInterrupted 调用记账（静态绑定表一枚 + bindingsFile 去重面） */
+  function reconcileCtx(config: { projects?: { wsPath: string; projectId: string }[]; bindingsFile?: string }) {
+    const rt = new TempRuntime()
+    const calls: unknown[] = []
+    const tasks = {
+      claimTask: async () => ({ task: null, dispatchPrompt: '', digest: '', reclaimed: false }),
+      taskStats: async () => ({
+        total: 0,
+        byStatus: { pending: 0, in_progress: 0, blocked: 0, completed: 0, skipped: 0, rejected: 0, suspended: 0, interrupted: 0 },
+        unmetPending: 0,
+      }),
+      reconcileInterrupted: async (input: unknown) => {
+        calls.push(input)
+        return { reconciled: [] }
+      },
+    } as unknown as ForgeTasksService
+    const dispose = forgePlugin({ ...rt.ctx(), forgeTasks: tasks }, config)
+    return { rt, dispose, calls }
+  }
+
+  it('装配即触发：逐绑定项目 reconcileInterrupted({projectId, registryEmpty: true})——三重判据之③装配期恒真', async () => {
+    const h = reconcileCtx({ projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] })
+    await new Promise((resolve) => setTimeout(resolve, 0)) // fire-and-forget 异步段
+    expect(h.calls).toEqual([{ projectId: 'p-9', registryEmpty: true }])
+    h.dispose()
+  })
+
+  it('无绑定（无 config.projects/bindingsFile）= 零触发；服务面同步缺席 = fail-soft 不阻载装配（六 tool 照常注册）', async () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx()) // forgeTasks = {} 桩——reconcileInterrupted 缺席
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+
+    const h2 = reconcileCtx({})
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(h2.calls).toEqual([])
+    h2.dispose()
+  })
+})
+
+// ─────────────────────────── jobs 注册表可选消费（async-dispatch §7 任务 1.2——reflect.get 防御读取） ───────────────────────────
 describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_background 降级守卫联动）', () => {
   const BOUND_CONFIG = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
   const EXEC = { agent: { session: { id: 's-jobs', header: { cwd: 'C:\\ws\\demo' } } } }

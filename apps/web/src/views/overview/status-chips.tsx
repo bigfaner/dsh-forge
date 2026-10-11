@@ -1,20 +1,24 @@
-// 七态过滤 chips（定位：业务——UF-1：TASK_STATUSES 行序 chips，toggle 过滤 + 0 计数
+// 状态过滤 chips（定位：业务——UF-1：TASK_STATUSES 行序 chips，toggle 过滤 + 0 计数
 // disabled 淡化；三视图统一过滤接口——3.6 任务子 tab 消费同组件同状态）。
 // 状态点/标签单源 = contracts（StateDot 官方语义映射）；计数 = 头路 tasks.stats
 // byStatus（0 计数禁用——不可点出空态）。受控件：active 集合与 toggle 上抛归帧侧模型。
+// S3（run-tasks-host-command）：词汇七态 → 八态（+interrupted——表驱动，chips/泳道/
+// 转移菜单自动覆盖新态；仅语义映射表需显式补行）。
 import type { ReactNode } from 'react'
 import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/contracts'
 import { StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { hasActiveStatusFilter, isChipDisabled } from './overview-model.js'
 import './overview.css'
 
-/** 七态 → 官方 StateDot 语义（done/warning/ongoing/error/idle；原型 ST_DOT 对齐） */
+/** 状态 → 官方 StateDot 语义（done/warning/ongoing/error/idle；原型 ST_DOT 对齐）。
+ *  S3 interrupted = warning（与 suspended 同族——暂停等待恢复，非错误态） */
 export const STATUS_DOT_STATE: Readonly<Record<TaskStatus, StateDotState>> = {
   pending: 'idle',
   in_progress: 'ongoing',
   completed: 'done',
   blocked: 'error',
   suspended: 'warning',
+  interrupted: 'warning',
   skipped: 'idle',
   rejected: 'error',
 }
@@ -30,7 +34,8 @@ export interface StatusChipsProps {
   readonly onClear?: () => void
 }
 
-/** 七态过滤 chips（AC5：toggle + 0 计数 disabled——过滤接口三视图统一） */
+/** 状态过滤 chips（AC5：toggle + 0 计数 disabled——过滤接口三视图统一；表驱动 TASK_STATUSES
+ *  行序——S3 interrupted 自动呈现「已中断」chip） */
 export function StatusChips({ counts, active, onToggle, onClear }: StatusChipsProps): ReactNode {
   const hasFilter = hasActiveStatusFilter(active)
   return (

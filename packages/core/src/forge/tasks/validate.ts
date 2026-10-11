@@ -76,8 +76,9 @@ interface ForeignTaskRow {
   readonly source_id: string
 }
 
-/** liveness 解锁路径判据（老 forge validateLiveness 平移：pending/in_progress = 有望满足） */
-const RESOLVABLE_PREREQ_STATUSES: readonly TaskStatus[] = ['pending', 'in_progress']
+/** liveness 解锁路径判据（老 forge validateLiveness 平移：pending/in_progress = 有望满足；
+ *  S3 +interrupted——对账中断可经循环定向恢复（adopt），在途解锁路径不计死锁） */
+const RESOLVABLE_PREREQ_STATUSES: readonly TaskStatus[] = ['pending', 'in_progress', 'interrupted']
 
 /** 数值 localId 主段（'2.5' → 2；非数值（fix-N/disc-N 等）→ null——⑤ 豁免面） */
 function localIdMajor(localId: string): number | null {
@@ -298,7 +299,7 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     if (!hasResolvable) {
       violations.push({
         kind: 'liveness',
-        message: `blocked 无解锁路径（deadlock——未满足前置均非 pending/in_progress）：${natural(t)}`,
+        message: `blocked 无解锁路径（deadlock——未满足前置均非 pending/in_progress/interrupted）：${natural(t)}`,
         taskRef: ref(t),
       })
     }

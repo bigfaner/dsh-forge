@@ -1,10 +1,11 @@
 // 任务 2.6 测试 —— listTasks/taskStats/taskGraph（tech-design §Interface 1 读面五法列表族 +
-// TaskCard 副行承重字段表）：search 中英双语标签常量匹配 / sort(active|created) / 副行水化
-// 四件（实际耗时[completed 首 claim→末 submit]/前置摘要[自然键+状态]/挂接计数/fix 源标）+
+// TaskCard 副行承重字段表）：search 中英双语标签常量匹配 / sort(active|created|interrupted) /
+// 副行水化四件（实际耗时[completed 首 claim→末 submit]/前置摘要[自然键+状态]/挂接计数/fix 源标）+
 // EQP 四查询命中索引断言 + @500 任务直读核心侧基准（SC2 数据面 ≤2s）。
 // 读面直读 Hard Rule（即时判据 = 单次重取见新值）单列断言。
 // M3 2.5 读面泛化：source 容器作用域 feature/proposal 双轨（成链撞键判别）+
 // taskStats.unmetPending（池快照派生——含 fix 链边形态）。
+// S3（run-tasks-host-command）：sort +interrupted（中断序——updated_at 升序恢复取数序）。
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { LINKS_BY_SESSION_SQL } from './session-links.js'
@@ -237,8 +238,8 @@ describe('读面直读 Hard Rule（即时判据 = 单次重取见新值——禁
   })
 })
 
-describe('AC2 taskStats（total + byStatus 七态分布）', () => {
-  it('全库七态分布（零计数态含 0 键）+ feature 作用域', async () => {
+describe('AC2 taskStats（total + byStatus 八态分布）', () => {
+  it('全库八态分布（零计数态含 0 键）+ feature 作用域', async () => {
     seedSevenStatuses()
     const all = await taskStats({ store: h!.store }, { projectId: P() })
     expect(all.total).toBe(8)
@@ -248,6 +249,7 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
       completed: 2,
       blocked: 1,
       suspended: 1,
+      interrupted: 0,
       skipped: 1,
       rejected: 1,
     })
@@ -257,6 +259,7 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
       'completed',
       'blocked',
       'suspended',
+      'interrupted',
       'skipped',
       'rejected',
     ])
@@ -265,17 +268,26 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
     expect(f1.byStatus.pending).toBe(1)
   })
 
-  it('空库 → 全零七态 + unmetPending 0（M3 池快照派生）', async () => {
+  it('空库 → 全零八态 + unmetPending 0（M3 池快照派生）', async () => {
     db() // 起夹具（空库）
     const stats = await taskStats({ store: h!.store }, { projectId: P() })
     expect(stats).toEqual({
       total: 0,
-      byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+      byStatus: {
+        pending: 0,
+        in_progress: 0,
+        completed: 0,
+        blocked: 0,
+        suspended: 0,
+        interrupted: 0,
+        skipped: 0,
+        rejected: 0,
+      },
       unmetPending: 0,
     })
   })
 
-  it('M3 2.5 proposal 容器作用域（七态分布 + unmetPending 同 scope 口径）；未命中 → 全零（零 404）', async () => {
+  it('M3 2.5 proposal 容器作用域（八态分布 + unmetPending 同 scope 口径）；未命中 → 全零（零 404）', async () => {
     const d = db()
     seedSevenStatuses() // 跨容器噪声（feature 侧——不计入 proposal scope）
     seedProposal(d, { slug: 'p1', mode: 'blitz' })
@@ -286,15 +298,78 @@ describe('AC2 taskStats（total + byStatus 七态分布）', () => {
     const scoped = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
     expect(scoped).toEqual({
       total: 3,
-      byStatus: { pending: 1, in_progress: 0, completed: 1, blocked: 1, suspended: 0, skipped: 0, rejected: 0 },
+      byStatus: {
+        pending: 1,
+        in_progress: 0,
+        completed: 1,
+        blocked: 1,
+        suspended: 0,
+        interrupted: 0,
+        skipped: 0,
+        rejected: 0,
+      },
       unmetPending: 1, // 1.1 pending ∧ 前置 1.2 blocked 未满足
     })
     const missed = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'nope' } })
     expect(missed).toEqual({
       total: 0,
-      byStatus: { pending: 0, in_progress: 0, completed: 0, blocked: 0, suspended: 0, skipped: 0, rejected: 0 },
+      byStatus: {
+        pending: 0,
+        in_progress: 0,
+        completed: 0,
+        blocked: 0,
+        suspended: 0,
+        interrupted: 0,
+        skipped: 0,
+        rejected: 0,
+      },
       unmetPending: 0,
     })
+  })
+})
+
+// ── S3（run-tasks-host-command）：interrupted 读面（chips 过滤 / 双语搜索 / 中断序 / active 权重位） ──
+
+describe('S3 listTasks interrupted：statusFilter + 中英搜索 + 中断序（恢复取数序）', () => {
+  /** interrupted 夹具：三任务 interrupted，updated_at 受控（= 对账真化时刻锚） */
+  function seedInterrupted(): void {
+    const d = db()
+    seedFeature(d, { slug: 'f1', status: 'in-progress' })
+    seedTask(d, 'f1', '2.1', { status: 'interrupted', createdAt: TS(1) })
+    seedTask(d, 'f1', '2.2', { status: 'interrupted', createdAt: TS(2) })
+    seedTask(d, 'f1', '2.3', { status: 'pending', createdAt: TS(3) })
+    d.prepare(`UPDATE tasks SET updated_at = ? WHERE local_id = ?`).run(TS(9), '2.1') // 最晚中断
+    d.prepare(`UPDATE tasks SET updated_at = ? WHERE local_id = ?`).run(TS(5), '2.2') // 最早中断
+  }
+
+  it('statusFilter = [interrupted] → 仅中断任务（chips 过滤表驱动覆盖新态）', async () => {
+    seedInterrupted()
+    const cards = await listTasks({ store: h!.store }, { projectId: P(), statusFilter: ['interrupted'] })
+    expect(cards.map((c) => c.localId).sort()).toEqual(['2.1', '2.2'])
+  })
+
+  it('search 双语标签：已中断 / Interrupted 命中中断任务（TASK_STATUS_LABELS 新行）', async () => {
+    seedInterrupted()
+    for (const needle of ['已中断', 'Interrupted']) {
+      const cards = await listTasks({ store: h!.store }, { projectId: P(), search: needle })
+      expect(cards.map((c) => c.localId).sort()).toEqual(['2.1', '2.2'])
+    }
+  })
+
+  it("sort = 'interrupted' → updated_at 升序（最早中断优先——循环逐个恢复取数序）", async () => {
+    seedInterrupted()
+    const cards = await listTasks({ store: h!.store }, {
+      projectId: P(),
+      statusFilter: ['interrupted'],
+      sort: 'interrupted',
+    })
+    expect(cards.map((c) => c.localId)).toEqual(['2.2', '2.1'])
+  })
+
+  it('active 序：interrupted 权重居 blocked 与 pending 之间（恢复优先——既有相对序不变）', async () => {
+    seedInterrupted()
+    const cards = await listTasks({ store: h!.store }, { projectId: P(), sort: 'active' })
+    expect(cards.map((c) => c.localId)).toEqual(['2.2', '2.1', '2.3'])
   })
 })
 

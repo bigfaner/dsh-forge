@@ -69,6 +69,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     skipped: 0,
     rejected: 0,
     suspended: 0,
+    interrupted: 0,
     ...over,
   }
   return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
