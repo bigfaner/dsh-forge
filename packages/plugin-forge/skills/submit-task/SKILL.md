@@ -16,28 +16,51 @@ you: what goes *in* those fields.
 ## Success Path — organizing the record
 
 The quality-gate sequence and failure triage live in your dispatch brief; run them
-there. When settling, the record is only as good as its content:
+there. When settling, the record is structured — split it into its fields, do not
+cram everything into free text:
 
-- **`summary`** — what was accomplished, plus the key decisions and their reasons.
-  Lead with the outcome (one sentence a reviewer can trust without opening the diff),
-  then the decisions that shaped it (approach chosen over alternative, constraint
-  honored, boundary drawn). A summary that only restates the task title is a failed
-  summary.
-- **`files`** — the files actually changed, forward-slash paths. If the change touches
-  files beyond the obvious ones (test fixtures, generated artifacts), list them too —
-  this is the diff inventory for later audits.
+- **`summary`** — one sentence stating the outcome. It is the first and result line of
+  the record: compare it against the task's `GOAL` ("what was to be achieved") and say
+  whether and how the goal was met — a reviewer trusts this line without opening the
+  diff. A summary that only restates the task title is a failed summary.
+- **`key_decisions`** — the decisions that shaped the result, as a separate array (≤3
+  items: approach chosen over alternative, constraint honored, boundary drawn). Keep
+  them out of `summary`.
+- **`files_created` / `files_modified`** — the files actually changed, forward-slash
+  paths, grouped by created vs modified (flat `files` is the union form; supply the
+  grouping, not the union). Include test fixtures, generated artifacts — this is the
+  diff inventory for later audits.
 - **`gate_*`** — report what ran, as it ran. Never report a gate you did not run, never
   report a failed gate as passed, never invent a coverage number.
 
-### Test evidence for AC-bearing tasks
+### AC evidence — per criterion, not prose
 
 Tasks created with `acceptance_criteria` pass the submit evidence gate only with
-`gate_test: true` — that boolean must stand on a real test run you can name. When
-submitting such a task, make the correspondence explicit in the `summary`: which suites
-or cases were run and which AC item each one covers ("AC-2 covered by
-`dispatch-task.test.ts` describe block 'pool verdict'" — one line per AC item when
-feasible). If an AC item has no covering test, that is not success — either add the
-test or settle `blocked` saying which item is uncovered.
+`gate_test: true` standing on a real test run you can name. Submit each criterion as a
+triple in the paired arrays `ac_criteria` / `ac_met` / `ac_evidence`:
+
+- `ac_criteria` — the criterion strings, same order and wording as the task definition
+  (the tool cross-checks the mirror with the definition side);
+- `ac_met` — one boolean per criterion (`success` with any `false` is rejected);
+- `ac_evidence` — one line of proof per criterion: covering case/command + its result
+  ("AC-2 covered by `dispatch-task.test.ts` describe block 'pool verdict' — pass"). If
+  the proof output is long, archive it under the artifact convention and reference only
+  the subfolder path. If an AC item has no covering test, that is not success — either
+  add the test or settle `blocked` naming the uncovered criterion.
+
+### Settle checklist
+
+1. **todo all `completed`** before `submitTask` — no open todo item survives a submit
+   (trivial two-step tasks may skip the todo discipline entirely).
+2. Artifact convention applied: screenshots, long command output, probe artifacts →
+   `logs/<slug>/<taskKey>/<seq>-<event-type>/` (one folder per task, one subfolder per
+   event) — and the record's narrative (summary/evidence/notes) carries **only the
+   subfolder path**, never pasted blobs.
+3. `TASK_ID` is `slug/local_id` — split on the slash to fill the two locating fields.
+4. Type-family record fields populated where the brief lists them (doc family:
+   `referencedDocs` / `reviewStatus` / `docMetrics`; test family: `casesGenerated` /
+   `casesEvaluated` / `scriptsCreated` / `testResults`; validation family:
+   `validationPassed` / `issuesFound`; gate family: `gateChecks`).
 
 ## Commit Conventions (two states)
 
@@ -82,7 +105,7 @@ result lists restored tasks; nothing further to do.
 
 ## If the submitTask call itself fails
 
-The error text carries the violated expectations (missing summary, missing reason,
-half-given gates, AC evidence absent). Fix the inputs per what it lists and retry. If
+The error text carries the violated expectations (missing summary, criterion/AC
+evidence mismatch, half-given gates). Fix the inputs per what it lists and retry. If
 the tool is unreachable, report to the dispatcher or the user — never switch to file
 edits as a workaround.
