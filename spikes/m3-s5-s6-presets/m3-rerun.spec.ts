@@ -907,8 +907,10 @@ test.describe.serial('M3 3.9 spike 残余补验', () => {
           sessionId: s === undefined ? null : basename(s.dir),
           promptDigest: promptText === undefined ? null : digestOf(promptText),
           promptHead: promptText?.slice(0, 200) ?? null,
-          personaBlockInPrompt: promptText?.includes('You are a focused task executor.') ?? false,
-          typePolicyInPrompt: promptText?.includes('type-policy') ?? false,
+          // S2b 锚双层化：persona 锚在 system 面（spawn 链 persona 通道——composeWorkerPersona
+          // 尾行纪律句），任务面锚在 user 面（单块 task-context + TASK_ID）
+          personaInSystem: sys.includes('先思考定方案与改动范围再动手'),
+          taskContextInPrompt: promptText?.includes('<task-context>') === true && promptText.includes('TASK_ID:'),
           agentsMarkerInSystem: sys.includes(AGENTS_MARKER),
           catalogRunTestsInSystem: sys.includes('run-tests'),
           catalogWritePrdInSystem: sys.includes('write-prd'),
@@ -947,8 +949,9 @@ test.describe.serial('M3 3.9 spike 残余补验', () => {
       const spawnedLines = spawnLog.split('\n').filter((l) => l.includes('task-spawned') || l.includes('task-claimed'))
       recordEvidence(T, 'claim-digest-recon', { claimRows, submitRows, spawnedLines })
 
-      // 对账：worker 首条用户消息 == dispatchPrompt——结构面硬断言（人格段/type-policy/TASK_ID），
-      // digest 等值 = 证据级（会话持久化包裹等平台细节不以红灯误报；不等值即 drift 候选，落证据）
+      // 对账：worker 首条用户消息 == dispatchPrompt——结构面硬断言（S2b 双层：system 面
+      // persona 锚 + user 面任务锚），digest 等值 = 证据级（会话持久化包裹等平台细节不以
+      // 红灯误报；不等值即 drift 候选，落证据）
       expect(docAnalysis.sessionFound, 'doc worker 会话文件在场').toBe(true)
       expect(testAnalysis.sessionFound, 'test worker 会话文件在场').toBe(true)
       const digestRecon: Record<string, { worker: string | null; claim: string | null; equal: boolean }> = {}
@@ -960,7 +963,8 @@ test.describe.serial('M3 3.9 spike 残余补验', () => {
         expect(claims.length > 0, `claim record 在场（${key}）`).toBe(true)
         expect(claims.every((c) => c.digest !== null && c.digest !== ''), `claim digest 在场（${key}）`).toBe(true)
         expect(a.promptDigest, `worker 首条 = dispatchPrompt（digest 可算，${key}）`).toBeTruthy()
-        expect(a.personaBlockInPrompt && a.typePolicyInPrompt, `dispatchPrompt 四段组成（${key}）`).toBe(true)
+        expect(a.personaInSystem, `persona 锚在 system 面（S2b 分层承载，${key}）`).toBe(true)
+        expect(a.taskContextInPrompt, `dispatchPrompt 任务级单块（TASK_ID，${key}）`).toBe(true)
         // 幂等重入会产生多 claim 行（简报重合成 digest 新值）——worker 实收 prompt 对账任一 claim 即证同源
         const equal = a.promptDigest !== null && claims.some((c) => c.digest === a.promptDigest)
         digestRecon[key] = { worker: a.promptDigest, claims: claims.map((c) => c.digest), equal }

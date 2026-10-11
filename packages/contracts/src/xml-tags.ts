@@ -1,18 +1,20 @@
 // dispatchPrompt / 系统提示段 XML 标签集常量（tech-design §Interface 9 标签总表）。
-// 标签集封闭于四枚——新增 = 契约面变更（G1 pin 锚定；core 快照测试断言三标签在场 +
-// 块序 + 人格段在场）。值为裸标签名（不含尖括号）——包裹与组成序属 core prompt
-// 合成逻辑（Interface 9：人格段无标签 → <constraints> → <task-context> → <type-policy>）。
+// 标签集封闭于四枚——新增 = 契约面变更（G1 pin 锚定）。值为裸标签名（不含尖括号）——
+// 包裹与组成序属 core prompt 合成逻辑。S2b（worker-lean-execution）后 dispatchPrompt
+// 渲染面收窄为 <task-context> 单块（无人格段/约束块/类型策略段——agent 级内容迁
+// persona，system 面承载）；constraints/typePolicy 两常量保留 = 词汇封闭面不破（G1 pin），
+// 现无 dispatchPrompt 渲染消费者。
 // 定位铁律：纯常量，零逻辑零依赖。
 
 /** XML 标签集（四枚封闭；键 = 载体语义名） */
 export const XML_TAGS = {
   /** 系统提示段·最外层唯一（forge 管线系统提示——老 forge hook 注入文本平移；不含 tool 说明） */
   forgePipeline: 'forge-pipeline',
-  /** dispatchPrompt 块级：约束块（单一 TS 源：失败分诊/质量门序列/提交纪律/不越权） */
+  /** 块级词汇：约束块（S2b 后 dispatchPrompt 不再渲染——失败分诊/门序列/提交纪律迁 persona） */
   constraints: 'constraints',
-  /** dispatchPrompt 块级：动态信息块（TASK_ID/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记） */
+  /** dispatchPrompt 块级（S2b 渲染面唯一块）：动态信息块（TASK_ID/SOURCE/TITLE/TYPE/CATEGORY/SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS + GOAL/AC + 结算出口） */
   taskContext: 'task-context',
-  /** dispatchPrompt 块级：类型策略块（20 类型模板函数族） */
+  /** 块级词汇：类型策略块（S2b 后 dispatchPrompt 不再渲染——20 类型工作流/门纪律迁 persona 变体表） */
   typePolicy: 'type-policy',
 } as const
 

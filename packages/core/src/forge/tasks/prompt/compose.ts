@@ -1,10 +1,8 @@
-// dispatchPrompt 合成（任务 2.2；tech-design §Interface 9 组成序 + 提示词资产归属——
-// prompt/ 在 core，plugin 侧仅 forge:pipeline 系统提示段（3.2，不进本合成））。
-//
-// 组成序（AC1）：人格段(task-executor，无标签) → <constraints> → <task-context> →
-// <type-policy>；digest 见 digest.ts（全文含人格段与标签）。约束块 = 单一 TS 源（本文件
-// CONSTRAINTS_BLOCK：失败分诊/质量门序列/提交纪律/不越权——老 forge executor 模板共享段
-// 平移，伪标签 <CRITICAL>/<IMPORTANT> 清剿为 markdown 强调，标签集封闭于四枚）。
+// dispatchPrompt 合成（任务 2.2 起源；S2b 收窄重定义——worker-lean-execution 提案）。
+// 分层承载（S2/S2a/S2b）：agent 级内容（人格、门纪律、Coding Strategy、工作流、Record
+// Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
+// system 面）；dispatchPrompt 收窄为纯任务级——<task-context> 单块（GOAL 键 + SURFACE 行 +
+// ACCEPTANCE_CRITERIA + 结算出口一句），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
 // 定位铁律：纯函数禁 IO（BLOCKERS/PHASE_SUMMARY 等动态值由调用方领取瞬间取数注入——
 // 2.4 claimTask 接线；「快照取领取瞬间而非渲染时」）。
 import {
@@ -16,40 +14,6 @@ import {
   type TaskRef,
   type TaskType,
 } from '@dsh-forge/contracts'
-import { TYPE_POLICY_TEMPLATES } from './templates/index.js'
-
-// ─────────────────────────── 人格段（无标签；组成序第一段） ───────────────────────────
-
-/** 人格段文本（老 forge「You are a focused task executor」+ CODING_PRINCIPLES 平移） */
-export const PERSONA_BLOCK = `You are a focused task executor.
-
-Execution principles:
-- Think Before Coding: restate the task goal before coding; identify assumptions. If unclear, stop and ask.
-- Simplicity First: implement only what is required. Trivial tasks (one-liners, config) skip full analysis.
-- Surgical Changes: modify only code and documents directly relevant to the task.
-- Goal-Driven Execution: define a verifiable success condition before starting; confirm after implementation.`
-
-// ─────────────────────────── 约束块（单一 TS 源；四节封闭） ───────────────────────────
-
-/** 约束块文本（失败分诊/质量门序列/提交纪律/不越权——老 forge 各类型模板共享约束段收敛单源） */
-export const CONSTRAINTS_BLOCK = `Failure triage:
-- Simple/transient failures (network timeout, missing dependency, single command failure, formatting lint): fix inline or retry, at most ~3 attempts, then stop.
-- Complex/recurring failures (persist after ~3 attempts, large compilation failure, cross-file refactor): stop and submit result=blocked with the failure classified in the reason — do not loop.
-
-Quality gate sequence (strict sequential order, stop at the first unresolved failure):
-1. just compile
-2. just fmt — non-blocking warning: fix fmt issues only in files you modified; pre-existing drift is not your responsibility
-3. just lint — self-fix, max 1 retry
-4. Targeted tests on the changed packages/modules only (framework-native command); full project-wide tests run at submit, not here.
-
-Commit discipline:
-- Submit via the submit-task skill only after the quality gate sequence passes; populate the record fields (testsPassed/testsFailed/coverage, or the type-specific fields listed in the type-policy block).
-- Commit only files related to this task; never commit unrelated pre-existing changes.
-
-Scope discipline (no authority escalation):
-- Modify only code and documents directly relevant to the task; note out-of-scope issues instead of fixing them.
-- Never modify task definitions or execution records (docs/**/tasks/**) — they are audit artifacts, not deliverables.
-- Task Hard Rules override your judgment for any step they address; do not rationalize bypassing a Hard Rule based on "I know a better way".`
 
 // ─────────────────────────── CATEGORY 映射（老 forge CategoryForType 平移） ───────────────────────────
 
@@ -100,9 +64,9 @@ export function resolveCoverage(taskType: TaskType, coverage?: number): Coverage
   return { strategy: 'percentage', target: Math.round(coverage * 100) }
 }
 
-// ─────────────────────────── 合成输入（动态块九键的注入面） ───────────────────────────
+// ─────────────────────────── 合成输入（动态块键的注入面） ───────────────────────────
 
-/** 合成入参（动态块载荷——恒在场键：TASK_ID/TYPE/CATEGORY；其余条件键缺席省行） */
+/** 合成入参（任务级载荷——恒在场键：TASK_ID/TYPE/CATEGORY；其余条件键缺席省行） */
 export interface DispatchPromptInput {
   /** feature slug（slug 列 ≡ feature slug） */
   slug: string
@@ -120,11 +84,13 @@ export interface DispatchPromptInput {
    */
   title?: string
   /**
-   * 任务描述（任务规格内嵌：DESCRIPTION 段——task_desc 原文逐字；db-only 任务
+   * 任务目标（任务规格内嵌：GOAL 段——S2b 原 DESCRIPTION 键更名，以结果为导向表述
+   * 「要达成什么」；实现路径由 persona 工作流承载。task_desc 原文逐字；db-only 任务
    * （quick-tasks/addTask 建）无定义文件可读，本段 = worker 的规格正文）。
    */
-  taskDesc?: string
-  /** 验收清单（任务规格内嵌：ACCEPTANCE_CRITERIA 段——ac_json 数组逐行；空数组省段） */
+  goal?: string
+  /** 验收清单（任务规格内嵌：ACCEPTANCE_CRITERIA 段——ac_json 数组逐行；条目单行化
+   *  （换行折叠空格——机械提取无歧义，与 S3 criterion 交叉校验同源）；空数组省段） */
   acceptanceCriteria?: readonly string[]
   /**
    * 注入变量（vars_json 解码的 KEY=VALUE 面——VARS 行；SKIP_EVAL_GATE / fix 链
@@ -145,6 +111,10 @@ export interface DispatchPromptInput {
   breaking?: boolean
   /** fix 链源（标记行 fix-of 呈现；非 fix 任务缺省） */
   sourceTask?: TaskRef
+  /** 目标 surface 键（S2b/SC3：`SURFACE: <key> (<type>)` 单行双值；缺席省行——R6 填写率缓解） */
+  surfaceKey?: string
+  /** surface 类型（web/api/cli/tui/mobile；仅 surfaceKey 在场时随行呈现） */
+  surfaceType?: string
 }
 
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
@@ -154,7 +124,7 @@ function renderBlockers(blockers: readonly TaskPrerequisiteSummary[]): string {
   return blockers.map((b) => `${b.localId} ${b.taskStatus}`).join('; ')
 }
 
-/** 标记行值：fix-of <slug>/<localId>, breaking（在场者按序拼接。M3 裁决⑦：main_session
+/** 标记行值：`fix-of <slug>/<localId>, breaking`（在场者按序拼接。M3 裁决⑦：main_session
  *  砍除——标记行不再有 main-session 分支） */
 function renderMarkers(input: DispatchPromptInput): string | undefined {
   const markers: string[] = []
@@ -171,14 +141,31 @@ function renderVars(vars: Readonly<Record<string, string>> | undefined): string 
   return keys.map((k) => `${k}=${vars[k]}`).join('; ')
 }
 
-/** `<task-context>` 内文（键值行序 = AC2 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——
- *  SOURCE = M3 2.4 增键紧随 TASK_ID；TITLE = 5.3 任务规格内嵌增键；VARS = vars 注入面
- *  （SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；DESCRIPTION/ACCEPTANCE_CRITERIA
- *  = 键值行后的任务体段落（多行值——worker 面无 queryTask 时的定义唯一到达面） */
+/** SURFACE 行值（SC3 单行双值）：`web (web)`；type 缺席单值 `web`；key 缺席 → 省行 */
+function renderSurface(input: DispatchPromptInput): string | undefined {
+  if (input.surfaceKey === undefined) return undefined
+  return input.surfaceType === undefined ? input.surfaceKey : `${input.surfaceKey} (${input.surfaceType})`
+}
+
+/** AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源） */
+function singleLine(criterion: string): string {
+  return criterion.replace(/\s*\r?\n\s*/g, ' ')
+}
+
+/** 结算出口一句（S2b：submitTask 路径指称——纪律细节在 persona；<task-context> 尾行） */
+export const SETTLEMENT_EXIT_LINE =
+  'Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.'
+
+/** `<task-context>` 内文（键值行序 = S2b 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/SURFACE/BLOCKERS/
+ *  PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；SURFACE = S2b 增键
+ *  紧随 CATEGORY；TITLE = 5.3 任务规格内嵌增键；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文
+ *  ——尾行承载体）；GOAL/ACCEPTANCE_CRITERIA = 键值行后的任务体段落（多行值——worker 面无
+ *  queryTask 时的定义唯一到达面）+ 结算出口一句收尾 */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
+  const surface = renderSurface(input)
   const lines: (string | undefined)[] = [
     `TASK_ID: ${input.slug}/${input.localId}`,
     input.source !== undefined ? `SOURCE: ${input.source.kind} ${input.source.slug}` : undefined,
@@ -186,6 +173,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,
+    surface !== undefined ? `SURFACE: ${surface}` : undefined,
     input.blockers !== undefined && input.blockers.length > 0
       ? `BLOCKERS: ${renderBlockers(input.blockers)}`
       : undefined,
@@ -198,14 +186,14 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     vars !== undefined ? `VARS: ${vars}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
-  if (input.taskDesc !== undefined) context += `\nDESCRIPTION:\n${input.taskDesc}`
+  if (input.goal !== undefined) context += `\nGOAL:\n${input.goal}`
   if (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0) {
-    context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${ac}`).join('\n')}`
+    context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${singleLine(ac)}`).join('\n')}`
   }
-  return context
+  return `${context}\n${SETTLEMENT_EXIT_LINE}`
 }
 
-// ─────────────────────────── 组成序合成（AC1） ───────────────────────────
+// ─────────────────────────── 组成序合成（S2b：任务级单块） ───────────────────────────
 
 /** 块包裹（裸标签名 → `<tag>\n内文\n</tag>`——包裹属 core 合成逻辑，契约层只出常量） */
 function wrapBlock(tag: string, body: string): string {
@@ -213,19 +201,16 @@ function wrapBlock(tag: string, body: string): string {
 }
 
 /**
- * dispatchPrompt 合成（纯函数零 IO）：人格段(无标签) → <constraints> → <task-context> →
- * <type-policy>（模板族 exhaustive 路由）。digest 由调用方经 dispatchDigest(全文) 取值
+ * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形）：单一 `<task-context>` 块（任务级——
+ * GOAL 键 + SURFACE 行 + ACCEPTANCE_CRITERIA + 结算出口一句）。无人格段/约束块/类型
+ * 策略工作流段（agent 级内容由 persona 承载——prompt/persona.ts 单源，经 spawn 链
+ * persona 通道落子会话 system 面）。digest 由调用方经 dispatchDigest(全文) 取值
  * （2.4 claimTask 落 claim record）。`<forge-pipeline>` 属 plugin-forge 系统提示段，不进本合成。
  */
 export function composeDispatchPrompt(input: DispatchPromptInput): string {
   if (!TASK_TYPES.includes(input.taskType)) {
-    // 运行期防御面（词汇外值——TS 类型已封；快照测试锚定 20 值路由）
+    // 运行期防御面（词汇外值——TS 类型已封）
     throw new Error(`dispatchPrompt: unknown task type: ${String(input.taskType)}`)
   }
-  return [
-    PERSONA_BLOCK,
-    wrapBlock(XML_TAGS.constraints, CONSTRAINTS_BLOCK),
-    wrapBlock(XML_TAGS.taskContext, renderTaskContext(input)),
-    wrapBlock(XML_TAGS.typePolicy, TYPE_POLICY_TEMPLATES[input.taskType](input)),
-  ].join('\n\n')
+  return wrapBlock(XML_TAGS.taskContext, renderTaskContext(input))
 }

@@ -1,19 +1,20 @@
-// 2.2 快照测试 ×20 + 组成序/键值行/映射/digest/标签封闭断言（tech-design §Interface 9
-// + Per-Layer Test Plan「prompt 快照 ×20(人格段+标签+块序)」）。快照文件 = dispatchPrompt
-// 全文字节级 pin（digest 契约的回归面：任何模板/约束/人格文本改动都会在快照 diff 显形）。
+// S2b 快照/契约测试（worker-lean-execution）：dispatchPrompt 收窄为纯任务级单块
+// <task-context>（GOAL 键 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化 + 结算出口一句）。
+// 反锚（SC9）：无人格段/无约束块/无工作流段（agent 级内容迁 persona——persona.ts 单源，
+// system 面承载）。快照 ×20 = 任务级简报字节级 pin（digest 契约回归面：任何键/行序改动
+// 都在快照 diff 显形）。
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { TASK_TYPES, XML_TAGS, type TaskType } from '@dsh-forge/contracts'
 import {
   composeDispatchPrompt,
-  CONSTRAINTS_BLOCK,
-  PERSONA_BLOCK,
   resolveCoverage,
+  SETTLEMENT_EXIT_LINE,
   TASK_CATEGORY_FOR_TYPE,
   type DispatchPromptInput,
 } from './compose.js'
 import { DISPATCH_DIGEST_LENGTH, dispatchDigest } from './digest.js'
-import { TYPE_POLICY_TEMPLATES } from './templates/index.js'
+import { ANTI_CHURN_ANCHORS, PERSONA_CORE_SECTION, composePersona } from './persona.js'
 
 /** 全载荷夹具（全键在场——快照覆盖每键行形态；5.3 任务规格内嵌三键入载荷） */
 function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
@@ -22,8 +23,8 @@ function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
     localId: '2.2',
     taskType: o.taskType,
     title: '派发简报模板族（20 类型路由）',
-    taskDesc: '步骤：1) 核对模板路由表 2) 快照锚定全文',
-    acceptanceCriteria: ['快照与模板逐字一致', '块序恒定'],
+    goal: '达成：简报仅承载任务级内容，纪律面全部迁 persona 承载',
+    acceptanceCriteria: ['快照与简报逐字一致', '块序恒定'],
     vars: { SOURCE_FILES: 'packages/core/src/forge/tasks/prompt/', TEST_SCRIPT: 'just test' },
     taskFile: 'docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md',
     priority: 'P1',
@@ -35,10 +36,12 @@ function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
     ],
     breaking: true,
     sourceTask: { slug: 'm2-pipeline', localId: '2.4' },
+    surfaceKey: 'web',
+    surfaceType: 'web',
   }
 }
 
-/** 最小夹具（仅恒在场四键——快照覆盖条件键缺席形态） */
+/** 最小夹具（仅恒在场键——快照覆盖条件键缺席形态） */
 function minimalInput(o: { taskType: TaskType; localId?: string }): DispatchPromptInput {
   return { slug: 'm2-pipeline', localId: o.localId ?? '3.1', taskType: o.taskType }
 }
@@ -78,53 +81,59 @@ const FIXTURES: Record<TaskType, DispatchPromptInput> = {
   'eval-journey': minimalInput({ taskType: 'eval-journey', localId: '7.2' }),
 }
 
-// ─────────────────── AC4：快照 ×20（人格段 + 三标签在场 + 块序） ───────────────────
+function taskContextBody(prompt: string): string {
+  return prompt.slice(
+    prompt.indexOf(`<${XML_TAGS.taskContext}>`) + XML_TAGS.taskContext.length + 2,
+    prompt.indexOf(`</${XML_TAGS.taskContext}>`),
+  )
+}
 
-describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照 [%s]', (taskType) => {
-  it('全文快照 + 人格段在场 + 三标签在场 + 块序（人格段→constraints→task-context→type-policy）', () => {
+// ─────────────────── AC4（S2b 重写）：快照 ×20 + 任务级反锚（SC9） ───────────────────
+
+describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照·任务级收窄 [%s]', (taskType) => {
+  it('全文快照 + 单块 <task-context> + 任务级键在场', () => {
     const prompt = composeDispatchPrompt(FIXTURES[taskType])
     expect(prompt).toMatchSnapshot()
 
-    // 人格段在场 = 全文以无标签人格段开头（组成序第一段）
-    expect(prompt.startsWith(PERSONA_BLOCK)).toBe(true)
+    expect(prompt.startsWith(`<${XML_TAGS.taskContext}>`)).toBe(true)
+    expect(prompt.endsWith(`</${XML_TAGS.taskContext}>`)).toBe(true)
+    const ctx = taskContextBody(prompt)
+    expect(ctx).toContain(`TASK_ID: ${FIXTURES[taskType]!.slug}/${FIXTURES[taskType]!.localId}`)
+    expect(ctx).toContain('Settlement exit:')
+  })
 
-    // 三标签在场（开 + 闭）
-    for (const tag of [XML_TAGS.constraints, XML_TAGS.taskContext, XML_TAGS.typePolicy]) {
-      expect(prompt).toContain(`<${tag}>`)
-      expect(prompt).toContain(`</${tag}>`)
+  it('SC9 反锚：无人格段/无约束块/无工作流段/无共享段（agent 级内容在 persona 面）', () => {
+    const prompt = composeDispatchPrompt(FIXTURES[taskType])
+    for (const antiAnchor of [
+      'You are',
+      `<${XML_TAGS.constraints}>`,
+      `<${XML_TAGS.typePolicy}>`,
+      'Workflow',
+      'Quality gate sequence',
+      'Coding Strategy',
+      'SPEC-CODE SCAN',
+      'Reference Files',
+      'Record Fields',
+      'submit-task skill only after',
+    ]) {
+      expect(prompt, `反锚缺席：${antiAnchor}`).not.toContain(antiAnchor)
     }
-
-    // 块序：人格段 < <constraints> < <task-context> < <type-policy>
-    const constraintsAt = prompt.indexOf(`<${XML_TAGS.constraints}>`)
-    const contextAt = prompt.indexOf(`<${XML_TAGS.taskContext}>`)
-    const policyAt = prompt.indexOf(`<${XML_TAGS.typePolicy}>`)
-    expect(constraintsAt).toBeGreaterThan(PERSONA_BLOCK.length)
-    expect(contextAt).toBeGreaterThan(constraintsAt)
-    expect(policyAt).toBeGreaterThan(contextAt)
-
-    // 模板族内文非空且承载类型策略
-    const policyBody = prompt.slice(
-      prompt.indexOf(`<${XML_TAGS.typePolicy}>`) + XML_TAGS.typePolicy.length + 2,
-      prompt.indexOf(`</${XML_TAGS.typePolicy}>`),
-    )
-    expect(policyBody.trim().length).toBeGreaterThan(0)
+    // 双产物对偶：同类型的 persona 产物确含被迁出的段（分层承载成立，非内容丢失）
+    const persona = composePersona(taskType, 'medium')
+    expect(persona).toContain(PERSONA_CORE_SECTION)
   })
 })
 
-// ─────────────────── AC5：XML 标签集封闭 pin（G1-14 core 侧消费面） ───────────────────
+// ─────────────────── AC5（S2b 重写）：XML 标签集封闭——dispatchPrompt 单标签 ───────────────────
 
-describe('AC5 XML 标签集封闭（四枚；<forge-pipeline> 不进 dispatchPrompt）', () => {
-  it.each(TASK_TYPES)('[%s] 全文角括号标签 ⊆ 三 dispatchPrompt 标签（开闭成对，无增员）', (taskType) => {
+describe('AC5 XML 标签封闭（S2b：dispatchPrompt 仅 <task-context>；<forge-pipeline> 不进）', () => {
+  it.each(TASK_TYPES)('[%s] 全文角括号标签 = task-context 开闭对（无增员）', (taskType) => {
     const prompt = composeDispatchPrompt(FIXTURES[taskType])
     const found = prompt.match(/<\/?[A-Za-z][A-Za-z0-9-]*>/g) ?? []
     expect(new Set(found)).toEqual(
       new Set([
-        `<${XML_TAGS.constraints}>`,
-        `</${XML_TAGS.constraints}>`,
         `<${XML_TAGS.taskContext}>`,
         `</${XML_TAGS.taskContext}>`,
-        `<${XML_TAGS.typePolicy}>`,
-        `</${XML_TAGS.typePolicy}>`,
       ]),
     )
     // Hard Rule：forge-pipeline 属 plugin-forge 系统提示段（3.2），不进 dispatchPrompt
@@ -132,9 +141,9 @@ describe('AC5 XML 标签集封闭（四枚；<forge-pipeline> 不进 dispatchPro
   })
 })
 
-// ─────────────────── AC1：组成序 + digest ───────────────────
+// ─────────────────── AC1：digest 语义不变（对全文取指纹——对账锚不受迁移影响） ───────────────────
 
-describe('AC1 digest = sha-256（全文，含人格段与标签）前 12 hex', () => {
+describe('AC1 digest = sha-256（全文，含标签与任务级载荷）前 12 hex', () => {
   it('与 node:crypto 逐字等值 + 小写 hex 12 位', () => {
     const prompt = composeDispatchPrompt(FIXTURES['coding-feature'])
     const expected = createHash('sha256').update(prompt, 'utf8').digest('hex').slice(0, DISPATCH_DIGEST_LENGTH)
@@ -142,11 +151,11 @@ describe('AC1 digest = sha-256（全文，含人格段与标签）前 12 hex', (
     expect(dispatchDigest(prompt)).toMatch(/^[0-9a-f]{12}$/)
   })
 
-  it('digest 覆盖人格段与标签（改人格段 → digest 变；改动态块 → digest 变）', () => {
+  it('digest 覆盖任务级载荷（改 GOAL/动态块 → digest 变）', () => {
     const base = composeDispatchPrompt(FIXTURES['doc'])
     const baseDigest = dispatchDigest(base)
-    const recharted = base.replace(PERSONA_BLOCK, `${PERSONA_BLOCK}\nextra persona line`)
-    expect(dispatchDigest(recharted)).not.toBe(baseDigest)
+    const regoaled = base.replace('TYPE: doc', 'TYPE: docx-extra')
+    expect(dispatchDigest(regoaled)).not.toBe(baseDigest)
     const recontexted = base.replace(
       '<task-context>',
       `<task-context>\nPHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md`,
@@ -167,28 +176,25 @@ describe('AC1 digest = sha-256（全文，含人格段与标签）前 12 hex', (
   })
 })
 
-// ─────────────────── AC2：task-context 动态块键值行 ───────────────────
+// ─────────────────── AC2（S2b）：task-context 键值行 ───────────────────
 
 describe('AC2 <task-context> 键值行（键级零标签）', () => {
-  const full = composeDispatchPrompt(FIXTURES['coding-feature'])
-  const contextBody = full.slice(
-    full.indexOf(`<${XML_TAGS.taskContext}>`) + XML_TAGS.taskContext.length + 2,
-    full.indexOf(`</${XML_TAGS.taskContext}>`),
-  )
+  const ctx = taskContextBody(composeDispatchPrompt(FIXTURES['coding-feature']))
 
   it('TASK_ID 呈现自然键 slug/localId；TYPE/CATEGORY 恒在场', () => {
-    expect(contextBody).toContain('TASK_ID: m2-pipeline/2.2')
-    expect(contextBody).toContain('TYPE: coding-feature')
-    expect(contextBody).toContain('CATEGORY: coding')
+    expect(ctx).toContain('TASK_ID: m2-pipeline/2.2')
+    expect(ctx).toContain('TYPE: coding-feature')
+    expect(ctx).toContain('CATEGORY: coding')
   })
 
-  it('键值行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（TITLE = 5.3 增键，紧随 SOURCE/先于 FILE；VARS = vars 注入面，尾行承载）', () => {
+  it('键值行序 = TASK_ID < TITLE < FILE < TYPE < CATEGORY < SURFACE < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（SURFACE = S2b 增键，紧随 CATEGORY——SC3）', () => {
     const keys = [
       'TASK_ID:',
       'TITLE:',
       'FILE:',
       'TYPE:',
       'CATEGORY:',
+      'SURFACE:',
       'BLOCKERS:',
       'PHASE_SUMMARY:',
       'COVERAGE:',
@@ -196,49 +202,59 @@ describe('AC2 <task-context> 键值行（键级零标签）', () => {
       'MARKERS:',
       'VARS:',
     ]
-    const positions = keys.map((k) => contextBody.indexOf(k))
+    const positions = keys.map((k) => ctx.indexOf(k))
     for (const p of positions) expect(p).toBeGreaterThanOrEqual(0)
     for (let i = 1; i < positions.length; i++) expect(positions[i]).toBeGreaterThan(positions[i - 1]!)
   })
 
+  it('SURFACE 行 = SC3 单行双值 `web (web)`；type 缺席单值；key 缺席省行', () => {
+    expect(ctx).toContain('SURFACE: web (web)')
+    const keyOnly = composeDispatchPrompt({ ...minimalInput({ taskType: 'doc' }), surfaceKey: 'api' })
+    expect(keyOnly).toContain('SURFACE: api')
+    expect(keyOnly).not.toContain('SURFACE: api (')
+    const none = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
+    expect(none).not.toContain('SURFACE:')
+  })
+
   it('BLOCKERS 快照行 = 前置自然键+状态（领取瞬间注入的列表值）', () => {
-    expect(contextBody).toContain('BLOCKERS: 2.1 completed; 1.gate skipped')
+    expect(ctx).toContain('BLOCKERS: 2.1 completed; 1.gate skipped')
   })
 
   it('COVERAGE 行 = 策略文本（percentage 目标 / maintain）', () => {
-    expect(contextBody).toContain('COVERAGE: percentage 80%')
+    expect(ctx).toContain('COVERAGE: percentage 80%')
     const maintain = composeDispatchPrompt(FIXTURES['coding-cleanup'])
     expect(maintain).toContain('COVERAGE: maintain')
   })
 
   it('标记行 = fix-of / breaking（在场者拼接；M3 裁决⑦ main-session 砍除）', () => {
-    expect(contextBody).toContain('MARKERS: fix-of m2-pipeline/2.4, breaking')
-    expect(contextBody).not.toContain('main-session')
+    expect(ctx).toContain('MARKERS: fix-of m2-pipeline/2.4, breaking')
+    expect(ctx).not.toContain('main-session')
   })
 
   it('VARS 行 = 键序字母序 KEY=VALUE 分号拼接（vars 注入面——SKIP_EVAL_GATE/fix 链契约的送达面）；空对象省行', () => {
-    expect(contextBody).toContain('VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test')
+    expect(ctx).toContain('VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test')
     const emptyVars = composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-fix' }), vars: {} })
     expect(emptyVars).not.toContain('VARS:')
   })
 
-  it('条件键缺席即省行（最小夹具仅恒在场键）', () => {
+  it('条件键缺席即省行（最小夹具仅恒在场键 + 结算出口句恒在场）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', 'DESCRIPTION:', 'ACCEPTANCE_CRITERIA:']) {
+    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', 'GOAL:', 'ACCEPTANCE_CRITERIA:', 'SURFACE:']) {
       expect(minimal).not.toContain(key)
     }
+    expect(minimal).toContain(SETTLEMENT_EXIT_LINE)
   })
 
   it('键级零标签（task-context 内文为纯键值行——不加键级标签）', () => {
-    expect(contextBody).not.toContain('<TASK_ID>')
-    expect(contextBody).not.toContain('<BLOCKERS>')
+    expect(ctx).not.toContain('<TASK_ID>')
+    expect(ctx).not.toContain('<BLOCKERS>')
   })
 })
 
 // ─────────────────── M3 2.4：SOURCE 容器语境行（任务带容器出厂） ───────────────────
 
 describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal <slug>）', () => {
-  it('feature 容器 → `SOURCE: feature <slug>`；行序紧随 TASK_ID、先于 FILE/TYPE', () => {
+  it('feature 容器 → `SOURCE: feature <slug>`；行序紧随 TASK_ID、先于 TYPE', () => {
     const prompt = composeDispatchPrompt({
       ...fullInput({ taskType: 'coding-feature' }),
       source: { kind: 'feature', slug: 'm2-pipeline' },
@@ -246,7 +262,6 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
     expect(prompt).toContain('SOURCE: feature m2-pipeline')
     const at = (k: string): number => prompt.indexOf(k)
     expect(at('SOURCE: feature m2-pipeline')).toBeGreaterThan(at('TASK_ID: m2-pipeline/2.2'))
-    expect(at('FILE:')).toBeGreaterThan(at('SOURCE: feature m2-pipeline'))
     expect(at('TYPE:')).toBeGreaterThan(at('SOURCE: feature m2-pipeline'))
   })
 
@@ -276,67 +291,60 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
   })
 })
 
-// ─────────────────── 5.3：任务规格内嵌（worker 面无 queryTask 的定义唯一到达面） ───────────────────
+// ─────────────────── 5.3/S2b：任务规格内嵌（GOAL 键 + AC 单行化 + 结算出口） ───────────────────
 
-describe('5.3 任务规格内嵌：TITLE 键值行 + DESCRIPTION/ACCEPTANCE_CRITERIA 段（tech-design 图 4「角色唯一来源·纯任务规格」兑付）', () => {
-  it('全载荷：TITLE 行 + DESCRIPTION 段（taskDesc 逐字）+ AC 清单段，落在 <task-context> 键值行之后', () => {
+describe('5.3/S2b 任务规格内嵌：TITLE 行 + GOAL 段 + AC 段 + 结算出口句', () => {
+  it('全载荷：TITLE 行 + GOAL 段（结果导向，原 DESCRIPTION 键更名）+ AC 清单段 + 结算出口句收尾', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    const ctx = prompt.slice(prompt.indexOf(`<${XML_TAGS.taskContext}>`), prompt.indexOf(`</${XML_TAGS.taskContext}>`))
+    const ctx = taskContextBody(prompt)
     expect(ctx).toContain('TITLE: 派发简报模板族（20 类型路由）')
-    expect(ctx).toContain('DESCRIPTION:\n步骤：1) 核对模板路由表 2) 快照锚定全文')
-    expect(ctx).toContain('ACCEPTANCE_CRITERIA:\n- 快照与模板逐字一致\n- 块序恒定')
-    expect(ctx.indexOf('DESCRIPTION:')).toBeGreaterThan(ctx.indexOf('MARKERS:'))
-    expect(ctx.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(ctx.indexOf('DESCRIPTION:'))
+    expect(ctx).toContain('GOAL:\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载')
+    expect(ctx).toContain('ACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定')
+    expect(ctx).not.toContain('DESCRIPTION:')
+    expect(ctx.indexOf('GOAL:')).toBeGreaterThan(ctx.indexOf('VARS:'))
+    expect(ctx.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(ctx.indexOf('GOAL:'))
+    expect(ctx.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(ctx.indexOf('ACCEPTANCE_CRITERIA:'))
+    expect(ctx.trimEnd().endsWith(SETTLEMENT_EXIT_LINE)).toBe(true)
   })
 
-  it('任务体不越 <task-context> 边界（三标签块结构不动——type-policy 首段前闭合）', () => {
-    const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    expect(prompt.indexOf(`</${XML_TAGS.taskContext}>`)).toBeLessThan(prompt.indexOf(`<${XML_TAGS.typePolicy}>`))
-    expect(prompt.slice(prompt.indexOf(`</${XML_TAGS.taskContext}>`))).not.toContain('步骤：1) 核对模板路由表')
-  })
-
-  it('taskDesc 单独在场（无 AC）→ 仅 DESCRIPTION 段；空 AC 数组 → 省段', () => {
-    const descOnly = composeDispatchPrompt({
+  it('AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源）', () => {
+    const prompt = composeDispatchPrompt({
       ...minimalInput({ taskType: 'doc' }),
-      title: '仅有描述的任务',
-      taskDesc: '一行描述',
+      acceptanceCriteria: ['多行条目第一行\n第二行续', '单行条目'],
+    })
+    expect(prompt).toContain('ACCEPTANCE_CRITERIA:\n- 多行条目第一行 第二行续\n- 单行条目')
+  })
+
+  it('任务体不越 <task-context> 边界（单块结构——块内收尾）', () => {
+    const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
+    expect(prompt.indexOf(`</${XML_TAGS.taskContext}>`)).toBe(prompt.length - `</${XML_TAGS.taskContext}>`.length)
+    expect(prompt.slice(prompt.indexOf(`</${XML_TAGS.taskContext}>`))).not.toContain('达成：简报仅承载任务级内容')
+  })
+
+  it('GOAL 单独在场（无 AC）→ 仅 GOAL 段；空 AC 数组 → 省段', () => {
+    const goalOnly = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'doc' }),
+      title: '仅有目标的任务',
+      goal: '一行目标',
       acceptanceCriteria: [],
     })
-    expect(descOnly).toContain('DESCRIPTION:\n一行描述')
-    expect(descOnly).not.toContain('ACCEPTANCE_CRITERIA:')
+    expect(goalOnly).toContain('GOAL:\n一行目标')
+    expect(goalOnly).not.toContain('ACCEPTANCE_CRITERIA:')
   })
 
   it('任务规格注入 → digest 新值（简报重合成判据同族——规格变更 = 新简报）', () => {
     const base = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'doc' })))
     const withSpec = dispatchDigest(
-      composeDispatchPrompt({ ...minimalInput({ taskType: 'doc' }), title: 'T', taskDesc: 'D' }),
+      composeDispatchPrompt({ ...minimalInput({ taskType: 'doc' }), title: 'T', goal: 'D' }),
     )
     expect(withSpec).not.toBe(base)
   })
 })
 
-// ─────────────────── AC3：20 类型模板族 + ValidTypes ↔ TaskType 映射 ───────────────────
+// ─────────────────── CATEGORY 映射（submit-task 路由面保持） ───────────────────
 
-describe('AC3 模板族 exhaustive 路由（TaskType 20 值 = 21 模板 − fix-record-missed）', () => {
-  it('模板族键集 ≡ TASK_TYPES（20 值，逐字无增减）', () => {
-    expect(Object.keys(TYPE_POLICY_TEMPLATES).sort()).toEqual([...TASK_TYPES].sort())
-    expect(TASK_TYPES).toHaveLength(20)
-  })
-
-  it('fix-record-missed 不入词汇（降级 run-tasks 内置静态文本——非 core 模板族成员）', () => {
-    expect(TASK_TYPES).not.toContain('fix-record-missed' as TaskType)
-    expect(Object.keys(TYPE_POLICY_TEMPLATES)).not.toContain('fix-record-missed')
-  })
-
-  it('每模板可独立渲染（fixture 上下文 → 非空文本且含 Workflow 字样）', () => {
-    for (const taskType of TASK_TYPES) {
-      const text = TYPE_POLICY_TEMPLATES[taskType]({ slug: 'm2-pipeline', localId: '2.2' })
-      expect(text.length).toBeGreaterThan(0)
-      expect(text).toContain('Workflow')
-    }
-  })
-
-  it('CATEGORY 映射 = 老 forge CategoryForType 平移（六类归属逐点）', () => {
+describe('CATEGORY 映射 = 老 forge CategoryForType 平移（六类归属逐点）', () => {
+  it('20 类型归属逐点', () => {
     const expected: Record<TaskType, string> = {
       'coding-feature': 'coding',
       'coding-enhancement': 'coding',
@@ -383,15 +391,21 @@ describe('AC1/AC2 COVERAGE 解析（老 forge resolveCoverage 平移：cleanup/r
   })
 })
 
-describe('AC1 约束块单一 TS 源（失败分诊/质量门序列/提交纪律/不越权四节齐备）', () => {
-  it('四节关键词在场（快照文本面）', () => {
-    expect(CONSTRAINTS_BLOCK).toContain('Failure triage')
-    expect(CONSTRAINTS_BLOCK).toContain('Quality gate sequence')
-    expect(CONSTRAINTS_BLOCK).toContain('Commit discipline')
-    expect(CONSTRAINTS_BLOCK).toContain('no authority escalation')
-    expect(CONSTRAINTS_BLOCK).toContain('just compile')
-    expect(CONSTRAINTS_BLOCK).toContain('just fmt')
-    expect(CONSTRAINTS_BLOCK).toContain('just lint')
+describe('S2b 分层对偶（SC9 双产物）：persona 面承载被迁出内容', () => {
+  it('反搅动锚 ×6 与核心段在 persona 产物恒定在场（20 类型穷尽——SC6/SC10 对偶锚）', () => {
+    for (const taskType of TASK_TYPES) {
+      const persona = composePersona(taskType, 'medium')
+      for (const anchor of ANTI_CHURN_ANCHORS) expect(persona, `${taskType} 反搅动锚`).toContain(anchor)
+      expect(persona).toContain('AC item-by-item check is invariable')
+    }
+  })
+
+  it('dispatchPrompt 与 persona 零文本交叠（任务级 vs agent 级分层收口）', () => {
+    const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
+    const persona = composePersona('coding-feature', 'medium')
+    for (const line of persona.split('\n').filter((l) => l.trim().length > 20)) {
+      expect(prompt).not.toContain(line)
+    }
   })
 })
 

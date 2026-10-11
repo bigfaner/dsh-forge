@@ -134,7 +134,7 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     expect(h!.events.emitted).toEqual([{ projectId: P() }])
   })
 
-  it('dispatchPrompt 组成序（2.2 单源合成）：人格段 + <constraints> + <task-context>（TASK_ID 自然键 + BLOCKERS 快照）+ <type-policy>', async () => {
+  it('dispatchPrompt 组成（S2b 任务级收窄）：单块 <task-context>（TASK_ID 自然键 + BLOCKERS 快照 + 结算出口）——无人格段/约束块/类型策略段（agent 级内容迁 persona）', async () => {
     const claim = svc()
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1', { status: 'completed' })
@@ -145,22 +145,22 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
       taskRef: { slug: 'f', localId: '2.1' },
       sessionId: 's',
     })
-    expect(dispatchPrompt).toContain('You are a focused task executor.')
-    const constraints = dispatchPrompt.indexOf('<constraints>')
-    const taskContext = dispatchPrompt.indexOf('<task-context>')
-    const typePolicy = dispatchPrompt.indexOf('<type-policy>')
-    expect(constraints).toBeGreaterThan(0)
-    expect(taskContext).toBeGreaterThan(constraints)
-    expect(typePolicy).toBeGreaterThan(taskContext)
+    // S2b 收窄形：全文 = 单一 <task-context> 块；反锚（SC9）
+    expect(dispatchPrompt.startsWith('<task-context>\n')).toBe(true)
+    expect(dispatchPrompt.endsWith('\n</task-context>')).toBe(true)
+    for (const antiAnchor of ['You are', '<constraints>', '<type-policy>', 'Workflow', 'Quality gate sequence']) {
+      expect(dispatchPrompt).not.toContain(antiAnchor)
+    }
     expect(dispatchPrompt).toContain('TASK_ID: f/2.1')
     expect(dispatchPrompt).toContain('BLOCKERS: 1.1 completed')
+    expect(dispatchPrompt).toContain('Settlement exit:')
     // 无前置任务 → 无 BLOCKERS 行
     seedTask(h!.db, 'f', '1.2')
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's' })
     expect(r2.dispatchPrompt).not.toContain('BLOCKERS:')
   })
 
-  it('任务规格内嵌（5.3 dogfood 实证缺陷收口）：TITLE/DESCRIPTION/ACCEPTANCE_CRITERIA 入 <task-context>——worker 面无 queryTask 时的定义唯一来源', async () => {
+  it('任务规格内嵌（5.3 dogfood 实证缺陷收口）：TITLE/GOAL/ACCEPTANCE_CRITERIA 入 <task-context>——worker 面无 queryTask 时的定义唯一来源（S2b DESCRIPTION 键更名 GOAL）', async () => {
     // 缺陷背景（5.3 SC-M3 走查首跑实证）：task-context 无任务体 + worker 收窄面禁 queryTask
     // + M3 task_file 列砍除 → worker 三路皆无定义可读 → 全员 blocked（missing-input）。
     // 收口 = dispatchPrompt 内嵌任务规格（tech-design 图 4「角色唯一来源·纯任务规格」兑付）。
@@ -169,20 +169,25 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     seedTask(h!.db, 'f', '4.1')
     h!.db.prepare(`UPDATE tasks SET title = ?, task_desc = ?, ac_json = ? WHERE id = 't-f-4.1'`).run(
       '创建 notes.md 并提交',
-      '步骤：1) 在工作区根创建 notes.md，内容恰好一行：ok',
+      '达成：工作区根 notes.md 在场，内容恰好一行：ok',
       JSON.stringify(['notes.md 在场且内容逐字', '四门全绿']),
     )
     const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
     expect(dispatchPrompt).toContain('TITLE: 创建 notes.md 并提交')
-    expect(dispatchPrompt).toContain('DESCRIPTION:\n步骤：1) 在工作区根创建 notes.md，内容恰好一行：ok')
+    expect(dispatchPrompt).toContain('GOAL:\n达成：工作区根 notes.md 在场，内容恰好一行：ok')
     expect(dispatchPrompt).toContain('ACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿')
-    // 任务体入 <task-context>（三标签块结构不动）——DESCRIPITION 段落于键值行之后
+    // S2b/SC3：SURFACE 单行双值（行值取任务行 surface_key/surface_type；缺席省行）
+    h!.db.prepare(`UPDATE tasks SET surface_key = 'web', surface_type = 'web' WHERE id = 't-f-4.1'`).run()
+    const withSurface = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
+    expect(withSurface.dispatchPrompt).toContain('SURFACE: web (web)')
+    expect(withSurface.dispatchPrompt.indexOf('SURFACE:')).toBeGreaterThan(withSurface.dispatchPrompt.indexOf('CATEGORY:'))
+    // 任务体入 <task-context>（单块结构不动）——GOAL 段落于键值行之后
     const ctx = dispatchPrompt.slice(dispatchPrompt.indexOf('<task-context>'), dispatchPrompt.indexOf('</task-context>'))
-    expect(ctx.indexOf('DESCRIPTION:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
+    expect(ctx.indexOf('GOAL:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
     // 无 desc/AC 任务 → 段落省略（M2 形态兼容）
     seedTask(h!.db, 'f', '4.2')
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.2' }, sessionId: 's' })
-    expect(r2.dispatchPrompt).not.toContain('DESCRIPTION:')
+    expect(r2.dispatchPrompt).not.toContain('GOAL:')
     expect(r2.dispatchPrompt).not.toContain('ACCEPTANCE_CRITERIA:')
   })
 

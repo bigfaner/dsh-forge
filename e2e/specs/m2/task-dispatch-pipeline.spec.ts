@@ -14,9 +14,9 @@
 // Fact Table 摘录（源码核实）：
 //   - 概览面（Step 6）：[data-dswf-ov-panel]（OverviewTab.tsx:177）+ 子 tab
 //     [data-dswf-ov-subtab="tasks"] + 任务行 [data-dswf-tt-item="<taskId>"]（list-view.tsx:95）；
-//   - dispatchPrompt 四段（compose.ts:172-186）：人格段 "You are a focused task executor."
-//     → <constraints> → <task-context>（内文首行 TASK_ID: <slug>/<localId>）→ <type-policy>；
-//     digest = sha-256 全文前 12 hex（dto/forge.ts ClaimTaskResult）；
+//   - dispatchPrompt S2b 收窄形（compose.ts）：单块 <task-context>（内文首行
+//     TASK_ID: <slug>/<localId> + GOAL/AC + 结算出口句）——无人格段/约束块/类型策略段
+//     （agent 级内容迁 persona，system 面承载）；digest = sha-256 全文前 12 hex（dto/forge.ts ClaimTaskResult）；
 //   - 错误码文案（core tasks/errors.ts）：ERR_DEPENDENCIES_UNMET「前置依赖未满足：
 //     <slug>/<localId> <status>——满足集 {completed, skipped}」；ERR_INVALID_TRANSITION
 //     「非法任务转移：…」；ERR_REASON_REQUIRED「submitTask 需要 reason」；
@@ -102,11 +102,14 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     })) as ClaimTaskResult
     expect(claim.task?.taskStatus, '领取后 in_progress').toBe('in_progress')
     expect(claim.reclaimed, '首领非重入').toBe(false)
-    expect(claim.dispatchPrompt, '简报人格段（task-executor，无标签）').toContain('You are a focused task executor.')
-    expect(claim.dispatchPrompt, '简报约束块').toContain('<constraints>')
-    expect(claim.dispatchPrompt, '简报动态信息块').toContain('<task-context>')
+    // S2b 锚双层化（SC9）：user 面 = 任务级（单块 task-context + TASK_ID + 结算出口）；
+    // persona/约束面已迁 system 面（此处反锚断言分层成立）
+    expect(claim.dispatchPrompt, '简报任务级单块').toContain('<task-context>')
     expect(claim.dispatchPrompt, '动态块含 TASK_ID 自然键').toContain(`TASK_ID: ${added.slug}/${added.localId}`)
-    expect(claim.dispatchPrompt, '简报类型策略块').toContain('<type-policy>')
+    expect(claim.dispatchPrompt, '结算出口句在场（submitTask 路径指称）').toContain('Settlement exit:')
+    expect(claim.dispatchPrompt, '无人格段（persona 迁 system 面）').not.toContain('You are')
+    expect(claim.dispatchPrompt, '无约束块（门纪律迁 persona）').not.toContain('<constraints>')
+    expect(claim.dispatchPrompt, '无类型策略工作流段（迁 persona 变体表）').not.toContain('<type-policy>')
     expect(claim.digest, 'digest = 12 hex 简报指纹').toMatch(/^[0-9a-f]{12}$/)
     // 单发重取即见（即时判据——无轮询）
     const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })

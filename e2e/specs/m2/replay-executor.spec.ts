@@ -69,7 +69,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     }
     expect(claim.task?.taskId).toBe(addA.taskId)
     expect(claim.reclaimed).toBe(false)
-    expect(claim.dispatchPrompt.length).toBeGreaterThan(200) // 全文简报（人格段 + 三标签块）
+    expect(claim.dispatchPrompt, '全文简报（S2b 任务级单块——task-context + TASK_ID）').toContain('TASK_ID:')
     expect(claim.digest).toMatch(/^[0-9a-f]{12}$/)
     // 即时判据②：claim 返回后单次重取即见 in_progress
     cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })

@@ -229,9 +229,10 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     assertDependenciesMet(prereqs)
 
     // ③ dispatchPrompt 合成（领取瞬间取数——BLOCKERS 快照 + PHASE_SUMMARY 相位机注入 +
-    //    fix 源标记谱系水化 + 任务规格内嵌（5.3：TITLE/DESCRIPTION/ACCEPTANCE_CRITERIA
-    //    ——worker 收窄面禁 queryTask 且 M3 task_file 列砍除，本合成 = 任务定义唯一到达面）
-    //    + VARS 行（vars_json 解码——SKIP_EVAL_GATE/fix 链上下文的唯一送达面）；
+    //    fix 源标记谱系水化 + 任务规格内嵌（5.3：TITLE/GOAL/ACCEPTANCE_CRITERIA——S2b
+    //    DESCRIPTION 键更名 GOAL；worker 收窄面禁 queryTask 且 M3 task_file 列砍除，
+    //    本合成 = 任务定义唯一到达面）+ SURFACE 行（S2b/SC3）+
+    //    VARS 行（vars_json 解码——SKIP_EVAL_GATE/fix 链上下文的唯一送达面）；
     //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
     const sourceRef = sourceRow === undefined ? undefined : { slug: sourceRow.slug, localId: sourceRow.local_id }
@@ -242,7 +243,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // 使行内 slug 直取任务行 slug）
       source: { kind: row.source_kind, slug: row.slug },
       title: row.title,
-      ...(row.task_desc !== null ? { taskDesc: row.task_desc } : {}),
+      ...(row.task_desc !== null ? { goal: row.task_desc } : {}),
       ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as readonly string[] } : {}),
       ...(row.vars_json !== null ? { vars: JSON.parse(row.vars_json) as Record<string, string> } : {}),
       taskType: row.task_type,
@@ -256,6 +257,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // main_session 砍除（M3 裁决⑦）：标记行不再有 main-session 分支（1.2 schema 直改伴随）
       breaking: row.breaking === 1,
       sourceTask: sourceRef,
+      // S2b/SC3：SURFACE 单行双值（`<key> (<type>)`；缺席省行——R6 填写率缓解）
+      ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
+      ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
     })
     const digest = dispatchDigest(dispatchPrompt)
 

@@ -439,7 +439,8 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     )
     for (const o of claimObs) {
       const r = o.result as { dispatchPrompt: string; digest: string }
-      expect(r.dispatchPrompt.length, 'claim observed 全文非空（人格段 + 三标签块）').toBeGreaterThan(200)
+      expect(r.dispatchPrompt, 'claim observed 全文非空（S2b 任务级单块）').toContain('<task-context>')
+      expect(r.dispatchPrompt, 'claim observed 含 TASK_ID 行').toContain('TASK_ID:')
       expect(r.digest).toMatch(/^[0-9a-f]{12}$/)
     }
     const reclaimObs = claimObs.find((o) => (o.result as { reclaimed?: boolean }).reclaimed === true)
