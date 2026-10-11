@@ -16,7 +16,8 @@
 //     .dswf-ov-empty（feature-tab.tsx:72 / proposal-tab.tsx:55——一等 EmptyState 非错误）；
 //   - 文档 tab：[data-dswf-doc-key="<projectId>#<docRel>"]（去重键 = 地址）+ 悬空标记
 //     [data-dswf-doc-dangling]（docs/index 悬空分支）+ 正文 [data-dswf-doc-body] +
-//     路径栏 .dswf-doc-path + mermaid [data-dswf-doc-mermaid-svg]（SVG 在场）/
+//     单行头路径 [data-path-label]（1.6 收敛——官方 PathLabel，原 .dswf-doc-path 退役）+
+//     mermaid [data-dswf-doc-mermaid-svg]（SVG 在场）/
 //     [data-dswf-doc-mermaid-fallback]（回退占位卡）；
 //   - 多文档并存：官方 dockkit strip 页签 [data-dockkit-strip] [role=tab]（multiple）；
 //     同地址重开 = reveal（不新增 tab）；
@@ -49,6 +50,7 @@ import { openOverviewDock } from '../../support/navigation.js'
 import {
   DOC_MERMAID_FALLBACK,
   DOC_MERMAID_SVG,
+  DOC_PATH_LABEL,
   DOCKKIT_STRIP_TAB,
   OV_PARENT_ANY,
   docPanelOf,
@@ -147,12 +149,14 @@ test('@web-e2e @m2 文档浏览·冒烟：发现链列表 → 文档 tab 只读�
     await revealFeatureDocRow(page, designRel)
     await expect(page.locator(ovDocRowOf(prdRel)).first(), '同 feature 另一类文档行在场').toBeVisible()
 
-    // ── Step 2：点开 design 文档 → 独立文档 tab（docRel 去重）+ 只读渲染 + canonical 路径栏 ──
+    // ── Step 2：点开 design 文档 → 独立文档 tab（docRel 去重）+ 只读渲染 + 单行头 canonical 路径 ──
     await page.locator(ovDocRowOf(designRel)).first().click()
     const designPanel = page.locator(docPanelOf(projectId, designRel)).first()
     await expect(designPanel, '文档 tab 开出（docRel 去重键 = 地址）').toBeVisible({ timeout: 30_000 })
     await expect(designPanel.locator('[data-dswf-doc-body]'), '正文只读渲染（MarkdownDoc）').toContainText('DOC-DESIGN-BODY')
-    const pathText = (await designPanel.locator('.dswf-doc-path').textContent()) ?? ''
+    // 1.6 载体适配：单行头路径 = 官方 PathLabel（[data-path-label]——目录段弱化/渐隐裁剪官方自带；
+    // textContent = 目录段+文件名拼接全值，原 .dswf-doc-path 断言语义不变）
+    const pathText = (await designPanel.locator(DOC_PATH_LABEL).textContent()) ?? ''
     expect(pathText.toLowerCase().startsWith(wsDir.slice(0, 2).toLowerCase()), 'canonical 路径栏 = 绝对路径（盘符起）').toBe(true)
     expect(pathText.endsWith(join('docs', 'features', 'db-feat', 'design', 'tech-design.md')), 'canonical 路径栏逐字承载 rel_path 解析').toBe(true)
 
@@ -211,7 +215,7 @@ test('@web-e2e @m2 文档浏览·悬空容错：占位面在场 + 不崩溃不�
     await expect(panel, '悬空文档 tab 可开').toBeVisible({ timeout: 30_000 })
     await expect(panel, '悬空标记在场（panel 级属性——dangling 容错锚）').toHaveAttribute('data-dswf-doc-dangling', '')
     await expect(panel, '悬空标注文案').toContainText('文档引用悬空')
-    await expect(panel.locator('.dswf-doc-path'), '路径栏保留（库内 rel_path 原值）').toBeVisible()
+    await expect(panel.locator(DOC_PATH_LABEL), '单行头路径保留（库内 rel_path 原值——1.6 官方 PathLabel 载体）').toBeVisible()
 
     // 不崩溃：renderer 零未捕获异常
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])

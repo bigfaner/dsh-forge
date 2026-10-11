@@ -199,6 +199,8 @@ export const docPanelOf = (projectId: string, docRel: string): string =>
   `[data-dswf-doc-key="${projectId}#${docRel}"]`
 /** 悬空文档占位面（SC-branch 容错锚） */
 export const DOC_DANGLING = '[data-dswf-doc-dangling]'
+/** 单行头路径标签（1.6 收敛——官方 PathLabel 自带 data-path-label 锚：目录段弱化/左缘渐隐裁剪/悬浮全值官方自带） */
+export const DOC_PATH_LABEL = '[data-path-label]'
 /** mermaid 渲染成功面（SVG 在场——erDiagram 验收锚） */
 export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
 /** mermaid 渲染回退占位卡（非法源/渲染失败） */

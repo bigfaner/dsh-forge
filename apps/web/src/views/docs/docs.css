@@ -1,14 +1,18 @@
-/* 文档 tab 样式（定位：业务——UF-2：头部[文件名 + 只读/悬空徽标] + 路径栏[canonical
- * + 📁 编辑器 + ↻ 重读] + 摘要块 + 正文分段渲染[md 段 MarkdownDoc / mermaid 段
- * MermaidDiagram 卡] + 悬空占位面 + 骨架/错误条）。
- * 结构基准 = 原型 doc-tab（ui-design UF-2——路径栏底色条、图卡[头 + 画布]、回退卡
- * [头 + 源码 + 注记]）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值）。
+/* 文档 tab 样式（定位：业务——UF-2：单行头[官方 PathLabel 路径 + 悬空 warn chip +
+ * 官方图标钮：重读/编辑器打开——1.6 对齐官方预览头 css$8 dhJKeW_header 单行形] +
+ * 正文分段渲染[md 段 MarkdownDoc / mermaid 段 MermaidDiagram 卡] + 悬空占位面 +
+ * 骨架/错误条）。
+ * 1.6 收敛退役：标题行/只读 chip（标题归 tab 页签、面板恒只读零冗余）+ 摘要卡（摘要
+ * 供给改经概览文档行悬浮——数据仍经列表行 summary 通道，docs.read 契约不动）。
+ * 结构基准 = 官方 documentpreview 预览头（单行：路径左 + 控件簇右 + 底缘发丝线）；
+ * 视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值）。
  * dsw-raw 豁免（执行记录同步）：骨架行高 28px / 图源行高 = 原型结构刻度
  * （overview.css 同款豁免先例——官方主题无间距标尺令牌）；块级留白取行高令牌刻度；
  * 预览径容器 inset 10px 12px / 图卡段间距 16px 0 = 官方 MarkdownBody 容器 css$7
- * 同刻度镜像（1.3 对齐官方——官方主题无间距标尺令牌，取值唯一来源 = css$7）。 */
+ * 同刻度镜像（1.3 对齐官方）；图标钮 28×28 命中区 + svg 15×15 = 官方预览头 css$8
+ * .tool 同刻度镜像（1.6 对齐官方——主题无间距标尺令牌）。 */
 
-/* ── 面板骨架：头部 + 路径栏 + 摘要 + 正文。滚动所有权 = 正文自持——dock 宿主不滚
+/* ── 面板骨架：单行头 + 正文。滚动所有权 = 正文自持——dock 宿主不滚
  * （dockkit 内容容器零 overflow 滚动规则：lib/index.js 全量核查唯一注记 = strip 刻意
  * 裁剪防滚动容器 L2236；data-dockkit-content L3087 仅 id 属性），同宿主先例 = overview
  * tab 自持滚动（overview.css .dswf-ov-content：flex:1 + min-height:0 + overflow-y:auto）。── */
@@ -21,72 +25,47 @@
   background: var(--dsw-alias-bg-base);
 }
 
-/* ── 头部：文件名 + 徽标行 ── */
-.dswf-doc-head {
+/* ── 单行头（1.6 对齐官方预览头单行形）：路径左[官方 PathLabel——目录段弱化/左缘渐隐
+ * 裁剪/悬浮全值官方自带，零自绘样式] + 右控件簇[悬空 warn chip 仅 dangling + 官方图标
+ * 钮]；底缘发丝线分隔正文（官方 css$8 header 同形——间距取行高令牌刻度）。 ── */
+.dswf-doc-pathbar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
-}
-
-.dswf-doc-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--dsw-font-s-14-strong);
-  color: var(--dsw-alias-label-primary);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l3);
 }
 
 .dswf-doc-chip-dangling {
   color: var(--dsw-alias-state-warn-primary);
 }
 
-/* ── 路径栏：canonical 全路径 + 📁 / ↻ 图标钮 ── */
-.dswf-doc-pathbar {
-  display: flex;
-  align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
-  margin: 0 var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.dswf-doc-path {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
-}
-
+/* 官方图标钮（css$8 .tool 同刻度镜像）：ghost 形——透明底 + hover 底色/提字；svg 刻度
+ * 官方自带（icon 件 color 随 currentColor） */
 .dswf-doc-iconbtn {
   flex: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* dsw-raw 官方同刻度（css$8 .tool 28×28 命中区——主题无间距标尺令牌） */
+  height: 28px; /* dsw-raw 同上 */
   padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  font: var(--dsw-font-base-16);
-  line-height: var(--dsw-font-s-14-line-height);
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
 }
 
-.dswf-doc-iconbtn:hover {
-  color: var(--dsw-alias-label-primary);
+.dswf-doc-iconbtn svg {
+  width: 15px; /* dsw-raw 官方同刻度（css$8 .tool svg 15×15） */
+  height: 15px; /* dsw-raw 同上 */
 }
 
-/* ── 摘要块 ── */
-.dswf-doc-summary {
-  margin: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height) 0;
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
-  border-radius: var(--dsw-radius-md);
+.dswf-doc-iconbtn:hover {
+  color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
 }
 
 /* ── 共享文档 body 官方同形容器（1.5 单源）：三入口容器同一刻度组——官方预览径
@@ -169,7 +148,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 悬空占位面（路径栏保留——面板级居中） ── */
+/* ── 悬空占位面（单行头保留——面板级居中） ── */
 .dswf-doc-dangling {
   min-height: 50%;
 }

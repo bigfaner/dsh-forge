@@ -370,6 +370,29 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(plugin).toContain("loading: 'text-pages'")
     expect(plugin).toContain('wrap: false') // 1.3：对齐内建 md（官方 L1626）——文档级 wrap 钮不出
   })
+
+  it('1.6 单行头收敛 pin（对齐官方预览头）：标题行/只读 chip/摘要卡退役 + 官方 PathLabel/图标件 + docs.css 新旧规则对位 + 概览文档行 summary 悬浮数据面', () => {
+    const tab = read('apps/web/src/views/docs/index.tsx')
+    expect(tab, '官方 PathLabel 复用（目录段弱化/渐隐裁剪/悬浮全值官方自带——禁自绘仿制）').toContain('PathLabel')
+    expect(tab, '重读钮 = 官方导出图标件（documentpreview reload 同源 face）').toContain('IconRefreshOutlineRegular')
+    expect(tab, '编辑器打开钮 = 官方导出图标件').toContain('IconFolderOpenOutlineRegular')
+    expect(tab, '标题行退役（标题归 tab 页签）').not.toContain('dswf-doc-head')
+    expect(tab, '摘要卡退役（摘要供给改经概览文档行悬浮）').not.toContain('dswf-doc-summary')
+    expect(tab, '头部标题纯函数随退役（零消费死代码缺席）').not.toContain('docTitle')
+    expect(tab, 'emoji 图标零残留（📁）').not.toContain('📁')
+    expect(tab, 'emoji 图标零残留（↻）').not.toContain('↻')
+    const css = read('apps/web/src/views/docs/docs.css')
+    expect(css, '退役规则清理：head 行').not.toMatch(/\.dswf-doc-head \{/)
+    expect(css, '退役规则清理：title 行').not.toMatch(/\.dswf-doc-title \{/)
+    expect(css, '退役规则清理：path 行（官方 PathLabel 自带——`.dswf-doc-pathbar` 前缀不误伤）').not.toMatch(/\.dswf-doc-path \{/)
+    expect(css, '退役规则清理：summary 行').not.toMatch(/\.dswf-doc-summary \{/)
+    expect(css, '单行头新规则在场（路径左 + 控件簇右 + 底缘发丝线——官方预览头同形）').toMatch(/\.dswf-doc-pathbar \{[^}]*border-bottom/)
+    expect(css, '官方图标钮刻度组（28×28 命中区 + svg 15×15 官方同刻度 dsw-raw 镜像）').toContain('.dswf-doc-iconbtn svg')
+    expect(css, '悬空 warn chip 规则保留（单行内可见性）').toContain('.dswf-doc-chip-dangling')
+    const dgl = read('apps/web/src/views/overview/feature-tab/DocGroupList.tsx')
+    expect(dgl, '概览文档行悬浮 summary（官方 Tooltip label——缺省 relPath 回退）').toContain('docRowTipLabel')
+    expect(dgl, 'DocGroupDoc 携 summary 透传（FeatureDocumentRow DTO 已有——零契约改动）').toContain('summary?: string')
+  })
 })
 
 describe('views/knowledge 详情抽屉 pin（3.7）', () => {

@@ -1,23 +1,25 @@
 // 文档 tab 体（定位：业务——UF-2：dock 文档 tab body）。分层同 overview 先例：
 // DocsFrame = 纯呈现帧（结构静态可测）；DocsTab = 状态 + 装载胶水（docs.read 单发 +
-// ↻ 重读 nonce + 竞态守卫）。tab 注册（multiple + docRel 去重）归 4.1——本组件接收
+// 重读 nonce + 竞态守卫）。tab 注册（multiple + docRel 去重）归 4.1——本组件接收
 // docRel props；多文档并存 = 每文档一个 tab 实例，互不共享态。
-// 内容结构（ui-design UF-2 / 原型 doc-tab）：头部（文件名 + 只读徽标 + 悬空徽标）→
-// 路径栏（canonical 全路径 + 📁 在编辑器中打开 + ↻ 重读）→ 摘要块 → 正文分段渲染
-// （经共享件 MdSegmentsBody 单源——md 段 MarkdownDoc、mermaid 段 MermaidDiagram 懒加载，
-// 零 mermaid 段零挂载；1.5 三入口一致）。
-// 悬空（dangling=true，Interface 4 悬空容忍）= 只读占位面：路径栏保留、不崩溃、
-// 不写入、不删行；↻ 重读照常（切回含文件分支后恢复）。
+// 内容结构（1.6 单行头收敛——对齐官方预览头 documentpreview css$8 dhJKeW_header 单行形）：
+// 单行头（官方 PathLabel 路径[目录段弱化/左缘渐隐裁剪/悬浮全值官方自带] + 悬空 warn chip
+// [仅 dangling] + 控件簇[官方图标钮：编辑器打开/重读]）→ 正文分段渲染（经共享件
+// MdSegmentsBody 单源——md 段 MarkdownDoc、mermaid 段 MermaidDiagram 懒加载，零 mermaid
+// 段零挂载；1.5 三入口一致）。退役面（1.6 用户裁决）：标题行/只读 chip（标题归 tab 页签、
+// 面板恒只读零冗余）+ 摘要卡（摘要供给改经概览文档行悬浮）。
+// 悬空（dangling=true，Interface 4 悬空容忍）= 只读占位面：单行头保留、不崩溃、不写入、
+// 不删行；重读照常（切回含文件分支后恢复）。
 // 边界：禁 import ../session/ ../knowledge/ ../overview/（依赖铁律③ 同级业务互禁）；
 // 正文渲染唯一经共享件 MdSegmentsBody（内层 md 段仍唯一经 MarkdownDoc——结构 pin）；
-// openExternal 触发即忘（失败吞——不炸 tab）。
+// openExternal 触发即忘（失败吞——不炸 tab）；官方件零改写（PathLabel/图标消费原样）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocContent } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderOpenOutlineRegular, IconRefreshOutlineRegular, PathLabel, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { MdSegmentsBody } from './md-segments-body.js'
 import './docs.css'
 
@@ -50,12 +52,7 @@ export async function fetchDocContent(
   }
 }
 
-/** 头部标题（doc.title 缺席 = docRel 末段文件名） */
-export function docTitle(doc: DocContent, docRel: string): string {
-  return doc.title !== undefined && doc.title !== '' ? doc.title : (docRel.split('/').pop() ?? docRel)
-}
-
-/** 📁 在编辑器中打开（纯动作——触发即忘：失败吞不炸 tab，悬空/路径失效同路静默） */
+/** 在编辑器中打开（纯动作——触发即忘：失败吞不炸 tab，悬空/路径失效同路静默） */
 export async function openDocExternal(client: ForgeRpcClient, q: { readonly projectId: string; readonly docRel: string }): Promise<void> {
   try {
     await client.docs.openExternal(q)
@@ -98,9 +95,9 @@ export interface DocsFrameProps {
   readonly doc: DocContent | undefined
   readonly busy: boolean
   readonly error: DocsErrorInfo | undefined
-  /** ↻ 重读（读取失败重试同钮） */
+  /** 重读（读取失败重试同钮——官方刷新图标件） */
   readonly onReread: () => void
-  /** 📁 在编辑器中打开（openExternal 触发即忘） */
+  /** 在编辑器中打开（openExternal 触发即忘——官方打开文件夹图标件） */
   readonly onOpenExternal: () => void
 }
 
@@ -115,12 +112,10 @@ export function DocBody({ content }: { readonly content: string }): ReactNode {
   )
 }
 
-/** 文档 tab 纯呈现帧（结构静态可测——头部/路径栏/摘要/正文/悬空面/骨架/错误条分派） */
+/** 文档 tab 纯呈现帧（结构静态可测——单行头/正文/悬空面/骨架/错误条分派） */
 export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread, onOpenExternal }: DocsFrameProps): ReactNode {
-  const title = doc !== undefined ? docTitle(doc, docRel) : (docRel.split('/').pop() ?? docRel)
-
   if (doc === undefined) {
-    // 首读在途 = 骨架；首读失败 = 错误条 + 重试（↻ 同径）
+    // 首读在途 = 骨架；首读失败 = 错误条 + 重试（重读同径）
     return (
       <div className="dswf-doc-panel" data-dswf-doc-panel="" data-dswf-doc-key={`${projectId}#${docRel}`}>
         {phase === 'error' ? (
@@ -139,47 +134,39 @@ export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread
     )
   }
 
-  const head = (
-    <div className="dswf-doc-head" data-dswf-doc-head="">
-      {/* D30：原生 title 退役——官方 Tooltip 深色气泡（portal 逃逸 dock 文档 tab 滚动容器） */}
-      <Tooltip label={title} portal>
-        <span className="dswf-doc-title">{title}</span>
-      </Tooltip>
-      <StateChip status="只读" className="dswf-doc-chip" />
-      {doc.dangling ? <StateChip status="悬空" className="dswf-doc-chip dswf-doc-chip-dangling" /> : null}
-    </div>
-  )
+  // 单行头（1.6 收敛——对齐官方预览头：路径左[官方 PathLabel——目录段弱化/左缘渐隐裁剪/
+  // 悬浮全值官方自带，零自绘样式] + 右控件簇[悬空 warn chip 仅 dangling + 官方图标钮]）；
+  // 官方预览头同形先例：documentpreview client.js 头 = PathLabel + IconRefreshOutline 钮簇。
   const pathbar = (
     <div className="dswf-doc-pathbar" data-dswf-doc-pathbar="">
-      <Tooltip label={doc.canonicalPath} portal>
-        <span className="dswf-doc-path">{doc.canonicalPath}</span>
-      </Tooltip>
+      <PathLabel path={doc.canonicalPath} />
+      {/* 悬空态可见性：单行内小 warn chip——非 dangling 零冗余标注 */}
+      {doc.dangling ? <StateChip status="悬空" className="dswf-doc-chip-dangling" /> : null}
       <Tooltip label="在编辑器中打开（系统关联 · 应用零写入）" portal>
         <button type="button" className="dswf-doc-iconbtn" aria-label="在编辑器中打开" onClick={onOpenExternal}>
-          📁
+          <IconFolderOpenOutlineRegular />
         </button>
       </Tooltip>
       <Tooltip label="重新读取（只读）" portal>
         <button type="button" className="dswf-doc-iconbtn" aria-label="重新读取" onClick={onReread}>
-          ↻
+          <IconRefreshOutlineRegular />
         </button>
       </Tooltip>
     </div>
   )
 
   if (doc.dangling) {
-    // 悬空 = 只读占位面（路径栏保留；不崩溃、不写入、不删行——SC-branch 容错）
+    // 悬空 = 只读占位面（单行头保留；不崩溃、不写入、不删行——SC-branch 容错）
     return (
       <div className="dswf-doc-panel" data-dswf-doc-panel="" data-dswf-doc-key={`${projectId}#${docRel}`} data-dswf-doc-dangling="">
         {error !== undefined ? (
           <ErrorBar className="dswf-doc-error" message={`重读失败：${error.message}`} retryClassName="dswf-doc-retry" onRetry={onReread} anchor="data-dswf-doc-error" retryAnchor="data-dswf-doc-retry" />
         ) : null}
-        {head}
         {pathbar}
         <EmptyState
           className="dswf-doc-dangling"
           title="文档引用悬空"
-          description="文件不在当前分支或已被移动——只读缺省渲染，不崩溃、不写入、不删行；切回含此文件的分支后 ↻ 重读即可。"
+          description="文件不在当前分支或已被移动——只读缺省渲染，不崩溃、不写入、不删行；切回含此文件的分支后重读即可。"
         />
       </div>
     )
@@ -190,13 +177,7 @@ export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread
       {error !== undefined ? (
         <ErrorBar className="dswf-doc-error" message={`重读失败：${error.message}`} retryClassName="dswf-doc-retry" onRetry={onReread} anchor="data-dswf-doc-error" retryAnchor="data-dswf-doc-retry" />
       ) : null}
-      {head}
       {pathbar}
-      {doc.summary !== undefined && doc.summary !== '' ? (
-        <p className="dswf-doc-summary" data-dswf-doc-summary="">
-          {doc.summary}
-        </p>
-      ) : null}
       <DocBody content={doc.content} />
     </div>
   )
@@ -211,7 +192,7 @@ export interface DocsTabProps {
   readonly makeClient?: RpcClientFactory
 }
 
-/** 文档 tab body（状态 + 装载胶水——docs.read 单发 + ↻ 重读 nonce + seq 竞态守卫） */
+/** 文档 tab body（状态 + 装载胶水——docs.read 单发 + 重读 nonce + seq 竞态守卫） */
 export function DocsTab({ projectId, docRel, makeClient = preloadRpcClientFactory }: DocsTabProps): ReactNode {
   const [nonce, setNonce] = useState(0)
   const [state, setState] = useState<DocViewState>(initialDocViewState)

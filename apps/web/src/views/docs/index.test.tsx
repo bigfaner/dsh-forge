@@ -1,6 +1,7 @@
-// 文档 tab 单测 —— AC1/AC4/AC5：tab 内容结构（头部 + 路径栏[canonical + 📁 + ↻] +
-// 摘要 + md/mermaid 分段渲染）、零 mermaid 块零挂载（懒加载前提）、悬空只读占位面
-// （路径栏保留不崩溃）、装载/落点纯函数 + docs.read 通道面 + openExternal 触发即忘。
+// 文档 tab 单测 —— AC1/AC4/AC5：tab 内容结构（单行头[官方 PathLabel 路径 + 悬空 warn chip
+// + 官方图标钮 ↻ 重读/编辑器打开——1.6 收敛：标题行/只读 chip/摘要卡退役] + md/mermaid
+// 分段渲染）、零 mermaid 块零挂载（懒加载前提）、悬空只读占位面（单行头保留不崩溃）、
+// 装载/落点纯函数 + docs.read 通道面 + openExternal 触发即忘。
 // 口径沿 overview 先例：effect 胶水不在 Node 测面（renderToStaticMarkup 不跑 effect）；
 // 纯异步面与纯函数全量单测；DocsTab 静态首装面断言骨架形态。
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +14,6 @@ import { RpcClientError } from '../../rpc/errors.js'
 import {
   applyDocFetch,
   DocBody,
-  docTitle,
   DocsFrame,
   DocsTab,
   fetchDocContent,
@@ -68,12 +68,7 @@ const baseFrame = {
   onOpenExternal: () => {},
 }
 
-describe('docTitle / mapDocsError（纯函数）', () => {
-  it('标题：doc.title 在场用之；缺席 = docRel 末段文件名', () => {
-    expect(docTitle(READY_DOC, 'a/b.md')).toBe('M2 技术设计')
-    expect(docTitle(PLAIN_DOC, 'docs/features/m2/design/tech-design.md')).toBe('tech-design.md')
-  })
-
+describe('mapDocsError（纯函数）', () => {
   it('错误归一：RpcClientError → code 三态映射；其余 → 错误条', () => {
     expect(mapDocsError(new RpcClientError({ code: 'ERR_DOC_PATH_INVALID', message: '路径越界' }))).toEqual({
       message: '路径越界',
@@ -152,18 +147,23 @@ describe('装载落点纯函数（pendingDocView / applyDocFetch）', () => {
   })
 })
 
-describe('DocsFrame（AC4 tab 内容结构）', () => {
-  it('头部 + 路径栏（canonical + 📁/↻ 图标钮）+ 摘要 + md 段 MarkdownDoc + mermaid 段挂载占位', () => {
+describe('DocsFrame（AC4 tab 内容结构——1.6 单行头收敛）', () => {
+  it('单行头：PathLabel 路径 + 官方图标钮（编辑器打开/重读）+ md 段 MarkdownDoc + mermaid 段挂载占位；标题行/只读 chip/摘要卡全数退役', () => {
     const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
-    expect(markup).toContain('data-dswf-doc-head')
-    expect(markup).toContain('M2 技术设计') // doc.title
-    expect(markup).toContain('只读') // 只读徽标
-    expect(markup).toContain('data-dswf-doc-pathbar')
-    expect(markup).toContain('Z:/ws/demo/docs/features/m2/design/tech-design.md') // canonical 路径
+    expect(markup).toContain('data-dswf-doc-pathbar') // 单行头（对齐官方预览头——路径左 + 控件簇右）
+    expect(markup).not.toContain('data-dswf-doc-head') // 标题行退役（标题归 tab 页签）
+    expect(markup).not.toContain('M2 技术设计') // doc.title 零渲染（头部标题段退役）
+    expect(markup).not.toContain('只读') // 只读 chip 退役（面板恒只读——零冗余标注）
+    expect(markup).not.toContain('data-dswf-doc-summary') // 摘要卡退役（摘要供给改经概览文档行悬浮）
+    expect(markup).not.toContain('每工作区库') // doc.summary 零渲染
+    expect(markup).toContain('data-path-label') // 官方 PathLabel（目录段弱化/左缘渐隐裁剪/悬浮全值——官方自带）
+    expect(markup).toContain('Z:/ws/demo/docs/features/m2/design/tech-design.md') // canonical 全路径文本（目录段+文件名分段拼接）
     expect(markup).toContain('aria-label="在编辑器中打开"')
     expect(markup).toContain('aria-label="重新读取"')
-    expect(markup).toContain('data-dswf-doc-summary')
-    expect(markup).toContain('每工作区库') // 摘要文本
+    expect(markup).not.toContain('📁') // emoji 零残留——官方导出图标件
+    expect(markup).not.toContain('↻')
+    expect(markup).toContain('<svg') // 控件簇 = 官方图标件（svg 在场）
+    expect(markup).not.toContain('dswf-doc-chip') // 非 dangling = 零冗余 chip
     expect(markup).toContain('data-dswf-markdown') // md 段经 MarkdownDoc
     expect(markup).toContain('前置段落。')
     expect(markup).toContain('data-dswf-doc-mermaid-pending') // mermaid 段挂载（effect 后渲染）
@@ -175,9 +175,10 @@ describe('DocsFrame（AC4 tab 内容结构）', () => {
     expect(markup).not.toContain('data-dswf-doc-mermaid')
   })
 
-  it('标题缺席 = docRel 末段文件名；摘要缺席 = 无摘要块', () => {
+  it('标题缺席 = 单行头零标题段（退役恒态）；摘要缺席 = 无摘要块（零冗余面）', () => {
     const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={PLAIN_DOC} busy={false} />)
-    expect(markup).toContain('tech-design.md') // baseFrame.docRel 末段（doc.title 缺席回退）
+    expect(markup).toContain('data-path-label')
+    expect(markup).toContain('Z:/ws/demo/docs/plain.md') // canonical 路径（PLAIN_DOC）
     expect(markup).not.toContain('data-dswf-doc-summary')
   })
 
@@ -203,13 +204,15 @@ describe('DocsFrame（AC4 tab 内容结构）', () => {
 })
 
 describe('DocsFrame（AC5 悬空只读占位面）', () => {
-  it('悬空 = 路径栏保留 + 占位面 + 悬空徽标；不渲染正文不崩溃', () => {
+  it('悬空 = 单行头保留（路径 + 悬空 warn chip）+ 占位面；不渲染正文不崩溃', () => {
     const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={DANGLING_DOC} busy={false} />)
     expect(markup).toContain('data-dswf-doc-dangling')
-    expect(markup).toContain('悬空') // 悬空徽标
+    expect(markup).toContain('悬空') // 悬空 warn chip（单行内——可见性不丢）
+    expect(markup).toContain('dswf-doc-chip-dangling') // warn 配色 chip 类在场
     expect(markup).toContain('data-dswf-doc-pathbar')
+    expect(markup).toContain('data-path-label')
     expect(markup).toContain('docs/features/gone/proposal.md') // canonicalPath = 库内 rel_path 原值
-    expect(markup).toContain('aria-label="重新读取"') // ↻ 重读保留
+    expect(markup).toContain('aria-label="重新读取"') // 重读保留
     expect(markup).toContain('不崩溃、不写入、不删行') // 占位面文案
     expect(markup).not.toContain('data-dswf-doc-body')
     expect(markup).not.toContain('data-dswf-markdown')

@@ -25,6 +25,7 @@ import {
   DOCKKIT_STRIP_TAB,
   DOC_MERMAID_FALLBACK,
   DOC_MERMAID_SVG,
+  DOC_PATH_LABEL,
   OV_PARENT_ANY,
   docPanelOf,
   ovDocRowOf,
@@ -99,8 +100,9 @@ test('@web-e2e @m2 5.2 SC4 仓内：本仓注册发现链 → 提案文档 dock 
     await openProposalDoc(page, docRel, 'dsh-forge-m2-pipeline')
     const panel = page.locator(docPanelOf(projectId, docRel)).first()
     await expect(panel, '文档 tab 开出（docRel 去重键 = 地址）').toBeVisible({ timeout: 30_000 })
-    // canonical 路径栏：绝对路径呈现（canonical 解析含本机大小写/分隔形态——子串断言面）
-    const pathText = (await panel.locator('.dswf-doc-path').textContent()) ?? ''
+    // canonical 单行头路径：绝对路径呈现（1.6 载体适配：官方 PathLabel [data-path-label]——
+    // 目录段+文件名 textContent 拼接全值；canonical 解析含本机大小写/分隔形态——子串断言面）
+    const pathText = (await panel.locator(DOC_PATH_LABEL).textContent()) ?? ''
     expect(pathText.toLowerCase().startsWith(ROOT.slice(0, 2).toLowerCase()), 'canonical 路径 = 绝对路径（盘符起）').toBe(true)
     expect(pathText.endsWith('docs\\proposals\\dsh-forge-m2-pipeline\\proposal.md'), 'canonical 路径栏逐字承载 rel_path 解析').toBe(true)
     // 只读渲染：正文分段（Markdown 正文在场——非悬空非错误态）

@@ -4,10 +4,12 @@
 // 「emoji 全退役」）+ [状态] 括注（在场/缺席两态——FeatureDocumentRow 无状态字段，
 // 缺席 = 恒态）+ 零文档空态行（原型 is-empty 形态）+ 整行可点回调锚
 // （data-dswf-ov-doc = relPath 原始值——onOpenDoc 上抛同值；点击链归 4.6/e2e）。
+// 1.6 B 面：文档行悬浮 summary（官方 Tooltip label——自然多行；缺省/空串 = relPath
+// 回退，行渲染零变化；FeatureDocumentRow.summary 结构兼容透传——零契约改动）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DOC_KINDS, type FeatureDocumentRow } from '@dsh-forge/contracts'
-import { DocGroupList, docPathInFeature, groupFeatureDocs } from './DocGroupList.js'
+import { DocGroupList, docPathInFeature, docRowTipLabel, groupFeatureDocs } from './DocGroupList.js'
 import { DOC_GROUP_ORDER, DOC_KIND_GROUP_LABELS } from './doc-kind-labels.js'
 
 const CREATED = '2026-10-01T08:00:00.000Z'
@@ -168,5 +170,26 @@ describe('分层文档列表（AC3 渲染面）', () => {
     )
     expect(markup).not.toContain('需求文档/prd-spec.md')
     expect(markup).not.toContain('设计/schema.sql')
+  })
+})
+
+describe('文档行悬浮标签（1.6 B 面——summary 官方 Tooltip 数据面）', () => {
+  it('summary 在场 = 摘要 label（自然多行浮层）；缺省/空串 = relPath 回退（行渲染零变化）', () => {
+    const relPath = 'docs/features/dsh-forge-m3/prd/prd-spec.md'
+    expect(docRowTipLabel({ docKind: 'prd-spec', relPath, summary: '一句话摘要' })).toBe('一句话摘要')
+    expect(docRowTipLabel({ docKind: 'prd-spec', relPath })).toBe(relPath)
+    expect(docRowTipLabel({ docKind: 'prd-spec', relPath, summary: '' })).toBe(relPath)
+  })
+
+  it('FeatureDocumentRow.summary 结构兼容透传（DTO 已有字段直携——行映射零改动零契约变更）', () => {
+    const withSummary: FeatureDocumentRow = {
+      featureId: 'f-1',
+      docKind: 'tech-design',
+      relPath: 'docs/features/dsh-forge-m3/design/tech-design.md',
+      summary: '每工作区库 + 概览/文档 tab',
+      createdAt: CREATED,
+      updatedAt: CREATED,
+    }
+    expect(docRowTipLabel(withSummary)).toBe('每工作区库 + 概览/文档 tab')
   })
 })

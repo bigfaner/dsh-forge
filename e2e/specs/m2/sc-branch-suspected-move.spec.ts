@@ -28,6 +28,7 @@ import { openOverviewDock, enterDir, dirRow } from '../../support/navigation.js'
 import {
   AP_ANY,
   CTA_ADD_PROJECT,
+  DOC_PATH_LABEL,
   DSR_DIR,
   DSR_ERROR,
   NAV_ADD_PROJECT,
@@ -139,7 +140,7 @@ test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不
     // 属性名断言面非选择器，锚台账 selector DOC_DANGLING 的元素即本 panel）
     await expect(panel, '悬空占位面在场（SC-branch 容错锚）').toHaveAttribute('data-dswf-doc-dangling', '')
     await expect(panel).toContainText('文档引用悬空')
-    await expect(panel.locator('.dswf-doc-path'), '路径栏保留（悬空态不崩页面）').toBeVisible()
+    await expect(panel.locator(DOC_PATH_LABEL), '单行头路径保留（悬空态不崩页面——1.6 官方 PathLabel 载体）').toBeVisible()
 
     // 不崩溃：renderer 零未捕获异常
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])

@@ -6,7 +6,8 @@
 // Hard Rule（v18 裁决）：中文分组 = 展示标签（doc-kind-labels 常量）、真实路径 = 数据
 // （FeatureDocumentRow.relPath）——两层不混。
 // 文档数据 = forge:features/listDocs（4.1 通道）——FeatureDocumentRow 结构兼容直喂
-// （无状态字段 → [状态] 恒缺席态；status 可选入参 = 在场态消费面）。
+// （无状态字段 → [状态] 恒缺席态；status 可选入参 = 在场态消费面；1.6：summary 透传
+// → 行悬浮官方 Tooltip 摘要——缺省 relPath 回退）。
 // 组件半身（Build）：onOpenDoc 上抛 relPath 原始值（dock 开 tab——4.6 接线）。
 import type { ReactNode } from 'react'
 import type { DocKind } from '@dsh-forge/contracts'
@@ -36,13 +37,25 @@ function DocFileIcon(): ReactNode {
   )
 }
 
-/** 文档行输入（FeatureDocumentRow 结构兼容：docKind/relPath 恒有、status 括注可选缺席） */
+/** 文档行输入（FeatureDocumentRow 结构兼容：docKind/relPath 恒有、status 括注可选缺席；
+ *  1.6：summary 可选透传——DTO 已有字段直携，行映射零改动零契约变更） */
 export interface DocGroupDoc {
   readonly docKind: DocKind
   /** 相对 forge_dir 真实路径（正斜杠——数据面，展示时裁剪为相对 feature 目录） */
   readonly relPath: string
   /** 状态括注（缺席 = 无 [状态] 段——FeatureDocumentRow 无状态字段恒缺席） */
   readonly status?: string
+  /** 一句话摘要（缺席 = 无摘要浮层——悬浮 label 回退 relPath） */
+  readonly summary?: string
+}
+
+/**
+ * 文档行悬浮标签（1.6 B 面——官方 Tooltip label）：summary 在场 = 摘要（官方 Tooltip
+ * portal 气泡 white-space:pre-line 自然多行不折叠）；缺省/空串 = relPath 回退（现状
+ * 悬浮，行渲染零变化）。
+ */
+export function docRowTipLabel(doc: DocGroupDoc): string {
+  return doc.summary !== undefined && doc.summary !== '' ? doc.summary : doc.relPath
 }
 
 /**
@@ -94,7 +107,7 @@ export function DocGroupList({ featureSlug, docs, onOpenDoc }: DocGroupListProps
         <div key={group.group} className="dswf-ov-dgroup" data-dswf-ov-dgroup={group.group}>
           <div className="dswf-ov-dgroup-title">{`${group.group}（${group.docs.length}）`}</div>
           {group.docs.map((doc) => (
-            <Tooltip key={`${doc.docKind}:${doc.relPath}`} label={doc.relPath} portal>
+            <Tooltip key={`${doc.docKind}:${doc.relPath}`} label={docRowTipLabel(doc)} portal>
               <button
                 type="button"
                 className="dswf-ov-drow"
