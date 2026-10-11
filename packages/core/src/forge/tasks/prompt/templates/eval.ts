@@ -9,7 +9,7 @@ export function evalContract(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:eval", args="--type contract --target 850")\` to evaluate quality
+- MUST invoke \`Skill(skill="eval", args="--type contract --target 850")\` to evaluate quality
 - MUST NOT modify the files being evaluated
 
 ## Workflow (2 Steps)
@@ -18,7 +18,7 @@ ${step1ReadSimple('what to evaluate')}
 
 ### Step 2: Run Evaluation
 
-${skillInvocation('Skill(skill="forge:eval", args="--type contract --target 850")')}
+${skillInvocation('Skill(skill="eval", args="--type contract --target 850")')}
 
 ${recordFields(EVAL_RECORD_FIELDS)}
 
@@ -30,7 +30,7 @@ export function evalJourney(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:eval", args="--type journey --target 850")\` to evaluate quality
+- MUST invoke \`Skill(skill="eval", args="--type journey --target 850")\` to evaluate quality
 - MUST NOT modify the files being evaluated
 
 ## Workflow (2 Steps)
@@ -39,7 +39,7 @@ ${step1ReadSimple('what to evaluate')}
 
 ### Step 2: Run Evaluation
 
-${skillInvocation('Skill(skill="forge:eval", args="--type journey --target 850")')}
+${skillInvocation('Skill(skill="eval", args="--type journey --target 850")')}
 
 ${recordFields(EVAL_RECORD_FIELDS)}
 

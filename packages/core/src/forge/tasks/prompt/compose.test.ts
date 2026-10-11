@@ -24,6 +24,7 @@ function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
     title: '派发简报模板族（20 类型路由）',
     taskDesc: '步骤：1) 核对模板路由表 2) 快照锚定全文',
     acceptanceCriteria: ['快照与模板逐字一致', '块序恒定'],
+    vars: { SOURCE_FILES: 'packages/core/src/forge/tasks/prompt/', TEST_SCRIPT: 'just test' },
     taskFile: 'docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md',
     priority: 'P1',
     coverage: 0.8,
@@ -168,7 +169,7 @@ describe('AC1 digest = sha-256（全文，含人格段与标签）前 12 hex', (
 
 // ─────────────────── AC2：task-context 动态块键值行 ───────────────────
 
-describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
+describe('AC2 <task-context> 键值行（键级零标签）', () => {
   const full = composeDispatchPrompt(FIXTURES['coding-feature'])
   const contextBody = full.slice(
     full.indexOf(`<${XML_TAGS.taskContext}>`) + XML_TAGS.taskContext.length + 2,
@@ -181,7 +182,7 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
     expect(contextBody).toContain('CATEGORY: coding')
   })
 
-  it('九键行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS（TITLE = 5.3 增键，紧随 SOURCE/先于 FILE）', () => {
+  it('键值行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（TITLE = 5.3 增键，紧随 SOURCE/先于 FILE；VARS = vars 注入面，尾行承载）', () => {
     const keys = [
       'TASK_ID:',
       'TITLE:',
@@ -193,6 +194,7 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
       'COVERAGE:',
       'PRIORITY:',
       'MARKERS:',
+      'VARS:',
     ]
     const positions = keys.map((k) => contextBody.indexOf(k))
     for (const p of positions) expect(p).toBeGreaterThanOrEqual(0)
@@ -214,9 +216,15 @@ describe('AC2 <task-context> 键值行（九键；键级零标签）', () => {
     expect(contextBody).not.toContain('main-session')
   })
 
+  it('VARS 行 = 键序字母序 KEY=VALUE 分号拼接（vars 注入面——SKIP_EVAL_GATE/fix 链契约的送达面）；空对象省行', () => {
+    expect(contextBody).toContain('VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test')
+    const emptyVars = composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-fix' }), vars: {} })
+    expect(emptyVars).not.toContain('VARS:')
+  })
+
   it('条件键缺席即省行（最小夹具仅恒在场键）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'DESCRIPTION:', 'ACCEPTANCE_CRITERIA:']) {
+    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', 'DESCRIPTION:', 'ACCEPTANCE_CRITERIA:']) {
       expect(minimal).not.toContain(key)
     }
   })

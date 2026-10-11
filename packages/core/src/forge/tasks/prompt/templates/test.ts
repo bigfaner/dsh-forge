@@ -35,7 +35,7 @@ export function testGenContracts(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-contracts")\` to generate contracts
+- MUST invoke \`Skill(skill="gen-contracts")\` to generate contracts
 - MUST NOT write contract files manually — the skill generates them from journeys
 
 ## Workflow (2 Steps)
@@ -44,7 +44,7 @@ ${step1ReadSimple('what contracts to generate')}
 
 ### Step 2: Generate Contracts
 
-${skillInvocation('Skill(skill="forge:gen-contracts")')}
+${skillInvocation('Skill(skill="gen-contracts")')}
 
 ${recordFields(TEST_RECORD_FIELDS)}
 
@@ -56,7 +56,7 @@ export function testGenJourneys(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-journeys")\` to generate journeys
+- MUST invoke \`Skill(skill="gen-journeys")\` to generate journeys
 - MUST NOT write journey files manually — the skill generates them from specs
 
 ## Workflow (2 Steps)
@@ -65,7 +65,7 @@ ${step1ReadSimple('what journeys to generate')}
 
 ### Step 2: Generate Journeys
 
-${skillInvocation('Skill(skill="forge:gen-journeys")')}
+${skillInvocation('Skill(skill="gen-journeys")')}
 
 ${recordFields(TEST_RECORD_FIELDS)}
 
@@ -77,7 +77,7 @@ export function testGenScripts(_ctx: TypePolicyContext): string {
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-test-scripts")\` to generate scripts
+- MUST invoke \`Skill(skill="gen-test-scripts")\` to generate scripts
 - MUST NOT write test scripts manually — the skill generates them from test cases
 
 ## Workflow (2 Steps)
@@ -86,7 +86,7 @@ ${step1ReadSimple('what test scripts to generate')}
 
 ### Step 2: Generate Test Scripts
 
-${skillInvocation('Skill(skill="forge:gen-test-scripts")')}
+${skillInvocation('Skill(skill="gen-test-scripts")')}
 
 ${recordFields(TEST_RECORD_FIELDS)}
 

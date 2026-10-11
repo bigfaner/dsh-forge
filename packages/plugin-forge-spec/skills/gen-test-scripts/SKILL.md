@@ -16,7 +16,8 @@ Fact Table.
 | ≥1 Contract file in `testing/<journey>/contracts/` | Run `gen-contracts` first |
 | Contract eval report `testing/<journey>/.eval-report.md`, all at/above target | Run `eval --type contract` first — **blocker** |
 
-**SKIP_EVAL_GATE**: task vars `SKIP_EVAL_GATE=true` (quick-mode pipeline) waive the
+**SKIP_EVAL_GATE**: task vars (the `VARS:` line in the task-context block of your brief)
+carrying `SKIP_EVAL_GATE=true` (quick-mode pipeline) waive the
 eval-report blocker; every generated file then carries the header comment
 "// SKIP_EVAL_GATE: generated without eval-contract verification. Review with extra
 scrutiny." Without the flag the blocker is mandatory.

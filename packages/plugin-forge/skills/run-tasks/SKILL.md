@@ -159,6 +159,9 @@ addTask { source_kind: "<feature|proposal>", source_slug: "<container slug>",
 
 - Fix type by source category: `coding` / `test` / `validation` / `gate` → `coding-fix`;
   `doc` / `eval` → `doc`.
+- The `vars` you attach reach the fix worker as the `VARS:` line of its dispatch brief —
+  put everything the fixer needs (`SOURCE_FILES`, `TEST_SCRIPT`, `TEST_RESULTS`) there;
+  context that never rides a var never arrives.
 - Mechanical parts are tool-carried and need no supervision: the `fix-N` local id, the
   same-transaction blocking of the source, automatic restoration when the fix completes
   (the `submitTask` result lists restored tasks), and the depth cap (≤6 — deeper spawns

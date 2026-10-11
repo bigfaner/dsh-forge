@@ -1,11 +1,11 @@
 // doc 系模板 ×5（doc/doc-consolidate/doc-drift/doc-review/doc-summary）——老 forge 同名
-// 模板平移（Spec Authority/四维扫描/AC 校验在 shared；技能类模板 M3 技能面承接，文本先置）。
+// 模板平移（Spec Authority/四维扫描/AC 校验在 shared）。doc-consolidate/doc-drift：老
+// consolidate-specs 技能在技能目录从未存在（幽灵引用）——已改内联指引。
 import {
   AC_VALIDATION,
   SCAN_4DIM_DOC,
   SPEC_AUTHORITY,
   recordFields,
-  skillInvocation,
   step1ReadSimple,
   type TypePolicyContext,
 } from './shared.js'
@@ -62,7 +62,11 @@ ${step1ReadSimple('what specs to consolidate')}
 
 ### Step 2: Consolidate Specs
 
-${skillInvocation('Skill(skill="forge:consolidate-specs")')}
+Work the spec documents named by the task (the container's prd / design / testing trees) without user confirmation:
+
+- Merge duplicated statements into the authoritative document; where the duplicate lived, leave a one-line pointer
+- Reconcile contradictions by following the more recent document and recording the choice inline
+- Consolidation targets spec deliverables only — never delete or rewrite task records / history files
 
 ${recordFields(DOC_RECORD_FIELDS)}
 
@@ -78,7 +82,10 @@ ${step1ReadSimple('what specs to check for drift')}
 
 ### Step 2: Detect and Fix Spec Drift
 
-${skillInvocation('Skill(skill="forge:consolidate-specs")')}
+Compare the spec documents named by the task against the shipped code, spec side only:
+
+- Spec stale, code is the reality → update the spec to describe the code (one line per fix: spec section → what changed and why)
+- Spec is the freshly adjudicated authority and code diverges → record it as a finding; a doc task never changes code
 
 ${recordFields(DOC_RECORD_FIELDS)}
 

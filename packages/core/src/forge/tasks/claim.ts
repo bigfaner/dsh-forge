@@ -230,7 +230,8 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
     // ③ dispatchPrompt 合成（领取瞬间取数——BLOCKERS 快照 + PHASE_SUMMARY 相位机注入 +
     //    fix 源标记谱系水化 + 任务规格内嵌（5.3：TITLE/DESCRIPTION/ACCEPTANCE_CRITERIA
-    //    ——worker 收窄面禁 queryTask 且 M3 task_file 列砍除，本合成 = 任务定义唯一到达面）；
+    //    ——worker 收窄面禁 queryTask 且 M3 task_file 列砍除，本合成 = 任务定义唯一到达面）
+    //    + VARS 行（vars_json 解码——SKIP_EVAL_GATE/fix 链上下文的唯一送达面）；
     //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
     const sourceRef = sourceRow === undefined ? undefined : { slug: sourceRow.slug, localId: sourceRow.local_id }
@@ -243,6 +244,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       title: row.title,
       ...(row.task_desc !== null ? { taskDesc: row.task_desc } : {}),
       ...(row.ac_json !== null ? { acceptanceCriteria: JSON.parse(row.ac_json) as readonly string[] } : {}),
+      ...(row.vars_json !== null ? { vars: JSON.parse(row.vars_json) as Record<string, string> } : {}),
       taskType: row.task_type,
       // prompt-input 面（合成 dispatch prompt 文本——非 tool JSON 返回）：`?? undefined`
       // 留任无害（提案 tool-row-lossless-json-fix 处置口径）；tool 返回面由 dispatch-task.ts

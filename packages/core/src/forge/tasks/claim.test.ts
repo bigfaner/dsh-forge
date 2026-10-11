@@ -185,6 +185,26 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     expect(r2.dispatchPrompt).not.toContain('DESCRIPTION:')
     expect(r2.dispatchPrompt).not.toContain('ACCEPTANCE_CRITERIA:')
   })
+
+  it('VARS 行透传（vars 注入面）：vars_json 解码入 <task-context> 键值行——SKIP_EVAL_GATE/fix 链上下文的唯一送达面；键序字母序 + 缺席省行', async () => {
+    // 缺陷背景：老形态任务=文件、vars 随文件到达 worker；新形态 db-only + 简报=定义唯一
+    // 到达面，vars_json 不入合成 → SKIP_EVAL_GATE / fix 链 SOURCE_FILES 断流。收口 = VARS 行。
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '4.3')
+    h!.db.prepare(`UPDATE tasks SET vars_json = ? WHERE id = 't-f-4.3'`).run(
+      JSON.stringify({ TEST_SCRIPT: 'just test', SOURCE_FILES: 'src/a.ts,src/b.ts' }),
+    )
+    const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.3' }, sessionId: 's' })
+    // 键序字母序确定性渲染（同 vars_json 恒同简报——digest 幂等）
+    expect(dispatchPrompt).toContain('VARS: SOURCE_FILES=src/a.ts,src/b.ts; TEST_SCRIPT=just test')
+    const ctx = dispatchPrompt.slice(dispatchPrompt.indexOf('<task-context>'), dispatchPrompt.indexOf('</task-context>'))
+    expect(ctx.indexOf('VARS:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
+    // 无 vars 任务 → 行省略（M2 形态兼容）
+    seedTask(h!.db, 'f', '4.4')
+    const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.4' }, sessionId: 's' })
+    expect(r2.dispatchPrompt).not.toContain('VARS:')
+  })
 })
 
 describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 创建序', () => {

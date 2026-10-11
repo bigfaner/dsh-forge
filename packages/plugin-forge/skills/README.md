@@ -6,7 +6,7 @@
 - `submit-task/SKILL.md` —— 结算协议（executor 专用面）：聚焦 LLM 判断面——summary 组织（结果先行 + 决策及因由）/测试证据引用（AC 逐项对应用例）/commit 规范两态（AGENTS.md 约定在场从其约定，缺席回退模型常识级 Conventional Commits；显式路径暂存）/git 缺席走 blocked 承接（禁伪造）；机械面（必带校验/四门 all-or-none/AC 证据门）全部工具化零复述
 - `run-tests/SKILL.md` —— 面级测试执行编排（surface 探测 → just 配方序列 dev/probe/逐 journey test/teardown）；**按需加载语义自述**（catalog 行常驻、内容仅 test-run 任务加载——SC2 断言语义）；禁结果伪造；任务形态下失败即 blocked（fix 链承接）
 - `quick-tasks/SKILL.md` —— 突击直达入口：一句话 → 提案（`createProposal mode=blitz`——溯源由创建技能写入）+ 任务清单（`addTask source_kind=proposal`）一次产出；突击语义显式（整数 ID/无 stage-gate/eval 豁免/无 feature 行）；执行期 gate 纪律不折扣
-- `brainstorm/SKILL.md` —— 远征结构化探索入口：挑战式对话（Need Gate/方案对照/意图推断/SC 一致性检查内联）→ `proposal.md` 经 tool 读写 + `createProposal mode=expedition` 溯源；accepted 成链分叉交由服务内聚，本技能止于注册提案
+- `brainstorm/SKILL.md` —— 远征结构化探索入口：挑战式对话（Need Gate/方案对照/意图推断/SC 一致性检查内联）→ `proposal.md` 经 tool 读写 + `createProposal` 注册（**mode 不透传**——createProposal 按会话预设 `header.agentPreset` 自动填充，远征会话即 expedition 溯源）；accepted 成链分叉交由服务内聚，本技能止于注册提案
 
 已移除：`git-commit/`（Out of Scope #12——M2 条目 M3 删除；复活触发 = 真实消费者出现。commit 纪律两态由 submit-task 承载）。
 
@@ -16,4 +16,4 @@
 
 本目录 = customSkillDirs 挂载根：profile `customSkillDirs` 行指向 `packages/plugin-forge/skills`（dsh-skill-filesystem 发现约定 = 根下**一层** `<name>/SKILL.md`；frontmatter 必填 `name`[kebab-case，与目录名一致] + `description`，可选 `user-invocable`——submit-task 置 false（executor 专用面））。
 
-> 前缀缝注记（drift #8 收口）：M2 3.3 的 `Skill(skill="forge:run-tests")` 前缀引用已在 2.4 消灭——core test-run 模板与技能文本自述名一致，均为挂载名 `run-tests`（无前缀）。技能目录不含 git-commit/git-checkout（SC2 断言对象）。
+> 前缀缝注记（drift #8 收口）：M2 3.3 的 `Skill(skill="forge:run-tests")` 前缀引用已在 2.4 消灭——core test-run 模板与技能文本自述名一致，均为挂载名 `run-tests`（无前缀）。同缝残余已随后续收口清零：eval/gen 系模板（`forge:eval`/`forge:gen-*`）同批去前缀；code-quality-simplify 与 doc-consolidate/doc-drift 模板的幽灵技能引用（`forge:clean-code`/`forge:consolidate-specs`——技能目录从未存在）已改内联指引。技能目录不含 git-commit/git-checkout（SC2 断言对象）。

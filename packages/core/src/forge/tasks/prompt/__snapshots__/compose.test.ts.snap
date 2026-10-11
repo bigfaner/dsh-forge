@@ -37,12 +37,13 @@ CATEGORY: coding
 </task-context>
 
 <type-policy>
-Objective: run scoped code-quality cleanup via the clean-code skill.
+Objective: run scoped code-quality cleanup.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:clean-code")\` to perform scoped code cleanup
-- MUST NOT manually rewrite code — the skill handles scope detection, cleanup, and quality gate
+- Scope = the files named in the task definition (DESCRIPTION / vars / FILE) only — never sweep unrelated files
+- Behavior-preserving: cleanup MUST NOT change observable behavior; assertions and business logic stay intact
+- No new tests — existing targeted tests are the regression net
 
 ## Workflow (2 Steps)
 
@@ -56,11 +57,9 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 
 ### Step 2: Clean Code
 
-Invoke the skill:
+In the scoped files: remove dead code (unused exports, variables, branches), simplify convoluted logic without changing semantics, align with the repo's existing conventions, and extract duplicated fragments only when the extraction is locally obvious. Search before editing — collect the full list of cleanup points first, then apply them.
 
-\`\`\`
-Skill(skill="forge:clean-code")
-\`\`\`
+After cleanup run \`just compile\` plus targeted tests on the affected packages (max 3 retries per failure; still failing → stop and report).
 
 Output: \`Step 2/2: Cleaning code... DONE\`
 </type-policy>"
@@ -375,6 +374,7 @@ PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 COVERAGE: percentage 80%
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 DESCRIPTION:
 步骤：1) 核对模板路由表 2) 快照锚定全文
 ACCEPTANCE_CRITERIA:
@@ -1042,11 +1042,11 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 
 ### Step 2: Consolidate Specs
 
-Invoke the skill:
+Work the spec documents named by the task (the container's prd / design / testing trees) without user confirmation:
 
-\`\`\`
-Skill(skill="forge:consolidate-specs")
-\`\`\`
+- Merge duplicated statements into the authoritative document; where the duplicate lived, leave a one-line pointer
+- Reconcile contradictions by following the more recent document and recording the choice inline
+- Consolidation targets spec deliverables only — never delete or rewrite task records / history files
 
 ## Record Fields
 
@@ -1110,11 +1110,10 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 
 ### Step 2: Detect and Fix Spec Drift
 
-Invoke the skill:
+Compare the spec documents named by the task against the shipped code, spec side only:
 
-\`\`\`
-Skill(skill="forge:consolidate-specs")
-\`\`\`
+- Spec stale, code is the reality → update the spec to describe the code (one line per fix: spec section → what changed and why)
+- Spec is the freshly adjudicated authority and code diverges → record it as a finding; a doc task never changes code
 
 ## Record Fields
 
@@ -1167,6 +1166,7 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 DESCRIPTION:
 步骤：1) 核对模板路由表 2) 快照锚定全文
 ACCEPTANCE_CRITERIA:
@@ -1386,7 +1386,7 @@ Objective: evaluate Contract quality via the eval skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:eval", args="--type contract --target 850")\` to evaluate quality
+- MUST invoke \`Skill(skill="eval", args="--type contract --target 850")\` to evaluate quality
 - MUST NOT modify the files being evaluated
 
 ## Workflow (2 Steps)
@@ -1404,7 +1404,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:eval", args="--type contract --target 850")
+Skill(skill="eval", args="--type contract --target 850")
 \`\`\`
 
 ## Record Fields
@@ -1460,7 +1460,7 @@ Objective: evaluate Journey quality via the eval skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:eval", args="--type journey --target 850")\` to evaluate quality
+- MUST invoke \`Skill(skill="eval", args="--type journey --target 850")\` to evaluate quality
 - MUST NOT modify the files being evaluated
 
 ## Workflow (2 Steps)
@@ -1478,7 +1478,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:eval", args="--type journey --target 850")
+Skill(skill="eval", args="--type journey --target 850")
 \`\`\`
 
 ## Record Fields
@@ -1533,6 +1533,7 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 DESCRIPTION:
 步骤：1) 核对模板路由表 2) 快照锚定全文
 ACCEPTANCE_CRITERIA:
@@ -1687,7 +1688,7 @@ Objective: generate test contracts via the gen-contracts skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-contracts")\` to generate contracts
+- MUST invoke \`Skill(skill="gen-contracts")\` to generate contracts
 - MUST NOT write contract files manually — the skill generates them from journeys
 
 ## Workflow (2 Steps)
@@ -1705,7 +1706,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:gen-contracts")
+Skill(skill="gen-contracts")
 \`\`\`
 
 ## Record Fields
@@ -1759,7 +1760,7 @@ Objective: generate test journeys via the gen-journeys skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-journeys")\` to generate journeys
+- MUST invoke \`Skill(skill="gen-journeys")\` to generate journeys
 - MUST NOT write journey files manually — the skill generates them from specs
 
 ## Workflow (2 Steps)
@@ -1777,7 +1778,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:gen-journeys")
+Skill(skill="gen-journeys")
 \`\`\`
 
 ## Record Fields
@@ -1831,7 +1832,7 @@ Objective: generate executable test scripts via the gen-test-scripts skill.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:gen-test-scripts")\` to generate scripts
+- MUST invoke \`Skill(skill="gen-test-scripts")\` to generate scripts
 - MUST NOT write test scripts manually — the skill generates them from test cases
 
 ## Workflow (2 Steps)
@@ -1849,7 +1850,7 @@ Output: \`Step 1/2: Reading task definition... DONE\`
 Invoke the skill:
 
 \`\`\`
-Skill(skill="forge:gen-test-scripts")
+Skill(skill="gen-test-scripts")
 \`\`\`
 
 ## Record Fields
@@ -1979,6 +1980,7 @@ BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
+VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 DESCRIPTION:
 步骤：1) 核对模板路由表 2) 快照锚定全文
 ACCEPTANCE_CRITERIA:

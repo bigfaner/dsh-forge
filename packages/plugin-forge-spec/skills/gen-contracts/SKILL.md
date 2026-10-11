@@ -22,8 +22,9 @@ scripts, no execution, no other paths.
 | ≥1 Journey dir with `journey.md` under `testing/` | Run `gen-journeys` first |
 | Journey eval report `testing/<journey>/.eval-report.md`, all at/above target | Run `eval --type journey` first — **blocker** |
 
-**SKIP_EVAL_GATE**: when the task vars carry `SKIP_EVAL_GATE=true` (quick-mode pipeline),
-the eval-report prerequisite is waived; every Contract file then carries frontmatter
+**SKIP_EVAL_GATE**: when the task vars (the `VARS:` line in the task-context block of your
+brief) carry `SKIP_EVAL_GATE=true` (quick-mode pipeline), the eval-report prerequisite is
+waived; every Contract file then carries frontmatter
 `skip_eval: true` plus a body note "generated without eval-journey verification — review
 with extra scrutiny". Without the flag the blocker is mandatory.
 

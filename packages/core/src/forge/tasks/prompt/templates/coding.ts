@@ -1,6 +1,7 @@
 // coding 系模板 ×6（coding-feature/enhancement/cleanup/refactor + code-quality-simplify +
 // coding-fix）——老 forge 同名模板平移（人格段/原则/约束块/质量门序列已抽出至 compose/shared，
 // 此处只留类型专属工作流）。目标行承载老模板人格句的类型语义（"implementing a new feature"）。
+// code-quality-simplify：老 clean-code 技能在技能目录从未存在（幽灵引用）——已改内联指引。
 import {
   CODING_RECORD_FIELDS,
   HARD_RULES_FIX,
@@ -11,6 +12,7 @@ import {
   SPEC_AUTHORITY,
   recordFields,
   step1Read,
+  step1ReadSimple,
   targetedChecksStep,
   type TypePolicyContext,
 } from './shared.js'
@@ -338,30 +340,23 @@ ${recordFields(CODING_RECORD_FIELDS)}`
 }
 
 export function codeQualitySimplify(_ctx: TypePolicyContext): string {
-  return `Objective: run scoped code-quality cleanup via the clean-code skill.
+  return `Objective: run scoped code-quality cleanup.
 
 ## Hard constraints
 
-- MUST invoke \`Skill(skill="forge:clean-code")\` to perform scoped code cleanup
-- MUST NOT manually rewrite code — the skill handles scope detection, cleanup, and quality gate
+- Scope = the files named in the task definition (DESCRIPTION / vars / FILE) only — never sweep unrelated files
+- Behavior-preserving: cleanup MUST NOT change observable behavior; assertions and business logic stay intact
+- No new tests — existing targeted tests are the regression net
 
 ## Workflow (2 Steps)
 
-### Step 1: Read Task Definition
-
-Read the task definition — the TITLE / DESCRIPTION / ACCEPTANCE_CRITERIA blocks embedded in the task-context block (a FILE path there, when present, points at the full definition file on disk) — to understand the code to clean up.
-
-If PHASE_SUMMARY is present in the task-context block, read that file for context from the previous phase.
-
-Output: \`Step 1/2: Reading task definition... DONE\`
+${step1ReadSimple('the code to clean up')}
 
 ### Step 2: Clean Code
 
-Invoke the skill:
+In the scoped files: remove dead code (unused exports, variables, branches), simplify convoluted logic without changing semantics, align with the repo's existing conventions, and extract duplicated fragments only when the extraction is locally obvious. Search before editing — collect the full list of cleanup points first, then apply them.
 
-\`\`\`
-Skill(skill="forge:clean-code")
-\`\`\`
+After cleanup run \`just compile\` plus targeted tests on the affected packages (max 3 retries per failure; still failing → stop and report).
 
 Output: \`Step 2/2: Cleaning code... DONE\``
 }

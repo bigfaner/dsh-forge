@@ -126,6 +126,12 @@ export interface DispatchPromptInput {
   taskDesc?: string
   /** 验收清单（任务规格内嵌：ACCEPTANCE_CRITERIA 段——ac_json 数组逐行；空数组省段） */
   acceptanceCriteria?: readonly string[]
+  /**
+   * 注入变量（vars_json 解码的 KEY=VALUE 面——VARS 行；SKIP_EVAL_GATE / fix 链
+   * SOURCE_FILES 等技能契约经此送达 worker。db-only 任务简报 = 定义唯一到达面，本行
+   * 缺席 = vars 断流。缺席/空对象省行；键序字母序确定性渲染——digest 幂等）。
+   */
+  vars?: Readonly<Record<string, string>>
   taskType: TaskType
   /** 任务定义载体路径（M2 task_file 列砍除——由调用方按需注入；缺席省 FILE 行） */
   taskFile?: string
@@ -157,12 +163,22 @@ function renderMarkers(input: DispatchPromptInput): string | undefined {
   return markers.length > 0 ? markers.join(', ') : undefined
 }
 
-/** `<task-context>` 内文（九键行序 = AC2 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记——
- *  SOURCE = M3 2.4 增键紧随 TASK_ID；TITLE = 5.3 任务规格内嵌增键；DESCRIPTION/ACCEPTANCE_CRITERIA
+/** VARS 行值：`K1=V1; K2=V2`（键序字母序——同 vars_json 恒同简报，digest 幂等；空对象 → 省行） */
+function renderVars(vars: Readonly<Record<string, string>> | undefined): string | undefined {
+  if (vars === undefined) return undefined
+  const keys = Object.keys(vars).sort()
+  if (keys.length === 0) return undefined
+  return keys.map((k) => `${k}=${vars[k]}`).join('; ')
+}
+
+/** `<task-context>` 内文（键值行序 = AC2 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——
+ *  SOURCE = M3 2.4 增键紧随 TASK_ID；TITLE = 5.3 任务规格内嵌增键；VARS = vars 注入面
+ *  （SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；DESCRIPTION/ACCEPTANCE_CRITERIA
  *  = 键值行后的任务体段落（多行值——worker 面无 queryTask 时的定义唯一到达面） */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
+  const vars = renderVars(input.vars)
   const lines: (string | undefined)[] = [
     `TASK_ID: ${input.slug}/${input.localId}`,
     input.source !== undefined ? `SOURCE: ${input.source.kind} ${input.source.slug}` : undefined,
@@ -179,6 +195,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
       : undefined,
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
+    vars !== undefined ? `VARS: ${vars}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
   if (input.taskDesc !== undefined) context += `\nDESCRIPTION:\n${input.taskDesc}`
