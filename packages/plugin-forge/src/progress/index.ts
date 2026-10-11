@@ -25,6 +25,7 @@
 // 数据形状（AC：任务键/动词结果/状态/计数/时间戳）——纯 JSON（Session.append 契约
 // 「MUST be JSON-serializable」）。纪律：既有 notice 双通道零回归（notice = 模型面
 // user/message 照旧）；渲染端无机制词（#24 同源）。
+import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import type { AgentLookupFace } from '../faces.js'
 
 /** 会话事件类型键（SessionEventMap 合并键 = 客户端 match 判别字面量，双侧同源） */
@@ -123,3 +124,18 @@ export type ForgeProgressEventKeyAssertion = Extract<
   keyof SessionEventMap,
   typeof FORGE_PROGRESS_EVENT_TYPE
 >
+
+// ② 读侧词汇注册（#35 定罪修复——2026-10-11 真机）：持久化读路径对「构建未知且无
+// ignorable 标记」的事件类型拒绝解读整本日志（known-event-types.ts:10-14 + 存量校验
+// `validateStoredEvents`），而 session.append 的信封构造（dsh-session index.ts:744-750）
+// 无 ignorable 设置口 → append 落盘的事件无标记 → owner 会话日志被毒化（历史加载失败）。
+// 修复=激活时向官方导出的词汇表运行时注册（公开导出 Set 的追加，零 dsh 源码修改）：
+// 本构建确实理解该类型（宿主 append、客户端节点渲染双侧在位），注册即把事实告知词汇表。
+// 副作用自愈：已毒化的存量日志在注册后的构建中恢复可观测（类型已知 → 不再拒读）。
+// 非模型面边界不因注册改变（MESSAGE_PROJECTION_EVENT_TYPES 不含本类型）。
+export function registerProgressEventVocabulary(): void {
+  // 运行期依赖（boundaries 白名单成员——#35）：激活即同步注册。幂等（Set.add）。
+  // 上游类型刻意 ReadonlySet（first-party 目录禁手编纪律），运行时实为可变 Set——
+  // 插件注册是就地追加语义，定点按真实形状断言。
+  ;(KNOWN_SESSION_EVENT_TYPES as Set<string>).add(FORGE_PROGRESS_EVENT_TYPE)
+}

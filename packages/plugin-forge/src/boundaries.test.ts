@@ -16,8 +16,14 @@ const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
  *  path-key + dsh 上游运行时包白名单」；新成员 = 契约面变更）
  *  S7 增员 @deepseek-ai/dsh-session-projection：类型面 devDependency（declare-module
  *  合并进 SessionProjectionMap + 投影定义形状 authority）——运行期零 import（fold unit
- *  为结构同型 plain object，registry 鸭子消费），运行时白名单（dependencies 面）不含它。 */
-const DSH_RUNTIME_ALLOWLIST = ['@deepseek-ai/dsh-subagent-in-process-driver'] as const
+ *  为结构同型 plain object，registry 鸭子消费），运行时白名单（dependencies 面）不含它。
+ *  1.20 增员 @deepseek-ai/dsh-session：运行期依赖（#35——'forge/progress' 读侧词汇
+ *  注册 KNOWN_SESSION_EVENT_TYPES.add，公开导出 Set 的运行时追加；未注册 = 持久化
+ *  读路径拒绝解读含该事件的日志=历史加载失败）。 */
+const DSH_RUNTIME_ALLOWLIST = [
+  '@deepseek-ai/dsh-session',
+  '@deepseek-ai/dsh-subagent-in-process-driver',
+] as const
 
 /** @deepseek-ai 类型面 import 白名单（S7——投影模块的类型合并；1.17 增员 dsh-session/types
  *  ——'forge/progress' SessionEventMap 合并锚；零运行时 import 面） */

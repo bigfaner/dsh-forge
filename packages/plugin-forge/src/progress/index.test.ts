@@ -2,7 +2,7 @@
 // 鸭子消费）+ 链断/抛错 fail-soft。declare-module 合并不可运行期断言——键身份锚由
 // ForgeProgressEventKeyAssertion 编译期承担（dispatch-loop 同款）。
 import { describe, expect, it, vi } from 'vitest'
-import { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './index.js'
+import { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData, registerProgressEventVocabulary } from './index.js'
 import type { AgentLookupFace } from '../faces.js'
 
 const DATA = {
@@ -31,6 +31,22 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
     expect(isForgeProgressData({ ...DATA, status: 'paused' })).toBe(false)
     expect(isForgeProgressData({ ...DATA, at: Number.NaN })).toBe(false)
     expect(isForgeProgressData({ ...DATA, taskKey: 42 })).toBe(false)
+  })
+})
+
+describe('registerProgressEventVocabulary（#35 读侧词汇注册）', () => {
+  it('注册后持久化已知集包含 forge/progress（含该事件的日志恢复可观测）', async () => {
+    const { KNOWN_SESSION_EVENT_TYPES } = await import('@deepseek-ai/dsh-session')
+    registerProgressEventVocabulary()
+    // 动态 import 链微延迟——注册为同步 Set.add，微任务后必达
+    await Promise.resolve()
+    expect(KNOWN_SESSION_EVENT_TYPES.has(FORGE_PROGRESS_EVENT_TYPE)).toBe(true)
+  })
+  it('幂等：重复注册不抛错不劣化', () => {
+    expect(() => {
+      registerProgressEventVocabulary()
+      registerProgressEventVocabulary()
+    }).not.toThrow()
   })
 })
 

@@ -26,7 +26,7 @@ import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDi
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, SessionActivationFace } from './faces.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
-import { adaptSessionProgressAppend } from './progress/index.js'
+import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { createForgeDispatchLoopProjection } from './projection/index.js'
@@ -61,6 +61,9 @@ export interface ForgePlugin {
 
 const forgePlugin: ForgePlugin = Object.assign(
   (ctx: ForgeContextFace, config: ForgePluginConfig = {}): (() => void) => {
+    // 词汇注册先行（#35——'forge/progress' 进已知事件集：未注册时持久化读路径拒绝
+    // 解读含该事件的日志=历史加载失败；fire-and-forget 毫秒级，先于任何会话观测）。
+    registerProgressEventVocabulary()
     // 事件链装配（3.3/3.4）：总线 → sink（emit + 会话目录记忆——core deriveTaskStoreDir
     // 单源）→ 监听器（唯一写者——容器维度 logs/{slug}.jsonl；dirOf 未命中 = fail-soft 丢行·绝不落相对路径）
     const bus = createForgeEventBus()
