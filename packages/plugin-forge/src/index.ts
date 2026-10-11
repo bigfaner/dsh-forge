@@ -26,6 +26,7 @@ import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDi
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
+import { adaptSessionProgressAppend } from './progress/index.js'
 import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { createForgeDispatchLoopProjection } from './projection/index.js'
@@ -143,6 +144,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
     const narrationChannel: NarrationChannel =
       agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { notice: async () => {}, followup: async () => {} }
+    // 1.17 循环进度 append 面（'forge/progress' 会话事件——同 agents 注册表鸭子消费，
+    // 链 = agent.session.append；注册表缺席 = 面不注入，驱动器零发射 fail-soft）。
+    const progressAppend = adaptSessionProgressAppend(agentsRegistry)
     // S2 宿主派发循环装配单例（run-tasks-host-command S1b/S1c/S4 接线）：驱动器 + 叙述面 +
     // 第三层裁决挂钩 + 第二层处置钩子真绑定（1.11 装配接线收口——LoopTriageInput 每循环
     // 身份载体 ownerSessionId/parent/signal 逐调用绑定，钩子服务面 tasks/spawn 与驱动器
@@ -167,6 +171,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
+      ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       triage: createTriageHook({
@@ -418,3 +423,6 @@ export type {
   ProjectContainerDirs,
   ProjectDirServiceFace,
 } from './faces.js'
+// 1.17 循环进度事件族（'forge/progress'——declare-module 合并 + append 适配面）。
+export { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './progress/index.js'
+export type { ForgeProgressCounts, ForgeProgressEventData, ProgressAppendFace } from './progress/index.js'

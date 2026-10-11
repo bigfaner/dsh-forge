@@ -1,0 +1,63 @@
+/* 1.17 'forge/progress' Chat 节点（DisclosureRow 同族折叠行——官方令牌直用，行语言
+ * 对齐 tool-call 行刻度；零机制词零平台 fork）。 */
+.dswf-progress-node {
+  width: 100%;
+  min-width: 0;
+}
+
+.dswf-progress-node-row {
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* 状态点（图标位——状态色语义对齐会话行/contdot 同款令牌映射） */
+.dswf-progress-node-dot {
+  width: 8px; /* dsw-raw 官方 StateDot 点径刻度 */
+  height: 8px; /* dsw-raw 官方 StateDot 点径刻度 */
+  border-radius: 50%; /* dsw-raw 圆点本体 */
+  background: var(--dsw-alias-label-tertiary);
+  display: inline-block;
+}
+
+.dswf-progress-node-dot[data-status='running'] {
+  background: var(--dsw-alias-business-primary); /* 进行中 = 远征蓝（task-tab contdot 同语义） */
+}
+
+.dswf-progress-node-dot[data-status='completed'] {
+  background: var(--dsw-alias-state-success-primary); /* 已完成 */
+}
+
+.dswf-progress-node-dot[data-status='blocked'],
+.dswf-progress-node-dot[data-status='interrupted'] {
+  background: var(--dsw-alias-state-warn-primary); /* 阻塞/中断 = 突击琥珀（会话行同语义） */
+}
+
+.dswf-progress-node-content {
+  padding: 2px 8px 6px 32px; /* dsw-raw 官方行内刻度（上2 右8 下6——折叠行文本位缩进对齐：图标16+gap刻度） */
+}
+
+.dswf-progress-node-detail {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 官方详情行距刻度 */
+}
+
+.dswf-progress-node-detail-row {
+  display: flex;
+  gap: 8px; /* dsw-raw 官方行内刻度 */
+  font-size: var(--dsh-content-font-size-secondary); /* dsw-raw 官方 dsh-content 字号令牌（上游 ui-tool 行同款——dsw-raw 非 dsw 前缀） */
+  line-height: var(--dsh-content-font-line-height-secondary, 18px); /* dsw-raw 官方 13px 行高刻度 */
+}
+
+.dswf-progress-node-detail-row dt {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-progress-node-detail-row dd {
+  margin: 0;
+  min-width: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}

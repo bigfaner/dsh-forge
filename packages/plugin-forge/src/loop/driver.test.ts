@@ -25,6 +25,7 @@ import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, Lo
 import { backoffDelayMs, LOOP_TRIAGE_MAX_ATTEMPTS } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
+import type { ForgeProgressEventData } from '../progress/index.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { createTriageHook } from '../triage/index.js'
 import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../dispatch-core/index.js'
@@ -230,6 +231,8 @@ interface Built {
   h: ReturnType<typeof tasksHarness>
   spawn: ReturnType<typeof trackedSpawn>
   escalations: LoopEscalation[]
+  /** 1.17 进度事件录制面（'forge/progress' append 形状观察） */
+  progressCalls: ForgeProgressEventData[]
 }
 
 function build(options: {
@@ -270,12 +273,19 @@ function build(options: {
   const spawn = trackedSpawn()
   if (options.spawnBehavior !== undefined) options.spawnBehavior(spawn)
   const escalations: LoopEscalation[] = []
+  // 1.17 进度事件录制（'forge/progress' append 形状——形状/序断言消费）
+  const progressCalls: ForgeProgressEventData[] = []
   const deps: LoopDriverDeps = {
     projectId: PROJECT,
     tasks: h.tasks,
     spawn: spawn.spawn,
     narrator,
     events: sink,
+    progress: {
+      append: (_sessionId, data) => {
+        progressCalls.push(data)
+      },
+    },
     ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
     ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
     escalation: {
@@ -285,7 +295,7 @@ function build(options: {
     },
     delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
   }
-  return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations }
+  return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls }
 }
 
 /** 等待循环终局（登记表注销 = 终态唯一机械信号） */
@@ -1165,5 +1175,115 @@ describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消�
       delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
     })
     await expect(driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })).rejects.toThrow(/projectId/)
+  })
+})
+
+// ─────────────────────────── 1.17 循环进度事件（'forge/progress' 流内交错） ───────────────────────────
+
+describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型面零回合唤醒）', () => {
+  it('全链形状：领取（claim + counts 快照）→ 结算成功（settle·completed）——数据形状五件齐（任务键/动词/状态/计数/时间戳）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    const before = Date.now()
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls).toHaveLength(2)
+    const [claimEvt, settleEvt] = built.progressCalls
+    // 领取点：动词 claim + running + 任务键 + 计数快照 + 时间戳界内
+    expect(claimEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      taskKey: 'feat-x/2.5',
+      counts: { pending: 0, running: 1, done: 0 },
+      at: expect.any(Number),
+    })
+    expect(claimEvt!.at).toBeGreaterThanOrEqual(before)
+    // 结算点：动词 settle + completed + 同任务键（零计数——claim 后快照过期不虚报）
+    expect(settleEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'settle',
+      status: 'completed',
+      taskKey: 'feat-x/2.5',
+      at: expect.any(Number),
+    })
+    // 纯 JSON（Session.append 契约——序列化往返无损）
+    expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
+  })
+
+  it('adopt 恢复径：动词 claim-resume（⑤ 领取（恢复中断））', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1, interrupted: 1 }),
+        statsOf({ pending: 0, interrupted: 0, in_progress: 1 }),
+        statsOf({ pending: 0, in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls[0]).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5' })
+  })
+
+  it('停止真化：stop 面 in-flight → interrupted（状态迁移点——动词 stop + 中断任务键）', async () => {
+    const built = build({ claim: [claimed()] })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.progressCalls.filter((e) => e.verb === 'stop')).toEqual([
+      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', at: expect.any(Number) },
+    ])
+  })
+
+  it('blocked 无 follow-up 处置径：wait-external 决策 → settle·blocked（状态迁移点）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'wait-external', externalSlug: 'feat-y' }),
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ blocked: 1 }),
+        statsOf({ blocked: 1 }),
+        statsOf({ blocked: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls[1]).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5' })
+  })
+
+  it('面缺席 = 零发射 fail-soft（可选依赖——叙述四连零回归）', async () => {
+    const h = tasksHarness()
+    h.setClaim([claimed(), NO_TASK])
+    h.setStats([statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })])
+    const channel: NarrationChannel = { notice: async () => {}, followup: async () => {} }
+    const driver = createLoopDriver({
+      projectId: PROJECT,
+      tasks: h.tasks,
+      spawn: trackedSpawn().spawn,
+      narrator: createNarrator({ channel }),
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+      // progress 缺席——零发射不外溢
+    })
+    await driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(driver)
+    expect(driver.activeOf(OWNER)).toBeUndefined()
   })
 })

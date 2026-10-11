@@ -50,6 +50,7 @@ import {
   type ForgeSidebarRightTabsService,
   type ForgeSlotsService,
 } from './plugin.js'
+import { FORGE_PROGRESS_NODE_KIND, FORGE_PROGRESS_NODE_SLOT, forgeProgressDefinition } from './progress-node.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX as DOCK_DOC_PREFIX,
@@ -170,6 +171,8 @@ function fakeClientCtx(
   sessionsById: Record<string, { parentId?: string; displayTitle?: string }>
   /** 账本 refresh 注入面（D6 修复面——缺行兜底重拉测试；缺省 undefined = 平开径） */
   sessionsRefresh: { current: (() => Promise<unknown>) | undefined }
+  /** 1.17 uiConversation events.register 录制（forge/progress 节点定义断言） */
+  eventDefinitions: unknown[]
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -225,6 +228,15 @@ function fakeClientCtx(
   }
   // fix-33 ⑧：官方 locale 服务切片
   const locale = fakeLocale()
+  // 1.17：官方 uiConversation 事件注册表切片（events.register 录制——forge/progress 节点定义断言）
+  const eventDefinitions: unknown[] = []
+  const uiConversation = {
+    events: {
+      register: (definition: unknown) => {
+        eventDefinitions.push(definition)
+      },
+    },
+  }
   const ctx: ForgeClientCtx = {
     slots,
     get: (name) => {
@@ -235,12 +247,13 @@ function fakeClientCtx(
       if (name === 'sidebarRightTabs') return tabTypes
       if (name === 'layout') return layout
       if (name === 'locale') return locale
+      if (name === 'uiConversation') return uiConversation
       throw new Error(`unexpected service: ${name}`)
     },
     // m3.1 D25：reflect 面（ ForgeClientCtx 窄面外——插件真身经 cast 读取，同径注入）
     ...(reflect !== undefined ? { reflect } : {}),
   } as ForgeClientCtx
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions }
 }
 
 /** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body；m3.1 D5 会话头 pill 退役） */
@@ -255,6 +268,7 @@ function publishFakeViews() {
     ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
     ForgeRecallView: 'COMP:recall-view',
     ForgeDispatchToolRow: 'COMP:dispatch-tool-row',
+    ForgeProgressNode: 'COMP:progress-node',
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeMdPreviewBody: 'COMP:md-preview-body',
@@ -322,6 +336,7 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
       'sidebarRightTabs',
       'layout',
       'locale',
+      'uiConversation',
     ])
     const { ctx, locale } = fakeClientCtx()
     plugin.apply(ctx)
@@ -368,6 +383,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       CONVERSATION_VIEW_SLOT,
       HERO_WORKSPACE_SLOT,
       TOOL_CALL_TOOLVIEW_SLOT,
+      FORGE_PROGRESS_NODE_SLOT, // 1.17 'forge/progress' keyed node body
       SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
@@ -549,7 +565,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT]) // fix-24 ① 后 views 族含 hero 影子；m3.1 D5 会话头 pill 卸载
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT]) // fix-24 ① 后 views 族含 hero 影子；m3.1 D5 会话头 pill 卸载；1.17 增 forge/progress 节点
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -570,7 +586,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -594,6 +610,41 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(row.options.priority).toBeUndefined()
     expect(row.options.children).toBeUndefined()
     expect(row.options.inject).toBeUndefined()
+    unpublishViews()
+  })
+
+  it("1.17 forge/progress 节点（decisions #34 流内交错）：events.register 定义恰一 + conversation.chat.node keyed 'forge-progress' body（发布组件 + locale NS）——非模型面渲染（notice 双通道零回归）", () => {
+    const views = publishFakeViews()
+    const { ctx, registers, eventDefinitions } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    // 第一段：uiConversation.events.register 节点 Definition 恰一
+    expect(eventDefinitions).toHaveLength(1)
+    expect(eventDefinitions[0]).toBe(forgeProgressDefinition)
+    // 第二段：keyed node body 恰一——key = 节点 kind（buildViewNode.kind 字面量同源）
+    const bodies = registers.filter((r) => r.key === FORGE_PROGRESS_NODE_SLOT)
+    expect(bodies, 'conversation.chat.node 恰一登记（只接管 forge-progress kind）').toHaveLength(1)
+    const body = bodies[0]!
+    expect(body.options.key).toBe(FORGE_PROGRESS_NODE_KIND)
+    expect(body.options.key).toBe('forge-progress')
+    expect(body.options.locale).toBe(FORGE_LOCALE_NS)
+    expect(body.component).toBe(views.ForgeProgressNode)
+    unpublishViews()
+  })
+
+  it('1.17 uiConversation 缺席 = 两段全跳 fail-soft（capability absence = 无节点——不炸不阻载其余登记）', () => {
+    publishFakeViews()
+    const base = fakeClientCtx()
+    const ctx = {
+      ...base.ctx, // slots 为 readonly——浅拷贝面置换 get（惰性假体旁路同径）
+      get: (name: string) => {
+        if (name === 'uiConversation') throw new Error('unexpected service: uiConversation')
+        return (base.ctx as { get: (n: string) => unknown }).get(name)
+      },
+    } as ForgeClientCtx
+    forgeClientPlugin().apply(ctx)
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.views?.error).toBeUndefined()
+    expect(marker?.views?.registered).not.toContain(FORGE_PROGRESS_NODE_SLOT)
     unpublishViews()
   })
 
@@ -1197,7 +1248,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

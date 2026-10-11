@@ -38,6 +38,7 @@ import type {
 import { clearExclusiveLoopSource, setExclusiveLoopSource } from '../dispatch-core/index.js'
 import { renderHeadline, renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
+import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef } from './registry.js'
 
@@ -238,6 +239,11 @@ export interface LoopDriverDeps {
   readonly narrator: Narrator
   /** 事件发射面（可选——透传 dispatch-core 事件闭包，logs/<slug>.jsonl 里程碑不断流） */
   readonly events?: DispatchCoreDeps['events']
+  /**
+   * 循环进度 append 面（可选——1.17 'forge/progress' 会话事件流内交错；缺席/链断 =
+   * 零发射 fail-soft，循环正确性零依赖。非模型面：不进模型上下文、零回合唤醒。）
+   */
+  readonly progress?: ProgressAppendFace
   /** forgeSettings 服务面（可选——worker agentOptions 组装同工具壳） */
   readonly settings?: Pick<ForgeSettingsService, 'get'>
   readonly resolveModelReasoning?: DispatchCoreDeps['resolveModelReasoning']
@@ -312,6 +318,35 @@ type RoundOutcome = 'continue' | 'terminal'
 /** 呈现任务行（「localId 任务名」——notification-samples ④「2.8 诊断弹窗装配（Apps web）」口径） */
 function taskLabelOf(task: TaskSnapshot): string {
   return `${task.localId} ${task.title}`
+}
+
+/**
+ * 循环进度事件发射（1.17——'forge/progress' 会话事件流内交错）：领取/结算/状态迁移点
+ * 各一枚，append 进 owner 会话日志（客户端 DisclosureRow 同族折叠行渲染，seq 时序天然
+ * 交错）。fail-soft：面缺席/append 链断 = 零发射不外溢（进度非循环正确性依赖）；既有
+ * notice 双通道零回归（本发射与叙述面完全并行，不改 notice/followup 分流）。
+ */
+function emitProgress(
+  loop: ActiveLoop,
+  event: { readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop'; readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'; readonly taskKey?: string; readonly counts?: ForgeProgressCounts },
+): void {
+  try {
+    loop.deps.progress?.append(loop.record.ownerSessionId, {
+      sourceSlug: loop.record.source.slug,
+      verb: event.verb,
+      status: event.status,
+      ...(event.taskKey !== undefined ? { taskKey: event.taskKey } : {}),
+      ...(event.counts !== undefined ? { counts: event.counts } : {}),
+      at: Date.now(),
+    })
+  } catch {
+    // 进度发射零循环正确性依赖——异常吞并（append 面内部已另有告警）
+  }
+}
+
+/** 池计数快照（claim 时点——'forge/progress' counts 段单源） */
+function progressCountsOf(stats: TaskStats): ForgeProgressCounts {
+  return { pending: stats.byStatus.pending, running: stats.byStatus.in_progress, done: stats.byStatus.completed }
 }
 
 /** 可中断停顿（true = 时延到点 / false = 循环已叫停——停止立即打断退避与耐心等待） */
@@ -428,6 +463,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       if (captured !== undefined) {
         hadInFlight = true
         await interruptedize(loop, captured.taskId) // in-flight 真化 interrupted（S3 transitionTask 面）
+        // 进度事件（1.17——状态迁移点：停止真化 in-flight → interrupted）
+        if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', taskKey: captured.taskKey })
       }
       const stats = await statsFailSoft(loop)
       await deps.narrator.followup(
@@ -587,6 +624,13 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     }
     await deps.narrator.notice(owner, renderNarrative('claim', payload), renderHeadline('claim', payload))
   }
+  // 进度事件（1.17——领取点：常规 = claim / 恢复 = claim-resume；零模型面零回合唤醒）
+  emitProgress(loop, {
+    verb: adoptRef !== undefined ? 'claim-resume' : 'claim',
+    status: 'running',
+    taskKey,
+    counts: progressCountsOf(stats),
+  })
   // 通知 await 窗口的停止竞态收口（同上——stop 已接管则让渡）
   if (await bailIfAborted(loop, claim)) return 'terminal'
 
@@ -674,6 +718,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     loop.dispositions.delete(taskKey) // S1c 处置簿清账（任务成功——同任务处置计数归零）
     const donePayload = { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }
     await deps.narrator.notice(owner, renderNarrative('completed', donePayload), renderHeadline('completed', donePayload))
+    // 进度事件（1.17——结算成功点）
+    emitProgress(loop, { verb: 'settle', status: 'completed', taskKey })
     return 'continue' // 续领下一轮
   }
 
@@ -681,6 +727,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const meta = { projectId: scope.projectId, taskKey: task.localId, reason: settlement.reason ?? '', settlement }
   if (settlement.followUp !== undefined) {
     await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: settlement.followUp.localId }, meta)
+    emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue'
   }
 
@@ -721,6 +768,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   if (decision === undefined) {
     // 处置重试超限（同任务计数封顶）→ 第三层（⑩ 叙述 + 问询附 reason 全文与处置历史）——终局
     await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+    emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     await deps.escalation?.escalate({
       kind: 'disposition-over-limit',
       ownerSessionId: owner,
@@ -750,6 +798,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         { sourceSlug: slug, taskLabel: label, fixId: added.localId, fixNote: decision.note ?? '待修复项' },
         meta,
       )
+      emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     } catch (cause) {
       if ((cause as { code?: unknown }).code === 'ERR_CHAIN_DEPTH_EXCEEDED') {
         // fix 链深 ≤6 到顶（C6/addTask 权威校验）→ 第三层升级（⑩ 叙述 + 问询）——终局
@@ -776,11 +825,13 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   }
   if (decision.action === 'wait-external') {
     await deps.narrator.blocked(owner, 'blocked-wait-external', { sourceSlug: slug, taskLabel: label, externalSlug: decision.externalSlug }, meta)
+    emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
   // ask-user → 第三层（⑩ 叙述已告知问询另行发起；裁决不经主会话，decisions #16）——终局
   // （处置历史已由阶梯循环记录本决策行——不重复追加）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+  emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
   await deps.escalation?.escalate({
     kind: 'blocked-ask-user',
     ownerSessionId: owner,

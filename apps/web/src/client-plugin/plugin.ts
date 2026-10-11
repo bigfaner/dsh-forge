@@ -37,6 +37,13 @@
 // 运行期锚（e2e 实证，2.7）：插件长活依赖 profile 置停 client-hmr——其全图 sync 会以宿主
 // 最新图对账掉壳掌舵追加的本行，见 apps/host profile cordis.patch.yml 的 client-hmr 行。
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
+// 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
+import {
+  FORGE_PROGRESS_NODE_KIND,
+  FORGE_PROGRESS_NODE_SLOT,
+  forgeProgressDefinition,
+  type ForgeUiConversationService,
+} from './progress-node.js'
 // 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
 import {
   createOpenSessionOrchestrator,
@@ -158,6 +165,7 @@ export const FORGE_CLIENT_INJECT = [
   'sidebarRightTabs',
   'layout',
   'locale',
+  'uiConversation',
 ] as const
 
 /** 产品 locale 命名空间（官方 locale 服务词典登记键——LOCALE_IDS = zh/en） */
@@ -597,6 +605,7 @@ export interface ForgeViewsGlobal {
     ForgeKnowledgeGlyph: unknown
     ForgeRecallView: unknown
     ForgeDispatchToolRow: unknown
+    ForgeProgressNode: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeMdPreviewBody: unknown
@@ -637,7 +646,8 @@ export interface ForgeClientCtx {
       | 'sidebarRightTabs'
       | 'layout'
       | 'locale'
-      | 'conversation',
+      | 'conversation'
+      | 'uiConversation',
   ): unknown
 }
 
@@ -845,6 +855,39 @@ function registerConversationViews(
       // props 自足：三相块 + 展开钩子 + inspect 回调）
       { name: TOOL_CALL_TOOLVIEW_SLOT, key: DISPATCH_TASK_TOOL_KEY, locale: FORGE_LOCALE_NS },
       views.ForgeDispatchToolRow,
+    ),
+  )
+  registerProgressNode(ctx, views, diagnostics)
+}
+
+/**
+ * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册
+ * （workflow-run 同型）——① `uiConversation.events.register` 节点 Definition（每枚事件
+ * 独立成节点，seq 时序天然交错；零折叠）；② `conversation.chat.node` keyed
+ * 'forge-progress' body（DisclosureRow 同族折叠行——组件经发布面递达）。uiConversation
+ * 缺席/异常 = 两段全跳 fail-soft 不炸（capability absence = 无节点——宿主未装配官方
+ * 会话注册表的降级面）；notice 双通道零回归（本节点为非模型面事件渲染，零模型回合）。
+ */
+function registerProgressNode(ctx: ForgeClientCtx, views: PublishedViews, diagnostics: { registered?: string[] }): void {
+  let uiConversation: ForgeUiConversationService | undefined
+  try {
+    uiConversation = ctx.get('uiConversation') as ForgeUiConversationService | undefined
+  } catch {
+    uiConversation = undefined
+  }
+  const registerEvents = uiConversation?.events?.register
+  if (uiConversation === undefined || typeof registerEvents !== 'function') return
+  try {
+    registerEvents.call(uiConversation.events, forgeProgressDefinition)
+  } catch {
+    return // Definition 注册被拒（重复 kind 等）——渲染段不落半座
+  }
+  registerSlotEntry(ctx, FORGE_PROGRESS_NODE_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // keyed node body：key = 节点 kind（buildViewNode.kind 字面量同源）；locale NS
+      // 声明（行内 t 座——组件自足标签暂零词条，注册面留语言归属锚）
+      { name: FORGE_PROGRESS_NODE_SLOT, key: FORGE_PROGRESS_NODE_KIND, locale: FORGE_LOCALE_NS },
+      views.ForgeProgressNode,
     ),
   )
 }
