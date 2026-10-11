@@ -51,6 +51,26 @@ export const SIDEBAR_EXPAND_BUTTON =
 export const NAV_SHELL = '#root nav[aria-label]'
 /** 知识库入口（官方 panellist 行 aria——fix-25 产品 nav 行迁官方 PanelRow） */
 export const KNOWLEDGE_ENTRY = 'button[aria-label="知识库"]'
+/** 官方右栏 guide 入口卡（值 = tab kind——'files' = 官方工作区文件入口卡） */
+export const guideEntryOf = (kind: string): string => `[data-sidebar-right-guide-entry="${kind}"]`
+/** 官方文件树 tab body 根（值锚 data-files-root = 会话工作区根绝对路径） */
+export const FILES_BODY = '[data-files-root]'
+/** 官方文件树文件行（li；行钮 = 后代 button——点名经 hasText 文件名过滤，路径值含宿主分隔符不入选） */
+export const FILES_FILE_ROW = 'li[data-files-entry="file"]'
+/** 官方文档预览容器（值 = 选中渲染器 id；地址断言面 data-textpreview-url 同宿主） */
+export const documentPreviewOf = (rendererId: string): string => `[data-document-preview="${rendererId}"]`
+/** 官方文档预览容器（任意渲染器——文档 tab 开出收敛门） */
+export const DOC_PREVIEW_ANY = '[data-document-preview]'
+/** 官方渲染器下拉触发钮（aria=打开方式；候选 >1 才渲染——官方 TextPreview chrome） */
+export const DOC_VIEWER_MENU = '[data-document-viewer-menu]'
+/** 官方渲染器菜单行（官方 Menu portal 于 document.body） */
+export const DOC_VIEWER_MENU_ITEM = '[role="menu"] button[role="menuitem"]'
+/** 官方换行切换钮（选中渲染器声明 wrap=true 才渲染；aria-pressed = 偏好态） */
+export const DOC_WRAP_TOOL = '[data-textpreview-tool="wrap"]'
+/** 官方内建 Markdown 正文锚（内建渲染器选中期） */
+export const DOC_BUILTIN_MARKDOWN = '[data-document-markdown]'
+/** 官方内建 Markdown 渲染器 id（MARKDOWN_BODY_ID 镜像——下拉切换断言值） */
+export const DOC_BUILTIN_MARKDOWN_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown'
 
 // ─── 产品锚（apps/web data-dswf-* 台账） ───
 
@@ -183,6 +203,12 @@ export const DOC_DANGLING = '[data-dswf-doc-dangling]'
 export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
 /** mermaid 渲染回退占位卡（非法源/渲染失败） */
 export const DOC_MERMAID_FALLBACK = '[data-dswf-doc-mermaid-fallback]'
+/** md 预览扩展渲染器 body 根（dswf-md-mermaid keyed body——md-preview-mermaid blitz） */
+export const MD_PREVIEW_BODY = '[data-dswf-md-preview-body]'
+/** 产品 MarkdownDoc 正文锚（官方 MarkdownText 唯一包装入口——扩展渲染器 md 段） */
+export const MD_DOC_BODY = '[data-dswf-markdown="body"]'
+/** 产品 md mermaid 扩展渲染器 id（= documentPreviews 定义 id = keyed body 键；plugin.ts MD_MERMAID_PREVIEW_ID 同源字面量） */
+export const MD_MERMAID_RENDERER_ID = 'dswf-md-mermaid'
 /** 会话头挂接槽（官方动作带——m3.1 D5：产品 pill 卸载断言面；零产品占用者） */
 export const SESSION_HEADER_ACTIONS = '[data-slot="conversation.session.header.actions"]'
 /** 派发任务悬浮面板（m3.1 D6——ShellHost 常驻树挂载，对话列内浮层；role=complementary） */

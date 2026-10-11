@@ -152,6 +152,7 @@
 
 - 入口 = `pnpm test:e2e`（`e2e/playwright.config.ts`，globalSetup 前置构建 apps/web dist——幂等重跑）。
 - 骨架组套件 = `e2e/specs/smoke-skeleton.spec.ts`（三用例：组一/组二/组三实机全绿——组三随 host 通道转正实跑，4.2 验证）；重复跑验证记录见任务 2.14 执行记录。
+- blitz 增量套件 = `e2e/specs/blitz/md-preview-mermaid.spec.ts`（md-preview-mermaid 1.2：官方文件入口全径四断言——erDiagram SVG / 非法源回退占位卡 / 纯文零退化+wrap 控件 / 渲染器下拉双项切回内建；2026-10-11 实跑 1 passed (41.3s)——fix-1 apply 期反射时序修复后全绿；夹具仓外 tmp 零 git 面；扩锚 e2e/support/anchors.ts 官方 files/documentpreview 面常量组）。
 - 3.8 集成套件 = `e2e/specs/knowledge-integration.spec.ts`（两用例：组一知识视图/召回 tab 接线 + 组二真数据面——随 host 通道转正实跑，4.2 验证）。
 - 4.2 dogfood 套件 = `e2e/specs/flywheel.spec.ts`（飞轮 6 步链单流走查，真实模型凭据缺席 = 留痕 skip——Open Question ② 口径）。
 - 4.3 安装包冒烟套件 = `e2e/specs/p1mvp/installer-smoke.spec.ts`（MVP 门第二步 4 步旅程：NSIS 静默安装 → 安装后 exe 直启 → 三区最简 → 会话面板 + 新建会话入口；非 smoke 迁移组——断言面 = 安装形态可用性下限（Story 2），三区最简断言为骨架组 L41/L44/L46 同语义复刻非迁移载体）。**归并记录（2026-10-04，fix-37 ④）**：任务 4.3 产物 `e2e/specs/installer-smoke.spec.ts` 覆盖面并入本 p1mvp contract 溯源版（installer 链单跑——双 NSIS 分钟级安装终结）：①安装/--check 与 ②启动零错（manifest + profile 四文件 + patch 产品插件行内容 + state.db）归 beforeAll + 冒烟前半（patch 内容断言随迁保留）；③三区 = 冒烟前半 Step 3 超集；④会话面板 = 冒烟后半超集；fail-fast 差异面（Step2c 破坏启动路径）保留。NSIS 安装包未构建（`release/installer/`）= 留痕 skip；每跑静默安装至盘根短路径隔离目录（`<仓库盘>:\dsh-forge-smoke\`——MAX_PATH 与 TEMP 盘余量双约束，套件内重定向 TEMP/TMP）+ 静默卸载收尾（注册表/快捷方式卫生）。
