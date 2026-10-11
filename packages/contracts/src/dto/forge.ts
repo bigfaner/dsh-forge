@@ -158,15 +158,6 @@ export interface TaskFilesPayload {
   modified?: string[]
 }
 
-/** files 分组归一（读面单源：{created, modified} → 平铺并集，created 序优先） */
-export function taskFilesUnion(payload: TaskFilesPayload): string[] {
-  const union: string[] = []
-  for (const f of [...(payload.created ?? []), ...(payload.modified ?? [])]) {
-    if (!union.includes(f)) union.push(f)
-  }
-  return union
-}
-
 /** tasks 行应用层形状（claim/transition 返回体；身份双轨恒含 taskId + slug + localId） */
 export interface TaskSnapshot {
   /** uuid 代理主键（FK/前端/RPC 引用锚，恒稳定） */

@@ -414,9 +414,9 @@ export function dispatchAnchorRectsOf(dom: DispatchAnchorDom): DispatchAnchorRec
 
 // ─────────────────── 纯渲染体（全相位静态可测） ───────────────────
 
-/** 行键呈现（S3 编号化：编号 chip——title 列自承载，去 slug 键；悬停 Tooltip 补全名） */
-export function dispatchRowKeyLabel(item: Pick<SessionTaskLinkCard, 'localId'>): string {
-  return item.localId
+/** 行键呈现（回归修复——m2 契约锚：行键文本 = `slug/localId` 自然键；悬停 Tooltip 补全名） */
+export function dispatchRowKeyLabel(item: Pick<SessionTaskLinkCard, 'slug' | 'localId'>): string {
+  return `${item.slug}/${item.localId}`
 }
 
 export interface DispatchPanelRowProps {

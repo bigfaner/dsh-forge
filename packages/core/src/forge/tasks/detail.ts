@@ -15,7 +15,7 @@
 //     summary），未命中 = 置灰（resolved=false——文档移除/改名后的诚实呈现）。
 import type Database from 'better-sqlite3'
 import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary } from '@dsh-forge/contracts'
-import { taskFilesUnion } from '@dsh-forge/contracts'
+import { taskFilesUnion } from './files.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { listCommitFiles, type GitExecFile } from './git-lookup.js'
 import { hydrateTaskCards } from './list.js'

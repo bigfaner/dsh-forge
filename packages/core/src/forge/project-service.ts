@@ -51,7 +51,7 @@ import { errMessage } from '../util.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
-import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir } from './workspace/derive-dir.js'
+import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from './workspace/derive-dir.js'
 import { SuspectedMoveError } from './workspace/errors.js'
 
 /**
@@ -116,16 +116,38 @@ export function createProjectService(deps: ProjectServiceDeps): ProjectServiceM2
 }
 
 /**
+ * 中央在册项目 → 任务库目录集（中央 ws_path 列单行只读；ws_path 落库恒 canonical——
+ * deriveStoreDir 同基准单源映射）。消费方 = 疑似移动消歧：同扁平化主体异 hash8 目录若恰为
+ * 某在册项目的任务库，则它是另一条在册工作区（Step2b 同主体异路径各自成库），非孤儿——
+ * 不构成「疑似移动」；孤儿（中央行缺席，Step3 构造）仍拒绝。
+ */
+function registeredStoreDirs(deps: ProjectServiceDeps, tasksHome: string): Set<string> {
+  const rows = deps.db.prepare<unknown[], { ws_path: string }>(`SELECT ws_path FROM projects`).all()
+  return new Set(rows.map((r) => deriveStoreDir(tasksHome, r.ws_path)))
+}
+
+/** 疑似移动拒绝判定（预检动词消费——existingDir 为在册项目任务库 = 放行） */
+function isSuspectedMoveBlocked(deps: ProjectServiceDeps, tasksHome: string, collision: RegistrationCollision): boolean {
+  return collision.state === 'suspected-move' && !registeredStoreDirs(deps, tasksHome).has(collision.data.existingDir)
+}
+
+/**
  * M2 注册碰撞复检（1.4；Interface 5 注册闭包侧——表单预检位（deriveTaskStoreDir 动词）的
  * 复检位）。三态机械面归 workspace/derive-dir.ts 分类器单源；本位收口两拒绝态：
- *   · 同扁平化主体异 hash8 → ERR_SUSPECTED_MOVE（疑似移动拒绝——data 带手工指引）；
+ *   · 同扁平化主体异 hash8 → ERR_SUSPECTED_MOVE（疑似移动拒绝——data 带手工指引；
+ *     在册项目任务库消歧除外——registeredStoreDirs）；
  *   · 目标目录在场（hash 一致）而中央行缺席（调用不变量：attachExisting 已 miss）→
  *     §6-33 兜底拒绝（hash 自身碰撞/中央库重置遗留孤儿库——同 typed 面，existingDir=derivedDir）。
  * Hard Rule：于中央行落库之前抛出——调用位在 ① 预检/目录确保/② create 之前，拒绝注册零副作用。
  */
-function assertNoRegistrationCollision(tasksHome: string, workspaceDir: string): void {
+function assertNoRegistrationCollision(deps: ProjectServiceDeps, tasksHome: string, workspaceDir: string): void {
   const collision = classifyRegistrationCollision(tasksHome, workspaceDir)
-  if (collision.state !== 'normal') throw new SuspectedMoveError(collision.data)
+  if (
+    (collision.state === 'suspected-move' && !registeredStoreDirs(deps, tasksHome).has(collision.data.existingDir)) ||
+    collision.state === 'present'
+  ) {
+    throw new SuspectedMoveError(collision.data)
+  }
 }
 
 /**
@@ -144,7 +166,10 @@ async function deriveTaskStoreDirVerb(
   }
   const workspaceDir = await canonicalizeDir(q.workspaceDir)
   const collision = classifyRegistrationCollision(deps.tasksHome, workspaceDir)
-  if (collision.state === 'suspected-move') throw new SuspectedMoveError(collision.data)
+  if (collision.state === 'suspected-move' && !isSuspectedMoveBlocked(deps, deps.tasksHome, collision)) {
+    return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
+  }
+  if (collision.state !== 'normal') throw new SuspectedMoveError(collision.data)
   return { dir: deriveStoreDir(deps.tasksHome, workspaceDir) }
 }
 
@@ -310,7 +335,7 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
   // ERR_SUSPECTED_MOVE（Hard Rule：于中央行落库之前抛出——本位在 ① 预检/目录确保/② create
   // 之前，拒绝注册零副作用：dsh 侧/盘面/中央行零变更）。tasksHome 未注入（3.4 前）= 复检
   // 降级缺席，P1 五法行为零变化。
-  if (deps.tasksHome !== undefined) assertNoRegistrationCollision(deps.tasksHome, canonicalInput.workspaceDir)
+  if (deps.tasksHome !== undefined) assertNoRegistrationCollision(deps, deps.tasksHome, canonicalInput.workspaceDir)
 
   // ① 预检：list() 按归一键匹配（fix-30：BINARY → normalizeFsPath——输入与 registry canonical
   // 的盘符大小写/正反斜杠/尾分隔符差异不再击穿；命中=挂接，不登记补偿）

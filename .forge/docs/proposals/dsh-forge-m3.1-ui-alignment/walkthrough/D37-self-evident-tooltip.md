@@ -35,11 +35,13 @@
 | 截断兜底 | `proposal-tab.tsx:357` slug、`:377` createdAt、`proposal-tab.tsx:165` relPath、`DocGroupList.tsx:97` relPath、`coding.tsx:26,54` file、`parts.tsx:96` docRel、`timeline.tsx:333` createdAt | 同上 |
 | 截断兜底 | `drawer/index.tsx:451` taskKey、`transition-dialog.tsx:214` taskKey | slug/localId 自然键全形出口 |
 | 截断兜底 | `dag-view.tsx:106`「键 · 全名」 | DAG 节点两行截断兜底（D29 形态保持） |
+| 截断兜底（S3 扩记） | `drawer/index.tsx` 前置引用编号 chip / 会话 chip / 弹窗头编号 chip（悬停补 `{编号} {title}` 全名） | 编号化呈现的全形唯一出口（截断兜底同族；台账余额 4→6 对位扩记） |
 | 副作用说明 | `feature-tab.tsx:161` 打开新会话、`proposal-tab.tsx:296` 打开新会话 | 「预填·不发送」= 非可见行为预告（×2 全保留） |
 | 诊断说明 | `task-tab.tsx:380`「诊断——validateFeatureTasks…五类检查」 | 诊断语义非自释 |
 | 容器 pill 计数注 | `task-tab.tsx:348` | 正文零计数注的**唯一承载位**（D18 形态——撤则信息丢失） |
 | 1.23 ⑥ 增量悬停 | `list-view.tsx:103,106,160`、`swimlane-view.tsx:48` 行卡 taskHoverLabel | 非可见位增量注（状态全称/优先级/估时——D36 ⑥ 交付面） |
 | 边界位 | `timeline.tsx:104` ⟞ 跳转会话、`drawer/index.tsx:306` 拖宽柄「拖动调宽 · 双击复位」 | 非自释把手（图标语义不直明 / 隐藏交互公约）——裁决默认保留 |
+| 边界位（S5 扩记） | `list-view.tsx` ⟞ 执行子会话钮「打开执行子会话（worker）：键」 | 图标钮非自释把手 + 副作用说明（S5 task-ui-info-density-blitz 新增位——D37 口径同族保留；d30 台账 list-view 余额 3→4 对位扩记） |
 | 呈现面非钮 | `swimlane-view.tsx:84` 列头（空列「无此状态任务」/ 非空 zh（en）） | 列头为呈现面非操作控件，不在点名清单；空列说明 + en 名 = 增量信息 |
 
 **域外同型位记账（不动）**：知识面 `EntryDrawer.tsx:274`「关闭（Esc）」、`KnowledgeToolbar.tsx:148`「清除（Esc）」——D37 点名域 = 概览 tab；同型位是否随裁决外推 = 后续用户裁决项，本轮零改动（零未记账项口径）。

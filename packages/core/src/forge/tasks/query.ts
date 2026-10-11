@@ -24,7 +24,7 @@ import type {
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
-import { taskFilesUnion } from '@dsh-forge/contracts'
+import { taskFilesUnion } from './files.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TaskNotFoundError } from './errors.js'
 

@@ -154,8 +154,9 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // 对话框标题（Modal 头部标题文本）×6：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
   // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog
   Modal: 6,
-  // 官方 Rows 行标题文本 prop ×1（ForgeWorkspacePanel 项目行名称）
-  DisclosureRow: 1,
+  // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；1.17 扩记：
+  // ForgeProgressNode 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位）
+  DisclosureRow: 2,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
   DrawerSection: 2,
 }
@@ -180,8 +181,8 @@ const TOOLTIP_RETIRED_FILES = [
 const TOOLTIP_REMAINING_COUNTS: Readonly<Record<string, number>> = {
   'apps/web/src/views/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
   'apps/web/src/views/overview/proposal-tab.tsx': 4, // title + 打开新会话（副作用说明）+ slug + createdAt（1.7 裁决：提案文档行 relPath 悬浮退役——无摘要不出路径）
-  'apps/web/src/views/overview/task-tab/list-view.tsx': 3, // key/title/sub（1.23 ⑥ 增量悬停交付面）
-  'apps/web/src/views/overview/drawer/index.tsx': 4, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明
+  'apps/web/src/views/overview/task-tab/list-view.tsx': 4, // key/title/sub（1.23 ⑥ 增量悬停交付面）+ S5 ⟞ 执行子会话钮（图标把手非自释——副作用说明，扩记）
+  'apps/web/src/views/overview/drawer/index.tsx': 6, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明 + S3 扩记：前置引用编号 chip / 会话 chip / 弹窗头编号 chip（{编号} {title} 全名兜底 ×3 位）
   'apps/web/src/views/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
 }
 
