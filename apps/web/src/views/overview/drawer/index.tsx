@@ -370,6 +370,21 @@ export interface TaskDrawerBodyProps {
   readonly onDragEnd: () => void
   /** 相对时间基准（缺省当次渲染时刻） */
   readonly now?: number
+  /** 会话名解析器（task-ui-info-density-blitz S1 通道递达——账本快照 displayTitle 窄读；
+   * 缺席/未命中 = undefined 回退 sessionId。消费归后续任务，本面仅承接通道） */
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+}
+
+/**
+ * 会话名回退契约（task-ui-info-density-blitz S1/SC6——fail-soft）：解析器命中 = 标题；
+ * 账本未命中（解析器返回 undefined）或解析器缺席（注入面漂移）= 回退显示 sessionId。
+ * 纯函数（调用方呈现面消费——消费渲染归后续任务）。
+ */
+export function sessionTitleOfOrId(
+  sessionTitleOf: ((sessionId: string) => string | undefined) | undefined,
+  sessionId: string,
+): string {
+  return sessionTitleOf?.(sessionId) ?? sessionId
 }
 
 /** 任务详情弹窗纯渲染体（D21 弹窗壳 + D22 双形态 + 两分块 + 调宽/关闭锚） */
@@ -695,6 +710,10 @@ export interface TaskDrawerProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** @ 锚文档根（装配 fail-soft 装载注入——useProjectDocsRoot 项目行推导；缺席 = `docs` 缺省锚） */
   readonly docsRoot?: string
+  /** 会话名解析器（task-ui-info-density-blitz S1 插件 inject face 经 ShellHost 递达——账本
+   * 快照 displayTitle 窄读；缺席/未命中 = undefined 回退 sessionId。消费归后续任务——本任务
+   * 只做通道与回退契约面） */
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 相对时间基准（缺省当次渲染时刻） */
@@ -730,7 +749,7 @@ export interface TaskDrawerDragSession {
  * → formatDiagMessage 自动发送（发往任务容器对应模式：feature → 远征 / 突击提案 → 突击；
  * 容器 mode 缺席[未标记提案直挂] = 不切换——registry 默认）。
  */
-export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, docsRoot, makeClient, now }: TaskDrawerProps): ReactNode {
+export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSession, onTransition, onStartSession, docsRoot, sessionTitleOf, makeClient, now }: TaskDrawerProps): ReactNode {
   useTaskDrawerEscape(taskId, onClose)
   const [session, setSession] = useState(() => drawerSessionStore.getState())
   useEffect(() => drawerSessionStore.subscribe(() => {
@@ -938,6 +957,7 @@ export function TaskDrawer({ projectId, taskId, onClose, onOpenDoc, onOpenSessio
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       now={now}
+      {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
     />
   )
 }

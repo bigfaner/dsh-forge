@@ -14,7 +14,7 @@ import {
   initialDrawerCollapse,
   toggleDrawerSection,
 } from './collapse.js'
-import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, taskFailureInputOf } from './index.js'
+import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, sessionTitleOfOrId, taskFailureInputOf } from './index.js'
 import { taskFailureDiagToast } from '../task-tab/DiagToast.js'
 import { docsRootOf, formatDiagMessage } from '../message-format.js'
 
@@ -603,5 +603,18 @@ describe('taskFailureInputOf（AC3 诊断第二路数据面——容器水化 + 
     const bare = taskFailureInputOf(detail)
     expect('docsRoot' in bare.container).toBe(false)
     expect(formatDiagMessage(bare).split('\n')[0]).toBe('@docs/features/m2-pipeline/')
+  })
+})
+
+describe('sessionTitleOfOrId 会话名回退契约（task-ui-info-density-blitz S1/SC6——fail-soft）', () => {
+  it('解析器命中 = 标题；账本未命中（undefined）= 回退显示 sessionId', () => {
+    const resolver = (sessionId: string): string | undefined =>
+      sessionId === 's-hit' ? '登录修复' : undefined
+    expect(sessionTitleOfOrId(resolver, 's-hit')).toBe('登录修复') // 命中态
+    expect(sessionTitleOfOrId(resolver, 's-miss')).toBe('s-miss') // 缺席态——回退 id
+  })
+
+  it('解析器缺席（注入面漂移）= 回退显示 sessionId（fail-soft 不炸）', () => {
+    expect(sessionTitleOfOrId(undefined, 's-1')).toBe('s-1')
   })
 })

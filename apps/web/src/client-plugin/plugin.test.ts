@@ -36,8 +36,10 @@ import {
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
   TOOL_CALL_TOOLVIEW_SLOT,
+  makeSessionTitleResolver,
   sessionParentIdOf,
   sessionRowInLedger,
+  sessionTitleOf,
   workerOpenTarget,
   forgeClientPlugin,
   moduleLoaderFacade,
@@ -165,7 +167,7 @@ function fakeClientCtx(
   locale: ReturnType<typeof fakeLocale>
   tabTypes: ReturnType<typeof fakeSidebarRightTabs>
   /** 账本 byId 注入面（m3.1 D6 worker ⟞ parentId 判读测试） */
-  sessionsById: Record<string, { parentId?: string }>
+  sessionsById: Record<string, { parentId?: string; displayTitle?: string }>
   /** 账本 refresh 注入面（D6 修复面——缺行兜底重拉测试；缺省 undefined = 平开径） */
   sessionsRefresh: { current: (() => Promise<unknown>) | undefined }
 } {
@@ -194,7 +196,7 @@ function fakeClientCtx(
   // fix-42：新会话流 = uiWorkspace.startSession（官方行动作面）
   // m3.1 D6：账本快照可注入 byId（worker ⟞ 开面的 parentId 判读测试面——缺省空账本 = 平开径）；
   // D6 修复面：refresh 可注入（缺行兜底重拉测试——getter 动态读 current，缺省 undefined）
-  const sessionsById: Record<string, { parentId?: string }> = {}
+  const sessionsById: Record<string, { parentId?: string; displayTitle?: string }> = {}
   const sessionsRefresh: { current: (() => Promise<unknown>) | undefined } = { current: undefined }
   const sessions = {
     list: {
@@ -597,7 +599,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
 
   it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）+ 悬浮面板 ⟞ 开面（m3.1 D6）；桥经发布面工厂创建并发布页内全局', () => {
     const views = publishFakeViews()
-    const { ctx, registers, selectPanel, rightToggle } = fakeClientCtx()
+    const { ctx, registers, selectPanel, rightToggle, sessionsById } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)
     expect(host).toBeDefined()
@@ -611,14 +613,20 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       openSession: { openSessionWithPreset(request: unknown): Promise<unknown> }
       openDocResource: (address: string) => void
       onOpenWorkerSession: (childSessionId: string) => void
+      sessionTitleOf: (sessionId: string) => string | undefined
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
-    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'onOpenWorkerSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel'])
+    // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
+    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'onOpenWorkerSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel', 'sessionTitleOf'])
     expect(typeof face.onOpenSession).toBe('function')
     // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
     expect(typeof face.onOpenWorkerSession).toBe('function')
     expect(typeof face.openSession.openSessionWithPreset).toBe('function')
     expect(typeof face.openDocResource).toBe('function')
+    // S1 会话名解析器（task-ui-info-density-blitz）：账本快照命中 = displayTitle；未命中 = undefined
+    sessionsById['s-title'] = { displayTitle: '登录修复' }
+    expect(face.sessionTitleOf('s-title')).toBe('登录修复')
+    expect(face.sessionTitleOf('s-miss')).toBeUndefined()
     // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
     expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.selectPanel.selectPanel('dswf-knowledge')
@@ -1137,6 +1145,29 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     ).toBe(false)
     expect(sessionRowInLedger({ getSnapshot: () => ({ byId: {} }) }, 's-1')).toBe(false)
     expect(sessionRowInLedger({ getSnapshot: () => ({ byId: { 's-1': {} } }) }, 's-1')).toBe(true)
+    // S1 会话名解析（sessionTitleOf）：命中 = displayTitle；行缺席/非串/空串/形状漂移/快照异常 → undefined
+    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: '索引重建' } } }) }, 's-1')).toBe('索引重建')
+    expect(sessionTitleOf(undefined, 's-1')).toBeUndefined()
+    expect(sessionTitleOf({ tag: 'x' }, 's-1')).toBeUndefined()
+    expect(sessionTitleOf({ getSnapshot: () => ({ byId: {} }) }, 's-1')).toBeUndefined()
+    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': {} } }) }, 's-1')).toBeUndefined()
+    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: 42 } } }) }, 's-1')).toBeUndefined()
+    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: '' } } }) }, 's-1')).toBeUndefined()
+    expect(
+      sessionTitleOf(
+        {
+          getSnapshot: () => {
+            throw new Error('shape drift')
+          },
+        },
+        's-1',
+      ),
+    ).toBeUndefined()
+    // 解析器组装（makeSessionTitleResolver）：闭包持账本快照源——命中/缺席两态
+    const ledger = { getSnapshot: () => ({ byId: { 's-2': { displayTitle: '派发会话' } } }) }
+    const resolver = makeSessionTitleResolver({ list: ledger })
+    expect(resolver('s-2')).toBe('派发会话')
+    expect(resolver('s-x')).toBeUndefined()
     // 官方面异常 fail-soft：openSession 抛错不外溢（会话卸载瞬态）
     publishFakeViews()
     const base = fakeClientCtx()

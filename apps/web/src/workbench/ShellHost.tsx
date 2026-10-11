@@ -88,6 +88,12 @@ export interface ForgeShellHostProps {
    * 弹窗参考 chip 非交互呈现）。消费面组地址 = forgeDocAddress(projectId, docRel)。
    */
   readonly openDocResource?: (address: string) => void
+  /**
+   * 会话名解析器（task-ui-info-density-blitz S1 插件 inject face——账本快照 displayTitle
+   * 窄读，未命中 = undefined）。递达任务详情弹窗组件（消费归后续任务）；缺席 = 弹窗侧
+   * 回退显示 sessionId（fail-soft——sessionTitleOfOrId 契约面）。
+   */
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
 }
 
 /**
@@ -337,6 +343,7 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           onTransition={handleOpenTransition}
           {...(props.openSession !== undefined ? { onStartSession: handleStartSession } : {})}
           {...(docsRoot !== undefined ? { docsRoot } : {})}
+          {...(props.sessionTitleOf !== undefined ? { sessionTitleOf: props.sessionTitleOf } : {})}
         />
       ) : null}
       {/* 人工转移对话框（随弹窗同宿主——allowedTransitions 唯一源直喂；快照呈现归

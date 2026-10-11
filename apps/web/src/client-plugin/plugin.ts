@@ -304,6 +304,38 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
   if (typeof snapshot !== 'object' || snapshot === null) return false
   return (snapshot as { byId?: Record<string, unknown> }).byId?.[sessionId] !== undefined
 }
+
+/**
+ * 会话名解析（纯函数——task-ui-info-density-blitz S1 通道）：账本快照窄读
+ * byId[sessionId].displayTitle。命中（非空串）= 返回标题；行缺席（归档/旧会话/快照
+ * 缺行）/形状漂移/快照异常/非串/空串 = undefined（调用方回退显示 sessionId——fail-soft
+ * 口径与 sessionParentIdOf 同源）。
+ */
+export function sessionTitleOf(list: unknown, sessionId: string): string | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  if (typeof snapshot !== 'object' || snapshot === null) return undefined
+  const title = (snapshot as { byId?: Record<string, { displayTitle?: unknown }> }).byId?.[sessionId]
+    ?.displayTitle
+  return typeof title === 'string' && title !== '' ? title : undefined
+}
+
+/**
+ * 会话名解析器组装（S1 通道——shell.overlay inject face 递达 ShellHost → 任务弹窗组件
+ * 的闭包面）：账本快照源（sessions.list）单源，缺省 undefined 回退归调用方。
+ */
+export function makeSessionTitleResolver(
+  sessions: ForgeSessionsService,
+): (sessionId: string) => string | undefined {
+  return (sessionId: string): string | undefined => sessionTitleOf(sessions.list, sessionId)
+}
 /**
  * 打开会话（判读式统一径——D6 修复面）：显式父（库侧权威——任务挂接双源卡的 link 派发
  * 会话 = worker 的 durable 父）仅在账本缺行时直接 SubagentAddress 形态打开（进行中
@@ -1365,6 +1397,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                     // fail-soft：无在场面（会话卸载瞬态）——chip 点击不外溢
                   }
                 },
+                // 会话名解析器（task-ui-info-density-blitz S1 通道——账本快照 displayTitle
+                // 窄读；账本未命中 = undefined，调用方回退显示 sessionId fail-soft）
+                sessionTitleOf: makeSessionTitleResolver(sessions),
               }),
             },
             views.ForgeShellHost,

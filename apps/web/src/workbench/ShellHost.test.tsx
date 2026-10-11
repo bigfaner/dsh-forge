@@ -5,11 +5,26 @@
 // fix-33 ⑤：usePanelInfo 内联可选调用 → PanelInfoAnchor 子件（hooks 规则合规）——
 // 钩子形制断言 = 子件直测（渲染期读取 + null 渲染），效应上抛面归 e2e。
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { ForgeShellHost, PanelInfoAnchor, heroPanelDrive, readActivePanelId } from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
 import { createWorkbenchBridge, type ForgeCenterNav } from './workbench-bridge.js'
+import type { TaskDrawerProps } from '../views/overview/drawer/index.js'
+
+// S1 装配注入断言面（task-ui-info-density-blitz）：TaskDrawer 捕获包装——记录 ShellHost
+// 递达的 sessionTitleOf 注入后照常渲染真身（其余测试不受扰）。
+const drawerCapture = vi.hoisted(() => ({ sessionTitleOf: undefined as unknown }))
+vi.mock('../views/overview/drawer/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../views/overview/drawer/index.js')>()
+  return {
+    ...actual,
+    TaskDrawer: (props: TaskDrawerProps) => {
+      drawerCapture.sessionTitleOf = props.sessionTitleOf
+      return createElement(actual.TaskDrawer, props)
+    },
+  }
+})
 
 const noopNav: ForgeCenterNav = { showKnowledge: () => {}, showSession: () => {} }
 
@@ -68,6 +83,25 @@ describe('任务详情弹窗宿主（m3.1 D21/D23：桥 drawerTaskId 受控—�
     bridge.openTaskDrawer('t-1')
     const markup = renderToStaticMarkup(createElement(ForgeShellHost, { bridge }))
     expect(markup).not.toContain('data-dswf-td-drawer')
+  })
+
+  it('sessionTitleOf 解析器递达任务弹窗（S1 装配注入断言——task-ui-info-density-blitz）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1' })
+    bridge.openTaskDrawer('t-1')
+    const resolver = (sessionId: string): string | undefined =>
+      sessionId === 's-1' ? '登录修复' : undefined
+    renderToStaticMarkup(createElement(ForgeShellHost, { bridge, sessionTitleOf: resolver }))
+    expect(drawerCapture.sessionTitleOf).toBe(resolver)
+  })
+
+  it('sessionTitleOf 缺席 = 键缺席不递达（fail-soft——弹窗侧回退 sessionId）', () => {
+    const bridge = createWorkbenchBridge(noopNav)
+    bridge.setOverviewContext({ projectId: 'p1', workspaceId: 'w-1' })
+    bridge.openTaskDrawer('t-1')
+    drawerCapture.sessionTitleOf = 'SENTINEL'
+    renderToStaticMarkup(createElement(ForgeShellHost, { bridge }))
+    expect(drawerCapture.sessionTitleOf).toBeUndefined()
   })
 })
 
