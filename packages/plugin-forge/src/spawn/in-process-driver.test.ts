@@ -73,6 +73,24 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     expect('agentOptions' in request).toBe(false)
   })
 
+  it('persona 透传（S2 分层承载）：persona 在场 = 请求携带原文；缺席 = 请求不携带键', async () => {
+    const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    await spawn({
+      prompt: 'P',
+      parent: {},
+      signal: new AbortController().signal,
+      toolFilter: { deny: [] },
+      persona: '你是质量门守卫：只认全绿证据。',
+    })
+    const [request] = startInProcessRun.mock.calls[0] as [Record<string, unknown>]
+    expect(request.persona).toBe('你是质量门守卫：只认全绿证据。')
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    const [request2] = startInProcessRun.mock.calls[1] as [Record<string, unknown>]
+    expect('persona' in request2).toBe(false)
+  })
+
   it('result 映射：stopReason 平移 + output text 块拼接（非 text 块跳过）；dispose 委托 run.dispose', async () => {
     const spawn = createInProcessDriverSpawn()
     const run = runStub({

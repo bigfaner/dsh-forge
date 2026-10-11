@@ -50,6 +50,9 @@ export function createInProcessDriverSpawn(): SpawnWorker {
         ...(request.label !== undefined ? { label: request.label } : {}),
         toolFilter: { deny: [...request.toolFilter.deny] },
         ...(request.agentOptions !== undefined ? { agentOptions: { ...request.agentOptions } } : {}),
+        // persona 透传（S2 分层承载）：上游 applyChildComposition 落子会话 scoped
+        // 'deployment:persona-prefix' 段；缺席 = 不携带键（直传 undefined 会被上游视为显式覆盖）
+        ...(request.persona !== undefined ? { persona: request.persona } : {}),
         descriptor: {
           version: SUBAGENT_DESCRIPTOR_VERSION,
           mode: 'one-shot',
