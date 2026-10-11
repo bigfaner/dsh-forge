@@ -221,7 +221,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     const ask = askStub(answerLabel('blitz-y'))
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const agent = agentOf() as never
+    const agent = agentOf(SESSION, CWD, () => {}) as never // 1.20：提交成功 = 启动前提（steer 在场）
     const out = await d.handler({ agent, rawInput: '' })
     expect(stub.startInputs).toEqual([
       { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
@@ -303,7 +303,7 @@ describe('带参 <source-slug> 直通（AC）', () => {
     const ask = askStub(answerLabel('不应被触达'))
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const agent = agentOf() as never
+    const agent = agentOf(SESSION, CWD, () => {}) as never // 1.20：提交成功 = 启动前提
     const out = await d.handler({ agent, rawInput: ' blitz-y ' }) // 原样入参含空白——handler trim
     expect(ask.requests).toHaveLength(0)
     expect(stub.startInputs).toEqual([
@@ -352,7 +352,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     const ask = askStub(answerLabel('停止'))
     const stub = driverStub({ activeRecord: ACTIVE })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: '' })
     expect(stub.stopInputs).toEqual([{ ownerSessionId: SESSION }])
     expect(stub.startInputs).toHaveLength(0)
     expect((out as { text: string }).text).toContain('已停止')
@@ -379,7 +379,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     const ask = askStub(answerLabel('替换'))
     const stub = driverStub({ activeRecord: ACTIVE })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: 'feat-x' })
     expect(stub.stopInputs).toEqual([{ ownerSessionId: SESSION }])
     expect(stub.startInputs).toHaveLength(1)
     expect(stub.startInputs[0]?.source).toEqual({ kind: 'feature', slug: 'feat-x' })
@@ -395,7 +395,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     })
     const stub = driverStub({ activeRecord: ACTIVE })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: '' })
     expect(stub.stopInputs).toEqual([{ ownerSessionId: SESSION }])
     expect(stub.startInputs).toHaveLength(1)
     expect(stub.startInputs[0]?.source).toEqual({ kind: 'feature', slug: 'feat-x' })
@@ -441,7 +441,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
 
 // ─────────────────────────── 派发指令单行提交（fix-1） ───────────────────────────
 
-describe('派发指令单行提交（fix-1 + 1.14——producer 补位兼会话物化步：先提交后启动，失败可见）', () => {
+describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会话创建成功判据：先提交后启动，失败不启动循环）', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
 
   it('带参直通启动成功：agent.steer 恰一次收 `/run-dag-tasks feat-x` user 消息（role/content/source.kind）', async () => {
@@ -530,18 +530,24 @@ describe('派发指令单行提交（fix-1 + 1.14——producer 补位兼会话�
     expect(rec.steered).toEqual([])
   })
 
-  it('steer 面缺席（fail-soft 两态可见性）：不回滚启动，回执附可见告警行（防零痕迹）', async () => {
+  it('steer 面缺席（1.20 门控）：会话未落实 → error 回执，循环不启动', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
-    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 steer 位
-    expect(out.kind).toBe('success')
-    expect((out as { text?: string }).text).toContain('已启动')
-    expect((out as { text?: string }).text).toContain('提交失败')
-    expect((out as { text?: string }).text).toContain('steer 面缺席')
-    expect(stub.loops.has(SESSION)).toBe(true) // 循环已启动（不回滚）
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 steer 位
+      expect(out.kind).toBe('error')
+      expect((out as { text?: string }).text).toContain('未派发')
+      expect((out as { text?: string }).text).toContain('提交失败')
+      expect((out as { text?: string }).text).toContain('循环未启动')
+      expect(stub.loops.has(SESSION)).toBe(false)
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
-  it('steer 投递抛错（fail-soft 两态可见性）：告警不外抛，回执附可见告警行，启动回执原样', async () => {
+  it('steer 投递抛错（1.20 门控）：告警不外抛，error 回执附原因，循环不启动', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -552,11 +558,11 @@ describe('派发指令单行提交（fix-1 + 1.14——producer 补位兼会话�
         }) as never,
         rawInput: 'feat-x',
       })
-      expect(out.kind).toBe('success')
-      expect((out as { text?: string }).text).toContain('已启动')
-      expect((out as { text?: string }).text).toContain('提交失败')
+      expect(out.kind).toBe('error')
+      expect((out as { text?: string }).text).toContain('未派发')
       expect((out as { text?: string }).text).toContain('inbox closed')
-      expect(stub.loops.has(SESSION)).toBe(true)
+      expect((out as { text?: string }).text).toContain('循环未启动')
+      expect(stub.loops.has(SESSION)).toBe(false)
       expect(warn).toHaveBeenCalled()
     } finally {
       warn.mockRestore()
@@ -592,7 +598,7 @@ describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.se
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
-  it('registry 未命中 + fallback steer 缺席：error 回执带激活指引，循环不回滚不 wedge', async () => {
+  it('registry 未命中 + fallback steer 缺席：error 回执带激活指引，循环不启动（1.20 门控）', async () => {
     const stub = driverStub()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -600,11 +606,11 @@ describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.se
       const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
       expect(out.kind).toBe('error')
       const text = (out as { text: string }).text
-      expect(text).toContain('已启动') // 循环已启动（不回滚——1.14 语义保持）
+      expect(text).toContain('未派发')
       expect(text).toContain('提交失败')
-      expect(text).toContain('发送任意消息激活会话')
-      expect(text).toContain('任务面板派发按钮')
-      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(text).toContain('循环未启动')
+      expect(text).toContain('发送任意消息')
+      expect(stub.loops.has(SESSION)).toBe(false)
       expect(warn).toHaveBeenCalled()
     } finally {
       warn.mockRestore()
@@ -653,7 +659,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
-  it('registry 未命中 + 激活失败（error 路 undefined）：error 回执激活指引，循环不回滚', async () => {
+  it('registry 未命中 + 激活失败（error 路 undefined）：error 回执激活指引，循环不启动（1.20 门控）', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const stub = driverStub()
@@ -671,16 +677,17 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
       expect(activations).toBe(1)
       expect(out.kind).toBe('error')
       const text = (out as { text: string }).text
-      expect(text).toContain('已启动')
+      expect(text).toContain('未派发')
       expect(text).toContain('提交失败')
-      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(text).toContain('循环未启动')
+      expect(stub.loops.has(SESSION)).toBe(false)
       expect(warn).toHaveBeenCalled()
     } finally {
       warn.mockRestore()
     }
   })
 
-  it('激活面抛错：fail-soft（warn 留痕不外抛），落入 registryMissed 回执路', async () => {
+  it('激活面抛错：fail-soft（warn 留痕不外抛），落入 registryMissed 回执路，循环不启动', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const stub = driverStub()
@@ -695,7 +702,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
       const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
       expect(out.kind).toBe('error')
       expect((out as { text: string }).text).toContain('提交失败')
-      expect(stub.loops.has(SESSION)).toBe(true)
+      expect(stub.loops.has(SESSION)).toBe(false)
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('persistence locked'))
     } finally {
       warn.mockRestore()
@@ -721,7 +728,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     expect(reg.steered).toHaveLength(1)
   })
 
-  it('激活面缺席（1.18 装配形态）：语义原样——registryMissed error 回执指引激活', async () => {
+  it('激活面缺席（1.18 装配形态）：语义原样——registryMissed error 回执指引激活，循环不启动', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const stub = driverStub()
@@ -729,6 +736,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
       const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
       expect(out.kind).toBe('error')
       expect((out as { text: string }).text).toContain('发送任意消息激活会话')
+      expect(stub.loops.has(SESSION)).toBe(false)
     } finally {
       warn.mockRestore()
     }
@@ -755,7 +763,7 @@ describe('防线下探', () => {
   it('直通径单活竞态兜底：start 返回 loop-active → success「已在运行」（active() 读数与 start 间窗口）', async () => {
     const stub = driverStub({ startCode: 'loop-active' }) // active() 无读数、start 恒拒绝（竞态窗口模拟）
     const d = depsOf({ cards: [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')], driver: stub.driver })
-    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text: string }).text).toContain('已在运行')
   })

@@ -6,8 +6,10 @@
 // 启动 = loopDriver.start——派发/继续判定与启动模板叙述（①从头/②接续中断/③接续在飞）归
 // 循环驱动器（S1b announceStartup，经 S4 notify 模块）；本 handler 只做枚举/问询/启动编排，
 // 外加启动链前段的派发指令单行提交（commitDispatchLine——/plan producer 先例，known command
-// 零转录的补位；fix-1 根因定罪 + 1.14 修订「先落实会话，再启动循环」：提交先行 = steer 开
-// turn 物化会话（脱离 blank 相位）后循环才启动；提交失败可见回执不零痕迹，详见函数注）。
+// 零转录的补位；fix-1 根因定罪 + 1.14 修订「先落实会话，再启动循环」+ 1.20 收严（用户裁决
+// 2026-10-12「等创建会话成功后，才开始运行任务循环」）：提交成功 = 会话物化（steer 开 turn
+// 脱离 blank/hero 相位、hero 座位退场切对话面）后才 driver.start；提交失败 = 会话未创建
+// 成功，循环不启动（取代 1.14「提交失败不回滚启动」——空相位循环零痕迹且 hero 不退场）。
 //
 // 作用域纪律（decisions #20）：停止与替换恒经 driver.stop({ownerSessionId: 敲指令会话})——
 // 驱动器按归属拒绝他会话循环（跨会话隔离）；本会话无活循环的停止 = no-op 文本
@@ -340,12 +342,13 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
 /**
  * 启动（loopDriver.start——派发/继续判定与启动叙述归驱动器）；单活竞态兜底 = 「已在运行」。
  *
- * 1.14 修复序（用户裁决 2026-10-11「先创建会话，再启动循环」）：派发指令单行提交先行——
- * agent.steer 收件 = idle 驱动开 turn（上游契约），turn/start 落地即会话物化（脱离
- * hero/blank 相位）；物化后的主会话再走 driver.start 启动链（worker spawn 的 owner
- * 依赖与启动叙述/领取结果 notice 的投影前提均落在真实对话面上）。提交失败不回滚启动
- * （fail-soft 纪律不变），但产出可见回执（防零痕迹——案发：blank 相位零消息事件，
- * 静默失败 = 用户「没有任何反应」）。
+ * 1.14 修复序（用户裁决 2026-10-11「先创建会话，再启动循环」）+ 1.20 收严（用户裁决
+ * 2026-10-12「等创建会话成功后，才开始运行任务循环」）：派发指令单行提交成功 = 会话创建
+ * 成功的判据（agent.steer 收件 = idle 驱动开 turn——上游契约；turn/start 落地即会话物化，
+ * 脱离 blank/hero 相位，新会话界面（hero 座位）随之切对话界面）——**提交成功后才
+ * driver.start**。提交失败（激活不可达/steer 面缺席/投递抛错）= 会话未创建成功：循环
+ * **不启动**（取代 1.14「不回滚已启动的循环」——空相位循环零痕迹且 hero 不退场），产出
+ * 可见 error 回执指引激活/重试。
  */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
   // 1.19 修复序（深层根因：owner 会话 agent 未进入运行时 → steer 内件 undefined.send）：
@@ -355,6 +358,9 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
   // 先落实会话（转录承载 + 非 blank 化）——1.18 起 steer 目标恒先经 agentsRegistry 解析活根
   // （ctx.parent 仅 registry 未命中时的 fallback，向后兼容）
   const commit = commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source)
+  if (!commit.committed) {
+    return commitFailedReceipt(source, commit) // 1.20：会话未创建成功 → 循环不启动
+  }
   const result = await deps.driver.start({
     source,
     ownerSessionId: ctx.sessionId,
@@ -365,17 +371,26 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     // loop-active（active() 读数与 start 之间的竞态窗口；含他会话刚启动的循环）——不重复启动
     return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
   }
-  const base = `任务源 ${source.slug} 的派发循环已启动`
-  if (commit.committed) return { kind: 'success', text: base }
-  // registry 未命中（会话运行时确实不存在/agent 缺席）→ 明确 error 回执指引激活，不静默
-  // 不 wedge、不回滚已启动的循环（1.14 语义保持——循环照常，仅单行提交面可见失败）
+  return { kind: 'success', text: `任务源 ${source.slug} 的派发循环已启动` }
+}
+
+/**
+ * 提交失败回执（1.20——会话未创建成功，循环未启动）：registryMissed（激活不可达/会话运行时
+ * 不存在）= 激活指引（发送任意消息激活，或经任务面板派发按钮新建会话后重试）；其余（steer 面
+ * 缺席/投递抛错）= 附原因的失败回执 + 同款重试指引。零归属 id 泄露，可见不静默。
+ */
+function commitFailedReceipt(source: ContainerRef, commit: CommitOutcome): ForgeCommandResult {
+  const reasonLine = commit.reason !== undefined ? `（${commit.reason}）` : ''
   if (commit.registryMissed) {
     return {
       kind: 'error',
-      text: `${base}，但指令单行提交失败（${commit.reason}）——会话运行时未就绪。请先在会话中发送任意消息激活会话，或经任务面板派发按钮新建会话后重试；已启动的循环不受影响`,
+      text: `任务源 ${source.slug} 未派发：会话未创建成功，指令单行提交失败${reasonLine}，派发循环未启动。请先在该会话中发送任意消息激活会话，或经任务面板派发按钮新建会话后重试 /run-dag-tasks ${source.slug}`,
     }
   }
-  return { kind: 'success', text: `${base}——注意：指令单行提交失败（${commit.reason}），会话可能仍处空相位，启动叙述或不可见` }
+  return {
+    kind: 'error',
+    text: `任务源 ${source.slug} 未派发：指令单行提交失败${reasonLine}，会话未落实、派发循环未启动。请在该会话中发送任意消息后重试 /run-dag-tasks ${source.slug}`,
+  }
 }
 
 /**
@@ -410,9 +425,9 @@ async function ensureAgentEntered(deps: RunDagTasksDeps, sessionId: string): Pro
  * 三旅程断言面）。agent.steer 收件 = idle 驱动开 turn（上游契约），转录承载与转录面切
  * 换同径兑现。
  *
- * fail-soft 纪律（R3 防御读取同源 + 1.14 可见性修订 + 1.18 活根定罪修复）：steer 面
- * 缺席/非函数/投递抛错 = 不回滚启动、不外抛，但不再零痕迹——返回失败态（调用方产出可见
- * 回执）并保留 console.warn 告警日志（SC7「注入失败循环照常结束」同源）。
+ * fail-soft 纪律（R3 防御读取同源 + console.warn 告警日志——SC7「注入失败循环照常结束」
+ * 同源）：steer 面缺席/非函数/投递抛错 = 不外抛，返回失败态；1.20 起调用方以此判据
+ * 门控循环启动（提交失败 = 会话未创建成功 → 循环不启动 + 可见 error 回执）。
  *
  * 1.18 steer 目标活根化（真机定罪：两容器同症状 `undefined.send`）：1.14 直用 ctx.parent
  * （command invocation agent 把手）——对从未开启过回合的会话，该把手的运行时内件未初始化，
