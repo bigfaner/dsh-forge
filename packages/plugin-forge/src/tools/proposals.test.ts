@@ -1,6 +1,6 @@
 // 3.5 单测 —— 提案域两 tool（createProposal / transitionProposal）：词表收窄 +
-// projectId 路由 + 映射（mode 透传 / superseded_by 透传）+ 双友好返回面渲染
-//（formatOk：身份与名称分离 proposalId 锚 + mode/supersededBy/成链行；
+// projectId 路由 + 映射（mode 透传 + 会话预设自动填充 / superseded_by 透传）+
+// 双友好返回面渲染（formatOk：身份与名称分离 proposalId 锚 + mode/supersededBy/成链行；
 // typed 错误 → 失败 DTO formatErr）。superseded 必带校验经服务 2.2（tool 面纯透传）。
 import { describe, expect, it } from 'vitest'
 import type {
@@ -10,11 +10,16 @@ import type {
   TransitionProposalInput,
 } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
-import { createCreateProposalTool, parseCreateProposalArgs } from './create-proposal.js'
+import { createCreateProposalTool, parseCreateProposalArgs, presetModeOf } from './create-proposal.js'
 import { createTransitionProposalTool, parseTransitionProposalArgs } from './transition-proposal.js'
 import type { ForgeToolDeps } from './index.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
+
+/** 带出生预设 id 的 exec（header.agentPreset——出生头回退源夹具；当前值径见 selected 事件回归用例） */
+function execWithPreset(agentPreset: string): ToolExecFace {
+  return { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo', agentPreset } } } }
+}
 
 const row: ProposalRow = {
   proposalId: 'pr-1',
@@ -58,7 +63,7 @@ describe('createProposal', () => {
     })
   })
 
-  it('mode 透传（M3 溯源——创建技能写入）：expedition/blitz 两态映射', async () => {
+  it('mode 透传（M3 溯源——显式参优先）：expedition/blitz 两态映射', async () => {
     const { deps, created } = depsWithCapture()
     const tool = createCreateProposalTool(deps)
     await tool.execute({ slug: 'idea', title: 'T', mode: 'blitz' }, EXEC)
@@ -77,6 +82,52 @@ describe('createProposal', () => {
         status: 'under-review',
       },
     ])
+  })
+
+  it('mode 缺省 → 按会话当前预设自动填充（出生头——未切换会话的回退源）', async () => {
+    const { deps, created } = depsWithCapture()
+    const tool = createCreateProposalTool(deps)
+    await tool.execute({ slug: 'exp-1', title: 'T' }, execWithPreset('expedition'))
+    await tool.execute({ slug: 'blz-1', title: 'T' }, execWithPreset('blitz'))
+    expect(created.map((i) => [i.slug, i.mode])).toEqual([
+      ['exp-1', 'expedition'],
+      ['blz-1', 'blitz'],
+    ])
+  })
+
+  it('mode 缺省自动填充读当前预设：出生头 expedition + selected 事件 blitz → blitz（2026-10-11 实机 incident 回归——出生头冻结不随切换更新）', async () => {
+    const { deps, created } = depsWithCapture()
+    const tool = createCreateProposalTool(deps)
+    const exec: ToolExecFace = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => [{ type: 'agent-preset/selected', data: { agentPreset: 'blitz' } }],
+        },
+      },
+    }
+    await tool.execute({ slug: 'blz-2', title: 'T' }, exec)
+    expect(created[0]?.mode).toBe('blitz')
+  })
+
+  it('显式 mode 优先于会话预设（跨容器提案——override 仍可达）', async () => {
+    const { deps, created } = depsWithCapture()
+    const tool = createCreateProposalTool(deps)
+    await tool.execute({ slug: 'x', title: 'T', mode: 'expedition' }, execWithPreset('blitz'))
+    expect(created[0]?.mode).toBe('expedition')
+  })
+
+  it('预设缺席或词表外值（自定义预设）→ 不填充（NULL 占位——成链门按 NULL 边界）', async () => {
+    const { deps, created } = depsWithCapture()
+    const tool = createCreateProposalTool(deps)
+    await tool.execute({ slug: 'n1', title: 'T' }, EXEC) // 无预设会话
+    await tool.execute({ slug: 'n2', title: 'T' }, execWithPreset('cordis-default')) // 词表外
+    expect(created.map((i) => 'mode' in i)).toEqual([false, false])
+    expect(presetModeOf(undefined)).toBeUndefined()
+    expect(presetModeOf('cordis-default')).toBeUndefined()
+    expect(presetModeOf('expedition')).toBe('expedition')
+    expect(presetModeOf('blitz')).toBe('blitz')
   })
 
   it('cwd 未命中 → 失败 DTO（ERR_WORKSPACE_NOT_REGISTERED——formatErr 面）', async () => {

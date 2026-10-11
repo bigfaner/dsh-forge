@@ -16,7 +16,7 @@
 // 变体拼写在 core 命中既有行 ⟺ 在此命中绑定行）。
 import { readFileSync } from 'node:fs'
 import { normalizeFsPath } from '@dsh-forge/path-key'
-import type { ToolExecFace } from '../faces.js'
+import type { ToolExecFace, ToolSessionEventFace, ToolSessionFace } from '../faces.js'
 
 /** 会话上下文（tool 执行点可解析的全部会话身份） */
 export interface ToolSessionContext {
@@ -24,6 +24,9 @@ export interface ToolSessionContext {
   readonly sessionId: string
   /** 会话工作区根（官方 session.header.cwd）；非 agent 调用无此值 */
   readonly cwd: string | undefined
+  /** 会话预设 id——**当前值**（'agent-preset/selected' 事件回放 > 出生头，上游 agentPreset
+   * 投影同径——expedition/blitz 容器语境；无预设 = undefined） */
+  readonly agentPreset: string | undefined
 }
 
 /** 会话 cwd → projectId 绑定行（插件 config.projects 表项；bindingsFile 行同形） */
@@ -43,26 +46,6 @@ export interface WorkspaceNotRegisteredData {
   readonly cwd?: string
 }
 
-/**
- * 绑定全集 → 去重 projectId 清单（静态表在前、bindingsFile 条目随后——S3 启动对账的
- * 装配期枚举面：进程重启 → 插件装配 → 逐绑定项目 reconcileInterrupted（图 D）。
- * fail-soft：bindingsFile 读取失败按空表降级（与解析器同口径）。
- */
-export function bindingProjectIds(bindings: readonly ProjectBinding[], bindingsFile?: string): string[] {
-  const ids: string[] = []
-  const seen = new Set<string>()
-  const push = (projectId: string): void => {
-    if (!seen.has(projectId)) {
-      seen.add(projectId)
-      ids.push(projectId)
-    }
-  }
-  for (const b of bindings) push(b.projectId)
-  if (bindingsFile !== undefined) {
-    for (const projectId of readBindingsFile(bindingsFile).values()) push(projectId)
-  }
-  return ids
-}
 /**
  * tool 面 cwd 无匹配项目（tech-design §Error Handling 表 400 行）。
  * code 字面量锚定 @dsh-forge/contracts ERROR_CODES；类定义落位插件侧
@@ -129,13 +112,61 @@ function readBindingsFile(file: string): Map<string, string> {
   }
 }
 
-/** exec → 会话上下文（无 agent / 无 session → sessionId 空串 + cwd undefined） */
+/**
+ * 绑定全集 → 去重 projectId 清单（静态表在前、bindingsFile 条目随后——S3 启动对账的
+ * 装配期枚举面：进程重启 → 插件装配 → 逐绑定项目 reconcileInterrupted（图 D）。
+ * fail-soft：bindingsFile 读取失败按空表降级（与解析器同口径）。
+ */
+export function bindingProjectIds(bindings: readonly ProjectBinding[], bindingsFile?: string): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const push = (projectId: string): void => {
+    if (!seen.has(projectId)) {
+      seen.add(projectId)
+      ids.push(projectId)
+    }
+  }
+  for (const b of bindings) push(b.projectId)
+  if (bindingsFile !== undefined) {
+    for (const projectId of readBindingsFile(bindingsFile).values()) push(projectId)
+  }
+  return ids
+}
+
+/**
+ * 会话事件日志 → 当前 agent 预设（出生头之上的事件回放——上游 dsh-agent-preset-registry
+ * agentPreset 投影同径：init = header.agentPreset，apply = 'agent-preset/selected' 事件
+ * 覆盖；投影口径明文 "Reconstruction reads the agentPreset Session projection, never
+ * the header alone"——出生头是冻结的出生事实，切换只记事件）。自尾向首取最近一次
+ * 选择的 string 型 agentPreset；无该事件 / 形状漂移 / snapshotEvents 缺席 = undefined
+ * （调用面回落出生头）。防御读取零外抛。
+ */
+export function currentAgentPresetOf(session: ToolSessionFace): string | undefined {
+  if (typeof session.snapshotEvents !== 'function') return undefined
+  let events: readonly ToolSessionEventFace[]
+  try {
+    events = session.snapshotEvents()
+  } catch {
+    return undefined
+  }
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    if (event?.type !== 'agent-preset/selected') continue
+    const preset = (event.data as { agentPreset?: unknown } | undefined)?.agentPreset
+    return typeof preset === 'string' ? preset : undefined
+  }
+  return undefined
+}
+
+/** exec → 会话上下文（无 agent / 无 session → sessionId 空串 + cwd/agentPreset undefined） */
 export function sessionContextOf(exec: ToolExecFace): ToolSessionContext {
   const session = exec.agent?.session
-  if (session === undefined) return { sessionId: '', cwd: undefined }
-  // 官方读取位 header.cwd；顶层 cwd 为结构兼容位（真实现不携带）
+  if (session === undefined) return { sessionId: '', cwd: undefined, agentPreset: undefined }
+  // 官方读取位 header.cwd / header.agentPreset；顶层 cwd 为结构兼容位（真实现不携带）
   const cwd = session.header?.cwd ?? session.cwd
-  return { sessionId: session.id, cwd }
+  // 预设当前值：切换事件回放 > 出生头（出生头在切换后过期——currentAgentPresetOf 注记）
+  const agentPreset = currentAgentPresetOf(session) ?? session.header?.agentPreset
+  return { sessionId: session.id, cwd, agentPreset }
 }
 
 /**

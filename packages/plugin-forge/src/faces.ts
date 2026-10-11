@@ -34,11 +34,19 @@ export interface ToolParameterProperty {
 }
 
 /** 会话头（官方 SessionHeader 子面：cwd = 会话创建时的工作目录 = 工作区根；
- * agentPreset = 会话组合时的预设 id——expedition/blitz 容器语境内置于会话身份） */
+ * agentPreset = 会话**出生**预设 id——出生事实，deepFreeze 不随切换更新） */
 export interface ToolSessionHeaderFace {
   readonly cwd?: string
-  /** 会话创建头携带的 agent 预设 id（上游 SessionHeader.agentPreset 同位；无预设组合 = 缺席） */
+  /** 会话创建头携带的 agent 预设 id（上游 SessionHeader.agentPreset 同位；无预设组合 = 缺席）。
+   * 出生快照——预设切换后此值**过期**：当前值 = snapshotEvents 的 'agent-preset/selected'
+   * 事件回放 > 本出生头（上游 agentPreset 投影同径——"never the header alone"） */
   readonly agentPreset?: string
+}
+
+/** 会话事件（官方 SessionEvent 消费切片——防御读面：type 判别 + data 载荷） */
+export interface ToolSessionEventFace {
+  readonly type?: unknown
+  readonly data?: unknown
 }
 
 /** dsh 会话（官方 Session 子面：id = claim/submit 的执行会话键） */
@@ -48,6 +56,13 @@ export interface ToolSessionFace {
   readonly header?: ToolSessionHeaderFace
   /** 兼容位：Session 顶层 cwd（结构面允许双读，真实现只有 header.cwd） */
   readonly cwd?: string
+  /**
+   * 官方 Session.snapshotEvents 结构同位（事件日志只读快照）。预设切换上游记
+   * 'agent-preset/selected' 事件（出生头冻结不更新）——当前预设 = 事件回放 > 出生头
+   * （dsh-agent-preset-registry agentPreset 投影同径）。缺席（结构漂移/测试窄面）=
+   * 只读出生头。
+   */
+  snapshotEvents?(): readonly ToolSessionEventFace[]
 }
 
 /** dsh agent（官方 Agent 子面：id === session id；session 为其驱动的活会话） */
@@ -261,9 +276,15 @@ export const FORGE_NOTICE_SOURCE_KIND = 'forge-dispatch'
 /** 上游 notice 折叠摘要单行界（CONTEXT_SUMMARY_MAX_CHARS=120 同值——超界省略号截断） */
 const NOTICE_SUMMARY_MAX_CHARS = 120
 
-/** 叙述文本 → 官方 UserMessage 形状（createUserMessage 语义结构化最小面：id 铸造 + role/content/source） */
-function forgeUserMessage(text: string, form: 'notice' | 'followup'): unknown {
-  const summary = text.length <= NOTICE_SUMMARY_MAX_CHARS ? text : `${text.slice(0, NOTICE_SUMMARY_MAX_CHARS - 1)}…`
+/** 折叠摘要钳制（≤120 字符——超界省略号截断；预构建摘要同样保底） */
+function clampSummary(text: string): string {
+  return text.length <= NOTICE_SUMMARY_MAX_CHARS ? text : `${text.slice(0, NOTICE_SUMMARY_MAX_CHARS - 1)}…`
+}
+
+/** 叙述文本 → 官方 UserMessage 形状（createUserMessage 语义结构化最小面：id 铸造 + role/content/source）。
+ * headline = 预构建场景单行摘要（可选——传入则 source.summary=headline；缺省回退整段截断，兼容不破坏） */
+function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: string): unknown {
+  const summary = clampSummary(headline !== undefined && headline !== '' ? headline : text)
   return {
     id: crypto.randomUUID(),
     role: 'user',
@@ -298,9 +319,9 @@ export function forgeCommandLineMessage(text: string): unknown {
  */
 export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationChannel {
   return {
-    notice(sessionId: string, text: string): Promise<void> {
+    notice(sessionId: string, text: string, headline?: string): Promise<void> {
       const agent = agents.get(sessionId) as { inject?(message: unknown): void } | undefined
-      if (typeof agent?.inject === 'function') agent.inject(forgeUserMessage(text, 'notice'))
+      if (typeof agent?.inject === 'function') agent.inject(forgeUserMessage(text, 'notice', headline))
       return Promise.resolve()
     },
     followup(sessionId: string, text: string): Promise<void> {

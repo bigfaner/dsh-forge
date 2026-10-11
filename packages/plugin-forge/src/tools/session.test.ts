@@ -21,13 +21,97 @@ import {
 } from './session.js'
 
 describe('sessionContextOf', () => {
-  it('无 agent 上下文 → sessionId 空串 + cwd undefined', () => {
-    expect(sessionContextOf({} as ToolExecFace)).toEqual({ sessionId: '', cwd: undefined })
+  it('无 agent 上下文 → sessionId 空串 + cwd/agentPreset undefined', () => {
+    expect(sessionContextOf({} as ToolExecFace)).toEqual({ sessionId: '', cwd: undefined, agentPreset: undefined })
   })
 
   it('官方读取位：agent.session.header.cwd（dsh-tool-fs sessionCwd 同型）', () => {
     const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
-    expect(sessionContextOf(exec)).toEqual({ sessionId: 'sess-1', cwd: 'C:\\ws\\demo' })
+    expect(sessionContextOf(exec)).toEqual({ sessionId: 'sess-1', cwd: 'C:\\ws\\demo', agentPreset: undefined })
+  })
+
+  it('预设读取位：agent.session.header.agentPreset（上游 SessionHeader 同位——mode 自动填充源）', () => {
+    const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' } } } }
+    expect(sessionContextOf(exec).agentPreset).toBe('expedition')
+  })
+
+  it('预设当前值：agent-preset/selected 事件回放压过出生头（上游 agentPreset 投影同径——出生头切换后过期）', () => {
+    const exec = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => [
+            { type: 'session/created', data: {} },
+            { type: 'agent-preset/selected', data: { agentPreset: 'blitz' } },
+          ],
+        },
+      },
+    }
+    expect(sessionContextOf(exec as ToolExecFace).agentPreset).toBe('blitz')
+  })
+
+  it('多次切换取最近一次 selected 事件（自尾向首）', () => {
+    const exec = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => [
+            { type: 'agent-preset/selected', data: { agentPreset: 'blitz' } },
+            { type: 'agent-preset/selected', data: { agentPreset: 'expedition' } },
+          ],
+        },
+      },
+    }
+    expect(sessionContextOf(exec as ToolExecFace).agentPreset).toBe('expedition')
+  })
+
+  it('无 selected 事件 → 回落出生头（未切换会话）', () => {
+    const exec = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => [{ type: 'user/message', data: { text: 'hi' } }],
+        },
+      },
+    }
+    expect(sessionContextOf(exec as ToolExecFace).agentPreset).toBe('expedition')
+  })
+
+  it('事件形状漂移（非元素/data 缺席/非字符串 agentPreset）→ 回落出生头，不外抛', () => {
+    const malformed = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => [
+            null,
+            { type: 'agent-preset/selected' },
+            { type: 'agent-preset/selected', data: { agentPreset: 42 } },
+          ],
+        },
+      },
+    }
+    expect(sessionContextOf(malformed as ToolExecFace).agentPreset).toBe('expedition')
+  })
+
+  it('snapshotEvents 抛错/缺席（结构漂移窄面）→ 回落出生头', () => {
+    const throwing = {
+      agent: {
+        session: {
+          id: 'sess-1',
+          header: { cwd: 'C:\\ws\\demo', agentPreset: 'expedition' },
+          snapshotEvents: () => {
+            throw new Error('drift')
+          },
+        },
+      },
+    }
+    expect(sessionContextOf(throwing as ToolExecFace).agentPreset).toBe('expedition')
+    const absent = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo', agentPreset: 'blitz' } } } }
+    expect(sessionContextOf(absent as ToolExecFace).agentPreset).toBe('blitz')
   })
 
   it('header 缺席时回落顶层 cwd 兼容位；两者皆无 → cwd undefined', () => {
@@ -127,15 +211,15 @@ describe('requireProjectId（六 tool 共用路由口——AC4 未命中口径�
   const resolver = createProjectResolver([{ wsPath: 'C:\\ws\\demo', projectId: 'p-1' }])
 
   it('命中 → projectId（→ core 动词路由键）', () => {
-    expect(requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\demo' })).toBe('p-1')
+    expect(requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\demo', agentPreset: undefined })).toBe('p-1')
   })
 
   it('cwd 未命中 → WorkspaceNotRegisteredError（code = ERR_WORKSPACE_NOT_REGISTERED，data 带 cwd）', () => {
-    expect(() => requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\other' })).toThrow(
+    expect(() => requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\other', agentPreset: undefined })).toThrow(
       WorkspaceNotRegisteredError,
     )
     try {
-      requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\other' })
+      requireProjectId(resolver, { sessionId: 's', cwd: 'C:\\ws\\other', agentPreset: undefined })
     } catch (e) {
       expect(isWorkspaceNotRegisteredError(e)).toBe(true)
       expect((e as WorkspaceNotRegisteredError).code).toBe('ERR_WORKSPACE_NOT_REGISTERED')
@@ -147,7 +231,7 @@ describe('requireProjectId（六 tool 共用路由口——AC4 未命中口径�
 
   it('cwd 缺席（非 agent 会话）→ 同码拒绝（data 无 cwd + 差异化文案）', () => {
     try {
-      requireProjectId(resolver, { sessionId: '', cwd: undefined })
+      requireProjectId(resolver, { sessionId: '', cwd: undefined, agentPreset: undefined })
       expect.unreachable('should throw')
     } catch (e) {
       expect(isWorkspaceNotRegisteredError(e)).toBe(true)
@@ -159,10 +243,10 @@ describe('requireProjectId（六 tool 共用路由口——AC4 未命中口径�
 
 describe('requireSessionId（claim/submit 执行会话键——防御收窄）', () => {
   it('有 agent 会话 → sessionId 透传（actor = plugin-tool 通道推断的会话锚）', () => {
-    expect(requireSessionId({ sessionId: 'sess-9', cwd: 'C:\\ws\\demo' })).toBe('sess-9')
+    expect(requireSessionId({ sessionId: 'sess-9', cwd: 'C:\\ws\\demo', agentPreset: 'blitz' })).toBe('sess-9')
   })
 
   it('空会话（无 agent 上下文）→ 拒（空键会落不可归属的 links/records 行）', () => {
-    expect(() => requireSessionId({ sessionId: '', cwd: undefined })).toThrow(/no agent session/)
+    expect(() => requireSessionId({ sessionId: '', cwd: undefined, agentPreset: undefined })).toThrow(/no agent session/)
   })
 })
