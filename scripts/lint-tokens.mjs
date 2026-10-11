@@ -62,7 +62,10 @@ const DSW_VAR_PLAIN = /^var\(--dsw-[a-z0-9-]+\)$/i
 const errors = []
 
 function stripBlockComments(s) {
-  return s.replace(/\/\*[\s\S]*?\*\//g, '')
+  // 保换行剥除（注释内容逐字符换空格、\n 保留）——行号与源文件对齐：
+  // ① TS 路径豁免/报错行号须对齐原始行（多行块注释塌缩曾使后续行号整体漂移）；
+  // ② 1.8 md-preview-mermaid 起豁免判据须取原始行（与 lintCss 同机制）。
+  return s.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
 }
 function stripLineComments(s) {
   return s
@@ -127,10 +130,13 @@ function lintCss(file, src) {
 }
 
 function lintTs(file, src) {
+  // 豁免判据取原始行（行尾 // dsw-raw——styling.md TECH-styling-001 契约；先剥注释再判豁免
+  // 会使标记消失、TS 豁免恒失效——1.8 md-preview-mermaid 修复与 lintCss 同机制）
+  const rawLines = src.split('\n')
   const text = stripLineComments(stripBlockComments(src))
   text.split('\n').forEach((line, i) => {
     const no = i + 1
-    if (exempt(line)) return
+    if (exempt(line) || exempt(rawLines[i] ?? line)) return
     if (/querySelector|getElementById/.test(line)) return // '#id' 选择器非色值
     const hex = line.match(/['"]#[0-9a-fA-F]{3,8}['"]/)
     if (hex) errors.push(`${file}:${no} [token-lint] 裸色值 ${hex[0]} —— 须 var(--dsw-*)`)
