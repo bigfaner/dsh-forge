@@ -101,7 +101,7 @@ export const DOCUMENT_PREVIEW_BODY_SLOT = 'sidebar.right.tab.document'
  * 官方 builtin Markdown（自动选择序），官方内建留在下拉可切回（选择态官方自持）。
  */
 export const MD_MERMAID_PREVIEW_ID = 'dswf-md-mermaid'
-/** documentPreviews 缺席诊断注记（dock 诊断 error 面——缺席 = 记账跳过不炸，官方 documentpreview 未装配的合法形态） */
+/** documentPreviews 缺席诊断注记（dock 诊断 error 面——座回调期内仍缺席 = 永不态记账跳过不炸；apply 期反射未就绪 = 惰性等待不记账） */
 export const MD_MERMAID_PREVIEW_ABSENT = 'documentPreviews 缺席（官方 documentpreview 未装配）——md mermaid 预览跳过注册'
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
@@ -744,11 +744,12 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 
 /** 惰性服务读取（reflect.get——未 inject 服务的官方面；缺席/异常 = undefined fail-soft；
- * 5.2 e2e 勘误配方同 buildOpenSessionOrchestrator） */
-function reflectServiceGet(ctx: ForgeClientCtx, name: string): unknown {
+ * 5.2 e2e 勘误配方同 buildOpenSessionOrchestrator）。strict = 官方缺省（仅活性 fiber 可见）；
+ * false = 非严格读（提供方 fiber apply 期 state=1 亦可见——register 的值已同步构造完整） */
+function reflectServiceGet(ctx: ForgeClientCtx, name: string, strict = true): unknown {
   try {
-    const reflect = (ctx as { reflect?: { get(n: string): unknown } }).reflect
-    return reflect?.get(name)
+    const reflect = (ctx as { reflect?: { get(n: string, strict?: boolean): unknown } }).reflect
+    return reflect?.get(name, strict)
   } catch {
     return undefined
   }
@@ -985,43 +986,78 @@ function registerDockTabs(
 }
 
 /**
- * md mermaid 预览注册（官方文档预览器扩展缝——apply 期两段：定义元数据 + keyed body）：
- * `ctx.reflect.get('documentPreviews')` 惰性取用（注册表由官方 documentpreview 插件
- * `ctx.reflect.provide` 供给——不进 inject 数组，m3.1 D25 反射先例同径）→ 在场 =
- * `documentPreviews.register`（extension 带——自动选择恒胜官方 builtin Markdown；官方内建
- * 留在下拉可切回，选择态官方自持）+ `sidebar.right.tab.document` keyed body（key = 实现
- * id，useTabInfo/useResource 由槽声明/标准面递达）；缺席 = 跳过注册 + dock 诊断记 absent
- * （不炸不阻塞其余注册）。返回定义撤销器（并入 dock 撤销级联——官方注册表不残留死定义）。
+ * md mermaid 预览注册（官方文档预览器扩展缝——惰性两段注册）：`ctx.slots.inject` 挂
+ * `sidebar.right.tab.document` 声明等待，回调触发时点 = 官方 documentpreview 已 commit 该子槽
+ * 声明（其 apply 首语句 `reflect.provide('documentPreviews')` 先于声明 commit——上游
+ * 0.2.0-rc.2 client.js 核实）→ 回调内 reflect 非严格读（strict=false——回调触发点在官方
+ * apply 体内，提供方 fiber state=1，严格读恒 undefined；注册表此刻已构造完整）惰性取注册表
+ * （不进 inject 数组，m3.1 D25 反射先例同径）→ 在场 = `documentPreviews.register`（extension
+ * 带——自动选择恒胜官方 builtin Markdown；官方内建留在下拉可切回，选择态官方自持）+
+ * keyed body（key = 实现 id，useTabInfo/useResource 由槽声明/标准面递达）。apply 期不直接
+ * 反射：官方插件 apply 晚于本插件时反射缺席 = 时序非真缺席（1.2 e2e 实证——apply 期读即
+ * 永久走 absent 分支零注册，fix-1 惰性化收口）。回调期内仍缺席 = 永不态，记账 absent 跳过
+ * （不炸不阻塞）。幂等：回调多次触发只注册一次（活定义在场即跳过——重复 id 官方注册表
+ * 抛错）；cb 可能跑在官方声明 commit 内（slots.inject 时序）→ 注册链异常 catch 记账不外溢。
+ * 返回撤销器（并入 dock 撤销级联——撤销已落定义与 keyed body + 取消挂起等待；官方注册表
+ * 不残留死定义）。
  */
 function registerMdMermaidPreview(
   ctx: ForgeClientCtx,
   views: PublishedViews,
   diagnostics: { registered?: string[]; error?: string },
-): (() => void) | undefined {
-  const previews = asRecord(reflectServiceGet(ctx, 'documentPreviews')) as unknown as
-    | ForgeDocumentPreviewsService
-    | undefined
-  const register = previews?.register
-  if (previews === undefined || typeof register !== 'function') {
-    diagnostics.error = MD_MERMAID_PREVIEW_ABSENT
-    return undefined
+): () => void {
+  let disposeDefinition: (() => void) | undefined
+  let disposeBody: (() => void) | undefined
+  let revoked = false
+  const teardown = (): void => {
+    disposeBody?.()
+    disposeBody = undefined
+    disposeDefinition?.()
+    disposeDefinition = undefined
   }
-  const disposeDefinition = register.call(previews, {
-    id: MD_MERMAID_PREVIEW_ID,
-    extensions: ['md', 'markdown'],
-    priority: 'extension',
-    title: (): string => 'Markdown（mermaid）',
-    loading: 'text-pages',
-    wrap: true,
+  const cancelWait = ctx.slots.inject(DOCUMENT_PREVIEW_BODY_SLOT, () => {
+    if (revoked || disposeDefinition !== undefined) return undefined // 幂等：活定义在场不重复注册
+    try {
+      // 非严格反射读（strict=false）：回调触发点 = 官方 documentpreview 的声明 commit——
+      // 位于其 apply 体内（provide 先行），此时提供方 fiber state=1（reloading）而严格读
+      // 只认 state=2 → 恒 undefined（fix-1 探针实证：cb 于 apply+59ms 触发即记 absent，
+      // +5s 同读可见）。非严格读返回的注册表已同步构造完整（official ctx.documentPreviews
+      // 属性径同场面——fiber.store 直读无状态检查，官方子插件 apply 期登记同径）。
+      const previews = asRecord(reflectServiceGet(ctx, 'documentPreviews', false)) as unknown as
+        | ForgeDocumentPreviewsService
+        | undefined
+      const register = previews?.register
+      if (previews === undefined || typeof register !== 'function') {
+        diagnostics.error = MD_MERMAID_PREVIEW_ABSENT
+        return undefined
+      }
+      disposeDefinition = register.call(previews, {
+        id: MD_MERMAID_PREVIEW_ID,
+        extensions: ['md', 'markdown'],
+        priority: 'extension',
+        title: (): string => 'Markdown（mermaid）',
+        loading: 'text-pages',
+        wrap: true,
+      })
+      diagnostics.registered = [...(diagnostics.registered ?? []), MD_MERMAID_PREVIEW_ID]
+      disposeBody = ctx.slots.register(
+        { name: DOCUMENT_PREVIEW_BODY_SLOT, key: MD_MERMAID_PREVIEW_ID },
+        views.ForgeMdPreviewBody,
+      )
+      diagnostics.registered = [...(diagnostics.registered ?? []), DOCUMENT_PREVIEW_BODY_SLOT]
+    } catch (error) {
+      teardown()
+      const message = error instanceof Error ? error.message : String(error)
+      diagnostics.error = message
+      return undefined
+    }
+    return teardown
   })
-  diagnostics.registered = [...(diagnostics.registered ?? []), MD_MERMAID_PREVIEW_ID]
-  registerSlotEntry(ctx, DOCUMENT_PREVIEW_BODY_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      { name: DOCUMENT_PREVIEW_BODY_SLOT, key: MD_MERMAID_PREVIEW_ID },
-      views.ForgeMdPreviewBody,
-    ),
-  )
-  return disposeDefinition
+  return (): void => {
+    revoked = true
+    teardown()
+    cancelWait()
+  }
 }
 
 /** 插件本体（client bundle factory 的返回值 = 模块 exports）。 */
@@ -1128,15 +1164,17 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           sidebarRightTabs,
           dockDiagnostics,
         )
-        // md mermaid 预览（官方 documentpreview 扩展缝——apply 期定义 + keyed body；注册表
-        // 缺席 = dock 诊断记 absent 跳过，不炸不阻塞其余注册）。撤销并入本级联：与 dock 族
-        // 同径（apply catch + overlay 洞 dispose 两面回收——官方注册表不残留死定义）
+        // md mermaid 预览（官方 documentpreview 扩展缝——惰性两段注册：`slots.inject` 挂
+        // `sidebar.right.tab.document` 声明等待，回调触发（官方声明 commit——provide 已先行）
+        // 时定义 + keyed body 齐落；回调期内仍缺席 = dock 诊断记 absent 跳过，不炸不阻塞其余
+        // 注册）。撤销并入本级联：撤销已落注册 + 取消挂起等待（apply catch + overlay 洞
+        // dispose 两面回收——官方注册表不残留死定义）
         const disposeMdPreview = registerMdMermaidPreview(clientCtx, views, dockDiagnostics)
         const revokeBase = revokeBridgeAndLocale
         revokeBridgeAndLocale = (): void => {
           revokeBase()
           disposeDockTabs()
-          disposeMdPreview?.()
+          disposeMdPreview()
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -1212,7 +1250,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
             disposeLocale()
             disposeDockTabs()
-            disposeMdPreview?.()
+            disposeMdPreview()
           }
         })
       } catch (error) {

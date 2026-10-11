@@ -341,6 +341,9 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     expect(injectedKeys).toEqual([
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      // md mermaid 预览声明等待（fix-1 惰性两段）：apply 期无条件挂 `slots.inject` 等待
+      // （未就绪也挂——「未就绪 ≠ 永不」；缺席分支不再跳过挂等待）
+      DOCUMENT_PREVIEW_BODY_SLOT,
       SIDEBAR_WORKSPACES_SLOT,
       SIDEBAR_BRAND_MARK_SLOT,
       SIDEBAR_BRAND_NAME_SLOT,
@@ -666,13 +669,53 @@ describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => 
     }
   }
 
+  /**
+   * 惰性 inject 假体（真实时序模型——fakeClientCtx 的 inject 即刻触发 = eager，正掩盖声明
+   * 提交时序的单测盲区）：仅 `sidebar.right.tab.document` 置挂起（callback 缓存不触发，同
+   * 官方 slots.inject「声明未提交 = 等待」语义），其余洞位走原 eager 径。fireMd = 声明
+   * commit 时点（官方 documentpreview apply 内 TextPreview body 登记）手动触发；等待撤销
+   * （cancelWait）后 pending 清空 → fireMd 零效。
+   */
+  function lazyMdInjectCtx(base: ReturnType<typeof fakeClientCtx>): {
+    ctx: ForgeClientCtx
+    fireMd: () => void
+  } {
+    const origInject = base.ctx.slots.inject.bind(base.ctx.slots)
+    let pending: (() => (() => void) | undefined) | undefined
+    const ctx: ForgeClientCtx = {
+      ...base.ctx, // slots 为 readonly——不改原对象，浅拷贝面置换 inject（fix-33 ⑥ 先例同径）
+      slots: {
+        ...base.ctx.slots,
+        inject: (key: string, callback: () => (() => void) | undefined) => {
+          if (key === DOCUMENT_PREVIEW_BODY_SLOT) {
+            pending = callback
+            return () => {
+              pending = undefined
+            }
+          }
+          return origInject(key, callback)
+        },
+      },
+    }
+    return {
+      ctx,
+      fireMd: (): void => {
+        const callback = pending
+        callback?.()
+      },
+    }
+  }
+
   it('documentPreviews 在场：extension 带定义（md/markdown + text-pages + wrap 消费）+ keyed body 槽位（key = 实现 id，body 自足）', () => {
     const views = publishFakeViews()
     const previews = fakeDocumentPreviews()
-    const { ctx, registers } = fakeClientCtx({
+    const { ctx, registers, injectedKeys } = fakeClientCtx({
       get: (name: string) => (name === 'documentPreviews' ? previews.registry : undefined),
     })
     forgeClientPlugin().apply(ctx)
+    // 注册经 slots.inject 声明等待回调落座（eager 假体 = 声明已在场即同步触发——官方
+    // 「已声明即同步跑 cb」语义；apply 期直接反射的旧时序缺陷面归惰性两专项 pin）
+    expect(injectedKeys).toContain(DOCUMENT_PREVIEW_BODY_SLOT)
     expect(previews.registry.register).toHaveBeenCalledTimes(1)
     const definition = previews.calls[0]!
     expect(definition.id).toBe(MD_MERMAID_PREVIEW_ID)
@@ -699,7 +742,7 @@ describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => 
     unpublishViews()
   })
 
-  it('reflect 缺席：降级不炸且不注册（零 documentPreviews 调用 + 零文档槽位）+ dock 诊断记 absent', () => {
+  it('座回调期内仍缺席 = 永不态：降级不炸且不注册（零 documentPreviews 调用 + 零文档槽位）+ dock 诊断记 absent', () => {
     publishFakeViews()
     const previews = fakeDocumentPreviews()
     const { ctx, registers } = fakeClientCtx()
@@ -709,6 +752,72 @@ describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => 
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.dock?.error).toBe(MD_MERMAID_PREVIEW_ABSENT)
     unpublishViews()
+  })
+
+  // ── 真实时序专项（1.2 e2e 实证缺陷面：官方 documentpreview apply 晚于本插件——
+  // apply 期反射未就绪 = 「未就绪」非「永不」；惰性两段 = 声明 commit 回调内注册）──
+  it('真实时序：apply 期反射未就绪 = 惰性等待零记账零注册；声明 commit 回调内反射在场即注册（幂等：重复触发只注册一次）', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    const views = publishFakeViews()
+    const previews = fakeDocumentPreviews()
+    let previewsService: unknown
+    const base = fakeClientCtx({
+      get: (name: string) => (name === 'documentPreviews' ? previewsService : undefined),
+    })
+    const { ctx, fireMd } = lazyMdInjectCtx(base)
+    forgeClientPlugin().apply(ctx)
+    // 未就绪段：apply 期零注册零记账（旧实现于此记 absent 即永久跳过——fix-1 缺陷本体）。
+    // 等待安装证据 = fireMd 可触发（惰性假体旁路 injectedKeys 账本——缓存即挂起）
+    expect(previews.registry.register).not.toHaveBeenCalled()
+    expect(base.registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)).toBeUndefined()
+    let dock = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__?.dock
+    expect(dock?.error).toBeUndefined()
+    expect(dock?.registered).toEqual([OVERVIEW_TAB_KIND, DOC_TAB_KIND, SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_SLOT])
+    // 声明 commit 时点（官方 apply：provide 先行——本行模拟）→ 回调内定义 + keyed body 齐落
+    previewsService = previews.registry
+    fireMd()
+    expect(previews.registry.register).toHaveBeenCalledTimes(1)
+    expect(previews.calls[0]!.id).toBe(MD_MERMAID_PREVIEW_ID)
+    const body = base.registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)
+    expect(body).toBeDefined()
+    expect(body!.options.key).toBe(MD_MERMAID_PREVIEW_ID)
+    expect(body!.component).toBe(views.ForgeMdPreviewBody)
+    dock = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__?.dock
+    expect(dock?.registered).toEqual([
+      OVERVIEW_TAB_KIND,
+      DOC_TAB_KIND,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      MD_MERMAID_PREVIEW_ID,
+      DOCUMENT_PREVIEW_BODY_SLOT,
+    ])
+    expect(dock?.error).toBeUndefined()
+    fireMd() // 幂等：活定义在场重复触发不重注册（重复 id 官方注册表抛错）
+    expect(previews.registry.register).toHaveBeenCalledTimes(1)
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
+  })
+
+  it('撤销级联不回退（惰性挂起期）：overlay 洞 dispose 撤销挂起等待——迟到声明 commit（回调迟到触发）零注册零记账', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const previews = fakeDocumentPreviews()
+    const previewsService: unknown = previews.registry // 注册表先于声明 commit 就绪（真实时序：provide 先行）
+    const base = fakeClientCtx({
+      get: (name: string) => (name === 'documentPreviews' ? previewsService : undefined),
+    })
+    const { ctx, fireMd } = lazyMdInjectCtx(base)
+    forgeClientPlugin().apply(ctx)
+    expect(previews.registry.register).not.toHaveBeenCalled()
+    base.injectDisposers.get(SHELL_OVERLAY_SLOT)!() // overlay 洞 dispose（现行 pin 语义：级联撤 md 预览面）
+    fireMd() // 迟到声明 commit——等待已撤销，零注册零记账
+    expect(previews.registry.register).not.toHaveBeenCalled()
+    expect(previews.disposedIds).toEqual([])
+    expect(base.registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)).toBeUndefined()
+    unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 
   it('撤销级联：overlay 洞 dispose 即撤销 documentPreviews 定义（官方注册表不残留死定义）', () => {
