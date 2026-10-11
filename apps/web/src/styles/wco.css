@@ -11,7 +11,9 @@
  * 原型 R4/R6 轮）＝「原生带线形态」偏离族：
  *   D1 左栏右缘 1px 竖线常驻 + WCO 中区左上圆角移除；
  *   D2 WCO 收起 = 59px 竖排图标列常驻（展开/新会话/插件/知识库/搜索/设置全官方件
- *      图标——「rail 隐藏 + 标题栏双 28px 圆钮」语义退役）；
+ *      图标——「rail 隐藏 + 标题栏双 28px 圆钮」语义退役）+ 2026-10-11 残差修复
+ *      「收起左侧栏后左分隔线右侧白屏」（轨脱 grid 流 → 列自动重排，centerCol/
+ *      rightbarCol 显式列位钉定——D2 块内专节）；
  *   D31 竖线自窗口顶点 y=0 连续贯穿至底（带内段 frame::after 补齐——D1 残差
  *      2026-10-10 实机报障「分隔线没有到达最高点」收尾）；
  *   D32 分隔线 handle / 会话消息文字单色光标纯白不可辨 → 高对比色图光标（Windows/DWM
@@ -86,7 +88,7 @@ html[data-windows-titlebar] div[data-sidebar-collapsed='true']:has(> [data-shell
   left: 58px; /* dsw-raw 轨右缘 1px 列（59 轨宽刻度 − 1px 竖线） */
 }
 
-/* ── D2：WCO 收起 = 59px 竖排图标列常驻 ── */
+/* ── D2：WCO 收起 = 59px 竖排图标列常驻（+ 2026-10-11 残差修复：列位钉定）── */
 
 /* 收起态 sidebarCol：脱轨绝对定位竖轨（官方收起轨 = grid 内联 0px 不可 CSS 对冲——
  * 覆层轨为唯一保真径；frame position:relative 官方自持，顶起于标题栏带下） */
@@ -100,9 +102,21 @@ html[data-windows-titlebar] [data-sidebar-collapsed='true'] > div:first-child {
   z-index: 12; /* 官方层序内垫底于覆层（overlayLayer 20 / leadingSeat 15 / handle 11） */
 }
 
-/* centerCol margin 让位（轨下内容零遮蔽；不动 grid 轨——右栏轨/拖柄零扰动） */
+/* centerCol 轨锚定 + margin 让位（轨下内容零遮蔽；不动 grid 轨——右栏轨/拖柄零扰动）。
+ * grid-column:2 轨锚定 = D2 残差修复（2026-10-11 实机报障「收起左侧栏后，左分隔线的
+ * 右侧白屏」）：轨转 absolute 脱离 grid 流，官方 frame 零显式列位（grid-column 全 auto
+ * ——e2e 实跑几何取证：gridTemplateColumns="0px minmax(0px,1fr) minmax(0px,0px)" 下
+ * centerCol 自动重排进第 1 列 0px 轨（x=59 width=0 中列不可见）、rightbarCol 顶入第 2
+ * 列全宽（D39 白底）⇒ 分隔线右侧整面白屏。显式钉回原生列位（centerCol=2 /
+ * rightbarCol=3）恢复官方占位语义——轨脱流零波及他列。 */
 html[data-windows-titlebar] [data-sidebar-collapsed='true'] > div:nth-child(2) {
+  grid-column: 2; /* 官方原生列位钉定——对冲轨脱流引发的自动重排 */
   margin-left: 59px; /* dsw-raw 与轨同宽（原型刻度） */
+}
+
+/* rightbarCol 轨锚定（同上——防顶入 centerCol 第 2 列全宽） */
+html[data-windows-titlebar] [data-sidebar-collapsed='true'] > div:nth-child(3) {
+  grid-column: 3;
 }
 
 /* 侧栏根：恢复官方非 WCO 收起态 padding（对冲 WCO 收起 padding:0——图标列四周留白） */

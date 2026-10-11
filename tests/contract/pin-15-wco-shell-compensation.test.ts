@@ -169,7 +169,13 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(rail).toContain('position: absolute')
     expect(rail).toContain('width: 59px')
     expect(rail).toContain('top: var(--dsh-windows-titlebar-height)')
-    expect(ruleOf("\\[data-sidebar-collapsed='true'\\] > div:nth-child\\(2\\)")).toContain('margin-left: 59px')
+    const center = ruleOf("\\[data-sidebar-collapsed='true'\\] > div:nth-child\\(2\\)")
+    expect(center).toContain('margin-left: 59px')
+    // D2 残差修复（2026-10-11「收起左侧栏后左分隔线右侧白屏」）：轨转 absolute 脱 grid
+    // 流 → 官方零显式列位下列自动重排（centerCol 挤入 0px 侧栏轨 w=0、rightbarCol 顶入
+    // 中列全宽）——双列显式钉回原生列位（e2e 几何取证实锚）
+    expect(center).toContain('grid-column: 2')
+    expect(ruleOf("\\[data-sidebar-collapsed='true'\\] > div:nth-child\\(3\\)")).toContain('grid-column: 3')
   })
 
   it('D2 三区 un-hide + 双圆钮退役 + 侧栏根 padding 复位（官方收起态刻度）', () => {
@@ -279,9 +285,9 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
       expect(selector).toContain('[data-windows-titlebar]')
     }
     const collapsed = css.match(/html\[data-windows-titlebar\] \[data-sidebar-collapsed='true'\][^{]*\{/g) ?? []
-    // 覆层轨/让位/根 padding/logoRow/toggle/newSession/三区 un-hide（末组三选择器共体）；
-    // D31/D41 收起态变体走属性限定 frame 锚（div[data-sidebar-collapsed]——特异性对账，
-    // 不落本弱式选择器族）
+    // 覆层轨/让位+列位钉定/右栏列位钉定/根 padding/logoRow/toggle/newSession/三区 un-hide
+    // （末组三选择器共体）；D31/D41 收起态变体走属性限定 frame 锚
+    // （div[data-sidebar-collapsed]——特异性对账，不落本弱式选择器族）
     expect(collapsed.length).toBeGreaterThanOrEqual(7)
   })
 
