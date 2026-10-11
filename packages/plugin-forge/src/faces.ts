@@ -276,6 +276,21 @@ function forgeUserMessage(text: string, form: 'notice' | 'followup'): unknown {
 }
 
 /**
+ * 指令行消息（S2 producer 显式提交——/plan 先例的 forge 消费形）：known command 经上游
+ * slash 仲裁路由 command plane 执行时注册表本身零转录（"the registry itself submits
+ * nothing"），指令单行的转录承载 = producer 显式提交的 user 消息（source kind user——
+ * 与 composer 默认 sink 同形；idle 驱动经 agent.steer 收件即开 turn——会话非 blank 化）。
+ */
+export function forgeCommandLineMessage(text: string): unknown {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: 'user' },
+  }
+}
+
+/**
  * 适配层：agents 注册表 → 叙述双通道（S2 装配方消费——decisions #17/#28 分流：
  * notice = agent.inject（零模型回合、不唤醒）；followup = agent.followup（完整消息开新回合））。
  * 会话无活根（主会话已关闭/删除）或面 non-function = 静默跳过——narrator fail-soft 包装之外

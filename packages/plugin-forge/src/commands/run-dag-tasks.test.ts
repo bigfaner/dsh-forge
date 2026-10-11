@@ -1,7 +1,8 @@
 // S2 指令单测 —— /run-dag-tasks handler（run-tasks-host-command proposal S2 + SC1 +
 // decisions #19/#20；问询用桩注入）。覆盖：无参单查询枚举双轨候选→问询→选中即启动；
 // 带参直通；跑动中再触发→查看/停止/替换问询（停止走本会话作用域——跨会话隔离在
-// driver 层已有 pin，此处 pin handler 恒以敲指令会话 id 调 stop）。
+// driver 层已有 pin，此处 pin handler 恒以敲指令会话 id 调 stop）；启动成功后的派发
+// 指令单行提交（fix-1——known command 零转录的 producer 补位，/plan 先例）。
 import { describe, expect, it, vi } from 'vitest'
 import type { ContainerRef, ForgeTasksService, ListTasksQuery, TaskCard, TaskStatus } from '@dsh-forge/contracts'
 import type { LoopDriver, LoopRecord, LoopStartInput, LoopStopResult } from '../loop/index.js'
@@ -13,11 +14,40 @@ const CWD = 'C:\\ws\\demo'
 const PROJECT = 'p-9'
 const SESSION = 's-main'
 
-function agentOf(sessionId = SESSION, cwd: string | undefined = CWD): { session: { id: string; header?: { cwd?: string } } } {
+/** steer 提交记录（fix-1 断言径——已知命令零转录，指令单行由 producer 显式提交） */
+interface SteeredMessage {
+  readonly role: unknown
+  readonly text: unknown
+  readonly sourceKind: unknown
+}
+
+/** agent 桩（session 身份 + 可选 steer 记录器——steer 缺席形态 = fail-soft 分支靶） */
+function agentOf(
+  sessionId = SESSION,
+  cwd: string | undefined = CWD,
+  steer?: (message: unknown) => void,
+): { session: { id: string; header?: { cwd?: string } }; steer?: (message: unknown) => void } {
   return {
     session: {
       id: sessionId,
       ...(cwd !== undefined ? { header: { cwd } } : {}),
+    },
+    ...(steer !== undefined ? { steer } : {}),
+  }
+}
+
+/** steer 记录器（消息形状窄读——role/text/source.kind 三键断言面） */
+function steerRecorder(): { steered: SteeredMessage[]; fn: (message: unknown) => void } {
+  const steered: SteeredMessage[] = []
+  return {
+    steered,
+    fn: (message: unknown) => {
+      const m = message as { role?: unknown; content?: { type?: unknown; text?: unknown }[]; source?: { kind?: unknown } }
+      steered.push({
+        role: m?.role,
+        text: m?.content?.[0]?.text,
+        sourceKind: m?.source?.kind,
+      })
     },
   }
 }
@@ -348,6 +378,80 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
     expect((out as { text: string }).text).toContain('未选择操作')
     expect(stub.loops.has(SESSION)).toBe(true)
+  })
+})
+
+// ─────────────────────────── 派发指令单行提交（fix-1） ───────────────────────────
+
+describe('派发指令单行提交（fix-1——known command 零转录的 producer 补位，/plan 先例）', () => {
+  const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
+
+  it('带参直通启动成功：agent.steer 恰一次收 `/run-dag-tasks feat-x` user 消息（role/content/source.kind）', async () => {
+    const rec = steerRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.steered).toEqual([
+      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
+    ])
+  })
+
+  it('无参选中启动：同一提交径（选中源 = 问询回读 label）', async () => {
+    const rec = steerRecorder()
+    const ask = askStub(answerLabel('feat-x'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: '' })
+    expect(out.kind).toBe('success')
+    expect(rec.steered).toEqual([
+      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
+    ])
+  })
+
+  it('启动被拒（单活竞态 loop-active）：零提交——回执已说明未重复启动', async () => {
+    const rec = steerRecorder()
+    const stub = driverStub({ startCode: 'loop-active' })
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).toContain('已在运行')
+    expect(rec.steered).toEqual([])
+  })
+
+  it('未启动径（未知 slug）：零提交', async () => {
+    const rec = steerRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'ghost' })
+    expect(rec.steered).toEqual([])
+  })
+
+  it('steer 面缺席（fail-soft）：启动回执原样，不抛', async () => {
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 steer 位
+    expect(out.kind).toBe('success')
+    expect((out as { text?: string }).text).toContain('已启动')
+  })
+
+  it('steer 投递抛错（fail-soft）：告警不外抛，启动回执原样', async () => {
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const out = await d.handler({
+        agent: agentOf(SESSION, CWD, () => {
+          throw new Error('inbox closed')
+        }) as never,
+        rawInput: 'feat-x',
+      })
+      expect(out.kind).toBe('success')
+      expect((out as { text?: string }).text).toContain('已启动')
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

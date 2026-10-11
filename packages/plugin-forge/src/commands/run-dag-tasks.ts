@@ -4,13 +4,16 @@
 // 提案双轨——TaskCard.source 判别）→ userQuestions.ask 弹选项（与 ask_user_question 同渲染
 // 面）；带参 <source-slug> 直通（同单查询解析 kind）；跑动中再触发 → 查看/停止/替换问询。
 // 启动 = loopDriver.start——派发/继续判定与启动模板叙述（①从头/②接续中断/③接续在飞）归
-// 循环驱动器（S1b announceStartup，经 S4 notify 模块）；本 handler 只做枚举/问询/启动编排。
+// 循环驱动器（S1b announceStartup，经 S4 notify 模块）；本 handler 只做枚举/问询/启动编排，
+// 外加启动成功后的派发指令单行提交（commitDispatchLine——/plan producer 先例，known command
+// 零转录的补位；fix-1 根因定罪详见函数注）。
 //
 // 作用域纪律（decisions #20）：停止与替换恒经 driver.stop({ownerSessionId: 敲指令会话})——
 // 驱动器按归属拒绝他会话循环（跨会话隔离）；本会话无活循环的停止 = no-op 文本
 // 「本会话没有派发任务」，不附归属。
 import { TASK_STATUS_LABELS } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeTasksService, TaskCard, TaskStatus } from '@dsh-forge/contracts'
+import { forgeCommandLineMessage } from '../faces.js'
 import type { EscalationAskFace, EscalationAskOption, LoopDriver, LoopRecord } from '../loop/index.js'
 import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
 import type { ProjectIdResolver } from '../tools/index.js'
@@ -270,8 +273,31 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     projectId: ctx.projectId,
   })
   if (result.ok) {
+    commitDispatchLine(ctx.parent, source)
     return { kind: 'success', text: `任务源 ${source.slug} 的派发循环已启动` }
   }
   // loop-active（active() 读数与 start 之间的竞态窗口；含他会话刚启动的循环）——不重复启动
   return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
+}
+
+/**
+ * 派发指令单行提交（S2 producer 显式提交——/plan 先例）：known command 经上游 slash 仲裁
+ * 路由 command plane 执行，注册表本身零转录（"the registry itself submits nothing"）——
+ * 若 producer 不提交，S5 指令单行永不落会话转录，且会话零 turn/start 恒 blank（hero 不退场、
+ * 会话头预设投影标签不挂载——S6 e2e uf3/sc5/dogfood 三旅程断言面）。agent.steer 收件 =
+ * idle 驱动开 turn（上游契约），转录承载与转录面切换同径兑现。
+ *
+ * fail-soft 纪律（R3 防御读取同源）：steer 面缺席/非函数/投递抛错 = 跳过——循环已启动，
+ * 提交面故障不回滚启动、不外抛（SC7「注入失败循环照常结束」同源）。
+ */
+function commitDispatchLine(agent: unknown, source: ContainerRef): void {
+  const steer = (agent as { steer?: (message: unknown) => void } | undefined)?.steer
+  if (typeof steer !== 'function') return
+  try {
+    steer(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
+  } catch (cause) {
+    console.warn(
+      `forge dispatch line commit failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
 }
