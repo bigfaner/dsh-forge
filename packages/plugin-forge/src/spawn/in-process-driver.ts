@@ -8,7 +8,7 @@
 // （version 3 / provider 'forge-dispatch'——绕过 ctx.subagents 服务直驱共享驱动器）。
 // 动态 import：driver 缺席的环境（极简 profile）以 ERR_SPAWN_FAILED 形态失败而非拖垮
 // 插件加载（五 tool 面不受影响）。
-import type { SpawnWorker, SpawnWorkerHandle } from '../tools/dispatch-task.js'
+import type { SpawnWorker, SpawnWorkerHandle } from '../dispatch-core/index.js'
 
 /** 上游描述符格式版本（SUBAGENT_DESCRIPTOR_VERSION——0.2.0-rc.2 值 3；驱动器类型面不透出常量，
  *  升级上游 = 此处同步（精确 pin 0.2.0-rc.2，升级即契约面变更） */
