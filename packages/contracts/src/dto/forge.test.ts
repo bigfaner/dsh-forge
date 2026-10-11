@@ -87,6 +87,23 @@ describe('AC1 身份双轨（TaskSnapshot/TaskCard/TaskDetail 恒含 taskId + sl
   it('TaskDetail ⊇ TaskCard（详情 = 列表卡全量 + 深字段）', () => {
     expectTypeOf<Pick<TaskDetail, keyof TaskCard>>().toEqualTypeOf<TaskCard>()
   })
+
+  it('TaskCard.source 可选任务源（S2——run-tasks-host-command 无参 /run-dag-tasks 单查询双轨枚举的 kind 判别面；加性扩面）', () => {
+    expectTypeOf<TaskCard>().toHaveProperty('source')
+    const ref: ContainerRef = { kind: 'proposal', slug: 'run-tasks-host-command' }
+    const card: TaskCard = {
+      taskId: 't-1',
+      slug: 'run-tasks-host-command',
+      localId: '1.6',
+      title: 'S2',
+      taskType: 'coding-feature',
+      taskStatus: 'in_progress',
+      prerequisites: [],
+      sessionCount: 0,
+      source: ref,
+    }
+    expect(card.source).toEqual(ref)
+  })
 })
 
 describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () => {

@@ -198,6 +198,11 @@ export interface LoopStartInput {
   readonly ownerSessionId: string
   /** 主会话 Agent（结构兼容透传——in-process driver 派生 lineage/工作目录/深度） */
   readonly parent: unknown
+  /**
+   * 项目覆盖（S2——指令面按敲指令会话 cwd 经绑定表解析；缺席回退 deps.projectId。
+   * 双缺席 = start 拒绝——不落不可归属的循环。多工作区宿主逐会话路由的判别缝。）
+   */
+  readonly projectId?: string
 }
 
 /** 启动返回（v1 单活：进程内已有活循环 → loop-active 拒绝——S2 据此问询查看/停止/替换） */
@@ -212,7 +217,11 @@ export type LoopStopResult =
 
 /** 驱动器依赖（装配方注入——registry 缺省自建，多驱动器共享时由装配传入单例） */
 export interface LoopDriverDeps {
-  readonly projectId: string
+  /**
+   * 项目缺省（可选——S2 起指令面按敲指令会话 cwd 逐会话解析并经 LoopStartInput.projectId
+   * 覆盖；装配面无固定项目时缺席，双缺席 = start 拒绝 fail-loud）
+   */
+  readonly projectId?: string
   readonly tasks: ForgeTasksService
   readonly spawn: SpawnWorker
   /** 叙述面（notify createNarrator 产物——notice/followup/blocked 三出口 + 落盘委派） */
@@ -229,12 +238,14 @@ export interface LoopDriverDeps {
   readonly delays?: { readonly backoffBaseMs?: number; readonly patiencePauseMs?: number }
 }
 
-/** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询） */
+/** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/单活读数） */
 export interface LoopDriver {
   start(input: LoopStartInput): Promise<LoopStartResult>
   stop(input: { readonly ownerSessionId: string }): Promise<LoopStopResult>
   /** 本会话活循环（S2「跑动中再触发」的查询面；无 = undefined） */
   activeOf(ownerSessionId: string): LoopRecord | undefined
+  /** 进程内活循环读数（S2「跑动中再触发」的任意归属查询面——v1 单活；无 = undefined） */
+  active(): LoopRecord | undefined
 }
 
 // ─────────────────────────── 活循环内部状态（登记表行 + 运行时计数） ───────────────────────────
@@ -320,6 +331,9 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
 
   return {
     async start(input: LoopStartInput): Promise<LoopStartResult> {
+      // S2 projectId 解析（会话工作区覆盖 > 装配缺省；双缺席 fail-loud——不落不可归属的循环）
+      const projectId = input.projectId ?? deps.projectId
+      if (projectId === undefined) throw new Error('派发循环启动缺少 projectId（input.projectId 与 deps.projectId 双缺席）')
       // ② v1 单活：进程内已有活循环 → 拒绝（S2 问询查看/停止/替换——停止后可再启新实例）
       const active = registry.active()
       if (active !== undefined) {
@@ -332,7 +346,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         id,
         source,
         ownerSessionId: input.ownerSessionId,
-        projectId: deps.projectId,
+        projectId,
       }
       const controller = new AbortController()
       const loop: ActiveLoop = {
@@ -355,7 +369,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           signal: controller.signal, // spawn 信号 = 循环控制器——stop 取消 in-flight 的机械通道
           verb: 'run-dag-tasks',
         },
-        scope: { sessionId: input.ownerSessionId, projectId: deps.projectId, guardKey: id, source },
+        scope: { sessionId: input.ownerSessionId, projectId, guardKey: id, source },
         delays: {
           backoffBaseMs: deps.delays?.backoffBaseMs ?? LOOP_BACKOFF_BASE_MS,
           patiencePauseMs: deps.delays?.patiencePauseMs ?? LOOP_PATIENCE_PAUSE_MS,
@@ -423,6 +437,10 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
 
     activeOf(ownerSessionId: string): LoopRecord | undefined {
       return registry.byOwner(ownerSessionId)
+    },
+
+    active(): LoopRecord | undefined {
+      return registry.active()
     },
   }
 }

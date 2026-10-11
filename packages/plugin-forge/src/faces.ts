@@ -7,6 +7,7 @@
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import type { NarrationChannel } from './notify/index.js'
 
 /** dsh 官方 ContentBlock 的文本块子面（output.render 产物） */
 export interface TextContentBlock {
@@ -32,9 +33,12 @@ export interface ToolParameterProperty {
   readonly description: string
 }
 
-/** 会话头（官方 SessionHeader 子面：cwd = 会话创建时的工作目录 = 工作区根） */
+/** 会话头（官方 SessionHeader 子面：cwd = 会话创建时的工作目录 = 工作区根；
+ * agentPreset = 会话组合时的预设 id——expedition/blitz 容器语境内置于会话身份） */
 export interface ToolSessionHeaderFace {
   readonly cwd?: string
+  /** 会话创建头携带的 agent 预设 id（上游 SessionHeader.agentPreset 同位；无预设组合 = 缺席） */
+  readonly agentPreset?: string
 }
 
 /** dsh 会话（官方 Session 子面：id = claim/submit 的执行会话键） */
@@ -206,4 +210,88 @@ export interface ForgeContextFace {
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */
   systemPrompt: SystemPromptSectionFace
+}
+
+// ─────────────────────────── dsh commands 注册表收窄面（S2——run-tasks-host-command 指令两枚） ───────────────────────────
+
+/**
+ * 指令执行回执（官方 CommandResult 消费子面）：UI command plane 直接渲染（零模型消息——
+ * "The registry itself submits nothing"）；success 的 text 可选、error 恒带 text。
+ */
+export interface ForgeCommandResult {
+  readonly kind: 'success' | 'error'
+  readonly text?: string
+}
+
+/** 指令调用入参（官方 CommandInvocation 消费子面）：敲指令会话身份 + 指令名后原文 + 取消信号 */
+export interface ForgeCommandInvocation {
+  /** 敲指令会话（官方 Agent 结构子面：id = ownerSessionId 锚——decisions #20 stop 作用域键） */
+  readonly agent: ToolAgentFace
+  /** 指令名后原文（<source-slug> 直通参数；无参 = 空白） */
+  readonly rawInput: string
+  /** 派发 UI 请求的取消信号（官方 invocation.signal——问询透传；缺席 = 无取消通道） */
+  readonly signal?: AbortSignal
+}
+
+/** 指令定义（官方 CommandDefinition 消费子集：name/description/input.hint/handler——零上游 import） */
+export interface ForgeCommandDefinition {
+  /** 小写指令名（无前导斜杠） */
+  readonly name: string
+  /** 发现 UI 的人类可读摘要 */
+  readonly description: string
+  /** 可选自由输入提示（hint 展示于 composer——`[<source-slug>]`） */
+  readonly input?: { readonly hint: string }
+  /** 对接收 agent 执行、零模型回合（UI command plane 语义） */
+  handler(invocation: ForgeCommandInvocation): ForgeCommandResult | Promise<ForgeCommandResult>
+}
+
+/** dsh commands 注册表收窄面（官方 CommandRuntime.register——返回注销器；S2 经 reflect.get 防御读取） */
+export interface CommandRegisterFace {
+  register(definition: ForgeCommandDefinition): () => void
+}
+
+/** dsh agents 注册表收窄面（官方 AgentRegistry.get——活根解析：叙述通道 + 裁决问询 agent 随载） */
+export interface AgentLookupFace {
+  get(id: string): unknown
+}
+
+/** forge notice 生产者名（ContextProducerView.label 裸 kind 兜底渲染——decisions #28 producer 归因） */
+export const FORGE_NOTICE_SOURCE_KIND = 'forge-dispatch'
+
+/** 上游 notice 折叠摘要单行界（CONTEXT_SUMMARY_MAX_CHARS=120 同值——超界省略号截断） */
+const NOTICE_SUMMARY_MAX_CHARS = 120
+
+/** 叙述文本 → 官方 UserMessage 形状（createUserMessage 语义结构化最小面：id 铸造 + role/content/source） */
+function forgeUserMessage(text: string, form: 'notice' | 'followup'): unknown {
+  const summary = text.length <= NOTICE_SUMMARY_MAX_CHARS ? text : `${text.slice(0, NOTICE_SUMMARY_MAX_CHARS - 1)}…`
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source:
+      form === 'notice'
+        ? { kind: FORGE_NOTICE_SOURCE_KIND, form: 'notice', summary }
+        : { kind: 'user' },
+  }
+}
+
+/**
+ * 适配层：agents 注册表 → 叙述双通道（S2 装配方消费——decisions #17/#28 分流：
+ * notice = agent.inject（零模型回合、不唤醒）；followup = agent.followup（完整消息开新回合））。
+ * 会话无活根（主会话已关闭/删除）或面 non-function = 静默跳过——narrator fail-soft 包装之外
+ * 的第二道防线（R4 叙述通道存活依赖；循环正确性只依赖宿主事件）。
+ */
+export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationChannel {
+  return {
+    notice(sessionId: string, text: string): Promise<void> {
+      const agent = agents.get(sessionId) as { inject?(message: unknown): void } | undefined
+      if (typeof agent?.inject === 'function') agent.inject(forgeUserMessage(text, 'notice'))
+      return Promise.resolve()
+    },
+    followup(sessionId: string, text: string): Promise<void> {
+      const agent = agents.get(sessionId) as { followup?(message: unknown): void } | undefined
+      if (typeof agent?.followup === 'function') agent.followup(forgeUserMessage(text, 'followup'))
+      return Promise.resolve()
+    },
+  }
 }

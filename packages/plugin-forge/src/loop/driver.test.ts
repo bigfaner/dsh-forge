@@ -983,3 +983,49 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
   })
 })
+
+// ─────────────────────────── S2 面（any-active 读数 + projectId 会话覆盖） ───────────────────────────
+
+describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消费缝）', () => {
+  it('active()：启动后返回登记行（任务源/主会话 id）；stop 后 undefined（跑动中再触发问询的读数面）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    expect(built.driver.active()).toBeUndefined()
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, projectId: PROJECT })
+    const record = built.driver.active()
+    expect(record).toMatchObject({ source: SOURCE, ownerSessionId: OWNER })
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.driver.active()).toBeUndefined()
+  })
+
+  it('projectId 覆盖：input.projectId 优先于 deps（claim/list/stats 读携带会话工作区解析结果）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, projectId: 'p-override' })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ projectId: 'p-override' })
+    for (const q of built.h.listInputs) expect(q.projectId).toBe('p-override')
+  })
+
+  it('projectId 双缺席（deps 与 input 均无）：start 拒绝（fail-loud——不落不可归属的循环）', async () => {
+    const h = tasksHarness()
+    const channel: NarrationChannel = { notice: async () => {}, followup: async () => {} }
+    const driver = createLoopDriver({
+      tasks: h.tasks,
+      spawn: trackedSpawn().spawn,
+      narrator: createNarrator({ channel }),
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    })
+    await expect(driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })).rejects.toThrow(/projectId/)
+  })
+})

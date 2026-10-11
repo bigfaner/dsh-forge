@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
+import { FORGE_COMMAND_NAMES } from './commands/index.js'
+import type { ForgeCommandDefinition } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
 import type { ForgePromptSection, ForgeToolDefinition } from './tools/index.js'
@@ -15,7 +17,9 @@ import type { ForgePromptSection, ForgeToolDefinition } from './tools/index.js'
 class TempRuntime {
   readonly registeredTools: ForgeToolDefinition[] = []
   readonly sections: ForgePromptSection[] = []
+  readonly registeredCommands: ForgeCommandDefinition[] = []
   private readonly disposed = { tools: 0, sections: 0 }
+  disposedCommands = 0
 
   ctx() {
     return {
@@ -39,6 +43,22 @@ class TempRuntime {
             this.disposed.sections += 1
           }
         },
+      },
+    }
+  }
+
+  /** reflect 桩（S2 指令注册面——commands 经 reflect.get 防御读取） */
+  withReflect(services: Record<string, unknown>) {
+    return { ...this.ctx(), reflect: { get: (name: string) => services[name] } }
+  }
+
+  commandsFace() {
+    return {
+      register: (d: ForgeCommandDefinition) => {
+        this.registeredCommands.push(d)
+        return () => {
+          this.disposedCommands += 1
+        }
       },
     }
   }
@@ -299,8 +319,7 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
 })
 
 // ─────────────────────────── jobs 注册表可选消费（async-dispatch §7 任务 1.2——reflect.get 防御读取） ───────────────────────────
-describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_background 降级守卫联动）', () => {
-  const BOUND_CONFIG = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
+describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_background 降级守卫联动）', () => {  const BOUND_CONFIG = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
   const EXEC = { agent: { session: { id: 's-jobs', header: { cwd: 'C:\\ws\\demo' } } } }
 
   /** 装配桩：claim 记账 + no-task 结算（零 spawn 触达——守卫行为的最短观察径） */
@@ -355,5 +374,48 @@ describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_backgrou
     const out = (await h2.dispatch.execute({ run_in_background: true }, EXEC)) as { ok: boolean }
     expect(out.ok).toBe(false)
     h2.dispose()
+  })
+})
+
+// ─────────────────────────── S2 指令两枚注册（run-tasks-host-command——reflect.get 防御读取 fail-soft） ───────────────────────────
+describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command plane 零模型消息）', () => {
+  it('commands 面在场：两指令注册（FORGE_COMMAND_NAMES 名序 pin）+ run-dag-tasks 带 <source-slug> hint + stop 无 input 描述符', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.withReflect({ commands: rt.commandsFace() }))
+    expect(rt.registeredCommands.map((c) => c.name)).toEqual([...FORGE_COMMAND_NAMES])
+    expect([...FORGE_COMMAND_NAMES]).toEqual(['run-dag-tasks', 'stop-dag-tasks'])
+    const run = rt.registeredCommands.find((c) => c.name === 'run-dag-tasks')
+    const stop = rt.registeredCommands.find((c) => c.name === 'stop-dag-tasks')
+    expect(run?.input?.hint).toBe('[<source-slug>]')
+    expect(run?.description.length).toBeGreaterThan(4)
+    expect(stop?.input).toBeUndefined() // 无参指令——composer 零占位
+    expect(typeof run?.handler).toBe('function')
+    expect(typeof stop?.handler).toBe('function')
+    // 六 tool 照常注册（指令面 additive——tool 面零波及）
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+    expect(rt.disposedCommands).toBe(2) // 注销器并入插件 disposer（两指令各恰一次）
+  })
+
+  it('commands 面缺席（reflect 无该键）：零指令注册、六 tool 照常（fail-soft 不阻载——R3）', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.withReflect({}))
+    expect(rt.registeredCommands).toHaveLength(0)
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+    expect(rt.disposedCommands).toBe(0)
+  })
+
+  it('reflect.get 抛异常 / 非函数面：同降级（零指令、装配照常）', () => {
+    const rt1 = new TempRuntime()
+    const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
+    expect(rt1.registeredCommands).toHaveLength(0)
+    expect(rt1.registeredTools).toHaveLength(6)
+    d1()
+    const rt2 = new TempRuntime()
+    const d2 = forgePlugin(rt2.withReflect({ commands: 'not-a-registry' }))
+    expect(rt2.registeredCommands).toHaveLength(0)
+    expect(rt2.registeredTools).toHaveLength(6)
+    d2()
   })
 })

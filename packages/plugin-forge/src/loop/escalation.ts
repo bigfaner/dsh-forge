@@ -29,9 +29,10 @@ export interface EscalationAskQuestion {
   readonly options?: readonly EscalationAskOption[]
 }
 
-/** ask 面结构化最小face（装配方适配 UserQuestionService.ask——缺席 = 静默降级） */
+/** ask 面结构化最小face（装配方适配 UserQuestionService.ask——缺席 = 静默降级；
+ *  signal 可选透传（官方 ask 支持取消信号——S2 指令面问询随 invocation.signal 挂接）） */
 export interface EscalationAskFace {
-  ask(request: { readonly questions: readonly EscalationAskQuestion[]; readonly agent?: unknown }): Promise<unknown>
+  ask(request: { readonly questions: readonly EscalationAskQuestion[]; readonly agent?: unknown; readonly signal?: AbortSignal }): Promise<unknown>
 }
 
 /** 第三层挂钩依赖 */

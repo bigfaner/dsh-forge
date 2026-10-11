@@ -133,6 +133,19 @@ describe('AC1 listTasks：statusFilter 七态 chips + source 容器作用域（f
     const props = await listTasks({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'dup' } })
     expect(props.map((c) => c.localId)).toEqual(['2.1'])
   })
+
+  it('S2 TaskCard.source 水化（run-tasks-host-command 无参 /run-dag-tasks 单查询枚举判别面）：kind = 行 source_kind、slug ≡ 任务 slug——双轨 + 成链撞键', async () => {
+    const d = db()
+    seedFeature(d, { slug: 'dup' })
+    seedProposal(d, { slug: 'dup', mode: 'blitz' })
+    seedTask(d, 'dup', '1.1', { kind: 'feature', status: 'pending' })
+    seedTask(d, 'dup', '2.1', { kind: 'proposal', status: 'blocked' })
+    const cards = await listTasks({ store: h!.store }, { projectId: P() }) // 无 source = 全库单查询
+    expect(cards.map((c) => c.source)).toEqual([
+      { kind: 'proposal', slug: 'dup' }, // active 序：blocked（权重 1）在前
+      { kind: 'feature', slug: 'dup' },
+    ])
+  })
 })
 
 describe('AC1 listTasks：sort（active 活跃优先 | created 最新创建）', () => {

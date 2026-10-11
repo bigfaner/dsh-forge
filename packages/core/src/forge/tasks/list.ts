@@ -243,6 +243,9 @@ export function hydrateTaskCards(db: Database.Database, rows: readonly TaskStora
     prerequisites: prerequisites.get(row.id) ?? [],
     sessionCount: sessionCounts.get(row.id) ?? 0,
     sourceTask: row.source_task_id !== null ? sourceRefs.get(row.source_task_id) : undefined,
+    // S2 任务源判别面（无参 /run-dag-tasks 单查询枚举——kind = 行 source_kind；slug ≡ 容器 slug
+    // 服务不变量——query.ts TaskSnapshot.source 同款映射口径）
+    source: { kind: row.source_kind, slug: row.slug },
   }))
 }
 

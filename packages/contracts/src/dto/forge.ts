@@ -187,6 +187,13 @@ export interface TaskCard {
   sessionCount: number
   /** fix 链源自然键（fix 源标；非 fix 任务缺省） */
   sourceTask?: TaskRef
+  /**
+   * 任务源（S2——run-tasks-host-command：无参 /run-dag-tasks 单查询枚举「尚有非终态任务的
+   * 任务源」的 kind 判别面，feature + blitz 提案双轨）。可选 = 加性扩面（GUI/既有夹具零波及）；
+   * core hydrateTaskCards（listTasks/taskGraph/taskDetail 三读面共用水化）恒填——
+   * slug ≡ 容器 slug 服务不变量（任务 slug 恒等值），kind = 行 source_kind。
+   */
+  source?: ContainerRef
 }
 
 /** task_records 时间线项（append-only 行应用层形状；verb/from→to/reason/summary/gate/commit/digest） */

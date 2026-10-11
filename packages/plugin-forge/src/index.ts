@@ -6,6 +6,9 @@
 //   forgeSettings = 可选服务（经官方 reflect.get 防御读取——cordis 4.0.4 无 '?'
 //   可选 inject 后缀；缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）；
 //   tools / systemPrompt 为 dsh 官方面（非 core）。
+// S2（run-tasks-host-command）：指令两枚 /run-dag-tasks、/stop-dag-tasks 经
+// ctx.reflect.get('commands') 防御读取注册（同先例配方——服务缺席 = 指令不注册
+// fail-soft，R3）+ 宿主派发循环装配单例（agents 注册表叙述通道 + userQuestions 裁决挂钩）。
 // 装配（3.4 终态）：事件总线（产品自建）+ 事件 sink（emit 面 + 会话目录记忆）+
 // 日志监听器挂接（logs/{slug}.jsonl 唯一写者——事件→工作区映射 = 装配方闭包：
 // sink.prepare 在 tool 执行点经 core deriveTaskStoreDir 解析并记忆，监听器
@@ -15,11 +18,16 @@
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
 import type { ForgeSettingsService } from '@dsh-forge/contracts'
+import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptDispatchJobs } from './faces.js'
-import type { DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
+import { createNarrator } from './notify/index.js'
+import type { NarrationChannel } from './notify/index.js'
+import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
+import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
@@ -111,16 +119,82 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       jobsFace = undefined
     }
+    // agents 注册表可选消费（S2——叙述通道/裁决问询的活根解析，同 reflect.get 防御读取
+    // 三先例）：适配为 NarrationChannel（notice=agent.inject 零模型回合 / followup=agent
+    // .followup 新回合，decisions #17/#28）。服务缺席/异常 = 通道降级为 no-op（R4——叙述
+    // 静默缺席，循环正确性只依赖宿主事件）。
+    let agentsRegistry: AgentLookupFace | undefined
+    try {
+      const viaReflect = ctx.reflect?.get('agents') as AgentLookupFace | undefined
+      if (viaReflect !== undefined && typeof viaReflect.get === 'function') agentsRegistry = viaReflect
+    } catch {
+      agentsRegistry = undefined
+    }
+    // userQuestions 面可选消费（S2——无参枚举问询 + 第三层裁决投递，同防御读取先例）：
+    // 缺席 = 问询降级（枚举路径指引带参直通；裁决静默终局——问询非循环正确性依赖）。
+    let askFace: EscalationAskFace | undefined
+    try {
+      const viaReflect = ctx.reflect?.get('userQuestions') as EscalationAskFace | undefined
+      if (viaReflect !== undefined && typeof viaReflect.ask === 'function') askFace = viaReflect
+    } catch {
+      askFace = undefined
+    }
+    const narrationChannel: NarrationChannel =
+      agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { notice: async () => {}, followup: async () => {} }
+    // S2 宿主派发循环装配单例（run-tasks-host-command S1b/S1c 接线）：驱动器 + 叙述面 +
+    // 第三层裁决挂钩。deps.projectId 缺席——指令面按敲指令会话 cwd 逐会话解析
+    // （LoopStartInput.projectId 覆盖）。第二层处置钩子（triage）不接线：钩子 run 面缺
+    // 每循环 parent/signal 载体（LoopTriageInput 无会话身份），缺席 = 驱动器装配降级
+    // （blocked 无 follow-up 仅落盘续领）——接缝扩展留后续任务。
+    const spawn = createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    const loopDriver = createLoopDriver({
+      tasks: ctx.forgeTasks,
+      spawn,
+      narrator: createNarrator({ channel: narrationChannel }),
+      events: sink,
+      ...(settingsService !== undefined ? { settings: settingsService } : {}),
+      ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      ...(askFace !== undefined
+        ? {
+            escalation: createUserQuestionsEscalation({
+              ask: askFace,
+              ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
+            }),
+          }
+        : {}),
+    })
+    const resolveProjectId = createProjectResolver(config.projects ?? [], config.bindingsFile)
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
-      resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
+      resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
-      spawn: createInProcessDriverSpawn(),
+      spawn,
     })
+    // S2 指令两枚注册（ctx.inject(['commands']) 的防御读取形态——cordis 4.0.4 无 '?'
+    // 可选 inject 后缀，同 forgeSettings/llm/jobs/agents 四先例）：commands 服务缺席 =
+    // 指令不注册 fail-soft（R3——不阻载插件，六 tool 面零影响）；注销器并入插件 disposer。
+    let disposeCommands: (() => void) | undefined
+    try {
+      const commands = ctx.reflect?.get('commands') as CommandRegisterFace | undefined
+      if (commands !== undefined && typeof commands.register === 'function') {
+        const forgeCommands = createForgeCommands({
+          driver: loopDriver,
+          tasks: ctx.forgeTasks,
+          resolveProjectId,
+          ...(askFace !== undefined ? { ask: askFace } : {}),
+        })
+        const registered = [commands.register(forgeCommands.runDagTasks), commands.register(forgeCommands.stopDagTasks)]
+        disposeCommands = () => {
+          for (const dispose of registered) dispose()
+        }
+      }
+    } catch {
+      disposeCommands = undefined
+    }
     // S3 启动对账（run-tasks-host-command 图 D）：进程重启 → 插件装配 → reconcileInterrupted
     // 逐绑定项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
     // 之③在装配时点恒真——循环登记表进程内不持久化，重启即空（活循环启动只会晚于装配），
@@ -152,6 +226,7 @@ const forgePlugin: ForgePlugin = Object.assign(
         order: FORGE_SECTION_ORDER,
         text: renderForgePipelineSection(),
       }),
+      ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
     ]
     return () => {
       for (const dispose of disposers) dispose()
@@ -285,3 +360,10 @@ export {
   resetExclusiveLoopSources,
   setExclusiveLoopSource,
 } from './dispatch-core/index.js'
+// S2（run-tasks-host-command）指令两枚——/run-dag-tasks 与 /stop-dag-tasks（UI command
+// plane 执行零模型消息；注册面 = 装配方 reflect.get('commands') 防御读取 fail-soft）。
+export { createForgeCommands, FORGE_COMMAND_NAMES, NO_ACTIVE_LOOP_TEXT, nonTerminalSourcesOf } from './commands/index.js'
+export type { ForgeCommands, ForgeCommandsDeps, RunDagTasksDeps, SourceCandidate, StopDagTasksDeps } from './commands/index.js'
+// S2 宿主服务收窄面与适配层（faces.ts 增员——commands 注册表/agents 注册表 + 叙述通道适配）。
+export { adaptAgentNarrationChannel, FORGE_NOTICE_SOURCE_KIND } from './faces.js'
+export type { AgentLookupFace, CommandRegisterFace, ForgeCommandDefinition, ForgeCommandInvocation, ForgeCommandResult } from './faces.js'
