@@ -752,10 +752,10 @@ describe('D42/D45 会话行 hover 动作组（官方 fading 模式 + 三钮 ⋯/
   // （apps/web 测试面无 node:fs 类型面——d36/d38 CSS pin 同落 tests/structure 先例）。
 })
 
-// ─────────────────────────── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 兜底面渲染） ───────────────────────────
+// ─────────────────────────── S7 改版·R2 循环左缘标记（决策 #30——文字徽标退役，行左缘流光承载状态） ───────────────────────────
 
-describe('S7 派发循环会话徽标（兜底面 = 产品会话行——上游 sidebar 徽标缝不可挂接的记账面）', () => {
-  it('活循环行渲染徽标：data-dswf-session-loop 状态锚 + slug 随行 + 状态词在场', () => {
+describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退至 aria；数据链零改动）', () => {
+  it('running 行 = 左缘流光标记（data-dswf-session-loop-edge 锚随行）+ 行 aria 承载 slug+状态词；文字徽标退役', () => {
     const markup = panel({
       tree: [
         node({
@@ -773,15 +773,59 @@ describe('S7 派发循环会话徽标（兜底面 = 产品会话行——上游 
         }),
       ],
     })
+    // 状态锚 + slug 随行（树视图行面）
     expect(markup).toContain('data-dswf-session-loop="running"')
     expect(markup).toContain('data-dswf-session-loop-slug="feat-x"')
-    expect(markup).toContain('派发循环中')
-    expect(markup).toContain('feat-x')
-    // 徽标挂在派发会话行内（锚序——loop 锚在行 data-dswf-session 之后）
-    expect(markup.indexOf('data-dswf-session="s-dispatch"')).toBeLessThan(markup.indexOf('data-dswf-session-loop='))
+    // 左缘流光标记件在场（running 锚）
+    expect(markup).toContain('data-dswf-session-loop-edge="running"')
+    // 语义层：aria-label = 任务源 slug + 状态词（D30 零原生 title 纪律延续）
+    expect(markup).toContain('aria-label="任务源 feat-x · 状态 派发循环中"')
+    // 1.8 文字徽标退役（chip 类零残留——class 全等判；loopedge 左缘件是另一前缀不在此列）
+    expect(markup).not.toContain('class="dswf-sidebar-session-loop"')
+    // 标记挂在派发会话行内（锚序——loop 锚在行 data-dswf-session 之后）
+    expect(markup.indexOf('data-dswf-session="s-dispatch"')).toBeLessThan(
+      markup.indexOf('data-dswf-session-loop-edge='),
+    )
   })
 
-  it('无 loop 行零徽标（基线面板零回归——普通会话行语言不变）', () => {
-    expect(panel()).not.toContain('data-dswf-session-loop')
+  it('starting/stopping 行 = 琥珀静态左缘（edge 锚随行 + 状态词入 aria）；无 slug = aria 回退派发循环词', () => {
+    const markup = panel({
+      tree: [
+        node({
+          sessions: [
+            {
+              sessionId: 's-start',
+              title: '启动会话',
+              status: 'running',
+              updatedAt: NOW - 30_000,
+              pinned: false,
+              archived: false,
+              loop: { status: 'starting', slug: null },
+            },
+            {
+              sessionId: 's-stop',
+              title: '收尾会话',
+              status: 'running',
+              updatedAt: NOW - 30_000,
+              pinned: false,
+              archived: false,
+              loop: { status: 'stopping', slug: 'feat-y' },
+            },
+          ],
+        }),
+      ],
+    })
+    expect(markup).toContain('data-dswf-session-loop="starting"')
+    expect(markup).toContain('data-dswf-session-loop-edge="starting"')
+    expect(markup).toContain('data-dswf-session-loop="stopping"')
+    expect(markup).toContain('data-dswf-session-loop-edge="stopping"')
+    expect(markup).toContain('aria-label="派发循环启动中"')
+    expect(markup).toContain('aria-label="任务源 feat-y · 状态 停止中"')
+  })
+
+  it('非活循环行零标记（基线面板零回归——普通会话行语言不变、无锚无边）', () => {
+    const markup = panel()
+    expect(markup).not.toContain('data-dswf-session-loop')
+    expect(markup).not.toContain('dswf-sidebar-session-loopedge')
   })
 })

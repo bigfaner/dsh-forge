@@ -34,7 +34,7 @@
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
 // 态机持有者；SidebarProjectsZone = 受控展示件（过滤/视图应用/相位正交的静态可测面）；
 // SidebarRail = 收起态受控展示件（图标列——fix-42 抽出同型受控缝）。
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Button,
   DisclosureRow,
@@ -69,6 +69,7 @@ import {
   SIDEBAR_VIEW_DEFAULT,
   relativeTimeLabel,
   sessionDotState,
+  sessionLoopAriaLabel,
   shouldCollapseFilterOnBlur,
   sidebarArchivedFilterOf,
   sidebarFilterOf,
@@ -204,30 +205,38 @@ interface SessionRowActions {
 }
 
 /**
- * 派发循环徽标（S7·run-tasks-host-command 1.8——SC8 dispatcher 会话可识别）。
+ * 派发循环行左缘标记（S7 改版·R2·决策 #30——run-tasks-host-command 1.8 文字徽标退役）。
  * 兜底面记账（proposal S7「上游 sidebar 徽标缝任务内核实」）：上游缝存在但本产品
  * 不可挂接——① `sidebar.session.row.leading` 座契约明文只在行主状态 idle 时挂载
  * （dsh-client-ui-workspace slots.d.ts：「never renders beside a status dot」），循环
  * 运行中会话恰是 live-activity 态（running 点占位）——徽标要出现的时刻正是该座被
  * 撤换的时刻；hover 座仅悬浮卡打开时挂载。② 决定性：本产品 sidebar.workspaces 洞位
  * 由 ForgeSidebarSlot 以 priority -100 影子占用（plugin.ts 2.7 槽位路线 A），官方
- * WorkspaceBrowser 及其两座在本产品不挂载。故徽标落产品自有会话行（本组件），
+ * WorkspaceBrowser 及其两座在本产品不挂载。故循环状态落产品自有会话行（本组件），
  * 数据经账本行 projectionValues['forge-dispatch-loop'] 窄读（sidebar-model
  * sessionLoopBadge——零新增 RPC、零新增记录）。
- * 文案 = 用户视角状态词（机制词零出现）；slug 随行 = data 锚 + aria-label（D30 原生
- * title 退役——结构 pin tests/structure/d30；行宽守卫省略面 CSS 承载）。
+ * R2 形态（预览工件 walkthrough/loop-visual-marker-preview-v2.html 变体 R2 为准绳）：
+ * 行左缘 2-3px 标记即循环状态——running = 蓝色连续流光（CSS-only 渐变
+ * background-position 动画，sidebar.css dswf-loop-flowdown）；starting/stopping =
+ * 琥珀静态左缘；非活循环族 = 零标记（sessionLoopBadge 派生同 1.8 语义）。扫视层归
+ * 图形，语义层退至 hover/aria——行 aria-label 承载「任务源 slug + 状态词」
+ * （sessionLoopAriaLabel；D30 零原生 title 纪律延续）。离开 running 后左缘 2s 渐隐
+ * （fading 态——CSS 动画 opacity 收敛后卸载；reduced-motion 降级全静态）。
  */
-function SessionLoopBadgeMark({ loop }: { loop: SessionLoopBadge }): ReactNode {
-  const label = loop.status === 'starting' ? '启动中' : loop.status === 'stopping' ? '停止中' : '派发循环中'
+function SessionLoopEdgeFade({
+  status,
+  onDone,
+}: {
+  status: SessionLoopBadge['status']
+  onDone: () => void
+}): ReactNode {
   return (
     <span
-      className="dswf-sidebar-session-loop"
-      data-dswf-session-loop={loop.status}
-      {...(loop.slug !== null ? { 'data-dswf-session-loop-slug': loop.slug } : {})}
-      aria-label={loop.slug === null ? `派发循环${label}` : `派发循环${label} ${loop.slug}`}
-    >
-      {label}
-    </span>
+      className="dswf-sidebar-session-loopedge"
+      data-dswf-session-loop-fading={status}
+      aria-hidden="true"
+      onAnimationEnd={onDone}
+    />
   )
 }
 
@@ -277,6 +286,19 @@ function SessionRow({
   actions?: SessionRowActions
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
+  // S7 R2：循环离场渐隐态（running 离开活循环族 → 左缘 ≤2s 渐隐后归普通行；本地
+  // 微观态不持久化——上一次循环状态记翻转判据；stopping 直接退场零渐隐=琥珀静态缘
+  // 本就无动效语义）
+  const [fadeStatus, setFadeStatus] = useState<SessionLoopBadge['status'] | null>(null)
+  const prevLoopRef = useRef(row.loop)
+  useEffect(() => {
+    const prev = prevLoopRef.current
+    prevLoopRef.current = row.loop
+    if (prev !== undefined && row.loop === undefined && prev.status !== 'stopping') {
+      setFadeStatus(prev.status)
+    }
+  }, [row.loop])
+  const loop = row.loop
   const interactive = onActivate !== undefined
   // D45 动作可用性逐位（回调缺席 = 钮/项缺席——P1 纯展示件零缺省动作）
   const pinAvailable = actions?.onPinToggle !== undefined && !row.archived
@@ -300,6 +322,12 @@ function SessionRow({
       data-selected={selected || undefined}
       data-pinned={row.pinned || undefined}
       data-archived={row.archived || undefined}
+      // S7 R2：循环状态锚随行（活循环族在场 = 左缘标记；锚 + slug 随行供测试/语义面）
+      data-dswf-session-loop={loop?.status}
+      {...(loop?.slug !== undefined && loop.slug !== null
+        ? { 'data-dswf-session-loop-slug': loop.slug }
+        : {})}
+      aria-label={loop !== undefined ? sessionLoopAriaLabel(loop) : undefined}
       onClick={
         onActivate === undefined
           ? undefined
@@ -321,12 +349,22 @@ function SessionRow({
           : undefined
       }
     >
+      {/* S7 R2 左缘循环标记（绝对定位行左缘——running 流光/琥珀静态；离场渐隐态
+          由 fading 锚承载，onAnimationEnd 卸载归普通行；reduced-motion 全静态降级） */}
+      {loop !== undefined ? (
+        <span
+          className="dswf-sidebar-session-loopedge"
+          data-dswf-session-loop-edge={loop.status}
+          aria-hidden="true"
+        />
+      ) : fadeStatus !== null ? (
+        <SessionLoopEdgeFade status={fadeStatus} onDone={() => setFadeStatus(null)} />
+      ) : null}
       <span className="dswf-sidebar-session-dot">
         {/* 归档行前导槽空白（官方 archived row keeps the cell blank 同判） */}
         {row.archived ? null : <StateDot state={sessionDotState(row.status)} size={10} />}
       </span>
       <span className="dswf-sidebar-session-title">{row.title}</span>
-      {row.loop !== undefined ? <SessionLoopBadgeMark loop={row.loop} /> : null}
       <span className="dswf-sidebar-session-time">{relativeTimeLabel(row.updatedAt, now)}</span>
       {hasActions ? (
         // D42/D45 行尾 hover 动作组（机制与记账见组件文档块；容器 stopPropagation 防双触发）

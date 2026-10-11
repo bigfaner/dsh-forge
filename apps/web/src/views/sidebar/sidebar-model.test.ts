@@ -6,7 +6,9 @@ import {
   buildSidebarTree,
   relativeTimeLabel,
   sessionDotState,
+  sessionLoopAriaLabel,
   sessionLoopBadge,
+  sessionLoopStatusLabel,
   sessionStatus,
   SIDEBAR_SESSION_WINDOW_MS,
   SIDEBAR_VIEW_DEFAULT,
@@ -619,5 +621,18 @@ describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——�
     const rows = sidebarFlatRowsOf([node])
     expect(rows.find((r) => r.sessionId === 's2')?.loop).toEqual({ status: 'running', slug: 'feat-x' })
     expect(rows.find((r) => r.sessionId === 's1')?.loop).toBeUndefined()
+  })
+
+  it('R2 语义层：状态词三态 + aria-label =「任务源 slug + 状态词」（无 slug 回退派发循环词——徽标退役词不消失）', () => {
+    expect(sessionLoopStatusLabel('starting')).toBe('启动中')
+    expect(sessionLoopStatusLabel('running')).toBe('派发循环中')
+    expect(sessionLoopStatusLabel('stopping')).toBe('停止中')
+    expect(sessionLoopAriaLabel({ status: 'running', slug: 'feat-x' })).toBe(
+      '任务源 feat-x · 状态 派发循环中',
+    )
+    expect(sessionLoopAriaLabel({ status: 'stopping', slug: 'feat-y' })).toBe(
+      '任务源 feat-y · 状态 停止中',
+    )
+    expect(sessionLoopAriaLabel({ status: 'starting', slug: null })).toBe('派发循环启动中')
   })
 })

@@ -120,6 +120,24 @@ export function sessionLoopBadge(row: LedgerSessionRow): SessionLoopBadge | unde
   return { status: candidate.status as SessionLoopBadge['status'], slug }
 }
 
+/**
+ * 循环状态词（用户视角三态——1.8 文字徽标词表沿袭；R2 徽标退役后词不消失，
+ * 退至 aria/hover 语义层）。
+ */
+export function sessionLoopStatusLabel(status: SessionLoopBadge['status']): string {
+  return status === 'starting' ? '启动中' : status === 'stopping' ? '停止中' : '派发循环中'
+}
+
+/**
+ * 循环行语义层 aria（R2·决策 #30——扫视层归图形[左缘流光]，语义层归文字）：
+ * 「任务源 slug + 状态词」；无参问询路径（slug null）回退「派发循环 + 状态词」
+ * （日志不可知零猜测）。D30 零原生 title 纪律延续——aria 承载、hover 同文本。
+ */
+export function sessionLoopAriaLabel(loop: SessionLoopBadge): string {
+  const word = sessionLoopStatusLabel(loop.status)
+  return loop.slug === null ? `派发循环${word}` : `任务源 ${loop.slug} · 状态 ${word}`
+}
+
 /** 面板项目节点（项目 = forge projects 行；会话 = 该项目 workspace 名下账本行） */
 export interface SidebarProjectNode {
   readonly projectId: string

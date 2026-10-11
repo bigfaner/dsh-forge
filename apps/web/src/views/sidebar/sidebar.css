@@ -371,35 +371,73 @@
   display: none; /* hover 让位：三钮显形（官方 marker↔button 同位互换） */
 }
 
-/* ── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 dispatcher 会话可识别；
+/* ── S7 改版·R2 派发循环会话行左缘标记（run-tasks-host-command 决策 #30——1.8 文字徽标
+ * 退役，行左缘 2-3px 即循环状态；规格准绳 = 预览工件 walkthrough/
+ * loop-visual-marker-preview-v2.html 变体 R2[十六进制为占位，此处全映射 design tokens]。
  * 数据 = 账本行 projectionValues['forge-dispatch-loop'] 窄读（sessionLoopBadge），
- * 记账见 ForgeWorkspacePanel.tsx SessionLoopBadgeMark 文档块。行语言 = 官方行内 chip
- * 刻度：xs 行高 + radius-sm + tertiary 弱化（时间标签同档），活循环 ongoing 色点前导） ── */
-.dswf-sidebar-session-loop {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px; /* dsw-raw 官方 chip 内距刻度 */
-  margin-right: 6px; /* dsw-raw 官方行语言（title 右距同款） */
-  padding: 0 6px; /* dsw-raw 官方 chip 水平内距刻度 */
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xs-13);
-  line-height: 16px; /* dsw-raw 官方 xs chip 高刻度 */
-  max-width: 72px; /* 行宽守卫——slug 超长省略（aria-label 全文提示，D30 零原生 title） */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+ * 记账见 ForgeWorkspacePanel.tsx SessionLoopEdgeFade 文档块。形态：running = 蓝色连续
+ * 流光（渐变 background-position 动画——CSS-only 合成器友好，仅活循环行有动画）；
+ * starting/stopping = 琥珀静态左缘；非活循环族 = 零渲染。语义层退至 hover/aria
+ * （行 aria-label = 任务源 slug + 状态词；D30 零原生 title 纪律延续） ── */
+.dswf-sidebar-session[data-dswf-session-loop] {
+  overflow: hidden; /* 左缘标记随行圆角收敛（radius-md 内切——流光不戳出圆角） */
 }
 
-.dswf-sidebar-session-loop::before {
-  content: '';
-  flex: none;
-  width: 6px; /* dsw-raw 状态点小刻度（xs chip 内——StateDot size 同族缩档） */
-  height: 6px;
-  border-radius: 50%; /* dsw-raw 原型圆点刻度（pschip-dot/task-tab contdot 同款豁免） */
-  background: var(--dsw-alias-business-primary); /* 循环进行中 = 远征蓝（task-tab contdot 同语义） */
+.dswf-sidebar-session-loopedge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px; /* dsw-raw 预览页 R2 左缘刻度（2-3px 档——取 3px 扫视可见性） */
+  pointer-events: none;
+  background: var(--dsw-alias-state-warn-primary); /* starting/stopping = 突击琥珀静态左缘 */
+}
+
+.dswf-sidebar-session-loopedge[data-dswf-session-loop-edge='running'] {
+  background-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--dsw-alias-business-primary) 30%,
+    color-mix(in srgb, var(--dsw-alias-business-primary) 55%, transparent) 50%,
+    var(--dsw-alias-business-primary) 70%,
+    transparent 100%
+  );
+  background-size: 100% 260%;
+  background-repeat: no-repeat;
+  animation: dswf-loop-flowdown 2.2s linear infinite; /* 预览页 v2 流光时长同刻 */
+}
+
+@keyframes dswf-loop-flowdown {
+  to {
+    background-position: 0 260%;
+  }
+}
+
+/* 离场渐隐（状态从 running 离开 → 左缘 ≤2s 渐隐后归普通行；fading 锚保留末态色，
+ * 动画 opacity 收敛后 onAnimationEnd 卸载） */
+.dswf-sidebar-session-loopedge[data-dswf-session-loop-fading] {
+  animation: dswf-loop-fade 2s ease forwards;
+}
+
+@keyframes dswf-loop-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* reduced-motion 全静态降级：running 流光停为静态蓝缘；fading 直接隐没（动画缺席时
+ * 不触发 onAnimationEnd——opacity 0 兜底，行面即普通行） */
+@media (prefers-reduced-motion: reduce) {
+  .dswf-sidebar-session-loopedge[data-dswf-session-loop-edge='running'] {
+    animation: none;
+    background-image: none;
+    background: var(--dsw-alias-business-primary); /* 循环进行中 = 远征蓝（task-tab contdot 同语义） */
+  }
+
+  .dswf-sidebar-session-loopedge[data-dswf-session-loop-fading] {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .dswf-sidebar-session-actions:focus-within ~ .dswf-sidebar-session-pinmark {
