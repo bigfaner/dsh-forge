@@ -43,7 +43,7 @@ const WCO_BAND_PX = 32
 // ─────────────────────────────────────────────────────────────────────────────
 // AC「标记 + 补偿面」：preload 标记在场 + 官方 frame padding/拖拽条 + 折叠钮带区内居中
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 + 折叠钮带区内居中', async () => {
+test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 + 折叠钮 D40 回流形态', async () => {
   test.setTimeout(240_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-wtb-'))
   const { app, page, pageErrors } = await launchHost({ userData })
@@ -72,23 +72,25 @@ test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 +
     expect(frameGeo?.paddingTop, 'frame padding-top=32px（整帧内容让出原生钮带区）').toBe(`${WCO_BAND_PX}px`)
     expect(frameGeo?.dragRegion, 'frame :before 拖拽条（顶部空白带可拖窗）').toBe('drag')
 
-    // ③ 官方侧栏折叠钮：32px 带区内垂直居中（fixed 定位公式 top=calc((32-28)/2)=2px）
+    // ③ 官方侧栏折叠钮（fix-7 面级窗口随迁对齐——87a95cb D40 残差记账承接）：官方 WCO
+    // toggle position:fixed 带内居中退役 → static 回流 logoRow（brand 右侧）+ 官方
+    // iconButton 家族 36px 命中刻度（pin-15 ⑮-3/⑮-6 同值单源——radius 刻度归结构 pin，
+    // 此处不重复）。带区不变式随形改承载：整钮在原生钮带之下（y ≥ 32——静态回流不与
+    // 系统钮区重叠；带本体归 ② 的 frame 补偿面）。
     const toggle = page.locator(SIDEBAR_COLLAPSE_BUTTON).first()
-    await expect(toggle, '官方折叠钮在场（windows-titlebar 模式 fixed 定位）').toBeVisible({ timeout: 30_000 })
+    await expect(toggle, '官方折叠钮在场（D40 logoRow 回流态）').toBeVisible({ timeout: 30_000 })
     const toggleGeo = await page.evaluate((selector: string) => {
       const el = document.querySelector(selector)
       if (el === null) return null
       const cs = getComputedStyle(el)
       const rect = el.getBoundingClientRect()
-      return { position: cs.position, y: rect.y, height: rect.height }
+      return { position: cs.position, y: rect.y, height: rect.height, width: rect.width }
     }, SIDEBAR_COLLAPSE_BUTTON)
     expect(toggleGeo, '折叠钮几何可读').not.toBeNull()
-    expect(toggleGeo?.position, '折叠钮 position=fixed（官方 windows-titlebar 模式）').toBe('fixed')
-    expect(toggleGeo?.y, '折叠钮在带区内（y ≥ 0——不沉出上边界）').toBeGreaterThanOrEqual(0)
-    expect(
-      (toggleGeo?.y ?? 0) + (toggleGeo?.height ?? 0),
-      `折叠钮整钮在带区内（y+高 ≤ ${WCO_BAND_PX}px——垂直居中不越带）`,
-    ).toBeLessThanOrEqual(WCO_BAND_PX)
+    expect(toggleGeo?.position, '折叠钮 position=static（D40 对冲回流——官方 fixed 带内居中退役）').toBe('static')
+    expect(toggleGeo?.y, '折叠钮整钮在原生钮带之下（y ≥ 32——static 回流零带区重叠）').toBeGreaterThanOrEqual(WCO_BAND_PX)
+    expect(toggleGeo?.height, '折叠钮命中区高 36px（官方 rail iconButton 家族刻度——D40）').toBe(36)
+    expect(toggleGeo?.width, '折叠钮命中区宽 36px（同上）').toBe(36)
 
     // 运行时元断言（台账 L824 口径：pageerror 面）
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])

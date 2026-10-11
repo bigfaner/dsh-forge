@@ -130,7 +130,10 @@ async function launchInstalled(
     devProfile: false,
     dismiss: options?.dismiss ?? true, // 零 UI boot 传 false（毒化面防护）
     env: { TEMP: tmp, TMP: tmp },
-    timeouts: { bootReady: 120_000, loaderLive: 120_000, workbenchVisible: 60_000 },
+    // fix-7：firstWindow 随安装形态慢盘窗（launch.ts 契约「安装形态 120s」——缺省缺席即
+    // playwright 30s 界，installed exe 直启两轮池同界超时实证 31.3s/31.1s；boot 链后续
+    // 三门本就 120s/120s/60s——本行为契约缺项补齐，非窗口放宽）
+    timeouts: { firstWindow: 120_000, bootReady: 120_000, loaderLive: 120_000, workbenchVisible: 60_000 },
   })
 }
 
@@ -189,7 +192,10 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     await expect(page.locator(SIDEBAR_ANY).first(), '产品工作区面板').toBeVisible()
     await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口').toBeVisible()
     await expect(page.locator(PROJECT_ROW_ANY), '零项目态：项目树空').toHaveCount(0)
-    await expect(page.locator(workbenchOfView('session')).first(), '中区结构位').toBeAttached()
+    // fix-7 定性收口（smoke-skeleton L44 同源矛盾）：view 镜像 = 官方面板态投影（hero 相位
+    // 产品 'dswf-hero' 面板替换呈现 → 镜像恒 'hero'）；本组自带零项目 hero 确定相位（组题
+    // 即证 + 下方 hero/CTA 断言组同真相）——镜像按相位断终态，无条件 session 断言退役。
+    await expect(page.locator(workbenchOfView('hero')).first(), '中区结构位（hero 相位镜像终态）').toBeAttached()
     await expect(page.locator(HERO).first(), 'hero 空态 + CTA（零项目确定相位）').toBeVisible()
     await expect(page.locator(CTA_ADD_PROJECT)).toBeVisible()
     await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '右栏默认收起（fix-23 官方右栏 frame 锚）').toBeAttached()

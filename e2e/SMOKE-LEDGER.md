@@ -29,7 +29,7 @@
 |---|---|---|---|
 | L41 | 左栏渲染(纯菜单与导航) | `#root nav[aria-label]` 可见 + `[data-dswf-sidebar]` 可见 | 载体适配：M0 左栏 = 官方 sidebar 壳（路线 A）+ 产品工作区面板，非原型自绘纯菜单 |
 | L42 | 左栏 = 品牌/新会话/知识库入口/项目树/设置 | `button[aria-label="知识库"]` 可见 + `.dswf-sidebar-sectionlabel`「项目」可见 | 载体适配：品牌/新会话/设置 = 官方壳承继域；知识库入口 = 官方 panellist 行（fix-25：产品 nav 行迁官方 PanelRow）；项目树 = 产品面板 |
-| L44 | 默认中区 = 会话视图(conv 可见 / knview 隐藏) | `[data-dswf-workbench][data-dswf-view="session"]` + `[data-dswf-knowledge-view]` 隐藏；相位门 ∈ {hero, session} | M0 语义：hero = 首用替换呈现（UF-2），session = 会话视图；知识视图恒隐藏语义不变；中区 = 官方 ConversationRoot（fix-25 影子退役），视图镜像锚 = 壳宿主 |
+| L44 | 默认中区 = 会话视图(conv 可见 / knview 隐藏) | `[data-dswf-workbench][data-dswf-view="session"]` + `[data-dswf-knowledge-view]` 隐藏；相位门 ∈ {hero, session} | M0 语义：hero = 首用替换呈现（UF-2），session = 会话视图；知识视图恒隐藏语义不变；中区 = 官方 ConversationRoot（fix-25 影子退役），视图镜像锚 = 壳宿主。fix-7 定性收口：view 镜像 = 官方面板态投影（centerViewOf——hero 相位产品面板替换呈现 → 镜像恒 `hero`），无条件 session 断言命中的只是 boot 驱动落位前的首帧瞬态 → 按稳定相位断镜像终态（session 相位断言原样；hero 相位断 hero 镜像在场——瞬态命中改终态命中，断言强度只增） |
 | L45 | tabs = 对话/轨迹/知识召回 | `[data-conversation-tabs] [role="tab"]` 计 3 + 三 label 可见（真实会话载体归 session-workbench Step3/krf；无会话面 = 官方语义无页签行） | fix-25：官方 roster 形态——对话 = 官方 chat 直用，轨迹/知识召回 = 产品登记项（官方头部链点亮已白拿）；页签行会话作用域——无会话/空白会话不渲染（官方语义） |
 | L46 | 右栏默认收起(轨道归零) | `[data-rightbar-collapsed]` 在场 | fix-23 锚迁移：右栏 = 官方 AppFrame 第三列（ui-sidebar-right）——frame 收起标记承载「轨道归零」语义（自研 data-dswf-dock 退役） |
 
@@ -61,20 +61,20 @@
 | L760 | ① 单击选中 → 按钮解禁 | 点 `dsh-demo` 行 → enabled | 夹具目录替原型本地目录（dsh-demo 名称保持） |
 | L769 | ② 工作区目录自动回填表单 | `[data-dswf-rf-ws]` 值 + readonly | 无适配 |
 | L770 | ② 项目名自动取文件夹名 | `[data-dswf-rf-name]` = `dsh-demo` | 无适配 |
-| L771 | ② 任务清单与记录自动派生且只读(分隔符扁平化为 -) | `[data-dswf-rf-tasks]` = `~/.dsh-forge/<扁平化路径>` + readonly | 载体适配：M0 前缀 = 展示口径 `~/.dsh-forge`（真实 home 注入归配置面）；扁平化算法同口径（`Z:\a\b` → `Z-a-b`）整串断言 |
-| L773 | ② 任务清单与记录位于表单最下方(目录字段之后) | 末 `.dswf-rf-row` 含 tasks 输入 | 无适配 |
+| L771 | ② 任务清单与记录自动派生且只读(分隔符扁平化为 -) | `[data-dswf-dsr="ready"]` 派生行 ready + `[data-dswf-dsr-dir]` 全路径逐字 = core `deriveTaskStoreDir` 单源同值 | 载体适配：M0 前缀 = 展示口径 `~/.dsh-forge`（真实 home 注入归配置面）；扁平化算法同口径（`Z:\a\b` → `Z-a-b`）整串断言。fix-7 就地迁移：4.3 派生行 RPC 化（整行替换——unit pin「非 input value」，旧 `data-dswf-rf-tasks` input 形态废除）→ 呈现面 = `{tasksHome}/{flatten}@{hash8}` 全路径逐字（SC2 锚），core 单源同值断言——只读语义升级 = 零输入位，断言强度只增 |
+| L773 | ② 任务清单与记录位于表单最下方(目录字段之后) | 末 `.dswf-rf-row`（kn 行）与 `.dswf-dsr` 派生行序断言（`compareDocumentPosition`） | fix-7 载体适配：派生行 = 4.3 `DerivedTaskStoreRow`（非 rf-row 输入位）——序语义不变 |
 | L777 | ② forge 目录(文档位置)按工作区构建预填 | `[data-dswf-rf-forge]` = `<ws>\.forge` | 无适配 |
 | L778 | ② 知识库目录按工作区构建预填且可改 | `[data-dswf-rf-kn]` = `<ws>\.knowledge` + 非 readonly | 无适配 |
 | L779 | ② forge 目录字段位于知识库目录之上 | `compareDocumentPosition` 序断言 | 无适配 |
 | L783 | ② 目录字段均带「浏览…」(文件浏览器改选) | `浏览…` 按钮 × 2 | 无适配 |
 | L784 | ② 文档位置 = forge 目录输入(仓内/仓外 radio 已并入) | radio 计 0 + 仓内 chip 可见 | 无适配 |
-| L785 | ② 默认召回域字段已移除(默认加载改走 AGENTS.md · 提案记账) | 表单 input 全集 = 5（ws/name/forge/kn/tasks） | 载体适配：以字段全集盘点承载「无此字段」（M0 从未有该字段，负向盘点同语义） |
+| L785 | ② 默认召回域字段已移除(默认加载改走 AGENTS.md · 提案记账) | 表单 input 全集 = 4（ws/name/forge/kn） | 载体适配：以字段全集盘点承载「无此字段」（M0 从未有该字段，负向盘点同语义）。fix-7 计数随 4.3 派生行零输入位化 5→4 |
 | L786 | ② 底部按钮 =「确认」 | `.dswf-rf-confirm` 文本 = 确认 | 无适配 |
 | L791 | ③ 浏览 = 叠加文件浏览器(表单保持,共两层) | `[data-dswf-rf="browsing"][target=knowledgeDir]` + 标题「选择知识库目录」 | 载体适配：M0 = 模态内同位浏览面板（「返回表单」保留已填——表单状态保持语义不变）；原型 = 叠层两对话框 |
 | L798 | ③ 浏览确认 → 回填知识库目录(叠层关闭,表单仍在) | 确认选 `.knowledge` → 回 form 相位 + kn 值更新 | 同上载体适配 |
 | L803 | ④ 重新选择 → 回到文件浏览器 | 表单「重新选择」→ 同位浏览面板 `[data-dswf-rf="browsing"][target=workspace]`（标题「选择工作区目录」与原型对话框同文） | 载体适配：M0 = 表单内同位浏览面板（表单状态保持）；流程级「返回上一步」repick 相位同径 relink——换选联动语义不变 |
 | L807 | ④ 换选工作区:回填 + 未手改字段重构(forge/项目名) | 换选 `legacy-app` → ws/forge/name 重构 | 无适配 |
-| L810 | ④ 任务清单随工作区重新派生(扁平化) | tasks 值 = 新扁平化路径 | 无适配 |
+| L810 | ④ 任务清单随工作区重新派生(扁平化) | 派生行 ready 收敛 + `[data-dswf-dsr-dir]` = core 单源新目录同值 | fix-7 载体适配：同 L771（4.3 RPC 化呈现面——core 单源同值断言） |
 | L811 | ④ 浏览选定的知识库目录保留(不随工作区重构) | kn 保持 `dsh-demo\.knowledge` | 无适配 |
 
 ### 组三（条件留痕）：⑤ 入库 + 已注册标记 + hero

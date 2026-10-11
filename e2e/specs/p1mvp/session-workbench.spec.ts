@@ -30,7 +30,7 @@
 //
 // 载体面（launch/dismiss/close/RPC/解码族/清理/dogfood）经 e2e/support 支撑层（fix-37 ①；
 // LaunchOpts.dogfood 死旗标已随收编删除——fix-37 ⑦）。
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
@@ -62,6 +62,23 @@ import {
   trajectoryRow,
   workbenchOfView,
 } from '../../support/anchors.js'
+
+/**
+ * workspace 账本绑定行探测（{dshHome}/storages/workspace.json 官方持久化面直读——文件
+ * 直读零交互零状态变更，compensation spec registry 探针同纪律）：任一 workspace 行
+ * sessionIds 非空 = 官方账本存在被绑定会话（fresh home 首用 boot 初始会话绑定实证锚）。
+ * 缺席/形状漂移 = false（零绑定 → 走 sessionless 分支断原语义）。
+ */
+function workspaceLedgerHasBoundSession(dshHome: string): boolean {
+  try {
+    const raw = JSON.parse(readFileSync(join(dshHome, 'storages', 'workspace.json'), 'utf8')) as {
+      tables?: { workspaces?: Record<string, { sessionIds?: readonly string[] }> }
+    }
+    return Object.values(raw.tables?.workspaces ?? {}).some((row) => (row.sessionIds?.length ?? 0) > 0)
+  } catch {
+    return false
+  }
+}
 
 /** 工作区夹具：{root}/<name>（含哨兵文件——「列出文件」fixture 消息的确定性工具调用对象） */
 function makeWorkspaceFixture(name: string): string {
@@ -135,59 +152,62 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     await expect(sessionRow.locator('.dswf-sidebar-session-time'), '行语言：相对时间在场').not.toBeEmpty()
     // 回答呈现于对话 tab
     await expect(page.locator(CONVERSATION_CONTENT).first()).toBeAttached()
-    // fix-38 ②：真实 active 相位——书海背景在场（资产随应用内主题口径：暗色 paper/浅色 ink；
-    // 官方缺省 preference=system 随 OS——按 body 标记现状断言，不假设浅色）
+    // fix-38 ②：真实 active 相位——书海背景在场。裁决沿革（brand.css 头注，2026-10-06
+    // 用户裁决）：v3 双资产纹理（::before ink/paper 互换、仅 active 相位）退役为历史档，
+    // 现行 = 「鲸游书海」统一插画 whale-hero-bg.svg ::after 全相位全视图常驻（hero .88 /
+    // 其余相位 .4 可读性分层；主题跟随经 filter 提亮层承载）。断言随行迁移（锚 ::after +
+    // 统一资产——在场/主题跟随/沉底结构三面强度保持）：
     await expect
       .poll(
         async () =>
           await page
             .evaluate(() => {
               const el = document.querySelector('[data-conversation-content]')
-              return el === null ? '' : window.getComputedStyle(el, '::before').backgroundImage
+              return el === null ? '' : window.getComputedStyle(el, '::after').backgroundImage
             })
             .catch(() => ''),
-        { timeout: 30_000, message: 'fix-38：active 相位书海背景在场（鲸游书海 v3）' },
+        { timeout: 30_000, message: 'fix-38：active 相位书海背景在场（鲸游书海统一插画）' },
       )
-      .toContain('whale-sea-bg-')
-    const whaleSeaBg = await page
-      .evaluate(() => {
-        const el = document.querySelector('[data-conversation-content]')
-        const dark = document.body.hasAttribute('data-ds-dark-theme')
-        return {
-          dark,
-          bg: el === null ? '' : window.getComputedStyle(el, '::before').backgroundImage,
-        }
-      })
-      .catch(() => ({ dark: false, bg: '' }))
-    expect(
-      whaleSeaBg.bg,
-      '资产与应用内主题口径一致（暗色 paper / 浅色 ink）',
-    ).toContain(whaleSeaBg.dark ? 'whale-sea-bg-paper.svg' : 'whale-sea-bg-ink.svg')
-    // fix-44：覆层底边让出 composer 座——几何断言（evaluate 双 rect 对照）：覆层
-    // （[data-conversation-content]::before）底边 y ≤ composer 卡顶 y（鲸/书海主体完整
-    // 可见于输入框上方）。覆层底边 = content 底边 − ::before 解析 bottom inset；卡座 =
-    // [data-composer-input] 最近 form/card/composer 祖先（probe-geo.mjs 测量口径同源
-    // ——active 遮挡带实测：静息 106px/工具往返中 128px，brand.css 锚工作带定值 134px
-    // 含余量，两态断言均成立）。
-    const seaGeo = await page
+      .toContain('whale-hero-bg.svg')
+    // 主题跟随（应用内口径）：双向显式翻转断言（brand spec 同径）——dark = filter 提亮
+    // 去饱和在场、摘除标记即回（资产互换退役后的主题层形态）
+    const seaFilter = async (dark: boolean): Promise<string> =>
+      await page
+        .evaluate((d) => {
+          if (d) document.body.setAttribute('data-ds-dark-theme', '')
+          else document.body.removeAttribute('data-ds-dark-theme')
+          const el = document.querySelector('[data-conversation-content]')
+          return el === null ? '' : window.getComputedStyle(el, '::after').filter
+        }, dark)
+        .catch(() => '')
+    expect(await seaFilter(true), '暗色主题：插画提亮层在场（filter 承载——资产互换退役）').toContain('brightness')
+    expect(await seaFilter(false), '浅色回位：提亮层退场（应用内主题即时跟随）').not.toContain('brightness')
+    // fix-44 沿革（统一插画裁决随行迁移）：v3「覆层底边让出 composer 座」几何面退役——
+    // 现行沉底结构 = 宿主 isolation:isolate + 覆层 ::after z-index:-1（「输入卡浮于书海」
+    // = 官方层序结构性承载，总纲原型同构）。结构断言四面（对照面锚 content 不变）：
+    const seaStruct = await page
       .evaluate(() => {
         const content = document.querySelector('[data-conversation-content]')
-        const input = document.querySelector('[data-composer-input]')
-        if (content === null || input === null) return null
-        const bottomInset = Number.parseFloat(window.getComputedStyle(content, '::before').bottom)
-        const card = input.closest('form,[class*="card"],[class*="composer"]') ?? input
+        if (content === null) return null
+        const cs = window.getComputedStyle(content)
+        const overlay = window.getComputedStyle(content, '::after')
         return {
-          overlayBottomY: content.getBoundingClientRect().bottom - bottomInset,
-          cardTopY: card.getBoundingClientRect().y,
+          isolation: cs.isolation,
+          overlayZ: overlay.zIndex,
+          overlayPe: overlay.pointerEvents,
+          overlayOpacity: overlay.opacity,
         }
       })
       .catch(() => null)
-    expect(seaGeo, 'fix-44 几何对照面在场（content 锚 + composer 卡）').not.toBeNull()
-    if (seaGeo !== null) {
+    expect(seaStruct, 'fix-44 结构对照面在场（content 锚 + 覆层伪元素）').not.toBeNull()
+    if (seaStruct !== null) {
+      expect(seaStruct.isolation, '插画宿主栈上下文（z-index:-1 生效前提）').toBe('isolate')
+      expect(seaStruct.overlayZ, '插画沉底（正文/输入卡恒在其上——官方层序承载）').toBe('-1')
+      expect(seaStruct.overlayPe, '覆层不拦截指针（pointer-events:none）').toBe('none')
       expect(
-        seaGeo.overlayBottomY,
-        'fix-44：覆层底边 y ≤ composer 卡顶 y（背景母版不被输入框遮挡）',
-      ).toBeLessThanOrEqual(seaGeo.cardTopY)
+        Number.parseFloat(seaStruct.overlayOpacity),
+        'active 相位可读性降透明档（brand.css .4 档——总守护 ≤ .85）',
+      ).toBeLessThanOrEqual(0.85)
     }
 
     // ── Step 3 success：三签唯一性 + 官方轨迹视图 + 切回不重置 ──
@@ -573,9 +593,26 @@ test('@web-e2e @p1mvp session-workbench·Step5/6 可达子集：官方右栏休�
     await page.waitForTimeout(3_000)
     const conversation = page.locator(MAIN_CONVERSATION).first()
 
-    // 官方右栏休眠形态（fix-23 无会话面）：frame 收起标记在场 + 无展开钮（官方原生语义）
+    // 官方右栏休眠形态（fix-23 右栏 = 会话作用域）：frame 收起标记在场；展开钮 = 官方
+    // 会话面内 per-session 角钮（ui-sidebar-right ExpandButton——会话面在场 + 该会话右栏
+    // 收起 → 渲染）。fix-7 定性（launch env 净化后 fresh 隔离 home 首用 boot 恒走官方
+    // first-use 链：default workspace 行创建 + 初始会话绑定——compensation Step1/2
+    // registry 实证）：「无会话面 = 无展开钮」的旧前提（boot 后无会话期）不再成立——
+    // 会话面在场 = 展开钮在场为官方正确形态。会话作用域语义改按账本事实双向承载：
+    // 账本存在绑定会话的 workspace 行 → 展开钮在场；零绑定行（真 sessionless 态）→
+    // 展开钮必须缺席（原语义保留——零弱化：双向都断）。
     await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '右栏收起（官方 frame 锚）').toBeAttached()
-    await expect(page.locator(SIDEBAR_RIGHT_EXPAND), '无会话面 = 无展开钮（官方休眠）').toHaveCount(0)
+    {
+      const anyBound = workspaceLedgerHasBoundSession(join(userData, 'dsh-home'))
+      if (anyBound) {
+        await expect(
+          page.locator(SIDEBAR_RIGHT_EXPAND).first(),
+          '展开钮在场（会话面在场 + 右栏收起——官方会话作用域；fix-7 首用会话定性）',
+        ).toBeAttached()
+      } else {
+        await expect(page.locator(SIDEBAR_RIGHT_EXPAND), '无会话面 = 无展开钮（官方休眠）').toHaveCount(0)
+      }
+    }
 
     // 知识模式：中区视图互换（官方 keyed main——会话面板让位卸载，状态归官方 store 自持；
     // 右栏本就休眠——不变式「无知识视图+右栏可见」成立）

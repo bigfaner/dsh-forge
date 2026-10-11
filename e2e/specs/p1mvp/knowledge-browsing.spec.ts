@@ -37,6 +37,7 @@ import {
   KNOWLEDGE_VIEW,
   KN_CARDS,
   KN_SKELETON,
+  WORKBENCH,
   workbenchOfView,
 } from '../../support/anchors.js'
 
@@ -75,7 +76,10 @@ function makeKnowledgeFixture(): string {
 // 可服务（ZAI_CODING_CN_API_KEY 环境在场）则弹窗不挂装。CI 无该 env 时复启链路测试
 // 将受弹窗毒化影响——转正条件见 SMOKE-LEDGER 口径。（launchHost providerOverlay 形态）
 
-/** 注册夹具项目（RPC 直注——向导 UI 走查归 project-registration 旅程） */
+/** 注册夹具项目（RPC 直注——向导 UI 走查归 project-registration 旅程）。
+ * fix-7 收敛前置：注册写推送驱动工作台相位翻转（hero→session——registerProject 写推送
+ * 同 navigation.ts revealRightbar 前置门口径），未收敛即点知识库入口会与相位驱动竞态
+ * （知识视图挂载即被视图重置压回 hidden——Step1b cycle-4 实证 30s 恒 hidden）。 */
 async function registerKbProject(page: Page, fixtureRoot: string): Promise<string> {
   const wsDir = join(fixtureRoot, 'kb-demo')
   const result = await forgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
@@ -84,6 +88,7 @@ async function registerKbProject(page: Page, fixtureRoot: string): Promise<strin
     forgeDir: join(wsDir, '.forge'),
     knowledgeDir: join(wsDir, '.knowledge'),
   })
+  await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
   return result.projectId
 }
 

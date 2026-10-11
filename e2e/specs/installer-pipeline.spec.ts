@@ -34,7 +34,12 @@ test('打包形态（staged resources）boot：manifest + 双服务 + sqlite + �
         DSH_FORGE_RESOURCES_DIR: STAGING,
       },
     })
-    const page: Page = await app.firstWindow()
+    // fix-7 boot 瞬败族收口（环境纪律记账——launch.ts 头注同口径）：staged boot =
+    // bootDshHost（child spawn + profile 装配）先于首窗，内存受限/慢盘环境首窗可越
+    // Playwright 缺省 30s（fix-9 实证瞬败一次 + 复跑全绿；本套件复跑同型）——安装形态
+    // firstWindow 预算 120s（launch.ts LaunchHostOptions.timeouts 注记的安装形态刻度），
+    // 断言面零变化。
+    const page: Page = await app.firstWindow({ timeout: 120_000 })
     // SC-NFR（Hard Rule）：安装包资源自足——renderer 全程零远程请求（回环 webserver 除外）
     page.on('request', (request) => {
       const url = request.url()

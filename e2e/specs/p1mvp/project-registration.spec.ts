@@ -14,12 +14,13 @@
 //   - hero 相位：[data-dswf-workbench][data-dswf-phase=hero|session]；CTA [data-dswf-cta=add-project]
 // 隔离：独立 userData + 独立端口（e2e 单实例纪律——端口经 e2e/support 分配器，fix-37）。
 // 载体面（launch/dismiss/close/RPC/seed）经 e2e/support 支撑层（fix-37 ①）。
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
 import type { KnowledgeCard } from '../../../packages/contracts/src/dto/knowledge.js'
+import { deriveTaskStoreDir } from '../../../packages/core/src/forge/workspace/derive-dir.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
@@ -29,10 +30,12 @@ import { rmDirBestEffort } from '../../support/cleanup.js'
 import {
   AP_ANY,
   CTA_ADD_PROJECT,
+  DSR_DIR,
   FB_ERROR,
   NAV_ADD_PROJECT,
   WORKBENCH,
   addProjectPhase,
+  dsrOf,
   rfBrowsing,
   rfField,
   rfIssue,
@@ -63,11 +66,8 @@ async function openFlowAtFixtureRoot(page: Page, fixtureRoot: string): Promise<v
   await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
 }
 
-/** canonical path 扁平化（form-model.flattenWorkspacePath 同口径） */
-function flattenPath(dir: string): string {
-  const normalized = dir.replaceAll('/', '\\').replace(/\\+$/, '')
-  return normalized.replace(/^([A-Za-z]):/, '$1').replaceAll('\\', '-')
-}
+/** canonical path 扁平化（form-model.flattenWorkspacePath 同口径）——4.3 派生行 RPC 化后
+ *  呈现面 = core deriveTaskStoreDir 单源（本 helper 退役；断言改 core 单源同值，fix-7） */
 
 /** 表单段走查到「确认」可点（选中目标目录 → 下一步 → 表单就位） */
 async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string): Promise<string> {
@@ -111,18 +111,21 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     const name = page.locator(rfField('name'))
     const forge = page.locator(rfField('forge'))
     const kn = page.locator(rfField('kn'))
-    const tasks = page.locator(rfField('tasks'))
     await expect(ws).toHaveValue(targetDir)
     expect(await ws.getAttribute('readonly'), '工作区目录只读回填').not.toBeNull()
     await expect(name).toHaveValue('reg-demo')
     await expect(forge).toHaveValue(`${targetDir}\\.forge`)
     await expect(kn).toHaveValue(`${targetDir}\\.knowledge`)
     expect(await kn.getAttribute('readonly'), '知识库目录可改').toBeNull()
-    await expect(tasks).toHaveValue(`~/.dsh-forge/${flattenPath(targetDir)}`)
-    expect(await tasks.getAttribute('readonly'), '任务清单与记录只读派生').not.toBeNull()
+    // fix-7 载体适配（4.3 派生行 RPC 化——unit pin「非 input value」）：任务清单派生 =
+    // DerivedTaskStoreRow 单源下发全路径逐字呈现（workspace-registration 同律：core 单源
+    // 计算 ≡ 表单呈现）；旧 rf-tasks input 形态废除，只读语义升级 = 零输入位
+    const derivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(targetDir))
+    await expect(page.locator(dsrOf('ready')), '任务清单派生行 ready（RPC 单源下发）').toBeVisible({ timeout: 30_000 })
+    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单与记录只读派生（core 单源同值）').toBe(derivedExpected)
     expect(await page.locator('.dswf-rf input[type="radio"]').count(), '仓内/仓外无 radio 字段').toBe(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
-    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 5（不含「默认召回域」）').toHaveCount(5)
+    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 4（ws/name/forge/kn——派生行 4.3 零输入位化）').toHaveCount(4)
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
     // Step 4 success：确认 → 不可交互中断执行态 → 四步链
@@ -356,7 +359,10 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
     await expect(page.locator(rfField('ws'))).toHaveValue(dirB)
     await expect(page.locator(rfField('name')), '项目名重取').toHaveValue('rederive-b')
     await expect(page.locator(rfField('forge')), 'forge 目录默认值重算').toHaveValue(`${dirB}\\.forge`)
-    await expect(page.locator(rfField('tasks')), '任务清单重新派生').toHaveValue(`~/.dsh-forge/${flattenPath(dirB)}`)
+    // fix-7 载体适配（同 Step3）：重新派生 = 派生行随换选目录更新（core 单源同值断言）
+    const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(dirB))
+    await expect(page.locator(dsrOf('ready')), '任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
+    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单重新派生（core 单源同值）').toBe(rederivedExpected)
     await expect(page.locator(rfField('kn')), '浏览选定过的知识库目录保留原值').toHaveValue(`${dirA}\\.forge`)
   } finally {
     await closeApp(app)

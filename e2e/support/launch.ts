@@ -42,6 +42,25 @@ export interface RawLaunchOptions {
   readonly port?: number
 }
 
+/**
+ * 子会话环境净化（fix-7 环境纪律——DSH 宿主链会话继承的两枚毒化变量在启动面摘除）：
+ *  - ELECTRON_RUN_AS_NODE=1：harness .desktop-bin node.cmd shim 注入——electron 以 Node
+ *    模式启动即秒败（首轮池全体 journey 秒败根因；e2e/fixtures README 同记）。
+ *  - DSH_HOME：真 home 数据界——在场即压过 fix-26 缺省隔离（paths.ts 第三层，main.ts
+ *    `??=` 让位），e2e 变读污染真 home：官方工作区账本/会话恢复/凭据全串味（官方 dsh 继承
+ *    真 home 工作区标题→hero 芯片文案锚失配 + 真 home 状态拖慢 boot + 存储/凭据串场；
+ *    「仅调试/特殊布局有意使用」——e2e 恒隔离，paths.ts resolveDshHome 层注记同口径）。
+ *  显式口不动：DSH_FORGE_DSH_HOME（paths.ts 第一层显式覆盖）照传；凭据播种归 dogfood
+ *  specs 自管（launch 层不播种——零凭据 Hard Rule，见 launchHost 内注记），真 home 凭据
+ *  读面（~/.dsh）不经 DSH_HOME，零波及。
+ */
+function sanitizedLaunchEnv(): Record<string, string> {
+  const env = { ...process.env } as Record<string, string>
+  delete env.ELECTRON_RUN_AS_NODE
+  delete env.DSH_HOME
+  return env
+}
+
 /** 薄宿主原始启动（不做就绪链——调用侧自定义等待面） */
 export async function launchElectron(opts: RawLaunchOptions = {}): Promise<ElectronApplication> {
   const { _electron } = await import('@playwright/test')
@@ -50,7 +69,7 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
     executablePath: opts.executablePath ?? electronBinary,
     ...(installed ? {} : { args: [...(opts.args ?? ['.'])], cwd: opts.cwd ?? HOST_DIR }),
     env: {
-      ...process.env,
+      ...sanitizedLaunchEnv(),
       DSH_FORGE_PORT: String(opts.port ?? allocatePort()),
       ...opts.env,
     } as Record<string, string>,
@@ -167,6 +186,11 @@ export async function launchHost(opts: LaunchHostOptions): Promise<Launched> {
     timeouts,
   } = opts
   const overlayPath = providerOverlay ? writeProviderOverlay() : undefined
+  // 凭据播种不在本层（fix-7 cycle-3 定性收口）：隔离 dsh-home 缺 .credentials.yaml = 官方
+  // 零凭据形态（模型调用失败不影响会话建档——fix-42 台账 Hard Rule 零真实模型，tsl 族
+  // fixture 即此形态；launch 层无条件播种曾令零凭据 spec 变真实模型活会话——转录判据
+  // 被活体 agent 面污染，m2 tsl :173/:538 实证）。dogfood specs 自带播种（seedDshHome
+  // 同文件同字节）+ 叠层，launch 层零重复；onboarding 模态 = 既有 dismiss 纪律处置。
   const app = await launchElectron({
     executablePath,
     env: {

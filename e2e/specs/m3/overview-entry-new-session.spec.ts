@@ -76,7 +76,6 @@ import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
-import { bestSessionLog } from '../../support/session-files.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
@@ -92,22 +91,27 @@ function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[])
 }
 
 /**
- * 夹具工作区全部会话 id（现行日志 mtime 升序 = 发送先后序——fix-3② Step1e 回访锚：
+ * 夹具工作区全部会话 id（会话目录创建时间升序 = 发送先后序——fix-3② Step1e 回访锚，
  * 目录名 = 账本 sessionId，findFixtureSession 同口径扩展多会话枚举）。
+ * fix-7 排序口径修正：旧「现行日志 mtime 升序」在有真实模型链的形态下失效（dogfood 播种
+ * 或凭据在场——发送触发的 agent 链会把早会话日志持续写新（分钟级往返），mtime 序漂移成
+ * 「最近活动序」，Step1e 位置解构取错行 → 回访断言读到别的会话转录（cycle-3 实证：首会话
+ * 断言收到第三会话内容）。目录 birthtime = 会话开户时刻，与后续写入无关（ctime 兜底跨
+ * 平台）；发送先后序语义由此稳定承载——断言面零弱化。
  */
 function fixtureSessionIds(dshHome: string, fixtureSegment: string): string[] {
   const sessionsDir = join(dshHome, 'sessions')
   if (!existsSync(sessionsDir)) return []
-  const found: { id: string; mtime: number }[] = []
+  const found: { id: string; born: number }[] = []
   for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
     if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
     for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
       if (!sDir.isDirectory()) continue
-      const log = bestSessionLog(join(sessionsDir, wsDir.name, sDir.name))
-      found.push({ id: sDir.name, mtime: log !== undefined ? statSync(log).mtimeMs : 0 })
+      const st = statSync(join(sessionsDir, wsDir.name, sDir.name))
+      found.push({ id: sDir.name, born: st.birthtimeMs !== 0 ? st.birthtimeMs : st.ctimeMs })
     }
   }
-  return found.sort((a, b) => a.mtime - b.mtime).map((entry) => entry.id)
+  return found.sort((a, b) => a.born - b.born).map((entry) => entry.id)
 }
 
 test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突击/多文档/远征/无溯源）+ feature 恒远征 + 草稿独立 + 空意图发送', async () => {
@@ -139,8 +143,9 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    // 展开行先行：预填文档清单取自 docsMap（useProposalDocs 按需装载——展开行才拉
-    // listDocs；收起行打开会话 = 空清单）。真实用户审阅文档后开会的同径。
+    // 展开行先行（真实用户审阅文档后开会的同径）：文档区断言验 docsMap 按需装载
+    // （useProposalDocs——展开行才拉 listDocs）；预填文档清单则 = 点击时实时扫描
+    // （proposalSessionRequest → listDocs 直扫——收起行打开会话 ≠ 空清单），两数据面独立。
     const blitzRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Joe 多文档突击提案' }).first()
     await expect(blitzRow, '突击提案行在场').toBeVisible({ timeout: 30_000 })
     await blitzRow.locator('[data-dswf-ov-parent-toggle]').click()
@@ -430,6 +435,12 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     await expect(page.locator(CONVERSATION_CONTENT).first(), '任务键 + 失败记录逐行').toContainText('任务：')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '状态行（阻塞 + 原因）').toContainText('状态：')
     await expect(page.locator(CONVERSATION_CONTENT).first(), '修复请求行').toContainText('请求：')
+    // fix-7 收敛前置（m3.1 D21/D23 弹窗宿主形态随行迁移）：任务详情弹窗 = shell.overlay
+    // 常驻树受控挂载（对话中直接打开——开会不会话动线不自动关闭，D21/D23 裁决形态），
+    // 诊断发送后弹窗仍在场为现行正确形态。awaitNoLateModals 的「零 dialog」判据针对晚到
+    // onboarding 模态——先经 ✕ 关闭工作弹窗再验收敛（原语义保留：晚到模态仍须归零）。
+    await page.locator('[data-dswf-td-close]').click()
+    await expect(page.locator('[data-dswf-td-drawer]'), '工作弹窗显式关闭（D21/D23 受控卸载）').toHaveCount(0)
     await awaitNoLateModals(page)
     await awaitPresetHeaderLabel(page, '突击模式')
 

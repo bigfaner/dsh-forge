@@ -19,11 +19,23 @@ export async function enterDir(page: Page, name: string): Promise<void> {
 }
 
 /**
- * 右栏展开前置（5.2 实测口径）：零开页签态右栏官方休眠——banner「打开右侧边栏」
+ * 右栏展开前置（5.2 实测口径）：零开页签态右栏官方休眠——会话面 corner「打开右侧边栏」
  * 钮承载 reveal（aria 文案非 data-* 台账锚，留字面量）。已展开 = 幂等跳过。
+ * fix-7 前置收敛门：展开钮 = 官方 ui-sidebar-right ExpandButton（conversation.session.header
+ * .corner 注入——官方会话面板被选中 + 面内有会话才渲染）。全部消费面位于 registerProject
+ * 之后（注册成功 → projects 写推送 → 工作台 phase 翻 session → heroPanelDrive
+ * selectPanel(null) 官方面板选中）——先等相位驱动收敛再断言展开钮（消除「注册驱动 + 首用
+ * 会话面就位」竞态的盲等；门超时静默放行原断言——语义零改，只吃时序）。
  */
 export async function revealRightbar(page: Page): Promise<void> {
   if ((await page.locator(RIGHTBAR_COL).first().isVisible().catch(() => false)) === true) return
+  await page
+    .waitForFunction(
+      () => document.querySelector('[data-dswf-workbench]')?.getAttribute('data-dswf-phase') === 'session',
+      undefined,
+      { timeout: 60_000 },
+    )
+    .catch(() => undefined)
   const expand = page.locator('button[aria-label="打开右侧边栏"]').first()
   await expect(expand, '右栏休眠态展开钮在场（banner 面）').toBeVisible({ timeout: 30_000 })
   await expand.click()

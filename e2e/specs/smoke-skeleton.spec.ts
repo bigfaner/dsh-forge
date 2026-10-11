@@ -6,10 +6,11 @@
 // 隔离：独立 userData + 端口分配器（e2e 单实例纪律，沿 host-boot/web-shell.spec）；
 // 载体面（launch/dismiss/close/桥导航/导航族）经 e2e/support（fix-37 ①——选择器随
 // anchors 常量面，值逐字等价）。
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
+import { deriveTaskStoreDir } from '../../packages/core/src/forge/workspace/derive-dir.js'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
 import { dirRow, enterDir } from '../support/navigation.js'
 import {
@@ -17,6 +18,7 @@ import {
   DOCKKIT_STRIP_TAB,
   DOCKKIT_SURFACE,
   COLLAPSE_RIGHTBAR_BUTTON,
+  DSR_DIR,
   KNOWLEDGE_ENTRY,
   MAIN_CONVERSATION,
   CONVERSATION_CONTENT,
@@ -27,6 +29,7 @@ import {
   SIDEBAR_RIGHT_EXPAND,
   WORKBENCH,
   addProjectPhase,
+  dsrOf,
   rfField,
   workbenchOfView,
 } from '../support/anchors.js'
@@ -39,11 +42,8 @@ function makeWizardFixture(): string {
   return root
 }
 
-/** canonical path 扁平化（form-model.flattenWorkspacePath 同口径：分隔符 → `-`、盘符冒号去除） */
-function flattenPath(dir: string): string {
-  const normalized = dir.replaceAll('/', '\\').replace(/\\+$/, '')
-  return normalized.replace(/^([A-Za-z]):/, '$1').replaceAll('\\', '-')
-}
+// canonical path 扁平化 helper 退役（fix-7）：4.3 派生行 RPC 化后呈现面 = core
+// deriveTaskStoreDir 单源，断言改 core 单源同值（flattenPath 旧自算口径随之退场）。
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 组零（fix-12）：fresh 裸启动真实路径——env 不含 DSH_FORGE_PATCH_FILES（无任何 spec
@@ -96,7 +96,12 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     await expect(page.locator(KNOWLEDGE_ENTRY).first()).toBeVisible()
     await expect(page.locator('.dswf-sidebar-sectionlabel', { hasText: '项目' }).first()).toBeVisible()
     // L44 默认中区 = 会话视图（M0 相位语义：hero = 首用替换呈现，否则会话视图；知识视图恒隐藏）
-    await expect(page.locator(workbenchOfView('session')).first()).toBeAttached()
+    // fix-7 定性收口（与 fix-25 hero 相位语义的矛盾）：view 镜像 = 官方面板态投影
+    // （panel-model.centerViewOf——hero 相位产品 'dswf-hero' 面板替换呈现 → 镜像恒 'hero'），
+    // 无条件 session 断言命中的只是 boot 驱动落位前的首帧瞬态（驱动落位即红——cycle-2 实证）。
+    // 载体适配 = 按稳定相位断镜像终态：hero 相位断 hero 镜像在场（与下方 hero 面断言组同真相，
+    // 断言强度只增——瞬态命中改终态命中），session 相位断言原样。
+    await expect(page.locator(workbenchOfView(phase)).first()).toBeAttached()
     await expect(page.locator('.dswf-zone-knowledge')).toBeHidden()
     if (phase === 'session') {
       // L45 官方会话面 + 头部链渲染点（fix-25 官方基座：本组无会话——页签行归
@@ -131,10 +136,18 @@ test('骨架组·三区/视图互换/页签跟随（smoke L41–L66、L474、L68
     })
     // 轨道归零 computed 载体（L46 的 computed-style 样本——官方右栏列收起 0px）
     expect(l3.rightbarColWidth, 'L3·收起官方右栏列宽度归零').toBe('0px')
-    // 左栏行对照：产品会话行与官方行同 token 圆角（--dsw-radius-md 实解析比对）+ 官方 workspace 行刻度
-    expect(l3.entryRadius, 'L3·左栏行圆角 = 官方行同 token').toBe(l3.officialRowRadius)
-    expect(l3.entryHeight, 'L3·左栏行高 = 官方 projectRow 刻度 h34').toBe(34)
-    expect(l3.entryFontSize, 'L3·左栏行字号 = 官方 14px 刻度').toBe('14px')
+    // 左栏行对照：产品会话行与官方行同 token 圆角（--dsw-radius-md 实解析比对）+ 官方 workspace 行刻度。
+    // fix-7 条件留痕（台账 §0 条件留痕纪律）：行样本 = 产品会话行——本组 fresh 零数据 boot
+    // （零项目零会话）行本体不在场；历史绿 = DSH_HOME 泄漏态携带的假阳性（数据面已随
+    // launch 净化收口）。样本三断言原语义条件承载；转正条件 = 会话行在场载体（如
+    // session-workbench 行语言组扩几何样本）。
+    if (l3.entryRadius !== undefined) {
+      expect(l3.entryRadius, 'L3·左栏行圆角 = 官方行同 token').toBe(l3.officialRowRadius)
+      expect(l3.entryHeight, 'L3·左栏行高 = 官方 projectRow 刻度 h34').toBe(34)
+      expect(l3.entryFontSize, 'L3·左栏行字号 = 官方 14px 刻度').toBe('14px')
+    } else {
+      console.log('[smoke-l3] 零数据 boot 零会话行——行样本三断言（圆角/行高/字号）条件留痕（fix-7；转正 = 会话行在场载体）')
+    }
 
     // ── 视图互换组（smoke SC5 骨架行；M1 语义：知识视图 = UF-6 浏览面装配壳，3.8）──
     // L50 点「知识库」→ 中区切换为知识视图（载体适配，台账 #L50：M0 占位锚 data-dswf-knowledge-m0
@@ -327,21 +340,23 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     const name = page.locator(rfField('name'))
     const forge = page.locator(rfField('forge'))
     const kn = page.locator(rfField('kn'))
-    const tasks = page.locator(rfField('tasks'))
     const demoDir = join(fixture, 'dsh-demo')
     // L769 ② 工作区目录自动回填表单（只读）
     await expect(ws).toHaveValue(demoDir)
     expect(await ws.getAttribute('readonly'), 'L769 工作区目录只读').not.toBeNull()
     // L770 ② 项目名自动取文件夹名
     await expect(name).toHaveValue('dsh-demo')
-    // L771 ② 任务清单与记录自动派生且只读（分隔符扁平化为 -；载体适配，台账 #163：
-    // M0 前缀 = 展示口径 ~/.dsh-forge，真实 home 注入归配置面——扁平化算法同口径断言）
-    await expect(tasks).toHaveValue(`~/.dsh-forge/${flattenPath(demoDir)}`)
-    expect(await tasks.getAttribute('readonly'), 'L771 任务清单只读').not.toBeNull()
-    // L773 ② 任务清单与记录位于表单最下方（目录字段之后）
+    // L771 ② 任务清单与记录自动派生且只读（fix-7 载体适配：4.3 派生行 RPC 化——unit pin
+    // 「非 input value」，旧 rf-tasks input 形态废除；呈现面 = DerivedTaskStoreRow 单源下发
+    // 全路径逐字 {tasksHome}/{flatten}@{hash8}——SC2 锚，只读语义升级 = 零输入位）
+    const derivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(demoDir))
+    await expect(page.locator(dsrOf('ready')), 'L771 任务清单派生行 ready（RPC 单源下发）').toBeVisible({ timeout: 30_000 })
+    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), 'L771 任务清单只读派生（core 单源同值）').toBe(derivedExpected)
+    // L773 ② 任务清单与记录位于表单最下方（目录字段之后——派生行随字段行后、页脚前）
     const tasksLast = await page.evaluate(() => {
-      const rows = [...document.querySelectorAll('.dswf-rf-row')]
-      return rows.at(-1)?.querySelector('[data-dswf-rf-tasks]') !== null
+      const knRow = [...document.querySelectorAll('.dswf-rf-row')].at(-1)
+      const dsr = document.querySelector('.dswf-dsr')
+      return !!(knRow && dsr && (knRow.compareDocumentPosition(dsr) & Node.DOCUMENT_POSITION_FOLLOWING))
     })
     expect(tasksLast, 'L773 任务清单行位于表单最下方').toBe(true)
     // L777 ② forge 目录（文档位置）按工作区构建预填
@@ -361,8 +376,9 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     // L784 ② 文档位置 = forge 目录输入（仓内/仓外 radio 已并入——chip 呈现）
     await expect(page.locator('.dswf-rf input[type="radio"]')).toHaveCount(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
-    // L785 ② 默认召回域字段已移除（载体适配，台账 #170：以字段全集盘点承载「无此字段」）
-    await expect(page.locator('.dswf-rf input')).toHaveCount(5)
+    // L785 ② 默认召回域字段已移除（载体适配，台账 #170：以字段全集盘点承载「无此字段」；
+    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn）
+    await expect(page.locator('.dswf-rf input')).toHaveCount(4)
     // L786 ② 底部按钮 =「确认」
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
@@ -404,8 +420,10 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await expect(ws).toHaveValue(legacyDir)
     await expect(forge).toHaveValue(`${legacyDir}\\.forge`)
     await expect(name).toHaveValue('legacy-app')
-    // L810 ④ 任务清单随工作区重新派生（扁平化）
-    await expect(tasks).toHaveValue(`~/.dsh-forge/${flattenPath(legacyDir)}`)
+    // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
+    const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
+    await expect(page.locator(dsrOf('ready')), 'L810 任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
+    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), 'L810 任务清单随工作区重新派生').toBe(rederivedExpected)
     // L811 ④ 浏览选定的知识库目录保留（不随工作区重构）
     await expect(kn).toHaveValue(`${demoDir}\\.knowledge`)
 

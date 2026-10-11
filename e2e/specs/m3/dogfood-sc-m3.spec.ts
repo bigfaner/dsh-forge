@@ -48,8 +48,10 @@ import { findFixtureSession } from '../../support/session-files.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel } from '../../support/m3.js'
 import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 
-/** M3.5 真实提案（仓内 Draft——走查即立项启动；夹具内逐字拷贝） */
-const M35_REPO_PROPOSAL = join(ROOT, 'docs', 'proposals', 'dsh-forge-m3.5-knowledge-consolidation', 'proposal.md')
+/** M3.5 真实提案（仓内 Draft——走查即立项启动；夹具内逐字拷贝）。
+ * fix-7 路径随迁：提案登记体归 forge 状态层投影 .forge/docs/proposals/<slug>/（ tracked），
+ * 旧 docs/proposals/ 假设路径不存在（凭据在场形态首跑实证 ENOENT）——零弱化，同文件逐字拷贝。 */
+const M35_REPO_PROPOSAL = join(ROOT, '.forge', 'docs', 'proposals', 'dsh-forge-m3.5-knowledge-consolidation', 'proposal.md')
 const PROP = 'dsh-forge-m3.5-knowledge-consolidation'
 const PROP_TITLE = 'dsh-forge M3.5 知识沉淀与保鲜（进气端 + 保鲜端）'
 /** 成链 feature slug ≡ 提案 slug（同名成链裁决） */

@@ -114,6 +114,25 @@ function registrySnapshot(dshHome: string): string {
   return registryFileText(dshHome)
 }
 
+/**
+ * registry 趋稳基线快照（fix-7——fresh home 首用写落盘竞态除净）：隔离 dsh-home 首用
+ * boot 走官方 first-use 链（default workspace 行创建 + 初始会话绑定——本 spec Step1/2
+ * 实证行创建 +73ms 绑定落盘），持久化为异步写——基线快照早于落盘即把官方 boot 期写误报
+ * 成「挂接写 registry」。基线改「连续两读相同」趋稳门（1s 间隔 × 15s 窗，超时取末读不
+ * 阻塞）：快照语义不变（byte-equality 跨挂接流），只除 boot 期落盘时序——断言强度不变。
+ */
+async function stableRegistrySnapshot(dshHome: string): Promise<string> {
+  const deadline = Date.now() + 15_000
+  let last = registrySnapshot(dshHome)
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    const next = registrySnapshot(dshHome)
+    if (next === last) return next
+    last = next
+    if (Date.now() > deadline) return next
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 旅程冒烟：新建注册成功（Step1/2）→ ③注入失败补偿（Step3/4）→ 重试成功（Step5b）→ 孤儿=0
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,7 +247,8 @@ test('@web-e2e @p1mvp compensation·Step1/2 attach-branch + create-idempotent：
       knowledgeDir: join(dirA, '.knowledge'),
     })
     expect(first.attachedToExisting, '①预检未命中 = 新建分支').toBe(false)
-    const registryBefore = registrySnapshot(join(userData, 'dsh-home'))
+    // fix-7：基线取趋稳快照（首用 boot 期官方写落盘竞态除净——helper 头注）
+    const registryBefore = await stableRegistrySnapshot(join(userData, 'dsh-home'))
     // WAL 活删应用侧行（registry 保留——②幂等实体验证锚；挂接可达前置 = 应用库零行）
     {
       const db = openStateDb(userData)
@@ -295,7 +315,8 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
         db.close()
       }
     }
-    const registryBefore = registrySnapshot(join(userData, 'dsh-home'))
+    // fix-7：基线取趋稳快照（同 Step1/2——首用 boot 期官方写落盘竞态除净）
+    const registryBefore = await stableRegistrySnapshot(join(userData, 'dsh-home'))
     await dismissOnboardingModals(launched.page)
 
     // 行使：注册同一既有路径 → ①命中（挂接，无补偿登记）→ ③写入失败（workspace_id 冲突）
