@@ -10,6 +10,7 @@ import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
 import './styles/global.css'
 import './styles/brand.css'
 import './styles/wco.css'
+import './styles/cursors.css'
 import './product-views.js'
 import { bootShell, type ProductClientEntry } from './shell/index.js'
 

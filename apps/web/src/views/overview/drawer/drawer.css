@@ -52,7 +52,7 @@
   padding-inline: var(--dsw-font-xs-13-line-height);
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-interactive-bg-hover);
-  cursor: move;
+  cursor: var(--dsh-cursor-move, move); /* 全局光标系统（styles/cursors.css——OS 单色 move 光标纯白缺陷缓解） */
   user-select: none;
   touch-action: none;
 }
@@ -64,7 +64,7 @@
   bottom: 0;
   width: 9px; /* dsw-raw 原型手柄宽刻度 */
   z-index: 3;
-  cursor: col-resize;
+  cursor: var(--dsh-cursor-col-resize, col-resize); /* 全局光标系统（styles/cursors.css——D32 同病面收口） */
   touch-action: none;
 }
 
@@ -268,7 +268,7 @@
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-interactive-bg-hover); /* v12 块头底色条 */
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   user-select: none;
   text-align: start;
   min-width: 0;
@@ -412,7 +412,7 @@
 .dswf-td-ref.is-link {
   color: var(--dsw-alias-link);
   border-color: var(--dsw-alias-link);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-td-ref.is-link:hover {
@@ -625,7 +625,7 @@
   color: var(--dsw-alias-link);
   border-color: var(--dsw-alias-link);
   background: transparent;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-td-line {
@@ -790,7 +790,7 @@
   padding: 0;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-link);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-td-skeleton {

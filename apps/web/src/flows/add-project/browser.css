@@ -52,7 +52,7 @@
   font: inherit;
   font-family: inherit;
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-fb-crumb-seg:hover {
@@ -95,7 +95,7 @@
   border-radius: var(--dsw-radius-md);
   font: var(--dsw-font-s-14);
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   user-select: none;
 }
 
@@ -181,7 +181,7 @@
   background: transparent;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-primary-bluish);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* ── 底部：提示 + 确认钮（「下一步」/「选择此文件夹」） ── */

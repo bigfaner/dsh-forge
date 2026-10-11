@@ -28,7 +28,7 @@
 }
 
 .dswf-dtr-row[data-expandable] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* 图标位（静态业务图标 + 悬停/展开换 Chevron——SkillRow 同形制） */
@@ -196,7 +196,7 @@
   color: var(--dsw-alias-label-secondary);
   font-size: var(--dsw-font-xxxs-11);
   line-height: 16px; /* dsw-raw 上游检视钮行高刻度 */
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   transition: opacity 0.1s; /* dsw-raw 上游检视钮显形过渡刻度 */
   opacity: 0;
 }

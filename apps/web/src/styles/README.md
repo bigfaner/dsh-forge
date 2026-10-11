@@ -15,3 +15,12 @@
   圆角移除 + 收起 = 59px 竖排图标列常驻；锚定纪律 = 稳定结构面（`[data-shell-overlay]`
   / `[data-sidebar-collapsed]` / `[data-slot]` 洞锚），hash 类名零耦合；上游事实由
   `tests/contract/pin-15-wco-shell-compensation.test.ts` 机械 pin。
+- `cursors.css` —— 全局光标系统（D32 全局面接任 + 产品风格对齐，2026-10-11 用户裁决链
+  「风格要和应用一致 / 拖宽拖移不要过大 / 按钮指手全局修改——整个产品保持一致」）：
+  OS 单色光标（text/IBeam、col-resize、move）纯白不可辨缺陷的缓解 + 按钮指针族同化。
+  资产中央化（`--dsh-cursor-*` 自定义属性，四形：钢笔 / 缩小版双向箭头 / 缩小版十字
+  箭头 / Lucide「pointer」指手（ISC 派生））；配色 = 墨/纸正文同源（浅墨 `#0f1115` /
+  暗纸 `#f9fafb` 形体 + 反侧描边，随主题翻转；强调蓝归还链接/按钮专属位）；消费面
+  全局双窗体（会话消息文字 + 原生输入件 + 官方 DragHandle + drawer/dispatch-panel
+  拖拽面 var() 接线 + 指针面双径：产品 45 处 sweep 接线 + 中央元素阶梯兜官方包）；
+  机械面由 `tests/contract/pin-17-cursor-visibility.test.ts` pin。

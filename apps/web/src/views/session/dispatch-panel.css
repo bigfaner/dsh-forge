@@ -41,7 +41,7 @@
   padding: 0 6px 0 12px; /* dsw-raw 原型头内距刻度 */
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-interactive-bg-hover);
-  cursor: move;
+  cursor: var(--dsh-cursor-move, move); /* 全局光标系统（styles/cursors.css——D32 同病面「dispatch-panel move」收口） */
   user-select: none;
   touch-action: none;
 }
@@ -89,7 +89,7 @@
 }
 
 .dswf-dp-row[role='button'] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-dp-row[role='button']:hover {
@@ -128,7 +128,7 @@
   border-radius: var(--dsw-radius-xs);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-dp-open:hover {
@@ -158,7 +158,7 @@
   font: var(--dsw-font-xxs-strong-12);
   z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（面板同径） */
   pointer-events: auto;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-dp-badge:hover {

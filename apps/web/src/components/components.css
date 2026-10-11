@@ -57,7 +57,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-mode-chip:hover:not(:disabled) {

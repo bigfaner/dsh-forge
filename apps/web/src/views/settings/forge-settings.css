@@ -79,7 +79,7 @@
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-fs-dd-btn:hover:not(:disabled) {

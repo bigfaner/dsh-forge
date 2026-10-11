@@ -139,7 +139,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-ov-subtab:hover {
@@ -228,7 +228,7 @@
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-ov-stchip:hover:not(:disabled) {
@@ -303,7 +303,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   text-align: start;
 }
 
@@ -317,7 +317,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-ov-act:hover {
@@ -334,7 +334,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-ov-more:hover {
@@ -421,7 +421,7 @@
   padding: 0 var(--dsw-font-s-14-line-height);
   border: none;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   min-width: 0;
 }
 
@@ -496,5 +496,5 @@
   padding: 0;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-link);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }

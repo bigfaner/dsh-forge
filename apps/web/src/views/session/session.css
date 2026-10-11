@@ -80,7 +80,7 @@
 }
 
 button.dswf-recall-rowbtn {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 button.dswf-recall-rowbtn:hover {
@@ -205,7 +205,7 @@ button.dswf-recall-rowbtn:hover {
   background: transparent;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-primary-bluish);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-recall-retry:hover {

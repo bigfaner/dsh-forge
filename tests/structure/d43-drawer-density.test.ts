@@ -43,7 +43,11 @@ describe('D43 ① 拖移标题栏高收紧（AC-1：min-height < 38px）', () =>
 
   it('拖移手柄形态零回归：cursor move + touch-action none + 底缘线在场（全窗拖移命中面）', () => {
     const head = declsOf(drawerCss, '.dswf-td-head')
-    expect(head, 'cursor move（全窗拖移）').toContain('cursor: move')
+    // 2026-10-11 全局光标系统接线下 = var(--dsh-cursor-move) 消费（move 关键字降级链在值尾
+    // ——styles/cursors.css 中央资产，pin ⑰ 机械面；语义仍 = 全窗拖移 move）
+    expect(head, 'cursor move（全窗拖移——品牌光标资产消费 + move 降级链）').toContain(
+      'cursor: var(--dsh-cursor-move, move)',
+    )
     expect(head, 'touch-action none（指针拖移独占）').toContain('touch-action: none')
     expect(head, '标题栏底缘线（顶/底分界可辨）').toContain('border-bottom')
     expect(head, '头部区行距 gap 零误伤（行距仍整行高令牌）').toContain('gap: var(--dsw-font-xs-13-line-height)')

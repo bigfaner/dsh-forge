@@ -1,0 +1,112 @@
+/* 全局光标系统（定位：基础——光标资产中央化 + 全局面消费）。
+ *
+ * 裁决沿革（2026-10-11 用户）：
+ *   ① 「重新鼠标光标的效果，风格要和应用一致，移动到任何位置的视觉效果要明显，不要
+ *      让人看不出来（例：悬浮文字变纯白竖线融入白底）」——首版品牌蓝 + 白描边（v1，
+ *      本文件当日早版）；
+ *   ② 「风格不一致。整个产品的风格要一致。你设计一版，让我审核后，再修改」——v1 的
+ *      强调蓝全程跟指针 = 把点缀色升全局色，与产品「墨/纸」中性语言冲突，当日退役；
+ *   ③ v2~v4 审核稿（tmp/cursor-review/design 设计板 + 72 组合对比度度量）：
+ *      v2 墨/纸双色对 → v3 反馈「拖宽/拖移不要过大」+「按钮悬浮效果」（缩小版箭头 +
+ *      指手首稿）→ v4 反馈「按钮指手好丑」（指手换 Lucide 几何重制）；
+ *   ④ 「ok，按钮这个全局修改。整个产品要保持一致」——v4 终稿落地；
+ *   ⑤ 「鼠标线条再细一些」——v5 描边整体减细（钢笔 6/2 → 5/1.6；箭头族 4/2 → 3/1.8；
+ *      指手 5/2.2 → 4/1.8），对比度门随线宽复验全过；
+ *   ⑥ 「浅色时：光标外层有一圈白色的边框，去掉」——v6 浅色资产白描边层退役（纯墨
+ *      单层，视觉更干净）；暗色墨描边保留（暗底上本就不可见——不构成边框观感，仅
+ *      于白内容岛承对比）。已接受的取舍：浅色主题下光标悬于深色内容（贴入的暗图）
+ *      对比下降——与 OS 原生墨色光标同性质（v2~v5 的白描边保险层退役）。
+ *
+ * 沿革（D32 → 本块，wco.css D32 块退役迁此）：D32（2026-10-10）首启 OS 单色光标纯白
+ * 缺陷的产品侧缓解——Windows/DWM 单色光标渲染缺陷（Chromium issue 1366924 族）把
+ * col-resize 与 text（IBeam）渲成纯白、浅底不可辨（箭头/手形彩色光标不受影响）——但仅锚
+ * html[data-windows-titlebar]（WCO 桌面窗体）双表面：浏览器窗体（属性缺席）零覆盖，
+ * 产品自持面（drawer 拖宽缘/拖移头、dispatch-panel 拖移头、原生文本输入件）亦零覆盖。
+ * 本块接任 = 全局面：资产中央化（--dsh-cursor-* 自定义属性，var() 替换入 cursor——
+ * 单源），消费面不锚 WCO（「移动到任何位置」裁决口径）。
+ *
+ * 配色（墨/纸——与产品排版同源，v2 裁决）：形体色 = 正文 label-primary 同值（浅色墨
+ * #0f1115 = dsw-static-neutral-bluish-1000；暗色纸 #f9fafb = bluish-50）——正文色随
+ * 主题翻转的口径原样延伸到光标；强调蓝（--dsw-alias-link #4176e6/#7aaaff）归还
+ * 链接/按钮专属位（v1 蓝版退役动因）。描边（v6 裁决后非对称）：浅色 = 纯墨单层
+ * （白描边退役——v2~v5 保险层，浅底上由墨形体自承对比 ≥4.4:1）；暗色 = 纸形体 +
+ * 墨描边（暗底上描边不可见、白内容岛上承对比 18.9:1）。
+ * data-URI 内色值不可令牌化——随行 dsw-raw 记账（lint-tokens 口径），升级窗口令牌色
+ * 再对账。对比度度量口径（tmp/cursor-review）：浅色资产 = 浅色面族（白/侧栏/主钮蓝/
+ * 插画洗白带）全过；暗色资产 = 暗面族 + 白内容岛全过。
+ *
+ * 形体族（28px 基准；指手 26px）：
+ *   text       = 钢笔形（D32 裁决 #24 造型沿袭——斜向笔身 + 笔尖，热点 = 笔尖 6 22；
+ *                宽描边 5 + 实心填充描边 1.6——v5 减细）；
+ *   col-resize = 水平双向箭头缩小版（v3 用户反馈「不要过大」——视觉幅面 21px → 16px，
+ *                描边 3/1.8——v5 减细；热点 = 箭头中心 14 14）；
+ *   move       = 四向十字箭头缩小版（同上，D32 同病面「dispatch-panel move / drawer
+ *                拖移头」收口；热点 = 中心 14 14）；
+ *   pointer    = 指手（v3 用户反馈「按钮悬浮效果」新增；v4 首稿连指手套被否「好丑」，
+ *                换 Lucide「pointer」v1.55.0 几何（ISC 许可——业界成熟指手比例：食指
+ *                伸直 + 三指节蜷曲 + 虎口）双层描边重制（几何同源、声明重制非资产拷贝）；
+ *                26px 画布 viewBox -1 -1 26 26（1px 边距防描边裁切），描边 4/1.8——v5
+ *                减细，热点 = 指尖 9 3）。
+ * 降级链 = url() 资产 + 关键字回退（无图环境回退 OS 语义——D32 机制沿袭）。
+ *
+ * 消费面（全局面，随报随收台账——tests/contract/pin-17 机械 pin）：
+ *   ① 文字面：[data-conversation-content]（官方 chat 台账锚——消息文字可选中区容器级
+ *      cursor 继承，按钮类自持 pointer 不受波及【VS Code 编辑器面先例，D32 实机验证】）
+ *      + 原生文本输入件（input 文本族白名单 / textarea / contenteditable——控件族排除，
+ *      UA 光标语义不劫持）；
+ *   ② 分隔线 handle：官方 ui-layout DragHandle（frame 结构子 div[data-side]——官方
+ *      _handle{cursor:col-resize} 全 handle 族施用，本块同口径全族覆绘；浏览器窗体
+ *      frame/handle 同在，故不锚 WCO）；
+ *   ③ 产品自持拖拽面：drawer 拖宽缘（col-resize）/ drawer + dispatch-panel 拖移头
+ *      （move）——表面自持规则就地改接 var()（drawer.css / dispatch-panel.css）；
+ *   ④ 指针面（v4 用户裁决「按钮这个全局修改」——双径保「整个产品保持一致」）：
+ *      a. 产品自有面全量接线——apps/web/src 全部 cursor:pointer 声明（45 处 / 14 文件）
+ *         就地改接 var(--dsh-cursor-pointer)（零特异性博弈，pin 断言零残留）；
+ *      b. 中央元素阶梯兜官方包（官方 ui-* 自带 cursor:pointer 单/双类规则特异性
+ *         (0,1,0)/(0,2,0)——:root body 前缀 + :is/:not 组合 (0,3,2) 恒压之；元素/ARIA
+ *         语义锚 = button / a[href] / role=button|tab|menuitem|option / 控件型 input /
+ *         label / summary；:not 排除 disabled 族——禁用态 UA 灰语义不劫持）。 */
+
+/* ── 中央资产（浅色：纯墨单层——白描边 v6 用户裁决退役「外圈白色边框去掉」）── */
+:root {
+  --dsh-cursor-text: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='%230f1115'%20stroke='%230f1115'%20stroke-width='1.6'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5.8%2022.2L11.3%2019.4L18.7%2011.9L16.1%209.3L8.6%2016.7Z'/%3E%3C/g%3E%3C/svg%3E") 6 22, text; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（墨 = label-primary 同值 bluish-1000） */
+  --dsh-cursor-col-resize: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9.2%2010.6L6%2014L9.2%2017.4M18.8%2010.6L22%2014L18.8%2017.4M7.4%2014L20.6%2014'/%3E%3C/g%3E%3C/svg%3E") 14 14, col-resize; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（缩小版 16px 幅面——v3 用户裁决） */
+  --dsh-cursor-move: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%206L14%2022M6%2014L22%2014M11.6%208.4L14%206L16.4%208.4M11.6%2019.6L14%2022L16.4%2019.6M8.4%2011.6L6%2014L8.4%2016.4M19.6%2011.6L22%2014L19.6%2016.4'/%3E%3C/g%3E%3C/svg%3E") 14 14, move; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（缩小版 16px 幅面——v3 用户裁决） */
+  --dsh-cursor-pointer: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='26'%20height='26'%20viewBox='-1%20-1%2026%2026'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M22%2014a8%208%200%200%201-8%208M18%2011v-1a2%202%200%200%200-2-2a2%202%200%200%200-2%202M14%2010V9a2%202%200%200%200-2-2a2%202%200%200%200-2%202v1M10%209.5V4a2%202%200%200%200-2-2a2%202%200%200%200-2%202v10M18%2011a2%202%200%201%201%204%200v3a8%208%200%200%201-8%208h-2c-2.8%200-4.5-.86-5.99-2.34l-3.6-3.6a2%202%200%200%201%202.83-2.82L7%2015'/%3E%3C/g%3E%3C/svg%3E") 9 3, pointer; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（指手几何 = Lucide pointer v1.55.0（ISC）派生） */
+}
+
+/* ── 中央资产（暗色：纸形体 #f9fafb + 墨描边——body[data-ds-dark-theme] 应用内主题
+ *    口径（brand.css 先例，不经 prefers-color-scheme）；label-primary/bg-base 随主题
+ *    翻转的排版口径原样延伸）── */
+body[data-ds-dark-theme] {
+  --dsh-cursor-text: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5.8%2022.2L11.3%2019.4L18.7%2011.9L16.1%209.3L8.6%2016.7Z'/%3E%3C/g%3E%3Cg%20fill='%23f9fafb'%20stroke='%23f9fafb'%20stroke-width='1.6'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5.8%2022.2L11.3%2019.4L18.7%2011.9L16.1%209.3L8.6%2016.7Z'/%3E%3C/g%3E%3C/svg%3E") 6 22, text; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（纸 = label-primary 暗档同值 bluish-50） */
+  --dsh-cursor-col-resize: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9.2%2010.6L6%2014L9.2%2017.4M18.8%2010.6L22%2014L18.8%2017.4M7.4%2014L20.6%2014'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23f9fafb'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9.2%2010.6L6%2014L9.2%2017.4M18.8%2010.6L22%2014L18.8%2017.4M7.4%2014L20.6%2014'/%3E%3C/g%3E%3C/svg%3E") 14 14, col-resize; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化 */
+  --dsh-cursor-move: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%206L14%2022M6%2014L22%2014M11.6%208.4L14%206L16.4%208.4M11.6%2019.6L14%2022L16.4%2019.6M8.4%2011.6L6%2014L8.4%2016.4M19.6%2011.6L22%2014L19.6%2016.4'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23f9fafb'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%206L14%2022M6%2014L22%2014M11.6%208.4L14%206L16.4%208.4M11.6%2019.6L14%2022L16.4%2019.6M8.4%2011.6L6%2014L8.4%2016.4M19.6%2011.6L22%2014L19.6%2016.4'/%3E%3C/g%3E%3C/svg%3E") 14 14, move; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化 */
+  --dsh-cursor-pointer: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='26'%20height='26'%20viewBox='-1%20-1%2026%2026'%3E%3Cg%20fill='none'%20stroke='%230f1115'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M22%2014a8%208%200%200%201-8%208M18%2011v-1a2%202%200%200%200-2-2a2%202%200%200%200-2%202M14%2010V9a2%202%200%200%200-2-2a2%202%200%200%200-2%202v1M10%209.5V4a2%202%200%200%200-2-2a2%202%200%200%200-2%202v10M18%2011a2%202%200%201%201%204%200v3a8%208%200%200%201-8%208h-2c-2.8%200-4.5-.86-5.99-2.34l-3.6-3.6a2%202%200%200%201%202.83-2.82L7%2015'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23f9fafb'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M22%2014a8%208%200%200%201-8%208M18%2011v-1a2%202%200%200%200-2-2a2%202%200%200%200-2%202M14%2010V9a2%202%200%200%200-2-2a2%202%200%200%200-2%202v1M10%209.5V4a2%202%200%200%200-2-2a2%202%200%200%200-2%202v10M18%2011a2%202%200%201%201%204%200v3a8%208%200%200%201-8%208h-2c-2.8%200-4.5-.86-5.99-2.34l-3.6-3.6a2%202%200%200%201%202.83-2.82L7%2015'/%3E%3C/g%3E%3C/svg%3E") 9 3, pointer; /* dsw-raw 墨/纸光标——data-URI 内色值不可令牌化（指手几何 = Lucide pointer v1.55.0（ISC）派生） */
+}
+
+/* ① 文字面（消息文字区容器级继承 + 原生文本输入件直标；input 白名单排除控件族——
+ *    button/submit/reset/checkbox/radio/range/color/file 保持各自 UA/产品光标语义） */
+[data-conversation-content],
+input:where(:not([type]), [type='text' i], [type='search' i], [type='url' i], [type='tel' i], [type='email' i], [type='password' i], [type='number' i], [type='date' i], [type='month' i], [type='week' i], [type='time' i], [type='datetime-local' i]),
+textarea,
+[contenteditable=''],
+[contenteditable='true'] {
+  cursor: var(--dsh-cursor-text, text);
+}
+
+/* ② 分隔线 handle（官方 ui-layout DragHandle 全族——官方 _handle{cursor:col-resize}
+ *    同口径覆绘；frame 结构锚 = [data-shell-overlay] 父级直子 div[data-side]
+ *    【wco.css D1/D32 结构锚沿袭，hash 类名零耦合】。浏览器/WCO 双窗体同命中——
+ *    不锚 data-windows-titlebar） */
+div:has(> [data-shell-overlay]) > div[data-side] {
+  cursor: var(--dsh-cursor-col-resize, col-resize);
+}
+
+/* ④b 指针面中央元素阶梯（官方包兜底 + 未 sweep 的语义面；产品自持面已就地 var() 接线
+ *    ——双径一致性见文件头注记。特异性 (0,3,2) 恒压官方单/双类 cursor 规则；
+ *    :not 排除禁用族——disabled/aria-disabled 保 UA 禁用语义；a 限 [href]——死链
+ *    锚点保 default 语义） */
+:root body :is(button, a:where([href]), [role='button'], [role='tab'], [role='menuitem'], [role='option'], input:is([type='button' i], [type='submit' i], [type='reset' i], [type='checkbox' i], [type='radio' i], [type='file' i], [type='color' i]), label, summary):not([disabled], :disabled, [aria-disabled='true']) {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}

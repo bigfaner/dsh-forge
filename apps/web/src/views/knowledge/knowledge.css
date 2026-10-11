@@ -113,7 +113,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   text-align: start;
   user-select: none;
 }
@@ -161,7 +161,7 @@
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: inherit;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   text-align: start;
 }
 
@@ -256,7 +256,7 @@
   background: transparent;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-primary-bluish);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-kn-textaction:hover {

@@ -71,7 +71,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-diagbtn:hover {
@@ -123,7 +123,7 @@
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-seg-btn:hover {
@@ -174,7 +174,7 @@
 }
 
 .dswf-tt-item[role='button'] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* D36 ④②：行顶距减半（首行 = 视图顶距半程；行间 = 副行底距 + 本值——行距收紧）
@@ -298,7 +298,7 @@ body[data-ds-dark-theme] .dswf-tt-node {
 }
 
 .dswf-tt-node[role='button'] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-node-top {
@@ -421,7 +421,7 @@ body[data-ds-dark-theme] .dswf-tt-card {
 }
 
 .dswf-tt-card[role='button'] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-card-key {
@@ -504,7 +504,7 @@ body[data-ds-dark-theme] .dswf-tt-card {
   padding: 0;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-link);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* ── 菜单行（feature pill / ⋯ 行动作——官方 Menu 门户面行语言） ── */
@@ -549,7 +549,7 @@ body[data-ds-dark-theme] .dswf-tt-card {
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-viewbtn:hover {
@@ -572,7 +572,7 @@ body[data-ds-dark-theme] .dswf-tt-card {
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-dispatch.is-on {
@@ -652,7 +652,7 @@ body[data-ds-dark-theme] .dswf-tt-card {
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-link);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-tt-diagtoast-send:hover {

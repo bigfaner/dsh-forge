@@ -34,7 +34,7 @@
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-ov-pschip:hover:not(:disabled) {

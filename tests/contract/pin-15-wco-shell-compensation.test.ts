@@ -11,8 +11,9 @@
 //     /regionArea 结构锚的来源）；
 //   - ui-plugin-manager / ui-settings-general：panellist 插件行与 sidebar.settings 设置行
 //     官方占用（D2 轨内 ≥4 官方图标的承载面）。
-// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31/D32/D39/D40/D41
-// 验收的机械面）。
+// 末组反向 pin 本仓偏离块本体（wco.css 规则面 + 记账注释——D1/D2/D31/D39/D40/D41
+// 验收的机械面；D32 光标面 2026-10-11 全局面接任迁 pin ⑰——styles/cursors.css，
+// wco.css 内 D32 四规则已退役）。
 // hash 类名（pI_x6G_/hHd-Xa_）为构建期产物不逐字 pin——一律取 hash 无关的结构事实或
 // hash 容差正则；任一事实漂移（升级窗口）→ 本 pin 红 → wco.css 偏离块须显式对账。
 import { readFileSync } from 'node:fs'
@@ -228,34 +229,9 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     expect(sidebarClient).toMatch(/_module_css_default\.brand, \w+_module_css_default\.wide\)/)
   })
 
-  it('D32 光标缓解两表面：handle col-resize 形 + 消息文字钢笔形（热点 = 笔尖 5 19 + 关键字降级链——裁决 #24 随形更替）', () => {
-    const handle = ruleOf('> div\\[data-side\\]')
-    expect(handle).toContain('cursor: url("data:image/svg+xml,')
-    expect(handle).toContain('12 12, col-resize')
-    const beam = ruleOf('html\\[data-windows-titlebar\\] \\[data-conversation-content\\]')
-    expect(beam).toContain('cursor: url("data:image/svg+xml,')
-    expect(beam).toContain('5 19, text')
-  })
-
-  it('D32 暗主题两套：浅形深描边（body[data-ds-dark-theme] scope——brand.css 先例）', () => {
-    const darkHandle = ruleOf(
-      'body\\[data-ds-dark-theme\\] div:has\\(> \\[data-shell-overlay\\]\\) > div\\[data-side\\]',
-    )
-    expect(darkHandle).toContain('cursor: url("data:image/svg+xml,')
-    expect(darkHandle).toContain('12 12, col-resize')
-    const darkBeam = ruleOf('body\\[data-ds-dark-theme\\] \\[data-conversation-content\\]')
-    expect(darkBeam).toContain('cursor: url("data:image/svg+xml,')
-    expect(darkBeam).toContain('5 19, text')
-  })
-
-  it('D32 记账：恰四条色图光标声明（两表面 × 亮/暗）——全带热点 + 降级链 + data-URI 色值行 dsw-raw 注记', () => {
+  it('D32 光标面退役：wco.css 零 cursor:url 行（2026-10-11 全局面接任——资产迁 styles/cursors.css，机械面 pin ⑰）', () => {
     const cursorLines = css.split('\n').filter((line) => line.includes('cursor: url('))
-    expect(cursorLines).toHaveLength(4)
-    for (const line of cursorLines) {
-      expect(line).toContain('dsw-raw')
-      expect(line).toContain('%23') // data-URI 内色值 URL 编码——无裸 # 十六进制（lint-tokens 裸色面零触发）
-      expect(line).toMatch(/ (?:12 12, col-resize|5 19, text);/) // 热点坐标（handle = 箭头中心 / 钢笔 = 笔尖，裁决 #24）+ 关键字降级链（无图环境回退 OS 语义）
-    }
+    expect(cursorLines).toHaveLength(0)
   })
 
   it('D39 dock 余缝同色：rightbarCol（frame 第三结构子）bg-base 对冲——上/下/右余缝与中区同色', () => {
