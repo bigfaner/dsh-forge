@@ -313,6 +313,32 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(mermaid).toContain('已回退为源码展示')
   })
 
+  it('1.8 方案 A 主题化 pin（proposal md-preview-mermaid——用户裁决 2026-10-11）：base 主题 + 令牌 themeVariables + transparent 背景 + 内联呈现 + 回退卡形制保留', () => {
+    const mermaid = read('apps/web/src/views/docs/mermaid-diagram.tsx')
+    expect(mermaid, 'theme base（themeVariables 覆盖生效前提）').toContain("theme: 'base'")
+    expect(mermaid, 'themeVariables 单一来源常量在装载参数在场').toContain('themeVariables: MERMAID_THEME_VARIABLES')
+    expect(mermaid, '透明背景（图即内容——不自带底色）').toContain("background: 'transparent'")
+    expect(mermaid, '字体栈 = 官方 --dsw-font-family 同源 var()').toContain("'var(--dsw-font-family, inherit)'")
+    expect(mermaid, '字号 = 官方 14px 正文刻度令牌').toContain("'var(--dsw-font-s-14-font-size)'")
+    expect(mermaid, 'khroma 派生输入 concrete 镜像官方静态调色板——dsw-raw 注记豁免记账').toMatch(
+      /primaryColor: '#[0-9a-fA-F]{6}', \/\/ dsw-raw/,
+    )
+    expect(mermaid, '显示面令牌主题联动（var() 直取 --dsw-alias-*）').toContain("'var(--dsw-alias-border-l3)'")
+    expect(mermaid, 'strict/startOnLoad 语义随主题化保持').toContain('startOnLoad: false')
+    expect(mermaid, '「Mermaid 图」标题条退役（渲染/在途内联无头）').not.toContain('Mermaid 图')
+    const css = read('apps/web/src/views/docs/docs.css')
+    expect(css, 'svg 自适应：max-width 100% + 居中（Codex 式图即内容）').toMatch(
+      /\.dswf-doc-mermaid-canvas svg \{[^}]*max-width: 100%;[^}]*margin: 0 auto/,
+    )
+    expect(css, '超宽横向滚动机制保持（canvas overflow-x auto 既有）').toMatch(
+      /\.dswf-doc-mermaid-canvas \{[^}]*overflow-x: auto/,
+    )
+    expect(css, '图卡外框 chrome 退役（内联零卡形制）').not.toMatch(/\.dswf-doc-mermaid \{[^}]*border/)
+    expect(css, '回退占位卡形制保留（失败语义不降级——border 收编 fallback 专属规则）').toMatch(
+      /\.dswf-doc-mermaid-fallback \{[^}]*border/,
+    )
+  })
+
   it('渲染纪律 + 数据面：DocBody 正文渲染委托共享件（1.5 单源——md 段唯一经 MarkdownDoc 归共享件断言）；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
     const tab = read('apps/web/src/views/docs/index.tsx')
     expect(tab, '正文分段渲染唯一经共享件 MdSegmentsBody（1.5 三入口一致）').toContain('MdSegmentsBody')

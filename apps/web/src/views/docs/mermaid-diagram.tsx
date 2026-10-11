@@ -6,26 +6,77 @@
 //   ③渲染失败/非法源回退纯文本占位卡（源码 + 回退注记），异常不外溢（render/import
 //     失败一律归一 fail 态，不炸文档 tab）。
 // erDiagram = 验收锚，全图型同库渲染——本件零图型分支（源原样入 engine.render）。
-// 分层：装载/渲染管线 = 可测纯异步面（loader 注入）；useEffect 仅编排；卡片 = 纯呈现。
+// 分层：装载/渲染管线 = 可测纯异步面（loader 注入）；useEffect 仅编排；
+// 内联图/回退卡 = 纯呈现（1.8 方案 A：成功态内联无头「图即内容」，回退卡形制原样保留）。
 import { useEffect, useState, type ReactNode } from 'react'
 
 /** mermaid 引擎窄面（消费的最小 API——真身类型经动态 import 推断，此处收敛调用面） */
 export interface MermaidEngine {
-  initialize(config: { startOnLoad?: boolean; securityLevel?: string }): unknown
+  initialize(config: {
+    startOnLoad?: boolean
+    securityLevel?: string
+    theme?: string
+    themeVariables?: Record<string, string>
+  }): unknown
   render(id: string, text: string): Promise<{ svg: string }>
 }
+
+/**
+ * mermaid 主题变量（1.8 方案 A——Codex 式内联观感，用户裁决 2026-10-11）。
+ * 取值策略（证据驱动，mermaid 12.1.0 theme-base 源实证）：主题变量最终内联进 SVG <style>，
+ * DOM 注入后 var() 引用可解析——显示面槽位（线条/边框/文字/标签底/字体/字号）直接取
+ * --dsw-* 令牌（主题切换自动联动）；theme-base calculate() 对 primaryColor 族有无条件
+ * khroma 色彩派生（hue 旋转/明暗变换），var() 不可派生——该族 concrete 镜像官方静态
+ * 调色板 --dsw-static-neutral-bluish-*（dsh-client-ui-theme 实值，取值唯一来源，
+ * dsw-raw 注记豁免）。中性灰阶低饱和 = 中性基色 × mermaid 自身派生数学。
+ */
+export const MERMAID_THEME_VARIABLES = {
+  /** 透明背景（图即内容——不自带底色，1.8 AC） */
+  background: 'transparent',
+  /** 字体栈同源官方（--dsw-font-family 主题包实定义；inherit 回退同官方 css$7 var(--dsw-font,inherit) 形） */
+  fontFamily: 'var(--dsw-font-family, inherit)',
+  /** 字号对齐官方 14px 正文刻度（--dsw-font-s-14-font-size 实值 14px——CSS 纯透传，核心渲染零 JS 数值消费） */
+  fontSize: 'var(--dsw-font-s-14-font-size)',
+  // ── khroma 派生输入族（concrete 镜像官方静态调色板——var() 会破坏 updateColors 派生）──
+  primaryColor: '#f1f3f5', // dsw-raw 官方 --dsw-static-neutral-bluish-75 实值（节点底/派生基色）
+  secondaryColor: '#e9ecf2', // dsw-raw 官方 --dsw-static-neutral-bluish-150 实值（次级底）
+  tertiaryColor: '#f9fafb', // dsw-raw 官方 --dsw-static-neutral-bluish-50 实值（簇底）
+  noteBkgColor: '#f9fafb', // dsw-raw 官方 --dsw-static-neutral-bluish-50 实值（便签底——出厂黄退役）
+  primaryTextColor: '#0f1115', // dsw-raw 官方 --dsw-static-neutral-bluish-1000 实值（节点内文字——落 concrete 亮底，双主题可读）
+  // ── 显示面令牌族（var() 直取——SVG 注入后解析，主题联动）──
+  textColor: 'var(--dsw-alias-label-primary)',
+  secondaryTextColor: 'var(--dsw-alias-label-secondary)',
+  tertiaryTextColor: 'var(--dsw-alias-label-tertiary)',
+  primaryBorderColor: 'var(--dsw-alias-border-l3)',
+  secondaryBorderColor: 'var(--dsw-alias-border-l2)',
+  tertiaryBorderColor: 'var(--dsw-alias-border-l2)',
+  noteBorderColor: 'var(--dsw-alias-border-l2)',
+  lineColor: 'var(--dsw-alias-border-l3)',
+  arrowheadColor: 'var(--dsw-alias-border-l3)',
+  edgeLabelBackground: 'var(--dsw-alias-interactive-bg-hover)',
+  labelBackgroundColor: 'var(--dsw-alias-bg-base)',
+  activationBorderColor: 'var(--dsw-alias-border-l3)',
+  sequenceNumberColor: 'var(--dsw-alias-label-secondary)',
+  loopTextColor: 'var(--dsw-alias-label-secondary)',
+} as const
 
 let enginePromise: Promise<MermaidEngine> | undefined
 
 /**
  * 懒加载唯一径（Hard Rule：禁同步 import mermaid——本函数的动态 import 是产品内唯一引用）。
  * 单次装载 + 单次 initialize（模块级 promise 缓存——多图共引擎）；securityLevel='strict'
- * 为安全边界字面量（禁放宽），startOnLoad=false（渲染恒经显式 render 调用）。
+ * 为安全边界字面量（禁放宽），startOnLoad=false（渲染恒经显式 render 调用）；
+ * 1.8 主题化 = theme base + MERMAID_THEME_VARIABLES（单次 initialize 语义不动）。
  */
 export function loadMermaidEngine(): Promise<MermaidEngine> {
   enginePromise ??= import('mermaid').then((mod) => {
     const engine = mod.default as MermaidEngine
-    engine.initialize({ startOnLoad: false, securityLevel: 'strict' })
+    engine.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      themeVariables: MERMAID_THEME_VARIABLES,
+    })
     return engine
   })
   return enginePromise
@@ -83,8 +134,19 @@ export function MermaidFallbackCard({ source }: MermaidDiagramProps): ReactNode 
 }
 
 /**
- * mermaid 图渲染件（挂载即懒加载 + 渲染；失败回退占位卡）。
- * SVG 注入：securityLevel='strict' 下库内 sanitize（DOMPurify）先行——strict 面唯一注径。
+ * 内联图（纯呈现——1.8 方案 A：标题条退役，图直接落文档流「图即内容」；
+ * SVG 注入：securityLevel='strict' 下库内 sanitize（DOMPurify）先行——strict 面唯一注径）。
+ */
+export function MermaidFigure({ svg }: { readonly svg: string }): ReactNode {
+  return (
+    <figure className="dswf-doc-mermaid" data-dswf-doc-mermaid="" data-dswf-doc-mermaid-svg="">
+      <div className="dswf-doc-mermaid-canvas" dangerouslySetInnerHTML={{ __html: svg }} />
+    </figure>
+  )
+}
+
+/**
+ * mermaid 图渲染件（挂载即懒加载 + 渲染；失败回退占位卡；成功/在途均内联无头形态）。
  */
 export function MermaidDiagram({ source }: MermaidDiagramProps): ReactNode {
   const [state, setState] = useState<MermaidDiagramState>({ phase: 'rendering' })
@@ -102,19 +164,13 @@ export function MermaidDiagram({ source }: MermaidDiagramProps): ReactNode {
   }, [source])
 
   if (state.phase === 'rendered') {
-    return (
-      <figure className="dswf-doc-mermaid" data-dswf-doc-mermaid="" data-dswf-doc-mermaid-svg="">
-        <figcaption className="dswf-doc-mermaid-head">Mermaid 图</figcaption>
-        <div className="dswf-doc-mermaid-canvas" dangerouslySetInnerHTML={{ __html: state.svg }} />
-      </figure>
-    )
+    return <MermaidFigure svg={state.svg} />
   }
   if (state.phase === 'fallback') {
     return <MermaidFallbackCard source={source} />
   }
   return (
     <figure className="dswf-doc-mermaid" data-dswf-doc-mermaid="" data-dswf-doc-mermaid-pending="" aria-busy="true">
-      <figcaption className="dswf-doc-mermaid-head">Mermaid 图</figcaption>
       <div className="dswf-doc-mermaid-canvas">图渲染中…</div>
     </figure>
   )

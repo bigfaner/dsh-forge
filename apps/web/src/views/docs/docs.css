@@ -99,9 +99,14 @@
   overflow-y: auto;
 }
 
-/* ── mermaid 图卡（头 + 画布；画布横向滚动容大图） ── */
+/* ── mermaid 内联图（1.8 方案 A：图即内容——零外框零标题条，成功/在途同形；
+ * 画布横向滚动兜底超宽源） ── */
 .dswf-doc-mermaid {
   margin: 0;
+}
+
+/* 回退占位卡保留卡形制（失败语义可见——外框随内联化收归回退面专属） */
+.dswf-doc-mermaid-fallback {
   border: 1px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
   overflow: hidden;
@@ -124,7 +129,8 @@
 
 .dswf-doc-mermaid-canvas svg {
   display: block;
-  max-width: none;
+  max-width: 100%; /* 常规图自适应容器宽（Codex 式——超宽源由 canvas overflow-x 兜底） */
+  margin: 0 auto; /* 窄图居中，不再贴左 */
 }
 
 /* ── 回退占位卡（源码 + 回退注记——渲染失败/非法源） ── */

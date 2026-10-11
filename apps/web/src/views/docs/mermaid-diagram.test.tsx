@@ -7,9 +7,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import mermaidDefault from 'mermaid'
 import {
+  MERMAID_THEME_VARIABLES,
   loadMermaidEngine,
   MermaidDiagram,
   MermaidFallbackCard,
+  MermaidFigure,
   nextMermaidId,
   renderMermaidDiagram,
   type MermaidEngine,
@@ -26,8 +28,8 @@ const render = vi.mocked(mermaidDefault.render)
 const ER_SOURCE = 'erDiagram\n    PROPOSALS ||--o{ FEATURES : "proposal_id"'
 const FLOW_SOURCE = 'flowchart TD\n    A-->B'
 
-describe('loadMermaidEngine（懒加载 + strict 安全边界）', () => {
-  it('动态 import 装载 + 单次 initialize（startOnLoad=false + securityLevel=strict）；重复调用复用同 promise 不重复装载', async () => {
+describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）', () => {
+  it('动态 import 装载 + 单次 initialize（startOnLoad=false + securityLevel=strict + theme=base + 令牌 themeVariables）；重复调用复用同 promise 不重复装载', async () => {
     initialize.mockClear()
     const first = loadMermaidEngine()
     const second = loadMermaidEngine()
@@ -35,7 +37,26 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界）', () => {
     const engine = await first
     expect(engine).toBe(mermaidDefault)
     expect(initialize).toHaveBeenCalledTimes(1)
-    expect(initialize).toHaveBeenCalledWith({ startOnLoad: false, securityLevel: 'strict' })
+    expect(initialize).toHaveBeenCalledWith({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      themeVariables: MERMAID_THEME_VARIABLES,
+    })
+  })
+
+  it('1.8 取值形状：transparent 背景 + 官方字体/字号 var() 令牌 + khroma 输入 concrete（var() 会破坏 mermaid updateColors 色彩派生）+ 显示面 var() 主题联动', () => {
+    expect(MERMAID_THEME_VARIABLES.background, '透明背景（图即内容）').toBe('transparent')
+    expect(MERMAID_THEME_VARIABLES.fontFamily, '字体栈 = 官方 --dsw-font-family 同源').toBe(
+      'var(--dsw-font-family, inherit)',
+    )
+    expect(MERMAID_THEME_VARIABLES.fontSize, '字号 = 官方 14px 正文刻度令牌').toBe('var(--dsw-font-s-14-font-size)')
+    for (const key of ['primaryColor', 'secondaryColor', 'tertiaryColor', 'primaryTextColor'] as const) {
+      expect(MERMAID_THEME_VARIABLES[key], `${key} 为 khroma 派生输入——必须 concrete 镜像官方静态调色板`).toMatch(/^#[0-9a-fA-F]{6}$/)
+    }
+    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = 主题联动 var()').toBe('var(--dsw-alias-border-l3)')
+    expect(MERMAID_THEME_VARIABLES.primaryBorderColor, '节点边框 = 主题联动 var()').toBe('var(--dsw-alias-border-l3)')
+    expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = 主题联动 var()').toBe('var(--dsw-alias-label-primary)')
   })
 })
 
@@ -86,12 +107,26 @@ describe('renderMermaidDiagram（渲染管线——loader 注入）', () => {
 })
 
 describe('MermaidDiagram 组件（静态首渲染面）', () => {
-  it('effect 不跑（renderToStaticMarkup）= 在途占位卡锚——动态 import 仅挂载后经 effect 触发', () => {
+  it('effect 不跑（renderToStaticMarkup）= 在途占位卡锚——动态 import 仅挂载后经 effect 触发；在途面同走内联无头形态（1.8 标题条退役）', () => {
     const markup = renderToStaticMarkup(<MermaidDiagram source={ER_SOURCE} />) as ReactNode as string
     expect(markup).toContain('data-dswf-doc-mermaid-pending')
     expect(markup).toContain('图渲染中')
+    expect(markup, '1.8 标题条退役（「Mermaid 图」caption 不再出现）').not.toContain('Mermaid 图')
+    expect(markup, '在途面零卡头类（图直接落文档流）').not.toContain('dswf-doc-mermaid-head')
     expect(markup).not.toContain('data-dswf-doc-mermaid-svg')
     expect(markup).not.toContain('data-dswf-doc-mermaid-fallback')
+  })
+})
+
+describe('MermaidFigure（内联呈现——1.8 方案 A 图即内容）', () => {
+  it('SVG 直接落 figure 文档流：svg 锚数据面在位、零标题条零卡头', () => {
+    const markup = renderToStaticMarkup(<MermaidFigure svg={'<svg data-anchor="er"></svg>'} />) as ReactNode as string
+    expect(markup).toContain('data-dswf-doc-mermaid-svg')
+    expect(markup).toContain('dswf-doc-mermaid-canvas')
+    expect(markup).toContain('data-anchor="er"')
+    expect(markup, '「Mermaid 图」标题条退役').not.toContain('Mermaid 图')
+    expect(markup).not.toContain('dswf-doc-mermaid-head')
+    expect(markup, '回退面数据锚零串扰').not.toContain('data-dswf-doc-mermaid-fallback')
   })
 })
 
