@@ -27,6 +27,16 @@ dogfood——Hard Rule：唯一真实模型依赖面）。本目录承载运行�
 
 ## 走查期产品缺陷实证与收口（M2 5.4 先例同形——dogfood 价值所在）
 
+0. **halted 分支失败类重定基线（2026-10-12，fix-5）**：宿主派发循环（run-tasks-host-command
+   1.19/1.20 + fix-4）下 spawn 装配不再前置校验 provider——halt 注入（不存在 provider 名）的
+   失败类从「spawn 失败 ×3 粘住（logs tool-error ERR_SPAWN_FAILED ×≥3）」变为「worker 异常
+   终止阶梯」（spawn 成功、worker 首请求 NO_ADAPTER 终止 → bounded 重入 ×4 →
+   worker-abort-over-limit 第三层裁决问询卡）。防线证据断言随行重定基线：logs
+   `{slug}/1.1/00N-worker-aborted` 事件夹 ×≥3 + task-claimed/task-spawned ×≥3 + 零 tool-error；
+   问询卡走「跳过」收口后循环 terminal 释放派发独占（sc5 同款产品行为面）。真实模型凭据面
+   零缺陷——同期 dogfood-sc-m2 实证隔离 DSH_HOME 播种下 zai 路由 worker 全程可解析
+   （sc5 的 MISSING_CREDENTIAL 为零播种环境预期面，走「跳过」+ 诊断行纪律）。
+
 1. **dispatchPrompt 任务规格缺席（首跑全阻）**：`<task-context>` 只含键值行（TASK_ID/SOURCE/
    TYPE/…），任务 title/desc/AC 不入简报；worker 收窄面禁 queryTask（矩阵 forge 族 =
    submitTask+addTask）且 M3 task_file 列砍除 → db-only 任务（quick-tasks/addTask 建）三路皆无

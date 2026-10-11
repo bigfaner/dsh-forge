@@ -213,7 +213,7 @@ describe('queryTask 事件发射（typed 错误 → tool-error；verb=queryTask�
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
     const out = await tool.execute({ slug: 'f1', local_id: '9.9' }, EXEC)
     expect(out).toMatchObject({ ok: false, code: 'ERR_TASK_NOT_FOUND' })

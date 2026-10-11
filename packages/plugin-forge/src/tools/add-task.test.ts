@@ -211,7 +211,7 @@ describe('addTask 事件发射（typed 错误 → tool-error；verb=addTask）',
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
     const out = await tool.execute({ source_kind: 'feature', source_slug: 'f1', title: 'T', type: 'coding-feature' }, EXEC)
     expect(out).toMatchObject({ ok: false, code: 'ERR_FEATURE_NOT_FOUND' })

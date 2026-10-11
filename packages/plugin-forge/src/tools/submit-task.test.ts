@@ -224,6 +224,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
         emit: (e: import('@dsh-forge/contracts').ForgePluginEvent) => events.push(e),
         prepare: async () => {},
         dirOf: () => undefined,
+        remember: () => {},
       },
     }
     return { events, eventsDeps }

@@ -269,6 +269,7 @@ function build(options: {
     emit: (e) => events.push(e),
     prepare: async () => {},
     dirOf: () => undefined,
+    remember: () => {},
   }
   const spawn = trackedSpawn()
   if (options.spawnBehavior !== undefined) options.spawnBehavior(spawn)

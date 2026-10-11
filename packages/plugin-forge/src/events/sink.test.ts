@@ -112,7 +112,7 @@ describe('createForgeEventSink（emit + 会话目录记忆）', () => {
 describe('emitToolError（守卫：宁零事件不空信封）', () => {
   it('正常路径发射 {verb, code, message}；sink 缺席 / 空 sessionId / 空 slug = 零发射', () => {
     const events: ForgePluginEvent[] = []
-    const sink = { emit: (e: ForgePluginEvent) => events.push(e), prepare: async () => {}, dirOf: () => undefined }
+    const sink = { emit: (e: ForgePluginEvent) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} }
     emitToolError(sink, 's-1', 'feat-x', 'dispatchTask', {
       ok: false,
       code: 'ERR_SPAWN_FAILED',

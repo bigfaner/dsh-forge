@@ -84,6 +84,7 @@ function sinkStub(): { sink: ForgeEventSink; events: ForgePluginEvent[] } {
       emit: (e) => events.push(e),
       prepare: async () => {},
       dirOf: () => undefined,
+      remember: () => {},
     },
   }
 }
@@ -1061,7 +1062,7 @@ describe('halted 防线（连续失败 ×3 粘住/成功清零/冷启动重置�
       tasks,
       proposals: {} as DispatchTaskToolDeps['proposals'],
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
       spawn: async () => okHandle(),
     })
     const out = (await freshTool.execute({}, h.exec)) as { kind: string }
@@ -1211,7 +1212,7 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
       tasks: bareTasks(),
       proposals: {} as DispatchTaskToolDeps['proposals'],
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => h.events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => h.events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
       settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'low' } }) },
       spawn: async () => okHandle(),
     })

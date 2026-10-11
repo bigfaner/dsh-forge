@@ -252,7 +252,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
     const out = await tool.execute({ slug: 'idea', title: 'T' }, EXEC)
     expect(out).toMatchObject({ ok: false, code: 'ERR_PROPOSAL_NOT_FOUND' })
@@ -270,7 +270,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
       resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined },
+      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
     const out = await tool.execute({ proposal_id: 'pr-9', to_status: 'accepted' }, EXEC)
     expect(out).toMatchObject({ ok: false, code: 'ERR_INVALID_TRANSITION' })

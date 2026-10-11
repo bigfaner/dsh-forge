@@ -92,7 +92,7 @@ function harness(claimedTask: TaskSnapshot | null): Harness {
       throw new Error('not expected')
     },
   } as unknown as ForgeTasksService
-  const sink: ForgeEventSink = { emit: () => {}, prepare: async () => {}, dirOf: () => undefined }
+  const sink: ForgeEventSink = { emit: () => {}, prepare: async () => {}, dirOf: () => undefined, remember: () => {} }
   const deps: DispatchCoreDeps = {
     tasks,
     events: sink,

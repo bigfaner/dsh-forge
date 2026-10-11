@@ -9,9 +9,12 @@
 //     RPC + 真实文件）→ 任务三件 db-insert 受控初态（M2 5.4 形制）；
 //   · dispatchTask 四分支全走查（Implementation Notes「四分支含 halted 复位路径」）：
 //     ① halted —— forgeSettings worker 指向不存在 provider → 派发入口（UF-3 按钮）开会话 A
-//     （远征 + /run-dag-tasks 指令单行自动发送）→ spawn 失败 ×3 粘住（1.1 留 in_progress 走幂等
-//     重入径——3 条 claim 零 submit 断言 + logs tool-error ×3）→ 复位 = 人工转移（forge:tasks/
-//     transition 人类面 in_progress→pending）+ 新派发会话 B（冷启动计数器复位）；
+//     （远征 + /run-dag-tasks 指令单行自动发送）→ worker 异常终止阶梯（spawn 成功，worker
+//     首请求 NO_ADAPTER 终止 → bounded 重入 ×4 → worker-abort-over-limit 第三层裁决问询卡
+//     ——1.1 留 in_progress 走幂等重入径：≥4 条 claim 零 submit 断言 + logs worker-aborted
+//     事件夹 ×≥3；spawn 装配不前置校验 provider，ERR_SPAWN_FAILED 面不在本分支）→ 问询卡
+//     「跳过」收口（循环 terminal → 派发独占释放——sc5 同款产品行为面）→ 复位 = 人工转移
+//     （forge:tasks/transition 人类面 in_progress→pending）+ 新派发会话 B（冷启动计数器复位）；
 //     ② spawned·success（1.1 复位后 + 1.2）；③ spawned·blocked（1.3 缺席文件 → fix 链 →
 //     auto-restore → 二轮成功）；④ no-task（1.4 收官占位 = harness 预领 in_progress——对
 //     两代 dispatcher 盲选不可见[双派发防线实证]，其余全终态后 dispatcher 必命中 no-task
@@ -24,8 +27,8 @@
 //     模型 worker 经 tool 写入 → 状态层 → 概览即时反映——submit 记录会话 ≠ 派发会话）。
 // dogfood 策略（Hard Rule：dogfood = 唯一真实模型依赖面——沿 M2 裁决）：低成本真实模型
 // （zai-coding-cn / glm-5.3-flash——e2e/support/dogfood.ts 缺省；halt 注入 = forgeSettings
-// worker provider 指向不存在名——spawn 组装恒拒，非真实模型面伪造）。凭据经 dsh profile
-// 域播种（缺席 = 留痕 skip，不伪造）。
+// worker provider 指向不存在名——spawn 成功、worker 首请求 NO_ADAPTER 终止走异常终止阶梯，
+// 非真实模型面伪造）。凭据经 dsh profile 域播种（缺席 = 留痕 skip，不伪造）。
 // 证据（AC5）：e2e/fixtures/m3/README.md 运行记录 + 环境备忘（M2 5.4 形制；S8 真实 node
 // 路径绕 harness node.cmd shim）。
 import { execFileSync } from 'node:child_process'
@@ -58,7 +61,7 @@ const PROP_TITLE = 'dsh-forge M3.5 知识沉淀与保鲜（进气端 + 保鲜端
 const FEATURE = PROP
 /** 夹具工作区目录名（会话 cwd / 芯片选择共用） */
 const WS_NAME = 'm35-ws'
-/** halted 注入面：不存在的 provider 名（spawn 组装恒拒——非伪造模型调用） */
+/** halted 注入面：不存在的 provider 名（spawn 成功、worker 首请求 NO_ADAPTER 终止——异常终止阶梯，非伪造模型调用） */
 const BROKEN_PROVIDER = 'dsh-forge-e2e-halt-probe'
 
 /** 夹具工作区：git 仓 + 无害四门 justfile（executor 质量门诚实可过——M2 5.4 形制） */
@@ -277,7 +280,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     {
       const db = openForgeDbAt(dir)
       try {
-        // 1.1 (P0) halted 复位路径靶：会话 A spawn 失败 ×3 粘住 → 人工转移 → 会话 B 完成
+    // ── 1.1 (P0) halted 复位路径靶：会话 A worker 异常终止阶梯（×4）→ 裁决问询收口 → 人工转移 → 会话 B 完成
         seedDogfoodTaskRow(db, FEATURE, '1.1', {
           title: '创建 docs/knowledge/domains-index.md（知识域索引初稿）并提交',
           taskType: 'doc',
@@ -377,7 +380,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     const sessionA = findFixtureSession(dshHome, WS_NAME)
     expect(sessionA, '派发会话 A 落盘开户').toBeDefined()
 
-    // ── halted 收敛轮询：1.1 claim 计 ≥3（幂等重入连环）+ 全库零 submit + 宿主存活 ──
+    // ── halted 收敛轮询：1.1 claim 计 ≥3（异常终止阶梯幂等重入）+ 全库零 submit + 宿主存活 ──
     const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
     const dbStats = (): { statuses: Map<string, string>; claims11: number; submits: number } => {
       const db = openForgeDbAt(dir)
@@ -418,25 +421,44 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
       }
       await sleep(3_000)
     }
-    await sleep(10_000) // 第三轮失败返回 + 模型收尾静置（db 已稳定——halted 后零 claim 面）
+    await sleep(10_000) // 阶梯 ×4 终局 + 裁决问询挂出静置（db 已稳定——halted 后零 claim 面）
     {
       const s = dbStats()
       expect(s.statuses.get('1.1'), 'halted 形态：1.1 留 in_progress（幂等重入径——不走 submit-blocked）').toBe('in_progress')
       expect(s.statuses.get('1.2'), '1.2 未被触碰（盲选重入本会话 in_progress）').toBe('pending')
       expect(s.statuses.get('1.3'), '1.3 未被触碰').toBe('pending')
       expect(s.submits, 'halted 阶段全库零 submit').toBe(0)
-      expect(s.claims11, '1.1 连环重入 claim 计 ≥3（spawn 失败防线阈值）').toBeGreaterThanOrEqual(3)
+      expect(s.claims11, '1.1 连环重入 claim 计 ≥3（worker 异常终止阶梯）').toBeGreaterThanOrEqual(3)
       console.log(`[m35] halted 收敛 +${Math.round((Date.now() - startedAt) / 1000)}s（claims11=${s.claims11}）`)
     }
 
-    // ── halted 阶段日志面：logs/{slug}.jsonl tool-error ×≥3 + task-claimed ×≥3（容器维度同文件） ──
+    // ── 裁决问询卡收口（worker-abort-over-limit 第三层——异常终止超限挂出，占据主区）：
+    //    「跳过」收卡 → 循环 terminal → 登记表释放派发独占（否则会话 B dispatchTask 被
+    //    「active dispatch loop」拒绝——sc5 同款产品行为面；sc5 先例：跳过即 composer 就绪） ──
+    const skipAsk = page.getByRole('button', { name: '跳过' }).first()
+    await expect(skipAsk, 'worker-abort 超限裁决问询卡挂出（阶梯 ×4 终局）').toBeVisible({ timeout: 90_000 })
+    await skipAsk.click()
+    await expect(skipAsk, '问询卡收口（循环终态——独占随登记表删除释放）').toBeHidden({ timeout: 30_000 })
+
+    // ── halted 阶日志面（防线证据与实际失败类一致）：worker 异常终止阶梯——logs
+    //    {slug}/1.1/00N-worker-aborted ×≥3（事件夹 error.log 落盘）+ task-claimed/task-spawned
+    //    ×≥3 + 零 tool-error（guardOnFailure=false——worker 异常终止不 emit tool-error） ──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)
     const haltLines = readLogLines(logFile)
-    const toolErrors = haltLines.filter((l) => l.type === 'tool-error')
+    const incidentRoot = join(dir, 'logs', FEATURE, '1.1')
+    const abortDirs = existsSync(incidentRoot) ? readdirSync(incidentRoot).filter((n) => /^\d{3}-worker-aborted$/.test(n)) : []
+    expect(abortDirs.length, 'logs worker-aborted 事件夹 ×≥3（异常终止阶梯证据）').toBeGreaterThanOrEqual(3)
+    for (const d of abortDirs) {
+      expect(
+        readFileSync(join(incidentRoot, d, 'error.log'), 'utf8'),
+        `worker-aborted 证据含失败归因（${d}）`,
+      ).toContain('worker run ended without a settlement')
+    }
     const claimEvents = haltLines.filter((l) => l.type === 'task-claimed' && (l.payload.taskKey as string) === `${FEATURE}/1.1`)
-    expect(toolErrors.length, 'logs tool-error（ERR_SPAWN_FAILED）×≥3').toBeGreaterThanOrEqual(3)
-    expect(toolErrors.every((l) => String(l.payload.code) === 'ERR_SPAWN_FAILED'), 'tool-error 码 = ERR_SPAWN_FAILED').toBe(true)
+    const spawnedEvents = haltLines.filter((l) => l.type === 'task-spawned' && (l.payload.taskKey as string) === `${FEATURE}/1.1`)
     expect(claimEvents.length, 'logs task-claimed（1.1 连环重入）×≥3').toBeGreaterThanOrEqual(3)
+    expect(spawnedEvents.length, 'logs task-spawned ×≥3（spawn 成功——失败类在 worker 首请求）').toBeGreaterThanOrEqual(3)
+    expect(haltLines.some((l) => l.type === 'tool-error'), 'halted 阶段零 tool-error（异常终止非 spawn 机制故障）').toBe(false)
 
     // ── 复位：设置回真实模型 + 人工转移（in_progress → pending——人类面 transition） ──
     await forgeInvoke(page, SETTINGS_CHANNELS.set, {
@@ -445,7 +467,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     const task11Id = `t-${FEATURE}-1.1`
     await forgeInvoke(page, TASKS_CHANNELS.transition, {
       projectId, taskId: task11Id, toStatus: 'pending',
-      reason: 'SC-M3 走查：halted 复位——人工转移后经派发入口新会话重派（ERR_SPAWN_FAILED 指引径）',
+      reason: 'SC-M3 走查：halted 复位——人工转移后经派发入口新会话重派（worker 异常终止阶梯终局指引径）',
     })
     {
       const db = openForgeDbAt(dir)

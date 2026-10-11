@@ -65,6 +65,7 @@ function sinkStub(): { sink: ForgeEventSink; events: ForgePluginEvent[] } {
       emit: (e) => events.push(e),
       prepare: async () => {},
       dirOf: () => undefined,
+      remember: () => {},
     },
   }
 }
