@@ -204,6 +204,15 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     expect(question?.options?.[1]?.description).toContain('feature')
   })
 
+  it('ask 请求携带 invocation.agent（活根定向——无主 waterfall 无应答器接受 NO_PROVIDER 面板不弹）', async () => {
+    const ask = askStub()
+    const d = depsOf({ cards, ask: ask.face })
+    const agent = agentOf() as never
+    await d.handler({ agent, rawInput: '' })
+    expect(ask.requests).toHaveLength(1)
+    expect((ask.requests[0] as { agent?: unknown }).agent).toBe(agent)
+  })
+
   it('选中即启动：driver.start 收到 任务源/主会话 id/parent/projectId；回执 success 带 slug', async () => {
     const ask = askStub(answerLabel('blitz-y'))
     const stub = driverStub()

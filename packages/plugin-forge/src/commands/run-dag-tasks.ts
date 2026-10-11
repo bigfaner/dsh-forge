@@ -107,11 +107,17 @@ async function resolveSourceBySlug(tasks: ForgeTasksService, projectId: string, 
  * 单选问询（userQuestions.ask）。回执取 answers 中本问询 id 的首个选中 label；
  * 关闭面板/取消（ASK_ABORTED）/服务故障 = undefined——调用方按「未选择」收口（fail-soft，
  * 指令面零外抛）。signal 透传官方取消语义（invocation.signal 随载）。
+ *
+ * agent 活根定向（1.12 定罪修复，2026-10-11）：无 agent 的 ask 走无主 waterfall，
+ * 客户端应答器 scopeOf(owner) 取不到会话即拒接 → NO_PROVIDER「面板从不弹出」。
+ * 上游契约：携带 agent 时须为注册表精确活根（CALLER_NOT_LIVE/DELEGATED_CALLER 抛错）——
+ * 指令 invocation.agent 即当前会话运行时根，天然满足；异常仍走 fail-soft 收口。
  */
 async function askOption(
   ask: EscalationAskFace,
   question: { readonly id: string; readonly header: string; readonly question: string; readonly detail?: string; readonly options: readonly EscalationAskOption[] },
   signal?: AbortSignal,
+  agent?: unknown,
 ): Promise<string | undefined> {
   try {
     const answer = await ask.ask({
@@ -124,6 +130,7 @@ async function askOption(
           options: question.options,
         },
       ],
+      ...(agent !== undefined ? { agent } : {}),
       ...(signal !== undefined ? { signal } : {}),
     })
     const item = (answer as { answers?: readonly { id?: unknown; selected?: unknown }[] } | undefined)?.answers?.find(
@@ -203,6 +210,7 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
       options: candidates.map((candidate) => ({ label: candidate.label, description: candidate.description })),
     },
     ctx.signal,
+    ctx.parent, // ask 活根定向（无 agent 无应答器接受——NO_PROVIDER 面板不弹）
   )
   const selected = candidates.find((candidate) => candidate.label === picked)
   if (picked === undefined || selected === undefined) {
@@ -233,6 +241,7 @@ async function handleRunning(deps: RunDagTasksDeps, ctx: InvokeContext, running:
       ],
     },
     ctx.signal,
+    ctx.parent, // ask 活根定向（无 agent 无应答器接受——NO_PROVIDER 面板不弹）
   )
   if (picked === '查看') return runningView(running)
   if (picked === '停止') return stopOwn(deps, ctx)
