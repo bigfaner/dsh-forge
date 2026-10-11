@@ -18,7 +18,9 @@
 //     div[data-document-preview=<选中渲染器id>][data-textpreview-url=<地址>]；渲染器下拉钮
 //     [data-document-viewer-menu]（aria=打开方式；候选 >1 才渲染；菜单行 = 官方 Menu portal
 //     `[role="menu"] button[role="menuitem"]`）；换行钮 [data-textpreview-tool="wrap"]
-//     （aria-pressed = 偏好态；选中渲染器声明 wrap=true 才渲染——扩展 true / 内建 md false）；
+//     （aria-pressed = 偏好态；选中渲染器声明 wrap=true 才渲染——1.3 起扩展注册 wrap:false
+//     对齐内建 md[官方 markdownDefinition 同值]，文档级钮两径均不出；块级 wrap 需求 =
+//     代码块 CodeToolbar 块内承接[预览径 labels 递达 code.toolbarLabels]）；
 //   - 渲染器候选序（registry rank）：extension 带 > builtin（.md → dswf-md-mermaid 首位、
 //     内建 Markdown 次位）；md 非 binary → 官方恒追加「纯文本」fallback 候选（官方 owner
 //     语义）——本套件断言「含产品渲染器与内建 Markdown 两项」，不锁官方第三项数量；
@@ -86,7 +88,8 @@ const BAD_DOC = [
   '',
 ].join('\n')
 
-/** 纯文 md（验收锚③——零 mermaid 段：懒加载零触发，正文零退化） */
+/** 纯文 md（验收锚③——零 mermaid 段：懒加载零触发，正文零退化；普通 ts fence = 代码块
+ * CodeToolbar 在场锚[wrap:false 后文档级 wrap 钮退役的替代观察面]） */
 const PLAIN_DOC = [
   '# 纯文演示',
   '',
@@ -95,7 +98,18 @@ const PLAIN_DOC = [
   '- 列表项甲',
   '- 列表项乙',
   '',
+  '```ts',
+  'const mdp = 1',
+  '```',
+  '',
 ].join('\n')
+
+/** 官方代码块卡（PR 稳定全局类 .md-code-block——零哈希类引用纪律允许面） */
+const DOC_CODE_BLOCK = '.md-code-block'
+/** 代码块 CodeToolbar 横幅（PR 稳定 data 锚——toolbarLabels 递达 = CodeToolbar 臂） */
+const DOC_CODE_TOOLBAR = '.md-code-block [data-code-block-banner]'
+/** 代码块块级 wrap 钮（CodeToolbar 动作行——aria-label = toolbarLabels.wrapLabel 中文文案） */
+const DOC_CODE_TOOLBAR_WRAP = '.md-code-block [data-code-block-banner] button[aria-label="换行"]'
 
 /** 夹具工作区（仓外 tmp——3 份 md 置根目录，files tab 首层直达） */
 function writeFixtureWorkspace(): string {
@@ -124,7 +138,7 @@ async function openFileFromFilesTab(page: import('@playwright/test').Page, fileN
   await expect(page.locator(DOC_PREVIEW_ANY).first(), `官方文档 tab 开出（${fileName}）`).toBeVisible({ timeout: 30_000 })
 }
 
-test('@web-e2e @blitz md 预览扩展渲染器·官方文件入口四断言：erDiagram SVG / 非法源回退 / 纯文零退化+wrap / 下拉切回内建', async () => {
+test('@web-e2e @blitz md 预览扩展渲染器·官方文件入口四断言：erDiagram SVG / 非法源回退 / 纯文零退化+wrap:false 口径 / 下拉切回内建', async () => {
   test.setTimeout(420_000)
   const fixtureRoot = writeFixtureWorkspace()
   const wsDir = join(fixtureRoot, 'mdp-demo')
@@ -170,15 +184,24 @@ test('@web-e2e @blitz md 预览扩展渲染器·官方文件入口四断言：er
     // 异常不外溢：文档其余部分照常渲染（md 段经产品 MarkdownDoc）
     await expect(badPreview.locator(MD_DOC_BODY), '异常不外溢——正文其余部分照常渲染').toContainText('MDP-BAD-BODY')
 
-    // ── ③ 纯文 md → 正文零退化 + wrap 控件在场（验收锚③）──
+    // ── ③ 纯文 md → 正文零退化 + wrap:false 口径（文档级钮退役 + 代码块 CodeToolbar 替代锚）──
     await openFileFromFilesTab(page, 'plain-notes.md')
     const plainPreview = page.locator(documentPreviewOf(MD_MERMAID_RENDERER_ID)).first()
     await expect(plainPreview, '纯文 md 同走扩展渲染器').toBeVisible({ timeout: 30_000 })
     await expect(plainPreview.locator(MD_DOC_BODY), '正文按官方 MarkdownText 呈现（零退化）').toContainText('MDP-PLAIN-BODY')
     await expect(plainPreview.locator(DOC_MERMAID_SVG), '零 mermaid 段零 SVG（懒加载零触发面）').toHaveCount(0)
     await expect(plainPreview.locator(DOC_MERMAID_FALLBACK), '零 mermaid 段零回退卡').toHaveCount(0)
-    await expect(plainPreview.locator(DOC_WRAP_TOOL), 'wrap 切换控件在场（扩展声明 wrap=true——官方 toolbar 面）').toBeVisible()
-    await expect(plainPreview.locator(DOC_WRAP_TOOL), '换行偏好起步开（aria-pressed）').toHaveAttribute('aria-pressed', 'true')
+    await expect(plainPreview.locator(DOC_WRAP_TOOL), '文档级 wrap 钮退役（1.3 wrap:false 对齐内建 md——官方 L1626）').toHaveCount(0)
+    await expect(plainPreview.locator(DOC_CODE_BLOCK), '普通代码 fence 升级官方代码块卡（labels 递达面）').toBeVisible()
+    await expect(plainPreview.locator(DOC_CODE_TOOLBAR), '代码块 CodeToolbar 在场（块级 wrap 承接面）').toBeVisible()
+    await expect(
+      plainPreview.locator(DOC_CODE_TOOLBAR_WRAP),
+      '块级 wrap 钮在场（toolbarLabels.wrapLabel 中文文案——文档级钮退役的替代锚）',
+    ).toBeVisible()
+    await expect(plainPreview.locator('[data-textpreview-body]'), '共享滚动体 overflow:auto（1.3 滚动根因收口探针锚）').toHaveCSS(
+      'overflow',
+      'auto',
+    )
 
     // ── ④ 渲染器下拉含产品渲染器与内建 Markdown；切回内建 → mermaid 段呈代码块文本（验收锚④）──
     await openFileFromFilesTab(page, 'er-demo.md')

@@ -8,6 +8,12 @@
 // 禁静态 import mermaid，动态 import 唯一径 = mermaid-diagram.tsx）。分页 = 官方 owner 递达
 // 的累计前缀（loading: 'text-pages'），props 变化自然重渲；未闭合 fence 归正文（分段器既有
 // 已测语义），页补齐后自动成图。不认领 scrollport（共享 body 保持滚动所有者，同内建）。
+// 容器 = 专用 .dswf-mdp-body（官方 MarkdownBody 容器 css$7 同形纯块级镜像——min-width:0 +
+// font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap 渗透[滚动/折行根因]，
+// 1.3 根因收口；不复用 dock tab 语境正文族类（docs.css flex/gap 容器，滚动所有权不同）。
+// labels/streaming 对齐官方 MarkdownBody（client.js L1557-1581/L1588）：code.toolbarLabels
+// 递达 = 代码块升级官方 CodeToolbar（语言名 + 块级 wrap + 复制——wrap:false 注册后块级
+// wrap 需求的唯一承接面）+ streaming=!eof 增量渲染。
 // 图片解析对齐内建 MarkdownBody 口径（官方 path-images 纯函数结构同型镜像——禁 import 官方
 // documentpreview 包）：useResource(tab.contentId) 元数据 absolutePath → 相对目的地并入文档
 // 目录 → 认证 /api/file 路由；HTTP(S)/data 保持原 URL、query/fragment 剔除、URL escape 解码
@@ -15,15 +21,28 @@
 // 分层：路径解析/词表工厂 = 可测纯函数面（Node 池）；组件 = 纯呈现（可选钩子经子件无条件
 // 调用——fix-33 ⑤ 形制）；effect 胶水（mermaid 懒加载渲染相位）不属本件不属单测面。
 import { useMemo, type ReactNode } from 'react'
-import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
-import { MarkdownDoc } from '../../components/index.js'
+import type { MarkdownLabels, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DEFAULT_MARKDOWN_LABELS, MarkdownDoc } from '../../components/index.js'
 import { splitDocSegments } from './doc-segments.js'
 import { MermaidDiagram } from './mermaid-diagram.js'
 import './docs.css'
 
+/**
+ * 预览径 labels（模块级冻结常量——引用稳定纪律同 DEFAULT_MARKDOWN_LABELS，新身份会废弃
+ * 流式渲染缓存）：官方 MarkdownBody 同形（client.js L1557-1581——code.toolbarLabels 递达 =
+ * 代码块 CodeToolbar；文案 = 产品中文面，复制/脚注沿 DEFAULT_MARKDOWN_LABELS 单源展开）。
+ */
+export const MD_PREVIEW_MARKDOWN_LABELS: MarkdownLabels = Object.freeze({
+  code: Object.freeze({
+    ...DEFAULT_MARKDOWN_LABELS.code,
+    toolbarLabels: Object.freeze({ codeLabel: '代码', wrapLabel: '换行', unwrapLabel: '不换行' }),
+  }),
+  footnotes: DEFAULT_MARKDOWN_LABELS.footnotes,
+}) as MarkdownLabels
+
 /** 官方文档内容判别（documentpreview contract 消费切片——本件只渲染 text 相位，他相位 null） */
 export type MdPreviewContent =
-  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'text'; readonly text: string; readonly eof: boolean }
   | { readonly kind: 'bytes' }
   | { readonly kind: 'renderer' }
 
@@ -33,7 +52,11 @@ export interface MdPreviewOwnerProps {
   readonly resourceAddress: string
   /** 官方共享读的内容载荷（text-pages = 累计前缀含分页前缀；bytes/renderer = 渲染 null） */
   readonly content: MdPreviewContent
-  /** 文档工具栏换行偏好（本实现声明消费——wrap=false = 容器 nowrap 族） */
+  /**
+   * 文档工具栏换行偏好（官方 DocumentBodyOwner 契约面——本实现零消费：1.3 注册 wrap:false
+   * 对齐内建 md[官方 L1626]，容器 white-space:normal 使壳层 wrap 类彻底失效[官方同款
+   * opt-out]；块级 wrap 需求归代码块 CodeToolbar）
+   */
   readonly wrap: boolean
   /** 滚动位申报回调（本件不认领——零调用，同内建 Markdown） */
   readonly scrollportRef: (element: HTMLElement | null) => void
@@ -164,11 +187,12 @@ function MdPreviewInfoReader({
 
 /**
  * 正文视图（纯呈现）：非 text 相位渲染 null；图片词表随 absolutePath 记忆化（官方
- * MarkdownBody 同径——baseURI Node/SSR 缺席 = ''，词表 inert）；wrap=false 追加 nowrap 族。
+ * MarkdownBody 同径——baseURI Node/SSR 缺席 = ''，词表 inert）；容器 = 官方同形纯块级
+ * dswf-mdp-body（white-space:normal 根因收口——不再随 wrap 偏好切换）；labels/streaming
+ * 对齐官方 MarkdownBody（CodeToolbar + !eof 增量渲染）。
  */
 function MdPreviewBodyView({
   content,
-  wrap,
   absolutePath,
 }: MdPreviewOwnerProps & { readonly absolutePath: string | undefined }): ReactNode {
   const baseURI = typeof document === 'undefined' ? undefined : document.baseURI
@@ -179,13 +203,17 @@ function MdPreviewBodyView({
   if (content.kind !== 'text') return null
   const segments = splitDocSegments(content.text)
   return (
-    <div
-      className={wrap ? 'dswf-doc-body' : 'dswf-doc-body dswf-mdp-nowrap'}
-      data-dswf-md-preview-body=""
-    >
+    <div className="dswf-mdp-body" data-dswf-md-preview-body="">
       {segments.map((segment, i) =>
         segment.kind === 'md' ? (
-          <MarkdownDoc key={i} text={segment.text} variant="body" pathImages={pathImages} />
+          <MarkdownDoc
+            key={i}
+            text={segment.text}
+            variant="body"
+            pathImages={pathImages}
+            labels={MD_PREVIEW_MARKDOWN_LABELS}
+            streaming={!content.eof}
+          />
         ) : (
           <MermaidDiagram key={i} source={segment.source} />
         ),

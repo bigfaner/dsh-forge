@@ -801,7 +801,7 @@ describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => 
     }
   }
 
-  it('documentPreviews 在场：extension 带定义（md/markdown + text-pages + wrap 消费）+ keyed body 槽位（key = 实现 id，body 自足）', () => {
+  it('documentPreviews 在场：extension 带定义（md/markdown + text-pages + wrap:false 对齐内建）+ keyed body 槽位（key = 实现 id，body 自足）', () => {
     const views = publishFakeViews()
     const previews = fakeDocumentPreviews()
     const { ctx, registers, injectedKeys } = fakeClientCtx({
@@ -817,7 +817,7 @@ describe('md mermaid 预览注册（官方 documentpreview 扩展缝）', () => 
     expect(definition.extensions).toEqual(['md', 'markdown'])
     expect(definition.priority).toBe('extension') // 外部实现带——自动选择恒胜官方 builtin Markdown
     expect(definition.loading).toBe('text-pages')
-    expect(definition.wrap).toBe(true)
+    expect(definition.wrap).toBe(false) // 1.3 产品裁决：对齐内建 md（官方 L1626 wrap:false）——文档级 wrap 钮不出
     expect(definition.title?.()).toBe('Markdown（mermaid）')
     const body = registers.find((r) => r.key === DOCUMENT_PREVIEW_BODY_SLOT)
     expect(body).toBeDefined()

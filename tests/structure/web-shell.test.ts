@@ -331,6 +331,14 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(body, '官方 documentpreview 包禁 import（本地结构窄类型——结构同型镜像）').not.toContain(
       '@deepseek-ai/dsh-client-ui-sidebar-documentpreview',
     )
+    // 1.3 容器收口：预览径专用官方同形纯块级容器（不复用 dock tab 语境 dswf-doc-body + nowrap 族退役）
+    expect(body).toContain('"dswf-mdp-body"')
+    expect(body, 'dock tab 语境容器类退役（滚动所有权不同）').not.toContain('dswf-doc-body')
+    expect(body, 'nowrap 族退役（white-space 渗透根因归容器 white-space:normal 收口）').not.toContain('dswf-mdp-nowrap')
+    const docsCss = read('apps/web/src/views/docs/docs.css')
+    expect(docsCss).toContain('.dswf-mdp-body')
+    expect(docsCss).toContain('white-space: normal')
+    expect(docsCss, 'dock tab 正文族原规则不动（dswf-doc-body 继续服务 dock tab）').toContain('.dswf-doc-body')
     // 发布 + 注册面：product-views 发布件 + plugin documentPreviews 反射缝注册字面量
     expect(read('apps/web/src/product-views.ts')).toContain('ForgeMdPreviewBody')
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
@@ -339,7 +347,7 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(plugin).toContain("extensions: ['md', 'markdown']")
     expect(plugin).toContain("priority: 'extension'")
     expect(plugin).toContain("loading: 'text-pages'")
-    expect(plugin).toContain('wrap: true')
+    expect(plugin).toContain('wrap: false') // 1.3：对齐内建 md（官方 L1626）——文档级 wrap 钮不出
   })
 })
 

@@ -5,7 +5,9 @@
 // frontmatter 是通用 Markdown 约定，非业务语义）②供默认 labels（引用稳定——官方要求逐 locale
 // 修订记忆化，新身份会废弃流式渲染缓存）③variant 透传（body = 详情抽屉正文 / compact = M4
 // 嵌入预览预留，官方 MarkdownText 原生双形态，不发明平行模式）④pathImages 可选透传（官方
-// MarkdownText 原生本地图片词表面——官方预览径 md body 供；缺省 undefined = 零变化）。
+// MarkdownText 原生本地图片词表面——官方预览径 md body 供；缺省 undefined = 零变化）⑤labels /
+// streaming 可选透传（官方 MarkdownText 原生面——官方预览径供 code.toolbarLabels[代码块
+// CodeToolbar] 与 streaming=!eof 增量渲染；缺省 = 现行为零变化，既有消费面不动）。
 // 布局归消费方（className 透传）。
 import { MarkdownText, type MarkdownLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
@@ -52,18 +54,28 @@ export interface MarkdownDocProps {
    * URL。缺省 undefined = 现行为零变化（既有用例不动）。
    */
   readonly pathImages?: MarkdownPathImages
+  /**
+   * 文档 chrome 文案（官方 MarkdownText 原生 labels 面——code.toolbarLabels 在场 =
+   * 代码块升级官方 CodeToolbar[语言名 + 块级 wrap + 复制]）。缺省 = DEFAULT_MARKDOWN_LABELS
+   * （现行为零变化）。引用稳定要求同官方：逐 locale 修订记忆化，新身份废弃流式渲染缓存——
+   * 消费方供模块级冻结常量。
+   */
+  readonly labels?: MarkdownLabels
+  /** 增量渲染旗（官方 MarkdownText 原生 streaming 面——流式臂冻结已结算块，尾段增量重析）。缺省 undefined = 全量结算渲染（现行为）。 */
+  readonly streaming?: boolean
 }
 
 /** Markdown 渲染唯一包装入口（产品内一切 Markdown 经本件，禁直用 MarkdownText）。 */
-export function MarkdownDoc({ text, variant = 'body', className, pathImages }: MarkdownDocProps): ReactNode {
+export function MarkdownDoc({ text, variant = 'body', className, pathImages, labels, streaming }: MarkdownDocProps): ReactNode {
   const cls = className === undefined ? 'dswf-markdown' : `dswf-markdown ${className}`
   return (
     <div className={cls} data-dswf-markdown={variant}>
       <MarkdownText
         text={stripMarkdownFrontmatter(text)}
-        labels={DEFAULT_MARKDOWN_LABELS}
+        labels={labels ?? DEFAULT_MARKDOWN_LABELS}
         variant={variant}
         {...(pathImages !== undefined ? { pathImages } : {})}
+        {...(streaming !== undefined ? { streaming } : {})}
       />
     </div>
   )

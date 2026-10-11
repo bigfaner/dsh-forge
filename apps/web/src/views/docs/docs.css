@@ -4,7 +4,9 @@
  * 结构基准 = 原型 doc-tab（ui-design UF-2——路径栏底色条、图卡[头 + 画布]、回退卡
  * [头 + 源码 + 注记]）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值）。
  * dsw-raw 豁免（执行记录同步）：骨架行高 28px / 图源行高 = 原型结构刻度
- * （overview.css 同款豁免先例——官方主题无间距标尺令牌）；块级留白取行高令牌刻度。 */
+ * （overview.css 同款豁免先例——官方主题无间距标尺令牌）；块级留白取行高令牌刻度；
+ * 预览径容器 inset 10px 12px / 图卡段间距 16px 0 = 官方 MarkdownBody 容器 css$7
+ * 同刻度镜像（1.3 对齐官方——官方主题无间距标尺令牌，取值唯一来源 = css$7）。 */
 
 /* ── 面板骨架：头部 + 路径栏 + 摘要 + 正文（面板独占滚动归 dock 容器） ── */
 .dswf-doc-panel {
@@ -92,12 +94,20 @@
   margin: var(--dsw-font-s-14-line-height) var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
 }
 
-/* ── 官方预览径 md body（md-preview-body 复用正文族）：wrap 偏好关 = 代码/预排版面
- * 不折行（横向滚动承接——官方文档工具栏换行切换的消费面） ── */
-.dswf-mdp-nowrap pre,
-.dswf-mdp-nowrap code {
-  white-space: pre;
-  overflow-x: auto;
+/* ── 官方预览径 md body（md-preview-body 专用）：官方 MarkdownBody 容器 css$7 同形纯块级
+ * 镜像——min-width:0 + font-family 重置 + white-space:normal 阻断共享 body pre/pre-wrap
+ * 渗透（1.3 根因收口：软换行变硬换行/关偏好横向爆宽皆源于此）。不复用 dswf-doc-body
+ * （dock tab 语境 flex/gap/margin 容器，滚动所有权不同：dock 由宿主滚）── */
+.dswf-mdp-body {
+  min-width: 0;
+  font-family: var(--dsw-font, inherit);
+  white-space: normal;
+  padding: 10px 12px; /* dsw-raw 官方同刻度（css$7 inset——主题无间距标尺令牌） */
+}
+
+/* 预览径 mermaid 图卡节奏：容器纯块级后段间距不再由 flex gap 承接——官方块级 16px 段间距同刻度 */
+.dswf-mdp-body .dswf-doc-mermaid {
+  margin: 16px 0; /* dsw-raw 官方块级刻度（css$7 语境段间距——主题无间距标尺令牌） */
 }
 
 /* ── mermaid 图卡（头 + 画布；画布横向滚动容大图） ── */

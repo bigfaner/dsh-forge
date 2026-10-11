@@ -63,6 +63,36 @@ describe('MarkdownDoc 组件（唯一包装入口）', () => {
     )
     expect(markup).toContain('复制')
   })
+  it('labels 缺省 = DEFAULT_MARKDOWN_LABELS（默认面钉：旧式 banner——零 CodeToolbar/块级 wrap 钮）', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownDoc text={'```ts\nconst a = 1\n```'} />,
+    )
+    expect(markup).toContain('data-code-block-banner') // 旧式代码横幅（默认 labels 无 toolbarLabels）
+    expect(markup, '块级 wrap 钮不出（toolbarLabels 缺席 = 既有消费面 EntryDrawer/docs tab 零变化）').not.toContain(
+      'aria-label="换行"',
+    )
+  })
+  it('labels 透传（code.toolbarLabels 在场 = 官方 CodeToolbar 臂：语言名/块级 wrap/复制）', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownDoc
+        text={'```\nconst a = 1\n```'}
+        labels={{
+          code: { copyLabel: '复制', copiedLabel: '已复制', toolbarLabels: { codeLabel: '代码', wrapLabel: '换行', unwrapLabel: '不换行' } },
+          footnotes: '脚注',
+        }}
+      />,
+    )
+    expect(markup).toContain('aria-label="换行"')
+    expect(markup).toContain('aria-label="复制"')
+    expect(markup, '未知语言回退 codeLabel 文案（官方 CodeToolbar 同判）').toContain('代码')
+  })
+  it('streaming 透传（官方 streaming 臂——$$ 块结算前保持字面，KaTeX 不触面）', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownDoc text={'前段。\n\n$$E=mc^2$$\n\n尾段。'} streaming />,
+    )
+    expect(markup).toContain('E=mc^2')
+    expect(markup, 'streaming 臂无 math 扩展（结算臂需浏览器 DOMParser——Node SSR 只锚本侧）').not.toContain('katex')
+  })
   it('className 透传到包装节点（布局归消费方）', () => {
     expect(renderToStaticMarkup(<MarkdownDoc text="正文" className="dswf-drawer-body" />)).toContain(
       'dswf-drawer-body',

@@ -1159,7 +1159,10 @@ function registerMdMermaidPreview(
         priority: 'extension',
         title: (): string => 'Markdown（mermaid）',
         loading: 'text-pages',
-        wrap: true,
+        // 产品裁决 1.3（对齐内建 md——官方 markdownDefinition wrap:false，client.js L1626）：
+        // 文档级 wrap 钮不出（工具栏钮仅 wrap===true 渲染，官方 L899），容器 white-space:normal
+        // 同款 opt-out；块级 wrap 需求由代码块 CodeToolbar 承接（预览径 labels 供 toolbarLabels）
+        wrap: false,
       })
       diagnostics.registered = [...(diagnostics.registered ?? []), MD_MERMAID_PREVIEW_ID]
       disposeBody = ctx.slots.register(
