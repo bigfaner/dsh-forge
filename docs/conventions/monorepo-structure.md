@@ -26,6 +26,12 @@ domains: [monorepo, pnpm, project-references, module-boundary, base-business, la
 **Requirement**: ① renderer（apps/web）禁 import `@dsh-forge/{core,knowledge,plugin-forge,plugin-forge-spec}`——只经 IPC RPC（contracts 通道常量）与数据内核通信（`scripts/lint-imports.mjs` 机械执行，行尾 `// raw-import` 豁免须在执行记录说明理由）；② 插件族对 core 只依赖服务接口类型（knowledge → `forgeKnowledge` 唯一；plugin-forge → `forgeTasks`+`forgeProposals`+`forgeProjects` 三服务 + forgeSettings 可选消费不走 inject 声明；plugin-forge-spec → `forgeFeatures`+`forgeTasks` 两服务——faces.ts 结构化最小面，运行期 Cordis `inject` 解析，无实现级 import，插件可独立发版；plugin-forge deps 边界 pin = contracts + path-key + dsh 上游运行时包白名单[in-process driver]——driver 非 core，对 core 零实现级 import 纪律不破）；③ core 包内知识域 ↛ forge 域（目录边界 + lint，为未来知识域抽包保留边界）；④ core / knowledge / plugin-forge / plugin-forge-spec 不进任何 import 图给 web——经 profile 装配进入运行时。
 **Source**: feature/dsh-forge-p1-mvp TECH-003（tech-design §包间协作规则 / scripts/lint-imports.mjs）+ feature/dsh-forge-m2-pipeline（tech-design §提示词与技能资产，drift 修订：单插件 → 插件族）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §边界与依赖变化 1-2，drift 修订：+spec 包 + driver 白名单）
 
+### TECH-monorepo-005: web 双入口零运行时共享（client bundle 自含）
+
+**Requirement**: apps/web vite 双入口（index.html 壳 + client-plugin 第二入口产物 forge-client.js）之间互禁 runtime import——壳树（client-plugin/ 外）与 client 树任何方向 import 共享模块，rollup 即拆公共 chunk，forge-client.js 变 ESM（`import{…}from"./assets/…"`）破坏 classic script 形状（模块系统以 `<script>` 装载，语法错误 load 照常触发 → 「loaded without registering」web boot 报障）。跨入口值需求 = 字面量/纯函数镜像复制（`main.ts` 插件 id 先例）+ plugin.test 字面量同源 pin；type-only import 豁免（编译期擦除零图影响）；测试文件豁免（不入构建图）。机械面：tests/structure/web-shell.test.ts 跨入口 import 边界扫描 + apps/web/src/build/client-bundle-shape.ts 产物形状断言（vite 构建期 pin——import/export 检测须含最小化零空格花括号/星号形态）。
+**Scope**: [CROSS]
+**Source**: /learn entry 2026-10-11
+
 ## 修改落点
 
 ### TECH-monorepo-004: 修改落点速查（唯一落点）
