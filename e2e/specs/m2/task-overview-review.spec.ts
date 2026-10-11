@@ -206,7 +206,12 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     expect(chipsBox, 'chips 行几何在场（D18）').not.toBeNull()
     expect(chipsBox!.y, 'chips 次行（行顶 ≥ taskbar 底 − 2）').toBeGreaterThanOrEqual(taskbarBox!.y + taskbarBox!.height - 2)
     await expect(page.locator('[data-dswf-tt-count]'), '正文零计数注（D18——注收进容器 pill 悬停）').toHaveCount(0)
-    await expect(page.locator(ttContpillOf('feature', FEATURE)).first(), '计数注收进 pill 悬停（title 载注）').toHaveAttribute('title', /· 3 条/)
+    // D30 迁移补收（fix-7）：计数注原生 title= 退役 → 官方 Tooltip label（容器 pill 包裹面，
+    // `任务容器：<slug>（…）· <countNote>`）——悬停出泡断言同 sc3 迁移式，载注强度不变
+    const contpill = page.locator(ttContpillOf('feature', FEATURE)).first()
+    await expect(contpill).not.toHaveAttribute('title', /.+/)
+    await contpill.hover()
+    await expect(page.locator('body > span[role="tooltip"]'), '计数注收进 pill 悬停（官方 Tooltip 气泡载注）').toContainText('· 3 条')
 
     // ── Step 3：七态 chips 过滤（in_progress 单选）——三视图统一 ──
     const chipInProgress = page.locator('[data-dswf-ov-stchip="in_progress"]')

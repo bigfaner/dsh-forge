@@ -91,9 +91,12 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toHaveAttribute('data-dswf-mode-chip', 'unmarked')
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toContainText('未标记')
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).toBeDisabled()
-    // D30：未标记说明 = 官方 Tooltip 深色气泡（portal 逃逸至 body，role=tooltip）——悬停出泡断言
+    // D30：未标记说明 = 官方 Tooltip 深色气泡（portal 逃逸至 body，role=tooltip）——悬停出泡断言。
+    // fix-7 悬停锚迁移：禁用 chip pointer-events 让渡（dswf-tipwrap 禁用态锚定设计）——
+    // 悬停打在包裹 span 上（Tooltip cloneElement 处理器宿主），钮本体 hover 过不了
+    // actionability（intercepts pointer events——cycle-3 实证 30s 超时）。
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]')).not.toHaveAttribute('title', /.+/)
-    await unmarkedRow.locator('[data-dswf-mode-chip]').hover()
+    await unmarkedRow.locator('.dswf-tipwrap').hover()
     await expect(page.locator('body > span[role="tooltip"]'), '官方 Tooltip 气泡在场').toContainText('扫描吸收的旧提案无溯源')
 
     // ── ④ feature 恒远征：expedition 提案 accepted 成链 → feature 容器任务快照恒 expedition ──

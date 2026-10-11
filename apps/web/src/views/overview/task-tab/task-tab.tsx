@@ -350,20 +350,25 @@ export function TasksTabBody({
               label={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）${countNote === undefined ? '' : ` · ${countNote}`}`}
               portal
             >
-              <Pill
-                className="dswf-tt-featpill"
-                data-dswf-tt-contpill={containerKeyOf(container)}
-                aria-haspopup="menu"
-                aria-expanded={containerMenuOpen}
-                onClick={() => {
-                  onContainerMenuOpenChange(!containerMenuOpen)
-                }}
-              >
-                <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
-                <span className="dswf-tt-featname">{container.slug}</span>
-                <span className="dswf-tt-featchip">{pillChip}</span>
-                <span aria-hidden="true">▾</span>
-              </Pill>
+              {/* fix-7：官方 Pill 非 ref 转发面（forwardRef 缺席）——Tooltip cloneElement 锚 ref
+                  落空即气泡恒不挂（D18 计数注悬停面失活）。dswf-tipwrap 包裹 span = 官方 Tooltip
+                  锚定包裹机制（components.css 单源）——锚 = 包裹矩形，Pill 满贴零形变 */}
+              <span className="dswf-tipwrap">
+                <Pill
+                  className="dswf-tt-featpill"
+                  data-dswf-tt-contpill={containerKeyOf(container)}
+                  aria-haspopup="menu"
+                  aria-expanded={containerMenuOpen}
+                  onClick={() => {
+                    onContainerMenuOpenChange(!containerMenuOpen)
+                  }}
+                >
+                  <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
+                  <span className="dswf-tt-featname">{container.slug}</span>
+                  <span className="dswf-tt-featchip">{pillChip}</span>
+                  <span aria-hidden="true">▾</span>
+                </Pill>
+              </span>
             </Tooltip>
           }
         />
