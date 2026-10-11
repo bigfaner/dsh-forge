@@ -428,7 +428,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
 
 // ─────────────────────────── 派发指令单行提交（fix-1） ───────────────────────────
 
-describe('派发指令单行提交（fix-1——known command 零转录的 producer 补位，/plan 先例）', () => {
+describe('派发指令单行提交（fix-1 + 1.14——producer 补位兼会话物化步：先提交后启动，失败可见）', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
 
   it('带参直通启动成功：agent.steer 恰一次收 `/run-dag-tasks feat-x` user 消息（role/content/source.kind）', async () => {
@@ -454,14 +454,59 @@ describe('派发指令单行提交（fix-1——known command 零转录的 produ
     ])
   })
 
-  it('启动被拒（单活竞态 loop-active）：零提交——回执已说明未重复启动', async () => {
+  it('启动被拒（单活竞态 loop-active）：提交已先行（1.14 物化序）——回执说明未重复启动，零重复提交', async () => {
     const rec = steerRecorder()
     const stub = driverStub({ startCode: 'loop-active' })
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已在运行')
-    expect(rec.steered).toEqual([])
+    // 1.14 序：提交先行（steer 开 turn 物化会话）→ start 被竞态拒绝——单行已落，无重复提交
+    expect(rec.steered).toHaveLength(1)
+  })
+
+  it('1.14 物化序（带参直通）：steer 提交先于 driver.start（先落实会话，再启动循环）', async () => {
+    const trace: string[] = []
+    const rec = steerRecorder()
+    const base = driverStub()
+    const driver: LoopDriver = {
+      ...base.driver,
+      start: async (input) => {
+        trace.push('start')
+        return base.driver.start(input)
+      },
+    }
+    const d = depsOf({ cards, driver })
+    const wrapped = agentOf(SESSION, CWD, (message: unknown) => {
+      trace.push('steer')
+      rec.fn(message)
+    })
+    const out = await d.handler({ agent: wrapped as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(trace).toEqual(['steer', 'start'])
+  })
+
+  it('1.14 物化序（无参问询径同治）：选中启动同走先提交后启动链', async () => {
+    const trace: string[] = []
+    const rec = steerRecorder()
+    const base = driverStub()
+    const driver: LoopDriver = {
+      ...base.driver,
+      start: async (input) => {
+        trace.push('start')
+        return base.driver.start(input)
+      },
+    }
+    const ask = askStub(answerLabel('feat-x'))
+    const d = depsOf({ cards, driver, ask: ask.face })
+    const wrapped = agentOf(SESSION, CWD, (message: unknown) => {
+      trace.push('steer')
+      rec.fn(message)
+    })
+    const out = await d.handler({ agent: wrapped as never, rawInput: '' })
+    expect(out.kind).toBe('success')
+    expect(trace).toEqual(['steer', 'start'])
+    expect(rec.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
   })
 
   it('未启动径（未知 slug）：零提交', async () => {
@@ -472,15 +517,18 @@ describe('派发指令单行提交（fix-1——known command 零转录的 produ
     expect(rec.steered).toEqual([])
   })
 
-  it('steer 面缺席（fail-soft）：启动回执原样，不抛', async () => {
+  it('steer 面缺席（fail-soft 两态可见性）：不回滚启动，回执附可见告警行（防零痕迹）', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 steer 位
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已启动')
+    expect((out as { text?: string }).text).toContain('提交失败')
+    expect((out as { text?: string }).text).toContain('steer 面缺席')
+    expect(stub.loops.has(SESSION)).toBe(true) // 循环已启动（不回滚）
   })
 
-  it('steer 投递抛错（fail-soft）：告警不外抛，启动回执原样', async () => {
+  it('steer 投递抛错（fail-soft 两态可见性）：告警不外抛，回执附可见告警行，启动回执原样', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -493,6 +541,9 @@ describe('派发指令单行提交（fix-1——known command 零转录的 produ
       })
       expect(out.kind).toBe('success')
       expect((out as { text?: string }).text).toContain('已启动')
+      expect((out as { text?: string }).text).toContain('提交失败')
+      expect((out as { text?: string }).text).toContain('inbox closed')
+      expect(stub.loops.has(SESSION)).toBe(true)
       expect(warn).toHaveBeenCalled()
     } finally {
       warn.mockRestore()

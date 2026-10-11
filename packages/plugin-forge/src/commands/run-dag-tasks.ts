@@ -5,8 +5,9 @@
 // 面）；带参 <source-slug> 直通（同单查询解析 kind）；跑动中再触发 → 查看/停止/替换问询。
 // 启动 = loopDriver.start——派发/继续判定与启动模板叙述（①从头/②接续中断/③接续在飞）归
 // 循环驱动器（S1b announceStartup，经 S4 notify 模块）；本 handler 只做枚举/问询/启动编排，
-// 外加启动成功后的派发指令单行提交（commitDispatchLine——/plan producer 先例，known command
-// 零转录的补位；fix-1 根因定罪详见函数注）。
+// 外加启动链前段的派发指令单行提交（commitDispatchLine——/plan producer 先例，known command
+// 零转录的补位；fix-1 根因定罪 + 1.14 修订「先落实会话，再启动循环」：提交先行 = steer 开
+// turn 物化会话（脱离 blank 相位）后循环才启动；提交失败可见回执不零痕迹，详见函数注）。
 //
 // 作用域纪律（decisions #20）：停止与替换恒经 driver.stop({ownerSessionId: 敲指令会话})——
 // 驱动器按归属拒绝他会话循环（跨会话隔离）；本会话无活循环的停止 = no-op 文本
@@ -308,40 +309,53 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
   return { kind: 'success', text: `已停止${slug !== undefined ? `任务源 ${slug} 的` : ''}派发循环${inflight}` }
 }
 
-/** 启动（loopDriver.start——派发/继续判定与启动叙述归驱动器）；单活竞态兜底 = 「已在运行」 */
+/**
+ * 启动（loopDriver.start——派发/继续判定与启动叙述归驱动器）；单活竞态兜底 = 「已在运行」。
+ *
+ * 1.14 修复序（用户裁决 2026-10-11「先创建会话，再启动循环」）：派发指令单行提交先行——
+ * agent.steer 收件 = idle 驱动开 turn（上游契约），turn/start 落地即会话物化（脱离
+ * hero/blank 相位）；物化后的主会话再走 driver.start 启动链（worker spawn 的 owner
+ * 依赖与启动叙述/领取结果 notice 的投影前提均落在真实对话面上）。提交失败不回滚启动
+ * （fail-soft 纪律不变），但产出可见回执（防零痕迹——案发：blank 相位零消息事件，
+ * 静默失败 = 用户「没有任何反应」）。
+ */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
+  const commit = commitDispatchLine(ctx.parent, source) // 先落实会话（转录承载 + 非 blank 化）
   const result = await deps.driver.start({
     source,
     ownerSessionId: ctx.sessionId,
     parent: ctx.parent,
     projectId: ctx.projectId,
   })
-  if (result.ok) {
-    commitDispatchLine(ctx.parent, source)
-    return { kind: 'success', text: `任务源 ${source.slug} 的派发循环已启动` }
+  if (!result.ok) {
+    // loop-active（active() 读数与 start 之间的竞态窗口；含他会话刚启动的循环）——不重复启动
+    return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
   }
-  // loop-active（active() 读数与 start 之间的竞态窗口；含他会话刚启动的循环）——不重复启动
-  return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
+  const base = `任务源 ${source.slug} 的派发循环已启动`
+  return commit.committed ? { kind: 'success', text: base } : { kind: 'success', text: `${base}——注意：指令单行提交失败（${commit.reason}），会话可能仍处空相位，启动叙述或不可见` }
 }
 
 /**
- * 派发指令单行提交（S2 producer 显式提交——/plan 先例）：known command 经上游 slash 仲裁
- * 路由 command plane 执行，注册表本身零转录（"the registry itself submits nothing"）——
- * 若 producer 不提交，S5 指令单行永不落会话转录，且会话零 turn/start 恒 blank（hero 不退场、
- * 会话头预设投影标签不挂载——S6 e2e uf3/sc5/dogfood 三旅程断言面）。agent.steer 收件 =
- * idle 驱动开 turn（上游契约），转录承载与转录面切换同径兑现。
+ * 派发指令单行提交（S2 producer 显式提交——/plan 先例；1.14 起兼会话物化步）：known
+ * command 经上游 slash 仲裁路由 command plane 执行，注册表本身零转录（"the registry
+ * itself submits nothing"）——若 producer 不提交，S5 指令单行永不落会话转录，且会话零
+ * turn/start 恒 blank（hero 不退场、会话头预设投影标签不挂载——S6 e2e uf3/sc5/dogfood
+ * 三旅程断言面）。agent.steer 收件 = idle 驱动开 turn（上游契约），转录承载与转录面切
+ * 换同径兑现。
  *
- * fail-soft 纪律（R3 防御读取同源）：steer 面缺席/非函数/投递抛错 = 跳过——循环已启动，
- * 提交面故障不回滚启动、不外抛（SC7「注入失败循环照常结束」同源）。
+ * fail-soft 纪律（R3 防御读取同源 + 1.14 可见性修订）：steer 面缺席/非函数/投递抛错 =
+ * 不回滚启动、不外抛，但不再零痕迹——返回失败态（调用方产出可见回执）并保留 console.warn
+ * 告警日志（SC7「注入失败循环照常结束」同源）。
  */
-function commitDispatchLine(agent: unknown, source: ContainerRef): void {
+function commitDispatchLine(agent: unknown, source: ContainerRef): { committed: boolean; reason?: string } {
   const steer = (agent as { steer?: (message: unknown) => void } | undefined)?.steer
-  if (typeof steer !== 'function') return
+  if (typeof steer !== 'function') return { committed: false, reason: 'steer 面缺席' }
   try {
     steer(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
+    return { committed: true }
   } catch (cause) {
-    console.warn(
-      `forge dispatch line commit failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
-    )
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    console.warn(`forge dispatch line commit failed (${source.slug}): ${reason}`)
+    return { committed: false, reason }
   }
 }
