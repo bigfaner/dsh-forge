@@ -1,7 +1,8 @@
 // @feature:dsh-forge-m3-bootstrap-presets @web-e2e
 // M3 5.2 UF-3 派发入口四断言（PRD UF-3 / 图 13 v22 ㊱–㊳ / ui-design v24 ㊵）：
-//   ① 新开 + 自动发送：容器对应模式（feature → 远征 / 突击提案 → 突击）+ 「/run-tasks
-//      <标识>」单行自动发送（v23 最小消息——容器标识经 run-tasks 技能映射为 dispatchTask source 对）；
+//   ① 新开 + 自动发送：容器对应模式（feature → 远征 / 突击提案 → 突击）+ 「/run-dag-tasks
+//      <标识>」指令单行自动发送（S5 缓切——known command 经上游 slash 仲裁路由至 command
+//      plane 执行宿主派发循环）；
 //   ② 执行中在场跳转不重发：执行中任务有最新派发挂接 → jump（openSession 按会话 id
 //      ——不新建不重发不切模式；观测面 = 主会话面切换至挂接会话 + 转录零派发指令）；
 //   ③ 全终态置灰：stats 单源终态判定 → disabled + 深灰实底自释（data-dswf-tt-dispatch=
@@ -82,7 +83,7 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await dispatchOn.click()
     // jump 观测面：主会话面切换至挂接会话 A（转录含夹具消息）+ 零派发指令（不重发）
     await expect(page.locator(CONVERSATION_CONTENT).first(), '跳转至派发挂接会话（转录 = 会话 A）').toContainText(MARKER, { timeout: 30_000 })
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '跳转不重发（转录零派发指令）').not.toContainText('/run-tasks')
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '跳转不重发（转录零派发指令）').not.toContainText('/run-dag-tasks')
 
     // ── ③ 全终态置灰：结算双任务 → 终态全集 → 深灰实底 + tooltip ──
     await driver.call('forgeTasks', 'submitTask', {
@@ -116,7 +117,7 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
   }
 })
 
-test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模式新会话 + /run-tasks 单行自动发送', async () => {
+test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模式新会话 + /run-dag-tasks 指令单行自动发送', async () => {
   test.setTimeout(480_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-uf3b-'))
   const wsDir = join(fixtureRoot, WS_NAME)
@@ -148,7 +149,7 @@ test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模�
     const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
     await expect(dispatchOn, '派发按钮亮起').toBeVisible({ timeout: 30_000 })
     await dispatchOn.click()
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '自动发送 /run-tasks 单行（容器标识 = 提案 slug）').toContainText(`/run-tasks ${PROP}`, { timeout: 30_000 })
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '自动发送 /run-dag-tasks 指令单行（任务源标识 = 提案 slug）').toContainText(`/run-dag-tasks ${PROP}`, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '突击模式')
 
     if (pageErrors.length > 0) console.log(`[uf3b-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)

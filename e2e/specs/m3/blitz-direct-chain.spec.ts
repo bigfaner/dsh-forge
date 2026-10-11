@@ -40,7 +40,7 @@
 //   - Step3 success（run-tasks 派发循环：worker spawn + toolFilter 收窄 + agentOptions 档位）
 //     = 真实派发链 → dogfood-sc-m3.spec.ts（dispatchTask 四分支）+ 5.1 pin 池（pin-10..14）
 //     + e2e/support/m3/worker-face.test.ts（deriveWorkerToolFilter 四型 deny 集）；
-//     UI 派发入口（/run-tasks 单行自动发送 + 容器模式）→ uf3-dispatch-entry.spec.ts；
+//     UI 派发入口（/run-dag-tasks 指令单行自动发送 + 容器模式）→ uf3-dispatch-entry.spec.ts；
 //   - Step3 no-ready-task-pool-done（池快照 + 收工判词）→ dogfood（no-ready-task 事件门控）
 //     + M2 task-dispatch-pipeline.spec.ts Step2b（空出口信号）；
 //   - Step3 worker-blocked 的 fix 链协议半段（block_source 单事务/链深 ≤6/恢复钩子）→

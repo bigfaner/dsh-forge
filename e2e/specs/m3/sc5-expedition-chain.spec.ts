@@ -5,7 +5,7 @@
 //   → accepted → 成链原子三行（features 行 + proposal_id 谱系 + feature_records(register)
 //   审计行——单事务）→ 规格文档（upsertFeatureDoc → feature_documents 两行——write-prd/
 //   tech-design 产出的 RPC 双门承载）→ 任务（addTask source=feature·mode=expedition 快照）
-//   → 派发入口（UF-3 新开路由联动断言：远征模式 + /run-tasks 单行自动发送）→
+//   → 派发入口（UF-3 新开路由联动断言：远征模式 + /run-dag-tasks 指令单行自动发送）→
 //   提案/文档/任务/记录四域全景一致。
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,8 +23,8 @@ import { awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
 const WS_NAME = 'ws-sc5'
 const PROP = 'sc5-expedition'
-/** 派发指令单行（v23——容器标识经 run-tasks 技能映射为 dispatchTask source 对） */
-const DISPATCH_CMD = `/run-tasks ${PROP}`
+/** 派发指令单行（S5 缓切 `/run-dag-tasks <source-slug>`——command plane 执行宿主派发循环） */
+const DISPATCH_CMD = `/run-dag-tasks ${PROP}`
 
 test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → 任务 → 派发入口 → 四域全景一致', async () => {
   test.setTimeout(480_000)
@@ -83,7 +83,7 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
     const dispatchButton = page.locator('[data-dswf-tt-dispatch="on"]').first()
     await expect(dispatchButton, '派发按钮亮起（存在未终态）').toBeVisible({ timeout: 15_000 })
     await dispatchButton.click()
-    // 新开：远征模式会话 + /run-tasks 单行自动发送（v23 最小消息）
+    // 新开：远征模式会话 + /run-dag-tasks 指令单行自动发送（S5 缓切宿主指令入口）
     await expect(page.locator(CONVERSATION_CONTENT).first(), '转录面承载自动发送指令').toContainText(DISPATCH_CMD, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '远征模式')
     expect(await seatPresent(page, 1_000), '指令已发送 = 非 blank（hero 座位退场）').toBe(false)

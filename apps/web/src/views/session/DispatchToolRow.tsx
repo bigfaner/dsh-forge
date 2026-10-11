@@ -5,8 +5,8 @@
 // 「工具调用 · dispatchTask · proposal/feature」（字面种类词，非容器标识，多容器
 // 派发循环里各行不可分辨）。
 // 本行 = 上游业务视图正径（keyed slot 按 wire 工具名注册——ui-skill/ask-question
-// 同型先例；零平台 fork）：摘要段改取 source_slug（容器标识——`/run-tasks <容器标识>`
-// 绑定语义同源值），缺席（全库 DAG 盲选）/形状漂移回退工具名单段（不猜不抛）；
+// 同型先例；零平台 fork）：摘要段改取 source_slug（任务源标识——`/run-dag-tasks <slug>`
+// 派发指令绑定语义同源值），缺席（全库 DAG 盲选）/形状漂移回退工具名单段（不猜不抛）；
 // 结算后行尾追加领取任务键 slug/localId（用户裁决 2026-10-09——结算文本首行解析，
 // 输入面无任务指定：就绪选择是工具内部行为，运行中不得而知）。
 // 行语言 = 上游 ToolRow/SkillRow 同型（24px 行高 · 16px 图标位 · 2px 点隔符 ·

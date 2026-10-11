@@ -312,7 +312,7 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
     expect(seen).toEqual(['jump:s-dispatch:m2-pipeline/2.4'])
   })
 
-  it('无执行中任务 → new（容器对应模式 + /run-tasks 指令单行·v23 最小消息）', async () => {
+  it('无执行中任务 → new（容器对应模式 + /run-dag-tasks 指令单行·S5 缓切宿主指令入口）', async () => {
     const seen: string[] = []
     await runDispatchRoute(
       { projectId: 'p-1', container: BLITZ_CONTAINER, client: dispatchClient({ list: [cardFixture()] }) },
@@ -321,7 +321,7 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
         onNew: (mode, command) => seen.push(`new:${mode}:${command}`),
       },
     )
-    expect(seen).toEqual(['new:blitz:/run-tasks legacy-eval-retire'])
+    expect(seen).toEqual(['new:blitz:/run-dag-tasks legacy-eval-retire'])
   })
 
   it('执行中在场但零 link 挂接（人工置 in_progress）→ new（空跳无意义）', async () => {
@@ -333,7 +333,7 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
         onNew: (mode, command) => seen.push(`new:${mode}:${command}`),
       },
     )
-    expect(seen).toEqual(['new:expedition:/run-tasks m2-pipeline'])
+    expect(seen).toEqual(['new:expedition:/run-dag-tasks m2-pipeline'])
   })
 
   it('RPC 失败 → fail-soft 回退 new（claim 原子性兜底）', async () => {
@@ -345,7 +345,7 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
         onNew: (mode, command) => seen.push(`new:${mode}:${command}`),
       },
     )
-    expect(seen).toEqual(['new:expedition:/run-tasks m2-pipeline'])
+    expect(seen).toEqual(['new:expedition:/run-dag-tasks m2-pipeline'])
   })
 })
 

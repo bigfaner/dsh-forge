@@ -10,6 +10,8 @@
 
 已移除：`git-commit/`（Out of Scope #12——M2 条目 M3 删除；复活触发 = 真实消费者出现。commit 纪律两态由 submit-task 承载）。
 
+> **S5 缓切注记（run-tasks-host-command）**：宿主指令 `/run-dag-tasks <source-slug>`（UI command plane 执行宿主派发循环）已接管 GUI 派发按钮入口；本技能 `/run-tasks <slug>` 手动入口与指令**不同名并存**——会话内手动触发照常（循环仍由 dispatchTask 每轮单调用承载），技能退役另案收口。
+
 ## 物理挂载
 
 本目录 = customSkillDirs 挂载根：profile `customSkillDirs` 行指向 `packages/plugin-forge/skills`（dsh-skill-filesystem 发现约定 = 根下**一层** `<name>/SKILL.md`；frontmatter 必填 `name`[kebab-case，与目录名一致] + `description`，可选 `user-invocable`——submit-task 置 false（executor 专用面））。

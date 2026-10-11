@@ -7,7 +7,8 @@
 // 顺序领取语义）随 D30 机械化包裹退役——置灰形态自释 + 置灰不可点已闭环（零死代码）。
 // 双路由（图 13 / v22 ㊲）：执行中任务在场且有其最新派发挂接会话 → jump（openExistingSession
 // ——不新建不重发不切模式）；否则 new（openSessionWithPreset 容器对应模式 + autosend
-// 「/run-tasks <容器标识>」单行——v23 最小消息·4.1 DISPATCH_COMMAND_PREFIX 串接）。
+// 「/run-dag-tasks <任务源标识>」指令单行——S5 缓切：known command 经上游 slash 仲裁路由至
+// command plane 执行宿主派发循环（新会话即主会话），零新增 RPC·4.1 DISPATCH_COMMAND_PREFIX 串接）。
 // 路由执行（RPC taskDetail 取挂接 + 编排器两出口）= 4.6 接线；本件 = 按钮呈现 +
 // 路由纯派生（dispatchRouteOf——AC6 双路由分支测试锚）。
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——本族组件零任务行/详情动作。
@@ -17,7 +18,7 @@ import { DISPATCH_COMMAND_PREFIX } from '../message-format.js'
 import { hasNonTerminalTask } from './terminal-state.js'
 import './task-tab.css'
 
-/** 派发指令单行（v23：`/run-tasks <容器标识>`——容器标识经 run-tasks 技能映射为 dispatchTask source 对） */
+/** 派发指令单行（S5 缓切：`/run-dag-tasks <source-slug>`——known command 路由 command plane 执行宿主派发循环） */
 export function dispatchCommandOf(containerSlug: string): string {
   return `${DISPATCH_COMMAND_PREFIX}${containerSlug}`
 }
@@ -40,7 +41,7 @@ export interface DispatchRouteInput {
   readonly latestDispatchSession?: { readonly sessionId: string }
   /** 容器对应模式（feature → expedition / 突击提案 → blitz） */
   readonly containerMode: Mode
-  /** 容器标识（指令单行参数——经技能映射为 dispatchTask source_slug） */
+  /** 任务源标识（指令单行参数——command plane 解析为 dispatchTask source 对） */
   readonly containerSlug: string
 }
 

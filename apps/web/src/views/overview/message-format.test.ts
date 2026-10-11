@@ -279,11 +279,11 @@ describe('@ 锚数据驱动（docsRoot 注入——缺席回退 docs 缺省锚�
   })
 })
 
-describe('派发指令模板（AC5——v23 单行最小消息，零纯函数）', () => {
-  it('PRD 示例⑤逐字对齐：前缀 + 容器标识 = 单行（无换行、无其它成分）', () => {
+describe('派发指令模板（AC5——v23 单行最小消息，零纯函数；S5 缓切换值 `/run-dag-tasks `）', () => {
+  it('S5 换值：前缀 + 任务源标识 = 单行（无换行、无其它成分；known command 路由 command plane）', () => {
     const line = `${DISPATCH_COMMAND_PREFIX}dsh-forge-m3-bootstrap-presets`
-    expect(line).toBe('/run-tasks dsh-forge-m3-bootstrap-presets')
+    expect(line).toBe('/run-dag-tasks dsh-forge-m3-bootstrap-presets')
     expect(line).not.toContain('\n')
-    expect(DISPATCH_COMMAND_PREFIX).toBe('/run-tasks ')
+    expect(DISPATCH_COMMAND_PREFIX).toBe('/run-dag-tasks ')
   })
 })

@@ -7,7 +7,7 @@
 // formatDiagMessage 自动发送·远征）。任务失败诊断（blocked/rejected）= 抽屉内「诊断失败」
 // 按钮（drawer 4.6 接线——同 toast 同发送机制）。派发按钮（DispatchButton 4.4）：终态判定
 // stats 单源 + 双路由（runDispatchRoute——执行中在场跳转既有派发会话[taskDetail.sessions
-// link 源末位]；否则新开容器对应模式 + autosend「/run-tasks <标识>」单行·v23）。
+// link 源末位]；否则新开容器对应模式 + autosend「/run-dag-tasks <标识>」指令单行·S5 缓切）。
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——行/详情零「执行」动作。
 // 容器选中：受控注入（4.2 taskFocus featureSlug）优先，否则本地切换；数据装载归
 // useTasksTabLoad（source 容器参数路由——AC5）。

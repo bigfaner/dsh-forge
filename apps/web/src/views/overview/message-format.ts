@@ -4,8 +4,9 @@
 //（message-format.test.ts 快照断言锚）。组装序（tech-design Integration 消息体组装）：
 // @path 第一行 → 名称/所属 → 摘要 → [状态|阶段] → 主体（诊断项/失败记录）→ 请求；
 // **不含模式**（由会话预设承载——数据约束 5）；文档清单 = 相对容器目录真实路径 + 状态。
-// 派发指令例外（v23）= `/run-tasks <容器标识>` 单行模板串接（DISPATCH_COMMAND_PREFIX 常量
-// ——零纯函数，容器标识经 run-tasks 技能映射为 dispatchTask source 对，不参与本格式族）。
+// 派发指令例外（v23）= `<指令> <任务源标识>` 单行模板串接（DISPATCH_COMMAND_PREFIX 常量
+// ——零纯函数，任务源标识经指令面映射为 dispatchTask source 对，不参与本格式族；S5 缓切
+// 换值 `/run-dag-tasks `——宿主指令为派发按钮入口，run-tasks 技能手动入口并存不退役）。
 // 词汇口径注记：阶段/状态短语以 PRD 示例与 UF-4.1 chips 词汇为准（阶段「任务/已完成」——
 // contracts FEATURE_STATUS_LABELS 的 chips 词汇「任务分解」为 M2 概览行用法，两 vocabulary
 // 并存各自单源；提案状态 = PROPOSAL_STATUS_LABELS zh（示例①「评审中」同源）。
@@ -61,8 +62,8 @@ export const FAILURE_STATUS_PHRASES: Readonly<Partial<Record<TaskStatus, string>
   rejected: '已拒绝',
 }
 
-/** 派发指令前缀（v23 最小消息 = 前缀 + 容器标识单行串接——4.4 派发按钮消费） */
-export const DISPATCH_COMMAND_PREFIX = '/run-tasks '
+/** 派发指令前缀（S5 缓切换值——宿主指令 `/run-dag-tasks <source-slug>` 单行 = 前缀 + 标识，4.4 派发按钮消费） */
+export const DISPATCH_COMMAND_PREFIX = '/run-dag-tasks '
 
 /**
  * 打开新会话请求（4.6 视图层中立形状——装配侧映射 openSessionWithPreset 输入）。

@@ -86,10 +86,10 @@ describe('DispatchButton 渲染面（AC3——stats 单源判定 + v24 视觉；
   })
 })
 
-describe('dispatchCommandOf（AC4——v23 单行最小消息·4.1 前缀消费）', () => {
-  it('「/run-tasks <容器标识>」单行（feature/突击提案容器同构）', () => {
-    expect(dispatchCommandOf('dsh-forge-m2-pipeline')).toBe('/run-tasks dsh-forge-m2-pipeline')
-    expect(dispatchCommandOf('legacy-eval-retire')).toBe('/run-tasks legacy-eval-retire')
+describe('dispatchCommandOf（AC4——S5 缓切：`/run-dag-tasks <slug>` 指令单行·前缀消费）', () => {
+  it('「/run-dag-tasks <任务源标识>」单行（feature/突击提案容器同构）', () => {
+    expect(dispatchCommandOf('dsh-forge-m2-pipeline')).toBe('/run-dag-tasks dsh-forge-m2-pipeline')
+    expect(dispatchCommandOf('legacy-eval-retire')).toBe('/run-dag-tasks legacy-eval-retire')
   })
 })
 
@@ -123,7 +123,7 @@ describe('dispatchRouteOf（AC4 双路由分支）', () => {
       containerMode: 'expedition',
       containerSlug: 'm2-pipeline',
     })
-    expect(route).toEqual({ kind: 'new', mode: 'expedition', command: '/run-tasks m2-pipeline' })
+    expect(route).toEqual({ kind: 'new', mode: 'expedition', command: '/run-dag-tasks m2-pipeline' })
   })
 
   it('无执行中任务 → new：突击提案容器 → 突击模式', () => {
@@ -131,7 +131,7 @@ describe('dispatchRouteOf（AC4 双路由分支）', () => {
       containerMode: 'blitz',
       containerSlug: 'legacy-eval-retire',
     })
-    expect(route).toEqual({ kind: 'new', mode: 'blitz', command: '/run-tasks legacy-eval-retire' })
+    expect(route).toEqual({ kind: 'new', mode: 'blitz', command: '/run-dag-tasks legacy-eval-retire' })
   })
 
   it('执行中在场但零派发挂接（人工置 in_progress 等）→ new（无在场派发循环——不空跳）', () => {
@@ -140,6 +140,6 @@ describe('dispatchRouteOf（AC4 双路由分支）', () => {
       containerMode: 'expedition',
       containerSlug: 'm2-pipeline',
     })
-    expect(route).toEqual({ kind: 'new', mode: 'expedition', command: '/run-tasks m2-pipeline' })
+    expect(route).toEqual({ kind: 'new', mode: 'expedition', command: '/run-dag-tasks m2-pipeline' })
   })
 })

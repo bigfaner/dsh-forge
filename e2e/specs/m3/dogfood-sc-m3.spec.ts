@@ -9,7 +9,7 @@
 //     RPC + 真实文件）→ 任务三件 db-insert 受控初态（M2 5.4 形制）；
 //   · dispatchTask 四分支全走查（Implementation Notes「四分支含 halted 复位路径」）：
 //     ① halted —— forgeSettings worker 指向不存在 provider → 派发入口（UF-3 按钮）开会话 A
-//     （远征 + /run-tasks 单行自动发送）→ spawn 失败 ×3 粘住（1.1 留 in_progress 走幂等
+//     （远征 + /run-dag-tasks 指令单行自动发送）→ spawn 失败 ×3 粘住（1.1 留 in_progress 走幂等
 //     重入径——3 条 claim 零 submit 断言 + logs tool-error ×3）→ 复位 = 人工转移（forge:tasks/
 //     transition 人类面 in_progress→pending）+ 新派发会话 B（冷启动计数器复位）；
 //     ② spawned·success（1.1 复位后 + 1.2）；③ spawned·blocked（1.3 缺席文件 → fix 链 →
@@ -360,7 +360,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
       worker: { provider: BROKEN_PROVIDER, model: 'none', reasoning: 'low' },
     })
 
-    // ── 派发会话 A（UF-3 派发入口——远征 + /run-tasks 单行自动发送）→ spawn 失败 ×3 → halted ──
+    // ── 派发会话 A（UF-3 派发入口——远征 + /run-dag-tasks 指令单行自动发送）→ spawn 失败 ×3 → halted ──
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
@@ -370,7 +370,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     await expect(
       page.locator('[data-conversation-content]').first(),
       '派发指令单行自动发送（容器标识 = feature slug）',
-    ).toContainText(`/run-tasks ${FEATURE}`, { timeout: 30_000 })
+    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '远征模式')
     const sessionA = findFixtureSession(dshHome, WS_NAME)
     expect(sessionA, '派发会话 A 落盘开户').toBeDefined()
@@ -475,7 +475,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     await expect(
       page.locator('[data-conversation-content]').first(),
       '会话 B 派发指令自动发送（不重发到 A——新会话转录只含本轮指令）',
-    ).toContainText(`/run-tasks ${FEATURE}`, { timeout: 30_000 })
+    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '远征模式')
     await awaitNoLateModals(page)
 
