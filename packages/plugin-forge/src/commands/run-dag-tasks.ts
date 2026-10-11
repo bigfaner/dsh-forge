@@ -196,9 +196,14 @@ export function createRunDagTasksHandler(
     const ctx: InvokeContext = { projectId, sessionId: agent.session.id, parent: agent, ...(signal !== undefined ? { signal } : {}) }
     const slug = rawInput.trim()
     try {
-      // 跑动中再触发（v1 单活——任意归属活循环在场即问询，decisions #19/#20）
+      // 跑动中再触发（v1 单活——decisions #19/#20）：先判归属——他会话活循环不进
+      // 查看/停止/替换问询（decisions #20 作用域下那些操作对本会话全是 no-op，
+      // 问询面板是假所有权），改出明确回执；仅本会话自己的活循环才弹问询。
       const running = deps.driver.active()
       if (running !== undefined) {
+        if (deps.driver.activeOf(ctx.sessionId) === undefined) {
+          return foreignLoopNotice(running, slug)
+        }
         return await handleRunning(deps, ctx, running, slug)
       }
       if (slug !== '') {
@@ -305,6 +310,19 @@ function runningView(running: LoopRecord): ForgeCommandResult {
       ? `正在执行 ${running.inFlight.taskKey} ${running.inFlight.title}`
       : '当前没有正在执行的任务'
   return { kind: 'success', text: `任务源 ${running.source.slug} 的派发循环进行中，${fact}。停止请执行 /stop-dag-tasks。` }
+}
+
+/**
+ * 他会话活循环回执（归属判序前置）：本会话无活循环而全局有——停止/替换对本会话恒 no-op
+ * （decisions #20 跨会话隔离），不弹问询、零归属 id 泄露；单活模型下带参直通也无法启动，
+ * 明示接管路径（到启动会话执行 /stop-dag-tasks 或等待完成）。
+ */
+function foreignLoopNotice(running: LoopRecord, requestedSlug: string): ForgeCommandResult {
+  const requested = requestedSlug !== '' ? `；本次请求的任务源 ${requestedSlug} 未启动` : ''
+  return {
+    kind: 'success',
+    text: `任务源 ${running.source.slug} 的派发循环正由其它会话运行——本会话没有可操作的派发循环${requested}。单活模型下无法并行派发；如需接管，请到启动它的会话执行 /stop-dag-tasks，或等待其完成。`,
+  }
 }
 
 /** 停止本会话循环（收口叙述由驱动器发向 owner 会话——⑰ stopped-by-command；此处仅回执） */

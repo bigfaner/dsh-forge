@@ -358,15 +358,21 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     expect((out as { text: string }).text).toContain('已停止')
   })
 
-  it('停止（他会话循环——跨会话隔离）：stop 恒以本会话 id 调用被作用域拒绝→文本恰「本会话没有派发任务」，他会话循环原样', async () => {
+  it('他会话活循环（归属判序前置）：零问询、零 stop/start 触达——success 回执明示其它会话运行与接管路径', async () => {
     const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other' }
     const ask = askStub(answerLabel('停止'))
     const stub = driverStub({ activeRecord: foreign })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
     const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
-    expect(stub.stopInputs).toEqual([{ ownerSessionId: SESSION }]) // 永远只报本会话
+    expect(ask.requests).toHaveLength(0) // 假所有权问询不再弹出
+    expect(stub.stopInputs).toHaveLength(0)
+    expect(stub.startInputs).toHaveLength(0)
     expect(stub.loops.has('s-other')).toBe(true) // 他会话循环不受影响
-    expect(out).toEqual({ kind: 'success', text: '本会话没有派发任务' })
+    expect(out.kind).toBe('success')
+    const text = (out as { text: string }).text
+    expect(text).toContain('其它会话')
+    expect(text).toContain('本会话没有可操作的派发循环')
+    expect(text).toContain('/stop-dag-tasks')
   })
 
   it('替换（带参）：先停本会话循环再直通新任务源', async () => {
@@ -396,16 +402,19 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     expect(out.kind).toBe('success')
   })
 
-  it('替换（他会话循环）：stop 被作用域拒绝→start 单活拒绝→success「已在运行」（未误停、未误启）', async () => {
+  it('他会话活循环 + 带参直通：不触 start（单活下必然拒绝）——回执含所请求 slug 未启动', async () => {
     const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other' }
     const ask = askStub(answerLabel('替换'))
     const stub = driverStub({ activeRecord: foreign })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
+    expect(ask.requests).toHaveLength(0)
     expect(stub.loops.has('s-other')).toBe(true)
-    expect(stub.startInputs).toHaveLength(1) // start 被触达但被单活守卫拒绝
+    expect(stub.startInputs).toHaveLength(0) // 归属判序前置——start 不再空触
     expect(out.kind).toBe('success')
-    expect((out as { text: string }).text).toContain('已在运行')
+    const text = (out as { text: string }).text
+    expect(text).toContain('其它会话')
+    expect(text).toContain('feat-x 未启动')
   })
 
   it('未选择操作：success 文本「未选择操作」，循环保持', async () => {
