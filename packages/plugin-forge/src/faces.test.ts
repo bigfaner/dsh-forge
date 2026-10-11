@@ -3,7 +3,8 @@
 // { channel: 'log' }) 单点硬编码（收窄句柄唯一写入口——默认通道 append 与 updateProgress
 // 结构性不可达，F4 通道矩阵唯 log 被模型消费读滤除）/ hooks（cancel + done）恒等交还注册表。
 import { describe, expect, it } from 'vitest'
-import { adaptAgentNarrationChannel, adaptDispatchJobs } from './faces.js'
+import type { Project } from '@dsh-forge/contracts'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { DispatchJobsRegistryFace } from './faces.js'
 
 describe('adaptDispatchJobs（适配层——channel 单点硬编码）', () => {
@@ -143,5 +144,66 @@ describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回�
     await expect(channel.followup('s-gone', 'x')).resolves.toBeUndefined()
     const partial = adaptAgentNarrationChannel({ get: () => ({ inject: 'not-a-function' }) })
     await expect(partial.notice('s-1', 'x')).resolves.toBeUndefined()
+  })
+})
+
+// ─────────────────────────── S1c/S4 createProjectContainerDirs（projectId→容器目录解析缝） ───────────────────────────
+
+describe('createProjectContainerDirs（1.11 装配接线收口——反向解析记忆化桥接）', () => {
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+  const DEMO_PROJECT = { wsPath: 'C:\\ws\\demo' } as unknown as Project
+
+  function projectSpy(over: { project?: Project | null; dir?: string; deriveThrows?: boolean } = {}) {
+    const getCalls: string[] = []
+    const deriveInputs: unknown[] = []
+    const projects = {
+      getProject: async (id: string): Promise<Project | null> => {
+        getCalls.push(id)
+        return over.project === undefined ? DEMO_PROJECT : over.project
+      },
+      deriveTaskStoreDir: async (q: { workspaceDir: string }) => {
+        deriveInputs.push(q)
+        if (over.deriveThrows === true) throw new Error('derive exploded')
+        return { dir: over.dir ?? 'D:/containers/demo@abcd1234' }
+      },
+    }
+    return { projects, getCalls, deriveInputs }
+  }
+
+  it('warm→resolve 命中：ws_path 反查 + deriveTaskStoreDir 单源派生（插件不复制派生逻辑）', async () => {
+    const spy = projectSpy()
+    const dirs = createProjectContainerDirs(spy.projects)
+    dirs.warm(['p-1'])
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1'])
+    expect(spy.deriveInputs).toEqual([{ workspaceDir: 'C:\\ws\\demo' }])
+    expect(dirs.resolve('p-1')).toBe('D:/containers/demo@abcd1234')
+    expect(spy.getCalls).toEqual(['p-1']) // 记忆命中零二次解析
+  })
+
+  it('resolve 未命中 = undefined + 懒解析（下次命中）；warm 幂等去重', async () => {
+    const spy = projectSpy()
+    const dirs = createProjectContainerDirs(spy.projects)
+    expect(dirs.resolve('p-1')).toBeUndefined() // 未命中即时回 undefined（同步落盘径 fail-soft）
+    await flush()
+    expect(dirs.resolve('p-1')).toBe('D:/containers/demo@abcd1234')
+    dirs.warm(['p-1', 'p-1']) // 已记忆/解析中跳过——幂等
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1'])
+  })
+
+  it('项目不存在（getProject null）= 永不记忆零抛；解析失败（derive 拒绝）= 清除占位可重试', async () => {
+    const missing = createProjectContainerDirs(projectSpy({ project: null }).projects)
+    missing.warm(['p-404'])
+    await flush()
+    expect(missing.resolve('p-404')).toBeUndefined()
+
+    const spy = projectSpy({ deriveThrows: true })
+    const dirs = createProjectContainerDirs(spy.projects)
+    dirs.warm(['p-1'])
+    await flush()
+    expect(dirs.resolve('p-1')).toBeUndefined() // 失败未记忆——不拖垮调用方
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1', 'p-1']) // 占位已清除——再次触发懒解析（可自愈重试）
   })
 })

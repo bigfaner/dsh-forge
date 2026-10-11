@@ -21,11 +21,12 @@ import type {
   TransitionTaskInput,
 } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
-import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageInput } from './driver.js'
+import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import { backoffDelayMs, LOOP_TRIAGE_MAX_ATTEMPTS } from './driver.js'
 import { createNarrator } from '../notify/index.js'
-import type { NarrationChannel, Narrator } from '../notify/index.js'
+import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import type { ForgeEventSink } from '../events/sink.js'
+import { createTriageHook } from '../triage/index.js'
 import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../dispatch-core/index.js'
 import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../dispatch-core/index.js'
 
@@ -236,6 +237,10 @@ function build(options: {
   stats?: TaskStats[]
   query?: QueryTaskResult[]
   triage?: (input: LoopTriageInput) => Promise<LoopTriageDecision>
+  /** 真钩子注册径（1.11 装配接线收口——SC4 端到端）：工厂收到 tasks 桩，装配期建钩子 */
+  triageHook?: (h: ReturnType<typeof tasksHarness>) => LoopTriageHook
+  /** 事件仓桩（blocked 族落盘委派观察——projectId 解析缝载体断言） */
+  incidents?: IncidentStore
   spawnBehavior?: (h: ReturnType<typeof trackedSpawn>) => void
 } = {}): Built {
   const h = tasksHarness()
@@ -251,7 +256,11 @@ function build(options: {
       calls.push({ method: 'followup', sessionId, text })
     },
   }
-  const narrator: Narrator = createNarrator({ channel }) // incident 仓缺目录解析 = 零 I/O fail-soft
+  const narrator: Narrator = createNarrator({
+    channel,
+    // incident 仓缺目录解析 = 零 I/O fail-soft；显式桩时观察落盘委派
+    ...(options.incidents !== undefined ? { incidents: options.incidents } : {}),
+  })
   const events: ForgePluginEvent[] = []
   const sink: ForgeEventSink = {
     emit: (e) => events.push(e),
@@ -268,6 +277,7 @@ function build(options: {
     narrator,
     events: sink,
     ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
+    ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -561,6 +571,134 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.escalations).toEqual([
       { kind: 'deadlock', ownerSessionId: OWNER, source: SOURCE, blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }] },
     ])
+  })
+})
+
+// ─────────────────────────── S1c/S4 装配接线收口（1.11——真实钩子注册 + 身份载体 + 落盘缝） ───────────────────────────
+
+describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册进驱动器，非钩子注入单测）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // 无 worker 派生 fix（findFixTaskRef 落空 → followUp 缺席）
+  }
+
+  /** 决策输出的 triage 代理 spawn 桩（真实 createTriageHook 的 in-process spawn 面） */
+  function triageSpawnWith(output: string): ReturnType<typeof trackedSpawn> {
+    const triageSpawn = trackedSpawn()
+    triageSpawn.setBehavior(async () => ({
+      workerSessionId: 'triage-1',
+      result: Promise.resolve({ stopReason: 'completed', output }),
+      dispose: async () => {},
+    }))
+    return triageSpawn
+  }
+
+  it('blocked 无 follow-up → 处置代理真实 spawn（收窄工具面+parent 透传）→ 三动作决策宿主忠实执行（add-fix 链）', async () => {
+    const parent = { agentTag: 'root-agent' }
+    let triageSpawn: ReturnType<typeof trackedSpawn> | undefined
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triageHook: (h) => {
+        triageSpawn = triageSpawnWith('分析过程略。\n{"action":"add-fix","title":"Fix: flaky selector","note":"修选择器等待"}')
+        // 真钩子装配同形（src/index.ts）：tasks/spawn 服务面与驱动器同源
+        return createTriageHook({ tasks: h.tasks, spawn: triageSpawn.spawn })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent })
+    await untilSettled(built.driver)
+    // 处置代理真实 spawn（第二路 spawn——worker 之外唯一一路）：收窄工具面 + 每循环身份
+    expect(built.spawn.requests).toHaveLength(1) // worker 一路；处置代理在独立 spawn 面
+    expect(triageSpawn?.requests).toHaveLength(1)
+    const req = triageSpawn?.requests[0] as SpawnWorkerRequest
+    expect(req.label).toBe('feat-x/2.5 · 处置分析')
+    expect(req.prompt).toContain('feat-x/2.5 Implement the thing')
+    expect(req.prompt).toContain('tests hang on flaky selector') // reason 全文进处置输入
+    for (const name of ['bash', 'read', 'write', 'addTask', 'submitTask', 'dispatchTask', 'queryTask']) {
+      expect(req.toolFilter.deny).toContain(name)
+    }
+    expect(req.parent).toBe(parent) // 每循环 parent 载体经输入面绑定（非装配期烘焙）
+    expect(req.signal).toBeInstanceOf(AbortSignal)
+    expect(req.signal.aborted).toBe(false)
+    // 三动作决策宿主忠实执行：add-fix → addTask(blockSource 链) → ⑧ 叙述 → 续领
+    expect(built.h.addTaskInputs).toEqual([
+      expect.objectContaining({
+        projectId: PROJECT,
+        source: SOURCE,
+        title: 'Fix: flaky selector',
+        type: 'coding-fix',
+        sourceTask: { slug: 'feat-x', localId: '2.5' },
+        blockSource: true,
+      }),
+    ])
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2（修选择器等待）'))).toBe(true)
+  })
+
+  it('每循环身份载体：ownerSessionId/parent 透传；signal = 循环控制器（stop 即取消在途处置）', async () => {
+    const parent = { agentTag: 'root-agent' }
+    let captured: LoopTriageInput | undefined
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: async (input) => {
+        captured = input
+        return new Promise<LoopTriageDecision>(() => {}) // 在途处置——挂起等待停止信号
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent })
+    await vi.waitFor(() => expect(captured).toBeDefined(), { timeout: 2000, interval: 5 })
+    expect(captured?.ownerSessionId).toBe(OWNER)
+    expect(captured?.parent).toBe(parent)
+    expect(captured?.signal).toBeInstanceOf(AbortSignal)
+    expect(captured?.signal.aborted).toBe(false)
+    // 停止 = 循环控制器 abort——在途处置信号随载体被取消
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(captured?.signal.aborted).toBe(true)
+  })
+
+  it('blocked 族落盘委派携带 projectId（解析缝载体——事件仓按项目解析容器目录）', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      incidents: {
+        record: (input) => {
+          incidentInputs.push(input)
+          return 'logs/feat-x/2.5/001-blocked/'
+        },
+      },
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(incidentInputs).toEqual([
+      expect.objectContaining({
+        projectId: PROJECT,
+        sourceSlug: SOURCE.slug,
+        taskKey: '2.5',
+        eventType: 'blocked',
+        error: 'tests hang on flaky selector',
+      }),
+    ])
+    // 详情行回到叙述（装配面 incidents 在场——blocked 族叙述恢复详情子文件夹路径）
+    expect(built.calls.some((c) => c.text.includes('详情: logs/feat-x/2.5/001-blocked/'))).toBe(true)
   })
 })
 

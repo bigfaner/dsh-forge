@@ -23,6 +23,7 @@ function storeWith(containerDir?: string) {
 
 function blocked(input: Partial<IncidentInput> = {}): IncidentInput {
   return {
+    projectId: 'p-1',
     sourceSlug: 'm2-pipeline',
     taskKey: '3.1',
     eventType: 'blocked',
@@ -73,6 +74,27 @@ describe('S4 · 事件子文件夹落盘（AC4）', () => {
     expect(path).toBe('logs/m2-pipeline/3.1/001-blocked/')
     const dir = join(home, 'logs', 'm2-pipeline', '3.1', '001-blocked')
     expect(readdirSync(dir)).toEqual(['error.log'])
+  })
+})
+
+describe('S4 · 解析缝（1.11 装配接线收口——projectId→容器目录反向解析载体）', () => {
+  it('projectId+sourceSlug 透传解析器；解析器回值决定落位目录', () => {
+    home = mkdtempSync(join(tmpdir(), 'forge-notify-incident-'))
+    const seen: { projectId: string | undefined; sourceSlug: string }[] = []
+    const store = createIncidentStore({
+      resolveContainerDir: (projectId, sourceSlug) => {
+        seen.push({ projectId, sourceSlug })
+        return projectId === 'p-1' ? home : undefined
+      },
+    })
+    expect(store.record(blocked())).toBe('logs/m2-pipeline/3.1/001-blocked/')
+    expect(existsSync(join(home, 'logs', 'm2-pipeline', '3.1', '001-blocked'))).toBe(true)
+    // 未注册项目（解析 undefined）= 不落盘 fail-soft
+    expect(store.record(blocked({ projectId: 'p-unknown' }))).toBeUndefined()
+    expect(seen).toEqual([
+      { projectId: 'p-1', sourceSlug: 'm2-pipeline' },
+      { projectId: 'p-unknown', sourceSlug: 'm2-pipeline' },
+    ])
   })
 })
 

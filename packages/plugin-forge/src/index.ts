@@ -22,12 +22,13 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace } from './faces.js'
-import { createNarrator } from './notify/index.js'
+import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
+import { createTriageHook } from './triage/index.js'
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
@@ -141,19 +142,38 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
     const narrationChannel: NarrationChannel =
       agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { notice: async () => {}, followup: async () => {} }
-    // S2 宿主派发循环装配单例（run-tasks-host-command S1b/S1c 接线）：驱动器 + 叙述面 +
-    // 第三层裁决挂钩。deps.projectId 缺席——指令面按敲指令会话 cwd 逐会话解析
-    // （LoopStartInput.projectId 覆盖）。第二层处置钩子（triage）不接线：钩子 run 面缺
-    // 每循环 parent/signal 载体（LoopTriageInput 无会话身份），缺席 = 驱动器装配降级
-    // （blocked 无 follow-up 仅落盘续领）——接缝扩展留后续任务。
+    // S2 宿主派发循环装配单例（run-tasks-host-command S1b/S1c/S4 接线）：驱动器 + 叙述面 +
+    // 第三层裁决挂钩 + 第二层处置钩子真绑定（1.11 装配接线收口——LoopTriageInput 每循环
+    // 身份载体 ownerSessionId/parent/signal 逐调用绑定，钩子服务面 tasks/spawn 与驱动器
+    // 同源同单例；活循环 blocked 无 follow-up 即处置代理真实 spawn）。deps.projectId 缺席
+    // ——指令面按敲指令会话 cwd 逐会话解析（LoopStartInput.projectId 覆盖）。
     const spawn = createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    // 容器目录解析缝（projectId→workspaceDir 反向解析——incident-log 落盘面，1.11 收口）：
+    // 装配期逐绑定项目预热 + 未命中懒解析记忆化（faces.createProjectContainerDirs——解析链
+    // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
+    // 不拖垮叙述，绝不落相对路径）。
+    const projectDirs = createProjectContainerDirs(ctx.forgeProjects)
+    const boundProjectIds = bindingProjectIds(config.projects ?? [], config.bindingsFile)
+    projectDirs.warm(boundProjectIds)
+    const narrator = createNarrator({
+      channel: narrationChannel,
+      incidents: createIncidentStore({
+        resolveContainerDir: (projectId) => (projectId !== undefined ? projectDirs.resolve(projectId) : undefined),
+      }),
+    })
     const loopDriver = createLoopDriver({
       tasks: ctx.forgeTasks,
       spawn,
-      narrator: createNarrator({ channel: narrationChannel }),
+      narrator,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      triage: createTriageHook({
+        tasks: ctx.forgeTasks,
+        spawn,
+        ...(settingsService !== undefined ? { settings: settingsService } : {}),
+        ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      }),
       ...(askFace !== undefined
         ? {
             escalation: createUserQuestionsEscalation({
@@ -200,7 +220,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 之③在装配时点恒真——循环登记表进程内不持久化，重启即空（活循环启动只会晚于装配），
     // registryEmpty=true 为装配期结构事实。fire-and-forget：失败不阻载装配（对账降级 = 遗留
     // in_progress 原样——skill 幂等重入语义不受伤，下次进程重启重试）。
-    for (const projectId of bindingProjectIds(config.projects ?? [], config.bindingsFile)) {
+    for (const projectId of boundProjectIds) {
       try {
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
@@ -364,6 +384,19 @@ export {
 // plane 执行零模型消息；注册面 = 装配方 reflect.get('commands') 防御读取 fail-soft）。
 export { createForgeCommands, FORGE_COMMAND_NAMES, NO_ACTIVE_LOOP_TEXT, nonTerminalSourcesOf } from './commands/index.js'
 export type { ForgeCommands, ForgeCommandsDeps, RunDagTasksDeps, SourceCandidate, StopDagTasksDeps } from './commands/index.js'
-// S2 宿主服务收窄面与适配层（faces.ts 增员——commands 注册表/agents 注册表 + 叙述通道适配）。
-export { adaptAgentNarrationChannel, FORGE_NOTICE_SOURCE_KIND } from './faces.js'
-export type { AgentLookupFace, CommandRegisterFace, ForgeCommandDefinition, ForgeCommandInvocation, ForgeCommandResult } from './faces.js'
+// S2 宿主服务收窄面与适配层（faces.ts 增员——commands 注册表/agents 注册表 + 叙述通道适配
+// + 项目容器目录解析缝）。
+export {
+  adaptAgentNarrationChannel,
+  createProjectContainerDirs,
+  FORGE_NOTICE_SOURCE_KIND,
+} from './faces.js'
+export type {
+  AgentLookupFace,
+  CommandRegisterFace,
+  ForgeCommandDefinition,
+  ForgeCommandInvocation,
+  ForgeCommandResult,
+  ProjectContainerDirs,
+  ProjectDirServiceFace,
+} from './faces.js'

@@ -84,10 +84,20 @@ export function loopInstructionOf(kind: 'halted' | 'timeout' | 'resume', slug: s
 
 // ─────────────────────────── 处置钩子接口（S1b 桩位——阶梯实现 = 任务 S1c） ───────────────────────────
 
-/** 第二层处置代理的输入（任务简报行/reason 全文/结算载荷——reason 全文只进钩子与落盘，decisions #24） */
+/**
+ * 第二层处置代理的输入（任务简报行/reason 全文/结算载荷——reason 全文只进钩子与落盘，
+ * decisions #24）。每循环身份载体（S1c/S4 装配接线收口）：钩子为装配单例，循环身份
+ * （主会话/parent/信号）只在 start 时点存在——经输入面逐调用绑定，装配期烘焙无效。
+ */
 export interface LoopTriageInput {
   readonly projectId: string
   readonly source: LoopSourceRef
+  /** 主会话真实 id（处置径归属锚——decisions #6） */
+  readonly ownerSessionId: string
+  /** 主会话 Agent（处置代理 spawn parent——与 worker 同 parent，lineage/工作目录同源） */
+  readonly parent: unknown
+  /** 取消信号（循环控制器——stop 即取消在途处置） */
+  readonly signal: AbortSignal
   readonly task: TaskSnapshot
   /** blocked 原因全文 */
   readonly reason: string
@@ -624,7 +634,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // ⑫ bounded 立即重入（claim 面按 links 幂等重入同任务，不退避）→ 超限第三层（decisions #16）
     loop.workerAborts += 1
     const attempt = loop.workerAborts
-    loop.deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
+    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
     if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
       await loop.deps.escalation?.escalate({
         kind: 'worker-abort-over-limit',
@@ -664,7 +674,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   }
 
   // blocked：worker 侧已 spawn fix → 机械续领不升级（fix ready 自然被领——decisions #22）
-  const meta = { taskKey: task.localId, reason: settlement.reason ?? '', settlement }
+  const meta = { projectId: scope.projectId, taskKey: task.localId, reason: settlement.reason ?? '', settlement }
   if (settlement.followUp !== undefined) {
     await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: settlement.followUp.localId }, meta)
     return 'continue'
@@ -673,7 +683,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // blocked 无 follow-up（修复路径缺位）→ 第二层处置代理（S1c 实装；钩子缺席 = 装配降级：
   // 仅落盘事件子文件夹、循环续领，池态判词机械接管后续叙述）
   if (deps.triage === undefined) {
-    deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+    deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     return 'continue'
   }
 
@@ -688,6 +698,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       decision = await deps.triage.run({
         projectId: scope.projectId,
         source: record.source,
+        ownerSessionId: owner,
+        parent: exec.parent,
+        signal,
         task,
         reason,
         settlement,
@@ -753,7 +766,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       }
       // add-fix 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
-      deps.narrator.recordIncident({ sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     }
     return 'continue'
   }

@@ -2,12 +2,25 @@
 // 委派（#28 分流——常规 inject·notice 零模型回合 / 终局 followup 完整消息）、通道
 // fail-soft（注入失败静默降级——异常不外抛不影响调用方，SC7「注入失败循环照常结束」）、
 // 阻塞族发射的 reason 机械防线（全文只落盘，叙述仅摘要+子文件夹路径）。
-import { describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { failSoftNarrationChannel } from './channel.js'
 import type { NarrationChannel } from './channel.js'
 import { createNarrator } from './narrator.js'
 import type { NarratorDeps } from './narrator.js'
+import { createIncidentStore } from './incident-log.js'
 import type { IncidentStore } from './incident-log.js'
+
+let home: string | undefined
+
+afterEach(() => {
+  if (home !== undefined) {
+    rmSync(home, { recursive: true, force: true })
+    home = undefined
+  }
+})
 
 function recordingChannel(): NarrationChannel & { calls: { method: string; sessionId: string; text: string }[] } {
   const calls: { method: string; sessionId: string; text: string }[] = []
@@ -86,9 +99,15 @@ describe('S4 · 阻塞族发射机械防线（AC4——reason 全文只落盘）
       'session-1',
       'blocked-auto-fixed',
       { sourceSlug: 'm2-pipeline', taskLabel: '3.2 装配桩', fixId: 'fix-3', fixNote: '修构建脚本依赖版本' },
-      { taskKey: '3.2', reason: REASON },
+      { projectId: 'p-1', taskKey: '3.2', reason: REASON },
     )
-    expect(incidents.inputs[0]).toMatchObject({ sourceSlug: 'm2-pipeline', taskKey: '3.2', eventType: 'blocked', error: REASON })
+    expect(incidents.inputs[0]).toMatchObject({
+      projectId: 'p-1',
+      sourceSlug: 'm2-pipeline',
+      taskKey: '3.2',
+      eventType: 'blocked',
+      error: REASON,
+    })
     const text = channel.calls[0]?.text ?? ''
     expect(channel.calls[0]?.method).toBe('notice')
     expect(text).toContain('详情: logs/m2-pipeline/3.2/001-blocked/')
@@ -113,6 +132,36 @@ describe('S4 · 阻塞族发射机械防线（AC4——reason 全文只落盘）
   it('事件仓缺席 = 详情行省略（narrator.recordIncident 返回 undefined）', async () => {
     const narrator = createNarrator({ channel: recordingChannel() })
     expect(narrator.recordIncident({ sourceSlug: 's', taskKey: '1', eventType: 'blocked', error: 'x' })).toBeUndefined()
+  })
+})
+
+describe('S4 · 解析缝端到端（1.11 装配接线收口——真实事件仓 + projectId 解析器）', () => {
+  it('projectId→容器目录解析命中：blocked 叙述带详情行且事件子文件夹真实生成', async () => {
+    home = mkdtempSync(join(tmpdir(), 'forge-notify-narrator-'))
+    const channel = recordingChannel()
+    // 装配缝同形：projectId → 容器目录（真仓 = faces.createProjectContainerDirs 的产物位）
+    const narrator = createNarrator({
+      channel,
+      incidents: createIncidentStore({ resolveContainerDir: (projectId) => (projectId === 'p-1' ? home : undefined) }),
+    })
+    await narrator.blocked(
+      'session-1',
+      'blocked-ask-user',
+      { sourceSlug: 'feat-x', taskLabel: '2.5 Implement the thing' },
+      { projectId: 'p-1', taskKey: '2.5', reason: 'tests hang on flaky selector', settlement: { outcome: 'blocked' } },
+    )
+    const text = channel.calls[0]?.text ?? ''
+    expect(text).toContain('详情: logs/feat-x/2.5/001-blocked/')
+    const dir = join(home!, 'logs', 'feat-x', '2.5', '001-blocked')
+    expect(existsSync(dir)).toBe(true)
+    // 解析未命中（未注册项目）= 详情行省略，叙述照发（fail-soft 保持）
+    await narrator.blocked(
+      'session-2',
+      'blocked-ask-user',
+      { sourceSlug: 'feat-x', taskLabel: '2.6 next' },
+      { projectId: 'p-unknown', taskKey: '2.6', reason: 'another reason' },
+    )
+    expect(channel.calls[1]?.text).not.toContain('详情:')
   })
 })
 

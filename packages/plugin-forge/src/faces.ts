@@ -295,3 +295,53 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationCh
     },
   }
 }
+
+// ─────────────────────────── 项目容器目录解析缝（S1c/S4 装配接线收口——incident-log 落盘面） ───────────────────────────
+
+/** 项目域服务收窄面（反向解析缝消费两法：getProject 反查 ws_path + deriveTaskStoreDir 单源派生） */
+export type ProjectDirServiceFace = Pick<ProjectServiceM2, 'getProject' | 'deriveTaskStoreDir'>
+
+/**
+ * projectId → 容器库目录记忆（incident-log 的反向解析缝落点——1.11 装配接线收口）。
+ * 解析链：projectId → getProject().ws_path（workspaceDir canonical path）→ deriveTaskStoreDir
+ * （{tasksHome}/{flatten}@{hash8} 单源——插件不复制派生逻辑）。两跳皆异步而事件子文件夹
+ * 落盘为同步径，以记忆化桥接：resolve 只读记忆（未命中触发懒解析并按 fail-soft 返回
+ * undefined——该次详情行省略，后续命中），warm 供装配期逐绑定项目预热。
+ */
+export interface ProjectContainerDirs {
+  /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
+  resolve(projectId: string): string | undefined
+  /** 预热（fire-and-forget 逐项目解析记忆；已记忆/解析中跳过——幂等） */
+  warm(projectIds: readonly string[]): void
+}
+
+/** 建解析缝（装配单例——装配方闭包持有，incident 仓 resolveContainerDir 消费） */
+export function createProjectContainerDirs(projects: ProjectDirServiceFace): ProjectContainerDirs {
+  const dirs = new Map<string, string>()
+  const warm = (projectId: string): void => {
+    if (dirs.has(projectId)) return
+    dirs.set(projectId, '') // 解析中占位（并发重复触发收敛为单跳；失败即清除重试）
+    void (async () => {
+      const project = await projects.getProject(projectId)
+      if (project === null) {
+        dirs.delete(projectId) // 未注册项目 = 未记忆（后续绑定增量注册后可再解析）
+        return
+      }
+      const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
+      if (derived.dir !== '') dirs.set(projectId, derived.dir)
+    })().catch(() => {
+      dirs.delete(projectId) // fail-soft：解析失败 = 未记忆（下次事件再触发懒解析，零外抛）
+    })
+  }
+  return {
+    resolve(projectId) {
+      const memo = dirs.get(projectId)
+      if (memo !== undefined && memo !== '') return memo
+      warm(projectId)
+      return undefined
+    },
+    warm(projectIds) {
+      for (const id of projectIds) warm(id)
+    },
+  }
+}

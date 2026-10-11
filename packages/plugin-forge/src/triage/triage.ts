@@ -21,16 +21,12 @@ import type { LoopTriageDecision, LoopTriageHook, LoopTriageInput } from '../loo
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
 
-/** 处置代理依赖（装配注入——与 worker spawn 同款面的结构子集） */
+/** 处置代理依赖（装配注入——服务面一次性绑定；循环身份不经此，每循环载体走 LoopTriageInput） */
 export interface TriageHookDeps {
   /** core 任务域服务读面（池快照 taskStats + 最近记录 queryTask——输入四件套之③④） */
   readonly tasks: Pick<ForgeTasksService, 'taskStats' | 'queryTask'>
   /** in-process driver spawn 真绑定（与 worker 同一装配单例） */
   readonly spawn: SpawnWorker
-  /** 主会话 Agent（与 worker 同 parent——lineage/工作目录/深度派生同源） */
-  readonly parent: unknown
-  /** 取消信号（循环控制器——stop 即取消在途处置） */
-  readonly signal?: AbortSignal
   /** forgeSettings 服务面（可选——与 worker 同款 agentOptions 组装，缺席回退父继承） */
   readonly settings?: Pick<ForgeSettingsService, 'get'>
   /** 模型推理档位目录解析（可选——组装面兼容收口同 worker） */
@@ -59,13 +55,14 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       const records: readonly TaskRecordEntry[] = detail.records ?? []
       // ② 类型化提示词（任务简报 + reason 全文 + 池快照 + 最近记录）
       const prompt = composeTriagePrompt({ task: input.task, reason: input.reason, pool, records })
-      // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致）
+      // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致；parent/signal =
+      //    每循环身份载体——输入面逐调用绑定，装配期烘焙无效）
       const settings = deps.settings !== undefined ? await deps.settings.get() : undefined
       const agentOptions = await reconcileWorkerReasoning(workerAgentOptionsOf(settings), deps.resolveModelReasoning)
       const handle = await deps.spawn({
         prompt,
-        parent: deps.parent,
-        signal: deps.signal ?? new AbortController().signal,
+        parent: input.parent,
+        signal: input.signal,
         toolFilter: deriveTriageToolFilter(),
         ...(agentOptions !== undefined ? { agentOptions } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,

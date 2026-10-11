@@ -19,6 +19,8 @@ export type BlockedFields<S extends BlockedScenarioId> = Omit<NarrativePayloadMa
 
 /** 阻塞族发射的事件材料（全文落盘、不进叙述） */
 export interface BlockedEmitMeta {
+  /** 项目 id（容器目录解析缝载体——透传 incident-log 反向解析，1.11 装配接线收口） */
+  readonly projectId?: string
   /** 事件子文件夹任务键（localId 口径——如「3.1」） */
   readonly taskKey: string
   /** 阻塞原因全文（只进 error.log 与裁决问询） */
@@ -69,6 +71,7 @@ export function createNarrator(deps: NarratorDeps): Narrator {
     ): Promise<void> {
       const reasonSummary = summarizeReason(meta.reason)
       const incidentPath = incidents.record({
+        projectId: meta.projectId,
         sourceSlug: fields.sourceSlug,
         taskKey: meta.taskKey,
         eventType: 'blocked',

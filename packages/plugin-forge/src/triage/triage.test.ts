@@ -69,6 +69,9 @@ function triageInput(over: Partial<LoopTriageInput> = {}): LoopTriageInput {
   return {
     projectId: 'p-1',
     source: { kind: 'feature', slug: 'feat-x' },
+    ownerSessionId: 'owner-1',
+    parent: { agentTag: 'owner-root' },
+    signal: new AbortController().signal,
     task: snapshot(),
     reason: 'pnpm 安装失败，编译环境缺失',
     settlement: { kind: 'spawned', outcome: 'blocked' },
@@ -118,7 +121,6 @@ function build(over: Partial<TriageHookDeps> = {}): Built {
       requests.push(req)
       return handle
     },
-    parent: { agentTag: 'owner-root' },
     ...over,
   }
   return {
@@ -153,6 +155,27 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     }
     expect(req.parent).toEqual({ agentTag: 'owner-root' })
     expect(req.label).toBe('feat-x/3.2 · 处置分析')
+  })
+
+  it('身份载体每调用绑定（1.11 装配接线收口）：parent/signal 取自输入面，装配期烘焙无效', async () => {
+    // 同一钩子面两次 run（不同 build 实例各自收请求）——spawn 请求身份各随各的输入
+    const first = new AbortController()
+    const second = new AbortController()
+    const parentA = { agentTag: 'parent-a' }
+    const parentB = { agentTag: 'parent-b' }
+    const builtA = build()
+    const builtB = build()
+    const doneA = createTriageHook(builtA.hookDeps).run(triageInput({ ownerSessionId: 'owner-a', parent: parentA, signal: first.signal }))
+    const doneB = createTriageHook(builtB.hookDeps).run(triageInput({ ownerSessionId: 'owner-b', parent: parentB, signal: second.signal }))
+    builtA.resolve('{"action":"ask-user"}')
+    builtB.resolve('{"action":"ask-user"}')
+    await Promise.all([doneA, doneB])
+    const reqA = builtA.requests[0] as SpawnWorkerRequest
+    const reqB = builtB.requests[0] as SpawnWorkerRequest
+    expect(reqA.parent).toBe(parentA)
+    expect(reqA.signal).toBe(first.signal)
+    expect(reqB.parent).toBe(parentB)
+    expect(reqB.signal).toBe(second.signal)
   })
 
   it('输入现读两调（taskStats + queryTask records）——处置瞬间取数', async () => {
