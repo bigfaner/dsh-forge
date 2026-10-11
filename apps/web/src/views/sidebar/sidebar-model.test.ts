@@ -6,6 +6,7 @@ import {
   buildSidebarTree,
   relativeTimeLabel,
   sessionDotState,
+  sessionLoopBadge,
   sessionStatus,
   SIDEBAR_SESSION_WINDOW_MS,
   SIDEBAR_VIEW_DEFAULT,
@@ -529,5 +530,94 @@ describe('sidebarSectionLabelOf（段头标签——官方 groupBy 切换同型�
   it('tree → 「项目」/ flat → 「会话」', () => {
     expect(sidebarSectionLabelOf({ groupBy: 'tree', archivedFilter: 'default' })).toBe('项目')
     expect(sidebarSectionLabelOf({ groupBy: 'flat', archivedFilter: 'default' })).toBe('会话')
+  })
+})
+
+// ─────────────────────────── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 兜底面数据面） ───────────────────────────
+
+describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——活循环族徽标派生）', () => {
+  /** 账本行构造（projectionValues = 上行宿主投影整值注入位） */
+  function ledgerRow(projectionValues: unknown): LedgerSessionRow {
+    return {
+      id: 's-loop',
+      displayTitle: '派发会话',
+      updatedAt: 1_700_000_000_000,
+      ...(projectionValues !== undefined ? { projectionValues: projectionValues as LedgerSessionRow['projectionValues'] } : {}),
+    }
+  }
+
+  it('活循环族（starting/running/stopping）→ 徽标随行（status + slug 原样透传）', () => {
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'feat-x', status: 'running' } }))).toEqual({
+      status: 'running',
+      slug: 'feat-x',
+    })
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: null, status: 'starting' } }))).toEqual({
+      status: 'starting',
+      slug: null,
+    })
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'stopping' } }))).toEqual({
+      status: 'stopping',
+      slug: 'f',
+    })
+  })
+
+  it('非活循环族（idle/stopped/failed）= 零徽标（徽标只标进行中循环——历史派发会话零噪声）', () => {
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'idle' } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'stopped' } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'failed' } }))).toBeUndefined()
+  })
+
+  it('键缺席/值形状漂移/它键投影 = 零徽标（防御读——形状漂移不炸面板）', () => {
+    expect(sessionLoopBadge(ledgerRow(undefined))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({}))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ plan: { active: true, pending: false } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': 'garbage' }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { status: 42 } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'bogus' } }))).toBeUndefined()
+  })
+
+  it('buildSidebarTree：活循环徽标随树行携带（账本 projectionValues → 视图行 loop）', () => {
+    const tree = buildSidebarTree({
+      projects: [{ id: 'p1', workspaceId: 'w1', name: '支付网关', wsPath: 'Z:/w/p1', archived: false } as never],
+      sessions: {
+        ids: ['s-loop'],
+        byId: {
+          's-loop': {
+            id: 's-loop',
+            displayTitle: '派发会话',
+            updatedAt: 1_700_000_000_000,
+            projectionValues: { 'forge-dispatch-loop': { sourceSlug: 'feat-x', status: 'running' } },
+          },
+        },
+        phase: 'ready',
+      },
+      workspaces: { items: [{ workspaceId: 'w1', sessionIds: ['s-loop'] }] },
+    })
+    expect(tree.tree[0]?.sessions[0]?.loop).toEqual({ status: 'running', slug: 'feat-x' })
+  })
+
+  it('sidebarFlatRowsOf：loop 随平铺行携带（树/平铺同语言——两视图徽标一致）', () => {
+    const node: SidebarProjectNode = {
+      projectId: 'p1',
+      workspaceId: 'w1',
+      name: '支付网关',
+      wsPath: 'Z:/w/p1',
+      archived: false,
+      sessions: [
+        { sessionId: 's1', title: '普通', status: 'idle', updatedAt: 100, pinned: false, archived: false },
+        {
+          sessionId: 's2',
+          title: '派发会话',
+          status: 'running',
+          updatedAt: 300,
+          pinned: false,
+          archived: false,
+          loop: { status: 'running', slug: 'feat-x' },
+        },
+      ],
+    }
+    const rows = sidebarFlatRowsOf([node])
+    expect(rows.find((r) => r.sessionId === 's2')?.loop).toEqual({ status: 'running', slug: 'feat-x' })
+    expect(rows.find((r) => r.sessionId === 's1')?.loop).toBeUndefined()
   })
 })

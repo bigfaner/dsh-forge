@@ -77,6 +77,7 @@ import {
   sidebarSectionLabelOf,
   sidebarSessionVisibility,
   sidebarViewOfPick,
+  type SessionLoopBadge,
   type SidebarFlatRow,
   type SidebarProjectNode,
   type SidebarSessionRow,
@@ -203,6 +204,34 @@ interface SessionRowActions {
 }
 
 /**
+ * 派发循环徽标（S7·run-tasks-host-command 1.8——SC8 dispatcher 会话可识别）。
+ * 兜底面记账（proposal S7「上游 sidebar 徽标缝任务内核实」）：上游缝存在但本产品
+ * 不可挂接——① `sidebar.session.row.leading` 座契约明文只在行主状态 idle 时挂载
+ * （dsh-client-ui-workspace slots.d.ts：「never renders beside a status dot」），循环
+ * 运行中会话恰是 live-activity 态（running 点占位）——徽标要出现的时刻正是该座被
+ * 撤换的时刻；hover 座仅悬浮卡打开时挂载。② 决定性：本产品 sidebar.workspaces 洞位
+ * 由 ForgeSidebarSlot 以 priority -100 影子占用（plugin.ts 2.7 槽位路线 A），官方
+ * WorkspaceBrowser 及其两座在本产品不挂载。故徽标落产品自有会话行（本组件），
+ * 数据经账本行 projectionValues['forge-dispatch-loop'] 窄读（sidebar-model
+ * sessionLoopBadge——零新增 RPC、零新增记录）。
+ * 文案 = 用户视角状态词（机制词零出现）；slug 随行 = data 锚 + aria-label（D30 原生
+ * title 退役——结构 pin tests/structure/d30；行宽守卫省略面 CSS 承载）。
+ */
+function SessionLoopBadgeMark({ loop }: { loop: SessionLoopBadge }): ReactNode {
+  const label = loop.status === 'starting' ? '启动中' : loop.status === 'stopping' ? '停止中' : '派发循环中'
+  return (
+    <span
+      className="dswf-sidebar-session-loop"
+      data-dswf-session-loop={loop.status}
+      {...(loop.slug !== null ? { 'data-dswf-session-loop-slug': loop.slug } : {})}
+      aria-label={loop.slug === null ? `派发循环${label}` : `派发循环${label} ${loop.slug}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+/**
  * 会话行（dsh 行语言：状态点 + 标题 + 相对时间；官方 sessionRow 同型刻度）。
  * D42（2026-10-10 用户裁决：「鼠标悬浮到项目列表的某一个会话时，显示相关的按钮，对齐 dsh」）
  * 行尾 hover 动作组：显隐 = 官方 ui-sidebar fading 等价机制（opacity:0 + hover/focus-within
@@ -241,7 +270,7 @@ function SessionRow({
   onActivate,
   actions,
 }: {
-  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'status' | 'updatedAt' | 'pinned' | 'archived'>
+  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'status' | 'updatedAt' | 'pinned' | 'archived' | 'loop'>
   selected: boolean
   now: number
   onActivate?: (sessionId: string) => void
@@ -297,6 +326,7 @@ function SessionRow({
         {row.archived ? null : <StateDot state={sessionDotState(row.status)} size={10} />}
       </span>
       <span className="dswf-sidebar-session-title">{row.title}</span>
+      {row.loop !== undefined ? <SessionLoopBadgeMark loop={row.loop} /> : null}
       <span className="dswf-sidebar-session-time">{relativeTimeLabel(row.updatedAt, now)}</span>
       {hasActions ? (
         // D42/D45 行尾 hover 动作组（机制与记账见组件文档块；容器 stopPropagation 防双触发）

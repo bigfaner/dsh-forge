@@ -20,6 +20,7 @@ class TempRuntime {
   readonly registeredCommands: ForgeCommandDefinition[] = []
   private readonly disposed = { tools: 0, sections: 0 }
   disposedCommands = 0
+  disposedProjection = 0
 
   ctx() {
     return {
@@ -374,6 +375,64 @@ describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_backgrou
     const out = (await h2.dispatch.execute({ run_in_background: true }, EXEC)) as { ok: boolean }
     expect(out.ok).toBe(false)
     h2.dispose()
+  })
+})
+
+// ─────────────────────────── S7 会话投影键注册（run-tasks-host-command 1.8——reflect.get 防御读取 fail-soft） ───────────────────────────
+describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections 面可选消费）', () => {
+  /** 投影注册表捕获桩（register 记账 + 注销器计数） */
+  function projectionsFace(rt: TempRuntime) {
+    const registered: unknown[] = []
+    return {
+      registered,
+      face: {
+        register: (definition: unknown) => {
+          registered.push(definition)
+          return () => {
+            rt.disposedProjection += 1
+          }
+        },
+      },
+    }
+  }
+
+  it('sessionProjections 面在场：forge-dispatch-loop 投影注册（plain object 定义——key/stateVersion/init/apply/wire 五件齐备）+ 注销器并入插件 disposer', () => {
+    const rt = new TempRuntime()
+    const { registered, face } = projectionsFace(rt)
+    const dispose = forgePlugin(rt.withReflect({ sessionProjections: face }))
+    expect(registered).toHaveLength(1)
+    const definition = registered[0] as { key?: string; stateVersion?: number; init?: unknown; apply?: unknown; wire?: unknown }
+    expect(definition.key).toBe('forge-dispatch-loop')
+    expect(definition.stateVersion).toBe(1)
+    expect(typeof definition.init).toBe('function')
+    expect(typeof definition.apply).toBe('function')
+    expect(definition.wire).toBeDefined()
+    // 六 tool 照常注册（投影面 additive——tool 面零波及）
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+    expect(rt.disposedProjection).toBe(1)
+  })
+
+  it('sessionProjections 面缺席（reflect 无该键）：键不注册、装配照常（fail-soft——capability absence = key absence）', () => {
+    const rt = new TempRuntime()
+    const { registered, face } = projectionsFace(rt)
+    const dispose = forgePlugin(rt.withReflect({})) // commands 亦缺席——仅验证投影面
+    void face
+    expect(registered).toHaveLength(0)
+    expect(rt.registeredTools).toHaveLength(6)
+    dispose()
+    expect(rt.disposedProjection).toBe(0)
+  })
+
+  it('reflect.get 抛异常 / 非函数面：同降级（键不注册、六 tool 照常）', () => {
+    const rt1 = new TempRuntime()
+    const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
+    expect(rt1.registeredTools).toHaveLength(6)
+    d1()
+    const rt2 = new TempRuntime()
+    const d2 = forgePlugin(rt2.withReflect({ sessionProjections: 'not-a-registry' }))
+    expect(rt2.registeredTools).toHaveLength(6)
+    d2()
   })
 })
 

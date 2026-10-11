@@ -31,6 +31,12 @@ export interface LedgerSessionRow {
   readonly blank?: boolean
   /** 父会话在场 = 子代理行，不入顶层列表（官方顶层行口径） */
   readonly parentId?: string
+  /**
+   * 宿主投影整值（上游账本行 projectionValues 消费切片——session.list 逐行 hints 块
+   * 经 ProjectionValueStore 落值；S7 派发循环徽标窄读键 = 'forge-dispatch-loop'）。
+   * 键缺席 = 能力缺席（上游既定语义），形状漂移 = 徽标不渲染（sessionLoopBadge 防御读）。
+   */
+  readonly projectionValues?: Readonly<Record<string, unknown>>
 }
 
 /** dsh 会话账本快照窄形状（上游 SessionListState 消费切片） */
@@ -77,6 +83,41 @@ export interface SidebarSessionRow {
   readonly pinned: boolean
   /** 归档成员位（D45——默认隐藏；在场时行语言弱化 + 归档钮转取消归档） */
   readonly archived: boolean
+  /** 派发循环徽标（S7——活循环族在场；undefined = 零徽标） */
+  readonly loop?: SessionLoopBadge
+}
+
+/**
+ * 派发循环徽标（S7·run-tasks-host-command——SC8 dispatcher 会话可识别）：
+ * `forge-dispatch-loop` 投影键的活循环族视图（status ∈ starting/running/stopping）。
+ * 徽标只标进行中循环——idle/stopped/failed 历史派发会话零噪声。
+ */
+export interface SessionLoopBadge {
+  readonly status: 'starting' | 'running' | 'stopping'
+  /** 任务源标识（无参问询路径 = null——日志不可知零猜测） */
+  readonly slug: string | null
+}
+
+/** 投影键（plugin-forge FORGE_DISPATCH_LOOP_PROJECTION_KEY 字面量同源镜像——跨包字面量 pin） */
+const FORGE_DISPATCH_LOOP_KEY = 'forge-dispatch-loop'
+
+/** 徽标状态词表（活循环族——宿主 ForgeDispatchLoopStatus 折叠词汇的进行中子集） */
+const LOOP_BADGE_STATUSES: ReadonlySet<string> = new Set(['starting', 'running', 'stopping'])
+
+/**
+ * 会话行派发循环徽标派生（纯函数——账本行 projectionValues 窄读）：
+ * 键缺席/非活循环状态/形状漂移 = undefined（零徽标——capability absence 与防御读同口径）。
+ */
+export function sessionLoopBadge(row: LedgerSessionRow): SessionLoopBadge | undefined {
+  const values = row.projectionValues
+  if (typeof values !== 'object' || values === null) return undefined
+  const raw = values[FORGE_DISPATCH_LOOP_KEY]
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const candidate = raw as { readonly status?: unknown; readonly sourceSlug?: unknown }
+  if (typeof candidate.status !== 'string' || !LOOP_BADGE_STATUSES.has(candidate.status)) return undefined
+  const slug =
+    typeof candidate.sourceSlug === 'string' && candidate.sourceSlug !== '' ? candidate.sourceSlug : null
+  return { status: candidate.status as SessionLoopBadge['status'], slug }
 }
 
 /** 面板项目节点（项目 = forge projects 行；会话 = 该项目 workspace 名下账本行） */
@@ -160,6 +201,7 @@ export function buildSidebarTree(input: {
       const row = input.sessions.byId[sessionId]
       if (row === undefined) continue
       if (!sessionVisible(row, currentSessionId)) continue
+      const loop = sessionLoopBadge(row) // S7——活循环徽标随行（undefined = 零徽标）
       rows.push({
         sessionId: row.id,
         title: row.displayTitle,
@@ -167,6 +209,7 @@ export function buildSidebarTree(input: {
         updatedAt: row.updatedAt,
         pinned: pinnedOrder.has(sessionId),
         archived: archivedIds.has(sessionId),
+        ...(loop !== undefined ? { loop } : {}),
       })
     }
     // D45 置顶领先（稳定排序——置顶行间 = 置顶集序，非置顶行间 = workspace 排列序保持）
@@ -362,6 +405,8 @@ export interface SidebarFlatRow {
   readonly pinned: boolean
   /** 归档成员位（D45——平铺行行尾动作组消费） */
   readonly archived: boolean
+  /** 派发循环徽标（S7——随行携带，树/平铺两视图徽标一致） */
+  readonly loop?: SessionLoopBadge
 }
 
 /**
@@ -384,6 +429,7 @@ export function sidebarFlatRowsOf(tree: readonly SidebarProjectNode[]): readonly
         updatedAt: session.updatedAt,
         pinned: session.pinned,
         archived: session.archived,
+        ...(session.loop !== undefined ? { loop: session.loop } : {}),
       })
       if (session.pinned && !pinnedOrder.has(session.sessionId)) {
         pinnedOrder.set(session.sessionId, pinnedOrder.size)

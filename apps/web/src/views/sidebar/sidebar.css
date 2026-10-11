@@ -371,6 +371,37 @@
   display: none; /* hover 让位：三钮显形（官方 marker↔button 同位互换） */
 }
 
+/* ── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 dispatcher 会话可识别；
+ * 数据 = 账本行 projectionValues['forge-dispatch-loop'] 窄读（sessionLoopBadge），
+ * 记账见 ForgeWorkspacePanel.tsx SessionLoopBadgeMark 文档块。行语言 = 官方行内 chip
+ * 刻度：xs 行高 + radius-sm + tertiary 弱化（时间标签同档），活循环 ongoing 色点前导） ── */
+.dswf-sidebar-session-loop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px; /* dsw-raw 官方 chip 内距刻度 */
+  margin-right: 6px; /* dsw-raw 官方行语言（title 右距同款） */
+  padding: 0 6px; /* dsw-raw 官方 chip 水平内距刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  line-height: 16px; /* dsw-raw 官方 xs chip 高刻度 */
+  max-width: 72px; /* 行宽守卫——slug 超长省略（aria-label 全文提示，D30 零原生 title） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-sidebar-session-loop::before {
+  content: '';
+  flex: none;
+  width: 6px; /* dsw-raw 状态点小刻度（xs chip 内——StateDot size 同族缩档） */
+  height: 6px;
+  border-radius: 50%; /* dsw-raw 原型圆点刻度（pschip-dot/task-tab contdot 同款豁免） */
+  background: var(--dsw-alias-business-primary); /* 循环进行中 = 远征蓝（task-tab contdot 同语义） */
+}
+
 .dswf-sidebar-session-actions:focus-within ~ .dswf-sidebar-session-pinmark {
   display: none; /* 键盘聚焦同判（显形钮与标记不并存） */
 }

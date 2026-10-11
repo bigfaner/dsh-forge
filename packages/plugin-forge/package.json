@@ -24,6 +24,7 @@
     "@dsh-forge/path-key": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
     "@types/node": "24.19.0"
   }
 }

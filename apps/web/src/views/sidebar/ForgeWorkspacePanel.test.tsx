@@ -751,3 +751,37 @@ describe('D42/D45 会话行 hover 动作组（官方 fading 模式 + 三钮 ⋯/
   // 归档行弱化）= tests/structure/d42-session-row-actions.test.ts 读文件 pin
   // （apps/web 测试面无 node:fs 类型面——d36/d38 CSS pin 同落 tests/structure 先例）。
 })
+
+// ─────────────────────────── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 兜底面渲染） ───────────────────────────
+
+describe('S7 派发循环会话徽标（兜底面 = 产品会话行——上游 sidebar 徽标缝不可挂接的记账面）', () => {
+  it('活循环行渲染徽标：data-dswf-session-loop 状态锚 + slug 随行 + 状态词在场', () => {
+    const markup = panel({
+      tree: [
+        node({
+          sessions: [
+            {
+              sessionId: 's-dispatch',
+              title: '派发会话',
+              status: 'running',
+              updatedAt: NOW - 30_000,
+              pinned: false,
+              archived: false,
+              loop: { status: 'running', slug: 'feat-x' },
+            },
+          ],
+        }),
+      ],
+    })
+    expect(markup).toContain('data-dswf-session-loop="running"')
+    expect(markup).toContain('data-dswf-session-loop-slug="feat-x"')
+    expect(markup).toContain('派发循环中')
+    expect(markup).toContain('feat-x')
+    // 徽标挂在派发会话行内（锚序——loop 锚在行 data-dswf-session 之后）
+    expect(markup.indexOf('data-dswf-session="s-dispatch"')).toBeLessThan(markup.indexOf('data-dswf-session-loop='))
+  })
+
+  it('无 loop 行零徽标（基线面板零回归——普通会话行语言不变）', () => {
+    expect(panel()).not.toContain('data-dswf-session-loop')
+  })
+})

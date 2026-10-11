@@ -28,6 +28,7 @@ import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
+import { createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
@@ -194,6 +195,22 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       spawn,
     })
+    // S7 会话投影键注册（run-tasks-host-command——sessionProjections 注册表可选消费，
+    // reflect.get 防御读取第五先例）：注册表缺席/异常/非函数面 = 键不注册 fail-soft
+    // 不阻载（capability absence = key absence——上游 session-projection 既定语义）。
+    // 注册为 effect：注销器并入插件 disposer（fiber 卸载 = 键自快照消失）。fold 只读
+    // 既有 command/run+command/done 日志派生 {sourceSlug, status}——零新增记录。
+    let disposeProjection: (() => void) | undefined
+    try {
+      const projections = ctx.reflect?.get('sessionProjections') as
+        | { register?: (definition: unknown) => () => void }
+        | undefined
+      if (projections !== undefined && typeof projections.register === 'function') {
+        disposeProjection = projections.register(createForgeDispatchLoopProjection())
+      }
+    } catch {
+      disposeProjection = undefined
+    }
     // S2 指令两枚注册（ctx.inject(['commands']) 的防御读取形态——cordis 4.0.4 无 '?'
     // 可选 inject 后缀，同 forgeSettings/llm/jobs/agents 四先例）：commands 服务缺席 =
     // 指令不注册 fail-soft（R3——不阻载插件，六 tool 面零影响）；注销器并入插件 disposer。
@@ -247,6 +264,7 @@ const forgePlugin: ForgePlugin = Object.assign(
         text: renderForgePipelineSection(),
       }),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
+      ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
     ]
     return () => {
       for (const dispose of disposers) dispose()

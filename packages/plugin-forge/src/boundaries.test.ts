@@ -13,8 +13,14 @@ import { describe, expect, it } from 'vitest'
 const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** dsh 上游运行时包白名单（tech-design 边界 1：boundaries pin 修订——「contracts +
- *  path-key + dsh 上游运行时包白名单」；新成员 = 契约面变更） */
+ *  path-key + dsh 上游运行时包白名单」；新成员 = 契约面变更）
+ *  S7 增员 @deepseek-ai/dsh-session-projection：类型面 devDependency（declare-module
+ *  合并进 SessionProjectionMap + 投影定义形状 authority）——运行期零 import（fold unit
+ *  为结构同型 plain object，registry 鸭子消费），运行时白名单（dependencies 面）不含它。 */
 const DSH_RUNTIME_ALLOWLIST = ['@deepseek-ai/dsh-subagent-in-process-driver'] as const
+
+/** @deepseek-ai 类型面 import 白名单（S7——仅投影模块的类型合并；零运行时 import 面） */
+const DSH_TYPE_IMPORT_ALLOWLIST = ['@deepseek-ai/dsh-session-projection/types'] as const
 
 function srcFiles(): string[] {
   const files: string[] = []
@@ -54,18 +60,31 @@ describe('AC1 插件依赖边界（构建图机械自证——3.4 修订：drive
     }
   })
 
-  it('src 非测试源 @deepseek-ai import 仅白名单包、且仅 spawn 真绑定单点（driver import 面收口）', () => {
+  it('src 非测试源 @deepseek-ai import 仅白名单包、且仅 spawn 真绑定单点（driver import 面收口）；类型面合并单点 = projection types（S7——devDependency 类型面，运行期零 import）', () => {
     const importers: string[] = []
     for (const f of srcFiles()) {
       const rel = relative(PKG_DIR, f).split('\\').join('/')
       const src = readFileSync(f, 'utf8')
       expect(src, `${rel} cordis`).not.toMatch(/['"]cordis['"]/)
       const specifiers = [...src.matchAll(/['"](@deepseek-ai\/[^'"]+)['"]/g)].map((m) => m[1] ?? '')
-      const offending = specifiers.filter((s) => !(DSH_RUNTIME_ALLOWLIST as readonly string[]).includes(s))
+      const offending = specifiers.filter(
+        (s) => !(DSH_RUNTIME_ALLOWLIST as readonly string[]).includes(s) && !(DSH_TYPE_IMPORT_ALLOWLIST as readonly string[]).includes(s),
+      )
       expect(offending, `${rel} 白名单外 @deepseek-ai import`).toEqual([])
       if (specifiers.length > 0) importers.push(rel)
     }
-    expect(importers.sort()).toEqual(['src/spawn/in-process-driver.ts'])
+    expect(importers.sort()).toEqual(['src/projection/dispatch-loop.ts', 'src/spawn/in-process-driver.ts'])
+  })
+
+  it('类型面收窄（S7 续）：@deepseek-ai/dsh-session-projection 仅投影模块 type-only import + declare-module 合并——零运行时 import 语法', () => {
+    const src = readFileSync(join(PKG_DIR, 'src/projection/dispatch-loop.ts'), 'utf8')
+    // declare-module 合并目标 = 官方 types 出口（/plan 同构）
+    expect(src).toContain("declare module '@deepseek-ai/dsh-session-projection/types'")
+    // 类型面单点：import type 解析锚（增广目标入程序——plan-mode types.d.ts 同款型法）
+    expect(src).toMatch(/import type \{ SessionProjectionMap \} from '@deepseek-ai\/dsh-session-projection\/types'/)
+    // 值面禁入：非 type import 语句与动态 import 均违例（运行期零 import——registry 鸭子消费）
+    expect(src).not.toMatch(/import\s*\{[^}]*\}\s*from\s*['"]@deepseek-ai\/dsh-session-projection/)
+    expect(src).not.toMatch(/import\(\s*['"]@deepseek-ai\/dsh-session-projection/)
   })
 
   it('tsconfig references = contracts + path-key（driver = 外部 npm 精确 pin，非工作区工程）', () => {
