@@ -59,12 +59,15 @@ export const WORKER_TOOL_MATRIX: Readonly<
 
 /**
  * 全局拒绝集（一切 worker——安全面收窄，与任务类型无关）；`skill` 不拒。
- * 语义族四门（Interface 2：ask-user / delegation / todo / present），名 = 上游 0.2.0-rc.2
+ * 语义族四门（Interface 2：ask-user / delegation / goal / present），名 = 上游 0.2.0-rc.2
  * 组合实面实名（fix-1 / drift #10：driver `tools.restrict()` 对未知名 loud 校验，族代称
  * 入表会拆一切 spawn——3.9 实跑证据 dispatch-round 附已知名表全文）：
  * ask_user_question（ask-user）· delegation 族五员 = subagent_fork / list_agents /
  * send_message / interrupt_agent / workflow（上游 delegation 组合实注册面）·
- * todo_write（todo）· present（实名恰同）。
+ * goal 三件套 = create_goal / get_goal / update_goal（worker-lean-execution S5：
+ * 生命周期错位——会话即终/幂等重入换会话致孤儿/自动续跑不适用 one-shot）·
+ * present（实名恰同）。todo_write 刻意不拒（worker-lean-execution S5 解禁——persona ⑦
+ * 引导 worker 使用 todo 清单，多步必做、两步内豁免）。
  * 刻意不入：spawn provider 的 `subagent` 工具为惰性注册（provider 缺席即不在场——
  * dsh-tool-subagent 延迟挂载 fail-soft），入表会在其缺席环境复现 unknown-name 拆 spawn。
  */
@@ -75,8 +78,10 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
   'send_message',
   'interrupt_agent',
   'workflow',
-  'todo_write',
   'present',
+  'create_goal',
+  'get_goal',
+  'update_goal',
 ] as const
 
 /** forge 工具族的面 = 恰两动词（claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言） */
@@ -93,8 +98,9 @@ export const WORKER_FORGE_TOOLS = ['submitTask', 'addTask'] as const
  *   read-image ← dsh-tool-fs 的 read_image（独立族——矩阵单独收窄）
  *   web ← dsh-tool-web（web_fetch/web_search）
  *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/addTask）
- * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ goal 三命令 / plan-mode exit_plan_mode /
- * delegation 族与 ask-user/todo/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
+ * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ plan-mode exit_plan_mode /
+ * todo_write（解禁——WORKER_GLOBAL_DENY_TOOLS 注释）/ goal 三命令与 delegation 族、
+ * ask-user/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
  * 注册面——provider 缺席即不在场，刻意不 deny 亦不入族）。
  */
 export const WORKER_TOOL_NAME_FAMILY: Readonly<Record<string, WorkerToolFamily>> = {

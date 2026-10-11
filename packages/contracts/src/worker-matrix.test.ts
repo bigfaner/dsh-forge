@@ -92,7 +92,7 @@ describe('AC2 收窄矩阵 ✓ 表：任务类型族 × 工具族逐格（Interf
 })
 
 describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动词）', () => {
-  it('全局拒绝 = 四族实面实名八员（fix-1/drift #10 重映射；skill 不拒；惰性 subagent 刻意不入）', () => {
+  it('全局拒绝 = 四族实面实名十员（fix-1/drift #10 重映射 + worker-lean-execution S5：todo_write 解禁、goal 三件套入拒；skill 不拒；惰性 subagent 刻意不入）', () => {
     expect(WORKER_GLOBAL_DENY_TOOLS).toEqual([
       'ask_user_question',
       'subagent_fork',
@@ -100,12 +100,15 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
       'send_message',
       'interrupt_agent',
       'workflow',
-      'todo_write',
       'present',
+      'create_goal',
+      'get_goal',
+      'update_goal',
     ])
     expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('skill')
+    expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('todo_write')
     // 族代称已死：driver tools.restrict() 对未知名 loud 校验（3.9 实跑拆 spawn 的根因）
-    for (const alias of ['ask-user', 'delegation', 'todo']) {
+    for (const alias of ['ask-user', 'delegation', 'goal', 'todo']) {
       expect((WORKER_GLOBAL_DENY_TOOLS as readonly string[]).includes(alias)).toBe(false)
     }
     // 惰性注册面不入表（provider 缺席环境 unknown-name 复发防线）

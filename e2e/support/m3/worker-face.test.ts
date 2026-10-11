@@ -9,28 +9,28 @@
 import { describe, expect, it } from 'vitest'
 import { deriveWorkerToolFilter, workerAgentOptionsOf } from '../../../packages/plugin-forge/src/tools/dispatch-task.js'
 
-/** 全局 deny 八员（WORKER_GLOBAL_DENY_TOOLS 实面实名——drift #10/fix-1） */
-const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'todo_write', 'present']
+/** 全局 deny 十员（WORKER_GLOBAL_DENY_TOOLS 实面实名——drift #10/fix-1 + worker-lean-execution S5） */
+const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
 /** forge 闭环禁入四动词（矩阵 forge 族 = submitTask + addTask 恰两员） */
 const FORGE_DENY = ['queryTask', 'createProposal', 'transitionProposal', 'dispatchTask']
 
 describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——族收窄 deny 集）', () => {
-  it('coding：基座 12 + web 二名（14 deny——web 族收窄）', () => {
+  it('coding：基座 14 + web 二名（16 deny——web 族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('coding-feature')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'web_fetch', 'web_search'].sort())
   })
 
-  it('doc：+job 三名 + read_image + web 二名（18 deny）', () => {
+  it('doc：+job 三名 + read_image + web 二名（20 deny）', () => {
     const { deny } = deriveWorkerToolFilter('doc')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'job_list', 'job_output', 'job_kill', 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('gate：+read_image + web 二名（15 deny）', () => {
+  it('gate：+read_image + web 二名（17 deny）', () => {
     const { deny } = deriveWorkerToolFilter('gate')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('validation：恰基座 12（零族收窄）', () => {
+  it('validation：恰基座 14（零族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('validation-code')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
     const evalDeny = deriveWorkerToolFilter('eval-contract').deny

@@ -318,20 +318,22 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局八 + forge 闭环四（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
+    // 全局十 + forge 闭环四（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
     // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
     const base = [
       'ask_user_question',
       'createProposal',
+      'create_goal',
       'dispatchTask',
+      'get_goal',
       'interrupt_agent',
       'list_agents',
       'present',
       'queryTask',
       'send_message',
       'subagent_fork',
-      'todo_write',
       'transitionProposal',
+      'update_goal',
       'workflow',
     ]
     // coding：web ✗（fs/shell/jobs/read-image ✓）

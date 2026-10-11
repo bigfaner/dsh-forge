@@ -11,13 +11,14 @@
 //     read-image  read_image（dsh-tool-fs——独立族）
 //     web         web_fetch/web_search（dsh-tool-web）
 //     forge       submitTask/addTask（我方 WORKER_FORGE_TOOLS）
-//   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名）：
+//   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名 + worker-lean-execution
+//   S5 迁移：todo_write 解禁 / goal 三件套入拒）：
 //     ask_user_question（tool-ask-user）· subagent_fork（delegation 行 provider:fork 的
 //     patch config toolName）· list_agents（tool-subagent-control/list-agents 子出口）·
 //     send_message/interrupt_agent（tool-subagent-control）· workflow（dsh-tool-workflow
-//     lib 默认 toolName）· todo_write（tool-todo）· present（present 行）
+//     lib 默认 toolName）· create_goal/get_goal/update_goal（tool-goal）· present（present 行）
 //   刻意不入（豁免面）：
-//     skill（恒在场不拒）· create_goal/get_goal/update_goal（goal 命令族非六族矩阵）·
+//     skill（恒在场不拒）· todo_write（worker-lean-execution S5 解禁——persona ⑦ 引导）·
 //     subagent（provider:spawn 惰性注册——缺席环境不在场，入 deny 复现 unknown-name 拆
 //     spawn）· subagent_codex/subagent_claude_code（disabled 行）· workflow-ptc（引擎服务
 //     提供者非 tool 注册）· tool-plugin-manager/tool-ralph（disabled 行）
@@ -104,7 +105,7 @@ function rowPackage(block: string): string {
 /**
  * 工具行核对清单（当期上游实面枚举——行 → 包 → 工具名 → 分类）。
  * 分类值：'fs'|'shell'|'jobs'|'read-image'|'web'（= WORKER_TOOL_NAME_FAMILY 族）·
- * 'deny'（= WORKER_GLOBAL_DENY_TOOLS）· 'exempt'（恒在场/goal 命令/惰性注册——刻意不入）。
+ * 'deny'（= WORKER_GLOBAL_DENY_TOOLS）· 'exempt'（恒在场/todo 解禁/惰性注册——刻意不入）。
  * disabled 行（工具名不生效）单列——上游启用即红（须重裁决分类）。
  */
 interface ToolRowPin {
@@ -137,10 +138,10 @@ const TOOL_ROWS: readonly ToolRowPin[] = [
   {
     row: 'tool-goal',
     pkg: '@deepseek-ai/dsh-tool-goal',
-    names: { create_goal: 'exempt', get_goal: 'exempt', update_goal: 'exempt' },
+    names: { create_goal: 'deny', get_goal: 'deny', update_goal: 'deny' },
   },
   { row: 'tool-ask-user', pkg: '@deepseek-ai/dsh-tool-ask-user', names: { ask_user_question: 'deny' } },
-  { row: 'tool-todo', pkg: '@deepseek-ai/dsh-tool-todo', names: { todo_write: 'deny' } },
+  { row: 'tool-todo', pkg: '@deepseek-ai/dsh-tool-todo', names: { todo_write: 'exempt' } },
   { row: 'present', pkg: '@deepseek-ai/dsh-tool-present', names: { present: 'deny' } },
   // delegation 组子行（delegationChild 标记）
   {
@@ -297,7 +298,7 @@ describe('pin ⑳-3 映射表 ↔ 上游枚举对账（WORKER_TOOL_NAME_FAMILY �
 })
 
 describe('pin ⑳-4 全局拒绝集 ↔ 上游实面（fix-1/drift #10——零未知名拆 spawn）', () => {
-  it('deny 清单名集合 = WORKER_GLOBAL_DENY_TOOLS 全等（八员实名——上游改名即红）', () => {
+  it('deny 清单名集合 = WORKER_GLOBAL_DENY_TOOLS 全等（十员实名——上游改名即红）', () => {
     const manifestDeny = new Set<string>()
     for (const pin of TOOL_ROWS) {
       if (pin.disabled === true) continue
