@@ -230,3 +230,33 @@ export type {
   IncidentStore,
   IncidentStoreDeps,
 } from './notify/index.js'
+// S1b（run-tasks-host-command）宿主派发循环驱动器——runRound 状态机（v1 严格串行）+ 运行时
+// 登记表 + 生命周期入口（start/stop，S2 指令层消费）+ 处置钩子接口（S1c 桩位）。
+export {
+  LOOP_BACKOFF_BASE_MS,
+  LOOP_INSTRUCTION_ALL_DONE,
+  LOOP_PATIENCE_MAX_WAIT_ROUNDS,
+  LOOP_PATIENCE_PAUSE_MS,
+  LOOP_STOP_TRANSITION_REASON,
+  LOOP_WORKER_ABORT_MAX_RETRIES,
+  createLoopDriver,
+  createLoopRegistry,
+  loopInstructionOf,
+} from './loop/index.js'
+export type {
+  LoopDriver,
+  LoopDriverDeps,
+  LoopEscalation,
+  LoopEscalationHook,
+  LoopInFlight,
+  LoopInstanceId,
+  LoopRecord,
+  LoopRegistry,
+  LoopSourceRef,
+  LoopStartInput,
+  LoopStartResult,
+  LoopStopResult,
+  LoopTriageDecision,
+  LoopTriageHook,
+  LoopTriageInput,
+} from './loop/index.js'

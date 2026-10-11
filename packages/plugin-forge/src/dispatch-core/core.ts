@@ -2,11 +2,19 @@
 // dispatch-task.ts 单体 execute 裂变的共享面）。主链 = claim → 组装 → spawn → 事件发射
 // （+ guard 机械 + spawn 契约 + 结算核；后台径 = jobs 包装的结算后置交付）。
 //
+// S1b（run-tasks-host-command/1.4）增补：主链裂分为三段可组合阶段面——claimForDispatch /
+// spawnClaimed / settleClaimed（implementation-blueprint §3 runRound 伪码「dispatchCore.claim /
+// dispatchCore.spawn」的消费形状）。动因：循环驱动器要在 claim 与 spawn 之间插入领取通知、
+// 在 spawn 与结算之间登记 in-flight（SpawnWorkerHandle 直持不经 jobs——decisions #14）——
+// 单体主链无这些交错点。dispatchCore 本体 = 三段的顺序组合（工具壳外部行为零变化）；循环
+// 驱动器（src/loop/）逐段消费同一实现——guard 机械/组装/结算核单一来源零漂移（依赖方向
+// 硬约束不变：核心面零 import 工具壳；循环面与工具壳同位于核之上）。
+//
 // 可拆卸壳设计（decisions #10/#18）：identity {sessionId, loopSourced} 与 guardKey 参数化——
-// 工具壳填 exec 会话 id（guardKey = sessionId，行为与分层前逐字节等价）；循环驱动器（后续
-// 任务）填主会话真实 id + loopSourced=true（claim 记录循环来源标记——S3 已落地：标记列
-// loop_sourced 随 claim 写入）+ LoopInstanceId。adopt 定向领取同属 S3 落地面（忽略 links，
-// 循环逐个恢复 earliest interrupted 的径）。
+// 工具壳填 exec 会话 id（guardKey = sessionId，行为与分层前逐字节等价）；循环驱动器填主会话
+// 真实 id + loopSourced=true（claim 记录循环来源标记——S3 已落地：标记列 loop_sourced 随
+// claim 写入）+ LoopInstanceId。adopt 定向领取同属 S3 落地面（忽略 links，循环逐个恢复
+// earliest interrupted 的径）。
 //
 // 依赖方向硬约束：工具壳 → 核心面单向；核心面零 import 工具壳（tools/**）——文件边界即
 // 未来 run-tasks skill 退役时的下线边界（工具面整体移除而核心面/循环/核心单测零波及）。
@@ -21,6 +29,7 @@ import type {
   Mode,
   TaskProgressPhase,
   TaskRef,
+  TaskSnapshot,
   TaskType,
 } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
@@ -38,7 +47,7 @@ import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
 /**
  * 派发核心入参（implementation-blueprint §3 DispatchCoreArgs——身份/guardKey 参数化点）。
  * 两消费者：工具壳（exec 会话 id + 工具参数直映射）与循环驱动器（主会话 id + loopSourced
- * + LoopInstanceId——后续任务接线）。
+ * + LoopInstanceId——S1b 三段阶段面接线）。
  */
 export interface DispatchCoreArgs {
   /** 身份（两消费者均传真实会话 id；loopSourced = 循环来源标记——claim 记录 loop_sourced 持久
@@ -82,7 +91,7 @@ export interface DispatchCoreExec {
   readonly parent: unknown
   /** 取消信号（exec.signal 透传；undefined = 核心新建兜底——驱动面要求必填） */
   readonly signal: AbortSignal | undefined
-  /** tool-error 留档动词名（工具壳 = 'dispatchTask'） */
+  /** tool-error 留档动词名（工具壳 = 'dispatchTask'；循环 = 'run-dag-tasks'） */
   readonly verb: string
 }
 
@@ -95,64 +104,327 @@ interface DispatchEventPayloads {
   'no-ready-task': { contextSlug?: string }
 }
 
-// ─────────────────────────── 主链（claim → 组装 → spawn → 事件发射 → 结算） ───────────────────────────
+// ─────────────────────────── 阶段面共享（作用域 + 闭包——三段与主链单一实现） ───────────────────────────
+
+/** halted 结果形状（guard 粘住——DispatchTaskResult 同名分支的结构子集） */
+export interface HaltedOutcome {
+  readonly kind: 'halted'
+  readonly reason: string
+}
 
 /**
- * 派发核心主链（原 dispatch-task.ts 单体 execute 的共享面裂变——外部行为零变更）：
- * halted 入口检查（guard）→ run_in_background 降级守卫 → claimTask（守卫 + 就绪选择 +
- * 幂等重入 + dispatchPrompt 合成）→ 组装（矩阵 toolFilter + settings agentOptions）→
- * spawn（start 拒绝 = 防线计数）→ 事件发射（claimed/spawned/progress/worker-done）→
- * 结算（前台阻塞 / 后台 job done continuation）→ 返回五态结果。
- * 1.10 增补：池快照口径分流（scoped 调用 = source 容器四计数，非 scoped = 全池）+
- * dispatched 回执幂等重入标识（claim reclaimed → reEntered——防 scoped 循环重复 spawn）。
+ * 阶段作用域（三段阶段面的共享键组——主链 = args 投影；循环每轮组装一次逐段透传同一值：
+ * sessionId = 主会话真实 id（事件信封/tool-error 归属）、guardKey = LoopInstanceId（防线
+ * 粘性载体）、source = 任务源（池快照口径 + no-task 事件归属））。
  */
-export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExec, args: DispatchCoreArgs): Promise<DispatchTaskResult> {
-  const { identity, guardKey, projectId } = args
-  const sessionId = identity.sessionId
+export interface DispatchChainScope {
+  readonly sessionId: string
+  readonly projectId: string
+  readonly guardKey: string
+  readonly source?: ContainerRef
+}
 
-  // 归属随流程推进（claim 前 = source 对容器语境/_pool 兜底；claim 后 = 任务容器）——
-  // 共享槽写入，工具壳失败回调（emitToolError）消费
-  const attributionSlug = args.source?.slug ?? '_pool'
-  exec.attribution.slug = attributionSlug
+/** DispatchCoreArgs → 阶段作用域（主链组合的投影点） */
+function scopeOfArgs(args: DispatchCoreArgs): DispatchChainScope {
+  return {
+    sessionId: args.identity.sessionId,
+    projectId: args.projectId,
+    guardKey: args.guardKey,
+    ...(args.source !== undefined ? { source: args.source } : {}),
+  }
+}
 
-  /** 池快照现读（口径分流——run-tasks-host-command/1.10：scoped 调用 = source 容器四计数，
-   *  no-task 判词与快照消费同口径；非 scoped = 全池，缺省行为零变化） */
-  const poolRead = async (): Promise<PoolSnapshot> =>
+/** 阶段共享闭包（emit/poolRead/spawnFailed——主链与三段阶段面同源，零漂移） */
+interface ChainClosures {
+  readonly emit: <K extends keyof DispatchEventPayloads>(
+    type: K,
+    slug: string,
+    payload: DispatchEventPayloads[K],
+  ) => void
+  readonly poolRead: () => Promise<PoolSnapshot>
+  /**
+   * spawn 失败防线：guard 计数 +1（guardKey 键）→ ≥3 halted 粘住 + tool-error 留档；否则
+   * ERR_SPAWN_FAILED 失败 DTO（人话 + 指引）。guard:false = 仅组同形 DTO（S1b 循环结算失败
+   * 径专用——worker 异常终止属执行受阻非 spawn 机制故障，bounded 重试阶梯归循环自有计数，
+   * 不进防线不发射 tool-error；缺省 guard 计数 = 工具壳行为零变化）。
+   */
+  readonly spawnFailed: (
+    slug: string,
+    taskKey: string,
+    cause: unknown,
+    options?: { readonly guard?: boolean },
+  ) => DispatchCoreFailure | HaltedOutcome
+}
+
+/** 池快照现读闭包（口径分流——run-tasks-host-command/1.10：scoped 调用 = source 容器四计数，
+ *  no-task 判词与快照消费同口径；非 scoped = 全池，缺省行为零变化） */
+function poolReadOf(deps: DispatchCoreDeps, scope: DispatchChainScope): () => Promise<PoolSnapshot> {
+  return async () =>
     poolOf(
       await deps.tasks.taskStats({
-        projectId,
-        ...(args.source !== undefined ? { source: args.source } : {}),
+        projectId: scope.projectId,
+        ...(scope.source !== undefined ? { source: scope.source } : {}),
       }),
     )
+}
 
-  /** 事件发射局部闭包（信封四件 + ts 单源；sink 缺席 = 零事件降级） */
+/** 归属槽初始化（claim 前 = source 对/_pool——幂等重复写无害） */
+function initAttribution(exec: DispatchCoreExec, source?: ContainerRef): void {
+  exec.attribution.slug = source?.slug ?? '_pool'
+}
+
+/** 阶段共享闭包组装（sessionId = scope.sessionId——事件信封与 tool-error 归属键） */
+function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: DispatchChainScope): ChainClosures {
   const emit = <K extends keyof DispatchEventPayloads>(
     type: K,
     slug: string,
     payload: DispatchEventPayloads[K],
   ): void => {
     if (deps.events === undefined) return
-    deps.events.emit({ ts: Date.now(), sessionId, slug, type, payload } as ForgePluginEvent)
+    deps.events.emit({ ts: Date.now(), sessionId: scope.sessionId, slug, type, payload } as ForgePluginEvent)
   }
+  const failureDto = (taskKey: string, message: string): DispatchCoreFailure => ({
+    ok: false,
+    code: 'ERR_SPAWN_FAILED',
+    message,
+    violations: [
+      `retry: call dispatchTask again to re-enter ${taskKey} (in_progress idempotent re-claim, briefing re-synthesized)`,
+      'or move the task manually via the human transition channel if the environment is broken',
+    ],
+  })
+  return {
+    emit,
+    poolRead: poolReadOf(deps, scope),
+    spawnFailed: (slug, taskKey, cause, options) => {
+      const message = `worker spawn failed for ${taskKey}: ${cause instanceof Error ? cause.message : String(cause)}`
+      if (options?.guard === false) {
+        return failureDto(taskKey, message)
+      }
+      const { stuck } = bumpSpawnFailures(scope.guardKey, taskKey, cause)
+      emitToolError(deps.events, scope.sessionId, slug, exec.verb, { ok: false, code: 'ERR_SPAWN_FAILED', message, violations: [] })
+      if (stuck) return { kind: 'halted', reason: HALTED_REASON }
+      return failureDto(taskKey, message)
+    },
+  }
+}
 
-  /** spawn 失败防线：guard 计数 +1（guardKey 键）→ ≥3 halted 粘住；否则 ERR_SPAWN_FAILED 失败 DTO（人话 + 指引） */
-  const spawnFailed = (slug: string, taskKey: string, cause: unknown): DispatchTaskResult => {
-    const { message, stuck } = bumpSpawnFailures(guardKey, taskKey, cause)
-    emitToolError(deps.events, sessionId, slug, exec.verb, { ok: false, code: 'ERR_SPAWN_FAILED', message, violations: [] })
-    if (stuck) return { kind: 'halted', reason: HALTED_REASON }
-    return {
-      ok: false,
-      code: 'ERR_SPAWN_FAILED',
-      message,
-      violations: [
-        `retry: call dispatchTask again to re-enter ${taskKey} (in_progress idempotent re-claim, briefing re-synthesized)`,
-        'or move the task manually via the human transition channel if the environment is broken',
-      ],
-    }
-  }
+// ─────────────────────────── 阶段一：claim（守卫 + 领取 + 事件） ───────────────────────────
+
+/** claim 阶段产出（claimed——组装/spawn/结算所需全量：任务行 + 简报指纹 + 重入标识 + 全文） */
+export interface ClaimedDispatch {
+  readonly kind: 'claimed'
+  readonly task: TaskSnapshot
+  /** claim 简报指纹（task_records.claim 行双记同值） */
+  readonly digest: string
+  /** in_progress 幂等重入 = true */
+  readonly reclaimed: boolean
+  /** 派发简报全文（人格段 + 三标签块——worker 首条用户消息，零进调用方上下文） */
+  readonly dispatchPrompt: string
+}
+
+/** claim 阶段返回（claimed / no-task 附池快照 / halted 入口粘住） */
+export type ClaimStageResult =
+  | ClaimedDispatch
+  | { readonly kind: 'no-task'; readonly pool: PoolSnapshot }
+  | HaltedOutcome
+
+/**
+ * 阶段一·claim（主链第 1 步的共享面）：归属槽初始化 → halted 入口粘住检查（粘住键不再
+ * claim：防再领任务弃置 in_progress）→ claimTask（守卫 + 就绪选择 + 幂等重入 + dispatchPrompt
+ * 合成 + S3 adopt/loopSourced 透传）→ no-task 出口（池快照 + no-ready-task 事件）→
+ * task-claimed 事件。组装/spawn 属阶段二（spawnClaimed）——循环在两段之间插入领取通知。
+ */
+export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCoreExec, args: DispatchCoreArgs): Promise<ClaimStageResult> {
+  const scope = scopeOfArgs(args)
+  initAttribution(exec, args.source)
+  const { emit, poolRead } = chainClosuresOf(deps, exec, scope)
 
   // halted 粘住（入口检查——粘住键不再 claim：防再领任务弃置 in_progress）
-  if (spawnFailureStuck(guardKey)) {
+  if (spawnFailureStuck(args.guardKey)) {
+    return { kind: 'halted', reason: HALTED_REASON }
+  }
+
+  // claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
+  // （source 对在场 = 任务源限定盲选；缺席 = 全库——缺省行为零变化。
+  //   S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取（忽略
+  //   links——工具壳两参数均不携带，schema 与外部语义零变化）。）
+  const claimed = await deps.tasks.claimTask({
+    projectId: scope.projectId,
+    sessionId: scope.sessionId,
+    ...(args.source !== undefined ? { source: args.source } : {}),
+    ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
+    ...(args.identity.loopSourced ? { loopSourced: true } : {}),
+  })
+  const task = claimed.task
+  if (task === null) {
+    // Z1 出口：no-ready-task 事件（source 对任务源归属——载荷 contextSlug = source_slug；
+    // 缺席回落 _pool 兜底）+ 池快照现读（scoped = 容器口径）
+    const pool = await poolRead()
+    emit(
+      'no-ready-task',
+      scope.source?.slug ?? '_pool',
+      scope.source !== undefined ? { contextSlug: scope.source.slug } : {},
+    )
+    return { kind: 'no-task', pool }
+  }
+  const taskKey = `${task.slug}/${task.localId}`
+  exec.attribution.slug = task.slug
+  emit('task-claimed', task.slug, {
+    taskKey,
+    taskType: task.taskType,
+    ...(task.mode !== undefined ? { mode: task.mode } : {}),
+    dispatchDigest: claimed.digest, // 双记：task_records.claim 行同值
+  })
+  return { kind: 'claimed', task, digest: claimed.digest, reclaimed: claimed.reclaimed, dispatchPrompt: claimed.dispatchPrompt }
+}
+
+// ─────────────────────────── 阶段二：spawn（组装 + spawn + 事件） ───────────────────────────
+
+/** spawn 阶段返回（ok = 句柄直持——发布即回，result 阻塞至终态；失败 = 防线 DTO 或 halted） */
+export type SpawnStageResult =
+  | { readonly ok: true; readonly handle: SpawnWorkerHandle; readonly spawnStartedAt: number }
+  | { readonly ok: false; readonly failure: DispatchCoreFailure | HaltedOutcome }
+
+/**
+ * 阶段二·spawn（主链第 2~3 步的共享面）：组装（taskType → 收窄矩阵 → toolFilter；
+ * forgeSettings → agentOptions，档位兼容收口——组装面异常向上抛与主链同径）→ driver
+ * in-process spawn（阻塞；start 拒绝 = 基建故障 → 防线计数）→ task-spawned 事件。
+ * 循环消费形状：spawn 即回（毫秒级）——句柄直持登记 in-flight 后再 await 结算（阶段三）。
+ * options.signal = 覆盖信号（主链后台径传 job 专属 controller.signal；缺席 =
+ * exec.signal ?? 新建兜底——前台径 SC-C 行为零变化）。
+ */
+export async function spawnClaimed(
+  deps: DispatchCoreDeps,
+  exec: DispatchCoreExec,
+  claimed: ClaimedDispatch,
+  options: { readonly scope: DispatchChainScope; readonly signal?: AbortSignal },
+): Promise<SpawnStageResult> {
+  const task = claimed.task
+  const taskKey = `${task.slug}/${task.localId}`
+  const { emit, spawnFailed } = chainClosuresOf(deps, exec, options.scope)
+
+  // 组装：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions
+  // （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
+  const toolFilter = deriveWorkerToolFilter(task.taskType)
+  const settings: ForgeSettings | undefined =
+    deps.settings !== undefined ? await deps.settings.get() : undefined
+  const agentOptions = await reconcileWorkerReasoning(
+    workerAgentOptionsOf(settings),
+    deps.resolveModelReasoning,
+  )
+
+  // driver in-process spawn（阻塞）——start 拒绝 = 基建故障（防线计数）
+  const spawnStartedAt = Date.now()
+  let handle: SpawnWorkerHandle
+  try {
+    handle = await deps.spawn({
+      prompt: claimed.dispatchPrompt, // 全文直达 worker——零进本会话上下文
+      parent: exec.parent,
+      signal: options.signal ?? exec.signal ?? new AbortController().signal,
+      toolFilter,
+      ...(agentOptions !== undefined ? { agentOptions } : {}),
+      label: `${taskKey} · ${task.title}`,
+    })
+  } catch (cause) {
+    return { ok: false, failure: spawnFailed(task.slug, taskKey, cause) }
+  }
+  emit('task-spawned', task.slug, {
+    taskKey,
+    workerSessionId: handle.workerSessionId,
+    toolFilter: toolFilter.deny,
+    model: agentOptions?.model ?? 'inherit', // 未配置 = 父会话继承（无显式值可记）
+  })
+  return { ok: true, handle, spawnStartedAt }
+}
+
+// ─────────────────────────── 阶段三：settle（结算 + 防线清零 + 事件） ───────────────────────────
+
+/** settle 阶段入参（claimed + 句柄 + 防线键 + 循环停止信号/自有阶梯开关——两可选位循环专用） */
+export interface SettleStageInput {
+  readonly scope: DispatchChainScope
+  readonly claimed: ClaimedDispatch
+  readonly handle: SpawnWorkerHandle
+  /** spawn 起点（durationMs 基准——spawnClaimed 产物透传） */
+  readonly spawnStartedAt: number
+  /**
+   * 循环停止信号（S1b——abort = 主动终态：结算失败按 killed 分类返回，零 bump 零
+   * tool-error；停止叙事与 in-flight 真化 interrupted 归循环 stop 面。工具壳不携带——
+   * 前台取消行为零变化）。
+   */
+  readonly killSignal?: AbortSignal
+  /**
+   * false = 结算失败不进防线计数、不发射 tool-error（S1b 循环径——worker 异常终止属执行
+   * 受阻非 spawn 机制故障，bounded 重试阶梯归循环自有计数；缺省 true = 工具壳行为零变化。
+   * 结算成功径恒清零防线 streak——两形态一致）。
+   */
+  readonly guardOnFailure?: boolean
+}
+
+/** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
+ *  killSignal 在场可达，主链无 killSignal 恒不出现） */
+export type SettleStageResult = DispatchTaskResult | { readonly kind: 'killed' }
+
+/**
+ * 阶段三·settle（主链前台第 4~5 步的共享面）：结算核（await handle.result → dispose →
+ * queryTask 只读结算读 → settled/failed 判定）→ 成功：防线清零 + worker-done 事件 +
+ * spawned 分支；失败：killSignal.aborted → killed（停止径零 bump）；guardOnFailure=false →
+ * 同形 DTO 零 bump（循环自有阶梯）；否则防线计数 + tool-error 留档（≥3 粘住由下一次
+ * claim 入口检查兑现）。
+ */
+export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreExec, input: SettleStageInput): Promise<SettleStageResult> {
+  const { scope, claimed, handle, spawnStartedAt } = input
+  const task = claimed.task
+  const taskKey = `${task.slug}/${task.localId}`
+  const { emit, spawnFailed } = chainClosuresOf(deps, exec, scope)
+
+  const settlement = await settleWorkerRun(deps, {
+    projectId: scope.projectId,
+    task,
+    digest: claimed.digest,
+    handle,
+    spawnStartedAt,
+    ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
+  })
+  if (settlement.case === 'settled') {
+    // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）
+    clearSpawnFailures(scope.guardKey)
+    emit('task-worker-done', task.slug, {
+      taskKey,
+      workerSessionId: handle.workerSessionId,
+      outcome: settlement.result.outcome,
+      durationMs: settlement.durationMs,
+    })
+    return { kind: 'spawned', ...settlement.result }
+  }
+  // 循环停止径（abort 中止——kill taxonomy：不进防线计数不发射 tool-error）
+  if (input.killSignal?.aborted === true) {
+    return { kind: 'killed' }
+  }
+  const failure = spawnFailed(task.slug, taskKey, settlement.cause, input.guardOnFailure === false ? { guard: false } : undefined)
+  return failure
+}
+
+// ─────────────────────────── 主链（claim → 组装 → spawn → 事件发射 → 结算） ───────────────────────────
+
+/**
+ * 派发核心主链（原 dispatch-task.ts 单体 execute 的共享面裂变——外部行为零变更）：
+ * halted 入口检查（guard）→ run_in_background 降级守卫 → 阶段一 claim → 阶段二 spawn →
+ * 事件发射（claimed/spawned/progress/worker-done）→ 后台径 job 包装结算后置交付 / 前台径
+ * 阶段三 settle → 返回五态结果。三段阶段面 = 本函数各步的同一实现（循环驱动器逐段消费）。
+ * 1.10 增补：池快照口径分流（scoped 调用 = source 容器四计数，非 scoped = 全池）+
+ * dispatched 回执幂等重入标识（claim reclaimed → reEntered——防 scoped 循环重复 spawn）。
+ */
+export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExec, args: DispatchCoreArgs): Promise<DispatchTaskResult> {
+  const scope = scopeOfArgs(args)
+  const { emit, poolRead, spawnFailed } = chainClosuresOf(deps, exec, scope)
+  const sessionId = scope.sessionId
+
+  // 归属随流程推进（claim 前 = source 对容器语境/_pool 兜底；claim 后 = 任务容器）——
+  // 共享槽写入，工具壳失败回调（emitToolError）消费
+  initAttribution(exec, args.source)
+
+  // halted 粘住（入口检查——粘住键不再 claim：防再领任务弃置 in_progress）
+  if (spawnFailureStuck(args.guardKey)) {
     return { kind: 'halted', reason: HALTED_REASON }
   }
 
@@ -172,82 +444,35 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
         'or enable the jobs service in the host assembly to unlock background dispatch',
       ],
     }
-    emitToolError(deps.events, sessionId, attributionSlug, exec.verb, failure)
+    emitToolError(deps.events, sessionId, scope.source?.slug ?? '_pool', exec.verb, failure)
     return failure
   }
 
-  // 1. claimTask（API）：守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
-  //    （source 对在场 = 任务源限定盲选；缺席 = 全库——缺省行为零变化。
-  //    S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取（忽略
-  //    links——工具壳两参数均不携带，schema 与外部语义零变化）。）
-  const claimed = await deps.tasks.claimTask({
-    projectId,
-    sessionId,
-    ...(args.source !== undefined ? { source: args.source } : {}),
-    ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
-    ...(identity.loopSourced ? { loopSourced: true } : {}),
-  })
-  const task = claimed.task
-  if (task === null) {
-    // Z1 出口：no-ready-task 事件（source 对任务源归属——载荷 contextSlug = source_slug；
-    // 缺席回落 _pool 兜底）+ 池快照现读（scoped = 容器口径）
-    const pool = await poolRead()
-    emit(
-      'no-ready-task',
-      attributionSlug,
-      args.source !== undefined ? { contextSlug: args.source.slug } : {},
-    )
-    return { kind: 'no-task', pool }
+  // 1. 阶段一：claimTask（API）——守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
+  //    （S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取）
+  const claim = await claimForDispatch(deps, exec, args)
+  if (claim.kind !== 'claimed') {
+    return claim // no-task（池快照附载）| halted（入口粘住）
   }
+  const task = claim.task
   const taskKey = `${task.slug}/${task.localId}`
-  exec.attribution.slug = task.slug
-  emit('task-claimed', task.slug, {
-    taskKey,
-    taskType: task.taskType,
-    ...(task.mode !== undefined ? { mode: task.mode } : {}),
-    dispatchDigest: claimed.digest, // 双记：task_records.claim 行同值
-  })
 
-  // 2. 组装：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions
-  //    （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
-  const toolFilter = deriveWorkerToolFilter(task.taskType)
-  const settings: ForgeSettings | undefined =
-    deps.settings !== undefined ? await deps.settings.get() : undefined
-  const agentOptions = await reconcileWorkerReasoning(
-    workerAgentOptionsOf(settings),
-    deps.resolveModelReasoning,
-  )
-
-  // 3. driver in-process spawn（阻塞）——start 拒绝 = 基建故障（防线计数）
-  //    后台径：spawn 即绑定 job 专属 AbortController（§4.1 F6 适配——工具调用返回后
-  //    exec.signal 失效，job 存活期内必须自有信号；job_kill → cancel → abort → 驱动器
-  //    取消 worker 剩余回合工作；run() hooks 与本 controller 同闭包），前台径
-  //    exec.signal 原样零变化（SC-C 前台逐字节等价）
-  const spawnStartedAt = Date.now()
+  // 2~3. 阶段二：组装 + spawn——后台径 spawn 即绑定 job 专属 AbortController（§4.1 F6 适配
+  //    ——工具调用返回后 exec.signal 失效，job 存活期内必须自有信号；job_kill → cancel →
+  //    abort → 驱动器取消 worker 剩余回合工作），前台径 exec.signal 原样零变化（SC-C 前台
+  //    逐字节等价）
   const background =
     args.runInBackground === true && deps.jobs !== undefined
       ? { jobs: deps.jobs, controller: new AbortController() }
       : undefined
-  let handle: SpawnWorkerHandle
-  try {
-    handle = await deps.spawn({
-      prompt: claimed.dispatchPrompt, // 全文直达 worker——零进本会话上下文
-      parent: exec.parent,
-      signal:
-        background !== undefined ? background.controller.signal : (exec.signal ?? new AbortController().signal),
-      toolFilter,
-      ...(agentOptions !== undefined ? { agentOptions } : {}),
-      label: `${taskKey} · ${task.title}`,
-    })
-  } catch (cause) {
-    return spawnFailed(task.slug, taskKey, cause)
-  }
-  emit('task-spawned', task.slug, {
-    taskKey,
-    workerSessionId: handle.workerSessionId,
-    toolFilter: toolFilter.deny,
-    model: agentOptions?.model ?? 'inherit', // 未配置 = 父会话继承（无显式值可记）
+  const spawned = await spawnClaimed(deps, exec, claim, {
+    scope,
+    ...(background !== undefined ? { signal: background.controller.signal } : {}),
   })
+  if (!spawned.ok) {
+    return spawned.failure
+  }
+  const { handle, spawnStartedAt } = spawned
 
   // ── 后台径（async-dispatch §4.1/4.2/4.4）：同步段到此为止，立即返回
   // dispatched 四键回执；job 异步段 = done continuation（结算核 settleWorkerRun 原样
@@ -280,16 +505,16 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
             },
             done: (async (): Promise<DispatchJobOutcome> => {
               const settlement = await settleWorkerRun(deps, {
-                projectId,
+                projectId: scope.projectId,
                 task,
-                digest: claimed.digest,
+                digest: claim.digest,
                 handle,
                 spawnStartedAt,
-                ...(args.source !== undefined ? { poolSource: args.source } : {}),
+                ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
                 onReading: () => progress('settled:reading', 'worker ended — reading settlement'),
               })
               if (settlement.case === 'settled') {
-                clearSpawnFailures(guardKey) // 成功结算即清零（结算序 streak）
+                clearSpawnFailures(args.guardKey) // 成功结算即清零（结算序 streak）
                 progress(
                   settlement.result.outcome === 'success' ? 'done:success' : 'done:blocked',
                   `settlement ready — collect via job_output (${taskKey})`,
@@ -313,7 +538,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
               }
               // 失败回灌（§4.2 ④）：guard 计数自 job 内按结算序回灌（guardKey 键——
               // 「连续」= 结算序 streak）+ tool-error 留档；≥3 粘住由下一次派发的同步入口检查兑现
-              const { message, stuck } = bumpSpawnFailures(guardKey, taskKey, settlement.cause)
+              const { message, stuck } = bumpSpawnFailures(args.guardKey, taskKey, settlement.cause)
               emitToolError(deps.events, sessionId, task.slug, exec.verb, {
                 ok: false,
                 code: 'ERR_SPAWN_FAILED',
@@ -338,30 +563,15 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
       type: task.taskType,
       workerSessionId: handle.workerSessionId,
       jobId,
-      ...(claimed.reclaimed ? { reEntered: true } : {}), // 幂等重入标识（1.10——渲染面附等待指引防重复 spawn）
+      ...(claim.reclaimed ? { reEntered: true } : {}), // 幂等重入标识（1.10——渲染面附等待指引防重复 spawn）
       pool,
     }
   }
 
-  // 4~5. 前台径（SC-C 逐字节等价）：worker 执行（阻塞至终态）→ 结算核（同后台共用体）
-  const settlement = await settleWorkerRun(deps, {
-    projectId,
-    task,
-    digest: claimed.digest,
-    handle,
-    spawnStartedAt,
-    ...(args.source !== undefined ? { poolSource: args.source } : {}),
-  })
-  if (settlement.case === 'settled') {
-    // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）
-    clearSpawnFailures(guardKey)
-    emit('task-worker-done', task.slug, {
-      taskKey,
-      workerSessionId: handle.workerSessionId,
-      outcome: settlement.result.outcome,
-      durationMs: settlement.durationMs,
-    })
-    return { kind: 'spawned', ...settlement.result }
-  }
-  return spawnFailed(task.slug, taskKey, settlement.cause)
+  // 4~5. 前台径（SC-C 逐字节等价）：阶段三结算核（worker 执行阻塞至终态 → 结算读）。
+  // 工具壳无 killSignal——killed 分支结构性不可达，防御性归 halted。
+  const settled = await settleClaimed(deps, exec, { scope, claimed: claim, handle, spawnStartedAt })
+  if ('ok' in settled) return settled // 失败 DTO（防线计数 + tool-error 留档已在阶段三落面）
+  if (settled.kind === 'killed') return { kind: 'halted', reason: HALTED_REASON } // 不可达防御
+  return settled // spawned | halted
 }
