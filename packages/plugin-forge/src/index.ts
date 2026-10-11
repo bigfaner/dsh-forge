@@ -203,3 +203,30 @@ export type { ForgeContextFace as PluginContextFace, ForgeToolDefinition } from 
 export { classifyPool, deriveWorkerToolFilter, poolOf, reconcileWorkerReasoning, workerAgentOptionsOf } from './tools/index.js'
 export type { DispatchTaskResult, PoolSnapshot, PoolVerdict, SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './tools/index.js'
 export { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
+// S4（run-tasks-host-command）叙述通知模块——17 场景模板 + 双通道 + 长内容落盘（纯模块，
+// 循环驱动器后续接线；规格锚 = notification-samples.md 全谱 + decisions #24/#25/#26/#27/#28）。
+export {
+  failSoftNarrationChannel,
+  createIncidentStore,
+  createNarrator,
+  incidentDirNameOf,
+  incidentRelPathOf,
+  renderNarrative,
+  sanitizeIncidentSegment,
+  SCENARIOS,
+  summarizeReason,
+  validateNarrative,
+  findMechanismWords,
+  MECHANISM_WORDS,
+} from './notify/index.js'
+export type {
+  NarrationChannel,
+  NarrationRoute,
+  Narrator,
+  NarratorDeps,
+  ScenarioId,
+  NarrativePayloadMap,
+  IncidentInput,
+  IncidentStore,
+  IncidentStoreDeps,
+} from './notify/index.js'
