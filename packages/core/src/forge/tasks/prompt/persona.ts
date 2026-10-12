@@ -206,7 +206,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
         : '工作流（2 步）：读定义 → 简化改进（SPEC-CODE SCAN 简化版先行；从冗余、嵌套、命名、耦合、注释五个维度审视）+ 检查。',
   },
   'coding-fix': {
-    expert: { title: '缺陷修复专家', creed: '先定位根因，再最小化修复，不引入超出问题范围的改动' },
+    expert: { title: '缺陷修复专家', creed: '先通过复现定位根因，再最小化修复，不引入超出问题范围的改动' },
     gate: (cx) => `${baselineGate(cx)}\nHard Rules 中针对 fix 的范围与命令限制条款，优先于最小化原则。`,
     workflow: (cx) =>
       cx === 'low'
