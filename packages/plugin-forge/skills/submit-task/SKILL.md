@@ -1,111 +1,97 @@
 ---
 name: submit-task
-description: Settle the task you executed via submitTask — an honest summary organized for audit, test evidence cited for AC-bearing tasks, and a commit hash under the workspace's commit conventions (AGENTS.md) or common-sense Conventional Commits. Use after executing a task brief and passing its quality gates.
+description: 通过 `submitTask` 结算你执行的任务——一段经得起审计的如实 summary，带 AC 的任务须引用测试证据，并按工作区提交规范（`AGENTS.md`）或常识性 Conventional Commits 附上 commit hash。在执行完任务简报并通过质量门后使用。
 user-invocable: false
 ---
 
-# Submit Task
+# 结算任务（Submit Task）
 
-Settle exactly the task you executed, located by its container `slug` + `local_id`.
-Settle once and settle honestly: `submitTask` is the only agent-reachable way out of
-`in_progress`, and the record is an audit artifact. The tool enforces the mechanics —
-which fields are required per path, the all-or-none gate booleans, the AC evidence gate,
-and the gate-task summary — so this skill is about the judgment the tool cannot do for
-you: what goes *in* those fields.
+只结算你亲手执行的那个任务，以容器 `slug` + `local_id` 定位。只结算一次，且如实结算：
+`submitTask` 是 agent 唯一能离开 `in_progress` 的出口，而记录是一份审计工件。工具负责
+执行机制——各路径要求哪些字段、gate 布尔量的全有或全无、AC 证据门、gate 任务的
+summary——所以本技能讲的是工具无法替你做的判断：那些字段里*填什么*。
 
-## Success Path — organizing the record
+## 成功路径——组织记录
 
-The quality-gate sequence and failure triage live in your dispatch brief; run them
-there. When settling, the record is structured — split it into its fields, do not
-cram everything into free text:
+质量门序列与失败分诊在你的派发简报里，在那里执行。结算时，记录是结构化的——拆进各
+字段，不要把所有东西塞进自由文本：
 
-- **`summary`** — one sentence stating the outcome. It is the first and result line of
-  the record: compare it against the task's `GOAL` ("what was to be achieved") and say
-  whether and how the goal was met — a reviewer trusts this line without opening the
-  diff. A summary that only restates the task title is a failed summary.
-- **`key_decisions`** — the decisions that shaped the result, as a separate array (≤3
-  items: approach chosen over alternative, constraint honored, boundary drawn). Keep
-  them out of `summary`.
-- **`files_created` / `files_modified`** — the files actually changed, forward-slash
-  paths, grouped by created vs modified (flat `files` is the union form; supply the
-  grouping, not the union). Include test fixtures, generated artifacts — this is the
-  diff inventory for later audits.
-- **`gate_*`** — report what ran, as it ran. Never report a gate you did not run, never
-  report a failed gate as passed, never invent a coverage number.
+- **`summary`**——一句话说明结果。它是记录的首行兼结果行：对照任务的 `GOAL`
+  （"要达成什么"）说明目标是否及如何达成——评审者不看 diff 也该信这一行。只复述任务
+  标题的 summary 即属失败的 summary。
+- **`key_decisions`**——塑造结果的决策，作为独立数组（≤3 条：选了的方案而非备选、
+  遵守的约束、划定的边界）。不要混进 `summary`。
+- **`files_created` / `files_modified`**——实际改动的文件，正斜杠路径，按新建/修改
+  分组（扁平 `files` 是并集形式；给分组，不给并集）。包含测试夹具与生成产物——这是
+  供日后审计的 diff 清单。
+- **`gate_*`**——跑了什么就报什么。不报没跑过的门，不把失败的门报成通过，不编造
+  coverage 数字。
 
-### AC evidence — per criterion, not prose
+### AC 证据——逐条给，不要写成散文
 
-Tasks created with `acceptance_criteria` pass the submit evidence gate only with
-`gate_test: true` standing on a real test run you can name. Submit each criterion as a
-triple in the paired arrays `ac_criteria` / `ac_met` / `ac_evidence`:
+带 `acceptance_criteria` 创建的任务，只有当 `gate_test: true` 站在一次叫得出名字的真实
+测试运行之上时才过证据门。每条标准以三元组提交到配对数组 `ac_criteria` / `ac_met` /
+`ac_evidence`：
 
-- `ac_criteria` — the criterion strings, same order and wording as the task definition
-  (the tool cross-checks the mirror with the definition side);
-- `ac_met` — one boolean per criterion (`success` with any `false` is rejected);
-- `ac_evidence` — one line of proof per criterion: covering case/command + its result
-  ("AC-2 covered by `dispatch-task.test.ts` describe block 'pool verdict' — pass"). If
-  the proof output is long, archive it under the artifact convention and reference only
-  the subfolder path. If an AC item has no covering test, that is not success — either
-  add the test or settle `blocked` naming the uncovered criterion.
+- `ac_criteria`——标准字符串，与任务定义同序同措辞（工具会用定义侧交叉核对镜像）；
+- `ac_met`——每条标准一个布尔（带任何 `false` 的 `success` 会被拒绝）；
+- `ac_evidence`——每条标准一行证据：覆盖用例/命令 + 其结果（"AC-2 由
+  `dispatch-task.test.ts` 的 describe 块 'pool verdict' 覆盖——通过"）。证据输出过长时，
+  按工件归档约定归档，叙述里只引用子目录路径。某条 AC 没有覆盖测试即不构成 success——
+  要么补测试，要么以 blocked 结算并点名未覆盖的标准。
 
-### Settle checklist
+### 结算清单
 
-1. **todo all `completed`** before `submitTask` — no open todo item survives a submit
-   (trivial two-step tasks may skip the todo discipline entirely).
-2. Artifact convention applied: screenshots, long command output, probe artifacts →
-   `logs/<slug>/<taskKey>/<seq>-<event-type>/` (one folder per task, one subfolder per
-   event) — and the record's narrative (summary/evidence/notes) carries **only the
-   subfolder path**, never pasted blobs.
-3. `TASK_ID` is `slug/local_id` — split on the slash to fill the two locating fields.
-4. Type-family record fields populated where the brief lists them (doc family:
-   `referencedDocs` / `reviewStatus` / `docMetrics`; test family: `casesGenerated` /
-   `casesEvaluated` / `scriptsCreated` / `testResults`; validation family:
-   `validationPassed` / `issuesFound`; gate family: `gateChecks`).
+1. `submitTask` 前 **todo 全部 `completed`**——提交时不允许残留未关闭的 todo
+   （两步以内的琐碎任务可整体跳过 todo 纪律）。
+2. 应用工件约定：截图、超长命令输出、探针产物 →
+   `logs/<slug>/<taskKey>/<seq>-<event-type>/`（每任务一目录、每事件一子目录）——记录
+   的叙述部分（summary/证据/notes）**只写子目录路径**，绝不粘贴大段内容。
+3. `TASK_ID` 形如 `slug/local_id`——按斜杠拆开填入两个定位字段。
+4. 简报列出类型族记录字段时如实填写（doc 族：`referencedDocs` / `reviewStatus` /
+   `docMetrics`；test 族：`casesGenerated` / `casesEvaluated` / `scriptsCreated` /
+   `testResults`；validation 族：`validationPassed` / `issuesFound`；gate 族：
+   `gateChecks`）。
 
-## Commit Conventions (two states)
+## 提交规范（两种状态）
 
-Commit before settling so `commit_hash` records the change. Which conventions apply
-depends on the workspace:
+结算前先提交，让 `commit_hash` 记录改动。适用哪套规范取决于工作区：
 
-1. **`AGENTS.md` present with commit conventions** → follow them — message format,
-   scope vocabulary, staging rules, everything it pins down.
-2. **No such conventions** → fall back to common-sense Conventional Commits:
-   `<type>(<scope>): <subject>` — lowercase imperative subject under 72 chars, type
-   from `feat` / `fix` / `docs` / `test` / `refactor` / `chore`, scope from the package
-   or layer touched.
+1. **存在带提交规范的 `AGENTS.md`** → 遵循它——消息格式、scope 词汇、暂存规则，凡它
+   钉死的一律照办。
+2. **无此类规范** → 退回常识性 Conventional Commits：
+   `<type>(<scope>): <subject>`——subject 小写祈使句、72 字符内，type 取 `feat` /
+   `fix` / `docs` / `test` / `refactor` / `chore`，scope 取被改动的包或层。
 
-Either way: stage **explicit file paths only** — never `git add -A` / `git add .` /
-`git add --all` (broad staging sweeps unrelated changes into the commit); commit only
-files related to this task, never unrelated pre-existing changes.
+无论哪种：只暂存**显式文件路径**——绝不 `git add -A` / `git add .` /
+`git add --all`（大范围暂存会把无关改动卷进提交）；只提交与本任务相关的文件，绝不提交
+无关的既有改动。
 
-**Git absent** — if `git` is unavailable (command not found, not a repository), do not
-fabricate a `commit_hash`: settle `result=blocked` with reason `git unavailable:
-<detail>` and let the fix chain or the user carry it. The state layer itself never
-requires git.
+**git 缺失**——若 `git` 不可用（命令不存在、不是仓库），不伪造 `commit_hash`：以
+reason `git unavailable: <detail>` 结算 `result=blocked`，交给 fix 链或用户处理。状态层
+本身从不依赖 git。
 
-## Blocked Path
+## Blocked 路径
 
-`result=blocked` with a `reason` that carries the concrete cause, classified per the
-brief's failure triage (simple/transient that survived ~3 inline attempts, or
-complex/recurring — do not loop). Organize it as: what you attempted, what failed, with
-which evidence (command output excerpt, error text). Typically spawn the fix task right
-after — the canonical fix-chain protocol lives in the run-tasks skill.
+`result=blocked`，`reason` 带具体原因，按简报的失败分诊归类（挺过约 3 次内联尝试的
+简单/瞬时问题，或复杂/复发问题——不要循环）。组织方式：你尝试了什么、什么失败了、
+拿什么证据（命令输出摘录、错误文本）。通常紧随其后派生 fix 任务——fix 链协议正本在
+run-tasks 技能中。
 
-When the fix completes, its blocked source restores automatically — the `submitTask`
-result lists restored tasks; nothing further to do.
+修复完成后，其被阻塞的源任务自动恢复——`submitTask` 结果会列出已恢复的任务；无需
+再做任何事。
 
-## Forbidden Operations
+## 禁止操作
 
-| Operation | Why |
+| 操作 | 原因 |
 |---|---|
-| Submitting `success` with a failing, unrun, or unbacked gate | Falsified record |
-| Editing state — database, task records, indexes — by hand | State changes only through the pipeline verbs |
-| Re-submitting or transitioning an already-settled task | Terminal-state transitions are human-only |
-| Submitting a task you did not execute | Settle exactly what you ran |
+| 带着失败、未运行或无依据的门提交 `success` | 伪造记录 |
+| 手工编辑状态——数据库、任务记录、索引 | 状态只能经 pipeline 动词变更 |
+| 重复提交或流转已结算的任务 | 终态流转仅限人类 |
+| 提交一个你没有执行的任务 | 只结算你跑过的东西 |
 
-## If the submitTask call itself fails
+## 如果 submitTask 调用本身失败
 
-The error text carries the violated expectations (missing summary, criterion/AC
-evidence mismatch, half-given gates). Fix the inputs per what it lists and retry. If
-the tool is unreachable, report to the dispatcher or the user — never switch to file
-edits as a workaround.
+错误文本会写明被违反的预期（缺 summary、标准/AC 证据不匹配、门只给了一半）。按其
+所列修好输入后重试。若工具不可达，上报派发方或用户——绝不改用文件编辑作为变通。
+
