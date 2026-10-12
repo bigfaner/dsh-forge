@@ -17,34 +17,39 @@ describe('AC5 段常量（Interface 8 定死）', () => {
 })
 
 describe('renderForgePipelineSection（老 forge hook 文本平移三部分）', () => {
-  it('① 状态层说明（状态层 = 唯一 SoT / 盘上文件与 UI 是投影 / 禁手改 / 自然键身份）', () => {
-    expect(text).toContain('single source of truth')
-    expect(text).toContain('projections')
-    expect(text.toLowerCase()).toContain('never edit state by hand')
+  it('① 状态层说明（状态层 = 唯一事实来源 / 盘上文件与 UI 是投影 / 禁手改 / 自然键身份；术语保留原文）', () => {
+    expect(text).toContain('唯一事实来源')
+    expect(text).toContain('投影')
+    expect(text).toContain('禁止手改状态')
+    expect(text).toContain('管线动词')
     expect(text).toContain('slug/local-id')
     expect(text).toContain('fix-N')
     expect(text).toContain('disc-N')
   })
 
-  it('② 执行协议（领取-简报-提交循环 / blocked 承接 fix 链 / 查询前置 / 未注册上报）', () => {
-    expect(text).toContain('Execution protocol')
-    expect(text).toContain('claiming')
-    expect(text).toContain('dispatch brief')
-    expect(text).toContain('quality-gate')
-    expect(text).toContain('never fabricate')
-    expect(text).toContain('blocked requires')
-    expect(text).toContain('fix task')
-    expect(text).toContain('restored automatically')
-    expect(text).toContain('not registered')
+  it('② 执行协议（领取-简报-提交循环 / blocked 承接 fix 链 / 查询前置 / 未注册上报；操作细节一行指针引至 run-tasks / submit-task 技能正本）', () => {
+    expect(text).toContain('执行协议')
+    expect(text).toContain('领取')
+    expect(text).toContain('派发简报')
+    expect(text).toContain('质量门')
+    expect(text).toContain('绝不伪造')
+    expect(text).toContain('blocked 须给出具体阻塞原因')
+    expect(text).toContain('fix 任务')
+    expect(text).toContain('自动恢复')
+    expect(text).toContain('未注册')
+    expect(text).toContain('run-tasks')
+    expect(text).toContain('submit-task')
+    // 去重契约：操作级细节不复制，正本指针在场
+    expect(text).toContain('不在此复制')
   })
 
   it('③ 受限面声明（转移人类专属 / 禁直写状态存储与索引 / 提案裁决须用户决定）', () => {
-    expect(text).toContain('Restricted face')
-    expect(text).toContain('human decisions')
-    expect(text).toContain('not available to agents')
-    expect(text).toContain('Never write to the state layer')
-    expect(text).toContain('exclusively through the pipeline verbs')
-    expect(text).toContain('only recorded when the user has decided')
+    expect(text).toContain('受限面')
+    expect(text).toContain('是人类决定')
+    expect(text).toContain('代理不可用')
+    expect(text).toContain('禁止直写状态层')
+    expect(text).toContain('只经管线动词维护')
+    expect(text).toContain('仅在用户已决定时记录')
   })
 
   it('④ 文档风格公约（mermaid 优先 / 文字精简 / 不留调整修复叙事；中文三要点，约束全部产出文档）', () => {
@@ -54,7 +59,7 @@ describe('renderForgePipelineSection（老 forge hook 文本平移三部分）',
     expect(text).toContain('文字精简')
     expect(text).toContain('不留调整修复叙事')
     // 置于受限面声明之后
-    expect(text.indexOf('Restricted face')).toBeLessThan(text.indexOf('文档风格公约'))
+    expect(text.indexOf('受限面')).toBeLessThan(text.indexOf('文档风格公约'))
   })
 
   it('最外层唯一标签包裹：<forge-pipeline>（contracts XML_TAGS 单源）+ 单层不细分', () => {
