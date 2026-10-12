@@ -198,39 +198,58 @@ export function createRunDagTasksHandler(
     const ctx: InvokeContext = { projectId, sessionId: agent.session.id, parent: agent, ...(signal !== undefined ? { signal } : {}) }
     const slug = rawInput.trim()
     try {
-      // 跑动中再触发（v1 单活——decisions #19/#20）：先判归属——他会话活循环不进
-      // 查看/停止/替换问询（decisions #20 作用域下那些操作对本会话全是 no-op，
-      // 问询面板是假所有权），改出明确回执；仅本会话自己的活循环才弹问询。
-      const running = deps.driver.active()
-      if (running !== undefined) {
-        if (deps.driver.activeOf(ctx.sessionId) === undefined) {
-          return foreignLoopNotice(running, slug)
-        }
-        return await handleRunning(deps, ctx, running, slug)
+      // 跑动中再触发（本会话活循环 → 查看/停止/替换问询——decisions #20 作用域）。
+      // 2026-10-12 多会话并行裁决（取代 v1 全局单活）：不同会话可各跑不同任务源；仅
+      // 「同一任务源已被其它会话派发」时按需拦截（带参径在 startWithSlug 判定，无参径在
+      // pickAndStart 候选过滤）。
+      const own = deps.driver.activeOf(ctx.sessionId)
+      if (own !== undefined) {
+        return await handleRunning(deps, ctx, own, slug)
       }
       if (slug !== '') {
-        return await startWithSlug(deps, ctx, slug) // 带参直通
+        return await startWithSlug(deps, ctx, slug) // 带参直通（含同源占用判定）
       }
-      return await pickAndStart(deps, ctx) // 无参枚举 + 问询
+      return await pickAndStart(deps, ctx) // 无参枚举 + 问询（在跑源已过滤）
     } catch (cause) {
       return { kind: 'error', text: `派发启动失败：${cause instanceof Error ? cause.message : String(cause)}` }
     }
   }
 }
 
-/** 带参直通：解析 slug → 启动（未知 slug = 错误回执 + 无参指引） */
+/** 同源占用判定（2026-10-12 多会话并行——同 kind+slug 已被其它会话派发 = 占用行） */
+function sameSourceBusy(deps: RunDagTasksDeps, source: ContainerRef): LoopRecord | undefined {
+  return deps.driver
+    .activeAll()
+    .find((record) => record.source.kind === source.kind && record.source.slug === source.slug)
+}
+
+/** 带参直通：解析 slug → 同源占用判定 → 启动（未知 slug = 错误回执 + 无参指引） */
 async function startWithSlug(deps: RunDagTasksDeps, ctx: InvokeContext, slug: string): Promise<ForgeCommandResult> {
   const source = await resolveSourceBySlug(deps.tasks, ctx.projectId, slug)
   if (source === undefined) {
     return { kind: 'error', text: `没有找到任务源 ${slug}——可执行无参 /run-dag-tasks 查看可派发的任务源` }
   }
+  const busy = sameSourceBusy(deps, source)
+  if (busy !== undefined) {
+    return foreignLoopNotice(busy, slug)
+  }
   return startSource(deps, ctx, source)
 }
 
-/** 无参：单查询枚举 → 问询选择 → 启动（零候选/未选/问询缺席 = 不启动 fail-soft 收口） */
+/** 无参：单查询枚举 → 在跑源过滤 → 问询选择 → 启动（零候选/未选/问询缺席 = 不启动 fail-soft 收口） */
 async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<ForgeCommandResult> {
-  const candidates = nonTerminalSourcesOf(await deps.tasks.listTasks({ projectId: ctx.projectId })) // 单查询
+  const all = nonTerminalSourcesOf(await deps.tasks.listTasks({ projectId: ctx.projectId })) // 单查询
+  // 2026-10-12 多会话并行：已在跑的源（无论哪个会话持有）不入候选——同一任务源不能双派发
+  const busyKeys = new Set(deps.driver.activeAll().map((record) => `${record.source.kind}/${record.source.slug}`))
+  const candidates = all.filter((candidate) => !busyKeys.has(`${candidate.source.kind}/${candidate.source.slug}`))
   if (candidates.length === 0) {
+    if (all.length > 0) {
+      const running = deps.driver
+        .activeAll()
+        .map((record) => record.source.slug)
+        .join('、')
+      return { kind: 'success', text: `其余任务源均已派发中（${running}），没有可新派发的任务源——不同任务源可在其它会话并行派发，或等待在跑循环完成` }
+    }
     return { kind: 'success', text: '没有未完成的任务，无需派发' }
   }
   if (deps.ask === undefined) {
@@ -315,15 +334,15 @@ function runningView(running: LoopRecord): ForgeCommandResult {
 }
 
 /**
- * 他会话活循环回执（归属判序前置）：本会话无活循环而全局有——停止/替换对本会话恒 no-op
- * （decisions #20 跨会话隔离），不弹问询、零归属 id 泄露；单活模型下带参直通也无法启动，
- * 明示接管路径（到启动会话执行 /stop-dag-tasks 或等待完成）。
+ * 同源占用回执（2026-10-12 多会话并行裁决——取代 v1 单活回执）：请求的任务源已被其它会话
+ * 派发——同一任务源不能同时被两个会话派发；不同任务源可在其它会话并行派发。零归属 id
+ * 泄露；接管路径明示（到启动会话停止或等待完成）。
  */
 function foreignLoopNotice(running: LoopRecord, requestedSlug: string): ForgeCommandResult {
   const requested = requestedSlug !== '' ? `；本次请求的任务源 ${requestedSlug} 未启动` : ''
   return {
     kind: 'success',
-    text: `任务源 ${running.source.slug} 的派发循环正由其它会话运行——本会话没有可操作的派发循环${requested}。单活模型下无法并行派发；如需接管，请到启动它的会话执行 /stop-dag-tasks，或等待其完成。`,
+    text: `任务源 ${running.source.slug} 的派发循环已由其它会话运行——同一任务源不能同时被两个会话派发${requested}。不同任务源可在其它会话并行派发；如需接管本源，请到启动它的会话执行 /stop-dag-tasks，或等待其完成。`,
   }
 }
 

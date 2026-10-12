@@ -254,14 +254,14 @@ export interface LoopDriverDeps {
   readonly delays?: { readonly backoffBaseMs?: number; readonly patiencePauseMs?: number }
 }
 
-/** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/单活读数） */
+/** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/全量活循环读数） */
 export interface LoopDriver {
   start(input: LoopStartInput): Promise<LoopStartResult>
   stop(input: { readonly ownerSessionId: string }): Promise<LoopStopResult>
   /** 本会话活循环（S2「跑动中再触发」的查询面；无 = undefined） */
   activeOf(ownerSessionId: string): LoopRecord | undefined
-  /** 进程内活循环读数（S2「跑动中再触发」的任意归属查询面——v1 单活；无 = undefined） */
-  active(): LoopRecord | undefined
+  /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
+  activeAll(): readonly LoopRecord[]
 }
 
 // ─────────────────────────── 活循环内部状态（登记表行 + 运行时计数） ───────────────────────────
@@ -379,8 +379,9 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       // S2 projectId 解析（会话工作区覆盖 > 装配缺省；双缺席 fail-loud——不落不可归属的循环）
       const projectId = input.projectId ?? deps.projectId
       if (projectId === undefined) throw new Error('派发循环启动缺少 projectId（input.projectId 与 deps.projectId 双缺席）')
-      // ② v1 单活：进程内已有活循环 → 拒绝（S2 问询查看/停止/替换——停止后可再启新实例）
-      const active = registry.active()
+      // ② 同源独占（2026-10-12 多会话并行裁决——取代 v1 全局单活）：同一任务源进程内至多
+      // 一个活循环（他源他会话并行不受限）；同源再 start → loop-active 拒绝
+      const active = registry.bySource({ kind: input.source.kind, slug: input.source.slug })
       if (active !== undefined) {
         return { ok: false, code: 'loop-active', activeSource: active.source, activeOwnerSessionId: active.ownerSessionId }
       }
@@ -486,8 +487,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       return registry.byOwner(ownerSessionId)
     },
 
-    active(): LoopRecord | undefined {
-      return registry.active()
+    activeAll(): readonly LoopRecord[] {
+      return registry.all()
     },
   }
 }

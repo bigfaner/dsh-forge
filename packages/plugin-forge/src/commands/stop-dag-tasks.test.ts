@@ -28,10 +28,7 @@ function driverStub(activeRecord?: LoopRecord) {
       return { ok: true, stopped: true, hadInFlight: false }
     }),
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
-    active: vi.fn(() => {
-      for (const record of loops.values()) return record
-      return undefined
-    }),
+    activeAll: vi.fn(() => [...loops.values()]),
   }
   return { driver, stopInputs, loops }
 }

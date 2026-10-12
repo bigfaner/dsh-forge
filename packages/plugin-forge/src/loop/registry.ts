@@ -45,8 +45,10 @@ export interface LoopRegistry {
   get(id: LoopInstanceId): LoopRecord | undefined
   /** 终态注销（幂等——不存在零效应） */
   remove(id: LoopInstanceId): void
-  /** v1 单活守卫读数（进程内至多一个活循环——单任务源多活/多任务源并行 = 后续方向） */
-  active(): LoopRecord | undefined
+  /** 同源占用读数（2026-10-12 多会话并行裁决——start 门控：同一任务源进程内至多一个活循环） */
+  bySource(source: LoopSourceRef): LoopRecord | undefined
+  /** 全量活循环读数（多会话并行——指令层候选过滤/同源占用判定的观察径） */
+  all(): readonly LoopRecord[]
   /** stop 作用域读数（ownerSessionId = 敲指令会话——decisions #20 仅停本会话循环） */
   byOwner(ownerSessionId: string): LoopRecord | undefined
 }
@@ -64,9 +66,14 @@ export function createLoopRegistry(): LoopRegistry {
     remove(id): void {
       loops.delete(id)
     },
-    active(): LoopRecord | undefined {
-      for (const record of loops.values()) return record // v1 单活——首项即全部
+    bySource(source): LoopRecord | undefined {
+      for (const record of loops.values()) {
+        if (record.source.kind === source.kind && record.source.slug === source.slug) return record
+      }
       return undefined
+    },
+    all(): readonly LoopRecord[] {
+      return [...loops.values()]
     },
     byOwner(ownerSessionId): LoopRecord | undefined {
       for (const record of loops.values()) {

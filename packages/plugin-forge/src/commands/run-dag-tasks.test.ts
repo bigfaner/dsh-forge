@@ -82,7 +82,7 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
   const driver: LoopDriver = {
     start: vi.fn(async (input: LoopStartInput) => {
       startInputs.push(input)
-      // 单活竞态脚本：start 恒拒绝（active() 读数后的启动窗口模拟）
+      // 同源竞态脚本：start 恒拒绝（占用读数后的启动窗口模拟）
       if (options.startCode === 'loop-active') {
         return {
           ok: false as const,
@@ -91,9 +91,11 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
           activeOwnerSessionId: 's-race',
         }
       }
-      // v1 单活：任一活循环在场即拒绝（owner 无关——进程级守卫）
+      // 同源独占（2026-10-12 多会话并行裁决）：同 kind+slug 已在跑才拒；他源他 session 并行放行
       for (const record of loops.values()) {
-        return { ok: false as const, code: 'loop-active' as const, activeSource: record.source, activeOwnerSessionId: record.ownerSessionId }
+        if (record.source.kind === input.source.kind && record.source.slug === input.source.slug) {
+          return { ok: false as const, code: 'loop-active' as const, activeSource: record.source, activeOwnerSessionId: record.ownerSessionId }
+        }
       }
       loops.set(input.ownerSessionId, recordOf(input.ownerSessionId, input.source.slug))
       return { ok: true as const, loopId: 'loop-new' }
@@ -106,10 +108,7 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
       return { ok: true, stopped: true, hadInFlight: false }
     }),
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
-    active: vi.fn(() => {
-      for (const record of loops.values()) return record
-      return undefined
-    }),
+    activeAll: vi.fn(() => [...loops.values()]),
   }
   return { driver, startInputs, stopInputs, loops, recordOf }
 }
@@ -358,21 +357,20 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     expect((out as { text: string }).text).toContain('已停止')
   })
 
-  it('他会话活循环（归属判序前置）：零问询、零 stop/start 触达——success 回执明示其它会话运行与接管路径', async () => {
+  it('他会话占源 + 无参（候选全被过滤）：零问询、零 stop/start 触达——success 回执明示已派发中与并行口径', async () => {
     const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other' }
     const ask = askStub(answerLabel('停止'))
     const stub = driverStub({ activeRecord: foreign })
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
     const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
-    expect(ask.requests).toHaveLength(0) // 假所有权问询不再弹出
+    expect(ask.requests).toHaveLength(0) // 唯一候选源已在跑——问询不弹（假所有权面板不再出现）
     expect(stub.stopInputs).toHaveLength(0)
     expect(stub.startInputs).toHaveLength(0)
     expect(stub.loops.has('s-other')).toBe(true) // 他会话循环不受影响
     expect(out.kind).toBe('success')
     const text = (out as { text: string }).text
-    expect(text).toContain('其它会话')
-    expect(text).toContain('本会话没有可操作的派发循环')
-    expect(text).toContain('/stop-dag-tasks')
+    expect(text).toContain('其余任务源均已派发中（feat-x）')
+    expect(text).toContain('并行派发')
   })
 
   it('替换（带参）：先停本会话循环再直通新任务源', async () => {
@@ -402,7 +400,7 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     expect(out.kind).toBe('success')
   })
 
-  it('他会话活循环 + 带参直通：不触 start（单活下必然拒绝）——回执含所请求 slug 未启动', async () => {
+  it('他会话占源 + 带参直通同源：不触 start——回执明示同源不可双派发与所请求 slug 未启动', async () => {
     const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other' }
     const ask = askStub(answerLabel('替换'))
     const stub = driverStub({ activeRecord: foreign })
@@ -410,10 +408,11 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
     expect(ask.requests).toHaveLength(0)
     expect(stub.loops.has('s-other')).toBe(true)
-    expect(stub.startInputs).toHaveLength(0) // 归属判序前置——start 不再空触
+    expect(stub.startInputs).toHaveLength(0) // 同源占用前置判定——start 不空触
     expect(out.kind).toBe('success')
     const text = (out as { text: string }).text
-    expect(text).toContain('其它会话')
+    expect(text).toContain('已由其它会话运行')
+    expect(text).toContain('不能同时被两个会话派发')
     expect(text).toContain('feat-x 未启动')
   })
 
@@ -436,6 +435,52 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
     expect((out as { text: string }).text).toContain('/stop-dag-tasks')
     expect(stub.loops.has(SESSION)).toBe(true) // 循环原样保持
     expect(stub.stopInputs).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────── 多会话并行（2026-10-12 裁决：一会话一循环；同源不可双派发；异源异会话并行） ───────────────────────────
+
+describe('多会话并行：同源独占 + 异源异会话并行放行', () => {
+  const cards = [
+    card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending'),
+    card({ kind: 'feature', slug: 'feat-y' }, '1.1', 'pending'),
+  ]
+
+  it('他会话在跑 feat-x + 本会话带参启动 feat-y：正常启动（异源并行不受限）', async () => {
+    const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other', source: { kind: 'feature', slug: 'feat-x' } }
+    const stub = driverStub({ activeRecord: foreign })
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: 'feat-y' })
+    expect(out.kind).toBe('success')
+    expect((out as { text: string }).text).toContain('已启动')
+    expect(stub.startInputs).toHaveLength(1)
+    expect(stub.startInputs[0]?.source).toEqual({ kind: 'feature', slug: 'feat-y' })
+    expect(stub.loops.has('s-other')).toBe(true) // 他会话循环原样
+    expect(stub.loops.has(SESSION)).toBe(true) // 本会话新循环并行在场
+  })
+
+  it('无参候选过滤：他会话在跑 feat-x → 问询仅列 feat-y', async () => {
+    const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other', source: { kind: 'feature', slug: 'feat-x' } }
+    const ask = askStub(answerLabel('feat-y'))
+    const stub = driverStub({ activeRecord: foreign })
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, () => {}) as never, rawInput: '' })
+    const question = (ask.requests[0] as { questions: { options?: { label: string }[] }[] }).questions[0]
+    expect(question?.options?.map((o) => o.label)).toEqual(['feat-y']) // 在跑源不入候选
+    expect(out.kind).toBe('success')
+    expect(stub.startInputs[0]?.source).toEqual({ kind: 'feature', slug: 'feat-y' })
+  })
+
+  it('零候选且非空池：新回执明示其余任务源均已派发中（含在跑源清单）', async () => {
+    const foreign: LoopRecord = { ...ACTIVE, ownerSessionId: 's-other', source: { kind: 'feature', slug: 'feat-x' } }
+    const single = [cards[0]!] // 仅 feat-x——过滤后零候选
+    const stub = driverStub({ activeRecord: foreign })
+    const d = depsOf({ cards: single, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: '' })
+    expect(out.kind).toBe('success')
+    const text = (out as { text: string }).text
+    expect(text).toContain('其余任务源均已派发中（feat-x）')
+    expect(text).not.toContain('没有未完成的任务') // 与真空池文案区分
   })
 })
 

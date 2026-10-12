@@ -821,7 +821,7 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
 // ─────────────────────────── 生命周期入口（start/stop——S2 消费面） ───────────────────────────
 
 describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
-  it('v1 单活守卫：活循环在场再 start → loop-active 拒绝（附在役循环归属）；停止后新实例可启', async () => {
+  it('同源独占守卫（2026-10-12 多会话并行裁决）：同源再 start → loop-active 拒绝（附在役归属）；异源异会话并行可启；停止后新实例可启', async () => {
     const built = build({ claim: [claimed()] })
     built.spawn.setBehavior(parkedSpawn) // 永不结算——保持在飞（确定性）
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -831,8 +831,14 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
       },
       { timeout: 2000, interval: 5 },
     )
-    const again = await built.driver.start({ source: { kind: 'proposal', slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
-    expect(again).toEqual({ ok: false, code: 'loop-active', activeSource: SOURCE, activeOwnerSessionId: OWNER })
+    // 同源他会话再 start → 拒绝（同一任务源不能双派发）
+    const same = await built.driver.start({ source: SOURCE, ownerSessionId: 'session-2', parent: {} })
+    expect(same).toEqual({ ok: false, code: 'loop-active', activeSource: SOURCE, activeOwnerSessionId: OWNER })
+    // 异源他会话 start → 并行放行（多会话各跑各源）
+    const parallel = await built.driver.start({ source: { kind: 'proposal', slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
+    expect(parallel).toEqual({ ok: true, loopId: expect.any(String) })
+    expect(built.driver.activeAll()).toHaveLength(2) // 两活循环并行在场
+    await built.driver.stop({ ownerSessionId: 'session-2' })
     const stopped = await built.driver.stop({ ownerSessionId: OWNER })
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     const restarted = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -1136,17 +1142,18 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
 // ─────────────────────────── S2 面（any-active 读数 + projectId 会话覆盖） ───────────────────────────
 
 describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消费缝）', () => {
-  it('active()：启动后返回登记行（任务源/主会话 id）；stop 后 undefined（跑动中再触发问询的读数面）', async () => {
+  it('activeAll()：启动后含登记行（任务源/主会话 id）；stop 后空（多会话并行的全量读数面）', async () => {
     const built = build({
       claim: [NO_TASK],
       stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
     })
-    expect(built.driver.active()).toBeUndefined()
+    expect(built.driver.activeAll()).toEqual([])
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, projectId: PROJECT })
-    const record = built.driver.active()
-    expect(record).toMatchObject({ source: SOURCE, ownerSessionId: OWNER })
+    const records = built.driver.activeAll()
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ source: SOURCE, ownerSessionId: OWNER })
     await built.driver.stop({ ownerSessionId: OWNER })
-    expect(built.driver.active()).toBeUndefined()
+    expect(built.driver.activeAll()).toEqual([])
   })
 
   it('projectId 覆盖：input.projectId 优先于 deps（claim/list/stats 读携带会话工作区解析结果）', async () => {
