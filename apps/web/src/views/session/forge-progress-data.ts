@@ -6,7 +6,9 @@
 // 壳树视图，故归壳树；client 树零引用（定义面数据透传 unknown 不窄读）。
 // 数据纪律：形状防御（plugin-forge isForgeProgressData 同语义镜像——他形不猜不抛）。
 
-/** 节点数据（buildViewNode.data——客户端可见整值，纯 JSON） */
+/** 节点数据（buildViewNode.data = append 侧 ForgeProgressEventData 原样整值，纯 JSON；
+ * 时序锚走节点 anchorSeq（buildViewNode 自 state.seq 取），载荷无 seq——2026-10-12 报障收口：
+ * 镜像守卫曾误要求 data.seq（append 契约无此位）恒 false → 组件静默 null 空行） */
 export interface ForgeProgressNodeData {
   readonly sourceSlug: string
   readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop'
@@ -14,11 +16,9 @@ export interface ForgeProgressNodeData {
   readonly taskKey?: string
   readonly counts?: { readonly pending: number; readonly running: number; readonly done: number }
   readonly at: number
-  /** 事件 seq（节点时序锚——流内交错位） */
-  readonly seq: number
 }
 
-/** 数据守卫（plugin-forge isForgeProgressData 同语义镜像） */
+/** 数据守卫（plugin-forge isForgeProgressData 同语义镜像——载荷位与 append 契约逐位同） */
 export function isForgeProgressNodeData(value: unknown): value is ForgeProgressNodeData {
   if (typeof value !== 'object' || value === null) return false
   const raw = value as Record<string, unknown>
@@ -29,7 +29,6 @@ export function isForgeProgressNodeData(value: unknown): value is ForgeProgressN
     (raw['status'] === 'running' || raw['status'] === 'completed' || raw['status'] === 'blocked' || raw['status'] === 'interrupted') &&
     (raw['taskKey'] === undefined || typeof raw['taskKey'] === 'string') &&
     typeof raw['at'] === 'number' &&
-    Number.isFinite(raw['at']) &&
-    typeof raw['seq'] === 'number'
+    Number.isFinite(raw['at'])
   )
 }

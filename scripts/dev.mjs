@@ -86,7 +86,9 @@ setTimeout(() => {
   }
   const electronEnv = { ...process.env, DSH_FORGE_DEV_PROFILE: 'dev' }
   delete electronEnv.ELECTRON_RUN_AS_NODE
-  const p = spawn(ELECTRON_EXE, [HOST_DIR], { stdio: 'inherit', cwd: ROOT, env: electronEnv })
+  // 透传附加参数（dev:debug 调试面：--remote-debugging-port=9222 → CDP 外接诊断）
+  const extraArgs = process.argv.slice(2)
+  const p = spawn(ELECTRON_EXE, [HOST_DIR, ...extraArgs], { stdio: 'inherit', cwd: ROOT, env: electronEnv })
   procs.push(['electron', p])
   p.on('exit', (code) => {
     if (shuttingDown) return
