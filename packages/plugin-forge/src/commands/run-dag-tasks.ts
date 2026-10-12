@@ -386,18 +386,32 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
 /**
  * 新会话判定（1.22——当且仅当新会话才 followup）：invocation agent 的 Session 自有事件
  * 鸭子读（ownEvents / snapshotEvents——dsh-session Session 公有方法，双缺 = 判定面缺席）。
- * 空自有事件 = 新会话（blank 相位——followup 承担物化职责，1.14 语义）；非空 = 既有会话
- * （已物化——followup 免除，防活 agent 读令自跑）；判定面缺席（旧装配/测试桩）= 恒新会话
- * （followup 原路径保留——向后兼容）。ownEvents 已排除 fork 继承前缀——fork 空自有事件
- * 会话按新会话处理（物化职责同 blank）。抛错 = fail-soft 按新会话（物化路径最保守）。
+ * fix-7 修订（1.22 回归收口，2026-10-12）：新会话判据 = **零回合事件**（user/message /
+ * assistant/message 皆缺席）——非「自有事件为空」。UI 派发径（任务面板派发按钮）经 slash
+ * 仲裁先落 command/run 事件再进 handler，自有事件恒非空；若按「非空 = 既有」误判，fresh
+ * 派发会话被当既有而零物化（followup 免除）→ 会话恒 blank → 下一次派发的 openWorkspace
+ * reuse-or-create 复用同会话（「新会话」派发永不新建，冷启动计数器复位失效——m3 5.3 门
+ * 「两个派发会话」回归根因）。回合事件在场 = 既有会话（已物化——followup 免除，防活 agent
+ * 读令自跑，1.22 保护面原样）；判定面缺席（旧装配/测试桩）= 恒新会话（followup 原路径
+ * 保留——向后兼容）。ownEvents 已排除 fork 继承前缀——fork 零回合事件会话按新会话处理
+ * （物化职责同 blank）。抛错 = fail-soft 按新会话（物化路径最保守）。
  */
+const TURN_EVENT_TYPES: ReadonlySet<string> = new Set(['user/message', 'assistant/message'])
+
+function hasTurnEvent(events: readonly unknown[]): boolean {
+  return events.some((event) => {
+    const type = (event as { type?: unknown } | undefined)?.type
+    return typeof type === 'string' && TURN_EVENT_TYPES.has(type)
+  })
+}
+
 export function isNewSession(parent: unknown): boolean {
   const session = (parent as { session?: { ownEvents?: () => unknown; snapshotEvents?: () => unknown } } | undefined)?.session
   try {
     const own = typeof session?.ownEvents === 'function' ? (session.ownEvents() as unknown) : undefined
-    if (Array.isArray(own)) return own.length === 0
+    if (Array.isArray(own)) return !hasTurnEvent(own)
     const snap = typeof session?.snapshotEvents === 'function' ? (session.snapshotEvents() as unknown) : undefined
-    if (Array.isArray(snap)) return snap.length === 0
+    if (Array.isArray(snap)) return !hasTurnEvent(snap)
   } catch {
     return true // 判定抛错 fail-soft——新会话路径（激活+followup）最保守
   }

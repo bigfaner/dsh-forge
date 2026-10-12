@@ -310,7 +310,15 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     // ── Step 4 Outcome "blank-send-blocked-min"（冒烟最小口径空提交拦截） ──
     // 账本级断言（空提交零消息零往返——官方 composer 占位/草稿文案随输入态显隐，
     // 转录文本等值断言不可用——载体适配，session-workbench 同径）
-    await composer.fill('')
+    // fix-7 机制修订（断言零触碰）：清稿改真实用户等径（Ctrl+A + Backspace——Lexical 经
+    // beforeinput deleteContent 消费，编辑器状态同步）。原 `composer.fill('')` 对 Lexical
+    // contenteditable 为 no-op（execCommand insertText 空串不删选区——编辑器状态不变），
+    // 首个 Enter 把上一步 insertText 的「回显探针」当草稿提交（失败票据：user/message 内容
+    // 逐字 = 前序 insertText 载体；同 run 回显断言绿 + krf Step3b 真实键入空提交拦截绿
+    // ——产品行为无缺陷，纯测试工具面阻抗）。
+    await composer.click()
+    await page.keyboard.press('ControlOrMeta+a')
+    await page.keyboard.press('Backspace')
     await page.keyboard.press('Enter')
     await page.keyboard.insertText('   ')
     await page.keyboard.press('Enter')

@@ -762,7 +762,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
 
 describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 agent 读令自跑）', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
-  /** 既有会话桩（自有事件非空——真实 Session.ownEvents 鸭子形） */
+  /** 既有会话桩（回合事件在场——真实 Session.ownEvents 鸭子形） */
   function existingAgent(followup?: (m: unknown) => void): Record<string, unknown> {
     return {
       ...agentOf(SESSION, CWD, followup),
@@ -776,8 +776,26 @@ describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 
       session: { id: SESSION, header: { cwd: CWD }, ownEvents: () => [] },
     }
   }
+  /**
+   * fix-7 回归形（UI 派发径真实态）：fresh 派发会话自有事件仅含 command 面 artifact
+   * （UI autosend 经 slash 仲裁先落 command/run 再进 handler）——零回合事件 = 新会话。
+   */
+  function commandOnlyAgent(followup?: (m: unknown) => void): Record<string, unknown> {
+    return {
+      ...agentOf(SESSION, CWD, followup),
+      session: {
+        id: SESSION,
+        header: { cwd: CWD },
+        ownEvents: () => [
+          { type: 'command/run', seq: 0 },
+          { type: 'agent/inbox/spliced', seq: 1 },
+          { type: 'forge/progress', seq: 2 },
+        ],
+      },
+    }
+  }
 
-  it('既有会话（自有事件非空）：零 followup 零激活，循环直接启动，success 回执', async () => {
+  it('既有会话（回合事件在场）：零 followup 零激活，循环直接启动，success 回执', async () => {
     const rec = followupRecorder()
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => { throw new Error('既有会话不应触达激活/解析面') } })
@@ -793,6 +811,16 @@ describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: newAgent(rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('fix-7 回归形（仅 command 面 artifact 自有事件——UI 派发径 fresh 会话）：按新会话物化（followup 照常）', async () => {
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: commandOnlyAgent(rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
     expect(stub.loops.has(SESSION)).toBe(true)
@@ -831,6 +859,20 @@ describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 
     })
     await d.handler({ agent: existingAgent(rec.fn) as never, rawInput: 'feat-x' })
     expect(enterCalls).toBe(0)
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('fix-7 回归形（仅 command 面 artifact）：激活面照常进入（新会话径激活先行——1.21）', async () => {
+    let enterCalls = 0
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({
+      cards,
+      driver: stub.driver,
+      enterAgent: async () => { enterCalls++; return undefined },
+    })
+    await d.handler({ agent: commandOnlyAgent(rec.fn) as never, rawInput: 'feat-x' })
+    expect(enterCalls).toBe(1)
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 })
