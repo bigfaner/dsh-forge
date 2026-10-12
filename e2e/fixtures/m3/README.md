@@ -46,7 +46,12 @@ dogfood——Hard Rule：唯一真实模型依赖面）。本目录承载运行�
    拒；code 沿用 ERR_SPAWN_FAILED「本次派发未发生」承载码，归属 slug 回落 `_pool`），
    产品行为面正确（双派发不双派发防线实证）。零 tool-error 断言基线过时且时序敏感（2026-10-12
    全绿 run 中同类 tool-error ×2 落在断言读窗之后）——防线卫式随行重定基线：halt 阶段
-   tool-error 只认独占拒绝消息，其余（spawn 装配/异常终止）仍 fail-loud。
+   tool-error 只认独占拒绝消息，其余（spawn 装配/异常终止）仍 fail-loud。**收口重跑
+   （2026-10-12，fix-9 settle）**：m2 dogfood fresh 重跑全绿（2.6m——1.1/3.1 files 断言
+   files_json v2 归一后实跑过，夹具随跑重录）；krf flywheel dogfood 全绿（5 passed——
+   8b Q2 ≥2 read-abstract 链在场即时累积，前次失败为模型依从时序抖动、非产品缺陷）；
+   走查日志留痕 `.forge/docs/proposals/worker-lean-execution/walkthrough/fix9/`
+   （m2-rerun.log / krf-flywheel-rerun3.log / m3-green-run.log / m3-halt-toolerror/）。
 
 1. **dispatchPrompt 任务规格缺席（首跑全阻）**：`<task-context>` 只含键值行（TASK_ID/SOURCE/
    TYPE/…），任务 title/desc/AC 不入简报；worker 收窄面禁 queryTask（矩阵 forge 族 =
