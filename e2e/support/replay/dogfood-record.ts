@@ -74,6 +74,25 @@ export interface DogfoodEdgeRow {
   readonly origin: string
 }
 
+/** files_json v2 对象形 {created, modified} → 平铺并集（created 序优先去重——core taskFilesUnion 同构） */
+function unionRecordFiles(parsed: unknown): readonly string[] {
+  const isStrArr = (v: unknown): v is readonly string[] => Array.isArray(v) && v.every((f) => typeof f === 'string')
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error(`[dogfood-record] files_json 形制不可识别：${JSON.stringify(parsed).slice(0, 60)}`)
+  }
+  const p = parsed as { created?: unknown; modified?: unknown }
+  const created: readonly string[] = isStrArr(p.created) ? p.created : []
+  const modified: readonly string[] = isStrArr(p.modified) ? p.modified : []
+  if (!isStrArr(p.created) && !isStrArr(p.modified)) {
+    throw new Error(`[dogfood-record] files_json 形制不可识别：${JSON.stringify(parsed).slice(0, 60)}`)
+  }
+  const union: string[] = []
+  for (const f of [...created, ...modified]) {
+    if (!union.includes(f)) union.push(f)
+  }
+  return union
+}
+
 /** 审计三表全读（追加序 = records.id 升序；e2e post-hoc 消费——app 关停后直读） */
 export function readDogfoodAudit(db: Database.Database): {
   readonly tasks: readonly DogfoodTaskRow[]
@@ -102,6 +121,13 @@ export function readDogfoodAudit(db: Database.Database): {
        FROM task_records r JOIN tasks t ON t.id = r.task_id ORDER BY r.id`,
     )
     .all()
+    // files_json 读面归一随行产品读面契约（core taskFilesUnion——detail/query 单源）：submit 行
+    // v2 对象形 {created, modified} → 平铺并集 JSON（旧扁平/NULL 原样）。
+    .map((r) =>
+      r.verb === 'submit' && r.filesJson !== null && r.filesJson.trimStart().startsWith('{')
+        ? { ...r, filesJson: JSON.stringify(unionRecordFiles(JSON.parse(r.filesJson))) }
+        : r,
+    )
   return { tasks, edges, records }
 }
 
