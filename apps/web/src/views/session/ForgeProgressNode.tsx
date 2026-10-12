@@ -52,12 +52,6 @@ function timeLabelOf(at: number): string {
   }
 }
 
-/** 计数行（领取时点快照——`待执行 N · 执行中 N · 已完成 N`） */
-export function forgeProgressCountsLabel(counts: { pending: number; running: number; done: number } | undefined): string | undefined {
-  if (counts === undefined) return undefined
-  return `待执行 ${counts.pending} · 执行中 ${counts.running} · 已完成 ${counts.done}`
-}
-
 /** 'forge/progress' 折叠行节点（形状漂移/他形 = null——官方流零残留） */
 export function ForgeProgressNode({ node }: ForgeProgressNodeProps) {
   if (node?.kind !== 'forge-progress' || !isForgeProgressNodeData(node.data)) return null
@@ -86,9 +80,9 @@ function ForgeProgressRow({ data }: { data: ForgeProgressNodeData }) {
   )
 }
 
-/** 展开详情（定义列表——任务源/任务/状态/进度/时间；导出 = 静态单测缝） */
+/** 展开详情（定义列表——任务源/任务/状态/时间；导出 = 静态单测缝。2026-10-12 用户裁决
+ *  「去掉状态计数」——进度行移除（counts 载荷契约保留，仅不再呈现）） */
 export function ForgeProgressDetail({ data }: { data: ForgeProgressNodeData }) {
-  const counts = forgeProgressCountsLabel(data.counts)
   return (
     <dl className="dswf-progress-node-detail">
       <div className="dswf-progress-node-detail-row">
@@ -105,12 +99,6 @@ export function ForgeProgressDetail({ data }: { data: ForgeProgressNodeData }) {
         <dt>状态</dt>
         <dd>{STATUS_LABELS[data.status] ?? data.status}</dd>
       </div>
-      {counts !== undefined ? (
-        <div className="dswf-progress-node-detail-row">
-          <dt>进度</dt>
-          <dd>{counts}</dd>
-        </div>
-      ) : null}
       <div className="dswf-progress-node-detail-row">
         <dt>时间</dt>
         <dd>{timeLabelOf(data.at)}</dd>
