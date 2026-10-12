@@ -17,7 +17,7 @@
 // 交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
-import type { ForgeSettingsService } from '@dsh-forge/contracts'
+import type { ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
@@ -307,6 +307,35 @@ const forgePlugin: ForgePlugin = Object.assign(
         warnReconcileDegraded(projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
+    // 1.16 文档位置动态注入：段文本以模板渲染，forgeDir 由中央 projects 行程序化注入。
+    // 装配同步径先以缺省注册（缺省 = 省略文档位置/目录树段）；绑定项目 forge_dir 异步
+    // 解析命中后重注册升级（外部化 forgeDir 取实际值，不假设 <ws>/.forge；解析失败/
+    // 项目未注册/面缺席 = 缺省段原样，fail-soft 不炸渲染）。sectionRef 持有当前注销器，
+    // 插件 disposer 统一经其注销恰一份现行段。
+    const sectionRef: { dispose: () => void } = {
+      dispose: ctx.systemPrompt.section({
+        name: FORGE_SECTION_NAME,
+        order: FORGE_SECTION_ORDER,
+        text: renderForgePipelineSection(),
+      }),
+    }
+    void (async () => {
+      const projectId = boundProjectIds[0]
+      if (projectId === undefined) return
+      const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
+      if (typeof projects.getProject !== 'function') return
+      const project = await projects.getProject(projectId)
+      if (project === null) return
+      const forgeDir = project.forgeDir
+      if (typeof forgeDir !== 'string' || forgeDir.trim() === '') return
+      const text = renderForgePipelineSection({ forgeDir })
+      sectionRef.dispose()
+      sectionRef.dispose = ctx.systemPrompt.section({
+        name: FORGE_SECTION_NAME,
+        order: FORGE_SECTION_ORDER,
+        text,
+      })
+    })().catch(() => {})
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),
@@ -316,12 +345,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.dispatchTask),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = 老 forge hook 注入文本平移（状态层说明/执行协议/受限面声明），
-      // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）
-      ctx.systemPrompt.section({
-        name: FORGE_SECTION_NAME,
-        order: FORGE_SECTION_ORDER,
-        text: renderForgePipelineSection(),
-      }),
+      // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
+      // 1.16 起经 sectionRef 注销现行段（缺省注册 + forge_dir 命中后的重注册升级）
+      () => sectionRef.dispose(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
     ]

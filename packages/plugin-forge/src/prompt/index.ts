@@ -14,10 +14,46 @@ export const FORGE_SECTION_NAME = 'forge:pipeline'
 export const FORGE_SECTION_ORDER = 510
 
 /**
- * 管线段全文（纯函数；协议动词以自然语言表述——具体工具面由 dsh tool 注册面自描述，
- * 本段不点名工具，防「提示词与注册面双源漂移」）。
+ * 段渲染入参（1.16 文档位置动态注入）。
  */
-export function renderForgePipelineSection(): string {
+export interface ForgePipelineSectionVars {
+  /**
+   * 本项目 forge 文档根（绝对路径——中央 projects.forge_dir 单源，调用点经 routing/
+   * projects 服务取实际值注入，不假设 `<ws>/.forge`）。缺省/空白/未知 = 回退：整段
+   * 省略文档位置与目录树介绍（渲染绝不因此炸掉——纯函数零外抛）。
+   */
+  readonly forgeDir?: string
+}
+
+/**
+ * 文档位置段（1.16——绝对路径先行 + 目录树介绍子目录）。布局实况
+ * `<forgeDir>/docs/{proposals,features,probes}` 与 `<slug>` 级目录（discovery 扫描口径）。
+ * 注：树内 slug 占位用 `{slug}` 而非 `<slug>`——段文本内层禁出现二级尖括号标签
+ * （单层不细分区 pin）。
+ */
+function docLocationLines(forgeDir: string): string[] {
+  const root = forgeDir.replace(/[\\/]+$/, '')
+  return [
+    '文档位置（本项目 forge 文档根——中央 projects.forge_dir 单源，绝对路径）：',
+    `${root}`,
+    '',
+    '目录树（文档面布局，相对上述根目录）：',
+    'docs/',
+    '├─ docs/proposals/{slug}/   提案（proposal.md 与配套文档）',
+    '├─ docs/features/{slug}/    特性（manifest 与 prd/design/test 等阶段文档）',
+    '└─ docs/probes/             探针（一次性验证脚本与取证产物）',
+    '',
+  ]
+}
+
+/**
+ * 管线段全文（纯函数；协议动词以自然语言表述——具体工具面由 dsh tool 注册面自描述，
+ * 本段不点名工具，防「提示词与注册面双源漂移」）。vars.forgeDir 由调用点程序化注入
+ * 实际值（非提示词侧插值），故段文本天然不含裸 {{ 占位。
+ */
+export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}): string {
+  const forgeDir = typeof vars.forgeDir === 'string' ? vars.forgeDir.trim() : ''
+  const docLocation = forgeDir === '' ? [] : docLocationLines(forgeDir)
   const body = [
     '## Forge 任务管线',
     '',
@@ -25,6 +61,7 @@ export function renderForgePipelineSection(): string {
     '',
     '任务身份是自然键：feature slug 加每 feature 的局部 id，写作 slug/local-id。由 blocked 任务派生的修复任务携带 fix-N 局部 id；偏差跟进携带 disc-N。slug 与其 feature 目录名一致。',
     '',
+    ...docLocation,
     '执行协议（操作级细节的正本在 run-tasks / submit-task 技能——派发循环、fix 链承接、提交结算均以指针引用，不在此复制）：',
     '1. 以领取承接工作：一次领取返回一个就绪任务及其派发简报，或报告当前无就绪任务——后者等待或收尾，不臆造工作。前置依赖完成或跳过后任务才就绪。',
     '2. 严格按所领简报执行并一次性结算提交：success 须附执行摘要与质量门结果（compile、format、lint、test——如实上报，绝不伪造）；blocked 须给出具体阻塞原因。',

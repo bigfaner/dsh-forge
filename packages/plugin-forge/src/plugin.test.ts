@@ -237,6 +237,55 @@ describe('AC5 段注册（forge:pipeline / order 510）', () => {
   })
 })
 
+describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir 取实际值）', () => {
+  /** 绑定项目 forgeProjects 桩（getProject 返回给定行/未注册 null） */
+  function projectsWith(project: { forgeDir: string } | null) {
+    return {
+      deriveTaskStoreDir: async () => ({ dir: 'D:/containers/demo@abcd1234' }),
+      getProject: async () => project,
+    } as Pick<ProjectServiceM2, 'deriveTaskStoreDir' | 'getProject'> as ProjectServiceM2
+  }
+  const BOUND = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
+
+  it('绑定项目 forge_dir 解析命中：段重注册升级，注入值出现在段文本（含目录树段）', async () => {
+    const rt = new TempRuntime()
+    const ctx = { ...rt.ctx(), forgeProjects: projectsWith({ forgeDir: 'Z:/external/ws/.forge' }) }
+    const dispose = forgePlugin(ctx, BOUND)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(rt.sections).toHaveLength(2) // 缺省段 + forge_dir 升级段
+    const upgraded = rt.sections[1]
+    expect(upgraded?.name).toBe('forge:pipeline')
+    expect(upgraded?.order).toBe(510)
+    expect(upgraded?.text).toContain('Z:/external/ws/.forge')
+    expect(upgraded?.text).toContain('文档位置')
+    expect(upgraded?.text).toContain('docs/proposals')
+    dispose()
+    // 重注册升级面：新旧两份注销器各恰一次
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
+  })
+
+  it('项目未注册（getProject → null）：缺省段原样（无目录树段，单段，回退不炸）', async () => {
+    const rt = new TempRuntime()
+    const ctx = { ...rt.ctx(), forgeProjects: projectsWith(null) }
+    const dispose = forgePlugin(ctx, BOUND)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(rt.sections).toHaveLength(1)
+    expect(rt.sections[0]?.text).not.toContain('文档位置')
+    dispose()
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+  })
+
+  it('无绑定项目 / forgeProjects 面缺 getProject：缺省段原样（fail-soft 零外抛）', async () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(rt.sections).toHaveLength(1)
+    expect(rt.sections[0]?.text).not.toContain('文档位置')
+    dispose()
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+  })
+})
+
 describe('createForgeTools 直装配（工厂面——注册器之外的单源消费）', () => {
   it('deps 注入即得六 tool 定义组（键 = FORGE_TOOL_NAMES 列序；spawn 必给）', () => {
     const tools = createForgeTools({

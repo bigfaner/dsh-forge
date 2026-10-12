@@ -83,3 +83,48 @@ describe('renderForgePipelineSection（老 forge hook 文本平移三部分）',
     expect(text).not.toContain('{{')
   })
 })
+
+describe('1.16 文档位置动态注入（forgeDir 注入 + 目录树段 + 回退）', () => {
+  const FORGE_DIR = 'Z:/ws/demo/.forge'
+
+  it('注入 forgeDir：绝对路径先行 + 目录树段介绍 docs/{proposals,features,probes} 与 {slug} 级布局', () => {
+    const injected = renderForgePipelineSection({ forgeDir: FORGE_DIR })
+    expect(injected).toContain('文档位置')
+    expect(injected).toContain(FORGE_DIR)
+    expect(injected).toContain('docs/proposals/{slug}/')
+    expect(injected).toContain('docs/features/{slug}/')
+    expect(injected).toContain('docs/probes/')
+    // 绝对路径先于目录树
+    expect(injected.indexOf(FORGE_DIR)).toBeLessThan(injected.indexOf('目录树'))
+    // 注入值出现于状态层说明之后、执行协议之前
+    expect(injected.indexOf('唯一事实来源')).toBeLessThan(injected.indexOf('文档位置'))
+    expect(injected.indexOf('目录树')).toBeLessThan(injected.indexOf('执行协议'))
+  })
+
+  it('既有断言对注入版同样全绿（标签包裹 / 禁裸 {{ / 无工具名——注入不破段契约）', () => {
+    const injected = renderForgePipelineSection({ forgeDir: FORGE_DIR })
+    expect(injected.startsWith(`<${XML_TAGS.forgePipeline}>\n`)).toBe(true)
+    expect(injected.endsWith(`</${XML_TAGS.forgePipeline}>`)).toBe(true)
+    expect(injected).not.toContain('{{')
+    expect(injected).not.toContain('queryTask')
+  })
+
+  it('回退：缺省/空白/未知 forgeDir = 省略文档位置与目录树段（渲染不炸、其余部分原样）', () => {
+    for (const vars of [undefined, { forgeDir: undefined }, { forgeDir: '' }, { forgeDir: '   ' }]) {
+      const fallback = renderForgePipelineSection(vars)
+      expect(fallback).not.toContain('文档位置')
+      expect(fallback).not.toContain('目录树')
+      expect(fallback).not.toContain('docs/proposals')
+      // 其余四部分不受回退影响
+      expect(fallback).toContain('唯一事实来源')
+      expect(fallback).toContain('执行协议')
+      expect(fallback).toContain('受限面')
+      expect(fallback).toContain('文档风格公约')
+    }
+  })
+
+  it('尾部路径分隔符归一（不落双斜杠结尾的裸路径）', () => {
+    const injected = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge/' })
+    expect(injected).toContain('Z:/ws/demo/.forge\n')
+  })
+})
