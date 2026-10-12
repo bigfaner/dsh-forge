@@ -7,7 +7,7 @@ import { failSoftNarrationChannel } from './channel.js'
 import type { NarrationChannel } from './channel.js'
 import { createIncidentStore } from './incident-log.js'
 import type { IncidentInput, IncidentStore } from './incident-log.js'
-import { summarizeReason } from './skeleton.js'
+import { localDateTimeLine, summarizeReason } from './skeleton.js'
 import { renderHeadline, renderNarrative } from './templates.js'
 import type { NarrativePayloadMap } from './templates.js'
 
@@ -59,10 +59,12 @@ export function createNarrator(deps: NarratorDeps): Narrator {
   const incidents: IncidentStore = deps.incidents ?? createIncidentStore({ resolveContainerDir: () => undefined })
   return {
     notice(sessionId: string, text: string, headline?: string): Promise<void> {
-      return safe.notice(sessionId, text, headline)
+      // 时间行统一追加（2026-10-12 用户裁决「注入消息内容要完整：时间使用 LocalDateTime」——
+      // 骨架收尾行，本地时区完整日期时间；headline 不变）
+      return safe.notice(sessionId, `${text}\n${localDateTimeLine()}`, headline)
     },
     followup(sessionId: string, text: string): Promise<void> {
-      return safe.followup(sessionId, text)
+      return safe.followup(sessionId, `${text}\n${localDateTimeLine()}`)
     },
     async blocked<S extends BlockedScenarioId>(
       sessionId: string,

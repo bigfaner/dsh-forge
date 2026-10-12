@@ -610,17 +610,16 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 剩余行 = claim 后池读——本任务已入执行中口径，与样例逐字一致）
   const stats = await statsFailSoft(loop)
   if (adoptRef !== undefined) {
+    // 2026-10-12「去掉状态计数」——剩余行移除，载荷只剩任务源/任务行
     const payload = {
       sourceSlug: slug,
       taskLabel: `${taskLabelOf(task)}（恢复自中断 — 重新执行）`,
-      remaining: { pending: stats.byStatus.pending, interrupted: stats.byStatus.interrupted, blocked: stats.byStatus.blocked },
     }
     await deps.narrator.notice(owner, renderNarrative('claim-interrupted', payload), renderHeadline('claim-interrupted', payload))
   } else {
     const payload = {
       sourceSlug: slug,
       taskLabel: taskLabelOf(task),
-      remaining: { pending: stats.byStatus.pending, inProgress: stats.byStatus.in_progress, blocked: stats.byStatus.blocked },
     }
     await deps.narrator.notice(owner, renderNarrative('claim', payload), renderHeadline('claim', payload))
   }

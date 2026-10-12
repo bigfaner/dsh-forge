@@ -345,7 +345,7 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
     expect(built.calls[0]?.text).toContain('待执行 1')
     expect(built.calls[1]?.text).toContain('[forge·领取] 任务源: feat-x')
     expect(built.calls[1]?.text).toContain('任务: 2.5 Implement the thing')
-    expect(built.calls[1]?.text).toContain('执行中 1')
+    expect(built.calls[1]?.text).not.toContain('执行中 1') // 2026-10-12「去掉状态计数」——剩余行移除
     expect(built.calls[2]?.text).toContain('[forge·完成] 任务源: feat-x')
     expect(built.calls[2]?.text).toContain('摘要: did the thing')
     expect(built.calls[3]?.text).toContain('[forge·结束] 任务源: feat-x — 全部任务已完成')
@@ -413,7 +413,7 @@ describe('adopt 重入与启动分类（①②③）', () => {
     expect(built.calls[0]?.text).toContain('接续执行 — 发现未完成任务 2.5')
     expect(built.calls[1]?.text).toContain('[forge·领取] 任务源: feat-x')
     expect(built.calls[1]?.text).toContain('恢复自中断')
-    expect(built.calls[1]?.text).toContain('中断 1')
+    expect(built.calls[1]?.text).not.toContain('中断 1') // 2026-10-12「去掉状态计数」——剩余行移除
   })
 
   it('in_progress 遗留（skill 路线）而无 interrupted：③ 启动接续在飞——claim 无可领 → wait 判词 → patience 耗尽 ⑮ 收口', async () => {

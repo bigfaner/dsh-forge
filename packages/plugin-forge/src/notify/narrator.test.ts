@@ -45,15 +45,19 @@ function brokenChannel(): NarrationChannel {
 }
 
 describe('S4 · 双通道委派（decisions #28）', () => {
-  it('notice 走 notice 通道、followup 走 followup 通道（sessionId+全文原样）', async () => {
+  it('notice 走 notice 通道、followup 走 followup 通道（sessionId + 全文 + 时间行收尾）', async () => {
     const channel = recordingChannel()
     const narrator = createNarrator({ channel })
     await narrator.notice('session-1', '[forge·领取] 任务源: m2-pipeline\n下一步动作: 无')
     await narrator.followup('session-1', '[forge·结束] 任务源: m2-pipeline\n下一步动作: 无')
-    expect(channel.calls).toEqual([
-      { method: 'notice', sessionId: 'session-1', text: '[forge·领取] 任务源: m2-pipeline\n下一步动作: 无' },
-      { method: 'followup', sessionId: 'session-1', text: '[forge·结束] 任务源: m2-pipeline\n下一步动作: 无' },
-    ])
+    expect(channel.calls).toHaveLength(2)
+    // 2026-10-12「时间使用 LocalDateTime」——两通道统一时间行收尾（本地时区完整日期时间）
+    expect(channel.calls[0]?.method).toBe('notice')
+    expect(channel.calls[0]?.sessionId).toBe('session-1')
+    expect(channel.calls[0]?.text).toMatch(/^\[forge·领取\] 任务源: m2-pipeline\n下一步动作: 无\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(channel.calls[1]?.method).toBe('followup')
+    expect(channel.calls[1]?.sessionId).toBe('session-1')
+    expect(channel.calls[1]?.text).toMatch(/^\[forge·结束\] 任务源: m2-pipeline\n下一步动作: 无\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
   })
 })
 

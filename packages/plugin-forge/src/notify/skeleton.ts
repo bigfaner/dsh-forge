@@ -25,6 +25,19 @@ export function typeLine(badge: string, key: string, value: string): string {
   return `[forge·${badge}] ${line(key, value)}`
 }
 
+/** 本地日期时间格式（2026-10-12 用户裁决「时间使用 LocalDateTime」——`YYYY-MM-DD HH:mm:ss`
+ *  本地时区；注入消息「时间」行与进度详情行同源） */
+export function formatLocalDateTime(at: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`
+}
+
+/** 时间行（注入消息统一收尾行——本地时区完整日期时间；值 = 本地受控生成，冒号为时间
+ *  语义必需，豁免 sanitizeValue 净化（decisions #27 值内零冒号只约束自由文本值）） */
+export function localDateTimeLine(at: Date = new Date()): string {
+  return `时间: ${formatLocalDateTime(at)}`
+}
+
 /** 下一步动作值（封闭两值形状——非两值不可构造，decisions #27④） */
 export type NextAction =
   | { readonly kind: 'none' }

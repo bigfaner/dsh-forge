@@ -42,7 +42,6 @@ export interface ClaimPayload {
   readonly sourceSlug: string
   /** 任务行值（任务键+任务名——如「2.8 诊断弹窗装配（Apps web）」） */
   readonly taskLabel: string
-  readonly remaining: { readonly pending: number; readonly inProgress: number; readonly blocked: number }
 }
 
 /** ⑤ 领取（恢复中断的任务） */
@@ -50,7 +49,6 @@ export interface ClaimInterruptedPayload {
   readonly sourceSlug: string
   /** 任务行值（含「（恢复自中断 — …）」注记） */
   readonly taskLabel: string
-  readonly remaining: { readonly pending: number; readonly interrupted: number; readonly blocked: number }
 }
 
 /** ⑥ 完成 */
@@ -223,22 +221,20 @@ export function startupResumeInFlight(p: StartupResumeInFlightPayload): string {
   ].join('\n')
 }
 
-/** ④ 领取（notice） */
+/** ④ 领取（notice；2026-10-12 用户裁决「去掉状态计数」——剩余行整体移除，头部单行摘要计数保留） */
 export function claim(p: ClaimPayload): string {
   return [
     typeLine('领取', '任务源', p.sourceSlug),
     line('任务', p.taskLabel),
-    line('剩余', `待执行 ${p.remaining.pending} · 执行中 ${p.remaining.inProgress} · 阻塞 ${p.remaining.blocked}`),
     nextActionLine(NEXT_ACTION_NONE),
   ].join('\n')
 }
 
-/** ⑤ 领取（恢复中断的任务）（notice） */
+/** ⑤ 领取（恢复中断的任务）（notice；剩余行移除同 ④） */
 export function claimInterrupted(p: ClaimInterruptedPayload): string {
   return [
     typeLine('领取', '任务源', p.sourceSlug),
     line('任务', p.taskLabel),
-    line('剩余', `待执行 ${p.remaining.pending} · 中断 ${p.remaining.interrupted} · 阻塞 ${p.remaining.blocked}`),
     nextActionLine(NEXT_ACTION_NONE),
   ].join('\n')
 }
@@ -391,26 +387,14 @@ function headlineOf(badge: string, parts: readonly string[]): string {
   return `[forge·${badge}] ${parts.map((part) => sanitizeValue(part)).join(' · ')}`
 }
 
-/** 剩余计数片段（claim 族——阻塞为零时省略） */
-function remainingParts(pending: number, midKey: '执行中' | '中断', mid: number, blocked: number): string[] {
-  const parts = [`待执行 ${pending}`, `${midKey} ${mid}`]
-  if (blocked > 0) parts.push(`阻塞 ${blocked}`)
-  return parts
-}
-
-/** 每场景专用单行摘要表（复用骨架同源载荷事实——类型 + 任务键/事实短语 + 关键计数） */
+/** 每场景专用单行摘要表（复用骨架同源载荷事实——类型 + 任务键/事实短语；2026-10-12
+ *  「去掉状态计数」——claim 族摘要零计数位） */
 const HEADLINERS: { readonly [S in ScenarioId]: (payload: NarrativePayloadMap[S]) => string } = {
   'startup-from-scratch': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, '从头执行', `待执行 ${p.pending}`]),
   'startup-resume-stopped': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, `接续执行未完成 ${p.taskKey}`]),
   'startup-resume-inflight': (p) => headlineOf('启动', [`${p.sourceSlug}（${p.sourceKind}）`, `在飞任务 ${p.taskKey}`]),
-  claim: (p) =>
-    headlineOf('领取', [clampPart(p.taskLabel, 60), ...remainingParts(p.remaining.pending, '执行中', p.remaining.inProgress, p.remaining.blocked)]),
-  'claim-interrupted': (p) =>
-    headlineOf('领取', [
-      clampPart(p.taskLabel, 60),
-      '恢复自中断',
-      ...remainingParts(p.remaining.pending, '中断', p.remaining.interrupted, p.remaining.blocked),
-    ]),
+  claim: (p) => headlineOf('领取', [clampPart(p.taskLabel, 60)]),
+  'claim-interrupted': (p) => headlineOf('领取', [clampPart(p.taskLabel, 60), '恢复自中断']),
   completed: (p) => headlineOf('完成', [`${clampPart(p.taskLabel, 60)} — 完成`, clampPart(p.summary, 40)]),
   'blocked-with-fix': (p) =>
     headlineOf('阻塞', [

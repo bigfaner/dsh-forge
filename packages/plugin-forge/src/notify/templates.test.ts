@@ -49,11 +49,9 @@ const SAMPLES: readonly SampleCase[] = [
       renderNarrative('claim', {
         sourceSlug: 'm2-pipeline',
         taskLabel: '2.8 诊断弹窗装配（Apps web）',
-        remaining: { pending: 3, inProgress: 1, blocked: 0 },
       }),
     expected: `[forge·领取] 任务源: m2-pipeline
 任务: 2.8 诊断弹窗装配（Apps web）
-剩余: 待执行 3 · 执行中 1 · 阻塞 0
 下一步动作: 无`,
   },
   {
@@ -63,11 +61,9 @@ const SAMPLES: readonly SampleCase[] = [
       renderNarrative('claim-interrupted', {
         sourceSlug: 'm2-pipeline',
         taskLabel: '2.5 会话装配（恢复自中断 — 进程重启前未完成）',
-        remaining: { pending: 2, interrupted: 1, blocked: 0 },
       }),
     expected: `[forge·领取] 任务源: m2-pipeline
 任务: 2.5 会话装配（恢复自中断 — 进程重启前未完成）
-剩余: 待执行 2 · 中断 1 · 阻塞 0
 下一步动作: 无`,
   },
   {
@@ -355,8 +351,8 @@ const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId;
   { no: '①', id: 'startup-from-scratch', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', pending: 6 }, mustContain: ['[forge·启动] m2-pipeline（feature）', '从头执行', '待执行 6'] },
   { no: '②', id: 'startup-resume-stopped', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', taskKey: '2.6' }, mustContain: ['[forge·启动]', '接续执行未完成 2.6'] },
   { no: '③', id: 'startup-resume-inflight', payload: { sourceSlug: 'm2-pipeline', sourceKind: 'feature', taskKey: '2.7' }, mustContain: ['[forge·启动]', '在飞任务 2.7'] },
-  { no: '④', id: 'claim', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配（Apps web）', remaining: { pending: 3, inProgress: 1, blocked: 0 } }, mustContain: ['[forge·领取] 2.8 诊断弹窗装配（Apps web）', '待执行 3', '执行中 1'] },
-  { no: '⑤', id: 'claim-interrupted', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.5 会话装配（恢复自中断 — 进程重启前未完成）', remaining: { pending: 2, interrupted: 1, blocked: 0 } }, mustContain: ['[forge·领取]', '恢复自中断', '待执行 2', '中断 1'] },
+  { no: '④', id: 'claim', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配（Apps web）' }, mustContain: ['[forge·领取] 2.8 诊断弹窗装配（Apps web）'] },
+  { no: '⑤', id: 'claim-interrupted', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.5 会话装配（恢复自中断 — 进程重启前未完成）' }, mustContain: ['[forge·领取]', '恢复自中断'] },
   { no: '⑥', id: 'completed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配', summary: '实现弹窗组件与抽屉接线，测试 12 通过' }, mustContain: ['[forge·完成] 2.8 诊断弹窗装配 — 完成', '测试 12 通过'] },
   { no: '⑦', id: 'blocked-with-fix', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.1 概览水化', reasonSummary: '测试挂起，选中态未同步（原因摘要）', incidentPath: 'logs/m2-pipeline/3.1/001-blocked/', fixId: 'fix-2' }, mustContain: ['[forge·阻塞] 3.1 概览水化 — 阻塞', '已创建修复任务 fix-2', '继续执行'] },
   { no: '⑧', id: 'blocked-auto-fixed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.2 装配桩', reasonSummary: 'pnpm 安装失败（原因摘要）', fixId: 'fix-3', fixNote: '修构建脚本依赖版本' }, mustContain: ['[forge·自动处理]', '已创建修复任务 fix-3', '修构建脚本依赖版本'] },

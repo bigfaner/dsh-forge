@@ -40,10 +40,13 @@ export function forgeProgressSummary(d: { verb: string; status: string; taskKey?
   return `${verb} · ${target} · ${status}`
 }
 
-/** 详情时间显示（HH:MM:SS 本地时——折叠位不重复展示） */
+/** 详情时间显示（本地时区完整日期时间 `YYYY-MM-DD HH:mm:ss`——2026-10-12「时间使用
+ *  LocalDateTime」；折叠位不重复展示） */
 function timeLabelOf(at: number): string {
   try {
-    return new Date(at).toLocaleTimeString()
+    const d = new Date(at)
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   } catch {
     return String(at)
   }
