@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import {
   ANTI_CHURN_ANCHORS,
-  CODING_STRATEGY_SECTION,
+  codingStrategyFor,
   CODING_STRATEGY_TYPES,
   composePersona,
   PERSONA_CORE_SECTION,
@@ -117,9 +117,82 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       for (const cx of COMPLEXITIES) {
         const persona = composePersona(taskType, cx)
         if (CODING_STRATEGY_TYPES.includes(taskType)) {
-          expect(persona, `${taskType}/${cx}`).toContain(CODING_STRATEGY_SECTION)
+          expect(persona, `${taskType}/${cx}`).toContain(codingStrategyFor(cx))
         } else {
           expect(persona, `${taskType}/${cx}`).not.toContain('### Coding Strategy')
+        }
+      }
+    }
+  })
+
+  it('SC2 回归锚：low 不含逐需求 TDD 句（红队攻 1），medium/high 含', () => {
+    for (const taskType of CODING_STRATEGY_TYPES) {
+      const low = composePersona(taskType, 'low')
+      const high = composePersona(taskType, 'high')
+      expect(low, taskType).not.toContain('先写失败测试')
+      expect(low, taskType).toContain('外科手术式修改') // 裁 TDD 不裁外科手术式
+      expect(high, taskType).toContain('先写失败测试')
+    }
+  })
+
+  it('红队攻 2/3 回归锚：todo 无豁免措辞；blocked 结算出口在场', () => {
+    for (const taskType of TASK_TYPES) {
+      const persona = composePersona(taskType, 'medium')
+      expect(persona).not.toContain('跳过完整分析')
+      expect(persona).toContain('todo_write 建单不豁免')
+      expect(persona).toContain('result=blocked 提前结算除外')
+    }
+  })
+
+  it('红队攻 7/8 回归锚：失败计数按同一问题累计；范围外问题承载位 = summary', () => {
+    const persona = composePersona('coding-fix', 'medium')
+    expect(persona).toContain('同一问题累计最多 3 次（换方案也计入）')
+    expect(persona).toContain('范围外的问题写进 summary 后上报')
+  })
+
+  it('红队攻 4/5/6 回归锚：悬空术语清除、白名单外英文清除、步数诚实', () => {
+    expect(composePersona('gate', 'medium')).toContain('执行本节质量门禁所列的全部检查')
+    expect(composePersona('code-quality-simplify', 'high')).toContain('冗余、嵌套、命名、耦合、注释五个维度')
+    expect(composePersona('eval-contract', 'medium')).not.toContain('vars_json')
+    expect(composePersona('coding-refactor', 'high')).toContain('重构（新增 → 迁移 → 移除）')
+    expect(composePersona('coding-cleanup', 'high')).toContain('第 1.5 步扫描附加段')
+    expect(composePersona('coding-cleanup', 'high')).not.toContain('（4 步，')
+    expect(composePersona('test-run', 'medium')).not.toContain('探测面 → 跑其 just 配方序列')
+  })
+
+  it('红队攻 9 回归锚：合并写入不破坏外科手术式——重写保持其余内容逐字不变', () => {
+    expect(ANTI_CHURN_ANCHORS[0]).toContain('重写保持其余内容逐字不变')
+  })
+
+  it('红队攻 11：complexity 运行期校验（unknown 抛错，与 unknown type 防御对称）', () => {
+    expect(() => composePersona('doc', 'critical' as PersonaComplexity)).toThrow('unknown complexity')
+  })
+
+  it('英文白名单机械扫描：产出中的英文词汇 ⊆ 白名单（红队攻 5 防线）', () => {
+    const whitelist = new Set(
+      [
+        // 术语白名单（裁决 2）+ TDD 子术语 + 工具/字段/路径词汇
+        'AC', 'AGENTS.md', 'Hard', 'Rules', 'Impact', 'Mapping', 'TDD', 'RED', 'GREEN', 'REFACTOR',
+        'SPEC-CODE', 'SCAN', 'Strategy', 'todo_write', 'submitTask', 'submit-task', 'result=blocked',
+        'COVERAGE=maintain', 'COVERAGE', 'maintain', 'vars_json',
+        'grep', 'glob', 'write', 'ls', 'git', 'status', 'diff', 'lint', 'just', 'run-tests',
+        'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
+        'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
+        'testsPassed', 'testsFailed', 'coverage',
+        'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill',
+      ].map((w) => w.toLowerCase()),
+    )
+    for (const taskType of TASK_TYPES) {
+      for (const cx of COMPLEXITIES) {
+        const persona = composePersona(taskType, cx)
+        const sansCode = persona.replace(/`[^`]*`/g, ' ') // 代码跨度（路径/命令）豁免
+        const words = sansCode.match(/[A-Za-z][A-Za-z0-9_.=|-]*/g) ?? []
+        for (const w of words) {
+          const token = w.toLowerCase().replace(/[.=|-]+$/, '')
+          expect(
+            whitelist.has(token),
+            `${taskType}/${cx} 白名单外英文: ${w}`,
+          ).toBe(true)
         }
       }
     }
@@ -159,7 +232,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
   })
 
   it('工作流变体：cleanup 的 SCAN 为附加段形态（非计步）；fix 高档含错误分诊首步', () => {
-    expect(composePersona('coding-cleanup', 'high')).toContain('Step 1.5 简化后缀附加段')
+    expect(composePersona('coding-cleanup', 'high')).toContain('第 1.5 步扫描附加段')
     expect(composePersona('coding-fix', 'high')).toContain('错误分诊')
     expect(composePersona('coding-fix', 'low')).not.toContain('错误分诊')
   })
