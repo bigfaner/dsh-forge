@@ -45,18 +45,39 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
     })
   })
 
-  it('1.8 取值形状：transparent 背景 + 官方字体/字号 var() 令牌 + khroma 输入 concrete（var() 会破坏 mermaid updateColors 色彩派生）+ 显示面 var() 主题联动', () => {
+  it('1.8 取值形状：transparent 背景 + 官方字体/字号 var() 令牌 + 全色彩槽位 concrete 静态镜像（khroma 派生禁 var()——「Unsupported color format」整图回退，2026-10-12 fresh 票据定性）', () => {
     expect(MERMAID_THEME_VARIABLES.background, '透明背景（图即内容）').toBe('transparent')
     expect(MERMAID_THEME_VARIABLES.fontFamily, '字体栈 = 官方 --dsw-font-family 同源').toBe(
       'var(--dsw-font-family, inherit)',
     )
     expect(MERMAID_THEME_VARIABLES.fontSize, '字号 = 官方 14px 正文刻度令牌').toBe('var(--dsw-font-s-14-font-size)')
-    for (const key of ['primaryColor', 'secondaryColor', 'tertiaryColor', 'primaryTextColor'] as const) {
-      expect(MERMAID_THEME_VARIABLES[key], `${key} 为 khroma 派生输入——必须 concrete 镜像官方静态调色板`).toMatch(/^#[0-9a-fA-F]{6}$/)
+    const colorKeys = [
+      'primaryColor',
+      'secondaryColor',
+      'tertiaryColor',
+      'noteBkgColor',
+      'primaryTextColor',
+      'textColor',
+      'secondaryTextColor',
+      'tertiaryTextColor',
+      'primaryBorderColor',
+      'secondaryBorderColor',
+      'tertiaryBorderColor',
+      'noteBorderColor',
+      'lineColor',
+      'arrowheadColor',
+      'edgeLabelBackground',
+      'labelBackgroundColor',
+      'activationBorderColor',
+      'sequenceNumberColor',
+      'loopTextColor',
+    ] as const
+    for (const key of colorKeys) {
+      const v = MERMAID_THEME_VARIABLES[key]
+      expect(v, `${key} 为 khroma 派生输入——必须 concrete 静态实值（var() 抛 Unsupported color format）`).toMatch(/^#[0-9a-fA-F]{3,8}$/)
     }
-    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = 主题联动 var()').toBe('var(--dsw-alias-border-l3)')
-    expect(MERMAID_THEME_VARIABLES.primaryBorderColor, '节点边框 = 主题联动 var()').toBe('var(--dsw-alias-border-l3)')
-    expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = 主题联动 var()').toBe('var(--dsw-alias-label-primary)')
+    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = 官方 border-l3 light 实值镜像（不透明黑 12% 透明刻度）').toBe('#0000001f') // dsw-raw 官方令牌实值镜像 pin
+    expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = 官方 label-primary 实值镜像（neutral-bluish-1000）').toBe('#0f1115') // dsw-raw 官方令牌实值镜像 pin
   })
 })
 

@@ -361,7 +361,11 @@ describe('views/docs 文档 tab pin（3.9——mermaid 懒加载 + strict 安全
     expect(mermaid, 'khroma 派生输入 concrete 镜像官方静态调色板——dsw-raw 注记豁免记账').toMatch(
       /primaryColor: '#[0-9a-fA-F]{6}', \/\/ dsw-raw/,
     )
-    expect(mermaid, '显示面令牌主题联动（var() 直取 --dsw-alias-*）').toContain("'var(--dsw-alias-border-l3)'")
+    expect(mermaid, '显示面色彩槽位 concrete dsw-raw 镜像（khroma 派生禁 var()——「Unsupported color format」整图回退，fix-8 fresh 票据定性）').toContain(
+      "lineColor: '#0000001f', // dsw-raw",
+    )
+    expect(mermaid, '色彩槽位零 var() 回潮（同 pin——全色彩族 khroma 消费）').not.toMatch(/: 'var\(--dsw-alias/)
+    expect(mermaid, '字体/字号非色彩径 var() 保留（纯透传）').toContain("'var(--dsw-font-family, inherit)'")
     expect(mermaid, 'strict/startOnLoad 语义随主题化保持').toContain('startOnLoad: false')
     expect(mermaid, '「Mermaid 图」标题条退役（渲染/在途内联无头）').not.toContain('Mermaid 图')
     const css = read('apps/web/src/views/docs/docs.css')
