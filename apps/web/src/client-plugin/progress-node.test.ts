@@ -40,9 +40,20 @@ describe('forgeProgressDefinition（uiConversation.events.register 消费形状�
       id: 'forge-progress-7',
       target: 'chat',
       anchorSeq: 7,
+      location: { kind: 'unresolved' }, // location 契约必填——官方 store 直读 location.kind
       visibility: 'visible',
       data: DATA,
     })
+  })
+  it('buildViewNode location 透传：context 携带 start/matches location 时透传（contextLocation 同序）', () => {
+    const state = forgeProgressDefinition.start(undefined, { event: evt(7, DATA) })
+    const loc = { kind: 'step' as const, turn: { turn: 2, status: 'running' as const }, step: { step: 1 } }
+    const viaStart = forgeProgressDefinition.buildViewNode({ key: 'k-1', id: 'i', state, start: { location: loc } })
+    expect(viaStart?.location).toBe(loc)
+    const viaMatches = forgeProgressDefinition.buildViewNode({
+      key: 'k-2', id: 'i', state, matches: [{ location: loc }],
+    })
+    expect(viaMatches?.location).toBe(loc)
   })
   it('零折叠·seq 天然交错：两枚事件各自独立成节点（anchorSeq 各归各事件）', () => {
     const n1 = forgeProgressDefinition.buildViewNode({

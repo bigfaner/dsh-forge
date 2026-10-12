@@ -91,6 +91,13 @@ void (async () => {
     )
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
+    if (!app.isPackaged) { // 开发态 devtools 面：分离窗自动开 + F12 开关（打包形态零面）
+      const wc = (mainWindow as BrowserWindow).webContents
+      wc.openDevTools({ mode: 'detach' })
+      wc.on('before-input-event', (_event, input) => {
+        if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools()
+      })
+    }
     wireWindowLifecycle(app)
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
