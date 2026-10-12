@@ -743,6 +743,17 @@ describe('1.4 注册碰撞三态（tasksHome 注入 → ① 预检前复检；Ha
     expect(onRegisteredCalls).toHaveLength(1) // 幂等径不触发协作者（AC3）
   })
 
+  it('present 态 + dsh registry 持同路径实体（应用侧行缺席 = 挂接可达前置）→ 复检放行走 ① 挂接分支（fix：复检不再截断挂接——e2e idem-a 回归收口）', async () => {
+    const { db, registry, tasksHome, service, rename } = setupM2()
+    const wsDir = join(WS, 'attach-present')
+    registry.seed(wsDir) // dsh 中央实体在场（对应 e2e：应用侧行活删、registry 保留）
+    mkdirSync(join(tasksHome, deriveDirName(wsDir))) // 任务库目录在场且 hash 一致（present 态）
+    const result = await service.registerProject(input({ workspaceDir: wsDir }))
+    expect(result.attachedToExisting, '① 预检命中 = 挂接分支（attachedToExisting=true）').toBe(true)
+    expect(readRows(db), '挂接登记恰一行').toHaveLength(1)
+    expect(rename.calls, '挂接径标题对齐照常（fix-24 ②）').toHaveLength(1)
+  })
+
   it('tasksHome 未注入（P1 装配面）→ 复检降级缺席：同主体异 hash8 在场仍注册成功（P1 五法行为零变化）', async () => {
     const { db, service } = setup() // P1 deps：无 tasksHome
     const tasksHome = m2TasksHome()

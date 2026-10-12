@@ -136,9 +136,12 @@ function isSuspectedMoveBlocked(deps: ProjectServiceDeps, tasksHome: string, col
  * 复检位）。三态机械面归 workspace/derive-dir.ts 分类器单源；本位收口两拒绝态：
  *   · 同扁平化主体异 hash8 → ERR_SUSPECTED_MOVE（疑似移动拒绝——data 带手工指引；
  *     在册项目任务库消歧除外——registeredStoreDirs）；
- *   · 目标目录在场（hash 一致）而中央行缺席（调用不变量：attachExisting 已 miss）→
- *     §6-33 兜底拒绝（hash 自身碰撞/中央库重置遗留孤儿库——同 typed 面，existingDir=derivedDir）。
- * Hard Rule：于中央行落库之前抛出——调用位在 ① 预检/目录确保/② create 之前，拒绝注册零副作用。
+ *   · 目标目录在场（hash 一致）= present 态——中央 ws_path 精确确认归本闭包（fix：present
+ *     不再无条件兜底拒绝）：dsh registry 命中（normalizeFsPath 同源键）= 既有工作区挂接径
+ *     （① 预检承接——e2e idem-a 回归收口：应用侧行活删后复注册曾在此误抛「中央无对应注册」，
+ *     挂接分支被碰撞复检截断）；registry 未命中 = §6-33 兜底拒绝（hash 自身碰撞/中央库重置
+ *     遗留孤儿库——同 typed 面，existingDir=derivedDir）。
+ * Hard Rule：拒绝态于中央行落库之前抛出——调用位在 ① 预检/目录确保/② create 之前，拒绝注册零副作用。
  */
 function assertNoRegistrationCollision(deps: ProjectServiceDeps, tasksHome: string, workspaceDir: string): void {
   const collision = classifyRegistrationCollision(tasksHome, workspaceDir)
@@ -146,6 +149,11 @@ function assertNoRegistrationCollision(deps: ProjectServiceDeps, tasksHome: stri
     (collision.state === 'suspected-move' && !registeredStoreDirs(deps, tasksHome).has(collision.data.existingDir)) ||
     collision.state === 'present'
   ) {
+    // present 态中央确认：dsh registry 持同路径实体 = 挂接径放行（① 预检承接，零抛）
+    if (collision.state === 'present') {
+      const key = normalizeFsPath(workspaceDir)
+      if (deps.registry.list().some((ws) => normalizeFsPath(ws.path) === key)) return
+    }
     throw new SuspectedMoveError(collision.data)
   }
 }
