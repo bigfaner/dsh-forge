@@ -18,7 +18,7 @@
 // 语义：跳对应对话面板——两动作一体）。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { TASK_STATUS_LABELS, type TaskDetail, type TaskDetailQuery } from '@dsh-forge/contracts'
-import { Button, IconCloseFillRegular, IconFullscreenOutlineMedium, StateDot, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, StateDot, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components/index.js'
 import { rpcUiState, type RpcUiStateKind } from '../../../rpc/ui-state.js'
 import { RpcClientError } from '../../../rpc/errors.js'
@@ -445,6 +445,36 @@ export interface TaskDrawerBodyProps {
 export { sessionJumpHandler, sessionTitleOfOrId } from './detail-model.js'
 
 /** 任务详情弹窗纯渲染体（D21 弹窗壳 + D22 双形态 + 两分块 + 调宽/关闭锚） */
+// S3：全屏/退出全屏两图形——内联复刻 dockkit PanelChrome 原图（dsh-client-ui-sidebar-right
+// lib/client.js FullscreenGlyph/ExitFullscreenGlyph；SVG path 直拷上游产物——bundle 自含纪律，
+// 零上游运行期包 import）。简要态 = FullscreenGlyph（填充四角）、完整态 = ExitFullscreenGlyph
+//（描边括弧），随展开态翻转（viewBox 16 缩至 14 与 ✕ 同刻度）。
+function FullscreenGlyph(): ReactNode {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M2.33203 10.4054V13.1681C2.33229 13.444 2.55605 13.6681 2.83203 13.6681H5.49512V14.6681H2.83203C2.00376 14.6681 1.33229 13.9963 1.33203 13.1681V10.4054H2.33203ZM14.6689 13.1681C14.6687 13.996 13.9968 14.6676 13.1689 14.6681H10.4951V13.6681H13.1689C13.4445 13.6676 13.6687 13.4437 13.6689 13.1681V10.4054H14.6689V13.1681ZM13.1689 1.33118C13.9969 1.33163 14.6688 2.00315 14.6689 2.83118V5.4054H13.6689V2.83118C13.6688 2.55544 13.4446 2.33162 13.1689 2.33118H10.4951V1.33118H13.1689ZM5.49512 2.33118H2.83203C2.55598 2.33118 2.33218 2.55516 2.33203 2.83118V5.4054H1.33203V2.83118C1.33218 2.00288 2.00369 1.33118 2.83203 1.33118H5.49512V2.33118Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function ExitFullscreenGlyph(): ReactNode {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M9 2.5V6C9 6.26522 9.10536 6.51957 9.29289 6.70711C9.48043 6.89464 9.73478 7 10 7H13.5"
+        stroke="currentColor"
+      />
+      <path
+        d="M7 13.5V10C7 9.73478 6.89464 9.48043 6.70711 9.29289C6.51957 9.10536 6.26522 9 6 9H2.5"
+        stroke="currentColor"
+      />
+    </svg>
+  )
+}
+
 export function TaskDrawerBody({
   detail,
   width,
@@ -524,7 +554,8 @@ export function TaskDrawerBody({
         </Tag>
         <span className="dswf-td-spacer" />
         {/* D37：⤢ 翻转钮控件自释零 Tooltip——aria-pressed + 图标翻转已承载两态
-            （「收起为简要信息/展开完整信息」气泡随裁决退役） */}
+            （「收起为简要信息/展开完整信息」气泡随裁决退役）；S3：图形对齐 dockkit
+            PanelChrome——简要态 FullscreenGlyph / 完整态 ExitFullscreenGlyph 随态翻转 */}
         <Button
           variant="ghost"
           size="sm"
@@ -533,7 +564,7 @@ export function TaskDrawerBody({
           aria-pressed={expanded}
           onClick={onToggleForm}
         >
-          <IconFullscreenOutlineMedium size={14} />
+          {expanded ? <ExitFullscreenGlyph /> : <FullscreenGlyph />}
         </Button>
         {/* D37：✕ 关闭钮控件自释零 Tooltip——通用关闭惯例 + Esc 层序机制自释（载注退役） */}
         <Button

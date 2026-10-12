@@ -191,6 +191,26 @@ describe('TaskDrawerBody · D22 ⤢/⤡ 翻转钮（两形态共享头部）', (
     expect(full).toContain('aria-pressed="true"')
   })
 
+  it('S3 两图形随态翻转（dockkit PanelChrome 对齐）：简要态 = FullscreenGlyph（填充四角）、完整态 = ExitFullscreenGlyph（描边括弧）；✕ 之左 DOM 序不变', () => {
+    // 简要态：填充四角 = fill="currentColor" 单 path（无 stroke path）
+    const brief = renderToStaticMarkup(TaskDrawerBody(bodyProps({ expanded: false })))
+    const briefExpand = brief.slice(brief.indexOf('data-dswf-td-expand'), brief.indexOf('data-dswf-td-close'))
+    expect(briefExpand).toContain('<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">')
+    expect(briefExpand).toContain('fill="currentColor"')
+    expect(briefExpand).toContain('M2.33203 10.4054V13.1681') // FullscreenGlyph 填充四角 path 直拷锚
+    expect(briefExpand).not.toContain('stroke="currentColor"')
+    // 完整态：描边括弧 = 两条 stroke path（fill path 不在场）
+    const full = renderToStaticMarkup(TaskDrawerBody(bodyProps()))
+    const fullExpand = full.slice(full.indexOf('data-dswf-td-expand'), full.indexOf('data-dswf-td-close'))
+    expect(fullExpand).toContain('M9 2.5V6C9 6.26522') // ExitFullscreenGlyph 描边括弧 path 直拷锚
+    expect(fullExpand).toContain('M7 13.5V10C7 9.73478')
+    expect(fullExpand).toContain('stroke="currentColor"')
+    expect(fullExpand).not.toContain('fill="currentColor"')
+    // aria-pressed 两态与 ✕ 之左 DOM 序不变（D37 口径零回归）
+    expect(fullExpand).toContain('aria-pressed="true"')
+    expect(full.indexOf('data-dswf-td-close')).toBeGreaterThan(full.indexOf('data-dswf-td-expand'))
+  })
+
   it('完整形态 = 1.2 全量内容平移：现状条 + kv 六项 + 目标/结果 + 类型模板段 + 覆盖率 + 备注 + 时间线', () => {
     const html = renderToStaticMarkup(
       TaskDrawerBody(
