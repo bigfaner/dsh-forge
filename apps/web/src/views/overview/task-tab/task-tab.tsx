@@ -206,8 +206,8 @@ export interface TasksTabBodyProps {
   // ── 装配回调（4.1 接线） ──
   /** 行/节点/卡片点击 → 抽屉（缺席 = 非交互呈现） */
   readonly onOpenTask?: (taskId: string) => void
-  /** ⋯ 转移预设 → 3.8 对话框（缺席 = 菜单仅查看详情） */
-  readonly onTransition?: (taskId: string) => void
+  /** ⋯ 转移预设 → 3.8 对话框（toStatus = 预设初选；缺席 = 菜单仅查看详情） */
+  readonly onTransition?: (taskId: string, toStatus: TaskStatus) => void
   /** 执行会话在场任务（S5——探测命中 = 仅该列表行呈现 ⟞；缺席 = 全行不呈现） */
   readonly workerSessionTaskId?: string
   /** ⟞ 打开 worker 执行子会话（S5 列表行——缺席 = 非交互呈现） */
@@ -450,8 +450,8 @@ export interface TasksTabProps {
   readonly onFeatureUserSwitch?: () => void
   /** 行/节点/卡片点击 → 抽屉回调 */
   readonly onOpenTask?: (taskId: string) => void
-  /** ⋯ 转移预设 → 3.8 对话框 */
-  readonly onTransition?: (taskId: string) => void
+  /** ⋯ 转移预设 → 3.8 对话框（toStatus = 预设初选） */
+  readonly onTransition?: (taskId: string, toStatus: TaskStatus) => void
   /** 抽屉开着的任务（三视图高亮） */
   readonly activeTaskId?: string
   /** 打开新会话通道（4.6：诊断发送/派发指令——装配注入 openSessionWithPreset autosend） */

@@ -13,6 +13,7 @@
 // 桥由插件 apply 期经发布面工厂创建（createWorkbenchBridge——nav 闭包绑定官方
 // layout.selectPanel）；缺席期（插件未激活）导航/跳转 fail-soft no-op。
 import { KNOWLEDGE_PANEL_KEY } from './panel-model.js'
+import type { TaskStatus } from '@dsh-forge/contracts'
 
 /** 官方面板导航窄面（插件侧绑定 layout.selectPanel——null = 回官方会话面板） */
 export interface ForgeCenterNav {
@@ -64,8 +65,9 @@ export interface ForgeWorkbenchSnapshot {
   /**
    * 转移对话框聚焦目标（m3.1 D23：对话框随弹窗迁 ShellHost——任务 ⋯ 菜单跨树开窗通道；
    * nonce 单调自增 = 重复开窗判据，消费侧对照已应用 nonce——同任务重复点击也重开）。
+   * toStatus = ⋯ 菜单所点预设态（对话框初选透传——抽屉径缺席 = 允许集首项）。
    */
-  readonly transitionFocus: ForgeTaskFocus | null
+  readonly transitionFocus: (ForgeTaskFocus & { readonly toStatus?: TaskStatus }) | null
 }
 
 /** 概览上下文缺省（ShellHost 锚定生效前/桥刚创建——无锚不猜首个） */
@@ -99,9 +101,9 @@ export interface WorkbenchBridge extends ForgeCenterNav {
   closeTaskDrawer(): void
   /**
    * 转移对话框开（m3.1 D23：任务 ⋯ 菜单 → 对话框[随弹窗挂 ShellHost]——nonce 自增重开；
-   * featureSlug 载荷缺席面 = 转移通道不消费，置空占位）。
+   * featureSlug 载荷缺席面 = 转移通道不消费，置空占位；toStatus = 预设态透传）。
    */
-  openTaskTransition(payload: { readonly taskId: string }): void
+  openTaskTransition(payload: { readonly taskId: string; readonly toStatus?: TaskStatus }): void
 }
 
 /** 桥的全局挂点（与 __DSH_FORGE_VIEWS__ 同族：装配 ↔ 插件两单元的页内缝） */
@@ -178,7 +180,7 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
       snapshot = { ...snapshot, drawerTaskId: null }
       notify()
     },
-    openTaskTransition: (payload: { readonly taskId: string }): void => {
+    openTaskTransition: (payload: { readonly taskId: string; readonly toStatus?: TaskStatus }): void => {
       transitionNonce += 1
       snapshot = { ...snapshot, transitionFocus: { ...payload, featureSlug: '', nonce: transitionNonce } }
       notify()

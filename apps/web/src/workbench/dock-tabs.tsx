@@ -107,10 +107,12 @@ export function dockDocOpener(
   }
 }
 
-/** 转移对话框目标（TaskDetail 投影——task + allowedTransitions 唯一源） */
+/** 转移对话框目标（TaskDetail 投影——task + allowedTransitions 唯一源；presetToStatus =
+ *  ⋯ 菜单所点预设态——直喂 TransitionDialog 初选，抽屉径缺席 = 允许集首项） */
 export interface TransitionTarget {
   readonly task: TransitionTaskView
   readonly allowedTransitions: readonly TaskStatus[]
+  readonly presetToStatus?: TaskStatus
 }
 
 /**
@@ -118,7 +120,7 @@ export interface TransitionTarget {
  * 已应用 nonce（或无聚焦）→ null（effect 仅落点——逻辑归纯面直测）。同载荷重复点击 =
  * nonce 恒新 → 恒重应用（重复聚焦重开抽屉）。
  */
-export function nextTaskFocusApply(appliedNonce: number, focus: ForgeTaskFocus | null): ForgeTaskFocus | null {
+export function nextTaskFocusApply<F extends ForgeTaskFocus>(appliedNonce: number, focus: F | null): F | null {
   if (focus === null || focus.nonce === appliedNonce) return null
   return focus
 }
@@ -141,8 +143,8 @@ export interface OverviewDockAssemblyProps {
   readonly drawerTaskId: string | null
   /** 任务行/DAG 节点/泳道卡点击 → 弹窗（桥 openTaskDrawer 写面；缺席 = 非交互） */
   readonly onOpenTask?: (taskId: string) => void
-  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面——对话框随弹窗挂 ShellHost[D23]；缺席 = 菜单无转移项） */
-  readonly onOpenTransition?: (taskId: string) => void
+  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面——toStatus = 预设初选透传；缺席 = 菜单无转移项） */
+  readonly onOpenTransition?: (taskId: string, toStatus?: TaskStatus) => void
   /** 待应用任务聚焦（4.2 pill 点击——feature 选中受控注入 + 任务子 tab 切换 nonce；null/undefined = 无） */
   readonly taskFocus?: ForgeTaskFocus | null
   /** feature 选中释放（4.2——用户 pill 菜单切换即释放聚焦覆盖，恢复本地切换） */
@@ -229,8 +231,8 @@ export interface OverviewDockBodyProps {
   readonly drawerTaskId: string | null
   /** 任务行 → 弹窗（桥 openTaskDrawer 写面；缺席 = 行点击非交互） */
   readonly onOpenTask?: (taskId: string) => void
-  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面；缺席 = 菜单无转移项） */
-  readonly onOpenTransition?: (taskId: string) => void
+  /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面——toStatus = 预设初选透传；缺席 = 菜单无转移项） */
+  readonly onOpenTransition?: (taskId: string, toStatus?: TaskStatus) => void
   /** 本 tab 动作面（TabInfoReader 递达；缺席 = 文档行非交互） */
   readonly tabActions?: DockTabActionsMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
@@ -360,8 +362,8 @@ function OverviewTabWithBridge(
     [bridge],
   )
   const openTransition = useCallback(
-    (taskId: string): void => {
-      bridge?.openTaskTransition({ taskId })
+    (taskId: string, toStatus?: TaskStatus): void => {
+      bridge?.openTaskTransition({ taskId, ...(toStatus !== undefined ? { toStatus } : {}) })
     },
     [bridge],
   )

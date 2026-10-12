@@ -622,14 +622,14 @@ export interface ForgeViewsGlobal {
         overview: { projectId: string | null }
         taskFocus: { taskId: string; featureSlug: string; nonce: number } | null
         drawerTaskId: string | null
-        transitionFocus: { taskId: string; featureSlug: string; nonce: number } | null
+        transitionFocus: { taskId: string; featureSlug: string; nonce: number; toStatus?: string } | null
       }
       setDrawerEntry(entryId: number | null): void
       setOverviewContext(context: { projectId: string | null }): void
       openTaskFocus(payload: { taskId: string; featureSlug: string }): void
       openTaskDrawer(taskId: string): void
       closeTaskDrawer(): void
-      openTaskTransition(payload: { taskId: string }): void
+      openTaskTransition(payload: { taskId: string; toStatus?: string }): void
     }
   }
 }

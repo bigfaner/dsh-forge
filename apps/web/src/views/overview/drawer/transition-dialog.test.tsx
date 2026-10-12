@@ -267,6 +267,19 @@ describe('确认动作 confirmTransitionDialog（AC2/AC3 主流程——补丁�
     expect(initialTransitionDialogState([]).toStatus).toBeUndefined()
   })
 
+  it('预设初选三分支：∈ 选项集 → 预选；∉ 选项集（含 = 当前态/被裁剪）→ 回落首项；无预设 → 首项', () => {
+    const options = ['pending', 'blocked', 'skipped'] as const
+    // ∈ 选项集 → 预选预设（⋯ 菜单「转 X」所见即所得）
+    expect(initialTransitionDialogState([...options], 'blocked').toStatus).toBe('blocked')
+    // ∉ 选项集（当前态 in_progress 被裁剪/交付集外）→ 回落首项（禁越集）
+    expect(initialTransitionDialogState([...options], 'in_progress').toStatus).toBe('pending')
+    expect(initialTransitionDialogState([...options], 'completed' as never).toStatus).toBe('pending')
+    // 无预设（抽屉径）→ 首项（回归口径不变）
+    expect(initialTransitionDialogState([...options]).toStatus).toBe('pending')
+    // 空集防线保持：有预设亦 undefined
+    expect(initialTransitionDialogState([], 'blocked').toStatus).toBeUndefined()
+  })
+
   it('空因拒绝留场：单补丁 error=reason-required；rpc 与 onDone 零调用；补丁不含 toStatus/reason（结构性不清空）', async () => {
     const h = harness(undefined)
     await confirmTransitionDialog(
@@ -400,5 +413,25 @@ describe('AC4 · 关闭：Esc / 取消', () => {
     expect(html).toContain('m2-pipeline/2.4')
     const selected = html.match(/<option[^>]*value="pending"[^>]*>/)?.[0] ?? ''
     expect(selected).toContain('selected')
+  })
+
+  it('装载壳预设初选（⋯ 菜单「转 X」直喂）：presetToStatus ∈ 选项集 → select 初值 = 预设', () => {
+    const client = { tasks: { transition: () => Promise.reject(new Error('不应在静态渲染期调用')) } } as unknown as ForgeRpcClient
+    const detail = dialogFixture()
+    const html = renderToStaticMarkup(
+      createElement(TransitionDialog, {
+        projectId: 'p-1',
+        task: detail,
+        allowedTransitions: detail.allowedTransitions,
+        presetToStatus: 'skipped',
+        onCancel: NOOP,
+        onDone: NOOP,
+        makeClient: () => client,
+      }),
+    )
+    const preset = html.match(/<option[^>]*value="skipped"[^>]*>/)?.[0] ?? ''
+    expect(preset).toContain('selected')
+    const first = html.match(/<option[^>]*value="pending"[^>]*>/)?.[0] ?? ''
+    expect(first).not.toContain('selected')
   })
 })

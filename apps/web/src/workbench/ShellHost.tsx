@@ -22,6 +22,7 @@ import { DispatchPanel } from '../views/session/DispatchPanel.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
 import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
+import type { TaskStatus } from '@dsh-forge/contracts'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
 import { useProjectDocsRoot } from '../views/overview/overview-data.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
@@ -245,6 +246,8 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   // useTaskDetail：taskId 变更骨架重置 + 事件静默重取同口径）。⋯ 菜单跨树开窗 =
   // 桥 transitionFocus（nonce 对照应用——nextTaskFocusApply 同判据复用）。
   const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
+  // ⋯ 菜单所点预设态（对话框初选——抽屉径不传 = undefined 回落允许集首项；关闭清空）
+  const [transitionPreset, setTransitionPreset] = useState<TaskStatus | undefined>(undefined)
   const appliedTransitionNonceRef = useRef(-1)
   const transitionFocus = snapshot?.transitionFocus ?? null
   useEffect(() => {
@@ -252,17 +255,24 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
     if (apply === null) return
     appliedTransitionNonceRef.current = apply.nonce
     setTransitionTaskId(apply.taskId)
+    setTransitionPreset(apply.toStatus)
   }, [transitionFocus])
   const [dialogLoad] = useTaskDetail(anchorProjectId ?? '', transitionTaskId)
   const transitionTarget: TransitionTarget | null =
     transitionTaskId !== null && dialogLoad.detail !== undefined
-      ? { task: dialogLoad.detail, allowedTransitions: dialogLoad.detail.allowedTransitions }
+      ? {
+          task: dialogLoad.detail,
+          allowedTransitions: dialogLoad.detail.allowedTransitions,
+          ...(transitionPreset !== undefined ? { presetToStatus: transitionPreset } : {}),
+        }
       : null
-  const handleOpenTransition = useCallback((taskId: string): void => {
+  const handleOpenTransition = useCallback((taskId: string, toStatus?: TaskStatus): void => {
     setTransitionTaskId(taskId)
+    setTransitionPreset(toStatus)
   }, [])
   const handleCloseTransition = useCallback((): void => {
     setTransitionTaskId(null)
+    setTransitionPreset(undefined)
   }, [])
 
   // 任务失败诊断 @ 锚文档根（fail-soft 装载：projects.get 项目行推导；失败/缺席 = undefined
@@ -353,6 +363,9 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           projectId={projectId}
           task={transitionTarget.task}
           allowedTransitions={transitionTarget.allowedTransitions}
+          {...(transitionTarget.presetToStatus !== undefined
+            ? { presetToStatus: transitionTarget.presetToStatus }
+            : {})}
           onCancel={handleCloseTransition}
           onDone={() => {
             handleCloseTransition() // 快照呈现归事件订阅重取（transition 写 → emitTasksChanged）

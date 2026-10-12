@@ -85,7 +85,7 @@ function TaskItem({
   readonly card: TaskCard
   readonly active: boolean
   readonly onOpenTask: ((taskId: string) => void) | undefined
-  readonly onTransition: ((taskId: string) => void) | undefined
+  readonly onTransition: ((taskId: string, toStatus: TaskStatus) => void) | undefined
   readonly menuOpen: boolean
   readonly onMenuOpenChange: (taskId: string | null) => void
   /** 执行会话在场（S5——无执行会话不呈现 ⟞；装载壳探测注入） */
@@ -158,13 +158,8 @@ function TaskItem({
               onMenuOpenChange(null)
               rowMenuSelect(id, {
                 onOpenTask,
-                // 转移预设快捷入口——目标态选择归 3.8 对话框（allowedTransitions 所见即所得）
-                onTransition:
-                  onTransition === undefined
-                    ? undefined
-                    : (taskId) => {
-                        onTransition(taskId)
-                      },
+                // 转移预设快捷入口——(taskId, toStatus) 全透传（预设态归对话框初选——所见即所得）
+                onTransition,
               })
             }}
             anchor={
@@ -206,8 +201,8 @@ export interface ListViewBodyProps {
   readonly activeTaskId?: string
   /** 行点击 → 抽屉回调（缺席 = 静态呈现无 ⋯） */
   readonly onOpenTask?: (taskId: string) => void
-  /** 转移入口（⋯ 菜单预设——3.8 对话框开；缺席 = 菜单仅查看详情） */
-  readonly onTransition?: (taskId: string) => void
+  /** 转移入口（⋯ 菜单预设——3.8 对话框开，toStatus = 预设初选；缺席 = 菜单仅查看详情） */
+  readonly onTransition?: (taskId: string, toStatus: TaskStatus) => void
   /** ⋯ 菜单开合（受控——装载壳持有） */
   readonly menuTaskId: string | null
   readonly onMenuOpenChange: (taskId: string | null) => void
@@ -257,7 +252,8 @@ export interface ListViewProps {
   readonly cards: readonly TaskCard[]
   readonly activeTaskId?: string
   readonly onOpenTask?: (taskId: string) => void
-  readonly onTransition?: (taskId: string) => void
+  /** 转移入口（⋯ 菜单预设——toStatus = 预设初选；缺席 = 非交互） */
+  readonly onTransition?: (taskId: string, toStatus: TaskStatus) => void
   /** 执行会话在场任务（S5 装载壳探测注入——缺席 = 全行不呈现 ⟞） */
   readonly workerSessionTaskId?: string
   /** ⟞ 打开 worker 执行子会话（缺席 = 非交互呈现） */

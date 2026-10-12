@@ -81,9 +81,18 @@ export interface TransitionDialogState {
   readonly submitting: boolean
 }
 
-/** 初始态：已选目标 = 允许集首项（交付集非空时免点选；空集 = target-required 防线） */
-export function initialTransitionDialogState(options: readonly TaskStatus[]): TransitionDialogState {
-  return { toStatus: options[0], reason: '', error: undefined, submitting: false }
+/**
+ * 初始态（所见即所得口径）：preset ∈ 选项集 → 预选预设（⋯ 菜单「转 X」打开即 X——预设仍受
+ * allowedTransitions 选项集约束，禁越集）；preset 缺席或 ∉ 选项集（防御：与当前态同/被裁剪）
+ * → 回落允许集首项；空集 = target-required 防线（undefined 不变）。
+ */
+export function initialTransitionDialogState(
+  options: readonly TaskStatus[],
+  presetToStatus?: TaskStatus,
+): TransitionDialogState {
+  const toStatus =
+    presetToStatus !== undefined && options.includes(presetToStatus) ? presetToStatus : options[0]
+  return { toStatus, reason: '', error: undefined, submitting: false }
 }
 
 /** 确认动作补丁——恒不含 toStatus/reason（AC2「不清空已选」结构性成立：补丁无此二键） */
@@ -294,6 +303,8 @@ export interface TransitionDialogProps {
   readonly task: TransitionTaskView
   /** 允许目标态（TaskDetail.allowedTransitions 下发——唯一源） */
   readonly allowedTransitions: readonly TaskStatus[]
+  /** 预设目标态（⋯ 菜单「转 X」直喂——∉ 选项集/缺席回落首项；抽屉径不传 = 首项） */
+  readonly presetToStatus?: TaskStatus
   /** 关闭（Esc / 取消——上抛装配方） */
   readonly onCancel: () => void
   /** 提交成功（快照回传——4.1 关闭对话框 + 提示；失败留场归本组件错误条） */
@@ -302,12 +313,14 @@ export interface TransitionDialogProps {
   readonly makeClient?: RpcClientFactory
 }
 
-/** 转移对话框装载壳（4.1 dock 装配接线）：初始选中 = 允许集首项；确认 = confirmTransitionDialog
- * 纯动作（补丁增量合并——选择与内容结构性不被清空）；rpc 构造器/成功上抛经 props 注入。 */
+/** 转移对话框装载壳（4.1 dock 装配接线）：初始选中 = 预设 ∈ 选项集取预设，否则允许集首项；
+ * 确认 = confirmTransitionDialog 纯动作（补丁增量合并——选择与内容结构性不被清空）；
+ * rpc 构造器/成功上抛经 props 注入。 */
 export function TransitionDialog({
   projectId,
   task,
   allowedTransitions,
+  presetToStatus,
   onCancel,
   onDone,
   makeClient = preloadRpcClientFactory,
@@ -317,7 +330,9 @@ export function TransitionDialog({
     () => transitionTargetOptions(allowedTransitions, task.taskStatus),
     [allowedTransitions, task.taskStatus],
   )
-  const [state, setState] = useState<TransitionDialogState>(() => initialTransitionDialogState(options))
+  const [state, setState] = useState<TransitionDialogState>(() =>
+    initialTransitionDialogState(options, presetToStatus),
+  )
 
   const handleConfirm = useCallback(async (): Promise<void> => {
     await confirmTransitionDialog(state, {

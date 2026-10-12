@@ -3,8 +3,11 @@
 // D21/D23——本体迁 ShellHost]）+ 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/
 // 桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect 同全仓口径。
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClientFactory } from '../rpc/index.js'
+import { detailFixture } from '../views/overview/drawer/detail-model.test.js'
+import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX,
   ForgeDocsTab,
@@ -16,6 +19,7 @@ import {
   nextTaskFocusApply,
   parseForgeDocAddress,
   type DockTabActionsMirror,
+  type TransitionTarget,
   type UseDockTabInfoMirror,
 } from './dock-tabs.js'
 import {
@@ -27,6 +31,8 @@ import {
 
 /** 假 RPC client 构造器（装载在途——SSR 无 effect，恒骨架相位） */
 const pendingClient = vi.fn() as unknown as RpcClientFactory
+
+const NOOP = (): void => {}
 
 const noopNav: ForgeCenterNav = { showKnowledge: () => {}, showSession: () => {} }
 
@@ -250,5 +256,36 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
     expect(() =>
       renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />),
     ).not.toThrow()
+  })
+
+  it('转移预设透传（fix-transition-dialog-preset）：桥缝带 toStatus → 快照递达；TransitionTarget.presetToStatus 直喂对话框 → select 初值 = 预设（非首项）', () => {
+    // 桥缝：⋯ 菜单预设态透传（toStatus 在场 = 递达；缺席 = 形状不变——抽屉径回归口径）
+    const bridge = freshBridge()
+    bridge.openTaskTransition({ taskId: 't-9', toStatus: 'completed' })
+    expect(bridge.getSnapshot().transitionFocus).toEqual({
+      taskId: 't-9', featureSlug: '', nonce: 1, toStatus: 'completed',
+    })
+    // TransitionTarget（ShellHost 构造形）带 presetToStatus 直喂 TransitionDialog → 静态渲染初选 = 预设
+    const target: TransitionTarget = {
+      task: detailFixture({ taskStatus: 'pending', allowedTransitions: ['in_progress', 'completed'] }),
+      allowedTransitions: ['in_progress', 'completed'],
+      presetToStatus: 'completed',
+    }
+    const html = renderToStaticMarkup(
+      createElement(TransitionDialog, {
+        projectId: 'p-1',
+        task: target.task,
+        allowedTransitions: target.allowedTransitions,
+        presetToStatus: target.presetToStatus,
+        onCancel: NOOP,
+        onDone: NOOP,
+        makeClient: pendingClient,
+      }),
+    )
+    expect(html).toContain('data-dswf-td-tr-to')
+    const preset = html.match(/<option[^>]*value="completed"[^>]*>/)?.[0] ?? ''
+    expect(preset).toContain('selected') // 初值 = 预设（非允许集首项 in_progress）
+    const first = html.match(/<option[^>]*value="in_progress"[^>]*>/)?.[0] ?? ''
+    expect(first).not.toContain('selected')
   })
 })
