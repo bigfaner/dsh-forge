@@ -115,7 +115,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('门纪律分级：low 与 medium/high 呈现不同保底门分级行', () => {
+  it('门禁分级：low 与 medium/high 呈现不同保底门分级行', () => {
     const low = composePersona('coding-feature', 'low')
     const medium = composePersona('coding-feature', 'medium')
     expect(low).toContain('复杂度=low')
@@ -123,7 +123,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(medium).not.toContain('复杂度=low')
   })
 
-  it('门纪律变体按类型表路由：gate=全面 / doc=无编译测试门 / test-run=报告即产物', () => {
+  it('门禁变体按类型表路由：gate=全面 / doc=无编译测试门 / test-run=报告即产物', () => {
     expect(composePersona('gate', 'medium')).toContain('全面测试分层')
     expect(composePersona('doc', 'medium')).toContain('无编译/测试门')
     expect(composePersona('test-run', 'medium')).toContain('测试报告本身即交付物')

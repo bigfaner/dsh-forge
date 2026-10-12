@@ -31,7 +31,7 @@ describe('composeWorkerPersona（S2 persona 通道——plugin 侧合成）', ()
     expect(new Set([coding, doc, gate, validation]).size).toBe(4)
   })
 
-  it('复杂度分级：门纪律行随 complexity 变化（low 裁剪 / medium·high 全门）', () => {
+  it('复杂度分级：门禁行随 complexity 变化（low 裁剪 / medium·high 全门）', () => {
     expect(composeWorkerPersona('coding-fix', 'low')).toContain('low')
     expect(composeWorkerPersona('coding-fix', 'medium')).toContain('medium')
     expect(composeWorkerPersona('coding-fix', 'high')).toContain('high')

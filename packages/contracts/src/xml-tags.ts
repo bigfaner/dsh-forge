@@ -14,7 +14,7 @@ export const XML_TAGS = {
   constraints: 'constraints',
   /** dispatchPrompt 块级（S2b 渲染面唯一块）：动态信息块（TASK_ID/SOURCE/TITLE/TYPE/CATEGORY/SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS + GOAL/AC + 结算出口） */
   taskContext: 'task-context',
-  /** 块级词汇：类型策略块（S2b 后 dispatchPrompt 不再渲染——20 类型工作流/门纪律迁 persona 变体表） */
+  /** 块级词汇：类型策略块（S2b 后 dispatchPrompt 不再渲染——20 类型工作流/门禁迁 persona 变体表） */
   typePolicy: 'type-policy',
 } as const
 

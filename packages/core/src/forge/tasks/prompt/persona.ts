@@ -97,7 +97,7 @@ export const CODING_STRATEGY_SECTION = `### Coding Strategy
 - 外科手术式修改：只改任务点名的代码——首次编辑前先用 grep/glob 收齐全部改动点清单；边搜边改是禁止项。
 - 测试分层：非 gate 的代码触及类任务只跑保底门 + 定向测试；全仓测试套件属于 gate 任务的结算面，不在此处。`
 
-// ─────────────────────── 门纪律变体（保底门单源 + 类型变体） ───────────────────────
+// ─────────────────────── 门禁变体（保底门单源 + 类型变体） ───────────────────────
 
 /** 保底门（类型检查/构建 + 改动文件 lint + 定向单测；命令 agent 自选，禁固定 just 配方） */
 export function baselineGate(complexity: PersonaComplexity): string {
@@ -112,11 +112,11 @@ export function baselineGate(complexity: PersonaComplexity): string {
 ${grading}`
 }
 
-/** 类型变体（20 类型表——唯一权威：专家身份/门纪律/工作流/记录字段/专属引导） */
+/** 类型变体（20 类型表——唯一权威：专家身份/门禁/工作流/记录字段/专属引导） */
 export interface PersonaVariant {
   /** 专家身份（变体段首行角色设定） */
   expert: string
-  /** 门纪律变体（low/medium/high 分级在渲染时注入） */
+  /** 门禁变体（low/medium/high 分级在渲染时注入） */
   gate: (complexity: PersonaComplexity) => string
   /** 工作流变体（low 级裁剪版 vs 全量；仅涉及变体段——不触及核心段与 AC 核查） */
   workflow: (complexity: PersonaComplexity) => string
@@ -329,7 +329,7 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
     PERSONA_CORE_SECTION,
     `## 类型变体：${taskType}`,
     `专家身份：${variant.expert}`,
-    `门纪律：\n${variant.gate(complexity)}`,
+    `门禁：\n${variant.gate(complexity)}`,
     ...(CODING_STRATEGY_TYPES.includes(taskType) ? [CODING_STRATEGY_SECTION] : []),
     variant.workflow(complexity),
     renderRecordFields(variant.recordFields),

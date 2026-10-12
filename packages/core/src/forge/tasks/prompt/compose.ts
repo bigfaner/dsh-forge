@@ -1,5 +1,5 @@
 // dispatchPrompt 合成（任务 2.2 起源；S2b 收窄重定义——worker-lean-execution 提案）。
-// 分层承载（S2/S2a/S2b）：agent 级内容（人格、门纪律、Coding Strategy、工作流、Record
+// 分层承载（S2/S2a/S2b）：agent 级内容（人格、门禁、Coding Strategy、工作流、Record
 // Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
 // system 面）；dispatchPrompt 收窄为纯任务级——<task-context> 单块（GOAL 键 + SURFACE 行 +
 // ACCEPTANCE_CRITERIA + 结算出口一句），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
