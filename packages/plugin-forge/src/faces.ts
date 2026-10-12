@@ -311,7 +311,7 @@ function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: 
  * 指令行消息（S2 producer 显式提交——/plan 先例的 forge 消费形）：known command 经上游
  * slash 仲裁路由 command plane 执行时注册表本身零转录（"the registry itself submits
  * nothing"），指令单行的转录承载 = producer 显式提交的 user 消息（source kind user——
- * 与 composer 默认 sink 同形；idle 驱动经 agent.steer 收件即开 turn——会话非 blank 化）。
+ * 与 composer 默认 sink 同形；经 agent.followup 收件开新回合——会话非 blank 化）。
  */
 export function forgeCommandLineMessage(text: string): unknown {
   return {

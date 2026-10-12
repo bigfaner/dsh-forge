@@ -23,7 +23,7 @@ export interface ForgeCommandsDeps {
   readonly tasks: ForgeTasksService
   readonly resolveProjectId: ProjectIdResolver
   readonly ask?: EscalationAskFace
-  /** agentsRegistry 活根解析（1.18——指令单行 steer 目标；缺席 = ctx.parent fallback） */
+  /** agentsRegistry 活根解析（1.18——指令单行 followup 目标；缺席 = ctx.parent fallback） */
   readonly resolveAgent?: (ownerSessionId: string) => unknown
   /** 未进入会话激活面（1.19——host sessionController.resolveAgent 进入；缺席 = 1.18 回执指引语义） */
   readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>

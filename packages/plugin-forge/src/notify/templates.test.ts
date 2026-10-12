@@ -391,11 +391,10 @@ describe('1.15 · 十七场景专用单行摘要（折叠位丰富——替代�
     expect(headline.endsWith('…')).toBe(true)
   })
 
-  it('阻塞为零时剩余片段省略阻塞计数（claim）', () => {
+  it('claim 面零计数（剩余行整体移除——阻塞计数必然缺席）', () => {
     const headline = renderHeadline('claim', {
       sourceSlug: 's',
       taskLabel: '1.1 t',
-      remaining: { pending: 2, inProgress: 1, blocked: 0 },
     })
     expect(headline).not.toContain('阻塞')
   })

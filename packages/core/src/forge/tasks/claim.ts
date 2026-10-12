@@ -1,4 +1,4 @@
-// claimTask——任务域派发动词（任务 2.4；tech-design §Interface 1「动词内聚不变量」claimTask 行 +
+﻿// claimTask——任务域派发动词（任务 2.4；tech-design §Interface 1「动词内聚不变量」claimTask 行 +
 // db-schema §4 动词矩阵 claimTask 行 + §6-35⑧ 就绪选择 + C1 幂等重入 + 交互一派发链）。
 // 定位：业务（forge/tasks 子域）。import 边：→ forge/workspace/（共享句柄/事件）与同域
 // errors/phase-deriver/query/state-machine + prompt/（2.2 产物合成调用点）；四域互禁 import
@@ -39,6 +39,8 @@ import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
+import { composePersona } from './prompt/persona.js'
+import type { TaskType } from '@dsh-forge/contracts'
 import { dispatchDigest } from './prompt/digest.js'
 import {
   TASK_COLUMNS,
@@ -67,7 +69,7 @@ const PRIORITY_RANK = `CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P
 
 /** Z1 出口（无就绪任务——纯读零变更；dispatchPrompt/digest 空串、reclaimed=false） */
 function noReadyExit(): ClaimTaskResult {
-  return { task: null, dispatchPrompt: '', digest: '', reclaimed: false }
+  return { task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false }
 }
 
 /**
@@ -263,6 +265,10 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     })
     const digest = dispatchDigest(dispatchPrompt)
 
+    // ③b worker persona 合成（S2a 组成矩阵——agent 级人格面；与 dispatchPrompt 任务面分层，
+    //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）
+    const persona = composePersona(row.task_type as TaskType, (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1])
+
     // ④ 转移（pending/blocked → in_progress）或幂等重入（in_progress 无状态转移，C1）
     const reclaimed = row.task_status === 'in_progress'
     if (!reclaimed) {
@@ -330,6 +336,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     return {
       task: toTaskSnapshot(reclaimed ? row : resolveTaskById(db, input.projectId, row.id)),
       dispatchPrompt,
+      persona,
       digest,
       reclaimed,
     }

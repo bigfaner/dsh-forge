@@ -1,4 +1,4 @@
-// dispatch-core · 派发核心（S1a 可拆卸壳分层——implementation-blueprint §3「dispatchCore」：
+﻿// dispatch-core · 派发核心（S1a 可拆卸壳分层——implementation-blueprint §3「dispatchCore」：
 // dispatch-task.ts 单体 execute 裂变的共享面）。主链 = claim → 组装 → spawn → 事件发射
 // （+ guard 机械 + spawn 契约 + 结算核；后台径 = jobs 包装的结算后置交付）。
 //
@@ -37,7 +37,6 @@ import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
-import { composePersona } from '@dsh-forge/core'
 import {
   exclusiveScopedRejection,
   externalExclusivityGuard,
@@ -226,6 +225,8 @@ export interface ClaimedDispatch {
   readonly reclaimed: boolean
   /** 派发简报全文（人格段 + 三标签块——worker 首条用户消息，零进调用方上下文） */
   readonly dispatchPrompt: string
+  /** worker agent 级 persona（claim 合成——S2a 组成矩阵；spawn 链透传落子会话 system 面） */
+  readonly persona: string
 }
 
 /** claim 阶段返回（claimed / no-task 附池快照 / halted 入口粘住） */
@@ -294,7 +295,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(task.mode !== undefined ? { mode: task.mode } : {}),
     dispatchDigest: claimed.digest, // 双记：task_records.claim 行同值
   })
-  return { kind: 'claimed', task, digest: claimed.digest, reclaimed: claimed.reclaimed, dispatchPrompt: claimed.dispatchPrompt }
+  return { kind: 'claimed', task, digest: claimed.digest, reclaimed: claimed.reclaimed, dispatchPrompt: claimed.dispatchPrompt, persona: claimed.persona }
 }
 
 // ─────────────────────────── 阶段二：spawn（组装 + spawn + 事件） ───────────────────────────
@@ -327,7 +328,7 @@ export async function spawnClaimed(
   // 落子会话 deployment:persona-prefix scoped 段；不进 dispatchPrompt，分层保持）
   // （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
   const toolFilter = deriveWorkerToolFilter(task.taskType)
-  const persona = composePersona(task.taskType, task.complexity)
+  // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
   const settings: ForgeSettings | undefined =
     deps.settings !== undefined ? await deps.settings.get() : undefined
   const agentOptions = await reconcileWorkerReasoning(
@@ -345,7 +346,7 @@ export async function spawnClaimed(
       signal: options.signal ?? exec.signal ?? new AbortController().signal,
       toolFilter,
       ...(agentOptions !== undefined ? { agentOptions } : {}),
-      persona, // 人格面（agent 级）——与 prompt 任务面分层承载（S2）
+      persona: claimed.persona, // 人格面（agent 级，claim 合成）——与 prompt 任务面分层承载（S2）
       label: `${taskKey} · ${task.title}`,
     })
   } catch (cause) {

@@ -1,4 +1,4 @@
-// S1a · dispatch-core 独立单测（可拆卸壳分层验收项——「不依赖工具面装配」）：
+﻿// S1a · dispatch-core 独立单测（可拆卸壳分层验收项——「不依赖工具面装配」）：
 // dispatchCore(deps, exec, args) 直调——零 createDispatchTaskTool / 零 args 解析 /
 // 零 ToolExecFace。覆盖 claim→组装→spawn→事件发射主链 + guard 机械的 guardKey
 // 参数化（decisions #18：粘性载体 = guard 键而非会话 id——工具壳填会话 id、循环填
@@ -17,7 +17,6 @@ import type {
 } from '@dsh-forge/contracts'
 import { dispatchCore } from './core.js'
 import type { DispatchCoreArgs, DispatchCoreDeps, DispatchCoreExec } from './core.js'
-import { composePersona } from '@dsh-forge/core'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, DispatchJobSpec, DispatchJobHooks } from '../faces.js'
 import type { SpawnWorkerHandle, SpawnWorkerRequest } from './spawn.js'
@@ -104,7 +103,7 @@ function harness(
   const claimInputs: unknown[] = []
   const statsInputs: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
-  let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', digest: 'digestabc123', reclaimed: false }
+  let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
     task: snapshot({ taskStatus: 'completed' }),
     container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
@@ -270,7 +269,7 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     expect(req.label).toBe('feat-x/2.5 · Implement the thing')
     // S2 分层承载：persona = compose 产出（taskType+complexity 消费）经 persona 字段透传；
     // 任务面/人格面分层——personaText 不进 prompt（AC-4）
-    expect(req.persona).toBe(composePersona('coding-fix', 'high'))
+    expect(req.persona).toBe('PERSONA-MATRIX')
     expect(req.prompt).not.toContain(req.persona!)
     expect(req.parent).toBe(parent)
     expect(req.signal).toBeInstanceOf(AbortSignal)

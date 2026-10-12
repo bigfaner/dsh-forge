@@ -1,4 +1,4 @@
-// 任务 2.4 测试 —— claimTask 全路径（tech-design §Interface 1「动词内聚不变量」claimTask 行 +
+﻿// 任务 2.4 测试 —— claimTask 全路径（tech-design §Interface 1「动词内聚不变量」claimTask 行 +
 // §6-35⑧ 就绪选择三分支 + C1 幂等重入 + 交互一派发链前半 + Z1 出口）。临时 SQLite 夹具
 // （harness——db.test.ts 形制）。dispatchPrompt 断言锚定 2.2 组成序（人格段 + 三标签块）与
 // BLOCKERS/PHASE_SUMMARY 注入（领取瞬间取数）。
@@ -346,7 +346,7 @@ describe('AC2 links upsert-ignore（claim = 唯一写源）+ in_progress 幂等�
     seedTask(h!.db, 'f', '1.1')
     await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's1' })
     const r = await claim({ projectId: P(), sessionId: 's2' }) // 他会话盲选：1.1 in_progress 不可领
-    expect(r).toEqual({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false })
     // 状态零污染：仍 in_progress、links 仍单会话
     expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
     expect(rows(`SELECT session_id FROM task_session_links`)).toEqual([{ session_id: 's1' }])
@@ -369,7 +369,7 @@ describe('AC3 无就绪任务出口（Z1 信号——run-tasks 循环等待/收�
     const claim = svc()
     seedFeature(h!.db, { slug: 'f', status: 'prd' })
     const r = await claim({ projectId: P(), sessionId: 's' })
-    expect(r).toEqual({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false })
     expect(h!.events.emitted).toEqual([])
     expect(rows(`SELECT * FROM task_records`)).toEqual([])
     expect(rows(`SELECT * FROM task_session_links`)).toEqual([])
@@ -382,7 +382,7 @@ describe('AC3 无就绪任务出口（Z1 信号——run-tasks 循环等待/收�
     seedTask(h!.db, 'f', '2.1')
     seedEdge(h!.db, 't-f-2.1', 't-f-1.1')
     const r = await claim({ projectId: P(), sessionId: 's' }) // 本会话无挂接 → 就绪池唯一候选不满足
-    expect(r).toEqual({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false })
   })
 
   it('终态集（completed/skipped）无 pending → 无就绪', async () => {
@@ -497,7 +497,7 @@ describe('AC（2.4）claimTask 容器双轨：容器限定盲选 + dispatchPromp
     seedFeature(h!.db, { slug: 'fa', status: 'tasks' })
     seedTask(h!.db, 'fa', '1.1')
     const r = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'ghost-p' }, sessionId: 's' })
-    expect(r).toEqual({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false })
     expect(h!.events.emitted).toEqual([])
   })
 

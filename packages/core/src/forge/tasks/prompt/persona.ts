@@ -1,4 +1,4 @@
-// worker persona 组成模块（提案 worker-lean-execution S2a；替代被废弃的 1.1，AC 按
+﻿// worker persona 组成模块（提案 worker-lean-execution S2a；替代被废弃的 1.1，AC 按
 // 2026-10-11 修订对齐：UI 任务不作特殊处理）。
 //
 // 组成矩阵 = 恒定核心段（单源常量，20 类型全在场——通用纪律，不含任何代码/测试/文档

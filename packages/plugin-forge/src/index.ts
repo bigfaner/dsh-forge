@@ -277,7 +277,7 @@ const forgePlugin: ForgePlugin = Object.assign(
           tasks: ctx.forgeTasks,
           resolveProjectId,
           ...(askFace !== undefined ? { ask: askFace } : {}),
-          // 1.18 活根解析随载（同 escalation 装配形态）——指令单行 steer 目标经 agentsRegistry
+          // 1.18 活根解析随载（同 escalation 装配形态）——指令单行 followup 目标经 agentsRegistry
           // 解析活根，registry 未命中才退回 ctx.parent fallback（真机 undefined.send 定罪修复）
           ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
           // 1.19 未进入会话激活随载（先进入再提交再启动——undefined.send 深层根因修复）

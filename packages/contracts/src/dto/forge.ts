@@ -448,6 +448,8 @@ export interface ClaimTaskResult {
   digest: string
   /** in_progress 幂等重入 = true（简报重合成，digest 新值） */
   reclaimed: boolean
+  /** worker agent 级 persona（S2a 组成矩阵合成——spawn 链经 SubagentStartRequest.persona 落子会话 system 面；Z1 出口 = 空串） */
+  persona: string
 }
 
 /** submitTask 入参（S3 结构化提交——老 forge record.json 形制回归） */
