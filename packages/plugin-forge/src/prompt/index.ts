@@ -3,7 +3,7 @@
 // 单层不细分、内文纯文本；**不含 tool 说明**（dsh tool 注册面自带——工具名/参数说明
 // 机械出自各 tool 定义，本段不复制）。段文本 = 最外层唯一标签 <forge-pipeline> 包裹
 //（XML_TAGS.forgePipeline 单源——标签集四枚封闭，G1-14 pin）。
-// 三部分：状态层说明 / 执行协议 / 受限面声明。
+// 四部分：状态层说明 / 执行协议 / 受限面声明 / 文档风格公约。
 // 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
 import { XML_TAGS } from '@dsh-forge/contracts'
 
@@ -35,7 +35,12 @@ export function renderForgePipelineSection(): string {
     'Restricted face:',
     '- Status transitions outside the claim/submit flow (reopen, skip, suspend, reject) and feature-level transitions are human decisions: they are not available to agents. Ask the user when one seems needed.',
     '- Never write to the state layer storage, task files, or indexes directly, and never fork parallel state: the state layer is maintained exclusively through the pipeline verbs.',
-    '- Proposal verdicts (accept or reject) are only recorded when the user has decided; registering a proposal or documenting one is fine at any time.',
+    '    - Proposal verdicts (accept or reject) are only recorded when the user has decided; registering a proposal or documenting one is fine at any time.',
+    '',
+    '文档风格公约（约束本工作区全部产出文档，含 PRD/走查记录/台账/README）：',
+    '- 图示优先用 mermaid（```mermaid 代码块）；能用一张图说清的不用大段文字。',
+    '- 文字精简：只写结论与必要上下文，不复述代码与流程细节。',
+    '- 不留调整修复叙事：不记录「改了哪里、为什么改、排查过程」等过程性内容，文档只呈现当前事实。',
   ].join('\n')
   return `<${XML_TAGS.forgePipeline}>\n${body}\n</${XML_TAGS.forgePipeline}>`
 }

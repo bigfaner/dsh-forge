@@ -1,4 +1,4 @@
-// 3.2 单测 —— AC5 forge:pipeline 段渲染（段常量 / 三部分在场 / 标签包裹单源 /
+// 3.2 单测 —— AC5 forge:pipeline 段渲染（段常量 / 四部分在场 / 标签包裹单源 /
 // 不含 tool 说明 / 禁裸 {{）。口径：老 forge hook 注入文本平移（状态层说明/执行协议/
 // 受限面声明）；Interface 9 标签表行 1——最外层唯一 <forge-pipeline>（XML_TAGS 单源），
 // 单层不细分、内文纯文本；tool 说明不重复注入（dsh tool 注册面自带）。
@@ -45,6 +45,16 @@ describe('renderForgePipelineSection（老 forge hook 文本平移三部分）',
     expect(text).toContain('Never write to the state layer')
     expect(text).toContain('exclusively through the pipeline verbs')
     expect(text).toContain('only recorded when the user has decided')
+  })
+
+  it('④ 文档风格公约（mermaid 优先 / 文字精简 / 不留调整修复叙事；中文三要点，约束全部产出文档）', () => {
+    expect(text).toContain('文档风格公约')
+    expect(text).toContain('全部产出文档')
+    expect(text).toContain('mermaid')
+    expect(text).toContain('文字精简')
+    expect(text).toContain('不留调整修复叙事')
+    // 置于受限面声明之后
+    expect(text.indexOf('Restricted face')).toBeLessThan(text.indexOf('文档风格公约'))
   })
 
   it('最外层唯一标签包裹：<forge-pipeline>（contracts XML_TAGS 单源）+ 单层不细分', () => {

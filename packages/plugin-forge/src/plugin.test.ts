@@ -224,6 +224,8 @@ describe('AC5 段注册（forge:pipeline / order 510）', () => {
     expect(section?.name).toBe('forge:pipeline')
     expect(section?.order).toBe(510)
     expect(section?.text).toContain('forge-pipeline')
+    // 文档风格公约第四部分随段注入（段注册无条件——双 preset 装配 plugin-forge 即共有）
+    expect(section?.text).toContain('文档风格公约')
     dispose()
   })
 
