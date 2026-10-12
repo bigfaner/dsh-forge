@@ -56,7 +56,8 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     for (const taskType of TASK_TYPES) {
       const { title, creed } = PERSONA_VARIANTS[taskType].expert
       const persona = composePersona(taskType, 'medium')
-      expect(persona, taskType).toContain(`你是${title}。行事信条：${creed}。`)
+      const gap = /^[A-Za-z]/.test(title) ? ' ' : ''
+      expect(persona, taskType).toContain(`你是${gap}${title}。行事信条：${creed}。`)
     }
   })
 
