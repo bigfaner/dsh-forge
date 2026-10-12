@@ -119,9 +119,10 @@ export function codingStrategyFor(complexity: PersonaComplexity): string {
   return complexity === 'low' ? CODING_STRATEGY_SECTION_LOW : CODING_STRATEGY_SECTION
 }
 
-/** Testing Strategy 段（test-gen 族 ×3 专属——从需求推导测试；红时不改被测代码） */
+/** Testing Strategy 段（test-gen 族 ×3 专属——契约+旅程双轨方法论；红时不改被测代码） */
 export const TESTING_STRATEGY_SECTION = `### Testing Strategy
-- 从需求推导：先从 AC/契约/旅程逐项推导用例清单，再落笔写测试——测试生成不是实现驱动，不从 RED→GREEN 起步。
+- 方法论：契约 + 用户旅程双轨——契约测试从接口契约推导，旅程测试从用户旅程推导；先定用例、再落脚本。
+- 用例与脚本分离：测试用例是文档（清单/表格，逐条可判 PASS/FAIL），测试脚本是代码（可执行自动化）——两者不混写，用例未定不写脚本。
 - 只新增或修改任务点名的测试文件；测试失败时修测试，绝不改被测代码。
 - 测试无法转绿时先归因：测试自身缺陷则修测试；若被测行为或环境与 AC 冲突，保持测试原样红，以 result=blocked 上报——不为变绿而弱化断言。`
 
