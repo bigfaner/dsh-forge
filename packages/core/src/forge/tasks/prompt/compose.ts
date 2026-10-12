@@ -1,13 +1,12 @@
 // dispatchPrompt 合成（任务 2.2 起源；S2b 收窄重定义——worker-lean-execution 提案）。
 // 分层承载（S2/S2a/S2b）：agent 级内容（人格、门禁、Coding Strategy、工作流、Record
 // Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
-// system 面）；dispatchPrompt 收窄为纯任务级——<task-context> 单块（GOAL 键 + SURFACE 行 +
+// system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 + SURFACE 行 +
 // ACCEPTANCE_CRITERIA + 结算出口一句），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
 // 定位铁律：纯函数禁 IO（BLOCKERS/PHASE_SUMMARY 等动态值由调用方领取瞬间取数注入——
 // 2.4 claimTask 接线；「快照取领取瞬间而非渲染时」）。
 import {
   TASK_TYPES,
-  XML_TAGS,
   type ContainerRef,
   type TaskPriority,
   type TaskPrerequisiteSummary,
@@ -152,24 +151,24 @@ function singleLine(criterion: string): string {
   return criterion.replace(/\s*\r?\n\s*/g, ' ')
 }
 
-/** 结算出口一句（S2b：submitTask 路径指称——纪律细节在 persona；<task-context> 尾行） */
+/** 结算出口一句（S2b：submitTask 路径指称——纪律细节在 persona；简报尾行） */
 export const SETTLEMENT_EXIT_LINE =
   'Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.'
 
-/** `<task-context>` 内文（键值行序 = S2b 序：TASK_ID/SOURCE/TITLE/FILE/TYPE/CATEGORY/SURFACE/BLOCKERS/
- *  PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；SURFACE = S2b 增键
- *  紧随 CATEGORY；TITLE = 5.3 任务规格内嵌增键；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文
- *  ——尾行承载体）；GOAL/ACCEPTANCE_CRITERIA = 键值行后的任务体段落（多行值——worker 面无
- *  queryTask 时的定义唯一到达面）+ 结算出口一句收尾 */
+/** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
+ *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
+ *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
+ *  GOAL = `<goal>` 包围的任务体段落（多行值——worker 面无 queryTask 时的定义唯一到达面）+
+ *  ACCEPTANCE_CRITERIA + 结算出口一句收尾。TITLE 缺席时首行为 TASK_ID。 */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
   const surface = renderSurface(input)
   const lines: (string | undefined)[] = [
+    input.title !== undefined ? input.title : undefined,
     `TASK_ID: ${input.slug}/${input.localId}`,
     input.source !== undefined ? `SOURCE: ${input.source.kind} ${input.source.slug}` : undefined,
-    input.title !== undefined ? `TITLE: ${input.title}` : undefined,
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,
@@ -186,7 +185,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     vars !== undefined ? `VARS: ${vars}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
-  if (input.goal !== undefined) context += `\nGOAL:\n${input.goal}`
+  if (input.goal !== undefined) context += `\n<goal>\n${input.goal}\n</goal>`
   if (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0) {
     context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${singleLine(ac)}`).join('\n')}`
   }
@@ -195,22 +194,18 @@ export function renderTaskContext(input: DispatchPromptInput): string {
 
 // ─────────────────────────── 组成序合成（S2b：任务级单块） ───────────────────────────
 
-/** 块包裹（裸标签名 → `<tag>\n内文\n</tag>`——包裹属 core 合成逻辑，契约层只出常量） */
-function wrapBlock(tag: string, body: string): string {
-  return `<${tag}>\n${body}\n</${tag}>`
-}
-
 /**
- * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形）：单一 `<task-context>` 块（任务级——
- * GOAL 键 + SURFACE 行 + ACCEPTANCE_CRITERIA + 结算出口一句）。无人格段/约束块/类型
- * 策略工作流段（agent 级内容由 persona 承载——prompt/persona.ts 单源，经 spawn 链
- * persona 通道落子会话 system 面）。digest 由调用方经 dispatchDigest(全文) 取值
- * （2.4 claimTask 落 claim record）。`<forge-pipeline>` 属 plugin-forge 系统提示段，不进本合成。
+ * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形 + 无包裹再收窄）：任务级简报正文直出——
+ * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + SURFACE 行 + `<goal>` 包围目标 +
+ * ACCEPTANCE_CRITERIA + 结算出口一句）。无人格段/约束块/类型策略工作流段（agent 级内容
+ * 由 persona 承载——prompt/persona.ts 单源，经 spawn 链 persona 通道落子会话 system 面）。
+ * digest 由调用方经 dispatchDigest(全文) 取值（2.4 claimTask 落 claim record）。
+ * `<forge-pipeline>` 属 plugin-forge 系统提示段，不进本合成。
  */
 export function composeDispatchPrompt(input: DispatchPromptInput): string {
   if (!TASK_TYPES.includes(input.taskType)) {
     // 运行期防御面（词汇外值——TS 类型已封）
     throw new Error(`dispatchPrompt: unknown task type: ${String(input.taskType)}`)
   }
-  return wrapBlock(XML_TAGS.taskContext, renderTaskContext(input))
+  return renderTaskContext(input)
 }

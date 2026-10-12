@@ -1,37 +1,30 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [code-quality-simplify] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/3.4
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [code-quality-simplify] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/3.4
 TYPE: code-quality-simplify
 CATEGORY: coding
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-cleanup] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/3.2
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-cleanup] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/3.2
 TYPE: coding-cleanup
 CATEGORY: coding
 COVERAGE: maintain
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-enhancement] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/3.1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-enhancement] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/3.1
 TYPE: coding-enhancement
 CATEGORY: coding
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-feature] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-feature] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"派发简报模板族（20 类型路由）
 TASK_ID: m2-pipeline/2.2
-TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: coding-feature
 CATEGORY: coding
@@ -42,67 +35,56 @@ COVERAGE: percentage 80%
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
-GOAL:
+<goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
+</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-fix] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/fix-1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-fix] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/fix-1
 TYPE: coding-fix
 CATEGORY: coding
 PRIORITY: P0
 MARKERS: fix-of m2-pipeline/2.4
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-refactor] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/3.3
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [coding-refactor] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/3.3
 TYPE: coding-refactor
 CATEGORY: coding
 COVERAGE: maintain
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/4.1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/4.1
 TYPE: doc
 CATEGORY: doc
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-consolidate] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/4.2
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-consolidate] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/4.2
 TYPE: doc-consolidate
 CATEGORY: doc
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-drift] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/4.3
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-drift] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/4.3
 TYPE: doc-drift
 CATEGORY: doc
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-review] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-review] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"派发简报模板族（20 类型路由）
 TASK_ID: m2-pipeline/2.2
-TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: doc-review
 CATEGORY: doc
@@ -112,46 +94,39 @@ PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
-GOAL:
+<goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
+</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-summary] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/1.summary
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [doc-summary] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/1.summary
 TYPE: doc-summary
 CATEGORY: doc
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [eval-contract] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/7.1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [eval-contract] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/7.1
 TYPE: eval-contract
 CATEGORY: eval
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [eval-journey] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/7.2
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [eval-journey] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/7.2
 TYPE: eval-journey
 CATEGORY: eval
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [gate] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [gate] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"派发简报模板族（20 类型路由）
 TASK_ID: m2-pipeline/2.2
-TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: gate
 CATEGORY: gate
@@ -161,55 +136,46 @@ PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
-GOAL:
+<goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
+</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-contracts] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/5.2
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-contracts] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/5.2
 TYPE: test-gen-contracts
 CATEGORY: test
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-journeys] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/5.3
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-journeys] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/5.3
 TYPE: test-gen-journeys
 CATEGORY: test
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-scripts] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/5.4
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-gen-scripts] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/5.4
 TYPE: test-gen-scripts
 CATEGORY: test
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-run] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/5.1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [test-run] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/5.1
 TYPE: test-run
 CATEGORY: test
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [validation-code] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [validation-code] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"派发简报模板族（20 类型路由）
 TASK_ID: m2-pipeline/2.2
-TITLE: 派发简报模板族（20 类型路由）
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: validation-code
 CATEGORY: validation
@@ -219,20 +185,18 @@ PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
 MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
-GOAL:
+<goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
+</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
-exports[`AC4 dispatchPrompt 快照·任务级收窄 [validation-ux] > 全文快照 + 单块 <task-context> + 任务级键在场 1`] = `
-"<task-context>
-TASK_ID: m2-pipeline/6.1
+exports[`AC4 dispatchPrompt 快照·任务级收窄 [validation-ux] > 全文快照 + 无包裹单块简报 + 任务级键在场 1`] = `
+"TASK_ID: m2-pipeline/6.1
 TYPE: validation-ux
 CATEGORY: validation
-Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.
-</task-context>"
+Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;

@@ -1,4 +1,4 @@
-﻿// 任务 2.4 测试 —— claimTask 全路径（tech-design §Interface 1「动词内聚不变量」claimTask 行 +
+// 任务 2.4 测试 —— claimTask 全路径（tech-design §Interface 1「动词内聚不变量」claimTask 行 +
 // §6-35⑧ 就绪选择三分支 + C1 幂等重入 + 交互一派发链前半 + Z1 出口）。临时 SQLite 夹具
 // （harness——db.test.ts 形制）。dispatchPrompt 断言锚定 2.2 组成序（人格段 + 三标签块）与
 // BLOCKERS/PHASE_SUMMARY 注入（领取瞬间取数）。
@@ -134,7 +134,7 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     expect(h!.events.emitted).toEqual([{ projectId: P() }])
   })
 
-  it('dispatchPrompt 组成（S2b 任务级收窄）：单块 <task-context>（TASK_ID 自然键 + BLOCKERS 快照 + 结算出口）——无人格段/约束块/类型策略段（agent 级内容迁 persona）', async () => {
+  it('dispatchPrompt 组成（S2b 任务级收窄 + 无包裹）：单块简报（TASK_ID 自然键 + BLOCKERS 快照 + 结算出口）——无人格段/约束块/类型策略段（agent 级内容迁 persona）', async () => {
     const claim = svc()
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1', { status: 'completed' })
@@ -145,9 +145,8 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
       taskRef: { slug: 'f', localId: '2.1' },
       sessionId: 's',
     })
-    // S2b 收窄形：全文 = 单一 <task-context> 块；反锚（SC9）
-    expect(dispatchPrompt.startsWith('<task-context>\n')).toBe(true)
-    expect(dispatchPrompt.endsWith('\n</task-context>')).toBe(true)
+    // S2b 收窄形 + 无包裹：全文 = 单块简报正文；反锚（SC9）
+    expect(dispatchPrompt).not.toContain('<task-context>')
     for (const antiAnchor of ['You are', '<constraints>', '<type-policy>', 'Workflow', 'Quality gate sequence']) {
       expect(dispatchPrompt).not.toContain(antiAnchor)
     }
@@ -160,8 +159,8 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     expect(r2.dispatchPrompt).not.toContain('BLOCKERS:')
   })
 
-  it('任务规格内嵌（5.3 dogfood 实证缺陷收口）：TITLE/GOAL/ACCEPTANCE_CRITERIA 入 <task-context>——worker 面无 queryTask 时的定义唯一来源（S2b DESCRIPTION 键更名 GOAL）', async () => {
-    // 缺陷背景（5.3 SC-M3 走查首跑实证）：task-context 无任务体 + worker 收窄面禁 queryTask
+  it('任务规格内嵌（5.3 dogfood 实证缺陷收口）：TITLE 首行/GOAL/ACCEPTANCE_CRITERIA 入简报——worker 面无 queryTask 时的定义唯一来源（S2b DESCRIPTION 键更名 GOAL）', async () => {
+    // 缺陷背景（5.3 SC-M3 走查首跑实证）：简报无任务体 + worker 收窄面禁 queryTask
     // + M3 task_file 列砍除 → worker 三路皆无定义可读 → 全员 blocked（missing-input）。
     // 收口 = dispatchPrompt 内嵌任务规格（tech-design 图 4「角色唯一来源·纯任务规格」兑付）。
     const claim = svc()
@@ -173,25 +172,25 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
       JSON.stringify(['notes.md 在场且内容逐字', '四门全绿']),
     )
     const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
-    expect(dispatchPrompt).toContain('TITLE: 创建 notes.md 并提交')
-    expect(dispatchPrompt).toContain('GOAL:\n达成：工作区根 notes.md 在场，内容恰好一行：ok')
+    // TITLE 裸值首行（无键前缀）
+    expect(dispatchPrompt.split('\n')[0]).toBe('创建 notes.md 并提交')
+    expect(dispatchPrompt).toContain('<goal>\n达成：工作区根 notes.md 在场，内容恰好一行：ok\n</goal>')
     expect(dispatchPrompt).toContain('ACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿')
     // S2b/SC3：SURFACE 单行双值（行值取任务行 surface_key/surface_type；缺席省行）
     h!.db.prepare(`UPDATE tasks SET surface_key = 'web', surface_type = 'web' WHERE id = 't-f-4.1'`).run()
     const withSurface = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
     expect(withSurface.dispatchPrompt).toContain('SURFACE: web (web)')
     expect(withSurface.dispatchPrompt.indexOf('SURFACE:')).toBeGreaterThan(withSurface.dispatchPrompt.indexOf('CATEGORY:'))
-    // 任务体入 <task-context>（单块结构不动）——GOAL 段落于键值行之后
-    const ctx = dispatchPrompt.slice(dispatchPrompt.indexOf('<task-context>'), dispatchPrompt.indexOf('</task-context>'))
-    expect(ctx.indexOf('GOAL:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
+    // 任务体在键值行之后——<goal> 段落于 VARS/键值区之后
+    expect(dispatchPrompt.indexOf('<goal>')).toBeGreaterThan(dispatchPrompt.indexOf('TASK_ID:'))
     // 无 desc/AC 任务 → 段落省略（M2 形态兼容）
     seedTask(h!.db, 'f', '4.2')
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.2' }, sessionId: 's' })
-    expect(r2.dispatchPrompt).not.toContain('GOAL:')
+    expect(r2.dispatchPrompt).not.toContain('<goal>')
     expect(r2.dispatchPrompt).not.toContain('ACCEPTANCE_CRITERIA:')
   })
 
-  it('VARS 行透传（vars 注入面）：vars_json 解码入 <task-context> 键值行——SKIP_EVAL_GATE/fix 链上下文的唯一送达面；键序字母序 + 缺席省行', async () => {
+  it('VARS 行透传（vars 注入面）：vars_json 解码入简报键值行——SKIP_EVAL_GATE/fix 链上下文的唯一送达面；键序字母序 + 缺席省行', async () => {
     // 缺陷背景：老形态任务=文件、vars 随文件到达 worker；新形态 db-only + 简报=定义唯一
     // 到达面，vars_json 不入合成 → SKIP_EVAL_GATE / fix 链 SOURCE_FILES 断流。收口 = VARS 行。
     const claim = svc()
@@ -203,8 +202,7 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.3' }, sessionId: 's' })
     // 键序字母序确定性渲染（同 vars_json 恒同简报——digest 幂等）
     expect(dispatchPrompt).toContain('VARS: SOURCE_FILES=src/a.ts,src/b.ts; TEST_SCRIPT=just test')
-    const ctx = dispatchPrompt.slice(dispatchPrompt.indexOf('<task-context>'), dispatchPrompt.indexOf('</task-context>'))
-    expect(ctx.indexOf('VARS:')).toBeGreaterThan(ctx.indexOf('TASK_ID:'))
+    expect(dispatchPrompt.indexOf('VARS:')).toBeGreaterThan(dispatchPrompt.indexOf('TASK_ID:'))
     // 无 vars 任务 → 行省略（M2 形态兼容）
     seedTask(h!.db, 'f', '4.4')
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.4' }, sessionId: 's' })

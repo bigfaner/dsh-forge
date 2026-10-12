@@ -1,11 +1,11 @@
-// S2b 快照/契约测试（worker-lean-execution）：dispatchPrompt 收窄为纯任务级单块
-// <task-context>（GOAL 键 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化 + 结算出口一句）。
-// 反锚（SC9）：无人格段/无约束块/无工作流段（agent 级内容迁 persona——persona.ts 单源，
-// system 面承载）。快照 ×20 = 任务级简报字节级 pin（digest 契约回归面：任何键/行序改动
+// S2b 快照/契约测试（worker-lean-execution）：dispatchPrompt 收窄为纯任务级单块简报
+// （TITLE 裸值首行 + `<goal>` 包围目标 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化 + 结算出口一句；
+// 无 <task-context> 外包裹）。反锚（SC9）：无人格段/无约束块/无工作流段（agent 级内容迁 persona——
+// persona.ts 单源，system 面承载）。快照 ×20 = 任务级简报字节级 pin（digest 契约回归面：任何键/行序改动
 // 都在快照 diff 显形）。
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { TASK_TYPES, XML_TAGS, type TaskType } from '@dsh-forge/contracts'
+import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import {
   composeDispatchPrompt,
   resolveCoverage,
@@ -81,33 +81,28 @@ const FIXTURES: Record<TaskType, DispatchPromptInput> = {
   'eval-journey': minimalInput({ taskType: 'eval-journey', localId: '7.2' }),
 }
 
-function taskContextBody(prompt: string): string {
-  return prompt.slice(
-    prompt.indexOf(`<${XML_TAGS.taskContext}>`) + XML_TAGS.taskContext.length + 2,
-    prompt.indexOf(`</${XML_TAGS.taskContext}>`),
-  )
-}
-
 // ─────────────────── AC4（S2b 重写）：快照 ×20 + 任务级反锚（SC9） ───────────────────
 
 describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照·任务级收窄 [%s]', (taskType) => {
-  it('全文快照 + 单块 <task-context> + 任务级键在场', () => {
+  it('全文快照 + 无包裹单块简报 + 任务级键在场', () => {
     const prompt = composeDispatchPrompt(FIXTURES[taskType])
     expect(prompt).toMatchSnapshot()
 
-    expect(prompt.startsWith(`<${XML_TAGS.taskContext}>`)).toBe(true)
-    expect(prompt.endsWith(`</${XML_TAGS.taskContext}>`)).toBe(true)
-    const ctx = taskContextBody(prompt)
-    expect(ctx).toContain(`TASK_ID: ${FIXTURES[taskType]!.slug}/${FIXTURES[taskType]!.localId}`)
-    expect(ctx).toContain('Settlement exit:')
+    expect(prompt).not.toContain('<task-context>')
+    // TITLE 裸值首行（无键前缀）；缺席时首行 = TASK_ID
+    const firstLine = prompt.split('\n')[0]!
+    const fx = FIXTURES[taskType]!
+    expect(firstLine).toBe(fx.title ?? `TASK_ID: ${fx.slug}/${fx.localId}`)
+    expect(prompt).toContain(`TASK_ID: ${fx.slug}/${fx.localId}`)
+    expect(prompt).toContain('Settlement exit:')
   })
 
   it('SC9 反锚：无人格段/无约束块/无工作流段/无共享段（agent 级内容在 persona 面）', () => {
     const prompt = composeDispatchPrompt(FIXTURES[taskType])
     for (const antiAnchor of [
       'You are',
-      `<${XML_TAGS.constraints}>`,
-      `<${XML_TAGS.typePolicy}>`,
+      '<constraints>',
+      '<type-policy>',
       'Workflow',
       'Quality gate sequence',
       'Coding Strategy',
@@ -124,17 +119,14 @@ describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照·任务级收窄 [%s]', (ta
   })
 })
 
-// ─────────────────── AC5（S2b 重写）：XML 标签集封闭——dispatchPrompt 单标签 ───────────────────
+// ─────────────────── AC5（S2b 重写）：XML 标签集封闭——仅 <goal> 开闭对 ───────────────────
 
-describe('AC5 XML 标签封闭（S2b：dispatchPrompt 仅 <task-context>；<forge-pipeline> 不进）', () => {
-  it.each(TASK_TYPES)('[%s] 全文角括号标签 = task-context 开闭对（无增员）', (taskType) => {
+describe('AC5 XML 标签封闭（仅 <goal> 包围目标；<task-context>/<forge-pipeline> 不进）', () => {
+  it.each(TASK_TYPES)('[%s] 全文角括号标签 = goal 开闭对（无增员）', (taskType) => {
     const prompt = composeDispatchPrompt(FIXTURES[taskType])
     const found = prompt.match(/<\/?[A-Za-z][A-Za-z0-9-]*>/g) ?? []
     expect(new Set(found)).toEqual(
-      new Set([
-        `<${XML_TAGS.taskContext}>`,
-        `</${XML_TAGS.taskContext}>`,
-      ]),
+      new Set(FIXTURES[taskType]!.goal === undefined ? [] : ['<goal>', '</goal>']),
     )
     // Hard Rule：forge-pipeline 属 plugin-forge 系统提示段（3.2），不进 dispatchPrompt
     expect(prompt).not.toContain('<forge-pipeline>')
@@ -157,8 +149,8 @@ describe('AC1 digest = sha-256（全文，含标签与任务级载荷）前 12 h
     const regoaled = base.replace('TYPE: doc', 'TYPE: docx-extra')
     expect(dispatchDigest(regoaled)).not.toBe(baseDigest)
     const recontexted = base.replace(
-      '<task-context>',
-      `<task-context>\nPHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md`,
+      'TASK_ID:',
+      `PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md\nTASK_ID:`,
     )
     expect(dispatchDigest(recontexted)).not.toBe(baseDigest)
   })
@@ -176,21 +168,27 @@ describe('AC1 digest = sha-256（全文，含标签与任务级载荷）前 12 h
   })
 })
 
-// ─────────────────── AC2（S2b）：task-context 键值行 ───────────────────
+// ─────────────────── AC2（S2b）：简报键值行 ───────────────────
 
-describe('AC2 <task-context> 键值行（键级零标签）', () => {
-  const ctx = taskContextBody(composeDispatchPrompt(FIXTURES['coding-feature']))
+describe('AC2 简报键值行（键级零标签）', () => {
+  const ctx = composeDispatchPrompt(FIXTURES['coding-feature'])
 
-  it('TASK_ID 呈现自然键 slug/localId；TYPE/CATEGORY 恒在场', () => {
+  it('TITLE 裸值首行（无 TITLE: 前缀）；TASK_ID 呈现自然键 slug/localId；TYPE/CATEGORY 恒在场', () => {
+    expect(ctx.split('\n')[0]).toBe('派发简报模板族（20 类型路由）')
+    expect(ctx).not.toContain('TITLE:')
     expect(ctx).toContain('TASK_ID: m2-pipeline/2.2')
     expect(ctx).toContain('TYPE: coding-feature')
     expect(ctx).toContain('CATEGORY: coding')
   })
 
-  it('键值行序 = TASK_ID < TITLE < FILE < TYPE < CATEGORY < SURFACE < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（SURFACE = S2b 增键，紧随 CATEGORY——SC3）', () => {
+  it('TITLE 缺席 → 首行 = TASK_ID 行', () => {
+    const noTitle = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
+    expect(noTitle.split('\n')[0]).toBe('TASK_ID: m2-pipeline/3.1')
+  })
+
+  it('键值行序 = TASK_ID < FILE < TYPE < CATEGORY < SURFACE < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（SURFACE = S2b 增键，紧随 CATEGORY——SC3）', () => {
     const keys = [
       'TASK_ID:',
-      'TITLE:',
       'FILE:',
       'TYPE:',
       'CATEGORY:',
@@ -239,13 +237,13 @@ describe('AC2 <task-context> 键值行（键级零标签）', () => {
 
   it('条件键缺席即省行（最小夹具仅恒在场键 + 结算出口句恒在场）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', 'GOAL:', 'ACCEPTANCE_CRITERIA:', 'SURFACE:']) {
+    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', '<goal>', 'ACCEPTANCE_CRITERIA:', 'SURFACE:']) {
       expect(minimal).not.toContain(key)
     }
     expect(minimal).toContain(SETTLEMENT_EXIT_LINE)
   })
 
-  it('键级零标签（task-context 内文为纯键值行——不加键级标签）', () => {
+  it('键级零标签（简报正文为纯键值行——除 <goal> 外不加键级标签）', () => {
     expect(ctx).not.toContain('<TASK_ID>')
     expect(ctx).not.toContain('<BLOCKERS>')
   })
@@ -291,20 +289,18 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
   })
 })
 
-// ─────────────────── 5.3/S2b：任务规格内嵌（GOAL 键 + AC 单行化 + 结算出口） ───────────────────
+// ─────────────────── 5.3/S2b：任务规格内嵌（TITLE 首行 + <goal> 段 + AC 单行化 + 结算出口） ───────────────────
 
-describe('5.3/S2b 任务规格内嵌：TITLE 行 + GOAL 段 + AC 段 + 结算出口句', () => {
-  it('全载荷：TITLE 行 + GOAL 段（结果导向，原 DESCRIPTION 键更名）+ AC 清单段 + 结算出口句收尾', () => {
+describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段 + 结算出口句', () => {
+  it('全载荷：TITLE 裸值首行 + <goal> 包围目标（结果导向，原 DESCRIPTION 键更名）+ AC 清单段 + 结算出口句收尾', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    const ctx = taskContextBody(prompt)
-    expect(ctx).toContain('TITLE: 派发简报模板族（20 类型路由）')
-    expect(ctx).toContain('GOAL:\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载')
-    expect(ctx).toContain('ACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定')
-    expect(ctx).not.toContain('DESCRIPTION:')
-    expect(ctx.indexOf('GOAL:')).toBeGreaterThan(ctx.indexOf('VARS:'))
-    expect(ctx.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(ctx.indexOf('GOAL:'))
-    expect(ctx.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(ctx.indexOf('ACCEPTANCE_CRITERIA:'))
-    expect(ctx.trimEnd().endsWith(SETTLEMENT_EXIT_LINE)).toBe(true)
+    expect(prompt).toContain('<goal>\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载\n</goal>')
+    expect(prompt).toContain('ACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定')
+    expect(prompt).not.toContain('DESCRIPTION:')
+    expect(prompt.indexOf('<goal>')).toBeGreaterThan(prompt.indexOf('VARS:'))
+    expect(prompt.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(prompt.indexOf('</goal>'))
+    expect(prompt.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(prompt.indexOf('ACCEPTANCE_CRITERIA:'))
+    expect(prompt.trimEnd().endsWith(SETTLEMENT_EXIT_LINE)).toBe(true)
   })
 
   it('AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源）', () => {
@@ -315,20 +311,20 @@ describe('5.3/S2b 任务规格内嵌：TITLE 行 + GOAL 段 + AC 段 + 结算出
     expect(prompt).toContain('ACCEPTANCE_CRITERIA:\n- 多行条目第一行 第二行续\n- 单行条目')
   })
 
-  it('任务体不越 <task-context> 边界（单块结构——块内收尾）', () => {
+  it('任务体收尾（结算出口句为全文最后一行；目标内容不越收尾句）', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    expect(prompt.indexOf(`</${XML_TAGS.taskContext}>`)).toBe(prompt.length - `</${XML_TAGS.taskContext}>`.length)
-    expect(prompt.slice(prompt.indexOf(`</${XML_TAGS.taskContext}>`))).not.toContain('达成：简报仅承载任务级内容')
+    expect(prompt.lastIndexOf('\n')).toBe(prompt.length - SETTLEMENT_EXIT_LINE.length - 1)
+    expect(prompt.slice(prompt.indexOf(SETTLEMENT_EXIT_LINE))).not.toContain('达成：简报仅承载任务级内容')
   })
 
-  it('GOAL 单独在场（无 AC）→ 仅 GOAL 段；空 AC 数组 → 省段', () => {
+  it('GOAL 单独在场（无 AC）→ 仅 <goal> 段；空 AC 数组 → 省段', () => {
     const goalOnly = composeDispatchPrompt({
       ...minimalInput({ taskType: 'doc' }),
       title: '仅有目标的任务',
       goal: '一行目标',
       acceptanceCriteria: [],
     })
-    expect(goalOnly).toContain('GOAL:\n一行目标')
+    expect(goalOnly).toContain('<goal>\n一行目标\n</goal>')
     expect(goalOnly).not.toContain('ACCEPTANCE_CRITERIA:')
   })
 

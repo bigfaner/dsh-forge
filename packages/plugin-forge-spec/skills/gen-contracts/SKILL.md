@@ -1,77 +1,79 @@
 ---
 name: gen-contracts
-description: Generate Contract specifications from Journey documents and code reconnaissance — six dimensions with semantic descriptors, risk-driven Outcome density, and handbook-derived technical anchors, one file per Step under contracts/.
+description: 从 Journey 文档与代码侦察生成 Contract 规格——六维度语义描述符、风险驱动的 Outcome 密度、手册导出的技术锚点，每步一份文件落 contracts/ 下。
 ---
 
-# Gen Contracts
+# 生成契约（gen-contracts）
 
-Every Journey Step gets a Contract: six-dimension declarations with **semantic descriptors**
-(natural language expressing business intent — regex and framework assertions are deferred to
-`gen-test-scripts`). When design handbooks exist, Contract frontmatter carries **technical
-anchors** (endpoint / command / page / screen) bridging design intent to test code.
+每个 Journey Step 得到一份 Contract：六维度声明配**语义描述符**（表达业务意图的
+自然语言——regex 与框架断言推迟到 `gen-test-scripts`）。存在设计手册时，Contract
+frontmatter 携带**技术锚点**（endpoint / command / page / screen），把设计意图桥接
+到测试代码。
 
 <HARD-GATE>
-This skill ONLY writes to `docs/features/<slug>/testing/<journey>/contracts/`. No test
-scripts, no execution, no other paths.
+本技能只写 `docs/features/<slug>/testing/<journey>/contracts/`。不写测试脚本、不执行、
+不碰其他路径。
 </HARD-GATE>
 
-## Prerequisites
+## 前置条件
 
-| Artifact | Missing? |
+| 工件 | 缺失时 |
 |---|---|
-| ≥1 Journey dir with `journey.md` under `testing/` | Run `gen-journeys` first |
-| Journey eval report `testing/<journey>/.eval-report.md`, all at/above target | Run `eval --type journey` first — **blocker** |
+| `testing/` 下 ≥1 个含 `journey.md` 的 Journey 目录 | 先跑 `gen-journeys` |
+| Journey 评审报告 `testing/<journey>/.eval-report.md` 全部达标 | 先跑 `eval --type journey` —— **阻塞项** |
 
-**SKIP_EVAL_GATE**: when the task vars (the `VARS:` line in the task-context block of your
-brief) carry `SKIP_EVAL_GATE=true` (quick-mode pipeline), the eval-report prerequisite is
-waived; every Contract file then carries frontmatter
-`skip_eval: true` plus a body note "generated without eval-journey verification — review
-with extra scrutiny". Without the flag the blocker is mandatory.
+**SKIP_EVAL_GATE**：任务 vars（简报里的 `VARS:` 行）携带
+`SKIP_EVAL_GATE=true`（quick-mode 管线）时豁免 eval-report 前置；此后每份 Contract
+文件 frontmatter 带 `skip_eval: true`，正文加注"generated without eval-journey
+verification — review with extra scrutiny"。无该标志时阻塞项强制生效。
 
 ## State-Layer Discipline (boundary)
 
-Contract files are on-disk artifacts under `testing/<journey>/contracts/` — the registry
-vocabulary has **no contract kind**; do NOT register them via `upsertFeatureDoc`. Pipeline
-position is carried by the task domain (`test-gen-contracts` / `eval-contract` / `test-gen-scripts`).
+Contract 文件是 `testing/<journey>/contracts/` 下的磁盘工件——注册表词表**没有
+contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任务域承载
+（`test-gen-contracts` / `eval-contract` / `test-gen-scripts`）。
 
-## Workflow
+## 工作流
 
-1. **Read Journeys** — every Journey directory under `testing/`; never skip one by risk or
-   size. Parse name, risk level, happy path steps, edge cases, invariants.
-2. **Code reconnaissance (Fact Table)** — read source to extract ground-truth values
-   (signatures, output formats, error codes, side effects, preconditions) with source
-   citations. Write/merge the Fact Table to `.forge/fact-table.json` (`source: "static"`,
-   `confidence: "inferred"`; merge by `fact_id`, never delete runtime entries).
-3. **Load handbooks + anchors** — per surface: `design/api-handbook.md` (api),
-   `design/cli-handbook.md` (cli/tui), `design/page-map.md` (web), `design/screen-map.md`
-   (mobile). Missing handbook → skip anchor filling for that surface with a hint, never
-   abort. Stale handbook (generated before the current tech-design) → warn, proceed.
-   Anchors come ONLY from handbooks — never reverse-engineer from code; unmatched Steps
-   leave anchors empty rather than guessed. Set `last_anchor_sync` (ISO-8601) when any
-   anchor is filled.
-4. **Generate Contracts** — one file per Step: `step-<N>-<action-slug>.md`. All Outcomes of
-   a Step share its file; happy path steps become the `success` Outcome, edge cases become
-   additional Outcomes with divergent Preconditions.
-   - **Six dimensions per Outcome**: Preconditions, Input, Output, State (mandatory);
-     Side-effect, Invariants (optional, default `none` / none).
-   - **fixture_spec is mandatory** inside Preconditions: declarative pre-existing data
-     state (entities, relationships, minimum counts). A Contract without it is invalid.
-   - **Preconditions mutual exclusivity**: at most one Outcome's Preconditions can hold for
-     any system state; >5 Outcomes per Step triggers review.
-   - **Risk-driven density** (from `risk_level`): High 3-5 Outcomes/Step, 13-20/Journey;
-     Medium 2-3, 8-12; Low 1-2, 4-7. Generation priority: happy path → surface-required →
-     Fact-Table-informed boundary (annotate `source: inferred` + reasoning) → LLM-inferred
-     edge cases (High/Medium only). Surface-required Outcomes are mandatory for matching
-     Steps: cli `not-found`/`already-exists`; api `unauthorized` (authenticated endpoints);
-     web `validation-error` (forms) / `session-expired` (session-dependent).
-   - Every Contract file ends with a `## Journey Invariants` section (≥1 entry).
-5. **Validate** — schema checks: mandatory dimensions non-empty; fixture_spec present; no
-   regex in descriptors; Outcome names unique; exclusivity; invariants section; side-effect
-   default; anchor frontmatter structure + sync timestamp. On failure regenerate the
-   offending files ONCE with the errors fed back; still failing → stop and report the
-   non-compliance list for manual correction (never continue with invalid Contracts).
-6. **Write output** to `testing/<journey>/contracts/`; keep the Fact Table current.
+1. **读 Journeys**——`testing/` 下每个 Journey 目录；绝不按风险或体量跳过。解析
+   名称、风险级、happy path 步骤、边界用例、不变式。
+2. **代码侦察（事实表）**——读源码提取地面真值（签名、输出格式、错误码、副作用、
+   前置条件）并附来源引用。把事实表写入/合并 `.forge/fact-table.json`
+   （`source: "static"`、`confidence: "inferred"`；按 `fact_id` 合并，绝不删除运行期
+   条目）。
+3. **装载手册 + 锚点**——逐表面：`design/api-handbook.md`（api）、
+   `design/cli-handbook.md`（cli/tui）、`design/page-map.md`（web）、
+   `design/screen-map.md`（mobile）。手册缺失 → 该表面跳过锚点填充并留提示，绝不
+   中止。手册过期（生成早于当前 tech-design）→ 警告并继续。锚点**只**来自手册——
+   绝不从代码逆向；匹配不上的 Step 锚点留空而不臆造。任一锚点被填充时写
+   `last_anchor_sync`（ISO-8601）。
+4. **生成 Contract**——每步一份文件：`step-<N>-<action-slug>.md`。一个 Step 的全部
+   Outcome 共享其文件；happy path 步骤成为 `success` Outcome，边界用例成为带分叉
+   Preconditions 的附加 Outcome。
+   - **每 Outcome 六维度**：Preconditions、Input、Output、State（必备）；
+     Side-effect、Invariants（可选，缺省 `none` / 无）。
+   - **fixture_spec 强制**在 Preconditions 内：声明式的既有数据状态（实体、关系、
+     最低数量）。缺它即无效 Contract。
+   - **Preconditions 互斥**：任一系统状态下至多一个 Outcome 的 Preconditions 成立；
+     每 Step >5 个 Outcome 触发评审。
+   - **风险驱动密度**（按 `risk_level`）：High 3-5 Outcome/步、13-20/Journey；
+     Medium 2-3、8-12；Low 1-2、4-7。生成优先序：happy path → 表面必需 →
+     事实表知情的边界（注 `source: inferred` + 理由）→ LLM 推断边界（仅
+     High/Medium）。匹配 Steps 的表面必需 Outcome 强制：cli `not-found` /
+     `already-exists`；api `unauthorized`（需认证端点）；web `validation-error`
+     （表单）/ `session-expired`（会话依赖）。
+   - 每份 Contract 文件以 `## Journey Invariants` 节收尾（≥1 条）。
+5. **校验**——schema 检查：必备维度非空；fixture_spec 在位；描述符无 regex；
+   Outcome 名唯一；互斥；不变式节；side-effect 缺省；锚点 frontmatter 结构 +
+   同步时间戳。失败时携错误回喂重新生成违规文件**一次**；仍失败 → 停止并呈报待
+   人工修复的不合规清单（绝不带无效 Contract 继续）。
+6. **写出**到 `testing/<journey>/contracts/`；保持事实表最新。
 
-## Next Step
+## 文档风格公约
 
-`eval --type contract`, then `gen-test-scripts`.
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 下一步
+
+`eval --type contract`，随后 `gen-test-scripts`。

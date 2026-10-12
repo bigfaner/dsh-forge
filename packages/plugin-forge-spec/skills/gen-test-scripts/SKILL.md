@@ -1,89 +1,82 @@
 ---
 name: gen-test-scripts
-description: Generate executable test scripts from Contract specifications — per-Journey test files with @feature tags, one test per Outcome plus a happy-path smoke test, output partitioned by surface count.
+description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测试文件带 @feature 标签，每 Outcome 一个测试外加一条 happy-path 冒烟测试，按表面数量分区输出。
 ---
 
-# Gen Test Scripts
+# 生成测试脚本（gen-test-scripts）
 
-Tests are generated per Journey, not per interface type. Each Step's Contract defines the
-assertions; semantic descriptors are resolved to concrete matchers here, grounded in the
-Fact Table.
+测试按 Journey 生成，不按接口类型。每步的 Contract 定义断言；语义描述符在此落成
+具体匹配器，并以事实表为据。
 
-## Prerequisites
+## 前置条件
 
-| Artifact | Missing? |
+| 工件 | 缺失时 |
 |---|---|
-| ≥1 Contract file in `testing/<journey>/contracts/` | Run `gen-contracts` first |
-| Contract eval report `testing/<journey>/.eval-report.md`, all at/above target | Run `eval --type contract` first — **blocker** |
+| `testing/<journey>/contracts/` 内 ≥1 份 Contract 文件 | 先跑 `gen-contracts` |
+| Contract 评审报告 `testing/<journey>/.eval-report.md` 全部达标 | 先跑 `eval --type contract` —— **阻塞项** |
 
-**SKIP_EVAL_GATE**: task vars (the `VARS:` line in the task-context block of your brief)
-carrying `SKIP_EVAL_GATE=true` (quick-mode pipeline) waive the
-eval-report blocker; every generated file then carries the header comment
-"// SKIP_EVAL_GATE: generated without eval-contract verification. Review with extra
-scrutiny." Without the flag the blocker is mandatory.
+**SKIP_EVAL_GATE**：任务 vars（简报里的 `VARS:` 行）携带
+`SKIP_EVAL_GATE=true`（quick-mode 管线）时豁免 eval-report 阻塞项；此后每份生成文件
+带头注释 "// SKIP_EVAL_GATE: generated without eval-contract verification. Review
+with extra scrutiny."。无该标志时阻塞项强制生效。
 
 ## State-Layer Discipline (boundary)
 
-Test scripts are repo code artifacts — NOT registered via `upsertFeatureDoc` and NOT task
-rows. Their pipeline position is carried by the `test-gen-scripts` / `test-run` task types.
+测试脚本是仓库代码工件——**不**经 `upsertFeatureDoc` 注册，**不是**任务行。其管线
+位置由 `test-gen-scripts` / `test-run` 任务类型承载。
 
-## Output Directory
+## 输出目录
 
-- **Multi-surface project (2+ surfaces)**: `tests/<surfaceKey>/<journey>/`
-- **Single-surface project**: `tests/<journey>/` (no surface-key layer)
+- **多表面项目（≥2 表面）**：`tests/<surfaceKey>/<journey>/`
+- **单表面项目**：`tests/<journey>/`（无 surface-key 层）
 
-`<surfaceKey>` is the user-defined key (e.g. `backend`), NEVER the type (`api`). No staging
-area — tests go directly to their final location; lifecycle is tag-based.
+`<surfaceKey>` 是用户自定义键（如 `backend`），**绝不是**类型（`api`）。无暂存区——
+测试直接落最终位置；生命周期基于标签。
 
-## Workflow
+## 工作流
 
-1. **Load conventions (surface-first)** — `docs/conventions/testing/{surface}/core.md` per
-   detected surface; legacy flat framework-first files are not loaded (flag them for
-   regeneration). From `core.md` read the assertion preference table to resolve the target
-   framework; otherwise detect from existing test files; still ambiguous → ask
-   (interactive) or derive from the brief + Fact Table and record the choice (task
-   context). Never silently default.
-2. **Code reconnaissance** — refresh the Fact Table (`.forge/fact-table.json`): framework
-   patterns (runner, imports, build tags) and domain ground truth (entry points, handlers,
-   config). Resolve every semantic descriptor against facts, citing sources.
-3. **Route decision per Journey** — Contracts exist → Contract path. No Contracts AND
-   `surface_types` ⊆ {web, mobile} → Direct path (generate from `journey.md` steps mapped
-   to actions + visual assertions; every direct-path test carries ≥1 meaningful visual
-   assertion). No Contracts with protocol surfaces (cli/tui/api) → error: run
-   `gen-contracts` first.
-4. **Cross-validate anchors** (Contract path) — compare Contract frontmatter anchors
-   against the Fact Table; handbook is the authority: handbook agrees with anchor, code
-   differs → code bug report; handbook differs from anchor → propose an anchor fix (show
-   the diff; write only on explicit approval); no handbook → degraded mode, use Fact Table
-   inference with a hint. Never auto-resolve low-confidence or unverifiable matches —
-   report them. Emit the surface coverage report.
-5. **Generate tests** — one test file per Contract step, one test function per Outcome:
-   assert Output (resolved matchers) and State changes per the Contract; traceability
-   comment linking back to the Contract; isolation via temp dirs/framework equivalents.
-   Load the per-type generation rules for the surface's type (from the testing
-   conventions); shared principles always apply: isolation, determinism, timeout
-   protection, idempotency, resource cleanup. Every test owns its world — no dependencies
-   on real repo state, git state, or workspace registries.
-   - **@feature tags mandatory** on every generated file, in the Convention's tag syntax;
-     absent Tags section → ask which format (or follow the brief's convention reference).
-   - **Test type naming** by surface: cli/tui/api → "functional" terminology; web/mobile →
-     "e2e"; tags `@cli-functional` / `@tui-functional` / `@api-functional` / `@web-e2e` /
-     `@mobile-e2e`. Never label non-web/mobile tests "e2e".
-   - **Journey smoke test** — exactly one per Journey: full happy path in sequence, state
-     passed between steps, success-Outcome outputs asserted, invariants verified across all
-     steps. Happy path only.
-   - **No hardcoded secrets** — sensitive fields use environment variable placeholders.
-   - One Journey per invocation; multiple Journeys are processed sequentially.
-6. **Compile gate** — syntax/import validation per framework (`gofmt -e` / `node --check` /
-   `tsc --noEmit` / `py_compile`), then the repo's compile recipe (e.g. `just compile`) or
-   framework equivalent. On failure feed errors back and regenerate — at most 1 auto-retry
-   per file (syntax) / 3 attempts (compile). Exhausted → mark the file `// GEN-FAILED:
-   <summary>` and continue; gen-failed files are kept for inspection, never deleted.
-7. **Coverage self-check** — per surface type: count Journeys (from `testing/*/journey.md`
-   frontmatter) vs generated test script sets. Any gap (including direct-path generation
-   failures) → report FAIL with the gap list; do not silently proceed with gaps.
+1. **装载约定（表面优先）**——逐探测表面读
+   `docs/conventions/testing/{surface}/core.md`；不装载旧式扁平框架优先文件（标记
+   待再生）。从 `core.md` 读断言偏好表解析目标框架；否则从既有测试文件探测；仍含糊
+   → 问（交互式）或从简报 + 事实表推导并记录选择（任务语境）。绝不静默取缺省。
+2. **代码侦察**——刷新事实表（`.forge/fact-table.json`）：框架模式（runner、imports、
+   build tags）与领域地面真值（入口、处理器、配置）。逐条语义描述符对照事实解析并
+   引用来源。
+3. **逐 Journey 路由决策**——有 Contract → Contract 路径。无 Contract 且
+   `surface_types` ⊆ {web, mobile} → Direct 路径（从 `journey.md` 步骤映射到动作 +
+   视觉断言生成；每条 direct-path 测试带 ≥1 条有意义的视觉断言）。无 Contract 且
+   协议表面（cli/tui/api）→ 报错：先跑 `gen-contracts`。
+4. **锚点交叉校验**（Contract 路径）——把 Contract frontmatter 锚点与事实表对照；
+   手册是权威：手册与锚点一致而代码不同 → 代码 bug 报告；手册与锚点不同 → 提议
+   锚点修复（展示 diff；获明确批准才写入）；无手册 → 降级模式，用事实表推断并附
+   提示。绝不自动裁决低置信或无法核验的匹配——呈报。输出表面覆盖报告。
+5. **生成测试**——每 Contract 步一份测试文件，每 Outcome 一个测试函数：按 Contract
+   断言 Output（已解析匹配器）与 State 变化；带回链 Contract 的溯源注释；经临时
+   目录/框架等价物隔离。装载该表面类型的逐类型生成规则（来自测试约定）；共享原则
+   恒适用：隔离、确定性、超时保护、幂等、资源清理。每个测试自持其世界——不依赖
+   真实仓库状态、git 状态或工作区注册表。
+   - **@feature 标签强制**在每份生成文件上，用约定的标签语法；缺 Tags 节 → 问
+     格式（或从简报的约定引用）。
+   - **测试类型命名**按表面：cli/tui/api → "functional" 术语；web/mobile →
+     "e2e"；标签 `@cli-functional` / `@tui-functional` / `@api-functional` /
+     `@web-e2e` / `@mobile-e2e`。绝不把非 web/mobile 测试标成 "e2e"。
+   - **Journey 冒烟测试**——每 Journey 恰一条：完整 happy path 依序执行，状态逐步
+     传递，断言 success-Outcome 输出，跨全部步骤校验不变式。仅 happy path。
+   - **无硬编码密钥**——敏感字段用环境变量占位。
+   - 每次调用一条 Journey；多条 Journey 顺序处理。
+6. **编译门**——逐框架做语法/import 校验（`gofmt -e` / `node --check` /
+   `tsc --noEmit` / `py_compile`），再跑仓库编译配方（如 `just compile`）或框架
+   等价物。失败回喂错误重新生成——每文件至多 1 次自动重试（语法）/ 3 次（编译）。
+   耗尽 → 文件标 `// GEN-FAILED: <summary>` 并继续；gen-failed 文件留检，绝不删除。
+7. **覆盖自检**——逐表面类型：数 Journey（读 `testing/*/journey.md` frontmatter）
+   对照已生成的测试脚本集。任一缺口（含 direct-path 生成失败）→ 带缺口清单报
+   FAIL；绝不带缺口静默继续。
 
-## Next Step
+## 文档风格公约
 
-The `test-run` task family executes the generated scripts via the core package's
-`run-tests` skill.
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：生成脚本写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 下一步
+
+生成的脚本由 `test-run` 任务族经核心包的 `run-tests` 技能执行。

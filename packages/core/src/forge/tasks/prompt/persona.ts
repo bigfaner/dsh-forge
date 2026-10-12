@@ -1,4 +1,4 @@
-﻿// worker persona 组成模块（提案 worker-lean-execution S2a；替代被废弃的 1.1，AC 按
+// worker persona 组成模块（提案 worker-lean-execution S2a；替代被废弃的 1.1，AC 按
 // 2026-10-11 修订对齐：UI 任务不作特殊处理）。
 //
 // 组成矩阵 = 恒定核心段（单源常量，20 类型全在场——通用纪律，不含任何代码/测试/文档
@@ -11,7 +11,7 @@
 // result=blocked/COVERAGE=maintain/AGENTS.md 等）外一律中文；行文统一祈使句分点风格。
 // 目标导向强制：领取后第一步用 todo_write 建待办清单（§7 单源），全 completed 才
 // submitTask。临时产物（含 e2e/验收证据票据）统一落盘 logs/<slug>/<taskKey>/。
-// 任务元数据不入 persona：类型/复杂度由任务级 <task-context> TYPE 键承载，persona 只
+// 任务元数据不入 persona：类型/复杂度由任务级简报 TYPE 键承载，persona 只
 // 出现路由**结果**（门禁裁剪事实/工作流步数）。结算面从简：只指 submit-task 技能，
 // 记录字段细则由该技能文档承载，不入 persona。
 //
@@ -317,7 +317,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
  * 核心段一切类型/分级在场；变体按 20 类型表路由（doc.fix 无变体——unknown 抛错）；
  * low 裁剪触及变体段工作流、门禁分级与 Coding Strategy 的 TDD 逐需求句（SC2）。
  * 产出文本禁裸 `{{`（上游严格插值防护——防御面在出口断言，违者抛错而非放行）。
- * 任务元数据（类型/复杂度标签）不入 persona——由任务级 <task-context> 承载；persona 只
+ * 任务元数据（类型/复杂度标签）不入 persona——由任务级简报承载；persona 只
  * 出现路由结果（门禁裁剪事实/工作流步数）。typeType 与 complexity 均运行期校验，违者抛错。
  * 结算面从简：只指 submit-task 技能，记录字段细则归该技能文档。
  */
