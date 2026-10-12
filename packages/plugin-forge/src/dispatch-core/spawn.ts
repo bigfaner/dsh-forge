@@ -22,7 +22,7 @@ export interface SpawnWorkerRequest {
   /** 子会话标签（任务键 · 任务名——worker 子会话标题；用户裁决 2026-10-10：编号+名称） */
   readonly label?: string
   /**
-   * worker persona（S2 分层承载——plugin 侧 composeWorkerPersona 产出，经上游
+   * worker persona（S2 分层承载——core composePersona 产出，经上游
    * SubagentStartRequest.persona 落子会话 scoped 'deployment:persona-prefix' 段遮蔽部署
    * 人格；缺席 = 不携带键回退父会话人格。不进 dispatchPrompt——任务面/人格面分层保持）
    */

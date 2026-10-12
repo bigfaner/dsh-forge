@@ -17,7 +17,7 @@ import type {
 } from '@dsh-forge/contracts'
 import { dispatchCore } from './core.js'
 import type { DispatchCoreArgs, DispatchCoreDeps, DispatchCoreExec } from './core.js'
-import { composeWorkerPersona } from './persona.js'
+import { composePersona } from '@dsh-forge/core'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, DispatchJobSpec, DispatchJobHooks } from '../faces.js'
 import type { SpawnWorkerHandle, SpawnWorkerRequest } from './spawn.js'
@@ -270,7 +270,7 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     expect(req.label).toBe('feat-x/2.5 · Implement the thing')
     // S2 分层承载：persona = compose 产出（taskType+complexity 消费）经 persona 字段透传；
     // 任务面/人格面分层——personaText 不进 prompt（AC-4）
-    expect(req.persona).toBe(composeWorkerPersona('coding-fix', 'high'))
+    expect(req.persona).toBe(composePersona('coding-fix', 'high'))
     expect(req.prompt).not.toContain(req.persona!)
     expect(req.parent).toBe(parent)
     expect(req.signal).toBeInstanceOf(AbortSignal)

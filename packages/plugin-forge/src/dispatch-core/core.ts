@@ -36,8 +36,8 @@ import { emitToolError } from '../events/sink.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
-import { composeWorkerPersona } from './persona.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
+import { composePersona } from '@dsh-forge/core'
 import {
   exclusiveScopedRejection,
   externalExclusivityGuard,
@@ -327,7 +327,7 @@ export async function spawnClaimed(
   // 落子会话 deployment:persona-prefix scoped 段；不进 dispatchPrompt，分层保持）
   // （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
   const toolFilter = deriveWorkerToolFilter(task.taskType)
-  const persona = composeWorkerPersona(task.taskType, task.complexity)
+  const persona = composePersona(task.taskType, task.complexity)
   const settings: ForgeSettings | undefined =
     deps.settings !== undefined ? await deps.settings.get() : undefined
   const agentOptions = await reconcileWorkerReasoning(

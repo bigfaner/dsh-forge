@@ -17,8 +17,8 @@ export type {
   SpawnStageResult,
 } from './core.js'
 export { deriveTriageToolFilter, deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
-// S2 分层承载：worker persona 合成（plugin 侧——composeWorkerPersona 单点扩写 S2a 矩阵）
-export { composeWorkerPersona } from './persona.js'
+// S2 分层承载：worker persona 合成单源 = @dsh-forge/core composePersona（spawn 链接线——
+// legacy composeWorkerPersona 族级先形已下线，防双源复活不再导出）
 export { bumpSpawnFailures, clearSpawnFailures, spawnFailureStuck, HALT_THRESHOLD, HALTED_REASON } from './guard.js'
 // S1c 循环独占守卫（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选两径；登记表
 // 模块级易失，驱动器 start/终态维护，claim 面消费）
