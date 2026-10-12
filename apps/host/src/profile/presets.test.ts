@@ -106,12 +106,28 @@ for (const preset of ['expedition', 'blitz'] as const) {
       }
     })
 
-    it('persona 分叉：suffix 逐字 + prefix 折叠块首行 = 上游平标量原文 + 作风行（只谈作风——不谈角色与工具禁令）', () => {
+    it('persona 分叉：suffix 逐字 + prefix 折叠块首行 = 上游平标量原文 + 四层简化版双锚（角色锚词 + 作风锚行）', () => {
       const persona = rows.get('persona')!
       expect(persona).toContain('              suffix: Your working directory is {{cwd}}.')
       expect(persona).toContain('              prefix: >-')
       expect(persona).toContain('                You are a coding agent powered by the {{model}} model.')
+      expect(persona).toContain(isExpedition ? '产品型 CTO' : '资深技术专家')
       expect(persona).toMatch(isExpedition ? /远征作风：/ : /突击作风：/)
+    })
+
+    it('persona 四层简化版：思维习惯层（主人翁意识+XY 问题/5 Whys/权衡显式化+clean code）+ 行为纪律 + 反模式禁令，≤12 行', () => {
+      const persona = rows.get('persona')!
+      expect(persona).toContain('思维习惯：主人翁意识')
+      expect(persona).toContain('XY 问题')
+      expect(persona).toContain('5 Whys')
+      expect(persona).toContain('权衡')
+      expect(persona).toContain('clean code')
+      expect(persona).toContain('行为纪律：')
+      expect(persona).toContain('反模式禁令：')
+      // 分工纪律单一归属技能层：persona 仅一句引用，不重复 run-tasks 铁律 3 表述
+      expect(persona).toContain('分工纪律按各技能自身铁律执行')
+      const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
+      expect(bodyLines).toHaveLength(6) // 身份定位/作风/思维习惯/行为纪律/反模式禁令/分工引用——prefix 总行数 7 ≤ 12
     })
 
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
