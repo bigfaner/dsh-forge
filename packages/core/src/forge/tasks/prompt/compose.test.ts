@@ -292,14 +292,14 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
 // ─────────────────── 5.3/S2b：任务规格内嵌（TITLE 首行 + <goal> 段 + AC 单行化 + 结算出口） ───────────────────
 
 describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段 + 结算出口句', () => {
-  it('全载荷：TITLE 裸值首行 + <goal> 包围目标（结果导向，原 DESCRIPTION 键更名）+ AC 清单段 + 结算出口句收尾', () => {
+  it('全载荷：TITLE 裸值首行 + <goal> 包围目标与 AC（结果导向，原 DESCRIPTION 键更名）+ 结算出口句收尾', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    expect(prompt).toContain('<goal>\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载\n</goal>')
-    expect(prompt).toContain('ACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定')
+    expect(prompt).toContain(
+      '<goal>\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载\nACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定\n</goal>',
+    )
     expect(prompt).not.toContain('DESCRIPTION:')
     expect(prompt.indexOf('<goal>')).toBeGreaterThan(prompt.indexOf('VARS:'))
-    expect(prompt.indexOf('ACCEPTANCE_CRITERIA:')).toBeGreaterThan(prompt.indexOf('</goal>'))
-    expect(prompt.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(prompt.indexOf('ACCEPTANCE_CRITERIA:'))
+    expect(prompt.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(prompt.indexOf('</goal>'))
     expect(prompt.trimEnd().endsWith(SETTLEMENT_EXIT_LINE)).toBe(true)
   })
 
@@ -317,7 +317,21 @@ describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段 + 结�
     expect(prompt.slice(prompt.indexOf(SETTLEMENT_EXIT_LINE))).not.toContain('达成：简报仅承载任务级内容')
   })
 
-  it('GOAL 单独在场（无 AC）→ 仅 <goal> 段；空 AC 数组 → 省段', () => {
+  it('仅 AC 在场（无目标）→ <goal> 只含 ACCEPTANCE_CRITERIA；两者皆缺 → 省段', () => {
+    const acOnly = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'doc' }),
+      acceptanceCriteria: ['仅验收条目'],
+    })
+    expect(acOnly).toContain('<goal>\nACCEPTANCE_CRITERIA:\n- 仅验收条目\n</goal>')
+    const none = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'doc' }),
+      goal: undefined,
+      acceptanceCriteria: [],
+    })
+    expect(none).not.toContain('<goal>')
+  })
+
+  it('GOAL 单独在场（无 AC）→ 仅目标入 <goal>；空 AC 数组 → AC 省段', () => {
     const goalOnly = composeDispatchPrompt({
       ...minimalInput({ taskType: 'doc' }),
       title: '仅有目标的任务',

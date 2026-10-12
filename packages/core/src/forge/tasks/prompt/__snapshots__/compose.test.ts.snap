@@ -37,10 +37,10 @@ MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 <goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
-</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
+</goal>
 Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
@@ -96,10 +96,10 @@ MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 <goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
-</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
+</goal>
 Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
@@ -138,10 +138,10 @@ MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 <goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
-</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
+</goal>
 Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 
@@ -187,10 +187,10 @@ MARKERS: fix-of m2-pipeline/2.4, breaking
 VARS: SOURCE_FILES=packages/core/src/forge/tasks/prompt/; TEST_SCRIPT=just test
 <goal>
 达成：简报仅承载任务级内容，纪律面全部迁 persona 承载
-</goal>
 ACCEPTANCE_CRITERIA:
 - 快照与简报逐字一致
 - 块序恒定
+</goal>
 Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above."
 `;
 

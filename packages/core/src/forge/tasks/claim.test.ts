@@ -174,8 +174,9 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     const { dispatchPrompt } = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
     // TITLE 裸值首行（无键前缀）
     expect(dispatchPrompt.split('\n')[0]).toBe('创建 notes.md 并提交')
-    expect(dispatchPrompt).toContain('<goal>\n达成：工作区根 notes.md 在场，内容恰好一行：ok\n</goal>')
-    expect(dispatchPrompt).toContain('ACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿')
+    expect(dispatchPrompt).toContain(
+      '<goal>\n达成：工作区根 notes.md 在场，内容恰好一行：ok\nACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿\n</goal>',
+    )
     // S2b/SC3：SURFACE 单行双值（行值取任务行 surface_key/surface_type；缺席省行）
     h!.db.prepare(`UPDATE tasks SET surface_key = 'web', surface_type = 'web' WHERE id = 't-f-4.1'`).run()
     const withSurface = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })

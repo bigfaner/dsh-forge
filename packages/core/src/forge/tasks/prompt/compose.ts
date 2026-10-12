@@ -158,8 +158,8 @@ export const SETTLEMENT_EXIT_LINE =
 /** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
  *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
  *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
- *  GOAL = `<goal>` 包围的任务体段落（多行值——worker 面无 queryTask 时的定义唯一到达面）+
- *  ACCEPTANCE_CRITERIA + 结算出口一句收尾。TITLE 缺席时首行为 TASK_ID。 */
+ *  GOAL = `<goal>` 包围的任务体段落（目标 + ACCEPTANCE_CRITERIA 同段——worker 面无
+ *  queryTask 时的定义唯一到达面）+ 结算出口一句收尾。TITLE 缺席时首行为 TASK_ID。 */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
@@ -185,9 +185,13 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     vars !== undefined ? `VARS: ${vars}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
-  if (input.goal !== undefined) context += `\n<goal>\n${input.goal}\n</goal>`
-  if (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0) {
-    context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${singleLine(ac)}`).join('\n')}`
+  if (input.goal !== undefined || (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0)) {
+    context += '\n<goal>'
+    if (input.goal !== undefined) context += `\n${input.goal}`
+    if (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0) {
+      context += `\nACCEPTANCE_CRITERIA:\n${input.acceptanceCriteria.map((ac) => `- ${singleLine(ac)}`).join('\n')}`
+    }
+    context += '\n</goal>'
   }
   return `${context}\n${SETTLEMENT_EXIT_LINE}`
 }
