@@ -65,7 +65,8 @@ A，先定 A）；当某分支推翻更早的假设时回溯。
 
 ### Step 6：撰写提案
 
-通过文件工具写 `docs/proposals/<slug>/proposal.md`，含 frontmatter
+通过文件工具写提案文档（`<slug>` proposal 目录相对约定——存储布局见 forge-pipeline
+系统提示段「文档位置/目录树」），含 frontmatter
 （`created`、`author` 取自 git config 或用户、`status: Draft`、`intent`）。
 质量标准——每条都是硬杠：
 

@@ -21,14 +21,16 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 状态层纪律
 
-设计工件落盘**并**注册——注册使 feature 相位单调推进至 `design`：
+设计工件落盘**并**注册——注册使 feature 相位单调推进至 `design`。路径按 `<slug>`
+feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段
+「文档位置/目录树」。
 
-| 工件 | 路径 | 注册方式 |
-|---|---|---|
-| 技术设计 | `docs/features/<slug>/design/tech-design.md` | `upsertFeatureDoc` `doc_kind: tech-design` |
-| ER 图 | `docs/features/<slug>/design/er-diagram.md` | `upsertFeatureDoc` `doc_kind: er-diagram` |
-| SQL schema | `docs/features/<slug>/design/schema.sql` | `upsertFeatureDoc` `doc_kind: sql-schema` |
-| 页面地图（web 表面） | `docs/features/<slug>/design/page-map.md` | `upsertFeatureDoc` `doc_kind: page-map` |
+| 工件 | 注册方式 |
+|---|---|
+| 技术设计 | `upsertFeatureDoc` `doc_kind: tech-design` |
+| ER 图 | `upsertFeatureDoc` `doc_kind: er-diagram` |
+| SQL schema | `upsertFeatureDoc` `doc_kind: sql-schema` |
+| 页面地图（web 表面） | `upsertFeatureDoc` `doc_kind: page-map` |
 
 `api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**
 ——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。返工文档重新注册
@@ -36,7 +38,8 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 意图适配
 
-读 `docs/proposals/<slug>/proposal.md` 的 `intent` frontmatter；缺失 → `new-feature`。
+读 brainstorm 提案文档的 `intent` frontmatter（`<slug>` proposal 目录相对约定，
+见系统提示段目录树）；缺失 → `new-feature`。
 
 - `new-feature`：全量设计——所有段落；用户故事即 AC 清单。
 - `enhancement`：聚焦内部架构；改进目标替代用户故事作清单；手册/ER 仅覆盖信号触发。

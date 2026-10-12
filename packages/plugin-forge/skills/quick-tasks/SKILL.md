@@ -41,7 +41,8 @@ createProposal { slug: "<kebab-slug>", title: "<short title>", mode: "blitz" }
 ```
 
 状态初始为 `draft`（默认）。`rel_path` 可选——仅在提案文档已存在或用户要求时附加；
-一行需求不需要 `proposal.md` 即可推进。
+一行需求不需要 `proposal.md` 即可推进。成文时 `proposal.md` 落 `<slug>` proposal
+目录（存储布局见 forge-pipeline 系统提示段「文档位置/目录树」）。
 
 ### 五段突击提案模板（不含风险段，60 行指导值）
 

@@ -13,15 +13,16 @@ description: 通过协作对话把用户需求固化为结构化 PRD——按适
 ## 状态层纪律
 
 此处产出的每份文档都要落盘**并**注册——注册表（而非文件树）才是"什么存在"的唯一
-事实源；注册使 feature 相位单调推进（永不回退）。
+事实源；注册使 feature 相位单调推进（永不回退）。路径按 `<slug>` feature 目录相对
+约定（`prd/<name>.md`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。
 
-| 文档 | 路径 | 注册方式 |
-|---|---|---|
-| PRD 规格 | `docs/features/<slug>/prd/prd-spec.md` | `upsertFeatureDoc` `doc_kind: prd-spec` |
-| 用户故事 | `docs/features/<slug>/prd/prd-user-stories.md` | `upsertFeatureDoc` `doc_kind: user-stories` |
-| UI 功能 | `docs/features/<slug>/prd/prd-ui-functions.md` | `upsertFeatureDoc` `doc_kind: ui-functions` |
+| 文档 | 注册方式 |
+|---|---|
+| PRD 规格 | `upsertFeatureDoc` `doc_kind: prd-spec` |
+| 用户故事 | `upsertFeatureDoc` `doc_kind: user-stories` |
+| UI 功能 | `upsertFeatureDoc` `doc_kind: ui-functions` |
 
-注册调用形态（参数 snake_case；`rel_path` 仓库相对路径、正斜杠）：
+注册调用形态（参数 snake_case；`rel_path` 仓库相对路径、正斜杠，按上方相对约定）：
 
 ```
 upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "prd-spec", rel_path: "docs/features/<slug>/prd/prd-spec.md", summary: "<一句话>" }
@@ -40,8 +41,8 @@ PRD 定稿并获用户批准之前，不得写任何代码、搭任何项目骨�
 
 ## 意图管线
 
-若 `docs/proposals/<slug>/proposal.md` 存在 brainstorm 提案，读其 `intent`
-frontmatter；缺失或为空 → 按 `new-feature` 处理。意图决定格式：
+若 brainstorm 提案文档存在（`<slug>` proposal 目录相对约定，见系统提示段目录树），
+读其 `intent` frontmatter；缺失或为空 → 按 `new-feature` 处理。意图决定格式：
 
 | 意图 | PRD 格式 | 用户故事 | UI 功能 |
 |---|---|---|---|

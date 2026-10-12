@@ -19,6 +19,7 @@ Journey 文档是 feature 测试树下的磁盘工件——文档注册表词表
 **没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由
 任务域承载：`test-gen-journeys` / `eval-journey` / `test-gen-contracts` 任务类型及其
 依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。
+存储布局（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
 
 ## 管线位置
 
@@ -33,7 +34,8 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
 一条 Journey 候选；朝同一目标递进的连续故事合并；每条 Journey 可回溯到具体故事 ID。
 `prd/prd-ui-functions.md`（若存在）把 UI 交互映射为步骤。
 
-**提案模式**（PRD 文件缺失、`docs/proposals/<slug>/proposal.md` 存在）：Scope 与
+**提案模式**（PRD 文件缺失、brainstorm 提案文档存在——`<slug>` proposal 目录相对
+约定，见系统提示段目录树）：Scope 与
 Success Criteria 节**必备**——任一缺失 → 带诊断中止，不生成。一个 Key Scenario =
 一条 Journey 候选；无 Key Scenarios 时从 Success Criteria/Scope 推导 smoke 级
 Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Journey 可回溯到
@@ -68,7 +70,7 @@ Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Jo
 3. **分级风险**（按上表）；提取产出的边界用例不足时补生成（非法输入、缺失前置
    条件、并发操作、边界值），强制 High 风险边界密度达标。
 4. **逐 Journey 生成文件**——每条 Journey 一个目录：
-   `docs/features/<slug>/testing/<journey-name>/journey.md`，frontmatter：
+   `testing/<journey-name>/journey.md`（feature 目录下），frontmatter：
 
    ```yaml
    ---

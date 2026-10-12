@@ -11,8 +11,8 @@ frontmatter 携带**技术锚点**（endpoint / command / page / screen），把
 到测试代码。
 
 <HARD-GATE>
-本技能只写 `docs/features/<slug>/testing/<journey>/contracts/`。不写测试脚本、不执行、
-不碰其他路径。
+本技能只写 `testing/<journey>/contracts/`（feature 目录下——存储布局见 forge-pipeline
+系统提示段「文档位置」）。不写测试脚本、不执行、不碰其他路径。
 </HARD-GATE>
 
 ## 前置条件

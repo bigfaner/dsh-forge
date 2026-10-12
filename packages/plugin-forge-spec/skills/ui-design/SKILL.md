@@ -15,7 +15,8 @@ description: 从 PRD 的 ui-functions 文档出发产出 UI 设计规格与 HTML
 
 文档注册表词表封闭于七种 kind 且**没有 ui-design kind**——`ui-design.md` 与原型文件
 是磁盘工件，不注册。不得在错配的 kind 下伪造注册（`ui-functions` 已命名
-`prd/prd-ui-functions.md`；把它改指 `ui-design.md` 会丢掉 PRD 那一行）。
+`prd/prd-ui-functions.md`；把它改指 `ui-design.md` 会丢掉 PRD 那一行）。存储布局
+（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
 
 本技能拥有的唯一状态层动作：每当本技能**回写 `prd/prd-ui-functions.md`**（第 2 步的
 导航架构回填、第 7 步的 PRD 对账），就重新注册它：
@@ -40,7 +41,7 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",
 
 | 工件 | 缺失时 |
 |---|---|
-| `docs/features/<slug>/prd/prd-ui-functions.md`（注册为 `ui-functions`） | 先跑 `write-prd` 并补齐 UI 功能定义 |
+| `prd/prd-ui-functions.md`（feature 目录相对约定，注册为 `ui-functions`） | 先跑 `write-prd` 并补齐 UI 功能定义 |
 
 ## 工作流
 
