@@ -1,37 +1,47 @@
 ---
 name: breakdown-tasks
-description: Break the finalized technical design into an executable task graph via addTask — phased business tasks with dependencies, per-phase summary and gate tasks, and the trailing test pipeline chain, validated with validateFeatureTasks.
+description: 把定稿的技术设计拆解为可执行任务图（经 addTask）——分阶段业务任务带依赖、逐阶段摘要与 gate 任务、尾部测试管线链，最后经 validateFeatureTasks 校验容器。
 ---
 
-# Breakdown Tasks
+# 目标拆解（breakdown-tasks）
 
-Decompose a technical design into executable tasks (1-4h each, clear dependencies,
-testable acceptance criteria) — entirely through the `addTask` tool against the feature
-container. Tasks live in the state layer.
+把技术设计拆解为可执行任务——每个任务 1-4 小时、依赖清晰、验收标准可客观核验——
+全程只经 `addTask` 工具作用于 feature 容器。任务活在状态层。
 
 <HARD-RULE>
-Do NOT create task files, `index.json`, stage-gate files, or any per-task markdown — that
-is the old file-based form. Every task, dependency, and gate is a state-layer row created
-with `addTask`. The feature phase advances automatically once tasks exist.
+不得创建任务文件、`index.json`、阶段门文件或任何逐任务 markdown——那是旧的文件形态。
+每条任务、每条依赖、每个 gate 都是经 `addTask` 创建的状态层行。任务一旦存在，feature
+相位自动推进。
 </HARD-RULE>
 
-## Prerequisites
+## 目标导向拆解原则
 
-| Artifact | Missing? |
+**每个任务有且只有一个清晰、明确的目标。** 拆解时逐条自检：
+
+- **一任务一目标**：任务标题能用一句"做完后 `<什么>` 成立"陈述；说不出单一目标
+  （标题含多个动词、"顺手"、"以及"）即未拆到位，先拆再建。
+- **目标可核验**：目标落在可客观核验的验收标准上，而不是"尽量""改善"之类的模糊
+  方向——验收标准就是目标的物化形态。
+- **目标属任务，不属阶段**：阶段是组织结构（并行分组、gate 边界），目标必须归属
+  单条任务；禁止出现"本阶段完成 X 的一部分"这类无目标任务。
+- **目标面向下游**：`task_desc` 写清该任务交付什么、下游谁消费它；不写"等待""配合"
+  等无交付物表述。
+
+## 前置条件
+
+| 工件 | 缺失时 |
 |---|---|
-| `prd/prd-spec.md` (registered `prd-spec`) | Run `write-prd` first |
-| `design/tech-design.md` (registered `tech-design`) | Run `tech-design` first |
+| `prd/prd-spec.md`（注册为 `prd-spec`） | 先跑 `write-prd` |
+| `design/tech-design.md`（注册为 `tech-design`） | 先跑 `tech-design` |
 
-`registerFeature` is NOT called here — this skill breaks down an existing feature container
-(expedition chain registered it at proposal acceptance; the two explicit-linking boundaries
-— NULL-mode proposal after mode setting, and an already-accepted upgrade — are handled in
-the session that owns the proposal decision, not during breakdown).
+此处不调 `registerFeature`——本技能作用于已存在的 feature 容器（远征链在提案被接受
+时注册它；两类显式链接边界——mode 设定后的 NULL-mode 提案、已接受的升级——由持有
+提案裁决的会话处理，不在拆解期处理）。
 
-## Task Creation Protocol (addTask)
+## 任务创建协议（addTask）
 
-Create tasks in dependency order — each `addTask` returns the natural key
-(`slug`/`local_id`); capture every returned `local_id` to wire later `depends_on`. All
-calls carry the container pair:
+按依赖顺序创建任务——每次 `addTask` 返回自然键（`slug`/`local_id`）；捕获全部返回的
+`local_id` 以便后续 `depends_on` 接线。所有调用携带容器对：
 
 ```
 addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "...",
@@ -41,79 +51,69 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
           surface_key: "...", surface_type: "...", breaking: true|false }
 ```
 
-- `title` = action-first business phrasing; `task_desc` = the working description.
-- `acceptance_criteria` = objectively verifiable checklist items (the submit-time AC
-  evidence gate judges against this list — every item must be checkable).
-- `depends_on` = natural-key localIds of same-container prerequisites (same-feature edges
-  only; cycles are rejected server-side).
-- No cross-container waits in prose: `task_desc` / `acceptance_criteria` must never say
-  "wait for another container's task to land" — the pipeline cannot see, guard, or
-  restore such a wait (it degrades into a worker-level block and a human decision). If
-  later work needs an earlier deliverable from another container (same files, layered
-  output), stop and put the choice to the user: merge into one container, or sequence
-  the dispatches (register the dependent container only after the earlier one settles).
-  Never create a waiting task.
-- `breaking: true` when modifying shared interfaces/models/contracts (additive interface
-  changes count).
-- `vars` carry structured context (`SOURCE_FILES`, `TEST_SCRIPT`, ...) as KEY=VALUE
-  entries.
-- File-scope boundaries: tasks touching multiple files enumerate exact paths in
-  `task_desc`/`vars` — never "all files". When >8 files share one pattern, split by file
-  group; a split task adds a scope-constraint var listing its files.
+- `title` = 动词先行的业务措辞；`task_desc` = 工作描述。
+- `acceptance_criteria` = 可客观核验的清单项（提交时 AC 证据门逐项对照此清单——
+  每项都必须可核验）。
+- `depends_on` = 同容器前置任务的自然键 localId（仅同 feature 内的边；环被服务端拒收）。
+- 正文不写跨容器等待：`task_desc` / `acceptance_criteria` 绝不说"等另一个容器的任务
+  落地"——管线看不见、守不住、也恢复不了这种等待（它退化为 worker 级阻塞加人工裁决）。
+  若后续工作需要另一容器的更早交付物（同文件、分层产出），停下来交用户裁决：合并进
+  同一容器，或排序派发（前一个落定后才注册依赖容器）。绝不创建等待型任务。
+- 改共享接口/模型/契约（含增量式接口变更）时 `breaking: true`。
+- `vars` 以 KEY=VALUE 条目承载结构化上下文（`SOURCE_FILES`、`TEST_SCRIPT`…）。
+- 文件范围边界：触及多文件的任务在 `task_desc`/`vars` 里枚举确切路径——绝不"所有
+  文件"。同一模式 >8 个文件时按文件组拆分；被拆任务加一条列明其文件的范围约束 var。
 
-### Type vocabulary (closed — `type` must be exactly one)
+### 类型词表（封闭——`type` 必须精确取一）
 
-`coding-feature` (new runtime behavior/capability/files) · `coding-enhancement` ·
-`coding-cleanup` · `coding-refactor` · `code-quality-simplify` · `coding-fix` (only for
-fix-chain spawn, never manual) · `gate` · `doc` (non-compilable output only — `.md`,
-`.yaml`, `.json`, `.sql`...; classify by OUTPUT artifact, not intent) · `doc-consolidate`
-· `doc-drift` · `doc-review` · `doc-summary` · `test-run` · `test-gen-contracts` ·
-`test-gen-journeys` · `test-gen-scripts` · `validation-code` · `validation-ux` ·
-`eval-contract` · `eval-journey`.
+`coding-feature`（新运行时行为/能力/文件）· `coding-enhancement` · `coding-cleanup` ·
+`coding-refactor` · `code-quality-simplify` · `coding-fix`（仅 fix 链派生，禁止手工）·
+`gate` · `doc`（仅不可编译产出——`.md`、`.yaml`、`.json`、`.sql`…；按产出工件分类，
+不按意图）· `doc-consolidate` · `doc-drift` · `doc-review` · `doc-summary` ·
+`test-run` · `test-gen-contracts` · `test-gen-journeys` · `test-gen-scripts` ·
+`validation-code` · `validation-ux` · `eval-contract` · `eval-journey`。
 
-Priority: P0 core mechanism or blocks others; P1 maps to a PRD AC or core flow; P2 polish.
+优先级：P0 核心机制或阻塞他人；P1 对应一条 PRD AC 或核心流程；P2 打磨。
 
-## Workflow
+## 工作流
 
-1. **Read all feature documents** — prd-spec, tech-design, user stories, ui-functions,
-   ui-design, ER diagram, schema.sql as available. UI docs contribute UI-component task
-   rows; ER/schema contribute a schema task; tech-design interfaces/data models/error
-   types each map to a task; PRD flow gates map to gate verification tasks.
-2. **PRD coverage verification** — read the tech-design's PRD Coverage Map (fallback: user
-   stories' AC directly). Every AC maps to ≥1 task; a gap means a missing task or a
-   design hole — resolve before creating.
-3. **Derive phases & dependencies** — number phases sequentially (1.x, 2.x, ...); prefer
-   PRD-declared phase structure, otherwise group by dependency depth. Same phase =
-   parallel (unless conflicting); cross-phase = depend on the prior phase's gate. Split
-   rules in priority order: (1) independently verifiable outcomes → separate tasks;
-   (2) multi-verb titles → split by functional boundary; (3) >8 same-pattern files →
-   split by file group. Docs-only features (every output non-compilable) skip language
-   resolution and use `doc` types throughout.
-4. **Create business tasks** per phase via `addTask` (protocol above). Complexity at
-   creation: `low` = ≤3 AC and no hard constraints; `high` = ≥5 AC or hard constraints;
-   `medium` otherwise.
-5. **Create per-phase summary + gate** — after each phase's business tasks: one `doc-summary`
-   task (deps = that phase's business task localIds), then one `gate` task (deps = the
-   summary's localId). Gates are the phase boundary; the next phase's first task depends
-   on the prior gate.
-6. **Create the test pipeline chain** after the last phase's gate, wired in order —
-   review-doc (`doc-review`) → gen-journeys (`test-gen-journeys`) → eval-journey
-   (`eval-journey`) → gen-contracts (`test-gen-contracts`) → eval-contract
-   (`eval-contract`) → gen-scripts (`test-gen-scripts`) → run-tests (`test-run`). Each
-   task depends on its predecessor; the first (review-doc) depends on the final phase
-   gate. Give each a title naming its skill/purpose; dispatch briefs for these types
-   already invoke the skills.
-7. **Sizing audit** — re-check every task: multi-verb titles split; AC crossing unrelated
-   domains split; operational ceiling respected; **≤6 acceptance criteria per task**
-   (more = scope too large, split further); zero cross-container references in any
-   `task_desc` / AC (a needed external ordering means merge or sequence, not a waiting
-   task).
-8. **Validate the container** — `validateFeatureTasks { feature_slug: "<slug>" }`: every
-   reported violation names the offending task key; fix (via task state transitions the
-   tool surface allows — never direct writes) until the subgraph is healthy.
+1. **通读全部 feature 文档**——按可得性读 prd-spec、tech-design、用户故事、
+   ui-functions、ui-design、ER 图、schema.sql。UI 文档贡献 UI 组件任务行；ER/schema
+   贡献一条 schema 任务；tech-design 的接口/数据模型/错误类型逐项映射为任务；PRD
+   流程 gate 映射为 gate 校验任务。
+2. **PRD 覆盖核验**——读 tech-design 的 PRD Coverage Map（兜底：直接读用户故事 AC）。
+   每条 AC 映射 ≥1 任务；有缺口即缺任务或设计有洞——创建前先解决。
+3. **推导阶段与依赖**——阶段顺序编号（1.x、2.x…）；优先采用 PRD 声明的阶段结构，
+   否则按依赖深度分组。同阶段 = 可并行（冲突除外）；跨阶段 = 依赖前一阶段的 gate。
+   拆分规则按优先序：(1) 可独立核验的产出 → 各自成任务；(2) 多动词标题 → 按功能
+   边界拆；(3) >8 个同模式文件 → 按文件组拆。纯文档特性（全部产出不可编译）跳过
+   语言解析，全程用 `doc` 类型。
+4. **逐阶段创建业务任务**（经 `addTask`，协议见上）。创建期复杂度：`low` = ≤3 条 AC
+   且无硬约束；`high` = ≥5 条 AC 或有硬约束；其余 `medium`。
+5. **创建逐阶段摘要 + gate**——每阶段业务任务之后：一条 `doc-summary` 任务（依赖 =
+   该阶段业务任务 localId），再一条 `gate` 任务（依赖 = 摘要的 localId）。gate 即
+   阶段边界；下一阶段的首个任务依赖前一 gate。
+6. **创建测试管线链**——最后一个阶段 gate 之后按序接线：review-doc（`doc-review`）→
+   gen-journeys（`test-gen-journeys`）→ eval-journey（`eval-journey`）→ gen-contracts
+   （`test-gen-contracts`）→ eval-contract（`eval-contract`）→ gen-scripts
+   （`test-gen-scripts`）→ run-tests（`test-run`）。逐任务依赖前驱；首个（review-doc）
+   依赖最终阶段 gate。每条标题点名其技能/用途；这些类型的派发简报会自动调起技能。
+7. **体量审计**——逐任务复查：多动词标题拆；AC 跨无关领域拆；守住操作上限；
+   **每任务 ≤6 条验收标准**（更多 = 范围过大，继续拆）；任何 `task_desc` / AC 内
+   零跨容器引用（确需外部排序就是合并或排序，不是等待任务）。
+8. **校验容器**——`validateFeatureTasks { feature_slug: "<slug>" }`：每条上报违规
+   都点名违规任务键；修到子图健康为止（只经工具面允许的任务状态转移——绝不直写）。
 
-## Output
+## 文档风格公约
 
-Report the created graph: phase structure, task count per phase with natural keys, the
-gate chain, and the test pipeline chain. Dispatchable execution (run-tasks) consumes the
-pool by DAG readiness — no further wiring needed here.
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 产出
+
+呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试管线链。可派发执行
+（run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。
+
+## 下一步
+
+容器校验通过后交派发循环（run-tasks）执行。

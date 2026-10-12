@@ -1,6 +1,6 @@
 ---
 name: eval
-description: Score a Journey or Contract document set against its rubric — inline score-gate-revise loop with a report at testing/<journey>/.eval-report.md; below-target artifacts block the downstream pipeline stage.
+description: 按评分细则给 Journey 或 Contract 文档集打分——内联评分-守门-修订循环，报告落 testing/<journey>/.eval-report.md；低于目标的工件阻塞下游管线阶段。
 user-invocable: false
 ---
 
@@ -16,79 +16,94 @@ user-invocable: false
   deny delegation, so the loop runs inline in the invoking session. Rubrics inlined below.
 -->
 
-# Eval
+# 评审（eval）
 
-Score document quality against the type's rubric, gate on the target score, revise when
-allowed, and write the report. Two types survive in M3: `journey` and `contract`.
+按该类型的评分细则给文档质量打分，以目标分守门，允许时修订，写出报告。M3 幸存两类：
+`journey` 与 `contract`。
 
-## Parameters
+## 参数
 
-| Parameter | Default | Description |
+| 参数 | 缺省 | 说明 |
 |---|---|---|
-| `--type` | required | `journey` or `contract` |
-| `--target` | rubric target (journey 975 / contract 935) | pass threshold; dispatched templates pin 850 |
-| `--iterations` | 1 | revise-loop bound; interactive use may raise to 3 |
+| `--type` | 必填 | `journey` 或 `contract` |
+| `--target` | 细则目标分（journey 975 / contract 935） | 通过阈值；派发模板钉 850 |
+| `--iterations` | 1 | 修订循环上界；交互式可用可升到 3 |
 
-## Required Documents
+## 必备文档
 
-| Type | Target |
+| 类型 | 目标 |
 |---|---|
 | `journey` | `testing/<journey>/journey.md` |
-| `contract` | all of `testing/<journey>/contracts/step-<N>-<action>.md` |
+| `contract` | `testing/<journey>/contracts/step-<N>-<action>.md` 全部 |
 
-Missing → report the missing artifact and stop; tell the user which skill produces it.
+缺失 → 呈报缺失工件并停止；告知用户由哪个技能产出。
 
-## Context Modes
+## 上下文模式
 
-- **Dispatched task (eval-journey / eval-contract)**: score-only — the dispatch brief
-  forbids modifying the evaluated files. Score once, write the report, and if below
-  target the TASK settles blocked with the findings (the fix chain carries rework);
-  do not self-revise here.
-- **Interactive session**: inline loop — score → gate → revise (the evaluated document
-  only) → re-score, up to `--iterations`; stop early at/above target.
+- **派发任务（eval-journey / eval-contract）**：只评分——派发简报禁止修改被评文件。
+  评一次、写报告；低于目标则本任务以发现清单结算 blocked（返工由 fix 链承接）；
+  此处不得自行修订。
+- **交互会话**：内联循环——评分 → 守门 → 修订（仅被评文档）→ 复评，至多
+  `--iterations` 次；达到/超过目标分即提前停止。
 
-The loop always runs inline in the invoking session (worker tool faces deny delegation;
-subagent orchestration is not assumed).
+循环始终在被调会话内内联运行（worker tool 面拒绝委托；不假设 subagent 编排）。
+
+## 魔鬼代言人速查
+
+评分前先扮演反方——**找扣分理由是本分内工作，不是给作者面子**：
+
+- **先找反例再给分**：逐维度先列"这条为什么可能不及 min"，列不出反例才给满分档。
+- **质疑事实对齐**：每个步骤/期望都问一句"PRD/手册里真有这条吗？"——臆造行为
+  （invented behavior）一律扣，不因写得合理而放过。
+- **追问语义纯度**：见到 regex、选择器、框架断言字样直接扣——"看起来像实现"与
+  "是实现"同罪。
+- **挤前置条件的重叠**：逐 Outcome 试构造一个同时满足两条前置条件的系统状态；
+  构造得出即排他性失分。
+- **宁低勿高**：拿不准的维度取低档并在发现清单里写明理由——评分诚实条款禁止
+  把不及 min 的维度凑到达标。
 
 ## Rubric: journey (1150 · target 975 · pass = total ≥ target AND every dimension ≥ min)
 
-| Dimension | Points | Min | What is checked |
+| 维度 | 分值 | 下限 | 核查内容 |
 |---|---|---|---|
-| Completeness | 200 | 120 | kebab-case name + valid justified risk; every step has action + ≥1 happy-path outcome in an ordered sequence; boundary/error outcomes beyond happy path as the surface requires |
-| Semantic purity | 200 | 120 | natural-language outcomes (no regex/selectors/assertion calls); declarative preconditions (state, not setup procedure); no implementation coupling in steps |
-| Precondition exclusivity | 150 | 90 | outcomes within a step distinguishable and non-overlapping via preconditions |
-| Fact alignment | 150 | 90 | steps/expectations consistent with the PRD/user stories they cite; no invented behavior |
-| Surface fitness | 150 | 90 | steps fit the declared surface types; surface conventions respected |
-| Internal consistency | 150 | 90 | invariants hold against the steps; edge cases reference real happy-path steps; no contradictions |
-| Workflow coverage | 150 | 90 | the user goal is achieved end-to-end; no unexplained gaps between steps |
+| 完整性 | 200 | 120 | kebab-case 名称 + 有效且论证过的风险级；每步有动作 + 有序序列内 ≥1 条 happy-path 结果；按表面所需覆盖 happy path 之外的边界/错误结果 |
+| 语义纯度 | 200 | 120 | 结果用自然语言（无 regex/选择器/断言调用）；前置条件声明式（状态而非搭建过程）；步骤内无实现耦合 |
+| 前置条件排他性 | 150 | 90 | 步内各结果经前置条件可分辨、不重叠 |
+| 事实对齐 | 150 | 90 | 步骤/期望与其引用的 PRD/用户故事一致；无臆造行为 |
+| 表面适配 | 150 | 90 | 步骤符合声明的表面类型；表面约定被遵守 |
+| 内部一致性 | 150 | 90 | 不变式相对步骤成立；边界用例引用真实 happy-path 步骤；无自相矛盾 |
+| 流程覆盖 | 150 | 90 | 用户目标端到端达成；步骤之间无未解释的缺口 |
 
 ## Rubric: contract (1100 · target 935 · pass = total ≥ target AND every dimension ≥ min)
 
-| Dimension | Points | Min | What is checked |
+| 维度 | 分值 | 下限 | 核查内容 |
 |---|---|---|---|
-| Completeness | 150 | 90 | six dimensions present per outcome; journey invariants section present |
-| Semantic purity | 200 | 120 | descriptors are natural language; no regex/framework assertions leaked |
-| Precondition exclusivity | 150 | 90 | per-step outcomes mutually exclusive |
-| Fact alignment | 150 | 90 | anchors and expectations match the handbooks/source ground truth cited |
-| Surface fitness | 100 | 60 | assertions phrased for the surface type (exit codes/stdout for cli, status/payload for api, visual for web/mobile) |
-| Internal consistency | 150 | 90 | state dimensions compose; invariants consistent with the journey |
-| Anchor integrity | 100 | 60 | anchors present when handbooks exist; matched to steps or explicitly empty — never guessed |
-| Fixture specification | 100 | 60 | every outcome's preconditions carry a declarative fixture_spec with ≥1 entity |
+| 完整性 | 150 | 90 | 每 Outcome 六维度齐备；含 Journey 不变式节 |
+| 语义纯度 | 200 | 120 | 描述符为自然语言；无 regex/框架断言泄漏 |
+| 前置条件排他性 | 150 | 90 | 逐步 Outcome 两两互斥 |
+| 事实对齐 | 150 | 90 | 锚点与期望同所引手册/源真值一致 |
+| 表面适配 | 100 | 60 | 断言按表面类型措辞（cli 用退出码/stdout、api 用状态码/payload、web/mobile 用视觉） |
+| 内部一致性 | 150 | 90 | 状态维度可组合；不变式与 journey 一致 |
+| 锚点完整性 | 100 | 60 | 有手册时锚点在位；与步骤匹配或显式留空——绝不臆造 |
+| Fixture 规格 | 100 | 60 | 每 Outcome 的前置条件带声明式 fixture_spec 且 ≥1 实体 |
 
-Scoring honesty: award points per dimension from evidence in the documents; never round a
-failing dimension up to reach the target — a below-min dimension fails the pass condition
-regardless of total.
+评分诚实：逐维度从文档内证据给分；绝不把不及格维度凑整到目标分——任一维度低于
+min 即判不通过，与总分无关。
 
-## Report
+## 报告
 
-Write the report to `testing/<journey>/.eval-report.md` (this file IS the gate artifact
-gen-contracts / gen-test-scripts check): final score with scale, per-dimension table
-(points/min/status), findings with severity and document-location references, outcome
-line (`PASSED` / `FAILED (below target|dimension <min>)`), and for revised runs the score
-progression. Then state the outcome in the session/task output.
+报告写到 `testing/<journey>/.eval-report.md`（此文件就是 gen-contracts /
+gen-test-scripts 核对的 gate 工件）：总分带量表、逐维度表（分值/min/状态）、带严重度
+与文档位置引用的发现清单、结果行（`PASSED` / `FAILED (below target|dimension <min>)`），
+修订过的运行附分数演进。然后在会话/任务输出中呈报结果。
 
-## Next Step
+## 文档风格公约
 
-journey at/above target → `gen-contracts`; contract at/above target → `gen-test-scripts`.
-Below target in interactive mode → revise and re-score per the loop; below target in task
-mode → settle blocked with the findings.
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：报告写当前评审判定，不写"原来如何、后来改成什么"的过程史
+  （修订分数演进表除外——那是证据，不是叙事）。
+
+## 下一步
+
+journey 达标 → `gen-contracts`；contract 达标 → `gen-test-scripts`。
+交互模式下低于目标 → 按循环修订复评；任务模式下低于目标 → 携发现清单结算 blocked。

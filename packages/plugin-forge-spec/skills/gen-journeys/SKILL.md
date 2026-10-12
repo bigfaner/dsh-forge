@@ -1,90 +1,81 @@
 ---
 name: gen-journeys
-description: Extract Journey narratives (user workflows with High/Medium/Low risk classification) from PRD user stories or the proposal — one journey.md per Journey under testing/, the input for gen-contracts.
+description: 从 PRD 用户故事或提案中提取 Journey 叙事（带 High/Medium/Low 风险分级）——每条 Journey 一份 journey.md 落 testing/ 下，是 gen-contracts 的输入。
 ---
 
-# Gen Journeys
+# 生成旅程（gen-journeys）
 
-Pure narrative extraction — no code reconnaissance. Each user workflow becomes one Journey
-document describing happy path + edge cases + invariants.
+纯叙事提取——不做代码侦察。每条用户工作流成为一份 Journey 文档，描述 happy path +
+边界用例 + 不变式。
 
 <HARD-GATE>
-This skill ONLY generates Journey narrative documents. Contracts, test scripts, and code
-belong to the downstream skills `gen-contracts` and `gen-test-scripts`.
+本技能只生成 Journey 叙事文档。契约、测试脚本与代码属下游技能 `gen-contracts` 与
+`gen-test-scripts`。
 </HARD-GATE>
 
 ## State-Layer Discipline (boundary)
 
-Journey documents are on-disk artifacts under the feature's testing tree — the document
-registry vocabulary (seven phase kinds) has **no journey kind**, so journeys are NOT
-registered via `upsertFeatureDoc`. Their pipeline position is carried by the task domain:
-the `test-gen-journeys` / `eval-journey` / `test-gen-contracts` task types and their
-dependencies. Do not write task files or indexes — tasks live in the state layer via
-`addTask` (created at breakdown time, not here).
+Journey 文档是 feature 测试树下的磁盘工件——文档注册表词表（七种 phase kind）
+**没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由
+任务域承载：`test-gen-journeys` / `eval-journey` / `test-gen-contracts` 任务类型及其
+依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。
 
-## Pipeline Position
+## 管线位置
 
 ```
 gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-test-scripts → run-tests
- (narrative)                   (technical)                      (code gen)         (execution)
+ (叙事)                        (技术)                       (代码生成)        (执行)
 ```
 
-## Input Modes (auto-detected by file existence — never ask which mode)
+## 输入模式（按文件存在性自动判别——绝不问用户哪种模式）
 
-**PRD mode** (default; `prd/prd-user-stories.md` + `prd/prd-spec.md` exist): one user story =
-one Journey candidate; merge stories that are sequential steps toward the same goal; every
-Journey traces back to specific story IDs. `prd/prd-ui-functions.md` (if present) maps UI
-interactions to steps.
+**PRD 模式**（缺省；`prd/prd-user-stories.md` + `prd/prd-spec.md` 存在）：一条用户故事 =
+一条 Journey 候选；朝同一目标递进的连续故事合并；每条 Journey 可回溯到具体故事 ID。
+`prd/prd-ui-functions.md`（若存在）把 UI 交互映射为步骤。
 
-**Proposal mode** (PRD files absent, `docs/proposals/<slug>/proposal.md` exists): Scope and
-Success Criteria sections are **mandatory** — either missing → abort with a diagnostic, do
-not generate. One Key Scenario = one Journey candidate; without Key Scenarios derive from
-Success Criteria/Scope as smoke-level Journeys and annotate `quality: low` in frontmatter
-with a quality notice in the body. Every Journey traces back to proposal sections.
+**提案模式**（PRD 文件缺失、`docs/proposals/<slug>/proposal.md` 存在）：Scope 与
+Success Criteria 节**必备**——任一缺失 → 带诊断中止，不生成。一个 Key Scenario =
+一条 Journey 候选；无 Key Scenarios 时从 Success Criteria/Scope 推导 smoke 级
+Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Journey 可回溯到
+提案小节。
 
-Neither source exists → abort listing the missing files.
+两类来源都不存在 → 中止并列出缺失文件。
 
-## Core Concepts
+## 核心概念
 
-- **Journey**: kebab-case name (`task-lifecycle`), Risk, ordered Steps (user action +
-  expected outcome), Invariants (cross-step constraints).
-- **Risk**: `High` (state mutation / data loss / irreversible — edge case count MUST be ≥
-  happy path step count), `Medium` (multi-step, no irreversible side effects — edge cases
-  per branching precondition), `Low` (read-only — happy path + critical errors only).
-  Infer from the PRD: create/delete/update → High; view/list/search → Low.
-- **Golden Path** (mandatory): every feature has ≥1 Journey covering the primary story's
-  core domain action sequence, ≥3 steps, domain terminology (not API terminology). Complex
-  features (≥2 entity types with parent-child relations) require ≥5 cross-entity steps.
+- **Journey**：kebab-case 名称（`task-lifecycle`）、Risk、有序 Steps（用户动作 +
+  预期结果）、Invariants（跨步约束）。
+- **Risk**：`High`（状态变更/数据丢失/不可逆——边界用例数必须 ≥ happy path 步数）、
+  `Medium`（多步、无不可逆副作用——按分支前置条件配边界用例）、`Low`（只读——仅
+  happy path + 关键错误）。从 PRD 推断：增/删/改 → High；查/列/搜 → Low。
+- **Golden Path**（必备）：每特性 ≥1 条 Journey 覆盖主故事的核心域动作序列，≥3 步，
+  用领域术语（不用 API 术语）。复杂特性（≥2 类实体且存在父子关系）要求 ≥5 步跨实体
+  步骤。
 
-## Surface Handling
+## 表面处理
 
-There is no surface-registry CLI in this environment. Detect surfaces from the repo itself:
-`docs/conventions/testing/` structure (per-surface convention dirs), `surface_types` of
-existing journeys, and the surface fields of the feature's tasks. Supported types: `web`,
-`api`, `cli`, `tui`, `mobile`. Never guess — ambiguous and interactive → ask the user;
-dispatched task context → derive from the task brief and record the choice. Each Journey
-declares `surface_types` + `surface_keys`; the union across all Journeys must cover every
-configured surface type and key.
+本环境没有表面注册表 CLI。从仓库自身探测表面：`docs/conventions/testing/` 结构
+（逐表面约定目录）、既有 journey 的 `surface_types`、feature 任务的表面字段。支持
+类型：`web`、`api`、`cli`、`tui`、`mobile`。绝不猜——含糊且交互式 → 问用户；派发
+任务语境 → 从任务简报推导并记录选择。每条 Journey 声明 `surface_types` +
+`surface_keys`；全部 Journey 的并集必须覆盖每个已配置的表面类型与键。
 
-## Workflow
+## 工作流
 
-1. **Read input sources** per the detected mode. Do not read source code — extraction is
-   narrative only.
-2. **Identify workflows** (incl. the Golden Path) and structure each: name, happy path
-   steps, edge cases (divergent preconditions referencing happy path steps), expected
-   results, setup preconditions.
-3. **Classify risk** per the table above; enforce High-risk edge density by generating
-   additional edge cases (invalid inputs, missing preconditions, concurrent operations,
-   boundaries) when extraction yields too few.
-4. **Generate per-Journey files** — one directory per Journey at
-   `docs/features/<slug>/testing/<journey-name>/journey.md` with frontmatter:
+1. **读输入源**（按判别出的模式）。不读源代码——提取仅限叙事。
+2. **识别工作流**（含 Golden Path）并逐条结构化：名称、happy path 步骤、边界用例
+   （引用 happy path 步骤的分叉前置条件）、预期结果、搭建前置条件。
+3. **分级风险**（按上表）；提取产出的边界用例不足时补生成（非法输入、缺失前置
+   条件、并发操作、边界值），强制 High 风险边界密度达标。
+4. **逐 Journey 生成文件**——每条 Journey 一个目录：
+   `docs/features/<slug>/testing/<journey-name>/journey.md`，frontmatter：
 
    ```yaml
    ---
    feature: "<slug>"
    journey: "<name>"
    risk_level: "High|Medium|Low"
-   quality: low          # proposal mode without Key Scenarios only
+   quality: low          # 仅提案模式且无 Key Scenarios 时
    surface_types: ["web"]
    surface_keys: ["<key>"]
    sources: ["<input doc paths>"]
@@ -92,18 +83,22 @@ configured surface type and key.
    ---
    ```
 
-   Body: setup preconditions → numbered happy path steps (each: user action + expected
-   result) → edge cases (referenced step + divergent precondition + action + result) →
-   Journey Invariants. One Journey = one cohesive document; batch internally when content
-   is large, never split across files.
-5. **Validate every Journey**: name present; risk valid; surface fields non-empty and
-   matching detected surfaces; ≥1 happy path step; ≥1 edge case; High-risk density met; ≥1
-   invariant; every step has action + expected result; PRD/proposal traceability; surface
-   coverage complete. Fix failures before finishing.
-6. **Report** — present the generated Journeys (interactive) or summarize in the task output
-   (dispatched). Quality gate: the `eval` skill with `--type journey` scores each Journey;
-   below-target Journeys block `gen-contracts` (their gate, not this skill's).
+   正文：搭建前置条件 → 编号 happy path 步骤（每步：用户动作 + 预期结果）→ 边界
+   用例（被引步骤 + 分叉前置条件 + 动作 + 结果）→ Journey Invariants。一条 Journey
+   = 一份内聚文档；内容大时内部分批写，绝不拆文件。
+5. **逐 Journey 校验**：名称在位；风险级有效；表面字段非空且与探测面匹配；
+   ≥1 条 happy path 步骤；≥1 条边界用例；High 风险密度达标；≥1 条不变式；每步有
+   动作 + 预期结果；PRD/提案可回溯；表面覆盖完整。失败先修复再收尾。
+6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。质量门：`eval`
+   技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`
+   （那是它的 gate，不是本技能的）。
 
-## Next Step
+## 文档风格公约
 
-`eval --type journey`, then `gen-contracts`.
+- **mermaid 优先**：结构与流程用图表达，文字做补充而非替代。
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 下一步
+
+`eval --type journey`，随后 `gen-contracts`。
