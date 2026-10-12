@@ -99,15 +99,19 @@ export const CODING_STRATEGY_TYPES: readonly TaskType[] = [
   'test-gen-scripts',
 ]
 
-/** Coding Strategy 段（域内容承载面：TDD 推崇 + 外科手术式精确修改 + 检索先行 + 测试分层） */
+/** Coding Strategy 段（域内容承载面：TDD 推崇 + 外科手术式精确修改 + 模块边界 + 检索先行 + 测试分层） */
 export const CODING_STRATEGY_SECTION = `### Coding Strategy
 - 推崇 TDD：先从 AC 逐项提取测试要求；RED → 先写失败测试，GREEN → 最小实现，REFACTOR → 保持测试绿的清理。
 - 外科手术式修改：只改任务点名的代码——首次编辑前先用 grep/glob 收齐全部改动点清单；禁止边搜边改。
+- 模块边界：尊重既有模块/包的职责划分；除非任务确有必要，不新增模块/包；新代码落在改动点所属的既有包内。
+- 红线：业务代码不得混入公共包/框架性代码——发现既有越界只记录上报，不顺手迁移。
 - 测试分层：非 gate 的代码触及类任务只跑本类质量门禁 + 定向测试；全仓测试套件属于 gate 任务的结算面，不在此处。`
 
-/** low 级 Coding Strategy（SC2：逐需求 TDD 段裁剪——外科手术式 + 测试分层保留） */
+/** low 级 Coding Strategy（SC2：逐需求 TDD 段裁剪——外科手术式 + 模块边界 + 测试分层保留） */
 export const CODING_STRATEGY_SECTION_LOW = `### Coding Strategy
 - 外科手术式修改：只改任务点名的代码——首次编辑前先用 grep/glob 收齐全部改动点清单；禁止边搜边改。
+- 模块边界：尊重既有模块/包的职责划分；除非任务确有必要，不新增模块/包；新代码落在改动点所属的既有包内。
+- 红线：业务代码不得混入公共包/框架性代码——发现既有越界只记录上报，不顺手迁移。
 - 测试分层：非 gate 的代码触及类任务只跑本类质量门禁 + 定向测试；全仓测试套件属于 gate 任务的结算面，不在此处。`
 
 /** 按复杂度取 Coding Strategy（low 裁 TDD 逐需求句——SC2 回归锚） */

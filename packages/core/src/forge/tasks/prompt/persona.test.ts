@@ -201,6 +201,16 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(composePersona('test-run', 'medium')).not.toContain('探测面 → 跑其 just 配方序列')
   })
 
+  it('Coding Strategy 模块边界锚：不新增模块/包 + 业务代码红线（low/high 两档恒定）', () => {
+    for (const taskType of ['coding-feature', 'coding-enhancement', 'coding-fix'] as const) {
+      for (const cx of COMPLEXITIES) {
+        const persona = composePersona(taskType, cx)
+        expect(persona, `${taskType}/${cx}`).toContain('除非任务确有必要，不新增模块/包')
+        expect(persona, `${taskType}/${cx}`).toContain('业务代码不得混入公共包/框架性代码')
+      }
+    }
+  })
+
   it('红队攻 9 回归锚：合并写入不破坏外科手术式——重写保持其余内容逐字不变', () => {
     expect(ANTI_CHURN_ANCHORS[0]).toContain('重写保持其余内容逐字不变')
   })
