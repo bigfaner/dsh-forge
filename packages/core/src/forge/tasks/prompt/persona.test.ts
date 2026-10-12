@@ -1,4 +1,4 @@
-﻿// persona 组成矩阵单测（提案 worker-lean-execution S2a AC）：×20 类型 ×low/medium/high
+// persona 组成矩阵单测（提案 worker-lean-execution S2a AC）：×20 类型 ×low/medium/high
 // 全矩阵——核心段①-⑧一切类型在场、高效执行锚 ×6 恒定、变体按 20 类型表路由、
 // Coding Strategy 9 类注入面、low 裁剪不触及核心段与 AC 核查、裸 `{{` 防护、
 // UI 任务不作特殊处理（coding-feature/enhancement 无 UI 专属锚）。
@@ -104,8 +104,8 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         const persona = composePersona(taskType, cx)
         expect(persona, `${taskType}/${cx}`).not.toContain('门纪律')
         expect(persona, `${taskType}/${cx}`).toContain('## 质量门禁')
-        expect(persona, `${taskType}/${cx}`).toContain('## 结算')
-        expect(persona, `${taskType}/${cx}`).toContain('用 submit-task 技能（submitTask）完成结算')
+        expect(persona, `${taskType}/${cx}`).not.toContain('## 结算') // 结算口径 §7 单源，不设独立段
+        expect(persona, `${taskType}/${cx}`).toContain('才用 submit-task 技能（submitTask）结算')
         expect(persona, `${taskType}/${cx}`).not.toContain('记录字段：')
       }
     }

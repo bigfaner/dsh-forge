@@ -310,7 +310,6 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
     ...(CODING_STRATEGY_TYPES.includes(taskType) ? [CODING_STRATEGY_SECTION] : []),
     variant.workflow(complexity),
     `## 质量门禁\n${variant.gate(complexity)}`,
-    `## 结算\n门禁全部通过且 AC 逐项核查完成后，用 submit-task 技能（submitTask）完成结算。`,
   ]
   const persona = sections.join('\n\n')
   if (persona.includes('{{')) {
