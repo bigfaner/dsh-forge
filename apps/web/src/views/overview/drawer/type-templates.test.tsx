@@ -122,6 +122,60 @@ describe('coding 族（AC3/AC4：参考文档 → 改动范围 → 验收标准�
     expect(html).toContain('dswf-td-file')
     expect(html).toContain('packages/core/src/forge/schema.ts')
   })
+
+  it('实现要点/测试要点：vars.impl/vars.tests 在场 → 段位渲染（M3.1 原型锚 app.js:1688-1689）', () => {
+    const html = renderToStaticMarkup(
+      TypeTemplateBody({
+        detail: detailFixture({
+          vars: {
+            scope: 'apps/web/src/views/overview/drawer/type-templates/coding.tsx',
+            impl: '["PlainList 复用 parts 原子", "有数据才渲染、缺席零渲染"]',
+            tests: '["组件测试两态夹具", "段序断言 refs→scope→acc→impl→tests"]',
+          },
+        }),
+        onOpenDoc: OPEN_DOC,
+      }),
+    )
+    expect(html).toContain('实现要点')
+    expect(html).toContain('PlainList 复用 parts 原子')
+    expect(html).toContain('测试要点')
+    expect(html).toContain('组件测试两态夹具')
+    // 段序保持：参考文档缺席 → 改动范围 → 实现要点 → 测试要点（尾段归块组装，不在此模板内）
+    const scopeAt = html.indexOf('改动范围')
+    const implAt = html.indexOf('实现要点')
+    const testsAt = html.indexOf('测试要点')
+    expect(scopeAt).toBeGreaterThanOrEqual(0)
+    expect(implAt).toBeGreaterThan(scopeAt)
+    expect(testsAt).toBeGreaterThan(implAt)
+  })
+
+  it('实现要点/测试要点：任一缺席 → 对应段位零渲染（无空段；段序 refs→scope→acc 现序保持）', () => {
+    const html = renderToStaticMarkup(
+      TypeTemplateBody({ detail, onOpenDoc: OPEN_DOC }),
+    )
+    expect(html).not.toContain('实现要点')
+    expect(html).not.toContain('测试要点')
+    const refsAt = html.indexOf('参考文档')
+    const scopeAt = html.indexOf('改动范围')
+    const accAt = html.indexOf('验收标准')
+    expect(refsAt).toBeGreaterThanOrEqual(0)
+    expect(scopeAt).toBeGreaterThan(refsAt)
+    expect(accAt).toBeGreaterThan(scopeAt)
+  })
+
+  it('实现要点/测试要点：单边在场——tests 缺席时仅渲染实现要点（独立段位门控）', () => {
+    const html = renderToStaticMarkup(
+      TypeTemplateBody({
+        detail: detailFixture({
+          vars: { scope: 'apps/web/src/x.ts', impl: '["最小改动", "复用现有原语"]' },
+        }),
+        onOpenDoc: OPEN_DOC,
+      }),
+    )
+    expect(html).toContain('实现要点')
+    expect(html).toContain('最小改动')
+    expect(html).not.toContain('测试要点')
+  })
 })
 
 describe('fix / doc / gate / test 族区块（AC3 模板表逐族）', () => {

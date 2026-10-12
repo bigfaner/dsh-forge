@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskDetail } from '@dsh-forge/contracts'
 import { actualScopeOf, isTerminalStatus, scopeDiff, varsList } from '../detail-model.js'
-import { Checklist, RefChips, SubTitle } from './parts.js'
+import { Checklist, PlainList, RefChips, SubTitle } from './parts.js'
 
 /** 改动范围 · 预期 ↔ 实际双列（AC4——文件路径完整展示：换行不断链） */
 function ScopeDual({ detail, expected }: { readonly detail: TaskDetail; readonly expected: readonly string[] }): ReactNode {
@@ -76,7 +76,8 @@ function scopeSummary(diff: ReturnType<typeof scopeDiff>): string {
   return parts.join(' · ')
 }
 
-/** coding 族模板（refs → scope → acceptance；v14 顺序） */
+/** coding 族模板（refs → scope → acceptance → impl/tests；v14 顺序 + M3.1 原型锚
+ * app.js:1688-1689——实现要点/测试要点有数据才渲染、缺席零渲染） */
 export function CodingTemplate({
   detail,
   vars,
@@ -88,6 +89,8 @@ export function CodingTemplate({
 }): ReactNode {
   const expected = varsList(vars, 'scope')
   const acceptance = varsList(vars, 'acceptance')
+  const impl = varsList(vars, 'impl')
+  const tests = varsList(vars, 'tests')
   return (
     <>
       {detail.refs.length > 0 ? (
@@ -101,6 +104,18 @@ export function CodingTemplate({
         <>
           <SubTitle>验收标准</SubTitle>
           <Checklist items={acceptance} allDone={isTerminalStatus(detail.taskStatus)} />
+        </>
+      ) : null}
+      {impl.length > 0 ? (
+        <>
+          <SubTitle>实现要点</SubTitle>
+          <PlainList items={impl} />
+        </>
+      ) : null}
+      {tests.length > 0 ? (
+        <>
+          <SubTitle>测试要点</SubTitle>
+          <PlainList items={tests} />
         </>
       ) : null}
     </>
