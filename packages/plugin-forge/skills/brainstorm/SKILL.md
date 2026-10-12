@@ -1,119 +1,123 @@
 ---
 name: brainstorm
-description: Expedition structured exploration — turn a vague idea into a user-approved proposal.md through challenge-driven dialogue, then register it into the proposal domain; the expedition mode lineage is inherited from the session preset automatically.
+description: 远征结构化探索——通过挑战式对话把模糊想法变成用户批准的 proposal.md，并注册进 proposal 域；远征模式血统由会话 preset 自动继承。
 ---
 
-# Brainstorm
+# Brainstorm（远征头脑风暴）
 
-From vague idea to structured proposal, through relentless collaborative dialogue. The
-goal is shared understanding — not filtering ideas, but making implicit assumptions
-explicit so the right path becomes obvious. Pseudo-requirements die naturally when the
-thinking is clear. This is the expedition entry: the accepted proposal chains into a
-feature container and the full SDD pipeline (write-prd → design → breakdown) beyond it.
+从模糊想法到结构化提案，经由不留情面的协作对话。目标是达成真正的共识——不是过滤
+想法，而是把隐含假设显式化，让正确的路径自然浮现。伪需求在思考清晰后自然消亡。这是
+远征入口：被接受的提案串联进 feature 容器及其后的完整 SDD 流水线
+（write-prd → design → breakdown）。
 
 <HARD-GATE>
-Do NOT write code or take implementation action — this skill produces a proposal
-document and its proposal-domain row only.
+禁止写代码或执行任何实现动作——本技能只产出 proposal 文档及其 proposal 域记录行。
 </HARD-GATE>
 
 <HARD-RULE>
-**No technology selection; constraints only.** Describe "what effect to achieve"
-(performance, platform, security) — not "what tool to implement with" (frameworks,
-languages, databases, patterns). Technology selection belongs to tech-design.
+**不做技术选型；只谈约束。** 描述"要达成什么效果"（性能、平台、安全）——而非
+"用什么工具实现"（框架、语言、数据库、模式）。技术选型属于 tech-design。
 </HARD-RULE>
 
-## Process Flow
+## 流程总览
 
 ```
-Analyze context → Walk the design tree → Propose approaches → Define scope →
-Infer intent → Write proposal → Consistency check → User approval → Register
+分析上下文 → 走设计树 → 提出方案 → 圈定范围 → 推断意图 → 撰写提案 → 一致性检查 → 用户批准 → 注册
 ```
 
-### Step 1: Analyze Context
+### Step 1：分析上下文
 
-Before asking anything, search the codebase for related features, docs, proposals, and
-recent history. Synthesize findings internally — do not show this analysis to the user;
-it drives informed questioning.
+提问之前，先检索代码库中的相关特性、文档、提案与近期历史。综合结论内部消化——不要
+把分析过程抛给用户；它驱动有依据的提问。
 
-### Step 2: Walk the Design Tree
+### Step 2：走设计树
 
-Interview the user until genuine shared understanding — not surface agreement. Ask one
-question at a time; **lead with your recommended answer**; if a question could be
-answered by exploring the codebase, explore instead of asking. Resolve parent decisions
-before sub-branches (if B depends on A, resolve A first); backtrack when a branch
-reveals an earlier assumption was wrong.
+持续访谈直到达成真正的共识——而非表面同意。一次只问一个问题；**先给出你的推荐答案**；
+若问题可以通过探索代码库回答，就去探索而不是提问。先解决父决策再进入子分支（若 B 依赖
+A，先定 A）；当某分支推翻更早的假设时回溯。
 
-Challenge is part of every decision point, not a separate phase: every challenge must
-cite codebase facts, logical consistency, or domain common sense — state observation →
-present evidence → pose the question. Rationally prudent, never hostile.
+挑战内嵌于每个决策点，不是独立阶段：每次挑战必须引用代码库事实、逻辑一致性或领域常识
+——先陈述观察 → 出示证据 → 抛出问题。理性审慎，绝不敌对。
 
-**Need Gate** — before diving into *how* for each crystallized feature, check in order:
-(1) *simpler alternative?* existing tooling/composition that already solves it → propose
-that path; (2) *the real need?* hypothesize the underlying goal and confirm it before
-assessing whether this is the best path to it; (3) *why now?* low cost of deferral →
-suggest deferring. If the user overrides the gate, accept and record
-`Challenge Override: user chose to proceed. Reason: <reason or "not stated">` in the
-proposal — do not keep challenging after an override.
+**需求闸门（Need Gate）**——深入每个具体特性的*怎么做*之前，按序检查：
+(1) *有更简单的替代？* 现有工具/组合已能解决 → 提议那条路；
+(2) *真实需求是什么？* 假设底层目标并在评估此路是否最优前先确认它；
+(3) *为什么是现在？* 延后成本低 → 建议延后。
+若用户否决闸门，接受并在提案中记录
+`Challenge Override: user chose to proceed. Reason: <原因或"未说明">`
+——否决之后不再继续纠缠。
 
-### Step 3: Propose Approaches
+### Step 3：提出方案
 
-Propose 2–3 **business approaches** (not technical implementations). Lead with your
-recommendation, include honest trade-offs, and always include "do nothing" as one
-alternative. Let the user decide.
+提出 2–3 个**业务方案**（不是技术实现）。推荐项放最前，附诚实的权衡取舍，并始终把
+"什么都不做"作为备选之一。对比时**必须识别跨模块/服务交互面**：谁与谁交互、涉及哪些
+流程、边界在哪里——这些是 tech-design 精确设计契约的输入。由用户决策。
 
-### Step 4: Define Scope
+### Step 4：圈定范围
 
-Propose in-scope / out-of-scope boundaries at deliverable level. Get explicit
-agreement; if too large, suggest decomposing.
+在交付物层面提出纳入/排除边界。取得明确同意；若过大，建议拆分。
 
-### Step 5: Infer Intent
+### Step 5：推断意图
 
-From the Proposed Solution and Scope (not the title), infer the frontmatter `intent`:
-any new externally observable behavior → `new-feature`; pure internal reorganization →
-`refactor`; otherwise `enhancement` / `cleanup` / `fix` / `doc` by the closest match.
-Present the inference with its reasoning — the user may override.
+从方案与范围（不是标题）推断 frontmatter `intent`：任何新的外部可观察行为 →
+`new-feature`；纯内部重组 → `refactor`；其余按最接近者取
+`enhancement` / `cleanup` / `fix` / `doc`。给出推理过程呈现给用户——用户可否决。
 
-### Step 6: Write the Proposal
+### Step 6：撰写提案
 
-Write `docs/proposals/<slug>/proposal.md` through the file tools, with frontmatter
-(`created`, `author` from git config or the user, `status: Draft`, `intent`). Quality
-standards — each is a hard bar:
+通过文件工具写 `docs/proposals/<slug>/proposal.md`，含 frontmatter
+（`created`、`author` 取自 git config 或用户、`status: Draft`、`intent`）。
+质量标准——每条都是硬杠：
 
-| Section | Standard | Red flag |
+| 段落 | 标准 | 红旗 |
 |---|---|---|
-| Problem | Specific statement + evidence + urgency | "We need to improve X" |
-| Solution | Concrete user-facing behavior | "Build a system that..." |
-| Alternatives | Honest trade-offs including "do nothing" | Straw-man alternatives with only pros |
-| Scope | Deliverable-level items, bounded | Vague areas, open-ended |
-| Risks | 3+ specific risks with actionable mitigations | "We'll handle it" |
-| Success Criteria | Measurable, testable, covering all scope | "Works well" |
+| 问题 | 具体陈述 + 证据 + 紧迫性 | "我们需要改进 X" |
+| 方案 | 具体的用户可感知行为，**优先用 mermaid 图表**呈现方案结构/流程；含跨模块/服务交互面识别 | "建一个系统……" |
+| 改动影响范围 | 交付物级条目，有边界；受影响的模块/包/交互面点列清楚 | 模糊区域、无边界 |
+| 风险 | 3+ 条具体风险及可执行缓解（远征段保留） | "我们会处理好的" |
+| 验收 | 可度量、可测试、覆盖全部范围 | "运行良好" |
 
-**Consistency check (mandatory before approval)**: after writing Success Criteria and
-In Scope, check both directions — every SC is satisfied by some in-scope item, and every
-in-scope item feeds some SC; no two SCs contradict. Present any conflict found to the
-user and resolve it before proceeding; record the check result in the proposal.
+方案段不留调整修复类叙事——只写目标形态；过程性讨论留在对话记录，不进提案正文。
 
-Do not auto-commit; present the proposal and wait for explicit user approval.
+**一致性检查（批准前强制）**：写完验收与纳入范围后做双向核对——每条验收都有某个
+纳入项满足，每个纳入项都服务于某条验收；任何两条验收不得互相矛盾。发现冲突即呈现给
+用户并在继续前解决；核对结果记录进提案。
 
-### Step 7: Register the Proposal
+不要自动提交；呈现提案，等待用户明确批准。
 
-Register the approved proposal into the state layer — the row, not the file tree, is
-the pipeline's truth:
+### Step 7：注册提案
+
+把已批准的提案注册进状态层——记录行（而非文件树）才是流水线的真相：
 
 ```
 createProposal { slug: "<slug>", title: "<title>",
                  rel_path: "proposals/<slug>/proposal.md" }
 ```
 
-Do not pass `mode` — createProposal fills it automatically from the session's agent
-preset (this expedition session → `expedition`). That lineage is what makes the
-accepted proposal chain into a feature container (same slug, one atomic transaction)
-instead of going straight to tasks. Draft status is the default; verdicts happen only
-when the user decides.
+不要传 `mode`——createProposal 从会话的 agent preset 自动填充（本远征会话 →
+`expedition`）。正是这条血统让被接受的提案串联进 feature 容器（同名 slug、单原子事务），
+而不是直接落到任务。Draft 状态是默认；accept/reject 只在用户裁决时记录。
 
-## Handoff
+## 方法论速查
 
-On acceptance (user decision, recorded via the proposal UI or in-session), the
-expedition chain continues automatically: feature row created → `/write-prd` →
-`/ui-design` / `/tech-design` → `/breakdown-tasks` → run-tasks dispatch. This skill
-ends at the registered proposal.
+按需取用，名称 + 一句话 + 适用场景：
+
+- **双钻模型**：先发散再收敛、两轮循环——问题空间含糊、需先定义问题再求解时。
+- **影响地图**：目标 → 角色 → 影响 → 交付物——需要把"为什么做"追溯到"做什么"时。
+- **机会解决方案树**：机会优先、方案后挂——多机会并列、择优切入时。
+- **用户故事地图**：横轴流程、纵轴优先级——范围切分与里程碑排序时。
+- **六顶思考帽**：事实/情感/风险/益处/创意/流程分角色审视——方案评审防止单视角时。
+- **SCAMPER**：替换/组合/调整/修改/另作他用/消除/重排——改进既有事物找突破口时。
+
+## 风格公约
+
+- 中文表达，术语首次出现可附英文；XML 标签名保留英文原样。
+- 直陈句优先，不用感叹号；一次说清，不堆形容词。
+- 结构先于修辞：能用表格/列表/图表的不用大段散文。
+- 诚实呈现权衡，不粉饰缺陷；证据先行于结论。
+
+## 交接
+
+提案被接受（用户裁决，经提案 UI 或会话内记录）后，远征链自动继续：
+创建 feature 记录行 → `/write-prd` → `/ui-design` / `/tech-design` →
+`/breakdown-tasks` → run-tasks 派发。本技能止于已注册的提案。
