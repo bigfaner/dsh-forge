@@ -1,76 +1,80 @@
 ---
 name: ui-design
-description: Produce the UI design specification and HTML prototype from the PRD's ui-functions document — design style selection, per-function layout/states/interactions, and a reviewable prototype.
+description: 从 PRD 的 ui-functions 文档出发产出 UI 设计规格与 HTML 原型——设计风格选型、逐功能布局/状态/交互，以及可评审的原型。
 ---
 
-# UI Design
+# UI 设计（ui-design）
 
-Define HOW the interface looks and behaves, separated from the PRD's WHAT.
+定义界面"长什么样、如何表现"，与 PRD 的"做什么"相分离。
 
 <HARD-GATE>
-Do NOT write implementation code (HTML prototypes are the only exception). This skill
-produces the design specification document and prototype files.
+不得编写实现代码（HTML 原型是唯一例外）。本技能只产出设计规格文档与原型文件。
 </HARD-GATE>
-
-## Prerequisites
-
-| Artifact | Missing? |
-|---|---|
-| `docs/features/<slug>/prd/prd-ui-functions.md` (registered as `ui-functions`) | Run `write-prd` first and add UI function definitions |
 
 ## State-Layer Discipline (boundary)
 
-The document registry vocabulary is closed at seven kinds and has **no ui-design kind** —
-`ui-design.md` and the prototype files are on-disk artifacts and are NOT registered. Do not
-fabricate registrations under a mismatched kind (`ui-functions` already names
-`prd/prd-ui-functions.md`; re-pointing it at `ui-design.md` would lose the PRD row).
+文档注册表词表封闭于七种 kind 且**没有 ui-design kind**——`ui-design.md` 与原型文件
+是磁盘工件，不注册。不得在错配的 kind 下伪造注册（`ui-functions` 已命名
+`prd/prd-ui-functions.md`；把它改指 `ui-design.md` 会丢掉 PRD 那一行）。
 
-The one state touch this skill owns: whenever this skill **writes back into
-`prd/prd-ui-functions.md`** (navigation architecture backfill in Step 2, PRD reconcile in
-Step 7), re-register it:
+本技能拥有的唯一状态层动作：每当本技能**回写 `prd/prd-ui-functions.md`**（第 2 步的
+导航架构回填、第 7 步的 PRD 对账），就重新注册它：
 
 ```
 upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",
-                   rel_path: "docs/features/<slug>/prd/prd-ui-functions.md", summary: "<one line>" }
+                   rel_path: "docs/features/<slug>/prd/prd-ui-functions.md", summary: "<一句话>" }
 ```
 
-## Workflow
+### 冻结锚点清单
 
-1. **Read UI functions** — for each UI function note its Placement: `new-page` (design the
-   complete page) vs `existing-page:<route>` (design only the embedded components; the
-   Position field constrains layout, e.g. width must match the existing content area).
-2. **Extract navigation architecture** — read the `## Navigation Architecture` section of
-   `prd-ui-functions.md`. If absent, collect it from the user (platform, primary entries,
-   secondary pages, navigation rules) and **write it back** into `prd-ui-functions.md`, then
-   re-register the document (see boundary above).
-3. **Select design style** — priority: user-provided DESIGN.md (project root or feature
-   directory) → user choice among built-in styles → clone from external style repos when
-   built-ins are insufficient. Multi-platform features select one style per platform. Inline
-   the selected tokens as the Design System section of the design doc (no external file
-   references).
-4. **Draft the design** — for each UI function define: layout structure (component
-   hierarchy), states (loading/empty/error/populated), interactions (triggers, actions,
-   feedback), data binding (element → data field). `existing-page` functions MUST carry a
-   Placement subsection refined with discovered layout constraints. TUI platforms: every
-   panel includes ASCII mockup, dimensions, character palette, color mapping, and edge-case
-   rendering.
-5. **Write the design document** — `ui/ui-design.md` (web), `ui/ui-design-tui.md` (TUI),
-   `ui/ui-design-mobile.md` (mobile); multi-platform features get one file per platform.
-   Not registered (see boundary).
-6. **Generate the prototype** — HTML from the design doc + selected style: shared CSS/JS +
-   per-page HTML + `index.html` navigation; all four states implemented; navigation, modals,
-   and tabs interactive; responsive. TUI: a single `index.html` simulating a terminal window
-   (dark monospace, box-drawing via CSS, key-button bar to switch panels, toggleable panel
-   states). Save under `ui/prototype/` (per-platform subdirectories for multi-platform).
-7. **Human review gate** — present the prototype (open `index.html` in a browser) and wait
-   for explicit approval before proceeding. In dispatched task context, record the
-   prototype location and highlights in the output instead of blocking.
-8. **Reconcile the PRD (after approval)** — compare prototype vs `prd-ui-functions.md`:
-   pages/interactions/data fields/navigation present in the prototype but not the PRD →
-   propose writing them back. On user approval, update `prd-ui-functions.md` and
-   re-register it (the prototype is the source of truth for what was designed); on decline,
-   note the discrepancies inside `ui-design.md`.
+以下内容被 e2e 断言或机械消费，**一律保留英文原样、禁止翻译**：
 
-## Next Step
+- 段名锚点：`State-Layer Discipline`（e2e `expedition-full-sdd-chain.spec.ts` 引用）
+- 消费段名：`## Navigation Architecture`（`prd-ui-functions.md` 的固定节名，write-prd 同款约定）
+- 工件约定名：`prd-spec.md` / `prd-ui-functions.md` / `ui-design.md`（discovery 机械消费）
+- 文档 kind：`ui-functions`（封闭词表七种之一）
+- 工具/动词名：`upsertFeatureDoc`
+- 标签名：`<HARD-GATE>` 等沿用英文原样（标签体内正文用中文）
 
-After the prototype is approved or skipped: the `tech-design` skill.
+## 前置条件
+
+| 工件 | 缺失时 |
+|---|---|
+| `docs/features/<slug>/prd/prd-ui-functions.md`（注册为 `ui-functions`） | 先跑 `write-prd` 并补齐 UI 功能定义 |
+
+## 工作流
+
+1. **读 UI 功能**——逐项记录其落位：`new-page`（设计完整页面）vs
+   `existing-page:<route>`（只设计内嵌组件；Position 字段约束布局，如宽度须与既有
+   内容区一致）。
+2. **提取导航架构**——读 `prd-ui-functions.md` 的 `## Navigation Architecture` 节。
+   若缺失，向用户收集（平台、主入口、次级页面、导航规则）并**回写**进
+   `prd-ui-functions.md`，再重新注册该文档（见上方边界）。
+3. **选设计风格**——优先级：用户提供的 DESIGN.md（项目根或 feature 目录）→
+   用户在内置风格中挑选 → 内置不足时从外部风格仓库克隆。多平台特性逐平台选一种
+   风格。将所选令牌内联进设计文档的设计系统节（不引外部文件）。
+4. **起草设计**——逐 UI 功能定义：布局结构（组件层级）、状态（加载/空/错误/有数据）、
+   交互（触发、动作、反馈）、数据绑定（元素 → 数据字段）。`existing-page` 功能必须带
+   经实地发现约束精化后的落位子节。TUI 平台：每个面板含 ASCII 示意图、尺寸、字符
+   调色板、颜色映射与边界渲染。
+5. **写设计文档**——`ui/ui-design.md`（web）、`ui/ui-design-tui.md`（TUI）、
+   `ui/ui-design-mobile.md`（移动）；多平台特性一平台一份。不注册（见边界）。
+6. **生成原型**——以设计文档 + 所选风格产出 HTML：共享 CSS/JS + 逐页 HTML +
+   `index.html` 导航；四种状态全部实现；导航、弹窗、页签可交互；响应式。TUI：单个
+   `index.html` 模拟终端窗口（深色等宽、CSS 画框线、按键条切换面板、面板状态可切换）。
+   存放在 `ui/prototype/` 下（多平台逐平台子目录）。
+7. **人工评审门**——呈现原型（浏览器打开 `index.html`）并等待明确批准后再继续。
+   派发任务语境下，在输出中记录原型位置与亮点，不做阻塞等待。
+8. **对账 PRD（批准后）**——对照原型与 `prd-ui-functions.md`：原型中出现而 PRD 没有
+   的页面/交互/数据字段/导航 → 提议回写。用户批准则更新 `prd-ui-functions.md` 并重新
+   注册（原型即"设计了什么"的事实源）；拒绝则在 `ui-design.md` 内记录差异。
+
+## 文档风格公约
+
+- **mermaid 优先**：结构与流程用图表达，文字做补充而非替代。
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 下一步
+
+原型获批或跳过后：`tech-design` 技能。
