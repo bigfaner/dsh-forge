@@ -19,15 +19,15 @@ import {
 
 const COMPLEXITIES: readonly PersonaComplexity[] = ['low', 'medium', 'high']
 
-/** 核心段①-⑧锚（每节标题——穷尽断言的稳定基面） */
+/** 核心段①-⑧锚（每节标题——穷尽断言的稳定基面；段序 = 执行动线：规划→执行→异常→证据→上报→收口） */
 const CORE_SECTION_ANCHORS = [
   '### 1. 工作方式',
-  '### 2. 失败处理',
-  '### 3. 提交纪律',
-  '### 4. 如实上报',
-  '### 5. 高效执行（避免无效动作）',
-  '### 6. 产物落盘',
-  '### 7. todo_write：目标导向的执行骨架',
+  '### 2. todo_write：目标导向的执行骨架',
+  '### 3. 高效执行（避免无效动作）',
+  '### 4. 失败处理',
+  '### 5. 产物落盘',
+  '### 6. 如实上报',
+  '### 7. 提交纪律',
   '### 8. 提问二分',
 ]
 
@@ -82,7 +82,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('e2e/验收证据落盘锚：核心段第 6 节分点列举 + 先落盘再继续', () => {
+  it('e2e/验收证据落盘锚：核心段第 5 节分点列举 + 先落盘再继续', () => {
     for (const taskType of TASK_TYPES) {
       const persona = composePersona(taskType, 'medium')
       expect(persona).toContain('e2e/验收测试的证据票据（trace、error-context、失败摘录）')
@@ -137,6 +137,11 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       expect(low).toContain(PERSONA_CORE_SECTION)
       expect(low).toContain('AC 逐项核查不变量')
     }
+  })
+
+  it('质量门禁命令构造口径：按改动范围自行构造 + 禁固定 just 配方', () => {
+    const persona = composePersona('coding-feature', 'medium')
+    expect(persona).toContain('根据本次任务的改动范围，自行构造最合适的验证命令：选对目标包与命令形态——不得机械套用固定的 just 配方')
   })
 
   it('质量门禁分级方向（对齐提案 S1）：low = ①收窄仅改动包 + ③必须完整执行；medium/high = ①含依赖包', () => {
