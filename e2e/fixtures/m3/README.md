@@ -37,6 +37,17 @@ dogfood——Hard Rule：唯一真实模型依赖面）。本目录承载运行�
    零缺陷——同期 dogfood-sc-m2 实证隔离 DSH_HOME 播种下 zai 路由 worker 全程可解析
    （sc5 的 MISSING_CREDENTIAL 为零播种环境预期面，走「跳过」+ 诊断行纪律）。
 
+0b. **halt 阶段 tool-error 来源定性（2026-10-12，fix-9——取证归档
+   `.forge/docs/proposals/worker-lean-execution/walkthrough/fix9/m3-halt-toolerror/`）**：
+   0 的重定基线后 halt 阶段仍可见 `type=tool-error`（fix-7 实跑 spec:461 卫式失败）。定性：
+   在场 tool-error ≠ spawn 机制故障——message 均为 dispatchTask 同步入口
+   「task source … owned by an active dispatch loop — exclusive until the loop settles」
+   **派发独占拒绝**（host 派发循环独占防线——循环 halted 粘住期间模型重试 dispatchTask 被
+   拒；code 沿用 ERR_SPAWN_FAILED「本次派发未发生」承载码，归属 slug 回落 `_pool`），
+   产品行为面正确（双派发不双派发防线实证）。零 tool-error 断言基线过时且时序敏感（2026-10-12
+   全绿 run 中同类 tool-error ×2 落在断言读窗之后）——防线卫式随行重定基线：halt 阶段
+   tool-error 只认独占拒绝消息，其余（spawn 装配/异常终止）仍 fail-loud。
+
 1. **dispatchPrompt 任务规格缺席（首跑全阻）**：`<task-context>` 只含键值行（TASK_ID/SOURCE/
    TYPE/…），任务 title/desc/AC 不入简报；worker 收窄面禁 queryTask（矩阵 forge 族 =
    submitTask+addTask）且 M3 task_file 列砍除 → db-only 任务（quick-tasks/addTask 建）三路皆无

@@ -442,7 +442,11 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
 
     // ── halted 阶日志面（防线证据与实际失败类一致）：worker 异常终止阶梯——logs
     //    {slug}/1.1/00N-worker-aborted ×≥3（事件夹 error.log 落盘）+ task-claimed/task-spawned
-    //    ×≥3 + 零 tool-error（guardOnFailure=false——worker 异常终止不 emit tool-error） ──
+    //    ×≥3；tool-error 卫式只认 spawn 机制故障——fix-9 定性：halt 阶段在场 tool-error 均 =
+    //    dispatchTask 同步入口「active dispatch loop 独占」拒绝（host 派发循环独占防线——
+    //    双派发不双派发实证；code 沿用 ERR_SPAWN_FAILED「本次派发未发生」承载码，归属回落
+    //    _pool）。证据归档：.forge/docs/proposals/worker-lean-execution/walkthrough/fix9/
+    //    m3-halt-toolerror/（2026-10-12 失败票据 in-window 实证 + 全绿 run log） ──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)
     const haltLines = readLogLines(logFile)
     const incidentRoot = join(dir, 'logs', FEATURE, '1.1')
@@ -458,7 +462,13 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     const spawnedEvents = haltLines.filter((l) => l.type === 'task-spawned' && (l.payload.taskKey as string) === `${FEATURE}/1.1`)
     expect(claimEvents.length, 'logs task-claimed（1.1 连环重入）×≥3').toBeGreaterThanOrEqual(3)
     expect(spawnedEvents.length, 'logs task-spawned ×≥3（spawn 成功——失败类在 worker 首请求）').toBeGreaterThanOrEqual(3)
-    expect(haltLines.some((l) => l.type === 'tool-error'), 'halted 阶段零 tool-error（异常终止非 spawn 机制故障）').toBe(false)
+    const foreignToolErrors = haltLines.filter(
+      (l) => l.type === 'tool-error' && !String((l.payload as { message?: string }).message ?? '').includes('owned by an active dispatch loop'),
+    )
+    expect(
+      foreignToolErrors.map((l) => (l.payload as { code?: string }).code),
+      'halted 阶段零非独占拒绝 tool-error（异常终止/装配非 spawn 机制故障——独占拒绝 = 防线正确行为面）',
+    ).toEqual([])
 
     // ── 复位：设置回真实模型 + 人工转移（in_progress → pending——人类面 transition） ──
     await forgeInvoke(page, SETTINGS_CHANNELS.set, {
