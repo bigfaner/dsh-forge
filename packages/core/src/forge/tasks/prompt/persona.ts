@@ -162,7 +162,7 @@ export interface PersonaVariant {
 
 /** low 级裁剪工作流（TDD/SCAN/逐需求段裁剪；AC 核查保留在核心段） */
 function lowTrimWorkflow(type: TaskType, steps: string): string {
-  return `工作流（裁剪版）：${steps}（扫描与逐需求段裁剪；AC 逐项核查保留）。`
+  return `工作流：${steps}（扫描与逐需求段裁剪；AC 逐项核查保留）。`
 }
 
 export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
