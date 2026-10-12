@@ -135,6 +135,52 @@ describe('layoutDag（几何 + 边路径）', () => {
   })
 })
 
+describe('S5 边几何：终点切线随源→目标向量（箭头契合线走向）', () => {
+  /** 解析 path d 的末段：返回终点与末控制点（切线向量 = 终点 − 末控制点） */
+  function endTangent(d: string): { end: number[]; ctrl: number[] } {
+    const pts = d
+      .slice(d.indexOf('C') + 1)
+      .split(',')
+      .map((pair) => pair.trim().split(/\s+/).map(Number))
+    const end = pts[2]!
+    const ctrl = pts[1]!
+    return { end, ctrl }
+  }
+
+  it('非垂直边（dx≠0）：终点切线 ∥ 源→目标向量（对角进入目标节点）', () => {
+    const tasks = [dagCard('a'), dagCard('b'), dagCard('diag')]
+    const layout = layoutDag(tasks, [edge('a', 'b'), edge('a', 'diag')])
+    const e = layout.edges.find((e) => e.taskId === 'diag')
+    if (e === undefined) throw new Error('斜向边缺席——断言不可达')
+    const from = layout.nodes.find((n) => n.taskId === 'a')!
+    const to = layout.nodes.find((n) => n.taskId === 'diag')!
+    const x1 = from.x + DAG_NODE_W / 2
+    const y1 = from.y + DAG_NODE_H
+    const x2 = to.x + DAG_NODE_W / 2
+    const y2 = to.y
+    expect(x2 - x1).not.toBe(0) // 夹具确为斜向
+    const { end, ctrl } = endTangent(e.d)
+    expect(end).toEqual([x2, y2])
+    const arm = Math.max(12, (y2 - y1) / 2)
+    expect(ctrl).toEqual([x2 - ((x2 - x1) * arm) / (y2 - y1), y2 - arm])
+    // 切线 (end−ctrl) 与 (x2−x1, y2−y1) 叉积 = 0（共线）
+    const tx = end[0]! - ctrl[0]!
+    const ty = end[1]! - ctrl[1]!
+    expect(tx * (y2 - y1) - ty * (x2 - x1)).toBeCloseTo(0, 6)
+  })
+
+  it('垂直边（dx=0）回归锚：路径与旧形态等价（两控制点均与端点同 x）', () => {
+    const layout = layoutDag([dagCard('a'), dagCard('b')], [edge('a', 'b')])
+    const [e] = layout.edges
+    if (e === undefined) throw new Error('垂直边缺席——断言不可达')
+    const x = DAG_PAD + DAG_NODE_W / 2
+    const y1 = DAG_PAD + DAG_NODE_H
+    const y2 = DAG_PAD + DAG_NODE_H + DAG_GAP_Y
+    const arm = Math.max(12, (y2 - y1) / 2)
+    expect(e.d).toBe(`M${x} ${y1} C${x} ${y1 + arm}, ${x} ${y2 - arm}, ${x} ${y2}`)
+  })
+})
+
 describe('D29 原型节点刻度 pin（M3.1——纠正版原型 renderTaskDag W190/H72）', () => {
   it('节点刻度字面 = 190×72（D29——历史 170×64 与原型不符已退役）', () => {
     expect(DAG_NODE_W).toBe(190)

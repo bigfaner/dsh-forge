@@ -161,11 +161,17 @@ export function layoutDag(tasks: readonly TaskCard[], edges: readonly TaskGraphE
     const x2 = to.x + DAG_NODE_W / 2
     const y2 = to.y
     const arm = Math.max(DAG_CTRL_MIN, (y2 - y1) / 2)
+    // 终点切线随源→目标向量（S5）：末控制点按 dx 比例偏置（dx·arm/dy），切线
+    // (dx·arm/dy, arm) ∥ (dx, dy)——斜向边对角进入目标节点，marker orient=auto
+    // 自然贴合线走向；垂直边（dx=0）偏置为零、形态与旧版等价；回边（dy≤0，
+    // 向上走）保持旧垂直臂形态（切线对齐无意义，回归安全）。
+    const dy = y2 - y1
+    const c2x = dy > 0 ? x2 - ((x2 - x1) * arm) / dy : x2
     layoutEdges.push({
       prerequisiteId: e.prerequisiteId,
       taskId: e.taskId,
       done: byId.get(e.prerequisiteId)?.taskStatus === 'completed',
-      d: `M${x1} ${y1} C${x1} ${y1 + arm}, ${x2} ${y2 - arm}, ${x2} ${y2}`,
+      d: `M${x1} ${y1} C${x1} ${y1 + arm}, ${c2x} ${y2 - arm}, ${x2} ${y2}`,
       back: back.has(edgeKey(e.prerequisiteId, e.taskId)),
     })
   }
