@@ -103,12 +103,6 @@ addTask { source_kind: "proposal", source_slug: "<proposal slug>",
 （经提案 UI 或会话内明示）后由 `transitionProposal` 记录——接受后任务即可经
 run-tasks 直接派发，中间没有 feature 阶段。
 
-## 文档风格公约
-
-- **mermaid 优先**：结构与流程用图表达，文字做补充而非替代。
-- **文字精简**：一段一个含义，无歧义短语，不留废话。
-- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
-
 ## 输出清单
 
 - [ ] 提案以 `mode: "blitz"`（draft）注册

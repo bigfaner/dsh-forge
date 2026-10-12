@@ -93,12 +93,6 @@ Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Jo
    技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`
    （那是它的 gate，不是本技能的）。
 
-## 文档风格公约
-
-- **mermaid 优先**：结构与流程用图表达，文字做补充而非替代。
-- **文字精简**：一段一个含义，无歧义短语，不留废话。
-- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
-
 ## 下一步
 
 `eval --type journey`，随后 `gen-contracts`。

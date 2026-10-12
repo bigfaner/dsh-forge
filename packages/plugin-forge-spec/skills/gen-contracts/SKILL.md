@@ -69,11 +69,6 @@ contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任�
    人工修复的不合规清单（绝不带无效 Contract 继续）。
 6. **写出**到 `testing/<journey>/contracts/`；保持事实表最新。
 
-## 文档风格公约
-
-- **文字精简**：一段一个含义，无歧义短语，不留废话。
-- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
-
 ## 下一步
 
 `eval --type contract`，随后 `gen-test-scripts`。
