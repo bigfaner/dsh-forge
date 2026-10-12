@@ -14,36 +14,36 @@ const CWD = 'C:\\ws\\demo'
 const PROJECT = 'p-9'
 const SESSION = 's-main'
 
-/** steer 提交记录（fix-1 断言径——已知命令零转录，指令单行由 producer 显式提交） */
-interface SteeredMessage {
+/** followup 提交记录（fix-1 断言径——已知命令零转录，指令单行由 producer 显式提交） */
+interface followupedMessage {
   readonly role: unknown
   readonly text: unknown
   readonly sourceKind: unknown
 }
 
-/** agent 桩（session 身份 + 可选 steer 记录器——steer 缺席形态 = fail-soft 分支靶） */
+/** agent 桩（session 身份 + 可选 followup 记录器——followup 缺席形态 = fail-soft 分支靶） */
 function agentOf(
   sessionId = SESSION,
   cwd: string | undefined = CWD,
-  steer?: (message: unknown) => void,
-): { session: { id: string; header?: { cwd?: string } }; steer?: (message: unknown) => void } {
+  followup?: (message: unknown) => void,
+): { session: { id: string; header?: { cwd?: string } }; followup?: (message: unknown) => void } {
   return {
     session: {
       id: sessionId,
       ...(cwd !== undefined ? { header: { cwd } } : {}),
     },
-    ...(steer !== undefined ? { steer } : {}),
+    ...(followup !== undefined ? { followup } : {}),
   }
 }
 
-/** steer 记录器（消息形状窄读——role/text/source.kind 三键断言面） */
-function steerRecorder(): { steered: SteeredMessage[]; fn: (message: unknown) => void } {
-  const steered: SteeredMessage[] = []
+/** followup 记录器（消息形状窄读——role/text/source.kind 三键断言面） */
+function followupRecorder(): { followuped: followupedMessage[]; fn: (message: unknown) => void } {
+  const followuped: followupedMessage[] = []
   return {
-    steered,
+    followuped,
     fn: (message: unknown) => {
       const m = message as { role?: unknown; content?: { type?: unknown; text?: unknown }[]; source?: { kind?: unknown } }
-      steered.push({
+      followuped.push({
         role: m?.role,
         text: m?.content?.[0]?.text,
         sourceKind: m?.source?.kind,
@@ -221,7 +221,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     const ask = askStub(answerLabel('blitz-y'))
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
-    const agent = agentOf(SESSION, CWD, () => {}) as never // 1.20：提交成功 = 启动前提（steer 在场）
+    const agent = agentOf(SESSION, CWD, () => {}) as never // 1.20：提交成功 = 启动前提（followup 在场）
     const out = await d.handler({ agent, rawInput: '' })
     expect(stub.startInputs).toEqual([
       { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
@@ -444,43 +444,43 @@ describe('跑动中再触发→查看/停止/替换问询（AC；decisions #20 �
 describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会话创建成功判据：先提交后启动，失败不启动循环）', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
 
-  it('带参直通启动成功：agent.steer 恰一次收 `/run-dag-tasks feat-x` user 消息（role/content/source.kind）', async () => {
-    const rec = steerRecorder()
+  it('带参直通启动成功：agent.followup 恰一次收 `/run-dag-tasks feat-x` user 消息（role/content/source.kind）', async () => {
+    const rec = followupRecorder()
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(rec.steered).toEqual([
+    expect(rec.followuped).toEqual([
       { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
     ])
   })
 
   it('无参选中启动：同一提交径（选中源 = 问询回读 label）', async () => {
-    const rec = steerRecorder()
+    const rec = followupRecorder()
     const ask = askStub(answerLabel('feat-x'))
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: '' })
     expect(out.kind).toBe('success')
-    expect(rec.steered).toEqual([
+    expect(rec.followuped).toEqual([
       { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
     ])
   })
 
   it('启动被拒（单活竞态 loop-active）：提交已先行（1.14 物化序）——回执说明未重复启动，零重复提交', async () => {
-    const rec = steerRecorder()
+    const rec = followupRecorder()
     const stub = driverStub({ startCode: 'loop-active' })
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已在运行')
-    // 1.14 序：提交先行（steer 开 turn 物化会话）→ start 被竞态拒绝——单行已落，无重复提交
-    expect(rec.steered).toHaveLength(1)
+    // 1.14 序：提交先行（followup 开 turn 物化会话）→ start 被竞态拒绝——单行已落，无重复提交
+    expect(rec.followuped).toHaveLength(1)
   })
 
-  it('1.14 物化序（带参直通）：steer 提交先于 driver.start（先落实会话，再启动循环）', async () => {
+  it('1.14 物化序（带参直通）：followup 提交先于 driver.start（先落实会话，再启动循环）', async () => {
     const trace: string[] = []
-    const rec = steerRecorder()
+    const rec = followupRecorder()
     const base = driverStub()
     const driver: LoopDriver = {
       ...base.driver,
@@ -491,17 +491,17 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     }
     const d = depsOf({ cards, driver })
     const wrapped = agentOf(SESSION, CWD, (message: unknown) => {
-      trace.push('steer')
+      trace.push('followup')
       rec.fn(message)
     })
     const out = await d.handler({ agent: wrapped as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(trace).toEqual(['steer', 'start'])
+    expect(trace).toEqual(['followup', 'start'])
   })
 
   it('1.14 物化序（无参问询径同治）：选中启动同走先提交后启动链', async () => {
     const trace: string[] = []
-    const rec = steerRecorder()
+    const rec = followupRecorder()
     const base = driverStub()
     const driver: LoopDriver = {
       ...base.driver,
@@ -513,29 +513,29 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     const ask = askStub(answerLabel('feat-x'))
     const d = depsOf({ cards, driver, ask: ask.face })
     const wrapped = agentOf(SESSION, CWD, (message: unknown) => {
-      trace.push('steer')
+      trace.push('followup')
       rec.fn(message)
     })
     const out = await d.handler({ agent: wrapped as never, rawInput: '' })
     expect(out.kind).toBe('success')
-    expect(trace).toEqual(['steer', 'start'])
-    expect(rec.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(trace).toEqual(['followup', 'start'])
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
   })
 
   it('未启动径（未知 slug）：零提交', async () => {
-    const rec = steerRecorder()
+    const rec = followupRecorder()
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'ghost' })
-    expect(rec.steered).toEqual([])
+    expect(rec.followuped).toEqual([])
   })
 
-  it('steer 面缺席（1.20 门控）：会话未落实 → error 回执，循环不启动', async () => {
+  it('followup 面缺席（1.20 门控）：会话未落实 → error 回执，循环不启动', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 steer 位
+      const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' }) // agentOf 无 followup 位
       expect(out.kind).toBe('error')
       expect((out as { text?: string }).text).toContain('未派发')
       expect((out as { text?: string }).text).toContain('提交失败')
@@ -547,7 +547,7 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     }
   })
 
-  it('steer 投递抛错（1.20 门控）：告警不外抛，error 回执附原因，循环不启动', async () => {
+  it('followup 投递抛错（1.20 门控）：告警不外抛，error 回执附原因，循环不启动', async () => {
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -570,35 +570,35 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
   })
 })
 
-// ─────────────────────────── 1.18 steer 目标活根化 ───────────────────────────
+// ─────────────────────────── 1.18 followup 目标活根化 ───────────────────────────
 
-describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.send 定罪修复）', () => {
+describe('1.18 followup 目标经 agentsRegistry 活根解析（真机 undefined.send 定罪修复）', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
 
-  it('registry 命中：steer 落在 registry 活根（非 ctx.parent——invocation 把手零触达）', async () => {
-    const reg = steerRecorder()
-    const parent = steerRecorder()
+  it('registry 命中：followup 落在 registry 活根（非 ctx.parent——invocation 把手零触达）', async () => {
+    const reg = followupRecorder()
+    const parent = followupRecorder()
     const stub = driverStub()
-    const d = depsOf({ cards, driver: stub.driver, resolveAgent: (id) => (id === SESSION ? { steer: reg.fn } : undefined) })
+    const d = depsOf({ cards, driver: stub.driver, resolveAgent: (id) => (id === SESSION ? { followup: reg.fn } : undefined) })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已启动')
-    expect(reg.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }]) // 活根收件
-    expect(parent.steered).toEqual([]) // ctx.parent 不再是 steer 目标
+    expect(reg.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }]) // 活根收件
+    expect(parent.followuped).toEqual([]) // ctx.parent 不再是 followup 目标
   })
 
-  it('registry 未命中 + fallback steer 在：fallback 提交成功（向后兼容），success 回执', async () => {
-    const parent = steerRecorder()
+  it('registry 未命中 + fallback followup 在：fallback 提交成功（向后兼容），success 回执', async () => {
+    const parent = followupRecorder()
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => undefined })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).not.toContain('提交失败')
-    expect(parent.steered).toHaveLength(1)
+    expect(parent.followuped).toHaveLength(1)
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
-  it('registry 未命中 + fallback steer 缺席：error 回执带激活指引，循环不启动（1.20 门控）', async () => {
+  it('registry 未命中 + fallback followup 缺席：error 回执带激活指引，循环不启动（1.20 门控）', async () => {
     const stub = driverStub()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -618,12 +618,12 @@ describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.se
   })
 
   it('resolveAgent 缺席（旧装配形态）：恒走 ctx.parent fallback（向后兼容两态之命中态）', async () => {
-    const parent = steerRecorder()
+    const parent = followupRecorder()
     const stub = driverStub()
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(parent.steered).toHaveLength(1)
+    expect(parent.followuped).toHaveLength(1)
   })
 })
 
@@ -632,8 +632,8 @@ describe('1.18 steer 目标经 agentsRegistry 活根解析（真机 undefined.se
 describe('1.19 未进入态处理：先进入（sessionController.resolveAgent）再提交再启动', () => {
   const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
 
-  it('registry 未命中 + 激活成功：进入先于提交，steer 落在进入后的活根，success 回执零告警', async () => {
-    const rec = steerRecorder()
+  it('registry 未命中 + 激活成功：进入先于提交，followup 落在进入后的活根，success 回执零告警', async () => {
+    const rec = followupRecorder()
     const order: string[] = []
     let live: unknown // 激活后才「进入」——registry 活根在此之后才可解析
     const stub = driverStub()
@@ -643,8 +643,8 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
       resolveAgent: () => live,
       enterAgent: async () => {
         order.push('enter')
-        live = { steer: (m: unknown) => {
-          order.push('steer')
+        live = { followup: (m: unknown) => {
+          order.push('followup')
           rec.fn(m)
         } }
         return live
@@ -654,8 +654,8 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已启动')
     expect((out as { text?: string }).text).not.toContain('提交失败')
-    expect(order).toEqual(['enter', 'steer']) // 先进入再提交（undefined.send 根因面不再触达）
-    expect(rec.steered).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(order).toEqual(['enter', 'followup']) // 先进入再提交（undefined.send 根因面不再触达）
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
@@ -709,9 +709,9 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     }
   })
 
-  it('1.21 活根定向：registry 陈旧把手（steer 抛 undefined.send）+ 激活返回真活根 → steer 落在激活活根，success 回执', async () => {
-    const live = steerRecorder()
-    const stale = steerRecorder()
+  it('1.21 活根定向：registry 陈旧把手（followup 抛 undefined.send）+ 激活返回真活根 → followup 落在激活活根，success 回执', async () => {
+    const live = followupRecorder()
+    const stale = followupRecorder()
     stale.fn = () => {
       throw new TypeError("Cannot read properties of undefined (reading 'send')")
     }
@@ -719,27 +719,27 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     const d = depsOf({
       cards,
       driver: stub.driver,
-      resolveAgent: (id) => (id === SESSION ? { steer: stale.fn } : undefined), // 陈旧把手（内件未初始化）
-      enterAgent: async () => ({ steer: live.fn }), // sessionController 激活活根
+      resolveAgent: (id) => (id === SESSION ? { followup: stale.fn } : undefined), // 陈旧把手（内件未初始化）
+      enterAgent: async () => ({ followup: live.fn }), // sessionController 激活活根
     })
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(live.steered).toHaveLength(1) // 提交目标 = 激活活根（registry 陈旧把手未被使用）
-    expect(stale.steered).toHaveLength(0)
+    expect(live.followuped).toHaveLength(1) // 提交目标 = 激活活根（registry 陈旧把手未被使用）
+    expect(stale.followuped).toHaveLength(0)
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
   it('激活面缺席 + registry 命中：registry 把手照用（向后兼容——1.18 装配形态）', async () => {
-    const reg = steerRecorder()
+    const reg = followupRecorder()
     const stub = driverStub()
     const d = depsOf({
       cards,
       driver: stub.driver,
-      resolveAgent: (id) => (id === SESSION ? { steer: reg.fn } : undefined),
+      resolveAgent: (id) => (id === SESSION ? { followup: reg.fn } : undefined),
     })
     const out = await d.handler({ agent: agentOf() as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(reg.steered).toHaveLength(1)
+    expect(reg.followuped).toHaveLength(1)
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
@@ -755,6 +755,83 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+// ─────────────────────────── 1.22 当且仅当新会话才 followup ───────────────────────────
+
+describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 agent 读令自跑）', () => {
+  const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
+  /** 既有会话桩（自有事件非空——真实 Session.ownEvents 鸭子形） */
+  function existingAgent(followup?: (m: unknown) => void): Record<string, unknown> {
+    return {
+      ...agentOf(SESSION, CWD, followup),
+      session: { id: SESSION, header: { cwd: CWD }, ownEvents: () => [{ type: 'user/message', seq: 0 }] },
+    }
+  }
+  /** 新会话桩（自有事件空——blank 相位真实形） */
+  function newAgent(followup?: (m: unknown) => void): Record<string, unknown> {
+    return {
+      ...agentOf(SESSION, CWD, followup),
+      session: { id: SESSION, header: { cwd: CWD }, ownEvents: () => [] },
+    }
+  }
+
+  it('既有会话（自有事件非空）：零 followup 零激活，循环直接启动，success 回执', async () => {
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, resolveAgent: () => { throw new Error('既有会话不应触达激活/解析面') } })
+    const out = await d.handler({ agent: existingAgent(rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect((out as { text: string }).text).toContain('已启动')
+    expect(rec.followuped).toEqual([]) // 当且仅当新会话才 followup
+    expect(stub.loops.has(SESSION)).toBe(true) // 循环照常启动
+  })
+
+  it('新会话（自有事件空）：followup 照常（1.14 物化语义原样）', async () => {
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: newAgent(rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(stub.loops.has(SESSION)).toBe(true)
+  })
+
+  it('判定面缺席（旧桩/旧装配）：恒新会话路径——followup 向后兼容', async () => {
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.followuped).toHaveLength(1)
+  })
+
+  it('判定抛错（ownEvents throw）：fail-soft 按新会话——激活+followup 最保守路径', async () => {
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const agent = {
+      ...agentOf(SESSION, CWD, rec.fn),
+      session: { id: SESSION, header: { cwd: CWD }, ownEvents: () => { throw new Error('log locked') } },
+    }
+    const out = await d.handler({ agent: agent as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.followuped).toHaveLength(1)
+  })
+
+  it('既有会话径零触达激活面：enterAgent 不被调用（既有会话无需进入）', async () => {
+    let enterCalls = 0
+    const rec = followupRecorder()
+    const stub = driverStub()
+    const d = depsOf({
+      cards,
+      driver: stub.driver,
+      enterAgent: async () => { enterCalls++; return undefined },
+    })
+    await d.handler({ agent: existingAgent(rec.fn) as never, rawInput: 'feat-x' })
+    expect(enterCalls).toBe(0)
+    expect(stub.loops.has(SESSION)).toBe(true)
   })
 })
 
