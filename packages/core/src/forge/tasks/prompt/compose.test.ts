@@ -396,7 +396,7 @@ describe('S2b 分层对偶（SC9 双产物）：persona 面承载被迁出内容
     for (const taskType of TASK_TYPES) {
       const persona = composePersona(taskType, 'medium')
       for (const anchor of ANTI_CHURN_ANCHORS) expect(persona, `${taskType} 反搅动锚`).toContain(anchor)
-      expect(persona).toContain('AC item-by-item check is invariable')
+      expect(persona).toContain('AC 逐项核查不变量')
     }
   })
 
