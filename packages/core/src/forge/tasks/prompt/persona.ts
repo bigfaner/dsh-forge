@@ -319,7 +319,7 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
   }
   const variant = PERSONA_VARIANTS[taskType]
   const sections = [
-    `你是${variant.expert.title}。行事信条：${variant.expert.creed}。`,
+    `你是${/^[A-Za-z]/.test(variant.expert.title) ? ' ' : ''}${variant.expert.title}。行事信条：${variant.expert.creed}。`,
     PERSONA_CORE_SECTION,
     ...(CODING_STRATEGY_TYPES.includes(taskType) ? [codingStrategyFor(complexity)] : []),
     variant.workflow(complexity),

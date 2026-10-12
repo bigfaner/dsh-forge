@@ -33,7 +33,13 @@ import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
 // worker agent 级提示词（persona 组成矩阵——worker-lean-execution S2a）：
 // plugin-forge spawn 链的唯一 persona 源（dispatch-core 消费；此前为死代码双源，接线收口）
-export { composePersona, PERSONA_CORE_SECTION, ANTI_CHURN_ANCHORS } from './forge/tasks/prompt/persona.js'
+export {
+  composePersona,
+  PERSONA_CORE_SECTION,
+  ANTI_CHURN_ANCHORS,
+  PERSONA_VARIANTS,
+  CODING_STRATEGY_TYPES,
+} from './forge/tasks/prompt/persona.js'
 
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
