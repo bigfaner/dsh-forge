@@ -117,7 +117,7 @@ export function baselineGate(complexity: PersonaComplexity): string {
       : `1. 受影响包的类型检查/构建，含直接依赖它的包
 2. 改动文件 lint
 3. 改动包/模块的定向单元测试（用该测试框架的原生命令）`
-  return `质量门禁（根据本次任务的改动范围，自行构造最合适的验证命令：选对目标包与命令形态——不得机械套用固定的 just 配方）：
+  return `根据本次任务的改动范围，自行构造最合适的验证命令：选对目标包与命令形态——不得机械套用固定的 just 配方。
 ${items}`
 }
 

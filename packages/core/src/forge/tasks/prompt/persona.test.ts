@@ -1,4 +1,4 @@
-// persona 组成矩阵单测（提案 worker-lean-execution S2a AC）：×20 类型 ×low/medium/high
+﻿// persona 组成矩阵单测（提案 worker-lean-execution S2a AC）：×20 类型 ×low/medium/high
 // 全矩阵——核心段①-⑧一切类型在场、高效执行锚 ×6 恒定、变体按 20 类型表路由、
 // Coding Strategy 9 类注入面、low 裁剪不触及核心段与 AC 核查、裸 `{{` 防护、
 // UI 任务不作特殊处理（coding-feature/enhancement 无 UI 专属锚）。
@@ -142,6 +142,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
   it('质量门禁命令构造口径：按改动范围自行构造 + 禁固定 just 配方', () => {
     const persona = composePersona('coding-feature', 'medium')
     expect(persona).toContain('根据本次任务的改动范围，自行构造最合适的验证命令：选对目标包与命令形态——不得机械套用固定的 just 配方')
+    expect(persona).not.toContain('质量门禁（根据')
   })
 
   it('质量门禁分级方向（对齐提案 S1）：low = ①收窄仅改动包 + ③必须完整执行；medium/high = ①含依赖包', () => {
