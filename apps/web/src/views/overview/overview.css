@@ -11,8 +11,8 @@
  * 999px（官方 Tag 同值刻度）/ 卡片圆角 8px / 卡片行距 6px / 卡头内距 8px 10px /
  * meta 内距 8px 12px 12px 24px = M3.1 原型结构刻度（官方主题无间距标尺令牌——
  * sidebar.css/knowledge.css 同款豁免先例）；块级留白取行高令牌刻度；D44 状态 chip 统一宽
- * 78px / 横向 padding 2px / chip 内距 6px = 用户等长裁决刻度（原 auto 宽 + 整行高令牌
- * 对照——行注逐位记账）。 */
+ * （S6 加宽 78→90px）/ 横向 padding 2px / chip 内距 6px = 用户等长裁决刻度（原 auto 宽 +
+ * 整行高令牌对照——行注逐位记账）。 */
 
 /* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动；M3.1 D12 弹性填满整 tab） ── */
 .dswf-ov-wrap {
@@ -204,9 +204,10 @@
 
 /* ── 七态 chips（M3.1 D14 彩色胶囊：0 计数禁用淡化；激活 = 单强调蓝——状态差异由
  *    StateDot 点承载，原型 m31-tchip.on；胶囊 999px = 官方 Tag 刻度同值 + bg-base
- *    灰底承载面（D13 灰底内容区上的浮起胶囊）；D44：三族状态 chip 固定统一宽 78px +
- *    内容居中（原 auto 宽内容自适应形态退役——dswf-ov-pschip / dswf-ov-phchip 同值互指；
- *    ✕ 重置钮非状态标签不参与等长，auto 宽在 -clear 保持）） ── */
+ *    灰底承载面（D13 灰底内容区上的浮起胶囊）；D44：三族状态 chip 固定统一宽 + 内容居中
+ *    （原 auto 宽内容自适应形态退役——dswf-ov-pschip / dswf-ov-phchip 同值互指；✕ 重置钮
+ *    非状态标签不参与等长，auto 宽在 -clear 保持）；S6：统一宽 78→90px 加宽（78px 档
+ *    实测「已完成 + 点 + 两位计数」溢出致内部换行——D44 固定统一宽形态保留仅换值）。 ── */
 .dswf-ov-stchips {
   display: flex;
   flex-wrap: wrap;
@@ -220,7 +221,7 @@
   align-items: center;
   justify-content: center; /* D44 固定宽内容居中——3 字 + 点 + 两位计数不截断（三族同值） */
   gap: 6px; /* D44 chip 内点/字/计距收窄（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；与行 gap 6px 同刻度） */
-  width: 78px; /* D44 固定统一宽（dsw-raw 新裁决刻度——原 auto 宽内容自适应形态退役：3 字 39 + 点 8 + 两位计数 ~15 + 内距 12 ≈ 74 紧凑容纳，渲染总宽 84px 较原最长 ~116px 收紧；三族同值零漂移互指：dswf-ov-pschip / dswf-ov-phchip） */
+  width: 90px; /* D44 固定统一宽 + S6 加宽（dsw-raw 新裁决刻度——原 auto 宽内容自适应形态退役：3 字 39 + 点 8 + 两位计数 ~15 + chip 内距 gap 12 + 横向 padding 4 + 边框 2 ≈ 80，原 78px 档实测溢出致内部换行，加宽至 90px 档容纳；三族同值零漂移互指：dswf-ov-pschip / dswf-ov-phchip） */
   height: 24px; /* dsw-raw 原型 chip 行刻度 */
   padding: 0 2px; /* D44 横向收窄档（dsw-raw 新裁决刻度——原值整行高令牌 0 13px 对照：固定宽居中下仅溢出护栏；✕ 重置钮原形制在 -clear 保持） */
   border: 1px solid var(--dsw-alias-border-l2);
@@ -246,6 +247,12 @@
 .dswf-ov-stchip:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.dswf-ov-stchip-label,
+.dswf-ov-stchip-count {
+  white-space: nowrap; /* S6 防内部换行兜底（固定宽 + flex 收缩下 label/count span 不折行） */
+  flex-shrink: 0;
 }
 
 .dswf-ov-stchip-count {

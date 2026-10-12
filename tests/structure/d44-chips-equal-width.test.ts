@@ -5,10 +5,11 @@
 //  width 同值断言承载机械面。）
 // 断言面：
 //   ① 三族状态 chip（.dswf-ov-stchip 七态 / .dswf-ov-pschip 五态 / .dswf-ov-phchip 阶段）
-//      固定统一宽 78px（执行期定值：3 字 label 39 + 点 8 + 两位计数 ~15 + 内距 12 = ~74
-//      紧凑容纳 + 余量；渲染总宽 84px = 78 内容 + 2×2 padding + 2×1 边框，较原最长 auto
-//      宽 ~116px 收紧——72–84px 档顶）；三族 width 声明同值零漂移（平行类互指注记——
-//      共享类收敛退役：TSX 类名面零改动，平行结构沿 D14/D38 先例）；
+//      固定统一宽 90px（S6 加宽——原 78px 档实测「已完成 + 点 + 两位计数」溢出致内部换行，
+//      D44 固定统一宽形态保留仅换值：3 字 label 39 + 点 8 + 两位计数 ~15 + chip 内距 gap
+//      12 + 横向 padding 4 + 边框 2 ≈ 80，90px 档容纳；渲染总宽 96px = 90 内容 + 2×2
+//      padding + 2×1 边框，较原最长 auto 宽 ~116px 收紧）；三族 width 声明同值零漂移
+//      （平行类互指注记——共享类收敛退役：TSX 类名面零改动，平行结构沿 D14/D38 先例）；
 //   ② 内容居中：justify-content: center（固定宽下 3 字 + 点 + 两位计数不截断——零
 //      overflow:hidden / 零 text-overflow 引入；inline-flex 默认 nowrap 零换行）；
 //   ③ 横向 padding 收窄档 0 2px（dsw-raw 新裁决刻度原始行记账——原值整行高令牌 0 13px
@@ -30,8 +31,8 @@ const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
 const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
-/** D44 执行期定值：三族状态 chip 固定统一宽（渲染总宽 84px——72–84px 档顶） */
-const CHIP_WIDTH_PX = 78
+/** D44 执行期定值 + S6 加宽：三族状态 chip 固定统一宽（渲染总宽 96px） */
+const CHIP_WIDTH_PX = 90
 /** D44 横向 padding 收窄档（dsw-raw 新裁决刻度——固定宽居中下仅溢出护栏） */
 const GUARD_PADDING = 'padding: 0 2px'
 /** D44 chip 内点/字/计距收窄（dsw-raw 新裁决刻度——与行 gap 6px 同刻度） */
@@ -74,7 +75,7 @@ const families = [
 
 describe('D44 ① 三族状态 chip 固定统一宽（同值零漂移——原 auto 宽内容自适应退役）', () => {
   it.each(families)(
-    '$face：width = 78px（dsw-raw 新裁决刻度原始行记账 + 原值对照 + 三族互指注记）',
+    '$face：width = 90px（D44 定值 + S6 加宽——dsw-raw 新裁决刻度原始行记账 + 原值对照 + 三族互指注记）',
     ({ css, chip, peers }) => {
       const block = blockOf(css, `.${chip}`)
       expect(declsOfBlock(block), `${chip} 固定统一宽`).toContain(`width: ${CHIP_WIDTH_PX}px`)
@@ -87,7 +88,7 @@ describe('D44 ① 三族状态 chip 固定统一宽（同值零漂移——原 a
     },
   )
 
-  it('三族 width 声明并集 = {78px}（同值零漂移机械锚——三处规则一值）', () => {
+  it('三族 width 声明并集 = {90px}（同值零漂移机械锚——三处规则一值；S6 三处同批同值换值）', () => {
     const widths = families.map(
       ({ css, chip }) =>
         declsOfBlock(blockOf(css, `.${chip}`)).match(new RegExp('width: (\\d+)px'))?.[1],

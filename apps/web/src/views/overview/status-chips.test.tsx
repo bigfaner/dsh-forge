@@ -90,6 +90,19 @@ describe('StatusChips（AC5 状态过滤 chips——S3 八态）', () => {
     expect(markup).not.toContain('data-dswf-ov-stchip-clear')
   })
 
+  it('S6：每 chip label/count span 在场（-label / -count 类 = nowrap + flex-shrink:0 CSS 钩子——内部文字零折行锚）', () => {
+    const markup = renderToStaticMarkup(<StatusChips counts={COUNTS} active={NONE} onToggle={() => {}} />)
+    const chipOf = (status: string): string => {
+      const at = markup.indexOf(`data-dswf-ov-stchip="${status}"`)
+      return markup.slice(at, markup.indexOf('</button>', at))
+    }
+    for (const status of ['pending', 'completed', 'interrupted', 'rejected']) {
+      const chip = chipOf(status)
+      expect(chip).toContain('class="dswf-ov-stchip-label"')
+      expect(chip).toContain('class="dswf-ov-stchip-count"')
+    }
+  })
+
   it('状态点官方语义映射在场（八态封闭——每 chip 一枚官方 StateDot[data-state]）', () => {
     const markup = renderToStaticMarkup(<StatusChips counts={COUNTS} active={NONE} onToggle={() => {}} />)
     expect(markup.match(/data-state="/g)?.length).toBeGreaterThanOrEqual(8)
