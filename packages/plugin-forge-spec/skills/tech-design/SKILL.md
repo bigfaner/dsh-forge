@@ -1,85 +1,126 @@
 ---
 name: tech-design
-description: Produce the technical design from the PRD and UI design — architecture and interface decisions, plus the registered design artifacts (tech-design, ER diagram, SQL schema, page map) via upsertFeatureDoc.
+description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈选型、架构决策、模块/包设计与交互契约，落盘并经 upsertFeatureDoc 注册设计工件（tech-design、ER 图、SQL schema、页面地图）。
 ---
 
-# Tech Design
+# 技术设计（tech-design）
 
-Resolve technical uncertainty during design, avoiding rework during implementation. The PRD
-intentionally excludes technology selection — every technology decision starts here, driven
-by the PRD's non-functional constraints and the current project state.
+在设计期消解技术不确定性，避免实现期返工。PRD 刻意不做技术选型——所有技术决策从这里
+开始，输入条件是 PRD 的非功能约束与项目现状。
 
 <HARD-GATE>
-Do NOT write implementation code until the design is approved. The output of this skill is
-design documents.
+设计获批之前不得写任何实现代码——本技能的产出只有设计文档。
 </HARD-GATE>
 
-## Prerequisites
+## 前置条件
 
-| Artifact | Missing? |
+| 工件 | 缺失时 |
 |---|---|
-| `prd/prd-spec.md` (registered `prd-spec`) | Run `write-prd` first |
-| `ui/ui-design.md` (when the feature has UI) | Run `ui-design` first |
+| `prd/prd-spec.md`（注册为 `prd-spec`） | 先跑 `write-prd` |
+| `ui/ui-design.md`（特性有 UI 时） | 先跑 `ui-design` |
 
-## State-Layer Discipline
+## 状态层纪律
 
-Design artifacts are written to disk AND registered — registration advances the feature
-phase to `design` monotonically:
+设计工件落盘**并**注册——注册使 feature 相位单调推进至 `design`：
 
-| Artifact | Path | Registration |
+| 工件 | 路径 | 注册方式 |
 |---|---|---|
-| Tech design | `docs/features/<slug>/design/tech-design.md` | `upsertFeatureDoc` `doc_kind: tech-design` |
-| ER diagram | `docs/features/<slug>/design/er-diagram.md` | `upsertFeatureDoc` `doc_kind: er-diagram` |
+| 技术设计 | `docs/features/<slug>/design/tech-design.md` | `upsertFeatureDoc` `doc_kind: tech-design` |
+| ER 图 | `docs/features/<slug>/design/er-diagram.md` | `upsertFeatureDoc` `doc_kind: er-diagram` |
 | SQL schema | `docs/features/<slug>/design/schema.sql` | `upsertFeatureDoc` `doc_kind: sql-schema` |
-| Page map (web surface) | `docs/features/<slug>/design/page-map.md` | `upsertFeatureDoc` `doc_kind: page-map` |
+| 页面地图（web 表面） | `docs/features/<slug>/design/page-map.md` | `upsertFeatureDoc` `doc_kind: page-map` |
 
-`api-handbook.md` / `cli-handbook.md` / `screen-map.md` (surface handbooks below) have **no
-registry kind** — they are on-disk artifacts consumed by gen-contracts/gen-test-scripts; do
-not fabricate registrations for them. Reworked documents are registered again (same kind,
-refreshed summary).
+`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**
+——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。返工文档重新注册
+（同 kind、刷新 summary）。
 
-## Intent Adjustments
+## 意图适配
 
-Read `intent` from `docs/proposals/<slug>/proposal.md` when present; missing → `new-feature`.
+读 `docs/proposals/<slug>/proposal.md` 的 `intent` frontmatter；缺失 → `new-feature`。
 
-- `new-feature`: full design — all sections; user stories read and used as the AC checklist.
-- `enhancement`: internal-architecture focus; improvement goals replace user stories as the
-  checklist; handbooks/ER only on override signal.
-- `refactor` / `cleanup` / `fix`: internal architecture (module reorganization, dependency
-  adjustment, behavioral invariants, regression risk); NO ER diagram, NO user stories; the
-  PRD's Verification Criteria section is the AC checklist.
-- `doc`: minimal — what changes and why; no architecture/interfaces/data sections.
+- `new-feature`：全量设计——所有段落；用户故事即 AC 清单。
+- `enhancement`：聚焦内部架构；改进目标替代用户故事作清单；手册/ER 仅覆盖信号触发。
+- `refactor` / `cleanup` / `fix`：仅内部架构（模块重组、依赖调整、行为不变量、回归
+  风险）；无 ER 图、无用户故事；PRD 的 Verification Criteria 即 AC 清单。
+- `doc`：极简——改什么、为什么；无架构/接口/数据段。
 
-## Workflow
+## 硬性段
 
-1. **Read the PRD** (+ user stories or their intent-specific replacements). Note non-functional
-   requirements — they are the input conditions for technology selection. Extract the
-   `db-schema` frontmatter value for the DB branch below.
-2. **Explore context** — existing architecture and decision docs (`docs/ARCHITECTURE.md`,
-   `docs/decisions/`), business rules and conventions from prior features, package manager
-   files for current dependencies, source directories for existing patterns.
-3. **Identify decisions** — architecture fit, interfaces, data models, dependencies, error
-   handling, testing strategy, security, local dev. Ask the user about genuinely uncertain
-   areas; in dispatched task context decide from the brief and record the rationale.
-4. **Draft section by section with approval per section** — Overview / Architecture
-   (component diagram) / Interfaces / Data Models / Error Handling / Integration Specs /
-   Testing / Security as applicable to the intent. Quality checks per section: every PRD AC
-   maps to a design element; every section is ready for task breakdown; cross-layer data
-   flows are mapped; integration points specified.
-   - **DB schema branch** (`db-schema: "yes"`, new-feature): generate `er-diagram.md` +
-     `schema.sql` alongside Data Models and present them as a standalone review unit — do
-     not proceed until the schema is explicitly approved.
-5. **Write documents and register** — `design/tech-design.md` always; ER + schema on the DB
-   branch; handbooks by surface: `api-handbook.md` (api), `cli-handbook.md` (cli/tui),
-   `page-map.md` (web), `screen-map.md` (mobile). Surface detection: read the repo's own
-   surface configuration (testing conventions under `docs/conventions/testing/`, existing
-   tasks' surface fields, UI functions' platform) — never guess; ask when ambiguous
-   (interactive) or derive from the brief (task context). Handbooks carry a `created`
-   frontmatter timestamp for freshness checks downstream.
-6. **Decisions** — significant decisions live IN the design document. Archiving to
-   `docs/decisions/` is a separate knowledge-sinking activity outside this skill; propose it
-   to the user when warranted, do not perform it here.
+设计文档**必列**两段，任何意图不豁免：
 
-## Next Step
+- **改动范围**：受影响的包/模块/文件（包粒度），具体路径。
+- **影响范围**：下游消费方（接口调用者、依赖本包的模块、契约/测试面）与运行时影响
+  （表面、构建、schema），未触及的写"无"并说明判据。
 
-After the design is approved and registered: the `breakdown-tasks` skill.
+## 技术栈选型步骤
+
+1. **候选并列**——每个决策点（框架/库/语言特性/工具）列出 ≥2 个候选，不预设答案。
+2. **评估**——按 PRD 非功能约束与项目现状（既有依赖、团队约定、维护成本）构建**权衡
+   矩阵**：行=候选，列=约束维度（性能/兼容/生态/迁移成本…），格内定性打分。
+3. **决策与理由留存**——写入设计文档：选中者、矩阵结论、放弃候选的原因（一句话即可，
+   但必须留痕）。
+
+## 技术架构决策
+
+架构级决策（分层、事件模型、持久化策略等）逐条成段，ADR 风格：**候选并列 → 权衡（矩阵
+或逐维对比）→ 决策记录，含弃选原因**。留痕判据：三个月后新人只读文档能回答"为什么当时
+不选 X"。
+
+## 模块/包设计
+
+新模块或模块重组时显式成段：
+
+- **能力边界**：本模块管什么、不管什么（越界即依赖方向错误的前兆）。
+- **职责划分**：单一职责；一个模块一个变更理由。
+- **依赖方向**：依赖指向稳定方（领域 → 接口 → 基础设施），禁止环。
+- **对外接口**：公开 API 面（导出符号/入口函数），内部细节不外泄。
+
+## 跨模块/服务交互契约
+
+brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此处精确设计**三要素**：
+
+1. **流程时序**：跨模块流程配 mermaid `sequenceDiagram`（参与方、消息序、失败分支）。
+2. **交互方式**：同步调用/异步事件/消息队列等，写明选型理由（一致性要求、耦合容忍、
+   失败语义）。
+3. **契约数据模型**：请求/响应/事件的 schema（字段、类型、必填性），与 Interfaces 段
+   衔接，不另起炉灶。
+
+## 工作流
+
+1. **读 PRD**（含用户故事或其意图替代物）；摘录非功能约束——它们是选型的输入条件；
+   提取 `db-schema` frontmatter 值供 DB 分支。
+2. **探索上下文**——既有架构与决策文档（`docs/ARCHITECTURE.md`、`docs/decisions/`）、
+   历史特性的业务规则与约定、包管理器文件的现有依赖、源码目录的既有模式。
+3. **识别决策**——架构适配、接口、数据模型、依赖、错误处理、测试策略、安全、本地开发。
+   真正不确定处问用户；派发任务语境依简报决断并记录理由。
+4. **逐节起草并逐节获批**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互
+   契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。逐节自检：每条 PRD AC 映射到
+   设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
+   - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
+     + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。
+5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；手册按表面：
+   `api-handbook.md`（api）、`cli-handbook.md`（cli/tui）、`page-map.md`（web）、
+   `screen-map.md`（mobile）。表面探测：读仓库自身的表面配置（`docs/conventions/testing/`
+   的测试约定、既有任务 surface 字段、UI 函数平台）——不许猜；交互语境问，任务语境依简报。
+   手册带 `created` frontmatter 时间戳供下游新鲜度检查。
+6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的
+   知识沉降动作，认为有必要时向用户提议，不擅自执行。
+
+## 方法论速查
+
+- **DDD 限界上下文**：按业务边界切模块而非按技术分层——上下文地图即依赖方向依据。
+- **TOC 约束理论**：先找瓶颈（最不确定/最高风险处）先设计，局部优化不救全局吞吐。
+- **奥卡姆剃刀**：能简单则简单——候选中假设最少者胜，避免为想象的未来加抽象层。
+- **预验尸**：动工前假设"已失败"，倒推最可能的死因并写入设计的规避措施。
+- **FMEA**：按 严重度×发生度×可检测度 排故障模式，高风险项必须有设计侧对策。
+- **权衡矩阵**：候选×约束维度打分表——把取舍从"我觉得"变成可审计的结论。
+
+## 文档风格公约
+
+- **mermaid 优先**：结构与流程用图表达，文字做补充而非替代。
+- **文字精简**：一段一个含义，无歧义短语，不留废话。
+- **不留调整修复叙事**：文档写最终态，不写"原来如何、后来改成什么"的过程史。
+
+## 下一步
+
+设计获批并注册后：`breakdown-tasks` 技能。
