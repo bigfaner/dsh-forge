@@ -286,6 +286,8 @@ export function taskFailureInputOf(detail: TaskDetail, docsRoot?: string): TaskF
     taskTitle: detail.title,
     taskStatus: detail.taskStatus,
     reason: detail.blockedReason ?? lastNote ?? '—',
+    // S4：goal/taskDesc 首行级摘要 → 「目标：」行（消息对无 GUI agent 自包含）
+    goal: taskGoalOf(detail),
     records,
   }
 }

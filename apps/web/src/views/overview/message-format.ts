@@ -164,6 +164,8 @@ export interface TaskFailureDiagInput {
   readonly taskStatus: TaskStatus
   /** 失败原因（状态行尾——blockedReason / 最近失败记录原因） */
   readonly reason: string
+  /** 目标摘要（taskGoalOf 首行——「目标：」行，消息对无 GUI 工具的 agent 自包含；缺席 = 行缺省） */
+  readonly goal?: string
   /** 失败记录清单（最近记录——调用面截取） */
   readonly records: readonly DiagRecordLine[]
 }
@@ -201,9 +203,9 @@ export const DIAG_CHECK_NAMES: ReadonlyArray<{ readonly kind: ViolationKind; rea
 /**
  * 诊断消息体（PRD 示例②③④逐字对齐；错误直达修复无需用户意图——autosend 例外成员）：
  * `@path` 第一行 → `所属：标题（feature|突击提案）` → [`摘要：`] → [`阶段：`（feature）] →
- * 主体（任务失败 = `任务：`/`状态：短语 — 原因`/`失败记录：` 逐行；子图 = `诊断：` + 五类
- * ✓/✗ 逐行）→ `请求：请排查修复——不要开启 subagent，直接在主会话中执行（…）`
- *（诊断 = 主会话直查直修的执行语境——不开子代理派发，用户裁决 2026-10-10）。
+ * 主体（任务失败 = `任务：`/[`目标：`]/`状态：短语 — 原因`/`失败记录：` 逐行；子图 = `诊断：` + 五类
+ * ✓/✗ 逐行）→ `请求：请排查修复——不要开启 subagent，直接在主会话中执行`
+ *（诊断 = 主会话直查直修的执行语境——不开子代理派发，用户裁决 2026-10-10；S4 去 UI 指路括注）。
  * @param input 任务失败（feature/突击提案容器两态）| feature 子图诊断
  */
 export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInput): string {
@@ -218,12 +220,15 @@ export function formatDiagMessage(input: TaskFailureDiagInput | SubgraphDiagInpu
     const phrase = FAILURE_STATUS_PHRASES[input.taskStatus] ?? TASK_STATUS_LABELS[input.taskStatus].zh
     // S3 任务行名称位：`任务：{编号} {title}`（去 slug——slug 消歧保留于 @path/所属行）
     lines.push(`任务：${input.taskKey.split('/').pop() ?? input.taskKey} ${input.taskTitle}`)
+    if (input.goal !== undefined) lines.push(`目标：${input.goal.split('\n')[0]}`)
     lines.push(`状态：${phrase} — ${input.reason}`)
     lines.push('失败记录：')
     for (const record of input.records) {
       lines.push(record.note === undefined ? `· ${record.verb} ${stampOf(record.at)}` : `· ${record.verb} ${stampOf(record.at)} ${record.note}`)
     }
-    lines.push('请求：请排查修复——不要开启 subagent，直接在主会话中执行（任务时间线见概览 → 任务子 tab → 该任务详情）')
+    // S4（提案 task-ui-visual-copy-blitz）：去「（任务时间线见概览 → …）」UI 指路括注——
+    // 接收 agent 无 GUI 工具，指路悬空；必要信息改由「目标：」行内嵌自包含。
+    lines.push('请求：请排查修复——不要开启 subagent，直接在主会话中执行')
   } else {
     lines.push('诊断：validateFeatureTasks 失败')
     for (const check of DIAG_CHECK_NAMES) {

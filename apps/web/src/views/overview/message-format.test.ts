@@ -111,6 +111,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
       taskTitle: '概览 tab 三视图接线',
       taskStatus: 'blocked',
       reason: 'fix-1 创建（block-source 单事务）',
+      goal: 'S4 诊断提示词自包含：去 UI 指路括注 + 目标行内嵌',
       records: [{ verb: 'auto-block', at: '2026-10-02T12:00:00.000Z', note: 'fix-1 创建（block-source 单事务）' }],
     })
     expect(text).toBe(
@@ -120,12 +121,15 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
         '摘要：状态层转正 + 插件执行链 + 任务/文档视图',
         '阶段：任务',
         '任务：2.5 概览 tab 三视图接线',
+        '目标：S4 诊断提示词自包含：去 UI 指路括注 + 目标行内嵌',
         '状态：阻塞 — fix-1 创建（block-source 单事务）',
         '失败记录：',
         '· auto-block 10-02 12:00 fix-1 创建（block-source 单事务）',
-        '请求：请排查修复——不要开启 subagent，直接在主会话中执行（任务时间线见概览 → 任务子 tab → 该任务详情）',
+        '请求：请排查修复——不要开启 subagent，直接在主会话中执行',
       ].join('\n'),
     )
+    // S4：请求行无 UI 指路括注（接收 agent 无 GUI 工具）
+    expect(text).not.toContain('任务时间线见概览')
   })
 
   it('PRD 示例③逐字对齐（任务失败 · 突击提案容器：@path 指提案目录、无阶段行）', () => {
@@ -155,7 +159,7 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
         '状态：阻塞 — result=blocked：eval 用例集与幸存者裁剪清单冲突——待排查',
         '失败记录：',
         '· submit 09-23 10:05 result=blocked：eval 用例集与幸存者裁剪清单冲突——待排查',
-        '请求：请排查修复——不要开启 subagent，直接在主会话中执行（任务时间线见概览 → 任务子 tab → 该任务详情）',
+        '请求：请排查修复——不要开启 subagent，直接在主会话中执行',
       ].join('\n'),
     )
   })
@@ -214,6 +218,20 @@ describe('formatDiagMessage（AC3——诊断两路三态）', () => {
     })
     expect(failure).toContain('状态：已拒绝 — 证据不足')
     expect(failure).toContain('· submit 10-01 09:30')
+    // S4：goal 缺席 = 「目标：」行缺省；在场 = 首行级摘要（多行截首行）
+    expect(failure).not.toContain('目标：')
+    const withGoal = formatDiagMessage({
+      kind: 'task-failure',
+      container: { kind: 'proposal', slug: 'p', title: 'P' },
+      taskKey: 'p/1.1',
+      taskTitle: '任务甲',
+      taskStatus: 'rejected',
+      reason: '证据不足',
+      goal: '第一行目标摘要\n第二行细节',
+      records: [],
+    })
+    expect(withGoal).toContain('目标：第一行目标摘要')
+    expect(withGoal).not.toContain('第二行细节')
   })
 })
 

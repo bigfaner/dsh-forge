@@ -15,7 +15,7 @@ import {
   toggleDrawerSection,
 } from './collapse.js'
 import { TaskDrawer, TaskDrawerBody, drawerBodySections, fetchTaskDetail, sessionTitleOfOrId, taskFailureInputOf } from './index.js'
-import { sessionJumpHandler } from './detail-model.js'
+import { sessionJumpHandler, taskGoalOf } from './detail-model.js'
 import { taskFailureDiagToast } from '../task-tab/DiagToast.js'
 import { docsRootOf, formatDiagMessage } from '../message-format.js'
 
@@ -567,6 +567,7 @@ describe('taskFailureInputOf（AC3 诊断第二路数据面——容器水化 + 
     expect(input.records).toHaveLength(2) // 记录 ≤3（本例 2 全保）
     expect(input.records.map((record) => record.verb)).toEqual(['add', 'auto-block'])
     expect(input.records[1]?.note).toBe('fix-1 创建（block-source 单事务）')
+    expect(input.goal).toBe(taskGoalOf(detail)) // S4：goal/taskDesc 摘要随行 → 「目标：」行
   })
 
   it('blockedReason 缺席 → 最近失败记录 note 兜底；记录 >3 截尾 3 条；note 缺席行无 note 键', () => {
