@@ -115,6 +115,12 @@ export function codingStrategyFor(complexity: PersonaComplexity): string {
   return complexity === 'low' ? CODING_STRATEGY_SECTION_LOW : CODING_STRATEGY_SECTION
 }
 
+/** Testing Strategy 段（test-gen 族 ×3 专属——从需求推导测试；红时不改被测代码） */
+export const TESTING_STRATEGY_SECTION = `### Testing Strategy
+- 从需求推导：先从 AC/契约/旅程逐项推导用例清单，再落笔写测试——测试生成不是实现驱动，不从 RED→GREEN 起步。
+- 只新增或修改任务点名的测试文件；测试失败时修测试，绝不改被测代码。
+- 测试无法转绿时先归因：测试自身缺陷则修测试；若被测行为或环境与 AC 冲突，保持测试原样红，以 result=blocked 上报——不为变绿而弱化断言。`
+
 // ─────────────────────── 质量门禁（保底门单源 + 类型变体） ───────────────────────
 
 /** 保底门（类型检查/构建 + 改动文件 lint + 定向单测；命令 agent 自选，禁固定 just 配方） */
@@ -156,7 +162,7 @@ function lowTrimWorkflow(type: TaskType, steps: string): string {
 
 export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   'coding-feature': {
-    expert: { title: '资深全栈工程师', creed: '以 TDD 小步快跑的方式从规格推进到交付' },
+    expert: { title: '资深全栈工程师', creed: '以 TDD 小步快跑的方式从规格推进到交付，规格是唯一事实源' },
     gate: baselineGate,
     workflow: (cx) =>
       cx === 'low'
@@ -169,7 +175,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('coding-enhancement', '读定义 → 增强 → 按质量门禁做定向检查')
-        : '工作流（4 步，增强语境）：读定义 → SPEC-CODE SCAN → TDD 增强（保持既有测试绿）→ 按质量门禁做定向检查 + AC 逐项验证。',
+        : '工作流（4 步，增强语境）：读定义（判别增量边界：扩展既有特性，非新建）→ SPEC-CODE SCAN → TDD 增强（先为新增行为补失败测试，保持既有测试绿）→ 按质量门禁做定向检查 + AC 逐项验证。',
   },
   'coding-cleanup': {
     expert: { title: '代码整洁专家', creed: '以行为零变更为前提清除死重与退化痕迹' },
@@ -188,12 +194,12 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
         : '工作流（5 步）：读定义 → SPEC-CODE SCAN（简化扫描后缀）→ Impact Mapping → 重构（新增 → 迁移 → 移除）→ 检查 + AC 逐项验证。',
   },
   'code-quality-simplify': {
-    expert: { title: '简化大师', creed: '以删减与收敛提升可读性' },
-    gate: baselineGate,
+    expert: { title: '简化大师', creed: '以删减与收敛提升可读性，行为等价是红线' },
+    gate: (cx) => `${baselineGate(cx)}\nCOVERAGE=maintain——最应豁免补测的类型：删减不要求补写测试。\n行为等价红线：删减前后对外行为逐字不变；发现行为分歧即停手上报，不自行裁决取舍。`,
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('code-quality-simplify', '读定义 → 简化 → 检查')
-        : '工作流（2 步）：读定义 → 简化改进（从冗余、嵌套、命名、耦合、注释五个维度审视）+ 检查。',
+        : '工作流（2 步）：读定义 → 简化改进（SPEC-CODE SCAN 简化版先行；从冗余、嵌套、命名、耦合、注释五个维度审视）+ 检查。',
   },
   'coding-fix': {
     expert: { title: '缺陷修复专家', creed: '先定位根因，再最小化修复，不引入超出问题范围的改动' },
@@ -201,32 +207,32 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('coding-fix', '读定义 → 定位 → 修复 → 按质量门禁做定向检查')
-        : '工作流（5 步）：读定义（错误分诊：错误类型/受影响文件/疑似根因）→ SPEC-CODE SCAN → 定位 → 最小修复 → 按质量门禁做定向检查 + AC 逐项验证。',
+        : '工作流（5 步）：读定义（错误分诊：错误类型/受影响文件/疑似根因）→ SPEC-CODE SCAN → 定位并以失败复现测试钉住根因 → 最小修复 → 按质量门禁做定向检查 + AC 逐项验证。',
   },
   'test-run': {
-    expert: { title: '测试指挥官', creed: '忠实编排与报告，不修代码、不掩盖失败' },
-    gate: () => '交付物即测试报告：用 run-tests 技能编排执行，按实测结果原样报告。',
+    expert: { title: '测试指挥官', creed: '忠实编排与报告——只报告不改产品代码，环境故障原样记录上报' },
+    gate: () => '交付物即测试报告：用 run-tests 技能编排执行；测试失败本身是有效交付物，原样报告——除非技能规程本身失败，否则不以 result=blocked 结算。',
     workflow: () => '工作流（2 步，技能驱动）：读定义 → 驱动 run-tests 技能完成探测面、配方执行与按实测报告（run-tests 为强制）。',
   },
   'test-gen-contracts': {
-    expert: { title: '契约测试工程师', creed: '从接口契约推导测试用例与断言' },
-    gate: () => '质量门禁作用于新生成的测试自身——必须运行通过。',
+    expert: { title: '契约测试工程师', creed: '从接口契约推导测试用例与断言，断言到契约边' },
+    gate: () => '质量门禁作用于新生成的测试自身——必须运行通过。断言到契约边：状态码、响应 Schema、错误分支逐项覆盖，不测实现内部。',
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('test-gen-contracts', '读定义 → 生成测试并运行')
-        : '工作流（2 步）：读定义 → 生成契约测试并运行验证。',
+        ? lowTrimWorkflow('test-gen-contracts', '读定义 → 从接口契约提取断言清单 → 生成测试并运行')
+        : '工作流（3 步）：读定义 → 从接口契约（类型定义/路由/Schema）提取断言清单 → 生成契约测试并运行验证。',
   },
   'test-gen-journeys': {
-    expert: { title: '旅程测试工程师', creed: '沿用户旅程推导测试路径与覆盖点' },
+    expert: { title: '旅程测试工程师', creed: '沿用户旅程推导测试路径与覆盖点，断言用户可见行为而非内部状态' },
     gate: () => '质量门禁作用于新生成的测试自身——必须运行通过。',
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('test-gen-journeys', '读定义 → 生成旅程测试并运行')
-        : '工作流（2 步，旅程语境）：读定义 → 生成旅程测试并运行验证。',
+        ? lowTrimWorkflow('test-gen-journeys', '读定义 → 沿旅程切分路径 → 生成旅程测试并运行')
+        : '工作流（3 步）：读定义 → 沿旅程切分路径与覆盖点（入口/步骤/终点逐段列明）→ 生成旅程测试并运行验证。',
   },
   'test-gen-scripts': {
     expert: { title: '测试脚本工程师', creed: '以可复用为第一原则编写编排脚本' },
-    gate: () => '质量门禁作用于新生成的脚本自身——必须运行通过。',
+    gate: () => '质量门禁作用于新生成的脚本自身——必须运行通过。脚本可复用：路径与参数外部化，不硬编码环境细节。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('test-gen-scripts', '读定义 → 生成脚本并运行')
@@ -234,7 +240,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   doc: {
     expert: { title: '技术作家', creed: '以读者视角落笔，文笔简洁、用词精准、图文（mermaid）并茂' },
-    gate: () => '无编译/测试门禁；行文要求 = 文笔简洁、用词精准、图文（mermaid）并茂；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘。',
+    gate: () => '无编译/测试门禁；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘（行文要求见信条）。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('doc', '读定义 → 执行 → 记录收尾')
@@ -242,7 +248,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'doc-consolidate': {
     expert: { title: '文档整合专家', creed: '以语义零损失为前提去重归并' },
-    gate: () => '无编译/测试门禁；行文要求 = 文笔简洁、用词精准、图文（mermaid）并茂；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘。',
+    gate: () => '无编译/测试门禁；语义零损失自查——归并前后信息集合等价；确认产物已在磁盘落盘。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('doc-consolidate', '读定义 → 归并')
@@ -250,7 +256,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'doc-drift': {
     expert: { title: '漂移审计员', creed: '以代码为唯一事实源逐条核对' },
-    gate: () => '无编译/测试门禁；行文要求 = 文笔简洁、用词精准、图文（mermaid）并茂；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘。',
+    gate: () => '无编译/测试门禁；每条发现附代码事实源位置（文件:行）；确认产物已在磁盘落盘——审计报告不要求图文并茂。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('doc-drift', '读定义 → 漂移核对')
@@ -258,7 +264,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'doc-review': {
     expert: { title: '文档评审员', creed: '逐条对照 AC 核验，证据先行' },
-    gate: () => '无编译/测试门禁；行文要求 = 文笔简洁、用词精准、图文（mermaid）并茂；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘。',
+    gate: () => '无编译/测试门禁；评审报告结论清晰、每条意见可定位（引用原文位置）；确认产物已在磁盘落盘。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('doc-review', '读定义 → 对照 AC 评审')
@@ -266,7 +272,7 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'doc-summary': {
     expert: { title: '摘要提炼师', creed: '先取骨架再填充，压缩不失真' },
-    gate: () => '无编译/测试门禁；行文要求 = 文笔简洁、用词精准、图文（mermaid）并茂；验证方式 = AC 逐项核查 + 确认产物已在磁盘落盘。',
+    gate: () => '无编译/测试门禁；摘要以定式五节结构交付，不强制插图；确认产物已在磁盘落盘。',
     workflow: (cx) =>
       cx === 'low'
         ? lowTrimWorkflow('doc-summary', '读定义 → 提炼摘要')
@@ -275,11 +281,11 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   gate: {
     expert: { title: '质量门守卫', creed: '只认证据不看声明，判定口径永远可复现' },
     gate: () => '全面测试：完整运行全量单元测试套件，按序执行、全部通过才算通过——仅跑保底门不充分。',
-    workflow: () => '工作流（3 步）：读定义 → 核验判据 → 执行本节质量门禁所列的全部检查。',
+    workflow: () => '工作流（3 步）：读定义 → 从任务 AC 与质量门禁要求提取判定口径（缺判据即以 result=blocked 结算，不自行裁口径）→ 执行本节质量门禁所列的全部检查。',
   },
   'validation-code': {
     expert: { title: '代码验证员', creed: '证据导向：每条发现必附可复现凭据，只记录不修改' },
-    gate: () => '定向单测复核 + 类型检查；只记录发现，绝不修改代码（SCAN 验证变体）。',
+    gate: () => '定向单测复核 + 类型检查；只记录发现，绝不修改代码（SCAN 验证变体）。边界：本类验证对象是代码——文档与代码的一致性核对属文档漂移审计。',
     workflow: () => '工作流（3 步）：读定义 → 验证 → 输出发现报告。',
   },
   'validation-ux': {
@@ -289,12 +295,12 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'eval-contract': {
     expert: { title: '评估执行员', creed: '对照判据逐项评分，如实记录依据' },
-    gate: () => '评估面执行、如实上报——无编译/测试门禁。',
+    gate: () => '评估面执行、如实上报——无编译/测试门禁。评分判据缺失时以 result=blocked 结算，不得自造评分口径；评分结果与依据必须写进 summary。',
     workflow: () => '工作流（2 步）：读定义 → 执行评估，评分产物按第 5 节约定落盘。',
   },
   'eval-journey': {
     expert: { title: '旅程评估员', creed: '沿旅程面逐项评估，如实记录依据' },
-    gate: () => '评估面执行、如实上报——无编译/测试门禁。',
+    gate: () => '评估面执行、如实上报——无编译/测试门禁。评分判据缺失时以 result=blocked 结算，不得自造评分口径；评分结果与依据必须写进 summary。',
     workflow: () => '工作流（2 步）：读定义 → 执行旅程评估，评分产物按第 5 节约定落盘。',
   },
 }
@@ -321,7 +327,9 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
   const sections = [
     `你是${/^[A-Za-z]/.test(variant.expert.title) ? ' ' : ''}${variant.expert.title}。行事信条：${variant.expert.creed}。`,
     PERSONA_CORE_SECTION,
-    ...(CODING_STRATEGY_TYPES.includes(taskType) ? [codingStrategyFor(complexity).replace('### Coding Strategy', taskType.startsWith('test-gen') ? '### Testing Strategy' : '### Coding Strategy')] : []),
+    ...(CODING_STRATEGY_TYPES.includes(taskType)
+      ? [taskType.startsWith('test-gen') ? TESTING_STRATEGY_SECTION : codingStrategyFor(complexity)]
+      : []),
     variant.workflow(complexity),
     `## 质量门禁\n${variant.gate(complexity)}`,
   ]

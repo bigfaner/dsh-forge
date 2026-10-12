@@ -14,6 +14,7 @@ import {
   composePersona,
   PERSONA_CORE_SECTION,
   PERSONA_VARIANTS,
+  TESTING_STRATEGY_SECTION,
   type PersonaComplexity,
 } from './persona.js'
 
@@ -118,26 +119,61 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       for (const cx of COMPLEXITIES) {
         const persona = composePersona(taskType, cx)
         if (CODING_STRATEGY_TYPES.includes(taskType)) {
-          const expected = codingStrategyFor(cx).replace(
-            '### Coding Strategy',
-            taskType.startsWith('test-gen') ? '### Testing Strategy' : '### Coding Strategy',
-          )
-          expect(persona, `${taskType}/${cx}`).toContain(expected)
+          if (taskType.startsWith('test-gen')) {
+            expect(persona, `${taskType}/${cx}`).toContain(TESTING_STRATEGY_SECTION)
+          } else {
+            expect(persona, `${taskType}/${cx}`).toContain(codingStrategyFor(cx))
+          }
         } else {
           expect(persona, `${taskType}/${cx}`).not.toContain('### Coding Strategy')
+          expect(persona, `${taskType}/${cx}`).not.toContain('### Testing Strategy')
         }
       }
     }
   })
 
-  it('SC2 回归锚：low 不含逐需求 TDD 句（红队攻 1），medium/high 含', () => {
+  it('SC2 回归锚：coding 族 low 不含逐需求 TDD 句（红队攻 1），medium/high 含；test-gen 全档注入 Testing Strategy', () => {
     for (const taskType of CODING_STRATEGY_TYPES) {
       const low = composePersona(taskType, 'low')
       const high = composePersona(taskType, 'high')
+      if (taskType.startsWith('test-gen')) {
+        expect(low, taskType).toContain('绝不改被测代码')
+        expect(high, taskType).toContain('绝不改被测代码')
+        continue
+      }
       expect(low, taskType).not.toContain('先写失败测试')
       expect(low, taskType).toContain('外科手术式修改') // 裁 TDD 不裁外科手术式
       expect(high, taskType).toContain('先写失败测试')
+      expect(high, taskType).not.toContain('绝不改被测代码') // test-gen 专属纪律不回流 coding 族
     }
+  })
+
+  it('角色匹配评审回归锚：三路对抗评估的判别与纪律缺口收口', () => {
+    // simplify：COVERAGE=maintain 豁免 + 行为等价红线 + 扫描步（coding 族报告「唯一硬错位」）
+    const simplify = composePersona('code-quality-simplify', 'high')
+    expect(simplify).toContain('最应豁免补测的类型')
+    expect(simplify).toContain('行为等价红线')
+    expect(simplify).toContain('五个维度')
+    // enhancement/feature/fix 判别锚
+    expect(composePersona('coding-enhancement', 'high')).toContain('判别增量边界')
+    expect(composePersona('coding-feature', 'medium')).toContain('规格是唯一事实源')
+    expect(composePersona('coding-fix', 'high')).toContain('失败复现测试钉住根因')
+    // test-gen 推导步 + scripts 可复用 + run/test-run 边界
+    expect(composePersona('test-gen-contracts', 'high')).toContain('提取断言清单')
+    expect(composePersona('test-gen-journeys', 'high')).toContain('沿旅程切分路径与覆盖点')
+    expect(composePersona('test-gen-scripts', 'medium')).toContain('不硬编码环境细节')
+    expect(composePersona('test-run', 'medium')).toContain('环境故障原样记录上报')
+    // doc 族门禁分化（非共享字符串）
+    expect(composePersona('doc-drift', 'medium')).toContain('每条发现附代码事实源位置')
+    expect(composePersona('doc-drift', 'medium')).toContain('不要求图文并茂')
+    expect(composePersona('doc-consolidate', 'medium')).toContain('语义零损失自查')
+    expect(composePersona('doc-review', 'medium')).toContain('每条意见可定位')
+    expect(composePersona('doc-summary', 'medium')).toContain('不强制插图')
+    expect(composePersona('doc', 'medium')).toContain('图文（mermaid）并茂') // 只有技术作家保行文要求
+    // gate 判据来源 + eval 判据缺失出口 + validation-code 边界
+    expect(composePersona('gate', 'medium')).toContain('缺判据即以 result=blocked 结算')
+    expect(composePersona('eval-contract', 'medium')).toContain('不得自造评分口径')
+    expect(composePersona('validation-code', 'medium')).toContain('文档与代码的一致性核对属文档漂移审计')
   })
 
   it('红队攻 2/3 回归锚：todo 无豁免措辞；blocked 结算出口在场', () => {
@@ -184,7 +220,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage',
-        'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing',
+        'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema',
       ].map((w) => w.toLowerCase()),
     )
     for (const taskType of TASK_TYPES) {
