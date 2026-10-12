@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { TASK_RECORD_VERBS, type TaskRecordEntry } from '@dsh-forge/contracts'
 import { detailFixture } from './detail-model.test.js'
 import {
+  AcItem,
   TASK_VERB_KIND,
   TimelineEvents,
   TimelineNow,
@@ -195,8 +196,96 @@ describe('事件流（AC5 织入矩阵）', () => {
   })
 })
 
-describe('会话 pill 名称展示（task-ui-info-density-blitz S1/SC1——task-ui-info-density-blitz/1.2）', () => {
-  const SESSIONS = [
+describe('submit 结构化消费（task-ui-visual-copy-blitz S2——结构化列在场渲染 / 缺席 fail-soft）', () => {
+  it('带结构化列：AC 折叠块收起态「AC N/M ✓」计数 + keyDecisions 分列 + 分类字段行', () => {
+    const detail = detailFixture({
+      records: [
+        rec('submit', {
+          summary: 'feat(core): 七表 schema',
+          commitHash: 'a1b2c3d4',
+          gate: { compile: true, fmt: true, lint: true, test: true },
+          acceptanceCriteria: [
+            { criterion: 'AC-1 七表建表', met: true, evidence: 'query.test.ts 全绿' },
+            { criterion: 'AC-2 解码归一', met: true },
+            { criterion: 'AC-3 迁移幂等', met: false, evidence: 'migrate.test.ts 红' },
+          ],
+          keyDecisions: ['单事务落列', '双形制读面归一'],
+          testsPassed: 9,
+          testsFailed: 1,
+          coverage: 0.88,
+          notes: 'n',
+        }),
+      ],
+    })
+    const html = renderToStaticMarkup(TimelineEvents({ detail, now: NOW }))
+    expect(html).toContain('data-dswf-td-ac=""')
+    expect(html).toContain('AC 2/3') // 收起态计数（非全过无 ✓）
+    expect(html).not.toContain('AC-1 七表建表') // 折叠态徽标不渲染
+    expect(html).toContain('data-dswf-td-kd-item=""')
+    expect(html).toContain('决策 · 单事务落列')
+    expect(html).toContain('决策 · 双形制读面归一')
+    expect(html).toContain('测试 通过 9 · 失败 1 · 覆盖率 88%')
+    expect(html).toContain('n')
+  })
+
+  it('全过 AC 计数带 ✓；AC 徽标行 ✓/✗ + 判据 + 证据行（AcItem 展开形直测）', () => {
+    const detail = detailFixture({
+      records: [
+        rec('submit', {
+          acceptanceCriteria: [
+            { criterion: 'AC-1 a', met: true, evidence: 't1 绿' },
+            { criterion: 'AC-2 b', met: true },
+          ],
+        }),
+      ],
+    })
+    const html = renderToStaticMarkup(TimelineEvents({ detail, now: NOW }))
+    expect(html).toContain('AC 2/2 ✓')
+    const met = renderToStaticMarkup(<AcItem met={true} criterion="AC-1 a" evidence="t1 绿" />)
+    expect(met).toContain('data-dswf-td-ac-item=""')
+    expect(met).toContain('is-met')
+    expect(met).toContain('✓')
+    expect(met).toContain('AC-1 a')
+    expect(met).toContain('t1 绿')
+    const miss = renderToStaticMarkup(<AcItem met={false} criterion="AC-3 c" evidence="t1 红" />)
+    expect(miss).toContain('is-miss')
+    expect(miss).toContain('✗')
+    expect(miss).toContain('AC-3 c')
+  })
+
+  it('fail-soft：结构化列缺席（历史旧格式）= 纯文本行渲染，零结构化锚、不报错', () => {
+    const detail = detailFixture({
+      records: [
+        rec('submit', {
+          summary: '历史旧格式纯文本摘要\n第二行细节',
+          files: ['a.ts'],
+          commitHash: 'deadbeef',
+          gate: { compile: true, fmt: true, lint: true, test: true },
+        }),
+      ],
+    })
+    const html = renderToStaticMarkup(TimelineEvents({ detail, now: NOW }))
+    expect(html).not.toContain('data-dswf-td-ac=""')
+    expect(html).not.toContain('data-dswf-td-kd=""')
+    expect(html).not.toContain('data-dswf-td-fields=""')
+    // 多行 summary 走收起/展开单源组件：收起显首行
+    expect(html).toContain('data-dswf-td-fold="collapsed"')
+    expect(html).toContain('历史旧格式纯文本摘要')
+    expect(html).not.toContain('第二行细节')
+  })
+
+  it('部分结构化（仅 keyDecisions）= 逐项省略渲染，缺 AC 不折叠不报错', () => {
+    const detail = detailFixture({
+      records: [rec('submit', { summary: 's', keyDecisions: ['只此一策'] })],
+    })
+    const html = renderToStaticMarkup(TimelineEvents({ detail, now: NOW }))
+    expect(html).not.toContain('data-dswf-td-ac=""')
+    expect(html).toContain('决策 · 只此一策')
+    expect(html).not.toContain('测试 通过')
+  })
+})
+
+describe('会话 pill 名称展示（task-ui-info-density-blitz S1/SC1——task-ui-info-density-blitz/1.2）', () => {  const SESSIONS = [
     { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'T', taskStatus: 'completed' as const, sessionId: 's1', source: 'link' as const },
     { taskId: 't-1', slug: 'm2-pipeline', localId: '2.4', title: 'T', taskStatus: 'completed' as const, sessionId: 's1-1', source: 'record' as const },
   ]

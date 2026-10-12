@@ -43,6 +43,7 @@ import {
   type DrawerSectionKey,
 } from './collapse.js'
 import { prereqFullName, sessionJumpHandler, sessionTitleOfOrId, taskGoalOf, taskKvChips, taskNameLabel, taskResultOf, varsText } from './detail-model.js'
+import { CollapsibleText } from './collapsible-text.js'
 import { CoverageBar, coverageViewOf } from './coverage-bar.js'
 import { TimelineEvents, TimelineNow } from './timeline.js'
 import { templateFamilyOf, typeCategoryClassOf, TypeTemplateBody } from './type-templates/index.js'
@@ -219,7 +220,8 @@ function ResultView({ result }: { readonly result: ReturnType<typeof taskResultO
       return (
         <span className="dswf-td-gr-v">
           <span className="is-success">✓ 已提交</span>
-          {` · ${result.summary}`}
+          {' · '}
+          <CollapsibleText text={result.summary} />
           {result.commitHash !== undefined ? (
             <>
               {' · '}
@@ -229,11 +231,24 @@ function ResultView({ result }: { readonly result: ReturnType<typeof taskResultO
         </span>
       )
     case 'note':
-      return <span className="dswf-td-gr-v">{result.text}</span>
+      return (
+        <span className="dswf-td-gr-v">
+          <CollapsibleText text={result.text} />
+        </span>
+      )
     case 'blocked':
-      return <span className="dswf-td-gr-v is-error">⚠ {result.reason}</span>
+      return (
+        <span className="dswf-td-gr-v is-error">
+          ⚠ <CollapsibleText text={result.reason} />
+        </span>
+      )
     case 'running':
-      return <span className="dswf-td-gr-v">{`执行中 · ${result.text}`}</span>
+      return (
+        <span className="dswf-td-gr-v">
+          {'执行中 · '}
+          <CollapsibleText text={result.text} />
+        </span>
+      )
     case 'pending':
       return <span className="dswf-td-gr-v">未开始</span>
     case 'status':
@@ -548,7 +563,7 @@ export function TaskDrawerBody({
                     目标
                   </div>
                   <div className="dswf-td-gr-v" data-dswf-td-goal="">
-                    {taskGoalOf(detail)}
+                    <CollapsibleText text={taskGoalOf(detail)} />
                   </div>
                 </div>
                 <div className="dswf-td-gr-item">

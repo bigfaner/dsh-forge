@@ -720,6 +720,67 @@
   overflow-wrap: anywhere;
 }
 
+/* ── 收起/展开单源（task-ui-visual-copy-blitz S2——Note/目标/结果/AC 块共用） ── */
+.dswf-td-fold {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fold-caret {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-fold-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fold-collapse {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+/* ── submit 结构化面（AC 徽标 / keyDecisions 分列 / 分类字段行） ── */
+.dswf-td-ac-item {
+  display: flex;
+  gap: var(--dsw-font-xs-13-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-ac-item.is-met .dswf-td-ac-mark {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-ac-item.is-miss .dswf-td-ac-mark {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-ac-ev {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-kd-item {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fields {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ── 评分表分值档（≥70 / ≥40 / 其余）── */
 .dswf-td-score.is-pass {
   color: var(--dsw-alias-state-success-primary);

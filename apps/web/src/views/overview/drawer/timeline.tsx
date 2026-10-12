@@ -8,6 +8,7 @@ import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
 import { isoTimeLabelZh } from '../../../components/time-label.js'
 import { evalScoreOf, gateSummary, latestSubmitGateOf, prereqFullName, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
+import { CollapsibleText, Fold } from './collapsible-text.js'
 import { templateFamilyOf } from './type-templates/index.js'
 
 export { evalScoreOf } from './detail-model.js' // 现状条「得分+严重度」条件同源投影（消费面重导出）
@@ -192,9 +193,71 @@ export function TimelineNow({
   )
 }
 
-/** 事件说明行（织入信息——垂直缩进对齐） */
+/** 事件说明行（织入信息——垂直缩进对齐）。纯文本子串走收起/展开单源组件（S2：多行默认
+ *  收起显首行、点击展开全文、保留换行；结构化 ReactNode 子串直通不折叠） */
 function Note({ children }: { readonly children: ReactNode }): ReactNode {
-  return <div className="dswf-td-ev-note">{children}</div>
+  return <div className="dswf-td-ev-note">{typeof children === 'string' ? <CollapsibleText text={children} /> : children}</div>
+}
+
+/** AC 徽标行（✓/✗ + 判据原文 + 一行证据——TaskAcResult 逐项镜像） */
+export function AcItem({ met, criterion, evidence }: { readonly met: boolean; readonly criterion: string; readonly evidence?: string }): ReactNode {
+  return (
+    <div className={`dswf-td-ac-item ${met ? 'is-met' : 'is-miss'}`} data-dswf-td-ac-item="">
+      <span className="dswf-td-ac-mark">{met ? '✓' : '✗'}</span>
+      <span className="dswf-td-ac-text">
+        {criterion}
+        {evidence !== undefined ? <span className="dswf-td-ac-ev"> · {evidence}</span> : null}
+      </span>
+    </div>
+  )
+}
+
+/** submit 结构化面（S2——task_records 结构化列消费）：ac_json 在场 = AC 折叠块（收起态
+ *  「AC N/M ✓」计数，展开逐项徽标）；record_fields 在场 = keyDecisions 分列 + 分类字段
+ *  行（测试通过/失败/覆盖率/notes 按在缺席渲染）。缺席字段 fail-soft 逐项省略，全缺 = 不渲染。 */
+function SubmitStructured({ record }: { readonly record: TaskRecordEntry }): ReactNode {
+  const ac = record.acceptanceCriteria
+  const fields = record
+  const metCount = ac?.filter((item) => item.met).length ?? 0
+  const fieldBits: string[] = []
+  if (fields.testsPassed !== undefined) fieldBits.push(`通过 ${fields.testsPassed}`)
+  if (fields.testsFailed !== undefined) fieldBits.push(`失败 ${fields.testsFailed}`)
+  if (fields.coverage !== undefined) fieldBits.push(`覆盖率 ${Math.round(fields.coverage * 100)}%`)
+  return (
+    <>
+      {ac !== undefined && ac.length > 0 ? (
+        <div className="dswf-td-ac" data-dswf-td-ac="">
+          <Fold
+            summary={
+              <span className="dswf-td-ac-count" data-dswf-td-ac-count="">
+                {`AC ${metCount}/${ac.length}${metCount === ac.length ? ' ✓' : ''}`}
+              </span>
+            }
+          >
+            {ac.map((item, index) => (
+              <AcItem key={index} met={item.met} criterion={item.criterion} {...(item.evidence !== undefined ? { evidence: item.evidence } : {})} />
+            ))}
+          </Fold>
+        </div>
+      ) : null}
+      {fields.keyDecisions !== undefined && fields.keyDecisions.length > 0 ? (
+        <div className="dswf-td-kd" data-dswf-td-kd="">
+          {fields.keyDecisions.map((decision, index) => (
+            <div className="dswf-td-kd-item" data-dswf-td-kd-item="" key={index}>
+              决策 · {decision}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {fieldBits.length > 0 || fields.notes !== undefined ? (
+        <div className="dswf-td-fields" data-dswf-td-fields="">
+          {fieldBits.length > 0 ? `测试 ${fieldBits.join(' · ')}` : ''}
+          {fieldBits.length > 0 && fields.notes !== undefined ? ' · ' : ''}
+          {fields.notes !== undefined ? fields.notes : ''}
+        </div>
+      ) : null}
+    </>
+  )
 }
 
 /** 事件织入（创建：前置声明 + fix 链；领取：digest + 派发⟞；提交：gate + commit 徽标/
@@ -281,12 +344,20 @@ function eventWeaves(
               {record.gate.coverage !== undefined ? ` · 覆盖率 ${Math.round(record.gate.coverage * 100)}%` : ''}
             </Note>
           ) : null}
+          {/* S2 结构化列消费：ac_json/record_fields_json 在场 = 结构化渲染（AC 徽标折叠块
+              + keyDecisions 分列 + 分类字段行）；缺席 = 不渲染本块（fail-soft 纯文本行承载） */}
+          <SubmitStructured record={record} />
           {record.commitHash !== undefined ? (
             <Note>
               <span className="dswf-td-commit" data-dswf-td-commit={record.commitHash}>
                 {record.commitHash}
               </span>
-              {record.summary !== undefined ? ` ${record.summary}` : ''}
+              {record.summary !== undefined ? (
+                <>
+                  {' '}
+                  <CollapsibleText text={record.summary} />
+                </>
+              ) : ''}
               {record.files !== undefined ? `（${record.files.length} 文件）` : ''}
             </Note>
           ) : record.summary !== undefined ? (

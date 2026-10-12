@@ -687,3 +687,45 @@ describe('简要形态挂接会话：名称展示 + pill 化跳会话（task-ui-
     expect(closes).toBe(2)
   })
 })
+
+describe('目标/结果多行收起展开（task-ui-visual-copy-blitz S2——收起/展开单源组件复用）', () => {
+  const MULTILINE_GOAL = 'S2 面板文本结构化展示\n第一行实现收起展开单源\n第二行结构化消费'
+
+  it('目标行多行文本：默认收起显首行（折叠锚在场，余行不在静态标记中）', () => {
+    const html = renderToStaticMarkup(
+      TaskDrawerBody(bodyProps({ detail: detailFixture({ vars: { goal: MULTILINE_GOAL }, records: [...RECORDS] }) })),
+    )
+    const goal = html.slice(html.indexOf('data-dswf-td-goal'), html.indexOf('data-dswf-td-result'))
+    expect(goal).toContain('data-dswf-td-fold="collapsed"')
+    expect(goal).toContain('S2 面板文本结构化展示')
+    expect(goal).not.toContain('第二行结构化消费')
+  })
+
+  it('目标行旧格式（taskDesc 回退链）长文本同样收起/展开生效；单行直显零折叠锚', () => {
+    const legacy = renderToStaticMarkup(
+      TaskDrawerBody(bodyProps({ detail: detailFixture({ taskDesc: '旧格式长目标第一行\n旧格式第二行', records: [...RECORDS] }) })),
+    )
+    expect(legacy).toContain('data-dswf-td-fold="collapsed"')
+    expect(legacy).toContain('旧格式长目标第一行')
+    const single = renderToStaticMarkup(
+      TaskDrawerBody(bodyProps({ detail: detailFixture({ vars: { goal: '单行目标' }, records: [...RECORDS] }) })),
+    )
+    expect(single).not.toContain('data-dswf-td-fold')
+    expect(single).toContain('单行目标')
+  })
+
+  it('结果行 submitted summary 多行：收起显首行；受控展开态全文在场（pre-wrap 保留换行）', () => {
+    const detail = detailFixture({
+      records: [
+        ...RECORDS.slice(0, 2),
+        { verb: 'submit', actor: 'plugin-tool', createdAt: '2026-10-04T16:00:00.000Z', summary: MULTILINE_GOAL, commitHash: 'a1b2c3d4' },
+      ],
+    })
+    const html = renderToStaticMarkup(TaskDrawerBody(bodyProps({ detail })))
+    const result = html.slice(html.indexOf('data-dswf-td-result'))
+    expect(result).toContain('✓ 已提交')
+    expect(result).toContain('data-dswf-td-fold="collapsed"')
+    expect(result).toContain('S2 面板文本结构化展示')
+    expect(result).not.toContain('第二行结构化消费')
+  })
+})
