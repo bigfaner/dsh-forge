@@ -281,6 +281,27 @@ describe('AC2 ensureOpen 惰性链（openDatabase 参数化 → 版本门 → �
     store.dispose()
   })
 
+  it('结构健全性检查·关键列在场：同版本同十表但 task_records 缺 ac_json（早期直改形态存量库）→ 隔离 + 记账', () => {
+    const ws = wsDir()
+    const db = openWorkspaceDb(join(ws, 'forge.db'))
+    db.exec(`DROP TRIGGER trg_task_records_no_update`)
+    db.exec(`ALTER TABLE task_records DROP COLUMN ac_json`)
+    db.exec(`CREATE TRIGGER trg_task_records_no_update BEFORE UPDATE ON task_records
+BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (update)'); END`)
+    db.close()
+
+    const store = createWorkspaceStore({ resolveDir: () => ws })
+    try {
+      store.ensureOpen('p1')
+      expect.unreachable('缺列存量库须隔离拒绝')
+    } catch (e) {
+      expect(isWorkspaceDbUnavailableError(e)).toBe(true)
+      expect((e as WorkspaceDbUnavailableError).data.error).toContain('task_records 缺列 [ac_json]')
+      expect((e as WorkspaceDbUnavailableError).data.error).toContain('废弃')
+    }
+    store.dispose()
+  })
+
   it('结构健全性检查·foreign_key_check：违例行在场 → 拒绝（恒轻量开库断言）', () => {
     const ws = wsDir()
     const db = openWorkspaceDb(join(ws, 'forge.db'))

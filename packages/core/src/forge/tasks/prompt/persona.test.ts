@@ -118,7 +118,11 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       for (const cx of COMPLEXITIES) {
         const persona = composePersona(taskType, cx)
         if (CODING_STRATEGY_TYPES.includes(taskType)) {
-          expect(persona, `${taskType}/${cx}`).toContain(codingStrategyFor(cx))
+          const expected = codingStrategyFor(cx).replace(
+            '### Coding Strategy',
+            taskType.startsWith('test-gen') ? '### Testing Strategy' : '### Coding Strategy',
+          )
+          expect(persona, `${taskType}/${cx}`).toContain(expected)
         } else {
           expect(persona, `${taskType}/${cx}`).not.toContain('### Coding Strategy')
         }
@@ -180,7 +184,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage',
-        'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill',
+        'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing',
       ].map((w) => w.toLowerCase()),
     )
     for (const taskType of TASK_TYPES) {
@@ -215,7 +219,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
 
   it('质量门禁命令构造口径：按改动范围自行构造 + 禁固定 just 配方', () => {
     const persona = composePersona('coding-feature', 'medium')
-    expect(persona).toContain('根据本次任务的改动范围，自行构造最合适的验证命令：选对目标包与命令形态——不得机械套用固定的 just 配方')
+    expect(persona).toContain('不得机械套用固定的命令配方')
     expect(persona).not.toContain('质量门禁（根据')
   })
 

@@ -69,6 +69,15 @@ const EXPECTED_TABLES: readonly string[] = [
   'tasks',
 ]
 
+/**
+ * 结构健全性检查·关键列在场清单（v1 直改跨轮次版本号不 bump——版本门 + 表在场拦不住
+ * 早期直改形态的存量开发库，列断言补位；缺列即旧形态 → 按仓规废弃重扫）。
+ */
+const EXPECTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  tasks: ['ac_json', 'mode', 'source_id', 'source_kind'],
+  task_records: ['ac_json', 'loop_sourced', 'record_fields_json'],
+}
+
 /** 隔离处置文案（记账 data_json 与 typed error message 同源单份） */
 const ISOLATED_DISPOSITION = '工作区隔离——本进程内该工作区任务域不可用，其余工作区照常'
 
@@ -95,6 +104,20 @@ function assertStructureSound(db: Database.Database): void {
     throw new Error(
       `工作区库结构健全性检查失败：表在场不符（期望十表 [${EXPECTED_TABLES.join(', ')}]，实际 [${tables.join(', ')}]）`,
     )
+  }
+  // 关键列断言（v1 直改跨轮次——存量开发库废弃重扫，缺列 fail-loud 带处置指引）
+  for (const [table, columns] of Object.entries(EXPECTED_COLUMNS)) {
+    const present = new Set(
+      (
+        db.pragma(`table_info('${table}')`) as ReadonlyArray<{ name: string }>
+      ).map((c) => c.name),
+    )
+    const missing = columns.filter((c) => !present.has(c))
+    if (missing.length > 0) {
+      throw new Error(
+        `工作区库结构健全性检查失败：${table} 缺列 [${missing.join(', ')}]（早期直改形态存量开发库——按仓规废弃：手工删除本库文件后重扫）`,
+      )
+    }
   }
 }
 
