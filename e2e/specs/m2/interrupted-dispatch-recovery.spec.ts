@@ -154,7 +154,7 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
     // 段——persona 在 system 面）+ 动态块按当前状态取数
     expect(reentry.dispatchPrompt, '重派简报任务级单块不变').toContain('<task-context>')
     expect(reentry.dispatchPrompt, '动态信息块按当前库状态重合成').toContain(`TASK_ID: ${added.slug}/${added.localId}`)
-    expect(reentry.dispatchPrompt, '结算出口句不变').toContain('Settlement exit:')
+    expect(reentry.dispatchPrompt, '结算出口句仍不在简报（persona/技能承载——用户裁决 2026-10-13）').not.toContain('Settlement exit')
     expect(reentry.dispatchPrompt, '重派简报仍无人格段（persona 在 system 面）').not.toContain('You are')
     expect(reentry.dispatchPrompt, '重派简报仍无约束块').not.toContain('<constraints>')
     expect(reentry.dispatchPrompt, '重派简报仍无类型策略段').not.toContain('<type-policy>')

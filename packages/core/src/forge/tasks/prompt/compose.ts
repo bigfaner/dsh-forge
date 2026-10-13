@@ -2,7 +2,9 @@
 // 分层承载（S2/S2a/S2b）：agent 级内容（人格、门禁、Coding Strategy、工作流、Record
 // Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
 // system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 + SURFACE 行 +
-// ACCEPTANCE_CRITERIA + 结算出口一句），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
+// ACCEPTANCE_CRITERIA），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
+// 结算出口句删除（用户裁决 2026-10-13）：结算纪律归 worker persona（每变体工作流收尾句）与
+// submit-task 技能正本——简报零重复；TASK_ID 键行恒在场即参数本体。
 // 定位铁律：纯函数禁 IO（BLOCKERS/PHASE_SUMMARY 等动态值由调用方领取瞬间取数注入——
 // 2.4 claimTask 接线；「快照取领取瞬间而非渲染时」）。
 import {
@@ -178,15 +180,12 @@ function singleLine(criterion: string): string {
   return criterion.replace(/\s*\r?\n\s*/g, ' ')
 }
 
-/** 结算出口一句（S2b：submitTask 路径指称——纪律细节在 persona；简报尾行） */
-export const SETTLEMENT_EXIT_LINE =
-  'Settlement exit: close out via the submit-task skill (submitTask) using the TASK_ID above.'
-
 /** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
- *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
+ *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS/EVIDENCE——SOURCE = M3 2.4 增键紧随 TASK_ID；
  *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
  *  GOAL = `<goal>` 包围的任务体段落（目标 + ACCEPTANCE_CRITERIA 同段——worker 面无
- *  queryTask 时的定义唯一到达面）+ 结算出口一句收尾。TITLE 缺席时首行为 TASK_ID。 */
+ *  queryTask 时的定义唯一到达面）。TITLE 缺席时首行为 TASK_ID；简报以 `</goal>`（在场）或
+ *  末键行收尾——结算出口不在简报（persona/技能承载）。 */
 export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
@@ -223,7 +222,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     }
     context += '\n</goal>'
   }
-  return `${context}\n${SETTLEMENT_EXIT_LINE}`
+  return context
 }
 
 // ─────────────────────────── 组成序合成（S2b：任务级单块） ───────────────────────────
@@ -231,8 +230,9 @@ export function renderTaskContext(input: DispatchPromptInput): string {
 /**
  * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形 + 无包裹再收窄）：任务级简报正文直出——
  * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + SURFACE 行 + `<goal>` 包围目标 +
- * ACCEPTANCE_CRITERIA + 结算出口一句）。无人格段/约束块/类型策略工作流段（agent 级内容
- * 由 persona 承载——prompt/persona.ts 单源，经 spawn 链 persona 通道落子会话 system 面）。
+ * ACCEPTANCE_CRITERIA）。无人格段/约束块/类型策略工作流段/结算出口句（agent 级内容
+ * 由 persona 承载——prompt/persona.ts 单源，经 spawn 链 persona 通道落子会话 system 面；
+ * 结算路径由 persona 工作流收尾句 + submit-task 技能正本承载）。
  * digest 由调用方经 dispatchDigest(全文) 取值（2.4 claimTask 落 claim record）。
  * `<forge-pipeline>` 属 plugin-forge 系统提示段，不进本合成。
  */

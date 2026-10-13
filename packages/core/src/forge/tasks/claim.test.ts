@@ -152,7 +152,7 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     }
     expect(dispatchPrompt).toContain('TASK_ID: f/2.1')
     expect(dispatchPrompt).toContain('BLOCKERS: 1.1 completed')
-    expect(dispatchPrompt).toContain('Settlement exit:')
+    expect(dispatchPrompt).not.toContain('Settlement exit')
     // 无前置任务 → 无 BLOCKERS 行
     seedTask(h!.db, 'f', '1.2')
     const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's' })

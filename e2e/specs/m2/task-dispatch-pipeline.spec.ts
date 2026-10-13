@@ -106,7 +106,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     // persona/约束面已迁 system 面（此处反锚断言分层成立）
     expect(claim.dispatchPrompt, '简报任务级单块').toContain('<task-context>')
     expect(claim.dispatchPrompt, '动态块含 TASK_ID 自然键').toContain(`TASK_ID: ${added.slug}/${added.localId}`)
-    expect(claim.dispatchPrompt, '结算出口句在场（submitTask 路径指称）').toContain('Settlement exit:')
+    expect(claim.dispatchPrompt, '结算出口句不在简报（路径指称由 persona/submit-task 技能承载——用户裁决 2026-10-13）').not.toContain('Settlement exit')
     expect(claim.dispatchPrompt, '无人格段（persona 迁 system 面）').not.toContain('You are')
     expect(claim.dispatchPrompt, '无约束块（门纪律迁 persona）').not.toContain('<constraints>')
     expect(claim.dispatchPrompt, '无类型策略工作流段（迁 persona 变体表）').not.toContain('<type-policy>')

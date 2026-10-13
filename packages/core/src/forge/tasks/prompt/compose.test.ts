@@ -1,8 +1,9 @@
 // S2b 快照/契约测试（worker-lean-execution）：dispatchPrompt 收窄为纯任务级单块简报
-// （TITLE 裸值首行 + `<goal>` 包围目标 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化 + 结算出口一句；
-// 无 <task-context> 外包裹）。反锚（SC9）：无人格段/无约束块/无工作流段（agent 级内容迁 persona——
-// persona.ts 单源，system 面承载）。快照 ×20 = 任务级简报字节级 pin（digest 契约回归面：任何键/行序改动
-// 都在快照 diff 显形）。
+// （TITLE 裸值首行 + `<goal>` 包围目标 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化；
+// 无 <task-context> 外包裹）。反锚（SC9）：无人格段/无约束块/无工作流段/无结算出口句
+// （agent 级内容迁 persona——persona.ts 单源，system 面承载；结算路径由 persona 工作流
+// 收尾句 + submit-task 技能正本承载——用户裁决 2026-10-13 删简报尾行）。快照 ×20 = 任务级
+// 简报字节级 pin（digest 契约回归面：任何键/行序改动都在快照 diff 显形）。
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
@@ -10,7 +11,6 @@ import {
   composeDispatchPrompt,
   resolveCoverage,
   RESUME_POINTER_BLOCK,
-  SETTLEMENT_EXIT_LINE,
   TASK_CATEGORY_FOR_TYPE,
   type DispatchPromptInput,
 } from './compose.js'
@@ -95,7 +95,7 @@ describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照·任务级收窄 [%s]', (ta
     const fx = FIXTURES[taskType]!
     expect(firstLine).toBe(fx.title ?? `TASK_ID: ${fx.slug}/${fx.localId}`)
     expect(prompt).toContain(`TASK_ID: ${fx.slug}/${fx.localId}`)
-    expect(prompt).toContain('Settlement exit:')
+    expect(prompt).not.toContain('Settlement exit')
   })
 
   it('SC9 反锚：无人格段/无约束块/无工作流段/无共享段（agent 级内容在 persona 面）', () => {
@@ -111,6 +111,7 @@ describe.each(TASK_TYPES)('AC4 dispatchPrompt 快照·任务级收窄 [%s]', (ta
       'Reference Files',
       'Record Fields',
       'submit-task skill only after',
+      'Settlement exit',
     ]) {
       expect(prompt, `反锚缺席：${antiAnchor}`).not.toContain(antiAnchor)
     }
@@ -236,12 +237,12 @@ describe('AC2 简报键值行（键级零标签）', () => {
     expect(emptyVars).not.toContain('VARS:')
   })
 
-  it('条件键缺席即省行（最小夹具仅恒在场键 + 结算出口句恒在场）', () => {
+  it('条件键缺席即省行（最小夹具仅恒在场键；结算出口句不在简报——persona/技能承载）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
     for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', '<goal>', 'ACCEPTANCE_CRITERIA:', 'SURFACE:']) {
       expect(minimal).not.toContain(key)
     }
-    expect(minimal).toContain(SETTLEMENT_EXIT_LINE)
+    expect(minimal).not.toContain('Settlement exit')
   })
 
   it('键级零标签（简报正文为纯键值行——除 <goal> 外不加键级标签）', () => {
@@ -290,18 +291,18 @@ describe('M3 2.4 SOURCE 容器语境行（Interface 1：SOURCE: feature|proposal
   })
 })
 
-// ─────────────────── 5.3/S2b：任务规格内嵌（TITLE 首行 + <goal> 段 + AC 单行化 + 结算出口） ───────────────────
+// ─────────────────── 5.3/S2b：任务规格内嵌（TITLE 首行 + <goal> 段 + AC 单行化） ───────────────────
 
-describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段 + 结算出口句', () => {
-  it('全载荷：TITLE 裸值首行 + <goal> 包围目标与 AC（结果导向，原 DESCRIPTION 键更名）+ 结算出口句收尾', () => {
+describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段（结算出口句已删——用户裁决 2026-10-13）', () => {
+  it('全载荷：TITLE 裸值首行 + <goal> 包围目标与 AC（结果导向，原 DESCRIPTION 键更名）；简报以 </goal> 收尾', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
     expect(prompt).toContain(
       '<goal>\n达成：简报仅承载任务级内容，纪律面全部迁 persona 承载\nACCEPTANCE_CRITERIA:\n- 快照与简报逐字一致\n- 块序恒定\n</goal>',
     )
     expect(prompt).not.toContain('DESCRIPTION:')
     expect(prompt.indexOf('<goal>')).toBeGreaterThan(prompt.indexOf('VARS:'))
-    expect(prompt.indexOf(SETTLEMENT_EXIT_LINE)).toBeGreaterThan(prompt.indexOf('</goal>'))
-    expect(prompt.trimEnd().endsWith(SETTLEMENT_EXIT_LINE)).toBe(true)
+    expect(prompt.trimEnd().endsWith('</goal>')).toBe(true)
+    expect(prompt).not.toContain('Settlement exit')
   })
 
   it('AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源）', () => {
@@ -312,10 +313,10 @@ describe('5.3/S2b 任务规格内嵌：TITLE 首行 + <goal> 段 + AC 段 + 结�
     expect(prompt).toContain('ACCEPTANCE_CRITERIA:\n- 多行条目第一行 第二行续\n- 单行条目')
   })
 
-  it('任务体收尾（结算出口句为全文最后一行；目标内容不越收尾句）', () => {
+  it('任务体收尾（`</goal>` 为全文末尾——目标内容后无任何追加行）', () => {
     const prompt = composeDispatchPrompt(fullInput({ taskType: 'coding-feature' }))
-    expect(prompt.lastIndexOf('\n')).toBe(prompt.length - SETTLEMENT_EXIT_LINE.length - 1)
-    expect(prompt.slice(prompt.indexOf(SETTLEMENT_EXIT_LINE))).not.toContain('达成：简报仅承载任务级内容')
+    expect(prompt.trimEnd().endsWith('</goal>')).toBe(true)
+    expect(prompt.slice(prompt.lastIndexOf('</goal>'))).toBe('</goal>')
   })
 
   it('仅 AC 在场（无目标）→ <goal> 只含 ACCEPTANCE_CRITERIA；两者皆缺 → 省段', () => {
