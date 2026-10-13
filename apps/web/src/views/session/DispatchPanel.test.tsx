@@ -34,6 +34,7 @@ import {
   fetchWorkerSession,
   initialSessionPillsState,
   parentSessionOf,
+  resolveWorkerOpenTarget,
   runSessionPillsLoad,
   sessionPillItems,
   sessionPillsLoadPlan,
@@ -410,6 +411,41 @@ describe('fetchWorkerSession 纯异步面（taskDetail 挂接面 → worker + �
       worker: null,
       parent: undefined,
     })
+  })
+})
+
+describe('resolveWorkerOpenTarget（⟞ 打开目标解析：库侧 record 源优先 → 账本父反查兜底）', () => {
+  it('库侧命中 → 走库（兜底不调）', async () => {
+    const detail = {
+      sessions: [card({ source: 'link', sessionId: 'd-1' }), card({ source: 'record', sessionId: 'w-1' })],
+    } as TaskDetail
+    const { client } = recordingClient({ detail: async () => detail })
+    const fallback = vi.fn(async (): Promise<string | undefined> => 'w-x')
+    await expect(resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1' }, fallback)).resolves.toEqual({
+      worker: 'w-1',
+      parent: 'd-1',
+    })
+    expect(fallback).not.toHaveBeenCalled()
+  })
+  it('bug：库侧 null（进行中无 record 审计行）+ 账本兜底命中 → {worker: 子, parent: 面班会话（显式父）}', async () => {
+    const detail = {
+      sessions: [card({ source: 'link', sessionId: 'd-1' }), card({ source: 'record', sessionId: 'd-1' })], // claim 审计 = 派发会话本身
+    } as TaskDetail
+    const { client } = recordingClient({ detail: async () => detail })
+    const fallback = vi.fn(async (): Promise<string | undefined> => 'worker-9')
+    await expect(resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1' }, fallback)).resolves.toEqual({
+      worker: 'worker-9',
+      parent: 'd-1',
+    })
+    expect(fallback).toHaveBeenCalledWith('d-1')
+  })
+  it('两路皆空 → null（兜底缺席/undefined 均不炸）', async () => {
+    const detail = { sessions: [card({ source: 'link', sessionId: 'd-1' })] } as TaskDetail
+    const { client } = recordingClient({ detail: async () => detail })
+    await expect(resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1' }, undefined)).resolves.toBeNull()
+    await expect(
+      resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1' }, vi.fn(async () => undefined)),
+    ).resolves.toBeNull()
   })
 })
 

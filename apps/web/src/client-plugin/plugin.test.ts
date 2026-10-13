@@ -37,9 +37,11 @@ import {
   SIDEBAR_WORKSPACES_SLOT,
   TOOL_CALL_TOOLVIEW_SLOT,
   makeSessionTitleResolver,
+  resolveWorkerChildSession,
   sessionParentIdOf,
   sessionRowInLedger,
   sessionTitleOf,
+  workerChildSessionOf,
   workerOpenTarget,
   forgeClientPlugin,
   moduleLoaderFacade,
@@ -648,7 +650,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）+ 悬浮面板 ⟞ 开面（m3.1 D6）；桥经发布面工厂创建并发布页内全局', () => {
+  it('壳宿主：shell.overlay 登记 + 注入面 = 官方面板选择/右栏收展/桥（概览上下文写回缝——4.1）+ 弹窗三窄面（m3.1 D21/D23——跳会话/新会话编排/文档开出）+ 悬浮面板 ⟞ 开面（m3.1 D6）+ ⟞ 父反查兜底（fix：进行中 worker 无 record 审计行）；桥经发布面工厂创建并发布页内全局', async () => {
     const views = publishFakeViews()
     const { ctx, registers, selectPanel, rightToggle, sessionsById } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -665,10 +667,22 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       openDocResource: (address: string) => void
       onOpenWorkerSession: (childSessionId: string) => void
       sessionTitleOf: (sessionId: string) => string | undefined
+      resolveWorkerSession: (parentSessionId: string) => Promise<string | undefined>
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
     // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
-    expect(Object.keys(face).sort()).toEqual(['bridge', 'onOpenSession', 'onOpenWorkerSession', 'openDocResource', 'openSession', 'rightbar', 'selectPanel', 'sessionTitleOf'])
+    // + ⟞ 父反查兜底（fix：进行中 worker 无 record 审计行 → 库侧解析恒空的修复面）
+    expect(Object.keys(face).sort()).toEqual([
+      'bridge',
+      'onOpenSession',
+      'onOpenWorkerSession',
+      'openDocResource',
+      'openSession',
+      'resolveWorkerSession',
+      'rightbar',
+      'selectPanel',
+      'sessionTitleOf',
+    ])
     expect(typeof face.onOpenSession).toBe('function')
     // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
     expect(typeof face.onOpenWorkerSession).toBe('function')
@@ -678,6 +692,10 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     sessionsById['s-title'] = { displayTitle: '登录修复' }
     expect(face.sessionTitleOf('s-title')).toBe('登录修复')
     expect(face.sessionTitleOf('s-miss')).toBeUndefined()
+    // ⟞ 父反查兜底（fix）：账本子行 parentId 命中 = 该子会话；零命中 = undefined（no-op 面）
+    sessionsById['w-child'] = { parentId: 's-dispatch' }
+    await expect(face.resolveWorkerSession('s-dispatch')).resolves.toBe('w-child')
+    await expect(face.resolveWorkerSession('s-none')).resolves.toBeUndefined()
     // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
     expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.selectPanel.selectPanel('dswf-knowledge')
@@ -694,6 +712,75 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(marker?.shell?.registered).toEqual([SHELL_OVERLAY_SLOT])
     expect(marker?.shell?.error).toBeUndefined()
     unpublishViews()
+  })
+
+  // ── ⟞ worker 父反查兜底（fix：进行中 worker 无 record 审计行 → 库侧 workerSessionOf 恒空）──
+
+  describe('workerChildSessionOf 账本父反查（byId parentId 扫描——updatedAt 择新）', () => {
+    const ledger = (byId: Record<string, unknown>): unknown => ({ getSnapshot: () => ({ byId }) })
+    it('parentId === 父的子行命中；多子 updatedAt 择新（进行中 worker = 最新子会话近似）', () => {
+      const list = ledger({
+        'dispatch-1': { parentId: 'top' },
+        'worker-old': { parentId: 'dispatch-1', updatedAt: '2026-10-13T10:00:00Z' },
+        'worker-new': { parentId: 'dispatch-1', updatedAt: '2026-10-13T11:00:00Z' },
+        unrelated: { parentId: 'other' },
+      })
+      expect(workerChildSessionOf(list, 'dispatch-1')).toBe('worker-new')
+    })
+    it('updatedAt 缺席回退枚举末位；无命中/形状漂移/快照异常 = undefined', () => {
+      expect(workerChildSessionOf(ledger({ 'w-1': { parentId: 'p' } }), 'p')).toBe('w-1')
+      expect(workerChildSessionOf(ledger({ 'w-1': { parentId: 'x' } }), 'p')).toBeUndefined()
+      expect(workerChildSessionOf(ledger({}), 'p')).toBeUndefined()
+      expect(workerChildSessionOf(undefined, 'p')).toBeUndefined()
+      expect(workerChildSessionOf({ tag: 'x' }, 'p')).toBeUndefined()
+      expect(workerChildSessionOf({ getSnapshot: () => 'garbage' }, 'p')).toBeUndefined()
+      expect(
+        workerChildSessionOf(
+          {
+            getSnapshot: () => {
+              throw new Error('shape drift')
+            },
+          },
+          'p',
+        ),
+      ).toBeUndefined()
+    })
+  })
+
+  describe('resolveWorkerChildSession（miss → refresh 兜底一次 → 重扫；缺席/失败 = undefined）', () => {
+    it('首扫命中 → 不 refresh', async () => {
+      let refreshed = 0
+      const list = { getSnapshot: () => ({ byId: { 'w-1': { parentId: 'p-1' } } }) }
+      await expect(resolveWorkerChildSession({ list, refresh: async () => (refreshed += 1) }, 'p-1')).resolves.toBe('w-1')
+      expect(refreshed).toBe(0)
+    })
+    it('首扫 miss → refresh 一次后重扫命中（added 广播未达兜底）；仍 miss = undefined', async () => {
+      let byId: Record<string, unknown> = {}
+      const list = { getSnapshot: () => ({ byId }) }
+      const refresh = async (): Promise<unknown> => {
+        byId = { 'w-9': { parentId: 'p-1', updatedAt: '2026-10-13T12:00:00Z' } }
+        return undefined
+      }
+      await expect(resolveWorkerChildSession({ list, refresh }, 'p-1')).resolves.toBe('w-9')
+      await expect(
+        resolveWorkerChildSession({ list: { getSnapshot: () => ({ byId: {} }) }, refresh: async () => undefined }, 'p-1'),
+      ).resolves.toBeUndefined()
+    })
+    it('refresh 缺席/抛错 = fail-soft undefined（不炸调用面）', async () => {
+      const empty = { getSnapshot: () => ({ byId: {} }) }
+      await expect(resolveWorkerChildSession({ list: empty }, 'p-1')).resolves.toBeUndefined()
+      await expect(
+        resolveWorkerChildSession(
+          {
+            list: empty,
+            refresh: async () => {
+              throw new Error('boom')
+            },
+          },
+          'p-1',
+        ),
+      ).resolves.toBeUndefined()
+    })
   })
 
   it('main.conversation 影子登记缺席（fix-25：官方 ConversationRoot 渲染中区——官方头部链白拿）', () => {

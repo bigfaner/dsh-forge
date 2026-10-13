@@ -384,6 +384,25 @@ export async function fetchWorkerSession(
   }
 }
 
+/**
+ * ⟞ 打开目标解析（纯异步面——fix：进行中任务无 record 审计行 → workerSessionOf 恒空）：
+ * 库侧 fetchWorkerSession（record 源——已提交任务权威映射）优先；worker null 且兜底在场 →
+ * 账本父反查（面板会话 = 派发会话 = worker 的 durable 父），命中 → {worker: 子,
+ * parent: 面班会话}（显式父——账本缺行时 openSessionWithLedgerAddress 显式父优先径
+ * 同源）。两路皆空 = null（调用面 no-op）。
+ */
+export async function resolveWorkerOpenTarget(
+  client: ForgeRpcClient,
+  q: { readonly projectId: string; readonly taskId: string; readonly sessionId: string },
+  resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>,
+): Promise<{ readonly worker: string; readonly parent?: string } | null> {
+  const { worker, parent } = await fetchWorkerSession(client, q)
+  if (worker !== null) return parent !== undefined ? { worker, parent } : { worker }
+  if (resolveWorkerSession === undefined) return null
+  const child = await resolveWorkerSession(q.sessionId)
+  return child === undefined ? null : { worker: child, parent: q.sessionId }
+}
+
 /** 锚定 DOM 窄面（生产 = document + window 适配；测试 = 假 dom 直喂） */
 export interface DispatchAnchorDom {
   querySelector(selector: string): { getBoundingClientRect(): { readonly right: number; readonly top: number; readonly bottom: number } } | null
@@ -585,6 +604,10 @@ export interface DispatchPanelProps {
   /** 行尾 ⟞ = 打开 worker 执行子会话（插件 inject face；缺席 = 非交互）——可选第二参 =
    * 库侧权威父会话（link 派发源——进行中 worker 账本缺行场景的显式地址径输入） */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
+  /** ⟞ worker 父反查兜底（装配注入——账本子行 parentId 扫描 + refresh 一次）：库侧 record
+   *  源解析 miss（进行中任务无 record 审计行 = workerSessionOf 恒空——修复面）时消费，
+   *  面班会话即父；缺席 = 无兜底（两路皆空 → no-op） */
+  readonly resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -680,8 +703,13 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
     props.onOpenWorkerSession === undefined
       ? undefined
       : (taskId: string): void => {
-          void fetchWorkerSession(makeClient(), { projectId: props.projectId, taskId }).then(({ worker, parent }) => {
-            if (worker !== null) props.onOpenWorkerSession?.(worker, parent)
+          // fix：库侧 record 源 miss（进行中无 submit/transition 审计行）→ 账本父反查兜底
+          void resolveWorkerOpenTarget(
+            makeClient(),
+            { projectId: props.projectId, taskId, sessionId: props.sessionId },
+            props.resolveWorkerSession,
+          ).then((target) => {
+            if (target !== null) props.onOpenWorkerSession?.(target.worker, target.parent)
           })
         }
 

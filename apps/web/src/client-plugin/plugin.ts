@@ -314,6 +314,63 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
 }
 
 /**
+ * 账本父反查子会话（纯函数——⟞ 进行中 worker 兜底面）：byId 扫描 row.parentId ===
+ * parentSessionId 的子行；多子（同父重派发）取 updatedAt 最新（字符串 ISO 字典序防御窄读；
+ * 全体缺席/非串回退枚举末位）。零命中/形状漂移/快照异常 = undefined（调用面 no-op
+ * fail-soft）。进行中 worker 无 record 审计行（workerSessionOf 恒 null）时，账本父子
+ * 关系是唯一在途源（宿主 openChild spawn 恒挂 parent）。
+ */
+export function workerChildSessionOf(list: unknown, parentSessionId: string): string | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  if (typeof snapshot !== 'object' || snapshot === null) return undefined
+  const byId = (snapshot as { byId?: Record<string, { readonly parentId?: unknown; readonly updatedAt?: unknown }> }).byId
+  if (typeof byId !== 'object' || byId === null) return undefined
+  let bestId: string | undefined
+  let bestUpdatedAt: string | undefined
+  for (const [sessionId, row] of Object.entries(byId)) {
+    if (typeof row !== 'object' || row === null || row.parentId !== parentSessionId) continue
+    const updatedAt = typeof row.updatedAt === 'string' ? row.updatedAt : undefined
+    const newer =
+      updatedAt !== undefined && (bestUpdatedAt === undefined || updatedAt > bestUpdatedAt)
+    if (bestId === undefined || newer || (updatedAt === undefined && bestUpdatedAt === undefined)) {
+      bestId = sessionId
+      bestUpdatedAt = updatedAt
+    }
+  }
+  return bestId
+}
+
+/**
+ * 父反查 worker 子会话解析（纯异步面——⟞ 兜底径）：首扫账本；miss（in-process worker 的
+ * added 广播未达——D6 修复面同款场景）→ refresh 全量基线一次后重扫（宿主 session.list
+ * 读盘上报持久子会话行）；仍 miss / refresh 缺席或抛错 = undefined fail-soft
+ * （openSessionWithLedgerAddress refresh 兜底同刻度）。
+ */
+export async function resolveWorkerChildSession(
+  services: Pick<ForgeSessionsService, 'list' | 'refresh'>,
+  parentSessionId: string,
+): Promise<string | undefined> {
+  const first = workerChildSessionOf(services.list, parentSessionId)
+  if (first !== undefined) return first
+  const refresh = services.refresh
+  if (refresh === undefined) return undefined
+  try {
+    await refresh()
+  } catch {
+    return undefined
+  }
+  return workerChildSessionOf(services.list, parentSessionId)
+}
+
+/**
  * 会话名解析（纯函数——task-ui-info-density-blitz S1 通道）：账本快照窄读
  * byId[sessionId].displayTitle。命中（非空串）= 返回标题；行缺席（归档/旧会话/快照
  * 缺行）/形状漂移/快照异常/非串/空串 = undefined（调用方回退显示 sessionId——fail-soft
@@ -1449,6 +1506,11 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 会话名解析器（task-ui-info-density-blitz S1 通道——账本快照 displayTitle
                 // 窄读；账本未命中 = undefined，调用方回退显示 sessionId fail-soft）
                 sessionTitleOf: makeSessionTitleResolver(sessions),
+                // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
+                // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
+                // 单源）——DispatchPanel 库侧解析 miss 时经 ShellHost 递达消费。
+                resolveWorkerSession: (parentSessionId: string): Promise<string | undefined> =>
+                  resolveWorkerChildSession(sessions, parentSessionId),
               }),
             },
             views.ForgeShellHost,

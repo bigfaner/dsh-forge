@@ -82,6 +82,10 @@ export interface ForgeShellHostProps {
    * 派发源）优先地址形态，账本判读兜底；缺席 = ⟞ 非交互呈现）。
    */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
+  /** ⟞ worker 父反查兜底（插件 inject face——账本子行 parentId 扫描 + refresh 一次）：
+   *  DispatchPanel 库侧 record 源 miss（进行中任务无 record 审计行——修复面）时消费；
+   *  缺席 = 无兜底 */
+  readonly resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**
@@ -339,6 +343,7 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           projectId={overviewContext.projectId}
           {...(bridge !== undefined ? { onOpenTask: bridge.openTaskDrawer } : {})}
           {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
+          {...(props.resolveWorkerSession !== undefined ? { resolveWorkerSession: props.resolveWorkerSession } : {})}
         />
       ) : null}
       {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/
