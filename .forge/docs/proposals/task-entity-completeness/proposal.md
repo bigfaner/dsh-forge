@@ -48,6 +48,14 @@ worker 领取任务时拿不到"改哪里、参考什么、预算多少"的结�
 D4/D6 不新增字段：task_desc 保持 GOAL 唯一语义（改动范围/参考文档迁移到新字段后自然
 卸载）；FILE 行维持"调用方注入"形态（db-only 任务由新字段承载规格语境）。
 
+5. **GUI 任务详情弹窗对齐原型**（用户裁决 2026-10-13）：任务详情对话框按
+   `dsh-forge-m3.1-ui-alignment/prototype` fillTaskModal 完整形态对齐——现状条 +
+   任务内容/时间线两可折叠分块；任务内容 = kv chips（类别/优先级/预估耗时/实际耗时/
+   复杂度/breaking）+ 目标 + **变更范围**（= 实体 plannedFiles）+ 实现要点/测试要点
+   类型模板（coding/gate/doc 三型）+ 验收标准 + **参考文档**（= 实体 refs，可点开）
+   + 备注 + gate 覆盖率条；时间线 = verb 分色 + 执行/派发会话双源 pill（跳对话面板）。
+   新实体字段经 DTO 到达该弹窗——与 1–4 项构成"实体 → 简报 → UI"三面闭环。
+
 ## Alternatives
 
 - **方案 A（选定）**：实体加两列 + 简报三行 + vars 单源——结构化、有机械防线。
@@ -59,11 +67,12 @@ D4/D6 不新增字段：task_desc 保持 GOAL 唯一语义（改动范围/参考
 ## Scope
 
 **收编**：D1（预计文件列 + 简报行 + fix 链收编）、D2（参考文档列 + 简报行 + 读面列驱动）、
-D3（ESTIMATE 行）、D5（vars 标准键单源常量）。
+D3（ESTIMATE 行）、D5（vars 标准键单源常量）、**GUI 任务详情弹窗对齐原型**（Solution⑤——
+变更范围/参考文档/预估耗时/时间线会话双源 pill 等 fillTaskModal 完整形态，apps/web
+drawer 面落地）。
 
 **出界**：D4/D6 结构性新增（按 Solution 以字段迁移消化）；老 forge 21 模板复辟（persona
-已承载）；GUI 面板呈现调整（读面 DTO 增字段后前端随行，不单列）；schema 版本线变更
-（v1 直改纪律不变——零兼容义务，存量开发库废弃重扫照旧）。
+已承载）；schema 版本线变更（v1 直改纪律不变——零兼容义务，存量开发库废弃重扫照旧）。
 
 ## Risks
 
@@ -86,8 +95,13 @@ D3（ESTIMATE 行）、D5（vars 标准键单源常量）。
 4. fix 链 SOURCE_FILES 经标准键常量承载（六键 grep 对齐，技能正文零散字符串清零）。
 5. schema.sql ↔ migrations pin 同步；全仓 compile/lint/test 三门绿 + 新增单测覆盖
    （简报渲染/读面列驱动/常量对齐）。
+6. 任务详情弹窗呈现原型完整形态（对照
+   `dsh-forge-m3.1-ui-alignment/prototype` fillTaskModal）：变更范围/参考文档/预估
+   耗时/时间线会话双源 pill 逐区块在场（含折叠与 verb 分色），字段缺省区块省略
+   （与简报缺席纪律同构）；e2e 走查截图留证。
 
 ### Consistency Check
 
 - SC1←D1/D2 创建面；SC2←D1/D2/D3 简报面；SC3←D2 读面；SC4←D1 收编+D5 单源；
-  SC5←全部的机械门。每条 SC 有收编项承载，无矛盾。**检查通过（2026-10-13）**。
+  SC5←全部的机械门；SC6←Solution⑤ UI 面。每条 SC 有收编项承载，收编项均喂养 SC，
+  无矛盾。**检查通过（2026-10-13，含 GUI 对齐扩张后复审）**。
