@@ -51,8 +51,8 @@ function seedTask(db: Database.Database, taskId = 't1'): void {
   ).run(taskId, 'demo-feature-f1', '1.1', '任务一', 'coding.feature', NOW, NOW)
 }
 
-describe('AC1 全 DDL 在临时库执行零错（十表 + 七索引 + 四触发器 + FK/CHECK 负样例）', () => {
-  it('首开空目录：十表全部在场（八域表 + schema_meta + app_key_logs）', () => {
+describe('AC1 全 DDL 在临时库执行零错（十一表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
+  it('首开空目录：十一表全部在场（八域表 + bugs + schema_meta + app_key_logs）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const tables = db
@@ -63,6 +63,7 @@ describe('AC1 全 DDL 在临时库执行零错（十表 + 七索引 + 四触发�
       .map((r) => r.name)
     expect(tables).toEqual([
       'app_key_logs',
+      'bugs',
       'feature_documents',
       'feature_records',
       'features',
@@ -76,7 +77,7 @@ describe('AC1 全 DDL 在临时库执行零错（十表 + 七索引 + 四触发�
     store.dispose()
   })
 
-  it('七索引全部创建（idx_* 前缀——M3：idx_tasks_source_status 取代 feature_status 形态）', () => {
+  it('八索引全部创建（idx_* 前缀——M3：idx_tasks_source_status 取代 feature_status 形态；fix-bug：+idx_bugs_status）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const indexes = db
@@ -86,6 +87,7 @@ describe('AC1 全 DDL 在临时库执行零错（十表 + 七索引 + 四触发�
       .all()
       .map((r) => r.name)
     expect(indexes).toEqual([
+      'idx_bugs_status',
       'idx_edges_prerequisite',
       'idx_fr_feature',
       'idx_records_session',
@@ -281,7 +283,7 @@ describe('AC2 ensureOpen 惰性链（openDatabase 参数化 → 版本门 → �
     store.dispose()
   })
 
-  it('结构健全性检查·关键列在场：同版本同十表但 task_records 缺 ac_json（早期直改形态存量库）→ 隔离 + 记账', () => {
+  it('结构健全性检查·关键列在场：同版本同十一表但 task_records 缺 ac_json（早期直改形态存量库）→ 隔离 + 记账', () => {
     const ws = wsDir()
     const db = openWorkspaceDb(join(ws, 'forge.db'))
     db.exec(`DROP TRIGGER trg_task_records_no_update`)
