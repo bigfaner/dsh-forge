@@ -96,6 +96,14 @@ export const SETTINGS_CHANNELS = {
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[keyof typeof SETTINGS_CHANNELS]
 
+/** forge:bugs/*（fix-bug：Bug 子 tab 列表读面——listBugs 服务端搜索/状态过滤/排序；
+ *  recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC） */
+export const BUGS_CHANNELS = {
+  list: 'forge:bugs/list',
+} as const
+
+export type BugsChannel = (typeof BUGS_CHANNELS)[keyof typeof BUGS_CHANNELS]
+
 /** forge:docs/*（read = 工作区文档读；openExternal = main 侧 shell.openPath，先经桥校验路径在册） */
 export const DOCS_CHANNELS = {
   read: 'forge:docs/read',
@@ -133,6 +141,7 @@ export const FORGE_CHANNELS = {
   proposalsListDocs: PROPOSALS_CHANNELS.listDocs,
   settingsGet: SETTINGS_CHANNELS.get,
   settingsSet: SETTINGS_CHANNELS.set,
+  bugsList: BUGS_CHANNELS.list,
   docsRead: DOCS_CHANNELS.read,
   docsOpenExternal: DOCS_CHANNELS.openExternal,
 } as const
@@ -146,6 +155,7 @@ export type ForgeChannel =
   | FeaturesChannel
   | ProposalsChannel
   | SettingsChannel
+  | BugsChannel
   | DocsChannel
 
 /** main 侧 IPC allowlist 唯一源（未知通道拒绝——electron-ipc-security 约定，继承自 1.4） */

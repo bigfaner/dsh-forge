@@ -3,8 +3,11 @@
 // 权威来源：tech-design §Interface 9 映射表（21 模板 − fix-record-missed = 20 值）与
 // design/schema.sql（tasks 八态 / features 六态 / proposals 五态 CHECK 行序）。
 // S3（run-tasks-host-command）：TaskStatus 七态 → 八态（+interrupted——proposal.md S3/SC3/R6）。
+// fix-bug 增补：BugStatus 三态词汇 + 中文标签 pin（bugs.ck_bugs_status 行序）。
 import { describe, expect, it } from 'vitest'
 import {
+  BUG_STATUSES,
+  BUG_STATUS_LABELS,
   FEATURE_STATUSES,
   FEATURE_STATUS_LABELS,
   PROPOSAL_STATUSES,
@@ -93,6 +96,16 @@ describe('AC4 三域状态词汇（schema.sql CHECK 行序）', () => {
       'superseded',
     ])
   })
+
+  it('BUG_STATUSES 三态（bugs ck_bugs_status 行序——open 登记 / fixed·unresolved 回填终态）', () => {
+    expect([...BUG_STATUSES]).toEqual(['open', 'fixed', 'unresolved'])
+  })
+
+  it('BUG_STATUS_LABELS 三态中文标签（子 tab chips 用）', () => {
+    expect(BUG_STATUS_LABELS.open).toEqual({ zh: '待修复', en: 'Open' })
+    expect(BUG_STATUS_LABELS.fixed).toEqual({ zh: '已修复', en: 'Fixed' })
+    expect(BUG_STATUS_LABELS.unresolved).toEqual({ zh: '无法复现', en: 'Unresolved' })
+  })
 })
 
 describe('AC4 中英标签常量（exhaustive——搜索中英共用）', () => {
@@ -101,6 +114,7 @@ describe('AC4 中英标签常量（exhaustive——搜索中英共用）', () =>
     expect([...Object.keys(TASK_STATUS_LABELS).sort()]).toEqual([...TASK_STATUSES].sort())
     expect([...Object.keys(FEATURE_STATUS_LABELS).sort()]).toEqual([...FEATURE_STATUSES].sort())
     expect([...Object.keys(PROPOSAL_STATUS_LABELS).sort()]).toEqual([...PROPOSAL_STATUSES].sort())
+    expect([...Object.keys(BUG_STATUS_LABELS).sort()]).toEqual([...BUG_STATUSES].sort())
   })
 
   it('每标签 zh/en 均为非空字符串（双语搜索匹配面）', () => {
@@ -109,6 +123,7 @@ describe('AC4 中英标签常量（exhaustive——搜索中英共用）', () =>
       TASK_STATUS_LABELS,
       FEATURE_STATUS_LABELS,
       PROPOSAL_STATUS_LABELS,
+      BUG_STATUS_LABELS,
     ] as const
     for (const table of tables) {
       for (const label of Object.values(table)) {

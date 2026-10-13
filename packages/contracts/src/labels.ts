@@ -5,6 +5,8 @@
 // UI 状态 tag 中文呈现）。定位铁律：纯常量与类型，零逻辑零依赖（P1 沿袭）。
 // S3（run-tasks-host-command）：TaskStatus 七态 → 八态——+interrupted（进程重启真化的
 // 非终态，run-tasks-host-command proposal.md S3/SC3/R6；schema v1 直改先例）。
+// fix-bug：+BugStatus 三态（bugs.ck_bugs_status 行序 open|fixed|unresolved——两阶段落库
+// 登记/回填状态机词汇；子 tab 状态 chips 用）。
 
 /** 中英标签形状（双语搜索匹配面——en 兼搜索词，zh 兼展示与中文搜索） */
 export interface BilingualLabel {
@@ -123,4 +125,16 @@ export const PROPOSAL_STATUS_LABELS: Readonly<Record<ProposalStatus, BilingualLa
   accepted: { zh: '已接受', en: 'Accepted' },
   rejected: { zh: '已拒绝', en: 'Rejected' },
   superseded: { zh: '已取代', en: 'Superseded' },
+}
+
+/** BugStatus 三态（bugs.ck_bugs_status 行序；两阶段落库：open 登记 → fixed｜unresolved 回填终态） */
+export const BUG_STATUSES = ['open', 'fixed', 'unresolved'] as const
+
+export type BugStatus = (typeof BUG_STATUSES)[number]
+
+/** BugStatus 中英标签（exhaustive；概览 Bug 子 tab 状态 chips 与双语搜索共用） */
+export const BUG_STATUS_LABELS: Readonly<Record<BugStatus, BilingualLabel>> = {
+  open: { zh: '待修复', en: 'Open' },
+  fixed: { zh: '已修复', en: 'Fixed' },
+  unresolved: { zh: '无法复现', en: 'Unresolved' },
 }

@@ -16,6 +16,10 @@
 // coverage/notes 结构化字段）；files_json 形制升级 {created, modified}（列不变形制变——历史行旧
 // 扁平形制读面归一）。只加列不 ALTER 破坏 append-only 四触发器（R12）；v1 直改沿仓规——存量
 // 开发库废弃重扫（头注既定纪律）。
+// fix-bug v1 直改（头注纪律：只加表不动既有语句顺序）：bugs 单表 20 列（bug_status CHECK 三态
+// open|fixed|unresolved；source_task_id → tasks(id)）+ idx_bugs_status(bug_status, created_at)。
+// 单一来源 = .forge/docs/proposals/fix-bug/proposal.md「技术细节·持久化」节（列清单/索引/CHECK
+// 三态逐条照建，migrations.test.ts pin 防漂移——蓝本对齐面 + 提案 DDL 附加段）。
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
@@ -177,6 +181,31 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
     CONSTRAINT uq_tsl_task_session UNIQUE (task_id, session_id)
 )`,
       `CREATE INDEX idx_tsl_session ON task_session_links(session_id)`,
+      `CREATE TABLE bugs (
+    id               TEXT PRIMARY KEY,
+    summary          TEXT NOT NULL,
+    bug_desc         TEXT NOT NULL,
+    trigger_desc     TEXT NOT NULL,
+    expected         TEXT NOT NULL,
+    actual           TEXT NOT NULL,
+    suspected        TEXT,
+    error_type       TEXT,
+    bug_status       TEXT NOT NULL DEFAULT 'open'
+                     CONSTRAINT ck_bugs_status
+                     CHECK (bug_status IN ('open', 'fixed', 'unresolved')),
+    commit_hash      TEXT,
+    worktree         TEXT,
+    branch           TEXT,
+    unresolved_reason TEXT,
+    source_task_id   TEXT REFERENCES tasks(id),
+    report_session_id TEXT,
+    fix_session_id   TEXT,
+    reporter         TEXT NOT NULL,
+    fixer            TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+)`,
+      `CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)`,
     ],
   },
 ]

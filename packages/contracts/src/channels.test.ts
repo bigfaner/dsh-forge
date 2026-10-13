@@ -6,8 +6,11 @@
 // 写动词 add/claim/submit/createProposal/transitionProposal 恒不上 RPC（SC7 断言面）。
 // 1.1（M3）增补：Interface 4 扩池——proposals 三新键（transition 双面/setMode/listDocs）+
 // forge:settings/{get,set} 新族；allowlist 28 → 33；transitionProposal 移出 RPC 拒绝集（drift 修订）。
+// fix-bug 增补：forge:bugs/list 新族（Bug 子 tab 列表读面）；allowlist 33 → 34；
+// recordBug/resolveBug 写动词恒不上 RPC（拒绝集 pin 扩充）。
 import { describe, expect, it } from 'vitest'
 import {
+  BUGS_CHANNELS,
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
   FORGE_CHANNEL_ALLOWLIST,
@@ -90,6 +93,12 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
+  it('forge:bugs/* 单通道（fix-bug：Bug 子 tab 列表读面——recordBug/resolveBug 写径不上 RPC）', () => {
+    expect(BUGS_CHANNELS).toEqual({
+      list: 'forge:bugs/list',
+    })
+  })
+
   it('forge:docs/* 两通道（read / openExternal——后者 main 侧执行）', () => {
     expect(DOCS_CHANNELS).toEqual({
       read: 'forge:docs/read',
@@ -111,9 +120,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 八 invoke 族 33 通道全列、无重复（M3：+proposals 三键 +settings 两键；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(33)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(33)
+  it('allowlist = 九 invoke 族 34 通道全列、无重复（fix-bug：+bugs.list；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(34)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(34)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),
@@ -124,6 +133,7 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
         ...Object.values(FEATURES_CHANNELS),
         ...Object.values(PROPOSALS_CHANNELS),
         ...Object.values(SETTINGS_CHANNELS),
+        ...Object.values(BUGS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
       ].sort(),
     )
@@ -156,6 +166,7 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       FEATURES_CHANNELS,
       PROPOSALS_CHANNELS,
       SETTINGS_CHANNELS,
+      BUGS_CHANNELS,
       DOCS_CHANNELS,
     ]
     const writeVerbs = [
@@ -163,7 +174,9 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       'claimTask',
       'submitTask',
       'createProposal',
-      // transitionProposal 已上 RPC 双面（M3 Interface 4 drift 修订）——不再入拒绝集
+      // fix-bug：bug 两写径工具不上 RPC（recordBug/resolveBug——agent tool 专属）
+      'recordBug',
+      'resolveBug',
     ]
     for (const family of families) {
       for (const key of Object.keys(family)) {
