@@ -54,9 +54,10 @@ describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）
 })
 
 describe('fix-45 入仓图标资产自证（build/ 一次生成物）', () => {
-  it('icon.svg：墨色烘焙 + 派生缩放在场（currentColor 位图语义不适用）', () => {
+  it('icon.svg：bluish 强调色烘焙 + 派生缩放在场（currentColor 位图语义不适用）', () => {
     const svg = readFileSync(join(ROOT, 'build', 'icon.svg'), 'utf8')
-    expect(svg).toContain('#22314a')
+    expect(svg).toContain('#4176e6') // 2026-10-13 提亮：墨 #22314a → deepseek-500（用户走查「太暗」，README 既有回退执行）
+    expect(svg).not.toContain('#22314a')
     expect(svg).not.toContain('currentColor')
     expect(svg).toMatch(/<g transform="translate\([\d.]+ [\d.]+\) scale\([\d.]+\)">/)
   })

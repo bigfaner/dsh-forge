@@ -66,12 +66,18 @@
   - **构图**：mark 三层原样整体缩放定位（不自创构图）——图标 ≠ 侧栏标直放大：24×24
     构图大尺寸下太满，按 app icon 惯例内缩：内容长边 19.2/24（80% 网格）+ bbox 中心
     对齐画布中心（四周安全边 ≥2/24，实测 getBBox 派生，不手工估算）；
-  - **定色**：侧栏标 currentColor 语义不适用位图——取品牌墨色单色 **#22314a** + 透明底
-    （P1 裁决：浅底可辨；深底 Windows 任务栏由系统合成——如暗色辨识不足再转 bluish
-    强调色并记本节）；
-  - 生成器：`tmp-ui-review/gen-whale-brand-v3.mjs --emit icon`（母版
+  - **定色**：侧栏标 currentColor 语义不适用位图——初版取品牌墨色单色 **#22314a** + 透明底
+    （P1 裁决：浅底可辨；深底 Windows 任务栏由系统合成，暗色辨识不足转 bluish 回退已记）；
+    **2026-10-13 回退执行**（用户走查反馈「太暗」）：改 bluish 强调 **#4176e6**
+    （`dsw-static-deepseek-500` = 官方 `--dsw-alias-link` 亮档实值——品牌血缘直承官方
+    强调蓝，深浅任务栏双底可辨）单色透明底，构图与三层透明度结构零改动；
+  - 生成器：`tmp-ui-review/gen-whale-brand-v3.mjs --emit icon`（初版；母版
     whale-sea-mark.svg 单源；栅格化经 tmp-ui-review/icon-rasterizer——electron
     Chromium offscreen 透明截帧 + 手写 ICO 封装，零新依赖；同机重跑 byte-identical）；
+    2026-10-13 提亮重栅格化经 `tmp-ui-review/rasterize-icon.mjs`（build/icon.svg 母本 →
+    png/ico，electron Chromium 同栈但改**页面内 canvas 出帧**——capturePage 透明窗截帧
+    在 Windows 混入窗后内容 + 母本注释含 ASCII `--`（XML 注释内非法）致 `<img>` 拒载，
+    双坑实证后剥注释入 canvas；双渲染 byte 相等 + 两次全跑 sha256 一致自证确定性）；
   - 接线：dev/运行窗口 BrowserWindow `icon` = `build/icon.png`（解析单源
     apps/host/src/window/icon.ts——打包形态 `{resources}/icon.png`，assemble 物化；
     Windows 任务栏/Alt-Tab 由 exe 内嵌优先）；electron-builder `win.icon` +
@@ -89,3 +95,4 @@
 - 2026-10-05：fix-45 应用图标 —— v2 标派生 `build/icon.{svg,png,ico}`（80% 网格内缩 + 墨色单色透明底），接入 dev 窗口 icon 与 electron-builder win/nsis——Electron 默认图标退役
 - 2026-10-06：hero 空态插画 `whale-book-sea-bg.svg`（鲸游书海完整叙事：喷书散落回书海）——原型多轮零遮挡构图验证后入产品 hero 面板（public/brand 零改拷贝 + workbench.css 承载 + 暗色 filter 口径）；M2/总纲两原型 hero 同步接入
 - 2026-10-06（同日二次裁决）：对话区背景**改统**——插画升对话区全相位全视图统一背景（官方 hero 空态 / active 会话 / 轨迹 / 知识召回，brand.css `[data-conversation-content]::after` 常驻层），v3 书海纹理消费退役为历史档（双资产 + 生成器存档），原红线①②（相位/视图限域）废止——守护收敛为指针不拦截 + 无障碍树不进 + 顶部渐隐带恒净
+- 2026-10-13：应用图标**提亮**——用户走查反馈墨 #22314a「太暗」，执行 P1 既有回退转 bluish 强调 #4176e6（官方 deepseek-500 = --dsw-alias-link 亮档实值）；build/icon.{svg,png,ico} 三件重生成（tmp-ui-review/rasterize-icon.mjs：页面内 canvas 出帧管线，双渲染相等 + sha256 复跑一致），结构 pin 同步（installer-pipeline 图标色断言）
