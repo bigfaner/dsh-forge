@@ -173,10 +173,10 @@ describe('文档位置与存储约束（forgeDir 注入）', () => {
 
 describe('段契约（标签包裹 / 无 forge tool 说明 / 禁裸 {{）', () => {
   const BLITZ_RENDER = renderForgePipelineSection({ mode: 'blitz' })
-  it('最外层唯一标签包裹：<forge-pipeline>（contracts XML_TAGS 单源）', () => {
+  it('最外层唯一标签包裹：<forge-pipeline>（contracts XML_TAGS 单源）；标签行独立成 HTML 块（开标签后/闭标签前各一空行——段内 markdown 不被 HTML 块吞掉）', () => {
     for (const v of [text, renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/x/.forge' })]) {
-      expect(v.startsWith(`<${XML_TAGS.forgePipeline}>\n`)).toBe(true)
-      expect(v.endsWith(`</${XML_TAGS.forgePipeline}>`)).toBe(true)
+      expect(v.startsWith(`<${XML_TAGS.forgePipeline}>\n\n`)).toBe(true)
+      expect(v.endsWith(`\n\n</${XML_TAGS.forgePipeline}>`)).toBe(true)
     }
     expect(XML_TAGS.forgePipeline).toBe('forge-pipeline')
   })
@@ -199,9 +199,9 @@ describe('段契约（标签包裹 / 无 forge tool 说明 / 禁裸 {{）', () =
 describe('renderDocStyleSection——独立段（dual-mode-overhaul 拆段）', () => {
   const docStyle = renderDocStyleSection()
 
-  it('doc-style 标签包裹（XML_TAGS.docStyle 单源）+ 零入参共用', () => {
-    expect(docStyle.startsWith(`<${XML_TAGS.docStyle}>\n`)).toBe(true)
-    expect(docStyle.endsWith(`</${XML_TAGS.docStyle}>`)).toBe(true)
+  it('doc-style 标签包裹（XML_TAGS.docStyle 单源）+ 零入参共用 + 标签行独立成 HTML 块（同 pipeline 段空行边界）', () => {
+    expect(docStyle.startsWith(`<${XML_TAGS.docStyle}>\n\n`)).toBe(true)
+    expect(docStyle.endsWith(`\n\n</${XML_TAGS.docStyle}>`)).toBe(true)
     expect(XML_TAGS.docStyle).toBe('doc-style')
   })
 

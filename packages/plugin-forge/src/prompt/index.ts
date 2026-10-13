@@ -150,7 +150,9 @@ export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}):
   const dir = typeof vars.forgeDir === 'string' ? vars.forgeDir.trim().replace(/[\\/]+$/, '') : ''
   const docsRoot = dir === '' ? '' : `${dir}\\docs`
   const body = mode === 'blitz' ? blitzSection(docsRoot) : expeditionSection(docsRoot)
-  return `<${XML_TAGS.forgePipeline}>\n${body}\n</${XML_TAGS.forgePipeline}>`
+  // 标签行独立成 HTML 块：开标签后/闭标签前各留空行，段内 markdown（标题/列表/围栏）
+  // 才不被 HTML 块吞掉内联化（GUI 按 markdown 渲染系统提示词）。
+  return `<${XML_TAGS.forgePipeline}>\n\n${body}\n</${XML_TAGS.forgePipeline}>`
 }
 
 /**
@@ -158,7 +160,9 @@ export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}):
  * XML_TAGS.docStyle 封闭集扩集；双模式共用注入，零入参，单模板字符串）。
  */
 export function renderDocStyleSection(): string {
+  // 标签行独立成 HTML 块（同上——开标签后/闭标签前各留空行）。
   return `<${XML_TAGS.docStyle}>
+
 ## 文档风格公约
 
 约束本工作区全部产出文档（含 PRD/走查记录/台账/README）：
@@ -166,5 +170,6 @@ export function renderDocStyleSection(): string {
 - 图示优先用 mermaid（\`\`\`mermaid 代码块）；能用一张图说清的不用大段文字。
 - 文字精简：只写结论与必要上下文，不复述代码与流程细节。
 - 不留调整修复叙事：不记录「改了哪里、为什么改、排查过程」等过程性内容，文档只呈现当前事实。
+
 </${XML_TAGS.docStyle}>`
 }
