@@ -8,11 +8,12 @@
 // agentOptions 回退父会话继承）。原子写 = 同目录 tmp + rename（崩溃无半写文件）。
 // 路径守卫（Security ②）：settingsFile 经 canonical 后必须严格落在 userData 域内
 // （startsWith(root) + 分隔符双条件——同 docs.ts 守卫口径；realpath 收敛符号链接/大小写，
-// 缺席回退词法 resolve）；装配层守卫基准 = dirname(dbFile)（state.db 与设置文件同居
+// 缺席逐级上溯最近存在祖先 realpath + 余段拼接——两侧同口径，/tmp 型 userData 首启不误拒）；
+// 装配层守卫基准 = dirname(dbFile)（state.db 与设置文件同居
 // userData——host resolveHostPaths 单源，双注入缝交叉校验坏装配）。
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, resolve as resolvePath, sep } from 'node:path'
+import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path'
 import {
   REASONING_LEVELS,
   type ForgeSettings,
@@ -30,12 +31,16 @@ export interface SettingsServiceDeps {
   readonly userDataDir: string
 }
 
-/** canonical：可达 realpath（磁盘真值拼写——符号链接/大小写收敛），缺席回退词法 resolve */
+/** canonical：可达 realpath（磁盘真值拼写——符号链接/大小写收敛）；缺席逐级上溯 realpath
+ * 最近存在祖先 + 余段拼接（#60：首启 forge-settings.json 缺席时纯词法 resolve 拼写
+ * /tmp/... 与 userDataDir 侧 realpath 拼写 /private/tmp/... 前缀失配误拒——两侧同口径）；
+ * 上溯到根（dirname(p) === p）仍不可达 → 回退词法 resolve */
 function canonical(p: string): string {
   try {
     return realpathSync(p)
   } catch {
-    return resolvePath(p)
+    const parent = dirname(p)
+    return parent === p ? resolvePath(p) : join(canonical(parent), basename(p))
   }
 }
 

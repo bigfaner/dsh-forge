@@ -2,7 +2,8 @@
 // get/set/持久化往返 + 未配置态（文件缺席 → {} 不抛——UI ⚠ 显式占位判据）+ 路径守卫
 // （userData 域外拒）+ 原子写（tmp + rename 无残留）+ 写校验（worker 三项形状）。
 // 存储形状单测逐字节锚定（稳定序列化——同 host bindingsFile 先例口径）。
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -122,5 +123,32 @@ describe('2.7 forgeSettings：路径守卫（userData 域外拒）', () => {
     const svc = createSettingsService({ settingsFile: nested, userDataDir })
     await svc.set({ worker })
     await expect(svc.get()).resolves.toEqual({ worker })
+  })
+
+  it('#60 符号链接拼写 + 首启文件缺席 → 放行不误拒（缺席侧逐级上溯最近存在祖先 realpath + 余段拼接——与 userDataDir 侧同口径；词法 /tmp/... vs realpath /private/tmp/... 前缀失配即此病灶）', async () => {
+    const real = mkdtempSync(join(tmpdir(), 'dsh-forge-settings-real-'))
+    const link = join(tmpdir(), `dsh-forge-settings-link-${randomUUID()}`)
+    try {
+      // Windows 无特权符号链接（EPERM）→ junction 同构复现（realpathSync 同样展开到真值拼写）
+      symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'EPERM') return // 受限容器无符号链接权：跳过——CI 覆盖
+      throw cause
+    }
+    try {
+      // 旧实现在此抛 SettingsPathInvalidError → core 插件不激活 → 全 forge:* 通道缺席
+      const svc = createSettingsService({ userDataDir: link, settingsFile: join(link, 'forge-settings.json') })
+      await expect(svc.get()).resolves.toEqual({})
+      await svc.set({ worker })
+      expect(existsSync(join(real, 'forge-settings.json'))).toBe(true) // 落盘经 realpath 真值目录
+      // 多级缺席（sub 目录也未建）逐级上溯同样不误拒
+      expect(() =>
+        createSettingsService({ userDataDir: link, settingsFile: join(link, 'sub', 'forge-settings.json') }),
+      ).not.toThrow()
+    } finally {
+      // recursive 摘除：junction（EISDIR 防线）与 POSIX symlink 皆只摘链接、不触真值目录
+      rmSync(link, { recursive: true, force: true })
+      rmSync(real, { recursive: true, force: true })
+    }
   })
 })
