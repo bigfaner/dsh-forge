@@ -16,8 +16,10 @@
 // 出现路由**结果**（门禁裁剪事实/工作流步数）。结算面从简：只指 submit-task 技能，
 // 记录字段细则由该技能文档承载，不入 persona。
 //
-// 恒定不变项：核心段①-⑧一切类型/分级在场；高效执行锚 ×6 恒定；AC 逐项核查
-// 不变量——一切分级裁剪不触碰。persona 文本禁裸 `{{`（上游严格插值防护）。
+// 恒定不变项：核心段①-⑦一切类型/分级在场；高效执行锚 ×6 恒定；AC 逐项核查
+// 不变量——一切分级裁剪不触碰。Coding/Testing Strategy 一切复杂度常驻（TDD 统一）。
+// paths（claim 领取瞬间注入）：产物落盘/续跑指针行填充绝对路径。persona 文本禁裸
+// `{{`（上游严格插值防护）。
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
@@ -37,55 +39,69 @@ export const ANTI_CHURN_ANCHORS: readonly string[] = [
 ]
 
 /**
- * 恒定核心段（①工作方式 ②todo_write 执行骨架 ③高效执行×6 ④失败处理 ⑤产物落盘
- * ⑥如实上报 ⑦提交纪律 ⑧歧义处置 + AC 逐项核查不变量）——段序即执行动线：
- * 规划 → 执行 → 异常 → 证据 → 上报 → 收口。
- * 通用纪律——无代码/测试/文档域内容（TDD/外科手术式/测试分层由 coding 族变体承载）。
+ * 恒定核心段（①执行骨架 ②高效执行×6 ③失败处理 ④产物落盘 ⑤如实上报 ⑥提交纪律
+ * ⑦歧义处置 + AC 逐项核查不变量）——段序即执行动线：规划 → 执行 → 异常 → 证据 →
+ * 上报 → 收口。通用纪律——无代码/测试/文档域内容（TDD/外科手术式/测试分层由
+ * coding 族变体承载）。产物落盘/续跑指针两行路径由 renderCoreSection 按 paths 填充
+ * （已知即绝对路径；缺席回退相对占位形态）。
  */
-export const PERSONA_CORE_SECTION = `## 核心纪律（一切类型与复杂度恒定）
+export function renderCoreSection(paths?: PersonaPaths): string {
+  const logsLine =
+    paths !== undefined
+      ? `- 临时产物统一写入 \`${paths.logsDir}/{NNN-issue-key}/\`：`
+      : `- ${CONSTRAINTS_BLOCK}`
+  const resumeLine =
+    paths !== undefined
+      ? `- 断点续跑指针：\`${paths.logsDir}/resume.md\`（进度三要素：已完成步骤/当前步骤/下一步；重入派发时先读指针续跑，不零上下文重述）。`
+      : `- ${RESUME_POINTER_BLOCK}`
+  return `## 核心纪律（一切类型与复杂度恒定）
 
-### 1. 工作方式
-- 动手前先规划：复述任务目标，确定方案与改动范围，用 todo_write 建立待办清单（细则见第 2 节）。
-- 只做任务要求的事：不扩大改动面，不做顺带的重构与美化；琐碎任务压缩分析深度（todo_write 建单不豁免，见第 2 节）。
-- 流程深度随任务复杂度与风险伸缩；拿不准的事项按第 8 节歧义处置，不原地等待。
-
-### 2. todo_write：目标导向的执行骨架
-- 领取任务后的第一步（先于任何探索与改动）：把任务目标与 AC 逐项转成 todo_write 待办清单。
-- 执行中随时对照清单：完成一项更新一项，偏离方向即回到清单。
+### 1. 执行骨架
+- 领取任务后的第一步（先于任何探索与改动）：把任务目标与 AC 逐项转成 todo_write 待办清单；执行中完成一项更新一项，偏离方向即回到清单。
 - 清单全部 completed 后，才允许 submitTask 结算（result=blocked 提前结算除外：未完成项如实保留，不谎报 completed）。
+- 动手前先规划：复述任务目标，确定方案与改动范围；只做任务要求的事——不扩大改动面，不做顺带的重构与美化；琐碎任务压缩分析深度（todo_write 建单不豁免）。
+- 流程深度随任务复杂度与风险伸缩；拿不准的事项按第 7 节歧义处置，不原地等待。
 
-### 3. 高效执行（避免无效动作）
+### 2. 高效执行（避免无效动作）
 ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 
-### 4. 失败处理
+### 3. 失败处理
 - 遇到失败先分类。简单失败（网络超时、缺依赖、单条命令报错、格式问题）：当场修复或重试，同一问题累计最多 3 次（换方案也计入）。
 - 复杂失败（3 次修不好、大范围编译失败、跨文件重构）：停止尝试，以 result=blocked 结算，把失败分类写进 reason。
 - 不反复尝试同一失败方案。
 
-### 5. 产物落盘
-- ${CONSTRAINTS_BLOCK}
-- ${RESUME_POINTER_BLOCK}
-  - 截图（含视觉验收证据）；
-  - 长命令输出与探针工件；
-  - e2e/验收测试的证据票据（trace、error-context、失败摘录）。
-- 结构约定：一个任务一个文件夹，一个事件一个子文件夹。
+### 4. 产物落盘
+${logsLine}
+- 截图（含视觉验收证据）；长命令输出与探针工件；e2e/验收测试的证据票据（trace、error-context、失败摘录）。
+- 结构约定：一个任务一个文件夹，一个事件一个子文件夹；按轮追加不覆盖（细则见目录内 README）。
 - 先落盘再继续：确保证据在手，避免失败后从头复跑。
-- 对话与 summary 中只携带子文件夹路径，不粘贴长输出。
 
-### 6. 如实上报
+### 5. 如实上报
 - 按实测结果报告，绝不伪造门禁或测试证据；门禁布尔值零妥协：false 就是 false。
 - 报告实际发生了什么；每条 AC 判定必须给出证据。
+- 对话与 summary 中只携带子文件夹路径，不粘贴长输出。
+${resumeLine}
 
-### 7. 提交纪律
+### 6. 提交纪律
 - 门禁全部通过、AC 逐项核查完成后，才用 submit-task 技能（submitTask）结算。
 - 只提交与任务相关的文件；范围外的问题写进 summary 后上报，不顺手修改。
 - 任务规格中的 Hard Rules 优先于你的个人判断。
 
-### 8. 歧义处置
+### 7. 歧义处置
 - 低风险假设：声明假设并继续，记入 summary。
 - 重大歧义：以 result=blocked 结算，把问题写进 reason。
 
 **AC 逐项核查不变量**：结算前逐条输出 [AC-N] PASS/FAIL 与证据；任何裁剪都不得省略此项。`
+}
+
+/** 领取瞬间已知的路径填充（claim 合成期注入——logs 绝对路径；缺席 = 相对占位形态） */
+export interface PersonaPaths {
+  /** 任务产物目录（<任务库目录>/logs/<slug>/<localId>——绝对路径，claim 装配方解析） */
+  readonly logsDir: string
+}
+
+/** 缺省核心段（无路径填充——相对占位形态；单测与既有消费兼容面） */
+export const PERSONA_CORE_SECTION = renderCoreSection()
 
 // ─────────────────────── Coding Strategy（coding 族 ×6 + test-gen ×3） ───────────────────────
 
@@ -102,25 +118,14 @@ export const CODING_STRATEGY_TYPES: readonly TaskType[] = [
   'test-gen-scripts',
 ]
 
-/** Coding Strategy 段（域内容承载面：TDD 推崇 + 外科手术式精确修改 + 模块边界 + 检索先行 + 测试分层） */
+/** Coding Strategy 段（域内容承载面：TDD 推崇 + 外科手术式精确修改 + 模块边界 + 测试分层）。
+ *  TDD 一切复杂度常驻（用户裁决：统一采用 TDD，忽略任务复杂度）——低级裁剪只剩工作流与门禁分级。 */
 export const CODING_STRATEGY_SECTION = `### Coding Strategy
 - 推崇 TDD：先从 AC 逐项提取测试要求；RED → 先写失败测试，GREEN → 最小实现，REFACTOR → 保持测试绿的清理。
 - 外科手术式修改：只改任务点名的代码——首次编辑前先用 grep/glob 收齐全部改动点清单；禁止边搜边改。
 - 模块边界：尊重既有模块/包的职责划分；除非任务确有必要，不新增模块/包；新代码落在改动点所属的既有包内。
 - 红线：业务代码不得混入公共包/框架性代码——发现既有越界只记录上报，不顺手迁移。
 - 测试分层：非 gate 的代码触及类任务只跑本类质量门禁 + 定向测试；全仓测试套件属于 gate 任务的结算面，不在此处。`
-
-/** low 级 Coding Strategy（SC2：逐需求 TDD 段裁剪——外科手术式 + 模块边界 + 测试分层保留） */
-export const CODING_STRATEGY_SECTION_LOW = `### Coding Strategy
-- 外科手术式修改：只改任务点名的代码——首次编辑前先用 grep/glob 收齐全部改动点清单；禁止边搜边改。
-- 模块边界：尊重既有模块/包的职责划分；除非任务确有必要，不新增模块/包；新代码落在改动点所属的既有包内。
-- 红线：业务代码不得混入公共包/框架性代码——发现既有越界只记录上报，不顺手迁移。
-- 测试分层：非 gate 的代码触及类任务只跑本类质量门禁 + 定向测试；全仓测试套件属于 gate 任务的结算面，不在此处。`
-
-/** 按复杂度取 Coding Strategy（low 裁 TDD 逐需求句——SC2 回归锚） */
-export function codingStrategyFor(complexity: PersonaComplexity): string {
-  return complexity === 'low' ? CODING_STRATEGY_SECTION_LOW : CODING_STRATEGY_SECTION
-}
 
 /** Testing Strategy 段（test-gen 族 ×3 专属——契约+旅程双轨方法论；红时不改被测代码） */
 export const TESTING_STRATEGY_SECTION = `### Testing Strategy
@@ -318,13 +323,14 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
 /**
  * worker persona 合成（纯函数零 IO）：身份行 + 恒定核心段 + 变体细节 + 结算一句。
  * 核心段一切类型/分级在场；变体按 20 类型表路由（doc.fix 无变体——unknown 抛错）；
- * low 裁剪触及变体段工作流、门禁分级与 Coding Strategy 的 TDD 逐需求句（SC2）。
+ * Coding/Testing Strategy 一切复杂度常驻（TDD 统一裁决——low 裁剪只剩工作流与门禁分级）。
+ * paths 在场时核心段产物落盘/续跑指针两行填充绝对路径（claim 领取瞬间注入）。
  * 产出文本禁裸 `{{`（上游严格插值防护——防御面在出口断言，违者抛错而非放行）。
  * 任务元数据（类型/复杂度标签）不入 persona——由任务级简报承载；persona 只
- * 出现路由结果（门禁裁剪事实/工作流步数）。typeType 与 complexity 均运行期校验，违者抛错。
+ * 出现路由结果（门禁裁剪事实/工作流步数）。taskType 与 complexity 均运行期校验，违者抛错。
  * 结算面从简：只指 submit-task 技能，记录字段细则归该技能文档。
  */
-export function composePersona(taskType: TaskType, complexity: PersonaComplexity): string {
+export function composePersona(taskType: TaskType, complexity: PersonaComplexity, paths?: PersonaPaths): string {
   if (!TASK_TYPES.includes(taskType)) {
     throw new Error(`composePersona: unknown task type: ${String(taskType)}`)
   }
@@ -334,9 +340,9 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
   const variant = PERSONA_VARIANTS[taskType]
   const sections = [
     `你是${/^[A-Za-z]/.test(variant.expert.title) ? ' ' : ''}${variant.expert.title}。行事信条：${variant.expert.creed}。`,
-    PERSONA_CORE_SECTION,
+    renderCoreSection(paths),
     ...(CODING_STRATEGY_TYPES.includes(taskType)
-      ? [taskType.startsWith('test-gen') ? TESTING_STRATEGY_SECTION : codingStrategyFor(complexity)]
+      ? [taskType.startsWith('test-gen') ? TESTING_STRATEGY_SECTION : CODING_STRATEGY_SECTION]
       : []),
     variant.workflow(complexity),
     `## 质量门禁\n${variant.gate(complexity)}`,

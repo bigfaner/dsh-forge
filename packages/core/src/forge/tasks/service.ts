@@ -12,6 +12,7 @@ import type {
   AddTaskResult,
   ClaimTaskInput,
   ClaimTaskResult,
+  ContainerRef,
   ForgeTasksService,
   ListTasksQuery,
   QueryTaskInput,
@@ -59,6 +60,10 @@ export interface TasksServiceDeps {
   readonly gitExec?: GitExecFile
   /** 续跑指针探测（worker-exec-evidence-replay 1.3——可选，缺席 = brief 零 EVIDENCE 行） */
   readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
+  /** 任务产物目录解析（worker-lean-execution 追加轮——可选，缺席 = persona 相对占位形态） */
+  readonly resolveLogsDir?: (projectId: string, slug: string, localId: string) => string | undefined
+  /** worker 容器上下文块渲染（worker-lean-execution 追加轮——可选，缺席/空串 = persona 零追加） */
+  readonly resolveWorkerContext?: (projectId: string, source: ContainerRef) => string
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */

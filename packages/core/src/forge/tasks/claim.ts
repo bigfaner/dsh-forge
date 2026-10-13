@@ -270,8 +270,17 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     const digest = dispatchDigest(dispatchPrompt)
 
     // ③b worker persona 合成（S2a 组成矩阵——agent 级人格面；与 dispatchPrompt 任务面分层，
-    //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）
-    const persona = composePersona(row.task_type as TaskType, (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1])
+    //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
+    //     追加轮：paths（logs 绝对路径——与 EVIDENCE 指针同锚）填充产物落盘/续跑指针行；
+    //     容器上下文块（WORKSPACE/容器目录树——worker 独享）非空追加尾部；缺席依赖 = 形态兼容。
+    const logsDir = deps.resolveLogsDir?.(input.projectId, row.slug, row.local_id)
+    let persona = composePersona(
+      row.task_type as TaskType,
+      (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1],
+      logsDir !== undefined ? { logsDir } : undefined,
+    )
+    const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug })
+    if (workerContext !== undefined && workerContext !== '') persona += `\n\n${workerContext}`
 
     // ④ 转移（pending/blocked → in_progress）或幂等重入（in_progress 无状态转移，C1）
     const reclaimed = row.task_status === 'in_progress'

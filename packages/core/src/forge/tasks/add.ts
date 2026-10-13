@@ -21,6 +21,7 @@ import type Database from 'better-sqlite3'
 import type {
   AddTaskInput,
   AddTaskResult,
+  ContainerRef,
   DocKind,
   FeatureStatus,
   Mode,
@@ -51,6 +52,16 @@ export interface TasksVerbDeps {
    * 行；核心零 IO 纪律下由装配方注入 FS 读侧，缺席/undefined = 零指针行，首跑形态兼容）。
    */
   readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
+  /**
+   * 任务产物目录解析（worker-lean-execution 追加轮——claim 领取瞬间填充 persona 产物落盘/
+   * 续跑指针绝对路径；缺席/undefined = 相对占位形态兼容）。
+   */
+  readonly resolveLogsDir?: (projectId: string, slug: string, localId: string) => string | undefined
+  /**
+   * worker 容器上下文块（worker-lean-execution 追加轮——WORKSPACE/容器目录树，claim 领取
+   * 瞬间渲染追加 persona 尾部；缺席/空串 = 零追加，形态兼容）。
+   */
+  readonly resolveWorkerContext?: (projectId: string, source: ContainerRef) => string
 }
 
 /** fix 链深上限（C6 用户裁决：≤6，较老 forge Max nesting 3 放宽） */

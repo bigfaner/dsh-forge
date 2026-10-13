@@ -12,7 +12,7 @@
 // inject 依赖声明（仅 workspaceRegistry 可用时加载）；返回句柄 disposer（fiber 卸载时关库，
 // 单句柄生命周期）。core 不依赖 cordis 编译期包：ctx 以结构化最小面（CoreContextFace）消费，
 // 运行期由 profile 装配注入；reflect.provide 即服务注册官方面（dsh Service 基类同径）。
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
@@ -29,6 +29,7 @@ import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
 import { readEvidencePointer } from './forge/tasks/evidence-pointer.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
+import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
 import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
@@ -148,6 +149,12 @@ const corePlugin: CorePlugin = Object.assign(
           // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 零指针行）
           resolveEvidencePointer: (projectId, slug, localId) =>
             readEvidencePointer(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), slug, localId),
+          // worker-lean-execution 追加轮：产物目录解析（logs 绝对路径——与续跑指针同锚）+
+          // worker 容器上下文块（WORKSPACE/容器目录树——persona 通道 worker 独享；fail-soft）
+          resolveLogsDir: (projectId, slug, localId) =>
+            join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), 'logs', slug, localId),
+          resolveWorkerContext: (projectId, source) =>
+            renderWorkerContext({ wsPath: routing.wsPath(projectId), forgeDir: routing.forgeDir(projectId), source }),
         }),
       )
       ctx.reflect.provide(

@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import {
   ANTI_CHURN_ANCHORS,
-  codingStrategyFor,
+  CODING_STRATEGY_SECTION,
   CODING_STRATEGY_TYPES,
   composePersona,
   PERSONA_CORE_SECTION,
@@ -21,16 +21,15 @@ import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
 const COMPLEXITIES: readonly PersonaComplexity[] = ['low', 'medium', 'high']
 
-/** 核心段①-⑧锚（每节标题——穷尽断言的稳定基面；段序 = 执行动线：规划→执行→异常→证据→上报→收口） */
+/** 核心段①-⑦锚（每节标题——穷尽断言的稳定基面；段序 = 执行动线：规划→执行→异常→证据→上报→收口） */
 const CORE_SECTION_ANCHORS = [
-  '### 1. 工作方式',
-  '### 2. todo_write：目标导向的执行骨架',
-  '### 3. 高效执行（避免无效动作）',
-  '### 4. 失败处理',
-  '### 5. 产物落盘',
-  '### 6. 如实上报',
-  '### 7. 提交纪律',
-  '### 8. 歧义处置',
+  '### 1. 执行骨架',
+  '### 2. 高效执行（避免无效动作）',
+  '### 3. 失败处理',
+  '### 4. 产物落盘',
+  '### 5. 如实上报',
+  '### 6. 提交纪律',
+  '### 7. 歧义处置',
 ]
 
 describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
@@ -113,6 +112,18 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
+  it('paths 填充（claim 领取瞬间）：logs 绝对路径替换产物落盘/续跑指针两行——相对占位形态退场', () => {
+    const persona = composePersona('coding-feature', 'medium', { logsDir: 'C:\\ws-home\\logs\\f\\2.1' })
+    expect(persona).toContain('`C:\\ws-home\\logs\\f\\2.1/{NNN-issue-key}/`')
+    expect(persona).toContain('`C:\\ws-home\\logs\\f\\2.1/resume.md`')
+    expect(persona).not.toContain(CONSTRAINTS_BLOCK)
+    expect(persona).not.toContain(RESUME_POINTER_BLOCK)
+    // 缺席 paths = 相对占位形态兼容
+    const fallback = composePersona('coding-feature', 'medium')
+    expect(fallback).toContain(CONSTRAINTS_BLOCK)
+    expect(fallback).toContain(RESUME_POINTER_BLOCK)
+  })
+
   it('旧审计条款移除：任务定义/执行记录保护句不再出现（任务内容与记录已入库）', () => {
     for (const taskType of TASK_TYPES) {
       expect(composePersona(taskType, 'medium')).not.toContain('docs/**/tasks/**')
@@ -133,7 +144,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('Coding Strategy 注入面：coding 族 9 类含段，其余 11 类不含', () => {
+  it('Coding Strategy 注入面：coding 族 9 类含段（一切复杂度常驻），其余 11 类不含', () => {
     expect(CODING_STRATEGY_TYPES).toHaveLength(9)
     for (const taskType of TASK_TYPES) {
       for (const cx of COMPLEXITIES) {
@@ -142,7 +153,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
           if (taskType.startsWith('test-gen')) {
             expect(persona, `${taskType}/${cx}`).toContain(TESTING_STRATEGY_SECTION)
           } else {
-            expect(persona, `${taskType}/${cx}`).toContain(codingStrategyFor(cx))
+            expect(persona, `${taskType}/${cx}`).toContain(CODING_STRATEGY_SECTION)
           }
         } else {
           expect(persona, `${taskType}/${cx}`).not.toContain('### Coding Strategy')
@@ -152,19 +163,13 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('SC2 回归锚：coding 族 low 不含逐需求 TDD 句（红队攻 1），medium/high 含；test-gen 全档注入 Testing Strategy', () => {
+  it('TDD 统一（复杂度豁免废除）：coding 族 low/medium/high 均含逐需求 TDD 句', () => {
     for (const taskType of CODING_STRATEGY_TYPES) {
-      const low = composePersona(taskType, 'low')
-      const high = composePersona(taskType, 'high')
-      if (taskType.startsWith('test-gen')) {
-        expect(low, taskType).toContain('绝不改被测代码')
-        expect(high, taskType).toContain('绝不改被测代码')
-        continue
+      if (taskType.startsWith('test-gen')) continue // test-gen = Testing Strategy（无 TDD 句——方法论正身不同）
+      for (const cx of COMPLEXITIES) {
+        expect(composePersona(taskType, cx), `${taskType}/${cx}`).toContain('先写失败测试')
       }
-      expect(low, taskType).not.toContain('先写失败测试')
-      expect(low, taskType).toContain('外科手术式修改') // 裁 TDD 不裁外科手术式
-      expect(high, taskType).toContain('先写失败测试')
-      expect(high, taskType).not.toContain('绝不改被测代码') // test-gen 专属纪律不回流 coding 族
+      expect(composePersona(taskType, 'high')).not.toContain('绝不改被测代码') // test-gen 专属纪律不回流 coding 族
     }
   })
 

@@ -776,3 +776,51 @@ describe('1.3 重入证据指针透传：claim 领取瞬间探测证据位 → b
     expect(digestRows).toEqual([{ dispatch_digest: expected }])
   })
 })
+
+// ─────────────────── worker-lean-execution 追加轮：persona 路径填充 + 容器上下文块 ───────────────────
+
+describe('persona 领取瞬间填充：logs 绝对路径 + 容器上下文块（worker 独享，主会话零感知）', () => {
+  /** 带 resolveLogsDir + resolveWorkerContext 注入的 claim */
+  function svcWithWorkerCtx(o: { logsDir?: string; context?: string }) {
+    h ??= createTasksHarness()
+    return (input: Parameters<typeof claimTask>[1]) =>
+      claimTask(
+        {
+          store: h!.store,
+          events: h!.events,
+          resolveLogsDir: () => o.logsDir,
+          resolveWorkerContext: () => o.context,
+        },
+        input,
+      )
+  }
+
+  it('logsDir 命中 → persona 产物落盘/续跑指针两行填充绝对路径；相对占位形态退场', async () => {
+    const claim = svcWithWorkerCtx({ logsDir: 'C:\\ws-home\\logs\\f\\1.1' })
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
+    expect(r.persona).toContain('`C:\\ws-home\\logs\\f\\1.1/{NNN-issue-key}/`')
+    expect(r.persona).toContain('`C:\\ws-home\\logs\\f\\1.1/resume.md`')
+    expect(r.persona).not.toContain('logs/{slug}/{task-local-id}/')
+  })
+
+  it('容器上下文块非空 → persona 尾部空行分隔追加；空串/缺席 = 形态兼容（零追加）', async () => {
+    const claim = svcWithWorkerCtx({
+      logsDir: 'C:\\ws-home\\logs\\f\\1.1',
+      context: `WORKSPACE: Z:\\ws\n\nfeature_dir: Z:\\ws\\.forge\\docs\\features\\f/\n└─ prd/`,
+    })
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
+    expect(r.persona.endsWith('└─ prd/')).toBe(true)
+    expect(r.persona).toContain('\n\nWORKSPACE: Z:\\ws')
+    // digest 不受 persona 影响（persona 不入简报——分层面）
+    expect(r.digest).toBe(dispatchDigest(r.dispatchPrompt))
+    // 空串 = 零追加
+    const claimEmpty = svcWithWorkerCtx({})
+    const r2 = await claimEmpty({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's2' })
+    expect(r2.persona).not.toContain('WORKSPACE:')
+    expect(r2.persona).not.toContain('`C:\\ws-home')
+  })
+})
