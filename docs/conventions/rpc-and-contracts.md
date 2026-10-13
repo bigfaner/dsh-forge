@@ -63,3 +63,8 @@ domains: [rpc, contracts, channel, sqlite, service-injection, event, settings]
 
 **Requirement**: worker 默认 LLM 设置存储 = `{userData}/forge-settings.json`（路径经 boot overlay 注 core 行 config——bindingsFile 同型先例）；core 新供 `forgeSettings` 服务单点读写（get/set 单门——UI 设置分区经 RPC 与 dispatchTask 服务注入同门消费）；派发时实时读（改完即生效无重启）；settingsFile 缺席 = 服务降级缺席（六服务形制不动）；reasoning → agentOptions.effort 直映射；cordis 4.0.4 无 '?' 可选 inject——可选消费不走 inject 声明（缺席不阻载）。
 **Source**: feature/dsh-forge-m3-bootstrap-presets TECH-007（tech-design §Interface 1·图 11·§关键技术决策 / packages/core/src/forge/settings/service.ts）
+
+### TECH-rpc-010: tool 面 schema additionalProperties 布尔形限制
+**Requirement**: 插件工具面 schema（parameters 与 output.schema 全节点深走）additionalProperties 只许布尔形或缺席——宿主引擎子集校验器拒对象形（`{ type: ... }`），违例 = 插件注册即拒、新建会话（agent-preset/invalid）与 resume（gateway/internal）全炸；Record 形字段改闭集显式 properties（单源常量派生，如 TASK_STATUSES）+ `additionalProperties: false`。plugin.test.ts 宿主子集 walker 测试钉住（4a699518）。
+**Scope**: [CROSS]
+**Source**: /learn entry 2026-10-14
