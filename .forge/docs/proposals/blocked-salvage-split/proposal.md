@@ -48,6 +48,15 @@ flowchart TB
 - 依赖 A 的结算协议（commit hash 字段）作为进展信号。
 - 验收：driver 单测——无信号 blocked 即升级（阶梯零调用）；有 commit 正常入阶梯。
 
+### D · 声明式继任 + 源任务核实-only 终局（coding-feature，用户裁决 2026-10-13）
+
+- `submitTask` 协议扩展：`result=blocked` 可携带 `successors: [{title, type, taskDesc, ...}]`（≤3 条）——结算动词机械逐条 `addTask`（disc-N 形，携带 source 引用、不阻断）。
+- **源任务核实-only 语义**：声明继任后源任务永不再执行全简报——继任活跃期源保持 blocked；全部继任终态后源自动恢复 pending，但下一轮简报为**核实模式**：只逐条核实 AC（对继任累计交付实测），全绿 → success；有缺 → 声明新继任或再 blocked。
+- 与 B 的关系：声明式继任为一等快径（worker 领取现场声明——信息最全一方决策，零额外模型回合）；B 的处置代理 split-remainder 降为回退径（worker 未声明继任时阶梯兜底）。
+- 三重边界守「不无限追加」：单结算 ≤3 条（新）＋ 链深 ≤6（既有硬拒）＋ 同源同型活跃去重（既有复用）。
+- 触点：`packages/plugin-forge/src/tools/submit-task.ts`（协议）+ `packages/core/src/forge/tasks/`（结算动词继任落账 + 源恢复语义）+ `packages/core/src/forge/tasks/prompt/compose.ts`（核实模式简报段）+ submit-task SKILL.md。
+- 验收：successors 机械落账（disc-N、≤3 越界拒）；全继任终态 → 源恢复且简报含核实模式段（零原简报任务体）；核实缺口的再声明走同一协议；三重边界各有负样例。
+
 ## 已定取舍
 
 - 源任务终态 = blocked（不谎报 completed）；deadlock 判词因 pending 继任路径在场不误报。
