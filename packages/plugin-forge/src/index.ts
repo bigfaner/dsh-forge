@@ -33,6 +33,8 @@ import { createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
+import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
+import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
@@ -179,7 +181,30 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 身份载体 ownerSessionId/parent/signal 逐调用绑定，钩子服务面 tasks/spawn 与驱动器
     // 同源同单例；活循环 blocked 无 follow-up 即处置代理真实 spawn）。deps.projectId 缺席
     // ——指令面按敲指令会话 cwd 逐会话解析（LoopStartInput.projectId 覆盖）。
-    const spawn = createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    // spawn 替换缝（worker-exec-evidence-replay fix-1——B 层回放注入面）：装配单例不再
+    // 硬绑定 in-process 真绑定，按「程序化替换缝 > 回放计划（env DSH_FORGE_REPLAY_PLAN
+    // ——e2e 零模型注入）> in-process 默认」三级解析。回放计划 spawn 的 runTool 闭包
+    // 引用六 tool 组（后文装配——派发时点早已就绪；装配序前向引用 = let 惰性解引用），
+    // forge 工具调用经真 handler 执行（submitTask/addTask 落账 actor/session 链与真实
+    // worker 同产品写路径——SC7 会话链断言结构保留）， fabricated 会话上下文：
+    // sessionId = 回放 worker 裸 uuid、cwd = 计划工作区根（绑定表路由 projectId）。
+    let forgeToolsRef: ReturnType<typeof createForgeTools> | undefined
+    const replayPlan = loadReplayPlanFromEnv()
+    const planSpawn: SpawnWorker | undefined =
+      replayPlan !== undefined
+        ? createPlanReplaySpawn(replayPlan, (name, args, sessionId) => {
+            const tools = forgeToolsRef
+            if (tools === undefined) throw new Error('[replay-plan] forge 工具组未装配（装配序违例——runTool 先于 createForgeTools 触达）')
+            const def = (tools as unknown as Record<string, { execute(args: unknown, exec: unknown): Promise<unknown> }>)[name]
+            if (def === undefined || typeof def.execute !== 'function') {
+              throw new Error(`[replay-plan] forge 工具不在面：${name}（终态六员之外——回放面拒绝）`)
+            }
+            return def.execute(args, {
+              agent: { session: { id: sessionId, header: { cwd: replayPlan.workspaceDir } } },
+            })
+          })
+        : undefined
+    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
     // 容器目录解析缝（projectId→workspaceDir 反向解析——incident-log 落盘面，1.11 收口）：
     // 装配期逐绑定项目预热 + 未命中懒解析记忆化（faces.createProjectContainerDirs——解析链
     // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
@@ -251,6 +276,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       spawn,
     })
+    forgeToolsRef = tools // 回放计划 runTool 的执行面回填（见 spawn 替换缝注记）
     // S7 会话投影键注册（run-tasks-host-command——sessionProjections 注册表可选消费，
     // reflect.get 防御读取第五先例）：注册表缺席/异常/非函数面 = 键不注册 fail-soft
     // 不阻载（capability absence = key absence——上游 session-projection 既定语义）。
@@ -422,6 +448,21 @@ export type { ForgeContextFace as PluginContextFace, ForgeToolDefinition } from 
 export { classifyPool, deriveWorkerToolFilter, poolOf, reconcileWorkerReasoning, workerAgentOptionsOf } from './tools/index.js'
 export type { DispatchTaskResult, PoolSnapshot, PoolVerdict, SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './tools/index.js'
 export { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
+export {
+  createPlanReplaySpawn,
+  loadReplayPlanFromEnv,
+  setForgeSpawnOverride,
+  takeForgeSpawnOverride,
+  writeReplayPlan,
+  REPLAY_PLAN_ENV,
+  type PlanAction,
+  type PlanEntry,
+  type PlanFsWriteAction,
+  type PlanGitCommitAction,
+  type PlanToolAction,
+  type PlanToolRunner,
+  type ReplayPlan,
+} from './spawn/seam.js'
 export {
   createReplayDriverSpawn,
   digestOfPrompt,
