@@ -4,6 +4,7 @@
 // main.ts 单行编排的装配逻辑全量锚定于此（~100 行纪律的配套测试面）。
 import { describe, expect, it, vi } from 'vitest'
 import {
+  BUGS_CHANNELS,
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
   FORGE_EVENT_CHANNELS,
@@ -45,7 +46,7 @@ function fakeHost(services: Partial<DshHostServices>) {
 const stub = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as unknown as never
 
 describe('3.1 registerM2Channels · 通道族注册', () => {
-  it('七服务齐备：六族全量注册（tasks 八 + features 五 + proposals 四 + docs 两 + derive 一 + settings 两 = 22 通道）', () => {
+  it('七服务齐备：七族全量注册（tasks 八 + features 五 + proposals 四 + docs 两 + derive 一 + settings 两 + bugs 一 = 23 通道）', () => {
     const { ipcMain, handlers } = fakeIpcMain()
     registerM2Channels(
       createForgeIpc(ipcMain),
@@ -56,6 +57,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         forgeProposals: stub,
         forgeDocs: stub,
         forgeSettings: stub,
+        forgeBugs: stub,
       }),
       () => undefined,
       vi.fn(async () => ''),
@@ -70,11 +72,13 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         ...Object.values(DOCS_CHANNELS),
         PROJECTS_M2_CHANNELS.deriveTaskStoreDir,
         ...Object.values(SETTINGS_CHANNELS),
+        // fix-bug：forge:bugs/list 单通道（Bug 子 tab 列表读面——recordBug/resolveBug 不上 RPC）
+        ...Object.values(BUGS_CHANNELS),
       ]
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(22)
+    expect(handlers).toHaveLength(23)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {
@@ -91,13 +95,14 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
     ).not.toThrow()
     expect(handlers.has(PROJECTS_M2_CHANNELS.deriveTaskStoreDir)).toBe(true)
     expect(handlers.has(TASKS_CHANNELS.list)).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(5) // M2 四域 + M3 设置域缺席各一条（forgeProjects 在场不计）
+    expect(warn).toHaveBeenCalledTimes(6) // M2 四域 + M3 设置域 + bugs 域缺席各一条（forgeProjects 在场不计）
     expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([
       expect.stringContaining('forgeTasks 服务缺席'),
       expect.stringContaining('forgeFeatures 服务缺席'),
       expect.stringContaining('forgeProposals 服务缺席'),
       expect.stringContaining('forgeDocs 服务缺席'),
       expect.stringContaining('forgeSettings 服务缺席'),
+      expect.stringContaining('forgeBugs 服务缺席'),
     ])
   })
 })

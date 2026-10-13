@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
   BrowseKnowledgeService,
+  ForgeBugsService,
   ForgeDocsService,
   ForgeFeaturesService,
   ForgeProposalsService,
@@ -35,6 +36,7 @@ import {
   PROJECTS_M2_SERVICE_METHODS,
   PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
+  BUGS_SERVICE_METHODS,
   SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
   type BridgeFatalMessage,
@@ -88,6 +90,8 @@ export interface DshHostServices {
   forgeDocs: ForgeDocsService
   /** M3 3.8 设置域（Interface 1 M3；settingsFile 注入时 core provide，缺席 = 设置域降级 undefined） */
   forgeSettings: ForgeSettingsService
+  /** fix-bug bug 域（Interface 1 扩池；tasksHome 注入时 core provide，缺席 = bugs 面降级 undefined） */
+  forgeBugs: ForgeBugsService
 }
 
 export interface DshHostHandle {
@@ -236,6 +240,9 @@ export async function bootDshHost(
         : undefined,
       forgeSettings: ready.services.forgeSettings
         ? createBridgeProxy<DshHostServices['forgeSettings']>('forgeSettings', SETTINGS_SERVICE_METHODS, call)
+        : undefined,
+      forgeBugs: ready.services.forgeBugs
+        ? createBridgeProxy<DshHostServices['forgeBugs']>('forgeBugs', BUGS_SERVICE_METHODS, call)
         : undefined,
     },
     onEvent: channel.onEvent,

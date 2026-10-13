@@ -19,6 +19,7 @@ import {
   FORGE_EVENT_CHANNELS,
   type BrowseKnowledgeService,
   type BridgeEventMessage,
+  type ForgeBugsService,
   type ForgeDocsService,
   type ForgeFeaturesService,
   type ForgeProposalsService,
@@ -44,6 +45,7 @@ export type BridgeServiceName =
   | 'forgeProposals'
   | 'forgeDocs'
   | 'forgeSettings'
+  | 'forgeBugs'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
@@ -54,6 +56,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeProposals',
   'forgeDocs',
   'forgeSettings',
+  'forgeBugs',
 ] as const satisfies readonly BridgeServiceName[]
 
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
@@ -223,6 +226,15 @@ export const SETTINGS_SERVICE_METHODS = ['get', 'set'] as const satisfies readon
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeSettingsService 方法在此编译期点名） */
 export type SettingsWhitelistCoverage = AssertNever<Exclude<keyof ForgeSettingsService, (typeof SETTINGS_SERVICE_METHODS)[number]>>
+
+/**
+ * bug 域服务方法白名单（fix-bug——Interface 1 扩池第八服务；桥白名单 = 代理可达面全集锚，
+ * listBugs 单法透传；recordBug/resolveBug 两写径不上 RPC 面）。
+ */
+export const BUGS_SERVICE_METHODS = ['listBugs'] as const satisfies readonly (keyof ForgeBugsService)[]
+
+/** 白名单覆盖完备性（= never：缺席的 ForgeBugsService 方法在此编译期点名） */
+export type BugsWhitelistCoverage = AssertNever<Exclude<keyof ForgeBugsService, (typeof BUGS_SERVICE_METHODS)[number]>>
 
 /**
  * projects 域 M2 扩法白名单（Interface 5 派生行第六法——P1 五法常量零波及，独立锚；

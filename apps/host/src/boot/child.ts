@@ -128,6 +128,8 @@ async function main(): Promise<void> {
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
     // M3 3.8 设置域（settingsFile 缺席时 core 不 provide——独立缝降级，六服务形制不动）
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
+    // fix-bug bug 域（tasksHome 注入时 core provide——缺席 = bugs 面降级）
+    forgeBugs: (servicesFace.get('forgeBugs') as object | undefined) ?? undefined,
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
@@ -144,6 +146,7 @@ async function main(): Promise<void> {
       forgeProposals: services.forgeProposals !== undefined,
       forgeDocs: services.forgeDocs !== undefined,
       forgeSettings: services.forgeSettings !== undefined,
+      forgeBugs: services.forgeBugs !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })

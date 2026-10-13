@@ -11,6 +11,7 @@ import {
   asEventMessage,
   asReadyMessage,
   BRIDGE_SERVICE_NAMES,
+  BUGS_SERVICE_METHODS,
   createBridgeProxy,
   decodeWire,
   dispatchRpc,
@@ -29,6 +30,7 @@ import {
   SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
   type BridgeRpcRequest,
+  type BugsWhitelistCoverage,
   type ChildToMainMessage,
   type DocsWhitelistCoverage,
   type FeaturesWhitelistCoverage,
@@ -170,7 +172,7 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
 })
 
 describe('asReadyMessage（ready 守卫）', () => {
-  it('形状齐备 → ready 消息（url/injections/七服务在场位——Interface 6 六位 + M3 3.8 设置域第七位）', () => {
+  it('形状齐备 → ready 消息（url/injections/八服务在场位——Interface 6 六位 + M3 3.8 设置域第七位 + fix-bug bugs 域第八位）', () => {
     const ready = asReadyMessage({
       type: 'ready',
       url: 'http://127.0.0.1:1/#t',
@@ -183,6 +185,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeProposals: false,
         forgeDocs: true,
         forgeSettings: false,
+        forgeBugs: true,
       },
     })
     expect(ready).toEqual({
@@ -197,12 +200,13 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeProposals: false,
         forgeDocs: true,
         forgeSettings: false,
+        forgeBugs: true,
       },
     })
   })
 
-  it('M2 四域 + M3 设置域在场位缺席任一 → undefined（七位齐备才可作 manifest 面）', () => {
-    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings'] as const) {
+  it('M2 四域 + M3 设置域 + bugs 域在场位缺席任一 → undefined（八位齐备才可作 manifest 面）', () => {
+    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs'] as const) {
       const services = {
         forgeProjects: true,
         forgeKnowledge: true,
@@ -211,6 +215,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeProposals: true,
         forgeDocs: true,
         forgeSettings: true,
+        forgeBugs: true,
         [missing]: undefined,
       }
       expect(asReadyMessage({ type: 'ready', url: 'http://x', injections: [], services })).toBeUndefined()
@@ -237,6 +242,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeProposals: true,
         forgeDocs: true,
         forgeSettings: true,
+        forgeBugs: true,
       },
     } as const
     expect(asReadyMessage({ ...base, tools: ['addTask', 'claimTask'] })?.tools).toEqual(['addTask', 'claimTask'])
@@ -452,6 +458,8 @@ describe('createBridgeProxy（主侧代理）', () => {
     ])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
     expect([...SETTINGS_SERVICE_METHODS]).toEqual(['get', 'set'])
+    // fix-bug：bug 域单读面（listBugs——recordBug/resolveBug 写径不上 RPC）
+    expect([...BUGS_SERVICE_METHODS]).toEqual(['listBugs'])
     expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
     expect([...BRIDGE_SERVICE_NAMES]).toEqual([
       'forgeProjects',
@@ -461,6 +469,7 @@ describe('createBridgeProxy（主侧代理）', () => {
       'forgeProposals',
       'forgeDocs',
       'forgeSettings',
+      'forgeBugs',
     ])
   })
 })
@@ -505,6 +514,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
       forgeProposals: true,
       forgeDocs: true,
       forgeSettings: true,
+      forgeBugs: true,
     }
     expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
     expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
@@ -535,6 +545,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ProposalsWhitelistCoverage)
     assertType<never>(undefined as DocsWhitelistCoverage)
     assertType<never>(undefined as SettingsWhitelistCoverage)
+    assertType<never>(undefined as BugsWhitelistCoverage)
     assertType<never>(undefined as ProjectsM2WhitelistCoverage)
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
@@ -544,7 +555,8 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(SETTINGS_SERVICE_METHODS).toHaveLength(2)
+    expect(BUGS_SERVICE_METHODS).toHaveLength(1) // fix-bug +listBugs
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
-    expect(BRIDGE_SERVICE_NAMES).toHaveLength(7)
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(8)
   })
 })
