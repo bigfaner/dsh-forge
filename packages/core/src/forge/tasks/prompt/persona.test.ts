@@ -234,6 +234,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'COVERAGE=maintain', 'COVERAGE', 'maintain', 'vars_json',
         'grep', 'glob', 'write', 'ls', 'git', 'status', 'diff', 'lint', 'just', 'run-tests',
         'gen-journeys', 'gen-contracts', 'gen-test-scripts', // test-gen 三型装载目标技能名（与 run-tests 同类协议词）
+        'fix-bug', 'recordBug', 'resolveBug', 'unresolved', // coding-fix 强制委托目标技能名 + 两阶段落库工具/终态词（fix-bug 委托）
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
@@ -295,6 +296,18 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(composePersona('coding-cleanup', 'high')).toContain('第 1.5 步扫描附加段')
     expect(composePersona('coding-fix', 'high')).toContain('错误分诊')
     expect(composePersona('coding-fix', 'low')).not.toContain('错误分诊')
+  })
+
+  it('coding-fix 强制 fix-bug 委托（提案 fix-bug 交互面 6，test-run ↔ run-tests 先例形态）：单行委托 + 两阶段落库义务一切分级在场', () => {
+    for (const cx of COMPLEXITIES) {
+      const persona = composePersona('coding-fix', cx)
+      expect(persona, cx).toContain('强制委托 fix-bug 技能')
+      expect(persona, cx).toContain('两阶段落库')
+      expect(persona, cx).toContain('recordBug')
+      expect(persona, cx).toContain('resolveBug')
+    }
+    // 其余 coding 族不携带委托（只改 coding-fix 变体，不外溢）
+    expect(composePersona('coding-feature', 'high')).not.toContain('fix-bug')
   })
 
   it('UI 任务不作特殊处理：coding-feature/enhancement 无 UI 专属锚（核心段 §6 截图通则除外）', () => {

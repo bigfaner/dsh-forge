@@ -200,8 +200,8 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
     gate: (cx) => `${baselineGate(cx)}\nHard Rules 中针对 fix 的范围与命令限制条款，优先于最小化原则。`,
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('coding-fix', '读定义 → 定位 → 修复 → 按质量门禁做定向检查')
-        : '工作流（5 步）：读定义（错误分诊：错误类型/受影响文件/疑似根因）→ SPEC-CODE SCAN → 定位并以失败复现测试钉住根因 → 最小修复 → 按质量门禁做定向检查 + AC 逐项验证。',
+        ? '工作流：读定义 → 定位 → 修复 → 按质量门禁做定向检查（扫描与逐需求段裁剪；AC 逐项核查保留；fix-bug 为强制）——全程强制委托 fix-bug 技能，走同一 TDD 流程并两阶段落库：诊断后 recordBug 登记，提交后/停机后 resolveBug 回填终态（不可修即回填 unresolved 与原因）。'
+        : '工作流（5 步）：读定义（错误分诊：错误类型/受影响文件/疑似根因）→ SPEC-CODE SCAN → 定位并以失败复现测试钉住根因 → 最小修复 → 按质量门禁做定向检查 + AC 逐项验证；全程强制委托 fix-bug 技能，走同一 TDD 流程并两阶段落库：诊断后 recordBug 登记，提交后/停机后 resolveBug 回填终态（不可修即回填 unresolved 与原因）。',
   },
   'test-run': {
     expert: { title: '测试指挥官', creed: '忠实编排与报告——只报告不改产品代码，环境故障原样记录上报' },
