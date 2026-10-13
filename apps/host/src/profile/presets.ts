@@ -5,9 +5,10 @@
 // 预设行 = boot overlay 每启覆盖（用户不可经 UI 改组合）；ui-settings 开关行 = 首启预置
 // 一次性让位用户（template.ts/materialize.ts 面）——两径不混，本模块只涉前者。
 // 目录解析双锚：模块同邻 presets/（vitest src 直读；构建拷贝形态 = dist/profile/presets/
-// ——scripts/copy-preset-assets.mjs 随 pnpm build 落位，assemble host-dist 递归随包）→
-// repo 回退 hostRoot()/src/profile/presets（dev electron 形态：tsc 不拷贝非 TS 资产，
-// dist 邻位缺席而 repo src 在场）。两锚皆缺席（如打包形态未 stage）= undefined fail-soft
+// ——scripts/copy-preset-assets.mjs 随 pnpm build 落位 + dev.mjs electron 拉起前刷新，
+// assemble host-dist 递归随包）→ repo 回退 hostRoot()/src/profile/presets（dev electron
+// 形态兜底：tsc 不拷贝非 TS 资产，dist 邻位缺席时 repo src 在场）。两锚皆缺席（如打包
+// 形态未 stage）= undefined fail-soft
 // （预设面降级不抛断 boot——装配缺口由结构 pin/冒烟显形，同 paths.ts skillsDir 纪律）。
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

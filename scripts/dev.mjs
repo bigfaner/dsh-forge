@@ -84,6 +84,16 @@ setTimeout(() => {
     )
     return
   }
+  // 预设底稿刷新（根治 src→dist 遮蔽）：copy-preset-assets.mjs 只挂 pnpm build，tsc watch
+  // 不拷非 TS 资产——dist 旧副本（历次 build 残留）在 presets.ts 双锚解析里优先于 src，
+  // 改底稿后仅重启 dev 会被旧副本遮蔽。electron 拉起前同步刷新一次，保证本次启动读到
+  // 最新底稿（底稿仅 boot 读一次：改底稿后仍须重启 dev 才进 boot overlay）。
+  const copyPresets = spawnSync(process.execPath, [join(ROOT, 'scripts', 'copy-preset-assets.mjs')], {
+    stdio: 'inherit',
+  })
+  if (copyPresets.status !== 0) {
+    console.error('[dev] copy-preset-assets 失败——electron 将沿 dist 旧副本（若在场）或 src 回退读底稿')
+  }
   const electronEnv = { ...process.env, DSH_FORGE_DEV_PROFILE: 'dev' }
   delete electronEnv.ELECTRON_RUN_AS_NODE
   // 透传附加参数（dev:debug 调试面：--remote-debugging-port=9222 → CDP 外接诊断）
