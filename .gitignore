@@ -73,3 +73,31 @@ Desktop.ini
 
 .cache/
 tmp/
+# Process evidence under .forge/docs — never committed (user ruling 2026-10-10:
+# walkthrough screenshots & captures are archived on disk only; force-add forbidden)
+.forge/docs/**/*.png
+.forge/docs/**/*.jpg
+.forge/docs/**/*.jpeg
+.forge/docs/**/*.webp
+.forge/docs/**/*.gif
+.forge/docs/**/*.mp4
+.forge/docs/**/*.zip
+.forge/docs/**/*.har
+.forge/docs/**/*.trace.zip
+.forge/docs/**/*/walkthrough/
+.vitest/
+.forge/docs/probes/
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/app.js
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/data.js
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/index.html
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/m31.css
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/probe.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/probe2.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/probe3.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/probe4.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/probe5.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/README.md
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/shots-m31.cjs
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/styles.css
+.forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/whale-book-sea-bg.svg
+.forge/docs/proposals/worker-lean-execution/tasks-backup-20261011.md
