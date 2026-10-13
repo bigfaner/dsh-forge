@@ -4,6 +4,7 @@
 // 口径；缺省 = 全库）→ TaskStatsQuery。返回 = total + 八态分布 + unmetPending。
 // 参照 query-task.ts 薄壳模式：参数执行点防御收窄 / callToolFace 路由（typed 错误 → 失败
 // DTO formatErr + tool-error 事件发射）/ formatOk 成功渲染。
+import { TASK_STATUSES } from '@dsh-forge/contracts'
 import type { ContainerKind, TaskStats, TaskStatsQuery } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
@@ -36,7 +37,10 @@ export const TASK_STATS_OUTPUT_SCHEMA = withFailureVariant({
     total: { type: 'number', description: 'Total task count under the scope (whole pool when no source given).' },
     byStatus: {
       type: 'object',
-      additionalProperties: { type: 'number' },
+      // Root cause: 宿主子集校验器 additionalProperties 只认布尔形——4da4fa57 的对象形曾致插件
+      // 注册即拒（会话创建/resume 全炸）。八态闭集显式化（core 零填充分布，labels 单源防漂移）。
+      additionalProperties: false,
+      properties: Object.fromEntries(TASK_STATUSES.map((s) => [s, { type: 'number' }])),
       description: 'Per-status distribution across the eight task statuses (zero counts included).',
     },
     unmetPending: {

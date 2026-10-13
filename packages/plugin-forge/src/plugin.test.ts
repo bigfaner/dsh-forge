@@ -180,6 +180,35 @@ describe('注册面集合 pin（十一 tool：M3 九员 + recordBug/resolveBug �
     dispose()
   })
 
+  it('bug: additionalProperties 对象形逃逸宿主子集校验（taskStats byStatus 曾炸会话创建/resume）', () => {
+    // 宿主引擎 schema 子集校验器：additionalProperties 只认布尔形——对象形（{ type: 'number' }）
+    // 令插件工具面注册即拒（agent-preset/invalid + resume RemoteError：unsupported JSON schema:
+    // schema.oneOf[0].properties.byStatus.additionalProperties must be a boolean）。深走双面钉住。
+    const walk = (node: unknown, path: string, violations: string[]): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child, i) => walk(child, `${path}[${i}]`, violations))
+        return
+      }
+      if (node === null || typeof node !== 'object') return
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'additionalProperties') {
+          if (typeof value !== 'boolean') violations.push(`${path}.additionalProperties`)
+          continue
+        }
+        walk(value, `${path}.${key}`, violations)
+      }
+    }
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx())
+    for (const tool of rt.registeredTools) {
+      const violations: string[] = []
+      walk(tool.parameters, `${tool.name}.parameters`, violations)
+      walk(tool.output.schema, `${tool.name}.output.schema`, violations)
+      expect(violations, `${tool.name} 宿主 schema 子集违规（additionalProperties 须布尔形或缺席）`).toEqual([])
+    }
+    dispose()
+  })
+
   it('tool 名形 pin（fix-19 同锚）：^[a-zA-Z0-9_-]+$（OpenAI 兼容端点强校验名形）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
