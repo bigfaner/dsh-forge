@@ -2,10 +2,15 @@
 // start(spec) → { jobId } 包装 / kind·label·owner 透传 / appendLog → job.append(line,
 // { channel: 'log' }) 单点硬编码（收窄句柄唯一写入口——默认通道 append 与 updateProgress
 // 结构性不可达，F4 通道矩阵唯 log 被模型消费读滤除）/ hooks（cancel + done）恒等交还注册表。
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Project } from '@dsh-forge/contracts'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { DispatchJobsRegistryFace } from './faces.js'
+
+/** 容器目录桩值（平台无关绝对路径——#61：'D:/...' 盘符拼写 POSIX 下为相对路径） */
+const DEMO_CONTAINER_DIR = join(tmpdir(), 'dsh-forge-containers', 'demo@abcd1234')
 
 describe('adaptDispatchJobs（适配层——channel 单点硬编码）', () => {
   it('start 返回 { jobId }（注册表签发 id 包装）；kind/label/owner 透传', () => {
@@ -180,7 +185,7 @@ describe('createProjectContainerDirs（1.11 装配接线收口——反向解析
       deriveTaskStoreDir: async (q: { workspaceDir: string }) => {
         deriveInputs.push(q)
         if (over.deriveThrows === true) throw new Error('derive exploded')
-        return { dir: over.dir ?? 'D:/containers/demo@abcd1234' }
+        return { dir: over.dir ?? DEMO_CONTAINER_DIR }
       },
     }
     return { projects, getCalls, deriveInputs }
@@ -193,7 +198,7 @@ describe('createProjectContainerDirs（1.11 装配接线收口——反向解析
     await flush()
     expect(spy.getCalls).toEqual(['p-1'])
     expect(spy.deriveInputs).toEqual([{ workspaceDir: 'C:\\ws\\demo' }])
-    expect(dirs.resolve('p-1')).toBe('D:/containers/demo@abcd1234')
+    expect(dirs.resolve('p-1')).toBe(DEMO_CONTAINER_DIR)
     expect(spy.getCalls).toEqual(['p-1']) // 记忆命中零二次解析
   })
 
@@ -202,7 +207,7 @@ describe('createProjectContainerDirs（1.11 装配接线收口——反向解析
     const dirs = createProjectContainerDirs(spy.projects)
     expect(dirs.resolve('p-1')).toBeUndefined() // 未命中即时回 undefined（同步落盘径 fail-soft）
     await flush()
-    expect(dirs.resolve('p-1')).toBe('D:/containers/demo@abcd1234')
+    expect(dirs.resolve('p-1')).toBe(DEMO_CONTAINER_DIR)
     dirs.warm(['p-1', 'p-1']) // 已记忆/解析中跳过——幂等
     await flush()
     expect(spy.getCalls).toEqual(['p-1'])

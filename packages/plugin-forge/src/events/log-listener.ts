@@ -10,7 +10,7 @@
 // 不含 dispatchPrompt 全文；logs = agent 面执行运营日志，UI 面状态审计 = feature_records/
 // task_records（DB）——两纪律不混不重复。
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import type { ForgePluginEvent } from '@dsh-forge/contracts'
 import type { ForgeEventBus } from './bus.js'
 
@@ -54,8 +54,9 @@ export interface ForgeLogListenerOptions {
   /** 容器库目录解析：返回 {tasksHome}/{flatten}@{hash8}（事件 → 工作区映射归装配方
    *  闭包承载——本模块零 core import，derive-dir 单源不动）。
    *  3.4 接线增补：undefined = 该事件会话未解析到容器库目录（sink.prepare 未达/
-   *  解析失败）——本行静默丢弃（fail-soft），**绝不回落相对路径**（join('', ...) 会
-   *  以进程 CWD 为根写散落文件——曾致仓库根 logs/ 污染，机械防线） */
+   *  解析失败）——本行静默丢弃（fail-soft），**绝不回落相对路径**（#61：守卫 =
+   *  isAbsolute——'D:/...' 型盘符拼写 POSIX 下为相对路径，join 后以进程 CWD 为根
+   *  写散落文件，曾致仓库根 logs/ 污染与真实盘符根树——单源机械防线） */
   resolveContainerDir(event: ForgePluginEvent): string | undefined
 }
 
@@ -72,7 +73,8 @@ export function createForgeLogListener(options: ForgeLogListenerOptions): ForgeL
       try {
         const line = standardizeEvent(event)
         const containerDir = options.resolveContainerDir(event)
-        if (containerDir === undefined || containerDir === '') return // 未解析会话：丢行不落相对路径
+        // 未解析/非绝对同丢行：相对拼写 join 后以进程 CWD 为根写散落文件（#61——单源机械防线）
+        if (typeof containerDir !== 'string' || !isAbsolute(containerDir)) return
         const file = forgeLogFileOf(containerDir, line.slug)
         mkdirSync(dirname(file), { recursive: true })
         appendFileSync(file, `${JSON.stringify(line)}\n`, 'utf8')

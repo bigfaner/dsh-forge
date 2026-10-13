@@ -4,6 +4,8 @@
 // 旧参删除机械断言）/ AC5 段注册）：临时 Cordis runtime（结构化最小面假宿主，
 // knowledge plugin.test 同型）装配 core 服务桩 + 插件，验证 inject 声明、注册/disposer
 // 全生命周期与 forge:pipeline 段。
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
@@ -12,6 +14,10 @@ import type { ForgeCommandDefinition } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
 import type { ForgePromptSection, ForgeToolDefinition } from './tools/index.js'
+
+/** 容器目录桩值（平台无关绝对路径——#61：'D:/...' 盘符拼写 POSIX 下为相对路径，
+ *  log-listener isAbsolute 守卫丢行；Windows 侧则写真实 D: 盘根。tmpdir 锚定各平台安全） */
+const DEMO_CONTAINER_DIR = join(tmpdir(), 'dsh-forge-containers', 'demo@abcd1234')
 
 /** 临时 runtime：服务表 + 注册捕获 + disposer 记账 */
 class TempRuntime {
@@ -27,7 +33,7 @@ class TempRuntime {
       forgeTasks: {} as ForgeTasksService, // 桩：装配面不触方法
       forgeProposals: {} as ForgeProposalsService,
       forgeProjects: {
-        deriveTaskStoreDir: async () => ({ dir: 'D:/containers/demo@abcd1234' }),
+        deriveTaskStoreDir: async () => ({ dir: DEMO_CONTAINER_DIR }),
       } as Pick<ProjectServiceM2, 'deriveTaskStoreDir'> as ProjectServiceM2,
       tools: {
         register: (d: ForgeToolDefinition) => {
@@ -258,7 +264,7 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
   /** 绑定项目 forgeProjects 桩（getProject 返回给定行/未注册 null） */
   function projectsWith(project: { forgeDir: string } | null) {
     return {
-      deriveTaskStoreDir: async () => ({ dir: 'D:/containers/demo@abcd1234' }),
+      deriveTaskStoreDir: async () => ({ dir: DEMO_CONTAINER_DIR }),
       getProject: async () => project,
     } as Pick<ProjectServiceM2, 'deriveTaskStoreDir' | 'getProject'> as ProjectServiceM2
   }

@@ -333,7 +333,7 @@ describe('readForgeEventLog（JSONL 读回——串联读法载面）', () => {
 
 // ─────────────────────────── 3.4 接线增补：未解析目录 = 丢行不落相对路径 ───────────────────────────
 
-describe('resolveContainerDir 未解析（undefined/空串）——fail-soft 丢行', () => {
+describe('resolveContainerDir 未解析（undefined/空串/非绝对）——fail-soft 丢行', () => {
   it('undefined 与空串两形：零文件写出（绝不以进程 CWD 为根写相对路径）', () => {
     for (const dir of [undefined, '']) {
       const listener = createForgeLogListener({ resolveContainerDir: () => dir })
@@ -342,5 +342,15 @@ describe('resolveContainerDir 未解析（undefined/空串）——fail-soft 丢
       ).not.toThrow()
       expect(existsSync(join(process.cwd(), 'logs', 'c.jsonl'))).toBe(false)
     }
+  })
+
+  it('#61 非绝对路径同丢行：相对拼写连目录都不建（Windows 盘符夹具 D:/... 的 POSIX 形态——曾以 CWD 为根写散落树）', () => {
+    const relative = join('rel-containers', 'demo@abcd1234') // 各平台恒相对拼写
+    const listener = createForgeLogListener({ resolveContainerDir: () => relative })
+    expect(() =>
+      listener.handle({ ts: Date.now(), sessionId: 's', slug: 'c61', type: 'no-ready-task', payload: {} }),
+    ).not.toThrow()
+    expect(existsSync(join(process.cwd(), 'rel-containers'))).toBe(false) // mkdirSync 均不触
+    expect(existsSync(join(process.cwd(), 'logs', 'c61.jsonl'))).toBe(false)
   })
 })
