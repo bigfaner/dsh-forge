@@ -101,7 +101,16 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       expect(persona).toContain('统一写入 {forge.task_logs_dir}/{issue-key}/')
       expect(persona).toContain('{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）')
       expect(persona).toContain('按轮追加、永不覆盖')
-      expect(persona).toContain('断点续跑约束：当遇到阻塞性问题时，把「已完成 / 进行中 / 待办」覆盖写入 {forge.task_logs_dir}/resume.md，仅保留最新状态')
+      expect(persona).toContain('断点续跑约束：当遇到阻塞性问题时')
+      // 三段形 + 次序：先提交过质量门的完成部分（消息带任务键）→ 覆盖写 resume.md 三段 → 结算 blocked
+      expect(persona).toContain('「已完成（含 commit hash）／进行中／待办」')
+      expect(persona).toContain('仅保留最新状态')
+      expect(persona).toContain('git commit（消息带任务键，提交规范按 AGENTS.md，不含过程文件）')
+      const resumeIdx = persona.indexOf('resume.md')
+      const commitIdx = persona.indexOf('先把过质量门的完成部分 git commit')
+      const blockedIdx = persona.indexOf('然后以 result=blocked 结算')
+      expect(commitIdx, '次序①提交在 resume.md 之前').toBeLessThan(resumeIdx)
+      expect(resumeIdx, '次序②resume.md 在结算之前').toBeLessThan(blockedIdx)
     }
   })
 
@@ -239,6 +248,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
         'evidence', 'resume.md', 'xxx', 'login-fail', 'issue-key', 'forge.task_logs_dir', // 追加轮：续跑指针文件名 + 编号子文件夹示例词 + 任务日志变量
+        'commit', 'hash', 'worker', // 打捞三步次序：git commit（消息带任务键）+ 已完成段 commit hash + 接手 worker 续跑
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
         'Contract', 'Journey', 'feature', // test-gen 变体产出物术语（规格/叙事文档/@feature 标签）
       ].map((w) => w.toLowerCase()),

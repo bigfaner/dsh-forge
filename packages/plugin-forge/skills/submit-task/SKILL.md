@@ -74,7 +74,16 @@ reason `git unavailable: <detail>` 结算 `result=blocked`，交给 fix 链或�
 
 `result=blocked`，`reason` 带具体原因，按简报的失败分诊归类（挺过约 3 次内联尝试的
 简单/瞬时问题，或复杂/复发问题——不要循环）。组织方式：你尝试了什么、什么失败了、
-拿什么证据（命令输出摘录、错误文本）。通常紧随其后派生 fix 任务——fix 链协议正本在
+拿什么证据（命令输出摘录、错误文本）。结算按固定三步次序执行：
+
+1. **先提交**——把过质量门的完成部分 git commit（消息带任务键；暂存与提交规范同上
+   「提交规范」节，不含过程文件）；
+2. **再写 resume.md**——把 {forge.task_logs_dir}/resume.md 覆盖写为固定三段——
+   「已完成（含 commit hash）／进行中／待办」，仅保留最新状态（commit hash 供接手
+   worker 从 hash diff 续跑不重做）；
+3. **后结算**——`result=blocked`，`reason` 附 commit hash 与剩余范围描述。
+
+通常紧随其后派生 fix 任务——fix 链协议正本在
 run-tasks 技能中。
 
 修复完成后，其被阻塞的源任务自动恢复——`submitTask` 结果会列出已恢复的任务；无需

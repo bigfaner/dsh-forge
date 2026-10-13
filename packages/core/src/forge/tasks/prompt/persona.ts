@@ -71,7 +71,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 按实测结果报告，绝不伪造门禁或测试证据；门禁布尔值零妥协：false 就是 false。
 - 报告实际发生了什么；每条 AC 判定必须给出证据。
 - 对话与 summary 中只携带子文件夹路径，不粘贴长输出。
-- 断点续跑约束：当遇到阻塞性问题时，把「已完成 / 进行中 / 待办」覆盖写入 {forge.task_logs_dir}/resume.md，仅保留最新状态。
+- 断点续跑约束：当遇到阻塞性问题时，按固定次序三步——①先把过质量门的完成部分 git commit（消息带任务键，提交规范按 AGENTS.md，不含过程文件）；②再把「已完成（含 commit hash）／进行中／待办」覆盖写入 {forge.task_logs_dir}/resume.md，仅保留最新状态（commit hash 供接手 worker 从 hash diff 续跑不重做）；③然后以 result=blocked 结算，附 commit hash 与剩余范围描述。
 
 ### 6. 提交纪律
 - 门禁全部通过、AC 逐项核查完成后，才用 submit-task 技能（submitTask）结算。
