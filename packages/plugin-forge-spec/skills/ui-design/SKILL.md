@@ -19,7 +19,7 @@ description: 从 PRD 的 ui-functions 文档出发产出 UI 设计规格与 HTML
 （`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
 
 本技能拥有的唯一状态层动作：每当本技能**回写 `prd/prd-ui-functions.md`**（第 2 步的
-导航架构回填、第 7 步的 PRD 对账），就重新注册它：
+导航架构回填、第 7 步的 PRD 对账），就重新注册它。回写内容含 mermaid 图时：图写完 → `validateMermaid` 自检 → 再重新注册：
 
 ```
 upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",

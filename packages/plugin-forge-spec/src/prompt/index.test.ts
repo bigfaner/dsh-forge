@@ -16,6 +16,8 @@ describe('forge:spec 系统提示段', () => {
     // 文档径 → upsertFeatureDoc（登记即推进·单调只进）
     expect(text).toContain('upsertFeatureDoc')
     expect(text).toContain('monotonic')
+    // 图自检可用性提示 → validateMermaid（消费闭环：图写完 → 自检 → 注册）
+    expect(text).toContain('validateMermaid')
     // 任务径 → addTask + registerFeature（显式补链正门·成链内聚不重复）
     expect(text).toContain('registerFeature')
     expect(text).toContain('addTask')

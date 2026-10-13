@@ -29,6 +29,7 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "prd-spec", rel_path: "docs
 ```
 
 先写文件再注册（或先注册后立刻补写——行可能短暂悬空，但绝不留下未注册的产出文档）。
+含 mermaid 图的文档自检纪律：图写完 → `validateMermaid` 自检 → 再 `upsertFeatureDoc` 注册。
 没有 manifest 也没有索引要维护——状态层已取代二者。
 
 <HARD-GATE>

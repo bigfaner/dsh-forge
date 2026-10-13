@@ -22,7 +22,7 @@ export function renderForgeSpecSection(): string {
     'Specification work in this workspace is state-backed: every feature keeps its phase, registered documents, and task graph in the per-workspace state layer. Documents on disk are artifacts; the state layer is the source of truth for what exists and where the chain stands. Never edit that state by hand — it changes only through the forge verbs.',
     '',
     'Spec artifacts go through the tools, one path per artifact kind:',
-    '1. Documents (PRD, user stories, UI functions, tech design, ER diagram, SQL schema, page map): write the file, then register it with upsertFeatureDoc so the feature phase advances. Registering is monotonic — a phase never regresses.',
+    '1. Documents (PRD, user stories, UI functions, tech design, ER diagram, SQL schema, page map): write the file, then register it with upsertFeatureDoc so the feature phase advances. Registering is monotonic — a phase never regresses. When a document contains mermaid diagrams, validateMermaid is available: self-check the diagrams before registering.',
     '2. Task breakdown: register the feature itself with registerFeature when linking explicitly (the accepted-expedition chain registers automatically; do not duplicate it), then create tasks with addTask against that feature container.',
     '3. Diagnostics: validate the feature container with validateFeatureTasks after breakdown, or when execution seems stuck; every reported violation names the offending task key so the fix can go straight to it.',
     '',

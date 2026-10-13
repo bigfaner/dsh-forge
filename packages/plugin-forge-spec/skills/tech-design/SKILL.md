@@ -24,7 +24,8 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工
 重注册——见 forge:spec 系统提示段；注册推进相位至 `design`）。路径按 `<slug>`
 feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段
-「文档位置/目录树」。
+「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →
+再 `upsertFeatureDoc` 注册。
 
 | 工件 | 注册方式 |
 |---|---|
