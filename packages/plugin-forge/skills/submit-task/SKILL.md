@@ -45,7 +45,8 @@ summary——所以本技能讲的是工具无法替你做的判断：那些字�
 1. `submitTask` 前 **todo 全部 `completed`**——提交时不允许残留未关闭的 todo
    （两步以内的琐碎任务可整体跳过 todo 纪律）。
 2. 应用工件约定：截图、超长命令输出、探针产物 →
-   `logs/<slug>/<taskKey>/<seq>-<event-type>/`（每任务一目录、每事件一子目录）——记录
+   `logs/{slug}/{task-local-id}/{NNN-issue-key}/`（工作区派生目录下；每任务一目录、
+   每事件一子目录，NNN 三位序号按轮追加命名、永不覆盖；细则见该证据目录内 README）——记录
    的叙述部分（summary/证据/notes）**只写子目录路径**，绝不粘贴大段内容。
 3. `TASK_ID` 形如 `slug/local_id`——按斜杠拆开填入两个定位字段。
 4. 简报列出类型族记录字段时如实填写（doc 族：`referencedDocs` / `reviewStatus` /

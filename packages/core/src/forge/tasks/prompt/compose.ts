@@ -116,6 +116,16 @@ export interface DispatchPromptInput {
   surfaceType?: string
 }
 
+// ─────────────────────────── 统一证据路径约束块（worker-exec-evidence-replay Solution①） ───────────────────────────
+
+/**
+ * 证据路径约束块（worker 系统提示词硬约定——全 worker 生效，不靠任务书/技能各自携带）：
+ * 单行路径模板（容量风险 #4 缓解），细则外链到证据目录内 README。
+ * 落盘侧对应实现：plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
+ */
+export const CONSTRAINTS_BLOCK =
+  '证据落盘约束：一切跑批/证据产物统一写入 `logs/{slug}/{task-local-id}/{NNN-issue-key}/`（工作区派生目录下；NNN 三位序号按轮追加命名、永不覆盖——失败轮日志在盘可考；细则见该证据目录内 README）。'
+
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
 
 /** BLOCKERS 快照行值：`2.1 completed; 1.gate skipped`（前置自然键 + 当前状态——同 feature 故 localId 即识别） */

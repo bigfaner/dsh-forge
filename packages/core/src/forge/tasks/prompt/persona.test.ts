@@ -17,6 +17,7 @@ import {
   TESTING_STRATEGY_SECTION,
   type PersonaComplexity,
 } from './persona.js'
+import { CONSTRAINTS_BLOCK } from './compose.js'
 
 const COMPLEXITIES: readonly PersonaComplexity[] = ['low', 'medium', 'high']
 
@@ -48,7 +49,8 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
           expect(persona, `${taskType}/${cx} missing execution anchor`).toContain(anchor)
         }
         expect(persona).toContain('AC 逐项核查不变量')
-        expect(persona).toContain('logs/<slug>/<taskKey>/')
+        expect(persona).toContain('logs/{slug}/{task-local-id}/{NNN-issue-key}/')
+        expect(persona).toContain(CONSTRAINTS_BLOCK)
       }
     }
   })
@@ -90,6 +92,16 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       expect(persona).toContain('e2e/验收测试的证据票据（trace、error-context、失败摘录）')
       expect(persona).toContain('先落盘再继续')
       expect(persona).toContain('一个任务一个文件夹，一个事件一个子文件夹')
+    }
+  })
+
+  it('统一证据路径约束块（worker-exec-evidence-replay S①）：单行模板 + 按轮追加不覆盖 + 细则外链，恒定在场', () => {
+    expect(CONSTRAINTS_BLOCK).not.toContain('\n')
+    expect(CONSTRAINTS_BLOCK).toContain('logs/{slug}/{task-local-id}/{NNN-issue-key}/')
+    expect(CONSTRAINTS_BLOCK).toContain('永不覆盖')
+    expect(CONSTRAINTS_BLOCK).toContain('README')
+    for (const taskType of TASK_TYPES) {
+      expect(composePersona(taskType, 'low')).toContain('按轮追加')
     }
   })
 
@@ -229,7 +241,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'grep', 'glob', 'write', 'ls', 'git', 'status', 'diff', 'lint', 'just', 'run-tests',
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
-        'testsPassed', 'testsFailed', 'coverage',
+        'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
       ].map((w) => w.toLowerCase()),
     )

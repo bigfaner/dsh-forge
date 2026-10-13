@@ -10,7 +10,8 @@
 // 文案语言裁决（2026-10-12）：除术语（todo_write/submitTask/TDD/SPEC-CODE SCAN/AC/
 // result=blocked/COVERAGE=maintain/AGENTS.md 等）外一律中文；行文统一祈使句分点风格。
 // 目标导向强制：领取后第一步用 todo_write 建待办清单（§7 单源），全 completed 才
-// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 logs/<slug>/<taskKey>/。
+// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 logs/{slug}/{task-local-id}/{NNN-issue-key}/
+// （约束块单源 = compose.ts CONSTRAINTS_BLOCK，按轮追加不覆盖）。
 // 任务元数据不入 persona：类型/复杂度由任务级简报 TYPE 键承载，persona 只
 // 出现路由**结果**（门禁裁剪事实/工作流步数）。结算面从简：只指 submit-task 技能，
 // 记录字段细则由该技能文档承载，不入 persona。
@@ -18,6 +19,7 @@
 // 恒定不变项：核心段①-⑧一切类型/分级在场；高效执行锚 ×6 恒定；AC 逐项核查
 // 不变量——一切分级裁剪不触碰。persona 文本禁裸 `{{`（上游严格插值防护）。
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
+import { CONSTRAINTS_BLOCK } from './compose.js'
 
 /** 复杂度分级（变体段第二维；low 裁剪只触及变体段工作流/门禁分级，不触及核心段与 AC 核查） */
 export type PersonaComplexity = 'low' | 'medium' | 'high'
@@ -61,7 +63,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 不反复尝试同一失败方案。
 
 ### 5. 产物落盘
-- 所有临时产物写入 \`logs/<slug>/<taskKey>/<seq>-<event-type>/\`：
+- ${CONSTRAINTS_BLOCK}
   - 截图（含视觉验收证据）；
   - 长命令输出与探针工件；
   - e2e/验收测试的证据票据（trace、error-context、失败摘录）。

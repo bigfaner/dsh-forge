@@ -60,6 +60,18 @@ describe('S4 · 事件子文件夹落盘（AC4）', () => {
     expect(readdirSync(join(home, 'logs', 'm2-pipeline', '3.1'))).toEqual(['001-blocked', '002-worker-aborted'])
   })
 
+  it('同事件类型多轮追加：失败轮报错文本在盘可考且前轮未覆盖（SC1 抽查口径）', () => {
+    home = mkdtempSync(join(tmpdir(), 'forge-notify-incident-'))
+    const store = storeWith(home)
+    const first = store.record(blocked({ error: '第一轮失败全文' }))
+    const second = store.record(blocked({ error: '15:33 白跑轮 journey 全灭 exit=1' }))
+    expect(first).toBe('logs/m2-pipeline/3.1/001-blocked/')
+    expect(second).toBe('logs/m2-pipeline/3.1/002-blocked/')
+    const taskDir = join(home, 'logs', 'm2-pipeline', '3.1')
+    expect(readFileSync(join(taskDir, '001-blocked', 'error.log'), 'utf8')).toBe('第一轮失败全文')
+    expect(readFileSync(join(taskDir, '002-blocked', 'error.log'), 'utf8')).toContain('exit=1')
+  })
+
   it('既有序号被外部占用时取 max+1', () => {
     home = mkdtempSync(join(tmpdir(), 'forge-notify-incident-'))
     const taskDir = join(home, 'logs', 'm2-pipeline', '3.1')
