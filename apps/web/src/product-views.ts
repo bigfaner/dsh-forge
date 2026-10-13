@@ -16,8 +16,11 @@
 // 4.7 扩设置分区：ForgeSettingsSection（官方 ui-settings settings.section list 槽占用者
 // ——M3 UF-2 Forge设置 分区；slot 注册归 client 插件，生命周期 = 官方设置对话框）。
 // 1.8 渲染链退役：官方预览径 md mermaid 扩展渲染器随分段链整体退役，sidebar md
-// 预览回归官方 builtin；mermaid 出图改经 DOM 增强器（挂接归 client 插件 1.7）。
+// 预览回归官方 builtin；mermaid 出图改经 DOM 增强器——1.9 经本发布面递达
+// createMermaidEnhancer（@dsh-forge/md-mermaid ./web 出口单源；client 插件 apply 期
+// start、卸载级联 stop——插件 bundle 自含禁跨 chunk import，故经本缝）。
 import type { ComponentType } from 'react'
+import { createMermaidEnhancer } from '@dsh-forge/md-mermaid/web'
 import {
   ForgeBrandMark,
   ForgeBrandName,
@@ -81,6 +84,8 @@ export interface ForgePublishedViews {
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
+  /** md-mermaid DOM 增强器工厂（1.9——@dsh-forge/md-mermaid ./web 出口；插件 apply 期 start/卸载 stop） */
+  readonly createMermaidEnhancer: typeof createMermaidEnhancer
 }
 
 declare global {
@@ -104,4 +109,5 @@ declare global {
   ForgeHeroWorkspacePicker,
   ForgeSettingsSection,
   createWorkbenchBridge,
+  createMermaidEnhancer,
 }

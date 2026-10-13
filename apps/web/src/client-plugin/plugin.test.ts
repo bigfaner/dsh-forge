@@ -255,8 +255,29 @@ function fakeClientCtx(
   return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions }
 }
 
-/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body；m3.1 D5 会话头 pill 退役） */
+/** 假 md-mermaid DOM 增强器（1.9——启停调用记账面；stop 幂等语义镜像真身——重复 stop 不重复记账） */
+function fakeMermaidEnhancer(): { calls: string[]; scan: () => Promise<void>; start: () => void; stop: () => void } {
+  const calls: string[] = []
+  return {
+    calls,
+    scan: async () => {
+      calls.push('scan')
+    },
+    start: () => {
+      calls.push('start')
+    },
+    stop: () => {
+      if (calls[calls.length - 1] !== 'stop') calls.push('stop')
+    },
+  }
+}
+
+/** 最近一次 publishFakeViews 挂的假增强器（1.9 挂接断言消费） */
+let lastFakeEnhancer: ReturnType<typeof fakeMermaidEnhancer> | undefined
+
+/** 假产品视图发布面（fix-25 发布集 + 4.1 dock tab 两 body + 1.9 增强器工厂；m3.1 D5 会话头 pill 退役） */
 function publishFakeViews() {
+  lastFakeEnhancer = fakeMermaidEnhancer()
   const views = {
     ForgeSidebarSlot: 'COMP:sidebar-slot',
     ForgeBrandMark: 'COMP:brand-mark',
@@ -307,6 +328,7 @@ function publishFakeViews() {
       ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = bridgeObj
       return bridgeObj
     },
+    createMermaidEnhancer: () => lastFakeEnhancer!,
   }
   ;(globalThis as { __DSH_FORGE_VIEWS__?: unknown }).__DSH_FORGE_VIEWS__ = views
   return views
@@ -1357,6 +1379,68 @@ describe('fix-33 ⑥ 缝族对称性（桥/词典/标记的发布与撤销）', 
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
+})
+
+describe('DOM 增强器挂接（1.9：md-mermaid enhancer apply 期启动 + 卸载级联回收）', () => {
+  it('apply 期 start 恰一（@dsh-forge/md-mermaid ./web enhancer 经发布面递达——凡 .md-code-block 全 DOM 扫描增强）', () => {
+    publishFakeViews()
+    const { ctx } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect(lastFakeEnhancer!.calls).toEqual(['start'])
+    unpublishViews()
+  })
+
+  it('overlay 洞 dispose = enhancer.stop（插件 fiber 卸载级联回收——start/stop 对称；dispose 幂等不重复记账）', () => {
+    publishFakeViews()
+    const { ctx, injectDisposers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect(lastFakeEnhancer!.calls).toEqual(['start'])
+    const disposeOverlay = injectDisposers.get(SHELL_OVERLAY_SLOT)!
+    disposeOverlay()
+    expect(lastFakeEnhancer!.calls).toEqual(['start', 'stop'])
+    disposeOverlay()
+    expect(lastFakeEnhancer!.calls).toEqual(['start', 'stop'])
+    unpublishViews()
+  })
+
+  it('apply 中途抛错（dock tab 首个 pane.tab inject 失败）= 增强器未及挂接（零 start 零 stop——半成型态零死观察器）', () => {
+    publishFakeViews()
+    const base = fakeClientCtx()
+    const origInject = base.ctx.slots.inject.bind(base.ctx.slots)
+    let first = true
+    const ctx: ForgeClientCtx = {
+      ...base.ctx,
+      slots: {
+        ...base.ctx.slots,
+        inject: (key: string, callback: () => (() => void) | undefined) => {
+          if (first) {
+            first = false
+            throw new Error('inject down')
+          }
+          return origInject(key, callback)
+        },
+      },
+    }
+    expect(() => forgeClientPlugin().apply(ctx)).not.toThrow()
+    expect(lastFakeEnhancer!.calls).toEqual([])
+    unpublishViews()
+  })
+})
+
+it('1.8/1.9 退役收口 pin：dswf-md-mermaid 预览注册链零残留（keyed body / documentPreviews 惰性注册零登记——sidebar md 预览回归官方 builtin 下拉）', () => {
+  publishFakeViews()
+  const { ctx, registers, injectedKeys } = fakeClientCtx()
+  forgeClientPlugin().apply(ctx)
+  expect(
+    registers.filter((r) => r.key.includes('dswf-md-mermaid') || (r.options.key ?? '').includes('dswf-md-mermaid')),
+    '零 dswf-md-mermaid 预览注册（官方 builtin 独占 md 预览）',
+  ).toEqual([])
+  expect(injectedKeys.filter((k) => k.includes('dswf-md-mermaid'))).toEqual([])
+  expect(
+    (globalThis as { __DSH_FORGE_VIEWS__?: Record<string, unknown> }).__DSH_FORGE_VIEWS__?.['ForgeMdPreviewBody'],
+    '发布面零 ForgeMdPreviewBody（1.8 渲染链退役收口）',
+  ).toBeUndefined()
+  unpublishViews()
 })
 
 it('发布面缺席 → 诊断面记录（激活不炸——标记仍在，错误可查；publishedViews 直调仍 fail-loud）', () => {

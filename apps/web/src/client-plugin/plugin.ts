@@ -27,7 +27,7 @@
 //     = source_slug 容器标识 + 结算后任务键后缀——2026-10-09 用户实机报障收口，官方通用
 //     行 fallback 恒显种类词 proposal/feature 不可分辨）。
 //   - [官方预览径 md mermaid 扩展注册链已于 1.8 渲染链退役——sidebar md 预览回归官方
-//     builtin；出图改经 DOM 增强器]。
+//     builtin；出图改经 DOM 增强器（1.9 挂接：apply 期 start，卸载级联 stop）]。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
 // 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
 // keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
@@ -96,9 +96,9 @@ export const OVERVIEW_TAB_KIND = 'dswf-overview'
 export const DOC_TAB_KIND = 'dswf-doc'
 /** 文档 tab 资源地址前缀（dsh-resource:// 资源面——openResource 去重键 = 地址本身；与 dock-tabs DSWF_DOC_ADDRESS_PREFIX 同源 pin） */
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
-// 1.8 渲染链退役：官方预览径 md mermaid 扩展注册链（定义元数据 + keyed body 槽
-// + 惰性两段注册）整体退役，sidebar md 预览回归官方 builtin；mermaid 出图改经 DOM 增强器
-// （挂接归 1.7）。
+// 1.8/1.9 渲染链退役收口：官方预览径 md mermaid 扩展注册链（定义元数据 + keyed body 槽
+// + 惰性两段注册）整体退役，sidebar md 预览回归官方 builtin；mermaid 出图改经 DOM 增强
+// 器（1.9 挂接——apply 期 start，随插件 fiber 卸载级联 stop）。
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 /** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
@@ -618,6 +618,22 @@ export interface ForgeLocaleService {
   bind(ns: string): (key: string) => string
 }
 
+/**
+ * md-mermaid DOM 增强器窄面（@dsh-forge/md-mermaid ./web 出口 enhancer 启停 API 结构
+ * 同型镜像——bundle 自含禁跨 chunk import，真身经发布面递达）。1.9 挂接：apply 期
+ * start（凡 .md-code-block 全 DOM 扫描增强——门控 + parse 确认 + 失败安全降级），
+ * stop 随插件 fiber 卸载级联回收（overlay 洞 dispose + apply catch 两径，同 dock tab
+ * 类型撤销面）。
+ */
+export interface ForgeMermaidEnhancer {
+  /** 全量扫描（MutationObserver 回调经防抖合并后亦走此径） */
+  scan(): Promise<void>
+  /** 开始观察（幂等；随调用方生命周期） */
+  start(): void
+  /** 停止观察并取消在途防抖扫描 */
+  stop(): void
+}
+
 /** 产品视图发布面窄面（product-views.ts 结构同型镜像） */
 export interface ForgeViewsGlobal {
   __DSH_FORGE_VIEWS__?: {
@@ -655,6 +671,8 @@ export interface ForgeViewsGlobal {
       closeTaskDrawer(): void
       openTaskTransition(payload: { taskId: string; toStatus?: string }): void
     }
+    /** md-mermaid DOM 增强器工厂（@dsh-forge/md-mermaid ./web——壳 bundle 单源发布） */
+    createMermaidEnhancer: (options?: Record<string, unknown>) => ForgeMermaidEnhancer
   }
 }
 
@@ -1316,12 +1334,17 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           sidebarRightTabs,
           dockDiagnostics,
         )
-        // 1.8 渲染链退役：md mermaid 预览注册链已随分段链退役（sidebar md 预览回归官方
-        // builtin）；mermaid 出图改经 DOM 增强器（挂接归 1.7）。
+        // 1.9 DOM 增强器挂接：apply 期启动（@dsh-forge/md-mermaid ./web enhancer 经壳
+        // bundle 发布面递达——凡 .md-code-block 全 DOM 扫描增强，门控 + parse 确认 +
+        // 失败安全降级）；stop 归 overlay 洞 dispose 与 apply catch 两径（与 dock tab
+        // 类型撤销面同刻度——插件 fiber 卸载级联回收）。
+        const mermaidEnhancer = views.createMermaidEnhancer()
+        mermaidEnhancer.start()
         const revokeBase = revokeBridgeAndLocale
         revokeBridgeAndLocale = (): void => {
           revokeBase()
           disposeDockTabs()
+          mermaidEnhancer.stop()
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -1337,7 +1360,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 派发任务悬浮面板
         // [m3.1 D6——行点击开弹窗经桥，⟞ 开 worker 子会话经 openWorkerSession]；
         // selectPanel/rightbar/bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
-        // 卸载期顺带撤销桥发布、locale 词典与 dock tab 类型注册 + 清 __DSH_FORGE_CLIENT__
+        // 卸载期顺带撤销桥发布、locale 词典、dock tab 类型注册与 mermaid DOM 增强器观察
+        // + 清 __DSH_FORGE_CLIENT__
         // 激活标记（fix-33 ⑥ 标记卸载不清收口——本插件 fiber 卸载的唯一级联回收面；
         // 缺席期导航 fail-soft no-op）
         registerSlotEntry(clientCtx, SHELL_OVERLAY_SLOT, shellDiagnostics, () => {
@@ -1405,6 +1429,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
             disposeLocale()
             disposeDockTabs()
+            mermaidEnhancer.stop()
           }
         })
       } catch (error) {
