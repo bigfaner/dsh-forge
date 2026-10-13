@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  # packages/plugins/* 为 cordis 插件包居所（首住户 md-mermaid；既有 plugin-forge* 平铺不动）
+  - packages/plugins/*
 
 # Electron 精确 pin 44.0.0（S1 实测指纹门：node-addon-require-builtin 仅接受
 # 43.0.0 / 44.0.0 / 45.0.0-alpha.6——升级 Electron = 等上游扩展指纹清单）。
