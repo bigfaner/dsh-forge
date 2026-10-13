@@ -140,6 +140,15 @@ flowchart LR
 }
 
 /**
+ * forgeDir → docsRoot（平台独立连接：Windows 风格（盘符/UNC）→ `\docs`，POSIX →
+ * `/docs`——dir 已归一去尾分隔符，此处只补一段）。
+ */
+function docsRootOfForgeDir(dir: string): string {
+  const sep = /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') ? '\\' : '/'
+  return `${dir}${sep}docs`
+}
+
+/**
  * 管线段全文（纯胶水：模式归一 → docsRoot 归一 → 选模板 → XML 标签包裹）。
  * vars.forgeDir / vars.mode 由调用点程序化注入实际值（非提示词侧插值），段文本天然
  * 不含裸 {{ 占位；不点名 forge 工具（防「提示词与注册面双源漂移」——工具面由 dsh
@@ -148,7 +157,7 @@ flowchart LR
 export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}): string {
   const mode = modeOf(typeof vars.mode === 'string' ? vars.mode : undefined)
   const dir = typeof vars.forgeDir === 'string' ? vars.forgeDir.trim().replace(/[\\/]+$/, '') : ''
-  const docsRoot = dir === '' ? '' : `${dir}\\docs`
+  const docsRoot = dir === '' ? '' : docsRootOfForgeDir(dir)
   const body = mode === 'blitz' ? blitzSection(docsRoot) : expeditionSection(docsRoot)
   // 标签行独立成 HTML 块：开标签后/闭标签前各留空行，段内 markdown（标题/列表/围栏）
   // 才不被 HTML 块吞掉内联化（GUI 按 markdown 渲染系统提示词）。

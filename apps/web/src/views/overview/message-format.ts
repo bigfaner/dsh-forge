@@ -79,10 +79,14 @@ export interface SessionOpenRequest {
 
 /**
  * 路径归一（flows/add-project form-model normalizeDirPath 同口径镜像——本模块零跨视图
- * import）：`/` → `\` + 去尾分隔符（盘符根 `Z:\` → `Z:`——拼接/比较统一基准）。
+ * import，平台独立）：Windows 风格（盘符/UNC）→ `/` → `\` + 去尾分隔符（盘符根 `Z:\` →
+ * `Z:`）；POSIX（`/` 起首）→ 保持 `/` 分隔仅去尾 `/`（POSIX 文件名可含 `\`，不重写）。
  */
 function normalizeFsPath(path: string): string {
-  return path.replaceAll('/', '\\').replace(/\\+$/, '')
+  if (/^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')) {
+    return path.replaceAll('/', '\\').replace(/\\+$/, '')
+  }
+  return path.replace(/\/+$/, '')
 }
 
 /** 全反斜杠 → 正斜杠（@ 锚正斜杠口径——浏览器安全字符串运算，零 node:path） */
@@ -97,17 +101,18 @@ function startsWithIgnoreCase(haystack: string, prefix: string): boolean {
 
 /**
  * @ 锚文档根推导（纯函数——字符串运算零 node:path）：镜像 flows/add-project form-model
- * normalizeDirPath / isForgeDirExternal 归一口径（`/` → `\`、去尾分隔、大小写不敏感、
- * 段边界敏感）。三分支：仓内（forge = <ws>\…）→ forge 去工作区前缀段 + `/docs`
- * （如 `.forge/docs`）；forge = 工作区根 → `docs`；仓外（注册可仓外）→ 全正斜杠
- * 绝对路径 + `/docs`（@ 引用按工作区根解析需绝对锚）。
+ * normalizeDirPath / isForgeDirExternal 归一口径（Windows `/` → `\`、POSIX 保持 `/`、
+ * 去尾分隔、大小写不敏感、段边界敏感——分隔符双态容忍）。三分支：仓内
+ * （forge = <ws>/…）→ forge 去工作区前缀段 + `/docs`（如 `.forge/docs`）；
+ * forge = 工作区根 → `docs`；仓外（注册可仓外）→ 全正斜杠绝对路径 + `/docs`
+ * （@ 引用按工作区根解析需绝对锚）。
  */
 export function docsRootOf(workspaceDir: string, forgeDir: string): string {
   const ws = normalizeFsPath(workspaceDir)
   const forge = normalizeFsPath(forgeDir)
   if (ws === '' || forge === '') return `${toForwardSlashes(forge)}/docs`
   if (forge.toLowerCase() === ws.toLowerCase()) return 'docs'
-  if (startsWithIgnoreCase(forge, `${ws}\\`)) {
+  if (startsWithIgnoreCase(forge, `${ws}\\`) || startsWithIgnoreCase(forge, `${ws}/`)) {
     return `${toForwardSlashes(forge.slice(ws.length + 1))}/docs`
   }
   return `${toForwardSlashes(forge)}/docs`

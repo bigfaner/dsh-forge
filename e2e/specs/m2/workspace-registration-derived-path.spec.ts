@@ -62,7 +62,7 @@ async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: 
   for (const segment of ['AppData', 'Local', 'Temp']) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -146,7 +146,7 @@ test('@web-e2e @m2 注册派生·Step1b 重选目录：派生行更新（不残�
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
     await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
     await page.locator('.dswf-fb-up').click()
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split(/[\\/]/).at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'ws-b').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -271,7 +271,7 @@ test('@web-e2e @m2 注册派生·Step3b 处置后重选复检通过：恢复正�
     await page.locator('.dswf-rf-sidebtn', { hasText: '重新选择' }).first().click()
     await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
     await page.locator('.dswf-fb-up').click()
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split(/[\\/]/).at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'ws-clean').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -356,7 +356,7 @@ test('@web-e2e @m2 注册派生·Step3d 已注册幂等复用：StateChip + 挂�
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     // 单击选中（双击 = 进入目录——DirectoryBrowser 行语言）→ 选中行呈现「已注册」标记
     await dirRow(page, 'ws-idem').click()
     await expect(dirRow(page, 'ws-idem'), '浏览器行「已注册」标记在场（行级标记判据）').toContainText('已注册')
@@ -415,7 +415,7 @@ test('@web-e2e @m2 注册派生·Step2b 同主体异路径：hash8 消歧各自�
       for (const segment of ['AppData', 'Local', 'Temp']) {
         await enterDir(page, segment)
       }
-      await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+      await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
       if (dir === nestedDir) await enterDir(page, 'aa')
       await dirRow(page, dir === nestedDir ? 'bb' : 'aa-bb').click()
       await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()

@@ -98,7 +98,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split('\\').at(-1) as string)
+    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'demo-proj').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()

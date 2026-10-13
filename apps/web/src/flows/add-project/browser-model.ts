@@ -44,12 +44,22 @@ export interface CrumbSegment {
 }
 
 /**
- * 路径 → 面包屑段（Windows 盘符路径主口径；`/` 与 `\` 均可切——canonical 对账前的
- * 用户态输入同型；UNC 首段 = 服务器名；POSIX 绝对路径兜底）。
+ * 路径 → 面包屑段（平台独立：Windows 盘符路径主口径，`/` 与 `\` 均可切——canonical
+ * 对账前的用户态输入同型；UNC 首段 = 服务器名；POSIX 绝对路径一等分支——`/` 分隔保持）。
  * 跳转目标 = 逐级前缀（盘符根带尾分隔符，与 host path.resolve 口径一致）。
  */
 export function crumbSegments(path: string): CrumbSegment[] {
   if (path === '') return []
+  if (path.startsWith('/')) {
+    // POSIX 绝对路径：/home/user → [home → /home, user → /home/user]
+    const segments: CrumbSegment[] = []
+    let acc = ''
+    for (const part of path.split('/').filter((part) => part !== '')) {
+      acc += `/${part}`
+      segments.push({ name: part, path: acc })
+    }
+    return segments
+  }
   const norm = path.replaceAll('/', '\\')
   const parts = norm.split('\\').filter((part) => part !== '')
   if (parts.length === 0) return []
@@ -76,7 +86,7 @@ export function crumbSegments(path: string): CrumbSegment[] {
     }
     return segments
   }
-  // POSIX 绝对路径兜底：/home/user → [home → /home, user → /home/user]
+  // 相对/非绝对残串兜底：按 POSIX 式 `/` 逐级拼接（浏览器态输入恒绝对，此支仅防御）
   const segments: CrumbSegment[] = [{ name: first, path: `/${first}` }]
   let acc = `/${first}`
   for (const part of rest) {

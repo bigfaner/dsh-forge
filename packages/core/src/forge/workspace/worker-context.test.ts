@@ -4,7 +4,7 @@
 // 任务日志树仅目录在盘时、树渲染（目录优先/码序/深度与条目上限/隐藏项跳过）。
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { renderWorkerContext } from './worker-context.js'
 
@@ -44,15 +44,15 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
         `  ${WS}`,
         '',
         'proposal_dir——提案文档目录：本任务的提案出处（proposal.md 及配套）。',
-        `  ${join(FORGE, 'docs', 'proposals', 'prop-a')}\\`,
+        `  ${join(FORGE, 'docs', 'proposals', 'prop-a')}${sep}`,
         '  ├─ persona-examples.md',
         '  └─ proposal.md',
         '',
         'forge.project_logs_dir——forge 运行日志目录：任务日志存放的根目录（位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。',
-        `  ${LOGS_ROOT}\\`,
+        `  ${LOGS_ROOT}${sep}`,
         '',
         'forge.task_logs_dir——任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件存储在此。',
-        `  ${join(LOGS_ROOT, 'prop-a', 'fix-1')}\\`,
+        `  ${join(LOGS_ROOT, 'prop-a', 'fix-1')}${sep}`,
       ].join('\n'),
     )
     expect(block).not.toContain('feature_dir')
@@ -75,10 +75,10 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
     expect(at('forge.project_logs_dir——')).toBeGreaterThan(at('feature_dir——'))
     expect(at('forge.task_logs_dir——')).toBeGreaterThan(at('forge.project_logs_dir——'))
     expect(block).toContain('feature_dir——特性文档目录：prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。')
-    // 树渲染：目录优先 + 码序 + box-drawing + 目录尾反斜杠
-    expect(block).toContain('  ├─ prd\\\n  │  └─ prd-spec.md')
-    expect(block).toContain('  ├─ design\\\n  │  └─ tech-design.md')
-    expect(block).toContain('  └─ test\\\n     └─ test-plan.md')
+    // 树渲染：目录优先 + 码序 + box-drawing + 目录尾随平台分隔符
+    expect(block).toContain(`  ├─ prd${sep}\n  │  └─ prd-spec.md`)
+    expect(block).toContain(`  ├─ design${sep}\n  │  └─ tech-design.md`)
+    expect(block).toContain(`  └─ test${sep}\n     └─ test-plan.md`)
   })
 
   it('feature 任务且 proposal 目录缺席：省附段；logs 双锚恒出', () => {
@@ -105,7 +105,7 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
       source: { kind: 'proposal', slug: 'ghost' },
     })
     expect(block).toContain('forge.task_logs_dir——任务日志目录：')
-    expect(block).toContain(`  ${join(LOGS_ROOT, 'ghost', '1.1')}\\`)
+    expect(block).toContain(`  ${join(LOGS_ROOT, 'ghost', '1.1')}${sep}`)
     // 任务日志目录未建 → 介绍行 + 路径行后无树行（该段两行收束）
     const taskLogsSection = block.slice(block.indexOf('forge.task_logs_dir——'))
     expect(taskLogsSection.split('\n')).toHaveLength(2)
@@ -123,7 +123,7 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
     })
     // feature 容器缺席 → 无 feature_dir 段；任务日志树在 logs 双锚下展开
     expect(block).not.toContain('feature_dir——')
-    expect(block).toContain('  └─ a\\\n     └─ 1\\\n        ├─ 2\\\n        └─ shallow.md')
+    expect(block).toContain(`  └─ a${sep}\n     └─ 1${sep}\n        ├─ 2${sep}\n        └─ shallow.md`)
     expect(block).not.toContain('deep-file.md') // 第 4 层截断
     expect(block).not.toContain('.hidden')
   })

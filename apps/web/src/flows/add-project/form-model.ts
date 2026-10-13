@@ -16,9 +16,9 @@ export interface FormValues {
   readonly workspaceDir: string
   /** 项目名（自动取文件夹名，可改） */
   readonly name: string
-  /** 文档位置 = forge 目录（默认 `<工作区>\.forge`，可直输/浏览改选） */
+  /** 文档位置 = forge 目录（默认 `<工作区>/.forge`，可直输/浏览改选；分隔符随平台风格） */
   readonly forgeDir: string
-  /** 知识库目录（默认 `<工作区>\.knowledge`，可直输/浏览改选） */
+  /** 知识库目录（默认 `<工作区>/.knowledge`，可直输/浏览改选；分隔符随平台风格） */
   readonly knowledgeDir: string
 }
 
@@ -41,41 +41,60 @@ export interface FormState {
   readonly touched: TouchedFields
 }
 
-/**
- * 路径归一（内部口径）：`/` → `\` + 去尾分隔符（盘符根 `Z:\` → `Z:`，拼接/比较统一基准；
- * 工作区路径来自 host canonical 化，此处仅消解用户态输入的记法差异）。
- */
-export function normalizeDirPath(path: string): string {
-  return path.replaceAll('/', '\\').replace(/\\+$/, '')
+/** Windows 风格路径判定（盘符或 UNC 前缀；POSIX `/` 起首恒 false） */
+export function isWindowsStylePath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
-/** 工作区目录 → 文件夹名（末段；盘符根 → `Z:`，UNC → 末 share 段，POSIX 兜底同型） */
+/**
+ * 路径归一（内部口径，平台独立）：Windows 风格（盘符/UNC）→ `/` → `\` + 去尾分隔符
+ * （盘符根 `Z:\` → `Z:`）；POSIX（`/` 起首）→ 保持 `/` 分隔仅去尾 `/`（POSIX 文件名可含
+ * `\`，不重写）。工作区路径来自 host canonical 化，此处仅消解用户态输入的记法差异；
+ * 后续拼接/比较的分隔符随路径自身风格（见 dirSeparatorOf）。
+ */
+export function normalizeDirPath(path: string): string {
+  if (isWindowsStylePath(path)) {
+    return path.replaceAll('/', '\\').replace(/\\+$/, '')
+  }
+  return path.replace(/\/+$/, '')
+}
+
+/** 目录分隔符（随路径风格：Windows `\` / POSIX `/`——拼接与段边界判定的统一基准；盘符根 `Z:`（归一去尾后）仍按 Windows） */
+export function dirSeparatorOf(path: string): '\\' | '/' {
+  const norm = normalizeDirPath(path)
+  return isWindowsStylePath(path) || /^[A-Za-z]:$/.test(norm) ? '\\' : '/'
+}
+
+/** 工作区目录 → 文件夹名（末段；盘符根 → `Z:`，UNC → 末 share 段，POSIX → 末段） */
 export function folderNameOf(workspaceDir: string): string {
-  const segments = normalizeDirPath(workspaceDir).split('\\').filter((part) => part !== '')
+  const norm = normalizeDirPath(workspaceDir)
+  const segments = norm.split(dirSeparatorOf(workspaceDir)).filter((part) => part !== '')
   return segments.at(-1) ?? ''
 }
 
-/** 工作区目录 → forge 目录默认值（`<工作区>\.forge`） */
+/** 工作区目录 → forge 目录默认值（`<工作区>/.forge`——分隔符随工作区风格） */
 export function deriveForgeDir(workspaceDir: string): string {
-  return `${normalizeDirPath(workspaceDir)}\\.forge`
+  return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.forge`
 }
 
-/** 工作区目录 → 知识库目录默认值（`<工作区>\.knowledge`） */
+/** 工作区目录 → 知识库目录默认值（`<工作区>/.knowledge`——分隔符随工作区风格） */
 export function deriveKnowledgeDir(workspaceDir: string): string {
-  return `${normalizeDirPath(workspaceDir)}\\.knowledge`
+  return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.knowledge`
 }
 
 /**
  * 仓内/仓外推导（AC3）：forge 目录是否位于工作区内（true = 仓外）。
  * 段边界敏感（`Z:\project\ds` 不是 `Z:\project\dsh\.forge` 的容器——修正原型裸前缀
  * slice 口径）+ 大小写不敏感（Windows）+ 尾分隔符不干扰；forge 目录 = 工作区根 → 仓内。
+ * 分隔符随工作区风格（Windows `\` / POSIX `/`）——平台独立。
  */
 export function isForgeDirExternal(workspaceDir: string, forgeDir: string): boolean {
   const ws = normalizeDirPath(workspaceDir).toLowerCase()
   const forge = normalizeDirPath(forgeDir).toLowerCase()
   if (ws === '' || forge === '') return true
   if (forge === ws) return false
-  return !forge.startsWith(`${ws}\\`)
+  const sep = dirSeparatorOf(workspaceDir)
+  return !forge.startsWith(`${ws}${sep}`)
 }
 
 /** 段一选定 → 表单初始态（AC1：回填工作区 + 文件夹名 + 两目录默认值，全字段未手改） */

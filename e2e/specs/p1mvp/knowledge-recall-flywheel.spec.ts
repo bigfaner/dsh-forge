@@ -95,7 +95,7 @@ async function registerViaUi(page: Page, fixtureRoot: string, dirName: string): 
   for (const segment of ['AppData', 'Local', 'Temp']) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()

@@ -6,11 +6,13 @@ import type { BrowserSelection } from './browser-model.js'
 import {
   deriveForgeDir,
   deriveKnowledgeDir,
+  dirSeparatorOf,
   editFieldValue,
   folderNameOf,
   initialFormState,
   isAbsolutePath,
   isForgeDirExternal,
+  normalizeDirPath,
   relinkWorkspace,
   toRegisterInput,
   validateFormValues,
@@ -44,6 +46,25 @@ describe('AC1 回填与默认值（initialFormState / derive）', () => {
     expect(deriveForgeDir('Z:/project/dsh')).toBe('Z:\\project\\dsh\\.forge')
     expect(deriveKnowledgeDir('Z:/project/dsh/')).toBe('Z:\\project\\dsh\\.knowledge')
   })
+
+  it('POSIX（macOS/Linux）：默认值保持 `/` 分隔——不再被改写为 `\\`（平台独立）', () => {
+    expect(deriveForgeDir('/Users/panda/proj')).toBe('/Users/panda/proj/.forge')
+    expect(deriveKnowledgeDir('/Users/panda/proj')).toBe('/Users/panda/proj/.knowledge')
+    expect(deriveForgeDir('/Users/panda/proj/')).toBe('/Users/panda/proj/.forge')
+    expect(normalizeDirPath('/Users/panda/proj//')).toBe('/Users/panda/proj')
+    expect(dirSeparatorOf('/Users/panda/proj')).toBe('/')
+    expect(dirSeparatorOf('Z:\\project')).toBe('\\')
+    // POSIX 表单初始态全链（报告缺陷回归锚：mac 表单默认值曾被拼成 `\Users\…\.forge`
+    // → isAbsolutePath 拒绝 → 表单不可用）
+    const posixState = initialFormState({ path: '/Users/panda/proj', registered: false })
+    expect(posixState.values).toEqual({
+      workspaceDir: '/Users/panda/proj',
+      name: 'proj',
+      forgeDir: '/Users/panda/proj/.forge',
+      knowledgeDir: '/Users/panda/proj/.knowledge',
+    })
+    expect(validateFormValues(posixState.values)).toEqual([])
+  })
 })
 
 describe('AC3 仓内/仓外推导（isForgeDirExternal = forge 目录是否位于工作区内）', () => {
@@ -70,6 +91,13 @@ describe('AC3 仓内/仓外推导（isForgeDirExternal = forge 目录是否位�
   it('工作区为盘符根：Z:\\ 下任意同盘目录均仓内', () => {
     expect(isForgeDirExternal('Z:\\', 'Z:\\.forge')).toBe(false)
     expect(isForgeDirExternal('Z:\\', 'D:\\x')).toBe(true)
+  })
+
+  it('POSIX（macOS/Linux）：`/` 段边界判仓内/仓外——分隔符随路径风格', () => {
+    expect(isForgeDirExternal('/Users/p/proj', '/Users/p/proj/.forge')).toBe(false)
+    expect(isForgeDirExternal('/Users/p/proj', '/opt/forge-store')).toBe(true)
+    expect(isForgeDirExternal('/Users/p/pro', '/Users/p/proj/.forge')).toBe(true) // 段边界
+    expect(isForgeDirExternal('/Users/p/proj/', '/Users/p/proj/.forge/')).toBe(false) // 尾分隔符
   })
 })
 

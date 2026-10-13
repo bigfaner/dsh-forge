@@ -70,12 +70,21 @@ describe('面包屑段（AC1：跳转目标路径正确；Windows 盘符主口�
     ])
   })
 
-  it('盘符根单段；POSIX 绝对路径兜底（跨平台口径）', () => {
+  it('盘符根单段；POSIX 绝对路径一等分支（跨平台口径）', () => {
     expect(crumbSegments('Z:\\')).toEqual([{ name: 'Z:', path: 'Z:\\' }])
     expect(crumbSegments('/home/user')).toEqual([
       { name: 'home', path: '/home' },
       { name: 'user', path: '/home/user' },
     ])
+  })
+
+  it('POSIX（macOS/Linux）：多级路径 `/` 分隔保持（不被改写为 `\\`）', () => {
+    expect(crumbSegments('/Users/panda/proj')).toEqual([
+      { name: 'Users', path: '/Users' },
+      { name: 'panda', path: '/Users/panda' },
+      { name: 'proj', path: '/Users/panda/proj' },
+    ])
+    expect(crumbSegments('/')).toEqual([])
   })
 
   it('UNC 路径：首段 = 服务器名（目标 \\\\server），逐级拼接', () => {

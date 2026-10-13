@@ -11,17 +11,19 @@
 //   WORKSPACE——工作区仓库根：…
 //     <wsPath>
 //   proposal_dir——提案文档目录：…（feature 任务且目录在盘）
-//     <forgeDir>\docs\proposals\<slug>\ + 树
+//     <forgeDir>{sep}docs{sep}proposals{sep}<slug>{sep} + 树
 //   feature_dir——特性文档目录：…（feature 任务）/ proposal 任务则 proposal_dir 为主锚
-//     <forgeDir>\docs\features\<slug>\ + 树
+//     <forgeDir>{sep}docs{sep}features{sep}<slug>{sep} + 树
 //   forge.project_logs_dir——forge 运行日志目录：任务日志存放的根目录（仓库外，不进 git）。
-//     <任务库>\logs
+//     <任务库>{sep}logs
 //   forge.task_logs_dir——任务日志目录：{…} = {forge.project_logs_dir}/{slug}/{local_id}；…
-//     <任务库>\logs\<slug>\<localId>\ + 树（首跑未建 → 仅介绍行 + 路径行）
+//     <任务库>{sep}logs{sep}<slug>{sep}<localId>{sep} + 树（首跑未建 → 仅介绍行 + 路径行）
+//
+// （{sep} = node:path sep——路径行/树目录后缀随平台分隔符；join 拼接本身恒平台原生。）
 //
 // 目录树：深 3 层、条目上限 60、跳 `.` 开头项；目录子项在前、同名码序。
 import { readdirSync, type Dirent } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import type { ContainerRef } from '@dsh-forge/contracts'
 
 /** 目录树深度上限（相对锚点根；超过截断） */
@@ -44,21 +46,21 @@ function renderDirBlock(label: string, abs: string, note: string): string | unde
   } catch {
     return undefined
   }
-  const lines: string[] = [`${label}——${note}`, `  ${abs}\\`]
+  const lines: string[] = [`${label}——${note}`, `  ${abs}${sep}`]
   scanLines(abs, '  ', 1, lines)
   return lines.join('\n')
 }
 
 /** logs 根锚点段：恒出（目录未建也不依赖在盘性——根路径由装配解析给出） */
 function renderLogsRootBlock(abs: string): string {
-  return [`forge.project_logs_dir——${DIR_ROLE_NOTES['forge.project_logs_dir']}`, `  ${abs}\\`].join('\n')
+  return [`forge.project_logs_dir——${DIR_ROLE_NOTES['forge.project_logs_dir']}`, `  ${abs}${sep}`].join('\n')
 }
 
 /** 任务日志锚点段：恒出；树仅任务目录在盘时追加（首跑未建 → 介绍行 + 路径行） */
 function renderTaskLogsBlock(abs: string): string {
   const note =
     '任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件存储在此。'
-  const lines: string[] = [`forge.task_logs_dir——${note}`, `  ${abs}\\`]
+  const lines: string[] = [`forge.task_logs_dir——${note}`, `  ${abs}${sep}`]
   scanLines(abs, '  ', 1, lines)
   return lines.join('\n')
 }
@@ -81,7 +83,7 @@ function scanLines(abs: string, prefix: string, depth: number, lines: string[]):
       return
     }
     const last = i === visible.length - 1
-    lines.push(`${prefix}${last ? '└─ ' : '├─ '}${e.name}${e.isDirectory() ? '\\' : ''}`)
+    lines.push(`${prefix}${last ? '└─ ' : '├─ '}${e.name}${e.isDirectory() ? sep : ''}`)
     if (e.isDirectory()) scanLines(join(abs, e.name), prefix + (last ? '   ' : '│  '), depth + 1, lines)
   })
 }

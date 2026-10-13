@@ -140,7 +140,7 @@ test('@web-e2e @p1mvp hero-control·AC3 「添加项目…」→ 注册流端到
       await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
     }
     for (const segment of ['AppData', 'Local', 'Temp']) await enterDir(segment)
-    await enterDir(fixtureRoot.split('\\').at(-1) as string)
+    await enterDir(fixtureRoot.split(/[\\/]/).at(-1) as string)
     await dirRow('hero-add-new').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()

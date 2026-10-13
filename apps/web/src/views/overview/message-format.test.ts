@@ -257,6 +257,13 @@ describe('docsRootOf（@ 锚文档根推导——三分支 + 容差）', () => {
   it('段边界敏感：`Z:\\project\\ds` 非 `Z:\\project\\dsh\\.forge` 容器（裸前缀不误判仓内）', () => {
     expect(docsRootOf('Z:\\project\\ds', 'Z:\\project\\dsh\\.forge')).toBe('Z:/project/dsh/.forge/docs')
   })
+
+  it('POSIX（macOS/Linux）：仓内段 + 仓外正斜杠路径原样（不被改写为 `\\`）', () => {
+    expect(docsRootOf('/Users/p/proj', '/Users/p/proj/.forge')).toBe('.forge/docs')
+    expect(docsRootOf('/Users/p/proj', '/Users/p/proj')).toBe('docs')
+    expect(docsRootOf('/Users/p/proj', '/opt/forge-external')).toBe('/opt/forge-external/docs')
+    expect(docsRootOf('/Users/p/pro', '/Users/p/proj/.forge')).toBe('/Users/p/proj/.forge/docs') // 段边界
+  })
 })
 
 describe('@ 锚数据驱动（docsRoot 注入——缺席回退 docs 缺省锚）', () => {

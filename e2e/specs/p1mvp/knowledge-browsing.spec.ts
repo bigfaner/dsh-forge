@@ -423,7 +423,7 @@ test('@web-e2e @p1mvp knowledge-browsing·关键词交互回归（fix-5）：向
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible({ timeout: 20_000 })
     for (const segment of ['AppData', 'Local', 'Temp']) await wizardEnterDir(page, segment)
-    await wizardEnterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await wizardEnterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     await wizardDirRow(page, 'kb-demo').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()

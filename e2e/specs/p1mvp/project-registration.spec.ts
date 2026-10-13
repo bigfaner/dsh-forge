@@ -63,7 +63,7 @@ async function openFlowAtFixtureRoot(page: Page, fixtureRoot: string): Promise<v
   for (const segment of ['AppData', 'Local', 'Temp']) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
 }
 
 /** canonical path 扁平化（form-model.flattenWorkspacePath 同口径）——4.3 派生行 RPC 化后
@@ -100,7 +100,7 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'reg-demo').click()
     await expect(confirmBtn).toBeEnabled()
     await confirmBtn.click()
@@ -114,8 +114,8 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     await expect(ws).toHaveValue(targetDir)
     expect(await ws.getAttribute('readonly'), '工作区目录只读回填').not.toBeNull()
     await expect(name).toHaveValue('reg-demo')
-    await expect(forge).toHaveValue(`${targetDir}\\.forge`)
-    await expect(kn).toHaveValue(`${targetDir}\\.knowledge`)
+    await expect(forge).toHaveValue(`${join(targetDir, '.forge')}`)
+    await expect(kn).toHaveValue(`${join(targetDir, '.knowledge')}`)
     expect(await kn.getAttribute('readonly'), '知识库目录可改').toBeNull()
     // fix-7 载体适配（4.3 派生行 RPC 化——unit pin「非 input value」）：任务清单派生 =
     // DerivedTaskStoreRow 单源下发全路径逐字呈现（workspace-registration 同律：core 单源
@@ -222,7 +222,7 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     const row = dirRow(page, 'attach-demo')
     // 注：「已注册」标记源 = 应用库 ws_path 全集（browser-model.ts:90）——挂接态（应用库
     // 零行）标记缺席为设计语义；挂接判定在服务面 ① 预检（registry）
@@ -299,7 +299,7 @@ test('@web-e2e @p1mvp project-registration·Step3 cancel-return-clean-exit：表
     await expect(page.locator(addProjectPhase('repick'))).toBeVisible()
     // repick 起始 = 段一起始目录锚（选定工作区自身）→ 上一级回夹具根再选同目录
     await page.locator('.dswf-fb-up').click()
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split(/[\\/]/).at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'formcancel-demo').click()
     await page.locator('.dswf-fb-confirm').click() // repick 确认钮（选择此文件夹/下一步 两态文案）
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -344,13 +344,13 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
     await dirRow(page, '.forge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
-    await expect(page.locator(rfField('kn')), '浏览选定知识库目录 = 已触碰').toHaveValue(`${dirA}\\.forge`)
+    await expect(page.locator(rfField('kn')), '浏览选定知识库目录 = 已触碰').toHaveValue(`${join(dirA, '.forge')}`)
 
     // 重新选择 → 换选 rederive-b
     await page.getByRole('button', { name: '重新选择' }).click()
     await expect(page.locator(rfBrowsing('workspace'))).toBeVisible()
     await page.locator('.dswf-fb-up').click()
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split('\\').at(-1) as string, { timeout: 15_000 })
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixtureRoot.split(/[\\/]/).at(-1) as string, { timeout: 15_000 })
     await dirRow(page, 'rederive-b').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -358,12 +358,12 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
     // Output：未手改字段随新工作区重构；手改/浏览选定过的字段保留原值不重置
     await expect(page.locator(rfField('ws'))).toHaveValue(dirB)
     await expect(page.locator(rfField('name')), '项目名重取').toHaveValue('rederive-b')
-    await expect(page.locator(rfField('forge')), 'forge 目录默认值重算').toHaveValue(`${dirB}\\.forge`)
+    await expect(page.locator(rfField('forge')), 'forge 目录默认值重算').toHaveValue(`${join(dirB, '.forge')}`)
     // fix-7 载体适配（同 Step3）：重新派生 = 派生行随换选目录更新（core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(dirB))
     await expect(page.locator(dsrOf('ready')), '任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
     expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单重新派生（core 单源同值）').toBe(rederivedExpected)
-    await expect(page.locator(rfField('kn')), '浏览选定过的知识库目录保留原值').toHaveValue(`${dirA}\\.forge`)
+    await expect(page.locator(rfField('kn')), '浏览选定过的知识库目录保留原值').toHaveValue(`${join(dirA, '.forge')}`)
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
@@ -487,7 +487,7 @@ test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项�
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split('\\').at(-1) as string)
+    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'proj-b').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()

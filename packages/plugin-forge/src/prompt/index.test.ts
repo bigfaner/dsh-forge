@@ -159,6 +159,15 @@ describe('文档位置与存储约束（forgeDir 注入）', () => {
     expect(injected).not.toContain('//docs')
   })
 
+  it('POSIX（macOS/Linux）forgeDir：docsRoot 以 `/` 连接（不被拼成 `\\docs`）', () => {
+    const injected = renderForgePipelineSection({ forgeDir: '/Users/p/proj/.forge', mode: 'expedition' })
+    expect(injected).toContain('/Users/p/proj/.forge/docs')
+    expect(injected).not.toContain('/Users/p/proj/.forge\\docs')
+    const trailing = renderForgePipelineSection({ forgeDir: '/Users/p/proj/.forge/' })
+    expect(trailing).toContain('/Users/p/proj/.forge/docs')
+    expect(trailing).not.toContain('//docs')
+  })
+
   it('回退：缺省/空白 forgeDir = 省略文档位置段（渲染不炸、其余段原样）', () => {
     for (const vars of [undefined, { forgeDir: undefined }, { forgeDir: '' }, { forgeDir: '   ' }]) {
       const fallback = renderForgePipelineSection(vars)

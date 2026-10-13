@@ -137,7 +137,7 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split('\\').at(-1) as string)
+    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'demo-proj').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()

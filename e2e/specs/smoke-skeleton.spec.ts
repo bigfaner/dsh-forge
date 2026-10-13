@@ -298,7 +298,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split('\\').at(-1) as string)
+    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     // L760 ① 单击选中 → 按钮解禁
     await dirRow(page, 'dsh-demo').click()
     await expect(confirmBtn).toBeEnabled()
@@ -360,9 +360,9 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     })
     expect(tasksLast, 'L773 任务清单行位于表单最下方').toBe(true)
     // L777 ② forge 目录（文档位置）按工作区构建预填
-    await expect(forge).toHaveValue(`${demoDir}\\.forge`)
+    await expect(forge).toHaveValue(`${join(demoDir, '.forge')}`)
     // L778 ② 知识库目录按工作区构建预填且可改
-    await expect(kn).toHaveValue(`${demoDir}\\.knowledge`)
+    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
     expect(await kn.getAttribute('readonly'), 'L778 知识库目录可改').toBeNull()
     // L779 ② forge 目录字段位于知识库目录之上
     const forgeAboveKn = await page.evaluate(() => {
@@ -398,7 +398,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     // L798 ③ 浏览确认 → 回填知识库目录（浏览面板让位，表单仍在）
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
-    await expect(kn).toHaveValue(`${demoDir}\\.knowledge`)
+    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
 
     // ── ④ 重新选择与联动（smoke ④ 组）──
     // L803 ④ 重新选择 → 回到文件浏览器（载体适配，台账 #175：M0 = 表单内「重新选择」→
@@ -409,7 +409,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await expect(page.getByText('选择工作区目录').first()).toBeVisible()
     // 重选起点 = 当前工作区（dsh-demo）→ 上一级到夹具根 → 选 legacy-app
     await page.locator('.dswf-fb-up').click()
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixture.split('\\').at(-1) as string, {
+    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(fixture.split(/[\\/]/).at(-1) as string, {
       timeout: 15_000,
     })
     await dirRow(page, 'legacy-app').click()
@@ -418,14 +418,14 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     const legacyDir = join(fixture, 'legacy-app')
     // L807 ④ 换选工作区：回填 + 未手改字段重构（forge/项目名）
     await expect(ws).toHaveValue(legacyDir)
-    await expect(forge).toHaveValue(`${legacyDir}\\.forge`)
+    await expect(forge).toHaveValue(`${join(legacyDir, '.forge')}`)
     await expect(name).toHaveValue('legacy-app')
     // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
     await expect(page.locator(dsrOf('ready')), 'L810 任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
     expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), 'L810 任务清单随工作区重新派生').toBe(rederivedExpected)
     // L811 ④ 浏览选定的知识库目录保留（不随工作区重构）
-    await expect(kn).toHaveValue(`${demoDir}\\.knowledge`)
+    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
 
     // 取消干净退出（AC 取消点语义 + L824 元断言）
     await page.keyboard.press('Escape')
@@ -469,7 +469,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split('\\').at(-1) as string)
+    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'legacy-app').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -496,7 +496,7 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     for (const segment of ['AppData', 'Local', 'Temp']) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split('\\').at(-1) as string)
+    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     const legacyRow = page.locator('.dswf-fb-item', { hasText: 'legacy-app' }).first()
     await expect(legacyRow).toHaveAttribute('data-registered')
     await expect(legacyRow.locator('.dswf-fb-reg', { hasText: '已注册' })).toBeVisible()
