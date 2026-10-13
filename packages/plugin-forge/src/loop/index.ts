@@ -26,9 +26,10 @@ export type {
   LoopTriageHook,
   LoopTriageInput,
 } from './driver.js'
-// S1c 第三层人工裁决挂钩（userQuestions 面实装——问询材料纯函数 + fail-soft 投递）
-export { createUserQuestionsEscalation, renderEscalationAsk } from './escalation.js'
+// S1c 第三层人工裁决挂钩（userQuestions 面实装——问询材料纯函数 + fail-soft 投递 + 裁决回执）
+export { askOption, createUserQuestionsEscalation, renderEscalationAsk, renderEscalationReceipt } from './escalation.js'
 export type {
+  AskOutcome,
   EscalationAskFace,
   EscalationAskMaterial,
   EscalationAskOption,

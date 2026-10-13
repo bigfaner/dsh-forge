@@ -1,6 +1,7 @@
 // S1c · 第三层人工裁决挂钩单测（run-tasks-host-command/1.5 验收面）：userQuestions 载荷含
 // reason 原文与处置历史；agent 经 resolveAgent(ownerSessionId) 随载；ask 面故障 fail-soft
-// （裁决问询缺席 = 静默终局，循环终态不被拖垮）。
+// （裁决问询缺席 = 静默终局，循环终态不被拖垮）。裁决回执（2026-10-13 闭环断环修复）：
+// 裁决/取消/投递失败三路回执经 notifyReceipt 送达主会话——人已答必须有回响。
 import { describe, expect, it } from 'vitest'
 import type { TaskSnapshot } from '@dsh-forge/contracts'
 import { createUserQuestionsEscalation, renderEscalationAsk } from './escalation.js'
@@ -202,5 +203,114 @@ describe('userQuestions 投递（ask 面——载荷与 fail-soft）', () => {
       createUserQuestionsEscalation({ ask: built.ask }).escalate(built.escalations[0] as LoopEscalation),
     ).resolves.toBeUndefined()
     expect(built.questions).toHaveLength(0)
+  })
+})
+
+describe('裁决回执（闭环断环修复——人已答必须有回响）', () => {
+  interface ReceiptBuilt {
+    readonly receipts: { sessionId: string; text: string; headline?: string }[]
+    failWith(cause: unknown): void
+    escalate(): Promise<void>
+  }
+
+  /** 回执形态桩：ask 脚本化应答/故障 + notifyReceipt 捕获 */
+  function receiptOf(escalation: LoopEscalation, answer: unknown): ReceiptBuilt {
+    const receipts: { sessionId: string; text: string; headline?: string }[] = []
+    let cause: unknown
+    const ask: EscalationAskFace = {
+      ask: async () => {
+        if (cause !== undefined) throw cause
+        return answer
+      },
+    }
+    return {
+      receipts,
+      failWith: (c: unknown) => {
+        cause = c
+      },
+      escalate: () =>
+        createUserQuestionsEscalation({
+          ask,
+          notifyReceipt: async (sessionId, text, headline) => {
+            receipts.push({ sessionId, text, headline })
+          },
+        }).escalate(escalation),
+    }
+  }
+
+  const BLOCKED: LoopEscalation = {
+    kind: 'blocked-ask-user',
+    ownerSessionId: OWNER,
+    source: SOURCE,
+    task: task(),
+    reason: FULL_REASON,
+    history: [],
+  }
+
+  it('选中「保持现状」→ 回执到达主会话（ownerSessionId 定向，含源行与任务键行）', async () => {
+    const r = receiptOf(BLOCKED, { answers: [{ id: 'forge-dispatch-adjudication', selected: ['保持现状'] }] })
+    await r.escalate()
+    expect(r.receipts).toHaveLength(1)
+    expect(r.receipts[0]?.sessionId).toBe(OWNER)
+    expect(r.receipts[0]?.text).toContain('任务源: feat-x')
+    expect(r.receipts[0]?.text).toContain('任务: feat-x/4.2 导出功能')
+    expect(r.receipts[0]?.text).toContain('已收到「保持现状」')
+    expect(r.receipts[0]?.text).toContain('保持当前状态')
+    expect(r.receipts[0]?.headline).toBe('裁决已收到——保持现状')
+  })
+
+  it('选中「重新派发」→ 回执带 /run-dag-tasks <slug> 指引并明示不自动重启', async () => {
+    const r = receiptOf(BLOCKED, { answers: [{ id: 'forge-dispatch-adjudication', selected: ['重新派发'] }] })
+    await r.escalate()
+    expect(r.receipts[0]?.text).toContain('/run-dag-tasks feat-x')
+    expect(r.receipts[0]?.text).toContain('不自动重启')
+    expect(r.receipts[0]?.headline).toBe('裁决已收到——重新派发')
+  })
+
+  it('取消两形（空应答 / ASK_ABORTED）→ 回执「问询已关闭（未选择）」', async () => {
+    const empty = receiptOf(BLOCKED, { answers: [] })
+    await empty.escalate()
+    expect(empty.receipts[0]?.text).toContain('问询已关闭（未选择）')
+
+    const aborted = receiptOf(BLOCKED, undefined)
+    aborted.failWith(Object.assign(new Error('ask closed by user'), { name: 'AbortError' }))
+    await aborted.escalate()
+    expect(aborted.receipts[0]?.text).toContain('问询已关闭（未选择）')
+  })
+
+  it('通道故障（NO_PROVIDER）→ 回执「投递失败」带原因，escalate 不抛', async () => {
+    const r = receiptOf(BLOCKED, undefined)
+    r.failWith(new Error('NO_PROVIDER'))
+    await expect(r.escalate()).resolves.toBeUndefined()
+    expect(r.receipts[0]?.text).toContain('问询投递失败')
+    expect(r.receipts[0]?.text).toContain('NO_PROVIDER')
+    expect(r.receipts[0]?.headline).toBe('问询投递失败')
+  })
+
+  it('回执面抛错 = warn 降级不拖垮终态（选中形态也必须 resolves）', async () => {
+    let calls = 0
+    const ask: EscalationAskFace = {
+      ask: async () => ({ answers: [{ id: 'forge-dispatch-adjudication', selected: ['保持现状'] }] }),
+    }
+    await expect(
+      createUserQuestionsEscalation({
+        ask,
+        notifyReceipt: async () => {
+          calls += 1
+          throw new Error('channel gone')
+        },
+      }).escalate(BLOCKED),
+    ).resolves.toBeUndefined()
+    expect(calls).toBe(1)
+  })
+
+  it('halted 形（无 task/taskKey）→ 回执无任务行、源行在场', async () => {
+    const r = receiptOf(
+      { kind: 'halted', ownerSessionId: OWNER, source: SOURCE, attempts: 3, reason: 'r' },
+      { answers: [{ id: 'forge-dispatch-adjudication', selected: ['保持现状'] }] },
+    )
+    await r.escalate()
+    expect(r.receipts[0]?.text).toContain('任务源: feat-x')
+    expect(r.receipts[0]?.text).not.toContain('任务:')
   })
 })

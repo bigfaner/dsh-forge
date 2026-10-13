@@ -17,7 +17,8 @@
 import { TASK_STATUS_LABELS } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeTasksService, TaskCard, TaskStatus } from '@dsh-forge/contracts'
 import { forgeCommandLineMessage } from '../faces.js'
-import type { EscalationAskFace, EscalationAskOption, LoopDriver, LoopRecord } from '../loop/index.js'
+import { askOption } from '../loop/index.js'
+import type { EscalationAskFace, LoopDriver, LoopRecord } from '../loop/index.js'
 import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
 import type { ProjectIdResolver } from '../tools/index.js'
 import { NO_ACTIVE_LOOP_TEXT } from './stop-dag-tasks.js'
@@ -113,66 +114,10 @@ async function resolveSourceBySlug(tasks: ForgeTasksService, projectId: string, 
 }
 
 // ─────────────────────────── 问询（与 ask_user_question 同渲染面） ───────────────────────────
-
-/**
- * 单选问询（userQuestions.ask）。收束三路：选中 label / 用户取消（关闭面板、ASK_ABORTED、
- * 空应答）/ 问询通道故障（NO_PROVIDER、异常、非活根 assertLiveRoot 拒绝）——故障与取消
- * 分值回传，调用方分别收口（1.12 三路收敛文案拆分）。signal 透传官方取消语义。
- *
- * agent 活根定向（1.12 定罪修复，2026-10-11）：无 agent 的 ask 走无主 waterfall，
- * 客户端应答器 scopeOf(owner) 取不到会话即拒接 → NO_PROVIDER「面板从不弹出」。
- * 上游契约：携带 agent 时须为注册表精确活根（CALLER_NOT_LIVE/DELEGATED_CALLER 抛错）——
- * 指令 invocation.agent 即当前会话运行时根，天然满足；非活根异常归故障路明确回执，不静默。
- */
-/**
- * 问询收束（1.12 三路收敛文案拆分）：用户取消（ASK_ABORTED/关闭面板/空应答）与问询通道
- * 故障（NO_PROVIDER/异常/非活根）分值——故障回执附「带 slug 直通」指引，取消回执归静默不做。
- * 非活根（CALLER_NOT_LIVE/DELEGATED_CALLER——assertLiveRoot 抛）落在故障路：回执带原因码，
- * 不静默、不降级无 agent 重问（无 agent 问询 = 同一 NO_PROVIDER 静默缺陷，降级无意义）。
- */
-type AskOutcome =
-  | { readonly kind: 'selected'; readonly label: string }
-  | { readonly kind: 'cancelled' }
-  | { readonly kind: 'failed'; readonly reason: string }
-
-/** 用户取消判别（上游 ASK_ABORTED 错误码 / AbortError 名；子串匹配——结构化最小面无类型缝） */
-function isAskAborted(cause: unknown): boolean {
-  const text = cause instanceof Error ? `${cause.name} ${cause.message}` : String(cause)
-  return /ASK_ABORTED|AbortError/i.test(text)
-}
-
-async function askOption(
-  ask: EscalationAskFace,
-  question: { readonly id: string; readonly header: string; readonly question: string; readonly detail?: string; readonly options: readonly EscalationAskOption[] },
-  signal?: AbortSignal,
-  agent?: unknown,
-): Promise<AskOutcome> {
-  let answer: unknown
-  try {
-    answer = await ask.ask({
-      questions: [
-        {
-          id: question.id,
-          header: question.header,
-          question: question.question,
-          ...(question.detail !== undefined ? { detail: question.detail } : {}),
-          options: question.options,
-        },
-      ],
-      ...(agent !== undefined ? { agent } : {}),
-      ...(signal !== undefined ? { signal } : {}),
-    })
-  } catch (cause) {
-    if (isAskAborted(cause)) return { kind: 'cancelled' }
-    const reason = cause instanceof Error ? cause.message : String(cause)
-    return { kind: 'failed', reason: reason === '' ? '问询通道异常' : reason }
-  }
-  const item = (answer as { answers?: readonly { id?: unknown; selected?: unknown }[] } | undefined)?.answers?.find(
-    (entry) => entry?.id === question.id,
-  )
-  const selected = Array.isArray(item?.selected) ? item.selected.filter((s): s is string => typeof s === 'string') : []
-  return selected.length > 0 ? { kind: 'selected', label: selected[0] as string } : { kind: 'cancelled' }
-}
+// 单选收束协议（三路：选中/取消/故障）单源在 loop/escalation.ts askOption——本面消费。
+// 问询收束文案拆分（1.12）：故障回执附「带 slug 直通」指引，取消回执归静默不做；非活根
+// （CALLER_NOT_LIVE/DELEGATED_CALLER——assertLiveRoot 抛）落在故障路：回执带原因码，不静默、
+// 不降级无 agent 重问（无 agent 问询 = 同一 NO_PROVIDER 静默缺陷，降级无意义）。
 
 // ─────────────────────────── handler ───────────────────────────
 

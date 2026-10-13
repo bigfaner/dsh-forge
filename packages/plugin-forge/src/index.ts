@@ -240,6 +240,9 @@ const forgePlugin: ForgePlugin = Object.assign(
         ? {
             escalation: createUserQuestionsEscalation({
               ask: askFace,
+              // 裁决回执经叙述通道注入主会话（agent.inject 零模型回合——闭环断环修复：
+              // 裁决绕主会话、回执不绕；通道缺席形态 notice 已为 no-op，fail-soft 同源）
+              notifyReceipt: (sessionId, text, headline) => narrationChannel.notice(sessionId, text, headline),
               ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
             }),
           }
