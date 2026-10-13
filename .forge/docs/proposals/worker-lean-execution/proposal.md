@@ -76,9 +76,8 @@ worker 执行慢、流程重、摘要难读。四个病灶（代码证据 + 会�
 - **测试分层**：gate 任务 = 全面测试（全量单元测试，GATE_QUALITY_TABLE 消费面收窄至 gate
   单族）；非 gate 的代码触及类任务（coding 族/test-gen/validation-code）= 保底门；validation-ux
   = 视觉验收主径；doc/eval/test-run 的门各如其类型变体表；run-tests 技能仅 test-run 使用。
-- **UI 视觉验收**：触及 UI 的任务要求视觉验收（效果截图判读）；**验收工具与方式由 agent
-  自行决定，不写死**——工具约定由用户在 AGENTS.md 写明或任务内容指定，变体引导只声明
-  「须以效果截图为据完成视觉验收」。
+- **UI 任务无特殊处理**（暂时）：触及 UI 的任务不作特殊验收安排，各如其类型标准门；
+  「先视觉验证后 e2e」等 UI 专属引导**暂缓**，留待后续按需补入变体表。
 - **分级**：complexity=low → 保底③ + ①②裁剪版（改动文件 lint + 改动包类型检查）；
   medium/high → 保底门全走。
 - **如实上报**（恒定核心段④单源——门变体仅含「门布尔零妥协」语境句）；失败分诊/提交纪律/
@@ -116,8 +115,8 @@ Strategy（是否注入）/ type-policy 工作流 / Record Fields / 类型专属
 5. 环境摩擦用标准解：照 AGENTS.md 的规范规避命令/配置，不每会话自建；
 6. git 查询收敛：status/diff 仅提交前与必要诊断。
 （原第 7 条「测试域不越界」属任务域纪律，下沉 coding 族与 gate/test-run 族门纪律变体，
-语义不变——含「非 gate/test-run 不自建 e2e 调试循环；触及 UI 须完成视觉验收（工具由
-AGENTS.md 或任务内容约定，agent 自选）」。）
+语义不变，修订一处——含「非 gate/test-run 不自建 e2e 调试循环」，UI 任务暂无例外条款。）
+（UI 任务暂不作特殊处理——变体表中 coding-feature/enhancement 专属引导列为「—」。）
 
 **产物落盘约定**：截图（含 UI 视觉验收）、长命令输出、探针工件 →
 `logs/<slug>/<taskKey>/<序号>-<事件类型>/`（一任务一文件夹、一事件一子文件夹、同事件文件
@@ -134,7 +133,7 @@ coding ×6 + test-gen ×3 共 9 类，其余 11 类不注入）：
 
 | 类型 | 专家身份（变体段首行角色设定） | 门纪律变体 | Coding Strategy | 工作流变体（现模板迁入，low 级裁剪） | 专属引导 |
 |---|---|---|---|---|---|
-| coding-feature | 资深全栈工程师：从规格到可交付特性的端到端实现者 | 保底门+分级 | ✓ | 4 步：读定义→SCAN→TDD 实现→定向检查 | 触及 UI 须视觉验收 |
+| coding-feature | 资深全栈工程师：从规格到可交付特性的端到端实现者 | 保底门+分级 | ✓ | 4 步：读定义→SCAN→TDD 实现→定向检查 | — |
 | coding-enhancement | 交付工程师：在既有特性上做增强，尊重现状克制扩张 | 保底门+分级 | ✓ | 4 步（增强语境） | 同上 |
 | coding-cleanup | 代码整洁专家：清理死重与退化痕迹，行为零变更 | 保底门+分级；COVERAGE=maintain | ✓ | 4 步 + SCAN 简化后缀（Step 1.5 附加段） | — |
 | coding-refactor | 重构专家：结构改善守护者，Impact Mapping 先行 | 保底门+分级；COVERAGE=maintain | ✓ | 5 步（含 Impact Mapping）+ SCAN 简化后缀 | — |
@@ -297,7 +296,7 @@ dsh-forge 的技能同理——dsh-forge 不涉及的均跳过、不预建，待
 | SC3 | 带 surface_key 的任务简报含 `SURFACE: <key> (<type>)` 单行双值 | claim/compose 断言 |
 | SC4 | todo_write 不在 deny、goal 三件套在 deny；全部锚随迁绿 | 单测/e2e |
 | SC5 | 结构化提交面在场（全字段 DTO + met=false 拒绝 + criterion 交叉校验 + ac_json/record_fields_json 入库 + files_json 形制升级 + files 一致性校验）；summary 一句话；eval 不入 schema | contracts DTO + core submit 单测 + 技能文件锚 |
-| SC6 | persona 含反搅动纪律锚 ×6（恒定）；UI 视觉验收锚在 coding-feature/enhancement 与 validation-ux 断言（变体非恒定） | persona 文本断言（恒定锚穷尽 + 变体锚按类型） |
+| SC6 | persona 含反搅动纪律锚 ×6（恒定）；变体锚按类型表穷尽（UI 任务暂无特殊锚） | persona 文本断言（恒定锚穷尽 + 变体锚按类型） |
 | SC7 | AGENTS.md worker 使用段含档位建议 + 沙箱标准解 | 文档断言 |
 | SC8 | persona 含产物落盘约定锚（路径模板 + 叙述只带路径）；submit-task 技能同步 | persona 断言 + 技能锚 |
 | SC9 | 分层承载成立：dispatchPrompt 任务级聚焦（GOAL 键 + SURFACE + 结算出口；无人格段/工作流段——反锚）；子会话 system 面含 persona | compose 双产物断言 + e2e 解码（user vs system 分层） |
