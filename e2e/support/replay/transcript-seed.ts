@@ -8,8 +8,9 @@
 // decodeRow → finish；形状漂移在还原时 fail-loud——与 dogfood-record 完整性门同哲学）。
 //
 // 播种策略 = 「官方开户 + 确定性转录代位」：会话目录/账本绑定由官方机制建立（spec 先经
-// 官方 startSession 开户），本模块只读既有日志头（session v4 版本锚核验），在其后追加
-// 种子回合（seq 连续续编），整文件重写。标题 source=fallback 引用本轮 user 行（官方约束：
+// 官方 startSession 开户），本模块只读既有日志头（session v4 版本锚核验），在其后以
+// **新 zstd 帧追加**种子回合（seq 连续续编——帧纪律见 seedTranscript 内注记）。标题
+// source=fallback 引用本轮 user 行（官方约束：
 // messageSeqs 必须引用更早的 human user/message 事件——kind=user 源）。
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -83,8 +84,42 @@ export function seedTranscript(
   const uuid = (): string => randomUUID()
   const callId = `call_replay_seed_${seq0}`
   const t = (n: number): number => clockBase + n
+  const PROVIDER = 'replay-transcript-seed'
+  // 助手 settlement 形状（v4——真实转录逐同构采样，形状漂移在还原/打开时 fail-loud）：
+  // source.replayState + usage + stream（chunk 域 block-start/text|tool-call-chunks/
+  // block-end/usage/finish；assembleAssistantStream 重组必须与 message.content 逐字一致）。
+  const replayState = (stopReason: string, blocks: readonly string[]) => ({
+    response: { kind: 'pi-ai', version: 2, api: 'openai-completions', provider: PROVIDER, model: PROVIDER, responseId: `replay-seed-${seq0}`, stopReason },
+    blocks: blocks.map((b) => ({ type: b })),
+  })
+  const usage = { inputTokens: 10, outputTokens: 10, totalTokens: 20 }
+  /** 单块助手回合（step 内唯一内容块 → stream 逐同构；结果即 content 的机械代位） */
+  const assistantStep = (turnNo: number, stepNo: number, block: { type: 'text'; text: string } | { type: 'tool-call'; id: string; name: string; arguments: string }): Record<string, unknown> => {
+    const stream: Record<string, unknown>[] = [
+      { type: 'chunk', time: t(0), chunk: { type: 'block-start', index: 0, blockType: block.type } },
+    ]
+    if (block.type === 'text') {
+      stream.push({ type: 'text-chunks', time0: t(0), index: 0, dt: [1], texts: [block.text] })
+    } else {
+      stream.push({ type: 'tool-call-chunks', time0: t(0), index: 0, dt: [1], id: block.id, name: block.name, args: [block.arguments] })
+    }
+    stream.push(
+      { type: 'chunk', time: t(1), chunk: { type: 'block-end', index: 0, block: block.type === 'text' ? { type: 'text', text: block.text } : { type: 'tool-call', id: block.id, name: block.name, arguments: block.arguments } } },
+      { type: 'chunk', time: t(1), chunk: { type: 'usage', usage } },
+      { type: 'chunk', time: t(1), chunk: { type: 'finish', reason: block.type === 'tool-call' ? { kind: 'tool-calls' } : { kind: 'stop' }, replayState: replayState(block.type === 'tool-call' ? 'toolUse' : 'stop', [block.type]) } },
+    )
+    const content = block.type === 'text'
+      ? [{ type: 'text', text: block.text }]
+      : [{ type: 'tool-call', id: block.id, name: block.name, arguments: block.arguments }]
+    return {
+      type: 'assistant/message', time: t(0), surfaceOp: 'append',
+      data: { turn: turnNo, step: stepNo, message: { role: 'assistant', content, source: { kind: 'model', provider: PROVIDER, model: PROVIDER, replayState: replayState(block.type === 'tool-call' ? 'toolUse' : 'stop', [block.type]) }, id: uuid() }, usage, stream },
+    }
+  }
   // 事件序 = 真实 v4 转录逐同构（inbox 进列 → turn 开 → inbox 消费 → step 开 → 消息链 →
-  // step 收 → 标题；投影器按此序 hydrate——缺 inbox 面 = 投影在 turn 边界停摆，实测教训）
+  // step 收 → 标题；投影器按此序 hydrate——缺 inbox 面 = 投影在 turn 边界停摆，实测教训）。
+  // 助手回合两步：step1 = 工具调用（tool/call 须先由 assistant 的 tool-call 块广告——
+  // 「has no advertised tool lifecycle」实测），step2 = 文本作答（对话 tab 断言锚）。
   const userMsgId = uuid()
   const userSeq = seq0 + 5
   const seeded: string[] = [
@@ -109,24 +144,33 @@ export function seedTranscript(
       type: 'user/message', seq: userSeq, time: t(5), surfaceOp: 'append',
       data: { content: [{ type: 'text', text: turn.userText }], source: { kind: 'user', rpcId: uuid(), clientTimeZone: 'Asia/Shanghai' }, role: 'user', id: userMsgId },
     }),
+    JSON.stringify({ type: 'request/header', seq: userSeq + 1, time: t(6), data: { reason: 'initial', header: { config: { provider: PROVIDER, model: PROVIDER }, tools: [{ name: turn.tool.name, description: 'replay transcript seed tool', parameters: { type: 'object', properties: {} } }] } } }),
+    { ...assistantStep(1, 1, { type: 'tool-call', id: callId, name: turn.tool.name, arguments: turn.tool.arguments }), seq: userSeq + 2, time: t(7) },
     JSON.stringify({
-      type: 'assistant/message', seq: userSeq + 1, time: t(6), surfaceOp: 'append',
-      data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: turn.assistantText }], source: { kind: 'model', provider: 'replay-transcript-seed', model: 'replay-transcript-seed' }, id: uuid() } },
-    }),
-    JSON.stringify({
-      type: 'tool/call', seq: userSeq + 2, time: t(7),
+      type: 'tool/call', seq: userSeq + 3, time: t(8),
       data: { turn: 1, step: 1, callId, name: turn.tool.name, arguments: turn.tool.arguments },
     }),
     JSON.stringify({
-      type: 'tool/result', seq: userSeq + 3, time: t(8), surfaceOp: 'append', sourceEventSeqs: [userSeq + 2],
+      type: 'tool/result', seq: userSeq + 4, time: t(9), surfaceOp: 'append', sourceEventSeqs: [userSeq + 3],
       data: { turn: 1, step: 1, message: { role: 'tool', source: { kind: 'tool', callId }, toolCallId: callId, content: [{ type: 'text', text: turn.tool.resultText }], isError: false, id: uuid() } },
     }),
-    JSON.stringify({ type: 'step/end', seq: userSeq + 4, time: t(9), data: { turn: 1, step: 1 } }),
-    JSON.stringify({ type: 'session/title', seq: userSeq + 5, time: t(10), data: { title: turn.title ?? turn.userText.slice(0, 24), messageSeqs: [userSeq], source: { kind: 'fallback' } } }),
-  ]
-  // 沿既有物件的压缩形态写回（.zstd → 单帧 zstd；裸 .jsonl → 原样明文——生成代次不换名）
-  const body = Buffer.from([...lines, ...seeded].join('\n') + '\n')
-  writeFileSync(logPath, logPath.endsWith('.zstd') ? zstdCompressSync(body) : body)
+    JSON.stringify({ type: 'step/end', seq: userSeq + 5, time: t(10), data: { turn: 1, step: 1 } }),
+    JSON.stringify({ type: 'step/start', seq: userSeq + 6, time: t(11), data: { turn: 1, step: 2 } }),
+    { ...assistantStep(1, 2, { type: 'text', text: turn.assistantText }), seq: userSeq + 7, time: t(12) },
+    JSON.stringify({ type: 'step/end', seq: userSeq + 8, time: t(13), data: { turn: 1, step: 2 } }),
+    JSON.stringify({ type: 'session/title', seq: userSeq + 9, time: t(14), data: { title: turn.title ?? turn.userText.slice(0, 24), messageSeqs: [userSeq], source: { kind: 'fallback' } } }),
+  ].map((e) => (typeof e === 'string' ? e : JSON.stringify(e)))
+  // 帧追加（持久层帧纪律——1.9 实测根因修复）：jsonl 后端的 listing/头读面只把**首个 zstd
+  // 帧**当 header 行消费（scanZstdFrames(content,1) + 单行断言，多行首帧 =
+  // SessionPersistenceCorruptionError → listArtifacts 静默 continue → 会话被逐出账本）。
+  // 故播种不整文件重写，而是把种子行作为**新 zstd 帧追加**到既有字节之后（宿主自身
+  // append 同型——帧界 = 既有帧末尾；裸 .jsonl → 明文尾接）。既有帧逐字不动。
+  const payload = Buffer.from(seeded.join('\n') + '\n', 'utf8')
+  const current = readFileSync(logPath)
+  const next = logPath.endsWith('.zstd')
+    ? Buffer.concat([current, zstdCompressSync(payload)])
+    : Buffer.concat([current, payload])
+  writeFileSync(logPath, next)
   return userSeq
 }
 

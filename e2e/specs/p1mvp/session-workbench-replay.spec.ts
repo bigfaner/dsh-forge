@@ -99,17 +99,13 @@ test('@web-e2e @p1mvp session-workbench·回放版：转录播种→对话/轨�
       title: FIXTURE_TITLE,
     })
     // 投影缓存同步（listing 可见性承载——冷会话元数据源，见 transcript-seed 注记）
-    refreshSessionProjcache(dshHome, sessionId, { title: FIXTURE_TITLE, asOfSeq: userSeq + 5, lastPromptAt: Date.now() })
+    refreshSessionProjcache(dshHome, sessionId, { title: FIXTURE_TITLE, asOfSeq: userSeq + 9, lastPromptAt: Date.now() })
     const seededEvents = decodeSessionFile(logBefore!)
     expect(seededEvents.find((e) => e.seq === userSeq)?.type, '种子 user 行在盘（seq 对账）').toBe('user/message')
     expect(seededEvents.map((e) => e.type), '种子工具调用在盘（fixture 保证——零模型往返代位）').toContain('tool/call')
 
     // ── launch #2：回放面走查 ──
     launched = await launchHost({ userData })
-    launched.app.process().stderr?.on('data', (d: Buffer) => {
-      const s = String(d)
-      if (s.includes('filtered session') || s.includes('workspace')) console.log('[sw-replay][host]', s.trim().slice(0, 400))
-    })
     const page2 = launched.page
     await expect(page2.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
     await expect(page2.locator(NAV_SHELL).first(), '官方导航壳在场').toBeVisible({ timeout: 30_000 })
@@ -120,9 +116,12 @@ test('@web-e2e @p1mvp session-workbench·回放版：转录播种→对话/轨�
     await expect(sessionRow, '种子会话行入列（账本实时读）').toBeVisible({ timeout: 60_000 })
     await expect(sessionRow.locator('.dswf-sidebar-session-title'), '行语言：种子标题在场').toContainText(FIXTURE_TITLE, { timeout: 30_000 })
 
-    // Step 4 回放面：先开新会话再点回历史行 → 转录完整呈现（恢复链载体——冒烟同径）
-    await block.locator('.dswf-sidebar-project-row').first().hover() // 行尾动作钮 hover 显形（tree-row 同径）
-    await block.locator(projectActionOf('new-session')).click()
+    // Step 4 回放面：先开新会话再点回历史行 → 转录完整呈现（恢复链载体——冒烟同径）。
+    // 项目行锚必须在 page2 上重取——launch#1 的 page/block 已随 closeApp 关闭（复启用旧
+    // locator = 「Target page closed」即发即崩；1.9 实测教训）。
+    const block2 = page2.locator(projectRowOf(project.id))
+    await block2.locator('.dswf-sidebar-project-row').first().hover() // 行尾动作钮 hover 显形（tree-row 同径）
+    await block2.locator(projectActionOf('new-session')).click()
     await page2.waitForTimeout(2_000)
     await ensureNoBlockingDialog(page2) // 零凭据形态二次开户的晚到 onboarding 模态收口（tree-row 同径）
     await sessionRow.click()
