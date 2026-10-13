@@ -370,10 +370,15 @@ export function sidebarArchivedFilterOf(
 //    展开态 = 本地微观态不持久化（fix-42 P1 口径沿袭）；搜索在场折叠让位（命中行全展示）；
 //    flat（用户显式全量视图）/ rail（恒项目口径）投影不消费本切分。
 //    D45 补充：置顶行永不折叠（置顶 = 用户显式「保持可见」语义——窗口外照常 recent，
-//    官方 pinned leads 语义一致）。） ──
+//    官方 pinned leads 语义一致）。）
+//    2026-10-12 用户裁决：每项目默认至少展示 10 个会话——窗口内行不足 10 时前缀补足
+//    （MIN_VISIBLE_SESSIONS 下限；行序 = 置顶领先 + workspace 序，补足取前缀不改序）。 ──
 
 /** 会话默认可见窗口（24h——D41-② 裁决口径；now 基准 = 渲染时钟，relativeTimeLabel 同源） */
 export const SIDEBAR_SESSION_WINDOW_MS = 24 * 3_600_000
+
+/** 每项目默认可见下限（2026-10-12 裁决：窗口内行不足时前缀补足到 10——折叠组永不吞掉前 10 行） */
+export const SIDEBAR_SESSION_MIN_VISIBLE = 10
 
 /** 24h 窗口切分（项目块内会话两组：recent = 窗口内默认可见行 / older = 窗口外折叠组行） */
 export interface SidebarSessionSplit {
@@ -382,10 +387,11 @@ export interface SidebarSessionSplit {
 }
 
 /**
- * 会话 24h 窗口切分（纯函数，D41-② + D45）：updatedAt ≥ now−24h = recent，其余 =
- * older（「更早（N）」的 N = older 长度）；置顶行（pinned）恒 recent（D45——置顶 =
- * 保持可见语义，窗口外不折叠）。组内序 = 输入序（置顶领先序不重排）；全 recent 快径
- * 原引用返回（零派生——sidebarFilterOf 全命中同款）。
+ * 会话 24h 窗口切分 + 至少 10 行下限（纯函数，D41-② + D45 + 2026-10-12 补足）：
+ * updatedAt ≥ now−24h = recent，其余 = older（「更早（N）」的 N = older 长度）；置顶行
+ * （pinned）恒 recent（D45——置顶 = 保持可见语义，窗口外不折叠）。窗口内行不足
+ * SIDEBAR_SESSION_MIN_VISIBLE 时前缀补足到下限（行序 = 置顶领先 + workspace 序，
+ * 补足 = 前缀切分不改序）；全 recent 快径原引用返回（零派生——sidebarFilterOf 全命中同款）。
  */
 export function sidebarSessionVisibility(
   sessions: readonly SidebarSessionRow[],
@@ -393,21 +399,16 @@ export function sidebarSessionVisibility(
 ): SidebarSessionSplit {
   const boundary = now - SIDEBAR_SESSION_WINDOW_MS
   const inWindow = (row: SidebarSessionRow): boolean => row.pinned || row.updatedAt >= boundary
-  let allRecent = true
-  for (const row of sessions) {
-    if (!inWindow(row)) {
-      allRecent = false
-      break
-    }
+  // 可见前缀长度 = 最后一个窗口内行的下标 + 1；不足 10 补足到 10（全量不足 = 全 recent）
+  let visibleCount = 0
+  for (let index = 0; index < sessions.length; index += 1) {
+    if (inWindow(sessions[index])) visibleCount = index + 1
   }
-  if (allRecent) return { recent: sessions, older: [] }
-  const recent: SidebarSessionRow[] = []
-  const older: SidebarSessionRow[] = []
-  for (const row of sessions) {
-    if (inWindow(row)) recent.push(row)
-    else older.push(row)
+  if (visibleCount < SIDEBAR_SESSION_MIN_VISIBLE) {
+    visibleCount = Math.min(SIDEBAR_SESSION_MIN_VISIBLE, sessions.length)
   }
-  return { recent, older }
+  if (visibleCount >= sessions.length) return { recent: sessions, older: [] }
+  return { recent: sessions.slice(0, visibleCount), older: sessions.slice(visibleCount) }
 }
 
 /** 平铺视图行（flat 排列——跨项目全会话行；projectName 随行 = 过滤命中面 + 归属可辨；

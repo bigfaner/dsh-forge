@@ -51,8 +51,18 @@ function node(overrides: Partial<SidebarProjectNode> = {}): SidebarProjectNode {
     sessions: [
       { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: false },
       { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: NOW - 3 * 3_600_000, pinned: false, archived: false },
-      { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000, pinned: false, archived: false },
       { sessionId: 's4', title: '静默会话', status: 'idle', updatedAt: NOW - 30_000, pinned: false, archived: false },
+      // 2026-10-12 至少 10 行下限：补足窗口内行（s1/s2/s4 + s5..s11 = 10 行窗口内）；
+      // s3（2 天前）位于窗口内行之后 → 保持「更早（1）」折叠口径不变（前缀补足语义）
+      ...Array.from({ length: 7 }, (_, i) => ({
+        sessionId: `s${i + 5}`,
+        title: `填充会话${i + 5}`,
+        status: 'idle' as const,
+        updatedAt: NOW - 4 * 3_600_000 - i * 60_000,
+        pinned: false,
+        archived: false,
+      })),
+      { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000, pinned: false, archived: false },
     ],
     ...overrides,
   }
