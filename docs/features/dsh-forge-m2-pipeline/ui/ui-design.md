@@ -225,7 +225,7 @@ sequenceDiagram
     D->>DR: taskDrawerHtml(key)
     DR->>DR: 通用区(头部 ✕ 右端 + 标题 + 彩色chip 徽标行)
     DR->>DR: 块一 任务内容——目标·预期 ↔ 结果·实际(综合记录)<br>+ 类型模板 + 改动范围双列(commit 优先)<br>+ 单元测试覆盖率(任务无文档)
-    DR->>DR: 块二 关联与过程 · 时间线——现状条(当前关联)<br>+ 事件流(创建/领取/提交/恢复/转移;commit⟶实际范围)
+    DR->>DR: 块二 关联与过程 · 时间线——现状条(当前关联)<br>+ 事件流(创建/领取/提交/恢复/转移，commit⟶实际范围)
     U->>DR: 点击块头部(▾/▸)
     DR->>DR: 该块收起/展开(会话级,跨任务保持)
     U->>DR: 拖拽左缘手柄(双击复位/←→ 微调)
@@ -254,7 +254,7 @@ sequenceDiagram
     end
     T->>T: 头部+路径栏+摘要+Markdown渲染
     alt 含 mermaid 块
-        T->>T: 图渲染(SVG;mermaid 库懒加载;erDiagram/流程图/其余图型同库)
+        T->>T: 图渲染(SVG，mermaid 库懒加载，erDiagram/流程图/其余图型同库)
     else 渲染失败 / 非法源
         T->>T: 占位卡(源码+回退注记)
     end
