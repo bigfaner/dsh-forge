@@ -1,8 +1,10 @@
-// 单测 —— forge:pipeline / forge:doc-style 段渲染（dual-mode-overhaul 段重构终版）：
-// 段常量 / 三段结构 MD 段体（总纲与核心规则·文档位置与存储约束·流程）/ 四规则含环间确认 /
-// 执行协议与受限面整段删除 / 双模式独立渲染（mode 键——目录树与流程图各自版本，缺省回退
-// 远征）/ 双 mermaid 无 worker 内部节点 / doc-style 独立段（XML_TAGS.docStyle 扩集）/
-// 标签包裹单源 / 不含 forge tool 说明 / 禁裸 {{ / forgeDir 缺省回退不炸渲染。
+// 单测 —— forge:pipeline / forge:doc-style 段渲染（dual-mode-overhaul 模板化终版）：
+// 两份自包含模板（四条核心规则双份逐字在场——允许重复、禁止占位抽公共）/ 三段结构
+// MD 段体（总纲与核心规则·文档位置与存储约束·流程）/ 四规则口径（状态库+查询为准，
+// 执行协议与受限面零回渗）/ 双模式独立渲染（mode 键——目录树与流程图各自版本，缺省
+// 回退远征）/ 双 mermaid 含用户裁决节点与箭头固定产物、无 worker 内部节点 / doc-style
+// 独立段（XML_TAGS.docStyle 扩集）/ 标签包裹单源 / 不含 forge tool 说明 / 禁裸 {{ /
+// forgeDir 缺省回退不炸渲染。
 import { describe, expect, it } from 'vitest'
 import { XML_TAGS } from '@dsh-forge/contracts'
 import {
@@ -42,32 +44,36 @@ describe('renderForgePipelineSection——三段结构 MD 段体', () => {
     expect(text).not.toContain('文档位置与存储约束')
   })
 
-  it('总纲四条规则：状态层单源 / 自然键与 fix 链 / 领取-结算如实 / 环间确认铁律', () => {
-    expect(text).toContain('唯一事实来源')
-    expect(text).toContain('投影')
-    expect(text).toContain('禁止手改状态')
-    expect(text).toContain('管线动词')
-    expect(text).toContain('slug/local-id')
-    expect(text).toContain('fix-N')
-    expect(text).toContain('disc-N')
-    expect(text).toContain('派发简报')
-    expect(text).toContain('质量门')
-    expect(text).toContain('绝不伪造')
-    expect(text).toContain('blocked 给出具体阻塞原因')
-    expect(text).toContain('fix 链至多六层')
+  it('标题带模式名（## Forge 任务管线（远征模式）/（突击模式））', () => {
+    expect(text).toContain('## Forge 任务管线（远征模式）')
+    expect(renderForgePipelineSection({ mode: 'blitz' })).toContain('## Forge 任务管线（突击模式）')
+  })
+})
+
+describe('总纲四条核心规则（双模式逐字在场——允许重复、禁止占位）', () => {
+  const RULES = [
+    '状态存于 forge 管线的状态库（任务/提案/特性/文档四域，按工作区注册）；一切状态判断以管线工具的查询结果为准，不以盘上文件或记忆推断。',
+    '任务身份 = slug/local-id；blocked 任务派生修复任务携带 fix-N；偏差跟进携带 disc-N；slug 与 feature 目录名一致。',
+    '提案 accept/reject 仅在用户明示决定后记录。',
+    '进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。',
+  ]
+
+  it.each(RULES.map((rule, i) => [`规则${i + 1}`, rule]))('%s 逐字在场于双模式渲染', (_label, rule) => {
+    expect(text).toContain(rule)
+    expect(renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge' })).toContain(rule)
   })
 
-  it('环间确认规则逐句在场（ask_user_question 显式确认 / 确认后推进并流转状态 / 未确认不得推进）', () => {
-    expect(text).toContain(
-      '环间确认：进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。',
-    )
-  })
-
-  it('执行协议与受限面整段删除（dual-mode-overhaul——正本在 run-tasks / submit-task 技能）', () => {
-    expect(text).not.toContain('执行协议')
-    expect(text).not.toContain('受限面')
-    expect(text).not.toContain('是人类决定')
-    expect(text).not.toContain('不在此复制')
+  it('执行协议与受限面零回渗（领取/结算/fix 链细节不出现——正本在 run-tasks / submit-task 技能）', () => {
+    for (const v of [text, renderForgePipelineSection({ mode: 'blitz' })]) {
+      expect(v).not.toContain('执行协议')
+      expect(v).not.toContain('受限面')
+      expect(v).not.toContain('投影')
+      expect(v).not.toContain('禁止手改状态')
+      expect(v).not.toContain('派发简报')
+      expect(v).not.toContain('质量门')
+      expect(v).not.toContain('fix 链至多六层')
+      expect(v).not.toContain('blocked 给出具体阻塞原因')
+    }
   })
 })
 
@@ -86,38 +92,48 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     expect(renderForgePipelineSection()).toBe(renderForgePipelineSection({ mode: 'expedition' }))
   })
 
-  it('远征目录树：提案/特性/探针三类', () => {
-    expect(EXPEDITION).toContain('docs/features/{slug}/')
-    expect(EXPEDITION).toContain('docs/probes/')
-    expect(EXPEDITION).toContain('远征模式文档面布局')
+  it('远征目录树：提案/特性/探针三类（根=docs 层，树内无 docs/ 前缀）', () => {
+    expect(EXPEDITION).toContain('├─ proposals/{slug}/')
+    expect(EXPEDITION).toContain('├─ features/{slug}/')
+    expect(EXPEDITION).toContain('└─ probes/')
+    expect(EXPEDITION).not.toContain('docs/features/')
   })
 
   it('突击目录树：提案/探针两类（无特性目录行）', () => {
-    expect(BLITZ).toContain('docs/proposals/{slug}/')
-    expect(BLITZ).toContain('docs/probes/')
-    expect(BLITZ).not.toContain('docs/features/')
-    expect(BLITZ).toContain('突击模式文档面布局')
+    expect(BLITZ).toContain('├─ proposals/{slug}/')
+    expect(BLITZ).toContain('└─ probes/')
+    expect(BLITZ).not.toContain('features/{slug}/')
   })
 
-  it('远征流程图：brainstorm→write-prd→ui-design→tech-design→breakdown-tasks→派发→eval→交付，各步产物标于箭头', () => {
-    expect(EXPEDITION).toContain('A[brainstorm] -->|proposal.md| B[write-prd]')
-    expect(EXPEDITION).toContain('B -->|prd| C[ui-design]')
-    expect(EXPEDITION).toContain('C -->|ui 设计稿| D[tech-design]')
-    expect(EXPEDITION).toContain('D -->|design 文档| E[breakdown-tasks]')
-    expect(EXPEDITION).toContain('E -->|任务清单| F[派发]')
-    expect(EXPEDITION).toContain('F -->|实现与测试| G[eval]')
-    expect(EXPEDITION).toContain('G -->|验收报告| H[交付]')
-    expect(EXPEDITION).toContain('仅在存在 UI 面时执行')
+  it('存储约束显式清单：远征三类 / 突击两类', () => {
+    expect(EXPEDITION).toContain('入文档根仅三类：提案文档、特性阶段文档、探针产物。')
+    expect(EXPEDITION).toContain('特性阶段文档产出后经管线工具登记')
+    expect(BLITZ).toContain('入文档根仅两类：提案文档、探针产物；突击不产特性阶段文档。')
+    for (const v of [EXPEDITION, BLITZ]) {
+      expect(v).toContain('代码与测试不入文档根——进仓库源码树')
+      expect(v).toContain('过程产物只归档到对应 {slug} 子目录，不另设他处')
+    }
+  })
+
+  it('远征流程图：brainstorm→用户裁决→write-prd→ui-design（有 UI 面）→tech-design→breakdown-tasks→派发→交付，各步产物标于箭头', () => {
+    expect(EXPEDITION).toContain('A[brainstorm] -->|"proposal.md"| B{用户裁决}')
+    expect(EXPEDITION).toContain('B -->|"accept"| C[write-prd]')
+    expect(EXPEDITION).toContain('C -->|"prd-spec / user-stories / ui-functions"| D["ui-design（有 UI 面）"]')
+    expect(EXPEDITION).toContain('D -->|"ui-design.md + prototype"| E[tech-design]')
+    expect(EXPEDITION).toContain('C -->|"无 UI 面"| E')
+    expect(EXPEDITION).toContain('E -->|"tech-design / ER / schema / handbook"| F[breakdown-tasks]')
+    expect(EXPEDITION).toContain('F -->|"任务清单"| G["/run-dag-tasks 派发"]')
+    expect(EXPEDITION).toContain('G --> H["eval → 交付"]')
   })
 
   it('突击流程图：brainstorm→用户裁决→quick-tasks→派发→交付', () => {
-    expect(BLITZ).toContain('A[brainstorm] -->|proposal.md| B[用户裁决]')
-    expect(BLITZ).toContain('B -->|裁决记录| C[quick-tasks]')
-    expect(BLITZ).toContain('C -->|任务清单| D[派发]')
-    expect(BLITZ).toContain('D -->|实现与验收| E[交付]')
+    expect(BLITZ).toContain('A[brainstorm] -->|"proposal.md"| B{用户裁决}')
+    expect(BLITZ).toContain('B -->|"accept"| C[quick-tasks]')
+    expect(BLITZ).toContain('C -->|"任务清单"| D["/run-dag-tasks 派发"]')
+    expect(BLITZ).toContain('D --> E[交付]')
   })
 
-  it('双 mermaid 简要、无 worker 内部节点（流程图行不含 claim/submit 等动词节点）', () => {
+  it('双 mermaid 简要、无 worker 内部节点（流程图行不含 claim/submit/dispatch 节点）', () => {
     for (const v of [EXPEDITION, BLITZ]) {
       const flow = v.slice(v.indexOf('```mermaid'), v.indexOf('```', v.indexOf('```mermaid') + 3))
       expect(flow).not.toMatch(/\[(claim|submit|dispatch)\]/i)
@@ -129,35 +145,29 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
 describe('文档位置与存储约束（forgeDir 注入）', () => {
   const FORGE_DIR = 'Z:/ws/demo/.forge'
 
-  it('注入 forgeDir：绝对路径先行 + 目录树段；去「中央 projects.forge_dir 单源」注记', () => {
+  it('注入 forgeDir：文档根 = forgeDir 的 docs 层（绝对路径）；无中央库注记', () => {
     const injected = renderForgePipelineSection({ forgeDir: FORGE_DIR, mode: 'expedition' })
-    expect(injected).toContain('文档位置')
-    expect(injected).toContain(FORGE_DIR)
-    expect(injected.indexOf(FORGE_DIR)).toBeLessThan(injected.indexOf('目录树'))
+    expect(injected).toContain('文档根')
+    expect(injected).toContain(`${FORGE_DIR}\\docs`)
+    expect(injected.indexOf(`${FORGE_DIR}\\docs`)).toBeLessThan(injected.indexOf('```text'))
     expect(injected).not.toContain('projects.forge_dir 单源')
   })
 
-  it('存储约束：代码与测试入源码树 / 过程产物归 {slug} 子目录不另设他处', () => {
-    const injected = renderForgePipelineSection({ forgeDir: FORGE_DIR })
-    expect(injected).toContain('代码与测试改动一律落工作区源码树')
-    expect(injected).toContain('过程产物')
-    expect(injected).toContain('{slug} 子目录，不另设他处')
+  it('尾部路径分隔符归一（不落双分隔符结尾）', () => {
+    const injected = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge/' })
+    expect(injected).toContain('Z:/ws/demo/.forge\\docs')
+    expect(injected).not.toContain('//docs')
   })
 
   it('回退：缺省/空白 forgeDir = 省略文档位置段（渲染不炸、其余段原样）', () => {
     for (const vars of [undefined, { forgeDir: undefined }, { forgeDir: '' }, { forgeDir: '   ' }]) {
       const fallback = renderForgePipelineSection(vars)
-      expect(fallback).not.toContain('文档位置')
-      expect(fallback).not.toContain('目录树')
-      expect(fallback).toContain('唯一事实来源')
-      expect(fallback).toContain('环间确认')
+      expect(fallback).not.toContain('### 文档位置与存储约束')
+      expect(fallback).not.toContain('文档根')
+      expect(fallback).not.toContain('```text')
+      expect(fallback).toContain('状态存于 forge 管线的状态库')
       expect(fallback).toContain('### 流程')
     }
-  })
-
-  it('尾部路径分隔符归一（不落双斜杠结尾的裸路径）', () => {
-    const injected = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge/' })
-    expect(injected).toContain('Z:/ws/demo/.forge\n')
   })
 })
 
@@ -171,7 +181,7 @@ describe('段契约（标签包裹 / 无 forge tool 说明 / 禁裸 {{）', () =
     expect(XML_TAGS.forgePipeline).toBe('forge-pipeline')
   })
 
-  it('不含 forge tool 说明（六工具名零出现——注册面自描述；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
+  it('不含 forge tool 说明（工具名零出现——注册面自描述；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
     expect(FORGE_TOOL_NAMES).not.toContain('ask_user_question')
     for (const name of FORGE_TOOL_NAMES) {
       expect(text, `段文本不得含工具名 ${name}`).not.toContain(name)

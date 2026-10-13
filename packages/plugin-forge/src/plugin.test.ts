@@ -232,17 +232,17 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     dispose()
   })
 
-  it('config.mode 双模式渲染：blitz → 突击流程图；缺省/未知 → 远征回退', () => {
+  it('config.mode 双模式渲染：blitz → 突击模板；缺省/未知 → 远征回退', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin(rt1.ctx(), { mode: 'blitz' })
     const p1 = rt1.sections.find((s) => s.name === FORGE_SECTION_NAME)
-    expect(p1?.text).toContain('突击模式短流程')
-    expect(p1?.text).toContain('B -->|裁决记录| C[quick-tasks]')
+    expect(p1?.text).toContain('## Forge 任务管线（突击模式）')
+    expect(p1?.text).toContain('B -->|"accept"| C[quick-tasks]')
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.ctx(), { mode: 'unknown-mode' })
     const p2 = rt2.sections.find((s) => s.name === FORGE_SECTION_NAME)
-    expect(p2?.text).toContain('远征模式全流程')
+    expect(p2?.text).toContain('## Forge 任务管线（远征模式）')
     d2()
   })
 
@@ -273,9 +273,9 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     const upgraded = rt.sections[2]
     expect(upgraded?.name).toBe('forge:pipeline')
     expect(upgraded?.order).toBe(510)
-    expect(upgraded?.text).toContain('Z:/external/ws/.forge')
-    expect(upgraded?.text).toContain('文档位置')
-    expect(upgraded?.text).toContain('docs/proposals')
+    expect(upgraded?.text).toContain('Z:/external/ws/.forge\\docs')
+    expect(upgraded?.text).toContain('文档位置与存储约束')
+    expect(upgraded?.text).toContain('proposals/{slug}/')
     dispose()
     // 重注册升级面：新旧 pipeline 注销器 + doc-style 注销器各恰一次
     expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 3 })
