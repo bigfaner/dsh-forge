@@ -17,7 +17,7 @@ import {
   TESTING_STRATEGY_SECTION,
   type PersonaComplexity,
 } from './persona.js'
-import { CONSTRAINTS_BLOCK } from './compose.js'
+import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
 const COMPLEXITIES: readonly PersonaComplexity[] = ['low', 'medium', 'high']
 
@@ -102,6 +102,14 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(CONSTRAINTS_BLOCK).toContain('README')
     for (const taskType of TASK_TYPES) {
       expect(composePersona(taskType, 'low')).toContain('按轮追加')
+    }
+  })
+
+  it('断点续跑约束块（worker-exec-evidence-replay 1.3/S③）：单行指针路径 + 进度三要素 + 续跑指令，恒定在场', () => {
+    expect(RESUME_POINTER_BLOCK).not.toContain('\n')
+    expect(RESUME_POINTER_BLOCK).toContain('logs/{slug}/{task-local-id}/resume.md')
+    for (const taskType of TASK_TYPES) {
+      expect(composePersona(taskType, 'low')).toContain(RESUME_POINTER_BLOCK)
     }
   })
 
@@ -242,6 +250,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
+        'evidence', 'resume.md', // worker-exec-evidence-replay 1.3：EVIDENCE 行 + 续跑指针文件名
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
       ].map((w) => w.toLowerCase()),
     )

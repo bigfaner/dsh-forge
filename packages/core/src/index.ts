@@ -27,6 +27,7 @@ import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
+import { readEvidencePointer } from './forge/tasks/evidence-pointer.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
 import { createKnowledgeService } from './knowledge/knowledge-service.js'
@@ -139,7 +140,15 @@ const corePlugin: CorePlugin = Object.assign(
       taskStore = store
       ctx.reflect.provide(
         'forgeTasks',
-        createTasksService({ store, events, resolveWsPath: routing.wsPath }), // 十一法全接线（2.6 读面收口）
+        createTasksService({
+          store,
+          events,
+          resolveWsPath: routing.wsPath, // 十一法全接线（2.6 读面收口）
+          // worker-exec-evidence-replay 1.3：续跑指针探测（claim 领取瞬间证据位读取——
+          // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 零指针行）
+          resolveEvidencePointer: (projectId, slug, localId) =>
+            readEvidencePointer(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), slug, localId),
+        }),
       )
       ctx.reflect.provide(
         'forgeFeatures',

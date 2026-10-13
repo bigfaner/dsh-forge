@@ -57,6 +57,8 @@ export interface TasksServiceDeps {
   readonly resolveWsPath: (projectId: string) => string
   /** git 只读执行注入（缺席 = 生产 execFile——git-lookup.ts defaultExecFile；测试桩受控注入） */
   readonly gitExec?: GitExecFile
+  /** 续跑指针探测（worker-exec-evidence-replay 1.3——可选，缺席 = brief 零 EVIDENCE 行） */
+  readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */

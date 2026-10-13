@@ -716,3 +716,63 @@ describe('S1c claimTask 循环独占守卫（exclusivityGuard——目标解析�
     expect(rows(`SELECT session_id FROM task_session_links`)).toEqual([{ session_id: 's-external' }])
   })
 })
+
+// ─────────────────── worker-exec-evidence-replay 1.3：重入证据指针透传（Solution③/SC3） ───────────────────
+
+describe('1.3 重入证据指针透传：claim 领取瞬间探测证据位 → brief 自动携带 EVIDENCE 行', () => {
+  /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制） */
+  function svcWithPointer(pointer: string | undefined, seen: { slug: string; localId: string }[]) {
+    h ??= createTasksHarness()
+    return (input: Parameters<typeof claimTask>[1]) =>
+      claimTask(
+        {
+          store: h!.store,
+          events: h!.events,
+          resolveEvidencePointer: (projectId, slug, localId) => {
+            expect(projectId).toBe(h!.projectId)
+            seen.push({ slug, localId })
+            return pointer
+          },
+        },
+        input,
+      )
+  }
+
+  it('重入派发（幂等重入）：证据位指针在盘 → brief 自动携带 EVIDENCE 行 + 续跑指令（中断重入不零上下文重述）', async () => {
+    const seen: { slug: string; localId: string }[] = []
+    const claim = svcWithPointer('logs/f/1.1/resume.md', seen)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' }) // 中断残留——重入径
+    const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
+    expect(r.reclaimed).toBe(true)
+    expect(r.dispatchPrompt).toContain('EVIDENCE: logs/f/1.1/resume.md')
+    expect(r.dispatchPrompt).toContain('从最后落盘点续跑')
+    expect(seen).toEqual([{ slug: 'f', localId: '1.1' }]) // 领取瞬间取数——探测按目标行进行
+  })
+
+  it('证据位无指针（undefined）→ brief 零 EVIDENCE 行（首跑形态）；注入面缺席（dep 缺省）同样零行', async () => {
+    const seen: { slug: string; localId: string }[] = []
+    const claim = svcWithPointer(undefined, seen)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1')
+    seedTask(h!.db, 'f', '1.2')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
+    expect(r.dispatchPrompt).not.toContain('EVIDENCE:')
+    // dep 缺省（生产装配方缺席可选注入 = 容忍）——零指针行且不因探测崩
+    const plain = (input: Parameters<typeof claimTask>[1]) => claimTask({ store: h!.store, events: h!.events }, input)
+    const r2 = await plain({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's2' })
+    expect(r2.dispatchPrompt).not.toContain('EVIDENCE:')
+  })
+
+  it('指针注入 → claim 记录 digest 覆盖 EVIDENCE 行（同任务有无指针 = 不同简报指纹）', async () => {
+    const seen: { slug: string; localId: string }[] = []
+    const claim = svcWithPointer('logs/f/2.1/resume.md', seen)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' })
+    const expected = dispatchDigest(r.dispatchPrompt)
+    expect(r.digest).toBe(expected)
+    const digestRows = rows(`SELECT dispatch_digest FROM task_records WHERE task_id = 't-f-2.1' AND verb = 'claim'`)
+    expect(digestRows).toEqual([{ dispatch_digest: expected }])
+  })
+})

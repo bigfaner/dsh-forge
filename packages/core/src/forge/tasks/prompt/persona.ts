@@ -19,7 +19,7 @@
 // 恒定不变项：核心段①-⑧一切类型/分级在场；高效执行锚 ×6 恒定；AC 逐项核查
 // 不变量——一切分级裁剪不触碰。persona 文本禁裸 `{{`（上游严格插值防护）。
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
-import { CONSTRAINTS_BLOCK } from './compose.js'
+import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
 /** 复杂度分级（变体段第二维；low 裁剪只触及变体段工作流/门禁分级，不触及核心段与 AC 核查） */
 export type PersonaComplexity = 'low' | 'medium' | 'high'
@@ -64,6 +64,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 
 ### 5. 产物落盘
 - ${CONSTRAINTS_BLOCK}
+- ${RESUME_POINTER_BLOCK}
   - 截图（含视觉验收证据）；
   - 长命令输出与探针工件；
   - e2e/验收测试的证据票据（trace、error-context、失败摘录）。

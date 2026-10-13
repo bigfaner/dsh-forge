@@ -9,6 +9,7 @@ import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import {
   composeDispatchPrompt,
   resolveCoverage,
+  RESUME_POINTER_BLOCK,
   SETTLEMENT_EXIT_LINE,
   TASK_CATEGORY_FOR_TYPE,
   type DispatchPromptInput,
@@ -424,5 +425,50 @@ describe('运行期防御面（词汇外值拒绝——TS 已封，防 as 断言
     expect(() =>
       composeDispatchPrompt({ slug: 'x', localId: '1', taskType: 'nonsense' as TaskType }),
     ).toThrow(/unknown task type/)
+  })
+})
+
+// ─────────────────── worker-exec-evidence-replay 1.3：EVIDENCE 续跑指针行（Solution③/SC3） ───────────────────
+
+describe('1.3 EVIDENCE 续跑指针行（重入派发 brief 自动携带——首步读指针续跑）', () => {
+  it('evidencePointer 在场 → EVIDENCE 行（相对路径 + 首步读指针续跑指令），VARS 之后、<goal> 之前', () => {
+    const prompt = composeDispatchPrompt({
+      ...fullInput({ taskType: 'coding-feature' }),
+      evidencePointer: 'logs/m2-pipeline/2.2/resume.md',
+    })
+    expect(prompt).toContain('EVIDENCE: logs/m2-pipeline/2.2/resume.md')
+    expect(prompt).toContain('首步读取')
+    expect(prompt).toContain('从最后落盘点续跑')
+    expect(prompt).not.toContain('会话快照')
+    const at = (k: string): number => prompt.indexOf(k)
+    expect(at('EVIDENCE:')).toBeGreaterThan(at('VARS:'))
+    expect(at('<goal>')).toBeGreaterThan(at('EVIDENCE:'))
+  })
+
+  it('evidencePointer 缺席 → 省行（零证据位 = 首跑零行，M2 形态兼容）', () => {
+    const prompt = composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' }))
+    expect(prompt).not.toContain('EVIDENCE:')
+  })
+
+  it('evidencePointer 注入 → digest 新值（简报重合成判据同族）', () => {
+    const base = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' })))
+    const withPointer = dispatchDigest(
+      composeDispatchPrompt({
+        ...minimalInput({ taskType: 'coding-feature' }),
+        evidencePointer: 'logs/m2-pipeline/3.1/resume.md',
+      }),
+    )
+    expect(withPointer).not.toBe(base)
+  })
+
+  it('断点续跑约束块（worker 系统提示词硬约定——单行 + 指针路径模板 + 续跑指令），persona 面恒定在场', () => {
+    expect(RESUME_POINTER_BLOCK).not.toContain('\n')
+    expect(RESUME_POINTER_BLOCK).toContain('logs/{slug}/{task-local-id}/resume.md')
+    expect(RESUME_POINTER_BLOCK).toContain('已完成轮次')
+    expect(RESUME_POINTER_BLOCK).toContain('已清零簇')
+    expect(RESUME_POINTER_BLOCK).toContain('证据目录指针')
+    for (const taskType of TASK_TYPES) {
+      expect(composePersona(taskType, 'medium')).toContain(RESUME_POINTER_BLOCK)
+    }
   })
 })

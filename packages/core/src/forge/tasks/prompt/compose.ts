@@ -114,6 +114,12 @@ export interface DispatchPromptInput {
   surfaceKey?: string
   /** surface 类型（web/api/cli/tui/mobile；仅 surfaceKey 在场时随行呈现） */
   surfaceType?: string
+  /**
+   * 续跑指针（worker-exec-evidence-replay 1.3：`logs/<slug>/<localId>/resume.md` 相对路径，
+   * 正斜杠——调用方领取瞬间探测证据位注入；缺席省行 = 首跑/证据位空。在场即重入语境：
+   * worker 首步读指针从最后落盘点续跑）。
+   */
+  evidencePointer?: string
 }
 
 // ─────────────────────────── 统一证据路径约束块（worker-exec-evidence-replay Solution①） ───────────────────────────
@@ -125,6 +131,17 @@ export interface DispatchPromptInput {
  */
 export const CONSTRAINTS_BLOCK =
   '证据落盘约束：一切跑批/证据产物统一写入 `logs/{slug}/{task-local-id}/{NNN-issue-key}/`（工作区派生目录下；NNN 三位序号按轮追加命名、永不覆盖——失败轮日志在盘可考；细则见该证据目录内 README）。'
+
+/**
+ * 断点续跑约束块（worker-exec-evidence-replay Solution③——重入证据指针透传的写入侧）：
+ * worker 执行中把「已完成轮次/已清零簇/证据目录指针」持续更新写入任务证据位根部的单点
+ * 指针文件（覆盖写——指针非证据，最新进度即真相）。读取侧对应实现：core tasks
+ * evidence-pointer.ts（claim 领取瞬间探测 → brief EVIDENCE 行自动携带）。轻形态红线：
+ * 不做会话快照/进程迁移。
+ */
+export const RESUME_POINTER_FILE = 'resume.md'
+export const RESUME_POINTER_BLOCK =
+  '断点续跑约束：执行中把「已完成轮次/已清零簇/证据目录指针」持续更新写入 `logs/{slug}/{task-local-id}/resume.md`（覆盖写单点指针——最新进度即真相）；重入派发简报携带 EVIDENCE 行时，首步读取该指针从最后落盘点续跑，不零上下文重述。'
 
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
 
@@ -193,6 +210,9 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
+    input.evidencePointer !== undefined
+      ? `EVIDENCE: ${input.evidencePointer}（断点续跑指针——首步读取，从最后落盘点续跑，不零上下文重述）`
+      : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
   if (input.goal !== undefined || (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0)) {

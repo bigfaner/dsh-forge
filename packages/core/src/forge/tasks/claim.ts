@@ -1,4 +1,4 @@
-﻿// claimTask——任务域派发动词（任务 2.4；tech-design §Interface 1「动词内聚不变量」claimTask 行 +
+// claimTask——任务域派发动词（任务 2.4；tech-design §Interface 1「动词内聚不变量」claimTask 行 +
 // db-schema §4 动词矩阵 claimTask 行 + §6-35⑧ 就绪选择 + C1 幂等重入 + 交互一派发链）。
 // 定位：业务（forge/tasks 子域）。import 边：→ forge/workspace/（共享句柄/事件）与同域
 // errors/phase-deriver/query/state-machine + prompt/（2.2 产物合成调用点）；四域互禁 import
@@ -238,6 +238,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
     const sourceRef = sourceRow === undefined ? undefined : { slug: sourceRow.slug, localId: sourceRow.local_id }
+    // worker-exec-evidence-replay 1.3：续跑指针领取瞬间探测（证据位 resume.md 在盘 →
+    // EVIDENCE 行——重入派发 brief 自动携带，新 worker 首步读指针续跑；缺席 = 首跑零行）
+    const evidencePointer = deps.resolveEvidencePointer?.(input.projectId, row.slug, row.local_id)
     const dispatchPrompt = composeDispatchPrompt({
       slug: row.slug,
       localId: row.local_id,
@@ -262,6 +265,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // S2b/SC3：SURFACE 单行双值（`<key> (<type>)`；缺席省行——R6 填写率缓解）
       ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
       ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
+      ...(evidencePointer !== undefined ? { evidencePointer } : {}),
     })
     const digest = dispatchDigest(dispatchPrompt)
 

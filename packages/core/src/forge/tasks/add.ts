@@ -46,6 +46,11 @@ export interface TasksVerbDeps {
   readonly store: ForgeWorkspaceStore
   /** 写后事件发射器（事务提交后 emitTasksChanged） */
   readonly events: ForgeTaskEvents
+  /**
+   * 续跑指针探测（worker-exec-evidence-replay 1.3——claim 领取瞬间取数注入 brief EVIDENCE
+   * 行；核心零 IO 纪律下由装配方注入 FS 读侧，缺席/undefined = 零指针行，首跑形态兼容）。
+   */
+  readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
 }
 
 /** fix 链深上限（C6 用户裁决：≤6，较老 forge Max nesting 3 放宽） */
