@@ -17,7 +17,6 @@ import {
   TESTING_STRATEGY_SECTION,
   type PersonaComplexity,
 } from './persona.js'
-import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
 const COMPLEXITIES: readonly PersonaComplexity[] = ['low', 'medium', 'high']
 
@@ -37,7 +36,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(Object.keys(PERSONA_VARIANTS).sort()).toEqual([...TASK_TYPES].sort())
   })
 
-  it('全矩阵：核心段①-⑧ + 高效执行锚 ×6 + AC 核查不变量恒定在场', () => {
+  it('全矩阵：核心段①-⑦ + 高效执行锚 ×6 + AC 核查不变量恒定在场', () => {
     for (const taskType of TASK_TYPES) {
       for (const cx of COMPLEXITIES) {
         const persona = composePersona(taskType, cx)
@@ -48,8 +47,8 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
           expect(persona, `${taskType}/${cx} missing execution anchor`).toContain(anchor)
         }
         expect(persona).toContain('AC 逐项核查不变量')
-        expect(persona).toContain('logs/{slug}/{task-local-id}/{NNN-issue-key}/')
-        expect(persona).toContain(CONSTRAINTS_BLOCK)
+        // 产物/续跑路径只指称变量（值由任务目录锚点节承载——persona 零绝对路径）
+        expect(persona).toContain('`forge.project_logs_dir`')
       }
     }
   })
@@ -75,17 +74,19 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(composePersona('test-run', 'medium')).toContain('交付物即测试报告')
   })
 
-  it('目标导向 todo 先行（§7 单源）：第一步建单 + 全 completed 才结算，恒定在场', () => {
+  it('目标导向 todo 先行：动手前先规划（读简报→按需读锚点目录→拆待办）+ 全 completed 才结算，恒定在场', () => {
     for (const taskType of TASK_TYPES) {
       for (const cx of COMPLEXITIES) {
         const persona = composePersona(taskType, cx)
-        expect(persona, `${taskType}/${cx}`).toContain('领取任务后的第一步（先于任何探索与改动）：把任务目标与 AC 逐项转成 todo_write 待办清单')
+        expect(persona, `${taskType}/${cx}`).toContain('动手前先规划：领取任务后的第一步（先于任何探索与改动）')
+        expect(persona, `${taskType}/${cx}`).toContain('先读任务简报，再按需读取任务锚点目录中的规格、设计')
+        expect(persona, `${taskType}/${cx}`).toContain('把要做的工作拆成 todo_write 待办清单')
         expect(persona, `${taskType}/${cx}`).toContain('清单全部 completed 后，才允许 submitTask 结算')
       }
     }
   })
 
-  it('e2e/验收证据落盘锚：核心段第 5 节分点列举 + 先落盘再继续', () => {
+  it('e2e/验收证据落盘锚：核心段第 4 节分点列举 + 先落盘再继续', () => {
     for (const taskType of TASK_TYPES) {
       const persona = composePersona(taskType, 'medium')
       expect(persona).toContain('e2e/验收测试的证据票据（trace、error-context、失败摘录）')
@@ -94,34 +95,15 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('统一证据路径约束块（worker-exec-evidence-replay S①）：单行模板 + 按轮追加不覆盖 + 细则外链，恒定在场', () => {
-    expect(CONSTRAINTS_BLOCK).not.toContain('\n')
-    expect(CONSTRAINTS_BLOCK).toContain('logs/{slug}/{task-local-id}/{NNN-issue-key}/')
-    expect(CONSTRAINTS_BLOCK).toContain('永不覆盖')
-    expect(CONSTRAINTS_BLOCK).toContain('README')
+  it('产物落盘/续跑路径变量指称（追加轮）：编号子文件夹 + 永不覆盖 + resume.md 维护，恒定在场且零绝对路径', () => {
     for (const taskType of TASK_TYPES) {
-      expect(composePersona(taskType, 'low')).toContain('按轮追加')
+      const persona = composePersona(taskType, 'low')
+      expect(persona).toContain('统一写入 `forge.project_logs_dir` 下按编号命名的子文件夹')
+      expect(persona).toContain('按轮追加、永不覆盖')
+      expect(persona).toContain('断点续跑约束')
+      expect(persona).toContain('resume.md')
+      expect(persona).toContain('自首次执行起即维护该文件')
     }
-  })
-
-  it('断点续跑约束块（worker-exec-evidence-replay 1.3/S③）：单行指针路径 + 进度三要素 + 续跑指令，恒定在场', () => {
-    expect(RESUME_POINTER_BLOCK).not.toContain('\n')
-    expect(RESUME_POINTER_BLOCK).toContain('logs/{slug}/{task-local-id}/resume.md')
-    for (const taskType of TASK_TYPES) {
-      expect(composePersona(taskType, 'low')).toContain(RESUME_POINTER_BLOCK)
-    }
-  })
-
-  it('paths 填充（claim 领取瞬间）：logs 绝对路径替换产物落盘/续跑指针两行——相对占位形态退场', () => {
-    const persona = composePersona('coding-feature', 'medium', { logsDir: 'C:\\ws-home\\logs\\f\\2.1' })
-    expect(persona).toContain('`C:\\ws-home\\logs\\f\\2.1/{NNN-issue-key}/`')
-    expect(persona).toContain('`C:\\ws-home\\logs\\f\\2.1/resume.md`')
-    expect(persona).not.toContain(CONSTRAINTS_BLOCK)
-    expect(persona).not.toContain(RESUME_POINTER_BLOCK)
-    // 缺席 paths = 相对占位形态兼容
-    const fallback = composePersona('coding-feature', 'medium')
-    expect(fallback).toContain(CONSTRAINTS_BLOCK)
-    expect(fallback).toContain(RESUME_POINTER_BLOCK)
   })
 
   it('旧审计条款移除：任务定义/执行记录保护句不再出现（任务内容与记录已入库）', () => {
@@ -255,7 +237,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
-        'evidence', 'resume.md', // worker-exec-evidence-replay 1.3：EVIDENCE 行 + 续跑指针文件名
+        'evidence', 'resume.md', 'xxx', // worker-exec-evidence-replay 1.3：续跑指针文件名 + 编号子文件夹示例词
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
       ].map((w) => w.toLowerCase()),
     )

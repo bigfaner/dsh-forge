@@ -719,7 +719,7 @@ describe('S1c claimTask 循环独占守卫（exclusivityGuard——目标解析�
 
 // ─────────────────── worker-exec-evidence-replay 1.3：重入证据指针透传（Solution③/SC3） ───────────────────
 
-describe('1.3 重入证据指针透传：claim 领取瞬间探测证据位 → brief 自动携带 EVIDENCE 行', () => {
+describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 → 简报注入 <resume> 段', () => {
   /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制） */
   function svcWithPointer(pointer: string | undefined, seen: { slug: string; localId: string }[]) {
     h ??= createTasksHarness()
@@ -738,33 +738,34 @@ describe('1.3 重入证据指针透传：claim 领取瞬间探测证据位 → b
       )
   }
 
-  it('重入派发（幂等重入）：证据位指针在盘 → brief 自动携带 EVIDENCE 行 + 续跑指令（中断重入不零上下文重述）', async () => {
+  it('重入派发（幂等重入）：证据位指针在盘 → 简报注入 <resume> 段（变量指称 + 四条规则——中断重入续跑）', async () => {
     const seen: { slug: string; localId: string }[] = []
     const claim = svcWithPointer('logs/f/1.1/resume.md', seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1', { status: 'in_progress' }) // 中断残留——重入径
     const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
     expect(r.reclaimed).toBe(true)
-    expect(r.dispatchPrompt).toContain('EVIDENCE: logs/f/1.1/resume.md')
-    expect(r.dispatchPrompt).toContain('从最后落盘点续跑')
+    expect(r.dispatchPrompt).toContain('<resume>')
+    expect(r.dispatchPrompt).toContain('{forge.project_logs_dir}/resume.md')
+    expect(r.dispatchPrompt).toContain('不得重做已完成部分')
     expect(seen).toEqual([{ slug: 'f', localId: '1.1' }]) // 领取瞬间取数——探测按目标行进行
   })
 
-  it('证据位无指针（undefined）→ brief 零 EVIDENCE 行（首跑形态）；注入面缺席（dep 缺省）同样零行', async () => {
+  it('证据位无指针（undefined）→ 简报零 <resume> 段（首跑形态）；注入面缺席（dep 缺省）同样零段', async () => {
     const seen: { slug: string; localId: string }[] = []
     const claim = svcWithPointer(undefined, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1')
     seedTask(h!.db, 'f', '1.2')
     const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
-    expect(r.dispatchPrompt).not.toContain('EVIDENCE:')
-    // dep 缺省（生产装配方缺席可选注入 = 容忍）——零指针行且不因探测崩
+    expect(r.dispatchPrompt).not.toContain('<resume>')
+    // dep 缺省（生产装配方缺席可选注入 = 容忍）——零段且不因探测崩
     const plain = (input: Parameters<typeof claimTask>[1]) => claimTask({ store: h!.store, events: h!.events }, input)
     const r2 = await plain({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's2' })
-    expect(r2.dispatchPrompt).not.toContain('EVIDENCE:')
+    expect(r2.dispatchPrompt).not.toContain('<resume>')
   })
 
-  it('指针注入 → claim 记录 digest 覆盖 EVIDENCE 行（同任务有无指针 = 不同简报指纹）', async () => {
+  it('指针注入 → claim 记录 digest 覆盖 <resume> 段（同任务有无指针 = 不同简报指纹）', async () => {
     const seen: { slug: string; localId: string }[] = []
     const claim = svcWithPointer('logs/f/2.1/resume.md', seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
@@ -777,50 +778,56 @@ describe('1.3 重入证据指针透传：claim 领取瞬间探测证据位 → b
   })
 })
 
-// ─────────────────── worker-lean-execution 追加轮：persona 路径填充 + 容器上下文块 ───────────────────
+// ─────────────────── worker-lean-execution 追加轮：任务目录锚点节追加 persona ───────────────────
 
-describe('persona 领取瞬间填充：logs 绝对路径 + 容器上下文块（worker 独享，主会话零感知）', () => {
-  /** 带 resolveLogsDir + resolveWorkerContext 注入的 claim */
-  function svcWithWorkerCtx(o: { logsDir?: string; context?: string }) {
+describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，主会话零感知）', () => {
+  /** 带 resolveWorkerContext 注入的 claim（节文本由夹具控制——渲染本体归 worker-context.test） */
+  function svcWithWorkerCtx(context: string | undefined) {
     h ??= createTasksHarness()
     return (input: Parameters<typeof claimTask>[1]) =>
       claimTask(
         {
           store: h!.store,
           events: h!.events,
-          resolveLogsDir: () => o.logsDir,
-          resolveWorkerContext: () => o.context,
+          resolveWorkerContext: (_projectId, _source, _localId) => context,
         },
         input,
       )
   }
 
-  it('logsDir 命中 → persona 产物落盘/续跑指针两行填充绝对路径；相对占位形态退场', async () => {
-    const claim = svcWithWorkerCtx({ logsDir: 'C:\\ws-home\\logs\\f\\1.1' })
+  it('锚点节非空 → persona 尾部空行分隔追加；persona 本体零绝对路径（变量指称不变）', async () => {
+    const claim = svcWithWorkerCtx(
+      [
+        '## 任务目录锚点',
+        '本任务领取的目录锚点（绝对路径即取用值；行下注释为该目录职责）：',
+        '',
+        'WORKSPACE: Z:\\ws',
+        '  工作区仓库根——代码、测试与配置所在；检索与改动均在此树内。',
+        'feature_dir: Z:\\ws\\.forge\\docs\\features\\f/',
+        '  特性文档目录——prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。',
+        'forge.project_logs_dir: C:\\ws-home\\logs\\f\\1.1/',
+        '  任务运行产物根——按编号命名的各轮证据子文件夹与 resume.md 进度文件所在。',
+      ].join('\n'),
+    )
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1')
     const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
-    expect(r.persona).toContain('`C:\\ws-home\\logs\\f\\1.1/{NNN-issue-key}/`')
-    expect(r.persona).toContain('`C:\\ws-home\\logs\\f\\1.1/resume.md`')
-    expect(r.persona).not.toContain('logs/{slug}/{task-local-id}/')
-  })
-
-  it('容器上下文块非空 → persona 尾部空行分隔追加；空串/缺席 = 形态兼容（零追加）', async () => {
-    const claim = svcWithWorkerCtx({
-      logsDir: 'C:\\ws-home\\logs\\f\\1.1',
-      context: `WORKSPACE: Z:\\ws\n\nfeature_dir: Z:\\ws\\.forge\\docs\\features\\f/\n└─ prd/`,
-    })
-    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
-    seedTask(h!.db, 'f', '1.1')
-    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's' })
-    expect(r.persona.endsWith('└─ prd/')).toBe(true)
-    expect(r.persona).toContain('\n\nWORKSPACE: Z:\\ws')
+    expect(r.persona.endsWith('任务运行产物根——按编号命名的各轮证据子文件夹与 resume.md 进度文件所在。')).toBe(true)
+    expect(r.persona).toContain('\n\n## 任务目录锚点')
     // digest 不受 persona 影响（persona 不入简报——分层面）
     expect(r.digest).toBe(dispatchDigest(r.dispatchPrompt))
-    // 空串 = 零追加
-    const claimEmpty = svcWithWorkerCtx({})
-    const r2 = await claimEmpty({ projectId: P(), taskRef: { slug: 'f', localId: '1.1' }, sessionId: 's2' })
-    expect(r2.persona).not.toContain('WORKSPACE:')
-    expect(r2.persona).not.toContain('`C:\\ws-home')
+  })
+
+  it('锚点节空串/dep 缺席 = 形态兼容（零追加——persona 原样）', async () => {
+    const claimEmpty = svcWithWorkerCtx('') // 先建 harness（h 惰性初始化）
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.2')
+    const r = await claimEmpty({ projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, sessionId: 's2' })
+    expect(r.persona).not.toContain('## 任务目录锚点')
+    expect(r.persona).not.toContain('WORKSPACE:')
+    const plain = (input: Parameters<typeof claimTask>[1]) => claimTask({ store: h!.store, events: h!.events }, input)
+    seedTask(h!.db, 'f', '1.3')
+    const r2 = await plain({ projectId: P(), taskRef: { slug: 'f', localId: '1.3' }, sessionId: 's3' })
+    expect(r2.persona).not.toContain('## 任务目录锚点')
   })
 })

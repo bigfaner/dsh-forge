@@ -58,12 +58,10 @@ export interface TasksServiceDeps {
   readonly resolveWsPath: (projectId: string) => string
   /** git 只读执行注入（缺席 = 生产 execFile——git-lookup.ts defaultExecFile；测试桩受控注入） */
   readonly gitExec?: GitExecFile
-  /** 续跑指针探测（worker-exec-evidence-replay 1.3——可选，缺席 = brief 零 EVIDENCE 行） */
+  /** 续跑指针探测（worker-exec-evidence-replay 1.3——可选，缺席 = 简报零 <resume> 段） */
   readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
-  /** 任务产物目录解析（worker-lean-execution 追加轮——可选，缺席 = persona 相对占位形态） */
-  readonly resolveLogsDir?: (projectId: string, slug: string, localId: string) => string | undefined
-  /** worker 容器上下文块渲染（worker-lean-execution 追加轮——可选，缺席/空串 = persona 零追加） */
-  readonly resolveWorkerContext?: (projectId: string, source: ContainerRef) => string
+  /** worker 任务目录锚点节渲染（worker-lean-execution 追加轮——可选，缺席/空串 = persona 零追加） */
+  readonly resolveWorkerContext?: (projectId: string, source: ContainerRef, localId: string) => string
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */

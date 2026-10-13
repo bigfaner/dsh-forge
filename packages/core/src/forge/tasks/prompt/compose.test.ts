@@ -10,7 +10,8 @@ import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
 import {
   composeDispatchPrompt,
   resolveCoverage,
-  RESUME_POINTER_BLOCK,
+  RESUME_POINTER_FILE,
+  RESUME_SECTION,
   TASK_CATEGORY_FOR_TYPE,
   type DispatchPromptInput,
 } from './compose.js'
@@ -429,26 +430,34 @@ describe('运行期防御面（词汇外值拒绝——TS 已封，防 as 断言
   })
 })
 
-// ─────────────────── worker-exec-evidence-replay 1.3：EVIDENCE 续跑指针行（Solution③/SC3） ───────────────────
+// ─────────────────── worker-exec-evidence-replay 1.3：<resume> 续跑规则段（Solution③/SC3 收敛形态） ───────────────────
 
-describe('1.3 EVIDENCE 续跑指针行（重入派发 brief 自动携带——首步读指针续跑）', () => {
-  it('evidencePointer 在场 → EVIDENCE 行（相对路径 + 首步读指针续跑指令），VARS 之后、<goal> 之前', () => {
+describe('1.3 <resume> 续跑规则段（重入派发简报整段注入——规则自洽，不回翻系统面）', () => {
+  it('evidencePointer 在场 → <resume> 段（变量指称 + 四条规则），键值行之后、<goal> 之前', () => {
     const prompt = composeDispatchPrompt({
       ...fullInput({ taskType: 'coding-feature' }),
       evidencePointer: 'logs/m2-pipeline/2.2/resume.md',
     })
-    expect(prompt).toContain('EVIDENCE: logs/m2-pipeline/2.2/resume.md')
-    expect(prompt).toContain('首步读取')
-    expect(prompt).toContain('从最后落盘点续跑')
-    expect(prompt).not.toContain('会话快照')
+    expect(prompt).toContain('<resume>')
+    expect(prompt).toContain('</resume>')
+    // 路径零绝对值——只引用变量（值由 agent 提示词任务目录锚点节承载）
+    expect(prompt).toContain('{forge.project_logs_dir}/resume.md')
+    expect(prompt).not.toContain('logs/m2-pipeline/2.2/resume.md')
+    // 四条规则锚
+    expect(prompt).toContain('本任务已有部分进度')
+    expect(prompt).toContain('将未完成项转入 todo_write 后继续执行，不得重做已完成部分')
+    expect(prompt).toContain('先核对内容，再决定沿用或重跑；未核对不得覆盖')
+    expect(prompt).toContain('进度变化即覆盖写入，仅保留最新状态')
+    expect(prompt).toContain('本段缺席 = 首次执行')
     const at = (k: string): number => prompt.indexOf(k)
-    expect(at('EVIDENCE:')).toBeGreaterThan(at('VARS:'))
-    expect(at('<goal>')).toBeGreaterThan(at('EVIDENCE:'))
+    expect(at('<resume>')).toBeGreaterThan(at('VARS:'))
+    expect(at('<goal>')).toBeGreaterThan(at('</resume>'))
   })
 
-  it('evidencePointer 缺席 → 省行（零证据位 = 首跑零行，M2 形态兼容）', () => {
+  it('evidencePointer 缺席 → 零段（首跑形态兼容）', () => {
     const prompt = composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' }))
-    expect(prompt).not.toContain('EVIDENCE:')
+    expect(prompt).not.toContain('<resume>')
+    expect(prompt).not.toContain('EVIDENCE')
   })
 
   it('evidencePointer 注入 → digest 新值（简报重合成判据同族）', () => {
@@ -462,14 +471,10 @@ describe('1.3 EVIDENCE 续跑指针行（重入派发 brief 自动携带——�
     expect(withPointer).not.toBe(base)
   })
 
-  it('断点续跑约束块（worker 系统提示词硬约定——单行 + 指针路径模板 + 续跑指令），persona 面恒定在场', () => {
-    expect(RESUME_POINTER_BLOCK).not.toContain('\n')
-    expect(RESUME_POINTER_BLOCK).toContain('logs/{slug}/{task-local-id}/resume.md')
-    expect(RESUME_POINTER_BLOCK).toContain('已完成轮次')
-    expect(RESUME_POINTER_BLOCK).toContain('已清零簇')
-    expect(RESUME_POINTER_BLOCK).toContain('证据目录指针')
-    for (const taskType of TASK_TYPES) {
-      expect(composePersona(taskType, 'medium')).toContain(RESUME_POINTER_BLOCK)
-    }
+  it('RESUME_SECTION 单源形状：单文件名常量 + 段文本（EVIDENCE 词汇废弃——由段承载）', () => {
+    expect(RESUME_POINTER_FILE).toBe('resume.md')
+    expect(RESUME_SECTION.startsWith('<resume>\n')).toBe(true)
+    expect(RESUME_SECTION.endsWith('\n</resume>')).toBe(true)
+    expect(RESUME_SECTION).not.toContain('EVIDENCE')
   })
 })

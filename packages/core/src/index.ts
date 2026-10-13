@@ -146,15 +146,18 @@ const corePlugin: CorePlugin = Object.assign(
           events,
           resolveWsPath: routing.wsPath, // 十一法全接线（2.6 读面收口）
           // worker-exec-evidence-replay 1.3：续跑指针探测（claim 领取瞬间证据位读取——
-          // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 零指针行）
+          // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 首跑零 <resume> 段）
           resolveEvidencePointer: (projectId, slug, localId) =>
             readEvidencePointer(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), slug, localId),
-          // worker-lean-execution 追加轮：产物目录解析（logs 绝对路径——与续跑指针同锚）+
-          // worker 容器上下文块（WORKSPACE/容器目录树——persona 通道 worker 独享；fail-soft）
-          resolveLogsDir: (projectId, slug, localId) =>
-            join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), 'logs', slug, localId),
-          resolveWorkerContext: (projectId, source) =>
-            renderWorkerContext({ wsPath: routing.wsPath(projectId), forgeDir: routing.forgeDir(projectId), source }),
+          // worker-lean-execution 追加轮：任务目录锚点节（WORKSPACE/容器目录树/logs 锚点——
+          // persona 通道 worker 独享；logs 与续跑指针共享 deriveTaskStoreDir 单源锚；fail-soft）
+          resolveWorkerContext: (projectId, source, localId) =>
+            renderWorkerContext({
+              wsPath: routing.wsPath(projectId),
+              forgeDir: routing.forgeDir(projectId),
+              logsDir: join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), 'logs', source.slug, localId),
+              source,
+            }),
         }),
       )
       ctx.reflect.provide(

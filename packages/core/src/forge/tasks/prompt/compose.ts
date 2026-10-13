@@ -118,32 +118,30 @@ export interface DispatchPromptInput {
   surfaceType?: string
   /**
    * 续跑指针（worker-exec-evidence-replay 1.3：`logs/<slug>/<localId>/resume.md` 相对路径，
-   * 正斜杠——调用方领取瞬间探测证据位注入；缺席省行 = 首跑/证据位空。在场即重入语境：
-   * worker 首步读指针从最后落盘点续跑）。
+   * 调用方领取瞬间探测证据位注入；缺席 = 首跑零段。在场即重入语境：简报注入 `<resume>`
+   * 续跑规则段（路径引用变量 `{forge.project_logs_dir}`——值由任务目录锚点节承载）。
    */
   evidencePointer?: string
 }
 
-// ─────────────────────────── 统一证据路径约束块（worker-exec-evidence-replay Solution①） ───────────────────────────
+// ─────────────────────────── 续跑规则段（worker-exec-evidence-replay Solution①/③ 收敛形态） ───────────────────────────
 
-/**
- * 证据路径约束块（worker 系统提示词硬约定——全 worker 生效，不靠任务书/技能各自携带）：
- * 单行路径模板（容量风险 #4 缓解），细则外链到证据目录内 README。
- * 落盘侧对应实现：plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
- */
-export const CONSTRAINTS_BLOCK =
-  '证据落盘约束：一切跑批/证据产物统一写入 `logs/{slug}/{task-local-id}/{NNN-issue-key}/`（工作区派生目录下；NNN 三位序号按轮追加命名、永不覆盖——失败轮日志在盘可考；细则见该证据目录内 README）。'
-
-/**
- * 断点续跑约束块（worker-exec-evidence-replay Solution③——重入证据指针透传的写入侧）：
- * worker 执行中把「已完成轮次/已清零簇/证据目录指针」持续更新写入任务证据位根部的单点
- * 指针文件（覆盖写——指针非证据，最新进度即真相）。读取侧对应实现：core tasks
- * evidence-pointer.ts（claim 领取瞬间探测 → brief EVIDENCE 行自动携带）。轻形态红线：
- * 不做会话快照/进程迁移。
- */
+/** 断点续跑进度文件名（探测侧 evidence-pointer.ts 与落盘侧共享单点定义） */
 export const RESUME_POINTER_FILE = 'resume.md'
-export const RESUME_POINTER_BLOCK =
-  '断点续跑约束：执行中把「已完成轮次/已清零簇/证据目录指针」持续更新写入 `logs/{slug}/{task-local-id}/resume.md`（覆盖写单点指针——最新进度即真相）；重入派发简报携带 EVIDENCE 行时，首步读取该指针从最后落盘点续跑，不零上下文重述。'
+
+/**
+ * `<resume>` 续跑规则段（重入命中整段注入简报——键值行之后、`<goal>` 之前；规则本体
+ * 自洽，worker 不回翻系统面即可执行）。路径只引用变量 `{forge.project_logs_dir}`
+ * （绝对路径由 agent 提示词任务目录锚点节承载——简报零日志路径）。落盘侧对应实现：
+ * plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
+ */
+export const RESUME_SECTION = `<resume>
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.project_logs_dir}/resume.md。
+1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
+2. 同目录下按编号命名的子文件夹（如 001-xxx/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
+3. 执行中持续更新该文件：进度变化即覆盖写入，仅保留最新状态。
+4. 本段缺席 = 首次执行：从零开始，并自第一轮起按上述方式维护该文件。
+</resume>`
 
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
 
@@ -181,8 +179,9 @@ function singleLine(criterion: string): string {
 }
 
 /** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
- *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS/EVIDENCE——SOURCE = M3 2.4 增键紧随 TASK_ID；
+ *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
  *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
+ *  `<resume>` = 重入命中的续跑规则段（evidencePointer 在场才注入——键值行之后）；
  *  GOAL = `<goal>` 包围的任务体段落（目标 + ACCEPTANCE_CRITERIA 同段——worker 面无
  *  queryTask 时的定义唯一到达面）。TITLE 缺席时首行为 TASK_ID；简报以 `</goal>`（在场）或
  *  末键行收尾——结算出口不在简报（persona/技能承载）。 */
@@ -209,11 +208,9 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
-    input.evidencePointer !== undefined
-      ? `EVIDENCE: ${input.evidencePointer}（断点续跑指针——首步读取，从最后落盘点续跑，不零上下文重述）`
-      : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
+  if (input.evidencePointer !== undefined) context += `\n${RESUME_SECTION}`
   if (input.goal !== undefined || (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0)) {
     context += '\n<goal>'
     if (input.goal !== undefined) context += `\n${input.goal}`

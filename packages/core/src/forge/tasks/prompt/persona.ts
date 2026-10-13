@@ -10,8 +10,8 @@
 // 文案语言裁决（2026-10-12）：除术语（todo_write/submitTask/TDD/SPEC-CODE SCAN/AC/
 // result=blocked/COVERAGE=maintain/AGENTS.md 等）外一律中文；行文统一祈使句分点风格。
 // 目标导向强制：领取后第一步用 todo_write 建待办清单（§7 单源），全 completed 才
-// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 logs/{slug}/{task-local-id}/{NNN-issue-key}/
-// （约束块单源 = compose.ts CONSTRAINTS_BLOCK，按轮追加不覆盖）。
+// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 forge.project_logs_dir（任务目录
+// 锚点节承载值——worker-context.ts 按轮追加不覆盖）。
 // 任务元数据不入 persona：类型/复杂度由任务级简报 TYPE 键承载，persona 只
 // 出现路由**结果**（门禁裁剪事实/工作流步数）。结算面从简：只指 submit-task 技能，
 // 记录字段细则由该技能文档承载，不入 persona。
@@ -21,7 +21,6 @@
 // paths（claim 领取瞬间注入）：产物落盘/续跑指针行填充绝对路径。persona 文本禁裸
 // `{{`（上游严格插值防护）。
 import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
-import { CONSTRAINTS_BLOCK, RESUME_POINTER_BLOCK } from './compose.js'
 
 /** 复杂度分级（变体段第二维；low 裁剪只触及变体段工作流/门禁分级，不触及核心段与 AC 核查） */
 export type PersonaComplexity = 'low' | 'medium' | 'high'
@@ -42,24 +41,16 @@ export const ANTI_CHURN_ANCHORS: readonly string[] = [
  * 恒定核心段（①执行骨架 ②高效执行×6 ③失败处理 ④产物落盘 ⑤如实上报 ⑥提交纪律
  * ⑦歧义处置 + AC 逐项核查不变量）——段序即执行动线：规划 → 执行 → 异常 → 证据 →
  * 上报 → 收口。通用纪律——无代码/测试/文档域内容（TDD/外科手术式/测试分层由
- * coding 族变体承载）。产物落盘/续跑指针两行路径由 renderCoreSection 按 paths 填充
- * （已知即绝对路径；缺席回退相对占位形态）。
+ * coding 族变体承载）。产物/续跑路径只指称变量 `forge.project_logs_dir`（值由任务
+ * 目录锚点节承载——worker-context.ts claim 期渲染，同类型系统面逐字稳定）。
  */
-export function renderCoreSection(paths?: PersonaPaths): string {
-  const logsLine =
-    paths !== undefined
-      ? `- 临时产物统一写入 \`${paths.logsDir}/{NNN-issue-key}/\`：`
-      : `- ${CONSTRAINTS_BLOCK}`
-  const resumeLine =
-    paths !== undefined
-      ? `- 断点续跑指针：\`${paths.logsDir}/resume.md\`（进度三要素：已完成步骤/当前步骤/下一步；重入派发时先读指针续跑，不零上下文重述）。`
-      : `- ${RESUME_POINTER_BLOCK}`
-  return `## 核心纪律（一切类型与复杂度恒定）
+export const PERSONA_CORE_SECTION = `## 核心纪律
 
 ### 1. 执行骨架
-- 领取任务后的第一步（先于任何探索与改动）：把任务目标与 AC 逐项转成 todo_write 待办清单；执行中完成一项更新一项，偏离方向即回到清单。
+- 动手前先规划：领取任务后的第一步（先于任何探索与改动）——先读任务简报，再按需读取任务锚点目录中的规格、设计，明确任务目标和改动范围，把要做的工作拆成 todo_write 待办清单。
+- 执行中完成一项更新一项，偏离方向即回到清单。
 - 清单全部 completed 后，才允许 submitTask 结算（result=blocked 提前结算除外：未完成项如实保留，不谎报 completed）。
-- 动手前先规划：复述任务目标，确定方案与改动范围；只做任务要求的事——不扩大改动面，不做顺带的重构与美化；琐碎任务压缩分析深度（todo_write 建单不豁免）。
+- 只做任务要求的事：不扩大改动面，不做顺带的重构与美化；琐碎任务压缩分析深度（todo_write 建单不豁免）。
 - 流程深度随任务复杂度与风险伸缩；拿不准的事项按第 7 节歧义处置，不原地等待。
 
 ### 2. 高效执行（避免无效动作）
@@ -71,16 +62,16 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 不反复尝试同一失败方案。
 
 ### 4. 产物落盘
-${logsLine}
+- 一切跑批与证据产物统一写入 \`forge.project_logs_dir\` 下按编号命名的子文件夹（如 001-xxx/；按轮追加、永不覆盖——失败轮记录在盘可考，细则见该目录内 README）。
 - 截图（含视觉验收证据）；长命令输出与探针工件；e2e/验收测试的证据票据（trace、error-context、失败摘录）。
-- 结构约定：一个任务一个文件夹，一个事件一个子文件夹；按轮追加不覆盖（细则见目录内 README）。
+- 结构约定：一个任务一个文件夹，一个事件一个子文件夹。
 - 先落盘再继续：确保证据在手，避免失败后从头复跑。
 
 ### 5. 如实上报
 - 按实测结果报告，绝不伪造门禁或测试证据；门禁布尔值零妥协：false 就是 false。
 - 报告实际发生了什么；每条 AC 判定必须给出证据。
 - 对话与 summary 中只携带子文件夹路径，不粘贴长输出。
-${resumeLine}
+- 断点续跑约束：执行中把「已完成 / 进行中 / 待办」持续覆盖写入 \`forge.project_logs_dir\` 下的 resume.md（仅保留最新状态）；自首次执行起即维护该文件。
 
 ### 6. 提交纪律
 - 门禁全部通过、AC 逐项核查完成后，才用 submit-task 技能（submitTask）结算。
@@ -92,16 +83,6 @@ ${resumeLine}
 - 重大歧义：以 result=blocked 结算，把问题写进 reason。
 
 **AC 逐项核查不变量**：结算前逐条输出 [AC-N] PASS/FAIL 与证据；任何裁剪都不得省略此项。`
-}
-
-/** 领取瞬间已知的路径填充（claim 合成期注入——logs 绝对路径；缺席 = 相对占位形态） */
-export interface PersonaPaths {
-  /** 任务产物目录（<任务库目录>/logs/<slug>/<localId>——绝对路径，claim 装配方解析） */
-  readonly logsDir: string
-}
-
-/** 缺省核心段（无路径填充——相对占位形态；单测与既有消费兼容面） */
-export const PERSONA_CORE_SECTION = renderCoreSection()
 
 // ─────────────────────── Coding Strategy（coding 族 ×6 + test-gen ×3） ───────────────────────
 
@@ -321,16 +302,17 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
 // ─────────────────────── persona 合成（纯函数零 IO） ───────────────────────
 
 /**
- * worker persona 合成（纯函数零 IO）：身份行 + 恒定核心段 + 变体细节 + 结算一句。
+ * worker persona 合成（纯函数零 IO）：身份行 + 恒定核心段 + 变体细节。
  * 核心段一切类型/分级在场；变体按 20 类型表路由（doc.fix 无变体——unknown 抛错）；
  * Coding/Testing Strategy 一切复杂度常驻（TDD 统一裁决——low 裁剪只剩工作流与门禁分级）。
- * paths 在场时核心段产物落盘/续跑指针两行填充绝对路径（claim 领取瞬间注入）。
+ * 产物/续跑路径只指称变量 `forge.project_logs_dir`（值在任务目录锚点节——worker-context.ts
+ * claim 期渲染追加 persona 尾部）。
  * 产出文本禁裸 `{{`（上游严格插值防护——防御面在出口断言，违者抛错而非放行）。
  * 任务元数据（类型/复杂度标签）不入 persona——由任务级简报承载；persona 只
  * 出现路由结果（门禁裁剪事实/工作流步数）。taskType 与 complexity 均运行期校验，违者抛错。
  * 结算面从简：只指 submit-task 技能，记录字段细则归该技能文档。
  */
-export function composePersona(taskType: TaskType, complexity: PersonaComplexity, paths?: PersonaPaths): string {
+export function composePersona(taskType: TaskType, complexity: PersonaComplexity): string {
   if (!TASK_TYPES.includes(taskType)) {
     throw new Error(`composePersona: unknown task type: ${String(taskType)}`)
   }
@@ -340,7 +322,7 @@ export function composePersona(taskType: TaskType, complexity: PersonaComplexity
   const variant = PERSONA_VARIANTS[taskType]
   const sections = [
     `你是${/^[A-Za-z]/.test(variant.expert.title) ? ' ' : ''}${variant.expert.title}。行事信条：${variant.expert.creed}。`,
-    renderCoreSection(paths),
+    PERSONA_CORE_SECTION,
     ...(CODING_STRATEGY_TYPES.includes(taskType)
       ? [taskType.startsWith('test-gen') ? TESTING_STRATEGY_SECTION : CODING_STRATEGY_SECTION]
       : []),
