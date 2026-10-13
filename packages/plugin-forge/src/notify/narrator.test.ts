@@ -122,6 +122,33 @@ describe('S4 · 阻塞族发射机械防线（AC4——reason 全文只落盘）
     expect(channel.calls[0]?.headline).toBe('[forge·自动处理] 3.2 装配桩 — 阻塞 · 已创建修复任务 fix-3 · 修构建脚本依赖版本')
   })
 
+  it('⑩ blocked-ask-user（终局）走 followup 唤醒主 agent；⑦-⑨ 中段场景保持 notice', async () => {
+    const channel = recordingChannel()
+    const incidents = incidentSpy('logs/m2-pipeline/4.2/001-blocked/')
+    const narrator = createNarrator({ channel, incidents })
+    await narrator.blocked(
+      'session-1',
+      'blocked-ask-user',
+      { sourceSlug: 'm2-pipeline', taskLabel: '4.2 导出功能' },
+      { taskKey: '4.2', reason: REASON },
+    )
+    // 终局阻塞 = 完整消息新回合（阻塞上下文进会话触发主 agent 分析——裁决仍走问询 UI）
+    expect(channel.calls[0]?.method).toBe('followup')
+    expect(channel.calls[0]?.sessionId).toBe('session-1')
+    expect(channel.calls[0]?.text).toContain('无法自动处理——已向你发起问询')
+    expect(channel.calls[0]?.text).toContain('详情: logs/m2-pipeline/4.2/001-blocked/')
+    expect(channel.calls[0]?.text).not.toContain(REASON)
+    expect(channel.calls[0]?.text).toMatch(/\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    // 中段场景（wait-external）不受影响：notice 零模型注入保持
+    await narrator.blocked(
+      'session-1',
+      'blocked-wait-external',
+      { sourceSlug: 'm2-pipeline', taskLabel: '4.2 导出功能', externalSlug: 'feat-y' },
+      { taskKey: '4.2', reason: REASON },
+    )
+    expect(channel.calls[1]?.method).toBe('notice')
+  })
+
   it('notice 直发径：headline 可选透传至通道（缺席 = 不带 headline——回退截断由 faces 兜底）', async () => {
     const channel = recordingChannel()
     const narrator = createNarrator({ channel })

@@ -42,7 +42,8 @@ export interface Narrator {
   notice(sessionId: string, text: string, headline?: string): Promise<void>
   /** 终局事件（样例 ⑬-⑰，每循环 1–2 条）——followup 通道（完整消息）；fail-soft */
   followup(sessionId: string, text: string): Promise<void>
-  /** 阻塞族发射（样例 ⑦-⑩）：reason 全文落盘 → 摘要 + 子文件夹路径进 notice 叙述 */
+  /** 阻塞族发射（⑦-⑨ 中段 notice 零模型注入；⑩ 终局 followup 唤醒主 agent 分析——裁决仍
+   * 走问询 UI，decisions #16）：reason 全文落盘 → 摘要 + 子文件夹路径进叙述 */
   blocked<S extends BlockedScenarioId>(
     sessionId: string,
     scenario: S,
@@ -87,8 +88,18 @@ export function createNarrator(deps: NarratorDeps): Narrator {
         reasonSummary,
         ...(incidentPath !== undefined ? { incidentPath } : {}),
       } as NarrativePayloadMap[S]
+      const text = renderNarrative(scenario, payload)
+      // ⑩ blocked-ask-user 是终局事件（无法自动处理→人工裁决）：走 followup 新回合唤醒主
+      // agent——阻塞上下文进会话触发分析（2026-10-13 用户定罪「收到阻塞上下文未触发主
+      // agent 分析」；与 ⑬-⑰ 终局族通道对齐）；裁决仍走问询 UI（decisions #16 不变——
+      // 分析入会话，裁决不经会话）。⑦-⑨ 循环中段场景保持 notice 零模型注入（fix 链续领/
+      // 外部等待，循环未终——不逐事件烧模型回合）。
+      if (scenario === 'blocked-ask-user') {
+        await safe.followup(sessionId, `${text}\n${localDateTimeLine()}`)
+        return
+      }
       // 折叠摘要 = 场景专用单行摘要（S4 增强——同源载荷事实，替代整段截断）
-      await safe.notice(sessionId, renderNarrative(scenario, payload), renderHeadline(scenario, payload))
+      await safe.notice(sessionId, text, renderHeadline(scenario, payload))
     },
     recordIncident(input: IncidentInput): string | undefined {
       return incidents.record(input)
