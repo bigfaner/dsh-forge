@@ -18,6 +18,7 @@ import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import { createSettingsService } from './forge/settings/service.js'
 import { createDocsService } from './forge/small-domains/docs.js'
+import { createBugsService } from './forge/small-domains/bugs.js'
 import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
@@ -180,6 +181,11 @@ const corePlugin: CorePlugin = Object.assign(
         }),
       )
       ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
+      // fix-bug 第五小域（bug 台账两写径 + listBugs）：recordBug/resolveBug 工具面 + RPC list 消费
+      ctx.reflect.provide(
+        'forgeBugs',
+        createBugsService({ store, events, resolveWsPath: routing.wsPath }),
+      )
     }
     return () => {
       taskStore?.dispose() // 每工作区任务库句柄统一关闭（3.4 接插件 disposer 前的进程内收口）

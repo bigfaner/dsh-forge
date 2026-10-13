@@ -46,6 +46,7 @@ function depsWithCapture() {
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals,
+    bugs: {} as ForgeToolDeps['bugs'],
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { deps, created, transitioned }
@@ -185,6 +186,7 @@ describe('transitionProposal', () => {
     const deps: ForgeToolDeps = {
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
+      bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
     }
     const tool = createTransitionProposalTool(deps)
@@ -251,6 +253,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
     const tool = createCreateProposalTool({
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
+      bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
@@ -269,6 +272,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
     const tool = createTransitionProposalTool({
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
+      bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })

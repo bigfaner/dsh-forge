@@ -1,6 +1,6 @@
 // 1.1（M3）AC2 —— worker 收窄矩阵常量 pin（tech-design §Interface 2 收窄矩阵表逐格对照）。
 // 断言面：任务类型族四值 exhaustive 分割 TASK_TYPES 20 值 / 矩阵 ✓ 表逐格 / 全局拒绝集 /
-// forge 面恰两动词（claimTask/queryTask/dispatchTask 不入 worker 面）/ 映射表骨架（OQ#2）。
+// forge 面四动词（fix-bug 两 bug 写径放行；claimTask/queryTask/dispatchTask 不入 worker 面）/ 映射表骨架（OQ#2）。
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { TASK_TYPES } from './labels.js'
 import {
@@ -115,8 +115,8 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
     expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('subagent')
   })
 
-  it('forge 面 = 恰 submitTask + addTask（claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
-    expect(WORKER_FORGE_TOOLS).toEqual(['submitTask', 'addTask'])
+  it('forge 面 = 四动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径——fix-bug coding-fix worker 放行；claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
+    expect(WORKER_FORGE_TOOLS).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug'])
     expect(WORKER_FORGE_TOOLS).not.toContain('claimTask')
     expect(WORKER_FORGE_TOOLS).not.toContain('queryTask')
     expect(WORKER_FORGE_TOOLS).not.toContain('dispatchTask')
@@ -124,7 +124,7 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
 })
 
 describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 standard 组合实面枚举核对）', () => {
-  it('全表 17 名 = forge 两动词 + 五上游族逐名（机械核对记录归 G1 pin #20）', () => {
+  it('全表 19 名 = forge 四动词 + 五上游族逐名（机械核对记录归 G1 pin #20）', () => {
     expect(Object.keys(WORKER_TOOL_NAME_FAMILY).sort()).toEqual([
       'addTask',
       'bash',
@@ -137,6 +137,8 @@ describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 stand
       'pwsh',
       'read',
       'read_image',
+      'recordBug',
+      'resolveBug',
       'submitTask',
       'web_fetch',
       'web_search',
@@ -144,12 +146,12 @@ describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 stand
     ].sort())
   })
 
-  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 二）', () => {
+  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 四）', () => {
     const byFamily = new Map<WorkerToolFamily, string[]>()
     for (const [name, family] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
       byFamily.set(family, [...(byFamily.get(family) ?? []), name].sort())
     }
-    expect(byFamily.get('forge')).toEqual(['addTask', 'submitTask'])
+    expect(byFamily.get('forge')).toEqual(['addTask', 'recordBug', 'resolveBug', 'submitTask'])
     expect(byFamily.get('fs')).toEqual(['edit', 'glob', 'grep', 'read', 'write'])
     expect(byFamily.get('shell')).toEqual(['bash', 'pwsh'])
     expect(byFamily.get('jobs')).toEqual(['job_kill', 'job_list', 'job_output'])

@@ -332,8 +332,9 @@ describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）'
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
       expect(provided.has('forgeSettings')).toBe(false)
-      // 六服务仍齐（P1 双服务 + M2 四域）
+      // 六服务仍齐（P1 双服务 + M2 四域 + fix-bug bug 域）
       expect([...provided.keys()].sort()).toEqual([
+        'forgeBugs',
         'forgeDocs',
         'forgeFeatures',
         'forgeKnowledge',

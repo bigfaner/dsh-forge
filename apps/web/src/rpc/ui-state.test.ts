@@ -40,6 +40,11 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   // main-agent-task-tools（updateTask 锁定面）
   ERR_TASK_LOCKED: 'error-bar',
   ERR_TASK_EDGE_ORIGIN_LOCKED: 'error-bar',
+  // fix-bug（bug 域两写径）
+  ERR_BUG_NOT_FOUND: 'empty-state',
+  ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
+  ERR_BUG_ALREADY_RESOLVED: 'error-bar',
+  ERR_COMMIT_HASH_REQUIRED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

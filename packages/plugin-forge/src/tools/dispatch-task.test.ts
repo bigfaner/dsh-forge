@@ -178,6 +178,7 @@ function harness(
   const deps: DispatchTaskToolDeps = {
     tasks,
     proposals: {} as DispatchTaskToolDeps['proposals'],
+    bugs: {} as DispatchTaskToolDeps['bugs'],
     resolveProjectId: (cwd) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     events: sink,
     ...(options.settings !== undefined ? { settings: options.settings as DispatchTaskToolDeps['settings'] } : {}),
@@ -341,10 +342,12 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'updateTask',
       'workflow',
     ]
-    // coding：web ✗（fs/shell/jobs/read-image ✓）
-    expect(deriveWorkerToolFilter('coding-fix').deny.sort()).toEqual(
-      [...base, 'web_fetch', 'web_search'].sort(),
-    )
+    // coding：web ✗（fs/shell/jobs/read-image ✓）——fix-bug 两 bug 写径（recordBug/resolveBug）
+    // coding-fix worker 放行（forge 族 ✓——收窄面不含 deny 两工具）
+    const codingFixDeny = deriveWorkerToolFilter('coding-fix').deny.sort()
+    expect(codingFixDeny).toEqual([...base, 'web_fetch', 'web_search'].sort())
+    expect(codingFixDeny).not.toContain('recordBug')
+    expect(codingFixDeny).not.toContain('resolveBug')
     // doc：jobs ✗ / read-image ✗ / web ✗
     expect(deriveWorkerToolFilter('doc').deny.sort()).toEqual(
       [...base, 'job_kill', 'job_list', 'job_output', 'read_image', 'web_fetch', 'web_search'].sort(),
@@ -377,11 +380,20 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
-      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族只给 submitTask+addTask）`).toBe(true)
+      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
       expect(triageDeny.has(name), `${name} 应入 triage deny（仅主 agent 面）`).toBe(true)
     }
     expect(workerDeny.has('submitTask')).toBe(false)
     expect(workerDeny.has('addTask')).toBe(false)
+    // fix-bug 两 bug 写径：worker 面（forge 族四动词）+ triage 面（仅决策不执行——deny）分治
+    expect(workerDeny.has('recordBug')).toBe(false)
+    expect(workerDeny.has('resolveBug')).toBe(false)
+    expect(triageDeny.has('recordBug')).toBe(true)
+    expect(triageDeny.has('resolveBug')).toBe(true)
+  })
+
+  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 四动词（submitTask/addTask + 两 bug 写径）——fix-bug worker 放行钉住', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug'])
   })
 })
 
@@ -1067,6 +1079,7 @@ describe('halted 防线（连续失败 ×3 粘住/成功清零/冷启动重置�
     const freshTool = fresh.createDispatchTaskTool({
       tasks,
       proposals: {} as DispatchTaskToolDeps['proposals'],
+    bugs: {} as DispatchTaskToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
       spawn: async () => okHandle(),
@@ -1217,6 +1230,7 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
     const tool = createDispatchTaskTool({
       tasks: bareTasks(),
       proposals: {} as DispatchTaskToolDeps['proposals'],
+    bugs: {} as DispatchTaskToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => h.events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
       settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'low' } }) },
@@ -1243,6 +1257,7 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
     const tool = createDispatchTaskTool({
       tasks: bareTasks(),
       proposals: {} as DispatchTaskToolDeps['proposals'],
+    bugs: {} as DispatchTaskToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       spawn: async () => okHandle(),
     })

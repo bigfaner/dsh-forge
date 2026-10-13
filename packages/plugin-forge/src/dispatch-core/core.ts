@@ -1,4 +1,4 @@
-﻿// dispatch-core · 派发核心（S1a 可拆卸壳分层——implementation-blueprint §3「dispatchCore」：
+// dispatch-core · 派发核心（S1a 可拆卸壳分层——implementation-blueprint §3「dispatchCore」：
 // dispatch-task.ts 单体 execute 裂变的共享面）。主链 = claim → 组装 → spawn → 事件发射
 // （+ guard 机械 + spawn 契约 + 结算核；后台径 = jobs 包装的结算后置交付）。
 //
@@ -35,7 +35,7 @@ import type {
 import { emitToolError } from '../events/sink.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
-import { deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
+import { deriveWorkerToolFilter, reconcileWorkerReasoning, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
 import {
   exclusiveScopedRejection,
@@ -352,6 +352,8 @@ export async function spawnClaimed(
   } catch (cause) {
     return { ok: false, failure: spawnFailed(task.slug, taskKey, cause) }
   }
+  // 来源任务登记（fix-bug——recordBug 的 source_task_id 派发上下文注入源；结算核注销）
+  rememberWorkerSourceTask(handle.workerSessionId, task.taskId)
   emit('task-spawned', task.slug, {
     taskKey,
     workerSessionId: handle.workerSessionId,

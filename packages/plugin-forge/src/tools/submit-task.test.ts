@@ -20,6 +20,7 @@ function toolWithCapture() {
   const deps: ForgeToolDeps = {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createSubmitTaskTool(deps), captured }
@@ -188,6 +189,7 @@ describe('submitTask execute（路由 + 映射）', () => {
     const deps: ForgeToolDeps = {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
     }
     const tool = createSubmitTaskTool(deps)
@@ -242,6 +244,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     const tool = createSubmitTaskTool({
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -263,6 +266,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     const tool = createSubmitTaskTool({
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -283,6 +287,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     const tool = createSubmitTaskTool({
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -299,6 +304,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     const tool = createSubmitTaskTool({
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
     })
     const out = await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)

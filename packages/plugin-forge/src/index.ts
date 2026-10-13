@@ -1,8 +1,9 @@
 // @dsh-forge/plugin-forge 插件定义（定位：装配；knowledge index.ts 同型——3.4 物理挂载）。
 // 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
-//   inject = ['forgeTasks', 'forgeProposals', 'forgeProjects', 'tools', 'systemPrompt']
-//   —— 对 core 的依赖 = 任务/提案/项目三域服务（Interface 1/3 类型 +
-//   ProjectServiceM2.deriveTaskStoreDir——事件日志落位目录单源派生，插件不复制）；
+//   inject = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt']
+//   —— 对 core 的依赖 = 任务/提案/bug/项目四域服务（Interface 1/3 类型 +
+//   ProjectServiceM2.deriveTaskStoreDir——事件日志落位目录单源派生，插件不复制；
+//   forgeBugs = fix-bug bug 域服务——recordBug/resolveBug 两写径）；
 //   forgeSettings = 可选服务（经官方 reflect.get 防御读取——cordis 4.0.4 无 '?'
 //   可选 inject 后缀；缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）；
 //   tools / systemPrompt 为 dsh 官方面（非 core）。
@@ -58,8 +59,8 @@ function warnReconcileDegraded(projectId: string, cause: unknown): void {
 /** 函数插件形状（Plugin.Function + inject 元数据） */
 export interface ForgePlugin {
   (ctx: ForgeContextFace, config?: ForgePluginConfig): () => void
-  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeProposals + forgeProjects
-   *  三服务；forgeSettings 可选消费不走 inject 声明——缺席不阻载） */
+  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeProposals + forgeBugs +
+   *  forgeProjects 四服务；forgeSettings 可选消费不走 inject 声明——缺席不阻载） */
   readonly inject: readonly string[]
 }
 
@@ -272,6 +273,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
+      bugs: ctx.forgeBugs,
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -385,6 +387,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.updateTask),
       ctx.tools.register(tools.taskStats),
       ctx.tools.register(tools.listTasks),
+      ctx.tools.register(tools.recordBug),
+      ctx.tools.register(tools.resolveBug),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
@@ -400,7 +404,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeProjects', 'tools', 'systemPrompt'] as const,
+    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt'] as const,
   },
 )
 
@@ -440,6 +444,7 @@ export type {
   DispatchJobSpec,
   DispatchJobsFace,
   DispatchJobsRegistryFace,
+  ForgeBugsToolFace,
   ForgeTools,
   ForgeToolDeps,
   DispatchForgeToolDeps,

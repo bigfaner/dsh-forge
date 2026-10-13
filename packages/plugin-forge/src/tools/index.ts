@@ -13,6 +13,7 @@
 // 会话目录记忆（→ 3.3 总线/监听器）；deps.settings = forgeSettings 服务面（可选——
 // 缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）。
 import type { ForgeProposalsService, ForgeSettingsService, ForgeTasksService } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
@@ -21,10 +22,40 @@ import { createCreateProposalTool } from './create-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
 import { createListTasksTool } from './list-tasks.js'
 import { createQueryTaskTool } from './query-task.js'
+import { createRecordBugTool } from './record-bug.js'
+import { createResolveBugTool } from './resolve-bug.js'
 import { createSubmitTaskTool } from './submit-task.js'
 import { createTaskStatsTool } from './task-stats.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createUpdateTaskTool } from './update-task.js'
+
+/**
+ * core bug 域服务的插件侧结构化消费面（fix-bug 两写径——core createBugsService 结构兼容，
+ * 类型出自本面：插件禁 import core，跨面以结构判别；两写径语义 = core RegisterBugInput/
+ * ResolveBugInput 同形）。
+ */
+export interface ForgeBugsToolFace {
+  registerBug(input: {
+    readonly projectId: string
+    readonly summary: string
+    readonly bugDesc: string
+    readonly triggerDesc: string
+    readonly expected: string
+    readonly actual: string
+    readonly suspected?: string
+    readonly errorType?: string
+    readonly sourceTaskId?: string
+    readonly reportSessionId?: string
+  }): Promise<BugCard>
+  resolveBug(input: {
+    readonly projectId: string
+    readonly bugId: string
+    readonly outcome: 'fixed' | 'unresolved'
+    readonly commitHash?: string
+    readonly unresolvedReason?: string
+    readonly fixSessionId?: string
+  }): Promise<BugCard>
+}
 
 /** tool 共享的执行期依赖（index.ts 装配注入） */
 export interface ForgeToolDeps {
@@ -32,6 +63,8 @@ export interface ForgeToolDeps {
   tasks: ForgeTasksService
   /** core 提案域服务（写动词 = tool 专属面） */
   proposals: ForgeProposalsService
+  /** core bug 域服务（fix-bug 两写径 recordBug/resolveBug 的服务面——装配注入） */
+  bugs: ForgeBugsToolFace
   /** 会话 cwd → projectId 解析器（session.ts 绑定表/bindingsFile 产物） */
   resolveProjectId: ProjectIdResolver
   /** 事件发射面（3.4——可选：缺席 = 零事件降级；task-submitted/task-error 等发射点共消费） */
@@ -52,7 +85,7 @@ export interface ForgeToolDeps {
   jobs?: DispatchJobsFace
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——九员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——十一员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -63,9 +96,12 @@ export interface ForgeTools {
   readonly updateTask: ReturnType<typeof createUpdateTaskTool>
   readonly taskStats: ReturnType<typeof createTaskStatsTool>
   readonly listTasks: ReturnType<typeof createListTasksTool>
+  readonly recordBug: ReturnType<typeof createRecordBugTool>
+  readonly resolveBug: ReturnType<typeof createResolveBugTool>
 }
 
-/** 注册面全集（九 tool——M3 六员 + updateTask/taskStats/listTasks 三员，仅主 agent 面） */
+/** 注册面全集（十一 tool——M3 九员 + recordBug/resolveBug 两 bug 写径；主 agent +
+ *  coding-fix worker 放行——WORKER_FORGE_TOOLS 四动词） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -76,6 +112,8 @@ export const FORGE_TOOL_NAMES = [
   'updateTask',
   'taskStats',
   'listTasks',
+  'recordBug',
+  'resolveBug',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -94,6 +132,8 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     updateTask: createUpdateTaskTool(deps),
     taskStats: createTaskStatsTool(deps),
     listTasks: createListTasksTool(deps),
+    recordBug: createRecordBugTool(deps),
+    resolveBug: createResolveBugTool(deps),
   }
 }
 
@@ -142,6 +182,10 @@ export { parseUpdateTaskArgs } from './update-task.js'
 export type { UpdateTaskToolArgs } from './update-task.js'
 export { parseTaskStatsArgs } from './task-stats.js'
 export type { TaskStatsToolArgs } from './task-stats.js'
+export { parseRecordBugArgs } from './record-bug.js'
+export type { RecordBugToolArgs } from './record-bug.js'
+export { parseResolveBugArgs } from './resolve-bug.js'
+export type { ResolveBugToolArgs } from './resolve-bug.js'
 export { parseListTasksArgs } from './list-tasks.js'
 export type { ListTasksToolArgs } from './list-tasks.js'
 export {

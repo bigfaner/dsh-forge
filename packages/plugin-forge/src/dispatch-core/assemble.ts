@@ -11,10 +11,11 @@ import {
 } from '@dsh-forge/contracts'
 
 /**
- * worker 面禁入的 forge 动词（矩阵 forge 族 = submitTask + addTask 恰两员——Hard Rule
- * 「矩阵只给 submitTask + addTask」）。名单 = 本包 FORGE_TOOL_NAMES ∪ dispatchTask −
- * WORKER_FORGE_TOOLS（单测同步守护）——九员全集中仅 submitTask/addTask 两员 worker 可见
- * （updateTask/taskStats/listTasks 三新员仅主 agent——worker/triage 两面 deny）。plugin-forge-spec 三动词不入本 deny：其注册面
+ * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 四动词——submitTask +
+ * addTask 两既有动词 + recordBug/resolveBug 两 bug 写径（fix-bug coding-fix worker 放行））。
+ * 名单 = 本包 FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——
+ * 十一员全集中 worker 可见 = 四动词，其余七员 deny（updateTask/taskStats/listTasks 等仅主
+ * agent 面）。plugin-forge-spec 三动词不入本 deny：其注册面
  * 预设相依（突击组合物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——
  * spec 面收口归 5.1 工具名映射 pin（OQ#2）。
  */
@@ -27,6 +28,29 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'taskStats',
   'listTasks',
 ]
+
+/**
+ * worker 会话 → 来源任务 id 注册表（fix-bug：recordBug 的 source_task_id 派发上下文注入径）。
+ * spawnClaimed spawn 成功即登记（workerSessionId → claimed.task.taskId）；结算核终读后注销。
+ * 进程内 Map 单例——worker 会话 id 一次性 uuid 不复用，循环/工具壳两派发径（同 spawnClaimed
+ * 实现）天然共源；未登记（standalone 主 agent 调用）= undefined（source_task_id 键缺席）。
+ */
+const workerSourceTasks = new Map<string, string>()
+
+/** spawn 成功即登记 worker 会话的来源任务 id（recordBug 工具面注入源） */
+export function rememberWorkerSourceTask(workerSessionId: string, taskId: string): void {
+  workerSourceTasks.set(workerSessionId, taskId)
+}
+
+/** worker 会话 → 来源任务 id（未登记/standalone = undefined） */
+export function workerSourceTaskOf(workerSessionId: string): string | undefined {
+  return workerSourceTasks.get(workerSessionId)
+}
+
+/** 结算后注销（worker 会话一次性——防表无界增长） */
+export function forgetWorkerSourceTask(workerSessionId: string): void {
+  workerSourceTasks.delete(workerSessionId)
+}
 
 /**
  * taskType → 收窄矩阵 → toolFilter（deny 面）。矩阵 = contracts WORKER_TOOL_MATRIX

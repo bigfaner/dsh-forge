@@ -54,6 +54,12 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // 锁定态改写 / 派生边改写 → 错误条（修改语境原地反馈，改参重试）
   ERR_TASK_LOCKED: 'error-bar',
   ERR_TASK_EDGE_ORIGIN_LOCKED: 'error-bar',
+  // ── fix-bug（bug 域两写径）──
+  // bug 未命中 → 空态（详情引用锚缺席）；其余写径校验 → 错误条（表单/回填语境原地反馈）
+  ERR_BUG_NOT_FOUND: 'empty-state',
+  ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
+  ERR_BUG_ALREADY_RESOLVED: 'error-bar',
+  ERR_COMMIT_HASH_REQUIRED: 'error-bar',
 }
 
 /**

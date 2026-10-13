@@ -218,6 +218,9 @@ export interface ForgeContextFace {
   forgeProposals: ForgeProposalsService
   /** core 项目域服务（3.4——deriveTaskStoreDir 单源消费：事件日志落位目录派生，插件不复制） */
   forgeProjects: ProjectServiceM2
+  /** core bug 域服务（fix-bug——recordBug/resolveBug 两写径的工具面服务源；结构化消费面
+   *  ForgeBugsToolFace 定义于 tools/index.ts） */
+  forgeBugs: import('./tools/index.js').ForgeBugsToolFace
   /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
    *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
   readonly reflect?: { get(name: string, strict?: boolean): unknown }

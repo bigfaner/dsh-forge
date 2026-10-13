@@ -4,6 +4,7 @@
 // queryTask 只读结算读 → 三_case 判定（settled：spawned 分支字段面全量构建；failed：
 // run 拒绝/无结算同归防线径，kill 由调用方 taxonomy 判定）。
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
+import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'
@@ -75,10 +76,12 @@ export async function settleWorkerRun(
   try {
     run = await ctx.handle.result
   } catch (cause) {
+    forgetWorkerSourceTask(ctx.handle.workerSessionId) // 来源任务登记注销（fix-bug 注入源——结算即清）
     await disposeQuietly(ctx.handle)
     return { case: 'failed', cause }
   }
   const durationMs = Date.now() - ctx.spawnStartedAt
+  forgetWorkerSourceTask(ctx.handle.workerSessionId) // 结算即清（成功/失败同径）
   await disposeQuietly(ctx.handle)
   ctx.onReading?.()
 

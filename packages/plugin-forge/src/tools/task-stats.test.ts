@@ -26,6 +26,7 @@ function toolWithCapture(overrides?: Partial<Parameters<typeof createTaskStatsTo
   const deps: ForgeToolDeps = {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     ...overrides,
   }

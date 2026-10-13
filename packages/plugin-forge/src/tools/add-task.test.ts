@@ -23,6 +23,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createAddTaskTool>; captur
   const deps: ForgeToolDeps = {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createAddTaskTool(deps), captured }
@@ -168,6 +169,7 @@ describe('addTask execute（路由 + 容器直传映射）', () => {
     const deps: ForgeToolDeps = {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
     }
     const tool = createAddTaskTool(deps)
@@ -210,6 +212,7 @@ describe('addTask 事件发射（typed 错误 → tool-error；verb=addTask）',
     const tool = createAddTaskTool({
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
+  bugs: {} as ForgeToolDeps['bugs'],
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
