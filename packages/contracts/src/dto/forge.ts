@@ -63,6 +63,7 @@ export const TASK_RECORD_VERBS = [
   'claim',
   'submit',
   'transition',
+  'updateTask',
   'auto-restore',
   'auto-block',
 ] as const
@@ -399,6 +400,35 @@ export interface AddTaskResult {
 }
 
 /**
+ * updateTask 入参（主 agent 工具面新动词——宽字段面 partial 语义：给定的字段改写、未给字段不动）。
+ * 定位口径同 queryTask/submitTask：TaskRef = slug + localId。状态门：pending/blocked/suspended
+ * 可改（六锁定态拒——ERR_TASK_LOCKED）；dependsOn 改写仅作用于 manual 边（fix-chain/autoconfig
+ * 派生边拒绝——ERR_TASK_EDGE_ORIGIN_LOCKED），复用 addTask 增量环校验拒环。
+ */
+export interface UpdateTaskInput {
+  projectId: string
+  /** 目标任务自然键（UNIQUE(slug, local_id) 查捞——未命中 ERR_TASK_NOT_FOUND） */
+  taskRef: TaskRef
+  title?: string
+  type?: TaskType
+  priority?: TaskPriority
+  estimatedTime?: string
+  complexity?: TaskComplexity
+  taskDesc?: string
+  /** 验收清单（→ ac_json 整体覆写——submitTask AC 证据门判据随之更新） */
+  acceptanceCriteria?: string[]
+  /** --var 注入变量（vars_json 整体覆写） */
+  vars?: Record<string, string>
+  surfaceKey?: string
+  surfaceType?: string
+  /** 依赖改写（manual 边整体置换：删旧 manual 边 → 增量环校验 → 插新 manual 边） */
+  dependsOn?: string[]
+}
+
+/** updateTask 返回体（更新后任务快照——同 transitionTask 返回口径） */
+export type UpdateTaskResult = TaskSnapshot
+
+/**
  * claim 独占守卫目标（S1c 循环独占——claimTask 目标解析命中行投影给守卫判定）。
  */
 export interface ClaimExclusivityTarget {
@@ -621,6 +651,8 @@ export interface ForgeTasksService {
   reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult>
   /** 人类纠偏面（提前校验 + 与 submitTask 同族恢复钩子） */
   transitionTask(input: TransitionTaskInput): Promise<TaskSnapshot>
+  /** 主 agent 修改面（宽字段 partial + 状态门 + dependsOn 增量环校验 + manual 边护栏 + updateTask 审计） */
+  updateTask(input: UpdateTaskInput): Promise<UpdateTaskResult>
   /** agent 查询面（四节按 include 门控） */
   queryTask(input: QueryTaskInput): Promise<QueryTaskResult>
   /** 只读校验：单 feature 子图五类检查（发现面吸收对新入库 feature 逐个送校） */

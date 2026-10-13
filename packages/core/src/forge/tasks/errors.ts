@@ -367,3 +367,53 @@ export class FilesUnionMismatchError extends Error {
     this.data = data
   }
 }
+
+// ───────────────────────── main-agent-task-tools：updateTask 锁定面 ─────────────────────────
+
+/** ERR_TASK_LOCKED 附载（updateTask 状态门——无 worker 持有 ∧ 未落结算审计才可改写） */
+export interface TaskLockedData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  readonly taskStatus: TaskStatus
+}
+
+/**
+ * 六锁定态任务改写（409）：in_progress/interrupted（简报已被 worker 消费——改写致重入不一致）
+ * 与 completed/skipped/rejected（已落结算——改写 = 历史失真）拒绝；pending/blocked/suspended 放行。
+ */
+export class TaskLockedError extends Error {
+  readonly code = 'ERR_TASK_LOCKED' as const
+  readonly data: TaskLockedData
+
+  constructor(data: TaskLockedData) {
+    super(
+      `任务处锁定态 ${data.taskStatus}，不可改写（仅 pending/blocked/suspended 可改）——` +
+        `${data.taskRef.slug}/${data.taskRef.localId}（project ${data.projectId}）`,
+    )
+    this.name = 'TaskLockedError'
+    this.data = data
+  }
+}
+
+/** ERR_TASK_EDGE_ORIGIN_LOCKED 附载（updateTask dependsOn 改写护栏——链机械持有） */
+export interface EdgeOriginLockedData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  /** 在场的非 manual 边 origin 清单（fix-chain / autoconfig） */
+  readonly origins: readonly ('fix-chain' | 'autoconfig')[]
+}
+
+/** fix-chain/autoconfig 派生边改写（409）：仅 manual 边可改写——派生边由机械协议持有 */
+export class EdgeOriginLockedError extends Error {
+  readonly code = 'ERR_TASK_EDGE_ORIGIN_LOCKED' as const
+  readonly data: EdgeOriginLockedData
+
+  constructor(data: EdgeOriginLockedData) {
+    super(
+      `dependsOn 改写被拒：存在非 manual 边（${[...new Set(data.origins)].join(', ')}）——` +
+        `fix-chain/autoconfig 派生边结构性不可改，仅 manual 边可改写（${data.taskRef.slug}/${data.taskRef.localId}）`,
+    )
+    this.name = 'EdgeOriginLockedError'
+    this.data = data
+  }
+}

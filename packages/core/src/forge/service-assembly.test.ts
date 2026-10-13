@@ -114,7 +114,8 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
     const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
-      // Interface 1（壳——2.2–2.6 接线期）：十一法面完整（桥白名单/ready 位锚）
+      // Interface 1（壳——2.2–2.7 接线期）：十二法面完整（桥白名单/ready 位锚；
+      // main-agent-task-tools 1.1 扩员 updateTask）
       const tasks = provided.get('forgeTasks') as Record<string, unknown> | undefined
       expect(tasks).toBeDefined()
       for (const method of [
@@ -122,6 +123,7 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
         'claimTask',
         'submitTask',
         'transitionTask',
+        'updateTask',
         'queryTask',
         'validateFeatureTasks',
         'listTasks',

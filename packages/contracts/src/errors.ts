@@ -42,6 +42,9 @@ export const ERROR_CODES = [
   'ERR_AC_NOT_MET', // → AcNotMetError：success ∧ acceptanceCriteria 任一 met=false（400；data 带未达清单）
   'ERR_AC_CRITERIA_MISMATCH', // → AcCriteriaMismatchError：AC 交叉校验——提交面 criterion 与 tasks.ac_json 定义侧条数/顺序/原文不符（400）
   'ERR_FILES_UNION_MISMATCH', // → FilesUnionMismatchError：files 与 {created, modified} 并存且 files ≠ created ∪ modified（400）
+  // ── main-agent-task-tools（updateTask 锁定面） ──
+  'ERR_TASK_LOCKED', // → TaskLockedError：六锁定态任务改写被拒（in_progress/interrupted/completed/skipped/rejected——409）
+  'ERR_TASK_EDGE_ORIGIN_LOCKED', // → EdgeOriginLockedError：fix-chain/autoconfig 派生边结构性不可改（409；仅 manual 边可改写）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

@@ -32,6 +32,7 @@ import type {
   TaskStats,
   TaskStatsQuery,
   TransitionTaskInput,
+  UpdateTaskInput,
   ValidateFeatureTasksInput,
   ValidateReport,
 } from '@dsh-forge/contracts'
@@ -47,6 +48,7 @@ import { reconcileInterrupted } from './reconcile.js'
 import { sessionLinks } from './session-links.js'
 import { submitTask } from './submit.js'
 import { transitionTask } from './transition.js'
+import { updateTask } from './update.js'
 import { validateFeatureTasks } from './validate.js'
 
 export interface TasksServiceDeps {
@@ -81,6 +83,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async transitionTask(input: TransitionTaskInput): Promise<TaskSnapshot> {
       return transitionTask(deps, input)
+    },
+    async updateTask(input: UpdateTaskInput): Promise<TaskSnapshot> {
+      return updateTask(deps, input)
     },
     async queryTask(input: QueryTaskInput): Promise<QueryTaskResult> {
       return queryTask(deps, input)

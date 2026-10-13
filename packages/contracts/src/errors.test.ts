@@ -55,6 +55,12 @@ const S3_ERROR_TABLE = [
   ['ERR_FILES_UNION_MISMATCH', 'FilesUnionMismatchError'],
 ] as const
 
+// main-agent-task-tools 表（2 新码；行序 = 表行序——updateTask 锁定面）
+const TASK_TOOLS_ERROR_TABLE = [
+  ['ERR_TASK_LOCKED', 'TaskLockedError'],
+  ['ERR_TASK_EDGE_ORIGIN_LOCKED', 'EdgeOriginLockedError'],
+] as const
+
 describe('AC1 六错误码与 Error Handling 表一致（P1 面不动）', () => {
   it('ERROR_CODES 前六码齐备且行序与表一致', () => {
     expect([...ERROR_CODES].slice(0, 6)).toEqual(ERROR_TABLE.map(([code]) => code))
@@ -75,14 +81,15 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 27 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后', () => {
-    expect([...ERROR_CODES]).toHaveLength(27)
+  it('ERROR_CODES = 29 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾', () => {
+    expect([...ERROR_CODES]).toHaveLength(29)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
-    expect([...ERROR_CODES].slice(24)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
-    expect(new Set(ERROR_CODES).size).toBe(27)
+    expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
+    expect([...ERROR_CODES].slice(27)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
+    expect(new Set(ERROR_CODES).size).toBe(29)
   })
 
-  it('M3/S3 新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
+  it('M3/S3/工具面新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
     for (const code of ERROR_CODES.slice(21)) {
       expect(code.startsWith('ERR_')).toBe(true)
     }

@@ -174,8 +174,9 @@ export function allocateLocalId(
 /**
  * 可达性 DFS（§6-14：新边 (S←T)+(T←D) 成环 ⟺ D 经既有出边可达 S——非全图扫描）。
  * 出边方向 = (task_id=等待方 → prerequisite_id=前置方)。命中返回路径 [from, …, target]，未命中 null。
+ * 2.1(main-agent-task-tools) 导出：updateTask dependsOn 改写增量环校验同源复用。
  */
-function findPathThroughOutEdges(
+export function findPathThroughOutEdges(
   db: Database.Database,
   fromId: string,
   targetId: string,
@@ -209,8 +210,8 @@ function findPathThroughOutEdges(
   return null
 }
 
-/** 批量自然键水化（环路径/链诊断的节点呈现——'slug/localId' 复合） */
-function naturalKeysByIds(db: Database.Database, ids: readonly string[]): Map<string, string> {
+/** 批量自然键水化（环路径/链诊断的节点呈现——'slug/localId' 复合）。2.1 导出：updateTask 环路径呈现复用 */
+export function naturalKeysByIds(db: Database.Database, ids: readonly string[]): Map<string, string> {
   const keys = new Map<string, string>()
   if (ids.length === 0) return keys
   const placeholders = ids.map(() => '?').join(', ')
