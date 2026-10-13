@@ -69,18 +69,27 @@ let enginePromise: Promise<MermaidEngine> | undefined
  * 单次装载 + 单次 initialize（模块级 promise 缓存——多图共引擎）；securityLevel='strict'
  * 为安全边界字面量（禁放宽），startOnLoad=false（渲染恒经显式 render 调用）；
  * 1.8 主题化 = theme base + MERMAID_THEME_VARIABLES（单次 initialize 语义不动）。
+ * 装载瞬时失败（页面存活期间 dist 重建 chunk 404 等）**不粘住**：reject 即清缓存，
+ * 下次挂载重试——不清则被拒 promise 永久缓存 = 该页一切图恒回退（2026-10-13 宿主
+ * renderer 页内取证定性：源/引擎/环境全绿仍整会话回退的唯一解释径）。
  */
 export function loadMermaidEngine(): Promise<MermaidEngine> {
-  enginePromise ??= import('mermaid').then((mod) => {
-    const engine = mod.default as MermaidEngine
-    engine.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'base',
-      themeVariables: MERMAID_THEME_VARIABLES,
-    })
-    return engine
-  })
+  enginePromise ??= import('mermaid').then(
+    (mod) => {
+      const engine = mod.default as MermaidEngine
+      engine.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: 'base',
+        themeVariables: MERMAID_THEME_VARIABLES,
+      })
+      return engine
+    },
+    (err: unknown) => {
+      enginePromise = undefined
+      throw err
+    },
+  )
   return enginePromise
 }
 
