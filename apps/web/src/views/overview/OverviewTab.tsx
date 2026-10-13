@@ -7,7 +7,7 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { BugStatus, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
@@ -49,6 +49,7 @@ import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
 import { BugList } from './bug-tab/bug-list.js'
+import { BugDialog } from './bug-tab/index.js'
 import { ProposalsTab } from './proposal-tab.js'
 import { FeaturesTab } from './feature-tab.js'
 import './overview.css'
@@ -108,6 +109,8 @@ export interface OverviewFrameProps {
   readonly onToggleHead: () => void
   /** 重试（头路 + 列路全量重装载） */
   readonly onRetry: () => void
+  /** Bug 行点击 → 详情弹框（fix-bug 收尾——选中即开，帧侧透传 BugList；缺席 = 行静态呈现） */
+  readonly onOpenBug?: (bugId: string) => void
   /** 文档行点击（dock 开 tab——4.1 接线；缺席 = 无动作面） */
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入；缺省 = chips 过滤接口独占呈现） */
@@ -142,6 +145,7 @@ export function OverviewFrame({
   onToggleRow,
   onToggleHead,
   onRetry,
+  onOpenBug,
   onOpenDoc,
   renderTasksTab,
   onStartSession,
@@ -212,6 +216,7 @@ export function OverviewFrame({
           activeStatuses={filter.activeBugStatuses}
           onToggleStatus={onToggleBugStatus}
           onClearStatuses={onClearBugStatuses}
+          {...(onOpenBug !== undefined ? { onOpenBug } : {})}
           emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 Bug` : undefined}
         />
       </>
@@ -376,6 +381,37 @@ function emptyCounts(): Record<TaskStatus, number> {
   }
 }
 
+/** Bug 弹框开合投影（纯函数）：选中 bugId 在 bugs 列表命中 → 卡片；无选中/列表缺席/
+ *  非 bugs 列表/未命中 → undefined（onClose 复位 = 无选中不渲染）。 */
+export function openBugCardOf(list: OverviewListData | undefined, openBugId: string | null): BugCard | undefined {
+  if (openBugId === null || list === undefined || list.kind !== 'bugs') return undefined
+  return list.bugs.find((bug) => bug.bugId === openBugId)
+}
+
+/** Bug 弹框挂载位（OverviewTab 装配体——bug 子 tab 行点击开合；无选中 = 不渲染）。
+ *  注入面 sessionTitleOf/onOpenSession = ShellHost 递达缝（任务抽屉同缝——键缺席
+ *  fail-soft 不递达）；Escape 关闭径随 BugDialog 内 useTaskDrawerEscape（同款）。 */
+export interface OverviewBugDialogMountProps {
+  readonly list: OverviewListData | undefined
+  readonly openBugId: string | null
+  readonly onClose: () => void
+  readonly onOpenSession?: (sessionId: string) => void
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+}
+
+export function OverviewBugDialogMount({ list, openBugId, onClose, onOpenSession, sessionTitleOf }: OverviewBugDialogMountProps): ReactNode {
+  const bug = openBugCardOf(list, openBugId)
+  if (bug === undefined) return null
+  return (
+    <BugDialog
+      bug={bug}
+      onClose={onClose}
+      {...(onOpenSession !== undefined ? { onOpenSession } : {})}
+      {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
+    />
+  )
+}
+
 export interface OverviewTabProps {
   /** 当前项目（4.1 ShellHost 锚定注入——knowledge-anchor 裁决） */
   readonly projectId: string
@@ -391,6 +427,10 @@ export interface OverviewTabProps {
   readonly focusTasksNonce?: number
   /** 打开新会话通道（4.6：提案/feature 行头预填——装配注入 openSessionWithPreset；缺席 = 按钮不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
+  /** 会话 pill 跳转（ShellHost 递达面——任务抽屉同缝；缺席 = Bug 弹框 pill 非交互） */
+  readonly onOpenSession?: (sessionId: string) => void
+  /** 会话名解析器（dsh 账本快照 displayTitle 窄读——任务抽屉同缝；缺席 = pill 回退 id） */
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
 }
@@ -404,6 +444,8 @@ export function OverviewTab({
   renderTasksTab,
   focusTasksNonce,
   onStartSession,
+  onOpenSession,
+  sessionTitleOf,
   now,
 }: OverviewTabProps): ReactNode {
   // 初始态（4.2）：挂载即带任务聚焦（pill 点击 → dock 首开概览 tab）= 任务子 tab 起步；
@@ -412,6 +454,14 @@ export function OverviewTab({
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
   const [nonce, setNonce] = useState(0)
+  // Bug 弹框开合态（fix-bug 收尾）：行点击选中即开，onClose 复位（无选中 = 不渲染）
+  const [openBugId, setOpenBugId] = useState<string | null>(null)
+  const handleOpenBug = useCallback((bugId: string): void => {
+    setOpenBugId(bugId)
+  }, [])
+  const handleCloseBug = useCallback((): void => {
+    setOpenBugId(null)
+  }, [])
   // Bug chips 白名单参（受控集合引用稳定——仅 toggle 时换参；列表键含投影键 → 服务端重拉）
   const bugStatusParam = useMemo(() => bugStatusFilterParam(filter.activeBugStatuses), [filter.activeBugStatuses])
   const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient, bugStatusParam)
@@ -467,33 +517,43 @@ export function OverviewTab({
   }, [])
 
   return (
-    <OverviewFrame
-      projectId={projectId}
-      head={load.head}
-      list={load.list}
-      phase={load.phase}
-      busy={load.busy}
-      error={load.error}
-      filter={filter}
-      sessionCount={sessionCount}
-      onSubtabChange={handleSubtabChange}
-      onSearchChange={handleSearchChange}
-      onSortToggle={handleSortToggle}
-      onToggleStatus={handleToggleStatus}
-      onClearStatuses={handleClearStatuses}
-      onToggleProposalStatus={handleToggleProposalStatus}
-      onClearProposalStatuses={handleClearProposalStatuses}
-      onTogglePhase={handleTogglePhase}
-      onClearPhases={handleClearPhases}
-      onToggleBugStatus={handleToggleBugStatus}
-      onClearBugStatuses={handleClearBugStatuses}
-      onToggleRow={handleToggleRow}
-      onToggleHead={handleToggleHead}
-      onRetry={handleRetry}
-      onOpenDoc={onOpenDoc}
-      renderTasksTab={renderTasksTab}
-      {...(onStartSession !== undefined ? { onStartSession } : {})}
-      now={now}
-    />
+    <>
+      <OverviewFrame
+        projectId={projectId}
+        head={load.head}
+        list={load.list}
+        phase={load.phase}
+        busy={load.busy}
+        error={load.error}
+        filter={filter}
+        sessionCount={sessionCount}
+        onSubtabChange={handleSubtabChange}
+        onSearchChange={handleSearchChange}
+        onSortToggle={handleSortToggle}
+        onToggleStatus={handleToggleStatus}
+        onClearStatuses={handleClearStatuses}
+        onToggleProposalStatus={handleToggleProposalStatus}
+        onClearProposalStatuses={handleClearProposalStatuses}
+        onTogglePhase={handleTogglePhase}
+        onClearPhases={handleClearPhases}
+        onToggleBugStatus={handleToggleBugStatus}
+        onClearBugStatuses={handleClearBugStatuses}
+        onToggleRow={handleToggleRow}
+        onToggleHead={handleToggleHead}
+        onRetry={handleRetry}
+        onOpenBug={handleOpenBug}
+        onOpenDoc={onOpenDoc}
+        renderTasksTab={renderTasksTab}
+        {...(onStartSession !== undefined ? { onStartSession } : {})}
+        now={now}
+      />
+      <OverviewBugDialogMount
+        list={load.list}
+        openBugId={openBugId}
+        onClose={handleCloseBug}
+        {...(onOpenSession !== undefined ? { onOpenSession } : {})}
+        {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
+      />
+    </>
   )
 }

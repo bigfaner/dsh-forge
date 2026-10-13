@@ -8,7 +8,8 @@ import type { ReactNode } from 'react'
 import type { FeatureCard, ProposalCard, TaskStatus } from '@dsh-forge/contracts'
 import { initialOverviewFilter, type OverviewFilterState } from './overview-model.js'
 import type { OverviewHeadBundle, OverviewListData } from './overview-data.js'
-import { OverviewFrame, OverviewTab } from './OverviewTab.js'
+import { OverviewBugDialogMount, OverviewFrame, OverviewTab, openBugCardOf } from './OverviewTab.js'
+import type { BugCard } from '@dsh-forge/contracts'
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
 const CREATED = '2026-10-01T08:00:00.000Z'
@@ -104,6 +105,7 @@ const frame = (over: {
   error?: { message: string; uiState: 'error-bar' | 'banner' | 'empty-state' }
   sessionCount?: number
   renderTasksTab?: (ctx: unknown) => ReactNode
+  onOpenBug?: (bugId: string) => void
 }) =>
   renderToStaticMarkup(
     <OverviewFrame
@@ -119,6 +121,7 @@ const frame = (over: {
       {...handlers}
       {...(over.renderTasksTab === undefined ? {} : { renderTasksTab: over.renderTasksTab as never })}
       {...(over.sessionCount === undefined ? {} : { sessionCount: over.sessionCount })}
+      {...(over.onOpenBug === undefined ? {} : { onOpenBug: over.onOpenBug })}
     />,
   )
 
@@ -353,5 +356,71 @@ describe('OverviewTab（状态 + 装载胶水——静态首装面）', () => {
     expect(markup).toContain('data-dswf-ov-sticky')
     expect(markup).toContain('data-dswf-ov-skeleton')
     expect(markup).not.toContain('data-dswf-ov-head')
+    // fix-bug 收尾：BugDialog 挂载位在场但首装无选中 = 不渲染（零弹框锚）
+    expect(markup).not.toContain('data-dswf-ov-bdialog')
+  })
+})
+
+describe('BugDialog 挂载接线（fix-bug 收尾——onOpenBug → 开合 → 注入面）', () => {
+  const BUG_B1: BugCard = {
+    bugId: 'b1',
+    summary: '登录接口 500',
+    bugDesc: 'd',
+    triggerDesc: 't',
+    expected: 'e',
+    actual: 'a',
+    errorType: 'api',
+    bugStatus: 'open',
+    reporter: 'faner',
+    reportSessionId: 'sess-r',
+    createdAt: CREATED,
+    updatedAt: CREATED,
+  }
+  const BUGS_LIST: OverviewListData = { kind: 'bugs', bugs: [BUG_B1], counts: { open: 1, fixed: 0, unresolved: 0 } }
+
+  it('openBugCardOf 开合投影：bugs 列表命中 bugId → 卡片；无选中/列表缺席/非 bugs 列表 → undefined（onClose 复位 = 无选中不渲染）', () => {
+    expect(openBugCardOf(BUGS_LIST, 'b1')?.bugId).toBe('b1')
+    expect(openBugCardOf(BUGS_LIST, null)).toBeUndefined()
+    expect(openBugCardOf(BUGS_LIST, 'miss')).toBeUndefined()
+    expect(openBugCardOf(undefined, 'b1')).toBeUndefined()
+    expect(openBugCardOf(PROPOSALS_LIST, 'b1')).toBeUndefined()
+  })
+
+  it('选中即开：OverviewBugDialogMount 渲染 BugDialog（bdialog 锚 + bugId 标注）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewBugDialogMount list={BUGS_LIST} openBugId="b1" onClose={() => {}} />,
+    )
+    expect(markup).toContain('data-dswf-ov-bdialog=""')
+    expect(markup).toContain('data-dswf-ov-bdialog-id="b1"')
+  })
+
+  it('注入面（ShellHost 递达——任务抽屉同缝）：sessionTitleOf 命中 + onOpenSession = 会话 pill 可点击（会话名呈现）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewBugDialogMount
+        list={BUGS_LIST}
+        openBugId="b1"
+        onClose={() => {}}
+        onOpenSession={() => {}}
+        sessionTitleOf={(id) => (id === 'sess-r' ? '修复登录会话' : undefined)}
+      />,
+    )
+    expect(markup).toContain('data-dswf-ov-bsess')
+    expect(markup).toContain('修复登录会话')
+  })
+
+  it('注入面缺席 = 键缺席不递达（fail-soft——BugDialog 侧回退非交互）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewBugDialogMount list={BUGS_LIST} openBugId="b1" onClose={() => {}} />,
+    )
+    expect(markup).toContain('sess-r') // pill 仍呈现（文本形态）
+    expect(markup).not.toContain('data-dswf-ov-bsess="') // 非 pill 呈现——sessionTitleOf/onOpenSession 键缺席
+  })
+
+  it('行点击缝递达：帧 onOpenBug 在场 = Bug 行整行可点（role=button）；缺席 = 静态行（回归钉）', () => {
+    const at = (markup: string): number => markup.indexOf('data-dswf-ov-bugrow="b1"')
+    const withSeam = frame({ filter: { ...initialOverviewFilter(), subtab: 'bugs' as const }, list: BUGS_LIST, onOpenBug: () => {} })
+    expect(withSeam.slice(withSeam.lastIndexOf('<div', at(withSeam)), withSeam.indexOf('>', at(withSeam)))).toContain('role="button"')
+    const withoutSeam = frame({ filter: { ...initialOverviewFilter(), subtab: 'bugs' as const }, list: BUGS_LIST })
+    expect(withoutSeam.slice(withoutSeam.lastIndexOf('<div', at(withoutSeam)), withoutSeam.indexOf('>', at(withoutSeam)))).not.toContain('role="button"')
   })
 })
