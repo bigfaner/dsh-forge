@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
-  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE,
-  refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel, registerFsChannels,
-  registerKnowledgeChannels, registerM2Channels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
+  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE, refreshKnowledgeBindings,
+  registerBootChannel, registerDirectoryPickerChannel, registerFsChannels, registerKnowledgeChannels,
+  registerM2Channels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
@@ -51,8 +51,7 @@ void (async () => {
       bindingsFile: paths.bindingsFile,
       tasksHome: paths.tasksHome, settingsFile: paths.settingsFile, // core 行 config 双注：3.4 派生根（四域装配门）+ 3.8 设置域存储（forgeSettings 装配门）
       skillsDir: paths.skillsDir, specSkillsDir: paths.specSkillsDir, // skills 物理挂载（M3 3.7：core/spec 双目录——预设 customSkillDirs 物化锚）
-      credentialsPath: paths.credentialsPath, // fix-26：非 USER_DATA 隔离态桥真 home 凭据
-      resourcesDir: paths.resourcesDir, // 4.1：打包形态 boot child 取 runtime/host-dist 入口
+      credentialsPath: paths.credentialsPath, resourcesDir: paths.resourcesDir, // fix-26 隔离态凭据桥真 home + 4.1 打包资源根（boot child runtime/host-dist 入口）
     })
     const cookie = await authenticateWebHost(host.manifest.url) // 认证 URL → authority cookie（转发/ws 用）
     let hostRef: { url: string; cookie: string } | undefined = { url: host.manifest.url, cookie }
@@ -82,27 +81,21 @@ void (async () => {
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     // fix-14/fix-21：官方目录选取桥 main 半边——openDirectory 单选 + parent 窗口模态/置顶（缺席 fail-soft 回退无 parent）。
     const pickDialogOptions: OpenDialogOptions = { properties: ['openDirectory'], title: DIRECTORY_PICKER_DIALOG_TITLE }
-    registerDirectoryPickerChannel(
-      ipcMain,
-      (parent) => (parent === null
-        ? dialog.showOpenDialog(pickDialogOptions)
-        : dialog.showOpenDialog(parent as BrowserWindow, pickDialogOptions)),
-      (sender) => BrowserWindow.fromWebContents(sender as WebContents),
-    )
+    const showPickDialog = (parent: unknown) => (parent === null
+      ? dialog.showOpenDialog(pickDialogOptions)
+      : dialog.showOpenDialog(parent as BrowserWindow, pickDialogOptions))
+    registerDirectoryPickerChannel(ipcMain, showPickDialog, (sender) => BrowserWindow.fromWebContents(sender as WebContents))
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     if (!app.isPackaged) { // 开发态 devtools 面：分离窗自动开 + F12 开关（打包形态零面）
       const wc = (mainWindow as BrowserWindow).webContents
       wc.openDevTools({ mode: 'detach' })
-      wc.on('before-input-event', (_event, input) => {
-        if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools()
-      })
+      wc.on('before-input-event', (_event, input) => { if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools() })
     }
     wireWindowLifecycle(app)
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
-      ipcMain.removeHandler(BOOT_CHANNEL)
-      ipcMain.removeHandler(DIRECTORY_PICKER_CHANNEL)
+      for (const channel of [BOOT_CHANNEL, DIRECTORY_PICKER_CHANNEL]) ipcMain.removeHandler(channel)
       hostRef = undefined
       void host.shutdown()
     })

@@ -56,6 +56,8 @@ export const forgeProgressDefinition = {
     key: string
     id: string
     state: { seq: number; data: unknown } | undefined
+    start?: { location?: unknown }
+    matches?: Array<{ location?: unknown }>
   }): {
     key: string
     kind: typeof FORGE_PROGRESS_NODE_KIND
@@ -70,8 +72,7 @@ export const forgeProgressDefinition = {
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind 直读
     // location.kind，缺席即 TypeError 整会话装配中断）：镜像官方 contextLocation 解析——
     // start/matches 携带 location 则透传，否则 unresolved（流内按 anchorSeq 排序不受影响）。
-    const ctx = context as { start?: { location?: unknown }; matches?: Array<{ location?: unknown }> }
-    const location = ctx.start?.location ?? ctx.matches?.[0]?.location ?? { kind: 'unresolved' }
+    const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
     return {
       key: context.key,
       kind: FORGE_PROGRESS_NODE_KIND,

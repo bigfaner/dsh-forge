@@ -728,7 +728,7 @@
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   overflow-wrap: anywhere;
 }
 
@@ -747,7 +747,7 @@
   background: none;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* ── submit 结构化面（AC 徽标 / keyDecisions 分列 / 分类字段行） ── */
