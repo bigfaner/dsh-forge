@@ -1,7 +1,7 @@
 // triage · 处置代理提示词组装（S1c 第二层——「类型化提示词」件，decisions #16：与 worker
 // 同款 in-process 形态 = 类型化提示词 + 收窄工具面 + 结构化决策输出）。输入四件套
 // （proposal §1.4 第二层）：任务简报 / blocked reason 全文 / 池快照 / 最近记录。
-// 纯函数——零 I/O 零上游依赖；输出契约在文内自释（三动作封闭枚举 + 末行单行 JSON）。
+// 纯函数——零 I/O 零上游依赖；输出契约在文内自释（四动作封闭枚举 + 末行单行 JSON）。
 import type { PoolSnapshot } from '../dispatch-core/index.js'
 import type { TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
 
@@ -49,18 +49,24 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
     ...(records.length > 0 ? records.slice(-20).map(recordLine) : ['-（无记录）']),
     '</recent-records>',
     '',
-    '决策规则（三选一，封闭枚举，无第四种）：',
+    '决策规则（四选一，封闭枚举，无第五种）：',
     '1. "add-fix" —— 阻塞可由一个修复任务解决（依赖安装、脚本修正、配置修补、测试修复等）。提供：',
     '   title（修复任务标题）、type（可选，任务类型，缺省 coding-fix）、taskDesc（可选，修复说明）、',
     '   note（可选，一句话修复内容摘要——给用户看）。',
     '2. "wait-external" —— 阻塞原因在其它任务源（另一个 feature/proposal 的工作需先落地，此刻建修复任务无意义）。',
     '   提供：externalSlug（外部任务源 slug）。',
     '3. "ask-user" —— 任务自身矛盾或无法自动处置（如验收标准与任务硬规则冲突），需要人工裁决。',
+    '4. "split-remainder" —— 剩余范围是结构性独立范围（已完成部分应保留、不应重跑整个任务）。提供：',
+    '   title（继任任务标题）、type（可选，任务类型，缺省同源任务）、taskDesc（可选，剩余范围说明）、',
+    '   note（可选，一句话分割内容摘要——给用户看）。',
+    '   分界指引：窄因可解整个源任务（修好即可继续原范围）→ 选 add-fix（源任务恢复后续跑）；',
+    '   剩余是结构性独立范围（已完成部分有价值且不应重做）→ 选 split-remainder。',
     '',
     '输出契约（严格）：分析结束后，输出唯一一行 JSON（不带代码围栏、其后不得有任何文字）：',
     '{"action":"add-fix","title":"...","type":"coding-fix","taskDesc":"...","note":"..."}',
     '{"action":"wait-external","externalSlug":"..."}',
     '{"action":"ask-user"}',
+    '{"action":"split-remainder","title":"...","type":"...","taskDesc":"...","note":"..."}',
   ]
   return lines.join('\n')
 }

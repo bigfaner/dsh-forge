@@ -11,8 +11,8 @@ import { localDateTimeLine, summarizeReason } from './skeleton.js'
 import { renderHeadline, renderNarrative } from './templates.js'
 import type { NarrativePayloadMap } from './templates.js'
 
-/** 阻塞族四场景（blocked 发射径的 id 域——样例 ⑦-⑩；泛型约束即编译期封闭） */
-export type BlockedScenarioId = 'blocked-with-fix' | 'blocked-auto-fixed' | 'blocked-wait-external' | 'blocked-ask-user'
+/** 阻塞族五场景（blocked 发射径的 id 域——样例 ⑦-⑧b-⑩；泛型约束即编译期封闭） */
+export type BlockedScenarioId = 'blocked-with-fix' | 'blocked-auto-fixed' | 'blocked-split' | 'blocked-wait-external' | 'blocked-ask-user'
 
 /** 阻塞族发射的模板字段（reasonSummary/incidentPath 由本面机械填充——调用方不可越过） */
 export type BlockedFields<S extends BlockedScenarioId> = Omit<NarrativePayloadMap[S], 'reasonSummary' | 'incidentPath'>

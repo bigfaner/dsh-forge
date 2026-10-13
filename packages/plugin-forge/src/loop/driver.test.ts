@@ -512,6 +512,43 @@ describe('blocked 结算分支（图 C）', () => {
     expect(fixed?.text).toContain('已自动分析原因并创建修复任务 fix-2（修选择器等待），继续执行')
   })
 
+  it('blocked 无 follow-up + 处置钩子 split-remainder：addTask(blockSource:false) 继任落账 + 源任务保持 blocked + ⑧b 叙述 → 续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'split-remainder', title: 'Split: remaining scope', taskDesc: '承接 C/D', note: '已完成 A/B' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // disc-N 机械：blockSource:false——继任承接剩余范围，源任务同事务不置恢复链（保持 blocked）
+    expect(built.h.addTaskInputs).toEqual([
+      expect.objectContaining({
+        projectId: PROJECT,
+        source: SOURCE,
+        title: 'Split: remaining scope',
+        sourceTask: { slug: 'feat-x', localId: '2.5' },
+        blockSource: false,
+      }),
+    ])
+    // 源任务保持 blocked 不恢复：零 pending 方向的状态迁移（不重头开始的结构保证）
+    expect(built.h.transitions.every((t) => t.toStatus !== 'pending')).toBe(true)
+    // ⑧b 分割叙述：源任务键（任务行）+ 继任任务键 + reason 摘要纪律
+    const split = built.calls.find((c) => c.text.includes('[forge·自动处理]'))
+    expect(split?.text).toContain('任务: 2.5 Implement the thing — 阻塞 — tests hang on flaky selector')
+    expect(split?.text).toContain('已创建继任任务 fix-2 承接剩余范围（本任务保持阻塞，不再重跑），继续执行——已完成 A/B')
+    expect(split?.text).not.toContain('处置历史')
+    // 循环续领：分割后继续 claim（pending 继任路径在场——池态判词不误报）
+    expect(built.h.claimInputs.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领', async () => {
     const built = build({
       claim: [claimed('2.5'), NO_TASK],

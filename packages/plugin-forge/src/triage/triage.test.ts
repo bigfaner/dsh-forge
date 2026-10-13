@@ -278,12 +278,19 @@ describe('决策 JSON 提取（围栏/裸对象/嵌套回溯，扫描窗口有�
 })
 
 describe('提示词组装（纯函数——决策规则与输出契约自释）', () => {
-  it('四件套 + 三动作规则 + 单行 JSON 契约；无记录 = 占位行', () => {
+  it('四件套 + 四动作规则 + 分界指引 + 单行 JSON 契约；无记录 = 占位行', () => {
     const text = composeTriagePrompt({ task: snapshot({ taskDesc: undefined, acceptanceCriteria: undefined }), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] })
     expect(text).toContain('"add-fix"')
     expect(text).toContain('"wait-external"')
     expect(text).toContain('"ask-user"')
+    expect(text).toContain('"split-remainder"')
+    // 分界指引（split-remainder B）：窄因→add-fix；结构性剩余→split
+    expect(text).toContain('窄因可解整个源任务')
+    expect(text).toContain('add-fix（源任务恢复后续跑）')
+    expect(text).toContain('结构性独立范围')
+    expect(text).toContain('split-remainder')
     expect(text).toContain('{"action":"ask-user"}')
+    expect(text).toContain('{"action":"split-remainder"')
     expect(text).toContain('（无记录）')
     expect(text).not.toContain('undefined')
   })

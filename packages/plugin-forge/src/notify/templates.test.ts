@@ -116,6 +116,24 @@ const SAMPLES: readonly SampleCase[] = [
 下一步动作: 无`,
   },
   {
+    no: '⑧b',
+    id: 'blocked-split',
+    render: () =>
+      renderNarrative('blocked-split', {
+        sourceSlug: 'm2-pipeline',
+        taskLabel: '3.3 分块迁移',
+        reasonSummary: '剩余范围结构性独立（原因摘要）',
+        incidentPath: 'logs/m2-pipeline/3.3/001-blocked/',
+        successorId: 'disc-1',
+        splitNote: '已完成 A/B，剩余 C/D',
+      }),
+    expected: `[forge·自动处理] 任务源: m2-pipeline
+任务: 3.3 分块迁移 — 阻塞 — 剩余范围结构性独立（原因摘要）
+详情: logs/m2-pipeline/3.3/001-blocked/
+系统: 已创建继任任务 disc-1 承接剩余范围（本任务保持阻塞，不再重跑），继续执行——已完成 A/B，剩余 C/D
+下一步动作: 无`,
+  },
+  {
     no: '⑨',
     id: 'blocked-wait-external',
     render: () =>
@@ -284,8 +302,8 @@ describe('S4 · 每条叙述的统一骨架不变式', () => {
 // ─────────────────────────── #28 · 通道分流表 ───────────────────────────
 
 describe('S4 · 场景表与通道分流（decisions #28）', () => {
-  it('场景表恰 17 场景', () => {
-    expect(Object.keys(SCENARIOS)).toHaveLength(17)
+  it('场景表恰 18 场景', () => {
+    expect(Object.keys(SCENARIOS)).toHaveLength(18)
   })
 
   it('常规进行事件 ①-⑫ 走 notice，终局事件 ⑬-⑰ 走 followup', () => {
@@ -298,6 +316,7 @@ describe('S4 · 场景表与通道分流（decisions #28）', () => {
       'completed',
       'blocked-with-fix',
       'blocked-auto-fixed',
+      'blocked-split',
       'blocked-wait-external',
       'blocked-ask-user',
       'spawn-failed-retry',
@@ -356,6 +375,7 @@ const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId;
   { no: '⑥', id: 'completed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '2.8 诊断弹窗装配', summary: '实现弹窗组件与抽屉接线，测试 12 通过' }, mustContain: ['[forge·完成] 2.8 诊断弹窗装配 — 完成', '测试 12 通过'] },
   { no: '⑦', id: 'blocked-with-fix', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.1 概览水化', reasonSummary: '测试挂起，选中态未同步（原因摘要）', incidentPath: 'logs/m2-pipeline/3.1/001-blocked/', fixId: 'fix-2' }, mustContain: ['[forge·阻塞] 3.1 概览水化 — 阻塞', '已创建修复任务 fix-2', '继续执行'] },
   { no: '⑧', id: 'blocked-auto-fixed', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.2 装配桩', reasonSummary: 'pnpm 安装失败（原因摘要）', fixId: 'fix-3', fixNote: '修构建脚本依赖版本' }, mustContain: ['[forge·自动处理]', '已创建修复任务 fix-3', '修构建脚本依赖版本'] },
+  { no: '⑧b', id: 'blocked-split', payload: { sourceSlug: 'm2-pipeline', taskLabel: '3.3 分块迁移', reasonSummary: '剩余范围结构性独立（原因摘要）', successorId: 'disc-1', splitNote: '已完成 A/B，剩余 C/D' }, mustContain: ['[forge·自动处理] 3.3 分块迁移 — 阻塞', '已创建继任任务 disc-1 承接剩余范围', '已完成 A/B，剩余 C/D'] },
   { no: '⑨', id: 'blocked-wait-external', payload: { sourceSlug: 'm2-pipeline', taskLabel: '4.1 API 接线', reasonSummary: '等待接口重构先落地', externalSlug: 'feature-b' }, mustContain: ['[forge·自动处理]', '等待 feature-b 先完成'] },
   { no: '⑩', id: 'blocked-ask-user', payload: { sourceSlug: 'm2-pipeline', taskLabel: '4.2 导出功能', reasonSummary: '验收标准冲突' }, mustContain: ['[forge·自动处理]', '已发起问询'] },
   { no: '⑪', id: 'spawn-failed-retry', payload: { sourceSlug: 'm2-pipeline', attempt: 2, errorSummary: '子会话创建被拒', delaySeconds: 30, maxAttempts: 3 }, mustContain: ['[forge·自动重试]', '第 2 次', '30 秒后重试'] },
@@ -367,7 +387,7 @@ const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId;
   { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9', instruction: '继续执行' }, mustContain: ['[forge·停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
 ]
 
-describe('1.15 · 十七场景专用单行摘要（折叠位丰富——替代整段前 120 字符截断）', () => {
+describe('1.15 · 十八场景专用单行摘要（折叠位丰富——替代整段前 120 字符截断）', () => {
   for (const sample of HEADLINE_SAMPLES) {
     it(`${sample.no} ${String(sample.id)} 摘要：单行·≤120·含事实短语·零机制词`, () => {
       const headline = renderHeadline(sample.id, sample.payload)

@@ -1,8 +1,9 @@
 // triage · 结构化决策解析（S1c 第二层——处置代理输出契约的宿主侧收口）。
-// 输出契约（封闭三动作枚举，proposal §1.4 第二层——无第四种）：
+// 输出契约（封闭四动作枚举，proposal blocked-salvage-split B——split-remainder 为第四态）：
 //   {"action":"add-fix","title":"...","type":"coding-fix","taskDesc":"...","note":"..."}
 //   {"action":"wait-external","externalSlug":"..."}
 //   {"action":"ask-user"}
+//   {"action":"split-remainder","title":"...","type":"...","taskDesc":"...","note":"..."}
 // 解析纪律（decisions #8/#16/R2）：无效输出（非 JSON/结构错/字段型错）与越权输出（action
 // 越出封闭枚举）一律抛 TriageDecisionInvalidError——宿主计一次处置失败入重试上限，绝不
 // 猜测兜底（忠实执行封闭枚举 = 模型失误爆炸半径有界的第一道闸）。
@@ -62,28 +63,30 @@ function optionalString(record: Record<string, unknown>, key: string, action: st
   return value
 }
 
-/** fix 任务类型字段（缺省 coding-fix；在场必须 ∈ TASK_TYPES——越权类型即无效） */
-function optionalTaskType(record: Record<string, unknown>): TaskType | undefined {
+/** fix/继任任务类型字段（缺省 coding-fix；在场必须 ∈ TASK_TYPES——越权类型即无效） */
+function optionalTaskType(record: Record<string, unknown>, action: string): TaskType | undefined {
   const value = record.type
   if (value === undefined) return undefined
   if (typeof value !== 'string' || !(TASK_TYPES as readonly string[]).includes(value)) {
-    throw new TriageDecisionInvalidError(`add-fix.type 越出任务类型全集——${String(value)}`, JSON.stringify(record))
+    throw new TriageDecisionInvalidError(`${action}.type 越出任务类型全集——${String(value)}`, JSON.stringify(record))
   }
   return value as TaskType
 }
 
 /**
- * 决策解析（triage 代理终态 output → 封闭三动作决策）：
+ * 决策解析（triage 代理终态 output → 封闭四动作决策）：
  * - add-fix：宿主经 addTask 建 fix 链（title/type/taskDesc/note 全可选——缺省由宿主补，
  *   blockSource 挂接归宿主定，模型只定内容参数）；
  * - wait-external：externalSlug 必带非空（外部任务源键——记录等待续领其它）；
- * - ask-user：无字段（直达第三层人工裁决）。
+ * - ask-user：无字段（直达第三层人工裁决）；
+ * - split-remainder：宿主经 addTask(blockSource:false) 建继任任务承接剩余范围（字段形同
+ *   add-fix——校验同款；源任务保持 blocked 不恢复）。
  * 越权动作（枚举外）/结构错/字段型错 → TriageDecisionInvalidError（计处置失败）。
  */
 export function parseTriageDecision(raw: string): LoopTriageDecision {
   const jsonText = extractDecisionJson(raw)
   if (jsonText === undefined) {
-    throw new TriageDecisionInvalidError('输出不含 JSON 决策（封闭三动作契约）', raw)
+    throw new TriageDecisionInvalidError('输出不含 JSON 决策（封闭四动作契约）', raw)
   }
   let parsed: unknown
   try {
@@ -98,11 +101,24 @@ export function parseTriageDecision(raw: string): LoopTriageDecision {
   switch (record.action) {
     case 'add-fix': {
       const title = optionalString(record, 'title', 'add-fix')
-      const type = optionalTaskType(record)
+      const type = optionalTaskType(record, 'add-fix')
       const taskDesc = optionalString(record, 'taskDesc', 'add-fix')
       const note = optionalString(record, 'note', 'add-fix')
       return {
         action: 'add-fix',
+        ...(title !== undefined ? { title } : {}),
+        ...(type !== undefined ? { type } : {}),
+        ...(taskDesc !== undefined ? { taskDesc } : {}),
+        ...(note !== undefined ? { note } : {}),
+      }
+    }
+    case 'split-remainder': {
+      const title = optionalString(record, 'title', 'split-remainder')
+      const type = optionalTaskType(record, 'split-remainder')
+      const taskDesc = optionalString(record, 'taskDesc', 'split-remainder')
+      const note = optionalString(record, 'note', 'split-remainder')
+      return {
+        action: 'split-remainder',
         ...(title !== undefined ? { title } : {}),
         ...(type !== undefined ? { type } : {}),
         ...(taskDesc !== undefined ? { taskDesc } : {}),
@@ -120,7 +136,7 @@ export function parseTriageDecision(raw: string): LoopTriageDecision {
       return { action: 'ask-user' }
     default:
       throw new TriageDecisionInvalidError(
-        `越权动作——${String(record.action)}（封闭三动作枚举 add-fix/wait-external/ask-user 之外）`,
+        `越权动作——${String(record.action)}（封闭四动作枚举 add-fix/wait-external/ask-user/split-remainder 之外）`,
         jsonText,
       )
   }

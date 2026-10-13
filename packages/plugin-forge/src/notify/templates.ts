@@ -1,5 +1,5 @@
-// notify · 十七场景模板（S4 纯模块——notification-samples.md 全谱的实现规格与测试锚）。
-// 常规 6（①启动×3/领取×2/完成）+ 异常 8（⑦-⑩阻塞族/⑪⑫自动重试/⑬⑭终局受阻）+
+// notify · 十八场景模板（S4 纯模块——notification-samples.md 全谱的实现规格与测试锚）。
+// 常规 6（①启动×3/领取×2/完成）+ 异常 9（⑦-⑧b-⑩阻塞族/⑪⑫自动重试/⑬⑭终局受阻）+
 // 收口停止 3（⑮⑯⑰）。统一骨架（类型行/任务源/任务键/事实/剩余/详情/系统动作/下一步动作）
 // 经 skeleton 机械拼装（key: val 单冒号·值内零冒号·封闭两值·机制词零出现）。
 // 通道分流表（decisions #28）：①-⑫ 常规进行事件 = notice（inject·零模型回合）；
@@ -87,6 +87,14 @@ export interface BlockedWaitExternalPayload extends BlockedBase {
 /** ⑩ 阻塞（无法自动处理——需要你决定；问询另行发起不经叙述） */
 export interface BlockedAskUserPayload extends BlockedBase {}
 
+/** ⑧b 阻塞（已分割剩余范围——继任任务承接，源任务保持阻塞） */
+export interface BlockedSplitPayload extends BlockedBase {
+  /** 继任任务键（承接剩余范围的新任务 localId） */
+  readonly successorId: string
+  /** 分割内容摘要（系统行动作行括注；缺席省略） */
+  readonly splitNote?: string
+}
+
 /** ⑪ 启动子代理失败（自动重试） */
 export interface SpawnFailedRetryPayload {
   readonly sourceSlug: string
@@ -159,6 +167,7 @@ export type ScenarioId =
   | 'completed'
   | 'blocked-with-fix'
   | 'blocked-auto-fixed'
+  | 'blocked-split'
   | 'blocked-wait-external'
   | 'blocked-ask-user'
   | 'spawn-failed-retry'
@@ -181,6 +190,7 @@ export const SCENARIOS: Readonly<Record<ScenarioId, { readonly no: string; reado
   completed: { no: '⑥', channel: 'notice', title: '完成' },
   'blocked-with-fix': { no: '⑦', channel: 'notice', title: '阻塞（已带修复任务）' },
   'blocked-auto-fixed': { no: '⑧', channel: 'notice', title: '阻塞（已自动分析并创建修复任务）' },
+  'blocked-split': { no: '⑧b', channel: 'notice', title: '阻塞（已分割剩余范围）' },
   'blocked-wait-external': { no: '⑨', channel: 'notice', title: '阻塞（原因在其它任务源）' },
   'blocked-ask-user': { no: '⑩', channel: 'notice', title: '阻塞（无法自动处理）' },
   'spawn-failed-retry': { no: '⑪', channel: 'notice', title: '启动子代理失败（自动重试）' },
@@ -192,7 +202,7 @@ export const SCENARIOS: Readonly<Record<ScenarioId, { readonly no: string; reado
   'stopped-by-command': { no: '⑰', channel: 'followup', title: '停止' },
 }
 
-// ─────────────────────────── 十七场景模板函数 ───────────────────────────
+// ─────────────────────────── 十八场景模板函数 ───────────────────────────
 
 /** ① 启动·从头执行（notice） */
 export function startupFromScratch(p: StartupFromScratchPayload): string {
@@ -277,6 +287,17 @@ export function blockedAutoFixed(p: BlockedAutoFixedPayload): string {
     blockedTaskLine(p),
     ...blockedDetailLine(p),
     line('系统', `已自动分析原因并创建修复任务 ${p.fixId}（${p.fixNote}），继续执行`),
+    nextActionLine(NEXT_ACTION_NONE),
+  ].join('\n')
+}
+
+/** ⑧b 阻塞（已分割剩余范围——继任承接，源保持阻塞不重跑）（notice） */
+export function blockedSplit(p: BlockedSplitPayload): string {
+  return [
+    typeLine('自动处理', '任务源', p.sourceSlug),
+    blockedTaskLine(p),
+    ...blockedDetailLine(p),
+    line('系统', `已创建继任任务 ${p.successorId} 承接剩余范围（本任务保持阻塞，不再重跑），继续执行${p.splitNote !== undefined ? `——${p.splitNote}` : ''}`),
     nextActionLine(NEXT_ACTION_NONE),
   ].join('\n')
 }
@@ -405,6 +426,12 @@ const HEADLINERS: { readonly [S in ScenarioId]: (payload: NarrativePayloadMap[S]
     ]),
   'blocked-auto-fixed': (p) =>
     headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, `已创建修复任务 ${p.fixId}`, clampPart(p.fixNote, 20)]),
+  'blocked-split': (p) =>
+    headlineOf('自动处理', [
+      `${clampPart(p.taskLabel, 40)} — 阻塞`,
+      `已创建继任任务 ${p.successorId} 承接剩余范围`,
+      ...(p.splitNote !== undefined ? [clampPart(p.splitNote, 20)] : []),
+    ]),
   'blocked-wait-external': (p) =>
     headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, `等待 ${p.externalSlug} 先完成`]),
   'blocked-ask-user': (p) => headlineOf('自动处理', [`${clampPart(p.taskLabel, 40)} — 阻塞`, '已发起问询']),
@@ -450,6 +477,7 @@ export interface NarrativePayloadMap {
   completed: CompletedPayload
   'blocked-with-fix': BlockedWithFixPayload
   'blocked-auto-fixed': BlockedAutoFixedPayload
+  'blocked-split': BlockedSplitPayload
   'blocked-wait-external': BlockedWaitExternalPayload
   'blocked-ask-user': BlockedAskUserPayload
   'spawn-failed-retry': SpawnFailedRetryPayload
@@ -470,6 +498,7 @@ const RENDERERS: { readonly [S in ScenarioId]: (payload: NarrativePayloadMap[S])
   completed,
   'blocked-with-fix': blockedWithFix,
   'blocked-auto-fixed': blockedAutoFixed,
+  'blocked-split': blockedSplit,
   'blocked-wait-external': blockedWaitExternal,
   'blocked-ask-user': blockedAskUser,
   'spawn-failed-retry': spawnFailedRetry,

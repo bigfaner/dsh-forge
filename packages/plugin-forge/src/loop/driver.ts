@@ -107,9 +107,12 @@ export interface LoopTriageInput {
 }
 
 /**
- * 处置决策三动作枚举（proposal §1.4 第二层——无第四种；宿主忠实执行）：
+ * 处置决策四动作枚举（S1c 三动作 + split-remainder 第四态，proposal blocked-salvage-split B；
+ * 宿主忠实执行）：
  * add-fix = 宿主经 addTask 建 fix 链（blockSource 置源 blocked，fix 完成自动恢复）；
- * wait-external = 原因在其它任务源（记录等待 → 续领其它）；ask-user = 直达第三层。
+ * wait-external = 原因在其它任务源（记录等待 → 续领其它）；ask-user = 直达第三层；
+ * split-remainder = 宿主经 addTask(blockSource:false) 建继任任务承接剩余范围——源任务保持
+ * blocked 不恢复（不重头开始的结构保证；pending 继任路径在场，deadlock 判词不误报）。
  */
 export type LoopTriageDecision =
   | {
@@ -124,6 +127,16 @@ export type LoopTriageDecision =
     }
   | { readonly action: 'wait-external'; readonly externalSlug: string }
   | { readonly action: 'ask-user' }
+  | {
+      readonly action: 'split-remainder'
+      /** 继任任务标题（缺省 = `Split: <任务名>`） */
+      readonly title?: string
+      /** 继任任务类型（缺省 = 源任务同型——剩余范围是源任务的结构性子集） */
+      readonly type?: TaskType
+      readonly taskDesc?: string
+      /** 分割内容摘要（叙述系统行动作行括注） */
+      readonly note?: string
+    }
 
 /** 第二层处置钩子（blocked 且结算无 followUp 时触发；缺省缺席 = 仅落盘续领——S1c 注入实现） */
 export interface LoopTriageHook {
@@ -309,6 +322,7 @@ function dispositionBookOf(loop: ActiveLoop, taskKey: string): DispositionBook {
 function triageDecisionNote(decision: LoopTriageDecision): string {
   if (decision.action === 'add-fix') return `决定创建修复任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
   if (decision.action === 'wait-external') return `决定等待 ${decision.externalSlug} 先完成`
+  if (decision.action === 'split-remainder') return `决定分割剩余范围为继任任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
   return '决定请求人工裁决'
 }
 
@@ -819,6 +833,33 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       }
       // add-fix 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+    }
+    return 'continue'
+  }
+  if (decision.action === 'split-remainder') {
+    try {
+      // disc-N 机械（blockSource:false）：继任任务承接剩余范围，源任务保持 blocked 不恢复
+      // ——不重头开始的结构保证（继任活跃期源不重跑全简报；pending 继任在场，池态判词不误报）
+      const added = await deps.tasks.addTask({
+        projectId: scope.projectId,
+        source,
+        title: decision.title ?? `Split: ${task.title}`,
+        type: decision.type ?? task.taskType,
+        ...(decision.taskDesc !== undefined ? { taskDesc: decision.taskDesc } : {}),
+        sourceTask: { slug: task.slug, localId: task.localId },
+        blockSource: false,
+      })
+      await deps.narrator.blocked(
+        owner,
+        'blocked-split',
+        { sourceSlug: slug, taskLabel: label, successorId: added.localId, ...(decision.note !== undefined ? { splitNote: decision.note } : {}) },
+        meta,
+      )
+      emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
+    } catch (cause) {
+      // split 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
+      console.warn(`forge loop triage split-remainder failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     }
     return 'continue'
