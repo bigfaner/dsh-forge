@@ -87,11 +87,9 @@ void (async () => {
     registerDirectoryPickerChannel(ipcMain, showPickDialog, (sender) => BrowserWindow.fromWebContents(sender as WebContents))
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
-    if (!app.isPackaged) { // 开发态 devtools 面：分离窗自动开 + F12 开关（打包形态零面）
+    if (!app.isPackaged) { // 开发态 devtools 面：F12 按需开关（用户裁决 2026-10-13：boot 不自动
+      // 开分离窗——窗口可见、能力在场、零打扰；打包形态零面）
       const wc = (mainWindow as BrowserWindow).webContents
-      // devtools 关闭缝（DSH_FORGE_DEVTOOLS_OFF=1，e2e 无头族）：跳过自动分离窗——人不可见；
-      // F12 手动开关保留（显式人为动作）。env 消费同 create.ts WINDOW_HIDDEN 先例。
-      if (process.env.DSH_FORGE_DEVTOOLS_OFF !== '1') wc.openDevTools({ mode: 'detach' })
       wc.on('before-input-event', (_event, input) => { if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools() })
     }
     wireWindowLifecycle(app)
