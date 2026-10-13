@@ -21,6 +21,20 @@ export const DEFAULT_MARKDOWN_LABELS: MarkdownLabels = Object.freeze({
   footnotes: '脚注',
 }) as MarkdownLabels
 
+/**
+ * 文档正文 labels（模块级冻结常量——引用稳定纪律同 DEFAULT_MARKDOWN_LABELS，新身份会废弃
+ * 流式渲染缓存）：官方 MarkdownBody 同形（client.js L1557-1581——code.toolbarLabels 递达 =
+ * 代码块升级官方 CodeToolbar：语言名 + 块级 wrap + 复制；文案 = 产品中文面，复制/脚注沿
+ * DEFAULT_MARKDOWN_LABELS 单源展开）。
+ */
+export const MD_PREVIEW_MARKDOWN_LABELS: MarkdownLabels = Object.freeze({
+  code: Object.freeze({
+    ...DEFAULT_MARKDOWN_LABELS.code,
+    toolbarLabels: Object.freeze({ codeLabel: '代码', wrapLabel: '换行', unwrapLabel: '不换行' }),
+  }),
+  footnotes: DEFAULT_MARKDOWN_LABELS.footnotes,
+}) as MarkdownLabels
+
 const FRONTMATTER_OPEN = /^---\r?\n/
 const FRONTMATTER_CLOSE = /^(?:---|\.\.\.)\r?$/
 

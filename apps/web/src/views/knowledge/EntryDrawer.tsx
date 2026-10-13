@@ -2,10 +2,9 @@
 // 组装分工沿 3.6 形制：EntryDrawer（装载壳——hook + Esc 接线）持有 useEntryDetail
 // （正文按需读取），EntryDrawerBody（纯渲染——全相位 renderToStaticMarkup 可测）呈现三区。
 // Hard Rules：
-//   - 正文渲染经共享文档 body 件 MdSegmentsBody（1.5 三入口一致——views/docs 单源：md 段
-//     仍唯一经 MarkdownDoc[variant=body + CodeToolbar labels]、mermaid 段升级分段渲染
-//     [懒加载/strict/失败回退同源]，裸渲染器禁直用不变；跨目录 import 沿
-//     DispatchPanel→overview 单源先例——oxlint 铁律仅 session↔knowledge 互禁）；
+//   - 正文渲染经 MarkdownDoc 全量渲染（1.8 渲染链退役：官方渲染唯一包装入口——mermaid
+//     fence 渲染为 md-code-block 后由 DOM 增强器出图，增强器挂接归 client 插件 1.7；
+//     variant=body + CodeToolbar labels，裸渲染器禁直用不变）；
 //   - 正文按需读取（getEntryDetail 唯一通道），不预载全库（browse/listEntries/heat 零调用）。
 // 打开参数按 entryId 设计（Implementation Notes）——3.8 召回 tab 分组行跳转复用同门。
 // AC3 关闭回浏览上下文（过滤态保持）：本件不触碰浏览过滤态（旁挂层， onClose 上抛归装配方）；
@@ -13,8 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, IconCloseFillRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EntryDetail } from '@dsh-forge/contracts'
-import { EmptyState, ErrorBar, StateChip } from '../../components/index.js'
-import { MdSegmentsBody } from '../docs/md-segments-body.js'
+import { EmptyState, ErrorBar, MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc, StateChip } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { cardTimeLabel } from './browse-model.js'
 import { isEscapeKey } from './KnowledgeToolbar.js'
@@ -259,11 +257,11 @@ function DrawerContent({ detail, now }: { readonly detail: EntryDetail; readonly
       </section>
       <section className="dswf-kn-drawer-body" data-dswf-kn-body="" aria-label="正文">
         <div className="dswf-kn-drawer-seclabel">正文</div>
-        {/* 正文区 = 共享件 MdSegmentsBody（1.5 三入口一致）；容器 dswf-kn-md-body 持官方同形
-         * 刻度组（docs.css 单源——css$7 inset + white-space 重置 + 图卡 16px 节奏），纯块级：
+        {/* 正文区 = MarkdownDoc 全量渲染（1.8 渲染链退役）；容器 dswf-kn-md-body 持官方同形
+         * 刻度组（docs.css 单源——css$7 inset + white-space 重置），纯块级：
          * 滚动所有权归抽屉内容区（dswf-kn-drawer-content overflow-y:auto 既有面不动） */}
         <div className="dswf-kn-md-body">
-          <MdSegmentsBody content={detail.body} />
+          <MarkdownDoc text={detail.body} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
         </div>
       </section>
     </div>

@@ -27,6 +27,9 @@
   "references": [
     {
       "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/plugins/md-mermaid"
     }
   ]
 }

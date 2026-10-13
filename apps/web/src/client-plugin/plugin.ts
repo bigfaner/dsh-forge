@@ -26,10 +26,8 @@
 //     工具视图正径[上游 README「注册业务工具视图」，ui-skill 同型先例]：对话工具行摘要段
 //     = source_slug 容器标识 + 结算后任务键后缀——2026-10-09 用户实机报障收口，官方通用
 //     行 fallback 恒显种类词 proposal/feature 不可分辨）。
-//   - `documentPreviews.register` + `sidebar.right.tab.document` keyed 'dswf-md-mermaid'
-//     （官方 ui-sidebar-documentpreview 扩展缝——md 预览 mermaid 扩展渲染器，extension 带
-//     恒胜 builtin Markdown，官方内建留在下拉可切回；注册表经 ctx.reflect 惰性取用，缺席
-//     = 记账跳过不炸）。
+//   - [官方预览径 md mermaid 扩展注册链已于 1.8 渲染链退役——sidebar md 预览回归官方
+//     builtin；出图改经 DOM 增强器]。
 // 契约依据（上游 0.2.0-rc.2 源码核实）：ui-slots SlotCore——single 槽 priority 升序最低者
 // 渲染（lowest renders），同 priority 再注册即抛（官方占用者缺省 0 → 产品行 -100 影子）；
 // keyed 槽按 key 唯一；list 槽按 (id, priority) 唯一、order 升序。SlotRegistry.inject(key, cb)：
@@ -98,18 +96,9 @@ export const OVERVIEW_TAB_KIND = 'dswf-overview'
 export const DOC_TAB_KIND = 'dswf-doc'
 /** 文档 tab 资源地址前缀（dsh-resource:// 资源面——openResource 去重键 = 地址本身；与 dock-tabs DSWF_DOC_ADDRESS_PREFIX 同源 pin） */
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
-/**
- * 洞名：官方文档预览 body keyed 槽（ui-sidebar-documentpreview contract——documentpreview
- * 插件自带类型/注册表/槽声明，本插件只叠加定义元数据 + keyed body；key = 实现 id）。
- */
-export const DOCUMENT_PREVIEW_BODY_SLOT = 'sidebar.right.tab.document'
-/**
- * md mermaid 预览实现 id（= documentPreviews 定义 id = keyed body 键）：extension 带恒胜
- * 官方 builtin Markdown（自动选择序），官方内建留在下拉可切回（选择态官方自持）。
- */
-export const MD_MERMAID_PREVIEW_ID = 'dswf-md-mermaid'
-/** documentPreviews 缺席诊断注记（dock 诊断 error 面——座回调期内仍缺席 = 永不态记账跳过不炸；apply 期反射未就绪 = 惰性等待不记账） */
-export const MD_MERMAID_PREVIEW_ABSENT = 'documentPreviews 缺席（官方 documentpreview 未装配）——md mermaid 预览跳过注册'
+// 1.8 渲染链退役：官方预览径 md mermaid 扩展注册链（定义元数据 + keyed body 槽
+// + 惰性两段注册）整体退役，sidebar md 预览回归官方 builtin；mermaid 出图改经 DOM 增强器
+// （挂接归 1.7）。
 /** 影子优先级（single 槽 lowest renders；官方占用者缺省 0 → -100 = 产品面板替换占用者） */
 export const SIDEBAR_SHADOW_PRIORITY = -100
 /** 产品页签登记 id（知识召回——UF-4 三页签之三；轨迹 = 官方 'trajectory' 直用，fix-29） */
@@ -606,28 +595,7 @@ export interface ForgePanelInfo {
 }
 
 /**
- * 官方文档预览注册表窄面（ui-sidebar-documentpreview DocumentPreviewRegistry 消费切片——
- * 结构同型镜像，bundle 零外部 import）。register 落定义元数据并返回幂等撤销器；同名活实现
- * 重复注册 / binaryExtensions 越界官方抛错（本插件单次注册不触）。
- */
-export interface ForgeDocumentPreviewsService {
-  register(definition: {
-    /** 实现身份（跨全部注册唯一——keyed 文档 body 槽的 dispatch 键） */
-    readonly id: string
-    /** 认领后缀（无前导点——'md'/'markdown'） */
-    readonly extensions: readonly string[]
-    /** 优先带（extension = 外部实现带，自动选择恒胜官方 builtin） */
-    readonly priority?: 'builtin' | 'extension'
-    /** 实现 label（工具栏渲染时逐读——下拉切换面文案） */
-    readonly title: () => string
-    /** 内容递达模式（text-pages = 官方共享分页文本读） */
-    readonly loading: 'text-pages' | 'bytes-complete' | 'renderer'
-    /** 是否消费文档换行偏好（true = 工具栏出换行切换，偏好起步开） */
-    readonly wrap?: boolean
-  }): () => void
-}
-
-/** 官方布局服务窄面（ui-layout LayoutController 消费切片，fix-25） */
+ * 官方布局服务窄面（ui-layout LayoutController 消费切片，fix-25） */
 export interface ForgeLayoutService {
   /** 选中全局 main 面板或回官方会话面板（null；未注册 id 抛错——调用面守卫） */
   selectPanel(panelId: string | null): void
@@ -665,7 +633,6 @@ export interface ForgeViewsGlobal {
     ForgeProgressNode: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
-    ForgeMdPreviewBody: unknown
     ForgeHeroWorkspacePicker: unknown
     ForgeSettingsSection: unknown
     createWorkbenchBridge: (nav: {
@@ -1245,84 +1212,6 @@ function registerDockTabs(
   }
 }
 
-/**
- * md mermaid 预览注册（官方文档预览器扩展缝——惰性两段注册）：`ctx.slots.inject` 挂
- * `sidebar.right.tab.document` 声明等待，回调触发时点 = 官方 documentpreview 已 commit 该子槽
- * 声明（其 apply 首语句 `reflect.provide('documentPreviews')` 先于声明 commit——上游
- * 0.2.0-rc.2 client.js 核实）→ 回调内 reflect 非严格读（strict=false——回调触发点在官方
- * apply 体内，提供方 fiber state=1，严格读恒 undefined；注册表此刻已构造完整）惰性取注册表
- * （不进 inject 数组，m3.1 D25 反射先例同径）→ 在场 = `documentPreviews.register`（extension
- * 带——自动选择恒胜官方 builtin Markdown；官方内建留在下拉可切回，选择态官方自持）+
- * keyed body（key = 实现 id，useTabInfo/useResource 由槽声明/标准面递达）。apply 期不直接
- * 反射：官方插件 apply 晚于本插件时反射缺席 = 时序非真缺席（1.2 e2e 实证——apply 期读即
- * 永久走 absent 分支零注册，fix-1 惰性化收口）。回调期内仍缺席 = 永不态，记账 absent 跳过
- * （不炸不阻塞）。幂等：回调多次触发只注册一次（活定义在场即跳过——重复 id 官方注册表
- * 抛错）；cb 可能跑在官方声明 commit 内（slots.inject 时序）→ 注册链异常 catch 记账不外溢。
- * 返回撤销器（并入 dock 撤销级联——撤销已落定义与 keyed body + 取消挂起等待；官方注册表
- * 不残留死定义）。
- */
-function registerMdMermaidPreview(
-  ctx: ForgeClientCtx,
-  views: PublishedViews,
-  diagnostics: { registered?: string[]; error?: string },
-): () => void {
-  let disposeDefinition: (() => void) | undefined
-  let disposeBody: (() => void) | undefined
-  let revoked = false
-  const teardown = (): void => {
-    disposeBody?.()
-    disposeBody = undefined
-    disposeDefinition?.()
-    disposeDefinition = undefined
-  }
-  const cancelWait = ctx.slots.inject(DOCUMENT_PREVIEW_BODY_SLOT, () => {
-    if (revoked || disposeDefinition !== undefined) return undefined // 幂等：活定义在场不重复注册
-    try {
-      // 非严格反射读（strict=false）：回调触发点 = 官方 documentpreview 的声明 commit——
-      // 位于其 apply 体内（provide 先行），此时提供方 fiber state=1（reloading）而严格读
-      // 只认 state=2 → 恒 undefined（fix-1 探针实证：cb 于 apply+59ms 触发即记 absent，
-      // +5s 同读可见）。非严格读返回的注册表已同步构造完整（official ctx.documentPreviews
-      // 属性径同场面——fiber.store 直读无状态检查，官方子插件 apply 期登记同径）。
-      const previews = asRecord(reflectServiceGet(ctx, 'documentPreviews', false)) as unknown as
-        | ForgeDocumentPreviewsService
-        | undefined
-      const register = previews?.register
-      if (previews === undefined || typeof register !== 'function') {
-        diagnostics.error = MD_MERMAID_PREVIEW_ABSENT
-        return undefined
-      }
-      disposeDefinition = register.call(previews, {
-        id: MD_MERMAID_PREVIEW_ID,
-        extensions: ['md', 'markdown'],
-        priority: 'extension',
-        title: (): string => 'Markdown（mermaid）',
-        loading: 'text-pages',
-        // 产品裁决 1.3（对齐内建 md——官方 markdownDefinition wrap:false，client.js L1626）：
-        // 文档级 wrap 钮不出（工具栏钮仅 wrap===true 渲染，官方 L899），容器 white-space:normal
-        // 同款 opt-out；块级 wrap 需求由代码块 CodeToolbar 承接（预览径 labels 供 toolbarLabels）
-        wrap: false,
-      })
-      diagnostics.registered = [...(diagnostics.registered ?? []), MD_MERMAID_PREVIEW_ID]
-      disposeBody = ctx.slots.register(
-        { name: DOCUMENT_PREVIEW_BODY_SLOT, key: MD_MERMAID_PREVIEW_ID },
-        views.ForgeMdPreviewBody,
-      )
-      diagnostics.registered = [...(diagnostics.registered ?? []), DOCUMENT_PREVIEW_BODY_SLOT]
-    } catch (error) {
-      teardown()
-      const message = error instanceof Error ? error.message : String(error)
-      diagnostics.error = message
-      return undefined
-    }
-    return teardown
-  })
-  return (): void => {
-    revoked = true
-    teardown()
-    cancelWait()
-  }
-}
-
 /** 插件本体（client bundle factory 的返回值 = 模块 exports）。 */
 export function forgeClientPlugin(): ForgeClientPlugin {
   return {
@@ -1427,17 +1316,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           sidebarRightTabs,
           dockDiagnostics,
         )
-        // md mermaid 预览（官方 documentpreview 扩展缝——惰性两段注册：`slots.inject` 挂
-        // `sidebar.right.tab.document` 声明等待，回调触发（官方声明 commit——provide 已先行）
-        // 时定义 + keyed body 齐落；回调期内仍缺席 = dock 诊断记 absent 跳过，不炸不阻塞其余
-        // 注册）。撤销并入本级联：撤销已落注册 + 取消挂起等待（apply catch + overlay 洞
-        // dispose 两面回收——官方注册表不残留死定义）
-        const disposeMdPreview = registerMdMermaidPreview(clientCtx, views, dockDiagnostics)
+        // 1.8 渲染链退役：md mermaid 预览注册链已随分段链退役（sidebar md 预览回归官方
+        // builtin）；mermaid 出图改经 DOM 增强器（挂接归 1.7）。
         const revokeBase = revokeBridgeAndLocale
         revokeBridgeAndLocale = (): void => {
           revokeBase()
           disposeDockTabs()
-          disposeMdPreview()
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -1521,7 +1405,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker | undefined }).__DSH_FORGE_CLIENT__ = undefined
             disposeLocale()
             disposeDockTabs()
-            disposeMdPreview()
           }
         })
       } catch (error) {

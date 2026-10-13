@@ -15,9 +15,8 @@
 // 派发任务监视面 = DispatchPanel，经 ShellHost 常驻树直挂不经槽位发布）。
 // 4.7 扩设置分区：ForgeSettingsSection（官方 ui-settings settings.section list 槽占用者
 // ——M3 UF-2 Forge设置 分区；slot 注册归 client 插件，生命周期 = 官方设置对话框）。
-// 官方预览径扩 md mermaid：ForgeMdPreviewBody（官方 ui-sidebar-documentpreview
-// `sidebar.right.tab.document` keyed 'dswf-md-mermaid' body——定义元数据注册归 client 插件
-// documentPreviews 反射缝）。
+// 1.8 渲染链退役：官方预览径 md mermaid 扩展渲染器随分段链整体退役，sidebar md
+// 预览回归官方 builtin；mermaid 出图改经 DOM 增强器（挂接归 client 插件 1.7）。
 import type { ComponentType } from 'react'
 import {
   ForgeBrandMark,
@@ -37,7 +36,6 @@ import {
   ForgeOverviewTab,
   type ForgeOverviewTabProps,
 } from './workbench/dock-tabs.js'
-import { MdPreviewBody, type MdPreviewBodyProps } from './views/docs/md-preview-body.js'
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
 import { ForgeDispatchToolRow, type ForgeDispatchToolRowProps } from './views/session/DispatchToolRow.js'
 import { ForgeProgressNode, type ForgeProgressNodeProps } from './views/session/ForgeProgressNode.js'
@@ -77,8 +75,6 @@ export interface ForgePublishedViews {
   readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
   /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
   readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
-  /** sidebar.right.tab.document keyed 'dswf-md-mermaid' 占用者（官方 md 预览 mermaid 扩展渲染器——注册归 client 插件 documentPreviews 缝） */
-  readonly ForgeMdPreviewBody: ComponentType<MdPreviewBodyProps>
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
@@ -105,7 +101,6 @@ declare global {
   ForgeProgressNode,
   ForgeOverviewTab,
   ForgeDocsTab,
-  ForgeMdPreviewBody: MdPreviewBody,
   ForgeHeroWorkspacePicker,
   ForgeSettingsSection,
   createWorkbenchBridge,

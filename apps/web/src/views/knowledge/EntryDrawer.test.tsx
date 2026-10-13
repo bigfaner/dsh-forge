@@ -160,7 +160,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
     expect(html).not.toContain('title:')
   })
 
-  it('1.5 正文升级：```mermaid 段出图挂载锚（MermaidDiagram 占位——回退语义同源归 MermaidDiagram）+ 相邻 md 段照常', () => {
+  it('1.8 渲染链退役：```mermaid fence 保持官方代码块形态（md-code-block DOM——出图归 DOM 增强器）+ 相邻 md 段同体全量渲染', () => {
     const mermaidDetail: EntryDetail = {
       ...DETAIL,
       body: ['# 架构', '', '```mermaid', 'erDiagram', '    PROPOSALS ||--o{ FEATURES : "proposal_id"', '```', '', '收尾段落。'].join('\n'),
@@ -168,18 +168,18 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
     const html = renderToStaticMarkup(
       <EntryDrawerBody state={{ phase: 'ready', detail: mermaidDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
     )
-    expect(html).toContain('dswf-kn-md-body') // 共享容器（官方同形刻度组）
-    expect(html).toContain('data-dswf-doc-mermaid-pending') // mermaid 段挂载（effect 渲染相位前占位）
-    expect(html).toContain('data-dswf-markdown="body"') // md 段照常（variant=body）
+    expect(html).toContain('dswf-kn-md-body') // 官方同形容器（刻度组保留）
+    expect(html).toContain('data-dswf-markdown="body"') // 正文经 MarkdownDoc 全量渲染
+    expect(html, '渲染链退役——零分段渲染件挂载').not.toContain('dswf-doc-mermaid')
+    expect(html).toContain('md-code-block') // mermaid fence = 官方代码块（增强器扫描判据）
+    expect(html).toContain('erDiagram') // 源码保持可见（安全兜底形态）
     const headAt = html.indexOf('架构')
-    const mermaidAt = html.indexOf('data-dswf-doc-mermaid')
     const tailAt = html.indexOf('收尾段落。')
     expect(headAt).toBeGreaterThan(-1)
-    expect(mermaidAt).toBeGreaterThan(headAt)
-    expect(tailAt).toBeGreaterThan(mermaidAt)
+    expect(tailAt).toBeGreaterThan(headAt)
   })
 
-  it('1.5 正文升级：代码块 CodeToolbar（labels 递达——块级 wrap/复制，与文档 tab/预览径同面）', () => {
+  it('1.5 正文升级：代码块 CodeToolbar（labels 递达——块级 wrap/复制，与文档 tab 同面）', () => {
     const codeDetail: EntryDetail = { ...DETAIL, body: '# 正文\n\n```ts\nconst a = 1\n```' }
     const html = renderToStaticMarkup(
       <EntryDrawerBody state={{ phase: 'ready', detail: codeDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
@@ -189,12 +189,13 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
     expect(html).toContain('aria-label="复制"') // 复制钮
   })
 
-  it('1.5 非法 mermaid 源透传：分段照切、渲染件照挂（回退语义归 MermaidDiagram——异常不外溢，尾段照常）', () => {
+  it('1.8 非法 mermaid 源：源码原样进官方代码块（安全兜底形态——异常归 DOM 增强器面，尾段照常）', () => {
     const badDetail: EntryDetail = { ...DETAIL, body: '# 图\n\n```mermaid\nnot a valid diagram @@@\n```\n\n尾段。' }
     const html = renderToStaticMarkup(
       <EntryDrawerBody state={{ phase: 'ready', detail: badDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
     )
-    expect(html).toContain('data-dswf-doc-mermaid-pending')
+    expect(html).toContain('md-code-block')
+    expect(html).toContain('not a valid diagram @@@')
     expect(html).toContain('尾段。')
   })
 })

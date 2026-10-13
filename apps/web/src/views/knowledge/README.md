@@ -33,7 +33,7 @@
 
 ## 关键口径（3.7 详情抽屉）
 
-- **三区呈现序 = 摘要块（summary 先行：条目标题 + 摘要）→ 两列元数据（域/状态/关键词/作者/更新时间；关键词整行，其余半行两列）→ Markdown 正文**（经共享件 `MdSegmentsBody`——1.5 三入口一致：md 段 variant=body + CodeToolbar labels、mermaid 段分段懒加载渲染；Hard Rule：抽屉内禁裸 MarkdownText、禁直连 MarkdownDoc）。
+- **三区呈现序 = 摘要块（summary 先行：条目标题 + 摘要）→ 两列元数据（域/状态/关键词/作者/更新时间；关键词整行，其余半行两列）→ Markdown 正文**（经 `MarkdownDoc` 全量渲染——1.8 渲染链退役：variant=body + CodeToolbar labels；mermaid fence 渲染为官方代码块后由 DOM 增强器出图；Hard Rule：抽屉内禁裸 MarkdownText）。
 - **正文按需读取**：打开（entryId 变更）才拉 `forge:knowledge/entryDetail`，全库通道（browse/listEntries/heat）零调用；竞态守卫同浏览面（seq 序号）。
 - **关闭回浏览上下文**：抽屉不持有过滤态（旁挂层）；Esc 捕获阶段拦截（抽屉先于工具栏清空——`stopPropagation` 防「关抽屉连带清空关键词」）；✕/Esc 均 `onClose` 上抛装配方。
 - **形态对齐官方 dockkit 浮层**：层级 `--dsh-dockkit-float-layer`（回退 60）+ 抬升面 `--dsw-elevation-prominent`（描边回弹 border-l2）+ 粘顶栏行尾关闭位 + 右缘滑入动画；布局结构 = 原型 kn-drawer（min(520px, 52vw) 全高）。

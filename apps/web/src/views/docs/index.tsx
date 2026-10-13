@@ -4,23 +4,23 @@
 // docRel props；多文档并存 = 每文档一个 tab 实例，互不共享态。
 // 内容结构（1.6 单行头收敛——对齐官方预览头 documentpreview css$8 dhJKeW_header 单行形）：
 // 单行头（官方 PathLabel 路径[目录段弱化/左缘渐隐裁剪/悬浮全值官方自带] + 悬空 warn chip
-// [仅 dangling] + 控件簇[官方图标钮：编辑器打开/重读]）→ 正文分段渲染（经共享件
-// MdSegmentsBody 单源——md 段 MarkdownDoc、mermaid 段 MermaidDiagram 懒加载，零 mermaid
-// 段零挂载；1.5 三入口一致）。退役面（1.6 用户裁决）：标题行/只读 chip（标题归 tab 页签、
-// 面板恒只读零冗余）+ 摘要卡（摘要供给改经概览文档行悬浮）。
+// [仅 dangling] + 控件簇[官方图标钮：编辑器打开/重读]）→ 正文 MarkdownDoc 全量渲染（1.8
+// 渲染链退役：官方渲染唯一径——mermaid fence 渲染为 md-code-block 后由 DOM 增强器出图，
+// 增强器挂接归 client 插件 1.7；labels 递达 CodeToolbar）。退役面（1.6 用户裁决）：标题
+// 行/只读 chip（标题归 tab 页签、面板恒只读零冗余）+ 摘要卡（摘要供给改经概览文档行悬浮）。
 // 悬空（dangling=true，Interface 4 悬空容忍）= 只读占位面：单行头保留、不崩溃、不写入、
 // 不删行；重读照常（切回含文件分支后恢复）。
 // 边界：禁 import ../session/ ../knowledge/ ../overview/（依赖铁律③ 同级业务互禁）；
-// 正文渲染唯一经共享件 MdSegmentsBody（内层 md 段仍唯一经 MarkdownDoc——结构 pin）；
-// openExternal 触发即忘（失败吞——不炸 tab）；官方件零改写（PathLabel/图标消费原样）。
+// 正文渲染唯一经 MarkdownDoc（官方渲染唯一包装入口——结构 pin）；mermaid 渲染零产品引用
+// （唯一引用方 = @dsh-forge/md-mermaid）；openExternal 触发即忘（失败吞——不炸 tab）；
+// 官方件零改写（PathLabel/图标消费原样）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocContent } from '@dsh-forge/contracts'
+import { MD_PREVIEW_MARKDOWN_LABELS, EmptyState, ErrorBar, MarkdownDoc, SkeletonRows, StateChip } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
-import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
 import { IconFolderOpenOutlineRegular, IconRefreshOutlineRegular, PathLabel, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import { MdSegmentsBody } from './md-segments-body.js'
 import './docs.css'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -101,13 +101,13 @@ export interface DocsFrameProps {
   readonly onOpenExternal: () => void
 }
 
-/** 正文分段渲染——共享件 MdSegmentsBody 单源委托（1.5：分段 + labels + 图卡节奏唯一实现，
- * 与官方预览径/知识抽屉同面）。本件只持 dock tab 语境容器（滚动所有权自持——docs.css
- * 专条规则；官方同形刻度组共享）与 e2e 锚。 */
+/** 正文全量渲染——MarkdownDoc 单源委托（官方渲染唯一径：mermaid fence 渲染为 md-code-block
+ * 后由 DOM 增强器出图——增强器挂接归 1.7）。本件只持 dock tab 语境容器（滚动所有权自持——
+ * docs.css 专条规则；官方同形刻度组共享）与 e2e 锚。 */
 export function DocBody({ content }: { readonly content: string }): ReactNode {
   return (
     <div className="dswf-doc-body" data-dswf-doc-body="">
-      <MdSegmentsBody content={content} />
+      <MarkdownDoc text={content} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
     </div>
   )
 }

@@ -1,7 +1,8 @@
 // 文档 tab 单测 —— AC1/AC4/AC5：tab 内容结构（单行头[官方 PathLabel 路径 + 悬空 warn chip
-// + 官方图标钮 ↻ 重读/编辑器打开——1.6 收敛：标题行/只读 chip/摘要卡退役] + md/mermaid
-// 分段渲染）、零 mermaid 块零挂载（懒加载前提）、悬空只读占位面（单行头保留不崩溃）、
-// 装载/落点纯函数 + docs.read 通道面 + openExternal 触发即忘。
+// + 官方图标钮 ↻ 重读/编辑器打开——1.6 收敛：标题行/只读 chip/摘要卡退役] + 正文 MarkdownDoc
+// 全量渲染——1.8 渲染链退役：mermaid fence 保持官方代码块形态、出图归 DOM 增强器[挂接归
+// client 插件 1.7]）、悬空只读占位面（单行头保留不崩溃）、装载/落点纯函数 + docs.read 通道
+// 面 + openExternal 触发即忘。
 // 口径沿 overview 先例：effect 胶水不在 Node 测面（renderToStaticMarkup 不跑 effect）；
 // 纯异步面与纯函数全量单测；DocsTab 静态首装面断言骨架形态。
 import { describe, expect, it, vi } from 'vitest'
@@ -148,7 +149,7 @@ describe('装载落点纯函数（pendingDocView / applyDocFetch）', () => {
 })
 
 describe('DocsFrame（AC4 tab 内容结构——1.6 单行头收敛）', () => {
-  it('单行头：PathLabel 路径 + 官方图标钮（编辑器打开/重读）+ md 段 MarkdownDoc + mermaid 段挂载占位；标题行/只读 chip/摘要卡全数退役', () => {
+  it('单行头：PathLabel 路径 + 官方图标钮（编辑器打开/重读）+ 正文 MarkdownDoc 全量渲染；标题行/只读 chip/摘要卡全数退役', () => {
     const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
     expect(markup).toContain('data-dswf-doc-pathbar') // 单行头（对齐官方预览头——路径左 + 控件簇右）
     expect(markup).not.toContain('data-dswf-doc-head') // 标题行退役（标题归 tab 页签）
@@ -164,15 +165,17 @@ describe('DocsFrame（AC4 tab 内容结构——1.6 单行头收敛）', () => {
     expect(markup).not.toContain('↻')
     expect(markup).toContain('<svg') // 控件簇 = 官方图标件（svg 在场）
     expect(markup).not.toContain('dswf-doc-chip') // 非 dangling = 零冗余 chip
-    expect(markup).toContain('data-dswf-markdown') // md 段经 MarkdownDoc
+    expect(markup).toContain('data-dswf-markdown') // 正文经 MarkdownDoc 全量渲染
     expect(markup).toContain('前置段落。')
-    expect(markup).toContain('data-dswf-doc-mermaid-pending') // mermaid 段挂载（effect 后渲染）
+    expect(markup).toContain('收尾段落。') // 全量渲染——mermaid fence 后的尾段同体在场
   })
 
-  it('零 mermaid 块 = 零挂载（无 mermaid 锚——懒加载零触发的前提）', () => {
-    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={PLAIN_DOC} busy={false} />)
+  it('1.8 渲染链退役：mermaid fence 保持官方代码块形态（md-code-block DOM——出图归 DOM 增强器，产品零渲染件挂载）', () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
     expect(markup).toContain('data-dswf-markdown')
-    expect(markup).not.toContain('data-dswf-doc-mermaid')
+    expect(markup).toContain('md-code-block') // mermaid fence = 官方代码块（增强器扫描判据）
+    expect(markup).not.toContain('dswf-doc-mermaid') // 零产品 mermaid 渲染件（分段链退役）
+    expect(markup).toContain('erDiagram') // 源码保持可见（安全兜底形态）
   })
 
   it('标题缺席 = 单行头零标题段（退役恒态）；摘要缺席 = 无摘要块（零冗余面）', () => {
@@ -219,15 +222,20 @@ describe('DocsFrame（AC5 悬空只读占位面）', () => {
   })
 })
 
-describe('DocBody（分段渲染）', () => {
-  it('md 段与 mermaid 段按序交替渲染', () => {
+describe('DocBody（MarkdownDoc 全量渲染——1.8 渲染链退役）', () => {
+  it('全量渲染单体：正文整体一次入 MarkdownDoc（含 mermaid fence 原文——不分段零交替）', () => {
     const markup = render(<DocBody content={READY_DOC.content} />)
-    const mdAt = markup.indexOf('前置段落。')
-    const mermaidAt = markup.indexOf('data-dswf-doc-mermaid')
+    expect(markup).toContain('data-dswf-markdown="body"')
+    expect(markup).toContain('前置段落。')
+    expect(markup).toContain('erDiagram')
+    expect(markup).toContain('收尾段落。')
+    expect(markup, '渲染链退役——零分段渲染件挂载').not.toContain('dswf-doc-mermaid')
+    const mdAt = markup.indexOf('data-dswf-markdown')
+    const headAt = markup.indexOf('前置段落。')
     const tailAt = markup.indexOf('收尾段落。')
     expect(mdAt).toBeGreaterThan(-1)
-    expect(mermaidAt).toBeGreaterThan(mdAt)
-    expect(tailAt).toBeGreaterThan(mermaidAt)
+    expect(headAt).toBeGreaterThan(mdAt)
+    expect(tailAt).toBeGreaterThan(headAt)
   })
 
   it('1.4 CodeToolbar labels 递达：代码块升级官方 CodeToolbar（块级 wrap/复制/语言名——1.3 冻结常量复用）', () => {
