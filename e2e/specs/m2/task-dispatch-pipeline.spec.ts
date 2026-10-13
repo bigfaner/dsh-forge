@@ -102,9 +102,10 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     })) as ClaimTaskResult
     expect(claim.task?.taskStatus, '领取后 in_progress').toBe('in_progress')
     expect(claim.reclaimed, '首领非重入').toBe(false)
-    // S2b 锚双层化（SC9）：user 面 = 任务级（单块 task-context + TASK_ID + 结算出口）；
+    // S2b 锚双层化（SC9）：user 面 = 任务级（无包裹单块——TITLE 裸值首行 + TASK_ID）；
     // persona/约束面已迁 system 面（此处反锚断言分层成立）
-    expect(claim.dispatchPrompt, '简报任务级单块').toContain('<task-context>')
+    expect(claim.dispatchPrompt, '简报无 <task-context> 外包裹（S2b 再收窄——compose 单源）').not.toContain('<task-context>')
+    expect(claim.dispatchPrompt.split('\n')[0], 'TITLE 裸值首行（无键前缀）').toBe('派发链冒烟任务')
     expect(claim.dispatchPrompt, '动态块含 TASK_ID 自然键').toContain(`TASK_ID: ${added.slug}/${added.localId}`)
     expect(claim.dispatchPrompt, '结算出口句不在简报（路径指称由 persona/submit-task 技能承载——用户裁决 2026-10-13）').not.toContain('Settlement exit')
     expect(claim.dispatchPrompt, '无人格段（persona 迁 system 面）').not.toContain('You are')
