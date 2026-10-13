@@ -75,7 +75,9 @@ test('@web-e2e @probe installer composer 回显定性探针', async () => {
       userData,
       executablePath: exe,
       devProfile: false,
-      env: { TEMP: tmp, TMP: tmp },
+      // 取证截图（page.screenshot）需真实绘制面——显式逃逸回可见窗（隐藏窗口无合成帧，
+      // 截图挂起；opts.env 覆盖 launch 层缺省注入的 WINDOW_HIDDEN=1）
+      env: { TEMP: tmp, TMP: tmp, DSH_FORGE_WINDOW_HIDDEN: '0' },
       timeouts: { firstWindow: 120_000, bootReady: 120_000, loaderLive: 120_000, workbenchVisible: 60_000 },
     })
     app = launched.app

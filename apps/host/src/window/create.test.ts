@@ -102,4 +102,18 @@ describe('createMainWindow（显窗行为）', () => {
     win.emit('ready-to-show')
     expect(win.shown).toBe(true)
   })
+  it('DSH_FORGE_WINDOW_HIDDEN=1：ready-to-show 不显窗 + 节流豁免（e2e 无头形态）', async () => {
+    // e2e 无头缝（create.ts 头注）：隐藏形态两语义——不注册 ready-to-show 显窗、
+    // webPreferences 追加 backgroundThrottling:false（缺省形态不携带该键——建窗参数组
+    // 精确匹配 pin 不动）。env set/restore 写法同 icon 用例先例。
+    process.env.DSH_FORGE_WINDOW_HIDDEN = '1'
+    try {
+      const win = await createFake()
+      expect((win.options.webPreferences as Record<string, unknown>).backgroundThrottling).toBe(false)
+      win.emit('ready-to-show')
+      expect(win.shown).toBe(false)
+    } finally {
+      delete process.env.DSH_FORGE_WINDOW_HIDDEN
+    }
+  })
 })

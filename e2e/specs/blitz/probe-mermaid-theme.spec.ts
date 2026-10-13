@@ -69,7 +69,14 @@ test('@web-e2e @probe mermaid 方案 A 主题化 1.8 实机探针：concrete/var
   writeFileSync(join(wsDir, 'wide.md'), WIDE_DOC, 'utf8')
   writeFileSync(join(wsDir, 'bad.md'), BAD_DOC, 'utf8')
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-probe-mermaid-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
+  // 取证截图（preview.screenshot）需真实绘制面——隐藏窗口无合成帧，元素截图挂起
+  // （2026-10-13 无头化实证）：本探针显式逃逸回可见窗（launch 层缺省注入 WINDOW_HIDDEN=1，
+  // opts.env 覆盖序在注入之后）。
+  const launched: Launched = await launchHost({
+    userData,
+    expectPhase: 'hero',
+    env: { DSH_FORGE_WINDOW_HIDDEN: '0' },
+  })
   const { app, page, pageErrors } = launched
   const result: Record<string, unknown> = { at: new Date().toISOString(), checks: {} as Record<string, unknown> }
   const checks = result.checks as Record<string, unknown>

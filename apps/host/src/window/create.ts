@@ -30,6 +30,11 @@ export async function createMainWindow(
   BrowserWindow: BrowserWindowFactory,
   options: MainWindowOptions,
 ): Promise<BrowserWindowLike> {
+  // e2e 无头缝（DSH_FORGE_WINDOW_HIDDEN=1）：ready-to-show 不显窗（窗口永久隐藏——人不可见；
+  // Playwright firstWindow/可见性断言走 CDP 目标发现与布局判定，不依赖窗口可见）。同形态豁免
+  // backgroundThrottling：隐藏窗口下 Chromium 节流 rAF/计时器，e2e waitForFunction（raf 轮询）
+  // 与动画计时窗断言依赖其推进。env 消费同 icon 先例；不设 env = 产品行为逐字不变。
+  const hidden = process.env.DSH_FORGE_WINDOW_HIDDEN === '1'
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -59,9 +64,10 @@ export async function createMainWindow(
       nodeIntegration: false,
       // ESM preload（.mjs）须非沙箱渲染；contextIsolation 保持开（electron-ipc-security）
       sandbox: false,
+      ...(hidden ? { backgroundThrottling: false } : {}),
     },
   })
-  win.on('ready-to-show', () => win.show())
+  if (!hidden) win.on('ready-to-show', () => win.show())
   await win.loadURL(options.url)
   return win
 }

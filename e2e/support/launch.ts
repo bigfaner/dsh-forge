@@ -71,6 +71,10 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
     env: {
       ...sanitizedLaunchEnv(),
       DSH_FORGE_PORT: String(opts.port ?? allocatePort()),
+      // e2e 无头形态（缺省开）：DSH_FORGE_WINDOW_HIDDEN=1 → 宿主不显窗（人不可见，缝语义见
+      // apps/host/src/window/create.ts 头注）。E2E_WINDOW_VISIBLE=1 一键恢复可见（调试/走查
+      // 形态）；置于 opts.env 之前——调用侧 env 仍可显式覆盖。
+      ...(process.env.E2E_WINDOW_VISIBLE === '1' ? {} : { DSH_FORGE_WINDOW_HIDDEN: '1' }),
       ...opts.env,
     } as Record<string, string>,
   })
