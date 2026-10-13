@@ -87,7 +87,7 @@ function card(slug: string, localId: string, over: Partial<TaskCard> = {}): Task
   }
 }
 
-const NO_TASK: ClaimTaskResult = { task: null, dispatchPrompt: '', digest: '', reclaimed: false }
+const NO_TASK: ClaimTaskResult = { task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false }
 
 /** 永不结算的 spawn 桩（生命周期用例——在飞保持确定性） */
 function parkedSpawn(_n: number): Promise<SpawnWorkerHandle> {
@@ -99,7 +99,7 @@ function parkedSpawn(_n: number): Promise<SpawnWorkerHandle> {
 }
 
 function claimed(localId = '2.5', digest = 'digestabc123'): ClaimTaskResult {
-  return { task: snapshot({ localId }), dispatchPrompt: 'PERSONA + <task-context>', digest, reclaimed: false }
+  return { task: snapshot({ localId }), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest, reclaimed: false }
 }
 
 function queryOf(status: TaskStatus, over: Partial<TaskSnapshot> = {}): QueryTaskResult {

@@ -69,6 +69,7 @@ function harness(claimedTask: TaskSnapshot | null): Harness {
   let claimResult: ClaimTaskResult = {
     task: claimedTask,
     dispatchPrompt: 'PERSONA + <task-context>',
+    persona: 'PERSONA-MATRIX',
     digest: 'digestabc123',
     reclaimed: false,
   }

@@ -126,7 +126,7 @@ function harness(
   const claimInputs: unknown[] = []
   const statsInputs: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
-  let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', digest: 'digestabc123', reclaimed: false }
+  let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
     task: snapshot({ taskStatus: 'completed' }),
     container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
@@ -443,7 +443,7 @@ describe('execute 四分支（AC1）', () => {
 
   it('spawned·blocked：原因行 + followUp（最新 fix 任务）+ 渲染 ⚑ 行', async () => {
     const h = harness()
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', digest: 'd42', reclaimed: false })
+    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
     h.setQuery({
       task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
       container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
@@ -465,7 +465,7 @@ describe('execute 四分支（AC1）', () => {
 
   it('no-task：池快照 + no-ready-task 事件（source 对容器归属——载荷 contextSlug = source_slug）+ 渲染 · 行带三分判词', async () => {
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2 }))
     const out = (await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
     expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2 } })
@@ -478,7 +478,7 @@ describe('execute 四分支（AC1）', () => {
 
   it('no-task 无 source 对：归属回落 _pool', async () => {
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     h.setStats(statsOf())
     await h.tool.execute({}, h.exec)
     expect(h.events[0]).toMatchObject({ slug: '_pool', payload: {} })
@@ -642,7 +642,7 @@ describe('dispatched 分支（AC1：立即返回四键回执——不 await work
   it('no-task 分支不建 job（§5——无任务零注册，no-task 回执原样）', async () => {
     const js = jobsStub()
     const h = harness({ jobs: js.jobs })
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
     expect(out.kind).toBe('no-task')
     expect(js.specs).toHaveLength(0)
@@ -672,7 +672,7 @@ describe('结算后置交付（AC2：JobOutcome.result = 前台 spawned 分支�
   it('blocked：reason/followUp 原样投影 + done:blocked 里程碑', async () => {
     const js = jobsStub()
     const h = harness({ jobs: js.jobs })
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', digest: 'd42', reclaimed: false })
+    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
     h.setQuery({
       task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
       container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
@@ -938,7 +938,7 @@ describe('后台径 ring 通道值域（负向 pin 生产者面——appendLog �
   it('blocked 结算同域：done:blocked 里程碑环块亦全 log（值域断言与结算解耦）', async () => {
     const { registry, ring, hooks } = ringCaptureRegistry()
     const h = harness({ jobs: adaptDispatchJobs(registry) })
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', digest: 'd42', reclaimed: false })
+    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
     h.setQuery({
       task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
       container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
@@ -1250,7 +1250,7 @@ describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () =>
 describe('scoped 池快照 + 重入回执（1.10：快照口径分流 + 重入标识渲染 + schema 可选 reEntered）', () => {
   it('scoped 调用：taskStats 查询携带 source（容器口径快照——no-task 收据全池数字不再出现的数据源）', async () => {
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)
     expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
     const text = h.tool.output.render({}, { kind: 'no-task', pool: { pending: 9, inProgress: 1, blocked: 0, unmetPending: 2 } })[0]?.text ?? ''
@@ -1259,7 +1259,7 @@ describe('scoped 池快照 + 重入回执（1.10：快照口径分流 + 重入�
 
   it('非 scoped 调用：taskStats 查询不含 source 键（全池口径零变化）', async () => {
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     await h.tool.execute({}, h.exec)
     expect(h.statsInputs).toHaveLength(1)
     expect(h.statsInputs[0]).not.toHaveProperty('source')
@@ -1272,7 +1272,7 @@ describe('scoped 池快照 + 重入回执（1.10：快照口径分流 + 重入�
       h.spawnRequests.push(req)
       return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
     })
-    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd2', reclaimed: true })
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd2', reclaimed: true })
     const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string; reEntered?: boolean }
     expect(out.kind).toBe('dispatched')
     expect(out.reEntered).toBe(true)

@@ -789,7 +789,8 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
         {
           store: h!.store,
           events: h!.events,
-          resolveWorkerContext: (_projectId, _source, _localId) => context,
+          // 签名要求 string；缺席夹具 coerce ''（生产端 claim.ts 对 undefined/'' 同判缺席——语义等价）
+          resolveWorkerContext: (_projectId, _source, _localId) => context ?? '',
         },
         input,
       )

@@ -1,4 +1,4 @@
-﻿// S1a · dispatch-core 独立单测（可拆卸壳分层验收项——「不依赖工具面装配」）：
+// S1a · dispatch-core 独立单测（可拆卸壳分层验收项——「不依赖工具面装配」）：
 // dispatchCore(deps, exec, args) 直调——零 createDispatchTaskTool / 零 args 解析 /
 // 零 ToolExecFace。覆盖 claim→组装→spawn→事件发射主链 + guard 机械的 guardKey
 // 参数化（decisions #18：粘性载体 = guard 键而非会话 id——工具壳填会话 id、循环填
@@ -311,7 +311,7 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
   it('no-task：池快照 + no-ready-task 事件（source 对归属）+ 归属槽保持 source 语境', async () => {
     const h = harness()
     const { exec, attribution } = execOf()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2 }))
     const out = await dispatchCore(h.deps, exec, loopArgs({ source: { kind: 'proposal', slug: 'pa' } }))
     expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2 } })
@@ -460,7 +460,7 @@ describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(
   it('scoped 调用：taskStats 查询携带 source（四计数 = 容器口径）——no-task 读与结算 spawned 读同口径', async () => {
     // no-task 读
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'proposal', slug: 'pa' } }))
     expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'proposal', slug: 'pa' } }])
     // 结算 spawned 读（settle 结算核）
@@ -482,7 +482,7 @@ describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(
 
   it('非 scoped 调用：taskStats 查询不含 source 键（全池口径零变化）', async () => {
     const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', digest: '', reclaimed: false })
+    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
     await dispatchCore(h.deps, execOf().exec, loopArgs())
     expect(h.statsInputs).toHaveLength(1)
     expect(h.statsInputs[0]).not.toHaveProperty('source')
@@ -495,11 +495,11 @@ describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(
       h.spawnRequests.push(req)
       return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算——回执即证
     })
-    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd2', reclaimed: true })
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd2', reclaimed: true })
     const reentered = await dispatchCore(h.deps, execOf().exec, loopArgs({ runInBackground: true }))
     expect(reentered).toMatchObject({ kind: 'dispatched', reEntered: true })
     // 新领取（reclaimed=false）：回执零重入键
-    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', digest: 'd3', reclaimed: false })
+    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd3', reclaimed: false })
     const fresh = await dispatchCore(h.deps, execOf().exec, loopArgs({ runInBackground: true }))
     expect(fresh).toMatchObject({ kind: 'dispatched', jobId: 'forge-dispatch-2' })
     expect(fresh).not.toHaveProperty('reEntered')
