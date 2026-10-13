@@ -154,10 +154,10 @@ test('@web-e2e @probe mermaid 方案 A 主题化 1.8 实机探针：concrete/var
     checks.theme = themeProbe
     expect(themeProbe.captionCount, '① 渲染态零标题条（figcaption 退役）').toBe(0)
     expect(themeProbe.figureTag, '① figure 直接落文档流').toBe('FIGURE')
-    expect(themeProbe.nodeShape?.fill, '① 节点 fill = concrete 中性灰（primaryColor 派生链）').toBe('rgb(241, 243, 245)')
+    expect(themeProbe.nodeShape?.fill, '① 节点 fill = concrete 中性灰（primaryColor 派生链——1.11 调优 = bluish-200）').toBe('rgb(225, 229, 238)')
     expect(themeProbe.nodeText?.fill, '① 节点文字 fill = #0f1115 派生').toBe('rgb(15, 17, 21)')
-    expect(themeProbe.edgePath?.stroke, '① 线条 stroke = var(--dsw-alias-border-l3) 解析（主题联动）').toBe(
-      'rgba(0, 0, 0, 0.12)',
+    expect(themeProbe.edgePath?.stroke, '① 线条 stroke = lineColor 静态令牌（1.11 调优 = bluish-400 solid）').toBe(
+      'rgb(173, 178, 184)',
     )
     expect(themeProbe.svgBackground, '③ svg 背景透明').toBe('rgba(0, 0, 0, 0)')
     expect(themeProbe.canvasBackground, '③ 画布背景透明').toBe('rgba(0, 0, 0, 0)')

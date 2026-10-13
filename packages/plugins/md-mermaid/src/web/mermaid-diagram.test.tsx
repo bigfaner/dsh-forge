@@ -77,7 +77,13 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
       const v = MERMAID_THEME_VARIABLES[key]
       expect(v, `${key} 为 khroma 派生输入——必须 concrete 静态实值（var() 抛 Unsupported color format）`).toMatch(/^#[0-9a-fA-F]{3,8}$/)
     }
-    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = 官方 border-l3 light 实值镜像（不透明黑 12% 透明刻度）').toBe('#0000001f') // dsw-raw 官方令牌实值镜像 pin
+    // 1.11 调优 pin：对比度层次——节点底 200/100/50 三档差异化；边框/连线 solid 静态令牌（过淡半透明黑档退役）
+    expect(MERMAID_THEME_VARIABLES.primaryColor, '主节点底 = neutral-bluish-200 实值（层次最强档）').toBe('#e1e5ee')
+    expect(MERMAID_THEME_VARIABLES.secondaryColor, '次级底 = neutral-bluish-100 实值（中间档）').toBe('#ebeef2')
+    expect(MERMAID_THEME_VARIABLES.tertiaryColor, '簇底 = neutral-bluish-50 实值（最浅档）').toBe('#f9fafb')
+    expect(MERMAID_THEME_VARIABLES.primaryBorderColor, '主边框 = neutral-bluish-300 实值（对比度提升）').toBe('#cfd3d6')
+    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = neutral-bluish-400 实值（对比度提升——1.11 调优）').toBe('#adb2b8')
+    expect(MERMAID_THEME_VARIABLES.arrowheadColor, '箭头色 = neutral-bluish-400 实值（与连线同源）').toBe('#adb2b8')
     expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = 官方 label-primary 实值镜像（neutral-bluish-1000）').toBe('#0f1115') // dsw-raw 官方令牌实值镜像 pin
   })
 })
