@@ -19,6 +19,7 @@ export const TASK_VERB_KIND: Readonly<Record<TaskRecordVerb, string>> = {
   claim: 'v-claim',
   submit: 'v-submit',
   transition: 'v-human',
+  updateTask: 'v-add',
   'auto-restore': 'v-restore',
   'auto-block': 'v-block',
 }
@@ -35,6 +36,8 @@ export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string 
       return '提交'
     case 'transition':
       return '人工转移'
+    case 'updateTask':
+      return '修改'
     case 'auto-restore':
       return '自动恢复'
     case 'auto-block':

@@ -50,6 +50,10 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_AC_NOT_MET: 'error-bar',
   ERR_AC_CRITERIA_MISMATCH: 'error-bar',
   ERR_FILES_UNION_MISMATCH: 'error-bar',
+  // ── main-agent-task-tools（updateTask 锁定面）──
+  // 锁定态改写 / 派生边改写 → 错误条（修改语境原地反馈，改参重试）
+  ERR_TASK_LOCKED: 'error-bar',
+  ERR_TASK_EDGE_ORIGIN_LOCKED: 'error-bar',
 }
 
 /**

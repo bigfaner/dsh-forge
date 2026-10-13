@@ -107,12 +107,13 @@ describe('AC1 身份双轨（TaskSnapshot/TaskCard/TaskDetail 恒含 taskId + sl
 })
 
 describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () => {
-  it('ForgeTasksService 十一法（动词×4 + 校验 + 读面×6）', () => {
+  it('ForgeTasksService 十二法（动词×5 含 updateTask + 校验 + 读面×6）', () => {
     const methods: readonly (keyof ForgeTasksService)[] = [
       'addTask',
       'claimTask',
       'submitTask',
       'transitionTask',
+      'updateTask',
       'queryTask',
       'validateFeatureTasks',
       'listTasks',
@@ -121,7 +122,7 @@ describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () =>
       'taskDetail',
       'sessionLinks',
     ]
-    expect(methods).toHaveLength(11)
+    expect(methods).toHaveLength(12)
   })
 
   it('ForgeFeaturesService 五法 / ForgeProposalsService 五法（M3 +setProposalMode/listProposalDocs）/ ForgeDocsService 一法', () => {

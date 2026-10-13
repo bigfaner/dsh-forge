@@ -37,6 +37,9 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_AC_NOT_MET: 'error-bar',
   ERR_AC_CRITERIA_MISMATCH: 'error-bar',
   ERR_FILES_UNION_MISMATCH: 'error-bar',
+  // main-agent-task-tools（updateTask 锁定面）
+  ERR_TASK_LOCKED: 'error-bar',
+  ERR_TASK_EDGE_ORIGIN_LOCKED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

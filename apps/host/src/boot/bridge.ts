@@ -173,6 +173,7 @@ export const TASKS_SERVICE_METHODS = [
   'submitTask',
   'reconcileInterrupted',
   'transitionTask',
+  'updateTask',
   'queryTask',
   'validateFeatureTasks',
   'listTasks',

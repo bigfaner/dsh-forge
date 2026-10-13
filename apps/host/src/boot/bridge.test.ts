@@ -425,6 +425,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       // S3（run-tasks-host-command）：启动对账动词（桥白名单全集锚——锚定服务面而非 RPC 面）
       'reconcileInterrupted',
       'transitionTask',
+      // main-agent-task-tools 1.1：主 agent 修改动词（桥白名单全集锚——锚定服务面而非 RPC 面）
+      'updateTask',
       'queryTask',
       'validateFeatureTasks',
       'listTasks',
@@ -537,7 +539,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
-    expect(TASKS_SERVICE_METHODS).toHaveLength(12) // S3 +reconcileInterrupted
+    expect(TASKS_SERVICE_METHODS).toHaveLength(13) // S3 +reconcileInterrupted；1.1 +updateTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
