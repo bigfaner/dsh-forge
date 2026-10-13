@@ -64,14 +64,12 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 - 文件范围边界：触及多文件的任务在 `task_desc`/`vars` 里枚举确切路径——绝不"所有
   文件"。同一模式 >8 个文件时按文件组拆分；被拆任务加一条列明其文件的范围约束 var。
 
-### 类型词表（封闭——`type` 必须精确取一）
+### 类型词表（封闭）
 
-`coding-feature`（新运行时行为/能力/文件）· `coding-enhancement` · `coding-cleanup` ·
-`coding-refactor` · `code-quality-simplify` · `coding-fix`（仅 fix 链派生，禁止手工）·
-`gate` · `doc`（仅不可编译产出——`.md`、`.yaml`、`.json`、`.sql`…；按产出工件分类，
-不按意图）· `doc-consolidate` · `doc-drift` · `doc-review` · `doc-summary` ·
-`test-run` · `test-gen-contracts` · `test-gen-journeys` · `test-gen-scripts` ·
-`validation-code` · `validation-ux` · `eval-contract` · `eval-journey`。
+`type` 从 addTask 工具面的封闭词表精确取一（全量以工具注册面为准，本技能不复述）。
+判断规则：按**产出工件**分类、不按意图——可编译或可运行 → `coding-*`；仅不可编译
+产出（`.md`、`.yaml`、`.json`、`.sql`…）→ `doc` 族；`coding-fix` 仅 fix 链派生，
+禁止手工指派。
 
 优先级：P0 核心机制或阻塞他人；P1 对应一条 PRD AC 或核心流程；P2 打磨。
 
@@ -97,17 +95,13 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
    gen-journeys（`test-gen-journeys`）→ eval-journey（`eval-journey`）→ gen-contracts
    （`test-gen-contracts`）→ eval-contract（`eval-contract`）→ gen-scripts
    （`test-gen-scripts`）→ run-tests（`test-run`）。逐任务依赖前驱；首个（review-doc）
-   依赖最终阶段 gate。每条标题点名其技能/用途；这些类型的派发简报会自动调起技能。
+   依赖最终阶段 gate。每条标题点名其技能/用途——执行 worker 依标题与任务类型装载
+   对应技能。
 7. **体量审计**——逐任务复查：多动词标题拆；AC 跨无关领域拆；守住操作上限；
    **每任务 ≤6 条验收标准**（更多 = 范围过大，继续拆）；任何 `task_desc` / AC 内
    零跨容器引用（确需外部排序就是合并或排序，不是等待任务）。
 8. **校验容器**——`validateFeatureTasks { feature_slug: "<slug>" }`：每条上报违规
    都点名违规任务键；修到子图健康为止（只经工具面允许的任务状态转移——绝不直写）。
-
-## 文档风格公约
-
-- **文字精简**：一段一个含义，无歧义短语，不留废话。
-- **不留调整修复叙事**：写最终态，不写"原来如何、后来改成什么"的过程史。
 
 ## 产出
 

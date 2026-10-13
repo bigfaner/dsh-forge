@@ -21,7 +21,8 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 状态层纪律
 
-设计工件落盘**并**注册——注册使 feature 相位单调推进至 `design`。路径按 `<slug>`
+设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工
+重注册——见 forge:spec 系统提示段；注册推进相位至 `design`）。路径按 `<slug>`
 feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段
 「文档位置/目录树」。
 
@@ -33,8 +34,7 @@ feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline
 | 页面地图（web 表面） | `upsertFeatureDoc` `doc_kind: page-map` |
 
 `api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**
-——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。返工文档重新注册
-（同 kind、刷新 summary）。
+——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
 
 ## 意图适配
 
@@ -97,7 +97,8 @@ brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此
 3. **识别决策**——架构适配、接口、数据模型、依赖、错误处理、测试策略、安全、本地开发。
    真正不确定处问用户；派发任务语境依简报决断并记录理由。
 4. **逐节起草并逐节获批**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互
-   契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。逐节自检：每条 PRD AC 映射到
+   契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。逐节自检并产出命名节
+   **PRD Coverage Map**（breakdown-tasks 的核对输入）：每条 PRD AC 映射到
    设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
    - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
      + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。

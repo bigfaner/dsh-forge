@@ -20,12 +20,7 @@ frontmatter 携带**技术锚点**（endpoint / command / page / screen），把
 | 工件 | 缺失时 |
 |---|---|
 | `testing/` 下 ≥1 个含 `journey.md` 的 Journey 目录 | 先跑 `gen-journeys` |
-| Journey 评审报告 `testing/<journey>/.eval-report.md` 全部达标 | 先跑 `eval --type journey` —— **阻塞项** |
-
-**SKIP_EVAL_GATE**：任务 vars（简报里的 `VARS:` 行）携带
-`SKIP_EVAL_GATE=true`（quick-mode 管线）时豁免 eval-report 前置；此后每份 Contract
-文件 frontmatter 带 `skip_eval: true`，正文加注"generated without eval-journey
-verification — review with extra scrutiny"。无该标志时阻塞项强制生效。
+| Journey 评审报告 `testing/<journey>/.eval-journey-report.md` 全部达标 | 先跑 `eval --type journey` —— **阻塞项** |
 
 ## State-Layer Discipline (boundary)
 
@@ -41,9 +36,8 @@ contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任�
    前置条件）并附来源引用。把事实表写入/合并 `.forge/fact-table.json`
    （`source: "static"`、`confidence: "inferred"`；按 `fact_id` 合并，绝不删除运行期
    条目）。
-3. **装载手册 + 锚点**——逐表面：`design/api-handbook.md`（api）、
-   `design/cli-handbook.md`（cli/tui）、`design/page-map.md`（web）、
-   `design/screen-map.md`（mobile）。手册缺失 → 该表面跳过锚点填充并留提示，绝不
+3. **装载手册 + 锚点**——逐表面装载对应设计手册（表面→手册文件映射以 tech-design
+   技能的产出约定为正本）。手册缺失 → 该表面跳过锚点填充并留提示，绝不
    中止。手册过期（生成早于当前 tech-design）→ 警告并继续。锚点**只**来自手册——
    绝不从代码逆向；匹配不上的 Step 锚点留空而不臆造。任一锚点被填充时写
    `last_anchor_sync`（ISO-8601）。

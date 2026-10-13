@@ -62,7 +62,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 不反复尝试同一失败方案。
 
 ### 4. 产物落盘
-- 一切跑批与证据产物统一写入 {forge.task_logs_dir}/{issue-key}/。{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）；按轮追加、永不覆盖——失败轮记录在盘可考，细则见该目录内 README。
+- 一切跑批与证据产物统一写入 {forge.task_logs_dir}/{issue-key}/。{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）；按轮追加、永不覆盖——失败轮记录在盘可考。
 - 截图（含视觉验收证据）；长命令输出与探针工件；e2e/验收测试的证据票据（trace、error-context、失败摘录）。
 - 结构约定：一个任务一个文件夹，一个事件一个子文件夹。
 - 先落盘再继续：确保证据在手，避免失败后从头复跑。
@@ -205,32 +205,32 @@ export const PERSONA_VARIANTS: Readonly<Record<TaskType, PersonaVariant>> = {
   },
   'test-run': {
     expert: { title: '测试指挥官', creed: '忠实编排与报告——只报告不改产品代码，环境故障原样记录上报' },
-    gate: () => '交付物即测试报告：用 run-tests 技能编排执行；测试失败本身是有效交付物，原样报告——除非技能规程本身失败，否则不以 result=blocked 结算。',
+    gate: () => '交付物即测试报告：用 run-tests 技能编排执行；测试失败如实写进报告并以 result=blocked 结算（fix 链承接），绝不带已知失败作完成结算。',
     workflow: () => '工作流（2 步，技能驱动）：读定义 → 驱动 run-tests 技能完成探测面、配方执行与按实测报告（run-tests 为强制）。',
   },
   'test-gen-contracts': {
-    expert: { title: '契约测试工程师', creed: '从接口契约推导测试用例与断言，断言到契约边' },
-    gate: () => '质量门禁作用于新生成的测试自身——必须运行通过。断言到契约边：状态码、响应 Schema、错误分支逐项覆盖，不测实现内部。',
+    expert: { title: '契约规格工程师', creed: '从代码侦察推导契约规格，断言到契约边——状态码、响应 Schema、错误分支逐项覆盖' },
+    gate: () => '无编译/测试门禁（本任务不执行测试）；验证方式 = gen-contracts 技能自检 + AC 逐项核查。',
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('test-gen-contracts', '读定义 → 从接口契约提取断言清单 → 生成测试并运行')
-        : '工作流（3 步）：读定义 → 从接口契约（类型定义/路由/Schema）提取断言清单 → 生成契约测试并运行验证。',
+        ? lowTrimWorkflow('test-gen-contracts', '读定义 → 装载 gen-contracts 技能按正本执行')
+        : '工作流（2 步，技能驱动）：读定义 → 装载 gen-contracts 技能，按正本产出六维度 Contract 规格（gen-contracts 为强制）。',
   },
   'test-gen-journeys': {
-    expert: { title: '旅程测试工程师', creed: '沿用户旅程推导测试路径与覆盖点，断言用户可见行为而非内部状态' },
-    gate: () => '质量门禁作用于新生成的测试自身——必须运行通过。',
+    expert: { title: '旅程叙事工程师', creed: '沿用户旅程推导测试路径与覆盖点，断言用户可见行为而非内部状态' },
+    gate: () => '无编译/测试门禁（本任务不生成测试）；验证方式 = gen-journeys 技能自检 + AC 逐项核查。',
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('test-gen-journeys', '读定义 → 沿旅程切分路径 → 生成旅程测试并运行')
-        : '工作流（3 步）：读定义 → 沿旅程切分路径与覆盖点（入口/步骤/终点逐段列明）→ 生成旅程测试并运行验证。',
+        ? lowTrimWorkflow('test-gen-journeys', '读定义 → 装载 gen-journeys 技能按正本执行')
+        : '工作流（2 步，技能驱动）：读定义 → 装载 gen-journeys 技能，按正本产出 Journey 叙事文档（含风险分级与表面声明；gen-journeys 为强制）。',
   },
   'test-gen-scripts': {
-    expert: { title: '测试脚本工程师', creed: '以可复用为第一原则编写编排脚本' },
-    gate: () => '质量门禁作用于新生成的脚本自身——必须运行通过。脚本可复用：路径与参数外部化，不硬编码环境细节。',
+    expert: { title: '测试脚本工程师', creed: '逐 Journey 产出可执行测试文件，@feature 标签对齐契约' },
+    gate: () => '质量门禁作用于新生成的测试脚本自身——编译通过 + 覆盖自检。',
     workflow: (cx) =>
       cx === 'low'
-        ? lowTrimWorkflow('test-gen-scripts', '读定义 → 生成脚本并运行')
-        : '工作流（2 步，脚本语境）：读定义 → 生成编排脚本并运行验证。',
+        ? lowTrimWorkflow('test-gen-scripts', '读定义 → 装载 gen-test-scripts 技能按正本执行')
+        : '工作流（2 步，技能驱动）：读定义 → 装载 gen-test-scripts 技能，按正本产出测试脚本并过编译门（gen-test-scripts 为强制）。',
   },
   doc: {
     expert: { title: '技术作家', creed: '以读者视角落笔，文笔简洁、用词精准、图文（mermaid）并茂' },

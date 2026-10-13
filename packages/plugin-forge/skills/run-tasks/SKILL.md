@@ -11,8 +11,7 @@ description: Forge 派发循环——后台派发直到 no-task，经 job_output
 不进入本会话上下文。持续派发直到 `no-task`；等待裁决（仍有工作在途）即
 抽干点——用 `job_output` 读取每个在途任务的结算，然后继续派发结算新解锁
 的工作。worker 落定时会结构化推送完成通知——优先在推送时收取，抽干点为
-第二道防线；因此轮中读取 job 从无必要。状态只经管线动词变更（`dispatchTask` /
-`queryTask` / `addTask` / `submitTask`），绝不经文件、数据库或平行状态。
+第二道防线；因此轮中读取 job 从无必要。状态只经管线动词变更，绝不经文件、数据库或平行状态。
 
 两种容器模式下行为一致：容器可以是 feature（远征链）或直接挂任务的
 proposal（突击链）。选择依据是 DAG 就绪度——`/run-tasks <slug>` 把循环

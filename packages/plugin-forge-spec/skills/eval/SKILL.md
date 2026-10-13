@@ -1,33 +1,20 @@
 ---
 name: eval
-description: 按评分细则给 Journey 或 Contract 文档集打分——内联评分-守门-修订循环，报告落 testing/<journey>/.eval-report.md；低于目标的工件阻塞下游管线阶段。
+description: 按评分细则给 Journey 或 Contract 文档集打分——评一次写报告守门（不修订），报告按类型落 testing/<journey>/.eval-journey-report.md 或 .eval-contract-report.md；低于目标的工件阻塞下游管线阶段。
 user-invocable: false
 ---
 
-<!--
-  M3 eval survivor list (OQ#3 — decided in task 3.2, 2026-10-07):
-  KEPT: journey, contract (task types eval-journey/eval-contract exist; gen-contracts and
-        gen-test-scripts gate on this skill's report).
-  CUT:   proposal / prd / design / ui (no M3 consumer — no task types, no auto-run config,
-         chain does not wire them); consistency (prerequisite manifest.md is dead in M3);
-         validate-code / validate-ux (validation-* dispatch templates are self-contained —
-         M2/M3 precedent: template-driven, not skill-driven).
-  Architecture trim: scorer/reviser subagent orchestration removed — worker tool faces
-  deny delegation, so the loop runs inline in the invoking session. Rubrics inlined below.
--->
-
 # 评审（eval）
 
-按该类型的评分细则给文档质量打分，以目标分守门，允许时修订，写出报告。M3 幸存两类：
-`journey` 与 `contract`。
+按该类型的评分细则给文档质量打分，以目标分守门，写出报告。两类：`journey` 与
+`contract`。executor 专用——由 `eval-journey` / `eval-contract` 任务派发调起。
 
 ## 参数
 
 | 参数 | 缺省 | 说明 |
 |---|---|---|
 | `--type` | 必填 | `journey` 或 `contract` |
-| `--target` | 细则目标分（journey 975 / contract 935） | 通过阈值；派发模板钉 850 |
-| `--iterations` | 1 | 修订循环上界；交互式可用可升到 3 |
+| `--target` | 细则目标分（journey 975 / contract 935） | 通过阈值 |
 
 ## 必备文档
 
@@ -38,15 +25,11 @@ user-invocable: false
 
 缺失 → 呈报缺失工件并停止；告知用户由哪个技能产出。
 
-## 上下文模式
+## 执行语义
 
-- **派发任务（eval-journey / eval-contract）**：只评分——派发简报禁止修改被评文件。
-  评一次、写报告；低于目标则本任务以发现清单结算 blocked（返工由 fix 链承接）；
-  此处不得自行修订。
-- **交互会话**：内联循环——评分 → 守门 → 修订（仅被评文档）→ 复评，至多
-  `--iterations` 次；达到/超过目标分即提前停止。
-
-循环始终在被调会话内内联运行（worker tool 面拒绝委托；不假设 subagent 编排）。
+只评分、写报告——本技能**绝不修改被评文件**（硬规则）。评一次、写报告；低于目标
+则以发现清单结算 `result=blocked`（返工由 fix 链承接）。循环在被调会话内内联运行
+（worker tool 面拒绝委托；不假设 subagent 编排）。
 
 ## 魔鬼代言人速查
 
@@ -92,7 +75,8 @@ min 即判不通过，与总分无关。
 
 ## 报告
 
-报告写到 `testing/<journey>/.eval-report.md`（此文件就是 gen-contracts /
-gen-test-scripts 核对的 gate 工件）：总分带量表、逐维度表（分值/min/状态）、带严重度
-与文档位置引用的发现清单、结果行（`PASSED` / `FAILED (below target|dimension <min>)`），
-修订过的运行附分数演进。然后在会话/任务输出中呈报结果。
+报告按类型分路径——journey → `testing/<journey>/.eval-journey-report.md`、
+contract → `testing/<journey>/.eval-contract-report.md`（gen-contracts 核对前者、
+gen-test-scripts 核对后者，互不覆写）：总分带量表、逐维度表（分值/min/状态）、带
+严重度与文档位置引用的发现清单、结果行（`PASSED` / `FAILED (below target|dimension
+<min>)`）。然后在会话/任务输出中呈报结果。

@@ -30,9 +30,9 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",
 
 以下内容被 e2e 断言或机械消费，**一律保留英文原样、禁止翻译**：
 
-- 段名锚点：`State-Layer Discipline`（e2e `expedition-full-sdd-chain.spec.ts` 引用）
+- 段名锚点：`State-Layer Discipline`（e2e 注释级引用——非断言锚点）
 - 消费段名：`## Navigation Architecture`（`prd-ui-functions.md` 的固定节名，write-prd 同款约定）
-- 工件约定名：`prd-spec.md` / `prd-ui-functions.md` / `ui-design.md`（discovery 机械消费）
+- 工件约定名：`prd-spec.md` / `prd-ui-functions.md`（discovery 机械消费）；`ui-design.md`（技能链约定名——on-disk 工件不入册，非机械消费）
 - 文档 kind：`ui-functions`（封闭词表七种之一）
 - 工具/动词名：`upsertFeatureDoc`
 - 标签名：`<HARD-GATE>` 等沿用英文原样（标签体内正文用中文）

@@ -34,7 +34,7 @@ surface 解析、服务生命周期、结果解析与上报都在这里完成—
 
 ## 判断点（按顺序）
 
-1. **识别 surface**——任务上下文中有 `SURFACE_KEY` / `SURFACE_TYPE` 就取用；否则读
+1. **识别 surface**——任务简报 `SURFACE` 行（`key (type)` 形态）就取用；否则读
    justfile 的 surface 分组。标量 surface 使用裸配方（`dev`、`probe`、`test`、
    `teardown`）；具名 surface 给每个配方加 `<surface-key>-` 前缀。两个来源都无法识别
    是**阻断性**错误，不可重试：连同恢复线索（任务上下文、justfile、surface 配置）一并

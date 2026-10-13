@@ -13,12 +13,7 @@ description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测
 | 工件 | 缺失时 |
 |---|---|
 | `testing/<journey>/contracts/` 内 ≥1 份 Contract 文件 | 先跑 `gen-contracts` |
-| Contract 评审报告 `testing/<journey>/.eval-report.md` 全部达标 | 先跑 `eval --type contract` —— **阻塞项** |
-
-**SKIP_EVAL_GATE**：任务 vars（简报里的 `VARS:` 行）携带
-`SKIP_EVAL_GATE=true`（quick-mode 管线）时豁免 eval-report 阻塞项；此后每份生成文件
-带头注释 "// SKIP_EVAL_GATE: generated without eval-contract verification. Review
-with extra scrutiny."。无该标志时阻塞项强制生效。
+| Contract 评审报告 `testing/<journey>/.eval-contract-report.md` 全部达标 | 先跑 `eval --type contract` —— **阻塞项** |
 
 ## State-Layer Discipline (boundary)
 
@@ -42,13 +37,12 @@ with extra scrutiny."。无该标志时阻塞项强制生效。
 2. **代码侦察**——刷新事实表（`.forge/fact-table.json`）：框架模式（runner、imports、
    build tags）与领域地面真值（入口、处理器、配置）。逐条语义描述符对照事实解析并
    引用来源。
-3. **逐 Journey 路由决策**——有 Contract → Contract 路径。无 Contract 且
-   `surface_types` ⊆ {web, mobile} → Direct 路径（从 `journey.md` 步骤映射到动作 +
-   视觉断言生成；每条 direct-path 测试带 ≥1 条有意义的视觉断言）。无 Contract 且
-   协议表面（cli/tui/api）→ 报错：先跑 `gen-contracts`。
+3. **逐 Journey 路由决策**——有 Contract → Contract 路径。无 Contract → 报错：
+   先跑 `gen-contracts`（与前置表一致）。
 4. **锚点交叉校验**（Contract 路径）——把 Contract frontmatter 锚点与事实表对照；
    手册是权威：手册与锚点一致而代码不同 → 代码 bug 报告；手册与锚点不同 → 提议
-   锚点修复（展示 diff；获明确批准才写入）；无手册 → 降级模式，用事实表推断并附
+   锚点修复（展示 diff）——交互式语境获明确批准才写入；派发语境 diff 呈报于任务
+   输出，写入留给人工或 fix 链。无手册 → 降级模式，用事实表推断并附
    提示。绝不自动裁决低置信或无法核验的匹配——呈报。输出表面覆盖报告。
 5. **生成测试**——每 Contract 步一份测试文件，每 Outcome 一个测试函数：按 Contract
    断言 Output（已解析匹配器）与 State 变化；带回链 Contract 的溯源注释；经临时
@@ -69,5 +63,5 @@ with extra scrutiny."。无该标志时阻塞项强制生效。
    等价物。失败回喂错误重新生成——每文件至多 1 次自动重试（语法）/ 3 次（编译）。
    耗尽 → 文件标 `// GEN-FAILED: <summary>` 并继续；gen-failed 文件留检，绝不删除。
 7. **覆盖自检**——逐表面类型：数 Journey（读 `testing/*/journey.md` frontmatter）
-   对照已生成的测试脚本集。任一缺口（含 direct-path 生成失败）→ 带缺口清单报
+   对照已生成的测试脚本集。任一缺口 → 带缺口清单报
    FAIL；绝不带缺口静默继续。

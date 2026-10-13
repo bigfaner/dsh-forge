@@ -164,10 +164,10 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     expect(composePersona('coding-enhancement', 'high')).toContain('判别增量边界')
     expect(composePersona('coding-feature', 'medium')).toContain('规格是唯一事实源')
     expect(composePersona('coding-fix', 'high')).toContain('失败复现测试钉住根因')
-    // test-gen 推导步 + scripts 可复用 + run/test-run 边界
-    expect(composePersona('test-gen-contracts', 'high')).toContain('提取断言清单')
-    expect(composePersona('test-gen-journeys', 'high')).toContain('沿旅程切分路径与覆盖点')
-    expect(composePersona('test-gen-scripts', 'medium')).toContain('不硬编码环境细节')
+    // test-gen 三型装载技能正本（契约/旅程=文档产出，脚本=编译门）+ run/test-run 边界
+    expect(composePersona('test-gen-contracts', 'high')).toContain('六维度 Contract 规格')
+    expect(composePersona('test-gen-journeys', 'high')).toContain('Journey 叙事文档')
+    expect(composePersona('test-gen-scripts', 'medium')).toContain('编译通过 + 覆盖自检')
     expect(composePersona('test-run', 'medium')).toContain('环境故障原样记录上报')
     // doc 族门禁分化（非共享字符串）
     expect(composePersona('doc-drift', 'medium')).toContain('每条发现附代码事实源位置')
@@ -233,11 +233,13 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'SPEC-CODE', 'SCAN', 'Strategy', 'todo_write', 'submitTask', 'submit-task', 'result=blocked',
         'COVERAGE=maintain', 'COVERAGE', 'maintain', 'vars_json',
         'grep', 'glob', 'write', 'ls', 'git', 'status', 'diff', 'lint', 'just', 'run-tests',
+        'gen-journeys', 'gen-contracts', 'gen-test-scripts', // test-gen 三型装载目标技能名（与 run-tests 同类协议词）
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
         'evidence', 'resume.md', 'xxx', 'login-fail', 'issue-key', 'forge.task_logs_dir', // 追加轮：续跑指针文件名 + 编号子文件夹示例词 + 任务日志变量
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
+        'Contract', 'Journey', 'feature', // test-gen 变体产出物术语（规格/叙事文档/@feature 标签）
       ].map((w) => w.toLowerCase()),
     )
     for (const taskType of TASK_TYPES) {

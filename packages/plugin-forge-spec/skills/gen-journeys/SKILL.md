@@ -1,6 +1,6 @@
 ---
 name: gen-journeys
-description: 从 PRD 用户故事或提案中提取 Journey 叙事（带 High/Medium/Low 风险分级）——每条 Journey 一份 journey.md 落 testing/ 下，是 gen-contracts 的输入。
+description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 风险分级）——每条 Journey 一份 journey.md 落 testing/ 下，是 gen-contracts 的输入。
 ---
 
 # 生成旅程（gen-journeys）
@@ -28,20 +28,13 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
  (叙事)                        (技术)                       (代码生成)        (执行)
 ```
 
-## 输入模式（按文件存在性自动判别——绝不问用户哪种模式）
+## 输入模式
 
-**PRD 模式**（缺省；`prd/prd-user-stories.md` + `prd/prd-spec.md` 存在）：一条用户故事 =
+**PRD 模式**（`prd/prd-user-stories.md` + `prd/prd-spec.md` 存在）：一条用户故事 =
 一条 Journey 候选；朝同一目标递进的连续故事合并；每条 Journey 可回溯到具体故事 ID。
 `prd/prd-ui-functions.md`（若存在）把 UI 交互映射为步骤。
 
-**提案模式**（PRD 文件缺失、brainstorm 提案文档存在——`<slug>` proposal 目录相对
-约定，见系统提示段目录树）：Scope 与
-Success Criteria 节**必备**——任一缺失 → 带诊断中止，不生成。一个 Key Scenario =
-一条 Journey 候选；无 Key Scenarios 时从 Success Criteria/Scope 推导 smoke 级
-Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Journey 可回溯到
-提案小节。
-
-两类来源都不存在 → 中止并列出缺失文件。
+任一 PRD 文件缺失 → 带诊断中止并列出缺失文件，不生成。
 
 ## 核心概念
 
@@ -77,7 +70,6 @@ Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Jo
    feature: "<slug>"
    journey: "<name>"
    risk_level: "High|Medium|Low"
-   quality: low          # 仅提案模式且无 Key Scenarios 时
    surface_types: ["web"]
    surface_keys: ["<key>"]
    sources: ["<input doc paths>"]
@@ -90,7 +82,7 @@ Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Jo
    = 一份内聚文档；内容大时内部分批写，绝不拆文件。
 5. **逐 Journey 校验**：名称在位；风险级有效；表面字段非空且与探测面匹配；
    ≥1 条 happy path 步骤；≥1 条边界用例；High 风险密度达标；≥1 条不变式；每步有
-   动作 + 预期结果；PRD/提案可回溯；表面覆盖完整。失败先修复再收尾。
+   动作 + 预期结果；PRD 可回溯；表面覆盖完整。失败先修复再收尾。
 6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。质量门：`eval`
    技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`
    （那是它的 gate，不是本技能的）。
