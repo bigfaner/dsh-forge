@@ -1,9 +1,10 @@
 ---
 title: 老 forge 技能迁移：fix-bug（TDD 修缺陷工作流独立技能化）
-status: draft
+status: superseded
 intent: new-feature
 created: 2026-10-09
 author: faner
+superseded-by: fix-bug（.forge/docs/proposals/fix-bug/，2026-10-13）
 ---
 
 # 提案：migrate-fix-bug-skill
