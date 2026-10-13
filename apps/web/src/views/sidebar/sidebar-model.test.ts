@@ -318,56 +318,41 @@ describe('sidebarSessionVisibility（D41-② 24h 窗口 + 2026-10-12 至少 10 �
     return { sessionId, title: `会话${sessionId}`, status: 'idle', updatedAt, pinned: false, archived: false, ...overrides }
   }
 
-  it('窗口内（updatedAt ≥ now−24h）= recent，其余 = older（组内序 = 输入序不重排；尾部旧行折叠）', () => {
+  it('窗口内优先（≥10 窗口内非置顶行时封顶取最近的 10 个——窗口规则让位封顶）', () => {
     const sessions = [
       row('a', NOW - 25 * 3_600_000), row('b', NOW - 60_000), row('c', NOW - 2 * 86_400_000),
-      ...Array.from({ length: 10 }, (_, i) => row(`w${i}`, NOW - 3_600_000 + i)),
-      row('z', NOW - 3 * 86_400_000),
+      ...Array.from({ length: 12 }, (_, i) => row(`w${i}`, NOW - (i + 1) * 60_000)), // w11 最近
     ]
     const split = sidebarSessionVisibility(sessions, NOW)
-    // 最后窗口内行 = w9（下标 12）→ 前缀 13 行 recent（含出窗的 a/c），尾部 z 落折叠组
-    expect(split.recent.map((r) => r.sessionId)).toEqual(['a', 'b', 'c', ...Array.from({ length: 10 }, (_, i) => `w${i}`)])
-    expect(split.older.map((r) => r.sessionId)).toEqual(['z'])
+    // 非置顶封顶 10：取最近的 10 个（b + w0..w8——w9/w11 较旧仍折叠；a/c 更旧折叠）
+    expect(split.recent.map((r) => r.sessionId)).toEqual(['b', ...Array.from({ length: 9 }, (_, i) => `w${i}`)])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['a', 'c', 'w9', 'w10', 'w11'])
   })
 
-  it('24h 边界值：updatedAt = now−24h 恰在窗口内（≥ 语义——可见）；差 1ms 出窗（尾部单行出窗口径）', () => {
+  it('24h 边界值：updatedAt = now−24h 恰在窗口内（≥ 语义）；差 1ms 出窗（不足 10 时按 updatedAt 降序补足）', () => {
     const edge = sidebarSessionVisibility([
       row('edge', NOW - SIDEBAR_SESSION_WINDOW_MS),
-      ...Array.from({ length: 10 }, (_, i) => row(`w${i}`, NOW - i)),
-    ], NOW)
-    expect(edge.recent.map((r) => r.sessionId)).toEqual(['edge', ...Array.from({ length: 10 }, (_, i) => `w${i}`)])
-    expect(edge.older).toEqual([])
-    const out = sidebarSessionVisibility([
-      ...Array.from({ length: 10 }, (_, i) => row(`w${i}`, NOW - i)),
       row('out', NOW - SIDEBAR_SESSION_WINDOW_MS - 1),
+      ...Array.from({ length: 8 }, (_, i) => row(`w${i}`, NOW - i)),
     ], NOW)
-    expect(out.recent.map((r) => r.sessionId)).toEqual(Array.from({ length: 10 }, (_, i) => `w${i}`))
-    expect(out.older.map((r) => r.sessionId)).toEqual(['out'])
+    // 窗口内 9 个（edge + w0..w7）→ 补 1 个最近窗口外行 = out（恰在边界外 1ms）
+    expect(edge.recent.map((r) => r.sessionId)).toEqual(['edge', 'out', ...Array.from({ length: 8 }, (_, i) => `w${i}`)])
+    expect(edge.older).toEqual([])
   })
 
   it('空窗（无会话）→ 两组皆空', () => {
     expect(sidebarSessionVisibility([], NOW)).toEqual({ recent: [], older: [] })
   })
 
-  it('2026-10-12 下限补足：窗口内行不足 10 → 前缀补足到 10（行数 ≥ 10 时折叠组只吞前缀之外的行）', () => {
-    const sessions = [
-      row('w0', NOW), row('w1', NOW - 60_000), row('w2', NOW - 120_000), // 窗口内 3 行
-      ...Array.from({ length: 12 }, (_, i) => row(`old${i}`, NOW - (3 + i) * 86_400_000)),
-    ]
-    const split = sidebarSessionVisibility(sessions, NOW)
-    expect(split.recent.map((r) => r.sessionId)).toEqual(['w0', 'w1', 'w2', ...Array.from({ length: 7 }, (_, i) => `old${i}`)])
-    expect(split.older.map((r) => r.sessionId)).toEqual(['old7', 'old8', 'old9', 'old10', 'old11'])
-  })
-
-  it('全旧 ≤10（总数不足下限）→ 全 recent 零折叠（「至少展示 10 个」= 有多少展示多少）', () => {
-    const sessions = [row('a', NOW - 2 * 86_400_000), row('b', NOW - 3 * 86_400_000)]
+  it('总数 ≤10（含全旧）→ 全 recent 零折叠（「至少展示 10 个」= 有多少展示多少）', () => {
+    const sessions = [row('a', NOW - 2 * DAY), row('b', NOW - 3 * DAY)]
     const split = sidebarSessionVisibility(sessions, NOW)
     expect(split.recent.map((r) => r.sessionId)).toEqual(['a', 'b'])
     expect(split.older).toEqual([])
   })
 
   it('纯投影：全 recent 原引用返回（零派生）；输入冻结不突变（SC2 直读同型）', () => {
-    const sessions = [row('a', NOW), row('b', NOW - 60_000)]
+    const sessions = [row('a', NOW), row('b', NOW - MIN)]
     const split = sidebarSessionVisibility(sessions, NOW)
     expect(split.recent).toBe(sessions)
     expect(split.older).toEqual([])
@@ -375,15 +360,17 @@ describe('sidebarSessionVisibility（D41-② 24h 窗口 + 2026-10-12 至少 10 �
     expect(() => sidebarSessionVisibility(frozen, NOW)).not.toThrow()
   })
 
-  it('D45：置顶行永不折叠（窗口外照常 recent——置顶 = 保持可见语义；≥10 行面非补足口径）', () => {
+  it('D45：置顶行恒全量可见且不占 10 名额（10 个置顶 + 10 窗口内非置顶 = 20 recent）', () => {
     const sessions = [
-      row('p', NOW - 3 * 86_400_000, { pinned: true }),
-      ...Array.from({ length: 10 }, (_, i) => row(`w${i}`, NOW - i)),
-      row('old0', NOW - 2 * 86_400_000), row('old1', NOW - 4 * 86_400_000),
+      ...Array.from({ length: 10 }, (_, i) => row(`p${i}`, NOW - (5 + i) * DAY, { pinned: true })),
+      ...Array.from({ length: 12 }, (_, i) => row(`w${i}`, NOW - (i + 1) * 60_000)),
     ]
     const split = sidebarSessionVisibility(sessions, NOW)
-    expect(split.recent.map((r) => r.sessionId)).toEqual(['p', ...Array.from({ length: 10 }, (_, i) => `w${i}`)])
-    expect(split.older.map((r) => r.sessionId)).toEqual(['old0', 'old1'])
+    expect(split.recent.map((r) => r.sessionId)).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => `p${i}`),
+      ...Array.from({ length: 10 }, (_, i) => `w${i}`),
+    ])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['w10', 'w11'])
   })
 })
 
