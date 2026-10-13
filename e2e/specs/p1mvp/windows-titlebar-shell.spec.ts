@@ -26,6 +26,7 @@ import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import { closeApp, launchHost } from '../../support/launch.js'
 import { registerProject } from '../../support/rpc.js'
+import { ensureOfficialSessionBound } from '../../support/navigation.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import {
   CONVERSATION_HEADER,
@@ -116,7 +117,9 @@ test('@web-e2e @p1mvp windows-titlebar·会话面：右栏展开钮位于 WCO �
     // 前置：RPC 直注项目 → 会话相位（官方会话头/右栏展开钮渲染相位）
     await registerProject(page, wsDir, 'wtb-demo')
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
-    await page.waitForTimeout(3_000) // 收敛窗（安装/首启 kit 收敛——hero-control 同径）
+    // fix-10 收敛门（探针实证——注册与官方会话物化竞速，败者 corner ExpandButton 恒缺席）：
+    // 先等官方会话视图绑上会话（绑定期 + 新建会话兜底）再断言展开钮（navigation.ts 同源 helper）。
+    await ensureOfficialSessionBound(page)
 
     // 会话头整行在位（官方 ConversationHeader 渲染点；槽壳 display:contents 零盒——
     // 几何断言锚官方头内容行 .wSkVaW_header，类名锚 = 官方模块 CSS 稳定前缀，升级窗口对照面）

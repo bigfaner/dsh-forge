@@ -54,6 +54,10 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await composer.click()
     await page.keyboard.insertText(MARKER)
     await page.keyboard.press('Enter')
+    // fix-10 收敛门（fix-6 e2e :85 实证形态——composer Enter 与官方面会话绑定存在装载竞态，
+    // 高载下指令未入转录即盲走 → 跳转断言落 hero 面）：先等用户事件入转录（tsl openRealSession
+    // 「会话行入树」同判据族），再做后续跳转编排。
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '夹具消息入转录（用户事件落地 = 非 blank）').toContainText(MARKER, { timeout: 60_000 })
     await ensureNoBlockingDialog(page)
     const sessionA = findFixtureSession(dshHome, WS_NAME)
     expect(sessionA, '跳转目标会话在盘').toBeDefined()

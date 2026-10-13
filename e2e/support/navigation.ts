@@ -19,6 +19,40 @@ export async function enterDir(page: Page, name: string): Promise<void> {
 }
 
 /**
+ * fix-10 会话绑定收敛门（探针实证——注册与官方会话物化竞速：胜者 ~30s 内
+ * data-conversation-content 绑上 data-conversation-session；败者恒 hero/headerSessionless，
+ * corner 槽 ExpandButton 无载体恒缺席）。绑定期 15s；缺席则点工作区行「在 {name} 新建会话」
+ * 强制物化（空白会话同样承载 corner 槽——probe round0 实证 headerBlank + expand present），
+ * 再等 30s。返回绑定是否收敛（调用方自行决定放行语义）。
+ */
+export async function ensureOfficialSessionBound(page: Page): Promise<boolean> {
+  const bound = () =>
+    document.querySelector('[data-conversation-content]')?.hasAttribute('data-conversation-session') === true
+  if (
+    await page
+      .waitForFunction(bound, undefined, { timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false)
+  )
+    return true
+  // 兜底点击走 DOM 级（候选钮在侧栏行 hover 面/裁剪树内——locator 可见性过滤不稳，
+  // evaluate 直点 onClick 载体；命中即 React 合成事件正常触发）
+  await page
+    .evaluate(() => {
+      const target = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label]')).find((button) =>
+        /在 .+ 新建会话/.test(button.getAttribute('aria-label') ?? ''),
+      )
+      if (target === undefined) return
+      target.click()
+    })
+    .catch(() => undefined)
+  return page
+    .waitForFunction(bound, undefined, { timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false)
+}
+
+/**
  * 右栏展开前置（5.2 实测口径）：零开页签态右栏官方休眠——会话面 corner「打开右侧边栏」
  * 钮承载 reveal（aria 文案非 data-* 台账锚，留字面量）。已展开 = 幂等跳过。
  * fix-7 前置收敛门：展开钮 = 官方 ui-sidebar-right ExpandButton（conversation.session.header
@@ -36,6 +70,9 @@ export async function revealRightbar(page: Page): Promise<void> {
       { timeout: 60_000 },
     )
     .catch(() => undefined)
+  // fix-10 收敛门（探针实证——注册与官方会话物化竞速，败者 corner ExpandButton 恒缺席）：
+  // 先等官方会话视图绑上会话（绑定期 + 新建会话兜底）再断言展开钮。
+  await ensureOfficialSessionBound(page)
   const expand = page.locator('button[aria-label="打开右侧边栏"]').first()
   await expect(expand, '右栏休眠态展开钮在场（banner 面）').toBeVisible({ timeout: 30_000 })
   await expand.click()

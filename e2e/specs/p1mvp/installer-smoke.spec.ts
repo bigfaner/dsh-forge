@@ -302,9 +302,15 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
         { timeout: 30_000 },
       )
       .catch(() => undefined) // 收敛失败不预失败——下方回显断言承载真实判据
-    await composer.click()
-    await page.keyboard.insertText('回显探针')
-    const echoed = await composer.evaluate((el) => (el as HTMLTextAreaElement).value ?? el.textContent ?? '')
+    // fix-10 收敛复跑实证：journey 语境下 wsItem 切换后 composer 重挂载竞态吃掉首次
+    // click+insertText（单文件跑零复现）——回显读数带重试收敛（重聚焦重插，断言语义不变）
+    let echoed = ''
+    for (let attempt = 0; attempt < 5 && !echoed.includes('回显探针'); attempt++) {
+      await composer.click()
+      await page.keyboard.insertText('回显探针')
+      echoed = await composer.evaluate((el) => (el as HTMLTextAreaElement).value ?? el.textContent ?? '')
+      if (!echoed.includes('回显探针')) await page.waitForTimeout(3_000)
+    }
     expect(echoed, '键入字符即回显（会话面板可用）').toContain('回显探针')
 
     // ── Step 4 Outcome "blank-send-blocked-min"（冒烟最小口径空提交拦截） ──
