@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { PRODUCT_PLUGIN_PACKAGES, RUNTIME_PACKAGES } from './runtime-packages.js'
+import { PRODUCT_PLUGIN_PACKAGES, productPluginPackageLinkPath, RUNTIME_PACKAGES } from './runtime-packages.js'
 
 const hostPkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')) as {
   dependencies: Record<string, string>
@@ -42,6 +42,7 @@ describe('运行时包集合（S1 闭包）', () => {
 describe('产品插件闭包（3.4 M2）', () => {
   it('闭包成员全部以 workspace 链接入 apps/host dependencies（锚树供应）', () => {
     expect(PRODUCT_PLUGIN_PACKAGES).toContain('@dsh-forge/plugin-forge')
+    expect(PRODUCT_PLUGIN_PACKAGES).toContain('@dsh-forge/md-mermaid')
     for (const name of PRODUCT_PLUGIN_PACKAGES) {
       expect(hostPkg.dependencies[name], `${name} 缺席 apps/host dependencies（锚树供应断裂）`).toBe('workspace:*')
       // 不混入 npm 精确 pin 池（profile.install 消费——无 npm 分发形态）
@@ -54,7 +55,7 @@ describe('产品插件闭包（3.4 M2）', () => {
       readFileSync(join(import.meta.dirname, '..', '..', 'profile.dev', 'package.json'), 'utf8'),
     ) as { dependencies: Record<string, string> }
     for (const name of PRODUCT_PLUGIN_PACKAGES) {
-      expect(devPkg.dependencies[name], `profile.dev 缺链接行 ${name}`).toBe(`link:../../../packages/${name.slice('@dsh-forge/'.length)}`)
+      expect(devPkg.dependencies[name], `profile.dev 缺链接行 ${name}`).toBe(`link:../../../${productPluginPackageLinkPath(name)}`)
     }
   })
 })

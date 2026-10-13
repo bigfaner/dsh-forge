@@ -180,6 +180,8 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
     // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）
     expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBe('link:../../../packages/plugin-forge-spec')
+    // md-mermaid-plugin：双组合 in-preset md-mermaid 行的 loader 解析锚（packages/plugins/ 新居所）
+    expect(dev.dependencies['@dsh-forge/md-mermaid']).toBe('link:../../../packages/plugins/md-mermaid')
     // core 运行期原生依赖（prebuilds 随包分发；兜底供非 realpath 解析路径）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')

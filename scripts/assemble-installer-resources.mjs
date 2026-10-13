@@ -14,7 +14,7 @@
  *                             dsh-app-boot resolution BFS 以它为根遍历出全量 entries
  *       node_modules/         完整 hoisted 真实文件运行时树（源 = apps/host/profile.install，
  *                             autoInstallPeers: true 补全 peer-only 包）+ @dsh-forge/* 产品插件
- *                             真实拷贝（packages/{contracts,path-key,core,knowledge,plugin-forge} 的 package.json+dist）
+ *                             真实拷贝（packages/{contracts,path-key,core,knowledge,plugin-forge,plugins/md-mermaid} 的 package.json+dist）
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
@@ -54,7 +54,8 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * （源 = packages/<name>）：清单 + 构建产物（不携带 src/测试）；两产品插件另携
  * skills/——customSkillDirs 物理挂载源（boot overlay 注 skill-filesystem 行），缺席即
  * 技能面静默缺失，故必物化 fail-loud（plugin-forge = 3.4；plugin-forge-spec = 3.2
- * 规格技能迁移落地，3.8 曾注记「随 3.2 落地后补列」——本次兑现）。
+ * 规格技能迁移落地，3.8 曾注记「随 3.2 落地后补列」——本次兑现）。md-mermaid =
+ * md-mermaid-plugin（无 skills 面——预防/渲染能力零技能目录，键含 packages/ 子路径）。
  * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段——产品包新增
  * @dsh-forge/* 运行时依赖须随包同步补列。
@@ -66,6 +67,7 @@ const PRODUCT_PACKAGES = {
   knowledge: ['package.json', 'dist'],
   'plugin-forge': ['package.json', 'dist', 'skills'],
   'plugin-forge-spec': ['package.json', 'dist', 'skills'],
+  'plugins/md-mermaid': ['package.json', 'dist'],
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 
@@ -170,6 +172,7 @@ function assertPreconditions() {
     [join(ROOT, 'packages/plugin-forge/skills/run-tasks/SKILL.md'), 'packages/plugin-forge/skills 技能面（3.4 customSkillDirs 挂载源——缺席即技能面静默缺失）'],
     [join(ROOT, 'packages/plugin-forge-spec/dist/index.js'), 'pnpm build（tsc -b 全拓扑——M3 3.8 packaging 三处同步：缺席即打包形态 boot ESM 解析断裂，远征预设行装载失败）'],
     [join(ROOT, 'packages/plugin-forge-spec/skills/write-prd/SKILL.md'), 'packages/plugin-forge-spec/skills 技能面（M3 3.2 规格技能迁移——customSkillDirs[spec] 挂载源，缺席即远征技能面静默缺失）'],
+    [join(ROOT, 'packages/plugins/md-mermaid/dist/index.js'), 'pnpm build（tsc -b 全拓扑——md-mermaid-plugin：缺席即打包形态 boot ESM 解析断裂，双组合预设行装载失败）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
@@ -210,8 +213,10 @@ function stage() {
   const installManifest = readJson(join(ROOT, 'apps/host/profile.install/package.json'), 'profile.install manifest')
   const productVersions = {}
   for (const name of Object.keys(PRODUCT_PACKAGES)) {
+    // 键可含 packages/ 子路径（plugins/md-mermaid）——dest/版本键取 basename 短名
+    const short = name.split('/').pop()
     const manifest = readJson(join(ROOT, 'packages', name, 'package.json'), `packages/${name} manifest`)
-    productVersions[`@dsh-forge/${name}`] = manifest.version ?? '0.0.0'
+    productVersions[`@dsh-forge/${short}`] = manifest.version ?? '0.0.0'
   }
 
   // Windows 删除竞态（本机实证）：rmSync 递归删数万文件 staging 树偶发 ENOTEMPTY
@@ -228,11 +233,12 @@ function stage() {
   const sections = {}
   copyTree(INSTALL_NM, join(RUNTIME, 'node_modules'))
   mkdirSync(join(RUNTIME, 'node_modules', '@dsh-forge'), { recursive: true })
-  for (const [name, requiredFiles] of Object.entries(PRODUCT_PACKAGES)) {
-    const dest = join(RUNTIME, 'node_modules', '@dsh-forge', name)
+  for (const [key, requiredFiles] of Object.entries(PRODUCT_PACKAGES)) {
+    const short = key.split('/').pop()
+    const dest = join(RUNTIME, 'node_modules', '@dsh-forge', short)
     mkdirSync(dest, { recursive: true })
     for (const file of [...requiredFiles, ...PRODUCT_OPTIONAL_FILES]) {
-      const source = join(ROOT, 'packages', name, file)
+      const source = join(ROOT, 'packages', key, file)
       if (!existsSync(source)) {
         if (requiredFiles.includes(file)) fail(`${source} 未就位 —— 先执行：pnpm build`)
         continue // 可选件（README.md 等）缺席静默跳过

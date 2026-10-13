@@ -42,7 +42,7 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
 
 /**
  * 产品插件闭包（3.4 M2 起步；M3 3.7 增 plugin-forge-spec——预设装配远征组合 in-preset 行
- * 的 loader 解析面）。两包三供应面：
+ * 的 loader 解析面；md-mermaid-plugin 增 @dsh-forge/md-mermaid——远征+突击双组合 in-preset 行）。
  *   · dev 锚树：apps/host/package.json dependencies workspace 链接（本清单同门供应面
  *     ——paths.ts resolvePackageSkillsDir 亦自此解析 skills 目录）；
  *   · dev profile 树：apps/host/profile.dev/package.json link 行（loader 行 import 锚）；
@@ -52,4 +52,18 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
  * 不入 RUNTIME_PACKAGES 映射：该池 = npm 精确 pin 闭包（profile.install 消费——
  * installer-pipeline pin 禁声明 @dsh-forge/*，无 npm 分发形态）。
  */
-export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = ['@dsh-forge/plugin-forge', '@dsh-forge/plugin-forge-spec']
+export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
+  '@dsh-forge/plugin-forge',
+  '@dsh-forge/plugin-forge-spec',
+  '@dsh-forge/md-mermaid',
+]
+
+/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid 居 packages/plugins/ 新居所）。 */
+export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
+  '@dsh-forge/md-mermaid': 'plugins',
+}
+
+/** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。 */
+export function productPluginPackageLinkPath(name: string): string {
+  return `packages/${PRODUCT_PLUGIN_PACKAGE_DIRS[name] ? `${PRODUCT_PLUGIN_PACKAGE_DIRS[name]}/` : ''}${name.slice('@dsh-forge/'.length)}`
+}

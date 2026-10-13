@@ -61,7 +61,7 @@ const blitzPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.blit
 
 /** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
-const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
+const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec', 'md-mermaid'])
 
 describe('底稿前置（环境门）', () => {
   it('上游 standard.patch.yml 在场（profile.dev 物化树——缺席 = 环境缺口，先 pnpm -C apps/host/profile.dev install）', () => {
@@ -163,6 +163,11 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(rows.has('plugin-forge-spec')).toBe(isExpedition)
       if (isExpedition) expect(text).toContain("            name: '@dsh-forge/plugin-forge-spec'")
       else expect(text).not.toContain('@dsh-forge/plugin-forge-spec')
+    })
+
+    it('md-mermaid 双组合装载（md-mermaid-plugin：突击同享预防面——validateMermaid 恒在场）', () => {
+      expect(rows.has('md-mermaid')).toBe(true)
+      expect(rows.get('md-mermaid')).toContain("name: '@dsh-forge/md-mermaid'")
     })
 
     it('增量行携带 bindingsFile 同 config（fix-1/drift #9：占位符物化——config-less 行内实例遮蔽全局配置实例断链的处置）', () => {
