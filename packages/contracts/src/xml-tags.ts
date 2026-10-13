@@ -1,12 +1,12 @@
 // dispatchPrompt / 系统提示段 XML 标签集常量（tech-design §Interface 9 标签总表）。
-// 标签集封闭于四枚——新增 = 契约面变更（G1 pin 锚定）。值为裸标签名（不含尖括号）——
+// 标签集封闭于五枚（dual-mode-overhaul：扩 doc-style——forge 文档风格公约独立段）——
 // 包裹与组成序属 core prompt 合成逻辑。S2b（worker-lean-execution）后 dispatchPrompt
 // 渲染面收窄为 <task-context> 单块（无人格段/约束块/类型策略段——agent 级内容迁
 // persona，system 面承载）；constraints/typePolicy 两常量保留 = 词汇封闭面不破（G1 pin），
 // 现无 dispatchPrompt 渲染消费者。
 // 定位铁律：纯常量，零逻辑零依赖。
 
-/** XML 标签集（四枚封闭；键 = 载体语义名） */
+/** XML 标签集（五枚封闭；键 = 载体语义名） */
 export const XML_TAGS = {
   /** 系统提示段·最外层唯一（forge 管线系统提示——老 forge hook 注入文本平移；不含 tool 说明） */
   forgePipeline: 'forge-pipeline',
@@ -16,9 +16,11 @@ export const XML_TAGS = {
   taskContext: 'task-context',
   /** 块级词汇：类型策略块（S2b 后 dispatchPrompt 不再渲染——20 类型工作流/门禁迁 persona 变体表） */
   typePolicy: 'type-policy',
+  /** 系统提示段·独立段（forge 文档风格公约——双模式共用注入，dual-mode-overhaul 扩集） */
+  docStyle: 'doc-style',
 } as const
 
 export type XmlTag = (typeof XML_TAGS)[keyof typeof XML_TAGS]
 
-/** 标签集封闭面（四枚）——消费者与 G1 pin 以此为全集 */
+/** 标签集封闭面（五枚）——消费者与契约 pin 以此为全集 */
 export const XML_TAG_SET: readonly XmlTag[] = Object.values(XML_TAGS)

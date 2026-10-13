@@ -52,6 +52,13 @@ function blockKeys(block: string): Set<string> {
 const upstreamText = existsSync(UPSTREAM) ? readFileSync(UPSTREAM, 'utf8') : ''
 const upstreamRows = pluginRowBlocks(upstreamText)
 
+/** 行块内取某键起整行（persona 纪律句同句断言的比较基） */
+function lineOf(block: string, key: string): string | undefined {
+  return block.match(new RegExp(`${key}.*$`, 'm'))?.[0]
+}
+const expeditionPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.expedition), 'utf8')
+const blitzPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.blitz), 'utf8')
+
 /** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
 const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
@@ -128,6 +135,19 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(persona).toContain('分工纪律按各技能自身铁律执行')
       const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
       expect(bodyLines).toHaveLength(6) // 身份定位/作风/思维习惯/行为纪律/反模式禁令/分工引用——prefix 总行数 7 ≤ 12
+    })
+
+    it('persona 行为纪律同句一致（dual-mode-overhaul：双 preset 互补不冲突——纪律句逐字相同）', () => {
+      const line = lineOf(preset === 'expedition' ? expeditionPersona : blitzPersona, '行为纪律：')
+      expect(line).toBeDefined()
+      expect(line).toBe(lineOf(expeditionPersona, '行为纪律：'))
+      expect(line).toBe(lineOf(blitzPersona, '行为纪律：'))
+    })
+
+    it('plugin-forge 行 config mode 键（dual-mode-overhaul：双模式独立渲染——缺省回退远征）', () => {
+      const row = rows.get('plugin-forge')!
+      expect(row).toContain(isExpedition ? 'mode: expedition' : 'mode: blitz')
+      expect(row).toContain('bindingsFile: "{{plugin-forge-bindings}}"')
     })
 
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {

@@ -31,7 +31,7 @@ import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js
 import type { EscalationAskFace } from './loop/index.js'
 import { createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
-import { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
+import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
@@ -43,6 +43,8 @@ export interface ForgePluginConfig {
   projects?: readonly ProjectBinding[]
   /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表） */
   bindingsFile?: string
+  /** 管线模式（preset yml plugin-forge 行 config 的 mode 键——expedition/blitz，缺省回退远征） */
+  mode?: string
 }
 
 /** 启动对账降级告警（fail-soft 单行——console.warn；降级 = 遗留 in_progress 原样，下次重启重试） */
@@ -307,18 +309,26 @@ const forgePlugin: ForgePlugin = Object.assign(
         warnReconcileDegraded(projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
-    // 1.16 文档位置动态注入：段文本以模板渲染，forgeDir 由中央 projects 行程序化注入。
-    // 装配同步径先以缺省注册（缺省 = 省略文档位置/目录树段）；绑定项目 forge_dir 异步
-    // 解析命中后重注册升级（外部化 forgeDir 取实际值，不假设 <ws>/.forge；解析失败/
+    // 1.16 文档位置动态注入 + dual-mode-overhaul 双模式键：段文本以模板渲染，forgeDir 由
+    // 中央 projects 行程序化注入，mode 由 preset yml plugin-forge 行 config 注入（缺省回退
+    // 远征）。装配同步径先以缺省注册（缺省 = 省略文档位置/目录树段）；绑定项目 forge_dir
+    // 异步解析命中后重注册升级（外部化 forgeDir 取实际值，不假设 <ws>/.forge；解析失败/
     // 项目未注册/面缺席 = 缺省段原样，fail-soft 不炸渲染）。sectionRef 持有当前注销器，
-    // 插件 disposer 统一经其注销恰一份现行段。
+    // 插件 disposer 统一经其注销恰一份现行段。doc-style 独立段双模式共用注入（常量文本，
+    // 一次注册不重注册）。
+    const pipelineMode = modeOf(config.mode)
     const sectionRef: { dispose: () => void } = {
       dispose: ctx.systemPrompt.section({
         name: FORGE_SECTION_NAME,
         order: FORGE_SECTION_ORDER,
-        text: renderForgePipelineSection(),
+        text: renderForgePipelineSection({ mode: pipelineMode }),
       }),
     }
+    const disposeDocStyle = ctx.systemPrompt.section({
+      name: FORGE_DOC_STYLE_SECTION_NAME,
+      order: FORGE_DOC_STYLE_SECTION_ORDER,
+      text: renderDocStyleSection(),
+    })
     void (async () => {
       const projectId = boundProjectIds[0]
       if (projectId === undefined) return
@@ -328,7 +338,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       if (project === null) return
       const forgeDir = project.forgeDir
       if (typeof forgeDir !== 'string' || forgeDir.trim() === '') return
-      const text = renderForgePipelineSection({ forgeDir })
+      const text = renderForgePipelineSection({ forgeDir, mode: pipelineMode })
       sectionRef.dispose()
       sectionRef.dispose = ctx.systemPrompt.section({
         name: FORGE_SECTION_NAME,
@@ -344,10 +354,12 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.transitionProposal),
       ctx.tools.register(tools.dispatchTask),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
-      // 段文本 = 老 forge hook 注入文本平移（状态层说明/执行协议/受限面声明），
+      // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
-      // 1.16 起经 sectionRef 注销现行段（缺省注册 + forge_dir 命中后的重注册升级）
+      // 1.16 起经 sectionRef 注销现行段（缺省注册 + forge_dir 命中后的重注册升级）；
+      // doc-style 独立段双模式共用（disposeDocStyle 恰一份）。
       () => sectionRef.dispose(),
+      () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
     ]
@@ -361,7 +373,16 @@ const forgePlugin: ForgePlugin = Object.assign(
 )
 
 export default forgePlugin
-export { FORGE_SECTION_NAME, FORGE_SECTION_ORDER, renderForgePipelineSection } from './prompt/index.js'
+export {
+  FORGE_DOC_STYLE_SECTION_NAME,
+  FORGE_DOC_STYLE_SECTION_ORDER,
+  FORGE_SECTION_NAME,
+  FORGE_SECTION_ORDER,
+  modeOf,
+  renderDocStyleSection,
+  renderForgePipelineSection,
+} from './prompt/index.js'
+export type { ForgePipelineMode, ForgePipelineSectionVars } from './prompt/index.js'
 // M3 3.3/3.4：产品自建事件总线 + 日志监听器 + 事件 sink（logs/{slug}.jsonl 唯一写者）——
 // tool 面 emit 点已接线（dispatchTask 五事件 + submitTask task-submitted + 全 tool-error）。
 export { assertForgeEventEnvelope, createForgeEventBus } from './events/bus.js'

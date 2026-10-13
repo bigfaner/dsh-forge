@@ -214,26 +214,43 @@ describe('注册面集合 pin（M3 终态六 tool：3.4 切片六在场 / 缺席
   })
 })
 
-describe('AC5 段注册（forge:pipeline / order 510）', () => {
-  it('默认装配：一段（name/order/text 三件在场）', () => {
+describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511）', () => {
+  it('默认装配：双段（pipeline + doc-style，name/order/text 三件在场）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.sections).toHaveLength(1)
-    const section = rt.sections[0]
-    expect(section?.name).toBe(FORGE_SECTION_NAME)
-    expect(section?.name).toBe('forge:pipeline')
-    expect(section?.order).toBe(510)
-    expect(section?.text).toContain('forge-pipeline')
-    // 文档风格公约第四部分随段注入（段注册无条件——双 preset 装配 plugin-forge 即共有）
-    expect(section?.text).toContain('文档风格公约')
+    expect(rt.sections).toHaveLength(2)
+    const pipeline = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
+    const docStyle = rt.sections.find((s) => s.name === 'forge:doc-style')
+    expect(pipeline?.order).toBe(510)
+    expect(pipeline?.text).toContain('forge-pipeline')
+    // doc-style 独立段（dual-mode-overhaul：文档风格公约拆段——双模式共用注入，段注册无条件）
+    expect(docStyle?.order).toBe(511)
+    expect(docStyle?.text).toContain('doc-style')
+    expect(docStyle?.text).toContain('文档风格公约')
+    // pipeline 段本体不再携带公约（拆段后单一归属）
+    expect(pipeline?.text).not.toContain('文档风格公约')
     dispose()
   })
 
-  it('disposer 全注销（tool×6 + 段×1，各恰一次）', () => {
+  it('config.mode 双模式渲染：blitz → 突击流程图；缺省/未知 → 远征回退', () => {
+    const rt1 = new TempRuntime()
+    const d1 = forgePlugin(rt1.ctx(), { mode: 'blitz' })
+    const p1 = rt1.sections.find((s) => s.name === FORGE_SECTION_NAME)
+    expect(p1?.text).toContain('突击模式短流程')
+    expect(p1?.text).toContain('B -->|裁决记录| C[quick-tasks]')
+    d1()
+    const rt2 = new TempRuntime()
+    const d2 = forgePlugin(rt2.ctx(), { mode: 'unknown-mode' })
+    const p2 = rt2.sections.find((s) => s.name === FORGE_SECTION_NAME)
+    expect(p2?.text).toContain('远征模式全流程')
+    d2()
+  })
+
+  it('disposer 全注销（tool×6 + 段×2，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
   })
 })
 
@@ -252,16 +269,16 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     const ctx = { ...rt.ctx(), forgeProjects: projectsWith({ forgeDir: 'Z:/external/ws/.forge' }) }
     const dispose = forgePlugin(ctx, BOUND)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(2) // 缺省段 + forge_dir 升级段
-    const upgraded = rt.sections[1]
+    expect(rt.sections).toHaveLength(3) // 缺省 pipeline 段 + doc-style 段 + forge_dir 升级段
+    const upgraded = rt.sections[2]
     expect(upgraded?.name).toBe('forge:pipeline')
     expect(upgraded?.order).toBe(510)
     expect(upgraded?.text).toContain('Z:/external/ws/.forge')
     expect(upgraded?.text).toContain('文档位置')
     expect(upgraded?.text).toContain('docs/proposals')
     dispose()
-    // 重注册升级面：新旧两份注销器各恰一次
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
+    // 重注册升级面：新旧 pipeline 注销器 + doc-style 注销器各恰一次
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 3 })
   })
 
   it('项目未注册（getProject → null）：缺省段原样（无目录树段，单段，回退不炸）', async () => {
@@ -269,20 +286,20 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     const ctx = { ...rt.ctx(), forgeProjects: projectsWith(null) }
     const dispose = forgePlugin(ctx, BOUND)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(1)
-    expect(rt.sections[0]?.text).not.toContain('文档位置')
+    expect(rt.sections).toHaveLength(2)
+    expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
   })
 
   it('无绑定项目 / forgeProjects 面缺 getProject：缺省段原样（fail-soft 零外抛）', async () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(1)
-    expect(rt.sections[0]?.text).not.toContain('文档位置')
+    expect(rt.sections).toHaveLength(2)
+    expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 1 })
+    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
   })
 })
 

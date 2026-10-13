@@ -171,6 +171,7 @@
             name: '@dsh-forge/plugin-forge'
             config:
               bindingsFile: "{{plugin-forge-bindings}}"
+              mode: expedition
           - id: plugin-forge-spec
             name: '@dsh-forge/plugin-forge-spec'
             config:
