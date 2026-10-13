@@ -170,6 +170,12 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     credentials === undefined,
     'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip（沿 flywheel.spec 口径，不伪造凭据）',
   )
+  // 去模型化门（worker-exec-evidence-replay SC4/SC5 边界裁决）：知识召回语义类 = 真实 LLM
+  // 按需人工清单，不进自动门——仅显式 DSH_FORGE_DOGFOOD_RECORD=1 时运行。
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：知识召回语义类退人工按需清单（不进自动门）——须显式 DSH_FORGE_DOGFOOD_RECORD=1',
+  )
 
   const fixtureRoot = makeFlywheelFixture()
   const knDir = join(fixtureRoot, 'fw-demo', '.knowledge')
@@ -376,6 +382,11 @@ test('@web-e2e @p1mvp flywheel·Step2b no-knowledge-dir-session：无知识段�
   test.setTimeout(600_000)
   const credentials = realCredentials()
   test.skip(credentials === undefined, 'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip')
+  // 去模型化门（SC4/SC5 边界裁决——语义类退人工清单，不进自动门）
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：知识召回语义类退人工按需清单（不进自动门）——须显式 DSH_FORGE_DOGFOOD_RECORD=1',
+  )
 
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw2b-'))
   mkdirSync(join(fixtureRoot, 'fw-bare'), { recursive: true }) // 无 .knowledge 目录（未配置态）
@@ -431,6 +442,11 @@ test('@web-e2e @p1mvp flywheel·Step2c empty-knowledge-dir-session：空目录�
   test.setTimeout(600_000)
   const credentials = realCredentials()
   test.skip(credentials === undefined, 'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip')
+  // 去模型化门（SC4/SC5 边界裁决——语义类退人工清单，不进自动门）
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：知识召回语义类退人工按需清单（不进自动门）——须显式 DSH_FORGE_DOGFOOD_RECORD=1',
+  )
 
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw2c-'))
   mkdirSync(join(fixtureRoot, 'fw-empty', '.knowledge'), { recursive: true }) // 已配置且为空
@@ -559,6 +575,11 @@ test('@web-e2e @p1mvp flywheel·Step4d no-hit-fallback：无关库回答不阻�
   test.setTimeout(600_000)
   const credentials = realCredentials()
   test.skip(credentials === undefined, 'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip')
+  // 去模型化门（SC4/SC5 边界裁决——语义类退人工清单，不进自动门）
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：知识召回语义类退人工按需清单（不进自动门）——须显式 DSH_FORGE_DOGFOOD_RECORD=1',
+  )
 
   const fixtureRoot = makeUnrelatedFixture()
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-fw-ud-'))

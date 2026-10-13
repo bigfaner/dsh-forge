@@ -147,6 +147,13 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     credentials === undefined,
     'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip（Hard Rule：dogfood = 唯一真实模型面，不伪造凭据）',
   )
+  // 去模型化门（worker-exec-evidence-replay SC4/SC5）：自动套件零真实模型——本件为
+  // 真实 dispatchTask 走查面（SC-M3 门生产者），仅显式 DSH_FORGE_DOGFOOD_RECORD=1 时
+  // 运行（B/D 层回放化改造 = spawn 缝回放驱动器 + 转录播种，后续任务承接）。
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：自动套件零真实模型——真实 dispatchTask 走查须显式 DSH_FORGE_DOGFOOD_RECORD=1（回放化改造承接中）',
+  )
 
   const startedAt = Date.now()
   const wsRoot = makeWalkthroughWorkspace()

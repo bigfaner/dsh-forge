@@ -99,6 +99,13 @@ test('@web-e2e @p1mvp session-workbench·冒烟：首屏→往返→轨迹→恢
     credentials === undefined,
     'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip（沿 flywheel.spec 口径，不伪造凭据）',
   )
+  // 去模型化门（worker-exec-evidence-replay SC4/SC5）：自动套件零真实模型——本冒烟为
+  // 真实模型往返面（会话 UI 走查生产者），仅显式 DSH_FORGE_DOGFOOD_RECORD=1 时运行；
+  // 无往返依赖的确定性子集（1b/1c/2b/2c/4b/4c/5/6）在本文件独立无 dogfood 测试照常跑。
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：自动套件零真实模型——真实往返冒烟须显式 DSH_FORGE_DOGFOOD_RECORD=1（转录播种回放面承接中）',
+  )
 
   const fixtureRoot = makeWorkspaceFixture('sw-demo')
   const wsDir = join(fixtureRoot, 'sw-demo')

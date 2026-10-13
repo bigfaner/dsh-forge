@@ -74,6 +74,12 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     credentials === undefined,
     `dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip（Open Question ②：dogfood 为主，录制回放仅 flake 时评估、不预建）`,
   )
+  // 去模型化门（worker-exec-evidence-replay SC4/SC5 边界裁决）：知识召回语义类 = 真实 LLM
+  // 按需人工清单，不进自动门——仅显式 DSH_FORGE_DOGFOOD_RECORD=1 时运行。
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：知识召回语义类退人工按需清单（不进自动门）——须显式 DSH_FORGE_DOGFOOD_RECORD=1',
+  )
 
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-fly-ud-'))
   const dshHome = join(userData, 'dsh-home')

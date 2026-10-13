@@ -127,6 +127,13 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     credentials === undefined,
     'dogfood 前置缺口：真实模型凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip（Hard Rule：dogfood = 唯一真实模型面，不伪造凭据）',
   )
+  // 去模型化门（worker-exec-evidence-replay SC4/SC5）：自动套件零真实模型——本件降为
+  // 【录制生产者】（夹具随跑重录的载体），仅显式 DSH_FORGE_DOGFOOD_RECORD=1 时运行；
+  // 回放断言面 = dogfood-sc-m2-replay.spec.ts（消费本件产出的录制夹具）。
+  test.skip(
+    process.env.DSH_FORGE_DOGFOOD_RECORD !== '1',
+    '去模型化门：自动套件零真实模型——录制生产者须显式 DSH_FORGE_DOGFOOD_RECORD=1（回放面 = dogfood-sc-m2-replay.spec.ts）',
+  )
 
   const startedAt = Date.now()
   const wsRoot = makeDogfoodWorkspace()
