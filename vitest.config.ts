@@ -21,7 +21,7 @@ export default defineConfig({
       // M3 3.1：第八工件 plugin-forge-spec（spec 三 tool + forge:spec 段）
       { test: { name: 'plugin-forge-spec', include: ['packages/plugin-forge-spec/src/**/*.test.ts'] } },
       // md-mermaid 插件包（校验面单测 + 真引擎 headless parse 集成）
-      { test: { name: 'md-mermaid', include: ['packages/plugins/md-mermaid/src/**/*.test.ts'] } },
+      { test: { name: 'md-mermaid', include: ['packages/plugins/md-mermaid/src/**/*.test.{ts,tsx}'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）

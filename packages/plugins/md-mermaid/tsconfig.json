@@ -3,11 +3,12 @@
   "compilerOptions": {
     "composite": true,
     "types": ["node"],
+    "jsx": "react-jsx",
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
   "references": []
 }

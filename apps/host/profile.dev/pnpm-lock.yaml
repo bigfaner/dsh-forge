@@ -26,6 +26,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: link:../../../packages/knowledge
         version: link:../../../packages/knowledge
+      '@dsh-forge/md-mermaid':
+        specifier: link:../../../packages/plugins/md-mermaid
+        version: link:../../../packages/plugins/md-mermaid
       '@dsh-forge/plugin-forge':
         specifier: link:../../../packages/plugin-forge
         version: link:../../../packages/plugin-forge
@@ -3088,8 +3091,8 @@ packages:
     resolution: {integrity: sha512-5v6yZd4JK3eMI3FqqCouswVqwugaA9r4dNZB1wwcmrD02QkV5H0y7XBQW8QwQqEaZY1pM9aqORSORhJRdNK44Q==}
     engines: {node: '>=6.0'}
 
-  http-cache-semantics@4.2.0:
-    resolution: {integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==}
+  http-cache-semantics@4.3.0:
+    resolution: {integrity: sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA==}
 
   http-proxy-agent@9.1.0:
     resolution: {integrity: sha512-2NxoveTT58mjYT4n3RPTEfCZGLMbidoO8XEieXfpSYxu+PQJ1qpx4ypwH6N+uF9twBPIvRRgvkvW5HUTYWENig==}
@@ -7107,7 +7110,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       get-stream: 9.0.1
-      http-cache-semantics: 4.2.0
+      http-cache-semantics: 4.3.0
       keyv: 5.6.0
       mimic-response: 4.0.0
       normalize-url: 8.1.1
@@ -7309,7 +7312,7 @@ snapshots:
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
 
-  http-cache-semantics@4.2.0: {}
+  http-cache-semantics@4.3.0: {}
 
   http-proxy-agent@9.1.0:
     dependencies:
