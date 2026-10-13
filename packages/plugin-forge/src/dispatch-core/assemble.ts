@@ -14,8 +14,10 @@ import {
  * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 四动词——submitTask +
  * addTask 两既有动词 + recordBug/resolveBug 两 bug 写径（fix-bug coding-fix worker 放行））。
  * 名单 = 本包 FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——
- * 十一员全集中 worker 可见 = 四动词，其余七员 deny（updateTask/taskStats/listTasks 等仅主
- * agent 面）。plugin-forge-spec 三动词不入本 deny：其注册面
+ * 十一员全集中 worker 可见 = 四动词，其余八员 deny（updateTask/taskStats/listTasks 等仅主
+ * agent 面）。validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
+ * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validateMermaid'——工具面仅主 agent，
+ * 附录 F deny 约束；本包不反依赖插件包，字面量 + 锚注释对齐）。plugin-forge-spec 三动词不入本 deny：其注册面
  * 预设相依（突击组合物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——
  * spec 面收口归 5.1 工具名映射 pin（OQ#2）。
  */
@@ -27,6 +29,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'updateTask',
   'taskStats',
   'listTasks',
+  'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
 ]
 
 /**
@@ -81,7 +84,7 @@ const TRIAGE_FORGE_DENY: readonly string[] = [...FORGE_DENY_IN_WORKER]
  * 处置代理 toolFilter（S1c 第二层——「收窄工具面」的全收窄形）：一次性处置代理只做决策
  * 不执行——已知工具名全数 deny（决策权与执行权分离，越权动作结构性不可达；输出契约 =
  * 终态 output 文本内的 JSON 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 17 名
- * （fs/shell/jobs/read-image/web/forge 六族）+ forge 动词七员 + 全局拒绝集——全部已知名
+ * （fs/shell/jobs/read-image/web/forge 六族）+ forge 动词八员（含 validateMermaid）+ 全局拒绝集——全部已知名
  * （driver tools.restrict loud 校验安全，与 worker 同理）。
  */
 export function deriveTriageToolFilter(): { deny: string[] } {

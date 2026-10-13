@@ -15,7 +15,7 @@ import type {
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
-import { WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
+import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import { adaptDispatchJobs } from '../faces.js'
 import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, DispatchJobsRegistryFace, ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
@@ -321,7 +321,7 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局十 + forge 闭环七（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
+    // 全局十 + forge 闭环八（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid）为共同底座；
     // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
     const base = [
       'ask_user_question',
@@ -340,6 +340,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'transitionProposal',
       'update_goal',
       'updateTask',
+      'validateMermaid',
       'workflow',
     ]
     // coding：web ✗（fs/shell/jobs/read-image ✓）——fix-bug 两 bug 写径（recordBug/resolveBug）
@@ -390,6 +391,13 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(workerDeny.has('resolveBug')).toBe(false)
     expect(triageDeny.has('recordBug')).toBe(true)
     expect(triageDeny.has('resolveBug')).toBe(true)
+  })
+
+  it('validateMermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {
+    for (const t of TASK_TYPES) {
+      expect(deriveWorkerToolFilter(t).deny, `${t} worker deny 应含 validateMermaid`).toContain('validateMermaid')
+    }
+    expect(deriveTriageToolFilter().deny).toContain('validateMermaid')
   })
 
   it('contracts 矩阵单源：WORKER_FORGE_TOOLS 四动词（submitTask/addTask + 两 bug 写径）——fix-bug worker 放行钉住', () => {
