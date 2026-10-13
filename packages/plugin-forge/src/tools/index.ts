@@ -19,9 +19,12 @@ import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
 import { createCreateProposalTool } from './create-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
+import { createListTasksTool } from './list-tasks.js'
 import { createQueryTaskTool } from './query-task.js'
 import { createSubmitTaskTool } from './submit-task.js'
+import { createTaskStatsTool } from './task-stats.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
+import { createUpdateTaskTool } from './update-task.js'
 
 /** tool 共享的执行期依赖（index.ts 装配注入） */
 export interface ForgeToolDeps {
@@ -49,7 +52,7 @@ export interface ForgeToolDeps {
   jobs?: DispatchJobsFace
 }
 
-/** tool 定义组（顺序 = Interface 4 列序；注册面与断言面共消费——终态六员） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——九员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -57,9 +60,12 @@ export interface ForgeTools {
   readonly createProposal: ReturnType<typeof createCreateProposalTool>
   readonly transitionProposal: ReturnType<typeof createTransitionProposalTool>
   readonly dispatchTask: ReturnType<typeof createDispatchTaskTool>
+  readonly updateTask: ReturnType<typeof createUpdateTaskTool>
+  readonly taskStats: ReturnType<typeof createTaskStatsTool>
+  readonly listTasks: ReturnType<typeof createListTasksTool>
 }
 
-/** 注册面全集（M3 终态六 tool；G1-11 旧「六在场/两缺席」已改写——新面 pin = 5.1 #17/#18） */
+/** 注册面全集（九 tool——M3 六员 + updateTask/taskStats/listTasks 三员，仅主 agent 面） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -67,6 +73,9 @@ export const FORGE_TOOL_NAMES = [
   'createProposal',
   'transitionProposal',
   'dispatchTask',
+  'updateTask',
+  'taskStats',
+  'listTasks',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -82,6 +91,9 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     createProposal: createCreateProposalTool(deps),
     transitionProposal: createTransitionProposalTool(deps),
     dispatchTask: createDispatchTaskTool(deps),
+    updateTask: createUpdateTaskTool(deps),
+    taskStats: createTaskStatsTool(deps),
+    listTasks: createListTasksTool(deps),
   }
 }
 
@@ -126,6 +138,12 @@ export { parseCreateProposalArgs } from './create-proposal.js'
 export type { CreateProposalToolArgs } from './create-proposal.js'
 export { parseTransitionProposalArgs } from './transition-proposal.js'
 export type { TransitionProposalToolArgs } from './transition-proposal.js'
+export { parseUpdateTaskArgs } from './update-task.js'
+export type { UpdateTaskToolArgs } from './update-task.js'
+export { parseTaskStatsArgs } from './task-stats.js'
+export type { TaskStatsToolArgs } from './task-stats.js'
+export { parseListTasksArgs } from './list-tasks.js'
+export type { ListTasksToolArgs } from './list-tasks.js'
 export {
   classifyPool,
   deriveWorkerToolFilter,

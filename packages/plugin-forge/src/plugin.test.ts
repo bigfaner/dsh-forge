@@ -97,8 +97,8 @@ describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals + fo
   })
 })
 
-describe('注册面集合 pin（M3 终态六 tool：3.4 切片六在场 / 缺席面改写）', () => {
-  it('六 tool 注册且名 = Interface 4 列序（FORGE_TOOL_NAMES 单源——dispatchTask 3.4 补位成六）', () => {
+describe('注册面集合 pin（九 tool：M3 六员 + updateTask/taskStats/listTasks 三员，仅主 agent）', () => {
+  it('九 tool 注册且名 = FORGE_TOOL_NAMES 列序（单源——1.4 三新员补位成九）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     expect(rt.registeredTools.map((t) => t.name)).toEqual([...FORGE_TOOL_NAMES])
@@ -109,6 +109,9 @@ describe('注册面集合 pin（M3 终态六 tool：3.4 切片六在场 / 缺席
       'createProposal',
       'transitionProposal',
       'dispatchTask',
+      'updateTask',
+      'taskStats',
+      'listTasks',
     ])
     dispose()
   })
@@ -132,7 +135,7 @@ describe('注册面集合 pin（M3 终态六 tool：3.4 切片六在场 / 缺席
   it('每 tool 形状齐备：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     for (const tool of rt.registeredTools) {
       expect(tool.description.length, `${tool.name} description`).toBeGreaterThan(20)
       expect(tool.parameters.type).toBe('object')
@@ -252,11 +255,11 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     d2()
   })
 
-  it('disposer 全注销（tool×6 + 段×2，各恰一次）', () => {
+  it('disposer 全注销（tool×9 + 段×2，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
+    expect(rt.disposedCounts()).toEqual({ tools: 9, sections: 2 })
   })
 })
 
@@ -284,7 +287,7 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     expect(upgraded?.text).toContain('proposals/{slug}/')
     dispose()
     // 重注册升级面：新旧 pipeline 注销器 + doc-style 注销器各恰一次
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 3 })
+    expect(rt.disposedCounts()).toEqual({ tools: 9, sections: 3 })
   })
 
   it('项目未注册（getProject → null）：缺省段原样（无目录树段，单段，回退不炸）', async () => {
@@ -295,7 +298,7 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     expect(rt.sections).toHaveLength(2)
     expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
+    expect(rt.disposedCounts()).toEqual({ tools: 9, sections: 2 })
   })
 
   it('无绑定项目 / forgeProjects 面缺 getProject：缺省段原样（fail-soft 零外抛）', async () => {
@@ -305,12 +308,12 @@ describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir
     expect(rt.sections).toHaveLength(2)
     expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 6, sections: 2 })
+    expect(rt.disposedCounts()).toEqual({ tools: 9, sections: 2 })
   })
 })
 
 describe('createForgeTools 直装配（工厂面——注册器之外的单源消费）', () => {
-  it('deps 注入即得六 tool 定义组（键 = FORGE_TOOL_NAMES 列序；spawn 必给）', () => {
+  it('deps 注入即得九 tool 定义组（键 = FORGE_TOOL_NAMES 列序；spawn 必给）', () => {
     const tools = createForgeTools({
       tasks: {} as ForgeTasksService,
       proposals: {} as ForgeProposalsService,
@@ -334,18 +337,18 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
       reflect: { get: (name: string) => (name === 'forgeSettings' ? { get: async () => ({}) } : undefined) },
     }
     const dispose = forgePlugin(ctx)
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
   })
 
-  it('reflect.get 抛异常 / 返回非函数面：降级缺席不阻载（六 tool 照常注册）', () => {
+  it('reflect.get 抛异常 / 返回非函数面：降级缺席不阻载（九 tool 照常注册）', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
-    expect(rt1.registeredTools).toHaveLength(6)
+    expect(rt1.registeredTools).toHaveLength(9)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin({ ...rt2.ctx(), reflect: { get: () => 'not-a-service' } })
-    expect(rt2.registeredTools).toHaveLength(6)
+    expect(rt2.registeredTools).toHaveLength(9)
     d2()
   })
 })
@@ -380,10 +383,10 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
     h.dispose()
   })
 
-  it('无绑定（无 config.projects/bindingsFile）= 零触发；服务面同步缺席 = fail-soft 不阻载装配（六 tool 照常注册）', async () => {
+  it('无绑定（无 config.projects/bindingsFile）= 零触发；服务面同步缺席 = fail-soft 不阻载装配（九 tool 照常注册）', async () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx()) // forgeTasks = {} 桩——reconcileInterrupted 缺席
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
 
     const h2 = reconcileCtx({})
@@ -440,10 +443,10 @@ describe('jobs 可选消费（DispatchJobsFace 收窄注入——run_in_backgrou
     h.dispose()
   })
 
-  it('reflect jobs 异常 / 非函数面：降级缺席不阻载（六 tool 照常注册）且后台调用被拒绝', async () => {
+  it('reflect jobs 异常 / 非函数面：降级缺席不阻载（九 tool 照常注册）且后台调用被拒绝', async () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } }, BOUND_CONFIG)
-    expect(rt1.registeredTools).toHaveLength(6)
+    expect(rt1.registeredTools).toHaveLength(9)
     d1()
     const h2 = dispatchCtx({ get: (name) => (name === 'jobs' ? 'not-a-registry' : undefined) })
     const out = (await h2.dispatch.execute({ run_in_background: true }, EXEC)) as { ok: boolean }
@@ -482,7 +485,7 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
     expect(typeof definition.apply).toBe('function')
     expect(definition.wire).toBeDefined()
     // 六 tool 照常注册（投影面 additive——tool 面零波及）
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
     expect(rt.disposedProjection).toBe(1)
   })
@@ -493,7 +496,7 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
     const dispose = forgePlugin(rt.withReflect({})) // commands 亦缺席——仅验证投影面
     void face
     expect(registered).toHaveLength(0)
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
     expect(rt.disposedProjection).toBe(0)
   })
@@ -501,11 +504,11 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
   it('reflect.get 抛异常 / 非函数面：同降级（键不注册、六 tool 照常）', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
-    expect(rt1.registeredTools).toHaveLength(6)
+    expect(rt1.registeredTools).toHaveLength(9)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.withReflect({ sessionProjections: 'not-a-registry' }))
-    expect(rt2.registeredTools).toHaveLength(6)
+    expect(rt2.registeredTools).toHaveLength(9)
     d2()
   })
 })
@@ -525,7 +528,7 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     expect(typeof run?.handler).toBe('function')
     expect(typeof stop?.handler).toBe('function')
     // 六 tool 照常注册（指令面 additive——tool 面零波及）
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
     expect(rt.disposedCommands).toBe(2) // 注销器并入插件 disposer（两指令各恰一次）
   })
@@ -534,7 +537,7 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.withReflect({}))
     expect(rt.registeredCommands).toHaveLength(0)
-    expect(rt.registeredTools).toHaveLength(6)
+    expect(rt.registeredTools).toHaveLength(9)
     dispose()
     expect(rt.disposedCommands).toBe(0)
   })
@@ -543,12 +546,12 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
     expect(rt1.registeredCommands).toHaveLength(0)
-    expect(rt1.registeredTools).toHaveLength(6)
+    expect(rt1.registeredTools).toHaveLength(9)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.withReflect({ commands: 'not-a-registry' }))
     expect(rt2.registeredCommands).toHaveLength(0)
-    expect(rt2.registeredTools).toHaveLength(6)
+    expect(rt2.registeredTools).toHaveLength(9)
     d2()
   })
 })

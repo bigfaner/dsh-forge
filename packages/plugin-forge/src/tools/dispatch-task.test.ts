@@ -19,6 +19,7 @@ import { WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import { adaptDispatchJobs } from '../faces.js'
 import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, DispatchJobsRegistryFace, ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
+import { deriveTriageToolFilter } from '../dispatch-core/assemble.js'
 import { FORGE_TOOL_NAMES } from './index.js'
 import {
   classifyPool,
@@ -319,7 +320,7 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局十 + forge 闭环四（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
+    // 全局十 + forge 闭环七（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS）为共同底座；
     // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
     const base = [
       'ask_user_question',
@@ -329,12 +330,15 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'get_goal',
       'interrupt_agent',
       'list_agents',
+      'listTasks',
       'present',
       'queryTask',
       'send_message',
       'subagent_fork',
+      'taskStats',
       'transitionProposal',
       'update_goal',
+      'updateTask',
       'workflow',
     ]
     // coding：web ✗（fs/shell/jobs/read-image ✓）
@@ -368,14 +372,16 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveWorkerToolFilter('validation-code', nameFamily).deny).not.toContain('web-search')
   })
 
-  it('forge 闭环同步守护：FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS ⊆ deny', () => {
-    const deny = new Set(deriveWorkerToolFilter('doc').deny)
+  it('forge 闭环同步守护：FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS 全覆盖入 deny（worker 与 triage 两面）', () => {
+    const workerDeny = new Set(deriveWorkerToolFilter('doc').deny)
+    const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
-      expect(deny.has(name), `${name} 应入 worker deny（forge 族只给 submitTask+addTask）`).toBe(true)
+      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族只给 submitTask+addTask）`).toBe(true)
+      expect(triageDeny.has(name), `${name} 应入 triage deny（仅主 agent 面）`).toBe(true)
     }
-    expect(deny.has('submitTask')).toBe(false)
-    expect(deny.has('addTask')).toBe(false)
+    expect(workerDeny.has('submitTask')).toBe(false)
+    expect(workerDeny.has('addTask')).toBe(false)
   })
 })
 
