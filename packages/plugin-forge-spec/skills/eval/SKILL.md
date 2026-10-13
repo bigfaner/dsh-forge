@@ -96,8 +96,3 @@ min 即判不通过，与总分无关。
 gen-test-scripts 核对的 gate 工件）：总分带量表、逐维度表（分值/min/状态）、带严重度
 与文档位置引用的发现清单、结果行（`PASSED` / `FAILED (below target|dimension <min>)`），
 修订过的运行附分数演进。然后在会话/任务输出中呈报结果。
-
-## 下一步
-
-journey 达标 → `gen-contracts`；contract 达标 → `gen-test-scripts`。
-交互模式下低于目标 → 按循环修订复评；任务模式下低于目标 → 携发现清单结算 blocked。

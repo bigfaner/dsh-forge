@@ -69,7 +69,3 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",
 8. **对账 PRD（批准后）**——对照原型与 `prd-ui-functions.md`：原型中出现而 PRD 没有
    的页面/交互/数据字段/导航 → 提议回写。用户批准则更新 `prd-ui-functions.md` 并重新
    注册（原型即"设计了什么"的事实源）；拒绝则在 `ui-design.md` 内记录差异。
-
-## 下一步
-
-原型获批或跳过后：`tech-design` 技能。

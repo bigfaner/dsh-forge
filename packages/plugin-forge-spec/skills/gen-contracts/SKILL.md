@@ -68,7 +68,3 @@ contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任�
    同步时间戳。失败时携错误回喂重新生成违规文件**一次**；仍失败 → 停止并呈报待
    人工修复的不合规清单（绝不带无效 Contract 继续）。
 6. **写出**到 `testing/<journey>/contracts/`；保持事实表最新。
-
-## 下一步
-
-`eval --type contract`，随后 `gen-test-scripts`。

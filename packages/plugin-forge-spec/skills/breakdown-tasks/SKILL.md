@@ -113,7 +113,3 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 
 呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试管线链。可派发执行
 （run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。
-
-## 下一步
-
-容器校验通过后交派发循环（run-tasks）执行。

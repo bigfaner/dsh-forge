@@ -98,11 +98,10 @@ addTask { source_kind: "proposal", source_slug: "<proposal slug>",
 创建后做量级审计：多动词标题拆分、验收标准跨无关领域的拆分、请求的每个验收点至少
 被一个任务覆盖。
 
-## 第 5 步：汇报交接
+## 第 5 步：汇报
 
 汇报建好的任务图（任务键、类型、依赖）与提案的自然身份。裁决权在用户：用户接受
-（经提案 UI 或会话内明示）后由 `transitionProposal` 记录——接受后任务即可经
-run-tasks 直接派发，中间没有 feature 阶段。
+（经提案 UI 或会话内明示）后由 `transitionProposal` 记录。
 
 ## 输出清单
 

@@ -94,7 +94,3 @@ Journey，frontmatter 注 `quality: low` 并在正文加质量提示。每条 Jo
 6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。质量门：`eval`
    技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`
    （那是它的 gate，不是本技能的）。
-
-## 下一步
-
-`eval --type journey`，随后 `gen-contracts`。

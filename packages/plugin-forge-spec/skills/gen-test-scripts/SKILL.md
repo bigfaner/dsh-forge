@@ -71,7 +71,3 @@ with extra scrutiny."。无该标志时阻塞项强制生效。
 7. **覆盖自检**——逐表面类型：数 Journey（读 `testing/*/journey.md` frontmatter）
    对照已生成的测试脚本集。任一缺口（含 direct-path 生成失败）→ 带缺口清单报
    FAIL；绝不带缺口静默继续。
-
-## 下一步
-
-生成的脚本由 `test-run` 任务族经核心包的 `run-tests` 技能执行。
