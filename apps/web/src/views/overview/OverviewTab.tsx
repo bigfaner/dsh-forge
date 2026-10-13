@@ -6,12 +6,14 @@
 // 三签不动（Hard Rule）：本目录零左栏/中区/conversation.view 改动——纯右栏 tab 体。
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { BugStatus, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
 import { ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
   activeFeatureSlug,
+  bugStatusFilterParam,
+  clearBugStatusFilter,
   clearPhaseFilter,
   clearProposalStatusFilter,
   clearStatusFilter,
@@ -25,6 +27,7 @@ import {
   toggleHead,
   toggleOpenRow,
   togglePhaseFilter,
+  toggleBugStatusFilter,
   toggleProposalStatusFilter,
   toggleStatusFilter,
   type OverviewFilterState,
@@ -45,6 +48,7 @@ import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
+import { BugList } from './bug-tab/bug-list.js'
 import { ProposalsTab } from './proposal-tab.js'
 import { FeaturesTab } from './feature-tab.js'
 import './overview.css'
@@ -97,6 +101,9 @@ export interface OverviewFrameProps {
   /** feature 阶段 chips toggle/清空（4.6 UF-4——受控归帧侧模型） */
   readonly onTogglePhase: (phase: FeatureStatus) => void
   readonly onClearPhases: () => void
+  /** Bug 三态 chips toggle/清空（fix-bug——受控归帧侧模型） */
+  readonly onToggleBugStatus: (status: BugStatus) => void
+  readonly onClearBugStatuses: () => void
   readonly onToggleRow: (key: string) => void
   readonly onToggleHead: () => void
   /** 重试（头路 + 列路全量重装载） */
@@ -130,6 +137,8 @@ export function OverviewFrame({
   onClearProposalStatuses,
   onTogglePhase,
   onClearPhases,
+  onToggleBugStatus,
+  onClearBugStatuses,
   onToggleRow,
   onToggleHead,
   onRetry,
@@ -190,6 +199,20 @@ export function OverviewFrame({
           onOpenDoc={openDoc}
           onStartSession={onStartSession}
           now={now}
+        />
+      </>
+    )
+  } else if (filter.subtab === 'bugs' && list.kind === 'bugs') {
+    content = (
+      <>
+        {listErrorBar(error, onRetry)}
+        <BugList
+          bugs={list.bugs}
+          counts={list.counts}
+          activeStatuses={filter.activeBugStatuses}
+          onToggleStatus={onToggleBugStatus}
+          onClearStatuses={onClearBugStatuses}
+          emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 Bug` : undefined}
         />
       </>
     )
@@ -389,7 +412,9 @@ export function OverviewTab({
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
   const [nonce, setNonce] = useState(0)
-  const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient)
+  // Bug chips 白名单参（受控集合引用稳定——仅 toggle 时换参；列表键含投影键 → 服务端重拉）
+  const bugStatusParam = useMemo(() => bugStatusFilterParam(filter.activeBugStatuses), [filter.activeBugStatuses])
+  const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient, bugStatusParam)
 
   // 任务聚焦子 tab 切换（4.2 pill 点击链尾）：nonce 变更（已开概览后的后续点击）→
   // switchSubtab('tasks')（清搜索/清 chips/收展开——子 tab 切换语义同源；同值原样返回零重渲）
@@ -425,6 +450,12 @@ export function OverviewTab({
   const handleClearPhases = useCallback((): void => {
     setFilter((prev) => clearPhaseFilter(prev))
   }, [])
+  const handleToggleBugStatus = useCallback((status: BugStatus): void => {
+    setFilter((prev) => toggleBugStatusFilter(prev, status))
+  }, [])
+  const handleClearBugStatuses = useCallback((): void => {
+    setFilter((prev) => clearBugStatusFilter(prev))
+  }, [])
   const handleToggleRow = useCallback((key: string): void => {
     setFilter((prev) => toggleOpenRow(prev, key))
   }, [])
@@ -454,6 +485,8 @@ export function OverviewTab({
       onClearProposalStatuses={handleClearProposalStatuses}
       onTogglePhase={handleTogglePhase}
       onClearPhases={handleClearPhases}
+      onToggleBugStatus={handleToggleBugStatus}
+      onClearBugStatuses={handleClearBugStatuses}
       onToggleRow={handleToggleRow}
       onToggleHead={handleToggleHead}
       onRetry={handleRetry}

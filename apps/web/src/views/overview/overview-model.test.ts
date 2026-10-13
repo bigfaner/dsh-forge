@@ -1,9 +1,12 @@
 // overview-model 单测 —— AC3（子 tab 切换清空三态）+ AC5（chips 过滤接口）+ AC1（默认折叠）
 // + 排序/搜索参归一（Hard Rule 服务端承载的模型侧锚：关键词只转查询参，不做本地过滤）。
 import { describe, expect, it } from 'vitest'
-import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/contracts'
+import { BUG_STATUSES, TASK_STATUSES, type BugCard, type BugStatus, type TaskStatus } from '@dsh-forge/contracts'
 import {
   OVERVIEW_SORT_LABELS,
+  bugStatusCounts,
+  bugStatusFilterParam,
+  clearBugStatusFilter,
   clearPhaseFilter,
   clearProposalStatusFilter,
   OVERVIEW_SUBTABS,
@@ -20,6 +23,7 @@ import {
   statusFilterParam,
   switchSubtab,
   toggleHead,
+  toggleBugStatusFilter,
   togglePhaseFilter,
   toggleProposalStatusFilter,
   toggleOpenRow,
@@ -29,10 +33,10 @@ import {
 
 const ALL_STATUS = new Set<TaskStatus>(TASK_STATUSES)
 
-describe('OVERVIEW_SUBTABS（AC2 三子 tab 用户定向顺序）', () => {
-  it('顺序 = 提案 | feature | 任务（用户定向——非字母序非任务前置）', () => {
-    expect(OVERVIEW_SUBTABS.map((t) => t.value)).toEqual(['proposals', 'features', 'tasks'])
-    expect(OVERVIEW_SUBTABS.map((t) => t.label)).toEqual(['提案', 'feature', '任务'])
+describe('OVERVIEW_SUBTABS（用户定向顺序）', () => {
+  it('顺序 = 提案 | feature | 任务 | Bug（fix-bug 第 4 子 tab）', () => {
+    expect(OVERVIEW_SUBTABS.map((t) => t.value)).toEqual(['proposals', 'features', 'tasks', 'bugs'])
+    expect(OVERVIEW_SUBTABS.map((t) => t.label)).toEqual(['提案', 'feature', '任务', 'Bug'])
   })
 })
 
@@ -86,10 +90,11 @@ describe('searchQueryOf / searchPlaceholderOf（Hard Rule 服务端承载——�
     expect(searchQueryOf('')).toBeUndefined()
   })
 
-  it('占位文案逐子 tab（提案/slug/状态 · feature/文档 · 标题/类型/状态中英）', () => {
+  it('占位文案逐子 tab（提案/slug/状态 · feature/文档 · 标题/类型/状态中英 · Bug 摘要/错误类型）', () => {
     expect(searchPlaceholderOf('proposals')).toContain('提案')
     expect(searchPlaceholderOf('features')).toContain('feature')
     expect(searchPlaceholderOf('tasks')).toContain('中英')
+    expect(searchPlaceholderOf('bugs')).toContain('Bug')
   })
 })
 
@@ -171,6 +176,59 @@ describe('ov-head 摘要合成', () => {
     expect(activeFeatureSlug([card('done', 'completed'), card('live', 'prd')])).toBe('live')
     expect(activeFeatureSlug([card('a', 'completed'), card('b', 'archived')])).toBe('a')
     expect(activeFeatureSlug([])).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── Bug 三态 chips 族（fix-bug 第 4 子 tab） ───────────────────────────
+
+describe('Bug 三态 chips（fix-bug——toggle/清空/白名单参/计数）', () => {
+  const bug = (bugId: string, bugStatus: BugStatus): BugCard => ({
+    bugId,
+    summary: `摘要 ${bugId}`,
+    bugDesc: 'd',
+    triggerDesc: 't',
+    expected: 'e',
+    actual: 'a',
+    bugStatus,
+    reporter: 'faner',
+    createdAt: '2026-10-13T00:00:00.000Z',
+    updatedAt: '2026-10-13T00:00:00.000Z',
+  })
+
+  it('toggleBugStatusFilter：集合翻转；clearBugStatusFilter 全清（他族不受累）', () => {
+    let state = initialOverviewFilter()
+    state = toggleBugStatusFilter(state, 'open')
+    state = toggleBugStatusFilter(state, 'fixed')
+    state = toggleStatusFilter(state, 'blocked')
+    expect([...state.activeBugStatuses].sort()).toEqual(['fixed', 'open'])
+    state = toggleBugStatusFilter(state, 'open')
+    expect([...state.activeBugStatuses]).toEqual(['fixed'])
+    const cleared = clearBugStatusFilter(state)
+    expect(cleared.activeBugStatuses.size).toBe(0)
+    expect(cleared.activeStatuses.size).toBe(1)
+  })
+
+  it('bugStatusFilterParam = contracts 三态行序白名单；空集 = 空参（= 全部）', () => {
+    expect([...BUG_STATUSES]).toEqual(['open', 'fixed', 'unresolved'])
+    const active = new Set<BugStatus>(['unresolved', 'open'])
+    expect(bugStatusFilterParam(active)).toEqual(['open', 'unresolved'])
+    expect(bugStatusFilterParam(new Set())).toEqual([])
+  })
+
+  it('bugStatusCounts：三态计数投影（缺态 = 0）', () => {
+    expect(bugStatusCounts([bug('b1', 'open'), bug('b2', 'open'), bug('b3', 'fixed')])).toEqual({
+      open: 2,
+      fixed: 1,
+      unresolved: 0,
+    })
+    expect(bugStatusCounts([])).toEqual({ open: 0, fixed: 0, unresolved: 0 })
+  })
+
+  it('子 tab 切换清空 Bug chips（切换语义沿袭——四族全清）', () => {
+    let state = initialOverviewFilter()
+    state = toggleBugStatusFilter(state, 'open')
+    const next = switchSubtab(state, 'tasks')
+    expect(next.activeBugStatuses.size).toBe(0)
   })
 })
 

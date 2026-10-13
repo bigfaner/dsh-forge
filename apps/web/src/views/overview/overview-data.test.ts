@@ -3,8 +3,9 @@
 // 归一 + 派生行 fail-soft + typed error 三态映射 + 落点纯函数。
 // 口径沿 use-knowledge-browse 先例：effect 胶水不在 Node 测面；纯异步面全量单测。
 import { describe, expect, it } from 'vitest'
-import type { FeatureCard, FeatureDocumentRow, Project, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, Project, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
 import {
+  BUGS_CHANNELS,
   FEATURES_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
@@ -116,6 +117,7 @@ function headOkClient(overrides: { deriveTaskStoreDir?: () => unknown } = {}) {
     if (channel === FEATURES_CHANNELS.listDocs) return [featureDocRow()]
     if (channel === TASKS_CHANNELS.stats) return STATS
     if (channel === PROPOSALS_CHANNELS.list) return [proposalCard('pr-1', 'prop-1')]
+    if (channel === BUGS_CHANNELS.list) return []
     throw new Error(`unexpected channel: ${channel}`)
   })
 }
@@ -239,6 +241,63 @@ describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言�
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'proposals', search: 'q', sort: 'active' })
     expect(out?.ok).toBe(false)
     if (out && !out.ok) expect(out.error.uiState).toBe('banner')
+  })
+})
+
+describe('fetchOverviewList · bugs 子 tab（fix-bug——bugs.list 通道与入参钉住）', () => {
+  function bugCard(bugId: string, bugStatus: BugStatus): BugCard {
+    return {
+      bugId,
+      summary: `摘要 ${bugId}`,
+      bugDesc: 'd',
+      triggerDesc: 't',
+      expected: 'e',
+      actual: 'a',
+      bugStatus,
+      reporter: 'faner',
+      createdAt: '2026-10-13T00:00:00.000Z',
+      updatedAt: '2026-10-13T00:00:00.000Z',
+    }
+  }
+
+  it('search/sort 服务端参透传 bugs.list（BUGS_CHANNELS.list 通道本尊；前端零本地过滤）', async () => {
+    const { client, calls } = headOkClient()
+    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'bugs', search: ' 游标 ', sort: 'created' })
+    expect(out?.ok).toBe(true)
+    const list = calls.filter((c) => c.channel === BUGS_CHANNELS.list)
+    expect(list).toHaveLength(2) // 过滤行调用 + 无参计数调用
+    expect(list[0]?.payload).toEqual({ projectId: 'p-1', search: '游标', sort: 'created' })
+  })
+
+  it('chips 白名单 status 参透传；无参调用归一三态计数（counts 不随过滤漂移）', async () => {
+    const { client, calls } = clientResponding((channel, payload) => {
+      if (channel !== BUGS_CHANNELS.list) throw new Error(`unexpected channel: ${channel}`)
+      const q = payload as { status?: BugStatus[] }
+      if (q.status !== undefined) return [bugCard('b1', 'open')]
+      return [bugCard('b1', 'open'), bugCard('b2', 'fixed'), bugCard('b3', 'fixed'), bugCard('b4', 'unresolved')]
+    })
+    const out = await fetchOverviewList(client, {
+      projectId: 'p-1',
+      subtab: 'bugs',
+      search: '',
+      sort: 'active',
+      status: ['open', 'unresolved'],
+    })
+    expect(out?.ok).toBe(true)
+    const list = calls.filter((c) => c.channel === BUGS_CHANNELS.list)
+    expect(list[0]?.payload).toEqual({ projectId: 'p-1', search: undefined, sort: 'active', status: ['open', 'unresolved'] })
+    expect(list[1]?.payload).toEqual({ projectId: 'p-1' }) // 无参计数调用
+    if (out?.ok && out.data.kind === 'bugs') {
+      expect(out.data.bugs.map((b) => b.bugId)).toEqual(['b1'])
+      expect(out.data.counts).toEqual({ open: 1, fixed: 2, unresolved: 1 })
+    }
+  })
+
+  it('空搜索 = 不带 search 参；空 chips = 不带 status 参（空参即全量）', async () => {
+    const { client, calls } = headOkClient()
+    await fetchOverviewList(client, { projectId: 'p-1', subtab: 'bugs', search: '  ', sort: 'active' })
+    const call = calls.find((c) => c.channel === BUGS_CHANNELS.list)
+    expect(call?.payload).toEqual({ projectId: 'p-1', search: undefined, sort: 'active' })
   })
 })
 

@@ -89,6 +89,8 @@ const handlers = {
   onClearProposalStatuses: () => {},
   onTogglePhase: () => {},
   onClearPhases: () => {},
+  onToggleBugStatus: () => {},
+  onClearBugStatuses: () => {},
   onToggleRow: () => {},
   onToggleHead: () => {},
   onRetry: () => {},
@@ -254,6 +256,48 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
       },
     })
     expect(seen).toBeUndefined()
+  })
+})
+
+describe('OverviewFrame Bug 子 tab（fix-bug 第 4 子 tab——列表视图）', () => {
+  const BUGS_LIST: OverviewListData = {
+    kind: 'bugs',
+    bugs: [
+      {
+        bugId: 'b1',
+        summary: '登录接口 500',
+        bugDesc: 'd',
+        triggerDesc: 't',
+        expected: 'e',
+        actual: 'a',
+        errorType: 'api',
+        bugStatus: 'open',
+        reporter: 'faner',
+        createdAt: CREATED,
+        updatedAt: CREATED,
+      },
+    ],
+    counts: { open: 3, fixed: 12, unresolved: 0 },
+  }
+
+  it('bugs 子 tab：三态 chips（列表之上）+ Bug 行（summary 主行 + 错误类型 + 时间）', () => {
+    const filter = { ...initialOverviewFilter(), subtab: 'bugs' as const }
+    const markup = frame({ filter, list: BUGS_LIST })
+    expect(markup).toContain('data-dswf-ov-bugpage')
+    const stickyAt = markup.indexOf('data-dswf-ov-sticky=""')
+    const chipsAt = markup.indexOf('data-dswf-ov-bschips=""')
+    const listAt = markup.indexOf('data-dswf-ov-bugs=""')
+    expect(chipsAt).toBeGreaterThan(stickyAt)
+    expect(listAt).toBeGreaterThan(chipsAt)
+    expect(markup).toContain('登录接口 500')
+    expect(markup).toContain('data-dswf-ov-bugrow-type="api"')
+    expect(markup).toContain('10-01 08:00')
+  })
+
+  it('搜索在场 + 空结果 = 无匹配空态（帧侧注入空标题）', () => {
+    const filter = { ...initialOverviewFilter(), subtab: 'bugs' as const, search: 'zzz' }
+    const markup = frame({ filter, list: { kind: 'bugs', bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } })
+    expect(markup).toContain('无匹配「zzz」的 Bug')
   })
 })
 

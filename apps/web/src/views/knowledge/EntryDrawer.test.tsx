@@ -47,6 +47,7 @@ function recordingClient(
       deriveTaskStoreDir: mark('projects.deriveTaskStoreDir', () => Promise.resolve({})),
     },
     fs: { listDir: mark('fs.listDir', () => Promise.resolve({})) },
+    bugs: { list: mark('bugs.list', () => Promise.resolve([])) },
     knowledge: {
       browse: mark('knowledge.browse', () => Promise.resolve([])),
       listEntries: mark('knowledge.listEntries', () => Promise.resolve([])),

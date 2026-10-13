@@ -12,11 +12,11 @@
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
-import { searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
+import { bugStatusCounts, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -115,6 +115,13 @@ export type OverviewListData =
        *  featureId 归属过滤归呈现层） */
       readonly docs: readonly FeatureDocumentRow[]
     }
+  | {
+      /** Bug 子 tab（fix-bug）：listBugs 服务端搜索/状态过滤/排序后行集 + 无参全量计数 */
+      readonly kind: 'bugs'
+      readonly bugs: readonly BugCard[]
+      /** Bug 三态计数（无参全量行投影——chips 计数单源，不随搜索/过滤漂移） */
+      readonly counts: Record<BugStatus, number>
+    }
 
 /**
  * 列路装载（纯异步面——Hard Rule 锚）：search/sort 原样入查询参（服务端过滤与排序）。
@@ -122,13 +129,33 @@ export type OverviewListData =
  */
 export async function fetchOverviewList(
   client: ForgeRpcClient,
-  q: { readonly projectId: string; readonly subtab: OverviewSubtab; readonly search: string; readonly sort: OverviewSort },
+  q: {
+    readonly projectId: string
+    readonly subtab: OverviewSubtab
+    readonly search: string
+    readonly sort: OverviewSort
+    /** Bug chips 白名单参（bugStatusFilterParam 投影——空 = 全部三态） */
+    readonly status?: readonly BugStatus[]
+  },
 ): Promise<OverviewFetch<OverviewListData> | null> {
   const search = searchQueryOf(q.search)
   if (q.subtab === 'tasks') return null
   try {
     if (q.subtab === 'proposals') {
       return { ok: true, data: { kind: 'proposals', proposals: await client.proposals.list({ projectId: q.projectId, search, sort: q.sort }) } }
+    }
+    if (q.subtab === 'bugs') {
+      const status = q.status ?? []
+      const [bugs, all] = await Promise.all([
+        client.bugs.list({
+          projectId: q.projectId,
+          search,
+          sort: q.sort,
+          ...(status.length > 0 ? { status: [...status] } : {}),
+        }),
+        client.bugs.list({ projectId: q.projectId }),
+      ])
+      return { ok: true, data: { kind: 'bugs', bugs, counts: bugStatusCounts(all) } }
     }
     const [features, proposals, docs] = await Promise.all([
       client.features.list({ projectId: q.projectId, search, sort: q.sort }),
@@ -317,6 +344,8 @@ export function useOverviewLoad(
   sort: OverviewSort,
   nonce: number,
   makeClient: RpcClientFactory = preloadRpcClientFactory,
+  /** Bug chips 白名单参（Bug 子 tab 透传 fetchOverviewList；他子 tab 缺省 = 空） */
+  status?: readonly BugStatus[],
 ): OverviewLoadState {
   const [state, setState] = useState<OverviewLoadState>(initialOverviewLoadState)
   const [eventNonce, setEventNonce] = useState(0)
@@ -337,9 +366,10 @@ export function useOverviewLoad(
     })
   }, [projectId, refreshNonce, makeClient])
 
-  // 列路：subtab / search / sort / projectId / 重试 / 事件重取（键变装载；子 tab 或项目切换 = 清场骨架）
+  // 列路：subtab / search / sort / projectId / 重试 / Bug chips / 事件重取（键变装载；子 tab 或项目切换 = 清场骨架）
   useEffect(() => {
-    const listKey = `${projectId}#${subtab}#${search}#${sort}#${refreshNonce}`
+    const statusKey = (status ?? []).join(',')
+    const listKey = `${projectId}#${subtab}#${search}#${sort}#${statusKey}#${refreshNonce}`
     const plan = overviewListPlan({
       listKey,
       lastListKey: lastListKeyRef.current,
@@ -355,11 +385,11 @@ export function useOverviewLoad(
     const seq = ++listSeqRef.current
     setState((prev) => pendingOverviewList(prev, plan.mustClear))
     const client = makeClient()
-    void fetchOverviewList(client, { projectId, subtab, search, sort }).then((out) => {
+    void fetchOverviewList(client, { projectId, subtab, search, sort, ...(status !== undefined && status.length > 0 ? { status } : {}) }).then((out) => {
       if (seq !== listSeqRef.current) return
       setState((prev) => applyOverviewList(prev, out))
     })
-  }, [projectId, subtab, search, sort, refreshNonce, makeClient])
+  }, [projectId, subtab, search, sort, refreshNonce, makeClient, status])
 
   // 写推送事件（forge:events/tasks-changed）→ 同项目静默重取（50ms 合并归订阅层）
   useEffect(

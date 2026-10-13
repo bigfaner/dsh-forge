@@ -12,6 +12,7 @@
 // listDocs = 提案文档区目录扫描读）；恒不在面的写动词收窄为 addTask/submitTask/createProposal
 // （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。
 import {
+  BUGS_CHANNELS,
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
   FS_CHANNELS,
@@ -27,6 +28,7 @@ import {
   type DomainNode,
   type EntryDetail,
   type EntryDetailQuery,
+  type BugCard,
   type FeatureCard,
   type FeatureDocumentRow,
   type FeatureRow,
@@ -34,6 +36,7 @@ import {
   type GetProjectRequest,
   type KnowledgeCard,
   type ListDirRequest,
+  type ListBugsQuery,
   type ListFeatureDocsQuery,
   type ListEntriesQuery,
   type ListFeaturesQuery,
@@ -175,6 +178,14 @@ export interface ForgeProposalsRpc {
   listDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
 }
 
+/**
+ * forge:bugs/* 面方法集（fix-bug：Bug 子 tab 列表读面——listBugs 服务端搜索/状态过滤/排序；
+ * recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
+ */
+export interface ForgeBugsRpc {
+  list(q: ListBugsQuery): Promise<BugCard[]>
+}
+
 /** forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
 export interface ForgeDocsRpc {
   read(q: ReadDocRequest): Promise<DocContent>
@@ -198,6 +209,7 @@ export interface ForgeRpcClient {
   readonly tasks: ForgeTasksRpc
   readonly features: ForgeFeaturesRpc
   readonly proposals: ForgeProposalsRpc
+  readonly bugs: ForgeBugsRpc
   readonly docs: ForgeDocsRpc
   readonly settings: ForgeSettingsRpc
 }
@@ -255,6 +267,9 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       transition: (input) => invokeRpc<TransitionProposalResult>(transport, PROPOSALS_CHANNELS.transition, input),
       setMode: (input) => invokeRpc<ProposalRow>(transport, PROPOSALS_CHANNELS.setMode, input),
       listDocs: (q) => invokeRpc<ProposalDocRow[]>(transport, PROPOSALS_CHANNELS.listDocs, q),
+    },
+    bugs: {
+      list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),
     },
     docs: {
       read: (q) => invokeRpc<DocContent>(transport, DOCS_CHANNELS.read, q),

@@ -1,5 +1,5 @@
 // 概览过滤/折叠态模型（定位：业务——UF-1 概览 tab 框架的视图本地态单一来源）。
-// 纯函数面（零 RPC / 零 effect）：三子 tab（用户定向顺序 提案|feature|任务）+ 搜索 + 排序 +
+// 纯函数面（零 RPC / 零 effect）：四子 tab（用户定向顺序 提案|feature|任务|Bug）+ 搜索 + 排序 +
 // 七态 chips 过滤 + 父行/ov-head 展开态。Hard Rule「搜索过滤服务端承载」：本模型只持有
 // 关键词原文与过滤集合，转查询参（searchQueryOf / statusFilterParam）交数据层透传——
 // 前端禁全量拉取本地过滤。排序同为服务端参（sort: 'active'|'created'——活跃优先权重
@@ -7,18 +7,22 @@
 // 切换语义（AC3）：子 tab 切换 = 清空搜索 + 清空 chips + 收起全部展开态
 // （ov-head 展开态跨子 tab 保持——路径详情与内容区正交）。
 import {
+  BUG_STATUSES,
   TASK_STATUSES,
+  type BugCard,
+  type BugStatus,
   type FeatureCard,
   type FeatureStatus,
   type ProposalStatus,
   type TaskStatus,
 } from '@dsh-forge/contracts'
 
-/** 三子 tab（用户定向顺序：提案 | feature | 任务——ui-design UF-1 结构注记） */
+/** 四子 tab（用户定向顺序：提案 | feature | 任务 | Bug——fix-bug 第 4 子 tab） */
 export const OVERVIEW_SUBTABS = [
   { value: 'proposals', label: '提案' },
   { value: 'features', label: 'feature' },
   { value: 'tasks', label: '任务' },
+  { value: 'bugs', label: 'Bug' },
 ] as const
 
 export type OverviewSubtab = (typeof OVERVIEW_SUBTABS)[number]['value']
@@ -44,6 +48,8 @@ export interface OverviewFilterState {
   readonly activeProposalStatuses: ReadonlySet<ProposalStatus>
   /** feature 阶段 chips 激活集（空 = 全部；多选并集客户端过滤——feature 子 tab，4.6 UF-4） */
   readonly activePhases: ReadonlySet<FeatureStatus>
+  /** Bug 三态 chips 激活集（空 = 全部；bugStatusFilterParam 转白名单参——Bug 子 tab，fix-bug） */
+  readonly activeBugStatuses: ReadonlySet<BugStatus>
   /** 父行展开键集（prop:{id} / feat:{slug}——多开并存） */
   readonly openRows: ReadonlySet<string>
   /** ov-head 展开（默认 false——AC1 折叠） */
@@ -59,12 +65,13 @@ export function initialOverviewFilter(): OverviewFilterState {
     activeStatuses: new Set<TaskStatus>(),
     activeProposalStatuses: new Set<ProposalStatus>(),
     activePhases: new Set<FeatureStatus>(),
+    activeBugStatuses: new Set<BugStatus>(),
     openRows: new Set<string>(),
     headOpen: false,
   }
 }
 
-/** 子 tab 切换（AC3）：清空搜索 + 清空三族 chips + 收起全部展开态；同值原样返回（零重渲） */
+/** 子 tab 切换（AC3）：清空搜索 + 清空 chips 四族 + 收起全部展开态；同值原样返回（零重渲） */
 export function switchSubtab(state: OverviewFilterState, subtab: OverviewSubtab): OverviewFilterState {
   if (state.subtab === subtab) return state
   return {
@@ -74,6 +81,7 @@ export function switchSubtab(state: OverviewFilterState, subtab: OverviewSubtab)
     activeStatuses: new Set(),
     activeProposalStatuses: new Set(),
     activePhases: new Set(),
+    activeBugStatuses: new Set(),
     openRows: new Set(),
   }
 }
@@ -93,6 +101,7 @@ export function searchQueryOf(text: string): string | undefined {
 export function searchPlaceholderOf(subtab: OverviewSubtab): string {
   if (subtab === 'tasks') return '搜索标题/类型/状态(中英)…'
   if (subtab === 'features') return '搜索 feature/文档…'
+  if (subtab === 'bugs') return '搜索 Bug 摘要/错误类型…'
   return '搜索提案/slug/状态…'
 }
 
@@ -119,8 +128,8 @@ export function statusFilterParam(active: ReadonlySet<TaskStatus>): TaskStatus[]
   return TASK_STATUSES.filter((status) => active.has(status))
 }
 
-/** chips 过滤在场判据（清过滤入口显隐） */
-export function hasActiveStatusFilter(active: ReadonlySet<TaskStatus>): boolean {
+/** chips 过滤在场判据（清过滤入口显隐——任务/提案/feature/Bug chips 族共用） */
+export function hasActiveStatusFilter(active: ReadonlySet<unknown>): boolean {
   return active.size > 0
 }
 
@@ -148,6 +157,31 @@ export function togglePhaseFilter(state: OverviewFilterState, phase: FeatureStat
 /** feature 阶段 chips 全清 */
 export function clearPhaseFilter(state: OverviewFilterState): OverviewFilterState {
   return { ...state, activePhases: new Set() }
+}
+
+/** Bug 三态 chips toggle（纯集合翻转——白名单参服务端过滤，fix-bug） */
+export function toggleBugStatusFilter(state: OverviewFilterState, status: BugStatus): OverviewFilterState {
+  const next = new Set(state.activeBugStatuses)
+  if (next.has(status)) next.delete(status)
+  else next.add(status)
+  return { ...state, activeBugStatuses: next }
+}
+
+/** Bug 三态 chips 全清 */
+export function clearBugStatusFilter(state: OverviewFilterState): OverviewFilterState {
+  return { ...state, activeBugStatuses: new Set() }
+}
+
+/** Bug chips → 服务端 status 参（白名单序 = contracts BUG_STATUSES 行序；空集 = 空参 = 全部） */
+export function bugStatusFilterParam(active: ReadonlySet<BugStatus>): BugStatus[] {
+  return BUG_STATUSES.filter((status) => active.has(status))
+}
+
+/** Bug 三态计数（无参全量行投影——chips 计数单源；行集来自头路/列路无参调用） */
+export function bugStatusCounts(bugs: readonly BugCard[]): Record<BugStatus, number> {
+  const counts: Record<BugStatus, number> = { open: 0, fixed: 0, unresolved: 0 }
+  for (const bug of bugs) counts[bug.bugStatus] += 1
+  return counts
 }
 
 // ─────────────────────────── 概览 tab 宽度模型（已退役） ───────────────────────────
