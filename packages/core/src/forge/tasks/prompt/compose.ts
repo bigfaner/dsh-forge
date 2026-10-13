@@ -136,10 +136,10 @@ export const RESUME_POINTER_FILE = 'resume.md'
  * plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
  */
 export const RESUME_SECTION = `<resume>
-续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.project_logs_dir}/resume.md。
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md。
 1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
-2. 同目录下按编号命名的子文件夹（如 001-xxx/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
-3. 执行中持续更新该文件：进度变化即覆盖写入，仅保留最新状态。
+2. 同目录下按编号命名的子文件夹（如 001-login-fail/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
+3. 遇到阻塞性问题时覆盖写入该文件，仅保留最新状态。
 4. 本段缺席 = 首次执行：从零开始，并自第一轮起按上述方式维护该文件。
 </resume>`
 

@@ -47,8 +47,8 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
           expect(persona, `${taskType}/${cx} missing execution anchor`).toContain(anchor)
         }
         expect(persona).toContain('AC 逐项核查不变量')
-        // 产物/续跑路径只指称变量（值由任务目录锚点节承载——persona 零绝对路径）
-        expect(persona).toContain('`forge.project_logs_dir`')
+        // 产物/续跑路径只引用花括号变量（值由任务目录锚点节承载——persona 零绝对路径）
+        expect(persona).toContain('{forge.task_logs_dir}')
       }
     }
   })
@@ -95,14 +95,13 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
     }
   })
 
-  it('产物落盘/续跑路径变量指称（追加轮）：编号子文件夹 + 永不覆盖 + resume.md 维护，恒定在场且零绝对路径', () => {
+  it('产物落盘/续跑路径变量指称（追加轮）：{issue-key} 定义 + 永不覆盖 + 阻塞时写 resume.md，恒定在场且零绝对路径', () => {
     for (const taskType of TASK_TYPES) {
       const persona = composePersona(taskType, 'low')
-      expect(persona).toContain('统一写入 `forge.project_logs_dir` 下按编号命名的子文件夹')
+      expect(persona).toContain('统一写入 {forge.task_logs_dir}/{issue-key}/')
+      expect(persona).toContain('{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）')
       expect(persona).toContain('按轮追加、永不覆盖')
-      expect(persona).toContain('断点续跑约束')
-      expect(persona).toContain('resume.md')
-      expect(persona).toContain('自首次执行起即维护该文件')
+      expect(persona).toContain('断点续跑约束：当遇到阻塞性问题时，把「已完成 / 进行中 / 待办」覆盖写入 {forge.task_logs_dir}/resume.md，仅保留最新状态')
     }
   })
 
@@ -237,7 +236,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
-        'evidence', 'resume.md', 'xxx', // worker-exec-evidence-replay 1.3：续跑指针文件名 + 编号子文件夹示例词
+        'evidence', 'resume.md', 'xxx', 'login-fail', 'issue-key', 'forge.task_logs_dir', // 追加轮：续跑指针文件名 + 编号子文件夹示例词 + 任务日志变量
         'UI', 'UX', 'MUST', 'Simplicity', 'First', 'PASS', 'FAIL', 'N', 'AC-N', 'Skill', 'mermaid', 'Testing', 'Schema', 'PRD',
       ].map((w) => w.toLowerCase()),
     )

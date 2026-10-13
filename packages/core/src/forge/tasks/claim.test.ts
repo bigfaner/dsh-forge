@@ -746,7 +746,7 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
     const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
     expect(r.reclaimed).toBe(true)
     expect(r.dispatchPrompt).toContain('<resume>')
-    expect(r.dispatchPrompt).toContain('{forge.project_logs_dir}/resume.md')
+    expect(r.dispatchPrompt).toContain('{forge.task_logs_dir}/resume.md')
     expect(r.dispatchPrompt).toContain('不得重做已完成部分')
     expect(seen).toEqual([{ slug: 'f', localId: '1.1' }]) // 领取瞬间取数——探测按目标行进行
   })

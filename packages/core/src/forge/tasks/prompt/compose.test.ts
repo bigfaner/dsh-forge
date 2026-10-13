@@ -441,13 +441,13 @@ describe('1.3 <resume> 续跑规则段（重入派发简报整段注入——规
     expect(prompt).toContain('<resume>')
     expect(prompt).toContain('</resume>')
     // 路径零绝对值——只引用变量（值由 agent 提示词任务目录锚点节承载）
-    expect(prompt).toContain('{forge.project_logs_dir}/resume.md')
+    expect(prompt).toContain('{forge.task_logs_dir}/resume.md')
     expect(prompt).not.toContain('logs/m2-pipeline/2.2/resume.md')
     // 四条规则锚
     expect(prompt).toContain('本任务已有部分进度')
     expect(prompt).toContain('将未完成项转入 todo_write 后继续执行，不得重做已完成部分')
     expect(prompt).toContain('先核对内容，再决定沿用或重跑；未核对不得覆盖')
-    expect(prompt).toContain('进度变化即覆盖写入，仅保留最新状态')
+    expect(prompt).toContain('遇到阻塞性问题时覆盖写入该文件，仅保留最新状态')
     expect(prompt).toContain('本段缺席 = 首次执行')
     const at = (k: string): number => prompt.indexOf(k)
     expect(at('<resume>')).toBeGreaterThan(at('VARS:'))
