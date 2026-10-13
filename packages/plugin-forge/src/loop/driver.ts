@@ -739,10 +739,29 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 
   // blocked：worker 侧已 spawn fix → 机械续领不升级（fix ready 自然被领——decisions #22）
   const meta = { projectId: scope.projectId, taskKey: task.localId, reason: settlement.reason ?? '', settlement }
+  const reason = settlement.reason ?? ''
   if (settlement.followUp !== undefined) {
     await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: settlement.followUp.localId }, meta)
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue'
+  }
+
+  // 无进展硬停门（提案 blocked-salvage-split · C，用户裁决 2026-10-13「没有进展则直接停止问人」）：
+  // blocked 结算零 commit hash 且零 files 增量 = 无进展信号 → 跳过处置阶梯（triage 零调用、
+  // 零 fix 链），直达 ⑩ blocked-ask-user 升级（followup 唤醒主 agent + 问询 + 答案回执）。
+  // 有打捞提交（commit hash 在场）或带 files = 有进展，照常入阶梯。
+  if (settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0)) {
+    await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+    emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
+    await deps.escalation?.escalate({
+      kind: 'blocked-ask-user',
+      ownerSessionId: owner,
+      source: record.source,
+      task,
+      reason,
+      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+    })
+    return 'terminal'
   }
 
   // blocked 无 follow-up（修复路径缺位）→ 第二层处置代理（S1c 实装；钩子缺席 = 装配降级：
@@ -754,7 +773,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 
   // 处置阶梯（decisions #16/#22 + R2）：同任务处置计数封顶强制升级；无效/越权输出计处置
   // 失败入重试上限（有界重试轮次——模型失误爆炸半径 = LOOP_TRIAGE_MAX_ATTEMPTS）。
-  const reason = settlement.reason ?? ''
   const book = dispositionBookOf(loop, taskKey)
   let decision: LoopTriageDecision | undefined
   while (decision === undefined && book.attempts < LOOP_TRIAGE_MAX_ATTEMPTS) {

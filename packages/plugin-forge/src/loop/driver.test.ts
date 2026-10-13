@@ -110,7 +110,7 @@ function queryOf(status: TaskStatus, over: Partial<TaskSnapshot> = {}): QueryTas
       status === 'completed'
         ? [{ verb: 'submit', toStatus: 'completed', summary: 'did the thing', commitHash: 'abc1234', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }]
         : status === 'blocked'
-          ? [{ verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }]
+          ? [{ verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }]
           : [],
   }
 }
@@ -447,6 +447,84 @@ describe('blocked 结算分支（图 C）', () => {
   function blockedScript(built: Built): void {
     built.h.lists.created = [] // 无 worker 派生 fix（findFixTaskRef 落空 → followUp 缺席）
   }
+
+  /** 无进展硬停门的结算记录变体（commit/files 两进展信号任选——门判定面） */
+  function queryOfBlocked(over: { commitHash?: string; files?: string[] } = {}): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'blocked',
+          reason: 'tests hang on flaky selector',
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+          ...(over.commitHash !== undefined ? { commitHash: over.commitHash } : {}),
+          ...(over.files !== undefined ? { files: over.files } : {}),
+        },
+      ],
+    }
+  }
+
+  it('无进展硬停门：blocked 零 commit hash 且零 files 增量 → 处置阶梯零调用 + ⑩ followup 问询升级 → 终局', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async () => {
+        throw new Error('triage ladder must not run on zero-progress blocked settlement')
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 处置阶梯零调用：triage 钩子抛错即失败（用例绿 = 零调用）；宿主零 addTask（零 fix 链）
+    expect(built.h.addTaskInputs).toEqual([])
+    // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 终局族通道）
+    const ask = built.calls.find((c) => c.method === 'followup')
+    expect(ask?.text).toContain('无法自动处理——已向你发起问询')
+    // 直达升级：blocked-ask-user + 无进展处置历史（跳过阶梯的机械证据）
+    expect(built.escalations).toEqual([
+      {
+        kind: 'blocked-ask-user',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+      },
+    ])
+    expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
+  })
+
+  it('无进展门放行：带 commit hash（零 files）的 blocked 结算照常入处置阶梯', async () => {
+    let triageCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+      ],
+      query: [queryOfBlocked({ commitHash: 'feed1234' })],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'wait-external', externalSlug: 'feature-b' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(triageCalls).toBe(1)
+    expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(true)
+  })
 
   it('blocked 且结算携带 followUp → ⑦ 叙述 + 机械续领 fix（不升级）', async () => {
     const built = build({
@@ -1121,7 +1199,7 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
           task: snapshot({ taskStatus: 'blocked' }),
           container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
           records: [
-            { verb: 'submit', toStatus: 'blocked', reason: fullReason, actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+            { verb: 'submit', toStatus: 'blocked', reason: fullReason, files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
           ],
         },
       ],

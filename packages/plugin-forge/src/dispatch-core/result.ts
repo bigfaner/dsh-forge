@@ -20,6 +20,8 @@ export interface DispatchSpawnedResult {
   /** blocked 原因行（blocked submit 必带 reason——core 侧先证） */
   readonly reason?: string
   readonly commitHash?: string
+  /** 结算 files 平铺清单（无进展门的第二进展信号——submit record files_json 解码形） */
+  readonly files?: readonly string[]
   /** 已建修复任务（blocked 径 worker 经 addTask blockSource 派生链——可继续派发） */
   readonly followUp?: TaskRef
   readonly pool: PoolSnapshot

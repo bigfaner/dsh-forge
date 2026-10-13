@@ -122,6 +122,7 @@ export async function settleWorkerRun(
         ? { reason: settled.task.blockedReason ?? submitRecord?.reason ?? 'blocking reason not recorded' }
         : {}),
       ...(submitRecord?.commitHash !== undefined ? { commitHash: submitRecord.commitHash } : {}),
+      ...(submitRecord?.files !== undefined ? { files: submitRecord.files } : {}),
       ...(followUp !== undefined ? { followUp } : {}),
       pool,
     },
