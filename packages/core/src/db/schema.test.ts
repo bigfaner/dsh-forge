@@ -16,6 +16,10 @@ const norm = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+/** MigrationStatement → SQL 文本（守卫形态取 sql 字段——中央序列全裸 SQL，类型面兜守卫扩展）。 */
+const stmtText = (s: import('./schema.js').MigrationStatement): string =>
+  norm(typeof s === 'string' ? s : s.sql)
+
 function blueprintStatements(): string[] {
   const sql = readFileSync(resolve(ROOT, BLUEPRINT), 'utf8')
   // 先剔除行注释再切分：蓝本中文注释内含分号（如「唯一 SoT;」「整表重建; SC2」），
@@ -34,16 +38,16 @@ describe('AC4 迁移 DDL 与 design/schema.sql 单一来源对齐', () => {
 
   it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移）', () => {
     const expected = blueprintStatements()
-    const actual = MIGRATIONS.flatMap((m) => m.statements.map(norm))
+    const actual = MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
   })
 
   it('五表 + 七索引全量承载（DDL executes / indexes created 合并覆盖 AC1）', () => {
     const tables = MIGRATIONS.flatMap((m) =>
-      m.statements.filter((s) => /^CREATE TABLE/i.test(norm(s))),
+      m.statements.filter((s) => /^CREATE TABLE/i.test(stmtText(s))),
     )
     const indexes = MIGRATIONS.flatMap((m) =>
-      m.statements.filter((s) => /^CREATE (?:UNIQUE )?INDEX/i.test(norm(s))),
+      m.statements.filter((s) => /^CREATE (?:UNIQUE )?INDEX/i.test(stmtText(s))),
     )
     expect(tables).toHaveLength(5)
     expect(indexes).toHaveLength(7)

@@ -1,25 +1,10 @@
-// 工作区任务库（forge.db）schema v1 直改 M3 终态（任务 1.2·用户裁决③）——单一来源对齐
-// docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql（蓝本逐条拷贝，migrations.test.ts
-// pin 防漂移）。产品未上线零兼容义务：FORGE_DB_SCHEMA_VERSION = 1 不变、无迁移路径、
-// 开发期存量 dogfood 库废弃（手工删除，发现面重扫）。
+// 工作区任务库（forge.db）schema 迁移序列（migration-hardening 收敛化）。
+// 迁移纪律（取代 v1 直改惯例）：已发布迁移禁改语句——只能追加新版本 Migration；直改已发布
+// 语句会在开库指纹守卫（migration_digests）处 MigrationTamperedError 明确拒开。
 // 独立版本线：FORGE_DB_SCHEMA_VERSION 与中央 state.db 迁移互不相干（schema.sql 头注）；
 // Hard Rule——本序列经 openDatabase 参数化传入（db/open.ts options），中央 MIGRATIONS 硬编码 import 勿照抄。
 // 前向单向：只追加新版本 Migration（全 CREATE 无 ALTER）；保留字已清剿（task_type/task_status 等，禁 key/type/status/description）。
 // PRAGMA（WAL / foreign_keys）在 openDatabase 打开时设置，不入迁移语句。
-// M3 对 M2 schema 的差异（5 项）：+feature_records（八域表）；proposals +mode +superseded_by；
-// tasks 源头双列化（source_kind+source_id 取代 feature_id）+mode+ac_json、main_session 砍除；
-// idx_tasks_feature_status → idx_tasks_source_status；迁移机制 = v1 直改（无迁移·存量开发库废弃）。
-// S3（run-tasks-host-command）v1 直改两处：tasks ck_tasks_status 八态（+interrupted）；
-// task_records +loop_sourced（循环来源标记——claim 写入/reconcileInterrupted 消费，R1 读面零感知）。
-// S3（worker-lean-execution·结构化提交）v1 追加式直改：task_records +ac_json（AC 逐项核验结果
-// ——与 tasks.ac_json 定义侧镜像成对）+record_fields_json（keyDecisions/testsPassed/testsFailed/
-// coverage/notes 结构化字段）；files_json 形制升级 {created, modified}（列不变形制变——历史行旧
-// 扁平形制读面归一）。只加列不 ALTER 破坏 append-only 四触发器（R12）；v1 直改沿仓规——存量
-// 开发库废弃重扫（头注既定纪律）。
-// fix-bug v1 直改（头注纪律：只加表不动既有语句顺序）：bugs 单表 20 列（bug_status CHECK 三态
-// open|fixed|unresolved；source_task_id → tasks(id)）+ idx_bugs_status(bug_status, created_at)。
-// 单一来源 = .forge/docs/proposals/fix-bug/proposal.md「技术细节·持久化」节（列清单/索引/CHECK
-// 三态逐条照建，migrations.test.ts pin 防漂移——蓝本对齐面 + 提案 DDL 附加段）。
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
@@ -209,10 +194,46 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
     ],
   },
   {
-    // v2（fix-approach-review）：bugs +fix_approach（修复方案总结——fixed 回填时写，
-    // 台账审查面）。首例前向 ALTER 追加（v1 直改惯例 = 存量库废弃；活库在跑不可废弃，
-    // 单列 ADD COLUMN 前向兼容 v1 存量库——bugs 表无触发器，零 R12 顾虑）。
+    // v2（migration-hardening 收敛式自愈）：任何 version=1 谱系应用后收敛到同一 v2 终态——
+    // ①CREATE TABLE IF NOT EXISTS bugs（21 列终态，fix_approach 内联——旧十表谱系无 bugs 时
+    // 全量建表；bugs 已在场的谱系跳过）；②CREATE INDEX IF NOT EXISTS idx_bugs_status；
+    // ③守卫式 ALTER TABLE bugs ADD COLUMN fix_approach（列已在场跳过——全新库 v1 20 列 +
+    // 本条补列；fix-bug 后谱系同理）。三条谱系（旧十表 v1 / fix-bug 后 v1 / 全新库）终态一致，
+    // migrations.lineage.test.ts 夹具回归锁死。
     version: 2,
-    statements: [`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`],
+    statements: [
+      {
+        sql: `CREATE TABLE IF NOT EXISTS bugs (
+    id               TEXT PRIMARY KEY,
+    summary          TEXT NOT NULL,
+    bug_desc         TEXT NOT NULL,
+    trigger_desc     TEXT NOT NULL,
+    expected         TEXT NOT NULL,
+    actual           TEXT NOT NULL,
+    suspected        TEXT,
+    error_type       TEXT,
+    bug_status       TEXT NOT NULL DEFAULT 'open'
+                     CONSTRAINT ck_bugs_status
+                     CHECK (bug_status IN ('open', 'fixed', 'unresolved')),
+    commit_hash      TEXT,
+    worktree         TEXT,
+    branch           TEXT,
+    unresolved_reason TEXT,
+    source_task_id   TEXT REFERENCES tasks(id),
+    report_session_id TEXT,
+    fix_session_id   TEXT,
+    reporter         TEXT NOT NULL,
+    fixer            TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    fix_approach     TEXT
+)`,
+      },
+      `CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(bug_status, created_at)`,
+      {
+        sql: `ALTER TABLE bugs ADD COLUMN fix_approach TEXT`,
+        columnGuard: { table: 'bugs', column: 'fix_approach' },
+      },
+    ],
   },
 ]

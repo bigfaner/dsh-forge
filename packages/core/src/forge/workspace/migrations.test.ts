@@ -1,15 +1,18 @@
 // 任务 1.2 测试 —— 工作区库 schema 蓝本对齐 pin（AC1 / G1-12：每工作区 DB 布局
 // schema.sql ↔ WORKSPACE_MIGRATIONS 逐条，防漂移）。
 // 权威蓝本：docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql（M3 终态——
-// v1 直改裁决③：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器；
-// FORGE_DB_SCHEMA_VERSION = 1 不变、无迁移路径、存量 dogfood 库废弃手工删除）。
-// fix-bug 增补：bugs 单表 + idx_bugs_status 为 v1 直改追加段（不在 M3 蓝本内）——单一来源 =
+// 八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器）。
+// fix-bug 增补：bugs 单表 + idx_bugs_status 为 v1 追加段（不在 M3 蓝本内）——单一来源 =
 // .forge/docs/proposals/fix-bug/proposal.md「技术细节·持久化」节，BUGS_DDL 逐条 pin 附加到
 // 蓝本对齐面之后（语句顺序：只加不改）。
+// migration-hardening 增补：v2 收敛式（CREATE TABLE IF NOT EXISTS bugs 21 列终态 + 守卫式
+// ALTER 补列）——三谱系收敛，migrations.lineage.test.ts 夹具回归锁死；已发布迁移禁改语句
+// （头注纪律，指纹守卫 MigrationTamperedError 兜底）。
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { type MigrationStatement } from '../../db/schema.js'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './migrations.js'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../../')
@@ -17,7 +20,7 @@ const BLUEPRINT = 'docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sq
 
 /**
  * fix-bug 提案 DDL（单一来源拷贝——proposal.md「技术细节·持久化」节 SQL，剔注释逐字照建；
- * v1 直改追加段，紧跟蓝本语句集之后）。
+ * v1 追加段，紧跟蓝本语句集之后）。
  */
 const BUGS_DDL = [
   `CREATE TABLE bugs (
@@ -47,8 +50,36 @@ const BUGS_DDL = [
   `CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)`,
 ]
 
-/** v2（fix-approach-review）：bugs +fix_approach 前向 ALTER 追加段（活库零废弃） */
-const BUGS_V2_DDL = [`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`]
+/** v2 收敛式三条语句的 SQL 文本 pin（守卫字段不在文本面——守卫语义由 lineage 测试行为锁死） */
+const BUGS_V2_SQL = [
+  `CREATE TABLE IF NOT EXISTS bugs (
+    id               TEXT PRIMARY KEY,
+    summary          TEXT NOT NULL,
+    bug_desc         TEXT NOT NULL,
+    trigger_desc     TEXT NOT NULL,
+    expected         TEXT NOT NULL,
+    actual           TEXT NOT NULL,
+    suspected        TEXT,
+    error_type       TEXT,
+    bug_status       TEXT NOT NULL DEFAULT 'open'
+                     CONSTRAINT ck_bugs_status
+                     CHECK (bug_status IN ('open', 'fixed', 'unresolved')),
+    commit_hash      TEXT,
+    worktree         TEXT,
+    branch           TEXT,
+    unresolved_reason TEXT,
+    source_task_id   TEXT REFERENCES tasks(id),
+    report_session_id TEXT,
+    fix_session_id   TEXT,
+    reporter         TEXT NOT NULL,
+    fixer            TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    fix_approach     TEXT
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(bug_status, created_at)`,
+  `ALTER TABLE bugs ADD COLUMN fix_approach TEXT`,
+]
 
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
@@ -56,6 +87,9 @@ const norm = (s: string) =>
     .replace(/--[^\n]*/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
+/** MigrationStatement → SQL 文本（守卫形态取 sql 字段——守卫列由行为测试另行锁死）。 */
+const stmtText = (s: MigrationStatement): string => norm(typeof s === 'string' ? s : s.sql)
 
 function blueprintStatements(): string[] {
   const sql = readFileSync(resolve(ROOT, BLUEPRINT), 'utf8')
@@ -84,33 +118,33 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(existsSync(resolve(ROOT, BLUEPRINT))).toBe(true)
   })
 
-  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；fix-bug：+提案 bugs DDL 追加段 + v2 ALTER 段）', () => {
-    const expected = [...blueprintStatements(), ...BUGS_DDL.map(norm), ...BUGS_V2_DDL.map(norm)]
-    const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(norm))
+  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段）', () => {
+    const expected = [...blueprintStatements(), ...BUGS_DDL.map(norm), ...BUGS_V2_SQL.map(norm)]
+    const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
   })
 
-  it('十一表 + 八索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs 基建表 + fix-bug bugs 表）', () => {
+  it('十二表 + 九索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs + migration_digests 外的 v2 收敛 bugs 表；fix-bug bugs 表 + v2 IF NOT EXISTS 形态）', () => {
     const tables = WORKSPACE_MIGRATIONS.flatMap((m) =>
-      m.statements.filter((s) => /^CREATE TABLE/i.test(norm(s))),
+      m.statements.filter((s) => /^CREATE TABLE/i.test(stmtText(s))),
     )
     const indexes = WORKSPACE_MIGRATIONS.flatMap((m) =>
-      m.statements.filter((s) => /^CREATE (?:UNIQUE )?INDEX/i.test(norm(s))),
+      m.statements.filter((s) => /^CREATE (?:UNIQUE )?INDEX/i.test(stmtText(s))),
     )
     const triggers = WORKSPACE_MIGRATIONS.flatMap((m) =>
-      m.statements.filter((s) => /^CREATE TRIGGER/i.test(norm(s))),
+      m.statements.filter((s) => /^CREATE TRIGGER/i.test(stmtText(s))),
     )
-    expect(tables).toHaveLength(11)
-    expect(indexes).toHaveLength(8)
+    expect(tables).toHaveLength(12)
+    expect(indexes).toHaveLength(9)
     expect(triggers).toHaveLength(4)
   })
 
   it('bugs 单表 20 列（fix-bug 提案持久化节照建；bug_status CHECK 三态 + source_task_id FK）', () => {
     const createBugs = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements).find((s) =>
-      /^CREATE TABLE bugs/i.test(norm(s)),
+      /^CREATE TABLE bugs/i.test(stmtText(s)),
     )
     expect(createBugs).toBeDefined()
-    const cols = [...createBugs!.matchAll(/^\s{4}([a-z_]+)\s+(TEXT|INTEGER|REAL)/gm)].map(
+    const cols = [...stmtText(createBugs!).matchAll(/\b([a-z_]+)\s+(TEXT|INTEGER|REAL)/g)].map(
       (m) => m[1],
     )
     expect(cols).toEqual([
@@ -135,17 +169,17 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
       'created_at',
       'updated_at',
     ])
-    expect(norm(createBugs!)).toContain(
+    expect(stmtText(createBugs!)).toContain(
       "CHECK (bug_status IN ('open', 'fixed', 'unresolved'))",
     )
-    expect(norm(createBugs!)).toContain('REFERENCES tasks(id)')
+    expect(stmtText(createBugs!)).toContain('REFERENCES tasks(id)')
   })
 
   it('idx_bugs_status(bug_status, created_at) 在场（状态 chips + 排序读面）', () => {
     const idx = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements).find((s) =>
-      /^CREATE INDEX idx_bugs_status/i.test(norm(s)),
+      /^CREATE INDEX idx_bugs_status/i.test(stmtText(s)),
     )
-    expect(norm(idx!)).toBe('CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)')
+    expect(stmtText(idx!)).toBe('CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)')
   })
 
   it('迁移版本序列从 1 连续递增至 FORGE_DB_SCHEMA_VERSION（独立版本线，前向单向）', () => {
@@ -155,18 +189,31 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(FORGE_DB_SCHEMA_VERSION).toBe(2)
   })
 
-  it('v2：bugs +fix_approach 单列前向 ALTER（活库零废弃——fix-approach-review 台账审查面）', () => {
+  it('v2 收敛式：CREATE IF NOT EXISTS bugs（21 列含 fix_approach 内联）+ CREATE INDEX IF NOT EXISTS + 守卫式 ALTER 补列', () => {
     const v2 = WORKSPACE_MIGRATIONS.find((m) => m.version === 2)
-    expect(v2?.statements.map(norm)).toEqual([`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`])
+    expect(v2?.statements.map(stmtText)).toEqual(BUGS_V2_SQL.map(norm))
+    // 守卫字段逐条 pin：①IF NOT EXISTS 建表无守卫；③ALTER 带 bugs.fix_approach 列守卫
+    const stmts = v2!.statements
+    expect('columnGuard' in (stmts[0] as object)).toBe(false)
+    expect(stmts[2]).toEqual({
+      sql: `ALTER TABLE bugs ADD COLUMN fix_approach TEXT`,
+      columnGuard: { table: 'bugs', column: 'fix_approach' },
+    })
+    // 21 列终态（20 列 + fix_approach 内联）
+    const createIfNotExists = stmtText(stmts[0]!)
+    expect(createIfNotExists).toContain('IF NOT EXISTS')
+    const cols = [...createIfNotExists.matchAll(/\b([a-z_]+)\s+(TEXT|INTEGER|REAL)/g)].map((m) => m[1])
+    expect(cols).toHaveLength(21)
+    expect(cols[cols.length - 1]).toBe('fix_approach')
   })
 
   it('FK 一律无 ON DELETE（Hard Rule——M2 无删除动词）', () => {
     const fkStatements = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements).filter((s) =>
-      /REFERENCES/i.test(s),
+      /REFERENCES/i.test(stmtText(s)),
     )
     expect(fkStatements.length).toBeGreaterThan(0)
     for (const stmt of fkStatements) {
-      expect(norm(stmt), stmt).not.toMatch(/ON DELETE/i)
+      expect(stmtText(stmt), stmtText(stmt)).not.toMatch(/ON DELETE/i)
     }
   })
 })

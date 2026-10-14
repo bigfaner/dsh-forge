@@ -51,8 +51,8 @@ function seedTask(db: Database.Database, taskId = 't1'): void {
   ).run(taskId, 'demo-feature-f1', '1.1', '任务一', 'coding.feature', NOW, NOW)
 }
 
-describe('AC1 全 DDL 在临时库执行零错（十一表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
-  it('首开空目录：十一表全部在场（八域表 + bugs + schema_meta + app_key_logs）', () => {
+describe('AC1 全 DDL 在临时库执行零错（十二表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
+  it('首开空目录：十二表全部在场（八域表 + bugs + schema_meta + app_key_logs + migration_digests）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const tables = db
@@ -67,6 +67,7 @@ describe('AC1 全 DDL 在临时库执行零错（十一表 + 八索引 + 四触�
       'feature_documents',
       'feature_records',
       'features',
+      'migration_digests',
       'proposals',
       'schema_meta',
       'task_edges',
@@ -285,7 +286,7 @@ describe('AC2 ensureOpen 惰性链（openDatabase 参数化 → 版本门 → �
     store.dispose()
   })
 
-  it('结构健全性检查·关键列在场：同版本同十一表但 task_records 缺 ac_json（早期直改形态存量库）→ 隔离 + 记账', () => {
+  it('结构健全性检查·关键列在场：同版本同十二表但 task_records 缺 ac_json（早期直改形态存量库）→ 隔离 + 记账', () => {
     const ws = wsDir()
     const db = openWorkspaceDb(join(ws, 'forge.db'))
     db.exec(`DROP TRIGGER trg_task_records_no_update`)
