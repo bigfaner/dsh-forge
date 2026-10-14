@@ -319,12 +319,15 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
 
 /**
  * 账本父反查子会话（纯函数——⟞ 进行中 worker 兜底面）：byId 扫描 row.parentId ===
- * parentSessionId 的子行；多子（同父重派发）取 updatedAt 最新（字符串 ISO 字典序防御窄读；
- * 全体缺席/非串回退枚举末位）。零命中/形状漂移/快照异常 = undefined（调用面 no-op
- * fail-soft）。进行中 worker 无 record 审计行（workerSessionOf 恒 null）时，账本父子
- * 关系是唯一在途源（宿主 openChild spawn 恒挂 parent）。
+ * parentSessionId 的子行。taskKey 在场时优先按 displayTitle 前缀 `${taskKey} · ` 命中
+ * 目标任务的子行（spawn 标签 = `${taskKey} · ${任务名}` 落账本 displayTitle——同父多
+ * worker 判别单源）；无键命中（标签漂移/旧数据/缺省）回退 updatedAt 择新（字符串 ISO
+ * 字典序防御窄读；全体缺席/非串回退枚举末位）。零命中/形状漂移/快照异常 = undefined
+ * （调用面 no-op fail-soft）。
+ * Root cause（bug 661bce2b）：原实现任务键无关、恒取同父最新子行——一父多 worker 时
+ * 进行中任务的 ⟞ 打开的是别的任务的子会话。
  */
-export function workerChildSessionOf(list: unknown, parentSessionId: string): string | undefined {
+export function workerChildSessionOf(list: unknown, parentSessionId: string, taskKey?: string): string | undefined {
   if (typeof list !== 'object' || list === null) return undefined
   const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
   if (typeof getSnapshot !== 'function') return undefined
@@ -335,10 +338,12 @@ export function workerChildSessionOf(list: unknown, parentSessionId: string): st
     return undefined
   }
   if (typeof snapshot !== 'object' || snapshot === null) return undefined
-  const byId = (snapshot as { byId?: Record<string, { readonly parentId?: unknown; readonly updatedAt?: unknown }> }).byId
+  const byId = (snapshot as { byId?: Record<string, { readonly parentId?: unknown; readonly updatedAt?: unknown; readonly displayTitle?: unknown }> }).byId
   if (typeof byId !== 'object' || byId === null) return undefined
+  const keyPrefix = taskKey === undefined ? undefined : `${taskKey} · `
   let bestId: string | undefined
   let bestUpdatedAt: string | undefined
+  let keyedId: string | undefined
   for (const [sessionId, row] of Object.entries(byId)) {
     if (typeof row !== 'object' || row === null || row.parentId !== parentSessionId) continue
     const updatedAt = typeof row.updatedAt === 'string' ? row.updatedAt : undefined
@@ -348,8 +353,12 @@ export function workerChildSessionOf(list: unknown, parentSessionId: string): st
       bestId = sessionId
       bestUpdatedAt = updatedAt
     }
+    if (keyPrefix !== undefined && keyedId === undefined) {
+      const title = row.displayTitle
+      if (typeof title === 'string' && title.startsWith(keyPrefix)) keyedId = sessionId
+    }
   }
-  return bestId
+  return keyedId ?? bestId
 }
 
 /**
@@ -361,8 +370,9 @@ export function workerChildSessionOf(list: unknown, parentSessionId: string): st
 export async function resolveWorkerChildSession(
   services: Pick<ForgeSessionsService, 'list' | 'refresh'>,
   parentSessionId: string,
+  taskKey?: string,
 ): Promise<string | undefined> {
-  const first = workerChildSessionOf(services.list, parentSessionId)
+  const first = workerChildSessionOf(services.list, parentSessionId, taskKey)
   if (first !== undefined) return first
   const refresh = services.refresh
   if (refresh === undefined) return undefined
@@ -371,7 +381,7 @@ export async function resolveWorkerChildSession(
   } catch {
     return undefined
   }
-  return workerChildSessionOf(services.list, parentSessionId)
+  return workerChildSessionOf(services.list, parentSessionId, taskKey)
 }
 
 /**
@@ -1776,8 +1786,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
                 // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
                 // 单源）——DispatchPanel 库侧解析 miss 时经 ShellHost 递达消费。
-                resolveWorkerSession: (parentSessionId: string): Promise<string | undefined> =>
-                  resolveWorkerChildSession(sessions, parentSessionId),
+                resolveWorkerSession: (parentSessionId: string, taskKey?: string): Promise<string | undefined> =>
+                  resolveWorkerChildSession(sessions, parentSessionId, taskKey),
               }),
             },
             views.ForgeShellHost,

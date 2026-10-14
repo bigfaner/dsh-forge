@@ -82,10 +82,11 @@ export interface ForgeShellHostProps {
    * 派发源）优先地址形态，账本判读兜底；缺席 = ⟞ 非交互呈现）。
    */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
-  /** ⟞ worker 父反查兜底（插件 inject face——账本子行 parentId 扫描 + refresh 一次）：
+  /** ⟞ worker 父反查兜底（插件 inject face——账本子行 parentId 扫描 + refresh 一次；
+   *  taskKey 在场 = displayTitle 前缀判别同父多 worker）：
    *  DispatchPanel 库侧 record 源 miss（进行中任务无 record 审计行——修复面）时消费；
    *  缺席 = 无兜底 */
-  readonly resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>
+  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**

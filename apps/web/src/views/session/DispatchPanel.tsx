@@ -393,13 +393,13 @@ export async function fetchWorkerSession(
  */
 export async function resolveWorkerOpenTarget(
   client: ForgeRpcClient,
-  q: { readonly projectId: string; readonly taskId: string; readonly sessionId: string },
-  resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>,
+  q: { readonly projectId: string; readonly taskId: string; readonly sessionId: string; readonly taskKey?: string },
+  resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>,
 ): Promise<{ readonly worker: string; readonly parent?: string } | null> {
   const { worker, parent } = await fetchWorkerSession(client, q)
   if (worker !== null) return parent !== undefined ? { worker, parent } : { worker }
   if (resolveWorkerSession === undefined) return null
-  const child = await resolveWorkerSession(q.sessionId)
+  const child = await resolveWorkerSession(q.sessionId, q.taskKey)
   return child === undefined ? null : { worker: child, parent: q.sessionId }
 }
 
@@ -606,8 +606,9 @@ export interface DispatchPanelProps {
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** ⟞ worker 父反查兜底（装配注入——账本子行 parentId 扫描 + refresh 一次）：库侧 record
    *  源解析 miss（进行中任务无 record 审计行 = workerSessionOf 恒空——修复面）时消费，
-   *  面班会话即父；缺席 = 无兜底（两路皆空 → no-op） */
-  readonly resolveWorkerSession?: (parentSessionId: string) => Promise<string | undefined>
+   *  面班会话即父；taskKey 在场 = displayTitle 前缀判别同父多 worker；缺席 = 无兜底
+   *  （两路皆空 → no-op） */
+  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -704,9 +705,12 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
       ? undefined
       : (taskId: string): void => {
           // fix：库侧 record 源 miss（进行中无 submit/transition 审计行）→ 账本父反查兜底
+          // （taskKey = slug/localId——spawn 标签前缀，同父多 worker 判别；bug 661bce2b）
+          const row = rows.find((item) => item.taskId === taskId)
+          const taskKey = row === undefined ? undefined : dispatchRowKeyLabel(row)
           void resolveWorkerOpenTarget(
             makeClient(),
-            { projectId: props.projectId, taskId, sessionId: props.sessionId },
+            { projectId: props.projectId, taskId, sessionId: props.sessionId, taskKey },
             props.resolveWorkerSession,
           ).then((target) => {
             if (target !== null) props.onOpenWorkerSession?.(target.worker, target.parent)

@@ -697,7 +697,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       openDocResource: (address: string) => void
       onOpenWorkerSession: (childSessionId: string) => void
       sessionTitleOf: (sessionId: string) => string | undefined
-      resolveWorkerSession: (parentSessionId: string) => Promise<string | undefined>
+      resolveWorkerSession: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
     // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
@@ -757,6 +757,23 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       })
       expect(workerChildSessionOf(list, 'dispatch-1')).toBe('worker-new')
     })
+    it('bug：同父多 worker（displayTitle = 任务键 · 任务名）→ 按任务键命中目标任务，非 updatedAt 择新', () => {
+      const list = ledger({
+        'dispatch-1': { parentId: 'top' },
+        'worker-1-1': { parentId: 'dispatch-1', updatedAt: '2026-10-13T10:00:00Z', displayTitle: 'feat-x/1.1 · Implement A' },
+        'worker-1-2': { parentId: 'dispatch-1', updatedAt: '2026-10-13T11:00:00Z', displayTitle: 'feat-x/1.2 · Implement B' },
+      })
+      expect(workerChildSessionOf(list, 'dispatch-1', 'feat-x/1.1')).toBe('worker-1-1')
+      expect(workerChildSessionOf(list, 'dispatch-1', 'feat-x/1.2')).toBe('worker-1-2')
+    })
+    it('任务键无命中（标签漂移/旧数据）或缺省 → 回退 updatedAt 择新', () => {
+      const list = ledger({
+        'worker-1-1': { parentId: 'p', updatedAt: '2026-10-13T10:00:00Z', displayTitle: 'feat-x/1.1 · A' },
+        'worker-1-2': { parentId: 'p', updatedAt: '2026-10-13T11:00:00Z', displayTitle: 'feat-x/1.2 · B' },
+      })
+      expect(workerChildSessionOf(list, 'p', 'feat-x/9.9')).toBe('worker-1-2')
+      expect(workerChildSessionOf(list, 'p')).toBe('worker-1-2')
+    })
     it('updatedAt 缺席回退枚举末位；无命中/形状漂移/快照异常 = undefined', () => {
       expect(workerChildSessionOf(ledger({ 'w-1': { parentId: 'p' } }), 'p')).toBe('w-1')
       expect(workerChildSessionOf(ledger({ 'w-1': { parentId: 'x' } }), 'p')).toBeUndefined()
@@ -795,6 +812,18 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       await expect(
         resolveWorkerChildSession({ list: { getSnapshot: () => ({ byId: {} }) }, refresh: async () => undefined }, 'p-1'),
       ).resolves.toBeUndefined()
+    })
+    it('taskKey 透传：键命中优先于 updatedAt 择新（⟞ 进行中任务判别面）', async () => {
+      const list = {
+        getSnapshot: () => ({
+          byId: {
+            'w-old': { parentId: 'p-1', updatedAt: '2026-10-13T10:00:00Z', displayTitle: 'feat-x/1.1 · A' },
+            'w-new': { parentId: 'p-1', updatedAt: '2026-10-13T11:00:00Z', displayTitle: 'feat-x/1.2 · B' },
+          },
+        }),
+      }
+      await expect(resolveWorkerChildSession({ list }, 'p-1', 'feat-x/1.1')).resolves.toBe('w-old')
+      await expect(resolveWorkerChildSession({ list }, 'p-1', 'feat-x/1.2')).resolves.toBe('w-new')
     })
     it('refresh 缺席/抛错 = fail-soft undefined（不炸调用面）', async () => {
       const empty = { getSnapshot: () => ({ byId: {} }) }

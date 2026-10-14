@@ -432,12 +432,14 @@ describe('resolveWorkerOpenTarget（⟞ 打开目标解析：库侧 record 源�
       sessions: [card({ source: 'link', sessionId: 'd-1' }), card({ source: 'record', sessionId: 'd-1' })], // claim 审计 = 派发会话本身
     } as TaskDetail
     const { client } = recordingClient({ detail: async () => detail })
-    const fallback = vi.fn(async (): Promise<string | undefined> => 'worker-9')
-    await expect(resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1' }, fallback)).resolves.toEqual({
+    const fallback = vi.fn(async (_parentSessionId: string, _taskKey?: string): Promise<string | undefined> => 'worker-9')
+    await expect(
+      resolveWorkerOpenTarget(client, { projectId: 'p-1', taskId: 't-1', sessionId: 'd-1', taskKey: 'feat-x/1.1' }, fallback),
+    ).resolves.toEqual({
       worker: 'worker-9',
       parent: 'd-1',
     })
-    expect(fallback).toHaveBeenCalledWith('d-1')
+    expect(fallback).toHaveBeenCalledWith('d-1', 'feat-x/1.1')
   })
   it('两路皆空 → null（兜底缺席/undefined 均不炸）', async () => {
     const detail = { sessions: [card({ source: 'link', sessionId: 'd-1' })] } as TaskDetail
