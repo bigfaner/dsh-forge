@@ -28,6 +28,7 @@ import type {
 import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
+  asPairConnectedMessage,
   asPairMessage,
   asReadyMessage,
   createBridgeProxy,
@@ -228,6 +229,12 @@ export async function bootDshHost(
     ready.remotePairExpiresAt,
   )
   child.on('message', (message: unknown) => {
+    // fix-7：/pair 握手成功推送 → manifest 抬 remoteDeviceConnected（粘性 until 重启——
+    // 轮换 pair 消息经 applyPairMessage 保留该位，connected 态卡不因 token 轮换丢态）
+    if (asPairConnectedMessage(message) !== undefined) {
+      manifest = applyPairConnected(manifest)
+      return
+    }
     manifest = applyPairMessage(manifest, message)
   })
   return {
@@ -370,5 +377,21 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     manifest.remoteHost,
     pair.remotePairUrl,
     pair.remotePairExpiresAt,
+    manifest.remoteDeviceConnected, // fix-7：轮换重建保留 connected 读数（粘性 until 重启）
+  )
+}
+
+/**
+ * fix-7 /pair 握手成功消费（纯函数）：以旧 manifest 面重建并抬 remoteDeviceConnected
+ * 粘性位（url/injections/绑定/配对面全保留；直到宿主重启——官方「手机已连接」态语义）。
+ */
+export function applyPairConnected(manifest: BootManifest): BootManifest {
+  return buildBootManifest(
+    manifest.url,
+    manifest.injections,
+    manifest.remoteHost,
+    manifest.remotePairUrl,
+    manifest.remotePairExpiresAt,
+    true,
   )
 }

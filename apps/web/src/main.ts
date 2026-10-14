@@ -16,6 +16,7 @@ import './styles/cursors.css'
 import './product-views.js'
 import { bootShell, type ProductClientEntry } from './shell/index.js'
 import { ForgeRemoteView } from './views/remote/ForgeRemoteView.js'
+import { ForgePairingWindow, isPairingWindowLocation } from './views/remote/pairing-window.js'
 import { isRestrictedRemoteViewLocation } from './views/remote/remote-view-model.js'
 
 // 产品 client 插件掌舵入图描述（bundle = vite 第二入口产物 forge-client.js；rev = 构建戳）。
@@ -34,7 +35,11 @@ if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 // 手机受限视图分支（mobile-remote-approval 1.3）：`?forgeRemote=1` = 独立单页直挂——
 // 不进官方壳（无侧栏/dock/对话，暴露面边界 = 渲染范围本身）；未配对/数据面不可达由
 // 组件内回退配对引导页（官方配对流承载）。
-if (isRestrictedRemoteViewLocation(window.location)) {
+// fix-7 配对独立窗分支：`?forgePair=1` = host「连接移动设备」独立窗载入的产品配对页——
+// 独立单页直挂（无侧栏/dock/对话），页内 800ms 状态轮询 + RemotePanel 配对面。
+if (isPairingWindowLocation(window.location)) {
+  createRoot(el).render(createElement(ForgePairingWindow))
+} else if (isRestrictedRemoteViewLocation(window.location)) {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {
   const entry = new AppWebEntry(el)

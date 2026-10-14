@@ -185,17 +185,7 @@
   cursor: var(--dsh-cursor-pointer, pointer);
 }
 
-.dswf-remote-address {
-  padding: 6px 8px; /* dsw-raw 地址行内距（面板局部刻度） */
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-primary-bluish);
-  text-align: left;
-  cursor: var(--dsh-cursor-pointer, pointer);
-  overflow-wrap: anywhere;
-}
+/* （fix-7 旧 .dswf-remote-address 按钮形态退役——地址条带 + 复制图标按钮见文件尾段） */
 
 .dswf-remote-panel-note {
   margin: 0;
@@ -368,4 +358,114 @@
 .dswf-rview-appr-note--error {
   color: var(--dsw-alias-state-danger-primary, var(--dsw-alias-label-secondary));
   overflow-wrap: anywhere;
+}
+
+/* ── fix-7 配对独立窗（bug 9fd9b6b1 ①③——布局逐位对照官方 DSH Desktop 0.10.0） ── */
+
+/* 双模式 tab 卡（局域网 active / 互联网「即将支持」占位——隧道另立项） */
+.dswf-remote-tabs {
+  display: flex;
+  gap: 4px; /* dsw-raw tab 行内缝（局部刻度） */
+  padding: 2px; /* dsw-raw tab 卡内距（局部刻度） */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-surface-module-platform, var(--dsw-alias-bg-layer-2));
+}
+
+.dswf-remote-tab {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* dsw-raw tab 徽标间距（局部刻度） */
+  padding: 5px 10px; /* dsw-raw tab 内距（局部刻度） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-tab[data-active='true'] {
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-remote-tab:disabled {
+  cursor: default;
+}
+
+.dswf-remote-tab-badge {
+  padding: 1px 6px; /* dsw-raw 徽标内距（局部刻度） */
+  border-radius: 999px; /* dsw-raw 胶囊徽标全圆角（局部刻度——官方「即将支持」徽标形态） */
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxs-12, var(--dsw-font-xs-13));
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 「手机已连接」态卡（fix-7 官方连接态——connected 收回 QR） */
+.dswf-remote-connected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px; /* dsw-raw 态卡行内距（局部刻度） */
+  padding: 24px 12px; /* dsw-raw 态卡内距（局部刻度） */
+  border: 1px solid var(--dsw-alias-state-success-primary, var(--dsw-alias-border-l2));
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary));
+  font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
+}
+
+/* 地址条带 + 复制图标按钮（fix-7——整条可点改图标钮承载复制） */
+.dswf-remote-address {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw 条带行内缝（局部刻度） */
+  padding: 6px 8px; /* dsw-raw 条带内距（局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  font: var(--dsw-font-xs-13);
+}
+
+.dswf-remote-address-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary-bluish);
+  overflow-wrap: anywhere;
+}
+
+.dswf-remote-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 2px; /* dsw-raw 图标钮命中区微距（局部刻度） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-copy:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 配对独立窗页面（?forgePair=1——host「连接移动设备」窗载体） */
+.dswf-pairing-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* dsw-raw 配对页纵向行距（局部刻度） */
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 20px 16px; /* dsw-raw 配对页内距（局部刻度） */
+  font-family: inherit;
+}
+
+.dswf-pairing-title {
+  margin: 0;
+  font: var(--dsw-font-l-20, var(--dsw-font-m-strong-16, var(--dsw-font-s-14)));
+  color: var(--dsw-alias-label-primary);
+  text-align: center;
 }

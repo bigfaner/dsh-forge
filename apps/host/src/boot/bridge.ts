@@ -119,6 +119,14 @@ export interface BridgePairMessage {
 }
 
 /**
+ * fix-7 子 → 主：/pair 握手成功推送（child 校验通过即发一次——run.ts 消费抬 manifest
+ * remoteDeviceConnected 粘性位，UI「手机已连接」态卡单源；轮换 pair 消息不携本态）。
+ */
+export interface BridgePairConnectedMessage {
+  readonly type: 'pair-connected'
+}
+
+/**
  * 桥错误结构化形态（fix-28：typed error 过桥保真）。code ∈ contracts 六码（子侧判型
  * 保证）；data = RpcErrorPayload.data 同源附载。string 旧形态 = 非 typed（fail-loud
  * 语义——不捏造结构化）。
@@ -144,6 +152,7 @@ export type ChildToMainMessage =
   | BridgeRpcResultMessage
   | BridgeEventMessage
   | BridgePairMessage
+  | BridgePairConnectedMessage
 
 // 桥事件信封唯一源 = contracts BridgeEventMessage（1.1 定稿；Interface 6——G1-09 pin）。
 // 子侧发射 = core workspace/events.ts 写动词闭包尾部 sendGuarded（direct 形态 IPC 缺席
@@ -448,6 +457,16 @@ export function asPairMessage(message: unknown): BridgePairMessage | undefined {
     return undefined
   }
   return { type: 'pair', remotePairUrl: m.remotePairUrl, remotePairExpiresAt: m.remotePairExpiresAt }
+}
+
+/**
+ * fix-7 pair-connected 消息守卫（子 → 主 /pair 握手成功推送分流——run.ts connected 分支
+ * 消费）。零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asPairConnectedMessage(message: unknown): BridgePairConnectedMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'pair-connected') return undefined
+  return { type: 'pair-connected' }
 }
 
 /**

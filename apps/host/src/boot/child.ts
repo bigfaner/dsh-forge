@@ -186,6 +186,9 @@ async function main(): Promise<void> {
             res.end('配对二维码已过期——请在桌面端重新扫码')
             return
           }
+          // fix-7：握手成功 → 主侧抬 manifest remoteDeviceConnected（粘性位——UI「手机已
+          // 连接」态卡单源；guard 路径外发，重复扫码重复发亦幂等）
+          send({ type: 'pair-connected' })
           // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 回干净 ./
           const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
           res.writeHead(302, { location: target })

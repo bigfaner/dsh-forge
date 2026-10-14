@@ -3,7 +3,12 @@
 // 绑定）双源 → 相位快照（配置↔实况不一致 = pending 待重启生效）；桥缺席/失败 = fail-soft
 // off；setEnabled = forge:settings/set remoteApproval 分节覆写 + 即时 refresh。
 import { afterEach, describe, expect, it } from 'vitest'
-import { SIDEBAR_FOOTER_ACTION_SLOT, buildRemoteStatusSource, type ForgeClientCtx } from './plugin.js'
+import {
+  SIDEBAR_FOOTER_ACTION_SLOT,
+  buildRemoteStatusSource,
+  openPairingWindowViaBridge,
+  type ForgeClientCtx,
+} from './plugin.js'
 
 /** dshForge 桥替身安装面（globalThis.dshForge——preloadBridgeOf 读取面；用后还原） */
 let installed: unknown
@@ -14,7 +19,7 @@ afterEach(() => {
 
 function fakeBridge(overrides: {
   readonly settings?: unknown
-  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number }
+  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number; remoteDeviceConnected?: boolean }
   readonly invokeFail?: boolean
   readonly written?: { channel: string; payload: unknown }[]
 }): ForgeClientCtx {
@@ -40,6 +45,31 @@ describe('sidebar.footer.action 槽常量', () => {
 })
 
 describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
+  it('fix-7：manifest.remoteDeviceConnected 在场且真 → connected 快照（/pair 握手成功读数透传）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:1/',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+          remoteDeviceConnected: true,
+        },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().phase).toBe('connected')
+  })
+
+  it('fix-7：openPairingWindowViaBridge → dshForge.openPairingWindow 直转（true）；桥/成员缺席 = false（fail-soft 不炸入口）', () => {
+    let called = 0
+    ;(globalThis as { dshForge?: unknown }).dshForge = { openPairingWindow: () => { called += 1 } }
+    expect(openPairingWindowViaBridge()).toBe(true)
+    expect(called).toBe(1)
+    ;(globalThis as { dshForge?: unknown }).dshForge = undefined
+    expect(openPairingWindowViaBridge()).toBe(false)
+  })
+
   it('配置开 × 全卡绑定实况 → listening 快照（fix-5：lanAddress = manifest.remotePairUrl 官方配对地址单源）', async () => {
     const remote = buildRemoteStatusSource(
       fakeBridge({

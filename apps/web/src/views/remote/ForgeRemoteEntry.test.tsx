@@ -51,12 +51,20 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).toContain('http://192.168.1.7:8787') // 地址文本兜底
   })
 
-  it('有设备已连接：QR 同样在场（扫码连接不因已连接收回）', () => {
+  it('有设备已连接：QR 收回，呈现「手机已连接」态卡（fix-7 官方语义——等待扫码/已连接两态）', () => {
     const html = renderToStaticMarkup(
-      <RemotePanel snapshot={{ phase: 'connected', lanAddress: 'http://192.168.1.7:8787' }} onToggle={() => undefined} />,
+      <RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />,
     )
-    expect(html).toContain('data-testid="dswf-remote-qr"')
-    expect(html).toContain('data-value="http://192.168.1.7:8787"')
+    expect(html).toContain('data-testid="dswf-remote-connected"')
+    expect(html).toMatch(/手机已连接/)
+    expect(html).not.toContain('dswf-remote-qr')
+  })
+
+  it('fix-7：双模式 tab 卡在场——「局域网」active + 「互联网」tab「即将支持」占位（隧道另立项）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(html).toMatch(/data-testid="dswf-remote-tab-lan"/)
+    expect(html).toMatch(/data-testid="dswf-remote-tab-internet"/)
+    expect(html).toMatch(/即将支持/)
   })
 
   it('远程关 = 空态替代 QR（不渲染二维码锚）', () => {
@@ -78,21 +86,22 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-6：官方文案（「扫码即可连接。移动设备与电脑需连接至同一 WiFi。」）+ 倒计时行在场 + QR 220', () => {
+  it('fix-6：官方文案（「扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。」）+ 倒计时行在场 + QR 220', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, pairExpiresAt: Date.now() + 120_000 }}
         onToggle={() => undefined}
       />,
     )
-    expect(html).toMatch(/扫码即可连接。移动设备与电脑需连接至同一 WiFi。/)
+    expect(html).toMatch(/扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。/)
     expect(html).toMatch(/二维码将在 \d+ 秒后刷新/)
     expect(html).toMatch(/width="220"/)
   })
 
-  it('fix-6：地址条在场（点击复制完整 pairingUrl——「已复制」1.8s 反馈为交互态，静态面只钉载体）', () => {
+  it('fix-7：地址条带 + 复制图标按钮（aria-label 复制地址——独立钮不再整条可点）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
     expect(html).toContain('dswf-remote-address')
+    expect(html).toMatch(/aria-label="复制地址"/)
     expect(html).toContain('http://192.168.1.7:8787')
     expect(html).not.toContain('已复制')
   })
@@ -105,16 +114,18 @@ describe('ForgeRemoteEntry 图标三态', () => {
     expect(html).toMatch(/远程已关闭/)
   })
 
-  it('监听中 = data-phase listening（绿态）', () => {
+  it('监听中 = data-phase listening（绿态）——fix-7 语义：等待扫码（服务相位词不外泄）', () => {
     const html = renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf(LISTENING)} />)
     expect(html).toContain('data-phase="listening"')
-    expect(html).toMatch(/远程监听中/)
+    expect(html).toMatch(/等待扫码/)
+    expect(html).not.toMatch(/远程监听中/)
   })
 
-  it('有设备已连接 = data-phase connected（亮态）', () => {
+  it('有设备已连接 = data-phase connected（亮态）——fix-7 语义：手机已连接', () => {
     const html = renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'connected' })} />)
     expect(html).toContain('data-phase="connected"')
-    expect(html).toMatch(/设备已连接/)
+    expect(html).toMatch(/手机已连接/)
+    expect(html).not.toMatch(/设备已连接/)
   })
 
   it('fix-3 待重启生效 = data-phase pending（提示态——不伪装 listening）', () => {
@@ -158,12 +169,20 @@ describe('RemotePanel 面板', () => {
     expect(html).not.toContain('http://')
   })
 
-  it('状态行语言随相位（关闭/待重启/监听中/设备已连接）', () => {
-    expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />)).toMatch(
-      /设备已连接/,
+  it('状态行语言随相位（关闭/待重启/等待扫码/手机已连接）', () => {
+    expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'listening' }} onToggle={() => undefined} />)).toMatch(
+      /等待扫码/,
     )
     expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />)).toMatch(
       /待重启生效/,
     )
+  })
+
+  it('fix-7：Modal 承载退役——入口组件零弹层渲染（开窗归 host 独立配对窗）', () => {
+    const html = renderToStaticMarkup(
+      <ForgeRemoteEntry status={sourceOf(LISTENING)} onOpenPairing={() => undefined} />,
+    )
+    expect(html).not.toContain('dswf-remote-modal')
+    expect(html).not.toContain('dialog')
   })
 })

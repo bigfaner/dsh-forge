@@ -68,6 +68,26 @@ describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () =
     expect(snapshot.lanAddress).toBeUndefined()
   })
 
+  it('fix-7：manifest.remoteDeviceConnected 在场且真 = connected（/pair 握手成功读数——等待扫码抬手机已连接）', () => {
+    const snapshot = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+      remoteDeviceConnected: true,
+    })
+    expect(snapshot.phase).toBe('connected')
+    expect('lanAddress' in snapshot).toBe(false)
+  })
+
+  it('fix-7：remoteDeviceConnected 缺席/false = listening（不虚报连接）', () => {
+    expect(
+      remoteSnapshotOf(true, { url: 'http://127.0.0.1:19400/', remoteHost: '0.0.0.0', remotePairUrl: 'http://x/pair?token=t' }).phase,
+    ).toBe('listening')
+    expect(
+      remoteSnapshotOf(true, { url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0', remoteDeviceConnected: false }).phase,
+    ).toBe('listening')
+  })
+
   it('fix-6：remotePairExpiresAt 在场 = 快照 pairExpiresAt 读数透传（倒计时单源）；缺席 = 字段不出现', () => {
     const withTtl = remoteSnapshotOf(true, {
       url: 'http://127.0.0.1:19400/',

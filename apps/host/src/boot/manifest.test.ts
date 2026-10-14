@@ -56,6 +56,17 @@ describe('buildBootManifest', () => {
     ).toBe(false)
   })
 
+  it('fix-7：remoteDeviceConnected 在场（true）透传（/pair 握手成功读数——connected 态卡单源）；缺席/false = 字段不出现', () => {
+    expect(
+      buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=t', 1, true)
+        .remoteDeviceConnected,
+    ).toBe(true)
+    expect('remoteDeviceConnected' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0')).toBe(false)
+    expect(
+      'remoteDeviceConnected' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, false),
+    ).toBe(false)
+  })
+
   it('fix-6：remotePairUrlOf 产官方 /pair 形状——`http://<lan-ip>:<port>/pair?token=<token>`（URL 形状单源）', () => {
     expect(remotePairUrlOf('192.168.1.7', 19400, 'abc_-X')).toBe('http://192.168.1.7:19400/pair?token=abc_-X')
   })

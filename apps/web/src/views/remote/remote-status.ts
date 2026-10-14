@@ -22,7 +22,6 @@ export interface RemoteStatusSnapshot {
   /** fix-6：配对令牌到期时刻（epoch ms——QR 倒计时单源；与 lanAddress 同生同灭） */
   readonly pairExpiresAt?: number
 }
-
 /**
  * 相位派生（纯函数——配置意图 × 实际绑定双源）：意图（产品配置 enabled）与实况（本 boot
  * webserver 绑定 host === '0.0.0.0'）不一致 = pending（重启生效缝——开/关两向同语义）；
@@ -48,6 +47,8 @@ export interface BootManifestRead {
   readonly remotePairUrl?: string
   /** fix-6：配对令牌到期时刻（epoch ms——QR 倒计时单源；可选缺席降级） */
   readonly remotePairExpiresAt?: number
+  /** fix-7：/pair 握手成功读数（host manifest 透传——true = 手机已连接粘性位） */
+  readonly remoteDeviceConnected?: boolean
 }
 
 /**
@@ -62,7 +63,11 @@ export function remoteSnapshotOf(
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
   const exposureActive = manifest?.remoteHost === '0.0.0.0'
-  const phase = remotePhaseOf({ enabled, exposureActive })
+  const phase = remotePhaseOf({
+    enabled,
+    exposureActive,
+    devicesConnected: manifest?.remoteDeviceConnected === true, // fix-7：/pair 握手成功读数抬 connected
+  })
   if (phase !== 'listening') return { phase }
   const pairUrl = manifest?.remotePairUrl
   const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined

@@ -4,7 +4,7 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
+import { Menu, app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
   BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE, refreshKnowledgeBindings,
@@ -14,7 +14,7 @@ import {
 import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
 import {
   acquireSingleInstance, authenticateWebHost, createMainWindow, createShellProtocolHandler,
-  installShellStreamRewrite, registerShellScheme, resolveWebDistDir, SHELL_ENTRY_URL,
+  installShellStreamRewrite, registerShellScheme, resolveWebDistDir, setupPairingEntry, SHELL_ENTRY_URL,
   SHELL_SCHEME, wireWindowLifecycle, type BrowserWindowLike,
 } from './window/index.js'
 
@@ -93,9 +93,16 @@ void (async () => {
       wc.on('before-input-event', (_event, input) => { if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools() })
     }
     wireWindowLifecycle(app)
+    // fix-7 配对独立窗装配：应用菜单「连接手机... Ctrl+Shift+M」+ dshForge.openPairingWindow
+    // 通道（侧栏手机图标点击缝）→ 单实例复用开「连接移动设备」窗（加载 ?forgePair=1 配对页）。
+    const disposePairingEntry = setupPairingEntry({
+      app, BrowserWindow: BrowserWindow as unknown as Parameters<typeof setupPairingEntry>[0]['BrowserWindow'],
+      Menu, ipcMain, preloadPath,
+    })
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
       for (const channel of [BOOT_CHANNEL, DIRECTORY_PICKER_CHANNEL]) ipcMain.removeHandler(channel)
+      disposePairingEntry()
       hostRef = undefined
       void host.shutdown()
     })

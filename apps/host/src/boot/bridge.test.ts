@@ -13,6 +13,7 @@ import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
   asPairMessage,
+  asPairConnectedMessage,
   asReadyMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
@@ -313,6 +314,18 @@ describe('asReadyMessage（ready 守卫）', () => {
 
 // ── fix-6 配对令牌轮换推送（child → 主单向——官方 reload 轮换的桥载体） ──
 
+describe('asPairConnectedMessage（fix-7 /pair 握手成功推送守卫——run.ts connected 分支消费）', () => {
+  it('type pair-connected → 消息对象（零载荷面）', () => {
+    expect(asPairConnectedMessage({ type: 'pair-connected' })).toEqual({ type: 'pair-connected' })
+  })
+  it('非 pair-connected / 畸形 → undefined（静默忽略不转发）', () => {
+    expect(asPairConnectedMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1 })).toBeUndefined()
+    expect(asPairConnectedMessage({ type: 'ready', url: 'x', injections: [], services: {} })).toBeUndefined()
+    expect(asPairConnectedMessage(undefined)).toBeUndefined()
+    expect(asPairConnectedMessage({ type: 'pair-connected ', extra: 1 })).toBeUndefined()
+  })
+})
+
 describe('asPairMessage（pair 消息守卫——run.ts 轮换分支消费）', () => {
   it('形状齐备 → pair 消息（remotePairUrl 非空串 + remotePairExpiresAt 正数）', () => {
     expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=t', remotePairExpiresAt: 300_000 })).toEqual({
@@ -507,6 +520,8 @@ describe('createBridgeProxy（主侧代理）', () => {
     expect([...TASKS_SERVICE_METHODS]).toEqual([
       'addTask',
       'claimTask',
+      // 78b9227e spawn 审计行：执行会话事实诞生即入库（桥白名单全集锚）
+      'recordSpawn',
       'submitTask',
       // S3（run-tasks-host-command）：启动对账动词（桥白名单全集锚——锚定服务面而非 RPC 面）
       'reconcileInterrupted',
@@ -692,7 +707,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
-    expect(TASKS_SERVICE_METHODS).toHaveLength(13) // S3 +reconcileInterrupted；1.1 +updateTask
+    expect(TASKS_SERVICE_METHODS).toHaveLength(14) // S3 +reconcileInterrupted；1.1 +updateTask；78b9227e +recordSpawn
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)

@@ -15,6 +15,9 @@ export interface BootManifest {
   remotePairUrl?: string
   /** fix-6：配对令牌到期时刻（epoch ms——桌面 QR 倒计时单源；与 remotePairUrl 同生同灭） */
   remotePairExpiresAt?: number
+  /** fix-7：/pair 握手成功读数（扫码连接完成——UI「手机已连接」态卡单源；粘性 until 宿主
+   *  重启；缺席/false = 未连接，不虚报） */
+  remoteDeviceConnected?: boolean
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -54,6 +57,7 @@ export function buildBootManifest(
   remoteHost?: string,
   remotePairUrl?: string,
   remotePairExpiresAt?: number,
+  remoteDeviceConnected?: boolean,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -69,5 +73,6 @@ export function buildBootManifest(
     ...(typeof remotePairExpiresAt === 'number' && Number.isFinite(remotePairExpiresAt) && remotePairExpiresAt > 0
       ? { remotePairExpiresAt }
       : {}),
+    ...(remoteDeviceConnected === true ? { remoteDeviceConnected: true } : {}),
   })
 }

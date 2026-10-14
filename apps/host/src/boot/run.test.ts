@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
-import { applyPairMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { applyPairConnected, applyPairMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
 import { buildBootManifest } from './manifest.js'
 
 const MODULE_URL = 'file:///Z:/worktrees/redesign/apps/host/dist/boot/run.js'
@@ -99,6 +99,23 @@ describe('createBridgeChannel · event 分支（交互二事件链中段——G1
     child.emit('message', { type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 'p-10' } })
     expect(a).toEqual(['p-9'])
     expect(b).toEqual(['p-9', 'p-10'])
+  })
+})
+
+describe('applyPairConnected（fix-7 /pair 握手成功——connected 读数入 manifest）', () => {
+  const base = () => buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000)
+  it('pair-connected 事实 → manifest 抬 remoteDeviceConnected（url/绑定/配对面保留——粘性 until 重启）', () => {
+    const next = applyPairConnected(base())
+    expect(next.remoteDeviceConnected).toBe(true)
+    expect(next.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=old')
+    expect(next.remoteHost).toBe('0.0.0.0')
+  })
+
+  it('已抬 connected 的 manifest 过 applyPairMessage（token 轮换）→ connected 读数保留（不因轮换丢态）', () => {
+    const connected = applyPairConnected(base())
+    const rotated = applyPairMessage(connected, { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(rotated.remoteDeviceConnected).toBe(true)
+    expect(rotated.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=new')
   })
 })
 
