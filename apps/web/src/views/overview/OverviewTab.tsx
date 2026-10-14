@@ -111,6 +111,8 @@ export interface OverviewFrameProps {
   readonly onRetry: () => void
   /** Bug 行点击 → 详情弹框（fix-bug 收尾——选中即开，帧侧透传 BugList；缺席 = 行静态呈现） */
   readonly onOpenBug?: (bugId: string) => void
+  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——装配注入；缺席 = 按钮不呈现，行语言零变化） */
+  readonly onAddBugToSession?: (bug: BugCard) => void
   /** 文档行点击（dock 开 tab——4.1 接线；缺席 = 无动作面） */
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入；缺省 = chips 过滤接口独占呈现） */
@@ -146,6 +148,7 @@ export function OverviewFrame({
   onToggleHead,
   onRetry,
   onOpenBug,
+  onAddBugToSession,
   onOpenDoc,
   renderTasksTab,
   onStartSession,
@@ -217,6 +220,7 @@ export function OverviewFrame({
           onToggleStatus={onToggleBugStatus}
           onClearStatuses={onClearBugStatuses}
           {...(onOpenBug !== undefined ? { onOpenBug } : {})}
+          {...(onAddBugToSession !== undefined ? { onAddBugToSession } : {})}
           emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 Bug` : undefined}
         />
       </>
@@ -434,6 +438,8 @@ export interface OverviewTabProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 会话 pill 跳转（ShellHost 递达面——任务抽屉同缝；缺席 = Bug 弹框 pill 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
+  /** Bug 行「添加到会话中」（1.4——装配注入 addBugToSession；缺席 = 按钮不呈现） */
+  readonly onAddBugToSession?: (bug: BugCard) => void
   /** 会话名解析器（dsh 账本快照 displayTitle 窄读——任务抽屉同缝；缺席 = pill 回退 id） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
@@ -450,6 +456,7 @@ export function OverviewTab({
   focusTasksNonce,
   onStartSession,
   onOpenSession,
+  onAddBugToSession,
   sessionTitleOf,
   now,
 }: OverviewTabProps): ReactNode {
@@ -550,6 +557,7 @@ export function OverviewTab({
         onOpenDoc={onOpenDoc}
         renderTasksTab={renderTasksTab}
         {...(onStartSession !== undefined ? { onStartSession } : {})}
+        {...(onAddBugToSession !== undefined ? { onAddBugToSession } : {})}
         now={now}
       />
       <OverviewBugDialogMount

@@ -48,6 +48,7 @@ import {
 // 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
 import {
   createOpenSessionOrchestrator,
+  insertReferenceAtTail,
   openSessionPlatformFrom,
   type ComposerInputFace,
   type OpenSessionBinding,
@@ -55,10 +56,12 @@ import {
   type OpenSessionOrchestrator,
   type OpenSessionServices,
   type PresetSelectResult,
+  type ReferenceInsertMirror,
+  type ReferenceInsertServices,
 } from './open-session.js'
 // composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
-// bundle 自含纪律不破；本文件做注册行 + 接线面）
-import { bugIdOfRef, createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
+// bundle 自含纪律不破；本文件做注册行 + 接线面；1.4 chip 构造单一事实源同径复用）
+import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -439,6 +442,25 @@ export function makeSessionTitleResolver(
   sessions: ForgeSessionsService,
 ): (sessionId: string) => string | undefined {
   return (sessionId: string): string | undefined => sessionTitleOf(sessions.list, sessionId)
+}
+
+/**
+ * 活跃会话解析（纯函数——1.4 Bug 快速路径「有活跃会话」判读）：账本快照窄读
+ * `current`（官方 selection 锚——sidebar-model currentSessionId 同源）。快照缺席/
+ * 形状漂移/非串/空串 = undefined（调用方走无活跃会话兜底：开新会话预填）。
+ */
+export function activeSessionIdOf(list: unknown): string | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  const current = (snapshot as { current?: unknown } | null)?.current
+  return typeof current === 'string' && current !== '' ? current : undefined
 }
 /**
  * 打开会话（判读式统一径——D6 修复面）：显式父（库侧权威——任务挂接双源卡的 link 派发
@@ -1480,7 +1502,7 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
     install: () => {
       if (snapshot.phase === 'installing') return Promise.resolve(false)
       const installBundle = managerSvc()?.['installBundle'] as
-        | ((spec: string) => Promise<unknown>)
+        | ((spec: string, options?: Record<string, unknown>) => Promise<unknown>)
         | undefined
       if (typeof installBundle !== 'function') {
         setSnapshot({ phase: 'absent', error: '官方插件管理面缺席（宿主未装配 pluginManager）' })
@@ -1488,7 +1510,8 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
       }
       setSnapshot({ phase: 'installing' })
       return Promise.resolve()
-        .then(() => installBundle.call(managerSvc(), MARKETPLACE_PLUGIN_SPEC))
+        // Root cause: 远程协议按位实参计数——options 在 TS 可选但调用必须带第二实参（官方配方恒传对象），缺参即被 arity 校验拒绝
+        .then(() => installBundle.call(managerSvc(), MARKETPLACE_PLUGIN_SPEC, {}))
         .then(
           () => true,
           (cause: unknown) => {
@@ -1507,11 +1530,11 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
       },
       install: (spec: string) => {
         const installBundle = managerSvc()?.['installBundle'] as
-          | ((spec: string) => Promise<unknown>)
+          | ((spec: string, options?: Record<string, unknown>) => Promise<unknown>)
           | undefined
         if (typeof installBundle !== 'function') return Promise.resolve(false)
         return Promise.resolve()
-          .then(() => installBundle.call(managerSvc(), spec))
+          .then(() => installBundle.call(managerSvc(), spec, {}))
           .then(
             () => true,
             () => false,
@@ -1789,6 +1812,71 @@ function buildOpenSessionOrchestrator(
   return createOpenSessionOrchestrator(openSessionPlatformFrom(services))
 }
 
+/** Bug 快速路径输入（1.4——Bug 子 tab 行「添加到会话中」；summary = chip label 主键） */
+export interface BugQuickAddInput {
+  readonly bugId: string
+  readonly summary: string
+}
+
+/** Bug 快速路径动作面（概览 dock tab 注入面——Bug 子 tab 行按钮消费） */
+export type BugQuickAddFn = (bug: BugQuickAddInput, workspaceId: string | null) => Promise<void>
+
+/**
+ * Bug 快速路径组装（composer-bug-reference 1.4）：有活跃会话（账本快照 current 锚）→
+ * 官方 scoped 事件 `slash/input-insert-reference`（span-CAS 基于 InputState.draftRev +
+ * 草稿末尾——insertReferenceAtTail 单源）插入 T1 同构原子引用并还焦 composer；插入未获
+ * 应用（缝缺席/相位守卫拒——韧性兜底同 open-session 兜底裁决刻度）或无活跃会话 → 既有
+ * open-session 编排器开新会话，首条草稿预填该引用剪贴板投影（@[摘要](bug:<bugId>)——
+ * 预填走 setDraft 既有缝，chip 形态由 @ 菜单/粘贴官方链承接）。conversation 服务调用期
+ * 惰性解析（buildOpenSessionOrchestrator 同配方）；workspaceId 缺席 = 无锚不编排（点击
+ * fail-soft 不外溢）。
+ */
+export function buildBugQuickAdder(
+  clientCtx: ForgeClientCtx,
+  sessions: ForgeSessionsService,
+  orchestrator: OpenSessionOrchestrator,
+): BugQuickAddFn {
+  const services: ReferenceInsertServices = {
+    sessions: {
+      binding: (sessionId) =>
+        (sessions as unknown as { binding?: (sessionId: string) => unknown }).binding?.(sessionId) as
+          | OpenSessionBinding
+          | undefined,
+    },
+    conversation: {
+      input: {
+        for: (actx: unknown): ComposerInputFace => {
+          const resolved = (
+            asRecord(reflectServiceGet(clientCtx, 'conversation'))?.['input'] as
+              | { for?: (actx: unknown) => unknown }
+              | undefined
+          )?.['for']?.(actx)
+          if (resolved === undefined || resolved === null) {
+            throw new Error('conversation.input.for 缺席（会话输入缝未就绪）')
+          }
+          return resolved as ComposerInputFace
+        },
+      },
+    } satisfies OpenSessionConversation,
+    // scoped 事件发射（cordis bail——actx 作主语；官方 input-trigger execute 同径；
+    // bail 面缺席 = undefined 返回 → 判未应用走兜底）
+    bail: (actx, name, payload) =>
+      (actx as { bail?: (subject: unknown, name: string, payload: unknown) => unknown }).bail?.(
+        actx,
+        name,
+        payload,
+      ),
+  }
+  return async (bug, workspaceId) => {
+    // chip 构造单一事实源（T1 bugReferenceInsertOf——@ 菜单 pick 产物同构）
+    const reference: ReferenceInsertMirror = bugReferenceInsertOf(bug, FORGE_BUG_SOURCE_NAME)
+    const active = activeSessionIdOf(sessions.list)
+    if (active !== undefined && insertReferenceAtTail(services, active, reference)) return
+    if (workspaceId === null) return
+    await orchestrator.openSessionWithPreset({ workspaceId, prefill: reference.clipboardText })
+  }
+}
+
 /**
  * dock tab 族登记（4.1 两段注册，tech-design Integration #3/#4——「adding a type is a
  * registration, never an edit」官方口径）：
@@ -1867,8 +1955,15 @@ function registerDockTabs(
             openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
           },
           // 4.6 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab
-          // 行头预填/诊断发送/派发指令/派发跳转四渠道共源）
+          // 行头预填/诊断发送/派发指令/派发跳转四渠道共源；1.4 Bug 快速路径复用同一编排器）
           openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
+          // 1.4 Bug 快速路径（Bug 子 tab 行「添加到会话中」——有活跃会话 scoped 插入/
+          // 无活跃会话开新会话预填；openSession 编排器同源复用）
+          addBugToSession: buildBugQuickAdder(
+            ctx,
+            sessions,
+            buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
+          ),
         }),
       },
       views.ForgeOverviewTab,

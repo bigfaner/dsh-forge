@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   bugCandidates,
+  bugReferenceInsertOf,
   clipboardTextOf,
   createBugReferenceSource,
   filterBugsByScope,
@@ -255,5 +256,26 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     const crumbs = source.header?.(SESSION, { query: '', drilled: false })
     expect(crumbs?.map((c) => c.value)).toEqual(['scope:all', 'scope:open', 'scope:fixed', 'scope:unresolved'])
     expect(crumbs?.find((c) => c.current)?.value).toBe('scope:all')
+  })
+})
+
+describe('bugReferenceInsertOf（chip 构造单一事实源——composer-bug-reference 1.4 快速路径）', () => {
+  it('产出 = @ pick insert 同构（同 source/ref/label/clipboardText 路由）', () => {
+    expect(bugReferenceInsertOf({ bugId: 'b-42', summary: '修复后段一目录选取双开对话框' }, 'dswf-bug')).toEqual({
+      source: 'dswf-bug',
+      ref: 'bug:b-42',
+      label: '修复后段一目录选取双开对话框',
+      clipboardText: '@[修复后段一目录选取双开对话框](bug:b-42)',
+    })
+    expect(bugReferenceInsertOf({ bugId: 'b-1', summary: 's' })).toMatchObject({ source: 'bug' })
+  })
+
+  it('@ 菜单 pick 产物经同一路径（onPick insert ≡ bugReferenceInsertOf 输出）', async () => {
+    const source = createBugReferenceSource({ projectId: () => 'proj-1', listBugs: () => Promise.resolve([card()]) })
+    const rows = await source.candidates(SESSION, request())
+    const outcome = source.onPick({ candidate: at(rows, 0), session: SESSION, position: 'inline', via: 'menu', action: 'pick' })
+    expect(outcome).toEqual({
+      insert: bugReferenceInsertOf({ bugId: 'b-42', summary: '修复后段一目录选取双开对话框' }, source.name),
+    })
   })
 })

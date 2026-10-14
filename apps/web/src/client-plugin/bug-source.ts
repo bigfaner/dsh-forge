@@ -148,6 +148,23 @@ export function clipboardTextOf(summary: string, bugId: string): string {
   return `@[${summary}](bug:${bugId})`
 }
 
+/**
+ * Bug 引用 chip 构造单一事实源（1.4 快速路径——@ 菜单 pick 与 Bug 子 tab 行「添加到
+ * 会话中」按钮经此同径产出：同 ref/codec/serialize 路由、同 clipboardText 投影）。
+ * sourceName 缺省 'bug'（FORGE_BUG_SOURCE_NAME 由装配面显式传入）。
+ */
+export function bugReferenceInsertOf(
+  bug: { readonly bugId: string; readonly summary: string },
+  sourceName?: string,
+): BugReferenceInsert {
+  return {
+    source: sourceName ?? 'bug',
+    ref: bugRefOf(bug.bugId),
+    label: bug.summary,
+    clipboardText: clipboardTextOf(bug.summary, bug.bugId),
+  }
+}
+
 /** 状态口径纯过滤（all = 原样全列） */
 export function filterBugsByScope(bugs: readonly BugCardSource[], scope: BugStatusScope): readonly BugCardSource[] {
   if (scope === 'all') return bugs
@@ -305,14 +322,8 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
         createdAt: '',
         updatedAt: '',
       })
-      return {
-        insert: {
-          source: name,
-          ref: bugRefOf(bugId),
-          label: summary,
-          clipboardText: clipboardTextOf(summary, bugId),
-        },
-      }
+      // chip 构造单一事实源（1.4——快速路径按钮与 @ pick 同径产出）
+      return { insert: bugReferenceInsertOf({ bugId, summary }, name) }
     },
     bugStatusScope() {
       return scope

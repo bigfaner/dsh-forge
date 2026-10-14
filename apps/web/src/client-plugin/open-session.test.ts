@@ -5,10 +5,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createOpenSessionOrchestrator,
+  insertReferenceAtTail,
   openSessionPlatformFrom,
+  tailSpanOf,
   type ComposerInputFace,
   type OpenSessionPlatform,
   type PresetSelectResult,
+  type ReferenceInsertServices,
 } from './open-session.js'
 
 /** mock 平台：记录调用序（步骤名 + 实参），可编程各步行为 */
@@ -249,5 +252,100 @@ describe('平台适配层 openSessionPlatformFrom（真实服务切片 → 窄�
     expect(f.submitted).toEqual([true])
     orchestrator.openExistingSession('s-9')
     expect(f.openSessionCalls).toEqual(['s-9'])
+  })
+})
+
+// ─────────────────── Bug 快速路径（composer-bug-reference 1.4） ───────────────────
+
+describe('tailSpanOf（span-CAS 构造——草稿末尾 + draftRev）', () => {
+  it('span = 草稿末尾（start=end=length）+ 当前 draftRev', () => {
+    expect(tailSpanOf({ draft: 'hello', draftRev: 7 })).toEqual({ start: 5, end: 5, draftRev: 7 })
+    expect(tailSpanOf({ draft: '', draftRev: 0 })).toEqual({ start: 0, end: 0, draftRev: 0 })
+  })
+})
+
+describe('insertReferenceAtTail（官方 scoped 事件径——span-CAS 插入 + 还焦）', () => {
+  const REFERENCE = { source: 'dswf-bug', ref: 'bug:b-1', label: '摘要', clipboardText: '@[摘要](bug:b-1)' }
+
+  function fixture(options?: {
+    currentBinding?: boolean
+    faceState?: { draft: string; draftRev: number }
+    bailResult?: unknown
+    bailThrows?: boolean
+    forThrows?: boolean
+  }) {
+    const face = {
+      focus: vi.fn(),
+      ...(options?.faceState !== undefined
+        ? { state: { getSnapshot: () => options.faceState! } }
+        : {}),
+    }
+    const actx = { tag: 'actx' }
+    const bail = vi.fn((..._args: unknown[]) => {
+      if (options?.bailThrows === true) throw new Error('bail boom')
+      return options !== undefined && 'bailResult' in options ? options.bailResult : true
+    })
+    ;(actx as Record<string, unknown>)['bail'] = bail
+    const services: ReferenceInsertServices = {
+      sessions: {
+        binding: (sessionId) =>
+          sessionId === 's-1' && options?.currentBinding !== false ? { ctx: actx } : undefined,
+      },
+      conversation: {
+        input: {
+          for: (_actx: unknown) => {
+            if (options?.forThrows === true) throw new Error('for boom')
+            return face as unknown as ComposerInputFace
+          },
+        },
+      },
+      bail: (subject, name, payload) => bail(subject, name, payload),
+    }
+    return { services, face, bail, actx }
+  }
+
+  it('应用成功：bail 收 reference + 末尾 span-CAS；true → 聚焦归还 composer；返回 true', () => {
+    const f = fixture({ faceState: { draft: '/fix-bug ', draftRev: 3 } })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(true)
+    expect(f.bail).toHaveBeenCalledTimes(1)
+    expect(f.bail).toHaveBeenCalledWith(f.actx, 'slash/input-insert-reference', {
+      reference: REFERENCE,
+      span: { start: 9, end: 9, draftRev: 3 },
+    })
+    expect(f.face.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('binding 缺席 = false（零 bail 零聚焦）', () => {
+    const f = fixture({ currentBinding: false })
+    expect(insertReferenceAtTail(f.services, 's-other', REFERENCE)).toBe(false)
+    expect(f.bail).not.toHaveBeenCalled()
+    expect(f.face.focus).not.toHaveBeenCalled()
+  })
+
+  it('state 窄面缺席（上游面漂移）= false', () => {
+    const f = fixture()
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(false)
+    expect(f.bail).not.toHaveBeenCalled()
+  })
+
+  it('bail 未获 true（相位守卫拒/span-CAS 失）= false 且不聚焦', () => {
+    const f = fixture({ faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(false)
+    expect(f.face.focus).not.toHaveBeenCalled()
+  })
+
+  it('面抛错（for/bail 异常）= false fail-soft 不外溢', () => {
+    const forThrows = fixture({ forThrows: true })
+    expect(insertReferenceAtTail(forThrows.services, 's-1', REFERENCE)).toBe(false)
+    const bailThrows = fixture({ faceState: { draft: 'x', draftRev: 1 }, bailThrows: true })
+    expect(insertReferenceAtTail(bailThrows.services, 's-1', REFERENCE)).toBe(false)
+  })
+
+  it('聚焦抛错不回滚（插入已落——best effort）', () => {
+    const f = fixture({ faceState: { draft: 'x', draftRev: 1 } })
+    f.face.focus.mockImplementation(() => {
+      throw new Error('focus boom')
+    })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(true)
   })
 })

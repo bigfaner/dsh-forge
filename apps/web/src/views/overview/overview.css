@@ -387,6 +387,30 @@
   flex: none;
 }
 
+/* Bug 行「添加到会话中」（composer-bug-reference 1.4 纯增行内控件——dswf-ov-act 同款式
+ * 族：右靠小钮、hover 行才现，不扰既有行语言） */
+.dswf-ov-bugrow-add {
+  flex: none;
+  height: 22px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+  visibility: hidden;
+}
+
+.dswf-ov-item:hover .dswf-ov-bugrow-add,
+.dswf-ov-bugrow-add:focus-visible {
+  visibility: visible;
+}
+
+.dswf-ov-bugrow-add:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 /* meta 块（展开态——原型 m31-meta）：顶分隔线 + bg-3 灰底 + 内距刻度（卡内第二段） */
 .dswf-ov-meta {
   display: flex;

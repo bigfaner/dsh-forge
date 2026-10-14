@@ -46,6 +46,8 @@ import {
   makeSessionTitleResolver,
   bugAddressOf,
   bugIdOfAddress,
+  activeSessionIdOf,
+  buildBugQuickAdder,
   resolveWorkerChildSession,
   sessionParentIdOf,
   sessionRowInLedger,
@@ -918,10 +920,13 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     const face = overview.options.inject!() as {
       bridge: unknown
       onOpenSession: (sessionId: string) => void
+      addBugToSession: (bug: { bugId: string; summary: string }, workspaceId: string | null) => Promise<void>
     }
     expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.onOpenSession('s-9')
     expect(open).toHaveBeenCalledWith('s-9')
+    // composer-bug-reference 1.4：Bug 快速路径动作面在场（Bug 子 tab 行按钮消费）
+    expect(typeof face.addBugToSession).toBe('function')
     expect(doc.options.inject).toBeUndefined() // 文档 body 自足（useTabInfo 由 seat 声明递达）
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.dock?.registered).toEqual([
@@ -1370,7 +1375,12 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
     const bundles = [{ name: MARKETPLACE_PLUGIN_SPEC, enabled: true, installed: true }]
     const enabledFace = faceOf((name) =>
       name === 'remote.pluginManager'
-        ? { listBundles: () => Promise.resolve(bundles), installBundle: () => Promise.resolve({}) }
+        ? {
+            listBundles: () => Promise.resolve(bundles),
+            // 远程协议按位计数：options 在 TS 可选但调用必须带第二实参（官方配方恒传对象）
+            installBundle: (spec: string, options?: Record<string, unknown>) =>
+              options === undefined ? Promise.reject(new Error('missing options')) : Promise.resolve({}),
+          }
         : undefined,
     )
     await enabledFace.refresh()
@@ -1381,8 +1391,9 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
       name === 'remote.pluginManager'
         ? {
             listBundles: () => Promise.resolve(liveBundles),
-            installBundle: (spec: string) => {
+            installBundle: (spec: string, options?: Record<string, unknown>) => {
               expect(spec).toBe(MARKETPLACE_PLUGIN_SPEC)
+              expect(options).toEqual({})
               return new Promise<void>((resolve) => {
                 expect(installingFace.source.getSnapshot().phase).toBe('installing')
                 liveBundles.push(...bundles)
@@ -1891,5 +1902,88 @@ describe('Bug 引用 source 注册（composer-bug-reference 1.2）', () => {
     expect(openRef({ sessionId: 's1' }, { ref: 'bug:b-42' })).toBe(false)
     void views
     fixture.unstub()
+  })
+})
+
+// ─────────── Bug 快速路径（composer-bug-reference 1.4） ───────────
+
+describe('activeSessionIdOf（账本快照 current 锚——有活跃会话判读）', () => {
+  it('current 非空串命中；快照缺席/形状漂移/空串 = undefined', () => {
+    expect(activeSessionIdOf({ getSnapshot: () => ({ current: 's-live', byId: {} }) })).toBe('s-live')
+    expect(activeSessionIdOf({ getSnapshot: () => ({ byId: {} }) })).toBeUndefined()
+    expect(activeSessionIdOf({ getSnapshot: () => ({ current: '' }) })).toBeUndefined()
+    expect(activeSessionIdOf({ getSnapshot: () => ({ current: 42 }) })).toBeUndefined()
+    expect(activeSessionIdOf(undefined)).toBeUndefined()
+    expect(
+      activeSessionIdOf({
+        getSnapshot: () => {
+          throw new Error('drift')
+        },
+      }),
+    ).toBeUndefined()
+  })
+})
+
+describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活跃会话开新会话预填）', () => {
+  const BUG = { bugId: 'b-42', summary: '修复双开对话框' }
+  const CLIP = '@[修复双开对话框](bug:b-42)'
+
+  function fixture(options?: { current?: string; bailResult?: unknown; faceState?: { draft: string; draftRev: number } }) {
+    const face = {
+      focus: vi.fn(),
+      ...(options?.faceState !== undefined ? { state: { getSnapshot: () => options.faceState! } } : {}),
+    }
+    const actx = {
+      bail: vi.fn(() => (options !== undefined && 'bailResult' in options ? options.bailResult : true)),
+    }
+    const clientCtx = {
+      reflect: {
+        get: (name: string) => (name === 'conversation' ? { input: { for: () => face } } : undefined),
+      },
+    } as unknown as ForgeClientCtx
+    const sessions = {
+      list: { getSnapshot: () => ({ byId: {}, ...(options?.current !== undefined ? { current: options.current } : {}) }) },
+      binding: (sessionId: string) => (sessionId === options?.current ? { ctx: actx } : undefined),
+    }
+    const openSessionWithPreset = vi.fn(() =>
+      Promise.resolve({ ok: true as const, sessionId: 's-new', presetApplied: false, sent: false }),
+    )
+    const orchestrator = { openSessionWithPreset, openExistingSession: vi.fn() }
+    return { addBugToSession: buildBugQuickAdder(clientCtx, sessions as never, orchestrator as never), bail: actx.bail, face, openSessionWithPreset }
+  }
+
+  it('有活跃会话 + bail true：scoped 事件收 T1 同构 reference + 末尾 span-CAS，聚焦 composer，不走编排器', async () => {
+    const f = fixture({ current: 's-live', faceState: { draft: '/fix-bug ', draftRev: 5 } })
+    await f.addBugToSession(BUG, 'ws-1')
+    expect(f.bail).toHaveBeenCalledWith(
+      expect.objectContaining({ bail: f.bail }),
+      'slash/input-insert-reference',
+      {
+        reference: { source: FORGE_BUG_SOURCE_NAME, ref: 'bug:b-42', label: BUG.summary, clipboardText: CLIP },
+        span: { start: 9, end: 9, draftRev: 5 },
+      },
+    )
+    expect(f.face.focus).toHaveBeenCalledTimes(1)
+    expect(f.openSessionWithPreset).not.toHaveBeenCalled()
+  })
+
+  it('无活跃会话：既有 open-session 编排器开新会话，首条草稿预填引用剪贴板投影', async () => {
+    const f = fixture()
+    await f.addBugToSession(BUG, 'ws-1')
+    expect(f.openSessionWithPreset).toHaveBeenCalledWith({ workspaceId: 'ws-1', prefill: CLIP })
+    expect(f.bail).not.toHaveBeenCalled()
+  })
+
+  it('插入未获应用（bail 拒）→ 兜底开新会话预填（韧性同 open-session 兜底裁决刻度）', async () => {
+    const f = fixture({ current: 's-live', faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
+    await f.addBugToSession(BUG, 'ws-1')
+    expect(f.openSessionWithPreset).toHaveBeenCalledWith({ workspaceId: 'ws-1', prefill: CLIP })
+  })
+
+  it('无活跃会话且 workspaceId 缺席（null = 无锚）：fail-soft no-op 不外溢', async () => {
+    const f = fixture()
+    await f.addBugToSession(BUG, null)
+    expect(f.openSessionWithPreset).not.toHaveBeenCalled()
+    expect(f.bail).not.toHaveBeenCalled()
   })
 })

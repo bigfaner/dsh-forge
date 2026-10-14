@@ -22,6 +22,7 @@ import type { RpcClientFactory } from '../rpc/index.js'
 import { OverviewTab, type OverviewTasksContext } from '../views/overview/OverviewTab.js'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
+import type { BugQuickAddFn } from '../client-plugin/plugin.js'
 import { TasksTab } from '../views/overview/task-tab/task-tab.js'
 import type { TransitionTaskView } from '../views/overview/drawer/transition-dialog.js'
 import { DocsTab } from '../views/docs/index.js'
@@ -139,6 +140,8 @@ export interface OverviewDockAssemblyProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
+  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
+  readonly onAddBugToSession?: (bug: { readonly bugId: string; readonly summary: string }) => void
   /** 弹窗开着的任务（null = 关——三视图行高亮源；弹窗本体挂载在 ShellHost[D23 挂载独立]） */
   readonly drawerTaskId: string | null
   /** 任务行/DAG 节点/泳道卡点击 → 弹窗（桥 openTaskDrawer 写面；缺席 = 非交互） */
@@ -167,6 +170,7 @@ export function OverviewDockAssembly({
   onOpenSession,
   onStartSession,
   onOpenWorkerSession,
+  onAddBugToSession,
   drawerTaskId,
   onOpenTask,
   onOpenTransition,
@@ -216,6 +220,7 @@ export function OverviewDockAssembly({
       renderTasksTab={renderTasksTab}
       focusTasksNonce={taskFocus?.nonce}
       {...(onStartSession !== undefined ? { onStartSession } : {})}
+      {...(onAddBugToSession !== undefined ? { onAddBugToSession } : {})}
       makeClient={makeClient}
     />
   )
@@ -241,6 +246,8 @@ export interface OverviewDockBodyProps {
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
+  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
+  readonly addBugToSession?: BugQuickAddFn
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -255,6 +262,7 @@ export function OverviewDockBody({
   onOpenSession,
   onOpenWorkerSession,
   openSession,
+  addBugToSession,
   makeClient,
 }: OverviewDockBodyProps): ReactNode {
   // 任务聚焦应用（4.2 UF-3 流程 7）：桥聚焦 nonce 未曾应用 → 聚焦注入（feature 选中 +
@@ -287,6 +295,16 @@ export function OverviewDockBody({
     [overview.workspaceId, openSession],
   )
 
+  // Bug 快速路径（1.4）：锚定 workspaceId 注入 + addBugToSession 动作（scoped 插入/
+  // 开新会话预填编排归插件面；失败留场 fail-soft 不炸壳）
+  const handleAddBugToSession = useCallback(
+    (bug: { readonly bugId: string; readonly summary: string }): void => {
+      if (addBugToSession === undefined) return
+      void addBugToSession(bug, overview.workspaceId)
+    },
+    [addBugToSession, overview.workspaceId],
+  )
+
   const onOpenDoc = dockDocOpener(tabActions, overview.projectId)
 
   return (
@@ -297,6 +315,7 @@ export function OverviewDockBody({
       onOpenSession={onOpenSession}
       {...(onOpenWorkerSession !== undefined ? { onOpenWorkerSession } : {})}
       {...(openSession !== undefined ? { onStartSession: handleStartSession } : {})}
+      {...(addBugToSession !== undefined ? { onAddBugToSession: handleAddBugToSession } : {})}
       drawerTaskId={drawerTaskId}
       {...(onOpenTask !== undefined ? { onOpenTask } : {})}
       {...(onOpenTransition !== undefined ? { onOpenTransition } : {})}
@@ -324,6 +343,8 @@ export interface ForgeOverviewTabProps {
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（4.6 插件 inject face；缺席 = 行头/诊断/派发入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
+  /** Bug 行「添加到会话中」（composer-bug-reference 1.4 插件 inject face；缺席 = 按钮不呈现） */
+  readonly addBugToSession?: BugQuickAddFn
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
@@ -378,6 +399,7 @@ function OverviewTabWithBridge(
       onOpenSession={props.onOpenSession}
       onOpenWorkerSession={props.onOpenWorkerSession}
       openSession={props.openSession}
+      addBugToSession={props.addBugToSession}
       makeClient={props.makeClient}
     />
   )

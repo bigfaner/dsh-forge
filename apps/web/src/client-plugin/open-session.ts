@@ -37,6 +37,88 @@ export interface ComposerInputFace {
   submit(): void
   /** 键盘焦点归还 composer（兜底形态：聚焦 + 引导粘贴） */
   focus(): void
+  /**
+   * 输入状态快照源（官方 InputState 消费切片——draft/draftRev；1.4 快速路径 span-CAS
+   * 构造单源）。窄面缺席（上游面漂移/旧面）= undefined——引用插入判不可用。
+   */
+  readonly state?: { getSnapshot(): { readonly draft: string; readonly draftRev: number } }
+}
+
+// ─────────────────────────── Bug 快速路径（composer-bug-reference 1.4） ───────────────────────────
+
+/** TokenSpan 结构同型镜像（镜像上游 draft-editor TokenSpan——span-CAS 三元组） */
+export interface TokenSpanMirror {
+  readonly start: number
+  readonly end: number
+  readonly draftRev: number
+}
+
+/** ReferenceInsert 结构同型镜像（镜像上游 draft-editor ReferenceInsert 消费切片） */
+export interface ReferenceInsertMirror {
+  readonly source: string
+  readonly ref: string
+  readonly label: string
+  readonly clipboardText: string
+}
+
+/** scoped 事件 bail 窄面（cordis ctx.bail——actx 作主语；官方 input-trigger execute 同径） */
+export type ScopedEventBail = (actx: unknown, name: string, payload: unknown) => unknown
+
+/** 引用插入依赖（会话寻址 + 输入面 + scoped 事件发射——测试注入面） */
+export interface ReferenceInsertServices {
+  readonly sessions: OpenSessionSessions
+  readonly conversation: OpenSessionConversation
+  readonly bail: ScopedEventBail
+}
+
+/** 官方 scoped 引用插入事件名（上游 input.d.ts Events 契约字面量——span-CAS 变更动词） */
+export const INPUT_INSERT_REFERENCE_EVENT = 'slash/input-insert-reference'
+
+/**
+ * span-CAS 构造（纯函数——1.4 缝口径）：草稿末尾 + 当前 InputState.draftRev。
+ */
+export function tailSpanOf(state: { readonly draft: string; readonly draftRev: number }): TokenSpanMirror {
+  return { start: state.draft.length, end: state.draft.length, draftRev: state.draftRev }
+}
+
+/**
+ * 活跃会话草稿末尾插入原子引用（纯编排——官方 scoped 事件径，不直捅 editor 内部 API）：
+ * binding 解析会话作用域 actx → input.for(actx) 取 state 快照 → tail span-CAS →
+ * actx.bail('slash/input-insert-reference', {reference, span})。bail 返回 true（编辑器
+ * 已应用）= 聚焦归还 composer 并返回 true；binding 缺席 / 面缺席或抛错 / state 窄面
+ * 缺席 / bail 未获 true = false（调用方 fail-soft 兜底）。
+ */
+export function insertReferenceAtTail(
+  services: ReferenceInsertServices,
+  sessionId: string,
+  reference: ReferenceInsertMirror,
+): boolean {
+  const binding = services.sessions.binding(sessionId)
+  if (binding === undefined) return false
+  let face: ComposerInputFace | undefined
+  try {
+    face = services.conversation.input.for(binding.ctx)
+  } catch {
+    return false
+  }
+  const state = face?.state?.getSnapshot()
+  if (face === undefined || state === undefined) return false
+  let applied: unknown
+  try {
+    applied = services.bail(binding.ctx, INPUT_INSERT_REFERENCE_EVENT, {
+      reference,
+      span: tailSpanOf(state),
+    })
+  } catch {
+    return false
+  }
+  if (applied !== true) return false
+  try {
+    face.focus()
+  } catch {
+    // best effort（插入已落——还焦失败不回滚）
+  }
+  return true
 }
 
 /** openSessionWithPreset 输入 */

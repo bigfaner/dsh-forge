@@ -72,13 +72,26 @@ export function BugStatusChips({ counts, active, onToggle, onClear }: BugStatusC
 
 /** 单 Bug 行（提案行同构——dswf-ov-item/parent flex：状态点[色区分状态] + summary 标题
  *  靠左 + error_type chip 右靠；无展开/无状态文字/无时间。onOpenBug 在场 = 整行可点
- *  role=button 键盘可达，点击上抛开详情弹框；缺席 = 静态呈现） */
-function BugRow({ bug, onOpenBug }: { readonly bug: BugCard; readonly onOpenBug?: (bugId: string) => void }): ReactNode {
+ *  role=button 键盘可达，点击上抛开详情弹框；缺席 = 静态呈现。onAddBugToSession 在场 =
+ *  行内纯增「添加到会话中」控件（composer-bug-reference 1.4——stopPropagation 不触发
+ *  行点击；缺席 = 行语言零变化） */
+function BugRow({
+  bug,
+  onOpenBug,
+  onAddBugToSession,
+}: {
+  readonly bug: BugCard
+  readonly onOpenBug?: (bugId: string) => void
+  readonly onAddBugToSession?: (bug: BugCard) => void
+}): ReactNode {
   const handleKey = (event: ReactKeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       onOpenBug?.(bug.bugId)
     }
+  }
+  const stop = (event: { stopPropagation(): void }): void => {
+    event.stopPropagation()
   }
   return (
     <div
@@ -96,6 +109,21 @@ function BugRow({ bug, onOpenBug }: { readonly bug: BugCard; readonly onOpenBug?
             <Tag tone="neutral" className="dswf-ov-parent-chip">{bug.errorType}</Tag>
           </span>
         ) : null}
+        {onAddBugToSession !== undefined ? (
+          <button
+            type="button"
+            className="dswf-ov-bugrow-add"
+            data-dswf-ov-bugrow-add=""
+            title={`把该 Bug 引用添加到会话输入（${bug.bugId}）`}
+            onClick={(event) => {
+              stop(event)
+              onAddBugToSession(bug)
+            }}
+            onKeyDown={stop}
+          >
+            添加到会话中
+          </button>
+        ) : null}
       </div>
     </div>
   )
@@ -111,12 +139,14 @@ export interface BugListProps {
   readonly onClearStatuses?: () => void
   /** 行点击 → 详情弹框回调（后续切片接线；缺席 = 行静态呈现） */
   readonly onOpenBug?: (bugId: string) => void
+  /** 行「添加到会话中」上抛（1.4——装配注入；缺席 = 按钮不呈现） */
+  readonly onAddBugToSession?: (bug: BugCard) => void
   /** 空态标题（缺省「暂无 Bug」；搜索在场由帧侧注入「无匹配…」） */
   readonly emptyTitle?: string
 }
 
 /** Bug 子 tab 列表视图（chips 行 + 行集；空态 = EmptyState——过滤在场/缺省双标题） */
-export function BugList({ bugs, counts, activeStatuses, onToggleStatus, onClearStatuses, onOpenBug, emptyTitle }: BugListProps): ReactNode {
+export function BugList({ bugs, counts, activeStatuses, onToggleStatus, onClearStatuses, onOpenBug, onAddBugToSession, emptyTitle }: BugListProps): ReactNode {
   const hasFilter = hasActiveStatusFilter(activeStatuses)
   return (
     <div className="dswf-ov-bugpage" data-dswf-ov-bugpage="">
@@ -130,7 +160,12 @@ export function BugList({ bugs, counts, activeStatuses, onToggleStatus, onClearS
       ) : (
         <div className="dswf-ov-list" data-dswf-ov-bugs="">
           {bugs.map((bug) => (
-            <BugRow key={bug.bugId} bug={bug} {...(onOpenBug !== undefined ? { onOpenBug } : {})} />
+            <BugRow
+              key={bug.bugId}
+              bug={bug}
+              {...(onOpenBug !== undefined ? { onOpenBug } : {})}
+              {...(onAddBugToSession !== undefined ? { onAddBugToSession } : {})}
+            />
           ))}
         </div>
       )}
