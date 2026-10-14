@@ -445,10 +445,13 @@ export function makeSessionTitleResolver(
 }
 
 /**
- * 活跃会话解析（纯函数——1.4 Bug 快速路径「有活跃会话」判读）：账本快照窄读
- * `current`（官方 selection 锚——sidebar-model currentSessionId 同源）。快照缺席/
- * 形状漂移/非串/空串 = undefined（调用方走无活跃会话兜底：开新会话预填）。
+ * 活跃会话解析（纯函数——1.4 Bug 快速路径「有活跃会话」判读；bug 15faa6f0 修正）：
+ * 官方 SessionListState 无 current 字段（view selection 在 Controller 之外）——当前会话
+ * 正本 = ui-session publishMain 同径：byId 行 `retainedBy.mainView > 0` 即主视图在留
+ * （该会话因已被 retain，sessions.binding(id) 按「borrow an already-retained binding」
+ * 语义可用）。快照缺席/形状漂移/无在留行 = undefined（调用方走无活跃会话兜底：开新会话预填）。
  */
+// Root cause: 实现者虚构了快照 current 字段（官方类型无此成员），活跃判读恒 undefined。
 export function activeSessionIdOf(list: unknown): string | undefined {
   if (typeof list !== 'object' || list === null) return undefined
   const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
@@ -459,8 +462,14 @@ export function activeSessionIdOf(list: unknown): string | undefined {
   } catch {
     return undefined
   }
-  const current = (snapshot as { current?: unknown } | null)?.current
-  return typeof current === 'string' && current !== '' ? current : undefined
+  const byId = (snapshot as { byId?: unknown } | null)?.byId
+  if (typeof byId !== 'object' || byId === null) return undefined
+  for (const row of Object.values(byId as Record<string, unknown>)) {
+    const id = (row as { id?: unknown } | null)?.id
+    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
+    if (typeof id === 'string' && id !== '' && typeof mainView === 'number' && mainView > 0) return id
+  }
+  return undefined
 }
 /**
  * 打开会话（判读式统一径——D6 修复面）：显式父（库侧权威——任务挂接双源卡的 link 派发
@@ -1408,6 +1417,29 @@ function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[
  */
 export const MARKETPLACE_PLUGIN_SPEC = '@deepseek-ai/dsh-plugin-marketplace'
 
+/**
+ * 安装标的 e2e 窄缝（dsh-plugin-marketplace/fix-2）：官方包未发布（npm/npmmirror 双源
+ * 404 实测），旅程安装腿改走环境内 tarball fixture。e2e 在页面全局置位本键（对象形态
+ * { spec, name }——spec = installBundle 安装形（tarball 绝对路径），name = listBundles
+ * 相位判定匹配的包名）；缺席/形状漂移 = 回退官方字面量——生产路径零行为分支，缝面只有
+ * 这一处守卫读。
+ */
+export const MARKETPLACE_TARGET_OVERRIDE_KEY = '__DSH_FORGE_MKT_TARGET__'
+
+/** 安装标的目标（override 在场 = fixture；缺席 = 官方 spec——spec/name 同源字面量） */
+export function marketplaceTargetOf(): { readonly spec: string; readonly name: string } {
+  const raw = (globalThis as Record<string, unknown>)[MARKETPLACE_TARGET_OVERRIDE_KEY]
+  if (typeof raw === 'object' && raw !== null) {
+    const record = raw as Record<string, unknown>
+    const spec = record['spec']
+    const name = record['name']
+    if (typeof spec === 'string' && spec !== '' && typeof name === 'string' && name !== '') {
+      return { spec, name }
+    }
+  }
+  return { spec: MARKETPLACE_PLUGIN_SPEC, name: MARKETPLACE_PLUGIN_SPEC }
+}
+
 /** 相位（views/marketplace/marketplace-model.ts 结构同型镜像——bundle 自持禁跨 chunk import） */
 export type ForgeMarketplacePhase = 'absent' | 'installing' | 'enabled'
 
@@ -1450,7 +1482,7 @@ export function forgeMarketplacePhaseOf(bundles: unknown): ForgeMarketplacePhase
   for (const row of bundles) {
     if (typeof row !== 'object' || row === null) continue
     const record = row as Record<string, unknown>
-    if (record['name'] !== MARKETPLACE_PLUGIN_SPEC) continue
+    if (record['name'] !== marketplaceTargetOf().name) continue
     return record['enabled'] === true ? 'enabled' : 'absent'
   }
   return 'absent'
@@ -1509,9 +1541,10 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
         return Promise.resolve(false)
       }
       setSnapshot({ phase: 'installing' })
+      const target = marketplaceTargetOf()
       return Promise.resolve()
         // Root cause: 远程协议按位实参计数——options 在 TS 可选但调用必须带第二实参（官方配方恒传对象），缺参即被 arity 校验拒绝
-        .then(() => installBundle.call(managerSvc(), MARKETPLACE_PLUGIN_SPEC, {}))
+        .then(() => installBundle.call(managerSvc(), target.spec, {}))
         .then(
           () => true,
           (cause: unknown) => {
@@ -1596,7 +1629,7 @@ export interface ForgeRemoteStatusFace {
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
 interface ForgePreloadBridge {
   invoke(channel: string, payload?: unknown): Promise<unknown>
-  getBootManifest(): Promise<{ url?: string; remoteHost?: string }>
+  getBootManifest(): Promise<{ url?: string; remoteHost?: string; remotePairUrl?: string }>
 }
 
 /** dshForge 桥读取（缺席/形状不符 = undefined——fail-soft off 面，不炸装配） */
@@ -1644,24 +1677,17 @@ function isOkEnvelope(envelope: unknown): boolean {
  */
 function snapshotOfReads(
   enabled: boolean | undefined,
-  manifest: { url?: string; remoteHost?: string } | undefined,
+  manifest: { url?: string; remoteHost?: string; remotePairUrl?: string } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
   const exposureActive = manifest?.remoteHost === '0.0.0.0'
   if (enabled !== exposureActive) return { phase: 'pending' }
   if (!enabled) return { phase: 'off' }
-  let port: number | undefined
-  try {
-    const parsed = manifest?.url !== undefined ? new URL(manifest.url) : undefined
-    const numeric = parsed !== undefined ? Number(parsed.port) : NaN
-    port = Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
-  } catch {
-    port = undefined
-  }
-  const loc = (globalThis as { location?: { hostname?: string } }).location
-  const hostname = typeof loc?.hostname === 'string' ? loc.hostname : 'localhost'
-  const lanAddress =
-    port !== undefined ? `http://${hostname}:${port}` : undefined
+  // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
+  // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 authenticatedUrl 构造的
+  // 官方配对地址单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
+  const pairUrl = manifest?.remotePairUrl
+  const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
   return { phase: 'listening', lanAddress }
 }
 

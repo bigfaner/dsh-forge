@@ -19,6 +19,8 @@ import {
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   MARKETPLACE_PLUGIN_SPEC,
+  MARKETPLACE_TARGET_OVERRIDE_KEY,
+  marketplaceTargetOf,
   buildMarketplaceSource,
   forgeMarketplacePhaseOf,
   FORGE_LOCALE_NS,
@@ -1417,6 +1419,72 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
     expect(forgeMarketplacePhaseOf('junk')).toBe('absent')
   })
 
+  it('marketplaceTargetOf（dsh-plugin-marketplace/fix-2 e2e 窄缝）：override 在场 = fixture spec/name；缺席/畸形 = 官方字面量回退', () => {
+    const overrideKey = MARKETPLACE_TARGET_OVERRIDE_KEY
+    const setOverride = (value: unknown): void => {
+      ;(globalThis as Record<string, unknown>)[overrideKey] = value
+    }
+    try {
+      // 缺席 = 官方字面量（生产路径零分支污染）
+      expect(marketplaceTargetOf()).toEqual({ spec: MARKETPLACE_PLUGIN_SPEC, name: MARKETPLACE_PLUGIN_SPEC })
+      // e2e 置位：安装腿走环境内 tarball fixture（spec）+ 相位判定匹配 fixture 包名（name）
+      setOverride({ spec: 'C:/cache/mkt-fixture/fixture-1.0.0.tgz', name: '@dsh-forge/e2e-mkt-marketplace' })
+      expect(marketplaceTargetOf()).toEqual({
+        spec: 'C:/cache/mkt-fixture/fixture-1.0.0.tgz',
+        name: '@dsh-forge/e2e-mkt-marketplace',
+      })
+      // 畸形 override（键缺/非串/空串）= 回退官方字面量（缝面防御）
+      setOverride({ spec: 'C:/x.tgz' })
+      expect(marketplaceTargetOf().name).toBe(MARKETPLACE_PLUGIN_SPEC)
+      setOverride({ spec: '', name: '@dsh-forge/e2e-mkt-marketplace' })
+      expect(marketplaceTargetOf().spec).toBe(MARKETPLACE_PLUGIN_SPEC)
+      setOverride('junk')
+      expect(marketplaceTargetOf()).toEqual({ spec: MARKETPLACE_PLUGIN_SPEC, name: MARKETPLACE_PLUGIN_SPEC })
+    } finally {
+      setOverride(undefined)
+    }
+  })
+
+  it('插件市场安装窄缝（fix-2）：override 在场时 install 走 fixture tarball spec、相位匹配 fixture 包名', async () => {
+    const fixture = { spec: 'C:/cache/mkt-fixture/fixture-1.0.0.tgz', name: '@dsh-forge/e2e-mkt-marketplace' }
+    const setOverride = (value: unknown): void => {
+      ;(globalThis as Record<string, unknown>)[MARKETPLACE_TARGET_OVERRIDE_KEY] = value
+    }
+    setOverride(fixture)
+    try {
+      const publishAndApply = (reflectGet: (name: string) => unknown) => {
+        publishFakeViews()
+        const run = fakeClientCtx({ get: reflectGet })
+        forgeClientPlugin().apply(run.ctx)
+        const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)
+        if (forge === undefined) throw new Error('settings.section 登记缺席')
+        return (forge.options.inject!() as { marketplace: ReturnType<typeof buildMarketplaceSource> }).marketplace
+      }
+      const liveBundles: unknown[] = []
+      const seen: { spec: string; options: unknown }[] = []
+      const face = publishAndApply((name) =>
+        name === 'remote.pluginManager'
+          ? {
+              listBundles: () => Promise.resolve(liveBundles),
+              installBundle: (spec: string, options?: Record<string, unknown>) => {
+                seen.push({ spec, options })
+                liveBundles.push({ name: fixture.name, enabled: true, installed: true })
+                return Promise.resolve({})
+              },
+            }
+          : undefined,
+      )
+      await face.refresh()
+      expect(face.source.getSnapshot().phase).toBe('absent')
+      await expect(face.install()).resolves.toBe(true)
+      expect(seen).toEqual([{ spec: fixture.spec, options: {} }])
+      expect(face.source.getSnapshot().phase).toBe('enabled')
+      unpublishViews()
+    } finally {
+      setOverride(undefined)
+    }
+  })
+
   it('loadModelCatalog 档位兼容能力面：efforts 缺席/畸形/空集 = 不记该模型能力（组件面不过滤不判）', async () => {
     const envelope = {
       ok: true,
@@ -1907,13 +1975,38 @@ describe('Bug 引用 source 注册（composer-bug-reference 1.2）', () => {
 
 // ─────────── Bug 快速路径（composer-bug-reference 1.4） ───────────
 
-describe('activeSessionIdOf（账本快照 current 锚——有活跃会话判读）', () => {
-  it('current 非空串命中；快照缺席/形状漂移/空串 = undefined', () => {
-    expect(activeSessionIdOf({ getSnapshot: () => ({ current: 's-live', byId: {} }) })).toBe('s-live')
-    expect(activeSessionIdOf({ getSnapshot: () => ({ byId: {} }) })).toBeUndefined()
-    expect(activeSessionIdOf({ getSnapshot: () => ({ current: '' }) })).toBeUndefined()
-    expect(activeSessionIdOf({ getSnapshot: () => ({ current: 42 }) })).toBeUndefined()
+describe('activeSessionIdOf（官方快照形状——retainedBy.mainView 锚，bug 15faa6f0 修正）', () => {
+  /** 官方 SessionListState 真形：ids/byId/phase/projectionsBySession——无 current 字段 */
+  function ledger(rows: Record<string, unknown>): unknown {
+    return {
+      getSnapshot: () => ({
+        ids: Object.keys(rows),
+        byId: rows,
+        phase: 'ready',
+        projectionsBySession: {},
+      }),
+    }
+  }
+  const row = (mainView: number): { id: string; retainedBy: { mainView: number } } => ({
+    id: 'x',
+    retainedBy: { mainView },
+  })
+
+  it('mainView 在留行命中（官方 publishMain 同径）：首个 retainedBy.mainView>0 行的 id', () => {
+    const sLive = { ...row(1), id: 's-live' }
+    const sBg = { ...row(0), id: 's-bg' }
+    expect(activeSessionIdOf(ledger({ 's-bg': sBg, 's-live': sLive }))).toBe('s-live')
+  })
+
+  it('无 mainView 在留行 / 空账本 = undefined（走开新会话兜底）', () => {
+    expect(activeSessionIdOf(ledger({ 's-a': { ...row(0), id: 's-a' } }))).toBeUndefined()
+    expect(activeSessionIdOf(ledger({}))).toBeUndefined()
+  })
+
+  it('快照缺席/形状漂移/读取抛错 = undefined', () => {
     expect(activeSessionIdOf(undefined)).toBeUndefined()
+    expect(activeSessionIdOf({ getSnapshot: () => null })).toBeUndefined()
+    expect(activeSessionIdOf({ getSnapshot: () => ({ ids: [], byId: 'drift' }) })).toBeUndefined()
     expect(
       activeSessionIdOf({
         getSnapshot: () => {
@@ -1922,13 +2015,19 @@ describe('activeSessionIdOf（账本快照 current 锚——有活跃会话判�
       }),
     ).toBeUndefined()
   })
+
+  it('行 id 非串/空串或 mainView 非数 = 跳过不命中（防御漂移行）', () => {
+    expect(activeSessionIdOf(ledger({ a: { retainedBy: { mainView: 2 } } }))).toBeUndefined()
+    expect(activeSessionIdOf(ledger({ a: { id: '', retainedBy: { mainView: 2 } } }))).toBeUndefined()
+    expect(activeSessionIdOf(ledger({ a: { id: 's-x', retainedBy: { mainView: '2' } } }))).toBeUndefined()
+  })
 })
 
 describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活跃会话开新会话预填）', () => {
   const BUG = { bugId: 'b-42', summary: '修复双开对话框' }
   const CLIP = '@[修复双开对话框](bug:b-42)'
 
-  function fixture(options?: { current?: string; bailResult?: unknown; faceState?: { draft: string; draftRev: number } }) {
+  function fixture(options?: { active?: string; bailResult?: unknown; faceState?: { draft: string; draftRev: number } }) {
     const face = {
       focus: vi.fn(),
       ...(options?.faceState !== undefined ? { state: { getSnapshot: () => options.faceState! } } : {}),
@@ -1941,9 +2040,12 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
         get: (name: string) => (name === 'conversation' ? { input: { for: () => face } } : undefined),
       },
     } as unknown as ForgeClientCtx
+    const rows: Record<string, unknown> = options?.active !== undefined
+      ? { [options.active]: { id: options.active, retainedBy: { mainView: 1 } }, 's-other': { id: 's-other', retainedBy: {} } }
+      : { 's-other': { id: 's-other', retainedBy: {} } }
     const sessions = {
-      list: { getSnapshot: () => ({ byId: {}, ...(options?.current !== undefined ? { current: options.current } : {}) }) },
-      binding: (sessionId: string) => (sessionId === options?.current ? { ctx: actx } : undefined),
+      list: { getSnapshot: () => ({ ids: Object.keys(rows), byId: rows, phase: 'ready', projectionsBySession: {} }) },
+      binding: (sessionId: string) => (sessionId === options?.active ? { ctx: actx } : undefined),
     }
     const openSessionWithPreset = vi.fn(() =>
       Promise.resolve({ ok: true as const, sessionId: 's-new', presetApplied: false, sent: false }),
@@ -1953,7 +2055,7 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
   }
 
   it('有活跃会话 + bail true：scoped 事件收 T1 同构 reference + 末尾 span-CAS，聚焦 composer，不走编排器', async () => {
-    const f = fixture({ current: 's-live', faceState: { draft: '/fix-bug ', draftRev: 5 } })
+    const f = fixture({ active: 's-live', faceState: { draft: '/fix-bug ', draftRev: 5 } })
     await f.addBugToSession(BUG, 'ws-1')
     expect(f.bail).toHaveBeenCalledWith(
       expect.objectContaining({ bail: f.bail }),
@@ -1975,7 +2077,7 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
   })
 
   it('插入未获应用（bail 拒）→ 兜底开新会话预填（韧性同 open-session 兜底裁决刻度）', async () => {
-    const f = fixture({ current: 's-live', faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
+    const f = fixture({ active: 's-live', faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
     await f.addBugToSession(BUG, 'ws-1')
     expect(f.openSessionWithPreset).toHaveBeenCalledWith({ workspaceId: 'ws-1', prefill: CLIP })
   })
