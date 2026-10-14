@@ -203,12 +203,10 @@ export const DOC_PATH_LABEL = '[data-path-label]'
 export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
 /** mermaid 渲染回退占位卡（非法源/渲染失败） */
 export const DOC_MERMAID_FALLBACK = '[data-dswf-doc-mermaid-fallback]'
-/** md 预览扩展渲染器 body 根（dswf-md-mermaid keyed body——md-preview-mermaid blitz） */
-export const MD_PREVIEW_BODY = '[data-dswf-md-preview-body]'
-/** 产品 MarkdownDoc 正文锚（官方 MarkdownText 唯一包装入口——扩展渲染器 md 段） */
-export const MD_DOC_BODY = '[data-dswf-markdown="body"]'
-/** 产品 md mermaid 扩展渲染器 id（= documentPreviews 定义 id = keyed body 键；plugin.ts MD_MERMAID_PREVIEW_ID 同源字面量） */
-export const MD_MERMAID_RENDERER_ID = 'dswf-md-mermaid'
+/** DOM 增强图容器（增强器旁插 figure——源 hash 值锚，md-mermaid-plugin blitz） */
+export const MD_MERMAID_FIGURE = '[data-dswf-md-mermaid]'
+/** DOM 增强已渲染原块标记（值 = 已渲染源 hash——增强后原块隐藏态断言面） */
+export const MD_MERMAID_ENHANCED_BLOCK = '[data-dswf-md-mermaid-enhanced]'
 /** 会话头挂接槽（官方动作带——m3.1 D5：产品 pill 卸载断言面；零产品占用者） */
 export const SESSION_HEADER_ACTIONS = '[data-slot="conversation.session.header.actions"]'
 /** 派发任务悬浮面板（m3.1 D6——ShellHost 常驻树挂载，对话列内浮层；role=complementary） */
