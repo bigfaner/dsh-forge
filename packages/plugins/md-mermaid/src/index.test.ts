@@ -152,6 +152,21 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
     dispose()
   })
 
+  it('bug: docRel 文件不存在 → ERR_INVALID_ARGS「document not found」而非 ERR_MERMAID_ENGINE 裸 ENOENT', async () => {
+    const rt = new TempRuntime()
+    const dispose = mdMermaidPlugin(rt.ctx())
+    const tool = rt.registeredTools[0]
+    await expect(
+      tool?.execute({ docRel: '.forge/docs/probes/__nonexistent-dir__/probe.md' }),
+    ).rejects.toSatisfy(
+      (e: unknown) =>
+        isValidateMermaidError(e) &&
+        e.code === 'ERR_INVALID_ARGS' &&
+        /document not found: \.forge\/docs\/probes\/__nonexistent-dir__\/probe\.md/.test(e.message),
+    )
+    dispose()
+  })
+
   it('typed error 归一：引擎崩溃（非 typed 错误）→ ERR_MERMAID_ENGINE（不裸抛）', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx(), {

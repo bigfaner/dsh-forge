@@ -173,7 +173,20 @@ export function createValidateMermaidTool(deps: ValidateMermaidToolDeps = {}): M
         if (parsed.source !== undefined) {
           return await validateSource(parsed.source, { format: parsed.format })
         }
-        const doc = readDocFile(parsed.docRel as string)
+        const docRel = parsed.docRel as string
+        let doc: string
+        try {
+          doc = readDocFile(docRel)
+        } catch (e) {
+          // Root cause: 文件不存在属入参问题，此前与引擎错同兜底裸抛 ENOENT，调用方无从自纠。
+          if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new ValidateMermaidError(
+              'ERR_INVALID_ARGS',
+              `${MERMAID_TOOL_NAME}: document not found: ${docRel} — docRel resolves relative to the workspace root`,
+            )
+          }
+          throw e
+        }
         return await validateDocFences(doc)
       } catch (e) {
         if (isValidateMermaidError(e)) throw e
